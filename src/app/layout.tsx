@@ -3,7 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AI 암기자료 변환기",
-  description: "학습 자료를 암기 가능한 카드와 빈칸 문제로 변환합니다.",
+  description:
+    "학습 자료를 플래시카드, 빈칸 문제, 영작 리콜 카드로 변환하고 저장해 학습합니다.",
 };
 
 export default function RootLayout({

@@ -1,5 +1,104 @@
 @import "tailwindcss";
 
+.pdf-text-layer {
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  transform-origin: 0 0;
+  user-select: none;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.pdf-text-layer :is(span, br) {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  color: transparent;
+  white-space: pre;
+  transform-origin: 0 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pdf-text-layer > :not(.markedContent),
+.pdf-text-layer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+
+  z-index: 1;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x))
+    scale(var(--min-font-size-inv));
+}
+
+.pdf-text-layer .markedContent {
+  display: contents;
+}
+
+.pdf-text-layer span {
+  border-radius: 2px;
+  transition:
+    background-color 100ms ease,
+    box-shadow 100ms ease;
+}
+
+.pdf-text-layer span.pdf-text-fragment {
+  position: static;
+  display: inline;
+  white-space: pre;
+}
+
+.pdf-text-layer .pdf-text-hovered {
+  background: rgb(240 178 50 / 38%);
+  box-shadow: 0 0 0 1px rgb(240 178 50 / 65%);
+}
+
+.pdf-text-layer .pdf-text-selected {
+  background: rgb(88 101 242 / 42%);
+  box-shadow: 0 0 0 1px rgb(88 101 242 / 72%);
+}
+
+.pdf-ocr-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.pdf-ocr-box {
+  position: absolute;
+  margin: 0;
+  border: 0;
+  border-radius: 2px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background-color 100ms ease,
+    box-shadow 100ms ease;
+}
+
+.pdf-ocr-box.pdf-ocr-hovered {
+  background: rgb(240 178 50 / 38%);
+  box-shadow: 0 0 0 1px rgb(240 178 50 / 65%);
+}
+
+.pdf-ocr-box.pdf-ocr-selected {
+  background: rgb(88 101 242 / 42%);
+  box-shadow: 0 0 0 1px rgb(88 101 242 / 72%);
+}
+
 :root {
   --background: #f7f7f4;
   --foreground: #171717;

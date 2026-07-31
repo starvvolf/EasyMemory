@@ -66,3 +66,21 @@ export type GenerateRequest = {
   instruction: string;
   mode: StudyMode;
 };
+
+export type PdfOutlineSection = {
+  heading: string;
+  points: string[];
+};
+
+export type PdfAnalysisResult = {
+  fileName: string;
+  documentType: string;
+  summary: string;
+  keyTopics: string[];
+  outline: PdfOutlineSection[];
+  suggestedRole: string;
+};
+
+export type PdfAnalysisResponse = {
+  files: PdfAnalysisResult[];
+};

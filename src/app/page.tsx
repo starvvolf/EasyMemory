@@ -2,11 +2,14 @@
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { deleteDeck, listDecks, saveDeck } from "@/lib/storage";
+import PdfReviewViewer from "./PdfReviewViewer";
 import type {
   Card,
   Deck,
+  PdfAnalysisResponse,
   GeneratePipelineResult,
   GenerateRequest,
+  OrganizedMaterial,
   StudyMode,
 } from "@/lib/types";
 
@@ -24,17 +27,32 @@ const emptyForm: GenerateRequest = {
 };
 
 const loadingPhases = [
-  "자료와 지시사항을 읽고 있어요",
-  "공부해야 할 핵심을 파악하는 중이에요",
-  "학습용 정리본을 만드는 중이에요",
-  "선택한 유형에 맞게 카드로 바꾸는 중이에요",
+  "자료와 지시사항을 읽고 있습니다.",
+  "공부해야 할 핵심을 분석하고 있습니다.",
+  "학습용 정리본을 만들고 있습니다.",
+  "선택한 방식에 맞춰 카드로 변환하고 있습니다.",
+];
+
+const pdfAnalysisPhases = [
+  "업로드한 PDF를 확인하고 있습니다.",
+  "문서의 내용과 구조를 읽고 있습니다.",
+  "파일별 목차와 핵심 주제를 정리하고 있습니다.",
 ];
 
 export default function Home() {
   const [view, setView] = useState<View>("create");
   const [form, setForm] = useState<GenerateRequest>(emptyForm);
-  const [tagInput, setTagInput] = useState("");
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const tagInput = "";
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [pdfAnalysis, setPdfAnalysis] = useState<PdfAnalysisResponse | null>(null);
+  const [preparedResult, setPreparedResult] =
+    useState<GeneratePipelineResult | null>(null);
+  const [editableMaterial, setEditableMaterial] =
+    useState<OrganizedMaterial | null>(null);
+  const [isAnalyzingPdfs, setIsAnalyzingPdfs] = useState(false);
+  const [isPreparingMaterial, setIsPreparingMaterial] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisPhaseIndex, setAnalysisPhaseIndex] = useState(0);
   const [pipelineResult, setPipelineResult] =
     useState<GeneratePipelineResult | null>(null);
   const [editableCards, setEditableCards] = useState<Card[]>([]);
@@ -78,8 +96,18 @@ export default function Home() {
     setError("");
     setNotice("");
 
-    if (!form.sourceText.trim() && !pdfFile) {
-      setError("학습 자료 텍스트 또는 PDF 파일을 입력해야 생성할 수 있습니다.");
+    if (!preparedResult || !editableMaterial) {
+      setError("카드로 만들 학습 내용 추출 결과가 필요합니다.");
+      return;
+    }
+
+    if (
+      editableMaterial.sections.length === 0 ||
+      editableMaterial.sections.every(
+        (section) => !section.heading.trim() && !section.content.trim(),
+      )
+    ) {
+      setError("카드로 만들 학습 내용을 한 개 이상 남겨 주세요.");
       return;
     }
 
@@ -95,7 +123,15 @@ export default function Home() {
     }, 1800);
 
     try {
-      const response = await fetch("/api/generate", buildGenerateRequest(form, tagInput, pdfFile));
+      const response = await fetch(
+        "/api/generate",
+        buildCardRequest(
+          form,
+          tagInput,
+          preparedResult.analysis,
+          editableMaterial,
+        ),
+      );
       const data = await response.json();
 
       if (!response.ok) {
@@ -118,6 +154,53 @@ export default function Home() {
     }
   }
 
+  async function handlePrepareMaterial(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+    setIsPreparingMaterial(true);
+    setPreparedResult(null);
+    setEditableMaterial(null);
+
+    try {
+      const response = await fetch(
+        "/api/generate",
+        buildGenerateRequest(
+          form,
+          tagInput,
+          pdfFiles,
+          pdfAnalysis,
+          "prepare",
+        ),
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message ?? "학습 내용 추출에 실패했습니다.");
+      }
+
+      setPreparedResult(data);
+      setEditableMaterial(data.organizedMaterial);
+      setNotice("지시사항을 반영한 학습 내용을 추출했습니다.");
+    } catch (prepareError) {
+      setError(
+        prepareError instanceof Error
+          ? prepareError.message
+          : "학습 내용 추출에 실패했습니다.",
+      );
+    } finally {
+      setIsPreparingMaterial(false);
+    }
+  }
+
+  function resetAnalysisFlow() {
+    setPdfAnalysis(null);
+    setPreparedResult(null);
+    setEditableMaterial(null);
+    setError("");
+    setNotice("");
+  }
+
   function updateCard(id: string, patch: Partial<Card>) {
     setEditableCards((cards) =>
       cards.map((card) => (card.id === id ? { ...card, ...patch } : card)),
@@ -133,15 +216,15 @@ export default function Home() {
           }
         : form.mode === "translation"
           ? {
-              front: "새 한글 cue",
+              front: "한국어 cue",
               back: "New English sentence.",
             }
-        : {
-            clozeText: "새 빈칸 문장 ____",
-            answer: "정답",
-            answers: ["정답"],
-            hint: "",
-          };
+          : {
+              clozeText: "새 빈칸 문장 ____",
+              answer: "정답",
+              answers: ["정답"],
+              hint: "",
+            };
 
     setEditableCards((cards) => [
       ...cards,
@@ -179,7 +262,7 @@ export default function Home() {
       tags: parseTags(tagInput),
       mode: form.mode,
       sourceText: form.sourceText || pipelineResult.analysis.extractedMaterial || "",
-      sourceFileName: pdfFile?.name,
+      sourceFileName: pdfFiles.map((file) => file.name).join(", ") || undefined,
       instruction: form.instruction,
       analysis: pipelineResult.analysis,
       organizedMaterial: pipelineResult.organizedMaterial,
@@ -195,6 +278,56 @@ export default function Home() {
     setIsAnswerVisible(false);
     setNotice("덱을 저장했습니다.");
     setView("study");
+  }
+
+  async function handleAnalyzePdfs() {
+    setError("");
+    setNotice("");
+
+    if (pdfFiles.length === 0) {
+      setError("분석할 PDF 파일을 한 개 이상 선택하세요.");
+      return;
+    }
+
+    setIsAnalyzingPdfs(true);
+    setPdfAnalysis(null);
+    setAnalysisProgress(8);
+    setAnalysisPhaseIndex(0);
+
+    const interval = window.setInterval(() => {
+      setAnalysisProgress((progress) => Math.min(progress + 7, 92));
+      setAnalysisPhaseIndex((index) =>
+        Math.min(index + 1, pdfAnalysisPhases.length - 1),
+      );
+    }, 1100);
+
+    try {
+      const formData = new FormData();
+      pdfFiles.forEach((file) => formData.append("pdfs", file));
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message ?? "PDF 분석에 실패했습니다.");
+      }
+
+      setAnalysisProgress(100);
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      setPdfAnalysis(data);
+      setNotice("PDF 분석이 완료되었습니다. 파일별 구조와 활용 방식을 확인하세요.");
+    } catch (analysisError) {
+      setError(
+        analysisError instanceof Error
+          ? analysisError.message
+          : "PDF 분석에 실패했습니다.",
+      );
+    } finally {
+      window.clearInterval(interval);
+      setIsAnalyzingPdfs(false);
+    }
   }
 
   async function handleDeleteDeck(id: string) {
@@ -281,6 +414,9 @@ export default function Home() {
       {isGenerating ? (
         <LoadingOverlay message={loadingPhases[loadingPhaseIndex]} />
       ) : null}
+      {isPreparingMaterial ? (
+        <LoadingOverlay message="지시사항을 반영해 학습 내용을 추출하고 있습니다." />
+      ) : null}
       {showAiDebug && isDebugOpen && pipelineResult ? (
         <DebugModal result={pipelineResult} onClose={() => setIsDebugOpen(false)} />
       ) : null}
@@ -294,7 +430,7 @@ export default function Home() {
             <p className="text-xs font-bold uppercase tracking-wider text-[#B5BAC1]">
               Study Forge
             </p>
-            <h1 className="mt-2 text-xl font-black text-white">AI 암기</h1>
+            <h1 className="mt-2 text-xl font-black text-white">AI 암기자료</h1>
           </div>
 
           <nav className="space-y-2">
@@ -302,14 +438,14 @@ export default function Home() {
               + 생성
             </NavButton>
             <NavButton active={view === "decks"} onClick={() => setView("decks")}>
-              ▣ 내 덱
+              덱 목록
             </NavButton>
             <NavButton
               active={view === "study"}
               onClick={() => setView("study")}
               disabled={!selectedDeck}
             >
-              ▶ 학습
+              학습
             </NavButton>
           </nav>
 
@@ -324,7 +460,7 @@ export default function Home() {
               </button>
             ) : null}
             <p className="text-xs leading-5 text-[#7D828A]">
-              생성, 편집, 학습을 분리한 MVP 레이아웃입니다.
+              자료 입력, 생성 결과 수정, 저장, 학습을 한 흐름으로 처리합니다.
             </p>
           </div>
         </aside>
@@ -337,7 +473,11 @@ export default function Home() {
                   {getViewEyebrow(view)}
                 </p>
                 <h2 className="mt-1 text-2xl font-black text-white">
-                  {getViewTitle(view)}
+                  {getViewTitle(
+                    view,
+                    Boolean(pdfAnalysis),
+                    Boolean(preparedResult),
+                  )}
                 </h2>
               </div>
               {showAiDebug && pipelineResult ? (
@@ -353,19 +493,39 @@ export default function Home() {
           </header>
 
           <section className="flex-1 px-5 py-6 pb-24 md:pb-6">
-            <div className="mx-auto max-w-5xl">
+            <div
+              className={`mx-auto ${
+                view === "create" && pdfFiles.length > 0 && !pdfAnalysis
+                  ? "max-w-[1800px]"
+                  : "max-w-5xl"
+              }`}
+            >
               {view === "create" ? (
                 <CreateView
                   form={form}
-                  tagInput={tagInput}
                   error={error}
                   notice={notice}
                   isGenerating={isGenerating}
-                  pdfFile={pdfFile}
+                  isAnalyzingPdfs={isAnalyzingPdfs}
+                  analysisProgress={analysisProgress}
+                  analysisPhase={pdfAnalysisPhases[analysisPhaseIndex]}
+                  pdfFiles={pdfFiles}
+                  pdfAnalysis={pdfAnalysis}
+                  preparedResult={preparedResult}
+                  editableMaterial={editableMaterial}
                   setForm={setForm}
-                  setTagInput={setTagInput}
-                  setPdfFile={setPdfFile}
+                  setEditableMaterial={setEditableMaterial}
+                  setPdfFiles={setPdfFiles}
+                  clearPdfAnalysis={resetAnalysisFlow}
+                  clearPreparedResult={() => {
+                    setPreparedResult(null);
+                    setEditableMaterial(null);
+                    setError("");
+                    setNotice("");
+                  }}
+                  handlePrepareMaterial={handlePrepareMaterial}
                   handleGenerate={handleGenerate}
+                  handleAnalyzePdfs={handleAnalyzePdfs}
                 />
               ) : null}
               {view === "review" ? (
@@ -426,7 +586,7 @@ export default function Home() {
           생성
         </MobileNavButton>
         <MobileNavButton active={view === "decks"} onClick={() => setView("decks")}>
-          내 덱
+          덱
         </MobileNavButton>
         <MobileNavButton
           active={view === "study"}
@@ -442,120 +602,180 @@ export default function Home() {
 
 function CreateView({
   form,
-  tagInput,
   error,
   notice,
   isGenerating,
-  pdfFile,
+  isAnalyzingPdfs,
+  analysisProgress,
+  analysisPhase,
+  pdfFiles,
+  pdfAnalysis,
+  preparedResult,
+  editableMaterial,
   setForm,
-  setTagInput,
-  setPdfFile,
+  setPdfFiles,
+  setEditableMaterial,
+  clearPdfAnalysis,
+  clearPreparedResult,
   handleGenerate,
+  handlePrepareMaterial,
+  handleAnalyzePdfs,
 }: {
   form: GenerateRequest;
-  tagInput: string;
   error: string;
   notice: string;
   isGenerating: boolean;
-  pdfFile: File | null;
+  isAnalyzingPdfs: boolean;
+  analysisProgress: number;
+  analysisPhase: string;
+  pdfFiles: File[];
+  pdfAnalysis: PdfAnalysisResponse | null;
+  preparedResult: GeneratePipelineResult | null;
+  editableMaterial: OrganizedMaterial | null;
   setForm: React.Dispatch<React.SetStateAction<GenerateRequest>>;
-  setTagInput: (value: string) => void;
-  setPdfFile: (file: File | null) => void;
+  setPdfFiles: (files: File[]) => void;
+  setEditableMaterial: React.Dispatch<
+    React.SetStateAction<OrganizedMaterial | null>
+  >;
+  clearPdfAnalysis: () => void;
+  clearPreparedResult: () => void;
   handleGenerate: (event: FormEvent<HTMLFormElement>) => void;
+  handlePrepareMaterial: (event: FormEvent<HTMLFormElement>) => void;
+  handleAnalyzePdfs: () => void;
 }) {
-  return (
-    <form onSubmit={handleGenerate} className="space-y-5">
-      <Panel>
-        <details>
-          <summary className="cursor-pointer text-sm font-bold text-[#F2F3F5]">
-            선택 정보: 제목, 과목, 태그
-          </summary>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <TextInput
-              label="제목"
-              value={form.title}
-              placeholder="비워두면 AI가 정한 제목을 씁니다"
-              onChange={(value) => setForm((item) => ({ ...item, title: value }))}
-            />
-            <TextInput
-              label="과목"
-              value={form.subject}
-              placeholder="CS, 오픽, 전공"
-              onChange={(value) => setForm((item) => ({ ...item, subject: value }))}
-            />
-            <label className="space-y-2 sm:col-span-2">
-              <FieldLabel>태그</FieldLabel>
-              <input
-                value={tagInput}
-                onChange={(event) => setTagInput(event.target.value)}
-                className={inputClassName}
-                placeholder="네트워크, 면접"
-              />
-              <p className="text-xs text-[#949BA4]">
-                지금은 덱 목록에서 구분하는 용도입니다.
-              </p>
-            </label>
-          </div>
-        </details>
-      </Panel>
-
-      <Panel>
-        <div className="mb-4 rounded-md border border-dashed border-[#5865F2]/60 bg-[#5865F2]/10 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <FieldLabel>PDF 학습자료</FieldLabel>
-              <p className="mt-1 text-xs leading-5 text-[#B5BAC1]">
-                텍스트가 없어도 PDF만으로 생성할 수 있습니다. 인식 결과는 1단계
-                분석의 extractedMaterial로 보관됩니다.
-              </p>
+  if (!pdfAnalysis) {
+    return (
+      <form className="space-y-5">
+        <Panel>
+          <div className="rounded-md border border-dashed border-[#5865F2]/60 bg-[#5865F2]/10 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <FieldLabel>PDF 학습 자료</FieldLabel>
+                <p className="mt-1 text-xs leading-5 text-[#B5BAC1]">
+                  한 번에 최대 20개, 전체 50MB까지 분석할 수 있습니다.
+                </p>
+              </div>
+              {pdfFiles.length > 0 ? (
+                <SecondaryButton onClick={() => setPdfFiles([])}>
+                  전체 제거
+                </SecondaryButton>
+              ) : null}
             </div>
-            {pdfFile ? (
-              <SecondaryButton onClick={() => setPdfFile(null)}>PDF 제거</SecondaryButton>
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              multiple
+              disabled={isAnalyzingPdfs}
+              onChange={(event) => {
+                setPdfFiles(Array.from(event.target.files ?? []));
+                clearPdfAnalysis();
+              }}
+              className="mt-3 block w-full text-sm text-[#B5BAC1] file:mr-3 file:rounded-md file:border-0 file:bg-[#5865F2] file:px-3 file:py-2 file:font-black file:text-white hover:file:bg-[#4752C4] disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            {pdfFiles.length > 0 ? (
+              <>
+                <div className="mt-3 space-y-1 text-xs text-[#F2F3F5]">
+                  {pdfFiles.map((file) => (
+                    <p key={`${file.name}-${file.size}`}>
+                      {file.name} ({formatFileSize(file.size)})
+                    </p>
+                  ))}
+                </div>
+                <PdfReviewViewer files={pdfFiles} />
+              </>
             ) : null}
           </div>
-          <input
-            type="file"
-            accept="application/pdf,.pdf"
-            onChange={(event) => setPdfFile(event.target.files?.[0] ?? null)}
-            className="mt-3 block w-full text-sm text-[#B5BAC1] file:mr-3 file:rounded-md file:border-0 file:bg-[#5865F2] file:px-3 file:py-2 file:font-black file:text-white hover:file:bg-[#4752C4]"
-          />
-          {pdfFile ? (
-            <p className="mt-2 text-xs font-bold text-[#F2F3F5]">
-              선택됨: {pdfFile.name} ({formatFileSize(pdfFile.size)})
-            </p>
-          ) : null}
+
+          <label className="mt-5 block space-y-2">
+            <FieldLabel>학습 자료</FieldLabel>
+            <textarea
+              value={form.sourceText}
+              disabled={isAnalyzingPdfs}
+              onChange={(event) =>
+                setForm((value) => ({
+                  ...value,
+                  sourceText: event.target.value,
+                }))
+              }
+              className={`${inputClassName} min-h-80 resize-y leading-6 disabled:cursor-not-allowed disabled:opacity-50`}
+              placeholder="PDF에 덧붙일 자료나 참고 내용을 입력하세요."
+            />
+          </label>
+
+          <PrimaryButton
+            type="button"
+            onClick={handleAnalyzePdfs}
+            disabled={isAnalyzingPdfs || pdfFiles.length === 0}
+            className="mt-5 w-full sm:w-auto"
+          >
+            {isAnalyzingPdfs ? "자료 분석 중" : "자료 분석"}
+          </PrimaryButton>
+        </Panel>
+
+        {isAnalyzingPdfs ? (
+          <PdfAnalysisProgress progress={analysisProgress} phase={analysisPhase} />
+        ) : null}
+
+        <Feedback error={error} notice={notice} />
+      </form>
+    );
+  }
+
+  if (!preparedResult || !editableMaterial) {
+    return (
+      <form onSubmit={handlePrepareMaterial} className="space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <SecondaryButton onClick={clearPdfAnalysis}>
+            자료 다시 선택
+          </SecondaryButton>
+          <p className="text-sm text-[#B5BAC1]">
+            {pdfFiles.length}개 PDF 분석 완료
+          </p>
         </div>
 
-        <label className="space-y-2">
-          <FieldLabel>학습 자료</FieldLabel>
-          <textarea
-            value={form.sourceText}
-            onChange={(event) =>
-              setForm((value) => ({
-                ...value,
-                sourceText: event.target.value,
-              }))
-            }
-            className={`${inputClassName} min-h-80 resize-y leading-6`}
-            placeholder="학습 자료만 넣어도 생성할 수 있습니다. PDF를 올린 경우 보충 지시나 필요한 범위를 적어도 됩니다."
-          />
-        </label>
+        <PdfAnalysisPanel analysis={pdfAnalysis} />
 
-        <label className="mt-4 block space-y-2">
-          <FieldLabel>추가 지시사항</FieldLabel>
-          <textarea
-            value={form.instruction}
-            onChange={(event) =>
-              setForm((value) => ({
-                ...value,
-                instruction: event.target.value,
-              }))
-            }
-            className={`${inputClassName} min-h-24 resize-y text-sm leading-6`}
-            placeholder="예: 면접 대비용으로 만들어줘 / 오픽 답변 암기용으로 정리해줘 / 헷갈리는 개념 비교 위주로 만들어줘"
-          />
-        </label>
-      </Panel>
+        <Panel>
+          <label className="block space-y-2">
+            <FieldLabel>추가 지시사항</FieldLabel>
+            <textarea
+              value={form.instruction}
+              onChange={(event) =>
+                setForm((value) => ({
+                  ...value,
+                  instruction: event.target.value,
+                }))
+              }
+              className={`${inputClassName} min-h-36 resize-y text-sm leading-6`}
+              placeholder="예: 오픽 질문을 들은 뒤 한글 키워드로 스토리라인을 인출할 수 있게 정리하고, 질문 유형별 답변 구조와 스피킹 패턴을 분리해 주세요."
+            />
+          </label>
+        </Panel>
+
+        <PrimaryButton className="w-full sm:w-auto">
+          지시사항 반영해 학습 내용 추출
+        </PrimaryButton>
+
+        <Feedback error={error} notice={notice} />
+      </form>
+    );
+  }
+
+  return (
+    <form onSubmit={handleGenerate} className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <SecondaryButton onClick={clearPreparedResult}>
+          지시사항 수정
+        </SecondaryButton>
+        <p className="text-sm text-[#B5BAC1]">
+          카드로 만들 내용을 확인하고 필요한 부분을 수정하세요.
+        </p>
+      </div>
+
+      <PreparedMaterialEditor
+        material={editableMaterial}
+        onChange={setEditableMaterial}
+      />
 
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
         <label className="space-y-2">
@@ -577,12 +797,219 @@ function CreateView({
         </label>
 
         <PrimaryButton disabled={isGenerating}>
-          {isGenerating ? "생성 중" : "AI 생성"}
+          {isGenerating ? "카드 생성 중" : "AI 카드 생성"}
         </PrimaryButton>
       </div>
 
       <Feedback error={error} notice={notice} />
     </form>
+  );
+}
+
+function PreparedMaterialEditor({
+  material,
+  onChange,
+}: {
+  material: OrganizedMaterial;
+  onChange: (material: OrganizedMaterial) => void;
+}) {
+  function updateSection(
+    index: number,
+    field: "heading" | "content",
+    value: string,
+  ) {
+    onChange({
+      ...material,
+      sections: material.sections.map((section, sectionIndex) =>
+        sectionIndex === index ? { ...section, [field]: value } : section,
+      ),
+    });
+  }
+
+  return (
+    <Panel>
+      <div>
+        <h3 className="text-base font-black text-white">학습 내용 추출 결과</h3>
+        <p className="mt-1 text-sm leading-6 text-[#B5BAC1]">
+          이 내용만 카드 생성에 사용됩니다. 불필요한 부분을 지우거나 표현을
+          다듬은 뒤 생성하세요.
+        </p>
+      </div>
+
+      <label className="mt-5 block space-y-2">
+        <FieldLabel>정리 제목</FieldLabel>
+        <input
+          value={material.title}
+          onChange={(event) =>
+            onChange({ ...material, title: event.target.value })
+          }
+          className={inputClassName}
+        />
+      </label>
+
+      <div className="mt-5 space-y-4">
+        {material.sections.map((section, index) => (
+          <section
+            key={index}
+            className="rounded-md border border-[#3F4147] bg-[#1E1F22] p-4"
+          >
+            <div className="flex items-start gap-3">
+              <span className="mt-3 shrink-0 text-xs font-black text-[#B5BAC1]">
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1 space-y-3">
+                <input
+                  aria-label={`${index + 1}번 섹션 제목`}
+                  value={section.heading}
+                  onChange={(event) =>
+                    updateSection(index, "heading", event.target.value)
+                  }
+                  className={inputClassName}
+                  placeholder="섹션 제목"
+                />
+                <textarea
+                  aria-label={`${index + 1}번 섹션 내용`}
+                  value={section.content}
+                  onChange={(event) =>
+                    updateSection(index, "content", event.target.value)
+                  }
+                  className={`${inputClassName} min-h-40 resize-y text-sm leading-6`}
+                  placeholder="카드로 만들 학습 내용"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...material,
+                      sections: material.sections.filter(
+                        (_, sectionIndex) => sectionIndex !== index,
+                      ),
+                    })
+                  }
+                  className="text-xs font-bold text-[#F23F42] hover:text-[#FF6B6E]"
+                >
+                  섹션 삭제
+                </button>
+              </div>
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <SecondaryButton
+        className="mt-4"
+        onClick={() =>
+          onChange({
+            ...material,
+            sections: [
+              ...material.sections,
+              { heading: "", content: "" },
+            ],
+          })
+        }
+      >
+        섹션 추가
+      </SecondaryButton>
+    </Panel>
+  );
+}
+
+function PdfAnalysisProgress({
+  progress,
+  phase,
+}: {
+  progress: number;
+  phase: string;
+}) {
+  return (
+    <Panel>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h3 className="text-base font-black text-white">PDF 분석 중</h3>
+          <p className="mt-1 text-sm text-[#B5BAC1]">{phase}</p>
+        </div>
+        <span className="shrink-0 text-sm font-black text-[#F2F3F5]">
+          {progress}%
+        </span>
+      </div>
+      <div className="mt-5 h-2 overflow-hidden rounded-full bg-[#1E1F22]">
+        <div
+          className="h-full rounded-full bg-[#5865F2] transition-[width] duration-500"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </Panel>
+  );
+}
+
+function PdfAnalysisPanel({ analysis }: { analysis: PdfAnalysisResponse }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const file = analysis.files[activeIndex];
+
+  if (!file) {
+    return null;
+  }
+
+  return (
+    <Panel>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-black text-white">PDF 분석 결과</h3>
+          <p className="mt-1 text-xs leading-5 text-[#B5BAC1]">
+            {analysis.files.length}개 파일 중 {activeIndex + 1}번째 분석 결과
+          </p>
+        </div>
+        {analysis.files.length > 1 ? (
+          <div className="flex gap-2">
+            <SecondaryButton
+              onClick={() => setActiveIndex((index) => Math.max(index - 1, 0))}
+              disabled={activeIndex === 0}
+            >
+              이전
+            </SecondaryButton>
+            <SecondaryButton
+              onClick={() =>
+                setActiveIndex((index) => Math.min(index + 1, analysis.files.length - 1))
+              }
+              disabled={activeIndex === analysis.files.length - 1}
+            >
+              다음
+            </SecondaryButton>
+          </div>
+        ) : null}
+      </div>
+
+      <article className="mt-4 rounded-md border border-[#3F4147] bg-[#1E1F22] p-4">
+        <h4 className="font-black text-[#F2F3F5]">{file.fileName}</h4>
+        <p className="mt-2 text-sm font-bold text-[#B5BAC1]">
+          {file.documentType}
+        </p>
+        <p className="mt-2 text-sm leading-6 text-[#DCDDDE]">{file.summary}</p>
+        <div className="mt-3">
+          <p className="text-xs font-bold text-[#B5BAC1]">핵심 주제</p>
+          <p className="mt-1 text-sm text-[#F2F3F5]">
+            {file.keyTopics.join(" · ") || "추출된 주제가 없습니다."}
+          </p>
+        </div>
+        <div className="mt-4 space-y-3">
+          <p className="text-xs font-bold text-[#B5BAC1]">구조 및 목차식 정리</p>
+          {file.outline.map((section, index) => (
+            <div key={`${section.heading}-${index}`} className="border-l-2 border-[#5865F2] pl-3">
+              <p className="text-sm font-black text-[#F2F3F5]">{section.heading}</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4 text-sm leading-5 text-[#DCDDDE]">
+                {section.points.map((point, pointIndex) => (
+                  <li key={`${point}-${pointIndex}`}>{point}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 rounded-md bg-[#313338] p-3 text-sm leading-6 text-[#B5BAC1]">
+          <span className="font-bold text-[#F2F3F5]">권장 역할: </span>
+          {file.suggestedRole}
+        </p>
+      </article>
+    </Panel>
   );
 }
 
@@ -624,8 +1051,7 @@ function ReviewView({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-[#B5BAC1]">
-          {editableCards.length}개 카드 ·{" "}
-          {getModeLabel(formMode)}
+          {editableCards.length}개 카드 · {getModeLabel(formMode)}
         </p>
         <div className="flex gap-2">
           <SecondaryButton onClick={addCard}>카드 추가</SecondaryButton>
@@ -655,12 +1081,12 @@ function ReviewView({
             {card.type === "flashcard" || card.type === "translation" ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <TextField
-                  label={card.type === "translation" ? "한글 cue" : "질문"}
+                  label={card.type === "translation" ? "한국어 cue" : "질문"}
                   value={card.front ?? ""}
                   onChange={(value) => updateCard(card.id, { front: value })}
                 />
                 <TextField
-                  label={card.type === "translation" ? "영어 표현" : "답"}
+                  label={card.type === "translation" ? "영어 표현" : "답변"}
                   value={card.back ?? ""}
                   onChange={(value) => updateCard(card.id, { back: value })}
                 />
@@ -776,7 +1202,7 @@ function DecksView({
                 </h3>
               )}
               <p className="mt-1 text-sm text-[#B5BAC1]">
-                {deck.cards.length}장 · {deck.subject || "과목 없음"} ·{" "}
+                {deck.cards.length}개 · {deck.subject || "과목 없음"} ·{" "}
                 {getModeLabel(deck.mode)}
               </p>
               <p className="mt-1 text-xs text-[#949BA4]">
@@ -787,7 +1213,7 @@ function DecksView({
               <PrimaryButton type="button" onClick={() => startStudy(deck)}>
                 학습 시작
               </PrimaryButton>
-              <SecondaryButton onClick={() => openDetail(deck)}>세부정보</SecondaryButton>
+              <SecondaryButton onClick={() => openDetail(deck)}>상세 정보</SecondaryButton>
               <SecondaryButton onClick={() => startRename(deck)}>이름 수정</SecondaryButton>
               <SecondaryButton onClick={() => void deleteDeck(deck.id)}>
                 삭제
@@ -826,7 +1252,7 @@ function StudyView({
       <EmptyState
         title="학습할 덱을 선택하세요."
         body="저장된 덱에서 학습을 시작하거나 새 자료를 생성할 수 있습니다."
-        actionLabel="내 덱 보기"
+        actionLabel="덱 보기"
         onAction={goDecks}
         secondaryLabel="새 자료 생성"
         onSecondary={goCreate}
@@ -862,7 +1288,7 @@ function StudyView({
         {isAnswerVisible && currentStudyCard.type !== "cloze" ? (
           <div className="mt-8 border-t border-[#3F4147] pt-5">
             <p className="text-sm font-bold text-[#B5BAC1]">
-              {currentStudyCard.type === "translation" ? "영어 표현" : "답"}
+              {currentStudyCard.type === "translation" ? "영어 표현" : "답변"}
             </p>
             <p className="mt-2 text-lg leading-8 text-white">{currentStudyCard.back}</p>
             {currentStudyCard.hint ? (
@@ -876,7 +1302,7 @@ function StudyView({
 
       <div className="grid grid-cols-3 gap-2">
         <SecondaryButton onClick={() => setIsAnswerVisible((visible) => !visible)}>
-          답 {isAnswerVisible ? "OFF" : "ON"}
+          답 {isAnswerVisible ? "숨기기" : "보기"}
         </SecondaryButton>
         <button
           type="button"
@@ -993,30 +1419,6 @@ function SecondaryButton({
   );
 }
 
-function TextInput({
-  label,
-  value,
-  placeholder,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="space-y-2">
-      <FieldLabel>{label}</FieldLabel>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={inputClassName}
-        placeholder={placeholder}
-      />
-    </label>
-  );
-}
-
 function TextField({
   label,
   value,
@@ -1099,7 +1501,7 @@ function LoadingOverlay({ message }: { message: string }) {
         </div>
         <p className="mt-4 font-black text-white">{message}</p>
         <p className="mt-2 text-sm text-[#B5BAC1]">
-          3단계 파이프라인을 순서대로 실행하고 있습니다.
+          분석, 정리, 카드 생성 단계를 차례로 실행하고 있습니다.
         </p>
       </div>
     </div>
@@ -1154,7 +1556,7 @@ function DeckDetailModal({
                 {deck.title}
               </h2>
               <p className="mt-2 text-sm text-[#B5BAC1]">
-                {deck.cards.length}장 · {deck.subject || "과목 없음"} ·{" "}
+                {deck.cards.length}개 · {deck.subject || "과목 없음"} ·{" "}
                 {getModeLabel(deck.mode)}
               </p>
             </div>
@@ -1212,13 +1614,13 @@ function DeckDetailModal({
                     <div className="mt-2 space-y-2 text-sm leading-6">
                       <p>
                         <span className="font-bold text-[#B5BAC1]">
-                          {card.type === "translation" ? "한글 cue: " : "질문: "}
+                          {card.type === "translation" ? "한국어 cue: " : "질문: "}
                         </span>
                         {card.front}
                       </p>
                       <p>
                         <span className="font-bold text-[#B5BAC1]">
-                          {card.type === "translation" ? "영어 표현: " : "답: "}
+                          {card.type === "translation" ? "영어 표현: " : "답변: "}
                         </span>
                         {card.back}
                       </p>
@@ -1360,11 +1762,19 @@ function DebugBlock({ title, value }: { title: string; value: unknown }) {
   );
 }
 
-function getViewTitle(view: View) {
+function getViewTitle(
+  view: View,
+  hasPdfAnalysis = false,
+  hasPreparedResult = false,
+) {
   const titles: Record<View, string> = {
-    create: "자료 변환",
-    review: "생성 결과 편집",
-    decks: "내 덱",
+    create: hasPreparedResult
+      ? "학습 내용 추출 결과"
+      : hasPdfAnalysis
+        ? "분석 결과"
+        : "자료 분석",
+    review: "생성 결과 수정",
+    decks: "덱 목록",
     study: "학습",
   };
   return titles[view];
@@ -1393,7 +1803,7 @@ function getStudyPromptLabel(mode: StudyMode) {
   const labels: Record<StudyMode, string> = {
     flashcard: "질문",
     cloze: "빈칸 문제",
-    translation: "한글 cue",
+    translation: "한국어 cue",
   };
   return labels[mode];
 }
@@ -1401,17 +1811,20 @@ function getStudyPromptLabel(mode: StudyMode) {
 function buildGenerateRequest(
   form: GenerateRequest,
   tagInput: string,
-  pdfFile: File | null,
+  pdfFiles: File[],
+  pdfAnalysis: PdfAnalysisResponse | null,
+  stage: "full" | "prepare" = "full",
 ): RequestInit {
   const tags = parseTags(tagInput);
 
-  if (!pdfFile) {
+  if (pdfFiles.length === 0) {
     return {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
         tags,
+        stage,
       }),
     };
   }
@@ -1422,12 +1835,36 @@ function buildGenerateRequest(
   formData.append("tags", JSON.stringify(tags));
   formData.append("sourceText", form.sourceText);
   formData.append("instruction", form.instruction);
+  formData.append("stage", stage);
+  formData.append(
+    "analysisContext",
+    pdfAnalysis ? JSON.stringify(pdfAnalysis) : "",
+  );
   formData.append("mode", form.mode);
-  formData.append("pdf", pdfFile);
+  pdfFiles.forEach((file) => formData.append("pdfs", file));
 
   return {
     method: "POST",
     body: formData,
+  };
+}
+
+function buildCardRequest(
+  form: GenerateRequest,
+  tagInput: string,
+  analysis: GeneratePipelineResult["analysis"],
+  material: OrganizedMaterial,
+): RequestInit {
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...form,
+      tags: parseTags(tagInput),
+      stage: "cards",
+      preparedAnalysis: JSON.stringify(analysis),
+      preparedMaterial: JSON.stringify(material),
+    }),
   };
 }
 
