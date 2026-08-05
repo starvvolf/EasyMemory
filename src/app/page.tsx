@@ -5,11 +5,16 @@ import { deleteDeck, listDecks, saveDeck } from "@/lib/storage";
 import PdfReviewViewer from "./PdfReviewViewer";
 import type {
   Card,
+  ConfirmedRecallDesign,
+  ConfirmedStudyGuideline,
   Deck,
   PdfAnalysisResponse,
   GeneratePipelineResult,
   GenerateRequest,
+  LearningUnitSample,
   OrganizedMaterial,
+  RecallDesignDraft,
+  StudyGuidelineDraft,
   StudyMode,
 } from "@/lib/types";
 
@@ -37,6 +42,7 @@ const pdfAnalysisPhases = [
   "업로드한 PDF를 확인하고 있습니다.",
   "문서의 내용과 구조를 읽고 있습니다.",
   "파일별 목차와 핵심 주제를 정리하고 있습니다.",
+  "학습 방향을 설계하고 있습니다.",
 ];
 
 export default function Home() {
@@ -45,6 +51,21 @@ export default function Home() {
   const tagInput = "";
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const [pdfAnalysis, setPdfAnalysis] = useState<PdfAnalysisResponse | null>(null);
+  const [studyGuideline, setStudyGuideline] =
+    useState<StudyGuidelineDraft | null>(null);
+  const [selectedFocusGroupId, setSelectedFocusGroupId] = useState<string | null>(
+    null,
+  );
+  const [isPlanningGuideline, setIsPlanningGuideline] = useState(false);
+  const [recallDesign, setRecallDesign] = useState<RecallDesignDraft | null>(null);
+  const [selectedRecallOptionId, setSelectedRecallOptionId] = useState<
+    string | null
+  >(null);
+  const [learningSample, setLearningSample] =
+    useState<LearningUnitSample | null>(null);
+  const [sampleFeedback, setSampleFeedback] = useState("");
+  const [isDesigningRecall, setIsDesigningRecall] = useState(false);
+  const [isGeneratingSample, setIsGeneratingSample] = useState(false);
   const [preparedResult, setPreparedResult] =
     useState<GeneratePipelineResult | null>(null);
   const [editableMaterial, setEditableMaterial] =
@@ -101,6 +122,23 @@ export default function Home() {
       return;
     }
 
+    const confirmedGuideline = buildConfirmedStudyGuideline(
+      studyGuideline,
+      selectedFocusGroupId,
+    );
+    if (!confirmedGuideline) {
+      setError("학습 방향을 먼저 모두 선택해 주세요.");
+      return;
+    }
+    const confirmedRecall = buildConfirmedRecallDesign(
+      recallDesign,
+      selectedRecallOptionId,
+    );
+    if (!confirmedRecall || !learningSample) {
+      setError("인출 방식과 대표 예시를 먼저 확정해 주세요.");
+      return;
+    }
+
     if (
       editableMaterial.sections.length === 0 ||
       editableMaterial.sections.every(
@@ -130,6 +168,10 @@ export default function Home() {
           tagInput,
           preparedResult.analysis,
           editableMaterial,
+          confirmedGuideline,
+          confirmedRecall,
+          learningSample,
+          sampleFeedback,
         ),
       );
       const data = await response.json();
@@ -162,6 +204,25 @@ export default function Home() {
     setPreparedResult(null);
     setEditableMaterial(null);
 
+    const confirmedGuideline = buildConfirmedStudyGuideline(
+      studyGuideline,
+      selectedFocusGroupId,
+    );
+    if (!confirmedGuideline) {
+      setIsPreparingMaterial(false);
+      setError("학습 방향을 먼저 모두 선택해 주세요.");
+      return;
+    }
+    const confirmedRecall = buildConfirmedRecallDesign(
+      recallDesign,
+      selectedRecallOptionId,
+    );
+    if (!confirmedRecall || !learningSample) {
+      setIsPreparingMaterial(false);
+      setError("인출 방식과 대표 예시를 먼저 확정해 주세요.");
+      return;
+    }
+
     try {
       const response = await fetch(
         "/api/generate",
@@ -170,6 +231,10 @@ export default function Home() {
           tagInput,
           pdfFiles,
           pdfAnalysis,
+          confirmedGuideline,
+          confirmedRecall,
+          learningSample,
+          sampleFeedback,
           "prepare",
         ),
       );
@@ -195,6 +260,9 @@ export default function Home() {
 
   function resetAnalysisFlow() {
     setPdfAnalysis(null);
+    setStudyGuideline(null);
+    setSelectedFocusGroupId(null);
+    resetRecallFlow();
     setPreparedResult(null);
     setEditableMaterial(null);
     setError("");
@@ -264,6 +332,12 @@ export default function Home() {
       sourceText: form.sourceText || pipelineResult.analysis.extractedMaterial || "",
       sourceFileName: pdfFiles.map((file) => file.name).join(", ") || undefined,
       instruction: form.instruction,
+      studyGuideline:
+        buildConfirmedStudyGuideline(studyGuideline, selectedFocusGroupId) ??
+        undefined,
+      recallDesign:
+        buildConfirmedRecallDesign(recallDesign, selectedRecallOptionId) ??
+        undefined,
       analysis: pipelineResult.analysis,
       organizedMaterial: pipelineResult.organizedMaterial,
       cards: normalizeCards(editableCards),
@@ -291,6 +365,9 @@ export default function Home() {
 
     setIsAnalyzingPdfs(true);
     setPdfAnalysis(null);
+    setStudyGuideline(null);
+    setSelectedFocusGroupId(null);
+    resetRecallFlow();
     setAnalysisProgress(8);
     setAnalysisPhaseIndex(0);
 
@@ -317,7 +394,12 @@ export default function Home() {
       setAnalysisProgress(100);
       await new Promise((resolve) => window.setTimeout(resolve, 250));
       setPdfAnalysis(data);
-      setNotice("PDF 분석이 완료되었습니다. 파일별 구조와 활용 방식을 확인하세요.");
+      const planned = await requestStudyGuideline(data);
+      setNotice(
+        planned
+          ? "PDF 분석과 학습 방향 설계가 완료되었습니다."
+          : "PDF 분석은 완료되었습니다. 학습 방향 만들기를 다시 시도해 주세요.",
+      );
     } catch (analysisError) {
       setError(
         analysisError instanceof Error
@@ -327,6 +409,144 @@ export default function Home() {
     } finally {
       window.clearInterval(interval);
       setIsAnalyzingPdfs(false);
+    }
+  }
+
+  function resetRecallFlow() {
+    setRecallDesign(null);
+    setSelectedRecallOptionId(null);
+    setLearningSample(null);
+    setSampleFeedback("");
+    setPreparedResult(null);
+    setEditableMaterial(null);
+  }
+
+  async function requestStudyGuideline(
+    analysis: PdfAnalysisResponse | null = pdfAnalysis,
+  ): Promise<boolean> {
+    if (!analysis) {
+      return false;
+    }
+
+    setError("");
+    setIsPlanningGuideline(true);
+    try {
+      const response = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analysis, instruction: form.instruction }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "학습 방향을 만드는 데 실패했습니다.");
+      }
+
+      const draft = data as StudyGuidelineDraft;
+      setStudyGuideline(draft);
+      setSelectedFocusGroupId(draft.recommendedGroupId);
+      return true;
+    } catch (guidelineError) {
+      setError(
+        guidelineError instanceof Error
+          ? guidelineError.message
+          : "학습 방향을 만드는 데 실패했습니다.",
+      );
+      return false;
+    } finally {
+      setIsPlanningGuideline(false);
+    }
+  }
+
+  async function handleCreateRecallDesign() {
+    const guideline = buildConfirmedStudyGuideline(
+      studyGuideline,
+      selectedFocusGroupId,
+    );
+    if (!pdfAnalysis || !guideline) {
+      setError("집중할 학습 영역을 먼저 선택해 주세요.");
+      return;
+    }
+
+    setError("");
+    setNotice("");
+    setIsDesigningRecall(true);
+    setRecallDesign(null);
+    setSelectedRecallOptionId(null);
+    setLearningSample(null);
+    try {
+      const response = await fetch("/api/recall-design", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analysis: pdfAnalysis, guideline }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "인출 방식을 설계하지 못했습니다.");
+      }
+
+      const draft = data as RecallDesignDraft;
+      setRecallDesign(draft);
+      setSelectedRecallOptionId(draft.recommendedOptionId);
+      setNotice("자료에 맞는 인출 방식을 만들었습니다.");
+    } catch (designError) {
+      setError(
+        designError instanceof Error
+          ? designError.message
+          : "인출 방식을 설계하지 못했습니다.",
+      );
+    } finally {
+      setIsDesigningRecall(false);
+    }
+  }
+
+  async function handleGenerateSample() {
+    const guideline = buildConfirmedStudyGuideline(
+      studyGuideline,
+      selectedFocusGroupId,
+    );
+    const confirmedRecall = buildConfirmedRecallDesign(
+      recallDesign,
+      selectedRecallOptionId,
+    );
+    if (!guideline || !confirmedRecall) {
+      setError("인출 방식을 먼저 선택해 주세요.");
+      return;
+    }
+
+    setError("");
+    setNotice("");
+    setIsGeneratingSample(true);
+    setLearningSample(null);
+    try {
+      const response = await fetch(
+        "/api/generate",
+        buildGenerateRequest(
+          form,
+          tagInput,
+          pdfFiles,
+          pdfAnalysis,
+          guideline,
+          confirmedRecall,
+          null,
+          "",
+          "sample",
+        ),
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message ?? "대표 예시를 만들지 못했습니다.");
+      }
+
+      setLearningSample(data.sample);
+      setNotice("대표 예시를 확인하고 필요한 수정 의견을 남겨 주세요.");
+    } catch (sampleError) {
+      setError(
+        sampleError instanceof Error
+          ? sampleError.message
+          : "대표 예시를 만들지 못했습니다.",
+      );
+    } finally {
+      setIsGeneratingSample(false);
     }
   }
 
@@ -511,10 +731,29 @@ export default function Home() {
                   analysisPhase={pdfAnalysisPhases[analysisPhaseIndex]}
                   pdfFiles={pdfFiles}
                   pdfAnalysis={pdfAnalysis}
+                  studyGuideline={studyGuideline}
+                  selectedFocusGroupId={selectedFocusGroupId}
+                  isPlanningGuideline={isPlanningGuideline}
+                  recallDesign={recallDesign}
+                  selectedRecallOptionId={selectedRecallOptionId}
+                  learningSample={learningSample}
+                  sampleFeedback={sampleFeedback}
+                  isDesigningRecall={isDesigningRecall}
+                  isGeneratingSample={isGeneratingSample}
                   preparedResult={preparedResult}
                   editableMaterial={editableMaterial}
                   setForm={setForm}
                   setEditableMaterial={setEditableMaterial}
+                  selectFocusGroup={(id) => {
+                    setSelectedFocusGroupId(id);
+                    resetRecallFlow();
+                  }}
+                  selectRecallOption={(id) => {
+                    setSelectedRecallOptionId(id);
+                    setLearningSample(null);
+                    setSampleFeedback("");
+                  }}
+                  setSampleFeedback={setSampleFeedback}
                   setPdfFiles={setPdfFiles}
                   clearPdfAnalysis={resetAnalysisFlow}
                   clearPreparedResult={() => {
@@ -526,6 +765,9 @@ export default function Home() {
                   handlePrepareMaterial={handlePrepareMaterial}
                   handleGenerate={handleGenerate}
                   handleAnalyzePdfs={handleAnalyzePdfs}
+                  handleCreateRecallDesign={handleCreateRecallDesign}
+                  handleGenerateSample={handleGenerateSample}
+                  retryGuideline={() => void requestStudyGuideline()}
                 />
               ) : null}
               {view === "review" ? (
@@ -610,16 +852,31 @@ function CreateView({
   analysisPhase,
   pdfFiles,
   pdfAnalysis,
+  studyGuideline,
+  selectedFocusGroupId,
+  isPlanningGuideline,
+  recallDesign,
+  selectedRecallOptionId,
+  learningSample,
+  sampleFeedback,
+  isDesigningRecall,
+  isGeneratingSample,
   preparedResult,
   editableMaterial,
   setForm,
   setPdfFiles,
   setEditableMaterial,
+  selectFocusGroup,
+  selectRecallOption,
+  setSampleFeedback,
   clearPdfAnalysis,
   clearPreparedResult,
   handleGenerate,
   handlePrepareMaterial,
   handleAnalyzePdfs,
+  handleCreateRecallDesign,
+  handleGenerateSample,
+  retryGuideline,
 }: {
   form: GenerateRequest;
   error: string;
@@ -630,6 +887,15 @@ function CreateView({
   analysisPhase: string;
   pdfFiles: File[];
   pdfAnalysis: PdfAnalysisResponse | null;
+  studyGuideline: StudyGuidelineDraft | null;
+  selectedFocusGroupId: string | null;
+  isPlanningGuideline: boolean;
+  recallDesign: RecallDesignDraft | null;
+  selectedRecallOptionId: string | null;
+  learningSample: LearningUnitSample | null;
+  sampleFeedback: string;
+  isDesigningRecall: boolean;
+  isGeneratingSample: boolean;
   preparedResult: GeneratePipelineResult | null;
   editableMaterial: OrganizedMaterial | null;
   setForm: React.Dispatch<React.SetStateAction<GenerateRequest>>;
@@ -637,11 +903,17 @@ function CreateView({
   setEditableMaterial: React.Dispatch<
     React.SetStateAction<OrganizedMaterial | null>
   >;
+  selectFocusGroup: (id: string) => void;
+  selectRecallOption: (id: string) => void;
+  setSampleFeedback: (value: string) => void;
   clearPdfAnalysis: () => void;
   clearPreparedResult: () => void;
   handleGenerate: (event: FormEvent<HTMLFormElement>) => void;
   handlePrepareMaterial: (event: FormEvent<HTMLFormElement>) => void;
   handleAnalyzePdfs: () => void;
+  handleCreateRecallDesign: () => void;
+  handleGenerateSample: () => void;
+  retryGuideline: () => void;
 }) {
   if (!pdfAnalysis) {
     return (
@@ -735,26 +1007,96 @@ function CreateView({
 
         <PdfAnalysisPanel analysis={pdfAnalysis} />
 
-        <Panel>
-          <label className="block space-y-2">
-            <FieldLabel>추가 지시사항</FieldLabel>
-            <textarea
-              value={form.instruction}
-              onChange={(event) =>
-                setForm((value) => ({
-                  ...value,
-                  instruction: event.target.value,
-                }))
-              }
-              className={`${inputClassName} min-h-36 resize-y text-sm leading-6`}
-              placeholder="예: 오픽 질문을 들은 뒤 한글 키워드로 스토리라인을 인출할 수 있게 정리하고, 질문 유형별 답변 구조와 스피킹 패턴을 분리해 주세요."
-            />
-          </label>
-        </Panel>
+        {studyGuideline ? (
+          <StudyGuidelinePanel
+            guideline={studyGuideline}
+            selectedGroupId={selectedFocusGroupId}
+            onSelect={selectFocusGroup}
+          />
+        ) : (
+          <Panel>
+            <h3 className="text-base font-black text-white">학습 방향 준비</h3>
+            <p className="mt-2 text-sm leading-6 text-[#B5BAC1]">
+              {isPlanningGuideline
+                ? "자료에 맞는 학습 목표와 카드 구성을 정하고 있습니다."
+                : "학습 방향을 아직 만들지 못했습니다. 다시 시도해 주세요."}
+            </p>
+            {!isPlanningGuideline ? (
+              <SecondaryButton className="mt-4" onClick={retryGuideline}>
+                학습 방향 다시 만들기
+              </SecondaryButton>
+            ) : null}
+          </Panel>
+        )}
 
-        <PrimaryButton className="w-full sm:w-auto">
-          지시사항 반영해 학습 내용 추출
-        </PrimaryButton>
+        {!recallDesign ? (
+          <PrimaryButton
+            type="button"
+            onClick={handleCreateRecallDesign}
+            className="w-full sm:w-auto"
+            disabled={
+              !studyGuideline ||
+              !selectedFocusGroupId ||
+              isPlanningGuideline ||
+              isDesigningRecall
+            }
+          >
+            {isDesigningRecall ? "인출 방식 설계 중" : "인출 방식 정하기"}
+          </PrimaryButton>
+        ) : (
+          <RecallDesignPanel
+            design={recallDesign}
+            selectedOptionId={selectedRecallOptionId}
+            onSelect={selectRecallOption}
+          />
+        )}
+
+        {recallDesign && !learningSample ? (
+          <PrimaryButton
+            type="button"
+            onClick={handleGenerateSample}
+            className="w-full sm:w-auto"
+            disabled={!selectedRecallOptionId || isGeneratingSample}
+          >
+            {isGeneratingSample ? "대표 예시 생성 중" : "대표 예시 1개 만들기"}
+          </PrimaryButton>
+        ) : null}
+
+        {learningSample ? (
+          <>
+            <LearningSamplePanel sample={learningSample} />
+            <Panel>
+              <label className="block space-y-2">
+                <FieldLabel>예시에 대한 수정 의견</FieldLabel>
+                <textarea
+                  value={sampleFeedback}
+                  onChange={(event) => setSampleFeedback(event.target.value)}
+                  className={`${inputClassName} min-h-28 resize-y text-sm leading-6`}
+                  placeholder="예: Cue를 더 짧게 하고, Target에는 영어 패턴과 원문 예문을 함께 넣어 주세요."
+                />
+              </label>
+
+              <label className="mt-5 block space-y-2">
+                <FieldLabel>추가 지시사항</FieldLabel>
+                <textarea
+                  value={form.instruction}
+                  onChange={(event) =>
+                    setForm((value) => ({
+                      ...value,
+                      instruction: event.target.value,
+                    }))
+                  }
+                  className={`${inputClassName} min-h-24 resize-y text-sm leading-6`}
+                  placeholder="전체 자료에 함께 적용할 추가 지시가 있다면 입력하세요."
+                />
+              </label>
+            </Panel>
+
+            <PrimaryButton className="w-full sm:w-auto">
+              이 구조로 전체 학습 내용 만들기
+            </PrimaryButton>
+          </>
+        ) : null}
 
         <Feedback error={error} notice={notice} />
       </form>
@@ -782,12 +1124,13 @@ function CreateView({
           <FieldLabel>암기 방식</FieldLabel>
           <select
             value={form.mode}
-            onChange={(event) =>
+            onChange={(event) => {
+              const mode = event.target.value as StudyMode;
               setForm((value) => ({
                 ...value,
-                mode: event.target.value as StudyMode,
-              }))
-            }
+                mode,
+              }));
+            }}
             className={inputClassName}
           >
             <option value="flashcard">플래시카드</option>
@@ -910,6 +1253,165 @@ function PreparedMaterialEditor({
       >
         섹션 추가
       </SecondaryButton>
+    </Panel>
+  );
+}
+
+function StudyGuidelinePanel({
+  guideline,
+  selectedGroupId,
+  onSelect,
+}: {
+  guideline: StudyGuidelineDraft;
+  selectedGroupId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Panel>
+      <div className="border-b border-[#3F4147] pb-5">
+        <p className="text-xs font-bold uppercase text-[#23A559]">자료 구조</p>
+        <h3 className="mt-2 text-lg font-black text-white">학습 영역 선택</h3>
+        <p className="mt-2 text-sm leading-6 text-[#DBDEE1]">
+          {guideline.summary}
+        </p>
+      </div>
+
+      <h4 className="mt-5 text-sm font-black text-white">
+        {guideline.question}
+      </h4>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {guideline.groups.map((group, index) => {
+          const selected = selectedGroupId === group.id;
+          const recommended = guideline.recommendedGroupId === group.id;
+          return (
+            <button
+              key={group.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelect(group.id)}
+              className={`min-h-32 rounded-md border p-4 text-left transition-colors ${
+                selected
+                  ? "border-[#5865F2] bg-[#5865F2]/15"
+                  : "border-[#3F4147] bg-[#2B2D31] hover:border-[#686D73]"
+              }`}
+            >
+              <span className="flex items-start justify-between gap-3">
+                <span className="text-sm font-black text-white">
+                  {String.fromCharCode(65 + index)}. {group.title}
+                </span>
+                {recommended ? (
+                  <span className="shrink-0 text-[11px] font-bold text-[#23A559]">
+                    추천
+                  </span>
+                ) : null}
+              </span>
+              <span className="mt-2 block text-xs leading-5 text-[#B5BAC1]">
+                {group.description}
+              </span>
+              <span className="mt-3 block text-xs font-black text-[#F2F3F5]">
+                {group.itemCount}개 {group.itemLabel}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+function RecallDesignPanel({
+  design,
+  selectedOptionId,
+  onSelect,
+}: {
+  design: RecallDesignDraft;
+  selectedOptionId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Panel>
+      <p className="text-xs font-bold uppercase text-[#23A559]">인출 설계</p>
+      <h3 className="mt-2 text-lg font-black text-white">{design.question}</h3>
+      <div className="mt-4 grid gap-2 lg:grid-cols-3">
+        {design.options.map((option) => {
+          const selected = selectedOptionId === option.id;
+          const recommended = design.recommendedOptionId === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelect(option.id)}
+              className={`min-h-48 rounded-md border p-4 text-left transition-colors ${
+                selected
+                  ? "border-[#5865F2] bg-[#5865F2]/15"
+                  : "border-[#3F4147] bg-[#2B2D31] hover:border-[#686D73]"
+              }`}
+            >
+              <span className="flex items-start justify-between gap-2">
+                <span className="text-sm font-black leading-5 text-white">
+                  {option.title}
+                </span>
+                {recommended ? (
+                  <span className="shrink-0 text-[11px] font-bold text-[#23A559]">
+                    추천
+                  </span>
+                ) : null}
+              </span>
+              <span className="mt-4 block text-xs font-black text-[#B5BAC1]">
+                보고
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-[#F2F3F5]">
+                {option.cue}
+              </span>
+              <span className="mt-3 block text-xs font-black text-[#B5BAC1]">
+                인출
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-[#F2F3F5]">
+                {option.target}
+              </span>
+              <span className="mt-3 block text-xs text-[#949BA4]">
+                한 장: {option.unit}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+function LearningSamplePanel({ sample }: { sample: LearningUnitSample }) {
+  return (
+    <Panel>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase text-[#23A559]">대표 예시</p>
+          <h3 className="mt-2 text-lg font-black text-white">{sample.title}</h3>
+        </div>
+        <span className="text-xs font-bold text-[#B5BAC1]">1개만 미리보기</span>
+      </div>
+
+      <div className="mt-5 border-y border-[#3F4147] py-4">
+        <p className="text-xs font-black text-[#B5BAC1]">보고</p>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white">
+          {sample.cue}
+        </p>
+      </div>
+      <div className="border-b border-[#3F4147] py-4">
+        <p className="text-xs font-black text-[#B5BAC1]">인출</p>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white">
+          {sample.target}
+        </p>
+      </div>
+      {sample.supportingInfo ? (
+        <div className="pt-4">
+          <p className="text-xs font-black text-[#B5BAC1]">참고</p>
+          <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#DBDEE1]">
+            {sample.supportingInfo}
+          </p>
+        </div>
+      ) : null}
     </Panel>
   );
 }
@@ -1813,7 +2315,11 @@ function buildGenerateRequest(
   tagInput: string,
   pdfFiles: File[],
   pdfAnalysis: PdfAnalysisResponse | null,
-  stage: "full" | "prepare" = "full",
+  studyGuideline: ConfirmedStudyGuideline,
+  recallDesign: ConfirmedRecallDesign,
+  approvedSample: LearningUnitSample | null,
+  sampleFeedback: string,
+  stage: "full" | "sample" | "prepare" = "full",
 ): RequestInit {
   const tags = parseTags(tagInput);
 
@@ -1824,6 +2330,10 @@ function buildGenerateRequest(
       body: JSON.stringify({
         ...form,
         tags,
+        studyGuideline: JSON.stringify(studyGuideline),
+        recallDesign: JSON.stringify(recallDesign),
+        approvedSample: approvedSample ? JSON.stringify(approvedSample) : "",
+        sampleFeedback,
         stage,
       }),
     };
@@ -1835,6 +2345,13 @@ function buildGenerateRequest(
   formData.append("tags", JSON.stringify(tags));
   formData.append("sourceText", form.sourceText);
   formData.append("instruction", form.instruction);
+  formData.append("studyGuideline", JSON.stringify(studyGuideline));
+  formData.append("recallDesign", JSON.stringify(recallDesign));
+  formData.append(
+    "approvedSample",
+    approvedSample ? JSON.stringify(approvedSample) : "",
+  );
+  formData.append("sampleFeedback", sampleFeedback);
   formData.append("stage", stage);
   formData.append(
     "analysisContext",
@@ -1854,6 +2371,10 @@ function buildCardRequest(
   tagInput: string,
   analysis: GeneratePipelineResult["analysis"],
   material: OrganizedMaterial,
+  studyGuideline: ConfirmedStudyGuideline,
+  recallDesign: ConfirmedRecallDesign,
+  approvedSample: LearningUnitSample,
+  sampleFeedback: string,
 ): RequestInit {
   return {
     method: "POST",
@@ -1862,9 +2383,48 @@ function buildCardRequest(
       ...form,
       tags: parseTags(tagInput),
       stage: "cards",
+      studyGuideline: JSON.stringify(studyGuideline),
+      recallDesign: JSON.stringify(recallDesign),
+      approvedSample: JSON.stringify(approvedSample),
+      sampleFeedback,
       preparedAnalysis: JSON.stringify(analysis),
       preparedMaterial: JSON.stringify(material),
     }),
+  };
+}
+
+function buildConfirmedRecallDesign(
+  draft: RecallDesignDraft | null,
+  selectedOptionId: string | null,
+): ConfirmedRecallDesign | null {
+  if (!draft || !selectedOptionId) {
+    return null;
+  }
+
+  const selectedOption = draft.options.find(
+    (option) => option.id === selectedOptionId,
+  );
+  return selectedOption ? { selectedOption } : null;
+}
+
+function buildConfirmedStudyGuideline(
+  draft: StudyGuidelineDraft | null,
+  selectedGroupId: string | null,
+): ConfirmedStudyGuideline | null {
+  if (!draft || !selectedGroupId) {
+    return null;
+  }
+
+  const selectedGroup = draft.groups.find(
+    (group) => group.id === selectedGroupId,
+  );
+  if (!selectedGroup) {
+    return null;
+  }
+
+  return {
+    summary: draft.summary,
+    selectedGroup,
   };
 }
 

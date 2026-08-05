@@ -4,6 +4,7 @@ import type {
   AnalysisResult,
   Card,
   GeneratePipelineResult,
+  LearningUnitSample,
   OrganizedMaterial,
   StudyMode,
 } from "@/lib/types";
@@ -15,7 +16,14 @@ const requestSchema = z.object({
   sourceText: z.string().optional().default(""),
   instruction: z.string().optional().default(""),
   analysisContext: z.string().optional().default(""),
-  stage: z.enum(["full", "prepare", "cards"]).optional().default("full"),
+  studyGuideline: z.string().optional().default(""),
+  recallDesign: z.string().optional().default(""),
+  approvedSample: z.string().optional().default(""),
+  sampleFeedback: z.string().optional().default(""),
+  stage: z
+    .enum(["full", "sample", "prepare", "cards"])
+    .optional()
+    .default("full"),
   preparedAnalysis: z.string().optional().default(""),
   preparedMaterial: z.string().optional().default(""),
   mode: z.enum(["flashcard", "cloze", "translation"]),
@@ -62,11 +70,19 @@ const cardsSchema = z.object({
   cards: z.array(cardDraftSchema).min(1),
 });
 
+const learningUnitSampleSchema = z.object({
+  title: z.string(),
+  cue: z.string(),
+  target: z.string(),
+  supportingInfo: z.string(),
+});
+
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
 
-type PipelineStep = "analysis" | "organize" | "cards";
+type PipelineStep = "sample" | "analysis" | "organize" | "cards";
 
 const stepMessages: Record<PipelineStep, string> = {
+  sample: "대표 학습 예시 생성에 실패했습니다.",
   analysis: "학습 자료 분석에 실패했습니다.",
   organize: "학습 자료 정리에 실패했습니다.",
   cards: "암기 카드 생성에 실패했습니다.",
@@ -112,6 +128,21 @@ export async function POST(request: Request) {
       );
     }
 
+    if (input.stage === "sample") {
+      if (!input.studyGuideline || !input.recallDesign) {
+        return NextResponse.json(
+          {
+            message: "대표 예시에 사용할 학습 영역과 인출 방식이 필요합니다.",
+            step: "input",
+          },
+          { status: 400 },
+        );
+      }
+
+      const sample = await runSampleExtraction(input, pdfs);
+      return NextResponse.json({ sample });
+    }
+
     if (input.stage === "cards") {
       if (!input.preparedAnalysis || !input.preparedMaterial) {
         return NextResponse.json(
@@ -134,6 +165,10 @@ export async function POST(request: Request) {
         organizedMaterial,
         analysis,
         input.instruction,
+        input.studyGuideline,
+        input.recallDesign,
+        input.approvedSample,
+        input.sampleFeedback,
       );
 
       return NextResponse.json({
@@ -159,6 +194,10 @@ export async function POST(request: Request) {
       organizedMaterial,
       analysis,
       input.instruction,
+      input.studyGuideline,
+      input.recallDesign,
+      input.approvedSample,
+      input.sampleFeedback,
     );
 
     const result: GeneratePipelineResult = {
@@ -216,6 +255,10 @@ async function parseGenerateRequest(request: Request) {
     sourceText: String(formData.get("sourceText") ?? ""),
     instruction: String(formData.get("instruction") ?? ""),
     analysisContext: String(formData.get("analysisContext") ?? ""),
+    studyGuideline: String(formData.get("studyGuideline") ?? ""),
+    recallDesign: String(formData.get("recallDesign") ?? ""),
+    approvedSample: String(formData.get("approvedSample") ?? ""),
+    sampleFeedback: String(formData.get("sampleFeedback") ?? ""),
     stage: String(formData.get("stage") ?? "full"),
     preparedAnalysis: String(formData.get("preparedAnalysis") ?? ""),
     preparedMaterial: String(formData.get("preparedMaterial") ?? ""),
@@ -303,6 +346,18 @@ function buildAnalysisPrompt(input: GenerateInput, pdfs: PdfInput[]) {
     input.analysisContext
       ? `\n사용자가 확인한 사전 구조 분석 결과:\n${input.analysisContext}`
       : "",
+    input.studyGuideline
+      ? `\n사용자가 확정한 학습 가이드:\n${input.studyGuideline}`
+      : "",
+    input.recallDesign
+      ? `\n사용자가 확정한 인출 방식:\n${input.recallDesign}`
+      : "",
+    input.approvedSample
+      ? `\n사용자가 확인한 대표 예시:\n${input.approvedSample}`
+      : "",
+    input.sampleFeedback
+      ? `\n대표 예시에 대한 사용자 피드백:\n${input.sampleFeedback}`
+      : "",
     "",
     "해야 할 일:",
     "- 사용자가 공부하고 외워야 할 목표를 파악합니다.",
@@ -311,6 +366,11 @@ function buildAnalysisPrompt(input: GenerateInput, pdfs: PdfInput[]) {
     "- 이후 암기자료 생성을 위한 추천 전략을 제안합니다.",
     "- extractedMaterial에는 2단계가 원문처럼 사용할 수 있는 핵심 학습 내용을 충분히 자세히 정리합니다.",
     "- PDF 안에 그림이나 슬라이드 구조가 의미를 가진다면 텍스트로 설명해 extractedMaterial에 포함합니다.",
+    "- 확정 학습 가이드에 selectedGroup이 있으면 그 영역만 추출하고 다른 영역의 내용은 제외합니다.",
+    "- selectedGroup.itemCount에 적힌 개수만큼 독립 학습 단위를 빠짐없이 구분해 추출합니다.",
+    "- 패턴, 예문, 스크립트는 요약하지 말고 PDF의 원문 표현과 번역을 그대로 보존합니다.",
+    "- 확정 인출 방식의 Cue, Target, Unit 구조를 모든 학습 단위에 동일하게 적용합니다.",
+    "- 대표 예시와 사용자 피드백이 있으면 그 형식과 수정 방향을 나머지 전체에 적용합니다.",
     "- 불확실한 내용은 추측하지 말고 확인 가능한 내용 중심으로 씁니다.",
   ].join("\n");
 }
@@ -348,6 +408,10 @@ async function runOrganization(
     user: [
       `제목: ${input.title || analysis.keyTopics[0] || fallbackTitle}`,
       `사용자 추가 지시사항: ${input.instruction || "없음"}`,
+      `사용자가 확정한 학습 가이드: ${input.studyGuideline || "없음"}`,
+      `사용자가 확정한 인출 방식: ${input.recallDesign || "없음"}`,
+      `사용자가 확인한 대표 예시: ${input.approvedSample || "없음"}`,
+      `대표 예시에 대한 사용자 피드백: ${input.sampleFeedback || "없음"}`,
       "",
       "1단계 분석 결과:",
       JSON.stringify(analysis, null, 2),
@@ -357,6 +421,11 @@ async function runOrganization(
       "",
       "해야 할 일:",
       "- 분석 결과에 맞게 학습용 정리본으로 재구성합니다.",
+      "- 확정 학습 가이드가 있으면 선택 영역과 단위 수를 계약처럼 따릅니다.",
+      "- selectedGroup 이외의 자료는 정리본에 섞지 않습니다.",
+      "- 선택 영역의 각 학습 단위를 하나씩 분리하고 원문 표현을 요약하거나 생략하지 않습니다.",
+      "- 각 단위는 승인된 대표 예시와 같은 Cue, Target, Unit 구조로 작성합니다.",
+      "- 사용자 피드백은 대표 예시뿐 아니라 나머지 모든 단위에 적용합니다.",
       "- 카드로 변환하기 쉽게 섹션을 나눕니다.",
       "- 원문의 중요한 표현과 자료의 의미를 보존합니다.",
       "- 비교 자료는 차이점이 드러나게 정리합니다.",
@@ -372,7 +441,12 @@ async function runCardGeneration(
   organizedMaterial: OrganizedMaterial,
   analysis: AnalysisResult,
   instruction = "",
+  studyGuideline = "",
+  recallDesign = "",
+  approvedSample = "",
+  sampleFeedback = "",
 ) {
+  const targetCardCount = getSelectedUnitCount(studyGuideline);
   const analysisForCards = {
     detectedGoal: analysis.detectedGoal,
     sourceType: analysis.sourceType,
@@ -389,6 +463,9 @@ async function runCardGeneration(
       properties: {
         cards: {
           type: "array",
+          ...(targetCardCount
+            ? { minItems: targetCardCount, maxItems: targetCardCount }
+            : {}),
           items: {
             type: "object",
             additionalProperties: false,
@@ -423,6 +500,13 @@ async function runCardGeneration(
     user: [
       `선택한 암기 유형: ${mode}`,
       `사용자 추가 지시사항: ${instruction || "없음"}`,
+      `사용자가 확정한 학습 가이드: ${studyGuideline || "없음"}`,
+      `사용자가 확정한 인출 방식: ${recallDesign || "없음"}`,
+      `사용자가 확인한 대표 예시: ${approvedSample || "없음"}`,
+      `대표 예시에 대한 사용자 피드백: ${sampleFeedback || "없음"}`,
+      targetCardCount
+        ? `반드시 생성할 카드 수: ${targetCardCount}장`
+        : "카드 수: 자료 분량에 맞게 판단",
       "",
       "1단계 분석 결과:",
       JSON.stringify(analysisForCards, null, 2),
@@ -432,6 +516,10 @@ async function runCardGeneration(
       "",
       "규칙:",
       "- 카드의 사실과 표현은 사용자가 검토한 최종 학습 내용에서만 가져옵니다.",
+      "- 확정 학습 가이드가 있으면 선택 영역과 독립 학습 단위 수를 반드시 따릅니다.",
+      "- 선택 영역의 독립 학습 단위 하나당 카드 하나를 만들고 다른 영역의 카드는 만들지 않습니다.",
+      "- 카드 앞면은 확정 인출 방식의 Cue, 뒷면은 Target이 되도록 구성합니다.",
+      "- 승인된 대표 예시와 사용자 피드백의 구조를 모든 카드에 동일하게 적용합니다.",
       "- 분석 결과는 학습 목표와 카드 구성 전략을 판단하는 용도로만 사용합니다.",
       "- flashcard 유형이면 type을 flashcard로 두고 front/back을 채웁니다. clozeText, answer, hint는 빈 문자열, answers는 빈 배열로 둡니다.",
       "- cloze 유형이면 type을 cloze로 두고 clozeText, answer, hint를 채웁니다. front/back은 빈 문자열로 둡니다.",
@@ -474,6 +562,66 @@ async function runCardGeneration(
       basis: card.basis || undefined,
     };
   });
+}
+
+async function runSampleExtraction(
+  input: GenerateInput,
+  pdfs: PdfInput[],
+): Promise<LearningUnitSample> {
+  const content = await callOpenAIJson({
+    schemaName: "learning_unit_sample",
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["title", "cue", "target", "supportingInfo"],
+      properties: {
+        title: { type: "string" },
+        cue: { type: "string" },
+        target: { type: "string" },
+        supportingInfo: { type: "string" },
+      },
+    },
+    system:
+      "당신은 사용자가 선택한 인출 훈련 구조를 실제 학습 예시 하나로 구현하는 전문가입니다. 선택 영역에서 대표 단위 하나만 사용하며 다른 단위나 영역을 섞지 않습니다. 결과는 한국어 JSON만 반환합니다.",
+    user: [
+      "PDF 구조 분석:",
+      input.analysisContext || "없음",
+      "",
+      "선택한 학습 영역:",
+      input.studyGuideline,
+      "",
+      "선택한 인출 방식:",
+      input.recallDesign,
+      "",
+      "해야 할 일:",
+      "- 선택 영역의 첫 번째 또는 가장 대표적인 실제 학습 단위 하나만 사용합니다.",
+      "- cue에는 사용자가 보고 인출을 시작할 앞면 정보를 넣습니다.",
+      "- target에는 사용자가 보지 않고 인출해야 할 정답 전체를 넣습니다.",
+      "- supportingInfo에는 인출 정답은 아니지만 예시 확인에 필요한 보조 정보를 넣고, 없으면 빈 문자열로 둡니다.",
+      "- PDF 원문의 표현, 번역, 예문을 임의로 바꾸거나 요약하지 않습니다.",
+      "- 아직 나머지 학습 단위는 만들지 않습니다.",
+    ].join("\n"),
+    files: pdfs,
+    step: "sample",
+  });
+
+  return learningUnitSampleSchema.parse(content);
+}
+
+function getSelectedUnitCount(studyGuideline: string) {
+  if (!studyGuideline) {
+    return undefined;
+  }
+
+  try {
+    const guideline = JSON.parse(studyGuideline) as {
+      selectedGroup?: { itemCount?: number };
+    };
+    const count = guideline.selectedGroup?.itemCount;
+    return typeof count === "number" && count > 0 ? count : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function normalizeClozeText(clozeText: string, answers: string[]) {

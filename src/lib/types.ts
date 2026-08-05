@@ -1,5 +1,52 @@
 export type StudyMode = "flashcard" | "cloze" | "translation";
 
+export type StudyFocusGroup = {
+  id: string;
+  title: string;
+  description: string;
+  itemCount: number;
+  itemLabel: string;
+  selectionInstruction: string;
+};
+
+export type StudyGuidelineDraft = {
+  summary: string;
+  question: string;
+  groups: StudyFocusGroup[];
+  recommendedGroupId: string;
+};
+
+export type ConfirmedStudyGuideline = {
+  summary: string;
+  selectedGroup: StudyFocusGroup;
+};
+
+export type RecallTrainingOption = {
+  id: string;
+  title: string;
+  cue: string;
+  target: string;
+  unit: string;
+  instruction: string;
+};
+
+export type RecallDesignDraft = {
+  question: string;
+  options: RecallTrainingOption[];
+  recommendedOptionId: string;
+};
+
+export type ConfirmedRecallDesign = {
+  selectedOption: RecallTrainingOption;
+};
+
+export type LearningUnitSample = {
+  title: string;
+  cue: string;
+  target: string;
+  supportingInfo: string;
+};
+
 export type CardStatus = "new" | "known" | "review";
 
 export type SourceType =
@@ -54,6 +101,8 @@ export type Deck = GeneratePipelineResult & {
   sourceText: string;
   sourceFileName?: string;
   instruction: string;
+  studyGuideline?: ConfirmedStudyGuideline;
+  recallDesign?: ConfirmedRecallDesign;
   createdAt: string;
   updatedAt: string;
 };
