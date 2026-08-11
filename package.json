@@ -6,9 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "eval:import": "node scripts/import-eval-baseline.mjs",
+    "eval:import:test": "node --test scripts/import-eval-baseline.test.mjs"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@xyflow/react": "^12.10.0",
+    "lucide-react": "^1.25.0",
     "next": "16.2.9",
     "pdfjs-dist": "^6.2.108",
     "react": "19.2.3",

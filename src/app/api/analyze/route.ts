@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { PdfAnalysisResponse } from "@/lib/types";
+import { DEFAULT_MODEL, DEFAULT_REASONING_EFFORT } from "@/lib/model-config";
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
 const maxFiles = 20;
 const maxTotalBytes = 50 * 1024 * 1024;
 const analysisBatchSize = 3;
@@ -120,7 +120,8 @@ async function analyzePdf(file: File) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
+      model: DEFAULT_MODEL,
+      reasoning: { effort: DEFAULT_REASONING_EFFORT },
       input: [
         {
           role: "system",

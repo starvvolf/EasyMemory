@@ -3,7 +3,9 @@ import { z } from "zod";
 import type {
   PdfAnalysisResponse,
   StudyGuidelineDraft,
+  WholeDocumentCorePlan,
 } from "@/lib/types";
+import { DEFAULT_MODEL, DEFAULT_REASONING_EFFORT } from "@/lib/model-config";
 
 const requestSchema = z.object({
   analysis: z.object({
@@ -24,7 +26,35 @@ const requestSchema = z.object({
     ),
   }),
   instruction: z.string().optional().default(""),
+  runMode: z
+    .enum(["focused_area", "whole_document_core"])
+    .optional()
+    .default("focused_area"),
 });
+
+const wholeDocumentCoreAreaSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  learningValue: z.string(),
+  sourceScope: z.array(z.string()).min(1),
+  estimatedLearningUnitCount: z.number().int().min(1).max(200),
+});
+
+const wholeDocumentCoreSchema = z.object({
+  summary: z.string(),
+  learningGoal: z.string(),
+  selectionRationale: z.string(),
+  areas: z.array(wholeDocumentCoreAreaSchema).min(1).max(12),
+  exclusions: z.array(z.string()),
+  estimatedLearningUnitCount: z.number().int().min(1).max(200),
+});
+
+type PdfInput = {
+  filename: string;
+  mimeType: string;
+  base64: string;
+};
 
 const focusGroupSchema = z.object({
   id: z.string(),
@@ -42,8 +72,6 @@ const responseSchema = z.object({
   recommendedGroupId: z.string(),
 });
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
-
 export async function POST(request: Request) {
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -53,7 +81,29 @@ export async function POST(request: Request) {
       );
     }
 
+    if (request.headers.get("content-type")?.includes("multipart/form-data")) {
+      const { input, pdfs } = await parseWholeDocumentRequest(request);
+      if (input.runMode !== "whole_document_core") {
+        return NextResponse.json(
+          { message: "전체 핵심 학습 실험 요청 형식이 올바르지 않습니다." },
+          { status: 400 },
+        );
+      }
+      const plan = await createWholeDocumentCorePlan(
+        input.analysis,
+        input.instruction,
+        pdfs,
+      );
+      return NextResponse.json(plan);
+    }
+
     const input = requestSchema.parse(await request.json());
+    if (input.runMode === "whole_document_core") {
+      return NextResponse.json(
+        { message: "전체 핵심 학습 실험에는 원본 PDF가 필요합니다." },
+        { status: 400 },
+      );
+    }
     const draft = await createGuideline(input.analysis, input.instruction);
     return NextResponse.json(draft);
   } catch (error) {
@@ -63,6 +113,118 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+async function parseWholeDocumentRequest(request: Request) {
+  const formData = await request.formData();
+  const files = formData
+    .getAll("pdfs")
+    .filter((entry): entry is File => entry instanceof File);
+
+  if (files.length === 0 || files.length > 20) {
+    throw new Error("전체 핵심 학습 실험에는 1~20개의 PDF가 필요합니다.");
+  }
+  if (files.some((file) => file.type !== "application/pdf")) {
+    throw new Error("PDF 파일만 사용할 수 있습니다.");
+  }
+  if (files.reduce((sum, file) => sum + file.size, 0) > 50 * 1024 * 1024) {
+    throw new Error("PDF 전체 용량은 최대 50MB입니다.");
+  }
+
+  const input = requestSchema.parse({
+    analysis: JSON.parse(String(formData.get("analysis") ?? "{}")),
+    instruction: String(formData.get("instruction") ?? ""),
+    runMode: String(formData.get("runMode") ?? ""),
+  });
+  const pdfs = await Promise.all(
+    files.map(async (file) => ({
+      filename: file.name,
+      mimeType: file.type,
+      base64: Buffer.from(await file.arrayBuffer()).toString("base64"),
+    })),
+  );
+  return { input, pdfs };
+}
+
+async function createWholeDocumentCorePlan(
+  analysis: PdfAnalysisResponse,
+  instruction: string,
+  pdfs: PdfInput[],
+): Promise<WholeDocumentCorePlan> {
+  const prompt = [
+    "PDF 구조 분석 결과:",
+    JSON.stringify(analysis, null, 2),
+    "",
+    `사용자 추가 지시사항: ${instruction || "없음"}`,
+    "",
+    "특정 영역 하나를 선택하지 않고, 원자료 전체에서 능동 인출로 학습할 가치가 높은 핵심 범위를 결정하세요.",
+    "",
+    "규칙:",
+    "- 모든 섹션을 균등하게 포함하거나 카드 수를 동일하게 배분하지 않습니다.",
+    "- 학습 목표, 개념적 중요도, 이후 인출 가치에 따라 핵심 LearningUnit 후보만 선별합니다.",
+    "- 자료의 중요한 하위 영역이 빠지지 않게 하되 상대적 중요도를 반영해 estimatedLearningUnitCount를 다르게 정할 수 있습니다.",
+    "- 예시, 반복 요약, 번역 중복, 페이지 번호와 저작권 문구 같은 메타데이터는 핵심 지식보다 낮은 우선순위로 봅니다.",
+    "- 구체적 예시가 핵심 개념의 이해나 조건 적용에 필수적인 경우에만 포함하고, 예시 자체를 무조건 독립 단위로 세지 않습니다.",
+    "- areas는 서로 구분되는 핵심 의미 범위이며, sourceScope에는 실제 제목·페이지·슬라이드 범위를 기록합니다.",
+    "- learningValue에는 해당 영역을 인출할 수 있어야 하는 이유를 씁니다.",
+    "- exclusions에는 이번 학습 목표에서 제외하거나 낮은 우선순위로 둔 내용과 이유를 함께 씁니다.",
+    "- estimatedLearningUnitCount는 카드 수가 아니라 전체 핵심 범위에서 기대하는 독립 LearningUnit 수이며 areas의 합과 같아야 합니다.",
+    "- gold/reference나 외부 정답을 가정하지 말고 제공된 analyze 결과와 PDF 원문만 사용합니다.",
+  ].join("\n");
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: DEFAULT_MODEL,
+      reasoning: { effort: DEFAULT_REASONING_EFFORT },
+      input: [
+        {
+          role: "system",
+          content:
+            "당신은 학습자료 전체에서 중요도와 능동 인출 가치를 기준으로 핵심 학습 범위를 선별하는 학습 설계자입니다. 문서 분량을 균등 배분하지 않고 실제 학습 가치에 따라 범위를 결정합니다. 결과는 한국어 JSON만 반환합니다.",
+        },
+        {
+          role: "user",
+          content: [
+            ...pdfs.map((file) => ({
+              type: "input_file" as const,
+              filename: file.filename,
+              file_data: `data:${file.mimeType};base64,${file.base64}`,
+            })),
+            { type: "input_text" as const, text: prompt },
+          ],
+        },
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "whole_document_core_plan",
+          strict: true,
+          schema: wholeDocumentCoreJsonSchema,
+        },
+      },
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error("OpenAI whole-document core planning request failed");
+  }
+
+  const parsed = wholeDocumentCoreSchema.parse(
+    JSON.parse(extractOutputText(data)),
+  );
+  return {
+    ...parsed,
+    estimatedLearningUnitCount: parsed.areas.reduce(
+      (sum, area) => sum + area.estimatedLearningUnitCount,
+      0,
+    ),
+  };
 }
 
 async function createGuideline(
@@ -76,7 +238,8 @@ async function createGuideline(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
+      model: DEFAULT_MODEL,
+      reasoning: { effort: DEFAULT_REASONING_EFFORT },
       input: [
         {
           role: "system",
@@ -167,6 +330,63 @@ const guidelineJsonSchema = {
           selectionInstruction: { type: "string" },
         },
       },
+    },
+  },
+} as const;
+
+const wholeDocumentCoreJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "summary",
+    "learningGoal",
+    "selectionRationale",
+    "areas",
+    "exclusions",
+    "estimatedLearningUnitCount",
+  ],
+  properties: {
+    summary: { type: "string" },
+    learningGoal: { type: "string" },
+    selectionRationale: { type: "string" },
+    areas: {
+      type: "array",
+      minItems: 1,
+      maxItems: 12,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "id",
+          "title",
+          "description",
+          "learningValue",
+          "sourceScope",
+          "estimatedLearningUnitCount",
+        ],
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
+          learningValue: { type: "string" },
+          sourceScope: {
+            type: "array",
+            minItems: 1,
+            items: { type: "string" },
+          },
+          estimatedLearningUnitCount: {
+            type: "integer",
+            minimum: 1,
+            maximum: 200,
+          },
+        },
+      },
+    },
+    exclusions: { type: "array", items: { type: "string" } },
+    estimatedLearningUnitCount: {
+      type: "integer",
+      minimum: 1,
+      maximum: 200,
     },
   },
 } as const;

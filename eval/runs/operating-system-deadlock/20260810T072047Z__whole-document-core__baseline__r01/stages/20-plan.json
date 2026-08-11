@@ -1,0 +1,247 @@
+{
+  "artifactType": "study-forge-stage-artifact",
+  "artifactVersion": "v0",
+  "runId": "20260810T072047Z__whole-document-core__baseline__r01",
+  "stage": "plan",
+  "capturedAt": null,
+  "capturedAtAvailability": "unavailable; legacy export only records artifact capturedAt",
+  "modelConfiguration": {
+    "plan": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "wholeDocumentCorePlan": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    }
+  },
+  "modelConfigurationAvailability": "copied-from-legacy-export",
+  "inputRefs": [
+    "inputs.json",
+    "stages/10-analyze.json"
+  ],
+  "request": null,
+  "requestAvailability": "unavailable-in-legacy-browser-export",
+  "response": {
+    "plan": {
+      "summary": "이 자료는 데드락의 개념과 발생 조건, 자원 할당 그래프를 통한 특성화, 그리고 예방·회피·탐지 및 복구의 처리 방법으로 구성되어 있습니다.",
+      "question": "어느 데드락 학습 영역에 집중할까요?",
+      "groups": [
+        {
+          "id": "concept-and-conditions",
+          "title": "데드락 개념과 발생 조건",
+          "description": "데드락의 정의, 세마포어 예시, 시스템 자원 모델 및 데드락의 네 가지 필요조건으로 이루어진 영역입니다.",
+          "itemCount": 4,
+          "itemLabel": "개념·조건",
+          "selectionInstruction": "데드락의 의미, 세마포어 발생 예시, 프로세스·자원 모델, 상호 배제·점유 및 대기·비선점·순환 대기 조건을 포함하며, 그래프 판정과 처리 방법은 제외합니다."
+        },
+        {
+          "id": "resource-allocation-graph",
+          "title": "자원 할당 그래프와 데드락 판정",
+          "description": "요청·할당 간선의 의미와 자원 인스턴스 수에 따른 사이클 기반 데드락 판정으로 이루어진 영역입니다.",
+          "itemCount": 4,
+          "itemLabel": "그래프 규칙",
+          "selectionInstruction": "프로세스·자원 정점, 요청 간선, 할당 간선, 사이클과 단일·다중 인스턴스의 판정 차이를 포함하며, 예방·회피·탐지·복구 절차는 제외합니다."
+        },
+        {
+          "id": "deadlock-handling",
+          "title": "데드락 처리 방법",
+          "description": "데드락 예방, 회피, 탐지 및 복구라는 세 가지 처리 접근법과 각각의 핵심 원리로 이루어진 영역입니다.",
+          "itemCount": 3,
+          "itemLabel": "처리 전략",
+          "selectionInstruction": "예방·회피·탐지 및 복구의 접근 방식과 차이를 포함하며, 네 필요조건의 상세 정의와 자원 할당 그래프의 기본 표기법은 제외합니다."
+        },
+        {
+          "id": "prevention",
+          "title": "데드락 예방",
+          "description": "데드락의 네 필요조건 가운데 성립을 막을 수 있는 조건을 깨는 예방 방법으로 이루어진 영역입니다.",
+          "itemCount": 4,
+          "itemLabel": "예방 지침",
+          "selectionInstruction": "상호 배제의 한계와 점유 및 대기·비선점·순환 대기를 방지하는 방법을 포함하며, 안전 상태 판단과 발생 후 탐지·복구는 제외합니다."
+        },
+        {
+          "id": "avoidance-and-safety",
+          "title": "데드락 회피와 안전 상태",
+          "description": "안전·불안전 상태, 클레임 간선 기반 자원 할당 그래프 회피, 은행원 알고리즘의 적용으로 이루어진 영역입니다.",
+          "itemCount": 4,
+          "itemLabel": "회피 개념",
+          "selectionInstruction": "안전 상태의 의미, 최대 요구량 사전 정보, 클레임·요청·할당 간선 전환, 사이클에 따른 승인 판단과 은행원 알고리즘을 포함하며, 예방 규칙과 탐지 후 복구는 제외합니다."
+        },
+        {
+          "id": "detection-and-recovery",
+          "title": "데드락 탐지 및 복구",
+          "description": "사이클 탐색을 통한 데드락 탐지와 프로세스 종료·자원 선점을 통한 복구 방법으로 이루어진 영역입니다.",
+          "itemCount": 3,
+          "itemLabel": "탐지·복구 방법",
+          "selectionInstruction": "주기적 사이클 탐색, 프로세스 종료 방식, 자원 선점 방식의 복구를 포함하며, 데드락 예방과 안전 상태 기반 회피는 제외합니다."
+        }
+      ],
+      "recommendedGroupId": "deadlock-handling"
+    },
+    "wholeDocumentCorePlan": {
+      "summary": "이 자료의 핵심 학습 범위는 데드락의 정의와 성립 조건을 정확히 판별하고, 자원 할당 그래프를 해석하며, 예방·회피·탐지 및 복구 전략을 서로 비교하여 적용하는 데 있다. 특히 네 필요조건, 그래프의 사이클 해석, 안전 상태 판단, 처리 방식의 차이를 능동적으로 인출할 수 있어야 한다.",
+      "learningGoal": "학습자는 데드락을 설명하고 발생 조건 및 자원 할당 그래프의 의미를 판별하며, 예방·회피·탐지 및 복구 방식의 원리와 적용 차이를 설명할 수 있다.",
+      "selectionRationale": "자료의 명시적 학습 목표인 개념·발생 조건·처리 방안을 중심으로 범위를 구성했다. 단순 정의보다 이후 모든 처리 전략의 판단 기준이 되는 네 필요조건과 그래프 해석에 높은 비중을 두었고, 처리 방법은 예방·회피·탐지 및 복구가 혼동되기 쉬우므로 각각의 작동 시점, 전제 조건, 핵심 방법을 비교 가능한 범위로 선별했다. 세마포어 및 그래프 사례는 독립 암기 대상보다 개념과 규칙을 적용하는 근거로 포함했다.",
+      "areas": [
+        {
+          "id": "deadlock-concept-and-conditions",
+          "title": "데드락의 개념과 네 가지 필요조건",
+          "description": "데드락은 차단된 프로세스들이 자원을 하나 이상 보유한 채 서로가 보유한 자원을 무한히 기다리는 상태이다. 시스템의 프로세스·자원 유형·자원 인스턴스 모델, 그리고 요청(request)·사용(use)·반납(release) 흐름을 이해한다. 데드락이 발생할 수 있는 네 필요조건인 상호 배제, 점유 및 대기, 비선점, 순환 대기를 각각 정의하고, 네 조건이 동시에 성립해야 함을 설명한다.",
+          "learningValue": "데드락 여부와 예방 전략을 판단하는 가장 기초적이면서도 핵심적인 기준이다. 각 조건의 정의를 구별하고 특정 자원 요청 상황에서 어떤 조건이 성립하는지 인출할 수 있어야 이후 그래프 판정과 처리 전략 비교가 가능하다.",
+          "sourceScope": [
+            "3쪽: What is deadlock?",
+            "4쪽: Deadlock Characterization — System modeling",
+            "5쪽: Deadlock Characterization — four conditions",
+            "14쪽: Summary — 데드락 정의 및 네 조건 요약"
+          ],
+          "estimatedLearningUnitCount": 5
+        },
+        {
+          "id": "resource-allocation-graph-and-cycle-interpretation",
+          "title": "자원 할당 그래프와 사이클 기반 데드락 판정",
+          "description": "자원 할당 그래프에서 프로세스 정점과 자원 유형 정점을 구분하고, 프로세스→자원 간선은 요청, 자원→프로세스 간선은 할당임을 해석한다. 그래프에 사이클이 없으면 데드락이 없으며, 사이클이 있을 때 자원 유형별 인스턴스가 하나이면 데드락이지만 여러 인스턴스이면 데드락 가능성만 의미한다는 조건부 판정 규칙을 다룬다.",
+          "learningValue": "그래프를 요청·할당 관계로 변환하고 사이클의 의미를 자원 인스턴스 수에 따라 구분하는 능력은 데드락 문제에서 높은 적용·인출 가치를 가진다. ‘사이클이 있으면 항상 데드락’이라는 대표적 오개념도 예방한다.",
+          "sourceScope": [
+            "6쪽: Deadlock Characterization — Resource allocation graph",
+            "7쪽: Deadlock examples with resource allocation graph"
+          ],
+          "estimatedLearningUnitCount": 4
+        },
+        {
+          "id": "deadlock-handling-and-prevention",
+          "title": "처리 전략의 분류와 데드락 예방",
+          "description": "데드락 처리의 큰 분류인 예방, 회피, 탐지 및 복구를 발생 전 차단 여부와 사전 정보 필요성 관점에서 구별한다. 예방은 네 필요조건 중 적어도 하나를 성립하지 못하게 하는 방식이며, 점유 및 대기는 실행 전 모든 자원을 요청·할당하게 하여 방지하고, 비선점은 추가 자원을 즉시 얻지 못하면 보유 자원을 반납하게 하며, 순환 대기는 자원 유형의 전체 순서에 따라 오름차순으로 요청하게 하여 방지한다. 상호 배제는 일반적으로 제거하기 어렵다는 점을 포함한다.",
+          "learningValue": "예방은 네 필요조건을 실제 정책으로 연결하는 핵심 응용이다. 각 예방 정책이 어느 조건을 깨는지 역으로 설명할 수 있어야 하며, 회피·탐지 및 복구와 달리 데드락 진입 자체를 구조적으로 막는 방식임을 구별해야 한다.",
+          "sourceScope": [
+            "8쪽: Methods for Handling Deadlocks",
+            "9쪽: Deadlock Prevention",
+            "14쪽: Summary — 예방의 핵심 원리"
+          ],
+          "estimatedLearningUnitCount": 5
+        },
+        {
+          "id": "avoidance-safe-state-and-claims",
+          "title": "데드락 회피와 안전 상태 판단",
+          "description": "회피는 자원 요청을 즉시 승인하기 전에 그 할당 후에도 시스템이 안전 상태인지 검사하는 방식이다. 안전 상태는 어떤 프로세스 완료 순서가 존재하여 각 프로세스의 최대 요구량을 충족하면서 데드락을 피할 수 있는 상태이며, 안전 상태는 데드락이 없음을 보장하지만 불안전 상태는 데드락 가능성을 뜻한다. 회피에는 각 프로세스의 자원 최대 요구량 같은 사전 정보가 필요하다. 단일 인스턴스 자원에서는 클레임 간선(향후 요청 가능성), 요청 간선, 할당 간선의 전환과 사이클 형성 여부를 이용하며, 다중 인스턴스 자원에는 은행원 알고리즘을 사용한다.",
+          "learningValue": "안전 상태·불안전 상태·데드락 상태를 구분하고, 요청 승인 전 결과 상태를 가정하여 판단하는 것은 회피의 핵심 추론이다. 특히 불안전이 곧 즉시 데드락은 아니라는 점과, 사이클 형성 요청을 거부하는 이유를 정확히 인출해야 한다.",
+          "sourceScope": [
+            "10쪽: Deadlock Avoidance — safe/unsafe state",
+            "11쪽: Deadlock Avoidance — claim edge 및 banker’s algorithm 언급",
+            "12쪽: Deadlock Avoidance — unsafe state example",
+            "14쪽: Summary — 회피의 핵심 원리"
+          ],
+          "estimatedLearningUnitCount": 5
+        },
+        {
+          "id": "detection-and-recovery",
+          "title": "데드락 탐지 및 복구",
+          "description": "탐지 및 복구 방식은 시스템의 데드락 진입을 허용한 뒤 주기적으로 자원 할당 그래프의 사이클을 탐색하여 데드락을 찾아낸다. 복구는 모든 데드락 프로세스를 종료하거나, 사이클이 제거될 때까지 프로세스를 하나씩 종료하는 방법을 사용한다. 또한 일부 프로세스의 자원을 선점하여 다른 프로세스에 할당함으로써 사이클을 끊는 자원 선점 방식도 있다. 다중 인스턴스 자원에서는 탐지에 더 복잡한 알고리즘이 필요하다.",
+          "learningValue": "발생 전 차단하는 예방·회피와 달리 발생 후 탐지하고 비용을 감수하여 회복하는 전략임을 분명히 비교할 수 있어야 한다. 종료 방식과 자원 선점 방식이 어떤 방식으로 대기 사이클을 해소하는지 설명하는 능력이 중요하다.",
+          "sourceScope": [
+            "8쪽: Methods for Handling Deadlocks",
+            "13쪽: Deadlock Detection & Recovery",
+            "14쪽: Summary — 탐지 및 복구의 핵심 원리"
+          ],
+          "estimatedLearningUnitCount": 3
+        }
+      ],
+      "exclusions": [
+        "1쪽의 장 제목, 2쪽의 학습 목표 목록, 14쪽의 반복 요약은 학습 범위 선정의 근거로는 활용하되 독립 학습 단위에서는 제외한다. 이미 각 핵심 영역에 실질 내용이 포함되어 있다.",
+        "3쪽의 S·Q 세마포어 코드 순서 자체는 데드락 정의와 순환 대기의 예시로만 활용한다. 특정 코드 문장을 독립적으로 암기하는 것은 일반화 가능한 조건·그래프·처리 원리보다 인출 가치가 낮다.",
+        "7쪽의 개별 그래프 (a), (b), (c)의 노드·간선 배치를 그대로 재현하는 학습은 제외한다. 대신 사이클 유무와 자원 인스턴스 수에 따른 일반 판정 규칙을 핵심으로 학습한다.",
+        "11쪽의 은행원 알고리즘은 다중 인스턴스 자원에서 사용된다는 수준만 포함한다. 자료에 알고리즘의 데이터 구조, 안전성 검사 절차, 계산 예제가 제시되지 않았으므로 상세 알고리즘 풀이 범위에서는 제외한다.",
+        "12쪽의 특정 P1·P2·R1·R2 그림은 안전 상태 판단 규칙을 적용하는 보조 사례로만 다루며, 그림의 세부 간선 상태를 별도 학습 단위로 세지 않는다."
+      ],
+      "estimatedLearningUnitCount": 22
+    },
+    "selectedLearningArea": null,
+    "effectiveStudyGuideline": {
+      "summary": "이 자료의 핵심 학습 범위는 데드락의 정의와 성립 조건을 정확히 판별하고, 자원 할당 그래프를 해석하며, 예방·회피·탐지 및 복구 전략을 서로 비교하여 적용하는 데 있다. 특히 네 필요조건, 그래프의 사이클 해석, 안전 상태 판단, 처리 방식의 차이를 능동적으로 인출할 수 있어야 한다.",
+      "selectedGroup": {
+        "id": "whole-document-core",
+        "title": "전체 자료 핵심 학습 범위",
+        "description": "자료의 명시적 학습 목표인 개념·발생 조건·처리 방안을 중심으로 범위를 구성했다. 단순 정의보다 이후 모든 처리 전략의 판단 기준이 되는 네 필요조건과 그래프 해석에 높은 비중을 두었고, 처리 방법은 예방·회피·탐지 및 복구가 혼동되기 쉬우므로 각각의 작동 시점, 전제 조건, 핵심 방법을 비교 가능한 범위로 선별했다. 세마포어 및 그래프 사례는 독립 암기 대상보다 개념과 규칙을 적용하는 근거로 포함했다.",
+        "itemCount": 22,
+        "itemLabel": "핵심 LearningUnit",
+        "selectionInstruction": "특정 영역 하나로 제한하지 않고 wholeDocumentCore.areas 전체에서 핵심 단위를 추출합니다. 모든 영역을 균등하게 배분하지 말고 learningValue와 estimatedLearningUnitCount의 상대적 비중을 반영합니다. 중요한 하위 영역은 누락하지 않되 예시, 반복 요약, 메타데이터는 핵심 단위보다 낮은 우선순위로 둡니다. wholeDocumentCore.exclusions에 포함된 내용은 핵심 LearningUnit으로 만들지 않습니다."
+      },
+      "wholeDocumentCore": {
+        "summary": "이 자료의 핵심 학습 범위는 데드락의 정의와 성립 조건을 정확히 판별하고, 자원 할당 그래프를 해석하며, 예방·회피·탐지 및 복구 전략을 서로 비교하여 적용하는 데 있다. 특히 네 필요조건, 그래프의 사이클 해석, 안전 상태 판단, 처리 방식의 차이를 능동적으로 인출할 수 있어야 한다.",
+        "learningGoal": "학습자는 데드락을 설명하고 발생 조건 및 자원 할당 그래프의 의미를 판별하며, 예방·회피·탐지 및 복구 방식의 원리와 적용 차이를 설명할 수 있다.",
+        "selectionRationale": "자료의 명시적 학습 목표인 개념·발생 조건·처리 방안을 중심으로 범위를 구성했다. 단순 정의보다 이후 모든 처리 전략의 판단 기준이 되는 네 필요조건과 그래프 해석에 높은 비중을 두었고, 처리 방법은 예방·회피·탐지 및 복구가 혼동되기 쉬우므로 각각의 작동 시점, 전제 조건, 핵심 방법을 비교 가능한 범위로 선별했다. 세마포어 및 그래프 사례는 독립 암기 대상보다 개념과 규칙을 적용하는 근거로 포함했다.",
+        "areas": [
+          {
+            "id": "deadlock-concept-and-conditions",
+            "title": "데드락의 개념과 네 가지 필요조건",
+            "description": "데드락은 차단된 프로세스들이 자원을 하나 이상 보유한 채 서로가 보유한 자원을 무한히 기다리는 상태이다. 시스템의 프로세스·자원 유형·자원 인스턴스 모델, 그리고 요청(request)·사용(use)·반납(release) 흐름을 이해한다. 데드락이 발생할 수 있는 네 필요조건인 상호 배제, 점유 및 대기, 비선점, 순환 대기를 각각 정의하고, 네 조건이 동시에 성립해야 함을 설명한다.",
+            "learningValue": "데드락 여부와 예방 전략을 판단하는 가장 기초적이면서도 핵심적인 기준이다. 각 조건의 정의를 구별하고 특정 자원 요청 상황에서 어떤 조건이 성립하는지 인출할 수 있어야 이후 그래프 판정과 처리 전략 비교가 가능하다.",
+            "sourceScope": [
+              "3쪽: What is deadlock?",
+              "4쪽: Deadlock Characterization — System modeling",
+              "5쪽: Deadlock Characterization — four conditions",
+              "14쪽: Summary — 데드락 정의 및 네 조건 요약"
+            ],
+            "estimatedLearningUnitCount": 5
+          },
+          {
+            "id": "resource-allocation-graph-and-cycle-interpretation",
+            "title": "자원 할당 그래프와 사이클 기반 데드락 판정",
+            "description": "자원 할당 그래프에서 프로세스 정점과 자원 유형 정점을 구분하고, 프로세스→자원 간선은 요청, 자원→프로세스 간선은 할당임을 해석한다. 그래프에 사이클이 없으면 데드락이 없으며, 사이클이 있을 때 자원 유형별 인스턴스가 하나이면 데드락이지만 여러 인스턴스이면 데드락 가능성만 의미한다는 조건부 판정 규칙을 다룬다.",
+            "learningValue": "그래프를 요청·할당 관계로 변환하고 사이클의 의미를 자원 인스턴스 수에 따라 구분하는 능력은 데드락 문제에서 높은 적용·인출 가치를 가진다. ‘사이클이 있으면 항상 데드락’이라는 대표적 오개념도 예방한다.",
+            "sourceScope": [
+              "6쪽: Deadlock Characterization — Resource allocation graph",
+              "7쪽: Deadlock examples with resource allocation graph"
+            ],
+            "estimatedLearningUnitCount": 4
+          },
+          {
+            "id": "deadlock-handling-and-prevention",
+            "title": "처리 전략의 분류와 데드락 예방",
+            "description": "데드락 처리의 큰 분류인 예방, 회피, 탐지 및 복구를 발생 전 차단 여부와 사전 정보 필요성 관점에서 구별한다. 예방은 네 필요조건 중 적어도 하나를 성립하지 못하게 하는 방식이며, 점유 및 대기는 실행 전 모든 자원을 요청·할당하게 하여 방지하고, 비선점은 추가 자원을 즉시 얻지 못하면 보유 자원을 반납하게 하며, 순환 대기는 자원 유형의 전체 순서에 따라 오름차순으로 요청하게 하여 방지한다. 상호 배제는 일반적으로 제거하기 어렵다는 점을 포함한다.",
+            "learningValue": "예방은 네 필요조건을 실제 정책으로 연결하는 핵심 응용이다. 각 예방 정책이 어느 조건을 깨는지 역으로 설명할 수 있어야 하며, 회피·탐지 및 복구와 달리 데드락 진입 자체를 구조적으로 막는 방식임을 구별해야 한다.",
+            "sourceScope": [
+              "8쪽: Methods for Handling Deadlocks",
+              "9쪽: Deadlock Prevention",
+              "14쪽: Summary — 예방의 핵심 원리"
+            ],
+            "estimatedLearningUnitCount": 5
+          },
+          {
+            "id": "avoidance-safe-state-and-claims",
+            "title": "데드락 회피와 안전 상태 판단",
+            "description": "회피는 자원 요청을 즉시 승인하기 전에 그 할당 후에도 시스템이 안전 상태인지 검사하는 방식이다. 안전 상태는 어떤 프로세스 완료 순서가 존재하여 각 프로세스의 최대 요구량을 충족하면서 데드락을 피할 수 있는 상태이며, 안전 상태는 데드락이 없음을 보장하지만 불안전 상태는 데드락 가능성을 뜻한다. 회피에는 각 프로세스의 자원 최대 요구량 같은 사전 정보가 필요하다. 단일 인스턴스 자원에서는 클레임 간선(향후 요청 가능성), 요청 간선, 할당 간선의 전환과 사이클 형성 여부를 이용하며, 다중 인스턴스 자원에는 은행원 알고리즘을 사용한다.",
+            "learningValue": "안전 상태·불안전 상태·데드락 상태를 구분하고, 요청 승인 전 결과 상태를 가정하여 판단하는 것은 회피의 핵심 추론이다. 특히 불안전이 곧 즉시 데드락은 아니라는 점과, 사이클 형성 요청을 거부하는 이유를 정확히 인출해야 한다.",
+            "sourceScope": [
+              "10쪽: Deadlock Avoidance — safe/unsafe state",
+              "11쪽: Deadlock Avoidance — claim edge 및 banker’s algorithm 언급",
+              "12쪽: Deadlock Avoidance — unsafe state example",
+              "14쪽: Summary — 회피의 핵심 원리"
+            ],
+            "estimatedLearningUnitCount": 5
+          },
+          {
+            "id": "detection-and-recovery",
+            "title": "데드락 탐지 및 복구",
+            "description": "탐지 및 복구 방식은 시스템의 데드락 진입을 허용한 뒤 주기적으로 자원 할당 그래프의 사이클을 탐색하여 데드락을 찾아낸다. 복구는 모든 데드락 프로세스를 종료하거나, 사이클이 제거될 때까지 프로세스를 하나씩 종료하는 방법을 사용한다. 또한 일부 프로세스의 자원을 선점하여 다른 프로세스에 할당함으로써 사이클을 끊는 자원 선점 방식도 있다. 다중 인스턴스 자원에서는 탐지에 더 복잡한 알고리즘이 필요하다.",
+            "learningValue": "발생 전 차단하는 예방·회피와 달리 발생 후 탐지하고 비용을 감수하여 회복하는 전략임을 분명히 비교할 수 있어야 한다. 종료 방식과 자원 선점 방식이 어떤 방식으로 대기 사이클을 해소하는지 설명하는 능력이 중요하다.",
+            "sourceScope": [
+              "8쪽: Methods for Handling Deadlocks",
+              "13쪽: Deadlock Detection & Recovery",
+              "14쪽: Summary — 탐지 및 복구의 핵심 원리"
+            ],
+            "estimatedLearningUnitCount": 3
+          }
+        ],
+        "exclusions": [
+          "1쪽의 장 제목, 2쪽의 학습 목표 목록, 14쪽의 반복 요약은 학습 범위 선정의 근거로는 활용하되 독립 학습 단위에서는 제외한다. 이미 각 핵심 영역에 실질 내용이 포함되어 있다.",
+          "3쪽의 S·Q 세마포어 코드 순서 자체는 데드락 정의와 순환 대기의 예시로만 활용한다. 특정 코드 문장을 독립적으로 암기하는 것은 일반화 가능한 조건·그래프·처리 원리보다 인출 가치가 낮다.",
+          "7쪽의 개별 그래프 (a), (b), (c)의 노드·간선 배치를 그대로 재현하는 학습은 제외한다. 대신 사이클 유무와 자원 인스턴스 수에 따른 일반 판정 규칙을 핵심으로 학습한다.",
+          "11쪽의 은행원 알고리즘은 다중 인스턴스 자원에서 사용된다는 수준만 포함한다. 자료에 알고리즘의 데이터 구조, 안전성 검사 절차, 계산 예제가 제시되지 않았으므로 상세 알고리즘 풀이 범위에서는 제외한다.",
+          "12쪽의 특정 P1·P2·R1·R2 그림은 안전 상태 판단 규칙을 적용하는 보조 사례로만 다루며, 그림의 세부 간선 상태를 별도 학습 단위로 세지 않는다."
+        ],
+        "estimatedLearningUnitCount": 22
+      }
+    }
+  },
+  "responseAvailability": "available"
+}

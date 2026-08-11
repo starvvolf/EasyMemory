@@ -78,9 +78,9 @@ export default function PdfReviewViewer({ files }: PdfReviewViewerProps) {
   }
 
   return (
-    <section className="mt-4 overflow-hidden rounded-md border border-[#3F4147] bg-[#1E1F22]">
+    <section className="mt-4 overflow-hidden rounded-md border border-[#DCDFE4] bg-white shadow-sm">
       {files.length > 1 ? (
-        <div className="flex gap-1 overflow-x-auto border-b border-[#3F4147] p-2">
+        <div className="flex gap-1 overflow-x-auto border-b border-[#DCDFE4] p-2">
           {files.map((file, index) => (
             <button
               key={`${file.name}-${file.size}`}
@@ -88,8 +88,8 @@ export default function PdfReviewViewer({ files }: PdfReviewViewerProps) {
               onClick={() => setActiveFileIndex(index)}
               className={`max-w-56 shrink-0 truncate rounded-md px-3 py-2 text-xs font-bold ${
                 safeActiveFileIndex === index
-                  ? "bg-[#5865F2] text-white"
-                  : "bg-[#2B2D31] text-[#B5BAC1] hover:text-white"
+                  ? "bg-[#0C66E4] text-white"
+                  : "bg-[#FFFFFF] text-[#44546F] hover:text-[#172B4D]"
               }`}
               title={file.name}
             >
@@ -420,17 +420,17 @@ function PdfDocumentViewer({ file }: { file: File }) {
 
   return (
     <div>
-      <div className="border-b border-[#3F4147] bg-[#2B2D31] px-4 py-3">
-        <p className="truncate text-sm font-black text-white">{file.name}</p>
-        <p className="mt-1 text-xs text-[#B5BAC1]">
+      <div className="border-b border-[#DCDFE4] bg-[#FFFFFF] px-4 py-3">
+        <p className="truncate text-sm font-black text-[#172B4D]">{file.name}</p>
+        <p className="mt-1 text-xs text-[#44546F]">
           텍스트에 마우스를 올리고 클릭하면 선택됩니다.
         </p>
       </div>
 
       <div className="grid h-[calc(100dvh-10rem)] min-h-[44rem] grid-cols-[4rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_18rem] lg:grid-cols-[4.5rem_minmax(0,1fr)_22rem] lg:grid-rows-1">
-        <aside className="flex min-h-0 flex-col gap-4 border-r border-[#3F4147] bg-[#232428] p-2">
+        <aside className="flex min-h-0 flex-col gap-4 border-r border-[#DCDFE4] bg-[#F1F2F4] p-2">
           <div className="space-y-1" aria-label="선택 단위">
-            <p className="px-1 text-center text-[10px] font-bold text-[#7D828A]">
+            <p className="px-1 text-center text-[10px] font-bold text-[#7A869A]">
               선택
             </p>
             <ModeButton
@@ -449,8 +449,8 @@ function PdfDocumentViewer({ file }: { file: File }) {
             </ModeButton>
           </div>
 
-          <div className="space-y-1 border-t border-[#3F4147] pt-3">
-            <p className="px-1 text-center text-[10px] font-bold text-[#7D828A]">
+          <div className="space-y-1 border-t border-[#DCDFE4] pt-3">
+            <p className="px-1 text-center text-[10px] font-bold text-[#7A869A]">
               배율
             </p>
             <button
@@ -463,7 +463,7 @@ function PdfDocumentViewer({ file }: { file: File }) {
             >
               +
             </button>
-            <span className="block py-1 text-center text-[10px] font-bold text-[#B5BAC1]">
+            <span className="block py-1 text-center text-[10px] font-bold text-[#44546F]">
               {Math.round(scale * 100)}%
             </span>
             <button
@@ -480,9 +480,9 @@ function PdfDocumentViewer({ file }: { file: File }) {
 
         </aside>
 
-        <div className="min-h-0 overflow-auto bg-[#111214] p-4">
+        <div className="min-h-0 overflow-auto bg-[#DFE1E6] p-4">
           <div className="sticky top-0 z-20 mb-4 flex justify-center">
-            <div className="flex items-center gap-2 rounded-md border border-[#3F4147] bg-[#2B2D31]/95 p-2 shadow-lg backdrop-blur">
+            <div className="flex items-center gap-2 rounded-md border border-[#DCDFE4] bg-[#FFFFFF]/95 p-2 shadow-lg backdrop-blur">
               <button
                 type="button"
                 onClick={() => setPageNumber((page) => Math.max(1, page - 1))}
@@ -491,7 +491,7 @@ function PdfDocumentViewer({ file }: { file: File }) {
               >
                 이전
               </button>
-              <span className="min-w-20 text-center text-xs font-black text-[#F2F3F5]">
+              <span className="min-w-20 text-center text-xs font-black text-[#172B4D]">
                 {pageNumber} / {pageCount || "-"}
               </span>
               <button
@@ -542,20 +542,20 @@ function PdfDocumentViewer({ file }: { file: File }) {
                 </div>
               ) : null}
               {status ? (
-                <div className="absolute inset-0 z-10 grid min-h-80 place-items-center bg-white/90 px-4 text-sm font-bold text-[#313338]">
+                <div className="absolute inset-0 z-10 grid min-h-80 place-items-center bg-white/90 px-4 text-sm font-bold text-[#172B4D]">
                   <div className="w-full max-w-xs text-center">
                     <p>{status}</p>
                     {isOcrRunning ? (
                       <>
-                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#DCDDDE]">
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#DCDFE4]">
                           <div
-                            className="h-full rounded-full bg-[#5865F2] transition-[width]"
+                            className="h-full rounded-full bg-[#0C66E4] transition-[width]"
                             style={{
                               width: `${Math.max(4, Math.round(ocrProgress * 100))}%`,
                             }}
                           />
                         </div>
-                        <p className="mt-2 text-xs text-[#5C5E66]">
+                        <p className="mt-2 text-xs text-[#626F86]">
                           처음 인식할 때는 언어 모델을 준비하느라 시간이 걸릴 수
                           있습니다.
                         </p>
@@ -568,9 +568,9 @@ function PdfDocumentViewer({ file }: { file: File }) {
           </div>
         </div>
 
-        <aside className="col-span-2 min-h-0 overflow-y-auto border-t border-[#3F4147] bg-[#232428] p-4 lg:col-span-1 lg:border-l lg:border-t-0">
+        <aside className="col-span-2 min-h-0 overflow-y-auto border-t border-[#DCDFE4] bg-[#F1F2F4] p-4 lg:col-span-1 lg:border-l lg:border-t-0">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-black text-white">선택한 내용</h3>
+            <h3 className="text-sm font-black text-[#172B4D]">선택한 내용</h3>
             {selectedTexts.length > 0 ? (
               <button
                 type="button"
@@ -578,7 +578,7 @@ function PdfDocumentViewer({ file }: { file: File }) {
                   setSelectedGroupIds([]);
                   setSelectedTexts([]);
                 }}
-                className="text-xs font-bold text-[#B5BAC1] hover:text-white"
+                className="text-xs font-bold text-[#44546F] hover:text-[#172B4D]"
               >
                 전체 해제
               </button>
@@ -590,35 +590,35 @@ function PdfDocumentViewer({ file }: { file: File }) {
               {selectedTexts.map((selection, index) => (
                 <article
                   key={selection.id}
-                  className="rounded-md border border-[#5865F2]/50 bg-[#5865F2]/10 p-3"
+                  className="rounded-md border border-[#0C66E4]/50 bg-[#0C66E4]/10 p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-black text-[#B5BAC1]">
+                    <p className="text-xs font-black text-[#44546F]">
                       선택 {index + 1}
                     </p>
                     <button
                       type="button"
                       onClick={() => removeSelection(selection.id)}
-                      className="rounded px-2 py-1 text-xs font-bold text-[#FF999C] hover:bg-[#F23F42]/15 hover:text-white"
+                      className="rounded px-2 py-1 text-xs font-bold text-[#AE2E24] hover:bg-[#C9372C]/15 hover:text-[#172B4D]"
                       aria-label={`${index + 1}번 선택 해제`}
                     >
                       해제
                     </button>
                   </div>
-                  <p className="mt-1 text-sm leading-6 text-[#F2F3F5]">
+                  <p className="mt-1 text-sm leading-6 text-[#172B4D]">
                     {selection.text}
                   </p>
                 </article>
               ))}
             </div>
           ) : (
-            <p className="mt-3 text-sm leading-6 text-[#949BA4]">
+            <p className="mt-3 text-sm leading-6 text-[#626F86]">
               아직 선택한 문장이 없습니다.
             </p>
           )}
 
           {error ? (
-            <p className="mt-4 rounded-md border border-[#F23F42]/40 bg-[#F23F42]/10 p-3 text-sm font-bold text-[#FF999C]">
+            <p className="mt-4 rounded-md border border-[#C9372C]/40 bg-[#C9372C]/10 p-3 text-sm font-bold text-[#AE2E24]">
               {error}
             </p>
           ) : null}
@@ -786,8 +786,8 @@ function ModeButton({
       onClick={onClick}
       className={`w-full rounded px-1 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-50 ${
         active
-          ? "bg-[#5865F2] text-white"
-          : "text-[#B5BAC1] hover:text-white"
+          ? "bg-[#0C66E4] text-white"
+          : "text-[#44546F] hover:text-[#172B4D]"
       }`}
     >
       {children}
@@ -964,7 +964,7 @@ function attachGroupEvents(
 }
 
 const toolbarButtonClassName =
-  "w-full rounded-md border border-[#3F4147] bg-[#383A40] px-1 py-2 text-xs font-black text-[#F2F3F5] hover:bg-[#404249] disabled:cursor-not-allowed disabled:opacity-40";
+  "w-full rounded-md border border-[#DCDFE4] bg-[#F1F2F4] px-1 py-2 text-xs font-black text-[#172B4D] hover:bg-[#E9EBEE] disabled:cursor-not-allowed disabled:opacity-40";
 
 const pageButtonClassName =
-  "rounded-md border border-[#3F4147] bg-[#383A40] px-3 py-2 text-xs font-black text-[#F2F3F5] hover:bg-[#404249] disabled:cursor-not-allowed disabled:opacity-40";
+  "rounded-md border border-[#DCDFE4] bg-[#F1F2F4] px-3 py-2 text-xs font-black text-[#172B4D] hover:bg-[#E9EBEE] disabled:cursor-not-allowed disabled:opacity-40";

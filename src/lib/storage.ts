@@ -1,6 +1,6 @@
 "use client";
 
-import type { Deck } from "@/lib/types";
+import type { Deck, DeckBoardColumn } from "@/lib/types";
 
 const DB_NAME = "memory-transformer";
 const DB_VERSION = 1;
@@ -38,11 +38,31 @@ export async function listDecks(): Promise<Deck[]> {
   const decks = await new Promise<Deck[]>((resolve, reject) => {
     const tx = db.transaction(DECK_STORE, "readonly");
     const request = tx.objectStore(DECK_STORE).getAll();
-    request.onsuccess = () => resolve(request.result as Deck[]);
+    request.onsuccess = () =>
+      resolve(
+        (request.result as Array<Deck & { boardColumn?: DeckBoardColumn }>).map(
+          normalizeDeck,
+        ),
+      );
     request.onerror = () => reject(request.error);
   });
   db.close();
   return decks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function normalizeDeck(
+  deck: Deck & { boardColumn?: DeckBoardColumn },
+): Deck {
+  if (deck.boardColumn) return deck;
+
+  const boardColumn: DeckBoardColumn =
+    deck.cards.length > 0 && deck.cards.every((card) => card.status === "known")
+      ? "completed"
+      : deck.cards.some((card) => card.status !== "new")
+        ? "learning"
+        : "new";
+
+  return { ...deck, boardColumn };
 }
 
 export async function deleteDeck(id: string): Promise<void> {
