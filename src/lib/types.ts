@@ -55,6 +55,29 @@ export type LearningOutline = {
   nodes: LearningOutlineNode[];
 };
 
+export type LearningConceptTreeSourceRef = {
+  fileName: string;
+  pageNumbers: number[];
+};
+
+export type LearningConceptTreeNode = {
+  id: string;
+  parentId: string | null;
+  order: number;
+  depth: number;
+  title: string;
+  relation: string;
+  description: string;
+  sourceRefs: LearningConceptTreeSourceRef[];
+};
+
+export type LearningConceptTree = {
+  id: string;
+  title: string;
+  sourceFileNames: string[];
+  nodes: LearningConceptTreeNode[];
+};
+
 export type WholeDocumentCorePlan = {
   summary: string;
   learningGoal: string;
@@ -138,6 +161,7 @@ export type DeckBoardColumn = "new" | "learning" | "completed";
 
 export type LearningActivityType =
   | "flashcard"
+  | "cloze"
   | "true_false"
   | "multiple_choice"
   | "structure_recall";
@@ -219,6 +243,8 @@ export type PracticeBlueprint = {
     transferDistance: "same_context" | "near_transfer" | "far_transfer";
   };
   requiredCapabilities: string[];
+  /** 이 문제 설계가 실제로 확인하는 개념트리 노드. */
+  conceptNodeIds?: string[];
   recommendedType: LearningActivityType;
 };
 
@@ -250,6 +276,8 @@ export type KnowledgeUnit = {
   sourceText: string;
   knowledgeType: KnowledgeType;
   rationale: string;
+  /** Learning Design에서 묶거나 나눈 개념트리 노드 범위. */
+  conceptNodeIds?: string[];
 };
 
 export type AssessmentBlueprint = Omit<
@@ -309,6 +337,8 @@ export type StructureRecallNode = {
   parentId: string | null;
   correctLabel: string;
 };
+
+export type StructureRecallKind = "sequence" | "hierarchy";
 
 export type StructureRecallMode = "word_bank" | "free_input";
 
@@ -473,6 +503,8 @@ export type Card = {
   correctOptionIndex?: number;
   correctBoolean?: boolean;
   structureNodes?: StructureRecallNode[];
+  structureRecallKind?: StructureRecallKind;
+  supportedStructureRecallModes?: StructureRecallMode[];
   structureRecallMode?: StructureRecallMode;
   recommendationReason?: string;
   hint?: string;
@@ -482,6 +514,8 @@ export type Card = {
   learningUnitId?: string;
   objectiveId?: string;
   blueprintId?: string;
+  /** 연결된 문제 설계에서 상속한 개념트리 노드. */
+  conceptNodeIds?: string[];
   strategy?: CardStrategy;
   sourceId?: string;
   sourcePage?: number;
@@ -543,6 +577,8 @@ export type Deck = GeneratePipelineResult & {
     outline: LearningOutline;
     selectedLeafIds: string[];
   };
+  conceptTree?: LearningConceptTree;
+  conceptTreeIds?: string[];
   pdfSourceIds?: string[];
   pdfMaskActivities?: PdfMaskActivity[];
   createdAt: string;

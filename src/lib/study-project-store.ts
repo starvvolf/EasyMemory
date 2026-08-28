@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { PdfAnalysisResult } from "@/lib/types";
+import type { LearningConceptTree, PdfAnalysisResult } from "@/lib/types";
 import type {
   StudyCodingSession,
   StudyCodingSessionDetail,
   StudyCodingSubmission,
   StudyProject,
+  StudyProjectConceptTree,
   StudyProjectDetail,
   StudyProjectSource,
   StudyProjectSummary,
@@ -19,6 +20,7 @@ type StudyProjectDatabase = {
   sources: StoredProjectSource[];
   codingSessions: StudyCodingSession[];
   codingSubmissions: StudyCodingSubmission[];
+  conceptTrees: StudyProjectConceptTree[];
 };
 
 const dataDirectory =
@@ -45,12 +47,13 @@ async function readDatabase(): Promise<StudyProjectDatabase> {
       sources: Array.isArray(value.sources) ? value.sources : [],
       codingSessions: Array.isArray(value.codingSessions) ? value.codingSessions : [],
       codingSubmissions: Array.isArray(value.codingSubmissions) ? value.codingSubmissions : [],
+      conceptTrees: Array.isArray(value.conceptTrees) ? value.conceptTrees : [],
     };
     await normalizeStoredSources(database);
     return database;
   } catch (error) {
     if (isMissingFileError(error)) {
-      return { projects: [], sources: [], codingSessions: [], codingSubmissions: [] };
+      return { projects: [], sources: [], codingSessions: [], codingSubmissions: [], conceptTrees: [] };
     }
     throw error;
   }
@@ -164,8 +167,53 @@ export async function getStudyProject(projectId: string): Promise<StudyProjectDe
       .filter((source) => source.projectId === projectId)
       .map(stripStorageName)
       .sort((left, right) => right.addedAt.localeCompare(left.addedAt)),
+    conceptTrees: database.conceptTrees
+      .filter((tree) => tree.projectId === projectId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
     activeCodingSession: findActiveCodingSession(database, projectId),
   };
+}
+
+export async function saveStudyProjectConceptTree(
+  projectId: string,
+  inputTree: LearningConceptTree,
+  requestedSourceIds: string[] = [],
+): Promise<StudyProjectConceptTree> {
+  const tree = normalizeConceptTree(inputTree);
+  return mutateDatabase((database) => {
+    const project = database.projects.find((item) => item.id === projectId);
+    if (!project) throw new Error("학습 프로젝트를 찾지 못했습니다.");
+    const projectSources = database.sources.filter((source) => source.projectId === projectId);
+    const validSourceIds = new Set(projectSources.map((source) => source.id));
+    const explicitSourceIds = [...new Set(requestedSourceIds)].filter((id) => validSourceIds.has(id));
+    const sourceFileNames = new Set(tree.sourceFileNames.map(normalizeFileName));
+    const inferredSourceIds = projectSources
+      .filter((source) => sourceFileNames.has(normalizeFileName(source.fileName)))
+      .map((source) => source.id);
+    const sourceIds = explicitSourceIds.length ? explicitSourceIds : inferredSourceIds;
+    const now = new Date().toISOString();
+    const existing = database.conceptTrees.find(
+      (item) => item.projectId === projectId && item.id === tree.id,
+    );
+    if (existing) {
+      existing.sourceIds = sourceIds;
+      existing.tree = tree;
+      existing.updatedAt = now;
+      project.updatedAt = now;
+      return existing;
+    }
+    const stored: StudyProjectConceptTree = {
+      id: tree.id,
+      projectId,
+      sourceIds,
+      tree,
+      createdAt: now,
+      updatedAt: now,
+    };
+    database.conceptTrees.push(stored);
+    project.updatedAt = now;
+    return stored;
+  });
 }
 
 export async function startStudyCodingSession(
@@ -331,6 +379,10 @@ export async function deleteStudyProjectSource(sourceId: string) {
     if (index < 0) return false;
     const [source] = database.sources.splice(index, 1);
     await rm(await resolveStoredSourcePath(source), { force: true });
+    for (const conceptTree of database.conceptTrees) {
+      if (conceptTree.projectId !== source.projectId) continue;
+      conceptTree.sourceIds = conceptTree.sourceIds.filter((id) => id !== source.id);
+    }
     const project = database.projects.find((item) => item.id === source.projectId);
     if (project) project.updatedAt = new Date().toISOString();
     return true;
@@ -381,6 +433,59 @@ function cleanOptionalText(value: string | undefined, maximumLength: number) {
   const clean = value?.trim() ?? "";
   if (clean.length > maximumLength) throw new Error(`입력은 ${maximumLength}자 이내로 작성하세요.`);
   return clean;
+}
+
+function normalizeConceptTree(input: LearningConceptTree): LearningConceptTree {
+  const id = cleanRequiredText(input?.id ?? "", "학습트리 ID", 200);
+  const title = cleanRequiredText(input?.title ?? "", "학습트리 제목", 200);
+  if (!Array.isArray(input?.nodes) || input.nodes.length === 0) {
+    throw new Error("학습트리에 개념 노드가 없습니다.");
+  }
+  const sourceFileNames = [...new Set(
+    (Array.isArray(input.sourceFileNames) ? input.sourceFileNames : [])
+      .map((fileName) => cleanRequiredText(fileName, "출처 파일명", 500)),
+  )];
+  const nodes = input.nodes.map((node, index) => ({
+    id: cleanRequiredText(node?.id ?? "", "개념 노드 ID", 200),
+    parentId: node?.parentId
+      ? cleanRequiredText(node.parentId, "상위 개념 노드 ID", 200)
+      : null,
+    order: Number.isFinite(node?.order) ? node.order : index,
+    depth: Number.isFinite(node?.depth) ? Math.max(0, node.depth) : 0,
+    title: cleanRequiredText(node?.title ?? "", "개념 노드 제목", 300),
+    relation: cleanOptionalText(node?.relation, 300),
+    description: cleanOptionalText(node?.description, 2_000),
+    sourceRefs: (Array.isArray(node?.sourceRefs) ? node.sourceRefs : []).map((reference) => ({
+      fileName: cleanRequiredText(reference?.fileName ?? "", "개념 출처 파일명", 500),
+      pageNumbers: [...new Set(
+        (Array.isArray(reference?.pageNumbers) ? reference.pageNumbers : [])
+          .filter((pageNumber) => Number.isInteger(pageNumber) && pageNumber > 0),
+      )],
+    })),
+  }));
+  const nodeIds = new Set<string>();
+  for (const node of nodes) {
+    if (nodeIds.has(node.id)) throw new Error(`중복된 개념 노드 ID입니다: ${node.id}`);
+    nodeIds.add(node.id);
+  }
+  for (const node of nodes) {
+    if (node.parentId === node.id) throw new Error("개념 노드는 자기 자신을 상위 노드로 가질 수 없습니다.");
+    if (node.parentId && !nodeIds.has(node.parentId)) {
+      throw new Error(`상위 개념 노드를 찾지 못했습니다: ${node.parentId}`);
+    }
+    const visited = new Set([node.id]);
+    let parentId = node.parentId;
+    while (parentId) {
+      if (visited.has(parentId)) throw new Error("학습트리에 순환 연결이 있습니다.");
+      visited.add(parentId);
+      parentId = nodes.find((candidate) => candidate.id === parentId)?.parentId ?? null;
+    }
+  }
+  return { id, title, sourceFileNames, nodes };
+}
+
+function normalizeFileName(value: string) {
+  return value.trim().toLocaleLowerCase("ko-KR");
 }
 
 async function normalizeStoredSources(database: StudyProjectDatabase) {

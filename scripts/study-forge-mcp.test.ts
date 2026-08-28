@@ -327,6 +327,7 @@ test("MCP 도구가 네트워크 없이 목록과 단계 입력을 반환한다"
   assert.deepEqual(
     tools.tools.map((tool) => tool.name).sort(),
     [
+      "cancel_chatgpt_pdf_run",
       "configure_chatgpt_pdf_run",
       "configure_run",
       "get_active_coding_session",
@@ -336,6 +337,7 @@ test("MCP 도구가 네트워크 없이 목록과 단계 입력을 반환한다"
       "get_project",
       "get_run_result",
       "get_run_status",
+      "list_chatgpt_pdf_runs",
       "list_materials",
       "list_projects",
       "publish_chatgpt_pdf_run",

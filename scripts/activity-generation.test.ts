@@ -428,9 +428,11 @@ test("새 문제 생성은 기존 Recall 카드 규칙과 분리된 전용 프�
     assert.match(prompt, /LearningUnit마다 문제 하나/);
     assert.match(prompt, /explanation은 정답 이유를 짧게/);
     assert.match(prompt, /structureRecallMode/);
+    assert.match(prompt, /structureRecallKind/);
+    assert.match(prompt, /supportedStructureRecallModes/);
     assert.match(prompt, /word_bank/);
     assert.match(prompt, /free_input/);
-    assert.match(prompt, /형제 노드는 순서 없는/);
+    assert.match(prompt, /sequence는 하나의 부모→자식 사슬/);
     assert.match(prompt, /한 카드에는 한 종류의 관계/);
     assert.match(prompt, /암기보다 판단 문제를 우선한다/);
     assert.match(prompt, /지시 문구를 front에 복사하지 않습니다/);

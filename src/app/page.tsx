@@ -69,8 +69,11 @@ import { selectNewPublishedMcpDecks } from "@/lib/mcp-deck-import";
 import {
   getCorrectStudyAnswer,
   getLearningActivityType,
+  getStructureRecallKind,
   getStructureRecallMode,
   getStructureRecallChoices,
+  getStudyStructureRecallMode,
+  getSupportedStructureRecallModes,
   gradeStudyAnswer,
   isAutomaticallyGradedActivity,
   validateLearningActivities,
@@ -257,7 +260,9 @@ export default function Home() {
     let cancelled = false;
     async function restoreSavedState() {
       try {
-        const existingDecks = await listDecks();
+        let existingDecks = await listDecks();
+        await migrateDeckConceptTreesToProjects(existingDecks);
+        existingDecks = await listDecks();
         const importedMcpDeckCount = await importPublishedMcpDecks(existingDecks);
         const [savedDecks, sessions, attempts] = await Promise.all([
           listDecks(),
@@ -311,7 +316,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (view !== "manager" && view !== "records") return;
+    if (view !== "manager" && view !== "records" && view !== "decks") return;
     let cancelled = false;
     async function refreshManager() {
       setIsLoadingManager(true);
@@ -1114,6 +1119,10 @@ export default function Home() {
         : deck;
 
     await startStudySession(studyDeck, session);
+    setStudySessions((items) => [
+      ...items.filter((item) => item.id !== session.id),
+      session,
+    ]);
     setDecks((items) =>
       items.map((item) => (item.id === studyDeck.id ? studyDeck : item)),
     );
@@ -1260,6 +1269,11 @@ export default function Home() {
         session: updatedSession,
         attempt,
       });
+      setStudySessions((items) => [
+        ...items.filter((item) => item.id !== updatedSession.id),
+        updatedSession,
+      ]);
+      setStudyAttempts((items) => [...items, attempt]);
       setSelectedDeck(updatedDeck);
       setDecks((items) =>
         items.map((deck) => (deck.id === updatedDeck.id ? updatedDeck : deck)),
@@ -1363,6 +1377,11 @@ export default function Home() {
         session: recorded.session,
         attempt: recorded.attempt,
       });
+      setStudySessions((items) => [
+        ...items.filter((item) => item.id !== recorded.session.id),
+        recorded.session,
+      ]);
+      setStudyAttempts((items) => [...items, recorded.attempt]);
       setSelectedDeck(updatedDeck);
       setDecks((items) =>
         items.map((deck) => (deck.id === updatedDeck.id ? updatedDeck : deck)),
@@ -1651,6 +1670,8 @@ export default function Home() {
                 <DecksView
                   projectsOnly
                   decks={decks}
+                  sessions={studySessions}
+                  attempts={studyAttempts}
                   isProjectCreationOpen={isProjectGenerationOpen}
                   projectCreationPanel={
                     pipelineResult && editableCards.length > 0 ? (
@@ -2264,7 +2285,7 @@ function CreateView({
       <GenerationProgressFocus
         eyebrow="문제 구성 중"
         stage="각 내용에 맞는 문제 방식을 고르고 있습니다"
-        description="플래시카드, OX, 객관식, 구조복원 중 현재 앱에서 가장 알맞은 방식을 판단합니다."
+        description="플래시카드, 빈칸, OX, 객관식, 구조복원 중 현재 앱에서 가장 알맞은 방식을 판단합니다."
       />
     );
   }
@@ -2804,6 +2825,7 @@ function CreateView({
                       className={inputClassName}
                     >
                       <option value="flashcard">플래시카드</option>
+                      <option value="cloze">빈칸</option>
                       <option value="true_false">OX</option>
                       <option value="multiple_choice">객관식</option>
                       <option value="structure_recall">구조복원</option>
@@ -3457,6 +3479,11 @@ function LearningActivityPreview({ card, index }: { card: Card; index: number })
           <span className="rounded-[9px] border border-[#393939] px-4 py-3 text-center text-[#B5B5B5]">X</span>
         </div>
       ) : null}
+      {type === "cloze" ? (
+        <div className="mt-5 rounded-[9px] border border-[#393939] bg-[#222222] px-4 py-3 text-sm text-[#B5B5B5]">
+          {card.clozeText ?? card.front}
+        </div>
+      ) : null}
       {type === "multiple_choice" ? (
         <ol className="mt-5 grid gap-2 sm:grid-cols-2">
           {(card.options ?? []).map((option, optionIndex) => (
@@ -3475,8 +3502,8 @@ function LearningActivityPreview({ card, index }: { card: Card; index: number })
           ))}
           {getStructureRecallMode(card) === "word_bank" ? (
             <div className="mt-4 flex flex-wrap gap-2 border-t border-[#E2E0D8] pt-4">
-              {structureChoices.map((label) => (
-                <span key={label} className="border border-[#3B3F3C] bg-[#242725] px-3 py-2 text-xs font-bold text-[#B2B6B1]">{label}</span>
+              {structureChoices.map((label, choiceIndex) => (
+                <span key={`${label}-${choiceIndex}`} className="border border-[#3B3F3C] bg-[#242725] px-3 py-2 text-xs font-bold text-[#B2B6B1]">{label}</span>
               ))}
             </div>
           ) : null}
@@ -3513,10 +3540,19 @@ function GradedActivityReviewFields({
         ) : null}
       </div>
       <TextField
-        label="문제"
-        value={card.front ?? ""}
-        onChange={(value) => updateCard(card.id, { front: value })}
+        label={type === "cloze" ? "빈칸 문장" : "문제"}
+        value={type === "cloze" ? (card.clozeText ?? card.front ?? "") : (card.front ?? "")}
+        onChange={(value) => updateCard(card.id, type === "cloze"
+          ? { front: value, clozeText: value }
+          : { front: value })}
       />
+      {type === "cloze" ? (
+        <TextField
+          label="빈칸 정답"
+          value={card.answer ?? ""}
+          onChange={(value) => updateCard(card.id, { answer: value, answers: [value], back: value })}
+        />
+      ) : null}
       {type === "true_false" ? (
         <div>
           <FieldLabel>정답</FieldLabel>
@@ -3576,22 +3612,58 @@ function GradedActivityReviewFields({
           </label>
         </div>
       ) : null}
+
       {type === "structure_recall" ? (
         <div>
-          <label className="mb-4 block">
-            <FieldLabel>구조복원 풀이 방식</FieldLabel>
+          <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <FieldLabel>복원 대상</FieldLabel>
             <select
-              value={getStructureRecallMode(card)}
+              value={getStructureRecallKind(card)}
               onChange={(event) =>
                 updateCard(card.id, {
-                  structureRecallMode: event.target.value as "word_bank" | "free_input",
+                  structureRecallKind: event.target.value as "sequence" | "hierarchy",
                 })
               }
               className={`${inputClassName} mt-1`}
             >
-              <option value="word_bank">보기형 · 아래 답 모음에서 고르기</option>
-              <option value="free_input">빈칸형 · 답 없이 직접 입력하기</option>
+              <option value="sequence">순서 복원</option>
+              <option value="hierarchy">계층·분류 구조 복원</option>
             </select>
+          </label>
+          <label className="block">
+            <FieldLabel>처음 보여줄 풀이</FieldLabel>
+            <select
+              value={getStructureRecallMode(card)}
+              onChange={(event) => {
+                const mode = event.target.value as "word_bank" | "free_input";
+                updateCard(card.id, {
+                  structureRecallMode: mode,
+                  supportedStructureRecallModes: [
+                    ...new Set([...getSupportedStructureRecallModes(card), mode]),
+                  ],
+                });
+              }}
+              className={`${inputClassName} mt-1`}
+            >
+              <option value="word_bank">보기에서 고르기</option>
+              <option value="free_input">직접 입력하기</option>
+            </select>
+          </label>
+          </div>
+          <label className="mb-4 flex items-center gap-2 text-sm font-bold text-[#D1D4D0]">
+            <input
+              type="checkbox"
+              checked={getSupportedStructureRecallModes(card).length === 2}
+              onChange={(event) =>
+                updateCard(card.id, {
+                  supportedStructureRecallModes: event.target.checked
+                    ? ["word_bank", "free_input"]
+                    : [getStructureRecallMode(card)],
+                })
+              }
+            />
+            학습 중 보기형과 직접입력을 바꿀 수 있게 허용
           </label>
           <FieldLabel>구조의 빈자리와 정답 단어</FieldLabel>
           <div className="mt-2 space-y-2">
@@ -3975,6 +4047,8 @@ function getStudySessionStatusLabel(status: StudySession["status"]) {
 function DecksView({
   projectsOnly,
   decks,
+  sessions,
+  attempts,
   createFromProjectSources,
   projectCreationPanel,
   isProjectCreationOpen,
@@ -3993,6 +4067,8 @@ function DecksView({
 }: {
   projectsOnly?: boolean;
   decks: Deck[];
+  sessions: StudySession[];
+  attempts: StudyAttempt[];
   createFromProjectSources: (
     files: File[],
     project: StudyProject,
@@ -4028,6 +4104,8 @@ function DecksView({
     return (
       <StudyProjectLibrary
         decks={decks}
+        sessions={sessions}
+        attempts={attempts}
         onCreateFromSources={createFromProjectSources}
         onStartStudy={startStudy}
         creationPanel={projectCreationPanel}
@@ -4060,6 +4138,8 @@ function DecksView({
     <div className="space-y-6">
       <StudyProjectLibrary
         decks={decks}
+        sessions={sessions}
+        attempts={attempts}
         onCreateFromSources={createFromProjectSources}
         onStartStudy={startStudy}
         creationPanel={projectCreationPanel}
@@ -4872,12 +4952,26 @@ function GradedActivityInput({
   onAnswer: (answer: StudyAnswer) => void;
 }) {
   const type = getLearningActivityType(card);
-  const structureMode = getStructureRecallMode(card);
+  const supportedStructureModes = getSupportedStructureRecallModes(card);
+  const [structureMode, setStructureMode] = useState(getStudyStructureRecallMode(card));
   const [activeStructureNodeId, setActiveStructureNodeId] = useState<string | null>(null);
   const answerRecord = asStudyAnswerRecord(userAnswer);
   const structureChoices = type === "structure_recall"
     ? getStructureRecallChoices(card.structureNodes ?? [], sessionId, card.id)
     : [];
+  const usedStructureChoiceCounts = new Map<string, number>();
+  for (const answer of Object.values(answerRecord)) {
+    if (typeof answer !== "string" || !answer) continue;
+    usedStructureChoiceCounts.set(answer, (usedStructureChoiceCounts.get(answer) ?? 0) + 1);
+  }
+  const usedStructureChoiceIndexes = new Set<number>();
+  for (let index = 0; index < structureChoices.length; index += 1) {
+    const choice = structureChoices[index];
+    const remaining = usedStructureChoiceCounts.get(choice) ?? 0;
+    if (remaining <= 0) continue;
+    usedStructureChoiceIndexes.add(index);
+    usedStructureChoiceCounts.set(choice, remaining - 1);
+  }
   return (
     <div className="mt-8">
       <p className="text-2xl font-black leading-10 text-[#F0F2EF]">{card.front}</p>
@@ -4922,9 +5016,47 @@ function GradedActivityInput({
         </div>
       ) : null}
 
+      {type === "cloze" ? (
+        <input
+          aria-label="빈칸 정답"
+          disabled={result !== null}
+          value={typeof userAnswer === "string" ? userAnswer : ""}
+          placeholder="정답 입력"
+          onChange={(event) => onAnswer(event.target.value)}
+          className={`${inputClassName} mt-6 min-h-12 text-base font-bold`}
+        />
+      ) : null}
+
       {type === "structure_recall" ? (
         <div className="mt-6 rounded-lg border border-[#393D3A] bg-[#202321] p-4">
-          {hasUnorderedStructureGroup(card.structureNodes ?? []) ? (
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-xs font-black text-[#B2B6B1]">
+              {getStructureRecallKind(card) === "sequence" ? "순서 복원" : "계층·분류 구조 복원"}
+            </p>
+            {supportedStructureModes.length > 1 && result === null ? (
+              <div className="flex rounded-md border border-[#454945] p-0.5">
+                {supportedStructureModes.map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      setStructureMode(mode);
+                      setActiveStructureNodeId(null);
+                      onAnswer(null);
+                    }}
+                    className={`rounded px-2.5 py-1 text-xs font-bold ${
+                      structureMode === mode
+                        ? "bg-[#ECEEEB] text-[#202321]"
+                        : "text-[#A6AAA5]"
+                    }`}
+                  >
+                    {mode === "word_bank" ? "보기" : "직접입력"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          {getStructureRecallKind(card) === "hierarchy" && hasUnorderedStructureGroup(card.structureNodes ?? []) ? (
             <p className="mb-3 text-xs font-bold text-[#B2B6B1]">
               같은 가지에 나란히 놓인 빈칸은 순서와 관계없이 채점됩니다.
             </p>
@@ -4937,10 +5069,10 @@ function GradedActivityInput({
                 <div
                   key={node.id}
                   className="flex items-center gap-2"
-                  style={{ marginLeft: `${depth * 28}px` }}
+                  style={{ marginLeft: `${getStructureRecallKind(card) === "hierarchy" ? depth * 28 : 0}px` }}
                 >
                   <span className="w-5 shrink-0 text-center font-black text-[#A5A9A4]">
-                    {depth > 0 ? "└" : "●"}
+                    {getStructureRecallKind(card) === "sequence" ? index + 1 : depth > 0 ? "└" : "●"}
                   </span>
                   {structureMode === "word_bank" ? (
                     <button
@@ -4982,11 +5114,11 @@ function GradedActivityInput({
             <div className="mt-6 border-t border-[#393D3A] pt-4">
               <p className="mb-3 text-xs font-black text-[#B2B6B1]">답 모음</p>
               <div className="flex flex-wrap gap-2">
-                {structureChoices.map((choice) => {
-                  const used = Object.values(answerRecord).includes(choice);
+                {structureChoices.map((choice, choiceIndex) => {
+                  const used = usedStructureChoiceIndexes.has(choiceIndex);
                   return (
                     <button
-                      key={choice}
+                      key={`${choice}-${choiceIndex}`}
                       type="button"
                       disabled={result !== null || used}
                       onClick={() => {
@@ -5047,6 +5179,7 @@ function isCompleteGradedAnswer(card: Card, answer: StudyAnswer) {
   const type = getLearningActivityType(card);
   if (type === "true_false") return typeof answer === "boolean";
   if (type === "multiple_choice") return typeof answer === "number";
+  if (type === "cloze") return typeof answer === "string" && Boolean(answer.trim());
   if (type === "structure_recall") {
     const record = asStudyAnswerRecord(answer);
     return (card.structureNodes ?? []).every(
@@ -5099,6 +5232,7 @@ function formatCorrectStudyAnswer(card: Card) {
   if (type === "multiple_choice") {
     return card.options?.[card.correctOptionIndex ?? -1] ?? "정답 없음";
   }
+  if (type === "cloze") return card.answer ?? card.answers?.[0] ?? "정답 없음";
   if (type === "structure_recall") {
     const nodes = card.structureNodes ?? [];
     const nodesByParent = new Map<string | null, typeof nodes>();
@@ -5674,6 +5808,7 @@ function getLearningActivityMixLabel(cards: Card[], fallbackMode: StudyMode) {
 
   const orderedTypes: LearningActivityType[] = [
     "flashcard",
+    "cloze",
     "true_false",
     "multiple_choice",
     "structure_recall",
@@ -5695,6 +5830,7 @@ function getLearningActivityMixLabel(cards: Card[], fallbackMode: StudyMode) {
 function getLearningActivityLabel(type: LearningActivityType) {
   const labels: Record<LearningActivityType, string> = {
     flashcard: "플래시카드",
+    cloze: "빈칸",
     true_false: "OX",
     multiple_choice: "객관식",
     structure_recall: "구조복원",
@@ -6004,9 +6140,51 @@ async function importPublishedMcpDecks(existingDecks: Deck[]) {
   const payload = await response.json() as { decks?: unknown[] };
   const newDecks = selectNewPublishedMcpDecks(payload, existingDecks);
   for (const candidate of newDecks) {
-    await saveDeck(candidate);
+    try {
+      await saveDeck(await moveDeckConceptTreeToProject(candidate));
+    } catch (error) {
+      console.warn("MCP 학습트리를 프로젝트로 옮기지 못해 덱 내부 트리를 유지합니다.", error);
+      await saveDeck(candidate);
+    }
   }
   return newDecks.length;
+}
+
+async function migrateDeckConceptTreesToProjects(decks: Deck[]) {
+  for (const deck of decks) {
+    if (!deck.projectId || !deck.conceptTree) continue;
+    try {
+      await saveDeck(await moveDeckConceptTreeToProject(deck));
+    } catch (error) {
+      console.warn("기존 학습트리를 프로젝트로 옮기지 못해 덱 내부 트리를 유지합니다.", error);
+    }
+  }
+}
+
+async function moveDeckConceptTreeToProject(deck: Deck): Promise<Deck> {
+  if (!deck.projectId || !deck.conceptTree) return deck;
+  const response = await fetch(
+    `/api/study-projects/${encodeURIComponent(deck.projectId)}/concept-trees`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tree: deck.conceptTree,
+        sourceIds: deck.pdfSourceIds ?? [],
+      }),
+    },
+  );
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(payload?.message ?? "프로젝트 학습트리를 저장하지 못했습니다.");
+  }
+  const payload = await response.json() as { conceptTree: { id: string } };
+  const migratedDeck: Deck = {
+    ...deck,
+    conceptTreeIds: [...new Set([...(deck.conceptTreeIds ?? []), payload.conceptTree.id])],
+  };
+  delete migratedDeck.conceptTree;
+  return migratedDeck;
 }
 
 function normalizeClozeAnswer(text: string, answer: string) {

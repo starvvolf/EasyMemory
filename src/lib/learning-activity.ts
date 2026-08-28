@@ -1,13 +1,14 @@
 import type {
   Card,
   LearningActivityType,
+  StructureRecallKind,
   StructureRecallNode,
   StructureRecallMode,
 } from "./types.ts";
 import type { StudyAnswer } from "./graded-study.ts";
 
 export function getLearningActivityType(card: Card): LearningActivityType {
-  return card.activityType ?? "flashcard";
+  return card.activityType ?? (card.type === "cloze" ? "cloze" : "flashcard");
 }
 
 export function isAutomaticallyGradedActivity(card: Card) {
@@ -18,12 +19,50 @@ export function getStructureRecallMode(card: Card): StructureRecallMode {
   return card.structureRecallMode ?? "word_bank";
 }
 
+export function getStudyStructureRecallMode(card: Card): StructureRecallMode {
+  const supportedModes = getSupportedStructureRecallModes(card);
+  if (
+    supportedModes.includes("free_input") &&
+    card.reviewSchedule?.state === "review"
+  ) {
+    return "free_input";
+  }
+  if (
+    supportedModes.includes("word_bank") &&
+    (card.reviewSchedule?.state === "new" ||
+      card.reviewSchedule?.state === "learning" ||
+      card.reviewSchedule?.state === "relearning")
+  ) {
+    return "word_bank";
+  }
+  return getStructureRecallMode(card);
+}
+
+export function getSupportedStructureRecallModes(card: Card): StructureRecallMode[] {
+  const configured = card.supportedStructureRecallModes ?? [getStructureRecallMode(card)];
+  return [...new Set(configured)];
+}
+
+export function getStructureRecallKind(card: Card): StructureRecallKind {
+  if (card.structureRecallKind) return card.structureRecallKind;
+  const nodes = card.structureNodes ?? [];
+  const childCounts = new Map<string | null, number>();
+  for (const node of nodes) {
+    childCounts.set(node.parentId, (childCounts.get(node.parentId) ?? 0) + 1);
+  }
+  return nodes.length > 1 && [...childCounts.values()].every((count) => count === 1)
+    ? "sequence"
+    : "hierarchy";
+}
+
 export function getCorrectStudyAnswer(card: Card): StudyAnswer {
   switch (getLearningActivityType(card)) {
     case "true_false":
       return card.correctBoolean ?? null;
     case "multiple_choice":
       return card.correctOptionIndex ?? null;
+    case "cloze":
+      return card.answer ?? card.answers?.[0] ?? "";
     case "structure_recall":
       return Object.fromEntries(
         (card.structureNodes ?? []).map((node) => [node.id, node.correctLabel]),
@@ -35,6 +74,10 @@ export function getCorrectStudyAnswer(card: Card): StudyAnswer {
 
 export function gradeStudyAnswer(card: Card, userAnswer: StudyAnswer) {
   if (!isAutomaticallyGradedActivity(card)) return false;
+  if (getLearningActivityType(card) === "cloze") {
+    return normalizeTypedStructureAnswer(userAnswer) ===
+      normalizeTypedStructureAnswer(getCorrectStudyAnswer(card));
+  }
   if (getLearningActivityType(card) === "structure_recall") {
     return gradeStructureRecallAnswer(
       card.structureNodes ?? [],
@@ -51,6 +94,13 @@ export function validateLearningActivity(card: Card): string[] {
   if (type === "flashcard") return card.back?.trim() || card.answer?.trim()
     ? []
     : ["플래시카드 정답이 필요합니다."];
+  if (type === "cloze") {
+    const clozeText = card.clozeText ?? card.front ?? "";
+    const blankCount = clozeText.match(/____/g)?.length ?? 0;
+    return blankCount === 1 && Boolean((card.answer ?? card.answers?.[0] ?? "").trim())
+      ? []
+      : ["빈칸 문제는 ____ 한 개와 짧은 정답 하나가 필요합니다."];
+  }
   if (type === "true_false") return typeof card.correctBoolean === "boolean"
     ? []
     : ["OX 정답이 필요합니다."];
@@ -68,10 +118,30 @@ export function validateLearningActivity(card: Card): string[] {
       ? []
       : ["객관식은 서로 다른 선택지 2개 이상과 유효한 정답 번호가 필요합니다."];
   }
-  const structureIssues = validateStructureNodes(card.structureNodes ?? []);
+  const kind = getStructureRecallKind(card);
+  const structureIssues = validateStructureNodes(card.structureNodes ?? [], kind);
   if (structureIssues.length > 0) return structureIssues;
+  const nodes = card.structureNodes ?? [];
+  const childCounts = new Map<string | null, number>();
+  for (const node of nodes) {
+    childCounts.set(node.parentId, (childCounts.get(node.parentId) ?? 0) + 1);
+  }
+  if (kind === "sequence" && [...childCounts.values()].some((count) => count > 1)) {
+    return ["순서 복원은 하나의 시작점에서 한 줄로 이어지는 단계만 사용할 수 있습니다."];
+  }
+  if (kind === "hierarchy" && ![...childCounts.values()].some((count) => count > 1)) {
+    return ["구조 복원은 실제 상하·분류 관계가 드러나는 갈래가 필요합니다."];
+  }
+  const supportedModes = getSupportedStructureRecallModes(card);
   if (
-    getStructureRecallMode(card) === "free_input" &&
+    supportedModes.length === 0 ||
+    supportedModes.some((mode) => mode !== "word_bank" && mode !== "free_input") ||
+    !supportedModes.includes(getStructureRecallMode(card))
+  ) {
+    return ["구조복원의 기본 풀이 방식은 지원 풀이 방식에 포함되어야 합니다."];
+  }
+  if (
+    supportedModes.includes("free_input") &&
     (card.structureNodes ?? []).some(
       (node) => node.correctLabel.length > 40 || node.correctLabel.includes("\n"),
     )
@@ -143,23 +213,32 @@ export function getAvailableStructureRecallChoices(
   currentNodeId: string,
 ): string[] {
   const currentAnswer = answers[currentNodeId];
-  const usedByOtherNodes = new Set(
-    Object.entries(answers)
-      .filter(([nodeId]) => nodeId !== currentNodeId)
-      .map(([, answer]) => answer)
-      .filter((answer): answer is string => typeof answer === "string"),
-  );
-  return choices.filter(
-    (choice) => choice === currentAnswer || !usedByOtherNodes.has(choice),
-  );
+  const usedCounts = new Map<string, number>();
+  for (const [nodeId, answer] of Object.entries(answers)) {
+    if (nodeId === currentNodeId || typeof answer !== "string") continue;
+    usedCounts.set(answer, (usedCounts.get(answer) ?? 0) + 1);
+  }
+  const available = choices.filter((choice) => {
+    const used = usedCounts.get(choice) ?? 0;
+    if (used === 0) return true;
+    usedCounts.set(choice, used - 1);
+    return false;
+  });
+  if (typeof currentAnswer === "string" && !available.includes(currentAnswer)) {
+    available.push(currentAnswer);
+  }
+  return available;
 }
 
-function validateStructureNodes(nodes: StructureRecallNode[]) {
+function validateStructureNodes(nodes: StructureRecallNode[], kind: StructureRecallKind) {
   if (nodes.length < 2) return ["구조복원에는 빈자리 2개 이상이 필요합니다."];
   const ids = new Set(nodes.map((node) => node.id));
   const labels = new Set(nodes.map((node) => node.correctLabel.trim()));
-  if (ids.size !== nodes.length || labels.size !== nodes.length || labels.has("")) {
-    return ["구조복원의 빈자리 ID와 정답 단어는 서로 달라야 합니다."];
+  if (ids.size !== nodes.length || labels.has("")) {
+    return ["구조복원의 빈자리 ID는 서로 달라야 하고 정답은 비어 있지 않아야 합니다."];
+  }
+  if (kind === "hierarchy" && labels.size !== nodes.length) {
+    return ["계층 구조복원의 정답 단어는 서로 달라야 합니다."];
   }
   if (nodes.some((node) => node.parentId !== null && !ids.has(node.parentId))) {
     return ["구조복원의 부모 빈자리가 존재하지 않습니다."];
@@ -266,5 +345,6 @@ function gradeStructureRecallAnswer(
 }
 
 function normalizeStructureAnswer(value: StudyAnswer, mode: StructureRecallMode) {
-  return mode === "free_input" ? normalizeTypedStructureAnswer(value) : String(value);
+  void mode;
+  return normalizeTypedStructureAnswer(value);
 }

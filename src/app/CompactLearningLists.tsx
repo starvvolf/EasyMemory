@@ -62,6 +62,7 @@ const boardColumns: Array<{
 
 const activityLabels: Record<LearningActivityType, string> = {
   flashcard: "플래시카드",
+  cloze: "빈칸",
   true_false: "OX",
   multiple_choice: "객관식",
   structure_recall: "구조 복원",

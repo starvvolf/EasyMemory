@@ -21,6 +21,9 @@
     "quality:input-report": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/compact-input-report.ts",
     "mcp:study-forge": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/study-forge-mcp/server.ts",
     "mcp:study-forge:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/study-forge-mcp.test.ts scripts/study-forge-mcp-project.test.ts scripts/study-forge-mcp-chatgpt.test.ts",
+    "mcp:concept-tree": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/concept-tree-mcp/server.ts",
+    "mcp:concept-tree:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/concept-tree-mcp.test.ts",
+    "mcp:concept-tree:experiment": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/run-concept-tree-experiment.ts",
     "vscode:study-forge:test": "node --test scripts/study-forge-vscode.test.cjs && node --check tools/study-forge-vscode/extension.js"
   },
   "dependencies": {

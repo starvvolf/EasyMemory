@@ -42,7 +42,7 @@ export function createStudyForgeMcpServer(
     { name: "study-forge-generation", version: "0.2.0" },
     {
       instructions:
-        "The default PDF generation engine is the current Study Forge flow: Analyze -> Plan -> Learning Design (Objectives, Knowledge Units, Assessment Blueprints) -> Activity Design + Cards + verification. For a PDF attached to the current conversation, always use start_chatgpt_pdf_run and submit_chatgpt_pdf_stage. Read the attachment yourself; the local MCP server does not receive its binary. get_next_stage and submit_next_stage_result are legacy five-stage compatibility tools only and must not be used for new comparison runs. Always read instructions and outputContract before authoring. Publish only after explicit user confirmation.",
+        "The default PDF generation flow is: compact source-outline extraction -> Concept Tree -> Learning Design (tree grouping/splitting and objectives) -> Assessment & Activity Design (blueprints matched to current app capabilities) -> Cards -> verification. ChatGPT writes short natural-language text blocks; the MCP server parses them and materializes IDs, links, JSON fields, support levels, strategy, difficulty, structure modes, and source checks. For a PDF attached to the current conversation, always use start_chatgpt_pdf_run and submit_chatgpt_pdf_stage. Read the attachment yourself; the local MCP server does not receive its binary. get_next_stage and submit_next_stage_result are legacy compatibility tools only. Always read instructions and outputContract before authoring. Publish only after explicit user confirmation.",
     },
   );
 
@@ -100,8 +100,12 @@ export function createStudyForgeMcpServer(
     {
       title: "Start a ChatGPT PDF comparison run",
       description:
-        "Start the comparison path for PDFs attached to the current ChatGPT conversation. ChatGPT reads the attachments and authors every stage; MCP only validates, materializes, times, and stores results.",
+        "Start the comparison path for PDFs attached to the current ChatGPT conversation. ChatGPT first returns only a compact source outline; MCP builds the app structure, then validates, materializes, times, and stores later stages.",
       inputSchema: {
+        clientRequestId: z.string().trim().min(1).max(200).optional(),
+        projectId: z.string().trim().min(1).max(200).optional().describe(
+          "Study Forge 프로젝트에서 시작한 run이면 list_study_projects가 반환한 projectId를 그대로 전달합니다.",
+        ),
         title: z.string().min(1),
         files: z.array(z.object({
           fileName: z.string().min(1),
@@ -124,7 +128,7 @@ export function createStudyForgeMcpServer(
     },
     async (input) => toolResult(
       await chatGptParity.startRun(input),
-      "ChatGPT 첨부 PDF 비교 run을 시작했습니다. 반환된 Analyze 계약에 맞춰 첨부 PDF를 직접 분석하세요.",
+      "ChatGPT 첨부 PDF 비교 run을 시작했습니다. 반환된 계약에 맞춰 첨부 PDF의 원문 목차만 제출하세요.",
     ),
   );
 
@@ -133,7 +137,7 @@ export function createStudyForgeMcpServer(
     {
       title: "Choose source outline items for a ChatGPT PDF run",
       description:
-        "After Analyze, change the selected original-outline leaf nodes before Learning Design. This is the user intervention point equivalent to the Study Forge UI selection.",
+        "After Analyze, change the selected original-outline leaf nodes before Concept Tree generation. This is the user intervention point equivalent to the Study Forge UI selection.",
       inputSchema: {
         runId: z.string().min(1),
         selectedOutlineLeafIds: z.array(z.string().min(1)).min(1),
@@ -179,7 +183,7 @@ export function createStudyForgeMcpServer(
     {
       title: "Submit a ChatGPT-authored PDF stage",
       description:
-        "Validate and store one ChatGPT-authored Analyze, Plan, Learning Design, or Cards result, then return the next exact stage contract.",
+        "Validate and store one ChatGPT-authored Analyze, Concept Tree, Learning Design, Assessment & Activity Design, or Cards result, then return the next exact stage contract.",
       inputSchema: {
         runId: z.string().min(1),
         stage: z.enum(chatGptParityStages),
@@ -214,7 +218,13 @@ export function createStudyForgeMcpServer(
         files: z.array(z.record(z.string(), z.unknown())),
         selectedOutlineLeafIds: z.array(z.string()),
         stageDurationsMs: z.record(z.string(), z.number()),
+        stageAttemptCounts: z.record(z.string(), z.number()),
+        stageValidationFailures: z.record(z.string(), z.array(z.object({
+          at: z.string(),
+          error: z.string(),
+        }))),
         totalDurationMs: z.number(),
+        conceptTree: z.record(z.string(), z.unknown()),
         learningDesign: z.record(z.string(), z.unknown()),
         activityDesign: z.record(z.string(), z.unknown()),
         cardCount: z.number().int().nonnegative(),
@@ -225,6 +235,50 @@ export function createStudyForgeMcpServer(
     async ({ runId }) => toolResult(
       await chatGptParity.getResult(runId),
       "ChatGPT MCP 생성 결과와 단계별 시간을 조회했습니다.",
+    ),
+  );
+
+  server.registerTool(
+    "list_chatgpt_pdf_runs",
+    {
+      title: "List ChatGPT PDF runs",
+      description: "List active, completed, published, and cancelled ChatGPT MCP PDF runs for cleanup and diagnostics.",
+      inputSchema: {},
+      outputSchema: {
+        runs: z.array(z.object({
+          runId: z.string(),
+          title: z.string(),
+          status: z.enum(["active", "completed", "published", "cancelled"]),
+          nextStage: z.enum(chatGptParityStages).nullable(),
+          createdAt: z.string(),
+          updatedAt: z.string(),
+          clientRequestId: z.string().nullable(),
+        })),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => toolResult(
+      { runs: await chatGptParity.listRuns() },
+      "ChatGPT MCP PDF run 목록을 조회했습니다.",
+    ),
+  );
+
+  server.registerTool(
+    "cancel_chatgpt_pdf_run",
+    {
+      title: "Cancel an unfinished ChatGPT PDF run",
+      description: "Mark an unfinished ChatGPT MCP PDF run as cancelled without deleting its diagnostic record.",
+      inputSchema: { runId: z.string().min(1) },
+      outputSchema: {
+        runId: z.string(),
+        cancelled: z.literal(true),
+        cancelledAt: z.string(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async ({ runId }) => toolResult(
+      await chatGptParity.cancelRun(runId),
+      "미완료 ChatGPT MCP PDF run을 취소했습니다. 진단 기록은 보존됩니다.",
     ),
   );
 

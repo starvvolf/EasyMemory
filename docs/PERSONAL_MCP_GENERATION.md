@@ -2,11 +2,11 @@
 
 ## 무엇이 달라지는가
 
-현재 Study Forge 앱은 Codex App Server를 통해 다음 최신 구조를 실행합니다.
+현재 Study Forge 앱의 Codex App Server 경로는 그대로 유지합니다. ChatGPT 첨부 PDF를 처리하는 MCP 비교 경로는 다음 구조를 실행합니다.
 
-`Analyze → Plan → Learning Design(Objectives + Knowledge Units + Assessment Blueprints) → Activity Design + Cards + 검수`
+`원문 목차 추출 → Concept Tree → Learning Design → Assessment & Activity Design → Cards + 검수`
 
-MCP의 기본 생성 경로도 같은 구조와 같은 Zod 계약·서버 조립 함수를 사용합니다. ChatGPT가 구조화 결과를 직접 작성하고 MCP 서버는 단계 순서, 원문 연결, 출력 계약을 검증해 로컬에 저장합니다. MCP 서버 내부에서는 OpenAI API나 Codex App Server를 호출하지 않습니다.
+ChatGPT는 각 단계에서 짧은 자연어 목차·트리·블록만 작성합니다. MCP 서버는 이를 파싱해 ID, 부모·자식, 원문 목차 연결, Learning Objective, Knowledge Unit, Assessment Blueprint, 지원 문제 형식과 카드 JSON을 조립하고 검증해 로컬에 저장합니다. MCP 서버 내부에서는 OpenAI API나 Codex App Server를 호출하지 않습니다.
 
 예전 `Analyze → Plan → Prepare → Activity Design → Cards` 경로와 `get_next_stage` 계열 도구는 기존 run을 읽기 위한 호환 기능으로만 남긴다. 새 비교 실행에는 사용하지 않는다.
 
@@ -17,11 +17,12 @@ MCP의 기본 생성 경로도 같은 구조와 같은 Zod 계약·서버 조립
 ```text
 ChatGPT에 PDF 첨부
   -> start_chatgpt_pdf_run
-  -> Analyze
+  -> 원문 목차만 추출
   -> 사용자 원문 목차 선택(선택 사항)
-  -> Plan
-  -> Learning Objectives + Knowledge Units + Assessment Blueprints
-  -> Activity Design + Cards + 원문 대조 검수
+  -> Concept Tree
+  -> Learning Design: 트리 묶기·나누기 + 학습목표
+  -> Assessment & Activity Design: 문제 설계 + 앱 형식 배정
+  -> Cards + 원문 대조 검수
   -> get_chatgpt_pdf_result
   -> 사용자 승인
   -> publish_chatgpt_pdf_run
@@ -29,26 +30,47 @@ ChatGPT에 PDF 첨부
 
 ChatGPT 첨부 PDF의 바이너리나 OpenAI 내부 file ID가 로컬 MCP 서버로 자동 복사되는 구조는 아니다. PDF는 현재 ChatGPT 대화의 모델 입력으로 남고, MCP 서버는 파일명·설정·단계별 구조화 산출물만 받는다. 따라서 실제 추론 주체는 PDF가 첨부된 ChatGPT 모델이며 MCP 서버는 다음만 담당한다.
 
-- 단계 순서와 JSON 계약 검증
+- 첫 단계의 작은 목차 초안을 앱용 원문 목차 구조로 조립
+- 단계 순서와 자연어 블록 형식 검증
 - 원문 목차 선택 범위 검증
-- Learning Objective, Knowledge Unit, Assessment Blueprint 연결 조립
+- Concept Tree의 ID·부모·순서·페이지·원문 목차 연결 조립
+- Learning Objective와 Knowledge Unit 연결 조립
+- Assessment Blueprint와 현재 앱 문제 형식 연결 조립
 - Blueprint와 Card의 1:1 연결 및 문제 형식 검증
 - 단계별 소요 시간과 최종 결과 저장
 - 사용자 승인 후 기존 Study Forge 덱 가져오기 공간에 발행
 
-`learning-design`과 `cards`는 Codex App Server가 현재 사용하는 같은 Zod 스키마와 서버 조립 함수를 재사용한다. 최종 결과에는 `engine: chatgpt-mcp`가 기록되어 기존 결과와 구분된다.
+최종 카드와 덱은 앱이 현재 사용하는 Zod 스키마와 서버 조립 함수를 재사용한다. 최종 결과에는 `engine: chatgpt-mcp`가 기록되어 기존 결과와 구분된다.
 
 ChatGPT에서는 다음 순서로 사용한다.
 
 1. PDF를 현재 대화에 첨부한다.
-2. `start_chatgpt_pdf_run`에 첨부 파일명, 학습목표와 추가 지시를 전달한다.
+2. `start_chatgpt_pdf_run`에 첨부 파일명, 학습목표와 추가 지시를 전달한다. 재호출 가능성이 있으면 같은 `clientRequestId`를 사용해 중복 run 생성을 막는다.
 3. 반환된 `stageInput.instructions`와 `outputContract`에 맞춰 첨부 PDF를 직접 읽고 결과를 만든다.
 4. `submit_chatgpt_pdf_stage`로 현재 단계 결과를 제출한다.
-5. Analyze 뒤 선택 범위를 바꾸려면 `configure_chatgpt_pdf_run`을 호출한다. 바꾸지 않으면 Analyze 기본 선택을 사용한다.
+5. 목차 추출 뒤 선택 범위를 바꾸려면 `configure_chatgpt_pdf_run`을 호출한다. 바꾸지 않으면 전체 말단 목차를 사용한다.
 6. 완료될 때까지 반환된 다음 단계를 처리하고 `get_chatgpt_pdf_result`로 카드와 단계별 시간을 검토한다.
 7. 사용자가 명시적으로 승인한 뒤에만 `publish_chatgpt_pdf_run`을 호출한다.
 
 이 비교 경로는 별도 OpenAI API 호출이나 Codex App Server 호출을 하지 않는다.
+
+첫 단계에서 ChatGPT가 제출하는 값은 `outlineText` 문자열 하나뿐이다. 파일은 `@file 파일명`, 계층은 `#` 개수, 페이지는 제목 끝의 `[페이지]` 또는 `[시작-끝]`으로 표시한다. ID, 부모 연결, 순서, sourceRefs와 앱이 요구하는 나머지 필드는 MCP 서버가 결정적으로 생성한다. 요약, 핵심 개념, 중요도와 관계 설명은 첫 단계에서 생성하지 않는다.
+
+그다음 세 단계도 각각 `treeText`, `learningDesignText`, `activityDesignText` 문자열 하나만 제출한다. Concept Tree는 들여쓰기된 개념어와 관계·페이지를 쓰고, Learning Design은 `--- LEARNING n ---`, 문제 설계는 `--- DESIGN n ---` 경계로 짧은 한국어 항목을 쓴다. 모델은 앱 ID나 Blueprint JSON을 직접 작성하지 않는다.
+
+Cards 단계도 실제 문제는 `cardsText` 문자열로 제출한다. 각 문제는 `--- CARD n ---`으로 나누고 유형, 질문, 정답, 해설, 근거만 쓴다. 객관식 선택지와 구조·순서 항목만 글머리표를 사용한다. MCP 서버가 blueprint 연결, 앱 ID, 전략, 난이도, 자동채점 필드, 구조 노드와 지원 풀이 방식을 조립한다. 현재 지원 형식은 플래시카드, 일반 빈칸, OX, 객관식, 순서복원, 구조복원이다. 내부 활동은 `structure_recall`로 공유하지만 Assessment 단계에서 `sequence`와 `hierarchy`를 확정해 Cards 단계에 각각 순서복원과 구조복원으로 전달한다.
+
+근거 문구는 해당 Knowledge Unit의 `sourceText`에서 실제로 확인되어야 한다. 형식 오류나 근거 불일치는 카드 번호가 포함된 오류로 거부된다. 첫 Cards 제출의 블록은 임시 초안으로 보존되므로 이후에는 오류가 난 `CARD n` 블록만 같은 번호로 다시 제출할 수 있다. 순환형 순서에서는 시작 상태가 마지막에 다시 등장하는 동일 라벨을 허용하지만 계층 구조의 중복 라벨은 거부한다.
+
+Activity Design 결과에서 한 학습대상의 설계가 모두 proxy 또는 unsupported로 제외되면 MCP가 그 대상의 핵심 원리·판단 절차를 묻는 플래시카드 scaffold 하나로 자동 보정한다. 따라서 지원 불가 설계를 억지로 발행하지 않으면서도 학습대상 전체가 카드 없이 사라지는 것을 막는다.
+
+```text
+@file deadlock.pdf
+# Chapter 8. Deadlocks [1-14]
+## What is deadlock? [3]
+## Deadlock Characterization [4-7]
+### Four conditions [5]
+```
 
 ## 실행
 
@@ -115,6 +137,8 @@ npx @modelcontextprotocol/inspector@latest
 - `submit_chatgpt_pdf_stage`: ChatGPT가 작성한 현재 단계 결과 검증·저장
 - `get_chatgpt_pdf_result`: 최종 설계, 카드와 단계별 시간 조회
 - `publish_chatgpt_pdf_run`: 승인한 ChatGPT 비교 결과를 Study Forge 덱으로 발행
+- `list_chatgpt_pdf_runs`: 비교 run의 active/completed/published/cancelled 상태 조회
+- `cancel_chatgpt_pdf_run`: 미완료 run을 삭제하지 않고 취소 상태로 전환
 
 이전의 `get_stage_input`과 `submit_stage_result` 저수준 도구는 MCP 공개 목록에서 제거했습니다. 서비스 내부 함수는 오프라인 검사에 사용하지만 ChatGPT는 ID, stage와 checksum을 직접 복사하지 않습니다.
 
@@ -169,11 +193,11 @@ ChatGPT는 다음 순서로 실행합니다.
 6. 사용자가 승인한 경우에만 `publish_run_to_deck`을 호출합니다.
 7. Study Forge 웹 화면을 새로고침하면 발행된 덱이 기존 IndexedDB에 한 번만 들어오고 학습할 수 있습니다.
 
-현재 ChatGPT 대화에 PDF를 직접 첨부해 최신 엔진과 비교하려면 다음처럼 요청합니다.
+현재 ChatGPT 대화에 PDF를 직접 첨부해 새 MCP 경로로 처리하려면 다음처럼 요청합니다.
 
 ```text
 첨부한 PDF를 start_chatgpt_pdf_run으로 처리해줘.
-Analyze → Plan → Learning Design → Cards 순서로 끝까지 진행하고,
+Analyze → Concept Tree → Learning Design → Assessment & Activity Design → Cards 순서로 끝까지 진행하고,
 각 단계는 반환된 계약에 맞춰 submit_chatgpt_pdf_stage로 저장해.
 최종 결과와 단계별 시간을 보여주고 내가 승인하기 전에는 발행하지 마.
 ```

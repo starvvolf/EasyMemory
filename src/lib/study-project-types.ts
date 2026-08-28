@@ -1,4 +1,4 @@
-import type { PdfAnalysisResult } from "@/lib/types";
+import type { LearningConceptTree, PdfAnalysisResult } from "@/lib/types";
 
 export type StudyProject = {
   id: string;
@@ -29,6 +29,15 @@ export type StudyProjectSourceAnalysis = {
 
 export type StudyProjectSummary = StudyProject & {
   sourceCount: number;
+};
+
+export type StudyProjectConceptTree = {
+  id: string;
+  projectId: string;
+  sourceIds: string[];
+  tree: LearningConceptTree;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type StudyCodingSession = {
@@ -62,5 +71,6 @@ export type StudyCodingSessionDetail = StudyCodingSession & {
 export type StudyProjectDetail = {
   project: StudyProject;
   sources: StudyProjectSource[];
+  conceptTrees: StudyProjectConceptTree[];
   activeCodingSession?: StudyCodingSessionDetail;
 };

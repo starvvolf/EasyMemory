@@ -154,6 +154,7 @@ const cardStrategies = [
 
 const learningActivityTypes = [
   "flashcard",
+  "cloze",
   "true_false",
   "multiple_choice",
   "structure_recall",
@@ -196,6 +197,15 @@ const structureRecallNodeSchema = z.object({
   correctLabel: z.string(),
 });
 
+const structureRecallKindSchema = z.enum(["sequence", "hierarchy"]);
+const structureRecallModeSchema = z.enum(["word_bank", "free_input"]);
+const supportedStructureRecallModesSchema = z.array(structureRecallModeSchema)
+  .min(1)
+  .max(2)
+  .refine((modes) => new Set(modes).size === modes.length, {
+    message: "지원 풀이 방식은 중복될 수 없습니다.",
+  });
+
 export const analysisSchema = z.object({
   detectedGoal: z.string(),
   sourceType: z.enum(["concept", "comparison", "script", "definition", "mixed"]),
@@ -229,7 +239,9 @@ export const cardDraftSchema = z.object({
   correctOptionIndex: z.number().int(),
   correctBoolean: z.boolean(),
   structureNodes: z.array(structureRecallNodeSchema),
-  structureRecallMode: z.enum(["word_bank", "free_input"]).optional(),
+  structureRecallKind: structureRecallKindSchema.optional(),
+  supportedStructureRecallModes: supportedStructureRecallModesSchema.optional(),
+  structureRecallMode: structureRecallModeSchema.optional(),
   recommendationReason: z.string(),
   hint: z.string(),
   tags: z.array(z.string()),
@@ -237,6 +249,7 @@ export const cardDraftSchema = z.object({
   learningUnitId: z.string(),
   objectiveId: z.string().optional().default(""),
   blueprintId: z.string().optional().default(""),
+  conceptNodeIds: z.array(z.string().min(1)).optional(),
   strategy: z.enum(cardStrategies),
   sourceId: z.string(),
   sourcePage: z.number().int().min(0),
@@ -258,6 +271,7 @@ export const cardsSchema = z.object({
 
 const generatedCardCommonShape = {
   learningUnitId: z.string(),
+  conceptNodeIds: z.array(z.string().min(1)).optional(),
   front: z.string(),
   basis: z.string(),
   strategy: z.enum(cardStrategies),
@@ -270,6 +284,12 @@ const generatedCardContentSchema = z.discriminatedUnion("activityType", [
     ...generatedCardCommonShape,
     activityType: z.literal("flashcard"),
     back: z.string(),
+  }),
+  z.object({
+    ...generatedCardCommonShape,
+    activityType: z.literal("cloze"),
+    clozeText: z.string().min(1),
+    answer: z.string().min(1),
   }),
   z.object({
     ...generatedCardCommonShape,
@@ -286,7 +306,9 @@ const generatedCardContentSchema = z.discriminatedUnion("activityType", [
     ...generatedCardCommonShape,
     activityType: z.literal("structure_recall"),
     structureNodes: z.array(structureRecallNodeSchema),
-    structureRecallMode: z.enum(["word_bank", "free_input"]),
+    structureRecallKind: structureRecallKindSchema.optional(),
+    supportedStructureRecallModes: supportedStructureRecallModesSchema.optional(),
+    structureRecallMode: structureRecallModeSchema,
   }),
 ]);
 
@@ -369,6 +391,7 @@ export const practiceBlueprintSchema = z.object({
     transferDistance: z.enum(["same_context", "near_transfer", "far_transfer"]),
   }),
   requiredCapabilities: z.array(z.string()),
+  conceptNodeIds: z.array(z.string().min(1)).min(1).optional(),
   recommendedType: z.enum(learningActivityTypes),
 }).superRefine((blueprint, context) => {
   if (blueprint.expectedResponse.kind !== "numeric") return;
@@ -416,6 +439,7 @@ const knowledgeUnitSchema = z.object({
   sourceText: z.string().min(1),
   knowledgeType: z.enum(knowledgeTypes),
   rationale: z.string().min(1),
+  conceptNodeIds: z.array(z.string().min(1)).min(1).optional(),
 });
 
 const assessmentBlueprintSchema = z.object({
@@ -461,6 +485,7 @@ const assessmentBlueprintSchema = z.object({
     transferDistance: z.enum(["same_context", "near_transfer", "far_transfer"]),
   }),
   requiredCapabilities: z.array(z.string()),
+  conceptNodeIds: z.array(z.string().min(1)).min(1).optional(),
 });
 
 export const learningDesignSchema = z.object({
@@ -533,6 +558,7 @@ const plannedActivitySchema = z.object({
 
 const plannedCardCommonShape = {
   blueprintId: z.string().min(1),
+  conceptNodeIds: z.array(z.string().min(1)).min(1).optional(),
   front: z.string().min(1),
   basis: z.string().min(1),
   strategy: z.enum(cardStrategies),
@@ -550,6 +576,12 @@ const plannedCardSchema = z.discriminatedUnion("activityType", [
   }),
   z.object({
     ...plannedCardCommonShape,
+    activityType: z.literal("cloze"),
+    clozeText: z.string().min(1),
+    answer: z.string().min(1),
+  }),
+  z.object({
+    ...plannedCardCommonShape,
     activityType: z.literal("true_false"),
     correctBoolean: z.boolean(),
   }),
@@ -563,7 +595,9 @@ const plannedCardSchema = z.discriminatedUnion("activityType", [
     ...plannedCardCommonShape,
     activityType: z.literal("structure_recall"),
     structureNodes: z.array(structureRecallNodeSchema).min(3).max(8),
-    structureRecallMode: z.enum(["word_bank", "free_input"]),
+    structureRecallKind: structureRecallKindSchema,
+    supportedStructureRecallModes: supportedStructureRecallModesSchema,
+    structureRecallMode: structureRecallModeSchema,
   }),
 ]);
 
@@ -1718,6 +1752,7 @@ export async function runActivityDesign(
       "",
       "사용 가능한 문제 화면:",
       "- flashcard: 단서를 보고 답을 먼저 떠올린 뒤 뒷면과 자기 확인",
+      "- cloze: 문장 속 ____ 한 곳을 짧은 정답으로 직접 입력해 자동 채점",
       "- true_false: 명제 하나를 O/X로 자동 채점",
       "- multiple_choice: 후보 3~4개 중 정답 하나를 선택해 자동 채점",
       "- structure_recall: 고정된 순서·상하 관계·분류 구조를 짧은 라벨로 복원",
@@ -2107,6 +2142,17 @@ export async function runCardGeneration(
       {
         type: "object",
         additionalProperties: false,
+        required: [...compactCardCommonRequired, "clozeText", "answer"],
+        properties: {
+          ...compactCardCommonProperties,
+          activityType: { type: "string", enum: ["cloze"] },
+          clozeText: { type: "string" },
+          answer: { type: "string" },
+        },
+      },
+      {
+        type: "object",
+        additionalProperties: false,
         required: [...compactCardCommonRequired, "correctBoolean"],
         properties: {
           ...compactCardCommonProperties,
@@ -2128,7 +2174,13 @@ export async function runCardGeneration(
       {
         type: "object",
         additionalProperties: false,
-        required: [...compactCardCommonRequired, "structureNodes", "structureRecallMode"],
+        required: [
+          ...compactCardCommonRequired,
+          "structureNodes",
+          "structureRecallKind",
+          "supportedStructureRecallModes",
+          "structureRecallMode",
+        ],
         properties: {
           ...compactCardCommonProperties,
           activityType: { type: "string", enum: ["structure_recall"] },
@@ -2148,6 +2200,17 @@ export async function runCardGeneration(
           structureRecallMode: {
             type: "string",
             enum: ["word_bank", "free_input"],
+          },
+          structureRecallKind: {
+            type: "string",
+            enum: ["sequence", "hierarchy"],
+          },
+          supportedStructureRecallModes: {
+            type: "array",
+            minItems: 1,
+            maxItems: 2,
+            uniqueItems: true,
+            items: { type: "string", enum: ["word_bank", "free_input"] },
           },
         },
       },
@@ -2183,6 +2246,8 @@ export async function runCardGeneration(
               "correctOptionIndex",
               "correctBoolean",
               "structureNodes",
+              "structureRecallKind",
+              "supportedStructureRecallModes",
               "structureRecallMode",
               "recommendationReason",
               "hint",
@@ -2229,6 +2294,17 @@ export async function runCardGeneration(
               structureRecallMode: {
                 type: "string",
                 enum: ["word_bank", "free_input"],
+              },
+              structureRecallKind: {
+                type: "string",
+                enum: ["sequence", "hierarchy"],
+              },
+              supportedStructureRecallModes: {
+                type: "array",
+                minItems: 1,
+                maxItems: 2,
+                uniqueItems: true,
+                items: { type: "string", enum: ["word_bank", "free_input"] },
               },
               recommendationReason: { type: "string" },
               hint: { type: "string" },
@@ -2350,11 +2426,13 @@ export async function runCardGeneration(
             "- flashcard는 front에 단서, back에 직접 떠올릴 정답을 둡니다.",
             "- true_false는 front에 하나의 명확한 명제를 쓰고 correctBoolean에 정답을 둡니다. back에는 O 또는 X만 씁니다.",
             "- multiple_choice는 front에 질문, options에 서로 겹치지 않는 선택지 3~4개, correctOptionIndex에 0부터 시작하는 정답 번호를 둡니다. back에는 정답 선택지 문구를 씁니다.",
-            "- structure_recall은 front에 복원할 하나의 구조를 묻고 structureNodes에 3~8개 빈자리를 둡니다. 각 노드는 고유 id, 상위 노드의 parentId, 들어갈 correctLabel을 가집니다. 시작 노드는 parentId가 null입니다.",
+            "- structure_recall은 원문에 실제 고정 순서 또는 상하·분류 관계가 있을 때만 사용합니다. 평면적인 조건·항목 목록에는 사용하지 않습니다.",
+            "- structureRecallKind는 단계의 앞뒤가 학습 대상이면 sequence, 상하·분류 관계가 학습 대상이면 hierarchy입니다.",
+            "- sequence는 노드를 하나의 부모→자식 사슬로 만들고, hierarchy는 실제 가지가 생기도록 부모·자식 관계를 표현합니다. 서로 다른 관계를 한 문제에 섞지 않습니다.",
+            "- structureNodes에는 3~8개 빈자리를 둡니다. 각 노드는 고유 id, 상위 노드의 parentId, 들어갈 correctLabel을 가집니다. 시작 노드는 parentId가 null입니다.",
             "- word_bank의 답 목록이나 보기를 front에 쓰지 않습니다. 답 모음은 structureNodes의 correctLabel을 학습 화면이 자동으로 섞어 제공합니다.",
-            "- 같은 parentId를 가진 형제 노드는 순서 없는 구성요소·분기·분류입니다. 실제 순서가 중요한 단계는 앞 단계가 다음 단계의 parentId가 되는 한 줄 흐름으로 표현합니다.",
-            "- 서로 다른 관계나 개념 묶음을 한 줄 흐름으로 억지로 연결하지 않습니다. 한 카드에는 하나의 일관된 구조만 둡니다.",
-            "- structureRecallMode는 아래 답 모음에서 고르는 쉬운 문제면 word_bank, 답 모음 없이 직접 입력하는 문제면 free_input입니다. free_input은 40자 이하의 짧고 표기가 명확한 정답에만 사용합니다.",
+            "- supportedStructureRecallModes에는 이 정답을 안전하게 풀 수 있는 방식을 넣습니다. 짧고 표기가 하나로 확정되는 답이면 word_bank와 free_input을 모두 지원할 수 있습니다.",
+            "- structureRecallMode는 최초 풀이 방식입니다. 둘 다 지원하면 word_bank를 기본으로 두고 학습 화면에서 free_input으로 바꿀 수 있게 합니다.",
             "- 사용하지 않는 형식 전용 필드는 빈 배열, 0, false로 채웁니다.",
             "- recommendationReason은 확정된 추천 이유를 그대로 보존합니다.",
           ]
@@ -2537,13 +2615,16 @@ function buildLearningActivityGenerationPrompt(input: {
     "",
     "형식별 규칙:",
     "- flashcard: front에는 단서 또는 질문, back에는 직접 떠올릴 짧고 명확한 정답을 둡니다.",
+    "- cloze: clozeText에는 ____를 정확히 한 개 두고 answer에는 그 자리에 들어갈 짧은 정답만 둡니다.",
     "- true_false: front에는 하나의 명확한 명제를 둡니다. 거짓 명제는 원문의 핵심 관계 하나만 바꾸며 애매한 수식어를 쓰지 않습니다. correctBoolean에 정답을 두고 back에는 O 또는 X만 씁니다.",
     "- multiple_choice: 질문 하나와 겹치지 않는 선택지 3~4개를 둡니다. 정답은 하나이며 correctOptionIndex는 0부터 시작하고 back은 정답 선택지 문구입니다. 오답은 그럴듯하되 새로운 학습 사실을 만들지 않습니다.",
-    "- structure_recall: 세 개 이상의 요소가 가진 실제 순서·상하 관계·분류 구조만 사용합니다. structureNodes에는 3~8개 노드를 두고 각 노드는 고유 id, 상위 노드의 parentId, 들어갈 correctLabel을 가집니다. 시작 노드는 parentId가 null입니다.",
+    "- structure_recall: 세 개 이상의 요소가 가진 실제 고정 순서 또는 상하·분류 구조에만 사용합니다. 평면 목록에는 사용하지 않습니다.",
+    "- structureRecallKind는 단계의 앞뒤를 복원하면 sequence, 상하·분류 관계를 복원하면 hierarchy입니다. sequence는 하나의 부모→자식 사슬이어야 하고 hierarchy는 실제 가지가 있어야 합니다.",
+    "- structureNodes에는 3~8개 노드를 두고 각 노드는 고유 id, 상위 노드의 parentId, 들어갈 correctLabel을 가집니다. 시작 노드는 parentId가 null입니다.",
     "- word_bank에서는 front에 '보기:'나 답 목록을 쓰지 않습니다. front에는 문제 지시만 쓰고, 답 모음은 structureNodes의 correctLabel에 개별 저장합니다. 학습 화면이 이를 자동으로 섞습니다.",
-    "- 같은 parentId를 가진 형제 노드는 순서 없는 구성요소·분기·분류로 채점됩니다. 실제 순서가 중요한 단계는 앞 단계가 다음 단계의 parentId가 되는 한 줄 흐름으로 표현합니다.",
     "- correctLabel은 서로 달라야 하고 한 카드에는 한 종류의 관계만 둡니다. 단순 목록을 거짓 계층으로 만들지 않습니다.",
-    "- structureRecallMode는 보기형이면 word_bank, 직접 입력형이면 free_input입니다. free_input은 40자 이하이며 표기가 하나로 확정되는 짧은 답에만 사용합니다.",
+    "- supportedStructureRecallModes에는 가능한 풀이 방식을 넣습니다. 짧고 표기가 하나로 확정되는 답이면 word_bank와 free_input을 모두 지원할 수 있습니다.",
+    "- structureRecallMode는 최초 풀이 방식입니다. 둘 다 지원하면 word_bank를 기본으로 둡니다.",
   ].join("\n");
 }
 
@@ -2612,13 +2693,14 @@ export function validateBlueprintItem(
 export function materializeCards(cards: CardDraft[], mode: StudyMode) {
   return cards.map<Card>((card) => {
     const answers =
-      mode === "cloze"
+      card.activityType === "cloze" || mode === "cloze"
         ? normalizeClozeAnswers(card.clozeText, card.answer, card.answers)
         : undefined;
+    const resolvedMode = card.activityType === "cloze" ? "cloze" : mode;
 
     return {
       id: crypto.randomUUID(),
-      type: mode,
+      type: resolvedMode,
       activityType: card.activityType,
       front:
         cleanEmbeddedStructureChoices(
@@ -2628,7 +2710,7 @@ export function materializeCards(cards: CardDraft[], mode: StudyMode) {
         ) || undefined,
       back: card.back || undefined,
       clozeText:
-        mode === "cloze" && answers
+        resolvedMode === "cloze" && answers
           ? normalizeClozeText(card.clozeText, answers)
           : undefined,
       answer: answers?.join(", "),
@@ -2644,6 +2726,14 @@ export function materializeCards(cards: CardDraft[], mode: StudyMode) {
         card.activityType === "structure_recall"
           ? card.structureNodes
           : undefined,
+      structureRecallKind:
+        card.activityType === "structure_recall"
+          ? card.structureRecallKind ?? "hierarchy"
+          : undefined,
+      supportedStructureRecallModes:
+        card.activityType === "structure_recall"
+          ? card.supportedStructureRecallModes ?? [card.structureRecallMode ?? "word_bank"]
+          : undefined,
       structureRecallMode:
         card.activityType === "structure_recall"
           ? card.structureRecallMode ?? "word_bank"
@@ -2656,6 +2746,7 @@ export function materializeCards(cards: CardDraft[], mode: StudyMode) {
       learningUnitId: card.learningUnitId,
       objectiveId: card.objectiveId || undefined,
       blueprintId: card.blueprintId || undefined,
+      conceptNodeIds: card.conceptNodeIds,
       strategy: card.strategy,
       sourceId: card.sourceId,
       sourcePage: card.sourcePage,
@@ -2966,6 +3057,8 @@ export async function runCardCritic(
               "correctOptionIndex",
               "correctBoolean",
               "structureNodes",
+              "structureRecallKind",
+              "supportedStructureRecallModes",
               "structureRecallMode",
               "recommendationReason",
               "hint",
@@ -3012,6 +3105,17 @@ export async function runCardCritic(
               structureRecallMode: {
                 type: "string",
                 enum: ["word_bank", "free_input"],
+              },
+              structureRecallKind: {
+                type: "string",
+                enum: ["sequence", "hierarchy"],
+              },
+              supportedStructureRecallModes: {
+                type: "array",
+                minItems: 1,
+                maxItems: 2,
+                uniqueItems: true,
+                items: { type: "string", enum: ["word_bank", "free_input"] },
               },
               recommendationReason: { type: "string" },
               hint: { type: "string" },
@@ -3065,8 +3169,8 @@ export async function runCardCritic(
       "- template과 filled_example을 한 카드 안에서 섞지 않습니다.",
       "- 대표 예시 cue에 없던 과업 설명, 접두 문장 또는 메타 지시문을 추가하지 않습니다.",
       "- 카드 유형으로 학습 행동이 이미 명확하면 '다음 뜻을', '영어로 말하세요', '번역하세요' 같은 설명을 추가하지 않습니다.",
-      "- structure_recall 카드의 structureRecallMode(word_bank 또는 free_input)를 바꾸지 않습니다.",
-      "- structure_recall의 같은 parentId를 가진 형제 노드는 순서 없는 묶음이고, 실제 순서가 중요한 단계만 부모→자식 흐름입니다. 서로 다른 관계를 하나의 흐름으로 합치지 않습니다.",
+      "- structure_recall 카드의 structureRecallKind, supportedStructureRecallModes, structureRecallMode를 바꾸지 않습니다.",
+      "- sequence는 하나의 부모→자식 사슬, hierarchy는 실제 가지가 있는 구조여야 합니다. 평면 목록이나 서로 다른 관계를 억지로 구조 문제로 바꾸지 않습니다.",
       "- 문제가 있으면 문제가 있는 최소 부분만 수정하고 qualityNotes에 수정 이유를 기록합니다.",
       "- 수정 후 모든 기준을 통과하면 qualityPassed를 true로 둡니다.",
       "- 원문 자체가 불충분해 해결할 수 없는 경우만 qualityPassed를 false로 두고 이유를 기록합니다.",
@@ -3404,6 +3508,17 @@ function buildLearningPlanGenerationJsonSchema(blueprintCount: number) {
             {
               type: "object",
               additionalProperties: false,
+              required: [...commonCardRequired, "clozeText", "answer"],
+              properties: {
+                ...commonCardProperties,
+                activityType: { type: "string", enum: ["cloze"] },
+                clozeText: { type: "string" },
+                answer: { type: "string" },
+              },
+            },
+            {
+              type: "object",
+              additionalProperties: false,
               required: [...commonCardRequired, "correctBoolean"],
               properties: {
                 ...commonCardProperties,
@@ -3425,7 +3540,13 @@ function buildLearningPlanGenerationJsonSchema(blueprintCount: number) {
             {
               type: "object",
               additionalProperties: false,
-              required: [...commonCardRequired, "structureNodes", "structureRecallMode"],
+              required: [
+                ...commonCardRequired,
+                "structureNodes",
+                "structureRecallKind",
+                "supportedStructureRecallModes",
+                "structureRecallMode",
+              ],
               properties: {
                 ...commonCardProperties,
                 activityType: { type: "string", enum: ["structure_recall"] },
@@ -3443,6 +3564,14 @@ function buildLearningPlanGenerationJsonSchema(blueprintCount: number) {
                       correctLabel: { type: "string" },
                     },
                   },
+                },
+                structureRecallKind: { type: "string", enum: ["sequence", "hierarchy"] },
+                supportedStructureRecallModes: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 2,
+                  uniqueItems: true,
+                  items: { type: "string", enum: ["word_bank", "free_input"] },
                 },
                 structureRecallMode: { type: "string", enum: ["word_bank", "free_input"] },
               },

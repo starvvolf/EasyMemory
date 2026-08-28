@@ -4,8 +4,11 @@ import test from "node:test";
 import {
   getAvailableStructureRecallChoices,
   getLearningActivityType,
+  getStructureRecallKind,
   getStructureRecallMode,
   getStructureRecallChoices,
+  getStudyStructureRecallMode,
+  getSupportedStructureRecallModes,
   gradeStudyAnswer,
   validateLearningActivity,
   validateLearningActivities,
@@ -55,6 +58,28 @@ test("객관식은 빈 선택지를 허용하지 않는다", () => {
   assert.equal(validateLearningActivity(activity).length, 1);
 });
 
+test("일반 빈칸은 빈칸 하나를 직접 입력해 자동 채점한다", () => {
+  const activity = card({
+    type: "cloze",
+    activityType: "cloze",
+    front: "데드락의 필요조건은 ____ 성립해야 한다.",
+    clozeText: "데드락의 필요조건은 ____ 성립해야 한다.",
+    answer: "동시에",
+  });
+  assert.deepEqual(validateLearningActivity(activity), []);
+  assert.equal(gradeStudyAnswer(activity, " 동시에 "), true);
+  assert.equal(gradeStudyAnswer(activity, "개별적으로"), false);
+});
+
+test("일반 빈칸은 여러 빈칸이나 빈 정답을 거부한다", () => {
+  assert.match(validateLearningActivity(card({
+    type: "cloze", activityType: "cloze", clozeText: "____와 ____", answer: "A",
+  }))[0], /정확히|한 개/);
+  assert.match(validateLearningActivity(card({
+    type: "cloze", activityType: "cloze", clozeText: "정답은 ____", answer: "",
+  }))[0], /정답 하나/);
+});
+
 test("같은 부모 아래의 구조복원 항목은 순서 없이 채점한다", () => {
   const activity = card({
     activityType: "structure_recall",
@@ -99,6 +124,93 @@ test("기존 구조복원은 보기형으로 유지된다", () => {
     getStructureRecallMode(card({ activityType: "structure_recall" })),
     "word_bank",
   );
+});
+
+test("새 구조복원은 대상 형태와 지원 풀이 방식을 서로 독립적으로 보존한다", () => {
+  const activity = card({
+    activityType: "structure_recall",
+    structureRecallKind: "sequence",
+    supportedStructureRecallModes: ["word_bank", "free_input"],
+    structureRecallMode: "word_bank",
+    structureNodes: [
+      { id: "first", parentId: null, correctLabel: "요청" },
+      { id: "second", parentId: "first", correctLabel: "할당" },
+      { id: "third", parentId: "second", correctLabel: "반납" },
+    ],
+  });
+  assert.equal(getStructureRecallKind(activity), "sequence");
+  assert.deepEqual(getSupportedStructureRecallModes(activity), ["word_bank", "free_input"]);
+  assert.deepEqual(validateLearningActivity(activity), []);
+});
+
+test("순환형 순서복원은 같은 상태 이름의 재등장과 중복 보기를 한 개씩 보존한다", () => {
+  const activity = card({
+    activityType: "structure_recall",
+    structureRecallKind: "sequence",
+    structureRecallMode: "word_bank",
+    structureNodes: [
+      { id: "claim-start", parentId: null, correctLabel: "주장 간선" },
+      { id: "request", parentId: "claim-start", correctLabel: "요청 간선" },
+      { id: "assignment", parentId: "request", correctLabel: "할당 간선" },
+      { id: "claim-end", parentId: "assignment", correctLabel: "주장 간선" },
+    ],
+  });
+  assert.deepEqual(validateLearningActivity(activity), []);
+  const choices = activity.structureNodes!.map((node) => node.correctLabel);
+  const available = getAvailableStructureRecallChoices(
+    choices,
+    { "claim-start": "주장 간선" },
+    "request",
+  );
+  assert.equal(available.filter((choice) => choice === "주장 간선").length, 1);
+});
+
+test("같은 구조 카드는 첫 학습에는 보기를, 복습에는 직접입력을 기본으로 쓴다", () => {
+  const base = card({
+    activityType: "structure_recall",
+    structureRecallMode: "word_bank",
+    supportedStructureRecallModes: ["word_bank", "free_input"],
+  });
+  assert.equal(getStudyStructureRecallMode(base), "word_bank");
+  assert.equal(getStudyStructureRecallMode({
+    ...base,
+    reviewSchedule: {
+      algorithm: "fsrs", dueAt: "2026-08-29T00:00:00.000Z", stability: 1,
+      difficulty: 5, elapsedDays: 1, scheduledDays: 1, learningSteps: 1,
+      repetitions: 2, lapses: 0, state: "review", lastReviewAt: "2026-08-28T00:00:00.000Z",
+    },
+  }), "free_input");
+  assert.equal(getStudyStructureRecallMode({
+    ...base,
+    reviewSchedule: {
+      algorithm: "fsrs", dueAt: "2026-08-29T00:00:00.000Z", stability: 1,
+      difficulty: 5, elapsedDays: 1, scheduledDays: 1, learningSteps: 1,
+      repetitions: 2, lapses: 1, state: "relearning", lastReviewAt: "2026-08-28T00:00:00.000Z",
+    },
+  }), "word_bank");
+});
+
+test("순서에 갈래를 만들거나 계층을 한 줄 순서로 위장하면 거부한다", () => {
+  const branchedSequence = card({
+    activityType: "structure_recall",
+    structureRecallKind: "sequence",
+    structureNodes: [
+      { id: "root", parentId: null, correctLabel: "시작" },
+      { id: "left", parentId: "root", correctLabel: "왼쪽" },
+      { id: "right", parentId: "root", correctLabel: "오른쪽" },
+    ],
+  });
+  const flatHierarchy = card({
+    activityType: "structure_recall",
+    structureRecallKind: "hierarchy",
+    structureNodes: [
+      { id: "first", parentId: null, correctLabel: "1단계" },
+      { id: "second", parentId: "first", correctLabel: "2단계" },
+      { id: "third", parentId: "second", correctLabel: "3단계" },
+    ],
+  });
+  assert.match(validateLearningActivity(branchedSequence)[0], /한 줄/);
+  assert.match(validateLearningActivity(flatHierarchy)[0], /갈래/);
 });
 
 test("답 없는 빈칸형은 짧은 답을 직접 입력하고 공백·대소문자는 허용한다", () => {
@@ -198,9 +310,13 @@ test("구조복원은 여러 최상위 항목을 순서 없이 채점하고 순�
   assert.match(validateLearningActivity(cyclic)[0], /순환/);
 });
 
-test("저장 전 검사는 네 문제 형식의 정상 카드를 모두 통과시킨다", () => {
+test("저장 전 검사는 다섯 문제 형식의 정상 카드를 모두 통과시킨다", () => {
   const activities = [
     card({ id: "flashcard" }),
+    card({
+      id: "cloze", type: "cloze", activityType: "cloze",
+      front: "정답은 ____", clozeText: "정답은 ____", answer: "A",
+    }),
     card({ id: "true-false", activityType: "true_false", correctBoolean: false }),
     card({
       id: "multiple-choice",

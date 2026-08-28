@@ -2,15 +2,17 @@
 
 import {
   ArrowLeft,
-  ArrowUp,
   BookOpen,
-  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
   FileText,
   Folder,
   Layers3,
   ListChecks,
-  MessageCircle,
+  Maximize2,
+  Minus,
   MoreHorizontal,
+  Network,
   Plus,
   Sparkles,
   TextCursorInput,
@@ -19,9 +21,17 @@ import {
 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import PdfReviewViewer from "./PdfReviewViewer";
-import type { Deck, PdfAnalysisResponse, PdfAnalysisResult } from "@/lib/types";
+import type {
+  Deck,
+  LearningConceptTree,
+  PdfAnalysisResponse,
+  PdfAnalysisResult,
+  StudyAttempt,
+  StudySession,
+} from "@/lib/types";
 import type {
   StudyProject,
+  StudyProjectConceptTree,
   StudyProjectDetail,
   StudyProjectSource,
   StudyProjectSummary,
@@ -34,6 +44,8 @@ type ReaderState = {
 
 type StudyProjectLibraryProps = {
   decks: Deck[];
+  sessions: StudySession[];
+  attempts: StudyAttempt[];
   onCreateFromSources: (
     files: File[],
     project: StudyProject,
@@ -49,6 +61,8 @@ const learningIcons = [Layers3, ListChecks, TextCursorInput, BookOpen, FileText,
 
 export default function StudyProjectLibrary({
   decks,
+  sessions,
+  attempts,
   onCreateFromSources,
   onStartStudy,
   creationPanel,
@@ -66,9 +80,7 @@ export default function StudyProjectLibrary({
   const [busyMessage, setBusyMessage] = useState("");
   const [error, setError] = useState("");
   const [mobilePanel, setMobilePanel] = useState<"sources" | "learning">("sources");
-  const [chatDraft, setChatDraft] = useState("");
-  const [chatMessages, setChatMessages] = useState<string[]>([]);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isTreeOpen, setIsTreeOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadProject = async (projectId: string) => {
@@ -176,19 +188,8 @@ export default function StudyProjectLibrary({
     setDetail(null);
     setSelectedSourceIds([]);
     setReader(null);
-    setChatDraft("");
-    setChatMessages([]);
-    setIsChatOpen(false);
+    setIsTreeOpen(false);
     setError("");
-  };
-
-  const submitChat = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const message = chatDraft.trim();
-    if (!message) return;
-    setChatMessages((current) => [...current, message]);
-    setChatDraft("");
-    setIsChatOpen(true);
   };
 
   const uploadSources = async (files: FileList | null) => {
@@ -413,6 +414,15 @@ export default function StudyProjectLibrary({
         </div>
         <button
           type="button"
+          onClick={() => setIsTreeOpen(true)}
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border border-[#343434] bg-[#202020] px-2.5 text-[10px] text-[#B5B5B5] transition hover:border-[#4A4A4A] hover:bg-[#292929] hover:text-[#F0F0F0]"
+          aria-label="프로젝트 학습트리 확인"
+        >
+          <Network size={13} />
+          트리 확인
+        </button>
+        <button
+          type="button"
           className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-[#8B8B8B] transition hover:bg-[#292929] hover:text-[#E8E8E8]"
           aria-label="프로젝트 메뉴"
         >
@@ -552,6 +562,36 @@ export default function StudyProjectLibrary({
         </section>
       </div>
 
+      {isTreeOpen ? (
+        <>
+          <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-[3px]" />
+          <section className="fixed inset-0 z-[80] flex flex-col overflow-hidden bg-[#171717] md:inset-3 md:rounded-2xl md:border md:border-[#383838] md:shadow-[0_28px_90px_rgba(0,0,0,0.62)]">
+            <header className="flex min-h-[64px] shrink-0 items-center justify-between border-b border-[#303030] px-4 md:px-6">
+              <div>
+                <p className="text-[9px] tracking-[0.12em] text-[#747474]">PROJECT TREE</p>
+                <h4 className="mt-0.5 text-[14px] font-medium text-[#E8E8E8]">{detail.project.name}</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTreeOpen(false)}
+                className="grid h-8 w-8 place-items-center rounded-[8px] text-[#858585] transition hover:bg-[#292929] hover:text-[#E8E8E8]"
+                aria-label="학습트리 닫기"
+              >
+                <X size={15} />
+              </button>
+            </header>
+            <ProjectConceptTree
+              key={detail.project.id}
+              projectName={detail.project.name}
+              conceptTrees={detail.conceptTrees ?? []}
+              decks={projectDecks}
+              sessions={sessions}
+              attempts={attempts}
+            />
+          </section>
+        </>
+      ) : null}
+
       {isCreationOpen && creationPanel ? (
         <>
           <div className="absolute inset-[54px_0_0] z-20 bg-black/50 backdrop-blur-[2px]" />
@@ -575,89 +615,6 @@ export default function StudyProjectLibrary({
         </>
       ) : null}
 
-      <form
-        onSubmit={submitChat}
-        className="absolute bottom-3 left-2.5 right-2.5 z-10 grid min-h-[46px] grid-cols-[18px_minmax(0,1fr)_32px] items-center gap-2 rounded-[14px] border border-[#393939] bg-[#222222] py-1.5 pl-3 pr-[7px] shadow-[0_10px_26px_rgba(0,0,0,0.24)] md:left-[16%] md:right-[16%]"
-      >
-        <MessageCircle size={15} className="text-[#A6AAA5]" />
-        <input
-          value={chatDraft}
-          onChange={(event) => {
-            setChatDraft(event.target.value);
-            if (event.target.value) setIsChatOpen(true);
-          }}
-          placeholder="이 프로젝트에 질문하세요"
-          className="min-w-0 border-0 bg-transparent text-[11px] text-[#F0F2EF] outline-none placeholder:text-[#898E89]"
-          aria-label="프로젝트에 질문"
-        />
-        <button
-          type="submit"
-          className="grid h-8 w-8 place-items-center rounded-[10px] bg-[#ECEEEB] text-[#202321]"
-          aria-label="질문 보내기"
-        >
-          <ArrowUp size={14} />
-        </button>
-      </form>
-
-      {isChatOpen ? (
-        <section className="absolute bottom-0 left-0 right-0 z-20 flex h-[80%] flex-col overflow-hidden rounded-t-[20px] border border-b-0 border-[#484C48] bg-[#242725] shadow-[0_-18px_50px_rgba(32,35,33,0.14)] md:left-[4%] md:right-[4%] md:rounded-t-[22px]">
-          <header className="flex min-h-[58px] shrink-0 items-center gap-2.5 border-b border-[#393D3A] px-3.5 pl-[18px]">
-            <div className="min-w-0 flex-1">
-              <p className="mb-0.5 text-[8px] tracking-[0.15em] text-[#A5A9A4]">PROJECT CHAT</p>
-              <h4 className="truncate text-[13px] font-medium text-[#F0F2EF]">{detail.project.name}</h4>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsChatOpen(false)}
-              className="grid h-8 w-8 place-items-center rounded-[9px] border border-[#464A46] text-[#F0F2EF]"
-              aria-label="채팅 접기"
-            >
-              <ChevronDown size={15} />
-            </button>
-          </header>
-
-          <div className="min-h-0 flex-1 overflow-auto px-4 py-5 md:px-[10%] md:py-[22px]">
-            {chatMessages.length ? (
-              <div className="flex flex-col gap-3">
-                {chatMessages.map((message, index) => (
-                  <div
-                    key={`${message}-${index}`}
-                    className="ml-auto max-w-[76%] rounded-[13px] rounded-br-[3px] bg-[#303431] px-3 py-2.5 text-[10px] leading-5 text-[#F0F2EF]"
-                  >
-                    {message}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center">
-                <p className="text-[9px] text-[#A5A9A4]">선택한 소스 {selectedSourceIds.length}개</p>
-                <h4 className="mt-[7px] text-lg font-medium text-[#F0F2EF]">자료에서 무엇을 찾을까요?</h4>
-              </div>
-            )}
-          </div>
-
-          <form
-            onSubmit={submitChat}
-            className="absolute bottom-2.5 left-3 right-3 grid min-h-[46px] grid-cols-[minmax(0,1fr)_32px] items-center gap-2 rounded-[14px] border border-[#4B4F4B] bg-[#2A2E2B] py-1.5 pl-[13px] pr-[7px] md:bottom-3 md:left-[8%] md:right-[8%]"
-          >
-            <input
-              autoFocus
-              value={chatDraft}
-              onChange={(event) => setChatDraft(event.target.value)}
-              placeholder="질문을 입력하세요"
-              className="min-w-0 border-0 bg-transparent text-[11px] text-[#F0F2EF] outline-none placeholder:text-[#898E89]"
-              aria-label="열린 채팅에 질문"
-            />
-            <button
-              type="submit"
-              className="grid h-8 w-8 place-items-center rounded-[10px] bg-[#ECEEEB] text-[#202321]"
-              aria-label="질문 보내기"
-            >
-              <ArrowUp size={14} />
-            </button>
-          </form>
-        </section>
-      ) : null}
     </div>
   ) : null;
 
@@ -690,6 +647,505 @@ export default function StudyProjectLibrary({
       ) : null}
     </section>
   );
+}
+
+type TreeProgress = {
+  attempts: number;
+  correct: number;
+  lastCorrect: boolean | null;
+};
+
+type TreeAttemptOutcome = {
+  correct: boolean;
+  completedAt: string;
+};
+
+type ProjectForestNode = {
+  id: string;
+  parentId: string | null;
+  title: string;
+  description: string;
+  relation: string;
+  treeId: string | null;
+  conceptNodeId: string | null;
+  treeTitle?: string;
+};
+
+type ProjectTreeEntry = {
+  id: string;
+  title: string;
+  tree: LearningConceptTree;
+};
+
+function ProjectConceptTree({
+  projectName,
+  conceptTrees,
+  decks,
+  sessions,
+  attempts,
+}: {
+  projectName: string;
+  conceptTrees: StudyProjectConceptTree[];
+  decks: Deck[];
+  sessions: StudySession[];
+  attempts: StudyAttempt[];
+}) {
+  const projectTreeIds = new Set(conceptTrees.map((entry) => entry.id));
+  const treeEntries: ProjectTreeEntry[] = [
+    ...conceptTrees
+      .filter((entry) => entry.tree.nodes.length > 0)
+      .map((entry) => ({ id: entry.id, title: entry.tree.title, tree: entry.tree })),
+    ...decks
+      .filter((deck) => deck.conceptTree?.nodes.length && !projectTreeIds.has(deck.conceptTree.id))
+      .map((deck) => ({ id: deck.conceptTree!.id, title: deck.title, tree: deck.conceptTree! })),
+  ];
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
+  const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set());
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
+  const [closingNodeIds, setClosingNodeIds] = useState<Set<string>>(new Set());
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const panRef = useRef({ x: 0, y: 0, left: 0, top: 0 });
+  const closingTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => () => {
+    closingTimeoutsRef.current.forEach(clearTimeout);
+  }, []);
+
+  if (!treeEntries.length) {
+    return (
+      <div className="grid min-h-0 flex-1 place-items-center px-6 text-center">
+        <div>
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-[#363636] bg-[#222222] text-[#787878]">
+            <Network size={21} />
+          </span>
+          <p className="mt-4 text-[13px] text-[#C7C7C7]">아직 연결된 학습트리가 없습니다.</p>
+          <p className="mt-1.5 text-[10px] leading-5 text-[#747474]">
+            개념트리가 포함된 학습을 만들면 이 프로젝트에 자동으로 쌓입니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const sessionDeckIds = new Map(sessions.map((session) => [session.id, session.deckId]));
+  const cardsByDeckAndId = new Map(
+    decks.flatMap((deck) =>
+      deck.cards.map((card) => [`${deck.id}:${card.id}`, { card, deck }] as const),
+    ),
+  );
+  const directOutcomes = new Map<string, Map<string, TreeAttemptOutcome>>();
+  for (const attempt of attempts) {
+    const deckId = sessionDeckIds.get(attempt.sessionId);
+    if (!deckId) continue;
+    const cardEntry = cardsByDeckAndId.get(`${deckId}:${attempt.activityId}`);
+    if (!cardEntry?.card.conceptNodeIds?.length) continue;
+    const correct = attempt.activityType === "graded_problem"
+      ? attempt.isCorrect
+      : attempt.selfRating === "known";
+    const treeIds = cardEntry.deck.conceptTreeIds?.length
+      ? cardEntry.deck.conceptTreeIds
+      : cardEntry.deck.conceptTree ? [cardEntry.deck.conceptTree.id] : [];
+    for (const treeId of treeIds) {
+      for (const conceptNodeId of cardEntry.card.conceptNodeIds) {
+        const key = `${treeId}:${conceptNodeId}`;
+        const outcomes = directOutcomes.get(key) ?? new Map<string, TreeAttemptOutcome>();
+        outcomes.set(attempt.id, { correct, completedAt: attempt.completedAt });
+        directOutcomes.set(key, outcomes);
+      }
+    }
+  }
+
+  const projectRootId = "project-root";
+  const includeProjectRoot = treeEntries.length > 1;
+  const forestNodes: ProjectForestNode[] = includeProjectRoot ? [{
+      id: projectRootId,
+      parentId: null,
+      title: projectName,
+      description: "프로젝트 학습트리",
+      relation: "",
+      treeId: null,
+      conceptNodeId: null,
+    }] : [];
+  for (const entry of treeEntries) {
+    const tree = entry.tree;
+    const knownIds = new Set(tree.nodes.map((node) => node.id));
+    for (const node of tree.nodes) {
+      forestNodes.push({
+        id: `${entry.id}:${node.id}`,
+        parentId: node.parentId && knownIds.has(node.parentId)
+          ? `${entry.id}:${node.parentId}`
+          : includeProjectRoot ? projectRootId : null,
+        title: node.title,
+        description: node.description,
+        relation: node.relation,
+        treeId: entry.id,
+        conceptNodeId: node.id,
+        treeTitle: node.parentId ? undefined : entry.title,
+      });
+    }
+  }
+
+  const children = new Map<string, ProjectForestNode[]>();
+  for (const node of forestNodes) {
+    if (!node.parentId) continue;
+    const items = children.get(node.parentId) ?? [];
+    items.push(node);
+    children.set(node.parentId, items);
+  }
+  const aggregateProgress = new Map<string, TreeProgress>();
+  const collectProgress = (node: ProjectForestNode): Map<string, TreeAttemptOutcome> => {
+    const own = node.treeId && node.conceptNodeId
+      ? directOutcomes.get(`${node.treeId}:${node.conceptNodeId}`)
+      : undefined;
+    const combined = new Map(own ?? []);
+    for (const child of children.get(node.id) ?? []) {
+      for (const [attemptId, outcome] of collectProgress(child)) {
+        combined.set(attemptId, outcome);
+      }
+    }
+    const ordered = [...combined.values()].sort((left, right) =>
+      left.completedAt.localeCompare(right.completedAt),
+    );
+    aggregateProgress.set(node.id, {
+      attempts: ordered.length,
+      correct: ordered.filter((outcome) => outcome.correct).length,
+      lastCorrect: ordered.at(-1)?.correct ?? null,
+    });
+    return combined;
+  };
+  const rootNodes = forestNodes.filter((node) => !node.parentId);
+  rootNodes.forEach(collectProgress);
+
+  const originalDepth = new Map<string, number>();
+  const recordDepth = (node: ProjectForestNode, depth: number) => {
+    originalDepth.set(node.id, depth);
+    (children.get(node.id) ?? []).forEach((child) => recordDepth(child, depth + 1));
+  };
+  rootNodes.forEach((node) => recordDepth(node, 0));
+  const isExpanded = (node: ProjectForestNode) => {
+    if (collapsedNodeIds.has(node.id)) return false;
+    return (originalDepth.get(node.id) ?? 0) < 1 || expandedNodeIds.has(node.id);
+  };
+  const visibleNodes: ProjectForestNode[] = [];
+  const visibleDepth = new Map<string, number>();
+  const collectVisible = (node: ProjectForestNode, depth: number) => {
+    visibleNodes.push(node);
+    visibleDepth.set(node.id, depth);
+    if (!isExpanded(node)) return;
+    (children.get(node.id) ?? []).forEach((child) => collectVisible(child, depth + 1));
+  };
+  rootNodes.forEach((node) => collectVisible(node, 0));
+  const visibleIds = new Set(visibleNodes.map((node) => node.id));
+
+  const positions = new Map<string, { x: number; y: number }>();
+  let leafIndex = 0;
+  let maxDepth = 0;
+  const horizontalGap = 246;
+  const verticalGap = 78;
+  const placeNode = (node: ProjectForestNode, depth: number): number => {
+    maxDepth = Math.max(maxDepth, depth);
+    const childNodes = (children.get(node.id) ?? []).filter((child) => visibleIds.has(child.id));
+    const childYs = childNodes.map((child) => placeNode(child, depth + 1));
+    const y = childYs.length
+      ? childYs.reduce((sum, value) => sum + value, 0) / childYs.length
+      : 58 + leafIndex++ * verticalGap;
+    positions.set(node.id, { x: 120 + depth * horizontalGap, y });
+    return y;
+  };
+  rootNodes.forEach((node) => placeNode(node, 0));
+  const width = Math.max(900, 250 + maxDepth * horizontalGap);
+  const height = Math.max(520, 116 + Math.max(1, leafIndex - 1) * verticalGap);
+  const rootAnchor = { x: 120, y: 260 };
+  rootNodes.forEach((node) => positions.set(node.id, rootAnchor));
+
+  const selectedBranch = new Set<string>();
+  if (selectedNodeId) {
+    let cursor = forestNodes.find((node) => node.id === selectedNodeId);
+    while (cursor) {
+      selectedBranch.add(cursor.id);
+      cursor = cursor.parentId
+        ? forestNodes.find((node) => node.id === cursor?.parentId)
+        : undefined;
+    }
+    const addDescendants = (nodeId: string) => {
+      for (const child of children.get(nodeId) ?? []) {
+        if (!visibleIds.has(child.id)) continue;
+        selectedBranch.add(child.id);
+        addDescendants(child.id);
+      }
+    };
+    addDescendants(selectedNodeId);
+  }
+
+  const isBelowClosingNode = (node: ProjectForestNode) => {
+    let cursor = node;
+    while (cursor.parentId) {
+      if (closingNodeIds.has(cursor.parentId)) return true;
+      const parent = forestNodes.find((candidate) => candidate.id === cursor.parentId);
+      if (!parent) break;
+      cursor = parent;
+    }
+    return false;
+  };
+
+  const fitTree = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const nextScale = Math.min(1.15, Math.max(0.55, Math.min(
+      (canvas.clientWidth - 48) / width,
+      (canvas.clientHeight - 48) / height,
+    )));
+    setScale(nextScale);
+    requestAnimationFrame(() => {
+      canvas.scrollLeft = 0;
+      canvas.scrollTop = 0;
+    });
+  };
+
+  const toggleNode = (node: ProjectForestNode) => {
+    if (closingNodeIds.has(node.id)) return;
+    setSelectedNodeId((current) => current === node.id ? null : node.id);
+    if (!(children.get(node.id)?.length)) return;
+    if (isExpanded(node)) {
+      setClosingNodeIds((current) => new Set(current).add(node.id));
+      const timeout = setTimeout(() => {
+        setCollapsedNodeIds((current) => new Set(current).add(node.id));
+        setExpandedNodeIds((current) => {
+          const next = new Set(current);
+          next.delete(node.id);
+          return next;
+        });
+        setClosingNodeIds((current) => {
+          const next = new Set(current);
+          next.delete(node.id);
+          return next;
+        });
+      }, 190);
+      closingTimeoutsRef.current.push(timeout);
+    } else {
+      setExpandedNodeIds((current) => new Set(current).add(node.id));
+      setCollapsedNodeIds((current) => {
+        const next = new Set(current);
+        next.delete(node.id);
+        return next;
+      });
+    }
+  };
+
+  const expandAll = () => {
+    setClosingNodeIds(new Set());
+    setCollapsedNodeIds(new Set());
+    setExpandedNodeIds(new Set(
+      forestNodes.filter((node) => children.get(node.id)?.length).map((node) => node.id),
+    ));
+  };
+
+  const collapseAll = () => {
+    const collapsible = forestNodes.filter((node) =>
+      (originalDepth.get(node.id) ?? 0) > 0 && (children.get(node.id)?.length ?? 0) > 0,
+    );
+    const ids = new Set(collapsible.map((node) => node.id));
+    setSelectedNodeId(null);
+    setClosingNodeIds(ids);
+    const timeout = setTimeout(() => {
+      setExpandedNodeIds(new Set());
+      setCollapsedNodeIds(ids);
+      setClosingNodeIds(new Set());
+    }, 190);
+    closingTimeoutsRef.current.push(timeout);
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#303030] bg-[#1B1B1B] px-4 py-3 text-[10px] text-[#A0A0A0] md:px-6">
+        <TreeLegend color="#747474" label="미학습" />
+        <TreeLegend color="#8A4B4B" label="최근 오답" />
+        <TreeLegend color="#8A7A45" label="학습 중" />
+        <TreeLegend color="#4D7A60" label="안정" />
+        <span className="ml-auto">노드를 눌러 가지 열기 · 트리 {treeEntries.length}개 · 개념 {forestNodes.length - (includeProjectRoot ? 1 : 0)}개</span>
+      </div>
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-[10px] border border-[#3C3C3C] bg-[#202020]/95 p-1 shadow-lg">
+          <button type="button" onClick={expandAll} className="flex h-8 items-center gap-1.5 rounded-[7px] px-2 text-[10px] text-[#C8C8C8] hover:bg-[#303030]" aria-label="트리 모두 펼치기"><ChevronsRight size={13} /><span>다 열기</span></button>
+          <button type="button" onClick={collapseAll} className="flex h-8 items-center gap-1.5 rounded-[7px] px-2 text-[10px] text-[#C8C8C8] hover:bg-[#303030]" aria-label="트리 모두 접기"><ChevronsLeft size={13} /><span>다 닫기</span></button>
+          <span className="mx-1 h-5 w-px bg-[#3B3B3B]" />
+          <button type="button" onClick={() => setScale((value) => Math.min(1.6, value + 0.1))} className="grid h-8 w-8 place-items-center rounded-[7px] text-[#C8C8C8] hover:bg-[#303030]" aria-label="트리 확대"><Plus size={14} /></button>
+          <button type="button" onClick={() => setScale((value) => Math.max(0.5, value - 0.1))} className="grid h-8 w-8 place-items-center rounded-[7px] text-[#C8C8C8] hover:bg-[#303030]" aria-label="트리 축소"><Minus size={14} /></button>
+          <button type="button" onClick={fitTree} className="grid h-8 w-8 place-items-center rounded-[7px] text-[#C8C8C8] hover:bg-[#303030]" aria-label="트리 화면 맞춤"><Maximize2 size={14} /></button>
+          <span className="min-w-10 px-1 text-center text-[10px] text-[#8F8F8F]">{Math.round(scale * 100)}%</span>
+        </div>
+        <div
+          ref={canvasRef}
+          className={`h-full overflow-auto bg-[radial-gradient(circle_at_center,#2B2B2B_0.8px,transparent_0.9px)] bg-[size:20px_20px] ${isPanning ? "cursor-grabbing select-none" : "cursor-grab"}`}
+          onPointerDown={(event) => {
+            if ((event.target as Element).closest("[data-tree-node]")) return;
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            panRef.current = { x: event.clientX, y: event.clientY, left: canvas.scrollLeft, top: canvas.scrollTop };
+            setIsPanning(true);
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (!isPanning || !canvasRef.current) return;
+            canvasRef.current.scrollLeft = panRef.current.left - (event.clientX - panRef.current.x);
+            canvasRef.current.scrollTop = panRef.current.top - (event.clientY - panRef.current.y);
+          }}
+          onPointerUp={(event) => {
+            setIsPanning(false);
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          onPointerCancel={() => setIsPanning(false)}
+        >
+          <div style={{ width: width * scale, height: height * scale }}>
+            <svg
+              width={width}
+              height={height}
+              viewBox={`0 0 ${width} ${height}`}
+              className="block origin-top-left"
+              style={{ transform: `scale(${scale})` }}
+              role="img"
+              aria-label={`${projectName} 프로젝트 학습트리`}
+            >
+          {visibleNodes.filter((node) => node.parentId && visibleIds.has(node.parentId)).map((node) => {
+            const from = positions.get(node.parentId!)!;
+            const to = positions.get(node.id)!;
+            const emphasized = !selectedNodeId || (selectedBranch.has(node.id) && selectedBranch.has(node.parentId!));
+            const closing = isBelowClosingNode(node);
+            return (
+              <path
+                key={`edge-${node.id}`}
+                d={`M ${from.x + 91} ${from.y} C ${from.x + 140} ${from.y}, ${to.x - 140} ${to.y}, ${to.x - 91} ${to.y}`}
+                fill="none"
+                stroke={emphasized ? "#5D5D5D" : "#303030"}
+                strokeWidth={emphasized ? 1.8 : 1.1}
+                opacity={closing ? 0 : emphasized ? 1 : 0.36}
+                className="sf-tree-edge-enter"
+                style={{ transition: "opacity 180ms ease" }}
+              />
+            );
+          })}
+          {visibleNodes.map((node) => {
+            const position = positions.get(node.id)!;
+            const progress = aggregateProgress.get(node.id) ?? { attempts: 0, correct: 0, lastCorrect: null };
+            const projectRoot = node.id === projectRootId;
+            const appearance = treeNodeAppearance(progress, projectRoot);
+            const childCount = children.get(node.id)?.length ?? 0;
+            const expanded = isExpanded(node);
+            const emphasized = !selectedNodeId || selectedBranch.has(node.id);
+            const closing = isBelowClosingNode(node);
+            return (
+              <g
+                key={node.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleNode(node)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") toggleNode(node);
+                }}
+                aria-label={`${node.title}, ${appearance.label}`}
+                data-tree-node={node.conceptNodeId ?? "project"}
+                className="cursor-pointer outline-none"
+                style={{
+                  transform: `translate(${position.x}px, ${position.y}px)`,
+                  opacity: closing ? 0 : emphasized ? 1 : 0.32,
+                  transition: "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease",
+                }}
+              >
+                <g className="sf-tree-node-enter">
+                  <title>{`${node.title}${node.description ? ` — ${node.description}` : ""}`}</title>
+                  <rect
+                  x="-91"
+                  y="-27"
+                  width="182"
+                  height="54"
+                  rx="14"
+                  fill={appearance.fill}
+                  stroke={selectedNodeId === node.id ? "#F0F0EE" : appearance.stroke}
+                  strokeWidth={selectedNodeId === node.id || projectRoot ? 2 : 1.35}
+                  />
+                  <circle cx="-72" cy="0" r="4.5" fill={appearance.stroke} />
+                  <text
+                  x="-60"
+                  y={node.treeTitle ? -5 : 1}
+                  dominantBaseline="middle"
+                  fill={appearance.text}
+                  fontSize="12"
+                  fontWeight="600"
+                >
+                  {truncateTreeLabel(node.title, 20)}
+                  </text>
+                  {node.treeTitle ? (
+                    <text x="-60" y="13" fill="#929292" fontSize="9">
+                      {truncateTreeLabel(node.treeTitle, 25)}
+                    </text>
+                  ) : null}
+                  {childCount ? (
+                    <g transform="translate(73, 0)">
+                      <circle r="10" fill="#303030" stroke="#606060" />
+                      <text textAnchor="middle" dominantBaseline="middle" fill="#D0D0D0" fontSize="12" fontWeight="600">{expanded ? "−" : "+"}</text>
+                    </g>
+                  ) : null}
+                </g>
+              </g>
+            );
+          })}
+            </svg>
+          </div>
+        </div>
+        <style>{`
+          @keyframes sf-tree-node-enter {
+            from { opacity: 0; transform: translateX(-12px) scale(0.97); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
+          }
+          @keyframes sf-tree-edge-enter {
+            from { opacity: 0; }
+          }
+          .sf-tree-node-enter {
+            animation: sf-tree-node-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+            transform-box: fill-box;
+            transform-origin: center;
+          }
+          .sf-tree-edge-enter {
+            animation: sf-tree-edge-enter 220ms ease both;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .sf-tree-node-enter, .sf-tree-edge-enter { animation: none; }
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+}
+
+function TreeLegend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+      {label}
+    </span>
+  );
+}
+
+function treeNodeAppearance(progress: TreeProgress, projectRoot: boolean) {
+  if (projectRoot) {
+    return { fill: "#E7E7E5", stroke: "#F4F4F2", text: "#202020", label: "프로젝트 루트" };
+  }
+  if (progress.attempts === 0) {
+    return { fill: "#242424", stroke: "#565656", text: "#BDBDBD", label: "미학습" };
+  }
+  if (progress.lastCorrect === false) {
+    return { fill: "#352323", stroke: "#8A4B4B", text: "#F0C4C4", label: "최근 오답" };
+  }
+  if (progress.correct === progress.attempts && progress.attempts >= 2) {
+    return { fill: "#213129", stroke: "#4D7A60", text: "#C8E2D0", label: "안정" };
+  }
+  return { fill: "#332F20", stroke: "#8A7A45", text: "#E7DDAE", label: "학습 중" };
+}
+
+function truncateTreeLabel(value: string, maximum = 16) {
+  return value.length > maximum ? `${value.slice(0, maximum - 1)}…` : value;
 }
 
 function buildCachedProjectAnalysis(

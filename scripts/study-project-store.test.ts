@@ -4,7 +4,7 @@ import { access, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import type { PdfAnalysisResult } from "../src/lib/types";
+import type { LearningConceptTree, PdfAnalysisResult } from "../src/lib/types";
 
 test("프로젝트 PDF와 두 종류의 분석 결과를 같은 원본에 연결한다", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "study-forge-project-store-"));
@@ -109,6 +109,34 @@ test("프로젝트 PDF와 두 종류의 분석 결과를 같은 원본에 연결
     const readingSaved = await store.saveStudyProjectSourceAnalysis(source.id, analysis, "reading");
     assert.equal(readingSaved.readingAnalysis?.sourceChecksum, expectedChecksum);
     assert.equal(readingSaved.analysis?.sourceChecksum, expectedChecksum);
+
+    const conceptTree: LearningConceptTree = {
+      id: "deadlock-tree",
+      title: "Deadlocks",
+      sourceFileNames: ["deadlocks.pdf"],
+      nodes: [
+        {
+          id: "deadlock",
+          parentId: null,
+          order: 0,
+          depth: 0,
+          title: "데드락",
+          relation: "",
+          description: "데드락의 정의와 조건",
+          sourceRefs: [{ fileName: "deadlocks.pdf", pageNumbers: [1] }],
+        },
+      ],
+    };
+    const storedTree = await store.saveStudyProjectConceptTree(project.id, conceptTree);
+    assert.deepEqual(storedTree.sourceIds, [source.id]);
+    assert.equal(storedTree.tree.nodes[0].title, "데드락");
+    await store.saveStudyProjectConceptTree(project.id, {
+      ...conceptTree,
+      title: "Deadlocks updated",
+    }, [source.id]);
+    const detailWithTree = await store.getStudyProject(project.id);
+    assert.equal(detailWithTree?.conceptTrees.length, 1);
+    assert.equal(detailWithTree?.conceptTrees[0].tree.title, "Deadlocks updated");
 
     assert.equal(await store.deleteStudyProjectSource(source.id), true);
     assert.equal(await store.loadStudyProjectSource(source.id), null);

@@ -19,6 +19,7 @@ export const defaultGenerationPolicy: GenerationPolicy = {
 
 const rendererCapabilities: Record<LearningActivityType, Set<string>> = {
   flashcard: new Set(["text_prompt", "short_text", "self_scoring"]),
+  cloze: new Set(["text_prompt", "short_text", "exact_text", "exact_scoring"]),
   true_false: new Set(["text_prompt", "boolean_choice", "exact_scoring"]),
   multiple_choice: new Set(["text_prompt", "single_choice", "exact_scoring"]),
   structure_recall: new Set([
@@ -117,7 +118,8 @@ export function assessBlueprintSupport(
       : capabilities.has("exact_scoring"),
   );
   const operationFits =
-    (blueprint.elicitedOperation === "recall" && rendererType === "flashcard") ||
+    (blueprint.elicitedOperation === "recall" &&
+      (rendererType === "flashcard" || rendererType === "cloze")) ||
     selfScoredApply ||
     (blueprint.elicitedOperation === "discriminate" &&
       (rendererType === "true_false" || rendererType === "multiple_choice")) ||

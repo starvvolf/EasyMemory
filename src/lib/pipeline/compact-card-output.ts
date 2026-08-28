@@ -5,6 +5,7 @@ import type {
   CardStrategy,
   LearningUnit,
   LearningActivityType,
+  StructureRecallKind,
   StructureRecallNode,
   StructureRecallMode,
 } from "../types.ts";
@@ -30,6 +31,7 @@ type CompactCardCommon = {
 
 export type CompactCardDraft =
   | (CompactCardCommon & { activityType: "flashcard"; back: string })
+  | (CompactCardCommon & { activityType: "cloze"; clozeText: string; answer: string })
   | (CompactCardCommon & { activityType: "true_false"; correctBoolean: boolean })
   | (CompactCardCommon & {
       activityType: "multiple_choice";
@@ -39,15 +41,28 @@ export type CompactCardDraft =
   | (CompactCardCommon & {
       activityType: "structure_recall";
       structureNodes: StructureRecallNode[];
+      structureRecallKind?: StructureRecallKind;
+      supportedStructureRecallModes?: StructureRecallMode[];
       structureRecallMode: StructureRecallMode;
     });
 
-export type GeneratedCardContent =
+export type GeneratedCardContent = (
   | {
       learningUnitId: string;
       activityType: "flashcard";
       front: string;
       back: string;
+      basis: string;
+      strategy: CardStrategy;
+      difficulty: number;
+      explanation: string;
+    }
+  | {
+      learningUnitId: string;
+      activityType: "cloze";
+      front: string;
+      clozeText: string;
+      answer: string;
       basis: string;
       strategy: CardStrategy;
       difficulty: number;
@@ -79,12 +94,15 @@ export type GeneratedCardContent =
       activityType: "structure_recall";
       front: string;
       structureNodes: StructureRecallNode[];
+      structureRecallKind?: StructureRecallKind;
+      supportedStructureRecallModes?: StructureRecallMode[];
       structureRecallMode: StructureRecallMode;
       basis: string;
       strategy: CardStrategy;
       difficulty: number;
       explanation: string;
-    };
+    }
+) & { conceptNodeIds?: string[] };
 
 export function hydrateGeneratedCardContent(
   card: GeneratedCardContent,
@@ -106,6 +124,8 @@ export function hydrateGeneratedCardContent(
     correctOptionIndex: 0,
     correctBoolean: false,
     structureNodes: [] as StructureRecallNode[],
+    structureRecallKind: "hierarchy" as StructureRecallKind,
+    supportedStructureRecallModes: ["word_bank"] as StructureRecallMode[],
     structureRecallMode: "word_bank" as StructureRecallMode,
     recommendationReason: recommendation.reason,
     hint: "",
@@ -114,6 +134,7 @@ export function hydrateGeneratedCardContent(
     learningUnitId: learningUnit.id,
     objectiveId: recommendation.objectiveId ?? "",
     blueprintId: recommendation.blueprintId ?? "",
+    conceptNodeIds: card.conceptNodeIds,
     strategy: card.strategy,
     sourceId: learningUnit.sourceId,
     sourcePage: learningUnit.sourcePage,
@@ -128,6 +149,18 @@ export function hydrateGeneratedCardContent(
 
   if (card.activityType === "flashcard") {
     return { ...common, activityType: card.activityType, back: card.back };
+  }
+  if (card.activityType === "cloze") {
+    return {
+      ...common,
+      type: "cloze",
+      activityType: card.activityType,
+      front: card.clozeText,
+      clozeText: card.clozeText,
+      answer: card.answer,
+      answers: [card.answer],
+      back: card.answer,
+    };
   }
   if (card.activityType === "true_false") {
     return {
@@ -146,10 +179,13 @@ export function hydrateGeneratedCardContent(
       correctOptionIndex: card.correctOptionIndex,
     };
   }
+  const structureRecallKind = card.structureRecallKind ?? inferStructureRecallKind(card.structureNodes);
   return {
     ...common,
     activityType: card.activityType,
     structureNodes: card.structureNodes,
+    structureRecallKind,
+    supportedStructureRecallModes: card.supportedStructureRecallModes ?? [card.structureRecallMode],
     structureRecallMode: card.structureRecallMode,
   };
 }
@@ -167,6 +203,8 @@ export function expandCompactCardDraft(card: CompactCardDraft): CardDraft {
     correctOptionIndex: 0,
     correctBoolean: false,
     structureNodes: [] as StructureRecallNode[],
+    structureRecallKind: "hierarchy" as StructureRecallKind,
+    supportedStructureRecallModes: ["word_bank"] as StructureRecallMode[],
     structureRecallMode: "word_bank" as StructureRecallMode,
     recommendationReason: card.recommendationReason,
     hint: "",
@@ -190,6 +228,18 @@ export function expandCompactCardDraft(card: CompactCardDraft): CardDraft {
   if (card.activityType === "flashcard") {
     return { ...common, activityType: card.activityType, back: card.back };
   }
+  if (card.activityType === "cloze") {
+    return {
+      ...common,
+      type: "cloze",
+      activityType: card.activityType,
+      front: card.clozeText,
+      clozeText: card.clozeText,
+      answer: card.answer,
+      answers: [card.answer],
+      back: card.answer,
+    };
+  }
   if (card.activityType === "true_false") {
     return {
       ...common,
@@ -207,10 +257,23 @@ export function expandCompactCardDraft(card: CompactCardDraft): CardDraft {
       correctOptionIndex: card.correctOptionIndex,
     };
   }
+  const structureRecallKind = card.structureRecallKind ?? inferStructureRecallKind(card.structureNodes);
   return {
     ...common,
     activityType: card.activityType,
     structureNodes: card.structureNodes,
+    structureRecallKind,
+    supportedStructureRecallModes: card.supportedStructureRecallModes ?? [card.structureRecallMode],
     structureRecallMode: card.structureRecallMode,
   };
+}
+
+function inferStructureRecallKind(nodes: StructureRecallNode[]): StructureRecallKind {
+  const childCounts = new Map<string | null, number>();
+  for (const node of nodes) {
+    childCounts.set(node.parentId, (childCounts.get(node.parentId) ?? 0) + 1);
+  }
+  return nodes.length > 1 && [...childCounts.values()].every((count) => count === 1)
+    ? "sequence"
+    : "hierarchy";
 }
