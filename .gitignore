@@ -33,3 +33,12 @@ eval/**/tmp/
 eval/**/logs/
 eval/**/*.partial.json
 eval/**/*.secret.*
+
+# Personal local Study Forge projects and source PDFs
+.study-forge-data/
+
+# Local runtime artifacts
+/next-*.log
+/output/
+/tmp/
+/*.traineddata

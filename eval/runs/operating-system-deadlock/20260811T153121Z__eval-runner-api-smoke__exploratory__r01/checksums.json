@@ -1,0 +1,18 @@
+{
+  "artifactType": "study-forge-run-checksums",
+  "artifactVersion": "v0",
+  "runId": "20260811T153121Z__eval-runner-api-smoke__exploratory__r01",
+  "algorithm": "sha256",
+  "files": {
+    "stages/10-analyze.json": "9002f7b6580087bdb8fdd6d6e3ecfb6625bc69ba1f48aafde3e2bfbda0e6d2c6",
+    "stages/20-plan.json": "6e37522bf96d60b343f3628f6b92fd53c677d1e457c24a1ed6ddda71c36b28d2",
+    "stages/30-recall.json": "9547b2af617a321c6ff27f0f43fb0e3d9d9c7cf2b5a617d0a45d5c5caf95719c",
+    "stages/40-prepare.json": "1872cdb4a41d1134b88bceb1b630323d95d77b36226bac5055814bebe9b68de7",
+    "stages/50-cards.json": "34c33be16c3e8f96a66c9660e08ee7a14ecf422c0eca06db441a4d78b1ada767",
+    "stages/60-critic.json": "274f6ad5fcf9e59bf67557545c4f31cf2d7ec5fe0a5264de1f8124b52fd5505c",
+    "stages/70-final-cards.json": "3a34ac205d70be4fffbad9727c899d4ecb4455731fac5d68fd8687bf4e8fa205",
+    "run.json": "bb1a5c7947a4eaef8af471dcd3d4bddf3ae3605b78a8b213f219a8b067b38183",
+    "inputs.json": "54ed51481050c04ba39012b22fa4dd392ad0d5482d60d6548b520151920af751",
+    "observations.json": "bd4c1cc58ad1548b6d8b1bf1bafb73aca35734d40866c258f58f23fca98b48e6"
+  }
+}

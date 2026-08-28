@@ -35,3 +35,43 @@ npm.cmd run eval:import:test
 - API key, 인증 정보, 전체 환경 변수와 provider 내부 trace를 저장하지 않는다.
 
 세부 규약은 `docs/EVAL_ARTIFACT_STRUCTURE.md`를 따른다.
+
+## 기존 run 기반 headless 재실행
+
+Eval Runner는 기존 run의 앞 단계 artifact를 그대로 고정하고, 지정한 단계부터 production과 동일한 pipeline 함수로 다시 실행한다. 지원 시작 단계는 `recall`, `prepare`, `cards`, `critic`이다.
+
+실행 전 검증만 수행하는 예:
+
+```powershell
+npm.cmd run eval:run -- --case operating-system-deadlock --source-run 20260810T152136Z__whole-document-core-soft-budget__baseline__r01 --from-stage cards --label eval-runner-smoke-test --dry-run
+```
+
+실제 실행에서는 `--dry-run`을 제거한다. `recall` 또는 `prepare`부터 실행하려면 legacy run에 원자료 본문이 없으므로 `--override-file`의 `sourceContext.text` 또는 `sourceContext.files`로 원자료를 명시해야 한다.
+
+Override 파일은 source run을 수정하지 않으며 해당 실행에만 적용된다. 허용 범위는 recall option/variant/대표 예시, 단계별 model/reasoning effort, 단계별 추가 instruction, 명시적 source context다. 정의되지 않은 필드는 거부된다.
+
+```json
+{
+  "artifactType": "study-forge-eval-run-override",
+  "artifactVersion": "v0",
+  "recall": {
+    "optionId": "option-1",
+    "variantId": "option-1-template"
+  },
+  "models": {
+    "cards": {
+      "model": "gpt-5.4",
+      "reasoningEffort": "medium"
+    }
+  },
+  "stageInstructions": {
+    "cards": "이번 실험에만 적용할 추가 지시"
+  }
+}
+```
+
+Runner 단위 테스트:
+
+```powershell
+npm.cmd run eval:run:test
+```

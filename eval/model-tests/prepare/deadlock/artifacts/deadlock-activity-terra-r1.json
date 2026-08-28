@@ -1,0 +1,1108 @@
+{
+  "artifactType": "study-forge-model-stage-test",
+  "stage": "activity",
+  "completedAt": "2026-08-17T06:58:27.901Z",
+  "preparedPath": "C:\\Users\\jkh01\\OneDrive\\문서\\CD0625\\eval\\local\\plan-prepare-v1\\model-test-prepare-terra-deadlock-r1.json",
+  "model": "gpt-5.6-terra",
+  "reasoningEffort": "medium",
+  "activityDesign": {
+    "recommendations": [
+      {
+        "learningUnitId": "deadlock-definition",
+        "objectiveId": "obj-deadlock-definition",
+        "blueprintId": "bp-deadlock-definition",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "flashcard",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "system-model",
+        "objectiveId": "obj-system-model",
+        "blueprintId": "memorize:obj-system-model",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "four-conditions",
+        "objectiveId": "obj-four-conditions",
+        "blueprintId": "memorize:obj-four-conditions",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "rag-edge-semantics",
+        "objectiveId": "obj-rag-edge-semantics",
+        "blueprintId": "bp-rag-edge-semantics",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "multiple_choice",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "cycle-criterion",
+        "objectiveId": "obj-cycle-criterion",
+        "blueprintId": "bp-cycle-criterion",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "handling-framework",
+        "objectiveId": "obj-handling-framework",
+        "blueprintId": "bp-handling-framework",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "multiple_choice",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "prevention-hold-wait",
+        "objectiveId": "obj-prevention-hold-wait",
+        "blueprintId": "bp-prevention-hold-wait",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "flashcard",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "prevention-no-preemption",
+        "objectiveId": "obj-prevention-no-preemption",
+        "blueprintId": "bp-prevention-no-preemption",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "structure_recall",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "prevention-circular-wait",
+        "objectiveId": "obj-prevention-circular-wait",
+        "blueprintId": "bp-prevention-circular-wait",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "flashcard",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "prevention-mutual-exclusion-limit",
+        "objectiveId": "obj-prevention-mutual-exclusion-limit",
+        "blueprintId": "bp-prevention-mutual-exclusion-limit",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "flashcard",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "safe-state",
+        "objectiveId": "obj-safe-state",
+        "blueprintId": "bp-safe-state",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "avoidance-prior-information",
+        "objectiveId": "obj-avoidance-prior-information",
+        "blueprintId": "bp-avoidance-prior-information",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "flashcard",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "claim-edge-transitions",
+        "objectiveId": "obj-claim-edge-transitions",
+        "blueprintId": "bp-claim-edge-transitions",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "structure_recall",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "banker-algorithm-scope",
+        "objectiveId": "obj-banker-algorithm-scope",
+        "blueprintId": "bp-banker-algorithm-scope",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "flashcard",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "detection",
+        "objectiveId": "obj-detection",
+        "blueprintId": "bp-detection",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "recovery",
+        "objectiveId": "obj-recovery",
+        "blueprintId": "memorize:obj-recovery",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      }
+    ],
+    "objectives": [
+      {
+        "id": "obj-deadlock-definition",
+        "outlineNodeId": "deadlock-definition",
+        "learningUnitId": "deadlock-definition",
+        "target": "차단된 프로세스 집합에서 각 프로세스의 자원 보유와 집합 내부의 상호 대기 구조를 설명한다.",
+        "terminalOperation": "recall",
+        "successCriteria": [
+          {
+            "id": "sc-deadlock-definition",
+            "description": "차단된 각 프로세스가 자원을 보유하고 집합 내 다른 프로세스가 보유한 자원을 기다린다는 구조를 빠짐없이 말하거나 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-system-model",
+        "outlineNodeId": "system-model",
+        "learningUnitId": "system-model",
+        "target": "시스템 자원 모델의 구성 요소와 프로세스의 자원 이용 순서를 복원한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-system-model",
+            "description": "프로세스 집합, 자원 유형 집합, 유형별 인스턴스 수 및 request → use → release 순서를 같은 구조로 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 2
+      },
+      {
+        "id": "obj-four-conditions",
+        "outlineNodeId": "four-conditions",
+        "learningUnitId": "four-conditions",
+        "target": "데드락 발생의 네 가지 필요 조건과 각 조건의 의미를 복원한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-four-conditions",
+            "description": "상호 배제, 점유와 대기, 비선점, 순환 대기를 모두 제시하고 각각의 의미를 자료와 일치하게 설명한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-rag-edge-semantics",
+        "outlineNodeId": "rag-edge-semantics",
+        "learningUnitId": "rag-edge-semantics",
+        "target": "자원 할당 그래프의 간선 방향이 주어졌을 때 요청인지 할당인지 판별한다.",
+        "terminalOperation": "discriminate",
+        "successCriteria": [
+          {
+            "id": "sc-rag-edge-semantics",
+            "description": "Pi → Rj와 Rj → Pi 각각에 대해 요청 또는 할당을 정확히 판별한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-cycle-criterion",
+        "outlineNodeId": "cycle-criterion",
+        "learningUnitId": "cycle-criterion",
+        "target": "사이클 유무와 자원 유형당 인스턴스 수가 주어진 자원 할당 그래프의 데드락 상태를 판별한다.",
+        "terminalOperation": "apply",
+        "successCriteria": [
+          {
+            "id": "sc-cycle-criterion",
+            "description": "그래프 조건에 따라 데드락 없음, 데드락, 또는 데드락 가능성 중 해당 결과를 정확히 도출한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-handling-framework",
+        "outlineNodeId": "handling-framework",
+        "learningUnitId": "handling-framework",
+        "target": "처리 방식의 설명이 주어졌을 때 예방, 회피, 탐지 및 복구 중 해당 방식을 구분한다.",
+        "terminalOperation": "discriminate",
+        "successCriteria": [
+          {
+            "id": "sc-handling-framework",
+            "description": "필요 조건 차단, 사전 정보 기반 진입 방지, 발생 후 회복이라는 설명을 각각 예방, 회피, 탐지 및 복구로 정확히 분류한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-prevention-hold-wait",
+        "outlineNodeId": "prevention-hold-wait",
+        "learningUnitId": "prevention-hold-wait",
+        "target": "점유와 대기 조건을 차단하는 예방 정책을 설명한다.",
+        "terminalOperation": "recall",
+        "successCriteria": [
+          {
+            "id": "sc-prevention-hold-wait",
+            "description": "프로세스가 실행 시작 전에 필요한 모든 자원을 요청하고 할당받아야 한다고 말하거나 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 2
+      },
+      {
+        "id": "obj-prevention-no-preemption",
+        "outlineNodeId": "prevention-no-preemption",
+        "learningUnitId": "prevention-no-preemption",
+        "target": "비선점 조건을 차단하기 위한 자원 반납과 재시작 규칙을 복원한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-prevention-no-preemption",
+            "description": "추가 자원을 즉시 얻지 못할 때 보유 자원을 모두 반납하고, 기존·신규 자원을 함께 얻을 수 있을 때 재시작한다는 규칙을 순서대로 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-prevention-circular-wait",
+        "outlineNodeId": "prevention-circular-wait",
+        "learningUnitId": "prevention-circular-wait",
+        "target": "순환 대기 조건을 차단하는 자원 요청 순서 정책을 설명한다.",
+        "terminalOperation": "recall",
+        "successCriteria": [
+          {
+            "id": "sc-prevention-circular-wait",
+            "description": "자원 유형에 전체 순서를 부여하고 증가 순서로만 요청하게 한다고 말하거나 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 2
+      },
+      {
+        "id": "obj-prevention-mutual-exclusion-limit",
+        "outlineNodeId": "prevention-mutual-exclusion-limit",
+        "learningUnitId": "prevention-mutual-exclusion-limit",
+        "target": "데드락 예방에서 상호 배제 조건을 부정하기 어려운 한계를 말한다.",
+        "terminalOperation": "recall",
+        "successCriteria": [
+          {
+            "id": "sc-prevention-mutual-exclusion-limit",
+            "description": "상호 배제는 일반적으로 부정하기 어렵다고 말하거나 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 1
+      },
+      {
+        "id": "obj-safe-state",
+        "outlineNodeId": "safe-state",
+        "learningUnitId": "safe-state",
+        "target": "자원 요청을 즉시 할당한 뒤 안전 상태가 유지되는지에 따라 요청 허용 여부를 판정한다.",
+        "terminalOperation": "apply",
+        "successCriteria": [
+          {
+            "id": "sc-safe-state",
+            "description": "할당 후 안전 상태가 유지되면 허용하고, 안전 상태가 유지되지 않으면 허용하지 않는 결론을 정확히 낸다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-avoidance-prior-information",
+        "outlineNodeId": "avoidance-prior-information",
+        "learningUnitId": "avoidance-prior-information",
+        "target": "데드락 회피에 추가 사전 정보가 필요함을 말한다.",
+        "terminalOperation": "recall",
+        "successCriteria": [
+          {
+            "id": "sc-avoidance-prior-information",
+            "description": "시스템이 데드락 회피를 위해 추가적인 사전 정보를 가져야 한다고 말하거나 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 2
+      },
+      {
+        "id": "obj-claim-edge-transitions",
+        "outlineNodeId": "claim-edge-transitions",
+        "learningUnitId": "claim-edge-transitions",
+        "target": "클레임 간선의 의미와 요청·할당·반납에 따른 간선 전이 순서를 복원한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-claim-edge-transitions",
+            "description": "클레임 간선의 향후 요청 가능성과 점선 표현을 제시하고 claim → request → assignment → claim 전이 및 각 사건을 순서대로 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 2
+      },
+      {
+        "id": "obj-banker-algorithm-scope",
+        "outlineNodeId": "banker-algorithm-scope",
+        "learningUnitId": "banker-algorithm-scope",
+        "target": "자원 유형에 여러 인스턴스가 있을 때 회피에 사용하는 알고리즘을 말한다.",
+        "terminalOperation": "recall",
+        "successCriteria": [
+          {
+            "id": "sc-banker-algorithm-scope",
+            "description": "자원 유형에 여러 인스턴스가 있으면 은행원 알고리즘을 사용한다고 말하거나 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 2
+      },
+      {
+        "id": "obj-detection",
+        "outlineNodeId": "detection",
+        "learningUnitId": "detection",
+        "target": "그래프에서 탐지된 사이클과 자원 인스턴스 조건을 바탕으로 데드락 탐지 방법을 결정한다.",
+        "terminalOperation": "apply",
+        "successCriteria": [
+          {
+            "id": "sc-detection",
+            "description": "사이클이 있으면 데드락으로 탐지하고, 다중 인스턴스 환경에서는 더 복잡한 탐지 알고리즘이 필요하다고 정확히 판단한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-recovery",
+        "outlineNodeId": "recovery",
+        "learningUnitId": "recovery",
+        "target": "데드락 복구를 위한 프로세스 종료와 자원 선점 방법을 복원한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-recovery",
+            "description": "모든 교착 프로세스 종료, 사이클 제거까지 하나씩 종료, 자원 선점으로 사이클 단절의 세 복구 방법을 빠짐없이 쓴다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      }
+    ],
+    "blueprints": [
+      {
+        "id": "bp-deadlock-definition",
+        "objectiveId": "obj-deadlock-definition",
+        "learningUnitId": "deadlock-definition",
+        "relationToObjective": "direct",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-deadlock-definition"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "차단된 프로세스들의 집합이 데드락 상태인지 설명할 때 사용한다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "집합의 각 차단 프로세스는 자원을 하나 이상 보유하고 있으며, 집합 안의 다른 프로세스가 보유한 자원을 얻기 위해 대기한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "데드락이 성립하는 차단 프로세스 집합의 보유·대기 구조를 짧게 설명한다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-deadlock-definition",
+            "description": "각 프로세스의 자원 보유와 집합 내부의 다른 프로세스 자원에 대한 대기를 모두 포함한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "multi_part",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "memorize:obj-system-model",
+        "objectiveId": "obj-system-model",
+        "learningUnitId": "system-model",
+        "relationToObjective": "scaffold",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-system-model"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "현재 문제 형식으로 최종 수행을 직접 연습하기 어려우므로, 수행에 필요한 핵심 원리·조건·판단 절차를 플래시카드로 떠올리게 합니다. 정답은 문제 앞면에 제시하지 않습니다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "원문에 근거한 핵심 내용: 프로세스 집합, 자원 유형 집합, 유형별 인스턴스 수 및 request → use → release 순서를 같은 구조로 쓴다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "프로세스 집합, 자원 유형 집합, 유형별 인스턴스 수 및 request → use → release 순서를 같은 구조로 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-system-model",
+            "description": "정답을 펼쳐 원문의 핵심 원리·조건·판단 절차와 의미가 일치하는지 자기 확인합니다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "memorize:obj-four-conditions",
+        "objectiveId": "obj-four-conditions",
+        "learningUnitId": "four-conditions",
+        "relationToObjective": "scaffold",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-four-conditions"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "현재 문제 형식으로 최종 수행을 직접 연습하기 어려우므로, 수행에 필요한 핵심 원리·조건·판단 절차를 플래시카드로 떠올리게 합니다. 정답은 문제 앞면에 제시하지 않습니다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "원문에 근거한 핵심 내용: 상호 배제, 점유와 대기, 비선점, 순환 대기를 모두 제시하고 각각의 의미를 자료와 일치하게 설명한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "상호 배제, 점유와 대기, 비선점, 순환 대기를 모두 제시하고 각각의 의미를 자료와 일치하게 설명한다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-four-conditions",
+            "description": "정답을 펼쳐 원문의 핵심 원리·조건·판단 절차와 의미가 일치하는지 자기 확인합니다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-rag-edge-semantics",
+        "objectiveId": "obj-rag-edge-semantics",
+        "learningUnitId": "rag-edge-semantics",
+        "relationToObjective": "direct",
+        "elicitedOperation": "discriminate",
+        "coverageCriterionIds": [
+          "sc-rag-edge-semantics"
+        ],
+        "given": [
+          {
+            "type": "data",
+            "description": "자원 할당 그래프의 두 간선: P1 → R2, R3 → P2"
+          }
+        ],
+        "hidden": [
+          {
+            "description": "P1 → R2는 요청 간선이고, R3 → P2는 할당 간선이다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "single_choice",
+          "description": "각 간선에 요청 또는 할당 라벨을 대응시킨다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-rag-edge-semantics",
+            "description": "프로세스→자원 간선을 요청, 자원→프로세스 간선을 할당으로 모두 정확히 판별한다.",
+            "weight": 1,
+            "gradingMode": "exact"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "multi_part",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "multiple_choice"
+      },
+      {
+        "id": "bp-cycle-criterion",
+        "objectiveId": "obj-cycle-criterion",
+        "learningUnitId": "cycle-criterion",
+        "relationToObjective": "direct",
+        "elicitedOperation": "apply",
+        "coverageCriterionIds": [
+          "sc-cycle-criterion"
+        ],
+        "given": [
+          {
+            "type": "data",
+            "description": "자원 할당 그래프의 원시 간선: R1 → P1, P1 → R2, R2 → P2, P2 → R1. R1과 R2는 각각 인스턴스가 1개인 자원 유형이다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "P1 → R2 → P2 → R1 → P1의 사이클이 있으며 모든 자원 유형이 단일 인스턴스이므로 데드락이다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "이 그래프의 데드락 판정 결과를 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-cycle-criterion",
+            "description": "사이클과 단일 인스턴스 조건을 적용하여 데드락이라고 정확히 판정한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "low",
+          "responseComplexity": "atomic",
+          "transferDistance": "near_transfer"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-handling-framework",
+        "objectiveId": "obj-handling-framework",
+        "learningUnitId": "handling-framework",
+        "relationToObjective": "direct",
+        "elicitedOperation": "discriminate",
+        "coverageCriterionIds": [
+          "sc-handling-framework"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "데드락 처리 방식과 그 핵심 원리를 대응시키는 분류 구조를 복원한다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "예방: 데드락의 필요 조건 하나 이상을 차단한다. 회피: 프로세스의 자원 이용에 관한 사전 정보를 이용하여 불안전 상태로의 진입을 막는다. 탐지 및 복구: 데드락 진입을 허용한 뒤 발생 여부를 탐지하고 회복한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "single_choice",
+          "description": "예방, 회피, 탐지 및 복구에 각각의 핵심 처리 원리를 대응시킨다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-handling-framework",
+            "description": "필요 조건 차단, 사전 정보 기반 진입 방지, 발생 후 탐지·회복을 해당 처리 방식에 정확히 분류한다.",
+            "weight": 1,
+            "gradingMode": "exact"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "multi_part",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "multiple_choice"
+      },
+      {
+        "id": "bp-prevention-hold-wait",
+        "objectiveId": "obj-prevention-hold-wait",
+        "learningUnitId": "prevention-hold-wait",
+        "relationToObjective": "direct",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-prevention-hold-wait"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "데드락 예방에서 점유와 대기 조건을 성립하지 못하게 하려는 상황이다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "프로세스는 실행을 시작하기 전에 필요한 모든 자원을 요청하고 모두 할당받아야 한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "점유와 대기를 막는 자원 요청·할당 정책을 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-prevention-hold-wait",
+            "description": "실행 시작 전 필요한 모든 자원을 요청하고 할당받는다는 정책을 포함한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-prevention-no-preemption",
+        "objectiveId": "obj-prevention-no-preemption",
+        "learningUnitId": "prevention-no-preemption",
+        "relationToObjective": "direct",
+        "elicitedOperation": "reconstruct",
+        "coverageCriterionIds": [
+          "sc-prevention-no-preemption"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "보유 자원을 가진 프로세스가 추가 자원을 요청했지만 즉시 할당받지 못한 상황이다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "프로세스는 보유 중인 자원을 모두 반납한다. 이후 기존에 보유했던 자원과 새로 요청한 자원을 함께 얻을 수 있을 때만 재시작한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "ordered_structure",
+          "description": "즉시 할당 실패 뒤의 자원 반납과 재시작 규칙을 순서대로 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-prevention-no-preemption",
+            "description": "모든 보유 자원 반납 후, 기존·신규 자원을 함께 얻을 수 있을 때 재시작한다는 순서를 정확히 복원한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "multi_step",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "structure_recall"
+      },
+      {
+        "id": "bp-prevention-circular-wait",
+        "objectiveId": "obj-prevention-circular-wait",
+        "learningUnitId": "prevention-circular-wait",
+        "relationToObjective": "direct",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-prevention-circular-wait"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "데드락 예방에서 순환 대기 조건을 성립하지 못하게 하려는 상황이다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "모든 자원 유형에 전체 순서를 부여하고, 각 프로세스는 증가하는 순서로만 자원을 요청하게 한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "순환 대기를 막는 자원 요청 순서 정책을 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-prevention-circular-wait",
+            "description": "자원 유형의 전체 순서 부여와 증가 순서 요청을 모두 포함한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "multi_part",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-prevention-mutual-exclusion-limit",
+        "objectiveId": "obj-prevention-mutual-exclusion-limit",
+        "learningUnitId": "prevention-mutual-exclusion-limit",
+        "relationToObjective": "direct",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-prevention-mutual-exclusion-limit"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "데드락 예방을 위해 네 필요 조건 중 하나를 부정하려고 검토하는 상황이다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "상호 배제 조건은 일반적으로 부정하기 어렵거나 불가능하다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "예방에서 부정하기 어려운 필요 조건과 그 한계를 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-prevention-mutual-exclusion-limit",
+            "description": "상호 배제는 일반적으로 부정하기 어렵다는 한계를 정확히 말한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-safe-state",
+        "objectiveId": "obj-safe-state",
+        "learningUnitId": "safe-state",
+        "relationToObjective": "direct",
+        "elicitedOperation": "apply",
+        "coverageCriterionIds": [
+          "sc-safe-state"
+        ],
+        "given": [
+          {
+            "type": "data",
+            "description": "자원 유형 R은 인스턴스가 총 3개이다. 현재 Available=1이다. P1은 R을 1개 할당받았고 최대 요구량은 2개이며, R 1개를 추가 요청한다. P2는 R을 1개 할당받았고 최대 요구량은 3개이다. P1의 요청을 즉시 할당한 뒤 안전 상태인지 확인한다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "P1에 R 1개를 할당하면 Available=0이다. P1의 남은 필요량은 0이므로 P1이 완료하여 R 2개를 반납할 수 있다. 이후 P2의 남은 필요량 2개를 충족해 완료할 수 있다. 안전 순서 P1 → P2가 존재하므로 요청을 허용한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "요청 허용 여부를 쓰고, 가능하면 안전 순서를 함께 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-safe-state",
+            "description": "가상 할당 뒤 P1 → P2 안전 순서가 존재함을 근거로 요청을 허용한다고 정확히 판정한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "low",
+          "responseComplexity": "multi_step",
+          "transferDistance": "near_transfer"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-avoidance-prior-information",
+        "objectiveId": "obj-avoidance-prior-information",
+        "learningUnitId": "avoidance-prior-information",
+        "relationToObjective": "direct",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-avoidance-prior-information"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "운영체제가 데드락 회피 정책을 적용하려는 상황이다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "데드락 회피를 위해 시스템에는 프로세스의 자원 이용에 관한 추가적인 사전 정보가 उपलब्ध해야 한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "데드락 회피에 필요한 추가 전제 정보를 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-avoidance-prior-information",
+            "description": "시스템에 추가적인 사전 정보가 필요하다고 정확히 말한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-claim-edge-transitions",
+        "objectiveId": "obj-claim-edge-transitions",
+        "learningUnitId": "claim-edge-transitions",
+        "relationToObjective": "direct",
+        "elicitedOperation": "reconstruct",
+        "coverageCriterionIds": [
+          "sc-claim-edge-transitions"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "프로세스 P와 자원 R 사이의 클레임 간선이 요청, 할당, 반납 사건에 따라 바뀌는 구조를 복원한다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "클레임 간선은 프로세스가 미래에 해당 자원을 요청할 수 있음을 나타내는 점선 간선이다. 요청 시 claim → request, 할당 시 request → assignment, 반납 시 assignment → claim으로 전이한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "ordered_structure",
+          "description": "클레임 간선의 의미·표현과 claim → request → assignment → claim 전이 및 사건을 순서대로 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-claim-edge-transitions",
+            "description": "향후 요청 가능성 및 점선 표현을 제시하고 요청·할당·반납에 대응하는 전체 전이 순서를 정확히 복원한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "low",
+          "responseComplexity": "multi_step",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "structure_recall"
+      },
+      {
+        "id": "bp-banker-algorithm-scope",
+        "objectiveId": "obj-banker-algorithm-scope",
+        "learningUnitId": "banker-algorithm-scope",
+        "relationToObjective": "direct",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-banker-algorithm-scope"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "데드락 회피 환경에서 하나의 자원 유형이 여러 인스턴스를 가진다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "자원 유형에 여러 인스턴스가 있으면 데드락 회피에 은행원 알고리즘을 사용한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "사용할 데드락 회피 알고리즘의 이름을 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-banker-algorithm-scope",
+            "description": "여러 인스턴스 환경의 회피 알고리즘으로 은행원 알고리즘을 정확히 말한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "high",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-detection",
+        "objectiveId": "obj-detection",
+        "learningUnitId": "detection",
+        "relationToObjective": "direct",
+        "elicitedOperation": "apply",
+        "coverageCriterionIds": [
+          "sc-detection"
+        ],
+        "given": [
+          {
+            "type": "data",
+            "description": "탐지 대상 자원 할당 그래프의 원시 간선은 R1 → P1, P1 → R2, R2 → P2, P2 → R1이다. R1과 R2는 각각 인스턴스가 1개이다. 탐지 결과에 따른 처리 방법을 결정한다."
+          },
+          {
+            "type": "context",
+            "description": "자원 유형에 여러 인스턴스가 있는 환경에서는 단일 인스턴스 그래프 탐지와 동일한 방식만으로 충분한지 함께 판단한다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "그래프에는 P1 → R2 → P2 → R1 → P1 사이클이 있으므로 데드락이 존재하는 것으로 탐지한다. 자원 유형에 여러 인스턴스가 있는 환경에서는 더 복잡한 탐지 알고리즘이 필요하다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "structured_text",
+          "description": "제시 그래프의 탐지 결과와 다중 인스턴스 환경에서 필요한 탐지 방법의 수준을 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-detection",
+            "description": "사이클을 근거로 데드락 존재를 탐지하고, 다중 인스턴스에서는 더 복잡한 탐지 알고리즘이 필요하다고 정확히 판단한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "multi_part",
+          "transferDistance": "near_transfer"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "memorize:obj-recovery",
+        "objectiveId": "obj-recovery",
+        "learningUnitId": "recovery",
+        "relationToObjective": "scaffold",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-recovery"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "현재 문제 형식으로 최종 수행을 직접 연습하기 어려우므로, 수행에 필요한 핵심 원리·조건·판단 절차를 플래시카드로 떠올리게 합니다. 정답은 문제 앞면에 제시하지 않습니다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "원문에 근거한 핵심 내용: 모든 교착 프로세스 종료, 사이클 제거까지 하나씩 종료, 자원 선점으로 사이클 단절의 세 복구 방법을 빠짐없이 쓴다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "모든 교착 프로세스 종료, 사이클 제거까지 하나씩 종료, 자원 선점으로 사이클 단절의 세 복구 방법을 빠짐없이 쓴다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-recovery",
+            "description": "정답을 펼쳐 원문의 핵심 원리·조건·판단 절차와 의미가 일치하는지 자기 확인합니다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      }
+    ]
+  },
+  "usage": [
+    {
+      "sourceName": "technical-deadlocks.pdf",
+      "experimentId": "deadlock-activity-terra-r1",
+      "stage": "activity-design",
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium",
+      "inputTokens": 4194,
+      "cachedInputTokens": 0,
+      "outputTokens": 6915,
+      "reasoningTokens": 666,
+      "totalTokens": 11109,
+      "estimatedCostUsd": 0.11421,
+      "pricingAsOf": "2026-08-17"
+    }
+  ]
+}

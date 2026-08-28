@@ -1,0 +1,136 @@
+{
+  "artifactType": "study-forge-eval-run-inputs",
+  "artifactVersion": "v0",
+  "runId": "20260812T062928Z__generation-lab-1__exploratory__r01",
+  "sourceRunId": null,
+  "runMode": "whole_document_core",
+  "sourceFiles": [
+    {
+      "name": "1.pdf",
+      "mimeType": "application/pdf",
+      "size": 1979761,
+      "sha256": "67d462c4e63ecc9e4ab5efbbbcd67b28c42c1d5281756e10f77a9dd63d979629",
+      "localPath": "eval/local/sources/67d462c4e63ecc9e4ab5efbbbcd67b28c42c1d5281756e10f77a9dd63d979629.pdf"
+    }
+  ],
+  "userSelections": {
+    "instruction": "이 자료 전체의 핵심 개념과 관계를 이해하고 기억할 수 있도록 학습",
+    "wholeDocumentCore": {
+      "summary": "이 자료의 핵심은 오픽 인물 묘사 답변을 일관된 7단계 구조로 즉시 구성하고, 다양한 주제에 같은 구조를 변형 적용한 뒤 쉐도잉으로 전달력을 높이는 것이다.",
+      "learningGoal": "학습자는 인물 묘사형 질문을 받았을 때 3인칭 단수 문법을 정확히 사용하여 소개→기본 정보→외모→호감 이유→알게 된 계기→현재 관계→최종 평가의 흐름으로 답변을 구성하고, 학교·이웃·배우·건강 인물 주제에 맞게 내용을 바꾸어 말하며 쉐도잉을 실행할 수 있다.",
+      "selectionRationale": "답변 전략과 7개 패턴은 모든 주제별 스크립트의 공통 뼈대이므로 가장 높은 비중으로 선정했다. 주제별 스크립트는 문장 전체 암기보다 동일한 틀을 상황별로 치환하는 능력을 위해 묶어 다룬다. 쉐도잉은 말하기 수행을 실제 발화로 연결하는 핵심 실천 절차이므로 별도 범위로 포함했다.",
+      "areas": [
+        {
+          "id": "A1",
+          "title": "인물 묘사 답변의 설계 원리와 문법 통제",
+          "description": "인물 묘사 답변에서 이름·나이 등 배경을 먼저 제시하고 구체적 특징, 알게 된 계기, 개인적 평가로 마무리하는 전개 원리를 학습한다. 인물을 가리키는 주어가 주로 he/she인 만큼 3인칭 단수 주어와 동사의 수일치를 점검하며, about 및 that 뒤에는 질문과 답변의 핵심 정보를 넣는 원리를 익힌다.",
+          "learningValue": "개별 문장을 외우지 않아도 답변의 누락을 막고 문법 오류를 줄이는 상위 조직 원리이다. 질문을 들은 뒤 어떤 정보를 어떤 순서로 인출할지 결정하는 기준이 된다.",
+          "sourceScope": [
+            "CH.1 인물 묘사 > 1. 답변 전략 (p.1)"
+          ],
+          "estimatedLearningUnitCount": 2
+        },
+        {
+          "id": "A2",
+          "title": "인물 묘사 7단계 만능 패턴",
+          "description": "하나의 인물을 일관되게 설명하는 핵심 문장 틀을 순서와 기능 중심으로 학습한다: ① I’d like to talk about … / His/Her name is …로 대상 소개, ② He/She is … and he/she is about … years old로 관계·나이 제시, ③ To talk about his/her appearance, he/she is …로 외모 묘사, ④ I especially like him/her because …로 호감 이유 제시, ⑤ I first got to know him/her when …로 첫 만남 설명, ⑥ Since then, he/she has become …로 이후 관계 변화 제시, ⑦ I think he/she is …로 최종 평가를 제시한다.",
+          "learningValue": "이 자료에서 가장 재사용성이 높은 답변 골격이다. 각 빈칸에 대상별 정보를 능동적으로 채워 넣을 수 있어야 여러 인물 묘사 문제를 빠르게 확장해 답할 수 있다.",
+          "sourceScope": [
+            "CH.1 인물 묘사 > 2. 인물 묘사 PATTERNS: Pattern #1~#3 (p.1)",
+            "CH.1 인물 묘사 > 2. 인물 묘사 PATTERNS: Pattern #4~#7 (p.2)"
+          ],
+          "estimatedLearningUnitCount": 7
+        },
+        {
+          "id": "A3",
+          "title": "주제별 스크립트의 구조 전이와 내용 치환",
+          "description": "학교 동기, 이웃, 좋아하는 배우, 건강한 사람이라는 서로 다른 질문에도 동일한 7단계 구조가 적용됨을 이해한다. 대상의 관계·특징·호감 이유·첫 만남 계기·현재 관계·평가만 질문 맥락에 맞게 바꾼다. 예를 들어 첫 만남은 학교 첫 수업, 이웃의 이사, 영화 감상, 헬스장 운동처럼 주제에 맞추어 치환하며, 외모·능력·태도 등 질문이 요구하는 구체성을 반영한다.",
+          "learningValue": "고정 스크립트 암기에서 벗어나 질문의 핵심 요구에 맞춰 내용을 선택·변형하는 전이 능력을 기른다. 실제 오픽에서 낯선 인물 주제가 나와도 답변 틀을 유지할 수 있다.",
+          "sourceScope": [
+            "CH.1 인물 묘사 > 3. 쉐도잉 스크립트 > 1) 학교, 2) 동네 및 이웃 (p.3)",
+            "CH.1 인물 묘사 > 3. 쉐도잉 스크립트 > 3) 영화, 4) 건강 (p.4)"
+          ],
+          "estimatedLearningUnitCount": 2
+        },
+        {
+          "id": "A4",
+          "title": "쉐도잉의 목적과 반복 실행법",
+          "description": "쉐도잉의 목적이 원어민의 말투·전달력·톤을 따라 하여 전달력을 높이는 데 있음을 이해한다. 워드 스크립트와 음성을 함께 사용하고, 음성보다 약 0.5초 뒤에 따라 말한다. 한 스크립트는 기본 30회 반복하고 2~3일간 같은 스크립트를 연습하며, 매일 모든 자료를 하기보다 2개 스크립트를 정해 집중한다.",
+          "learningValue": "패턴 지식을 실제 말하기 속도와 자연스러운 전달로 전환하는 실행 절차이다. 반복 횟수, 지연 시간, 집중 범위를 인출할 수 있어야 학습법을 일관되게 적용할 수 있다.",
+          "sourceScope": [
+            "CH.1 인물 묘사 > 4. SHADOWING (p.5)"
+          ],
+          "estimatedLearningUnitCount": 2
+        }
+      ],
+      "exclusions": [
+        "각 패턴 아래의 개별 예문(Tom, Jennifer Lawrence, Amy 등)은 패턴의 빈칸 치환을 보여 주는 사례이므로 독립 핵심 단위로는 제외한다. 단, 주제별 내용 치환 원리를 이해하기 위한 대표 맥락으로만 활용한다.",
+        "영문 스크립트의 한국어 전체 해석은 의미 확인용 번역 중복 자료이므로 별도 학습 범위에서 제외한다.",
+        "학교·이웃·영화·건강의 네 개 스크립트를 각각 완전 암기하는 방식은 공통 구조 학습보다 전이 가치가 낮으므로 제외한다.",
+        "페이지 번호, 사이트 주소, 저작권·배포 경고 문구는 학습 목표와 무관한 메타데이터이므로 제외한다."
+      ],
+      "estimatedLearningUnitCount": 13
+    },
+    "recallOption": {
+      "id": "option-1",
+      "title": "한국어 기능·상황 단서 → 영어 패턴 또는 실행 문장 산출",
+      "cue": "카드 앞면에는 인물 묘사의 말하기 기능(예: ‘처음 알게 된 계기’) 또는 학습 실행 상황(예: ‘쉐도잉에서 음성 뒤 지연 시간’)을 한국어로 제시합니다.",
+      "target": "카드 뒷면에는 해당 기능을 수행하는 영어 패턴 전체, 또는 자료에 제시된 정확한 실행 수치·순서를 영어/한국어 문장으로 산출합니다.",
+      "unit": "핵심 LearningUnit",
+      "instruction": "총 13장을 만든다. 7장은 인물 묘사 7단계 패턴을 대상으로 하며, 앞면에는 각 단계의 한국어 기능과 필요한 정보만 제시하고 뒷면에는 해당 영어 패턴 전체를 쓴다. 2장은 답변 전략을 대상으로 하며, 앞면의 전략 상황을 보고 3인칭 단수 수일치 규칙 또는 답변 전개 순서를 뒷면에 정확히 쓴다. 2장은 주제별 구조 전이를 대상으로 하며, 앞면의 주제·요구 정보 단서를 보고 동일한 7단계 틀에 넣을 내용 범주를 뒷면에 순서대로 쓴다. 2장은 쉐도잉을 대상으로 하며, 앞면의 실행 단서를 보고 뒷면에 0.5초 지연, 30회, 2~3일, 하루 2개 스크립트 등의 정확한 절차를 쓴다. 영어 패턴 카드는 영어를 직접 산출하게 하며, 개별 인물 스크립트 전체 암기나 자료 속 고유 예문은 카드 대상으로 만들지 않는다.",
+      "mode": "translation",
+      "variants": [
+        {
+          "id": "option-1-template",
+          "label": "빈칸 보존형",
+          "description": "한국어 기능 단서를 보고 PDF의 일반화된 영어 패턴을 빈칸까지 포함해 그대로 말하거나 씁니다.",
+          "slotMode": "template",
+          "exampleSource": "source",
+          "preservePlaceholders": true,
+          "sample": {
+            "title": "처음 알게 된 계기 → 영어 패턴",
+            "cue": "인물을 처음 알게 된 때",
+            "target": "I first got to know him/her when _____.",
+            "supportingInfo": "빈칸에는 처음 만난 시점·장소·상황을 넣습니다."
+          }
+        },
+        {
+          "id": "option-1-filled",
+          "label": "완성 문장형",
+          "description": "같은 기능 단서를 보고 구체적인 정보를 넣은 완성 영어 문장을 말하거나 씁니다.",
+          "slotMode": "filled_example",
+          "exampleSource": "generated",
+          "preservePlaceholders": false,
+          "sample": {
+            "title": "처음 알게 된 계기 → 완성 영어 문장",
+            "cue": "인물을 처음 알게 된 때",
+            "target": "I first got to know her when I joined a weekend photography club.",
+            "supportingInfo": "주제에 맞는 만남의 계기를 자연스럽게 넣어 산출합니다."
+          }
+        }
+      ]
+    },
+    "recallVariant": {
+      "id": "option-1-template",
+      "label": "빈칸 보존형",
+      "description": "한국어 기능 단서를 보고 PDF의 일반화된 영어 패턴을 빈칸까지 포함해 그대로 말하거나 씁니다.",
+      "slotMode": "template",
+      "exampleSource": "source",
+      "preservePlaceholders": true,
+      "sample": {
+        "title": "처음 알게 된 계기 → 영어 패턴",
+        "cue": "인물을 처음 알게 된 때",
+        "target": "I first got to know him/her when _____.",
+        "supportingInfo": "빈칸에는 처음 만난 시점·장소·상황을 넣습니다."
+      }
+    },
+    "representativeExample": {
+      "title": "처음 알게 된 계기 → 영어 패턴",
+      "cue": "인물을 처음 알게 된 때",
+      "target": "I first got to know him/her when _____.",
+      "supportingInfo": "빈칸에는 처음 만난 시점·장소·상황을 넣습니다."
+    },
+    "cardMode": "translation"
+  },
+  "override": null
+}

@@ -1,7 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 import { z } from "zod";
-import type { RecallDesignDraft } from "@/lib/types";
-import { DEFAULT_MODEL, DEFAULT_REASONING_EFFORT } from "@/lib/model-config";
+import type { RecallDesignDraft } from "../types.ts";
+import { DEFAULT_MODEL, DEFAULT_REASONING_EFFORT } from "../model-config.ts";
+import { callCodexJson } from "../ai/codex-provider.ts";
+
+export type RecallStageRuntimeOptions = {
+  model?: string;
+  reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh" | "max";
+  instruction?: string;
+};
 
 const focusGroupSchema = z.object({
   id: z.string(),
@@ -29,27 +36,28 @@ const requestSchema = z.object({
             description: z.string(),
             learningValue: z.string(),
             sourceScope: z.array(z.string()),
-            estimatedLearningUnitCount: z.number().int().min(1),
+            estimatedLearningUnitCount: z.number().int().min(1).optional(),
           }),
         ),
         exclusions: z.array(z.string()),
-        estimatedLearningUnitCount: z.number().int().min(1),
+        maxLearningUnitCount: z.number().int().min(1).optional(),
+        estimatedLearningUnitCount: z.number().int().min(1).optional(),
       })
       .optional(),
     countPolicy: z.literal("soft_budget").optional(),
     learningUnitSoftBudget: z
       .object({
-        target: z.number().int().min(1),
-        min: z.number().int().min(1),
+        target: z.number().int().min(1).optional(),
+        min: z.number().int().min(1).optional(),
         max: z.number().int().min(1),
         areas: z.array(
           z.object({
             areaId: z.string(),
             target: z.number().int().min(1),
-            min: z.number().int().min(1),
+            min: z.number().int().min(1).optional(),
             max: z.number().int().min(1),
           }),
-        ),
+        ).optional(),
       })
       .optional(),
   }),
@@ -81,7 +89,10 @@ const optionSchema = z.object({
   ).length(2),
 });
 
-type PdfInput = {
+export type RecallAnalysisInput = z.infer<typeof requestSchema>["analysis"];
+export type RecallGuidelineInput = z.infer<typeof requestSchema>["guideline"];
+
+export type RecallPdfInput = {
   filename: string;
   mimeType: string;
   base64: string;
@@ -95,13 +106,6 @@ const responseSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { message: "OPENAI_API_KEY 환경변수가 필요합니다." },
-        { status: 500 },
-      );
-    }
-
     const { input, pdfs } = await parseRecallDesignRequest(request);
     const design = await createRecallDesign(input.analysis, input.guideline, pdfs);
     return NextResponse.json(design);
@@ -113,11 +117,11 @@ export async function POST(request: Request) {
     );
   }
 }
-
-async function createRecallDesign(
-  analysis: z.infer<typeof requestSchema>["analysis"],
-  guideline: z.infer<typeof requestSchema>["guideline"],
-  pdfs: PdfInput[],
+export async function createRecallDesign(
+  analysis: RecallAnalysisInput,
+  guideline: RecallGuidelineInput,
+  pdfs: RecallPdfInput[],
+  runtime: RecallStageRuntimeOptions = {},
 ): Promise<RecallDesignDraft> {
   const usesSoftBudget = guideline.countPolicy === "soft_budget";
   const userPrompt = [
@@ -158,7 +162,7 @@ async function createRecallDesign(
     ...(usesSoftBudget
       ? [
           "- 사용자가 하나를 고르면 추출된 모든 핵심 LearningUnit에 같은 Cue -> Target 구조가 적용되어야 합니다.",
-          "- learningUnitSoftBudget은 대략적인 분량 가이드일 뿐 정확한 LearningUnit 수나 카드 수가 아닙니다.",
+          "- learningUnitSoftBudget.max는 과다 추출 안전선입니다. 최소 개수나 예상 개수는 없으며 max를 채울 필요도 없습니다.",
           "- option의 instruction에 총 N장 또는 영역별 정확한 카드 수를 명시하지 않습니다.",
           "- 의미적 완결성이 soft budget보다 우선하며 숫자를 맞추기 위해 단위를 합치거나 낮은 가치 내용을 추가하지 않습니다.",
         ]
@@ -184,61 +188,28 @@ async function createRecallDesign(
     ...(guideline.wholeDocumentCore
       ? [
           "- 이 실행은 특정 영역 하나가 아니라 wholeDocumentCore.areas 전체의 핵심 범위를 대상으로 합니다.",
-          "- 영역별 단위 수를 균등하게 맞추지 말고 estimatedLearningUnitCount와 learningValue의 상대적 비중을 반영합니다.",
+          "- 영역별 단위 수를 균등하게 맞추지 말고 learningValue를 반영합니다.",
           "- wholeDocumentCore.exclusions에 적힌 내용은 대표 예시와 인출 설계의 핵심 대상으로 삼지 않습니다.",
         ]
       : []),
     "- title은 Cue와 Target 관계가 드러나게 씁니다.",
     "- question은 예시를 보고 원하는 카드 구조를 고르라는 의미가 드러나게 씁니다.",
+    ...(runtime.instruction
+      ? ["", "실험 실행 추가 지시:", runtime.instruction]
+      : []),
   ].join("\n");
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: DEFAULT_MODEL,
-      reasoning: { effort: DEFAULT_REASONING_EFFORT },
-      input: [
-        {
-          role: "system",
-          content:
-            "당신은 학습 내용을 인출 훈련으로 설계하는 전문가입니다. 모든 선택지는 사용자가 무엇을 보고 무엇을 머릿속에서 꺼낼지 명확해야 합니다. 이해, 읽기, 복습처럼 인출 대상이 불분명한 활동은 제안하지 않습니다. 결과는 한국어 JSON만 반환합니다.",
-        },
-        {
-          role: "user",
-          content:
-            pdfs.length > 0
-              ? [
-                  ...pdfs.map((file) => ({
-                    type: "input_file" as const,
-                    filename: file.filename,
-                    file_data: `data:${file.mimeType};base64,${file.base64}`,
-                  })),
-                  { type: "input_text" as const, text: userPrompt },
-                ]
-              : userPrompt,
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "recall_training_design",
-          strict: true,
-          schema: recallDesignJsonSchema,
-        },
-      },
-    }),
+  const data = await callCodexJson({
+    schemaName: "recall_training_design",
+    schema: recallDesignJsonSchema,
+    model: runtime.model ?? DEFAULT_MODEL,
+    reasoningEffort: runtime.reasoningEffort ?? DEFAULT_REASONING_EFFORT,
+    system:
+      "당신은 학습 내용을 인출 훈련으로 설계하는 전문가입니다. 모든 선택지는 사용자가 무엇을 보고 무엇을 머릿속에서 꺼낼지 명확해야 합니다. 이해, 읽기, 복습처럼 인출 대상이 불분명한 활동은 제안하지 않습니다. 결과는 한국어 JSON만 반환합니다.",
+    user: userPrompt,
+    files: pdfs,
   });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error("OpenAI recall design request failed");
-  }
-
-  const parsed = responseSchema.parse(JSON.parse(extractOutputText(data)));
+  const parsed = responseSchema.parse(data);
   const ids = new Set(parsed.options.map((option) => option.id));
   return {
     ...parsed,
@@ -339,30 +310,3 @@ async function parseRecallDesignRequest(request: Request) {
   return { input, pdfs };
 }
 
-function extractOutputText(data: unknown): string {
-  if (
-    typeof data === "object" &&
-    data !== null &&
-    "output_text" in data &&
-    typeof data.output_text === "string"
-  ) {
-    return data.output_text;
-  }
-
-  const output = (data as { output?: Array<{ content?: Array<unknown> }> }).output;
-  const textItem = output
-    ?.flatMap((item) => item.content ?? [])
-    .find(
-      (item): item is { text: string } =>
-        typeof item === "object" &&
-        item !== null &&
-        "text" in item &&
-        typeof item.text === "string",
-    );
-
-  if (textItem) {
-    return textItem.text;
-  }
-
-  throw new Error("OpenAI 응답에서 인출 설계를 찾지 못했습니다.");
-}

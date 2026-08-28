@@ -12,7 +12,7 @@ import { Braces, Check, Workflow, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type ModelConfig = Record<
-  "default" | "extraction" | "critic",
+  "default" | "extraction",
   { model: string; reasoningEffort: string }
 >;
 
@@ -92,46 +92,6 @@ const steps: PipelineStep[] = [
     position: { x: 500, y: 0 },
   },
   {
-    id: "recall",
-    phase: "DESIGN",
-    title: "대표 예시 기반 인출 설계",
-    summary: "PDF의 실제 학습 단위로 만든 앞면·뒷면 예시를 중심으로 인출 구조를 제안합니다.",
-    endpoint: "POST /api/recall-design",
-    input: "원문 PDF · PDF 분석 · 확정 학습 영역",
-    output: "RecallDesignDraft · option.variants[]",
-    systemPrompt:
-      "당신은 학습 내용을 인출 훈련으로 설계하는 전문가입니다. 모든 선택지는 사용자가 무엇을 보고 무엇을 머릿속에서 꺼낼지 명확해야 합니다. 이해, 읽기, 복습처럼 인출 대상이 불분명한 활동은 제안하지 않습니다. 결과는 한국어 JSON만 반환합니다.",
-    userPrompt: [
-      "PDF 구조 분석: {{pdfAnalysisJson}}",
-      "선택한 학습 영역: {{selectedGroupJson}}",
-      "",
-      "이 영역에 적합한 인출 방식 2~3개를 제안합니다.",
-      "각 방식마다 변수 자리를 보존한 템플릿과 구체적인 값으로 채운 완성 예문을 함께 만듭니다.",
-      "모든 선택지는 Cue → Target 관계여야 하며 전체 학습 단위에 동일한 구조를 적용합니다.",
-      "target은 학습자가 직접 말하거나 써서 재생산할 원문 지식이어야 합니다.",
-      "언어 자료에서는 영어를 직접 산출하는 능동 인출 방식을 우선합니다.",
-    ].join("\n"),
-    color: "#C25100",
-    position: { x: 500, y: 210 },
-  },
-  {
-    id: "sample",
-    phase: "VALIDATE",
-    title: "대표 예시 선택",
-    summary: "사용자가 실제 앞면·뒷면 예시를 선택하면 해당 구조를 CardContract로 확정합니다.",
-    endpoint: "브라우저 상태 · AI 호출 없음",
-    input: "RecallDesignDraft.options[].variants[]",
-    output: "확정 RecallDesign · SlotMode · LearningUnitSample · CardContract",
-    userPrompt: [
-      "AI 호출 없음",
-      "",
-      "선택한 예시의 cue, target, mode, slotMode와 플레이스홀더 보존 정책을 변경 불가능한 카드 계약으로 확정합니다.",
-      "선택 즉시 추출, 카드 생성과 Critic 단계를 연속 실행합니다.",
-    ].join("\n"),
-    color: "#E2B203",
-    position: { x: 250, y: 210 },
-  },
-  {
     id: "extract",
     phase: "REFINE",
     title: "학습 단위 추출·일반화",
@@ -147,8 +107,8 @@ const steps: PipelineStep[] = [
       "사전 구조 분석: {{analysisContext}}",
       "확정 학습 가이드: {{studyGuideline}}",
       "선택 영역만 추출하고 다른 영역은 제외합니다.",
-      "itemCount만큼 독립 학습 단위를 빠짐없이 구분합니다.",
-      "각 단위를 지식 유형으로 분류하고 원문 출처, 고정/가변 구조, 일반화 형태와 판단 이유를 기록합니다.",
+      "최대 개수를 채우기보다 한 번에 질문하고 성공 여부를 판정할 수 있는 크기로 구분합니다.",
+      "각 단위에 학습 대상, 해야 할 행동, 성공 기준과 원문 출처를 기록합니다.",
       "패턴, 예문과 스크립트는 요약하지 않고 원문 표현과 번역을 보존합니다.",
       "이 단계에서는 Cue, Target, 질문, 답변 또는 카드 형식을 만들지 않습니다.",
     ].join("\n"),
@@ -173,60 +133,55 @@ const steps: PipelineStep[] = [
     position: { x: 0, y: 420 },
   },
   {
+    id: "activity-design",
+    phase: "DESIGN",
+    title: "문제 설계",
+    summary: "각 학습단위에 학습 행동을 유지하는 문제 설계도 하나를 만듭니다.",
+    endpoint: "POST /api/generate · stage=activity-design",
+    input: "확정 LearningUnit[] · 사용자 문제 방향",
+    output: "LearningUnit별 PracticeBlueprint 1개",
+    userPrompt: [
+      "학습단위마다 문제 설계도 하나만 만듭니다.",
+      "학습자가 해야 하는 행동과 성공 기준을 유지합니다.",
+      "실제 관계가 있을 때만 구조복원을 사용합니다.",
+      "직접 자동채점이 어렵더라도 중요한 학습단위는 보조 문제로 보존합니다.",
+    ].join("\n"),
+    color: "#C25100",
+    position: { x: 250, y: 420 },
+  },
+  {
     id: "cards",
     phase: "GENERATE",
     title: "암기 카드 생성",
-    summary: "검토된 학습 단위에 처음으로 Cue와 Target을 적용해 카드를 생성합니다.",
+    summary: "확정된 문제 설계도대로 각 학습단위의 실제 문제 하나를 생성합니다.",
     endpoint: "POST /api/generate · stage=cards",
-    input: "수정 완료한 OrganizedMaterial · 카드 유형",
+    input: "수정 완료한 OrganizedMaterial · ActivityDesign",
     output: "Card[] · strategy · source · rationale",
     systemPrompt:
       "당신은 정리된 학습 자료를 사용자가 선택한 암기 카드 유형으로 변환하는 전문가입니다. 결과는 한국어 JSON만 반환합니다.",
     userPrompt: [
       "카드 유형: {{mode}}",
-      "확정 가이드/인출 방식/대표 예시: {{confirmedDesign}}",
-      "반드시 생성할 카드 수: {{selectedGroup.itemCount}}",
+      "확정 학습목표와 문제 설계도: {{activityDesign}}",
       "최종 학습 내용: {{organizedMaterialJson}}",
       "",
       "최종 학습 내용에서만 사실과 표현을 가져옵니다.",
-      "독립 학습 단위 하나당 카드 하나를 만들고 앞면은 Cue, 뒷면은 Target으로 구성합니다.",
-      "지식 유형에 따라 production, recognition, concept, contrast, procedure, application 전략을 선택합니다.",
-      "대표 예시와 사용자 피드백의 구조를 모든 카드에 동일하게 적용합니다.",
-      "중복 카드를 만들지 않고 원문 출처, 근거와 전략 선택 이유를 기록합니다.",
+      "포함된 학습단위 하나당 문제 하나를 만듭니다.",
+      "플래시카드, OX, 객관식, 구조복원 중 설계도에 지정된 화면을 사용합니다.",
+      "문제 앞면에 정답을 노출하지 않고 원문 출처를 유지합니다.",
     ].join("\n"),
     color: "#22A06B",
-    position: { x: 250, y: 420 },
-  },
-  {
-    id: "critic",
-    phase: "VERIFY",
-    title: "카드 품질 검사",
-    summary: "각 카드를 원문 학습 단위와 대조하고 인출 품질이 낮은 카드를 수정합니다.",
-    endpoint: "POST /api/generate · stage=cards · critic",
-    input: "LearningUnit[] · 생성 Card[]",
-    output: "검수 완료 Card[] · qualityPassed · qualityNotes",
-    systemPrompt:
-      "당신은 암기 카드 품질 검사자입니다. 원문 학습 단위와 생성된 카드를 대조해 문제가 있는 카드는 직접 수정합니다. 결과는 한국어 JSON만 반환합니다.",
-    userPrompt: [
-      "구조화 학습 단위: {{learningUnits}}",
-      "검사할 카드: {{generatedCards}}",
-      "",
-      "능동 인출 가능성, 한 카드 한 개념, 답변 길이, 재사용성, 원문 근거, 전략 적합성을 검사합니다.",
-      "문제가 있으면 직접 수정하고 qualityNotes에 이유를 기록합니다.",
-    ].join("\n"),
-    color: "#BF63F3",
     position: { x: 500, y: 420 },
   },
   {
     id: "save",
     phase: "OUTPUT",
     title: "덱 카드 저장",
-    summary: "생성 결과와 설계 이력을 하나의 덱으로 저장하고 보드의 새 덱 카드로 표시합니다.",
+    summary: "생성 결과와 현재 학습 설계를 하나의 덱으로 저장하고 보드에 표시합니다.",
     endpoint: "IndexedDB · memory-transformer/decks",
     input: "GeneratePipelineResult · 확정 설계 · Card[]",
     output: "Deck · boardColumn=new",
     userPrompt:
-      "AI 호출 없음\n\n사용자가 검토한 카드, 분석 결과, 정리본, 학습 가이드와 인출 설계를 하나의 Deck 객체로 저장합니다.",
+      "AI 호출 없음\n\n사용자가 검토한 문제, 분석 결과, 정리본, 학습 가이드와 문제 설계를 하나의 Deck 객체로 저장합니다.",
     color: "#172B4D",
     position: { x: 750, y: 420 },
   },
@@ -235,13 +190,11 @@ const steps: PipelineStep[] = [
 const edges: Edge[] = [
   ["input", "outline", "PDF"],
   ["outline", "focus", "구조 JSON"],
-  ["focus", "recall", "선택 영역"],
-  ["recall", "sample", "인출 계약"],
-  ["sample", "extract", "승인 예시"],
+  ["focus", "extract", "선택 영역"],
   ["extract", "organize", "LearningUnit[]"],
-  ["organize", "cards", "검토 단위"],
-  ["cards", "critic", "초안 카드"],
-  ["critic", "save", "검수 카드"],
+  ["organize", "activity-design", "검토 단위"],
+  ["activity-design", "cards", "문제 설계도"],
+  ["cards", "save", "확정 문제"],
 ].map(([source, target, label]) => ({
   id: `${source}-${target}`,
   source,
@@ -318,8 +271,8 @@ export default function PipelineOperatorModal({
         style: {
           width: 205,
           borderRadius: 6,
-          border: `2px solid ${selectedId === step.id ? step.color : "#DCDFE4"}`,
-          background: completed.has(step.id) ? "#F3FFF8" : "#FFFFFF",
+          border: `2px solid ${selectedId === step.id ? step.color : "#3B3F3C"}`,
+          background: completed.has(step.id) ? "#29332E" : "#242725",
           boxShadow:
             selectedId === step.id
               ? `inset 5px 0 0 ${step.color}, 0 0 0 3px rgb(12 102 228 / 14%)`
@@ -331,7 +284,7 @@ export default function PipelineOperatorModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#091E42]/60 p-3 backdrop-blur-[1px] sm:p-5">
+    <div className="fixed inset-0 z-50 bg-black/70 p-3 backdrop-blur-[1px] sm:p-5">
       <section className="mx-auto flex h-full max-w-[1600px] flex-col overflow-hidden rounded-lg bg-[#F4F5F7] shadow-2xl">
         <header className="flex items-center justify-between gap-3 border-b border-[#DCDFE4] bg-white px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
@@ -371,7 +324,7 @@ export default function PipelineOperatorModal({
               maxZoom={1.6}
               proOptions={{ hideAttribution: true }}
             >
-              <Background color="#B6C2CF" gap={22} size={1} />
+              <Background color="#4B4F4B" gap={22} size={1} />
               <Controls showInteractive={false} />
             </ReactFlow>
           </div>
@@ -438,12 +391,10 @@ export default function PipelineOperatorModal({
   );
 }
 
-function getModelSlot(stepId: string): "none" | "default" | "extraction" | "critic" {
+function getModelSlot(stepId: string): "none" | "default" | "extraction" {
   if (stepId === "input" || stepId === "save") return "none";
-  if (stepId === "sample") return "none";
   if (stepId === "organize") return "none";
   if (stepId === "extract") return "extraction";
-  if (stepId === "critic") return "critic";
   return "default";
 }
 

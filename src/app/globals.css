@@ -67,6 +67,80 @@
   box-shadow: 0 0 0 1px rgb(12 102 228 / 70%);
 }
 
+.pdf-text-layer .pdf-text-evidence {
+  background: transparent;
+  mix-blend-mode: multiply;
+  box-shadow:
+    inset 0 -0.48em rgb(245 205 71 / 48%),
+    0 0 0 1px rgb(226 178 3 / 45%);
+}
+
+.pdf-text-layer .pdf-text-importance-1 {
+  background: transparent;
+  mix-blend-mode: multiply;
+  box-shadow:
+    inset 0 -0.38em rgb(185 191 202 / 40%),
+    0 0 0 1px rgb(98 111 134 / 26%);
+}
+
+.pdf-text-layer .pdf-text-importance-2 {
+  background: transparent;
+  mix-blend-mode: multiply;
+  box-shadow:
+    inset 0 -0.44em rgb(133 184 255 / 42%),
+    0 0 0 1px rgb(56 139 255 / 34%);
+}
+
+.pdf-text-layer .pdf-text-importance-3 {
+  background: transparent;
+  mix-blend-mode: multiply;
+  box-shadow:
+    inset 0 -0.52em rgb(245 205 71 / 60%),
+    0 0 0 1px rgb(176 133 0 / 50%);
+}
+
+.pdf-text-layer .pdf-text-evidence-active {
+  background: transparent;
+  mix-blend-mode: multiply;
+  box-shadow:
+    inset 0 -0.58em rgb(245 205 71 / 72%),
+    0 0 0 2px rgb(176 133 0 / 72%);
+}
+
+.pdf-text-layer .pdf-text-mask {
+  background: #172b4d;
+  box-shadow: 0 0 0 1px #091e42;
+  cursor: pointer;
+}
+
+.pdf-text-layer .pdf-text-mask-revealed {
+  background: transparent;
+  box-shadow:
+    inset 0 -0.48em rgb(245 205 71 / 48%),
+    0 0 0 1px rgb(226 178 3 / 45%);
+  cursor: pointer;
+}
+
+.pdf-mask-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.pdf-mask-box {
+  position: absolute;
+  margin: 0;
+  border: 0;
+  border-radius: 2px;
+  padding: 0;
+  background: #172b4d;
+  box-shadow: 0 0 0 1px #091e42;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
 .pdf-ocr-layer {
   position: absolute;
   inset: 0;
@@ -99,9 +173,50 @@
   box-shadow: 0 0 0 1px rgb(12 102 228 / 70%);
 }
 
+.pdf-ocr-box.pdf-ocr-evidence {
+  background: rgb(245 205 71 / 42%);
+  mix-blend-mode: multiply;
+  box-shadow: 0 0 0 1px rgb(226 178 3 / 60%);
+}
+
+.pdf-ocr-box.pdf-ocr-importance-1 {
+  background: rgb(185 191 202 / 32%);
+  mix-blend-mode: multiply;
+  box-shadow: 0 0 0 1px rgb(98 111 134 / 38%);
+}
+
+.pdf-ocr-box.pdf-ocr-importance-2 {
+  background: rgb(133 184 255 / 34%);
+  mix-blend-mode: multiply;
+  box-shadow: 0 0 0 1px rgb(56 139 255 / 48%);
+}
+
+.pdf-ocr-box.pdf-ocr-importance-3 {
+  background: rgb(245 205 71 / 58%);
+  mix-blend-mode: multiply;
+  box-shadow: 0 0 0 1px rgb(176 133 0 / 68%);
+}
+
+.pdf-ocr-box.pdf-ocr-evidence-active {
+  background: rgb(245 205 71 / 68%);
+  mix-blend-mode: multiply;
+  box-shadow: 0 0 0 2px rgb(176 133 0 / 85%);
+}
+
+.pdf-ocr-box.pdf-ocr-mask {
+  background: #172b4d;
+  box-shadow: 0 0 0 1px #091e42;
+}
+
+.pdf-ocr-box.pdf-ocr-mask-revealed {
+  background: rgb(245 205 71 / 42%);
+  box-shadow: 0 0 0 1px rgb(226 178 3 / 60%);
+}
+
 :root {
-  --background: #f4f5f7;
-  --foreground: #172b4d;
+  color-scheme: dark;
+  --background: #161616;
+  --foreground: #e8e8e8;
 }
 
 body {
@@ -109,8 +224,14 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR",
-    Arial, sans-serif;
+    Inter, Pretendard, "Pretendard Variable", "Noto Sans KR", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.012em;
+  font-variant-numeric: tabular-nums;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -124,6 +245,195 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid #0c66e4;
+  outline: 2px solid #7b7b7b;
   outline-offset: 2px;
+}
+
+::selection {
+  background: rgb(236 238 235 / 22%);
+}
+
+.sf-app h1,
+.sf-app h2,
+.sf-app h3 {
+  text-wrap: balance;
+}
+
+/* 시안의 얇고 정돈된 타이포를 모든 기존 화면에 동일하게 적용한다. */
+.font-black,
+.font-extrabold,
+.font-bold,
+.font-semibold {
+  font-weight: 500 !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.rounded-md { border-radius: 8px !important; }
+.rounded-lg { border-radius: 10px !important; }
+.rounded-xl { border-radius: 12px !important; }
+.rounded-2xl { border-radius: 14px !important; }
+.rounded-3xl { border-radius: 16px !important; }
+
+/* 기존에 흩어진 녹색빛 회색을 시안의 중성 회색 단계로 통합한다. */
+.bg-\[\#1E211F\] { background-color: #161616 !important; }
+.bg-\[\#202321\] { background-color: #1b1b1b !important; }
+.bg-\[\#222523\] { background-color: #1b1b1b !important; }
+.bg-\[\#242725\] { background-color: #1e1e1e !important; }
+.bg-\[\#2A2E2B\] { background-color: #222222 !important; }
+.bg-\[\#2D312E\] { background-color: #292929 !important; }
+.bg-\[\#303431\],
+.bg-\[\#343836\],
+.bg-\[\#353936\] { background-color: #303030 !important; }
+.bg-\[\#ECEEEB\],
+.bg-\[\#F0F2EF\] { background-color: #e6e6e6 !important; }
+.hover\:bg-\[\#222523\]:hover { background-color: #242424 !important; }
+.hover\:bg-\[\#2D312E\]:hover { background-color: #292929 !important; }
+.hover\:bg-\[\#D5D8D4\]:hover { background-color: #d4d4d4 !important; }
+
+.border-\[\#353936\],
+.border-\[\#393D3A\],
+.border-\[\#3B3F3C\] { border-color: #303030 !important; }
+.border-\[\#464A46\],
+.border-\[\#4B4F4B\],
+.border-\[\#4B514D\] { border-color: #393939 !important; }
+.border-\[\#5A5F5A\] { border-color: #4b4b4b !important; }
+
+.text-\[\#F0F2EF\],
+.text-\[\#ECEEEB\],
+.text-\[\#E3E6E2\],
+.text-\[\#D8DAD6\],
+.text-\[\#D7DAD6\],
+.text-white { color: #e8e8e8 !important; }
+.text-\[\#D1D4D0\],
+.text-\[\#BFC4BF\],
+.text-\[\#B9BDBA\],
+.text-\[\#B2B6B1\] { color: #b5b5b5 !important; }
+.text-\[\#AEB4AF\],
+.text-\[\#AEB2AD\],
+.text-\[\#A6AAA5\],
+.text-\[\#A5A9A4\],
+.text-\[\#969D98\],
+.text-\[\#8E9690\] { color: #858585 !important; }
+.text-\[\#898E89\],
+.text-\[\#7F8781\],
+.text-\[\#707770\] { color: #696969 !important; }
+.text-\[\#202321\] { color: #171717 !important; }
+
+.placeholder\:text-\[\#898E89\]::placeholder,
+.placeholder\:text-\[\#707770\]::placeholder { color: #696969 !important; }
+
+.ring-offset-\[\#202321\] { --tw-ring-offset-color: #1b1b1b !important; }
+
+/* 예전 색상 클래스를 사용하는 검토 화면도 현재 다크 팔레트에 맞춘다. */
+.sf-app .text-\[\#0C66E4\] {
+  color: #d8d8d8 !important;
+}
+
+.sf-app .bg-\[\#0C66E4\] {
+  background-color: #292929 !important;
+}
+
+.sf-app .hover\:bg-\[\#0055CC\]:hover {
+  background-color: #353535 !important;
+}
+
+.sf-app .border-\[\#0C66E4\],
+.sf-app .focus\:border-\[\#0C66E4\]:focus {
+  border-color: #777777 !important;
+}
+
+.sf-app .bg-\[\#E9F2FF\] {
+  background-color: #292929 !important;
+}
+
+.sf-app .hover\:bg-\[\#E9F2FF\]:hover {
+  background-color: #303030 !important;
+}
+
+.sf-app .text-\[\#172B4D\] {
+  color: #e8e8e8 !important;
+}
+
+.sf-app .text-\[\#44546F\] {
+  color: #b5b5b5 !important;
+}
+
+.sf-app .text-\[\#626F86\],
+.sf-app .text-\[\#7A869A\] {
+  color: #858585 !important;
+}
+
+.sf-app .border-\[\#DCDFE4\] {
+  border-color: #303030 !important;
+}
+
+.sf-app .bg-\[\#F1F2F4\],
+.sf-app .bg-\[\#F4F5F7\],
+.sf-app .bg-\[\#F7F8F9\] {
+  background-color: #1b1b1b !important;
+}
+
+.sf-app .hover\:bg-\[\#E9EBEE\]:hover {
+  background-color: #292929 !important;
+}
+
+.sf-app .bg-white,
+.sf-app .bg-\[\#FFFFFF\] {
+  background-color: #1e1e1e;
+}
+
+.sf-app .bg-white\/90 {
+  background-color: rgb(30 30 30 / 90%);
+}
+
+.sf-app .bg-\[\#FFFFFF\]\/95 {
+  background-color: rgb(30 30 30 / 95%);
+}
+
+.sf-app .bg-\[\#FFECEB\] {
+  background-color: #3a2927 !important;
+}
+
+.sf-app .text-\[\#AE2E24\] {
+  color: #f2a39a !important;
+}
+
+.sf-app .bg-\[\#E3FCEF\],
+.sf-app .bg-\[\#DCFFF1\],
+.sf-app .bg-\[\#D9F2E6\],
+.sf-app .bg-\[\#D9F3E6\] {
+  background-color: #303b35 !important;
+}
+
+.sf-app .text-\[\#216E4E\] {
+  color: #b9d6c7 !important;
+}
+
+.sf-app .bg-\[\#FFF7D6\],
+.sf-app .bg-\[\#FFF2B8\] {
+  background-color: #3a392f !important;
+}
+
+.sf-app .text-\[\#7F5F01\],
+.sf-app .text-\[\#735600\],
+.sf-app .text-\[\#6D5200\] {
+  color: #ddd6ac !important;
+}
+
+.sf-app .bg-\[\#E2B203\],
+.sf-app .bg-\[\#F5CD47\] {
+  background-color: #625b34 !important;
+}
+
+.sf-app .hover\:bg-\[\#F5CD47\]:hover {
+  background-color: #756d3d !important;
 }

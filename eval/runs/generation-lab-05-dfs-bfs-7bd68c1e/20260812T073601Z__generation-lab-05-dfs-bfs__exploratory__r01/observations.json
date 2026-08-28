@@ -1,0 +1,42 @@
+{
+  "artifactType": "study-forge-run-observations",
+  "artifactVersion": "v0",
+  "runId": "20260812T073601Z__generation-lab-05-dfs-bfs__exploratory__r01",
+  "counts": {
+    "learningUnits": 21,
+    "generatedCards": 21,
+    "criticCards": 21,
+    "finalCards": 21
+  },
+  "learningUnitCardCoverageBasis": "finalCards",
+  "learningUnitCardCoverage": {
+    "LU01": 1,
+    "LU02": 1,
+    "LU03": 1,
+    "LU04": 1,
+    "LU05": 1,
+    "LU06": 1,
+    "LU07": 1,
+    "LU08": 1,
+    "LU09": 1,
+    "LU10": 1,
+    "LU11": 1,
+    "LU12": 1,
+    "LU13": 1,
+    "LU14": 1,
+    "LU15": 1,
+    "LU16": 1,
+    "LU17": 1,
+    "LU18": 1,
+    "LU19": 1,
+    "LU20": 1,
+    "LU21": 1
+  },
+  "zeroCardLearningUnitIds": [],
+  "multipleCardLearningUnitIds": [],
+  "derivation": {
+    "type": "mechanical-from-run-stage-artifacts",
+    "semanticEvaluationPerformed": false
+  },
+  "notes": []
+}
