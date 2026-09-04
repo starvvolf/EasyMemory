@@ -112,10 +112,20 @@ async function ensureReadable(target, label) {
 async function extractCommit(repoRoot, workspace) {
   const archive = path.join(workspace, "snapshot.tar");
   await mkdir(workspace, { recursive: true });
-  execFileSync("git", ["archive", "--format=tar", `--output=${archive}`, RECOVERY_COMMIT], {
-    cwd: repoRoot,
-    stdio: "pipe",
-  });
+  execFileSync(
+    "git",
+    [
+      "archive",
+      "--format=tar",
+      `--output=${archive}`,
+      RECOVERY_COMMIT,
+      "src",
+      "scripts",
+      "package.json",
+      "tsconfig.json",
+    ],
+    { cwd: repoRoot, stdio: "pipe" },
+  );
   execFileSync("tar", ["-xf", archive, "-C", workspace], { cwd: repoRoot, stdio: "pipe" });
   await rm(archive, { force: true });
 }

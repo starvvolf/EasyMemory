@@ -1,0 +1,18 @@
+{
+  "artifactType": "study-forge-run-checksums",
+  "artifactVersion": "v0",
+  "runId": "20260904T123714Z__recovered-openai-api-150138f__exploratory__r01",
+  "algorithm": "sha256",
+  "files": {
+    "stages/10-analyze.json": "8bf92d0a5a148f8c309943ddb8daee84ab126336f442f4ae718c94f169a66a39",
+    "stages/20-plan.json": "dcb5931942a1082d9fd97ef232d07fc80809c70f4a09c9f9477a7c57367cbec2",
+    "stages/30-recall.json": "3724a73d3d32eaa6d064de9f49f864f90788ba12db678284da6d7474adc90c81",
+    "stages/40-prepare.json": "905a3cbf16175671aeef9df568acccc60dfec9fcf6d0161ff034b09216b494be",
+    "stages/50-cards.json": "f07353c5300bd84d509614fd760b8f11ef97db43057c576a9b0318559ee47c6e",
+    "stages/60-critic.json": "c92a044b81d0cf85b5cf7ad4085aaa8895aa96266ad992f5ff432dc2a041cf59",
+    "stages/70-final-cards.json": "7f0701dd808a5c351b67fb6c413cbd457617c8f0562ca33ac8aa5e56fded0038",
+    "run.json": "6d058615e85d989e8aa449f190afa361860d63fdedb1a8b98d0da94a1dc85f5c",
+    "inputs.json": "2d2dcd02820aae1bb2a52cea1d4d5d1d6334ffda094a4ad2382dc236ab7b96a2",
+    "observations.json": "cb2562f1f0a36b0f298b5c33e97d2fec6c1e136baefbb62340139f54e33442af"
+  }
+}
