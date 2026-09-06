@@ -1,6 +1,18 @@
 /** Account-scoped derived state; original records remain the source of truth. */
 export type MemoryDomain = "algorithm" | "cs" | "opic" | "report";
 export type MemoryBasis = "observation" | "self-report" | "inference";
+/** Submitted summary snapshot; ownership is verified, educational truth is not certified. */
+export interface LearnerMemoryRecordInput {
+  recordId: string;
+  summary: {
+    throughMessageId: string;
+    updatedAt: string;
+    automatic: boolean;
+    sections: { text: string; messageIds: string[]; codeIds: string[] }[];
+    learnerMemoryCandidates: unknown;
+  };
+  evidenceIndex: { id: string; kind: "message" | "code"; contentHash: string }[];
+}
 export interface MemoryCandidate {
   domain: MemoryDomain;
   topic: string;

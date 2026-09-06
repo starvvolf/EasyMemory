@@ -1,6 +1,6 @@
 # 공통 학습자 기억 최소 계약
 
-현재 상태: 공통 순수 규칙과 모의 검증 구현. 실제 Firebase 저장·인증·VS Code 소비자 연결은 아직 완료되지 않았다. 이 문서를 실제 연결 완료 또는 개인화 품질 검증 결과로 읽지 않는다.
+현재 상태: 공통 순수 규칙과 HTTP 모의 검증 구현. 인증 연결 최소안 승인 후 Firebase 어댑터·VS Code 소비자 연결 진행 중. 이 문서를 실제 연결 완료 또는 개인화 품질 검증 결과로 읽지 않는다.
 
 ## 책임과 기반
 
@@ -16,7 +16,20 @@
 
 VS Code `summary.js`의 `summaryInput → generate(기존 1회) → validateSummary → updateSummary`에서 원문 `messageIds`, `codeIds`, `throughMessageId`를 이미 보존한다. `learning-state.js`의 `LearningStore`는 `learning.json`에 로컬 세션을 저장한다. 현재 Firebase 저장에는 이 코딩 원문을 계정별로 저장하는 경로가 없다.
 
-따라서 인증된 기억 API에서 클라이언트가 보낸 UID/원문 존재/위치를 믿고 저장하면 안 된다. Firebase 담당이 기존 기록의 계정 소유권과 명시적 저장 경계를 연결한 후 그 원문을 검증하는 어댑터가 필요하다. 계정 연결 전 로컬 자료를 자동 업로드하거나 계정에 자동 귀속하지 않는다. 확인되지 않은 어댑터를 import하는 API 껍데기는 만들지 않았다.
+인증된 기억 API는 클라이언트가 보낸 UID/source/sequence를 받지 않는다. 확정된 저장 어댑터는 정리 스냅샷과 근거 목록을 계정 UID 아래 저장하고 그 목록의 안정적 위치를 검증해 source를 구성한다. 계정 연결 전 로컬 자료를 자동 업로드하거나 계정에 자동 귀속하지 않는다.
+
+## 확정 HTTP 연결 계약
+
+인증은 Firebase 담당의 `requireLearnerMemoryUser`를 사용한다. Google 웹 사용자 또는 기억 연결 전용 custom claim을 갖는 클라이언트만 허용하며, custom 인증이 기존 AI API 권한으로 확대되면 안 된다. 최초 웹 계정 확인→수신 challenge에 바인딩된 단기 일회용 code→공식 Firebase custom token 교환/갱신 흐름은 인증 담당 소유다.
+
+- `GET /api/learner-memory` → `{state}`.
+- `POST /api/learner-memory` 입력 `{record, expectedRevision, operationId}` → `{state,status:'applied'|'duplicate'}`.
+- `PATCH /api/learner-memory` 입력 `{target:{domain,topic},change,expectedRevision,operationId}` → `{state}`.
+- `GET /api/learner-memory/context?domain=algorithm&topic=binary%20search` → `{kind,entries}`. 복수 주제는 `topic`을 반복한다.
+
+`record`의 타입은 공통 `LearnerMemoryRecordInput`이다. `{recordId,summary:{throughMessageId,updatedAt,automatic,sections,learnerMemoryCandidates},evidenceIndex}`를 받는다. sections는 기존 다섯 정리 영역을 합친 `{text,messageIds,codeIds}[]`이며 evidenceIndex는 원문의 안정적인 전체 순서 `{id,kind:'message'|'code',contentHash}[]`다. 기존 prefix의 ID·종류·hash·순서는 바꿀 수 없고 새 항목만 뒤에 붙인다. 원문 본문·이미지·모델 호출은 추가하지 않는다.
+
+POST는 900KiB, PATCH는 16KiB 요청 상한을 둔다. 상세 record 검증과 직렬화된 DB 문서 900KB 제한은 저장 어댑터 책임이다. 정리 record와 MemoryState를 같은 CAS 트랜잭션에서 갱신한다. 원문 위치는 어댑터가 고정하므로 제출자가 임의 throughSequence를 지정할 수 없다. 같은 operationId의 재시도는 저장 어댑터가 hash로 검증한다. 응답은 모두 private/no-store이며 인증 실패는 저장 조회 전에 처리한다. 테스트의 모의 인증·저장은 실제 Firebase 규칙을 입증하지 않는다.
 
 ## 정리 응답 후보
 
@@ -78,8 +91,8 @@ selectMemoryContext(state, uid, domain, currentQuestionTopics)
 
 미완료: 인증된 원문 저장 경로 합의, Firebase 어댑터/규칙, 얇은 API, VS Code summary/chat/UI 실제 연결, 통합 mock의 저장 실패·계정 격리·재접속 검증. 실 Firebase 설정과 Google 로그인, 실제 AI 호출 및 개인화 품질은 시험하지 않는다.
 
-현재 검증: 독립 테스트 10개, 범위 ESLint, strict TypeScript 검사 통과. 전체 Next 빌드는 이 작업트리에 node_modules가 없어 Next package를 해석하지 못해 시작 단계에서 실패했다. 다른 checkout 실행기로 시도했으며 의존성을 새로 설치하거나 package/lock을 수정하지 않았다.
+현재 검증: 독립 규칙 10개와 HTTP 모의 흐름 4개, 범위 ESLint, strict TypeScript 검사 통과. HTTP 검증은 정리→관련 대화→정정/삭제→재조회, 계정 전환, source/UID 조작 거부, 실패 이전상태 보존과 오류 세부정보 차단, revision 충돌을 포함한다. 전체 Next 빌드는 초기 시도에서 node_modules가 없어 Next package를 해석하지 못해 실패했다. 실제 어댑터 통합 후 전체 검증이 남아 있다.
 
-반복 파일 가져오기를 기본 흐름으로 쓰는 안은 기획팀2가 승인하지 않았다. 파일 가져오기는 기존 자료 이전 보조만 될 수 있다. 완료하려면 최초 계정 연결 뒤 기존 정리 성공에서 상태를 갱신하고 다음 VS Code 질문에서 관련 상태를 자동으로 읽어야 한다. 신규 인증 전달 경로는 Firebase·VS Code 담당이 검토 중이며 아직 구현·승인되지 않았다. 기존 `server-auth.ts`는 Bearer Firebase ID token을 이미 받지만 `auth-policy.ts`는 Google provider만 허용하므로 custom token을 그대로 호환된다고 가정하지 않는다.
+반복 파일 가져오기를 기본 흐름으로 쓰는 안은 기획팀2가 승인하지 않았다. 파일 가져오기는 기존 자료 이전 보조만 될 수 있다. 완료하려면 최초 계정 연결 뒤 기존 정리 성공에서 상태를 갱신하고 다음 VS Code 질문에서 관련 상태를 자동으로 읽어야 한다. 승인된 인증 전달 경로의 실제 구현과 검증은 Firebase·VS Code 담당이 진행한다. 기존 Bearer 인증을 재사용하되, Google 전용 기존 정책에 custom token이 그대로 호환된다고 가정하지 않는다.
 
 저장 단위는 기존 summary와 근거 참조를 크기 제한 아래 재사용하며 전체 이벤트별 저장·이미지 이전을 선결조건으로 만들지 않는다. 같은 session의 기존 ID·내용·순서 및 반영 위치를 보존해야 한다. 날짜 재정렬로 기존 sequence를 바꾸면 과거 근거 재처리 방지가 깨지므로 금지한다. 동일 자료의 중복 가져오기도 새 독립 근거로 만들지 않는다. 서버에서 기록을 다시 읽었다고 내용의 객관적 사실성을 인증한 것이 아니다.
