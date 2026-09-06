@@ -2,6 +2,8 @@ import "server-only";
 
 import { getApp, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 function getProjectId(): string {
   const projectId =
@@ -23,4 +25,19 @@ export function getFirebaseAdminAuth() {
       ? getApp()
       : initializeApp({ projectId: getProjectId() });
   return getAuth(app);
+}
+
+export function getFirebaseAdminServices() {
+  const app =
+    getApps().length > 0
+      ? getApp()
+      : initializeApp({
+          projectId: getProjectId(),
+          storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+        });
+  return {
+    auth: getAuth(app),
+    firestore: getFirestore(app),
+    storage: getStorage(app),
+  };
 }

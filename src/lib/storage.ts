@@ -7,6 +7,7 @@ import type {
   StudySession,
   StoredPdfSource,
 } from "@/lib/types";
+import type { PdfReadingPosition } from "@/lib/cloud-storage-types";
 
 const DB_NAME = "memory-transformer";
 const DB_VERSION = 4;
@@ -14,6 +15,46 @@ const DECK_STORE = "decks";
 const SESSION_STORE = "study-sessions";
 const ATTEMPT_STORE = "study-attempts";
 const PDF_SOURCE_STORE = "pdf-sources";
+
+export async function getPdfReadingPosition(
+  sourceId: string,
+): Promise<PdfReadingPosition | null> {
+  const response = await fetch(
+    `/api/user-data/pdf-reading/${encodeURIComponent(sourceId)}`,
+    { cache: "no-store" },
+  );
+  const payload = (await response.json()) as {
+    position?: PdfReadingPosition | null;
+    message?: string;
+  };
+  if (!response.ok) {
+    throw new Error(payload.message ?? "PDF 읽기 위치를 불러오지 못했습니다.");
+  }
+  return payload.position ?? null;
+}
+
+export async function savePdfReadingPosition(
+  sourceId: string,
+  page: number,
+  expectedRevision?: number,
+): Promise<PdfReadingPosition> {
+  const response = await fetch(
+    `/api/user-data/pdf-reading/${encodeURIComponent(sourceId)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ page, expectedRevision }),
+    },
+  );
+  const payload = (await response.json()) as {
+    position?: PdfReadingPosition;
+    message?: string;
+  };
+  if (!response.ok || !payload.position) {
+    throw new Error(payload.message ?? "PDF 읽기 위치를 저장하지 못했습니다.");
+  }
+  return payload.position;
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
