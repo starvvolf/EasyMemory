@@ -38,7 +38,7 @@ function options(value: Record<string, unknown>): MemoryMutationOptions {
 }
 async function body(request: Request, maxBytes = 16384) {
   // The apply endpoint accepts a bounded summary/evidence index, never raw source bodies.
-  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) throw new InputError("JSON 요청이 필요합니다.");
+  if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") throw new InputError("JSON 요청이 필요합니다.");
   if (Number(request.headers.get("content-length")) > maxBytes) throw new InputError("요청 크기가 너무 큽니다.");
   const reader = request.body?.getReader();
   if (!reader) throw new InputError("요청 내용이 없습니다.");
@@ -66,6 +66,11 @@ function json(value: unknown, status = 200) {
 
 /** Thin transport shared by route handlers; authentication and atomic storage stay in their existing owners. */
 export function createMemoryHttpHandlers(deps: MemoryHttpDependencies) {
+  const loadOwned = async (uid: string) => {
+    const state = await deps.load(uid);
+    if (state.ownerUid !== uid) throw new Error("Learner memory owner mismatch");
+    return state;
+  };
   const guarded = (handler: (request: Request, uid: string) => Promise<Response>) => async (request: Request) => {
     try {
       const { uid } = await deps.authenticate(request);
@@ -76,7 +81,7 @@ export function createMemoryHttpHandlers(deps: MemoryHttpDependencies) {
     }
   };
   return {
-    GET: guarded(async (_request, uid) => json({ state: await deps.load(uid) })),
+    GET: guarded(async (_request, uid) => json({ state: await loadOwned(uid) })),
     POST: guarded(async (request, uid) => {
       const input = await body(request, 900 * 1024);
       keys(input, ["record", "expectedRevision", "operationId"]);
@@ -106,7 +111,7 @@ export function createMemoryHttpHandlers(deps: MemoryHttpDependencies) {
       const topics = params.getAll("topic");
       if (topics.length > 20) throw new InputError("관련 주제는 20개 이하로 요청하세요.");
       topics.forEach((topic) => text(topic, MEMORY_LIMITS.topic));
-      const state = await deps.load(uid);
+      const state = await loadOwned(uid);
       return json(selectMemoryContext(state, uid, requestedDomain, topics));
     }),
   };

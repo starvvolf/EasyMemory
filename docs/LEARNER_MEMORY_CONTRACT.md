@@ -93,6 +93,8 @@ selectMemoryContext(state, uid, domain, currentQuestionTopics)
 
 현재 검증: 독립 규칙 10개와 HTTP 모의 흐름 4개, 범위 ESLint, strict TypeScript 검사 통과. HTTP 검증은 정리→관련 대화→정정/삭제→재조회, 계정 전환, source/UID 조작 거부, 실패 이전상태 보존과 오류 세부정보 차단, revision 충돌을 포함한다. 전체 Next 빌드는 초기 시도에서 node_modules가 없어 Next package를 해석하지 못해 실패했다. 실제 어댑터 통합 후 전체 검증이 남아 있다.
 
+확정 계약을 사용하는 얇은 route와 `learner-memory/server.ts`도 작성했다. 이 연결 커밋은 Firebase 담당의 `firebase-learner-memory-store.ts`와 `server-user.ts`의 `requireLearnerMemoryUser`가 함께 통합되어야 빌드된다. 기존 동일 버전(Next 16.3.4) 의존성을 읽기 재사용해 전체 tsc를 실행한 결과, 현재 미통합된 두 참조만 오류다. route/core/HTTP 범위 lint는 통과했다. 어댑터 도착 전 전체 빌드 성공 또는 실제 계정 연속 저장을 주장하지 않는다.
+
 반복 파일 가져오기를 기본 흐름으로 쓰는 안은 기획팀2가 승인하지 않았다. 파일 가져오기는 기존 자료 이전 보조만 될 수 있다. 완료하려면 최초 계정 연결 뒤 기존 정리 성공에서 상태를 갱신하고 다음 VS Code 질문에서 관련 상태를 자동으로 읽어야 한다. 승인된 인증 전달 경로의 실제 구현과 검증은 Firebase·VS Code 담당이 진행한다. 기존 Bearer 인증을 재사용하되, Google 전용 기존 정책에 custom token이 그대로 호환된다고 가정하지 않는다.
 
 저장 단위는 기존 summary와 근거 참조를 크기 제한 아래 재사용하며 전체 이벤트별 저장·이미지 이전을 선결조건으로 만들지 않는다. 같은 session의 기존 ID·내용·순서 및 반영 위치를 보존해야 한다. 날짜 재정렬로 기존 sequence를 바꾸면 과거 근거 재처리 방지가 깨지므로 금지한다. 동일 자료의 중복 가져오기도 새 독립 근거로 만들지 않는다. 서버에서 기록을 다시 읽었다고 내용의 객관적 사실성을 인증한 것이 아니다.

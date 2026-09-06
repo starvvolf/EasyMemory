@@ -38,7 +38,7 @@ export interface MemoryState {
   entries: MemoryEntry[];
   appliedSources: { recordId: string; throughSequence: number }[];
 }
-/** Construct from persisted, owned ORIGINAL events, never from model metadata. */
+/** Construct from the owned record's stable evidence index, never model-supplied positions. */
 export interface MemorySource {
   ownerUid: string;
   recordId: string;

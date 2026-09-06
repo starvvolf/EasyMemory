@@ -87,9 +87,13 @@ test("authentication precedes body parsing or storage; spoofed source and uid ar
     assert.equal((await fx.handlers.POST(request("POST", { record: recordFor("alice"), expectedRevision: 0, operationId: "one", ...extra }))).status, 400);
   }
   assert.equal(fx.states.size, 0);
+  fx.states.set("alice", createMemoryState("bob"));
+  const wrongOwner = await fx.handlers.GET(request());
+  assert.equal(wrongOwner.status, 500);
+  assert.ok(!(await wrongOwner.text()).includes('"ownerUid":"bob"'));
 });
 
-test("invalid payloads fail as 400 and concurrent stale revision returns 409", async () => {
+test("invalid payloads fail as 400 and stale revision returns 409", async () => {
   const { handlers } = fixture();
   for (const payload of [null, [], { recordId: "alice-record", operationId: "one" }, { record: recordFor("alice"), expectedRevision: -1, operationId: "one" }]) {
     assert.equal((await handlers.POST(request("POST", payload))).status, 400);
