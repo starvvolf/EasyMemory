@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { LanguageRunner } = require('../language-runner');
 const { detectRuntime } = require('../local-runtimes');
-const { analyzeSource } = require('../execution-contract');
+const { analyzeSource, confirmExecution } = require('../execution-contract');
 function alive(pid) { try { process.kill(pid, 0); return true; } catch (error) { return error.code !== 'ESRCH'; } }
 const sources = {
   python: 'import sys,subprocess,time\nif len(sys.argv)>1:\n    time.sleep(60)\nelse:\n    child=subprocess.Popen([sys.executable,__file__,"child"])\n    print(child.pid,flush=True)\n    time.sleep(60)\n',
@@ -16,7 +16,9 @@ for (const language of ['python', 'java', 'csharp']) for (const stop of ['timeou
     if (!runtime.available) { t.skip(runtime.reason); return; }
     const source = sources[language], analysis = analyzeSource(language, source), runner = new LanguageRunner();
     let timer;
-    const result = await runner.runSource({ source, language, runtime, execution: { mode: 'stdio', mainClass: analysis.className, confirmedHash: analysis.hash }, examples: [{ input: '', expectedOutput: '' }] }, undefined,
+    const examples = [{ input: '', expectedOutput: '' }];
+    const execution = confirmExecution(language, source, { mode: 'stdio', mainClass: analysis.className }, examples);
+    const result = await runner.runSource({ source, language, runtime, execution, examples }, undefined,
       { timeoutMs: 1200, ...(stop === 'stopped' ? { onSpawn: () => { timer = setTimeout(() => runner.stop(), 900); } } : {}) });
     clearTimeout(timer);
     assert.equal(result[0].status, stop, JSON.stringify(result));

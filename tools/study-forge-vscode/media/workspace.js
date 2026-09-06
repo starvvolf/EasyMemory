@@ -18,7 +18,12 @@
   };
   function syncRunButton() {
     const run = document.querySelector('#run-examples');
-    if (run) run.disabled = !state.runnerAvailable || state.running || state.busy || JSON.stringify(executionDraft) !== JSON.stringify(state.session?.execution);
+    if (run) run.disabled = !state.runnerAvailable || state.running || state.busy || draftChanged();
+  }
+  function draftChanged() {
+    const shape = (value) => value && ({ mode: value.mode, mainClass: value.mode === 'stdio' ? value.mainClass : '',
+      function: value.mode === 'function' && value.function ? { name: value.function.name, className: value.function.className, isStatic: value.function.isStatic, parameters: value.function.parameters, returnType: value.function.returnType } : null });
+    return JSON.stringify(shape(executionDraft)) !== JSON.stringify(shape(state.session?.execution));
   }
   function field(parent, title, value, change, large = false, single = false) {
     const id = `field-${Math.random().toString(36).slice(2)}`;
@@ -160,12 +165,16 @@
     app.append(row(button('실행 파일 선택', () => send('chooseFile'), true), button('런타임 다시 확인', () => send('checkRuntime'), true)));
     if (state.runtimeStatus) app.append(node('p', state.runtimeStatus.available ? state.runtimeStatus.version : state.runtimeStatus.reason, state.runtimeStatus.available ? 'muted' : 'error'));
     if (state.executionAnalysis) {
-      const analysis = state.executionAnalysis, key = `${state.activeFile}:${analysis.hash}`;
+      const analysis = state.executionAnalysis, key = JSON.stringify([state.session?.id, state.activeFileId || state.activeFile, state.activeLanguage, analysis.candidates, analysis.className, analysis.entrypoints]);
       if (key !== executionKey) {
         executionKey = key;
         executionDraft = { mode: state.session?.execution?.mode || 'stdio', mainClass: analysis.className || '',
-          function: analysis.candidates.length === 1 ? structuredClone(analysis.candidates[0]) : null, confirmedHash: analysis.hash };
-        if (state.session?.execution?.confirmedHash === analysis.hash) executionDraft = structuredClone(state.session.execution);
+          function: analysis.candidates.length === 1 ? structuredClone(analysis.candidates[0]) : null };
+        if (state.executionConfirmed) {
+          executionDraft = structuredClone(state.session.execution);
+          const candidate = analysis.candidates.find((c) => c.declaration === executionDraft.function?.declaration && c.name === executionDraft.function?.name);
+          if (candidate) executionDraft.function.sourceIndex = candidate.sourceIndex;
+        }
       }
       const setup = node('details', undefined, 'card'); setup.open = !state.runnerAvailable;
       setup.append(node('summary', '실행 형식과 호출 규격 확인'), select(modes, executionDraft.mode, (value) => { executionDraft.mode = value; render(); }, '실행 형식'));
@@ -198,10 +207,10 @@
           setup.append(node('small', 'int는 32비트, long은 ±9,007,199,254,740,991 범위입니다. 1차원 배열만 지원하며 실수는 오차 허용 없이 비교합니다.'));
         }
       }
-      const confirm = button('이 호출 규격과 등록 예제를 확인', () => send('confirmExecution', { execution: executionDraft }));
+      const confirm = button('이 호출 규격과 등록 예제를 확인', () => send('confirmExecution', { execution: executionDraft, sourceHash: analysis.hash, targetPath: state.activeFileId }));
       confirm.disabled = state.running || state.busy || Boolean(analysis.reason); setup.append(confirm); app.append(setup);
     }
-    const run = button('모든 예제 실행', () => send('runExamples')); run.id = 'run-examples'; run.disabled = !state.runnerAvailable || state.running || state.busy || JSON.stringify(executionDraft) !== JSON.stringify(state.session?.execution);
+    const run = button('모든 예제 실행', () => send('runExamples')); run.id = 'run-examples'; run.disabled = !state.runnerAvailable || state.running || state.busy || draftChanged();
     const stop = button('실행 중지', () => send('stopExamples'), true); stop.disabled = !state.running;
     app.append(row(run, stop));
     if (!state.runnerAvailable) app.append(node('p', '런타임과 현재 코드의 호출 규격을 확인하면 실행할 수 있습니다.', 'muted'));

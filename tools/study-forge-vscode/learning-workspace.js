@@ -5,11 +5,11 @@ const fs = require('node:fs');
 const { LearningStore, normalizeProblem, questionContext } = require('./learning-state');
 const { createLocalCodexClient } = require('./codex-client');
 const { LanguageRunner } = require('./language-runner');
-const { analyzeSource, validateExecution, starter } = require('./execution-contract');
+const { analyzeSource, confirmExecution, validateExecution, starter } = require('./execution-contract');
 const { detectRuntime } = require('./local-runtimes');
 const { SummaryScheduler, updateSummary } = require('./summary');
 
-function registerLearningWorkspace(vscode, context, { createClient = createLocalCodexClient } = {}) {
+function registerLearningWorkspace(vscode, context, { createClient = createLocalCodexClient, detect = detectRuntime } = {}) {
   const directory = (context.storageUri || context.globalStorageUri).fsPath;
   const store = new LearningStore(path.join(directory, 'learning'));
   const runner = new LanguageRunner();
@@ -25,10 +25,14 @@ function registerLearningWorkspace(vscode, context, { createClient = createLocal
 
   function snapshot() {
     const executionAnalysis = activeFile ? analyzeSource(activeFile.language, activeFile.document.getText()) : undefined;
+    let executionConfirmed = false;
+    if (activeFile && store.active()?.execution) {
+      try { validateExecution(activeFile.language, activeFile.document.getText(), store.active().execution, store.active().problem.examples, activeFile.path); executionConfirmed = true; } catch { /* Changed contracts need user confirmation. */ }
+    }
     return { session: store.active(), sessions: store.state.sessions.map((s) => ({ id: s.id, title: s.problem.title })),
       pendingCode, pendingFailures, busy, results, running: runner.running, error, connection,
-      activeFile: activeFile?.label, activeLanguage: activeFile?.language, runtimeStatus, executionAnalysis,
-      runnerAvailable: Boolean(activeFile && runtimeStatus?.available && !executionAnalysis?.reason && store.active()?.execution?.confirmedHash === executionAnalysis?.hash), problemSaved, summaryBusy, draft: store.state.draft,
+      activeFile: activeFile?.label, activeFileId: activeFile?.path, activeLanguage: activeFile?.language, runtimeStatus, executionAnalysis, executionConfirmed,
+      runnerAvailable: Boolean(executionConfirmed && runtimeStatus?.available), problemSaved, summaryBusy, draft: store.state.draft,
     };
   }
   function broadcast() { for (const webview of views.values()) void webview.postMessage({ type: 'state', ...snapshot() }); }
@@ -88,7 +92,7 @@ function registerLearningWorkspace(vscode, context, { createClient = createLocal
     if (!activeFile) throw new Error('실행할 파일을 먼저 선택하세요.');
     const config = vscode.workspace.getConfiguration('studyForge');
     const setting = (name) => config.inspect(name)?.globalValue || undefined;
-    runtimeStatus = await detectRuntime(activeFile.language, { python: setting('pythonExecutable'), dotnet: setting('dotnetExecutable'), java: setting('javaExecutable'), javac: setting('javacExecutable') });
+    runtimeStatus = await detect(activeFile.language, { python: setting('pythonExecutable'), dotnet: setting('dotnetExecutable'), java: setting('javaExecutable'), javac: setting('javacExecutable') });
   }
   async function refreshSummary(automatic = false) {
     const session = store.active();
@@ -200,8 +204,9 @@ function registerLearningWorkspace(vscode, context, { createClient = createLocal
         case 'confirmExecution': {
           requireIdle(); const session = requireSession();
           if (!activeFile) throw new Error('실행할 파일을 먼저 선택하세요.');
-          validateExecution(activeFile.language, activeFile.document.getText(), message.execution, session.problem.examples);
-          session.execution = message.execution; await store.save(); break;
+          const source = activeFile.document.getText();
+          if (message.sourceHash !== analyzeSource(activeFile.language, source).hash || message.targetPath !== activeFile.path) throw new Error('화면의 실행 대상이 바뀌었습니다. 다시 확인하세요.');
+          session.execution = confirmExecution(activeFile.language, source, message.execution, session.problem.examples, activeFile.path); await store.save(); break;
         }
         case 'newSource': {
           requireIdle(); const content = starter(message.language, message.mode);
@@ -215,7 +220,7 @@ function registerLearningWorkspace(vscode, context, { createClient = createLocal
           if (activeFile.document.isDirty) throw new Error('선택 파일을 저장한 뒤 실행하세요.');
           if (!session.problem.examples.length) throw new Error('문제의 예제를 먼저 등록하세요.');
           results = []; pendingFailures = undefined;
-          const execution = runner.runSource({ source: activeFile.document.getText(), language: activeFile.language,
+          const execution = runner.runSource({ source: activeFile.document.getText(), language: activeFile.language, targetPath: activeFile.path,
             execution: session.execution, examples: session.problem.examples, runtime: runtimeStatus },
           (result) => { results.push({ ...result, filePath: activeFile.label }); broadcast(); });
           broadcast(); await execution; break;

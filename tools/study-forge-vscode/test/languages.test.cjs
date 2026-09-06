@@ -4,9 +4,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { analyzeSource, validateExecution, starter } = require('../execution-contract');
+const { analyzeSource, confirmExecution, validateExecution, starter } = require('../execution-contract');
 const { detectRuntime } = require('../local-runtimes');
-const { LanguageRunner, createPlan } = require('../language-runner');
+const { LanguageRunner: BaseRunner, createPlan } = require('../language-runner');
+class LanguageRunner extends BaseRunner {
+  runSource(input, ...rest) {
+    return super.runSource({ ...input, execution: confirmExecution(input.language, input.source, input.execution, input.examples) }, ...rest);
+  }
+}
 const { buildWrapper } = require('../function-wrappers');
 const settings = { python: process.env.STUDY_FORGE_TEST_PYTHON, dotnet: process.env.STUDY_FORGE_TEST_DOTNET, java: process.env.STUDY_FORGE_TEST_JAVA, javac: process.env.STUDY_FORGE_TEST_JAVAC };
 const runtimePromises = Object.fromEntries(['python', 'csharp', 'java'].map((lang) => [lang, detectRuntime(lang, settings)]));
@@ -25,12 +30,14 @@ test('호출 계약: 모호한 후보를 자동 선택/확정하지 않고 복�
   const source = 'def one(x):\n    return x\ndef two(x: list[int]) -> list[int]:\n    return x\n';
   const analysis = analyzeSource('python', source); assert.equal(analysis.candidates.length, 2);
   assert.equal(analysis.candidates[0].parameters[0].type, '');
-  const config = execution('python', source, 'function');
+  let config = execution('python', source, 'function');
   assert.throws(() => validateExecution('python', source, config, []), /확인/);
   config.function = analysis.candidates[1];
-  assert.throws(() => validateExecution('python', source, config, [{ input: '[1,2]', expectedOutput: '[1,2]' }]), /인자/);
-  assert.equal(validateExecution('python', source, config, [{ input: '[[1,2]]', expectedOutput: '[1,2]' }]).length, 1);
-  assert.throws(() => validateExecution('python', source + '#changed', config, []), /다시 확인/);
+  assert.throws(() => confirmExecution('python', source, config, [{ input: '[1,2]', expectedOutput: '[1,2]' }]), /인자/);
+  const examples = [{ input: '[[1,2]]', expectedOutput: '[1,2]' }];
+  config = confirmExecution('python', source, config, examples);
+  assert.equal(validateExecution('python', source + '#changed', config, examples).length, 1);
+  assert.throws(() => validateExecution('python', source, config, []), /다시 확인/);
   assert.match(analyzeSource('java', 'package p; public class A {}').reason, /package/);
 });
 
@@ -102,7 +109,7 @@ for (const language of ['python', 'csharp', 'java']) {
 test('C# 계획은 SDK csc와 명시 소스만 사용: 프로젝트/restore/빌드 이벤트 없음', async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'sf-csharp-plan-')); t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const refs = path.join(directory, 'refs'); await fs.mkdir(refs); await fs.writeFile(path.join(refs, 'System.Runtime.dll'), 'fixture');
-  const source = starter('csharp', 'function'), config = execution('csharp', source, 'function');
+  const source = starter('csharp', 'function'), config = confirmExecution('csharp', source, execution('csharp', source, 'function'), [{ input: '[1,2]', expectedOutput: '3' }]);
   const cases = validateExecution('csharp', source, config, [{ input: '[1,2]', expectedOutput: '3' }]);
   const plan = await createPlan({ source, language: 'csharp', execution: config, cases, directory,
     runtime: { dotnet: 'dotnet', compiler: '/sdk/csc.dll', references: refs, tfm: 'net8.0', runtimeVersion: '8.0.0' } });

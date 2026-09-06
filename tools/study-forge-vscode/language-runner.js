@@ -9,9 +9,9 @@ const { buildWrapper } = require('./function-wrappers');
 const { runtimeEnv } = require('./local-runtimes');
 
 class LanguageRunner extends ExampleRunner {
-  async runSource({ source, language, execution, examples, runtime }, onResult = () => {}, limits = {}) {
+  async runSource({ source, language, execution, examples, runtime, targetPath = '' }, onResult = () => {}, limits = {}) {
     if (this.running) throw new Error('이미 예제를 실행 중입니다.');
-    const cases = validateExecution(language, source, execution, examples);
+    const cases = validateExecution(language, source, execution, examples, targetPath);
     if (!runtime?.available) throw new Error(runtime?.reason || '런타임 확인이 필요합니다.');
     if (source.length > 100000) throw new Error('단일 소스 파일은 100,000자 이내여야 합니다.');
     this.running = true; this.cancelled = false;

@@ -33,7 +33,7 @@ test('VS Code view bridge: 로컬 문제 등록·편집·재개, 실제 연결 �
     workspace: { openTextDocument: async () => document, asRelativePath: () => 'main.py', getConfiguration: () => ({ inspect: () => ({ globalValue: enabled }) }), onDidChangeTextDocument: (handler) => { changeDocument = handler; return {}; } },
   };
   const extensionPath = path.resolve(__dirname, '..');
-  registerLearningWorkspace(vscode, { storageUri: uri(root), globalStorageUri: uri(root), extensionPath, extensionUri: uri(extensionPath), subscriptions: disposables }, { createClient: async () => fakeClient });
+  registerLearningWorkspace(vscode, { storageUri: uri(root), globalStorageUri: uri(root), extensionPath, extensionUri: uri(extensionPath), subscriptions: disposables }, { createClient: async () => fakeClient, detect: async () => ({ available: true, version: 'mock runtime; never executed' }) });
   function view(name) {
     const webview = webviewMock();
     providers.get(name).resolveWebviewView({ webview, onDidDispose: () => ({}) }); return webview;
@@ -65,12 +65,22 @@ test('VS Code view bridge: 로컬 문제 등록·편집·재개, 실제 연결 �
   contents = 'def solution(a: int, b: int) -> int:\n    return a+b\n';
   await results.receive({ type: 'chooseFile' });
   const analysis = results.state.executionAnalysis;
-  await results.receive({ type: 'confirmExecution', execution: { mode: 'function', function: analysis.candidates[0], confirmedHash: 'stale' } });
+  await results.receive({ type: 'confirmExecution', sourceHash: 'stale', targetPath: document.uri.fsPath, execution: { mode: 'function', function: analysis.candidates[0] } });
   assert.match(results.state.error, /다시 확인/);
-  await results.receive({ type: 'confirmExecution', execution: { mode: 'function', function: analysis.candidates[0], confirmedHash: analysis.hash } });
-  assert.equal(results.state.session.execution.confirmedHash, analysis.hash);
+  const confirm = () => results.receive({ type: 'confirmExecution', sourceHash: results.state.executionAnalysis.hash, targetPath: document.uri.fsPath, execution: { mode: 'function', function: results.state.executionAnalysis.candidates[0] } });
+  await confirm(); assert.equal(results.state.runnerAvailable, true);
+  const confirmation = structuredClone(results.state.session.execution.confirmation);
   contents += '# change'; changeDocument({ document }); await new Promise((resolve) => setTimeout(resolve, 30));
-  await results.receive({ type: 'ready' }); assert.equal(results.state.runnerAvailable, false); assert.notEqual(results.state.executionAnalysis.hash, analysis.hash);
+  await results.receive({ type: 'ready' }); assert.equal(results.state.runnerAvailable, true); assert.notEqual(results.state.executionAnalysis.hash, analysis.hash);
+  contents = contents.replace('return a+b', 'return a-b'); await results.receive({ type: 'ready' });
+  assert.equal(results.state.runnerAvailable, true); assert.deepEqual(results.state.session.execution.confirmation, confirmation);
+  contents = contents.replace('a: int', 'a: str'); await results.receive({ type: 'ready' }); assert.equal(results.state.runnerAvailable, false);
+  await confirm(); assert.equal(results.state.runnerAvailable, true);
+  document.uri = uri(path.join(root, 'other.py')); await results.receive({ type: 'chooseFile' });
+  assert.equal(results.state.runnerAvailable, false, 'same source in another file needs confirmation even with same UI label');
+  await confirm(); assert.equal(results.state.runnerAvailable, true);
+  await problem.receive({ type: 'updateProblem', problem: { ...problem.state.session.problem, examples: [{ input: '["x",1]', expectedOutput: '2' }] } });
+  assert.equal(results.state.runnerAvailable, false, 'example mapping changed');
   const content = JSON.parse(await fs.readFile(path.join(root, 'learning/learning.json'), 'utf8'));
   assert.equal(content.activeSessionId, id); assert.equal(content.sessions.length, 1);
   assert.equal(await fs.stat(path.join(root, 'managed-codex')).then(() => true, () => false), false);
