@@ -18,6 +18,7 @@ import {
 test("고정 프롬프트는 특정 평가 자료나 정답을 주입하지 않는다", () => {
   const fixedPrompt = JSON.stringify({ system: API_SYSTEM_PROMPT, stages: API_STAGE_PROMPTS });
   assert.doesNotMatch(fixedPrompt, /오픽|DFS|BFS|데드락|deadlock/i);
+  assert.doesNotMatch(fixedPrompt, /A와 C|중간 B/);
   assert.match(fixedPrompt, /문구 보존/);
   assert.match(fixedPrompt, /개념 이해·적용/);
 });
@@ -167,8 +168,10 @@ test("동일 MCP 계약으로 전체 흐름을 중단·재개하고 오류 CARD�
   assert.ok(requests.slice(3).every((request) => !request.pdf));
   assert.match(JSON.stringify(requests[0].stageInput), /input_file PDF/);
   assert.match(JSON.stringify(requests[1].stageInput), /바로 아래 자식.*공백 없이/);
+  assert.match(JSON.stringify(requests[2].stageInput), /근거 배치가 아니라 인출 대상, 조건과 목표/);
+  assert.doesNotMatch(JSON.stringify(requests[2].stageInput), /학습 대상을 나눈다/);
   assert.match(JSON.stringify(requests[3].stageInput), /대상마다 1~3개 과제/);
-  assert.match(JSON.stringify(requests[4].stageInput), /하나의 연속 구절/);
+  assert.match(JSON.stringify(requests[4].stageInput), /sourceEvidence.*하나의 연속 발췌/);
   assert.equal((requests[0].stageInput.runContext as { learningGoal: string }).learningGoal, "데드락 조건을 설명한다.");
   assert.ok((requests[1].stageInput.context as { input: { selectedSourceOutline: unknown } }).input.selectedSourceOutline);
   assert.ok((requests[2].stageInput.context as { input: { conceptTree: unknown } }).input.conceptTree);
@@ -177,6 +180,7 @@ test("동일 MCP 계약으로 전체 흐름을 중단·재개하고 오류 CARD�
   for (const request of requests) {
     const serialized = JSON.stringify(request.stageInput);
     assert.doesNotMatch(serialized, /"instructions":|"outputContract":|"attachmentRule":|"format":|"cardOrderRule":|"retryRule":/);
+    assert.doesNotMatch(serialized, /"commonPrinciples":/);
     assert.equal(request.stageInput.promptVersion, API_PROMPT_VERSION);
   }
   assert.equal(requests[5].priorAttempt?.error.includes("O 또는 X"), true);

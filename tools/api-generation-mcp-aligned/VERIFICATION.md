@@ -22,7 +22,7 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test `
   tools/api-generation-mcp-aligned/pipeline.test.ts
 ```
 
-프롬프트 v2 변경 후 결과: 5 passed, 0 failed.
+프롬프트 v3 변경 후 결과: 5 passed, 0 failed.
 
 - 가짜 API 응답으로 Analyze → Concept Tree → Learning Design → Activity Design →
   Cards 전체 흐름 완료
@@ -36,8 +36,10 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test `
   설명의 중복 키 제거 확인
 - 선택 목차, 개념트리, 학습대상, problemDesigns와 사용자 목표 유지 확인
 - CT 1차 자식 무들여쓰기와 손자 공백 2칸 규칙 확인
+- Learning Design이 근거 배치 때문에 학습 단위를 강제로 나누지 않음 확인
+- 공통 학습 원칙이 system prompt와 payload에 중복되지 않음 확인
 - 서버 오류와 직전 출력을 포함한 재시도 요청 확인
-- manifest·attempt의 v2 프롬프트 버전 기록과 다른 버전 run 재개 거부 확인
+- manifest·attempt의 v3 프롬프트 버전 기록과 다른 버전 run 재개 거부 확인
 - 고정 프롬프트에 평가 자료명이나 특정 정답이 들어가지 않음 확인
 
 ## 기존 MCP 회귀
