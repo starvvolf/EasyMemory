@@ -28,7 +28,7 @@ Firebase 기반은 담당자 커밋 `3b47d015`를 병합했으며, 해당 커밋
 - ESLint 통과
 - PDF source/navigation 단위 테스트 4개 통과
 - 인증 정책 포함 관련 단위 테스트 9개 통과
-- 학습 테스트 52개 통과
+- 학습 테스트 56개 통과(새 PDF source/navigation 4개 포함)
 - 프로젝트 테스트 1개 통과
 - Next.js 16.3.4 production build 통과
 
