@@ -1,6 +1,6 @@
 # 공통 학습자 기억 최소 계약
 
-현재 상태: 공통 순수 규칙과 HTTP 모의 검증 구현. 인증 연결 최소안 승인 후 Firebase 어댑터·VS Code 소비자 연결 진행 중. 이 문서를 실제 연결 완료 또는 개인화 품질 검증 결과로 읽지 않는다.
+현재 상태: 공통 규칙·API·Firebase 어댑터 통합 및 VS Code 소비자와의 모의 통합 검증 완료. VS Code 최종 커밋 고정 검증은 대기 중이다. 실제 계정 로그인·원격 저장·개인화 품질은 검증하지 않았다.
 
 ## 책임과 기반
 
@@ -69,7 +69,7 @@ selectMemoryContext(state, uid, domain, currentQuestionTopics)
 - 저장 시 expectedRevision 비교는 필수이며 트랜잭션 안에서 수행한다. 순수 함수만 호출한 것으로 동시 쓰기나 인증이 해결되지 않는다.
 - 순수 함수는 기존 객체를 변경하지 않는다. 어댑터 저장 성공 후에만 반환 상태를 소비자에 게시한다. 검증/네트워크/트랜잭션 실패는 기존 성공 상태를 보존한다.
 - 충돌은 최신 상태를 다시 읽도록 명확히 표시한다. 오래된 후보를 새 revision에 조용히 덮어쓰지 않는다.
-- `appliedSources`는 record별 최대 원문 위치를 저장한다. 동일·이전 위치 재처리는 no-op. 새 정리에도 기존 위치 이전 근거만 있는 후보는 반영하지 않는다.
+- `appliedSources`는 record별 최대 원문 위치를 저장한다. 순수 규칙의 동일·이전 위치 재처리는 no-op이다. 저장 어댑터는 같은 위치를 duplicate로 반환하고, 이전 위치는 기존 성공 정리 보존을 위해 409로 거부한다. 새 정리에도 기존 위치 이전 근거만 있는 후보는 반영하지 않는다.
 - 신규 증거가 있으면 자동 항목을 최신 관찰로 교체한다. 과거 원문+요약을 각각 독립 증거로 누적하지 않는다.
 - 사용자 확인·수정은 `userEdited`로 자동 덮어쓰기를 막는다. 확인은 미확인 내용을 자동으로 확인 내용으로 승격하지 않는다.
 - 삭제는 본문과 세부 evidenceIds를 비우고 영역/주제 및 재생 방지 표식을 남긴다. 삭제한 주제는 이후 자동 정리로도 되살리지 않는다. 현재 최소 UI에는 자동 갱신 잠금 해제/삭제 복구 기능이 없다.
@@ -85,15 +85,15 @@ selectMemoryContext(state, uid, domain, currentQuestionTopics)
 
 ## 검증과 남은 완료 조건
 
-실행: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/learner-memory/index.test.ts`.
+실행(Node 24): `node --experimental-transform-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/learner-memory/*.test.ts`.
 
-독립 테스트는 관련/무관 영역·주제 선택, 원문 위치 재처리, 새 정리의 옛 근거, 사용자 확인·정정·삭제, JSON 재로딩, 소유자 불일치, 잘못된 후보/근거, revision 충돌, 컨텍스트 한도, 용량 초과를 검증한다. 실제 저장 실패·재접속·동시 쓰기는 Firebase 어댑터 모의 통합 테스트가 추가로 필요하다.
+독립 규칙 10건, HTTP mock 4건, 실제 Firebase adapter와 VS Code 소비자를 연결한 mock 통합 4건이 통과했다. 통합 시험은 `summary.updateSummary`의 모델 호출을 1회 mock하고, 실제 `recordSnapshot/MemoryClient → HTTP → applyLearnerMemorySummary`를 실행한다. 근거 참조 종류, 허용하지 않은 raw필드 제외, 동일근거 재처리, 커서 역행, CAS/멱등성, 원문 prefix 변경 거부, transaction 실패 시 record/state 동시 보존, 수정삭제 후 재조회, 계정 전환을 검증한다.
 
-미완료: 인증된 원문 저장 경로 합의, Firebase 어댑터/규칙, 얇은 API, VS Code summary/chat/UI 실제 연결, 통합 mock의 저장 실패·계정 격리·재접속 검증. 실 Firebase 설정과 Google 로그인, 실제 AI 호출 및 개인화 품질은 시험하지 않는다.
+통합 테스트의 Firestore는 직렬 transaction mock이고 인증은 고정 UID mock이다. 실제 서버 규칙·원격 동시성·로그인 동작을 입증하지 않는다. 별도로 기존 인증 정책 6건과 일회용 연결 code 저장 mock 5건이 통과했다. Firebase 실설정, Google 로그인, 실제 VS Code 개발호스트 및 AI 호출은 시험하지 않았다.
 
-현재 검증: 독립 규칙 10개와 HTTP 모의 흐름 4개, 범위 ESLint, strict TypeScript 검사 통과. HTTP 검증은 정리→관련 대화→정정/삭제→재조회, 계정 전환, source/UID 조작 거부, 실패 이전상태 보존과 오류 세부정보 차단, revision 충돌을 포함한다. 전체 Next 빌드는 초기 시도에서 node_modules가 없어 Next package를 해석하지 못해 실패했다. 실제 어댑터 통합 후 전체 검증이 남아 있다.
+통합 테스트는 기본적으로 같은 checkout의 `tools/study-forge-vscode`를 사용한다. 소비자 커밋 통합 전에는 `LEARNER_MEMORY_CONSUMER_ROOT`로 담당자의 디렉터리를 명시할 수 있다. 파일이 없으면 소비자 통합 4건은 skip으로 표시하며 통과로 보고하지 않는다. 현재 최초 18건 검증은 worktree1263 소비자 코드를 읽기 참조했다. 최종 커밋 통합 후 환경변수 없이 재검증해야 한다.
 
-확정 계약을 사용하는 얇은 route와 `learner-memory/server.ts`도 작성했다. 이 연결 커밋은 Firebase 담당의 `firebase-learner-memory-store.ts`와 `server-user.ts`의 `requireLearnerMemoryUser`가 함께 통합되어야 빌드된다. 기존 동일 버전(Next 16.3.4) 의존성을 읽기 재사용해 전체 tsc를 실행한 결과, 현재 미통합된 두 참조만 오류다. route/core/HTTP 범위 lint는 통과했다. 어댑터 도착 전 전체 빌드 성공 또는 실제 계정 연속 저장을 주장하지 않는다.
+Firebase 담당 커밋 `438b7194`, `efb741f2`, `b7a1e597`을 통합했고 전체 tsc 및 route/core/HTTP 범위 lint, Next 16.3.4 webpack production build가 통과했다. 빌드에는 `/api/learner-memory`, `/api/learner-memory/context`, 연결 페이지·교환 API가 포함된다. 의존성 설치나 package/lock 수정 없이 기존 같은 버전 node_modules를 읽기 재사용했다.
 
 반복 파일 가져오기를 기본 흐름으로 쓰는 안은 기획팀2가 승인하지 않았다. 파일 가져오기는 기존 자료 이전 보조만 될 수 있다. 완료하려면 최초 계정 연결 뒤 기존 정리 성공에서 상태를 갱신하고 다음 VS Code 질문에서 관련 상태를 자동으로 읽어야 한다. 승인된 인증 전달 경로의 실제 구현과 검증은 Firebase·VS Code 담당이 진행한다. 기존 Bearer 인증을 재사용하되, Google 전용 기존 정책에 custom token이 그대로 호환된다고 가정하지 않는다.
 
