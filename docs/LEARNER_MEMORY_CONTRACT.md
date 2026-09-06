@@ -80,4 +80,6 @@ selectMemoryContext(state, uid, domain, currentQuestionTopics)
 
 현재 검증: 독립 테스트 10개, 범위 ESLint, strict TypeScript 검사 통과. 전체 Next 빌드는 이 작업트리에 node_modules가 없어 Next package를 해석하지 못해 시작 단계에서 실패했다. 다른 checkout 실행기로 시도했으며 의존성을 새로 설치하거나 package/lock을 수정하지 않았다.
 
-후속 최소 연결안(최종 합의 전): 기존 웹 Firebase 로그인에서 사용자가 선택 session JSON을 명시적으로 가져온다. 기존 session/summary 단위를 크기 제한 아래 재사용하며 확장 전용 인증·전체 이벤트별 저장·이미지 이전을 선결조건으로 만들지 않는다. 재가져오기는 같은 session의 기존 ID·내용·순서 및 반영 위치를 보존해야 한다. 날짜 재정렬로 기존 sequence를 바꾸면 과거 근거 재처리 방지가 깨지므로 금지한다. 동일 파일의 중복 가져오기도 새 독립 근거로 만들지 않는다. 웹 저장만으로 VS Code 다음 질문의 계정 기억 조회까지 완료되는 것은 아니다.
+반복 파일 가져오기를 기본 흐름으로 쓰는 안은 기획팀2가 승인하지 않았다. 파일 가져오기는 기존 자료 이전 보조만 될 수 있다. 완료하려면 최초 계정 연결 뒤 기존 정리 성공에서 상태를 갱신하고 다음 VS Code 질문에서 관련 상태를 자동으로 읽어야 한다. 신규 인증 전달 경로는 Firebase·VS Code 담당이 검토 중이며 아직 구현·승인되지 않았다. 기존 `server-auth.ts`는 Bearer Firebase ID token을 이미 받지만 `auth-policy.ts`는 Google provider만 허용하므로 custom token을 그대로 호환된다고 가정하지 않는다.
+
+저장 단위는 기존 summary와 근거 참조를 크기 제한 아래 재사용하며 전체 이벤트별 저장·이미지 이전을 선결조건으로 만들지 않는다. 같은 session의 기존 ID·내용·순서 및 반영 위치를 보존해야 한다. 날짜 재정렬로 기존 sequence를 바꾸면 과거 근거 재처리 방지가 깨지므로 금지한다. 동일 자료의 중복 가져오기도 새 독립 근거로 만들지 않는다. 서버에서 기록을 다시 읽었다고 내용의 객관적 사실성을 인증한 것이 아니다.
