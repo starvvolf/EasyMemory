@@ -88,9 +88,17 @@ test("separates AI, shared host-data, and member API access", () => {
   assert.equal(getApiAccessLevel("/api/codex/chat"), "owner-ai");
   assert.equal(
     getApiAccessLevel("/api/study-projects/project-1"),
+    "member",
+  );
+  assert.equal(
+    getApiAccessLevel("/api/study-projects/project-1/coding-session"),
     "owner-local-data",
   );
   assert.equal(getApiAccessLevel("/api/mcp-decks"), "owner-local-data");
+  assert.equal(
+    getApiAccessLevel("/api/user-data/local-project-import"),
+    "owner-local-data",
+  );
   assert.equal(getApiAccessLevel("/api/auth/session"), "member");
   assert.equal(getApiAccessLevel("/api/future-study-tool"), "member");
 });

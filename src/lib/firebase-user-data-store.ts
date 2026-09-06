@@ -9,11 +9,13 @@ import type {
   CloudDeckSummary,
   CloudMutationOptions,
   PdfReadingPosition,
+  PdfReadingPositionState,
   CloudStudySessionDetail,
   CloudStudySessionSummary,
   LegacyImportResult,
 } from "@/lib/cloud-storage-types";
 import { CloudStorageConflictError } from "@/lib/cloud-storage-types";
+import { CloudSourceImportRequiredError } from "@/lib/cloud-storage-types";
 import type { Card, Deck, StudyAttempt, StudySession } from "@/lib/types";
 
 const MAX_DECK_CARDS_PER_ATOMIC_WRITE = 440;
@@ -85,6 +87,7 @@ export async function saveCloudDeck(
   const deckRef = userDoc(firestore, uid).collection("decks").doc(deck.id);
   const contentRef = deckRef.collection("content").doc("main");
   const operationRef = userDoc(firestore, uid).collection("operations").doc(options.operationId);
+  const requestHash = stableHash(deck);
 
   const revision = await firestore.runTransaction(async (transaction) => {
     const [operationSnapshot, summarySnapshot, existingCards] = await Promise.all([
@@ -93,6 +96,7 @@ export async function saveCloudDeck(
       transaction.get(deckRef.collection("cards")),
     ]);
     if (operationSnapshot.exists) {
+      assertIdempotentOperation(operationSnapshot, "save-deck", deck.id, requestHash);
       return Number(operationSnapshot.get("revision"));
     }
 
@@ -122,6 +126,7 @@ export async function saveCloudDeck(
       ownerUid: uid,
       kind: "save-deck",
       targetId: deck.id,
+      requestHash,
       revision: nextRevision,
       createdAt: new Date().toISOString(),
     });
@@ -131,12 +136,58 @@ export async function saveCloudDeck(
   return { deck, revision };
 }
 
+export async function deleteCloudDeck(
+  uid: string,
+  deckId: string,
+  options: CloudMutationOptions,
+) {
+  assertDocumentId(deckId, "덱");
+  validateMutationOptions(options);
+  const { firestore, storage } = getFirebaseAdminServices();
+  const owner = userDoc(firestore, uid);
+  const deckRef = owner.collection("decks").doc(deckId);
+  const operationRef = owner.collection("operations").doc(options.operationId);
+  const deletedAt = new Date().toISOString();
+  const requestHash = stableHash({ deckId });
+
+  const existed = await firestore.runTransaction(async (transaction) => {
+    const [operation, deckSnapshot] = await Promise.all([
+      transaction.get(operationRef),
+      transaction.get(deckRef),
+    ]);
+    if (operation.exists) {
+      assertIdempotentOperation(operation, "delete-deck", deckId, requestHash);
+      return true;
+    }
+    if (!deckSnapshot.exists) return false;
+    const currentRevision = Number(deckSnapshot.get("revision") ?? 0);
+    assertExpectedRevision(currentRevision, true, options.expectedRevision);
+    transaction.update(deckRef, { deletedAt, revision: currentRevision + 1 });
+    transaction.create(operationRef, operationDocument(uid, "delete-deck", deckId, requestHash));
+    return true;
+  });
+  if (!existed) return false;
+
+  const sourceSnapshot = await owner.collection("sources").where("deckId", "==", deckId).get();
+  const bucketName = process.env.FIREBASE_STORAGE_BUCKET?.trim();
+  const bucket = bucketName ? storage.bucket(bucketName) : storage.bucket();
+  for (const document of sourceSnapshot.docs) {
+    const storagePath = document.get("storagePath");
+    if (typeof storagePath === "string") {
+      await bucket.file(storagePath).delete({ ignoreNotFound: true });
+    }
+    await firestore.recursiveDelete(document.ref);
+  }
+  await firestore.recursiveDelete(deckRef);
+  return true;
+}
+
 export async function startCloudStudySession(
   uid: string,
   deck: Deck,
   session: StudySession,
   options: CloudMutationOptions,
-) {
+): Promise<{ deckRevision: number; sessionRevision: number }> {
   validateStudySession(deck, session);
   validateMutationOptions(options);
   const { firestore } = getFirebaseAdminServices();
@@ -144,14 +195,26 @@ export async function startCloudStudySession(
   const deckRef = owner.collection("decks").doc(deck.id);
   const sessionRef = owner.collection("studySessions").doc(session.id);
   const operationRef = owner.collection("operations").doc(options.operationId);
+  const requestHash = stableHash({
+    deckId: deck.id,
+    boardColumn: deck.boardColumn,
+    updatedAt: deck.updatedAt,
+    session,
+  });
 
-  await firestore.runTransaction(async (transaction) => {
+  return firestore.runTransaction(async (transaction) => {
     const [operation, deckSnapshot, existingSession] = await Promise.all([
       transaction.get(operationRef),
       transaction.get(deckRef),
       transaction.get(sessionRef),
     ]);
-    if (operation.exists) return;
+    if (operation.exists) {
+      assertIdempotentOperation(operation, "start-session", session.id, requestHash);
+      return {
+        deckRevision: Number(operation.get("deckRevision")),
+        sessionRevision: Number(operation.get("sessionRevision") ?? 1),
+      };
+    }
     if (!deckSnapshot.exists || deckSnapshot.get("deletedAt")) {
       throw new Error("학습할 덱을 찾지 못했습니다.");
     }
@@ -163,23 +226,51 @@ export async function startCloudStudySession(
       updatedAt: deck.updatedAt,
       revision: currentRevision + 1,
     });
-    transaction.create(sessionRef, sessionDocument(uid, session, 0));
-    transaction.create(operationRef, operationDocument(uid, "start-session", session.id));
+    transaction.create(sessionRef, sessionDocument(uid, session, 0, 1));
+    const deckRevision = currentRevision + 1;
+    transaction.create(operationRef, {
+      ...operationDocument(uid, "start-session", session.id, requestHash),
+      deckRevision,
+      sessionRevision: 1,
+    });
+    return { deckRevision, sessionRevision: 1 };
   });
 }
 
-export async function saveCloudStudySession(uid: string, session: StudySession) {
+export async function saveCloudStudySession(
+  uid: string,
+  session: StudySession,
+  options: CloudMutationOptions,
+): Promise<number> {
   assertDocumentId(session.id, "학습 세션");
+  validateMutationOptions(options);
   const { firestore } = getFirebaseAdminServices();
   const owner = userDoc(firestore, uid);
   const sessionRef = owner.collection("studySessions").doc(session.id);
-  await firestore.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(sessionRef);
+  const operationRef = owner.collection("operations").doc(options.operationId);
+  const requestHash = stableHash(session);
+  return firestore.runTransaction(async (transaction) => {
+    const [operation, snapshot] = await Promise.all([
+      transaction.get(operationRef),
+      transaction.get(sessionRef),
+    ]);
+    if (operation.exists) {
+      assertIdempotentOperation(operation, "save-session", session.id, requestHash);
+      return Number(operation.get("revision"));
+    }
     if (!snapshot.exists) throw new Error("학습 세션을 찾지 못했습니다.");
+    const currentRevision = Number(snapshot.get("revision") ?? 1);
+    assertExpectedRevision(currentRevision, true, options.expectedRevision);
+    const nextRevision = currentRevision + 1;
     transaction.set(
       sessionRef,
-      sessionDocument(uid, session, Number(snapshot.get("attemptCount") ?? 0)),
+      sessionDocument(uid, session, Number(snapshot.get("attemptCount") ?? 0), nextRevision),
     );
+    transaction.create(operationRef, {
+      ...operationDocument(uid, "save-session", session.id, requestHash),
+      revision: nextRevision,
+    });
+    return nextRevision;
   });
 }
 
@@ -187,7 +278,7 @@ export async function saveCloudStudyProgress(
   uid: string,
   input: { deck: Deck; session: StudySession; attempt: StudyAttempt },
   options: CloudMutationOptions,
-) {
+): Promise<{ deckRevision: number; sessionRevision: number }> {
   validateStudySession(input.deck, input.session);
   if (!input.session.plannedActivityIds.includes(input.attempt.activityId)) {
     throw new Error("응답 기록이 학습 세션 계획에 포함되지 않았습니다.");
@@ -204,21 +295,31 @@ export async function saveCloudStudyProgress(
   const attemptRef = sessionRef.collection("attempts").doc(input.attempt.id);
   const reviewRef = owner.collection("reviewStates").doc(reviewStateId(input.deck.id, card.id));
   const operationRef = owner.collection("operations").doc(options.operationId);
+  const requestHash = stableHash(input);
 
-  await firestore.runTransaction(async (transaction) => {
+  return firestore.runTransaction(async (transaction) => {
     const [operation, deckSnapshot, sessionSnapshot, existingAttempt] = await Promise.all([
       transaction.get(operationRef),
       transaction.get(deckRef),
       transaction.get(sessionRef),
       transaction.get(attemptRef),
     ]);
-    if (operation.exists) return;
+    if (operation.exists) {
+      assertIdempotentOperation(operation, "study-progress", input.attempt.id, requestHash);
+      return {
+        deckRevision: Number(operation.get("deckRevision")),
+        sessionRevision: Number(operation.get("sessionRevision")),
+      };
+    }
     if (!deckSnapshot.exists || !sessionSnapshot.exists) {
       throw new Error("덱 또는 학습 세션을 찾지 못했습니다.");
     }
     if (existingAttempt.exists) {
       if (stableHash(existingAttempt.data()!) === stableHash(attemptDocument(uid, input.attempt))) {
-        return;
+        return {
+          deckRevision: Number(deckSnapshot.get("revision") ?? 0),
+          sessionRevision: Number(sessionSnapshot.get("revision") ?? 1),
+        };
       }
       throw new Error("같은 응답 ID에 다른 내용이 이미 저장되어 있습니다.");
     }
@@ -231,7 +332,8 @@ export async function saveCloudStudyProgress(
       deckId: input.deck.id,
       order: input.deck.cards.findIndex((item) => item.id === card.id),
     }));
-    transaction.set(sessionRef, sessionDocument(uid, input.session, attemptCount));
+    const sessionRevision = Number(sessionSnapshot.get("revision") ?? 1) + 1;
+    transaction.set(sessionRef, sessionDocument(uid, input.session, attemptCount, sessionRevision));
     transaction.create(attemptRef, attemptDocument(uid, input.attempt));
     transaction.set(reviewRef, cleanFirestoreValue({
       id: reviewStateId(input.deck.id, card.id),
@@ -249,7 +351,13 @@ export async function saveCloudStudyProgress(
       dueCount: countDueCards(input.deck.cards),
       revision: currentRevision + 1,
     });
-    transaction.create(operationRef, operationDocument(uid, "study-progress", input.attempt.id));
+    const deckRevision = currentRevision + 1;
+    transaction.create(operationRef, {
+      ...operationDocument(uid, "study-progress", input.attempt.id, requestHash),
+      deckRevision,
+      sessionRevision,
+    });
+    return { deckRevision, sessionRevision };
   });
 }
 
@@ -264,7 +372,19 @@ export async function listCloudStudySessions(
     .orderBy("startedAt", "desc")
     .limit(clampLimit(limit));
   if (deckId) query = query.where("deckId", "==", deckId);
-  const snapshot = await query.get();
+  const snapshot = await query.select(
+    "id",
+    "deckId",
+    "activityType",
+    "startedAt",
+    "endedAt",
+    "status",
+    "selectionMode",
+    "plannedItemCount",
+    "completedItemCount",
+    "attemptCount",
+    "revision",
+  ).get();
   return snapshot.docs.map((document) => stripOwner(document.data()) as CloudStudySessionSummary);
 }
 
@@ -280,9 +400,15 @@ export async function loadCloudStudySession(
     sessionRef.collection("attempts").orderBy("completedAt", "asc").get(),
   ]);
   if (!sessionSnapshot.exists) return null;
+  const storedSession = { ...sessionSnapshot.data()! };
+  const revision = Number(storedSession.revision ?? 1);
+  delete storedSession.ownerUid;
+  delete storedSession.attemptCount;
+  delete storedSession.revision;
   return {
-    session: stripOwner(sessionSnapshot.data()!) as StudySession,
+    session: storedSession as StudySession,
     attempts: attemptSnapshot.docs.map((document) => stripOwner(document.data()) as StudyAttempt),
+    revision,
   };
 }
 
@@ -297,11 +423,12 @@ export async function uploadCloudSource(
   const { firestore, storage } = getFirebaseAdminServices();
   const bucket = configuredBucket(storage.bucket());
   const storagePath = `users/${uid}/sources/${input.sourceId}/original/${safeFileName(input.file.name)}`;
-  await bucket.file(storagePath).save(bytes, {
-    resumable: false,
-    contentType: input.file.type || "application/octet-stream",
-    metadata: { metadata: { ownerUid: uid, checksum } },
-  });
+  const storageFile = bucket.file(storagePath);
+  await storageFile.save(bytes, {
+      resumable: false,
+      contentType: input.file.type || "application/octet-stream",
+      metadata: { metadata: { ownerUid: uid, checksum } },
+    });
   const now = new Date().toISOString();
   const source = cleanFirestoreValue({
     id: input.sourceId,
@@ -314,10 +441,16 @@ export async function uploadCloudSource(
     lastModified: input.file.lastModified,
     checksum,
     storagePath,
+    addedAt: now,
     createdAt: now,
     updatedAt: now,
   });
-  await userDoc(firestore, uid).collection("sources").doc(input.sourceId).set(source);
+  try {
+    await userDoc(firestore, uid).collection("sources").doc(input.sourceId).set(source);
+  } catch (error) {
+    await storageFile.delete({ ignoreNotFound: true }).catch(() => undefined);
+    throw error;
+  }
   return source;
 }
 
@@ -325,9 +458,9 @@ export async function importLegacyDeck(
   uid: string,
   deck: Deck,
   files: File[],
-  fingerprint: string,
 ): Promise<LegacyImportResult> {
-  if (!/^[a-f0-9]{64}$/.test(fingerprint)) throw new Error("가져오기 지문이 올바르지 않습니다.");
+  validateDeck(deck);
+  const fingerprint = await legacyImportFingerprint(deck, files);
   const { firestore } = getFirebaseAdminServices();
   const importRef = userDoc(firestore, uid).collection("imports").doc(fingerprint);
   const existing = await importRef.get();
@@ -340,14 +473,21 @@ export async function importLegacyDeck(
     };
   }
 
+  const importedSourceIds: string[] = [];
   for (let index = 0; index < files.length; index += 1) {
+    const sourceId = deck.pdfSourceIds?.[index] ?? `${deck.id}-legacy-${index + 1}`;
     await uploadCloudSource(uid, {
-      sourceId: `${deck.id}-legacy-${index + 1}`,
+      sourceId,
       deckId: deck.id,
       file: files[index],
     });
+    importedSourceIds.push(sourceId);
   }
-  await saveCloudDeck(uid, deck, {
+  const importedDeck = {
+    ...deck,
+    pdfSourceIds: importedSourceIds,
+  };
+  await saveCloudDeck(uid, importedDeck, {
     operationId: `import-${fingerprint}`,
     expectedRevision: 0,
   });
@@ -380,11 +520,37 @@ export async function getCloudPdfReadingPosition(
   };
 }
 
+export async function getCloudPdfReadingPositionState(
+  uid: string,
+  sourceId: string,
+): Promise<PdfReadingPositionState> {
+  assertDocumentId(sourceId, "자료");
+  const { firestore } = getFirebaseAdminServices();
+  const owner = userDoc(firestore, uid);
+  const [sourceSnapshot, readingSnapshot] = await Promise.all([
+    owner.collection("sources").doc(sourceId).get(),
+    owner.collection("readingStates").doc(sourceId).get(),
+  ]);
+  if (!sourceSnapshot.exists) return { state: "import_required", position: null };
+  if (!readingSnapshot.exists) return { state: "ready", position: null };
+  const value = readingSnapshot.data() as PdfReadingPosition & { ownerUid: string };
+  return {
+    state: "ready",
+    position: {
+      sourceId: value.sourceId,
+      page: value.page,
+      updatedAt: value.updatedAt,
+      revision: value.revision,
+    },
+  };
+}
+
 export async function saveCloudPdfReadingPosition(
   uid: string,
   sourceId: string,
   page: number,
   expectedRevision?: number,
+  operationId?: string,
 ): Promise<PdfReadingPosition> {
   assertDocumentId(sourceId, "자료");
   if (!Number.isInteger(page) || page < 1) {
@@ -394,13 +560,25 @@ export async function saveCloudPdfReadingPosition(
   const owner = userDoc(firestore, uid);
   const sourceRef = owner.collection("sources").doc(sourceId);
   const readingRef = owner.collection("readingStates").doc(sourceId);
+  const requestHash = stableHash({ sourceId, page, expectedRevision });
 
   return firestore.runTransaction(async (transaction) => {
     const [sourceSnapshot, readingSnapshot] = await Promise.all([
       transaction.get(sourceRef),
       transaction.get(readingRef),
     ]);
-    if (!sourceSnapshot.exists) throw new Error("연결된 PDF 자료를 찾지 못했습니다.");
+    if (!sourceSnapshot.exists) throw new CloudSourceImportRequiredError();
+    if (operationId && readingSnapshot.get("lastOperationId") === operationId) {
+      if (readingSnapshot.get("lastOperationHash") !== requestHash) {
+        throw new Error("같은 작업 ID에 다른 PDF 읽기 위치가 이미 저장되어 있습니다.");
+      }
+      return {
+        sourceId,
+        page: Number(readingSnapshot.get("page")),
+        updatedAt: String(readingSnapshot.get("updatedAt")),
+        revision: Number(readingSnapshot.get("revision")),
+      };
+    }
     const currentRevision = readingSnapshot.exists
       ? Number(readingSnapshot.get("revision") ?? 0)
       : 0;
@@ -416,7 +594,12 @@ export async function saveCloudPdfReadingPosition(
       updatedAt: new Date().toISOString(),
       revision: currentRevision + 1,
     };
-    transaction.set(readingRef, { ...position, ownerUid: uid });
+    transaction.set(readingRef, {
+      ...position,
+      ownerUid: uid,
+      lastOperationId: operationId ?? null,
+      lastOperationHash: operationId ? requestHash : null,
+    });
     return position;
   });
 }
@@ -452,16 +635,41 @@ function deckWithoutCards(deck: Deck): Omit<Deck, "cards"> {
   return content;
 }
 
-function sessionDocument(uid: string, session: StudySession, attemptCount: number) {
-  return cleanFirestoreValue({ ...session, ownerUid: uid, attemptCount });
+function sessionDocument(
+  uid: string,
+  session: StudySession,
+  attemptCount: number,
+  revision: number,
+) {
+  return cleanFirestoreValue({ ...session, ownerUid: uid, attemptCount, revision });
 }
 
 function attemptDocument(uid: string, attempt: StudyAttempt) {
   return cleanFirestoreValue({ ...attempt, ownerUid: uid });
 }
 
-function operationDocument(uid: string, kind: string, targetId: string) {
-  return { ownerUid: uid, kind, targetId, createdAt: new Date().toISOString() };
+function operationDocument(
+  uid: string,
+  kind: string,
+  targetId: string,
+  requestHash: string,
+) {
+  return { ownerUid: uid, kind, targetId, requestHash, createdAt: new Date().toISOString() };
+}
+
+function assertIdempotentOperation(
+  snapshot: FirebaseFirestore.DocumentSnapshot,
+  kind: string,
+  targetId: string,
+  requestHash: string,
+) {
+  if (
+    snapshot.get("kind") !== kind ||
+    snapshot.get("targetId") !== targetId ||
+    snapshot.get("requestHash") !== requestHash
+  ) {
+    throw new Error("같은 작업 ID에 다른 저장 요청이 이미 처리되었습니다.");
+  }
 }
 
 function validateDeck(deck: Deck) {
@@ -556,4 +764,27 @@ function sha256(value: Uint8Array) {
 
 function stableHash(value: unknown) {
   return sha256(Buffer.from(JSON.stringify(value)));
+}
+
+async function legacyImportFingerprint(deck: Deck, files: File[]) {
+  const hash = createHash("sha256");
+  hash.update(JSON.stringify(sortObjectKeys(deck)));
+  for (const file of files) {
+    hash.update(file.name);
+    hash.update(String(file.lastModified));
+    hash.update(Buffer.from(await file.arrayBuffer()));
+  }
+  return hash.digest("hex");
+}
+
+function sortObjectKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortObjectKeys);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, sortObjectKeys(child)]),
+    );
+  }
+  return value;
 }

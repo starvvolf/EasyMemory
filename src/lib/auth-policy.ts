@@ -28,8 +28,6 @@ const ownerOnlyLocalDataPrefixes = [
   "/api/mcp-decks",
   "/api/model-config",
   "/api/project-status",
-  "/api/study-projects",
-  "/api/study-sources",
 ];
 
 export function normalizeEmail(value: string): string {
@@ -70,6 +68,12 @@ export function authorizeAuthenticatedUser(
 
 export function getApiAccessLevel(pathname: string): ApiAccessLevel {
   if (ownerOnlyAiRoutes.has(pathname)) return "owner-ai";
+  if (pathname === "/api/user-data/local-project-import") {
+    return "owner-local-data";
+  }
+  if (/^\/api\/study-projects\/[^/]+\/coding-session$/.test(pathname)) {
+    return "owner-local-data";
+  }
   if (
     ownerOnlyLocalDataPrefixes.some(
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
