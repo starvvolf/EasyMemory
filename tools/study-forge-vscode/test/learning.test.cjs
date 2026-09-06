@@ -5,7 +5,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { LearningStore, normalizeProblem, questionContext } = require('../learning-state');
-const { ExampleRunner, resolveLanguageLaunch } = require('../example-runner');
+const { ExampleRunner } = require('../example-runner');
 const { CodexClient, createLocalCodexClient, FIXED_CONFIG } = require('../codex-client');
 const { spawn } = require('node:child_process');
 
@@ -48,7 +48,6 @@ test('여러 예제별 출력/실패/오류 및 쉘 메타문자 stdin 보존', 
   assert.equal(results[1].actualOutput, 'actual');
   const errors = await runner.run(examples.slice(0, 1), launch('error'));
   assert.equal(errors[0].status, 'error'); assert.equal(errors[0].exitCode, 2);
-  assert.equal(resolveLanguageLaunch({ language: 'python' }), null);
 });
 test('시간·출력 제한 및 중지 후 나머지 예제 실행 금지', async () => {
   const runner = new ExampleRunner(); const examples = [{ input: '', expectedOutput: '' }, { input: '', expectedOutput: '' }];
@@ -57,6 +56,12 @@ test('시간·출력 제한 및 중지 후 나머지 예제 실행 금지', asyn
   assert.equal(flood[0].status, 'output-limit'); assert.ok(flood[0].actualOutput.length <= 1024);
   const pending = runner.run(examples, launch('hang')); setTimeout(() => runner.stop(), 100);
   const stopped = await pending; assert.equal(stopped.length, 1); assert.equal(stopped[0].status, 'stopped');
+});
+test('프로세스 트리 종료 거부 시 무한 대기 없이 실패 표시 및 후속 예제 중단', async () => {
+  const runner = new ExampleRunner({ terminateTree: async () => false });
+  const result = await runner.run([{ input: '', expectedOutput: '' }, { input: '', expectedOutput: '' }], launch('hang'), undefined, { timeoutMs: 100 });
+  assert.equal(result.length, 1); assert.equal(result[0].status, 'termination-error');
+  assert.match(result[0].stderr, /종료를 확인하지/);
 });
 
 async function fake(t, mode, options = {}) {

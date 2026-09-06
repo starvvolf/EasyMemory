@@ -8,7 +8,8 @@
 - `learning-workspace.js`: VS Code 웹뷰/편집기와 로컬 모델·저장·정리 연결. 메시지는 발신 화면별 허용 목록으로 검증.
 - `learning-state.js`: 입력 제한, 로컬 JSON atomic rename/직렬 쓰기, 원문 대화 재개.
 - `codex-client.js`: stdio JSON-RPC, managed ChatGPT 로그인, 구독 계정 확인, turn 시작/재개/중지, 조기 완료 이벤트 처리, 실패 시 자동 재전송 금지.
-- `example-runner.js`: trusted 어댑터로만 shell:false spawn. 예제별 제한/중지. 실사용 언어 어댑터 없음.
+- `example-runner.js`: trusted 어댑터로만 shell:false spawn. 제한/중지/프로세스 트리 종료 실패 처리.
+- `execution-contract.js`, `local-runtimes.js`, `function-wrappers.js`, `language-runner.js`: Python/C#/Java 런타임 확인, 호출 규격 확인, 임시 래퍼·명시 소스 실행. 세부 계약과 검증은 [EXECUTION.md](EXECUTION.md).
 - `summary.js`: 정리 입력/근거 ID 검증, 성공 cursor, 활성 세션 타이머. 이전 정리를 대화 원문에 섞지 않음.
 - `media/*`: CSP가 적용된 웹뷰. 문제/AI 출력을 textContent로 표시하며 HTML·스크립트로 실행하지 않음.
 - `test/*`: 합성 fixture만. npm 의존성 없음.
@@ -28,6 +29,7 @@ sessions[]:
   linkedFile?: {path,label,language}
   codeSnapshots[{id,filePath,language,text,createdAt}]
   threadId?
+  execution?: {mode,mainClass?,function?,confirmedHash}
   summaryAutoEnabled: false
   summary?: {sections,throughMessageId,updatedAt,automatic}
   summaryError?
@@ -48,7 +50,7 @@ App Server 전용 `globalStorageUri/managed-codex`에 고정 read-only/ChatGPT-o
 - 합성 브라우저 preview에서 문제와 예제 등록 후 좌측 문제/중앙 코드 자리/하단 결과/우측 대화 배치를 확인. 실제 VS Code WebviewView 배치·클립보드 이미지·계정 연결 E2E와는 구별.
 - 설치된 codex-cli 0.101.0에서 `app-server generate-json-schema`를 오프라인 실행해 thread start/resume의 read-only, modelProvider/developerInstructions, turn의 image URL/outputSchema/sandboxPolicy 필드를 확인. 서버/로그인/turn 실호출 아님.
 - 실제 연결 시험은 중지 상태. 사용자 승인 후 전용 managed 로그인, 구독 응답, 그림 이해, 새로고침 후 대화 재개, 파일 무수정, 정리 갱신을 합성 자료로 확인해야 한다.
-- 실사용 실행 어댑터는 첫 언어와 답안 형식 확정 후 연결. Windows 자손 종료, 런타임 탐색, stdin/solution 계약은 이 단계에서 검증해야 한다.
+- Python/Java 실제 fixture와 Windows 자손 종료 검증 완료. C#은 SDK 부재로 실제 컴파일/실행은 미완료. 호출 규격 확인·범위와 런타임 설치 필요사항은 EXECUTION.md 참조.
 - 변경 범위가 plain JS VS Code 확장이라 별도 번들 빌드 없음. 루트 Next.js는 이 worktree에 의존성이 없으며 무설치 원칙을 유지한다. 주 저장소 기존 eslint 설치/설정을 읽기 전용으로 사용해 확장 린트 실행.
 
 ## 공식 계약 근거

@@ -50,6 +50,10 @@
     "configuration": {
       "title": "Study Forge",
       "properties": {
+        "studyForge.pythonExecutable": { "type": "string", "default": "", "scope": "machine", "description": "Python 3 실행 파일 절대 경로. 비우면 PATH에서 WindowsApps 별칭을 제외하고 찾습니다." },
+        "studyForge.dotnetExecutable": { "type": "string", "default": "", "scope": "machine", "description": ".NET SDK가 설치된 dotnet 실행 파일 절대 경로. 런타임만으로는 C#을 컴파일할 수 없습니다." },
+        "studyForge.javaExecutable": { "type": "string", "default": "", "scope": "machine", "description": "JDK java 실행 파일 절대 경로. 비우면 PATH에서 찾습니다." },
+        "studyForge.javacExecutable": { "type": "string", "default": "", "scope": "machine", "description": "JDK javac 실행 파일 절대 경로. 비우면 선택한 java의 JDK에서 찾습니다." },
         "studyForge.codexExecutable": {
           "type": "string", "default": "", "scope": "machine",
           "description": "Codex 네이티브 실행 파일의 절대 경로. .cmd/.bat/.ps1 래퍼는 지원하지 않습니다."

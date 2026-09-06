@@ -3,9 +3,14 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const { analyzeSource } = require('../execution-contract');
 const media = path.join(__dirname, '../media');
 const theme = ':root{--vscode-foreground:#d8dbe3;--vscode-editor-background:#151922;--vscode-font-family:Arial,sans-serif;--vscode-descriptionForeground:#989fae;--vscode-input-background:#202634;--vscode-input-foreground:#eee;--vscode-panel-border:#343d4f;--vscode-button-background:#3565c5;--vscode-button-foreground:white;--vscode-button-secondaryBackground:#303a4c;--vscode-button-secondaryForeground:#eee;--vscode-focusBorder:#64a2ff;--vscode-errorForeground:#ff8c8c;--vscode-testing-iconPassed:#84d6aa;--vscode-textCodeBlock-background:#10141c;}';
-const state = { type: 'state', sessions: [], session: null, results: [], connection: '연결 전 · 오프라인 화면 검증', problemSaved: 0 };
+const source = 'def solution(a: int, b: int) -> int:\n    return a+b\ndef helper(value: int) -> int:\n    return value\n';
+const state = { type: 'state', sessions: [{ id: 'fixture', title: '두 수의 합 · 합성 문제' }],
+  session: { id: 'fixture', problem: { title: '두 수의 합 · 합성 문제', text: '두 정수의 합을 반환하세요.', sourceUrl: '', images: [], examples: [{ input: '[1,2]', expectedOutput: '3' }] }, messages: [], codeSnapshots: [] },
+  activeFile: 'fixture.py (모의 파일)', activeLanguage: 'python', executionAnalysis: analyzeSource('python', source), runtimeStatus: { available: true, version: 'Python · 모의 런타임 표시' },
+  results: [], connection: '연결 전 · 오프라인 화면 검증', problemSaved: 0 };
 const bridge = `window.acquireVsCodeApi=()=>({getState:()=>null,setState:()=>{},postMessage:(m)=>{window.parent.postMessage({preview:m},'*')}});`;
 http.createServer((request, response) => {
   const url = new URL(request.url, 'http://localhost');
@@ -13,7 +18,7 @@ http.createServer((request, response) => {
     response.setHeader('Content-Type', 'text/html; charset=utf-8');
     response.end(`<html><head><title>Study Forge offline fixture</title><style>body{margin:0;background:#10141c;color:#ccc;font:14px Arial}header{padding:12px}main{display:grid;grid-template-columns:310px 1fr 390px;height:calc(100vh - 44px)}iframe{border:1px solid #303a4c;width:100%;height:100%;box-sizing:border-box}.center{display:grid;grid-template-rows:45% 55%}.editor{padding:20px;white-space:pre-wrap;font:15px/1.8 monospace}</style></head><body><header>Study Forge · 오프라인 화면 검증</header><main><iframe title="문제" src="/view?kind=problem"></iframe><div class="center"><div class="editor">main.py — 기본 코드 편집기 위치\n\na, b = map(int, input().split())\nprint(a + b)</div><iframe title="실행 결과" src="/view?kind=results"></iframe></div><iframe title="학습 대화" src="/view?kind=chat"></iframe></main><script>
 let state=${JSON.stringify(state)}; const broadcast=()=>document.querySelectorAll('iframe').forEach(f=>f.contentWindow.postMessage(state,'*'));
-addEventListener('message',e=>{const m=e.data.preview;if(!m)return;if(m.type==='createProblem'||m.type==='updateProblem'){state.session={id:'fixture',problem:m.problem,messages:[],updatedAt:Date.now()};state.sessions=[{id:'fixture',title:m.problem.title}];state.problemSaved++;}if(m.type==='login'||m.type==='status'||m.type==='question')state.error='오프라인 미리보기입니다. 실제 연결은 하지 않습니다.';broadcast()});</script></body></html>`);
+addEventListener('message',e=>{const m=e.data.preview;if(!m)return;if(m.type==='createProblem'||m.type==='updateProblem'){state.session={id:'fixture',problem:m.problem,messages:[],updatedAt:Date.now()};state.sessions=[{id:'fixture',title:m.problem.title}];state.problemSaved++;}if(m.type==='confirmExecution'){state.session.execution=m.execution;state.runnerAvailable=true;}if(['login','status','question','runExamples'].includes(m.type))state.error='오프라인 미리보기입니다. 실제 연결/실행은 하지 않습니다.';broadcast()});</script></body></html>`);
   } else if (url.pathname === '/view') {
     const kind = ['problem', 'results', 'chat'].includes(url.searchParams.get('kind')) ? url.searchParams.get('kind') : 'problem';
     response.setHeader('Content-Type', 'text/html; charset=utf-8');

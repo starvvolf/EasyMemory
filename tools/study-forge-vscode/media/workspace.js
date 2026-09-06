@@ -4,6 +4,7 @@
   const app = document.querySelector('#app');
   const kind = document.body.dataset.kind;
   let state = {}, draft = null, editing = false, newProblem = false, draftDirty = false;
+  let executionDraft, executionKey, templateLanguage = 'python', templateMode = 'stdio';
   const saved = api.getState() || {};
   let question = saved.question || '';
   if (saved.draft) { draft = saved.draft; editing = true; newProblem = saved.newProblem; draftDirty = true; }
@@ -13,7 +14,12 @@
   const row = (...children) => { const item = node('div', undefined, 'row'); item.append(...children); return item; };
   const persist = () => { api.setState({ question, draft: draftDirty ? draft : null, newProblem });
     if (kind === 'problem') send('saveDraft', { draft: draftDirty ? { problem: draft, sessionId: newProblem ? null : state.session?.id, newProblem } : null });
+    syncRunButton();
   };
+  function syncRunButton() {
+    const run = document.querySelector('#run-examples');
+    if (run) run.disabled = !state.runnerAvailable || state.running || state.busy || JSON.stringify(executionDraft) !== JSON.stringify(state.session?.execution);
+  }
   function field(parent, title, value, change, large = false, single = false) {
     const id = `field-${Math.random().toString(36).slice(2)}`;
     const label = node('label', title); label.htmlFor = id;
@@ -140,20 +146,75 @@
   function renderResults() {
     app.append(node('div', 'EXAMPLE TESTS', 'eyebrow'), node('h1', '등록한 예제 실행'));
     app.append(node('p', '문제에 등록한 예제만 비교합니다. 숨은 테스트나 원사이트 합격 판정이 아닙니다.', 'muted'));
+    function select(options, value, change, label) {
+      const input = node('select'); input.setAttribute('aria-label', label);
+      for (const [key, title] of options) input.append(new Option(title, key));
+      input.value = value; input.onchange = () => { change(input.value); syncRunButton(); }; return input;
+    }
+    const modes = [['stdio', '전체 프로그램 · 표준입력 → 출력'], ['function', '함수/메서드 · 인자 → 반환값']];
+    app.append(row(select([['python', 'Python'], ['csharp', 'C#'], ['java', 'Java']], templateLanguage, (value) => { templateLanguage = value; }, '기본 코드 언어'),
+      select(modes, templateMode, (value) => { templateMode = value; }, '기본 코드 형식'),
+      button('기본 코드 열기', () => send('newSource', { language: templateLanguage, mode: templateMode }), true)));
+    app.append(node('small', '기본 코드는 새 미저장 문서로 열립니다. 저장한 뒤 실행 파일로 선택하세요.'));
     app.append(node('p', state.activeFile || '실행할 파일을 선택하세요.'));
-    const run = button('모든 예제 실행', () => send('runExamples')); run.disabled = !state.runnerAvailable || state.running || state.busy;
+    app.append(row(button('실행 파일 선택', () => send('chooseFile'), true), button('런타임 다시 확인', () => send('checkRuntime'), true)));
+    if (state.runtimeStatus) app.append(node('p', state.runtimeStatus.available ? state.runtimeStatus.version : state.runtimeStatus.reason, state.runtimeStatus.available ? 'muted' : 'error'));
+    if (state.executionAnalysis) {
+      const analysis = state.executionAnalysis, key = `${state.activeFile}:${analysis.hash}`;
+      if (key !== executionKey) {
+        executionKey = key;
+        executionDraft = { mode: state.session?.execution?.mode || 'stdio', mainClass: analysis.className || '',
+          function: analysis.candidates.length === 1 ? structuredClone(analysis.candidates[0]) : null, confirmedHash: analysis.hash };
+        if (state.session?.execution?.confirmedHash === analysis.hash) executionDraft = structuredClone(state.session.execution);
+      }
+      const setup = node('details', undefined, 'card'); setup.open = !state.runnerAvailable;
+      setup.append(node('summary', '실행 형식과 호출 규격 확인'), select(modes, executionDraft.mode, (value) => { executionDraft.mode = value; render(); }, '실행 형식'));
+      if (analysis.reason) setup.append(node('p', analysis.reason, 'error'));
+      if (executionDraft.mode === 'stdio') {
+        setup.append(node('p', '등록 예제의 입력 원문을 표준입력으로 전달합니다. 출력은 공백을 보존해 비교합니다.', 'muted'));
+        if (state.activeLanguage === 'java') field(setup, 'main 메서드가 있는 클래스', executionDraft.mainClass, (value) => { executionDraft.mainClass = value; }, false, true);
+      } else {
+        setup.append(node('p', '입력은 인자 순서의 JSON 배열, 기대 출력은 JSON 값입니다. 배열 인자 1개는 [[1,2]], 문자열 인자 1개는 ["text"]로 입력합니다.', 'muted'));
+        const candidates = [['', '호출할 후보를 선택하세요'], ...analysis.candidates.map((candidate, i) => [String(i), `${candidate.className ? candidate.className + '.' : ''}${candidate.name}(${candidate.parameters.map((p) => `${p.name}: ${p.type || '?'}`).join(', ')})`])];
+        const selected = executionDraft.function?.sourceIndex ?? -1;
+        setup.append(select(candidates, selected < 0 ? '' : String(selected), (value) => { executionDraft.function = value === '' ? null : structuredClone(analysis.candidates[Number(value)]); render(); }, '함수 후보'));
+        setup.append(node('small', analysis.note || '후보를 확인하세요.'));
+        const fn = executionDraft.function;
+        if (!fn) setup.append(node('p', '모호한 후보는 자동 선택하지 않습니다. 후보가 없으면 현재 지원하지 않는 선언 형식인지 확인하세요.', 'error'));
+        else {
+          if (fn.unsupportedReason) setup.append(node('p', fn.unsupportedReason, 'error'));
+          field(setup, '함수/메서드 이름', fn.name, (value) => { fn.name = value; }, false, true);
+          if (state.activeLanguage !== 'python') {
+            field(setup, '클래스 이름', fn.className, (value) => { fn.className = value; }, false, true);
+            setup.append(select([['static', 'static 메서드'], ['instance', '인자 없는 생성자의 인스턴스 메서드']], fn.isStatic ? 'static' : 'instance', (value) => { fn.isStatic = value === 'static'; }, '메서드 호출 방식'));
+          }
+          const types = ['', 'int', 'long', 'double', 'bool', 'string', 'int[]', 'long[]', 'double[]', 'bool[]', 'string[]'].map((type) => [type, type || '타입 확인 필요']);
+          fn.parameters.forEach((parameter, index) => {
+            const item = node('div', undefined, 'card');
+            field(item, `인자 ${index + 1} 이름`, parameter.name, (value) => { parameter.name = value; }, false, true);
+            item.append(select(types, parameter.type, (value) => { parameter.type = value; }, `인자 ${index + 1} 자료형`)); setup.append(item);
+          });
+          setup.append(node('label', '반환 자료형'), select(types, fn.returnType, (value) => { fn.returnType = value; }, '반환 자료형'));
+          setup.append(node('small', 'int는 32비트, long은 ±9,007,199,254,740,991 범위입니다. 1차원 배열만 지원하며 실수는 오차 허용 없이 비교합니다.'));
+        }
+      }
+      const confirm = button('이 호출 규격과 등록 예제를 확인', () => send('confirmExecution', { execution: executionDraft }));
+      confirm.disabled = state.running || state.busy || Boolean(analysis.reason); setup.append(confirm); app.append(setup);
+    }
+    const run = button('모든 예제 실행', () => send('runExamples')); run.id = 'run-examples'; run.disabled = !state.runnerAvailable || state.running || state.busy || JSON.stringify(executionDraft) !== JSON.stringify(state.session?.execution);
     const stop = button('실행 중지', () => send('stopExamples'), true); stop.disabled = !state.running;
-    app.append(row(button('실행 파일 선택', () => send('chooseFile'), true), run, stop));
-    if (!state.runnerAvailable) app.append(node('p', '첫 지원 언어와 실행 형식을 정한 뒤 실행 버튼이 연결됩니다.', 'muted'));
-    app.append(node('small', '예제당 3초 · 출력 합계 64KB · CRLF와 마지막 줄바꿈 1개를 제외하고 정확히 비교'));
-    const labels = { passed: '통과', failed: '출력 불일치', error: '실행 오류', timeout: '시간 초과', 'output-limit': '출력 초과', stopped: '중지' };
+    app.append(row(run, stop));
+    if (!state.runnerAvailable) app.append(node('p', '런타임과 현재 코드의 호출 규격을 확인하면 실행할 수 있습니다.', 'muted'));
+    app.append(node('small', '컴파일 10초 · 예제당 3초 · 출력 합계 64KB · 전체프로그램: CRLF/마지막 줄바꿈 1개 정규화 · 함수: JSON 값/배열 순서 비교'));
+    const labels = { passed: '통과', failed: '출력 불일치', error: '실행 오류', timeout: '시간 초과', 'output-limit': '출력 초과', stopped: '중지', 'termination-error': '프로세스 종료 확인 실패' };
     (state.results || []).forEach((result, index) => {
-      const card = node('article', undefined, 'card'); card.append(node('h2', `예제 ${index + 1} · ${labels[result.status]}`, result.status));
+      const card = node('article', undefined, 'card'); card.append(node('h2', `${result.stage === 'compile' ? '컴파일' : `예제 ${index + 1}`} · ${labels[result.status]}`, result.status));
       const grid = node('div', undefined, 'grid');
       for (const [label, value] of [['입력', result.input], ['기대 출력', result.expectedOutput], ['실제 출력', result.actualOutput], ['오류', result.stderr]]) {
         const cell = node('div'); cell.append(node('small', label), node('pre', value)); grid.append(cell);
       }
       card.append(grid); app.append(card);
+      if (result.stdout) card.append(node('small', '함수 실행 중 출력(반환값과 별도)'), node('pre', result.stdout));
     });
     const attach = button('실패 결과를 질문에 첨부', () => send('attachFailures'), true); attach.disabled = state.running || !state.results?.some((result) => result.status !== 'passed'); app.append(attach);
   }

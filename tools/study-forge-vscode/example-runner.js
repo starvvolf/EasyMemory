@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { spawn } = require('node:child_process');
 const { StringDecoder } = require('node:string_decoder');
+const path = require('node:path');
 
 // Adapters are trusted extension code, never problem text, AI output, or shell strings.
 class ExampleRunner {
-  constructor() { this.running = false; this.cancelled = false; this.stopCurrent = null; }
+  constructor({ terminateTree = killTree } = {}) { this.running = false; this.cancelled = false; this.stopCurrent = null; this.terminateTree = terminateTree; }
   stop() { this.cancelled = true; this.stopCurrent?.('stopped'); }
   async run(examples, launch, onResult = () => {}, limits = {}) {
     if (this.running) throw new Error('예제를 이미 실행 중입니다.');
@@ -28,9 +29,20 @@ class ExampleRunner {
         cwd: launch.cwd, env: launch.env, shell: false, windowsHide: true,
         detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'],
       });
+      limits.onSpawn?.(child.pid);
       let stdout = '', stderr = '', bytes = 0, reason = null, settled = false;
       const decoders = { stdout: new StringDecoder('utf8'), stderr: new StringDecoder('utf8') };
-      const terminate = (status) => { if (reason) return; reason = status; killTree(child); };
+      const terminate = (status) => {
+        if (reason) return; reason = status;
+        void this.terminateTree(child).then((terminated) => {
+          if (terminated || settled) return;
+          // A denied tree kill must not look like a successful stop or keep the
+          // UI waiting forever on pipes held by a surviving descendant.
+          reason = 'termination-error'; this.cancelled = true;
+          stderr = '프로세스 트리 종료를 확인하지 못했습니다. 실행을 중단했으며 자손 프로세스 확인이 필요합니다.';
+          child.kill(); child.stdout.destroy(); child.stderr.destroy(); finish(null);
+        });
+      };
       this.stopCurrent = terminate;
       const timer = setTimeout(() => terminate('timeout'), timeoutMs);
       const append = (name, chunk) => {
@@ -60,18 +72,19 @@ class ExampleRunner {
 }
 
 function killTree(child) {
-  if (!child.pid) return;
+  if (!child.pid) return Promise.resolve(true);
   if (process.platform === 'win32') {
-    const killer = spawn('taskkill.exe', ['/pid', String(child.pid), '/T', '/F'], { shell: false, windowsHide: true, stdio: 'ignore' });
-    killer.on('error', () => child.kill());
-    killer.on('exit', (code) => { if (code !== 0) child.kill(); });
-    const fallback = setTimeout(() => { child.kill(); killer.kill(); }, 1000);
-    child.once('close', () => clearTimeout(fallback));
+    return new Promise((resolve) => {
+      const taskkill = path.join(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows', 'System32', 'taskkill.exe');
+      const killer = spawn(taskkill, ['/pid', String(child.pid), '/T', '/F'], { shell: false, windowsHide: true, stdio: 'ignore' });
+      const timeout = setTimeout(() => { killer.kill(); resolve(false); }, 2000);
+      killer.on('error', () => { clearTimeout(timeout); resolve(false); });
+      killer.on('exit', (code) => { clearTimeout(timeout); resolve(code === 0); });
+    });
   } else {
-    try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
+    try { process.kill(-child.pid, 'SIGKILL'); return Promise.resolve(true); }
+    catch { return Promise.resolve(false); }
   }
 }
 
-// Deliberately empty until the first language and stdin/solution contract are agreed.
-function resolveLanguageLaunch() { return null; }
-module.exports = { ExampleRunner, resolveLanguageLaunch };
+module.exports = { ExampleRunner };

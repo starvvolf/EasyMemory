@@ -27,9 +27,10 @@ test('VS Code view bridge: 로컬 문제 등록·편집·재개, 실제 연결 �
     ViewColumn: { One: 1, Beside: -2 },
     Uri: { joinPath: (base, ...parts) => uri(path.join(base.fsPath, ...parts)) },
     window: { activeTextEditor: { document, selection: { isEmpty: false } }, onDidChangeActiveTextEditor: () => ({}), registerWebviewViewProvider: (name, provider) => { providers.set(name, provider); return {}; },
+      showOpenDialog: async () => [document.uri], showTextDocument: async () => {},
       createWebviewPanel: () => { chat = webviewMock(); return { webview: chat, onDidDispose: () => {}, dispose: () => {}, reveal: () => {} }; } },
     commands: { registerCommand: (name, handler) => { commands.set(name, handler); return {}; } },
-    workspace: { asRelativePath: () => 'main.py', getConfiguration: () => ({ inspect: () => ({ globalValue: enabled }) }), onDidChangeTextDocument: (handler) => { changeDocument = handler; return {}; } },
+    workspace: { openTextDocument: async () => document, asRelativePath: () => 'main.py', getConfiguration: () => ({ inspect: () => ({ globalValue: enabled }) }), onDidChangeTextDocument: (handler) => { changeDocument = handler; return {}; } },
   };
   const extensionPath = path.resolve(__dirname, '..');
   registerLearningWorkspace(vscode, { storageUri: uri(root), globalStorageUri: uri(root), extensionPath, extensionUri: uri(extensionPath), subscriptions: disposables }, { createClient: async () => fakeClient });
@@ -61,6 +62,15 @@ test('VS Code view bridge: 로컬 문제 등록·편집·재개, 실제 연결 �
   const summary = structuredClone(chat.state.session.summary); failSummary = true;
   await chat.receive({ type: 'summarize' }); assert.deepEqual(chat.state.session.summary, summary); assert.match(chat.state.session.summaryError, /mock/);
   enabled = false; await chat.receive({ type: 'question', question: 'blocked' }); assert.match(chat.state.error, /보류/); assert.equal(calls, 3);
+  contents = 'def solution(a: int, b: int) -> int:\n    return a+b\n';
+  await results.receive({ type: 'chooseFile' });
+  const analysis = results.state.executionAnalysis;
+  await results.receive({ type: 'confirmExecution', execution: { mode: 'function', function: analysis.candidates[0], confirmedHash: 'stale' } });
+  assert.match(results.state.error, /다시 확인/);
+  await results.receive({ type: 'confirmExecution', execution: { mode: 'function', function: analysis.candidates[0], confirmedHash: analysis.hash } });
+  assert.equal(results.state.session.execution.confirmedHash, analysis.hash);
+  contents += '# change'; changeDocument({ document }); await new Promise((resolve) => setTimeout(resolve, 30));
+  await results.receive({ type: 'ready' }); assert.equal(results.state.runnerAvailable, false); assert.notEqual(results.state.executionAnalysis.hash, analysis.hash);
   const content = JSON.parse(await fs.readFile(path.join(root, 'learning/learning.json'), 'utf8'));
   assert.equal(content.activeSessionId, id); assert.equal(content.sessions.length, 1);
   assert.equal(await fs.stat(path.join(root, 'managed-codex')).then(() => true, () => false), false);
