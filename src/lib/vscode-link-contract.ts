@@ -27,7 +27,6 @@ export type VscodeLinkExchange = {
 export type StoredVscodeLink = {
   ownerUid: string;
   email: string;
-  callbackUri: string;
   stateHash: string;
   challenge: string;
   createdAtMs: number;
@@ -37,7 +36,12 @@ export type StoredVscodeLink = {
 export function validateVscodeLinkRequest(input: VscodeLinkRequest) {
   validateOpaqueValue(input.state, "연결 상태", 22, 128);
   validateOpaqueValue(input.challenge, "연결 challenge", 43, 43);
-  const callback = new URL(input.callbackUri);
+  let callback: URL;
+  try {
+    callback = new URL(input.callbackUri);
+  } catch {
+    throw new VscodeLinkRequestError("등록된 Study Forge VS Code callback만 사용할 수 있습니다.");
+  }
   if (
     !["vscode:", "vscode-insiders:"].includes(callback.protocol) ||
     callback.hostname !== EXTENSION_AUTHORITY ||

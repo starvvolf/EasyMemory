@@ -81,6 +81,7 @@ test("연결 문서는 토큰과 원문 state를 저장하지 않고 등록 call
   assert.equal(stored.state, undefined);
   assert.equal(stored.idToken, undefined);
   assert.equal(stored.refreshToken, undefined);
+  assert.equal(stored.callbackUri, undefined);
   assert.notEqual(stored.stateHash, link.state);
 });
 

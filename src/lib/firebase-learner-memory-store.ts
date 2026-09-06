@@ -17,7 +17,7 @@ import { UserDataHttpError } from "@/lib/server-user";
 
 const MAX_DOCUMENT_BYTES = 900_000;
 const MAX_EVIDENCE = 2_000;
-const MAX_SECTIONS = 32;
+const MAX_SECTIONS = 150;
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 
 export type LearnerMemoryRecordInput = {
@@ -41,7 +41,11 @@ export type LearnerMemoryRecordInput = {
 };
 
 type MutationOptions = { expectedRevision: number; operationId: string };
-type StoredRecord = LearnerMemoryRecordInput & { ownerUid: string; updatedAt: string };
+type StoredRecord = LearnerMemoryRecordInput & {
+  ownerUid: string;
+  throughSequence: number;
+  storedAt: string;
+};
 
 export async function loadLearnerMemory(
   uid: string,
@@ -81,7 +85,12 @@ export async function applyLearnerMemorySummary(
     }
     assertRevision(state.revision, options.expectedRevision);
     if (recordSnapshot.exists) {
-      assertEvidenceAppendOnly((recordSnapshot.data() as StoredRecord).evidenceIndex, input.evidenceIndex);
+      const previous = recordSnapshot.data() as StoredRecord;
+      if (previous.ownerUid !== uid) throw new Error("학습 기록 소유자가 일치하지 않습니다.");
+      assertEvidenceAppendOnly(previous.evidenceIndex, input.evidenceIndex);
+      if (!Number.isSafeInteger(previous.throughSequence) || throughSequence <= previous.throughSequence) {
+        throw new UserDataHttpError(409, "기존 학습 기록보다 이전 위치의 요약으로 되돌릴 수 없습니다.");
+      }
     }
 
     let next: MemoryState;
@@ -105,9 +114,26 @@ export async function applyLearnerMemorySummary(
       throw badRequest(error);
     }
     const storedRecord: StoredRecord = {
-      ...clean(input),
+      recordId: input.recordId,
+      summary: {
+        throughMessageId: input.summary.throughMessageId,
+        updatedAt: new Date(input.summary.updatedAt).toISOString(),
+        automatic: input.summary.automatic,
+        sections: input.summary.sections.map((section) => ({
+          text: section.text.trim(),
+          messageIds: [...section.messageIds],
+          codeIds: [...section.codeIds],
+        })),
+        learnerMemoryCandidates: clean(candidates),
+      },
+      evidenceIndex: input.evidenceIndex.map((evidence) => ({
+        id: evidence.id,
+        kind: evidence.kind,
+        contentHash: evidence.contentHash,
+      })),
       ownerUid: uid,
-      updatedAt: new Date().toISOString(),
+      throughSequence,
+      storedAt: new Date().toISOString(),
     };
     assertSize(storedRecord, "학습 기록");
     assertSize(next, "학습자 메모리");
@@ -182,10 +208,20 @@ function validateRecord(input: LearnerMemoryRecordInput) {
   }
   if (!Array.isArray(input.evidenceIndex) || !input.evidenceIndex.length || input.evidenceIndex.length > MAX_EVIDENCE) throw new UserDataHttpError(400, "학습 근거 색인이 올바르지 않습니다.");
   const ids = new Set<string>();
+  const kinds = new Map<string, "message" | "code">();
   for (const evidence of input.evidenceIndex) {
     assertId(evidence?.id, "학습 근거");
     if (ids.has(evidence.id) || !["message", "code"].includes(evidence.kind) || !SHA256_HEX.test(evidence.contentHash)) throw new UserDataHttpError(400, "학습 근거 색인이 올바르지 않습니다.");
     ids.add(evidence.id);
+    kinds.set(evidence.id, evidence.kind);
+  }
+  for (const section of input.summary.sections) {
+    for (const id of section.messageIds) {
+      if (kinds.get(id) !== "message") throw new UserDataHttpError(400, "학습 요약이 알 수 없거나 종류가 다른 메시지 근거를 참조합니다.");
+    }
+    for (const id of section.codeIds) {
+      if (kinds.get(id) !== "code") throw new UserDataHttpError(400, "학습 요약이 알 수 없거나 종류가 다른 코드 근거를 참조합니다.");
+    }
   }
 }
 

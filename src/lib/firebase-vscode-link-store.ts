@@ -25,7 +25,6 @@ export async function createVscodeLinkCode(
   const link: StoredVscodeLink = {
     ownerUid: user.uid,
     email: user.email,
-    callbackUri: callback.toString(),
     stateHash: sha256Base64Url(input.state),
     challenge: input.challenge,
     createdAtMs: nowMs,
