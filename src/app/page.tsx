@@ -2,6 +2,8 @@
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { deleteDeck, listDecks, saveDeck } from "@/lib/storage";
+import { authenticatedFetch } from "@/lib/firebase-client";
+import { useAuthSession } from "@/components/AuthGate";
 import PdfReviewViewer from "./PdfReviewViewer";
 import type {
   Card,
@@ -46,6 +48,7 @@ const pdfAnalysisPhases = [
 ];
 
 export default function Home() {
+  const { canUseAi } = useAuthSession();
   const [view, setView] = useState<View>("create");
   const [form, setForm] = useState<GenerateRequest>(emptyForm);
   const tagInput = "";
@@ -161,7 +164,7 @@ export default function Home() {
     }, 1800);
 
     try {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         "/api/generate",
         buildCardRequest(
           form,
@@ -224,7 +227,7 @@ export default function Home() {
     }
 
     try {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         "/api/generate",
         buildGenerateRequest(
           form,
@@ -381,7 +384,7 @@ export default function Home() {
     try {
       const formData = new FormData();
       pdfFiles.forEach((file) => formData.append("pdfs", file));
-      const response = await fetch("/api/analyze", {
+      const response = await authenticatedFetch("/api/analyze", {
         method: "POST",
         body: formData,
       });
@@ -431,7 +434,7 @@ export default function Home() {
     setError("");
     setIsPlanningGuideline(true);
     try {
-      const response = await fetch("/api/plan", {
+      const response = await authenticatedFetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ analysis, instruction: form.instruction }),
@@ -474,7 +477,7 @@ export default function Home() {
     setSelectedRecallOptionId(null);
     setLearningSample(null);
     try {
-      const response = await fetch("/api/recall-design", {
+      const response = await authenticatedFetch("/api/recall-design", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ analysis: pdfAnalysis, guideline }),
@@ -518,7 +521,7 @@ export default function Home() {
     setIsGeneratingSample(true);
     setLearningSample(null);
     try {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         "/api/generate",
         buildGenerateRequest(
           form,
@@ -722,6 +725,7 @@ export default function Home() {
             >
               {view === "create" ? (
                 <CreateView
+                  canUseAi={canUseAi}
                   form={form}
                   error={error}
                   notice={notice}
@@ -843,6 +847,7 @@ export default function Home() {
 }
 
 function CreateView({
+  canUseAi,
   form,
   error,
   notice,
@@ -878,6 +883,7 @@ function CreateView({
   handleGenerateSample,
   retryGuideline,
 }: {
+  canUseAi: boolean;
   form: GenerateRequest;
   error: string;
   notice: string;
@@ -977,7 +983,7 @@ function CreateView({
           <PrimaryButton
             type="button"
             onClick={handleAnalyzePdfs}
-            disabled={isAnalyzingPdfs || pdfFiles.length === 0}
+            disabled={!canUseAi || isAnalyzingPdfs || pdfFiles.length === 0}
             className="mt-5 w-full sm:w-auto"
           >
             {isAnalyzingPdfs ? "자료 분석 중" : "자료 분석"}
@@ -1022,7 +1028,11 @@ function CreateView({
                 : "학습 방향을 아직 만들지 못했습니다. 다시 시도해 주세요."}
             </p>
             {!isPlanningGuideline ? (
-              <SecondaryButton className="mt-4" onClick={retryGuideline}>
+              <SecondaryButton
+                className="mt-4"
+                onClick={retryGuideline}
+                disabled={!canUseAi}
+              >
                 학습 방향 다시 만들기
               </SecondaryButton>
             ) : null}
@@ -1038,7 +1048,8 @@ function CreateView({
               !studyGuideline ||
               !selectedFocusGroupId ||
               isPlanningGuideline ||
-              isDesigningRecall
+              isDesigningRecall ||
+              !canUseAi
             }
           >
             {isDesigningRecall ? "인출 방식 설계 중" : "인출 방식 정하기"}
@@ -1056,7 +1067,7 @@ function CreateView({
             type="button"
             onClick={handleGenerateSample}
             className="w-full sm:w-auto"
-            disabled={!selectedRecallOptionId || isGeneratingSample}
+            disabled={!canUseAi || !selectedRecallOptionId || isGeneratingSample}
           >
             {isGeneratingSample ? "대표 예시 생성 중" : "대표 예시 1개 만들기"}
           </PrimaryButton>
@@ -1092,7 +1103,10 @@ function CreateView({
               </label>
             </Panel>
 
-            <PrimaryButton className="w-full sm:w-auto">
+            <PrimaryButton
+              className="w-full sm:w-auto"
+              disabled={!canUseAi}
+            >
               이 구조로 전체 학습 내용 만들기
             </PrimaryButton>
           </>
@@ -1139,7 +1153,7 @@ function CreateView({
           </select>
         </label>
 
-        <PrimaryButton disabled={isGenerating}>
+        <PrimaryButton disabled={!canUseAi || isGenerating}>
           {isGenerating ? "카드 생성 중" : "AI 카드 생성"}
         </PrimaryButton>
       </div>
@@ -1914,7 +1928,7 @@ function SecondaryButton({
     <button
       type="button"
       {...props}
-      className={`rounded-md border border-[#3F4147] bg-[#383A40] px-4 py-2.5 font-black text-[#F2F3F5] hover:bg-[#404249] ${props.className ?? ""}`}
+      className={`rounded-md border border-[#3F4147] bg-[#383A40] px-4 py-2.5 font-black text-[#F2F3F5] hover:bg-[#404249] disabled:cursor-not-allowed disabled:opacity-40 ${props.className ?? ""}`}
     >
       {children}
     </button>
