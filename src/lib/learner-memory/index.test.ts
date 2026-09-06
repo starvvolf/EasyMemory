@@ -4,7 +4,7 @@ import { applyMemorySummary, createMemoryState, editMemoryEntry, MEMORY_LIMITS, 
 import type { MemoryCandidate, MemorySource, MemoryState } from "./index.ts";
 
 const now = "2026-09-07T00:00:00.000Z";
-const candidate: MemoryCandidate = { domain: "algorithm", topic: "binary search", confirmed: ["경계 조건을 설명함"], uncertain: ["중복값 처리 미확인"], evidenceIds: ["m1"] };
+const candidate: MemoryCandidate = { domain: "algorithm", topic: "binary search", confirmed: ["경계 조건을 설명함"], uncertain: ["중복값 처리 미확인"], evidenceIds: ["m1"], basis: "observation" };
 const source: MemorySource = { ownerUid: "alice", recordId: "problem-1", throughSequence: 1, events: [{ id: "m1", sequence: 1 }] };
 function initial() { return applyMemorySummary(createMemoryState("alice"), "alice", 0, source, [candidate], now); }
 
@@ -98,4 +98,11 @@ test("capacity fails closed instead of evicting replay protection", () => {
   const before = JSON.stringify(state);
   assert.throws(() => applyMemorySummary(state, "alice", 0, source, [candidate], now), /capacity/);
   assert.equal(JSON.stringify(state), before);
+});
+
+test("inference cannot be promoted to confirmed and user corrections retain self-report provenance", () => {
+  assert.throws(() => validateMemoryCandidates([{ ...candidate, basis: "inference" }]), /uncertain/);
+  assert.equal(validateMemoryCandidates([{ ...candidate, basis: "inference", confirmed: [] }])[0].basis, "inference");
+  const state = editMemoryEntry(initial(), "alice", 1, candidate, "confirm", now);
+  assert.equal(state.entries[0].basis, "self-report");
 });

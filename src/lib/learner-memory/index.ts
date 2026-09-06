@@ -1,11 +1,13 @@
 /** Account-scoped derived state; original records remain the source of truth. */
 export type MemoryDomain = "algorithm" | "cs" | "opic" | "report";
+export type MemoryBasis = "observation" | "self-report" | "inference";
 export interface MemoryCandidate {
   domain: MemoryDomain;
   topic: string;
   confirmed: string[];
   uncertain: string[];
   evidenceIds: string[];
+  basis: MemoryBasis;
 }
 export interface MemoryEntry {
   domain: MemoryDomain;
@@ -16,6 +18,7 @@ export interface MemoryEntry {
   evidence: { recordId: string; throughSequence: number; evidenceIds: string[] };
   userEdited: boolean;
   deleted: boolean;
+  basis: MemoryBasis;
 }
 export interface MemoryState {
   ownerUid: string;
@@ -48,9 +51,10 @@ function lines(value: unknown): string[] {
   if (!Array.isArray(value) || value.length > MEMORY_LIMITS.items) fail("Invalid learner memory items");
   return [...new Set(value.map((item) => bounded(item, MEMORY_LIMITS.text)))];
 }
-function key(value: { domain: MemoryDomain; topic: string }): string {
+export function memoryEntryKey(value: { domain: MemoryDomain; topic: string }): string {
   return JSON.stringify([value.domain, value.topic.normalize("NFKC").trim().toLocaleLowerCase("en-US")]);
 }
+const key = memoryEntryKey;
 export function validateMemoryCandidates(value: unknown): MemoryCandidate[] {
   if (!Array.isArray(value) || value.length > MEMORY_LIMITS.candidates) fail("Invalid learner memory candidates");
   const seen = new Set<string>();
@@ -58,7 +62,9 @@ export function validateMemoryCandidates(value: unknown): MemoryCandidate[] {
     if (!raw || typeof raw !== "object") fail("Invalid learner memory candidate");
     const item = raw as Record<string, unknown>;
     if (!Array.isArray(item.evidenceIds) || !item.evidenceIds.length || item.evidenceIds.length > 12) fail("Missing learner memory evidence");
-    const candidate = { domain: domain(item.domain), topic: bounded(item.topic, MEMORY_LIMITS.topic), confirmed: lines(item.confirmed), uncertain: lines(item.uncertain), evidenceIds: [...new Set(item.evidenceIds.map((id) => bounded(id, 200)))] };
+    if (!["observation", "self-report", "inference"].includes(item.basis as string)) fail("Invalid learner memory basis");
+    const candidate = { domain: domain(item.domain), topic: bounded(item.topic, MEMORY_LIMITS.topic), confirmed: lines(item.confirmed), uncertain: lines(item.uncertain), evidenceIds: [...new Set(item.evidenceIds.map((id) => bounded(id, 200)))], basis: item.basis as MemoryBasis };
+    if (candidate.basis === "inference" && candidate.confirmed.length) fail("Inferred understanding must remain uncertain");
     if (!candidate.confirmed.length && !candidate.uncertain.length) fail("Empty learner memory candidate");
     if (seen.has(key(candidate))) fail("Duplicate learner memory topic");
     seen.add(key(candidate));
@@ -132,6 +138,7 @@ export function editMemoryEntry(state: MemoryState, uid: string, expectedRevisio
     if (!entry.confirmed.length && !entry.uncertain.length) fail("Empty learner memory edit; use delete");
   }
   entry.userEdited = true;
+  entry.basis = "self-report";
   entry.updatedAt = date(now);
   return { ...state, revision: state.revision + 1, entries };
 }

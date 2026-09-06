@@ -29,10 +29,13 @@ VS Code `summary.js`의 `summaryInput → generate(기존 1회) → validateSumm
   confirmed: string[], // 최대 4개, 각각 240자: 관찰되거나 사용자가 확인한 내용
   uncertain: string[], // 최대 4개, 각각 240자: 아직 확인하지 못한 사항
   evidenceIds: string[] // 기존 원문 ID 1~12개, 각각 최대 200자
+  basis: 'observation' | 'self-report' | 'inference'
 }
 ```
 
 `confirmed`는 모델이 숙련도를 인증했다는 뜻이 아니다. 설명 열람·질문·예제 통과만으로 숙달을 단정하지 않는다. 후보를 만드는 기존 정리 프롬프트에도 이 제한과 원문 근거 ID 요구를 유지한다. 공통 규칙은 문장 의미의 참/거짓까지 입증하지 못한다.
+
+`basis`는 관찰 내용, 자기평가, 추론을 구분한다. 추론 후보는 confirmed를 비워야 하며, 사용자 확인·수정은 self-report로 표시한다. 계정 소유자가 제출한 원문을 서버에서 다시 읽어도 객관적 사실성이 인증되거나 독립 숙달 증거가 늘어난 것은 아니다.
 
 ## 저장 계약
 
@@ -74,3 +77,7 @@ selectMemoryContext(state, uid, domain, currentQuestionTopics)
 독립 테스트는 관련/무관 영역·주제 선택, 원문 위치 재처리, 새 정리의 옛 근거, 사용자 확인·정정·삭제, JSON 재로딩, 소유자 불일치, 잘못된 후보/근거, revision 충돌, 컨텍스트 한도, 용량 초과를 검증한다. 실제 저장 실패·재접속·동시 쓰기는 Firebase 어댑터 모의 통합 테스트가 추가로 필요하다.
 
 미완료: 인증된 원문 저장 경로 합의, Firebase 어댑터/규칙, 얇은 API, VS Code summary/chat/UI 실제 연결, 통합 mock의 저장 실패·계정 격리·재접속 검증. 실 Firebase 설정과 Google 로그인, 실제 AI 호출 및 개인화 품질은 시험하지 않는다.
+
+현재 검증: 독립 테스트 10개, 범위 ESLint, strict TypeScript 검사 통과. 전체 Next 빌드는 이 작업트리에 node_modules가 없어 Next package를 해석하지 못해 시작 단계에서 실패했다. 다른 checkout 실행기로 시도했으며 의존성을 새로 설치하거나 package/lock을 수정하지 않았다.
+
+후속 최소 연결안(최종 합의 전): 기존 웹 Firebase 로그인에서 사용자가 선택 session JSON을 명시적으로 가져온다. 기존 session/summary 단위를 크기 제한 아래 재사용하며 확장 전용 인증·전체 이벤트별 저장·이미지 이전을 선결조건으로 만들지 않는다. 재가져오기는 같은 session의 기존 ID·내용·순서 및 반영 위치를 보존해야 한다. 날짜 재정렬로 기존 sequence를 바꾸면 과거 근거 재처리 방지가 깨지므로 금지한다. 동일 파일의 중복 가져오기도 새 독립 근거로 만들지 않는다. 웹 저장만으로 VS Code 다음 질문의 계정 기억 조회까지 완료되는 것은 아니다.
