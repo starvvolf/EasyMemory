@@ -1,0 +1,413 @@
+import type {
+  ActivityRecommendation,
+  ActivityDesign,
+  ActivitySelectionMode,
+  GenerationPolicy,
+  LearningActivityType,
+  LearningObjective,
+  LearningUnit,
+  PracticeBlueprint,
+  SupportAssessment,
+} from "./types.ts";
+
+export const defaultGenerationPolicy: GenerationPolicy = {
+  includeExact: true,
+  includeScaffold: true,
+  includeProxy: false,
+  includeUnsupported: false,
+};
+
+const rendererCapabilities: Record<LearningActivityType, Set<string>> = {
+  flashcard: new Set(["text_prompt", "short_text", "self_scoring"]),
+  true_false: new Set(["text_prompt", "boolean_choice", "exact_scoring"]),
+  multiple_choice: new Set(["text_prompt", "single_choice", "exact_scoring"]),
+  structure_recall: new Set([
+    "text_prompt",
+    "ordered_structure",
+    "unordered_structure",
+    "exact_text",
+    "exact_scoring",
+  ]),
+};
+
+export function getRendererCapabilities(): Record<LearningActivityType, string[]> {
+  return Object.fromEntries(
+    Object.entries(rendererCapabilities).map(([type, capabilities]) => [
+      type,
+      [...capabilities],
+    ]),
+  ) as Record<LearningActivityType, string[]>;
+}
+
+function responseCapability(
+  blueprint: PracticeBlueprint,
+  rendererType: LearningActivityType,
+) {
+  switch (blueprint.expectedResponse.kind) {
+    case "short_text":
+      return "short_text";
+    case "structured_text":
+      return rendererType === "flashcard" ? "short_text" : "structured_text";
+    case "single_choice":
+      return rendererType === "true_false" ? "boolean_choice" : "single_choice";
+    case "multiple_choice":
+      return "single_choice";
+    case "ordered_structure":
+      return "ordered_structure";
+    case "unordered_structure":
+      return "unordered_structure";
+    case "numeric":
+      return rendererType === "flashcard" ? "short_text" : "numeric";
+    default:
+      return blueprint.expectedResponse.kind;
+  }
+}
+
+function isFlashcardSelfCheckApply(
+  blueprint: PracticeBlueprint,
+  rendererType: LearningActivityType,
+) {
+  return blueprint.elicitedOperation === "apply" &&
+    rendererType === "flashcard" &&
+    ["short_text", "structured_text", "numeric"].includes(
+      blueprint.expectedResponse.kind,
+    );
+}
+
+export function assessBlueprintSupport(
+  blueprint: PracticeBlueprint,
+  rendererType: LearningActivityType,
+): SupportAssessment {
+  const capabilities = rendererCapabilities[rendererType];
+  const selfScoredApply = isFlashcardSelfCheckApply(
+    blueprint,
+    rendererType,
+  );
+  const effectiveRequiredCapabilities = blueprint.requiredCapabilities.filter(
+    (capability) => {
+      if (!selfScoredApply) return true;
+      if (capability === "numeric") return false;
+      if (
+        capability === "graph_annotation" &&
+        blueprint.expectedResponse.kind !== "graph_annotation" &&
+        blueprint.given.every((item) => item.type !== "diagram")
+      ) {
+        return false;
+      }
+      return true;
+    },
+  );
+  const required = new Set([
+    "text_prompt",
+    responseCapability(blueprint, rendererType),
+    ...effectiveRequiredCapabilities,
+  ]);
+  const missingCapabilities = [...required].filter(
+    (capability) => !capabilities.has(capability),
+  );
+  const supportsRequiredInput = !effectiveRequiredCapabilities.some(
+    (capability) => !capabilities.has(capability),
+  );
+  const capturesRequiredResponse = capabilities.has(
+    responseCapability(blueprint, rendererType),
+  );
+  const supportsScoring = blueprint.scoringRubric.every((criterion) =>
+    criterion.gradingMode === "self"
+      ? capabilities.has("self_scoring")
+      : capabilities.has("exact_scoring"),
+  );
+  const operationFits =
+    (blueprint.elicitedOperation === "recall" && rendererType === "flashcard") ||
+    selfScoredApply ||
+    (blueprint.elicitedOperation === "discriminate" &&
+      (rendererType === "true_false" || rendererType === "multiple_choice")) ||
+    (blueprint.elicitedOperation === "reconstruct" && rendererType === "structure_recall");
+  const preservesOperation = operationFits && blueprint.relationToObjective === "direct";
+
+  let level: SupportAssessment["level"];
+  if (!supportsRequiredInput || !capturesRequiredResponse) {
+    level = missingCapabilities.some((value) =>
+      ["audio", "code", "graph_annotation", "numeric", "checklist"].includes(value),
+    )
+      ? "unsupported"
+      : "proxy";
+  } else if (preservesOperation && supportsScoring && !selfScoredApply) {
+    level = "exact";
+  } else if (selfScoredApply && blueprint.relationToObjective !== "proxy") {
+    level = "scaffold";
+  } else if (blueprint.relationToObjective === "proxy") {
+    level = "proxy";
+  } else if (blueprint.relationToObjective === "scaffold" || operationFits) {
+    level = "scaffold";
+  } else {
+    level = "proxy";
+  }
+
+  return {
+    blueprintId: blueprint.id,
+    rendererType,
+    level,
+    preservesOperation,
+    capturesRequiredResponse,
+    supportsRequiredInput,
+    supportsScoring,
+    missingCapabilities,
+    rationale:
+      level === "exact"
+        ? "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다."
+        : level === "scaffold"
+          ? "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다."
+          : level === "proxy"
+            ? "관련 연습이지만 최종 목표를 수행했다는 증거로 사용할 수 없습니다."
+            : `현재 화면에 필요한 기능이 없습니다: ${missingCapabilities.join(", ") || "응답 채점"}`,
+  };
+}
+
+export function shouldIncludeAssessment(
+  assessment: SupportAssessment,
+  policy: GenerationPolicy = defaultGenerationPolicy,
+) {
+  if (assessment.level === "exact") return policy.includeExact;
+  if (assessment.level === "scaffold") return policy.includeScaffold;
+  if (assessment.level === "proxy") return policy.includeProxy;
+  return policy.includeUnsupported;
+}
+
+export function recommendationFromBlueprint(
+  blueprint: PracticeBlueprint,
+  assessment: SupportAssessment,
+  policy: GenerationPolicy = defaultGenerationPolicy,
+): ActivityRecommendation {
+  return {
+    learningUnitId: blueprint.learningUnitId,
+    objectiveId: blueprint.objectiveId,
+    blueprintId: blueprint.id,
+    assessmentLevel: assessment.level,
+    supportLevel:
+      assessment.level === "exact"
+        ? "supported"
+        : assessment.level === "unsupported"
+          ? "unsupported"
+          : "partial",
+    recommendedType:
+      assessment.level === "unsupported" ? null : assessment.rendererType,
+    reason: assessment.rationale,
+    limitation:
+      assessment.level === "exact" ? "" : assessment.rationale,
+    includeInGeneration: shouldIncludeAssessment(assessment, policy),
+  };
+}
+
+export function ensureMemorizationCoverage(
+  objectives: LearningObjective[],
+  blueprints: PracticeBlueprint[],
+  policy: GenerationPolicy = defaultGenerationPolicy,
+) {
+  const includedCriterionIds = new Set(
+    blueprints.flatMap((blueprint) => {
+      const assessment = assessBlueprintSupport(
+        blueprint,
+        blueprint.recommendedType,
+      );
+      return shouldIncludeAssessment(assessment, policy)
+        ? blueprint.coverageCriterionIds.map(
+            (criterionId) => `${blueprint.objectiveId}:${criterionId}`,
+          )
+        : [];
+    }),
+  );
+  const existingIds = new Set(blueprints.map((blueprint) => blueprint.id));
+  const replacementByObjectiveId = new Map<string, PracticeBlueprint>();
+
+  for (const objective of objectives) {
+    const uncovered = objective.successCriteria.filter(
+      (criterion) =>
+        criterion.required &&
+        !includedCriterionIds.has(`${objective.id}:${criterion.id}`),
+    );
+    if (uncovered.length === 0) continue;
+    const baseId = `memorize:${objective.id}`;
+    let id = baseId;
+    let suffix = 2;
+    while (existingIds.has(id)) id = `${baseId}:${suffix++}`;
+    existingIds.add(id);
+    replacementByObjectiveId.set(objective.id, {
+      id,
+      objectiveId: objective.id,
+      learningUnitId: objective.learningUnitId,
+      relationToObjective: "scaffold",
+      elicitedOperation: "recall",
+      coverageCriterionIds: objective.successCriteria
+        .filter((criterion) => criterion.required)
+        .map((criterion) => criterion.id),
+      given: [{
+        type: "instruction",
+        description:
+          "현재 문제 형식으로 최종 수행을 직접 연습하기 어려우므로, 수행에 필요한 핵심 원리·조건·판단 절차를 플래시카드로 떠올리게 합니다. 정답은 문제 앞면에 제시하지 않습니다.",
+      }],
+      hidden: [{
+        description: `원문에 근거한 핵심 내용: ${objective.successCriteria.filter((criterion) => criterion.required).map((criterion) => criterion.description).join(" / ")}`,
+        reason: "target_answer",
+      }],
+      expectedResponse: {
+        kind: "short_text",
+        description: objective.successCriteria.filter((criterion) => criterion.required).map((criterion) => criterion.description).join(" / "),
+      },
+      scoringRubric: objective.successCriteria
+        .filter((criterion) => criterion.required)
+        .map((criterion) => ({
+        criterionId: criterion.id,
+        description:
+          "정답을 펼쳐 원문의 핵심 원리·조건·판단 절차와 의미가 일치하는지 자기 확인합니다.",
+        weight: 1,
+        gradingMode: "self" as const,
+      })),
+      difficulty: {
+        cueLevel: "medium",
+        responseComplexity:
+          objective.successCriteria.filter((criterion) => criterion.required).length === 1
+            ? "atomic"
+            : "multi_part",
+        transferDistance: "same_context",
+      },
+      requiredCapabilities: [],
+      recommendedType: "flashcard",
+    });
+  }
+
+  return blueprints.map(
+    (blueprint) => replacementByObjectiveId.get(blueprint.objectiveId) ?? blueprint,
+  );
+}
+
+export function createLegacyObjectiveAndBlueprint(
+  unit: LearningUnit,
+  recommendedType: LearningActivityType,
+): { objective: LearningObjective; blueprint: PracticeBlueprint } {
+  const objectiveId = `objective:${unit.id}`;
+  const criterionId = `criterion:${unit.id}`;
+  const operation = unit.operation ?? "recall";
+  const responseKind =
+    recommendedType === "structure_recall"
+      ? operation === "reconstruct"
+        ? "ordered_structure"
+        : "unordered_structure"
+      : recommendedType === "multiple_choice"
+        ? "single_choice"
+        : recommendedType === "true_false"
+          ? "single_choice"
+          : "short_text";
+  return {
+    objective: {
+      id: objectiveId,
+      outlineNodeId: unit.id,
+      learningUnitId: unit.id,
+      target: unit.target?.trim() || unit.intent?.trim() || unit.sourceText,
+      terminalOperation: operation,
+      successCriteria: [{
+        id: criterionId,
+        description: unit.successCriterion?.trim() || unit.target?.trim() || unit.sourceText,
+        required: true,
+      }],
+      importance: 2,
+    },
+    blueprint: {
+      id: `blueprint:${unit.id}`,
+      objectiveId,
+      learningUnitId: unit.id,
+      relationToObjective: "direct",
+      elicitedOperation: operation,
+      coverageCriterionIds: [criterionId],
+      given: [{ type: "instruction", description: "학습대상을 직접 연습하는 문제를 제시합니다." }],
+      hidden: [{ description: "학습자가 만들어야 할 정답", reason: "target_answer" }],
+      expectedResponse: {
+        kind: responseKind,
+        description: unit.successCriterion?.trim() || "정답을 제시합니다.",
+      },
+      scoringRubric: [{
+        criterionId,
+        description: unit.successCriterion?.trim() || "정답과 일치합니다.",
+        weight: 1,
+        gradingMode: recommendedType === "flashcard" ? "self" : "exact",
+      }],
+      difficulty: {
+        cueLevel: "medium",
+        responseComplexity: "atomic",
+        transferDistance: "same_context",
+      },
+      requiredCapabilities: [],
+      recommendedType,
+    },
+  };
+}
+
+export function activityRecommendationKey(recommendation: ActivityRecommendation) {
+  return recommendation.blueprintId ?? recommendation.learningUnitId;
+}
+
+export function applyActivityDesignSelections(input: {
+  design: ActivityDesign;
+  selectedTypes: Record<string, LearningActivityType>;
+  selectedIncludes: Record<string, boolean>;
+  mode: ActivitySelectionMode;
+}): ActivityDesign {
+  if (!input.design.blueprints?.length) {
+    return {
+      ...input.design,
+      recommendations: input.design.recommendations.map((recommendation) => {
+        const key = activityRecommendationKey(recommendation);
+        return {
+          ...recommendation,
+          recommendedType:
+            input.selectedTypes[key] ?? recommendation.recommendedType,
+          includeInGeneration:
+            input.mode === "automatic"
+              ? recommendation.includeInGeneration
+              : (input.selectedIncludes[key] ?? recommendation.includeInGeneration),
+        };
+      }),
+    };
+  }
+
+  const policy = input.design.policy ?? defaultGenerationPolicy;
+  const previousByKey = new Map(
+    input.design.recommendations.map((recommendation) => [
+      activityRecommendationKey(recommendation),
+      recommendation,
+    ]),
+  );
+  const blueprints = input.design.blueprints.map((blueprint) => ({
+    ...blueprint,
+    recommendedType:
+      input.selectedTypes[blueprint.id] ?? blueprint.recommendedType,
+  }));
+  const supportAssessments = blueprints.map((blueprint) =>
+    assessBlueprintSupport(blueprint, blueprint.recommendedType),
+  );
+  const recommendations = blueprints.map((blueprint, index) => {
+    const computed = recommendationFromBlueprint(
+      blueprint,
+      supportAssessments[index],
+      policy,
+    );
+    const previous = previousByKey.get(blueprint.id);
+    return {
+      ...computed,
+      includeInGeneration:
+        computed.supportLevel === "unsupported"
+          ? false
+          : input.mode === "automatic"
+            ? computed.includeInGeneration
+            : (input.selectedIncludes[blueprint.id] ??
+              previous?.includeInGeneration ??
+              computed.includeInGeneration),
+    };
+  });
+  return {
+    ...input.design,
+    blueprints,
+    supportAssessments,
+    recommendations,
+    policy,
+  };
+}

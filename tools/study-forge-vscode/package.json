@@ -1,0 +1,46 @@
+{
+  "name": "study-forge-vscode",
+  "displayName": "Study Forge Coding Coach",
+  "description": "Study Forge 프로젝트에 선택 코드를 제출합니다.",
+  "version": "0.1.0",
+  "publisher": "study-forge-local",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Education", "Other"],
+  "activationEvents": [
+    "onCommand:studyForge.connectProject",
+    "onCommand:studyForge.submitSelection"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "studyForge.connectProject",
+        "title": "Study Forge: 프로젝트 연결"
+      },
+      {
+        "command": "studyForge.submitSelection",
+        "title": "Study Forge: 선택 코드를 GPT에게 제출"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "studyForge.submitSelection",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Study Forge",
+      "properties": {
+        "studyForge.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:3000",
+          "description": "로컬 Study Forge 웹 서버 주소"
+        }
+      }
+    }
+  }
+}

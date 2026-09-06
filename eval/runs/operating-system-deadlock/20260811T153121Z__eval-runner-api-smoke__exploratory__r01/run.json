@@ -1,0 +1,102 @@
+{
+  "artifactType": "study-forge-eval-run",
+  "artifactVersion": "v0",
+  "runId": "20260811T153121Z__eval-runner-api-smoke__exploratory__r01",
+  "caseId": "operating-system-deadlock",
+  "runKind": "exploratory",
+  "provenance": "eval-runner-v1",
+  "status": "completed",
+  "sourceRunId": "20260810T152136Z__whole-document-core-soft-budget__baseline__r01",
+  "fromStage": "cards",
+  "frozenStages": [
+    "analyze",
+    "plan",
+    "recall",
+    "prepare"
+  ],
+  "executedStages": [
+    "cards",
+    "critic"
+  ],
+  "startedAt": "2026-08-11T15:31:21.879Z",
+  "completedAt": "2026-08-11T15:33:10.579Z",
+  "code": {
+    "gitCommit": "fda889ea29bc8783d290a5836d8f45db9919c07c",
+    "gitDirty": true,
+    "runtimePromptChecksums": {
+      "src/lib/pipeline/recall.ts": "4e8b26849d9aa75dcab5c49076b0ed189aa27acce2bd67b570904b757a8931bc",
+      "src/lib/pipeline/generate.ts": "0f9b6ef9913a4aaca5a509009899be47851731b60ea7be01458e02ed3eae2cc5",
+      "src/lib/model-config.ts": "e262bd929ea32c0194cf94ff8dfd3f2ed3c577fe0ce1d6bac05b8d8cf9462c6f"
+    }
+  },
+  "modelConfiguration": {
+    "recall": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "prepare": {
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "medium"
+    },
+    "cards": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "critic": {
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "medium"
+    }
+  },
+  "overrideFile": null,
+  "overrideChecksum": null,
+  "stageLineage": {
+    "analyze": {
+      "status": "frozen",
+      "sourceRunId": "20260810T152136Z__whole-document-core-soft-budget__baseline__r01",
+      "sourceArtifact": "stages/10-analyze.json",
+      "checksum": "9002f7b6580087bdb8fdd6d6e3ecfb6625bc69ba1f48aafde3e2bfbda0e6d2c6"
+    },
+    "plan": {
+      "status": "frozen",
+      "sourceRunId": "20260810T152136Z__whole-document-core-soft-budget__baseline__r01",
+      "sourceArtifact": "stages/20-plan.json",
+      "checksum": "6e37522bf96d60b343f3628f6b92fd53c677d1e457c24a1ed6ddda71c36b28d2"
+    },
+    "recall": {
+      "status": "frozen",
+      "sourceRunId": "20260810T152136Z__whole-document-core-soft-budget__baseline__r01",
+      "sourceArtifact": "stages/30-recall.json",
+      "checksum": "9547b2af617a321c6ff27f0f43fb0e3d9d9c7cf2b5a617d0a45d5c5caf95719c"
+    },
+    "prepare": {
+      "status": "frozen",
+      "sourceRunId": "20260810T152136Z__whole-document-core-soft-budget__baseline__r01",
+      "sourceArtifact": "stages/40-prepare.json",
+      "checksum": "1872cdb4a41d1134b88bceb1b630323d95d77b36226bac5055814bebe9b68de7"
+    },
+    "cards": {
+      "status": "executed",
+      "sourceRunId": "20260810T152136Z__whole-document-core-soft-budget__baseline__r01",
+      "sourceArtifact": null
+    },
+    "critic": {
+      "status": "executed",
+      "sourceRunId": "20260810T152136Z__whole-document-core-soft-budget__baseline__r01",
+      "sourceArtifact": null
+    },
+    "finalCards": {
+      "status": "executed",
+      "sourceRunId": "20260810T152136Z__whole-document-core-soft-budget__baseline__r01",
+      "sourceArtifact": null
+    }
+  },
+  "stageFiles": {
+    "analyze": "stages/10-analyze.json",
+    "plan": "stages/20-plan.json",
+    "recall": "stages/30-recall.json",
+    "prepare": "stages/40-prepare.json",
+    "cards": "stages/50-cards.json",
+    "critic": "stages/60-critic.json",
+    "finalCards": "stages/70-final-cards.json"
+  }
+}

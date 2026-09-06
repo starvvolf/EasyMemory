@@ -1,0 +1,18 @@
+{
+  "artifactType": "study-forge-source-manifest",
+  "artifactVersion": "v0",
+  "caseId": "operating-system-deadlock",
+  "sources": [
+    {
+      "sourceId": "operating-system-deadlock-lecture8-pdf",
+      "fileName": "lecture8.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 317629,
+      "sha256": "fd8032502b90879df82d4727feb1c45ec8f4e27bbef8aa3d920c0ebd0fbdd954",
+      "pageCount": 14,
+      "storagePolicy": "external-not-committed",
+      "repositoryPath": null,
+      "availability": "user-local-source"
+    }
+  ]
+}

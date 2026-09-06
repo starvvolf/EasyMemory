@@ -64,6 +64,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         setStatus("loading");
         try {
           const response = await fetch("/api/auth/session", {
+            method: "POST",
             headers: { Authorization: `Bearer ${await user.getIdToken()}` },
           });
           const data = (await response.json()) as Partial<AuthSession> & {
@@ -160,18 +161,30 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
+  async function handleSignOut() {
+    try {
+      await fetch("/api/auth/session", { method: "DELETE" });
+    } finally {
+      await signOut(getFirebaseAuth());
+    }
+  }
+
   return (
     <AuthSessionContext.Provider value={session}>
       {!session.canUseAi ? (
         <div className="border-b border-[#F0B232]/40 bg-[#F0B232]/15 px-4 py-3 text-center text-sm font-bold text-[#FFF1C2]">
-          이 계정은 앱과 로컬 덱을 사용할 수 있지만 AI 생성 권한은 없습니다.
+          일반 회원은 이 브라우저의 로컬 덱을 학습할 수 있습니다. AI 생성과 사용자별
+          분리가 되지 않은 서버 프로젝트 기능은 아직 사용할 수 없습니다.
         </div>
       ) : null}
       <div className="fixed right-4 top-3 z-50 flex items-center gap-3 rounded-md border border-[#3F4147] bg-[#1E1F22]/95 px-3 py-2 text-xs text-[#B5BAC1] shadow-lg backdrop-blur">
         <span className="max-w-48 truncate">{session.email}</span>
+        <span className="rounded bg-[#383A40] px-1.5 py-0.5 font-bold text-[#DCDDDE]">
+          {session.canUseAi ? "운영자" : "일반 회원"}
+        </span>
         <button
           type="button"
-          onClick={() => void signOut(getFirebaseAuth())}
+          onClick={() => void handleSignOut()}
           className="font-bold text-white hover:underline"
         >
           로그아웃

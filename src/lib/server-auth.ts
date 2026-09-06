@@ -30,9 +30,8 @@ export async function authenticateRequest(
     };
   }
 
-  const authorization = request.headers.get("authorization");
-  const match = authorization?.match(/^Bearer\s+(.+)$/i);
-  if (!match) {
+  const token = readIdToken(request);
+  if (!token) {
     return {
       ok: false,
       status: 401,
@@ -41,7 +40,7 @@ export async function authenticateRequest(
   }
 
   try {
-    const claims = await getFirebaseAdminAuth().verifyIdToken(match[1]);
+    const claims = await getFirebaseAdminAuth().verifyIdToken(token);
     const user = authorizeAuthenticatedUser(claims, owner.email);
     if (!user) {
       return {
@@ -61,4 +60,24 @@ export async function authenticateRequest(
       message: "로그인 정보가 만료되었거나 유효하지 않습니다. 다시 로그인해 주세요.",
     };
   }
+}
+
+export const AUTH_COOKIE_NAME = "study_forge_id_token";
+
+function readIdToken(request: Request): string | null {
+  const authorization = request.headers.get("authorization");
+  const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (bearer) return bearer;
+
+  const cookieHeader = request.headers.get("cookie");
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    const name = part.slice(0, separator).trim();
+    if (name !== AUTH_COOKIE_NAME) continue;
+    const value = part.slice(separator + 1).trim();
+    return value ? decodeURIComponent(value) : null;
+  }
+  return null;
 }

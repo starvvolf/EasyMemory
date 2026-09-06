@@ -9,10 +9,17 @@ account.
 - Google-authenticated users can open the app.
 - The server returns the authenticated Firebase `uid` so a future Firestore/Storage
   layer can partition records by UID.
-- Only the email in the server-only `AI_OWNER_EMAIL` variable can call `/api/*` AI
-  routes. Other signed-in users can still use existing local decks and study flows.
+- Only the email in the server-only `AI_OWNER_EMAIL` variable can call the AI routes
+  `/api/analyze`, `/api/plan`, `/api/generate`, and `/api/codex/chat`.
+- Server project, source, MCP import, coding-session, model-config, and project-status
+  routes currently read shared files on the host. Until those records are partitioned
+  by UID, non-owner accounts receive HTTP 403 instead of seeing the owner's files.
+- Other signed-in users can still use browser-local decks and study flows.
 - Decks remain in the browser IndexedDB database `memory-transformer`, object store
   `decks`. They are not synchronized, migrated, or currently partitioned by UID.
+- IndexedDB is shared by every account using the same browser profile. Signing out
+  does not erase it. Do not switch between mutually untrusted accounts in one browser
+  profile until an explicit UID migration or separate-profile policy is implemented.
 - No Firestore or Cloud Storage resources or security rules are added in this change.
 
 ## Firebase console checklist
@@ -60,11 +67,12 @@ into `apphosting.yaml` or commit it to an env file.
 1. Copy `.env.example` to `.env.local` and fill the Firebase Web app values,
    `AI_OWNER_EMAIL`, and the existing OpenAI settings.
 2. Run `npm run dev` and open `http://localhost:3000`.
-3. Confirm a new Google account signs in automatically and can open the app, deck
-   list, and study screen.
+3. Confirm a new Google account is created by Google sign-in and can open the app,
+   browser-local deck list, and study screen. Confirm the account chip says either
+   `운영자` or `일반 회원`.
 4. With a non-owner Google account, confirm the yellow permission notice is visible,
-   AI action buttons are disabled, and a direct authenticated request to an AI API
-   returns HTTP 403.
+   and a direct authenticated request to an AI API returns HTTP 403. Shared host-file
+   project/source APIs must also return HTTP 403 until UID partitioning exists.
 5. With the `AI_OWNER_EMAIL` account, confirm PDF analysis/generation can call the
    existing API routes.
 6. Remove one Firebase variable and restart the dev server. The login screen must
@@ -79,4 +87,5 @@ Introduce Firestore and Cloud Storage together with rules that require
 `request.auth.uid == resource.data.ownerUid` (and equivalent create checks), then
 design an explicit, reversible IndexedDB import. The current UID-bearing session is
 the handoff point; this change intentionally does not alter deck IDs, records, or the
-MCP data model.
+MCP data model. Do not automatically assign existing IndexedDB or host files to the
+first account that signs in; ownership must be confirmed during migration.
