@@ -88,8 +88,15 @@ export async function applyLearnerMemorySummary(
       const previous = recordSnapshot.data() as StoredRecord;
       if (previous.ownerUid !== uid) throw new Error("학습 기록 소유자가 일치하지 않습니다.");
       assertEvidenceAppendOnly(previous.evidenceIndex, input.evidenceIndex);
-      if (!Number.isSafeInteger(previous.throughSequence) || throughSequence <= previous.throughSequence) {
+      if (!Number.isSafeInteger(previous.throughSequence) || throughSequence < previous.throughSequence) {
         throw new UserDataHttpError(409, "기존 학습 기록보다 이전 위치의 요약으로 되돌릴 수 없습니다.");
+      }
+      if (throughSequence === previous.throughSequence) {
+        transaction.create(
+          operationReference,
+          operation(uid, "apply-learner-memory", input.recordId, requestHash, state.revision),
+        );
+        return { state, status: "duplicate" as const };
       }
     }
 
