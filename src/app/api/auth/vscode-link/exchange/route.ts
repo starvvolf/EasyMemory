@@ -2,15 +2,11 @@ import { NextResponse } from "next/server";
 import { getFirebaseAdminAuth, getFirebaseAdminServices } from "@/lib/firebase-admin";
 import { consumeVscodeLinkCode } from "@/lib/firebase-vscode-link-store";
 import { UserDataHttpError, toUserDataError } from "@/lib/server-user";
-import { VscodeLinkRequestError } from "@/lib/vscode-link-contract";
+import { readVscodeLinkJson, VscodeLinkRequestError } from "@/lib/vscode-link-contract";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
-      code?: unknown;
-      state?: unknown;
-      verifier?: unknown;
-    };
+    const body = await readVscodeLinkJson(request);
     if (
       typeof body.code !== "string" ||
       typeof body.state !== "string" ||

@@ -2,17 +2,13 @@ import { NextResponse } from "next/server";
 import { getFirebaseAdminServices } from "@/lib/firebase-admin";
 import { createVscodeLinkCode } from "@/lib/firebase-vscode-link-store";
 import { requireAuthenticatedUser, toUserDataError, UserDataHttpError } from "@/lib/server-user";
-import { VscodeLinkRequestError } from "@/lib/vscode-link-contract";
+import { readVscodeLinkJson, VscodeLinkRequestError } from "@/lib/vscode-link-contract";
 
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const user = await requireAuthenticatedUser(request);
-    const body = (await request.json()) as {
-      callbackUri?: unknown;
-      state?: unknown;
-      challenge?: unknown;
-    };
+    const body = await readVscodeLinkJson(request);
     if (
       typeof body.callbackUri !== "string" ||
       typeof body.state !== "string" ||

@@ -12,6 +12,47 @@ export class VscodeLinkRequestError extends Error {
   }
 }
 
+export async function readVscodeLinkJson(request: Request): Promise<Record<string, unknown>> {
+  if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
+    throw new VscodeLinkRequestError("JSON 계정 연결 요청이 필요합니다.");
+  }
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > 8_192) {
+    throw new VscodeLinkRequestError("계정 연결 요청이 너무 큽니다.");
+  }
+  const reader = request.body?.getReader();
+  if (!reader) throw new VscodeLinkRequestError("계정 연결 요청 내용이 없습니다.");
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 8_192) {
+        await reader.cancel();
+        throw new VscodeLinkRequestError("계정 연결 요청이 너무 큽니다.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  try {
+    const value = JSON.parse(new TextDecoder().decode(bytes));
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
+    return value as Record<string, unknown>;
+  } catch {
+    throw new VscodeLinkRequestError("계정 연결 요청 형식이 올바르지 않습니다.");
+  }
+}
+
 export type VscodeLinkRequest = {
   callbackUri: string;
   state: string;
