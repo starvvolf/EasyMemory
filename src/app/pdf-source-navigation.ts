@@ -25,7 +25,14 @@ export function findExactPdfSourceIndex(
   sources: PdfSourceIdentity[],
   requestedSourceId: string,
 ) {
-  return sources.findIndex((source) => matchesPdfSource(source, requestedSourceId));
+  const idIndex = sources.findIndex((source) => source.id === requestedSourceId);
+  if (idIndex >= 0) return idIndex;
+
+  const normalizedRequest = normalizePdfFileName(requestedSourceId);
+  const fileNameMatches = sources
+    .map((source, index) => ({ source, index }))
+    .filter(({ source }) => normalizePdfFileName(source.fileName) === normalizedRequest);
+  return fileNameMatches.length === 1 ? fileNameMatches[0].index : -1;
 }
 
 export function clampPdfPage(page: number, pageCount: number) {

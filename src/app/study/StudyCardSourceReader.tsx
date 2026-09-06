@@ -6,7 +6,8 @@ import type { StudyProjectDetail, StudyProjectSource } from "@/lib/study-project
 import { ExternalLink, X } from "lucide-react";
 import { useState } from "react";
 import PdfReviewViewer from "../PdfReviewViewer";
-import { findExactPdfSourceIndex, matchesPdfSource } from "../pdf-source-navigation";
+import { findExactPdfSourceIndex } from "../pdf-source-navigation";
+import { usePdfReadingPosition } from "./usePdfReadingPosition";
 
 type OpenedSource = {
   id: string;
@@ -97,11 +98,7 @@ export function StudyCardSourceReader({ deck, card }: { deck: Deck; card: Card }
               </button>
             </header>
             <div className="min-h-0 flex-1 overflow-auto bg-[#222] p-2 sm:p-4">
-              <PdfReviewViewer
-                files={[openedSource.file]}
-                sourceIds={[openedSource.id]}
-                requestedSource={{ sourceId: openedSource.id, page: sourcePage }}
-              />
+              <CardPdfReader source={openedSource} page={sourcePage} />
             </div>
           </section>
         </div>
@@ -110,13 +107,36 @@ export function StudyCardSourceReader({ deck, card }: { deck: Deck; card: Card }
   );
 }
 
+function CardPdfReader({ source, page }: { source: OpenedSource; page: number }) {
+  const readingPosition = usePdfReadingPosition(source.id, page, false);
+
+  if (readingPosition.isLoadingPosition) {
+    return <p className="p-6 text-center text-sm text-[#A5A5A5]">읽기 위치를 확인하는 중입니다.</p>;
+  }
+
+  return (
+    <>
+      {readingPosition.positionError ? (
+        <p className="mb-2 rounded-lg border border-[#5A403A] bg-[#332724] px-3 py-2 text-xs text-[#FFB4A2]">
+          {readingPosition.positionError}
+        </p>
+      ) : null}
+      <PdfReviewViewer
+        files={[source.file]}
+        sourceIds={[source.id]}
+        requestedSource={{ sourceId: source.id, page }}
+        onPageChange={readingPosition.handlePageChange}
+      />
+    </>
+  );
+}
+
 async function findProjectSource(projectId: string, sourceId: string) {
   const response = await fetch(`/api/study-projects/${projectId}`);
   if (!response.ok) return null;
   const detail = (await response.json()) as StudyProjectDetail;
-  return detail.sources.find((source) =>
-    matchesPdfSource({ id: source.id, fileName: source.fileName }, sourceId),
-  ) ?? null;
+  const index = findExactPdfSourceIndex(detail.sources, sourceId);
+  return index >= 0 ? detail.sources[index] : null;
 }
 
 async function downloadProjectSource(source: StudyProjectSource) {

@@ -14,7 +14,6 @@ import {
 import {
   clampPdfPage,
   findExactPdfSourceIndex,
-  matchesPdfSource,
 } from "./pdf-source-navigation";
 
 type SelectionMode = "sentence" | "paragraph";
@@ -137,7 +136,7 @@ export default function PdfReviewViewer({
     (unit) => unit.id === activeLearningUnitId,
   );
   const activeFileLearningUnits = learningUnits?.filter(
-    (unit) => activeSource && matchesPdfSource(activeSource, unit.sourceId),
+    (unit) => findExactPdfSourceIndex(sources, unit.sourceId) === safeActiveFileIndex,
   );
 
   if (!activeFile) {
@@ -180,10 +179,11 @@ export default function PdfReviewViewer({
         file={activeFile}
         sourceId={activeSource.id ?? activeFile.name}
         initialPage={
-          requestedSource && matchesPdfSource(activeSource, requestedSource.sourceId)
+          requestedSource &&
+          findExactPdfSourceIndex(sources, requestedSource.sourceId) === safeActiveFileIndex
             ? requestedSource.page
             : selectedLearningUnit &&
-          matchesPdfSource(activeSource, selectedLearningUnit.sourceId)
+          findExactPdfSourceIndex(sources, selectedLearningUnit.sourceId) === safeActiveFileIndex
             ? selectedLearningUnit.sourcePage
             : initialPageBySourceId[activeSource.id ?? activeFile.name] ?? 1
         }
