@@ -16,6 +16,7 @@ export function usePdfReadingPosition(
   const [positionError, setPositionError] = useState("");
   const revisionRef = useRef<number | undefined>(undefined);
   const savedPageRef = useRef(fallbackPage);
+  const canSaveRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -27,11 +28,13 @@ export function usePdfReadingPosition(
         if (cancelled) return;
         revisionRef.current = position?.revision;
         savedPageRef.current = position?.page ?? fallbackPage;
+        canSaveRef.current = true;
         setInitialPage(restoreLastPage ? position?.page ?? fallbackPage : fallbackPage);
         setPositionError("");
       } catch (caught) {
         if (cancelled) return;
         savedPageRef.current = fallbackPage;
+        canSaveRef.current = false;
         setInitialPage(fallbackPage);
         setPositionError(
           caught instanceof Error ? caught.message : "마지막 읽기 위치를 불러오지 못했습니다.",
@@ -49,7 +52,11 @@ export function usePdfReadingPosition(
   }, [fallbackPage, restoreLastPage, sourceId]);
 
   const handlePageChange = useCallback((changedSourceId: string, page: number) => {
-    if (changedSourceId !== sourceId || page === savedPageRef.current) return;
+    if (
+      !canSaveRef.current ||
+      changedSourceId !== sourceId ||
+      page === savedPageRef.current
+    ) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 
     saveTimerRef.current = setTimeout(() => {
@@ -60,6 +67,7 @@ export function usePdfReadingPosition(
           setPositionError("");
         })
         .catch((caught) => {
+          canSaveRef.current = false;
           setPositionError(
             caught instanceof Error ? caught.message : "마지막 읽기 위치를 저장하지 못했습니다.",
           );

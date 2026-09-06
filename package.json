@@ -16,7 +16,7 @@
     "eval:full-run": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/eval-full-runner.ts",
     "generation-lab": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/generation-lab/server.mjs",
     "generation-lab:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tools/generation-lab/generation-lab.test.mjs",
-    "study:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/study-session.test.ts scripts/study-selection.test.ts scripts/graded-study.test.ts scripts/learning-activity.test.ts scripts/spaced-repetition.test.ts scripts/pdf-mask.test.ts scripts/pdf-mask-activity.test.ts scripts/learning-manager.test.ts",
+    "study:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/study-session.test.ts scripts/study-selection.test.ts scripts/graded-study.test.ts scripts/learning-activity.test.ts scripts/spaced-repetition.test.ts scripts/pdf-mask.test.ts scripts/pdf-mask-activity.test.ts scripts/pdf-source-navigation.test.ts scripts/learning-manager.test.ts",
     "project:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/study-project-store.test.ts",
     "quality:offline:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/api-usage.test.ts scripts/quality-eval-plan.test.ts scripts/compact-input.test.ts scripts/preflight-compact-output.test.ts scripts/outline-selection.test.ts scripts/practice-blueprint.test.ts",
     "quality:input-report": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/compact-input-report.ts",
