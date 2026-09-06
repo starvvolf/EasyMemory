@@ -19,11 +19,11 @@
 
 | 단계 | MCP에서 직접 재사용 | API 실행기의 역할 | PDF 전송 |
 | --- | --- | --- | --- |
-| Analyze | `getNextStage`의 목차 전용 지시·`outlineText` 계약, `submitStage`의 목차 파서·계층 조립·페이지 검사 | 같은 `stageInput`을 Responses API에 보내고 submit 객체를 전달 | 동일 원본 바이트 첨부 |
-| Concept Tree | 선택 목차 투영, 개념 관계 지시, `treeText` 계약, 기존 parser·목차/페이지 연결 검사 | 환경 문구만 input_file 기준으로 변환 | 동일 원본 바이트 첨부 |
-| Learning Design | 개념 번호·관계·근거 입력, LEARNING 블록 계약, 묶기/나누기 parser, ID·Objective·Knowledge Unit 조립 | MCP stageInput을 그대로 전달하고 결과 submit | 근거 구절 확인용 동일 바이트 첨부 |
-| Activity Design | 학습 대상·앱 능력 입력, DESIGN 블록 계약, 1~3개 제한, Blueprint·지원 수준·포함 여부 조립 | MCP stageInput을 그대로 전달하고 결과 submit | 미첨부; 이전 단계의 sourceEvidence 사용 |
-| Cards | 확정 problemDesigns, CARD 계약, 유형·구조·근거 검사, 앱 카드 조립, 정상 CARD 초안 보존·부분 재제출 | 전체 또는 오류 CARD의 API 출력을 같은 submit 경로에 전달 | 미첨부; 확정 설계와 sourceEvidence 사용 |
+| Analyze | `getNextStage`의 title·files, `outlineText` 계약, `submitStage`의 목차 파서·계층 조립·페이지 검사 | API 전용 구조 복원 과제와 최소 형식을 전달하고 submit 객체를 반환 | 동일 원본 바이트 첨부 |
+| Concept Tree | 선택 목차 투영, `treeText` 계약, 기존 parser·목차/페이지 연결 검사 | 선택·목차 데이터는 유지하고 의미 관계 판단과 실제 들여쓰기 규칙을 명료화 | 동일 원본 바이트 첨부 |
+| Learning Design | 개념 번호·관계·근거 입력, LEARNING 블록 계약, parser, ID·Objective·Knowledge Unit 조립 | 의미 입력을 유지하고 익힐 대상·조건·연속 근거 판단을 간결하게 제시 | 근거 구절 확인용 동일 바이트 첨부 |
+| Activity Design | 학습 대상·앱 능력 입력, DESIGN 블록 계약, 1~3개 제한, Blueprint·지원 수준·포함 여부 조립 | 의미 입력을 유지하고 인출 과제와 응답·문제방식 일관성을 먼저 판단하게 함 | 미첨부; 이전 단계의 sourceEvidence 사용 |
+| Cards | 확정 problemDesigns, CARD 계약, 유형·구조·근거 검사, 앱 카드 조립, 정상 CARD 초안 보존·부분 재제출 | 확정 설계의 실현과 연속 근거 계약만 전달하고 전체 또는 오류 CARD를 submit | 미첨부; 확정 설계와 sourceEvidence 사용 |
 
 관리 ID는 모델이 작성하지 않는다. 모델은 단계별 `outlineText`, `treeText`,
 `learningDesignText`, `activityDesignText`, `cardsText`만 작성하고 기존 MCP 서버가 ID,
@@ -41,9 +41,10 @@
 3. **PDF 접근**: MCP 서버에는 PDF가 없고 대화 AI가 첨부를 읽는다. API는 Analyze,
    Concept Tree, Learning Design 각각에 SHA-256이 같은 PDF 바이트를 보낸다. Activity와
    Cards는 MCP 단계 입력의 확정 근거만 쓴다.
-4. **환경 문구**: `현재 ChatGPT 대화에 첨부된 PDF`라는 표현만
-   `이 Responses API 요청의 input_file PDF`로 바꾼다. 원문 범위·단계 책임·학습 정책은
-   바꾸지 않는다.
+4. **API 전용 프롬프트**: 기존 v1은 MCP의 instructions·format·outputContract를
+   user payload에 그대로 넣었다. v2는 선택 목차·개념·학습대상·확정설계 등 의미
+   데이터는 유지하되 MCP 도구 사용 설명을 제거하고 단계 목적·판단·완료 조건·최소
+   형식으로 다시 작성한다. 원문 범위, 파서와 서버 검사는 바꾸지 않는다.
 5. **외곽 JSON**: MCP의 submit tool 객체와 같은 한 개 문자열 필드 객체를 Responses
    API strict JSON Schema로 받는다. OpenAI strict schema 호환을 위해 object schema에
    `additionalProperties: false`만 명시한다. 자연어 블록은 동일 MCP parser가 검사한다.
@@ -54,6 +55,9 @@
    `engine: chatgpt-mcp`가 남는다. 이를 API 생성 주체라고 오해하지 않도록 외부 manifest와
    result envelope는 `provider: openai-responses-api`, `materializerEngineLabel:
    chatgpt-mcp`를 함께 기록한다.
+8. **프롬프트 버전**: manifest와 모든 attempt에
+   `api-mcp-aligned-v2-smart-2026-09-06`을 기록한다. 재개 run의 버전이 현재 코드와
+   다르면 API 호출 전에 거부해 한 run 안에 두 프롬프트가 섞이지 않게 한다.
 
 ## 입력 조건
 

@@ -6,11 +6,21 @@ import test from "node:test";
 import type { TestContext } from "node:test";
 
 import {
+  API_PROMPT_VERSION,
+  API_STAGE_PROMPTS,
+  API_SYSTEM_PROMPT,
   createOpenAiStageGenerator,
   runAlignedPipeline,
   type ApiStageRequest,
   type StageGenerator,
 } from "./pipeline.ts";
+
+test("고정 프롬프트는 특정 평가 자료나 정답을 주입하지 않는다", () => {
+  const fixedPrompt = JSON.stringify({ system: API_SYSTEM_PROMPT, stages: API_STAGE_PROMPTS });
+  assert.doesNotMatch(fixedPrompt, /오픽|DFS|BFS|데드락|deadlock/i);
+  assert.match(fixedPrompt, /문구 보존/);
+  assert.match(fixedPrompt, /개념 이해·적용/);
+});
 
 const outputs = {
   analyze: {
@@ -156,9 +166,20 @@ test("동일 MCP 계약으로 전체 흐름을 중단·재개하고 오류 CARD�
   assert.ok(requests.slice(0, 3).every((request) => request.pdf));
   assert.ok(requests.slice(3).every((request) => !request.pdf));
   assert.match(JSON.stringify(requests[0].stageInput), /input_file PDF/);
-  assert.match(JSON.stringify(requests[3].stageInput), /각 대상을 1~3개의 문제 설계/);
+  assert.match(JSON.stringify(requests[1].stageInput), /바로 아래 자식.*공백 없이/);
+  assert.match(JSON.stringify(requests[3].stageInput), /대상마다 1~3개 과제/);
+  assert.match(JSON.stringify(requests[4].stageInput), /하나의 연속 구절/);
+  assert.equal((requests[0].stageInput.runContext as { learningGoal: string }).learningGoal, "데드락 조건을 설명한다.");
+  assert.ok((requests[1].stageInput.context as { input: { selectedSourceOutline: unknown } }).input.selectedSourceOutline);
+  assert.ok((requests[2].stageInput.context as { input: { conceptTree: unknown } }).input.conceptTree);
+  assert.ok((requests[3].stageInput.context as { input: { learningTargets: unknown } }).input.learningTargets);
+  assert.ok((requests[4].stageInput.context as { input: { problemDesigns: unknown } }).input.problemDesigns);
+  for (const request of requests) {
+    const serialized = JSON.stringify(request.stageInput);
+    assert.doesNotMatch(serialized, /"instructions":|"outputContract":|"attachmentRule":|"format":|"cardOrderRule":|"retryRule":/);
+    assert.equal(request.stageInput.promptVersion, API_PROMPT_VERSION);
+  }
   assert.equal(requests[5].priorAttempt?.error.includes("O 또는 X"), true);
-  assert.match(JSON.stringify(requests[5].stageInput), /해당 CARD 블록만/);
   assert.equal(requests[5].schema.additionalProperties, false);
 
   const firstCardAttempt = JSON.parse(await readFile(
@@ -166,8 +187,14 @@ test("동일 MCP 계약으로 전체 흐름을 중단·재개하고 오류 CARD�
     "utf8",
   )) as { outcome: string; request: { systemPrompt: string; userPayload: Record<string, unknown> } };
   assert.equal(firstCardAttempt.outcome, "server_validation_error");
-  assert.match(firstCardAttempt.request.systemPrompt, /현재 한 단계만/);
+  assert.match(firstCardAttempt.request.systemPrompt, /현재 요청의 한 단계만/);
   assert.equal(firstCardAttempt.request.userPayload.stage, "cards");
+  const secondCardAttempt = JSON.parse(await readFile(
+    path.join(outputDirectory, "attempts", "cards", "attempt-002.json"),
+    "utf8",
+  )) as { promptVersion: string; request: { userPayload: { retryContext: { validationError: string } } } };
+  assert.equal(secondCardAttempt.promptVersion, API_PROMPT_VERSION);
+  assert.match(secondCardAttempt.request.userPayload.retryContext.validationError, /O 또는 X/);
   const state = JSON.parse(await readFile(
     path.join(outputDirectory, "server-state", "runs", completed.manifest.serviceRunId!, "run.json"),
     "utf8",
@@ -209,6 +236,31 @@ test("계약 불일치는 유한 횟수 뒤 실패하고 원본 시도 파일을
   const second = await readFile(path.join(outputDirectory, "attempts", "analyze", "attempt-002.json"), "utf8");
   assert.match(first, /형식 없는 설명 문장/);
   assert.match(second, /형식 없는 설명 문장/);
+});
+
+test("재개 시 다른 프롬프트 버전을 한 run에 섞지 않는다", async (t) => {
+  const { pdfPath, outputDirectory } = await fixture(t);
+  const requests: ApiStageRequest[] = [];
+  const common = {
+    outputDirectory,
+    pdfPath,
+    title: "버전 보호",
+    learningGoal: "자료 구조를 익힌다.",
+    model: "fake-model",
+    reasoningEffort: "medium" as const,
+    pageCount: 1,
+    generateStage: fakeGenerator(requests),
+  };
+  await runAlignedPipeline({ ...common, stopAfter: "analyze" });
+  const manifestPath = path.join(outputDirectory, "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { promptVersion: string };
+  manifest.promptVersion = "older-prompt";
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  await assert.rejects(
+    runAlignedPipeline({ ...common, resume: true }),
+    /프롬프트 버전.*다릅니다/,
+  );
+  assert.equal(requests.length, 1);
 });
 
 test("Responses API 전송기는 strict 외곽 계약과 PDF를 보내되 인증값을 결과에 남기지 않는다", async () => {
