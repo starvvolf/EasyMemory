@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  getPdfReadingPosition,
+  getPdfReadingPositionState,
   savePdfReadingPosition,
 } from "@/lib/storage";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,8 +24,19 @@ export function usePdfReadingPosition(
 
     async function loadPosition() {
       try {
-        const position = await getPdfReadingPosition(sourceId);
+        const state = await getPdfReadingPositionState(sourceId);
         if (cancelled) return;
+        if (state.state === "import_required") {
+          savedPageRef.current = fallbackPage;
+          canSaveRef.current = false;
+          setInitialPage(fallbackPage);
+          setPositionError(
+            "이 PDF는 아직 계정 저장소에 없습니다. 명시적으로 가져온 뒤 읽기 위치를 저장할 수 있습니다.",
+          );
+          return;
+        }
+
+        const position = state.position;
         revisionRef.current = position?.revision;
         savedPageRef.current = position?.page ?? fallbackPage;
         canSaveRef.current = true;

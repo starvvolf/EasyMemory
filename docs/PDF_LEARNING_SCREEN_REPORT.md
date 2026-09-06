@@ -36,4 +36,4 @@ Firebase 기반은 담당자 커밋 `3b47d015`를 병합했으며, 해당 커밋
 
 ## 남은 통합 경계
 
-현재 Firebase의 읽기 위치 저장은 `users/{uid}/sources/{sourceId}`가 이미 존재해야 한다. 기존 프로젝트 자료함 API가 로컬 project store에만 저장한 PDF는 cloud source 동기화 전까지 읽기 위치 PUT이 실패하며, 화면은 이 오류를 숨기지 않고 표시한다. source 존재 검사를 우회하거나 별도 로컬 위치 저장소를 만들지 않았다. 프로젝트 source를 cloud source로 동기화하는 책임은 Firebase 저장 계층에 남아 있다.
+Firebase 후속 커밋 `149d515b`로 프로젝트 자료함 source가 사용자별 cloud source에 연결됐다. 기존 로컬 PDF처럼 아직 cloud source가 없는 자료는 읽기 상태 API가 `import_required`를 반환하며, 화면은 원문 열기를 막지 않되 위치 저장이 불가능한 이유를 명시한다. source 존재 검사를 우회하거나 별도 로컬 위치 저장소를 만들지 않았다.
