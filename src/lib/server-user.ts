@@ -30,10 +30,26 @@ export function toUserDataError(error: unknown, fallback: string) {
   ) {
     return {
       status: 409,
+      currentRevision:
+        "currentRevision" in error && typeof error.currentRevision === "number"
+          ? error.currentRevision
+          : undefined,
       message:
         error instanceof Error
           ? error.message
           : "다른 기기에서 먼저 변경되었습니다.",
+    };
+  }
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "source-import-required"
+  ) {
+    return {
+      status: 409,
+      code: "source-import-required",
+      message: error instanceof Error ? error.message : "PDF 가져오기가 필요합니다.",
     };
   }
   return {

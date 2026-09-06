@@ -28,13 +28,26 @@ export type CloudDeckDetail = {
   revision: number;
 };
 
-export type CloudStudySessionSummary = StudySession & {
+export type CloudStudySessionSummary = Pick<
+  StudySession,
+  | "id"
+  | "deckId"
+  | "activityType"
+  | "startedAt"
+  | "endedAt"
+  | "status"
+  | "selectionMode"
+  | "plannedItemCount"
+  | "completedItemCount"
+> & {
   attemptCount: number;
+  revision: number;
 };
 
 export type CloudStudySessionDetail = {
   session: StudySession;
   attempts: StudyAttempt[];
+  revision: number;
 };
 
 export type CloudReviewState = {
@@ -53,6 +66,10 @@ export type PdfReadingPosition = {
   updatedAt: string;
   revision: number;
 };
+
+export type PdfReadingPositionState =
+  | { state: "ready"; position: PdfReadingPosition | null }
+  | { state: "import_required"; position: null };
 
 export type CloudMutationOptions = {
   expectedRevision?: number;
@@ -74,5 +91,13 @@ export class CloudStorageConflictError extends Error {
   ) {
     super(message);
     this.name = "CloudStorageConflictError";
+  }
+}
+
+export class CloudSourceImportRequiredError extends Error {
+  readonly code = "source-import-required";
+  constructor() {
+    super("이 PDF는 아직 계정 저장소로 가져오지 않았습니다. 먼저 명시적 가져오기를 실행하세요.");
+    this.name = "CloudSourceImportRequiredError";
   }
 }

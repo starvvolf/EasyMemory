@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "auth:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/auth-policy.test.ts",
+    "firebase:rules:test": "node --test scripts/firebase-rules.test.mjs",
+    "firebase:emulator:test": "firebase emulators:exec --only firestore,storage \"npm run firebase:rules:test\"",
     "eval:import": "node scripts/import-eval-baseline.mjs",
     "eval:import:test": "node --test scripts/import-eval-baseline.test.mjs",
     "eval:run": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/eval-runner.ts",
@@ -44,6 +46,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/postcss": "^4",
     "@types/express": "^5.0.6",
     "@types/node": "^20",
@@ -51,6 +54,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "firebase-tools": "^15.29.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

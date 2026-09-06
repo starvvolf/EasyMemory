@@ -7,7 +7,11 @@ import type {
   StudySession,
   StoredPdfSource,
 } from "@/lib/types";
-import type { PdfReadingPosition } from "@/lib/cloud-storage-types";
+import type {
+  PdfReadingPosition,
+  PdfReadingPositionState,
+} from "@/lib/cloud-storage-types";
+import { CloudStorageConflictError } from "@/lib/cloud-storage-types";
 
 const DB_NAME = "memory-transformer";
 const DB_VERSION = 4;
@@ -23,14 +27,27 @@ export async function getPdfReadingPosition(
     `/api/user-data/pdf-reading/${encodeURIComponent(sourceId)}`,
     { cache: "no-store" },
   );
-  const payload = (await response.json()) as {
-    position?: PdfReadingPosition | null;
-    message?: string;
-  };
+  const payload = (await response.json()) as PdfReadingPositionState & { message?: string };
   if (!response.ok) {
     throw new Error(payload.message ?? "PDF 읽기 위치를 불러오지 못했습니다.");
   }
   return payload.position ?? null;
+}
+
+export async function getPdfReadingPositionState(
+  sourceId: string,
+): Promise<PdfReadingPositionState> {
+  const response = await fetch(
+    `/api/user-data/pdf-reading/${encodeURIComponent(sourceId)}`,
+    { cache: "no-store" },
+  );
+  const payload = (await response.json()) as PdfReadingPositionState & {
+    message?: string;
+  };
+  if (!response.ok || !payload.state) {
+    throw new Error(payload.message ?? "PDF 읽기 위치 상태를 확인하지 못했습니다.");
+  }
+  return payload;
 }
 
 export async function savePdfReadingPosition(
@@ -38,22 +55,41 @@ export async function savePdfReadingPosition(
   page: number,
   expectedRevision?: number,
 ): Promise<PdfReadingPosition> {
-  const response = await fetch(
+  const operationId = crypto.randomUUID();
+  const response = await fetchWithSingleRetry(
     `/api/user-data/pdf-reading/${encodeURIComponent(sourceId)}`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ page, expectedRevision }),
+      body: JSON.stringify({ page, expectedRevision, operationId }),
     },
   );
   const payload = (await response.json()) as {
     position?: PdfReadingPosition;
     message?: string;
+    currentRevision?: number;
   };
   if (!response.ok || !payload.position) {
+    if (response.status === 409 && typeof payload.currentRevision === "number") {
+      throw new CloudStorageConflictError(
+        payload.message ?? "다른 기기에서 PDF 읽기 위치를 변경했습니다.",
+        payload.currentRevision,
+      );
+    }
     throw new Error(payload.message ?? "PDF 읽기 위치를 저장하지 못했습니다.");
   }
   return payload.position;
+}
+
+async function fetchWithSingleRetry(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    return fetch(input, init);
+  }
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -271,6 +307,19 @@ export async function listDecks(): Promise<Deck[]> {
   });
   db.close();
   return decks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export const listLegacyDecks = listDecks;
+
+export async function importLegacyDeckToCloud(
+  deckId: string,
+): Promise<import("@/lib/cloud-storage-types").LegacyImportResult> {
+  const decks = await listLegacyDecks();
+  const deck = decks.find((item) => item.id === deckId);
+  if (!deck) throw new Error("가져올 로컬 덱을 찾지 못했습니다.");
+  const files = await loadDeckPdfFiles(deckId);
+  const { importLegacyDeckData } = await import("@/lib/cloud-storage-client");
+  return importLegacyDeckData(deck, files);
 }
 
 function normalizeDeck(
