@@ -7,6 +7,7 @@ import { Check,ChevronDown,Settings2,X } from "lucide-react";
 import { useState } from "react";
 import { Feedback,getLearningActivityLabel,getStudyPromptLabel,inputClassName,renderClozeForStudy } from "../study-forge-shared";
 import type { StudyCompletionSummary } from "../study-forge-types";
+import { StudyCardSourceReader } from "./StudyCardSourceReader";
 
 export function StudyView({
   selectedDeck,
@@ -249,6 +250,7 @@ export function StudyView({
                       ) : null}
                     </div>
                   )}
+                  <StudyCardSourceReader deck={selectedDeck} card={currentStudyCard} />
                 </div>
 
                 <footer className="shrink-0 border-t border-[#303030] p-3.5 sm:px-5">

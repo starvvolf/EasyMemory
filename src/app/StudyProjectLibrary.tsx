@@ -1214,7 +1214,10 @@ function SourceReader({
         </div>
         <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="min-h-0 overflow-auto bg-[#222523] p-3 sm:p-5">
-            <PdfReviewViewer files={[reader.file]} />
+            <PdfReviewViewer
+              files={[reader.file]}
+              sourceIds={[reader.source.id]}
+            />
           </div>
           <aside className="hidden overflow-auto border-l border-[#393D3A] p-5 lg:block">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#A5A9A4]">Analysis</p>
