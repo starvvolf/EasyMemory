@@ -1,13 +1,26 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getApiAccessLevel } from "@/lib/auth-policy";
-import { authenticateRequest } from "@/lib/server-auth";
+import {
+  authenticateLearnerMemoryRequest,
+  authenticateRequest,
+} from "@/lib/server-auth";
 
 export async function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname === "/api/auth/session") {
+  if (
+    request.nextUrl.pathname === "/api/auth/session" ||
+    request.nextUrl.pathname === "/api/auth/vscode-link/exchange"
+  ) {
     return NextResponse.next();
   }
 
-  const result = await authenticateRequest(request);
+  const learnerMemoryPath =
+    request.nextUrl.pathname === "/api/learner-memory" ||
+    request.nextUrl.pathname.startsWith("/api/learner-memory/") ||
+    request.nextUrl.pathname === "/api/learning-records" ||
+    request.nextUrl.pathname.startsWith("/api/learning-records/");
+  const result = learnerMemoryPath
+    ? await authenticateLearnerMemoryRequest(request)
+    : await authenticateRequest(request);
   if (!result.ok) {
     return NextResponse.json(
       { message: result.message },

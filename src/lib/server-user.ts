@@ -1,6 +1,9 @@
 import "server-only";
 
-import { authenticateRequest } from "@/lib/server-auth";
+import {
+  authenticateLearnerMemoryRequest,
+  authenticateRequest,
+} from "@/lib/server-auth";
 
 export class UserDataHttpError extends Error {
   constructor(
@@ -14,6 +17,12 @@ export class UserDataHttpError extends Error {
 
 export async function requireAuthenticatedUser(request: Request) {
   const result = await authenticateRequest(request);
+  if (!result.ok) throw new UserDataHttpError(result.status, result.message);
+  return result.user;
+}
+
+export async function requireLearnerMemoryUser(request: Request) {
+  const result = await authenticateLearnerMemoryRequest(request);
   if (!result.ok) throw new UserDataHttpError(result.status, result.message);
   return result.user;
 }

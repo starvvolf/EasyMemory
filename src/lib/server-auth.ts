@@ -62,6 +62,45 @@ export async function authenticateRequest(
   }
 }
 
+/**
+ * Learner-memory endpoints additionally accept the narrowly scoped VS Code
+ * custom-token session. All other APIs continue to use authenticateRequest.
+ */
+export async function authenticateLearnerMemoryRequest(
+  request: Request,
+): Promise<AuthenticationResult> {
+  const token = readIdToken(request);
+  if (!token) {
+    return { ok: false, status: 401, message: "로그인이 필요합니다." };
+  }
+
+  try {
+    const claims = await getFirebaseAdminAuth().verifyIdToken(token);
+    const provider = claims.firebase?.sign_in_provider;
+    if (provider === "custom" && claims.studyForgeClient === "vscode") {
+      return {
+        ok: true,
+        user: {
+          uid: claims.uid,
+          email: typeof claims.email === "string" ? claims.email : "",
+          canUseAi: false,
+        },
+      };
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Firebase 서버 설정")) {
+      return { ok: false, status: 500, message: error.message };
+    }
+    return {
+      ok: false,
+      status: 401,
+      message: "로그인 정보가 만료되었거나 유효하지 않습니다. 다시 로그인해 주세요.",
+    };
+  }
+
+  return authenticateRequest(request);
+}
+
 export const AUTH_COOKIE_NAME = "study_forge_id_token";
 
 function readIdToken(request: Request): string | null {

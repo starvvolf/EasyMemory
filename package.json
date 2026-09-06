@@ -27,7 +27,8 @@
     "mcp:concept-tree": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/concept-tree-mcp/server.ts",
     "mcp:concept-tree:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/concept-tree-mcp.test.ts",
     "mcp:concept-tree:experiment": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/run-concept-tree-experiment.ts",
-    "vscode:study-forge:test": "node --test scripts/study-forge-vscode.test.cjs && node --check tools/study-forge-vscode/extension.js"
+    "vscode:study-forge:test": "node --test scripts/study-forge-vscode.test.cjs && node --check tools/study-forge-vscode/extension.js",
+    "vscode-link:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/vscode-link.test.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

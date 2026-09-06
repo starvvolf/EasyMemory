@@ -53,6 +53,12 @@ test("Firestore 미로그인 접근과 사용자 경로 밖 접근을 거부한�
       ownerUid: "alice",
     }),
   );
+  await assertFails(
+    setDoc(doc(alice.firestore(), "vscodeLinkCodes/forged-code"), {
+      ownerUid: "alice",
+      challenge: "client-must-not-write-link-codes",
+    }),
+  );
 });
 
 test("Storage는 자기 UID 원본만 읽고 쓸 수 있다", async () => {
