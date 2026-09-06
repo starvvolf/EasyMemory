@@ -12,6 +12,7 @@
   "capabilities": { "untrustedWorkspaces": { "supported": false }, "virtualWorkspaces": false },
   "scripts": { "test": "node --test test/*.test.cjs" },
   "activationEvents": [
+    "onUri",
     "onCommand:studyForge.connectProject",
     "onCommand:studyForge.submitSelection",
     "onCommand:studyForge.openLearning",
@@ -50,6 +51,7 @@
     "configuration": {
       "title": "Study Forge",
       "properties": {
+        "studyForge.accountServerUrl": { "type": "string", "default": "http://127.0.0.1:3000", "scope": "machine", "description": "Study Forge 계정을 연결할 서버 기본 주소. HTTPS 또는 로컬 개발 서버를 사용합니다. ChatGPT 구독 연결과 별개입니다." },
         "studyForge.pythonExecutable": { "type": "string", "default": "", "scope": "machine", "description": "Python 3 실행 파일 절대 경로. 비우면 PATH에서 WindowsApps 별칭을 제외하고 찾습니다." },
         "studyForge.dotnetExecutable": { "type": "string", "default": "", "scope": "machine", "description": ".NET SDK가 설치된 dotnet 실행 파일 절대 경로. 런타임만으로는 C#을 컴파일할 수 없습니다." },
         "studyForge.javaExecutable": { "type": "string", "default": "", "scope": "machine", "description": "JDK java 실행 파일 절대 경로. 비우면 PATH에서 찾습니다." },

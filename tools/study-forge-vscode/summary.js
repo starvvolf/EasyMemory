@@ -1,8 +1,16 @@
 const SECTION_KEYS = ['concepts', 'difficulties', 'observedActions', 'unverifiedUnderstanding', 'reviewItems'];
-const SUMMARY_SCHEMA = { type: 'object', additionalProperties: false, required: SECTION_KEYS,
-  properties: Object.fromEntries(SECTION_KEYS.map((key) => [key, { type: 'array', items: { type: 'object', additionalProperties: false,
+// Transport schema mirrors the shared MemoryCandidate contract; application/selection rules stay on the server.
+const CANDIDATE_SCHEMA = { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false,
+  required: ['domain', 'topic', 'confirmed', 'uncertain', 'evidenceIds', 'basis'], properties: {
+    domain: { type: 'string', enum: ['algorithm', 'cs', 'opic', 'report'] }, topic: { type: 'string', maxLength: 100 },
+    confirmed: { type: 'array', maxItems: 4, items: { type: 'string', maxLength: 240 } }, uncertain: { type: 'array', maxItems: 4, items: { type: 'string', maxLength: 240 } },
+    evidenceIds: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'string', maxLength: 200 } },
+    basis: { type: 'string', enum: ['observation', 'self-report', 'inference'] },
+  } } };
+const SUMMARY_SCHEMA = { type: 'object', additionalProperties: false, required: [...SECTION_KEYS, 'learnerMemoryCandidates'],
+  properties: { learnerMemoryCandidates: CANDIDATE_SCHEMA, ...Object.fromEntries(SECTION_KEYS.map((key) => [key, { type: 'array', items: { type: 'object', additionalProperties: false,
     required: ['text', 'messageIds', 'codeIds'], properties: { text: { type: 'string' }, messageIds: { type: 'array', items: { type: 'string' } }, codeIds: { type: 'array', items: { type: 'string' } } },
-  } }])) };
+  } }])) } };
 
 function summaryInput(session) {
   const messages = session.messages.filter((message) => message.status !== 'pending');
@@ -35,9 +43,9 @@ function validateSummary(text, input) {
 
 async function updateSummary(session, generate, automatic = false) {
   const input = summaryInput(session);
-  const result = await generate(input.text, SUMMARY_SCHEMA);
+  const result = await generate(input.text + '\nlearnerMemoryCandidates에는 재사용할 학습 주제별 짧은 관찰/미확인 내용과 기존 근거 ID만 넣으세요. basis는 observation(실제 관찰), self-report(사용자 자기평가), inference(추론)를 구분합니다. inference는 confirmed를 비우세요. 질문이나 예제 통과만으로 숙달을 확정하지 마세요. 적절한 후보가 없으면 빈 배열로 두세요.', SUMMARY_SCHEMA);
   const sections = validateSummary(result.text, input);
-  session.summary = { sections, throughMessageId: input.throughMessageId, updatedAt: new Date().toISOString(), automatic };
+  session.summary = { sections, learnerMemoryCandidates: JSON.parse(result.text).learnerMemoryCandidates || [], throughMessageId: input.throughMessageId, updatedAt: new Date().toISOString(), automatic };
   return session.summary;
 }
 

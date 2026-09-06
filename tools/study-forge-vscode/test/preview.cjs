@@ -10,6 +10,8 @@ const source = 'def solution(a: int, b: int) -> int:\n    return a+b\ndef helper
 const state = { type: 'state', sessions: [{ id: 'fixture', title: '두 수의 합 · 합성 문제' }],
   session: { id: 'fixture', problem: { title: '두 수의 합 · 합성 문제', text: '두 정수의 합을 반환하세요.', sourceUrl: '', images: [], examples: [{ input: '[1,2]', expectedOutput: '3' }] }, messages: [], codeSnapshots: [] },
   activeFile: 'fixture.py (모의 파일)', activeFileId: '/fixture/one.py', activeLanguage: 'python', executionAnalysis: analyzeSource('python', source), runtimeStatus: { available: true, version: 'Python · 모의 런타임 표시' },
+  studyAccount: { generation: 1, account: { uid: 'fixture-user', email: 'fixture@example.invalid', serverUrl: 'https://fixture.invalid' } },
+  memoryState: { ownerUid: 'fixture-user', revision: 1, entries: [{ domain: 'algorithm', topic: 'BFS', confirmed: [], uncertain: ['방문 처리를 설명할 수 있는지 확인 필요'], basis: 'inference', updatedAt: '2026-09-07T00:00:00Z', evidence: { recordId: 'fixture', evidenceIds: ['fixture-message'] } }] },
   results: [], connection: '연결 전 · 오프라인 화면 검증', problemSaved: 0 };
 const bridge = `window.acquireVsCodeApi=()=>({getState:()=>null,setState:()=>{},postMessage:(m)=>{window.parent.postMessage({preview:m},'*')}});`;
 http.createServer((request, response) => {

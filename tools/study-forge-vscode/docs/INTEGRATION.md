@@ -11,6 +11,7 @@
 - `example-runner.js`: trusted 어댑터로만 shell:false spawn. 제한/중지/프로세스 트리 종료 실패 처리.
 - `execution-contract.js`, `local-runtimes.js`, `function-wrappers.js`, `language-runner.js`: Python/C#/Java 런타임 확인, 호출 규격 확인, 임시 래퍼·명시 소스 실행. 세부 계약과 검증은 [EXECUTION.md](EXECUTION.md).
 - `summary.js`: 정리 입력/근거 ID 검증, 성공 cursor, 활성 세션 타이머. 이전 정리를 대화 원문에 섞지 않음.
+- `account-client.js`, `memory-client.js`: 확정된 웹 계정 연결/공식 Firebase REST와 공통 기억 API 소비. 공통 갱신·관련 선택 규칙은 서버에만 둔다. [ACCOUNT_MEMORY.md](ACCOUNT_MEMORY.md) 참조.
 - `media/*`: CSP가 적용된 웹뷰. 문제/AI 출력을 textContent로 표시하며 HTML·스크립트로 실행하지 않음.
 - `test/*`: 합성 fixture만. npm 의존성 없음.
 
@@ -28,10 +29,12 @@ sessions[]:
   messages[{id,role,text,status,createdAt,context?,error?}]
   linkedFile?: {path,label,language}
   codeSnapshots[{id,filePath,language,text,createdAt}]
-  threadId?
-  execution?: {mode,mainClass?,function?,confirmedHash}
+  threadId?, threadAccountKey?
+  execution?: {mode,mainClass?,function?,confirmation:{signatureHash,contractHash}}
+  accountLink?: {uid,serverUrl,linkedAt}
+  evidenceIndex?: [{id,kind,contentHash}]
   summaryAutoEnabled: false
-  summary?: {sections,throughMessageId,updatedAt,automatic}
+  summary?: {sections,learnerMemoryCandidates,throughMessageId,updatedAt,automatic}
   summaryError?
 ```
 

@@ -5,6 +5,8 @@
   const kind = document.body.dataset.kind;
   let state = {}, draft = null, editing = false, newProblem = false, draftDirty = false;
   let executionDraft, executionKey, templateLanguage = 'python', templateMode = 'stdio';
+  let memoryDomain = 'algorithm', memoryTopics = '', memoryGeneration;
+  const memoryEdits = new Map();
   const saved = api.getState() || {};
   let question = saved.question || '';
   if (saved.draft) { draft = saved.draft; editing = true; newProblem = saved.newProblem; draftDirty = true; }
@@ -99,6 +101,42 @@
   }
   function renderChat() {
     app.append(node('div', 'LEARNING CONVERSATION', 'eyebrow'), node('h1', state.session?.problem.title || '학습 대화'));
+    if (memoryGeneration !== state.studyAccount?.generation) { memoryGeneration = state.studyAccount?.generation; memoryTopics = ''; memoryEdits.clear(); }
+    const account = state.studyAccount?.account;
+    const accountBox = node('details', undefined, 'card account-box');
+    accountBox.append(node('summary', account ? `Study Forge 계정 · ${account.email}` : 'Study Forge 계정 연결'));
+    accountBox.append(node('p', '학습 기억 저장용 계정입니다. ChatGPT 구독 로그인과 별개입니다.', 'muted'));
+    accountBox.append(button(account ? '다른 계정 연결' : '계정 연결', () => send('accountConnect'), true));
+    if (account || state.studyAccount?.connecting) accountBox.append(button(state.studyAccount.connecting ? '계정 연결 취소' : '계정 연결 해제', () => send('accountDisconnect'), true));
+    if (state.studyAccount?.connecting) accountBox.append(node('p', '브라우저에서 연결 계정을 확인하세요.'));
+    if (state.accountError) accountBox.append(node('p', state.accountError, 'error'));
+    if (account) {
+      accountBox.append(node('small', account.serverUrl));
+      const linked = state.session?.accountLink?.uid === account.uid && state.session?.accountLink?.serverUrl === account.serverUrl;
+      accountBox.append(node('p', linked ? '이 세션은 정리 성공 시 정리와 근거 참조를 계정에 저장합니다.' : '기존 로컬 세션은 자동으로 가져오지 않습니다. 연결 후 만든 새 세션부터 정리를 계정에 저장합니다.', 'muted'));
+      const importButton = button('이 세션의 정리·근거 참조만 계정으로 가져오기', () => send('memoryImport'), true);
+      importButton.disabled = !state.session?.summary || state.busy || state.running || linked;
+      accountBox.append(importButton, node('small', '원문·그림은 업로드하지 않으며 로컬 기록은 보존합니다.'));
+      accountBox.append(button('계정 기억 새로 읽기', () => send('memoryLoad'), true));
+      if (linked) accountBox.append(button('현재 정리의 계정 저장 재시도', () => send('memoryApply'), true));
+      if (state.memoryError) accountBox.append(node('p', state.memoryError, 'error'));
+      for (const entry of state.memoryState?.entries || []) {
+        if (entry.deleted) continue;
+        const key = JSON.stringify([entry.domain, entry.topic, entry.updatedAt]);
+        if (!memoryEdits.has(key)) memoryEdits.set(key, { confirmed: entry.confirmed.join('\n'), uncertain: entry.uncertain.join('\n') });
+        const edit = memoryEdits.get(key), card = node('details', undefined, 'card');
+        card.append(node('summary', `${entry.domain} · ${entry.topic}`), node('small', `${entry.updatedAt} · ${{ observation: '관찰', 'self-report': '자기평가', inference: '추론' }[entry.basis] || entry.basis}`));
+        card.append(node('p', entry.userEdited ? '사용자 확인·수정으로 자동 덮어쓰기 잠금' : '정리에서 얻은 내용이며 숙달 판정이 아닙니다.', 'muted'));
+        field(card, '확인된 내용 (한 줄에 하나)', edit.confirmed, (value) => { edit.confirmed = value; });
+        field(card, '아직 확인되지 않은 내용 (한 줄에 하나)', edit.uncertain, (value) => { edit.uncertain = value; });
+        const target = { domain: entry.domain, topic: entry.topic };
+        card.append(row(button('내용 확인', () => send('memoryEdit', { target, change: 'confirm' }), true),
+          button('수정 저장', () => send('memoryEdit', { target, change: { confirmed: edit.confirmed.split('\n').filter((line) => line.trim()), uncertain: edit.uncertain.split('\n').filter((line) => line.trim()) } }), true),
+          button('기억 삭제', () => send('memoryEdit', { target, change: 'delete' }), true)));
+        card.append(node('small', '기존 기록 근거'), node('pre', JSON.stringify(entry.evidence))); accountBox.append(card);
+      }
+    }
+    app.append(accountBox);
     app.append(node('p', state.connection, 'muted'), row(button('ChatGPT 로그인', () => send('login'), true), button('연결 확인', () => send('status'), true)));
     const close = button('학습 세션 닫기', () => send('closeSession'), true); close.disabled = state.busy || state.running || !state.session; app.append(close);
     app.append(node('p', '이 문제의 대화는 로컬에 보존됩니다. 질문을 보낼 때 등록한 본문과 그림을 AI에 전달합니다.', 'muted'));
@@ -143,7 +181,15 @@
     if (state.pendingCode) { const detail = node('details'); detail.append(node('summary', `첨부 코드 · ${state.pendingCode.label}`), node('pre', state.pendingCode.text)); composer.append(detail, button('코드 제외', () => send('clearCode'), true)); }
     if (state.pendingFailures?.length) { const detail = node('details'); detail.append(node('summary', `첨부 실행 결과 ${state.pendingFailures.length}개`), node('pre', JSON.stringify(state.pendingFailures, null, 2))); composer.append(detail, button('결과 제외', () => send('clearFailures'), true)); }
     const input = field(composer, '질문', question, (value) => { question = value; }); input.id = 'question'; composer.querySelector('label').htmlFor = 'question';
-    const submit = button('질문 보내기', () => { question = input.value; persist(); send('question', { question }); }); submit.disabled = state.busy || !state.session;
+    if (account) {
+      const referenceSetup = node('details'); referenceSetup.append(node('summary', '이번 질문의 기억 참고 (선택)'));
+      const domain = node('select'); domain.setAttribute('aria-label', '이번 질문의 학습 영역');
+      for (const [value, label] of [['algorithm', '알고리즘'], ['cs', '컴퓨터 과학'], ['opic', '말하기'], ['report', '보고서']]) domain.append(new Option(label, value));
+      domain.value = memoryDomain; domain.onchange = () => { memoryDomain = domain.value; }; referenceSetup.append(domain);
+      field(referenceSetup, '이번 질문에 참고할 기억 주제 (한 줄에 하나, 선택)', memoryTopics, (value) => { memoryTopics = value; });
+      referenceSetup.append(node('small', '지정한 주제와 일치하는 기억만 참고합니다. 비우면 기억을 전달하지 않습니다.')); composer.append(referenceSetup);
+    }
+    const submit = button('질문 보내기', () => { question = input.value; persist(); const topics = memoryTopics.split('\n').filter((topic) => topic.trim()); memoryTopics = ''; send('question', { question, memoryDomain, memoryTopics: topics }); }); submit.disabled = state.busy || !state.session;
     const stop = button('답변 중지', () => send('stopChat'), true); stop.disabled = !state.busy;
     composer.append(row(button('선택 코드 첨부', () => send('attachCode'), true), submit, stop));
     composer.onsubmit = (event) => { event.preventDefault(); if (!submit.disabled) submit.click(); }; app.append(composer);
