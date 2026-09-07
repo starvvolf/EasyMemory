@@ -39,7 +39,8 @@ API 시험은 MCP 결과를 기획팀2가 확인한 뒤 별도로 허가할 때�
 현재 열린 Codex Desktop 세션은 새 stdio 서버를 hot-load하지 않는다. 기존 설정을 바꾸지 않고 평가용 새 Codex CLI 세션에만 MCP를 노출하려면 다음과 같이 실행한다. 아래 `PROMPT`에는 위 도구 순서를 따르고 4문항만 만든 뒤 최대 1회 부분수정하라는 평가 프롬프트를 넣는다.
 
 ```powershell
-codex `
+$codexExe = 'C:\Users\jkh01\AppData\Local\OpenAI\Codex\bin\8e5b6932251c2c1c\codex.exe'
+& $codexExe `
   -c 'mcp_servers.problem_authoring_lab.command="node"' `
   -c 'mcp_servers.problem_authoring_lab.args=["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON","C:\\Users\\jkh01\\.codex\\worktrees\\778b\\CD0625\\tools\\problem-authoring-lab\\mcp-server.ts"]' `
   exec --ephemeral -C 'C:\Users\jkh01\.codex\worktrees\778b\CD0625' PROMPT
@@ -49,16 +50,16 @@ codex `
 
 ### 현재 호스트에서 확인된 실행 blocker
 
-2026-09-07 확인 결과 현재 PATH의 CLI는 `codex-cli 0.101.0`이고 `codex login status`는 `Not logged in`이다. 이 상태에서 `gpt-6-astra`를 지정한 첫 평가 실행은 unknown-model 경고 뒤 Responses 연결 재시도만 발생해 중단됐으며, 모델 응답과 MCP 도구 호출은 0회였다.
+2026-09-07 확인 결과 PATH의 CLI는 `codex-cli 0.101.0`이지만, Codex 앱에 `C:\Users\jkh01\AppData\Local\OpenAI\Codex\bin\8e5b6932251c2c1c\codex.exe` 버전 `0.153.4`가 이미 설치되어 있다. 평가에는 이 앱 번들 CLI 절대경로를 사용한다. 두 CLI의 `login status`는 모두 `Not logged in`이다.
 
-공식 문서는 현재 Codex CLI 예시에서 더 새로운 버전을 보여주고 `codex -m gpt-6-astra`를 안내하지만, Astra의 정확한 최소 CLI 버전은 확인되지 않았다. 따라서 재개 전에 사용자가 승인한 방식으로 CLI를 업데이트하고, `codex login`의 브라우저 ChatGPT 인증을 완료한 뒤 아래를 확인해야 한다.
+첫 평가 시도에서는 모델 요청과 CLI 자동 재연결이 발생했지만 Responses transport 오류로 중단됐고, 모델 응답·문항·실제 MCP 도구 호출은 0회였다. 미인증 상태와 transport 오류는 각각 확인된 사실이지만, 인증 전 결과만으로 transport 오류의 원인을 인증으로 확정하지 않는다. 앱 번들 CLI에서 공식 ChatGPT 로그인을 완료한 뒤 연결을 다시 검증해야 한다.
 
 ```powershell
-codex --version
-codex login status
+& $codexExe --version
+& $codexExe login status
 ```
 
-업데이트와 로그인은 이 실험이 자동으로 수행하지 않는다. API 키나 토큰을 복사하는 fallback, 다른 모델로의 임의 대체, API 경로 선행도 허용하지 않는다.
+CLI 업데이트는 현재 재개 조건이 아니다. 로그인은 이 실험이 자동으로 수행하지 않는다. API 키나 토큰을 복사하는 fallback, 다른 모델로의 임의 대체, API 경로 선행도 허용하지 않는다.
 
 ## 오프라인 확인
 
