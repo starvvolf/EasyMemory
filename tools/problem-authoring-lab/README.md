@@ -70,6 +70,12 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/
 
 두 번째 명령은 `manifest.json`, iteration별 문서·검사·패치, 정답 전·후 HTML을 만든다. mock 산출물은 도구 동작 확인용이며 AI 제작 품질 증거가 아니다.
 
+기존 문항 내용과 ID를 그대로 둔 채 렌더러 변경만 비교할 때는 다음 명령을 사용한다. 원본 산출물은 덮어쓰지 않고 별도 디렉터리에 같은 `document.json`과 새 HTML을 저장한다.
+
+```powershell
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/rerender-existing.ts <document.json> <output-directory>
+```
+
 ## 제품 연결이 필요할 때
 
 제품 쪽 최소 입력은 현재 `LearningUnit/KnowledgeUnit`에서 이미 가진 내용·목표·성공 기준·원문 출처다. 최소 출력은 안정 `questionId/responseId`, 자유 블록 문서, 정답·채점 계약이다. 실제 답안 기록·다시 풀기 연결은 이 1차 실험의 완료 조건이 아니며 공용 타입과 제품 렌더러를 바꾸기 전에 별도 합의가 필요하다.

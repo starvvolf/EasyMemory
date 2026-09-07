@@ -50,9 +50,47 @@ function renderBlock(block: AuthoringBlock, question: AuthoredQuestion, state: R
 
 export function renderDocument(document: AuthoringDocument, state: RenderState) {
   const questions = document.questions.map((question, index) => `<section class="question-page" data-question-id="${escapeHtml(question.id)}" style="width:${question.page.width}px;height:${question.page.height}px"><div class="number">${index + 1}</div>${question.blocks.map((block) => renderBlock(block, question, state)).join("")}</section>`).join("\n");
-  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(document.title)}</title><style>${STYLES}</style></head><body><main><h1>${escapeHtml(document.title)}</h1><p class="mode">${state.revealAnswers ? "정답 공개 화면" : "풀이 화면"}</p>${questions}</main></body></html>`;
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=820"><title>${escapeHtml(document.title)}</title><style>${STYLES}</style></head><body><main><header class="document-header"><h1>${escapeHtml(document.title)}</h1><p class="mode">${state.revealAnswers ? "정답 공개 화면" : "풀이 화면"}</p></header>${questions}</main></body></html>`;
 }
 
 const STYLES = `
-*{box-sizing:border-box}body{margin:0;background:#eef1f5;color:#172033;font:15px/1.5 Arial,"Noto Sans KR",sans-serif}main{max-width:920px;margin:0 auto;padding:28px}h1{margin:0}.mode{color:#566176}.question-page{position:relative;margin:24px auto;background:white;border:1px solid #c8ced8;border-radius:12px;box-shadow:0 5px 18px #1c26351a;overflow:hidden}.number{position:absolute;left:18px;top:14px;font-weight:800}.block{position:absolute;overflow:auto}.text.heading{font-size:20px;font-weight:750}.text.caption{font-size:12px;color:#616b7d}.box{border:1.5px solid #6e7788;border-radius:7px;padding:10px}.box.accent{background:#eef5ff;border-color:#4878c7}.box.warning{background:#fff7df;border-color:#bd8b26}.image-placeholder{height:100%;border:1px dashed #738097;background:#f7f8fa;display:grid;place-items:center;text-align:center;padding:12px}.table{border-collapse:collapse}.table td,.table th{border:1px solid #7d8797;padding:7px}.choices{display:grid;gap:8px}.choice{border:1px solid #bbc3cf;border-radius:7px;padding:9px;background:#fff}.choice.correct{border-color:#218a55;background:#eaf8f0}.blank{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.blank input{min-width:130px;border:0;border-bottom:2px solid #1f2a3d;padding:5px;background:#f7f8fb}.reveal{padding:10px;border-radius:7px;background:#eaf8f0;border:1px solid #73b98f}.hidden-answer{background:#f4f5f7;border-color:#d5d9df;color:#697386}
+*{box-sizing:border-box}
+:root{--canvas:#f4f6f9;--surface:#fff;--surface-soft:#f8fafc;--text:#182230;--muted:#667085;--line:#dfe4ea;--accent:#4f46e5;--accent-soft:#eef2ff;--success:#14804a;--success-soft:#ecfdf3;--warning:#b54708;--warning-soft:#fff7ed;--radius:14px;--shadow:0 8px 24px rgba(16,24,40,.07)}
+html{background:var(--canvas)}
+body{margin:0;background:var(--canvas);color:var(--text);font:15px/1.65 system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;letter-spacing:-.01em;-webkit-font-smoothing:antialiased}
+main{width:820px;margin:0 auto;padding:34px 30px 52px}
+.document-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 4px 22px;padding:0 2px 18px;border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:26px;line-height:1.3;letter-spacing:-.035em;font-weight:750}
+.mode{margin:0;color:var(--muted);font-size:13px;font-weight:600;white-space:nowrap}
+.question-page{position:relative;margin:22px auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.number{position:absolute;left:18px;top:14px;color:var(--accent);font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+.block{position:absolute;overflow:auto;overflow-wrap:anywhere}
+.text.body{font-size:19px;line-height:1.55;font-weight:700;letter-spacing:-.025em;white-space:pre-line}
+.text.heading{font-size:21px;line-height:1.45;font-weight:750;letter-spacing:-.03em;white-space:pre-line}
+.text.caption{font-size:12px;color:var(--muted)}
+.box{padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface-soft);white-space:pre-line;color:#344054}
+.box.accent{background:var(--accent-soft);border-color:#c7d2fe;color:#3730a3}
+.box.warning{background:var(--warning-soft);border-color:#fed7aa;color:var(--warning)}
+.image-placeholder{height:100%;border:1px dashed #98a2b3;border-radius:var(--radius);background:var(--surface-soft);display:grid;place-items:center;text-align:center;padding:14px;color:var(--muted)}
+.table{border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.table td,.table th{border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:middle}
+.table th{background:var(--surface-soft);color:#344054;font-weight:700}
+.table tr:last-child>*{border-bottom:0}
+.table tr>*:last-child{border-right:0}
+.choices{display:grid;gap:10px}
+.choice{display:flex;align-items:flex-start;gap:9px;min-height:46px;border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:var(--surface);line-height:1.5;cursor:pointer;transition:border-color .15s ease,background-color .15s ease}
+.choice:hover{border-color:#a5b4fc;background:#fafaff}
+.choice:focus-within{outline:3px solid rgba(79,70,229,.16);border-color:var(--accent)}
+.choice input{flex:0 0 auto;margin:4px 1px 0 0;accent-color:var(--accent)}
+.choice b{flex:0 0 20px;color:var(--accent);font-variant-numeric:tabular-nums}
+.choice.correct{border-color:#86d5a8;background:var(--success-soft)}
+.choice.correct b{color:var(--success)}
+.blank{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:16px;line-height:1.7}
+.blank input{min-width:150px;height:42px;border:1px solid #cbd5e1;border-radius:11px;padding:8px 12px;background:var(--surface);color:var(--text);font:inherit;outline:none}
+.blank input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.14)}
+.reveal{padding:13px 15px;border-radius:var(--radius);background:var(--success-soft);border:1px solid #a6e7c1;color:#166534}
+.reveal strong{display:block;margin-bottom:4px;font-weight:750}
+.reveal p{margin:3px 0}
+.hidden-answer{background:var(--surface-soft);border-color:var(--line);color:var(--muted)}
+@media print{html,body{background:#fff}.document-header{margin-top:0}.question-page{break-inside:avoid;box-shadow:none}}
 `;

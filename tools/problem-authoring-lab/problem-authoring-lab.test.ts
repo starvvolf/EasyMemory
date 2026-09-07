@@ -38,6 +38,16 @@ test("정답 전 화면은 답을 숨기고 정답 후 화면은 계약의 답�
   assert.match(after, /1000만 K/);
 });
 
+test("기본 렌더는 외부 폰트 없이 현대적인 한글 시스템 UI 토큰을 사용한다", async () => {
+  const document = mockDraft((await fixture()).items);
+  const html = renderDocument(document, { revealAnswers: false });
+  assert.match(html, /system-ui,-apple-system,"Segoe UI","Malgun Gothic"/);
+  assert.match(html, /--accent:#4f46e5/);
+  assert.match(html, /border-radius:16px/);
+  assert.match(html, /white-space:pre-line/);
+  assert.doesNotMatch(html, /fonts\.googleapis|@font-face/);
+});
+
 test("부분수정은 지정 블록만 바꾸고 문항·응답 ID를 보존한다", async () => {
   const document = mockDraft((await fixture()).items);
   const next = applyRevision(document, mockPatch);
