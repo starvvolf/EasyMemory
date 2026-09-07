@@ -47,6 +47,19 @@ codex `
 
 같은 override로 실행한 `codex ... mcp list`에서 `problem_authoring_lab`가 `enabled`로 인식되는 것을 확인했다. 이 방식은 `~/.codex/config.toml`을 수정하거나 기존 MCP 등록을 덮어쓰지 않는다. 새 CLI 프로세스의 실제 모델·reasoning 설정은 평가 담당이 명시하고 기록해야 한다.
 
+### 현재 호스트에서 확인된 실행 blocker
+
+2026-09-07 확인 결과 현재 PATH의 CLI는 `codex-cli 0.101.0`이고 `codex login status`는 `Not logged in`이다. 이 상태에서 `gpt-6-astra`를 지정한 첫 평가 실행은 unknown-model 경고 뒤 Responses 연결 재시도만 발생해 중단됐으며, 모델 응답과 MCP 도구 호출은 0회였다.
+
+공식 문서는 현재 Codex CLI 예시에서 더 새로운 버전을 보여주고 `codex -m gpt-6-astra`를 안내하지만, Astra의 정확한 최소 CLI 버전은 확인되지 않았다. 따라서 재개 전에 사용자가 승인한 방식으로 CLI를 업데이트하고, `codex login`의 브라우저 ChatGPT 인증을 완료한 뒤 아래를 확인해야 한다.
+
+```powershell
+codex --version
+codex login status
+```
+
+업데이트와 로그인은 이 실험이 자동으로 수행하지 않는다. API 키나 토큰을 복사하는 fallback, 다른 모델로의 임의 대체, API 경로 선행도 허용하지 않는다.
+
 ## 오프라인 확인
 
 ```powershell
