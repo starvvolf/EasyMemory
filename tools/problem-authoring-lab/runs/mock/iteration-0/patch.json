@@ -1,0 +1,22 @@
+{
+  "instruction": "q2 지시문만 수정해 빈칸이 원자핵의 상대적 무게를 묻는다는 점을 분명히 한다.",
+  "operations": [
+    {
+      "op": "replace-block",
+      "questionId": "q-lu3-blank",
+      "blockId": "q2-title",
+      "value": {
+        "id": "q2-title",
+        "kind": "text",
+        "frame": {
+          "x": 55,
+          "y": 35,
+          "width": 650,
+          "height": 48
+        },
+        "style": "heading",
+        "text": "표를 참고해 빈칸을 모두 완성하시오: 원자핵의 상대적 무게"
+      }
+    }
+  ]
+}
