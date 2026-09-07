@@ -6,6 +6,7 @@ import { renderDocument } from "./renderer.ts";
 
 const sourceDocument = path.resolve(process.argv[2] ?? "");
 const outputDirectory = path.resolve(process.argv[3] ?? "");
+const rendererRevision = process.argv[4] ?? "current";
 
 if (!process.argv[2] || !process.argv[3]) {
   throw new Error("사용법: rerender-existing.ts <document.json> <output-directory>");
@@ -23,7 +24,7 @@ await Promise.all([
     sourceDocument: path.relative(process.cwd(), sourceDocument).replaceAll("\\", "/"),
     documentSha256: createHash("sha256").update(documentText).digest("hex"),
     contentChanged: false,
-    rendererRevision: "modern-soft-v1",
+    rendererRevision,
   }, null, 2)),
 ]);
 

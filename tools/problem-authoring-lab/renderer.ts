@@ -54,19 +54,20 @@ export function renderDocument(document: AuthoringDocument, state: RenderState) 
 }
 
 const STYLES = `
+@font-face{font-family:"Pretendard Variable";src:url("../../../assets/fonts/pretendard-1.3.9/PretendardVariable.woff2") format("woff2");font-style:normal;font-weight:45 920;font-display:swap}
 *{box-sizing:border-box}
 :root{--canvas:#f4f6f9;--surface:#fff;--surface-soft:#f8fafc;--text:#182230;--muted:#667085;--line:#dfe4ea;--accent:#4f46e5;--accent-soft:#eef2ff;--success:#14804a;--success-soft:#ecfdf3;--warning:#b54708;--warning-soft:#fff7ed;--radius:14px;--shadow:0 8px 24px rgba(16,24,40,.07)}
 html{background:var(--canvas)}
-body{margin:0;background:var(--canvas);color:var(--text);font:15px/1.65 system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;letter-spacing:-.01em;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--canvas);color:var(--text);font:400 15px/1.65 "Pretendard Variable",system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;letter-spacing:-.01em;-webkit-font-smoothing:antialiased}
 main{width:820px;margin:0 auto;padding:34px 30px 52px}
 .document-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 4px 22px;padding:0 2px 18px;border-bottom:1px solid var(--line)}
-h1{margin:0;font-size:26px;line-height:1.3;letter-spacing:-.035em;font-weight:750}
+h1{margin:0;font-size:26px;line-height:1.3;letter-spacing:-.035em;font-weight:700}
 .mode{margin:0;color:var(--muted);font-size:13px;font-weight:600;white-space:nowrap}
 .question-page{position:relative;margin:22px auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
 .number{position:absolute;left:18px;top:14px;color:var(--accent);font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
 .block{position:absolute;overflow:auto;overflow-wrap:anywhere}
 .text.body{font-size:19px;line-height:1.55;font-weight:700;letter-spacing:-.025em;white-space:pre-line}
-.text.heading{font-size:21px;line-height:1.45;font-weight:750;letter-spacing:-.03em;white-space:pre-line}
+.text.heading{font-size:21px;line-height:1.45;font-weight:700;letter-spacing:-.03em;white-space:pre-line}
 .text.caption{font-size:12px;color:var(--muted)}
 .box{padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface-soft);white-space:pre-line;color:#344054}
 .box.accent{background:var(--accent-soft);border-color:#c7d2fe;color:#3730a3}
@@ -89,7 +90,7 @@ h1{margin:0;font-size:26px;line-height:1.3;letter-spacing:-.035em;font-weight:75
 .blank input{min-width:150px;height:42px;border:1px solid #cbd5e1;border-radius:11px;padding:8px 12px;background:var(--surface);color:var(--text);font:inherit;outline:none}
 .blank input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.14)}
 .reveal{padding:13px 15px;border-radius:var(--radius);background:var(--success-soft);border:1px solid #a6e7c1;color:#166534}
-.reveal strong{display:block;margin-bottom:4px;font-weight:750}
+.reveal strong{display:block;margin-bottom:4px;font-weight:700}
 .reveal p{margin:3px 0}
 .hidden-answer{background:var(--surface-soft);border-color:var(--line);color:var(--muted)}
 @media print{html,body{background:#fff}.document-header{margin-top:0}.question-page{break-inside:avoid;box-shadow:none}}

@@ -73,8 +73,12 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/
 기존 문항 내용과 ID를 그대로 둔 채 렌더러 변경만 비교할 때는 다음 명령을 사용한다. 원본 산출물은 덮어쓰지 않고 별도 디렉터리에 같은 `document.json`과 새 HTML을 저장한다.
 
 ```powershell
-node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/rerender-existing.ts <document.json> <output-directory>
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/rerender-existing.ts <document.json> <output-directory> [renderer-revision]
 ```
+
+## 글꼴 자산
+
+HTML은 런타임 CDN 없이 로컬 `assets/fonts/pretendard-1.3.9/PretendardVariable.woff2`를 실제 웹폰트로 사용한다. `font-weight: 45 920` 범위를 가진 공식 Pretendard v1.3.9 가변 WOFF2이며, 본문은 400, 보조 위계는 600, 제목은 700을 기본값으로 사용한다. 브라우저가 파일을 읽지 못하는 경우에만 운영체제 한글 sans-serif stack으로 대체된다. 재배포 조건은 같은 디렉터리의 `LICENSE.txt`에 보존했다.
 
 ## 제품 연결이 필요할 때
 

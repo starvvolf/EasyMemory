@@ -38,14 +38,22 @@ test("정답 전 화면은 답을 숨기고 정답 후 화면은 계약의 답�
   assert.match(after, /1000만 K/);
 });
 
-test("기본 렌더는 외부 폰트 없이 현대적인 한글 시스템 UI 토큰을 사용한다", async () => {
+test("기본 렌더는 로컬 Pretendard 가변 웹폰트와 시스템 fallback을 사용한다", async () => {
   const document = mockDraft((await fixture()).items);
   const html = renderDocument(document, { revealAnswers: false });
-  assert.match(html, /system-ui,-apple-system,"Segoe UI","Malgun Gothic"/);
+  assert.match(html, /@font-face\{font-family:"Pretendard Variable"/);
+  assert.match(html, /PretendardVariable\.woff2/);
+  assert.match(html, /font-weight:45 920/);
+  assert.match(html, /"Pretendard Variable",system-ui,-apple-system,"Segoe UI","Malgun Gothic"/);
   assert.match(html, /--accent:#4f46e5/);
   assert.match(html, /border-radius:16px/);
   assert.match(html, /white-space:pre-line/);
-  assert.doesNotMatch(html, /fonts\.googleapis|@font-face/);
+  assert.doesNotMatch(html, /https?:\/\/|fonts\.googleapis/);
+  const font = await readFile("tools/problem-authoring-lab/assets/fonts/pretendard-1.3.9/PretendardVariable.woff2");
+  assert.equal(font.subarray(0, 4).toString("ascii"), "wOF2");
+  assert.ok(font.byteLength > 1_000_000);
+  const license = await readFile("tools/problem-authoring-lab/assets/fonts/pretendard-1.3.9/LICENSE.txt", "utf8");
+  assert.match(license, /SIL OPEN FONT LICENSE Version 1\.1/);
 });
 
 test("부분수정은 지정 블록만 바꾸고 문항·응답 ID를 보존한다", async () => {
