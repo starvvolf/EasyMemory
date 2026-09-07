@@ -16,12 +16,24 @@ export type SourceAssetRef = {
   assetId: string;
   crop?: { x: number; y: number; width: number; height: number };
 };
+export type GeneratedAssetRef = {
+  assetId: string;
+  path: string;
+  mimeType: "image/svg+xml";
+  sha256: string;
+  generator: "python-matplotlib";
+  generatorVersion: string;
+  scriptPath: string;
+  specPath: string;
+  specSha256: string;
+};
 
 type BlockBase = { id: string; frame: Frame };
 export type AuthoringBlock =
   | (BlockBase & { kind: "text"; text: string; style?: "body" | "heading" | "caption" })
   | (BlockBase & { kind: "box"; label?: string; tone?: "plain" | "accent" | "warning" })
   | (BlockBase & { kind: "image"; alt: string; sourceAssetRef: SourceAssetRef })
+  | (BlockBase & { kind: "generated-image"; alt: string; caption?: string; generatedAssetRef: GeneratedAssetRef })
   | (BlockBase & { kind: "table"; rows: string[][]; headerRows?: number })
   | (BlockBase & { kind: "choice-set"; responseId: string; optionIds: string[]; columns?: number })
   | (BlockBase & { kind: "blank"; responseId: string; promptBefore: string; promptAfter: string })
@@ -84,6 +96,11 @@ function unique(values: string[]) {
   return new Set(values).size === values.length;
 }
 
+function isSafeRelativePath(value: string) {
+  if (!value || value.includes("\\") || /^[a-z]+:/i.test(value) || value.startsWith("/")) return false;
+  return value.split("/").every((segment) => segment && segment !== "." && segment !== "..");
+}
+
 export function validateDocument(document: AuthoringDocument): InspectionIssue[] {
   const issues: InspectionIssue[] = [];
   if (document.schemaVersion !== "problem-authoring-v1") {
@@ -122,6 +139,23 @@ export function validateDocument(document: AuthoringDocument): InspectionIssue[]
       }
       if (block.kind === "image" && (block.sourceAssetRef.sourceId !== question.source.sourceId || block.sourceAssetRef.page !== question.source.sourcePage)) {
         issues.push({ severity: "error", code: "image-source", message: "그림이 문항 원문 출처와 연결되지 않았습니다.", questionId: question.id, blockId: block.id });
+      }
+      if (block.kind === "generated-image") {
+        const asset = block.generatedAssetRef;
+        const valid = Boolean(block.alt.trim())
+          && asset.mimeType === "image/svg+xml"
+          && asset.generator === "python-matplotlib"
+          && /^assets\/[a-z0-9][a-z0-9._-]*\.svg$/i.test(asset.path)
+          && isSafeRelativePath(asset.path)
+          && isSafeRelativePath(asset.scriptPath)
+          && isSafeRelativePath(asset.specPath)
+          && /^[a-f0-9]{64}$/i.test(asset.sha256)
+          && /^[a-f0-9]{64}$/i.test(asset.specSha256)
+          && Boolean(asset.assetId.trim())
+          && Boolean(asset.generatorVersion.trim());
+        if (!valid) {
+          issues.push({ severity: "error", code: "generated-asset-contract", message: "생성 그림의 로컬 SVG 경로 또는 재현 정보가 유효하지 않습니다.", questionId: question.id, blockId: block.id });
+        }
       }
     }
     for (const response of question.responses) {

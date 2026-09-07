@@ -29,6 +29,7 @@ function renderBlock(block: AuthoringBlock, question: AuthoredQuestion, state: R
   if (block.kind === "text") return `<div class="block text ${block.style ?? "body"}" data-block-id="${escapeHtml(block.id)}" style="${style}">${escapeHtml(block.text)}</div>`;
   if (block.kind === "box") return `<div class="block box ${block.tone ?? "plain"}" data-block-id="${escapeHtml(block.id)}" style="${style}">${escapeHtml(block.label ?? "")}</div>`;
   if (block.kind === "image") return `<figure class="block image" data-block-id="${escapeHtml(block.id)}" data-source-asset="${escapeHtml(block.sourceAssetRef.assetId)}" style="${style}"><div class="image-placeholder">원문 그림 · ${escapeHtml(block.alt)}</div></figure>`;
+  if (block.kind === "generated-image") return `<figure class="block generated-image" data-block-id="${escapeHtml(block.id)}" data-generated-asset="${escapeHtml(block.generatedAssetRef.assetId)}" style="${style}"><img src="${escapeHtml(block.generatedAssetRef.path)}" alt="${escapeHtml(block.alt)}">${block.caption ? `<figcaption>${escapeHtml(block.caption)}</figcaption>` : ""}</figure>`;
   if (block.kind === "table") return `<table class="block table" data-block-id="${escapeHtml(block.id)}" style="${style}">${block.rows.map((row, rowIndex) => `<tr>${row.map((cell) => `${rowIndex < (block.headerRows ?? 0) ? "<th>" : "<td>"}${escapeHtml(cell)}${rowIndex < (block.headerRows ?? 0) ? "</th>" : "</td>"}`).join("")}</tr>`).join("")}</table>`;
   if (block.kind === "choice-set") {
     const response = responses.get(block.responseId);
@@ -73,6 +74,9 @@ h1{margin:0;font-size:26px;line-height:1.3;letter-spacing:-.035em;font-weight:70
 .box.accent{background:var(--accent-soft);border-color:#c7d2fe;color:#3730a3}
 .box.warning{background:var(--warning-soft);border-color:#fed7aa;color:var(--warning)}
 .image-placeholder{height:100%;border:1px dashed #98a2b3;border-radius:var(--radius);background:var(--surface-soft);display:grid;place-items:center;text-align:center;padding:14px;color:var(--muted)}
+.generated-image{margin:0;padding:12px;border:1px solid var(--line);border-radius:var(--radius);background:#fff;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:6px;overflow:hidden}
+.generated-image img{display:block;width:100%;height:100%;object-fit:contain}
+.generated-image figcaption{color:var(--muted);font-size:12px;line-height:1.4;text-align:center}
 .table{border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
 .table td,.table th{border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:middle}
 .table th{background:var(--surface-soft);color:#344054;font-weight:700}

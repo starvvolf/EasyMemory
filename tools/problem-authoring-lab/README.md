@@ -8,6 +8,7 @@
 - 출력: 자유 배치 블록 문서, 안정 문항·응답·선지 ID, 채점 계약, 정답 전·후 HTML
 - 제작 지침: [`skill/problem-authoring/SKILL.md`](skill/problem-authoring/SKILL.md)와 객관식·빈칸형 초기 가설
 - 수정: 블록 또는 응답 계약 단위의 `replace`만 허용하며 ID 변경은 거부
+- 그림: 원문 그림 `image`와 Python/Matplotlib로 재현한 로컬 SVG `generated-image`를 출처·해시 계약으로 구분
 - 반복: mock 하네스는 최대 1회 수정한다. 실제 MCP 평가의 모델 호출·턴 상한은 평가 담당이 기록한다.
 - 상태 `ready-for-independent-review`는 계약 검사와 mock 검사 완료만 뜻하며 품질 합격을 뜻하지 않는다.
 
@@ -69,6 +70,14 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/
 ```
 
 두 번째 명령은 `manifest.json`, iteration별 문서·검사·패치, 정답 전·후 HTML을 만든다. mock 산출물은 도구 동작 확인용이며 AI 제작 품질 증거가 아니다.
+
+한 문항 그래프 실험은 `load_source_packet({ packetId: "graph-one" })`로 고정 학습 내용을 읽고 아래 스크립트로 SVG와 재현 메타데이터를 먼저 만든다. 현재 호스트에서는 기존 `avalonbench` Python 환경의 Matplotlib 3.9.4를 사용하며 새 패키지를 설치하지 않는다.
+
+```powershell
+& 'C:\Users\jkh01\anaconda3\envs\avalonbench\python.exe' tools/problem-authoring-lab/graph-assets/generate_curve_line_svg.py --spec tools/problem-authoring-lab/fixtures/graph-one-spec.json --output tools/problem-authoring-lab/runs/graph-one-mcp/iteration-0/assets/curve-line-intersections.svg --metadata tools/problem-authoring-lab/runs/graph-one-mcp/iteration-0/assets/curve-line-intersections.meta.json --preview-png tools/problem-authoring-lab/runs/graph-one-mcp/iteration-0/assets/curve-line-intersections.preview.png
+```
+
+문서의 `generated-image`는 위 SVG를 `assets/curve-line-intersections.svg`로 참조하고, 메타데이터의 SVG·spec SHA-256과 generator 정보를 그대로 기록한다. SVG 안의 외부 리소스 참조는 허용하지 않는다.
 
 기존 문항 내용과 ID를 그대로 둔 채 렌더러 변경만 비교할 때는 다음 명령을 사용한다. 원본 산출물은 덮어쓰지 않고 별도 디렉터리에 같은 `document.json`과 새 HTML을 저장한다.
 

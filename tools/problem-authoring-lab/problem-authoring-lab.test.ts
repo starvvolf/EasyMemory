@@ -1,9 +1,10 @@
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { applyRevision, gradeResponse, validateDocument, type SourceContent } from "./contract.ts";
+import { applyRevision, gradeResponse, validateDocument, type AuthoringDocument, type SourceContent } from "./contract.ts";
 import { mockDraft, mockPatch } from "./fixtures/mock-adapters.ts";
 import { createProblemAuthoringMcpServer } from "./mcp-server.ts";
 import { renderDocument } from "./renderer.ts";
@@ -12,11 +13,13 @@ async function fixture() {
   return JSON.parse(await readFile("tools/problem-authoring-lab/fixtures/science-source-packet.json", "utf8")) as { items: SourceContent[] };
 }
 
-test("실험 스킬은 유효한 이름·설명과 두 시작 유형 참조를 가진다", async () => {
+test("실험 스킬은 유효한 이름·설명과 선택 가능한 네 방법 참조를 가진다", async () => {
   const skill = await readFile("tools/problem-authoring-lab/skill/problem-authoring/SKILL.md", "utf8");
   assert.match(skill, /^---\r?\nname: problem-authoring\r?\ndescription: .+\r?\n---/);
   assert.match(skill, /references\/multiple-choice\.md/);
   assert.match(skill, /references\/fill-blank\.md/);
+  assert.match(skill, /references\/relationship-structure\.md/);
+  assert.match(skill, /references\/graph-geometry\.md/);
   assert.doesNotMatch(skill, /\[TODO:/);
 });
 
@@ -83,10 +86,73 @@ test("실제 MCP 도구로 입력→검사→렌더→부분수정 흐름을 수
   assert.match((rendered.structuredContent as { beforeAnswerHtml: string }).beforeAnswerHtml, /q-lu5-choice/);
   const patched = await client.callTool({ name: "apply_problem_patch", arguments: { document, patch: mockPatch } });
   assert.equal((patched.structuredContent as { document: typeof document }).document.questions[1].blocks[0].id, "q2-title");
+  const graphLoaded = await client.callTool({ name: "load_source_packet", arguments: { packetId: "graph-one" } });
+  assert.equal((graphLoaded.structuredContent as { packet: { items: SourceContent[] } }).packet.items.length, 1);
+  const graphInstructions = await client.callTool({ name: "get_authoring_instructions", arguments: { methods: ["graph-geometry"] } });
+  const instructionContent = graphInstructions.structuredContent as { references: Record<string, string>; multipleChoice?: string; skillVersion: string };
+  assert.deepEqual(Object.keys(instructionContent.references), ["graph-geometry"]);
+  assert.equal(instructionContent.multipleChoice, undefined);
+  assert.equal(instructionContent.skillVersion, "problem-authoring-method-v2");
 });
 
 test("원문 페이지와 연결되지 않은 그림은 거부한다", async () => {
   const document = mockDraft((await fixture()).items);
   document.questions[0].blocks.push({ id: "bad-image", kind: "image", frame: { x: 50, y: 10, width: 100, height: 50 }, alt: "임의 도표", sourceAssetRef: { sourceId: "other", page: 99, assetId: "made-up" } });
   assert.ok(validateDocument(document).some((issue) => issue.code === "image-source"));
+});
+
+test("생성 SVG는 원문 그림과 분리해 로컬 경로와 재현 해시를 검증한다", async () => {
+  const packet = JSON.parse(await readFile("tools/problem-authoring-lab/fixtures/graph-one-source-packet.json", "utf8")) as { items: SourceContent[] };
+  const document: AuthoringDocument = {
+    schemaVersion: "problem-authoring-v1",
+    id: "generated-graph-contract-test",
+    title: "그래프 계약 검사",
+    questions: [{
+      id: "graph-q01",
+      source: packet.items[0]!,
+      page: { width: 760, height: 600 },
+      blocks: [{
+        id: "graph-q01-asset",
+        kind: "generated-image",
+        frame: { x: 40, y: 40, width: 680, height: 360 },
+        alt: "이차함수와 직선의 두 교점 그래프",
+        generatedAssetRef: {
+          assetId: "curve-line-intersections-v1",
+          path: "assets/curve-line-intersections.svg",
+          mimeType: "image/svg+xml",
+          sha256: "a".repeat(64),
+          generator: "python-matplotlib",
+          generatorVersion: "3.9.4",
+          scriptPath: "tools/problem-authoring-lab/graph-assets/generate_curve_line_svg.py",
+          specPath: "tools/problem-authoring-lab/fixtures/graph-one-spec.json",
+          specSha256: "b".repeat(64),
+        },
+      }],
+      responses: [],
+    }],
+  };
+  assert.deepEqual(validateDocument(document), []);
+  assert.match(renderDocument(document, { revealAnswers: false }), /<img src="assets\/curve-line-intersections\.svg"/);
+  const unsafe = structuredClone(document);
+  const block = unsafe.questions[0]!.blocks[0]!;
+  if (block.kind !== "generated-image") throw new Error("test setup failed");
+  block.generatedAssetRef.path = "https://example.com/answer.svg";
+  assert.ok(validateDocument(unsafe).some((issue) => issue.code === "generated-asset-contract"));
+});
+
+test("고정 그래프 자산은 spec과 일치하고 외부 SVG 리소스를 참조하지 않는다", async () => {
+  const root = "tools/problem-authoring-lab/runs/graph-one-mcp/iteration-0/assets";
+  const svg = await readFile(`${root}/curve-line-intersections.svg`);
+  const metadata = JSON.parse(await readFile(`${root}/curve-line-intersections.meta.json`, "utf8")) as {
+    sha256: string;
+    specSha256: string;
+    intersections: Array<{ label: string; x: number; y: number }>;
+  };
+  const spec = await readFile("tools/problem-authoring-lab/fixtures/graph-one-spec.json");
+  const hash = (value: Uint8Array) => createHash("sha256").update(value).digest("hex");
+  assert.equal(hash(svg), metadata.sha256);
+  assert.equal(hash(spec), metadata.specSha256);
+  assert.deepEqual(metadata.intersections, [{ label: "A", x: 1, y: 0 }, { label: "B", x: 4, y: 3 }]);
+  const hrefs = [...svg.toString("utf8").matchAll(/(?:xlink:)?href="([^"]+)"/g)].map((match) => match[1]);
+  assert.ok(hrefs.every((href) => href?.startsWith("#")));
 });

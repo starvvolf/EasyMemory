@@ -1,4 +1,4 @@
-# Multiple-choice authoring hypothesis v1
+# Selection authoring hypothesis v2
 
 Use this as a starting method and revise it only from observed failures across examples.
 
@@ -11,3 +11,5 @@ Use this as a starting method and revise it only from observed failures across e
 7. In the unanswered render, check that emphasis, length, labels, and surrounding text do not reveal the answer. In the revealed render, check that the highlighted option matches the response contract.
 
 Novelty is not a quality criterion. Prefer a less conventional composition only when it improves the required discrimination, clarity, or learnability.
+
+A wrong option is not useful merely because it is false. Use a confusion that a learner could reasonably make and that the supplied evidence can refute. If the stem can be answered from option length, repeated wording, or visual emphasis, treat that as answer leakage rather than successful measurement.

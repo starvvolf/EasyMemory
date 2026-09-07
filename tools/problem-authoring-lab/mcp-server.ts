@@ -10,39 +10,57 @@ import { renderDocument } from "./renderer.ts";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const unknownRecord = z.record(z.string(), z.unknown());
-const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+const sha256 = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
+const methodNames = ["selection", "recall-blank", "relationship-structure", "graph-geometry"] as const;
+const methodFiles: Record<(typeof methodNames)[number], string> = {
+  "selection": "multiple-choice.md",
+  "recall-blank": "fill-blank.md",
+  "relationship-structure": "relationship-structure.md",
+  "graph-geometry": "graph-geometry.md",
+};
 
 export function createProblemAuthoringMcpServer() {
   const server = new McpServer(
     { name: "study-forge-problem-authoring-lab", version: "0.1.0" },
-    { instructions: "Use the supplied source packet and problem-authoring skill to compose a block document. Validate it, render unanswered and revealed states, inspect the real HTML, and apply targeted patches. Never change source learning content or create unreferenced image facts." },
+    { instructions: "Use the supplied source packet and problem-authoring skill to compose a block document. Validate it, render unanswered and revealed states, inspect the real HTML, and apply targeted patches. Keep source images and reproducible generated assets explicitly distinct." },
   );
   server.registerTool("load_source_packet", {
     title: "Load the fixed school-content packet",
-    description: "Load four saved science learning items without existing card types or layouts.",
-    inputSchema: {}, outputSchema: { packet: unknownRecord, inputHash: z.string() },
+    description: "Load either the default four-item science packet or the isolated one-item curve/line graph packet.",
+    inputSchema: { packetId: z.enum(["science-default", "graph-one"]).default("science-default") }, outputSchema: { packet: unknownRecord, inputHash: z.string() },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async () => {
-    const packetText = await readFile(path.join(root, "fixtures", "science-source-packet.json"), "utf8");
+  }, async ({ packetId }) => {
+    const filename = packetId === "graph-one" ? "graph-one-source-packet.json" : "science-source-packet.json";
+    const packetText = await readFile(path.join(root, "fixtures", filename), "utf8");
     return result({ packet: JSON.parse(packetText), inputHash: sha256(packetText) }, "고정 원문 패킷을 읽었습니다.");
   });
 
   server.registerTool("get_authoring_instructions", {
     title: "Read problem-authoring instructions",
-    description: "Return the common skill and the initial multiple-choice and fill-blank methods.",
-    inputSchema: {}, outputSchema: {
+    description: "Return the common evidence-first skill and only the requested optional method references. No arguments preserves the legacy selection and recall response.",
+    inputSchema: { methods: z.array(z.enum(methodNames)).max(4).optional() }, outputSchema: {
       skillVersion: z.string(), skillHash: z.string(), skill: z.string(),
-      multipleChoice: z.string(), fillBlank: z.string(),
+      references: z.record(z.string(), z.string()), referenceHashes: z.record(z.string(), z.string()),
+      multipleChoice: z.string().optional(), fillBlank: z.string().optional(),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async () => {
+  }, async ({ methods }) => {
     const skill = await readFile(path.join(root, "skill", "problem-authoring", "SKILL.md"), "utf8");
+    const requested = methods ?? ["selection", "recall-blank"];
+    const entries = await Promise.all(requested.map(async (method) => {
+      const content = await readFile(path.join(root, "skill", "problem-authoring", "references", methodFiles[method]), "utf8");
+      return [method, content] as const;
+    }));
+    const references = Object.fromEntries(entries);
+    const referenceHashes = Object.fromEntries(entries.map(([method, content]) => [method, sha256(content)]));
     return result({
-      skillVersion: "problem-authoring-hypothesis-v1",
+      skillVersion: "problem-authoring-method-v2",
       skillHash: sha256(skill),
       skill,
-      multipleChoice: await readFile(path.join(root, "skill", "problem-authoring", "references", "multiple-choice.md"), "utf8"),
-      fillBlank: await readFile(path.join(root, "skill", "problem-authoring", "references", "fill-blank.md"), "utf8"),
+      references,
+      referenceHashes,
+      ...(references.selection ? { multipleChoice: references.selection } : {}),
+      ...(references["recall-blank"] ? { fillBlank: references["recall-blank"] } : {}),
     }, "문제 제작 지침을 읽었습니다.");
   });
 
@@ -98,6 +116,7 @@ export function createProblemAuthoringMcpServer() {
     if (errors.length) throw new Error("유효하지 않은 문서는 기록할 수 없습니다.");
     const directory = path.join(root, "runs", runId, `iteration-${iteration}`);
     await mkdir(directory, { recursive: true });
+    await verifyGeneratedAssets(authored, directory);
     const files = ["document.json", "before-answer.html", "after-answer.html", "inspection.json", "execution.json"];
     await Promise.all([
       writeFile(path.join(directory, files[0]), JSON.stringify(authored, null, 2)),
@@ -111,6 +130,22 @@ export function createProblemAuthoringMcpServer() {
     return result({ directory, files }, "이번 제작 iteration을 실험 디렉터리에 기록했습니다.");
   });
   return server;
+}
+
+async function verifyGeneratedAssets(document: AuthoringDocument, iterationDirectory: string) {
+  const workspaceRoot = path.resolve(root, "../..");
+  for (const question of document.questions) {
+    for (const block of question.blocks) {
+      if (block.kind !== "generated-image") continue;
+      const asset = block.generatedAssetRef;
+      const assetBytes = await readFile(path.resolve(iterationDirectory, asset.path));
+      const specBytes = await readFile(path.resolve(workspaceRoot, asset.specPath));
+      await readFile(path.resolve(workspaceRoot, asset.scriptPath));
+      if (sha256(assetBytes) !== asset.sha256 || sha256(specBytes) !== asset.specSha256) {
+        throw new Error(`생성 그림의 해시가 재현 정보와 다릅니다: ${asset.assetId}`);
+      }
+    }
+  }
 }
 
 function result(data: Record<string, unknown>, message: string) {
