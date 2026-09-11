@@ -49,70 +49,114 @@ function confirmedGuideline(plan: NonNullable<ConfirmedStudyGuideline["wholeDocu
 
 const { pdf, goal, runId, instruction, model } = parseArguments(process.argv.slice(2));
 const startedAt = new Date().toISOString();
-process.env.CODEX_MODEL = model;
-process.env.CODEX_EXTRACTION_MODEL = model;
-const [{ analyzePdf }, { createWholeDocumentCorePlan }, { runLearningDesign }, { getPublicModelConfig }] = await Promise.all([
-  import("../../src/lib/pipeline/analyze.ts"),
-  import("../../src/lib/pipeline/plan.ts"),
-  import("../../src/lib/pipeline/generate.ts"),
-  import("../../src/lib/model-config.ts"),
-]);
-const pdfPath = path.resolve(pdf);
-const pdfBytes = await readFile(pdfPath);
-const fileName = path.basename(pdfPath);
-if (!fileName.toLowerCase().endsWith(".pdf")) throw new Error("PDF 파일만 사용할 수 있습니다.");
-const file = new File([pdfBytes], fileName, { type: "application/pdf" });
-const pdfInput: PdfInput = { filename: fileName, mimeType: "application/pdf", base64: pdfBytes.toString("base64") };
-
-const analyze: PdfAnalysisResponse = { files: [{ fileName, ...(await analyzePdf(file)) }] };
-const sourceOutline = analyze.files[0]?.sourceOutline;
-if (!sourceOutline) throw new Error("Analyze 결과에 원문 목차가 없습니다.");
-const selectedSourceOutline = filterOutlineToSelection(sourceOutline, getDefaultNodeSelection(sourceOutline.nodes));
-const planned = await createWholeDocumentCorePlan(analyze, instruction, [pdfInput], goal, {}, selectedSourceOutline);
-const selectedPlan = filterPlanToOutlineSelection(planned, getDefaultOutlineSelection(planned));
-const plan = confirmedGuideline(selectedPlan);
-const selectedLeafIds = getDefaultOutlineSelection(selectedPlan);
-const generateInput: GenerateInput = {
-  title: fileName.replace(/\.pdf$/i, ""),
-  subject: "",
-  tags: [],
-  sourceText: buildSelectedOutlineSourceText(selectedPlan.learningOutline?.nodes ?? [], selectedLeafIds),
-  instruction: [goal, instruction].filter(Boolean).join("\n"),
-  analysisContext: JSON.stringify(analyze),
-  studyGuideline: JSON.stringify(plan),
-  activityDesign: "",
-  learningDesign: "",
-  codexThreadId: "",
-  activitySelectionMode: "automatic",
-  stage: "prepare",
-  preparedAnalysis: "",
-  preparedMaterial: "",
-  mode: "flashcard",
-};
-const learningDesignResult = await runLearningDesign(generateInput, [pdfInput]);
-const artifact: EngineLearningDesignArtifact = {
-  schemaVersion: "engine-learning-design-artifact-v1",
-  artifactId: runId,
-  title: generateInput.title,
-  analyze,
-  plan,
-  learningDesignResult,
-  execution: {
-    sourceFileName: fileName,
-    sourceSha256: createHash("sha256").update(pdfBytes).digest("hex"),
-    learningGoal: goal,
-    instruction,
-    startedAt,
-    completedAt: new Date().toISOString(),
-    modelConfiguration: getPublicModelConfig(),
+const outputDirectory = path.resolve("tools/problem-authoring-lab/runs", runId);
+await mkdir(outputDirectory);
+await mkdir(path.join(outputDirectory, "stages"));
+const writeJson = (fileName: string, value: unknown) =>
+  writeFile(path.join(outputDirectory, fileName), `${JSON.stringify(value, null, 2)}\n`);
+const stageLog: Array<{ stage: "analyze" | "plan" | "learning-design" | "bridge"; status: "completed"; startedAt: string; completedAt: string }> = [];
+const executionBase = {
+  runId,
+  sourcePath: pdf,
+  learningGoal: goal,
+  instruction,
+  requestedModel: model,
+  requestedReasoningEffort: "medium",
+  startedAt,
+  provider: "codex-subscription",
+  retryPolicy: "no runner retry; provider may replace only an invalid existing thread",
+  stageCalls: ["analyzePdf", "createWholeDocumentCorePlan", "runLearningDesign", "adaptLearningDesignArtifact"],
+  telemetry: {
+    analyzeAndPlanThreadIds: "not exposed by current pipeline wrappers",
+    learningDesignThreadId: "recorded in stages/30-learning-design.json when available",
+    tokenUsage: "not exposed by the current Codex app server response contract",
   },
 };
-const bridge = adaptLearningDesignArtifact(artifact);
-const outputDirectory = path.resolve("tools/problem-authoring-lab/runs", runId);
-await mkdir(outputDirectory, { recursive: true });
-await Promise.all([
-  writeFile(path.join(outputDirectory, "engine-artifact.json"), JSON.stringify(artifact, null, 2)),
-  writeFile(path.join(outputDirectory, "source-packet.json"), JSON.stringify(bridge.packet, null, 2)),
-  writeFile(path.join(outputDirectory, "bridge-report.json"), JSON.stringify(bridge.report, null, 2)),
-]);
-console.log(outputDirectory);
+await writeJson("execution.json", { ...executionBase, status: "running", stages: stageLog });
+process.env.CODEX_MODEL = model;
+process.env.CODEX_EXTRACTION_MODEL = model;
+let activeStage = "initialization";
+let activeStageStartedAt = startedAt;
+let providerTouched = false;
+try {
+  const [{ analyzePdf }, { createWholeDocumentCorePlan }, { runLearningDesign }, { getPublicModelConfig }] = await Promise.all([
+    import("../../src/lib/pipeline/analyze.ts"),
+    import("../../src/lib/pipeline/plan.ts"),
+    import("../../src/lib/pipeline/generate.ts"),
+    import("../../src/lib/model-config.ts"),
+  ]);
+  const pdfPath = path.resolve(pdf);
+  const pdfBytes = await readFile(pdfPath);
+  const fileName = path.basename(pdfPath);
+  if (!fileName.toLowerCase().endsWith(".pdf")) throw new Error("PDF 파일만 사용할 수 있습니다.");
+  const sourceSha256 = createHash("sha256").update(pdfBytes).digest("hex");
+  await writeJson("input.json", { sourcePath: pdf, sourceFileName: fileName, sourceSha256, learningGoal: goal, instruction, model, reasoningEffort: "medium" });
+  const file = new File([pdfBytes], fileName, { type: "application/pdf" });
+  const pdfInput: PdfInput = { filename: fileName, mimeType: "application/pdf", base64: pdfBytes.toString("base64") };
+
+  activeStage = "analyze";
+  activeStageStartedAt = new Date().toISOString();
+  providerTouched = true;
+  const analyze: PdfAnalysisResponse = { files: [{ fileName, ...(await analyzePdf(file)) }] };
+  await writeJson("stages/10-analyze.json", analyze);
+  stageLog.push({ stage: "analyze", status: "completed", startedAt: activeStageStartedAt, completedAt: new Date().toISOString() });
+  const sourceOutline = analyze.files[0]?.sourceOutline;
+  if (!sourceOutline) throw new Error("Analyze 결과에 원문 목차가 없습니다.");
+  const selectedSourceOutline = filterOutlineToSelection(sourceOutline, getDefaultNodeSelection(sourceOutline.nodes));
+
+  activeStage = "plan";
+  activeStageStartedAt = new Date().toISOString();
+  const planned = await createWholeDocumentCorePlan(analyze, instruction, [pdfInput], goal, {}, selectedSourceOutline);
+  const selectedLeafIds = getDefaultOutlineSelection(planned);
+  const selectedPlan = filterPlanToOutlineSelection(planned, selectedLeafIds);
+  const plan = confirmedGuideline(selectedPlan);
+  await writeJson("stages/20-plan.json", { raw: planned, selectedLeafIds, confirmed: plan });
+  stageLog.push({ stage: "plan", status: "completed", startedAt: activeStageStartedAt, completedAt: new Date().toISOString() });
+
+  activeStage = "learning-design";
+  activeStageStartedAt = new Date().toISOString();
+  const generateInput: GenerateInput = {
+    title: fileName.replace(/\.pdf$/i, ""), subject: "", tags: [],
+    sourceText: buildSelectedOutlineSourceText(selectedPlan.learningOutline?.nodes ?? [], selectedLeafIds),
+    instruction: [goal, instruction].filter(Boolean).join("\n"),
+    analysisContext: JSON.stringify(analyze), studyGuideline: JSON.stringify(plan),
+    activityDesign: "", learningDesign: "", codexThreadId: "", activitySelectionMode: "automatic",
+    stage: "prepare", preparedAnalysis: "", preparedMaterial: "", mode: "flashcard",
+  };
+  const learningDesignResult = await runLearningDesign(generateInput, [pdfInput]);
+  await writeJson("stages/30-learning-design.json", { request: generateInput, response: learningDesignResult });
+  stageLog.push({ stage: "learning-design", status: "completed", startedAt: activeStageStartedAt, completedAt: new Date().toISOString() });
+  const artifact: EngineLearningDesignArtifact = {
+    schemaVersion: "engine-learning-design-artifact-v1", artifactId: runId, title: generateInput.title,
+    analyze, plan, learningDesignResult,
+    execution: {
+      sourceFileName: fileName, sourceSha256, learningGoal: goal, instruction, startedAt,
+      completedAt: new Date().toISOString(), modelConfiguration: getPublicModelConfig(),
+    },
+  };
+  await writeJson("engine-artifact.json", artifact);
+
+  activeStage = "bridge";
+  activeStageStartedAt = new Date().toISOString();
+  const bridge = adaptLearningDesignArtifact(artifact);
+  await Promise.all([
+    writeJson("source-packet.json", bridge.packet),
+    writeJson("bridge-report.json", bridge.report),
+  ]);
+  stageLog.push({ stage: "bridge", status: "completed", startedAt: activeStageStartedAt, completedAt: new Date().toISOString() });
+  await writeJson("execution.json", { ...executionBase, status: "completed", completedAt: new Date().toISOString(), stages: stageLog });
+  console.log(outputDirectory);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  await writeJson("execution.json", { ...executionBase, status: "failed", failedStage: activeStage, failedStageStartedAt: activeStageStartedAt, completedAt: new Date().toISOString(), stages: stageLog, error: { message } });
+  throw error;
+} finally {
+  if (providerTouched) {
+    try {
+      const { getCodexAppServer } = await import("../../src/lib/codex-app-server.ts");
+      (await getCodexAppServer()).close();
+    } catch (error) {
+      console.error(`Codex App Server 종료 실패: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}

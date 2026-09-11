@@ -53,7 +53,7 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/
 
 현재 fixture는 기존 생성 계약 테스트의 데드락 자료를 재사용한 연결 검증용이다. 실제 PDF 품질, 실제 모델 출력, 여섯 문항 품질을 검증하지 않으며 authoring 모델도 호출하지 않는다. 비교 평가 담당은 지정 PDF를 실제 Analyze→Plan→Learning Design 경로로 한 번 실행해 같은 envelope로 저장한 뒤 브리지만 적용해야 한다. 사람 손으로 목표·지식 단위·문항을 중간에 새로 작성한 결과는 이 연결 시험의 증거가 아니다.
 
-평가 담당이 실제 PDF로 세 단계를 한 번만 소유해 실행할 때는 아래 명령을 사용한다. 이 스크립트는 Analyze, 전체 자료 Plan, 현재 Learning Design을 순서대로 호출하고 `engine-artifact.json`, 브리지 패킷, 보고서를 같은 run에 기록한다. authoring 모델은 호출하지 않는다.
+평가 담당이 실제 PDF로 세 단계를 한 번만 소유해 실행할 때는 아래 명령을 사용한다. 이 스크립트는 Analyze, 전체 자료 Plan, 현재 Learning Design을 순서대로 호출하고 `input.json`, 단계별 raw JSON, `engine-artifact.json`, 브리지 패킷, 보고서와 `execution.json`을 같은 run에 즉시 기록한다. 중간 실패 시 성공한 앞 단계 결과와 실패 단계·메시지를 보존한다. 기존 run ID는 덮어쓰지 않는다. authoring 모델은 호출하지 않는다.
 
 ```powershell
 node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/run-current-engine-learning-design.ts `
@@ -64,7 +64,9 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/
   --instruction <추가-범위-지시>
 ```
 
-기본 모델은 `gpt-6-astra`, 추론 강도는 현재 엔진 설정인 `medium`이다. `--model`은 Analyze·Plan·Learning Design 세 단계에 같은 모델을 지정한다. 이 경로는 ChatGPT 구독으로 로그인된 현재 Codex 엔진을 사용하며 API 키를 요구하거나 API fallback을 하지 않는다. 브리지 runner 자체의 추가 재시도는 없고, 현재 엔진 provider가 더 이상 유효하지 않은 연결 스레드를 교체할 수 있는 기존 복구 동작만 유지한다.
+기본 모델은 `gpt-6-astra`, 추론 강도는 현재 엔진 설정인 `medium`이다. `--model`은 Analyze·Plan·Learning Design 세 단계에 같은 모델을 지정한다. 이 경로는 ChatGPT 구독으로 로그인된 현재 Codex 엔진을 사용하며 API 키를 요구하거나 API fallback을 하지 않는다. 브리지 runner 자체의 추가 재시도는 없고, 현재 엔진 provider가 더 이상 유효하지 않은 연결 스레드를 교체할 수 있는 기존 복구 동작만 유지한다. 실행 성공·실패 후에는 이 runner가 사용한 Codex App Server 자식 프로세스를 종료한다.
+
+현재 pipeline wrapper는 Analyze·Plan의 thread/turn ID와 Codex 구독 token usage를 반환하지 않는다. Learning Design thread ID만 해당 단계 응답의 `codexThreadId`로 보존할 수 있다. `execution.json`은 실제 호출 순서와 이 telemetry 한계를 명시한다. 이를 더 확장하려면 제품 provider 반환 계약 변경이 필요하므로 이 격리 실험에서는 임의로 수정하지 않는다.
 
 현재 열린 Codex Desktop 세션은 새 stdio 서버를 hot-load하지 않는다. 기존 설정을 바꾸지 않고 평가용 새 Codex CLI 세션에만 MCP를 노출하려면 다음과 같이 실행한다. 아래 `PROMPT`에는 위 도구 순서를 따르고 4문항만 만든 뒤 최대 1회 부분수정하라는 평가 프롬프트를 넣는다.
 
