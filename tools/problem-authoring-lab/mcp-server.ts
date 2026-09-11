@@ -25,13 +25,20 @@ export function createProblemAuthoringMcpServer() {
     { instructions: "Use the supplied source packet and problem-authoring skill to compose a block document. Validate it, render unanswered and revealed states, inspect the real HTML, and apply targeted patches. Keep source images and reproducible generated assets explicitly distinct." },
   );
   server.registerTool("load_source_packet", {
-    title: "Load the fixed school-content packet",
-    description: "Load either the default four-item science packet or the isolated one-item curve/line graph packet.",
-    inputSchema: { packetId: z.enum(["science-default", "graph-one"]).default("science-default") }, outputSchema: { packet: unknownRecord, inputHash: z.string() },
+    title: "Load a school-content packet",
+    description: "Load a fixed lab packet, or a validated Learning Design bridge packet under this lab's runs directory.",
+    inputSchema: {
+      packetId: z.enum(["science-default", "graph-one"]).default("science-default"),
+      packetPath: z.string().optional(),
+    },
+    outputSchema: { packet: unknownRecord, inputHash: z.string() },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async ({ packetId }) => {
-    const filename = packetId === "graph-one" ? "graph-one-source-packet.json" : "science-source-packet.json";
-    const packetText = await readFile(path.join(root, "fixtures", filename), "utf8");
+  }, async ({ packetId, packetPath }) => {
+    const fixedFilename = packetId === "graph-one" ? "graph-one-source-packet.json" : "science-source-packet.json";
+    const packetFile = packetPath
+      ? resolveRunPacketPath(packetPath)
+      : path.join(root, "fixtures", fixedFilename);
+    const packetText = await readFile(packetFile, "utf8");
     return result({ packet: JSON.parse(packetText), inputHash: sha256(packetText) }, "고정 원문 패킷을 읽었습니다.");
   });
 
@@ -130,6 +137,17 @@ export function createProblemAuthoringMcpServer() {
     return result({ directory, files }, "이번 제작 iteration을 실험 디렉터리에 기록했습니다.");
   });
   return server;
+}
+
+function resolveRunPacketPath(packetPath: string) {
+  const normalized = packetPath.replaceAll("\\", "/");
+  if (!/^runs\/[a-z0-9][a-z0-9-]{0,63}\/source-packet\.json$/.test(normalized)) {
+    throw new Error("브리지 패킷은 runs/<run-id>/source-packet.json 형식만 허용합니다.");
+  }
+  const resolved = path.resolve(root, normalized);
+  const runsRoot = `${path.resolve(root, "runs")}${path.sep}`;
+  if (!resolved.startsWith(runsRoot)) throw new Error("실험 runs 디렉터리 밖의 패킷은 읽을 수 없습니다.");
+  return resolved;
 }
 
 async function verifyGeneratedAssets(document: AuthoringDocument, iterationDirectory: string) {

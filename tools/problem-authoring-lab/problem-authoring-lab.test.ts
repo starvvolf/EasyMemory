@@ -7,6 +7,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { applyRevision, gradeResponse, validateDocument, type AuthoringDocument, type SourceContent } from "./contract.ts";
 import { mockDraft, mockPatch } from "./fixtures/mock-adapters.ts";
 import { createProblemAuthoringMcpServer } from "./mcp-server.ts";
+import { adaptLearningDesignArtifact, type EngineLearningDesignArtifact } from "./learning-design-bridge.ts";
 import { renderDocument } from "./renderer.ts";
 
 async function fixture() {
@@ -93,6 +94,56 @@ test("실제 MCP 도구로 입력→검사→렌더→부분수정 흐름을 수
   assert.deepEqual(Object.keys(instructionContent.references), ["graph-geometry"]);
   assert.equal(instructionContent.multipleChoice, undefined);
   assert.equal(instructionContent.skillVersion, "problem-authoring-method-v2");
+  const bridgeLoaded = await client.callTool({
+    name: "load_source_packet",
+    arguments: { packetPath: "runs/learning-design-bridge-fixture/source-packet.json" },
+  });
+  const bridgePacket = (bridgeLoaded.structuredContent as { packet: { schemaVersion: string; items: SourceContent[] } }).packet;
+  assert.equal(bridgePacket.schemaVersion, "authoring-source-packet-v2");
+  assert.equal(bridgePacket.items.length, 1);
+});
+
+test("현재 Learning Design 계약을 문제 작성 패킷으로 손실 없이 연결한다", async () => {
+  const artifact = JSON.parse(await readFile(
+    "tools/problem-authoring-lab/fixtures/learning-design-current-engine.json",
+    "utf8",
+  )) as EngineLearningDesignArtifact;
+  const result = adaptLearningDesignArtifact(artifact);
+  const item = result.packet.items[0]!;
+  const design = artifact.learningDesignResult.learningDesign!;
+  assert.equal(result.packet.schemaVersion, "authoring-source-packet-v2");
+  assert.equal(result.packet.items.length, 1);
+  assert.equal(item.learningUnitId, "knowledge-unit-1");
+  assert.equal(item.objectiveId, "objective-1");
+  assert.equal(item.assessmentBlueprint.id, "blueprint-1");
+  assert.equal(item.sourceId, "source-deadlock");
+  assert.equal(item.sourcePage, 7);
+  assert.deepEqual(item.objective, design.objectives[0]);
+  assert.deepEqual(item.knowledgeUnit, design.knowledgeUnits[0]);
+  assert.deepEqual(item.assessmentBlueprint, design.assessmentBlueprints[0]);
+  assert.deepEqual(item.successCriteria, ["네 조건을 빠짐없이 복원한다."]);
+  assert.match(result.packet.origin.analyzeSha256, /^[a-f0-9]{64}$/);
+  assert.match(result.packet.origin.planSha256, /^[a-f0-9]{64}$/);
+  assert.match(result.packet.origin.learningDesignSha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(result.report.counts, { objectives: 1, knowledgeUnits: 1, assessmentBlueprints: 1, authoringItems: 1 });
+});
+
+test("Plan과 다른 Learning Design 원문 출처는 브리지에서 거부한다", async () => {
+  const artifact = JSON.parse(await readFile(
+    "tools/problem-authoring-lab/fixtures/learning-design-current-engine.json",
+    "utf8",
+  )) as EngineLearningDesignArtifact;
+  artifact.learningDesignResult.learningDesign!.knowledgeUnits[0]!.sourcePage = 8;
+  assert.throws(() => adaptLearningDesignArtifact(artifact), /Plan 목차 출처와 다릅니다/);
+});
+
+test("평가 설계에서 누락된 지식 단위는 작성 패킷으로 조용히 손실시키지 않는다", async () => {
+  const artifact = JSON.parse(await readFile(
+    "tools/problem-authoring-lab/fixtures/learning-design-current-engine.json",
+    "utf8",
+  )) as EngineLearningDesignArtifact;
+  artifact.learningDesignResult.learningDesign!.assessmentBlueprints = [];
+  assert.throws(() => adaptLearningDesignArtifact(artifact), /목표·지식 단위·평가 설계가 모두 필요합니다/);
 });
 
 test("원문 페이지와 연결되지 않은 그림은 거부한다", async () => {

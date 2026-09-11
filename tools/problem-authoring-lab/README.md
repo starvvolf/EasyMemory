@@ -24,7 +24,7 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/
 
 MCP 도구 순서:
 
-1. `load_source_packet`: 고정된 4개 원문·목표 입력을 읽는다.
+1. `load_source_packet`: 고정 fixture 또는 검증된 Learning Design 브리지 패킷을 읽는다.
 2. `get_authoring_instructions`: 공통 스킬과 객관식·빈칸 제작 지침을 읽는다.
 3. AI가 `problem-authoring-v1` 블록 문서를 직접 작성한다.
 4. `validate_problem_document`: ID·출처·응답 연결·페이지 경계를 검사한다. 내용을 고치지 않는다.
@@ -36,6 +36,35 @@ MCP 도구 순서:
 MCP 성공 보고에는 서버 이름, 실제 모델명, 세션/실행 ID, input hash, skill version/hash, 도구 호출 기록, 최초·수정후 문서와 렌더, 검사 이슈, 패치, 수정 횟수, 사용량을 남긴다. 모델명을 확인할 수 없으면 추정하지 말고 `unknown`으로 기록한다. 자체 검사 통과는 독립 품질평가 통과가 아니다.
 
 API 시험은 MCP 결과를 기획팀2가 확인한 뒤 별도로 허가할 때만 시작한다. 현재 API 어댑터와 API 호출은 없다.
+
+## Analyze → Plan → Learning Design 연결 시험
+
+제품 코드를 바꾸지 않고 현재 생성 엔진의 세 단계 결과를 문제 작성 입력으로 옮기는 결정론적 브리지가 있다. 입력 JSON은 `analyze`, 확정 `plan`, 카드 생성 전 `learningDesignResult`를 함께 담아야 한다. 브리지는 사람이 새 문제 내용을 쓰지 않으며, 목표·지식 단위·평가 설계·원문 출처 관계를 검사하고 그대로 보존한다.
+
+```powershell
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/run-learning-design-bridge.ts `
+  tools/problem-authoring-lab/fixtures/learning-design-current-engine.json `
+  tools/problem-authoring-lab/runs/learning-design-bridge-fixture
+```
+
+출력은 `source-packet.json`과 `bridge-report.json`이다. MCP에서는 `load_source_packet({ packetPath: "runs/learning-design-bridge-fixture/source-packet.json" })`처럼 읽는다. 경로는 이 실험의 `runs/<run-id>/source-packet.json`만 허용한다.
+
+브리지는 objective의 target·operation·success criteria, KnowledgeUnit의 content·분류·근거·정확한 원문 필드, AssessmentBlueprint의 given·hidden·expected response·rubric·난이도·필요 역량, 연결된 Plan 목차의 source reference를 전달한다. Analyze·Plan·Learning Design 원본은 SHA-256으로 연결한다. Analyze 표시 메타데이터와 legacy outline point, Plan의 질문/개수 UI 필드, organizedMaterial 표시 문구는 작성 입력에 복제하지 않는다. 다만 지식 단위 coverage와 출처 관계는 변환 전에 검증한다.
+
+현재 fixture는 기존 생성 계약 테스트의 데드락 자료를 재사용한 연결 검증용이다. 실제 PDF 품질, 실제 모델 출력, 여섯 문항 품질을 검증하지 않으며 authoring 모델도 호출하지 않는다. 비교 평가 담당은 지정 PDF를 실제 Analyze→Plan→Learning Design 경로로 한 번 실행해 같은 envelope로 저장한 뒤 브리지만 적용해야 한다. 사람 손으로 목표·지식 단위·문항을 중간에 새로 작성한 결과는 이 연결 시험의 증거가 아니다.
+
+평가 담당이 실제 PDF로 세 단계를 한 번만 소유해 실행할 때는 아래 명령을 사용한다. 이 스크립트는 Analyze, 전체 자료 Plan, 현재 Learning Design을 순서대로 호출하고 `engine-artifact.json`, 브리지 패킷, 보고서를 같은 run에 기록한다. authoring 모델은 호출하지 않는다.
+
+```powershell
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/run-current-engine-learning-design.ts `
+  --pdf <source.pdf> `
+  --goal <공통-학습-목표> `
+  --run-id <비교-run-id> `
+  --model gpt-6-astra `
+  --instruction <추가-범위-지시>
+```
+
+기본 모델은 `gpt-6-astra`, 추론 강도는 현재 엔진 설정인 `medium`이다. `--model`은 Analyze·Plan·Learning Design 세 단계에 같은 모델을 지정한다. 이 경로는 ChatGPT 구독으로 로그인된 현재 Codex 엔진을 사용하며 API 키를 요구하거나 API fallback을 하지 않는다. 브리지 runner 자체의 추가 재시도는 없고, 현재 엔진 provider가 더 이상 유효하지 않은 연결 스레드를 교체할 수 있는 기존 복구 동작만 유지한다.
 
 현재 열린 Codex Desktop 세션은 새 stdio 서버를 hot-load하지 않는다. 기존 설정을 바꾸지 않고 평가용 새 Codex CLI 세션에만 MCP를 노출하려면 다음과 같이 실행한다. 아래 `PROMPT`에는 위 도구 순서를 따르고 4문항만 만든 뒤 최대 1회 부분수정하라는 평가 프롬프트를 넣는다.
 
