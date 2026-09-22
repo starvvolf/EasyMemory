@@ -1,26 +1,30 @@
 import { NextResponse } from "next/server";
-import { createStudyProject, listStudyProjects } from "@/lib/study-project-store";
+import {
+  createFirebaseStudyProject,
+  listFirebaseStudyProjects,
+} from "@/lib/firebase-study-project-store";
+import { requireAuthenticatedUser, toUserDataError } from "@/lib/server-user";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    return NextResponse.json({ projects: await listStudyProjects() });
+    const user = await requireAuthenticatedUser(request);
+    return NextResponse.json({ projects: await listFirebaseStudyProjects(user.uid) });
   } catch (error) {
-    return NextResponse.json({ message: getMessage(error) }, { status: 500 });
+    const failure = toUserDataError(error, "학습 프로젝트를 불러오지 못했습니다.");
+    return NextResponse.json({ message: failure.message }, { status: failure.status });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const user = await requireAuthenticatedUser(request);
     const input = await request.json() as { name?: unknown };
-    const project = await createStudyProject(typeof input.name === "string" ? input.name : "");
+    const project = await createFirebaseStudyProject(user.uid, typeof input.name === "string" ? input.name : "");
     return NextResponse.json({ project }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ message: getMessage(error) }, { status: 400 });
+    const failure = toUserDataError(error, "학습 프로젝트를 만들지 못했습니다.");
+    return NextResponse.json({ message: failure.message }, { status: failure.status === 500 ? 400 : failure.status });
   }
-}
-
-function getMessage(error: unknown) {
-  return error instanceof Error ? error.message : "학습 프로젝트를 처리하지 못했습니다.";
 }

@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const vscode = require("vscode");
 const { createStudyForgeClient } = require("./client");
+const { registerLearningWorkspace } = require("./learning-workspace");
 
 const projectIdKey = "studyForge.projectId";
 const projectNameKey = "studyForge.projectName";
 
 function activate(context) {
+  registerLearningWorkspace(vscode, context);
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 20);
   status.command = "studyForge.connectProject";
   context.subscriptions.push(status);

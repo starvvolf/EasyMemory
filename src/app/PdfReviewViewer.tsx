@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type {
   PDFDocumentProxy,
   TextContent,
@@ -11,6 +11,10 @@ import {
   findPdfMaskTarget,
   matchesPdfEvidence,
 } from "@/lib/pdf-mask";
+import {
+  clampPdfPage,
+  findExactPdfSourceIndex,
+} from "./pdf-source-navigation";
 
 type SelectionMode = "sentence" | "paragraph";
 
@@ -80,6 +84,10 @@ type OcrCacheEntry = {
 
 type PdfReviewViewerProps = {
   files: File[];
+  sourceIds?: Array<string | undefined>;
+  initialPageBySourceId?: Record<string, number | undefined>;
+  requestedSource?: { sourceId: string; page: number } | null;
+  onPageChange?: (sourceId: string, page: number) => void;
   learningUnits?: LearningUnit[];
   excludedLearningUnitIds?: string[];
   activeLearningUnitId?: string | null;
@@ -92,6 +100,10 @@ type PdfReviewViewerProps = {
 
 export default function PdfReviewViewer({
   files,
+  sourceIds = [],
+  initialPageBySourceId = {},
+  requestedSource = null,
+  onPageChange,
   learningUnits,
   excludedLearningUnitIds = [],
   activeLearningUnitId = null,
@@ -101,25 +113,30 @@ export default function PdfReviewViewer({
   startInMaskMode = false,
   onMaskRating,
 }: PdfReviewViewerProps) {
+  const sources = files.map((file, index) => ({
+    id: sourceIds[index],
+    fileName: file.name,
+  }));
   const [activeFileIndex, setActiveFileIndex] = useState(() => {
     const activeUnit = learningUnits?.find(
       (unit) => unit.id === activeLearningUnitId,
     );
     const index = activeUnit
-      ? files.findIndex((file) => matchesSourceFile(file.name, activeUnit.sourceId))
+      ? findExactPdfSourceIndex(sources, activeUnit.sourceId)
       : -1;
-    return index >= 0 ? index : 0;
+    const requestedIndex = requestedSource
+      ? findExactPdfSourceIndex(sources, requestedSource.sourceId)
+      : -1;
+    return requestedIndex >= 0 ? requestedIndex : index >= 0 ? index : 0;
   });
   const safeActiveFileIndex = Math.min(activeFileIndex, files.length - 1);
   const activeFile = files[safeActiveFileIndex];
+  const activeSource = sources[safeActiveFileIndex];
   const selectedLearningUnit = learningUnits?.find(
     (unit) => unit.id === activeLearningUnitId,
   );
   const activeFileLearningUnits = learningUnits?.filter(
-    (unit) =>
-      matchesSourceFile(activeFile?.name ?? "", unit.sourceId) ||
-      (safeActiveFileIndex === 0 &&
-        !files.some((file) => matchesSourceFile(file.name, unit.sourceId))),
+    (unit) => findExactPdfSourceIndex(sources, unit.sourceId) === safeActiveFileIndex,
   );
 
   if (!activeFile) {
@@ -129,7 +146,7 @@ export default function PdfReviewViewer({
   function selectLearningUnit(id: string) {
     const unit = learningUnits?.find((item) => item.id === id);
     const fileIndex = unit
-      ? files.findIndex((file) => matchesSourceFile(file.name, unit.sourceId))
+      ? findExactPdfSourceIndex(sources, unit.sourceId)
       : -1;
     if (fileIndex >= 0) setActiveFileIndex(fileIndex);
     onActiveLearningUnitChange?.(id);
@@ -160,12 +177,17 @@ export default function PdfReviewViewer({
       <PdfDocumentViewer
         key={`${activeFile.name}-${activeFile.size}-${activeFile.lastModified}`}
         file={activeFile}
+        sourceId={activeSource.id ?? activeFile.name}
         initialPage={
-          selectedLearningUnit &&
-          matchesSourceFile(activeFile.name, selectedLearningUnit.sourceId)
+          requestedSource &&
+          findExactPdfSourceIndex(sources, requestedSource.sourceId) === safeActiveFileIndex
+            ? requestedSource.page
+            : selectedLearningUnit &&
+          findExactPdfSourceIndex(sources, selectedLearningUnit.sourceId) === safeActiveFileIndex
             ? selectedLearningUnit.sourcePage
-            : 1
+            : initialPageBySourceId[activeSource.id ?? activeFile.name] ?? 1
         }
+        onPageChange={onPageChange}
         learningUnits={activeFileLearningUnits}
         excludedLearningUnitIds={excludedLearningUnitIds}
         activeLearningUnitId={activeLearningUnitId}
@@ -181,7 +203,9 @@ export default function PdfReviewViewer({
 
 function PdfDocumentViewer({
   file,
+  sourceId,
   initialPage,
+  onPageChange,
   learningUnits,
   excludedLearningUnitIds,
   activeLearningUnitId,
@@ -192,7 +216,9 @@ function PdfDocumentViewer({
   onMaskRating,
 }: {
   file: File;
+  sourceId: string;
   initialPage: number;
+  onPageChange?: (sourceId: string, page: number) => void;
   learningUnits?: LearningUnit[];
   excludedLearningUnitIds: string[];
   activeLearningUnitId: string | null;
@@ -211,6 +237,7 @@ function PdfDocumentViewer({
   const ocrCacheRef = useRef<Map<number, OcrCacheEntry>>(new Map());
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(Math.max(1, initialPage));
+  const [pageInput, setPageInput] = useState(String(Math.max(1, initialPage)));
   const [pageCount, setPageCount] = useState(0);
   const [scale, setScale] = useState(1.25);
   const [renderedScale, setRenderedScale] = useState(1.25);
@@ -308,7 +335,9 @@ function PdfDocumentViewer({
 
         setDocument(loadedDocument);
         setPageCount(loadedDocument.numPages);
-        setPageNumber(Math.max(1, Math.min(initialPage, loadedDocument.numPages)));
+        const nextPage = clampPdfPage(initialPage, loadedDocument.numPages);
+        setPageNumber(nextPage);
+        setPageInput(String(nextPage));
         setStatus("");
       } catch (loadError) {
         if (!cancelled) {
@@ -331,6 +360,10 @@ function PdfDocumentViewer({
       }
     };
   }, [file, initialPage]);
+
+  useEffect(() => {
+    if (document) onPageChange?.(sourceId, pageNumber);
+  }, [document, onPageChange, pageNumber, sourceId]);
 
   useEffect(() => {
     if (!document || !canvasRef.current || !textLayerRef.current) {
@@ -666,8 +699,17 @@ function PdfDocumentViewer({
     const unit = learningUnits?.find((item) => item.id === id);
     if (unit?.sourcePage && unit.sourcePage !== pageNumber) {
       setPageNumber(unit.sourcePage);
+      setPageInput(String(unit.sourcePage));
     }
     onActiveLearningUnitChange?.(id);
+  }
+
+  function submitPage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const requestedPage = Number(pageInput);
+    const nextPage = clampPdfPage(requestedPage, pageCount);
+    setPageNumber(nextPage);
+    setPageInput(String(nextPage));
   }
 
   return (
@@ -783,30 +825,49 @@ function PdfDocumentViewer({
           ref={pdfViewportRef}
           className="overflow-x-clip bg-[#DFE1E6] p-3 sm:p-4 lg:min-h-0 lg:overflow-auto"
         >
-          <div className="sticky top-0 z-20 mb-4 flex justify-center">
-            <div className="flex items-center gap-2 rounded-md border border-[#DCDFE4] bg-[#FFFFFF]/95 p-2 shadow-lg backdrop-blur">
+          <div className="sticky top-2 z-20 mb-4 flex justify-center">
+            <form onSubmit={submitPage} className="flex max-w-full items-center gap-1.5 rounded-xl border border-[#DCDFE4] bg-[#FFFFFF]/95 p-1.5 shadow-lg backdrop-blur sm:gap-2 sm:p-2">
               <button
                 type="button"
-                onClick={() => setPageNumber((page) => Math.max(1, page - 1))}
+                onClick={() => {
+                  const nextPage = Math.max(1, pageNumber - 1);
+                  setPageNumber(nextPage);
+                  setPageInput(String(nextPage));
+                }}
                 disabled={pageNumber <= 1 || isOcrRunning}
                 className={pageButtonClassName}
+                aria-label="이전 페이지"
               >
-                이전
+                <span aria-hidden="true">←</span><span className="hidden sm:inline">이전</span>
               </button>
-              <span className="min-w-20 text-center text-xs font-black text-[#172B4D]">
-                {pageNumber} / {pageCount || "-"}
-              </span>
+              <label className="flex min-h-11 items-center gap-1 rounded-lg bg-[#F1F2F4] px-2 text-xs font-black text-[#172B4D]">
+                <span className="sr-only">이동할 페이지</span>
+                <input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={pageInput}
+                  onChange={(event) => setPageInput(event.target.value)}
+                  onBlur={() => setPageInput(String(pageNumber))}
+                  disabled={!pageCount || isOcrRunning}
+                  className="w-10 bg-white px-1 py-1.5 text-center text-sm outline-none ring-[#0C66E4] focus:ring-2"
+                  aria-label="이동할 페이지"
+                />
+                <span>/ {pageCount || "-"}</span>
+              </label>
               <button
                 type="button"
-                onClick={() =>
-                  setPageNumber((page) => Math.min(pageCount, page + 1))
-                }
+                onClick={() => {
+                  const nextPage = Math.min(pageCount, pageNumber + 1);
+                  setPageNumber(nextPage);
+                  setPageInput(String(nextPage));
+                }}
                 disabled={pageNumber >= pageCount || isOcrRunning}
                 className={pageButtonClassName}
+                aria-label="다음 페이지"
               >
-                다음
+                <span className="hidden sm:inline">다음</span><span aria-hidden="true">→</span>
               </button>
-            </div>
+            </form>
           </div>
 
           <div className="mx-auto w-fit shadow-xl">
@@ -1462,12 +1523,6 @@ function joinText(current: string, next: string) {
   return `${current} ${next}`;
 }
 
-function matchesSourceFile(fileName: string, sourceId: string) {
-  const normalize = (value: string) =>
-    value.normalize("NFKC").replace(/\\/g, "/").split("/").at(-1)?.toLowerCase();
-  return normalize(fileName) === normalize(sourceId);
-}
-
 function getLearningOperationLabel(operation: NonNullable<LearningUnit["operation"]>) {
   return {
     recall: "자료 없이 떠올리기",
@@ -1517,4 +1572,4 @@ const toolbarButtonClassName =
   "min-w-10 rounded-md border border-[#DCDFE4] bg-[#F1F2F4] px-2 py-2 text-xs font-black text-[#172B4D] hover:bg-[#E9EBEE] disabled:cursor-not-allowed disabled:opacity-40 lg:w-full lg:px-1";
 
 const pageButtonClassName =
-  "rounded-md border border-[#DCDFE4] bg-[#F1F2F4] px-3 py-2 text-xs font-black text-[#172B4D] hover:bg-[#E9EBEE] disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg border border-[#DCDFE4] bg-[#F1F2F4] px-2 text-xs font-black text-[#172B4D] hover:bg-[#E9EBEE] disabled:cursor-not-allowed disabled:opacity-40 sm:px-3";

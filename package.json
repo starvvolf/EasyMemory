@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "auth:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/auth-policy.test.ts",
+    "firebase:rules:test": "node --test scripts/firebase-rules.test.mjs",
+    "firebase:emulator:test": "firebase emulators:exec --only firestore,storage \"npm run firebase:rules:test\"",
     "eval:import": "node scripts/import-eval-baseline.mjs",
     "eval:import:test": "node --test scripts/import-eval-baseline.test.mjs",
     "eval:run": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/eval-runner.ts",
@@ -15,7 +18,7 @@
     "eval:full-run": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/eval-full-runner.ts",
     "generation-lab": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/generation-lab/server.mjs",
     "generation-lab:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tools/generation-lab/generation-lab.test.mjs",
-    "study:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/study-session.test.ts scripts/study-selection.test.ts scripts/graded-study.test.ts scripts/learning-activity.test.ts scripts/spaced-repetition.test.ts scripts/pdf-mask.test.ts scripts/pdf-mask-activity.test.ts scripts/learning-manager.test.ts",
+    "study:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/study-session.test.ts scripts/study-selection.test.ts scripts/graded-study.test.ts scripts/learning-activity.test.ts scripts/spaced-repetition.test.ts scripts/pdf-mask.test.ts scripts/pdf-mask-activity.test.ts scripts/pdf-source-navigation.test.ts scripts/learning-manager.test.ts",
     "project:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/study-project-store.test.ts",
     "quality:offline:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/api-usage.test.ts scripts/quality-eval-plan.test.ts scripts/compact-input.test.ts scripts/preflight-compact-output.test.ts scripts/outline-selection.test.ts scripts/practice-blueprint.test.ts",
     "quality:input-report": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/compact-input-report.ts",
@@ -24,15 +27,18 @@
     "mcp:concept-tree": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/concept-tree-mcp/server.ts",
     "mcp:concept-tree:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/concept-tree-mcp.test.ts",
     "mcp:concept-tree:experiment": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/run-concept-tree-experiment.ts",
-    "vscode:study-forge:test": "node --test scripts/study-forge-vscode.test.cjs && node --check tools/study-forge-vscode/extension.js"
+    "vscode:study-forge:test": "node --test scripts/study-forge-vscode.test.cjs && node --check tools/study-forge-vscode/extension.js",
+    "vscode-link:test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test scripts/vscode-link.test.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/utilities": "^3.2.2",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@xyflow/react": "^12.10.0",
+    "firebase": "^12.18.0",
+    "firebase-admin": "^14.3.0",
     "lucide-react": "^1.25.0",
-    "next": "16.2.9",
+    "next": "16.3.4",
     "pdfjs-dist": "^6.2.108",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -41,13 +47,15 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/postcss": "^4",
     "@types/express": "^5.0.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.9",
+    "eslint-config-next": "16.3.4",
+    "firebase-tools": "^15.29.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import PdfReviewViewer from "./PdfReviewViewer";
+import { usePdfReadingPosition } from "./study/usePdfReadingPosition";
 import type {
   Deck,
   LearningConceptTree,
@@ -1195,6 +1196,8 @@ function SourceReader({
   analysis?: PdfAnalysisResult;
   onClose: () => void;
 }) {
+  const readingPosition = usePdfReadingPosition(reader.source.id);
+
   return (
     <div className="fixed inset-0 z-[80] bg-black/45 p-3 backdrop-blur-sm sm:p-6">
       <div className="mx-auto flex h-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-[#3B3F3C] bg-[#242725] shadow-2xl">
@@ -1214,7 +1217,25 @@ function SourceReader({
         </div>
         <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="min-h-0 overflow-auto bg-[#222523] p-3 sm:p-5">
-            <PdfReviewViewer files={[reader.file]} />
+            {readingPosition.isLoadingPosition ? (
+              <p className="p-6 text-center text-sm text-[#A5A9A4]">마지막 읽기 위치를 확인하는 중입니다.</p>
+            ) : (
+              <>
+                {readingPosition.positionError ? (
+                  <p className="mb-2 rounded-xl border border-[#5A403A] bg-[#332724] px-3 py-2 text-xs text-[#FFB4A2]">
+                    {readingPosition.positionError}
+                  </p>
+                ) : null}
+                <PdfReviewViewer
+                  files={[reader.file]}
+                  sourceIds={[reader.source.id]}
+                  initialPageBySourceId={{
+                    [reader.source.id]: readingPosition.initialPage,
+                  }}
+                  onPageChange={readingPosition.handlePageChange}
+                />
+              </>
+            )}
           </div>
           <aside className="hidden overflow-auto border-l border-[#393D3A] p-5 lg:block">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#A5A9A4]">Analysis</p>

@@ -2,19 +2,35 @@
   "name": "study-forge-vscode",
   "displayName": "Study Forge Coding Coach",
   "description": "Study Forge 프로젝트에 선택 코드를 제출합니다.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "study-forge-local",
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": ["Education", "Other"],
+  "extensionKind": ["ui"],
+  "capabilities": { "untrustedWorkspaces": { "supported": false }, "virtualWorkspaces": false },
+  "scripts": { "test": "node --test test/*.test.cjs" },
   "activationEvents": [
+    "onUri",
     "onCommand:studyForge.connectProject",
-    "onCommand:studyForge.submitSelection"
+    "onCommand:studyForge.submitSelection",
+    "onCommand:studyForge.openLearning",
+    "onView:studyForge.problem",
+    "onView:studyForge.results"
   ],
   "main": "./extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [{ "id": "studyForge.learning", "title": "Study Forge", "icon": "media/book.svg" }],
+      "panel": [{ "id": "studyForge.execution", "title": "학습 실행 결과", "icon": "media/book.svg" }]
+    },
+    "views": {
+      "studyForge.learning": [{ "type": "webview", "id": "studyForge.problem", "name": "학습 문제" }],
+      "studyForge.execution": [{ "type": "webview", "id": "studyForge.results", "name": "예제 실행 결과" }]
+    },
     "commands": [
+      { "command": "studyForge.openLearning", "title": "Study Forge: 코딩 학습 열기" },
       {
         "command": "studyForge.connectProject",
         "title": "Study Forge: 프로젝트 연결"
@@ -35,6 +51,19 @@
     "configuration": {
       "title": "Study Forge",
       "properties": {
+        "studyForge.accountServerUrl": { "type": "string", "default": "http://127.0.0.1:3000", "scope": "machine", "description": "Study Forge 계정을 연결할 서버 기본 주소. HTTPS 또는 로컬 개발 서버를 사용합니다. ChatGPT 구독 연결과 별개입니다." },
+        "studyForge.pythonExecutable": { "type": "string", "default": "", "scope": "machine", "description": "Python 3 실행 파일 절대 경로. 비우면 PATH에서 WindowsApps 별칭을 제외하고 찾습니다." },
+        "studyForge.dotnetExecutable": { "type": "string", "default": "", "scope": "machine", "description": ".NET SDK가 설치된 dotnet 실행 파일 절대 경로. 런타임만으로는 C#을 컴파일할 수 없습니다." },
+        "studyForge.javaExecutable": { "type": "string", "default": "", "scope": "machine", "description": "JDK java 실행 파일 절대 경로. 비우면 PATH에서 찾습니다." },
+        "studyForge.javacExecutable": { "type": "string", "default": "", "scope": "machine", "description": "JDK javac 실행 파일 절대 경로. 비우면 선택한 java의 JDK에서 찾습니다." },
+        "studyForge.codexExecutable": {
+          "type": "string", "default": "", "scope": "machine",
+          "description": "Codex 네이티브 실행 파일의 절대 경로. .cmd/.bat/.ps1 래퍼는 지원하지 않습니다."
+        },
+        "studyForge.enableLiveConnection": {
+          "type": "boolean", "default": false, "scope": "machine",
+          "description": "실제 연결 시험 승인 후 켜는 ChatGPT 구독 연결. 로그인 또는 질문 버튼에서만 연결합니다."
+        },
         "studyForge.serverUrl": {
           "type": "string",
           "default": "http://127.0.0.1:3000",
