@@ -1,0 +1,22 @@
+{
+  "artifactType": "graph-one-mcp-preparation",
+  "status": "ready-for-model-authoring",
+  "questionLimit": 1,
+  "requestedModel": "gpt-6-astra",
+  "requestedReasoning": "medium",
+  "skill": {
+    "version": "problem-authoring-method-v2",
+    "sha256": "db91e8db0118947f330241712898ca05f20eca98b570aa079134f8ae5b800736",
+    "previousRunVersion": "problem-authoring-hypothesis-v1",
+    "previousRunSha256": "771b9c53e47eb3b4bc0568f8184d63a8d416cf85e245082c43aa505e1f6fdc74"
+  },
+  "selectedReferences": {
+    "selection": "0aaff1ac6a3820366814e56450b4db24f0cf9c7967536c2962986197351f4997",
+    "graph-geometry": "5190b6818573672643db3fc314380198126ef7776a1f755bc59f17fd6d5f5342"
+  },
+  "sourcePacketSha256": "edbb5fa0507953c78fb0879c46c9d113f0f67756b97bc136a1f5f07bffd746ad",
+  "graphSpecSha256": "4637c2b839b7147cb5ac74e82fc2b7f19932c7ad0e89b56c95d891102c29e255",
+  "graphScriptSha256": "58555c5fd419caa88424ae5751a17371d1a78d4ff8a71bfeF2fcc9b41cc9c2fc",
+  "graphSvgSha256": "3199119bf888395fac5c4ccaffc8df301e5509a4ff6380bd57693d05e181e87a",
+  "apiAllowed": false
+}

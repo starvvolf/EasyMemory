@@ -1,0 +1,13 @@
+{
+  "artifactType": "problem-authoring-lab-run",
+  "status": "ready-for-independent-review",
+  "inputHash": "d23b0f21f3df1762058ca4ddfb38fdeb6c19f50cc835b146613333426b718c90",
+  "skillVersion": "problem-authoring-hypothesis-v1",
+  "skillHash": "d1f2ce945353d229bf71f4ed224d3c307c2f1917dc69b2a7dad8307109335672",
+  "revisionLimit": 1,
+  "questionCount": 4,
+  "totalUsage": {
+    "inputTokens": 0,
+    "outputTokens": 0
+  }
+}

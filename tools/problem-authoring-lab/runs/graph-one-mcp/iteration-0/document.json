@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "problem-authoring-v1",
+  "id": "graph-one-mcp-document",
+  "title": "이차함수와 직선",
+  "questions": [
+    {
+      "id": "graph-one-q1",
+      "source": {
+        "learningUnitId": "GRAPH-LU1",
+        "objectiveId": "GRAPH-OBJ1",
+        "sourceId": "fixed-math-text",
+        "sourcePage": 1,
+        "sourceRange": "고정 함수 조건 전체",
+        "sourceText": "이차함수 f(x)=x²-4x+3과 직선 g(x)=x-1의 그래프를 이용하여 두 그래프의 교점을 해석한다.",
+        "target": "두 그래프의 교점이 만족하는 방정식을 세우고 교점의 x좌표에 관한 값을 구한다.",
+        "successCriteria": [
+          "교점에서 f(x)=g(x)임을 사용한다.",
+          "x²-5x+4=0을 풀어 두 교점의 x좌표가 1과 4임을 구한다.",
+          "문항이 요구하는 두 x좌표의 합이 5임을 판단한다."
+        ]
+      },
+      "page": {
+        "width": 740,
+        "height": 780
+      },
+      "blocks": [
+        {
+          "id": "graph-one-stem",
+          "kind": "text",
+          "style": "body",
+          "frame": {
+            "x": 40,
+            "y": 48,
+            "width": 660,
+            "height": 104
+          },
+          "text": "이차함수 f(x)=x²−4x+3과 직선 g(x)=x−1의 그래프가\n그림과 같이 두 점 A, B에서 만난다. 두 점 A, B의\nx좌표를 각각 α, β라 할 때, α+β의 값은?"
+        },
+        {
+          "id": "graph-one-figure",
+          "kind": "generated-image",
+          "frame": {
+            "x": 70,
+            "y": 166,
+            "width": 600,
+            "height": 400
+          },
+          "alt": "이차함수 y=f(x)의 실선 그래프와 직선 y=g(x)의 파선 그래프 및 두 교점 A, B",
+          "generatedAssetRef": {
+            "assetId": "curve-line-intersections-v1",
+            "path": "assets/curve-line-intersections.svg",
+            "mimeType": "image/svg+xml",
+            "generator": "python-matplotlib",
+            "generatorVersion": "3.9.4",
+            "scriptPath": "tools/problem-authoring-lab/graph-assets/generate_curve_line_svg.py",
+            "specPath": "tools/problem-authoring-lab/fixtures/graph-one-spec.json",
+            "specSha256": "4637c2b839b7147cb5ac74e82fc2b7f19932c7ad0e89b56c95d891102c29e255",
+            "sha256": "3199119bf888395fac5c4ccaffc8df301e5509a4ff6380bd57693d05e181e87a"
+          }
+        },
+        {
+          "id": "graph-one-choices",
+          "kind": "choice-set",
+          "frame": {
+            "x": 40,
+            "y": 588,
+            "width": 660,
+            "height": 54
+          },
+          "responseId": "graph-one-r1",
+          "optionIds": [
+            "graph-one-o1",
+            "graph-one-o2",
+            "graph-one-o3",
+            "graph-one-o4",
+            "graph-one-o5"
+          ],
+          "columns": 5
+        },
+        {
+          "id": "graph-one-answer",
+          "kind": "answer-reveal",
+          "frame": {
+            "x": 40,
+            "y": 666,
+            "width": 660,
+            "height": 90
+          },
+          "responseIds": [
+            "graph-one-r1"
+          ],
+          "title": "교점에서 f(x)=g(x)이므로 x²−5x+4=(x−1)(x−4)=0이다. 따라서 α=1, β=4이므로 α+β=5이다. 정답 ⑤"
+        }
+      ],
+      "responses": [
+        {
+          "id": "graph-one-r1",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "graph-one-o1",
+              "text": "−5"
+            },
+            {
+              "id": "graph-one-o2",
+              "text": "2"
+            },
+            {
+              "id": "graph-one-o3",
+              "text": "3"
+            },
+            {
+              "id": "graph-one-o4",
+              "text": "4"
+            },
+            {
+              "id": "graph-one-o5",
+              "text": "5"
+            }
+          ],
+          "correctOptionId": "graph-one-o5",
+          "grading": "exact"
+        }
+      ]
+    }
+  ]
+}

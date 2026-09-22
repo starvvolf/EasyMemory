@@ -26,7 +26,6 @@ import {
   assessBlueprintSupport,
   createLegacyObjectiveAndBlueprint,
   defaultGenerationPolicy,
-  ensureMemorizationCoverage,
   recommendationFromBlueprint,
 } from "../practice-blueprint.ts";
 import {
@@ -59,10 +58,6 @@ import {
   createCompactCardGenerationInput,
   learningUnitTarget,
 } from "./compact-input.ts";
-import {
-  hydrateGeneratedCardContent,
-  type GeneratedCardContent,
-} from "./compact-card-output.ts";
 
 const requestSchema = z.object({
   projectId: z.string().optional(),
@@ -267,53 +262,6 @@ export const cardDraftSchema = z.object({
 
 export const cardsSchema = z.object({
   cards: z.array(cardDraftSchema).min(1),
-});
-
-const generatedCardCommonShape = {
-  learningUnitId: z.string(),
-  conceptNodeIds: z.array(z.string().min(1)).optional(),
-  front: z.string(),
-  basis: z.string(),
-  strategy: z.enum(cardStrategies),
-  difficulty: z.number().int().min(1).max(5),
-  explanation: z.string(),
-};
-
-const generatedCardContentSchema = z.discriminatedUnion("activityType", [
-  z.object({
-    ...generatedCardCommonShape,
-    activityType: z.literal("flashcard"),
-    back: z.string(),
-  }),
-  z.object({
-    ...generatedCardCommonShape,
-    activityType: z.literal("cloze"),
-    clozeText: z.string().min(1),
-    answer: z.string().min(1),
-  }),
-  z.object({
-    ...generatedCardCommonShape,
-    activityType: z.literal("true_false"),
-    correctBoolean: z.boolean(),
-  }),
-  z.object({
-    ...generatedCardCommonShape,
-    activityType: z.literal("multiple_choice"),
-    options: z.array(z.string()),
-    correctOptionIndex: z.number().int(),
-  }),
-  z.object({
-    ...generatedCardCommonShape,
-    activityType: z.literal("structure_recall"),
-    structureNodes: z.array(structureRecallNodeSchema),
-    structureRecallKind: structureRecallKindSchema.optional(),
-    supportedStructureRecallModes: supportedStructureRecallModesSchema.optional(),
-    structureRecallMode: structureRecallModeSchema,
-  }),
-]);
-
-export const generatedCardsContentSchema = z.object({
-  cards: z.array(generatedCardContentSchema).min(1),
 });
 
 export type CardDraft = z.infer<typeof cardDraftSchema>;
@@ -556,54 +504,9 @@ const plannedActivitySchema = z.object({
   includeInGeneration: z.boolean(),
 });
 
-const plannedCardCommonShape = {
-  blueprintId: z.string().min(1),
-  conceptNodeIds: z.array(z.string().min(1)).min(1).optional(),
-  front: z.string().min(1),
-  basis: z.string().min(1),
-  strategy: z.enum(cardStrategies),
-  difficulty: z.number().int().min(1).max(5),
-  explanation: z.string().min(1),
-  sourceGrounded: z.boolean(),
-  verificationNotes: z.array(z.string()),
-};
-
-const plannedCardSchema = z.discriminatedUnion("activityType", [
-  z.object({
-    ...plannedCardCommonShape,
-    activityType: z.literal("flashcard"),
-    back: z.string().min(1),
-  }),
-  z.object({
-    ...plannedCardCommonShape,
-    activityType: z.literal("cloze"),
-    clozeText: z.string().min(1),
-    answer: z.string().min(1),
-  }),
-  z.object({
-    ...plannedCardCommonShape,
-    activityType: z.literal("true_false"),
-    correctBoolean: z.boolean(),
-  }),
-  z.object({
-    ...plannedCardCommonShape,
-    activityType: z.literal("multiple_choice"),
-    options: z.array(z.string().min(1)).min(3).max(5),
-    correctOptionIndex: z.number().int().min(0),
-  }),
-  z.object({
-    ...plannedCardCommonShape,
-    activityType: z.literal("structure_recall"),
-    structureNodes: z.array(structureRecallNodeSchema).min(3).max(8),
-    structureRecallKind: structureRecallKindSchema,
-    supportedStructureRecallModes: supportedStructureRecallModesSchema,
-    structureRecallMode: structureRecallModeSchema,
-  }),
-]);
-
 export const learningPlanGenerationSchema = z.object({
   activities: z.array(plannedActivitySchema).min(1),
-  cards: z.array(plannedCardSchema),
+  cards: z.array(cardDraftSchema),
 });
 
 export const activityDesignSchema = z.object({
@@ -1291,15 +1194,16 @@ export async function runLearningPlanGeneration({
       "1. 각 Assessment Blueprint마다 현재 앱의 형식(플래시카드, OX, 객관식, 구조복원) 중 하나를 고릅니다.",
       "2. 완전 지원·보조 지원·미지원을 구분합니다. 미지원이면 recommendedType은 null이고 카드를 만들지 않습니다.",
       "3. 지원되는 Blueprint 하나를 Card 하나로 표현합니다. 목표·학습내용·문제 수를 다시 판단하지 않습니다.",
-      "4. 완성한 모든 카드를 원문 근거와 다시 대조해 정답 오류, 근거 없는 내용, 중복, 애매한 표현을 바로 수정합니다.",
+      "4. 완성 전 원문 근거와 대조하고, 최종 카드 JSON에는 검증이 끝난 질문·정답·출처 필드를 직접 기록합니다.",
       "",
       "필수 규칙:",
       "- activity와 card는 반드시 blueprintId로 연결합니다.",
       "- 같은 Blueprint에서 카드 여러 개를 만들지 않습니다.",
       "- front에 정답을 노출하지 않고 한 카드에는 하나의 분명한 학습 행동만 둡니다.",
       "- 객관식 오답도 원문과 모순 여부를 검토하고 외부 사실을 새 학습내용처럼 넣지 않습니다.",
-      "- basis에는 정답을 확인할 수 있는 짧은 원문 근거를 넣습니다.",
-      "- 최종 대조가 끝난 카드만 sourceGrounded=true로 반환합니다. false인 카드는 수정한 뒤 반환하세요.",
+      "- 카드의 learningUnitId·objectiveId·blueprintId와 sourceId·sourcePage·sourceRange는 확정 설계 값을 그대로 복사합니다.",
+      "- basis에는 정답을 확인할 수 있는 짧은 원문 근거를 넣고, 형식별 모든 필드를 서버 후처리에 맡기지 말고 직접 완성합니다.",
+      "- 별도 Critic을 실행하지 않으므로 qualityPassed=false, qualityStatus=not_run, qualityNotes=[]로 반환합니다.",
       ...buildSourceExpressionRules(input.sourceExpressionMode ?? "adapt"),
     ].join("\n"),
     threadId: input.codexThreadId,
@@ -1799,60 +1703,12 @@ export function finalizeActivityDesignResult(
   learningUnits: LearningUnit[],
 ) {
   const raw = z.object({
-    objectives: z.array(learningObjectiveSchema).optional(),
-    blueprints: z.array(practiceBlueprintSchema).optional(),
-    recommendations: z.array(
-      activityRecommendationSchema.omit({ includeInGeneration: true }),
-    ).optional(),
+    objectives: z.array(learningObjectiveSchema).min(1),
+    blueprints: z.array(practiceBlueprintSchema).min(1),
   }).parse(result);
-  let objectives: LearningObjective[];
-  let blueprints: PracticeBlueprint[];
-  if (raw.objectives?.length && raw.blueprints?.length) {
-    objectives = raw.objectives;
-    blueprints = raw.blueprints;
-  } else {
-    const recommendationByUnitId = new Map(
-      (raw.recommendations ?? []).map((item) => [item.learningUnitId, item]),
-    );
-    const legacy = learningUnits.map((unit) =>
-      createLegacyObjectiveAndBlueprint(
-        unit,
-        recommendationByUnitId.get(unit.id)?.recommendedType ?? "flashcard",
-      ),
-    );
-    objectives = legacy.map((item) => item.objective);
-    blueprints = legacy.map((item) => item.blueprint);
-  }
-  const operationByUnitId = new Map(
-    learningUnits.map((unit) => [unit.id, unit.operation]),
-  );
-  objectives = objectives.map((objective) => ({
-    ...objective,
-    terminalOperation:
-      operationByUnitId.get(objective.learningUnitId) ?? objective.terminalOperation,
-    successCriteria: objective.successCriteria.some((criterion) => criterion.required)
-      ? objective.successCriteria
-      : objective.successCriteria.map((criterion) => ({ ...criterion, required: true })),
-  }));
-  blueprints = normalizeProblemTypesForBoundaries(objectives, blueprints);
-  const objectiveById = new Map(
-    objectives.map((objective) => [objective.id, objective]),
-  );
-  blueprints = blueprints.map((blueprint) => {
-    const objective = objectiveById.get(blueprint.objectiveId);
-    return blueprint.relationToObjective === "direct" &&
-      objective &&
-      blueprint.elicitedOperation !== objective.terminalOperation
-      ? { ...blueprint, relationToObjective: "scaffold" as const }
-      : blueprint;
-  });
+  const objectives = raw.objectives;
+  const blueprints = raw.blueprints;
   validateOneProblemBoundaries(learningUnits, objectives, blueprints);
-  validateObjectiveBlueprintLinks(learningUnits, objectives, blueprints);
-  blueprints = ensureMemorizationCoverage(
-    objectives,
-    blueprints,
-    defaultGenerationPolicy,
-  );
   validateObjectiveBlueprintLinks(learningUnits, objectives, blueprints);
   const supportAssessments = blueprints.map((blueprint) =>
     assessBlueprintSupport(blueprint, blueprint.recommendedType),
@@ -1975,47 +1831,6 @@ function validateOneProblemBoundaries(
       );
     }
   }
-}
-
-function normalizeProblemTypesForBoundaries(
-  objectives: LearningObjective[],
-  blueprints: PracticeBlueprint[],
-) {
-  const objectiveById = new Map(
-    objectives.map((objective) => [objective.id, objective]),
-  );
-  return blueprints.map((blueprint) => {
-    const objective = objectiveById.get(blueprint.objectiveId);
-    if (
-      blueprint.recommendedType !== "structure_recall" ||
-      objective?.terminalOperation === "reconstruct"
-    ) {
-      return blueprint;
-    }
-    const recommendedType = objective?.terminalOperation === "discriminate"
-      ? "multiple_choice" as const
-      : "flashcard" as const;
-    return {
-      ...blueprint,
-      elicitedOperation: objective?.terminalOperation ?? blueprint.elicitedOperation,
-      recommendedType,
-      expectedResponse: {
-        ...blueprint.expectedResponse,
-        kind: recommendedType === "multiple_choice"
-          ? "single_choice" as const
-          : blueprint.expectedResponse.kind === "structured_text"
-            ? "structured_text" as const
-            : "short_text" as const,
-      },
-      scoringRubric: blueprint.scoringRubric.map((rubric) => ({
-        ...rubric,
-        gradingMode: recommendedType === "flashcard" ? "self" as const : "exact" as const,
-      })),
-      requiredCapabilities: blueprint.requiredCapabilities.filter(
-        (capability) => !["ordered_structure", "unordered_structure"].includes(capability),
-      ),
-    };
-  });
 }
 
 export async function runCardGeneration(
@@ -2216,6 +2031,9 @@ export async function runCardGeneration(
       },
     ],
   };
+  // Kept locally while the direct schema below remains duplicated for the legacy path.
+  // Referencing it prevents an accidental silent return to compact hydration.
+  void compactCardSchema;
 
   const content = await callCodexJson({
     schemaName: "memory_cards",
@@ -2231,7 +2049,7 @@ export async function runCardGeneration(
             : targetCardCount
               ? { minItems: targetCardCount, maxItems: targetCardCount }
               : {}),
-          items: hasActivityDesign ? compactCardSchema : {
+          items: {
             type: "object",
             additionalProperties: false,
             required: [
@@ -2452,60 +2270,20 @@ export async function runCardGeneration(
     },
   });
 
-  const generatedCards = hasActivityDesign
-    ? generatedCardsContentSchema.parse(content).cards.map((card) => {
-        const learningUnit = learningUnitsForCards.find(
-          (item) => item.id === card.learningUnitId,
-        );
-        const recommendation = effectiveActivityDesign.recommendations.find(
-          (item) => item.learningUnitId === card.learningUnitId,
-        );
-        if (!learningUnit || !recommendation) {
-          throw new PipelineError(
-            "cards",
-            `생성된 문제의 학습내용 연결을 찾을 수 없습니다: ${card.learningUnitId}`,
-          );
-        }
-        if (recommendation.recommendedType !== card.activityType) {
-          throw new PipelineError(
-            "cards",
-            `확정된 문제 방식과 생성된 문제 방식이 다릅니다: ${card.learningUnitId}`,
-          );
-        }
-        return hydrateGeneratedCardContent(card as GeneratedCardContent, {
-          analysis,
-          learningUnit,
-          recommendation,
-        });
-      })
-    : cardsSchema.parse(content).cards;
+  const generatedCards = cardsSchema.parse(content).cards;
+  validateDirectCardDrafts(
+    generatedCards,
+    learningUnitsForCards,
+    hasActivityDesign ? effectiveActivityDesign : undefined,
+  );
   const generated = { cards: generatedCards };
   await runtime.onCardsGenerated?.(generatedCards);
-  const parsed = await runCardCritic(
-    generated.cards,
-    learningUnitsForCards,
-    targetCardCount,
-    cardContract,
-    usesSoftBudget,
-    runtime.critic,
-  );
+  // Direct JSON output is validation-only. A second model must not silently
+  // rewrite questions, answers, or source references after schema validation.
+  const parsed = generated.cards;
   await runtime.onCriticCompleted?.(parsed);
-  let cards = materializeCards(parsed, mode);
+  const cards = materializeCards(parsed, mode);
   if (hasActivityDesign) {
-    cards = cards.map((card) => {
-      if (card.blueprintId) return card;
-      const candidates = effectiveActivityDesign.recommendations.filter(
-        (item) => item.learningUnitId === card.learningUnitId,
-      );
-      return candidates.length === 1
-        ? {
-          ...card,
-          objectiveId: candidates[0].objectiveId,
-          blueprintId: candidates[0].blueprintId,
-          explanation: card.explanation || card.basis,
-        }
-        : card;
-    });
     const selectedTypeByBlueprintKey = new Map(
       effectiveActivityDesign.recommendations.map((item) => [
         activityRecommendationKey(item),
@@ -2548,12 +2326,6 @@ export async function runCardGeneration(
         [...qualityIssues, ...missingBlueprints.map((id) => `누락된 문제 설계서: ${id}`)],
       );
     }
-    cards = cards.map((card) => ({
-      ...card,
-      qualityPassed: true,
-      qualityStatus: "passed" as const,
-      qualityNotes: [],
-    }));
   }
 
   return {
@@ -2607,6 +2379,10 @@ function buildLearningActivityGenerationPrompt(input: {
     "생성 규칙:",
     ...buildSourceExpressionRules(input.sourceExpressionMode),
     "- LearningUnit마다 문제 하나를 만들고 learningUnitId·blueprintId·activityType을 그대로 유지합니다.",
+    "- objectiveId, sourceId, sourcePage, sourceRange는 연결된 설계와 LearningUnit의 값을 JSON 필드에 그대로 복사합니다.",
+    "- recommendationReason과 rationale도 확정 추천의 의미를 바꾸지 말고 완성해 반환합니다. 서버 후처리가 이 필드를 대신 채우지 않습니다.",
+    "- 사용하지 않는 형식 전용 필드는 빈 문자열·빈 배열·0·false로 반환하고, 구조복원 방식 필드는 지원 관계가 일치하도록 직접 완성합니다.",
+    "- 아직 별도 품질 검수를 실행하지 않았으므로 qualityPassed=false, qualityStatus=not_run, qualityNotes=[]로 반환합니다.",
     "- front는 given에서 만들고, 정답은 hidden의 target_answer를 그대로 사용합니다. 입력을 바꾸거나 답을 다시 계산하지 않으며 hidden의 결론·추론을 front에 노출하지 않습니다.",
     "- sourcePages는 unit의 pageRefs가 가리키는 페이지만 근거로 사용합니다. 문제·정답·오답은 해당 LearningUnit과 원문 근거 밖으로 확장하지 않습니다.",
     "- 한 문제에는 하나의 명확한 인출·판단 대상과 하나의 확정 가능한 정답만 둡니다. placeholder나 'keyword', '내용', '정보' 같은 자리 이름 자체는 정답이 아닙니다.",
@@ -2690,89 +2466,129 @@ export function validateBlueprintItem(
   return issues;
 }
 
-export function materializeCards(cards: CardDraft[], mode: StudyMode) {
-  return cards.map<Card>((card) => {
-    const answers =
-      card.activityType === "cloze" || mode === "cloze"
-        ? normalizeClozeAnswers(card.clozeText, card.answer, card.answers)
-        : undefined;
-    const resolvedMode = card.activityType === "cloze" ? "cloze" : mode;
+export function validateDirectCardDrafts(
+  cards: CardDraft[],
+  learningUnits: LearningUnit[],
+  activityDesign?: ActivityDesign,
+) {
+  const issues: string[] = [];
+  const unitById = new Map(learningUnits.map((unit) => [unit.id, unit]));
+  const seenUnitIds = new Set<string>();
+  const recommendationByBlueprintId = new Map(
+    (activityDesign?.recommendations ?? []).map((item) => [item.blueprintId, item]),
+  );
 
-    return {
-      id: crypto.randomUUID(),
-      type: resolvedMode,
-      activityType: card.activityType,
-      front:
-        cleanEmbeddedStructureChoices(
-          card.front,
-          card.activityType,
-          card.structureRecallMode,
-        ) || undefined,
-      back: card.back || undefined,
-      clozeText:
-        resolvedMode === "cloze" && answers
-          ? normalizeClozeText(card.clozeText, answers)
-          : undefined,
-      answer: answers?.join(", "),
-      answers,
-      options: card.options.length > 0 ? card.options : undefined,
-      correctOptionIndex:
-        card.activityType === "multiple_choice"
-          ? card.correctOptionIndex
-          : undefined,
-      correctBoolean:
-        card.activityType === "true_false" ? card.correctBoolean : undefined,
-      structureNodes:
-        card.activityType === "structure_recall"
-          ? card.structureNodes
-          : undefined,
-      structureRecallKind:
-        card.activityType === "structure_recall"
-          ? card.structureRecallKind ?? "hierarchy"
-          : undefined,
-      supportedStructureRecallModes:
-        card.activityType === "structure_recall"
-          ? card.supportedStructureRecallModes ?? [card.structureRecallMode ?? "word_bank"]
-          : undefined,
-      structureRecallMode:
-        card.activityType === "structure_recall"
-          ? card.structureRecallMode ?? "word_bank"
-          : undefined,
-      recommendationReason: card.recommendationReason || undefined,
-      hint: card.hint || undefined,
-      tags: card.tags,
-      status: "new",
-      basis: card.basis || undefined,
-      learningUnitId: card.learningUnitId,
-      objectiveId: card.objectiveId || undefined,
-      blueprintId: card.blueprintId || undefined,
-      conceptNodeIds: card.conceptNodeIds,
-      strategy: card.strategy,
-      sourceId: card.sourceId,
-      sourcePage: card.sourcePage,
-      sourceRange: card.sourceRange,
-      rationale: card.rationale,
-      difficulty: card.difficulty as 1 | 2 | 3 | 4 | 5,
-      qualityPassed: card.qualityPassed,
-      qualityNotes: card.qualityNotes,
-      qualityStatus: card.qualityStatus,
-      explanation: card.explanation || undefined,
-    };
+  cards.forEach((card, index) => {
+    const prefix = `${index + 1}번 문제`;
+    const unit = unitById.get(card.learningUnitId);
+    if (!unit) {
+      issues.push(`${prefix}: 존재하지 않는 학습내용을 참조합니다.`);
+    } else if (
+      card.sourceId !== unit.sourceId ||
+      card.sourcePage !== unit.sourcePage ||
+      card.sourceRange !== unit.sourceRange
+    ) {
+      issues.push(`${prefix}: sourceId/sourcePage/sourceRange가 학습내용과 다릅니다.`);
+    }
+    if (seenUnitIds.has(card.learningUnitId)) {
+      issues.push(`${prefix}: 같은 학습내용에서 카드가 중복 생성되었습니다.`);
+    }
+    seenUnitIds.add(card.learningUnitId);
+    if (!card.basis.trim()) issues.push(`${prefix}: 원문 근거가 비어 있습니다.`);
+    if (card.qualityPassed || card.qualityStatus !== "not_run" || card.qualityNotes.length) {
+      issues.push(`${prefix}: 실행하지 않은 품질 검수를 통과한 것으로 표시했습니다.`);
+    }
+
+    if (activityDesign) {
+      const recommendation = recommendationByBlueprintId.get(card.blueprintId);
+      if (!recommendation || !recommendation.includeInGeneration) {
+        issues.push(`${prefix}: 생성 대상으로 확정되지 않은 blueprintId입니다.`);
+      } else {
+        if (recommendation.learningUnitId !== card.learningUnitId) {
+          issues.push(`${prefix}: blueprint와 learningUnit 연결이 다릅니다.`);
+        }
+        if (recommendation.objectiveId !== card.objectiveId) {
+          issues.push(`${prefix}: objectiveId가 확정 설계와 다릅니다.`);
+        }
+        if (recommendation.recommendedType !== card.activityType) {
+          issues.push(`${prefix}: activityType이 확정 설계와 다릅니다.`);
+        }
+      }
+    }
+
+    if (card.type === "cloze" || card.activityType === "cloze") {
+      const blankCount = card.clozeText.match(/____/g)?.length ?? 0;
+      if (/\{\{c\d+::/u.test(card.clozeText)) {
+        issues.push(`${prefix}: Anki cloze 문법을 사용할 수 없습니다.`);
+      }
+      if (blankCount < 1 || blankCount !== card.answers.length) {
+        issues.push(`${prefix}: 빈칸 수와 answers 수가 다릅니다.`);
+      }
+      if (card.answers.some((answer) => !answer.trim())) {
+        issues.push(`${prefix}: 빈 답이 있습니다.`);
+      }
+      if (card.answer !== card.answers.join(", ")) {
+        issues.push(`${prefix}: answer가 answers의 순서와 다릅니다.`);
+      }
+      if (card.front || card.back) {
+        issues.push(`${prefix}: cloze 카드의 front/back은 비어 있어야 합니다.`);
+      }
+    }
+
+    if (card.activityType === "flashcard" && card.type !== "cloze") {
+      if (!card.front.trim() || !card.back.trim()) {
+        issues.push(`${prefix}: 플래시카드의 front/back이 비어 있습니다.`);
+      }
+    }
+    if (card.activityType === "multiple_choice") {
+      if (card.options.length < 3 || card.options.length > 5) {
+        issues.push(`${prefix}: 객관식 선택지는 3~5개여야 합니다.`);
+      }
+      if (card.correctOptionIndex < 0 || card.correctOptionIndex >= card.options.length) {
+        issues.push(`${prefix}: 객관식 정답 위치가 선택지 범위를 벗어났습니다.`);
+      } else if (card.back !== card.options[card.correctOptionIndex]) {
+        issues.push(`${prefix}: back이 정답 선택지와 다릅니다.`);
+      }
+    }
+    if (card.activityType === "true_false") {
+      const expectedBack = card.correctBoolean ? "O" : "X";
+      if (card.back !== expectedBack) issues.push(`${prefix}: O/X 정답 필드가 서로 다릅니다.`);
+    }
+    if (card.activityType === "structure_recall") {
+      const nodeIds = new Set(card.structureNodes.map((node) => node.id));
+      if (nodeIds.size !== card.structureNodes.length || card.structureNodes.length < 3) {
+        issues.push(`${prefix}: 구조복원 노드는 고유한 ID를 가진 3개 이상이어야 합니다.`);
+      }
+      if (card.structureNodes.some((node) => node.parentId && !nodeIds.has(node.parentId))) {
+        issues.push(`${prefix}: 구조 노드가 존재하지 않는 부모를 참조합니다.`);
+      }
+      if (!card.structureRecallMode ||
+        !card.supportedStructureRecallModes?.includes(card.structureRecallMode)) {
+        issues.push(`${prefix}: 최초 구조복원 방식이 지원 방식에 포함되지 않습니다.`);
+      }
+    }
   });
 
+  if (activityDesign) {
+    const expected = activityDesign.recommendations.filter((item) => item.includeInGeneration);
+    if (cards.length !== expected.length) {
+      issues.push(`생성 카드 수 ${cards.length}개가 확정 설계 ${expected.length}개와 다릅니다.`);
+    }
+  }
+  if (issues.length) {
+    throw new PipelineError("cards", "구조화 카드 JSON 검증에 실패했습니다.", issues);
+  }
 }
 
-function cleanEmbeddedStructureChoices(
-  front: string,
-  activityType: LearningActivityType,
-  recallMode: "word_bank" | "free_input" | undefined,
-) {
-  if (activityType !== "structure_recall" || recallMode !== "word_bank") {
-    return front;
-  }
-  return front
-    .replace(/\n\s*(?:보기|답\s*모음)\s*[:：][\s\S]*$/u, "")
-    .trim();
+export function materializeCards(cards: CardDraft[], mode: StudyMode) {
+  void mode;
+  return cards.map<Card>((card) => ({
+    ...card,
+    id: crypto.randomUUID(),
+    status: "new",
+    difficulty: card.difficulty as 1 | 2 | 3 | 4 | 5,
+  }));
+
 }
 
 export function buildCardContract(
@@ -3308,37 +3124,6 @@ function hasCompleteSelectedOutlineEvidence(
   }
 }
 
-function normalizeClozeText(clozeText: string, answers: string[]) {
-  let nextText = clozeText.replace(
-    /\{\{c\d+::([^}:]+)(?:::[^}]+)?\}\}/g,
-    "____",
-  );
-  answers.forEach((answer) => {
-    nextText = nextText.replace(answer, "____");
-  });
-  return nextText;
-}
-
-function normalizeClozeAnswers(
-  clozeText: string,
-  answer: string,
-  answers: string[],
-) {
-  const clozeMatches = Array.from(
-    clozeText.matchAll(/\{\{c\d+::([^}:]+)(?:::[^}]+)?\}\}/g),
-  ).map((match) => match[1].trim());
-  const candidates = clozeMatches.length > 0 ? clozeMatches : answers;
-  const parsed = candidates.length > 0 ? candidates : splitAnswerText(answer);
-  return parsed.filter(Boolean);
-}
-
-function splitAnswerText(answer: string) {
-  return answer
-    .split(/\n|,|;|\//)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function buildCompactLearningDesignJsonSchema(maxKnowledgeUnits: number) {
   return {
     type: "object",
@@ -3447,20 +3232,10 @@ function buildCompactLearningDesignJsonSchema(maxKnowledgeUnits: number) {
 }
 
 function buildLearningPlanGenerationJsonSchema(blueprintCount: number) {
-  const commonCardProperties = {
-    blueprintId: { type: "string" },
-    front: { type: "string" },
-    basis: { type: "string" },
-    strategy: { type: "string", enum: cardStrategies },
-    difficulty: { type: "integer", minimum: 1, maximum: 5 },
-    explanation: { type: "string" },
-    sourceGrounded: { type: "boolean" },
-    verificationNotes: { type: "array", items: { type: "string" } },
-  };
-  const commonCardRequired = [
-    "blueprintId", "activityType", "front", "basis", "strategy",
-    "difficulty", "explanation", "sourceGrounded", "verificationNotes",
-  ];
+  const directCardJsonSchema = z.toJSONSchema(cardDraftSchema, {
+    target: "draft-7",
+  }) as Record<string, unknown>;
+  delete directCardJsonSchema.$schema;
   return {
     type: "object",
     additionalProperties: false,
@@ -3493,91 +3268,7 @@ function buildLearningPlanGenerationJsonSchema(blueprintCount: number) {
         type: "array",
         minItems: 0,
         maxItems: blueprintCount,
-        items: {
-          anyOf: [
-            {
-              type: "object",
-              additionalProperties: false,
-              required: [...commonCardRequired, "back"],
-              properties: {
-                ...commonCardProperties,
-                activityType: { type: "string", enum: ["flashcard"] },
-                back: { type: "string" },
-              },
-            },
-            {
-              type: "object",
-              additionalProperties: false,
-              required: [...commonCardRequired, "clozeText", "answer"],
-              properties: {
-                ...commonCardProperties,
-                activityType: { type: "string", enum: ["cloze"] },
-                clozeText: { type: "string" },
-                answer: { type: "string" },
-              },
-            },
-            {
-              type: "object",
-              additionalProperties: false,
-              required: [...commonCardRequired, "correctBoolean"],
-              properties: {
-                ...commonCardProperties,
-                activityType: { type: "string", enum: ["true_false"] },
-                correctBoolean: { type: "boolean" },
-              },
-            },
-            {
-              type: "object",
-              additionalProperties: false,
-              required: [...commonCardRequired, "options", "correctOptionIndex"],
-              properties: {
-                ...commonCardProperties,
-                activityType: { type: "string", enum: ["multiple_choice"] },
-                options: { type: "array", minItems: 3, maxItems: 5, items: { type: "string" } },
-                correctOptionIndex: { type: "integer", minimum: 0 },
-              },
-            },
-            {
-              type: "object",
-              additionalProperties: false,
-              required: [
-                ...commonCardRequired,
-                "structureNodes",
-                "structureRecallKind",
-                "supportedStructureRecallModes",
-                "structureRecallMode",
-              ],
-              properties: {
-                ...commonCardProperties,
-                activityType: { type: "string", enum: ["structure_recall"] },
-                structureNodes: {
-                  type: "array",
-                  minItems: 3,
-                  maxItems: 8,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    required: ["id", "parentId", "correctLabel"],
-                    properties: {
-                      id: { type: "string" },
-                      parentId: { anyOf: [{ type: "string" }, { type: "null" }] },
-                      correctLabel: { type: "string" },
-                    },
-                  },
-                },
-                structureRecallKind: { type: "string", enum: ["sequence", "hierarchy"] },
-                supportedStructureRecallModes: {
-                  type: "array",
-                  minItems: 1,
-                  maxItems: 2,
-                  uniqueItems: true,
-                  items: { type: "string", enum: ["word_bank", "free_input"] },
-                },
-                structureRecallMode: { type: "string", enum: ["word_bank", "free_input"] },
-              },
-            },
-          ],
-        },
+        items: directCardJsonSchema,
       },
     },
   };
@@ -3658,47 +3349,37 @@ export function materializeLearningPlanGeneration(
     new Set(cardIds).size !== cardIds.length ||
     cardIds.some((id) => !includedIds.has(id)) ||
     cardIds.length !== includedIds.size ||
-    generated.cards.some((card) => !card.sourceGrounded)
+    generated.cards.some(
+      (card) => card.qualityPassed || card.qualityStatus !== "not_run" || card.qualityNotes.length > 0,
+    )
   ) {
     throw new PipelineError(
       "cards",
-      "생성된 문제의 수 또는 원문 대조 결과가 확정한 평가 설계와 일치하지 않습니다.",
+      "생성된 문제의 수, 연결 또는 품질 검수 상태가 확정한 평가 설계와 일치하지 않습니다.",
     );
   }
 
   const legacyUnitById = new Map(
     (analysis.learningUnits ?? []).map((item) => [item.id, item]),
   );
-  const hydrated = generated.cards.map((card) => {
+  generated.cards.forEach((card) => {
     const blueprint = blueprintById.get(card.blueprintId)!;
     const unit = unitById.get(blueprint.knowledgeUnitId)!;
     const legacyUnit = legacyUnitById.get(unit.id);
     const recommendation = recommendationByBlueprintId.get(card.blueprintId)!;
-    if (!legacyUnit || card.activityType !== recommendation.recommendedType) {
+    if (
+      !legacyUnit ||
+      card.learningUnitId !== unit.id ||
+      card.objectiveId !== blueprint.objectiveId ||
+      card.activityType !== recommendation.recommendedType
+    ) {
       throw new PipelineError("cards", "문제 형식 또는 학습 내용 연결이 설계와 다릅니다.");
     }
-    if (
-      card.activityType === "multiple_choice" &&
-      card.correctOptionIndex >= card.options.length
-    ) {
-      throw new PipelineError("cards", "객관식 정답 위치가 선택지 범위를 벗어났습니다.");
-    }
-    const content: GeneratedCardContent = {
-      ...card,
-      learningUnitId: unit.id,
-    };
-    return {
-      ...hydrateGeneratedCardContent(content, {
-        analysis,
-        learningUnit: legacyUnit,
-        recommendation,
-      }),
-      qualityPassed: true,
-      qualityStatus: "passed" as const,
-      qualityNotes: card.verificationNotes,
-    };
   });
-  const cards = materializeCards(hydrated, "flashcard");
+  validateDirectCardDrafts(generated.cards, [...legacyUnitById.values()], {
+    recommendations: [...recommendationByBlueprintId.values()],
+  });
+  const cards = materializeCards(generated.cards, "flashcard");
   const invalid = cards.flatMap((card) =>
     validateLearningActivity(card).map((issue) => `${card.blueprintId}: ${issue}`),
   );
