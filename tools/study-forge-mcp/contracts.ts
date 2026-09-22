@@ -1,3 +1,4 @@
+import { generatedCardsContentSchema } from "./compact-generation.ts";
 import { z } from "zod";
 import {
   combineSourceOutlines,
@@ -13,7 +14,6 @@ import {
   activityAuthoringResultSchema,
   analysisSchema,
   cardsSchema,
-  generatedCardsContentSchema,
   finalizeActivityDesignResult,
   organizedMaterialSchema,
   materializeCards,

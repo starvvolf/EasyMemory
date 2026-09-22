@@ -1,3 +1,4 @@
+import { learningPlanGenerationSchema, materializeLearningPlanGeneration } from "./compact-generation.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -5,8 +6,6 @@ import { z } from "zod";
 import {
   adaptLearningDesignToAnalysis,
   buildReviewMaterial,
-  learningPlanGenerationSchema,
-  materializeLearningPlanGeneration,
   validateLearningDesignPlan,
   type GenerateInput,
 } from "../../src/lib/pipeline/generate.ts";

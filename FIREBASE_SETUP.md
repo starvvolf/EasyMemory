@@ -4,23 +4,14 @@ This change prepares authentication and Firebase App Hosting, but it does not cr
 or deploy a Firebase project. Those operations require the owner's Google/Firebase
 account.
 
-## Current data boundary
+## Current data boundary (integration update: 2026-09-22)
 
-- Google-authenticated users can open the app.
-- The server returns the authenticated Firebase `uid` so a future Firestore/Storage
-  layer can partition records by UID.
-- Only the email in the server-only `AI_OWNER_EMAIL` variable can call the AI routes
-  `/api/analyze`, `/api/plan`, `/api/generate`, and `/api/codex/chat`.
-- Server project, source, MCP import, coding-session, model-config, and project-status
-  routes currently read shared files on the host. Until those records are partitioned
-  by UID, non-owner accounts receive HTTP 403 instead of seeing the owner's files.
-- Other signed-in users can still use browser-local decks and study flows.
-- Decks remain in the browser IndexedDB database `memory-transformer`, object store
-  `decks`. They are not synchronized, migrated, or currently partitioned by UID.
-- IndexedDB is shared by every account using the same browser profile. Signing out
-  does not erase it. Do not switch between mutually untrusted accounts in one browser
-  profile until an explicit UID migration or separate-profile policy is implemented.
-- No Firestore or Cloud Storage resources or security rules are added in this change.
+- Google authentication and server-side owner-only AI authorization remain in place.
+- Account-scoped Firestore/Storage adapters now cover projects, source PDFs, decks, study sessions, review state, reading positions, and learner memory. See [the data model](docs/FIREBASE_DATA_MODEL.md) and [memory contract](docs/LEARNER_MEMORY_CONTRACT.md).
+- Firestore and Storage rules are included. Their presence does not mean they have been deployed.
+- Local browser/filesystem data remains local until explicitly imported. Cloning this repository does not transfer it.
+- Local coding/model-management routes still have narrower owner/local-host boundaries; cloud persistence is not proof that every local tool works remotely.
+- This integration was built and tested offline. Real account login, cloud synchronization and deployed rules were not reverified.
 
 ## Firebase console checklist
 
@@ -71,8 +62,8 @@ into `apphosting.yaml` or commit it to an env file.
    browser-local deck list, and study screen. Confirm the account chip says either
    `운영자` or `일반 회원`.
 4. With a non-owner Google account, confirm the yellow permission notice is visible,
-   and a direct authenticated request to an AI API returns HTTP 403. Shared host-file
-   project/source APIs must also return HTTP 403 until UID partitioning exists.
+   and a direct authenticated request to an AI API returns HTTP 403. Account-scoped project/source APIs must expose only that UID’s data; owner-only
+   local management routes must still return HTTP 403.
 5. With the `AI_OWNER_EMAIL` account, confirm PDF analysis/generation can call the
    existing API routes.
 6. Remove one Firebase variable and restart the dev server. The login screen must
@@ -81,11 +72,6 @@ into `apphosting.yaml` or commit it to an env file.
    500 naming only the missing variable.
 8. Sign out and confirm the app content is hidden behind the Google login screen.
 
-## Next phase (not included)
+## Deployment and data migration still require verification
 
-Introduce Firestore and Cloud Storage together with rules that require
-`request.auth.uid == resource.data.ownerUid` (and equivalent create checks), then
-design an explicit, reversible IndexedDB import. The current UID-bearing session is
-the handoff point; this change intentionally does not alter deck IDs, records, or the
-MCP data model. Do not automatically assign existing IndexedDB or host files to the
-first account that signs in; ownership must be confirmed during migration.
+Firestore/Storage adapters, rules and explicit import endpoints are included in this branch. See [the data model](docs/FIREBASE_DATA_MODEL.md). Configure the actual Firebase resources and verify deployed rules with separate user accounts before relying on cloud storage. Existing IndexedDB/host files are not transferred by Git and must not be silently assigned to the first signed-in account. This integration did not deploy resources or migrate personal data.
