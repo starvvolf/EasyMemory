@@ -1,5 +1,19 @@
 # Problem Authoring Lab
 
+## 2026-09-28 기하변환 출제 프로토타입
+
+최신 범위와 성공 조건은 [`PROTOTYPE_PLAN.md`](PROTOTYPE_PLAN.md)에 있다. 고정 입력은 실제 Study Forge MCP Learning Design 산출물과 확정 원문에서 만든 `runs/geometric-authoring-prototype/source-packet.json`이다. 패킷에는 목표·성공 기준·지식 내용·PDF 2~7쪽 근거와 원본 세 파일의 해시가 있다. 기존 카드나 mock 문항을 출제 입력으로 사용하지 않는다.
+
+패킷 재생성(원본 파일을 수정하지 않음):
+
+```powershell
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/problem-authoring-lab/run-mcp-learning-design-packet.ts eval/local/product-flow-20260928-geometric/learning-design-output.json eval/local/product-flow-20260928-geometric/submit-learning-design.json eval/local/product-flow-20260928-geometric/data/mcp/published/chatgpt-request-cb0b90cecfffa5c231ffe1e6d7b63f8d.json <새-run-id>
+```
+
+평가 담당은 MCP 서버에서 `load_source_packet({packetPath:"runs/geometric-authoring-prototype/source-packet.json"})`로 입력을 읽는다. 목표와 원문을 고정한 채 독립 문항 2개와 관련된 공통 자료 문항 2개를 제작한다. 문제 유형은 기본적으로 제작 AI가 고른다. 사용자 지정이 있는 검사에서는 `validate_problem_document`의 `formatOverride`에 문항 ID별 `single-choice` 또는 `short-text`를 지정한다. 실제 출제에서는 `packetPath`를 검사·수정·기록 도구에 모두 전달해 확정 출처와 대조한다.
+
+`render_problem_preview`는 풀이·정답 공개·직접 풀이 HTML 세 개를 돌려준다. `record_problem_iteration`은 `interactive.html`도 보관한다. 직접 풀이 화면은 선택 또는 입력 후 문항별 제출·정답 공개가 가능하며 공통 자료는 한 번만 표시된다. 필요한 부분수정은 최대 1회다. 별도 AI Critic은 없다. `runs/geometric-authoring-prototype`에는 입력 패킷만 있고 아직 실제 출제 문항은 없다.
+
 격리된 1차 실험이다. 저장된 학습 내용은 그대로 두고, AI가 자유 블록 편집틀로 객관식 2개와 빈칸형 주관식 2개를 학교 시험지처럼 구성한 뒤 실제 렌더와 부분수정 루프를 거칠 수 있는지 확인한다. 제품 생성·렌더·학습 코드는 연결하지 않았다.
 
 ## 현재 범위

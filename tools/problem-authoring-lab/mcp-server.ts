@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { applyRevision, validateDocument, type AuthoringDocument, type RevisionPatch } from "./contract.ts";
-import { renderDocument } from "./renderer.ts";
+import { applyRevision, validateDocument, validateDocumentAgainstPacket, validateFormatOverride, type AuthoringDocument, type RevisionPatch, type SourceContent } from "./contract.ts";
+import { renderDocument, renderInteractiveDocument } from "./renderer.ts";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const unknownRecord = z.record(z.string(), z.unknown());
@@ -74,39 +74,53 @@ export function createProblemAuthoringMcpServer() {
   server.registerTool("validate_problem_document", {
     title: "Validate a problem document",
     description: "Check stable IDs, source assets, page bounds, response links, and answer contracts without rewriting content.",
-    inputSchema: { document: unknownRecord }, outputSchema: { valid: z.boolean(), issues: z.array(unknownRecord) },
+    inputSchema: { document: unknownRecord, packetPath: z.string().optional(), formatOverride: z.record(z.string(), z.enum(["single-choice", "short-text"])).optional() }, outputSchema: { valid: z.boolean(), issues: z.array(unknownRecord) },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-  }, async ({ document }) => {
+  }, async ({ document, packetPath, formatOverride }) => {
     const issues = validateDocument(document as AuthoringDocument);
+    if (packetPath) {
+      const packet = JSON.parse(await readFile(resolveRunPacketPath(packetPath), "utf8")) as { items: SourceContent[] };
+      issues.push(...validateDocumentAgainstPacket(document as AuthoringDocument, packet));
+    }
+    if (formatOverride) issues.push(...validateFormatOverride(document as AuthoringDocument, formatOverride));
     return result({ valid: !issues.some((issue) => issue.severity === "error"), issues }, "문서 계약을 검사했습니다.");
   });
 
   server.registerTool("render_problem_preview", {
     title: "Render unanswered and answer-revealed previews",
-    description: "Render the authored block layout to real HTML in both study states for visual inspection.",
-    inputSchema: { document: unknownRecord }, outputSchema: { beforeAnswerHtml: z.string(), afterAnswerHtml: z.string() },
+    description: "Render unanswered, answer-revealed, and locally interactive HTML for visual and grading checks.",
+    inputSchema: { document: unknownRecord }, outputSchema: { beforeAnswerHtml: z.string(), afterAnswerHtml: z.string(), interactiveHtml: z.string() },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async ({ document }) => result({
     beforeAnswerHtml: renderDocument(document as AuthoringDocument, { revealAnswers: false }),
     afterAnswerHtml: renderDocument(document as AuthoringDocument, { revealAnswers: true }),
+    interactiveHtml: renderInteractiveDocument(document as AuthoringDocument),
   }, "정답 전·후 HTML 미리보기를 렌더했습니다."));
 
   server.registerTool("apply_problem_patch", {
     title: "Apply a targeted problem patch",
     description: "Replace only named blocks or response contracts while preserving stable IDs, then validate the result.",
-    inputSchema: { document: unknownRecord, patch: unknownRecord }, outputSchema: { document: unknownRecord, issues: z.array(unknownRecord) },
+    inputSchema: { document: unknownRecord, patch: unknownRecord, packetPath: z.string().optional(), formatOverride: z.record(z.string(), z.enum(["single-choice", "short-text"])).optional() }, outputSchema: { document: unknownRecord, issues: z.array(unknownRecord) },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  }, async ({ document, patch }) => {
+  }, async ({ document, patch, packetPath, formatOverride }) => {
     const next = applyRevision(document as AuthoringDocument, patch as RevisionPatch);
-    return result({ document: next, issues: validateDocument(next) }, "지정한 부분만 수정하고 다시 검사했습니다.");
+    const issues = validateDocument(next);
+    if (packetPath) {
+      const packet = JSON.parse(await readFile(resolveRunPacketPath(packetPath), "utf8")) as { items: SourceContent[] };
+      issues.push(...validateDocumentAgainstPacket(next, packet));
+    }
+    if (formatOverride) issues.push(...validateFormatOverride(next, formatOverride));
+    return result({ document: next, issues }, "지정한 부분만 수정하고 다시 검사했습니다.");
   });
 
   server.registerTool("record_problem_iteration", {
     title: "Record one authoring iteration",
-    description: "Persist the exact document, both rendered states, inspection, optional patch, and actual execution metadata under this isolated lab.",
+    description: "Preserve an iteration, its validation issues and execution data; render previews when the contract is valid.",
     inputSchema: {
       runId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
-      iteration: z.number().int().min(0).max(3),
+      iteration: z.number().int().min(0).max(1),
+      packetPath: z.string().optional(),
+      formatOverride: z.record(z.string(), z.enum(["single-choice", "short-text"])).optional(),
       document: unknownRecord,
       issues: z.array(unknownRecord),
       patch: unknownRecord.optional(),
@@ -117,23 +131,33 @@ export function createProblemAuthoringMcpServer() {
     },
     outputSchema: { directory: z.string(), files: z.array(z.string()) },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  }, async ({ runId, iteration, document, issues, patch, execution }) => {
+  }, async ({ runId, iteration, packetPath, formatOverride, document, issues, patch, execution }) => {
     const authored = document as AuthoringDocument;
     const errors = validateDocument(authored).filter((issue) => issue.severity === "error");
-    if (errors.length) throw new Error("유효하지 않은 문서는 기록할 수 없습니다.");
+    if (packetPath) {
+      const packet = JSON.parse(await readFile(resolveRunPacketPath(packetPath), "utf8")) as { items: SourceContent[] };
+      errors.push(...validateDocumentAgainstPacket(authored, packet));
+    }
+    if (formatOverride) errors.push(...validateFormatOverride(authored, formatOverride));
     const directory = path.join(root, "runs", runId, `iteration-${iteration}`);
-    await mkdir(directory, { recursive: true });
-    await verifyGeneratedAssets(authored, directory);
-    const files = ["document.json", "before-answer.html", "after-answer.html", "inspection.json", "execution.json"];
+    await mkdir(directory, { recursive: false });
+    const files = ["document.json", "inspection.json", "execution.json"];
     await Promise.all([
       writeFile(path.join(directory, files[0]), JSON.stringify(authored, null, 2)),
-      writeFile(path.join(directory, files[1]), renderDocument(authored, { revealAnswers: false })),
-      writeFile(path.join(directory, files[2]), renderDocument(authored, { revealAnswers: true })),
-      writeFile(path.join(directory, files[3]), JSON.stringify(issues, null, 2)),
-      writeFile(path.join(directory, files[4]), JSON.stringify(execution, null, 2)),
+      writeFile(path.join(directory, files[1]), JSON.stringify([...issues, ...errors], null, 2)),
+      writeFile(path.join(directory, files[2]), JSON.stringify(execution, null, 2)),
       ...(patch ? [writeFile(path.join(directory, "patch.json"), JSON.stringify(patch, null, 2))] : []),
     ]);
     if (patch) files.push("patch.json");
+    if (!errors.length) {
+      await verifyGeneratedAssets(authored, directory);
+      await Promise.all([
+        writeFile(path.join(directory, "before-answer.html"), renderDocument(authored, { revealAnswers: false })),
+        writeFile(path.join(directory, "after-answer.html"), renderDocument(authored, { revealAnswers: true })),
+        writeFile(path.join(directory, "interactive.html"), renderInteractiveDocument(authored)),
+      ]);
+      files.push("before-answer.html", "after-answer.html", "interactive.html");
+    }
     return result({ directory, files }, "이번 제작 iteration을 실험 디렉터리에 기록했습니다.");
   });
   return server;
@@ -152,8 +176,8 @@ function resolveRunPacketPath(packetPath: string) {
 
 async function verifyGeneratedAssets(document: AuthoringDocument, iterationDirectory: string) {
   const workspaceRoot = path.resolve(root, "../..");
-  for (const question of document.questions) {
-    for (const block of question.blocks) {
+  for (const entry of [...document.questions, ...(document.sharedSets ?? [])]) {
+    for (const block of entry.blocks) {
       if (block.kind !== "generated-image") continue;
       const asset = block.generatedAssetRef;
       const assetBytes = await readFile(path.resolve(iterationDirectory, asset.path));

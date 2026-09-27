@@ -23,7 +23,7 @@ export type HarnessAdapters = {
   revise: (document: AuthoringDocument, issues: InspectionIssue[]) => Promise<{ patch: RevisionPatch; usage: ModelUsage }>;
 };
 
-export async function runHarness(adapters: HarnessAdapters, maxRevisions = 2): Promise<HarnessResult> {
+export async function runHarness(adapters: HarnessAdapters, maxRevisions = 1): Promise<HarnessResult> {
   if (!Number.isInteger(maxRevisions) || maxRevisions < 0 || maxRevisions > 3) throw new Error("maxRevisions는 0~3이어야 합니다.");
   const authored = await adapters.author();
   let document = authored.document;

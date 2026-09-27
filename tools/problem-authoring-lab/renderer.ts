@@ -23,6 +23,11 @@ function answerText(response: ResponseContract) {
   return response.acceptedAnswers.join(" / ");
 }
 
+function answerDetail(response: ResponseContract) {
+  const answer = answerText(response);
+  return `${answer}${response.explanation ? ` — ${response.explanation}` : ""}`;
+}
+
 function renderBlock(block: AuthoringBlock, question: AuthoredQuestion, state: RenderState) {
   const style = frameStyle(block);
   const responses = new Map(question.responses.map((response) => [response.id, response]));
@@ -35,24 +40,74 @@ function renderBlock(block: AuthoringBlock, question: AuthoredQuestion, state: R
     const response = responses.get(block.responseId);
     if (!response || response.kind !== "single-choice") return "";
     return `<div class="block choices" data-block-id="${escapeHtml(block.id)}" style="${style};grid-template-columns:repeat(${block.columns ?? 1},minmax(0,1fr))">${block.optionIds.map((id, index) => {
-      const option = response.options.find((item) => item.id === id)!;
+      const option = response.options.find((item) => item.id === id);
       const checked = state.answers?.[response.id] === id ? " checked" : "";
       const correct = state.revealAnswers && response.correctOptionId === id ? " correct" : "";
-      return `<label class="choice${correct}"><input type="radio" name="${escapeHtml(response.id)}" value="${escapeHtml(id)}"${checked}> <b>${index + 1}</b> ${escapeHtml(option.text)}</label>`;
+      return `<label class="choice${correct}"><input type="radio" name="${escapeHtml(response.id)}" value="${escapeHtml(id)}"${checked}> <b>${index + 1}</b> ${escapeHtml(option?.text ?? "연결되지 않은 선지")}</label>`;
     }).join("")}</div>`;
   }
   if (block.kind === "blank") {
     const answer = state.answers?.[block.responseId] ?? "";
     return `<div class="block blank" data-block-id="${escapeHtml(block.id)}" style="${style}"><span>${escapeHtml(block.promptBefore)}</span><input data-response-id="${escapeHtml(block.responseId)}" value="${escapeHtml(answer)}"><span>${escapeHtml(block.promptAfter)}</span></div>`;
   }
-  if (!state.revealAnswers) return `<div class="block reveal hidden-answer" data-block-id="${escapeHtml(block.id)}" style="${style}">정답을 확인한 뒤 표시됩니다.</div>`;
-  return `<div class="block reveal" data-block-id="${escapeHtml(block.id)}" style="${style}"><strong>${escapeHtml(block.title ?? "정답")}</strong>${block.responseIds.map((id) => `<p>${escapeHtml(answerText(responses.get(id)!) || "-")}</p>`).join("")}</div>`;
+  if (!state.revealAnswers) return `<div class="block reveal hidden-answer" data-block-id="${escapeHtml(block.id)}" data-response-ids="${escapeHtml(block.responseIds.join(","))}" style="${style}">정답을 확인한 뒤 표시됩니다.</div>`;
+  return `<div class="block reveal" data-block-id="${escapeHtml(block.id)}" style="${style}"><strong>${escapeHtml(block.title ?? "정답")}</strong>${block.responseIds.map((id) => `<p>${escapeHtml(responses.has(id) ? answerDetail(responses.get(id)!) : "연결되지 않은 응답")}</p>`).join("")}</div>`;
 }
 
-export function renderDocument(document: AuthoringDocument, state: RenderState) {
-  const questions = document.questions.map((question, index) => `<section class="question-page" data-question-id="${escapeHtml(question.id)}" style="width:${question.page.width}px;height:${question.page.height}px"><div class="number">${index + 1}</div>${question.blocks.map((block) => renderBlock(block, question, state)).join("")}</section>`).join("\n");
-  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=820"><title>${escapeHtml(document.title)}</title><style>${STYLES}</style></head><body><main><header class="document-header"><h1>${escapeHtml(document.title)}</h1><p class="mode">${state.revealAnswers ? "정답 공개 화면" : "풀이 화면"}</p></header>${questions}</main></body></html>`;
+export function renderDocument(document: AuthoringDocument, state: RenderState & { interactive?: boolean }) {
+  const renderQuestion = (question: AuthoredQuestion, index: number) => `<section class="question-page" data-question-id="${escapeHtml(question.id)}" style="width:${question.page.width}px;height:${question.page.height}px"><div class="number">${index + 1}</div>${question.blocks.map((block) => renderBlock(block, question, state)).join("")}</section><div class="source-line">근거: ${escapeHtml(question.source.sourceRange)}</div>${state.interactive ? `<div class="question-actions" data-question-id="${escapeHtml(question.id)}"><button type="button" data-action="submit">제출</button><button type="button" data-action="reveal">정답 공개</button><output aria-live="polite"></output></div>` : ""}`;
+  const renderedSets = new Set<string>();
+  const sections = document.questions.map((question, index) => {
+    if (!question.sharedSetId) return renderQuestion(question, index);
+    if (renderedSets.has(question.sharedSetId)) return "";
+    renderedSets.add(question.sharedSetId);
+    const set = document.sharedSets?.find((item) => item.id === question.sharedSetId);
+    if (!set) return renderQuestion(question, index);
+    const setQuestion = { ...question, responses: [] };
+    const shared = `<section class="question-page shared-page" data-shared-set-id="${escapeHtml(set.id)}" style="width:${set.page.width}px;height:${set.page.height}px"><div class="shared-label">공통 자료</div>${set.blocks.map((block) => renderBlock(block, setQuestion, state)).join("")}</section>`;
+    const members = document.questions.map((member, memberIndex) => member.sharedSetId === set.id ? renderQuestion(member, memberIndex) : "").join("\n");
+    return `<div class="shared-group" data-shared-group-id="${escapeHtml(set.id)}">${shared}${members}</div>`;
+  }).join("\n");
+  const contract = state.interactive ? `<script type="application/json" id="answer-contract">${JSON.stringify(document.questions.map((question) => ({ id: question.id, responses: question.responses }))).replace(/</g, "\\u003c")}</script><script>${INTERACTIVE_SCRIPT}</script>` : "";
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=820"><title>${escapeHtml(document.title)}</title><style>${STYLES}</style></head><body><main><header class="document-header"><h1>${escapeHtml(document.title)}</h1><p class="mode">${state.interactive ? "직접 풀기" : state.revealAnswers ? "정답 공개 화면" : "풀이 화면"}</p></header>${sections}</main>${contract}</body></html>`;
 }
+
+export function renderInteractiveDocument(document: AuthoringDocument) {
+  return renderDocument(document, { revealAnswers: false, interactive: true });
+}
+
+const INTERACTIVE_SCRIPT = `
+const contracts = new Map(JSON.parse(document.getElementById("answer-contract").textContent).map(item => [item.id, item.responses]));
+const normalize = value => value.normalize("NFKC").replace(/[\\u2212\\u2010-\\u2015]/g, "-").replace(/\\s+/g, "").toLocaleLowerCase("ko-KR");
+document.querySelectorAll(".question-actions").forEach(actions => {
+  const questionId = actions.dataset.questionId;
+  const page = document.querySelector('.question-page[data-question-id="' + CSS.escape(questionId) + '"]');
+  const responses = contracts.get(questionId) || [];
+  const output = actions.querySelector("output");
+  const answer = response => response.kind === "single-choice" ? (response.options.find(option => option.id === response.correctOptionId)?.text || "") : response.acceptedAnswers.join(" / ");
+  actions.querySelector('[data-action="submit"]').addEventListener("click", () => {
+    const results = responses.map(response => {
+      const selected = response.kind === "single-choice" ? page.querySelector('input[name="' + CSS.escape(response.id) + '"]:checked')?.value : page.querySelector('input[data-response-id="' + CSS.escape(response.id) + '"]')?.value;
+      if (!selected?.trim()) return "미입력";
+      if (response.kind === "short-text" && response.grading === "self-check") return "직접 확인";
+      const correct = response.kind === "single-choice" ? selected === response.correctOptionId : response.acceptedAnswers.some(expected => normalize(expected) === normalize(selected));
+      return correct ? "정답" : "오답";
+    });
+    output.textContent = results.join(" · ");
+  });
+  actions.querySelector('[data-action="reveal"]').addEventListener("click", () => {
+    page.querySelectorAll(".hidden-answer").forEach(block => {
+      block.classList.remove("hidden-answer");
+      const responseIds = (block.dataset.responseIds || "").split(",");
+      const authored = responses.filter(response => responseIds.includes(response.id));
+      block.textContent = authored.map(response => answer(response) + (response.explanation ? " — " + response.explanation : "")).join(" / ");
+    });
+    page.querySelectorAll(".choice").forEach(label => {
+      const input = label.querySelector("input");
+      if (responses.some(response => response.kind === "single-choice" && response.id === input?.name && response.correctOptionId === input.value)) label.classList.add("correct");
+    });
+  });
+});`;
 
 const STYLES = `
 @font-face{font-family:"Pretendard Variable";src:url("../../../assets/fonts/pretendard-1.3.9/PretendardVariable.woff2") format("woff2");font-style:normal;font-weight:45 920;font-display:swap}
@@ -97,5 +152,12 @@ h1{margin:0;font-size:26px;line-height:1.3;letter-spacing:-.035em;font-weight:70
 .reveal strong{display:block;margin-bottom:4px;font-weight:700}
 .reveal p{margin:3px 0}
 .hidden-answer{background:var(--surface-soft);border-color:var(--line);color:var(--muted)}
+.shared-label{position:absolute;left:18px;top:14px;color:var(--accent);font-size:14px;font-weight:800}
+.shared-group{margin-top:24px;padding:1px 0 12px;border-radius:18px;background:#eef2ff}
+.shared-group .question-page{margin-top:14px}
+.question-actions{width:760px;margin:-8px auto 22px;display:flex;align-items:center;gap:10px}
+.question-actions button{border:1px solid #c7d2fe;background:#fff;color:#3730a3;border-radius:9px;padding:7px 13px;font:inherit;cursor:pointer}
+.question-actions output{margin-left:auto;font-weight:700;color:var(--text)}
+.source-line{width:760px;margin:-8px auto 13px;color:var(--muted);font-size:12px}
 @media print{html,body{background:#fff}.document-header{margin-top:0}.question-page{break-inside:avoid;box-shadow:none}}
 `;

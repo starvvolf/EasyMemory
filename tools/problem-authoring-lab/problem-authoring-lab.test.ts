@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { Script } from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { applyRevision, gradeResponse, validateDocument, type AuthoringDocument, type SourceContent } from "./contract.ts";
+import { applyRevision, gradeResponse, validateDocument, validateDocumentAgainstPacket, validateFormatOverride, type AuthoringDocument, type SourceContent } from "./contract.ts";
 import { mockDraft, mockPatch } from "./fixtures/mock-adapters.ts";
 import { createProblemAuthoringMcpServer } from "./mcp-server.ts";
 import { adaptLearningDesignArtifact, type EngineLearningDesignArtifact } from "./learning-design-bridge.ts";
-import { renderDocument } from "./renderer.ts";
+import { renderDocument, renderInteractiveDocument } from "./renderer.ts";
 
 async function fixture() {
   return JSON.parse(await readFile("tools/problem-authoring-lab/fixtures/science-source-packet.json", "utf8")) as { items: SourceContent[] };
@@ -85,6 +86,7 @@ test("실제 MCP 도구로 입력→검사→렌더→부분수정 흐름을 수
   assert.equal((checked.structuredContent as { valid: boolean }).valid, true);
   const rendered = await client.callTool({ name: "render_problem_preview", arguments: { document } });
   assert.match((rendered.structuredContent as { beforeAnswerHtml: string }).beforeAnswerHtml, /q-lu5-choice/);
+  assert.match((rendered.structuredContent as { interactiveHtml: string }).interactiveHtml, /data-action="submit"/);
   const patched = await client.callTool({ name: "apply_problem_patch", arguments: { document, patch: mockPatch } });
   assert.equal((patched.structuredContent as { document: typeof document }).document.questions[1].blocks[0].id, "q2-title");
   const graphLoaded = await client.callTool({ name: "load_source_packet", arguments: { packetId: "graph-one" } });
@@ -101,6 +103,8 @@ test("실제 MCP 도구로 입력→검사→렌더→부분수정 흐름을 수
   const bridgePacket = (bridgeLoaded.structuredContent as { packet: { schemaVersion: string; items: SourceContent[] } }).packet;
   assert.equal(bridgePacket.schemaVersion, "authoring-source-packet-v2");
   assert.equal(bridgePacket.items.length, 1);
+  const geometricLoaded = await client.callTool({ name: "load_source_packet", arguments: { packetPath: "runs/geometric-authoring-prototype/source-packet.json" } });
+  assert.equal((geometricLoaded.structuredContent as { packet: { items: SourceContent[] } }).packet.items.length, 6);
 });
 
 test("현재 Learning Design 계약을 문제 작성 패킷으로 손실 없이 연결한다", async () => {
@@ -206,4 +210,60 @@ test("고정 그래프 자산은 spec과 일치하고 외부 SVG 리소스를 �
   assert.deepEqual(metadata.intersections, [{ label: "A", x: 1, y: 0 }, { label: "B", x: 4, y: 3 }]);
   const hrefs = [...svg.toString("utf8").matchAll(/(?:xlink:)?href="([^"]+)"/g)].map((match) => match[1]);
   assert.ok(hrefs.every((href) => href?.startsWith("#")));
+});
+
+test("공통 자료는 한 번 표시하고 각 문항의 응답은 독립적으로 유지한다", async () => {
+  const source = (await fixture()).items[0]!;
+  const document: AuthoringDocument = {
+    schemaVersion: "problem-authoring-v1", id: "shared-test", title: "세트 검사",
+    sharedSets: [{ id: "set-1", source, page: { width: 760, height: 120 }, blocks: [{ id: "shared-text", kind: "text", frame: { x: 40, y: 35, width: 680, height: 65 }, text: "공통 상황" }] }],
+    questions: [1, 2].map((number) => ({
+      id: `q${number}`, source, sharedSetId: "set-1", page: { width: 760, height: 230 },
+      blocks: [
+        { id: `prompt-${number}`, kind: "text" as const, frame: { x: 40, y: 35, width: 680, height: 45 }, text: `질문 ${number}` },
+        { id: `blank-${number}`, kind: "blank" as const, frame: { x: 40, y: 95, width: 680, height: 45 }, responseId: `r${number}`, promptBefore: "답", promptAfter: "" },
+        { id: `reveal-${number}`, kind: "answer-reveal" as const, frame: { x: 40, y: 155, width: 680, height: 50 }, responseIds: [`r${number}`] },
+      ],
+      responses: [{ id: `r${number}`, kind: "short-text" as const, acceptedAnswers: [`답${number}`], grading: "exact-normalized" as const, explanation: `해설${number}` }],
+    })),
+  };
+  assert.deepEqual(validateDocument(document), []);
+  assert.deepEqual(validateDocumentAgainstPacket(document, { items: [source] }), []);
+  const html = renderInteractiveDocument(document);
+  const browserCode = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(browserCode);
+  assert.doesNotThrow(() => new Script(browserCode));
+  assert.equal((html.match(/data-shared-set-id="set-1"/g) ?? []).length, 1);
+  assert.equal((html.match(/<button type="button" data-action="submit"/g) ?? []).length, 2);
+  assert.match(html, /data-question-id="q1"/);
+  assert.match(html, /data-question-id="q2"/);
+  assert.equal(gradeResponse(document.questions[0]!.responses[0]!, "답1"), true);
+  assert.equal(gradeResponse(document.questions[1]!.responses[0]!, "답1"), false);
+  assert.deepEqual(validateFormatOverride(document, { q1: "short-text" }), []);
+  assert.ok(validateFormatOverride(document, { q1: "single-choice" }).some((issue) => issue.code === "format-override"));
+  const broken = structuredClone(document);
+  broken.questions[1]!.sharedSetId = "missing";
+  assert.ok(validateDocument(broken).some((issue) => issue.code === "missing-shared-set"));
+  const changed = structuredClone(document);
+  changed.questions[0]!.source.target = "다른 목표";
+  assert.ok(validateDocumentAgainstPacket(changed, { items: [source] }).some((issue) => issue.code === "packet-source-mismatch"));
+  const revised = applyRevision(document, { instruction: "공통 상황 문장 수정", operations: [{ op: "replace-shared-block", sharedSetId: "set-1", blockId: "shared-text", value: { id: "shared-text", kind: "text", frame: { x: 40, y: 35, width: 680, height: 65 }, text: "수정 상황" } }] });
+  assert.equal(revised.sharedSets?.[0]?.blocks[0]?.kind, "text");
+  assert.deepEqual(revised.questions, document.questions);
+});
+
+test("짧은 답은 공백과 마이너스 기호만 동치 처리하고 다른 문자는 보존한다", () => {
+  const response = { id: "r", kind: "short-text" as const, acceptedAnswers: ["(−2, 3)"], grading: "exact-normalized" as const };
+  assert.equal(gradeResponse(response, "(-2,3)"), true);
+  assert.equal(gradeResponse(response, "(2,3)"), false);
+  assert.equal(gradeResponse(response, "(-2,4)"), false);
+  assert.equal(gradeResponse(response, "-2,3"), false);
+});
+
+test("실제 MCP Learning Design 패킷은 제출된 목표 여섯 개와 원문 해시를 보존한다", async () => {
+  const packet = JSON.parse(await readFile("tools/problem-authoring-lab/runs/geometric-authoring-prototype/source-packet.json", "utf8")) as { schemaVersion: string; items: SourceContent[]; origin: { sha256: Record<string, string> } };
+  assert.equal(packet.schemaVersion, "authoring-source-packet-v3");
+  assert.equal(packet.items.length, 6);
+  assert.deepEqual(packet.items.map((item) => item.sourcePage), [2, 3, 4, 6, 7, 5]);
+  assert.ok(Object.values(packet.origin.sha256).every((value) => /^[a-f0-9]{64}$/.test(value)));
 });
