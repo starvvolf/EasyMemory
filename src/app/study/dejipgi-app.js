@@ -409,6 +409,33 @@ function renderReport(deck, item, c){
     REPORT_REASONS.map(r => h("button", { class:"btn small", onclick: () => reportItem(r) }, r)),
     h("button", { class:"btn small ghost", onclick: () => { c.reporting = false; render(); } }, "취소"));
 }
+/* The authored stem block by block (text, math, table, box, blank, figures); older items fall back to the plain prompt. */
+function mathBlock(latex){
+  const el = h("div", { class:"math qmath" });
+  if (katexLib){
+    try{ el.innerHTML = katexLib.renderToString(latex, { displayMode:true, output:"htmlAndMathml", throwOnError:false, trust:false, strict:"ignore" }); return el; }catch(e){}
+  }
+  el.append(h("span", { class:"texfb" }, texFallback(latex)));
+  return el;
+}
+function renderStem(deck, item){
+  if (!Array.isArray(item.blocks) || !item.blocks.length) return h("p", { class:"qprompt" }, richText(item.prompt));
+  const wrap = h("div", { class:"qstem" });
+  for (const b of item.blocks){
+    if (b.kind === "text") wrap.append(h("p", { class: b.heading ? "qprompt" : "qbody" }, richText(b.text)));
+    else if (b.kind === "math") wrap.append(mathBlock(b.latex));
+    else if (b.kind === "table") wrap.append(h("div", { class:"qtable-wrap" }, h("table", { class:"qtable" },
+      b.rows.map((row, ri) => h("tr", null, row.map(cell => h(ri < b.headerRows ? "th" : "td", null, richText(cell))))))));
+    else if (b.kind === "box") wrap.append(h("div", { class:"qbox" }, richText(b.label)));
+    else if (b.kind === "blank") wrap.append(h("p", { class:"qprompt" }, richText(b.before),
+      h("span", { class: b.own ? "qblank" : "qblank other", text: b.own ? "빈칸" : "다른 칸" }), richText(b.after)));
+    // Source figures are not cropped yet (crop units are undefined); a whole page could give the answer away.
+    else if (b.kind === "image") wrap.append(h("figure", { class:"qfig" }, h("div", { class:"qfig-ph", text:`원문 p.${b.page}의 그림` }), h("figcaption", { text:b.alt })));
+    else if (b.kind === "generated-image") wrap.append(h("figure", { class:"qfig" },
+      h("img", { src: env.assetUrl ? env.assetUrl(deck.id, b.path) : "", alt:b.alt }), b.caption ? h("figcaption", { text:b.caption }) : null));
+  }
+  return wrap;
+}
 function nextItem(){
   S.session.i++; S.session.phase = "ask";
   if (S.session.i >= S.session.queue.length){ S.session.phase = "done"; }
@@ -437,7 +464,7 @@ function renderSession(){
     s.queue[s.i].retry ? h("span", { class:"chip help", text:"다시 확인" }) : null,
     h("span", { class:"chip", text:deck.title })
   ));
-  card.append(h("p", { class:"qprompt" }, richText(item.prompt)));
+  card.append(renderStem(deck, item));
 
   if (item.format === "choice"){
     const box = h("div", { class:"options", role:"group" });
@@ -1099,7 +1126,10 @@ function renderRecords(){
         h("div", { class:"meta" }, h("span", { class:"chip help", text:`신고 · ${deck.reported[it.id].reason}` }), h("span", { class:"chip page", text:"p." + it.page })),
         h("p", null, richText(it.prompt)),
         h("div", null, h("button", { class:"btn small", onclick: () => { delete deck.reported[it.id]; restore(); } }, "신고 취소"))))) : null,
-      h("p", { class:"small muted", text:"신고한 문제는 품질 근거로 남아요. 다시 만들기는 다음 단계에서 붙여요." })));
+      reportedItems.length && !deck.example ? h("div", { class:"row" },
+        h("button", { class:"btn small primary", disabled:!engine, onclick: () => remakeReported(deck) }, "신고한 문제의 목표 다시 만들기"),
+        h("span", { class:"small muted", text:"앞의 학습 설계를 그대로 쓰고, 신고한 문제의 목표만 새로 만들어요." })) : null,
+      h("p", { class:"small muted", text:"신고한 문제는 품질 근거로 남아요." })));
   }
   wrap.append(h("p", { class:"small muted", text:"‘3일 이상 혼자 맞힘’은 서로 다른 3일에 정답을 보기 전 스스로 맞힌 경우예요. 숙달했다는 판정이 아니라, 지금까지의 근거를 그대로 보여주는 표시입니다." }));
   return wrap;
@@ -1110,7 +1140,39 @@ function renderRecords(){
 const engine = env.builder || null;
 const PURPOSES = [["exam", "시험 대비"], ["class", "수업 따라가기"], ["understand", "개념 이해"], ["apply", "실제로 써먹기"]];
 const ABILITIES = ["용어·정의 말하기", "식·절차 쓰기", "계산·적용하기", "비슷한 것 구별하기", "말로 설명하기"];
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"exam", abilities:[], summary:"", edited:false, busy:false, status:"", error:"", file:null, pdfDoc:null }; }
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"exam", abilities:[], summary:"", edited:false, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[] }; }
+/* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
+async function readSections(doc, pages){
+  const flat = [];
+  try{
+    const walk = async (items, level) => {
+      for (const it of items || []){
+        let dest = it.dest;
+        if (typeof dest === "string") dest = await doc.getDestination(dest);
+        if (Array.isArray(dest) && dest[0]){
+          const page = typeof dest[0] === "number" ? dest[0] + 1 : (await doc.getPageIndex(dest[0])) + 1;
+          if (it.title && it.title.trim()) flat.push({ title:it.title.trim(), start:page, level });
+        }
+        if (level < 1) await walk(it.items, level + 1);
+      }
+    };
+    await walk(await doc.getOutline(), 0);
+  }catch(e){ flat.length = 0; }
+  const fromOutline = flat.length >= 2;
+  const list = fromOutline ? flat.sort((a, b) => a.start - b.start)
+    : pages.filter(p => p.text.trim()).map(p => ({ title:p.text.split("\n")[0].trim().slice(0, 60), start:p.n, level:0 }));
+  return list.map((sec, i) => {
+    const next = list.slice(i + 1).find(x => x.level <= sec.level);
+    return { ...sec, end: Math.max(sec.start, (next ? next.start - 1 : pages.length)), fromOutline };
+  });
+}
+function applyPicked(){
+  const b = S.builder;
+  const chosen = b.picked.map(i => b.sections[i]).filter(Boolean);
+  if (chosen.length){ b.from = Math.min(...chosen.map(x => x.start)); b.to = Math.max(...chosen.map(x => x.end)); }
+  else { b.from = 1; b.to = b.pages.length; }
+  syncSummary();
+}
 async function readPdf(file){
   const b = S.builder;
   b.busy = true; b.error = ""; b.status = "PDF를 읽는 중…"; render();
@@ -1128,6 +1190,7 @@ async function readPdf(file){
       if (n % 5 === 0){ b.status = `PDF를 읽는 중… ${n}/${doc.numPages}쪽`; render(); }
     }
     b.pages = pages; b.sourceName = file.name; b.from = 1; b.to = pages.length; b.file = file; b.pdfDoc = doc; b.edited = false;
+    b.sections = await readSections(doc, pages); b.picked = [];
     syncSummary();
   }catch(e){
     b.error = "PDF를 읽지 못했어요. 암호가 걸렸거나 손상된 파일일 수 있어요.";
@@ -1167,11 +1230,23 @@ async function startMaterial(){
     b.busy = false; b.status = ""; b.error = (e && e.message) || "요청을 올리지 못했어요."; render();
   }
 }
+async function remakeReported(deck){
+  if (!engine) return;
+  const objectiveIds = [...new Set((deck.allItems || []).filter(it => deck.reported && deck.reported[it.id]).map(it => it.objectiveId))];
+  try{
+    const res = await engine.remake({ artifactId:deck.id, objectiveIds });
+    const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:`${deck.title} · 다시 만든 문제`, sourceName:deck.sourceName,
+      pageCount:deck.pageCount, from:res.from, to:res.to, purpose:res.purpose, createdAt:now(), status:"waiting", message:"", remake:{ artifactId:deck.id, objectiveIds } };
+    S.decks[rec.id] = pendingDeck(rec); savePending();
+    toast("다시 만들기 요청을 올렸어요. 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요. 새 문제는 따로 자료로 붙어요.");
+    setView("practice"); pollPending();
+  }catch(e){ toast((e && e.message) || "다시 만들기 요청을 올리지 못했어요."); }
+}
 async function restartMaterial(d){
   if (!engine) return;
   const rec = d.pending;
   try{
-    const res = await engine.restart({ sourceId:rec.sourceId, from:rec.from, to:rec.to, purpose:rec.purpose });
+    const res = rec.remake ? await engine.remake(rec.remake) : await engine.restart({ sourceId:rec.sourceId, from:rec.from, to:rec.to, purpose:rec.purpose });
     Object.assign(rec, { requestId:res.requestId, status:"waiting", message:"" });
     savePending(); render(); pollPending();
   }catch(e){ toast((e && e.message) || "다시 요청하지 못했어요."); }
@@ -1235,7 +1310,7 @@ function renderBuilder(){
   const from = h("input", { type:"number", id:"from", min:"1", max:String(b.pages.length), style:"width:90px" });
   const to = h("input", { type:"number", id:"to", min:"1", max:String(b.pages.length), style:"width:90px" });
   from.value = String(b.from); to.value = String(b.to);
-  const upd = () => { b.from = Math.max(1, Math.min(Number(from.value) || 1, b.pages.length)); b.to = Math.max(b.from, Math.min(Number(to.value) || b.pages.length, b.pages.length)); syncSummary(); render(); };
+  const upd = () => { b.picked = []; b.from = Math.max(1, Math.min(Number(from.value) || 1, b.pages.length)); b.to = Math.max(b.from, Math.min(Number(to.value) || b.pages.length, b.pages.length)); syncSummary(); render(); };
   from.addEventListener("change", upd); to.addEventListener("change", upd);
   const summary = h("textarea", { id:"summary", rows:"3" });
   summary.value = b.summary;
@@ -1250,7 +1325,14 @@ function renderBuilder(){
       chips(ABILITIES.map(x => [x, x]), (k) => b.abilities.includes(k), (k) => { b.abilities = b.abilities.includes(k) ? b.abilities.filter(x => x !== k) : [...b.abilities, k]; })),
     h("div", { class:"field" }, h("label", { text:"3. 범위" }),
       h("div", { class:"row" }, h("span", { class:"small muted", text:"시작 쪽" }), from, h("span", { class:"small muted", text:"끝 쪽" }), to,
-        h("button", { class:"btn small ghost", disabled:b.busy, onclick: () => { b.from = 1; b.to = b.pages.length; syncSummary(); render(); } }, "전체"))),
+        h("button", { class:"btn small ghost", disabled:b.busy, onclick: () => { b.picked = []; applyPicked(); render(); } }, "전체")),
+      b.sections.length ? h("details", { open: b.picked.length ? true : null },
+        h("summary", { class:"small", text: `${b.sections[0].fromOutline ? "목차" : "쪽 제목"}에서 고르기${b.picked.length ? ` · ${b.picked.length}개 선택` : ""}` }),
+        h("div", { class:"sections" }, b.sections.map((sec, i) => h("button", { class:"chip-btn", style: sec.level ? "margin-left:14px" : null,
+          "aria-pressed": b.picked.includes(i) ? "true" : "false", disabled:b.busy,
+          onclick: () => { b.picked = b.picked.includes(i) ? b.picked.filter(x => x !== i) : [...b.picked, i]; applyPicked(); render(); } },
+          h("span", { class:"num small", text: sec.start === sec.end ? `p.${sec.start} ` : `p.${sec.start}–${sec.end} ` }), sec.title))),
+        h("p", { class:"small muted", text:"여러 개를 고르면 처음부터 끝까지 이어진 범위로 요청해요." })) : null),
     h("div", { class:"field" }, h("label", { for:"summary", text:"이렇게 만들게요" }), summary,
       h("span", { class:"small muted", text: b.edited ? "직접 고친 문장으로 요청해요." : "위에서 고르면 문장이 바뀌어요. 직접 고쳐도 돼요." })),
     h("div", { class:"row" },

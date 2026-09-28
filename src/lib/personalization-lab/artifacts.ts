@@ -216,11 +216,27 @@ async function loadDescriptor(id: string, item: ArtifactDescriptor): Promise<{ m
   return { meta, document, html, sourcePacket: packet };
 }
 
-export async function loadArtifact(id: string): Promise<{ meta: ArtifactMeta; document: AuthoringDocument; html: string; sourcePacket: ArtifactSourcePacket } | null> {
+async function findDescriptor(id: string): Promise<ArtifactDescriptor | null> {
   const fixed = Object.prototype.hasOwnProperty.call(allowed, id) ? allowed[id as keyof typeof allowed] : null;
-  const dynamic = fixed ? null : (await discoverArtifacts()).find((item) => item.id === id)?.item;
-  const item = fixed ?? dynamic;
+  return fixed ?? (await discoverArtifacts()).find((item) => item.id === id)?.item ?? null;
+}
+
+export async function loadArtifact(id: string): Promise<{ meta: ArtifactMeta; document: AuthoringDocument; html: string; sourcePacket: ArtifactSourcePacket } | null> {
+  const item = await findDescriptor(id);
   return item ? loadDescriptor(id, item) : null;
+}
+
+/** A generated SVG figure referenced by the document, served only if its hash still matches the recorded one. */
+export async function readArtifactAsset(id: string, assetPath: string): Promise<string | null> {
+  if (!/^assets\/[a-z0-9][a-z0-9._-]*\.svg$/i.test(assetPath)) return null;
+  const item = await findDescriptor(id);
+  if (!item) return null;
+  const { document } = await loadDescriptor(id, item);
+  const block = [...document.questions, ...(document.sharedSets ?? [])].flatMap((entry) => entry.blocks)
+    .find((candidate) => candidate.kind === "generated-image" && candidate.generatedAssetRef.path === assetPath);
+  if (!block || block.kind !== "generated-image") return null;
+  const svg = await readWithin(`${path.posix.dirname(item.file)}/${assetPath}`);
+  return svg && sha256(svg) === block.generatedAssetRef.sha256 ? svg : null;
 }
 
 export async function listArtifacts(): Promise<ArtifactMeta[]> {

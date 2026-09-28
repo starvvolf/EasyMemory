@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useAuthSession } from "@/components/AuthGate";
 import { authenticatedFetch } from "@/lib/firebase-client";
 import { toStudyDeck, type StudyArtifactMeta, type StudyDeck } from "@/lib/study/from-authoring";
-import { buildRequestBody, defaultPurpose, findReusableRequest } from "@/lib/study/request-form";
+import { buildRemakeBody, buildRequestBody, defaultPurpose, findReusableRequest } from "@/lib/study/request-form";
 import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
@@ -73,6 +73,23 @@ export default function DejipgiStudy() {
           const request = await createQueuedRequest(await findSource(sourceId), `${from}-${to}`, purpose, {});
           return { requestId: request.id };
         },
+        async remake({ artifactId, objectiveIds }) {
+          const { artifacts } = await loadArtifacts();
+          const meta = artifacts.find((item) => item.id === artifactId);
+          const { requests } = await readJson<{ requests: ExperimentRequest[] }>(
+            await fetchExperiment("/api/mcp-experiment-requests"), "요청 목록을 확인하지 못했어요.");
+          const origin = meta && requests.find((request) => request.runId === meta.originRunId && request.status === "completed");
+          if (!origin) throw new Error("이 자료는 원래 요청 기록이 없어 다시 만들 수 없어요.");
+          const source = await findSource(origin.input.sourceId);
+          const built = buildRemakeBody(source, origin, objectiveIds);
+          if ("error" in built) throw new Error(built.error);
+          const existing = findReusableRequest(requests, built.body);
+          const request = existing ?? (await readJson<{ request: ExperimentRequest }>(await fetchExperiment("/api/mcp-experiment-requests", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(built.body),
+          }), "다시 만들기 요청을 저장하지 못했어요.")).request;
+          const pages = origin.input.scope.pageNumbers;
+          return { requestId: request.id, sourceId: source.id, from: Math.min(...pages), to: Math.max(...pages), purpose: origin.input.purpose };
+        },
         async check(requestId) {
           const { request } = await readJson<{ request: ExperimentRequest }>(
             await fetchExperiment(`/api/mcp-experiment-requests/${encodeURIComponent(requestId)}`), "생성 요청 상태를 읽지 못했어요.");
@@ -114,6 +131,8 @@ export default function DejipgiStudy() {
         pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
         return pdfjs;
       },
+      assetUrl: (artifactId: string, assetPath: string) =>
+        `/api/personalization-lab/run-asset?id=${encodeURIComponent(artifactId)}&path=${encodeURIComponent(assetPath)}`,
       async loadKatex() {
         return (await import("katex")).default;
       },

@@ -102,3 +102,29 @@ export function findReusableRequest(requests: ExperimentRequest[], body: Request
   const key = requestKey(body);
   return requests.find((request) => request.status !== "failed" && requestKey(request.input) === key) ?? null;
 }
+
+/** [2,3,4,5,9] -> "2-5, 9", the form parsePageSelection reads back. */
+export function pageRangeText(pages: number[]) {
+  const sorted = [...new Set(pages)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (let i = 0; i < sorted.length;) {
+    const start = sorted[i];
+    let end = start;
+    while (sorted[i + 1] === end + 1) end = sorted[++i];
+    parts.push(start === end ? String(start) : `${start}-${end}`);
+    i += 1;
+  }
+  return parts.join(", ");
+}
+
+/** A request that remakes only the given objectives, reusing the learning design of the completed request that produced the document. */
+export function buildRemakeBody(source: RequestSource, origin: ExperimentRequest, objectiveIds: string[]) {
+  const design = origin.stages.find((stage) => stage.stage === "learning-design");
+  if (origin.status !== "completed" || !origin.runId || !design) return { error: "이 자료는 원래 요청 기록이 없어 다시 만들 수 없어요." } as const;
+  if (!objectiveIds.length) return { error: "다시 만들 목표가 없어요." } as const;
+  return buildRequestBody(source, pageRangeText(origin.input.scope.pageNumbers), origin.input.purpose, {
+    stopAfterStage: "cards",
+    reuse: { kind: "output", runId: origin.runId, stage: "learning-design", sha256: design.actual.outputSha256 },
+    selectedObjectiveIds: [...new Set(objectiveIds)],
+  });
+}

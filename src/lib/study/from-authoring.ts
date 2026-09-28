@@ -2,11 +2,21 @@ import type { AuthoredQuestion, AuthoringBlock, AuthoringDocument, ResponseContr
 
 // 되짚기 화면이 쓰는 자료 형식. 문제 내용은 Recaller 출제 문서를 그대로 옮기고, 새로 만들거나 고치지 않는다.
 export type StudyObjective = { id: string; statement: string; pages: number[]; quote: string };
+/** The authored question stem, block by block, in reading order. `prompt` keeps a plain-text copy for lists. */
+export type StudyBlock =
+  | { kind: "text"; text: string; heading: boolean }
+  | { kind: "math"; latex: string }
+  | { kind: "table"; rows: string[][]; headerRows: number }
+  | { kind: "box"; label: string }
+  | { kind: "blank"; before: string; after: string; own: boolean }
+  | { kind: "image"; alt: string; page: number }
+  | { kind: "generated-image"; alt: string; caption: string; path: string };
 export type StudyItem = {
   id: string;
   objectiveId: string;
   format: "choice" | "value" | "card";
   prompt: string;
+  blocks: StudyBlock[];
   explanation: string;
   page: number;
   quote: string;
@@ -50,19 +60,35 @@ function blockText(block: AuthoringBlock, responseId: string): string | null {
   }
 }
 
+function studyBlock(block: AuthoringBlock, responseId: string): StudyBlock | null {
+  switch (block.kind) {
+    case "text": return block.text.trim() ? { kind: "text", text: block.text, heading: block.style === "heading" } : null;
+    case "math": return { kind: "math", latex: block.latex };
+    case "table": return { kind: "table", rows: block.rows, headerRows: block.headerRows ?? 0 };
+    case "box": return block.label?.trim() ? { kind: "box", label: block.label } : null;
+    case "blank": return { kind: "blank", before: block.promptBefore, after: block.promptAfter, own: block.responseId === responseId };
+    case "image": return { kind: "image", alt: block.alt, page: block.sourceAssetRef.page };
+    case "generated-image": return { kind: "generated-image", alt: block.alt, caption: block.caption ?? "", path: block.generatedAssetRef.path };
+    default: return null;
+  }
+}
+
 function firstQuote(sourceRange: string) {
   return sourceRange.split(/\s+\/\s+/)[0]?.trim() ?? "";
 }
 
-function toItem(question: AuthoredQuestion, response: ResponseContract, prefix: string[], multi: boolean): StudyItem {
-  // follow the on-page reading order of the authored layout
-  const blocks = [...question.blocks].sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
-  const prompt = [...prefix, ...blocks.map((block) => blockText(block, response.id))]
+const readingOrder = (blocks: AuthoringBlock[]) => [...blocks].sort((a, b) => a.frame.y - b.frame.y || a.frame.x - b.frame.x);
+
+function toItem(question: AuthoredQuestion, response: ResponseContract, shared: AuthoringBlock[], multi: boolean): StudyItem {
+  // follow the on-page reading order of the authored layout; a shared passage comes first
+  const ordered = [...readingOrder(shared), ...readingOrder(question.blocks)];
+  const prompt = ordered.map((block) => blockText(block, response.id))
     .filter((line): line is string => !!line && !!line.trim()).join("\n");
   const base = {
     id: multi ? `${question.id}:${response.id}` : question.id,
     objectiveId: question.source.objectiveId,
     prompt,
+    blocks: ordered.map((block) => studyBlock(block, response.id)).filter((block): block is StudyBlock => block !== null),
     explanation: response.explanation ?? "",
     page: question.source.sourcePage,
     quote: question.source.sourceRange,
@@ -94,9 +120,9 @@ export function toStudyDeck(meta: StudyArtifactMeta, document: AuthoringDocument
     const reason = excluded.get(question.id);
     if (reason) { skipped.push({ questionId: question.id, reason }); continue; }
     const set = question.sharedSetId ? shared.get(question.sharedSetId) : undefined;
-    const prefix = set ? set.blocks.map((block) => blockText(block, "")).filter((line): line is string => !!line) : [];
+    const sharedBlocks = set?.blocks ?? [];
     for (const response of question.responses) {
-      try { items.push(toItem(question, response, prefix, question.responses.length > 1)); }
+      try { items.push(toItem(question, response, sharedBlocks, question.responses.length > 1)); }
       catch (error) { skipped.push({ questionId: question.id, reason: error instanceof Error ? error.message : "변환하지 못했습니다." }); }
     }
   }

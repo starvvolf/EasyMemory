@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createExperimentRequestSchema } from "../mcp-experiment-requests.ts";
 import type { ExperimentRequest } from "../mcp-experiment-requests.ts";
-import { findReusableRequest, buildRequestBody, eligibleLeafIds, objectivesFromCompletedRequest, parsePageSelection, type RequestSource } from "./request-form.ts";
+import { findReusableRequest, buildRemakeBody, pageRangeText, buildRequestBody, eligibleLeafIds, objectivesFromCompletedRequest, parsePageSelection, type RequestSource } from "./request-form.ts";
 
 const source: RequestSource = {
   id: "geometric-transformations",
@@ -80,4 +80,16 @@ test("같은 조건의 대기·진행·완료 요청은 다시 쓰고, 실패했
   if (!("body" in withSelection) || !withSelection.body) throw new Error(withSelection.error);
   assert.equal(findReusableRequest([request("e", "claimed", withSelection.body)],
     { ...withSelection.body, selectedObjectiveIds: ["objective-2"] }), null);
+});
+
+test("다시 만들기: 원래 요청의 학습 설계를 재사용하고 고른 목표만 요청한다", async () => {
+  assert.equal(pageRangeText([9, 2, 3, 4, 5, 3]), "2-5, 9");
+  const origin = (JSON.parse(await readFile(new URL("./fixtures/learning-design-request.json", import.meta.url), "utf8")) as { request: ExperimentRequest }).request;
+  const built = buildRemakeBody(source, origin, ["objective-2", "objective-2"]);
+  if (!("body" in built) || !built.body) throw new Error(built.error);
+  assert.ok(createExperimentRequestSchema.safeParse(built.body).success);
+  assert.deepEqual(built.body.selectedObjectiveIds, ["objective-2"]);
+  assert.equal(built.body.reuse?.sha256, origin.stages[2].actual.outputSha256);
+  assert.deepEqual(built.body.scope.pageNumbers, [2, 3, 4, 5, 6, 7]);
+  assert.equal(buildRemakeBody(source, { ...origin, status: "failed" }, ["objective-2"]).error, "이 자료는 원래 요청 기록이 없어 다시 만들 수 없어요.");
 });

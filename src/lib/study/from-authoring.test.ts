@@ -82,3 +82,29 @@ test("검사에서 제외한 문항은 연습에 넣지 않고 이유와 함께 
   assert.ok(!deck.items.some((item) => item.id === "question-21"));
   assert.deepEqual(deck.skipped, [{ questionId: "question-21", reason: "검사 제외: 한 칸에 여러 답" }]);
 });
+
+test("문제 본문을 블록 단위로 넘긴다: 공통 지문, 표, 수식, 빈칸, 그림", () => {
+  const document: AuthoringDocument = {
+    schemaVersion: "problem-authoring-v1", id: "doc", title: "doc",
+    sharedSets: [{ id: "set", source: source("o1", 3), page: { width: 1, height: 1 }, blocks: [{ id: "p", kind: "text", text: "공통 지문", frame }] }],
+    questions: [{
+      id: "q1", sharedSetId: "set", source: source("o1", 3), page: { width: 1, height: 1 },
+      blocks: [
+        { id: "t", kind: "text", text: "표를 보고 답하세요.", style: "heading", frame },
+        { id: "tb", kind: "table", rows: [["변환", "행렬"], ["이동", "T"]], headerRows: 1, frame: { ...frame, y: 1 } },
+        { id: "m", kind: "math", latex: "x^2", frame: { ...frame, y: 2 } },
+        { id: "g", kind: "image", alt: "원문 그림", sourceAssetRef: { sourceId: "source.pdf", page: 3, assetId: "a" }, frame: { ...frame, y: 3 } },
+        { id: "b", kind: "blank", responseId: "r1", promptBefore: "값은 ", promptAfter: "이다.", frame: { ...frame, y: 4 } },
+        { id: "v", kind: "answer-reveal", responseIds: ["r1"], frame: { ...frame, y: 5 } },
+      ],
+      responses: [{ id: "r1", kind: "short-text", acceptedAnswers: ["1"], grading: "exact-normalized" }],
+    }],
+  };
+  const [item] = toStudyDeck(meta, document).items;
+  assert.deepEqual(item.blocks.map((block) => block.kind), ["text", "text", "table", "math", "image", "blank"]);
+  assert.deepEqual(item.blocks[0], { kind: "text", text: "공통 지문", heading: false });
+  assert.deepEqual(item.blocks[2], { kind: "table", rows: [["변환", "행렬"], ["이동", "T"]], headerRows: 1 });
+  assert.deepEqual(item.blocks[4], { kind: "image", alt: "원문 그림", page: 3 });
+  assert.deepEqual(item.blocks[5], { kind: "blank", before: "값은 ", after: "이다.", own: true });
+  assert.ok(item.prompt.startsWith("공통 지문\n표를 보고 답하세요."));
+});
