@@ -1,6 +1,6 @@
 /* 되짚기 화면(협업/되짚기/되짚기_최신_v9.html)을 Recaller에 옮긴 것.
    화면·흐름·기록 규칙은 원본을 따르고, 문제 생성은 하지 않는다. 문제는 Recaller 출제 문서를 env.loadDecks()로 받는다.
-   env: see dejipgi-app.d.ts (decks, PDF, math, sources/requests for the request form; ask stays unset) */
+   env: see dejipgi-app.d.ts. env.builder (objective design, authoring, save) and env.ask are left unset on purpose. */
 export function mountDejipgi(root, env){
 "use strict";
 const listeners = new AbortController();
@@ -125,7 +125,7 @@ const S = {
   reader:{ deckId:null, page:1, active:null, zoom:false, attachErr:"", attachBusy:false },
   pdf:{},
   lib:{ status:"loading", error:"" },
-  req:{ status:"idle", error:"", sources:[], requests:[], sourceId:"", pages:"", purpose:"", file:null, busy:"", notice:"", formErr:"" }
+  builder:{ step:1, pages:[], sourceName:"", goal:"", from:1, to:1, objectives:[], selected:new Set(), items:[], report:null, busy:false, status:"", error:"", log:[], ctl:null, paste:"", file:null, pdfDoc:null, title:"" }
 };
 
 /* ---------- scheduling & status ---------- */
@@ -178,7 +178,7 @@ function render(){
   const app = document.getElementById("app");
   app.replaceChildren();
   if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
-  else if (S.view === "library") app.append(renderLibrary());
+  else if (S.view === "create") app.append(renderBuilder());
   else if (S.view === "read") { app.append(renderReader()); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); }
   else app.append(renderRecords());
   if (S.view === "practice" && S.session){
@@ -1030,130 +1030,200 @@ function renderRecords(){
   wrap.append(h("p", { class:"small muted", text:"‘3일 이상 혼자 맞힘’은 서로 다른 3일에 정답을 보기 전 스스로 맞힌 경우예요. 숙달했다는 판정이 아니라, 지금까지의 근거를 그대로 보여주는 표시입니다." }));
   return wrap;
 }
-/* ----- library: Recaller documents that passed the engine's checks, plus a generation request form.
-   Saving a request only queues it; the assigned AI picks it up through MCP and does the (paid) generation. ----- */
-const REQ_STATUS = {
-  "waiting-for-executor":{ label:"AI 실행 대기", cls:"" },
-  claimed:{ label:"AI가 가져감", cls:"acc" },
-  running:{ label:"AI가 만드는 중", cls:"acc" },
-  completed:{ label:"설계 완료", cls:"good" },
-  failed:{ label:"실패", cls:"bad" }
-};
-function pageRange(pages){
-  const out = []; let i = 0;
-  while (i < pages.length){ const a = pages[i]; let b = a; while (pages[i + 1] === b + 1) b = pages[++i]; out.push(a === b ? String(a) : `${a}-${b}`); i++; }
-  return out.join(", ");
-}
-async function loadRequests(){
-  const R = S.req; R.status = "loading"; R.error = "";
+/* ----- builder: the prototype's three-step "자료 만들기" screens.
+   Reading the PDF and choosing the range run locally. Objective design, problem authoring and saving are
+   delegated to env.builder (Recaller's generation engine), which is intentionally not wired yet. ----- */
+const engine = env.builder || null;
+function pagesInRange(){ const b = S.builder; return b.pages.filter(p => p.n >= b.from && p.n <= b.to && p.text.trim()); }
+async function readPdf(file){
+  const b = S.builder;
+  b.busy = true; b.error = ""; b.status = "PDF를 읽는 중…"; render();
   try{
-    const [sources, requests] = await Promise.all([env.listSources(), env.listRequests()]);
-    if (disposed) return;
-    R.sources = sources; R.requests = requests; R.status = "ready";
-    if (!sources.some(x => x.id === R.sourceId)) pickSource(sources.find(x => x.available) || sources[0]);
-  }catch(e){ R.status = "error"; R.error = (e && e.message) || "자료와 요청 목록을 불러오지 못했어요."; }
-  if (!disposed && S.view === "library") render();
+    if (!pdfjs) pdfjs = await env.loadPdfjs();
+    const data = new Uint8Array(await file.arrayBuffer());
+    const doc = await pdfjs.getDocument({ data, isEvalSupported:false }).promise;
+    const pages = [];
+    for (let n = 1; n <= doc.numPages; n++){
+      const page = await doc.getPage(n);
+      const tc = await page.getTextContent();
+      let text = "";
+      for (const it of tc.items){ if (typeof it.str !== "string") continue; text += it.str; text += it.hasEOL ? "\n" : " "; }
+      pages.push({ n, text: text.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim() });
+      if (n % 5 === 0){ b.status = `PDF를 읽는 중… ${n}/${doc.numPages}쪽`; render(); }
+    }
+    setSource(pages, file.name);
+    b.file = file; b.pdfDoc = doc;
+  }catch(e){
+    b.error = "PDF를 읽지 못했어요. 암호가 걸렸거나 손상된 파일일 수 있어요. 텍스트를 붙여 넣어도 됩니다.";
+  }finally{ b.busy = false; b.status = ""; render(); }
 }
-function pickSource(src){ const R = S.req; R.sourceId = src ? src.id : ""; R.pages = src ? `1-${src.pageCount}` : ""; R.formErr = ""; }
-async function uploadSource(){
-  const R = S.req; if (!R.file || R.busy) return;
-  R.busy = "upload"; R.notice = ""; R.formErr = ""; render();
+function setSource(pages, name){
+  const b = S.builder;
+  b.pages = pages; b.sourceName = name; b.from = 1; b.to = pages.length;
+  b.objectives = []; b.selected = new Set(); b.items = []; b.report = null; b.step = 1; b.log = [];
+}
+function useSampleText(){
+  const b = S.builder; b.file = null; b.pdfDoc = null;
+  const raw = b.paste.trim(); if (!raw) return;
+  const parts = raw.split(/\f|\n-{3,}\n/).flatMap(chunk => { const out = []; let cur = ""; for (const para of chunk.split(/\n{2,}/)){ if ((cur + para).length > 1600 && cur){ out.push(cur); cur = ""; } cur += (cur ? "\n\n" : "") + para; } if (cur) out.push(cur); return out; });
+  setSource(parts.map((t, i) => ({ n:i + 1, text:t.trim() })), "붙여 넣은 글");
+  render();
+}
+const onStatus = (msg) => { S.builder.status = msg; if (!disposed && S.view === "create") render(); };
+// engine.design(input) -> { title, objectives:[{ id, statement, kind, importance:"core"|"support", pages:number[], quote }] }
+async function runDesign(){
+  const b = S.builder; if (b.busy || !engine) return;
+  b.busy = true; b.error = ""; b.status = "학습목표를 설계하는 중…"; b.ctl = new AbortController(); render();
   try{
-    const src = await env.uploadPdf(R.file);
-    R.file = null; R.notice = `‘${src.fileName}’을 등록했어요 (${src.pageCount}쪽).`;
-    await loadRequests(); pickSource(R.sources.find(x => x.id === src.id) || null);
-  }catch(e){ R.formErr = (e && e.message) || "PDF를 등록하지 못했어요."; }
-  finally{ R.busy = ""; render(); }
+    const out = await engine.design({ file:b.file, sourceName:b.sourceName, pages:b.pages, from:b.from, to:b.to, goal:b.goal, signal:b.ctl.signal, onStatus });
+    b.objectives = Array.isArray(out && out.objectives) ? out.objectives : [];
+    b.title = String((out && out.title) || b.sourceName).slice(0, 40);
+    if (!b.objectives.length){ b.error = "학습목표를 찾지 못했어요. 쪽 범위를 바꾸거나 목적을 적어 다시 시도해 주세요."; }
+    else { b.selected = new Set(b.objectives.filter(o => o.importance === "core").map(o => o.id)); if (!b.selected.size) b.objectives.forEach(o => b.selected.add(o.id)); b.step = 2; }
+  }catch(e){ b.error = (e && e.message) || "학습목표를 설계하지 못했어요."; }
+  finally{ b.busy = false; b.status = ""; b.ctl = null; render(); }
 }
-async function saveRequest(){
-  const R = S.req; if (R.busy || !R.sourceId) return;
-  R.busy = "save"; R.notice = ""; R.formErr = ""; render();
+// engine.author(input) -> { items:[study item + checks?/warnings?/quoteVerified?], report:{ made, repaired, converted, dropped, dup, warned }, log?:string[] }
+async function runAuthoring(){
+  const b = S.builder; if (b.busy || !engine) return;
+  const objs = b.objectives.filter(o => b.selected.has(o.id)); if (!objs.length) return;
+  b.busy = true; b.error = ""; b.items = []; b.log = []; b.report = null; b.step = 3; b.status = "문제를 만드는 중…"; b.ctl = new AbortController(); render();
   try{
-    const res = await env.createRequest(R.sourceId, R.pages, R.purpose);
-    if (res && res.error){ R.formErr = res.error; }
-    else { R.notice = "요청을 대기 목록에 올렸어요. 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 하면 가져가서 만들어요."; await loadRequests(); }
-  }catch(e){ R.formErr = (e && e.message) || "요청을 저장하지 못했어요."; }
-  finally{ R.busy = ""; render(); }
+    const out = await engine.author({ objectives:objs, sourceName:b.sourceName, pages:b.pages, goal:b.goal, signal:b.ctl.signal, onStatus });
+    b.items = Array.isArray(out && out.items) ? out.items : [];
+    b.report = (out && out.report) || { made:b.items.length, repaired:0, converted:0, dropped:0, dup:0, warned:0 };
+    b.log = Array.isArray(out && out.log) ? out.log : [];
+  }catch(e){ b.error = (e && e.message) || "문제를 만들지 못했어요."; }
+  finally{ b.busy = false; b.status = ""; b.ctl = null; render(); }
 }
-function renderRequestPanel(){
-  const R = S.req;
-  if (R.status === "idle") loadRequests();
-  const panel = h("section", { class:"panel stack" },
-    h("p", { class:"eyebrow", text:"새 자료 요청" }),
-    h("p", { class:"small muted", text:"PDF와 범위, 공부 목적을 적어 두면 대기 목록에 올라가요. 실제 문제는 담당 AI가 요청을 가져가 만들고(비용은 AI 쪽에서 나가요), 문제 작성까지 끝나면 위 목록에 나타나요." }));
-  if (R.status === "loading" && !R.sources.length){ panel.append(h("p", { class:"small muted", text:"자료 목록을 불러오는 중…" })); return panel; }
-  if (R.status === "error") panel.append(h("div", { class:"note err", text:R.error }));
-
-  const file = h("input", { type:"file", accept:"application/pdf,.pdf", "aria-label":"PDF 파일", disabled: !!R.busy });
-  file.addEventListener("change", () => { R.file = file.files[0] || null; R.formErr = ""; R.notice = ""; const b = root.querySelector("#uploadBtn"); if (b) b.disabled = !R.file; });
-  panel.append(h("div", { class:"field" }, h("label", { text:"PDF 등록" }),
-    h("div", { class:"row" }, file, h("button", { class:"btn small", id:"uploadBtn", disabled: !R.file || !!R.busy, onclick:uploadSource }, R.busy === "upload" ? "등록하는 중…" : "등록"))));
-
-  if (R.sources.length){
-    const sel = h("select", { id:"reqSource", class:"btn", style:"font-weight:500;max-width:100%" },
-      R.sources.map(x => h("option", { value:x.id, selected: x.id === R.sourceId ? "selected" : null, disabled: !x.available ? "disabled" : null }, `${x.title} · ${x.pageCount}쪽${x.available ? "" : " (원본 없음)"}`)));
-    sel.addEventListener("change", () => { pickSource(R.sources.find(x => x.id === sel.value)); render(); });
-    const pages = h("input", { type:"text", id:"reqPages", placeholder:"예: 2-7, 10", autocomplete:"off" }); pages.value = R.pages;
-    pages.addEventListener("input", () => { R.pages = pages.value; });
-    const purpose = h("textarea", { id:"reqPurpose", rows:"2" }); purpose.value = R.purpose;
-    purpose.addEventListener("input", () => { R.purpose = purpose.value; });
-    const src = R.sources.find(x => x.id === R.sourceId);
-    panel.append(
-      h("div", { class:"field" }, h("label", { for:"reqSource", text:"자료" }), sel),
-      h("div", { class:"field" }, h("label", { for:"reqPages", text:`쪽 범위${src ? ` (전체 1-${src.pageCount})` : ""}` }), pages),
-      h("div", { class:"field" }, h("label", { for:"reqPurpose", text:"공부 목적" }), purpose),
-      h("div", { class:"row" }, h("button", { class:"btn primary", disabled: !!R.busy || !src || !src.available, onclick:saveRequest }, R.busy === "save" ? "저장하는 중…" : "요청 저장"),
-        h("span", { class:"small muted", text:"모든 단계 gpt-6-sol · medium, 문제까지 만드는 조건이에요." })));
-  } else if (R.status === "ready"){
-    panel.append(h("p", { class:"small muted", text:"등록된 자료가 없어요. 먼저 PDF를 등록해 주세요." }));
-  }
-  if (R.notice) panel.append(h("div", { class:"note", role:"status", text:R.notice }));
-  if (R.formErr) panel.append(h("div", { class:"note err", role:"alert", text:R.formErr }));
-
-  const head = h("div", { class:"row", style:"justify-content:space-between;margin-top:6px" }, h("p", { class:"eyebrow", text:"요청 상태" }),
-    h("div", { class:"row" },
-      h("button", { class:"btn small ghost", disabled: R.status === "loading", onclick: () => { loadRequests(); reloadDecks(); render(); } }, R.status === "loading" ? "불러오는 중…" : "새로고침")));
-  panel.append(head);
-  if (!R.requests.length) panel.append(h("p", { class:"small muted", text:"아직 올린 요청이 없어요." }));
-  else {
-    const names = new Map(R.sources.map(x => [x.id, x.title]));
-    panel.append(h("div", { class:"itemlist" }, R.requests.slice(0, 12).map(q => {
-      const st = REQ_STATUS[q.status] || { label:q.status, cls:"" };
-      const pg = q.input && q.input.scope ? q.input.scope.pageNumbers || [] : [];
-      return h("div", { class:"item" },
-        h("div", { class:"meta" }, h("span", { class:`chip ${st.cls}`, text:st.label }), h("span", { class:"chip", text:names.get(q.input && q.input.sourceId) || (q.input && q.input.sourceId) || "자료" }),
-          pg.length ? h("span", { class:"chip page", text:`p.${pageRange(pg)}` }) : null, h("span", { class:"small muted", text:new Date(q.createdAt).toLocaleString("ko-KR") })),
-        h("p", { text:(q.input && q.input.purpose) || "" }),
-        q.status === "completed" ? h("p", { class:"small muted", text:"학습 설계와 MCP 문제까지 끝났어요. 담당 AI가 출제 편집틀에서 문제 문서를 기록하면 위 목록에 나타나요." }) : null,
-        q.status === "failed" && q.failure ? h("p", { class:"small", style:"color:var(--bad)", text:q.failure }) : null);
-    })));
-  }
-  return panel;
+// engine.save(input) -> { deckId? } ; the saved document then comes back through env.loadDecks()
+async function saveBuilt(){
+  const b = S.builder; if (!b.items.length || b.busy || !engine) return;
+  b.busy = true; b.status = "저장하는 중…"; render();
+  try{
+    const res = await engine.save({ title:b.title || b.sourceName, sourceName:b.sourceName, objectives:b.objectives.filter(o => b.items.some(i => i.objectiveId === o.id)), items:b.items });
+    await reloadDecks();
+    S.builder = { ...S.builder, step:1, objectives:[], selected:new Set(), items:[], report:null, log:[], file:null, pdfDoc:null, busy:false, status:"" };
+    toast("자료를 저장했어요. 읽으면서 쪽마다 확인 문제를 풀 수 있어요.");
+    const id = res && res.deckId && S.decks[res.deckId] ? res.deckId : null;
+    if (id) openReader(id, firstPage(S.decks[id])); else setView("practice");
+  }catch(e){ b.busy = false; b.status = ""; b.error = (e && e.message) || "저장하지 못했어요."; render(); }
 }
-function renderLibrary(){
-  const decks = sortedDecks().filter(d => !d.example);
+function renderBuilder(){
+  const b = S.builder;
   const wrap = h("div", { class:"stack" });
-  wrap.append(h("section", { class:"panel stack" },
-    h("p", { class:"eyebrow", text:"자료" }),
-    h("h2", { style:"font-family:var(--display);font-size:22px", text: decks.length ? `Recaller 출제 문서 ${decks.length}개` : "아직 불러온 출제 문서가 없어요" }),
-    h("p", { class:"small muted", text:"문제는 Recaller 생성 엔진이 만들고 검사를 통과한 문서만 여기에 나와요." })));
-  if (S.lib.status === "loading") wrap.append(h("p", { class:"small muted", text:"Recaller 문제를 불러오는 중…" }));
-  if (S.lib.status === "error") wrap.append(h("div", { class:"note err", text:S.lib.error }));
-  const list = h("div", { class:"decks" });
-  for (const d of decks){
-    list.append(h("article", { class:"deck" },
-      h("div", null,
-        h("h3", { text:d.title }),
-        h("div", { class:"meta" },
-          h("span", { text:d.sourceName }),
-          h("span", { class:"num", text:`원본 ${d.pageCount}쪽 · 목표 ${d.objectives.length} · 문제 ${d.items.length}` }),
-          d.skipped && d.skipped.length ? h("span", { class:"chip help num", title:d.skipped.map(x => `${x.questionId}: ${x.reason}`).join("\n"), text:`옮기지 못한 문항 ${d.skipped.length}` }) : null)),
-      h("div", { class:"row" },
-        h("button", { class:"btn small", onclick: () => openReader(d.id, firstPage(d)) }, "읽기"),
-        h("button", { class:"btn small primary", onclick: () => startSession(d.id, true) }, "연습"))));
+  wrap.append(h("ol", { class:"steps" },
+    h("li", { "data-on": b.step === 1 ? "true" : "false", "data-done": b.step > 1 ? "true" : "false" }, "자료 올리기"),
+    h("li", { "data-on": b.step === 2 ? "true" : "false", "data-done": b.step > 2 ? "true" : "false" }, "학습목표 고르기"),
+    h("li", { "data-on": b.step === 3 ? "true" : "false" }, "문제 생성·검사")
+  ));
+  if (!engine){
+    wrap.append(h("div", { class:"note warn", text:"화면만 먼저 옮겨 둔 상태예요. PDF를 읽고 범위를 고르는 것까지는 되지만, 학습목표 설계와 문제 생성은 Recaller 생성 엔진에 아직 연결하지 않았어요." }));
   }
-  wrap.append(list);
-  wrap.append(renderRequestPanel());
+  if (b.error) wrap.append(h("div", { class:"note err", role:"alert", text:b.error }));
+  if (b.status) wrap.append(h("div", { class:"note row", role:"status" }, h("span", { text:b.status }), b.ctl ? h("button", { class:"btn small", onclick: () => b.ctl && b.ctl.abort() }, "멈추기") : null));
+
+  if (b.step === 1){
+    const drop = h("div", { class:"drop", id:"drop" },
+      h("strong", { text:"PDF를 끌어다 놓거나 골라 주세요" }),
+      h("span", { class:"small muted", text:"글자가 들어 있는 PDF만 읽을 수 있어요. 스캔 이미지로만 된 쪽은 건너뜁니다." }),
+      h("label", { class:"btn", for:"pdf" }, "PDF 고르기"),
+      h("input", { id:"pdf", type:"file", accept:"application/pdf", class:"hidden", onchange:(e) => { const f = e.target.files[0]; if (f) readPdf(f); } })
+    );
+    drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.dataset.over = "true"; });
+    drop.addEventListener("dragleave", () => { drop.dataset.over = "false"; });
+    drop.addEventListener("drop", (e) => { e.preventDefault(); drop.dataset.over = "false"; const f = e.dataTransfer.files[0]; if (f && /pdf$/i.test(f.name)) readPdf(f); });
+    const paste = h("textarea", { id:"paste", placeholder:"또는 강의 노트·교재 글을 붙여 넣으세요. 빈 줄 기준으로 1,600자 정도씩 나눠 쪽 번호를 붙입니다." });
+    paste.value = b.paste; paste.addEventListener("input", () => { b.paste = paste.value; });
+    const sec = h("section", { class:"panel stack" },
+      drop,
+      h("details", null, h("summary", { class:"small", text:"텍스트로 넣기" }), h("div", { class:"stack", style:"margin-top:10px" }, h("div", { class:"field" }, paste), h("div", null, h("button", { class:"btn small", onclick:useSampleText }, "이 글로 진행"))))
+    );
+    wrap.append(sec);
+
+    if (b.pages.length){
+      const inRange = pagesInRange();
+      const empty = b.pages.filter(p => !p.text.trim()).map(p => p.n);
+      const goal = h("input", { type:"text", id:"goal", placeholder:"예: 중간고사 대비, 식과 절차는 외워서 쓸 수 있게", value:b.goal });
+      goal.value = b.goal; goal.addEventListener("input", () => { b.goal = goal.value; });
+      const from = h("input", { type:"number", id:"from", min:"1", max:String(b.pages.length), value:String(b.from), style:"width:90px" });
+      const to = h("input", { type:"number", id:"to", min:"1", max:String(b.pages.length), value:String(b.to), style:"width:90px" });
+      const upd = () => { b.from = Math.max(1, Math.min(Number(from.value) || 1, b.pages.length)); b.to = Math.max(b.from, Math.min(Number(to.value) || b.pages.length, b.pages.length)); render(); };
+      from.addEventListener("change", upd); to.addEventListener("change", upd);
+      wrap.append(h("section", { class:"panel stack" },
+        h("div", null, h("p", { class:"eyebrow", text:"불러온 자료" }), h("h2", { style:"font-size:18px;margin-top:2px", text:b.sourceName }), h("p", { class:"small muted num", text:`${b.pages.length}쪽 · 글자가 있는 쪽 ${b.pages.length - empty.length}쪽` })),
+        empty.length ? h("div", { class:"note warn", text:`글자가 없는 쪽(${empty.slice(0, 12).join(", ")}${empty.length > 12 ? " …" : ""})은 그림이나 스캔이라 이번엔 제외돼요.` }) : null,
+        h("div", { class:"row" }, h("div", { class:"field" }, h("label", { for:"from", text:"시작 쪽" }), from), h("div", { class:"field" }, h("label", { for:"to", text:"끝 쪽" }), to)),
+        h("div", { class:"field" }, h("label", { for:"goal", text:"학습 목적 (선택)" }), goal),
+        h("div", { class:"row" }, h("button", { class:"btn primary", disabled: b.busy || !inRange.length || !engine, onclick:runDesign }, "학습목표 설계"),
+          engine ? null : h("span", { class:"small muted", text:"엔진 연결 후 눌러 쓸 수 있어요." }))
+      ));
+    }
+  }
+
+  if (b.step === 2){
+    const list = h("div", { class:"objs" });
+    for (const o of b.objectives){
+      const cb = h("input", { type:"checkbox", id:"cb-" + o.id });
+      cb.checked = b.selected.has(o.id);
+      cb.addEventListener("change", () => { if (cb.checked) b.selected.add(o.id); else b.selected.delete(o.id); render(); });
+      list.append(h("div", { class:"obj" },
+        cb,
+        h("label", { class:"st", for:"cb-" + o.id, text:o.statement }),
+        h("div", { class:"meta" },
+          h("span", { class:`chip ${o.importance === "core" ? "acc" : ""}`, text:o.importance === "core" ? "핵심" : "보조" }),
+          h("span", { class:"chip", text:{ fact:"사실·정의", concept:"관계·구별", procedure:"절차", formula:"식·계산", list:"열거" }[o.kind] || o.kind }),
+          h("span", { class:"chip page", text:"p." + o.pages.join(",") })
+        ),
+        h("details", null, h("summary", { text:"근거 원문" }), h("p", { style:"margin-top:4px" }, h("mark", { class:"quote", text:o.quote || "인용 없음" })))
+      ));
+    }
+    wrap.append(h("section", { class:"panel stack" },
+      h("div", null, h("p", { class:"eyebrow", text:"학습목표" }), h("h2", { style:"font-size:18px;margin-top:2px", text:b.title || b.sourceName }),
+        h("p", { class:"small muted", text:"연습할 목표를 고르세요. 핵심 목표가 먼저 골라져 있어요. 근거 원문은 정답이 될 수 있으니 필요할 때만 펼쳐 보세요." })),
+      h("div", { class:"row" },
+        h("button", { class:"btn small", onclick: () => { b.objectives.forEach(o => b.selected.add(o.id)); render(); } }, "모두 고르기"),
+        h("button", { class:"btn small", onclick: () => { b.selected.clear(); render(); } }, "모두 해제")
+      ),
+      list,
+      h("div", { class:"row" },
+        h("button", { class:"btn", onclick: () => { b.step = 1; render(); } }, "자료로 돌아가기"),
+        h("button", { class:"btn primary", disabled: b.busy || !b.selected.size, onclick:runAuthoring }, `문제 만들기 (${b.selected.size}개)`)
+      )
+    ));
+  }
+
+  if (b.step === 3){
+    const r = b.report;
+    const sec = h("section", { class:"panel stack" },
+      h("div", null, h("p", { class:"eyebrow", text:"생성과 자동 검사" }), h("h2", { style:"font-size:18px;margin-top:2px", text:b.title || b.sourceName }),
+        h("p", { class:"small muted", text:"만든 문제마다 정답 노출, 보기 길이 단서, 한 칸에 여러 요소를 쓰는 답, 중복, 원문 인용 일치를 검사해요. 걸린 문제는 한 번 고쳐 보고, 그래도 안 되면 뺍니다." }))
+    );
+    if (r) sec.append(h("div", { class:"report" },
+      h("div", null, h("b", { class:"num", text:String(r.made) }), h("span", { text:"사용할 문제" })),
+      h("div", null, h("b", { class:"num", text:String(r.repaired) }), h("span", { text:"검사 후 수정" })),
+      h("div", null, h("b", { class:"num", text:String(r.converted) }), h("span", { text:"형식 변경" })),
+      h("div", null, h("b", { class:"num", text:String(r.dropped + r.dup) }), h("span", { text:"제외 (결함·중복)" })),
+      h("div", null, h("b", { class:"num", text:String(r.warned) }), h("span", { text:"주의 표시" }))
+    ));
+    const list = h("div", { class:"itemlist" });
+    b.items.forEach((it, idx) => {
+      const notes = [...(it.checks || []), ...(it.warnings || [])];
+      list.append(h("div", { class:"item" },
+        h("div", { class:"meta" }, h("span", { class:"chip num", text:String(idx + 1) }), h("span", { class:"chip", text:FORMAT_LABEL[it.format] }), h("span", { class:"chip page", text:"p." + it.page }), it.quoteVerified ? h("span", { class:"chip good", text:"원문 인용 일치" }) : h("span", { class:"chip help", text:"인용 확인 필요" })),
+        h("p", { text:it.prompt }),
+        notes.length ? h("ul", null, notes.map(n => h("li", { text:n }))) : null
+      ));
+    });
+    sec.append(list);
+    if (b.log.length) sec.append(h("details", null, h("summary", { class:"small", text:"생성 기록" }), h("div", { class:"log", text:b.log.join("\n") })));
+    sec.append(h("div", { class:"row" },
+      h("button", { class:"btn", disabled:b.busy, onclick: () => { b.step = 2; render(); } }, "목표 다시 고르기"),
+      h("button", { class:"btn primary", disabled: b.busy || !b.items.length, onclick:saveBuilt }, "저장하고 읽기 시작")
+    ));
+    sec.append(h("p", { class:"small muted", text:"문제 목록에는 정답을 보여주지 않아요. 풀기 전에 답을 보면 연습 효과가 사라지니까요." }));
+    wrap.append(sec);
+  }
   return wrap;
 }
 
@@ -1180,7 +1250,6 @@ function reloadDecks(){
   }).then(() => { if (!disposed && !S.session) render(); });
 }
 Store.init();
-S.req.purpose = env.defaultPurpose || "";
 updateStoreChip(); render();
 ensureKatex().then(ok => { if (ok && !disposed) render(); });
 reloadDecks();
@@ -1189,6 +1258,7 @@ return () => {
   disposed = true;
   listeners.abort();
   if (Chat.ctl) Chat.ctl.abort();
+  if (S.builder.ctl) S.builder.ctl.abort();
   for (const P of Object.values(S.pdf)) if (P.doc) P.doc.destroy();
   root.querySelectorAll("#toast, .chatwin").forEach(el => el.remove());
   delete root.dataset.view;

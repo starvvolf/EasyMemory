@@ -107,7 +107,7 @@ export default function DejipgiStudy() {
           <nav className="tabs" role="tablist" id="tabs">
             <button role="tab" data-view="practice" aria-selected="true">연습</button>
             <button role="tab" data-view="read" aria-selected="false">읽기</button>
-            <button role="tab" data-view="library" aria-selected="false">자료</button>
+            <button role="tab" data-view="create" aria-selected="false">자료 만들기</button>
             <button role="tab" data-view="records" aria-selected="false">기록</button>
           </nav>
         </div>
