@@ -7,6 +7,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { applyRevision, validateDocument, validateDocumentAgainstPacket, validateFormatOverride, type AuthoringDocument, type RevisionPatch, type SourceContent } from "./contract.ts";
 import { renderDocument, renderInteractiveDocument } from "./renderer.ts";
+import { inspectQuality } from "./quality.ts";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const unknownRecord = z.record(z.string(), z.unknown());
@@ -77,7 +78,7 @@ export function createProblemAuthoringMcpServer() {
     inputSchema: { document: unknownRecord, packetPath: z.string().optional(), formatOverride: z.record(z.string(), z.enum(["single-choice", "short-text"])).optional() }, outputSchema: { valid: z.boolean(), issues: z.array(unknownRecord) },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async ({ document, packetPath, formatOverride }) => {
-    const issues = validateDocument(document as AuthoringDocument);
+    const issues = [...validateDocument(document as AuthoringDocument), ...inspectQuality(document as AuthoringDocument)];
     if (packetPath) {
       const packet = JSON.parse(await readFile(resolveRunPacketPath(packetPath), "utf8")) as { items: SourceContent[] };
       issues.push(...validateDocumentAgainstPacket(document as AuthoringDocument, packet));
@@ -104,7 +105,7 @@ export function createProblemAuthoringMcpServer() {
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   }, async ({ document, patch, packetPath, formatOverride }) => {
     const next = applyRevision(document as AuthoringDocument, patch as RevisionPatch);
-    const issues = validateDocument(next);
+    const issues = [...validateDocument(next), ...inspectQuality(next)];
     if (packetPath) {
       const packet = JSON.parse(await readFile(resolveRunPacketPath(packetPath), "utf8")) as { items: SourceContent[] };
       issues.push(...validateDocumentAgainstPacket(next, packet));
@@ -133,7 +134,7 @@ export function createProblemAuthoringMcpServer() {
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   }, async ({ runId, iteration, packetPath, formatOverride, document, issues, patch, execution }) => {
     const authored = document as AuthoringDocument;
-    const errors = validateDocument(authored).filter((issue) => issue.severity === "error");
+    const errors = [...validateDocument(authored), ...inspectQuality(authored)].filter((issue) => issue.severity === "error");
     if (packetPath) {
       const packet = JSON.parse(await readFile(resolveRunPacketPath(packetPath), "utf8")) as { items: SourceContent[] };
       errors.push(...validateDocumentAgainstPacket(authored, packet));
