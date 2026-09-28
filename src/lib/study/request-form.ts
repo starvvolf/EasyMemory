@@ -1,5 +1,7 @@
 // 되짚기 "자료" 탭의 출제 요청 양식. /mcp-runs의 "생성 조건 설정"과 같은 기본값으로 요청 본문을 만든다.
 // 요청은 대기 목록에 저장만 하고, 실제 생성은 담당 AI가 MCP로 가져가 실행한다.
+import type { ExperimentRequest } from "../mcp-experiment-requests.ts";
+import type { LearningDesignPlan } from "../types.ts";
 
 export const requestStages = ["analyze", "concept-tree", "learning-design", "activity-design", "cards"] as const;
 export const defaultPurpose = "자료의 핵심을 시험에 대비해 오래 기억하고 적용한다.";
@@ -40,18 +42,52 @@ export function eligibleLeafIds(source: RequestSource, pages: number[]): string[
     .map((node) => node.id as string);
 }
 
-export function buildRequestBody(source: RequestSource, pageText: string, purpose: string) {
+export function buildRequestBody(
+  source: RequestSource,
+  pageText: string,
+  purpose: string,
+  options: {
+    stopAfterStage?: (typeof requestStages)[number];
+    reuse?: { kind: "output"; runId: string; stage: "learning-design"; sha256: string };
+    selectedObjectiveIds?: string[];
+  } = {},
+) {
   const parsed = parsePageSelection(pageText, source.pageCount);
   if (parsed.error) return { error: parsed.error } as const;
   if (!parsed.pages.length) return { error: "학습할 쪽을 입력하세요." } as const;
   if (!purpose.trim()) return { error: "학습 목적을 적어 주세요." } as const;
+  const stopAfterStage = options.stopAfterStage ?? "cards";
+  const lastStage = requestStages.indexOf(stopAfterStage);
   return {
     body: {
       sourceId: source.id,
       scope: { pageNumbers: parsed.pages, outlineLeafIds: eligibleLeafIds(source, parsed.pages) },
       purpose: purpose.trim(),
-      requestedStages: Object.fromEntries(requestStages.map((stage) => [stage, { ...defaultSetting }])),
-      stopAfterStage: "cards" as const,
+      requestedStages: Object.fromEntries(requestStages.slice(0, lastStage + 1).map((stage) => [stage, { ...defaultSetting }])),
+      stopAfterStage,
+      ...(options.reuse ? { reuse: options.reuse } : {}),
+      ...(options.selectedObjectiveIds ? { selectedObjectiveIds: options.selectedObjectiveIds } : {}),
     },
   } as const;
+}
+
+export function objectivesFromCompletedRequest(request: ExperimentRequest) {
+  const stage = request.stages.find((item) => item.stage === "learning-design");
+  const output = stage?.output as { learningDesign?: LearningDesignPlan } | undefined;
+  const design = output?.learningDesign;
+  if (!stage || !design?.objectives?.length) throw new Error("완료된 요청에 학습목표가 없습니다.");
+  return {
+    hash: stage.actual.outputSha256,
+    objectives: design.objectives.map((objective) => {
+      const units = design.knowledgeUnits.filter((unit) => unit.objectiveId === objective.id);
+      return {
+        id: objective.id,
+        statement: objective.target,
+        kind: objective.terminalOperation,
+        importance: objective.importance >= 2 ? "core" as const : "support" as const,
+        pages: [...new Set(units.map((unit) => unit.sourcePage))].sort((a, b) => a - b),
+        quote: units[0]?.sourceText ?? "",
+      };
+    }),
+  };
 }

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import { createExperimentRequestSchema } from "../mcp-experiment-requests.ts";
-import { buildRequestBody, eligibleLeafIds, parsePageSelection, type RequestSource } from "./request-form.ts";
+import type { ExperimentRequest } from "../mcp-experiment-requests.ts";
+import { buildRequestBody, eligibleLeafIds, objectivesFromCompletedRequest, parsePageSelection, type RequestSource } from "./request-form.ts";
 
 const source: RequestSource = {
   id: "geometric-transformations",
@@ -33,7 +36,33 @@ test("요청 본문은 실제 요청 스키마를 통과한다", () => {
   assert.deepEqual(built.body.scope.outlineLeafIds, ["leaf-a", "leaf-b"]);
 });
 
+test("목표 설계까지만 요청하고 그 결과를 이어서 재사용할 수 있다", () => {
+  const design = buildRequestBody(source, "2-9", "시험 대비", { stopAfterStage: "learning-design" });
+  if (!("body" in design) || !design.body) throw new Error(design.error);
+  assert.ok(createExperimentRequestSchema.safeParse(design.body).success);
+  assert.deepEqual(Object.keys(design.body.requestedStages), ["analyze", "concept-tree", "learning-design"]);
+
+  const reuse = { kind: "output" as const, runId: "mcp:design", stage: "learning-design" as const, sha256: "a".repeat(64) };
+  const author = buildRequestBody(source, "2-9", "시험 대비", { reuse, selectedObjectiveIds: ["objective-2"] });
+  if (!("body" in author) || !author.body) throw new Error(author.error);
+  assert.ok(createExperimentRequestSchema.safeParse(author.body).success);
+  assert.equal(author.body.stopAfterStage, "cards");
+  assert.deepEqual(author.body.reuse, reuse);
+  assert.deepEqual(author.body.selectedObjectiveIds, ["objective-2"]);
+});
+
 test("목적이나 범위가 비면 저장하지 않는다", () => {
   assert.equal(buildRequestBody(source, "", "목적").error, "학습할 쪽을 입력하세요.");
   assert.equal(buildRequestBody(source, "1-2", " ").error, "학습 목적을 적어 주세요.");
+});
+
+test("기존 학습 설계 기록을 화면 목표와 재사용 해시로 옮긴다", async () => {
+  const raw = await readFile(path.join(process.cwd(), "eval/local/full-study-20260928/requests/geometry-learning-design-progress.json"), "utf8");
+  const record = (JSON.parse(raw) as { request: ExperimentRequest }).request;
+  const result = objectivesFromCompletedRequest(record);
+  assert.ok(result.objectives.length > 0);
+  assert.equal(result.hash, record.stages.find((stage) => stage.stage === "learning-design")?.actual.outputSha256);
+  assert.equal(result.objectives[0].id, "objective-1");
+  assert.ok(result.objectives[0].pages.includes(2));
+  assert.ok(result.objectives[0].quote.length > 0);
 });

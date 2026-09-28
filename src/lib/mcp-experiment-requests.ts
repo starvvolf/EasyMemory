@@ -27,6 +27,7 @@ export const createExperimentRequestSchema = z.strictObject({
   requestedStages: z.partialRecord(stageSchema, settingsSchema),
   stopAfterStage: stageSchema,
   reuse: z.strictObject({ kind: z.enum(["input", "output"]), runId: runIdSchema, stage: stageSchema, sha256: hashSchema }).optional(),
+  selectedObjectiveIds: z.array(z.string().trim().min(1).max(200)).min(1).max(100).optional(),
 }).superRefine((input, context) => {
   if (!input.scope.pageNumbers.length && !input.scope.outlineLeafIds.length) {
     context.addIssue({ code: "custom", path: ["scope"], message: "페이지나 목차 범위를 하나 이상 선택해야 합니다." });
@@ -47,6 +48,14 @@ export const createExperimentRequestSchema = z.strictObject({
   }
   if (input.reuse && experimentStages.indexOf(input.reuse.stage) > last) {
     context.addIssue({ code: "custom", path: ["reuse", "stage"], message: "재사용 단계는 중단 단계 이하여야 합니다." });
+  }
+  if (input.selectedObjectiveIds) {
+    if (new Set(input.selectedObjectiveIds).size !== input.selectedObjectiveIds.length) {
+      context.addIssue({ code: "custom", path: ["selectedObjectiveIds"], message: "선택한 학습목표 ID가 중복되었습니다." });
+    }
+    if (last < experimentStages.indexOf("activity-design") || input.reuse?.kind !== "output" || input.reuse.stage !== "learning-design") {
+      context.addIssue({ code: "custom", path: ["selectedObjectiveIds"], message: "선택한 목표만 출제하려면 완료된 학습 설계 결과를 재사용해야 합니다." });
+    }
   }
 });
 
@@ -239,6 +248,21 @@ export async function recordExperimentProgress(id: string, input: unknown, finis
       }
     } else if (update.actual.reusedFrom) {
       throw new ExperimentRequestError(409, "요청하지 않은 결과 재사용은 기록할 수 없습니다.");
+    }
+    if (record.input.selectedObjectiveIds && update.stage === "activity-design") {
+      const design = (update.output as { learningDesign?: { objectives?: Array<{ id?: unknown }> } } | null)?.learningDesign;
+      const actualIds = design?.objectives?.map((item) => item.id);
+      if (!actualIds || actualIds.length !== record.input.selectedObjectiveIds.length ||
+        actualIds.some((id) => typeof id !== "string" || !record.input.selectedObjectiveIds!.includes(id))) {
+        throw new ExperimentRequestError(409, "문제 설계 결과가 선택한 학습목표 범위와 다릅니다.");
+      }
+    }
+    if (record.input.selectedObjectiveIds && update.stage === "cards") {
+      const cards = (update.output as { cards?: Array<{ objectiveId?: unknown }> } | null)?.cards;
+      if (!Array.isArray(cards) || cards.some((card) => typeof card.objectiveId !== "string" ||
+        !record.input.selectedObjectiveIds!.includes(card.objectiveId))) {
+        throw new ExperimentRequestError(409, "생성된 문제에 선택하지 않은 학습목표가 포함되었습니다.");
+      }
     }
     record.runId = update.runId;
     record.stages.push({ stage: update.stage, runId: update.runId, actual: update.actual, output: update.output,

@@ -34,6 +34,19 @@ test("requested GPT-6 model and effort boundary", () => {
   assert.equal(createExperimentRequestSchema.safeParse(withAnalyze("gpt-6-astra", "ultra")).success, true);
 });
 
+test("selected objectives require a completed Learning Design prefix and reject duplicates", () => {
+  const request = {
+    ...base,
+    stopAfterStage: "cards",
+    requestedStages: { ...base.requestedStages, "learning-design": settings, "activity-design": settings, cards: settings },
+    reuse: { kind: "output", runId: "mcp:origin", stage: "learning-design", sha256: hash },
+    selectedObjectiveIds: ["objective-2"],
+  };
+  assert.equal(createExperimentRequestSchema.safeParse(request).success, true);
+  assert.equal(createExperimentRequestSchema.safeParse({ ...request, reuse: undefined }).success, false);
+  assert.equal(createExperimentRequestSchema.safeParse({ ...request, selectedObjectiveIds: ["objective-2", "objective-2"] }).success, false);
+});
+
 test("registered source requests pin the real PDF and reject pages outside its bounds", async () => {
   const folder = await mkdtemp(path.join(os.tmpdir(), "recaller-registered-request-"));
   process.env.STUDY_FORGE_DATA_DIR = folder;
@@ -149,6 +162,41 @@ test("Learning Design prefix reports three reused outputs before newly generated
     assert.deepEqual(finished.stages.map((stage) => stage.executionMode), [
       "reused-output", "reused-output", "reused-output", "model-generated",
     ]);
+  } finally {
+    delete process.env.STUDY_FORGE_DATA_DIR;
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("selected-objective requests reject an unselected objective in design or cards", async () => {
+  const folder = await mkdtemp(path.join(os.tmpdir(), "recaller-selected-objectives-"));
+  process.env.STUDY_FORGE_DATA_DIR = folder;
+  try {
+    const stages = ["analyze", "concept-tree", "learning-design", "activity-design", "cards"] as const;
+    const hashes = stages.map((stage) => createHash("sha256").update(stage).digest("hex"));
+    const reuse = { kind: "output" as const, runId: "mcp:origin", stage: "learning-design" as const, sha256: hashes[2] };
+    const created = await createExperimentRequest({ ...base, stopAfterStage: "cards",
+      requestedStages: Object.fromEntries(stages.map((stage) => [stage, settings])),
+      reuse, selectedObjectiveIds: ["objective-1"] });
+    const { claimToken } = await claimExperimentRequest(created.id);
+    const progress = (stage: typeof stages[number], index: number, output: unknown) => ({
+      claimToken, runId: "mcp:selected", stage, output,
+      actual: { ...actual, outputSha256: hashes[index], ...(index < 3 ? {
+        reusedFrom: { ...reuse, stage, sha256: hashes[index] },
+      } : {}) },
+    });
+    for (let index = 0; index < 3; index += 1) {
+      await recordExperimentProgress(created.id, progress(stages[index], index, { stage: stages[index] }));
+    }
+    await assert.rejects(recordExperimentProgress(created.id, progress("activity-design", 3,
+      { learningDesign: { objectives: [{ id: "objective-1" }, { id: "objective-2" }] } })), { status: 409 });
+    await recordExperimentProgress(created.id, progress("activity-design", 3,
+      { learningDesign: { objectives: [{ id: "objective-1" }] } }));
+    await assert.rejects(recordExperimentProgress(created.id, progress("cards", 4,
+      { cards: [{ objectiveId: "objective-2" }] }), true), { status: 409 });
+    const completed = await recordExperimentProgress(created.id, progress("cards", 4,
+      { cards: [{ objectiveId: "objective-1" }] }), true);
+    assert.equal(completed.status, "completed");
   } finally {
     delete process.env.STUDY_FORGE_DATA_DIR;
     await rm(folder, { recursive: true, force: true });

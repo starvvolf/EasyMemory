@@ -119,6 +119,9 @@ export function createStudyForgeMcpServer(
         tags: z.array(z.string()).optional().default([]),
         sourceExpressionMode: z.enum(["preserve", "adapt"]).optional().default("adapt"),
         stopAfterStage: z.enum(chatGptParityStages).optional().default("cards"),
+        selectedObjectiveIds: z.array(z.string().trim().min(1).max(200)).min(1).max(100).optional().describe(
+          "학습목표를 고른 출제 요청에서는 요청의 selectedObjectiveIds를 그대로 전달합니다. 뒤의 문제 설계·생성에만 적용됩니다.",
+        ),
       },
       outputSchema: {
         runId: z.string(),

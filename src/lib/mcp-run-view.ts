@@ -193,6 +193,11 @@ async function verifyRequestRun(run: StoredRun, request: PublicExperimentRequest
   if (!source || (request.sourceSnapshot && (request.sourceSnapshot.sha256 !== source.sha256 ||
     request.sourceSnapshot.pageCount !== source.pageCount || request.sourceSnapshot.fileName !== source.fileName))) return false;
   const files = object(run.config).files;
+  const requestedObjectives = request.input.selectedObjectiveIds ?? [];
+  const runObjectives = object(run.config).selectedObjectiveIds;
+  if (requestedObjectives.length > 0 && (!Array.isArray(runObjectives) ||
+    JSON.stringify(runObjectives) !== JSON.stringify(requestedObjectives))) return false;
+  if (requestedObjectives.length === 0 && Array.isArray(runObjectives) && runObjectives.length > 0) return false;
   if (!Array.isArray(files) || files.length !== 1 || object(files[0]).fileName !== source.fileName) return false;
   const runFile = object(files[0]);
   if (typeof runFile.pageCount === "number" && runFile.pageCount !== source.pageCount) return false;

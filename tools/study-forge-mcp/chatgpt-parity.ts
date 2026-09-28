@@ -62,6 +62,8 @@ const startInputSchema = z.object({
   tags: z.array(z.string()).default([]),
   sourceExpressionMode: z.enum(["preserve", "adapt"]).default("adapt"),
   stopAfterStage: z.enum(chatGptParityStages).default("cards"),
+  selectedObjectiveIds: z.array(z.string().trim().min(1).max(200)).min(1).max(100)
+    .refine((ids) => new Set(ids).size === ids.length, "학습목표 ID가 중복되었습니다.").optional(),
 });
 
 const outlineTextSchema = z.object({
@@ -107,6 +109,21 @@ type ConceptTreeArtifact = {
 type LearningDesignBase = Omit<LearningDesignPlan, "assessmentBlueprints"> & {
   assessmentBlueprints: [];
 };
+
+/** Keep the recorded Learning Design intact; narrow only the subsequent problem work. */
+export function selectLearningDesignObjectives(base: LearningDesignBase, selectedIds?: string[]): LearningDesignBase {
+  if (!selectedIds) return base;
+  const chosen = new Set(selectedIds);
+  const objectives = base.objectives.filter((objective) => chosen.has(objective.id));
+  if (objectives.length !== chosen.size || !objectives.length) {
+    throw new Error("선택한 학습목표 ID가 기존 학습 설계에 없습니다.");
+  }
+  const knowledgeUnits = base.knowledgeUnits.filter((unit) => chosen.has(unit.objectiveId));
+  if (!knowledgeUnits.length || objectives.some((objective) => !knowledgeUnits.some((unit) => unit.objectiveId === objective.id))) {
+    throw new Error("선택한 학습목표에 연결된 학습 내용이 없습니다.");
+  }
+  return { objectives, knowledgeUnits, assessmentBlueprints: [] };
+}
 
 type LearningDesignArtifact = {
   learningDesignText: string;
@@ -350,6 +367,12 @@ export class ChatGptParityService {
       const requestedPages = [...new Set(input.selectedPageNumbers ?? [])].sort((a, b) => a - b);
       if (!sourcePages.length || JSON.stringify(requestedPages) !== JSON.stringify(sourcePages)) {
         throw new Error("선택한 PDF 페이지 범위가 원본 run과 다릅니다.");
+      }
+      if (input.stage === "learning-design") {
+        selectLearningDesignObjectives(
+          parseLearningDesignArtifact(source.artifacts["learning-design"]).learningDesign,
+          target.config.selectedObjectiveIds,
+        );
       }
     }
     target.stageReuse ??= {};
@@ -744,11 +767,12 @@ export class ChatGptParityService {
     }
     const design = parseLearningDesignArtifact(run.artifacts["learning-design"]);
     if (stage === "activity-design") {
+      const selectedDesign = selectLearningDesignObjectives(design.learningDesign, run.config.selectedObjectiveIds);
       return {
         ...common,
         input: {
-          learningTargets: design.learningDesign.knowledgeUnits.map((unit, index) => {
-            const objective = design.learningDesign.objectives.find(
+          learningTargets: selectedDesign.knowledgeUnits.map((unit, index) => {
+            const objective = selectedDesign.objectives.find(
               (candidate) => candidate.id === unit.objectiveId,
             )!;
             return {
@@ -868,7 +892,7 @@ export class ChatGptParityService {
       const submitted = activityDesignTextSchema.parse(value);
       return materializeActivityDesignText(
         submitted.activityDesignText,
-        design.learningDesign,
+        selectLearningDesignObjectives(design.learningDesign, run.config.selectedObjectiveIds),
         conceptTree,
         run.selectedOutlineLeafIds,
       );
