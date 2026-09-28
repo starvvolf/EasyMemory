@@ -359,3 +359,10 @@
   .dejipgi .deck{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){.dejipgi,.dejipgi *{transition:none!important}}
+
+/* Recaller additions: goal row with a take-out link, pressed answer chips on the new-material questions */
+.dejipgi .goalrow{display:flex;align-items:flex-start;gap:8px}
+.dejipgi .goalrow .goal{flex:1}
+.dejipgi .goalrow .linkish{font-size:12.5px;margin-top:6px;white-space:nowrap}
+.dejipgi .chip-btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.dejipgi .chip-btn:disabled{opacity:.5;cursor:not-allowed}

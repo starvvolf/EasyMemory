@@ -74,3 +74,11 @@ test("전체 범위 r02 두 문서는 모든 문항이 변환된다", async () =
     assert.ok(deck.items.every((item) => item.prompt.trim() && item.page > 0), name);
   }
 });
+
+test("검사에서 제외한 문항은 연습에 넣지 않고 이유와 함께 남긴다", async () => {
+  const raw = await readFile(new URL("../../../tools/problem-authoring-lab/runs/integrated-geometry-full-20260928-r02/iteration-0/document.json", import.meta.url), "utf8");
+  const deck = toStudyDeck(meta, JSON.parse(raw) as AuthoringDocument, 0, new Map([["question-21", "검사 제외: 한 칸에 여러 답"]]));
+  assert.equal(deck.items.length, 27);
+  assert.ok(!deck.items.some((item) => item.id === "question-21"));
+  assert.deepEqual(deck.skipped, [{ questionId: "question-21", reason: "검사 제외: 한 칸에 여러 답" }]);
+});

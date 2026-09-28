@@ -91,21 +91,33 @@ const Store = {
   pkey(deck){ return deck.id + "@" + (deck.artifactSha256 || "example"); },
   all(){ if (this.mode !== "local") return {}; try{ return JSON.parse(localStorage.getItem(this.key) || "{}"); }catch(e){ return {}; } },
   restore(deck){
-    const saved = this.all()[this.pkey(deck)];
-    const ids = new Set(deck.items.map(i => i.id));
-    deck.events = saved && Array.isArray(saved.events) ? saved.events.filter(e => ids.has(e.item)) : [];
+    const saved = this.all()[this.pkey(deck)] || {};
+    deck.allItems = deck.allItems || deck.items;
+    const ids = new Set(deck.allItems.map(i => i.id));
+    deck.events = Array.isArray(saved.events) ? saved.events.filter(e => ids.has(e.item)) : [];
     deck.sched = {};
-    if (saved && saved.sched) for (const [id, s] of Object.entries(saved.sched)) if (ids.has(id)) deck.sched[id] = s;
+    if (saved.sched) for (const [id, s] of Object.entries(saved.sched)) if (ids.has(id)) deck.sched[id] = s;
+    deck.hidden = Array.isArray(saved.hidden) ? saved.hidden : [];
+    deck.reported = saved.reported && typeof saved.reported === "object" ? saved.reported : {};
+    deck.lastPage = Number(saved.lastPage) || 0;
+    applyFilters(deck);
   },
   save(deck){
     if (this.mode !== "local") return;
     try{
       const all = this.all();
-      all[this.pkey(deck)] = { events:deck.events.slice(-800), sched:deck.sched, savedAt:now() };
+      all[this.pkey(deck)] = { events:deck.events.slice(-800), sched:deck.sched, hidden:deck.hidden || [], reported:deck.reported || {}, lastPage:deck.lastPage || 0, savedAt:now() };
       localStorage.setItem(this.key, JSON.stringify(all));
     }catch(e){ toast("기록을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요."); }
-  }
+  },
+  pendingList(){ if (this.mode !== "local") return []; try{ const v = JSON.parse(localStorage.getItem(this.key + ":pending") || "[]"); return Array.isArray(v) ? v : []; }catch(e){ return []; } },
+  savePending(list){ if (this.mode !== "local") return; try{ localStorage.setItem(this.key + ":pending", JSON.stringify(list)); }catch(e){} }
 };
+// Objectives the learner took out and questions they reported stay in the document but leave practice and review.
+function applyFilters(deck){
+  const hidden = new Set(deck.hidden || []);
+  deck.items = (deck.allItems || deck.items).filter(it => !hidden.has(it.objectiveId) && !(deck.reported && deck.reported[it.id]));
+}
 
 /* ---------- question window answers: not connected yet (a paid call; wired only after the user approves) ---------- */
 const ask = typeof env.ask === "function" ? env.ask : null;
@@ -125,7 +137,7 @@ const S = {
   reader:{ deckId:null, page:1, active:null, zoom:false, attachErr:"", attachBusy:false },
   pdf:{},
   lib:{ status:"loading", error:"" },
-  builder:{ step:1, pages:[], sourceName:"", goal:"", from:1, to:1, objectives:[], selected:new Set(), items:[], report:null, busy:false, status:"", error:"", log:[], ctl:null, paste:"", file:null, pdfDoc:null, title:"" }
+  builder:freshBuilder()
 };
 
 /* ---------- scheduling & status ---------- */
@@ -211,14 +223,16 @@ function deckCounts(deck){
   return c;
 }
 function renderHome(){
-  const decks = Object.values(S.decks).sort((a,b) => (a.example?1:0) - (b.example?1:0) || b.createdAt - a.createdAt);
+  const all = Object.values(S.decks).sort((a,b) => (a.example?1:0) - (b.example?1:0) || b.createdAt - a.createdAt);
+  const pendings = all.filter(d => d.pending);
+  const decks = all.filter(d => !d.pending);
   let due = 0, fresh = 0;
   decks.forEach(d => { const c = deckCounts(d); due += c.due; fresh += Math.min(c.fresh, 10); });
   const wrap = h("div", { class:"stack" });
   wrap.append(h("section", { class:"panel today" },
     h("div", null,
       h("p", { class:"eyebrow", text:"오늘" }),
-      h("h2", { text: due ? "복습할 문제가 기다리고 있어요" : fresh ? "새 문제로 시작해 볼까요" : "오늘 할 문제를 모두 마쳤어요" }),
+      h("h2", { text: due ? "복습할 문제가 기다리고 있어요" : fresh ? "새 문제로 시작해 볼까요" : pendings.length ? "문제를 만드는 동안 먼저 읽어 두세요" : decks.length ? "오늘 할 문제를 모두 마쳤어요" : "새 자료로 시작해 볼까요" }),
       h("div", { class:"counts" },
         h("div", null, h("b", { class:"num", text:String(due) }), h("span", { text:"복습 차례" })),
         h("div", null, h("b", { class:"num", text:String(fresh) }), h("span", { text:"새 문제 (자료당 최대 10)" }))
@@ -226,8 +240,15 @@ function renderHome(){
     ),
     h("div", { class:"row" },
       h("button", { class:"btn primary", disabled: !(due || fresh), onclick: () => startSession(null) }, "전체 연습 시작"),
+      h("button", { class:"btn", onclick: () => setView("create") }, "+ 새 자료")
     )
   ));
+  for (const d of pendings){
+    wrap.append(h("article", { class:"deck" },
+      h("div", null, h("h3", { text:d.title }), h("div", { class:"meta" }, h("span", { text:d.sourceName }), h("span", { class:`chip ${d.pending.status === "failed" ? "bad" : "acc"}`, text:PENDING_LABEL[d.pending.status] || "준비 중" }))),
+      h("div", { class:"row" }, h("button", { class:"btn small primary", onclick: () => openReader(d.id, d.lastPage || d.pending.from || 1) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기")),
+      h("div", { style:"grid-column:1/-1" }, pendingNote(d))));
+  }
   wrap.append(h("div", { class:"legend" },
     h("span", { style:"--c:var(--good)", text:"혼자 맞힘" }),
     h("span", { style:"--c:var(--bad)", text:"복습 필요" }),
@@ -246,12 +267,13 @@ function renderHome(){
           h("span", { text:d.sourceName }),
           h("span", { class:"num", text:`목표 ${d.objectives.length} · 문제 ${d.items.length}` }),
           c.due ? h("span", { class:"chip bad num", text:`복습 ${c.due}` }) : null,
-          c.fresh ? h("span", { class:"chip num", text:`새 문제 ${c.fresh}` }) : null
+          c.fresh ? h("span", { class:"chip num", text:`새 문제 ${c.fresh}` }) : null,
+          d.skipped && d.skipped.length ? h("span", { class:"chip help num", title:d.skipped.map(x => `${x.questionId}: ${x.reason}`).join("\n"), text:`빠진 문항 ${d.skipped.length}` }) : null
         )
       ),
       h("div", { class:"row" },
         h("button", { class:"btn small", onclick: () => { S.recordsDeck = d.id; setView("records"); } }, "기록"),
-        h("button", { class:"btn small", onclick: () => openReader(d.id, firstPage(d)) }, "읽기"),
+        h("button", { class:"btn small", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기"),
         h("button", { class:"btn small primary", onclick: () => startSession(d.id, true) }, c.due || c.fresh ? "연습" : "더 풀기")
       ),
       h("div", { class:"bar", "aria-hidden":"true" },
@@ -300,7 +322,7 @@ function applyCheck(deck, item){
   // right after reading: never counts as memory evidence; real review starts tomorrow
   const s = schedOf(deck, item.id); s.seen = true; s.due = Math.max(s.due || 0, now() + DAY);
 }
-function curRef(){ const q = S.session.queue[S.session.i]; if (!q) return null; const deck = S.decks[q.deck]; return { deck, item: deck.items.find(x => x.id === q.item) }; }
+function curRef(){ const q = S.session.queue[S.session.i]; if (!q) return null; const deck = S.decks[q.deck]; return { deck, item: (deck.allItems || deck.items).find(x => x.id === q.item) }; }
 function prepCurrent(){
   const r = curRef(); if (!r) return;
   const it = r.item;
@@ -366,6 +388,26 @@ function overrideCorrect(){
   S.session.queue = S.session.queue.filter((q, idx) => !(idx > S.session.i && q.retry && q.item === item.id));
   c.verdict = "good"; c.overridden = true;
   Store.save(deck); render();
+}
+/* "이 문제 이상해요": the question leaves practice and review; the report stays as quality evidence. */
+const REPORT_REASONS = ["정답이 틀렸어요", "문제가 애매해요", "원문과 달라요", "기타"];
+function reportItem(reason){
+  const { deck, item } = curRef();
+  deck.reported = deck.reported || {};
+  deck.reported[item.id] = { reason, t:now() };
+  logEvent(deck, item, { kind:"report", reason });
+  S.session.queue = S.session.queue.filter((q, idx) => !(idx > S.session.i && q.deck === deck.id && q.item === item.id));
+  S.session.cur.reported = reason; S.session.cur.reporting = false;
+  applyFilters(deck); Store.save(deck);
+  toast("신고했어요. 이 문제는 연습과 복습에서 빠져요. 기록 탭에서 되돌릴 수 있어요.");
+  render();
+}
+function renderReport(deck, item, c){
+  if (c.reported || (deck.reported && deck.reported[item.id])) return h("p", { class:"small muted" }, h("span", { class:"chip help", text:`신고함 · ${c.reported || deck.reported[item.id].reason}` }));
+  if (!c.reporting) return h("p", null, h("button", { class:"linkish", onclick: () => { c.reporting = true; render(); } }, "이 문제 이상해요"));
+  return h("div", { class:"row" }, h("span", { class:"small muted", text:"무엇이 이상한가요?" }),
+    REPORT_REASONS.map(r => h("button", { class:"btn small", onclick: () => reportItem(r) }, r)),
+    h("button", { class:"btn small ghost", onclick: () => { c.reporting = false; render(); } }, "취소"));
 }
 function nextItem(){
   S.session.i++; S.session.phase = "ask";
@@ -461,6 +503,7 @@ function renderSession(){
         h("div", { style:"margin-top:8px" }, h("button", { class:"btn small", onclick: () => openReader(deck.id, item.page, item.objectiveId) }, "원문에서 보기 →")))));
     }
     card.append(rv);
+    if (s.phase === "result") card.append(renderReport(deck, item, c));
   }
 
   // actions
@@ -547,15 +590,27 @@ function openReader(deckId, page, objId){
   const R = S.reader;
   resetExplain();
   R.deckId = deckId; R.page = page || 1; R.active = objId || null; R.zoom = false; R.attachErr = "";
+  rememberPage();
   setView("read"); window.scrollTo({ top:0 });
 }
 function goPage(n){
   const R = S.reader, d = S.decks[R.deckId]; if (!d) return;
   n = Math.max(1, Math.min(pageTotal(d), Math.round(n) || 1));
   if (n === R.page){ render(); return; }
-  resetExplain(); R.page = n; R.active = null; R.zoom = false; render();
+  resetExplain(); R.page = n; R.active = null; R.zoom = false; rememberPage(); render();
   const bar = document.querySelector(".rbar");
   if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ block:"start" });
+}
+function rememberPage(){
+  const d = S.decks[S.reader.deckId]; if (!d || d.example) return;
+  d.lastPage = S.reader.page;
+  if (d.pending) savePending(); else Store.save(d);
+}
+function hideObjective(d, objectiveId){
+  d.hidden = [...new Set([...(d.hidden || []), objectiveId])];
+  applyFilters(d); Store.save(d);
+  toast("이 목표의 문제는 연습과 복습에서 빠져요. 기록 탭에서 다시 넣을 수 있어요.");
+  render();
 }
 function pageQuotes(d, n){ return d.objectives.filter(o => o.pages.includes(n)).map((o, i) => ({ id:o.id, quote:o.quote, num:i + 1 })).filter(q => q.quote); }
 function ensurePdf(d){
@@ -722,7 +777,7 @@ function renderReader(){
   if (S.session) S.session.viewed.add(d.id + ":" + R.page);
   const pdfOn = P && (P.status === "ready" || P.status === "loading");
   const wide = pdfOn && pageAspect(d) > 1.15;          // slides: explanation goes below, not beside
-  const objs = d.objectives.filter(o => o.pages.includes(R.page));
+  const objs = d.objectives.filter(o => o.pages.includes(R.page) && !(d.hidden || []).includes(o.id));
   const n = itemsOnPage(d, R.page).length;
   const nxt = nextPageWithItems(d, R.page);
   const wrap = h("div");
@@ -740,6 +795,7 @@ function renderReader(){
       h("button", { class:"qbtn", disabled: R.page <= 1, "aria-label":"이전 쪽", onclick: () => goPage(R.page - 1) }, "‹"),
       pg, h("span", { class:"num", text:`/ ${total}` }),
       h("button", { class:"qbtn", disabled: R.page >= total, "aria-label":"다음 쪽", onclick: () => goPage(R.page + 1) }, "›"))));
+  if (d.pending) wrap.append(h("div", { style:"margin-bottom:12px" }, pendingNote(d)));
 
   const page = h("section", { class:"rpage" + (wide ? " wide" : "") });
   let sheet;
@@ -755,8 +811,10 @@ function renderReader(){
   page.append(sheet);
   if (objs.length){
     page.append(h("div", { class:"goals" }, h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
-      objs.map((o, i) => h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", title:"원문에서 이 부분만 진하게 보기", onclick: () => { R.active = R.active === o.id ? null : o.id; render(); } },
-        h("span", { class:"gnum", text:String(i + 1) }), h("span", { text:o.statement })))));
+      objs.map((o, i) => h("div", { class:"goalrow" },
+        h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", title:"원문에서 이 부분만 진하게 보기", onclick: () => { R.active = R.active === o.id ? null : o.id; render(); } },
+          h("span", { class:"gnum", text:String(i + 1) }), h("span", { text:o.statement })),
+        d.example ? null : h("button", { class:"linkish", title:"이 목표의 문제를 연습·복습에서 빼기", onclick: () => hideObjective(d, o.id) }, "빼기")))));
   }
   if (P && P.status === "error") page.append(h("p", { class:"attach", text:"원본 PDF를 불러오지 못했어요. 원본 등록 상태를 확인해 주세요." }));
 
@@ -974,7 +1032,7 @@ function richLines(text){
   });
 }/* ----- records ----- */
 function renderRecords(){
-  const decks = Object.values(S.decks).sort((a,b) => (a.example?1:0) - (b.example?1:0) || b.createdAt - a.createdAt);
+  const decks = Object.values(S.decks).filter(d => !d.pending).sort((a,b) => (a.example?1:0) - (b.example?1:0) || b.createdAt - a.createdAt);
   if (!decks.length) return h("div", { class:"panel", text:"아직 자료가 없어요." });
   if (!S.recordsDeck || !S.decks[S.recordsDeck]) S.recordsDeck = decks[0].id;
   const deck = S.decks[S.recordsDeck];
@@ -1002,7 +1060,7 @@ function renderRecords(){
   const tbody = h("tbody");
   deck.items.forEach((it, idx) => {
     const o = deck.objectives.find(x => x.id === it.objectiveId);
-    const evs = deck.events.filter(e => e.item === it.id && e.kind !== "reveal");
+    const evs = deck.events.filter(e => e.item === it.id && e.kind !== "reveal" && e.kind !== "report");
     const s = deck.sched[it.id];
     const status = STATUS[st[idx]];
     tbody.append(h("tr", null,
@@ -1027,14 +1085,32 @@ function renderRecords(){
     h("span", { style:"--c:var(--help)", text:"정답 본 뒤 풂 (셈에서 제외)" }),
     h("span", { style:"--c:var(--read)", text:"읽은 직후 맞힘 (셈에서 제외)" })
   ));
+  const hiddenObjs = deck.objectives.filter(o => (deck.hidden || []).includes(o.id));
+  const reportedItems = (deck.allItems || []).filter(it => deck.reported && deck.reported[it.id]);
+  if (hiddenObjs.length || reportedItems.length){
+    const restore = () => { applyFilters(deck); Store.save(deck); render(); };
+    wrap.append(h("section", { class:"panel stack" },
+      h("p", { class:"eyebrow", text:"연습에서 뺀 것" }),
+      hiddenObjs.length ? h("div", { class:"itemlist" }, hiddenObjs.map(o => h("div", { class:"item" },
+        h("div", { class:"meta" }, h("span", { class:"chip", text:"뺀 목표" }), h("span", { class:"chip page", text:"p." + o.pages.join(",") })),
+        h("p", { text:o.statement }),
+        h("div", null, h("button", { class:"btn small", onclick: () => { deck.hidden = deck.hidden.filter(x => x !== o.id); restore(); } }, "다시 넣기"))))) : null,
+      reportedItems.length ? h("div", { class:"itemlist" }, reportedItems.map(it => h("div", { class:"item" },
+        h("div", { class:"meta" }, h("span", { class:"chip help", text:`신고 · ${deck.reported[it.id].reason}` }), h("span", { class:"chip page", text:"p." + it.page })),
+        h("p", null, richText(it.prompt)),
+        h("div", null, h("button", { class:"btn small", onclick: () => { delete deck.reported[it.id]; restore(); } }, "신고 취소"))))) : null,
+      h("p", { class:"small muted", text:"신고한 문제는 품질 근거로 남아요. 다시 만들기는 다음 단계에서 붙여요." })));
+  }
   wrap.append(h("p", { class:"small muted", text:"‘3일 이상 혼자 맞힘’은 서로 다른 3일에 정답을 보기 전 스스로 맞힌 경우예요. 숙달했다는 판정이 아니라, 지금까지의 근거를 그대로 보여주는 표시입니다." }));
   return wrap;
 }
-/* ----- builder: the prototype's three-step "자료 만들기" screens.
-   Reading the PDF and choosing the range run locally. Objective design, problem authoring and saving are
-   delegated to env.builder (Recaller's generation engine), which is intentionally not wired yet. ----- */
+/* ----- 새 자료: PDF → 짧은 질문 → "이렇게 만들게요" → 바로 읽기 (docs/DECISIONS.md, 2026-09-29 앱 전체 흐름).
+   Reading the PDF runs in the browser. Generation is one queued request that the assigned AI runs through MCP
+   (env.builder); the material is readable right away and its questions attach when the AI has recorded them. ----- */
 const engine = env.builder || null;
-function pagesInRange(){ const b = S.builder; return b.pages.filter(p => p.n >= b.from && p.n <= b.to && p.text.trim()); }
+const PURPOSES = [["exam", "시험 대비"], ["class", "수업 따라가기"], ["understand", "개념 이해"], ["apply", "실제로 써먹기"]];
+const ABILITIES = ["용어·정의 말하기", "식·절차 쓰기", "계산·적용하기", "비슷한 것 구별하기", "말로 설명하기"];
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"exam", abilities:[], summary:"", edited:false, busy:false, status:"", error:"", file:null, pdfDoc:null }; }
 async function readPdf(file){
   const b = S.builder;
   b.busy = true; b.error = ""; b.status = "PDF를 읽는 중…"; render();
@@ -1051,179 +1127,135 @@ async function readPdf(file){
       pages.push({ n, text: text.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim() });
       if (n % 5 === 0){ b.status = `PDF를 읽는 중… ${n}/${doc.numPages}쪽`; render(); }
     }
-    setSource(pages, file.name);
-    b.file = file; b.pdfDoc = doc;
+    b.pages = pages; b.sourceName = file.name; b.from = 1; b.to = pages.length; b.file = file; b.pdfDoc = doc; b.edited = false;
+    syncSummary();
   }catch(e){
-    b.error = "PDF를 읽지 못했어요. 암호가 걸렸거나 손상된 파일일 수 있어요. 텍스트를 붙여 넣어도 됩니다.";
+    b.error = "PDF를 읽지 못했어요. 암호가 걸렸거나 손상된 파일일 수 있어요.";
   }finally{ b.busy = false; b.status = ""; render(); }
 }
-function setSource(pages, name){
+function planSentence(){
   const b = S.builder;
-  b.pages = pages; b.sourceName = name; b.from = 1; b.to = pages.length;
-  b.objectives = []; b.selected = new Set(); b.items = []; b.report = null; b.step = 1; b.log = [];
+  const purpose = (PURPOSES.find(x => x[0] === b.purpose) || PURPOSES[0])[1];
+  const range = b.from === 1 && b.to === b.pages.length ? "전체를" : `${b.from}~${b.to}쪽을`;
+  const can = b.abilities.length ? `${b.abilities.join(", ")}를 할 수 있게` : "핵심을 스스로 떠올릴 수 있게";
+  return `${range} ${purpose}로 공부해요. ${can} 문제를 만들어 주세요. 원문의 기호와 용어는 바꾸지 않아요.`;
 }
-function useSampleText(){
-  const b = S.builder; b.file = null; b.pdfDoc = null;
-  const raw = b.paste.trim(); if (!raw) return;
-  const parts = raw.split(/\f|\n-{3,}\n/).flatMap(chunk => { const out = []; let cur = ""; for (const para of chunk.split(/\n{2,}/)){ if ((cur + para).length > 1600 && cur){ out.push(cur); cur = ""; } cur += (cur ? "\n\n" : "") + para; } if (cur) out.push(cur); return out; });
-  setSource(parts.map((t, i) => ({ n:i + 1, text:t.trim() })), "붙여 넣은 글");
-  render();
+function syncSummary(){ const b = S.builder; if (!b.edited) b.summary = planSentence(); }
+
+/* pending material: readable now, questions later */
+function pendingDeck(rec){
+  return { id:rec.id, pending:rec, title:rec.title, sourceName:rec.sourceName, sourceCatalogId:rec.sourceId, pageCount:rec.pageCount,
+    createdAt:rec.createdAt, example:false, items:[], allItems:[], objectives:[], pages:[], events:[], sched:{}, hidden:[], reported:{}, lastPage:rec.lastPage || 0, skipped:[] };
 }
-const onStatus = (msg) => { S.builder.status = msg; if (!disposed && S.view === "create") render(); };
-// engine.design(input) -> { title, objectives:[{ id, statement, kind, importance:"core"|"support", pages:number[], quote }] }
-async function runDesign(){
-  const b = S.builder; if (b.busy || !engine) return;
-  b.busy = true; b.error = ""; b.status = "학습목표를 설계하는 중…"; b.ctl = new AbortController(); render();
+function savePending(){ Store.savePending(Object.values(S.decks).filter(d => d.pending).map(d => ({ ...d.pending, lastPage:d.lastPage }))); }
+async function startMaterial(){
+  const b = S.builder; if (b.busy || !engine || !b.file || !b.summary.trim()) return;
+  b.busy = true; b.error = ""; b.status = "PDF를 등록하고 요청을 올리는 중…"; render();
   try{
-    const out = await engine.design({ file:b.file, sourceName:b.sourceName, pages:b.pages, from:b.from, to:b.to, goal:b.goal, signal:b.ctl.signal, onStatus });
-    b.objectives = Array.isArray(out && out.objectives) ? out.objectives : [];
-    b.title = String((out && out.title) || b.sourceName).slice(0, 40);
-    if (!b.objectives.length){ b.error = "학습목표를 찾지 못했어요. 쪽 범위를 바꾸거나 목적을 적어 다시 시도해 주세요."; }
-    else { b.selected = new Set(b.objectives.filter(o => o.importance === "core").map(o => o.id)); if (!b.selected.size) b.objectives.forEach(o => b.selected.add(o.id)); b.step = 2; }
-  }catch(e){ b.error = (e && e.message) || "학습목표를 설계하지 못했어요."; }
-  finally{ b.busy = false; b.status = ""; b.ctl = null; render(); }
+    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.summary.trim(), answers:{ purpose:b.purpose, abilities:b.abilities.slice() } });
+    const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:b.sourceName.replace(/\.pdf$/i, ""), sourceName:b.sourceName,
+      pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.summary.trim(), createdAt:now(), status:"waiting", message:"" };
+    const deck = pendingDeck(rec);
+    S.decks[deck.id] = deck;
+    if (b.pdfDoc) S.pdf[deck.id] = { status:"ready", doc:b.pdfDoc, canv:{}, aspect: await docAspect(b.pdfDoc) };
+    savePending();
+    S.builder = freshBuilder();
+    toast("요청을 올렸어요. 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 하면 문제가 만들어져요. 그동안 읽어 두세요.");
+    openReader(deck.id, rec.from);
+    pollPending();
+  }catch(e){
+    b.busy = false; b.status = ""; b.error = (e && e.message) || "요청을 올리지 못했어요."; render();
+  }
 }
-// engine.author(input) -> { items:[study item + checks?/warnings?/quoteVerified?], report:{ made, repaired, converted, dropped, dup, warned }, log?:string[] }
-async function runAuthoring(){
-  const b = S.builder; if (b.busy || !engine) return;
-  const objs = b.objectives.filter(o => b.selected.has(o.id)); if (!objs.length) return;
-  b.busy = true; b.error = ""; b.items = []; b.log = []; b.report = null; b.step = 3; b.status = "문제를 만드는 중…"; b.ctl = new AbortController(); render();
+async function restartMaterial(d){
+  if (!engine) return;
+  const rec = d.pending;
   try{
-    const out = await engine.author({ objectives:objs, sourceName:b.sourceName, pages:b.pages, goal:b.goal, signal:b.ctl.signal, onStatus });
-    b.items = Array.isArray(out && out.items) ? out.items : [];
-    b.report = (out && out.report) || { made:b.items.length, repaired:0, converted:0, dropped:0, dup:0, warned:0 };
-    b.log = Array.isArray(out && out.log) ? out.log : [];
-  }catch(e){ b.error = (e && e.message) || "문제를 만들지 못했어요."; }
-  finally{ b.busy = false; b.status = ""; b.ctl = null; render(); }
+    const res = await engine.restart({ sourceId:rec.sourceId, from:rec.from, to:rec.to, purpose:rec.purpose });
+    Object.assign(rec, { requestId:res.requestId, status:"waiting", message:"" });
+    savePending(); render(); pollPending();
+  }catch(e){ toast((e && e.message) || "다시 요청하지 못했어요."); }
 }
-// engine.save(input) -> { deckId? } ; the saved document then comes back through env.loadDecks()
-async function saveBuilt(){
-  const b = S.builder; if (!b.items.length || b.busy || !engine) return;
-  b.busy = true; b.status = "저장하는 중…"; render();
-  try{
-    const res = await engine.save({ title:b.title || b.sourceName, sourceName:b.sourceName, objectives:b.objectives.filter(o => b.items.some(i => i.objectiveId === o.id)), items:b.items });
-    await reloadDecks();
-    S.builder = { ...S.builder, step:1, objectives:[], selected:new Set(), items:[], report:null, log:[], file:null, pdfDoc:null, busy:false, status:"" };
-    toast("자료를 저장했어요. 읽으면서 쪽마다 확인 문제를 풀 수 있어요.");
-    const id = res && res.deckId && S.decks[res.deckId] ? res.deckId : null;
-    if (id) openReader(id, firstPage(S.decks[id])); else setView("practice");
-  }catch(e){ b.busy = false; b.status = ""; b.error = (e && e.message) || "저장하지 못했어요."; render(); }
+function removePending(d){ delete S.decks[d.id]; savePending(); if (S.reader.deckId === d.id) S.reader.deckId = null; render(); }
+const PENDING_LABEL = { waiting:"AI 실행 대기", running:"AI가 만드는 중", authoring:"문제 검사·기록 중", ready:"준비됨", failed:"실패" };
+let pollTimer = null;
+async function pollPending(){
+  clearTimeout(pollTimer);
+  if (disposed || !engine) return;
+  const list = Object.values(S.decks).filter(d => d.pending && d.pending.status !== "failed");
+  if (!list.length) return;
+  let changed = false, ready = false;
+  for (const d of list){
+    let next;
+    try{ next = await engine.check(d.pending.requestId); }
+    catch(e){ next = { status:d.pending.status, message:(e && e.message) || "상태를 확인하지 못했어요." }; }
+    if (disposed) return;
+    if (next.status !== d.pending.status || (next.message || "") !== d.pending.message) changed = true;
+    Object.assign(d.pending, { status:next.status, message:next.message || "", artifactId:next.artifactId || d.pending.artifactId });
+    if (next.status === "ready") ready = true;
+  }
+  if (ready) await reloadDecks();
+  if (changed || ready){ savePending(); if (!S.session && S.view !== "create") render(); }
+  pollTimer = setTimeout(pollPending, 5000);
 }
+function pendingNote(d){
+  const p = d.pending;
+  const text = p.message || (p.status === "waiting" ? "AI 실행 대기 중 · 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요" : PENDING_LABEL[p.status] || "");
+  return h("div", { class:`note row${p.status === "failed" ? " err" : ""}`, role:"status" },
+    h("span", { style:"flex:1;min-width:0", text: p.status === "failed" ? `문제 만들기 실패 · ${text}` : `문제 준비 중 · ${text}` }),
+    p.status === "failed" ? h("button", { class:"btn small", onclick: () => restartMaterial(d) }, "다시 요청") : null,
+    p.status === "failed" ? h("button", { class:"btn small ghost", onclick: () => removePending(d) }, "지우기") : null);
+}
+
 function renderBuilder(){
   const b = S.builder;
   const wrap = h("div", { class:"stack" });
+  const step = b.pages.length ? 2 : 1;
   wrap.append(h("ol", { class:"steps" },
-    h("li", { "data-on": b.step === 1 ? "true" : "false", "data-done": b.step > 1 ? "true" : "false" }, "자료 올리기"),
-    h("li", { "data-on": b.step === 2 ? "true" : "false", "data-done": b.step > 2 ? "true" : "false" }, "학습목표 고르기"),
-    h("li", { "data-on": b.step === 3 ? "true" : "false" }, "문제 생성·검사")
-  ));
-  if (!engine){
-    wrap.append(h("div", { class:"note warn", text:"화면만 먼저 옮겨 둔 상태예요. PDF를 읽고 범위를 고르는 것까지는 되지만, 학습목표 설계와 문제 생성은 Recaller 생성 엔진에 아직 연결하지 않았어요." }));
-  }
+    h("li", { "data-on": step === 1 ? "true" : "false", "data-done": step > 1 ? "true" : "false" }, "자료 올리기"),
+    h("li", { "data-on": step === 2 ? "true" : "false" }, "방향 정하기"),
+    h("li", { "data-on":"false" }, "읽기 시작")));
+  if (!engine) wrap.append(h("div", { class:"note warn", text:"이 화면에서는 생성 요청을 보낼 수 없어요. 로컬 실험 모드에서 열어 주세요." }));
   if (b.error) wrap.append(h("div", { class:"note err", role:"alert", text:b.error }));
-  if (b.status) wrap.append(h("div", { class:"note row", role:"status" }, h("span", { text:b.status }), b.ctl ? h("button", { class:"btn small", onclick: () => b.ctl && b.ctl.abort() }, "멈추기") : null));
+  if (b.status) wrap.append(h("div", { class:"note", role:"status", text:b.status }));
 
-  if (b.step === 1){
-    const drop = h("div", { class:"drop", id:"drop" },
-      h("strong", { text:"PDF를 끌어다 놓거나 골라 주세요" }),
-      h("span", { class:"small muted", text:"글자가 들어 있는 PDF만 읽을 수 있어요. 스캔 이미지로만 된 쪽은 건너뜁니다." }),
-      h("label", { class:"btn", for:"pdf" }, "PDF 고르기"),
-      h("input", { id:"pdf", type:"file", accept:"application/pdf", class:"hidden", onchange:(e) => { const f = e.target.files[0]; if (f) readPdf(f); } })
-    );
-    drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.dataset.over = "true"; });
-    drop.addEventListener("dragleave", () => { drop.dataset.over = "false"; });
-    drop.addEventListener("drop", (e) => { e.preventDefault(); drop.dataset.over = "false"; const f = e.dataTransfer.files[0]; if (f && /pdf$/i.test(f.name)) readPdf(f); });
-    const paste = h("textarea", { id:"paste", placeholder:"또는 강의 노트·교재 글을 붙여 넣으세요. 빈 줄 기준으로 1,600자 정도씩 나눠 쪽 번호를 붙입니다." });
-    paste.value = b.paste; paste.addEventListener("input", () => { b.paste = paste.value; });
-    const sec = h("section", { class:"panel stack" },
-      drop,
-      h("details", null, h("summary", { class:"small", text:"텍스트로 넣기" }), h("div", { class:"stack", style:"margin-top:10px" }, h("div", { class:"field" }, paste), h("div", null, h("button", { class:"btn small", onclick:useSampleText }, "이 글로 진행"))))
-    );
-    wrap.append(sec);
+  const drop = h("div", { class:"drop", id:"drop" },
+    h("strong", { text: b.pages.length ? `${b.sourceName} · ${b.pages.length}쪽` : "PDF를 끌어다 놓거나 골라 주세요" }),
+    h("span", { class:"small muted", text:"올리자마자 읽을 수 있어요. 문제는 AI가 뒤에서 만들어 붙여요." }),
+    h("label", { class:"btn", for:"pdf" }, b.pages.length ? "다른 PDF 고르기" : "PDF 고르기"),
+    h("input", { id:"pdf", type:"file", accept:"application/pdf", class:"hidden", disabled:b.busy, onchange:(e) => { const f = e.target.files[0]; if (f) readPdf(f); } }));
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.dataset.over = "true"; });
+  drop.addEventListener("dragleave", () => { drop.dataset.over = "false"; });
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.dataset.over = "false"; const f = e.dataTransfer.files[0]; if (f && /pdf$/i.test(f.name)) readPdf(f); });
+  wrap.append(h("section", { class:"panel stack" }, drop));
+  if (!b.pages.length) return wrap;
 
-    if (b.pages.length){
-      const inRange = pagesInRange();
-      const empty = b.pages.filter(p => !p.text.trim()).map(p => p.n);
-      const goal = h("input", { type:"text", id:"goal", placeholder:"예: 중간고사 대비, 식과 절차는 외워서 쓸 수 있게", value:b.goal });
-      goal.value = b.goal; goal.addEventListener("input", () => { b.goal = goal.value; });
-      const from = h("input", { type:"number", id:"from", min:"1", max:String(b.pages.length), value:String(b.from), style:"width:90px" });
-      const to = h("input", { type:"number", id:"to", min:"1", max:String(b.pages.length), value:String(b.to), style:"width:90px" });
-      const upd = () => { b.from = Math.max(1, Math.min(Number(from.value) || 1, b.pages.length)); b.to = Math.max(b.from, Math.min(Number(to.value) || b.pages.length, b.pages.length)); render(); };
-      from.addEventListener("change", upd); to.addEventListener("change", upd);
-      wrap.append(h("section", { class:"panel stack" },
-        h("div", null, h("p", { class:"eyebrow", text:"불러온 자료" }), h("h2", { style:"font-size:18px;margin-top:2px", text:b.sourceName }), h("p", { class:"small muted num", text:`${b.pages.length}쪽 · 글자가 있는 쪽 ${b.pages.length - empty.length}쪽` })),
-        empty.length ? h("div", { class:"note warn", text:`글자가 없는 쪽(${empty.slice(0, 12).join(", ")}${empty.length > 12 ? " …" : ""})은 그림이나 스캔이라 이번엔 제외돼요.` }) : null,
-        h("div", { class:"row" }, h("div", { class:"field" }, h("label", { for:"from", text:"시작 쪽" }), from), h("div", { class:"field" }, h("label", { for:"to", text:"끝 쪽" }), to)),
-        h("div", { class:"field" }, h("label", { for:"goal", text:"학습 목적 (선택)" }), goal),
-        h("div", { class:"row" }, h("button", { class:"btn primary", disabled: b.busy || !inRange.length || !engine, onclick:runDesign }, "학습목표 설계"),
-          engine ? null : h("span", { class:"small muted", text:"엔진 연결 후 눌러 쓸 수 있어요." }))
-      ));
-    }
-  }
-
-  if (b.step === 2){
-    const list = h("div", { class:"objs" });
-    for (const o of b.objectives){
-      const cb = h("input", { type:"checkbox", id:"cb-" + o.id });
-      cb.checked = b.selected.has(o.id);
-      cb.addEventListener("change", () => { if (cb.checked) b.selected.add(o.id); else b.selected.delete(o.id); render(); });
-      list.append(h("div", { class:"obj" },
-        cb,
-        h("label", { class:"st", for:"cb-" + o.id, text:o.statement }),
-        h("div", { class:"meta" },
-          h("span", { class:`chip ${o.importance === "core" ? "acc" : ""}`, text:o.importance === "core" ? "핵심" : "보조" }),
-          h("span", { class:"chip", text:{ fact:"사실·정의", concept:"관계·구별", procedure:"절차", formula:"식·계산", list:"열거" }[o.kind] || o.kind }),
-          h("span", { class:"chip page", text:"p." + o.pages.join(",") })
-        ),
-        h("details", null, h("summary", { text:"근거 원문" }), h("p", { style:"margin-top:4px" }, h("mark", { class:"quote", text:o.quote || "인용 없음" })))
-      ));
-    }
-    wrap.append(h("section", { class:"panel stack" },
-      h("div", null, h("p", { class:"eyebrow", text:"학습목표" }), h("h2", { style:"font-size:18px;margin-top:2px", text:b.title || b.sourceName }),
-        h("p", { class:"small muted", text:"연습할 목표를 고르세요. 핵심 목표가 먼저 골라져 있어요. 근거 원문은 정답이 될 수 있으니 필요할 때만 펼쳐 보세요." })),
-      h("div", { class:"row" },
-        h("button", { class:"btn small", onclick: () => { b.objectives.forEach(o => b.selected.add(o.id)); render(); } }, "모두 고르기"),
-        h("button", { class:"btn small", onclick: () => { b.selected.clear(); render(); } }, "모두 해제")
-      ),
-      list,
-      h("div", { class:"row" },
-        h("button", { class:"btn", onclick: () => { b.step = 1; render(); } }, "자료로 돌아가기"),
-        h("button", { class:"btn primary", disabled: b.busy || !b.selected.size, onclick:runAuthoring }, `문제 만들기 (${b.selected.size}개)`)
-      )
-    ));
-  }
-
-  if (b.step === 3){
-    const r = b.report;
-    const sec = h("section", { class:"panel stack" },
-      h("div", null, h("p", { class:"eyebrow", text:"생성과 자동 검사" }), h("h2", { style:"font-size:18px;margin-top:2px", text:b.title || b.sourceName }),
-        h("p", { class:"small muted", text:"만든 문제마다 정답 노출, 보기 길이 단서, 한 칸에 여러 요소를 쓰는 답, 중복, 원문 인용 일치를 검사해요. 걸린 문제는 한 번 고쳐 보고, 그래도 안 되면 뺍니다." }))
-    );
-    if (r) sec.append(h("div", { class:"report" },
-      h("div", null, h("b", { class:"num", text:String(r.made) }), h("span", { text:"사용할 문제" })),
-      h("div", null, h("b", { class:"num", text:String(r.repaired) }), h("span", { text:"검사 후 수정" })),
-      h("div", null, h("b", { class:"num", text:String(r.converted) }), h("span", { text:"형식 변경" })),
-      h("div", null, h("b", { class:"num", text:String(r.dropped + r.dup) }), h("span", { text:"제외 (결함·중복)" })),
-      h("div", null, h("b", { class:"num", text:String(r.warned) }), h("span", { text:"주의 표시" }))
-    ));
-    const list = h("div", { class:"itemlist" });
-    b.items.forEach((it, idx) => {
-      const notes = [...(it.checks || []), ...(it.warnings || [])];
-      list.append(h("div", { class:"item" },
-        h("div", { class:"meta" }, h("span", { class:"chip num", text:String(idx + 1) }), h("span", { class:"chip", text:FORMAT_LABEL[it.format] }), h("span", { class:"chip page", text:"p." + it.page }), it.quoteVerified ? h("span", { class:"chip good", text:"원문 인용 일치" }) : h("span", { class:"chip help", text:"인용 확인 필요" })),
-        h("p", { text:it.prompt }),
-        notes.length ? h("ul", null, notes.map(n => h("li", { text:n }))) : null
-      ));
-    });
-    sec.append(list);
-    if (b.log.length) sec.append(h("details", null, h("summary", { class:"small", text:"생성 기록" }), h("div", { class:"log", text:b.log.join("\n") })));
-    sec.append(h("div", { class:"row" },
-      h("button", { class:"btn", disabled:b.busy, onclick: () => { b.step = 2; render(); } }, "목표 다시 고르기"),
-      h("button", { class:"btn primary", disabled: b.busy || !b.items.length, onclick:saveBuilt }, "저장하고 읽기 시작")
-    ));
-    sec.append(h("p", { class:"small muted", text:"문제 목록에는 정답을 보여주지 않아요. 풀기 전에 답을 보면 연습 효과가 사라지니까요." }));
-    wrap.append(sec);
-  }
+  const chips = (options, isOn, toggle) => h("div", { class:"chat-sugs" }, options.map(([key, label]) =>
+    h("button", { class:"chip-btn", "aria-pressed": isOn(key) ? "true" : "false", disabled:b.busy, onclick: () => { toggle(key); syncSummary(); render(); } }, label)));
+  const from = h("input", { type:"number", id:"from", min:"1", max:String(b.pages.length), style:"width:90px" });
+  const to = h("input", { type:"number", id:"to", min:"1", max:String(b.pages.length), style:"width:90px" });
+  from.value = String(b.from); to.value = String(b.to);
+  const upd = () => { b.from = Math.max(1, Math.min(Number(from.value) || 1, b.pages.length)); b.to = Math.max(b.from, Math.min(Number(to.value) || b.pages.length, b.pages.length)); syncSummary(); render(); };
+  from.addEventListener("change", upd); to.addEventListener("change", upd);
+  const summary = h("textarea", { id:"summary", rows:"3" });
+  summary.value = b.summary;
+  summary.addEventListener("input", () => { b.summary = summary.value; b.edited = true; const s = root.querySelector("#startBtn"); if (s) s.disabled = b.busy || !engine || !b.summary.trim(); });
+  const empty = b.pages.filter(p => !p.text.trim()).length;
+  wrap.append(h("section", { class:"panel stack" },
+    h("div", null, h("p", { class:"eyebrow", text:"방향 정하기" }), h("h2", { style:"font-size:18px;margin-top:2px", text:"어떻게 공부할지 알려 주세요" }),
+      empty ? h("p", { class:"small muted", text:`글자가 없는 쪽 ${empty}개는 그림·스캔이라 AI가 글로 읽지 못할 수 있어요.` }) : null),
+    h("div", { class:"field" }, h("label", { text:"1. 무엇을 위해 공부하나요?" }),
+      chips(PURPOSES, (k) => b.purpose === k, (k) => { b.purpose = k; })),
+    h("div", { class:"field" }, h("label", { text:"2. 공부하고 나면 무엇을 할 수 있어야 하나요? (여러 개)" }),
+      chips(ABILITIES.map(x => [x, x]), (k) => b.abilities.includes(k), (k) => { b.abilities = b.abilities.includes(k) ? b.abilities.filter(x => x !== k) : [...b.abilities, k]; })),
+    h("div", { class:"field" }, h("label", { text:"3. 범위" }),
+      h("div", { class:"row" }, h("span", { class:"small muted", text:"시작 쪽" }), from, h("span", { class:"small muted", text:"끝 쪽" }), to,
+        h("button", { class:"btn small ghost", disabled:b.busy, onclick: () => { b.from = 1; b.to = b.pages.length; syncSummary(); render(); } }, "전체"))),
+    h("div", { class:"field" }, h("label", { for:"summary", text:"이렇게 만들게요" }), summary,
+      h("span", { class:"small muted", text: b.edited ? "직접 고친 문장으로 요청해요." : "위에서 고르면 문장이 바뀌어요. 직접 고쳐도 돼요." })),
+    h("div", { class:"row" },
+      h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine || !b.summary.trim(), onclick:startMaterial }, "읽기 시작"),
+      h("span", { class:"small muted", text:"요청을 올리고 바로 읽기로 넘어가요. 문제는 AI가 만들면 쪽마다 붙어요." }))));
   return wrap;
 }
 
@@ -1232,7 +1264,7 @@ function reloadDecks(){
   return env.loadDecks().then((decks) => {
     if (disposed) return;
     const ids = new Set(decks.map(d => d.id));
-    for (const id of Object.keys(S.decks)) if (!ids.has(id) && !S.decks[id].example) delete S.decks[id];
+    for (const id of Object.keys(S.decks)) if (!ids.has(id) && !S.decks[id].example && !S.decks[id].pending) delete S.decks[id];
     for (const d of decks){
       const prev = S.decks[d.id];
       if (prev && prev.artifactSha256 === d.artifactSha256) continue;   // keep the live deck (and its in-memory session refs)
@@ -1240,7 +1272,15 @@ function reloadDecks(){
       Store.restore(deck);
       S.decks[deck.id] = deck;
     }
-    if (decks.length) delete S.decks.example;
+    // a pending material whose questions are now recorded becomes that document; carry the reading position over
+    for (const p of Object.values(S.decks).filter(x => x.pending && x.pending.artifactId && S.decks[x.pending.artifactId])){
+      const real = S.decks[p.pending.artifactId];
+      if (!real.lastPage && p.lastPage){ real.lastPage = p.lastPage; Store.save(real); }
+      if (S.reader.deckId === p.id) S.reader.deckId = real.id;
+      delete S.decks[p.id];
+      toast(`‘${real.title}’ 문제가 준비됐어요. 읽던 쪽에 확인 문제가 붙었어요.`);
+    }
+    if (decks.length || Object.values(S.decks).some(x => x.pending)) delete S.decks.example;
     else if (!S.decks.example){ const ex = exampleDeck(); Store.restore(ex); S.decks[ex.id] = ex; }
     S.lib = { status:"ready", error:"" };
   }, (e) => {
@@ -1250,7 +1290,9 @@ function reloadDecks(){
   }).then(() => { if (!disposed && !S.session) render(); });
 }
 Store.init();
+for (const rec of Store.pendingList()) if (rec && rec.id && rec.requestId) S.decks[rec.id] = pendingDeck(rec);
 updateStoreChip(); render();
+pollPending();
 ensureKatex().then(ok => { if (ok && !disposed) render(); });
 reloadDecks();
 
@@ -1258,7 +1300,7 @@ return () => {
   disposed = true;
   listeners.abort();
   if (Chat.ctl) Chat.ctl.abort();
-  if (S.builder.ctl) S.builder.ctl.abort();
+  clearTimeout(pollTimer);
   for (const P of Object.values(S.pdf)) if (P.doc) P.doc.destroy();
   root.querySelectorAll("#toast, .chatwin").forEach(el => el.remove());
   delete root.dataset.view;

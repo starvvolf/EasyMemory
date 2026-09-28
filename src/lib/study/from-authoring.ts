@@ -79,7 +79,8 @@ function toItem(question: AuthoredQuestion, response: ResponseContract, prefix: 
   return { ...base, format: "value", accepted: response.acceptedAnswers };
 }
 
-export function toStudyDeck(meta: StudyArtifactMeta, document: AuthoringDocument, order = 0): StudyDeck {
+/** `excluded`: question ID → reason. Those questions stay out of practice (e.g. failed item-quality checks) and are listed in `skipped`. */
+export function toStudyDeck(meta: StudyArtifactMeta, document: AuthoringDocument, order = 0, excluded: ReadonlyMap<string, string> = new Map()): StudyDeck {
   const objectives = new Map<string, StudyObjective>();
   const items: StudyItem[] = [];
   const skipped: StudyDeck["skipped"] = [];
@@ -90,6 +91,8 @@ export function toStudyDeck(meta: StudyArtifactMeta, document: AuthoringDocument
     const objective = objectives.get(source.objectiveId);
     if (objective) objective.pages = [...new Set([...objective.pages, ...pages])].sort((a, b) => a - b);
     else objectives.set(source.objectiveId, { id: source.objectiveId, statement: source.target, pages: [...pages], quote: firstQuote(source.sourceRange) });
+    const reason = excluded.get(question.id);
+    if (reason) { skipped.push({ questionId: question.id, reason }); continue; }
     const set = question.sharedSetId ? shared.get(question.sharedSetId) : undefined;
     const prefix = set ? set.blocks.map((block) => blockText(block, "")).filter((line): line is string => !!line) : [];
     for (const response of question.responses) {
