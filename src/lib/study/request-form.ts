@@ -91,3 +91,14 @@ export function objectivesFromCompletedRequest(request: ExperimentRequest) {
     }),
   };
 }
+
+type RequestBody = Extract<ReturnType<typeof buildRequestBody>, { body: unknown }>["body"];
+const requestKey = (input: Pick<ExperimentRequest["input"], "sourceId" | "scope" | "purpose" | "stopAfterStage" | "reuse" | "selectedObjectiveIds">) =>
+  JSON.stringify([input.sourceId, input.scope.pageNumbers, input.purpose, input.stopAfterStage,
+    input.reuse ? [input.reuse.runId, input.reuse.stage, input.reuse.sha256] : null, input.selectedObjectiveIds ?? null]);
+
+/** An earlier identical request that is still queued, running, or already done — waiting on it again avoids a second paid run. */
+export function findReusableRequest(requests: ExperimentRequest[], body: RequestBody): ExperimentRequest | null {
+  const key = requestKey(body);
+  return requests.find((request) => request.status !== "failed" && requestKey(request.input) === key) ?? null;
+}

@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import test from "node:test";
 import { createExperimentRequestSchema } from "../mcp-experiment-requests.ts";
 import type { ExperimentRequest } from "../mcp-experiment-requests.ts";
-import { buildRequestBody, eligibleLeafIds, objectivesFromCompletedRequest, parsePageSelection, type RequestSource } from "./request-form.ts";
+import { findReusableRequest, buildRequestBody, eligibleLeafIds, objectivesFromCompletedRequest, parsePageSelection, type RequestSource } from "./request-form.ts";
 
 const source: RequestSource = {
   id: "geometric-transformations",
@@ -57,7 +56,7 @@ test("목적이나 범위가 비면 저장하지 않는다", () => {
 });
 
 test("기존 학습 설계 기록을 화면 목표와 재사용 해시로 옮긴다", async () => {
-  const raw = await readFile(path.join(process.cwd(), "eval/local/full-study-20260928/requests/geometry-learning-design-progress.json"), "utf8");
+  const raw = await readFile(new URL("./fixtures/learning-design-request.json", import.meta.url), "utf8");
   const record = (JSON.parse(raw) as { request: ExperimentRequest }).request;
   const result = objectivesFromCompletedRequest(record);
   assert.ok(result.objectives.length > 0);
@@ -65,4 +64,20 @@ test("기존 학습 설계 기록을 화면 목표와 재사용 해시로 옮긴
   assert.equal(result.objectives[0].id, "objective-1");
   assert.ok(result.objectives[0].pages.includes(2));
   assert.ok(result.objectives[0].quote.length > 0);
+});
+
+test("같은 조건의 대기·진행·완료 요청은 다시 쓰고, 실패했거나 조건이 다르면 새로 만든다", () => {
+  const built = buildRequestBody(source, "2-3", "시험 대비", { stopAfterStage: "learning-design" });
+  if (!("body" in built) || !built.body) throw new Error(built.error);
+  const request = (id: string, status: ExperimentRequest["status"], input = built.body) =>
+    ({ id, status, input } as unknown as ExperimentRequest);
+  assert.equal(findReusableRequest([request("a", "waiting-for-executor")], built.body)?.id, "a");
+  assert.equal(findReusableRequest([request("b", "completed")], built.body)?.id, "b");
+  assert.equal(findReusableRequest([request("c", "failed")], built.body), null);
+  assert.equal(findReusableRequest([request("d", "running", { ...built.body, purpose: "다른 목적" })], built.body), null);
+  const withSelection = buildRequestBody(source, "2-3", "시험 대비", { stopAfterStage: "cards",
+    reuse: { kind: "output", runId: "mcp:run", stage: "learning-design", sha256: "a".repeat(64) }, selectedObjectiveIds: ["objective-1"] });
+  if (!("body" in withSelection) || !withSelection.body) throw new Error(withSelection.error);
+  assert.equal(findReusableRequest([request("e", "claimed", withSelection.body)],
+    { ...withSelection.body, selectedObjectiveIds: ["objective-2"] }), null);
 });

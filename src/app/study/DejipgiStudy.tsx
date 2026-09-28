@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useAuthSession } from "@/components/AuthGate";
 import { authenticatedFetch } from "@/lib/firebase-client";
 import { toStudyDeck, type StudyArtifactMeta, type StudyDeck } from "@/lib/study/from-authoring";
-import { buildRequestBody, defaultPurpose, objectivesFromCompletedRequest } from "@/lib/study/request-form";
+import { buildRequestBody, defaultPurpose, findReusableRequest, objectivesFromCompletedRequest } from "@/lib/study/request-form";
 import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
@@ -60,6 +60,11 @@ export default function DejipgiStudy() {
       options: Parameters<typeof buildRequestBody>[3]) => {
       const built = buildRequestBody(source, pageText, purpose, options);
       if ("error" in built) throw new Error(built.error);
+      // After "멈추기" the earlier request stays queued; wait on it again instead of queuing a second paid run.
+      const { requests } = await readJson<{ requests: ExperimentRequest[] }>(
+        await fetchExperiment("/api/mcp-experiment-requests"), "요청 목록을 확인하지 못했어요.");
+      const existing = findReusableRequest(requests, built.body);
+      if (existing) return existing;
       const { request } = await readJson<{ request: ExperimentRequest }>(await fetchExperiment("/api/mcp-experiment-requests", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(built.body),
       }), "생성 요청을 저장하지 못했어요.");
@@ -124,7 +129,7 @@ export default function DejipgiStudy() {
               if (!deck.items.length) throw new Error("기록된 문서에 풀 수 있는 문제가 없습니다.");
               authoredArtifactId = meta.id;
               return { items: deck.items, report: { made: deck.items.length, repaired: 0, converted: 0,
-                dropped: deck.skipped.length, dup: 0, warned: deck.skipped.length },
+                dropped: deck.skipped.length, dup: 0, warned: 0 },
                 log: deck.skipped.map((item) => `${item.questionId}: ${item.reason}`) };
             }
             await new Promise<void>((resolve, reject) => {

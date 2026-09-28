@@ -1,0 +1,190 @@
+{
+  "request": {
+    "id": "req_00000000000000000000000000000000",
+    "createdAt": "2026-09-28T12:00:00.000Z",
+    "updatedAt": "2026-09-28T12:01:00.000Z",
+    "status": "completed",
+    "input": {
+      "sourceId": "geometric-transformations",
+      "scope": {
+        "pageNumbers": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "outlineLeafIds": []
+      },
+      "purpose": "시험 대비",
+      "requestedStages": {
+        "analyze": {
+          "model": "gpt-6-sol",
+          "effort": "medium"
+        },
+        "concept-tree": {
+          "model": "gpt-6-sol",
+          "effort": "medium"
+        },
+        "learning-design": {
+          "model": "gpt-6-sol",
+          "effort": "medium"
+        }
+      },
+      "stopAfterStage": "learning-design"
+    },
+    "sourceSnapshot": null,
+    "runId": "mcp:fixture-geometry",
+    "stages": [
+      {
+        "stage": "analyze",
+        "runId": "mcp:fixture-geometry",
+        "actual": {
+          "model": "gpt-6-sol",
+          "effort": "medium",
+          "startedAt": "2026-09-28T12:00:00.000Z",
+          "finishedAt": "2026-09-28T12:01:00.000Z",
+          "inputSha256": "cbcc2befb50aa36d20e42fb6fa5145832318f0917c901af98bcbce2b9fea66b1",
+          "outputSha256": "d3e9bf5bd17121446392f4ae7f49bb02e68499a1ca7656d4b571e255185215b9"
+        },
+        "output": {
+          "stage": "analyze"
+        },
+        "provenance": "executor-reported",
+        "executionMode": "model-generated"
+      },
+      {
+        "stage": "concept-tree",
+        "runId": "mcp:fixture-geometry",
+        "actual": {
+          "model": "gpt-6-sol",
+          "effort": "medium",
+          "startedAt": "2026-09-28T12:00:00.000Z",
+          "finishedAt": "2026-09-28T12:01:00.000Z",
+          "inputSha256": "aa2b7fd6c29baea6b119480e1a1e462f5d353beb7db872665579e3442c1ae6f7",
+          "outputSha256": "f95c9ec971fe1250241388bbf9610f439caa2e484c1a04ddb65f54d570401dac"
+        },
+        "output": {
+          "stage": "concept-tree"
+        },
+        "provenance": "executor-reported",
+        "executionMode": "model-generated"
+      },
+      {
+        "stage": "learning-design",
+        "runId": "mcp:fixture-geometry",
+        "actual": {
+          "model": "gpt-6-sol",
+          "effort": "medium",
+          "startedAt": "2026-09-28T12:00:00.000Z",
+          "finishedAt": "2026-09-28T12:01:00.000Z",
+          "inputSha256": "b0d50507daa8b48fbd1e7657c3e0b88950de1e5211ba4630d348016e6aecdd9d",
+          "outputSha256": "e120fdebcf3c9304fc9e3ff2e2661364a2d2b4392850c5baa44b4cc7e7e5110b"
+        },
+        "output": {
+          "learningDesign": {
+            "objectives": [
+              {
+                "id": "objective-1",
+                "outlineNodeIds": [
+                  "source-1:outline-1"
+                ],
+                "target": "평행이동한 점의 좌표를 계산한다.",
+                "terminalOperation": "recall",
+                "successCriteria": [
+                  {
+                    "id": "criterion-1",
+                    "description": "평행이동한 점의 좌표를 계산한다.",
+                    "required": true
+                  }
+                ],
+                "importance": 3
+              },
+              {
+                "id": "objective-2",
+                "outlineNodeIds": [
+                  "source-1:outline-2"
+                ],
+                "target": "원점 기준 회전 좌표식을 쓴다.",
+                "terminalOperation": "reconstruct",
+                "successCriteria": [
+                  {
+                    "id": "criterion-2",
+                    "description": "원점 기준 회전 좌표식을 쓴다.",
+                    "required": true
+                  }
+                ],
+                "importance": 2
+              },
+              {
+                "id": "objective-3",
+                "outlineNodeIds": [
+                  "source-1:outline-3"
+                ],
+                "target": "변환 행렬 곱의 순서를 구별한다.",
+                "terminalOperation": "discriminate",
+                "successCriteria": [
+                  {
+                    "id": "criterion-3",
+                    "description": "변환 행렬 곱의 순서를 구별한다.",
+                    "required": true
+                  }
+                ],
+                "importance": 1
+              }
+            ],
+            "knowledgeUnits": [
+              {
+                "id": "knowledge-unit-1",
+                "objectiveId": "objective-1",
+                "outlineNodeIds": [
+                  "source-1:outline-1"
+                ],
+                "content": "점 (x, y)에 (tx, ty)를 더하면 (x+tx, y+ty)가 된다.",
+                "sourceId": "02_Geometric Transformations.pdf",
+                "sourcePage": 2,
+                "sourceRange": "x' = x + tx, y' = y + ty",
+                "sourceText": "x' = x + tx, y' = y + ty",
+                "knowledgeType": "fact",
+                "rationale": "시험에 나오는 핵심 식"
+              },
+              {
+                "id": "knowledge-unit-2",
+                "objectiveId": "objective-2",
+                "outlineNodeIds": [
+                  "source-1:outline-2"
+                ],
+                "content": "x' = x cosθ − y sinθ, y' = x sinθ + y cosθ",
+                "sourceId": "02_Geometric Transformations.pdf",
+                "sourcePage": 3,
+                "sourceRange": "x' = x cos θ - y sin θ",
+                "sourceText": "x' = x cos θ - y sin θ",
+                "knowledgeType": "fact",
+                "rationale": "시험에 나오는 핵심 식"
+              },
+              {
+                "id": "knowledge-unit-3",
+                "objectiveId": "objective-3",
+                "outlineNodeIds": [
+                  "source-1:outline-3"
+                ],
+                "content": "열벡터 방식에서는 가장 오른쪽 행렬이 먼저 적용된다.",
+                "sourceId": "02_Geometric Transformations.pdf",
+                "sourcePage": 6,
+                "sourceRange": "M = A·B·C",
+                "sourceText": "M = A·B·C",
+                "knowledgeType": "fact",
+                "rationale": "시험에 나오는 핵심 식"
+              }
+            ],
+            "assessmentBlueprints": []
+          }
+        },
+        "provenance": "executor-reported",
+        "executionMode": "model-generated"
+      }
+    ],
+    "failure": null
+  }
+}
