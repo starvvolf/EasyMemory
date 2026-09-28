@@ -1,14 +1,16 @@
 ---
 name: problem-authoring
-description: Create and check source-grounded practice questions in the isolated Study Forge block-authoring lab, including independent questions and shared-material sets.
+description: Study Forge의 격리된 블록형 출제 실험실에서 원문 근거를 갖춘 독립 문항과 공통 자료 문항 세트를 만들고 검사합니다.
 ---
 
-# Problem authoring
+# 문제 출제
 
-Use the supplied learning goals, knowledge, success criteria, and source pages as fixed input. Choose the concrete situation, question, response form, options, answer, explanation, and page layout. Honor a user-specified format; otherwise choose the form that best tests the goal. Do not revise the learning design.
+제공된 학습목표, 학습 내용, 성공기준, 원문 쪽을 확정된 입력으로 사용합니다. 구체적인 상황, 질문, 응답 형식, 선택지, 정답, 해설, 화면 배치를 정합니다. 사용자가 형식을 지정했다면 따르고, 그렇지 않으면 목표를 가장 잘 확인하는 형식을 고릅니다. 학습설계는 수정하지 않습니다.
 
-Compose with the lab's text, box, blank, choice, table, and source-linked image blocks. A shared-material set displays one common source for related questions; each question retains its own response and grading ID. Do not group unrelated questions. Do not generate arbitrary HTML or code.
+실험실의 텍스트, 수식, 박스, 빈칸, 선택지, 표, 원문 연결 이미지 블록으로 구성합니다. 질문 데이터의 독립 수식이나 행렬에는 `latex` 필드가 있는 `math` 블록을 사용합니다. 행렬의 행을 세미콜론으로 나눠 텍스트나 박스 블록에 두지 않습니다. 선택지가 수식이나 행렬이라면 `text` 대신 `latex`를 제공하며 두 필드를 함께 넣지 않습니다. 수학 내용은 LaTeX로, 채점 식별은 안정적인 선택지 ID로 유지합니다. 공통 자료 문항 세트는 관련 문항에 하나의 공통 자료를 보여주되, 각 문항에는 고유한 응답·채점 ID를 둡니다. 관련 없는 문항을 묶지 않습니다. 임의의 HTML이나 코드를 생성하지 않습니다.
 
-Check source fidelity, one clear task per question, plausible options, no answer leakage, answer alternatives, layout, and individual grading. Use `validate_problem_document`, inspect unanswered, revealed, and interactive previews, then patch only concrete issues. Make at most one revision. This local check is not a separate AI critic or proof of educational quality.
+원문 충실성, 문항당 명확한 과제 하나, 그럴듯한 선택지, 정답 노출 여부, 인정 답안, 화면 배치, 문항별 채점을 검사합니다. `validate_problem_document`로 검증하고 정답 공개 전·후 및 대화형 미리보기를 살펴본 다음 구체적인 문제만 패치합니다. 수정은 최대 한 번만 합니다. 이 로컬 검사는 별도의 AI 비평 단계나 교육적 품질의 증명이 아닙니다.
 
-Read an optional reference only when its method helps: [multiple-choice.md](references/multiple-choice.md), [fill-blank.md](references/fill-blank.md), [relationship-structure.md](references/relationship-structure.md), [graph-geometry.md](references/graph-geometry.md). They are examples, not fixed templates or a closed type list.
+학습자가 읽을 순서대로 블록을 배치합니다(위에서 아래로, 다음에는 왼쪽에서 오른쪽으로). 좁은 화면에서는 미리보기가 문서 순서대로 블록을 세로로 쌓으므로 도식과 설명을 함께 두고, 답변은 풀이에 필요한 자료 뒤에 배치합니다. 정답 공개 전·후 모두 긴 선택지와 해설 전체가 들어갈 공간을 확보합니다. 행렬과 긴 선택지는 한 열을 우선합니다. 기본 화면뿐 아니라 좁은 화면 너비에서도 실제 렌더링을 확인합니다. 계약 검증만으로는 잘린 글자, 요소 겹침, 가로 스크롤을 찾아낼 수 없습니다.
+
+방법이 도움이 될 때만 해당 참고 문서를 읽습니다: [multiple-choice.md](references/multiple-choice.md), [fill-blank.md](references/fill-blank.md), [relationship-structure.md](references/relationship-structure.md), [graph-geometry.md](references/graph-geometry.md). 이 문서는 예시이며 고정 템플릿이나 닫힌 문제유형 목록이 아닙니다.

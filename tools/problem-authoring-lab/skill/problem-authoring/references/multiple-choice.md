@@ -1,15 +1,15 @@
-# Selection authoring hypothesis v2
+# 선택형 문항 출제 가설 v2
 
-Use this as a starting method and revise it only from observed failures across examples.
+이 방법을 출발점으로 사용하고, 여러 사례에서 관찰된 실패에 근거할 때만 수정합니다.
 
-1. Translate the objective into one decision with all needed conditions in the stem.
-2. Establish the correct answer from the supplied source before writing distractors.
-3. Write distractors from distinguishable misconceptions or category confusions that the source can safely refute. Do not add outside facts merely to make an option plausible.
-4. Keep options parallel in grammar, scope, and detail. Ensure exactly one option satisfies the stem.
-5. Bind stable option IDs and `correctOptionId` independently of visual order.
-6. Arrange stem, optional context box/table/source image, and choice set for scanability; no single layout is prescribed.
-7. In the unanswered render, check that emphasis, length, labels, and surrounding text do not reveal the answer. In the revealed render, check that the highlighted option matches the response contract.
+1. 학습목표를 하나의 판단으로 바꾸고, 판단에 필요한 조건을 모두 질문에 담습니다.
+2. 오답 선택지를 쓰기 전에 제공된 원문에서 정답을 확정합니다.
+3. 원문으로 반박할 수 있는, 구별 가능한 오개념이나 범주 혼동에서 오답 선택지를 만듭니다. 선택지를 그럴듯하게 만들려고 외부 사실을 추가하지 않습니다.
+4. 선택지의 문법, 범위, 구체성 수준을 맞춥니다. 질문을 만족하는 선택지는 정확히 하나여야 합니다.
+5. 안정적인 선택지 ID와 `correctOptionId`를 시각적 순서와 독립적으로 연결합니다.
+6. 질문, 선택적 맥락 박스·표·원문 이미지, 선택지를 훑어보기 쉽게 배치합니다. 특정 배치 하나를 강제하지 않습니다.
+7. 정답을 공개하지 않은 화면에서는 강조, 길이, 표시, 주변 문구로 정답이 드러나지 않는지 확인합니다. 정답 공개 화면에서는 강조된 선택지가 응답 계약과 일치하는지 확인합니다.
 
-Novelty is not a quality criterion. Prefer a less conventional composition only when it improves the required discrimination, clarity, or learnability.
+새로움 자체는 품질 기준이 아닙니다. 덜 익숙한 구성이 필요한 구별, 명확성, 학습 가능성을 높일 때만 선택합니다.
 
-A wrong option is not useful merely because it is false. Use a confusion that a learner could reasonably make and that the supplied evidence can refute. If the stem can be answered from option length, repeated wording, or visual emphasis, treat that as answer leakage rather than successful measurement.
+오답은 단지 틀렸다는 이유만으로 유용하지 않습니다. 학습자가 합리적으로 할 수 있고 제공된 근거로 반박할 수 있는 혼동을 사용합니다. 선택지 길이, 반복 표현, 시각적 강조만으로 답을 알 수 있다면 이를 성공적인 측정이 아니라 정답 노출로 봅니다.

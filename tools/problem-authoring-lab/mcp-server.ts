@@ -22,11 +22,11 @@ const methodFiles: Record<(typeof methodNames)[number], string> = {
 export function createProblemAuthoringMcpServer() {
   const server = new McpServer(
     { name: "study-forge-problem-authoring-lab", version: "0.1.0" },
-    { instructions: "Use the supplied source packet and problem-authoring skill to compose a block document. Validate it, render unanswered and revealed states, inspect the real HTML, and apply targeted patches. Keep source images and reproducible generated assets explicitly distinct." },
+    { instructions: "제공된 원문 패킷과 문제 출제 스킬로 블록 문서를 작성합니다. 검증한 뒤 정답 공개 전·후 화면을 렌더링하고 실제 HTML을 살펴보며 필요한 부분만 패치합니다. 원문 이미지와 재현 가능한 생성 자산을 명확히 구분합니다." },
   );
   server.registerTool("load_source_packet", {
-    title: "Load a school-content packet",
-    description: "Load a fixed lab packet, or a validated Learning Design bridge packet under this lab's runs directory.",
+    title: "학습자료 패킷 불러오기",
+    description: "고정 실험 패킷 또는 이 실험실의 runs 디렉터리에 있는 검증된 Learning Design 연결 패킷을 불러옵니다.",
     inputSchema: {
       packetId: z.enum(["science-default", "graph-one"]).default("science-default"),
       packetPath: z.string().optional(),
@@ -43,8 +43,8 @@ export function createProblemAuthoringMcpServer() {
   });
 
   server.registerTool("get_authoring_instructions", {
-    title: "Read problem-authoring instructions",
-    description: "Return the common evidence-first skill and only the requested optional method references. No arguments preserves the legacy selection and recall response.",
+    title: "문제 출제 지침 읽기",
+    description: "공통 원문 근거 중심 스킬과 요청한 선택적 방법 참고 문서만 반환합니다. 인자가 없으면 기존 선택형·회상형 응답을 유지합니다.",
     inputSchema: { methods: z.array(z.enum(methodNames)).max(4).optional() }, outputSchema: {
       skillVersion: z.string(), skillHash: z.string(), skill: z.string(),
       references: z.record(z.string(), z.string()), referenceHashes: z.record(z.string(), z.string()),
@@ -72,8 +72,8 @@ export function createProblemAuthoringMcpServer() {
   });
 
   server.registerTool("validate_problem_document", {
-    title: "Validate a problem document",
-    description: "Check stable IDs, source assets, page bounds, response links, and answer contracts without rewriting content.",
+    title: "문제 문서 검증",
+    description: "내용을 다시 쓰지 않고 안정적인 ID, 원문 자산, 쪽 범위, 응답 연결, 정답 계약을 검사합니다.",
     inputSchema: { document: unknownRecord, packetPath: z.string().optional(), formatOverride: z.record(z.string(), z.enum(["single-choice", "short-text"])).optional() }, outputSchema: { valid: z.boolean(), issues: z.array(unknownRecord) },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async ({ document, packetPath, formatOverride }) => {
@@ -87,8 +87,8 @@ export function createProblemAuthoringMcpServer() {
   });
 
   server.registerTool("render_problem_preview", {
-    title: "Render unanswered and answer-revealed previews",
-    description: "Render unanswered, answer-revealed, and locally interactive HTML for visual and grading checks.",
+    title: "정답 공개 전·후 미리보기 렌더링",
+    description: "화면과 채점을 확인할 수 있도록 정답 공개 전·후 및 로컬 대화형 HTML을 렌더링합니다.",
     inputSchema: { document: unknownRecord }, outputSchema: { beforeAnswerHtml: z.string(), afterAnswerHtml: z.string(), interactiveHtml: z.string() },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async ({ document }) => result({
@@ -98,8 +98,8 @@ export function createProblemAuthoringMcpServer() {
   }, "정답 전·후 HTML 미리보기를 렌더했습니다."));
 
   server.registerTool("apply_problem_patch", {
-    title: "Apply a targeted problem patch",
-    description: "Replace only named blocks or response contracts while preserving stable IDs, then validate the result.",
+    title: "지정한 문제 부분 패치",
+    description: "안정적인 ID를 유지하면서 지정된 블록 또는 응답 계약만 교체한 뒤 결과를 검증합니다.",
     inputSchema: { document: unknownRecord, patch: unknownRecord, packetPath: z.string().optional(), formatOverride: z.record(z.string(), z.enum(["single-choice", "short-text"])).optional() }, outputSchema: { document: unknownRecord, issues: z.array(unknownRecord) },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   }, async ({ document, patch, packetPath, formatOverride }) => {
@@ -114,8 +114,8 @@ export function createProblemAuthoringMcpServer() {
   });
 
   server.registerTool("record_problem_iteration", {
-    title: "Record one authoring iteration",
-    description: "Preserve an iteration, its validation issues and execution data; render previews when the contract is valid.",
+    title: "문제 제작 반복 기록",
+    description: "반복 결과와 검증 문제, 실행 데이터를 보존하고 계약이 유효하면 미리보기를 렌더링합니다.",
     inputSchema: {
       runId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
       iteration: z.number().int().min(0).max(1),
@@ -158,7 +158,7 @@ export function createProblemAuthoringMcpServer() {
       ]);
       files.push("before-answer.html", "after-answer.html", "interactive.html");
     }
-    return result({ directory, files }, "이번 제작 iteration을 실험 디렉터리에 기록했습니다.");
+    return result({ directory, files }, "이번 제작 반복을 실험 디렉터리에 기록했습니다.");
   });
   return server;
 }

@@ -342,6 +342,7 @@ test("MCP 도구가 네트워크 없이 목록과 단계 입력을 반환한다"
       "list_projects",
       "publish_chatgpt_pdf_run",
       "publish_run_to_deck",
+      "reuse_chatgpt_pdf_analyze_output",
       "start_chatgpt_pdf_run",
       "submit_chatgpt_pdf_stage",
       "submit_next_stage_result",

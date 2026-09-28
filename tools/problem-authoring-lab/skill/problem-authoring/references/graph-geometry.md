@@ -1,12 +1,12 @@
-# Graph and geometry authoring hypothesis v1
+# 그래프·기하 문항 출제 가설 v1
 
-Use this when the learner must read or reason from a plotted function, coordinate diagram, or geometric figure.
+학습자가 함수 그래프, 좌표 도식, 기하 도형을 읽거나 그것을 근거로 추론해야 할 때 사용합니다.
 
-1. Fix the equations, coordinates, domain, labels, and intended answer in a numeric spec before rendering.
-2. Recalculate intersections, lengths, slopes, or other answer values independently of the authored option key.
-3. Show the minimum axes, scale, point names, line styles, and conditions needed to read the figure. Keep monochrome distinctions legible without relying on color alone.
-4. Do not print coordinates or annotations that directly reveal the requested value unless reading that annotation is the objective.
-5. Keep generated figures in `generated-image`; preserve the generator, version, script, spec, and hashes. Reject external SVG resource references.
-6. Inspect mathematical consistency separately from actual rendering, including clipping, overlapping labels, unreadable ticks, and missing assets.
+1. 렌더링 전에 식, 좌표, 정의역, 표시, 의도한 정답을 수치 명세에 확정합니다.
+2. 교점, 길이, 기울기 또는 다른 정답 값을 작성한 선택지의 정답 키와 독립적으로 다시 계산합니다.
+3. 그림을 읽는 데 필요한 최소한의 축, 눈금, 점 이름, 선 종류, 조건을 표시합니다. 색에만 의존하지 않고 흑백에서도 구별되게 합니다.
+4. 주석을 읽는 것 자체가 목표가 아니라면 요구한 값을 바로 드러내는 좌표나 주석을 인쇄하지 않습니다.
+5. 생성한 그림은 `generated-image`에 두고 생성기, 버전, 스크립트, 명세, 해시를 보존합니다. 외부 SVG 리소스 참조는 거부합니다.
+6. 수학적 일관성과 실제 렌더링을 따로 확인합니다. 잘림, 표시 겹침, 읽기 어려운 눈금, 누락된 자산도 살펴봅니다.
 
-A realistic-looking graph does not make an item an application task. The learner response must still provide the evidence named by the objective.
+그럴듯해 보이는 그래프만으로 문항이 적용 과제가 되지는 않습니다. 학습자의 응답은 여전히 학습목표가 요구한 근거를 제공해야 합니다.

@@ -1,8 +1,11 @@
 import { learningPlanGenerationSchema, materializeLearningPlanGeneration } from "./compact-generation.ts";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import { readVerifiedMcpRunRaw } from "../../src/lib/mcp-run-view.ts";
+import { getRegisteredMcpSource, readRegisteredMcpSourcePdf } from "../../src/lib/mcp-source-registry.ts";
 import {
   adaptLearningDesignToAnalysis,
   buildReviewMaterial,
@@ -50,12 +53,15 @@ const startInputSchema = z.object({
   files: z.array(z.object({
     fileName: z.string().min(1),
     pageCount: z.number().int().min(1).optional(),
+    sourceId: z.string().regex(/^src_[a-f0-9]{64}$/).optional(),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   })).min(1).max(20),
   learningGoal: z.string().default(""),
   instruction: z.string().default(""),
   subject: z.string().default(""),
   tags: z.array(z.string()).default([]),
   sourceExpressionMode: z.enum(["preserve", "adapt"]).default("adapt"),
+  stopAfterStage: z.enum(chatGptParityStages).default("cards"),
 });
 
 const outlineTextSchema = z.object({
@@ -76,6 +82,20 @@ const activityDesignTextSchema = z.object({
 
 const cardsTextSubmissionSchema = z.object({
   cardsText: z.string().trim().min(1),
+});
+
+const reuseAnalyzeOutputSchema = z.object({
+  runId: z.string().regex(/^[A-Za-z0-9._-]+$/),
+  sourceRunId: z.string().regex(/^[A-Za-z0-9._-]+$/),
+  sourceRunSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  sourceArtifactSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  sourcePdfSha256: z.string().regex(/^[a-f0-9]{64}$/),
+});
+const reusablePrefixStages = ["analyze", "concept-tree", "learning-design", "activity-design"] as const;
+const reuseStagePrefixSchema = reuseAnalyzeOutputSchema.extend({
+  stage: z.enum(reusablePrefixStages),
+  selectedOutlineLeafIds: z.array(z.string().min(1)).min(1).optional(),
+  selectedPageNumbers: z.array(z.number().int().positive()).min(1).optional(),
 });
 
 type ConceptTreeArtifact = {
@@ -122,6 +142,14 @@ type ChatGptParityRun = {
     error: string;
   }>>>;
   cardDrafts?: Record<string, string>;
+  stageReuse?: Partial<Record<ChatGptParityStage, {
+    kind: "output";
+    sourceRunId: string;
+    sourceRunSha256: string;
+    sourceArtifactSha256: string;
+    sourcePdfSha256: string;
+    appliedAt: string;
+  }>>;
   cancelledAt?: string;
   publishedAt?: string;
 };
@@ -131,27 +159,52 @@ const defaultDataRoot = path.join(
   "mcp",
 );
 
+type TrustedSourcePdf = { path: string; pageCount: number; sha256: string };
+
+function defaultTrustedSourcePdf(fileName: string): TrustedSourcePdf | null {
+  const source = fileName === "02_Geometric Transformations.pdf"
+    ? { pageCount: 32, sha256: "73beb50cced41ee5da481f375fc21dff3b40d12054743767d6ad334d88fb7dca" }
+    : fileName === "ilovepdf_merged.pdf"
+      ? { pageCount: 44, sha256: "bfa671735178c61957ce5d78edd1746a4c585bdde2907d9b4c35f16483705254" }
+      : null;
+  return source ? {
+    ...source,
+    path: path.join(os.homedir(), "OneDrive", "바탕 화면", "예외폴", fileName),
+  } : null;
+}
+
 export class ChatGptParityService {
   private readonly runRoot: string;
   private readonly publishedRoot: string;
+  private readonly resolveTrustedSourcePdf: (fileName: string) => TrustedSourcePdf | null;
 
   constructor(
     runRoot = path.join(defaultDataRoot, "chatgpt-runs"),
     publishedRoot = path.join(defaultDataRoot, "published"),
+    resolveTrustedSourcePdf: (fileName: string) => TrustedSourcePdf | null = defaultTrustedSourcePdf,
   ) {
     this.runRoot = runRoot;
     this.publishedRoot = publishedRoot;
+    this.resolveTrustedSourcePdf = resolveTrustedSourcePdf;
   }
 
   async startRun(input: StartChatGptParityInput) {
     const config = startInputSchema.parse(input);
+    for (const file of config.files) {
+      if (Boolean(file.sourceId) !== Boolean(file.sha256)) throw new Error("등록 자료 ID와 SHA-256을 함께 지정해야 합니다.");
+      if (!file.sourceId) continue;
+      const registered = await getRegisteredMcpSource(file.sourceId);
+      if (!registered || registered.sha256 !== file.sha256 || registered.pageCount !== file.pageCount || registered.fileName !== file.fileName) {
+        throw new Error("등록된 원본 PDF의 ID, 해시, 파일명 또는 실제 쪽수가 다릅니다.");
+      }
+    }
     const fileNames = config.files.map((file) => file.fileName);
     assertUnique(fileNames, "PDF 파일명");
     if (config.clientRequestId) {
       const existingId = requestRunId(config.clientRequestId);
       try {
         const existing = await this.readRun(existingId);
-        if (checksum(existing.config) !== checksum(config)) {
+        if (checksum(startInputSchema.parse(existing.config)) !== checksum(config)) {
           throw new Error("같은 clientRequestId를 다른 생성 설정에 다시 사용할 수 없습니다.");
         }
         return this.getNextStage(existing.id);
@@ -201,15 +254,165 @@ export class ChatGptParityService {
     return this.getNextStage(run.id);
   }
 
+  async reuseAnalyzeOutput(rawInput: unknown) {
+    return this.reuseStagePrefix({ ...reuseAnalyzeOutputSchema.parse(rawInput), stage: "analyze" });
+  }
+
+  async reuseStagePrefix(rawInput: unknown) {
+    const input = reuseStagePrefixSchema.parse(rawInput);
+    if (input.runId === input.sourceRunId) throw new Error("같은 run 안에서 출력 재사용을 요청할 수 없습니다.");
+    const targetRunFile = await this.verifiedRunFile(input.runId);
+    const targetRaw = await readFile(targetRunFile, "utf8");
+    let sourceRaw: string;
+    try {
+      sourceRaw = await readFile(await this.verifiedRunFile(input.sourceRunId), "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const verified = await readVerifiedMcpRunRaw(`mcp:${input.sourceRunId}`);
+      if (!verified) throw new Error("검증된 이전 MCP run을 찾지 못했습니다.");
+      sourceRaw = verified;
+    }
+    const target = JSON.parse(targetRaw) as ChatGptParityRun;
+    const source = JSON.parse(sourceRaw) as ChatGptParityRun;
+    if (target.id !== input.runId || target.engine !== "chatgpt-mcp") {
+      throw new Error("새 run 기록의 ID 또는 엔진이 다릅니다.");
+    }
+    if (source.id !== input.sourceRunId || source.engine !== "chatgpt-mcp") {
+      throw new Error("원본 run 기록의 ID 또는 엔진이 다릅니다.");
+    }
+    if (target.cancelledAt) throw new Error("취소된 ChatGPT MCP run에는 재사용할 수 없습니다.");
+    if (Object.keys(target.artifacts).length > 0 || target.selectedOutlineLeafIds.length > 0) {
+      throw new Error("새 실행의 원문 분석 전에만 출력을 재사용할 수 있습니다.");
+    }
+    const prefix = chatGptParityStages.slice(0, chatGptParityStages.indexOf(input.stage) + 1);
+    if (chatGptParityStages.indexOf(target.config.stopAfterStage) < chatGptParityStages.indexOf(input.stage)) {
+      throw new Error("새 run의 종료 단계가 재사용 단계보다 앞섭니다.");
+    }
+    if (prefix.some((stage) => source.artifacts[stage] === undefined || !source.stageCompletedAt[stage])) {
+      throw new Error("원본 run에 요청 단계까지 완료된 연속 출력이 없습니다.");
+    }
+    if (target.config.files.length !== 1 || source.config.files.length !== 1) {
+      throw new Error("이 최소 재사용 도구는 PDF 한 개만 지원합니다.");
+    }
+    const targetFile = target.config.files[0];
+    const sourceFile = source.config.files[0];
+    if (targetFile.fileName !== sourceFile.fileName || targetFile.pageCount !== sourceFile.pageCount) {
+      throw new Error("원본과 새 run의 PDF 파일명 또는 페이지 수가 다릅니다.");
+    }
+    const registered = targetFile.sourceId ? await getRegisteredMcpSource(targetFile.sourceId) : null;
+    const legacyTrusted = !sourceFile.sourceId ? this.resolveTrustedSourcePdf(sourceFile.fileName) : null;
+    const sameRegistered = registered && sourceFile.sourceId === registered.id;
+    const verifiedLegacySource = legacyTrusted && !targetFile.sourceId;
+    const crossFromLegacy = registered && legacyTrusted && !sourceFile.sourceId &&
+      registered.sha256 === legacyTrusted.sha256 && registered.pageCount === legacyTrusted.pageCount;
+    const trusted = sameRegistered || crossFromLegacy
+      ? { pageCount: registered!.pageCount, sha256: registered!.sha256, bytes: await readRegisteredMcpSourcePdf(registered!.id) }
+      : verifiedLegacySource ? { ...legacyTrusted, bytes: await readFile(legacyTrusted.path) } : null;
+    if (!trusted || targetFile.pageCount !== trusted.pageCount || input.sourcePdfSha256 !== trusted.sha256 ||
+      (registered && targetFile.sha256 !== registered.sha256) ||
+      (sameRegistered && sourceFile.sha256 !== registered!.sha256)) {
+      throw new Error("원본 PDF의 파일명, 페이지 수 또는 승인된 SHA-256이 다릅니다.");
+    }
+    if (crossFromLegacy) {
+      const legacyBytes = await readFile(legacyTrusted!.path);
+      if (createHash("sha256").update(legacyBytes).digest("hex") !== registered!.sha256) {
+        throw new Error("기존 run의 원본 PDF 바이트가 등록 자료와 다릅니다.");
+      }
+    }
+    const pdfBytes = trusted.bytes;
+    if (!pdfBytes) throw new Error("등록된 원본 PDF를 읽지 못했습니다.");
+    if (pdfBytes.length > 10 * 1024 * 1024 ||
+      createHash("sha256").update(pdfBytes).digest("hex") !== input.sourcePdfSha256) {
+      throw new Error("현재 로컬 원본 PDF의 SHA-256이 요청값과 다릅니다.");
+    }
+    if (createHash("sha256").update(sourceRaw).digest("hex") !== input.sourceRunSha256) {
+      throw new Error("원본 run 파일의 SHA-256이 요청값과 다릅니다.");
+    }
+    if (createHash("sha256").update(JSON.stringify(source.artifacts[input.stage])).digest("hex") !== input.sourceArtifactSha256) {
+      throw new Error(`원본 ${input.stage} 산출물의 SHA-256이 요청값과 다릅니다.`);
+    }
+    const analysis = parseAnalysisArtifact(source.artifacts.analyze);
+    if (input.stage !== "analyze") {
+      if (target.config.learningGoal !== source.config.learningGoal ||
+        target.config.instruction !== source.config.instruction ||
+        target.config.subject !== source.config.subject ||
+        target.config.sourceExpressionMode !== source.config.sourceExpressionMode) {
+        throw new Error("학습 목적 또는 생성 조건이 원본 run과 다릅니다.");
+      }
+      const sourceLeaves = source.selectedOutlineLeafIds;
+      const leaves = input.selectedOutlineLeafIds;
+      if (!leaves || JSON.stringify(leaves) !== JSON.stringify(sourceLeaves)) {
+        throw new Error("선택한 원문 하위목차 범위가 원본 run과 다릅니다.");
+      }
+      const selectedNodes = analysis.sourceOutline!.nodes.filter((node) => sourceLeaves.includes(node.id));
+      const sourcePages = [...new Set(selectedNodes.flatMap((node) =>
+        node.sourceRefs.flatMap((ref) => ref.pageNumbers)))].sort((a, b) => a - b);
+      const requestedPages = [...new Set(input.selectedPageNumbers ?? [])].sort((a, b) => a - b);
+      if (!sourcePages.length || JSON.stringify(requestedPages) !== JSON.stringify(sourcePages)) {
+        throw new Error("선택한 PDF 페이지 범위가 원본 run과 다릅니다.");
+      }
+    }
+    target.stageReuse ??= {};
+    const appliedAt = new Date().toISOString();
+    for (const stage of prefix) {
+      target.artifacts[stage] = structuredClone(source.artifacts[stage]);
+      target.stageReuse[stage] = {
+        kind: "output",
+        sourceRunId: input.sourceRunId,
+        sourceRunSha256: input.sourceRunSha256,
+        sourceArtifactSha256: createHash("sha256").update(JSON.stringify(source.artifacts[stage])).digest("hex"),
+        sourcePdfSha256: input.sourcePdfSha256,
+        appliedAt,
+      };
+      target.stageCompletedAt[stage] = appliedAt;
+      delete target.stageStartedAt[stage];
+      delete target.stageDurationsMs[stage];
+    }
+    if (input.stage === "analyze") {
+      const leafIds = new Set(getLeafIds(analysis.sourceOutline!.nodes));
+      target.selectedOutlineLeafIds = analysis.sourceOutline!.nodes
+        .filter((node) => node.selectedByDefault && leafIds.has(node.id))
+        .map((node) => node.id);
+      if (target.selectedOutlineLeafIds.length === 0) target.selectedOutlineLeafIds = [...leafIds];
+    } else {
+      target.selectedOutlineLeafIds = [...source.selectedOutlineLeafIds];
+    }
+    target.updatedAt = appliedAt;
+    await this.writeRun(target);
+    return {
+      reused: {
+        kind: "output" as const,
+        stage: input.stage,
+        sourceRunId: input.sourceRunId,
+        sourceRunSha256: input.sourceRunSha256,
+        sourceArtifactSha256: input.sourceArtifactSha256,
+        sourcePdfSha256: input.sourcePdfSha256,
+      },
+      ...(await this.getNextStage(target.id)),
+    };
+  }
+
   async getNextStage(runId: string) {
     const run = await this.readRun(runId);
     if (run.cancelledAt) throw new Error("취소된 ChatGPT MCP run입니다.");
+    const stopAfterStage = run.config.stopAfterStage ?? "cards";
+    if (run.artifacts[stopAfterStage]) {
+      return {
+        runId,
+        engine: run.engine,
+        completed: stopAfterStage === "cards",
+        stoppedAfterStage: stopAfterStage === "cards" ? null : stopAfterStage,
+        nextStage: null,
+        stageInput: null,
+      };
+    }
     const nextStage = chatGptParityStages.find((stage) => !run.artifacts[stage]) ?? null;
     if (!nextStage) {
       return {
         runId,
         engine: run.engine,
         completed: true,
+        stoppedAfterStage: null,
         nextStage: null,
         stageInput: null,
       };
@@ -223,6 +426,7 @@ export class ChatGptParityService {
       runId,
       engine: run.engine,
       completed: false,
+      stoppedAfterStage: null,
       nextStage,
       stageInput: this.buildStageInput(run, nextStage),
     };
@@ -235,6 +439,10 @@ export class ChatGptParityService {
   }) {
     const run = await this.readRun(input.runId);
     if (run.cancelledAt) throw new Error("취소된 ChatGPT MCP run입니다.");
+    const stopAfterStage = run.config.stopAfterStage ?? "cards";
+    if (stopAfterStage !== "cards" && run.artifacts[stopAfterStage]) {
+      throw new Error(`${stopAfterStage} 단계에서 종료된 ChatGPT MCP run입니다. 다음 단계 결과를 받을 수 없습니다.`);
+    }
     const expected = chatGptParityStages.find((stage) => !run.artifacts[stage]) ?? null;
     if (!expected) throw new Error("이미 모든 단계가 완료되었습니다.");
     if (input.stage !== expected) {
@@ -413,7 +621,8 @@ export class ChatGptParityService {
           ? "cancelled"
           : run.publishedAt
             ? "published"
-            : nextStage === null ? "completed" : "active";
+            : nextStage === null ? "completed"
+              : run.artifacts[run.config.stopAfterStage ?? "cards"] ? "stopped" : "active";
         return {
           runId: run.id,
           title: run.config.title,
@@ -495,7 +704,7 @@ export class ChatGptParityService {
           selectedOutlineLeafIds: run.selectedOutlineLeafIds,
           availableLeafNodes: selectedOutline.nodes
             .filter((node) => getLeafIds(selectedOutline.nodes).includes(node.id))
-            .map((node) => ({ id: node.id, title: node.title, selected: node.selectedByDefault })),
+            .map((node, index) => ({ number: index + 1, id: node.id, title: node.title, selected: node.selectedByDefault })),
           changeTool: "configure_chatgpt_pdf_run",
         },
         input: {
@@ -503,9 +712,9 @@ export class ChatGptParityService {
           instruction: run.config.instruction,
           selectedSourceOutline: selectedOutline,
           attachmentRule:
-            "첨부 PDF에서 선택된 목차 범위의 실제 내용을 다시 읽고 개념 관계만 트리로 작성하세요. 목차 순서를 복제하지 말고 의미 관계를 표현하되 선택 범위 밖으로 확장하지 마세요.",
+            "첨부 PDF에서 선택된 목차 범위의 실제 내용을 다시 읽고 개념 관계만 트리로 작성하세요. 목차 순서를 복제하지 말고 의미 관계를 표현하되 선택 범위 밖으로 확장하지 마세요. 뒤에서 별도로 학습·판단해야 할 독립 내용은 한 노드의 출처에 섞어 넣지 마세요.",
           format:
-            "treeText 첫 줄은 최상위 개념, 이후는 '- [관계] 개념어 — 짧은 설명 (p.페이지)' 형식입니다. 하위 개념은 공백 두 칸씩 들여씁니다.",
+            "treeText 첫 줄은 최상위 개념, 이후는 '- [관계] 개념어 — 짧은 설명 (p.페이지) @목차(번호)' 형식입니다. 같은 페이지에 선택된 말단 목차가 여러 개면 @목차 번호를 반드시 적습니다. 하위 개념은 공백 두 칸씩 들여씁니다.",
         },
       };
     }
@@ -528,7 +737,7 @@ export class ChatGptParityService {
             sourceRefs: node.sourceRefs,
           })),
           attachmentRule:
-            "개념트리를 기준으로 묶거나 나눕니다. 첨부 PDF는 근거 문구 확인에만 사용하고 트리에 없는 학습 대상을 새로 만들지 마세요.",
+            "개념트리를 기준으로 묶거나 나눕니다. 첨부 PDF는 근거 문구와 실제 학습 가능 범위를 확인하는 데 사용하고 트리에 없는 학습 대상을 새로 만들지 마세요. 상위 개념의 출처를 그 아래 모든 독립 능력의 평가범위로 간주하지 마세요.",
           format: learningDesignFormatExample,
         },
       };
@@ -693,6 +902,17 @@ export class ChatGptParityService {
     }
   }
 
+  private async verifiedRunFile(runId: string): Promise<string> {
+    const [root, file] = await Promise.all([
+      realpath(this.runRoot),
+      realpath(path.join(this.runRoot, safeId(runId), "run.json")),
+    ]);
+    if (!file.startsWith(root + path.sep) || (await stat(file)).size > 24 * 1024 * 1024) {
+      throw new Error("허용된 MCP run 저장 경로 또는 파일 크기를 벗어났습니다.");
+    }
+    return file;
+  }
+
   private async writeRun(run: ChatGptParityRun) {
     const directory = path.join(this.runRoot, safeId(run.id));
     await mkdir(directory, { recursive: true });
@@ -841,7 +1061,7 @@ const learningDesignFormatExample = [
   "개념: 2, 3, 4",
   "학습내용: 함께 묶어 익힐 의미 있는 내용",
   "학습목표: 학습자가 달성해야 할 목표",
-  "성공기준: 목표를 달성했다고 볼 수 있는 기준 하나",
+  "성공기준: 학습내용과 같은 능력·범위를 원문 근거로 확인하는 기준 하나",
   "근거: PDF에서 확인한 짧은 원문 근거",
   "종류: 용어 | 사실 | 개념 | 관계 | 절차 | 공식 | 문제해결 | 기타",
   "이유: 이 노드들을 묶거나 나눈 이유",
@@ -884,21 +1104,28 @@ function materializeConceptTreeArtifact(
   value: unknown,
 ): ConceptTreeArtifact {
   const submitted = conceptTreeTextSchema.parse(value);
-  const nodes = parseConceptTreeOutline(submitted.treeText, run.config.files);
+  const lineHints = submitted.treeText.split(/\r?\n/).filter((line) => line.trim().length > 0).map((line) => {
+    const match = line.match(/\s+@목차\((\d+(?:\s*,\s*\d+)*)\)\s*$/);
+    return {
+      cleanLine: match ? line.slice(0, match.index).trimEnd() : line,
+      numbers: match ? [...new Set(match[1].split(",").map((part) => Number(part.trim())))] : null,
+    };
+  });
+  const nodes = parseConceptTreeOutline(lineHints.map((line) => line.cleanLine).join("\n"), run.config.files);
   const analysis = parseAnalysisArtifact(run.artifacts.analyze);
   const selectedOutline = selectOutline(analysis.sourceOutline!, run.selectedOutlineLeafIds);
   const selectedLeaves = selectedOutline.nodes.filter((node) => node.selectedByDefault);
   const allowedPages = new Map<string, Set<number>>();
   for (const node of selectedLeaves) {
     for (const ref of node.sourceRefs ?? []) {
-      const fileName = ref.fileName ?? ref.sourceId;
+      const fileName = ref.fileName;
       if (!fileName) continue;
       const pages = allowedPages.get(fileName) ?? new Set<number>();
       for (const page of ref.pageNumbers ?? []) pages.add(page);
       allowedPages.set(fileName, pages);
     }
   }
-  const mapped = nodes.map((node) => {
+  const mapped = nodes.map((node, index) => {
     if (node.depth > 0 && node.sourceRefs.length === 0) {
       throw new Error(`개념 '${node.title}'에 PDF 페이지 근거가 필요합니다.`);
     }
@@ -908,17 +1135,27 @@ function materializeConceptTreeArtifact(
         throw new Error(`개념 '${node.title}'의 페이지가 선택한 원문 목차 범위를 벗어났습니다.`);
       }
     }
-    const outlineNodeIds = node.sourceRefs.length === 0
-      ? [...run.selectedOutlineLeafIds]
-      : selectedLeaves
+    const pageMatchedLeaves = node.sourceRefs.length === 0 ? selectedLeaves : selectedLeaves
         .filter((outlineNode) => (outlineNode.sourceRefs ?? []).some((outlineRef) => {
-          const outlineFileName = outlineRef.fileName ?? outlineRef.sourceId;
+          const outlineFileName = outlineRef.fileName;
           return node.sourceRefs.some((conceptRef) =>
             conceptRef.fileName === outlineFileName &&
             conceptRef.pageNumbers.some((page) => outlineRef.pageNumbers?.includes(page))
           );
-        }))
-        .map((outlineNode) => outlineNode.id);
+        }));
+    const explicitNumbers = lineHints[index]?.numbers;
+    if (!explicitNumbers && node.sourceRefs.length > 0 && pageMatchedLeaves.length > 1) {
+      throw new Error(`개념 '${node.title}'은 같은 페이지의 선택 목차 ${pageMatchedLeaves.length}개와 겹칩니다. @목차(번호)로 실제 연결을 명시하세요.`);
+    }
+    const explicitLeaves = explicitNumbers?.map((number) => {
+      const leaf = selectedLeaves[number - 1];
+      if (!leaf) throw new Error(`개념 '${node.title}'의 @목차(${number})가 선택한 말단 목차 범위를 벗어났습니다.`);
+      return leaf;
+    });
+    if (explicitLeaves?.some((leaf) => !pageMatchedLeaves.includes(leaf))) {
+      throw new Error(`개념 '${node.title}'의 @목차 번호가 실제 PDF 페이지 근거와 맞지 않습니다.`);
+    }
+    const outlineNodeIds = (explicitLeaves ?? pageMatchedLeaves).map((leaf) => leaf.id);
     if (outlineNodeIds.length === 0) {
       throw new Error(`개념 '${node.title}'을 선택한 원문 목차와 연결할 수 없습니다.`);
     }
@@ -1196,9 +1433,7 @@ function ensureIncludedTargetCoverage(
       recommendedType: "flashcard",
       supportLevel: assessment.level === "exact" ? "exact" : "scaffold",
       reason: `기존 설계가 모두 생성 대상에서 제외되어 학습대상 누락을 막기 위한 자동 보조 문제입니다. ${assessment.rationale}`,
-      limitation: relationToObjective === "direct"
-        ? ""
-        : "최종 수행을 직접 평가하지 않고 필요한 핵심 원리의 회상을 보조합니다.",
+      limitation: "최종 수행을 직접 평가하지 않고 필요한 핵심 원리의 회상을 보조합니다.",
       includeInGeneration: true,
     };
     delete structureModes[fallback.id];
@@ -1510,10 +1745,10 @@ function instructionsForStage(stage: ChatGptParityStage) {
     return "첨부 PDF의 원문 목차만 Markdown 문자열로 제출합니다. @file로 파일을 구분하고 # 개수로 계층, 마지막 [페이지] 또는 [시작-끝]으로 범위를 표시합니다. 설명·요약·핵심 개념·중요도·관계 해설·문제 설계는 쓰지 않습니다. 명시적 목차가 없으면 실제 장·절 제목이나 슬라이드 제목만 사용합니다.";
   }
   if (stage === "concept-tree") {
-    return "선택된 원문 목차의 실제 내용을 의미 관계 중심 개념트리로 작성합니다. 목차를 복사하거나 학습목표·문제·예시를 노드로 만들지 않습니다. 모델은 짧은 자연어 트리만 쓰고 MCP가 노드 ID, 부모, 순서, 목차 연결과 페이지 범위를 검사합니다.";
+    return "선택된 원문 목차의 실제 내용을 의미 관계 중심 개념트리로 작성합니다. 목차를 복사하거나 학습목표·문제·예시를 노드로 만들지 않습니다. 독립적으로 학습·판단할 내용의 출처가 한 노드에 섞이지 않게 하되, 의미 관계에 맞게 묶고 나누는 자유는 유지합니다. 같은 PDF 페이지에 선택된 말단 목차가 여러 개면 노드 끝에 @목차(번호)를 써서 실제 해당하는 항목만 연결합니다. 번호는 userSelection.availableLeafNodes의 number를 사용합니다. 모델은 짧은 자연어 트리만 쓰고 MCP가 노드 ID, 부모, 순서, 목차 연결과 페이지 범위를 검사합니다.";
   }
   if (stage === "learning-design") {
-    return "개념트리의 노드를 개별·형제 묶음·경로·하위 트리 단위로 묶거나 나눠 학습 대상과 학습목표를 정합니다. 문제 수, 문제 형식, 질문, 보기, 정답은 만들지 않습니다. 자연어 LEARNING 블록만 쓰고 MCP가 ID와 출처 연결을 만듭니다.";
+    return "개념트리의 노드를 개별·형제 묶음·경로·하위 트리 단위로 묶거나 나눠 학습 대상과 학습목표를 정합니다. 각 블록의 학습내용·목표·성공기준은 같은 능력과 범위를 가리켜야 합니다. 한 기준으로 판단할 수 없는 독립 능력은 별도 학습 대상으로 나누고, 공통 상위 개념의 목차를 실제 평가범위로 과대 해석하지 마세요. 성공기준은 제공된 원문으로 학습하고 확인할 수 있는 내용만 요구합니다. 문제 수, 문제 형식, 질문, 보기, 정답은 만들지 않습니다. 자연어 LEARNING 블록만 쓰고 MCP가 ID와 출처 연결을 만듭니다.";
   }
   if (stage === "activity-design") {
     return "확정된 학습 대상과 목표를 바꾸지 않고, 현재 Study Forge가 지원하는 기능을 보고 각 대상을 1~3개의 문제 설계로 만듭니다. 관련개념에는 해당 학습대상의 concepts 중 이 문제로 확인할 번호를 쓰고 모두 확인하면 전체라고 씁니다. 보여줄 정보, 감출 답, 응답 방식, 채점 방식, 단서와 문제 형식만 정하며 실제 질문·보기·정답은 쓰지 않습니다. 자연어 DESIGN 블록을 쓰고 MCP가 Blueprint, 지원 수준, 포함 여부와 앱 필드를 계산합니다.";
@@ -1524,7 +1759,7 @@ function instructionsForStage(stage: ChatGptParityStage) {
     "유형은 플래시카드, 빈칸, OX, 객관식, 순서복원, 구조복원 중 하나입니다. 객관식은 선택지: 다음 줄에 - 항목 형식으로 3~5개를 씁니다.",
     "빈칸은 질문에 ____ 하나만 쓰고 정답에는 빈칸에 들어갈 짧은 말만 씁니다.",
     "순서복원과 구조복원은 구조: 다음 줄에 - 항목을 씁니다. 순서는 모두 같은 들여쓰기, 구조는 자식마다 공백 2칸을 더 들여씁니다.",
-    "근거에는 Knowledge Unit의 sourceText에서 정답을 확인할 수 있는 짧은 구절을 그대로 옮깁니다. 전략, 난이도, ID, sourceGrounded, verificationNotes는 쓰지 않습니다. MCP가 채웁니다.",
+    "근거에는 학습 단위의 sourceText에서 정답을 확인할 수 있는 짧은 구절을 그대로 옮깁니다. 전략, 난이도, ID, sourceGrounded, verificationNotes는 쓰지 않습니다. MCP가 채웁니다.",
     "structure_recall은 원문에 실제 고정 순서나 상하·분류 관계가 있을 때만 사용하고 평면 목록에는 사용하지 않습니다.",
     "문제 수, 문제 방식, 단서 수준과 기대 응답은 앞 단계 그대로 유지합니다.",
   ].join(" ");
@@ -1592,7 +1827,7 @@ function materializeCardsTextSubmission(
       difficulty: difficultyFromBlueprint(blueprint),
       explanation: block.require("해설"),
       sourceGrounded: true,
-      verificationNotes: ["MCP가 근거 문구를 Knowledge Unit 원문과 대조함"],
+      verificationNotes: ["MCP가 근거 문구를 학습 단위 원문과 대조함"],
     };
     const answer = block.require("정답");
     if (parsedType.activityType === "flashcard") return { ...common, back: answer };
@@ -1815,35 +2050,35 @@ function buildGenerateInput(run: ChatGptParityRun, studyGuideline: string): Gene
 }
 
 function parseAnalysisArtifact(value: unknown) {
-  if (!value) throw new Error("Analyze 단계가 아직 완료되지 않았습니다.");
+  if (!value) throw new Error("원문 분석 단계가 아직 완료되지 않았습니다.");
   const parsed = pdfAnalysisResponseSchema.parse(value);
-  if (!parsed.sourceOutline) throw new Error("Analyze 결과에 통합 원문 목차가 없습니다.");
+  if (!parsed.sourceOutline) throw new Error("원문 분석 결과에 통합 원문 목차가 없습니다.");
   return parsed;
 }
 
 function parseConceptTreeArtifact(value: unknown) {
-  if (!value || typeof value !== "object") throw new Error("Concept Tree 단계가 아직 완료되지 않았습니다.");
+  if (!value || typeof value !== "object") throw new Error("개념트리 단계가 아직 완료되지 않았습니다.");
   const artifact = value as Record<string, unknown>;
   if (typeof artifact.treeText !== "string" || !Array.isArray(artifact.nodes)) {
-    throw new Error("Concept Tree 산출물이 불완전합니다.");
+    throw new Error("개념트리 산출물이 불완전합니다.");
   }
   return artifact as ConceptTreeArtifact;
 }
 
 function parseLearningDesignArtifact(value: unknown) {
-  if (!value || typeof value !== "object") throw new Error("Learning Design 단계가 아직 완료되지 않았습니다.");
+  if (!value || typeof value !== "object") throw new Error("학습설계 단계가 아직 완료되지 않았습니다.");
   const artifact = value as Record<string, unknown>;
   if (!artifact.learningDesign || !artifact.analysis || !artifact.organizedMaterial) {
-    throw new Error("Learning Design 산출물이 불완전합니다.");
+    throw new Error("학습설계 산출물이 불완전합니다.");
   }
   return artifact as LearningDesignArtifact;
 }
 
 function parseActivityDesignArtifact(value: unknown) {
-  if (!value || typeof value !== "object") throw new Error("Activity Design 단계가 아직 완료되지 않았습니다.");
+  if (!value || typeof value !== "object") throw new Error("활동 설계 단계가 아직 완료되지 않았습니다.");
   const artifact = value as Record<string, unknown>;
   if (!artifact.learningDesign || !Array.isArray(artifact.activities) || !artifact.structureModes) {
-    throw new Error("Activity Design 산출물이 불완전합니다.");
+    throw new Error("활동 설계 산출물이 불완전합니다.");
   }
   if (!artifact.structureKinds || typeof artifact.structureKinds !== "object") {
     const design = artifact.learningDesign as LearningDesignPlan;
@@ -1861,10 +2096,10 @@ function parseActivityDesignArtifact(value: unknown) {
 }
 
 function parseCardsArtifact(value: unknown) {
-  if (!value || typeof value !== "object") throw new Error("Cards 단계가 아직 완료되지 않았습니다.");
+  if (!value || typeof value !== "object") throw new Error("카드 단계가 아직 완료되지 않았습니다.");
   const artifact = value as Record<string, unknown>;
   if (!artifact.activityDesign || !Array.isArray(artifact.cards)) {
-    throw new Error("Cards 산출물이 불완전합니다.");
+    throw new Error("카드 산출물이 불완전합니다.");
   }
   return artifact as ReturnType<typeof materializeLearningPlanGeneration> & { generated: unknown };
 }
@@ -1880,7 +2115,7 @@ function buildStudyGuideline(
       title: "선택한 원문 목차 학습",
       description: run.config.instruction || run.config.learningGoal,
       itemCount: Math.max(1, run.selectedOutlineLeafIds.length),
-      itemLabel: "Knowledge Unit",
+      itemLabel: "학습 단위",
       selectionInstruction: "선택한 원문 목차 범위에서 의미 있는 학습내용을 설계합니다.",
     },
     wholeDocumentCore: {

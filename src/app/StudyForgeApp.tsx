@@ -1130,16 +1130,17 @@ export default function Home() {
                 <GraduationCap size={17} />
                 기록
               </NavButton>
+              <a href="/mcp-runs" className="flex items-center gap-3 rounded-[9px] px-3 py-2.5 text-sm text-[#B5B5B5] hover:bg-[#292929] hover:text-white">
+                <Workflow size={16} />
+                MCP 실행
+              </a>
+              <a href="/mcp-personalization" className="flex items-center gap-3 rounded-[9px] px-3 py-2.5 text-sm text-[#B5B5B5] hover:bg-[#292929] hover:text-white">
+                <GraduationCap size={17} />
+                <span className="leading-5">MCP 생성 문제 +<br />로컬 개인화 실험</span>
+              </a>
             </nav>
 
             <div className="mt-auto border-t border-[#2B2B2B] pt-4">
-              <a
-                href="/codex"
-                className="mb-4 flex items-center gap-2 rounded-[9px] border border-[#393939] bg-[#202020] px-3 py-2.5 text-[11px] text-[#B5B5B5] hover:bg-[#292929]"
-              >
-                <span className="h-2 w-2 rounded-full bg-[#AEB4AF]" />
-                Codex 연결
-              </a>
               <span className="flex items-start gap-2 text-[10px] leading-5 text-[#777777]">
                 <Cloud size={14} className="mt-0.5 shrink-0" />
                 덱과 기록은 이 브라우저에,<br />프로젝트 PDF는 이 PC에 보관됩니다.
@@ -1358,7 +1359,7 @@ export default function Home() {
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-[#393D3A] bg-[#222523] p-2 md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-[#393D3A] bg-[#222523] p-2 md:hidden">
         <MobileNavButton active={view === "manager"} neutral={view === "manager"} onClick={() => navigateToView("manager")}>
           <CalendarDays size={17} /> 오늘
         </MobileNavButton>
@@ -1368,6 +1369,12 @@ export default function Home() {
         <MobileNavButton active={view === "records"} neutral={view === "manager"} onClick={() => navigateToView("records")}>
           <GraduationCap size={18} /> 기록
         </MobileNavButton>
+        <a href="/mcp-runs" className="flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-[11px] text-[#B5B5B5] hover:bg-white/10">
+          <Workflow size={18} /> MCP 실행
+        </a>
+        <a href="/mcp-personalization" aria-label="MCP 생성 문제 + 로컬 개인화 실험" className="flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-[11px] text-[#B5B5B5] hover:bg-white/10">
+          <GraduationCap size={18} /> 개인화
+        </a>
       </nav>
     </main>
   );

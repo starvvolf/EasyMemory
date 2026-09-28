@@ -21,6 +21,7 @@ type AuthSession = {
   uid: string;
   email: string;
   canUseAi: boolean;
+  mode?: "firebase" | "local-experiment";
 };
 
 const AuthSessionContext = createContext<AuthSession | null>(null);
@@ -44,66 +45,84 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     let active = true;
     let unsubscribe = () => {};
 
-    try {
-      const auth = getFirebaseAuth();
-      void getRedirectResult(auth).catch((error: unknown) => {
-        if (active) {
-          setMessage(toSignInMessage(error));
-          setStatus("signed-out");
-        }
-      });
-
-      unsubscribe = onIdTokenChanged(auth, async (user) => {
-        if (!active) return;
-        if (!user) {
-          setSession(null);
-          setStatus("signed-out");
-          return;
-        }
-
-        setStatus("loading");
-        try {
-          const response = await fetch("/api/auth/session", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${await user.getIdToken()}` },
-          });
-          const data = (await response.json()) as Partial<AuthSession> & {
-            message?: string;
-          };
-          if (!response.ok) {
-            throw new Error(data.message ?? "로그인 정보를 확인하지 못했습니다.");
-          }
-          if (!data.uid || !data.email || typeof data.canUseAi !== "boolean") {
-            throw new Error("서버가 올바른 인증 정보를 반환하지 않았습니다.");
-          }
+    function initializeFirebase() {
+      if (!active) return;
+      try {
+        const auth = getFirebaseAuth();
+        void getRedirectResult(auth).catch((error: unknown) => {
           if (active) {
-            setSession({
-              uid: data.uid,
-              email: data.email,
-              canUseAi: data.canUseAi,
-            });
-            setMessage("");
-            setStatus("ready");
+            setMessage(toSignInMessage(error));
+            setStatus("signed-out");
           }
-        } catch (error) {
-          if (active) {
+        });
+
+        unsubscribe = onIdTokenChanged(auth, async (user) => {
+          if (!active) return;
+          if (!user) {
             setSession(null);
-            setMessage(error instanceof Error ? error.message : "로그인에 실패했습니다.");
-            setStatus("error");
+            setStatus("signed-out");
+            return;
           }
-        }
-      });
-    } catch (error) {
-      queueMicrotask(() => {
-        if (!active) return;
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : "Firebase 인증을 초기화하지 못했습니다.",
-        );
-        setStatus("error");
-      });
+
+          setStatus("loading");
+          try {
+            const response = await fetch("/api/auth/session", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+            });
+            const data = (await response.json()) as Partial<AuthSession> & {
+              message?: string;
+            };
+            if (!response.ok) {
+              throw new Error(data.message ?? "로그인 정보를 확인하지 못했습니다.");
+            }
+            if (!data.uid || !data.email || typeof data.canUseAi !== "boolean") {
+              throw new Error("서버가 올바른 인증 정보를 반환하지 않았습니다.");
+            }
+            if (active) {
+              setSession({
+                uid: data.uid,
+                email: data.email,
+                canUseAi: data.canUseAi,
+                mode: "firebase",
+              });
+              setMessage("");
+              setStatus("ready");
+            }
+          } catch (error) {
+            if (active) {
+              setSession(null);
+              setMessage(error instanceof Error ? error.message : "로그인에 실패했습니다.");
+              setStatus("error");
+            }
+          }
+        });
+      } catch (error) {
+        queueMicrotask(() => {
+          if (!active) return;
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "Firebase 인증을 초기화하지 못했습니다.",
+          );
+          setStatus("error");
+        });
+      }
     }
+
+    void fetch("/api/local-experiment/status", { cache: "no-store" })
+      .then(async (response) => response.ok ? await response.json() as { active?: boolean } : { active: false })
+      .then((mode) => {
+        if (!active) return;
+        if (mode.active) {
+          setSession({ uid: "local-experiment", email: "", canUseAi: true, mode: "local-experiment" });
+          setMessage("");
+          setStatus("ready");
+        } else {
+          initializeFirebase();
+        }
+      })
+      .catch(() => initializeFirebase());
 
     return () => {
       active = false;
@@ -171,6 +190,11 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
   return (
     <AuthSessionContext.Provider value={session}>
+      {session.mode === "local-experiment" ? (
+        <div className="border-b border-[#F0B232]/40 bg-[#F0B232]/15 px-4 py-3 text-center text-sm font-bold text-[#FFF1C2]">
+          로컬 실험모드입니다. 이 실행은 Google 계정에 연결되지 않으며 기존 클라우드 데이터 기능은 사용할 수 없습니다.
+        </div>
+      ) : null}
       {!session.canUseAi ? (
         <div className="border-b border-[#F0B232]/40 bg-[#F0B232]/15 px-4 py-3 text-center text-sm font-bold text-[#FFF1C2]">
           일반 회원은 이 브라우저의 로컬 덱을 학습할 수 있습니다. AI 생성과 사용자별
@@ -178,17 +202,19 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         </div>
       ) : null}
       <div className="fixed right-4 top-3 z-50 flex items-center gap-3 rounded-md border border-[#3F4147] bg-[#1E1F22]/95 px-3 py-2 text-xs text-[#B5BAC1] shadow-lg backdrop-blur">
-        <span className="max-w-48 truncate">{session.email}</span>
+        <span className="max-w-48 truncate">{session.mode === "local-experiment" ? "로컬 실험" : session.email}</span>
         <span className="rounded bg-[#383A40] px-1.5 py-0.5 font-bold text-[#DCDDDE]">
-          {session.canUseAi ? "운영자" : "일반 회원"}
+          {session.mode === "local-experiment" ? "실험" : session.canUseAi ? "운영자" : "일반 회원"}
         </span>
-        <button
-          type="button"
-          onClick={() => void handleSignOut()}
-          className="font-bold text-white hover:underline"
-        >
-          로그아웃
-        </button>
+        {session.mode !== "local-experiment" ? (
+          <button
+            type="button"
+            onClick={() => void handleSignOut()}
+            className="font-bold text-white hover:underline"
+          >
+            로그아웃
+          </button>
+        ) : null}
       </div>
       {children}
     </AuthSessionContext.Provider>

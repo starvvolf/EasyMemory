@@ -1,0 +1,51 @@
+{
+  "instruction": "단일 열 4개 선지가 프레임 높이에 비해 길어 스크롤될 수 있으므로 두 문항의 선택지만 2열로 바꾼다. 질문, 보기, 정답 및 안정 ID는 유지한다.",
+  "operations": [
+    {
+      "op": "replace-block",
+      "questionId": "q-matrix-roles",
+      "blockId": "q1-choices",
+      "value": {
+        "id": "q1-choices",
+        "kind": "choice-set",
+        "frame": {
+          "x": 55,
+          "y": 185,
+          "width": 650,
+          "height": 153
+        },
+        "responseId": "r-matrix-roles",
+        "optionIds": [
+          "q1-a",
+          "q1-b",
+          "q1-c",
+          "q1-d"
+        ],
+        "columns": 2
+      }
+    },
+    {
+      "op": "replace-block",
+      "questionId": "q-set-translation-matrix",
+      "blockId": "q4-choices",
+      "value": {
+        "id": "q4-choices",
+        "kind": "choice-set",
+        "frame": {
+          "x": 55,
+          "y": 190,
+          "width": 650,
+          "height": 137
+        },
+        "responseId": "r-set-translation-matrix",
+        "optionIds": [
+          "q4-a",
+          "q4-b",
+          "q4-c",
+          "q4-d"
+        ],
+        "columns": 2
+      }
+    }
+  ]
+}

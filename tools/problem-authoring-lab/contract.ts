@@ -1,3 +1,6 @@
+import katex from "katex";
+import { normalizeExactAnswer } from "./grading.ts";
+
 export type SourceContent = {
   learningUnitId: string;
   objectiveId: string;
@@ -5,6 +8,7 @@ export type SourceContent = {
   sourcePage: number;
   sourcePages?: number[];
   sourceRange: string;
+  knowledgeContent?: string;
   sourceText: string;
   target: string;
   successCriteria: string[];
@@ -32,6 +36,7 @@ export type GeneratedAssetRef = {
 type BlockBase = { id: string; frame: Frame };
 export type AuthoringBlock =
   | (BlockBase & { kind: "text"; text: string; style?: "body" | "heading" | "caption" })
+  | (BlockBase & { kind: "math"; latex: string; displayMode?: boolean })
   | (BlockBase & { kind: "box"; label?: string; tone?: "plain" | "accent" | "warning" })
   | (BlockBase & { kind: "image"; alt: string; sourceAssetRef: SourceAssetRef })
   | (BlockBase & { kind: "generated-image"; alt: string; caption?: string; generatedAssetRef: GeneratedAssetRef })
@@ -44,7 +49,7 @@ export type ResponseContract =
   | {
       id: string;
       kind: "single-choice";
-      options: Array<{ id: string; text: string }>;
+      options: Array<{ id: string; text?: string; latex?: string }>;
       correctOptionId: string;
       grading: "exact";
       explanation?: string;
@@ -129,6 +134,24 @@ function validGeneratedImage(block: Extract<AuthoringBlock, { kind: "generated-i
     && Boolean(asset.generatorVersion.trim());
 }
 
+function validLatex(value: string | undefined) {
+  if (!value?.trim()) return false;
+  try {
+    katex.renderToString(value, { throwOnError: true, trust: false });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasPlainMatrixRows(value: string | undefined) {
+  if (!value) return false;
+  return [...value.matchAll(/\[([^\]\n]+)\]/g)].some((match) => {
+    const rows = (match[1] ?? "").split(";").map((row) => row.trim().split(/\s+/));
+    return rows.length >= 2 && rows.every((row) => row.length >= 2);
+  });
+}
+
 export function validateDocument(document: AuthoringDocument): InspectionIssue[] {
   const issues: InspectionIssue[] = [];
   if (document.schemaVersion !== "problem-authoring-v1") {
@@ -153,6 +176,8 @@ export function validateDocument(document: AuthoringDocument): InspectionIssue[]
       if (["choice-set", "blank", "answer-reveal"].includes(block.kind)) issues.push({ severity: "error", code: "shared-response-block", message: "응답 블록은 개별 문항에 있어야 합니다.", questionId: set.id, blockId: block.id });
       if (block.kind === "image" && (block.sourceAssetRef.sourceId !== set.source.sourceId || !(set.source.sourcePages ?? [set.source.sourcePage]).includes(block.sourceAssetRef.page))) issues.push({ severity: "error", code: "shared-image-source", message: "공통 그림의 출처가 다릅니다.", questionId: set.id, blockId: block.id });
       if (block.kind === "generated-image" && !validGeneratedImage(block)) issues.push({ severity: "error", code: "generated-asset-contract", message: "공통 생성 그림의 재현 정보가 유효하지 않습니다.", questionId: set.id, blockId: block.id });
+      if (block.kind === "math" && !validLatex(block.latex)) issues.push({ severity: "error", code: "math-syntax", message: "공통 수식의 LaTeX가 유효하지 않습니다.", questionId: set.id, blockId: block.id });
+      if (hasPlainMatrixRows(block.kind === "text" ? block.text : block.kind === "box" ? block.label : undefined)) issues.push({ severity: "warning", code: "plain-matrix", message: "세미콜론으로 구분한 행렬을 math 블록으로 조판하세요.", questionId: set.id, blockId: block.id });
     }
   }
   for (const question of document.questions) {
@@ -195,14 +220,18 @@ export function validateDocument(document: AuthoringDocument): InspectionIssue[]
           issues.push({ severity: "error", code: "generated-asset-contract", message: "생성 그림의 로컬 SVG 경로 또는 재현 정보가 유효하지 않습니다.", questionId: question.id, blockId: block.id });
         }
       }
+      if (block.kind === "math" && !validLatex(block.latex)) issues.push({ severity: "error", code: "math-syntax", message: "수식의 LaTeX가 유효하지 않습니다.", questionId: question.id, blockId: block.id });
+      if (hasPlainMatrixRows(block.kind === "text" ? block.text : block.kind === "box" ? block.label : undefined)) issues.push({ severity: "warning", code: "plain-matrix", message: "세미콜론으로 구분한 행렬을 math 블록으로 조판하세요.", questionId: question.id, blockId: block.id });
     }
     for (const response of question.responses) {
       const inputBlocks = question.blocks.filter((block) => (block.kind === "choice-set" || block.kind === "blank") && block.responseId === response.id);
       if (inputBlocks.length !== 1) issues.push({ severity: "error", code: "response-input-count", message: "응답마다 선택지 또는 빈칸 입력 블록 하나가 필요합니다.", questionId: question.id });
       if (response.kind === "single-choice") {
-        if (response.options.length < 2 || !unique(response.options.map((option) => option.id)) || !response.options.some((option) => option.id === response.correctOptionId) || response.options.some((option) => !option.text.trim())) {
+        if (response.options.length < 2 || !unique(response.options.map((option) => option.id)) || !response.options.some((option) => option.id === response.correctOptionId) || response.options.some((option) => Boolean(option.text?.trim()) === Boolean(option.latex?.trim()))) {
           issues.push({ severity: "error", code: "single-choice-answer", message: "객관식 정답 또는 선지 계약이 유효하지 않습니다.", questionId: question.id });
         }
+        if (response.options.some((option) => option.latex !== undefined && !validLatex(option.latex))) issues.push({ severity: "error", code: "math-syntax", message: "선지 수식의 LaTeX가 유효하지 않습니다.", questionId: question.id });
+        if (response.options.some((option) => hasPlainMatrixRows(option.text))) issues.push({ severity: "warning", code: "plain-matrix", message: "세미콜론으로 구분한 선지 행렬을 LaTeX로 조판하세요.", questionId: question.id });
       } else if (!response.acceptedAnswers.length || response.acceptedAnswers.some((answer) => !answer.trim())) {
         issues.push({ severity: "error", code: "short-text-answer", message: "단답형 정답이 비어 있습니다.", questionId: question.id });
       }
@@ -262,6 +291,5 @@ export function applyRevision(document: AuthoringDocument, patch: RevisionPatch)
 export function gradeResponse(response: ResponseContract, answer: string) {
   if (response.kind === "single-choice") return answer === response.correctOptionId;
   if (response.grading === "self-check") return null;
-  const normalize = (value: string) => value.normalize("NFKC").replace(/[\u2212\u2010-\u2015]/g, "-").replace(/\s+/g, "").toLocaleLowerCase("ko-KR");
-  return response.acceptedAnswers.some((expected) => normalize(expected) === normalize(answer));
+  return response.acceptedAnswers.some((expected) => normalizeExactAnswer(expected) === normalizeExactAnswer(answer));
 }

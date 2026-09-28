@@ -1,11 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getApiAccessLevel } from "@/lib/auth-policy";
 import {
+  isLocalExperimentApiPath,
+  isLocalExperimentRequest,
+  isSameOriginExperimentMutation,
+} from "@/lib/local-experiment-mode";
+import {
   authenticateLearnerMemoryRequest,
   authenticateRequest,
 } from "@/lib/server-auth";
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === "/api/local-experiment/status") {
+    return NextResponse.next();
+  }
+  if (isLocalExperimentApiPath(request.nextUrl.pathname) && isLocalExperimentRequest(request)) {
+    if (!isSameOriginExperimentMutation(request)) {
+      return NextResponse.json({ message: "같은 출처의 요청만 허용합니다." }, { status: 403 });
+    }
+    return NextResponse.next();
+  }
   if (
     request.nextUrl.pathname === "/api/auth/session" ||
     request.nextUrl.pathname === "/api/auth/vscode-link/exchange"

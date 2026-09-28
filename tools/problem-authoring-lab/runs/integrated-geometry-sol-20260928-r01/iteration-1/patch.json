@@ -1,0 +1,85 @@
+{
+  "instruction": "원천 run을 보존하고 p6 조건·복원을 한 응답에서 직접 확인하며 p7 답 형식을 명확히 하고 회전행렬 선택지를 수식으로 조판한다.",
+  "operations": [
+    {
+      "op": "replace-block",
+      "questionId": "question-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+      "blockId": "blank-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+      "value": {
+        "id": "blank-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+        "kind": "blank",
+        "responseId": "response-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+        "promptBefore": "동차좌표 (6,9,3)의 h 조건, 복원한 2D 좌표, h=1일 때 (x,y)의 표현을 순서대로 쓰세요: ",
+        "promptAfter": "",
+        "frame": {
+          "x": 28,
+          "y": 100,
+          "width": 704,
+          "height": 132
+        }
+      }
+    },
+    {
+      "op": "replace-response",
+      "questionId": "question-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+      "responseId": "response-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+      "value": {
+        "id": "response-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+        "kind": "short-text",
+        "acceptedAnswers": [
+          "h≠0; (2,3); (x,y,1)"
+        ],
+        "grading": "self-check",
+        "explanation": "h는 0이 아니어야 하며 (xh,yh,h)는 (xh/h,yh/h)로 복원한다. (6,9,3)은 (2,3)이고 h=1이면 (x,y,1)이다."
+      }
+    },
+    {
+      "op": "replace-block",
+      "questionId": "question-966efaff-3694-4a81-92cd-e89e0645d965",
+      "blockId": "blank-966efaff-3694-4a81-92cd-e89e0645d965",
+      "value": {
+        "id": "blank-966efaff-3694-4a81-92cd-e89e0645d965",
+        "kind": "blank",
+        "responseId": "response-966efaff-3694-4a81-92cd-e89e0645d965",
+        "promptBefore": "3×3 평행이동 행렬의 첫째 행 셋째 열과 둘째 행 셋째 열에 들어갈 값을 순서대로 쓰세요: ",
+        "promptAfter": "",
+        "frame": {
+          "x": 28,
+          "y": 100,
+          "width": 704,
+          "height": 132
+        }
+      }
+    },
+    {
+      "op": "replace-response",
+      "questionId": "question-686aa7b6-dc84-4966-92e3-2450264dd923",
+      "responseId": "response-686aa7b6-dc84-4966-92e3-2450264dd923",
+      "value": {
+        "id": "response-686aa7b6-dc84-4966-92e3-2450264dd923",
+        "kind": "single-choice",
+        "options": [
+          {
+            "id": "option-686aa7b6-dc84-4966-92e3-2450264dd923-1",
+            "latex": "\\begin{bmatrix}\\cos\\theta&-\\sin\\theta\\\\\\sin\\theta&\\cos\\theta\\end{bmatrix}"
+          },
+          {
+            "id": "option-686aa7b6-dc84-4966-92e3-2450264dd923-2",
+            "latex": "\\begin{bmatrix}\\cos\\theta&\\sin\\theta\\\\-\\sin\\theta&\\cos\\theta\\end{bmatrix}"
+          },
+          {
+            "id": "option-686aa7b6-dc84-4966-92e3-2450264dd923-3",
+            "latex": "\\begin{bmatrix}\\cos\\theta&0\\\\0&\\sin\\theta\\end{bmatrix}"
+          },
+          {
+            "id": "option-686aa7b6-dc84-4966-92e3-2450264dd923-4",
+            "latex": "\\begin{bmatrix}1&0\\\\0&1\\end{bmatrix}"
+          }
+        ],
+        "correctOptionId": "option-686aa7b6-dc84-4966-92e3-2450264dd923-1",
+        "grading": "exact",
+        "explanation": "회전 행렬의 오른쪽 위가 -sinθ, 왼쪽 아래가 sinθ이다."
+      }
+    }
+  ]
+}

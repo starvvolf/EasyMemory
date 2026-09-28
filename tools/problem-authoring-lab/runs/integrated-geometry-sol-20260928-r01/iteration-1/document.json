@@ -1,0 +1,787 @@
+{
+  "schemaVersion": "problem-authoring-v1",
+  "id": "authoring-chatgpt-request-789ee8708698831ced8655c04f289698",
+  "title": "Geometric Transformations · 대표 범위 시험학습",
+  "questions": [
+    {
+      "id": "question-c80b7c79-fa67-46a1-a3f9-bfb303a789f5",
+      "source": {
+        "learningUnitId": "knowledge-unit-1",
+        "objectiveId": "objective-1",
+        "sourceId": "02_Geometric Transformations.pdf",
+        "sourcePage": 2,
+        "sourcePages": [
+          2
+        ],
+        "sourceRange": "평행이동",
+        "sourceText": "Adding offsets to its coordinates; Relocating all the coordinate positions by the same displacement along parallel paths (PDF 2쪽).",
+        "target": "점과 변위가 주어졌을 때 이동 뒤 좌표를 계산한다.",
+        "successCriteria": [
+          "x와 y에 각각 해당 변위 성분을 더한다."
+        ],
+        "knowledgeContent": "2차원 평행이동은 점과 물체의 모든 좌표에 동일한 변위를 더해 형태를 보존한다.",
+        "outlineNodeIds": [
+          "source-1:outline-3"
+        ],
+        "conceptNodeIds": [
+          "concept-002"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-c80b7c79-fa67-46a1-a3f9-bfb303a789f5",
+          "kind": "text",
+          "text": "점 (2,-1)을 변위 (-3,4)만큼 평행이동하면 새 좌표는?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-c80b7c79-fa67-46a1-a3f9-bfb303a789f5",
+          "kind": "choice-set",
+          "responseId": "response-c80b7c79-fa67-46a1-a3f9-bfb303a789f5",
+          "optionIds": [
+            "option-c80b7c79-fa67-46a1-a3f9-bfb303a789f5-1",
+            "option-c80b7c79-fa67-46a1-a3f9-bfb303a789f5-2",
+            "option-c80b7c79-fa67-46a1-a3f9-bfb303a789f5-3",
+            "option-c80b7c79-fa67-46a1-a3f9-bfb303a789f5-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-c80b7c79-fa67-46a1-a3f9-bfb303a789f5",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-c80b7c79-fa67-46a1-a3f9-bfb303a789f5"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-c80b7c79-fa67-46a1-a3f9-bfb303a789f5",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-c80b7c79-fa67-46a1-a3f9-bfb303a789f5-1",
+              "text": "(5,-5)"
+            },
+            {
+              "id": "option-c80b7c79-fa67-46a1-a3f9-bfb303a789f5-2",
+              "text": "(-1,3)"
+            },
+            {
+              "id": "option-c80b7c79-fa67-46a1-a3f9-bfb303a789f5-3",
+              "text": "(-1,-5)"
+            },
+            {
+              "id": "option-c80b7c79-fa67-46a1-a3f9-bfb303a789f5-4",
+              "text": "(5,3)"
+            }
+          ],
+          "correctOptionId": "option-c80b7c79-fa67-46a1-a3f9-bfb303a789f5-2",
+          "grading": "exact",
+          "explanation": "x에는 -3, y에는 4를 더해 (2-3,-1+4)=(-1,3)이다."
+        }
+      ]
+    },
+    {
+      "id": "question-a08567d8-71a8-4f77-8a44-cec215ec859c",
+      "source": {
+        "learningUnitId": "knowledge-unit-2",
+        "objectiveId": "objective-2",
+        "sourceId": "02_Geometric Transformations.pdf",
+        "sourcePage": 3,
+        "sourcePages": [
+          3
+        ],
+        "sourceRange": "원점 중심 회전",
+        "sourceText": "A positive value for the angle θ defines a counterclockwise rotation about the pivot point (PDF 3쪽).",
+        "target": "양의 90도 회전에서 점의 새 좌표를 계산한다.",
+        "successCriteria": [
+          "(x,y)를 (-y,x)로 변환한다."
+        ],
+        "knowledgeContent": "원점 기준 양의 회전각은 반시계 방향으로 점을 원호를 따라 이동시킨다.",
+        "outlineNodeIds": [
+          "source-1:outline-4"
+        ],
+        "conceptNodeIds": [
+          "concept-003"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-a08567d8-71a8-4f77-8a44-cec215ec859c",
+          "kind": "text",
+          "text": "원점 기준 점 (2,1)을 양의 90도 회전하면 어디로 이동하는가?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-a08567d8-71a8-4f77-8a44-cec215ec859c",
+          "kind": "choice-set",
+          "responseId": "response-a08567d8-71a8-4f77-8a44-cec215ec859c",
+          "optionIds": [
+            "option-a08567d8-71a8-4f77-8a44-cec215ec859c-1",
+            "option-a08567d8-71a8-4f77-8a44-cec215ec859c-2",
+            "option-a08567d8-71a8-4f77-8a44-cec215ec859c-3",
+            "option-a08567d8-71a8-4f77-8a44-cec215ec859c-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-a08567d8-71a8-4f77-8a44-cec215ec859c",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-a08567d8-71a8-4f77-8a44-cec215ec859c"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-a08567d8-71a8-4f77-8a44-cec215ec859c",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-a08567d8-71a8-4f77-8a44-cec215ec859c-1",
+              "text": "(1,-2)"
+            },
+            {
+              "id": "option-a08567d8-71a8-4f77-8a44-cec215ec859c-2",
+              "text": "(-2,-1)"
+            },
+            {
+              "id": "option-a08567d8-71a8-4f77-8a44-cec215ec859c-3",
+              "text": "(-1,2)"
+            },
+            {
+              "id": "option-a08567d8-71a8-4f77-8a44-cec215ec859c-4",
+              "text": "(2,-1)"
+            }
+          ],
+          "correctOptionId": "option-a08567d8-71a8-4f77-8a44-cec215ec859c-3",
+          "grading": "exact",
+          "explanation": "양의 회전은 반시계 방향이다. 90도에서 (x,y)는 (-y,x)가 된다."
+        }
+      ]
+    },
+    {
+      "id": "question-31f2c325-85a6-42d4-bbf8-dd662f7d0364",
+      "source": {
+        "learningUnitId": "knowledge-unit-3",
+        "objectiveId": "objective-3",
+        "sourceId": "02_Geometric Transformations.pdf",
+        "sourcePage": 4,
+        "sourcePages": [
+          4
+        ],
+        "sourceRange": "축별 확대축소",
+        "sourceText": "Multiplying object positions by scaling factors; When sx and sy are assigned the same value, relative object proportions are maintained (PDF 4쪽).",
+        "target": "두 축의 확대축소를 계산하고 균일 여부를 판단한다.",
+        "successCriteria": [
+          "새 좌표와 sx=sy 여부를 모두 맞힌다."
+        ],
+        "knowledgeContent": "확대축소는 x에 sx, y에 sy를 곱하며 두 계수가 같을 때 원래 비율이 유지된다.",
+        "outlineNodeIds": [
+          "source-1:outline-5"
+        ],
+        "conceptNodeIds": [
+          "concept-004"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-31f2c325-85a6-42d4-bbf8-dd662f7d0364",
+          "kind": "text",
+          "text": "점 (2,3)에 sx=2, sy=1을 적용한 결과와 균일 확대축소 여부로 옳은 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-31f2c325-85a6-42d4-bbf8-dd662f7d0364",
+          "kind": "choice-set",
+          "responseId": "response-31f2c325-85a6-42d4-bbf8-dd662f7d0364",
+          "optionIds": [
+            "option-31f2c325-85a6-42d4-bbf8-dd662f7d0364-1",
+            "option-31f2c325-85a6-42d4-bbf8-dd662f7d0364-2",
+            "option-31f2c325-85a6-42d4-bbf8-dd662f7d0364-3",
+            "option-31f2c325-85a6-42d4-bbf8-dd662f7d0364-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-31f2c325-85a6-42d4-bbf8-dd662f7d0364",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-31f2c325-85a6-42d4-bbf8-dd662f7d0364"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-31f2c325-85a6-42d4-bbf8-dd662f7d0364",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-31f2c325-85a6-42d4-bbf8-dd662f7d0364-1",
+              "text": "(4,3), 균일하지 않음"
+            },
+            {
+              "id": "option-31f2c325-85a6-42d4-bbf8-dd662f7d0364-2",
+              "text": "(4,3), 균일함"
+            },
+            {
+              "id": "option-31f2c325-85a6-42d4-bbf8-dd662f7d0364-3",
+              "text": "(2,6), 균일하지 않음"
+            },
+            {
+              "id": "option-31f2c325-85a6-42d4-bbf8-dd662f7d0364-4",
+              "text": "(2,6), 균일함"
+            }
+          ],
+          "correctOptionId": "option-31f2c325-85a6-42d4-bbf8-dd662f7d0364-1",
+          "grading": "exact",
+          "explanation": "x에는 2를 곱하고 y에는 1을 곱한다. 두 계수가 달라 균일 확대축소가 아니다."
+        }
+      ]
+    },
+    {
+      "id": "question-dacdf08f-f21c-4267-a0f5-e2f96c371b9e",
+      "source": {
+        "learningUnitId": "knowledge-unit-4",
+        "objectiveId": "objective-4",
+        "sourceId": "02_Geometric Transformations.pdf",
+        "sourcePage": 5,
+        "sourcePages": [
+          5
+        ],
+        "sourceRange": "일반 행렬형",
+        "sourceText": "M1: a 2 × 2 matrix containing multiplicative factors; M2: a two-element column matrix containing translational terms (PDF 5쪽).",
+        "target": "두 항의 역할을 구별한다.",
+        "successCriteria": [
+          "M1과 M2를 각 기능에 바르게 대응한다."
+        ],
+        "knowledgeContent": "일반 행렬형 P'=M1 P+M2에서 M1은 곱셈 계수 2×2 행렬, M2는 평행이동 열벡터다.",
+        "outlineNodeIds": [
+          "source-1:outline-7"
+        ],
+        "conceptNodeIds": [
+          "concept-005"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-dacdf08f-f21c-4267-a0f5-e2f96c371b9e",
+          "kind": "text",
+          "text": "일반형 P'=M1 P+M2에서 M1과 M2의 역할을 바르게 대응한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-dacdf08f-f21c-4267-a0f5-e2f96c371b9e",
+          "kind": "choice-set",
+          "responseId": "response-dacdf08f-f21c-4267-a0f5-e2f96c371b9e",
+          "optionIds": [
+            "option-dacdf08f-f21c-4267-a0f5-e2f96c371b9e-1",
+            "option-dacdf08f-f21c-4267-a0f5-e2f96c371b9e-2",
+            "option-dacdf08f-f21c-4267-a0f5-e2f96c371b9e-3",
+            "option-dacdf08f-f21c-4267-a0f5-e2f96c371b9e-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-dacdf08f-f21c-4267-a0f5-e2f96c371b9e",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-dacdf08f-f21c-4267-a0f5-e2f96c371b9e"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-dacdf08f-f21c-4267-a0f5-e2f96c371b9e",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-dacdf08f-f21c-4267-a0f5-e2f96c371b9e-1",
+              "text": "M1은 곱셈 계수 2×2 행렬, M2는 평행이동 열벡터"
+            },
+            {
+              "id": "option-dacdf08f-f21c-4267-a0f5-e2f96c371b9e-2",
+              "text": "M1은 평행이동 열벡터, M2는 곱셈 계수 2×2 행렬"
+            },
+            {
+              "id": "option-dacdf08f-f21c-4267-a0f5-e2f96c371b9e-3",
+              "text": "둘 다 평행이동 열벡터"
+            },
+            {
+              "id": "option-dacdf08f-f21c-4267-a0f5-e2f96c371b9e-4",
+              "text": "둘 다 회전각만 나타내는 스칼라"
+            }
+          ],
+          "correctOptionId": "option-dacdf08f-f21c-4267-a0f5-e2f96c371b9e-1",
+          "grading": "exact",
+          "explanation": "M1은 곱셈으로 작용하고 M2는 변위를 더하는 항이다."
+        }
+      ]
+    },
+    {
+      "id": "question-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+      "source": {
+        "learningUnitId": "knowledge-unit-5",
+        "objectiveId": "objective-5",
+        "sourceId": "02_Geometric Transformations.pdf",
+        "sourcePage": 6,
+        "sourcePages": [
+          6
+        ],
+        "sourceRange": "동차좌표",
+        "sourceText": "The homogeneous parameter h is a non-zero value; If we simply set h = 1, each 2D position is represented with homogeneous coordinates (x,y,1) (PDF 6쪽).",
+        "target": "동차좌표의 의미와 h=1의 표현을 설명한다.",
+        "successCriteria": [
+          "비영 h와 (x,y,1)을 함께 말한다."
+        ],
+        "knowledgeContent": "2D 점을 (xh,yh,h)로 나타내고 h는 0이 아니며 h=1이면 (x,y,1)이다.",
+        "outlineNodeIds": [
+          "source-1:outline-8"
+        ],
+        "conceptNodeIds": [
+          "concept-006"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+          "kind": "text",
+          "text": "빈칸에 들어갈 내용을 직접 쓰세요.",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 56
+          }
+        },
+        {
+          "id": "blank-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+          "kind": "blank",
+          "responseId": "response-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+          "promptBefore": "동차좌표 (6,9,3)의 h 조건, 복원한 2D 좌표, h=1일 때 (x,y)의 표현을 순서대로 쓰세요: ",
+          "promptAfter": "",
+          "frame": {
+            "x": 28,
+            "y": 100,
+            "width": 704,
+            "height": 132
+          }
+        },
+        {
+          "id": "reveal-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-245a6b71-7bd9-4add-9a5f-5e7e72ad3d63",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "h≠0; (2,3); (x,y,1)"
+          ],
+          "grading": "self-check",
+          "explanation": "h는 0이 아니어야 하며 (xh,yh,h)는 (xh/h,yh/h)로 복원한다. (6,9,3)은 (2,3)이고 h=1이면 (x,y,1)이다."
+        }
+      ]
+    },
+    {
+      "id": "question-966efaff-3694-4a81-92cd-e89e0645d965",
+      "source": {
+        "learningUnitId": "knowledge-unit-6",
+        "objectiveId": "objective-6",
+        "sourceId": "02_Geometric Transformations.pdf",
+        "sourcePage": 7,
+        "sourcePages": [
+          7
+        ],
+        "sourceRange": "평행이동 행렬",
+        "sourceText": "Two-Dimensional Translation Matrix (T): [1 0 tx; 0 1 ty; 0 0 1] (PDF 7쪽).",
+        "target": "평행이동 행렬의 변위 항 위치를 완성한다.",
+        "successCriteria": [
+          "[1,0,tx;0,1,ty;0,0,1] 구조를 맞힌다."
+        ],
+        "knowledgeContent": "평행이동 3×3 행렬에서 tx,ty는 셋째 열 첫째·둘째 행에 놓이고 대각은 1이다.",
+        "outlineNodeIds": [
+          "source-1:outline-9",
+          "source-1:outline-10",
+          "source-1:outline-11"
+        ],
+        "conceptNodeIds": [
+          "concept-007"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-966efaff-3694-4a81-92cd-e89e0645d965",
+          "kind": "text",
+          "text": "빈칸에 들어갈 내용을 직접 쓰세요.",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 56
+          }
+        },
+        {
+          "id": "blank-966efaff-3694-4a81-92cd-e89e0645d965",
+          "kind": "blank",
+          "responseId": "response-966efaff-3694-4a81-92cd-e89e0645d965",
+          "promptBefore": "3×3 평행이동 행렬의 첫째 행 셋째 열과 둘째 행 셋째 열에 들어갈 값을 순서대로 쓰세요: ",
+          "promptAfter": "",
+          "frame": {
+            "x": 28,
+            "y": 100,
+            "width": 704,
+            "height": 132
+          }
+        },
+        {
+          "id": "reveal-966efaff-3694-4a81-92cd-e89e0645d965",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-966efaff-3694-4a81-92cd-e89e0645d965"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-966efaff-3694-4a81-92cd-e89e0645d965",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "tx,ty"
+          ],
+          "grading": "exact-normalized",
+          "explanation": "평행이동 변위 tx와 ty는 셋째 열의 첫째·둘째 행에 들어간다."
+        }
+      ]
+    },
+    {
+      "id": "question-686aa7b6-dc84-4966-92e3-2450264dd923",
+      "source": {
+        "learningUnitId": "knowledge-unit-7",
+        "objectiveId": "objective-7",
+        "sourceId": "02_Geometric Transformations.pdf",
+        "sourcePage": 7,
+        "sourcePages": [
+          7
+        ],
+        "sourceRange": "회전 행렬",
+        "sourceText": "Two-Dimensional Rotation Matrix (R): [cosθ -sinθ 0; sinθ cosθ 0; 0 0 1] (PDF 7쪽).",
+        "target": "회전 행렬의 부호와 위치를 판단한다.",
+        "successCriteria": [
+          "-sinθ와 +sinθ의 위치를 맞힌다."
+        ],
+        "knowledgeContent": "회전 3×3 행렬의 왼쪽 위 2×2는 [cosθ,-sinθ;sinθ,cosθ]이다.",
+        "outlineNodeIds": [
+          "source-1:outline-9",
+          "source-1:outline-10",
+          "source-1:outline-11"
+        ],
+        "conceptNodeIds": [
+          "concept-008"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-686aa7b6-dc84-4966-92e3-2450264dd923",
+          "kind": "text",
+          "text": "원점 기준 2차원 회전행렬의 왼쪽 위 2×2 부분을 올바르게 쓴 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-686aa7b6-dc84-4966-92e3-2450264dd923",
+          "kind": "choice-set",
+          "responseId": "response-686aa7b6-dc84-4966-92e3-2450264dd923",
+          "optionIds": [
+            "option-686aa7b6-dc84-4966-92e3-2450264dd923-1",
+            "option-686aa7b6-dc84-4966-92e3-2450264dd923-2",
+            "option-686aa7b6-dc84-4966-92e3-2450264dd923-3",
+            "option-686aa7b6-dc84-4966-92e3-2450264dd923-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-686aa7b6-dc84-4966-92e3-2450264dd923",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-686aa7b6-dc84-4966-92e3-2450264dd923"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-686aa7b6-dc84-4966-92e3-2450264dd923",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-686aa7b6-dc84-4966-92e3-2450264dd923-1",
+              "latex": "\\begin{bmatrix}\\cos\\theta&-\\sin\\theta\\\\\\sin\\theta&\\cos\\theta\\end{bmatrix}"
+            },
+            {
+              "id": "option-686aa7b6-dc84-4966-92e3-2450264dd923-2",
+              "latex": "\\begin{bmatrix}\\cos\\theta&\\sin\\theta\\\\-\\sin\\theta&\\cos\\theta\\end{bmatrix}"
+            },
+            {
+              "id": "option-686aa7b6-dc84-4966-92e3-2450264dd923-3",
+              "latex": "\\begin{bmatrix}\\cos\\theta&0\\\\0&\\sin\\theta\\end{bmatrix}"
+            },
+            {
+              "id": "option-686aa7b6-dc84-4966-92e3-2450264dd923-4",
+              "latex": "\\begin{bmatrix}1&0\\\\0&1\\end{bmatrix}"
+            }
+          ],
+          "correctOptionId": "option-686aa7b6-dc84-4966-92e3-2450264dd923-1",
+          "grading": "exact",
+          "explanation": "회전 행렬의 오른쪽 위가 -sinθ, 왼쪽 아래가 sinθ이다."
+        }
+      ]
+    },
+    {
+      "id": "question-43168ed9-6369-4e79-971b-e1244eb57201",
+      "source": {
+        "learningUnitId": "knowledge-unit-8",
+        "objectiveId": "objective-8",
+        "sourceId": "02_Geometric Transformations.pdf",
+        "sourcePage": 7,
+        "sourcePages": [
+          7
+        ],
+        "sourceRange": "확대축소 행렬",
+        "sourceText": "Two-Dimensional Scaling Matrix (S): [sx 0 0; 0 sy 0; 0 0 1] (PDF 7쪽).",
+        "target": "확대축소 행렬의 대각 성분을 완성한다.",
+        "successCriteria": [
+          "sx,sy,1의 위치를 맞힌다."
+        ],
+        "knowledgeContent": "확대축소 3×3 행렬의 대각은 sx,sy,1이고 비대각항은 0이다.",
+        "outlineNodeIds": [
+          "source-1:outline-9",
+          "source-1:outline-10",
+          "source-1:outline-11"
+        ],
+        "conceptNodeIds": [
+          "concept-009"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-43168ed9-6369-4e79-971b-e1244eb57201",
+          "kind": "text",
+          "text": "2차원 확대축소를 동차좌표 3×3 행렬로 나타낼 때 대각 성분의 순서는?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-43168ed9-6369-4e79-971b-e1244eb57201",
+          "kind": "choice-set",
+          "responseId": "response-43168ed9-6369-4e79-971b-e1244eb57201",
+          "optionIds": [
+            "option-43168ed9-6369-4e79-971b-e1244eb57201-1",
+            "option-43168ed9-6369-4e79-971b-e1244eb57201-2",
+            "option-43168ed9-6369-4e79-971b-e1244eb57201-3",
+            "option-43168ed9-6369-4e79-971b-e1244eb57201-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-43168ed9-6369-4e79-971b-e1244eb57201",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-43168ed9-6369-4e79-971b-e1244eb57201"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-43168ed9-6369-4e79-971b-e1244eb57201",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-43168ed9-6369-4e79-971b-e1244eb57201-1",
+              "text": "sx,sy,1"
+            },
+            {
+              "id": "option-43168ed9-6369-4e79-971b-e1244eb57201-2",
+              "text": "1,sx,sy"
+            },
+            {
+              "id": "option-43168ed9-6369-4e79-971b-e1244eb57201-3",
+              "text": "sx,1,sy"
+            },
+            {
+              "id": "option-43168ed9-6369-4e79-971b-e1244eb57201-4",
+              "text": "sy,sx,0"
+            }
+          ],
+          "correctOptionId": "option-43168ed9-6369-4e79-971b-e1244eb57201-1",
+          "grading": "exact",
+          "explanation": "x축 계수 sx, y축 계수 sy, 동차 성분 1이 대각에 놓인다."
+        }
+      ]
+    }
+  ]
+}

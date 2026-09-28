@@ -1,0 +1,52 @@
+{
+  "instruction": "p6 성공기준의 h≠0과 h=1→(x,y,1)을 같은 자동채점 문항에서 직접 판별하고, h로 나누는 이유를 정답 선택에 포함한다.",
+  "operations": [
+    {
+      "op": "replace-block",
+      "questionId": "question-h-nonzero-20260928-r02",
+      "blockId": "prompt-h-nonzero-20260928-r02",
+      "value": {
+        "id": "prompt-h-nonzero-20260928-r02",
+        "kind": "text",
+        "text": "2D 동차좌표 (xh,yh,h)의 h 조건과 h=1일 때 (x,y)의 표현을 모두 바르게 묶은 것은?",
+        "style": "heading",
+        "frame": {
+          "x": 28,
+          "y": 24,
+          "width": 704,
+          "height": 82
+        }
+      }
+    },
+    {
+      "op": "replace-response",
+      "questionId": "question-h-nonzero-20260928-r02",
+      "responseId": "response-h-nonzero-20260928-r02",
+      "value": {
+        "id": "response-h-nonzero-20260928-r02",
+        "kind": "single-choice",
+        "options": [
+          {
+            "id": "option-h-nonzero-20260928-r02-2",
+            "text": "h는 0이어도 되고, h=1이면 (x,y,1)로 나타낸다"
+          },
+          {
+            "id": "option-h-nonzero-20260928-r02-3",
+            "text": "h는 0이 아니어야 하지만, h=1이면 (1,x,y)로 나타낸다"
+          },
+          {
+            "id": "option-h-nonzero-20260928-r02-1",
+            "text": "h는 0이 아니어야 h로 나누어 복원할 수 있고, h=1이면 (x,y,1)로 나타낸다"
+          },
+          {
+            "id": "option-h-nonzero-20260928-r02-4",
+            "text": "h는 반드시 1이어야 하며, h=1이면 (x,y,0)으로 나타낸다"
+          }
+        ],
+        "correctOptionId": "option-h-nonzero-20260928-r02-1",
+        "grading": "exact",
+        "explanation": "h는 0이 아니어야 x=xh/h, y=yh/h로 복원할 수 있다. h=1로 두면 (x,y,1)이다."
+      }
+    }
+  ]
+}

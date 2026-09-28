@@ -10,6 +10,7 @@ import { mockDraft, mockPatch } from "./fixtures/mock-adapters.ts";
 import { createProblemAuthoringMcpServer } from "./mcp-server.ts";
 import { adaptLearningDesignArtifact, type EngineLearningDesignArtifact } from "./learning-design-bridge.ts";
 import { renderDocument, renderInteractiveDocument } from "./renderer.ts";
+import { normalizeExactAnswer } from "./grading.ts";
 
 async function fixture() {
   return JSON.parse(await readFile("tools/problem-authoring-lab/fixtures/science-source-packet.json", "utf8")) as { items: SourceContent[] };
@@ -41,6 +42,44 @@ test("정답 전 화면은 답을 숨기고 정답 후 화면은 계약의 답�
   assert.doesNotMatch(before, /choice correct/);
   assert.match(after, /choice correct/);
   assert.match(after, /1000만 K/);
+});
+
+test("긴 자기확인 답은 여러 줄로 입력하고 수식 정답은 공개할 때 조판한다", async () => {
+  const document = mockDraft((await fixture()).items);
+  const response = document.questions[0]!.responses.find((item) => item.kind === "short-text");
+  assert.ok(response && response.kind === "short-text");
+  response.grading = "self-check";
+  response.acceptedAnswers = ["\\frac{1}{2}"];
+  const interactive = renderInteractiveDocument(document);
+  const revealed = renderDocument(document, { revealAnswers: true });
+  assert.match(interactive, /class="block blank long-answer"[^>]*>[\s\S]*?<textarea[^>]*data-response-id="r-lu2-temp"/);
+  assert.match(interactive, /input\[data-response-id\],textarea\[data-response-id\]/);
+  assert.match(interactive, /answer\.innerHTML = response\.displayAnswerHtml/);
+  assert.match(interactive, /class="block reveal hidden-answer"[^>]*>정답을 확인한 뒤 표시됩니다\.<\/div>/);
+  assert.match(revealed, /class="block reveal"[\s\S]*?class="katex"/);
+});
+
+test("원문 근거와 학습 내용은 공개 전 HTML에 없고 공개 시에만 삽입할 수 있다", async () => {
+  const document = mockDraft((await fixture()).items);
+  const source = document.questions[0]!.source;
+  source.sourcePages = [34, 35];
+  source.sourceRange = "공개 전 감춰야 할 근거 문장";
+  source.knowledgeContent = "공개 전 감춰야 할 학습 내용";
+  const before = renderDocument(document, { revealAnswers: false });
+  const interactive = renderInteractiveDocument(document);
+  const after = renderDocument(document, { revealAnswers: true });
+  for (const html of [before, interactive]) {
+    assert.match(html, /class="source-line">원문 34, 35쪽<\/div>/);
+    assert.ok(!html.includes(source.sourceRange));
+    assert.ok(!html.includes(source.knowledgeContent));
+  }
+  assert.match(after, /근거: 공개 전 감춰야 할 근거 문장/);
+  assert.match(after, /학습 내용: 공개 전 감춰야 할 학습 내용/);
+  const encoded = interactive.match(/id="source-contract">([^<]+)<\/script>/)?.[1];
+  assert.ok(encoded);
+  const payload = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as Array<{ id: string; sourceRange: string; knowledgeContent: string }>;
+  assert.equal(payload.find((item) => item.id === document.questions[0]!.id)?.sourceRange, source.sourceRange);
+  assert.match(interactive, /sourceLine\.append\(detail\)/);
 });
 
 test("기본 렌더는 로컬 Pretendard 가변 웹폰트와 시스템 fallback을 사용한다", async () => {
@@ -212,6 +251,64 @@ test("고정 그래프 자산은 spec과 일치하고 외부 SVG 리소스를 �
   assert.ok(hrefs.every((href) => href?.startsWith("#")));
 });
 
+test("수식 블록과 행렬 선지는 KaTeX로 조판하고 ID 기준 채점을 유지한다", async () => {
+  const document = mockDraft((await fixture()).items);
+  const question = document.questions[2]!;
+  question.page.height = 500;
+  question.blocks.push({ id: "math-example", kind: "math", frame: { x: 50, y: 410, width: 500, height: 70 }, latex: "\\frac{1}{2}+x^2" });
+  const response = question.responses.find((item) => item.kind === "single-choice");
+  assert.ok(response && response.kind === "single-choice");
+  response.options = [
+    { id: "matrix-a", latex: "\\begin{bmatrix}1&0&3\\\\0&1&-2\\\\0&0&1\\end{bmatrix}" },
+    { id: "matrix-b", latex: "\\begin{bmatrix}1&0&-3\\\\0&1&2\\\\0&0&1\\end{bmatrix}" },
+  ];
+  response.correctOptionId = "matrix-b";
+  const choice = question.blocks.find((block) => block.kind === "choice-set");
+  assert.ok(choice && choice.kind === "choice-set");
+  choice.optionIds = ["matrix-a", "matrix-b"];
+  assert.deepEqual(validateDocument(document), []);
+  assert.equal(gradeResponse(response, "matrix-b"), true);
+  const before = renderDocument(document, { revealAnswers: false });
+  const after = renderDocument(document, { revealAnswers: true });
+  const interactive = renderInteractiveDocument(document);
+  assert.match(before, /\.katex-mathml\{/);
+  assert.match(before, /url\(data:font\/woff2;base64,/);
+  assert.doesNotMatch(before, /url\(fonts\//);
+  assert.doesNotMatch(before, /<link rel="stylesheet"/);
+  assert.match(before, /class="katex"/);
+  assert.match(before, /class="choice-content"><span class="katex"/);
+  assert.doesNotMatch(before, /\[1 0 -3;/);
+  assert.match(after, /choice correct/);
+  assert.match(after, /class="block reveal"[\s\S]*class="katex"/);
+  assert.match(interactive, /content\.cloneNode\(true\)/);
+  const font = await readFile("tools/problem-authoring-lab/assets/katex/fonts/KaTeX_Main-Regular.woff2");
+  assert.equal(font.subarray(0, 4).toString("ascii"), "wOF2");
+});
+
+test("깨진 수식과 텍스트·수식을 동시에 지정한 선지는 거부한다", async () => {
+  const document = mockDraft((await fixture()).items);
+  document.questions[2]!.page.height = 500;
+  document.questions[2]!.blocks.push({ id: "bad-math", kind: "math", frame: { x: 50, y: 410, width: 500, height: 70 }, latex: "\\begin{bmatrix}1&2" });
+  const response = document.questions[2]!.responses.find((item) => item.kind === "single-choice");
+  assert.ok(response && response.kind === "single-choice");
+  response.options[0] = { ...response.options[0]!, latex: "x^2" };
+  response.options[1] = { ...response.options[1]!, text: undefined, latex: "\\frac{" };
+  const issues = validateDocument(document);
+  assert.ok(issues.some((issue) => issue.code === "math-syntax" && issue.blockId === "bad-math"));
+  assert.ok(issues.some((issue) => issue.code === "single-choice-answer"));
+  assert.ok(issues.some((issue) => issue.code === "math-syntax" && issue.questionId === document.questions[2]!.id));
+  assert.match(renderDocument(document, { revealAnswers: false }), /class="math-error"/);
+});
+
+test("일반 텍스트에 남은 세미콜론 행렬은 경고한다", async () => {
+  const document = mockDraft((await fixture()).items);
+  const question = document.questions[0]!;
+  question.blocks.push({ id: "plain-matrix", kind: "box", frame: { x: 40, y: 40, width: 200, height: 50 }, label: "M=[2 0; 0 3]" });
+  assert.ok(validateDocument(document).some((issue) => issue.code === "plain-matrix" && issue.severity === "warning" && issue.blockId === "plain-matrix"));
+  question.blocks[question.blocks.length - 1] = { id: "plain-matrix", kind: "math", frame: { x: 40, y: 40, width: 200, height: 50 }, latex: "M=\\begin{bmatrix}2&0\\\\0&3\\end{bmatrix}" };
+  assert.ok(!validateDocument(document).some((issue) => issue.code === "plain-matrix"));
+});
+
 test("공통 자료는 한 번 표시하고 각 문항의 응답은 독립적으로 유지한다", async () => {
   const source = (await fixture()).items[0]!;
   const document: AuthoringDocument = {
@@ -252,12 +349,44 @@ test("공통 자료는 한 번 표시하고 각 문항의 응답은 독립적으
   assert.deepEqual(revised.questions, document.questions);
 });
 
-test("짧은 답은 공백과 마이너스 기호만 동치 처리하고 다른 문자는 보존한다", () => {
+test("짧은 답은 안전한 표기만 통일하고 값·순서·단위를 보존한다", () => {
   const response = { id: "r", kind: "short-text" as const, acceptedAnswers: ["(−2, 3)"], grading: "exact-normalized" as const };
   assert.equal(gradeResponse(response, "(-2,3)"), true);
   assert.equal(gradeResponse(response, "(2,3)"), false);
   assert.equal(gradeResponse(response, "(-2,4)"), false);
   assert.equal(gradeResponse(response, "-2,3"), false);
+  const prime = { id: "prime", kind: "short-text" as const, acceptedAnswers: ["x′=3"], grading: "exact-normalized" as const };
+  assert.equal(gradeResponse(prime, "x'=3"), true);
+  assert.equal(gradeResponse(prime, "x`=3"), true);
+  assert.equal(gradeResponse(prime, "x´=3"), true);
+  const exponent = { id: "exponent", kind: "short-text" as const, acceptedAnswers: ["R^-1"], grading: "exact-normalized" as const };
+  assert.equal(gradeResponse(exponent, "R^{-1}"), true);
+  assert.equal(gradeResponse(exponent, "R⁻¹"), true);
+  assert.equal(gradeResponse(exponent, "R-1"), false);
+  assert.equal(gradeResponse({ ...response, acceptedAnswers: ["sinθ,-sinθ"] }, "-sinθ,sinθ"), false);
+  assert.equal(gradeResponse({ ...response, acceptedAnswers: ["75°"] }, "75"), false);
+  assert.equal(gradeResponse({ ...response, acceptedAnswers: ["a·b"] }, "ab"), false);
+  assert.equal(gradeResponse({ ...response, acceptedAnswers: ["a;b"] }, "a,b"), false);
+});
+
+test("브라우저에 주입한 채점 함수는 서버와 동일하다", async () => {
+  const document = mockDraft((await fixture()).items);
+  const html = renderInteractiveDocument(document);
+  const embedded = html.match(/const normalize = (function normalizeExactAnswer\([\s\S]*?\n\});/)?.[1];
+  assert.ok(embedded);
+  const browserNormalize = new Script(`(${embedded})`).runInNewContext() as (value: string) => string;
+  for (const value of ["x′=3", "x'=3", "R^-1", "R⁻¹", "R^{-1}", "75°", "75", "a·b", "ab", "a;b", "a,b", "sinθ,-sinθ", "-sinθ,sinθ"]) {
+    assert.equal(browserNormalize(value), normalizeExactAnswer(value));
+  }
+  for (const question of document.questions) {
+    for (const response of question.responses) {
+      if (response.kind !== "short-text" || response.grading !== "exact-normalized") continue;
+      for (const answer of response.acceptedAnswers) {
+        assert.equal(response.acceptedAnswers.some((expected) => browserNormalize(expected) === browserNormalize(answer)), gradeResponse(response, answer));
+      }
+    }
+  }
+  assert.match(html, /revealed \? "정답 공개 후 제출\(독립 풀이 기록 제외\)"/);
 });
 
 test("실제 MCP Learning Design 패킷은 제출된 목표 여섯 개와 원문 해시를 보존한다", async () => {

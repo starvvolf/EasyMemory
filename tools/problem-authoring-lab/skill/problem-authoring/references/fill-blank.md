@@ -1,14 +1,14 @@
-# Recall and fill-blank authoring hypothesis v2
+# 회상·빈칸 문항 출제 가설 v2
 
-Use this as a starting method and revise it only from observed failures across examples.
+이 방법을 출발점으로 사용하고, 여러 사례에서 관찰된 실패에 근거할 때만 수정합니다.
 
-1. Choose the exact word, phrase, value, or relation the learner must retrieve.
-2. Supply enough surrounding context for that target to be uniquely recoverable without exposing it elsewhere on the page.
-3. Place one explicit blank block at the intended location. Never rely on a later text replacement pass to create blanks.
-4. Define accepted answers and choose exact-normalized grading only when spelling variants can be enumerated safely; otherwise use self-check.
-5. Size the blank for the expected response and arrange supporting text, boxes, or tables without turning them into answer cues.
-6. Render unanswered and revealed states. Check ambiguity, accidental answer exposure, blank placement and width, accepted-answer coverage, and reveal mapping.
+1. 학습자가 인출해야 할 정확한 단어, 구절, 값 또는 관계를 정합니다.
+2. 같은 화면의 다른 곳에서 답을 드러내지 않으면서 그 대상을 유일하게 복원할 수 있을 만큼 맥락을 제공합니다.
+3. 의도한 위치에 명시적인 빈칸 블록 하나를 둡니다. 나중에 텍스트를 치환하는 처리에 빈칸 생성을 맡기지 않습니다.
+4. 인정 답안을 정의합니다. 표기 변형을 안전하게 열거할 수 있을 때만 정규화 후 일치 채점을 선택하고, 그렇지 않으면 자기 점검을 사용합니다.
+5. 예상 답에 맞춰 빈칸 크기를 정하고, 보조 텍스트·박스·표가 정답 단서가 되지 않게 배치합니다.
+6. 정답 공개 전·후 화면을 렌더링합니다. 모호성, 뜻하지 않은 정답 노출, 빈칸 위치와 너비, 인정 답안의 범위, 정답 표시의 연결을 확인합니다.
 
-Multiple blanks or a novel composition may be appropriate, but each blank needs an explicit response contract and the combined task must still match the learning objective.
+여러 빈칸이나 새로운 구성도 적절할 수 있지만, 각 빈칸에는 명시적인 응답 계약이 필요하고 결합된 과제도 학습목표와 일치해야 합니다.
 
-Do not erase an arbitrary small token when the objective is a larger expression or relation. For example, hiding only `about` does not measure recall of an English speaking pattern unless that preposition itself is the stated target. Conversely, preserving exact source wording is appropriate when that wording is what the learner must retrieve.
+목표가 더 큰 표현이나 관계인데 임의의 짧은 토큰만 지우지 않습니다. 예를 들어 전치사 `about` 자체가 명시된 학습 대상이 아니라면 그 단어만 숨겨서는 영어 말하기 패턴의 회상을 측정하지 못합니다. 반대로 학습자가 인출해야 할 대상이 원문의 정확한 표현이라면 그 표현을 그대로 유지하는 것이 적절합니다.

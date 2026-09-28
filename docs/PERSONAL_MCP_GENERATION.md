@@ -132,6 +132,7 @@ npx @modelcontextprotocol/inspector@latest
 - `get_run_result`: 완료된 카드 본문 조회
 - `publish_run_to_deck`: 승인한 완료 run을 Study Forge 덱 가져오기 공간에 발행
 - `start_chatgpt_pdf_run`: 현재 ChatGPT 대화에 첨부한 PDF의 비교 run 시작
+- `reuse_chatgpt_pdf_analyze_output`: 빈 새 run의 Analyze에 기존 완료 artifact를 해시 검증 후 그대로 채택. 현재 승인된 로컬 PDF 두 개의 단일 파일 Analyze만 지원하며, 새 AI Analyze 실행으로 기록하지 않음
 - `configure_chatgpt_pdf_run`: Analyze 뒤 사용할 원문 목차 말단 항목 선택
 - `get_chatgpt_pdf_next_stage`: 비교 run의 다음 단계 계약 조회
 - `submit_chatgpt_pdf_stage`: ChatGPT가 작성한 현재 단계 결과 검증·저장
@@ -139,6 +140,8 @@ npx @modelcontextprotocol/inspector@latest
 - `publish_chatgpt_pdf_run`: 승인한 ChatGPT 비교 결과를 Study Forge 덱으로 발행
 - `list_chatgpt_pdf_runs`: 비교 run의 active/completed/published/cancelled 상태 조회
 - `cancel_chatgpt_pdf_run`: 미완료 run을 삭제하지 않고 취소 상태로 전환
+
+`start_chatgpt_pdf_run.stopAfterStage`를 지정하면 그 단계가 저장된 뒤 다음 단계의 결과 제출을 받지 않는다. 기본값은 `cards`다. Analyze 출력 재사용은 새 run을 시작한 다음 `reuse_chatgpt_pdf_analyze_output`에 원본 run ID·run 파일 SHA-256·Analyze artifact SHA-256·현재 승인 로컬 PDF SHA-256을 전달한다. MCP는 파일명·페이지 수와 네 해시/자료 조건을 확인하고 새 run의 `stageReuse.analyze`에 출처를 남긴다. 기존 run은 변경하지 않는다. 과거 run에는 PDF 바이트 해시가 자체 보존되지 않았으므로, 현재 고정 파일의 검증을 과거 생성 시점의 PDF 바이트 증명으로 과장하지 않는다. 다른 단계나 입력만 재사용하는 도구는 아직 없다.
 
 이전의 `get_stage_input`과 `submit_stage_result` 저수준 도구는 MCP 공개 목록에서 제거했습니다. 서비스 내부 함수는 오프라인 검사에 사용하지만 ChatGPT는 ID, stage와 checksum을 직접 복사하지 않습니다.
 

@@ -1,0 +1,672 @@
+{
+  "schemaVersion": "authoring-source-packet-v3",
+  "packetId": "mcp-chatgpt-request-edffcc5c6125fdf2f9ca5fc7d8191c90",
+  "title": "Geometric Transformations · 전체 시험 학습 r02",
+  "learningGoal": "자료의 핵심 개념, 공식과 적용 조건, 혼동하기 쉬운 차이를 이해하고 답을 보지 않고 기억에서 꺼내 사용할 수 있는 시험 학습.",
+  "sourceFileName": "02_Geometric Transformations.pdf",
+  "selectedPdfPages": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32
+  ],
+  "origin": {
+    "runId": "chatgpt-request-edffcc5c6125fdf2f9ca5fc7d8191c90",
+    "publishedId": null,
+    "sourceRunSha256": "3a535dcf3832145ceb2265a8c40b556937b29167b866043430dafa7b2644b35e",
+    "cardsInputSha256": "ac675bb61bbceaa5a9c830b7eec7492225cda2ba92e19a4b99f6608bb8f08375",
+    "status": "completed-unpublished"
+  },
+  "authoringRequest": {
+    "independentQuestions": 28,
+    "sharedSetQuestions": 0,
+    "revisionLimit": 1,
+    "format": "preserve-confirmed-cards"
+  },
+  "items": [
+    {
+      "learningUnitId": "knowledge-unit-1",
+      "objectiveId": "objective-1",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 2,
+      "sourcePages": [
+        2
+      ],
+      "sourceRange": "모든 점에 같은 변위를 더하면 평행 경로로 옮겨진다",
+      "sourceText": "PDF 2쪽: Adding offsets to its coordinates; same displacement.",
+      "target": "점과 변위에서 새 좌표를 계산한다.",
+      "successCriteria": [
+        "(x+tx,y+ty)를 구하고 두 좌표 모두 같은 변위를 적용한다."
+      ],
+      "knowledgeContent": "모든 2D 점에 같은 (tx,ty)를 더하면 모양을 유지하며 이동한다.",
+      "outlineNodeIds": [
+        "source-1:outline-3"
+      ],
+      "conceptNodeIds": [
+        "concept-003"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-2",
+      "objectiveId": "objective-2",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 3,
+      "sourcePages": [
+        3
+      ],
+      "sourceRange": "지정한 피벗과 각도에 따라 원호를 따라 움직이며 양의 각은 반시계다",
+      "sourceText": "PDF 3쪽의 positive angle과 pivot, 7쪽의 회전 행렬.",
+      "target": "양의 90도 원점 회전 결과를 계산한다.",
+      "successCriteria": [
+        "각도의 방향을 반시계로 판단하고 (-y,x)를 구한다."
+      ],
+      "knowledgeContent": "xy 평면의 양의 회전각은 피벗에서 볼 때 반시계 방향이며 원점 90도 회전은 (x,y)→(-y,x)이다.",
+      "outlineNodeIds": [
+        "source-1:outline-4"
+      ],
+      "conceptNodeIds": [
+        "concept-004"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-3",
+      "objectiveId": "objective-3",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 4,
+      "sourcePages": [
+        4
+      ],
+      "sourceRange": "x·y 축에 각각 다른 배율을 줄 수 있고 같은 배율일 때 비율을 유지한다",
+      "sourceText": "PDF 4쪽: scaling factors sx,sy; uniform scaling.",
+      "target": "점의 스케일 결과와 균일 여부를 판정한다.",
+      "successCriteria": [
+        "(sx·x,sy·y)를 구하고 sx=sy인지 확인한다."
+      ],
+      "knowledgeContent": "2D 스케일은 x에 sx, y에 sy를 곱하고 두 값이 같을 때만 축간 비율을 유지한다.",
+      "outlineNodeIds": [
+        "source-1:outline-5"
+      ],
+      "conceptNodeIds": [
+        "concept-005"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-4",
+      "objectiveId": "objective-4",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 5,
+      "sourcePages": [
+        5
+      ],
+      "sourceRange": "P′=M1P+M2에서 M1은 곱셈 성분이고 M2는 평행이동 성분이다",
+      "sourceText": "PDF 5쪽은 M1의 multiplicative factors와 M2의 translational terms를 구분한다.",
+      "target": "일반형의 두 항이 담당하는 작용을 대응한다.",
+      "successCriteria": [
+        "M1을 2×2 곱셈 행렬, M2를 2성분 이동 열벡터로 설명한다."
+      ],
+      "knowledgeContent": "일반 2D 변환형 P′=M1P+M2에서 M1은 좌표 곱셈, M2는 이동 성분이다.",
+      "outlineNodeIds": [
+        "source-1:outline-7"
+      ],
+      "conceptNodeIds": [
+        "concept-007"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-5",
+      "objectiveId": "objective-5",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 6,
+      "sourcePages": [
+        6
+      ],
+      "sourceRange": "h가 0이 아닌 (xh,yh,h) 표현에서 h=1이면 (x,y,1)이다",
+      "sourceText": "PDF 6쪽: homogeneous parameter h is non-zero; h=1인 점 표현.",
+      "target": "2D 점의 h=1 동차표현을 구성하고 h의 조건을 설명한다.",
+      "successCriteria": [
+        "(x,y,1)을 쓰고 h≠0 조건을 말한다."
+      ],
+      "knowledgeContent": "h가 0이 아닌 동차좌표에서 h=1이면 2D 점은 (x,y,1)로 나타난다.",
+      "outlineNodeIds": [
+        "source-1:outline-8"
+      ],
+      "conceptNodeIds": [
+        "concept-008"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-6",
+      "objectiveId": "objective-6",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 7,
+      "sourcePages": [
+        7
+      ],
+      "sourceRange": "3×3 행렬의 마지막 열 위 두 칸이 tx,ty 변위를 담는다",
+      "sourceText": "PDF 7쪽의 Two-Dimensional Translation Matrix.",
+      "target": "평행이동 행렬의 변위 항 위치를 재구성한다.",
+      "successCriteria": [
+        "[1,0,tx;0,1,ty;0,0,1]을 정확히 쓴다."
+      ],
+      "knowledgeContent": "2D 평행이동 3×3 행렬의 셋째 열 첫 두 항은 tx,ty이고 나머지는 단위행렬 형태다.",
+      "outlineNodeIds": [
+        "source-1:outline-9"
+      ],
+      "conceptNodeIds": [
+        "concept-009"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-7",
+      "objectiveId": "objective-7",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 7,
+      "sourcePages": [
+        7
+      ],
+      "sourceRange": "좌상단 2×2의 sin 부호가 양의 반시계 회전 방향을 정한다",
+      "sourceText": "PDF 7쪽의 Two-Dimensional Rotation Matrix.",
+      "target": "회전 행렬의 sin 부호와 위치를 재구성한다.",
+      "successCriteria": [
+        "-sinθ를 1행2열, +sinθ를 2행1열에 둔다."
+      ],
+      "knowledgeContent": "2D 양의 회전 행렬의 좌상단은 [cosθ,-sinθ;sinθ,cosθ]이다.",
+      "outlineNodeIds": [
+        "source-1:outline-10"
+      ],
+      "conceptNodeIds": [
+        "concept-010"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-8",
+      "objectiveId": "objective-8",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 7,
+      "sourcePages": [
+        7
+      ],
+      "sourceRange": "좌표 축별 배율 sx,sy는 대각 성분에 들어간다",
+      "sourceText": "PDF 7쪽의 Two-Dimensional Scaling Matrix.",
+      "target": "스케일 3×3 행렬의 대각 성분을 재구성한다.",
+      "successCriteria": [
+        "[sx,0,0;0,sy,0;0,0,1]을 정확히 쓴다."
+      ],
+      "knowledgeContent": "2D 스케일 행렬은 대각 sx,sy,1에 배율을 둔다.",
+      "outlineNodeIds": [
+        "source-1:outline-11"
+      ],
+      "conceptNodeIds": [
+        "concept-011"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-9",
+      "objectiveId": "objective-9",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 8,
+      "sourcePages": [
+        8
+      ],
+      "sourceRange": "변위·각도·비영 배율은 각각 반대 변위·반대 각·역수 배율로 되돌린다",
+      "sourceText": "PDF 8쪽의 inverse translation, rotation, scaling.",
+      "target": "이동·회전·스케일 각각의 역변환을 정한다.",
+      "successCriteria": [
+        "T(-tx,-ty), R(-θ), S(1/sx,1/sy)를 쓰고 sx,sy≠0을 확인한다."
+      ],
+      "knowledgeContent": "기본 변환의 역은 이동의 반대 변위, 회전의 반대 각, 비영 배율의 역수다.",
+      "outlineNodeIds": [
+        "source-1:outline-12"
+      ],
+      "conceptNodeIds": [
+        "concept-013"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-10",
+      "objectiveId": "objective-10",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 9,
+      "sourcePages": [
+        9
+      ],
+      "sourceRange": "연속 평행이동의 변위는 좌표별로 더해진다",
+      "sourceText": "PDF 9쪽의 composite translations.",
+      "target": "두 이동을 하나의 변위로 합친다.",
+      "successCriteria": [
+        "(tx1+tx2,ty1+ty2)를 구한다."
+      ],
+      "knowledgeContent": "연속 2D 평행이동의 변위는 좌표별로 더해진다.",
+      "outlineNodeIds": [
+        "source-1:outline-14"
+      ],
+      "conceptNodeIds": [
+        "concept-014"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-11",
+      "objectiveId": "objective-11",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 10,
+      "sourcePages": [
+        10
+      ],
+      "sourceRange": "같은 원점에 대한 연속 회전각은 더해진다",
+      "sourceText": "PDF 10쪽의 composite rotations.",
+      "target": "두 원점 회전의 합성각을 계산한다.",
+      "successCriteria": [
+        "R(α)R(β)=R(α+β)를 적용한다."
+      ],
+      "knowledgeContent": "같은 원점에 대한 연속 2D 회전은 각도를 더한 회전과 같다.",
+      "outlineNodeIds": [
+        "source-1:outline-15"
+      ],
+      "conceptNodeIds": [
+        "concept-015"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-12",
+      "objectiveId": "objective-12",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 10,
+      "sourcePages": [
+        10
+      ],
+      "sourceRange": "같은 축에 대한 연속 스케일 배율은 축별로 곱해진다",
+      "sourceText": "PDF 10쪽의 composite scalings.",
+      "target": "두 스케일의 합성 배율을 계산한다.",
+      "successCriteria": [
+        "(sx1·sx2,sy1·sy2)를 구한다."
+      ],
+      "knowledgeContent": "같은 좌표축에 대한 연속 스케일은 축별 배율을 곱한다.",
+      "outlineNodeIds": [
+        "source-1:outline-16"
+      ],
+      "conceptNodeIds": [
+        "concept-016"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-13",
+      "objectiveId": "objective-13",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 11,
+      "sourcePages": [
+        11
+      ],
+      "sourceRange": "임의 피벗을 원점으로 옮긴 뒤 회전하고 원래 위치로 되돌린다",
+      "sourceText": "PDF 11쪽의 general pivot-point rotation 단계와 행렬식.",
+      "target": "피벗 회전의 행렬 적용 순서를 세운다.",
+      "successCriteria": [
+        "q를 원점으로 옮기고 회전한 뒤 되돌리는 세 단계를 오른쪽부터 설명한다."
+      ],
+      "knowledgeContent": "피벗 q에 대한 2D 회전의 열벡터 행렬은 T(q)R(θ)T(-q)이다.",
+      "outlineNodeIds": [
+        "source-1:outline-17"
+      ],
+      "conceptNodeIds": [
+        "concept-017"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-14",
+      "objectiveId": "objective-14",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 12,
+      "sourcePages": [
+        12
+      ],
+      "sourceRange": "임의 고정점을 원점으로 옮긴 뒤 스케일하고 위치를 되돌린다",
+      "sourceText": "PDF 12쪽의 fixed-point scaling 단계와 행렬식.",
+      "target": "고정점 스케일의 적용 순서를 세운다.",
+      "successCriteria": [
+        "f를 원점으로 옮기고 축별 스케일한 뒤 되돌리는 세 단계를 오른쪽부터 설명한다."
+      ],
+      "knowledgeContent": "고정점 f 기준 2D 스케일의 열벡터 행렬은 T(f)S T(-f)이다.",
+      "outlineNodeIds": [
+        "source-1:outline-18"
+      ],
+      "conceptNodeIds": [
+        "concept-018"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-15",
+      "objectiveId": "objective-15",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 13,
+      "sourcePages": [
+        13
+      ],
+      "sourceRange": "원하는 방향을 축과 일치시키고 스케일한 뒤 반대 회전으로 복귀한다",
+      "sourceText": "PDF 13쪽의 R^-1(θ)·S·R(θ)와 세 단계 설명.",
+      "target": "열벡터 방식의 방향 스케일 합성 순서를 세운다.",
+      "successCriteria": [
+        "R(-θ)S R(θ)를 쓰고 오른쪽의 회전이 먼저 적용됨을 말한다."
+      ],
+      "knowledgeContent": "임의 방향 스케일은 방향을 축에 맞춘 R(θ) 뒤 S를 적용하고 R(-θ)로 복귀한다.",
+      "outlineNodeIds": [
+        "source-1:outline-19"
+      ],
+      "conceptNodeIds": [
+        "concept-019"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-16",
+      "objectiveId": "objective-16",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 14,
+      "sourcePages": [
+        14
+      ],
+      "sourceRange": "결합법칙은 성립하지만 일반적으로 교환법칙은 성립하지 않는다",
+      "sourceText": "PDF 14쪽의 associative와 not commutative 설명.",
+      "target": "두 변환의 곱에서 결합법칙과 교환법칙을 구별한다.",
+      "successCriteria": [
+        "(AB)C=A(BC)와 일반적 AB≠BA를 구별한다."
+      ],
+      "knowledgeContent": "행렬 곱은 결합 가능하지만 일반적으로 순서를 바꿔 곱할 수 없다.",
+      "outlineNodeIds": [
+        "source-1:outline-20"
+      ],
+      "conceptNodeIds": [
+        "concept-020"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-17",
+      "objectiveId": "objective-17",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 15,
+      "sourcePages": [
+        15
+      ],
+      "sourceRange": "먼저 계산한 합성 행렬을 여러 점에 적용하면 반복 계산량을 줄일 수 있다",
+      "sourceText": "PDF 15쪽의 general composite transformations and computational efficiency.",
+      "target": "여러 점에 같은 변환을 적용할 때 합성 계산의 이점을 설명한다.",
+      "successCriteria": [
+        "점마다 각 행렬을 따로 적용하기보다 하나의 M을 재사용한다고 말한다."
+      ],
+      "knowledgeContent": "합성 행렬을 먼저 계산해 같은 변환을 여러 점에 재사용하면 반복 연산을 줄인다.",
+      "outlineNodeIds": [
+        "source-1:outline-21"
+      ],
+      "conceptNodeIds": [
+        "concept-021"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-18",
+      "objectiveId": "objective-18",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 16,
+      "sourcePages": [
+        16
+      ],
+      "sourceRange": "축·원점·대각선 반사는 부호 변경과 좌표 교환으로 표현된다",
+      "sourceText": "PDF 16~17쪽의 축·원점·대각선 반사.",
+      "target": "네 반사 기준의 좌표 대응을 구별한다.",
+      "successCriteria": [
+        "x축·y축·원점·y=x 각각에 맞는 변환 좌표를 모두 제시한다."
+      ],
+      "knowledgeContent": "축·원점·y=x 기준 반사는 각각 (x,-y),(-x,y),(-x,-y),(y,x)의 좌표 대응을 준다.",
+      "outlineNodeIds": [
+        "source-1:outline-23"
+      ],
+      "conceptNodeIds": [
+        "concept-023"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-19",
+      "objectiveId": "objective-19",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 18,
+      "sourcePages": [
+        18
+      ],
+      "sourceRange": "x 또는 y 전단은 기준선에서 변위가 0이고 거리만큼 다른 좌표를 이동시킨다",
+      "sourceText": "PDF 18쪽의 x/y shear와 yref/xref 그림.",
+      "target": "전단 방향에 따라 변하는 좌표와 기준선 효과를 판정한다.",
+      "successCriteria": [
+        "x 전단은 y 고정·x 변화, y 전단은 x 고정·y 변화를 구별하고 기준선의 변위 0을 제시한다."
+      ],
+      "knowledgeContent": "x 방향 전단은 y에 따라 x가, y 방향 전단은 x에 따라 y가 달라지며 기준선에서는 변위가 0이다.",
+      "outlineNodeIds": [
+        "source-1:outline-24"
+      ],
+      "conceptNodeIds": [
+        "concept-024"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-20",
+      "objectiveId": "objective-20",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 19,
+      "sourcePages": [
+        19
+      ],
+      "sourceRange": "x·y·z 세 변위를 4×4 동차 행렬의 마지막 열에 담는다",
+      "sourceText": "PDF 19쪽의 Three-Dimensional Translation 행렬.",
+      "target": "3D 점의 이동 결과와 동차 행렬 항 위치를 구한다.",
+      "successCriteria": [
+        "(x+tx,y+ty,z+tz)를 계산하고 셋째 변위를 3행4열에 둔다."
+      ],
+      "knowledgeContent": "3D 평행이동 4×4 행렬의 마지막 열은 tx,ty,tz를 담는다.",
+      "outlineNodeIds": [
+        "source-1:outline-25"
+      ],
+      "conceptNodeIds": [
+        "concept-026"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-21",
+      "objectiveId": "objective-21",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 20,
+      "sourcePages": [
+        20
+      ],
+      "sourceRange": "z는 고정되고 xy 평면이 회전한다",
+      "sourceText": "PDF 20~21쪽의 Rz(θ) 행렬과 좌표식.",
+      "target": "z축 회전의 고정 좌표와 변화 좌표를 계산한다.",
+      "successCriteria": [
+        "x′=x cosθ-y sinθ, y′=x sinθ+y cosθ, z′=z를 쓴다."
+      ],
+      "knowledgeContent": "양의 z축 회전은 z를 고정하고 xy 평면을 2D 회전한다.",
+      "outlineNodeIds": [
+        "source-1:outline-27"
+      ],
+      "conceptNodeIds": [
+        "concept-028"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-22",
+      "objectiveId": "objective-22",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 21,
+      "sourcePages": [
+        21
+      ],
+      "sourceRange": "x는 고정되고 yz 평면이 회전한다",
+      "sourceText": "PDF 21쪽의 Rx(θ) 행렬과 좌표식.",
+      "target": "x축 회전의 고정 좌표와 변화 좌표를 계산한다.",
+      "successCriteria": [
+        "x′=x, y′=y cosθ-z sinθ, z′=y sinθ+z cosθ를 쓴다."
+      ],
+      "knowledgeContent": "양의 x축 회전은 x를 고정하고 yz 평면을 회전한다.",
+      "outlineNodeIds": [
+        "source-1:outline-27"
+      ],
+      "conceptNodeIds": [
+        "concept-029"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-23",
+      "objectiveId": "objective-23",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 21,
+      "sourcePages": [
+        21
+      ],
+      "sourceRange": "y는 고정되고 xz 평면이 회전한다",
+      "sourceText": "PDF 21쪽의 Ry(θ) 행렬과 좌표식.",
+      "target": "y축 회전의 고정 좌표와 변화 좌표를 계산한다.",
+      "successCriteria": [
+        "x′=x cosθ+z sinθ, y′=y, z′=z cosθ-x sinθ를 쓴다."
+      ],
+      "knowledgeContent": "양의 y축 회전은 y를 고정하고 xz 평면을 회전한다.",
+      "outlineNodeIds": [
+        "source-1:outline-27"
+      ],
+      "conceptNodeIds": [
+        "concept-030"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-24",
+      "objectiveId": "objective-24",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 22,
+      "sourcePages": [
+        22
+      ],
+      "sourceRange": "축을 원점에 놓고 좌표축에 맞춰 회전한 뒤 정렬과 이동을 역순으로 취소한다",
+      "sourceText": "PDF 22~23쪽의 general 3D rotation 단계와 24~29쪽의 축 정렬 유도.",
+      "target": "임의축 회전의 다섯 변환 단계를 순서대로 재구성한다.",
+      "successCriteria": [
+        "이동→축 정렬→지정 각 회전→정렬 역회전→역이동을 모두 제시한다."
+      ],
+      "knowledgeContent": "임의의 3D 축은 원점을 통과하도록 옮기고 좌표축에 정렬한 뒤 회전하며 역순으로 복귀한다.",
+      "outlineNodeIds": [
+        "source-1:outline-28"
+      ],
+      "conceptNodeIds": [
+        "concept-031"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-25",
+      "objectiveId": "objective-25",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 30,
+      "sourcePages": [
+        30
+      ],
+      "sourceRange": "축별 배율을 원점 또는 지정한 고정점에 대해 적용한다",
+      "sourceText": "PDF 30쪽의 3D origin scaling과 fixed-position scaling.",
+      "target": "3D 원점 스케일과 지정 고정점 스케일을 구별해 적용한다.",
+      "successCriteria": [
+        "원점에서는 (sx·x,sy·y,sz·z)를, 고정점에서는 T(f)S(sx,sy,sz)T(-f)를 제시한다."
+      ],
+      "knowledgeContent": "3D 스케일은 원점 기준으로 x·y·z에 sx·sy·sz를 곱하고 고정점 f 기준이면 T(f)S T(-f)로 감싼다.",
+      "outlineNodeIds": [
+        "source-1:outline-29"
+      ],
+      "conceptNodeIds": [
+        "concept-032"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-26",
+      "objectiveId": "objective-26",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 31,
+      "sourcePages": [
+        31
+      ],
+      "sourceRange": "공간의 한 축 방향을 뒤집으면 좌표계의 손잡이성이 달라질 수 있다",
+      "sourceText": "PDF 31쪽의 3D reflections와 right-handed to left-handed example.",
+      "target": "3D 반사가 좌표계 방향성에 미치는 효과를 설명한다.",
+      "successCriteria": [
+        "한 축 부호 반전과 손잡이성 변화를 연결한다."
+      ],
+      "knowledgeContent": "3D 반사는 한 좌표의 부호를 바꿔 오른손·왼손 좌표계 변환의 사례가 된다.",
+      "outlineNodeIds": [
+        "source-1:outline-31"
+      ],
+      "conceptNodeIds": [
+        "concept-033"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-27",
+      "objectiveId": "objective-27",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 31,
+      "sourcePages": [
+        31
+      ],
+      "sourceRange": "기준면에서 0인 변위가 기준면과의 거리에 비례해 늘어난다",
+      "sourceText": "PDF 31쪽의 zref 기준 3D shear 설명.",
+      "target": "3D 전단의 기준면에서 변위가 어떻게 되는지 판정한다.",
+      "successCriteria": [
+        "기준면의 전단량 0과 떨어진 점의 거리 비례 이동을 말한다."
+      ],
+      "knowledgeContent": "3D 전단은 기준면과의 거리에 따라 x 또는 y 좌표에 변위를 준다.",
+      "outlineNodeIds": [
+        "source-1:outline-32"
+      ],
+      "conceptNodeIds": [
+        "concept-034"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-28",
+      "objectiveId": "objective-28",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 32,
+      "sourcePages": [
+        32
+      ],
+      "sourceRange": "아핀 변환은 좌표의 선형식과 이동항으로 표현되며 평행성 보존과 등거리 보존을 구분한다",
+      "sourceText": "PDF 32쪽의 affine coordinate equations, parallel lines, isometric special case.",
+      "target": "일반 아핀과 등거리 특수 경우의 보존 성질을 구별한다.",
+      "successCriteria": [
+        "평행선 보존을 말하고 이동·회전·반사의 길이·각도 보존을 일반 스케일·전단과 구별한다."
+      ],
+      "knowledgeContent": "아핀 변환은 선형 좌표식과 상수항으로 쓰며 평행성은 보존하지만 길이·각도는 일반적으로 보존하지 않는다.",
+      "outlineNodeIds": [
+        "source-1:outline-33"
+      ],
+      "conceptNodeIds": [
+        "concept-035"
+      ]
+    }
+  ]
+}

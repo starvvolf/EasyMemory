@@ -1,0 +1,19 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "이번 제작 iteration을 실험 디렉터리에 기록했습니다."
+    }
+  ],
+  "structuredContent": {
+    "directory": "C:\\Users\\Public\\Documents\\ESTsoft\\CreatorTemp\\recaller-integration\\tools\\problem-authoring-lab\\runs\\geometric-authoring-prototype\\iteration-0",
+    "files": [
+      "document.json",
+      "inspection.json",
+      "execution.json",
+      "before-answer.html",
+      "after-answer.html",
+      "interactive.html"
+    ]
+  }
+}

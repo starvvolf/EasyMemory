@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { ChatGptParityService } from "../tools/study-forge-mcp/chatgpt-parity.ts";
+import { registerMcpSource } from "../src/lib/mcp-source-registry.ts";
 
 test("ChatGPT 첨부 PDF 경로가 자연어 다섯 단계를 검증하고 같은 덱 계약으로 발행한다", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "study-forge-chatgpt-mcp-"));
@@ -30,6 +32,7 @@ test("ChatGPT 첨부 PDF 경로가 자연어 다섯 단계를 검증하고 같�
     },
   });
   assert.equal(analyzed.nextStage, "concept-tree");
+  assert.match((analyzed.stageInput as { instructions: string }).instructions, /독립적으로 학습·판단할 내용의 출처/);
   assert.deepEqual(
     (analyzed.stageInput as { input: { selectedSourceOutline: { nodes: Array<{ id: string }> } } })
       .input.selectedSourceOutline.nodes.map((node) => node.id),
@@ -50,6 +53,12 @@ test("ChatGPT 첨부 PDF 경로가 자연어 다섯 단계를 검증하고 같�
     },
   });
   assert.equal(tree.nextStage, "learning-design");
+  const learningInput = tree.stageInput as { instructions: string; input: { attachmentRule: string; format: string } };
+  assert.match(learningInput.instructions, /학습내용·목표·성공기준은 같은 능력과 범위/);
+  assert.match(learningInput.instructions, /독립 능력은 별도 학습 대상/);
+  assert.match(learningInput.instructions, /제공된 원문으로 학습하고 확인할 수 있는 내용/);
+  assert.match(learningInput.input.attachmentRule, /상위 개념의 출처를 그 아래 모든 독립 능력의 평가범위로 간주하지/);
+  assert.match(learningInput.input.format, /학습내용과 같은 능력·범위/);
 
   const designed = await service.submitStage({
     runId: started.runId,
@@ -216,6 +225,249 @@ test("자연어형 Markdown 목차를 앱 계층으로 조립하고 설명 문�
     }),
     /형식이어야 합니다/,
   );
+});
+
+test("같은 페이지의 서로 다른 말단 목차는 개념별 명시 연결을 요구한다", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "study-forge-same-page-outline-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const service = new ChatGptParityService(path.join(root, "runs"), path.join(root, "published"));
+  const started = await service.startRun({
+    title: "같은 페이지 목차 검증",
+    files: [{ fileName: "same-page.pdf", pageCount: 2 }],
+  });
+  const analyzed = await service.submitStage({
+    runId: started.runId,
+    stage: "analyze",
+    result: { outlineText: "@file same-page.pdf\n# 변환 [1-2]\n## 평행이동 [2]\n## 회전 [2]" },
+  });
+  const choices = (analyzed.stageInput as { userSelection: { availableLeafNodes: Array<{ number: number; title: string }> } }).userSelection.availableLeafNodes;
+  assert.deepEqual(choices.map(({ number, title }) => [number, title]), [[1, "평행이동"], [2, "회전"]]);
+  await assert.rejects(service.submitStage({
+    runId: started.runId,
+    stage: "concept-tree",
+    result: { treeText: "변환\n- [종류] 평행이동 — 좌표 이동 (p.2)" },
+  }), /@목차\(번호\)/);
+  await service.submitStage({
+    runId: started.runId,
+    stage: "concept-tree",
+    result: { treeText: "변환\n- [종류] 평행이동 — 좌표 이동 (p.2) @목차(1)\n- [종류] 회전 — 방향 변경 (p.2) @목차(2)" },
+  });
+  const run = JSON.parse(await readFile(path.join(root, "runs", started.runId, "run.json"), "utf8")) as {
+    artifacts: { "concept-tree": { nodes: Array<{ outlineNodeIds: string[] }> } };
+  };
+  assert.deepEqual(run.artifacts["concept-tree"].nodes[1].outlineNodeIds, ["source-1:outline-2"]);
+  assert.deepEqual(run.artifacts["concept-tree"].nodes[2].outlineNodeIds, ["source-1:outline-3"]);
+});
+
+test("stopAfterStage 뒤에는 다음 단계 입력을 시작하지 않는다", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "study-forge-stop-stage-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const service = new ChatGptParityService(path.join(root, "runs"), path.join(root, "published"));
+  const started = await service.startRun({
+    title: "목차까지만 실행",
+    files: [{ fileName: "stop.pdf", pageCount: 2 }],
+    stopAfterStage: "analyze",
+  });
+  const stopped = await service.submitStage({
+    runId: started.runId,
+    stage: "analyze",
+    result: { outlineText: "@file stop.pdf\n# 첫 장 [1-2]" },
+  });
+  assert.equal(stopped.completed, false);
+  assert.equal(stopped.stoppedAfterStage, "analyze");
+  assert.equal(stopped.nextStage, null);
+  assert.equal(stopped.stageInput, null);
+  assert.equal((await service.getNextStage(started.runId)).nextStage, null);
+  assert.equal((await service.listRuns())[0].status, "stopped");
+  await assert.rejects(service.submitStage({
+    runId: started.runId,
+    stage: "concept-tree",
+    result: { treeText: "첫 장" },
+  }), /종료된 ChatGPT MCP run/);
+  const run = JSON.parse(await readFile(path.join(root, "runs", started.runId, "run.json"), "utf8")) as {
+    stageStartedAt: Record<string, string>;
+  };
+  assert.equal(run.stageStartedAt["concept-tree"], undefined);
+});
+
+test("완료 Analyze artifact를 해시 검증해 새 run에 정확히 재사용하고 출처를 보존한다", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "study-forge-reuse-analyze-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const pdfPath = path.join(root, "fixture.pdf");
+  const pdfBytes = Buffer.from("fixed local PDF fixture");
+  await writeFile(pdfPath, pdfBytes);
+  const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
+  const pdfSha256 = digest(pdfBytes);
+  const service = new ChatGptParityService(
+    path.join(root, "runs"),
+    path.join(root, "published"),
+    (name) => name === "fixture.pdf" ? { path: pdfPath, pageCount: 2, sha256: pdfSha256 } : null,
+  );
+  const source = await service.startRun({ title: "원본", files: [{ fileName: "fixture.pdf", pageCount: 2 }] });
+  await service.submitStage({
+    runId: source.runId,
+    stage: "analyze",
+    result: { outlineText: "@file fixture.pdf\n# 첫 장 [1-2]" },
+  });
+  const sourceFile = path.join(root, "runs", source.runId, "run.json");
+  const sourceRaw = await readFile(sourceFile, "utf8");
+  const sourceArtifact = (JSON.parse(sourceRaw) as { artifacts: { analyze: unknown } }).artifacts.analyze;
+  const sourceRunSha256 = digest(sourceRaw);
+  const sourceArtifactSha256 = digest(JSON.stringify(sourceArtifact));
+  const target = await service.startRun({
+    title: "재사용 대상",
+    files: [{ fileName: "fixture.pdf", pageCount: 2 }],
+    stopAfterStage: "concept-tree",
+  });
+  const reuseInput = {
+    runId: target.runId,
+    sourceRunId: source.runId,
+    sourceRunSha256,
+    sourceArtifactSha256,
+    sourcePdfSha256: pdfSha256,
+  };
+  await assert.rejects(service.reuseAnalyzeOutput({ ...reuseInput, sourceArtifactSha256: "0".repeat(64) }), /산출물의 SHA-256/);
+  await assert.rejects(service.reuseAnalyzeOutput({ ...reuseInput, sourceRunSha256: "0".repeat(64) }), /run 파일의 SHA-256/);
+  await assert.rejects(service.reuseAnalyzeOutput({ ...reuseInput, sourcePdfSha256: "0".repeat(64) }), /승인된 SHA-256/);
+  const reused = await service.reuseAnalyzeOutput(reuseInput);
+  assert.equal(reused.reused.kind, "output");
+  assert.equal(reused.nextStage, "concept-tree");
+  assert.equal(await readFile(sourceFile, "utf8"), sourceRaw);
+  const targetRun = JSON.parse(await readFile(path.join(root, "runs", target.runId, "run.json"), "utf8")) as {
+    artifacts: { analyze: unknown };
+    stageReuse: { analyze: { sourceRunId: string; sourceArtifactSha256: string } };
+  };
+  assert.deepEqual(targetRun.artifacts.analyze, sourceArtifact);
+  assert.equal(targetRun.stageReuse.analyze.sourceRunId, source.runId);
+  assert.equal(targetRun.stageReuse.analyze.sourceArtifactSha256, sourceArtifactSha256);
+  await assert.rejects(service.reuseAnalyzeOutput(reuseInput), /Analyze 전에만/);
+  const stopped = await service.submitStage({
+    runId: target.runId,
+    stage: "concept-tree",
+    result: { treeText: "첫 장\n- [주제] 근거 — 첫 장의 내용 (p.1)" },
+  });
+  assert.equal(stopped.stoppedAfterStage, "concept-tree");
+  assert.equal(stopped.nextStage, null);
+});
+
+test("registered PDF reuse binds source ID and bytes, not merely the file name", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "study-forge-registered-reuse-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  process.env.STUDY_FORGE_DATA_DIR = root;
+  t.after(() => { delete process.env.STUDY_FORGE_DATA_DIR; });
+  const firstBytes = await readFile(path.join(process.cwd(), "eval/corpus/user-test-pdfs/cornell-bfs-2pages.pdf"));
+  const first = await registerMcpSource("same.pdf", firstBytes);
+  const other = await registerMcpSource("same.pdf", Buffer.concat([firstBytes, Buffer.from("\n%alternate-copy\n")]));
+  const service = new ChatGptParityService(path.join(root, "runs"), path.join(root, "published"));
+  const source = await service.startRun({ title: "source", files: [{ fileName: first.fileName, pageCount: first.pageCount, sourceId: first.id, sha256: first.sha256 }] });
+  await service.submitStage({ runId: source.runId, stage: "analyze", result: { outlineText: "@file same.pdf\n# 첫 장 [1-2]" } });
+  const sourceRaw = await readFile(path.join(root, "runs", source.runId, "run.json"), "utf8");
+  const sourceArtifact = (JSON.parse(sourceRaw) as { artifacts: { analyze: unknown } }).artifacts.analyze;
+  const target = await service.startRun({ title: "target", files: [{ fileName: other.fileName, pageCount: other.pageCount, sourceId: other.id, sha256: other.sha256 }] });
+  await assert.rejects(service.reuseAnalyzeOutput({
+    runId: target.runId, sourceRunId: source.runId,
+    sourceRunSha256: createHash("sha256").update(sourceRaw).digest("hex"),
+    sourceArtifactSha256: createHash("sha256").update(JSON.stringify(sourceArtifact)).digest("hex"),
+    sourcePdfSha256: first.sha256,
+  }), /승인된 SHA-256/);
+  await assert.rejects(service.startRun({ title: "bad", files: [{ fileName: first.fileName, pageCount: first.pageCount, sourceId: first.id, sha256: other.sha256 }] }), /등록된 원본 PDF/);
+});
+
+test("verified legacy Analyze can be reused by the same registered PDF", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "study-forge-legacy-registered-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  process.env.STUDY_FORGE_DATA_DIR = root;
+  t.after(() => { delete process.env.STUDY_FORGE_DATA_DIR; });
+  const bytes = await readFile(path.join(process.cwd(), "eval/corpus/user-test-pdfs/cornell-bfs-2pages.pdf"));
+  const pdfPath = path.join(root, "legacy.pdf");
+  await writeFile(pdfPath, bytes);
+  const registered = await registerMcpSource("legacy.pdf", bytes);
+  const service = new ChatGptParityService(path.join(root, "runs"), path.join(root, "published"),
+    (name) => name === "legacy.pdf" ? { path: pdfPath, pageCount: registered.pageCount, sha256: registered.sha256 } : null);
+  const source = await service.startRun({ title: "old", files: [{ fileName: "legacy.pdf", pageCount: registered.pageCount }] });
+  await service.submitStage({ runId: source.runId, stage: "analyze", result: { outlineText: "@file legacy.pdf\n# 첫 장 [1-2]" } });
+  const sourceRaw = await readFile(path.join(root, "runs", source.runId, "run.json"), "utf8");
+  const artifact = (JSON.parse(sourceRaw) as { artifacts: { analyze: unknown } }).artifacts.analyze;
+  const target = await service.startRun({ title: "new", files: [{ fileName: "legacy.pdf", pageCount: registered.pageCount,
+    sourceId: registered.id, sha256: registered.sha256 }] });
+  const result = await service.reuseAnalyzeOutput({ runId: target.runId, sourceRunId: source.runId,
+    sourceRunSha256: createHash("sha256").update(sourceRaw).digest("hex"),
+    sourceArtifactSha256: createHash("sha256").update(JSON.stringify(artifact)).digest("hex"),
+    sourcePdfSha256: registered.sha256 });
+  assert.equal(result.reused.sourcePdfSha256, registered.sha256);
+});
+
+test("완료된 Learning Design까지만 불변 복사하고 새 Activity Design으로 이어간다", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "study-forge-reuse-prefix-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const pdfPath = path.join(root, "fixture.pdf");
+  const bytes = Buffer.from("fixed source for prefix reuse");
+  await writeFile(pdfPath, bytes);
+  const digest = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
+  const pdfSha256 = digest(bytes);
+  const service = new ChatGptParityService(path.join(root, "runs"), path.join(root, "published"),
+    (name) => name === "fixture.pdf" ? { path: pdfPath, pageCount: 1, sha256: pdfSha256 } : null);
+  const config = {
+    title: "학습 목표 확인", files: [{ fileName: "fixture.pdf", pageCount: 1 }],
+    learningGoal: "네 필요조건의 동시 성립을 설명한다.", instruction: "원문만 사용한다.",
+  };
+  const source = await service.startRun({ ...config, stopAfterStage: "learning-design" });
+  await service.submitStage({ runId: source.runId, stage: "analyze", result: {
+    outlineText: "@file fixture.pdf\n# 데드락의 필요조건 [1]",
+  } });
+  await service.submitStage({ runId: source.runId, stage: "concept-tree", result: { treeText: [
+    "데드락", "- [필요조건] 상호 배제 — 하나의 자원을 동시에 공유할 수 없음 (p.1)",
+    "- [필요조건] 점유와 대기 — 자원을 가진 채 다른 자원을 기다림 (p.1)",
+    "- [필요조건] 비선점 — 자원을 강제로 회수할 수 없음 (p.1)",
+    "- [필요조건] 순환 대기 — 프로세스들이 원형으로 자원을 기다림 (p.1)",
+  ].join("\n") } });
+  const stopped = await service.submitStage({ runId: source.runId, stage: "learning-design", result: {
+    learningDesignText: [
+      "--- LEARNING 1 ---", "개념: 2, 3, 4, 5", "학습내용: 데드락의 네 필요조건과 동시 성립 관계",
+      "학습목표: 네 필요조건과 동시 성립 관계를 설명할 수 있다.",
+      "성공기준: 네 조건과 동시 성립 관계를 빠짐없이 말한다.",
+      "근거: 데드락은 네 가지 필요조건이 동시에 성립할 때 발생할 수 있다.",
+      "종류: 관계", "이유: 네 조건은 개별 사실보다 동시 성립 관계가 핵심이다.", "중요도: 3",
+    ].join("\n"),
+  } });
+  assert.equal(stopped.stoppedAfterStage, "learning-design");
+  const sourceFile = path.join(root, "runs", source.runId, "run.json");
+  const sourceRaw = await readFile(sourceFile, "utf8");
+  const sourceRun = JSON.parse(sourceRaw) as {
+    artifacts: Record<string, unknown>; selectedOutlineLeafIds: string[];
+  };
+  const target = await service.startRun({ ...config, title: "새 문제 생성", stopAfterStage: "cards" });
+  const reuse = {
+    runId: target.runId, sourceRunId: source.runId, stage: "learning-design" as const,
+    sourceRunSha256: digest(sourceRaw), sourceArtifactSha256: digest(JSON.stringify(sourceRun.artifacts["learning-design"])),
+    sourcePdfSha256: pdfSha256, selectedOutlineLeafIds: sourceRun.selectedOutlineLeafIds, selectedPageNumbers: [1],
+  };
+  await assert.rejects(service.reuseStagePrefix({ ...reuse, sourceArtifactSha256: "0".repeat(64) }), /산출물의 SHA-256/);
+  await assert.rejects(service.reuseStagePrefix({ ...reuse, selectedPageNumbers: [2] }), /페이지 범위/);
+  await assert.rejects(service.reuseStagePrefix({ ...reuse, selectedOutlineLeafIds: ["different"] }), /하위목차 범위/);
+  const differentGoal = await service.startRun({ ...config, learningGoal: "다른 목표", stopAfterStage: "cards" });
+  await assert.rejects(service.reuseStagePrefix({ ...reuse, runId: differentGoal.runId }), /학습 목적/);
+  const tooEarly = await service.startRun({ ...config, stopAfterStage: "concept-tree" });
+  await assert.rejects(service.reuseStagePrefix({ ...reuse, runId: tooEarly.runId }), /종료 단계/);
+  const reused = await service.reuseStagePrefix(reuse);
+  assert.equal(reused.nextStage, "activity-design");
+  assert.equal(await readFile(sourceFile, "utf8"), sourceRaw);
+  const targetRun = JSON.parse(await readFile(path.join(root, "runs", target.runId, "run.json"), "utf8")) as {
+    artifacts: Record<string, unknown>;
+    stageReuse: Record<string, { sourceArtifactSha256: string }>;
+    selectedOutlineLeafIds: string[];
+  };
+  assert.deepEqual(Object.keys(targetRun.artifacts), ["analyze", "concept-tree", "learning-design"]);
+  assert.deepEqual(targetRun.selectedOutlineLeafIds, sourceRun.selectedOutlineLeafIds);
+  for (const stage of Object.keys(targetRun.artifacts)) {
+    assert.deepEqual(targetRun.artifacts[stage], sourceRun.artifacts[stage]);
+    assert.equal(targetRun.stageReuse[stage].sourceArtifactSha256, digest(JSON.stringify(sourceRun.artifacts[stage])));
+  }
+  await assert.rejects(service.reuseStagePrefix(reuse), /Analyze 전에만/);
+  const sameStop = await service.startRun({ ...config, stopAfterStage: "learning-design" });
+  const completedReuse = await service.reuseStagePrefix({ ...reuse, runId: sameStop.runId });
+  assert.equal(completedReuse.stoppedAfterStage, "learning-design");
+  assert.equal(completedReuse.nextStage, null);
 });
 
 test("Cards 계약은 구조의 종류와 지원 풀이 방식을 분리해 요구한다", async (t) => {
