@@ -1,6 +1,6 @@
 /* 되짚기 화면(협업/되짚기/되짚기_최신_v9.html)을 Recaller에 옮긴 것.
    화면·흐름·기록 규칙은 원본을 따르고, 문제 생성은 하지 않는다. 문제는 Recaller 출제 문서를 env.loadDecks()로 받는다.
-   env: { uid, loadDecks(), loadPdf(sourceCatalogId), loadPdfjs(), loadKatex(), ask? } */
+   env: see dejipgi-app.d.ts (decks, PDF, math, sources/requests for the request form; ask stays unset) */
 export function mountDejipgi(root, env){
 "use strict";
 const listeners = new AbortController();
@@ -124,7 +124,8 @@ const S = {
   deleting:null,
   reader:{ deckId:null, page:1, active:null, zoom:false, attachErr:"", attachBusy:false },
   pdf:{},
-  lib:{ status:"loading", error:"" }
+  lib:{ status:"loading", error:"" },
+  req:{ status:"idle", error:"", sources:[], requests:[], sourceId:"", pages:"", purpose:"", file:null, busy:"", notice:"", formErr:"" }
 };
 
 /* ---------- scheduling & status ---------- */
@@ -1029,14 +1030,113 @@ function renderRecords(){
   wrap.append(h("p", { class:"small muted", text:"‘3일 이상 혼자 맞힘’은 서로 다른 3일에 정답을 보기 전 스스로 맞힌 경우예요. 숙달했다는 판정이 아니라, 지금까지의 근거를 그대로 보여주는 표시입니다." }));
   return wrap;
 }
-/* ----- library: Recaller documents that passed the engine's checks ----- */
+/* ----- library: Recaller documents that passed the engine's checks, plus a generation request form.
+   Saving a request only queues it; the assigned AI picks it up through MCP and does the (paid) generation. ----- */
+const REQ_STATUS = {
+  "waiting-for-executor":{ label:"AI 실행 대기", cls:"" },
+  claimed:{ label:"AI가 가져감", cls:"acc" },
+  running:{ label:"AI가 만드는 중", cls:"acc" },
+  completed:{ label:"설계 완료", cls:"good" },
+  failed:{ label:"실패", cls:"bad" }
+};
+function pageRange(pages){
+  const out = []; let i = 0;
+  while (i < pages.length){ const a = pages[i]; let b = a; while (pages[i + 1] === b + 1) b = pages[++i]; out.push(a === b ? String(a) : `${a}-${b}`); i++; }
+  return out.join(", ");
+}
+async function loadRequests(){
+  const R = S.req; R.status = "loading"; R.error = "";
+  try{
+    const [sources, requests] = await Promise.all([env.listSources(), env.listRequests()]);
+    if (disposed) return;
+    R.sources = sources; R.requests = requests; R.status = "ready";
+    if (!sources.some(x => x.id === R.sourceId)) pickSource(sources.find(x => x.available) || sources[0]);
+  }catch(e){ R.status = "error"; R.error = (e && e.message) || "자료와 요청 목록을 불러오지 못했어요."; }
+  if (!disposed && S.view === "library") render();
+}
+function pickSource(src){ const R = S.req; R.sourceId = src ? src.id : ""; R.pages = src ? `1-${src.pageCount}` : ""; R.formErr = ""; }
+async function uploadSource(){
+  const R = S.req; if (!R.file || R.busy) return;
+  R.busy = "upload"; R.notice = ""; R.formErr = ""; render();
+  try{
+    const src = await env.uploadPdf(R.file);
+    R.file = null; R.notice = `‘${src.fileName}’을 등록했어요 (${src.pageCount}쪽).`;
+    await loadRequests(); pickSource(R.sources.find(x => x.id === src.id) || null);
+  }catch(e){ R.formErr = (e && e.message) || "PDF를 등록하지 못했어요."; }
+  finally{ R.busy = ""; render(); }
+}
+async function saveRequest(){
+  const R = S.req; if (R.busy || !R.sourceId) return;
+  R.busy = "save"; R.notice = ""; R.formErr = ""; render();
+  try{
+    const res = await env.createRequest(R.sourceId, R.pages, R.purpose);
+    if (res && res.error){ R.formErr = res.error; }
+    else { R.notice = "요청을 대기 목록에 올렸어요. 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 하면 가져가서 만들어요."; await loadRequests(); }
+  }catch(e){ R.formErr = (e && e.message) || "요청을 저장하지 못했어요."; }
+  finally{ R.busy = ""; render(); }
+}
+function renderRequestPanel(){
+  const R = S.req;
+  if (R.status === "idle") loadRequests();
+  const panel = h("section", { class:"panel stack" },
+    h("p", { class:"eyebrow", text:"새 자료 요청" }),
+    h("p", { class:"small muted", text:"PDF와 범위, 공부 목적을 적어 두면 대기 목록에 올라가요. 실제 문제는 담당 AI가 요청을 가져가 만들고(비용은 AI 쪽에서 나가요), 문제 작성까지 끝나면 위 목록에 나타나요." }));
+  if (R.status === "loading" && !R.sources.length){ panel.append(h("p", { class:"small muted", text:"자료 목록을 불러오는 중…" })); return panel; }
+  if (R.status === "error") panel.append(h("div", { class:"note err", text:R.error }));
+
+  const file = h("input", { type:"file", accept:"application/pdf,.pdf", "aria-label":"PDF 파일", disabled: !!R.busy });
+  file.addEventListener("change", () => { R.file = file.files[0] || null; R.formErr = ""; R.notice = ""; const b = root.querySelector("#uploadBtn"); if (b) b.disabled = !R.file; });
+  panel.append(h("div", { class:"field" }, h("label", { text:"PDF 등록" }),
+    h("div", { class:"row" }, file, h("button", { class:"btn small", id:"uploadBtn", disabled: !R.file || !!R.busy, onclick:uploadSource }, R.busy === "upload" ? "등록하는 중…" : "등록"))));
+
+  if (R.sources.length){
+    const sel = h("select", { id:"reqSource", class:"btn", style:"font-weight:500;max-width:100%" },
+      R.sources.map(x => h("option", { value:x.id, selected: x.id === R.sourceId ? "selected" : null, disabled: !x.available ? "disabled" : null }, `${x.title} · ${x.pageCount}쪽${x.available ? "" : " (원본 없음)"}`)));
+    sel.addEventListener("change", () => { pickSource(R.sources.find(x => x.id === sel.value)); render(); });
+    const pages = h("input", { type:"text", id:"reqPages", placeholder:"예: 2-7, 10", autocomplete:"off" }); pages.value = R.pages;
+    pages.addEventListener("input", () => { R.pages = pages.value; });
+    const purpose = h("textarea", { id:"reqPurpose", rows:"2" }); purpose.value = R.purpose;
+    purpose.addEventListener("input", () => { R.purpose = purpose.value; });
+    const src = R.sources.find(x => x.id === R.sourceId);
+    panel.append(
+      h("div", { class:"field" }, h("label", { for:"reqSource", text:"자료" }), sel),
+      h("div", { class:"field" }, h("label", { for:"reqPages", text:`쪽 범위${src ? ` (전체 1-${src.pageCount})` : ""}` }), pages),
+      h("div", { class:"field" }, h("label", { for:"reqPurpose", text:"공부 목적" }), purpose),
+      h("div", { class:"row" }, h("button", { class:"btn primary", disabled: !!R.busy || !src || !src.available, onclick:saveRequest }, R.busy === "save" ? "저장하는 중…" : "요청 저장"),
+        h("span", { class:"small muted", text:"모든 단계 gpt-6-sol · medium, 문제까지 만드는 조건이에요." })));
+  } else if (R.status === "ready"){
+    panel.append(h("p", { class:"small muted", text:"등록된 자료가 없어요. 먼저 PDF를 등록해 주세요." }));
+  }
+  if (R.notice) panel.append(h("div", { class:"note", role:"status", text:R.notice }));
+  if (R.formErr) panel.append(h("div", { class:"note err", role:"alert", text:R.formErr }));
+
+  const head = h("div", { class:"row", style:"justify-content:space-between;margin-top:6px" }, h("p", { class:"eyebrow", text:"요청 상태" }),
+    h("div", { class:"row" },
+      h("button", { class:"btn small ghost", disabled: R.status === "loading", onclick: () => { loadRequests(); reloadDecks(); render(); } }, R.status === "loading" ? "불러오는 중…" : "새로고침")));
+  panel.append(head);
+  if (!R.requests.length) panel.append(h("p", { class:"small muted", text:"아직 올린 요청이 없어요." }));
+  else {
+    const names = new Map(R.sources.map(x => [x.id, x.title]));
+    panel.append(h("div", { class:"itemlist" }, R.requests.slice(0, 12).map(q => {
+      const st = REQ_STATUS[q.status] || { label:q.status, cls:"" };
+      const pg = q.input && q.input.scope ? q.input.scope.pageNumbers || [] : [];
+      return h("div", { class:"item" },
+        h("div", { class:"meta" }, h("span", { class:`chip ${st.cls}`, text:st.label }), h("span", { class:"chip", text:names.get(q.input && q.input.sourceId) || (q.input && q.input.sourceId) || "자료" }),
+          pg.length ? h("span", { class:"chip page", text:`p.${pageRange(pg)}` }) : null, h("span", { class:"small muted", text:new Date(q.createdAt).toLocaleString("ko-KR") })),
+        h("p", { text:(q.input && q.input.purpose) || "" }),
+        q.status === "completed" ? h("p", { class:"small muted", text:"학습 설계와 MCP 문제까지 끝났어요. 담당 AI가 출제 편집틀에서 문제 문서를 기록하면 위 목록에 나타나요." }) : null,
+        q.status === "failed" && q.failure ? h("p", { class:"small", style:"color:var(--bad)", text:q.failure }) : null);
+    })));
+  }
+  return panel;
+}
 function renderLibrary(){
   const decks = sortedDecks().filter(d => !d.example);
   const wrap = h("div", { class:"stack" });
   wrap.append(h("section", { class:"panel stack" },
     h("p", { class:"eyebrow", text:"자료" }),
     h("h2", { style:"font-family:var(--display);font-size:22px", text: decks.length ? `Recaller 출제 문서 ${decks.length}개` : "아직 불러온 출제 문서가 없어요" }),
-    h("p", { class:"small muted", text:"문제는 Recaller 생성 엔진이 만들고 검사를 통과한 문서만 여기에 나와요. 새 자료는 지금은 담당 AI에게 대화로 요청해요. 이 화면에서 바로 요청하는 기능은 다음 단계에서 붙여요." })));
+    h("p", { class:"small muted", text:"문제는 Recaller 생성 엔진이 만들고 검사를 통과한 문서만 여기에 나와요." })));
   if (S.lib.status === "loading") wrap.append(h("p", { class:"small muted", text:"Recaller 문제를 불러오는 중…" }));
   if (S.lib.status === "error") wrap.append(h("div", { class:"note err", text:S.lib.error }));
   const list = h("div", { class:"decks" });
@@ -1053,27 +1153,37 @@ function renderLibrary(){
         h("button", { class:"btn small primary", onclick: () => startSession(d.id, true) }, "연습"))));
   }
   wrap.append(list);
+  wrap.append(renderRequestPanel());
   return wrap;
 }
 
 /* ---------- boot ---------- */
+function reloadDecks(){
+  return env.loadDecks().then((decks) => {
+    if (disposed) return;
+    const ids = new Set(decks.map(d => d.id));
+    for (const id of Object.keys(S.decks)) if (!ids.has(id) && !S.decks[id].example) delete S.decks[id];
+    for (const d of decks){
+      const prev = S.decks[d.id];
+      if (prev && prev.artifactSha256 === d.artifactSha256) continue;   // keep the live deck (and its in-memory session refs)
+      const deck = { ...d, example:false, createdAt:-d.order, pages:[], events:[], sched:{} };
+      Store.restore(deck);
+      S.decks[deck.id] = deck;
+    }
+    if (decks.length) delete S.decks.example;
+    else if (!S.decks.example){ const ex = exampleDeck(); Store.restore(ex); S.decks[ex.id] = ex; }
+    S.lib = { status:"ready", error:"" };
+  }, (e) => {
+    if (disposed) return;
+    if (!Object.keys(S.decks).length){ const ex = exampleDeck(); Store.restore(ex); S.decks[ex.id] = ex; }
+    S.lib = { status:"error", error:(e && e.message) || "Recaller 문제를 불러오지 못했어요." };
+  }).then(() => { if (!disposed && !S.session) render(); });
+}
 Store.init();
+S.req.purpose = env.defaultPurpose || "";
 updateStoreChip(); render();
 ensureKatex().then(ok => { if (ok && !disposed) render(); });
-env.loadDecks().then((decks) => {
-  if (disposed) return;
-  for (const d of decks){
-    const deck = { ...d, example:false, createdAt:-d.order, pages:[], events:[], sched:{} };
-    Store.restore(deck);
-    S.decks[deck.id] = deck;
-  }
-  if (!decks.length){ const ex = exampleDeck(); Store.restore(ex); S.decks[ex.id] = ex; }
-  S.lib = { status:"ready", error:"" };
-}, (e) => {
-  if (disposed) return;
-  const ex = exampleDeck(); Store.restore(ex); S.decks[ex.id] = ex;
-  S.lib = { status:"error", error:(e && e.message) || "Recaller 문제를 불러오지 못했어요." };
-}).then(() => { if (!disposed && !S.session) render(); });
+reloadDecks();
 
 return () => {
   disposed = true;

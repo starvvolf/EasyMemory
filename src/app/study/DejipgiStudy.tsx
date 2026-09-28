@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef } from "react";
 import { useAuthSession } from "@/components/AuthGate";
 import { authenticatedFetch } from "@/lib/firebase-client";
 import { toStudyDeck, type StudyArtifactMeta, type StudyDeck } from "@/lib/study/from-authoring";
+import { buildRequestBody, defaultPurpose } from "@/lib/study/request-form";
+import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 import { mountDejipgi } from "./dejipgi-app.js";
 import "katex/dist/katex.min.css";
@@ -18,15 +20,17 @@ async function readJson<T>(response: Response, fallback: string): Promise<T> {
 export default function DejipgiStudy() {
   const session = useAuthSession();
   const rootRef = useRef<HTMLDivElement>(null);
-  const fetchExperiment = useCallback((url: string) => session.mode === "local-experiment"
-    ? fetch(url, { cache: "no-store" })
-    : authenticatedFetch(url, { cache: "no-store" }), [session.mode]);
+  const fetchExperiment = useCallback((url: string, init: RequestInit = {}) => session.mode === "local-experiment"
+    ? fetch(url, { cache: "no-store", ...init })
+    : authenticatedFetch(url, { cache: "no-store", ...init }), [session.mode]);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    const sources = new Map<string, McpSourceCatalogEntry>();
     return mountDejipgi(root, {
       uid: session.uid,
+      defaultPurpose,
       async loadDecks(): Promise<StudyDeck[]> {
         const { artifacts } = await readJson<{ artifacts: StudyArtifactMeta[] }>(
           await fetchExperiment("/api/personalization-lab"), "Recaller 출제 문서 목록을 불러오지 못했어요.");
@@ -54,6 +58,35 @@ export default function DejipgiStudy() {
       },
       async loadKatex() {
         return (await import("katex")).default;
+      },
+      async listSources() {
+        const result = await readJson<{ sources: McpSourceCatalogEntry[] }>(
+          await fetchExperiment("/api/mcp-runs/sources"), "자료 목록을 불러오지 못했어요.");
+        sources.clear();
+        result.sources.forEach((source) => sources.set(source.id, source));
+        return result.sources.map(({ id, title, fileName, pageCount, available }) => ({ id, title, fileName, pageCount, available }));
+      },
+      async uploadPdf(file: File) {
+        const form = new FormData();
+        form.append("pdf", file);
+        const { source } = await readJson<{ source: { id: string; fileName: string; pageCount: number } }>(
+          await fetchExperiment("/api/mcp-runs/sources", { method: "POST", body: form }), "PDF를 등록하지 못했어요.");
+        return source;
+      },
+      async listRequests() {
+        const { requests } = await readJson<{ requests: unknown[] }>(
+          await fetchExperiment("/api/mcp-experiment-requests"), "요청 목록을 불러오지 못했어요.");
+        return requests;
+      },
+      async createRequest(sourceId: string, pageText: string, purpose: string) {
+        const source = sources.get(sourceId);
+        if (!source) return { error: "자료를 다시 골라 주세요." };
+        const built = buildRequestBody(source, pageText, purpose);
+        if ("error" in built) return { error: built.error };
+        await readJson(await fetchExperiment("/api/mcp-experiment-requests", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(built.body),
+        }), "요청을 저장하지 못했어요.");
+        return {};
       },
     });
   }, [fetchExperiment, session.uid]);

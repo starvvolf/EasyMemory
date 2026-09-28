@@ -96,5 +96,10 @@ Recaller에 옮길 때는 `sample` 자리를 서버 API 호출로, `db`를 Fireb
 - 문제: `/api/personalization-lab`의 검증 통과 문서를 변환한다. 객관식 → 고르기, 빈칸 → 값 쓰기, 자기확인 서술형 → 떠올리고 확인. 내용은 고치지 않고, 정답 연결이 깨진 문항은 건너뛴 목록에 남긴다.
 - 원본 PDF: `/api/mcp-runs/sources/<id>/pdf`. pdf.js는 설치된 `pdfjs-dist`(legacy 빌드), 수식은 설치된 KaTeX를 쓴다.
 - 기록: 이 브라우저의 `localStorage`(`recaller:study:v1:<uid>`)에 문서 해시별로 남는다. 문서가 바뀌면 새 기록으로 시작하고 옛 기록은 지우지 않는다.
-- 빠진 것: "자료 만들기"(페이지 안 생성)는 없앴다. "자료" 탭은 Recaller 출제 문서 목록만 보여 준다. 질문 창은 화면과 동작만 살려 두었고, 답변은 유료 호출이라 연결하지 않았다.
+- "자료 만들기"(페이지 안 생성)는 없앴다. 대신 "자료" 탭에 **새 자료 요청**을 붙였다(2026-09-29).
+  - PDF 등록: `POST /api/mcp-runs/sources`(로컬 실험 모드에서만 됨)
+  - 요청 저장: 자료·쪽 범위·공부 목적을 `/api/mcp-experiment-requests` 대기 목록에 올린다. 조건은 `/mcp-runs` 기본값과 같다(모든 단계 gpt-6-sol·medium, 문제까지). 본문 생성은 `src/lib/study/request-form.ts`
+  - 저장만 하고 실행은 하지 않는다. 담당 AI가 대화에서 요청을 가져가 MCP로 만든다(비용은 AI 쪽). 요청 상태(대기·진행·완료·실패)는 같은 탭에서 본다
+  - "완료"는 MCP 5단계(Cards)까지 끝났다는 뜻이다. 되짚기 목록에는 담당 AI가 출제 편집틀(`record_problem_iteration`)로 문제 문서를 기록한 뒤에 나타난다
+- 질문 창은 화면과 동작만 살려 두었고, 답변은 유료 호출이라 연결하지 않았다.
 - 원본 v9에서 고친 것: 정의되지 않았던 `docAspect`를 추가해 PDF가 실제로 그려진다.
