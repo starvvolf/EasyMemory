@@ -88,3 +88,13 @@ Recaller에 옮길 때는 `sample` 자리를 서버 API 호출로, `db`를 Fireb
 | `chat-d.png`, `chat-m.png` | 질문 창(데스크톱, 모바일) |
 | `checkend.png` | 읽은 직후 풀이 끝 |
 | `result.png` | 연습 결과 |
+
+## Recaller로 옮긴 판 (`/study`, 2026-09-29)
+되짚기의 화면·흐름·기록 규칙을 그대로 두고, 문제는 Recaller 생성 엔진의 출제 문서에서 받는다.
+
+- 파일: `src/app/study/`(화면 `dejipgi-app.js`, 스타일 `dejipgi.css`, 연결 `DejipgiStudy.tsx`), 변환기 `src/lib/study/from-authoring.ts`
+- 문제: `/api/personalization-lab`의 검증 통과 문서를 변환한다. 객관식 → 고르기, 빈칸 → 값 쓰기, 자기확인 서술형 → 떠올리고 확인. 내용은 고치지 않고, 정답 연결이 깨진 문항은 건너뛴 목록에 남긴다.
+- 원본 PDF: `/api/mcp-runs/sources/<id>/pdf`. pdf.js는 설치된 `pdfjs-dist`(legacy 빌드), 수식은 설치된 KaTeX를 쓴다.
+- 기록: 이 브라우저의 `localStorage`(`recaller:study:v1:<uid>`)에 문서 해시별로 남는다. 문서가 바뀌면 새 기록으로 시작하고 옛 기록은 지우지 않는다.
+- 빠진 것: "자료 만들기"(페이지 안 생성)는 없앴다. "자료" 탭은 Recaller 출제 문서 목록만 보여 준다. 질문 창은 화면과 동작만 살려 두었고, 답변은 유료 호출이라 연결하지 않았다.
+- 원본 v9에서 고친 것: 정의되지 않았던 `docAspect`를 추가해 PDF가 실제로 그려진다.
