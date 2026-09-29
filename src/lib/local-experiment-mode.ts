@@ -44,7 +44,8 @@ export function isLocalExperimentApiPath(pathname: string): boolean {
     pathname === "/api/mcp-experiment-requests" ||
     pathname.startsWith("/api/mcp-experiment-requests/") ||
     pathname === "/api/personalization-lab" ||
-    pathname.startsWith("/api/personalization-lab/");
+    pathname.startsWith("/api/personalization-lab/") ||
+    pathname === "/api/study-executor";
 }
 
 export function isSameOriginExperimentMutation(request: Request): boolean {

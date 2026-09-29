@@ -3,7 +3,7 @@ import type { LearningDesignPlan } from "../../src/lib/types.ts";
 import type { SourceContent } from "./contract.ts";
 
 /** A completed five-stage request becomes the immutable authoring input; no old 2–7-page fixture rules. */
-export function packetFromCompletedRequest(request: ExperimentRequest, sourceRunSha256: string) {
+export function packetFromCompletedRequest(request: Omit<ExperimentRequest, "claimTokenHash">, sourceRunSha256: string) {
   if (request.status !== "completed" || !request.runId || request.input.stopAfterStage !== "cards" ||
     request.stages.at(-1)?.stage !== "cards" || !request.sourceSnapshot) throw new Error("5단계가 완료된 등록 PDF 요청만 출제 패킷으로 연결할 수 있습니다.");
   const design = (request.stages.find((stage) => stage.stage === "learning-design")?.output as { learningDesign?: LearningDesignPlan } | undefined)?.learningDesign;

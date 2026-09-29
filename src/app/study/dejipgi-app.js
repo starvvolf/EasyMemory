@@ -1252,7 +1252,14 @@ async function restartMaterial(d){
   }catch(e){ toast((e && e.message) || "다시 요청하지 못했어요."); }
 }
 function removePending(d){ delete S.decks[d.id]; savePending(); if (S.reader.deckId === d.id) S.reader.deckId = null; render(); }
-const PENDING_LABEL = { waiting:"AI 실행 대기", running:"AI가 만드는 중", authoring:"문제 검사·기록 중", ready:"준비됨", failed:"실패" };
+async function resumeMaterial(d){
+  try{
+    await engine.resume(d.pending.requestId);
+    Object.assign(d.pending, { status:"running", message:"" });
+    savePending(); render(); pollPending();
+  }catch(e){ toast(e.message || "다시 시작하지 못했어요."); }
+}
+const PENDING_LABEL = { waiting:"AI 실행 대기", running:"AI가 만드는 중", paused:"잠시 멈춤", authoring:"문제 검사·기록 중", ready:"준비됨", failed:"실패" };
 let pollTimer = null;
 async function pollPending(){
   clearTimeout(pollTimer);
@@ -1278,6 +1285,7 @@ function pendingNote(d){
   const text = p.message || (p.status === "waiting" ? "AI 실행 대기 중 · 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요" : PENDING_LABEL[p.status] || "");
   return h("div", { class:`note row${p.status === "failed" ? " err" : ""}`, role:"status" },
     h("span", { style:"flex:1;min-width:0", text: p.status === "failed" ? `문제 만들기 실패 · ${text}` : `문제 준비 중 · ${text}` }),
+    p.status === "paused" && engine && engine.resume ? h("button", { class:"btn small", onclick: () => resumeMaterial(d) }, "다시 시작") : null,
     p.status === "failed" ? h("button", { class:"btn small", onclick: () => restartMaterial(d) }, "다시 요청") : null,
     p.status === "failed" ? h("button", { class:"btn small ghost", onclick: () => removePending(d) }, "지우기") : null);
 }

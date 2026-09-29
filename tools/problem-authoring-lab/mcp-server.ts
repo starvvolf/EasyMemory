@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -8,17 +8,12 @@ import { z } from "zod";
 import { applyRevision, validateDocument, validateDocumentAgainstPacket, validateFormatOverride, type AuthoringDocument, type RevisionPatch, type SourceContent } from "./contract.ts";
 import { renderDocument, renderInteractiveDocument } from "./renderer.ts";
 import { inspectQuality } from "./quality.ts";
+import { authoringMethods, readAuthoringInstructions, recordProblemIteration, resolveRunPacketPath } from "./authoring-io.ts";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const unknownRecord = z.record(z.string(), z.unknown());
 const sha256 = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
-const methodNames = ["selection", "recall-blank", "relationship-structure", "graph-geometry"] as const;
-const methodFiles: Record<(typeof methodNames)[number], string> = {
-  "selection": "multiple-choice.md",
-  "recall-blank": "fill-blank.md",
-  "relationship-structure": "relationship-structure.md",
-  "graph-geometry": "graph-geometry.md",
-};
+const methodNames = authoringMethods;
 
 export function createProblemAuthoringMcpServer() {
   const server = new McpServer(
@@ -37,7 +32,7 @@ export function createProblemAuthoringMcpServer() {
   }, async ({ packetId, packetPath }) => {
     const fixedFilename = packetId === "graph-one" ? "graph-one-source-packet.json" : "science-source-packet.json";
     const packetFile = packetPath
-      ? resolveRunPacketPath(packetPath)
+      ? resolveRunPacketPath(root, packetPath)
       : path.join(root, "fixtures", fixedFilename);
     const packetText = await readFile(packetFile, "utf8");
     return result({ packet: JSON.parse(packetText), inputHash: sha256(packetText) }, "고정 원문 패킷을 읽었습니다.");
@@ -53,17 +48,10 @@ export function createProblemAuthoringMcpServer() {
     },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async ({ methods }) => {
-    const skill = await readFile(path.join(root, "skill", "problem-authoring", "SKILL.md"), "utf8");
-    const requested = methods ?? ["selection", "recall-blank"];
-    const entries = await Promise.all(requested.map(async (method) => {
-      const content = await readFile(path.join(root, "skill", "problem-authoring", "references", methodFiles[method]), "utf8");
-      return [method, content] as const;
-    }));
-    const references = Object.fromEntries(entries);
-    const referenceHashes = Object.fromEntries(entries.map(([method, content]) => [method, sha256(content)]));
+    const { skillVersion, skillHash, skill, references, referenceHashes } = await readAuthoringInstructions(root, methods);
     return result({
-      skillVersion: "problem-authoring-method-v2",
-      skillHash: sha256(skill),
+      skillVersion,
+      skillHash,
       skill,
       references,
       referenceHashes,
@@ -80,7 +68,7 @@ export function createProblemAuthoringMcpServer() {
   }, async ({ document, packetPath, formatOverride }) => {
     const issues = [...validateDocument(document as AuthoringDocument), ...inspectQuality(document as AuthoringDocument)];
     if (packetPath) {
-      const packet = JSON.parse(await readFile(resolveRunPacketPath(packetPath), "utf8")) as { items: SourceContent[] };
+      const packet = JSON.parse(await readFile(resolveRunPacketPath(root, packetPath), "utf8")) as { items: SourceContent[] };
       issues.push(...validateDocumentAgainstPacket(document as AuthoringDocument, packet));
     }
     if (formatOverride) issues.push(...validateFormatOverride(document as AuthoringDocument, formatOverride));
@@ -107,7 +95,7 @@ export function createProblemAuthoringMcpServer() {
     const next = applyRevision(document as AuthoringDocument, patch as RevisionPatch);
     const issues = [...validateDocument(next), ...inspectQuality(next)];
     if (packetPath) {
-      const packet = JSON.parse(await readFile(resolveRunPacketPath(packetPath), "utf8")) as { items: SourceContent[] };
+      const packet = JSON.parse(await readFile(resolveRunPacketPath(root, packetPath), "utf8")) as { items: SourceContent[] };
       issues.push(...validateDocumentAgainstPacket(next, packet));
     }
     if (formatOverride) issues.push(...validateFormatOverride(next, formatOverride));
@@ -133,62 +121,12 @@ export function createProblemAuthoringMcpServer() {
     outputSchema: { directory: z.string(), files: z.array(z.string()) },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   }, async ({ runId, iteration, packetPath, formatOverride, document, issues, patch, execution }) => {
-    const authored = document as AuthoringDocument;
-    const errors = [...validateDocument(authored), ...inspectQuality(authored)].filter((issue) => issue.severity === "error");
-    if (packetPath) {
-      const packet = JSON.parse(await readFile(resolveRunPacketPath(packetPath), "utf8")) as { items: SourceContent[] };
-      errors.push(...validateDocumentAgainstPacket(authored, packet));
-    }
-    if (formatOverride) errors.push(...validateFormatOverride(authored, formatOverride));
-    const directory = path.join(root, "runs", runId, `iteration-${iteration}`);
-    await mkdir(directory, { recursive: false });
-    const files = ["document.json", "inspection.json", "execution.json"];
-    await Promise.all([
-      writeFile(path.join(directory, files[0]), JSON.stringify(authored, null, 2)),
-      writeFile(path.join(directory, files[1]), JSON.stringify([...issues, ...errors], null, 2)),
-      writeFile(path.join(directory, files[2]), JSON.stringify(execution, null, 2)),
-      ...(patch ? [writeFile(path.join(directory, "patch.json"), JSON.stringify(patch, null, 2))] : []),
-    ]);
-    if (patch) files.push("patch.json");
-    if (!errors.length) {
-      await verifyGeneratedAssets(authored, directory);
-      await Promise.all([
-        writeFile(path.join(directory, "before-answer.html"), renderDocument(authored, { revealAnswers: false })),
-        writeFile(path.join(directory, "after-answer.html"), renderDocument(authored, { revealAnswers: true })),
-        writeFile(path.join(directory, "interactive.html"), renderInteractiveDocument(authored)),
-      ]);
-      files.push("before-answer.html", "after-answer.html", "interactive.html");
-    }
+    const { directory, files } = await recordProblemIteration(root, {
+      runId, iteration: iteration as 0 | 1, packetPath, formatOverride, document: document as AuthoringDocument, issues, patch, execution,
+    });
     return result({ directory, files }, "이번 제작 반복을 실험 디렉터리에 기록했습니다.");
   });
   return server;
-}
-
-function resolveRunPacketPath(packetPath: string) {
-  const normalized = packetPath.replaceAll("\\", "/");
-  if (!/^runs\/[a-z0-9][a-z0-9-]{0,63}\/source-packet\.json$/.test(normalized)) {
-    throw new Error("브리지 패킷은 runs/<run-id>/source-packet.json 형식만 허용합니다.");
-  }
-  const resolved = path.resolve(root, normalized);
-  const runsRoot = `${path.resolve(root, "runs")}${path.sep}`;
-  if (!resolved.startsWith(runsRoot)) throw new Error("실험 runs 디렉터리 밖의 패킷은 읽을 수 없습니다.");
-  return resolved;
-}
-
-async function verifyGeneratedAssets(document: AuthoringDocument, iterationDirectory: string) {
-  const workspaceRoot = path.resolve(root, "../..");
-  for (const entry of [...document.questions, ...(document.sharedSets ?? [])]) {
-    for (const block of entry.blocks) {
-      if (block.kind !== "generated-image") continue;
-      const asset = block.generatedAssetRef;
-      const assetBytes = await readFile(path.resolve(iterationDirectory, asset.path));
-      const specBytes = await readFile(path.resolve(workspaceRoot, asset.specPath));
-      await readFile(path.resolve(workspaceRoot, asset.scriptPath));
-      if (sha256(assetBytes) !== asset.sha256 || sha256(specBytes) !== asset.specSha256) {
-        throw new Error(`생성 그림의 해시가 재현 정보와 다릅니다: ${asset.assetId}`);
-      }
-    }
-  }
 }
 
 function result(data: Record<string, unknown>, message: string) {

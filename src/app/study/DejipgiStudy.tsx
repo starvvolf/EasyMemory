@@ -52,6 +52,17 @@ export default function DejipgiStudy() {
       }), "생성 요청을 저장하지 못했어요.");
       return request;
     };
+    // In-app executor (docs/DECISIONS.md 2026-09-30 "ChatGPT 계정으로 생성"). When it is off, requests wait for the MCP chat executor.
+    type ExecutorInfo = { enabled: boolean; model: { ready: boolean; message: string }; executor: null | { status: string; phase: string; message: string } };
+    const executorInfo = async (requestId?: string) => readJson<ExecutorInfo>(await fetchExperiment(
+      `/api/study-executor${requestId ? `?id=${encodeURIComponent(requestId)}` : ""}`), "자동 생성 상태를 읽지 못했어요.");
+    const kickExecutor = async (requestId: string) => {
+      const response = await fetchExperiment("/api/study-executor", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId }),
+      });
+      if (response.status === 409) return;
+      await readJson(response, "자동 생성을 시작하지 못했어요.");
+    };
     return mountDejipgi(root, {
       uid: session.uid,
       defaultPurpose,
@@ -67,12 +78,14 @@ export default function DejipgiStudy() {
           }), "PDF를 등록하지 못했어요.");
           const source = await findSource(registered.id);
           const request = await createQueuedRequest(source, `${from}-${to}`, purpose, { abilities: answers.abilities });
+          await kickExecutor(request.id);
           return { requestId: request.id, sourceId: source.id };
         },
         async restart({ requestId, sourceId, from, to, purpose }) {
           const previous = await readJson<{ request: ExperimentRequest }>(
             await fetchExperiment(`/api/mcp-experiment-requests/${encodeURIComponent(requestId)}`), "이전 요청을 확인하지 못했어요.");
           const request = await createQueuedRequest(await findSource(sourceId), `${from}-${to}`, purpose, { abilities: previous.request.input.abilities });
+          await kickExecutor(request.id);
           return { requestId: request.id };
         },
         async remake({ artifactId, objectiveIds }) {
@@ -89,15 +102,31 @@ export default function DejipgiStudy() {
           const request = existing ?? (await readJson<{ request: ExperimentRequest }>(await fetchExperiment("/api/mcp-experiment-requests", {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(built.body),
           }), "다시 만들기 요청을 저장하지 못했어요.")).request;
+          await kickExecutor(request.id);
           const pages = origin.input.scope.pageNumbers;
           return { requestId: request.id, sourceId: source.id, from: Math.min(...pages), to: Math.max(...pages), purpose: origin.input.purpose };
+        },
+        async resume(requestId) {
+          await kickExecutor(requestId);
         },
         async check(requestId) {
           const { request } = await readJson<{ request: ExperimentRequest }>(
             await fetchExperiment(`/api/mcp-experiment-requests/${encodeURIComponent(requestId)}`), "생성 요청 상태를 읽지 못했어요.");
           if (request.status === "failed") return { status: "failed", message: request.failure || "담당 AI의 실행이 실패했어요." };
-          if (request.status === "waiting-for-executor") return { status: "waiting", message: "AI 실행 대기 중 · 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요" };
+          const auto = await executorInfo(requestId).catch(() => null);
+          const run = auto?.enabled ? auto.executor : null;
+          if (run?.status === "paused-usage-limit") return { status: "paused", message: run.message };
+          if (run?.status === "interrupted") return { status: "paused", message: run.message };
+          if (run?.status === "paused-login") return { status: "paused", message: `ChatGPT 로그인이 필요해요 · ${run.message}` };
+          if (run?.status === "failed") return { status: "failed", message: run.message || "자동 생성이 실패했어요." };
+          if (request.status === "waiting-for-executor") {
+            if (!auto?.enabled) return { status: "waiting", message: "AI 실행 대기 중 · 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요" };
+            // A request queued before the executor was on (or before a server restart) is started here.
+            if (!run) await kickExecutor(requestId).catch(() => undefined);
+            return { status: "waiting", message: auto.model.ready ? "자동 생성 대기 중" : `자동 생성 대기 중 · ${auto.model.message}` };
+          }
           if (request.status !== "completed") return { status: "running", message: `AI가 만드는 중 · ${request.stages.length}/6단계` };
+          if (run && run.status !== "done") return { status: "authoring", message: "문제 만들고 검사하는 중 · 6/6단계" };
           const { artifacts } = await loadArtifacts();
           const meta = artifacts.find((item) => item.originRunId === request.runId);
           return meta

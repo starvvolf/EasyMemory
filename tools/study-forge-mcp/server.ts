@@ -2,16 +2,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import path from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { StudyForgeMcpService } from "./service.ts";
 import { generationStages } from "./types.ts";
 import { studyAbilities } from "../../src/lib/mcp-experiment-requests.ts";
 import { getExperimentRequest, listExperimentRequests, claimExperimentRequest, recordExperimentProgress, progressSchema } from "../../src/lib/mcp-experiment-requests.ts";
-import { getMcpRunView } from "../../src/lib/mcp-run-view.ts";
 import { readRegisteredMcpSourcePdf } from "../../src/lib/mcp-source-registry.ts";
-import { packetFromCompletedRequest } from "../problem-authoring-lab/request-packet.ts";
+import { prepareAuthoringPacket } from "./authoring-packet.ts";
 import { extractPdfPageTexts } from "./source-evidence.ts";
 import {
   ChatGptParityService,
@@ -384,24 +382,8 @@ export function createStudyForgeMcpServer(
     outputSchema: { authoringRunId: z.string(), packetPath: z.string(), objectiveIds: z.array(z.string()), itemCount: z.number().int() },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   }, async ({ requestId }) => {
-    const request = await getExperimentRequest(requestId);
-    const run = request.runId ? await getMcpRunView(`mcp:${request.runId}`) : null;
-    if (!run || run.executionRequest?.id !== request.id || run.executionRequestStatus !== "completed") {
-      throw new Error("완료 요청과 검증된 MCP 실행을 연결할 수 없습니다.");
-    }
-    const packet = packetFromCompletedRequest(request, run.source.fileSha256);
-    const authoringRunId = request.runId!;
-    if (!/^chatgpt-request-[a-f0-9]{32}$/.test(authoringRunId)) throw new Error("출제 기록에 사용할 실행 ID가 올바르지 않습니다.");
-    const root = path.join(process.cwd(), "tools", "problem-authoring-lab", "runs");
-    const directory = path.join(root, authoringRunId);
-    const file = path.join(directory, "source-packet.json");
-    await mkdir(directory, { recursive: true });
-    const serialized = `${JSON.stringify(packet, null, 2)}\n`;
-    try { await writeFile(file, serialized, { flag: "wx" }); }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST" || await readFile(file, "utf8") !== serialized) throw error;
-    }
-    return toolResult({ authoringRunId, packetPath: `runs/${authoringRunId}/source-packet.json`, objectiveIds: [...new Set(packet.items.map((item) => item.objectiveId))], itemCount: packet.items.length }, "출제 입력 패킷을 고정했습니다. 문제 출제 실험실에서 기록까지 이어가세요.");
+    const { authoringRunId, packetPath, objectiveIds, itemCount } = await prepareAuthoringPacket(requestId);
+    return toolResult({ authoringRunId, packetPath, objectiveIds, itemCount }, "출제 입력 패킷을 고정했습니다. 문제 출제 실험실에서 기록까지 이어가세요.");
   });
 
   server.registerTool(

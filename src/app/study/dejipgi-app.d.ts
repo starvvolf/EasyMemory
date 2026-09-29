@@ -1,13 +1,15 @@
 import type { StudyDeck } from "@/lib/study/from-authoring";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 
-export type DejipgiMaterialStatus = { status: "waiting" | "running" | "authoring" | "ready" | "failed"; message: string; artifactId?: string };
+export type DejipgiMaterialStatus = { status: "waiting" | "running" | "paused" | "authoring" | "ready" | "failed"; message: string; artifactId?: string };
 export type DejipgiBuilderEngine = {
   start(input: { file: File; from: number; to: number; purpose: string; answers: { purpose: string; abilities: NonNullable<ExperimentRequest["input"]["abilities"]> } }): Promise<{ requestId: string; sourceId: string }>;
   restart(input: { requestId: string; sourceId: string; from: number; to: number; purpose: string }): Promise<{ requestId: string }>;
   check(requestId: string): Promise<DejipgiMaterialStatus>;
   /** Remake only these objectives of a recorded document (e.g. after "이 문제 이상해요" reports). */
   remake(input: { artifactId: string; objectiveIds: string[] }): Promise<{ requestId: string; sourceId: string; from: number; to: number; purpose: string }>;
+  /** Continue a request the in-app executor paused (usage limit reached, or ChatGPT login needed). */
+  resume?(requestId: string): Promise<void>;
 };
 
 export type DejipgiEnv = {

@@ -544,6 +544,19 @@ export class ChatGptParityService {
     };
   }
 
+  /** One completed stage exactly as stored, for request records that must hash-match the run file. */
+  async stageRecord(runId: string, stage: ChatGptParityStage) {
+    const run = await this.readRun(runId);
+    const artifact = run.artifacts[stage];
+    if (artifact === undefined) throw new Error(`${stage} 단계가 아직 저장되지 않았습니다.`);
+    return {
+      artifact,
+      startedAt: run.stageStartedAt[stage] ?? null,
+      completedAt: run.stageCompletedAt[stage] ?? null,
+      reusedFrom: run.stageReuse?.[stage] ?? null,
+    };
+  }
+
   async getResult(runId: string) {
     const run = await this.readRun(runId);
     const activity = parseActivityDesignArtifact(run.artifacts["activity-design"]);
