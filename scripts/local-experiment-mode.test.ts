@@ -53,6 +53,9 @@ test("local access is limited to experiment endpoints and same-origin writes", (
   assert.equal(isLocalExperimentApiPath("/api/mcp-experiment-requests/example"), true);
   assert.equal(isLocalExperimentApiPath("/api/personalization-lab/example"), true);
   assert.equal(isLocalExperimentApiPath("/api/study-executor"), true);
+  assert.equal(isLocalExperimentApiPath("/api/auth/chatgpt/start"), true);
+  assert.equal(isLocalExperimentApiPath("/api/auth/chatgpt/callback"), true);
+  assert.equal(isLocalExperimentApiPath("/api/auth/chatgpt/logout"), true);
   assert.equal(isLocalExperimentApiPath("/api/codex/status"), false);
   assert.equal(isLocalExperimentApiPath("/api/codex/models"), false);
   assert.equal(isLocalExperimentApiPath("/api/codex/login"), false);

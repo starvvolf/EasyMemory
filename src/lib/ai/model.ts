@@ -41,14 +41,16 @@ export interface ModelBackend {
   call(request: ModelRequest): Promise<Omit<ModelResult, "data">>;
 }
 
-/** Sign in with ChatGPT + plan usage. The OAuth login and Responses API call are wired in work order 07 (GPT). */
+/** Sign in with ChatGPT + eligible Responses API requests, loaded only for this provider. */
 const chatgptBackend: ModelBackend = {
   name: "chatgpt",
-  async status() {
-    return { ready: false, message: "ChatGPT 로그인 연결 전이에요. (작업지시 07)" };
+  async status(caller) {
+    const { chatgptBackend } = await import("./chatgpt-provider.ts");
+    return chatgptBackend.status(caller);
   },
-  async call() {
-    throw new ModelError("not_configured", "ChatGPT 계정 연결이 아직 준비되지 않았어요.");
+  async call(request) {
+    const { chatgptBackend } = await import("./chatgpt-provider.ts");
+    return chatgptBackend.call(request);
   },
 };
 
