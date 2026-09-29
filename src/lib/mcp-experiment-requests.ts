@@ -5,6 +5,7 @@ import { z } from "zod";
 import { resolveMcpSource } from "./mcp-source-registry.ts";
 
 export const experimentStages = ["analyze", "concept-tree", "learning-design", "activity-design", "cards"] as const;
+export const studyAbilities = ["용어·정의 말하기", "식·절차 쓰기", "계산·적용하기", "비슷한 것 구별하기", "말로 설명하기"] as const;
 const stageSchema = z.enum(experimentStages);
 const effortSchema = z.enum(["low", "medium", "high", "xhigh", "max", "ultra"]);
 const modelSchema = z.enum(["gpt-6-sol", "gpt-6-astra", "gpt-6-luna"]);
@@ -24,6 +25,7 @@ export const createExperimentRequestSchema = z.strictObject({
     outlineLeafIds: z.array(z.string().trim().min(1).max(200).regex(/^[\w:.-]+$/)).max(100),
   }),
   purpose: z.string().trim().min(1).max(2000),
+  abilities: z.array(z.enum(studyAbilities)).max(studyAbilities.length).optional(),
   requestedStages: z.partialRecord(stageSchema, settingsSchema),
   stopAfterStage: stageSchema,
   reuse: z.strictObject({ kind: z.enum(["input", "output"]), runId: runIdSchema, stage: stageSchema, sha256: hashSchema }).optional(),
@@ -38,6 +40,9 @@ export const createExperimentRequestSchema = z.strictObject({
   }
   if (new Set(input.scope.outlineLeafIds).size !== input.scope.outlineLeafIds.length) {
     context.addIssue({ code: "custom", path: ["scope", "outlineLeafIds"], message: "목차 항목이 중복되었습니다." });
+  }
+  if (input.abilities && new Set(input.abilities).size !== input.abilities.length) {
+    context.addIssue({ code: "custom", path: ["abilities"], message: "선택한 학습 능력이 중복되었습니다." });
   }
   const last = experimentStages.indexOf(input.stopAfterStage);
   for (const stage of experimentStages.slice(0, last + 1)) {

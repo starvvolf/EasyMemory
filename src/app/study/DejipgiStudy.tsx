@@ -58,7 +58,7 @@ export default function DejipgiStudy() {
       // One queued request per material (docs/DECISIONS.md 2026-09-29 앱 전체 흐름). The assigned AI runs it
       // through MCP and records the authored document; the screen only queues and polls.
       builder: {
-        async start({ file, from, to, purpose }) {
+        async start({ file, from, to, purpose, answers }) {
           if (session.mode !== "local-experiment") throw new Error("자료 등록과 생성 요청은 로컬 실험 모드에서만 할 수 있어요.");
           const form = new FormData();
           form.append("pdf", file);
@@ -66,11 +66,13 @@ export default function DejipgiStudy() {
             method: "POST", body: form,
           }), "PDF를 등록하지 못했어요.");
           const source = await findSource(registered.id);
-          const request = await createQueuedRequest(source, `${from}-${to}`, purpose, {});
+          const request = await createQueuedRequest(source, `${from}-${to}`, purpose, { abilities: answers.abilities });
           return { requestId: request.id, sourceId: source.id };
         },
-        async restart({ sourceId, from, to, purpose }) {
-          const request = await createQueuedRequest(await findSource(sourceId), `${from}-${to}`, purpose, {});
+        async restart({ requestId, sourceId, from, to, purpose }) {
+          const previous = await readJson<{ request: ExperimentRequest }>(
+            await fetchExperiment(`/api/mcp-experiment-requests/${encodeURIComponent(requestId)}`), "이전 요청을 확인하지 못했어요.");
+          const request = await createQueuedRequest(await findSource(sourceId), `${from}-${to}`, purpose, { abilities: previous.request.input.abilities });
           return { requestId: request.id };
         },
         async remake({ artifactId, objectiveIds }) {

@@ -50,6 +50,7 @@ export function buildRequestBody(
     stopAfterStage?: (typeof requestStages)[number];
     reuse?: { kind: "output"; runId: string; stage: "learning-design"; sha256: string };
     selectedObjectiveIds?: string[];
+    abilities?: ExperimentRequest["input"]["abilities"];
   } = {},
 ) {
   const parsed = parsePageSelection(pageText, source.pageCount);
@@ -63,6 +64,7 @@ export function buildRequestBody(
       sourceId: source.id,
       scope: { pageNumbers: parsed.pages, outlineLeafIds: eligibleLeafIds(source, parsed.pages) },
       purpose: purpose.trim(),
+      ...(options.abilities?.length ? { abilities: options.abilities } : {}),
       requestedStages: Object.fromEntries(requestStages.slice(0, lastStage + 1).map((stage) => [stage, { ...defaultSetting }])),
       stopAfterStage,
       ...(options.reuse ? { reuse: options.reuse } : {}),
@@ -93,9 +95,9 @@ export function objectivesFromCompletedRequest(request: ExperimentRequest) {
 }
 
 type RequestBody = Extract<ReturnType<typeof buildRequestBody>, { body: unknown }>["body"];
-const requestKey = (input: Pick<ExperimentRequest["input"], "sourceId" | "scope" | "purpose" | "stopAfterStage" | "reuse" | "selectedObjectiveIds">) =>
+const requestKey = (input: Pick<ExperimentRequest["input"], "sourceId" | "scope" | "purpose" | "abilities" | "stopAfterStage" | "reuse" | "selectedObjectiveIds">) =>
   JSON.stringify([input.sourceId, input.scope.pageNumbers, input.purpose, input.stopAfterStage,
-    input.reuse ? [input.reuse.runId, input.reuse.stage, input.reuse.sha256] : null, input.selectedObjectiveIds ?? null]);
+    input.reuse ? [input.reuse.runId, input.reuse.stage, input.reuse.sha256] : null, input.selectedObjectiveIds ?? null, input.abilities ?? null]);
 
 /** An earlier identical request that is still queued, running, or already done — waiting on it again avoids a second paid run. */
 export function findReusableRequest(requests: ExperimentRequest[], body: RequestBody): ExperimentRequest | null {
@@ -126,5 +128,6 @@ export function buildRemakeBody(source: RequestSource, origin: ExperimentRequest
     stopAfterStage: "cards",
     reuse: { kind: "output", runId: origin.runId, stage: "learning-design", sha256: design.actual.outputSha256 },
     selectedObjectiveIds: [...new Set(objectiveIds)],
+    abilities: origin.input.abilities,
   });
 }

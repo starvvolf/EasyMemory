@@ -1246,7 +1246,7 @@ async function restartMaterial(d){
   if (!engine) return;
   const rec = d.pending;
   try{
-    const res = rec.remake ? await engine.remake(rec.remake) : await engine.restart({ sourceId:rec.sourceId, from:rec.from, to:rec.to, purpose:rec.purpose });
+    const res = rec.remake ? await engine.remake(rec.remake) : await engine.restart({ requestId:rec.requestId, sourceId:rec.sourceId, from:rec.from, to:rec.to, purpose:rec.purpose });
     Object.assign(rec, { requestId:res.requestId, status:"waiting", message:"" });
     savePending(); render(); pollPending();
   }catch(e){ toast((e && e.message) || "다시 요청하지 못했어요."); }

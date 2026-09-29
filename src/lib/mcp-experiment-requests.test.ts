@@ -47,6 +47,12 @@ test("selected objectives require a completed Learning Design prefix and reject 
   assert.equal(createExperimentRequestSchema.safeParse({ ...request, selectedObjectiveIds: ["objective-2", "objective-2"] }).success, false);
 });
 
+test("능력 선택값은 허용된 다섯 개만 받고 중복을 거부한다", () => {
+  assert.equal(createExperimentRequestSchema.safeParse({ ...base, abilities: ["계산·적용하기", "식·절차 쓰기"] }).success, true);
+  assert.equal(createExperimentRequestSchema.safeParse({ ...base, abilities: ["계산·적용하기", "계산·적용하기"] }).success, false);
+  assert.equal(createExperimentRequestSchema.safeParse({ ...base, abilities: ["그림 그리기"] }).success, false);
+});
+
 test("registered source requests pin the real PDF and reject pages outside its bounds", async () => {
   const folder = await mkdtemp(path.join(os.tmpdir(), "recaller-registered-request-"));
   process.env.STUDY_FORGE_DATA_DIR = folder;

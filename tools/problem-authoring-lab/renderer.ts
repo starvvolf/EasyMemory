@@ -32,6 +32,13 @@ function renderMath(latex: string, displayMode = false) {
   }
 }
 
+function hasVisualOverlay(blocks: readonly AuthoringBlock[]) {
+  return blocks.some((image) => (image.kind === "image" || image.kind === "generated-image") &&
+    blocks.some((other) => other !== image && other.kind !== "answer-reveal" &&
+      image.frame.x < other.frame.x + other.frame.width && other.frame.x < image.frame.x + image.frame.width &&
+      image.frame.y < other.frame.y + other.frame.height && other.frame.y < image.frame.y + image.frame.height));
+}
+
 function answerHtml(response: ResponseContract) {
   if (response.kind === "single-choice") {
     const option = response.options.find((item) => item.id === response.correctOptionId);
@@ -87,7 +94,8 @@ export function renderDocument(document: AuthoringDocument, state: RenderState &
   const renderQuestion = (question: AuthoredQuestion, index: number) => {
     const pages = [...new Set(question.source.sourcePages?.length ? question.source.sourcePages : [question.source.sourcePage])].join(", ");
     const evidence = state.revealAnswers ? `<span class="source-evidence"> · 근거: ${escapeHtml(question.source.sourceRange)}${question.source.knowledgeContent ? ` · 학습 내용: ${escapeHtml(question.source.knowledgeContent)}` : ""}</span>` : "";
-    return `<article class="question-shell" style="width:${question.page.width}px"><section class="question-page" data-question-id="${escapeHtml(question.id)}" style="width:${question.page.width}px;height:${question.page.height}px"><div class="number">${index + 1}</div>${question.blocks.map((block) => renderBlock(block, question, state)).join("")}</section><div class="source-line">원문 ${escapeHtml(pages)}쪽${evidence}</div>${state.interactive ? `<div class="question-actions" data-question-id="${escapeHtml(question.id)}"><button type="button" data-action="submit">제출</button><button type="button" data-action="reveal">정답 공개</button><output aria-live="polite"></output></div>` : ""}</article>`;
+    const flow = !hasVisualOverlay(question.blocks);
+    return `<article class="question-shell" style="width:${question.page.width}px"><section class="question-page${flow ? " flow-page" : ""}" data-question-id="${escapeHtml(question.id)}" style="width:${question.page.width}px;${flow ? "" : `height:${question.page.height}px`}"><div class="number">${index + 1}</div>${question.blocks.map((block) => renderBlock(block, question, state)).join("")}</section><div class="source-line">원문 ${escapeHtml(pages)}쪽${evidence}</div>${state.interactive ? `<div class="question-actions" data-question-id="${escapeHtml(question.id)}"><button type="button" data-action="submit">제출</button><button type="button" data-action="reveal">정답 공개</button><output aria-live="polite"></output></div>` : ""}</article>`;
   };
   const renderedSets = new Set<string>();
   const sections = document.questions.map((question, index) => {
@@ -98,7 +106,8 @@ export function renderDocument(document: AuthoringDocument, state: RenderState &
     if (!set) return renderQuestion(question, index);
     const setQuestion = { ...question, responses: [] };
     const hasSharedHeading = set.blocks.some((block) => block.kind === "text" && block.text.trim().startsWith("공통 자료"));
-    const shared = `<section class="question-page shared-page" data-shared-set-id="${escapeHtml(set.id)}" style="width:${set.page.width}px;height:${set.page.height}px">${hasSharedHeading ? "" : '<div class="shared-label">공통 자료</div>'}${set.blocks.map((block) => renderBlock(block, setQuestion, state)).join("")}</section>`;
+    const flow = !hasVisualOverlay(set.blocks);
+    const shared = `<section class="question-page shared-page${flow ? " flow-page" : ""}" data-shared-set-id="${escapeHtml(set.id)}" style="width:${set.page.width}px;${flow ? "" : `height:${set.page.height}px`}">${hasSharedHeading ? "" : '<div class="shared-label">공통 자료</div>'}${set.blocks.map((block) => renderBlock(block, setQuestion, state)).join("")}</section>`;
     const members = document.questions.map((member, memberIndex) => member.sharedSetId === set.id ? renderQuestion(member, memberIndex) : "").join("\n");
     return `<div class="shared-group" data-shared-group-id="${escapeHtml(set.id)}">${shared}${members}</div>`;
   }).join("\n");
@@ -116,6 +125,7 @@ const LAYOUT_SCRIPT = `
   const mobile = window.matchMedia("(max-width: 820px)");
   const fitAnswers = () => {
     for (const page of pages) {
+      if (page.classList.contains("flow-page")) continue;
       if (mobile.matches) {
         page.style.removeProperty("min-height");
         continue;
@@ -275,6 +285,12 @@ h1{margin:0;font-size:26px;line-height:1.3;letter-spacing:-.035em;font-weight:70
 .shared-page{margin:14px auto;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
 .number{position:absolute;left:18px;top:14px;color:var(--accent);font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
 .block{position:absolute;overflow:auto;overflow-wrap:anywhere}
+.flow-page{height:auto!important;min-height:0!important;display:flex;flex-direction:column;gap:16px;padding:22px 26px;overflow:visible}
+.flow-page .number,.flow-page .shared-label{position:static}
+.flow-page .block{position:static!important;width:100%!important;height:auto!important;overflow:visible!important}
+.flow-page .choices{grid-template-columns:1fr!important}
+.flow-page .generated-image img{height:auto;max-height:420px}
+.flow-page .image-placeholder{min-height:220px}
 .text.body{font-size:19px;line-height:1.55;font-weight:700;letter-spacing:-.025em;white-space:pre-line}
 .text.heading{font-size:21px;line-height:1.45;font-weight:700;letter-spacing:-.03em;white-space:pre-line}
 .text.caption{font-size:12px;color:var(--muted)}

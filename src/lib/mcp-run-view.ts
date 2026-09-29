@@ -195,6 +195,11 @@ async function verifyRequestRun(run: StoredRun, request: PublicExperimentRequest
   const files = object(run.config).files;
   const requestedObjectives = request.input.selectedObjectiveIds ?? [];
   const runObjectives = object(run.config).selectedObjectiveIds;
+  const requestedAbilities = request.input.abilities ?? [];
+  const runAbilities = object(run.config).abilities;
+  if (requestedAbilities.length > 0 && (!Array.isArray(runAbilities) ||
+    JSON.stringify(runAbilities) !== JSON.stringify(requestedAbilities))) return false;
+  if (requestedAbilities.length === 0 && Array.isArray(runAbilities) && runAbilities.length > 0) return false;
   if (requestedObjectives.length > 0 && (!Array.isArray(runObjectives) ||
     JSON.stringify(runObjectives) !== JSON.stringify(requestedObjectives))) return false;
   if (requestedObjectives.length === 0 && Array.isArray(runObjectives) && runObjectives.length > 0) return false;

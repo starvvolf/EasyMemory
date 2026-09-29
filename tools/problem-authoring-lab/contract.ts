@@ -19,8 +19,15 @@ export type SourceAssetRef = {
   sourceId: string;
   page: number;
   assetId: string;
+  /** PDF page fractions: top-left origin, each coordinate in [0,1], width/height > 0, rectangle within page. */
   crop?: { x: number; y: number; width: number; height: number };
 };
+
+function validCrop(crop: SourceAssetRef["crop"]) {
+  if (!crop) return true;
+  const { x, y, width, height } = crop;
+  return [x, y, width, height].every(Number.isFinite) && x >= 0 && y >= 0 && width > 0 && height > 0 && x + width <= 1 && y + height <= 1;
+}
 export type GeneratedAssetRef = {
   assetId: string;
   path: string;
@@ -175,6 +182,7 @@ export function validateDocument(document: AuthoringDocument): InspectionIssue[]
       if (![x, y, width, height].every(Number.isFinite) || x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > set.page.width || y + height > set.page.height) issues.push({ severity: "error", code: "shared-out-of-bounds", message: "공통 자료 블록이 페이지 경계를 벗어납니다.", questionId: set.id, blockId: block.id });
       if (["choice-set", "blank", "answer-reveal"].includes(block.kind)) issues.push({ severity: "error", code: "shared-response-block", message: "응답 블록은 개별 문항에 있어야 합니다.", questionId: set.id, blockId: block.id });
       if (block.kind === "image" && (block.sourceAssetRef.sourceId !== set.source.sourceId || !(set.source.sourcePages ?? [set.source.sourcePage]).includes(block.sourceAssetRef.page))) issues.push({ severity: "error", code: "shared-image-source", message: "공통 그림의 출처가 다릅니다.", questionId: set.id, blockId: block.id });
+      if (block.kind === "image" && !validCrop(block.sourceAssetRef.crop)) issues.push({ severity: "error", code: "image-crop", message: "원문 그림 영역은 좌상단 기준 페이지 비율 0~1 안에 있어야 합니다.", questionId: set.id, blockId: block.id });
       if (block.kind === "generated-image" && !validGeneratedImage(block)) issues.push({ severity: "error", code: "generated-asset-contract", message: "공통 생성 그림의 재현 정보가 유효하지 않습니다.", questionId: set.id, blockId: block.id });
       if (block.kind === "math" && !validLatex(block.latex)) issues.push({ severity: "error", code: "math-syntax", message: "공통 수식의 LaTeX가 유효하지 않습니다.", questionId: set.id, blockId: block.id });
       if (hasPlainMatrixRows(block.kind === "text" ? block.text : block.kind === "box" ? block.label : undefined)) issues.push({ severity: "warning", code: "plain-matrix", message: "세미콜론으로 구분한 행렬을 math 블록으로 조판하세요.", questionId: set.id, blockId: block.id });
@@ -220,6 +228,7 @@ export function validateDocument(document: AuthoringDocument): InspectionIssue[]
           issues.push({ severity: "error", code: "generated-asset-contract", message: "생성 그림의 로컬 SVG 경로 또는 재현 정보가 유효하지 않습니다.", questionId: question.id, blockId: block.id });
         }
       }
+      if (block.kind === "image" && !validCrop(block.sourceAssetRef.crop)) issues.push({ severity: "error", code: "image-crop", message: "원문 그림 영역은 좌상단 기준 페이지 비율 0~1 안에 있어야 합니다.", questionId: question.id, blockId: block.id });
       if (block.kind === "math" && !validLatex(block.latex)) issues.push({ severity: "error", code: "math-syntax", message: "수식의 LaTeX가 유효하지 않습니다.", questionId: question.id, blockId: block.id });
       if (hasPlainMatrixRows(block.kind === "text" ? block.text : block.kind === "box" ? block.label : undefined)) issues.push({ severity: "warning", code: "plain-matrix", message: "세미콜론으로 구분한 행렬을 math 블록으로 조판하세요.", questionId: question.id, blockId: block.id });
     }

@@ -35,6 +35,15 @@ test("요청 본문은 실제 요청 스키마를 통과한다", () => {
   assert.deepEqual(built.body.scope.outlineLeafIds, ["leaf-a", "leaf-b"]);
 });
 
+test("선택한 능력은 자유 문장과 별도로 저장하고 재사용 판단에도 반영한다", () => {
+  const first = buildRequestBody(source, "2-3", "시험 대비", { abilities: ["계산·적용하기"] });
+  const second = buildRequestBody(source, "2-3", "시험 대비", { abilities: ["식·절차 쓰기"] });
+  if (!("body" in first) || !("body" in second) || !first.body || !second.body) throw new Error("요청 본문 없음");
+  assert.ok(createExperimentRequestSchema.safeParse(first.body).success);
+  assert.deepEqual(first.body.abilities, ["계산·적용하기"]);
+  assert.equal(findReusableRequest([{ id: "same-purpose", status: "completed", input: first.body } as ExperimentRequest], second.body), null);
+});
+
 test("목표 설계까지만 요청하고 그 결과를 이어서 재사용할 수 있다", () => {
   const design = buildRequestBody(source, "2-9", "시험 대비", { stopAfterStage: "learning-design" });
   if (!("body" in design) || !design.body) throw new Error(design.error);

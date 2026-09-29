@@ -369,6 +369,24 @@ test("짧은 답은 안전한 표기만 통일하고 값·순서·단위를 보�
   assert.equal(gradeResponse({ ...response, acceptedAnswers: ["a;b"] }, "a,b"), false);
 });
 
+test("원문 그림 crop은 좌상단 기준 페이지 비율 0~1만 받는다", async () => {
+  const document = mockDraft((await fixture()).items);
+  const source = document.questions[0]!.source;
+  const image = { id: "crop-image", kind: "image" as const, frame: { x: 50, y: 10, width: 100, height: 50 }, alt: "원문 도표",
+    sourceAssetRef: { sourceId: source.sourceId, page: source.sourcePage, assetId: "figure-1", crop: { x: 0.5, y: 0, width: 0.5, height: 1 } } };
+  document.questions[0]!.blocks.push(image);
+  assert.ok(!validateDocument(document).some((issue) => issue.code === "image-crop"));
+  image.sourceAssetRef.crop.width = 0.6;
+  assert.ok(validateDocument(document).some((issue) => issue.code === "image-crop"));
+});
+
+test("그림을 겹쳐 놓지 않는 문항은 데스크톱에서도 흐름 배치를 쓴다", async () => {
+  const document = mockDraft((await fixture()).items);
+  const html = renderDocument({ ...document, questions: document.questions.slice(0, 1) }, { revealAnswers: false });
+  assert.match(html, /class="question-page flow-page"/);
+  assert.match(html, /\.flow-page \.block\{position:static!important/);
+});
+
 test("브라우저에 주입한 채점 함수는 서버와 동일하다", async () => {
   const document = mockDraft((await fixture()).items);
   const html = renderInteractiveDocument(document);

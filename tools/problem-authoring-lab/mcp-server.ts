@@ -23,7 +23,7 @@ const methodFiles: Record<(typeof methodNames)[number], string> = {
 export function createProblemAuthoringMcpServer() {
   const server = new McpServer(
     { name: "study-forge-problem-authoring-lab", version: "0.1.0" },
-    { instructions: "제공된 원문 패킷과 문제 출제 스킬로 블록 문서를 작성합니다. 검증한 뒤 정답 공개 전·후 화면을 렌더링하고 실제 HTML을 살펴보며 필요한 부분만 패치합니다. 원문 이미지와 재현 가능한 생성 자산을 명확히 구분합니다." },
+    { instructions: "제공된 원문 패킷과 문제 출제 스킬로 블록 문서를 작성합니다. 되짚기 요청의 prepare_authoring_packet이 반환한 packetPath를 load_source_packet, validate_problem_document, apply_problem_patch, record_problem_iteration에 일관되게 전달합니다. 패킷에 선택된 목표만 문서에 넣고 새 목표를 만들지 않습니다. 검증·품질 검사와 정답 전·후 미리보기를 확인한 뒤 필요한 부분만 최대 한 번 고치고, 문제 없으면 record_problem_iteration으로 기록합니다. 이 기록 전에는 /study가 준비됨이 아닙니다. 원문 그림과 생성 자산은 구분합니다." },
   );
   server.registerTool("load_source_packet", {
     title: "학습자료 패킷 불러오기",

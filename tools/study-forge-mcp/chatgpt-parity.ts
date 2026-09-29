@@ -6,6 +6,9 @@ import path from "node:path";
 import { z } from "zod";
 import { readVerifiedMcpRunRaw } from "../../src/lib/mcp-run-view.ts";
 import { getRegisteredMcpSource, readRegisteredMcpSourcePdf } from "../../src/lib/mcp-source-registry.ts";
+import { studyAbilities } from "../../src/lib/mcp-experiment-requests.ts";
+import { inspectAbilityCoverage } from "./ability-coverage.ts";
+import { extractPdfPageTexts, inspectSourceEvidence, type EvidenceCheck } from "./source-evidence.ts";
 import {
   adaptLearningDesignToAnalysis,
   buildReviewMaterial,
@@ -57,6 +60,7 @@ const startInputSchema = z.object({
     sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   })).min(1).max(20),
   learningGoal: z.string().default(""),
+  abilities: z.array(z.enum(studyAbilities)).max(studyAbilities.length).optional(),
   instruction: z.string().default(""),
   subject: z.string().default(""),
   tags: z.array(z.string()).default([]),
@@ -130,6 +134,7 @@ type LearningDesignArtifact = {
   learningDesign: LearningDesignBase;
   analysis: ReturnType<typeof adaptLearningDesignToAnalysis>;
   organizedMaterial: ReturnType<typeof buildReviewMaterial>;
+  sourceEvidenceChecks?: EvidenceCheck[];
 };
 
 type ActivityDesignArtifact = {
@@ -138,6 +143,7 @@ type ActivityDesignArtifact = {
   activities: z.infer<typeof learningPlanGenerationSchema>["activities"];
   structureModes: Record<string, "word_bank" | "free_input">;
   structureKinds: Record<string, "sequence" | "hierarchy">;
+  abilityWarnings?: string[];
 };
 
 export type StartChatGptParityInput = z.input<typeof startInputSchema>;
@@ -299,7 +305,7 @@ export class ChatGptParityService {
     }
     if (target.cancelledAt) throw new Error("취소된 ChatGPT MCP run에는 재사용할 수 없습니다.");
     if (Object.keys(target.artifacts).length > 0 || target.selectedOutlineLeafIds.length > 0) {
-      throw new Error("새 실행의 원문 분석 전에만 출력을 재사용할 수 있습니다.");
+      throw new Error("새 실행의 Analyze 전에만 출력을 재사용할 수 있습니다.");
     }
     const prefix = chatGptParityStages.slice(0, chatGptParityStages.indexOf(input.stage) + 1);
     if (chatGptParityStages.indexOf(target.config.stopAfterStage) < chatGptParityStages.indexOf(input.stage)) {
@@ -480,7 +486,18 @@ export class ChatGptParityService {
       value = this.mergeCardDraftSubmission(run, input.result);
     }
     try {
-      run.artifacts[input.stage] = this.validateAndMaterialize(run, input.stage, value);
+      const artifact = this.validateAndMaterialize(run, input.stage, value);
+      if (input.stage === "learning-design") {
+        (artifact as LearningDesignArtifact).sourceEvidenceChecks = await this.checkLearningEvidence(run, artifact as LearningDesignArtifact);
+      }
+      run.artifacts[input.stage] = artifact;
+      if (input.stage === "activity-design") {
+        const artifact = run.artifacts[input.stage] as ActivityDesignArtifact;
+        artifact.abilityWarnings = inspectAbilityCoverage(
+          run.config.abilities ?? [], artifact.learningDesign.assessmentBlueprints, artifact.activities,
+          artifact.learningDesign.knowledgeUnits,
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       run.stageValidationFailures[input.stage] = [
@@ -520,6 +537,8 @@ export class ChatGptParityService {
         stage: input.stage,
         checksum: checksum(run.artifacts[input.stage]),
         durationMs: run.stageDurationsMs[input.stage] ?? null,
+        ...(input.stage === "activity-design" ? { abilityWarnings: (run.artifacts[input.stage] as ActivityDesignArtifact).abilityWarnings ?? [] } : {}),
+        ...(input.stage === "learning-design" ? { sourceEvidenceChecks: (run.artifacts[input.stage] as LearningDesignArtifact).sourceEvidenceChecks ?? [] } : {}),
       },
       ...(await this.getNextStage(run.id)),
     };
@@ -696,6 +715,9 @@ export class ChatGptParityService {
 
   private buildStageInput(run: ChatGptParityRun, stage: ChatGptParityStage) {
     const outputSchema = schemaForStage(stage);
+    const pdfReadingRule = run.config.files.some((file) => file.sourceId)
+      ? "이 실행은 /study에 등록된 PDF입니다. 해당 요청의 선택 쪽을 get_study_generation_source_pages로 읽은 실제 글자만 근거로 사용하세요. 글자가 없는 쪽은 내용을 추측하지 마세요."
+      : "현재 ChatGPT 대화에 첨부된 PDF를 직접 읽으세요. 로컬 MCP 서버에는 PDF 바이너리가 전달되지 않으므로 첨부 내용을 근거로 결과를 작성해야 합니다.";
     const common = {
       stage,
       instructions: instructionsForStage(stage),
@@ -711,8 +733,7 @@ export class ChatGptParityService {
         input: {
           title: run.config.title,
           files: run.config.files,
-          attachmentRule:
-            "현재 ChatGPT 대화에 첨부된 PDF를 직접 읽으세요. 로컬 MCP 서버에는 PDF 바이너리가 전달되지 않으므로 첨부 내용을 근거로 결과를 작성해야 합니다.",
+          attachmentRule: pdfReadingRule,
           format:
             "파일마다 @file 파일명 줄을 쓰고, 목차는 # 제목 [시작-끝], ## 하위 제목 [페이지] 형식으로 작성하세요. 설명 문장은 넣지 마세요.",
         },
@@ -735,7 +756,7 @@ export class ChatGptParityService {
           instruction: run.config.instruction,
           selectedSourceOutline: selectedOutline,
           attachmentRule:
-            "첨부 PDF에서 선택된 목차 범위의 실제 내용을 다시 읽고 개념 관계만 트리로 작성하세요. 목차 순서를 복제하지 말고 의미 관계를 표현하되 선택 범위 밖으로 확장하지 마세요. 뒤에서 별도로 학습·판단해야 할 독립 내용은 한 노드의 출처에 섞어 넣지 마세요.",
+            `${pdfReadingRule} 선택된 목차 범위의 실제 내용을 다시 읽고 개념 관계만 트리로 작성하세요. 목차 순서를 복제하지 말고 의미 관계를 표현하되 선택 범위 밖으로 확장하지 마세요. 뒤에서 별도로 학습·판단해야 할 독립 내용은 한 노드의 출처에 섞어 넣지 마세요.`,
           format:
             "treeText 첫 줄은 최상위 개념, 이후는 '- [관계] 개념어 — 짧은 설명 (p.페이지) @목차(번호)' 형식입니다. 같은 페이지에 선택된 말단 목차가 여러 개면 @목차 번호를 반드시 적습니다. 하위 개념은 공백 두 칸씩 들여씁니다.",
         },
@@ -760,7 +781,7 @@ export class ChatGptParityService {
             sourceRefs: node.sourceRefs,
           })),
           attachmentRule:
-            "개념트리를 기준으로 묶거나 나눕니다. 첨부 PDF는 근거 문구와 실제 학습 가능 범위를 확인하는 데 사용하고 트리에 없는 학습 대상을 새로 만들지 마세요. 상위 개념의 출처를 그 아래 모든 독립 능력의 평가범위로 간주하지 마세요.",
+            `${pdfReadingRule} 개념트리를 기준으로 묶거나 나눕니다. PDF는 근거 문구와 실제 학습 가능 범위를 확인하는 데 사용하고 트리에 없는 학습 대상을 새로 만들지 마세요. 상위 개념의 출처를 그 아래 모든 독립 능력의 평가범위로 간주하지 마세요. 근거에는 PDF 실제 문구만 옮기고 요약은 학습내용에 쓰세요.`,
           format: learningDesignFormatExample,
         },
       };
@@ -791,6 +812,8 @@ export class ChatGptParityService {
               }),
             };
           }),
+          requestedAbilities: run.config.abilities ?? [],
+          abilityRule: "사용자가 고른 능력을 형식 선택의 근거로 사용하세요. 해당 자료·학습목표에서 직접 확인할 수 없는 능력은 억지로 출제하지 말고 이유를 제한에 적으세요.",
           appCapabilities: {
             flashcard: "짧은 답 또는 자기채점형 설명·적용",
             cloze: "문맥 속 짧은 말 하나 직접 입력",
@@ -924,6 +947,28 @@ export class ChatGptParityService {
       }
       throw error;
     }
+  }
+
+  private async checkLearningEvidence(run: ChatGptParityRun, artifact: LearningDesignArtifact): Promise<EvidenceCheck[]> {
+    const tree = parseConceptTreeArtifact(run.artifacts["concept-tree"]);
+    const pageTexts = new Map<string, Map<number, string>>();
+    const unitPages = new Map<string, Map<string, number[]>>();
+    for (const file of run.config.files) {
+      const units = artifact.learningDesign.knowledgeUnits.filter((unit) => unit.sourceId === file.fileName);
+      if (!units.length) continue;
+      const perUnit = new Map<string, number[]>();
+      for (const unit of units) {
+        const pages = tree.nodes.filter((node) => unit.conceptNodeIds?.includes(node.id))
+          .flatMap((node) => node.sourceRefs.filter((ref) => ref.fileName === file.fileName).flatMap((ref) => ref.pageNumbers));
+        perUnit.set(unit.id, [...new Set([unit.sourcePage, ...pages])]);
+      }
+      unitPages.set(file.fileName, perUnit);
+      if (!file.sourceId) continue; // Old comparison runs had no locally registered PDF; leave them untouched.
+      const bytes = await readRegisteredMcpSourcePdf(file.sourceId);
+      if (!bytes) throw new Error(`${file.fileName}의 등록된 원본 PDF를 확인할 수 없습니다.`);
+      pageTexts.set(file.fileName, await extractPdfPageTexts(bytes, [...perUnit.values()].flat()));
+    }
+    return inspectSourceEvidence(artifact.learningDesign.knowledgeUnits, pageTexts, unitPages);
   }
 
   private async verifiedRunFile(runId: string): Promise<string> {
@@ -1086,7 +1131,7 @@ const learningDesignFormatExample = [
   "학습내용: 함께 묶어 익힐 의미 있는 내용",
   "학습목표: 학습자가 달성해야 할 목표",
   "성공기준: 학습내용과 같은 능력·범위를 원문 근거로 확인하는 기준 하나",
-  "근거: PDF에서 확인한 짧은 원문 근거",
+  "근거: PDF의 짧은 실제 문구 (여러 구절이면 ||로 구분; 쪽 표기는 끝의 (PDF 2쪽)처럼 별도 기입)",
   "종류: 용어 | 사실 | 개념 | 관계 | 절차 | 공식 | 문제해결 | 기타",
   "이유: 이 노드들을 묶거나 나눈 이유",
   "중요도: 0 | 1 | 2 | 3",
@@ -1243,7 +1288,7 @@ function materializeLearningDesignText(
       content: block.require("학습내용"),
       sourceId: sourceRef?.fileName ?? fallbackSourceId,
       sourcePage: sourceRef?.pageNumbers[0] ?? 0,
-      sourceRange: conceptNodes.map((node) => node.title).join(" / "),
+      sourceRange: `PDF ${sourceRef?.pageNumbers.join(", ") ?? "?"}쪽 / ${conceptNodes.map((node) => node.title).join(" / ")}`,
       sourceText: block.require("근거"),
       knowledgeType: parseKnowledgeType(block.require("종류")),
       rationale: block.require("이유"),
@@ -1766,16 +1811,16 @@ function schemaForStage(stage: ChatGptParityStage) {
 
 function instructionsForStage(stage: ChatGptParityStage) {
   if (stage === "analyze") {
-    return "첨부 PDF의 원문 목차만 Markdown 문자열로 제출합니다. @file로 파일을 구분하고 # 개수로 계층, 마지막 [페이지] 또는 [시작-끝]으로 범위를 표시합니다. 설명·요약·핵심 개념·중요도·관계 해설·문제 설계는 쓰지 않습니다. 명시적 목차가 없으면 실제 장·절 제목이나 슬라이드 제목만 사용합니다.";
+    return "PDF의 원문 목차만 Markdown 문자열로 제출합니다. 대화에 첨부된 PDF는 직접 읽고 /study에 등록된 PDF는 원문 읽기 도구 결과를 사용합니다. @file로 파일을 구분하고 # 개수로 계층, 마지막 [페이지] 또는 [시작-끝]으로 범위를 표시합니다. 설명·요약·핵심 개념·중요도·관계 해설·문제 설계는 쓰지 않습니다. 명시적 목차가 없으면 실제 장·절 제목이나 슬라이드 제목만 사용합니다.";
   }
   if (stage === "concept-tree") {
     return "선택된 원문 목차의 실제 내용을 의미 관계 중심 개념트리로 작성합니다. 목차를 복사하거나 학습목표·문제·예시를 노드로 만들지 않습니다. 독립적으로 학습·판단할 내용의 출처가 한 노드에 섞이지 않게 하되, 의미 관계에 맞게 묶고 나누는 자유는 유지합니다. 같은 PDF 페이지에 선택된 말단 목차가 여러 개면 노드 끝에 @목차(번호)를 써서 실제 해당하는 항목만 연결합니다. 번호는 userSelection.availableLeafNodes의 number를 사용합니다. 모델은 짧은 자연어 트리만 쓰고 MCP가 노드 ID, 부모, 순서, 목차 연결과 페이지 범위를 검사합니다.";
   }
   if (stage === "learning-design") {
-    return "개념트리의 노드를 개별·형제 묶음·경로·하위 트리 단위로 묶거나 나눠 학습 대상과 학습목표를 정합니다. 각 블록의 학습내용·목표·성공기준은 같은 능력과 범위를 가리켜야 합니다. 한 기준으로 판단할 수 없는 독립 능력은 별도 학습 대상으로 나누고, 공통 상위 개념의 목차를 실제 평가범위로 과대 해석하지 마세요. 성공기준은 제공된 원문으로 학습하고 확인할 수 있는 내용만 요구합니다. 문제 수, 문제 형식, 질문, 보기, 정답은 만들지 않습니다. 자연어 LEARNING 블록만 쓰고 MCP가 ID와 출처 연결을 만듭니다.";
+    return "개념트리의 노드를 묶거나 나눠 학습 대상과 목표를 정합니다. 학습내용·목표·성공기준은 같은 능력과 범위여야 하며 제공된 원문으로 학습하고 확인할 수 있는 내용이어야 합니다. 독립 능력은 별도 학습 대상으로 나누고 상위 개념의 출처를 평가범위로 과대 해석하지 마세요. 근거에는 PDF 실제 문구를 그대로 쓰며 여러 구절은 ||로 구분합니다. 요약은 학습내용에만 씁니다. 문제 수·형식·질문·보기·정답은 만들지 않습니다. MCP가 ID·출처 연결과 등록 PDF의 원문 문구를 검사합니다. 글자가 없는 쪽은 실패 대신 원문 글자 없음으로 표시합니다.";
   }
   if (stage === "activity-design") {
-    return "확정된 학습 대상과 목표를 바꾸지 않고, 현재 Study Forge가 지원하는 기능을 보고 각 대상을 1~3개의 문제 설계로 만듭니다. 관련개념에는 해당 학습대상의 concepts 중 이 문제로 확인할 번호를 쓰고 모두 확인하면 전체라고 씁니다. 보여줄 정보, 감출 답, 응답 방식, 채점 방식, 단서와 문제 형식만 정하며 실제 질문·보기·정답은 쓰지 않습니다. 자연어 DESIGN 블록을 쓰고 MCP가 Blueprint, 지원 수준, 포함 여부와 앱 필드를 계산합니다.";
+    return "확정된 학습 대상과 목표를 바꾸지 않고, 현재 Study Forge가 지원하는 기능과 사용자가 고른 requestedAbilities를 보고 각 대상을 1~3개의 문제 설계로 만듭니다. 관련개념에는 해당 학습대상의 concepts 중 이 문제로 확인할 번호를 쓰고 모두 확인하면 전체라고 씁니다. 실제 질문·보기·정답은 쓰지 않습니다. 지원되지 않거나 원문으로 확인할 수 없는 능력은 억지로 문제화하지 말고 제한을 적습니다. MCP가 Blueprint, 지원 수준, 포함 여부와 능력 충족 경고를 계산합니다.";
   }
   return [
     "확정된 문제 설계를 다시 판단하지 않고 includeInGeneration=true인 항목의 실제 문제만 같은 순서로 씁니다.",

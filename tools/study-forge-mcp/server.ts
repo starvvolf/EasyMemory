@@ -2,10 +2,17 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import path from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { StudyForgeMcpService } from "./service.ts";
 import { generationStages } from "./types.ts";
+import { studyAbilities } from "../../src/lib/mcp-experiment-requests.ts";
+import { getExperimentRequest, listExperimentRequests, claimExperimentRequest, recordExperimentProgress, progressSchema } from "../../src/lib/mcp-experiment-requests.ts";
+import { getMcpRunView } from "../../src/lib/mcp-run-view.ts";
+import { readRegisteredMcpSourcePdf } from "../../src/lib/mcp-source-registry.ts";
+import { packetFromCompletedRequest } from "../problem-authoring-lab/request-packet.ts";
+import { extractPdfPageTexts } from "./source-evidence.ts";
 import {
   ChatGptParityService,
   chatGptParityStages,
@@ -42,7 +49,7 @@ export function createStudyForgeMcpServer(
     { name: "study-forge-generation", version: "0.2.0" },
     {
       instructions:
-        "기본 PDF 생성 흐름은 간결한 원문 목차 추출 → 개념트리 → 학습설계(트리 묶기·나누기와 목표) → 평가·활동 설계(현재 앱이 지원하는 기능에 맞춘 설계) → 카드 → 검증입니다. ChatGPT는 짧은 자연어 블록을 쓰고, MCP 서버는 이를 파싱해 ID, 연결, JSON 필드, 지원 수준, 전략, 난이도, 구조 방식, 원문 검사를 구체화합니다. 현재 대화에 첨부된 PDF에는 항상 start_chatgpt_pdf_run과 submit_chatgpt_pdf_stage를 사용합니다. 로컬 MCP 서버는 PDF 바이너리를 받지 않으므로 첨부 파일을 직접 읽습니다. get_next_stage와 submit_next_stage_result는 이전 방식과의 호환용 도구일 뿐입니다. 작성 전에 항상 instructions와 outputContract를 읽습니다. 사용자의 명시적 확인을 받은 뒤에만 발행합니다.",
+        "대기 중인 되짚기 요청을 '처리해'라고 받으면 목록→요청 점유→get_study_generation_source_pages로 등록 PDF의 선택 쪽 읽기→start_chatgpt_pdf_run(요청 ID·목표·abilities·선택 목표 전달)→5단계 submit_chatgpt_pdf_stage와 요청 단계 기록→prepare_authoring_packet→문제 출제 실험실의 load_source_packet/get_authoring_instructions/validate_problem_document/render_problem_preview/record_problem_iteration까지 사람의 추가 지시 없이 이어갑니다. 예외는 실제 유료 실행을 처음 시작하기 전 사용자 승인과 실패·계약 불일치입니다. 다시 만들기의 selectedObjectiveIds는 학습 설계 재사용 후 활동 설계·카드·출제 패킷·문서 전부에 적용합니다. 요청 5단계 완료만으로 /study의 '준비됨'이 아닙니다. 출제 문서가 검사·기록되어야 합니다. 기본 PDF 생성은 원문 목차→개념트리→학습설계→활동 설계→카드이며 모델은 짧은 자연어 블록을 쓰고 MCP가 구조화합니다. 작성 전에 각 단계 instructions와 outputContract를 읽습니다. 구형 get_next_stage 경로는 사용하지 않습니다. 별도 덱 발행은 명시적 확인 후에만 합니다.",
     },
   );
 
@@ -100,7 +107,7 @@ export function createStudyForgeMcpServer(
     {
       title: "ChatGPT PDF 비교 실행 시작",
       description:
-        "현재 ChatGPT 대화에 첨부된 PDF의 비교 경로를 시작합니다. ChatGPT는 먼저 간결한 원문 목차만 반환하고, MCP가 앱 구조를 만든 뒤 이후 단계를 검증·구체화·시간 기록·저장합니다.",
+        "현재 대화의 PDF 또는 점유한 되짚기 요청의 등록 PDF로 5단계를 시작합니다. 되짚기 요청에서는 clientRequestId=request.id, learningGoal=request.input.purpose, abilities=request.input.abilities, selectedObjectiveIds와 등록 파일의 sourceId/sha256/pageCount를 그대로 전달합니다. 재생성 요청이면 learning-design 결과 재사용 후 선택 목표만 문제 설계·생성합니다.",
       inputSchema: {
         clientRequestId: z.string().trim().min(1).max(200).optional(),
         projectId: z.string().trim().min(1).max(200).optional().describe(
@@ -114,6 +121,9 @@ export function createStudyForgeMcpServer(
           sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
         })).min(1).max(20),
         learningGoal: z.string().optional().default(""),
+        abilities: z.array(z.enum(studyAbilities)).max(studyAbilities.length).optional().describe(
+          "요청의 abilities 선택값을 그대로 전달합니다. 학습 활동 형식 선택과 능력 충족 경고에 사용됩니다.",
+        ),
         instruction: z.string().optional().default(""),
         subject: z.string().optional().default(""),
         tags: z.array(z.string()).optional().default([]),
@@ -164,6 +174,48 @@ export function createStudyForgeMcpServer(
       "선택한 원문 목차 범위를 ChatGPT 비교 run에 반영했습니다.",
     ),
   );
+
+  server.registerTool("list_study_generation_requests", {
+    title: "되짚기 생성 대기 요청 조회",
+    description: "사용자가 '대기 중인 요청 처리해'라고 하면 먼저 호출합니다. 대기 요청의 ID·자료·선택 능력·선택 목표를 조회합니다. 이 도구 자체는 AI 생성이나 비용을 발생시키지 않습니다.",
+    inputSchema: {}, outputSchema: { requests: z.array(z.record(z.string(), z.unknown())) },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  }, async () => toolResult({ requests: (await listExperimentRequests()).filter((request) => request.status === "waiting-for-executor") }, "대기 중인 생성 요청을 조회했습니다."));
+
+  server.registerTool("get_study_generation_source_pages", {
+    title: "되짚기 요청의 등록 PDF 원문 읽기",
+    description: "대화에 PDF 첨부가 없는 /study 요청에서 원문을 읽는 도구입니다. 요청 범위의 쪽을 최대 10쪽씩 반환합니다. 글자 없는 쪽은 text가 비어 있으므로 원문을 추측하지 마세요. 비용이 드는 모델 호출은 하지 않습니다.",
+    inputSchema: { requestId: z.string().regex(/^req_[a-f0-9]{32}$/), pageNumbers: z.array(z.number().int().positive()).min(1).max(10) },
+    outputSchema: { fileName: z.string(), pages: z.array(z.object({ pageNumber: z.number().int(), text: z.string() })) },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  }, async ({ requestId, pageNumbers }) => {
+    const request = await getExperimentRequest(requestId);
+    const source = request.sourceSnapshot;
+    if (!source || !request.input.scope.pageNumbers.length ||
+      pageNumbers.some((page) => !request.input.scope.pageNumbers.includes(page))) {
+      throw new Error("등록 PDF와 요청 범위에 포함된 쪽만 읽을 수 있습니다.");
+    }
+    const bytes = await readRegisteredMcpSourcePdf(source.id);
+    if (!bytes) throw new Error("등록된 원본 PDF를 읽을 수 없습니다.");
+    const texts = await extractPdfPageTexts(bytes, pageNumbers);
+    return toolResult({ fileName: source.fileName, pages: pageNumbers.map((pageNumber) => ({ pageNumber, text: texts.get(pageNumber) ?? "" })) }, "선택한 PDF 쪽의 추출 글자를 읽었습니다.");
+  });
+
+  server.registerTool("claim_study_generation_request", {
+    title: "되짚기 생성 요청 점유",
+    description: "선택한 대기 요청을 한 실행자만 처리하도록 점유합니다. 반환한 claimToken은 단계 기록에만 사용하고 사용자에게 표시하지 않습니다. 유료 모델 실행 전에는 사용자의 승인이 필요합니다.",
+    inputSchema: { requestId: z.string().regex(/^req_[a-f0-9]{32}$/) },
+    outputSchema: { request: z.record(z.string(), z.unknown()), claimToken: z.string() },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  }, async ({ requestId }) => toolResult(await claimExperimentRequest(requestId), "생성 요청을 점유했습니다."));
+
+  server.registerTool("record_study_generation_stage", {
+    title: "되짚기 요청의 완료 단계 기록",
+    description: "MCP 단계 제출이 성공한 뒤 같은 출력과 해시·시간을 요청 기록에 연결합니다. 다섯 번째 cards 단계에서는 요청이 완료되지만, 출제 기록 전까지 /study는 준비됨이 아닙니다. 선택 목표 외 내용은 기존 요청 검사가 차단합니다.",
+    inputSchema: { requestId: z.string().regex(/^req_[a-f0-9]{32}$/), progress: progressSchema },
+    outputSchema: { request: z.record(z.string(), z.unknown()) },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  }, async ({ requestId, progress }) => toolResult({ request: await recordExperimentProgress(requestId, progress, progress.stage === (await getExperimentRequest(requestId)).input.stopAfterStage) }, "MCP 단계와 생성 요청 기록을 연결했습니다."));
 
   server.registerTool(
     "reuse_chatgpt_pdf_analyze_output",
@@ -269,7 +321,7 @@ export function createStudyForgeMcpServer(
     {
       title: "ChatGPT가 작성한 PDF 단계 제출",
       description:
-        "ChatGPT가 작성한 원문 분석, 개념트리, 학습설계, 평가·활동 설계 또는 카드 결과 하나를 검증·저장하고 다음 단계의 정확한 계약을 반환합니다.",
+        "ChatGPT가 작성한 원문 분석, 개념트리, 학습설계, 평가·활동 설계 또는 카드 결과 하나를 검증·저장합니다. 되짚기 요청에서는 성공한 각 단계를 record_study_generation_stage에도 연결하고, cards 뒤 prepare_authoring_packet과 출제 실험실 기록까지 계속합니다.",
       inputSchema: {
         runId: z.string().min(1),
         stage: z.enum(chatGptParityStages),
@@ -324,6 +376,33 @@ export function createStudyForgeMcpServer(
       "ChatGPT MCP 생성 결과와 단계별 시간을 조회했습니다.",
     ),
   );
+
+  server.registerTool("prepare_authoring_packet", {
+    title: "완료된 생성 요청을 출제 입력 패킷으로 연결",
+    description: "5단계가 완료되고 원본 실행과 요청의 연결이 검증된 경우에만, 선택된 학습목표의 원문·목표·성공기준을 문제 출제 실험실 패킷으로 고정합니다. 이후 load_source_packet(packetPath), 출제·검사·record_problem_iteration까지 이어가야 /study가 준비됨이 됩니다. 기존 패킷은 덮어쓰지 않습니다.",
+    inputSchema: { requestId: z.string().regex(/^req_[a-f0-9]{32}$/) },
+    outputSchema: { authoringRunId: z.string(), packetPath: z.string(), objectiveIds: z.array(z.string()), itemCount: z.number().int() },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  }, async ({ requestId }) => {
+    const request = await getExperimentRequest(requestId);
+    const run = request.runId ? await getMcpRunView(`mcp:${request.runId}`) : null;
+    if (!run || run.executionRequest?.id !== request.id || run.executionRequestStatus !== "completed") {
+      throw new Error("완료 요청과 검증된 MCP 실행을 연결할 수 없습니다.");
+    }
+    const packet = packetFromCompletedRequest(request, run.source.fileSha256);
+    const authoringRunId = request.runId!;
+    if (!/^chatgpt-request-[a-f0-9]{32}$/.test(authoringRunId)) throw new Error("출제 기록에 사용할 실행 ID가 올바르지 않습니다.");
+    const root = path.join(process.cwd(), "tools", "problem-authoring-lab", "runs");
+    const directory = path.join(root, authoringRunId);
+    const file = path.join(directory, "source-packet.json");
+    await mkdir(directory, { recursive: true });
+    const serialized = `${JSON.stringify(packet, null, 2)}\n`;
+    try { await writeFile(file, serialized, { flag: "wx" }); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST" || await readFile(file, "utf8") !== serialized) throw error;
+    }
+    return toolResult({ authoringRunId, packetPath: `runs/${authoringRunId}/source-packet.json`, objectiveIds: [...new Set(packet.items.map((item) => item.objectiveId))], itemCount: packet.items.length }, "출제 입력 패킷을 고정했습니다. 문제 출제 실험실에서 기록까지 이어가세요.");
+  });
 
   server.registerTool(
     "list_chatgpt_pdf_runs",
