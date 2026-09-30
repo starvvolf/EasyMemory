@@ -32,6 +32,8 @@ type ExecutorState = {
   /** What the executor is on now, for the screen: a stage name or "authoring", and the try number. */
   stage?: string;
   attempt?: number;
+  /** Every model call of this request: what it was for, which model, and how long it took. */
+  timings?: Array<{ purpose: string; model: string; effort: string; ms: number; ok: boolean }>;
   claimToken?: string;
   runId?: string;
   updatedAt: string;
@@ -43,6 +45,8 @@ const queueState = globalThis as typeof globalThis & { __studyForgeExecutorQueue
 
 /** Calls allowed per start or "다시 시작"; the total across restarts is kept in `calls`. */
 export const MAX_MODEL_CALLS = 14;
+const efforts = ["low", "medium", "high", "xhigh", "max", "ultra"] as const;
+type Effort = (typeof efforts)[number];
 /** Tries per stage: the first answer plus two corrections that see the previous answer and the check error. */
 export const STAGE_ATTEMPTS = 3;
 const STAGE_LABEL: Record<string, string> = {
@@ -133,8 +137,11 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
   };
   if (state.status === "done" || state.status === "failed") return (await executorView(requestId))!;
   let request = await getExperimentRequest(requestId);
-  const model = options.model ?? request.input.requestedStages.cards?.model ?? "gpt-6-sol";
-  const effort = options.effort ?? request.input.requestedStages.cards?.effort ?? "medium";
+  // STUDY_FORGE_EXECUTOR_MODEL / _EFFORT switch every call to one model for trying faster setups without new requests.
+  const envEffort = process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim();
+  const model = options.model ?? (process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || undefined) ?? request.input.requestedStages.cards?.model ?? "gpt-6-sol";
+  const effort = (options.effort ?? (envEffort && efforts.includes(envEffort as Effort) ? envEffort : undefined) ??
+    request.input.requestedStages.cards?.effort ?? "medium") as Effort;
 
   let callsThisRun = 0;
   const ask = async (purpose: string, system: string, user: string) => {
@@ -142,8 +149,17 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
     callsThisRun += 1;
     state.calls += 1;
     await saveState(state);
-    try { return await callModel({ purpose, system, user, json: true, model, effort, caller }); }
-    catch (error) {
+    const started = Date.now();
+    const timed = async (ok: boolean, served = model) => {
+      state.timings = [...(state.timings ?? []), { purpose, model: served, effort, ms: Date.now() - started, ok }];
+      await saveState(state);
+    };
+    try {
+      const reply = await callModel({ purpose, system, user, json: true, model, effort, caller });
+      await timed(true, reply.model);
+      return reply;
+    } catch (error) {
+      await timed(false);
       if (error instanceof ModelError && error.code === "usage_limit") throw new StopRun("paused-usage-limit", "ChatGPT 사용량 한도에 닿았어요. 한도가 풀리면 다시 시작해 주세요.");
       if (error instanceof ModelError && (error.code === "login_required" || error.code === "not_configured")) throw new StopRun("paused-login", error.message);
       throw error;
@@ -250,14 +266,18 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         for (let attempt = 1; attempt <= STAGE_ATTEMPTS && !submitted; attempt += 1) {
           state.stage = stage; state.attempt = attempt;
           // A correction sees its own previous answer; without it the model rewrites from scratch and trips again.
-          reply = await ask(`stage:${stage}`, STAGE_SYSTEM, feedback
-            ? `${user}\n\n[이전 답]\n${previous}\n\n[검사 오류]\n${feedback}\n\n이전 답에서 검사 오류가 가리킨 부분만 고치고 나머지는 그대로 둔 채, 같은 형식의 JSON 전체를 다시 쓴다.`
-            : user);
           try {
+            reply = await ask(`stage:${stage}`, STAGE_SYSTEM, feedback
+              ? `${user}\n\n[이전 답]\n${previous || "(읽을 수 있는 JSON이 아니었음)"}\n\n[검사 오류]\n${feedback}\n\n이전 답에서 검사 오류가 가리킨 부분만 고치고 나머지는 그대로 둔 채, 같은 형식의 JSON 전체를 다시 쓴다.`
+              : user);
             submitted = await service.submitStage({ runId, stage, result: reply.data as Record<string, unknown> });
           } catch (error) {
-            feedback = error instanceof Error ? error.message : String(error);
-            previous = JSON.stringify(reply.data);
+            // Stops (usage limit, login, call cap) end the run; unreadable JSON or a dropped call counts as one try.
+            if (error instanceof StopRun) throw error;
+            feedback = error instanceof ModelError && error.code === "invalid_output"
+              ? "응답이 JSON 객체 하나가 아니었습니다. 설명 없이 계약의 키를 가진 JSON 객체만 씁니다."
+              : error instanceof Error ? error.message : String(error);
+            previous = reply && !(error instanceof ModelError) ? JSON.stringify(reply.data) : "";
             if (attempt === STAGE_ATTEMPTS) {
               throw new StopRun("paused-invalid", `${STAGE_LABEL[stage]} 단계가 검사를 ${STAGE_ATTEMPTS}번 통과하지 못했어요: ${feedback} · 다시 시작하면 이 단계부터 다시 시도해요.`);
             }
@@ -276,6 +296,16 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
     }
 
     if (state.phase === "authoring") {
+      // Unreadable JSON or a dropped call pauses here; "다시 시작" redoes only the missing iteration.
+      const askAuthoring = async (purpose: string, systemText: string, userText: string) => {
+        try { return await ask(purpose, systemText, userText); }
+        catch (error) {
+          if (error instanceof ModelError && (error.code === "invalid_output" || error.code === "transient")) {
+            throw new StopRun("paused-invalid", `문제 만들기 응답을 읽지 못했어요: ${error.message} · 다시 시작하면 이 단계부터 다시 시도해요.`);
+          }
+          throw error;
+        }
+      };
       state.stage = "authoring"; state.attempt = 1;
       await saveState(state);
       const prepared = await prepareAuthoringPacket(requestId);
@@ -298,7 +328,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         document = JSON.parse(await readFile(path.join(runDir, "iteration-0", "document.json"), "utf8")) as AuthoringDocument;
         errors = (await blockingIssues(lab, document, prepared.packetPath)).filter((issue) => issue.severity === "error");
       } else {
-        const first = await ask("authoring", system, baseUser);
+        const first = await askAuthoring("authoring", system, baseUser);
         document = first.data as AuthoringDocument;
         const issues = await blockingIssues(lab, document, prepared.packetPath);
         errors = issues.filter((issue) => issue.severity === "error");
@@ -306,7 +336,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
       }
       if (errors.length && !(await exists("iteration-1/document.json"))) {
         state.attempt = 2;
-        const revision = await ask("authoring:revise", system, `${baseUser}\n\n[검사에 걸린 문제]\n${JSON.stringify(errors, null, 2)}\n\n[이전 문서]\n${JSON.stringify(document)}\n\n걸린 부분만 고친 문서 전체를 다시 쓴다. id는 바꾸지 않는다.`);
+        const revision = await askAuthoring("authoring:revise", system, `${baseUser}\n\n[검사에 걸린 문제]\n${JSON.stringify(errors, null, 2)}\n\n[이전 문서]\n${JSON.stringify(document)}\n\n걸린 부분만 고친 문서 전체를 다시 쓴다. id는 바꾸지 않는다.`);
         const revised = revision.data as AuthoringDocument;
         const issues = await blockingIssues(lab, revised, prepared.packetPath);
         errors = issues.filter((issue) => issue.severity === "error");

@@ -207,3 +207,32 @@ test("단계 검사를 3번 못 넘으면 실패가 아니라 멈춤이 되고, 
     assert.equal((await getExperimentRequest(request.id)).status, "completed");
   } finally { setFakeModelResponder(null); }
 });
+
+test("모델 덮어쓰기 설정과 호출 시간이 기록되고, JSON이 아닌 답은 한 번의 시도로 센다", async () => {
+  const bytes = await readFile(path.join(process.cwd(), "eval/corpus/user-test-pdfs", PDF));
+  const source = await registerMcpSource(PDF, bytes);
+  const settings = { model: "gpt-6-sol" as const, effort: "medium" as const };
+  const request = await createExperimentRequest({
+    sourceId: source.id, scope: { pageNumbers: [1], outlineLeafIds: [] }, purpose: "분석만 확인한다.",
+    requestedStages: { analyze: settings }, stopAfterStage: "analyze",
+  });
+  const seen: Array<{ model?: string; effort?: string }> = [];
+  let first = true;
+  setFakeModelResponder((call) => {
+    seen.push({ model: call.model, effort: call.effort });
+    if (first) { first = false; return "죄송하지만 목차는 다음과 같습니다"; }
+    return JSON.stringify(stageReplies.analyze);
+  });
+  process.env.STUDY_FORGE_EXECUTOR_MODEL = "gpt-6-luna";
+  process.env.STUDY_FORGE_EXECUTOR_EFFORT = "low";
+  try {
+    const done = await runStudyRequest(request.id, { uid: "local" });
+    assert.equal(done.status, "done", done.message);
+    assert.deepEqual(seen, [{ model: "gpt-6-luna", effort: "low" }, { model: "gpt-6-luna", effort: "low" }]);
+    assert.deepEqual(done.timings?.map((entry) => [entry.purpose, entry.effort, entry.ok]), [["stage:analyze", "low", false], ["stage:analyze", "low", true]]);
+  } finally {
+    setFakeModelResponder(null);
+    delete process.env.STUDY_FORGE_EXECUTOR_MODEL;
+    delete process.env.STUDY_FORGE_EXECUTOR_EFFORT;
+  }
+});
