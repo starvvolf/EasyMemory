@@ -54,7 +54,7 @@ export default function DejipgiStudy() {
       return request;
     };
     // In-app executor (docs/DECISIONS.md 2026-09-30 "ChatGPT 계정으로 생성"). When it is off, requests wait for the MCP chat executor.
-    type ExecutorInfo = { enabled: boolean; provider: string; model: { ready: boolean; message: string }; executor: null | { status: string; phase: string; message: string } };
+    type ExecutorInfo = { enabled: boolean; provider: string; model: { ready: boolean; message: string }; executor: null | { status: string; phase: string; message: string; stage?: string; attempt?: number } };
     const executorInfo = async (requestId?: string) => readJson<ExecutorInfo>(await fetchExperiment(
       `/api/study-executor${requestId ? `?id=${encodeURIComponent(requestId)}` : ""}`), "자동 생성 상태를 읽지 못했어요.");
     const kickExecutor = async (requestId: string) => {
@@ -117,7 +117,7 @@ export default function DejipgiStudy() {
           const auto = await executorInfo(requestId).catch(() => null);
           const run = auto?.enabled ? auto.executor : null;
           if (run?.status === "paused-usage-limit") return { status: "paused", message: run.message };
-          if (run?.status === "interrupted") return { status: "paused", message: run.message };
+          if (run?.status === "interrupted" || run?.status === "paused-invalid") return { status: "paused", message: run.message };
           if (run?.status === "paused-login") return { status: "paused", message: `ChatGPT 로그인이 필요해요 · ${run.message}` };
           if (run?.status === "failed") return { status: "failed", message: run.message || "자동 생성이 실패했어요." };
           if (request.status === "waiting-for-executor") {
@@ -126,8 +126,13 @@ export default function DejipgiStudy() {
             if (!run) await kickExecutor(requestId).catch(() => undefined);
             return { status: "waiting", message: auto.model.ready ? "자동 생성 대기 중" : `자동 생성 대기 중 · ${auto.model.message}` };
           }
-          if (request.status !== "completed") return { status: "running", message: `AI가 만드는 중 · ${request.stages.length}/6단계` };
-          if (run && run.status !== "done") return { status: "authoring", message: "문제 만들고 검사하는 중 · 6/6단계" };
+          const label: Record<string, string> = { analyze: "자료 구조", "concept-tree": "개념 구조", "learning-design": "학습 설계", "activity-design": "활동 설계", cards: "카드" };
+          const retry = run?.attempt && run.attempt > 1 ? ` · 고쳐서 다시 시도 ${run.attempt - 1}번째` : "";
+          if (request.status !== "completed") {
+            const where = run?.stage && label[run.stage] ? `${label[run.stage]} ` : "";
+            return { status: "running", message: `AI가 만드는 중 · ${where}${request.stages.length + 1}/6단계${retry}` };
+          }
+          if (run && run.status !== "done") return { status: "authoring", message: `문제 만들고 검사하는 중 · 6/6단계${retry}` };
           const { artifacts } = await loadArtifacts();
           const meta = artifacts.find((item) => item.originRunId === request.runId);
           return meta

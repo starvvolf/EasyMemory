@@ -1314,7 +1314,7 @@ function pendingNote(d){
     p.status === "paused" && account && S.account && S.account.show && !S.account.ready ? h("button", { class:"btn small", onclick:connectAccount }, "ChatGPT 연결") : null,
     p.status === "paused" && engine && engine.resume ? h("button", { class:"btn small", onclick: () => resumeMaterial(d) }, "다시 시작") : null,
     p.status === "failed" ? h("button", { class:"btn small", onclick: () => restartMaterial(d) }, "다시 요청") : null,
-    p.status === "failed" ? h("button", { class:"btn small ghost", onclick: () => removePending(d) }, "지우기") : null);
+    p.status === "failed" || p.status === "paused" ? h("button", { class:"btn small ghost", onclick: () => removePending(d) }, "지우기") : null);
 }
 
 function renderBuilder(){

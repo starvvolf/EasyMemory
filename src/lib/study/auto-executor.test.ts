@@ -171,3 +171,39 @@ test("대기열 없이 running으로 남은 기록은 멈춤(interrupted)으로 
   assert.equal(view?.status, "interrupted");
   assert.equal(JSON.stringify(view).includes("f".repeat(64)), false);
 });
+
+test("단계 검사를 3번 못 넘으면 실패가 아니라 멈춤이 되고, 고칠 때는 이전 답을 보여 주며, 다시 시작하면 그 단계부터 잇는다", async () => {
+  const bytes = await readFile(path.join(process.cwd(), "eval/corpus/user-test-pdfs", PDF));
+  const source = await registerMcpSource(PDF, bytes);
+  const settings = { model: "gpt-6-sol" as const, effort: "medium" as const };
+  const request = await createExperimentRequest({
+    sourceId: source.id, scope: { pageNumbers: [1], outlineLeafIds: [] }, purpose: "개념 구조만 확인한다.",
+    requestedStages: { analyze: settings, "concept-tree": settings }, stopAfterStage: "concept-tree",
+  });
+  // A child concept without (p.N), like "Overview of 3D Viewing Concepts" in the real run.
+  const missingPage = { treeText: "데드락\n- 개요\n- [필요조건] 상호 배제 — 동시에 공유할 수 없음 (p.1)" };
+  const users: string[] = [];
+  let fixed = false;
+  setFakeModelResponder((call) => {
+    if (call.purpose === "stage:analyze") return JSON.stringify(stageReplies.analyze);
+    users.push(call.user);
+    return JSON.stringify(fixed ? stageReplies["concept-tree"] : missingPage);
+  });
+  try {
+    const caller = { uid: "local" };
+    const paused = await runStudyRequest(request.id, caller);
+    assert.equal(paused.status, "paused-invalid");
+    assert.match(paused.message, /개념 구조 단계가 검사를 3번/);
+    assert.equal(paused.stage, "concept-tree");
+    assert.equal(users.length, 3);
+    assert.doesNotMatch(users[0]!, /\[이전 답\]/);
+    assert.match(users[1]!, /\[이전 답\][\s\S]*개요[\s\S]*\[검사 오류\][\s\S]*PDF 페이지 근거/);
+    assert.equal((await getExperimentRequest(request.id)).status, "running", "검사 실패는 요청을 실패로 돌리지 않는다");
+
+    fixed = true;
+    const done = await runStudyRequest(request.id, caller);
+    assert.equal(done.status, "done", done.message);
+    assert.equal(users.length, 4, "다시 시작은 analyze를 다시 부르지 않고 개념 구조부터 잇는다");
+    assert.equal((await getExperimentRequest(request.id)).status, "completed");
+  } finally { setFakeModelResponder(null); }
+});

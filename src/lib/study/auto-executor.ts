@@ -22,13 +22,16 @@ import { blockingIssues, readAuthoringInstructions, recordProblemIteration } fro
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 
 type Stage = (typeof experimentStages)[number];
-export type ExecutorStatus = "queued" | "running" | "paused-usage-limit" | "paused-login" | "interrupted" | "failed" | "done";
+export type ExecutorStatus = "queued" | "running" | "paused-usage-limit" | "paused-login" | "paused-invalid" | "interrupted" | "failed" | "done";
 type ExecutorState = {
   requestId: string;
   status: ExecutorStatus;
   phase: "stages" | "authoring" | "done";
   message: string;
   calls: number;
+  /** What the executor is on now, for the screen: a stage name or "authoring", and the try number. */
+  stage?: string;
+  attempt?: number;
   claimToken?: string;
   runId?: string;
   updatedAt: string;
@@ -38,7 +41,13 @@ export type ExecutorView = Omit<ExecutorState, "claimToken">;
 
 const queueState = globalThis as typeof globalThis & { __studyForgeExecutorQueue?: Promise<unknown>; __studyForgeExecutorQueued?: Set<string> };
 
+/** Calls allowed per start or "다시 시작"; the total across restarts is kept in `calls`. */
 export const MAX_MODEL_CALLS = 14;
+/** Tries per stage: the first answer plus two corrections that see the previous answer and the check error. */
+export const STAGE_ATTEMPTS = 3;
+const STAGE_LABEL: Record<string, string> = {
+  analyze: "자료 구조", "concept-tree": "개념 구조", "learning-design": "학습 설계", "activity-design": "활동 설계", cards: "카드", authoring: "문제 만들기",
+};
 const PAGE_TEXT_LIMIT = 3500;
 const TOTAL_TEXT_LIMIT = 60_000;
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -73,8 +82,8 @@ export async function executorView(id: string): Promise<ExecutorView | null> {
 }
 
 class StopRun extends Error {
-  readonly status: "paused-usage-limit" | "paused-login" | "failed";
-  constructor(status: "paused-usage-limit" | "paused-login" | "failed", message: string) { super(message); this.status = status; }
+  readonly status: "paused-usage-limit" | "paused-login" | "paused-invalid" | "failed";
+  constructor(status: "paused-usage-limit" | "paused-login" | "paused-invalid" | "failed", message: string) { super(message); this.status = status; }
 }
 
 function pageBlock(texts: Map<number, string>) {
@@ -127,8 +136,10 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
   const model = options.model ?? request.input.requestedStages.cards?.model ?? "gpt-6-sol";
   const effort = options.effort ?? request.input.requestedStages.cards?.effort ?? "medium";
 
+  let callsThisRun = 0;
   const ask = async (purpose: string, system: string, user: string) => {
-    if (state.calls >= MAX_MODEL_CALLS) throw new StopRun("failed", `자료 하나에 쓸 수 있는 호출 수(${MAX_MODEL_CALLS})를 넘었어요.`);
+    if (callsThisRun >= MAX_MODEL_CALLS) throw new StopRun("paused-invalid", `한 번에 쓸 수 있는 호출 수(${MAX_MODEL_CALLS})를 다 썼어요. 다시 시작하면 멈춘 단계부터 이어가요.`);
+    callsThisRun += 1;
     state.calls += 1;
     await saveState(state);
     try { return await callModel({ purpose, system, user, json: true, model, effort, caller }); }
@@ -233,15 +244,23 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
           needsText ? `[원문: 선택 쪽 추출 글자]\n${pageBlock(texts)}` : "",
         ].filter(Boolean).join("\n\n");
         let feedback = "";
+        let previous = "";
         let submitted: Awaited<ReturnType<ChatGptParityService["submitStage"]>> | null = null;
         let reply: Awaited<ReturnType<typeof ask>> | null = null;
-        for (let attempt = 0; attempt < 2 && !submitted; attempt += 1) {
-          reply = await ask(`stage:${stage}`, STAGE_SYSTEM, feedback ? `${user}\n\n[이전 제출 오류]\n${feedback}\n오류가 난 부분만 고쳐 같은 형식으로 다시 쓴다.` : user);
+        for (let attempt = 1; attempt <= STAGE_ATTEMPTS && !submitted; attempt += 1) {
+          state.stage = stage; state.attempt = attempt;
+          // A correction sees its own previous answer; without it the model rewrites from scratch and trips again.
+          reply = await ask(`stage:${stage}`, STAGE_SYSTEM, feedback
+            ? `${user}\n\n[이전 답]\n${previous}\n\n[검사 오류]\n${feedback}\n\n이전 답에서 검사 오류가 가리킨 부분만 고치고 나머지는 그대로 둔 채, 같은 형식의 JSON 전체를 다시 쓴다.`
+            : user);
           try {
             submitted = await service.submitStage({ runId, stage, result: reply.data as Record<string, unknown> });
           } catch (error) {
             feedback = error instanceof Error ? error.message : String(error);
-            if (attempt === 1) throw new StopRun("failed", `${stage} 단계 검사를 두 번 통과하지 못했어요: ${feedback}`);
+            previous = JSON.stringify(reply.data);
+            if (attempt === STAGE_ATTEMPTS) {
+              throw new StopRun("paused-invalid", `${STAGE_LABEL[stage]} 단계가 검사를 ${STAGE_ATTEMPTS}번 통과하지 못했어요: ${feedback} · 다시 시작하면 이 단계부터 다시 시도해요.`);
+            }
           }
         }
         await recordStage(stage, sha256(contract), reply!.model);
@@ -257,6 +276,8 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
     }
 
     if (state.phase === "authoring") {
+      state.stage = "authoring"; state.attempt = 1;
+      await saveState(state);
       const prepared = await prepareAuthoringPacket(requestId);
       const lab = labDir();
       const runDir = path.join(lab, "runs", prepared.authoringRunId);
@@ -284,6 +305,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         await recordProblemIteration(lab, { runId: prepared.authoringRunId, iteration: 0, packetPath: prepared.packetPath, document, issues, execution: execution(first.model) });
       }
       if (errors.length && !(await exists("iteration-1/document.json"))) {
+        state.attempt = 2;
         const revision = await ask("authoring:revise", system, `${baseUser}\n\n[검사에 걸린 문제]\n${JSON.stringify(errors, null, 2)}\n\n[이전 문서]\n${JSON.stringify(document)}\n\n걸린 부분만 고친 문서 전체를 다시 쓴다. id는 바꾸지 않는다.`);
         const revised = revision.data as AuthoringDocument;
         const issues = await blockingIssues(lab, revised, prepared.packetPath);
