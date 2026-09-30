@@ -4,7 +4,7 @@
   --ink:#16202A; --muted:#5A6774; --faint:#8A96A2;
   --accent:#1F4FD1; --accent-ink:#FFFFFF; --accent-soft:#E6ECFB;
   --mark:#F7E26B; --mark-ink:#3A3000;
-  --good:#1D7F52; --good-soft:#E3F3EA; --bad:#B93A26; --bad-soft:#FBE8E4; --help:#9A6400; --help-soft:#FBF0DA; --read:#1B7684; --read-soft:#DFF0F2;
+  --good:#1D7F52; --good-soft:#E3F3EA; --bad:#B93A26; --bad-soft:#FBE8E4; --help:#9A6400; --help-soft:#FBF0DA; --read:#1B7684; --read-soft:#DFF0F2; --ask:#7A4FD1; --ask-soft:#EFE9FB;
   --shadow:0 1px 2px rgba(22,32,42,.06),0 8px 24px rgba(22,32,42,.07);
   --radius:12px;
   --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
@@ -19,7 +19,7 @@
     --ink:#E5EAEF; --muted:#9AA7B3; --faint:#6F7C88;
     --accent:#7FA2FF; --accent-ink:#0B1222; --accent-soft:#1D2A48;
     --mark:rgba(247,226,107,.28); --mark-ink:#F5EBB0;
-    --good:#5CC896; --good-soft:#15302A; --bad:#FF8A73; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14; --read:#62C1CD; --read-soft:#14302F;
+    --good:#5CC896; --good-soft:#15302A; --bad:#FF8A73; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14; --read:#62C1CD; --read-soft:#14302F; --ask:#B79BFF; --ask-soft:#2A2140;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
   }
 }
@@ -29,7 +29,7 @@
   --ink:#E5EAEF; --muted:#9AA7B3; --faint:#6F7C88;
   --accent:#7FA2FF; --accent-ink:#0B1222; --accent-soft:#1D2A48;
   --mark:rgba(247,226,107,.28); --mark-ink:#F5EBB0;
-  --good:#5CC896; --good-soft:#15302A; --bad:#FF8A73; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14; --read:#62C1CD; --read-soft:#14302F;
+  --good:#5CC896; --good-soft:#15302A; --bad:#FF8A73; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14; --read:#62C1CD; --read-soft:#14302F; --ask:#B79BFF; --ask-soft:#2A2140;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
 }
 .dejipgi,.dejipgi *{box-sizing:border-box}
@@ -384,3 +384,84 @@
 .dejipgi .sections{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:8px;max-height:260px;overflow:auto}
 .dejipgi .sections .chip-btn{text-align:left}
 .dejipgi .qtable tr:last-child td{border-bottom:1px solid var(--line)}
+
+/* 모르는 것 노트: text layer, marks, selection menu, answer card, drawer (협업/모르는것노트/화면시안.html) */
+.dejipgi .tl{position:absolute;inset:0;overflow:hidden;line-height:1;font-family:sans-serif;z-index:1}
+.dejipgi .tl span{position:absolute;white-space:pre;color:transparent;transform-origin:0 0;cursor:text}
+.dejipgi .tl span::selection{background:rgba(122,79,209,.32);color:transparent}
+.dejipgi .tl::selection{background:transparent}
+.dejipgi .nu{position:absolute;z-index:2;padding:0;margin:0;border:0;background:transparent;border-bottom:2px dotted var(--ask);border-radius:2px;cursor:pointer}
+.dejipgi .nu:hover,.dejipgi .nu.on{background:rgba(122,79,209,.14)}
+.dejipgi .nu.weak{border-bottom-style:solid}
+.dejipgi .nu.marked{border-bottom-color:var(--faint)}
+.dejipgi .selpop{position:fixed;z-index:30;display:flex;gap:2px;padding:4px;border-radius:10px;background:var(--ink);color:var(--surface);box-shadow:var(--shadow);transform:translate(-50%,-100%);animation:selpop .12s ease-out}
+.dejipgi .selpop.below{transform:translate(-50%,0)}
+.dejipgi .selpop button{border:0;background:none;color:inherit;padding:6px 10px;border-radius:7px;font-size:13px;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.dejipgi .selpop button:hover,.dejipgi .selpop button:focus-visible{background:rgba(255,255,255,.14)}
+.dejipgi .selpop .k{font-family:var(--mono);font-size:11px;opacity:.6}
+@keyframes selpop{from{opacity:0}}
+.dejipgi .rgrid.noteopen{position:relative}
+.dejipgi .notecard{min-width:0;background:var(--surface);border:1px solid var(--ask);border-radius:12px;box-shadow:0 0 0 3px var(--ask-soft),var(--shadow);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 120px);animation:ncard .18s ease-out}
+@keyframes ncard{from{opacity:0;transform:translateX(8px)}}
+.dejipgi .notecard .nhd{display:flex;align-items:center;gap:8px;padding:9px 10px 8px 12px;border-bottom:1px solid var(--line)}
+.dejipgi .notecard .nq{flex:1;min-width:0;font-family:var(--read-font);font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .nk{display:inline-flex;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.dejipgi .k-term{background:var(--ask-soft);color:var(--ask)} .dejipgi .k-proc{background:var(--accent-soft);color:var(--accent)}
+.dejipgi .k-concept{background:var(--good-soft);color:var(--good)} .dejipgi .k-talk{background:var(--surface-2);color:var(--ink);border:1px solid var(--line-strong)}
+.dejipgi .k-weak{background:var(--bad-soft);color:var(--bad)}
+.dejipgi .notecard .nagain{background:var(--ask-soft);color:var(--ask);font-size:12.5px;padding:6px 12px;border-bottom:1px solid var(--line)}
+.dejipgi .notecard .nbody{padding:10px 12px 12px;font-size:14px;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.dejipgi .notecard .nlead{margin:0;font-size:15px;font-weight:500;line-height:1.6}
+.dejipgi .notecard .nsteps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px}
+.dejipgi .notecard .nsteps .why{color:var(--muted);font-size:13px}
+.dejipgi .notecard .nquote{border-left:3px solid var(--mark);padding:1px 0 1px 9px;color:var(--muted);font-family:var(--read-font);font-size:13.5px}
+.dejipgi .notecard .nextra{margin:0}
+.dejipgi .notecard .nout{background:var(--help-soft);color:var(--help);border-radius:8px;padding:6px 9px;font-size:13px}
+.dejipgi .notecard .nthread{display:flex;flex-direction:column;gap:6px}
+.dejipgi .notecard .nthread .btext{font-size:13.5px;padding:6px 10px}
+.dejipgi .notecard .nerr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:7px 10px;font-size:13px}
+.dejipgi .notecard .nerr span{flex:1 1 180px}
+.dejipgi .nskel i{display:block;height:10px;border-radius:5px;margin:7px 0;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%;animation:nsh 1.1s infinite}
+@keyframes nsh{to{background-position:-200% 0}}
+.dejipgi .notecard .nfollow{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--line)}
+.dejipgi .notecard .nfollow input{flex:1;min-width:0;border:1px solid var(--line-strong);border-radius:8px;padding:5px 9px;font-size:13.5px;background:var(--surface)}
+.dejipgi .notecard .ncont{display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.dejipgi .notecard .ncont span{flex:1}
+.dejipgi .notecard .nft{display:flex;gap:6px;padding:7px 12px;border-top:1px solid var(--line);background:var(--surface-2);font-size:12px;color:var(--muted)}
+.dejipgi .notecard .nft .grow{flex:1}
+.dejipgi .nlink{position:absolute;pointer-events:none;overflow:visible;z-index:3}
+.dejipgi .nlink path{fill:none;stroke:var(--ask);stroke-width:1.5;opacity:.7}
+.dejipgi .nlink circle{fill:var(--ask)}
+.dejipgi .ntick{position:absolute;width:3px;height:18px;border-radius:2px;background:var(--ask);z-index:3;pointer-events:none}
+.dejipgi .rgrid.noteflt .notecard{position:fixed;right:16px;bottom:84px;width:min(400px,calc(100vw - 32px));z-index:9}
+.dejipgi .ncount{display:inline-grid;place-items:center;min-width:18px;height:18px;margin-left:6px;border-radius:9px;background:var(--ask);color:#fff;font-size:11px;padding:0 5px}
+.dejipgi .nhint{color:var(--faint)}
+.dejipgi .notesdrawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);z-index:16;background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow);display:flex;flex-direction:column;animation:ncard .18s ease-out}
+.dejipgi .notesdrawer .dh{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.dejipgi .notesdrawer .grow{flex:1}
+.dejipgi .notesdrawer .dfilters{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.dejipgi .notesdrawer .chip-btn[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.dejipgi .notesdrawer .dlist{flex:1;overflow:auto;padding:8px 10px}
+.dejipgi .notesdrawer .dfoot{padding:10px 16px;border-top:1px solid var(--line)}
+.dejipgi .nitem{width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:4px}
+.dejipgi .nitem:hover{border-color:var(--ask)}
+.dejipgi .nitem .t{display:flex;gap:8px;align-items:center}
+.dejipgi .nitem .q{flex:1;min-width:0;font-weight:600;font-family:var(--read-font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .nitem .s{font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dejipgi .nitem .m{display:flex;gap:10px;font-size:11.5px;color:var(--faint)}
+.dejipgi .chat-in{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.dejipgi .chat-in textarea{width:100%}
+.dejipgi .qchip{display:flex;gap:6px;align-items:flex-start;border-left:3px solid var(--ask);background:var(--ask-soft);border-radius:0 8px 8px 0;padding:5px 8px;font-family:var(--read-font);font-size:13px;color:var(--ink);max-height:5.4em;overflow:auto}
+.dejipgi .qchip span{flex:1}
+.dejipgi .bubble .qchip{align-self:stretch}
+.dejipgi .chat-saved{font-size:12px;color:var(--ask);background:var(--ask-soft);padding:4px 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .chatwin[data-mode="min"] .chat-saved{display:none}
+.dejipgi .chat-head strong,.dejipgi .chat-head .qbtn{white-space:nowrap;flex:none}
+.dejipgi .chat-head .grow{min-width:0}
+@media (max-width:980px){
+  .dejipgi .rgrid.noteopen{grid-template-columns:minmax(0,1fr)}
+  .dejipgi .rgrid.noteopen .notecard{position:fixed;left:0;right:0;bottom:0;margin-top:0!important;max-height:62vh;border-radius:16px 16px 0 0;z-index:9;box-shadow:0 -8px 30px rgba(0,0,0,.18);padding-bottom:env(safe-area-inset-bottom,0px)}
+  .dejipgi .rgrid.noteflt .notecard{left:0;right:0;bottom:0;width:auto;border-radius:16px 16px 0 0;max-height:62vh}
+  .dejipgi .nlink,.dejipgi .ntick{display:none}
+  .dejipgi .nhint{display:none}
+}

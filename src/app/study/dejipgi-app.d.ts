@@ -1,5 +1,6 @@
 import type { StudyDeck } from "@/lib/study/from-authoring";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
+import type { NoteTurn, StudyNote } from "@/lib/study/notes";
 
 export type DejipgiMaterialStatus = { status: "waiting" | "running" | "paused" | "authoring" | "ready" | "failed"; message: string; artifactId?: string };
 export type DejipgiBuilderEngine = {
@@ -23,6 +24,15 @@ export type DejipgiEnv = {
   assetUrl?: (artifactId: string, assetPath: string) => string;
   /** Queues one generation request per material and reports its progress (the assigned AI runs it through MCP). */
   builder?: DejipgiBuilderEngine;
+  /** 모르는 것 노트: asked phrases and question-window talks, kept per registered PDF (sourceCatalogId). */
+  notes?: {
+    list(sourceId: string): Promise<StudyNote[]>;
+    ask(input: { sourceId: string; page: number; quote: string; sentence: string | null; pageText: string; title: string; purpose: string | null }): Promise<{ note: StudyNote; reused: boolean }>;
+    mark(input: { sourceId: string; page: number; quote: string; sentence: string | null }): Promise<StudyNote>;
+    seen(sourceId: string, noteId: string): Promise<StudyNote>;
+    follow(input: { sourceId: string; noteId: string; question: string; pageText: string; title: string }): Promise<StudyNote>;
+    talk(input: { sourceId: string; page: number; noteId: string | null; turns: Array<Omit<NoteTurn, "page"> & { page?: number }> }): Promise<StudyNote>;
+  };
   /** ChatGPT account for in-app generation; `show` is false when the host does not generate with ChatGPT. */
   account?: {
     status(): Promise<{ show: boolean; ready: boolean; message: string }>;

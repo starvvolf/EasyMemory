@@ -9,7 +9,8 @@ import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 import { inspectQuality } from "../../../tools/problem-authoring-lab/quality.ts";
-import { mountDejipgi } from "./dejipgi-app.js";
+import { mountDejipgi, type DejipgiEnv } from "./dejipgi-app.js";
+import type { StudyNote } from "@/lib/study/notes";
 import "katex/dist/katex.min.css";
 import "./dejipgi.css";
 
@@ -52,6 +53,13 @@ export default function DejipgiStudy() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(built.body),
       }), "생성 요청을 저장하지 못했어요.");
       return request;
+    };
+    // Model errors keep their code so the card can offer "ChatGPT 연결" or "다시 시도".
+    const noteCall = async <T,>(body: Record<string, unknown>): Promise<T> => {
+      const response = await fetchExperiment("/api/study-notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await response.json().catch(() => null) as (T & { message?: string; code?: string }) | null;
+      if (!response.ok) throw Object.assign(new Error(data?.message ?? "노트 요청을 처리하지 못했어요."), { code: data?.code });
+      return data as T;
     };
     // In-app executor (docs/DECISIONS.md 2026-09-30 "ChatGPT 계정으로 생성"). When it is off, requests wait for the MCP chat executor.
     type ExecutorInfo = { enabled: boolean; provider: string; model: { ready: boolean; message: string }; executor: null | { status: string; phase: string; message: string; stage?: string; attempt?: number } };
@@ -140,6 +148,27 @@ export default function DejipgiStudy() {
             : { status: "authoring", message: "문제 검사·기록 중 · 6/6단계 · 담당 AI가 출제 편집틀에 기록하면 붙어요" };
         },
       },
+      // Question window answers and 모르는 것 노트 go through /api/study-notes (the signed-in ChatGPT account).
+      ...(session.mode === "local-experiment" ? {
+        async ask(turns: Array<{ role: string; content: string }>, options: { signal: AbortSignal; onText: (chunk: { text: string }) => void }) {
+          const response = await fetchExperiment("/api/study-notes", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "chat", turns }), signal: options.signal,
+          });
+          const data = await response.json().catch(() => null) as { text?: string; message?: string; code?: string } | null;
+          if (!response.ok) throw Object.assign(new Error(data?.message ?? "답을 받지 못했어요."), { code: data?.code === "usage_limit" ? "rate_limited" : data?.code });
+          options.onText({ text: data?.text ?? "" });
+        },
+        notes: {
+          async list(sourceId: string) {
+            return (await readJson<{ notes: StudyNote[] }>(await fetchExperiment(`/api/study-notes?sourceId=${encodeURIComponent(sourceId)}`), "노트를 불러오지 못했어요.")).notes;
+          },
+          ask: (input) => noteCall<{ note: StudyNote; reused: boolean }>({ action: "ask", ...input }),
+          mark: async (input) => (await noteCall<{ note: StudyNote }>({ action: "mark", ...input })).note,
+          seen: async (sourceId, noteId) => (await noteCall<{ note: StudyNote }>({ action: "seen", sourceId, noteId })).note,
+          follow: async (input) => (await noteCall<{ note: StudyNote }>({ action: "follow", ...input })).note,
+          talk: async (input) => (await noteCall<{ note: StudyNote }>({ action: "talk", ...input })).note,
+        } satisfies NonNullable<DejipgiEnv["notes"]>,
+      } : {}),
       account: {
         async status() {
           const info = await executorInfo();

@@ -181,6 +181,7 @@ function setView(v){
   if (v !== "read" && Chat.isOpen() && typeof Chat !== "undefined"){ if (Chat.ctl) Chat.ctl.abort(); Chat.el.hidden = true; }
   root.dataset.view = v;
   if (v === "create") loadAccount();
+  if (v !== "read" && typeof hideSel === "function"){ hideSel(); NT.drawer = false; paintDrawer(); }
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === v ? "true" : "false"));
   render();
 }
@@ -194,7 +195,7 @@ function render(){
   app.replaceChildren();
   if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
   else if (S.view === "create") app.append(renderBuilder());
-  else if (S.view === "read") { app.append(renderReader()); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); }
+  else if (S.view === "read") { app.append(renderReader()); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer(); }
   else app.append(renderRecords());
   if (S.view === "practice" && S.session){
     const f = app.querySelector("[data-autofocus]");
@@ -711,7 +712,8 @@ async function paintBox(box, d, pageNo, cssW){
   // a canvas can live in one box at a time; the zoom view gets its own bitmap because its width differs
   box.replaceChildren(entry.canvas,
     ...rects.map(r => h("div", { class:"hl" + (r.dim ? " dim" : "") + (r.line ? " line" : ""), style:`left:${r.x / W * 100}%;top:${r.y / H * 100}%;width:${r.w / W * 100}%;height:${r.h / H * 100}%` })),
-    ...badges.map(b => h("div", { class:"hlnum" + (b.line ? " line" : ""), style:`left:${b.x / W * 100}%;top:${b.y / H * 100}%`, text:String(b.num) })));
+    ...badges.map(b => h("div", { class:"hlnum" + (b.line ? " line" : ""), style:`left:${b.x / W * 100}%;top:${b.y / H * 100}%`, text:String(b.num) })),
+    textLayer(entry, cssW), ...noteMarks(d, entry, W, H));
 }
 async function drawPage(){
   if (S.view !== "read") return;
@@ -722,6 +724,7 @@ async function drawPage(){
   if (token !== drawToken) return;
   const zb = document.getElementById("zoombox");
   if (zb) await paintBox(zb, d, R.page, Math.max(200, Math.floor(zb.getBoundingClientRect().width)));
+  placeNoteCard();
 }
 function findRange(text, quote){
   const chars = [...String(quote).replace(/\s+/g, "")].slice(0, 160).map(c => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -801,7 +804,7 @@ function renderReader(){
   if (!decks.length) return h("div", { class:"panel", text:"아직 자료가 없어요." });
   const R = S.reader;
   if (!R.deckId || !S.decks[R.deckId]){ R.deckId = decks[0].id; R.page = firstPage(decks[0]); }
-  const d = S.decks[R.deckId]; ensurePdf(d);
+  const d = S.decks[R.deckId]; ensurePdf(d); loadNotes(d);
   const P = S.pdf[d.id]; const total = pageTotal(d);
   R.page = Math.max(1, Math.min(total, R.page));
   if (S.session) S.session.viewed.add(d.id + ":" + R.page);
@@ -820,7 +823,7 @@ function renderReader(){
   sel.addEventListener("change", () => openReader(sel.value, firstPage(S.decks[sel.value])));
   const pg = h("input", { class:"num", id:"pgInput", type:"number", min:"1", max:String(total), "aria-label":"쪽 번호" });
   pg.value = String(R.page); pg.addEventListener("change", () => goPage(Number(pg.value)));
-  wrap.append(h("div", { class:"rbar" }, sel, h("span", { class:"grow" }),
+  wrap.append(h("div", { class:"rbar" }, sel, h("span", { class:"grow" }), notesButton(d),
     h("div", { class:"pager" },
       h("button", { class:"qbtn", disabled: R.page <= 1, "aria-label":"이전 쪽", onclick: () => goPage(R.page - 1) }, "‹"),
       pg, h("span", { class:"num", text:`/ ${total}` }),
@@ -848,7 +851,8 @@ function renderReader(){
   }
   if (P && P.status === "error") page.append(h("p", { class:"attach", text:"원본 PDF를 불러오지 못했어요. 원본 등록 상태를 확인해 주세요." }));
 
-  const grid = h("div", { class:"rgrid" }, page);
+  const card = renderNoteCard(d);
+  const grid = h("div", { class:"rgrid" + (card ? (wide || !pdfOn ? " noteflt" : " open noteopen") : "") }, page, card);
   wrap.append(grid);
 
   if (R.zoom && P && P.status === "ready"){
@@ -859,7 +863,8 @@ function renderReader(){
   }
 
   wrap.append(h("div", { class:"ractions" },
-    h("span", { class:"where" }, h("b", { text:`p.${R.page}` }), objs.length ? ` · 익힐 것 ${objs.length}` : " · 연결된 목표 없음"),
+    h("span", { class:"where" }, h("b", { text:`p.${R.page}` }), objs.length ? ` · 익힐 것 ${objs.length}` : " · 연결된 목표 없음",
+      notesOn(d) && pdfOn ? h("span", { class:"nhint", text:" · 모르는 건 원문을 드래그해 물어보세요" }) : null),
     h("button", { class:"btn", "aria-pressed": Chat.isOpen() ? "true" : "false", onclick: () => Chat.toggle() }, Chat.isOpen() ? "질문 창 닫기" : "질문하기"),
     S.session ? h("button", { class:"btn primary", onclick: () => setView("practice") }, "연습으로 돌아가기")
       : n ? h("button", { class:"btn primary", onclick: () => startCheck(d.id, R.page) }, `이 쪽 문제 풀기 (${n})`)
@@ -887,6 +892,8 @@ on(window, "resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout
    Answers need a paid model call, so `ask` stays unset until the user approves wiring it. ----- */
 const Chat = {
   el:null, msgs:[], busy:false, ctl:null, err:"",
+  // 모르는 것 노트: one conversation is one note item; a conversation continued from a card extends that card.
+  noteId:null, noteSource:null, noteTitle:"", fromNote:null, base:0, quote:null,
   box(){ try{ return JSON.parse(localStorage.getItem("dejipgi.chatbox") || "null"); }catch(e){ return null; } },
   saveBox(){ if (!this.el || this.mode !== "normal") return; const r = this.el.getBoundingClientRect(); try{ localStorage.setItem("dejipgi.chatbox", JSON.stringify({ x:r.left, y:r.top, w:r.width, h:r.height })); }catch(e){} },
   mode:"normal",
@@ -933,15 +940,15 @@ const Chat = {
       h("span", { class:"chat-grip", "aria-hidden":"true" }),
       h("strong", { id:"chatTitle", text:"질문하기" }),
       h("span", { class:"grow" }),
-      h("button", { class:"qbtn", title:"대화 비우기", onclick: () => { if (this.ctl) this.ctl.abort(); this.msgs = []; this.err = ""; this.paint(); } }, "비우기"),
+      h("button", { class:"qbtn", title:"새 대화 시작 (지금 대화는 노트에 남아요)", onclick: () => this.reset() }, "새 대화"),
       h("button", { class:"qbtn", id:"chatMin", "aria-label":"질문 창 접기", title:"접기", onclick: () => this.setMode(this.mode === "min" ? "normal" : "min") }, "—"),
       h("button", { class:"qbtn", id:"chatMax", "aria-label":"질문 창 크게", title:"크게 보기", onclick: () => this.setMode(this.mode === "max" ? "normal" : "max") }, "⤢"),
       h("button", { class:"qbtn", "aria-label":"질문 창 닫기", title:"닫기", onclick: () => this.close() }, "✕"));
     head.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) this.setMode(this.mode === "max" ? "normal" : "max"); });
     this.el = h("section", { class:"chatwin", role:"dialog", "aria-label":"질문하기", hidden:true },
-      head,
+      head, h("div", { class:"chat-saved", id:"chatSaved", hidden:true }),
       h("div", { class:"chat-log", id:"chatLog", "aria-live":"polite" }),
-      h("div", { class:"chat-foot" }, ta, h("button", { class:"btn primary small", id:"chatSend", onclick: () => this.send() }, "보내기")));
+      h("div", { class:"chat-foot" }, h("div", { class:"chat-in" }, h("div", { id:"chatQuote" }), ta), h("button", { class:"btn primary small", id:"chatSend", onclick: () => this.send() }, "보내기")));
     root.append(this.el);
     // drag by the header (desktop only)
     let drag = null;
@@ -994,16 +1001,22 @@ const Chat = {
     if (!this.el) return;
     const c = this.context();
     this.el.querySelector("#chatTitle").textContent = c ? `질문하기 · p.${c.page}` : "질문하기";
+    const saved = this.el.querySelector("#chatSaved");
+    saved.hidden = !this.noteTitle; saved.textContent = this.noteTitle ? `노트 · ${this.noteTitle}` : ""; saved.title = saved.textContent;
+    const qbox = this.el.querySelector("#chatQuote");
+    qbox.replaceChildren(...(this.quote ? [h("div", { class:"qchip" }, h("span", { text:`“${this.quote}”` }), h("button", { class:"qbtn", "aria-label":"인용 빼기", onclick: () => { this.quote = null; this.paint(); } }, "✕"))] : []));
     const log = this.el.querySelector("#chatLog");
     const nodes = [];
+    if (this.fromNote) nodes.push(h("p", { class:"chat-hint", style:"text-align:center", text:`‘${this.fromNote}’ 카드에서 이어진 대화예요. 여기 대화도 그 카드에 저장돼요.` }));
     if (!this.msgs.length){
-      nodes.push(h("p", { class:"chat-hint", text:"지금 보는 쪽을 근거로 답해요. 바로 물어보거나 아래에서 골라 보세요." }));
+      nodes.push(h("p", { class:"chat-hint", text:"지금 보는 쪽을 근거로 답해요. 바로 물어보거나 아래에서 골라 보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." }));
       nodes.push(h("div", { class:"chat-sugs" }, ["이 쪽 쉽게 설명해 줘", "핵심만 한 줄로 알려 줘", "원문 줄마다 쉬운 말로 풀어 줘", "예시 숫자로 한 번 보여 줘"].map(q =>
         h("button", { class:"chip-btn", onclick: () => { this.el.querySelector("textarea").value = q; this.send(); } }, q))));
     }
     for (const m of this.msgs){
       nodes.push(h("div", { class:"bubble " + m.role },
         m.page ? h("span", { class:"bpage", text:`p.${m.page}` }) : null,
+        m.quote ? h("div", { class:"qchip", text:`“${m.quote}”` }) : null,
         h("div", { class:"btext" }, m.role === "assistant" ? richLines(m.content || "…") : m.content)));
     }
     if (this.err) nodes.push(h("p", { class:"check", text:this.err }));
@@ -1030,22 +1043,58 @@ ${text || "(이 쪽은 추출된 글자가 없다. 이미지 위주의 쪽일 �
 ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.statement).join("\n")}` : ""}
 `;
   },
+  reset(keepOpen){
+    if (this.ctl) this.ctl.abort();
+    Object.assign(this, { msgs:[], err:"", noteId:null, noteSource:null, noteTitle:"", fromNote:null, base:0, quote: keepOpen ? this.quote : null });
+    if (!keepOpen) this.paint();
+  },
+  /* 질문 창에 넣기: the dragged text becomes a quote chip on the next question */
+  quoteIn(text){ this.quote = text; if (!this.isOpen()) this.open(); else { this.paint(); this.el.querySelector("textarea").focus(); } },
+  /* 질문 창에서 계속: carry a card's answer and turns into the window; new turns go back to that card */
+  continueNote(d, note){
+    this.reset(true);
+    this.msgs = [{ role:"assistant", content:note.answer ? note.answer.lead : "" }, ...note.thread.map(t => ({ role:t.role, content:t.text, quote:t.quote || null }))];
+    Object.assign(this, { base:this.msgs.length, noteId:note.id, noteSource:d.sourceCatalogId, fromNote:note.quote, noteTitle:`‘${note.quote}’ 카드` });
+    if (this.isOpen()) this.paint(); else this.open();
+  },
+  openTalk(d, note){
+    this.reset(true);
+    this.msgs = note.thread.map(t => ({ role:t.role, content:t.text, quote:t.quote || null, page:t.role === "user" ? t.page : undefined }));
+    Object.assign(this, { base:0, noteId:note.id, noteSource:d.sourceCatalogId, noteTitle:note.quote });
+    if (this.isOpen()) this.paint(); else this.open();
+    notesApi.seen(d.sourceCatalogId, note.id).then(n => putNote(d, n), () => {});
+  },
+  async saveTalk(c){
+    if (!notesOn(c.d)) return;
+    const turns = this.msgs.slice(this.base).filter(m => m.content).map(m => ({ role:m.role, text:m.content, quote:m.quote || null, page:m.page }));
+    if (!turns.some(t => t.role === "assistant")) return;
+    try{
+      const note = await notesApi.talk({ sourceId:c.d.sourceCatalogId, page:c.page, noteId:this.noteId, turns });
+      const first = !this.noteId;
+      Object.assign(this, { noteId:note.id, noteSource:c.d.sourceCatalogId, noteTitle: note.kind === "talk" ? note.quote : `‘${note.quote}’ 카드` });
+      putNote(c.d, note); this.paint(); paintDrawer();
+      if (first && note.kind === "talk"){ toast("이 대화를 ‘모르는 것’ 노트에 남겼어요."); if (S.view === "read" && !window.getSelection().toString()) render(); }
+    }catch{ /* the answer is already on screen; saving is retried with the next turn */ }
+  },
   async send(){
     const ta = this.el.querySelector("textarea");
-    const q = ta.value.trim(); if (!q || this.busy) return;
+    const q = ta.value.trim() || (this.quote ? "이 부분 설명해 줘" : ""); if (!q || this.busy) return;
     const c = this.context();
     if (!c) return;
     if (!ask){ this.err = "질문 답변은 아직 연결하지 않았어요. 유료 호출이라 확인을 받은 뒤 붙일 예정이에요."; this.paint(); return; }
     if (S.session) S.session.viewed.add(c.d.id + ":" + c.page);   // asking about a page during practice counts as help
     ta.value = ""; this.err = "";
-    this.msgs.push({ role:"user", content:q, page:c.page });
+    if (this.noteId && this.noteSource !== c.d.sourceCatalogId) this.reset(true);   // another material: a new conversation
+    this.msgs.push({ role:"user", content:q, page:c.page, quote:this.quote });
+    this.quote = null;
     const reply = { role:"assistant", content:"" }; this.msgs.push(reply);
     this.busy = true; this.ctl = new AbortController(); this.paint();
-    const history = this.msgs.slice(0, -1).slice(-12).map(m => ({ role:m.role, content: m.role === "user" && m.page ? `(p.${m.page}를 보며) ${m.content}` : m.content })).filter(m => m.content);
+    const history = this.msgs.slice(0, -1).slice(-12).map(m => ({ role:m.role, content: m.role === "user" ? `${m.page ? `(p.${m.page}를 보며) ` : ""}${m.quote ? `[원문 인용] “${m.quote}”\n` : ""}${m.content}` : m.content })).filter(m => m.content);
     const turns = [{ role:"user", content:this.prompt(c, await pageText(c.d, c.page)) }, ...history];
     try{
       await ask(turns, { signal:this.ctl.signal, onText: ({ text }) => { reply.content = text; const last = this.el.querySelector("#chatLog .bubble.assistant:last-of-type .btext"); if (last) last.replaceChildren(...richLines(text)); } });
       if (JSON.stringify(reply.content).includes("$") && !katexLib){ await ensureKatex(); }
+      this.saveTalk(c);
     }catch(e){
       if (e && e.text) reply.content = e.text;
       if (!(e && e.code === "cancelled")) this.err = sampleErrorCopy(e);
@@ -1053,6 +1102,277 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
     }finally{ this.busy = false; this.ctl = null; this.paint(); }
   }
 };
+/* ----- 모르는 것 노트 (docs/DECISIONS.md 2026-09-30): drag over the page → ask → a card linked to the text.
+   A phrase asked once is answered from the note after that (no model call); re-views mark weak points. ----- */
+const notesApi = env.notes || null;
+const NOTE_WEAK = 3;
+const NOTE_KIND = { term:["용어","k-term"], procedure:["절차","k-proc"], concept:["개념","k-concept"], talk:["대화","k-talk"] };
+const NT = { src:{}, open:null, asking:null, anchor:null, again:false, err:null, busy:false, drawer:false, filter:"all" };
+function agoText(iso){
+  const d = now() - Date.parse(iso);
+  if (!(d >= 0)) return "방금";
+  if (d < MIN) return "방금";
+  if (d < 60*MIN) return `${Math.round(d / MIN)}분 전`;
+  if (d < DAY) return `${Math.round(d / (60*MIN))}시간 전`;
+  return `${Math.round(d / DAY)}일 전`;
+}
+function phraseKey(t){ return String(t ?? "").normalize("NFKC").replace(/\s+/g, " ").trim().toLocaleLowerCase("ko-KR"); }
+function notesOn(d){ return !!(notesApi && d && d.sourceCatalogId && !d.example); }
+function noteList(d){ const e = notesOn(d) && NT.src[d.sourceCatalogId]; return e ? e.list : []; }
+function loadNotes(d){
+  if (!notesOn(d) || NT.src[d.sourceCatalogId]) return;
+  const k = d.sourceCatalogId; NT.src[k] = { status:"loading", list:[] };
+  notesApi.list(k).then(list => { NT.src[k] = { status:"ready", list }; }, () => { NT.src[k] = { status:"error", list:[] }; })
+    .then(() => { if (!disposed && S.view === "read") render(); });
+}
+function putNote(d, note){
+  const e = NT.src[d.sourceCatalogId] || (NT.src[d.sourceCatalogId] = { status:"ready", list:[] });
+  const i = e.list.findIndex(n => n.id === note.id);
+  if (i >= 0) e.list[i] = note; else e.list.push(note);
+}
+function findPhrase(d, quote){ const k = phraseKey(quote); return noteList(d).find(n => n.kind !== "talk" && phraseKey(n.quote) === k) || null; }
+function noteError(e){
+  const c = e && e.code;
+  if (c === "usage_limit") return { text:"ChatGPT 사용량 한도에 닿았어요. 한도가 풀리면 다시 물어봐 주세요.", retry:true };
+  if (c === "login_required" || c === "not_configured") return { text:(e && e.message) || "ChatGPT 계정을 연결해 주세요.", login:true };
+  return { text:(e && e.message) || "답을 받지 못했어요.", retry:true };
+}
+async function sentenceAround(d, page, quote){
+  const text = await pageText(d, page);
+  const r = findRange(text, quote); if (!r) return null;
+  const before = text.slice(0, r[0]), after = text.slice(r[1]);
+  const s = Math.max(before.lastIndexOf(". "), before.lastIndexOf("\n"), before.lastIndexOf("다. ")) + 1;
+  const eRel = after.search(/[.!?。](\s|$)|\n/);
+  return text.slice(s, r[1] + (eRel < 0 ? after.length : eRel + 1)).replace(/\s+/g, " ").trim().slice(0, 800);
+}
+
+/* ask: a new phrase calls the model once; a known one opens its saved answer */
+async function askPhrase(d, page, quote, anchor){
+  hideSel();
+  const known = findPhrase(d, quote);
+  if (known && known.status === "answered"){ openNote(d, known.id, true); return; }
+  NT.open = null; NT.asking = { quote, page }; NT.anchor = anchor; NT.again = false; NT.err = null; NT.busy = true;
+  render();
+  try{
+    const [sentence, text] = await Promise.all([sentenceAround(d, page, quote), pageText(d, page)]);
+    const res = await notesApi.ask({ sourceId:d.sourceCatalogId, page, quote, sentence, pageText:text, title:d.title, purpose:d.purpose || null });
+    putNote(d, res.note);
+    NT.open = res.note.id; NT.asking = null; NT.again = !!res.reused;
+  }catch(e){ NT.err = noteError(e); }
+  finally{ NT.busy = false; if (!disposed) render(); }
+}
+async function markPhrase(d, page, quote){
+  hideSel();
+  try{ const note = await notesApi.mark({ sourceId:d.sourceCatalogId, page, quote, sentence: await sentenceAround(d, page, quote) }); putNote(d, note); toast("모름으로 표시했어요. 밑줄을 누르면 그때 물어봐요."); render(); }
+  catch(e){ toast(noteError(e).text); }
+}
+function openNote(d, id, countSeen){
+  const note = noteList(d).find(n => n.id === id); if (!note) return;
+  if (note.status === "marked"){ askPhrase(d, note.page, note.quote, null); return; }
+  NT.open = id; NT.asking = null; NT.err = null; NT.anchor = null; NT.again = !!countSeen;
+  render();
+  if (countSeen) notesApi.seen(d.sourceCatalogId, id).then(n => { putNote(d, n); if (NT.open === id && !disposed) render(); }, () => {});
+}
+function closeNote(){ NT.open = null; NT.asking = null; NT.err = null; NT.anchor = null; render(); }
+async function followNote(d, note, q){
+  NT.busy = true; NT.err = null; render();
+  try{ putNote(d, await notesApi.follow({ sourceId:d.sourceCatalogId, noteId:note.id, question:q, pageText: await pageText(d, note.page), title:d.title })); }
+  catch(e){ NT.err = noteError(e); }
+  finally{ NT.busy = false; if (!disposed) render(); }
+}
+
+/* the transparent text layer over the canvas: lets the reader drag-select the PDF's own words */
+function textLayer(entry, cssW){
+  const W = entry.canvas.width, H = entry.canvas.height, k = cssW / W;
+  const tl = h("div", { class:"tl" });
+  for (const it of entry.items){
+    if (!it.str || !it.str.trim()) continue;
+    const tx = pdfjs.Util.transform(entry.vp.transform, it.transform);
+    const fh = Math.hypot(tx[2], tx[3]); if (!fh) continue;
+    const angle = Math.atan2(tx[1], tx[0]);
+    const span = h("span", { style:`left:${tx[4] / W * 100}%;top:${(tx[5] - fh * 0.86) / H * 100}%;font-size:${(fh * k).toFixed(2)}px` }, it.str);
+    span._w = it.width * entry.vp.scale * k; span._a = angle;
+    tl.append(span, it.hasEOL ? "\n" : " ");
+  }
+  requestAnimationFrame(() => {
+    for (const span of tl.querySelectorAll("span")){
+      const w = span.offsetWidth; if (!w) continue;
+      span.style.transform = `${span._a ? `rotate(${span._a}rad) ` : ""}scaleX(${span._w / w})`;
+    }
+  });
+  return tl;
+}
+/* where a note's phrase sits on the page: part of a text item, split by character position */
+function phraseRects(entry, quote){
+  let s = ""; const map = [];
+  entry.items.forEach((it, i) => { [...it.str.normalize("NFKC")].forEach((ch, j) => { if (/\s/.test(ch)) return; s += ch.toLocaleLowerCase("ko-KR"); map.push([i, j]); }); });
+  const q = looseText(quote); if (q.length < 2) return [];
+  const at = s.indexOf(q); if (at < 0) return [];
+  const byItem = new Map();
+  for (const [i, j] of map.slice(at, at + q.length)){ const r = byItem.get(i); byItem.set(i, r ? [Math.min(r[0], j), Math.max(r[1], j)] : [j, j]); }
+  return [...byItem].map(([i, [a, b]]) => {
+    const it = entry.items[i], len = [...it.str.normalize("NFKC")].length || 1;
+    const tx = pdfjs.Util.transform(entry.vp.transform, it.transform);
+    const fh = Math.hypot(tx[2], tx[3]), w = it.width * entry.vp.scale;
+    return { x:tx[4] + w * a / len, y:tx[5] - fh * 0.95, w:w * (b + 1 - a) / len, h:fh * 1.2 };
+  }).filter(r => r.w > 0);
+}
+function noteMarks(d, entry, W, H){
+  const out = [];
+  for (const note of noteList(d)){
+    if (note.kind === "talk") continue;
+    const weak = note.seen >= NOTE_WEAK, on = NT.open === note.id;
+    for (const r of phraseRects(entry, note.quote)){
+      out.push(h("button", { class:"nu" + (weak ? " weak" : "") + (on ? " on" : "") + (note.status === "marked" ? " marked" : ""), "data-note":note.id,
+        title: note.status === "marked" ? "모름 표시 · 누르면 물어봐요" : "물어본 곳 · 누르면 저장된 답", "aria-label":`${note.quote} 노트 열기`,
+        style:`left:${r.x / W * 100}%;top:${r.y / H * 100}%;width:${r.w / W * 100}%;height:${r.h / H * 100}%`,
+        onclick:(e) => { e.stopPropagation(); openNote(d, note.id, true); } }));
+    }
+  }
+  return out;
+}
+
+/* selection menu: lives outside #app so re-renders do not reset it */
+let selPop = null, selTimer = null;
+function hideSel(){ if (selPop) selPop.remove(); selPop = null; }
+function readSelection(){
+  const sel = window.getSelection(); if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+  const text = sel.toString().replace(/\s+/g, " ").trim(); if (!text || text.length > 400) return null;
+  const range = sel.getRangeAt(0);
+  const el = range.commonAncestorContainer.nodeType === 1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement;
+  const tl = el && el.closest(".tl"); if (!tl || !root.contains(tl)) return null;
+  const box = tl.closest(".pagebox"); const key = box && box.dataset.key; if (!key) return null;
+  const cut = key.lastIndexOf(":");
+  const rect = range.getBoundingClientRect(), br = box.getBoundingClientRect();
+  return { text, rect, deckId:key.slice(0, cut), page:Number(key.slice(cut + 1)), yRatio:(rect.top + rect.height / 2 - br.top) / br.height };
+}
+function showSel(){
+  const info = readSelection(); if (!info){ hideSel(); return; }
+  const d = S.decks[info.deckId]; if (!d) return;
+  const canNote = notesOn(d), chatOpen = Chat.isOpen();
+  if (!canNote && !chatOpen){ hideSel(); return; }
+  hideSel();
+  const known = canNote ? findPhrase(d, info.text) : null;
+  const anchor = { deckId:d.id, page:info.page, yRatio:info.yRatio };
+  const btns = [];
+  if (canNote){
+    btns.push(known && known.status === "answered"
+      ? h("button", { onclick: () => { window.getSelection().removeAllRanges(); hideSel(); openNote(d, known.id, true); } }, "저장된 답 보기")
+      : h("button", { onclick: () => { window.getSelection().removeAllRanges(); askPhrase(d, info.page, info.text, anchor); } }, "물어보기", h("span", { class:"k", text:"Enter" })));
+    if (!known) btns.push(h("button", { title:"답은 나중에, 모른다는 표시만", onclick: () => { window.getSelection().removeAllRanges(); markPhrase(d, info.page, info.text); } }, "모름 표시"));
+  }
+  if (chatOpen) btns.push(h("button", { onclick: () => { window.getSelection().removeAllRanges(); hideSel(); Chat.quoteIn(info.text); } }, "질문 창에 넣기"));
+  const below = info.rect.top < 64;
+  selPop = h("div", { class:"selpop" + (below ? " below" : ""), role:"toolbar", "aria-label":"고른 글",
+    style:`left:${Math.min(Math.max(info.rect.left + info.rect.width / 2, 110), innerWidth - 110)}px;top:${below ? info.rect.bottom + 8 : info.rect.top - 8}px` }, btns);
+  selPop.addEventListener("mousedown", (e) => e.preventDefault());   // keep the selection while clicking
+  root.append(selPop);
+}
+on(document, "mouseup", (e) => { if (e.target.closest && e.target.closest(".selpop")) return; setTimeout(showSel, 0); });
+on(document, "selectionchange", () => {
+  clearTimeout(selTimer);
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed){ if (selPop && !selPop.matches(":hover")) hideSel(); return; }
+  if (matchMedia("(hover:none)").matches) selTimer = setTimeout(showSel, 450);   // touch: no mouseup after handles move
+});
+on(window, "scroll", () => { if (selPop) hideSel(); }, { passive:true });
+on(document, "keydown", (e) => {
+  if (!selPop || e.isComposing) return;
+  if (e.key === "Escape"){ hideSel(); return; }
+  if (e.key === "Enter"){ const b = selPop.querySelector("button"); if (b){ e.preventDefault(); b.click(); } }
+});
+
+/* answer card: right column on wide screens (linked by a line), bottom sheet on narrow ones */
+function renderNoteCard(d){
+  if (!notesOn(d)) return null;
+  const note = NT.open ? noteList(d).find(n => n.id === NT.open) : null;
+  if (!note && !NT.asking) return null;
+  const quote = note ? note.quote : NT.asking.quote;
+  const [kl, kc] = NOTE_KIND[note ? note.kind : "term"];
+  const weak = note && note.seen >= NOTE_WEAK;
+  const a = note && note.answer;
+  const body = [];
+  if (!note || NT.busy && !a){
+    body.push(NT.err ? null : h("div", { class:"nskel" }, h("i", { style:"width:88%" }), h("i", { style:"width:62%" }), h("i", { style:"width:74%" })));
+  } else if (a){
+    body.push(h("p", { class:"nlead" }, ...richText(a.lead)));
+    if (a.steps && a.steps.length) body.push(h("ol", { class:"nsteps" }, a.steps.map(s => h("li", null, h("b", null, ...richText(s.step)), s.why ? h("span", { class:"why" }, " — ", ...richText(s.why)) : null))));
+    if (a.quote) body.push(h("div", { class:"nquote", text:`“${a.quote}”` }));
+    if (a.extra) body.push(h("p", { class:"nextra" }, ...richText(a.extra)));
+    if (a.outsideSource) body.push(h("div", { class:"nout" }, h("b", { text:"원문 밖 설명" }), " · ", ...richText(a.outsideSource)));
+  }
+  const thread = note && note.thread.length ? h("div", { class:"nthread" }, note.thread.map(t => h("div", { class:"bubble " + (t.role === "user" ? "user" : "assistant") }, h("div", { class:"btext" }, t.role === "user" ? t.text : richLines(t.text))))) : null;
+  const err = NT.err ? h("div", { class:"nerr", role:"alert" }, h("span", { text:NT.err.text }),
+    NT.err.login ? h("button", { class:"btn small", onclick:connectAccount }, "ChatGPT 연결") : null,
+    NT.err.retry && !note ? h("button", { class:"btn small", onclick: () => askPhrase(d, NT.asking.page, NT.asking.quote, NT.anchor) }, "다시 시도") : null) : null;
+  const input = h("input", { name:"q", placeholder:"이어서 물어보기", "aria-label":"이어서 물어보기", autocomplete:"off", disabled: NT.busy ? "" : null });
+  const follow = note && a ? h("form", { class:"nfollow", onsubmit:(e) => { e.preventDefault(); const q = input.value.trim(); if (q && !NT.busy) followNote(d, note, q); } },
+    input, h("button", { class:"btn small", disabled: NT.busy ? "" : null }, NT.busy ? "답 기다리는 중…" : "보내기")) : null;
+  return h("aside", { class:"notecard" + (weak ? " weak" : ""), role:"dialog", "aria-label":`${quote} 노트` },
+    h("div", { class:"nhd" }, h("span", { class:`nk ${kc}`, text:kl }), h("span", { class:"nq", title:quote, text:quote }), weak ? h("span", { class:"nk k-weak", text:"약점" }) : null,
+      h("button", { class:"qbtn", "aria-label":"닫기", onclick:closeNote }, "✕")),
+    note && NT.again ? h("div", { class:"nagain", text: weak ? `${note.seen}번째 다시 봄 · 약점으로 표시했어요` : `${note.seen}번째 다시 봄 · 저장된 답이에요 (AI 호출 없음)` }) : null,
+    h("div", { class:"nbody" }, body, thread, err),
+    follow,
+    note && note.thread.length >= 4 ? h("div", { class:"ncont" }, h("span", { text:"대화가 길어졌어요." }), h("button", { class:"btn small", onclick: () => { Chat.continueNote(d, note); closeNote(); } }, "질문 창에서 계속")) : null,
+    note ? h("div", { class:"nft" }, h("span", { text:`p.${note.page} · ${agoText(note.askedAt)} 물어봄` }), h("span", { class:"grow" }), h("span", { text:`다시 본 횟수 ${note.seen}` })) : null);
+}
+/* line the card up with its text and draw the link from the page's right edge (wide layout only) */
+function placeNoteCard(){
+  const grid = document.querySelector(".rgrid.noteopen"); if (!grid) return;
+  const card = grid.querySelector(".notecard"), box = document.getElementById("pagebox");
+  grid.querySelectorAll(".nlink,.ntick").forEach(el => el.remove());
+  if (!card || !box || getComputedStyle(card).position === "fixed") return;
+  const gr = grid.getBoundingClientRect(), br = box.getBoundingClientRect();
+  let y = null;
+  const mark = box.querySelector(`.nu[data-note="${NT.open}"]`);
+  if (mark){ const r = mark.getBoundingClientRect(); y = r.top + r.height / 2 - br.top; }
+  else if (NT.anchor && NT.anchor.yRatio != null) y = NT.anchor.yRatio * br.height;
+  if (y == null){ card.style.marginTop = "0px"; return; }
+  const top = Math.max(0, Math.min(br.top - gr.top + y - 24, br.bottom - gr.top - 120));
+  card.style.marginTop = top + "px";
+  const x1 = br.right - gr.left, y1 = br.top - gr.top + y, cr = card.getBoundingClientRect(), x2 = cr.left - gr.left, y2 = cr.top - gr.top + 22;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "nlink"); svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("style", `left:0;top:0;width:${gr.width}px;height:${Math.max(y1, y2) + 4}px`);
+  const mx = (x1 + x2) / 2;
+  svg.innerHTML = `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/><circle cx="${x1}" cy="${y1}" r="3"/>`;
+  grid.append(svg);
+  grid.append(h("i", { class:"ntick", style:`left:${x1 - 2}px;top:${y1 - 9}px` }));
+}
+on(window, "resize", () => { if (S.view === "read") requestAnimationFrame(placeNoteCard); });
+
+/* the notes drawer: this material's asked and marked things */
+function notesButton(d){
+  if (!notesOn(d)) return null;
+  const n = noteList(d).length;
+  return h("button", { class:"btn small", "aria-pressed": NT.drawer ? "true" : "false", onclick: () => { NT.drawer = !NT.drawer; paintDrawer(); } }, "모르는 것", n ? h("span", { class:"ncount", text:String(n) }) : null);
+}
+function paintDrawer(){
+  let el = document.getElementById("notesDrawer");
+  const d = S.decks[S.reader.deckId];
+  if (!NT.drawer || S.view !== "read" || !notesOn(d)){ if (el) el.remove(); return; }
+  const filters = [["all","전체"],["weak","약점"],["term","용어"],["procedure","절차"],["concept","개념"],["talk","대화"],["marked","아직 안 물어봄"]];
+  const pass = (n) => NT.filter === "all" || (NT.filter === "weak" ? n.seen >= NOTE_WEAK : NT.filter === "marked" ? n.status === "marked" : n.kind === NT.filter && n.status !== "marked");
+  const list = noteList(d).filter(pass).sort((a, b) => b.seen - a.seen || Date.parse(b.askedAt) - Date.parse(a.askedAt));
+  const item = (n) => { const [kl, kc] = NOTE_KIND[n.kind];
+    return h("button", { class:"nitem", onclick: () => {
+      NT.drawer = false; paintDrawer();
+      if (n.kind === "talk"){ Chat.openTalk(d, n); return; }
+      if (S.reader.page !== n.page) goPage(n.page);
+      openNote(d, n.id, true);
+      setTimeout(() => { const m = document.querySelector(`.nu[data-note="${n.id}"]`); if (m) m.scrollIntoView({ block:"center", behavior:"smooth" }); }, 400);
+    } },
+      h("div", { class:"t" }, h("span", { class:"q", text:n.quote }), n.seen >= NOTE_WEAK ? h("span", { class:"nk k-weak", text:"약점" }) : null, h("span", { class:`nk ${kc}`, text: n.status === "marked" ? "모름" : kl })),
+      h("div", { class:"s", text: n.status === "marked" ? "아직 안 물어봤어요 · 누르면 물어봐요" : n.kind === "talk" ? `질문 · ${n.answer ? n.answer.lead : ""}` : (n.answer ? n.answer.lead : "") }),
+      h("div", { class:"m" }, h("span", { text:`p.${n.page}` }), h("span", { text:agoText(n.askedAt) }), h("span", { text:`다시 본 횟수 ${n.seen}` }))); };
+  const fresh = h("aside", { class:"notesdrawer", id:"notesDrawer", role:"dialog", "aria-label":"모르는 것 노트" },
+    h("div", { class:"dh" }, h("strong", { text:"모르는 것 · 이 자료" }), h("span", { class:"grow" }), h("button", { class:"qbtn", onclick: () => { NT.drawer = false; paintDrawer(); render(); } }, "닫기")),
+    h("div", { class:"dfilters" }, filters.map(([k, t]) => h("button", { class:"chip-btn", "aria-pressed": NT.filter === k ? "true" : "false", onclick: () => { NT.filter = k; paintDrawer(); } }, t))),
+    h("div", { class:"dlist" }, list.length ? list.map(item) : h("p", { class:"small muted", style:"padding:8px", text: noteList(d).length ? "해당하는 항목이 없어요." : "원문을 드래그해 모르는 것을 물어보면 여기에 쌓여요." })),
+    h("div", { class:"dfoot small muted", text:`같은 것을 ${NOTE_WEAK}번 이상 다시 보면 약점으로 표시해요.` }));
+  if (el) el.replaceWith(fresh); else root.append(fresh);
+}
 function richLines(text){
   return String(text).split(/\n/).flatMap((line, i) => {
     const m = line.match(/^\s*원문 밖 설명\s*[:：]\s*(.*)$/);
