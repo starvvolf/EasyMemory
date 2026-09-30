@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>모르는 것 노트 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<!--
+  되짚기 읽기 화면의 "모르는 것 노트" 시안. 가짜 데이터로 움직이며 서버와 연결되지 않는다.
+  원문을 드래그해 고르면 작은 메뉴가 뜨고, [물어보기]를 누르면 오른쪽 여백에 답 카드가 선으로 이어져 나온다.
+  한 번 물어본 문구는 점선 밑줄로 남고, 다시 누르면 저장된 답이 바로 뜬다(AI 호출 없음).
+  색·글꼴 토큰은 /study(src/app/study/dejipgi.css)와 같다.
+-->
+<style>
+:root{
+  --ground:#EEF1F4; --surface:#FFFFFF; --surface-2:#F6F8FA; --line:#D8DEE5; --line-strong:#B9C2CC;
+  --ink:#16202A; --muted:#5A6774; --faint:#8A96A2;
+  --accent:#1F4FD1; --accent-ink:#FFFFFF; --accent-soft:#E6ECFB;
+  --mark:#F7E26B; --good:#1D7F52; --good-soft:#E3F3EA; --bad:#B93A26; --bad-soft:#FBE8E4; --help:#9A6400; --help-soft:#FBF0DA;
+  --ask:#7A4FD1; --ask-soft:#EFE9FB;
+  --shadow:0 1px 2px rgba(22,32,42,.06),0 8px 24px rgba(22,32,42,.09);
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --read:"Georgia","Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1318; --surface:#161D24; --surface-2:#1C242C; --line:#2A343E; --line-strong:#3A4652;
+    --ink:#E5EAEF; --muted:#9AA7B3; --faint:#6F7C88; --accent:#7FA2FF; --accent-ink:#0B1222; --accent-soft:#1D2A48;
+    --mark:rgba(247,226,107,.28); --good:#5CC896; --good-soft:#15302A; --bad:#FF8A73; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14;
+    --ask:#B79BFF; --ask-soft:#2A2140;
+  }
+}
+*{box-sizing:border-box} [hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14.5px;line-height:1.55}
+button{font:inherit;color:inherit;cursor:pointer}
+.top{display:flex;align-items:center;gap:10px;padding:14px 20px 0;max-width:1240px;margin:0 auto}
+.top h1{font-size:20px;margin:0;font-weight:600}
+.tabs{display:flex;gap:2px;margin-left:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:3px}
+.tabs button{border:0;background:none;padding:5px 12px;border-radius:7px;font-size:13.5px;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--surface-2);color:var(--ink);font-weight:600}
+.bar{display:flex;align-items:center;gap:10px;max-width:1240px;margin:12px auto 0;padding:0 20px}
+.bar b{font-size:15px}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;padding:5px 11px;font-size:13px}
+.btn.small{padding:3px 9px;font-size:12.5px}
+.btn.ghost{border-color:transparent;background:none;color:var(--muted)}
+.btn.ask{background:var(--ask);border-color:var(--ask);color:#fff}
+.count{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9px;background:var(--ask);color:#fff;font-size:11px;padding:0 5px;margin-left:4px}
+.hint{max-width:1240px;margin:8px auto 0;padding:0 20px;color:var(--muted);font-size:12.5px}
+
+/* 읽기 영역: 원문 쪽 + 오른쪽 여백(답 카드) */
+.stage{position:relative;max-width:1240px;margin:14px auto 60px;padding:0 20px;display:grid;grid-template-columns:minmax(0,760px) minmax(300px,1fr);gap:28px}
+.pagebox{position:relative;background:#fff;color:#222;border:1px solid var(--line);box-shadow:var(--shadow);border-radius:4px;padding:44px 56px 56px;font-family:var(--read);font-size:15.5px;line-height:1.7}
+.pagebox h2{font-size:24px;margin:0 0 4px;font-weight:600}
+.pagebox .sub{color:#666;margin:0 0 22px;font-size:13px;font-family:var(--sans)}
+.pagebox p{margin:0 0 14px}
+.pagebox ::selection{background:rgba(122,79,209,.22)}
+.pagebox .obj{background:linear-gradient(transparent 58%,rgba(247,226,107,.75) 58%)}
+.pagefoot{font-family:var(--sans);font-size:12px;color:#888;text-align:right;margin-top:18px}
+.u{text-decoration:underline dotted var(--ask);text-decoration-thickness:2px;text-underline-offset:4px;cursor:pointer;border-radius:2px;transition:background .15s}
+.u:hover,.u.on{background:rgba(122,79,209,.12)}
+.u.weak{text-decoration-style:solid}
+.u.on{background:rgba(122,79,209,.16);box-shadow:0 0 0 2px rgba(122,79,209,.16)}
+.tick{position:absolute;right:-1px;width:3px;background:var(--ask);border-radius:2px}
+.margin{position:relative;min-height:100%}
+svg.links{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;z-index:2}
+svg.links path{fill:none;stroke:var(--ask);stroke-width:1.5;opacity:.7}
+svg.links circle{fill:var(--ask)}
+
+/* 떠 있는 작은 메뉴 */
+.pop{position:absolute;z-index:6;display:flex;gap:2px;background:var(--ink);color:var(--surface);border-radius:10px;padding:4px;box-shadow:var(--shadow);transform:translate(-50%,-100%);animation:pop .12s ease-out}
+.pop button{border:0;background:none;color:inherit;padding:6px 10px;border-radius:7px;font-size:13px;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.pop button:hover{background:rgba(255,255,255,.14)}
+.pop .k{font-family:var(--mono);font-size:11px;opacity:.6}
+.pop::after{content:"";position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:var(--ink)}
+@keyframes pop{from{opacity:0;transform:translate(-50%,-90%)}}
+
+/* 답 카드 */
+.card{position:absolute;left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);z-index:3;animation:slide .18s ease-out;overflow:hidden}
+.card.focus{border-color:var(--ask);box-shadow:0 0 0 3px var(--ask-soft),var(--shadow)}
+@keyframes slide{from{opacity:0;transform:translateX(8px)}}
+.card .hd{display:flex;align-items:center;gap:8px;padding:10px 12px 8px;border-bottom:1px solid var(--line)}
+.card .q{font-family:var(--read);font-size:15px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{display:inline-flex;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.b-term{background:var(--ask-soft);color:var(--ask)} .b-proc{background:var(--accent-soft);color:var(--accent)} .b-concept{background:var(--good-soft);color:var(--good)}
+.b-weak{background:var(--bad-soft);color:var(--bad)} .b-out{background:var(--help-soft);color:var(--help)}
+.card .bd{padding:10px 12px 12px;font-size:13.5px}
+.card .lead{font-size:14.5px;font-weight:500;margin:0 0 8px}
+.card .ctx{border-left:3px solid var(--mark);padding:1px 0 1px 9px;color:var(--muted);font-family:var(--read);font-size:13.5px;margin:8px 0}
+.card ol{margin:6px 0;padding-left:20px} .card li{margin:3px 0}
+.card .li-why{color:var(--muted);font-size:12.5px}
+.card .out{margin-top:8px;background:var(--help-soft);color:var(--help);border-radius:8px;padding:6px 9px;font-size:12.5px}
+.card .ft{display:flex;align-items:center;gap:6px;padding:8px 12px;border-top:1px solid var(--line);background:var(--surface-2);font-size:12px;color:var(--muted)}
+.card .ft .sp{flex:1}
+.card .follow{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--line)}
+.card .follow input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:13px;background:var(--surface)}
+.card .thread{padding:0 12px 10px;display:flex;flex-direction:column;gap:6px}
+.card .me{align-self:flex-end;background:var(--surface-2);border-radius:10px 10px 2px 10px;padding:5px 9px;font-size:13px;max-width:85%}
+.card .ai{font-size:13px}
+.typing::after{content:"▍";animation:blink 1s steps(1) infinite;color:var(--ask)}
+@keyframes blink{50%{opacity:0}}
+.skel{height:10px;border-radius:5px;background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%;animation:sh 1.1s infinite;margin:7px 0}
+@keyframes sh{to{background-position:-200% 0}}
+.again{background:var(--ask-soft);color:var(--ask);font-size:12.5px;padding:6px 12px;border-bottom:1px solid var(--line)}
+
+/* 노트 서랍 */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow);z-index:20;display:flex;flex-direction:column;animation:slide .18s ease-out}
+.drawer .dh{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.drawer .dh h3{margin:0;font-size:16px;flex:1}
+.filters{display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line)}
+.chip{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12.5px}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.notes{flex:1;overflow:auto;padding:8px 10px}
+.note{width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:4px}
+.note:hover{border-color:var(--ask)}
+.note .t{display:flex;gap:8px;align-items:center;font-weight:600;font-family:var(--read)}
+.note .t span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note .s{font-size:12.5px;color:var(--muted)}
+.note .m{display:flex;gap:10px;font-size:11.5px;color:var(--faint)}
+.drawer .df{padding:12px 16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+
+/* 좁은 화면: 답은 아래에서 올라오는 판 */
+@media (max-width: 980px){
+  .stage{grid-template-columns:1fr}
+  .margin{display:none}
+  .pagebox{padding:28px 22px 36px;font-size:15px}
+  .sheet{position:fixed;left:0;right:0;bottom:0;max-height:62vh;overflow:auto;z-index:15;border-radius:16px 16px 0 0!important;animation:up .2s ease-out}
+  @keyframes up{from{transform:translateY(30%);opacity:0}}
+  .top,.bar,.hint{padding-inline:16px}
+  .stage{padding-inline:16px}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>되짚기</h1>
+  <nav class="tabs" role="tablist"><button>연습</button><button aria-selected="true">읽기</button><button>자료 만들기</button><button>기록</button></nav>
+</header>
+<div class="bar">
+  <b>03_Three Dimensional Viewing</b><span class="muted small" style="color:var(--muted);font-size:13px">p.3 / 44</span>
+  <span style="flex:1"></span>
+  <button class="btn" id="notesBtn">모르는 것 <span class="count" id="noteCount">2</span></button>
+</div>
+<p class="hint">원문을 드래그해 보세요. 점선 밑줄은 이미 물어본 곳이에요. 누르면 저장된 답이 바로 떠요.</p>
+
+<div class="stage" id="stage">
+  <article class="pagebox" id="page">
+    <h2>Viewing-Coordinate Parameters</h2>
+    <p class="sub">Three-Dimensional Viewing · p.3</p>
+    <p>To obtain a view of a scene, we first select a <span class="u" data-id="n1">viewing position</span> in world coordinates, called the <b>view reference point</b> P₀. We then choose the direction of the view-plane normal vector <b>N</b>, and a view-up vector <b>V</b> that establishes the positive direction for the y-axis of the viewing frame.</p>
+    <p>Only objects inside the <span class="u weak" data-id="n2">view volume</span> are displayed. For a perspective projection, the view volume is a <b>frustum</b>: a pyramid whose top has been cut off by the near clipping plane. Positions outside this region are removed by the clipping routines before the <span class="obj">normalization transformation</span> is applied.</p>
+    <p>The complete 3D viewing pipeline therefore proceeds from modeling coordinates to world coordinates, then to viewing coordinates, then through the projection transformation to normalized coordinates, and finally to device coordinates.</p>
+    <p class="pagefoot">3</p>
+  </article>
+  <aside class="margin" id="margin"><svg class="links" id="links"></svg></aside>
+</div>
+<div id="float"></div>
+<div id="drawer"></div>
+
+<script>
+/* ---------- 가짜 저장소 ---------- */
+const NOTES = {
+  n1:{ q:"viewing position", kind:"term", page:3, asked:1, seen:1, at:"어제",
+    lead:"장면을 바라보는 카메라(눈)의 위치예요.",
+    ctx:"we first select a viewing position in world coordinates, called the view reference point P₀",
+    extra:"이 자료에서는 같은 것을 view reference point, P₀라고도 불러요.", out:null },
+  n2:{ q:"view volume", kind:"concept", page:3, asked:1, seen:3, at:"3일 전",
+    lead:"화면에 실제로 보이게 될 3차원 공간의 범위예요. 이 밖은 잘려 나가요(클리핑).",
+    ctx:"Only objects inside the view volume are displayed.",
+    extra:"원근 투영에서는 꼭대기가 잘린 피라미드(frustum) 모양이에요.", out:null },
+};
+const FAKE = {
+  frustum:{ kind:"term", lead:"꼭대기를 잘라 낸 피라미드 모양이에요. 원근 투영에서 보이는 공간(view volume)의 모양이에요.", extra:"near clipping plane이 꼭대기를 자르는 면이에요.", out:"‘절두체’라는 한국어 번역어는 원문에 없는 설명이에요." },
+  pipeline:{ kind:"proc", lead:"3D 관측 파이프라인은 좌표를 이 순서로 바꿔요.",
+    steps:[["모델링 좌표","물체를 각자 기준으로 만든 좌표"],["월드 좌표","모든 물체를 한 장면에 배치"],["관측 좌표","카메라 기준으로 다시 봄"],["정규화 좌표","투영 후 크기를 표준 범위로 맞춤"],["장치 좌표","실제 화면 픽셀"]] },
+};
+function guess(text){
+  const t = text.toLowerCase();
+  if (t.includes("frustum")) return FAKE.frustum;
+  if (t.includes("pipeline") || t.includes("proceeds")) return FAKE.pipeline;
+  if (t.split(/\s+/).length > 6) return { kind:"concept", lead:"이 문장은 ‘무엇이 화면에 보일지’를 정하는 과정을 설명해요.", extra:"핵심은 보이는 범위(view volume) 밖을 먼저 잘라 낸다는 점이에요.", out:null };
+  return { kind:"term", lead:`‘${text}’는 이 자료에서 관측 과정의 한 요소를 가리켜요.`, extra:null, out:null };
+}
+const KIND = { term:["용어","b-term"], proc:["절차","b-proc"], concept:["개념","b-concept"] };
+let seq = 3, open = new Set(), focusId = null;
+const $ = (s) => document.querySelector(s);
+const h = (tag, a={}, ...kids) => { const el = document.createElement(tag);
+  for (const [k,v] of Object.entries(a||{})) { if (v == null || v === false) continue; if (k.startsWith("on")) el.addEventListener(k.slice(2), v); else if (k === "text") el.textContent = v; else el.setAttribute(k, v === true ? "" : v); }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid)); return el; };
+const narrow = () => matchMedia("(max-width: 980px)").matches;
+
+/* ---------- 드래그 → 작은 메뉴 ---------- */
+let pending = null;
+document.addEventListener("mouseup", (e) => {
+  if (e.target.closest(".pop,.card,.drawer,.u")) return;
+  setTimeout(() => {
+    const sel = getSelection(); const text = sel.toString().trim();
+    $("#float").replaceChildren();
+    if (!text || !sel.rangeCount || !$("#page").contains(sel.anchorNode)) { pending = null; return; }
+    const range = sel.getRangeAt(0); const r = range.getBoundingClientRect(); const sr = $("#stage").getBoundingClientRect();
+    pending = { text, range: range.cloneRange() };
+    const same = Object.entries(NOTES).find(([,n]) => n.q.toLowerCase() === text.toLowerCase());
+    $("#float").append(h("div", { class:"pop", style:`left:${r.left + r.width/2 - sr.left + $("#stage").offsetLeft}px;top:${r.top + scrollY - 8}px`, role:"toolbar", "aria-label":"고른 글" },
+      same ? h("button", { onclick:() => { getSelection().removeAllRanges(); $("#float").replaceChildren(); reopen(same[0], true); } }, "저장된 답 보기") :
+             h("button", { onclick:ask }, "물어보기", h("span", { class:"k", text:"Enter" })),
+      h("button", { onclick:markOnly, title:"답은 나중에, 모른다는 표시만" }, "모름 표시")));
+  }, 0);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Enter" && pending && $(".pop")) { e.preventDefault(); ask(); } if (e.key === "Escape") { $("#float").replaceChildren(); } });
+
+function wrap(range, id){
+  const span = h("span", { class:"u on", "data-id":id });
+  try { range.surroundContents(span); } catch { span.append(range.extractContents()); range.insertNode(span); }
+  span.addEventListener("click", () => reopen(id, true));
+  return span;
+}
+function markOnly(){
+  if (!pending) return; const id = "n" + seq++;
+  NOTES[id] = { q:pending.text, kind:"term", page:3, asked:0, seen:0, at:"방금", lead:null, ctx:null };
+  wrap(pending.range, id).classList.remove("on"); cleanup(); count(); toast("모름으로 표시했어요. 노트에서 나중에 물어볼 수 있어요.");
+}
+function ask(){
+  if (!pending) return; const id = "n" + seq++; const g = guess(pending.text);
+  NOTES[id] = { q:pending.text, kind:g.kind, page:3, asked:1, seen:0, at:"방금", lead:null, ctx:sentenceOf(pending.range), extra:g.extra, out:g.out, steps:g.steps, loading:true, _g:g };
+  wrap(pending.range, id); cleanup(); open.clear(); open.add(id); focusId = id; count(); paint();
+  setTimeout(() => { NOTES[id].loading = false; NOTES[id].typing = true; NOTES[id].lead = ""; stream(id, g.lead); }, 700);
+}
+function stream(id, full){ let i = 0; const tick = () => { i += 3; NOTES[id].lead = full.slice(0, i); paint(); if (i < full.length) setTimeout(tick, 18); else { NOTES[id].typing = false; paint(); } }; tick(); }
+function sentenceOf(range){ const t = range.startContainer.parentElement.closest("p").textContent; const s = t.split(/(?<=\.)\s+/).find(x => x.includes(range.toString().trim().split(/\s+/)[0])) || ""; return s.trim(); }
+function cleanup(){ getSelection().removeAllRanges(); $("#float").replaceChildren(); pending = null; }
+
+/* 다시 보기: 저장된 답을 바로. 다시 볼 때마다 횟수가 올라가고 3번이면 약점 */
+function reopen(id, countIt){
+  const n = NOTES[id];
+  if (countIt && n.lead) { n.seen++; n.again = true; }
+  if (!n.lead && !n.loading) { focusId = id; open.clear(); open.add(id); n.loading = true; paint(); const g = guess(n.q); Object.assign(n, { kind:g.kind, extra:g.extra, out:g.out, steps:g.steps, ctx:"(찍어 둔 문장)", asked:1 }); setTimeout(() => { n.loading = false; n.typing = true; n.lead = ""; stream(id, g.lead); }, 600); return; }
+  open.clear(); open.add(id); focusId = id; paint();
+}
+function closeCard(id){ open.delete(id); if (focusId === id) focusId = null; paint(); }
+
+/* ---------- 카드 그리기 + 이어 주는 선 ---------- */
+function cardBody(id){
+  const n = NOTES[id]; const [kl, kc] = KIND[n.kind];
+  const weak = n.seen >= 3;
+  return [
+    h("div", { class:"hd" }, h("span", { class:`badge ${kc}`, text:kl }), h("span", { class:"q", text:n.q }), weak ? h("span", { class:"badge b-weak", text:"약점" }) : null,
+      h("button", { class:"btn ghost small", "aria-label":"닫기", onclick:() => closeCard(id) }, "✕")),
+    n.again ? h("div", { class:"again", text: weak ? `${n.seen}번째 다시 봄 · 약점으로 연습에 넣었어요` : `${n.seen}번째 다시 봄 · 저장된 답이에요 (AI 호출 없음)` }) : null,
+    h("div", { class:"bd" },
+      n.loading ? [h("div", { class:"skel", style:"width:85%" }), h("div", { class:"skel", style:"width:60%" }), h("div", { class:"skel", style:"width:70%" })] : [
+        h("p", { class:`lead${n.typing ? " typing" : ""}`, text:n.lead }),
+        !n.typing && n.steps ? h("ol", null, n.steps.map(([s, why]) => h("li", null, h("b", { text:s }), " ", h("span", { class:"li-why", text:`— ${why}` })))) : null,
+        !n.typing && n.ctx ? h("div", { class:"ctx", text:`“${n.ctx}”` }) : null,
+        !n.typing && n.extra ? h("div", { text:n.extra }) : null,
+        !n.typing && n.out ? h("div", { class:"out", text:`원문 밖 설명 · ${n.out}` }) : null ]),
+    n.thread ? h("div", { class:"thread" }, n.thread.map(([who, t]) => h("div", { class: who === "me" ? "me" : "ai", text:t }))) : null,
+    h("form", { class:"follow", onsubmit:(e) => { e.preventDefault(); const v = e.target.elements.q.value.trim(); if (!v) return; n.thread = [...(n.thread || []), ["me", v], ["ai", "이어서 물어본 것도 이 카드에 함께 저장돼요."]]; paint(); } },
+      h("input", { name:"q", placeholder:"이어서 물어보기", "aria-label":"이어서 물어보기" }), h("button", { class:"btn small" }, "보내기")),
+    h("div", { class:"ft" }, h("span", { text:`p.${n.page} · ${n.at} 물어봄` }), h("span", { class:"sp" }), h("span", { text:`다시 본 횟수 ${n.seen}` })) ];
+}
+function paint(){
+  const margin = $("#margin"); margin.querySelectorAll(".card").forEach(c => c.remove());
+  document.querySelectorAll(".sheet").forEach(c => c.remove());
+  document.querySelectorAll(".u").forEach(u => u.classList.toggle("on", open.has(u.dataset.id)));
+  document.querySelectorAll(".u").forEach(u => u.classList.toggle("weak", (NOTES[u.dataset.id]?.seen || 0) >= 3));
+  const svg = $("#links"); svg.replaceChildren(); document.querySelectorAll(".tick").forEach(t => t.remove());
+  if (narrow()) {
+    if (focusId && open.has(focusId)) document.body.append(h("div", { class:`card sheet focus` }, cardBody(focusId)));
+    return;
+  }
+  const mr = margin.getBoundingClientRect(); let floor = 0;
+  const ids = [...open].sort((a,b) => anchorTop(a) - anchorTop(b));
+  for (const id of ids) {
+    const span = document.querySelector(`.u[data-id="${id}"]`); if (!span) continue;
+    const sr = span.getBoundingClientRect();
+    const top = Math.max(sr.top - mr.top - 12, floor);
+    const card = h("div", { class:`card${id === focusId ? " focus" : ""}`, style:`top:${top}px`, onclick:() => { focusId = id; paint(); } }, cardBody(id));
+    margin.append(card); floor = top + card.offsetHeight + 12;
+    // The line starts at the page's right edge beside the chosen text, so it never crosses the words.
+    const pr = $("#page").getBoundingClientRect();
+    const x1 = pr.right - mr.left, y1 = sr.top + sr.height/2 - mr.top, y2 = top + 22;
+    svg.append(svgEl("path", { d:`M${x1},${y1} C${x1/2},${y1} ${x1/2},${y2} 0,${y2}` }), svgEl("circle", { cx:x1, cy:y1, r:3 }));
+    const tick = h("div", { class:"tick", style:`top:${sr.top - pr.top}px;height:${sr.height}px` }); $("#page").append(tick);
+  }
+  svg.setAttribute("style", `left:0;top:0;width:100%;height:${Math.max(floor, 10)}px`);
+}
+const anchorTop = (id) => document.querySelector(`.u[data-id="${id}"]`)?.getBoundingClientRect().top ?? 0;
+function svgEl(t, a){ const el = document.createElementNS("http://www.w3.org/2000/svg", t); for (const [k,v] of Object.entries(a)) el.setAttribute(k, v); return el; }
+addEventListener("resize", paint);
+document.querySelectorAll(".u").forEach(u => u.addEventListener("click", () => reopen(u.dataset.id, true)));
+
+/* ---------- 모르는 것 노트 ---------- */
+let filter = "all";
+function count(){ $("#noteCount").textContent = Object.keys(NOTES).length; }
+function openDrawer(){
+  const list = Object.entries(NOTES).filter(([,n]) => filter === "all" || (filter === "weak" ? n.seen >= 3 : filter === "unasked" ? !n.lead : n.kind === filter))
+    .sort((a,b) => b[1].seen - a[1].seen);
+  const chip = (k, t) => h("button", { class:"chip", "aria-pressed": filter === k ? "true" : "false", onclick:() => { filter = k; openDrawer(); } }, t);
+  $("#drawer").replaceChildren(h("aside", { class:"drawer", role:"dialog", "aria-label":"모르는 것 노트" },
+    h("div", { class:"dh" }, h("h3", { text:"모르는 것 · 이 자료" }), h("button", { class:"btn ghost small", onclick:() => $("#drawer").replaceChildren() }, "닫기")),
+    h("div", { class:"filters" }, chip("all","전체"), chip("weak","약점"), chip("term","용어"), chip("proc","절차"), chip("concept","개념"), chip("unasked","아직 안 물어봄")),
+    h("div", { class:"notes" }, list.length ? list.map(([id, n]) => { const [kl,kc] = KIND[n.kind];
+      return h("button", { class:"note", onclick:() => { $("#drawer").replaceChildren(); reopen(id, false); document.querySelector(`.u[data-id="${id}"]`)?.scrollIntoView({ block:"center", behavior:"smooth" }); } },
+        h("div", { class:"t" }, h("span", { text:n.q }), n.seen >= 3 ? h("span", { class:"badge b-weak", text:"약점" }) : null, h("span", { class:`badge ${kc}`, text:kl })),
+        h("div", { class:"s", text: n.lead || "아직 안 물어봤어요 · 누르면 물어봐요" }),
+        h("div", { class:"m" }, h("span", { text:`p.${n.page}` }), h("span", { text:`${n.at}` }), h("span", { text:`다시 본 횟수 ${n.seen}` }))); })
+      : h("p", { style:"color:var(--muted);padding:8px", text:"해당하는 항목이 없어요." })),
+    h("div", { class:"df", text:"약점(3번 이상 다시 본 것)은 연습 탭에 ‘떠올리기’ 문제로 나와요." })));
+}
+$("#notesBtn").onclick = openDrawer;
+let tt; function toast(t){ let el = $("#toast"); if (!el){ el = h("div", { id:"toast", style:"position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:9px 14px;border-radius:9px;font-size:13px;z-index:40" }); document.body.append(el); } el.textContent = t; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => el.hidden = true, 2400); }
+paint();
+</script>
+</body>
+</html>
