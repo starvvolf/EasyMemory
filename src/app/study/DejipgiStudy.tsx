@@ -15,7 +15,8 @@ import "./dejipgi.css";
 
 async function readJson<T>(response: Response, fallback: string): Promise<T> {
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error((data as { message?: string } | null)?.message ?? fallback);
+  const reply = data as { message?: string; error?: string } | null;
+  if (!response.ok) throw new Error(reply?.message ?? reply?.error ?? fallback);
   return data as T;
 }
 
@@ -53,7 +54,7 @@ export default function DejipgiStudy() {
       return request;
     };
     // In-app executor (docs/DECISIONS.md 2026-09-30 "ChatGPT 계정으로 생성"). When it is off, requests wait for the MCP chat executor.
-    type ExecutorInfo = { enabled: boolean; model: { ready: boolean; message: string }; executor: null | { status: string; phase: string; message: string } };
+    type ExecutorInfo = { enabled: boolean; provider: string; model: { ready: boolean; message: string }; executor: null | { status: string; phase: string; message: string } };
     const executorInfo = async (requestId?: string) => readJson<ExecutorInfo>(await fetchExperiment(
       `/api/study-executor${requestId ? `?id=${encodeURIComponent(requestId)}` : ""}`), "자동 생성 상태를 읽지 못했어요.");
     const kickExecutor = async (requestId: string) => {
@@ -132,6 +133,19 @@ export default function DejipgiStudy() {
           return meta
             ? { status: "ready", message: "", artifactId: meta.id }
             : { status: "authoring", message: "문제 검사·기록 중 · 6/6단계 · 담당 AI가 출제 편집틀에 기록하면 붙어요" };
+        },
+      },
+      account: {
+        async status() {
+          const info = await executorInfo();
+          return { show: info.enabled && info.provider === "chatgpt", ready: info.model.ready, message: info.model.message };
+        },
+        async connect() {
+          const { url } = await readJson<{ url: string }>(await fetchExperiment("/api/auth/chatgpt/start", { method: "POST" }), "ChatGPT 연결을 시작하지 못했어요.");
+          window.location.assign(url);
+        },
+        async disconnect() {
+          await readJson(await fetchExperiment("/api/auth/chatgpt/logout", { method: "POST" }), "ChatGPT 연결을 해제하지 못했어요.");
         },
       },
       async loadDecks(): Promise<StudyDeck[]> {

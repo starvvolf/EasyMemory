@@ -23,6 +23,13 @@ export type DejipgiEnv = {
   assetUrl?: (artifactId: string, assetPath: string) => string;
   /** Queues one generation request per material and reports its progress (the assigned AI runs it through MCP). */
   builder?: DejipgiBuilderEngine;
+  /** ChatGPT account for in-app generation; `show` is false when the host does not generate with ChatGPT. */
+  account?: {
+    status(): Promise<{ show: boolean; ready: boolean; message: string }>;
+    /** Leaves the page for the ChatGPT sign-in; it comes back to /study?chatgpt=… */
+    connect(): Promise<void>;
+    disconnect(): Promise<void>;
+  };
   ask?: (turns: Array<{ role: string; content: string }>, options: { signal: AbortSignal; onText: (chunk: { text: string }) => void }) => Promise<void>;
 };
 

@@ -80,3 +80,8 @@ STUDY_FORGE_AUTO_EXECUTOR=1 STUDY_FORGE_MODEL_PROVIDER=chatgpt npm run dev -- -H
 ```
 - 로컬 Codex로 대신 돌리려면 `STUDY_FORGE_MODEL_PROVIDER=codex`로 바꾼다. 이 경우에도 실제 호출이므로 사용자 확인이 필요하다.
 - 가짜 모델 테스트는 `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/study/auto-executor.test.ts`로 돌린다.
+
+## 후속 (Claude, 2026-09-30)
+- 되짚기 **자료 만들기** 화면에 연결 줄을 달았다. 연결 전에는 "ChatGPT 연결" 버튼이, 연결 뒤에는 "연결 해제" 버튼이 보인다. "잠시 멈춤" 안내에도 연결 버튼이 붙는다. 로그인을 마치고 `/study?chatgpt=…`로 돌아오면 결과를 알려 준다.
+- `Study Forge 로컬 열기.cmd`로 실행하면(`scripts/run-local-experiment.mjs`) 자동 실행기와 `chatgpt` 공급자가 기본으로 켜진다. 끄려면 `STUDY_FORGE_AUTO_EXECUTOR=0`으로 설정한다.
+- 토큰 암호화 키가 없으면 실행 파일이 만들어 둔다. 키는 사용자 홈의 `.study-forge/chatgpt-token-key`에 둔다. 토큰이 있는 프로젝트 폴더와는 다른 곳이다.

@@ -1,6 +1,7 @@
 /* 되짚기 화면(협업/되짚기/되짚기_최신_v9.html)을 Recaller에 옮긴 것.
    화면·흐름·기록 규칙은 원본을 따르고, 문제 생성은 하지 않는다. 문제는 Recaller 출제 문서를 env.loadDecks()로 받는다.
    env: see dejipgi-app.d.ts. env.builder (objective design, authoring, save) and env.ask are left unset on purpose. */
+let signInOutcome = null;
 export function mountDejipgi(root, env){
 "use strict";
 const listeners = new AbortController();
@@ -137,7 +138,8 @@ const S = {
   reader:{ deckId:null, page:1, active:null, zoom:false, attachErr:"", attachBusy:false },
   pdf:{},
   lib:{ status:"loading", error:"" },
-  builder:freshBuilder()
+  builder:freshBuilder(),
+  account:null
 };
 
 /* ---------- scheduling & status ---------- */
@@ -178,6 +180,7 @@ function setView(v){
   S.view = v;
   if (v !== "read" && Chat.isOpen() && typeof Chat !== "undefined"){ if (Chat.ctl) Chat.ctl.abort(); Chat.el.hidden = true; }
   root.dataset.view = v;
+  if (v === "create") loadAccount();
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === v ? "true" : "false"));
   render();
 }
@@ -1138,6 +1141,29 @@ function renderRecords(){
    Reading the PDF runs in the browser. Generation is one queued request that the assigned AI runs through MCP
    (env.builder); the material is readable right away and its questions attach when the AI has recorded them. ----- */
 const engine = env.builder || null;
+/* ChatGPT sign-in for in-app generation (docs/DECISIONS.md 2026-09-30). Only shown when the host says it applies. */
+const account = env.account || null;
+async function loadAccount(){
+  if (!account) return;
+  try{ S.account = await account.status(); }catch{ S.account = null; }
+  if (!disposed && S.view === "create") render();
+}
+async function connectAccount(){
+  try{ await account.connect(); }catch(e){ toast((e && e.message) || "ChatGPT 연결을 시작하지 못했어요."); }
+}
+async function disconnectAccount(){
+  try{ await account.disconnect(); toast("ChatGPT 연결을 해제했어요."); }catch(e){ toast((e && e.message) || "연결을 해제하지 못했어요."); }
+  loadAccount();
+}
+function accountNote(){
+  const a = S.account;
+  if (!account || !a || !a.show) return null;
+  return a.ready
+    ? h("div", { class:"note row", role:"status" }, h("span", { style:"flex:1;min-width:0", text:a.message }),
+        h("button", { class:"btn small ghost", onclick:disconnectAccount }, "연결 해제"))
+    : h("div", { class:"note warn row", role:"status" }, h("span", { style:"flex:1;min-width:0", text:a.message }),
+        h("button", { class:"btn small", onclick:connectAccount }, "ChatGPT 연결"));
+}
 const PURPOSES = [["exam", "시험 대비"], ["class", "수업 따라가기"], ["understand", "개념 이해"], ["apply", "실제로 써먹기"]];
 const ABILITIES = ["용어·정의 말하기", "식·절차 쓰기", "계산·적용하기", "비슷한 것 구별하기", "말로 설명하기"];
 function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"exam", abilities:[], summary:"", edited:false, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[] }; }
@@ -1285,6 +1311,7 @@ function pendingNote(d){
   const text = p.message || (p.status === "waiting" ? "AI 실행 대기 중 · 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요" : PENDING_LABEL[p.status] || "");
   return h("div", { class:`note row${p.status === "failed" ? " err" : ""}`, role:"status" },
     h("span", { style:"flex:1;min-width:0", text: p.status === "failed" ? `문제 만들기 실패 · ${text}` : `문제 준비 중 · ${text}` }),
+    p.status === "paused" && account && S.account && S.account.show && !S.account.ready ? h("button", { class:"btn small", onclick:connectAccount }, "ChatGPT 연결") : null,
     p.status === "paused" && engine && engine.resume ? h("button", { class:"btn small", onclick: () => resumeMaterial(d) }, "다시 시작") : null,
     p.status === "failed" ? h("button", { class:"btn small", onclick: () => restartMaterial(d) }, "다시 요청") : null,
     p.status === "failed" ? h("button", { class:"btn small ghost", onclick: () => removePending(d) }, "지우기") : null);
@@ -1299,6 +1326,7 @@ function renderBuilder(){
     h("li", { "data-on": step === 2 ? "true" : "false" }, "방향 정하기"),
     h("li", { "data-on":"false" }, "읽기 시작")));
   if (!engine) wrap.append(h("div", { class:"note warn", text:"이 화면에서는 생성 요청을 보낼 수 없어요. 로컬 실험 모드에서 열어 주세요." }));
+  const acc = accountNote(); if (acc) wrap.append(acc);
   if (b.error) wrap.append(h("div", { class:"note err", role:"alert", text:b.error }));
   if (b.status) wrap.append(h("div", { class:"note", role:"status", text:b.status }));
 
@@ -1383,6 +1411,23 @@ Store.init();
 for (const rec of Store.pendingList()) if (rec && rec.id && rec.requestId) S.decks[rec.id] = pendingDeck(rec);
 updateStoreChip(); render();
 pollPending();
+loadAccount();
+{
+  // Back from the ChatGPT sign-in page (/study?chatgpt=connected|connection-failed). Kept for one tick so a
+  // development double mount still shows it.
+  const params = new URLSearchParams(location.search);
+  if (params.get("chatgpt")){
+    signInOutcome = params.get("chatgpt");
+    params.delete("chatgpt");
+    history.replaceState(null, "", location.pathname + (params.toString() ? `?${params}` : "") + location.hash);
+    setTimeout(() => { signInOutcome = null; }, 0);
+  }
+  const outcome = signInOutcome;
+  if (outcome){
+    toast(outcome === "connected" ? "ChatGPT 계정을 연결했어요." : "ChatGPT 연결에 실패했어요. 다시 시도해 주세요.");
+    setView("create");
+  }
+}
 ensureKatex().then(ok => { if (ok && !disposed) render(); });
 reloadDecks();
 
