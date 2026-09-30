@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { listExperimentRequests } from "../mcp-experiment-requests";
+import { isLabRequest } from "../study/auto-executor";
 import { getMcpRunView } from "../mcp-run-view";
 import { resolveMcpSource } from "../mcp-source-registry";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
@@ -131,6 +132,7 @@ async function discoverArtifacts(): Promise<Array<{ id: string; item: ArtifactDe
   const requests = (await listExperimentRequests()).filter((request) => request.status === "completed" && request.input.stopAfterStage === "cards" && request.runId && request.stages.at(-1)?.stage === "cards");
   const verified = new Map<string, { sourceId: string; sourceSha256?: string; runSha256: string; cardsInputSha256: string }>();
   await Promise.allSettled(requests.map(async (request) => {
+    if (await isLabRequest(request.id)) return;
     const run = await getMcpRunView(`mcp:${request.runId}`);
     const cards = request.stages.find((stage) => stage.stage === "cards");
     if (run?.executionRequest?.id === request.id && run.executionRequestStatus === "completed" && cards?.actual.inputSha256 && run.stages.find((stage) => stage.name === "cards")?.output.status === "recorded") {

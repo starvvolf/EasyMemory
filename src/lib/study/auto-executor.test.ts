@@ -19,6 +19,75 @@ const { authoringRunsRoot } = await import("../../../tools/study-forge-mcp/autho
 
 after(() => rm(root, { recursive: true, force: true }));
 
+test("실험실은 단계마다 멈추고 설정 변경을 다음 단계에 쓰며 호출 기록을 보존한다", async () => {
+  const { configureLab, readExecutorCalls } = await import("./auto-executor.ts");
+  const source = await registerMcpSource("cornell-bfs-2pages.pdf",new Uint8Array(await readFile("eval/corpus/user-test-pdfs/cornell-bfs-2pages.pdf")));
+  const settings = {model:"gpt-6-luna" as const,effort:"low" as const};
+  const request = await createExperimentRequest({sourceId:source.id,scope:{pageNumbers:[1],outlineLeafIds:[]},purpose:"BFS 연습",requestedStages:Object.fromEntries(["analyze","concept-tree","learning-design","activity-design","cards"].map(s=>[s,settings])),stopAfterStage:"cards"});
+  process.env.STUDY_FORGE_LOCAL_EXPERIMENT="1";
+  const previousNodeEnv=process.env.NODE_ENV;
+  Object.assign(process.env,{NODE_ENV:"test"});
+  const config = {provider:"fake" as const,stepMode:true,stages:{analyze:settings,"concept-tree":{model:"gpt-6-sol" as const,effort:"high" as const}},note:"fake",scenario:"retry" as const};
+  try {
+    await configureLab(request.id,config);
+    for (let i=0;i<5;i++) {
+      const state = await runStudyRequest(request.id,{uid:"local-experiment"});
+      assert.equal(state.status,"paused-step",state.message);
+      assert.equal((await getExperimentRequest(request.id)).stages.length,i+1);
+      if(i===0) await configureLab(request.id,{...config,note:"changed"});
+    }
+    const done = await runStudyRequest(request.id,{uid:"local-experiment"});
+    assert.equal(done.status,"done",done.message);
+    const calls=await readExecutorCalls(request.id);
+    assert.equal(calls.length,7);
+    const retries=calls.filter(c=>c.purpose==="stage:concept-tree");
+    assert.equal(retries.length,2);assert.equal(retries[0].ok,false);assert.equal(retries[1].ok,true);
+    assert.equal(retries[1].model,"gpt-6-sol");assert.equal(retries[1].effort,"high");
+    assert.match(retries[1].user,/이전 답/);assert.ok(calls[0].input.pagesSent.includes(1));
+    assert.equal(done.lab?.note,"changed");
+    assert.doesNotMatch(JSON.stringify(calls),/claimToken|access_token|refresh_token|cookie/);
+    await rm(path.join(authoringRunsRoot(),done.runId!),{recursive:true,force:true});
+  } finally {delete process.env.STUDY_FORGE_LOCAL_EXPERIMENT;if(previousNodeEnv)Object.assign(process.env,{NODE_ENV:previousNodeEnv});else Reflect.deleteProperty(process.env,"NODE_ENV");}
+});
+
+test("단계별 요청 모델과 원문 잘림, 비밀값 제거를 확인한다", async () => {
+  const { executorSettings, pageBlock } = await import("./auto-executor.ts");
+  const { redactCallText } = await import("./lab-contract.ts");
+  const source = await registerMcpSource("cornell-bfs-2pages.pdf",new Uint8Array(await readFile("eval/corpus/user-test-pdfs/cornell-bfs-2pages.pdf")));
+  const request = await createExperimentRequest({sourceId:source.id,scope:{pageNumbers:[1],outlineLeafIds:[]},purpose:"모델 선택",requestedStages:{analyze:{model:"gpt-6-luna",effort:"low"},"concept-tree":{model:"gpt-6-astra",effort:"high"}},stopAfterStage:"concept-tree"});
+  assert.equal(executorSettings("analyze",request).model,"gpt-6-luna");
+  assert.equal(executorSettings("concept-tree",request).model,"gpt-6-astra");
+  const block=pageBlock(new Map(Array.from({length:25},(_,i)=>[i+1,"x".repeat(4000)])));
+  assert.equal(block.input.charsSent,60000);assert.ok(block.input.pagesCut.includes(25));assert.match(block.text,/길이 제한/);
+  const redacted=redactCallText('Authorization: Bearer abc.def\n{"access_token":"secret","cookie":"session"}');
+  assert.doesNotMatch(redacted,/abc.def|secret|session/);
+  assert.doesNotMatch(redactCallText('Cookie: a=first; b=second\n{"cookie":"a=first; b=second"}'), /first|second/);
+});
+
+test("실제 모델은 확인 전 요청 생성과 대기열 진입을 거부한다", async () => {
+  const { createLabRun } = await import("./lab-store.ts");
+  const { enqueueStudyRequest, configureLab } = await import("./auto-executor.ts");
+  await assert.rejects(createLabRun({sourceId:"not-needed",startPage:1,endPage:1,purpose:"확인 테스트",lab:{provider:"chatgpt",stepMode:true,stages:{}}}),/확인/);
+  const source = await registerMcpSource("cornell-bfs-2pages.pdf",new Uint8Array(await readFile("eval/corpus/user-test-pdfs/cornell-bfs-2pages.pdf")));
+  const request = await createExperimentRequest({sourceId:source.id,scope:{pageNumbers:[1],outlineLeafIds:[]},purpose:"미확인 실행",requestedStages:{analyze:{model:"gpt-6-luna",effort:"low"}},stopAfterStage:"analyze"});
+  await configureLab(request.id,{provider:"chatgpt",stepMode:true,stages:{}});
+  await assert.rejects(enqueueStudyRequest(request.id,{uid:"local-experiment"}),/확인/);
+  assert.equal((await executorView(request.id))?.calls,0);
+});
+
+test("실험실 화면은 모르는 단계와 축소 목록을 다루고 JSON 차이를 줄 단위로 표시한다", async () => {
+  const { resultNodes, lineDiff, stageGridColumns } = await import("../../app/lab/lab-view.ts");
+  const { labStageList } = await import("./lab-contract.ts");
+  assert.match(stageGridColumns(labStageList.slice(0,-1)), /repeat\(5,/);
+  assert.match(stageGridColumns([...labStageList,{key:"unknown-stage"}]), /repeat\(7,/);
+  assert.match(stageGridColumns([]), /repeat\(1,/);
+  assert.deepEqual(resultNodes("unknown-stage",{items:[1]}),[]);
+  assert.equal(resultNodes("concept-tree",{nodes:[{id:"n"}]}).length,1);
+  const diff=lineDiff('{"a":1,"b":2}','{"a":1,"b":3}');
+  assert.ok(diff.some(d=>d.kind==="same" && d.text.includes('"a"')));
+  assert.ok(diff.some(d=>d.kind==="add" && d.text.includes('3')));
+});
+
 const PDF = "cornell-bfs-2pages.pdf";
 // Evidence must be real text from the selected page (source-evidence check).
 const QUOTE = "Then all nodes that are 1 edge from u.";

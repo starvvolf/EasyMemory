@@ -39,7 +39,7 @@ export function localExperimentStatusPayload(
 }
 
 export function isLocalExperimentApiPath(pathname: string): boolean {
-  return pathname === "/api/mcp-runs" ||
+  return pathname.startsWith("/api/lab/") || pathname === "/api/mcp-runs" ||
     pathname.startsWith("/api/mcp-runs/") ||
     pathname === "/api/mcp-experiment-requests" ||
     pathname.startsWith("/api/mcp-experiment-requests/") ||

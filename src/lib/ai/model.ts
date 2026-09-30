@@ -16,6 +16,8 @@ export type ModelRequest = {
   model?: string;
   effort?: string;
   caller: ModelCaller;
+  provider?: "chatgpt" | "codex" | "fake";
+  fakeReply?: string;
   signal?: AbortSignal;
 };
 
@@ -101,6 +103,7 @@ const fakeBackend: ModelBackend = {
   },
   async call(request) {
     const responder = fakeState.__studyForgeFakeResponder;
+    if (request.fakeReply !== undefined && request.provider === "fake") return { text: request.fakeReply, model: request.model ?? "fake" };
     if (!responder) throw new ModelError("not_configured", "가짜 모델 응답이 설정되지 않았어요.");
     return { text: await responder(request), model: "fake" };
   },
@@ -108,8 +111,8 @@ const fakeBackend: ModelBackend = {
 
 const backends = { chatgpt: chatgptBackend, codex: codexBackend, fake: fakeBackend } as const;
 
-export function modelBackend(): ModelBackend {
-  const name = (process.env.STUDY_FORGE_MODEL_PROVIDER ?? "chatgpt").trim() as keyof typeof backends;
+export function modelBackend(provider?: ModelRequest["provider"]): ModelBackend {
+  const name = (provider ?? process.env.STUDY_FORGE_MODEL_PROVIDER ?? "chatgpt").trim() as keyof typeof backends;
   return backends[name] ?? chatgptBackend;
 }
 
@@ -128,6 +131,6 @@ export function parseJsonReply(text: string): unknown {
 
 export async function callModel(request: ModelRequest): Promise<ModelResult> {
   if (request.signal?.aborted) throw new ModelError("transient", "호출을 멈췄어요.");
-  const reply = await modelBackend().call(request);
+  const reply = await modelBackend(request.provider).call(request);
   return request.json ? { ...reply, data: parseJsonReply(reply.text) } : reply;
 }

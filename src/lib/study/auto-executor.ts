@@ -5,13 +5,16 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { callModel, ModelError, type ModelCaller } from "../ai/model.ts";
+import { callModel, parseJsonReply, ModelError, type ModelCaller } from "../ai/model.ts";
+import { labConfigSchema, redactCallText, type LabConfig, type CallRecord } from "./lab-contract.ts";
+import { labFakeReply } from "./lab-fake.ts";
 import {
   claimExperimentRequest,
   experimentStages,
   failExperimentRequest,
   getExperimentRequest,
   recordExperimentProgress,
+  ExperimentRequestError,
 } from "../mcp-experiment-requests.ts";
 import { getMcpRunView } from "../mcp-run-view.ts";
 import { readRegisteredMcpSourcePdf } from "../mcp-source-registry.ts";
@@ -22,7 +25,7 @@ import { blockingIssues, readAuthoringInstructions, recordProblemIteration } fro
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 
 type Stage = (typeof experimentStages)[number];
-export type ExecutorStatus = "queued" | "running" | "paused-usage-limit" | "paused-login" | "paused-invalid" | "interrupted" | "failed" | "done";
+export type ExecutorStatus = "queued" | "running" | "paused-step" | "paused-usage-limit" | "paused-login" | "paused-invalid" | "interrupted" | "failed" | "done";
 type ExecutorState = {
   requestId: string;
   status: ExecutorStatus;
@@ -37,6 +40,7 @@ type ExecutorState = {
   claimToken?: string;
   runId?: string;
   updatedAt: string;
+  lab?: LabConfig;
 };
 /** What the screen may see; the claim token never leaves the server. */
 export type ExecutorView = Omit<ExecutorState, "claimToken">;
@@ -45,8 +49,7 @@ const queueState = globalThis as typeof globalThis & { __studyForgeExecutorQueue
 
 /** Calls allowed per start or "다시 시작"; the total across restarts is kept in `calls`. */
 export const MAX_MODEL_CALLS = 14;
-const efforts = ["low", "medium", "high", "xhigh", "max", "ultra"] as const;
-type Effort = (typeof efforts)[number];
+type Effort = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
 /** Tries per stage: the first answer plus two corrections that see the previous answer and the check error. */
 export const STAGE_ATTEMPTS = 3;
 const STAGE_LABEL: Record<string, string> = {
@@ -73,6 +76,33 @@ async function saveState(state: ExecutorState) {
   await writeFile(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
   await rename(temporary, stateFile(state.requestId));
 }
+export async function configureLab(id: string, config: unknown) {
+  const state = await loadState(id);
+  if (queueState.__studyForgeExecutorQueued?.has(id) || state?.status === "done" || state?.status === "failed") throw new ExperimentRequestError(409, "멈춘 실행만 변경할 수 있습니다.");
+  const lab = labConfigSchema.parse(config);
+  if (state?.lab && lab.provider !== state.lab.provider) throw new ExperimentRequestError(409, "실행 중 공급자는 바꿀 수 없습니다.");
+  await saveState({ requestId: id, status: "paused-step", phase: "stages", message: "", calls: 0, updatedAt: "", ...state, lab });
+}
+export async function isLabRequest(id: string) { return Boolean((await loadState(id))?.lab); }
+const callsRoot = (id: string) => path.join(path.dirname(stateFile(id)), id, "calls");
+export async function readExecutorCalls(id: string): Promise<CallRecord[]> {
+  const { readdir } = await import("node:fs/promises");
+  let files: string[];
+  try { files = await readdir(callsRoot(id)); } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return []; throw e; }
+  return Promise.all(files.filter((f) => /^\d+\.json$/.test(f)).sort((a,b) => parseInt(a)-parseInt(b)).map(async (f) => JSON.parse(await readFile(path.join(callsRoot(id), f), "utf8")) as CallRecord));
+}
+async function writeCall(id: string, call: CallRecord) {
+  if (!await isLabRequest(id)) return;
+  await mkdir(callsRoot(id), { recursive: true });
+  const file = path.join(callsRoot(id), `${call.n}.json`);
+  await writeFile(`${file}.tmp`, JSON.stringify(call), { mode: 0o600 });
+  await rename(`${file}.tmp`, file);
+}
+export function executorSettings(stage: string, request: Awaited<ReturnType<typeof getExperimentRequest>>, lab?: LabConfig, options: {model?:string;effort?:string} = {}) {
+  const requested = request.input.requestedStages[stage === "authoring" ? "cards" : stage as Stage];
+  return { model: lab?.stages[stage as keyof LabConfig["stages"]]?.model ?? options.model ?? (process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || undefined) ?? requested?.model ?? "gpt-6-sol",
+    effort: (lab?.stages[stage as keyof LabConfig["stages"]]?.effort ?? options.effort ?? (process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim() || undefined) ?? requested?.effort ?? "medium") as Effort };
+}
 export async function executorView(id: string): Promise<ExecutorView | null> {
   const state = await loadState(id);
   if (!state) return null;
@@ -86,20 +116,22 @@ export async function executorView(id: string): Promise<ExecutorView | null> {
 }
 
 class StopRun extends Error {
-  readonly status: "paused-usage-limit" | "paused-login" | "paused-invalid" | "failed";
-  constructor(status: "paused-usage-limit" | "paused-login" | "paused-invalid" | "failed", message: string) { super(message); this.status = status; }
+  readonly status: "paused-step" | "paused-usage-limit" | "paused-login" | "paused-invalid" | "failed";
+  constructor(status: "paused-step" | "paused-usage-limit" | "paused-login" | "paused-invalid" | "failed", message: string) { super(message); this.status = status; }
 }
 
-function pageBlock(texts: Map<number, string>) {
+export function pageBlock(texts: Map<number, string>) {
   let budget = TOTAL_TEXT_LIMIT;
   const lines: string[] = [];
+  const pagesSent: number[] = [], pagesCut: number[] = [];
   for (const [page, text] of [...texts.entries()].sort((a, b) => a[0] - b[0])) {
     const clipped = (text || "(이 쪽은 추출된 글자가 없음)").slice(0, Math.min(PAGE_TEXT_LIMIT, Math.max(0, budget)));
     budget -= clipped.length;
-    lines.push(`[p.${page}]\n${clipped}`);
-    if (budget <= 0) break;
+    if (clipped.length) { lines.push(`[p.${page}]\n${clipped}`); pagesSent.push(page); }
+    if (clipped.length < text.length) pagesCut.push(page);
   }
-  return lines.join("\n\n");
+  if (pagesCut.length) lines.push(`[길이 제한] p.${pagesCut.join(", ")}는 길이 제한으로 일부 또는 전체가 빠졌음`);
+  return { text: lines.join("\n\n"), input: { pagesSent, pagesCut, charsSent: TOTAL_TEXT_LIMIT-budget } };
 }
 
 const STAGE_SYSTEM = [
@@ -138,27 +170,38 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
   if (state.status === "done" || state.status === "failed") return (await executorView(requestId))!;
   let request = await getExperimentRequest(requestId);
   // STUDY_FORGE_EXECUTOR_MODEL / _EFFORT switch every call to one model for trying faster setups without new requests.
-  const envEffort = process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim();
-  const model = options.model ?? (process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || undefined) ?? request.input.requestedStages.cards?.model ?? "gpt-6-sol";
-  const effort = (options.effort ?? (envEffort && efforts.includes(envEffort as Effort) ? envEffort : undefined) ??
-    request.input.requestedStages.cards?.effort ?? "medium") as Effort;
-
+  let inputInfo = { pagesSent: [] as number[], pagesCut: [] as number[], charsSent: 0 };
+  let lastCall: CallRecord | null = null;
+  const checked = async (error: string | null) => {
+    if (lastCall) { lastCall.ok = !error; lastCall.error = error ? redactCallText(error) : null; await writeCall(requestId, lastCall); }
+    if (state.timings?.length) { state.timings[state.timings.length-1].ok = !error; await saveState(state); }
+  };
   let callsThisRun = 0;
   const ask = async (purpose: string, system: string, user: string) => {
+    const { model, effort } = executorSettings(state.stage ?? "authoring", request, state.lab, options);
     if (callsThisRun >= MAX_MODEL_CALLS) throw new StopRun("paused-invalid", `한 번에 쓸 수 있는 호출 수(${MAX_MODEL_CALLS})를 다 썼어요. 다시 시작하면 멈춘 단계부터 이어가요.`);
     callsThisRun += 1;
     state.calls += 1;
     await saveState(state);
     const started = Date.now();
+    lastCall = { n: state.calls, purpose, attempt: state.attempt ?? 1, model, effort, startedAt: new Date(started).toISOString(), ms: 0, ok: false, system: redactCallText(system), user: redactCallText(user), reply: null, error: null, input: inputInfo };
+    await writeCall(requestId, lastCall);
     const timed = async (ok: boolean, served = model) => {
       state.timings = [...(state.timings ?? []), { purpose, model: served, effort, ms: Date.now() - started, ok }];
       await saveState(state);
     };
     try {
-      const reply = await callModel({ purpose, system, user, json: true, model, effort, caller });
+      if (state.lab?.provider === "fake" && (process.env.NODE_ENV === "production" || process.env.STUDY_FORGE_LOCAL_EXPERIMENT !== "1")) throw new ModelError("not_configured", "가짜 실험은 로컬 모드에서만 가능합니다.");
+      const fakeReply = state.lab?.provider === "fake" ? await labFakeReply(state.stage ?? "authoring", user, request.sourceSnapshot!.fileName, state.lab.scenario, state.attempt ?? 1) : undefined;
+      const reply = await callModel({ purpose, system, user, model, effort, caller, provider: state.lab?.provider, fakeReply });
+      lastCall.reply = redactCallText(reply.text); lastCall.usage = reply.usage; lastCall.ms = Date.now()-started; lastCall.model = reply.model;
+      await writeCall(requestId, lastCall);
+      const data = parseJsonReply(reply.text);
+      lastCall.ok = true; await writeCall(requestId, lastCall);
       await timed(true, reply.model);
-      return reply;
+      return { ...reply, data };
     } catch (error) {
+      lastCall.ms = Date.now()-started; lastCall.error = redactCallText(error instanceof Error ? error.message : String(error)); await writeCall(requestId,lastCall);
       await timed(false);
       if (error instanceof ModelError && error.code === "usage_limit") throw new StopRun("paused-usage-limit", "ChatGPT 사용량 한도에 닿았어요. 한도가 풀리면 다시 시작해 주세요.");
       if (error instanceof ModelError && (error.code === "login_required" || error.code === "not_configured")) throw new StopRun("paused-login", error.message);
@@ -182,6 +225,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
       if (!bytes) throw new StopRun("failed", "등록된 원본 PDF를 읽을 수 없어요.");
       const pages = request.input.scope.pageNumbers;
       const texts = await extractPdfPageTexts(bytes, pages);
+      const block = pageBlock(texts);
       const service = new ChatGptParityService();
       const started = await service.startRun({
         clientRequestId: request.id,
@@ -205,7 +249,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         request = await recordExperimentProgress(requestId, {
           claimToken: state.claimToken!, stage, runId,
           actual: {
-            model: inPrefix ? "reused-output" : modelName, effort,
+            model: inPrefix ? "reused-output" : modelName, effort: executorSettings(stage, request, state.lab, options).effort,
             // A copied stage keeps the source run's timestamps, so it is reported at the time of reuse.
             startedAt: inPrefix ? now : stored.startedAt ?? now,
             finishedAt: inPrefix ? now : [stored.completedAt ?? now, stored.startedAt ?? now].sort().at(-1)!,
@@ -239,7 +283,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         for (const stage of experimentStages) {
           if (request.stages.some((entry) => entry.stage === stage)) continue;
           try { await service.stageRecord(runId, stage); } catch { break; }
-          await recordStage(stage, sha256(`resumed:${stage}`), model);
+          await recordStage(stage, sha256(`resumed:${stage}`), executorSettings(stage, request, state.lab, options).model);
           if (stage === request.input.stopAfterStage) break;
         }
       };
@@ -250,6 +294,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         const stage = next.nextStage as Stage;
         const contract = JSON.stringify(next.stageInput);
         const needsText = stage === "analyze" || stage === "learning-design" || stage === "cards";
+        inputInfo = needsText ? block.input : { pagesSent: [], pagesCut: [], charsSent: 0 };
         const user = [
           `[단계] ${stage}`,
           `[자료] ${source.fileName}`,
@@ -257,7 +302,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
           `[학습 목적] ${request.input.purpose}`,
           request.input.abilities?.length ? `[할 수 있어야 할 것] ${request.input.abilities.join(", ")}` : "",
           `[단계 계약과 입력]\n${contract}`,
-          needsText ? `[원문: 선택 쪽 추출 글자]\n${pageBlock(texts)}` : "",
+          needsText ? `[원문: 선택 쪽 추출 글자]\n${block.text}` : "",
         ].filter(Boolean).join("\n\n");
         let feedback = "";
         let previous = "";
@@ -271,12 +316,14 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
               ? `${user}\n\n[이전 답]\n${previous || "(읽을 수 있는 JSON이 아니었음)"}\n\n[검사 오류]\n${feedback}\n\n이전 답에서 검사 오류가 가리킨 부분만 고치고 나머지는 그대로 둔 채, 같은 형식의 JSON 전체를 다시 쓴다.`
               : user);
             submitted = await service.submitStage({ runId, stage, result: reply.data as Record<string, unknown> });
+            await checked(null);
           } catch (error) {
             // Stops (usage limit, login, call cap) end the run; unreadable JSON or a dropped call counts as one try.
             if (error instanceof StopRun) throw error;
             feedback = error instanceof ModelError && error.code === "invalid_output"
               ? "응답이 JSON 객체 하나가 아니었습니다. 설명 없이 계약의 키를 가진 JSON 객체만 씁니다."
               : error instanceof Error ? error.message : String(error);
+            await checked(feedback);
             previous = reply && !(error instanceof ModelError) ? JSON.stringify(reply.data) : "";
             if (attempt === STAGE_ATTEMPTS) {
               throw new StopRun("paused-invalid", `${STAGE_LABEL[stage]} 단계가 검사를 ${STAGE_ATTEMPTS}번 통과하지 못했어요: ${feedback} · 다시 시작하면 이 단계부터 다시 시도해요.`);
@@ -285,6 +332,10 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         }
         await recordStage(stage, sha256(contract), reply!.model);
         next = submitted!;
+        if (state.lab?.stepMode) {
+          if (!next.nextStage) state.phase = request.input.stopAfterStage === "cards" ? "authoring" : "done";
+          throw new StopRun("paused-step", "단계가 끝났어요. 결과를 확인하고 다음 단계를 실행하세요.");
+        }
       }
       if (request.input.stopAfterStage !== "cards") {
         state.phase = "done"; state.status = "done"; state.message = "";
@@ -296,6 +347,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
     }
 
     if (state.phase === "authoring") {
+      inputInfo = {pagesSent:[],pagesCut:[],charsSent:0};
       // Unreadable JSON or a dropped call pauses here; "다시 시작" redoes only the missing iteration.
       const askAuthoring = async (purpose: string, systemText: string, userText: string) => {
         try { return await ask(purpose, systemText, userText); }
@@ -332,6 +384,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         document = first.data as AuthoringDocument;
         const issues = await blockingIssues(lab, document, prepared.packetPath);
         errors = issues.filter((issue) => issue.severity === "error");
+        await checked(errors.length ? JSON.stringify(errors) : null);
         await recordProblemIteration(lab, { runId: prepared.authoringRunId, iteration: 0, packetPath: prepared.packetPath, document, issues, execution: execution(first.model) });
       }
       if (errors.length && !(await exists("iteration-1/document.json"))) {
@@ -340,6 +393,7 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         const revised = revision.data as AuthoringDocument;
         const issues = await blockingIssues(lab, revised, prepared.packetPath);
         errors = issues.filter((issue) => issue.severity === "error");
+        await checked(errors.length ? JSON.stringify(errors) : null);
         await recordProblemIteration(lab, { runId: prepared.authoringRunId, iteration: 1, packetPath: prepared.packetPath, document: revised, issues,
           patch: { instruction: "검사에 걸린 부분 수정", operations: [] }, execution: execution(revision.model) });
       }
@@ -362,10 +416,11 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
 }
 
 /* One request at a time in this server process. */
-export async function enqueueStudyRequest(requestId: string, caller: ModelCaller) {
+export async function enqueueStudyRequest(requestId: string, caller: ModelCaller, confirmed = false) {
   const queued = (queueState.__studyForgeExecutorQueued ??= new Set());
   if (queued.has(requestId)) return;
   const state = await loadState(requestId);
+  if (state?.lab?.provider === "chatgpt" && !confirmed) throw new Error("실험실의 실제 모델 실행 확인이 필요합니다.");
   if (state && (state.status === "done" || state.status === "failed")) return;
   queued.add(requestId);
   if (state) { state.status = "queued"; state.message = ""; await saveState(state); }
