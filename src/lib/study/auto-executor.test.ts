@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test, { after } from "node:test";
+import test, { after, mock } from "node:test";
+import fsPromises from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 
 const root = await mkdtemp(path.join(tmpdir(), "study-executor-"));
 process.env.STUDY_FORGE_DATA_DIR = root;
@@ -89,6 +94,51 @@ test("실험실 화면은 모르는 단계와 축소 목록을 다루고 JSON �
 });
 
 const PDF = "cornell-bfs-2pages.pdf";
+
+test("상태 저장은 Windows 일시 잠금을 재시도하고 동시 저장에서도 완전한 JSON을 유지한다", async () => {
+  const { configureLab } = await import("./auto-executor.ts");
+  const id = `req_${"b".repeat(32)}`;
+  const originalRename = fsPromises.rename;
+  let blocked = 2;
+  const replacement = mock.method(fsPromises, "rename", async (...args: Parameters<typeof fsPromises.rename>) => {
+    if (String(args[1]).endsWith(`${id}.json`) && blocked-- > 0) {
+      throw Object.assign(new Error("EPERM: local-path-hidden"), { code: "EPERM" });
+    }
+    return originalRename(...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    await configureLab(id, { provider: "fake", stepMode: true, stages: {}, note: "saved" });
+    assert.equal((await executorView(id))?.lab?.note, "saved");
+    assert.equal(replacement.mock.calls.length, 3, "두 번 잠긴 뒤 원본을 삭제하지 않고 교체한다");
+    await Promise.all(Array.from({ length: 20 }, (_, index) => configureLab(id,
+      { provider: "fake", stepMode: true, stages: {}, note: `parallel-${index}` })));
+    assert.match((await executorView(id))?.lab?.note ?? "", /^parallel-\d+$/);
+    const { readdir } = await import("node:fs/promises");
+    assert.equal((await readdir(path.join(root, "study-executor"))).filter((file) => file.startsWith(id) && file.endsWith(".tmp")).length, 0);
+  } finally { replacement.mock.restore(); syncBuiltinESMExports(); }
+});
+
+test("상태 저장 잠금이 계속되면 원본을 보존하고 화면에 파일 경로를 노출하지 않는다", async () => {
+  const { configureLab } = await import("./auto-executor.ts");
+  const id = `req_${"c".repeat(32)}`;
+  await configureLab(id, { provider: "fake", stepMode: true, stages: {}, note: "original" });
+  const originalRename = fsPromises.rename;
+  const replacement = mock.method(fsPromises, "rename", async (...args: Parameters<typeof fsPromises.rename>) => {
+    if (String(args[1]).endsWith(`${id}.json`)) throw Object.assign(new Error(`EPERM rename ${args[0]} -> ${args[1]}`), { code: "EPERM" });
+    return originalRename(...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(configureLab(id, { provider: "fake", stepMode: true, stages: {}, note: "changed" }), (error: unknown) => {
+      assert.match((error as Error).message, /생성 기록을 저장하지 못했어요/);
+      assert.doesNotMatch((error as Error).message, /EPERM|\.json|Temp|Users/);
+      return true;
+    });
+    assert.equal(replacement.mock.calls.length, 6, "재시도는 무한히 반복하지 않는다");
+    assert.equal((await executorView(id))?.lab?.note, "original");
+  } finally { replacement.mock.restore(); syncBuiltinESMExports(); }
+});
 // Evidence must be real text from the selected page (source-evidence check).
 const QUOTE = "Then all nodes that are 1 edge from u.";
 const stageReplies: Record<string, unknown> = {
@@ -325,4 +375,86 @@ test("실제 공급자에게 JSON 응답을 요청하고, 잘못 쓴 추론 강�
     setFakeModelResponder(null);
     delete process.env.STUDY_FORGE_EXECUTOR_EFFORT;
   }
+});
+
+test("한도·로그인·일시 오류·JSON 아닌 답에서 이어갈 때 성공한 단계는 다시 호출하지 않는다", async (t) => {
+  const source = await registerMcpSource(PDF, await readFile(path.join("eval/corpus/user-test-pdfs", PDF)));
+  const cases = [
+    { code: "usage_limit", status: "paused-usage-limit", failures: 1 },
+    { code: "login_required", status: "paused-login", failures: 1 },
+    { code: "transient", status: "paused-invalid", failures: 3 },
+    { code: "invalid_output", status: "paused-invalid", failures: 3 },
+  ] as const;
+  for (const scenario of cases) await t.test(scenario.code, async () => {
+    const settings = { model: "gpt-6-sol" as const, effort: "medium" as const };
+    const request = await createExperimentRequest({
+      sourceId: source.id, scope: { pageNumbers: [1], outlineLeafIds: [] }, purpose: `고장 복구 ${scenario.code}`,
+      requestedStages: { analyze: settings, "concept-tree": settings }, stopAfterStage: "concept-tree",
+    });
+    const purposes: string[] = [];
+    let recovered = false;
+    setFakeModelResponder((call) => {
+      purposes.push(call.purpose);
+      if (call.purpose === "stage:concept-tree" && !recovered) {
+        if (scenario.code === "invalid_output") return "목차를 읽었지만 JSON은 쓰지 않은 응답";
+        throw new ModelError(scenario.code, "검증용 고장");
+      }
+      return JSON.stringify(stageReplies[call.purpose.slice(6)]);
+    });
+    try {
+      const paused = await runStudyRequest(request.id, { uid: "local" });
+      assert.equal(paused.status, scenario.status, paused.message);
+      assert.equal((await getExperimentRequest(request.id)).stages.length, 1);
+      const failedCalls = paused.timings ?? [];
+      assert.equal(failedCalls.filter((call) => call.ok).length, 1);
+      assert.equal(failedCalls.filter((call) => !call.ok).length, scenario.failures);
+      recovered = true;
+      const done = await runStudyRequest(request.id, { uid: "local" });
+      assert.equal(done.status, "done", done.message);
+      assert.equal(purposes.filter((purpose) => purpose === "stage:analyze").length, 1, "성공한 분석은 재호출하지 않는다");
+      const calls = done.timings ?? [];
+      assert.equal(calls.filter((call) => call.ok).length, 2);
+      assert.equal(calls.filter((call) => !call.ok).length, scenario.failures);
+      assert.equal(done.calls, 2 + scenario.failures, "실패 호출도 총 호출 수에 포함된다");
+      await runStudyRequest(request.id, { uid: "local" });
+      assert.equal(purposes.length, 2 + scenario.failures, "완료된 요청은 다시 호출하지 않는다");
+    } finally { setFakeModelResponder(null); }
+  });
+});
+
+test("서버 프로세스가 사라져도 저장된 성공 단계와 호출 기록을 읽어 새 프로세스에서 이어간다", async () => {
+  const source = await registerMcpSource(PDF, await readFile(path.join("eval/corpus/user-test-pdfs", PDF)));
+  const settings = { model: "gpt-6-sol" as const, effort: "medium" as const };
+  const request = await createExperimentRequest({
+    sourceId: source.id, scope: { pageNumbers: [1], outlineLeafIds: [] }, purpose: "서버 재시작 복구",
+    requestedStages: { analyze: settings, "concept-tree": settings }, stopAfterStage: "concept-tree",
+  });
+  const execute = promisify(execFile);
+  const moduleUrl = pathToFileURL(path.join(process.cwd(), "src/lib/study/auto-executor.ts")).href;
+  const modelUrl = pathToFileURL(path.join(process.cwd(), "src/lib/ai/model.ts")).href;
+  const program = (crash: boolean) => `
+    const {setFakeModelResponder}=await import(${JSON.stringify(modelUrl)});
+    const {runStudyRequest}=await import(${JSON.stringify(moduleUrl)});
+    const replies=${JSON.stringify(stageReplies)};
+    setFakeModelResponder(call=>{
+      if (${crash} && call.purpose === "stage:concept-tree") process.exit(75);
+      return JSON.stringify(replies[call.purpose.slice(6)]);
+    });
+    const result=await runStudyRequest(${JSON.stringify(request.id)},{uid:"local"});
+    console.log(JSON.stringify({status:result.status,calls:result.calls,message:result.message}));`;
+  await assert.rejects(execute(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "--input-type=module", "-e", program(true)], {
+    cwd: process.cwd(), env: { ...process.env, STUDY_FORGE_DATA_DIR: root, STUDY_FORGE_MODEL_PROVIDER: "fake" },
+  }), (error: unknown) => (error as { code?: number }).code === 75);
+  assert.equal((await executorView(request.id))?.status, "interrupted");
+  assert.deepEqual((await getExperimentRequest(request.id)).stages.map((stage) => stage.stage), ["analyze"]);
+  const resumed = await execute(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "--input-type=module", "-e", program(false)], {
+    cwd: process.cwd(), env: { ...process.env, STUDY_FORGE_DATA_DIR: root, STUDY_FORGE_MODEL_PROVIDER: "fake" },
+  });
+  const result = JSON.parse(resumed.stdout.trim()) as { status: string; calls: number; message: string };
+  assert.equal(result.status, "done", result.message);
+  assert.equal(result.calls, 3);
+  const calls = (await executorView(request.id))?.timings ?? [];
+  assert.equal(calls.filter((call) => call.purpose === "stage:analyze").length, 1);
+  assert.equal(calls.filter((call) => call.ok).length, 2);
+  assert.equal(result.calls - calls.length, 1, "끝나기 전에 끊긴 호출도 총 호출 수에 보존된다");
 });

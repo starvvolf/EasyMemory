@@ -2,8 +2,8 @@
 // It does, in code, what the MCP chat executor does by hand: claim → five stages (submit + request record)
 // → authoring packet → author → check → at most one revision → record. Model calls go through callModel().
 // A usage limit or missing login pauses the request; it resumes from the stage it stopped at.
-import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { callModel, ModelError, type ModelCaller } from "../ai/model.ts";
 import { labConfigSchema, redactCallText, type LabConfig, type CallRecord } from "./lab-contract.ts";
@@ -45,7 +45,11 @@ type ExecutorState = {
 /** What the screen may see; the claim token never leaves the server. */
 export type ExecutorView = Omit<ExecutorState, "claimToken">;
 
-const queueState = globalThis as typeof globalThis & { __studyForgeExecutorQueue?: Promise<unknown>; __studyForgeExecutorQueued?: Set<string> };
+const queueState = globalThis as typeof globalThis & {
+  __studyForgeExecutorQueue?: Promise<unknown>;
+  __studyForgeExecutorQueued?: Set<string>;
+  __studyForgeExecutorWrites?: Map<string, Promise<void>>;
+};
 
 /** Calls allowed per start or "다시 시작"; the total across restarts is kept in `calls`. */
 export const MAX_MODEL_CALLS = 14;
@@ -74,10 +78,31 @@ async function loadState(id: string): Promise<ExecutorState | null> {
 }
 async function saveState(state: ExecutorState) {
   state.updatedAt = new Date().toISOString();
-  await mkdir(dataRoot(), { recursive: true });
-  const temporary = `${stateFile(state.requestId)}.${process.pid}.tmp`;
-  await writeFile(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
-  await rename(temporary, stateFile(state.requestId));
+  await saveExecutorJson(stateFile(state.requestId), JSON.stringify(state, null, 2));
+}
+async function saveExecutorJson(file: string, text: string) {
+  const writes = (queueState.__studyForgeExecutorWrites ??= new Map());
+  const pending = (writes.get(file) ?? Promise.resolve()).catch(() => undefined).then(async () => {
+    const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(temporary, text, { mode: 0o600 });
+      for (let attempt = 0; ; attempt += 1) {
+        try { await rename(temporary, file); break; }
+        catch (error) {
+          // Windows readers/virus scanners can briefly hold the destination open.
+          const code = (error as NodeJS.ErrnoException).code;
+          if (!["EPERM", "EACCES", "EBUSY"].includes(code ?? "") || attempt >= 5) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt));
+        }
+      }
+    } catch {
+      throw new Error("생성 기록을 저장하지 못했어요. 잠시 기다렸다가 다시 시작해 주세요.");
+    } finally { await rm(temporary, { force: true }).catch(() => undefined); }
+  });
+  writes.set(file, pending);
+  try { await pending; }
+  finally { if (writes.get(file) === pending) writes.delete(file); }
 }
 export async function configureLab(id: string, config: unknown) {
   const state = await loadState(id);
@@ -96,10 +121,8 @@ export async function readExecutorCalls(id: string): Promise<CallRecord[]> {
 }
 async function writeCall(id: string, call: CallRecord) {
   if (!await isLabRequest(id)) return;
-  await mkdir(callsRoot(id), { recursive: true });
   const file = path.join(callsRoot(id), `${call.n}.json`);
-  await writeFile(`${file}.tmp`, JSON.stringify(call), { mode: 0o600 });
-  await rename(`${file}.tmp`, file);
+  await saveExecutorJson(file, JSON.stringify(call));
 }
 export function executorSettings(stage: string, request: Awaited<ReturnType<typeof getExperimentRequest>>, lab?: LabConfig, options: {model?:string;effort?:string} = {}) {
   const requested = request.input.requestedStages[stage === "authoring" ? "cards" : stage as Stage];
