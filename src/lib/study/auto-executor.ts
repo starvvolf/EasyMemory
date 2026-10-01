@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { callModel, parseJsonReply, ModelError, type ModelCaller } from "../ai/model.ts";
+import { callModel, ModelError, type ModelCaller } from "../ai/model.ts";
 import { labConfigSchema, redactCallText, type LabConfig, type CallRecord } from "./lab-contract.ts";
 import { labFakeReply } from "./lab-fake.ts";
 import {
@@ -49,7 +49,10 @@ const queueState = globalThis as typeof globalThis & { __studyForgeExecutorQueue
 
 /** Calls allowed per start or "다시 시작"; the total across restarts is kept in `calls`. */
 export const MAX_MODEL_CALLS = 14;
-type Effort = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
+const efforts = ["low", "medium", "high", "xhigh", "max", "ultra"] as const;
+type Effort = (typeof efforts)[number];
+/** A mistyped STUDY_FORGE_EXECUTOR_EFFORT is ignored; it would otherwise fail the request record after the call was paid for. */
+const envEffort = () => { const value = process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim(); return value && (efforts as readonly string[]).includes(value) ? value : undefined; };
 /** Tries per stage: the first answer plus two corrections that see the previous answer and the check error. */
 export const STAGE_ATTEMPTS = 3;
 const STAGE_LABEL: Record<string, string> = {
@@ -101,7 +104,7 @@ async function writeCall(id: string, call: CallRecord) {
 export function executorSettings(stage: string, request: Awaited<ReturnType<typeof getExperimentRequest>>, lab?: LabConfig, options: {model?:string;effort?:string} = {}) {
   const requested = request.input.requestedStages[stage === "authoring" ? "cards" : stage as Stage];
   return { model: lab?.stages[stage as keyof LabConfig["stages"]]?.model ?? options.model ?? (process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || undefined) ?? requested?.model ?? "gpt-6-sol",
-    effort: (lab?.stages[stage as keyof LabConfig["stages"]]?.effort ?? options.effort ?? (process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim() || undefined) ?? requested?.effort ?? "medium") as Effort };
+    effort: (lab?.stages[stage as keyof LabConfig["stages"]]?.effort ?? options.effort ?? envEffort() ?? requested?.effort ?? "medium") as Effort };
 }
 export async function executorView(id: string): Promise<ExecutorView | null> {
   const state = await loadState(id);
@@ -193,14 +196,17 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
     try {
       if (state.lab?.provider === "fake" && (process.env.NODE_ENV === "production" || process.env.STUDY_FORGE_LOCAL_EXPERIMENT !== "1")) throw new ModelError("not_configured", "가짜 실험은 로컬 모드에서만 가능합니다.");
       const fakeReply = state.lab?.provider === "fake" ? await labFakeReply(state.stage ?? "authoring", user, request.sourceSnapshot!.fileName, state.lab.scenario, state.attempt ?? 1) : undefined;
-      const reply = await callModel({ purpose, system, user, model, effort, caller, provider: state.lab?.provider, fakeReply });
+      // json: true asks the real backend for a JSON object reply (structured output) and parses it.
+      const reply = await callModel({ purpose, system, user, json: true, model, effort, caller, provider: state.lab?.provider, fakeReply });
       lastCall.reply = redactCallText(reply.text); lastCall.usage = reply.usage; lastCall.ms = Date.now()-started; lastCall.model = reply.model;
       await writeCall(requestId, lastCall);
-      const data = parseJsonReply(reply.text);
       lastCall.ok = true; await writeCall(requestId, lastCall);
       await timed(true, reply.model);
-      return { ...reply, data };
+      return reply;
     } catch (error) {
+      // A reply that was not JSON is still kept in the call record.
+      const rawText = (error as { rawText?: string }).rawText;
+      if (rawText !== undefined) lastCall.reply = redactCallText(rawText);
       lastCall.ms = Date.now()-started; lastCall.error = redactCallText(error instanceof Error ? error.message : String(error)); await writeCall(requestId,lastCall);
       await timed(false);
       if (error instanceof ModelError && error.code === "usage_limit") throw new StopRun("paused-usage-limit", "ChatGPT 사용량 한도에 닿았어요. 한도가 풀리면 다시 시작해 주세요.");

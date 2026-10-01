@@ -305,3 +305,24 @@ test("모델 덮어쓰기 설정과 호출 시간이 기록되고, JSON이 아�
     delete process.env.STUDY_FORGE_EXECUTOR_EFFORT;
   }
 });
+
+test("실제 공급자에게 JSON 응답을 요청하고, 잘못 쓴 추론 강도 환경변수는 무시한다", async () => {
+  const bytes = await readFile(path.join(process.cwd(), "eval/corpus/user-test-pdfs", PDF));
+  const source = await registerMcpSource(PDF, bytes);
+  const settings = { model: "gpt-6-sol" as const, effort: "high" as const };
+  const request = await createExperimentRequest({
+    sourceId: source.id, scope: { pageNumbers: [1], outlineLeafIds: [] }, purpose: "JSON 요청 확인",
+    requestedStages: { analyze: settings }, stopAfterStage: "analyze",
+  });
+  const seen: Array<{ json?: boolean; effort?: string }> = [];
+  setFakeModelResponder((call) => { seen.push({ json: call.json, effort: call.effort }); return JSON.stringify(stageReplies.analyze); });
+  process.env.STUDY_FORGE_EXECUTOR_EFFORT = "hgih";
+  try {
+    const done = await runStudyRequest(request.id, { uid: "local" });
+    assert.equal(done.status, "done", done.message);
+    assert.deepEqual(seen, [{ json: true, effort: "high" }]);
+  } finally {
+    setFakeModelResponder(null);
+    delete process.env.STUDY_FORGE_EXECUTOR_EFFORT;
+  }
+});

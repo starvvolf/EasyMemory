@@ -132,5 +132,11 @@ export function parseJsonReply(text: string): unknown {
 export async function callModel(request: ModelRequest): Promise<ModelResult> {
   if (request.signal?.aborted) throw new ModelError("transient", "호출을 멈췄어요.");
   const reply = await modelBackend(request.provider).call(request);
-  return request.json ? { ...reply, data: parseJsonReply(reply.text) } : reply;
+  if (!request.json) return reply;
+  try { return { ...reply, data: parseJsonReply(reply.text) }; }
+  catch (error) {
+    // Keep the raw reply so callers can record what the model actually said.
+    if (error instanceof ModelError) Object.assign(error, { rawText: reply.text });
+    throw error;
+  }
 }

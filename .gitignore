@@ -46,3 +46,6 @@ eval/**/*.secret.*
 /output/
 /tmp/
 /*.traineddata
+
+# Authoring output of local generation runs (/study and /lab): personal run data, like .study-forge-data/
+tools/problem-authoring-lab/runs/chatgpt-request-*/
