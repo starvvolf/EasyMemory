@@ -97,6 +97,51 @@ test("사용량 한도는 그대로 알려서 화면이 안내하게 한다", as
   } finally { setFakeModelResponder(null); }
 });
 
+test("노트의 한도·로그인·일시 오류는 기존 표시와 대화를 보존하고 다시 물을 수 있다", async (t) => {
+  for (const code of ["usage_limit", "login_required", "transient"] as const) await t.test(code, async () => {
+    const sourceId = `src_note_fault_${code}`;
+    const marked = await markNote({ sourceId, page: 1, quote: "BFS" });
+    setFakeModelResponder(() => { throw new ModelError(code, "검증용 고장"); });
+    try {
+      await assert.rejects(askNote(caller, { sourceId, page: 1, quote: "BFS" }),
+        (error: unknown) => error instanceof ModelError && error.code === code);
+      const kept = (await listNotes(sourceId))[0];
+      assert.equal(kept.id, marked.id);
+      assert.equal(kept.status, "marked");
+      assert.equal(kept.answer, null);
+      setFakeModelResponder(() => JSON.stringify({ kind: "term", lead: "가까운 노드부터 방문하는 탐색" }));
+      const answered = await askNote(caller, { sourceId, page: 1, quote: "BFS" });
+      assert.equal(answered.note.id, marked.id);
+      assert.equal(answered.note.status, "answered");
+      setFakeModelResponder(() => { throw new ModelError(code, "검증용 고장"); });
+      await assert.rejects(followUp(caller, { sourceId, noteId: marked.id, question: "큐는 왜?" }),
+        (error: unknown) => error instanceof ModelError && error.code === code);
+      const unchanged = (await listNotes(sourceId))[0];
+      assert.deepEqual(unchanged.thread, answered.note.thread);
+      assert.deepEqual(unchanged.answer, answered.note.answer);
+      setFakeModelResponder(() => "선입선출이 방문 순서를 유지한다.");
+      const continued = await followUp(caller, { sourceId, noteId: marked.id, question: "큐는 왜?" });
+      assert.equal(continued.id, marked.id);
+      assert.equal(continued.thread.length, answered.note.thread.length + 2);
+      assert.equal((await listNotes(sourceId)).length, 1);
+    } finally { setFakeModelResponder(null); }
+  });
+});
+
+test("별도 런타임의 가짜 모델 오류도 현재 ModelError로 전달하고 알 수 없는 오류는 바꾸지 않는다", async () => {
+  const foreign = Object.assign(new Error("검증용 사용량 제한"), { name: "ModelError", code: "usage_limit" });
+  assert.equal(foreign instanceof ModelError, false);
+  setFakeModelResponder(() => { throw foreign; });
+  try {
+    await assert.rejects(askNote(caller, { sourceId: "src_foreign_fault", page: 1, quote: "BFS" }),
+      (error: unknown) => error instanceof ModelError && error.code === "usage_limit" && error.message === foreign.message);
+    const unknown = Object.assign(new Error("검증용 알 수 없는 오류"), { name: "ModelError", code: "other" });
+    setFakeModelResponder(() => { throw unknown; });
+    await assert.rejects(askNote(caller, { sourceId: "src_foreign_fault", page: 1, quote: "BFS" }),
+      (error: unknown) => error === unknown);
+  } finally { setFakeModelResponder(null); }
+});
+
 test("문구 비교와 답 읽기 규칙", () => {
   assert.equal(phraseKey(" View\n Volume "), phraseKey("view volume"));
   assert.throws(() => readAnswer({ kind: "term" }), /lead/);

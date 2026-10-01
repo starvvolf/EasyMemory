@@ -105,7 +105,17 @@ const fakeBackend: ModelBackend = {
     const responder = fakeState.__studyForgeFakeResponder;
     if (request.fakeReply !== undefined && request.provider === "fake") return { text: request.fakeReply, model: request.model ?? "fake" };
     if (!responder) throw new ModelError("not_configured", "가짜 모델 응답이 설정되지 않았어요.");
-    return { text: await responder(request), model: "fake" };
+    try { return { text: await responder(request), model: "fake" }; }
+    catch (error) {
+      // A test responder loaded before Next may use a different module instance.
+      // Translate only its explicit model errors into this backend's error class.
+      const foreign = error as { name?: string; code?: string; message?: string } | null;
+      const codes: readonly ModelErrorCode[] = ["login_required", "usage_limit", "transient", "invalid_output", "not_configured"];
+      if (!(error instanceof ModelError) && foreign?.name === "ModelError" && codes.includes(foreign.code as ModelErrorCode)) {
+        throw new ModelError(foreign.code as ModelErrorCode, typeof foreign.message === "string" ? foreign.message : "가짜 모델 호출이 실패했어요.");
+      }
+      throw error;
+    }
   },
 };
 
