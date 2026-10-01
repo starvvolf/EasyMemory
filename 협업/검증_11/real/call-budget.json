@@ -18,8 +18,129 @@
       "stage": "analyze",
       "caseId": "bfs-2pages-gpt-6-luna",
       "phase": "stage5"
+    },
+    {
+      "n": 3,
+      "at": "2026-10-01T19:29:58.488Z",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "stage": "analyze",
+      "caseId": "bfs-2pages-gpt-6-luna",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 4,
+      "at": "2026-10-01T19:30:02.146Z",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "stage": "concept-tree",
+      "caseId": "bfs-2pages-gpt-6-luna",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 5,
+      "at": "2026-10-01T19:30:05.322Z",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "stage": "learning-design",
+      "caseId": "bfs-2pages-gpt-6-luna",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 6,
+      "at": "2026-10-01T19:30:13.704Z",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "stage": "learning-design",
+      "caseId": "bfs-2pages-gpt-6-luna",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 7,
+      "at": "2026-10-01T19:30:21.098Z",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "stage": "learning-design",
+      "caseId": "bfs-2pages-gpt-6-luna",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 8,
+      "at": "2026-10-01T19:30:28.753Z",
+      "model": "gpt-6-sol",
+      "effort": "medium",
+      "stage": "analyze",
+      "caseId": "bfs-2pages-gpt-6-sol",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 9,
+      "at": "2026-10-01T19:30:33.077Z",
+      "model": "gpt-6-sol",
+      "effort": "medium",
+      "stage": "concept-tree",
+      "caseId": "bfs-2pages-gpt-6-sol",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 10,
+      "at": "2026-10-01T19:30:37.635Z",
+      "model": "gpt-6-sol",
+      "effort": "medium",
+      "stage": "learning-design",
+      "caseId": "bfs-2pages-gpt-6-sol",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 11,
+      "at": "2026-10-01T19:31:00.713Z",
+      "model": "gpt-6-sol",
+      "effort": "medium",
+      "stage": "learning-design",
+      "caseId": "bfs-2pages-gpt-6-sol",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 12,
+      "at": "2026-10-01T19:31:17.735Z",
+      "model": "gpt-6-sol",
+      "effort": "medium",
+      "stage": "learning-design",
+      "caseId": "bfs-2pages-gpt-6-sol",
+      "phase": "stage5",
+      "httpStatus": 200
+    },
+    {
+      "n": 13,
+      "at": "2026-10-01T19:31:32.425Z",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "stage": "analyze",
+      "caseId": "geometry-10pages-gpt-6-luna",
+      "phase": "stage5",
+      "httpStatus": 200
     }
   ],
-  "lastCorrection": "d6a2e5a620b4f665608787fc28616184f67886ca45088985555f09dfbe36618b",
-  "stopped": "same-validation-failure-twice"
+  "resumes": [
+    {
+      "at": "2026-10-01T19:29:58.093Z",
+      "reason": "User approved a network-enabled process after sandbox EACCES diagnosis",
+      "previousStop": "same-validation-failure-twice",
+      "preservedCalls": 2
+    }
+  ],
+  "lastHttpError": null,
+  "repeatedHttpErrors": 0,
+  "lastCorrection": "267225819472904ba3681536586e9e98547f261b15f27562240e6b8ff2d23602",
+  "stopped": "same-validation-failure-recurred",
+  "stoppedAt": "2026-10-01T19:35:28.776Z"
 }

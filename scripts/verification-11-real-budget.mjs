@@ -14,13 +14,14 @@ export function budgetFetch(file, delegate, context = () => ({})) {
     const meta = context();
     const stage = /\[단계\] ([^\r\n]+)/.exec(user)?.[1] ?? (user.includes("[출제 패킷]") ? "authoring" : "note:ask");
     if (correction) {
-      const signature = createHash("sha256").update(`${meta.caseId}:${stage}:${correction}`).digest("hex");
-      if (ledger.lastCorrection === signature) {
+      const signature = createHash("sha256").update(correction).digest("hex");
+      ledger.correctionCounts ??= {};
+      ledger.correctionCounts[signature] = (ledger.correctionCounts[signature] ?? 0) + 1;
+      if (ledger.correctionCounts[signature] >= 2) {
         ledger.stopped = "same-validation-failure-twice";
         writeFileSync(file, JSON.stringify(ledger, null, 2), { mode: 0o600 });
         throw new Error("Verification stops after two identical validation failures.");
       }
-      ledger.lastCorrection = signature;
     }
     ledger.calls.push({ n: ledger.calls.length + 1, at: new Date().toISOString(), model: body.model,
       effort: body.reasoning?.effort ?? null, stage, ...meta });
@@ -53,6 +54,17 @@ export function budgetFetch(file, delegate, context = () => ({})) {
     writeFileSync(file, JSON.stringify(updated, null, 2), { mode: 0o600 });
     return response;
   };
+}
+export function stopRepeatedRecordedFailures(file, calls) {
+  const ledger = JSON.parse(readFileSync(file, "utf8"));
+  const counts = {};
+  for (const call of calls.filter((call) => !call.ok && call.error)) {
+    const signature = createHash("sha256").update(call.error).digest("hex");
+    counts[signature] = (counts[signature] ?? 0) + 1;
+  }
+  ledger.recordedFailureCounts = counts;
+  if (Object.values(counts).some((count) => count >= 2)) ledger.stopped = "same-recorded-failure-twice";
+  writeFileSync(file, JSON.stringify(ledger, null, 2));
 }
 export async function proveBudget(file) {
   let outgoing = 0;

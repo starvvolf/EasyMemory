@@ -1,11 +1,12 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { resultsRoot, ledgerFile, preflight } from "./verification-11-real.mjs";
+import { stopRepeatedRecordedFailures } from "./verification-11-real-budget.mjs";
 if (!preflight.ready) throw new Error("ChatGPT connection required; no provider fallback allowed.");
 process.env.STUDY_FORGE_LOCAL_EXPERIMENT = "1";
 process.env.STUDY_FORGE_LOCAL_EXPERIMENT_BIND = "127.0.0.1";
 process.env.STUDY_FORGE_MODEL_PROVIDER = "chatgpt";
-const { createLabRun, getLabRun } = await import("../src/lib/study/lab-store.ts");
+const { createLabRun, getLabRun, continueLabRun } = await import("../src/lib/study/lab-store.ts");
 const { registerMcpSource } = await import("../src/lib/mcp-source-registry.ts");
 const { extractPdfPageTexts } = await import("../tools/study-forge-mcp/source-evidence.ts");
 const { readExecutorCalls } = await import("../src/lib/study/auto-executor.ts");
@@ -13,6 +14,16 @@ const mode = process.argv[2] ?? "prepare";
 const count = () => existsSync(ledgerFile) ? JSON.parse(readFileSync(ledgerFile, "utf8")).calls.length : 0;
 const budget = () => existsSync(ledgerFile) ? JSON.parse(readFileSync(ledgerFile, "utf8")) : { calls: [] };
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+if (process.argv.includes("--resume-approved")) {
+  const ledger = budget();
+  if (ledger.stopped) {
+    writeFileSync(path.join(resultsRoot, `call-budget-before-approved-resume-${stamp}.json`), JSON.stringify(ledger, null, 2), { flag: "wx" });
+    ledger.resumes = [...(ledger.resumes ?? []), { at: new Date().toISOString(), reason: "User approved a network-enabled process after sandbox EACCES diagnosis", previousStop: ledger.stopped, preservedCalls: ledger.calls.length }];
+    delete ledger.stopped;
+    delete ledger.lastCorrection;
+    writeFileSync(ledgerFile, JSON.stringify(ledger, null, 2));
+  }
+}
 const batchDir = path.join(resultsRoot, `${mode}-${stamp}`);
 mkdirSync(batchDir, { recursive: true });
 const save = (file, value) => writeFileSync(path.join(batchDir, file), JSON.stringify(value, null, 2), { flag: "wx" });
@@ -42,7 +53,14 @@ if (mode === "stage5") {
     const caseId = `${material.name}-${setting.model}`;
     globalThis.__verification11Operation = { caseId, phase: "stage5" };
     const startedAt = Date.now(), before = count();
-    const request = await createLabRun({ sourceId: material.source.id, startPage: material.pages[0], endPage: material.pages.at(-1),
+    const resumeId = caseId === "bfs-2pages-gpt-6-luna" && process.argv.includes("--resume-approved") ? "req_cf57cc2edd05e056e108101d4967cc96" : null;
+    let request;
+    if (resumeId) {
+      const previous = await getLabRun(resumeId);
+      globalThis.__verification11Operation.previousRecordedCalls = previous.executor.calls;
+      if (previous.executor.status === "done") request = previous.request;
+      else { await continueLabRun(resumeId, true); request = previous.request; }
+    } else request = await createLabRun({ sourceId: material.source.id, startPage: material.pages[0], endPage: material.pages.at(-1),
       purpose: "선택한 원문 내용을 시험 대비로 공부한다. 원문에서 확인할 수 있는 핵심을 기억하고 설명한다.",
       lab: { provider: "chatgpt", stepMode: false, stages: Object.fromEntries(["analyze", "concept-tree", "learning-design", "activity-design", "cards", "authoring"].map((stage) => [stage, setting])) }, confirmed: true });
     console.log(JSON.stringify({ type: "started", caseId, requestId: request.id }));
@@ -50,6 +68,7 @@ if (mode === "stage5") {
     do { await new Promise((resolve) => setTimeout(resolve, 1000)); run = await getLabRun(request.id); }
     while (["queued", "running"].includes(run.executor.status));
     const calls = await readExecutorCalls(request.id);
+    stopRepeatedRecordedFailures(ledgerFile, calls.filter((call) => call.n > (globalThis.__verification11Operation.previousRecordedCalls ?? 0)));
     const learning = run.request.stages.find((stage) => stage.stage === "learning-design")?.output?.learningDesign;
     const timings = run.executor.timings ?? [];
     const slowest = timings.toSorted((a, b) => b.ms - a.ms)[0];
@@ -57,7 +76,7 @@ if (mode === "stage5") {
       status: budget().unavailableModels?.includes(setting.model) ? "unavailable" : run.executor.status,
       ms: Date.now() - startedAt, outgoingFetchAttempts: count() - before, recordedCalls: run.executor.calls,
       backendFailures: calls.filter((call) => !call.ok).length,
-      guardBlockedBeforeFetch: calls.length - (count() - before),
+      guardBlockedBeforeFetch: calls.length - (budget().calls.filter((call) => call.caseId === caseId).length),
       httpResponsesReceived: budget().calls.slice(before).filter((call) => call.httpStatus !== undefined).length,
       slowest, objectives: learning?.objectives?.length ?? null,
       pagesPerObjective: learning?.objectives?.length ? material.pages.length / learning.objectives.length : null,
