@@ -15,7 +15,7 @@ mkdirSync(resultsRoot, { recursive: true });
 const proofRoot = mkdtempSync(path.join(tmpdir(), "verification-real-budget-"));
 const proof = await proveBudget(path.join(proofRoot, "proof.json"));
 const ledgerFile = path.join(resultsRoot, "call-budget.json");
-globalThis.fetch = budgetFetch(ledgerFile, globalThis.fetch.bind(globalThis));
+globalThis.fetch = budgetFetch(ledgerFile, globalThis.fetch.bind(globalThis), () => globalThis.__verification11Operation ?? {});
 const { chatgptBackend } = await import("../src/lib/ai/chatgpt-provider.ts");
 const { chatGptStorageReady, credentialFor } = await import("../src/lib/ai/chatgpt-auth.ts");
 let credentialStored = false;
@@ -27,6 +27,7 @@ const result = { checkedAt: new Date().toISOString(), proof, provider: "chatgpt"
   notesEffort: process.env.STUDY_FORGE_NOTE_EFFORT?.trim() || "low",
   modelCalls: existsSync(ledgerFile) ? JSON.parse(readFileSync(ledgerFile, "utf8")).calls.length : 0,
 };
-writeFileSync(path.join(resultsRoot, "preflight.json"), JSON.stringify(result, null, 2));
+writeFileSync(path.join(resultsRoot, `preflight-${status.ready ? "connected" : "blocked"}-${Date.now()}.json`), JSON.stringify(result, null, 2), { flag: "wx" });
 console.log(JSON.stringify(result));
 if (!status.ready) process.exitCode = 2;
+export { resultsRoot, ledgerFile, result as preflight };
