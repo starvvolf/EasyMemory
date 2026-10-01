@@ -217,6 +217,8 @@ test("가짜 모델로 요청 하나를 5단계부터 출제 기록까지 자동
     if (call.purpose.startsWith("stage:")) {
       const stage = call.purpose.slice(6);
       if (stage === "analyze") assert.match(call.user, /\[원문: 선택 쪽 추출 글자\]\n\[p\.1\]/);
+      if (stage === "concept-tree") assert.match(call.user, /\[원문: 선택 쪽 추출 글자\]\n\[p\.1\]/, "개념 구조도 원문을 받는다");
+      if (stage === "activity-design") assert.doesNotMatch(call.user, /\[원문: 선택 쪽 추출 글자\]/);
       return JSON.stringify(stageReplies[stage]);
     }
     const leak = call.purpose === "authoring" && leakOnce;
