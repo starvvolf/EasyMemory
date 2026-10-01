@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-10-01T19:07:11.595Z",
+  "proof": {
+    "outgoingFakeCalls": 60,
+    "sixtyFirstBlocked": true,
+    "realCalls": 0
+  },
+  "provider": "chatgpt",
+  "storageReady": false,
+  "credentialStored": false,
+  "ready": false,
+  "message": "서버에 ChatGPT 토큰 암호화 키를 설정해야 해요.",
+  "notesModel": "gpt-6-sol",
+  "notesEffort": "low",
+  "modelCalls": 0
+}

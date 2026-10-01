@@ -1,0 +1,46 @@
+{
+  "checkedAt": "2026-10-01T19:08:44.872Z",
+  "homeTokenKeyExists": false,
+  "checkouts": [
+    {
+      "checkout": "C:\\Users\\Public\\Documents\\ESTsoft\\CreatorTemp\\recaller-integration",
+      "envFiles": [
+        {
+          "file": ".env.example",
+          "configured": {
+            "STUDY_FORGE_DATA_DIR": false,
+            "STUDY_FORGE_CHATGPT_ENCRYPTION_KEY": false,
+            "STUDY_FORGE_MODEL_PROVIDER": false,
+            "STUDY_FORGE_NOTE_MODEL": false,
+            "STUDY_FORGE_NOTE_EFFORT": false
+          }
+        }
+      ],
+      "defaultAuthDirectoryExists": false,
+      "accountFileCount": 0
+    },
+    {
+      "checkout": "C:\\Users\\jkh01\\OneDrive\\문서\\CD0625",
+      "envFiles": [
+        {
+          "file": ".env.local",
+          "configured": {
+            "STUDY_FORGE_DATA_DIR": false,
+            "STUDY_FORGE_CHATGPT_ENCRYPTION_KEY": false,
+            "STUDY_FORGE_MODEL_PROVIDER": false,
+            "STUDY_FORGE_NOTE_MODEL": false,
+            "STUDY_FORGE_NOTE_EFFORT": false
+          }
+        }
+      ],
+      "defaultAuthDirectoryExists": false,
+      "accountFileCount": 0
+    },
+    {
+      "checkout": "C:\\Users\\Public\\Documents\\ESTsoft\\CreatorTemp\\recaller-laptop-handoff",
+      "envFiles": [],
+      "defaultAuthDirectoryExists": false,
+      "accountFileCount": 0
+    }
+  ]
+}
