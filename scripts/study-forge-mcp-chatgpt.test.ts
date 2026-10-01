@@ -187,6 +187,60 @@ test("ChatGPT 첨부 PDF 경로가 자연어 다섯 단계를 검증하고 같�
   assert.equal(publishedDeck.conceptTree?.nodes.length, 5);
 });
 
+test("쪽 근거 없는 맨 위 개념만 참조한 학습 설계는 거부하고 하위 개념의 실제 쪽을 사용한다", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "study-forge-learning-pages-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const service = new ChatGptParityService(path.join(root, "runs"), path.join(root, "published"));
+  const started = await service.startRun({
+    title: "쪽 근거 검증",
+    files: [{ fileName: "viewing.pdf", pageCount: 44 }],
+  });
+  await service.submitStage({
+    runId: started.runId,
+    stage: "analyze",
+    result: { outlineText: "@file viewing.pdf\n# Three Dimensional Viewing [1-44]\n## Perspective Projection [44]" },
+  });
+  const tree = await service.submitStage({
+    runId: started.runId,
+    stage: "concept-tree",
+    result: { treeText: "Three Dimensional Viewing\n- [투영] Perspective Projection — 원근 투영의 성질 (p.44)" },
+  });
+  assert.match((tree.stageInput as { instructions: string }).instructions, /맨 위 개념 하나로 자료 전체를 묶지/);
+  const learningText = (concepts: string) => [
+    "--- LEARNING 1 ---",
+    `개념: ${concepts}`,
+    "학습내용: 원근 투영의 성질",
+    "학습목표: 원근 투영의 성질을 설명한다.",
+    "성공기준: 원근 투영의 성질을 정확히 말한다.",
+    "근거: Perspective Projection",
+    "종류: 개념",
+    "이유: 해당 절의 핵심 성질이다.",
+    "중요도: 3",
+  ].join("\n");
+  await assert.rejects(service.submitStage({
+    runId: started.runId,
+    stage: "learning-design",
+    result: { learningDesignText: learningText("1") },
+  }), /1번 학습 설계는 쪽 근거가 있는 개념을 가리켜야 합니다/);
+  const rejected = JSON.parse(await readFile(path.join(root, "runs", started.runId, "run.json"), "utf8")) as {
+    artifacts: Record<string, unknown>;
+  };
+  assert.equal(rejected.artifacts["learning-design"], undefined);
+  const designed = await service.submitStage({
+    runId: started.runId,
+    stage: "learning-design",
+    result: { learningDesignText: learningText("1, 2") },
+  });
+  assert.equal(designed.nextStage, "activity-design");
+  const saved = JSON.parse(await readFile(path.join(root, "runs", started.runId, "run.json"), "utf8")) as {
+    artifacts: { "learning-design": { learningDesign: { knowledgeUnits: Array<{ sourcePage: number; sourceId: string; sourceRange: string }> } } };
+  };
+  const unit = saved.artifacts["learning-design"].learningDesign.knowledgeUnits[0];
+  assert.equal(unit.sourcePage, 44);
+  assert.equal(unit.sourceId, "viewing.pdf");
+  assert.match(unit.sourceRange, /PDF 44쪽/);
+});
+
 test("자연어형 Markdown 목차를 앱 계층으로 조립하고 설명 문장은 거부한다", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "study-forge-outline-text-"));
   t.after(() => rm(root, { recursive: true, force: true }));

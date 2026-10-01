@@ -905,7 +905,6 @@ export class ChatGptParityService {
         submitted.learningDesignText,
         conceptTree,
         run.selectedOutlineLeafIds,
-        run.config.files[0]?.fileName ?? run.config.title,
       );
       const analysisArtifact = parseAnalysisArtifact(run.artifacts.analyze);
       const selectedOutline = selectOutline(
@@ -1254,7 +1253,6 @@ function materializeLearningDesignText(
   text: string,
   conceptTree: ConceptTreeArtifact,
   selectedOutlineLeafIds: string[],
-  fallbackSourceId: string,
 ): LearningDesignBase {
   const blocks = parseNumberedTextBlocks(text, "LEARNING", "학습 설계");
   if (blocks.length > 60) throw new Error("학습 대상은 최대 60개까지 만들 수 있습니다.");
@@ -1280,7 +1278,11 @@ function materializeLearningDesignText(
     signatures.add(signature);
     const objectiveId = `objective-${index + 1}`;
     const criterionId = `criterion-${index + 1}-1`;
-    const sourceRef = conceptNodes.flatMap((node) => node.sourceRefs)[0];
+    const sourceRef = conceptNodes.flatMap((node) => node.sourceRefs)
+      .find((ref) => ref.pageNumbers.length > 0);
+    if (!sourceRef) {
+      throw new Error(`${index + 1}번 학습 설계는 쪽 근거가 있는 개념을 가리켜야 합니다. 맨 위 개념만 가리키지 말고 실제 내용이 있는 하위 개념 번호를 쓰세요.`);
+    }
     objectives.push({
       id: objectiveId,
       outlineNodeIds,
@@ -1299,9 +1301,9 @@ function materializeLearningDesignText(
       objectiveId,
       outlineNodeIds,
       content: block.require("학습내용"),
-      sourceId: sourceRef?.fileName ?? fallbackSourceId,
-      sourcePage: sourceRef?.pageNumbers[0] ?? 0,
-      sourceRange: `PDF ${sourceRef?.pageNumbers.join(", ") ?? "?"}쪽 / ${conceptNodes.map((node) => node.title).join(" / ")}`,
+      sourceId: sourceRef.fileName,
+      sourcePage: sourceRef.pageNumbers[0],
+      sourceRange: `PDF ${sourceRef.pageNumbers.join(", ")}쪽 / ${conceptNodes.map((node) => node.title).join(" / ")}`,
       sourceText: block.require("근거"),
       knowledgeType: parseKnowledgeType(block.require("종류")),
       rationale: block.require("이유"),
@@ -1830,7 +1832,7 @@ function instructionsForStage(stage: ChatGptParityStage) {
     return "선택된 원문 목차의 실제 내용을 의미 관계 중심 개념트리로 작성합니다. 목차를 복사하거나 학습목표·문제·예시를 노드로 만들지 않습니다. 독립적으로 학습·판단할 내용의 출처가 한 노드에 섞이지 않게 하되, 의미 관계에 맞게 묶고 나누는 자유는 유지합니다. 같은 PDF 페이지에 선택된 말단 목차가 여러 개면 노드 끝에 @목차(번호)를 써서 실제 해당하는 항목만 연결합니다. 번호는 userSelection.availableLeafNodes의 number를 사용합니다. 모델은 짧은 자연어 트리만 쓰고 MCP가 노드 ID, 부모, 순서, 목차 연결과 페이지 범위를 검사합니다.";
   }
   if (stage === "learning-design") {
-    return "개념트리의 노드를 묶거나 나눠 학습 대상과 목표를 정합니다. 학습내용·목표·성공기준은 같은 능력과 범위여야 하며 제공된 원문으로 학습하고 확인할 수 있는 내용이어야 합니다. 독립 능력은 별도 학습 대상으로 나누고 상위 개념의 출처를 평가범위로 과대 해석하지 마세요. 근거에는 PDF 실제 문구를 그대로 쓰며 여러 구절은 ||로 구분합니다. 요약은 학습내용에만 씁니다. 문제 수·형식·질문·보기·정답은 만들지 않습니다. MCP가 ID·출처 연결과 등록 PDF의 원문 문구를 검사합니다. 글자가 없는 쪽은 실패 대신 원문 글자 없음으로 표시합니다.";
+    return "개념트리의 노드를 묶거나 나눠 학습 대상과 목표를 정합니다. 학습내용·목표·성공기준은 같은 능력과 범위여야 하며 제공된 원문으로 학습하고 확인할 수 있는 내용이어야 합니다. 독립 능력은 별도 학습 대상으로 나누고 상위 개념의 출처를 평가범위로 과대 해석하지 마세요. 맨 위 개념 하나로 자료 전체를 묶지 말고, 쪽 근거가 있는 실제 내용의 개념 번호를 포함하세요. 근거에는 PDF 실제 문구를 그대로 쓰며 여러 구절은 ||로 구분합니다. 요약은 학습내용에만 씁니다. 문제 수·형식·질문·보기·정답은 만들지 않습니다. MCP가 ID·출처 연결과 등록 PDF의 원문 문구를 검사합니다. 글자가 없는 쪽은 실패 대신 원문 글자 없음으로 표시합니다.";
   }
   if (stage === "activity-design") {
     return "확정된 학습 대상과 목표를 바꾸지 않고, 현재 Study Forge가 지원하는 기능과 사용자가 고른 requestedAbilities를 보고 각 대상을 1~3개의 문제 설계로 만듭니다. 관련개념에는 해당 학습대상의 concepts 중 이 문제로 확인할 번호를 쓰고 모두 확인하면 전체라고 씁니다. 실제 질문·보기·정답은 쓰지 않습니다. 지원되지 않거나 원문으로 확인할 수 없는 능력은 억지로 문제화하지 말고 제한을 적습니다. MCP가 Blueprint, 지원 수준, 포함 여부와 능력 충족 경고를 계산합니다.";
