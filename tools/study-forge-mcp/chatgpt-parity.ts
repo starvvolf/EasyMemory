@@ -1193,6 +1193,9 @@ function materializeConceptTreeArtifact(
     };
   });
   const nodes = parseConceptTreeOutline(lineHints.map((line) => line.cleanLine).join("\n"), run.config.files);
+  if (!nodes.some((node) => node.depth > 0)) {
+    throw new Error("맨 위 개념만 있는 개념 구조는 학습 설계에 사용할 수 없습니다. 원문에서 하위 개념을 하나 이상 찾아 '- 개념어 (p.쪽번호)' 형식으로 추가해 주세요.");
+  }
   const analysis = parseAnalysisArtifact(run.artifacts.analyze);
   const selectedOutline = selectOutline(analysis.sourceOutline!, run.selectedOutlineLeafIds);
   const selectedLeaves = selectedOutline.nodes.filter((node) => node.selectedByDefault);

@@ -14,6 +14,14 @@ const mode = process.argv[2] ?? "prepare";
 const count = () => existsSync(ledgerFile) ? JSON.parse(readFileSync(ledgerFile, "utf8")).calls.length : 0;
 const budget = () => existsSync(ledgerFile) ? JSON.parse(readFileSync(ledgerFile, "utf8")) : { calls: [] };
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+if (process.argv.includes("--new-batch-approved")) {
+  const ledger = budget();
+  writeFileSync(path.join(resultsRoot, `call-budget-before-new-batch-${stamp}.json`), JSON.stringify(ledger, null, 2), { flag: "wx" });
+  ledger.resumes = [...(ledger.resumes ?? []), { at: new Date().toISOString(), reason: "User approved new requests after concept-tree submission repair and source-input correction", previousStop: ledger.stopped ?? null, preservedCalls: ledger.calls.length, batchId: stamp }];
+  for (const key of ["stopped", "stoppedAt", "lastCorrection", "correctionCounts", "recordedFailureCounts", "lastHttpError", "repeatedHttpErrors", "httpErrorCounts"]) delete ledger[key];
+  ledger.batchId = stamp;
+  writeFileSync(ledgerFile, JSON.stringify(ledger, null, 2));
+}
 if (process.argv.includes("--resume-approved")) {
   const ledger = budget();
   if (ledger.stopped) {
@@ -44,7 +52,13 @@ for (const entry of files) {
 save("sources.json", sources.map(({ name, source, pages, texts }) => ({ name, source, pages, texts })));
 if (mode === "stage5") {
   const rows = [];
+  const batchCalls = [];
   for (const material of sources) for (const setting of [{ model: "gpt-6-luna", effort: "low" }, { model: "gpt-6-sol", effort: "medium" }]) {
+    if (budget().stopped || count() >= 60) break;
+    if (material.name !== "bfs-2pages" && rows.filter((row) => row.material === "bfs-2pages" && row.status === "done").length !== 2) {
+      const ledger = budget(); ledger.stopped = "cornell-authoring-gate-not-passed"; ledger.stoppedAt = new Date().toISOString(); writeFileSync(ledgerFile, JSON.stringify(ledger, null, 2));
+      break;
+    }
     if (budget().stopped || count() >= 60) break;
     if (budget().unavailableModels?.includes(setting.model)) {
       rows.push({ material: material.name, ...setting, status: "unavailable", calls: 0 });
@@ -68,7 +82,8 @@ if (mode === "stage5") {
     do { await new Promise((resolve) => setTimeout(resolve, 1000)); run = await getLabRun(request.id); }
     while (["queued", "running"].includes(run.executor.status));
     const calls = await readExecutorCalls(request.id);
-    stopRepeatedRecordedFailures(ledgerFile, calls.filter((call) => call.n > (globalThis.__verification11Operation.previousRecordedCalls ?? 0)));
+    batchCalls.push(...calls.filter((call) => call.n > (globalThis.__verification11Operation.previousRecordedCalls ?? 0)));
+    stopRepeatedRecordedFailures(ledgerFile, batchCalls);
     const learning = run.request.stages.find((stage) => stage.stage === "learning-design")?.output?.learningDesign;
     const timings = run.executor.timings ?? [];
     const slowest = timings.toSorted((a, b) => b.ms - a.ms)[0];
@@ -76,7 +91,7 @@ if (mode === "stage5") {
       status: budget().unavailableModels?.includes(setting.model) ? "unavailable" : run.executor.status,
       ms: Date.now() - startedAt, outgoingFetchAttempts: count() - before, recordedCalls: run.executor.calls,
       backendFailures: calls.filter((call) => !call.ok).length,
-      guardBlockedBeforeFetch: calls.length - (budget().calls.filter((call) => call.caseId === caseId).length),
+      guardBlockedBeforeFetch: calls.filter((call) => call.n > (globalThis.__verification11Operation.previousRecordedCalls ?? 0)).length - (count() - before),
       httpResponsesReceived: budget().calls.slice(before).filter((call) => call.httpStatus !== undefined).length,
       slowest, objectives: learning?.objectives?.length ?? null,
       pagesPerObjective: learning?.objectives?.length ? material.pages.length / learning.objectives.length : null,
@@ -85,6 +100,7 @@ if (mode === "stage5") {
     save(`${caseId}-summary.json`, row);
     save(`${caseId}-calls.json`, calls);
     save(`${caseId}-outputs.json`, { stages: run.request.stages, authoring: run.authoring });
+    writeFileSync(path.join(batchDir, "summary_public.json"), JSON.stringify({ batchId: stamp, modelCallsTotal: count(), httpResponsesTotal: budget().calls.filter((call) => call.httpStatus !== undefined).length, remaining: 60 - count(), stopped: budget().stopped ?? null, notesExecuted: 0, rows: rows.map((row) => { const safe = { ...row }; delete safe.message; delete safe.engineChecks; return safe; }) }, null, 2));
     console.log(JSON.stringify({ type: "finished", caseId, requestId: request.id, status: row.status, outgoingFetchAttempts: row.outgoingFetchAttempts, ms: row.ms }));
     if (budget().stopped || ["paused-login", "paused-usage-limit"].includes(run.executor.status) && row.status !== "unavailable") break;
   }

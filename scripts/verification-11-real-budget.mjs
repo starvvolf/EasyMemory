@@ -46,9 +46,9 @@ export function budgetFetch(file, delegate, context = () => ({})) {
       updated.calls.at(-1).errorCode = code;
       if (/unsupported|model_not_found|not_found_model/.test(code)) updated.unavailableModels = [...new Set([...(updated.unavailableModels ?? []), body.model])];
       const signature = `${body.model}:${stage}:${code}`;
-      updated.repeatedHttpErrors = updated.lastHttpError === signature ? (updated.repeatedHttpErrors ?? 0) + 1 : 1;
-      updated.lastHttpError = signature;
-      if (updated.repeatedHttpErrors >= 2) updated.stopped = "same-http-failure-twice";
+      updated.httpErrorCounts ??= {};
+      updated.httpErrorCounts[signature] = (updated.httpErrorCounts[signature] ?? 0) + 1;
+      if (updated.httpErrorCounts[signature] >= 2) updated.stopped = "same-http-failure-twice";
       globalThis.__verification11Event?.({ type: "http-failure", model: body.model, stage, status: response.status, code });
     } else { updated.lastHttpError = null; updated.repeatedHttpErrors = 0; }
     writeFileSync(file, JSON.stringify(updated, null, 2), { mode: 0o600 });

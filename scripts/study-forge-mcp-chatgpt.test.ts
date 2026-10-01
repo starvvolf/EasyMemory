@@ -187,6 +187,19 @@ test("ChatGPT 첨부 PDF 경로가 자연어 다섯 단계를 검증하고 같�
   assert.equal(publishedDeck.conceptTree?.nodes.length, 5);
 });
 
+test("맨 위 개념만 제출하면 거부하고 하위 개념을 추가하면 다음 단계로 진행한다", async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), "study-forge-root-only-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const service = new ChatGptParityService(path.join(root, "runs"), path.join(root, "published"));
+  const started = await service.startRun({ title: "합성 회귀 자료", files: [{ fileName: "fixture.pdf", pageCount: 1 }] });
+  await service.submitStage({ runId: started.runId, stage: "analyze", result: { outlineText: "@file fixture.pdf\n# 개념 설명 [1]" } });
+  await assert.rejects(service.submitStage({ runId: started.runId, stage: "concept-tree", result: { treeText: "개념 설명" } }), /하위 개념을 하나 이상/);
+  const rejected = JSON.parse(await readFile(path.join(root, "runs", started.runId, "run.json"), "utf8"));
+  assert.equal(rejected.artifacts["concept-tree"], undefined);
+  const repaired = await service.submitStage({ runId: started.runId, stage: "concept-tree", result: { treeText: "개념 설명\n- 구성 요소 (p.1)" } });
+  assert.equal(repaired.nextStage, "learning-design");
+});
+
 test("쪽 근거 없는 맨 위 개념만 참조한 학습 설계는 거부하고 하위 개념의 실제 쪽을 사용한다", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "study-forge-learning-pages-"));
   t.after(() => rm(root, { recursive: true, force: true }));
