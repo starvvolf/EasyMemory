@@ -1,0 +1,20 @@
+{
+  "artifactType": "study-forge-run-observations",
+  "artifactVersion": "v0",
+  "runId": "20260812T061656Z__generation-lab-1__exploratory__r01",
+  "counts": {
+    "learningUnits": 0,
+    "generatedCards": 0,
+    "criticCards": 0,
+    "finalCards": 0
+  },
+  "learningUnitCardCoverageBasis": "finalCards",
+  "learningUnitCardCoverage": {},
+  "zeroCardLearningUnitIds": [],
+  "multipleCardLearningUnitIds": [],
+  "derivation": {
+    "type": "mechanical-from-run-stage-artifacts",
+    "semanticEvaluationPerformed": false
+  },
+  "notes": []
+}

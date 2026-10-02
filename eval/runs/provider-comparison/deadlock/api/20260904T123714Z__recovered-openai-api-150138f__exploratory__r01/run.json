@@ -1,0 +1,113 @@
+{
+  "artifactType": "study-forge-eval-run",
+  "artifactVersion": "v0",
+  "runId": "20260904T123714Z__recovered-openai-api-150138f__exploratory__r01",
+  "caseId": "recovered-openai-api-150138f-lecture8",
+  "runKind": "exploratory",
+  "runMode": "whole_document_core",
+  "provenance": "eval-runner-v1-full-pipeline",
+  "status": "completed",
+  "sourceRunId": null,
+  "fromStage": "analyze",
+  "frozenStages": [],
+  "executedStages": [
+    "analyze",
+    "plan",
+    "recall",
+    "prepare",
+    "cards",
+    "critic",
+    "finalCards"
+  ],
+  "startedAt": "2026-09-04T12:37:14.944Z",
+  "completedAt": "2026-09-04T12:40:25.639Z",
+  "code": {
+    "gitCommit": "5cbc36f44a572390b5e7518bd412d6814a89347d",
+    "gitDirty": true,
+    "runtimePromptChecksums": {
+      "src/lib/pipeline/analyze.ts": "ca6d0a4b1454f1bb65f7c71edd7174780ed138ac6e0d99325e86774f9234a7ea",
+      "src/lib/pipeline/plan.ts": "279b1e0d0b29232786fcbfd57c5e9ef2d46608418df9341b2e10839d2eeda4c6",
+      "src/lib/pipeline/recall.ts": "26b96a823de9bb74ad4e60ab70c12b39fefca3be58e410efbad7d11c2c7cf00b",
+      "src/lib/pipeline/generate.ts": "d9dedff72055ac28102e2a880c1548adb5fe4e3719f2376795a9d1922f5d3110",
+      "src/lib/model-config.ts": "c9fe5a3276dcafdc8e97edca8f213e4f1dceef3a48408b5d7817b9acaac7dd64"
+    }
+  },
+  "modelConfiguration": {
+    "analyze": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "plan": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "recall": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "prepare": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "cards": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "critic": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "finalCards": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    }
+  },
+  "overrideFile": null,
+  "overrideChecksum": null,
+  "stageLineage": {
+    "analyze": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "plan": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "recall": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "prepare": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "cards": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "critic": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "finalCards": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    }
+  },
+  "stageFiles": {
+    "analyze": "stages/10-analyze.json",
+    "plan": "stages/20-plan.json",
+    "recall": "stages/30-recall.json",
+    "prepare": "stages/40-prepare.json",
+    "cards": "stages/50-cards.json",
+    "critic": "stages/60-critic.json",
+    "finalCards": "stages/70-final-cards.json"
+  }
+}

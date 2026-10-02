@@ -1,0 +1,15 @@
+{
+  "id": "opic-person-description",
+  "title": "OPIc 인물 묘사 패턴",
+  "description": "반복 예시에서 재사용 가능한 인물 묘사 영어 패턴을 추출하는 고정 실험 자료",
+  "learningGoal": "인물 묘사 질문에서 한국어 발화 의도를 보고 재사용 가능한 영어 표현을 직접 말한다.",
+  "instruction": "완성 스크립트를 문장별로 복제하지 말고 공통 패턴을 추출한다. 쉐도잉 방법은 현재 학습 범위에서 제외한다.",
+  "mode": "flashcard",
+  "source": {
+    "fileName": "opic-person-description-fixture.txt",
+    "mimeType": "text/plain",
+    "content": "[1쪽: 답변 전략과 패턴]\n인물을 소개할 때는 이름과 관계, 외모, 좋아하는 이유, 처음 알게 된 계기, 이후 관계, 최종 생각의 흐름을 활용할 수 있다.\nPATTERN #1: I'd like to talk about my classmate. His name is Tom.\nPATTERN #2: He is a close friend and about 21 years old.\nPATTERN #3: To talk about his appearance, he is very tall and has brown eyes.\n\n[2쪽: 추가 패턴]\nPATTERN #4: I especially like him because he is always positive.\nPATTERN #5: I first got to know him when I went to my first class.\nPATTERN #6: Since then, he has become my best friend.\nPATTERN #7: I think he is a very nice guy.\n\n[3~4쪽: 반복 적용 예시]\n이웃, 배우, 건강한 사람을 묘사하는 완성 스크립트도 같은 흐름과 표현을 인물·나이·외모·이유만 바꾸어 반복한다. 배우 예시에는 I first saw her when I watched The Hunger Games.가 쓰인다.\n\n[5쪽: 학습 방법]\n음성을 재생하고 약 0.5초 뒤에 따라 말하는 쉐도잉 방법과 반복 연습을 안내한다."
+  }
+}
+
+

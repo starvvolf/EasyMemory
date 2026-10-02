@@ -1,0 +1,158 @@
+{
+  "schemaVersion": "engine-learning-design-artifact-v1",
+  "artifactId": "generation-contract-deadlock-v1",
+  "title": "운영체제 데드락",
+  "analyze": {
+    "files": [
+      {
+        "fileName": "deadlock.pdf",
+        "documentType": "강의자료",
+        "summary": "데드락의 필요조건을 설명한다.",
+        "keyTopics": ["데드락", "네 필요조건"],
+        "outline": [{ "heading": "데드락 필요조건", "points": ["상호배제", "점유대기", "비선점", "순환대기"] }],
+        "sourceOutline": {
+          "title": "데드락",
+          "summary": "필요조건",
+          "nodes": [
+            {
+              "id": "deadlock-conditions",
+              "parentId": null,
+              "order": 1,
+              "title": "데드락 필요조건",
+              "summary": "네 조건의 동시 성립",
+              "sourceRefs": [{ "sourceId": "source-deadlock", "fileName": "deadlock.pdf", "pageNumbers": [7] }],
+              "sourceEvidence": "Deadlock can arise if four conditions hold simultaneously.",
+              "selectedByDefault": true,
+              "structureTags": ["목록", "관계"],
+              "importance": 3
+            }
+          ]
+        },
+        "suggestedRole": "핵심 학습자료"
+      }
+    ]
+  },
+  "plan": {
+    "summary": "데드락의 네 필요조건과 동시 성립 관계를 학습한다.",
+    "selectedGroup": {
+      "id": "core",
+      "title": "핵심 원리",
+      "description": "데드락 성립 조건",
+      "itemCount": 1,
+      "itemLabel": "핵심 관계",
+      "selectionInstruction": "네 조건과 동시 성립 관계를 포함한다."
+    },
+    "wholeDocumentCore": {
+      "summary": "데드락 필요조건",
+      "learningGoal": "데드락의 네 필요조건과 동시 성립 관계를 설명한다.",
+      "selectionRationale": "데드락 판별의 핵심 전제다.",
+      "areas": [{
+        "id": "conditions",
+        "title": "데드락 필요조건",
+        "description": "네 조건과 동시 성립",
+        "learningValue": "데드락 가능 상태를 판별한다.",
+        "sourceScope": ["deadlock.pdf p.7"]
+      }],
+      "exclusions": ["예방 알고리즘은 이번 범위에서 제외"],
+      "maxLearningUnitCount": 1,
+      "learningOutline": {
+        "title": "데드락",
+        "summary": "필요조건",
+        "nodes": [
+          {
+            "id": "deadlock-conditions",
+            "parentId": null,
+            "order": 1,
+            "title": "데드락 필요조건",
+            "summary": "네 조건의 동시 성립",
+            "sourceRefs": [{ "sourceId": "source-deadlock", "fileName": "deadlock.pdf", "pageNumbers": [7] }],
+            "sourceEvidence": "Deadlock can arise if four conditions hold simultaneously.",
+            "selectedByDefault": true,
+            "structureTags": ["목록", "관계"],
+            "importance": 3
+          }
+        ]
+      }
+    }
+  },
+  "learningDesignResult": {
+    "analysis": {
+      "detectedGoal": "데드락의 네 필요조건과 동시 성립 관계를 설명한다.",
+      "sourceType": "mixed",
+      "keyTopics": ["데드락의 네 필요조건과 동시 성립 관계"],
+      "recommendedStrategy": "확정한 목표와 평가 설계에 따라 능동 인출 문제를 생성합니다.",
+      "extractedMaterial": "상호배제, 점유대기, 비선점, 순환대기가 동시에 성립해야 데드락이 가능하다.",
+      "primaryKnowledgeType": "relationship",
+      "learningUnits": [
+        {
+          "id": "knowledge-unit-1",
+          "sourceId": "source-deadlock",
+          "sourcePage": 7,
+          "sourceRange": "데드락 필요조건",
+          "sourceText": "Deadlock can arise if four conditions hold simultaneously.",
+          "knowledgeType": "relationship",
+          "fixedPart": "상호배제, 점유대기, 비선점, 순환대기가 동시에 성립해야 데드락이 가능하다.",
+          "variableSlots": [],
+          "generalizedForm": "상호배제, 점유대기, 비선점, 순환대기가 동시에 성립해야 데드락이 가능하다.",
+          "target": "상호배제, 점유대기, 비선점, 순환대기가 동시에 성립해야 데드락이 가능하다.",
+          "operation": "reconstruct",
+          "successCriterion": "네 조건을 빠짐없이 복원한다.",
+          "rationale": "조건의 목록과 동시 성립 관계가 하나의 의미 단위다."
+        }
+      ]
+    },
+    "organizedMaterial": {
+      "title": "운영체제 데드락",
+      "sections": [
+        {
+          "heading": "데드락 필요조건",
+          "content": "상호배제, 점유대기, 비선점, 순환대기가 동시에 성립해야 데드락이 가능하다.",
+          "learningUnitIds": ["knowledge-unit-1"]
+        }
+      ]
+    },
+    "cards": [],
+    "learningDesign": {
+      "objectives": [
+        {
+          "id": "objective-1",
+          "outlineNodeIds": ["deadlock-conditions"],
+          "target": "데드락의 네 필요조건과 동시 성립 관계를 설명한다.",
+          "terminalOperation": "reconstruct",
+          "successCriteria": [{ "id": "criterion-1-1", "description": "네 조건을 빠짐없이 복원한다.", "required": true }],
+          "importance": 3
+        }
+      ],
+      "knowledgeUnits": [
+        {
+          "id": "knowledge-unit-1",
+          "objectiveId": "objective-1",
+          "outlineNodeIds": ["deadlock-conditions"],
+          "content": "상호배제, 점유대기, 비선점, 순환대기가 동시에 성립해야 데드락이 가능하다.",
+          "sourceId": "source-deadlock",
+          "sourcePage": 7,
+          "sourceRange": "데드락 필요조건",
+          "sourceText": "Deadlock can arise if four conditions hold simultaneously.",
+          "knowledgeType": "relationship",
+          "rationale": "조건의 목록과 동시 성립 관계가 하나의 의미 단위다."
+        }
+      ],
+      "assessmentBlueprints": [
+        {
+          "id": "blueprint-1",
+          "objectiveId": "objective-1",
+          "knowledgeUnitId": "knowledge-unit-1",
+          "relationToObjective": "direct",
+          "elicitedOperation": "reconstruct",
+          "coverageCriterionIds": ["criterion-1-1"],
+          "given": [{ "type": "instruction", "description": "네 필요조건을 복원한다." }],
+          "hidden": [{ "description": "상호배제, 점유대기, 비선점, 순환대기", "reason": "target_answer" }],
+          "expectedResponse": { "kind": "unordered_structure", "description": "네 조건 전체" },
+          "scoringRubric": [{ "criterionId": "criterion-1-1", "description": "네 조건을 빠짐없이 복원한다.", "weight": 1, "gradingMode": "exact" }],
+          "difficulty": { "cueLevel": "medium", "responseComplexity": "multi_part", "transferDistance": "same_context" },
+          "requiredCapabilities": []
+        }
+      ]
+    }
+  }
+}

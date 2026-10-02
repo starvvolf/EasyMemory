@@ -1,0 +1,216 @@
+{
+  "schemaVersion": "authoring-source-packet-v3",
+  "packetId": "mcp-chatgpt-request-789ee8708698831ced8655c04f289698-authoring-r02",
+  "title": "Geometric Transformations · 대표 범위 시험학습",
+  "learningGoal": "자료에서 오래 기억할 핵심을 익히고, 선택한 2~7쪽의 2D 변환과 동차좌표를 설명·적용한다.",
+  "sourceFileName": "02_Geometric Transformations.pdf",
+  "selectedPdfPages": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "origin": {
+    "runId": "chatgpt-request-789ee8708698831ced8655c04f289698",
+    "publishedId": null,
+    "sourceRunSha256": "578a192b0c9866de7573ec22ed89de696da120dc10540a726d16cd3f5f0a3e2e",
+    "cardsInputSha256": "614f7254f42a7da5cf39b791824e38c9253b307a0d4c4219caa87f4716f0b5bf",
+    "status": "completed-unpublished",
+    "parentAuthoringRunId": "integrated-geometry-sol-20260928-r01",
+    "parentIteration": 1,
+    "parentDocumentSha256": "04c6b9cc8fa527d30f1271cdb54dbbd13ae4cc5ad25dd51a2891f2218153dd2d"
+  },
+  "authoringRequest": {
+    "independentQuestions": 9,
+    "sharedSetQuestions": 0,
+    "revisionLimit": 1,
+    "format": "preserve-confirmed-cards",
+    "revisionReason": "p6 leaf needs two independently gradable tasks"
+  },
+  "items": [
+    {
+      "learningUnitId": "knowledge-unit-1",
+      "objectiveId": "objective-1",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 2,
+      "sourcePages": [
+        2
+      ],
+      "sourceRange": "평행이동",
+      "sourceText": "Adding offsets to its coordinates; Relocating all the coordinate positions by the same displacement along parallel paths (PDF 2쪽).",
+      "target": "점과 변위가 주어졌을 때 이동 뒤 좌표를 계산한다.",
+      "successCriteria": [
+        "x와 y에 각각 해당 변위 성분을 더한다."
+      ],
+      "knowledgeContent": "2차원 평행이동은 점과 물체의 모든 좌표에 동일한 변위를 더해 형태를 보존한다.",
+      "outlineNodeIds": [
+        "source-1:outline-3"
+      ],
+      "conceptNodeIds": [
+        "concept-002"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-2",
+      "objectiveId": "objective-2",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 3,
+      "sourcePages": [
+        3
+      ],
+      "sourceRange": "원점 중심 회전",
+      "sourceText": "A positive value for the angle θ defines a counterclockwise rotation about the pivot point (PDF 3쪽).",
+      "target": "양의 90도 회전에서 점의 새 좌표를 계산한다.",
+      "successCriteria": [
+        "(x,y)를 (-y,x)로 변환한다."
+      ],
+      "knowledgeContent": "원점 기준 양의 회전각은 반시계 방향으로 점을 원호를 따라 이동시킨다.",
+      "outlineNodeIds": [
+        "source-1:outline-4"
+      ],
+      "conceptNodeIds": [
+        "concept-003"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-3",
+      "objectiveId": "objective-3",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 4,
+      "sourcePages": [
+        4
+      ],
+      "sourceRange": "축별 확대축소",
+      "sourceText": "Multiplying object positions by scaling factors; When sx and sy are assigned the same value, relative object proportions are maintained (PDF 4쪽).",
+      "target": "두 축의 확대축소를 계산하고 균일 여부를 판단한다.",
+      "successCriteria": [
+        "새 좌표와 sx=sy 여부를 모두 맞힌다."
+      ],
+      "knowledgeContent": "확대축소는 x에 sx, y에 sy를 곱하며 두 계수가 같을 때 원래 비율이 유지된다.",
+      "outlineNodeIds": [
+        "source-1:outline-5"
+      ],
+      "conceptNodeIds": [
+        "concept-004"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-4",
+      "objectiveId": "objective-4",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 5,
+      "sourcePages": [
+        5
+      ],
+      "sourceRange": "일반 행렬형",
+      "sourceText": "M1: a 2 × 2 matrix containing multiplicative factors; M2: a two-element column matrix containing translational terms (PDF 5쪽).",
+      "target": "두 항의 역할을 구별한다.",
+      "successCriteria": [
+        "M1과 M2를 각 기능에 바르게 대응한다."
+      ],
+      "knowledgeContent": "일반 행렬형 P'=M1 P+M2에서 M1은 곱셈 계수 2×2 행렬, M2는 평행이동 열벡터다.",
+      "outlineNodeIds": [
+        "source-1:outline-7"
+      ],
+      "conceptNodeIds": [
+        "concept-005"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-5",
+      "objectiveId": "objective-5",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 6,
+      "sourcePages": [
+        6
+      ],
+      "sourceRange": "동차좌표",
+      "sourceText": "The homogeneous parameter h is a non-zero value; If we simply set h = 1, each 2D position is represented with homogeneous coordinates (x,y,1) (PDF 6쪽).",
+      "target": "동차좌표의 의미와 h=1의 표현을 설명한다.",
+      "successCriteria": [
+        "비영 h와 (x,y,1)을 함께 말한다."
+      ],
+      "knowledgeContent": "2D 점을 (xh,yh,h)로 나타내고 h는 0이 아니며 h=1이면 (x,y,1)이다.",
+      "outlineNodeIds": [
+        "source-1:outline-8"
+      ],
+      "conceptNodeIds": [
+        "concept-006"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-6",
+      "objectiveId": "objective-6",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 7,
+      "sourcePages": [
+        7
+      ],
+      "sourceRange": "평행이동 행렬",
+      "sourceText": "Two-Dimensional Translation Matrix (T): [1 0 tx; 0 1 ty; 0 0 1] (PDF 7쪽).",
+      "target": "평행이동 행렬의 변위 항 위치를 완성한다.",
+      "successCriteria": [
+        "[1,0,tx;0,1,ty;0,0,1] 구조를 맞힌다."
+      ],
+      "knowledgeContent": "평행이동 3×3 행렬에서 tx,ty는 셋째 열 첫째·둘째 행에 놓이고 대각은 1이다.",
+      "outlineNodeIds": [
+        "source-1:outline-9",
+        "source-1:outline-10",
+        "source-1:outline-11"
+      ],
+      "conceptNodeIds": [
+        "concept-007"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-7",
+      "objectiveId": "objective-7",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 7,
+      "sourcePages": [
+        7
+      ],
+      "sourceRange": "회전 행렬",
+      "sourceText": "Two-Dimensional Rotation Matrix (R): [cosθ -sinθ 0; sinθ cosθ 0; 0 0 1] (PDF 7쪽).",
+      "target": "회전 행렬의 부호와 위치를 판단한다.",
+      "successCriteria": [
+        "-sinθ와 +sinθ의 위치를 맞힌다."
+      ],
+      "knowledgeContent": "회전 3×3 행렬의 왼쪽 위 2×2는 [cosθ,-sinθ;sinθ,cosθ]이다.",
+      "outlineNodeIds": [
+        "source-1:outline-9",
+        "source-1:outline-10",
+        "source-1:outline-11"
+      ],
+      "conceptNodeIds": [
+        "concept-008"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-8",
+      "objectiveId": "objective-8",
+      "sourceId": "02_Geometric Transformations.pdf",
+      "sourcePage": 7,
+      "sourcePages": [
+        7
+      ],
+      "sourceRange": "확대축소 행렬",
+      "sourceText": "Two-Dimensional Scaling Matrix (S): [sx 0 0; 0 sy 0; 0 0 1] (PDF 7쪽).",
+      "target": "확대축소 행렬의 대각 성분을 완성한다.",
+      "successCriteria": [
+        "sx,sy,1의 위치를 맞힌다."
+      ],
+      "knowledgeContent": "확대축소 3×3 행렬의 대각은 sx,sy,1이고 비대각항은 0이다.",
+      "outlineNodeIds": [
+        "source-1:outline-9",
+        "source-1:outline-10",
+        "source-1:outline-11"
+      ],
+      "conceptNodeIds": [
+        "concept-009"
+      ]
+    }
+  ]
+}

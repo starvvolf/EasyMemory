@@ -1,0 +1,6 @@
+eval/**/*.json text eol=lf
+eval/corpus/user-test-pdfs/*.pdf binary
+
+# Preserve the originally hashed spec (LF) and generated SVG (CRLF) bytes.
+tools/problem-authoring-lab/fixtures/graph-one-spec.json text eol=lf
+tools/problem-authoring-lab/runs/graph-one-mcp/iteration-0/assets/*.svg text eol=crlf

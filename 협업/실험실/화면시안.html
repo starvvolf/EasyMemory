@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>생성 실험실 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<!--
+  생성 실험실(/lab) 화면 시안. 작업지시_08_생성실험실.md의 화면 기준이다.
+  가짜 데이터로 움직이는 정적 시안이며 서버와 연결되지 않는다.
+  색·글꼴 토큰은 /study(src/app/study/dejipgi.css)와 같다.
+-->
+<style>
+:root{
+  --ground:#EEF1F4; --surface:#FFFFFF; --surface-2:#F6F8FA; --line:#D8DEE5; --line-strong:#B9C2CC;
+  --ink:#16202A; --muted:#5A6774; --faint:#8A96A2;
+  --accent:#1F4FD1; --accent-ink:#FFFFFF; --accent-soft:#E6ECFB;
+  --good:#1D7F52; --good-soft:#E3F3EA; --bad:#B93A26; --bad-soft:#FBE8E4; --help:#9A6400; --help-soft:#FBF0DA;
+  --reuse:#6B7682; --reuse-soft:#ECEFF2;
+  --shadow:0 1px 2px rgba(22,32,42,.06),0 8px 24px rgba(22,32,42,.07);
+  --radius:12px;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1318; --surface:#161D24; --surface-2:#1C242C; --line:#2A343E; --line-strong:#3A4652;
+    --ink:#E5EAEF; --muted:#9AA7B3; --faint:#6F7C88;
+    --accent:#7FA2FF; --accent-ink:#0B1222; --accent-soft:#1D2A48;
+    --good:#5CC896; --good-soft:#15302A; --bad:#FF8A73; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14;
+    --reuse:#98A4B0; --reuse-soft:#222B34;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1318; --surface:#161D24; --surface-2:#1C242C; --line:#2A343E; --line-strong:#3A4652;
+  --ink:#E5EAEF; --muted:#9AA7B3; --faint:#6F7C88;
+  --accent:#7FA2FF; --accent-ink:#0B1222; --accent-soft:#1D2A48;
+  --good:#5CC896; --good-soft:#15302A; --bad:#FF8A73; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14;
+  --reuse:#98A4B0; --reuse-soft:#222B34;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14.5px;line-height:1.55}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.num{font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:.92em}
+.muted{color:var(--muted)} .faint{color:var(--faint)} .small{font-size:12.5px}
+
+/* 머리줄 */
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.top h1{font-size:16px;margin:0;font-weight:600;letter-spacing:-.01em}
+.top .sp{flex:1}
+.conn{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--good);flex:none}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:none;padding:5px 10px;font-size:12.5px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+
+/* 배치 */
+.layout{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:calc(100vh - 53px)}
+.side{border-right:1px solid var(--line);background:var(--surface-2);padding:14px 12px;overflow:auto}
+.main{padding:18px 22px 60px;min-width:0}
+.with-pdf .main{padding-right:22px}
+.pdf{position:fixed;top:53px;right:0;bottom:0;width:min(440px,40vw);background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow);display:flex;flex-direction:column;z-index:4}
+.with-pdf .main{margin-right:min(440px,40vw)}
+
+/* 버튼 */
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;padding:6px 12px;font-size:13px}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{border-color:transparent;background:none;color:var(--muted)}
+.btn.small{padding:3px 9px;font-size:12.5px}
+.btn.block{width:100%}
+
+/* 실행 목록 */
+.runs{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.run{text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 11px;display:flex;flex-direction:column;gap:3px}
+.run[aria-current="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.run .t{font-weight:600;font-size:13.5px;display:flex;gap:6px;align-items:center;min-width:0}
+.run .t span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.run .m{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.run .memo{font-size:12px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.b-run{background:var(--accent-soft);color:var(--accent)}
+.b-ok{background:var(--good-soft);color:var(--good)}
+.b-warn{background:var(--help-soft);color:var(--help)}
+.b-bad{background:var(--bad-soft);color:var(--bad)}
+.b-gray{background:var(--reuse-soft);color:var(--reuse)}
+.fake{font-size:10.5px;border:1px dashed var(--line-strong);color:var(--muted);border-radius:4px;padding:0 4px}
+
+/* 제목줄 */
+.head{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline}
+.head h2{margin:0;font-size:19px;font-weight:600;letter-spacing:-.01em}
+.head .facts{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.purpose{margin:6px 0 0;color:var(--muted);font-size:13px}
+.memoline{margin-top:6px;font-size:13px;display:flex;gap:6px;align-items:center}
+.memoline input{border:1px dashed var(--line);background:none;border-radius:6px;padding:2px 8px;min-width:0;flex:1;max-width:420px;color:var(--muted)}
+
+/* 단계 줄 */
+.pipe{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow)}
+.stages{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.stage{position:relative;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 10px 8px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stage[aria-selected="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.stage .name{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:18px}
+.with-pdf .stages{grid-template-columns:repeat(3,minmax(0,1fr))}
+.stage .ico{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:10px;flex:none;color:#fff}
+.s-done .ico{background:var(--good)} .s-warn .ico{background:var(--help)} .s-fail .ico{background:var(--bad)}
+.s-run .ico{background:var(--accent);animation:pulse 1.2s infinite} .s-wait .ico{background:var(--line-strong)} .s-reuse .ico{background:var(--reuse)}
+@keyframes pulse{50%{opacity:.45}}
+.stage .time{font-size:13px}
+.stage .model{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stage .retry{position:absolute;top:8px;right:9px;font-size:11px;color:var(--help);font-weight:600}
+.s-wait{background:var(--surface-2)} .s-wait .time{color:var(--faint)}
+.next{margin-top:6px;display:flex;flex-direction:column;gap:5px}
+.next select{font-size:11.5px;border:1px solid var(--line);border-radius:6px;padding:2px 4px;background:var(--surface);width:100%}
+.bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:12px;background:var(--surface-2)}
+.bar i{display:block;height:100%}
+.barlegend{display:flex;justify-content:space-between;font-size:11.5px;color:var(--faint);margin-top:4px}
+
+/* 단계 상세 */
+.detail{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.dhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.dhead h3{margin:0;font-size:15px}
+.tabs{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
+.tabs button{border:0;background:none;padding:5px 10px;border-radius:7px;font-size:13px;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--surface-2);color:var(--ink);font-weight:600}
+.summary{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.pane{padding:14px 16px 18px}
+
+/* 결과 모양들 */
+.tree{list-style:none;margin:0;padding:0}
+.tree li{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);min-width:0}
+.tree li:last-child{border-bottom:0}
+.tree .lvl{flex:none}
+.tree .ttl{flex:1;min-width:0}
+.pg{font-family:var(--mono);font-size:11.5px;border:1px solid var(--line);border-radius:5px;padding:0 5px;color:var(--muted);background:var(--surface);white-space:nowrap}
+button.pg:hover{border-color:var(--accent);color:var(--accent)}
+.pg.warn{border-color:var(--help);color:var(--help);background:var(--help-soft)}
+.obj{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.obj.warn{border-color:var(--help);box-shadow:inset 3px 0 0 var(--help)}
+.obj h4{margin:0 0 6px;font-size:14.5px;display:flex;gap:8px;align-items:flex-start}
+.obj h4 .n{color:var(--faint);font-weight:500;white-space:nowrap}
+.kv{display:grid;grid-template-columns:72px minmax(0,1fr);gap:4px 10px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+.quote{border-left:3px solid var(--line-strong);padding:2px 0 2px 10px;color:var(--ink);font-size:13px}
+.quote button{border:0;background:none;padding:0;color:var(--accent);font-size:12px;margin-left:6px}
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+table.t th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line-strong)}
+table.t td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+.warnline{display:flex;gap:8px;align-items:flex-start;background:var(--help-soft);color:var(--help);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:10px}
+.errline{background:var(--bad-soft);color:var(--bad)}
+.card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.card .q{font-weight:500}
+.card .a{color:var(--good);font-size:13px;margin-top:4px}
+.qdoc{border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--surface-2)}
+.qdoc .blank{display:inline-block;min-width:110px;border-bottom:2px solid var(--ink);margin:0 4px}
+.reveal{margin-top:10px;padding:8px 10px;border-radius:8px;background:var(--good-soft);color:var(--good);font-size:13px}
+
+/* 보낸 입력 / 재시도 */
+.calls{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.calls button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 10px;font-size:12.5px;display:flex;gap:6px;align-items:center}
+.calls button[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.facts4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.fact{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.fact .k{font-size:11.5px;color:var(--muted)} .fact .v{font-size:15px;font-weight:600}
+details.block{border:1px solid var(--line);border-radius:8px;margin-bottom:8px}
+details.block summary{padding:8px 12px;cursor:pointer;font-size:13px;font-weight:500;display:flex;gap:8px;align-items:center}
+details.block pre{margin:0;padding:10px 12px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto;background:var(--surface-2)}
+.diff{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.diff div{padding:2px 10px;white-space:pre-wrap;word-break:break-word}
+.diff .del{background:var(--bad-soft);color:var(--bad)} .diff .add{background:var(--good-soft);color:var(--good)}
+.attempt{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.attempt .hd{display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px}
+
+/* PDF 보기 */
+.pdf .ph{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.pdf .pb{flex:1;overflow:auto;padding:16px;background:var(--surface-2)}
+.page{background:#fff;color:#222;aspect-ratio:4/3;border:1px solid var(--line);box-shadow:var(--shadow);padding:22px;font-family:Georgia,serif;font-size:13px;line-height:1.5}
+.page h5{margin:0 0 10px;font-size:18px}
+.page mark{background:#F7E26B;color:#3A3000}
+
+/* 겹창 */
+.scrim{position:fixed;inset:0;background:rgba(14,19,24,.45);display:grid;place-items:center;z-index:20;padding:16px}
+.dialog{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);width:min(720px,100%);max-height:calc(100vh - 32px);overflow:auto}
+.dialog.sm{width:min(420px,100%)}
+.dialog .dh{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.dialog .dh h3{margin:0;font-size:16px;flex:1}
+.dialog .db{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.dialog .df{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;align-items:center}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12.5px;color:var(--muted);font-weight:500}
+.field input,.field select,.field textarea{border:1px solid var(--line-strong);border-radius:8px;padding:7px 10px;background:var(--surface)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:4px 11px;font-size:12.5px}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+table.models{width:100%;border-collapse:collapse;font-size:13px}
+table.models td,table.models th{padding:6px 6px;border-bottom:1px solid var(--line);text-align:left}
+table.models th{font-size:12px;color:var(--muted);font-weight:500}
+table.models select{border:1px solid var(--line);border-radius:6px;padding:3px 6px;background:var(--surface);width:100%}
+table.models tr.all td{background:var(--surface-2)}
+.toggle{display:flex;gap:8px;align-items:center;font-size:13px}
+
+/* 좁은 화면 */
+@media (max-width: 900px){
+  .layout{grid-template-columns:1fr}
+  .side{border-right:0;border-bottom:1px solid var(--line)}
+  .runs{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  .run{min-width:220px}
+  .stages{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .with-pdf .main{margin-right:0}
+  .pdf{width:100%;top:0;z-index:30}
+  .facts4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .main{padding:14px 16px 60px}
+  .top .conn .label{display:none}
+}
+@media (max-width: 480px){
+  .stages{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kv{grid-template-columns:1fr}
+  .tabs{margin-left:0;width:100%}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>생성 실험실</h1>
+  <span class="sp"></span>
+  <span class="conn"><span class="dot"></span><span class="label">ChatGPT 연결됨</span></span>
+  <span class="seg" role="group" aria-label="모델 종류">
+    <button id="modeFake" aria-pressed="false">가짜 모델</button>
+    <button id="modeReal" aria-pressed="true">실제 모델</button>
+  </span>
+</header>
+<div class="layout" id="layout">
+  <aside class="side">
+    <button class="btn primary block" id="newBtn">+ 새 실행</button>
+    <div class="runs" id="runs"></div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<aside class="pdf" id="pdf" hidden></aside>
+<div id="modal"></div>
+
+<script>
+/* ---------- 가짜 데이터 ---------- */
+const STAGES = [
+  ["analyze","분석"],["concept-tree","개념 구조"],["learning-design","학습 설계"],
+  ["activity-design","활동 설계"],["cards","카드"],["authoring","출제"]];
+const MODELS = ["gpt-6-sol","gpt-6-astra","gpt-6-luna"];
+const EFFORTS = ["low","medium","high","xhigh","max"];
+
+const RUNS = [
+  { id:"r3", file:"03_Three Dimensional Viewing.pdf", pages:"p.1–44", total:44, purpose:"시험 대비로 3D 관측 개념을 떠올릴 수 있게", memo:"학습 설계만 sol·high, 나머지 luna·low",
+    status:["b-warn","멈춤 · 단계 확인"], fake:false, created:"오늘 14:02", calls:4, time:"2:41",
+    stages:{
+      analyze:{s:"done", ms:18400, m:"luna·low"},
+      "concept-tree":{s:"warn", ms:52100, m:"luna·low", retry:1},
+      "learning-design":{s:"warn", ms:71300, m:"sol·high"},
+      "activity-design":{s:"wait", m:"luna·low", next:true},
+      cards:{s:"wait", m:"luna·low"}, authoring:{s:"wait", m:"luna·low"} },
+    sel:"learning-design" },
+  { id:"r2", file:"cornell-bfs-2pages.pdf", pages:"p.1–2", total:2, purpose:"BFS 동작을 설명할 수 있게", memo:"기준 실행 (sol·medium)",
+    status:["b-ok","완료"], fake:false, created:"오늘 11:40", calls:7, time:"4:12",
+    stages:{ analyze:{s:"done",ms:21000,m:"sol·medium"}, "concept-tree":{s:"done",ms:38000,m:"sol·medium"},
+      "learning-design":{s:"done",ms:64000,m:"sol·medium"}, "activity-design":{s:"done",ms:29000,m:"sol·medium"},
+      cards:{s:"done",ms:24000,m:"sol·medium"}, authoring:{s:"done",ms:76000,m:"sol·medium",retry:1} },
+    sel:"authoring" },
+  { id:"r1", file:"cornell-bfs-2pages.pdf", pages:"p.1", total:1, purpose:"화면 확인용", memo:"",
+    status:["b-run","진행 중"], fake:true, created:"오늘 11:02", calls:3, time:"0:07",
+    stages:{ analyze:{s:"done",ms:900,m:"fake"}, "concept-tree":{s:"done",ms:1400,m:"fake"},
+      "learning-design":{s:"run",ms:0,m:"fake"}, "activity-design":{s:"wait",m:"fake"}, cards:{s:"wait",m:"fake"}, authoring:{s:"wait",m:"fake"} },
+    sel:"concept-tree" },
+];
+const OUTLINE = [
+  [0,"Three-Dimensional Viewing","1–44"],[1,"Overview of 3D Viewing Concepts","2–5"],[1,"The 3D Viewing Pipeline","6–9"],
+  [1,"Viewing-Coordinate Parameters","10–15"],[1,"Transformation from World to Viewing Coordinates","16–20"],
+  [1,"Projection Transformations","21–30"],[2,"Orthogonal Projections","22–25"],[2,"Perspective Projections","26–30"],
+  [1,"Clipping Window and View Volume","31–38"],[1,"Normalization Transformation","39–44"]];
+const TREE = [
+  [0,"3D 관측",null],[1,"3D 관측 개념 개요",null,"쪽 근거 없음 (1차 시도)"],[1,"관측 파이프라인","6–9"],
+  [2,"모델링 → 월드 → 관측 좌표","7"],[1,"관측 좌표 매개변수 (P0, N, V)","10–13"],[1,"투영 변환","21–30"],
+  [2,"평행 투영","22–25"],[2,"원근 투영","26–30"],[1,"뷰 볼륨과 클리핑","31–38"]];
+
+/* ---------- 상태 ---------- */
+const S = { run:"r3", stage:null, tab:"result", call:1, pdfPage:null, real:true };
+const $ = (s, r=document) => r.querySelector(s);
+const h = (tag, attrs={}, ...kids) => { const el = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})) { if (v == null || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v); else if (k === "text") el.textContent = v; else if (k === "html") el.innerHTML = v; else el.setAttribute(k, v === true ? "" : v); }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid));
+  return el; };
+const fmt = (ms) => ms == null ? "—" : ms < 60000 ? `${(ms/1000).toFixed(ms < 10000 ? 1 : 0)}초` : `${Math.floor(ms/60000)}분 ${String(Math.round(ms%60000/1000)).padStart(2,"0")}초`;
+const run = () => RUNS.find(r => r.id === S.run);
+
+/* ---------- 실행 목록 ---------- */
+function renderRuns(){
+  const box = $("#runs"); box.replaceChildren();
+  for (const r of RUNS) box.append(h("button", { class:"run", "aria-current": r.id === S.run ? "true" : "false", onclick:() => { S.run = r.id; S.stage = null; S.tab = "result"; render(); } },
+    h("div", { class:"t" }, h("span", { text:r.file.replace(/\.pdf$/,"") }), r.fake ? h("span", { class:"fake", text:"가짜" }) : null),
+    h("div", { class:"m" }, h("span", { class:"num", text:r.pages }), h("span", { class:`badge ${r.status[0]}`, text:r.status[1] })),
+    h("div", { class:"m" }, h("span", { text:modelSummary(r) }), h("span", { class:"num", text:r.time }), h("span", { text:r.created })),
+    r.memo ? h("div", { class:"memo", text:r.memo }) : null));
+}
+function modelSummary(r){
+  const ms = [...new Set(Object.values(r.stages).map(s => s.m))];
+  return ms.length === 1 ? ms[0] : `${ms[0]} 외 ${ms.length - 1}`;
+}
+
+/* ---------- 본문 ---------- */
+function render(){
+  renderRuns();
+  const r = run(); S.stage = S.stage || r.sel;
+  const main = $("#main"); main.replaceChildren();
+  main.append(
+    h("div", { class:"head" }, h("h2", { text:r.file }),
+      h("div", { class:"facts" }, h("span", { class:"num", text:r.pages }), h("span", null, "AI 호출 ", h("b", { class:"num", text:String(r.calls) }), "번"), h("span", null, "전체 ", h("b", { class:"num", text:r.time })), h("span", { class:`badge ${r.status[0]}`, text:r.status[1] }))),
+    h("p", { class:"purpose", text:`목적 · ${r.purpose}` }),
+    h("div", { class:"memoline" }, h("span", { class:"faint small", text:"메모" }), h("input", { value:r.memo, placeholder:"이 실행에 대해 적어 두기", "aria-label":"메모" })),
+    renderPipe(r), renderDetail(r));
+  $("#layout").classList.toggle("with-pdf", !!S.pdfPage);
+  renderPdf();
+}
+function renderPipe(r){
+  const total = Object.values(r.stages).reduce((a,s) => a + (s.ms || 0), 0) || 1;
+  const colors = { done:"var(--good)", warn:"var(--help)", fail:"var(--bad)", run:"var(--accent)", reuse:"var(--reuse)" };
+  const icon = { done:"✓", warn:"!", fail:"✕", run:"", wait:"", reuse:"↺" };
+  return h("section", { class:"pipe", "aria-label":"단계" },
+    h("div", { class:"stages", role:"tablist" }, STAGES.map(([key,label], i) => { const s = r.stages[key];
+      return h("button", { class:`stage s-${s.s}`, role:"tab", "aria-selected": S.stage === key ? "true" : "false", onclick:() => { if (s.s !== "wait") { S.stage = key; S.tab = "result"; render(); } } },
+        h("span", { class:"name" }, h("span", { class:"ico", text:icon[s.s] }), `${i+1} ${label}`),
+        h("span", { class:"time num", text: s.s === "run" ? "도는 중 0:04" : s.s === "wait" ? "대기" : fmt(s.ms) }),
+        h("span", { class:"model", text:s.m }),
+        s.retry ? h("span", { class:"retry", title:"재시도", text:`↻${s.retry}` }) : null,
+        s.next ? h("div", { class:"next", onclick:(e) => e.stopPropagation() },
+          h("select", { "aria-label":"다음 단계 모델" }, MODELS.map(m => h("option", { selected: m === "gpt-6-luna" ? true : null, text:m }))),
+          h("button", { class:"btn primary small", onclick:() => confirmNext(key, label) }, "다음 단계 실행")) : null); })),
+    h("div", { class:"bar", "aria-hidden":"true" }, STAGES.map(([key]) => { const s = r.stages[key]; return s.ms ? h("i", { style:`width:${s.ms/total*100}%;background:${colors[s.s]};opacity:${S.stage===key?1:.55}`, title:key }) : null; })),
+    h("div", { class:"barlegend" }, h("span", { text:"단계별 걸린 시간 비중" }), h("span", { class:"num", text:`가장 느림: ${slowest(r)}` })));
+}
+function slowest(r){ const [k,s] = Object.entries(r.stages).filter(([,s]) => s.ms).sort((a,b) => b[1].ms - a[1].ms)[0]; return `${STAGES.find(x => x[0]===k)[1]} ${fmt(s.ms)}`; }
+
+function renderDetail(r){
+  const [key,label] = STAGES.find(x => x[0] === S.stage);
+  const s = r.stages[key];
+  const tabs = [["result","결과"],["input","보낸 입력"],["retry",`검사·재시도${s.retry ? ` ${s.retry}` : ""}`],["json","원본 JSON"]];
+  const sum = summaryFor(r, key);
+  return h("section", { class:"detail" },
+    h("div", { class:"dhead" }, h("h3", { text:`${STAGES.findIndex(x=>x[0]===key)+1} ${label}` }),
+      h("span", { class:"small muted num", text:`${s.m} · ${fmt(s.ms)}` }),
+      h("div", { class:"tabs", role:"tablist" }, tabs.map(([k,t]) => h("button", { role:"tab", "aria-selected": S.tab === k ? "true" : "false", onclick:() => { S.tab = k; render(); } }, t)))),
+    sum.length ? h("div", { class:"summary" }, sum) : null,
+    h("div", { class:"pane" }, S.tab === "result" ? resultPane(r, key) : S.tab === "input" ? inputPane(r, key) : S.tab === "retry" ? retryPane(r, key) : jsonPane(key)));
+}
+function summaryFor(r, key){
+  const b = (cls, t) => h("span", { class:`badge ${cls}`, text:t });
+  if (r.id === "r3" && key === "learning-design") return [b("b-gray","목표 1개"), b("b-gray","범위 44쪽"), b("b-warn","쪽 수 ÷ 목표 수 = 44 (기준 8)"), b("b-warn","쪽 근거 없음 1"), b("b-warn","원문 잘림 p.31–44")];
+  if (r.id === "r3" && key === "concept-tree") return [b("b-gray","개념 9개"), b("b-warn","재시도 1 · 쪽 근거 누락을 고침")];
+  if (r.id === "r3" && key === "analyze") return [b("b-gray","목차 10줄"), b("b-ok","범위 전체 포함")];
+  if (key === "authoring") return [b("b-gray","문항 3개"), b("b-ok","검사 오류 0"), b("b-warn","경고 1 · 선택지 길이 단서")];
+  return [b("b-ok","경고 없음")];
+}
+
+/* 결과 탭: 단계마다 모양이 다르다 */
+function resultPane(r, key){
+  if (key === "analyze") return h("ul", { class:"tree" }, OUTLINE.map(([lv,t,p]) => h("li", null,
+    h("span", { class:"lvl", style:`width:${lv*18}px` }), h("span", { class:"ttl", style: lv === 0 ? "font-weight:600" : null, text:t }), h("button", { class:"pg", onclick:() => openPdf(+p.split("–")[0]), text:`p.${p}` }))));
+  if (key === "concept-tree") return h("ul", { class:"tree" }, TREE.map(([lv,t,p,warn]) => h("li", null,
+    h("span", { class:"lvl", style:`width:${lv*18}px` }), h("span", { class:"ttl", style: lv === 0 ? "font-weight:600" : null }, t, warn ? h("span", { class:"badge b-warn", style:"margin-left:8px", text:warn }) : null),
+    p ? h("button", { class:"pg", onclick:() => openPdf(+p.split("–")[0]), text:`p.${p}` }) : h("span", { class: lv === 0 ? "pg" : "pg warn", text: lv === 0 ? "전체" : "쪽 없음" }))));
+  if (key === "learning-design" && r.id === "r3") return [
+    h("div", { class:"warnline" }, h("b", { text:"!" }), h("span", null, "44쪽 범위에서 목표가 1개예요. 맨 위 개념(1번)만 가리켜서 쪽 근거가 없고 0쪽으로 저장돼요. 이대로면 출제 단계에서 막혀요.")),
+    objCard(1, "3차원 관측 과정의 개념과 단계를 설명할 수 있다.", "3D 관측의 좌표 변환, 투영, 클리핑 과정 전반", "관측 파이프라인의 단계를 순서대로 말하고 각 단계의 역할을 설명한다.", "The three-dimensional viewing pipeline transforms world-coordinate positions…", "관계", 3, null, "개념 1 (맨 위 개념)")];
+  if (key === "learning-design") return [
+    objCard(1, "BFS가 큐를 쓰는 이유를 설명할 수 있다.", "가까운 노드부터 방문하는 순서와 큐의 선입선출", "거리 순 방문과 선입선출의 관계를 말한다.", "We change it into a breadth-first search simply by changing s from a stack to a queue!", "관계", 3, 1, "개념 2, 3"),
+    objCard(2, "BFS 방문 순서를 손으로 구할 수 있다.", "그래프에서 u부터 거리 1, 2… 순으로 방문", "예시 그래프의 방문 순서를 빠짐없이 쓴다.", "Then all nodes that are 1 edge from u.", "절차", 2, 1, "개념 4")];
+  if (key === "activity-design") return h("table", { class:"t" }, h("thead", null, h("tr", null, ["목표","보여줄 것","감출 것","응답","채점","문제방식"].map(x => h("th", { text:x })))),
+    h("tbody", null, [["1","큐로 바꾼 코드 한 줄","큐를 쓰는 이유","짧은답","의미","빈칸"],["1","스택/큐 진술","참·거짓","단일선택","정확","OX"],["2","예시 그래프","방문 순서","순서구조","정확","순서복원"]].map(row => h("tr", null, row.map(c => h("td", { text:c }))))));
+  if (key === "cards") return [["빈칸","BFS는 DFS의 스택을 ____로 바꾼 것이다.","큐"],["OX","BFS에서 가까운 노드가 항상 먼저 방문된다.","O"],["순서복원","u에서 시작한 방문 순서를 맞추세요.","u, 2, 3, 4, 5, 6, 7"]].map(([t,q,a]) =>
+    h("div", { class:"card" }, h("span", { class:"badge b-gray", text:t }), h("div", { class:"q", style:"margin-top:6px", text:q }), h("div", { class:"a", text:`정답 · ${a}` })));
+  return [ h("div", { class:"row", style:"margin-bottom:10px" }, h("span", { class:"seg" }, h("button", { "aria-pressed":"true" }, "정답 공개 전"), h("button", { "aria-pressed":"false" }, "정답 공개 후")), h("span", { class:"small muted", text:"문항 1 / 3" })),
+    h("div", { class:"qdoc" }, h("div", { text:"DFS 반복 알고리즘에서 한 가지만 바꾸면 BFS가 된다." }), h("div", { style:"margin-top:8px" }, "자료구조 s를", h("span", { class:"blank" }), "로 바꾼다."), h("div", { class:"reveal", text:"정답 공개 후 · 큐 — 먼저 넣은 노드를 먼저 꺼내 가까운 노드부터 방문한다." })),
+    h("div", { class:"warnline", style:"margin-top:10px" }, h("b", { text:"!" }), h("span", { text:"문항 2 · 선택지 길이 단서: 정답 선택지가 다른 선택지보다 1.8배 길어요." })) ];
+}
+function objCard(n, target, content, criterion, quote, kind, imp, page, concepts){
+  return h("article", { class:`obj${page ? "" : " warn"}` },
+    h("h4", null, h("span", { class:"n", text:`목표 ${n}` }), h("span", { text:target })),
+    h("dl", { class:"kv" },
+      h("dt", { text:"학습내용" }), h("dd", { text:content }),
+      h("dt", { text:"성공기준" }), h("dd", { text:criterion }),
+      h("dt", { text:"근거" }), h("dd", null, h("div", { class:"quote" }, `“${quote}”`, page ? h("button", { onclick:() => openPdf(page), text:`p.${page}에서 보기` }) : null)),
+      h("dt", { text:"쪽" }), h("dd", null, page ? h("span", { class:"pg", text:`p.${page}` }) : h("span", { class:"pg warn", text:"0쪽 (근거 없음)" }), " ", h("span", { class:"small muted", text:concepts })),
+      h("dt", { text:"원문 확인" }), h("dd", null, page ? h("span", { class:"badge b-ok", text:"원문 확인" }) : h("span", { class:"badge b-warn", text:"쪽이 없어 확인 못 함" })),
+      h("dt", { text:"종류·중요도" }), h("dd", { text:`${kind} · ${imp}` })));
+}
+
+/* 보낸 입력 탭 */
+function inputPane(r, key){
+  const s = r.stages[key]; const tries = (s.retry || 0) + 1;
+  return [ h("div", { class:"calls" }, Array.from({ length:tries }, (_, i) => h("button", { "aria-pressed": S.call === i+1 ? "true" : "false", onclick:() => { S.call = i+1; render(); } },
+      h("span", { class:`badge ${i < tries-1 ? "b-warn" : "b-ok"}`, text: i < tries-1 ? "검사 걸림" : "통과" }), `시도 ${i+1}`, h("span", { class:"num faint", text: fmt(i < tries-1 ? 23000 : s.ms - (tries-1)*23000) })))),
+    h("div", { class:"facts4" },
+      fact("보낸 원문", key === "learning-design" || key === "analyze" ? "p.1–30" : "없음"),
+      fact("잘린 쪽", key === "learning-design" || key === "analyze" ? "p.31–44" : "—", true),
+      fact("입력 토큰", "18,420"), fact("출력 토큰", "1,206")),
+    key === "learning-design" || key === "analyze" ? h("div", { class:"warnline" }, h("b", { text:"!" }), h("span", { text:"길이 제한(합계 60,000자)으로 p.31–44를 보내지 못했어요. 모델에게는 “p.31–44는 길이 제한으로 빠졌음”이라고 알렸어요." })) : null,
+    h("details", { class:"block" }, h("summary", null, "지시문 ", h("span", { class:"faint small num", text:"1,480자" })), h("pre", { text:"너는 Recaller 학습 설계 엔진의 한 단계를 작성한다.\n아래 [단계 계약과 입력]의 instructions와 outputContract(또는 format)를 그대로 따른다.\n원문에 없는 사실을 만들지 않는다. …" })),
+    h("details", { class:"block" }, h("summary", null, "단계 계약과 입력 ", h("span", { class:"faint small num", text:"6,210자" })), h("pre", { text:'{\n  "instructions": "개념트리의 노드를 묶거나 나눠 학습 대상과 목표를 정합니다. …",\n  "input": { "conceptTree": { "nodes": [ … 9개 ] }, … }\n}' })),
+    h("details", { class:"block" }, h("summary", null, "원문 (선택 쪽 추출 글자) ", h("span", { class:"faint small num", text:"60,000자 · 30쪽" })), h("pre", { text:"[p.1]\nThree-Dimensional Viewing …\n\n[p.2]\nOverview of 3D Viewing Concepts …\n\n… (p.3–30 접힘)" })),
+    h("details", { class:"block" }, h("summary", null, "받은 답 ", h("span", { class:"faint small num", text:"2,944자" })), h("pre", { text:'{ "learningDesignText": "--- LEARNING 1 ---\\n개념: 1\\n학습내용: 3D 관측의 좌표 변환, 투영, 클리핑 과정 전반\\n…" }' })) ];
+}
+function fact(k, v, warn){ return h("div", { class:"fact" }, h("div", { class:"k", text:k }), h("div", { class:"v num", style: warn && v !== "—" ? "color:var(--help)" : null, text:v })); }
+
+/* 검사·재시도 탭 */
+function retryPane(r, key){
+  const s = r.stages[key];
+  if (!s.retry) return h("p", { class:"muted", text:"이 단계는 첫 시도에 검사를 통과했어요." });
+  return [ h("div", { class:"attempt" }, h("div", { class:"hd" }, h("span", { class:"badge b-warn", text:"시도 1 · 검사 걸림" }), h("span", { class:"num faint", text:"23초" })),
+      h("div", { class:"warnline errline", style:"margin:0" }, h("span", { text:"개념 'Overview of 3D Viewing Concepts'에 PDF 페이지 근거가 필요합니다." }))),
+    h("div", { class:"attempt" }, h("div", { class:"hd" }, h("span", { class:"badge b-ok", text:"시도 2 · 통과" }), h("span", { class:"small muted", text:"이전 답과 검사 오류를 함께 보내 걸린 부분만 고치게 했어요." })),
+      h("div", { class:"small muted", style:"margin-bottom:6px", text:"이전 답 → 고친 답 (바뀐 줄만)" }),
+      h("div", { class:"diff" }, h("div", { class:"del", text:"- - 3D 관측 개념 개요" }), h("div", { class:"add", text:"+ - 3D 관측 개념 개요 (p.2-5)" }), h("div", { class:"faint", text:"  - 관측 파이프라인 (p.6-9)" }), h("div", { class:"faint", text:"  …" }))) ];
+}
+function jsonPane(key){
+  return h("details", { class:"block", open:true }, h("summary", null, `${key} 산출물`, h("span", { class:"sp", style:"flex:1" }), h("button", { class:"btn small", onclick:(e) => { e.preventDefault(); toastMsg("복사했어요"); } }, "복사")),
+    h("pre", { text:'{\n  "learningDesign": {\n    "objectives": [ { "id": "objective-1", "target": "…", "importance": 3 } ],\n    "knowledgeUnits": [ { "id": "knowledge-unit-1", "sourcePage": 0, … } ]\n  },\n  "sourceEvidenceChecks": [ … ]\n}' }));
+}
+
+/* ---------- PDF 보기 ---------- */
+function openPdf(p){ S.pdfPage = p; render(); }
+function renderPdf(){
+  const box = $("#pdf"); box.hidden = !S.pdfPage; if (!S.pdfPage) return;
+  box.replaceChildren(
+    h("div", { class:"ph" }, h("b", { text:"원문" }), h("span", { class:"num muted", text:`p.${S.pdfPage} / ${run().total}` }), h("span", { style:"flex:1" }),
+      h("button", { class:"btn small", onclick:() => { S.pdfPage = Math.max(1, S.pdfPage-1); render(); } }, "‹"),
+      h("button", { class:"btn small", onclick:() => { S.pdfPage = Math.min(run().total, S.pdfPage+1); render(); } }, "›"),
+      h("button", { class:"btn small ghost", "aria-label":"닫기", onclick:() => { S.pdfPage = null; render(); } }, "닫기")),
+    h("div", { class:"pb" }, h("div", { class:"page" }, h("h5", { text: run().id === "r3" ? "Overview of 3D Viewing Concepts" : "Breadth-first search" }),
+      h("p", { html: run().id === "r3" ? "The three-dimensional viewing pipeline transforms world-coordinate positions … <mark>근거 문구가 이 쪽에 있으면 노랗게 칠해요.</mark>" : "Then all nodes that are 1 edge from u. … <mark>We change it into a breadth-first search simply by changing s from a stack to a queue!</mark>" }))));
+}
+
+/* ---------- 겹창 ---------- */
+function closeModal(){ $("#modal").replaceChildren(); }
+function openNew(){
+  const chips = ["용어·정의 말하기","식·절차 쓰기","계산·적용하기","비슷한 것 구별하기","말로 설명하기"];
+  const on = new Set(["말로 설명하기"]);
+  const modelRow = (label, all) => h("tr", { class: all ? "all" : null }, h("td", { style: all ? "font-weight:600" : null, text:label }),
+    h("td", null, h("select", { "aria-label":`${label} 모델`, onchange: all ? (e) => document.querySelectorAll(".mcol").forEach(s => s.value = e.target.value) : null, class: all ? null : "mcol" }, MODELS.map(m => h("option", { selected: m === "gpt-6-luna" ? true : null, text:m })))),
+    h("td", null, h("select", { "aria-label":`${label} 추론 강도`, onchange: all ? (e) => document.querySelectorAll(".ecol").forEach(s => s.value = e.target.value) : null, class: all ? null : "ecol" }, EFFORTS.map(m => h("option", { selected: m === "low" ? true : null, text:m })))));
+  const chipBox = h("div", { class:"chips" });
+  const paintChips = () => { chipBox.replaceChildren(...chips.map(c => h("button", { class:"chip", "aria-pressed": on.has(c) ? "true" : "false", onclick:() => { on.has(c) ? on.delete(c) : on.add(c); paintChips(); } }, c))); };
+  paintChips();
+  $("#modal").replaceChildren(h("div", { class:"scrim", onclick:(e) => { if (e.target === e.currentTarget) closeModal(); } },
+    h("div", { class:"dialog", role:"dialog", "aria-modal":"true", "aria-label":"새 실행" },
+      h("div", { class:"dh" }, h("h3", { text:"새 실행" }), h("button", { class:"btn ghost small", onclick:closeModal }, "닫기")),
+      h("div", { class:"db" },
+        h("div", { class:"field" }, h("label", { text:"자료" }), h("div", { class:"row" }, h("select", { style:"flex:1;min-width:0" }, h("option", { text:"03_Three Dimensional Viewing.pdf · 44쪽" }), h("option", { text:"cornell-bfs-2pages.pdf · 2쪽" })), h("button", { class:"btn" }, "PDF 올리기"))),
+        h("div", { class:"row" }, h("div", { class:"field" }, h("label", { text:"시작 쪽" }), h("input", { type:"number", value:"1", style:"width:90px" })), h("div", { class:"field" }, h("label", { text:"끝 쪽" }), h("input", { type:"number", value:"12", style:"width:90px" }))),
+        h("div", { class:"field" }, h("label", { text:"목적" }), h("input", { value:"시험 대비로 3D 관측 개념을 떠올릴 수 있게" })),
+        h("div", { class:"field" }, h("label", { text:"할 수 있어야 할 것" }), chipBox),
+        h("div", { class:"field" }, h("label", { text:"단계별 모델" }),
+          h("table", { class:"models" }, h("thead", null, h("tr", null, h("th", { text:"단계" }), h("th", { text:"모델" }), h("th", { text:"추론 강도" }))),
+            h("tbody", null, modelRow("모두 같게", true), STAGES.map(([,l], i) => modelRow(`${i+1} ${l}`))))),
+        h("div", { class:"row" }, h("label", { class:"toggle" }, h("input", { type:"checkbox", checked:true }), "한 단계씩 (단계마다 멈추고 확인)"), h("label", { class:"toggle" }, h("input", { type:"checkbox", checked: !S.real ? true : null }), "가짜 모델")),
+        h("div", { class:"field" }, h("label", { text:"메모" }), h("input", { placeholder:"예: 학습 설계만 sol·high" }))),
+      h("div", { class:"df" }, h("span", { class:"small muted", style:"flex:1", text: S.real ? "실제 모델 · ChatGPT 플랜 사용량이 나가요" : "가짜 모델 · 비용 없음" }),
+        h("button", { class:"btn", onclick:closeModal }, "취소"), h("button", { class:"btn primary", onclick:() => S.real ? confirmStart() : (closeModal(), toastMsg("가짜 모델로 시작했어요")) }, "시작")))));
+}
+function confirmBox(title, body, ok, onOk){
+  $("#modal").replaceChildren(h("div", { class:"scrim" }, h("div", { class:"dialog sm", role:"alertdialog", "aria-modal":"true", "aria-label":title },
+    h("div", { class:"dh" }, h("h3", { text:title })), h("div", { class:"db" }, body),
+    h("div", { class:"df" }, h("button", { class:"btn", onclick:closeModal }, "취소"), h("button", { class:"btn primary", onclick:() => { closeModal(); onOk(); } }, ok)))));
+}
+function confirmStart(){
+  confirmBox("실제 모델로 시작할까요?", [h("p", { style:"margin:0", text:"AI 호출 최소 6번, 최대 약 20번(재시도 포함). ChatGPT 플랜 사용량이 나가요." }), h("p", { class:"small muted", style:"margin:0", text:"한 단계씩 켜져 있어서 단계마다 멈춰요." })], "시작", () => toastMsg("실행을 시작했어요"));
+}
+function confirmNext(key, label){
+  confirmBox(`${label} 단계를 실행할까요?`, [h("p", { style:"margin:0", text:"AI 호출 1번, 검사에 걸리면 최대 3번. ChatGPT 플랜 사용량이 나가요." })], "실행", () => toastMsg(`${label} 단계를 시작했어요`));
+}
+let toastTimer;
+function toastMsg(t){ let el = $("#toast"); if (!el){ el = h("div", { id:"toast", role:"status", style:"position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:9px 14px;border-radius:9px;font-size:13px;z-index:40" }); document.body.append(el); }
+  el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, 2400); }
+
+$("#newBtn").onclick = openNew;
+$("#modeFake").onclick = () => { S.real = false; $("#modeFake").setAttribute("aria-pressed","true"); $("#modeReal").setAttribute("aria-pressed","false"); };
+$("#modeReal").onclick = () => { S.real = true; $("#modeReal").setAttribute("aria-pressed","true"); $("#modeFake").setAttribute("aria-pressed","false"); };
+render();
+</script>
+</body>
+</html>

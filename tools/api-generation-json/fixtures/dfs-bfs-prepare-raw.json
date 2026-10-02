@@ -1,0 +1,353 @@
+{
+  "detectedGoal": "그래프 표현을 이해하고, 방문 처리와 자료구조의 동작을 바탕으로 DFS·BFS를 구현·추적하며, 2차원 격자에서 연결 요소 개수와 최단 거리 문제에 각각 적용한다.",
+  "sourceType": "mixed",
+  "keyTopics": [
+    "그래프의 노드·간선·인접 관계",
+    "인접 행렬과 인접 리스트",
+    "DFS의 스택 기반 탐색과 재귀 구현",
+    "BFS의 큐 기반 탐색과 deque 구현",
+    "방문 처리",
+    "인접 노드 처리 순서 조건",
+    "2차원 배열의 그래프 모델링",
+    "DFS를 이용한 연결된 0 영역 개수 세기",
+    "BFS를 이용한 격자 최단 거리 기록"
+  ],
+  "recommendedStrategy": "먼저 그래프 표현 방식과 방문 처리의 목적을 구분해 학습한 뒤, DFS와 BFS를 각각 자료구조-절차-코드 흐름 순으로 복원한다. 이후 원문의 인접 리스트 예시에서 작은 번호 우선이라는 주어진 조건에 따라 탐색 순서를 직접 추적한다. 마지막으로 격자를 상하좌우 인접 그래프로 변환해, 연결된 0 영역은 DFS 시작 횟수로 세고 미로의 최소 이동 칸은 BFS에서 처음 방문 시 거리 값을 1씩 증가시켜 기록하는 두 적용 패턴을 반복한다. 작은 번호 우선은 원문 예시의 조건으로만 다루며 DFS·BFS의 일반 정의로 외우지 않는다.",
+  "extractedMaterial": "선정 근거: 사용자 목표인 그래프 표현, DFS·BFS의 원리·절차·구현·탐색 적용에 직접 연결되는 p1~21의 내용을 선정했다. 인접 행렬·인접 리스트는 저장 구조와 선택상의 차이를, DFS·BFS는 방문 처리·자료구조·코드·원문 그래프에서의 순서 추적을 중심으로 포함했다. 2차원 배열을 그래프로 보는 관점과 두 격자 문제는 탐색 목적에 따라 DFS와 BFS를 선택하는 적용 단위로 포함했다.\n\n제외 근거: DFS/BFS의 단계별 그림은 동일 절차와 탐색 순서를 반복 시각화한 내용이므로 별도 단위로 분리하지 않고 절차 및 순서 추적 단위에 통합했다. 인접 행렬·리스트 초기화 예제의 개별 거리값은 저장 방식 설명용 예시이므로 별도 단위로 만들지 않았다. 두 실전 문제의 전체 입출력 예시와 제약 수치는 문제 형식 확인용이므로, 핵심 탐색 규칙보다 우선하지 않았다. p20의 시작 위치가 다시 방문되어 값이 변경될 수 있다는 보충 설명은 해당 간결한 예제 코드의 특수 설명이므로 일반 규칙으로 추출하지 않았다. p22는 다음 장 정렬의 표지이므로 제외했다.\n\n원문 확인용 학습 단위 목록:\n1. 그래프는 노드(정점)와 간선으로 표현되며, 간선으로 연결된 두 노드는 인접하다.\n2. 인접 행렬은 2차원 배열에 노드 간 연결 관계를 기록하고, 연결되지 않은 노드의 비용은 무한으로 둔다.\n3. 인접 리스트는 각 노드에 연결된 노드 정보를 저장하며, 연결 정보만 저장해 메모리는 효율적이나 두 노드의 연결 여부 확인에는 인접 데이터를 차례로 확인해야 한다.\n4. DFS는 특정 경로를 따라 최대한 깊이 방문한 뒤 돌아와 다른 경로를 탐색하는 깊이 우선 탐색이다.\n5. DFS의 스택 기반 절차는 시작 노드를 삽입·방문 처리하고, 최상단에서 미방문 인접 노드로 진행하며, 없으면 꺼내는 과정을 반복한다.\n6. 방문 처리는 삽입되어 처리된 노드가 다시 삽입되지 않게 하여 각 노드를 한 번씩 처리하게 한다.\n7. 재귀 DFS 코드는 현재 노드를 방문 처리한 후 인접 리스트를 순회하며 미방문 노드를 재귀 호출한다.\n8. 원문 예시 그래프에서는 인접한 미방문 노드가 여러 개이면 작은 번호부터 처리한다는 조건 아래 DFS 순서는 1-2-7-6-8-3-4-5이다.\n9. BFS는 가까운 노드부터 탐색하는 너비 우선 탐색이며, 선입선출 큐를 사용한다.\n10. BFS는 시작 노드를 큐에 넣고 방문 처리한 뒤, 큐에서 꺼낸 노드의 모든 미방문 인접 노드를 큐에 넣고 방문 처리하는 과정을 반복한다.\n11. deque를 이용한 BFS 코드는 popleft()로 큐 앞 원소를 꺼내고 append()로 미방문 인접 노드를 넣은 즉시 방문 처리한다.\n12. 원문 예시 그래프에서 작은 번호부터 큐에 삽입한다는 조건 아래 BFS 순서는 1-2-3-8-7-4-5-6이다.\n13. DFS는 스택 원리에 기반해 재귀 함수로 간결히 구현할 수 있고, BFS는 큐 자료구조를 이용한다.\n14. 2차원 배열의 각 좌표를 노드, 상하좌우 이동 가능 관계를 간선으로 보면 격자를 그래프로 모델링할 수 있다.\n15. 음료수 얼려 먹기에서는 모든 칸을 확인하며 미방문 0에서 DFS를 시작하고 연결된 모든 0을 방문 처리하며, 새 DFS 시작 횟수를 아이스크림 개수로 센다.\n16. 미로 탈출에서는 시작점에서 BFS를 수행하고, 처음 방문하는 이동 가능 칸에 현재 거리보다 1 큰 값을 기록하여 출구 칸의 최소 이동 칸 수를 구한다.",
+  "primaryKnowledgeType": "procedure",
+  "learningUnits": [
+    {
+      "id": "LU01",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 1,
+      "sourceRange": "DFS 도입부: 그래프의 기본 구조와 그래프 탐색·인접의 정의",
+      "sourceText": "그래프는 노드(Node)와 간선(Edge)으로 표현되며 이때 노드를 정점(Vertex)이라고도 말한다. 그래프 탐색이란 하나의 노드를 시작으로 다수의 노드를 방문하는 것을 말한다. 또한 두 노드가 간선으로 연결되어 있다면 '두 노드는 인접하다(Adjacent)'라고 표현한다.",
+      "knowledgeType": "vocabulary",
+      "fixedPart": "",
+      "variableSlots": [],
+      "generalizedForm": "",
+      "target": "그래프의 노드·간선·정점·인접 및 그래프 탐색의 의미를 서로 연결해 설명한다.",
+      "operation": "reconstruct",
+      "successCriterion": "그래프를 구성하는 요소와 간선 연결 시 성립하는 인접 관계, 하나의 노드에서 다수 노드를 방문하는 그래프 탐색의 의미를 빠짐없이 설명한다.",
+      "rationale": "DFS 이해의 전제인 그래프 기본 용어와 관계를 원문이 하나의 도입 문단에서 함께 정의하므로 하나의 관계 구성 단위로 선정했다."
+    },
+    {
+      "id": "LU02",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 2,
+      "sourceRange": "인접 행렬 방식 설명 및 5-6.py 인접 행렬 방식 예제",
+      "sourceText": "인접 행렬(Adjacency Matrix) 방식은 2차원 배열에 각 노드가 연결된 형태를 기록하는 방식이다. 연결이 되어 있지 않은 노드끼리는 무한(Infinity)의 비용이라고 작성한다.",
+      "knowledgeType": "concept",
+      "fixedPart": "",
+      "variableSlots": [],
+      "generalizedForm": "",
+      "target": "인접 행렬에서 연결 관계와 연결되지 않은 관계를 2차원 배열 값으로 표현하는 방식을 설명한다.",
+      "operation": "reconstruct",
+      "successCriterion": "인접 행렬이 2차원 배열로 연결 관계를 기록하고 연결되지 않은 노드 사이에는 무한 비용을 둔다는 구조를 설명한다.",
+      "rationale": "원문은 인접 행렬의 저장 구조와 비연결 상태의 표현을 함께 제시하며, 이는 그래프 표현을 읽고 구현하는 핵심 개념이다."
+    },
+    {
+      "id": "LU03",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 3,
+      "sourceRange": "인접 리스트 방식 예제 뒤: 두 방식의 메모리와 연결 여부 확인 속도 비교",
+      "sourceText": "인접 리스트 방식은 연결된 정보만을 저장하기 때문에 메모리를 효율적으로 사용한다. 하지만 이와 같은 속성 때문에 인접 리스트 방식은 인접 행렬 방식에 비해 특정한 두 노드가 연결되어 있는지에 대한 정보를 얻는 속도가 느리다. 인접 리스트 방식에서는 연결된 데이터를 하나씩 확인해야 하기 때문이다.",
+      "knowledgeType": "relationship",
+      "fixedPart": "인접 행렬은 모든 관계를 저장하고, 인접 리스트는 연결된 정보만 저장한다.",
+      "variableSlots": [],
+      "generalizedForm": "모든 관계를 저장하는 표현은 연결 여부를 직접 확인할 수 있고, 연결된 관계만 저장하는 표현은 저장 공간을 효율적으로 사용하지만 특정 연결 여부 확인 시 관련 데이터를 순회한다.",
+      "target": "인접 행렬과 인접 리스트의 저장 범위에 따른 메모리 사용과 두 노드 연결 여부 확인 방식의 차이를 구분한다.",
+      "operation": "discriminate",
+      "successCriterion": "모든 관계 저장 여부와 연결 정보만 저장 여부를 근거로 두 표현 방식의 메모리 특성과 특정 두 노드의 연결 여부 확인 방식을 올바르게 구분한다.",
+      "rationale": "원문은 두 표현을 메모리 효율 및 특정 연결 관계 확인 방식으로 직접 대비하므로 비교·판별 단위로 선정했다."
+    },
+    {
+      "id": "LU04",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 4,
+      "sourceRange": "DFS 동작 설명 문단",
+      "sourceText": "DFS는 깊이 우선 탐색 알고리즘이라고 했다. 이 알고리즘은 특정한 경로로 탐색하다가 특정한 상황에서 최대한 깊숙이 들어가서 노드를 방문한 후, 다시 돌아가 다른 경로로 탐색하는 알고리즘이다.",
+      "knowledgeType": "concept",
+      "fixedPart": "",
+      "variableSlots": [],
+      "generalizedForm": "",
+      "target": "DFS가 한 경로를 최대한 깊게 탐색한 뒤 돌아와 다른 경로를 탐색하는 방식을 설명한다.",
+      "operation": "reconstruct",
+      "successCriterion": "DFS의 깊은 방향 탐색과 더 진행한 뒤 다른 경로로 돌아오는 흐름을 모두 포함해 설명한다.",
+      "rationale": "DFS의 이름뿐 아니라 실제 탐색 방향과 되돌아가는 특성을 원문이 명시하므로 독립적인 개념 단위로 선정했다."
+    },
+    {
+      "id": "LU05",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 4,
+      "sourceRange": "DFS는 스택 자료구조를 이용하며 구체적인 동작 과정은 다음과 같다",
+      "sourceText": "탐색 시작 노드를 스택에 삽입하고 방문 처리를 한다. 스택의 최상단 노드에 방문하지 않은 인접 노드가 있으면 그 인접 노드를 스택에 넣고 방문 처리를 한다. 방문하지 않은 인접 노드가 없으면 스택에서 최상단 노드를 꺼낸다. 1번의 과정을 더 이상 수행할 수 없을 때까지 반복한다.",
+      "knowledgeType": "procedure",
+      "fixedPart": "시작 노드를 스택에 삽입하고 방문 처리한 뒤, 최상단 노드의 미방문 인접 노드가 있으면 삽입·방문 처리하고 없으면 최상단을 꺼내며 반복한다.",
+      "variableSlots": [
+        {
+          "name": "시작 노드",
+          "example": "1"
+        },
+        {
+          "name": "미방문 인접 노드",
+          "example": "2"
+        }
+      ],
+      "generalizedForm": "시작 노드를 스택에 넣어 방문 처리하고, 스택 최상단에서 미방문 인접 노드로 계속 진행하며, 더 진행할 수 없을 때 꺼내어 이전 경로로 돌아간다.",
+      "target": "스택을 사용하는 DFS의 시작·진행·되돌아감·반복 절차를 순서대로 복원한다.",
+      "operation": "reconstruct",
+      "successCriterion": "시작 노드 삽입과 방문 처리, 미방문 인접 노드 삽입, 미방문 인접 노드가 없을 때의 꺼내기, 반복 조건을 순서에 맞게 복원한다.",
+      "rationale": "스택 기반 DFS의 원문 절차가 명시적으로 단계화되어 있어 절차 전체를 복원하는 단위로 선정했다."
+    },
+    {
+      "id": "LU06",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 4,
+      "sourceRange": "DFS 절차 아래 방문 처리 TIP",
+      "sourceText": "'방문 처리'는 스택에 한 번 삽입되어 처리된 노드가 다시 삽입되지 않게 체크하는 것을 의미한다. 방문 처리를 함으로써 각 노드를 한 번씩만 처리할 수 있다.",
+      "knowledgeType": "concept",
+      "fixedPart": "",
+      "variableSlots": [],
+      "generalizedForm": "",
+      "target": "DFS에서 방문 처리가 중복 삽입을 막고 각 노드를 한 번씩 처리하게 하는 이유를 설명한다.",
+      "operation": "reconstruct",
+      "successCriterion": "방문 처리가 이미 삽입·처리된 노드의 재삽입을 막으며 그 결과 각 노드를 한 번씩 처리하게 한다는 인과관계를 설명한다.",
+      "rationale": "방문 처리는 DFS·BFS 구현과 격자 적용에 공통으로 필요한 중복 방지 규칙이므로 별도 핵심 단위로 선정했다."
+    },
+    {
+      "id": "LU07",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 9,
+      "sourceRange": "5-8.py DFS 예제: dfs 함수 정의",
+      "sourceText": "def dfs(graph, v, visited):\n    visited[v] = True\n    print(v, end=' ')\n    for i in graph[v]:\n        if not visited[i]:\n            dfs(graph, i, visited)",
+      "knowledgeType": "procedure",
+      "fixedPart": "현재 노드를 방문 처리한 뒤, 현재 노드와 연결된 다른 노드를 순회하여 방문하지 않은 노드를 재귀적으로 방문한다.",
+      "variableSlots": [
+        {
+          "name": "현재 노드",
+          "example": "v"
+        },
+        {
+          "name": "인접 노드",
+          "example": "i"
+        }
+      ],
+      "generalizedForm": "현재 노드를 방문 처리하고, 인접 리스트의 각 노드가 미방문이면 그 노드를 현재 노드로 하여 같은 DFS를 재귀 호출한다.",
+      "target": "원문의 재귀 DFS 함수에서 방문 처리와 인접 노드 재귀 호출의 코드 흐름을 복원한다.",
+      "operation": "reconstruct",
+      "successCriterion": "현재 노드 방문 처리 후 인접 리스트 순회, 미방문 여부 검사, 재귀 호출의 흐름을 코드 구조에 맞게 복원한다.",
+      "rationale": "원문은 DFS를 재귀 함수로 간결하게 구현하는 방식을 제시하며, 절차와 별개로 코드의 핵심 흐름을 학습할 가치가 있다."
+    },
+    {
+      "id": "LU08",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 9,
+      "sourceRange": "DFS 단계 설명의 결과: 노드의 탐색 순서(스택에 들어간 순서)",
+      "sourceText": "결과적으로 노드의 탐색 순서(스택에 들어간 순서)는 다음과 같다. 1-2-7-6-8-3-4-5",
+      "knowledgeType": "example",
+      "fixedPart": "",
+      "variableSlots": [
+        {
+          "name": "시작 노드",
+          "example": "1"
+        },
+        {
+          "name": "인접 노드 처리 조건",
+          "example": "방문하지 않은 인접 노드가 여러 개이면 번호가 낮은 순서부터 처리"
+        }
+      ],
+      "generalizedForm": "주어진 시작 노드와 인접 노드 처리 순서 조건에 따라 DFS의 방문 순서는 그래프의 연결 관계와 조건에 의해 결정된다.",
+      "target": "원문의 그래프에서 미방문 인접 노드를 작은 번호부터 처리한다는 조건으로 DFS 방문 순서를 산출한다.",
+      "operation": "apply",
+      "successCriterion": "원문의 그래프와 작은 번호 우선 조건에서 DFS 방문 순서를 1-2-7-6-8-3-4-5로 산출한다.",
+      "rationale": "원문은 작은 번호 우선을 일반 정의가 아닌 예시 조건으로 제시하고 실제 탐색 결과를 제공하므로, 조건부 순서 추적 적용 단위로 선정했다."
+    },
+    {
+      "id": "LU09",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 10,
+      "sourceRange": "BFS 도입부",
+      "sourceText": "BFS(Breadth First Search) 알고리즘은 '너비 우선 탐색'이라는 의미를 가진다. 쉽게 말해 가까운 노드부터 탐색하는 알고리즘이다. BFS 구현에서는 선입선출 방식인 큐 자료구조를 이용하는 것이 정석이다.",
+      "knowledgeType": "concept",
+      "fixedPart": "",
+      "variableSlots": [],
+      "generalizedForm": "",
+      "target": "BFS가 가까운 노드부터 탐색하며 선입선출 큐를 이용하는 탐색이라는 점을 설명한다.",
+      "operation": "reconstruct",
+      "successCriterion": "BFS의 가까운 노드 우선 탐색 특성과 이를 위한 선입선출 큐 사용을 함께 설명한다.",
+      "rationale": "BFS의 탐색 특성과 큐 자료구조의 관계를 원문이 함께 설명하므로 핵심 개념 단위로 선정했다."
+    },
+    {
+      "id": "LU10",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 10,
+      "sourceRange": "알고리즘의 정확한 동작 방식은 다음과 같다",
+      "sourceText": "탐색 시작 노드를 큐에 삽입하고 방문 처리를 한다. 큐에서 노드를 꺼내 해당 노드의 인접 노드 중에서 방문하지 않은 노드를 모두 큐에 삽입하고 방문 처리를 한다. 1번의 과정을 더 이상 수행할 수 없을 때까지 반복한다.",
+      "knowledgeType": "procedure",
+      "fixedPart": "시작 노드를 큐에 삽입하고 방문 처리한 뒤, 큐에서 꺼낸 노드의 모든 미방문 인접 노드를 큐에 삽입·방문 처리하며 반복한다.",
+      "variableSlots": [
+        {
+          "name": "시작 노드",
+          "example": "1"
+        },
+        {
+          "name": "미방문 인접 노드들",
+          "example": "2, 3, 8"
+        }
+      ],
+      "generalizedForm": "시작 노드를 큐에 넣고, 꺼낸 노드의 모든 미방문 인접 노드를 큐에 넣어 방문 처리하는 과정을 큐가 빌 때까지 반복한다.",
+      "target": "큐를 사용하는 BFS의 시작·꺼내기·미방문 이웃 전체 삽입·반복 절차를 순서대로 복원한다.",
+      "operation": "reconstruct",
+      "successCriterion": "시작 노드의 큐 삽입과 방문 처리, 꺼낸 노드의 모든 미방문 인접 노드 삽입과 방문 처리, 반복 조건을 순서에 맞게 복원한다.",
+      "rationale": "BFS의 정확한 동작 방식이 원문에서 단계화되어 있으며 DFS와 구별되는 '모두 큐에 삽입' 규칙이 핵심이므로 선정했다."
+    },
+    {
+      "id": "LU11",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 14,
+      "sourceRange": "5-9.py BFS 예제: bfs 함수 정의",
+      "sourceText": "queue = deque([start])\nvisited[start] = True\nwhile queue:\n    v = queue.popleft()\n    print(v, end=' ')\n    for i in graph[v]:\n        if not visited[i]:\n            queue.append(i)\n            visited[i] = True",
+      "knowledgeType": "procedure",
+      "fixedPart": "deque로 시작 노드를 큐에 넣고 방문 처리한 뒤, popleft()로 꺼낸 노드의 미방문 인접 노드를 append()하고 즉시 방문 처리한다.",
+      "variableSlots": [
+        {
+          "name": "시작 노드",
+          "example": "start"
+        },
+        {
+          "name": "꺼낸 노드",
+          "example": "v"
+        },
+        {
+          "name": "인접 노드",
+          "example": "i"
+        }
+      ],
+      "generalizedForm": "BFS 구현에서는 deque에서 앞 원소를 꺼내고, 각 미방문 인접 노드를 큐 뒤에 넣는 즉시 방문 처리하여 중복 삽입을 방지한다.",
+      "target": "원문의 deque 기반 BFS 코드에서 큐 초기화, popleft(), 미방문 이웃 append(), 방문 처리의 흐름을 복원한다.",
+      "operation": "reconstruct",
+      "successCriterion": "시작 노드를 deque에 넣어 방문 처리한 후 popleft()로 꺼내고, 미방문 인접 노드를 append()한 즉시 방문 처리하는 코드 흐름을 복원한다.",
+      "rationale": "원문 BFS 구현의 자료구조 조작과 방문 처리 시점은 가까운 노드부터 탐색하고 중복 삽입을 막는 핵심 코드 구조이므로 선정했다."
+    },
+    {
+      "id": "LU12",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 13,
+      "sourceRange": "BFS 단계 설명의 결과: 노드의 탐색 순서(큐에 들어간 순서)",
+      "sourceText": "결과적으로 노드의 탐색 순서(큐에 들어간 순서)는 다음과 같다. 1-2-3-8-7-4-5-6",
+      "knowledgeType": "example",
+      "fixedPart": "",
+      "variableSlots": [
+        {
+          "name": "시작 노드",
+          "example": "1"
+        },
+        {
+          "name": "인접 노드 삽입 조건",
+          "example": "인접한 노드가 여러 개일 때 숫자가 작은 노드부터 먼저 큐에 삽입"
+        }
+      ],
+      "generalizedForm": "주어진 시작 노드와 이웃 삽입 순서 조건에 따라 BFS의 방문 순서는 큐의 선입선출 순서와 그래프 연결 관계에 의해 결정된다.",
+      "target": "원문의 그래프에서 작은 번호부터 큐에 삽입한다는 조건으로 BFS 방문 순서를 산출한다.",
+      "operation": "apply",
+      "successCriterion": "원문의 그래프와 작은 번호 우선 삽입 조건에서 BFS 방문 순서를 1-2-3-8-7-4-5-6으로 산출한다.",
+      "rationale": "원문의 BFS 예시는 이웃 삽입 순서 조건과 탐색 결과를 함께 제공하므로, 큐 동작을 실제 순서로 추적하는 적용 단위로 선정했다."
+    },
+    {
+      "id": "LU13",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 15,
+      "sourceRange": "DFS와 BFS의 구현 요약 표",
+      "sourceText": "동작 원리: DFS는 스택, BFS는 큐. 구현 방법: DFS는 재귀 함수 이용, BFS는 큐 자료구조 이용.",
+      "knowledgeType": "relationship",
+      "fixedPart": "DFS는 스택 원리와 재귀 함수 이용, BFS는 큐 원리와 큐 자료구조 이용으로 요약된다.",
+      "variableSlots": [],
+      "generalizedForm": "탐색 방식은 사용하는 자료구조의 처리 순서와 대응되며, DFS는 스택 계열, BFS는 큐 계열로 구현한다.",
+      "target": "DFS와 BFS를 각각 원문이 제시한 동작 원리 및 구현 방법에 대응시킨다.",
+      "operation": "reconstruct",
+      "successCriterion": "DFS-스택-재귀 함수 이용 및 BFS-큐-큐 자료구조 이용의 대응 관계를 정확히 복원한다.",
+      "rationale": "p15의 표는 앞선 설명을 압축해 DFS와 BFS의 구현 차이를 직접 대응시키므로 비교 관계 단위로 선정했다."
+    },
+    {
+      "id": "LU14",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 15,
+      "sourceRange": "2차원 배열을 그래프 형태로 생각하는 설명과 3×3 좌표 그림",
+      "sourceText": "1차원 배열이나 2차원 배열 또한 그래프 형태로 생각하면 수월하게 문제를 풀 수 있다. 이때 각 좌표를 상하좌우로만 이동할 수 있다면 모든 좌표의 형태를 그래프의 형태로 바꿔서 생각할 수 있다.",
+      "knowledgeType": "problem_solving_pattern",
+      "fixedPart": "격자의 각 좌표를 노드로 보고 상하좌우 이동 가능한 좌표 사이의 관계를 그래프의 연결로 본다.",
+      "variableSlots": [
+        {
+          "name": "격자 좌표",
+          "example": "(1, 1)"
+        },
+        {
+          "name": "이동 가능 방향",
+          "example": "상, 하, 좌, 우"
+        }
+      ],
+      "generalizedForm": "격자 탐색에서는 각 위치를 노드, 허용된 이동 관계를 간선으로 모델링하여 그래프 탐색으로 처리한다.",
+      "target": "상하좌우 이동 가능한 2차원 격자를 그래프의 노드와 연결 관계로 모델링한다.",
+      "operation": "apply",
+      "successCriterion": "주어진 상하좌우 이동 격자에서 각 좌표를 노드로, 이동 가능한 상하좌우 관계를 연결로 표현한다.",
+      "rationale": "원문은 전형적인 그래프뿐 아니라 2차원 배열을 그래프로 바꾸어 생각하는 관점을 별도로 강조하며, 뒤의 두 실전 문제의 공통 기반이므로 선정했다."
+    },
+    {
+      "id": "LU15",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 18,
+      "sourceRange": "음료수 얼려 먹기 문제 해설: DFS 절차와 5-10.py 답안 예시",
+      "sourceText": "특정한 지점의 주변 상, 하, 좌, 우를 살펴본 뒤에 주변 지점 중에서 값이 '0'이면서 아직 방문하지 않은 지점이 있다면 해당 지점을 방문한다. 방문한 지점에서 다시 상, 하, 좌, 우를 살펴보면서 방문을 다시 진행하면, 연결된 모든 지점을 방문할 수 있다. 1~2번의 과정을 모든 노드에 반복하며 방문하지 않은 지점의 수를 센다.",
+      "knowledgeType": "problem_solving_pattern",
+      "fixedPart": "미방문 0에서 DFS를 시작해 연결된 모든 0을 방문 처리하고, 새 DFS가 시작되는 횟수를 센다.",
+      "variableSlots": [
+        {
+          "name": "탐색 대상 값",
+          "example": "0"
+        },
+        {
+          "name": "인접 방향",
+          "example": "상, 하, 좌, 우"
+        },
+        {
+          "name": "격자 위치",
+          "example": "(i, j)"
+        }
+      ],
+      "generalizedForm": "격자에서 특정 값의 상하좌우 연결 영역 수는 모든 위치를 확인하면서 미방문 대상 칸마다 탐색을 시작하여 연결된 칸을 모두 방문 처리한 시작 횟수로 구한다.",
+      "target": "상하좌우로 연결된 0 영역의 개수를 구하기 위해 미방문 0마다 DFS를 시작하고 시작 횟수를 세는 절차를 적용한다.",
+      "operation": "apply",
+      "successCriterion": "0과 1로 이루어진 격자에서 미방문 0의 연결 영역마다 한 번씩 DFS를 시작하여 0 영역의 총개수를 산출한다.",
+      "rationale": "원문은 이 문제를 DFS로 해결하며 연결된 모든 0을 방문한 새 탐색의 횟수를 세는 핵심 적용 패턴을 제시하므로 선정했다."
+    },
+    {
+      "id": "LU16",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 21,
+      "sourceRange": "미로 탈출 5-11.py 답안 예시: BFS 범위·벽·첫 방문 검사 및 거리 기록",
+      "sourceText": "미로 찾기 공간을 벗어난 경우 무시한다. 벽인 경우 무시한다. 해당 노드를 처음 방문하는 경우에만 최단 거리 기록. graph[nx][ny] = graph[x][y] + 1. 가장 오른쪽 아래까지의 최단 거리 반환.",
+      "knowledgeType": "problem_solving_pattern",
+      "fixedPart": "큐에서 현재 칸을 꺼내 네 방향을 확인하고, 범위 밖과 0인 칸은 건너뛰며, 처음 방문하는 1인 칸에 현재 거리보다 1 큰 값을 기록해 큐에 넣는다.",
+      "variableSlots": [
+        {
+          "name": "현재 좌표",
+          "example": "(x, y)"
+        },
+        {
+          "name": "다음 좌표",
+          "example": "(nx, ny)"
+        },
+        {
+          "name": "현재 거리",
+          "example": "graph[x][y]"
+        }
+      ],
+      "generalizedForm": "상하좌우로 이동하는 격자에서 BFS는 처음 방문하는 이동 가능 칸의 값을 현재 칸 값보다 1 크게 기록하여 시작점으로부터의 거리를 누적한다.",
+      "target": "이동 가능한 1의 격자에서 BFS로 처음 방문한 칸에 이전 칸 거리보다 1 큰 값을 기록하여 출구의 최소 이동 칸 수를 구한다.",
+      "operation": "apply",
+      "successCriterion": "시작 칸과 마지막 칸을 포함해 세는 0·1 미로에서 범위 밖과 0을 제외하고, 처음 방문한 1의 값을 현재 값보다 1 크게 기록하는 BFS로 오른쪽 아래 칸의 최소 이동 칸 수를 산출한다.",
+      "rationale": "원문은 미로 탈출을 BFS로 해결하는 이유와 함께 범위 검사·벽 제외·처음 방문 시 거리 기록·출구 값 반환의 코드 규칙을 제시하므로 핵심 최단 거리 적용 단위로 선정했다."
+    }
+  ]
+}

@@ -1,0 +1,2138 @@
+{
+  "schemaVersion": "problem-authoring-v1",
+  "id": "authoring-chatgpt-request-ecdf7a398e99e1e6279633a5d5d11ae4",
+  "title": "반도체란 무엇인가 · 전체 시험 학습 r02",
+  "questions": [
+    {
+      "id": "question-1",
+      "source": {
+        "learningUnitId": "knowledge-unit-1",
+        "objectiveId": "objective-1",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 8,
+        "sourcePages": [
+          8
+        ],
+        "sourceRange": "팹리스는 회로를 설계하고 파운드리는 위탁 생산하며 IDM은 설계와 생산을 함께 수행한다 / 소재·부품·장비는 웨이퍼, 감광재, 가스 및 증착·식각·노광·검사 장비를 공급한다",
+        "sourceText": "PDF 8쪽의 IP·fabless·foundry·packaging/test·IDM 분류와 9쪽의 equipment·material supply 목록.",
+        "target": "반도체 가치사슬에서 기업 역할과 소부장의 공급 대상을 분류한다.",
+        "successCriteria": [
+          "팹리스·파운드리·IDM의 차이를 구별하고 웨이퍼·감광재·가스와 증착·식각·노광 장비를 소부장 예로 든다."
+        ],
+        "knowledgeContent": "팹리스는 설계, 파운드리는 위탁생산, IDM은 설계와 생산을 함께 맡고 소부장은 제조에 필요한 소재·부품·장비를 공급한다.",
+        "outlineNodeIds": [
+          "source-1:outline-9",
+          "source-1:outline-10"
+        ],
+        "conceptNodeIds": [
+          "concept-003",
+          "concept-004"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-1",
+          "kind": "text",
+          "text": "팹리스·파운드리·IDM과 소부장 역할을 바르게 연결한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-1",
+          "kind": "choice-set",
+          "responseId": "response-1",
+          "optionIds": [
+            "option-1-1",
+            "option-1-2",
+            "option-1-3",
+            "option-1-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-1",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-1"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-1",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-1-1",
+              "text": "팹리스 설계, 파운드리 위탁생산, IDM 설계+생산, 소부장 재료·장비 공급"
+            },
+            {
+              "id": "option-1-2",
+              "text": "팹리스 위탁생산, 파운드리 회로설계, IDM 검사만 담당"
+            },
+            {
+              "id": "option-1-3",
+              "text": "팹리스와 파운드리는 모두 웨이퍼 재료만 공급"
+            },
+            {
+              "id": "option-1-4",
+              "text": "IDM은 설계하지 않고 소부장은 칩 연산만 담당"
+            }
+          ],
+          "correctOptionId": "option-1-1",
+          "grading": "exact",
+          "explanation": "산업의 분업은 설계·생산·통합제조와 이를 받치는 소재·장비 공급으로 나뉜다."
+        }
+      ]
+    },
+    {
+      "id": "question-2",
+      "source": {
+        "learningUnitId": "knowledge-unit-2",
+        "objectiveId": "objective-2",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 10,
+        "sourcePages": [
+          10
+        ],
+        "sourceRange": "메모리는 데이터를 기억하고 비메모리에는 프로세서와 제어·연산 회로가 포함된다",
+        "sourceText": "PDF 10쪽은 memory versus non-memory를 기억 versus 연산으로 대비한다.",
+        "target": "제품이 저장 중심인지 연산·제어 중심인지 기능으로 구별한다.",
+        "successCriteria": [
+          "기억 기능을 메모리, 프로세서·제어 회로를 비메모리 범주에 연결한다."
+        ],
+        "knowledgeContent": "메모리는 정보를 저장하고 시스템 또는 비메모리 반도체는 연산·제어 등 다양한 기능을 수행한다.",
+        "outlineNodeIds": [
+          "source-1:outline-11"
+        ],
+        "conceptNodeIds": [
+          "concept-006"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-2",
+          "kind": "text",
+          "text": "메모리와 시스템 또는 비메모리 반도체의 기능 구별은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-2",
+          "kind": "choice-set",
+          "responseId": "response-2",
+          "optionIds": [
+            "option-2-1",
+            "option-2-2",
+            "option-2-3",
+            "option-2-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-2",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-2"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-2",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-2-1",
+              "text": "메모리 연산·제어, 비메모리 저장만 수행"
+            },
+            {
+              "id": "option-2-2",
+              "text": "둘 다 저장만 수행"
+            },
+            {
+              "id": "option-2-3",
+              "text": "둘 다 외부 전원 공급만 담당"
+            },
+            {
+              "id": "option-2-4",
+              "text": "메모리 저장, 비메모리 연산·제어"
+            }
+          ],
+          "correctOptionId": "option-2-4",
+          "grading": "exact",
+          "explanation": "강의는 기억과 연산을 대조한다."
+        }
+      ]
+    },
+    {
+      "id": "question-3",
+      "source": {
+        "learningUnitId": "knowledge-unit-3",
+        "objectiveId": "objective-3",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 12,
+        "sourcePages": [
+          12
+        ],
+        "sourceRange": "칩 면적과 집적도를 바꾸는 미세화는 웨이퍼당 생산량과 전력·성능의 제약을 함께 고려하게 한다 / 데이터센터와 대규모 연산은 높은 처리량, 낮은 전력, 신뢰성을 요구한다",
+        "sourceText": "PDF 12쪽의 chip size와 number of chips per wafer, 14쪽의 high speed·low power·reliability 요구.",
+        "target": "산업 전망 그림에서 미세화의 이점과 연산 수요의 요구를 구분한다.",
+        "successCriteria": [
+          "칩 면적 감소와 웨이퍼당 칩 수 증가를 연결하고 데이터센터 수요의 처리량·전력·신뢰성 조건을 제시한다."
+        ],
+        "knowledgeContent": "미세화는 같은 웨이퍼에서 생산 가능한 칩 수와 집적도를 높이지만 데이터 중심 연산은 속도·전력·신뢰성의 조건도 요구한다.",
+        "outlineNodeIds": [
+          "source-1:outline-13",
+          "source-1:outline-15"
+        ],
+        "conceptNodeIds": [
+          "concept-008",
+          "concept-009"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-3",
+          "kind": "text",
+          "text": "미세화의 이점과 데이터센터 연산 수요를 구별한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-3",
+          "kind": "choice-set",
+          "responseId": "response-3",
+          "optionIds": [
+            "option-3-1",
+            "option-3-2",
+            "option-3-3",
+            "option-3-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-3",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-3"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-3",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-3-1",
+              "text": "미세화는 연산 신뢰성을 자동 보장한다"
+            },
+            {
+              "id": "option-3-2",
+              "text": "데이터센터 수요는 칩 크기와 무관하므로 성능 조건이 없다"
+            },
+            {
+              "id": "option-3-3",
+              "text": "칩 면적 감소로 웨이퍼당 칩 수 증가, 연산에는 고속·저전력·신뢰성도 필요"
+            },
+            {
+              "id": "option-3-4",
+              "text": "칩 면적 감소로 웨이퍼당 칩 수 감소, 연산에는 전력만 필요"
+            }
+          ],
+          "correctOptionId": "option-3-3",
+          "grading": "exact",
+          "explanation": "생산량 이점과 사용처의 성능·전력 요구는 다른 축이다."
+        }
+      ]
+    },
+    {
+      "id": "question-4",
+      "source": {
+        "learningUnitId": "knowledge-unit-4",
+        "objectiveId": "objective-4",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 16,
+        "sourcePages": [
+          16
+        ],
+        "sourceRange": "비저항과 전도도는 역수 관계이며 도체·반도체·부도체를 넓은 전도도 범위로 비교한다",
+        "sourceText": "PDF 16~17쪽은 반도체 전도도 범위와 resistivity·conductivity의 역수 관계 및 단위를 제시한다.",
+        "target": "전도도와 비저항의 역수 관계·단위를 적용한다.",
+        "successCriteria": [
+          "σ=1/ρ와 σ의 S/m·ρ의 Ω·m 단위를 쓰고 비저항이 커질수록 전도도가 작아짐을 판정한다."
+        ],
+        "knowledgeContent": "전도도 σ와 비저항 ρ는 역수이며 각각 S/m과 Ω·m 같은 단위로 물질의 전류 수송 정도를 나타낸다.",
+        "outlineNodeIds": [
+          "source-1:outline-18",
+          "source-1:outline-19"
+        ],
+        "conceptNodeIds": [
+          "concept-011"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "instruction-4",
+          "kind": "text",
+          "text": "빈칸에 들어갈 내용을 직접 쓰세요.",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 52
+          }
+        },
+        {
+          "id": "blank-4",
+          "kind": "blank",
+          "responseId": "response-4",
+          "promptBefore": "비저항 ρ의 역수인 전도도 식과 각각의 SI 단위는 ",
+          "promptAfter": "이다.",
+          "frame": {
+            "x": 28,
+            "y": 96,
+            "width": 704,
+            "height": 152
+          }
+        },
+        {
+          "id": "reveal-4",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-4"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-4",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "σ=1/ρ; σ는 S/m, ρ는 Ω·m"
+          ],
+          "grading": "exact-normalized",
+          "explanation": "전도도는 비저항의 역수이며 단위도 서로 역수 관계다."
+        }
+      ]
+    },
+    {
+      "id": "question-5",
+      "source": {
+        "learningUnitId": "knowledge-unit-5",
+        "objectiveId": "objective-5",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 19,
+        "sourcePages": [
+          19
+        ],
+        "sourceRange": "금속은 이동 가능한 전자가 많아 전류를 운반하고 Drude 모형은 전류밀도와 전자밀도·이동을 연결한다 / 반도체에서는 캐리어 밀도가 온도·불순물·전압 조건에 따라 변해 단일한 고정 전도도로 단순화하기 어렵다",
+        "sourceText": "PDF 18쪽은 전자 밀도 차이를 강조하고 20쪽은 Drude 모형의 J=σE와 σ=neμ를 전개한다.",
+        "target": "전자 수 또는 이동도가 변할 때 전도도가 어떻게 달라질지 조건을 붙여 설명한다.",
+        "successCriteria": [
+          "σ=neμ의 n·μ 뜻을 말하고 모형 안에서 n 또는 μ가 늘면 σ가 커짐을 판단하며, 반도체의 n을 모든 조건에 고정하지 않는다."
+        ],
+        "knowledgeContent": "전도도는 캐리어 농도와 이동도에 좌우되며 금속의 σ=neμ는 단순 모형이고 반도체의 캐리어 농도는 조건에 따라 변한다.",
+        "outlineNodeIds": [
+          "source-1:outline-21",
+          "source-1:outline-22",
+          "source-1:outline-20"
+        ],
+        "conceptNodeIds": [
+          "concept-012",
+          "concept-013"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-5",
+          "kind": "text",
+          "text": "σ=neμ와 반도체 적용 조건을 바르게 설명한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-5",
+          "kind": "choice-set",
+          "responseId": "response-5",
+          "optionIds": [
+            "option-5-1",
+            "option-5-2",
+            "option-5-3",
+            "option-5-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-5",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-5"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-5",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-5-1",
+              "text": "n 또는 μ가 늘면 모형의 σ가 커지지만 반도체의 n은 조건에 따라 달라질 수 있다"
+            },
+            {
+              "id": "option-5-2",
+              "text": "n이 늘면 σ는 항상 줄고 반도체 n은 언제나 고정이다"
+            },
+            {
+              "id": "option-5-3",
+              "text": "μ가 늘면 σ는 0이 되고 도핑은 영향이 없다"
+            },
+            {
+              "id": "option-5-4",
+              "text": "금속과 반도체의 캐리어 농도는 모든 온도에서 동일하다"
+            }
+          ],
+          "correctOptionId": "option-5-1",
+          "grading": "exact",
+          "explanation": "Drude 관계의 n·μ 역할과 반도체의 캐리어 밀도 변화를 함께 봐야 한다."
+        }
+      ]
+    },
+    {
+      "id": "question-6",
+      "source": {
+        "learningUnitId": "knowledge-unit-6",
+        "objectiveId": "objective-6",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 21,
+        "sourcePages": [
+          21
+        ],
+        "sourceRange": "원자 에너지 준위가 결정 안에서 분리되어 가전자대와 전도대 같은 허용 띠를 만든다 / 페르미 에너지는 전자가 채운 상태와 비어 있는 상태를 판단하는 기준이다",
+        "sourceText": "PDF 21쪽의 free atoms to crystals band diagram과 22쪽의 채워진 가장 높은 준위 설명.",
+        "target": "가전자대·전도대의 형성과 페르미 준위의 의미를 연결해 설명한다.",
+        "successCriteria": [
+          "원자 준위가 결정에서 띠로 갈라지는 과정을 말하고 0 K에서 페르미 에너지를 채워진 가장 높은 에너지로 설명한다."
+        ],
+        "knowledgeContent": "결정에서는 원자 준위가 에너지 띠를 이루고 페르미 에너지는 전자 점유의 기준이 된다.",
+        "outlineNodeIds": [
+          "source-1:outline-23",
+          "source-1:outline-24"
+        ],
+        "conceptNodeIds": [
+          "concept-014",
+          "concept-015"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-6",
+          "kind": "text",
+          "text": "결정의 에너지 띠와 0 K 페르미 에너지를 바르게 설명한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-6",
+          "kind": "choice-set",
+          "responseId": "response-6",
+          "optionIds": [
+            "option-6-1",
+            "option-6-2",
+            "option-6-3",
+            "option-6-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-6",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-6"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-6",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-6-1",
+              "text": "결정은 모든 에너지 준위를 하나의 점으로 합치고 페르미 에너지는 최저 빈 준위다"
+            },
+            {
+              "id": "option-6-2",
+              "text": "에너지 띠는 도핑에서만 생기고 페르미 에너지는 전자의 질량이다"
+            },
+            {
+              "id": "option-6-3",
+              "text": "페르미 에너지는 언제나 밴드갭의 폭 자체다"
+            },
+            {
+              "id": "option-6-4",
+              "text": "원자 준위가 결정에서 띠로 분리되고 페르미 에너지는 0 K에 채워진 최고 에너지다"
+            }
+          ],
+          "correctOptionId": "option-6-4",
+          "grading": "exact",
+          "explanation": "결정의 띠 형성과 점유 기준은 서로 연결되지만 다른 개념이다."
+        }
+      ]
+    },
+    {
+      "id": "question-7",
+      "source": {
+        "learningUnitId": "knowledge-unit-7",
+        "objectiveId": "objective-7",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 23,
+        "sourcePages": [
+          23
+        ],
+        "sourceRange": "부분 점유 띠·작은 밴드갭·큰 밴드갭이 각각 도체·반도체·부도체의 캐리어 생성 차이를 만든다",
+        "sourceText": "PDF 23쪽의 metal, semiconductor, insulator band structures.",
+        "target": "에너지 띠 그림에서 세 재료 범주를 분류한다.",
+        "successCriteria": [
+          "부분 점유를 도체, 작은 밴드갭을 반도체, 큰 밴드갭을 부도체에 대응한다."
+        ],
+        "knowledgeContent": "부분 점유 띠·작은 밴드갭·큰 밴드갭은 각각 도체·반도체·부도체의 캐리어 이용 가능성을 설명한다.",
+        "outlineNodeIds": [
+          "source-1:outline-25"
+        ],
+        "conceptNodeIds": [
+          "concept-016"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-7",
+          "kind": "text",
+          "text": "부분 점유 띠·작은 밴드갭·큰 밴드갭을 올바르게 분류한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-7",
+          "kind": "choice-set",
+          "responseId": "response-7",
+          "optionIds": [
+            "option-7-1",
+            "option-7-2",
+            "option-7-3",
+            "option-7-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-7",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-7"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-7",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-7-1",
+              "text": "각각 반도체·부도체·도체"
+            },
+            {
+              "id": "option-7-2",
+              "text": "세 구조 모두 같은 전도 특성"
+            },
+            {
+              "id": "option-7-3",
+              "text": "각각 도체·반도체·부도체"
+            },
+            {
+              "id": "option-7-4",
+              "text": "각각 부도체·도체·반도체"
+            }
+          ],
+          "correctOptionId": "option-7-3",
+          "grading": "exact",
+          "explanation": "가용 상태와 밴드갭 크기가 캐리어 생성의 차이를 설명한다."
+        }
+      ]
+    },
+    {
+      "id": "question-8",
+      "source": {
+        "learningUnitId": "knowledge-unit-8",
+        "objectiveId": "objective-8",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 24,
+        "sourcePages": [
+          24
+        ],
+        "sourceRange": "밴드갭을 가진 재료에서는 온도가 높아지면 열로 생성되는 캐리어가 늘 수 있다",
+        "sourceText": "PDF 24쪽: 온도가 높을수록 캐리어 농도 올라감.",
+        "target": "온도 상승이 반도체 캐리어 농도에 미치는 방향을 판단한다.",
+        "successCriteria": [
+          "온도가 높을수록 열로 생성되는 캐리어가 늘어난다고 말한다."
+        ],
+        "knowledgeContent": "밴드갭이 있는 반도체에 열에너지가 늘면 전도 가능한 캐리어 농도가 증가할 수 있다.",
+        "outlineNodeIds": [
+          "source-1:outline-26"
+        ],
+        "conceptNodeIds": [
+          "concept-017"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "instruction-8",
+          "kind": "text",
+          "text": "빈칸에 들어갈 내용을 직접 쓰세요.",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 52
+          }
+        },
+        {
+          "id": "blank-8",
+          "kind": "blank",
+          "responseId": "response-8",
+          "promptBefore": "밴드갭이 있는 반도체에서 온도가 올라가면 열로 생성되는 캐리어 농도는 보통 ",
+          "promptAfter": "이다.",
+          "frame": {
+            "x": 28,
+            "y": 96,
+            "width": 704,
+            "height": 152
+          }
+        },
+        {
+          "id": "reveal-8",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-8"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-8",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "증가한다"
+          ],
+          "grading": "exact-normalized",
+          "explanation": "자료는 온도가 높을수록 캐리어 농도가 올라간다고 제시한다."
+        }
+      ]
+    },
+    {
+      "id": "question-9",
+      "source": {
+        "learningUnitId": "knowledge-unit-9",
+        "objectiveId": "objective-9",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 25,
+        "sourcePages": [
+          25
+        ],
+        "sourceRange": "가전자대 전자가 밴드갭을 넘어 전도대로 가면 정공이 남고 두 종류 모두 전류에 기여한다",
+        "sourceText": "PDF 25쪽은 밴드갭 여기, 전도대 전자와 가전자대 정공, 두 캐리어 전도도 식을 제시한다.",
+        "target": "전자·정공 생성의 순서와 두 기여를 전도도 식에 연결한다.",
+        "successCriteria": [
+          "가전자대→전도대 전자 여기와 정공 생성을 말하고 σ=neμe+peμh에서 두 항을 구별한다."
+        ],
+        "knowledgeContent": "밴드갭을 넘는 에너지를 받으면 가전자대 전자가 전도대로 올라가고 정공이 남아 두 캐리어가 전류에 기여한다.",
+        "outlineNodeIds": [
+          "source-1:outline-27"
+        ],
+        "conceptNodeIds": [
+          "concept-018"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "instruction-9",
+          "kind": "text",
+          "text": "빈칸에 들어갈 내용을 직접 쓰세요.",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 52
+          }
+        },
+        {
+          "id": "blank-9",
+          "kind": "blank",
+          "responseId": "response-9",
+          "promptBefore": "가전자대 전자가 전도대로 여기될 때 생기는 두 전하 수송자와 전도도 합은 ",
+          "promptAfter": "이다.",
+          "frame": {
+            "x": 28,
+            "y": 96,
+            "width": 704,
+            "height": 152
+          }
+        },
+        {
+          "id": "reveal-9",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-9"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-9",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "전도대 전자와 가전자대 정공; σ=neμe+peμh"
+          ],
+          "grading": "exact-normalized",
+          "explanation": "전자가 이동하면 정공이 남고 두 캐리어가 각각 전류에 기여한다."
+        }
+      ]
+    },
+    {
+      "id": "question-10",
+      "source": {
+        "learningUnitId": "knowledge-unit-10",
+        "objectiveId": "objective-10",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 26,
+        "sourcePages": [
+          26
+        ],
+        "sourceRange": "진성 반도체에서는 전도대 전자와 가전자대 정공이 한 쌍으로 생겨 농도가 같다",
+        "sourceText": "PDF 26쪽은 intrinsic semiconductor에서 전자·정공 수가 같고 도핑이 전도도를 올리는 수단이라고 설명한다.",
+        "target": "진성의 n=p 조건과 외부 도핑의 목적을 설명한다.",
+        "successCriteria": [
+          "n=p=ni의 관계를 쓰고 진성 Si의 낮은 캐리어 농도와 도핑의 필요를 연결한다."
+        ],
+        "knowledgeContent": "진성 반도체는 전자와 정공이 쌍으로 생성되어 평형 농도가 같고, 낮은 캐리어 수를 조절하려면 도핑할 수 있다.",
+        "outlineNodeIds": [
+          "source-1:outline-28"
+        ],
+        "conceptNodeIds": [
+          "concept-020"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "instruction-10",
+          "kind": "text",
+          "text": "빈칸에 들어갈 내용을 직접 쓰세요.",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 52
+          }
+        },
+        {
+          "id": "blank-10",
+          "kind": "blank",
+          "responseId": "response-10",
+          "promptBefore": "진성 반도체의 전자·정공 농도 관계는 ",
+          "promptAfter": "이다.",
+          "frame": {
+            "x": 28,
+            "y": 96,
+            "width": 704,
+            "height": 152
+          }
+        },
+        {
+          "id": "reveal-10",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-10"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-10",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "n=p=ni"
+          ],
+          "grading": "exact-normalized",
+          "explanation": "전자와 정공이 쌍으로 생겨 평형 농도가 같다."
+        }
+      ]
+    },
+    {
+      "id": "question-11",
+      "source": {
+        "learningUnitId": "knowledge-unit-11",
+        "objectiveId": "objective-11",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 28,
+        "sourcePages": [
+          28
+        ],
+        "sourceRange": "5족 도너는 전자·양이온을, 3족 억셉터는 정공·음이온을 만든다",
+        "sourceText": "PDF 27~28쪽은 도핑 정의와 3족 B 및 5족 P·As·Sb가 만드는 캐리어·이온 전하를 도식화한다.",
+        "target": "도핑 원소의 족과 생성 캐리어·남는 이온 전하를 대응한다.",
+        "successCriteria": [
+          "도너→n형·전자·양이온, 억셉터→p형·정공·음이온의 조합을 모두 맞힌다."
+        ],
+        "knowledgeContent": "Si의 5족 도너는 자유전자와 양이온 도너를 만들고 3족 억셉터는 정공과 음이온 억셉터를 만든다.",
+        "outlineNodeIds": [
+          "source-1:outline-30"
+        ],
+        "conceptNodeIds": [
+          "concept-022"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-11",
+          "kind": "text",
+          "text": "Si 도핑의 도너와 억셉터를 바르게 대응한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-11",
+          "kind": "choice-set",
+          "responseId": "response-11",
+          "optionIds": [
+            "option-11-1",
+            "option-11-2",
+            "option-11-3",
+            "option-11-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-11",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-11"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-11",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-11-1",
+              "text": "도너와 억셉터 모두 전자·음이온만 만든다"
+            },
+            {
+              "id": "option-11-2",
+              "text": "도너와 억셉터 모두 정공·양이온만 만든다"
+            },
+            {
+              "id": "option-11-3",
+              "text": "5족 도너는 전자·양이온, 3족 억셉터는 정공·음이온"
+            },
+            {
+              "id": "option-11-4",
+              "text": "5족 도너는 정공·음이온, 3족 억셉터는 전자·양이온"
+            }
+          ],
+          "correctOptionId": "option-11-3",
+          "grading": "exact",
+          "explanation": "도너는 전자를 제공하고 양이온, 억셉터는 전자를 받아 정공을 만들고 음이온이 된다."
+        }
+      ]
+    },
+    {
+      "id": "question-12",
+      "source": {
+        "learningUnitId": "knowledge-unit-12",
+        "objectiveId": "objective-12",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 29,
+        "sourcePages": [
+          29
+        ],
+        "sourceRange": "n형은 전자·전도대 근처 EF, p형은 정공·가전자대 근처 EF에 대응한다",
+        "sourceText": "PDF 29쪽의 p형/n형 캐리어와 30쪽의 진성·n형·p형 EF 위치 도식.",
+        "target": "n형·p형의 다수 캐리어와 밴드 그림의 페르미 준위 위치를 연결한다.",
+        "successCriteria": [
+          "n형의 CB 근처 EF와 p형의 VB 근처 EF를 각 다수 캐리어와 정확히 대응한다."
+        ],
+        "knowledgeContent": "n형에서는 전자가 다수이고 페르미 준위가 전도대 쪽으로, p형에서는 정공이 다수이고 가전자대 쪽으로 가까워진다.",
+        "outlineNodeIds": [
+          "source-1:outline-31",
+          "source-1:outline-32"
+        ],
+        "conceptNodeIds": [
+          "concept-025"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-12",
+          "kind": "text",
+          "text": "n형·p형의 다수 캐리어와 페르미 준위 위치는?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-12",
+          "kind": "choice-set",
+          "responseId": "response-12",
+          "optionIds": [
+            "option-12-1",
+            "option-12-2",
+            "option-12-3",
+            "option-12-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-12",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-12"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-12",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-12-1",
+              "text": "두 형 모두 정공·전도대 근처"
+            },
+            {
+              "id": "option-12-2",
+              "text": "n형 전자·전도대 근처, p형 정공·가전자대 근처"
+            },
+            {
+              "id": "option-12-3",
+              "text": "n형 정공·가전자대 근처, p형 전자·전도대 근처"
+            },
+            {
+              "id": "option-12-4",
+              "text": "두 형 모두 전자·밴드갭 정중앙"
+            }
+          ],
+          "correctOptionId": "option-12-2",
+          "grading": "exact",
+          "explanation": "도핑 종류에 따라 다수 캐리어와 EF의 가까운 밴드가 달라진다."
+        }
+      ]
+    },
+    {
+      "id": "question-13",
+      "source": {
+        "learningUnitId": "knowledge-unit-13",
+        "objectiveId": "objective-13",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 29,
+        "sourcePages": [
+          29
+        ],
+        "sourceRange": "열평형에서 전자와 정공의 농도곱 np는 ni²와 같다",
+        "sourceText": "PDF 29쪽의 np=ni²와 도너 10^15 cm^-3의 소수 정공 계산 예.",
+        "target": "ni와 다수 캐리어 농도에서 소수 캐리어 농도를 계산한다.",
+        "successCriteria": [
+          "p=ni²/n 또는 n=ni²/p를 적용하여 값을 구한다."
+        ],
+        "knowledgeContent": "열평형에서 전자와 정공의 농도곱은 np=ni²이므로 다수 캐리어가 정해지면 소수 캐리어를 계산할 수 있다.",
+        "outlineNodeIds": [
+          "source-1:outline-31"
+        ],
+        "conceptNodeIds": [
+          "concept-023"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "instruction-13",
+          "kind": "text",
+          "text": "빈칸에 들어갈 내용을 직접 쓰세요.",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 52
+          }
+        },
+        {
+          "id": "blank-13",
+          "kind": "blank",
+          "responseId": "response-13",
+          "promptBefore": "ni=10^10 cm^-3이고 n≈10^15 cm^-3라면 np=ni²에서 p는 ",
+          "promptAfter": "이다.",
+          "frame": {
+            "x": 28,
+            "y": 96,
+            "width": 704,
+            "height": 152
+          }
+        },
+        {
+          "id": "reveal-13",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-13"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-13",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "10^5 cm^-3"
+          ],
+          "grading": "exact-normalized",
+          "explanation": "p=ni²/n=10^20/10^15이다."
+        }
+      ]
+    },
+    {
+      "id": "question-14",
+      "source": {
+        "learningUnitId": "knowledge-unit-14",
+        "objectiveId": "objective-14",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 29,
+        "sourcePages": [
+          29
+        ],
+        "sourceRange": "도핑 원자 이온을 포함한 양전하와 음전하의 총합은 중성을 이룬다",
+        "sourceText": "PDF 29쪽은 정공·전자·donor·acceptor 총 전하량의 합이 0이라고 제시한다.",
+        "target": "도핑 원자 이온을 포함해 전하 중성 조건을 판단한다.",
+        "successCriteria": [
+          "음전하 전자·억셉터와 양전하 정공·도너의 총합이 같아야 한다고 설명한다."
+        ],
+        "knowledgeContent": "도핑된 반도체에서도 전자·정공·이온화 도너·억셉터의 전하 총합은 중성이다.",
+        "outlineNodeIds": [
+          "source-1:outline-31"
+        ],
+        "conceptNodeIds": [
+          "concept-024"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-14",
+          "kind": "text",
+          "text": "도핑한 반도체의 전하 중성 조건은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-14",
+          "kind": "choice-set",
+          "responseId": "response-14",
+          "optionIds": [
+            "option-14-1",
+            "option-14-2",
+            "option-14-3",
+            "option-14-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-14",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-14"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-14",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-14-1",
+              "text": "정공과 전자 수만 같으면 이온화 불순물은 무시해도 된다"
+            },
+            {
+              "id": "option-14-2",
+              "text": "도너와 억셉터는 모두 양전하이므로 합산할 필요 없다"
+            },
+            {
+              "id": "option-14-3",
+              "text": "전체 전하량은 도핑할수록 항상 양수가 된다"
+            },
+            {
+              "id": "option-14-4",
+              "text": "양전하인 정공·이온화 도너 총량과 음전하인 전자·이온화 억셉터 총량이 같다"
+            }
+          ],
+          "correctOptionId": "option-14-4",
+          "grading": "exact",
+          "explanation": "전자·정공과 도핑 원자 이온을 함께 세어 총전하 0을 만족한다."
+        }
+      ]
+    },
+    {
+      "id": "question-15",
+      "source": {
+        "learningUnitId": "knowledge-unit-15",
+        "objectiveId": "objective-15",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 31,
+        "sourcePages": [
+          31
+        ],
+        "sourceRange": "PN 다이오드는 p측 양전압의 순방향 바이어스에서 전류가 흐르기 쉽고 역방향에서는 막힌다",
+        "sourceText": "PDF 31쪽의 접합 구조와 forward/reverse bias 회로 및 전류 그래프.",
+        "target": "전압 극성 그림에서 순방향·역방향과 전류의 흐름 가능성을 판정한다.",
+        "successCriteria": [
+          "p측 양전압을 순방향으로, p측 음전압을 역방향으로 판단하고 정류 특성을 설명한다."
+        ],
+        "knowledgeContent": "PN 접합 다이오드는 p측에 양전압을 거는 순방향 바이어스에서 전류가 흐르기 쉽고 역방향에서는 전류가 억제된다.",
+        "outlineNodeIds": [
+          "source-1:outline-33"
+        ],
+        "conceptNodeIds": [
+          "concept-027"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-15",
+          "kind": "text",
+          "text": "PN 다이오드에서 p측 전압과 전류 흐름의 관계는?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-15",
+          "kind": "choice-set",
+          "responseId": "response-15",
+          "optionIds": [
+            "option-15-1",
+            "option-15-2",
+            "option-15-3",
+            "option-15-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-15",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-15"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-15",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-15-1",
+              "text": "어느 극성이든 전류가 똑같이 흐른다"
+            },
+            {
+              "id": "option-15-2",
+              "text": "다이오드에는 p측과 n측의 구별이 없다"
+            },
+            {
+              "id": "option-15-3",
+              "text": "p측 양전압은 순방향으로 전류가 흐르기 쉽고 p측 음전압은 역방향으로 억제된다"
+            },
+            {
+              "id": "option-15-4",
+              "text": "p측 음전압만 순방향이고 양전압은 역방향이다"
+            }
+          ],
+          "correctOptionId": "option-15-3",
+          "grading": "exact",
+          "explanation": "순·역 바이어스의 극성에 따라 정류 특성이 나타난다."
+        }
+      ]
+    },
+    {
+      "id": "question-16",
+      "source": {
+        "learningUnitId": "knowledge-unit-16",
+        "objectiveId": "objective-16",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 32,
+        "sourcePages": [
+          32
+        ],
+        "sourceRange": "MOSFET은 게이트 전압으로 소스와 드레인 사이 채널의 전류를 조절한다",
+        "sourceText": "PDF 32쪽은 N채널 증가형 FET의 세 단자 역할과 반전층 채널을 설명한다.",
+        "target": "세 단자와 반전 채널의 역할을 그림 없이 설명한다.",
+        "successCriteria": [
+          "소스·게이트·드레인을 바르게 대응하고 게이트 전압이 채널 형성을 조절한다고 말한다."
+        ],
+        "knowledgeContent": "MOSFET의 소스는 캐리어를 공급하고 게이트는 채널 전류를 제어하며 드레인은 캐리어를 내보낸다.",
+        "outlineNodeIds": [
+          "source-1:outline-34"
+        ],
+        "conceptNodeIds": [
+          "concept-028"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-16",
+          "kind": "text",
+          "text": "MOSFET의 세 단자와 채널 역할을 바르게 연결한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-16",
+          "kind": "choice-set",
+          "responseId": "response-16",
+          "optionIds": [
+            "option-16-1",
+            "option-16-2",
+            "option-16-3",
+            "option-16-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-16",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-16"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-16",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-16-1",
+              "text": "세 단자는 모두 같은 역할을 한다"
+            },
+            {
+              "id": "option-16-2",
+              "text": "소스는 캐리어 공급, 게이트는 채널 제어, 드레인은 캐리어 배출"
+            },
+            {
+              "id": "option-16-3",
+              "text": "소스는 채널 제어, 게이트는 캐리어 배출, 드레인은 공급"
+            },
+            {
+              "id": "option-16-4",
+              "text": "게이트는 기판과 관계없는 금속 배선일 뿐이다"
+            }
+          ],
+          "correctOptionId": "option-16-2",
+          "grading": "exact",
+          "explanation": "게이트 전계가 반전층 채널의 전류를 조절한다."
+        }
+      ]
+    },
+    {
+      "id": "question-17",
+      "source": {
+        "learningUnitId": "knowledge-unit-17",
+        "objectiveId": "objective-17",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 35,
+        "sourcePages": [
+          35
+        ],
+        "sourceRange": "채널을 더 줄이기 어려울 때 캐리어 이동도를 높이면 채널 저항을 낮출 수 있다 / SiGe·Ge·III-V의 이동도 이점은 격자 불일치·누설·게이트 제어·통합 과제와 함께 평가한다",
+        "sourceText": "PDF 35쪽의 높은 이동도 동기와 36쪽의 SiGe·Ge·III-V 도입 과제.",
+        "target": "높은 이동도 재료의 기대 효과와 구현 제약을 비교한다.",
+        "successCriteria": [
+          "이동도 증가가 채널 저항 감소를 노린다고 말하고 원문의 제약 두 가지를 든다."
+        ],
+        "knowledgeContent": "채널을 더 줄이기 어려울 때 이동도가 높은 SiGe·Ge·III-V를 고려하지만 격자 불일치·누설·게이트 제어·공정 통합의 제약이 있다.",
+        "outlineNodeIds": [
+          "source-1:outline-37",
+          "source-1:outline-38"
+        ],
+        "conceptNodeIds": [
+          "concept-030",
+          "concept-031"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-17",
+          "kind": "text",
+          "text": "SiGe·Ge·III-V의 높은 이동도 채널을 검토할 때 맞는 판단은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-17",
+          "kind": "choice-set",
+          "responseId": "response-17",
+          "optionIds": [
+            "option-17-1",
+            "option-17-2",
+            "option-17-3",
+            "option-17-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-17",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-17"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-17",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-17-1",
+              "text": "저항 감소를 노리지만 격자 불일치·누설·게이트 제어·통합 과제를 함께 본다"
+            },
+            {
+              "id": "option-17-2",
+              "text": "이동도만 높으면 계면·누설 문제가 사라진다"
+            },
+            {
+              "id": "option-17-3",
+              "text": "채널 이동도는 저항과 전혀 관계없다"
+            },
+            {
+              "id": "option-17-4",
+              "text": "III-V와 Ge는 모든 n형·p형 공정에 제약 없이 동일하게 적용된다"
+            }
+          ],
+          "correctOptionId": "option-17-1",
+          "grading": "exact",
+          "explanation": "높은 이동도의 이점과 소자 구현의 제약은 함께 평가해야 한다."
+        }
+      ]
+    },
+    {
+      "id": "question-18",
+      "source": {
+        "learningUnitId": "knowledge-unit-18",
+        "objectiveId": "objective-18",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 37,
+        "sourcePages": [
+          37
+        ],
+        "sourceRange": "이종접합의 삼각형 양자우물에 형성된 2차원 전자가스는 높은 이동도와 밀도를 노린다",
+        "sourceText": "PDF 37쪽의 2DEG 계면 도식과 전하이동도·전자밀도 상승 표시.",
+        "target": "2DEG가 생기는 위치와 기대 효과를 설명한다.",
+        "successCriteria": [
+          "이종접합 계면·양자우물·2차원 전하 이동을 연결하고 이동도·밀도 증가를 말한다."
+        ],
+        "knowledgeContent": "이종접합 계면의 삼각형 양자우물은 2차원 전자가스를 만들어 높은 전자 밀도와 이동도를 노린다.",
+        "outlineNodeIds": [
+          "source-1:outline-39"
+        ],
+        "conceptNodeIds": [
+          "concept-032"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-18",
+          "kind": "text",
+          "text": "2DEG의 형성 위치와 기대 효과를 바르게 설명한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-18",
+          "kind": "choice-set",
+          "responseId": "response-18",
+          "optionIds": [
+            "option-18-1",
+            "option-18-2",
+            "option-18-3",
+            "option-18-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-18",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-18"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-18",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-18-1",
+              "text": "웨이퍼 전체 벌크에만 생기며 이동도는 반드시 감소한다"
+            },
+            {
+              "id": "option-18-2",
+              "text": "다이오드의 금속 배선에 생기는 정공층이다"
+            },
+            {
+              "id": "option-18-3",
+              "text": "밴드갭이 완전히 사라진 절연체 표면을 뜻한다"
+            },
+            {
+              "id": "option-18-4",
+              "text": "이종접합 계면의 양자우물에 생기는 2차원 전자 수송으로 이동도·밀도 증가를 노린다"
+            }
+          ],
+          "correctOptionId": "option-18-4",
+          "grading": "exact",
+          "explanation": "강의는 계면의 삼각형 양자우물과 전하 이동도를 연결한다."
+        }
+      ]
+    },
+    {
+      "id": "question-19",
+      "source": {
+        "learningUnitId": "knowledge-unit-19",
+        "objectiveId": "objective-19",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 38,
+        "sourcePages": [
+          38
+        ],
+        "sourceRange": "그래핀은 높은 이동도에도 밴드갭이 없고 MoS2 같은 2차원 반도체는 밴드갭을 가진다",
+        "sourceText": "PDF 38쪽은 graphene, MoS2, BP의 이동도·밴드갭 차이와 생산·안정성 과제를 제시한다.",
+        "target": "2차원 재료를 이동도·밴드갭·소자 스위칭의 관점에서 비교한다.",
+        "successCriteria": [
+          "그래핀의 높은 이동도·무밴드갭과 MoS2의 상대적으로 낮은 이동도·유한 밴드갭을 구별하고 생산·신뢰성 과제를 언급한다."
+        ],
+        "knowledgeContent": "그래핀은 높은 이동도에도 밴드갭이 없고, MoS2 등 TMDC는 밴드갭이 있어 on/off 제어에 유리하나 이동도와 안정성의 절충이 있다.",
+        "outlineNodeIds": [
+          "source-1:outline-40"
+        ],
+        "conceptNodeIds": [
+          "concept-033"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-19",
+          "kind": "text",
+          "text": "그래핀과 MoS2를 스위칭 재료로 비교한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-19",
+          "kind": "choice-set",
+          "responseId": "response-19",
+          "optionIds": [
+            "option-19-1",
+            "option-19-2",
+            "option-19-3",
+            "option-19-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-19",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-19"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-19",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-19-1",
+              "text": "두 재료의 이동도·밴드갭·안정성은 완전히 같다"
+            },
+            {
+              "id": "option-19-2",
+              "text": "밴드갭은 on/off 제어에 아무 영향이 없다"
+            },
+            {
+              "id": "option-19-3",
+              "text": "그래핀은 높은 이동도에도 밴드갭이 없고 MoS2는 유한 밴드갭이 있으나 이동도·안정성 절충이 있다"
+            },
+            {
+              "id": "option-19-4",
+              "text": "그래핀은 큰 밴드갭, MoS2는 밴드갭 0이다"
+            }
+          ],
+          "correctOptionId": "option-19-3",
+          "grading": "exact",
+          "explanation": "이동도뿐 아니라 밴드갭과 생산·신뢰성을 함께 봐야 한다."
+        }
+      ]
+    },
+    {
+      "id": "question-20",
+      "source": {
+        "learningUnitId": "knowledge-unit-20",
+        "objectiveId": "objective-20",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 40,
+        "sourcePages": [
+          40
+        ],
+        "sourceRange": "강의가 열거한 웨이퍼 제조·산화·포토·박막·식각·배선·불량 선별·패키징의 여덟 단계를 구별한다",
+        "sourceText": "PDF 40쪽은 반도체 제조 8대 공정의 이름을 순서대로 나열한다.",
+        "target": "강의가 제시한 8대 공정의 명칭과 순서를 기억에서 재구성한다.",
+        "successCriteria": [
+          "여덟 공정 이름을 강의에 나온 순서대로 누락 없이 배열한다."
+        ],
+        "knowledgeContent": "강의는 웨이퍼 제조, 산화, 포토, 박막, 식각, 배선, 불량 선별, 패키징을 8대 공정으로 열거한다.",
+        "outlineNodeIds": [
+          "source-1:outline-42"
+        ],
+        "conceptNodeIds": [
+          "concept-035"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "instruction-20",
+          "kind": "text",
+          "text": "빈칸에 들어갈 내용을 직접 쓰세요.",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 52
+          }
+        },
+        {
+          "id": "blank-20",
+          "kind": "blank",
+          "responseId": "response-20",
+          "promptBefore": "강의가 나열한 반도체 제조 8대 공정의 순서는 ",
+          "promptAfter": "이다.",
+          "frame": {
+            "x": 28,
+            "y": 96,
+            "width": 704,
+            "height": 152
+          }
+        },
+        {
+          "id": "reveal-20",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-20"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-20",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "웨이퍼 제조→산화→포토→박막→식각→배선→불량 선별→패키징"
+          ],
+          "grading": "exact-normalized",
+          "explanation": "PDF 40쪽의 목록 순서를 그대로 복원한다."
+        }
+      ]
+    },
+    {
+      "id": "question-21",
+      "source": {
+        "learningUnitId": "knowledge-unit-21",
+        "objectiveId": "objective-21",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 41,
+        "sourcePages": [
+          41
+        ],
+        "sourceRange": "노광의 미세화, 3차원 트랜지스터 구조, 적층 패키징은 소재·공정 협력이 필요한 변화다",
+        "sourceText": "PDF 41쪽은 EUV 미세화, FinFET→GAAFET, 3차원 통합 패키징을 별도 항목으로 열거한다.",
+        "target": "공정 미세화·소자 구조·패키징 통합을 서로 구별한다.",
+        "successCriteria": [
+          "EUV를 노광, FinFET/GAAFET을 소자 구조, 3D 통합을 패키징 축에 정확히 대응한다."
+        ],
+        "knowledgeContent": "미세 노광, 평면에서 3차원 트랜지스터로의 구조 변화, 3차원 적층 패키징은 서로 다른 집적 기술 축이다.",
+        "outlineNodeIds": [
+          "source-1:outline-43"
+        ],
+        "conceptNodeIds": [
+          "concept-036"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-21",
+          "kind": "text",
+          "text": "EUV·FinFET/GAAFET·3D 통합 패키징을 올바르게 분류한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-21",
+          "kind": "choice-set",
+          "responseId": "response-21",
+          "optionIds": [
+            "option-21-1",
+            "option-21-2",
+            "option-21-3",
+            "option-21-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-21",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-21"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-21",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-21-1",
+              "text": "EUV는 노광, FinFET/GAAFET은 소자 구조, 3D 통합은 패키징"
+            },
+            {
+              "id": "option-21-2",
+              "text": "EUV는 패키징, FinFET/GAAFET은 소재 공급, 3D 통합은 노광"
+            },
+            {
+              "id": "option-21-3",
+              "text": "세 가지 모두 동일한 웨이퍼 제조 단계다"
+            },
+            {
+              "id": "option-21-4",
+              "text": "FinFET/GAAFET은 메모리와 비메모리의 시장 분류다"
+            }
+          ],
+          "correctOptionId": "option-21-1",
+          "grading": "exact",
+          "explanation": "강의는 미세 노광, 3D 소자, 통합 패키징을 별도 기술 축으로 든다."
+        }
+      ]
+    },
+    {
+      "id": "question-22",
+      "source": {
+        "learningUnitId": "knowledge-unit-22",
+        "objectiveId": "objective-22",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 42,
+        "sourcePages": [
+          42
+        ],
+        "sourceRange": "AI 가속과 온디바이스 연산에는 처리량과 전력 효율에 맞춘 전용 반도체가 쓰인다",
+        "sourceText": "PDF 42~43쪽은 AI 특화 반도체 필요와 온디바이스 AI의 모바일 AP·SoC·NPU 사례를 제시한다.",
+        "target": "대규모 AI와 온디바이스 AI 사례에서 공통 요구와 구현 위치를 구별한다.",
+        "successCriteria": [
+          "전용 연산·전력 효율 요구를 말하고 모바일 AP/SoC의 NPU를 기기 내부 처리 예로 든다."
+        ],
+        "knowledgeContent": "AI용 반도체는 연산량과 전력 효율 요구에 맞춘 전용 처리기를 사용하며 온디바이스 AI는 모바일 SoC 안의 처리 자원을 활용한다.",
+        "outlineNodeIds": [
+          "source-1:outline-44"
+        ],
+        "conceptNodeIds": [
+          "concept-037"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 606
+      },
+      "blocks": [
+        {
+          "id": "prompt-22",
+          "kind": "text",
+          "text": "대규모 AI와 온디바이스 AI에 필요한 반도체 설명은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 94
+          }
+        },
+        {
+          "id": "choices-22",
+          "kind": "choice-set",
+          "responseId": "response-22",
+          "optionIds": [
+            "option-22-1",
+            "option-22-2",
+            "option-22-3",
+            "option-22-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 134,
+            "width": 704,
+            "height": 300
+          }
+        },
+        {
+          "id": "reveal-22",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-22"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 464,
+            "width": 704,
+            "height": 118
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-22",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-22-1",
+              "text": "AI에는 저장용 메모리만 있고 연산용 반도체는 필요 없다"
+            },
+            {
+              "id": "option-22-2",
+              "text": "온디바이스 AI는 모바일 기기 안에서 연산하지 않는다"
+            },
+            {
+              "id": "option-22-3",
+              "text": "NPU는 반도체 공정의 산화 단계 이름이다"
+            },
+            {
+              "id": "option-22-4",
+              "text": "전용 연산과 전력 효율이 중요하며 모바일 SoC의 NPU는 기기 내부 AI 처리를 돕는다"
+            }
+          ],
+          "correctOptionId": "option-22-4",
+          "grading": "exact",
+          "explanation": "강의의 AI 가속기와 모바일 AP/SoC 사례를 기술 요구로 요약한다."
+        }
+      ]
+    }
+  ]
+}

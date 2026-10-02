@@ -1,0 +1,23 @@
+{
+  "requestId": "req_cf57cc2edd05e056e108101d4967cc96",
+  "status": "stopped-network-environment",
+  "model": "gpt-6-luna",
+  "effort": "low",
+  "stage": "analyze",
+  "backendInvocationsRecordedByExecutor": 3,
+  "outgoingFetchAttemptsRecordedBeforeDispatch": 2,
+  "guardBlockedBeforeOutgoingFetch": 1,
+  "httpResponsesReceived": 0,
+  "remoteModelResponsesReceived": 0,
+  "failureClassification": "sandbox-network-permission",
+  "diagnosticSource": "Root agent confirmed unauthenticated fetch failed with EACCES inside sandbox and reached HTTP 401 with require_escalated. The diagnostic made no model inference call.",
+  "legacySummaryFieldClarification": "modelHttpCalls=2 counts requests reserved in the ledger before fetch, not successful HTTP requests or model inference. retries=3 includes two connection failures and one guard-blocked backend invocation.",
+  "budgetLimit": 60,
+  "budgetConservativelyConsumed": 2,
+  "budgetRemaining": 58,
+  "stage5CompletedGenerations": 0,
+  "stage5UnstartedGenerations": 5,
+  "stage6ActualNoteQuestions": 0,
+  "stopReason": "Two identical connection failures. No additional request or provider substitution was attempted.",
+  "resumeRequirement": "User confirmation and a network-enabled process. Preserve this ledger and its two reserved attempts; never reset the budget."
+}
