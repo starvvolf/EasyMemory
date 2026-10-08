@@ -1,0 +1,54 @@
+{
+  "artifactType": "study-forge-experiment-manifest",
+  "artifactVersion": "v0",
+  "experimentId": "exp-20260810-count-policy-soft-budget-v1",
+  "caseId": "operating-system-deadlock",
+  "status": "completed",
+  "experimentType": "retrospective-comparison",
+  "question": "hard exact count를 soft budget으로 완화했을 때 LearningUnit/CardSet coverage 손실이 줄어드는가?",
+  "hypothesis": "soft budget은 정확한 총개수 강제보다 LearningUnit별 CardSet coverage를 보존할 가능성이 높다.",
+  "independentVariable": {
+    "name": "countPolicy",
+    "control": "exact",
+    "experiment": "soft_budget"
+  },
+  "controlledVariables": [
+    "source file metadata",
+    "modelConfiguration",
+    "additional instruction",
+    "cardMode",
+    "variableHandling"
+  ],
+  "arms": [
+    {
+      "armId": "exact-count",
+      "role": "control",
+      "runIds": [
+        "20260810T072047Z__whole-document-core__baseline__r01"
+      ]
+    },
+    {
+      "armId": "soft-budget",
+      "role": "experiment",
+      "runIds": [
+        "20260810T152136Z__whole-document-core-soft-budget__baseline__r01"
+      ]
+    }
+  ],
+  "knownConfounds": [
+    "Recall Design이 다르다. exact-count run은 option-2/option-2-template이고 soft-budget run은 option-1/option-1-template이다.",
+    "대표 예시가 각 Recall Design에 따라 달라졌다.",
+    "WholeDocumentCorePlan은 같은 다섯 영역과 5·4·5·5·3 예상 분포를 만들었지만 두 run에서 독립적으로 생성되어 문구와 일부 area ID가 동일하지 않다.",
+    "두 legacy run은 무작위 배정이나 반복 실행 없이 사후에 연결했으며 실행 seed와 완전한 request payload가 없다."
+  ],
+  "interpretationConstraint": "이 비교는 retrospective comparison이다. 관찰된 모든 품질 차이를 countPolicy 하나의 인과 효과로 해석하지 않는다.",
+  "referencePath": "docs/references/OPERATING_SYSTEM_DEADLOCK.md",
+  "notesPath": "eval/experiments/exp-20260810-count-policy-soft-budget-v1/notes.md",
+  "requiredStageFiles": [
+    "stages/30-recall.json",
+    "stages/40-prepare.json",
+    "stages/50-cards.json",
+    "stages/60-critic.json",
+    "stages/70-final-cards.json"
+  ]
+}

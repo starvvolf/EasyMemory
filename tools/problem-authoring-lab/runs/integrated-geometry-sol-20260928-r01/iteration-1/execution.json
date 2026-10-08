@@ -1,0 +1,19 @@
+{
+  "model": "gpt-6-sol",
+  "sessionId": "chatgpt-request-789ee8708698831ced8655c04f289698",
+  "usage": {
+    "method": "human-reviewed targeted authoring revision by current Codex conversation",
+    "tokenTelemetry": "not-recorded"
+  },
+  "toolCalls": [
+    "load_source_packet",
+    "get_authoring_instructions",
+    "validate_problem_document",
+    "render_problem_preview",
+    "record_problem_iteration",
+    "apply_problem_patch",
+    "validate_problem_document",
+    "render_problem_preview",
+    "record_problem_iteration"
+  ]
+}

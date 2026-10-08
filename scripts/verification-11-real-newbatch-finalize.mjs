@@ -1,0 +1,33 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { createHash } from "node:crypto";
+const root = "협업/검증_11/real";
+const batch = "stage5-2026-10-01T19-55-59-636Z";
+const file = path.join(root, "call-budget.json");
+const ledger = JSON.parse(readFileSync(file, "utf8"));
+const calls = JSON.parse(readFileSync(path.join(root, batch, "bfs-2pages-gpt-6-luna-calls.json"), "utf8"));
+const counts = {};
+for (const call of calls.filter((call) => !call.ok && call.error)) {
+  const hash = createHash("sha256").update(call.error).digest("hex");
+  counts[hash] = (counts[hash] ?? 0) + 1;
+}
+if (!Object.values(counts).some((count) => count >= 2)) throw new Error("Repeated failure evidence required.");
+ledger.stopped = "same-validation-failure-recurred";
+ledger.stoppedAt ??= new Date().toISOString();
+writeFileSync(file, JSON.stringify(ledger, null, 2));
+const summary = JSON.parse(readFileSync(path.join(root, batch, "summary_public.json"), "utf8"));
+summary.stopped = ledger.stopped;
+summary.stoppedAt = ledger.stoppedAt;
+summary.rows[0].guardBlockedBeforeFetch = 1;
+summary.rows[0].successfulStages = ["analyze", "concept-tree", "learning-design", "activity-design"];
+summary.rows[0].stoppedStage = "cards";
+summary.rows[0].errorClass = "card-source-evidence-mismatch";
+summary.rows[0].sameErrorActualOccurrences = 2;
+summary.rows[0].repeatedErrorHashes = Object.entries(counts).filter(([, count]) => count >= 2).map(([hash, count]) => ({ hash, count }));
+summary.rows[0].actualRetryHttpCalls = 2;
+summary.rows[0].requestState = "running";
+summary.rows[0].humanReview = "concept-tree → learning-design → cards; /lab request ID above";
+summary.notExecuted = ["Cornell Sol medium", "geometry Luna low", "geometry Sol medium", "merged Luna low", "merged Sol medium", "notes"];
+summary.qualityEvaluationPerformed = false;
+writeFileSync(path.join(root, batch, "summary-v2_public.json"), JSON.stringify(summary, null, 2), { flag: "wx" });
+console.log(JSON.stringify({ modelCallsTotal: ledger.calls.length, remaining: 60 - ledger.calls.length, stopped: ledger.stopped, newActualHttpCalls: 7, beforeFetchBlocked: 1, publicFile: path.join(root, batch, "summary-v2_public.json") }));

@@ -1,0 +1,200 @@
+{
+  "artifactType": "study-forge-stage-artifact",
+  "artifactVersion": "v0",
+  "runId": "20260810T072047Z__whole-document-core__baseline__r01",
+  "stage": "recall",
+  "capturedAt": null,
+  "capturedAtAvailability": "unavailable; legacy export only records artifact capturedAt",
+  "modelConfiguration": {
+    "model": "gpt-5.6-terra",
+    "reasoningEffort": "medium"
+  },
+  "modelConfigurationAvailability": "copied-from-legacy-export",
+  "inputRefs": [
+    "inputs.json",
+    "stages/20-plan.json"
+  ],
+  "request": null,
+  "requestAvailability": "unavailable-in-legacy-browser-export",
+  "response": {
+    "recallDesign": {
+      "question": "전체 핵심 범위의 22개 LearningUnit에 동일하게 적용할 카드 구조를 고르세요. 각 선택지는 카드 앞면(Cue)에서 보는 정보와 카드 뒷면(Target)에서 직접 인출할 내용을 다르게 설계합니다.",
+      "options": [
+        {
+          "id": "option-1",
+          "title": "핵심 용어·상황 단서 → 정의·조건·규칙 인출",
+          "cue": "데드락 관련 핵심 용어 또는 짧은 자원 요청 상황",
+          "target": "해당 용어의 정확한 정의, 성립 조건, 그래프 판정 규칙 또는 처리 원리",
+          "unit": "핵심 LearningUnit",
+          "instruction": "총 22장의 플래시카드를 만든다. 영역별 비중은 데드락 개념·네 필요조건 5장, 자원 할당 그래프 4장, 처리 전략 분류·예방 5장, 회피·안전 상태·클레임 간선 5장, 탐지·복구 3장으로 한다. 카드 앞면에는 하나의 핵심 용어 또는 짧고 구체적인 상황만 제시한다. 카드 뒷면에는 그 단서에 대응하는 정의, 조건의 구성 요소, 간선 의미, 판정 규칙, 정책 절차 또는 복구 방법을 완전한 문장이나 목록으로 재생산하게 한다. 한 카드에는 하나의 인출 목표만 둔다. 예방 정책 카드에서는 ‘어떤 조건을 깨는가’와 정책을 함께 인출하게 하고, 그래프 카드에서는 사이클과 인스턴스 수에 따른 결론을 정확히 구분하게 한다. 자료에 없는 은행원 알고리즘의 상세 절차나 제외된 개별 그림·세마포어 코드 재현은 만들지 않는다.",
+          "mode": "flashcard",
+          "variants": [
+            {
+              "id": "option-1-template",
+              "label": "템플릿 예시",
+              "description": "핵심 용어를 보고 그 정의와 성립 조건을 완전하게 말하는 카드입니다.",
+              "slotMode": "template",
+              "exampleSource": "source",
+              "preservePlaceholders": true,
+              "sample": {
+                "title": "용어 → 정의·조건",
+                "cue": "데드락",
+                "target": "차단된 프로세스 집합에서 각 프로세스가 자원을 보유한 채, 그 집합의 다른 프로세스가 보유한 자원을 획득하기 위해 기다리는 상태. 상호 배제, 점유 및 대기, 비선점, 순환 대기가 동시에 성립하면 발생할 수 있다.",
+                "supportingInfo": "앞면의 용어만 보고 정의와 네 필요조건을 순서대로 인출한다."
+              }
+            },
+            {
+              "id": "option-1-filled",
+              "label": "완성 예시",
+              "description": "특정 예방 정책을 보고 차단하는 조건과 정책 내용을 인출하는 카드입니다.",
+              "slotMode": "filled_example",
+              "exampleSource": "generated",
+              "preservePlaceholders": false,
+              "sample": {
+                "title": "정책 → 차단 조건·정책",
+                "cue": "순환 대기 예방",
+                "target": "순환 대기 조건을 깨기 위해 모든 자원 유형에 전체 순서를 부여하고, 각 프로세스가 그 번호가 증가하는 순서로만 자원을 요청하게 한다.",
+                "supportingInfo": "앞면의 예방 정책을 보고 깨는 조건과 구체적 정책을 인출한다."
+              }
+            }
+          ]
+        },
+        {
+          "id": "option-2",
+          "title": "판정·비교 질문 → 근거를 포함한 결론 인출",
+          "cue": "자원 할당 그래프의 조건, 자원 요청 후 상태, 또는 처리 방식 비교에 필요한 사실",
+          "target": "데드락·안전성·승인 여부 또는 처리 방식의 구분과 그 판단 근거",
+          "unit": "핵심 LearningUnit",
+          "instruction": "총 22장의 플래시카드를 만든다. 영역별 비중은 데드락 개념·네 필요조건 5장, 자원 할당 그래프 4장, 처리 전략 분류·예방 5장, 회피·안전 상태·클레임 간선 5장, 탐지·복구 3장으로 한다. 카드 앞면에는 답이 정해지는 조건, 짧은 상황, 또는 두 전략의 비교 기준을 제시한다. 카드 뒷면에는 반드시 결론을 먼저 쓰고 이어서 근거를 재생산하게 한다. 네 필요조건은 정의가 주어진 상황에서 해당 조건의 성립 여부를, 자원 할당 그래프는 간선 방향·사이클·인스턴스 수에서 도출되는 데드락 판정을, 예방은 정책이 깨는 필요조건을, 회피는 요청 승인 후 안전 상태 여부와 승인·거부 결정을, 탐지·복구는 발생 후 탐지 및 사이클 해소 수단을 인출하게 한다. ‘불안전 상태=즉시 데드락’으로 쓰지 말고 ‘데드락 가능성’으로 구분한다. 자료에 없는 은행원 알고리즘 상세, 제외된 개별 그래프 배치와 세마포어 코드 재현은 만들지 않는다.",
+          "mode": "flashcard",
+          "variants": [
+            {
+              "id": "option-2-template",
+              "label": "템플릿 예시",
+              "description": "사이클과 자원 인스턴스 수를 보고 데드락 여부를 판정하고 근거를 말하는 카드입니다.",
+              "slotMode": "template",
+              "exampleSource": "source",
+              "preservePlaceholders": true,
+              "sample": {
+                "title": "그래프 조건 → 데드락 판정·근거",
+                "cue": "자원 할당 그래프에 사이클이 있고, 각 자원 유형의 인스턴스가 하나이다.",
+                "target": "데드락이다. 자원 유형마다 인스턴스가 하나인 경우, 자원 할당 그래프의 사이클은 데드락을 의미한다.",
+                "supportingInfo": "사이클만으로 결론 내리지 않고 인스턴스 수를 근거에 포함해 인출한다."
+              }
+            },
+            {
+              "id": "option-2-filled",
+              "label": "완성 예시",
+              "description": "요청을 승인했을 때의 상태를 보고 승인·거부 결론과 이유를 인출하는 카드입니다.",
+              "slotMode": "filled_example",
+              "exampleSource": "generated",
+              "preservePlaceholders": false,
+              "sample": {
+                "title": "요청 결과 → 승인 여부·근거",
+                "cue": "P2의 R2 요청을 승인하면 자원 할당 그래프에 사이클이 형성된다.",
+                "target": "요청을 거부한다. 사이클이 형성되면 상태가 불안전해지고 데드락 가능성이 있으므로 즉시 할당해서는 안 된다.",
+                "supportingInfo": "회피에서는 할당 후의 안전성을 기준으로 승인 여부를 결정한다."
+              }
+            }
+          ]
+        },
+        {
+          "id": "option-3",
+          "title": "부분 진술의 빈칸 → 핵심 용어·정책·결론 완성",
+          "cue": "핵심 개념, 정책 또는 판정 문장에서 비워 둔 한두 개의 핵심 부분",
+          "target": "빈칸에 들어갈 정확한 용어, 조건명, 정책 내용 또는 결론",
+          "unit": "핵심 LearningUnit",
+          "instruction": "총 22장의 클로즈 카드를 만든다. 영역별 비중은 데드락 개념·네 필요조건 5장, 자원 할당 그래프 4장, 처리 전략 분류·예방 5장, 회피·안전 상태·클레임 간선 5장, 탐지·복구 3장으로 한다. 카드 앞면에는 자료의 핵심 규칙을 담은 한 문장을 제시하되, 하나의 학습 단위에 해당하는 핵심 용어·조건명·결론·정책 부분만 ____로 비운다. 카드 뒷면에는 빈칸을 포함한 완전한 문장을 제시한다. 한 카드에서 서로 독립적인 여러 사실을 동시에 비우지 않는다. 네 필요조건의 명칭과 정의, 요청·할당 간선의 방향, 사이클 판정의 인스턴스 조건, 예방 정책과 차단 조건, 안전·불안전 상태의 의미, 클레임 간선의 의미와 전환, 탐지·복구 수단을 중심으로 만든다. 불안전 상태를 데드락과 동일시하지 않는다. 자료에 없는 은행원 알고리즘 상세와 제외된 사례 그림·코드의 재현은 만들지 않는다.",
+          "mode": "cloze",
+          "variants": [
+            {
+              "id": "option-3-template",
+              "label": "템플릿 예시",
+              "description": "데드락 발생 조건의 명칭을 문맥 속 빈칸으로 인출하는 카드입니다.",
+              "slotMode": "template",
+              "exampleSource": "source",
+              "preservePlaceholders": true,
+              "sample": {
+                "title": "조건 정의 문장 → 조건명",
+                "cue": "하나 이상의 자원을 보유한 프로세스가 다른 프로세스가 보유한 추가 자원을 기다리는 조건은 ____이다.",
+                "target": "하나 이상의 자원을 보유한 프로세스가 다른 프로세스가 보유한 추가 자원을 기다리는 조건은 점유 및 대기이다.",
+                "supportingInfo": "정의 문맥을 보고 조건명을 정확히 채운다."
+              }
+            },
+            {
+              "id": "option-3-filled",
+              "label": "완성 예시",
+              "description": "자원 할당 그래프의 간선 의미를 문맥 속 빈칸으로 인출하는 카드입니다.",
+              "slotMode": "filled_example",
+              "exampleSource": "generated",
+              "preservePlaceholders": false,
+              "sample": {
+                "title": "간선 방향 문장 → 간선 의미",
+                "cue": "자원 할당 그래프에서 R3 → P1은 R3의 한 인스턴스가 P1에 ____되었음을 뜻한다.",
+                "target": "자원 할당 그래프에서 R3 → P1은 R3의 한 인스턴스가 P1에 할당되었음을 뜻한다.",
+                "supportingInfo": "자원에서 프로세스로 향하는 간선의 의미를 인출한다."
+              }
+            }
+          ]
+        }
+      ],
+      "recommendedOptionId": "option-2"
+    },
+    "selectedRecallDesign": {
+      "selectedOption": {
+        "id": "option-2",
+        "title": "판정·비교 질문 → 근거를 포함한 결론 인출",
+        "cue": "자원 할당 그래프의 조건, 자원 요청 후 상태, 또는 처리 방식 비교에 필요한 사실",
+        "target": "데드락·안전성·승인 여부 또는 처리 방식의 구분과 그 판단 근거",
+        "unit": "핵심 LearningUnit",
+        "instruction": "총 22장의 플래시카드를 만든다. 영역별 비중은 데드락 개념·네 필요조건 5장, 자원 할당 그래프 4장, 처리 전략 분류·예방 5장, 회피·안전 상태·클레임 간선 5장, 탐지·복구 3장으로 한다. 카드 앞면에는 답이 정해지는 조건, 짧은 상황, 또는 두 전략의 비교 기준을 제시한다. 카드 뒷면에는 반드시 결론을 먼저 쓰고 이어서 근거를 재생산하게 한다. 네 필요조건은 정의가 주어진 상황에서 해당 조건의 성립 여부를, 자원 할당 그래프는 간선 방향·사이클·인스턴스 수에서 도출되는 데드락 판정을, 예방은 정책이 깨는 필요조건을, 회피는 요청 승인 후 안전 상태 여부와 승인·거부 결정을, 탐지·복구는 발생 후 탐지 및 사이클 해소 수단을 인출하게 한다. ‘불안전 상태=즉시 데드락’으로 쓰지 말고 ‘데드락 가능성’으로 구분한다. 자료에 없는 은행원 알고리즘 상세, 제외된 개별 그래프 배치와 세마포어 코드 재현은 만들지 않는다.",
+        "mode": "flashcard",
+        "variants": [
+          {
+            "id": "option-2-template",
+            "label": "템플릿 예시",
+            "description": "사이클과 자원 인스턴스 수를 보고 데드락 여부를 판정하고 근거를 말하는 카드입니다.",
+            "slotMode": "template",
+            "exampleSource": "source",
+            "preservePlaceholders": true,
+            "sample": {
+              "title": "그래프 조건 → 데드락 판정·근거",
+              "cue": "자원 할당 그래프에 사이클이 있고, 각 자원 유형의 인스턴스가 하나이다.",
+              "target": "데드락이다. 자원 유형마다 인스턴스가 하나인 경우, 자원 할당 그래프의 사이클은 데드락을 의미한다.",
+              "supportingInfo": "사이클만으로 결론 내리지 않고 인스턴스 수를 근거에 포함해 인출한다."
+            }
+          },
+          {
+            "id": "option-2-filled",
+            "label": "완성 예시",
+            "description": "요청을 승인했을 때의 상태를 보고 승인·거부 결론과 이유를 인출하는 카드입니다.",
+            "slotMode": "filled_example",
+            "exampleSource": "generated",
+            "preservePlaceholders": false,
+            "sample": {
+              "title": "요청 결과 → 승인 여부·근거",
+              "cue": "P2의 R2 요청을 승인하면 자원 할당 그래프에 사이클이 형성된다.",
+              "target": "요청을 거부한다. 사이클이 형성되면 상태가 불안전해지고 데드락 가능성이 있으므로 즉시 할당해서는 안 된다.",
+              "supportingInfo": "회피에서는 할당 후의 안전성을 기준으로 승인 여부를 결정한다."
+            }
+          }
+        ]
+      },
+      "selectedVariant": {
+        "id": "option-2-template",
+        "label": "템플릿 예시",
+        "description": "사이클과 자원 인스턴스 수를 보고 데드락 여부를 판정하고 근거를 말하는 카드입니다.",
+        "slotMode": "template",
+        "exampleSource": "source",
+        "preservePlaceholders": true,
+        "sample": {
+          "title": "그래프 조건 → 데드락 판정·근거",
+          "cue": "자원 할당 그래프에 사이클이 있고, 각 자원 유형의 인스턴스가 하나이다.",
+          "target": "데드락이다. 자원 유형마다 인스턴스가 하나인 경우, 자원 할당 그래프의 사이클은 데드락을 의미한다.",
+          "supportingInfo": "사이클만으로 결론 내리지 않고 인스턴스 수를 근거에 포함해 인출한다."
+        }
+      }
+    }
+  },
+  "responseAvailability": "available"
+}

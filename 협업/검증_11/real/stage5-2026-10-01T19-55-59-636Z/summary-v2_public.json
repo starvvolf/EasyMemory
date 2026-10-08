@@ -1,0 +1,63 @@
+{
+  "batchId": "2026-10-01T19-55-59-636Z",
+  "modelCallsTotal": 20,
+  "httpResponsesTotal": 18,
+  "remaining": 40,
+  "stopped": "same-validation-failure-recurred",
+  "notesExecuted": 0,
+  "rows": [
+    {
+      "caseId": "bfs-2pages-gpt-6-luna",
+      "material": "bfs-2pages",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "requestId": "req_8cd806607eb7d50e1a38aca8525e2c00",
+      "runId": "chatgpt-request-3ffee5706db5e82599efb7dee5292d77",
+      "status": "paused-invalid",
+      "ms": 73461,
+      "outgoingFetchAttempts": 7,
+      "recordedCalls": 8,
+      "backendFailures": 4,
+      "guardBlockedBeforeFetch": 1,
+      "httpResponsesReceived": 7,
+      "slowest": {
+        "purpose": "stage:learning-design",
+        "model": "gpt-6-luna",
+        "effort": "low",
+        "ms": 17678,
+        "ok": true
+      },
+      "objectives": 3,
+      "pagesPerObjective": 0.6666666666666666,
+      "reviewAt": "/lab (request req_8cd806607eb7d50e1a38aca8525e2c00)",
+      "successfulStages": [
+        "analyze",
+        "concept-tree",
+        "learning-design",
+        "activity-design"
+      ],
+      "stoppedStage": "cards",
+      "errorClass": "card-source-evidence-mismatch",
+      "sameErrorActualOccurrences": 2,
+      "repeatedErrorHashes": [
+        {
+          "hash": "70c1668265ab2ed861693faf73f2700937c181dab8e40610c7e1e29577cd42ef",
+          "count": 2
+        }
+      ],
+      "actualRetryHttpCalls": 2,
+      "requestState": "running",
+      "humanReview": "concept-tree → learning-design → cards; /lab request ID above"
+    }
+  ],
+  "stoppedAt": "2026-10-01T19:57:13.444Z",
+  "notExecuted": [
+    "Cornell Sol medium",
+    "geometry Luna low",
+    "geometry Sol medium",
+    "merged Luna low",
+    "merged Sol medium",
+    "notes"
+  ],
+  "qualityEvaluationPerformed": false
+}

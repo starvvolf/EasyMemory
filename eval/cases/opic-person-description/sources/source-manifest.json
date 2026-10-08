@@ -1,0 +1,18 @@
+{
+  "artifactType": "study-forge-source-manifest",
+  "artifactVersion": "v0",
+  "caseId": "opic-person-description",
+  "sources": [
+    {
+      "sourceId": "opic-person-description-1-pdf",
+      "fileName": "1.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 1979761,
+      "sha256": "67d462c4e63ecc9e4ab5efbbcd67b28c42c1d5281756e10f77a9dd63d979629",
+      "pageCount": 5,
+      "storagePolicy": "external-not-committed",
+      "repositoryPath": null,
+      "availability": "user-local-source"
+    }
+  ]
+}

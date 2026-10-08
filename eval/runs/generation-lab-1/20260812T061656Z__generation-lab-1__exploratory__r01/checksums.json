@@ -1,0 +1,12 @@
+{
+  "artifactType": "study-forge-run-checksums",
+  "artifactVersion": "v0",
+  "runId": "20260812T061656Z__generation-lab-1__exploratory__r01",
+  "algorithm": "sha256",
+  "files": {
+    "run.json": "885f84d1166a5737462dc4e3c1ea8c226a335cbcf37dc45f8789e68aa91bafc4",
+    "inputs.json": "9f5c4f0afaa4b4aa48d605570d673f40c9b67f2c2327191f1ab1376723c61f50",
+    "observations.json": "46ba7b650330450143e0b2f551f842d96ea00f308521f088a1c258f5cefdb7c2",
+    "errors.json": "89e23c709f147a7995f8935927dde314e8a2401a60e4a25d84e68090b929a6d3"
+  }
+}

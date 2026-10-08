@@ -1,0 +1,23 @@
+{
+  "artifactType": "study-forge-run-checksums",
+  "artifactVersion": "v0",
+  "runId": "20260810T072047Z__whole-document-core__baseline__r01",
+  "algorithm": "sha256",
+  "files": {
+    "run.json": "df5aff3a30083f95d82f2f4d23935819f0f7a5b0b4d25732a12b614dc2255799",
+    "inputs.json": "b9a59edbdc9631c9ab6d0b0dad6f94affe851b79cec9cc4e2f69536e156adefc",
+    "observations.json": "5ffb4f2654cb4e5369c47f31abd4c2d54e3b1b9224b2a52c685d669939b7ac2f",
+    "legacy-export.json": "e5058cfbfd1be0269e0c2a8774a0dcd1799a9a0e57e195e08c76e91bf5661608",
+    "stages/10-analyze.json": "f49e0bc1c008c9e0c9c8c348b8f151504dc6121529373a63516ab9e06080c696",
+    "stages/20-plan.json": "878b2fc63bd7f724a273909b87b5e7c54aff4839fc37ca4a879d9b07a9c3d86a",
+    "stages/30-recall.json": "2f407fb3172171ab6d84172e3f760fb0ef7ebc0a172728e0ad1d7a1a686912fb",
+    "stages/40-prepare.json": "985e074a192d235f1d7a142f417c5b624ec1e55d0ad54e961a81e37c9a103f1c",
+    "stages/50-cards.json": "45e4091dfa18f73ba962f2ba3a109e99e40b485b37f533ab673f370031b61131",
+    "stages/60-critic.json": "c841e7bdbcebec3e4e541dee9d2c55725ff3d56fe2c30dc0c7ff25647b535965",
+    "stages/70-final-cards.json": "844cfb5e0a1dcd434a2c1c588217ae2e8d5611707d3965c8846d6b0040932b68"
+  },
+  "unavailable": {
+    "sourceFiles": "legacy export did not include source bytes or execution-time content hashes",
+    "runtimePromptFiles": "legacy export did not identify the executing code revision"
+  }
+}

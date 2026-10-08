@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Generation Lab</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <header class="brand">
+          <span class="brand-mark">GL</span>
+          <div><strong>Generation Lab</strong><span>Study Forge local eval viewer</span></div>
+        </header>
+        <div class="new-run-action"><button id="new-experiment" class="primary-button">새 실험</button></div>
+        <div class="sidebar-heading"><span>Runs</span><button id="refresh-runs" class="icon-button" title="Run 목록 새로고침" aria-label="Run 목록 새로고침">↻</button></div>
+        <div id="run-list" class="run-list" aria-live="polite"></div>
+      </aside>
+
+      <main class="workspace">
+        <header id="run-header" class="run-header">
+          <div><p class="eyebrow">Eval artifact explorer</p><h1>Run을 선택하세요</h1><p>왼쪽 목록에서 기존 실험 결과를 엽니다.</p></div>
+          <button id="developer-toggle" class="command-button" hidden>실행 정보</button>
+        </header>
+        <section id="developer-panel" class="developer-panel" hidden></section>
+        <nav id="stage-tabs" class="stage-tabs" aria-label="Pipeline 단계"></nav>
+        <section id="stage-content" class="stage-content">
+          <div class="empty-state"><strong>관찰할 run이 아직 선택되지 않았습니다.</strong><span>Generation Lab은 기존 artifact를 변경하지 않고 읽기만 합니다.</span></div>
+        </section>
+      </main>
+    </div>
+    <dialog id="experiment-dialog" class="experiment-dialog">
+      <form id="experiment-form" method="dialog">
+        <header class="dialog-header"><div><p class="eyebrow">Generation Lab</p><h2>새 실험</h2></div><button id="close-experiment" type="button" class="icon-button" aria-label="닫기">×</button></header>
+        <div id="experiment-inputs" class="dialog-body">
+          <label class="form-field"><span>PDF</span><input id="pdf-input" type="file" accept="application/pdf,.pdf" /><small id="pdf-status">PDF 파일을 선택하세요.</small></label>
+          <label class="form-field"><span>학습 목표</span><textarea id="learning-goal" rows="4">이 자료 전체의 핵심 개념과 관계를 이해하고 기억할 수 있도록 학습</textarea></label>
+        </div>
+        <div id="experiment-progress" class="experiment-progress" hidden></div>
+        <div id="experiment-error" class="error-box" hidden></div>
+        <footer class="dialog-footer"><button id="cancel-experiment" type="button" class="command-button">취소</button><button id="run-experiment" type="submit" class="primary-button" disabled>실행</button></footer>
+      </form>
+    </dialog>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,80 @@
+{
+  "artifactType": "study-forge-eval-run",
+  "artifactVersion": "v0",
+  "runId": "20260810T072047Z__whole-document-core__baseline__r01",
+  "caseId": "operating-system-deadlock",
+  "runKind": "control",
+  "provenance": "legacy-browser-export",
+  "status": "completed",
+  "runMode": "whole_document_core",
+  "capturedAt": "2026-08-10T07:20:47.775Z",
+  "importedAt": "2026-08-10T16:09:06.047Z",
+  "startedAt": null,
+  "completedAt": null,
+  "timingAvailability": "unavailable; capturedAt is export time, not stage start or completion time",
+  "experimentId": "exp-20260810-count-policy-soft-budget-v1",
+  "armId": "exact-count",
+  "role": "control",
+  "code": {
+    "gitCommit": null,
+    "gitDirty": null,
+    "runtimePromptFiles": null,
+    "availability": "unavailable; legacy export did not capture the executing code revision"
+  },
+  "modelConfiguration": {
+    "analyze": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "plan": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "wholeDocumentCorePlan": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "recallDesign": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "prepare": {
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "medium"
+    },
+    "cards": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "critic": {
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "medium"
+    }
+  },
+  "sourceIds": [],
+  "sourceIdentityAvailability": "unavailable; source content hash was not captured by the legacy export",
+  "legacyExport": {
+    "file": "legacy-export.json",
+    "artifactType": "study-forge-production-baseline",
+    "artifactVersion": "v0"
+  },
+  "stageFiles": {
+    "analyze": "stages/10-analyze.json",
+    "plan": "stages/20-plan.json",
+    "recall": "stages/30-recall.json",
+    "prepare": "stages/40-prepare.json",
+    "cards": "stages/50-cards.json",
+    "critic": "stages/60-critic.json",
+    "finalCards": "stages/70-final-cards.json"
+  },
+  "reproducibility": {
+    "level": "partial",
+    "unavailable": [
+      "complete request payloads",
+      "exact stage execution timestamps",
+      "source content hash captured at execution",
+      "executing git commit and dirty state",
+      "runtime prompt file checksums"
+    ]
+  }
+}

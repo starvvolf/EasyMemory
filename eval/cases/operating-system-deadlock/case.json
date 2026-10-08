@@ -1,0 +1,9 @@
+{
+  "artifactType": "study-forge-eval-case",
+  "artifactVersion": "v0",
+  "caseId": "operating-system-deadlock",
+  "title": "운영체제 데드락",
+  "referencePath": "docs/references/OPERATING_SYSTEM_DEADLOCK.md",
+  "sourceManifestPath": "eval/cases/operating-system-deadlock/sources/source-manifest.json",
+  "status": "active"
+}

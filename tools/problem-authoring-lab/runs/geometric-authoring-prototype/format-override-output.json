@@ -1,0 +1,12 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "문서 계약을 검사했습니다."
+    }
+  ],
+  "structuredContent": {
+    "valid": true,
+    "issues": []
+  }
+}

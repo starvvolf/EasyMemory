@@ -1,0 +1,274 @@
+{
+  "schemaVersion": "problem-authoring-v1",
+  "id": "authoring-chatgpt-request-3dba6486d3f74735d3c255020abb08e5",
+  "title": "반도체 재료·전도도·옴성 대비 · 16–18쪽 시험학습",
+  "questions": [
+    {
+      "id": "question-1",
+      "source": {
+        "learningUnitId": "knowledge-unit-1",
+        "objectiveId": "objective-1",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 16,
+        "sourcePages": [
+          16
+        ],
+        "sourceRange": "반도체의 중간 전도성 / 전도도 범위",
+        "sourceText": "반도체의 전기 전도도는 도체와 절연체 사이이며, 슬라이드에 10^3~10^-8 S/cm가 제시된다.",
+        "target": "반도체 재료의 정의를 전도성의 상대적 위치로 설명하고 슬라이드의 수치 범위를 회상한다.",
+        "successCriteria": [
+          "도체·반도체·절연체의 전도성 위치를 구별하고 10^3~10^-8 S/cm를 반도체 범위로 정확히 적는다."
+        ],
+        "knowledgeContent": "도체와 절연체 사이에 놓이는 반도체의 전기 전도성 및 강의자료에 표시된 전도도 범위",
+        "outlineNodeIds": [
+          "source-1:outline-18"
+        ],
+        "conceptNodeIds": [
+          "concept-002",
+          "concept-003"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 560
+      },
+      "blocks": [
+        {
+          "id": "prompt-1",
+          "kind": "text",
+          "text": "이 강의 슬라이드에서 반도체 재료의 전기 전도성은 도체·절연체와 비교해 어디에 놓이며, 제시된 전도도 범위는 무엇인가?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 112
+          }
+        },
+        {
+          "id": "blank-1",
+          "kind": "blank",
+          "responseId": "response-1",
+          "promptBefore": "답: ",
+          "promptAfter": "",
+          "frame": {
+            "x": 28,
+            "y": 160,
+            "width": 704,
+            "height": 92
+          }
+        },
+        {
+          "id": "reveal-1",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-1"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 462,
+            "width": 704,
+            "height": 72
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-1",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "도체와 절연체 사이에 놓이며, 10^3~10^-8 S/cm이다."
+          ],
+          "grading": "self-check",
+          "explanation": "이 슬라이드는 반도체를 전도성의 상대적 위치로 설명하고 그 수치 범위를 함께 제시한다."
+        }
+      ]
+    },
+    {
+      "id": "question-2",
+      "source": {
+        "learningUnitId": "knowledge-unit-2",
+        "objectiveId": "objective-2",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 17,
+        "sourcePages": [
+          17
+        ],
+        "sourceRange": "전도도와 저항률 / 전도도의 단위",
+        "sourceText": "슬라이드는 electrical resistivity와 electrical conductivity의 역수 관계 및 S/m=(Ωm)^-1을 보인다.",
+        "target": "저항률이 주어졌을 때 전도도의 관계식과 단위를 설명한다.",
+        "successCriteria": [
+          "전도도=1/저항률을 쓰고 S/m=(Ωm)^-1을 정확히 연결한다."
+        ],
+        "knowledgeContent": "전기 전도도와 전기 저항률의 역수 관계 및 전도도의 단위",
+        "outlineNodeIds": [
+          "source-1:outline-19"
+        ],
+        "conceptNodeIds": [
+          "concept-004",
+          "concept-005"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 560
+      },
+      "blocks": [
+        {
+          "id": "prompt-2",
+          "kind": "text",
+          "text": "저항률을 ρ(Ωm), 전도도를 σ라고 쓸 때 둘의 관계식과 σ의 단위를 적어라.",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 112
+          }
+        },
+        {
+          "id": "blank-2",
+          "kind": "blank",
+          "responseId": "response-2",
+          "promptBefore": "답: ",
+          "promptAfter": "",
+          "frame": {
+            "x": 28,
+            "y": 160,
+            "width": 704,
+            "height": 92
+          }
+        },
+        {
+          "id": "reveal-2",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-2"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 462,
+            "width": 704,
+            "height": 72
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-2",
+          "kind": "short-text",
+          "acceptedAnswers": [
+            "σ=1/ρ, 단위는 S/m=(Ωm)^-1이다."
+          ],
+          "grading": "self-check",
+          "explanation": "전도도는 저항률의 역수이므로 두 양의 단위도 서로 역수 관계다."
+        }
+      ]
+    },
+    {
+      "id": "question-3",
+      "source": {
+        "learningUnitId": "knowledge-unit-3",
+        "objectiveId": "objective-3",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 18,
+        "sourcePages": [
+          18
+        ],
+        "sourceRange": "전압-전류 관계 / 전자 밀도",
+        "sourceText": "슬라이드는 Linear Ohmic과 Rectification, Non-linear, Non-Ohmic을 대비하고 차이의 이유로 전자 밀도를 적는다.",
+        "target": "슬라이드의 선형 옴성 반응과 비선형·정류 반응을 구별하고 제시된 설명을 식별한다.",
+        "successCriteria": [
+          "슬라이드 기준으로 도체에는 선형 옴성, 반도체에는 비선형·정류를 연결하고 슬라이드가 전자 밀도를 이유로 든다고 말한다."
+        ],
+        "knowledgeContent": "이 강의 슬라이드가 대비하는 도체와 반도체의 전압-전류 그래프 및 슬라이드의 전자 밀도 설명",
+        "outlineNodeIds": [
+          "source-1:outline-20"
+        ],
+        "conceptNodeIds": [
+          "concept-006",
+          "concept-007"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 560
+      },
+      "blocks": [
+        {
+          "id": "prompt-3",
+          "kind": "text",
+          "text": "18쪽 강의 슬라이드의 도체·반도체 대비와 슬라이드가 든 이유를 모두 바르게 연결한 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 112
+          }
+        },
+        {
+          "id": "choices-3",
+          "kind": "choice-set",
+          "responseId": "response-3",
+          "optionIds": [
+            "option-3-1",
+            "option-3-2",
+            "option-3-3",
+            "option-3-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 151,
+            "width": 704,
+            "height": 292
+          }
+        },
+        {
+          "id": "reveal-3",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-3"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 462,
+            "width": 704,
+            "height": 72
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-3",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-3-1",
+              "text": "도체는 선형 옴성, 반도체는 비선형·정류 반응으로 대비하고, 슬라이드는 차이의 이유로 전자 밀도를 든다."
+            },
+            {
+              "id": "option-3-2",
+              "text": "도체는 비선형·정류 반응, 반도체는 선형 옴성으로 대비하고, 슬라이드는 차이의 이유로 전자 밀도를 든다."
+            },
+            {
+              "id": "option-3-3",
+              "text": "도체와 반도체 모두 선형 옴성으로 나타내고, 슬라이드는 차이의 이유로 전자 밀도를 든다."
+            },
+            {
+              "id": "option-3-4",
+              "text": "도체는 선형 옴성, 반도체는 비선형·정류 반응으로 대비하지만, 슬라이드는 차이의 이유로 저항률의 단위를 든다."
+            }
+          ],
+          "correctOptionId": "option-3-1",
+          "grading": "exact",
+          "explanation": "이는 18쪽 자료의 대비와 설명을 묻는다. 이 한 장의 표현을 모든 반도체의 보편적 법칙으로 일반화하지 않는다."
+        }
+      ]
+    }
+  ]
+}

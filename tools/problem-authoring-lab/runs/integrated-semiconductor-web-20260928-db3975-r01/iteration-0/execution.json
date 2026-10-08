@@ -1,0 +1,15 @@
+{
+  "model": "gpt-6-sol",
+  "sessionId": "chatgpt-request-3dba6486d3f74735d3c255020abb08e5",
+  "usage": {
+    "method": "model-authored layout preserving completed MCP cards",
+    "tokenTelemetry": "not-recorded"
+  },
+  "toolCalls": [
+    "load_source_packet",
+    "get_authoring_instructions",
+    "validate_problem_document",
+    "render_problem_preview",
+    "record_problem_iteration"
+  ]
+}

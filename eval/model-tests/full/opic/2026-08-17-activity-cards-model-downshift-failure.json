@@ -1,0 +1,30 @@
+{
+  "artifactType": "study-forge-model-downshift-failure",
+  "caseId": "opic",
+  "preparedArtifact": "eval/local/plan-prepare-v1/model-test-prepare-terra-opic-r1.json",
+  "pdfTransmitted": false,
+  "reasoningEffort": "medium",
+  "attempts": [
+    {
+      "activityModel": "gpt-5.6-terra",
+      "cardsModel": "gpt-5.6-terra",
+      "status": "failed",
+      "failedStage": "cards",
+      "error": "생성된 문제가 확정된 문제 설계서를 따르지 않았습니다.",
+      "detail": "3번 문제: 문제 앞면에 회상해야 할 정답이 그대로 노출되었습니다."
+    },
+    {
+      "activityModel": "gpt-5.6-luna",
+      "cardsModel": "gpt-5.6-luna",
+      "status": "failed",
+      "failedStage": "cards",
+      "error": "생성된 문제가 확정된 문제 설계서를 따르지 않았습니다.",
+      "detail": "3번 문제: 문제 앞면에 회상해야 할 정답이 그대로 노출되었습니다."
+    }
+  ],
+  "stopRule": {
+    "sameFailureLimit": 2,
+    "triggered": true
+  },
+  "productionConfigChanged": false
+}
