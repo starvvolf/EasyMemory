@@ -167,7 +167,7 @@ const STAGE_SYSTEM = [
   "응답은 계약이 요구하는 키를 가진 JSON 객체 하나만 쓴다. 설명 문장이나 코드 울타리를 덧붙이지 않는다.",
   // The stage instructions were written for the MCP chat executor, which reads pages with a tool. Here there is no tool.
   "instructions가 원문 읽기 도구(get_study_generation_source_pages 등)나 첨부 PDF를 말하면, 그 대신 아래 [원문: 선택 쪽 추출 글자]를 읽은 결과로 여긴다. 도구는 없다.",
-  "근거·인용 칸에는 [원문: 선택 쪽 추출 글자]의 문구를 글자 그대로 복사한다. 요약하거나 번역하거나 고쳐 쓰지 않는다.",
+  "근거·인용 칸에는 문구를 글자 그대로 복사한다. 요약하거나 번역하거나 고쳐 쓰지 않는다. 학습 설계는 [원문: 선택 쪽 추출 글자]에서, 카드는 계약 입력에 있는 그 학습 단위의 sourceEvidence(근거) 안에서만 복사한다.",
   "개념 구조는 맨 위 항목 하나로 끝내지 않는다. 원문에 실제로 있는 하위 개념마다 (p.쪽번호)를 붙여 나눈다.",
 ].join("\n");
 
@@ -327,7 +327,9 @@ export async function runStudyRequest(requestId: string, caller: ModelCaller, op
         const stage = next.nextStage as Stage;
         const contract = JSON.stringify(next.stageInput);
         // Every stage that judges content sees the source; concept-tree without it produced a one-line tree in live runs.
-        const needsText = stage !== "activity-design";
+        // Cards quote the learning unit's own evidence (sourceEvidence in the contract), not the page: the page text
+        // made live runs quote sentences outside that evidence. Activity design needs no source either.
+        const needsText = stage !== "activity-design" && stage !== "cards";
         inputInfo = needsText ? block.input : { pagesSent: [], pagesCut: [], charsSent: 0 };
         const user = [
           `[단계] ${stage}`,
