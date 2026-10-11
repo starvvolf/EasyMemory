@@ -8,7 +8,7 @@ import { readVerifiedMcpRunRaw } from "../../src/lib/mcp-run-view.ts";
 import { getRegisteredMcpSource, readRegisteredMcpSourcePdf } from "../../src/lib/mcp-source-registry.ts";
 import { studyAbilities } from "../../src/lib/mcp-experiment-requests.ts";
 import { inspectAbilityCoverage } from "./ability-coverage.ts";
-import { extractPdfPageTexts, inspectSourceEvidence, type EvidenceCheck } from "./source-evidence.ts";
+import { extractPdfPageTexts, inspectSourceEvidence, unmatchedEvidenceExcerpt, type EvidenceCheck } from "./source-evidence.ts";
 import {
   adaptLearningDesignToAnalysis,
   buildReviewMaterial,
@@ -1899,8 +1899,13 @@ function materializeCardsTextSubmission(
     }
     const front = block.require("질문");
     const basis = block.require("근거");
-    if (!normalizedIncludes(unit.sourceText, basis)) {
-      throw new Error(`${index + 1}번 카드의 근거가 해당 Knowledge Unit 원문에서 확인되지 않습니다.`);
+    const unmatched = unmatchedEvidenceExcerpt(unit.sourceText, basis);
+    if (unmatched !== null) {
+      // Say which excerpt failed and how to fix it; a bare "not found" made live retries rewrite the wrong part.
+      throw new Error(
+        `${index + 1}번 카드의 근거 구절 "${unmatched.slice(0, 80)}"이(가) 학습 단위 근거(sourceEvidence)에 글자 그대로 없습니다. ` +
+        "sourceEvidence의 구절을 한 글자도 바꾸지 말고 복사하세요. 여러 구절은 ||로 나누고, 번호·쪽 표기는 붙이지 않습니다.",
+      );
     }
     const common = {
       blueprintId: blueprint.id,
@@ -2089,12 +2094,6 @@ function materializeStructureNodes(
     }
   }
   return nodes;
-}
-
-function normalizedIncludes(source: string, excerpt: string) {
-  const normalize = (value: string) => value.normalize("NFKC").replace(/\s+/g, "").replace(/[“”‘’"']/g, "");
-  const normalizedExcerpt = normalize(excerpt);
-  return normalizedExcerpt.length >= 4 && normalize(source).includes(normalizedExcerpt);
 }
 
 function strategyFromActivityType(activityType: LearningActivityType) {

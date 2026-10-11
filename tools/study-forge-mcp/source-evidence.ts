@@ -17,6 +17,31 @@ export function evidenceQuotes(sourceText: string) {
     .replace(/^「|」$/g, "").trim()).filter(Boolean);
 }
 
+/** Whether a verbatim quote appears in a page's extracted text (spacing, hyphen breaks, dashes, case and quote marks ignored). */
+export function containsQuote(text: string, quote: string) {
+  const strip = (value: string) => normalized(value).replace(/[“”‘’"'`]/g, "");
+  const needle = strip(quote);
+  return needle.length >= 4 && strip(text).includes(needle);
+}
+
+/**
+ * A card quotes its learning unit's evidence, which may hold several ||-separated excerpts with page labels.
+ * Each excerpt of the card's basis must sit inside one of the unit's excerpts. Same splitting and
+ * normalisation as the learning-design check, so a quote that passed there is not rejected here.
+ * Returns the first excerpt that is not found, or null when every excerpt is found.
+ */
+export function unmatchedEvidenceExcerpt(unitSourceText: string, basis: string): string | null {
+  const strip = (value: string) => normalized(value).replace(/[“”‘’"'`]/g, "");
+  const allowed = evidenceQuotes(unitSourceText).map(strip);
+  const parts = evidenceQuotes(basis);
+  if (!parts.length) return basis.trim() || "(빈 근거)";
+  for (const part of parts) {
+    const value = strip(part);
+    if (value.length < 4 || !allowed.some((quote) => quote.includes(value))) return part;
+  }
+  return null;
+}
+
 export function inspectSourceEvidence(
   units: readonly KnowledgeUnit[],
   pageTexts: ReadonlyMap<string, ReadonlyMap<number, string>>,

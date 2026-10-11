@@ -17,17 +17,58 @@ export function responseFailure(status: number, body: ApiError): ModelError {
   return new ModelError("transient", status === 503 ? "ChatGPT 사용 가능 여부를 잠시 확인할 수 없어요." : "ChatGPT 모델 요청에 실패했어요.");
 }
 
-export function responseRequest(request: ModelRequest) {
+/** Structured output asks for a JSON Schema; `fallback` is the plain JSON mode used when the plan route refuses it. */
+type ResponseBody = {
+  model: string; instructions: string; input: Array<{ role: string; content: string }>; store: boolean; stream: boolean;
+  reasoning?: { effort: string }; text?: { format: { type: string } & Record<string, unknown> };
+};
+export function responseRequest(request: ModelRequest, format: "schema" | "fallback" = "schema"): ResponseBody {
+  const useSchema = Boolean(request.schema) && format === "schema";
+  const instructions = request.schema && !useSchema
+    ? `${request.system}\n\n응답은 다음 JSON Schema를 따르는 JSON 객체 하나만 쓴다.\n${JSON.stringify(request.schema)}`
+    : request.system;
   return {
     model: request.model ?? "gpt-6-sol",
-    instructions: request.system,
+    instructions,
     input: [{ role: "user", content: request.user }],
     store: false,
     stream: true,
     ...(request.effort ? { reasoning: { effort: request.effort } } : {}),
-    ...(request.schema ? { text: { format: { type: "json_schema", name: request.schemaName ?? "response", schema: request.schema, strict: true } } }
-      : request.json ? { text: { format: { type: "json_object" } } } : {}),
+    ...(useSchema
+      ? { text: { format: { type: "json_schema", name: request.schemaName ?? "response", schema: request.schema, strict: true } } }
+      : request.json || request.schema ? { text: { format: { type: "json_object" } } } : {}),
   };
+}
+
+/** The plan route said no to the JSON Schema format itself (not to the login or the model). */
+export function isFormatRejection(status: number, body: ApiError) {
+  const code = body.error?.code ?? "";
+  const message = `${body.error?.message ?? ""} ${body.detail ?? ""}`;
+  return code === "subscription_sharing_unsupported_capability" || (status === 400 && /text\.format|json_schema|response_format|strict/i.test(message));
+}
+
+// Once refused, later calls in this server process go straight to the fallback instead of paying for a refusal each time.
+const formatState = globalThis as typeof globalThis & { __studyForgeSchemaRefused?: boolean };
+export function resetSchemaSupport() { formatState.__studyForgeSchemaRefused = undefined; }
+
+/** Sends with the JSON Schema first; on a format refusal, remembers it and sends once more in JSON mode. */
+export async function sendWithFallback(send: (format: "schema" | "fallback") => Promise<Response>, hasSchema: boolean) {
+  let format: "schema" | "fallback" = hasSchema && !formatState.__studyForgeSchemaRefused ? "schema" : "fallback";
+  let response = await send(format);
+  if (!response.ok) {
+    let body: ApiError = {};
+    try { body = await response.json() as ApiError; } catch { /* Some admission failures have no JSON error body. */ }
+    if (format !== "schema" || !isFormatRejection(response.status, body)) throw responseFailure(response.status, body);
+    formatState.__studyForgeSchemaRefused = true;
+    format = "fallback";
+    response = await send(format);
+    if (!response.ok) {
+      body = {};
+      try { body = await response.json() as ApiError; } catch { /* as above */ }
+      throw responseFailure(response.status, body);
+    }
+  }
+  return { response, format };
 }
 
 export async function readResponseStream(body: ReadableStream<Uint8Array>): Promise<{ text: string; usage?: { inputTokens?: number; outputTokens?: number }; model?: string }> {
@@ -85,18 +126,16 @@ export const chatgptBackend: ModelBackend = {
   },
   async call(request) {
     const accessToken = await chatGptAccessToken(request.caller.uid);
-    let response: Response;
-    try {
-      response = await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-        body: JSON.stringify(responseRequest(request)), signal: request.signal });
-    } catch { throw new ModelError("transient", "ChatGPT 모델 서버에 연결하지 못했어요."); }
-    if (!response.ok) {
-      let body: ApiError = {};
-      try { body = await response.json() as ApiError; } catch { /* Some admission failures have no JSON error body. */ }
-      throw responseFailure(response.status, body);
-    }
+    const send = async (format: "schema" | "fallback") => {
+      try {
+        return await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+          body: JSON.stringify(responseRequest(request, format)), signal: request.signal });
+      } catch { throw new ModelError("transient", "ChatGPT 모델 서버에 연결하지 못했어요."); }
+    };
+    const { response, format } = await sendWithFallback(send, Boolean(request.schema));
     if (!response.body) throw new ModelError("transient", "ChatGPT 응답 스트림이 비어 있어요.");
     const completed = await readResponseStream(response.body);
-    return { text: completed.text, model: completed.model ?? request.model ?? "chatgpt", usage: completed.usage };
+    const used = !request.schema && !request.json ? "text" as const : format === "schema" ? "json_schema" as const : "json_object" as const;
+    return { text: completed.text, model: completed.model ?? request.model ?? "chatgpt", usage: completed.usage, format: used };
   },
 };

@@ -1,0 +1,95 @@
+// Checks, in the three tiers of the 2026-10-12 decision.
+// Tier 1 (format) is the schema's job and is only re-verified with zod in the runner.
+// Tier 2 (not in the source, broken links, unsolvable) returns per-item problems: only those items are asked again.
+// Tier 3 (quality) becomes warnings and never triggers a call.
+import { containsQuote } from "../../../../tools/study-forge-mcp/source-evidence.ts";
+import type { classifyReply, designReply, outlineReply } from "./schemas.ts";
+import type { z } from "zod";
+import { materialKinds, type ClassItem, type Issue, type Objective, type Section } from "./types.ts";
+
+const loose = (value: string) => value.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase("ko-KR");
+
+/**
+ * Outline problems are fixed in code, not by asking again: clamp to the chosen pages, keep source order,
+ * hand uncovered pages to the neighbouring section. Only an outline with no usable section is an error.
+ */
+export function normalizeOutline(reply: z.infer<typeof outlineReply>, chosen: number[]): { sections: Section[]; warnings: Issue[] } {
+  const pages = [...new Set(chosen)].sort((a, b) => a - b);
+  const warnings: Issue[] = [];
+  const drafts = reply.sections
+    .map((section) => {
+      const start = Math.min(section.pageStart, section.pageEnd), end = Math.max(section.pageStart, section.pageEnd);
+      return { title: section.title.trim(), pages: pages.filter((page) => page >= start && page <= end) };
+    })
+    .filter((section) => section.title && section.pages.length)
+    .sort((a, b) => a.pages[0] - b.pages[0]);
+  if (drafts.length < reply.sections.length) warnings.push({ severity: "warning", code: "outline-out-of-range", message: "고른 쪽 밖을 가리킨 목차 항목을 뺐어요." });
+  if (!drafts.length) return { sections: [], warnings };
+  const covered = new Set(drafts.flatMap((section) => section.pages));
+  const missing = pages.filter((page) => !covered.has(page));
+  for (const page of missing) {
+    // The last section that starts at or before the page takes it; leading pages go to the first section.
+    const owner = [...drafts].reverse().find((section) => section.pages[0] <= page) ?? drafts[0];
+    owner.pages = [...new Set([...owner.pages, page])].sort((a, b) => a - b);
+  }
+  if (missing.length) warnings.push({ severity: "warning", code: "outline-gap", message: `목차가 덮지 않은 p.${missing.join(", ")}를 앞 항목에 붙였어요.` });
+  return { sections: drafts.map((section, index) => ({ id: `s${index + 1}`, title: section.title, pages: section.pages })), warnings };
+}
+
+export type ItemProblem = { index: number; message: string };
+
+/** Each item's quote must be in the section's text. A quote found on another page of the section just moves the page. */
+export function checkClassify(reply: z.infer<typeof classifyReply>, section: Section, texts: Map<number, string>) {
+  const items: ClassItem[] = [];
+  const problems: ItemProblem[] = [];
+  reply.items.forEach((item, index) => {
+    const pageOrder = [item.page, ...section.pages.filter((page) => page !== item.page)];
+    const page = pageOrder.find((candidate) => section.pages.includes(candidate) && containsQuote(texts.get(candidate) ?? "", item.quote));
+    if (page === undefined) {
+      problems.push({ index, message: `${index + 1}번 항목의 quote "${item.quote.slice(0, 80)}"이(가) 원문(p.${section.pages.join(", ")})에 글자 그대로 없습니다. 원문 구절을 그대로 복사하세요.` });
+      return;
+    }
+    items.push({ n: 0, kind: item.kind, content: item.content, quote: item.quote, page });
+  });
+  items.forEach((item, index) => { item.n = index + 1; });
+  return { items, problems };
+}
+
+/** Objectives must point at real, non-material items; their evidence and pages come from those items, never from the model. */
+export function checkDesign(reply: z.infer<typeof designReply>, section: Section, items: ClassItem[]) {
+  const byNumber = new Map(items.map((item) => [item.n, item]));
+  const objectives: Objective[] = [];
+  const problems: ItemProblem[] = [];
+  const warnings: Issue[] = [];
+  const seen = new Map<string, string>();
+  reply.objectives.forEach((draft, index) => {
+    const unknown = draft.itemNumbers.filter((n) => !byNumber.has(n));
+    const evidence = draft.itemNumbers.map((n) => byNumber.get(n)).filter((item): item is ClassItem => Boolean(item));
+    const targets = evidence.filter((item) => !materialKinds.includes(item.kind));
+    if (unknown.length || !targets.length) {
+      problems.push({ index, message: unknown.length
+        ? `${index + 1}번 목표가 없는 항목 번호 ${unknown.join(", ")}를 가리킵니다.`
+        : `${index + 1}번 목표의 근거가 예시·연습문제·부가 정보뿐입니다. 핵심 지식·패턴·설명 항목 번호를 근거로 넣거나 목표를 빼세요.` });
+      return;
+    }
+    const key = loose(draft.recall);
+    const earlier = seen.get(key);
+    if (earlier) {
+      warnings.push({ severity: "warning", code: "duplicate-objective", message: `떠올릴 것이 ${earlier}와 같아 합쳤어요: ${draft.recall.slice(0, 60)}`, ref: earlier });
+      return;
+    }
+    const id = `${section.id}-o${objectives.length + 1}`;
+    seen.set(key, id);
+    if (key.length >= 4 && (loose(draft.statement).includes(key) || loose(draft.cue).includes(key))) {
+      warnings.push({ severity: "warning", code: "objective-leaks-recall", message: "목표 문장이나 실마리에 떠올릴 것이 그대로 들어 있어요.", ref: id });
+    }
+    const material = draft.materialNumbers.filter((n) => byNumber.has(n) && !draft.itemNumbers.includes(n));
+    objectives.push({
+      id, sectionId: section.id, statement: draft.statement, cue: draft.cue, recall: draft.recall, kind: draft.kind, importance: draft.importance,
+      itemNumbers: targets.map((item) => item.n), materialNumbers: material,
+      pages: [...new Set(targets.map((item) => item.page))].sort((a, b) => a - b),
+      quotes: [...new Set(targets.map((item) => item.quote))],
+    });
+  });
+  return { objectives, problems, warnings };
+}

@@ -26,6 +26,8 @@ export type ModelResult = {
   data?: unknown;
   model: string;
   usage?: { inputTokens?: number; outputTokens?: number };
+  /** How the reply was constrained: JSON Schema (structured output), plain JSON mode, or free text. */
+  format?: "json_schema" | "json_object" | "text";
 };
 
 export type ModelErrorCode = "login_required" | "usage_limit" | "transient" | "invalid_output" | "not_configured";
@@ -142,7 +144,7 @@ export function parseJsonReply(text: string): unknown {
 export async function callModel(request: ModelRequest): Promise<ModelResult> {
   if (request.signal?.aborted) throw new ModelError("transient", "호출을 멈췄어요.");
   const reply = await modelBackend(request.provider).call(request);
-  if (!request.json) return reply;
+  if (!request.json && !request.schema) return reply;
   try { return { ...reply, data: parseJsonReply(reply.text) }; }
   catch (error) {
     // Keep the raw reply so callers can record what the model actually said.

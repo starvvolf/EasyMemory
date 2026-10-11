@@ -5,7 +5,7 @@ import { mkdtemp, readFile, readdir, stat, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beginChatGptSignIn, chatGptAccessToken, credentialFor, finishChatGptSignIn, signOutChatGpt } from "./chatgpt-auth.ts";
-import { chatgptBackend, readResponseStream, responseFailure, responseRequest } from "./chatgpt-provider.ts";
+import { chatgptBackend, isFormatRejection, readResponseStream, resetSchemaSupport, responseFailure, responseRequest, sendWithFallback } from "./chatgpt-provider.ts";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 function jwt(nonce: string, clientId: string) {
@@ -128,4 +128,30 @@ test("한도·로그인·지원 불가 오류는 구분한다", () => {
   assert.equal(responseFailure(401, { detail: "invalid" }).code, "login_required");
   assert.equal(responseFailure(400, { error: { code: "subscription_sharing_unsupported_capability" } }).code, "not_configured");
   assert.equal(responseFailure(503, { error: { code: "subscription_sharing_usage_unavailable" } }).code, "transient");
+});
+
+test("스키마가 있으면 strict JSON Schema로 요청하고, 대체 요청은 JSON 모드에 스키마를 지시문으로 붙인다", () => {
+  const schema = { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"], additionalProperties: false };
+  const base = { purpose: "test", system: "rule", user: "context", caller: { uid: "u" }, json: true, schema, schemaName: "probe" };
+  assert.deepEqual(responseRequest(base).text, { format: { type: "json_schema", name: "probe", schema, strict: true } });
+  assert.equal(responseRequest(base).instructions, "rule");
+  const fallback = responseRequest(base, "fallback");
+  assert.deepEqual(fallback.text, { format: { type: "json_object" } });
+  assert.ok(fallback.instructions.startsWith("rule") && fallback.instructions.includes('"required":["ok"]'));
+});
+
+test("형식 거부면 한 번만 JSON 모드로 다시 보내고 이후 호출은 바로 JSON 모드를 쓴다", async () => {
+  resetSchemaSupport();
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  const sent: string[] = [];
+  const refusing = async (format: "schema" | "fallback") => { sent.push(format); return format === "schema" ? json(400, { error: { code: "subscription_sharing_unsupported_capability" } }) : json(200, {}); };
+  assert.equal((await sendWithFallback(refusing, true)).format, "fallback");
+  assert.equal((await sendWithFallback(refusing, true)).format, "fallback");
+  assert.deepEqual(sent, ["schema", "fallback", "fallback"]);
+  resetSchemaSupport();
+  await assert.rejects(sendWithFallback(async () => json(401, { detail: "invalid" }), true), (error: { code?: string }) => error.code === "login_required");
+  assert.equal((await sendWithFallback(async () => json(200, {}), true)).format, "schema");
+  assert.equal(isFormatRejection(400, { error: { message: "Invalid schema for response_format 'probe'" } }), true);
+  assert.equal(isFormatRejection(429, { error: { code: "subscription_sharing_usage_limit_exceeded" } }), false);
+  resetSchemaSupport();
 });
