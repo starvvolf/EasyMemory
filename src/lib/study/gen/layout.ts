@@ -1,0 +1,85 @@
+// The model picks block kinds, their order and the answer form; code places the blocks top to bottom,
+// wires the response, and fills the source from the confirmed objective (never copied by the model).
+import type { AuthoredQuestion, AuthoringBlock, AuthoringDocument, ResponseContract, SourceContent } from "../../../../tools/problem-authoring-lab/contract.ts";
+import { validateDocument } from "../../../../tools/problem-authoring-lab/contract.ts";
+import { inspectQuality } from "../../../../tools/problem-authoring-lab/quality.ts";
+import type { AuthoredReplyQuestion } from "./schemas.ts";
+import type { Issue, Objective, Section } from "./types.ts";
+
+export const PAGE_WIDTH = 760;
+const MARGIN = 24, GAP = 12, INNER = PAGE_WIDTH - MARGIN * 2;
+// Rough line capacity of the preview at body size; Korean runs ~1.6x wider than Latin per character.
+const lines = (text: string, perLine = 44) => Math.max(1, text.split("\n").reduce((sum, line) => {
+  const units = [...line].reduce((width, char) => width + (/[ㄱ-힣一-鿿]/.test(char) ? 1.6 : 1), 0) / 1.6;
+  return sum + Math.max(1, Math.ceil(units / perLine));
+}, 0));
+
+export function sourceFor(objective: Objective, section: Section, fileName: string): SourceContent {
+  return {
+    learningUnitId: objective.id, objectiveId: objective.id, sourceId: fileName,
+    sourcePage: objective.pages[0] ?? section.pages[0], sourcePages: objective.pages.length ? objective.pages : [section.pages[0]],
+    sourceRange: `PDF ${(objective.pages.length ? objective.pages : section.pages).join(", ")}쪽 / ${section.title}`,
+    knowledgeContent: objective.recall, sourceText: objective.quotes.join(" || "),
+    target: objective.statement, successCriteria: [`${objective.cue} → ${objective.recall}`],
+  };
+}
+
+/** Shape problems that make the question unanswerable; reported back to the model as tier-2 problems. */
+export function answerShapeProblem(reply: AuthoredReplyQuestion): string | null {
+  const answer = reply.answer;
+  if (!reply.stem.some((block) => (block.text ?? block.latex ?? block.rows?.flat().join("") ?? "").trim())) return "문제 본문이 비어 있습니다.";
+  if (answer.kind === "choice") {
+    const options = answer.options ?? [];
+    if (options.length !== 4 || options.some((option) => !(option.text ?? option.latex ?? "").trim())) return "choice는 내용이 있는 보기가 정확히 4개여야 합니다.";
+    if (answer.correctIndex === null || answer.correctIndex < 0 || answer.correctIndex > 3) return "choice의 correctIndex가 0~3이 아닙니다.";
+    const keys = options.map((option) => (option.text ?? option.latex ?? "").trim().toLocaleLowerCase("ko-KR"));
+    if (new Set(keys).size !== 4) return "choice 보기 중 같은 보기가 있습니다.";
+  } else if (!(answer.accepted ?? []).some((value) => value.trim())) {
+    return answer.kind === "short" ? "short의 인정 답안이 비어 있습니다." : "self-check의 모범 답이 비어 있습니다.";
+  }
+  return null;
+}
+
+export function layoutQuestion(reply: AuthoredReplyQuestion, objective: Objective, section: Section, fileName: string): AuthoredQuestion {
+  const blocks: AuthoringBlock[] = [];
+  let y = MARGIN;
+  const place = (height: number) => { const frame = { x: MARGIN, y, width: INNER, height }; y += height + GAP; return frame; };
+  reply.stem.forEach((block, index) => {
+    const id = `b${index + 1}`;
+    if (block.kind === "math" && block.latex?.trim()) blocks.push({ id, kind: "math", latex: block.latex.trim(), displayMode: true, frame: place(64) });
+    else if (block.kind === "table" && block.rows?.length) blocks.push({ id, kind: "table", rows: block.rows, headerRows: 1, frame: place(block.rows.length * 36 + 16) });
+    else if (block.kind === "box" && block.text?.trim()) blocks.push({ id, kind: "box", label: block.text.trim(), tone: "plain", frame: place(lines(block.text) * 26 + 24) });
+    else if (block.text?.trim()) {
+      const heading = block.kind === "heading";
+      blocks.push({ id, kind: "text", text: block.text.trim(), style: heading ? "heading" : "body", frame: place(lines(block.text, heading ? 36 : 44) * (heading ? 30 : 26) + 12) });
+    }
+  });
+  const answer = reply.answer;
+  let response: ResponseContract;
+  if (answer.kind === "choice") {
+    const options = (answer.options ?? []).map((option, index): { id: string; text?: string; latex?: string } =>
+      option.latex?.trim() ? { id: `o${index + 1}`, latex: option.latex.trim() } : { id: `o${index + 1}`, text: (option.text ?? "").trim() });
+    response = { id: "r1", kind: "single-choice", options, correctOptionId: `o${(answer.correctIndex ?? 0) + 1}`, grading: "exact", explanation: answer.explanation };
+    const height = options.reduce((sum, option) => sum + lines(option.text ?? option.latex ?? "", 40) * 26 + 22, 8);
+    blocks.push({ id: "choices", kind: "choice-set", responseId: "r1", optionIds: options.map((option) => option.id), frame: place(height) });
+  } else {
+    const accepted = (answer.accepted ?? []).map((value) => value.trim()).filter(Boolean);
+    response = { id: "r1", kind: "short-text", acceptedAnswers: answer.kind === "short" ? accepted : accepted.slice(0, 1), grading: answer.kind === "short" ? "exact-normalized" : "self-check", explanation: answer.explanation };
+    blocks.push({ id: "input", kind: "blank", responseId: "r1", promptBefore: (answer.before ?? "").trim(), promptAfter: (answer.after ?? "").trim(), frame: place(answer.kind === "short" ? 56 : 120) });
+  }
+  const revealText = `${response.kind === "short-text" ? response.acceptedAnswers[0] ?? "" : ""} ${answer.explanation}`;
+  blocks.push({ id: "reveal", kind: "answer-reveal", responseIds: ["r1"], frame: place(lines(revealText, 40) * 26 + 72) });
+  return { id: `q-${objective.id}`, source: sourceFor(objective, section, fileName), page: { width: PAGE_WIDTH, height: y - GAP + MARGIN }, blocks, responses: [response] };
+}
+
+export function sectionDocument(genId: string, section: Section, fileName: string, questions: AuthoredQuestion[]): AuthoringDocument {
+  return { schemaVersion: "problem-authoring-v1", id: `${genId}-${section.id}`, title: `${fileName.replace(/\.pdf$/i, "")} · ${section.title}`, questions };
+}
+
+/** Contract errors and quality errors are tier 2 (unsolvable or leaking); quality warnings are tier 3. */
+export function inspectQuestion(question: AuthoredQuestion): { errors: Issue[]; warnings: Issue[] } {
+  const document: AuthoringDocument = { schemaVersion: "problem-authoring-v1", id: "check", title: "check", questions: [question] };
+  const issues = [...validateDocument(document), ...inspectQuality(document)]
+    .map((issue) => ({ severity: issue.severity, code: issue.code, message: issue.message, ref: question.source.objectiveId }));
+  return { errors: issues.filter((issue) => issue.severity === "error"), warnings: issues.filter((issue) => issue.severity === "warning") };
+}
