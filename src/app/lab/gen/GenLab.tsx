@@ -90,6 +90,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const [models, setModels] = useState<Record<GenStep, { model: string; effort: string }>>(
     () => Object.fromEntries(STEPS.map((step) => [step, { model: "gpt-6-luna", effort: "low" }])) as Record<GenStep, { model: string; effort: string }>);
   const [autoConfirm, setAutoConfirm] = useState(false);
+  const [guideDir, setGuideDir] = useState("출제기준");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const source = sources.find((candidate) => candidate.id === sourceId) ?? sources[0];
@@ -101,7 +102,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
     setBusy(true); onError("");
     try {
       const { gen } = await api<{ gen: GenState }>("/api/lab/gen", "POST", {
-        sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, models, confirmed: provider === "chatgpt" ? confirmed : undefined,
+        sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, models, guideDir, confirmed: provider === "chatgpt" ? confirmed : undefined,
       });
       setConfirmed(false);
       onStarted(gen.id);
@@ -146,6 +147,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
           ))}</tbody></table>
         </>}
       </fieldset>
+      <label>출제기준 폴더<input value={guideDir} onChange={(event) => setGuideDir(event.target.value.trim())} placeholder="출제기준" title="비교할 때는 출제기준-후보처럼 복사본 이름" /></label>
       <label className="check"><input type="checkbox" checked={autoConfirm} onChange={(event) => setAutoConfirm(event.target.checked)} />목표 확인 없이 끝까지</label>
       {provider === "chatgpt" && <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다(ChatGPT 사용량이 나갑니다)</label>}
       <p className="muted">쪽 {pages.length}개 · 예상 호출: 목차 1 + 목차 수 × {purpose === "read" ? "1" : "3"} (+재시도)</p>
@@ -205,7 +207,7 @@ function RunView({ id, onChange, onError }: { id: string; onChange: () => void; 
     <div className="gen-run">
       <div className="gen-status">
         <span className={`tag ${tone(gen.status)}`}>{STATUS[gen.status] ?? gen.status}</span>
-        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]}
+        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.guideDir ?? "출제기준"}
         {label && <span className="muted"> · {label}</span>}
         <div className="muted">호출 {gen.calls}번 · 모델 시간 {seconds(totalMs)} · 토큰 입력 {tokens.input.toLocaleString()} / 출력 {tokens.output.toLocaleString()}{formats.length ? ` · 응답 형식 ${formats.join(", ")}` : ""}</div>
         {gen.message && <p className={gen.status === "failed" ? "gen-error" : ""}>{gen.message}</p>}
@@ -261,11 +263,11 @@ function RunView({ id, onChange, onError }: { id: string; onChange: () => void; 
       ))}
 
       <h3>호출 기록</h3>
-      <table className="calls"><thead><tr><th>#</th><th>단계</th><th>목차</th><th>시도</th><th>모델</th><th>형식</th><th>시간</th><th>토큰</th><th>결과</th></tr></thead>
+      <table className="calls"><thead><tr><th>#</th><th>단계</th><th>목차</th><th>시도</th><th>모델</th><th>형식</th><th>기준</th><th>시간</th><th>토큰</th><th>결과</th></tr></thead>
         <tbody>{calls.map((item) => (
           <tr key={item.n} onClick={() => void openCall(item.n)} className={item.ok ? "" : "bad"}>
             <td>{item.n}</td><td>{genStepLabel[item.step]}</td><td>{item.sectionId ?? ""}</td><td>{item.attempt}</td><td>{item.model} {item.effort}</td>
-            <td>{item.format ?? ""}</td><td>{seconds(item.ms)}</td><td>{item.usage ? `${item.usage.inputTokens ?? "?"}/${item.usage.outputTokens ?? "?"}` : ""}</td><td>{item.ok ? "응답" : item.error}</td>
+            <td>{item.format ?? ""}</td><td title={item.guide ? `${item.guide.dir} · ${item.guide.files.join(", ")}` : ""}>{item.guide ? `${item.guide.dir === "출제기준" ? "" : `${item.guide.dir} `}${item.guide.version.slice(0, 7)}` : ""}</td><td>{seconds(item.ms)}</td><td>{item.usage ? `${item.usage.inputTokens ?? "?"}/${item.usage.outputTokens ?? "?"}` : ""}</td><td>{item.ok ? "응답" : item.error}</td>
           </tr>
         ))}</tbody>
       </table>

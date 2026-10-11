@@ -61,6 +61,14 @@ test("가짜 모델로 목차 → 분류·설계(목차별) → 출제(목차별
   assert.equal(done.status, "done", done.message);
   assert.deepEqual(done.sections.map((section) => section.pages), [[1], [2]]);
   assert.deepEqual((await steps(state.id)).sort(), ["author:s1#1", "author:s2#1", "classify:s1#1", "classify:s2#1", "design:s1#1", "design:s2#1", "outline#1"]);
+  // Design and author calls carry the criteria they used; the criteria text is in the system prompt.
+  const calls = await readGenCalls(state.id);
+  for (const call of calls.filter((item) => item.step === "design" || item.step === "author")) {
+    assert.equal(call.guide?.dir, "출제기준");
+    assert.match(call.guide!.version, /^[a-f0-9]{12}$/);
+    assert.match(call.system, call.step === "design" ? /\[설계-1\]/ : /\[출제-1\]/);
+  }
+  assert.ok(calls.filter((item) => item.step === "outline" || item.step === "classify").every((item) => !item.guide));
   for (const section of done.sections) {
     assert.ok(section.design!.objectives.length >= 1);
     const document = await readSectionDocument(state.id, section.id) as AuthoringDocument;
@@ -160,6 +168,13 @@ test("사용량 한도면 멈추고, 다시 시작하면 끝난 단계는 다시
   assert.equal(done.status, "done", done.message);
   const after = await readGenCalls(state.id);
   assert.deepEqual(after.slice(before).map((call) => call.step), ["author", "author"]);
+}));
+
+test("출제기준 폴더가 깨져 있으면 실패가 아니라 멈춤이고, 고친 뒤 이어간다", () => withData(async () => {
+  const state = await createGen({ ...base, purpose: "core", autoConfirm: true, guideDir: "출제기준-없는폴더" });
+  const paused = await runGen(state.id, caller, { pages });
+  assert.equal(paused.status, "paused-invalid");
+  assert.match(paused.message, /출제기준 파일이 없습니다/);
 }));
 
 test("실제 모델 생성은 호출 확인 없이 대기열에 넣지 않는다", () => withData(async () => {

@@ -34,7 +34,7 @@ async function handle(request: Request, context: Context) {
       if (!gen) throw new GenError(404, "생성을 찾을 수 없습니다.");
       // The list leaves out prompt and reply text; one call's detail has them.
       const calls = (await readGenCalls(p[0])).map((call) => ({ n: call.n, step: call.step, sectionId: call.sectionId, attempt: call.attempt, model: call.model,
-        effort: call.effort, format: call.format, startedAt: call.startedAt, ms: call.ms, ok: call.ok, error: call.error, usage: call.usage }));
+        effort: call.effort, format: call.format, startedAt: call.startedAt, ms: call.ms, ok: call.ok, error: call.error, usage: call.usage, guide: call.guide }));
       result = { gen, label: stepLabel(gen), calls };
     } else if (p.length === 3 && p[1] === "calls" && /^\d+$/.test(p[2]) && method === "GET") {
       result = (await readGenCalls(p[0])).find((call) => call.n === Number(p[2]));

@@ -1,27 +1,14 @@
 // Prompts for the four model calls. Each says only what that call decides; the shape is enforced by the schema.
 // No tool talk: the app sends the source text itself, so nothing here refers to reading tools or MCP.
-import type { ClassItem, GenInput, Objective, Purpose, Section } from "./types.ts";
+// Judgment rules for design and authoring live in the editable 출제기준/ folder (guide.ts) and arrive as `guide`;
+// what stays here is what the reply's fields mean.
+import type { ClassItem, GenInput, Objective, Section } from "./types.ts";
 import { purposeLabel } from "./types.ts";
 
 const COMMON = [
   "원문에 없는 사실을 만들지 않는다. 원문의 기호·용어·표기를 바꾸지 않는다.",
   "인용 칸에는 원문을 글자 그대로 복사한다. 요약하거나 번역하거나 고쳐 쓰지 않는다.",
 ].join("\n");
-
-/** What each purpose turns into a learning target (docs/DECISIONS.md 2026-10-12). */
-export const PURPOSE_RULE: Record<Purpose, string> = {
-  read: "그냥 읽기: 문제를 만들지 않는다.",
-  understand: "이해: 개념, 관계, 이유처럼 '왜·어떻게'를 설명할 수 있어야 하는 것만 적게 고른다. 단순 용어·수치 암기는 고르지 않는다.",
-  core: "핵심 암기: 핵심 지식과 재사용 패턴 가운데 이 자료의 목적상 꼭 떠올려야 하는 것만 고른다. 보조 설명·부가 정보는 고르지 않는다.",
-  all: "통암기: 핵심 지식, 재사용 패턴, 원문에 나온 사실(정의, 수치, 순서)까지 떠올려야 할 것을 빠짐없이 고른다.",
-};
-
-const FORMAT_RULE: Record<Purpose, string> = {
-  read: "",
-  understand: "설명형을 우선한다: 이유·관계를 떠올려 말하게 하는 self-check, 헷갈리는 개념을 가르는 choice.",
-  core: "목표 종류에 맞춘다: 용어·사실은 short, 개념 구별은 choice, 식·절차·여러 요소는 self-check.",
-  all: "떠올리기 중심: short와 self-check를 우선하고, 구별이 핵심일 때만 choice.",
-};
 
 export function outlinePrompt(input: GenInput, pageText: string) {
   const system = [
@@ -58,16 +45,13 @@ export function classifyPrompt(input: GenInput, section: Section, pageText: stri
   return { system, user };
 }
 
-export function designPrompt(input: GenInput, section: Section, items: ClassItem[]) {
+export function designPrompt(input: GenInput, section: Section, items: ClassItem[], guide: string) {
   const system = [
     "너는 학습 설계자다. 분류된 내용에서 학습자가 '자료를 보지 않고 떠올려야 하는 것'을 학습 목표로 고른다.",
-    `목적 규칙 — ${PURPOSE_RULE[input.purpose]}`,
-    "목표 하나 = 떠올릴 것 하나(개념 하나, 식 하나, 절차 하나). 여러 사실을 한 목표에 묶지 않는다.",
-    "같은 패턴을 보여 주는 예시 여러 개는 목표를 따로 만들지 않고 그 패턴 하나로 묶는다. 구체적 사실 자체가 학습 대상이면 무리하게 일반화하지 않는다.",
-    "예시·연습문제·부가 정보는 목표의 근거로 쓰지 않는다. 문제 소재로 쓸 만하면 materialNumbers에 넣는다.",
-    "cue와 recall은 실제로 쓰는 상황 기준이다: 학습자가 무엇을 보고(cue) 무엇을 떠올려야(recall) 하는가. 예: 말하기 표현이면 '하고 싶은 말 → 영어 표현'.",
-    "statement와 cue에 recall(정답)을 그대로 쓰지 않는다.",
+    "칸의 뜻: statement는 학습자 행동으로 쓴 목표, cue는 학습자가 보는 것, recall은 떠올려야 하는 것 하나, itemNumbers는 근거가 되는 분류 항목 번호, materialNumbers는 문제 소재로 쓸 예시·연습문제 항목 번호, importance는 core 또는 support.",
     "고를 것이 없으면 빈 배열을 낸다.",
+    "아래 [기준]을 따른다.",
+    `[기준]\n${guide}`,
   ].join("\n");
   const list = items.map((item) => `${item.n}. [${item.kind}] ${item.content} (p.${item.page}) 「${item.quote}」`).join("\n");
   const signals = [...input.signals.weakSpots.map((value) => `- 약점: ${value}`), ...input.signals.reports.map((value) => `- 신고: ${value}`)];
@@ -82,22 +66,14 @@ export function designPrompt(input: GenInput, section: Section, items: ClassItem
   return { system, user };
 }
 
-export function authorPrompt(input: GenInput, section: Section, objectives: Objective[], items: ClassItem[]) {
+export function authorPrompt(input: GenInput, section: Section, objectives: Objective[], items: ClassItem[], guide: string) {
   const system = [
     "너는 인출 연습 문제 출제자다. 목표마다 문항을 정확히 하나 만든다.",
-    "문항은 블록을 읽는 순서대로 쌓아 만든다: heading(제목), text(본문), math(LaTeX 식), table(표), box(강조 상자). 위치·크기는 정하지 않는다. 코드가 위에서 아래로 쌓는다.",
-    "응답 형식:",
-    "- choice: 보기 정확히 4개, correctIndex는 0부터. 오답은 학습자가 실제로 헷갈릴 오개념(부호·순서 반전, 조건 누락, 비슷한 개념 혼동). 네 보기의 길이·문체·구체성을 비슷하게, 정답에만 조건을 붙이지 않는다. '항상·절대·전혀' 같은 티 나는 오답 금지.",
-    "- short: 답이 짧은 값 하나(수, 좌표, 기호, 용어, 20자 이내)일 때만. accepted에 원문 표기를 먼저, 같은 뜻의 다른 표기를 뒤에.",
-    "- self-check: 식·정의·절차·이유처럼 여러 요소를 떠올려야 할 때. accepted에 모범 답 하나(원문 표기 유지).",
-    `형식 선택 — ${FORMAT_RULE[input.purpose]}`,
-    "목표의 cue를 문제 상황으로 삼고 recall을 떠올리게 한다. 공개 전에 보이는 글(본문, 보기, 입력칸 앞뒤 문구)에 정답이나 결정적 단서를 쓰지 않는다.",
-    "풀이에 필요한 조건(수치, 기준, 방향, 단위)은 본문에 모두 넣는다. 소재 항목의 상황·수치를 쓸 수 있고, 수치를 새로 정했다면 검산한다.",
-    "식·절차가 목표면 원문 예시를 그대로 묻지 말고 수치나 상황을 바꾼 적용 문제를 낼 수 있다.",
-    "모범 답과 해설은 문제와 같은 언어로 쓴다. 원문의 용어·기호·코드는 원문 그대로 두고, 필요하면 괄호로 원문 표기를 덧붙인다.",
-    "short의 accepted에는 원문 표기, 한국어 표기, 흔한 줄임말(예: BFS, DFS)을 모두 넣는다.",
-    "본문에 표·수치·구체적 사례를 주었다면 모범 답도 그 값으로 답한다(예: 방문 순서를 실제 노드 이름으로). 주지 않은 값을 '주어졌다'고 쓰지 않는다.",
-    COMMON,
+    "문항은 블록을 읽는 순서대로 쌓아 만든다: heading(제목), text(본문), math(LaTeX 식), table(표, 첫 행은 머리글), box(강조 상자). 위치·크기는 정하지 않는다. 코드가 위에서 아래로 쌓는다.",
+    "answer 칸: choice는 options 4개와 correctIndex(0부터), short는 accepted에 인정 답안들, self-check는 accepted에 모범 답 하나. before·after는 입력칸 앞뒤 문구, explanation은 정답인 이유 1~2문장.",
+    "목표마다 주어진 소재 항목의 상황·수치를 문제에 쓸 수 있다.",
+    "아래 [기준]을 따른다.",
+    `[기준]\n${guide}`,
   ].join("\n");
   const material = new Map(items.map((item) => [item.n, item]));
   const blocks = objectives.map((objective) => [

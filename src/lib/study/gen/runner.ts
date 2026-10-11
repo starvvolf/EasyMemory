@@ -10,6 +10,7 @@ import { redactCallText } from "../lab-contract.ts";
 import { checkClassify, checkDesign, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, sectionDocument } from "./layout.ts";
+import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
 import { defaultChosen, genStepLabel, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
@@ -105,6 +106,8 @@ export const genInputSchema = z.strictObject({
   provider: z.enum(["chatgpt", "codex", "fake"]).default("chatgpt"),
   models: z.partialRecord(z.enum(["outline", "classify", "design", "author"]), modelChoice).default({}),
   signals: z.object({ weakSpots: z.array(z.string().max(300)).max(30), reports: z.array(z.string().max(300)).max(30) }).default({ weakSpots: [], reports: [] }),
+  /** 출제기준 folder; a candidate copy (출제기준-후보) lets one run compare criteria without touching the main folder. */
+  guideDir: z.string().regex(guideDirPattern).default(DEFAULT_GUIDE_DIR),
 });
 
 export async function createGen(raw: unknown): Promise<GenState> {
@@ -184,7 +187,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   let callsThisStart = 0;
   let loaded = new Map<number, string>();
 
-  const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>) => {
+  const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, guide?: LoadedGuide) => {
     if (callsThisStart >= MAX_CALLS_PER_START) throw new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${MAX_CALLS_PER_START})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
     if (input.provider === "fake" && process.env.NODE_ENV === "production") throw new Stop("failed", "가짜 모델은 개발 환경에서만 쓸 수 있어요.");
     callsThisStart += 1;
@@ -197,7 +200,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     await saveState(state);
     const started = Date.now();
     const record: GenCall = { n, step, sectionId, attempt, model, effort, format: null, startedAt: new Date(started).toISOString(), ms: 0, ok: false,
-      system: redactCallText(system), user: redactCallText(user), reply: null, error: null };
+      system: redactCallText(system), user: redactCallText(user), reply: null, error: null,
+      ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
     const callFile = path.join(dirOf(id), "calls", `${n}.json`);
     const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: true, schema, schemaName: `recaller_${step.replace(/-/g, "_")}`, model, effort, caller, provider: input.provider };
     try {
@@ -215,10 +219,15 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       throw error;
     }
   };
+  /** A broken criteria folder pauses the run: fix the folder and start again from the same place. */
+  const guideFor = async (step: "design" | "author", kinds?: Objective["kind"][]) => {
+    try { return await loadGuide(step, { purpose: input.purpose, kinds, dir: input.guideDir ?? DEFAULT_GUIDE_DIR }); }
+    catch (error) { throw new Stop("paused-invalid", `${error instanceof Error ? error.message : String(error)} 출제기준 폴더를 고친 뒤 다시 시작해 주세요.`); }
+  };
   /** A call whose reply did not parse or match the schema counts as one try; a dropped connection too. */
-  const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>) => {
+  const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide) => {
     try {
-      const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema));
+      const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide));
       return parsed.success ? { ok: true as const, value: parsed.data } : { ok: false as const, problem: "응답이 정해진 JSON 형식과 다릅니다." };
     } catch (error) {
       if (error instanceof Stop) throw error;
@@ -334,12 +343,13 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     if (input.purpose === "read" || section.design) return;
     const items = section.classify.items;
     if (!items.length) { section.design = { objectives: [], warnings: [] }; return; }
-    const prompt = designPrompt(input, section, items);
-    let result = await askParsed("design", section.id, 1, prompt.system, prompt.user, designSchema, designReply);
+    const guide = await guideFor("design");
+    const prompt = designPrompt(input, section, items, guide.text);
+    let result = await askParsed("design", section.id, 1, prompt.system, prompt.user, designSchema, designReply, guide);
     let checked = result.ok ? checkDesign(result.value, section, items) : null;
     if (!checked || checked.problems.length) {
       const problems = checked ? checked.problems.map((problem) => problem.message) : [result.ok ? "" : result.problem];
-      result = await askParsed("design", section.id, 2, prompt.system, retryUser(prompt.user, result.ok ? result.value : null, problems), designSchema, designReply);
+      result = await askParsed("design", section.id, 2, prompt.system, retryUser(prompt.user, result.ok ? result.value : null, problems), designSchema, designReply, guide);
       const second = result.ok ? checkDesign(result.value, section, items) : null;
       if (second) checked = second;
     }
@@ -357,10 +367,11 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const targets = attempt === 1 ? objectives : objectives.filter((objective) => problems.has(objective.id));
       if (!targets.length) break;
-      const prompt = authorPrompt(input, section, targets, items);
+      const guide = await guideFor("author", targets.map((objective) => objective.kind));
+      const prompt = authorPrompt(input, section, targets, items, guide.text);
       const user = attempt === 1 ? prompt.user
         : retryUser(prompt.user, { questions: targets.map((objective) => previous.get(objective.id)).filter(Boolean) }, targets.map((objective) => `${objective.id}: ${problems.get(objective.id)}`));
-      const result = await askParsed("author", section.id, attempt, prompt.system, user, authorSchema, authorReply);
+      const result = await askParsed("author", section.id, attempt, prompt.system, user, authorSchema, authorReply, guide);
       const next = new Map<string, string>();
       const nextPrevious = new Map<string, unknown>();
       const byId = new Map(targets.map((objective) => [objective.id, objective]));

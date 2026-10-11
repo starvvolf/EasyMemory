@@ -33,6 +33,8 @@ export type GenInput = {
   models: Partial<Record<GenStep, ModelChoice>>;
   /** Reserved slot: weak spots from the notes and reported problems. Empty until notes step 2. */
   signals: { weakSpots: string[]; reports: string[] };
+  /** Criteria folder name (출제기준 or a candidate copy). Older runs have none and use the default. */
+  guideDir?: string;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
@@ -109,4 +111,6 @@ export type GenCall = {
   reply: string | null;
   error: string | null;
   usage?: { inputTokens?: number; outputTokens?: number };
+  /** Which criteria went into this call: folder, content hash, files. */
+  guide?: { dir: string; version: string; files: string[] };
 };
