@@ -29,13 +29,14 @@ export function outlinePrompt(input: GenInput, pageText: string) {
     "원문에 있는 장·절·슬라이드 제목으로 목차를 만든다. 내용 설명·요약은 쓰지 않는다.",
     "목차 항목 하나가 한 번에 공부할 단위가 된다. 보통 1~6쪽이 되게 하고, 아주 긴 장은 원문의 절 제목으로 나눈다.",
     "고른 쪽을 빠짐없이 원문 순서대로 덮는다. 명시적 목차가 없으면 실제 제목이나 슬라이드 제목을 쓴다.",
+    "startText에는 그 항목이 시작되는 곳의 원문 글자(보통 제목 줄)를 그대로 복사한다. 한 쪽 중간에서 다음 항목이 시작되면 코드가 이 글자 위치에서 쪽을 나눈다.",
     COMMON,
   ].join("\n");
   const user = [`[자료] ${input.fileName}`, `[고른 쪽] ${input.pageNumbers.join(", ")}`, `[원문: 쪽별 추출 글자]\n${pageText}`].join("\n\n");
   return { system, user };
 }
 
-export function classifyPrompt(input: GenInput, section: Section, pageText: string) {
+export function classifyPrompt(input: GenInput, section: Section, pageText: string, others: string[] = []) {
   const system = [
     "너는 학습자료의 한 부분을 내용 성격별로 나눈다. 무엇을 공부할지는 아직 정하지 않는다.",
     "kind 기준:",
@@ -48,9 +49,12 @@ export function classifyPrompt(input: GenInput, section: Section, pageText: stri
     "- 부가 정보: 출처, 일화, 공지처럼 학습 대상이 아닌 것",
     "내용 하나에 항목 하나. 같은 패턴을 보여 주는 예시가 여러 개면 패턴은 재사용 패턴으로, 각 예시는 예시로 둔다.",
     "글자가 거의 없는 쪽(그림 위주)은 건너뛴다. 원문에 없는 내용을 채우지 않는다.",
+    "받은 원문은 이 목차에 해당하는 부분만 잘라 낸 것이다. 그 밖의 내용은 다른 목차에서 다루므로 끌어오지 않는다.",
     COMMON,
   ].join("\n");
-  const user = [`[자료] ${input.fileName}`, `[목차] ${section.title} (p.${section.pages.join(", ")})`, `[원문: 쪽별 추출 글자]\n${pageText}`].join("\n\n");
+  const user = [`[자료] ${input.fileName}`, `[목차] ${section.title} (p.${section.pages.join(", ")})`,
+    others.length ? `[같은 쪽의 다른 목차(다루지 않음)] ${others.join(" / ")}` : "",
+    `[원문: 이 목차 부분의 쪽별 추출 글자]\n${pageText}`].filter(Boolean).join("\n\n");
   return { system, user };
 }
 
@@ -90,6 +94,9 @@ export function authorPrompt(input: GenInput, section: Section, objectives: Obje
     "목표의 cue를 문제 상황으로 삼고 recall을 떠올리게 한다. 공개 전에 보이는 글(본문, 보기, 입력칸 앞뒤 문구)에 정답이나 결정적 단서를 쓰지 않는다.",
     "풀이에 필요한 조건(수치, 기준, 방향, 단위)은 본문에 모두 넣는다. 소재 항목의 상황·수치를 쓸 수 있고, 수치를 새로 정했다면 검산한다.",
     "식·절차가 목표면 원문 예시를 그대로 묻지 말고 수치나 상황을 바꾼 적용 문제를 낼 수 있다.",
+    "모범 답과 해설은 문제와 같은 언어로 쓴다. 원문의 용어·기호·코드는 원문 그대로 두고, 필요하면 괄호로 원문 표기를 덧붙인다.",
+    "short의 accepted에는 원문 표기, 한국어 표기, 흔한 줄임말(예: BFS, DFS)을 모두 넣는다.",
+    "본문에 표·수치·구체적 사례를 주었다면 모범 답도 그 값으로 답한다(예: 방문 순서를 실제 노드 이름으로). 주지 않은 값을 '주어졌다'고 쓰지 않는다.",
     COMMON,
   ].join("\n");
   const material = new Map(items.map((item) => [item.n, item]));

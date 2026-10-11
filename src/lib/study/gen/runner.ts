@@ -7,12 +7,12 @@ import path from "node:path";
 import { z } from "zod";
 import { callModel, ModelError, type ModelCaller, type ModelRequest } from "../../ai/model.ts";
 import { redactCallText } from "../lab-contract.ts";
-import { checkClassify, checkDesign, normalizeOutline } from "./checks.ts";
+import { checkClassify, checkDesign, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, sectionDocument } from "./layout.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
-import { genStepLabel, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
+import { defaultChosen, genStepLabel, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 
 /** Model calls allowed per start or restart; the total is kept in `calls`. */
@@ -266,6 +266,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         await saveState(state);
         return state;
       }
+      mergeAcrossSections(state.sections);
       state.phase = "confirm";
       await saveState(state);
     }
@@ -277,7 +278,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         await saveState(state);
         return state;
       }
-      state.confirmedObjectiveIds = all;
+      state.confirmedObjectiveIds = defaultChosen(input.purpose, state.sections.flatMap((section) => section.design?.objectives ?? []));
       state.phase = "author";
       await saveState(state);
     }
@@ -305,13 +306,16 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
 
   // -- per-section steps (closures over state, input, ask) ------------------------------------------------
   async function designSection(section: SectionState) {
-    const sectionBlock = pageBlock(new Map(section.pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
+    // A page shared with a neighbouring section is cut at the section starts (see sectionPageTexts).
+    const own = sectionPageTexts(section, state.sections, loaded);
+    const sectionTexts = own.texts;
+    const sectionBlock = pageBlock(sectionTexts).text;
     if (!section.classify) {
-      const sectionTexts = new Map(section.pages.map((page) => [page, loaded.get(page) ?? ""]));
       if (![...sectionTexts.values()].some((text) => text.trim())) {
         section.classify = { items: [], warnings: [{ severity: "warning", code: "no-text", message: "이 목차의 쪽에는 추출된 글자가 없어요(그림 위주)." }] };
       } else {
-        const prompt = classifyPrompt(input, section, sectionBlock);
+        const others = state.sections.filter((other) => other.id !== section.id && other.pages.some((page) => section.pages.includes(page))).map((other) => other.title);
+        const prompt = classifyPrompt(input, section, sectionBlock, others);
         let result = await askParsed("classify", section.id, 1, prompt.system, prompt.user, classifySchema, classifyReply);
         let checked = result.ok ? checkClassify(result.value, section, sectionTexts) : null;
         if (!checked || checked.problems.length) {
@@ -322,7 +326,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         }
         if (!checked) throw new Stop("paused-invalid", `${section.title}: 내용 분류 응답을 읽지 못했어요. 다시 시작하면 이 목차부터 이어가요.`);
         // Still-unverified quotes are dropped, not kept: the source must not be misquoted.
-        section.classify = { items: checked.items, warnings: checked.problems.map((problem) => ({ severity: "warning" as const, code: "quote-not-found", message: `원문에서 확인되지 않아 뺀 항목: ${problem.message}` })) };
+        section.classify = { items: checked.items, warnings: [...own.warnings,
+          ...checked.problems.map((problem) => ({ severity: "warning" as const, code: "quote-not-found", message: `원문에서 확인되지 않아 뺀 항목: ${problem.message}` }))] };
       }
       await saveState(state);
     }

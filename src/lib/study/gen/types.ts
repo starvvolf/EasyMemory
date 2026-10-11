@@ -35,7 +35,8 @@ export type GenInput = {
   signals: { weakSpots: string[]; reports: string[] };
 };
 
-export type Section = { id: string; title: string; pages: number[] };
+/** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
+export type Section = { id: string; title: string; pages: number[]; startText?: string };
 
 export type ClassItem = { n: number; kind: ItemKind; content: string; quote: string; page: number };
 
@@ -55,12 +56,18 @@ export type Objective = {
   quotes: string[];
 };
 
+/** Objectives checked by default at the confirmation: everything for 통암기, otherwise only core ones. */
+export function defaultChosen(purpose: Purpose, objectives: Array<{ id: string; importance: "core" | "support" }>) {
+  return objectives.filter((objective) => purpose === "all" || objective.importance === "core").map((objective) => objective.id);
+}
+
 export type Issue = { severity: "error" | "warning"; code: string; message: string; ref?: string };
 
 export type SectionState = {
   id: string;
   title: string;
   pages: number[];
+  startText?: string;
   classify?: { items: ClassItem[]; warnings: Issue[] };
   design?: { objectives: Objective[]; warnings: Issue[] };
   author?: { documentPath: string | null; questionCount: number; dropped: Array<{ objectiveId: string; reason: string }>; warnings: Issue[] };

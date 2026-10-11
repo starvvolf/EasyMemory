@@ -13,13 +13,13 @@ const loose = (value: string) => value.normalize("NFKC").replace(/\s+/g, "").toL
  * Outline problems are fixed in code, not by asking again: clamp to the chosen pages, keep source order,
  * hand uncovered pages to the neighbouring section. Only an outline with no usable section is an error.
  */
-export function normalizeOutline(reply: z.infer<typeof outlineReply>, chosen: number[]): { sections: Section[]; warnings: Issue[] } {
+export function normalizeOutline(reply: { sections: Array<Omit<z.infer<typeof outlineReply>["sections"][number], "startText"> & { startText?: string }> }, chosen: number[]): { sections: Section[]; warnings: Issue[] } {
   const pages = [...new Set(chosen)].sort((a, b) => a - b);
   const warnings: Issue[] = [];
   const drafts = reply.sections
     .map((section) => {
       const start = Math.min(section.pageStart, section.pageEnd), end = Math.max(section.pageStart, section.pageEnd);
-      return { title: section.title.trim(), pages: pages.filter((page) => page >= start && page <= end) };
+      return { title: section.title.trim(), startText: (section.startText ?? "").trim(), pages: pages.filter((page) => page >= start && page <= end) };
     })
     .filter((section) => section.title && section.pages.length)
     .sort((a, b) => a.pages[0] - b.pages[0]);
@@ -33,7 +33,63 @@ export function normalizeOutline(reply: z.infer<typeof outlineReply>, chosen: nu
     owner.pages = [...new Set([...owner.pages, page])].sort((a, b) => a - b);
   }
   if (missing.length) warnings.push({ severity: "warning", code: "outline-gap", message: `목차가 덮지 않은 p.${missing.join(", ")}를 앞 항목에 붙였어요.` });
-  return { sections: drafts.map((section, index) => ({ id: `s${index + 1}`, title: section.title, pages: section.pages })), warnings };
+  return { sections: drafts.map((section, index) => ({ id: `s${index + 1}`, title: section.title, pages: section.pages,
+    ...(section.startText ? { startText: section.startText } : {}) })), warnings };
+}
+
+/** Where `needle` starts in `text`, ignoring spacing and case; -1 when absent. */
+export function locate(text: string, needle: string) {
+  const chars = [...needle.normalize("NFKC")].filter((char) => !/\s/.test(char));
+  if (chars.length < 2) return -1;
+  const pattern = new RegExp(chars.map((char) => char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s*"), "iu");
+  return text.normalize("NFKC").search(pattern);
+}
+
+/**
+ * The text a section owns. Pages are shared when a section starts mid-page; there the page is cut at the
+ * section's own start and at the start of the next section on that page, so one passage is not studied twice.
+ * A start that cannot be found keeps the whole page (and is reported).
+ */
+export function sectionPageTexts(section: Section, sections: Section[], texts: Map<number, string>) {
+  const own = new Map<number, string>();
+  const warnings: Issue[] = [];
+  const startOf = (candidate: Section, page: number) => {
+    if (candidate.pages[0] !== page) return -1;
+    const text = texts.get(page) ?? "";
+    const at = candidate.startText ? locate(text, candidate.startText) : -1;
+    return at >= 0 ? at : locate(text, candidate.title);
+  };
+  const order = sections.findIndex((candidate) => candidate.id === section.id);
+  for (const page of section.pages) {
+    const text = (texts.get(page) ?? "").normalize("NFKC");
+    let from = 0;
+    if (page === section.pages[0] && sections.some((other, index) => index < order && other.pages.includes(page))) {
+      const at = startOf(section, page);
+      if (at >= 0) from = at;
+      else warnings.push({ severity: "warning", code: "section-start-not-found", message: `p.${page}에서 '${section.title}'의 시작 위치를 찾지 못해 쪽 전체를 썼어요.` });
+    }
+    const ends = sections.slice(order + 1).map((next) => startOf(next, page)).filter((at) => at > from);
+    own.set(page, text.slice(from, ends.length ? Math.min(...ends) : undefined));
+  }
+  return { texts: own, warnings };
+}
+
+/** The same thing to recall in two sections is studied once: the later copy is merged into the earlier one. */
+export function mergeAcrossSections(sections: Array<{ design?: { objectives: Objective[]; warnings: Issue[] } }>) {
+  const seen = new Map<string, string>();
+  for (const section of sections) {
+    if (!section.design) continue;
+    section.design.objectives = section.design.objectives.filter((objective) => {
+      const key = loose(objective.recall);
+      const earlier = seen.get(key);
+      if (earlier && earlier.split("-")[0] !== objective.sectionId) {
+        section.design!.warnings.push({ severity: "warning", code: "duplicate-objective", message: `앞 목차의 ${earlier}와 떠올릴 것이 같아 합쳤어요: ${objective.recall.slice(0, 60)}`, ref: earlier });
+        return false;
+      }
+      seen.set(key, objective.id);
+      return true;
+    });
+  }
 }
 
 export type ItemProblem = { index: number; message: string };

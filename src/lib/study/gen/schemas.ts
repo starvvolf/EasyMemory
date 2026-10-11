@@ -15,12 +15,13 @@ const oneOf = (values: readonly string[], description?: string): Json => ({ type
 export const outlineSchema = obj({
   sections: arr(obj({
     title: str("원문에 있는 장·절·슬라이드 제목 그대로"),
+    startText: str("이 항목이 원문에서 시작되는 곳의 글자를 그대로 복사(보통 제목 줄, 20~60자)"),
     pageStart: int("시작 쪽"),
     pageEnd: int("끝 쪽(한 쪽이면 시작 쪽과 같음)"),
   }), "학습 단위로 쓸 목차 항목. 원문 순서대로, 고른 쪽을 빠짐없이 덮는다"),
 });
 export const outlineReply = z.object({
-  sections: z.array(z.object({ title: z.string().trim().min(1), pageStart: z.number().int(), pageEnd: z.number().int() })),
+  sections: z.array(z.object({ title: z.string().trim().min(1), startText: z.string(), pageStart: z.number().int(), pageEnd: z.number().int() })),
 });
 
 export const classifySchema = obj({

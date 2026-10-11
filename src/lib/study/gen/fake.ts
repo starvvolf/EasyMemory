@@ -4,7 +4,7 @@ import type { GenStep } from "./types.ts";
 
 function pagesIn(user: string) {
   const pages = new Map<number, string>();
-  const body = user.split("[원문: 쪽별 추출 글자]\n")[1] ?? "";
+  const body = user.split(/\[원문: [^\]]*쪽별 추출 글자\]\n/)[1] ?? "";
   for (const match of body.matchAll(/\[p\.(\d+)\]\n([\s\S]*?)(?=\n\n\[p\.\d+\]\n|\n\n\[길이 제한\]|$)/g)) pages.set(Number(match[1]), match[2]);
   return pages;
 }
@@ -17,7 +17,7 @@ function quotesFrom(text: string) {
 export function genFakeReply(step: GenStep, user: string): string {
   if (step === "outline") {
     const chosen = (/\[고른 쪽\] ([\d, ]+)/.exec(user)?.[1] ?? "1").split(",").map((value) => Number(value.trim())).filter(Boolean);
-    return JSON.stringify({ sections: chosen.map((page) => ({ title: `${page}쪽 내용`, pageStart: page, pageEnd: page })) });
+    return JSON.stringify({ sections: chosen.map((page) => ({ title: `${page}쪽 내용`, startText: "", pageStart: page, pageEnd: page })) });
   }
   if (step === "classify") {
     const items = [...pagesIn(user)].flatMap(([page, text]) => quotesFrom(text).map((quote, index) => ({

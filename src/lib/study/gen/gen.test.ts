@@ -5,11 +5,11 @@ import path from "node:path";
 import test from "node:test";
 import { ModelError } from "../../ai/model.ts";
 import { validateDocument, type AuthoringDocument } from "../../../../tools/problem-authoring-lab/contract.ts";
-import { normalizeOutline } from "./checks.ts";
+import { checkClassify, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
 import { confirmObjectives, createGen, enqueueGen, loadGen, readGenCalls, readSectionDocument, runGen, type RunOptions } from "./runner.ts";
 import { authorSchema, classifySchema, designSchema, outlineSchema } from "./schemas.ts";
-import type { GenStep } from "./types.ts";
+import type { GenStep, Issue } from "./types.ts";
 
 const PAGES = new Map([
   [1, "Breadth-first search visits vertices in order of distance from the start. A queue holds the vertices that are waiting to be visited."],
@@ -166,4 +166,64 @@ test("실제 모델 생성은 호출 확인 없이 대기열에 넣지 않는다
   const state = await createGen({ ...base, provider: "chatgpt", purpose: "core" });
   await assert.rejects(enqueueGen(state.id, caller, { pages }), /실제 모델 호출 확인/);
   assert.equal((await readGenCalls(state.id)).length, 0);
+}));
+
+// Two sections share page 1: the second starts mid-page (the Cornell layout from the 10/12 live run).
+const SHARED = new Map([
+  [1, "Breadth-first search  Visit nodes in order of distance from u. Use a queue instead of a stack.  Reducing the potential maximum size of the queue  Each edge may add a vertex to the queue."],
+  [2, "A boolean array records whether each vertex has been in the queue."],
+]);
+const sharedOutline = JSON.stringify({ sections: [
+  { title: "Breadth-first search", startText: "Breadth-first search", pageStart: 1, pageEnd: 1 },
+  { title: "Reducing the potential maximum size of the queue", startText: "Reducing the potential maximum size", pageStart: 1, pageEnd: 2 },
+] });
+
+test("한 쪽을 두 목차가 나눠 쓰면 시작 글자 위치에서 잘라 각 목차에 자기 부분만 준다", () => {
+  const { sections } = normalizeOutline(JSON.parse(sharedOutline), [1, 2]);
+  const first = sectionPageTexts(sections[0], sections, SHARED).texts.get(1)!;
+  const second = sectionPageTexts(sections[1], sections, SHARED);
+  assert.ok(first.includes("Use a queue instead of a stack.") && !first.includes("Reducing"));
+  assert.ok(second.texts.get(1)!.startsWith("Reducing the potential") && !second.texts.get(1)!.includes("Use a queue"));
+  assert.equal(second.texts.get(2), SHARED.get(2));
+  // A quote from the earlier section no longer passes for the later one.
+  const checked = checkClassify({ items: [{ kind: "핵심 지식", content: "x", quote: "Use a queue instead of a stack.", page: 1 }] }, sections[1], second.texts);
+  assert.equal(checked.items.length, 0);
+  // A start that cannot be found keeps the whole page and says so.
+  const lost = sectionPageTexts({ ...sections[1], startText: "nowhere to be found", title: "also missing" }, sections, SHARED);
+  assert.ok(lost.texts.get(1)!.includes("Use a queue") && lost.warnings.some((warning) => warning.code === "section-start-not-found"));
+});
+
+test("실행에서도 뒤 목차의 분류 입력에는 앞 목차 글이 들어가지 않는다", () => withData(async () => {
+  const fakeReply = (step: GenStep, user: string) => step === "outline" ? sharedOutline : genFakeReply(step, user);
+  const state = await createGen({ ...base, purpose: "core", autoConfirm: true });
+  const done = await runGen(state.id, caller, { pages: async () => SHARED, fakeReply });
+  assert.equal(done.status, "done", done.message);
+  const classify = (await readGenCalls(state.id)).filter((call) => call.step === "classify");
+  const second = classify.find((call) => call.sectionId === "s2")!;
+  assert.ok(!second.user.includes("Use a queue instead of a stack.") && second.user.includes("Each edge may add"));
+  assert.match(second.user, /\[같은 쪽의 다른 목차\(다루지 않음\)\] Breadth-first search/);
+}));
+
+test("목차가 달라도 떠올릴 것이 같으면 뒤 목표를 앞 목표에 합친다", () => {
+  const objective = (id: string, sectionId: string, recall: string) => ({ id, sectionId, statement: "s", cue: "c", recall, kind: "개념" as const, importance: "core" as const, itemNumbers: [1], materialNumbers: [], pages: [1], quotes: ["q"] });
+  const sections = [
+    { design: { objectives: [objective("s1-o1", "s1", "Use a queue")], warnings: [] as Issue[] } },
+    { design: { objectives: [objective("s2-o1", "s2", "use a  QUEUE"), objective("s2-o2", "s2", "boolean array")], warnings: [] as Issue[] } },
+  ];
+  mergeAcrossSections(sections);
+  assert.deepEqual(sections[1].design.objectives.map((item) => item.id), ["s2-o2"]);
+  assert.equal(sections[1].design.warnings[0].ref, "s1-o1");
+});
+
+test("보조 목표는 기본으로 고르지 않고(통암기는 전부), 자동 확인도 같은 규칙을 따른다", () => withData(async () => {
+  const fakeReply = (step: GenStep, user: string) => {
+    if (step !== "design") return genFakeReply(step, user);
+    const objective = (recall: string, importance: string) => ({ statement: "떠올릴 수 있다", cue: "실마리", recall, kind: "개념", importance, itemNumbers: [1], materialNumbers: [] });
+    return JSON.stringify({ objectives: [objective("queue holds waiting vertices", "core"), objective("boolean array records visits", "support")] });
+  };
+  for (const [purpose, expected] of [["core", ["s1-o1"]], ["all", ["s1-o1", "s1-o2"]]] as const) {
+    const state = await createGen({ ...base, pageNumbers: [1], purpose, autoConfirm: true });
+    const done = await runGen(state.id, caller, { pages, fakeReply });
+    assert.deepEqual(done.confirmedObjectiveIds, expected, purpose);
+  }
 }));

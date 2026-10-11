@@ -3,7 +3,7 @@
 // confirm objectives once, and open the problems of each section as they are authored.
 import { useCallback, useEffect, useState } from "react";
 import type { GenCall, GenState, GenStep, Purpose } from "@/lib/study/gen/types";
-import { genStepLabel, purposeLabel } from "@/lib/study/gen/types";
+import { defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
 import "./gen.css";
 
 type Source = { id: string; fileName: string; pageCount: number; available: boolean };
@@ -42,6 +42,13 @@ export default function GenLab() {
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }, []);
   useEffect(() => { const initial = setTimeout(() => { void loadLists(); }, 0); return () => clearTimeout(initial); }, [loadLists]);
+  // Keep the list in step with the open run while anything is still moving.
+  const moving = runs.some((run) => run.status === "queued" || run.status === "running");
+  useEffect(() => {
+    if (!moving) return;
+    const timer = setInterval(() => { void loadLists(); }, 3000);
+    return () => clearInterval(timer);
+  }, [moving, loadLists]);
 
   return (
     <main className="gen">
@@ -170,7 +177,8 @@ function RunView({ id, onChange, onError }: { id: string; onChange: () => void; 
   const { gen, label, calls } = detail;
   const real = gen.input.provider !== "fake";
   const objectives = gen.sections.flatMap((section) => section.design?.objectives ?? []);
-  const selected = chosen ?? new Set(objectives.map((objective) => objective.id));
+  // 보조 목표는 보이되 기본으로 체크하지 않는다(통암기는 전부).
+  const selected = chosen ?? new Set(defaultChosen(gen.input.purpose, objectives));
   const toggle = (objectiveId: string) => { const next = new Set(selected); if (next.has(objectiveId)) next.delete(objectiveId); else next.add(objectiveId); setChosen(next); };
   const totalMs = calls.reduce((sum, item) => sum + item.ms, 0);
   const tokens = calls.reduce((sum, item) => ({ input: sum.input + (item.usage?.inputTokens ?? 0), output: sum.output + (item.usage?.outputTokens ?? 0) }), { input: 0, output: 0 });
