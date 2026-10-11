@@ -92,6 +92,7 @@ test("Responses 요청은 독립 입력·비저장·스트리밍을 사용하고
   assert.equal(body.stream, true);
   assert.equal(body.instructions, "rule");
   assert.deepEqual(body.input, [{ role: "user", content: "context" }]);
+  assert.ok("text" in body);
   assert.deepEqual(body.text, { format: { type: "json_object" } });
   assert.ok(!JSON.stringify(body).includes("previous_response_id"));
   const encode = new TextEncoder();
@@ -103,6 +104,23 @@ test("Responses 요청은 독립 입력·비저장·스트리밍을 사용하고
   } });
   assert.deepEqual(await readResponseStream(stream), { text: '{"ok":true}', model: "gpt-6-sol", usage: { inputTokens: 12, outputTokens: 4 } });
   await assert.rejects(readResponseStream(new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(encode.encode('data: {"type":"response.output_text.delta","delta":"partial"}\n\n')); controller.close(); } })), /완료되지/);
+});
+
+test("스키마가 있는 요청만 Structured Outputs를 사용하고 사용자 질문은 바꾸지 않는다", () => {
+  const schema = { type: "object", additionalProperties: false, required: ["lead"], properties: { lead: { type: "string" } } };
+  const request = { purpose: "note:ask", system: "짧게 설명한다", user: "frustum이 뭐야?", caller: { uid: "u" } };
+  const body = responseRequest({ ...request, json: true, schema, schemaName: "study_note_answer" });
+  assert.ok("text" in body);
+  assert.deepEqual(body.text, { format: { type: "json_schema", name: "study_note_answer", schema, strict: true } });
+  assert.deepEqual(body.input, [{ role: "user", content: request.user }]);
+  assert.equal(JSON.stringify(body.input).includes("JSON"), false);
+  const fallback = responseRequest({ ...request, schema });
+  assert.ok("text" in fallback);
+  assert.deepEqual(fallback.text, { format: { type: "json_schema", name: "response", schema, strict: true } });
+  assert.equal("text" in responseRequest(request), false);
+  const legacy = responseRequest({ ...request, json: true });
+  assert.ok("text" in legacy);
+  assert.deepEqual(legacy.text, { format: { type: "json_object" } });
 });
 
 test("한도·로그인·지원 불가 오류는 구분한다", () => {

@@ -1202,6 +1202,52 @@ function textLayer(entry, cssW){
   });
   return tl;
 }
+/* Preview the word under the pointer without changing the reader's drag selection. */
+let wordHover = null, wordPress = null;
+function clearWordHover(){ if (wordHover) wordHover.remove(); wordHover = null; }
+function pdfWordAtPoint(x, y){
+  let node, offset;
+  if (document.caretPositionFromPoint){
+    const caret = document.caretPositionFromPoint(x, y);
+    if (caret){ node = caret.offsetNode; offset = caret.offset; }
+  } else if (document.caretRangeFromPoint){
+    const caret = document.caretRangeFromPoint(x, y);
+    if (caret){ node = caret.startContainer; offset = caret.startOffset; }
+  }
+  if (!node || node.nodeType !== 3 || !node.parentElement.closest(".tl") || !root.contains(node)) return null;
+  for (const match of node.textContent.matchAll(/[\p{L}\p{N}\p{M}]+(?:['’\-][\p{L}\p{N}\p{M}]+)*/gu)){
+    const end = match.index + match[0].length;
+    if (offset < match.index || offset > end) continue;
+    const range = document.createRange(); range.setStart(node, match.index); range.setEnd(node, end);
+    const rect = range.getBoundingClientRect();
+    // Caret APIs also return the nearest text when the pointer is in empty page space.
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return { range, rect };
+  }
+  return null;
+}
+on(root, "mousemove", (e) => {
+  clearWordHover();
+  const sel = window.getSelection();
+  if (e.buttons || sel && !sel.isCollapsed || !e.target.closest(".tl")) return;
+  const word = pdfWordAtPoint(e.clientX, e.clientY); if (!word) return;
+  const r = word.rect;
+  wordHover = h("div", { class:"pdf-word-hover", "aria-hidden":"true", style:`left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px` });
+  root.append(wordHover);
+});
+on(root, "mousedown", (e) => {
+  clearWordHover();
+  wordPress = e.button === 0 && e.target.closest(".tl") ? { x:e.clientX, y:e.clientY } : null;
+});
+on(root, "mouseup", (e) => {
+  const press = wordPress; wordPress = null;
+  const sel = window.getSelection();
+  if (!press || !sel || !sel.isCollapsed || Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) return;
+  const word = pdfWordAtPoint(e.clientX, e.clientY); if (!word) return;
+  sel.removeAllRanges(); sel.addRange(word.range); // Existing selection menu handles the click, not a model call.
+});
+on(root, "mouseleave", clearWordHover);
+on(window, "scroll", clearWordHover, { passive:true, capture:true });
+on(window, "resize", clearWordHover);
 /* where a note's phrase sits on the page: part of a text item, split by character position */
 function phraseRects(entry, quote){
   let s = ""; const map = [];

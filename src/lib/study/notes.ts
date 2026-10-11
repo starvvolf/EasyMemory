@@ -97,6 +97,23 @@ export type AskInput = {
   pageText?: string | null; title?: string | null; purpose?: string | null;
 };
 
+const ASK_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["kind", "lead", "steps", "quote", "extra", "outsideSource"],
+  properties: {
+    kind: { type: "string", enum: ["term", "procedure", "concept"] },
+    lead: { type: "string" },
+    steps: { type: "array", items: {
+      type: "object", additionalProperties: false, required: ["step", "why"],
+      properties: { step: { type: "string" }, why: { type: "string" } },
+    } },
+    quote: { type: ["string", "null"] },
+    extra: { type: ["string", "null"] },
+    outsideSource: { type: ["string", "null"] },
+  },
+};
+
 const ASK_SYSTEM = [
   "너는 학습자가 읽고 있는 자료 옆에서 모르는 말을 짧게 풀어 주는 튜터다.",
   "학습자가 [고른 글]을 모른다. [이 쪽 원문]을 근거로, 일반 사전 뜻이 아니라 이 자료에서의 뜻으로 답한다.",
@@ -146,11 +163,11 @@ export async function askNote(caller: ModelCaller, input: AskInput): Promise<{ n
   const { model, effort } = modelSettings();
   let reply;
   let wasted = 0;   // a reply that was not JSON still used the plan
-  try { reply = await callModel({ purpose: "note:ask", system: ASK_SYSTEM, user: askUser(input), json: true, model, effort, caller }); }
+  try { reply = await callModel({ purpose: "note:ask", system: ASK_SYSTEM, user: askUser(input), json: true, schema: ASK_SCHEMA, schemaName: "study_note_answer", model, effort, caller }); }
   catch (error) {
     if (!(error instanceof ModelError) || error.code !== "invalid_output") throw error;
     wasted = 1;
-    reply = await callModel({ purpose: "note:ask", system: ASK_SYSTEM, user: `${askUser(input)}\n\n앞선 응답이 JSON 객체가 아니었다. 설명 없이 JSON 객체 하나만 쓴다.`, json: true, model, effort, caller });
+    reply = await callModel({ purpose: "note:ask", system: ASK_SYSTEM, user: `${askUser(input)}\n\n앞선 응답이 JSON 객체가 아니었다. 설명 없이 JSON 객체 하나만 쓴다.`, json: true, schema: ASK_SCHEMA, schemaName: "study_note_answer", model, effort, caller });
   }
   const { kind, answer } = readAnswer(reply.data);
   return locked(async () => {

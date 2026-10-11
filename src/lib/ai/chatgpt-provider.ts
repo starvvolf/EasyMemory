@@ -25,7 +25,8 @@ export function responseRequest(request: ModelRequest) {
     store: false,
     stream: true,
     ...(request.effort ? { reasoning: { effort: request.effort } } : {}),
-    ...(request.json ? { text: { format: { type: "json_object" } } } : {}),
+    ...(request.schema ? { text: { format: { type: "json_schema", name: request.schemaName ?? "response", schema: request.schema, strict: true } } }
+      : request.json ? { text: { format: { type: "json_object" } } } : {}),
   };
 }
 

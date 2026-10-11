@@ -20,6 +20,16 @@ test("같은 자료의 같은 문구는 한 번만 묻고, 다시 고르면 AI �
     calls.push(request.purpose);
     assert.match(request.user, /\[고른 글\] frustum/);
     assert.match(request.user, /\[이 쪽 원문 p\.3\]\nthe view volume is a frustum/);
+    assert.equal(request.schemaName, "study_note_answer");
+    assert.equal(request.schema?.additionalProperties, false);
+    assert.deepEqual(request.schema?.required, ["kind", "lead", "steps", "quote", "extra", "outsideSource"]);
+    const properties = request.schema?.properties as Record<string, { type?: unknown; enum?: string[]; items?: Record<string, unknown> }>;
+    assert.deepEqual(properties.kind.enum, ["term", "procedure", "concept"]);
+    assert.deepEqual(properties.quote.type, ["string", "null"]);
+    assert.deepEqual(properties.extra.type, ["string", "null"]);
+    assert.deepEqual(properties.outsideSource.type, ["string", "null"]);
+    assert.equal(properties.steps.items?.additionalProperties, false);
+    assert.deepEqual(properties.steps.items?.required, ["step", "why"]);
     return "```json\n" + JSON.stringify({ kind: "term", lead: "꼭대기가 잘린 피라미드 모양의 보이는 영역", steps: [], quote: "the view volume is a frustum", extra: null, outsideSource: "절두체라는 번역어" }) + "\n```";
   });
   try {
@@ -56,7 +66,11 @@ test("이어서 묻기는 카드 항목에 쌓이고, 형식이 틀린 답은 �
   let n = 0;
   setFakeModelResponder((request) => {
     n += 1;
-    if (request.purpose === "note:ask") return n === 1 ? "그건 이런 뜻이에요" : JSON.stringify({ kind: "concept", lead: "보이는 범위" });
+    if (request.purpose === "note:ask") {
+      assert.equal(request.schemaName, "study_note_answer", "재시도도 같은 스키마를 유지한다");
+      assert.ok(request.schema);
+      return n === 1 ? "그건 이런 뜻이에요" : JSON.stringify({ kind: "concept", lead: "보이는 범위" });
+    }
     assert.match(request.user, /\[새 질문\] 왜 잘라\?/);
     return "보이지 않는 것을 먼저 버려야 계산이 줄어요.";
   });
