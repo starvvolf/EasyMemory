@@ -92,10 +92,19 @@ export function sectionDocument(genId: string, section: Section, fileName: strin
   return { schemaVersion: "problem-authoring-v1", id: `${genId}-${section.id}`, title: `${fileName.replace(/\.pdf$/i, "")} · ${section.title}`, questions };
 }
 
+/** Short answers that are a sequence of 2–6 short names joined by arrows. */
+export function isOrderAnswer(question: AuthoredQuestion) {
+  const response = question.responses[0];
+  return response.kind === "short-text" && response.grading !== "self-check" && response.acceptedAnswers.length > 0
+    && response.acceptedAnswers.every((answer) => { const parts = answer.split(/\s*(?:→|->)\s*/); return parts.length >= 2 && parts.length <= 6 && parts.every((part) => part.trim() && part.trim().length <= 20); });
+}
+
 /** Contract errors and quality errors are tier 2 (unsolvable or leaking); quality warnings are tier 3. */
 export function inspectQuestion(question: AuthoredQuestion): { errors: Issue[]; warnings: Issue[] } {
   const document: AuthoringDocument = { schemaVersion: "problem-authoring-v1", id: "check", title: "check", questions: [question] };
   const issues = [...validateDocument(document), ...inspectQuality(document)]
+    // An order written with the given names ("A → B → C", 출제기준 단답-5) is one answer, not several in one box.
+    .filter((issue) => !(issue.code === "composite-short-answer" && isOrderAnswer(question)))
     .map((issue) => ({ severity: issue.severity, code: issue.code, message: issue.message, ref: question.source.objectiveId }));
   return { errors: issues.filter((issue) => issue.severity === "error"), warnings: issues.filter((issue) => issue.severity === "warning") };
 }

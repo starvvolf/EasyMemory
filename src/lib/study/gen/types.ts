@@ -140,7 +140,9 @@ export type GenCall = {
  * objectives for core knowledge (리허설), and every later step inherits those mistakes, so they move up too.
  */
 export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
-  transcribe: { model: "gpt-6-sol", effort: "medium" },
+  // sol·low read the same 6 slides with 0 math or number errors and no missing body text, in about half the time
+  // (작업지시 13: 54 s vs 120 s); luna·low dropped equations and labels.
+  transcribe: { model: "gpt-6-sol", effort: "low" },
   outline: { model: "gpt-6-sol", effort: "medium" },
   classify: { model: "gpt-6-sol", effort: "low" },
   design: { model: "gpt-6-sol", effort: "medium" },

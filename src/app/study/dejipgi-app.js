@@ -88,11 +88,20 @@ const Store = {
     this.key = "recaller:study:v1:" + (env.uid || "local");
     try{ localStorage.setItem("dejipgi.probe","1"); localStorage.removeItem("dejipgi.probe"); this.mode = "local"; }catch(e){ this.mode = "memory"; }
   },
-  // a changed document gets a fresh record; the old one stays under its own hash
-  pkey(deck){ return deck.id + "@" + (deck.artifactSha256 || "example"); },
+  // A changed document gets a fresh record; the old one stays under its own hash. New-engine materials (gen_…) grow
+  // section by section with stable question IDs, so their record is kept per material instead (리허설 2026-10-12:
+  // records and reports vanished each time a section was added).
+  pkey(deck){ return deck.id + "@" + (String(deck.id).startsWith("gen_") ? "live" : (deck.artifactSha256 || "example")); },
   all(){ if (this.mode !== "local") return {}; try{ return JSON.parse(localStorage.getItem(this.key) || "{}"); }catch(e){ return {}; } },
   restore(deck){
-    const saved = this.all()[this.pkey(deck)] || {};
+    const all = this.all();
+    let saved = all[this.pkey(deck)];
+    if (!saved && String(deck.id).startsWith("gen_")){
+      // Records saved before this fix sit under a section-count hash: take the most recent one.
+      const old = Object.entries(all).filter(([k]) => k.startsWith(deck.id + "@")).map(([, v]) => v).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+      saved = old[0];
+    }
+    saved = saved || {};
     deck.allItems = deck.allItems || deck.items;
     const ids = new Set(deck.allItems.map(i => i.id));
     deck.events = Array.isArray(saved.events) ? saved.events.filter(e => ids.has(e.item)) : [];

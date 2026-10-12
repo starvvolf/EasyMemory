@@ -430,3 +430,18 @@ test("목차는 두 단계: 단원 아래 세부 항목이 쪽을 나눠 갖고,
   assert.equal(merged.sections.length, 5);
   assert.deepEqual(merged.sections.flatMap((section) => section.parts!.map((part) => part.title)), many.map((page) => `슬라이드 ${page}`));
 });
+
+test("순서 단답(이름을 화살표로 잇기)은 '한 칸 여러 요소'로 떨어뜨리지 않는다", async () => {
+  const { inspectQuestion, isOrderAnswer } = await import("./layout.ts");
+  const question = (accepted: string[]) => ({
+    id: "q", page: { width: 760, height: 300 },
+    source: { learningUnitId: "o", objectiveId: "o", sourceId: "a.pdf", sourcePage: 1, sourceRange: "PDF 1쪽", sourceText: "x축 회전 뒤 y축 회전", target: "t", successCriteria: ["c"] },
+    blocks: [{ id: "b1", kind: "text" as const, text: "두 회전을 적용하는 순서는?", frame: { x: 0, y: 0, width: 10, height: 10 } },
+      { id: "input", kind: "blank" as const, responseId: "r", promptBefore: "순서(→로 구분):", promptAfter: "", frame: { x: 0, y: 0, width: 10, height: 10 } },
+      { id: "reveal", kind: "answer-reveal" as const, responseIds: ["r"], frame: { x: 0, y: 0, width: 10, height: 10 } }],
+    responses: [{ id: "r", kind: "short-text" as const, acceptedAnswers: accepted, grading: "exact-normalized" as const, explanation: "e" }],
+  });
+  assert.equal(isOrderAnswer(question(["x축 → y축"])), true);
+  assert.ok(!inspectQuestion(question(["x축 → y축"])).errors.some((issue) => issue.code === "composite-short-answer"));
+  assert.ok(inspectQuestion(question(["a; b; c"])).errors.some((issue) => issue.code === "composite-short-answer"));
+});
