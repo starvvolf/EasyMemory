@@ -33,8 +33,30 @@ export function normalizeOutline(reply: { sections: Array<Omit<z.infer<typeof ou
     owner.pages = [...new Set([...owner.pages, page])].sort((a, b) => a - b);
   }
   if (missing.length) warnings.push({ severity: "warning", code: "outline-gap", message: `목차가 덮지 않은 p.${missing.join(", ")}를 앞 항목에 붙였어요.` });
+  // Study units, not slide titles: a page-by-page outline (리허설 2026-10-12: 52쪽 → 52목차) is merged in code,
+  // smallest unit into its smaller neighbour, until there are at most one unit per SECTION_PAGES pages.
+  const limit = Math.max(MIN_SECTIONS, Math.ceil(pages.length / SECTION_PAGES));
+  const before = drafts.length;
+  while (drafts.length > limit) {
+    const size = (index: number) => drafts[index].pages.length;
+    let index = 0;
+    for (let i = 1; i < drafts.length; i += 1) if (size(i) < size(index)) index = i;
+    const neighbour = index === 0 ? 1 : index === drafts.length - 1 ? index - 1 : size(index - 1) <= size(index + 1) ? index - 1 : index + 1;
+    const [first, second] = neighbour < index ? [neighbour, index] : [index, neighbour];
+    const merged = { title: mergeTitles(drafts[first].title, drafts[second].title), startText: drafts[first].startText,
+      pages: [...new Set([...drafts[first].pages, ...drafts[second].pages])].sort((a, b) => a - b) };
+    drafts.splice(first, 2, merged);
+  }
+  if (drafts.length < before) warnings.push({ severity: "warning", code: "outline-merged", message: `목차 ${before}개가 너무 잘아서 ${drafts.length}개로 묶었어요.` });
   return { sections: drafts.map((section, index) => ({ id: `s${index + 1}`, title: section.title, pages: section.pages,
     ...(section.startText ? { startText: section.startText } : {}) })), warnings };
+}
+
+/** At most one section per this many chosen pages (but small selections may keep up to MIN_SECTIONS). */
+export const SECTION_PAGES = 4, MIN_SECTIONS = 3;
+function mergeTitles(a: string, b: string) {
+  const parts = [...new Set([...a.split(" · "), ...b.split(" · ")])];
+  return parts.length > 3 ? `${parts[0]} 외 ${parts.length - 1}` : parts.join(" · ");
 }
 
 /** Where `needle` starts in `text`, ignoring spacing and case; -1 when absent. */
@@ -122,10 +144,15 @@ export function checkDesign(reply: z.infer<typeof designReply>, section: Section
     const unknown = draft.itemNumbers.filter((n) => !byNumber.has(n));
     const evidence = draft.itemNumbers.map((n) => byNumber.get(n)).filter((item): item is ClassItem => Boolean(item));
     const targets = evidence.filter((item) => !materialKinds.includes(item.kind));
+    // Course administration (objectives lists, class procedure, grading) is never studied: drop without asking again.
+    if (!unknown.length && evidence.length && evidence.every((item) => item.kind === "학습 지시")) {
+      warnings.push({ severity: "warning", code: "course-admin-dropped", message: `강의 안내를 외우는 목표라 뺐어요: ${draft.statement.slice(0, 60)}` });
+      return;
+    }
     if (unknown.length || !targets.length) {
       problems.push({ index, message: unknown.length
         ? `${index + 1}번 목표가 없는 항목 번호 ${unknown.join(", ")}를 가리킵니다.`
-        : `${index + 1}번 목표의 근거가 예시·연습문제·부가 정보뿐입니다. 핵심 지식·패턴·설명 항목 번호를 근거로 넣거나 목표를 빼세요.` });
+        : `${index + 1}번 목표의 근거가 예시·연습문제·부가 정보·학습 지시뿐입니다. 핵심 지식·패턴·설명 항목 번호를 근거로 넣거나 목표를 빼세요.` });
       return;
     }
     const key = loose(draft.recall);

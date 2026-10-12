@@ -287,7 +287,9 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
     extra: { images?: ModelRequest["images"]; page?: number } = {}) => {
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
-    if (step !== "transcribe" && callsThisStart >= MAX_CALLS_PER_START) throw new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${MAX_CALLS_PER_START})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
+    // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
+    const cap = Math.max(MAX_CALLS_PER_START, state.sections.length * 4 + 10);
+    if (step !== "transcribe" && callsThisStart >= cap) throw new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${cap})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
     if (input.provider === "fake" && process.env.NODE_ENV === "production") throw new Stop("failed", "가짜 모델은 개발 환경에서만 쓸 수 있어요.");
     if (step !== "transcribe") callsThisStart += 1;
     state.calls += 1;
@@ -343,6 +345,16 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     // ⓪ pages read from their image (readImages), once per page, several at a time. A failed page keeps its text layer.
     if (input.readImages) {
       const images = (state.images ??= { pages: input.pageNumbers.filter((page) => needsImage(loaded.get(page) ?? "")), done: [], failed: [] });
+      await saveState(state);
+      // Readings of the same PDF from earlier runs are reused (a restart or another purpose does not read again).
+      for (const other of await listGens()) {
+        if (other.id === id || other.input.sourceId !== input.sourceId || !other.images?.done.length) continue;
+        for (const page of other.images.done) {
+          if (!images.pages.includes(page) || images.done.includes(page)) continue;
+          try { await saveJson(transcriptFile(id, page), JSON.parse(await readFile(transcriptFile(other.id, page), "utf8"))); images.done.push(page); }
+          catch { /* that run's file is gone: read it again */ }
+        }
+      }
       await saveState(state);
       const todo = images.pages.filter((page) => !images.done.includes(page) && !images.failed.includes(page));
       for (let start = 0; start < todo.length; start += PARALLEL) {

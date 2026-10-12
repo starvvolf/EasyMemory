@@ -12,8 +12,9 @@ export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 �
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
 export type ItemKind = (typeof itemKinds)[number];
-/** Kinds that are material for problems (situations, numbers), never a learning target on their own. */
-export const materialKinds: readonly ItemKind[] = ["예시", "연습문제", "부가 정보"];
+/** Kinds that are never a learning target on their own: material for problems (situations, numbers), or course
+ * administration (학습 지시: objectives lists, class procedure, grading — 리허설 2026-10-12 s5·s6·s8). */
+export const materialKinds: readonly ItemKind[] = ["예시", "연습문제", "부가 정보", "학습 지시"];
 
 export const objectiveKinds = ["용어", "사실", "개념", "관계", "절차", "공식", "패턴"] as const;
 export type ObjectiveKind = (typeof objectiveKinds)[number];

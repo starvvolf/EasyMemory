@@ -95,6 +95,7 @@ export default function DejipgiStudy() {
     const genStatus = async (id: string): Promise<DejipgiMaterialStatus> => {
       const { gen, label } = await genState(id);
       const done = gen.sections.filter((section) => section.author).length;
+      const calls = gen.calls ? ` · 호출 ${gen.calls}번` : "";
       if (gen.status === "awaiting-confirm") {
         const objectives = gen.sections.flatMap((section) => (section.design?.objectives ?? []).map((objective) => ({
           id: objective.id, section: section.title, statement: objective.statement, recall: objective.recall, importance: objective.importance })));
@@ -109,10 +110,10 @@ export default function DejipgiStudy() {
         const questions = gen.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0);
         return questions ? { status: "ready", message: "", artifactId: id } : { status: "failed", message: gen.message || "만들어진 문제가 없어요." };
       }
-      if (gen.current?.step === "transcribe" && gen.images) return { status: "running", message: `그림·수식 쪽 읽는 중 · ${gen.images.done.length}/${gen.images.pages.length}쪽` };
-      if (gen.phase === "author") return { ...partial, status: "authoring", message: `문제 만드는 중 · 목차 ${done}/${gen.sections.length}${label ? ` · ${label}` : ""}` };
+      if (gen.current?.step === "transcribe" && gen.images) return { status: "running", message: `그림·수식 쪽 읽는 중 · ${gen.images.done.length}/${gen.images.pages.length}쪽${calls}` };
+      if (gen.phase === "author") return { ...partial, status: "authoring", message: `문제 만드는 중 · 목차 ${done}/${gen.sections.length}${label ? ` · ${label}` : ""}${calls}` };
       const where = gen.phase === "outline" ? "목차 나누는 중" : `자료 파악·학습 설계 중${gen.sections.length ? ` · 목차 ${gen.sections.length}개` : ""}`;
-      return { status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}` };
+      return { status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}${calls}` };
     };
     const loadGenDecks = async () => {
       const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");

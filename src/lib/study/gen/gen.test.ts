@@ -383,3 +383,38 @@ test("신고한 문제 다시 만들기: 그 목표만 출제하고, 이전 문�
   assert.match(deck.meta.title, /다시 만든 문제$/);
   assert.equal(deck.document.questions.length, 1);
 }));
+
+test("쪽마다 잘린 목차는 코드가 공부 단위(4쪽에 1개 이하)로 묶는다", () => {
+  const pages = Array.from({ length: 52 }, (_, index) => index + 1);
+  const result = normalizeOutline({ sections: pages.map((page) => ({ title: `슬라이드 ${page}`, pageStart: page, pageEnd: page })) }, pages);
+  assert.equal(result.sections.length, 13);
+  assert.deepEqual(result.sections.flatMap((section) => section.pages), pages, "every page once, in order");
+  assert.deepEqual(result.sections.map((section) => section.id), result.sections.map((_, index) => `s${index + 1}`));
+  assert.ok(result.warnings.some((warning) => warning.code === "outline-merged"));
+  assert.match(result.sections[0].title, /슬라이드 1/);
+  // Small selections keep their sections.
+  assert.equal(normalizeOutline({ sections: [{ title: "A", pageStart: 1, pageEnd: 1 }, { title: "B", pageStart: 2, pageEnd: 2 }] }, [1, 2]).sections.length, 2);
+});
+
+test("강의 안내(학습목표 목록·수업 순서·평가 비율)만 근거인 목표는 다시 묻지 않고 뺀다", async () => {
+  const { checkDesign } = await import("./checks.ts");
+  const section = { id: "s1", title: "안내", pages: [5] };
+  const items = [{ n: 1, kind: "학습 지시" as const, content: "성적 반영: 시험 70%", quote: "시험(지필고사): 70%", page: 5 },
+    { n: 2, kind: "핵심 지식" as const, content: "기업윤리의 정의", quote: "기업윤리란", page: 5 }];
+  const draft = (itemNumbers: number[], recall: string) => ({ statement: `${recall}를 말할 수 있다`, cue: "?", recall, kind: "사실" as const, importance: "core" as const, itemNumbers, materialNumbers: [] });
+  const checked = checkDesign({ objectives: [draft([1], "시험 70%"), draft([2], "기업윤리의 정의")] }, section, items);
+  assert.equal(checked.objectives.length, 1);
+  assert.equal(checked.problems.length, 0);
+  assert.ok(checked.warnings.some((warning) => warning.code === "course-admin-dropped"));
+});
+
+test("같은 PDF를 다시 만들면 앞 실행의 그림 쪽 읽기를 그대로 쓴다", () => withData(async () => {
+  const pageImages = async (_input: unknown, wanted: number[]) => new Map(wanted.map((page) => [page, "data:image/jpeg;base64,AAAA"]));
+  const first = await createGen({ ...base, purpose: "core", autoConfirm: true, readImages: true });
+  await runGen(first.id, caller, { pages, pageImages });
+  const second = await createGen({ ...base, purpose: "understand", autoConfirm: true, readImages: true });
+  const done = await runGen(second.id, caller, { pages, pageImages });
+  assert.equal(done.status, "done", done.message);
+  assert.deepEqual(done.images?.done.sort(), [1, 2]);
+  assert.ok(!(await steps(second.id)).some((step) => step.startsWith("transcribe")));
+}));
