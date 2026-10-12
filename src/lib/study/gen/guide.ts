@@ -16,7 +16,8 @@ export type LoadedGuide = { dir: string; files: string[]; version: string; text:
 const root = () => process.env.STUDY_FORGE_GUIDE_ROOT?.trim() || process.cwd();
 
 async function read(dir: string, file: string) {
-  try { return await readFile(path.join(root(), dir, ...file.split("/")), "utf8"); }
+  // The folder is read at run time (and may be a candidate copy), so the bundler must not trace this path.
+  try { return await readFile(/* turbopackIgnore: true */ path.join(root(), dir, ...file.split("/")), "utf8"); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error(`출제기준 파일이 없습니다: ${dir}/${file}`);
     throw error;

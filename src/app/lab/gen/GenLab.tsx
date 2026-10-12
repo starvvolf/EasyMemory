@@ -164,8 +164,15 @@ function RunView({ id, onChange, onError }: { id: string; onChange: () => void; 
   const [call, setCall] = useState<GenCall | null>(null);
 
   const load = useCallback(async () => {
-    try { setDetail(await api<Detail>(`/api/lab/gen/${id}`)); } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
-  }, [id, onError]);
+    try {
+      const next = await api<Detail>(`/api/lab/gen/${id}`);
+      // When the run stops (done, paused, waiting for confirmation), refresh the list too so both sides agree.
+      setDetail((previous) => {
+        if (previous && previous.gen.status !== next.gen.status) setTimeout(onChange, 0);
+        return next;
+      });
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  }, [id, onChange, onError]);
   // The parent keys this view by run id, so switching runs starts from fresh state.
   useEffect(() => { const initial = setTimeout(() => { void load(); }, 0); return () => clearTimeout(initial); }, [load]);
   const status = detail?.gen.status;
