@@ -7,7 +7,7 @@ import path from "node:path";
 import { z } from "zod";
 import { callModel, ModelError, type ModelCaller, type ModelRequest } from "../../ai/model.ts";
 import { redactCallText } from "../lab-contract.ts";
-import { checkClassify, checkDesign, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
+import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
@@ -196,7 +196,8 @@ export async function registeredPages(input: GenInput) {
     import("../../mcp-source-registry.ts"), import("../../../../tools/study-forge-mcp/source-evidence.ts")]);
   const bytes = await readRegisteredMcpSourcePdf(input.sourceId);
   if (!bytes) throw new Stop("failed", "등록된 원본 PDF를 읽을 수 없어요.");
-  return extractPdfPageTexts(bytes, input.pageNumbers);
+  const texts = await extractPdfPageTexts(bytes, input.pageNumbers);
+  return new Map([...texts].map(([page, text]) => [page, cleanPageText(text)]));
 }
 
 /** Runs a job after whatever is queued (generation or judging), so model calls of two jobs never overlap. */

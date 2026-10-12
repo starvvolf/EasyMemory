@@ -19,7 +19,8 @@ export function responseFailure(status: number, body: ApiError): ModelError {
 
 /** Structured output asks for a JSON Schema; `fallback` is the plain JSON mode used when the plan route refuses it. */
 type ResponseBody = {
-  model: string; instructions: string; input: Array<{ role: string; content: string }>; store: boolean; stream: boolean;
+  model: string; instructions: string; store: boolean; stream: boolean;
+  input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail: "high" }> }>;
   reasoning?: { effort: string }; text?: { format: { type: string } & Record<string, unknown> };
 };
 export function responseRequest(request: ModelRequest, format: "schema" | "fallback" = "schema"): ResponseBody {
@@ -30,7 +31,11 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
   return {
     model: request.model ?? "gpt-6-sol",
     instructions,
-    input: [{ role: "user", content: request.user }],
+    // With page images the user turn becomes text plus one labelled image per page.
+    input: [{ role: "user", content: request.images?.length
+      ? [{ type: "input_text" as const, text: request.user }, ...request.images.flatMap((image) => [
+          { type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: "high" as const }])]
+      : request.user }],
     store: false,
     stream: true,
     ...(request.effort ? { reasoning: { effort: request.effort } } : {}),

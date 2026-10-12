@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { ModelError } from "../../ai/model.ts";
 import { validateDocument, type AuthoringDocument } from "../../../../tools/problem-authoring-lab/contract.ts";
-import { checkClassify, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
+import { checkClassify, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
 import { confirmObjectives, createGen, enqueueGen, forkGen, loadGen, readGenCalls, readSectionDocument, runGen, type RunOptions } from "./runner.ts";
 import { authorSchema, classifySchema, designSchema, outlineSchema } from "./schemas.ts";
@@ -317,3 +317,8 @@ test("앞 단계 고정 재실행: 목차·분류(출제만이면 목표까지)�
   await assert.rejects(forkGen(waiting.id, { from: "design" }), /내용 분류가 끝나지/);
   await assert.rejects(forkGen(first.id, { from: "outline" }));
 }));
+
+test("PDF 글자 층의 깨진 하이픈(㎿)을 하이픈으로 고친다", () => {
+  assert.equal(cleanPageText("Composite Two㎿Dimensional Rotations"), "Composite Two-Dimensional Rotations");
+  assert.equal(cleanPageText("An   𝑥 ㎿direction shear"), "An   𝑥-direction shear");
+});

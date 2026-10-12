@@ -155,3 +155,14 @@ test("형식 거부면 한 번만 JSON 모드로 다시 보내고 이후 호출�
   assert.equal(isFormatRejection(429, { error: { code: "subscription_sharing_usage_limit_exceeded" } }), false);
   resetSchemaSupport();
 });
+
+test("쪽 이미지가 있으면 사용자 입력을 글 + 이름 붙은 이미지로 보낸다", () => {
+  const caller = { uid: "u" };
+  const plain = responseRequest({ purpose: "p", system: "s", user: "질문", caller });
+  assert.equal(plain.input[0].content, "질문");
+  const withImage = responseRequest({ purpose: "p", system: "s", user: "질문", caller, images: [{ label: "p.3", dataUrl: "data:image/jpeg;base64,AAAA" }] });
+  assert.deepEqual(withImage.input[0].content, [
+    { type: "input_text", text: "질문" }, { type: "input_text", text: "[이미지] p.3" },
+    { type: "input_image", image_url: "data:image/jpeg;base64,AAAA", detail: "high" },
+  ]);
+});

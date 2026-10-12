@@ -6,6 +6,7 @@ import test from "node:test";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { codeGrade, keyText, learnerView, mutate, startJudge, verdictOf, type JudgeCall } from "./judge.ts";
 import { createGen, runGen } from "./runner.ts";
+import { genFakeReply } from "./fake.ts";
 import { scorecard, wordyShort } from "./scorecard.ts";
 
 const choice: AuthoredQuestion = {
@@ -38,8 +39,9 @@ test("판정 규칙: 조건·정답 오류는 실패, 노출·모호·목표 불
   assert.equal(verdictOf({ ...base, checks: ok }).verdict, "통과");
   assert.equal(verdictOf({ ...base, checks: { ...ok, conditionMatch: false } }).verdict, "실패");
   assert.equal(verdictOf({ ...base, checks: ok, readers: [{ answer: "", grade: "wrong" }, { answer: "", grade: "wrong" }] }).verdict, "실패");
-  assert.equal(verdictOf({ ...base, checks: ok, blind: { answer: "x", confidence: 0.9, grade: "correct" } }).verdict, "의심");
-  assert.equal(verdictOf({ ...base, checks: ok, blind: { answer: "x", confidence: 0.3, grade: "correct" } }).verdict, "통과", "a low-confidence guess is not exposure");
+  assert.equal(verdictOf({ ...base, checks: ok, blind: { answer: "x", confidence: 0.9, grade: "correct" } }).verdict, "통과", "solving without studying is not exposure by itself");
+  assert.equal(verdictOf({ ...base, checks: { ...ok, answerVisible: true } }).verdict, "의심");
+  assert.match(verdictOf({ ...base, checks: ok, acceptedGaps: ["불리언 배열"] }).reasons.join(), /인정 답안에 없음/);
   assert.match(verdictOf({ ...base, checks: ok, readers: [{ answer: "", grade: "correct" }, { answer: "", grade: "partial" }] }).reasons.join(), /모호/);
 });
 
@@ -76,7 +78,7 @@ test("평가 실행: 목차마다 맨손 1·원문 3·전문가 1번 부르고, 
     if (role === "blind") return JSON.stringify({ answers: labels.map((questionId) => ({ questionId, answer: "추측", confidence: 0.9 })) });
     if (role === "reader") return JSON.stringify({ answers: labels.map((questionId) => ({ questionId, answer: "원문대로", confidence: 1 })) });
     const page2 = user.includes("boolean array");
-    return JSON.stringify({ questions: labels.map((questionId) => ({ questionId, blindGrade: page2 ? "wrong" : "correct", readerGrades: ["correct", "correct", "correct"],
+    return JSON.stringify({ questions: labels.map((questionId) => ({ questionId, answerVisible: !page2, blindGrade: page2 ? "wrong" : "correct", readerGrades: ["correct", "correct", "correct"],
       conditionMatch: !page2, answerCorrect: true, answerUnique: true, objectiveMatch: true, distractorsPlausible: null, depth: "되풀이", problems: page2 ? "조건이 바뀜" : "" })) });
   };
   const { finished } = await startJudge(gen.id, { kind: "judge" }, caller, { pages: async () => PAGES, fakeReply });
@@ -85,6 +87,7 @@ test("평가 실행: 목차마다 맨손 1·원문 3·전문가 1번 부르고, 
   assert.deepEqual(roles, ["blind", "reader", "reader", "reader", "expert", "blind", "reader", "reader", "reader", "expert"]);
   assert.deepEqual(run.results.map((result) => result.verdict), ["의심", "실패"]);
   assert.equal(run.summary!.exposed, 1);
+  assert.equal(run.summary!.blindSolved, 1);
   assert.equal(run.summary!.conditionMismatch, 1);
   const score = scorecard(done, [], new Map(), run);
   assert.equal(score.judge?.summary?.fail, 1);
@@ -101,7 +104,7 @@ test("판정단 시험: 통과한 문제에 결함을 심고 검출률과 오탐
     return JSON.stringify({ questions: blocks.map((block) => {
       const recall = /떠올릴 것: (.+)/.exec(block)?.[1]?.trim();
       const key = /정답: 모범 답: (.+)/.exec(block)?.[1]?.trim();
-      return { questionId: block.split("\n")[0], blindGrade: block.includes("(참고:") ? "correct" : "wrong", readerGrades: ["correct", "correct", "correct"],
+      return { questionId: block.split("\n")[0], answerVisible: block.includes("(참고:"), blindGrade: block.includes("(참고:") ? "correct" : "wrong", readerGrades: ["correct", "correct", "correct"],
         conditionMatch: true, answerCorrect: !key || key === recall, answerUnique: true, objectiveMatch: true, distractorsPlausible: null, depth: "이해", problems: "" };
     }) });
   };
@@ -126,3 +129,33 @@ test("낱말로 된 단답은 플래시카드 후보로 의심하고, 값·기�
   for (const answer of ["boolean 배열", "불리언 배열", "BFS", "HashSet"]) assert.equal(wordyShort(answer), true, answer);
   for (const answer of ["12", "x′ = x + 3", "R⁻¹", "u → a → c", "A, B, C", ""]) assert.equal(wordyShort(answer), false, answer);
 });
+
+test("단답에서 코드는 오답인데 전문가가 뜻으로 맞다고 하면 인정 답안 누락으로 세고, 정답 오류로 떨어뜨리지 않는다", () => withData(async () => {
+  const caller = { uid: "local-experiment" };
+  const gen = await createGen({ sourceId: "src", fileName: "bfs.pdf", pageNumbers: [1, 2], provider: "fake", purpose: "core", autoConfirm: true });
+  // Author short answers instead of the fake's self-checks.
+  const asShort = (step: Parameters<typeof genFakeReply>[0], user: string) => {
+    const reply = genFakeReply(step, user);
+    if (step !== "author") return reply;
+    const parsed = JSON.parse(reply) as { questions: Array<{ answer: Record<string, unknown> }> };
+    for (const question of parsed.questions) Object.assign(question.answer, { kind: "short", accepted: ["boolean array"], before: "자료구조:" });
+    return JSON.stringify(parsed);
+  };
+  const done = await runGen(gen.id, caller, { pages: async () => PAGES, fakeReply: asShort });
+  assert.equal(done.status, "done", done.message);
+  const fakeReply = (role: JudgeCall["role"], user: string) => {
+    const labels = [...user.matchAll(/^### (Q\d+)$/gm)].map((match) => match[1]);
+    if (role !== "expert") return JSON.stringify({ answers: labels.map((questionId) => ({ questionId, answer: "불리언 배열", confidence: 0.2 })) });
+    return JSON.stringify({ questions: labels.map((questionId) => ({ questionId, answerVisible: false, blindGrade: "wrong", readerGrades: ["correct", "correct", "correct"],
+      conditionMatch: true, answerCorrect: true, answerUnique: true, objectiveMatch: true, distractorsPlausible: null, depth: "이해", problems: "" })) });
+  };
+  const run = await (await startJudge(gen.id, { kind: "judge" }, caller, { pages: async () => PAGES, fakeReply })).finished;
+  const shorts = run.results.filter((result) => result.acceptedGaps);
+  for (const result of shorts) {
+    assert.equal(result.verdict, "의심");
+    assert.ok(result.readers.every((reader) => reader.grade === "correct"));
+    assert.ok(!result.reasons.some((reason) => reason.includes("모두 틀림")));
+  }
+  assert.ok(shorts.length > 0);
+  assert.equal(run.summary!.acceptedGap, shorts.length);
+}));

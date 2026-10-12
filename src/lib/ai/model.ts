@@ -19,6 +19,8 @@ export type ModelRequest = {
   provider?: "chatgpt" | "codex" | "fake";
   fakeReply?: string;
   signal?: AbortSignal;
+  /** Page images sent with the user text (data URLs). Only the ChatGPT route sends them; others refuse. */
+  images?: Array<{ label: string; dataUrl: string }>;
 };
 
 export type ModelResult = {
@@ -143,7 +145,9 @@ export function parseJsonReply(text: string): unknown {
 
 export async function callModel(request: ModelRequest): Promise<ModelResult> {
   if (request.signal?.aborted) throw new ModelError("transient", "호출을 멈췄어요.");
-  const reply = await modelBackend(request.provider).call(request);
+  const backend = modelBackend(request.provider);
+  if (request.images?.length && backend.name === "codex") throw new ModelError("not_configured", "로컬 Codex 경로는 이미지 입력을 지원하지 않아요.");
+  const reply = await backend.call(request);
   if (!request.json && !request.schema) return reply;
   try { return { ...reply, data: parseJsonReply(reply.text) }; }
   catch (error) {

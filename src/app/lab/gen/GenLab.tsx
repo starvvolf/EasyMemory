@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { GenCall, GenState, GenStep, Purpose } from "@/lib/study/gen/types";
 import type { Scorecard } from "@/lib/study/gen/scorecard";
 import type { JudgeRun } from "@/lib/study/gen/judge";
+import type { VisionProbe } from "@/lib/study/gen/vision";
 import { defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
 import "./gen.css";
 
@@ -63,6 +64,7 @@ export default function GenLab() {
       <div className="gen-layout">
         <aside>
           <NewRun sources={sources} onSources={loadLists} onStarted={(id) => { setOpenId(id); void loadLists(); }} onError={setError} />
+          <VisionPanel sources={sources} onError={setError} />
           <h2>실행</h2>
           <ul className="gen-runs">
             {runs.map((run) => (
@@ -156,6 +158,63 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
       <p className="muted">쪽 {pages.length}개 · 예상 호출: 목차 1 + 목차 수 × {purpose === "read" ? "1" : "3"} (+재시도)</p>
       <button className="primary" disabled={busy || !source || !pages.length || (provider === "chatgpt" && !confirmed)}>{busy ? "시작하는 중…" : "시작"}</button>
     </form>
+  );
+}
+
+/** Image reading probe: one page, one call. Shows the page, the PDF text layer and what the model read side by side. */
+function VisionPanel({ sources, onError }: { sources: Source[]; onError: (message: string) => void }) {
+  const [sourceId, setSourceId] = useState("");
+  const [page, setPage] = useState(1);
+  const [model, setModel] = useState({ model: "gpt-6-sol", effort: "medium" });
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [probes, setProbes] = useState<VisionProbe[]>([]);
+  const [shown, setShown] = useState<(VisionProbe & { image?: string }) | null>(null);
+  const source = sources.find((candidate) => candidate.id === sourceId) ?? sources[0];
+  const loadList = useCallback(async () => {
+    try { setProbes((await api<{ probes: VisionProbe[] }>("/api/lab/gen/vision")).probes); } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  }, [onError]);
+  useEffect(() => { const initial = setTimeout(() => { void loadList(); }, 0); return () => clearTimeout(initial); }, [loadList]);
+  const run = async () => {
+    if (!source) return;
+    setBusy(true); onError("");
+    try {
+      const { probe } = await api<{ probe: VisionProbe & { image: string } }>("/api/lab/gen/vision", "POST", { sourceId: source.id, page, ...model, confirmed });
+      setShown(probe); setConfirmed(false); void loadList();
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+  const open = async (probe: VisionProbe) => {
+    try { setShown({ ...probe, image: (await api<{ image: string }>(`/api/lab/gen/vision/${probe.id}/image`)).image }); } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  return (
+    <details className="gen-new vision">
+      <summary><b>이미지 읽기 시험</b> <small className="muted">쪽 하나를 그려서 모델이 읽게 함(호출 1번)</small></summary>
+      <label>자료<select value={source?.id ?? ""} onChange={(event) => setSourceId(event.target.value)}>
+        {sources.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.fileName} ({candidate.pageCount}쪽)</option>)}</select></label>
+      <div className="row">
+        <label>쪽<input type="number" min={1} max={source?.pageCount} value={page} onChange={(event) => setPage(Number(event.target.value))} /></label>
+        <label>모델<select value={model.model} onChange={(event) => setModel({ ...model, model: event.target.value })}>{MODELS.map((m) => <option key={m}>{m}</option>)}</select></label>
+        <label>강도<select value={model.effort} onChange={(event) => setModel({ ...model, effort: event.target.value })}>{EFFORTS.map((e) => <option key={e}>{e}</option>)}</select></label>
+      </div>
+      <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다</label>
+      <button className="primary" disabled={busy || !source || !confirmed} onClick={() => void run()}>{busy ? "읽는 중…" : "이 쪽 읽기"}</button>
+      {probes.length > 0 && <ul className="gen-runs">{probes.slice(0, 8).map((probe) => (
+        <li key={probe.id}><button className={shown?.id === probe.id ? "on" : ""} onClick={() => void open(probe)}>
+          <span className={`tag ${probe.ok ? "ok" : "bad"}`}>{probe.ok ? "읽음" : "실패"}</span>
+          <small>{probe.fileName} p.{probe.page} · {probe.model}·{probe.effort} · {seconds(probe.ms)}</small></button></li>))}</ul>}
+      {shown && (
+        <div className="vision-result">
+          {/* A data URL from the probe; next/image adds nothing here. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {shown.image && <img src={shown.image} alt={`${shown.fileName} ${shown.page}쪽`} />}
+          {shown.error && <p className="gen-error">{shown.error}</p>}
+          <p className="muted">토큰 입력 {shown.usage?.inputTokens?.toLocaleString() ?? "—"} / 출력 {shown.usage?.outputTokens?.toLocaleString() ?? "—"} · 이미지 {Math.round(shown.imageBytes / 1024)}KB</p>
+          <h4>PDF 글자 층</h4><pre>{shown.textLayer || "(없음)"}</pre>
+          <h4>모델이 읽은 것</h4><pre>{shown.reply ?? "—"}</pre>
+        </div>
+      )}
+    </details>
   );
 }
 
@@ -333,10 +392,11 @@ function ScorePanel({ id, status, real, runs, onError }: { id: string; status: s
     ["의심 신호", (s) => `${s.suspects.length}`],
     ["경고", (s) => kinds(s.warnings)],
     ["판정 통과/의심/실패", (s) => s.judge?.summary ? `${s.judge.summary.pass} / ${s.judge.summary.suspect} / ${s.judge.summary.fail}` : "—"],
-    ["판정: 노출·모호·정답오류", (s) => s.judge?.summary ? `${s.judge.summary.exposed} · ${s.judge.summary.ambiguous} · ${s.judge.summary.answerWrong}` : "—"],
+    ["판정: 노출·모호·정답오류·인정답안누락", (s) => s.judge?.summary ? `${s.judge.summary.exposed} · ${s.judge.summary.ambiguous} · ${s.judge.summary.answerWrong} · ${s.judge.summary.acceptedGap ?? "—"}` : "—"],
+    ["판정: 맨손 정답(참고)", (s) => s.judge?.summary?.blindSolved !== undefined ? `${s.judge.summary.blindSolved}` : "—"],
     ["판정: 조건불일치·목표불일치·다른답·티나는오답", (s) => s.judge?.summary ? `${s.judge.summary.conditionMismatch} · ${s.judge.summary.objectiveMismatch} · ${s.judge.summary.nonUnique} · ${s.judge.summary.weakDistractors}` : "—"],
     ["판정: 깊이", (s) => s.judge?.summary ? kinds(s.judge.summary.depth) : "—"],
-    ["판정단 시험: 검출 · 오탐", (s) => s.judge?.trial ? `${s.judge.trial.caught}/${s.judge.trial.planted} · ${s.judge.trial.falseAlarms}/${s.judge.trial.originals}` : "—"],
+    ["판정단 시험: 검출 · 원본 비통과", (s) => s.judge?.trial ? `${s.judge.trial.caught}/${s.judge.trial.planted} · ${s.judge.trial.falseAlarms}/${s.judge.trial.originals}` : "—"],
     ["호출 · 실패 · 재시도", (s) => `${s.calls.total} · ${s.calls.failed} · ${s.calls.retries}`],
     ["모델 작업 시간", (s) => seconds(s.calls.elapsedMs)],
     ["토큰 입력/출력", (s) => `${s.calls.inputTokens.toLocaleString()} / ${s.calls.outputTokens.toLocaleString()}`],
@@ -451,7 +511,7 @@ function JudgePanel({ id, real, onDone, onError }: { id: string; real: boolean; 
       {detail && (
         <>
           <p className="muted">최근 {detail.kind === "trial" ? "판정단 시험" : "평가"} · {STATUS[detail.status] ?? detail.status} · 호출 {detail.calls}번{detail.message ? ` · ${detail.message}` : ""}</p>
-          {detail.trial && <p>심은 결함 {detail.trial.planted}개 중 {detail.trial.caught}개 검출 ({Object.entries(detail.trial.byKind).map(([kind, v]) => `${kind} ${v.caught}/${v.planted}`).join(", ")}) · 원본 오탐 {detail.trial.falseAlarms}/{detail.trial.originals}</p>}
+          {detail.trial && <p>심은 결함 {detail.trial.planted}개 중 {detail.trial.caught}개 검출 ({Object.entries(detail.trial.byKind).map(([kind, v]) => `${kind} ${v.caught}/${v.planted}`).join(", ")}) · 원본 비통과 {detail.trial.falseAlarms}/{detail.trial.originals}(실제 결함 포함, 오탐률 아님)</p>}
           <ul className="verdicts">{shown.map((result) => (
             <li key={result.questionId}>
               <span className={`tag ${VERDICT_TONE[result.verdict]}`}>{result.verdict}</span> {result.questionId}{result.mutation ? ` (심은 결함: ${result.mutation})` : ""}

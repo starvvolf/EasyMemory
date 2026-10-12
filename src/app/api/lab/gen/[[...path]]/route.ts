@@ -6,6 +6,7 @@ import { boundedJson, requireLocalRequest, responseError } from "../../../mcp-ex
 import { confirmObjectives, createGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, stepLabel } from "@/lib/study/gen/runner";
 import { scorecard } from "@/lib/study/gen/scorecard";
 import { listJudges, loadJudge, readJudgeCalls, startJudge } from "@/lib/study/gen/judge";
+import { listVisionProbes, readVisionImage, runVisionProbe } from "@/lib/study/gen/vision";
 import { renderInteractiveDocument } from "../../../../../../tools/problem-authoring-lab/renderer";
 import type { AuthoringDocument } from "../../../../../../tools/problem-authoring-lab/contract";
 
@@ -24,6 +25,12 @@ async function handle(request: Request, context: Context) {
     if (!p.length && method === "GET") {
       result = { runs: (await listGens()).map((gen) => ({ id: gen.id, createdAt: gen.createdAt, status: gen.status, phase: gen.phase, fileName: gen.input.fileName,
         pages: gen.input.pageNumbers, purpose: gen.input.purpose, provider: gen.input.provider, calls: gen.calls, forkOf: gen.forkOf ?? null })) };
+    } else if (p[0] === "vision") {
+      // Image reading probe: render one page, ask the model to read it, compare with the text layer.
+      if (p.length === 1 && method === "GET") result = { probes: await listVisionProbes() };
+      else if (p.length === 1 && method === "POST") result = { probe: await runVisionProbe(await boundedJson(request), caller) };
+      else if (p.length === 3 && p[2] === "image" && method === "GET") result = { image: await readVisionImage(p[1]) };
+      else throw new ExperimentRequestError(404, "경로를 찾을 수 없습니다.");
     } else if (!p.length && method === "POST") {
       const body = z.object({ confirmed: z.boolean().optional() }).passthrough().parse(await boundedJson(request));
       const { confirmed, ...input } = body;

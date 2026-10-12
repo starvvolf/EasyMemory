@@ -20,16 +20,18 @@ export type Verdict = "통과" | "의심" | "실패";
 export type MutationKind = "leak" | "wrong-key" | "condition-swap";
 export const mutationLabel: Record<MutationKind, string> = { leak: "정답 노출", "wrong-key": "정답 바꾸기", "condition-swap": "조건 바꾸기" };
 
-export type Checks = { conditionMatch: boolean; answerCorrect: boolean; answerUnique: boolean; objectiveMatch: boolean; distractorsPlausible: boolean | null; depth: "되풀이" | "이해" | "적용" };
+export type Checks = { answerVisible?: boolean; conditionMatch: boolean; answerCorrect: boolean; answerUnique: boolean; objectiveMatch: boolean; distractorsPlausible: boolean | null; depth: "되풀이" | "이해" | "적용" };
 export type QuestionJudgement = {
   questionId: string; objectiveId: string; sectionId: string; mutation?: MutationKind;
   blind: { answer: string; confidence: number; grade: Grade };
   readers: Array<{ answer: string; grade: Grade }>;
+  /** Answers the expert graded correct by meaning but code grading marked wrong: the accepted answers miss a spelling. */
+  acceptedGaps?: string[];
   checks: Checks; problems: string; verdict: Verdict; reasons: string[];
 };
 export type JudgeSummary = {
   questions: number; pass: number; suspect: number; fail: number;
-  exposed: number; ambiguous: number; answerWrong: number; conditionMismatch: number; nonUnique: number; objectiveMismatch: number; weakDistractors: number;
+  exposed: number; blindSolved: number; acceptedGap: number; ambiguous: number; answerWrong: number; conditionMismatch: number; nonUnique: number; objectiveMismatch: number; weakDistractors: number;
   depth: Record<string, number>;
 };
 export type JudgeRun = {
@@ -37,10 +39,13 @@ export type JudgeRun = {
   status: "queued" | "running" | "done" | "failed" | "paused-usage-limit" | "paused-login";
   message: string; models: { solver: ModelChoice; expert: ModelChoice }; calls: number;
   results: QuestionJudgement[]; summary?: JudgeSummary;
-  /** Trial runs: the planted flaws and how many the judges caught; originals flagged are false alarms. */
+  /**
+   * Trial runs: the planted flaws and how many the judges caught. `falseAlarms` counts originals that did not pass;
+   * some may be real flaws, so it is shown as "원본 비통과", not as a false-alarm rate.
+   */
   trial?: { planted: number; caught: number; byKind: Record<string, { planted: number; caught: number }>; originals: number; falseAlarms: number };
 };
-export type JudgeCall = { n: number; role: "blind" | "reader" | "expert"; sectionId: string; attempt: number; model: string; effort: string; startedAt: string; ms: number; ok: boolean; system: string; user: string; reply: string | null; error: string | null; usage?: { inputTokens?: number; outputTokens?: number } };
+export type JudgeCall = { n: number; role: "blind" | "reader" | "expert"; sectionId: string; attempt: number; model: string; effort: string; format?: string | null; startedAt: string; ms: number; ok: boolean; system: string; user: string; reply: string | null; error: string | null; usage?: { inputTokens?: number; outputTokens?: number } };
 
 // ---- criteria and schemas -----------------------------------------------------------------------------------
 const root = () => process.env.STUDY_FORGE_GUIDE_ROOT?.trim() || process.cwd();
@@ -55,6 +60,7 @@ const solverReply = z.object({ answers: z.array(z.object({ questionId: z.string(
 const grade = { type: "string", enum: ["correct", "partial", "wrong"] };
 const expertSchema = obj({ questions: { type: "array", items: obj({
   questionId: { type: "string" },
+  answerVisible: { type: "boolean", description: "정답 공개 전 화면(본문·보기·입력칸 문구)에 정답이나 결정적 단서가 보이는가" },
   blindGrade: grade,
   readerGrades: { type: "array", items: grade, description: "원문 학습자 1~3의 순서대로" },
   conditionMatch: { type: "boolean" }, answerCorrect: { type: "boolean" }, answerUnique: { type: "boolean" }, objectiveMatch: { type: "boolean" },
@@ -62,7 +68,7 @@ const expertSchema = obj({ questions: { type: "array", items: obj({
 }) } });
 const gradeEnum = z.enum(["correct", "partial", "wrong"]);
 const expertReply = z.object({ questions: z.array(z.object({
-  questionId: z.string(), blindGrade: gradeEnum, readerGrades: z.array(gradeEnum),
+  questionId: z.string(), answerVisible: z.boolean(), blindGrade: gradeEnum, readerGrades: z.array(gradeEnum),
   conditionMatch: z.boolean(), answerCorrect: z.boolean(), answerUnique: z.boolean(), objectiveMatch: z.boolean(),
   distractorsPlausible: z.boolean().nullable(), depth: z.enum(["되풀이", "이해", "적용"]), problems: z.string(),
 })) });
@@ -116,11 +122,13 @@ export function codeGrade(question: AuthoredQuestion, answer: string): Grade | n
 // ---- verdicts -------------------------------------------------------------------------------------------------
 export function verdictOf(judgement: Omit<QuestionJudgement, "verdict" | "reasons">): { verdict: Verdict; reasons: string[] } {
   const fail: string[] = [], suspect: string[] = [];
-  const { checks, readers, blind } = judgement;
+  const { checks, readers } = judgement;
   if (!checks.answerCorrect) fail.push("정답이 원문과 다름");
   if (!checks.conditionMatch) fail.push("질문의 조건이 원문과 다름");
   if (readers.length && readers.every((reader) => reader.grade === "wrong")) fail.push("원문 읽은 학습자가 모두 틀림");
-  if (blind.grade === "correct" && blind.confidence >= EXPOSED_CONFIDENCE) suspect.push("공부 안 하고도 확신하며 맞힘(노출·찍기)");
+  // A blind learner who knows the subject is not exposure; only an answer or decisive clue on screen is.
+  if (checks.answerVisible) suspect.push("정답이나 결정적 단서가 화면에 보임(노출)");
+  if (judgement.acceptedGaps?.length) suspect.push(`뜻은 맞는데 인정 답안에 없음: ${judgement.acceptedGaps.join(" / ").slice(0, 60)}`);
   if (readers.some((reader) => reader.grade === "correct") && readers.some((reader) => reader.grade !== "correct")) suspect.push("원문 읽은 학습자들의 정오가 갈림(모호)");
   if (!checks.answerUnique) suspect.push("다른 답도 정답이 됨");
   if (!checks.objectiveMatch) suspect.push("목표와 안 맞음");
@@ -136,7 +144,9 @@ export function summarize(results: QuestionJudgement[]): JudgeSummary {
     pass: results.filter((result) => result.verdict === "통과").length,
     suspect: results.filter((result) => result.verdict === "의심").length,
     fail: results.filter((result) => result.verdict === "실패").length,
-    exposed: has("노출"), ambiguous: has("모호"),
+    exposed: has("노출"), ambiguous: has("모호"), acceptedGap: has("인정 답안에 없음"),
+    // Informational: solved confidently without studying (easy, common knowledge, or a clue). Not a verdict reason.
+    blindSolved: results.filter((result) => result.blind.grade === "correct" && result.blind.confidence >= EXPOSED_CONFIDENCE).length,
     answerWrong: results.filter((result) => result.reasons.some((reason) => reason.includes("정답이 원문과 다름") || reason.includes("모두 틀림"))).length,
     conditionMismatch: has("조건이 원문과 다름"), nonUnique: has("다른 답도"), objectiveMismatch: has("목표와 안 맞음"), weakDistractors: has("티 나는 오답"),
     depth,
@@ -243,7 +253,7 @@ async function runJudge(gen: GenState, run: JudgeRun, caller: ModelCaller, optio
       try {
         const reply = await callModel({ purpose: `judge:${role}`, system, user, json: true, schema, schemaName: `recaller_judge_${role}`, model: choice.model, effort: choice.effort, caller, provider: gen.input.provider,
           ...(gen.input.provider === "fake" ? { fakeReply: (options.fakeReply ?? fakeJudgeReply)(role, user, reader) } : {}) });
-        Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, ms: Date.now() - started });
+        Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
         await save(path.join(callsDir, `${record.n}.json`), record);
         const parsed = parser.safeParse(reply.data);
         if (parsed.success) return parsed.data as z.infer<typeof parser>;
@@ -288,13 +298,24 @@ async function runJudge(gen: GenState, run: JudgeRun, caller: ModelCaller, optio
       return [...byLabel].map(([label, question]): QuestionJudgement => {
         const review = expert.questions.find((item) => item.questionId.trim().toUpperCase() === label);
         const blindAnswer = answerOf(blind, label);
+        const gaps: string[] = [];
+        /** Code grade first; when code says wrong but the expert says correct by meaning, keep the expert's and note the gap. */
+        const final = (answer: string, expertGrade: Grade | undefined): Grade => {
+          const coded = codeGrade(question, answer);
+          if (coded === null) return expertGrade ?? "wrong";
+          if (coded === "wrong" && question.responses[0].kind === "short-text" && expertGrade === "correct" && answer.trim()) { gaps.push(answer.trim()); return "correct"; }
+          return coded;
+        };
+        const blindFinal = final(blindAnswer.answer, review?.blindGrade);
+        const readerFinal = readers.map((reply, index) => { const answer = answerOf(reply, label).answer; return { answer, grade: final(answer, review?.readerGrades[index]) }; });
         const base = {
           questionId: question.id, objectiveId: question.source.objectiveId, sectionId: section.id,
           ...(question.id.includes("~") ? { mutation: question.id.split("~")[1] as MutationKind } : {}),
-          blind: { answer: blindAnswer.answer, confidence: Math.max(0, Math.min(1, blindAnswer.confidence)), grade: codeGrade(question, blindAnswer.answer) ?? review?.blindGrade ?? "wrong" },
-          readers: readers.map((reply, index) => { const answer = answerOf(reply, label).answer; return { answer, grade: codeGrade(question, answer) ?? review?.readerGrades[index] ?? "wrong" }; }),
+          blind: { answer: blindAnswer.answer, confidence: Math.max(0, Math.min(1, blindAnswer.confidence)), grade: blindFinal },
+          readers: readerFinal,
+          ...(gaps.length ? { acceptedGaps: [...new Set(gaps)] } : {}),
           // A question the expert skipped is treated as unreviewed: kept, but marked suspect below.
-          checks: review ? { conditionMatch: review.conditionMatch, answerCorrect: review.answerCorrect, answerUnique: review.answerUnique, objectiveMatch: review.objectiveMatch, distractorsPlausible: review.distractorsPlausible, depth: review.depth }
+          checks: review ? { answerVisible: review.answerVisible, conditionMatch: review.conditionMatch, answerCorrect: review.answerCorrect, answerUnique: review.answerUnique, objectiveMatch: review.objectiveMatch, distractorsPlausible: review.distractorsPlausible, depth: review.depth }
             : { conditionMatch: true, answerCorrect: true, answerUnique: true, objectiveMatch: true, distractorsPlausible: null, depth: "되풀이" as const },
           problems: review?.problems ?? "전문가 검토 응답에 이 문항이 없음",
         };
@@ -355,6 +376,6 @@ async function runJudge(gen: GenState, run: JudgeRun, caller: ModelCaller, optio
 export function fakeJudgeReply(role: JudgeCall["role"], user: string): string {
   const labels = [...user.matchAll(/^### (Q\d+)$/gm)].map((match) => match[1]);
   if (role !== "expert") return JSON.stringify({ answers: labels.map((questionId) => ({ questionId, answer: "모름", confidence: 0.1 })) });
-  return JSON.stringify({ questions: labels.map((questionId) => ({ questionId, blindGrade: "wrong", readerGrades: ["correct", "correct", "correct"],
+  return JSON.stringify({ questions: labels.map((questionId) => ({ questionId, answerVisible: false, blindGrade: "wrong", readerGrades: ["correct", "correct", "correct"],
     conditionMatch: true, answerCorrect: true, answerUnique: true, objectiveMatch: true, distractorsPlausible: null, depth: "이해", problems: "" })) });
 }

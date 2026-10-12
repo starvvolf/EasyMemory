@@ -149,3 +149,11 @@ export function checkDesign(reply: z.infer<typeof designReply>, section: Section
   });
   return { objectives, problems, warnings };
 }
+
+/**
+ * Fixes glyphs some slide fonts map wrongly in the PDF text layer, so quotes and terms match what the page shows.
+ * Seen in 컴퓨터 그래픽스 slides: the hyphen comes out as ㎿ (U+33BF), e.g. "Two㎿Dimensional".
+ */
+export function cleanPageText(text: string) {
+  return text.replace(/(?<=[\p{L}\p{N}])\s*\u33BF\s*(?=[\p{L}\p{N}])/gu, "-").replace(/\u33BF/g, "-");
+}

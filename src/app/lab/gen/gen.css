@@ -54,3 +54,7 @@
 .judge .row { display: flex; gap: 8px; align-items: center; }
 .verdicts { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
 .verdicts small { color: var(--muted); }
+.vision summary { cursor: pointer; }
+.vision-result { display: grid; gap: 6px; }
+.vision-result img { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.vision-result pre { white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 6px; margin: 0; }
