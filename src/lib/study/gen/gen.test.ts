@@ -290,12 +290,12 @@ test("앞 단계 고정 재실행: 목차·분류(출제만이면 목표까지)�
   const done = await runGen(first.id, caller, { pages });
   assert.equal(done.status, "done");
 
-  const design = await forkGen(first.id, { from: "design", models: { design: { model: "gpt-6-sol", effort: "medium" } }, guideDir: "출제기준-후보" });
+  const design = await forkGen(first.id, { from: "design", models: { design: { model: "gpt-6-sol", effort: "medium" } }, guideDir: "출제기준-테스트없음" });
   assert.deepEqual(design.forkOf, { genId: first.id, from: "design" });
   assert.equal(design.input.models.design?.model, "gpt-6-sol");
-  assert.equal(design.input.guideDir, "출제기준-후보");
+  assert.equal(design.input.guideDir, "출제기준-테스트없음");
   assert.ok(design.sections.every((section) => section.classify && !section.design && !section.author));
-  // The candidate folder does not exist here, so design pauses; the copied outline/classify are never called again.
+  // This criteria folder does not exist (출제기준-후보 does, so it is not used here), so design pauses; the copied outline/classify are never called again.
   const paused = await runGen(design.id, caller, { pages });
   assert.equal(paused.status, "paused-invalid");
   assert.deepEqual(await steps(design.id), []);
