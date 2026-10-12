@@ -132,3 +132,17 @@ export type GenCall = {
   /** Which criteria went into this call: folder, content hash, files. */
   guide?: { dir: string; version: string; files: string[] };
 };
+
+/**
+ * Default model per step for study materials (and the lab's starting values). Evidence, 2026-10-12:
+ * design/author on sol·medium removed the meaning errors seen on luna·low (B 실측); page reading on sol·medium read
+ * 6/6 slides correctly; the outline and classification on luna·low split 52 slides into 52 units and took course
+ * objectives for core knowledge (리허설), and every later step inherits those mistakes, so they move up too.
+ */
+export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
+  transcribe: { model: "gpt-6-sol", effort: "medium" },
+  outline: { model: "gpt-6-sol", effort: "medium" },
+  classify: { model: "gpt-6-sol", effort: "low" },
+  design: { model: "gpt-6-sol", effort: "medium" },
+  author: { model: "gpt-6-sol", effort: "medium" },
+};

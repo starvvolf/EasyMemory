@@ -6,7 +6,7 @@ import type { GenCall, GenState, GenStep, Purpose } from "@/lib/study/gen/types"
 import type { Scorecard } from "@/lib/study/gen/scorecard";
 import type { JudgeRun } from "@/lib/study/gen/judge";
 import type { VisionProbe } from "@/lib/study/gen/vision";
-import { defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
+import { DEFAULT_GEN_MODELS, defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
 import "./gen.css";
 
 type Source = { id: string; fileName: string; pageCount: number; available: boolean };
@@ -93,7 +93,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const [note, setNote] = useState("");
   const [provider, setProvider] = useState<"chatgpt" | "fake">("chatgpt");
   const [models, setModels] = useState<Record<GenStep, { model: string; effort: string }>>(
-    () => Object.fromEntries(STEPS.map((step) => [step, { model: "gpt-6-luna", effort: "low" }])) as Record<GenStep, { model: string; effort: string }>);
+    () => Object.fromEntries(STEPS.map((step) => [step, { ...DEFAULT_GEN_MODELS[step] }])) as Record<GenStep, { model: string; effort: string }>);
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [guideDir, setGuideDir] = useState("출제기준");
   const [readImages, setReadImages] = useState(false);

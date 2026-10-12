@@ -10,17 +10,10 @@ import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 import { inspectQuality } from "../../../tools/problem-authoring-lab/quality.ts";
 import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus } from "./dejipgi-app.js";
-import { defaultChosen, type GenState } from "@/lib/study/gen/types";
+import { DEFAULT_GEN_MODELS, defaultChosen, type GenState } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
 import "katex/dist/katex.min.css";
 import "./dejipgi.css";
-
-/** Engine v2 models for study materials: reading the material is light work, designing and authoring get the stronger model (B 실측, 2026-10-12). */
-const STUDY_MODELS = {
-  transcribe: { model: "gpt-6-sol", effort: "medium" },
-  outline: { model: "gpt-6-luna", effort: "low" }, classify: { model: "gpt-6-luna", effort: "low" },
-  design: { model: "gpt-6-sol", effort: "medium" }, author: { model: "gpt-6-sol", effort: "medium" },
-};
 
 async function readJson<T>(response: Response, fallback: string): Promise<T> {
   const data = await response.json().catch(() => null);
@@ -88,7 +81,7 @@ export default function DejipgiStudy() {
       const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
-          models: STUDY_MODELS, origin: "study", readImages, confirmed: true }),
+          models: DEFAULT_GEN_MODELS, origin: "study", readImages, confirmed: true }),
       }), "문제 만들기를 시작하지 못했어요.");
       return gen;
     };
