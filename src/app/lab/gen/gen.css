@@ -50,3 +50,7 @@
 .calldetail pre { white-space: pre-wrap; word-break: break-word; max-height: 420px; overflow: auto; font-size: 12px; }
 .score { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; display: grid; gap: 6px; }
 .score table th { text-align: left; font-weight: 500; white-space: nowrap; }
+.judge { border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 6px; }
+.judge .row { display: flex; gap: 8px; align-items: center; }
+.verdicts { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.verdicts small { color: var(--muted); }

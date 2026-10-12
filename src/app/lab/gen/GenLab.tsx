@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { GenCall, GenState, GenStep, Purpose } from "@/lib/study/gen/types";
 import type { Scorecard } from "@/lib/study/gen/scorecard";
+import type { JudgeRun } from "@/lib/study/gen/judge";
 import { defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
 import "./gen.css";
 
@@ -227,7 +228,7 @@ function RunView({ id, runs, onChange, onError }: { id: string; runs: RunSummary
 
       {gen.outlineWarnings?.map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
 
-      {["done", "awaiting-confirm"].includes(gen.status) && <ScorePanel id={id} status={gen.status} runs={runs} onError={onError} />}
+      {["done", "awaiting-confirm"].includes(gen.status) && <ScorePanel id={id} status={gen.status} real={real} runs={runs} onError={onError} />}
 
       {gen.status === "awaiting-confirm" && (
         <div className="confirmbar">
@@ -297,14 +298,15 @@ const percent = (value: number) => `${Math.round(value * 100)}%`;
 const kinds = (record: Record<string, number>) => Object.entries(record).sort((a, b) => b[1] - a[1]).map(([key, n]) => `${key} ${n}`).join(" · ") || "—";
 
 /** Scorecard v0 (numbers only) with an optional second run beside it, e.g. the same PDF on another model or criteria. */
-function ScorePanel({ id, status, runs, onError }: { id: string; status: string; runs: RunSummary[]; onError: (message: string) => void }) {
+function ScorePanel({ id, status, real, runs, onError }: { id: string; status: string; real: boolean; runs: RunSummary[]; onError: (message: string) => void }) {
   const [own, setOwn] = useState<Scorecard | null>(null);
+  const [judgeTick, setJudgeTick] = useState(0);
   const [otherId, setOtherId] = useState("");
   const [other, setOther] = useState<Scorecard | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => { api<{ score: Scorecard }>(`/api/lab/gen/${id}/score`).then((r) => setOwn(r.score), (e) => onError(e instanceof Error ? e.message : String(e))); }, 0);
     return () => clearTimeout(timer);
-  }, [id, status, onError]);
+  }, [id, status, judgeTick, onError]);
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!otherId) { setOther(null); return; }
@@ -325,6 +327,11 @@ function ScorePanel({ id, status, runs, onError }: { id: string; status: string;
     ["목표로 안 쓰인 핵심·패턴·설명", (s) => `${s.unusedTargets.length}`],
     ["의심 신호", (s) => `${s.suspects.length}`],
     ["경고", (s) => kinds(s.warnings)],
+    ["판정 통과/의심/실패", (s) => s.judge?.summary ? `${s.judge.summary.pass} / ${s.judge.summary.suspect} / ${s.judge.summary.fail}` : "—"],
+    ["판정: 노출·모호·정답오류", (s) => s.judge?.summary ? `${s.judge.summary.exposed} · ${s.judge.summary.ambiguous} · ${s.judge.summary.answerWrong}` : "—"],
+    ["판정: 조건불일치·목표불일치·다른답·티나는오답", (s) => s.judge?.summary ? `${s.judge.summary.conditionMismatch} · ${s.judge.summary.objectiveMismatch} · ${s.judge.summary.nonUnique} · ${s.judge.summary.weakDistractors}` : "—"],
+    ["판정: 깊이", (s) => s.judge?.summary ? kinds(s.judge.summary.depth) : "—"],
+    ["판정단 시험: 검출 · 오탐", (s) => s.judge?.trial ? `${s.judge.trial.caught}/${s.judge.trial.planted} · ${s.judge.trial.falseAlarms}/${s.judge.trial.originals}` : "—"],
     ["호출 · 실패 · 재시도", (s) => `${s.calls.total} · ${s.calls.failed} · ${s.calls.retries}`],
     ["모델 작업 시간", (s) => seconds(s.calls.elapsedMs)],
     ["토큰 입력/출력", (s) => `${s.calls.inputTokens.toLocaleString()} / ${s.calls.outputTokens.toLocaleString()}`],
@@ -347,6 +354,65 @@ function ScorePanel({ id, status, runs, onError }: { id: string; status: string;
           <ul>{s.unusedTargets.map((item) => <li key={`${item.sectionId}-${item.n}`}>{item.sectionId} #{item.n} [{item.kind}] {item.content}</li>)}
             {s.suspects.map((item) => <li key={`${item.code}-${item.ref}`} className="warnline">{item.ref}: {item.message}</li>)}</ul>
         </details>) : null)}
+      {status === "done" && <JudgePanel id={id} real={real} onDone={() => setJudgeTick((n) => n + 1)} onError={onError} />}
     </section>
+  );
+}
+
+type JudgeListItem = Omit<JudgeRun, "results"> & { questions: number };
+const VERDICT_TONE: Record<string, string> = { 통과: "ok", 의심: "warn", 실패: "bad" };
+
+/** Starts judge runs (평가 실행 / 판정단 시험) and shows per-question verdicts of the latest one. */
+function JudgePanel({ id, real, onDone, onError }: { id: string; real: boolean; onDone: () => void; onError: (message: string) => void }) {
+  const [list, setList] = useState<JudgeListItem[]>([]);
+  const [detail, setDetail] = useState<JudgeRun | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const refresh = useCallback(async () => {
+    try {
+      const { runs } = await api<{ runs: JudgeListItem[] }>(`/api/lab/gen/${id}/judge`);
+      setList((previous) => {
+        if (previous.some((run) => ["queued", "running"].includes(run.status)) && !runs.some((run) => ["queued", "running"].includes(run.status))) setTimeout(onDone, 0);
+        return runs;
+      });
+      const latest = runs[0];
+      if (latest) setDetail((await api<{ run: JudgeRun }>(`/api/lab/gen/${id}/judge/${latest.id}`)).run);
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  }, [id, onDone, onError]);
+  useEffect(() => { const initial = setTimeout(() => { void refresh(); }, 0); return () => clearTimeout(initial); }, [refresh]);
+  const busy = list.some((run) => ["queued", "running"].includes(run.status));
+  useEffect(() => {
+    if (!busy) return;
+    const timer = setInterval(() => { void refresh(); }, 3000);
+    return () => clearInterval(timer);
+  }, [busy, refresh]);
+  const start = async (kind: "judge" | "trial") => {
+    try { await api(`/api/lab/gen/${id}/judge`, "POST", { kind, confirmed: real ? confirmed : undefined }); setConfirmed(false); await refresh(); }
+    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  const shown = detail?.results.filter((result) => result.verdict !== "통과" || result.mutation) ?? [];
+  return (
+    <div className="judge">
+      <h4>판정단 <small>전문가 sol·medium, 학습자 luna·low · 목차마다 호출 5번(시험은 두 배)</small></h4>
+      {real && <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다</label>}
+      <div className="row">
+        <button disabled={busy || (real && !confirmed)} onClick={() => void start("judge")}>평가 실행</button>
+        <button disabled={busy || (real && !confirmed)} onClick={() => void start("trial")} title="통과한 문제에 결함을 심어 판정단이 잡는지 봅니다">판정단 시험</button>
+        {busy && <span className="muted">판정 중…</span>}
+      </div>
+      {detail && (
+        <>
+          <p className="muted">최근 {detail.kind === "trial" ? "판정단 시험" : "평가"} · {STATUS[detail.status] ?? detail.status} · 호출 {detail.calls}번{detail.message ? ` · ${detail.message}` : ""}</p>
+          {detail.trial && <p>심은 결함 {detail.trial.planted}개 중 {detail.trial.caught}개 검출 ({Object.entries(detail.trial.byKind).map(([kind, v]) => `${kind} ${v.caught}/${v.planted}`).join(", ")}) · 원본 오탐 {detail.trial.falseAlarms}/{detail.trial.originals}</p>}
+          <ul className="verdicts">{shown.map((result) => (
+            <li key={result.questionId}>
+              <span className={`tag ${VERDICT_TONE[result.verdict]}`}>{result.verdict}</span> {result.questionId}{result.mutation ? ` (심은 결함: ${result.mutation})` : ""}
+              {result.reasons.length > 0 && <div className="warnline">{result.reasons.join(" · ")}</div>}
+              {result.problems && <div>{result.problems}</div>}
+              <small>맨손: {result.blind.answer || "—"} ({result.blind.grade}, 확신 {result.blind.confidence}) · 원문 학습자: {result.readers.map((reader) => `${reader.answer || "—"}(${reader.grade})`).join(" / ")} · 깊이 {result.checks.depth}</small>
+            </li>
+          ))}{!shown.length && detail.status === "done" && <li className="muted">모든 문항 통과</li>}</ul>
+        </>
+      )}
+    </div>
   );
 }

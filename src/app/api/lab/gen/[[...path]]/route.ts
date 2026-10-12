@@ -5,6 +5,7 @@ import { ExperimentRequestError } from "@/lib/mcp-experiment-requests";
 import { boundedJson, requireLocalRequest, responseError } from "../../../mcp-experiment-requests/http";
 import { confirmObjectives, createGen, enqueueGen, genView, GenError, listGens, readGenCalls, readSectionDocument, stepLabel } from "@/lib/study/gen/runner";
 import { scorecard } from "@/lib/study/gen/scorecard";
+import { listJudges, loadJudge, readJudgeCalls, startJudge } from "@/lib/study/gen/judge";
 import { renderInteractiveDocument } from "../../../../../../tools/problem-authoring-lab/renderer";
 import type { AuthoringDocument } from "../../../../../../tools/problem-authoring-lab/contract";
 
@@ -42,7 +43,20 @@ async function handle(request: Request, context: Context) {
       if (!gen) throw new GenError(404, "생성을 찾을 수 없습니다.");
       const documents = new Map(await Promise.all(gen.sections.map(async (section) =>
         [section.id, await readSectionDocument(gen.id, section.id) as AuthoringDocument | null] as const)));
-      result = { score: scorecard(gen, await readGenCalls(gen.id), documents) };
+      const latest = (await listJudges(gen.id)).find((run) => run.status === "done") ?? null;
+      result = { score: scorecard(gen, await readGenCalls(gen.id), documents, latest) };
+    } else if (p.length === 2 && p[1] === "judge" && method === "GET") {
+      result = { runs: (await listJudges(p[0])).map(({ results: _results, ...run }) => ({ ...run, questions: _results.length })) };
+    } else if (p.length === 2 && p[1] === "judge" && method === "POST") {
+      const { run } = await startJudge(p[0], await boundedJson(request), caller);
+      result = { run };
+    } else if (p.length === 3 && p[1] === "judge" && method === "GET") {
+      const run = await loadJudge(p[0], p[2]);
+      if (!run) throw new GenError(404, "판정을 찾을 수 없습니다.");
+      result = { run };
+    } else if (p.length === 5 && p[1] === "judge" && p[3] === "calls" && /^\d+$/.test(p[4]) && method === "GET") {
+      result = (await readJudgeCalls(p[0], p[2])).find((call) => call.n === Number(p[4]));
+      if (!result) throw new GenError(404, "호출 기록을 찾을 수 없습니다.");
     } else if (p.length === 3 && p[1] === "calls" && /^\d+$/.test(p[2]) && method === "GET") {
       result = (await readGenCalls(p[0])).find((call) => call.n === Number(p[2]));
       if (!result) throw new GenError(404, "호출 기록을 찾을 수 없습니다.");

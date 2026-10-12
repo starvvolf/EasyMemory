@@ -152,12 +152,19 @@ export type RunOptions = {
   fakeReply?: (step: GenStep, user: string, attempt: number) => string;
 };
 
-async function registeredPages(input: GenInput) {
+export async function registeredPages(input: GenInput) {
   const [{ readRegisteredMcpSourcePdf }, { extractPdfPageTexts }] = await Promise.all([
     import("../../mcp-source-registry.ts"), import("../../../../tools/study-forge-mcp/source-evidence.ts")]);
   const bytes = await readRegisteredMcpSourcePdf(input.sourceId);
   if (!bytes) throw new Stop("failed", "등록된 원본 PDF를 읽을 수 없어요.");
   return extractPdfPageTexts(bytes, input.pageNumbers);
+}
+
+/** Runs a job after whatever is queued (generation or judging), so model calls of two jobs never overlap. */
+export function chainTask<T>(task: () => Promise<T>) {
+  const run = (queue.__studyGenQueue ?? Promise.resolve()).catch(() => undefined).then(task);
+  queue.__studyGenQueue = run.catch(() => undefined);
+  return run;
 }
 
 /** One request at a time in this server process. Throws before queueing when the request may not run. */

@@ -3,6 +3,7 @@
 // whose results will sit in `judge` later.
 import type { AuthoringDocument } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { purposeLabel, type GenCall, type GenState, type ItemKind } from "./types.ts";
+import type { JudgeRun } from "./judge.ts";
 
 /** Item kinds a design is expected to draw objectives from; examples, exercises and extras are material only. */
 const TARGET_KINDS: readonly ItemKind[] = ["핵심 지식", "재사용 패턴", "설명"];
@@ -21,12 +22,13 @@ export type Scorecard = {
   suspects: Array<{ code: string; ref: string; message: string }>;
   warnings: Record<string, number>;
   calls: { total: number; failed: number; retries: number; ms: number; elapsedMs: number; inputTokens: number; outputTokens: number; formats: Record<string, number>; guideVersions: string[] };
-  judge: null;
+  /** Latest finished judge run, if any (meaning and depth, from the judges). */
+  judge: Pick<JudgeRun, "id" | "kind" | "createdAt" | "models" | "summary" | "trial" | "calls"> | null;
 };
 
 const bump = (record: Record<string, number>, key: string, by = 1) => { record[key] = (record[key] ?? 0) + by; };
 
-export function scorecard(state: GenState, calls: GenCall[], documents: Map<string, AuthoringDocument | null>): Scorecard {
+export function scorecard(state: GenState, calls: GenCall[], documents: Map<string, AuthoringDocument | null>, judge: JudgeRun | null = null): Scorecard {
   const objectives = state.sections.flatMap((section) => section.design?.objectives ?? []);
   const chosen = new Set(state.confirmedObjectiveIds ?? []);
   const questions = [...documents.values()].flatMap((document) => document?.questions ?? []);
@@ -100,6 +102,6 @@ export function scorecard(state: GenState, calls: GenCall[], documents: Map<stri
       formats: callFormats,
       guideVersions: [...new Set(calls.flatMap((call) => call.guide ? [`${call.step}:${call.guide.version}`] : []))],
     },
-    judge: null,
+    judge: judge ? { id: judge.id, kind: judge.kind, createdAt: judge.createdAt, models: judge.models, summary: judge.summary, trial: judge.trial, calls: judge.calls } : null,
   };
 }
