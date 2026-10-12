@@ -7,7 +7,7 @@ import { ModelError } from "../../ai/model.ts";
 import { validateDocument, type AuthoringDocument } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkClassify, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
-import { confirmObjectives, createGen, enqueueGen, forkGen, loadGen, readGenCalls, readSectionDocument, runGen, type RunOptions } from "./runner.ts";
+import { confirmObjectives, createGen, enqueueGen, forkGen, loadGen, studyDocument, readGenCalls, readSectionDocument, runGen, type RunOptions } from "./runner.ts";
 import { authorSchema, classifySchema, designSchema, outlineSchema } from "./schemas.ts";
 import type { GenStep, Issue } from "./types.ts";
 
@@ -322,3 +322,17 @@ test("PDF 글자 층의 깨진 하이픈(㎿)을 하이픈으로 고친다", () 
   assert.equal(cleanPageText("Composite Two㎿Dimensional Rotations"), "Composite Two-Dimensional Rotations");
   assert.equal(cleanPageText("An   𝑥 ㎿direction shear"), "An   𝑥-direction shear");
 });
+
+test("공부 화면용: 목차 문서를 하나로 묶고, 공부 화면에서 만든 실행만 따로 고를 수 있다", () => withData(async () => {
+  const state = await createGen({ ...base, purpose: "core", autoConfirm: true, origin: "study" });
+  assert.equal(state.input.origin, "study");
+  assert.equal((await createGen({ ...base, purpose: "core" })).input.origin, "lab");
+  assert.equal(await studyDocument(state.id), null, "no questions yet");
+  const done = await runGen(state.id, caller, { pages });
+  const deck = (await studyDocument(state.id))!;
+  assert.equal(deck.document.questions.length, done.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0));
+  assert.deepEqual(validateDocument(deck.document).filter((issue) => issue.severity === "error"), []);
+  assert.equal(deck.meta.id, state.id);
+  assert.equal(deck.meta.title, "bfs · p.1–2");
+  assert.match(deck.meta.artifactSha256, /^[a-f0-9]{64}$/);
+}));

@@ -517,9 +517,9 @@ function renderSession(){
     if (s.phase === "result"){
       const map = {
         good:["good", c.overridden ? "맞음으로 고쳤어요" : "혼자 맞혔어요", c.overridden ? "자동 채점이 놓친 답을 직접 인정했어요. 기록에 표시해 둡니다." : "다음에는 간격을 늘려 다시 물어볼게요."],
-        bad:["bad", "이번엔 떠올리지 못했어요", "10분쯤 뒤, 이번 연습 안에서 한 번 더 나옵니다."],
+        bad:["bad", item.format === "card" ? "잘 모른다고 표시했어요" : "이번엔 떠올리지 못했어요", "10분쯤 뒤, 이번 연습 안에서 한 번 더 나옵니다."],
         assisted:["help", "정답을 보고 확인했어요", "혼자 맞힌 기록으로 세지 않아요. 잠시 뒤 다시 물어볼게요."],
-        "self-good":["self", "기억났다고 표시했어요", "자기평가라서 자동 채점보다 약한 근거로 기록돼요."],
+        "self-good":["self", "알고 있다고 표시했어요", "자기평가라서 자동 채점보다 약한 근거로 기록돼요."],
         "self-mid":["self", "헷갈렸다고 표시했어요", "내일 다시 물어볼게요."],
         "read-good":["read", c.overridden ? "맞음으로 고쳤어요 (읽은 직후)" : "읽은 직후 맞혔어요", "방금 읽은 내용이라 기억 기록으로 세지 않아요. 내일부터 복습에 넣을게요."],
         "read-mid":["read", "일부만 떠올렸어요 (읽은 직후)", "내일부터 복습에 넣을게요."],
@@ -550,11 +550,11 @@ function renderSession(){
     act.append(h("span", { class:"spacer" }));
     if (item.format !== "card") act.append(h("button", { class:"btn ghost small", onclick:peek, title:"정답을 먼저 보면 이번 풀이는 혼자 맞힌 기록으로 세지 않아요" }, "정답 먼저 보기"));
   } else if (s.phase === "rate"){
+    // Flashcards are judged by the learner, in two steps (docs/DECISIONS.md 2026-10-12 주관식 형식). "잘 모름" counts as a weak spot.
     act.append(h("span", { class:"small muted", text:"떠올린 것과 비교해 보세요" }));
     act.append(h("div", { class:"rate" },
-      h("button", { class:"btn", onclick: () => rateCard("forgot") }, "못 떠올림"),
-      h("button", { class:"btn", onclick: () => rateCard("unsure") }, "일부만"),
-      h("button", { class:"btn primary", onclick: () => rateCard("remembered") }, "다 떠올림")
+      h("button", { class:"btn", onclick: () => rateCard("forgot") }, "잘 모름"),
+      h("button", { class:"btn primary", onclick: () => rateCard("remembered") }, "알고 있음")
     ));
   } else {
     act.append(h("span", { class:"spacer" }));
@@ -1530,9 +1530,13 @@ function accountNote(){
     : h("div", { class:"note warn row", role:"status" }, h("span", { style:"flex:1;min-width:0", text:a.message }),
         h("button", { class:"btn small", onclick:connectAccount }, "ChatGPT 연결"));
 }
-const PURPOSES = [["exam", "시험 대비"], ["class", "수업 따라가기"], ["understand", "개념 이해"], ["apply", "실제로 써먹기"]];
-const ABILITIES = ["용어·정의 말하기", "식·절차 쓰기", "계산·적용하기", "비슷한 것 구별하기", "말로 설명하기"];
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"exam", abilities:[], summary:"", edited:false, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[] }; }
+/* Engine v2 purposes (docs/DECISIONS.md 2026-10-12). "그냥 읽기" needs no generation, so it is not offered here. */
+const PURPOSES = [
+  ["core", "핵심 암기", "꼭 떠올려야 하는 것만 골라요. 보조 내용은 확인할 때 빼 둬요."],
+  ["understand", "이해", "왜·어떻게를 설명할 수 있게, 개념과 관계 위주로 적게 골라요."],
+  ["all", "통암기", "나온 내용을 빠짐없이 떠올리게 해요. 문제가 많아져요."],
+];
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[] }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
   const flat = [];
@@ -1563,7 +1567,6 @@ function applyPicked(){
   const chosen = b.picked.map(i => b.sections[i]).filter(Boolean);
   if (chosen.length){ b.from = Math.min(...chosen.map(x => x.start)); b.to = Math.max(...chosen.map(x => x.end)); }
   else { b.from = 1; b.to = b.pages.length; }
-  syncSummary();
 }
 async function readPdf(file){
   const b = S.builder;
@@ -1581,21 +1584,12 @@ async function readPdf(file){
       pages.push({ n, text: text.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim() });
       if (n % 5 === 0){ b.status = `PDF를 읽는 중… ${n}/${doc.numPages}쪽`; render(); }
     }
-    b.pages = pages; b.sourceName = file.name; b.from = 1; b.to = pages.length; b.file = file; b.pdfDoc = doc; b.edited = false;
+    b.pages = pages; b.sourceName = file.name; b.from = 1; b.to = pages.length; b.file = file; b.pdfDoc = doc;
     b.sections = await readSections(doc, pages); b.picked = [];
-    syncSummary();
   }catch(e){
     b.error = "PDF를 읽지 못했어요. 암호가 걸렸거나 손상된 파일일 수 있어요.";
   }finally{ b.busy = false; b.status = ""; render(); }
 }
-function planSentence(){
-  const b = S.builder;
-  const purpose = (PURPOSES.find(x => x[0] === b.purpose) || PURPOSES[0])[1];
-  const range = b.from === 1 && b.to === b.pages.length ? "전체를" : `${b.from}~${b.to}쪽을`;
-  const can = b.abilities.length ? `${b.abilities.join(", ")}를 할 수 있게` : "핵심을 스스로 떠올릴 수 있게";
-  return `${range} ${purpose}로 공부해요. ${can} 문제를 만들어 주세요. 원문의 기호와 용어는 바꾸지 않아요.`;
-}
-function syncSummary(){ const b = S.builder; if (!b.edited) b.summary = planSentence(); }
 
 /* pending material: readable now, questions later */
 function pendingDeck(rec){
@@ -1604,18 +1598,18 @@ function pendingDeck(rec){
 }
 function savePending(){ Store.savePending(Object.values(S.decks).filter(d => d.pending).map(d => ({ ...d.pending, lastPage:d.lastPage }))); }
 async function startMaterial(){
-  const b = S.builder; if (b.busy || !engine || !b.file || !b.summary.trim()) return;
-  b.busy = true; b.error = ""; b.status = "PDF를 등록하고 요청을 올리는 중…"; render();
+  const b = S.builder; if (b.busy || !engine || !b.file) return;
+  b.busy = true; b.error = ""; b.status = "PDF를 등록하고 문제 만들기를 시작하는 중…"; render();
   try{
-    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.summary.trim(), answers:{ purpose:b.purpose, abilities:b.abilities.slice() } });
+    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim() });
     const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:b.sourceName.replace(/\.pdf$/i, ""), sourceName:b.sourceName,
-      pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.summary.trim(), createdAt:now(), status:"waiting", message:"" };
+      pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), createdAt:now(), status:"waiting", message:"" };
     const deck = pendingDeck(rec);
     S.decks[deck.id] = deck;
     if (b.pdfDoc) S.pdf[deck.id] = { status:"ready", doc:b.pdfDoc, canv:{}, aspect: await docAspect(b.pdfDoc) };
     savePending();
     S.builder = freshBuilder();
-    toast("요청을 올렸어요. 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 하면 문제가 만들어져요. 그동안 읽어 두세요.");
+    toast("문제 만들기를 시작했어요. 목표가 정리되면 확인을 부탁할게요. 그동안 읽어 두세요.");
     openReader(deck.id, rec.from);
     pollPending();
   }catch(e){
@@ -1638,7 +1632,7 @@ async function restartMaterial(d){
   if (!engine) return;
   const rec = d.pending;
   try{
-    const res = rec.remake ? await engine.remake(rec.remake) : await engine.restart({ requestId:rec.requestId, sourceId:rec.sourceId, from:rec.from, to:rec.to, purpose:rec.purpose });
+    const res = rec.remake ? await engine.remake(rec.remake) : await engine.restart({ requestId:rec.requestId, sourceId:rec.sourceId, from:rec.from, to:rec.to, purpose:rec.purpose, note:rec.note || "" });
     Object.assign(rec, { requestId:res.requestId, status:"waiting", message:"" });
     savePending(); render(); pollPending();
   }catch(e){ toast((e && e.message) || "다시 요청하지 못했어요."); }
@@ -1651,7 +1645,7 @@ async function resumeMaterial(d){
     savePending(); render(); pollPending();
   }catch(e){ toast(e.message || "다시 시작하지 못했어요."); }
 }
-const PENDING_LABEL = { waiting:"AI 실행 대기", running:"AI가 만드는 중", paused:"잠시 멈춤", authoring:"문제 검사·기록 중", ready:"준비됨", failed:"실패" };
+const PENDING_LABEL = { waiting:"시작 대기", running:"자료 파악 중", confirm:"목표 확인 필요", paused:"잠시 멈춤", authoring:"문제 만드는 중", ready:"준비됨", failed:"실패" };
 let pollTimer = null;
 async function pollPending(){
   clearTimeout(pollTimer);
@@ -1666,15 +1660,51 @@ async function pollPending(){
     if (disposed) return;
     if (next.status !== d.pending.status || (next.message || "") !== d.pending.message) changed = true;
     Object.assign(d.pending, { status:next.status, message:next.message || "", artifactId:next.artifactId || d.pending.artifactId });
+    if (next.status === "confirm" && next.objectives){
+      // Keep what the learner already ticked across polls; start from the engine's default (core only, or all for 통암기).
+      const known = new Set(next.objectives.map(o => o.id));
+      if (!d.pending.objectives || d.pending.objectives.length !== next.objectives.length) d.pending.chosen = (next.chosen || []).filter(id => known.has(id));
+      d.pending.objectives = next.objectives;
+    } else if (next.status !== "confirm"){ delete d.pending.objectives; delete d.pending.chosen; }
     if (next.status === "ready") ready = true;
   }
   if (ready) await reloadDecks();
   if (changed || ready){ savePending(); if (!S.session && S.view !== "create") render(); }
   pollTimer = setTimeout(pollPending, 5000);
 }
+async function confirmGoals(d){
+  const p = d.pending; if (!engine || !engine.confirm || p.confirming) return;
+  p.confirming = true; render();
+  try{
+    await engine.confirm(p.requestId, p.chosen || []);
+    Object.assign(p, { status:"authoring", message:(p.chosen || []).length ? "문제 만드는 중" : "고른 목표가 없어요" });
+    delete p.objectives; delete p.chosen;
+    savePending(); pollPending();
+  }catch(e){ toast((e && e.message) || "목표를 확정하지 못했어요."); }
+  finally{ p.confirming = false; render(); }
+}
+/* The one confirmation before authoring: objectives grouped by section, support ones unticked. */
+function goalPanel(d){
+  const p = d.pending, chosen = new Set(p.chosen || []);
+  const groups = [];
+  for (const o of p.objectives){ let g = groups.find(x => x.title === o.section); if (!g){ g = { title:o.section, list:[] }; groups.push(g); } g.list.push(o); }
+  const toggle = (id) => { p.chosen = chosen.has(id) ? [...chosen].filter(x => x !== id) : [...chosen, id]; savePending(); render(); };
+  return h("div", { class:"goals" },
+    h("p", { class:"small muted", text:"이 목표들로 문제를 만들어요. 필요 없는 건 빼고, 보조 목표 중 필요한 건 더하세요." }),
+    groups.map(g => h("section", null, h("h4", { text:g.title }),
+      h("ul", null, g.list.map(o => h("li", null, h("label", null,
+        h("input", { type:"checkbox", checked:chosen.has(o.id) ? true : null, onchange: () => toggle(o.id) }),
+        h("span", null, h("span", { text:o.statement }), o.importance === "support" ? h("span", { class:"chip", text:"보조" }) : null,
+          h("small", { class:"muted", text:`떠올릴 것: ${o.recall}` })))))))),
+    h("div", { class:"row" },
+      h("button", { class:"btn primary", disabled:p.confirming ? true : null, onclick: () => confirmGoals(d) }, p.confirming ? "확정하는 중…" : `이 목표 ${chosen.size}개로 문제 만들기`),
+      h("span", { class:"small muted", text:`전체 ${p.objectives.length}개 중` })));
+}
 function pendingNote(d){
   const p = d.pending;
-  const text = p.message || (p.status === "waiting" ? "AI 실행 대기 중 · 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요" : PENDING_LABEL[p.status] || "");
+  if (p.status === "confirm" && p.objectives && p.objectives.length) return h("div", { class:"note row", role:"status" },
+    h("div", { style:"flex:1;min-width:0" }, h("strong", { text:`문제 준비 중 · ${p.message || PENDING_LABEL.confirm}` }), goalPanel(d)));
+  const text = p.message || PENDING_LABEL[p.status] || "";
   return h("div", { class:`note row${p.status === "failed" ? " err" : ""}`, role:"status" },
     h("span", { style:"flex:1;min-width:0", text: p.status === "failed" ? `문제 만들기 실패 · ${text}` : `문제 준비 중 · ${text}` }),
     p.status === "paused" && account && S.account && S.account.show && !S.account.ready ? h("button", { class:"btn small", onclick:connectAccount }, "ChatGPT 연결") : null,
@@ -1707,25 +1737,25 @@ function renderBuilder(){
   wrap.append(h("section", { class:"panel stack" }, drop));
   if (!b.pages.length) return wrap;
 
-  const chips = (options, isOn, toggle) => h("div", { class:"chat-sugs" }, options.map(([key, label]) =>
-    h("button", { class:"chip-btn", "aria-pressed": isOn(key) ? "true" : "false", disabled:b.busy, onclick: () => { toggle(key); syncSummary(); render(); } }, label)));
   const from = h("input", { type:"number", id:"from", min:"1", max:String(b.pages.length), style:"width:90px" });
   const to = h("input", { type:"number", id:"to", min:"1", max:String(b.pages.length), style:"width:90px" });
   from.value = String(b.from); to.value = String(b.to);
-  const upd = () => { b.picked = []; b.from = Math.max(1, Math.min(Number(from.value) || 1, b.pages.length)); b.to = Math.max(b.from, Math.min(Number(to.value) || b.pages.length, b.pages.length)); syncSummary(); render(); };
+  const upd = () => { b.picked = []; b.from = Math.max(1, Math.min(Number(from.value) || 1, b.pages.length)); b.to = Math.max(b.from, Math.min(Number(to.value) || b.pages.length, b.pages.length)); render(); };
   from.addEventListener("change", upd); to.addEventListener("change", upd);
-  const summary = h("textarea", { id:"summary", rows:"3" });
-  summary.value = b.summary;
-  summary.addEventListener("input", () => { b.summary = summary.value; b.edited = true; const s = root.querySelector("#startBtn"); if (s) s.disabled = b.busy || !engine || !b.summary.trim(); });
+  const note = h("textarea", { id:"note", rows:"2", placeholder:"예: 중간고사 범위, 공식은 직접 써 볼 수 있게, 영어 용어는 원문 그대로" });
+  note.value = b.note;
+  note.addEventListener("input", () => { b.note = note.value; });
   const empty = b.pages.filter(p => !p.text.trim()).length;
+  const span = b.to - b.from + 1;
+  const purpose = PURPOSES.find(x => x[0] === b.purpose) || PURPOSES[0];
   wrap.append(h("section", { class:"panel stack" },
     h("div", null, h("p", { class:"eyebrow", text:"방향 정하기" }), h("h2", { style:"font-size:18px;margin-top:2px", text:"어떻게 공부할지 알려 주세요" }),
       empty ? h("p", { class:"small muted", text:`글자가 없는 쪽 ${empty}개는 그림·스캔이라 AI가 글로 읽지 못할 수 있어요.` }) : null),
-    h("div", { class:"field" }, h("label", { text:"1. 무엇을 위해 공부하나요?" }),
-      chips(PURPOSES, (k) => b.purpose === k, (k) => { b.purpose = k; })),
-    h("div", { class:"field" }, h("label", { text:"2. 공부하고 나면 무엇을 할 수 있어야 하나요? (여러 개)" }),
-      chips(ABILITIES.map(x => [x, x]), (k) => b.abilities.includes(k), (k) => { b.abilities = b.abilities.includes(k) ? b.abilities.filter(x => x !== k) : [...b.abilities, k]; })),
-    h("div", { class:"field" }, h("label", { text:"3. 범위" }),
+    h("div", { class:"field" }, h("label", { text:"1. 목적" }),
+      h("div", { class:"chat-sugs" }, PURPOSES.map(([key, label]) => h("button", { class:"chip-btn", "aria-pressed": b.purpose === key ? "true" : "false", disabled:b.busy,
+        onclick: () => { b.purpose = key; render(); } }, label))),
+      h("span", { class:"small muted", text:purpose[2] })),
+    h("div", { class:"field" }, h("label", { text:"2. 범위" }),
       h("div", { class:"row" }, h("span", { class:"small muted", text:"시작 쪽" }), from, h("span", { class:"small muted", text:"끝 쪽" }), to,
         h("button", { class:"btn small ghost", disabled:b.busy, onclick: () => { b.picked = []; applyPicked(); render(); } }, "전체")),
       b.sections.length ? h("details", { open: b.picked.length ? true : null },
@@ -1734,12 +1764,12 @@ function renderBuilder(){
           "aria-pressed": b.picked.includes(i) ? "true" : "false", disabled:b.busy,
           onclick: () => { b.picked = b.picked.includes(i) ? b.picked.filter(x => x !== i) : [...b.picked, i]; applyPicked(); render(); } },
           h("span", { class:"num small", text: sec.start === sec.end ? `p.${sec.start} ` : `p.${sec.start}–${sec.end} ` }), sec.title))),
-        h("p", { class:"small muted", text:"여러 개를 고르면 처음부터 끝까지 이어진 범위로 요청해요." })) : null),
-    h("div", { class:"field" }, h("label", { for:"summary", text:"이렇게 만들게요" }), summary,
-      h("span", { class:"small muted", text: b.edited ? "직접 고친 문장으로 요청해요." : "위에서 고르면 문장이 바뀌어요. 직접 고쳐도 돼요." })),
+        h("p", { class:"small muted", text:"여러 개를 고르면 처음부터 끝까지 이어진 범위로 만들어요." })) : null,
+      span > 60 ? h("p", { class:"small muted", text:`${span}쪽은 오래 걸려요. 한 주차·한 장씩 나눠 만들면 먼저 끝난 것부터 공부할 수 있어요.` }) : null),
+    h("div", { class:"field" }, h("label", { for:"note", text:"3. 메모 (선택)" }), note),
     h("div", { class:"row" },
-      h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine || !b.summary.trim(), onclick:startMaterial }, "읽기 시작"),
-      h("span", { class:"small muted", text:"요청을 올리고 바로 읽기로 넘어가요. 문제는 AI가 만들면 쪽마다 붙어요." }))));
+      h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "읽기 시작"),
+      h("span", { class:"small muted", text:"바로 읽기로 넘어가요. AI가 목표를 정리하면 한 번 확인을 부탁하고, 그다음 문제가 쪽마다 붙어요." }))));
   return wrap;
 }
 

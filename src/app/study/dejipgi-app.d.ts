@@ -1,12 +1,20 @@
 import type { StudyDeck } from "@/lib/study/from-authoring";
-import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { NoteTurn, StudyNote } from "@/lib/study/notes";
 
-export type DejipgiMaterialStatus = { status: "waiting" | "running" | "paused" | "authoring" | "ready" | "failed"; message: string; artifactId?: string };
+/** An objective shown at the one confirmation before authoring (engine v2). Support objectives start unchecked. */
+export type DejipgiObjective = { id: string; section: string; statement: string; recall: string; importance: "core" | "support" };
+export type DejipgiMaterialStatus = {
+  status: "waiting" | "running" | "confirm" | "paused" | "authoring" | "ready" | "failed"; message: string; artifactId?: string;
+  /** With "confirm": the designed objectives and the ones checked by default. */
+  objectives?: DejipgiObjective[]; chosen?: string[];
+};
 export type DejipgiBuilderEngine = {
-  start(input: { file: File; from: number; to: number; purpose: string; answers: { purpose: string; abilities: NonNullable<ExperimentRequest["input"]["abilities"]> } }): Promise<{ requestId: string; sourceId: string }>;
-  restart(input: { requestId: string; sourceId: string; from: number; to: number; purpose: string }): Promise<{ requestId: string }>;
+  /** `purpose`: core | understand | all (engine v2 purposes); `note`: the learner's free memo. */
+  start(input: { file: File; from: number; to: number; purpose: string; note: string }): Promise<{ requestId: string; sourceId: string }>;
+  restart(input: { requestId: string; sourceId: string; from: number; to: number; purpose: string; note?: string }): Promise<{ requestId: string }>;
   check(requestId: string): Promise<DejipgiMaterialStatus>;
+  /** The one confirmation: author these objectives. */
+  confirm?(requestId: string, objectiveIds: string[]): Promise<void>;
   /** Remake only these objectives of a recorded document (e.g. after "이 문제 이상해요" reports). */
   remake(input: { artifactId: string; objectiveIds: string[] }): Promise<{ requestId: string; sourceId: string; from: number; to: number; purpose: string }>;
   /** Continue a request the in-app executor paused (usage limit reached, or ChatGPT login needed). */

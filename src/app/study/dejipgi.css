@@ -466,3 +466,13 @@
   .dejipgi .nlink,.dejipgi .ntick{display:none}
   .dejipgi .nhint{display:none}
 }
+/* 목표 확인 (engine v2): one list per section, support objectives unticked by default */
+.dejipgi .goals{display:grid;gap:12px;margin-top:10px;color:var(--ink)}
+.dejipgi .goals h4{font-size:13px;color:var(--muted);margin:0 0 6px}
+.dejipgi .goals ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.dejipgi .goals label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.dejipgi .goals label:has(input:not(:checked)){opacity:.62}
+.dejipgi .goals input{margin-top:3px;flex:none}
+.dejipgi .goals label > span{display:grid;gap:2px;min-width:0}
+.dejipgi .goals small{font-size:12px;overflow-wrap:anywhere}
+.dejipgi .goals .chip{justify-self:start;font-size:11px}

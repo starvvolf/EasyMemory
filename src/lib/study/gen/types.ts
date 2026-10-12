@@ -35,6 +35,8 @@ export type GenInput = {
   signals: { weakSpots: string[]; reports: string[] };
   /** Criteria folder name (출제기준 or a candidate copy). Older runs have none and use the default. */
   guideDir?: string;
+  /** Who started it: the lab, or a material made on the study screen (/study lists only those). Older runs: lab. */
+  origin?: "lab" | "study";
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */

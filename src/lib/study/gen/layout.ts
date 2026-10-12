@@ -56,6 +56,8 @@ export function answerShapeProblem(reply: AuthoredReplyQuestion): string | null 
 
 export function layoutQuestion(reply: AuthoredReplyQuestion, objective: Objective, section: Section, fileName: string): AuthoredQuestion {
   const blocks: AuthoringBlock[] = [];
+  // Response IDs must be unique across a whole document (a section, or all sections on the study screen).
+  const rid = `r-${objective.id}`;
   let y = MARGIN;
   const place = (height: number) => { const frame = { x: MARGIN, y, width: INNER, height }; y += height + GAP; return frame; };
   reply.stem.forEach((block, index) => {
@@ -73,16 +75,16 @@ export function layoutQuestion(reply: AuthoredReplyQuestion, objective: Objectiv
   if (answer.kind === "choice") {
     const options = (answer.options ?? []).map((option, index): { id: string; text?: string; latex?: string } =>
       option.latex?.trim() ? { id: `o${index + 1}`, latex: option.latex.trim() } : { id: `o${index + 1}`, text: (option.text ?? "").trim() });
-    response = { id: "r1", kind: "single-choice", options, correctOptionId: `o${(answer.correctIndex ?? 0) + 1}`, grading: "exact", explanation: answer.explanation };
+    response = { id: rid, kind: "single-choice", options, correctOptionId: `o${(answer.correctIndex ?? 0) + 1}`, grading: "exact", explanation: answer.explanation };
     const height = options.reduce((sum, option) => sum + lines(option.text ?? option.latex ?? "", 40) * 26 + 22, 8);
-    blocks.push({ id: "choices", kind: "choice-set", responseId: "r1", optionIds: options.map((option) => option.id), frame: place(height) });
+    blocks.push({ id: "choices", kind: "choice-set", responseId: rid, optionIds: options.map((option) => option.id), frame: place(height) });
   } else {
     const accepted = (answer.accepted ?? []).map((value) => value.trim()).filter(Boolean);
-    response = { id: "r1", kind: "short-text", acceptedAnswers: answer.kind === "short" ? accepted : accepted.slice(0, 1), grading: answer.kind === "short" ? "exact-normalized" : "self-check", explanation: answer.explanation };
-    blocks.push({ id: "input", kind: "blank", responseId: "r1", promptBefore: inputLabel(answer.before), promptAfter: inputLabel(answer.after), frame: place(answer.kind === "short" ? 56 : 120) });
+    response = { id: rid, kind: "short-text", acceptedAnswers: answer.kind === "short" ? accepted : accepted.slice(0, 1), grading: answer.kind === "short" ? "exact-normalized" : "self-check", explanation: answer.explanation };
+    blocks.push({ id: "input", kind: "blank", responseId: rid, promptBefore: inputLabel(answer.before), promptAfter: inputLabel(answer.after), frame: place(answer.kind === "short" ? 56 : 120) });
   }
   const revealText = `${response.kind === "short-text" ? response.acceptedAnswers[0] ?? "" : ""} ${answer.explanation}`;
-  blocks.push({ id: "reveal", kind: "answer-reveal", responseIds: ["r1"], frame: place(lines(revealText, 40) * 26 + 72) });
+  blocks.push({ id: "reveal", kind: "answer-reveal", responseIds: [rid], frame: place(lines(revealText, 40) * 26 + 72) });
   return { id: `q-${objective.id}`, source: sourceFor(objective, section, fileName), page: { width: PAGE_WIDTH, height: y - GAP + MARGIN }, blocks, responses: [response] };
 }
 

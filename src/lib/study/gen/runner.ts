@@ -1,7 +1,7 @@
 // Runs one generation (docs/DECISIONS.md 2026-10-12): outline → per-section classify+design (in parallel)
 // → wait for the one confirmation → author section by section in order. Everything is saved as it happens,
 // so a stop (usage limit, login, call cap, server restart) resumes from what is missing.
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
@@ -108,6 +108,7 @@ export const genInputSchema = z.strictObject({
   signals: z.object({ weakSpots: z.array(z.string().max(300)).max(30), reports: z.array(z.string().max(300)).max(30) }).default({ weakSpots: [], reports: [] }),
   /** 출제기준 folder; a candidate copy (출제기준-후보) lets one run compare criteria without touching the main folder. */
   guideDir: z.string().regex(guideDirPattern).default(DEFAULT_GUIDE_DIR),
+  origin: z.enum(["lab", "study"]).default("lab"),
 });
 
 export async function createGen(raw: unknown): Promise<GenState> {
@@ -456,6 +457,31 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     section.author = { documentPath, questionCount: questions.length, warnings,
       dropped: [...problems].map(([objectiveId, reason]) => ({ objectiveId, reason })) };
   }
+}
+
+/**
+ * One study deck per run: every section's questions in source order as one document, with what /study needs to
+ * show it (title, PDF, page count). The hash changes when a section is added or remade, so the screen reloads it.
+ */
+export async function studyDocument(id: string) {
+  const state = await loadGen(id);
+  if (!state) return null;
+  const questions: AuthoredQuestion[] = [];
+  for (const section of state.sections) {
+    const document = await readSectionDocument(id, section.id) as { questions?: AuthoredQuestion[] } | null;
+    questions.push(...(document?.questions ?? []));
+  }
+  if (!questions.length) return null;
+  const { getRegisteredMcpSource } = await import("../../mcp-source-registry.ts");
+  const source = await getRegisteredMcpSource(state.input.sourceId).catch(() => null);
+  const pages = state.input.pageNumbers;
+  const range = pages.length > 1 ? `p.${pages[0]}–${pages.at(-1)}` : `p.${pages[0]}`;
+  const document = { schemaVersion: "problem-authoring-v1" as const, id, title: `${state.input.fileName.replace(/\.pdf$/i, "")} · ${range}`, questions };
+  return {
+    meta: { id, title: document.title, artifactSha256: createHash("sha256").update(JSON.stringify(document)).digest("hex"), sourceFile: state.input.fileName,
+      sourceCatalogId: state.input.sourceId, sourceTotalPages: source?.pageCount ?? Math.max(...pages) },
+    document,
+  };
 }
 
 export function stepLabel(state: GenState) {
