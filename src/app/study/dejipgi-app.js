@@ -151,8 +151,9 @@ function applyOutcome(deck, item, outcome){
   const s = schedOf(deck, item.id); const t = now(); s.seen = true;
   if (outcome === "correct"){ s.box = Math.min(s.box + 1, INTERVALS.length - 1); s.due = t + INTERVALS[s.box]; s.lastIndep = t; }
   else if (outcome === "unsure"){ s.due = t + DAY; }
-  else if (outcome === "wrong"){ s.box = 0; s.due = t + 10*MIN; }
-  else if (outcome === "assisted"){ s.due = t + 10*MIN; }
+  // Missed ones are only marked for now (사용자 결정 2026-10-12): no re-ask 10 minutes later, back in the next day's review.
+  else if (outcome === "wrong"){ s.box = 0; s.due = t + DAY; }
+  else if (outcome === "assisted"){ s.due = t + DAY; }
 }
 function itemStatus(deck, item){
   const evs = deck.events.filter(e => e.item === item.id);
@@ -338,11 +339,6 @@ function finishItem(outcome){
   if (S.session.mode === "check") applyCheck(deck, item); else applyOutcome(deck, item, outcome);
   S.session.results.push({ deck:deck.id, item:item.id, outcome });
   S.session.assisted.add(item.id); // the result screen shows the answer, so a retry later in this session is not independent
-  if ((outcome === "wrong" || outcome === "assisted") && !S.session.requeued.has(item.id)){
-    S.session.requeued.add(item.id);
-    const pos = Math.min(S.session.i + 4, S.session.queue.length);
-    S.session.queue.splice(pos, 0, { deck:deck.id, item:item.id, retry:true });
-  }
   Store.save(deck);
 }
 function submitAnswer(){
@@ -517,13 +513,13 @@ function renderSession(){
     if (s.phase === "result"){
       const map = {
         good:["good", c.overridden ? "맞음으로 고쳤어요" : "혼자 맞혔어요", c.overridden ? "자동 채점이 놓친 답을 직접 인정했어요. 기록에 표시해 둡니다." : "다음에는 간격을 늘려 다시 물어볼게요."],
-        bad:["bad", item.format === "card" ? "잘 모른다고 표시했어요" : "이번엔 떠올리지 못했어요", "10분쯤 뒤, 이번 연습 안에서 한 번 더 나옵니다."],
-        assisted:["help", "정답을 보고 확인했어요", "혼자 맞힌 기록으로 세지 않아요. 잠시 뒤 다시 물어볼게요."],
+        bad:["bad", item.format === "card" ? "잘 모른다고 표시했어요" : "이번엔 떠올리지 못했어요", "복습 필요로 표시해 뒀어요. 내일 복습에 다시 나와요."],
+        assisted:["help", "정답을 보고 확인했어요", "혼자 맞힌 기록으로 세지 않아요. 내일 복습에 다시 나와요."],
         "self-good":["self", "알고 있다고 표시했어요", "자기평가라서 자동 채점보다 약한 근거로 기록돼요."],
         "self-mid":["self", "헷갈렸다고 표시했어요", "내일 다시 물어볼게요."],
         "read-good":["read", c.overridden ? "맞음으로 고쳤어요 (읽은 직후)" : "읽은 직후 맞혔어요", "방금 읽은 내용이라 기억 기록으로 세지 않아요. 내일부터 복습에 넣을게요."],
         "read-mid":["read", "일부만 떠올렸어요 (읽은 직후)", "내일부터 복습에 넣을게요."],
-        "read-bad":["bad", "읽은 직후에도 헷갈렸어요", "아래 ‘원문에서 보기’로 다시 읽어 보세요. 이번 확인에서 한 번 더 나와요."]
+        "read-bad":["bad", "읽은 직후에도 헷갈렸어요", "아래 ‘원문에서 보기’로 다시 읽어 보세요. 복습 필요로 표시해 뒀어요."]
       }[c.verdict];
       card.append(h("div", { class:`verdict ${map[0]}` }, h("strong", { text:map[1] }), h("span", { class:"small", text:map[2] }),
         (item.format === "value" && (c.verdict === "bad" || c.verdict === "read-bad") && !c.overridden && c.text.trim()) ? h("span", null, h("button", { class:"linkish", onclick:overrideCorrect }, "내 답도 맞아요 (표기만 달라요)")) : null
