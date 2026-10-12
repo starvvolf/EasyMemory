@@ -6,9 +6,9 @@ export type Purpose = (typeof purposes)[number];
 export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", understand: "이해", core: "핵심 암기", all: "통암기" };
 
 /** Model calls, in order. classify and design run per section. */
-export const genSteps = ["outline", "classify", "design", "author"] as const;
+export const genSteps = ["transcribe", "outline", "classify", "design", "author"] as const;
 export type GenStep = (typeof genSteps)[number];
-export const genStepLabel: Record<GenStep, string> = { outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제" };
+export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제" };
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
 export type ItemKind = (typeof itemKinds)[number];
@@ -37,6 +37,8 @@ export type GenInput = {
   guideDir?: string;
   /** Who started it: the lab, or a material made on the study screen (/study lists only those). Older runs: lab. */
   origin?: "lab" | "study";
+  /** Read pages that are not full text slides from their image once, before the outline (see pages.ts). */
+  readImages?: boolean;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
@@ -91,7 +93,9 @@ export type GenState = {
   /** Total model calls across restarts. */
   calls: number;
   /** What runs now, for the screen. */
-  current?: { step: GenStep; sectionId?: string; attempt: number };
+  current?: { step: GenStep; sectionId?: string; page?: number; attempt: number };
+  /** Pages read from their image (readImages): chosen once, then done or failed (failed pages keep the text layer). */
+  images?: { pages: number[]; done: number[]; failed: number[] };
   outlineWarnings?: Issue[];
   sections: SectionState[];
   confirmedObjectiveIds?: string[];

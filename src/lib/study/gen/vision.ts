@@ -9,39 +9,9 @@ import { callModel, type ModelCaller } from "../../ai/model.ts";
 import { redactCallText } from "../lab-contract.ts";
 import { cleanPageText } from "./checks.ts";
 import { dataRoot, GenError } from "./runner.ts";
+import { renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 
-/** Long side of the rendered page in pixels: enough for slide text and subscripts, small enough for one request. */
-const RENDER_WIDTH = 1600;
-
-/** Renders pages to JPEG data URLs (server side, @napi-rs/canvas). */
-export async function renderPageImages(bytes: Uint8Array, pages: readonly number[], width = RENDER_WIDTH) {
-  const [{ createCanvas }, pdfjs] = await Promise.all([import("@napi-rs/canvas"), import("pdfjs-dist/legacy/build/pdf.mjs")]);
-  const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
-  const images = new Map<number, string>();
-  try {
-    for (const pageNumber of [...new Set(pages)]) {
-      if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > document.numPages) continue;
-      const page = await document.getPage(pageNumber);
-      const base = page.getViewport({ scale: 1 });
-      const viewport = page.getViewport({ scale: width / Math.max(base.width, base.height) });
-      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
-      const context = canvas.getContext("2d");
-      context.fillStyle = "white";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvas: canvas as never, canvasContext: context as never, viewport }).promise;
-      images.set(pageNumber, `data:image/jpeg;base64,${canvas.toBuffer("image/jpeg", 85).toString("base64")}`);
-      page.cleanup();
-    }
-  } finally { await document.cleanup(); }
-  return images;
-}
-
-export const VISION_SYSTEM = [
-  "너는 강의 슬라이드 한 쪽을 글로 옮기는 사람이다. 이미지에 보이는 것만 옮기고, 보이지 않는 내용은 지어내지 않는다.",
-  "순서: 제목 → 본문 글(글머리표 구조 유지) → 식(LaTeX, $...$) → 표(마크다운 표) → 그림·도표(무엇을 보여 주는지 한두 문장, 그림 안 글자·수치·축 이름은 그대로).",
-  "원문의 언어와 표기를 그대로 둔다. 읽을 수 없는 부분은 [읽을 수 없음]으로 쓴다.",
-  "아래 [글자 층]은 PDF에서 뽑은 글자다. 깨졌거나 빠진 부분이 있을 수 있으니 이미지를 기준으로 한다.",
-].join("\n");
+export const VISION_SYSTEM = TRANSCRIBE_SYSTEM;
 
 export type VisionProbe = {
   id: string; createdAt: string; sourceId: string; fileName: string; page: number; mode?: "image" | "pdf";

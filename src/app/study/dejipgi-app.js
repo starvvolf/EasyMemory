@@ -1532,7 +1532,7 @@ const PURPOSES = [
   ["understand", "이해", "왜·어떻게를 설명할 수 있게, 개념과 관계 위주로 적게 골라요."],
   ["all", "통암기", "나온 내용을 빠짐없이 떠올리게 해요. 문제가 많아져요."],
 ];
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[] }; }
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[] }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
   const flat = [];
@@ -1597,7 +1597,7 @@ async function startMaterial(){
   const b = S.builder; if (b.busy || !engine || !b.file) return;
   b.busy = true; b.error = ""; b.status = "PDF를 등록하고 문제 만들기를 시작하는 중…"; render();
   try{
-    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim() });
+    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages });
     const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:b.sourceName.replace(/\.pdf$/i, ""), sourceName:b.sourceName,
       pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), createdAt:now(), status:"waiting", message:"" };
     const deck = pendingDeck(rec);
@@ -1743,10 +1743,12 @@ function renderBuilder(){
   note.addEventListener("input", () => { b.note = note.value; });
   const empty = b.pages.filter(p => !p.text.trim()).length;
   const span = b.to - b.from + 1;
+  // Same rule as the engine (pages.ts): pages short of a full text slide are read from their image, about 20 s each, 3 at a time.
+  const thin = b.pages.filter(p => p.n >= b.from && p.n <= b.to && (p.text.match(/[\p{L}\p{N}]/gu) || []).length < 600).length;
   const purpose = PURPOSES.find(x => x[0] === b.purpose) || PURPOSES[0];
   wrap.append(h("section", { class:"panel stack" },
     h("div", null, h("p", { class:"eyebrow", text:"방향 정하기" }), h("h2", { style:"font-size:18px;margin-top:2px", text:"어떻게 공부할지 알려 주세요" }),
-      empty ? h("p", { class:"small muted", text:`글자가 없는 쪽 ${empty}개는 그림·스캔이라 AI가 글로 읽지 못할 수 있어요.` }) : null),
+      empty && !b.readImages ? h("p", { class:"small muted", text:`글자가 없는 쪽 ${empty}개는 그림·스캔이라, 아래 ‘그림·수식도 읽기’를 켜야 문제에 들어가요.` }) : null),
     h("div", { class:"field" }, h("label", { text:"1. 목적" }),
       h("div", { class:"chat-sugs" }, PURPOSES.map(([key, label]) => h("button", { class:"chip-btn", "aria-pressed": b.purpose === key ? "true" : "false", disabled:b.busy,
         onclick: () => { b.purpose = key; render(); } }, label))),
@@ -1763,6 +1765,9 @@ function renderBuilder(){
         h("p", { class:"small muted", text:"여러 개를 고르면 처음부터 끝까지 이어진 범위로 만들어요." })) : null,
       span > 60 ? h("p", { class:"small muted", text:`${span}쪽은 오래 걸려요. 한 주차·한 장씩 나눠 만들면 먼저 끝난 것부터 공부할 수 있어요.` }) : null),
     h("div", { class:"field" }, h("label", { for:"note", text:"3. 메모 (선택)" }), note),
+    thin ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
+      h("input", { type:"checkbox", checked:b.readImages ? true : null, disabled:b.busy, onchange:(e) => { b.readImages = e.target.checked; render(); } }),
+      h("span", null, h("b", { text:"그림·수식도 읽기" }), h("span", { class:"muted", text:` · 글자가 적은 ${thin}쪽을 그림으로 읽어요 (약 ${Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 문제에 들어가요.` }))) : null,
     h("div", { class:"row" },
       h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "읽기 시작"),
       h("span", { class:"small muted", text:"바로 읽기로 넘어가요. AI가 목표를 정리하면 한 번 확인을 부탁하고, 그다음 문제가 쪽마다 붙어요." }))));

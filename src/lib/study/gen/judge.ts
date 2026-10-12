@@ -10,7 +10,7 @@ import { gradeResponse, type AuthoredQuestion, type AuthoringBlock, type Authori
 import { redactCallText } from "../lab-contract.ts";
 import { sectionPageTexts } from "./checks.ts";
 import { ruleLines } from "./guide.ts";
-import { chainTask, dataRoot, GenError, loadGen, pageBlock, readSectionDocument, registeredPages } from "./runner.ts";
+import { chainTask, dataRoot, GenError, loadGen, pageBlock, readSectionDocument, registeredPages, withTranscripts } from "./runner.ts";
 import type { GenInput, GenState, ModelChoice } from "./types.ts";
 
 export const JUDGE_DIR = "평가기준";
@@ -271,7 +271,7 @@ async function runJudge(gen: GenState, run: JudgeRun, caller: ModelCaller, optio
   try {
     run.status = "running"; await persist();
     const [blindRules, readerRules, expertRules] = await Promise.all([criteria("맨손학습자.md"), criteria("원문학습자.md"), criteria("전문가.md")]);
-    const loaded = await (options.pages ?? registeredPages)(gen.input);
+    const loaded = await withTranscripts(gen.id, await (options.pages ?? registeredPages)(gen.input));
     const objectives = new Map(gen.sections.flatMap((section) => section.design?.objectives ?? []).map((objective) => [objective.id, objective]));
 
     const judgeSection = async (section: GenState["sections"][number], questions: AuthoredQuestion[]) => {

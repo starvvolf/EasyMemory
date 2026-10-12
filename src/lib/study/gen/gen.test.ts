@@ -336,3 +336,32 @@ test("공부 화면용: 목차 문서를 하나로 묶고, 공부 화면에서 �
   assert.equal(deck.meta.title, "bfs · p.1–2");
   assert.match(deck.meta.artifactSha256, /^[a-f0-9]{64}$/);
 }));
+
+test("그림 쪽 읽기: 글자 적은 쪽을 이미지로 한 번 읽어 원문으로 쓰고, 못 그린 쪽은 글자 층으로 두며, 재실행은 다시 읽지 않는다", () => withData(async () => {
+  const state = await createGen({ ...base, purpose: "core", autoConfirm: true, readImages: true });
+  const seen: string[] = [];
+  const fakeReply = (step: GenStep, user: string) => {
+    if (step === "transcribe") { seen.push(user); return "Matrix page: the composite rotation is R(θ1+θ2) and it is read from the picture."; }
+    return genFakeReply(step, user);
+  };
+  // Page 2 cannot be rendered: it keeps its text layer.
+  const pageImages = async (_input: unknown, wanted: number[]) => new Map(wanted.filter((page) => page === 1).map((page) => [page, "data:image/jpeg;base64,AAAA"]));
+  const done = await runGen(state.id, caller, { pages, fakeReply, pageImages });
+  assert.equal(done.status, "done", done.message);
+  assert.deepEqual(done.images, { pages: [1, 2], done: [1], failed: [2] });
+  assert.match(seen[0], /\[글자 층\]\nBreadth-first search/);
+  assert.ok(done.outlineWarnings?.some((warning) => warning.code === "image-read-failed"));
+  const calls = await readGenCalls(state.id);
+  assert.equal(calls.filter((call) => call.step === "transcribe").length, 1, "page 1 once; page 2 had no image, so no call");
+  // Later steps read the page-1 reading instead of its text layer; page 2 keeps its text layer.
+  const classify = calls.filter((call) => call.step === "classify").map((call) => call.user).join("\n");
+  assert.match(classify, /Matrix page: the composite rotation/);
+  assert.match(classify, /boolean array records/);
+  assert.ok(!classify.includes("visits vertices in order of distance"));
+
+  const rerun = await forkGen(state.id, { from: "design" });
+  const again = await runGen(rerun.id, caller, { pages, fakeReply, pageImages });
+  assert.equal(again.status, "done", again.message);
+  assert.ok(!(await steps(rerun.id)).some((step) => step.startsWith("transcribe")));
+  assert.match((await readGenCalls(rerun.id)).find((call) => call.step === "design")!.user, /Matrix page/);
+}));

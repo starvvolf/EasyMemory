@@ -2,7 +2,7 @@
 // → wait for the one confirmation → author section by section in order. Everything is saved as it happens,
 // so a stop (usage limit, login, call cap, server restart) resumes from what is missing.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { callModel, ModelError, type ModelCaller, type ModelRequest } from "../../ai/model.ts";
@@ -10,6 +10,7 @@ import { redactCallText } from "../lab-contract.ts";
 import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
+import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
@@ -104,11 +105,12 @@ export const genInputSchema = z.strictObject({
   note: z.string().max(2000).default(""),
   autoConfirm: z.boolean().default(false),
   provider: z.enum(["chatgpt", "codex", "fake"]).default("chatgpt"),
-  models: z.partialRecord(z.enum(["outline", "classify", "design", "author"]), modelChoice).default({}),
+  models: z.partialRecord(z.enum(["transcribe", "outline", "classify", "design", "author"]), modelChoice).default({}),
   signals: z.object({ weakSpots: z.array(z.string().max(300)).max(30), reports: z.array(z.string().max(300)).max(30) }).default({ weakSpots: [], reports: [] }),
   /** 출제기준 folder; a candidate copy (출제기준-후보) lets one run compare criteria without touching the main folder. */
   guideDir: z.string().regex(guideDirPattern).default(DEFAULT_GUIDE_DIR),
   origin: z.enum(["lab", "study"]).default("lab"),
+  readImages: z.boolean().default(false),
 });
 
 export async function createGen(raw: unknown): Promise<GenState> {
@@ -149,13 +151,16 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
   }
   const now = new Date().toISOString();
   const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued",
-    phase: options.from, message: "", calls: 0, sections, outlineWarnings: base.outlineWarnings, forkOf: { genId: base.id, from: options.from } };
+    phase: options.from, message: "", calls: 0, sections, outlineWarnings: base.outlineWarnings, forkOf: { genId: base.id, from: options.from },
+    ...(base.images ? { images: structuredClone(base.images) } : {}) };
   if (options.from === "author") {
     // Same objectives as the base: what it confirmed, or the default choice if it stopped at the confirmation.
     const objectives = sections.flatMap((section) => section.design?.objectives ?? []);
     state.confirmedObjectiveIds = base.confirmedObjectiveIds ? [...base.confirmedObjectiveIds] : defaultChosen(input.purpose, objectives);
   }
   await saveState(state);
+  // Page readings belong to the copied steps: carry them over so the rerun sees the same source text.
+  if (base.images?.done.length) await cp(path.join(dirOf(base.id), "pages"), path.join(dirOf(state.id), "pages"), { recursive: true }).catch(() => undefined);
   return state;
 }
 
@@ -190,7 +195,28 @@ export type RunOptions = {
   pages?: (input: GenInput) => Promise<Map<number, string>>;
   /** Fake replies by step; defaults to the built-in fake when the provider is "fake". */
   fakeReply?: (step: GenStep, user: string, attempt: number) => string;
+  /** Page images (data URLs) for pages read from their image; production renders the registered PDF. */
+  pageImages?: (input: GenInput, pages: number[]) => Promise<Map<number, string>>;
 };
+
+async function registeredImages(input: GenInput, pages: number[]) {
+  const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
+  const bytes = await readRegisteredMcpSourcePdf(input.sourceId);
+  if (!bytes) throw new Stop("failed", "등록된 원본 PDF를 읽을 수 없어요.");
+  return renderPageImages(bytes, pages);
+}
+
+// ---- pages read from their image -------------------------------------------------------------------------
+const transcriptFile = (id: string, page: number) => path.join(dirOf(id), "pages", `${page}.json`);
+/** Replaces page texts with the readings saved for this run (later steps, the judges and reruns all use them). */
+export async function withTranscripts(id: string, texts: Map<number, string>) {
+  const state = await loadGen(id);
+  for (const page of state?.images?.done ?? []) {
+    try { texts.set(page, (JSON.parse(await readFile(transcriptFile(id, page), "utf8")) as { text: string }).text); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
+  return texts;
+}
 
 export async function registeredPages(input: GenInput) {
   const [{ readRegisteredMcpSourcePdf }, { extractPdfPageTexts }] = await Promise.all([
@@ -235,29 +261,32 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   let callsThisStart = 0;
   let loaded = new Map<number, string>();
 
-  const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, guide?: LoadedGuide) => {
-    if (callsThisStart >= MAX_CALLS_PER_START) throw new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${MAX_CALLS_PER_START})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
+  const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
+    extra: { images?: ModelRequest["images"]; page?: number } = {}) => {
+    // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
+    if (step !== "transcribe" && callsThisStart >= MAX_CALLS_PER_START) throw new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${MAX_CALLS_PER_START})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
     if (input.provider === "fake" && process.env.NODE_ENV === "production") throw new Stop("failed", "가짜 모델은 개발 환경에서만 쓸 수 있어요.");
-    callsThisStart += 1;
+    if (step !== "transcribe") callsThisStart += 1;
     state.calls += 1;
     const n = state.calls;
     const choice = input.models[step];
     const model = choice?.model ?? (process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || "gpt-6-sol");
     const effort = choice?.effort ?? (process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim() || "medium");
-    state.current = { step, ...(sectionId ? { sectionId } : {}), attempt };
+    state.current = { step, ...(sectionId ? { sectionId } : {}), ...(extra.page ? { page: extra.page } : {}), attempt };
     await saveState(state);
     const started = Date.now();
     const record: GenCall = { n, step, sectionId, attempt, model, effort, format: null, startedAt: new Date(started).toISOString(), ms: 0, ok: false,
       system: redactCallText(system), user: redactCallText(user), reply: null, error: null,
       ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
     const callFile = path.join(dirOf(id), "calls", `${n}.json`);
-    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: true, schema, schemaName: `recaller_${step.replace(/-/g, "_")}`, model, effort, caller, provider: input.provider };
+    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
+      model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}) };
     try {
       if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => genFakeReply(s, u)))(step, user, attempt);
       const reply = await callModel(request);
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
       await saveJson(callFile, record);
-      return reply.data;
+      return schema ? reply.data : reply.text;
     } catch (error) {
       const raw = (error as { rawText?: string }).rawText;
       Object.assign(record, { reply: raw === undefined ? null : redactCallText(raw), error: redactCallText(error instanceof Error ? error.message : String(error)), ms: Date.now() - started });
@@ -287,6 +316,37 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     state.status = "running"; state.message = "";
     await saveState(state);
     loaded = await (options.pages ?? registeredPages)(input);
+
+    // ⓪ pages read from their image (readImages), once per page, several at a time. A failed page keeps its text layer.
+    if (input.readImages) {
+      const images = (state.images ??= { pages: input.pageNumbers.filter((page) => needsImage(loaded.get(page) ?? "")), done: [], failed: [] });
+      await saveState(state);
+      const todo = images.pages.filter((page) => !images.done.includes(page) && !images.failed.includes(page));
+      for (let start = 0; start < todo.length; start += PARALLEL) {
+        const batch = todo.slice(start, start + PARALLEL);
+        const rendered = await (options.pageImages ?? registeredImages)(input, batch);
+        const settled = await Promise.allSettled(batch.map(async (page) => {
+          const image = rendered.get(page);
+          if (!image) throw new Error("쪽을 그리지 못했어요.");
+          const user = `[자료] ${input.fileName} p.${page}\n\n[글자 층]\n${loaded.get(page) || "(없음)"}`;
+          let text = "";
+          for (let attempt = 1; attempt <= 2 && !text.trim(); attempt += 1) {
+            try { text = String(await ask("transcribe", null, attempt, TRANSCRIBE_SYSTEM, user, null, undefined, { images: [{ label: `p.${page}`, dataUrl: image }], page })); }
+            catch (error) { if (error instanceof Stop || attempt === 2) throw error; }
+          }
+          if (!text.trim()) throw new Error("빈 응답");
+          await saveJson(transcriptFile(id, page), { page, text: cleanPageText(text.trim()) });
+          images.done.push(page);
+        }));
+        const stop = settled.find((result) => result.status === "rejected" && result.reason instanceof Stop) as PromiseRejectedResult | undefined;
+        batch.forEach((page, index) => { if (settled[index].status === "rejected" && !(stop)) images.failed.push(page); });
+        await saveState(state);
+        if (stop) throw stop.reason;
+      }
+      if (images.failed.length) state.outlineWarnings = [...(state.outlineWarnings ?? []).filter((warning) => warning.code !== "image-read-failed"),
+        { severity: "warning", code: "image-read-failed", message: `그림으로 읽지 못해 글자 층만 쓴 쪽: p.${images.failed.join(", ")}` }];
+      await withTranscripts(id, loaded);
+    }
     const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
     // ① outline (once). Two tries; an unusable outline stops the run.
@@ -301,7 +361,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       }
       if (!normalized?.sections.length) throw new Stop("paused-invalid", "목차를 만들지 못했어요. 다시 시작하면 목차부터 다시 시도해요.");
       state.sections = normalized.sections.map((section) => ({ ...section }));
-      state.outlineWarnings = normalized.warnings;
+      state.outlineWarnings = [...(state.outlineWarnings ?? []).filter((warning) => warning.code === "image-read-failed"), ...normalized.warnings];
       state.phase = "design";
       await saveState(state);
     }
@@ -486,6 +546,7 @@ export async function studyDocument(id: string) {
 
 export function stepLabel(state: GenState) {
   if (!state.current) return "";
+  if (state.current.step === "transcribe") return `그림 쪽 읽기 ${state.images?.done.length ?? 0}/${state.images?.pages.length ?? 0}${state.current.page ? ` · p.${state.current.page}` : ""}`;
   const section = state.sections.find((candidate) => candidate.id === state.current?.sectionId);
   return `${genStepLabel[state.current.step]}${section ? ` · ${section.title}` : ""}${state.current.attempt > 1 ? ` (${state.current.attempt}번째)` : ""}`;
 }

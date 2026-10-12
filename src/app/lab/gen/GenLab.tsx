@@ -14,7 +14,7 @@ type RunSummary = { id: string; createdAt: string; status: string; phase: string
 type CallSummary = Omit<GenCall, "system" | "user" | "reply">;
 type Detail = { gen: GenState; label: string; calls: CallSummary[] };
 
-const STEPS: GenStep[] = ["outline", "classify", "design", "author"];
+const STEPS: GenStep[] = ["transcribe", "outline", "classify", "design", "author"];
 const MODELS = ["gpt-6-sol", "gpt-6-astra", "gpt-6-luna"];
 const EFFORTS = ["low", "medium", "high", "xhigh"];
 const STATUS: Record<string, string> = {
@@ -96,6 +96,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
     () => Object.fromEntries(STEPS.map((step) => [step, { model: "gpt-6-luna", effort: "low" }])) as Record<GenStep, { model: string; effort: string }>);
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [guideDir, setGuideDir] = useState("출제기준");
+  const [readImages, setReadImages] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const source = sources.find((candidate) => candidate.id === sourceId) ?? sources[0];
@@ -107,7 +108,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
     setBusy(true); onError("");
     try {
       const { gen } = await api<{ gen: GenState }>("/api/lab/gen", "POST", {
-        sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, models, guideDir, confirmed: provider === "chatgpt" ? confirmed : undefined,
+        sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, models, guideDir, readImages, confirmed: provider === "chatgpt" ? confirmed : undefined,
       });
       setConfirmed(false);
       onStarted(gen.id);
@@ -153,6 +154,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         </>}
       </fieldset>
       <label>출제기준 폴더<input value={guideDir} onChange={(event) => setGuideDir(event.target.value.trim())} placeholder="출제기준" title="비교할 때는 출제기준-후보처럼 복사본 이름" /></label>
+      <label className="check" title="글자가 적은 쪽(600자 미만)을 이미지로 한 번 읽어 원문으로 씁니다. 쪽당 호출 1번."><input type="checkbox" checked={readImages} onChange={(event) => setReadImages(event.target.checked)} />그림·수식 쪽 읽기</label>
       <label className="check"><input type="checkbox" checked={autoConfirm} onChange={(event) => setAutoConfirm(event.target.checked)} />목표 확인 없이 끝까지</label>
       {provider === "chatgpt" && <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다(ChatGPT 사용량이 나갑니다)</label>}
       <p className="muted">쪽 {pages.length}개 · 예상 호출: 목차 1 + 목차 수 × {purpose === "read" ? "1" : "3"} (+재시도)</p>
@@ -283,6 +285,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
         <span className={`tag ${tone(gen.status)}`}>{STATUS[gen.status] ?? gen.status}</span>
         <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.guideDir ?? "출제기준"}
         {label && <span className="muted"> · {label}</span>}
+        {gen.images && <div className="muted">그림 쪽 읽기: {gen.images.done.length}/{gen.images.pages.length}쪽{gen.images.failed.length ? ` · 실패 p.${gen.images.failed.join(", ")}` : ""}</div>}
         {gen.forkOf && <div className="muted">고정 재실행({FORK_LABEL[gen.forkOf.from]}) · 기준 실행 {gen.forkOf.genId.slice(0, 12)}… 의 목차·분류{gen.forkOf.from === "author" ? "·목표" : ""}를 그대로 썼어요. 호출·시간·토큰은 다시 돈 단계만 셉니다.</div>}
         <div className="muted">호출 {gen.calls}번 · 모델 시간 {seconds(totalMs)} · 토큰 입력 {tokens.input.toLocaleString()} / 출력 {tokens.output.toLocaleString()}{formats.length ? ` · 응답 형식 ${formats.join(", ")}` : ""}</div>
         {gen.message && <p className={gen.status === "failed" ? "gen-error" : ""}>{gen.message}</p>}

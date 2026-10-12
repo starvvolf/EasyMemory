@@ -15,6 +15,8 @@ function quotesFrom(text: string) {
 }
 
 export function genFakeReply(step: GenStep, user: string): string {
+  // Reading a page image: the fake has no eyes, so it returns the text layer it was given.
+  if (step === "transcribe") return (user.split("[글자 층]\n")[1] ?? "").trim() || "(그림만 있는 쪽)";
   if (step === "outline") {
     const chosen = (/\[고른 쪽\] ([\d, ]+)/.exec(user)?.[1] ?? "1").split(",").map((value) => Number(value.trim())).filter(Boolean);
     return JSON.stringify({ sections: chosen.map((page) => ({ title: `${page}쪽 내용`, startText: "", pageStart: page, pageEnd: page })) });

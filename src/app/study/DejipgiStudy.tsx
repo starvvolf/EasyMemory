@@ -17,6 +17,7 @@ import "./dejipgi.css";
 
 /** Engine v2 models for study materials: reading the material is light work, designing and authoring get the stronger model (B 실측, 2026-10-12). */
 const STUDY_MODELS = {
+  transcribe: { model: "gpt-6-sol", effort: "medium" },
   outline: { model: "gpt-6-luna", effort: "low" }, classify: { model: "gpt-6-luna", effort: "low" },
   design: { model: "gpt-6-sol", effort: "medium" }, author: { model: "gpt-6-sol", effort: "medium" },
 };
@@ -82,12 +83,12 @@ export default function DejipgiStudy() {
     // ---- engine v2 (/api/lab/gen) ----
     const isGen = (id: string) => /^gen_[a-f0-9]{32}$/.test(id);
     const genState = async (id: string) => (await readJson<{ gen: GenState; label: string }>(await fetchExperiment(`/api/lab/gen/${id}`), "만드는 상태를 읽지 못했어요."));
-    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string) => {
+    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean) => {
       const pageNumbers = Array.from({ length: Math.max(1, to - from + 1) }, (_, index) => from + index);
       const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
-          models: STUDY_MODELS, origin: "study", confirmed: true }),
+          models: STUDY_MODELS, origin: "study", readImages, confirmed: true }),
       }), "문제 만들기를 시작하지 못했어요.");
       return gen;
     };
@@ -106,6 +107,7 @@ export default function DejipgiStudy() {
         const questions = gen.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0);
         return questions ? { status: "ready", message: "", artifactId: id } : { status: "failed", message: gen.message || "만들어진 문제가 없어요." };
       }
+      if (gen.current?.step === "transcribe" && gen.images) return { status: "running", message: `그림·수식 쪽 읽는 중 · ${gen.images.done.length}/${gen.images.pages.length}쪽` };
       if (gen.phase === "author") return { status: "authoring", message: `문제 만드는 중 · 목차 ${done}/${gen.sections.length}${label ? ` · ${label}` : ""}` };
       const where = gen.phase === "outline" ? "목차 나누는 중" : `자료 파악·학습 설계 중${gen.sections.length ? ` · 목차 ${gen.sections.length}개` : ""}`;
       return { status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}` };
@@ -123,7 +125,7 @@ export default function DejipgiStudy() {
       // Materials go through the v2 engine (docs/DECISIONS.md 2026-10-12): outline → design per section → one
       // confirmation of objectives → authoring. Decks made by the old request flow still load and can be remade.
       builder: {
-        async start({ file, from, to, purpose, note }) {
+        async start({ file, from, to, purpose, note, readImages }) {
           if (session.mode !== "local-experiment") throw new Error("자료 등록과 문제 만들기는 로컬 실험 모드에서만 할 수 있어요.");
           const form = new FormData();
           form.append("pdf", file);
@@ -131,7 +133,7 @@ export default function DejipgiStudy() {
             method: "POST", body: form,
           }), "PDF를 등록하지 못했어요.");
           const source = await findSource(registered.id);
-          const gen = await startGen(source, from, to, purpose, note);
+          const gen = await startGen(source, from, to, purpose, note, readImages);
           return { requestId: gen.id, sourceId: source.id };
         },
         async restart({ requestId, sourceId, from, to, purpose, note }) {
@@ -143,7 +145,7 @@ export default function DejipgiStudy() {
             return { requestId: request.id };
           }
           const previous = await genState(requestId).catch(() => null);
-          const gen = await startGen(await findSource(sourceId), from, to, previous?.gen.input.purpose ?? purpose, previous?.gen.input.note ?? note ?? "");
+          const gen = await startGen(await findSource(sourceId), from, to, previous?.gen.input.purpose ?? purpose, previous?.gen.input.note ?? note ?? "", previous?.gen.input.readImages ?? true);
           return { requestId: gen.id };
         },
         async remake({ artifactId, objectiveIds }) {
