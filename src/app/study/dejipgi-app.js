@@ -248,7 +248,10 @@ function renderHome(){
       h("button", { class:"btn", onclick: () => setView("create") }, "+ 새 자료")
     )
   ));
+  // A material still being made whose first sections are ready shows as its real deck with the progress note.
+  const growing = new Map(pendings.filter(p => p.pending.artifactId && S.decks[p.pending.artifactId]).map(p => [p.pending.artifactId, p]));
   for (const d of pendings){
+    if (d.pending.artifactId && growing.has(d.pending.artifactId)) continue;
     wrap.append(h("article", { class:"deck" },
       h("div", null, h("h3", { text:d.title }), h("div", { class:"meta" }, h("span", { text:d.sourceName }), h("span", { class:`chip ${d.pending.status === "failed" ? "bad" : "acc"}`, text:PENDING_LABEL[d.pending.status] || "준비 중" }))),
       h("div", { class:"row" }, h("button", { class:"btn small primary", onclick: () => openReader(d.id, d.lastPage || d.pending.from || 1) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기")),
@@ -283,7 +286,8 @@ function renderHome(){
       ),
       h("div", { class:"bar", "aria-hidden":"true" },
         h("i", { class:"g", style:`width:${pct(c.good)}` }), h("i", { class:"r", style:`width:${pct(c.review)}` }), h("i", { class:"h", style:`width:${pct(c.help)}` }), h("i", { class:"c", style:`width:${pct(c.read)}` })
-      )
+      ),
+      growing.has(d.id) ? h("div", { style:"grid-column:1/-1" }, pendingNote(growing.get(d.id))) : null
     ));
   }
   if (S.lib.status === "loading") list.append(h("p", { class:"small muted", text:"Recaller 문제를 불러오는 중…" }));
@@ -1648,13 +1652,15 @@ async function pollPending(){
   if (disposed || !engine) return;
   const list = Object.values(S.decks).filter(d => d.pending && d.pending.status !== "failed");
   if (!list.length) return;
-  let changed = false, ready = false;
+  let changed = false, ready = false, grew = false;
   for (const d of list){
     let next;
     try{ next = await engine.check(d.pending.requestId); }
     catch(e){ next = { status:d.pending.status, message:(e && e.message) || "상태를 확인하지 못했어요." }; }
     if (disposed) return;
     if (next.status !== d.pending.status || (next.message || "") !== d.pending.message) changed = true;
+    // Sections authored so far are already a deck: reload it whenever another section is added.
+    if (next.artifactId && next.status !== "ready" && ((next.message || "") !== d.pending.message || !d.pending.artifactId)) grew = true;
     Object.assign(d.pending, { status:next.status, message:next.message || "", artifactId:next.artifactId || d.pending.artifactId });
     if (next.status === "confirm" && next.objectives){
       // Keep what the learner already ticked across polls; start from the engine's default (core only, or all for 통암기).
@@ -1664,7 +1670,7 @@ async function pollPending(){
     } else if (next.status !== "confirm"){ delete d.pending.objectives; delete d.pending.chosen; }
     if (next.status === "ready") ready = true;
   }
-  if (ready) await reloadDecks();
+  if (ready || grew) await reloadDecks();
   if (changed || ready){ savePending(); if (!S.session && S.view !== "create") render(); }
   pollTimer = setTimeout(pollPending, 5000);
 }
@@ -1792,8 +1798,14 @@ function reloadDecks(){
       const real = S.decks[p.pending.artifactId];
       if (!real.lastPage && p.lastPage){ real.lastPage = p.lastPage; Store.save(real); }
       if (S.reader.deckId === p.id) S.reader.deckId = real.id;
-      delete S.decks[p.id];
-      toast(`‘${real.title}’ 문제가 준비됐어요. 읽던 쪽에 확인 문제가 붙었어요.`);
+      if (p.pending.status === "ready"){
+        delete S.decks[p.id];
+        toast(`‘${real.title}’ 문제가 모두 준비됐어요.`);
+      } else if (!p.pending.announced){
+        // Still authoring: keep the pending record (it keeps polling) and let the learner start on what is ready.
+        p.pending.announced = true; savePending();
+        toast(`‘${real.title}’ 첫 문제들이 준비됐어요. 지금 연습할 수 있고, 나머지 목차는 만드는 대로 붙어요.`);
+      }
     }
     if (decks.length || Object.values(S.decks).some(x => x.pending)) delete S.decks.example;
     else if (!S.decks.example){ const ex = exampleDeck(); Store.restore(ex); S.decks[ex.id] = ex; }

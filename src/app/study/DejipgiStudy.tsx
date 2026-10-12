@@ -100,21 +100,24 @@ export default function DejipgiStudy() {
           id: objective.id, section: section.title, statement: objective.statement, recall: objective.recall, importance: objective.importance })));
         return { status: "confirm", message: `목표 ${objectives.length}개를 확인해 주세요`, objectives, chosen: defaultChosen(gen.input.purpose, objectives) };
       }
-      if (gen.status === "paused-login") return { status: "paused", message: `ChatGPT 로그인이 필요해요 · ${gen.message}` };
-      if (gen.status.startsWith("paused") || gen.status === "interrupted") return { status: "paused", message: gen.message };
+      // Authored sections are a deck already (artifactId), so the learner can start before the rest is made.
+      const partial = gen.sections.some((section) => (section.author?.questionCount ?? 0) > 0) ? { artifactId: id } : {};
+      if (gen.status === "paused-login") return { status: "paused", message: `ChatGPT 로그인이 필요해요 · ${gen.message}`, ...partial };
+      if (gen.status.startsWith("paused") || gen.status === "interrupted") return { status: "paused", message: gen.message, ...partial };
       if (gen.status === "failed") return { status: "failed", message: gen.message || "문제 만들기가 실패했어요." };
       if (gen.status === "done") {
         const questions = gen.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0);
         return questions ? { status: "ready", message: "", artifactId: id } : { status: "failed", message: gen.message || "만들어진 문제가 없어요." };
       }
       if (gen.current?.step === "transcribe" && gen.images) return { status: "running", message: `그림·수식 쪽 읽는 중 · ${gen.images.done.length}/${gen.images.pages.length}쪽` };
-      if (gen.phase === "author") return { status: "authoring", message: `문제 만드는 중 · 목차 ${done}/${gen.sections.length}${label ? ` · ${label}` : ""}` };
+      if (gen.phase === "author") return { ...partial, status: "authoring", message: `문제 만드는 중 · 목차 ${done}/${gen.sections.length}${label ? ` · ${label}` : ""}` };
       const where = gen.phase === "outline" ? "목차 나누는 중" : `자료 파악·학습 설계 중${gen.sections.length ? ` · 목차 ${gen.sections.length}개` : ""}`;
       return { status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}` };
     };
     const loadGenDecks = async () => {
-      const { runs } = await readJson<{ runs: Array<{ id: string; status: string }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
-      return Promise.all(runs.filter((run) => run.status === "done").map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument }>(
+      const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
+      // Finished runs, and runs still being made whose first sections are authored.
+      return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument }>(
         await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").catch(() => null)));
     };
     return mountDejipgi(root, {
