@@ -69,3 +69,17 @@ test("규칙 줄만 고른다", () => {
   assert.deepEqual(ruleLines(markdown), ["- [a-1] 하나", "- [a-2] 둘", "- [b-1] 셋"]);
   assert.deepEqual(ruleLines(markdown, ["B"]), ["- [b-1] 셋"]);
 });
+
+test("저장소에 있는 후보 폴더(출제기준-…)도 절이 다 있고 예산 안이다", async () => {
+  const { readdir } = await import("node:fs/promises");
+  const { guideDirPattern } = await import("./guide.ts");
+  const dirs = (await readdir(process.cwd())).filter((name) => name !== "출제기준" && guideDirPattern.test(name));
+  for (const dir of dirs) {
+    for (const purpose of purposes) {
+      const design = await loadGuide("design", { purpose, dir });
+      const author = await loadGuide("author", { purpose, kinds: [...objectiveKinds], dir });
+      assert.ok(design.text.length <= GUIDE_BUDGET.design, `${dir} ${purpose} 설계 ${design.text.length}자`);
+      assert.ok(author.text.length <= GUIDE_BUDGET.author, `${dir} ${purpose} 출제 ${author.text.length}자`);
+    }
+  }
+});

@@ -28,6 +28,13 @@ export type Scorecard = {
   judge: Pick<JudgeRun, "id" | "kind" | "createdAt" | "models" | "summary" | "trial" | "calls"> | null;
 };
 
+/** A short answer made of words (no digits, operators or arrows), e.g. "boolean 배열": spellings vary, so code grading misfires. */
+export function wordyShort(answer: string) {
+  const text = answer.trim();
+  if (!text || /[0-9=+\-*/^→<>≤≥(){}\[\]⁻¹²³√∑∫]/.test(text)) return false;
+  return /[A-Za-z가-힣]{2,}/.test(text);
+}
+
 const bump = (record: Record<string, number>, key: string, by = 1) => { record[key] = (record[key] ?? 0) + by; };
 
 export function scorecard(state: GenState, calls: GenCall[], documents: Map<string, AuthoringDocument | null>, judge: JudgeRun | null = null): Scorecard {
@@ -64,6 +71,10 @@ export function scorecard(state: GenState, calls: GenCall[], documents: Map<stri
     const response = formatOf.get(objective.id);
     if (response && /고를\s*수/.test(objective.statement) && response.kind !== "single-choice") {
       suspects.push({ code: "verb-format", ref: objective.id, message: "목표는 '고를 수 있다'인데 보기 고르기 문제가 아니에요." });
+    }
+    // Code grading only works when the answer has one spelling (a value, symbol or sequence of given names).
+    if (response && response.kind === "short-text" && response.grading !== "self-check" && wordyShort(response.acceptedAnswers[0] ?? "")) {
+      suspects.push({ code: "short-wordy", ref: objective.id, message: `단답인데 같은 뜻을 여러 말로 쓸 수 있는 답이에요(플래시카드 후보): ${(response.acceptedAnswers[0] ?? "").slice(0, 40)}` });
     }
   }
 

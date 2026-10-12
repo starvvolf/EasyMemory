@@ -6,7 +6,7 @@ import test from "node:test";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { codeGrade, keyText, learnerView, mutate, startJudge, verdictOf, type JudgeCall } from "./judge.ts";
 import { createGen, runGen } from "./runner.ts";
-import { scorecard } from "./scorecard.ts";
+import { scorecard, wordyShort } from "./scorecard.ts";
 
 const choice: AuthoredQuestion = {
   id: "q-s1-o1", page: { width: 760, height: 300 },
@@ -121,3 +121,8 @@ test("출제가 끝나지 않았거나 실제 호출 확인이 없으면 판정�
   await runGen(waiting.id, caller, { pages: async () => PAGES });
   await assert.rejects(startJudge(waiting.id, {}, caller), /출제가 끝난/);
 }));
+
+test("낱말로 된 단답은 플래시카드 후보로 의심하고, 값·기호·순서는 두지 않는다", () => {
+  for (const answer of ["boolean 배열", "불리언 배열", "BFS", "HashSet"]) assert.equal(wordyShort(answer), true, answer);
+  for (const answer of ["12", "x′ = x + 3", "R⁻¹", "u → a → c", "A, B, C", ""]) assert.equal(wordyShort(answer), false, answer);
+});
