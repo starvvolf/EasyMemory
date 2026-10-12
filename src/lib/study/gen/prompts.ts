@@ -85,7 +85,10 @@ export function authorPrompt(input: GenInput, section: Section, objectives: Obje
     ...objective.materialNumbers.map((n) => material.get(n)).filter(Boolean)
       .map((item) => `  소재(${item!.kind}): ${item!.content} 「${item!.quote}」`),
   ].join("\n"));
-  const user = [`[자료] ${input.fileName}`, `[목차] ${section.title}`, `[목적] ${purposeLabel[input.purpose]}`, `[목표]\n${blocks.join("\n")}`].join("\n\n");
+  const previous = objectives.map((objective) => input.remake?.previous[objective.id] ? `- ${objective.id}: ${input.remake.previous[objective.id]}` : "").filter(Boolean);
+  const user = [`[자료] ${input.fileName}`, `[목차] ${section.title}`, `[목적] ${purposeLabel[input.purpose]}`, `[목표]\n${blocks.join("\n")}`,
+    // A remake: the learner reported these questions as odd. Same objective, a different question that avoids the earlier one's problem.
+    previous.length ? `[다시 만들기: 학습자가 이상하다고 신고한 이전 문제. 같은 목표로, 이전 문제와 다른 상황·형식으로 다시 낸다]\n${previous.join("\n")}` : ""].filter(Boolean).join("\n\n");
   return { system, user };
 }
 

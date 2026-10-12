@@ -152,7 +152,15 @@ export default function DejipgiStudy() {
           return { requestId: gen.id };
         },
         async remake({ artifactId, objectiveIds }) {
-          if (isGen(artifactId)) throw new Error("새 엔진으로 만든 자료는 아직 신고한 문제만 다시 만들 수 없어요. 곧 붙일게요.");
+          if (isGen(artifactId)) {
+            // Same objectives, authoring only, with the reported questions shown so the new ones differ.
+            const { gen: base } = await genState(artifactId);
+            const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment(`/api/lab/gen/${artifactId}/fork`, {
+              method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from: "author", objectiveIds, confirmed: true }),
+            }), "다시 만들기를 시작하지 못했어요.");
+            const pages = base.input.pageNumbers;
+            return { requestId: gen.id, sourceId: base.input.sourceId, from: Math.min(...pages), to: Math.max(...pages), purpose: base.input.purpose };
+          }
           const { artifacts } = await loadArtifacts();
           const meta = artifacts.find((item) => item.id === artifactId);
           const { requests } = await readJson<{ requests: ExperimentRequest[] }>(

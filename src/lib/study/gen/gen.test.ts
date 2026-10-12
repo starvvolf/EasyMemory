@@ -365,3 +365,21 @@ test("그림 쪽 읽기: 글자 적은 쪽을 이미지로 한 번 읽어 원문
   assert.ok(!(await steps(rerun.id)).some((step) => step.startsWith("transcribe")));
   assert.match((await readGenCalls(rerun.id)).find((call) => call.step === "design")!.user, /Matrix page/);
 }));
+
+test("신고한 문제 다시 만들기: 그 목표만 출제하고, 이전 문제를 보여 주며, 공부 화면에서 따로 붙는다", () => withData(async () => {
+  const first = await createGen({ ...base, purpose: "core", autoConfirm: true, origin: "study" });
+  const done = await runGen(first.id, caller, { pages });
+  const target = done.sections[1].design!.objectives[0].id;
+  await assert.rejects(forkGen(first.id, { from: "design", objectiveIds: [target] }), /출제만 다시/);
+  await assert.rejects(forkGen(first.id, { from: "author", objectiveIds: ["s9-o9"] }), /없습니다/);
+  const remake = await forkGen(first.id, { from: "author", objectiveIds: [target] });
+  assert.deepEqual(remake.confirmedObjectiveIds, [target]);
+  assert.ok(remake.input.remake?.previous[target]?.includes("→ 답:"));
+  const redone = await runGen(remake.id, caller, { pages });
+  assert.equal(redone.status, "done", redone.message);
+  assert.deepEqual(await steps(remake.id), ["author:s2#1"]);
+  assert.match((await readGenCalls(remake.id))[0].user, /\[다시 만들기: 학습자가 이상하다고 신고한 이전 문제/);
+  const deck = (await studyDocument(remake.id))!;
+  assert.match(deck.meta.title, /다시 만든 문제$/);
+  assert.equal(deck.document.questions.length, 1);
+}));

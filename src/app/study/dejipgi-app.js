@@ -1624,7 +1624,7 @@ async function remakeReported(deck){
     const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:`${deck.title} · 다시 만든 문제`, sourceName:deck.sourceName,
       pageCount:deck.pageCount, from:res.from, to:res.to, purpose:res.purpose, createdAt:now(), status:"waiting", message:"", remake:{ artifactId:deck.id, objectiveIds } };
     S.decks[rec.id] = pendingDeck(rec); savePending();
-    toast("다시 만들기 요청을 올렸어요. 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요. 새 문제는 따로 자료로 붙어요.");
+    toast(String(res.requestId).startsWith("gen_") ? "신고한 문제를 다시 만들고 있어요. 새 문제는 ‘다시 만든 문제’ 자료로 따로 붙어요." : "다시 만들기 요청을 올렸어요. 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요. 새 문제는 따로 자료로 붙어요.");
     setView("practice"); pollPending();
   }catch(e){ toast((e && e.message) || "다시 만들기 요청을 올리지 못했어요."); }
 }

@@ -39,6 +39,8 @@ export type GenInput = {
   origin?: "lab" | "study";
   /** Read pages that are not full text slides from their image once, before the outline (see pages.ts). */
   readImages?: boolean;
+  /** A remake of reported questions: the earlier question per objective, so authoring writes a different one. */
+  remake?: { genId: string; previous: Record<string, string> };
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */

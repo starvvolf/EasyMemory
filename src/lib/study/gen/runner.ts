@@ -128,7 +128,18 @@ export const forkInputSchema = z.strictObject({
   models: z.partialRecord(z.enum(["design", "author"]), modelChoice).default({}),
   guideDir: z.string().regex(guideDirPattern).optional(),
   autoConfirm: z.boolean().default(true),
+  /** With "author": only these objectives, e.g. the ones a learner reported. The earlier questions go to the prompt. */
+  objectiveIds: z.array(z.string().max(40)).min(1).max(200).optional(),
 });
+
+/** Plain text of a question as the learner saw it, plus its answer: what a remake should not repeat. */
+function questionText(question: AuthoredQuestion) {
+  const stem = question.blocks.map((block) => block.kind === "text" ? block.text : block.kind === "math" ? `$${block.latex}$` : block.kind === "table" ? block.rows.map((row) => row.join(" | ")).join(" / ") : "")
+    .filter(Boolean).join(" ");
+  const response = question.responses[0];
+  const answer = response.kind === "single-choice" ? response.options.find((option) => option.id === response.correctOptionId)?.text ?? "" : response.acceptedAnswers[0] ?? "";
+  return `${stem} → 답: ${answer}`.slice(0, 600);
+}
 
 /**
  * Fixed-prefix rerun: copies the base run's outline and classification (and, from "author", its objectives and
@@ -157,7 +168,19 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
     // Same objectives as the base: what it confirmed, or the default choice if it stopped at the confirmation.
     const objectives = sections.flatMap((section) => section.design?.objectives ?? []);
     state.confirmedObjectiveIds = base.confirmedObjectiveIds ? [...base.confirmedObjectiveIds] : defaultChosen(input.purpose, objectives);
-  }
+    if (options.objectiveIds) {
+      const known = new Set(objectives.map((objective) => objective.id));
+      const chosen = [...new Set(options.objectiveIds)].filter((objectiveId) => known.has(objectiveId));
+      if (!chosen.length) throw new GenError(400, "다시 만들 목표가 이 실행에 없습니다.");
+      state.confirmedObjectiveIds = chosen;
+      const previous: Record<string, string> = {};
+      for (const section of base.sections) {
+        const document = await readSectionDocument(base.id, section.id) as { questions?: AuthoredQuestion[] } | null;
+        for (const question of document?.questions ?? []) if (chosen.includes(question.source.objectiveId)) previous[question.source.objectiveId] = questionText(question);
+      }
+      input.remake = { genId: base.id, previous };
+    }
+  } else if (options.objectiveIds) throw new GenError(400, "목표를 골라 다시 만드는 것은 '출제만 다시'에서만 됩니다.");
   await saveState(state);
   // Page readings belong to the copied steps: carry them over so the rerun sees the same source text.
   if (base.images?.done.length) await cp(path.join(dirOf(base.id), "pages"), path.join(dirOf(state.id), "pages"), { recursive: true }).catch(() => undefined);
@@ -536,7 +559,7 @@ export async function studyDocument(id: string) {
   const source = await getRegisteredMcpSource(state.input.sourceId).catch(() => null);
   const pages = state.input.pageNumbers;
   const range = pages.length > 1 ? `p.${pages[0]}–${pages.at(-1)}` : `p.${pages[0]}`;
-  const document = { schemaVersion: "problem-authoring-v1" as const, id, title: `${state.input.fileName.replace(/\.pdf$/i, "")} · ${range}`, questions };
+  const document = { schemaVersion: "problem-authoring-v1" as const, id, title: `${state.input.fileName.replace(/\.pdf$/i, "")} · ${range}${state.input.remake ? " · 다시 만든 문제" : ""}`, questions };
   return {
     meta: { id, title: document.title, artifactSha256: createHash("sha256").update(JSON.stringify(document)).digest("hex"), sourceFile: state.input.fileName,
       sourceCatalogId: state.input.sourceId, sourceTotalPages: source?.pageCount ?? Math.max(...pages) },
