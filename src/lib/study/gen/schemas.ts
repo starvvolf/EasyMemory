@@ -18,10 +18,12 @@ export const outlineSchema = obj({
     startText: str("이 항목이 원문에서 시작되는 곳의 글자를 그대로 복사(보통 제목 줄, 20~60자)"),
     pageStart: int("시작 쪽"),
     pageEnd: int("끝 쪽(한 쪽이면 시작 쪽과 같음)"),
-  }), "학습 단위로 쓸 목차 항목. 원문 순서대로, 고른 쪽을 빠짐없이 덮는다"),
+    parts: arr(obj({ title: str("원문의 소제목·슬라이드 제목 그대로"), pageStart: int("시작 쪽") }), "이 단원 안의 세부 항목, 원문 순서대로. 없으면 빈 배열"),
+  }), "공부 단위(단원). 원문 순서대로, 고른 쪽을 빠짐없이 덮는다"),
 });
 export const outlineReply = z.object({
-  sections: z.array(z.object({ title: z.string().trim().min(1), startText: z.string(), pageStart: z.number().int(), pageEnd: z.number().int() })),
+  sections: z.array(z.object({ title: z.string().trim().min(1), startText: z.string(), pageStart: z.number().int(), pageEnd: z.number().int(),
+    parts: z.array(z.object({ title: z.string().trim(), pageStart: z.number().int() })).default([]) })),
 });
 
 export const classifySchema = obj({

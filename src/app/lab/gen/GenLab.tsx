@@ -311,6 +311,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
       {gen.sections.map((section) => (
         <article key={section.id} className="gen-section">
           <h3>{section.title} <small>p.{section.pages.join(", ")}</small></h3>
+          {section.parts?.length ? <p className="muted parts">{section.parts.map((part) => `${part.title} (p.${part.pages[0]}${part.pages.length > 1 ? `–${part.pages.at(-1)}` : ""})`).join(" · ")}</p> : null}
           {section.classify && (
             <details><summary>내용 분류 {section.classify.items.length}개</summary>
               <ol className="items">{section.classify.items.map((item) => <li key={item.n}><span className="kind">{item.kind}</span> {item.content} <small>p.{item.page}</small><q>{item.quote}</q></li>)}</ol>

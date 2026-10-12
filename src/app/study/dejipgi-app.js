@@ -1696,7 +1696,7 @@ function goalPanel(d){
     groups.map(g => h("section", null, h("h4", { text:g.title }),
       h("ul", null, g.list.map(o => h("li", null, h("label", null,
         h("input", { type:"checkbox", checked:chosen.has(o.id) ? true : null, onchange: () => toggle(o.id) }),
-        h("span", null, h("span", { text:o.statement }), o.importance === "support" ? h("span", { class:"chip", text:"보조" }) : null,
+        h("span", null, o.part ? h("small", { class:"muted part", text:o.part }) : null, h("span", { text:o.statement }), o.importance === "support" ? h("span", { class:"chip", text:"보조" }) : null,
           h("small", { class:"muted", text:`떠올릴 것: ${o.recall}` })))))))),
     h("div", { class:"row" },
       h("button", { class:"btn primary", disabled:p.confirming ? true : null, onclick: () => confirmGoals(d) }, p.confirming ? "확정하는 중…" : `이 목표 ${chosen.size}개로 문제 만들기`),

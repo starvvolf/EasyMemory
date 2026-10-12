@@ -98,7 +98,8 @@ export default function DejipgiStudy() {
       const calls = gen.calls ? ` · 호출 ${gen.calls}번` : "";
       if (gen.status === "awaiting-confirm") {
         const objectives = gen.sections.flatMap((section) => (section.design?.objectives ?? []).map((objective) => ({
-          id: objective.id, section: section.title, statement: objective.statement, recall: objective.recall, importance: objective.importance })));
+          id: objective.id, section: section.title, part: section.parts?.find((part) => part.pages.includes(objective.pages[0]))?.title,
+          statement: objective.statement, recall: objective.recall, importance: objective.importance })));
         return { status: "confirm", message: `목표 ${objectives.length}개를 확인해 주세요`, objectives, chosen: defaultChosen(gen.input.purpose, objectives) };
       }
       // Authored sections are a deck already (artifactId), so the learner can start before the rest is made.

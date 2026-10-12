@@ -2,7 +2,7 @@ import type { StudyDeck } from "@/lib/study/from-authoring";
 import type { NoteTurn, StudyNote } from "@/lib/study/notes";
 
 /** An objective shown at the one confirmation before authoring (engine v2). Support objectives start unchecked. */
-export type DejipgiObjective = { id: string; section: string; statement: string; recall: string; importance: "core" | "support" };
+export type DejipgiObjective = { id: string; section: string; part?: string; statement: string; recall: string; importance: "core" | "support" };
 export type DejipgiMaterialStatus = {
   status: "waiting" | "running" | "confirm" | "paused" | "authoring" | "ready" | "failed"; message: string; artifactId?: string;
   /** With "confirm": the designed objectives and the ones checked by default. */

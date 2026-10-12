@@ -45,7 +45,9 @@ export type GenInput = {
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
-export type Section = { id: string; title: string; pages: number[]; startText?: string };
+/** A study unit (one call chain); `parts` are the finer headings inside it, kept for showing where an objective comes from. */
+export type SectionPart = { title: string; pages: number[] };
+export type Section = { id: string; title: string; pages: number[]; startText?: string; parts?: SectionPart[] };
 
 export type ClassItem = { n: number; kind: ItemKind; content: string; quote: string; page: number };
 
@@ -77,6 +79,7 @@ export type SectionState = {
   title: string;
   pages: number[];
   startText?: string;
+  parts?: SectionPart[];
   classify?: { items: ClassItem[]; warnings: Issue[] };
   design?: { objectives: Objective[]; warnings: Issue[] };
   author?: { documentPath: string | null; questionCount: number; dropped: Array<{ objectiveId: string; reason: string }>; warnings: Issue[] };

@@ -10,12 +10,16 @@ const COMMON = [
   "인용 칸에는 원문을 글자 그대로 복사한다. 요약하거나 번역하거나 고쳐 쓰지 않는다.",
 ].join("\n");
 
+/** The finer headings inside a unit, as context for classify and design. Empty when the outline has none. */
+const partsLine = (section: Section) => section.parts?.length ? `[세부 항목] ${section.parts.map((part) => `${part.title} (p.${part.pages[0]}${part.pages.length > 1 ? `–${part.pages.at(-1)}` : ""})`).join(" / ")}` : "";
+
 export function outlinePrompt(input: GenInput, pageText: string) {
   const system = [
     "너는 학습자료의 목차를 정리한다.",
     "원문에 있는 장·절·슬라이드 제목으로 목차를 만든다. 내용 설명·요약은 쓰지 않는다.",
-    "목차 항목 하나가 한 번에 공부할 단위가 된다. 한 주제를 다루는 여러 쪽을 묶어 보통 4~10쪽이 되게 한다. 슬라이드마다 항목을 만들지 않는다. 아주 긴 장은 원문의 절 제목으로 나눈다.",
-    "표지, 강의·차시 안내(학습목표 목록, 수업 진행 방식, 평가·교재·일정 안내), 퀴즈, 요약 쪽은 따로 항목을 만들지 않고 이웃 항목에 붙인다.",
+    "목차는 두 단계다. sections(단원)는 한 번에 공부할 단위로, 한 주제를 다루는 여러 쪽을 묶어 보통 4~10쪽이 되게 한다. 슬라이드마다 단원을 만들지 않는다. 아주 긴 장은 원문의 절 제목으로 나눈다.",
+    "parts(세부 항목)는 단원 안의 원문 소제목이나 슬라이드 제목을 원문 순서대로 쓴다. 세밀해도 된다. 같은 제목이 이어지는 쪽은 하나로 쓴다.",
+    "표지, 강의·차시 안내(학습목표 목록, 수업 진행 방식, 평가·교재·일정 안내), 퀴즈, 요약 쪽은 따로 단원을 만들지 않고 이웃 단원에 붙인다.",
     "고른 쪽을 빠짐없이 원문 순서대로 덮는다. 명시적 목차가 없으면 실제 제목이나 슬라이드 제목을 쓴다.",
     "startText에는 그 항목이 시작되는 곳의 원문 글자(보통 제목 줄)를 그대로 복사한다. 한 쪽 중간에서 다음 항목이 시작되면 코드가 이 글자 위치에서 쪽을 나눈다.",
     COMMON,
@@ -41,7 +45,7 @@ export function classifyPrompt(input: GenInput, section: Section, pageText: stri
     "받은 원문은 이 목차에 해당하는 부분만 잘라 낸 것이다. 그 밖의 내용은 다른 목차에서 다루므로 끌어오지 않는다.",
     COMMON,
   ].join("\n");
-  const user = [`[자료] ${input.fileName}`, `[목차] ${section.title} (p.${section.pages.join(", ")})`,
+  const user = [`[자료] ${input.fileName}`, `[목차] ${section.title} (p.${section.pages.join(", ")})`, partsLine(section),
     others.length ? `[같은 쪽의 다른 목차(다루지 않음)] ${others.join(" / ")}` : "",
     `[원문: 이 목차 부분의 쪽별 추출 글자]\n${pageText}`].filter(Boolean).join("\n\n");
   return { system, user };
@@ -60,6 +64,7 @@ export function designPrompt(input: GenInput, section: Section, items: ClassItem
   const user = [
     `[자료] ${input.fileName}`,
     `[목차] ${section.title} (p.${section.pages.join(", ")})`,
+    partsLine(section),
     `[목적] ${purposeLabel[input.purpose]}`,
     input.note.trim() ? `[학습자 메모] ${input.note.trim().slice(0, 600)}` : "",
     signals.length ? `[먼저 다룰 것]\n${signals.join("\n")}` : "",

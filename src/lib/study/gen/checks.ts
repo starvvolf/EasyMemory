@@ -5,7 +5,7 @@
 import { containsQuote } from "../../../../tools/study-forge-mcp/source-evidence.ts";
 import type { classifyReply, designReply, outlineReply } from "./schemas.ts";
 import type { z } from "zod";
-import { materialKinds, type ClassItem, type Issue, type Objective, type Section } from "./types.ts";
+import { materialKinds, type ClassItem, type Issue, type Objective, type Section, type SectionPart } from "./types.ts";
 
 const loose = (value: string) => value.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase("ko-KR");
 
@@ -13,13 +13,24 @@ const loose = (value: string) => value.normalize("NFKC").replace(/\s+/g, "").toL
  * Outline problems are fixed in code, not by asking again: clamp to the chosen pages, keep source order,
  * hand uncovered pages to the neighbouring section. Only an outline with no usable section is an error.
  */
-export function normalizeOutline(reply: { sections: Array<Omit<z.infer<typeof outlineReply>["sections"][number], "startText"> & { startText?: string }> }, chosen: number[]): { sections: Section[]; warnings: Issue[] } {
+type OutlineInput = { sections: Array<Omit<z.infer<typeof outlineReply>["sections"][number], "startText" | "parts"> & { startText?: string; parts?: Array<{ title: string; pageStart: number }> }> };
+/** Parts cover their unit's pages: each part runs from its start to the next part's start; pages before the first part go to it. */
+function toParts(parts: Array<{ title: string; pageStart: number }>, pages: number[]): SectionPart[] {
+  const valid = parts.map((part) => ({ title: part.title.trim(), pageStart: part.pageStart })).filter((part) => part.title && pages.includes(part.pageStart))
+    .sort((a, b) => a.pageStart - b.pageStart);
+  return valid.map((part, index) => {
+    const end = valid[index + 1]?.pageStart ?? Infinity;
+    return { title: part.title, pages: pages.filter((page) => (index === 0 || page >= part.pageStart) && page < end && (index > 0 || page < end)) };
+  }).filter((part) => part.pages.length);
+}
+export function normalizeOutline(reply: OutlineInput, chosen: number[]): { sections: Section[]; warnings: Issue[] } {
   const pages = [...new Set(chosen)].sort((a, b) => a - b);
   const warnings: Issue[] = [];
   const drafts = reply.sections
     .map((section) => {
       const start = Math.min(section.pageStart, section.pageEnd), end = Math.max(section.pageStart, section.pageEnd);
-      return { title: section.title.trim(), startText: (section.startText ?? "").trim(), pages: pages.filter((page) => page >= start && page <= end) };
+      const own = pages.filter((page) => page >= start && page <= end);
+      return { title: section.title.trim(), startText: (section.startText ?? "").trim(), pages: own, parts: toParts(section.parts ?? [], own) };
     })
     .filter((section) => section.title && section.pages.length)
     .sort((a, b) => a.pages[0] - b.pages[0]);
@@ -43,13 +54,19 @@ export function normalizeOutline(reply: { sections: Array<Omit<z.infer<typeof ou
     for (let i = 1; i < drafts.length; i += 1) if (size(i) < size(index)) index = i;
     const neighbour = index === 0 ? 1 : index === drafts.length - 1 ? index - 1 : size(index - 1) <= size(index + 1) ? index - 1 : index + 1;
     const [first, second] = neighbour < index ? [neighbour, index] : [index, neighbour];
+    // A merged unit keeps the finer headings: each original unit becomes a part (or brings its own parts).
+    const asParts = (draft: (typeof drafts)[number]) => draft.parts.length ? draft.parts : [{ title: draft.title, pages: draft.pages }];
     const merged = { title: mergeTitles(drafts[first].title, drafts[second].title), startText: drafts[first].startText,
-      pages: [...new Set([...drafts[first].pages, ...drafts[second].pages])].sort((a, b) => a - b) };
+      pages: [...new Set([...drafts[first].pages, ...drafts[second].pages])].sort((a, b) => a - b),
+      parts: [...asParts(drafts[first]), ...asParts(drafts[second])] };
     drafts.splice(first, 2, merged);
   }
   if (drafts.length < before) warnings.push({ severity: "warning", code: "outline-merged", message: `목차 ${before}개가 너무 잘아서 ${drafts.length}개로 묶었어요.` });
   return { sections: drafts.map((section, index) => ({ id: `s${index + 1}`, title: section.title, pages: section.pages,
-    ...(section.startText ? { startText: section.startText } : {}) })), warnings };
+    ...(section.startText ? { startText: section.startText } : {}),
+    // Gap pages added above belong to the last part that starts before them.
+    ...(section.parts.length ? { parts: section.parts.map((part, partIndex, all) => ({ ...part,
+      pages: section.pages.filter((page) => page >= (partIndex === 0 ? -Infinity : part.pages[0]) && (all[partIndex + 1] ? page < all[partIndex + 1].pages[0] : true)) })) } : {}) })), warnings };
 }
 
 /** At most one section per this many chosen pages (but small selections may keep up to MIN_SECTIONS). */

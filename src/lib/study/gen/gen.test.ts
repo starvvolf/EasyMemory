@@ -418,3 +418,15 @@ test("같은 PDF를 다시 만들면 앞 실행의 그림 쪽 읽기를 그대�
   assert.deepEqual(done.images?.done.sort(), [1, 2]);
   assert.ok(!(await steps(second.id)).some((step) => step.startsWith("transcribe")));
 }));
+
+test("목차는 두 단계: 단원 아래 세부 항목이 쪽을 나눠 갖고, 단원을 묶어도 세부 항목은 남는다", () => {
+  const pages = [1, 2, 3, 4, 5, 6];
+  const two = normalizeOutline({ sections: [
+    { title: "변환", startText: "", pageStart: 1, pageEnd: 6, parts: [{ title: "이동", pageStart: 1 }, { title: "회전", pageStart: 3 }, { title: "확대", pageStart: 5 }] },
+  ] }, pages);
+  assert.deepEqual(two.sections[0].parts, [{ title: "이동", pages: [1, 2] }, { title: "회전", pages: [3, 4] }, { title: "확대", pages: [5, 6] }]);
+  const many = Array.from({ length: 20 }, (_, index) => index + 1);
+  const merged = normalizeOutline({ sections: many.map((page) => ({ title: `슬라이드 ${page}`, startText: "", pageStart: page, pageEnd: page, parts: [] })) }, many);
+  assert.equal(merged.sections.length, 5);
+  assert.deepEqual(merged.sections.flatMap((section) => section.parts!.map((part) => part.title)), many.map((page) => `슬라이드 ${page}`));
+});
