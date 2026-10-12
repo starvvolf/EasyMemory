@@ -44,7 +44,7 @@ export const VISION_SYSTEM = [
 ].join("\n");
 
 export type VisionProbe = {
-  id: string; createdAt: string; sourceId: string; fileName: string; page: number;
+  id: string; createdAt: string; sourceId: string; fileName: string; page: number; mode?: "image" | "pdf";
   model: string; effort: string; ms: number; ok: boolean; error: string | null;
   textLayer: string; reply: string | null; usage?: { inputTokens?: number; outputTokens?: number }; imageBytes: number;
 };
@@ -55,6 +55,8 @@ const probeSchema = z.strictObject({
   model: z.string().trim().min(1).max(80).default("gpt-6-sol"),
   effort: z.enum(["low", "medium", "high", "xhigh"]).default("medium"),
   provider: z.enum(["chatgpt", "fake"]).default("chatgpt"),
+  /** image: one rendered page. pdf: the whole PDF file, asking for one page (the file route may bill every page). */
+  mode: z.enum(["image", "pdf"]).default("image"),
   confirmed: z.boolean().optional(),
 });
 const probeDir = () => path.join(dataRoot(), "vision");
@@ -75,11 +77,15 @@ export async function runVisionProbe(raw: unknown, caller: ModelCaller, options:
   if (!image) throw new GenError(400, "그 쪽을 그릴 수 없습니다(쪽 번호 확인).");
   const textLayer = cleanPageText(await (options.texts ?? textLayerOf)(pdf.bytes, input.page));
   const probe: VisionProbe = { id: `v_${randomBytes(8).toString("hex")}`, createdAt: new Date().toISOString(), sourceId: input.sourceId, fileName: pdf.fileName,
-    page: input.page, model: input.model, effort: input.effort, ms: 0, ok: false, error: null, textLayer, reply: null, imageBytes: Math.round(image.length * 0.75) };
+    page: input.page, mode: input.mode, model: input.model, effort: input.effort, ms: 0, ok: false, error: null, textLayer, reply: null, imageBytes: Math.round(image.length * 0.75) };
   const started = Date.now();
   try {
-    const reply = await callModel({ purpose: "vision:probe", system: VISION_SYSTEM, user: `[자료] ${pdf.fileName} p.${input.page}\n\n[글자 층]\n${textLayer || "(없음)"}`,
-      images: [{ label: `p.${input.page}`, dataUrl: image }], model: input.model, effort: input.effort, caller, provider: input.provider,
+    const asPdf = input.mode === "pdf";
+    const reply = await callModel({ purpose: `vision:probe:${input.mode}`, system: VISION_SYSTEM,
+      user: `[자료] ${pdf.fileName} p.${input.page}${asPdf ? `\n첨부한 PDF 전체 중 ${input.page}쪽만 옮긴다.` : ""}\n\n[글자 층]\n${textLayer || "(없음)"}`,
+      ...(asPdf ? { files: [{ filename: pdf.fileName, dataUrl: `data:application/pdf;base64,${Buffer.from(pdf.bytes).toString("base64")}` }] }
+        : { images: [{ label: `p.${input.page}`, dataUrl: image }] }),
+      model: input.model, effort: input.effort, caller, provider: input.provider,
       ...(input.provider === "fake" ? { fakeReply: `# p.${input.page}\n${textLayer.slice(0, 200)}\n(가짜 모델: 이미지는 읽지 않음)` } : {}) });
     Object.assign(probe, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage });
   } catch (error) {

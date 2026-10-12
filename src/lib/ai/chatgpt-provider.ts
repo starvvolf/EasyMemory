@@ -20,7 +20,7 @@ export function responseFailure(status: number, body: ApiError): ModelError {
 /** Structured output asks for a JSON Schema; `fallback` is the plain JSON mode used when the plan route refuses it. */
 type ResponseBody = {
   model: string; instructions: string; store: boolean; stream: boolean;
-  input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail: "high" }> }>;
+  input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail: "high" } | { type: "input_file"; filename: string; file_data: string }> }>;
   reasoning?: { effort: string }; text?: { format: { type: string } & Record<string, unknown> };
 };
 export function responseRequest(request: ModelRequest, format: "schema" | "fallback" = "schema"): ResponseBody {
@@ -32,9 +32,11 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
     model: request.model ?? "gpt-6-sol",
     instructions,
     // With page images the user turn becomes text plus one labelled image per page.
-    input: [{ role: "user", content: request.images?.length
-      ? [{ type: "input_text" as const, text: request.user }, ...request.images.flatMap((image) => [
-          { type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: "high" as const }])]
+    input: [{ role: "user", content: request.images?.length || request.files?.length
+      ? [{ type: "input_text" as const, text: request.user },
+          ...(request.files ?? []).map((file) => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
+          ...(request.images ?? []).flatMap((image) => [
+            { type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: "high" as const }])]
       : request.user }],
     store: false,
     stream: true,

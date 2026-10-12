@@ -166,6 +166,7 @@ function VisionPanel({ sources, onError }: { sources: Source[]; onError: (messag
   const [sourceId, setSourceId] = useState("");
   const [page, setPage] = useState(1);
   const [model, setModel] = useState({ model: "gpt-6-sol", effort: "medium" });
+  const [mode, setMode] = useState<"image" | "pdf">("image");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [probes, setProbes] = useState<VisionProbe[]>([]);
@@ -179,7 +180,7 @@ function VisionPanel({ sources, onError }: { sources: Source[]; onError: (messag
     if (!source) return;
     setBusy(true); onError("");
     try {
-      const { probe } = await api<{ probe: VisionProbe & { image: string } }>("/api/lab/gen/vision", "POST", { sourceId: source.id, page, ...model, confirmed });
+      const { probe } = await api<{ probe: VisionProbe & { image: string } }>("/api/lab/gen/vision", "POST", { sourceId: source.id, page, mode, ...model, confirmed });
       setShown(probe); setConfirmed(false); void loadList();
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
@@ -197,12 +198,16 @@ function VisionPanel({ sources, onError }: { sources: Source[]; onError: (messag
         <label>모델<select value={model.model} onChange={(event) => setModel({ ...model, model: event.target.value })}>{MODELS.map((m) => <option key={m}>{m}</option>)}</select></label>
         <label>강도<select value={model.effort} onChange={(event) => setModel({ ...model, effort: event.target.value })}>{EFFORTS.map((e) => <option key={e}>{e}</option>)}</select></label>
       </div>
+      <div className="row">
+        <label className="chip"><input type="radio" checked={mode === "image"} onChange={() => setMode("image")} />쪽 이미지</label>
+        <label className="chip" title="PDF 파일 전체를 보내고 그 쪽만 옮기게 합니다. 쪽 수만큼 토큰이 들 수 있어요."><input type="radio" checked={mode === "pdf"} onChange={() => setMode("pdf")} />PDF 통째</label>
+      </div>
       <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다</label>
       <button className="primary" disabled={busy || !source || !confirmed} onClick={() => void run()}>{busy ? "읽는 중…" : "이 쪽 읽기"}</button>
       {probes.length > 0 && <ul className="gen-runs">{probes.slice(0, 8).map((probe) => (
         <li key={probe.id}><button className={shown?.id === probe.id ? "on" : ""} onClick={() => void open(probe)}>
           <span className={`tag ${probe.ok ? "ok" : "bad"}`}>{probe.ok ? "읽음" : "실패"}</span>
-          <small>{probe.fileName} p.{probe.page} · {probe.model}·{probe.effort} · {seconds(probe.ms)}</small></button></li>))}</ul>}
+          <small>{probe.fileName} p.{probe.page} · {probe.mode === "pdf" ? "PDF" : "이미지"} · {probe.model}·{probe.effort} · {seconds(probe.ms)}</small></button></li>))}</ul>}
       {shown && (
         <div className="vision-result">
           {/* A data URL from the probe; next/image adds nothing here. */}
