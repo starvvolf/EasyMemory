@@ -14,6 +14,20 @@ const lines = (text: string, perLine = 44) => Math.max(1, text.split("\n").reduc
   return sum + Math.max(1, Math.ceil(units / perLine));
 }, 0));
 
+/**
+ * Instructions to the learner ("떠올린 뒤 모범 답과 비교하세요") next to the input box are meta text, not part of the
+ * question (AGENTS.md 6). The box labels keep only short labels such as "자료구조:"; anything instruction-like is dropped.
+ */
+const META = /(떠올(린|려|리)|비교(하|해)|모범\s*답|확인(하|해)\s*(세요|보세요|봅시다)|생각(하|해)\s*보|(답|정답)을?\s*(쓰|적|입력)|적어\s*보|써\s*보|쓰세요|적으세요|입력하세요)/;
+export function inputLabel(text: string | null) {
+  const value = (text ?? "").trim();
+  return META.test(value) ? "" : value;
+}
+/** Which input-box texts were instructions and get dropped (reported as a tier-3 warning). */
+export function metaLabels(reply: AuthoredReplyQuestion) {
+  return [reply.answer.before, reply.answer.after].filter((value): value is string => Boolean(value?.trim()) && inputLabel(value) === "");
+}
+
 export function sourceFor(objective: Objective, section: Section, fileName: string): SourceContent {
   return {
     learningUnitId: objective.id, objectiveId: objective.id, sourceId: fileName,
@@ -65,7 +79,7 @@ export function layoutQuestion(reply: AuthoredReplyQuestion, objective: Objectiv
   } else {
     const accepted = (answer.accepted ?? []).map((value) => value.trim()).filter(Boolean);
     response = { id: "r1", kind: "short-text", acceptedAnswers: answer.kind === "short" ? accepted : accepted.slice(0, 1), grading: answer.kind === "short" ? "exact-normalized" : "self-check", explanation: answer.explanation };
-    blocks.push({ id: "input", kind: "blank", responseId: "r1", promptBefore: (answer.before ?? "").trim(), promptAfter: (answer.after ?? "").trim(), frame: place(answer.kind === "short" ? 56 : 120) });
+    blocks.push({ id: "input", kind: "blank", responseId: "r1", promptBefore: inputLabel(answer.before), promptAfter: inputLabel(answer.after), frame: place(answer.kind === "short" ? 56 : 120) });
   }
   const revealText = `${response.kind === "short-text" ? response.acceptedAnswers[0] ?? "" : ""} ${answer.explanation}`;
   blocks.push({ id: "reveal", kind: "answer-reveal", responseIds: ["r1"], frame: place(lines(revealText, 40) * 26 + 72) });

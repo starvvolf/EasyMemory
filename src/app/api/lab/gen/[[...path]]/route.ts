@@ -4,6 +4,7 @@ import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
 import { ExperimentRequestError } from "@/lib/mcp-experiment-requests";
 import { boundedJson, requireLocalRequest, responseError } from "../../../mcp-experiment-requests/http";
 import { confirmObjectives, createGen, enqueueGen, genView, GenError, listGens, readGenCalls, readSectionDocument, stepLabel } from "@/lib/study/gen/runner";
+import { scorecard } from "@/lib/study/gen/scorecard";
 import { renderInteractiveDocument } from "../../../../../../tools/problem-authoring-lab/renderer";
 import type { AuthoringDocument } from "../../../../../../tools/problem-authoring-lab/contract";
 
@@ -36,6 +37,12 @@ async function handle(request: Request, context: Context) {
       const calls = (await readGenCalls(p[0])).map((call) => ({ n: call.n, step: call.step, sectionId: call.sectionId, attempt: call.attempt, model: call.model,
         effort: call.effort, format: call.format, startedAt: call.startedAt, ms: call.ms, ok: call.ok, error: call.error, usage: call.usage, guide: call.guide }));
       result = { gen, label: stepLabel(gen), calls };
+    } else if (p.length === 2 && p[1] === "score" && method === "GET") {
+      const gen = await genView(p[0]);
+      if (!gen) throw new GenError(404, "생성을 찾을 수 없습니다.");
+      const documents = new Map(await Promise.all(gen.sections.map(async (section) =>
+        [section.id, await readSectionDocument(gen.id, section.id) as AuthoringDocument | null] as const)));
+      result = { score: scorecard(gen, await readGenCalls(gen.id), documents) };
     } else if (p.length === 3 && p[1] === "calls" && /^\d+$/.test(p[2]) && method === "GET") {
       result = (await readGenCalls(p[0])).find((call) => call.n === Number(p[2]));
       if (!result) throw new GenError(404, "호출 기록을 찾을 수 없습니다.");

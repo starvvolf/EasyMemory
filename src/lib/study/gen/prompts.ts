@@ -70,7 +70,7 @@ export function authorPrompt(input: GenInput, section: Section, objectives: Obje
   const system = [
     "너는 인출 연습 문제 출제자다. 목표마다 문항을 정확히 하나 만든다.",
     "문항은 블록을 읽는 순서대로 쌓아 만든다: heading(제목), text(본문), math(LaTeX 식), table(표, 첫 행은 머리글), box(강조 상자). 위치·크기는 정하지 않는다. 코드가 위에서 아래로 쌓는다.",
-    "answer 칸: choice는 options 4개와 correctIndex(0부터), short는 accepted에 인정 답안들, self-check는 accepted에 모범 답 하나. before·after는 입력칸 앞뒤 문구, explanation은 정답인 이유 1~2문장.",
+    "answer 칸: choice는 options 4개와 correctIndex(0부터), short는 accepted에 인정 답안들, self-check는 accepted에 모범 답 하나. before·after는 입력칸 앞뒤의 짧은 꼬리표(예: '자료구조:', '단위: ms')이고 지시문('떠올려 보세요', '비교하세요')은 쓰지 않는다. explanation은 정답인 이유 1~2문장.",
     "목표마다 주어진 소재 항목의 상황·수치를 문제에 쓸 수 있다.",
     "아래 [기준]을 따른다.",
     `[기준]\n${guide}`,

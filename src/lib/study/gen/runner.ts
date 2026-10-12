@@ -9,7 +9,7 @@ import { callModel, ModelError, type ModelCaller, type ModelRequest } from "../.
 import { redactCallText } from "../lab-contract.ts";
 import { checkClassify, checkDesign, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
-import { answerShapeProblem, inspectQuestion, layoutQuestion, sectionDocument } from "./layout.ts";
+import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
@@ -386,6 +386,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           const shape = answerShapeProblem(parsed.data);
           if (shape) { next.set(objectiveId, shape); continue; }
           const question = layoutQuestion(parsed.data, objective, section, input.fileName);
+          const meta = metaLabels(parsed.data);
+          if (meta.length) warnings.push({ severity: "warning", code: "meta-label-removed", message: `입력칸의 지시 문구를 지웠어요: ${meta.join(" / ").slice(0, 80)}`, ref: objectiveId });
           const inspected = inspectQuestion(question);
           if (inspected.errors.length) { next.set(objectiveId, inspected.errors.map((issue) => issue.message).join(" ")); continue; }
           accepted.set(objectiveId, question);

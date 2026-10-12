@@ -242,3 +242,45 @@ test("보조 목표는 기본으로 고르지 않고(통암기는 전부), 자�
     assert.deepEqual(done.confirmedObjectiveIds, expected, purpose);
   }
 }));
+
+test("입력칸의 지시 문구는 지우고 경고로 남기며, 짧은 꼬리표는 둔다", async () => {
+  const { inputLabel } = await import("./layout.ts");
+  assert.equal(inputLabel("떠올린 뒤 모범 답과 비교하세요. "), "");
+  assert.equal(inputLabel("내가 떠올린 조건: "), "");
+  assert.equal(inputLabel("답을 쓰세요"), "");
+  assert.equal(inputLabel("자료구조: "), "자료구조:");
+  assert.equal(inputLabel("단위: ms"), "단위: ms");
+  await withData(async () => {
+    const fakeReply = (step: GenStep, user: string) => {
+      if (step !== "author") return genFakeReply(step, user);
+      const reply = JSON.parse(genFakeReply(step, user)) as { questions: Array<{ answer: { before: string } }> };
+      for (const question of reply.questions) question.answer.before = "떠올린 뒤 모범 답과 비교하세요.";
+      return JSON.stringify(reply);
+    };
+    const state = await createGen({ ...base, pageNumbers: [1], purpose: "core", autoConfirm: true });
+    const done = await runGen(state.id, caller, { pages, fakeReply });
+    const document = await readSectionDocument(state.id, "s1") as AuthoringDocument;
+    const blank = document.questions[0].blocks.find((block) => block.kind === "blank") as { promptBefore: string };
+    assert.equal(blank.promptBefore, "");
+    assert.ok(done.sections[0].author!.warnings.some((warning) => warning.code === "meta-label-removed"));
+  });
+});
+
+test("점수표는 형식·종류·안 쓰인 항목·의심 신호·비용을 숫자로 낸다(모델 호출 없음)", () => withData(async () => {
+  const { scorecard } = await import("./scorecard.ts");
+  const fakeReply = (step: GenStep, user: string) => {
+    if (step === "design") return JSON.stringify({ objectives: [{ statement: "방법을 고를 수 있다", cue: "실마리", recall: `방문 표시와 같은 방법 (${/\[목차\] (.+?) \(/.exec(user)?.[1]})`, kind: "절차", importance: "core", itemNumbers: [1], materialNumbers: [] }] });
+    return genFakeReply(step, user);
+  };
+  const state = await createGen({ ...base, purpose: "core", autoConfirm: true });
+  const done = await runGen(state.id, caller, { pages, fakeReply });
+  const documents = new Map(await Promise.all(done.sections.map(async (section) => [section.id, await readSectionDocument(state.id, section.id) as AuthoringDocument] as const)));
+  const score = scorecard(done, await readGenCalls(state.id), documents);
+  assert.equal(score.counts.questions, 2);
+  assert.equal(score.formats.selfCheck, 2);
+  assert.equal(score.formats.selfCheckRatio, 1);
+  assert.deepEqual(score.objectiveKinds, { 절차: 2 });
+  assert.equal(score.calls.total, 7);
+  assert.deepEqual(score.suspects.map((item) => item.code).sort(), ["recall-pointer", "recall-pointer", "verb-format", "verb-format"]);
+  assert.equal(score.judge, null);
+}));

@@ -3,6 +3,7 @@
 // confirm objectives once, and open the problems of each section as they are authored.
 import { useCallback, useEffect, useState } from "react";
 import type { GenCall, GenState, GenStep, Purpose } from "@/lib/study/gen/types";
+import type { Scorecard } from "@/lib/study/gen/scorecard";
 import { defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
 import "./gen.css";
 
@@ -74,7 +75,7 @@ export default function GenLab() {
             {!runs.length && <li className="muted">아직 실행이 없어요.</li>}
           </ul>
         </aside>
-        <section>{openId ? <RunView key={openId} id={openId} onChange={loadLists} onError={setError} /> : <p className="muted">왼쪽에서 새로 시작하거나 실행을 고르세요.</p>}</section>
+        <section>{openId ? <RunView key={openId} id={openId} runs={runs} onChange={loadLists} onError={setError} /> : <p className="muted">왼쪽에서 새로 시작하거나 실행을 고르세요.</p>}</section>
       </div>
     </main>
   );
@@ -156,7 +157,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   );
 }
 
-function RunView({ id, onChange, onError }: { id: string; onChange: () => void; onError: (message: string) => void }) {
+function RunView({ id, runs, onChange, onError }: { id: string; runs: RunSummary[]; onChange: () => void; onError: (message: string) => void }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [chosen, setChosen] = useState<Set<string> | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -226,6 +227,8 @@ function RunView({ id, onChange, onError }: { id: string; onChange: () => void; 
 
       {gen.outlineWarnings?.map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
 
+      {["done", "awaiting-confirm"].includes(gen.status) && <ScorePanel id={id} status={gen.status} runs={runs} onError={onError} />}
+
       {gen.status === "awaiting-confirm" && (
         <div className="confirmbar">
           목표 {selected.size}/{objectives.length}개를 출제합니다.
@@ -287,5 +290,63 @@ function RunView({ id, onChange, onError }: { id: string; onChange: () => void; 
         </div>
       )}
     </div>
+  );
+}
+
+const percent = (value: number) => `${Math.round(value * 100)}%`;
+const kinds = (record: Record<string, number>) => Object.entries(record).sort((a, b) => b[1] - a[1]).map(([key, n]) => `${key} ${n}`).join(" · ") || "—";
+
+/** Scorecard v0 (numbers only) with an optional second run beside it, e.g. the same PDF on another model or criteria. */
+function ScorePanel({ id, status, runs, onError }: { id: string; status: string; runs: RunSummary[]; onError: (message: string) => void }) {
+  const [own, setOwn] = useState<Scorecard | null>(null);
+  const [otherId, setOtherId] = useState("");
+  const [other, setOther] = useState<Scorecard | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => { api<{ score: Scorecard }>(`/api/lab/gen/${id}/score`).then((r) => setOwn(r.score), (e) => onError(e instanceof Error ? e.message : String(e))); }, 0);
+    return () => clearTimeout(timer);
+  }, [id, status, onError]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!otherId) { setOther(null); return; }
+      api<{ score: Scorecard }>(`/api/lab/gen/${otherId}/score`).then((r) => setOther(r.score), (e) => onError(e instanceof Error ? e.message : String(e)));
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [otherId, onError]);
+  if (!own) return null;
+  const rows: Array<[string, (score: Scorecard) => string]> = [
+    ["모델", (s) => s.run.models.replace(/(outline|classify|design|author):/g, (m) => ({ "outline:": "목차 ", "classify:": "분류 ", "design:": "설계 ", "author:": "출제 " } as Record<string, string>)[m])],
+    ["기준", (s) => `${s.run.guideDir} ${s.calls.guideVersions.map((v) => v.split(":")[1].slice(0, 7)).filter((v, i, a) => a.indexOf(v) === i).join("/")}`],
+    ["목차 · 분류 항목", (s) => `${s.counts.sections} · ${s.counts.items}`],
+    ["목표(보조) · 고름", (s) => `${s.counts.objectives}(${s.counts.supportObjectives}) · ${s.counts.chosen}`],
+    ["문제 · 빠짐", (s) => `${s.counts.questions} · ${s.counts.dropped}`],
+    ["형식 객관식/단답/자기확인", (s) => `${s.formats.choice} / ${s.formats.short} / ${s.formats.selfCheck} (자기확인 ${percent(s.formats.selfCheckRatio)})`],
+    ["목표 종류", (s) => kinds(s.objectiveKinds)],
+    ["분류 성격", (s) => kinds(s.itemKinds)],
+    ["목표로 안 쓰인 핵심·패턴·설명", (s) => `${s.unusedTargets.length}`],
+    ["의심 신호", (s) => `${s.suspects.length}`],
+    ["경고", (s) => kinds(s.warnings)],
+    ["호출 · 실패 · 재시도", (s) => `${s.calls.total} · ${s.calls.failed} · ${s.calls.retries}`],
+    ["모델 작업 시간", (s) => seconds(s.calls.elapsedMs)],
+    ["토큰 입력/출력", (s) => `${s.calls.inputTokens.toLocaleString()} / ${s.calls.outputTokens.toLocaleString()}`],
+  ];
+  const candidates = runs.filter((run) => run.id !== id && run.status === "done");
+  return (
+    <section className="score">
+      <h3>점수표 <small>숫자만 셉니다. 뜻·깊이 판정은 판정단(예정)</small></h3>
+      <label>비교할 실행
+        <select value={otherId} onChange={(event) => setOtherId(event.target.value)}>
+          <option value="">없음</option>
+          {candidates.map((run) => <option key={run.id} value={run.id}>{run.fileName} p.{run.pages[0]}–{run.pages.at(-1)} · {purposeLabel[run.purpose]} · {run.createdAt.slice(5, 16).replace("T", " ")}</option>)}
+        </select>
+      </label>
+      <table className="calls"><thead><tr><th></th><th>이 실행</th>{other && <th>비교 실행</th>}</tr></thead>
+        <tbody>{rows.map(([label, value]) => <tr key={label}><th>{label}</th><td>{value(own)}</td>{other && <td>{value(other)}</td>}</tr>)}</tbody>
+      </table>
+      {[own, other].filter((s): s is Scorecard => Boolean(s)).map((s, index) => (s.unusedTargets.length || s.suspects.length) ? (
+        <details key={s.run.id}><summary>{index ? "비교 실행" : "이 실행"}: 안 쓰인 항목 {s.unusedTargets.length} · 의심 {s.suspects.length}</summary>
+          <ul>{s.unusedTargets.map((item) => <li key={`${item.sectionId}-${item.n}`}>{item.sectionId} #{item.n} [{item.kind}] {item.content}</li>)}
+            {s.suspects.map((item) => <li key={`${item.code}-${item.ref}`} className="warnline">{item.ref}: {item.message}</li>)}</ul>
+        </details>) : null)}
+    </section>
   );
 }

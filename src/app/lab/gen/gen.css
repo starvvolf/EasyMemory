@@ -48,3 +48,5 @@
 .gen table.calls tr.bad td:last-child { color: var(--bad); }
 .calldetail { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-top: 10px; }
 .calldetail pre { white-space: pre-wrap; word-break: break-word; max-height: 420px; overflow: auto; font-size: 12px; }
+.score { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; display: grid; gap: 6px; }
+.score table th { text-align: left; font-weight: 500; white-space: nowrap; }
