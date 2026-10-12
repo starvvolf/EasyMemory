@@ -93,7 +93,13 @@ export type GenState = {
   outlineWarnings?: Issue[];
   sections: SectionState[];
   confirmedObjectiveIds?: string[];
+  /** A rerun that copied the earlier steps of another run and redoes only `from` onward (fair A/B comparison). */
+  forkOf?: { genId: string; from: ForkFrom };
 };
+
+/** Where a fixed-prefix rerun starts: redo design+authoring, or authoring only (same objectives). */
+export const forkFroms = ["design", "author"] as const;
+export type ForkFrom = (typeof forkFroms)[number];
 
 export type GenCall = {
   n: number;

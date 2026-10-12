@@ -7,7 +7,7 @@ import { ModelError } from "../../ai/model.ts";
 import { validateDocument, type AuthoringDocument } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkClassify, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
-import { confirmObjectives, createGen, enqueueGen, loadGen, readGenCalls, readSectionDocument, runGen, type RunOptions } from "./runner.ts";
+import { confirmObjectives, createGen, enqueueGen, forkGen, loadGen, readGenCalls, readSectionDocument, runGen, type RunOptions } from "./runner.ts";
 import { authorSchema, classifySchema, designSchema, outlineSchema } from "./schemas.ts";
 import type { GenStep, Issue } from "./types.ts";
 
@@ -283,4 +283,37 @@ test("점수표는 형식·종류·안 쓰인 항목·의심 신호·비용을 �
   assert.equal(score.calls.total, 7);
   assert.deepEqual(score.suspects.map((item) => item.code).sort(), ["recall-pointer", "recall-pointer", "verb-format", "verb-format"]);
   assert.equal(score.judge, null);
+}));
+
+test("앞 단계 고정 재실행: 목차·분류(출제만이면 목표까지)를 그대로 쓰고 뒤 단계만 다시 부른다", () => withData(async () => {
+  const first = await createGen({ ...base, purpose: "core", autoConfirm: true, models: { design: { model: "gpt-6-luna", effort: "low" } } });
+  const done = await runGen(first.id, caller, { pages });
+  assert.equal(done.status, "done");
+
+  const design = await forkGen(first.id, { from: "design", models: { design: { model: "gpt-6-sol", effort: "medium" } }, guideDir: "출제기준-후보" });
+  assert.deepEqual(design.forkOf, { genId: first.id, from: "design" });
+  assert.equal(design.input.models.design?.model, "gpt-6-sol");
+  assert.equal(design.input.guideDir, "출제기준-후보");
+  assert.ok(design.sections.every((section) => section.classify && !section.design && !section.author));
+  // The candidate folder does not exist here, so design pauses; the copied outline/classify are never called again.
+  const paused = await runGen(design.id, caller, { pages });
+  assert.equal(paused.status, "paused-invalid");
+  assert.deepEqual(await steps(design.id), []);
+
+  const again = await forkGen(first.id, { from: "design" });
+  const redone = await runGen(again.id, caller, { pages });
+  assert.equal(redone.status, "done", redone.message);
+  assert.deepEqual((await steps(again.id)).sort(), ["author:s1#1", "author:s2#1", "design:s1#1", "design:s2#1"]);
+  assert.deepEqual(redone.sections.map((section) => section.classify!.items), done.sections.map((section) => section.classify!.items));
+
+  const author = await forkGen(first.id, { from: "author" });
+  assert.deepEqual(author.confirmedObjectiveIds, done.confirmedObjectiveIds);
+  const authored = await runGen(author.id, caller, { pages });
+  assert.equal(authored.status, "done");
+  assert.deepEqual((await steps(author.id)).sort(), ["author:s1#1", "author:s2#1"]);
+  assert.deepEqual(authored.sections.map((section) => section.design!.objectives), done.sections.map((section) => section.design!.objectives));
+
+  const waiting = await createGen({ ...base, purpose: "core" });
+  await assert.rejects(forkGen(waiting.id, { from: "design" }), /내용 분류가 끝나지/);
+  await assert.rejects(forkGen(first.id, { from: "outline" }));
 }));

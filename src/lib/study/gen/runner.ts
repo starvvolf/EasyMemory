@@ -13,7 +13,7 @@ import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectio
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
-import { defaultChosen, genStepLabel, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
+import { defaultChosen, forkFroms, genStepLabel, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 
 /** Model calls allowed per start or restart; the total is kept in `calls`. */
@@ -115,6 +115,45 @@ export async function createGen(raw: unknown): Promise<GenState> {
   input.pageNumbers = [...new Set(input.pageNumbers)].sort((a, b) => a - b);
   const now = new Date().toISOString();
   const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued", phase: "outline", message: "", calls: 0, sections: [] };
+  await saveState(state);
+  return state;
+}
+
+export const forkInputSchema = z.strictObject({
+  from: z.enum(forkFroms),
+  /** Only the steps that run again matter; earlier steps keep the base run's results. */
+  models: z.partialRecord(z.enum(["design", "author"]), modelChoice).default({}),
+  guideDir: z.string().regex(guideDirPattern).optional(),
+  autoConfirm: z.boolean().default(true),
+});
+
+/**
+ * Fixed-prefix rerun: copies the base run's outline and classification (and, from "author", its objectives and
+ * the chosen set) into a new run, so only the later steps differ. Comparisons of models or criteria then see the
+ * same input instead of a different classification by chance, and the copied steps cost no calls.
+ */
+export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
+  const options = forkInputSchema.parse(raw);
+  const base = await loadGen(baseId);
+  if (!base) throw new GenError(404, "기준 실행을 찾을 수 없습니다.");
+  if (base.input.purpose === "read") throw new GenError(400, "그냥 읽기 실행은 다시 돌릴 설계·출제가 없습니다.");
+  const sections = structuredClone(base.sections);
+  if (!sections.length || sections.some((section) => !section.classify)) throw new GenError(409, "기준 실행의 내용 분류가 끝나지 않았습니다.");
+  if (options.from === "author" && sections.some((section) => !section.design)) throw new GenError(409, "기준 실행의 학습 설계가 끝나지 않았습니다.");
+  const input: GenInput = { ...structuredClone(base.input), autoConfirm: options.autoConfirm,
+    models: { ...base.input.models, ...options.models }, guideDir: options.guideDir ?? base.input.guideDir ?? DEFAULT_GUIDE_DIR };
+  for (const section of sections) {
+    delete section.author;
+    if (options.from === "design") delete section.design;
+  }
+  const now = new Date().toISOString();
+  const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued",
+    phase: options.from, message: "", calls: 0, sections, outlineWarnings: base.outlineWarnings, forkOf: { genId: base.id, from: options.from } };
+  if (options.from === "author") {
+    // Same objectives as the base: what it confirmed, or the default choice if it stopped at the confirmation.
+    const objectives = sections.flatMap((section) => section.design?.objectives ?? []);
+    state.confirmedObjectiveIds = base.confirmedObjectiveIds ? [...base.confirmedObjectiveIds] : defaultChosen(input.purpose, objectives);
+  }
   await saveState(state);
   return state;
 }

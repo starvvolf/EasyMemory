@@ -11,7 +11,9 @@ const TARGET_KINDS: readonly ItemKind[] = ["핵심 지식", "재사용 패턴", 
 const POINTER = /(같은\s*(방법|방식)|위와\s*같|마찬가지|앞(의|에서)\s*(것|내용)|해당\s*(내용|방법)|원문(의|에)\s*(방법|내용))/;
 
 export type Scorecard = {
-  run: { id: string; fileName: string; pages: string; purpose: string; guideDir: string; models: string; status: string };
+  run: { id: string; fileName: string; pages: string; purpose: string; guideDir: string; models: string; status: string;
+    /** Set on a fixed-prefix rerun: calls, time and tokens then cover only the steps it redid. */
+    forkOf: { genId: string; from: string } | null };
   counts: { sections: number; items: number; objectives: number; supportObjectives: number; chosen: number; questions: number; dropped: number };
   formats: { choice: number; short: number; selfCheck: number; selfCheckRatio: number };
   objectiveKinds: Record<string, number>;
@@ -82,6 +84,7 @@ export function scorecard(state: GenState, calls: GenCall[], documents: Map<stri
     run: {
       id: state.id, fileName: state.input.fileName, pages: `${state.input.pageNumbers[0]}–${state.input.pageNumbers.at(-1)}`,
       purpose: purposeLabel[state.input.purpose], guideDir: state.input.guideDir ?? "출제기준", models, status: state.status,
+      forkOf: state.forkOf ?? null,
     },
     counts: {
       sections: state.sections.length,

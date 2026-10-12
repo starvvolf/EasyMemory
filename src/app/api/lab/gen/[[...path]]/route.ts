@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
 import { ExperimentRequestError } from "@/lib/mcp-experiment-requests";
 import { boundedJson, requireLocalRequest, responseError } from "../../../mcp-experiment-requests/http";
-import { confirmObjectives, createGen, enqueueGen, genView, GenError, listGens, readGenCalls, readSectionDocument, stepLabel } from "@/lib/study/gen/runner";
+import { confirmObjectives, createGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, stepLabel } from "@/lib/study/gen/runner";
 import { scorecard } from "@/lib/study/gen/scorecard";
 import { listJudges, loadJudge, readJudgeCalls, startJudge } from "@/lib/study/gen/judge";
 import { renderInteractiveDocument } from "../../../../../../tools/problem-authoring-lab/renderer";
@@ -23,7 +23,7 @@ async function handle(request: Request, context: Context) {
     let result: unknown;
     if (!p.length && method === "GET") {
       result = { runs: (await listGens()).map((gen) => ({ id: gen.id, createdAt: gen.createdAt, status: gen.status, phase: gen.phase, fileName: gen.input.fileName,
-        pages: gen.input.pageNumbers, purpose: gen.input.purpose, provider: gen.input.provider, calls: gen.calls })) };
+        pages: gen.input.pageNumbers, purpose: gen.input.purpose, provider: gen.input.provider, calls: gen.calls, forkOf: gen.forkOf ?? null })) };
     } else if (!p.length && method === "POST") {
       const body = z.object({ confirmed: z.boolean().optional() }).passthrough().parse(await boundedJson(request));
       const { confirmed, ...input } = body;
@@ -69,6 +69,16 @@ async function handle(request: Request, context: Context) {
       const body = z.object({ objectiveIds: z.array(z.string().max(40)).max(500), confirmed: z.boolean().optional() }).parse(await boundedJson(request));
       const gen = await confirmObjectives(p[0], body.objectiveIds);
       if (gen.status === "queued") await enqueueGen(gen.id, caller, { confirmedRealCalls: body.confirmed === true });
+      result = { gen: await genView(gen.id) };
+    } else if (p.length === 2 && p[1] === "fork" && method === "POST") {
+      // Fixed-prefix rerun: same outline and classification (and objectives, from "author"), later steps redone.
+      const body = z.object({ confirmed: z.boolean().optional() }).passthrough().parse(await boundedJson(request));
+      const { confirmed, ...options } = body;
+      const base = await loadGen(p[0]);
+      if (!base) throw new GenError(404, "기준 실행을 찾을 수 없습니다.");
+      if (base.input.provider !== "fake" && confirmed !== true) throw new ExperimentRequestError(400, "실제 모델 실행 확인이 필요합니다.");
+      const gen = await forkGen(p[0], options);
+      if (gen.status === "queued") await enqueueGen(gen.id, caller, { confirmedRealCalls: confirmed === true });
       result = { gen: await genView(gen.id) };
     } else if (p.length === 2 && p[1] === "continue" && method === "POST") {
       const body = z.object({ confirmed: z.boolean().optional() }).parse(await boundedJson(request));

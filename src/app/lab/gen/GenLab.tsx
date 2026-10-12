@@ -9,7 +9,7 @@ import { defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types
 import "./gen.css";
 
 type Source = { id: string; fileName: string; pageCount: number; available: boolean };
-type RunSummary = { id: string; createdAt: string; status: string; phase: string; fileName: string; pages: number[]; purpose: Purpose; provider: string; calls: number };
+type RunSummary = { id: string; createdAt: string; status: string; phase: string; fileName: string; pages: number[]; purpose: Purpose; provider: string; calls: number; forkOf: GenState["forkOf"] | null };
 type CallSummary = Omit<GenCall, "system" | "user" | "reply">;
 type Detail = { gen: GenState; label: string; calls: CallSummary[] };
 
@@ -21,6 +21,7 @@ const STATUS: Record<string, string> = {
   "paused-invalid": "멈춤(검사)", interrupted: "멈춤(서버)", failed: "실패", done: "완료",
 };
 const tone = (status: string) => status === "done" ? "ok" : status === "failed" ? "bad" : status === "awaiting-confirm" ? "ask" : status.startsWith("paused") || status === "interrupted" ? "warn" : "run";
+const FORK_LABEL: Record<string, string> = { design: "설계부터", author: "출제만" };
 const seconds = (ms: number) => ms >= 60000 ? `${Math.floor(ms / 60000)}분 ${Math.round((ms % 60000) / 1000)}초` : `${(ms / 1000).toFixed(1)}초`;
 
 async function api<T>(url: string, method = "GET", body?: unknown): Promise<T> {
@@ -69,14 +70,14 @@ export default function GenLab() {
                 <button className={openId === run.id ? "on" : ""} onClick={() => setOpenId(run.id)}>
                   <span className={`tag ${tone(run.status)}`}>{STATUS[run.status] ?? run.status}</span>
                   <b>{run.fileName}</b>
-                  <small>p.{run.pages[0]}–{run.pages.at(-1)} · {purposeLabel[run.purpose]} · {run.provider === "fake" ? "가짜" : "실제"} · 호출 {run.calls}</small>
+                  <small>p.{run.pages[0]}–{run.pages.at(-1)} · {purposeLabel[run.purpose]} · {run.provider === "fake" ? "가짜" : "실제"} · 호출 {run.calls}{run.forkOf ? ` · 고정 재실행(${FORK_LABEL[run.forkOf.from]})` : ""}</small>
                 </button>
               </li>
             ))}
             {!runs.length && <li className="muted">아직 실행이 없어요.</li>}
           </ul>
         </aside>
-        <section>{openId ? <RunView key={openId} id={openId} runs={runs} onChange={loadLists} onError={setError} /> : <p className="muted">왼쪽에서 새로 시작하거나 실행을 고르세요.</p>}</section>
+        <section>{openId ? <RunView key={openId} id={openId} runs={runs} onChange={loadLists} onOpen={(id) => { setOpenId(id); void loadLists(); }} onError={setError} /> : <p className="muted">왼쪽에서 새로 시작하거나 실행을 고르세요.</p>}</section>
       </div>
     </main>
   );
@@ -158,7 +159,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   );
 }
 
-function RunView({ id, runs, onChange, onError }: { id: string; runs: RunSummary[]; onChange: () => void; onError: (message: string) => void }) {
+function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: RunSummary[]; onChange: () => void; onOpen: (id: string) => void; onError: (message: string) => void }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [chosen, setChosen] = useState<Set<string> | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -218,6 +219,7 @@ function RunView({ id, runs, onChange, onError }: { id: string; runs: RunSummary
         <span className={`tag ${tone(gen.status)}`}>{STATUS[gen.status] ?? gen.status}</span>
         <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.guideDir ?? "출제기준"}
         {label && <span className="muted"> · {label}</span>}
+        {gen.forkOf && <div className="muted">고정 재실행({FORK_LABEL[gen.forkOf.from]}) · 기준 실행 {gen.forkOf.genId.slice(0, 12)}… 의 목차·분류{gen.forkOf.from === "author" ? "·목표" : ""}를 그대로 썼어요. 호출·시간·토큰은 다시 돈 단계만 셉니다.</div>}
         <div className="muted">호출 {gen.calls}번 · 모델 시간 {seconds(totalMs)} · 토큰 입력 {tokens.input.toLocaleString()} / 출력 {tokens.output.toLocaleString()}{formats.length ? ` · 응답 형식 ${formats.join(", ")}` : ""}</div>
         {gen.message && <p className={gen.status === "failed" ? "gen-error" : ""}>{gen.message}</p>}
         {(canResume || gen.status === "awaiting-confirm") && real && (
@@ -229,6 +231,8 @@ function RunView({ id, runs, onChange, onError }: { id: string; runs: RunSummary
       {gen.outlineWarnings?.map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
 
       {["done", "awaiting-confirm"].includes(gen.status) && <ScorePanel id={id} status={gen.status} real={real} runs={runs} onError={onError} />}
+
+      {["done", "awaiting-confirm"].includes(gen.status) && gen.input.purpose !== "read" && <ForkPanel gen={gen} onOpen={onOpen} onError={onError} />}
 
       {gen.status === "awaiting-confirm" && (
         <div className="confirmbar">
@@ -317,6 +321,7 @@ function ScorePanel({ id, status, real, runs, onError }: { id: string; status: s
   if (!own) return null;
   const rows: Array<[string, (score: Scorecard) => string]> = [
     ["모델", (s) => s.run.models.replace(/(outline|classify|design|author):/g, (m) => ({ "outline:": "목차 ", "classify:": "분류 ", "design:": "설계 ", "author:": "출제 " } as Record<string, string>)[m])],
+    ["앞 단계", (s) => s.run.forkOf ? `${s.run.forkOf.genId.slice(4, 12)}에서 고정(${FORK_LABEL[s.run.forkOf.from]})` : "직접 실행"],
     ["기준", (s) => `${s.run.guideDir} ${s.calls.guideVersions.map((v) => v.split(":")[1].slice(0, 7)).filter((v, i, a) => a.indexOf(v) === i).join("/")}`],
     ["목차 · 분류 항목", (s) => `${s.counts.sections} · ${s.counts.items}`],
     ["목표(보조) · 고름", (s) => `${s.counts.objectives}(${s.counts.supportObjectives}) · ${s.counts.chosen}`],
@@ -356,6 +361,50 @@ function ScorePanel({ id, status, real, runs, onError }: { id: string; status: s
         </details>) : null)}
       {status === "done" && <JudgePanel id={id} real={real} onDone={() => setJudgeTick((n) => n + 1)} onError={onError} />}
     </section>
+  );
+}
+
+/**
+ * Fixed-prefix rerun: keep this run's outline and classification (and objectives, for "출제만") and redo the rest
+ * with other models or another criteria folder, so the comparison is not muddied by a different classification.
+ */
+function ForkPanel({ gen, onOpen, onError }: { gen: GenState; onOpen: (id: string) => void; onError: (message: string) => void }) {
+  const real = gen.input.provider !== "fake";
+  const designed = gen.sections.every((section) => section.design);
+  const [from, setFrom] = useState<"design" | "author">("design");
+  const pick = (step: "design" | "author") => gen.input.models[step] ?? { model: "gpt-6-sol", effort: "medium" };
+  const [models, setModels] = useState({ design: pick("design"), author: pick("author") });
+  const [guideDir, setGuideDir] = useState(gen.input.guideDir ?? "출제기준");
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const steps: Array<"design" | "author"> = from === "design" ? ["design", "author"] : ["author"];
+  const start = async () => {
+    setBusy(true); onError("");
+    try {
+      const { gen: next } = await api<{ gen: GenState }>(`/api/lab/gen/${gen.id}/fork`, "POST", {
+        from, guideDir, models: Object.fromEntries(steps.map((step) => [step, models[step]])), confirmed: real ? confirmed : undefined });
+      setConfirmed(false);
+      onOpen(next.id);
+    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <details className="score">
+      <summary>앞 단계 고정 재실행 <small>목차·분류를 그대로 두고 뒤 단계만 다른 모델·기준으로</small></summary>
+      <div className="row">
+        <label className="chip"><input type="radio" checked={from === "design"} onChange={() => setFrom("design")} />설계부터 다시</label>
+        <label className="chip"><input type="radio" checked={from === "author"} disabled={!designed} onChange={() => setFrom("author")} />출제만 다시(같은 목표)</label>
+      </div>
+      {real && <table className="models"><tbody>{steps.map((step) => (
+        <tr key={step}><th>{genStepLabel[step]}</th>
+          <td><select value={models[step].model} onChange={(event) => setModels({ ...models, [step]: { ...models[step], model: event.target.value } })}>{MODELS.map((m) => <option key={m}>{m}</option>)}</select></td>
+          <td><select value={models[step].effort} onChange={(event) => setModels({ ...models, [step]: { ...models[step], effort: event.target.value } })}>{EFFORTS.map((e) => <option key={e}>{e}</option>)}</select></td></tr>
+      ))}</tbody></table>}
+      <label>출제기준 폴더<input value={guideDir} onChange={(event) => setGuideDir(event.target.value.trim())} placeholder="출제기준" /></label>
+      <p className="muted">목표 확인 없이 끝까지 돌아요. 예상 호출: 목차 수 × {steps.length} (+재시도), 목차·분류 호출은 없음.</p>
+      {real && <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다</label>}
+      <button className="primary" disabled={busy || (real && !confirmed)} onClick={() => void start()}>{busy ? "시작하는 중…" : "고정 재실행 시작"}</button>
+    </details>
   );
 }
 
