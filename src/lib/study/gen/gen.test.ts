@@ -295,7 +295,7 @@ test("앞 단계 고정 재실행: 목차·분류(출제만이면 목표까지)�
   assert.equal(design.input.models.design?.model, "gpt-6-sol");
   assert.equal(design.input.guideDir, "출제기준-테스트없음");
   assert.ok(design.sections.every((section) => section.classify && !section.design && !section.author));
-  // This criteria folder does not exist (출제기준-후보 does, so it is not used here), so design pauses; the copied outline/classify are never called again.
+  // This criteria folder does not exist (an unused name, so the test does not depend on which folders exist), so design pauses; the copied outline/classify are never called again.
   const paused = await runGen(design.id, caller, { pages });
   assert.equal(paused.status, "paused-invalid");
   assert.deepEqual(await steps(design.id), []);
