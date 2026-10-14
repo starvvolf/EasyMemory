@@ -9,9 +9,10 @@ import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 import { inspectQuality } from "../../../tools/problem-authoring-lab/quality.ts";
-import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus } from "./dejipgi-app.js";
+import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type PlannerDeck } from "./dejipgi-app.js";
 import { DEFAULT_GEN_MODELS, defaultChosen, type GenState } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
+import { askedObjectives, diagnoseBox, planDeckFrom, planSettingsFrom, planToday, renderMemoryAuto, type PlanNote, type PlanRecord, type StudyRules } from "@/lib/study/plan";
 import "katex/dist/katex.min.css";
 import "./dejipgi.css";
 
@@ -115,6 +116,9 @@ export default function DejipgiStudy() {
       return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[] }>(
         await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").catch(() => null)));
     };
+    // The screen's decks carry their record (events, sched, hidden, reported) on the deck object itself.
+    const recordOf = (deck: PlannerDeck): PlanRecord => ({ events: deck.events ?? [], sched: deck.sched ?? {}, hidden: deck.hidden, reported: deck.reported });
+    const recordsOf = (decks: PlannerDeck[]) => Object.fromEntries(decks.map((deck) => [deck.id, recordOf(deck)]));
     return mountDejipgi(root, {
       uid: session.uid,
       defaultPurpose,
@@ -244,6 +248,30 @@ export default function DejipgiStudy() {
           async save(value: { records: Record<string, unknown>; pending: unknown[]; updatedAt: number }) {
             await readJson(await fetchExperiment("/api/study-records", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value) }),
               "풀이 기록을 저장하지 못했어요.");
+          },
+        },
+      } : {}),
+      // 오늘 할 것 (src/lib/study/plan.ts): the same code /api/study-plan runs for agents.
+      planner: {
+        today({ decks, settings, notes, rules, now }) {
+          return planToday({ decks: decks.map(planDeckFrom), records: recordsOf(decks), settings: planSettingsFrom(settings), notes: notes as Record<string, PlanNote[]>, rules: rules as StudyRules | undefined, now });
+        },
+        asked(deck, notes) {
+          return [...askedObjectives(planDeckFrom(deck), recordOf(deck), notes as PlanNote[]).keys()];
+        },
+        memoryAuto({ subject, decks, settings, notes, now }) {
+          return renderMemoryAuto({ subject, decks: decks.map(planDeckFrom), records: recordsOf(decks), settings: planSettingsFrom(settings), notes: notes as Record<string, PlanNote[]>, now });
+        },
+        diagnoseBox,
+      },
+      async rules() {
+        return (await readJson<{ today: { rules: unknown; warnings: string[] } }>(await fetchExperiment("/api/study-rules"), "학습규칙을 읽지 못했어요.")).today;
+      },
+      ...(session.mode === "local-experiment" ? {
+        memory: {
+          async save(subject: string, auto: string) {
+            await readJson(await fetchExperiment("/api/study-memory", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject, auto }) }),
+              "학습 메모를 저장하지 못했어요.");
           },
         },
       } : {}),

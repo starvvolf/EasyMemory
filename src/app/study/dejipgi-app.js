@@ -187,7 +187,8 @@ const S = {
   account:null,
   plan:{ subjects:[], of:{} },
   planEdit:null,            // null | "new" | subject name being edited (home)
-  sum:{ subject:null, weakOnly:false, hide:false, shown:new Set() }
+  sum:{ subject:null, weakOnly:false, hide:false, shown:new Set() },
+  rules:null, rulesWarnings:[]
 };
 
 /* ---------- scheduling & status ---------- */
@@ -251,7 +252,7 @@ function objectiveState(deck, objectiveId){
 /* ---------- subjects & exam dates (S.plan); a material belongs by its registered PDF, so remakes follow it ---------- */
 function planKey(d){ return d.sourceCatalogId || d.id; }
 function subjectOf(d){ const name = S.plan.of[planKey(d)]; return name && S.plan.subjects.some(s => s.name === name) ? name : ""; }
-function setSubject(d, name){ if (name) S.plan.of[planKey(d)] = name; else delete S.plan.of[planKey(d)]; Store.savePlan(S.plan); render(); }
+function setSubject(d, name){ const old = subjectOf(d); if (name) S.plan.of[planKey(d)] = name; else delete S.plan.of[planKey(d)]; Store.savePlan(S.plan); if (old) touchMemory(old); if (name) touchMemory(name); render(); }
 function examOf(name){ const s = S.plan.subjects.find(x => x.name === name); return s ? s.exam || "" : ""; }
 function daysLeft(exam){
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(exam || ""); if (!m) return null;
@@ -286,6 +287,94 @@ function removeSubject(name){
   S.plan.subjects = S.plan.subjects.filter(s => s.name !== name);
   for (const k of Object.keys(S.plan.of)) if (S.plan.of[k] === name) delete S.plan.of[k];
   Store.savePlan(S.plan);
+}
+
+/* ---------- 오늘 할 것 (env.planner = src/lib/study/plan.ts, rules from 학습규칙/오늘할것.md) ---------- */
+const planner = env.planner || null;
+function realDecks(){ return Object.values(S.decks).filter(d => !d.pending && !d.example); }
+/* Phrases asked while reading, per registered PDF, for "물어봄" (loaded once per material at start). */
+function notesBySource(){
+  const out = {};
+  for (const [k, v] of Object.entries(NT.src)) if (v && v.list) out[k] = v.list.map(n => ({ page:n.page, quote:n.quote, askedAt:n.askedAt, kind:n.kind }));
+  return out;
+}
+function todayPlan(){
+  if (!planner) return null;
+  const decks = realDecks().sort(byTitle);
+  if (!decks.length) return null;
+  try{ return planner.today({ decks, settings:S.plan, notes:notesBySource(), rules:S.rules || undefined, now:now() }); }
+  catch(e){ console.error(e); return null; }
+}
+const REASON = { weak:["약점", "bad"], asked:["물어봄", "ask"], due:["복습", ""], diagnose:["첫 훑기", "acc"], new:["새 문제", ""] };
+const chunkSize = () => (S.rules && S.rules.chunk) || 20;
+function startToday(){
+  const plan = todayPlan();
+  if (!plan || !plan.queue.length){ toast("오늘 할 문제가 없어요."); return; }
+  const queue = plan.queue.slice(0, chunkSize()).map(r => ({ deck:r.deckId, item:r.itemId, reason:r.reason }));
+  S.session = { queue, i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"today", viewed:new Set() };
+  prepCurrent(); setView("practice");
+}
+function weekday(t){ return ["일","월","화","수","목","금","토"][new Date(t).getDay()]; }
+function renderToday(plan, pendings){
+  const left = plan.queue.length;
+  const total = plan.doneToday + left;
+  const minutesLeft = Math.round(plan.queue.reduce((sum, r) => { const d = S.decks[r.deckId]; const it = d && (d.allItems || d.items).find(x => x.id === r.itemId); return sum + ((S.rules && S.rules.seconds && it && S.rules.seconds[it.format]) || 40); }, 0) / 60);
+  const d0 = new Date();
+  const title = left ? (plan.doneToday ? "이어서 해요" : "오늘 할 것") : plan.doneToday ? "오늘 할 것을 마쳤어요" : pendings.length ? "문제를 만드는 동안 먼저 읽어 두세요" : "오늘은 할 문제가 없어요";
+  const panel = h("section", { class:"panel today2" });
+  panel.append(h("div", { class:"today2-head" },
+    h("div", null,
+      h("p", { class:"today2-date", text:`${d0.getMonth() + 1}월 ${d0.getDate()}일 ${weekday(d0)}요일` }),
+      h("h2", { text:title }),
+      h("p", { class:"small muted num", text: left
+        ? `${left}문제 · 약 ${minutesLeft}분 남음${plan.doneToday ? ` · 오늘 ${plan.doneToday}문제 풂` : ""} · 하루 ${plan.budgetMinutes}분 기준`
+        : plan.doneToday ? `오늘 ${plan.doneToday}문제를 풀었어요. 내일 할 것은 내일 아침에 다시 계산해요.` : "새 자료를 올리거나, 과목에 시험일을 넣어 보세요." })),
+    h("div", { class:"row" },
+      left ? h("button", { class:"btn primary big", "data-autofocus":"1", onclick:startToday }, plan.doneToday ? "이어서 하기" : "시작하기", h("span", { class:"btn-sub num", text:`${Math.min(left, chunkSize())}문제` })) : null,
+      h("button", { class:"btn", onclick: () => setView("create") }, "+ 새 자료"))));
+  if (total) panel.append(h("div", { class:"today2-bar", "aria-hidden":"true" }, h("i", { style:`width:${(plan.doneToday / total * 100).toFixed(1)}%` })));
+  const rows = h("div", { class:"today2-rows" });
+  for (const sp of plan.subjects){
+    const picked = Object.values(sp.picked).reduce((a, b) => a + b, 0);
+    if (!picked && sp.phase === "learn" && !sp.doneToday) continue;
+    const chips = Object.entries(sp.picked).filter(([, n]) => n).map(([k, n]) => h("span", { class:`chip ${REASON[k][1]}`, text:`${REASON[k][0]} ${n}` }));
+    const n = sp.daysLeft;
+    const line = sp.phase === "over" ? "시험이 끝났어요. 이 과목은 오늘 할 것에서 빠져요."
+      : sp.phase === "final" ? "시험 직전이에요. 새 문제 없이 약점과 복습, 한 장 정리만 해요."
+      : sp.counts.fresh ? (sp.learnUntil ? `안 풀어본 ${sp.counts.fresh}문제를 하루 ${sp.quota}개씩 · ${Number(sp.learnUntil.slice(5, 7))}/${Number(sp.learnUntil.slice(8, 10))}까지 한 번씩 봐요` : `안 풀어본 ${sp.counts.fresh}문제 · 하루 ${sp.quota}개씩`)
+      : sp.counts.items ? "모든 문제를 한 번 이상 풀었어요. 약점과 복습만 남았어요." : "";
+    rows.append(h("div", { class:`today2-row${sp.phase === "final" ? " final" : ""}${sp.phase === "over" ? " over" : ""}` },
+      h("span", { class:`dday-mid${n != null && n >= 0 && n <= 3 ? " soon" : ""}${n == null || n < 0 ? " past" : ""}`, text: n == null ? "—" : n > 0 ? `D-${n}` : n === 0 ? "D-day" : "끝" }),
+      h("div", { class:"today2-main" },
+        h("div", { class:"row", style:"gap:6px" }, h("b", { text:sp.name || "과목 미지정" }), ...chips),
+        line ? h("p", { class:"small muted", text:line }) : null),
+      h("div", { class:"today2-side" },
+        picked ? h("span", { class:"small muted num", text:`약 ${sp.minutes}분` }) : sp.doneToday ? h("span", { class:"small good-text", text:"오늘 끝" }) : null,
+        sp.phase === "final" && sp.name ? h("button", { class:"btn small", onclick: () => openSummary(sp.name) }, "한 장 정리") : null)));
+  }
+  if (rows.childNodes.length) panel.append(rows);
+  for (const note of plan.notes) panel.append(h("p", { class:"small muted", text:note }));
+  if (S.rulesWarnings.length) panel.append(h("p", { class:"small help-text", text:`학습규칙 확인: ${S.rulesWarnings.join(" / ")}` }));
+  if (!S.plan.subjects.length) panel.append(h("p", { class:"small muted", text:"아래 ‘시험 과목’에 과목과 시험일을 넣으면 시험 날짜에 맞춰 하루 분량을 나눠요." }));
+  return panel;
+}
+
+/* ---------- 학습 메모 (study-memory/<과목>.md): rewritten after studying or changing subjects ---------- */
+let memoryTimer = null;
+const memoryDirty = new Set();
+function touchMemory(subject){
+  if (!env.memory || !planner || subject == null) return;
+  if (subject) memoryDirty.add(subject); else for (const s of S.plan.subjects) memoryDirty.add(s.name);
+  clearTimeout(memoryTimer);
+  memoryTimer = setTimeout(() => {
+    const list = [...memoryDirty]; memoryDirty.clear();
+    for (const name of list){
+      const decks = decksOf(name); if (!decks.length) continue;
+      let auto;
+      try{ auto = planner.memoryAuto({ subject:name, decks, settings:S.plan, notes:notesBySource(), now:now() }); }catch(e){ console.error(e); continue; }
+      env.memory.save(name, auto).catch(() => {});
+    }
+  }, 2500);
 }
 
 /* ---------- views ---------- */
@@ -347,7 +436,9 @@ function renderHome(){
   let due = 0, fresh = 0;
   decks.forEach(d => { const c = deckCounts(d); due += c.due; fresh += Math.min(c.fresh, 10); });
   const wrap = h("div", { class:"stack" });
-  wrap.append(h("section", { class:"panel today" },
+  const plan = todayPlan();
+  if (plan && decks.some(d => !d.example)) wrap.append(renderToday(plan, pendings));
+  else wrap.append(h("section", { class:"panel today" },
     h("div", null,
       h("p", { class:"eyebrow", text:"오늘" }),
       h("h2", { text: due ? "복습할 문제가 기다리고 있어요" : fresh ? "새 문제로 시작해 볼까요" : pendings.length ? "문제를 만드는 동안 먼저 읽어 두세요" : decks.length ? "오늘 할 문제를 모두 마쳤어요" : "새 자료로 시작해 볼까요" }),
@@ -513,7 +604,7 @@ function startCheck(deckId, page){
   S.session = { queue: items.map(it => ({ deck:d.id, item:it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"check", page, viewed:new Set() };
   prepCurrent(); setView("practice");
 }
-function assistedNow(deck, item){ return S.session.assisted.has(item.id) || S.session.viewed.has(deck.id + ":" + item.page); }
+function assistedNow(deck, item){ return S.session.assisted.has(deck.id + ":" + item.id) || S.session.viewed.has(deck.id + ":" + item.page); }
 function applyCheck(deck, item){
   // right after reading: never counts as memory evidence; real review starts tomorrow
   const s = schedOf(deck, item.id); s.seen = true; s.due = Math.max(s.due || 0, now() + DAY);
@@ -528,8 +619,13 @@ function logEvent(deck, item, ev){ deck.events.push({ t:now(), item:item.id, ...
 function finishItem(outcome){
   const { deck, item } = curRef();
   if (S.session.mode === "check") applyCheck(deck, item); else applyOutcome(deck, item, outcome);
+  // 첫 훑기: solved alone on the very first try means it is already known, so it waits longer (학습규칙 [첫훑기-앎-간격]).
+  const q = S.session.queue[S.session.i];
+  if (q && q.reason === "diagnose" && outcome === "correct" && planner){
+    const s = schedOf(deck, item.id); s.box = planner.diagnoseBox(INTERVALS, (S.rules && S.rules.diagnoseKnownDays) || 7); s.due = now() + INTERVALS[s.box];
+  }
   S.session.results.push({ deck:deck.id, item:item.id, outcome });
-  S.session.assisted.add(item.id); // the result screen shows the answer, so a retry later in this session is not independent
+  S.session.assisted.add(deck.id + ":" + item.id); // the result screen shows the answer, so a retry later in this session is not independent
   Store.save(deck);
 }
 function submitAnswer(){
@@ -554,7 +650,7 @@ function dontKnow(){
 }
 function peek(){
   const { deck, item } = curRef(); const c = S.session.cur;
-  S.session.assisted.add(item.id);
+  S.session.assisted.add(deck.id + ":" + item.id);
   logEvent(deck, item, { kind:"reveal", afterReading: S.session.mode === "check" || undefined });
   c.verdict = "assisted";
   finishItem("assisted");
@@ -629,7 +725,10 @@ function renderStem(deck, item){
 }
 function nextItem(){
   S.session.i++; S.session.phase = "ask";
-  if (S.session.i >= S.session.queue.length){ S.session.phase = "done"; }
+  if (S.session.i >= S.session.queue.length){
+    S.session.phase = "done";
+    for (const name of new Set(S.session.queue.map(q => S.decks[q.deck] ? subjectOf(S.decks[q.deck]) : ""))) if (name) touchMemory(name);
+  }
   else prepCurrent();
   render();
   const f = document.querySelector("[data-autofocus]"); if (f) f.focus();
@@ -653,6 +752,7 @@ function renderSession(){
     h("span", { class:"chip", text:FORMAT_LABEL[item.format] }),
     s.mode === "check" ? h("span", { class:"chip read", text:"읽은 직후 확인" }) : null,
     s.mode === "weak" ? h("span", { class:"chip bad", text:"약점 다시 풀기" }) : null,
+    s.queue[s.i].reason && REASON[s.queue[s.i].reason] ? h("span", { class:`chip ${REASON[s.queue[s.i].reason][1]}`, text:REASON[s.queue[s.i].reason][0] }) : null,
     s.queue[s.i].retry ? h("span", { class:"chip help", text:"다시 확인" }) : null,
     h("span", { class:"chip", text:deck.title })
   ));
@@ -767,6 +867,10 @@ function renderSessionEnd(){
         h("div", { class:"tile" }, h("b", { class:"num", style:"color:var(--help)", text:String(help) }), h("span", { text:"정답 보고 풂" }))
       ),
       h("p", { class:"small muted", text: next ? `다음 복습은 ${fmtWhen(next)}에 차례가 와요.` : "" }),
+      S.session.mode === "today" ? (() => {
+        const p = todayPlan(); const left = p ? p.queue.length : 0;
+        return h("p", { class:"small", text: left ? `오늘 할 것이 ${left}문제 남았어요.` : "오늘 할 것을 모두 마쳤어요." });
+      })() : null,
       S.session.mode === "weak" ? (() => {
         const left = weakList(decksOf(S.session.subject)).length;
         return h("p", { class:"small", text: left ? `${S.session.subject} 약점이 ${left}문제 남았어요. 혼자 맞히면 약점에서 빠져요.` : `${S.session.subject} 약점을 모두 풀었어요.` });
@@ -775,7 +879,10 @@ function renderSessionEnd(){
         ? h("div", { class:"row" },
             h("button", { class:"btn primary", onclick: () => { const d = S.session.queue[0].deck, pg = S.session.page; S.session = null; openReader(d, nextPageWithItems(S.decks[d], pg) || pg); } }, "다음 쪽 읽기"),
             h("button", { class:"btn", onclick: () => { const d = S.session.queue[0].deck, pg = S.session.page; S.session = null; openReader(d, pg); } }, `p.${S.session.page}로 돌아가기`))
-        : h("div", { class:"row" }, h("button", { class:"btn primary", onclick: () => { S.session = null; render(); } }, "처음으로"), h("button", { class:"btn", onclick: () => { S.session = null; setView("records"); } }, "기록 보기"))
+        : h("div", { class:"row" },
+            S.session.mode === "today" && (todayPlan() || { queue:[] }).queue.length ? h("button", { class:"btn primary", onclick:startToday }, "이어서 하기") : null,
+            h("button", { class: S.session.mode === "today" && (todayPlan() || { queue:[] }).queue.length ? "btn" : "btn primary", onclick: () => { S.session = null; render(); } }, "처음으로"),
+            h("button", { class:"btn", onclick: () => { S.session = null; setView("records"); } }, "기록 보기"))
     )
   );
 }
@@ -1315,7 +1422,7 @@ function loadNotes(d){
   if (!notesOn(d) || NT.src[d.sourceCatalogId]) return;
   const k = d.sourceCatalogId; NT.src[k] = { status:"loading", list:[] };
   notesApi.list(k).then(list => { NT.src[k] = { status:"ready", list }; }, () => { NT.src[k] = { status:"error", list:[] }; })
-    .then(() => { if (!disposed && S.view === "read") render(); });
+    .then(() => { if (!disposed && (S.view === "read" || (!S.session && S.view !== "create"))) render(); });
 }
 function putNote(d, note){
   const e = NT.src[d.sourceCatalogId] || (NT.src[d.sourceCatalogId] = { status:"ready", list:[] });
@@ -1653,8 +1760,10 @@ function renderSummary(){
   const perDeck = decks.map(d => {
     const secs = summarySections(d);
     const st = new Map();
+    let asked = new Map();
+    if (planner){ try{ const list = (NT.src[d.sourceCatalogId] && NT.src[d.sourceCatalogId].list) || []; for (const id of planner.asked(d, list.map(n => ({ page:n.page, quote:n.quote, askedAt:n.askedAt, kind:n.kind })))) asked.set(id, list.filter(n => (d.objectives.find(o => o.id === id)?.pages || []).includes(n.page)).map(n => n.quote)); }catch(e){ asked = new Map(); } }
     for (const sec of secs) for (const o of sec.objectives){ const v = objectiveState(d, o.id); st.set(o.id, v); total++; if (v === "weak") weak++; else if (v === "new") fresh++; }
-    return { d, secs, st };
+    return { d, secs, st, asked };
   });
   const weakQs = weakList(decks).length;
   wrap.append(h("section", { class:"panel sum-tools stack" },
@@ -1663,12 +1772,12 @@ function renderSummary(){
       h("div", { class:"row" },
         subject ? h("button", { class:"btn small primary", disabled: weakQs ? null : true, onclick: () => startWeak(subject) }, `약점 다시 풀기${weakQs ? ` ${Math.min(weakQs, WEAK_MAX)}` : ""}`) : null,
         h("button", { class:"btn small ghost", onclick: () => window.print() }, "인쇄"))),
-    h("div", { class:"row" }, toggle("weakOnly", "약점만"), toggle("hide", "떠올릴 것 가리기"),
+    h("div", { class:"row" }, toggle("weakOnly", "약점·물어본 것만"), toggle("hide", "떠올릴 것 가리기"),
       h("span", { class:"small muted num", text:`목표 ${total} · 약점 ${weak} · 안 풀어봄 ${fresh}` })),
     S.sum.hide ? h("p", { class:"small muted", text:"목표만 보고 떠올린 뒤 눌러서 확인하세요. 여기서 확인한 것은 풀이 기록에 들어가지 않아요." }) : null));
 
   if (!decks.length) wrap.append(h("div", { class:"panel small muted", text:"이 과목에 묶인 자료가 없어요. 연습 탭의 자료 카드에서 과목을 골라 주세요." }));
-  for (const { d, secs, st } of perDeck){
+  for (const { d, secs, st, asked } of perDeck){
     const box = h("section", { class:"sum-deck" });
     const dWeak = [...st.values()].filter(v => v === "weak").length;
     box.append(h("header", { class:"row", style:"justify-content:space-between" },
@@ -1676,7 +1785,7 @@ function renderSummary(){
       h("button", { class:"btn small ghost", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, "원문 읽기")));
     let shownHere = 0;
     for (const sec of secs){
-      const objs = sec.objectives.filter(o => !S.sum.weakOnly || st.get(o.id) === "weak");
+      const objs = sec.objectives.filter(o => !S.sum.weakOnly || st.get(o.id) === "weak" || asked.has(o.id));
       if (!objs.length) continue;
       shownHere += objs.length;
       const pages = sec.pages && sec.pages.length ? (sec.pages.length > 1 ? `p.${sec.pages[0]}–${sec.pages[sec.pages.length - 1]}` : `p.${sec.pages[0]}`) : "";
@@ -1702,6 +1811,7 @@ function renderSummary(){
             recall,
             h("div", { class:"sum-meta" },
               v === "weak" ? h("span", { class:"chip bad", text:"약점" }) : null,
+              asked.has(o.id) ? h("span", { class:"chip ask", title:`읽다가 물어본 것: ${asked.get(o.id).join(" / ")}`, text:"물어봄" }) : null,
               o.importance === "support" ? h("span", { class:"chip", text:"보조" }) : null,
               o.pages && o.pages.length ? h("button", { class:"linkish small", onclick: () => openReader(d.id, o.pages[0], o.id) }, `원문 p.${o.pages.join(",")}`) : null))));
       }
@@ -2130,7 +2240,8 @@ loadAccount();
   }
 }
 ensureKatex().then(ok => { if (ok && !disposed) render(); });
-reloadDecks();
+if (env.rules) env.rules().then((r) => { if (disposed || !r) return; S.rules = r.rules || null; S.rulesWarnings = r.warnings || []; if (!S.session) render(); }, () => {});
+reloadDecks().then(() => { if (!disposed) for (const d of realDecks()) loadNotes(d); });
 // Bring in records saved on another computer, then send this browser's records back.
 Store.pull().then((changed) => {
   if (disposed) return;

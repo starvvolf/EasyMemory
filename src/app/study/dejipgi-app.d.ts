@@ -1,5 +1,6 @@
 import type { StudyDeck } from "@/lib/study/from-authoring";
 import type { NoteTurn, StudyNote } from "@/lib/study/notes";
+import type { TodayPlan } from "@/lib/study/plan";
 
 /** An objective shown at the one confirmation before authoring (engine v2). Support objectives start unchecked. */
 export type DejipgiObjective = { id: string; section: string; part?: string; statement: string; recall: string; importance: "core" | "support" };
@@ -21,7 +22,23 @@ export type DejipgiBuilderEngine = {
   resume?(requestId: string): Promise<void>;
 };
 
+/** A deck as the screen holds it: the study deck plus this learner's record. */
+export type PlannerDeck = StudyDeck & { events?: Array<{ t: number; item: string; kind: string; correct?: boolean; rating?: string; assisted?: boolean; afterReading?: boolean }>;
+  sched?: Record<string, { box: number; due: number; seen: boolean }>; hidden?: string[]; reported?: Record<string, unknown> };
+type PlannerNotes = Record<string, Array<{ page: number; quote: string; askedAt: string; kind?: string }>>;
+
 export type DejipgiEnv = {
+  /** 오늘 할 것, 물어본 목표, 학습 메모 (src/lib/study/plan.ts). */
+  planner?: {
+    today(input: { decks: PlannerDeck[]; settings: unknown; notes: PlannerNotes; rules?: unknown; now: number }): TodayPlan;
+    asked(deck: PlannerDeck, notes: PlannerNotes[string]): string[];
+    memoryAuto(input: { subject: string; decks: PlannerDeck[]; settings: unknown; notes: PlannerNotes; now: number }): string;
+    diagnoseBox(intervals: number[], days: number): number;
+  };
+  /** 학습규칙/오늘할것.md, parsed on the server. */
+  rules?: () => Promise<{ rules: unknown; warnings: string[] }>;
+  /** 학습 메모 (study-memory/<과목>.md): the screen rewrites the auto part after studying. */
+  memory?: { save(subject: string, auto: string): Promise<void> };
   uid: string;
   defaultPurpose: string;
   loadDecks(): Promise<StudyDeck[]>;
