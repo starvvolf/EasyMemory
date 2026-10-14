@@ -17,12 +17,12 @@ function jwt(nonce: string, clientId: string) {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 test("동적 등록→서명 확인→서버 토큰 보관→갱신→로그아웃은 브라우저에 비밀을 주지 않는다", async (t) => {
-  const previous = process.env.STUDY_FORGE_DATA_DIR;
+  const previous = process.env.STUDY_FORGE_AUTH_DIR;
   const previousKey = process.env.STUDY_FORGE_CHATGPT_ENCRYPTION_KEY;
   const data = await mkdtemp(path.join(os.tmpdir(), "sf-chatgpt-auth-"));
-  process.env.STUDY_FORGE_DATA_DIR = data;
+  process.env.STUDY_FORGE_AUTH_DIR = data;
   process.env.STUDY_FORGE_CHATGPT_ENCRYPTION_KEY = "a".repeat(64);
-  t.after(async () => { if (previous === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = previous;
+  t.after(async () => { if (previous === undefined) delete process.env.STUDY_FORGE_AUTH_DIR; else process.env.STUDY_FORGE_AUTH_DIR = previous;
     if (previousKey === undefined) delete process.env.STUDY_FORGE_CHATGPT_ENCRYPTION_KEY; else process.env.STUDY_FORGE_CHATGPT_ENCRYPTION_KEY = previousKey;
     await rm(data, { recursive: true, force: true }); });
   const started = await beginChatGptSignIn("local-experiment", "http://127.0.0.1:3101");
@@ -68,12 +68,12 @@ test("동적 등록→서명 확인→서버 토큰 보관→갱신→로그아�
 });
 
 test("계정과 서명 조건이 틀리면 로그인 토큰을 저장하지 않는다", async (t) => {
-  const previous = process.env.STUDY_FORGE_DATA_DIR;
+  const previous = process.env.STUDY_FORGE_AUTH_DIR;
   const previousKey = process.env.STUDY_FORGE_CHATGPT_ENCRYPTION_KEY;
   const data = await mkdtemp(path.join(os.tmpdir(), "sf-chatgpt-reject-"));
-  process.env.STUDY_FORGE_DATA_DIR = data;
+  process.env.STUDY_FORGE_AUTH_DIR = data;
   process.env.STUDY_FORGE_CHATGPT_ENCRYPTION_KEY = "b".repeat(64);
-  t.after(async () => { if (previous === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = previous;
+  t.after(async () => { if (previous === undefined) delete process.env.STUDY_FORGE_AUTH_DIR; else process.env.STUDY_FORGE_AUTH_DIR = previous;
     if (previousKey === undefined) delete process.env.STUDY_FORGE_CHATGPT_ENCRYPTION_KEY; else process.env.STUDY_FORGE_CHATGPT_ENCRYPTION_KEY = previousKey;
     await rm(data, { recursive: true, force: true }); });
   const started = await beginChatGptSignIn("local-experiment", "http://127.0.0.1:3101");
