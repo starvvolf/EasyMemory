@@ -12,6 +12,8 @@ import { inspectQuality } from "../../../tools/problem-authoring-lab/quality.ts"
 import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type PlannerDeck } from "./dejipgi-app.js";
 import { DEFAULT_GEN_MODELS, defaultChosen, type GenState } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
+import { coachCards, type CoachInput } from "@/lib/study/coach";
+import { applyPatches, similarObjectives, tooEasy, type LedgerEntry, type PatchMap } from "@/lib/study/quality";
 import { askedObjectives, diagnoseBox, planDeckFrom, planSettingsFrom, planToday, renderMemoryAuto, type PlanNote, type PlanRecord, type StudyRules } from "@/lib/study/plan";
 import "katex/dist/katex.min.css";
 import "./dejipgi.css";
@@ -116,6 +118,10 @@ export default function DejipgiStudy() {
       return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[] }>(
         await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").catch(() => null)));
     };
+    const loadQuality = async () => readJson<{ patches: PatchMap; counts: Record<string, number> }>(await fetchExperiment("/api/study-quality"), "고친 문제 목록을 읽지 못했어요.");
+    const loadPatches = async () => (await loadQuality()).patches;
+    const qualityPost = async (body: Record<string, unknown>) => readJson<{ patch?: unknown; removed?: boolean }>(await fetchExperiment("/api/study-quality", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), "품질 기록을 저장하지 못했어요.");
     // The screen's decks carry their record (events, sched, hidden, reported) on the deck object itself.
     const recordOf = (deck: PlannerDeck): PlanRecord => ({ events: deck.events ?? [], sched: deck.sched ?? {}, hidden: deck.hidden, reported: deck.reported });
     const recordsOf = (decks: PlannerDeck[]) => Object.fromEntries(decks.map((deck) => [deck.id, recordOf(deck)]));
@@ -264,6 +270,18 @@ export default function DejipgiStudy() {
         },
         diagnoseBox,
       },
+      // 빠른 고리 (docs/품질_자동화.md): patches over the learner's own questions and the quality ledger, no model calls.
+      quality: {
+        similar: (hidden, candidates, threshold) => similarObjectives(hidden, candidates, threshold),
+        tooEasy: (events, itemId, streak) => tooEasy(events, itemId, streak),
+        ...(session.mode === "local-experiment" ? {
+          list: loadQuality,
+          async patch(deckId: string, patch: { kind: "accept"; itemId: string; answer: string } | { kind: "card"; itemId: string }, entry?: LedgerEntry) { await qualityPost({ action: "patch", deckId, patch, entry }); },
+          async unpatch(deckId: string, patchId: string, entry?: LedgerEntry) { await qualityPost({ action: "unpatch", deckId, patchId, entry }); },
+          async log(entries: LedgerEntry[]) { await qualityPost({ action: "log", entries }); },
+        } : {}),
+      },
+      coach: (input) => coachCards(input as CoachInput),
       async rules() {
         return (await readJson<{ today: { rules: unknown; warnings: string[] } }>(await fetchExperiment("/api/study-rules"), "학습규칙을 읽지 못했어요.")).today;
       },
@@ -290,6 +308,8 @@ export default function DejipgiStudy() {
       },
       async loadDecks(): Promise<StudyDeck[]> {
         // New-engine materials first (newest first), then documents from the old request flow.
+        // Fixes made while studying (빠른 고리) are laid over each material; patchSig makes the screen reload a patched deck.
+        const patches = session.mode === "local-experiment" ? await loadPatches().catch(() => ({} as PatchMap)) : {};
         const [fresh, { artifacts }] = await Promise.all([
           loadGenDecks().catch(() => []),
           readJson<{ artifacts: StudyArtifactMeta[] }>(await fetchExperiment("/api/personalization-lab"), "Recaller 출제 문서 목록을 불러오지 못했어요."),
@@ -302,7 +322,8 @@ export default function DejipgiStudy() {
           // Questions that fail the item-quality checks stay out of practice; the rest of the document is still usable.
           const excluded = new Map(inspectQuality(document).filter((issue) => issue.severity === "error")
             .map((issue) => [issue.questionId, `검사 제외: ${issue.message}`] as const));
-          const deck = toStudyDeck(meta, document, order, excluded);
+          const own = patches[meta.id];
+          const deck = { ...applyPatches(toStudyDeck(meta, document, order, excluded), own, showMath), patchSig: (own ?? []).map((patch) => patch.id).join(",") };
           // What to recall shows on the one-page summary; bare LaTeX there renders like answers do.
           return outline ? { ...deck, outline: outline.map((section) => ({ ...section,
             objectives: section.objectives.map((objective) => ({ ...objective, recall: showMath(objective.recall) })) })) } : deck;

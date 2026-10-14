@@ -3,19 +3,21 @@
 // Materials from the old request flow are left out (all exam materials go through engine v2).
 import { inspectQuality } from "../../../tools/problem-authoring-lab/quality.ts";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
-import { toStudyDeck } from "./from-authoring.ts";
+import { showMath, toStudyDeck } from "./from-authoring.ts";
 import { listGens, studyDocument } from "./gen/runner.ts";
 import { listMemories } from "./memory.ts";
 import { listNotes } from "./notes.ts";
 import { planDeckFrom, planSettingsFrom, planToday, recordFor, subjectOfDeck, type PlanDeck, type PlanNote, type PlanRecord } from "./plan.ts";
+import { applyPatches } from "./quality.ts";
+import { readPatches } from "./quality-store.ts";
 import { loadRecords } from "./records.ts";
 import { loadAgentRules, loadStudyRules } from "./rules.ts";
 
 const pendingLabel: Record<string, string> = { "awaiting-confirm": "목표 확인 필요", queued: "시작 대기", running: "만드는 중", interrupted: "멈춤", "paused-usage-limit": "사용량 한도로 멈춤", "paused-login": "ChatGPT 로그인 필요", "paused-invalid": "멈춤", failed: "실패" };
 
 export async function serverPlan(uid: string, now = Date.now()) {
-  const [gens, stored, { rules, warnings }, agentRules, memories] = await Promise.all([
-    listGens(), loadRecords(uid), loadStudyRules(), loadAgentRules(), listMemories()]);
+  const [gens, stored, { rules, warnings }, agentRules, memories, patches] = await Promise.all([
+    listGens(), loadRecords(uid), loadStudyRules(), loadAgentRules(), listMemories(), readPatches()]);
   const records = (stored?.records ?? {}) as Record<string, unknown>;
   const settings = planSettingsFrom(records.__plan);
   const study = gens.filter((gen) => (gen.input.origin ?? "lab") === "study");
@@ -26,7 +28,8 @@ export async function serverPlan(uid: string, now = Date.now()) {
     const built = await studyDocument(gen.id).catch(() => null);
     if (!built) continue;
     const excluded = new Map(inspectQuality(built.document as AuthoringDocument).filter((issue) => issue.severity === "error").map((issue) => [issue.questionId, issue.message] as const));
-    decks.push(planDeckFrom({ ...toStudyDeck(built.meta, built.document as AuthoringDocument, decks.length, excluded), outline: built.outline }));
+    const deck = applyPatches(toStudyDeck(built.meta, built.document as AuthoringDocument, decks.length, excluded), patches[gen.id], showMath);
+    decks.push(planDeckFrom({ ...deck, outline: built.outline }));
     shas.set(gen.id, built.meta.artifactSha256);
   }
   decks.sort((a, b) => a.title.localeCompare(b.title, "ko", { numeric: true }));

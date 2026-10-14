@@ -27,6 +27,8 @@ function h(tag, props, ...kids){
 const now = () => Date.now();
 const MIN = 60e3, DAY = 864e5;
 const INTERVALS = [10*MIN, 1*DAY, 3*DAY, 7*DAY, 16*DAY, 35*DAY];
+/* Review gap for a box, stretched or shortened by the learner's "아는 게 자꾸 나와요 / 금방 잊어요" feedback (prefs.intervalScale). */
+function gap(box){ const k = (typeof S !== "undefined" && S.plan && S.plan.prefs && S.plan.prefs.intervalScale) || 1; return Math.round(INTERVALS[box] * Math.min(2, Math.max(0.5, k))); }
 
 /* ---------- answer normalization (one place, used for grading and validation) ---------- */
 function norm(s){
@@ -162,7 +164,11 @@ const Store = {
 // Objectives the learner took out and questions they reported stay in the document but leave practice and review.
 function applyFilters(deck){
   const hidden = new Set(deck.hidden || []);
-  deck.items = (deck.allItems || deck.items).filter(it => !hidden.has(it.objectiveId) && !(deck.reported && deck.reported[it.id]));
+  // "핵심만" (end-of-session feedback "너무 꼼꼼·지엽적"): support objectives of this material leave practice too.
+  const p = typeof S !== "undefined" && S.plan && S.plan.prefs;
+  const coreOnly = p && p.detail && p.detail[deck.sourceCatalogId || deck.id] === "core";
+  const support = coreOnly ? new Set((deck.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").map(o => o.id)) : null;
+  deck.items = (deck.allItems || deck.items).filter(it => !hidden.has(it.objectiveId) && !(deck.reported && deck.reported[it.id]) && !(support && support.has(it.objectiveId)));
 }
 
 /* ---------- question window answers: not connected yet (a paid call; wired only after the user approves) ---------- */
@@ -188,7 +194,7 @@ const S = {
   plan:{ subjects:[], of:{} },
   planEdit:null,            // null | "new" | subject name being edited (home)
   sum:{ subject:null, weakOnly:false, hide:false, shown:new Set() },
-  rules:null, rulesWarnings:[]
+  rules:null, rulesWarnings:[], patches:{}, hideSuggest:null, gapMarks:new Set()
 };
 
 /* ---------- scheduling & status ---------- */
@@ -198,7 +204,7 @@ function isNew(deck, item){ const s = deck.sched[item.id]; return !s || !s.seen;
 function applyOutcome(deck, item, outcome){
   // outcome: "correct" | "wrong" | "unsure" | "assisted"
   const s = schedOf(deck, item.id); const t = now(); s.seen = true;
-  if (outcome === "correct"){ s.box = Math.min(s.box + 1, INTERVALS.length - 1); s.due = t + INTERVALS[s.box]; s.lastIndep = t; }
+  if (outcome === "correct"){ s.box = Math.min(s.box + 1, INTERVALS.length - 1); s.due = t + gap(s.box); s.lastIndep = t; }
   else if (outcome === "unsure"){ s.due = t + DAY; }
   // Missed ones are only marked for now (사용자 결정 2026-10-12): no re-ask 10 minutes later, back in the next day's review.
   else if (outcome === "wrong"){ s.box = 0; s.due = t + DAY; }
@@ -354,9 +360,146 @@ function renderToday(plan, pendings){
   }
   if (rows.childNodes.length) panel.append(rows);
   for (const note of plan.notes) panel.append(h("p", { class:"small muted", text:note }));
+  const coach = coachPanel(plan, pendings);
+  if (coach) panel.append(coach);
+  const mine = myAdjustments();
+  if (mine) panel.append(mine);
   if (S.rulesWarnings.length) panel.append(h("p", { class:"small help-text", text:`학습규칙 확인: ${S.rulesWarnings.join(" / ")}` }));
   if (!S.plan.subjects.length) panel.append(h("p", { class:"small muted", text:"아래 ‘시험 과목’에 과목과 시험일을 넣으면 시험 날짜에 맞춰 하루 분량을 나눠요." }));
   return panel;
+}
+
+/* ---------- 빠른 고리 (학습규칙/품질.md, docs/품질_자동화.md): fixes in place, no model calls ---------- */
+function rule(key, fallback){ return (S.rules && typeof S.rules[key] === "number") ? S.rules[key] : fallback; }
+function stamp(){ return new Date().toISOString(); }
+function ledger({ deck, item, objective, signal, action, cause, detail }){
+  if (!env.quality || !env.quality.log) return;
+  env.quality.log([{ at:stamp(), deck:deck.title, item:item ? item.id : undefined, objective: objective || (item ? item.objectiveId : undefined), signal, action, cause, detail: detail || undefined }])
+    .then(() => { clearTimeout(ledgerTimer); ledgerTimer = setTimeout(loadPatchList, 1500); }, () => {});
+}
+let ledgerTimer = null;
+function prefs(){ return S.plan.prefs || (S.plan.prefs = {}); }
+function loadPatchList(){ if (env.quality && env.quality.list) env.quality.list().then((m) => { S.patches = (m && m.patches) || {}; S.qualityCounts = (m && m.counts) || {}; if (!disposed && !S.session && S.view !== "create") render(); }, () => {}); }
+function savePrefs(msg){ Store.savePlan(S.plan); if (msg) toast(msg); render(); }
+async function patchItem(deck, patch, entry, msg){
+  if (!env.quality || !env.quality.patch) { toast("이 화면에서는 문제를 고칠 수 없어요."); return; }
+  try{ await env.quality.patch(deck.id, patch, entry); toast(msg); loadPatchList(); await reloadDecks(); }
+  catch(e){ toast((e && e.message) || "고치지 못했어요."); }
+}
+/* After "내 답도 맞아요": keep that spelling as correct from now on, or (when it keeps happening) make it a flashcard. */
+function quickFix(deck, item, c){
+  if (item.format !== "value" || !c.overridden || !c.text.trim() || c.fixed) return null;
+  const times = deck.events.filter(e => e.item === item.id && e.override).length;
+  const answer = c.text.trim();
+  return h("div", { class:"quickfix" },
+    h("span", { class:"small", text: times >= rule("cardAfterOverrides", 2) ? `이 문제에서 ‘내 답도 맞아요’가 ${times}번째예요. 표기가 여러 가지라 떠올리기 카드가 더 맞아 보여요.` : "다음부터 이 답도 정답으로 칠까요?" }),
+    h("div", { class:"row" },
+      h("button", { class:"btn small", onclick: () => { c.fixed = true; patchItem(deck, { kind:"accept", itemId:item.id, answer }, undefined, `‘${answer}’도 정답으로 쳐요.`); } }, "정답에 추가"),
+      times >= rule("cardAfterOverrides", 2) ? h("button", { class:"btn small primary", onclick: () => { c.fixed = true; patchItem(deck, { kind:"card", itemId:item.id },
+        { at:stamp(), deck:deck.title, item:item.id, objective:item.objectiveId, signal:`내 답도 맞아요 ${times}번`, action:"떠올리기 카드로 바꿈", cause:"형식선택" }, "떠올리기 카드로 바꿨어요. 기록 탭 ‘고친 것’에서 되돌릴 수 있어요."); } }, "카드로 바꾸기") : null));
+}
+/* One-tap feedback on the question itself. */
+function itemFeedback(deck, item, c){
+  if (c.feedback) return h("p", { class:"small muted", text:c.feedback });
+  return h("div", { class:"row itemfb" }, h("span", { class:"small muted", text:"이 문제는" }),
+    h("button", { class:"chip-btn", onclick: () => { c.feedback = "목표를 뺐어요. 비슷한 게 있으면 위에 보여요."; hideObjective(deck, item.objectiveId, "지엽"); } }, "너무 지엽적"),
+    h("button", { class:"chip-btn", onclick: () => {
+      const s = schedOf(deck, item.id); s.box = INTERVALS.length - 1; s.due = now() + gap(s.box); s.easy = true; Store.save(deck);
+      ledger({ deck, item, signal:"너무 쉬워요", action:"가장 긴 복습 간격으로", cause:"너무쉬움" });
+      c.feedback = `${fmtWhen(s.due)}에 다시 나와요.`; render(); } }, "너무 쉬움"));
+}
+function hideSuggestBar(){
+  const g = S.hideSuggest; if (!g) return null;
+  const d = S.decks[g.deckId]; if (!d){ S.hideSuggest = null; return null; }
+  const list = g.ids.map(id => d.objectives.find(o => o.id === id)).filter(Boolean);
+  if (!list.length){ S.hideSuggest = null; return null; }
+  return h("section", { class:"panel suggest" },
+    h("p", null, h("b", { text:`비슷한 목표 ${list.length}개도 뺄까요?` }), h("span", { class:"small muted", text:` ‘${g.from.slice(0, 40)}’를 뺐어요.` })),
+    h("ul", { class:"small" }, list.slice(0, 6).map(o => h("li", { text:o.statement }))),
+    h("div", { class:"row" },
+      h("button", { class:"btn small primary", onclick: () => {
+        d.hidden = [...new Set([...(d.hidden || []), ...g.ids])]; applyFilters(d); Store.save(d);
+        ledger({ deck:d, signal:`비슷한 목표 ${g.ids.length}개`, action:"함께 뺌", cause: g.why === "지엽" ? "지엽" : "목표설계", detail:list.map(o => o.statement).join(" / ") });
+        S.hideSuggest = null; toast(`${g.ids.length}개를 더 뺐어요. 기록 탭에서 다시 넣을 수 있어요.`); render(); } }, "모두 빼기"),
+      h("button", { class:"btn small ghost", onclick: () => { S.hideSuggest = null; render(); } }, "그대로 두기")));
+}
+/* End-of-session feedback: each answer changes something right away and says what changed. */
+const FEEDBACK = {
+  amount:[["많았어요", -15], ["딱 좋아요", 0], ["더 할 수 있어요", 15]],
+  repeat:[["아는 게 자꾸 나와요", 1.25], ["금방 잊어요", 0.8]],
+};
+function sessionFeedback(){
+  const s = S.session; s.fb = s.fb || {};
+  const decks = [...new Set(s.queue.map(q => q.deck))].map(id => S.decks[id]).filter(Boolean);
+  const base = (S.rules && S.rules.dailyMinutes) || 90;
+  const minutes = prefs().dailyMinutes || base;
+  const group = (key, label, kids) => h("div", { class:"fbrow" }, h("span", { class:"small muted", text:label }), h("div", { class:"row" }, kids),
+    s.fb[key] ? h("span", { class:"small good-text", text:s.fb[key] }) : null);
+  s.fbPick = s.fbPick || {};
+  const pick = (key, fn, label) => () => { if (s.fb[key]) return; s.fbPick[key] = label; s.fb[key] = fn(); render(); };
+  const chosen = (key, label) => s.fbPick[key] === label ? "true" : "false";
+  const supportOf = (d) => (d.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").length;
+  return h("section", { class:"panel stack fb" },
+    h("p", null, h("b", { text:"이번 풀이 어땠어요?" }), h("span", { class:"small muted", text:" 누르면 바로 반영돼요." })),
+    group("amount", "하루 분량", FEEDBACK.amount.map(([label, delta]) => h("button", { class:"chip-btn", "aria-pressed":chosen("amount", label), disabled: s.fb.amount ? true : null, onclick: pick("amount", () => {
+      if (!delta) return "지금 분량을 유지해요.";
+      const next = Math.min(300, Math.max(20, minutes + delta)); prefs().dailyMinutes = next; savePrefs();
+      ledger({ deck:{ title:"전체" }, signal:`분량: ${label}`, action:`하루 ${minutes}분 → ${next}분`, cause:"분량" });
+      return `하루 ${minutes}분 → ${next}분. 오늘 할 것을 다시 계산했어요.`; }, label) }, label))),
+    group("repeat", "복습 간격", FEEDBACK.repeat.map(([label, k]) => h("button", { class:"chip-btn", "aria-pressed":chosen("repeat", label), disabled: s.fb.repeat ? true : null, onclick: pick("repeat", () => {
+      const cur = prefs().intervalScale || 1; const next = Math.round(Math.min(2, Math.max(0.5, cur * k)) * 100) / 100; prefs().intervalScale = next; savePrefs();
+      ledger({ deck:{ title:"전체" }, signal:`간격: ${label}`, action:`복습 간격 ×${cur} → ×${next}`, cause:"간격" });
+      return `복습 간격 ×${next}. 다음에 맞히는 문제부터 적용돼요.`; }, label) }, label))),
+    group("content", "내용", [
+      h("button", { class:"chip-btn", "aria-pressed":chosen("content", "지엽"), disabled: s.fb.content ? true : null, onclick: pick("content", () => {
+        let n = 0;
+        for (const d of decks){ if (!supportOf(d)) continue; (prefs().detail || (prefs().detail = {}))[planKey(d)] = "core"; n++; }
+        for (const d of decks) ledger({ deck:d, signal:"내용: 너무 꼼꼼·지엽적", action: supportOf(d) ? "보조 목표 빼고 핵심만" : "바꿀 보조 목표 없음", cause:"지엽" });
+        savePrefs(); for (const d of decks) applyFilters(d);
+        return n ? `자료 ${n}개를 ‘핵심만’으로 바꿨어요. 정리 탭에서 되돌릴 수 있어요.` : "보조 목표가 따로 없는 자료예요. 문제의 ‘너무 지엽적’으로 하나씩 빼 주세요."; }, "지엽") }, "너무 꼼꼼·지엽적"),
+      h("button", { class:"chip-btn", "aria-pressed":chosen("content", "빠짐"), disabled: s.fb.content ? true : null, onclick: pick("content", () => {
+        for (const d of decks) ledger({ deck:d, signal:"내용: 빠진 게 많아요", action:"문제 없는 쪽을 정리 탭에 표시", cause:"빠뜨림" });
+        const name = decks.length ? subjectOf(decks[0]) : ""; setTimeout(() => openSummary(name), 900);
+        return "정리 탭에서 문제가 없는 쪽을 보여 드릴게요. 빠진 쪽을 누르면 기록돼요."; }, "빠짐") }, "빠진 게 많아요")]));
+}
+/* ---------- 앱 안의 코치 (src/lib/study/coach.ts): a few cards with one-tap actions; closing one hides it ---------- */
+function coachPanel(plan, pendings){
+  if (!env.coach) return null;
+  let cards = [];
+  try{
+    cards = env.coach({ plan, rules:S.rules || {}, prefs:S.plan.prefs || {}, counts:S.qualityCounts || {},
+      waiting: pendings.filter(p => p.pending && p.pending.status === "confirm").length,
+      unassigned: S.plan.subjects.length ? realDecks().filter(d => !subjectOf(d)).length : 0,
+      subjectsWithoutDate: S.plan.subjects.filter(s => !s.exam && decksOf(s.name).length).map(s => s.name) });
+  }catch(e){ console.error(e); return null; }
+  if (!cards.length) return null;
+  const close = (id) => { (prefs().coachSeen || (prefs().coachSeen = {}))[id] = new Date().toISOString().slice(0, 10); savePrefs(); };
+  const run = (card, a) => {
+    if (a.do === "summary") openSummary(a.subject);
+    else if (a.do === "weak") startWeak(a.subject);
+    else if (a.do === "minutes"){ prefs().dailyMinutes = a.minutes; ledger({ deck:{ title:"전체" }, signal:"코치: 밀린 양", action:`하루 ${a.minutes}분으로`, cause:"분량" }); toast(`하루 ${a.minutes}분으로 바꿨어요.`); }
+    else if (a.do === "subjects"){ S.planEdit = (S.plan.subjects.find(s => !s.exam) || {}).name || null; render(); requestAnimationFrame(() => { const el = document.querySelector(".subjects"); if (el) el.scrollIntoView({ behavior:"smooth", block:"center" }); }); return; }
+    else if (a.do === "genNote"){ const cur = prefs().genNote || ""; prefs().genNote = cur ? `${cur}\n${a.text}` : a.text; S.builder.note = ""; S.builder.noteSeeded = false;
+      ledger({ deck:{ title:"전체" }, signal:`코치: ${card.title}`, action:"다음 자료 메모에 추가", cause:card.id.split(":")[1] || "기타", detail:a.text }); toast("다음에 자료를 만들 때 메모에 들어가요."); }
+    else if (a.do === "propose"){ ledger({ deck:{ title:"전체" }, signal:`코치 제안: ${card.title}`, action:"개선 후보로 올림", cause:a.cause, detail:a.text }); toast("개선 후보로 올렸어요. 시험 뒤 개선 라운드에서 비교해요."); }
+    close(card.id);
+  };
+  return h("div", { class:"coach" }, cards.map(card => h("div", { class:`coach-card ${card.kind}` },
+    h("div", { class:"coach-text" }, h("b", { text:card.title }), h("p", { class:"small muted", text:card.body })),
+    h("div", { class:"row" }, card.actions.map(a => h("button", { class:"btn small", onclick: () => run(card, a) }, a.label)),
+      h("button", { class:"btn small ghost", title:"이 안내 닫기", onclick: () => close(card.id) }, "닫기")))));
+}
+/* What the learner changed by feedback, with a way back to 학습규칙's defaults. */
+function myAdjustments(){
+  const p = S.plan.prefs || {};
+  const parts = [];
+  if (p.dailyMinutes) parts.push(`하루 ${p.dailyMinutes}분`);
+  if (p.intervalScale && p.intervalScale !== 1) parts.push(`복습 간격 ×${p.intervalScale}`);
+  const core = Object.keys(p.detail || {}).length; if (core) parts.push(`핵심만 자료 ${core}개`);
+  if (p.genNote) parts.push("다음 자료 메모 있음");
+  if (!parts.length) return null;
+  return h("p", { class:"small muted" }, `내 조정: ${parts.join(" · ")} `, h("button", { class:"linkish", onclick: () => {
+    const seenCards = p.coachSeen; S.plan.prefs = seenCards ? { coachSeen:seenCards } : {}; for (const d of realDecks()) applyFilters(d); savePrefs("학습규칙 기본값으로 돌렸어요."); } }, "기본값으로"));
 }
 
 /* ---------- 학습 메모 (study-memory/<과목>.md): rewritten after studying or changing subjects ---------- */
@@ -395,6 +538,8 @@ on(document.getElementById("tabs"), "click", (e) => {
 function render(){
   const app = document.getElementById("app");
   app.replaceChildren();
+  const bar = S.view !== "create" && !(S.session && S.session.phase === "ask") ? hideSuggestBar() : null;
+  if (bar) app.append(bar);
   if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
   else if (S.view === "create") app.append(renderBuilder());
   else if (S.view === "read") { app.append(renderReader()); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer(); }
@@ -622,7 +767,15 @@ function finishItem(outcome){
   // 첫 훑기: solved alone on the very first try means it is already known, so it waits longer (학습규칙 [첫훑기-앎-간격]).
   const q = S.session.queue[S.session.i];
   if (q && q.reason === "diagnose" && outcome === "correct" && planner){
-    const s = schedOf(deck, item.id); s.box = planner.diagnoseBox(INTERVALS, (S.rules && S.rules.diagnoseKnownDays) || 7); s.due = now() + INTERVALS[s.box];
+    const s = schedOf(deck, item.id); s.box = planner.diagnoseBox(INTERVALS, (S.rules && S.rules.diagnoseKnownDays) || 7); s.due = now() + gap(s.box);
+  }
+  // 너무 쉬움 (학습규칙/품질.md [쉬움-연속]): solved alone on several different days → the longest gap, once.
+  if (outcome === "correct" && S.session.mode !== "check" && env.quality){
+    const s = schedOf(deck, item.id);
+    if (!s.easy && s.box < INTERVALS.length - 1 && env.quality.tooEasy(deck.events, item.id, rule("easyStreak", 4))){
+      s.box = INTERVALS.length - 1; s.due = now() + gap(s.box); s.easy = true;
+      ledger({ deck, item, signal:"연속으로 혼자 맞힘", action:"가장 긴 복습 간격으로", cause:"너무쉬움" });
+    }
   }
   S.session.results.push({ deck:deck.id, item:item.id, outcome });
   S.session.assisted.add(deck.id + ":" + item.id); // the result screen shows the answer, so a retry later in this session is not independent
@@ -670,10 +823,11 @@ function overrideCorrect(){
   const ev = [...deck.events].reverse().find(e => e.item === item.id && e.kind === "submit");
   if (ev){ ev.correct = true; ev.override = true; }
   if (S.session.mode === "check"){ c.verdict = "read-good"; c.overridden = true; S.session.queue = S.session.queue.filter((q, idx) => !(idx > S.session.i && q.retry && q.item === item.id)); Store.save(deck); render(); return; }
-  const s = schedOf(deck, item.id); s.box = Math.min(s.box + 1, INTERVALS.length - 1); s.due = now() + INTERVALS[s.box]; s.lastIndep = now();
+  const s = schedOf(deck, item.id); s.box = Math.min(s.box + 1, INTERVALS.length - 1); s.due = now() + gap(s.box); s.lastIndep = now();
   const res = S.session.results[S.session.results.length - 1]; if (res) res.outcome = "correct";
   S.session.queue = S.session.queue.filter((q, idx) => !(idx > S.session.i && q.retry && q.item === item.id));
   c.verdict = "good"; c.overridden = true;
+  ledger({ deck, item, signal:"내 답도 맞아요", action:"이번 풀이를 맞음으로", cause:"인정답안누락", detail:`내 답 "${c.text.slice(0, 60)}" / 정답 "${(item.accepted || [])[0] || ""}"` });
   Store.save(deck); render();
 }
 /* "이 문제 이상해요": the question leaves practice and review; the report stays as quality evidence. */
@@ -683,6 +837,7 @@ function reportItem(reason){
   deck.reported = deck.reported || {};
   deck.reported[item.id] = { reason, t:now() };
   logEvent(deck, item, { kind:"report", reason });
+  ledger({ deck, item, signal:`신고: ${reason}`, action:"연습·복습에서 뺌", cause:{ "정답이 틀렸어요":"정답오류", "문제가 애매해요":"애매함", "원문과 달라요":"원문불일치" }[reason] || "기타" });
   S.session.queue = S.session.queue.filter((q, idx) => !(idx > S.session.i && q.deck === deck.id && q.item === item.id));
   S.session.cur.reported = reason; S.session.cur.reporting = false;
   applyFilters(deck); Store.save(deck);
@@ -822,7 +977,7 @@ function renderSession(){
         h("div", { style:"margin-top:8px" }, h("button", { class:"btn small", onclick: () => openReader(deck.id, item.page, item.objectiveId) }, "원문에서 보기 →")))));
     }
     card.append(rv);
-    if (s.phase === "result") card.append(renderReport(deck, item, c));
+    if (s.phase === "result"){ const fix = quickFix(deck, item, c); if (fix) card.append(fix); card.append(itemFeedback(deck, item, c)); card.append(renderReport(deck, item, c)); }
   }
 
   // actions
@@ -875,6 +1030,7 @@ function renderSessionEnd(){
         const left = weakList(decksOf(S.session.subject)).length;
         return h("p", { class:"small", text: left ? `${S.session.subject} 약점이 ${left}문제 남았어요. 혼자 맞히면 약점에서 빠져요.` : `${S.session.subject} 약점을 모두 풀었어요.` });
       })() : null,
+      S.session.mode !== "check" && S.session.results.length ? sessionFeedback() : null,
       S.session.mode === "check"
         ? h("div", { class:"row" },
             h("button", { class:"btn primary", onclick: () => { const d = S.session.queue[0].deck, pg = S.session.page; S.session = null; openReader(d, nextPageWithItems(S.decks[d], pg) || pg); } }, "다음 쪽 읽기"),
@@ -936,10 +1092,15 @@ function rememberPage(){
   d.lastPage = S.reader.page;
   if (d.pending) savePending(); else Store.save(d);
 }
-function hideObjective(d, objectiveId){
+function hideObjective(d, objectiveId, why){
   d.hidden = [...new Set([...(d.hidden || []), objectiveId])];
   applyFilters(d); Store.save(d);
-  toast("이 목표의 문제는 연습과 복습에서 빠져요. 기록 탭에서 다시 넣을 수 있어요.");
+  const o = d.objectives.find(x => x.id === objectiveId);
+  ledger({ deck:d, objective:objectiveId, signal: why === "지엽" ? "너무 지엽적이에요" : "목표 빼기", action:"연습·복습에서 뺌", cause: why === "지엽" ? "지엽" : "목표설계", detail:o ? o.statement : "" });
+  // Offer the look-alikes in the same material (학습규칙/품질.md [비슷한목표-기준]).
+  const ids = o && env.quality ? env.quality.similar(o, d.objectives.filter(x => !(d.hidden || []).includes(x.id)), rule("similarHide", 50) / 100) : [];
+  S.hideSuggest = ids.length ? { deckId:d.id, from:o.statement, ids, why } : null;
+  if (!ids.length) toast("이 목표의 문제는 연습과 복습에서 빠져요. 기록 탭에서 다시 넣을 수 있어요.");
   render();
 }
 function pageQuotes(d, n){ return d.objectives.filter(o => o.pages.includes(n)).map((o, i) => ({ id:o.id, quote:o.quote, num:i + 1 })).filter(q => q.quote); }
@@ -1780,9 +1941,28 @@ function renderSummary(){
   for (const { d, secs, st, asked } of perDeck){
     const box = h("section", { class:"sum-deck" });
     const dWeak = [...st.values()].filter(v => v === "weak").length;
+    const supportN = (d.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").length;
+    const coreOnly = !!(S.plan.prefs && S.plan.prefs.detail && S.plan.prefs.detail[planKey(d)] === "core");
     box.append(h("header", { class:"row", style:"justify-content:space-between" },
-      h("div", null, h("h3", { text:d.title }), h("p", { class:"small muted num", text:`목표 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}` })),
-      h("button", { class:"btn small ghost", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, "원문 읽기")));
+      h("div", null, h("h3", { text:d.title }), h("p", { class:"small muted num", text:`목표 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}${coreOnly ? ` · 핵심만 (보조 ${supportN}개 뺌)` : ""}` })),
+      h("div", { class:"row" },
+        supportN ? h("button", { class:"chip-btn", "aria-pressed": coreOnly ? "true" : "false", title:"보조 목표를 연습·오늘 할 것에서 빼거나 다시 넣어요",
+          onclick: () => { const det = prefs().detail || (prefs().detail = {}); if (coreOnly) delete det[planKey(d)]; else det[planKey(d)] = "core";
+            ledger({ deck:d, signal: coreOnly ? "정리: 보조 목표 다시 넣기" : "정리: 핵심만", action: coreOnly ? "보조 목표 포함" : `보조 ${supportN}개 뺌`, cause:"지엽" });
+            applyFilters(d); savePrefs(); } }, "핵심만") : null,
+        h("button", { class:"btn small ghost", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, "원문 읽기"))));
+    // Pages of the material with no objective at all: title slides, or content the design skipped (빠뜨림).
+    if (Array.isArray(d.outline) && d.outline.length){
+      const covered = new Set(d.outline.flatMap(sec => sec.objectives).flatMap(o => o.pages || []));
+      const gaps = [...new Set(d.outline.flatMap(sec => sec.pages || []))].filter(n => !covered.has(n)).sort((a, b) => a - b);
+      if (gaps.length) box.append(h("div", { class:"gaps" },
+        h("span", { class:"small muted", text:`문제가 없는 쪽 ${gaps.length}개 · 표지·목차가 아닌데 내용이 있으면 눌러 주세요` }),
+        h("div", { class:"row" }, gaps.slice(0, 40).map(n => {
+          const key = d.id + ":" + n, marked = S.gapMarks.has(key);
+          return h("button", { class:"chip-btn", "aria-pressed": marked ? "true" : "false", title: marked ? "빠진 내용으로 기록했어요" : "빠진 내용이 있다고 기록",
+            onclick: () => { if (marked) { openReader(d.id, n); return; } S.gapMarks.add(key); ledger({ deck:d, signal:`p.${n} 내용이 빠짐`, action:"빠뜨린 쪽으로 기록(다시 만들기 후보)", cause:"빠뜨림", detail:`p.${n}` }); toast(`p.${n}을 빠진 쪽으로 기록했어요. 다시 누르면 그 쪽을 열어요.`); render(); } }, `p.${n}`);
+        }))));
+    }
     let shownHere = 0;
     for (const sec of secs){
       const objs = sec.objectives.filter(o => !S.sum.weakOnly || st.get(o.id) === "weak" || asked.has(o.id));
@@ -1901,6 +2081,18 @@ function renderRecords(){
         h("span", { class:"small muted", text:"앞의 학습 설계를 그대로 쓰고, 신고한 문제의 목표만 새로 만들어요." })) : null,
       h("p", { class:"small muted", text:"신고한 문제는 품질 근거로 남아요." })));
   }
+  const fixes = (S.patches && S.patches[deck.id]) || [];
+  if (fixes.length) wrap.append(h("section", { class:"panel stack" },
+    h("p", { class:"eyebrow", text:"고친 것 (공부하면서 바로 고친 문제)" }),
+    h("div", { class:"itemlist" }, fixes.map(f => {
+      const it = (deck.allItems || []).find(x => x.id === f.itemId);
+      return h("div", { class:"item" },
+        h("div", { class:"meta" }, h("span", { class:"chip acc", text: f.kind === "accept" ? `정답 추가 · ${f.answer}` : "떠올리기 카드로" }), h("span", { class:"small muted", text:new Date(f.at).toLocaleString("ko-KR", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" }) })),
+        it ? h("p", null, richText(it.prompt.slice(0, 160))) : null,
+        h("div", null, h("button", { class:"btn small", onclick: async () => {
+          try{ await env.quality.unpatch(deck.id, f.id, { at:stamp(), deck:deck.title, item:f.itemId, signal:"고친 것 되돌리기", action: f.kind === "accept" ? `정답 추가 취소 ${f.answer}` : "카드 전환 취소", cause: f.kind === "accept" ? "인정답안누락" : "형식선택" });
+            toast("되돌렸어요."); loadPatchList(); await reloadDecks(); render(); }catch(e){ toast("되돌리지 못했어요."); } } }, "되돌리기")));
+    }))));
   wrap.append(h("p", { class:"small muted", text:"‘3일 이상 혼자 맞힘’은 서로 다른 3일에 정답을 보기 전 스스로 맞힌 경우예요. 숙달했다는 판정이 아니라, 지금까지의 근거를 그대로 보여주는 표시입니다." }));
   return wrap;
 }
@@ -2118,6 +2310,8 @@ function pendingNote(d){
 
 function renderBuilder(){
   const b = S.builder;
+  // The coach's lines for the next material (from feedback like "너무 지엽적") start the memo; the learner can edit them.
+  if (!b.note && !b.noteSeeded && S.plan.prefs && S.plan.prefs.genNote){ b.note = S.plan.prefs.genNote; b.noteSeeded = true; }
   const wrap = h("div", { class:"stack" });
   const step = b.pages.length ? 2 : 1;
   wrap.append(h("ol", { class:"steps" },
@@ -2189,7 +2383,7 @@ function reloadDecks(){
     for (const id of Object.keys(S.decks)) if (!ids.has(id) && !S.decks[id].example && !S.decks[id].pending) delete S.decks[id];
     for (const d of decks){
       const prev = S.decks[d.id];
-      if (prev && prev.artifactSha256 === d.artifactSha256) continue;   // keep the live deck (and its in-memory session refs)
+      if (prev && prev.artifactSha256 === d.artifactSha256 && (prev.patchSig || "") === (d.patchSig || "")) continue;   // keep the live deck (and its in-memory session refs)
       const deck = { ...d, example:false, createdAt:-d.order, pages:[], events:[], sched:{} };
       Store.restore(deck);
       S.decks[deck.id] = deck;
@@ -2242,6 +2436,7 @@ loadAccount();
 ensureKatex().then(ok => { if (ok && !disposed) render(); });
 if (env.rules) env.rules().then((r) => { if (disposed || !r) return; S.rules = r.rules || null; S.rulesWarnings = r.warnings || []; if (!S.session) render(); }, () => {});
 reloadDecks().then(() => { if (!disposed) for (const d of realDecks()) loadNotes(d); });
+loadPatchList();
 // Bring in records saved on another computer, then send this browser's records back.
 Store.pull().then((changed) => {
   if (disposed) return;

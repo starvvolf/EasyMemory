@@ -644,6 +644,25 @@
   .dejipgi .today2-side{grid-column:2}
 }
 
+/* 빠른 고리 · 코치 */
+.dejipgi .quickfix{display:flex;flex-direction:column;gap:8px;background:var(--accent-soft);border-radius:12px;padding:12px 14px}
+.dejipgi .itemfb{gap:6px}
+.dejipgi .itemfb .chip-btn{font-size:12.5px;padding:4px 10px}
+.dejipgi .suggest{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;box-shadow:0 0 0 2px var(--accent-soft),var(--shadow)}
+.dejipgi .suggest ul{margin:0;padding-left:18px;color:var(--muted)}
+.dejipgi .fb{gap:12px}
+.dejipgi .fbrow{display:flex;flex-direction:column;gap:6px}
+.dejipgi .fbrow .chip-btn:disabled{opacity:.45}
+.dejipgi .fbrow .chip-btn[aria-pressed="true"]:disabled{opacity:1}
+.dejipgi .gaps{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border-radius:12px;padding:10px 12px}
+.dejipgi .gaps .chip-btn{font-size:12px;padding:3px 9px}
+.dejipgi .coach{display:flex;flex-direction:column;gap:8px}
+.dejipgi .coach-card{display:flex;justify-content:space-between;align-items:center;gap:10px 14px;flex-wrap:wrap;border-radius:12px;padding:12px 14px;background:var(--surface-2)}
+.dejipgi .coach-card.study{background:var(--accent-soft)}
+.dejipgi .coach-card.improve{background:var(--ask-soft)}
+.dejipgi .coach-text{flex:1;min-width:220px;display:flex;flex-direction:column;gap:2px}
+.dejipgi .coach-text b{font-size:14.5px}
+
 /* 정리 정돈 */
 .dejipgi .sum-tools{gap:14px}
 .dejipgi .sum-deck{border:0;box-shadow:var(--shadow);padding:22px 24px;gap:18px}

@@ -9,9 +9,10 @@ async function read(file: string) {
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
 export async function loadStudyRules(): Promise<{ rules: StudyRules; warnings: string[] }> {
-  const text = await read("오늘할것.md");
-  if (text == null) return { rules: DEFAULT_RULES, warnings: ["학습규칙/오늘할것.md가 없어 기본값을 써요."] };
-  return parseRules(text);
+  // 오늘할것.md (day plan) and 품질.md (fast quality loop) share one key space.
+  const [today, quality] = await Promise.all([read("오늘할것.md"), read("품질.md")]);
+  if (today == null && quality == null) return { rules: DEFAULT_RULES, warnings: ["학습규칙/오늘할것.md가 없어 기본값을 써요."] };
+  return parseRules(`${today ?? ""}\n${quality ?? ""}`);
 }
 /** Rule lines of 학습규칙/에이전트.md, for an agent's prompt. */
 export async function loadAgentRules(): Promise<string[]> {

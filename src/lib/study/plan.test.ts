@@ -127,3 +127,12 @@ test("하루 새 문제 몫은 아침 기준으로 고정: 오늘 처음 푼 것
   assert.equal(plan.subjects[0].quota, 10);
   assert.equal(plan.queue.length, 0);
 });
+
+test("내 조정: 하루 시간 덮어쓰기, '핵심만' 자료는 보조 목표 문제를 빼고 센다", () => {
+  const g = deck("g", "srcG", 4, 1, [2, 3]);
+  const base = planToday({ decks: [g], records: {}, settings, now: NOW });
+  assert.equal(base.subjects[0].counts.items, 4);
+  const mine = planToday({ decks: [g], records: {}, settings: { ...settings, prefs: { dailyMinutes: 45, detail: { srcG: "core" } } }, now: NOW });
+  assert.equal(mine.budgetMinutes, 45);
+  assert.equal(mine.subjects[0].counts.items, 2);
+});

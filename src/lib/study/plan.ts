@@ -11,7 +11,9 @@ export type PlanEvent = { t: number; item: string; kind: string; correct?: boole
 export type PlanSched = { box: number; due: number; seen: boolean };
 export type PlanRecord = { events: PlanEvent[]; sched: Record<string, PlanSched>; hidden?: string[]; reported?: Record<string, unknown> };
 export type PlanSubject = { name: string; exam: string };
-export type PlanSettings = { subjects: PlanSubject[]; of: Record<string, string> };
+/** The learner's own adjustments from quick feedback (빠른 고리): kept with the subjects, applied over 학습규칙. */
+export type PlanPrefs = { dailyMinutes?: number; intervalScale?: number; detail?: Record<string, "core"> };
+export type PlanSettings = { subjects: PlanSubject[]; of: Record<string, string>; prefs?: PlanPrefs };
 /** A phrase asked or marked while reading (모르는 것 노트), per registered PDF. */
 export type PlanNote = { page: number; quote: string; askedAt: string; kind?: string };
 
@@ -27,6 +29,11 @@ export type StudyRules = {
   diagnoseKnownDays: number;
   weakMax: number;
   chunk: number;
+  /** 학습규칙/품질.md (빠른 고리). */
+  easyStreak: number;
+  cardAfterOverrides: number;
+  similarHide: number;
+  candidateThreshold: number;
 };
 export const DEFAULT_RULES: StudyRules = {
   dailyMinutes: 90,
@@ -39,16 +46,22 @@ export const DEFAULT_RULES: StudyRules = {
   diagnoseKnownDays: 7,
   weakMax: 40,
   chunk: 20,
+  easyStreak: 4,
+  cardAfterOverrides: 2,
+  similarHide: 50,
+  candidateThreshold: 3,
 };
 type NumberKey = Exclude<keyof StudyRules, "seconds" | "diagnose">;
 const NUMBER_KEYS: Record<string, NumberKey> = {
   "하루-시간": "dailyMinutes", "새문제-최대": "newPerDayMax", "시험없음-새문제": "newPerDayNoExam", "마지막-복습일": "finalDays",
   "시험-임박": "urgentDays", "첫훑기-앎-간격": "diagnoseKnownDays", "약점-최대": "weakMax", "한번에": "chunk",
+  "쉬움-연속": "easyStreak", "카드전환-제안": "cardAfterOverrides", "비슷한목표-기준": "similarHide", "후보-문턱": "candidateThreshold",
 };
 const SECOND_KEYS: Record<string, PlanFormat> = { "시간-고르기": "choice", "시간-값쓰기": "value", "시간-떠올리기": "card", "시간-순서": "order" };
 const LIMITS: Record<NumberKey, [number, number]> = {
   dailyMinutes: [10, 600], newPerDayMax: [0, 500], newPerDayNoExam: [0, 500], finalDays: [0, 7], urgentDays: [0, 60],
   diagnoseKnownDays: [1, 60], weakMax: [0, 300], chunk: [5, 100],
+  easyStreak: [2, 10], cardAfterOverrides: [1, 10], similarHide: [10, 100], candidateThreshold: [1, 50],
 };
 
 /** Reads `- [키] 값` lines; anything else in the file is for people. Unknown keys and bad values are reported, not fatal. */
@@ -104,10 +117,18 @@ function solvedAloneAt(record: PlanRecord, itemId: string) {
 }
 const triedSince = (record: PlanRecord, itemId: string, since: number) => record.events.some((event) => event.item === itemId && TRY_KINDS.has(event.kind) && event.t >= since);
 const seen = (record: PlanRecord, itemId: string) => Boolean(record.sched[itemId]?.seen);
-const usable = (deck: PlanDeck, record: PlanRecord) => {
+/** Questions in play: not hidden, not reported, and not support objectives of a material set to "핵심만" (prefs.detail). */
+const usable = (deck: PlanDeck, record: PlanRecord, prefs?: PlanPrefs) => {
   const hidden = new Set(record.hidden ?? []);
-  return deck.items.filter((item) => !hidden.has(item.objectiveId) && !(record.reported && record.reported[item.id]));
+  const coreOnly = prefs?.detail?.[deck.sourceCatalogId || deck.id] === "core";
+  const support = coreOnly ? new Set(deck.objectives.filter((objective) => objective.importance === "support").map((objective) => objective.id)) : null;
+  return deck.items.filter((item) => !hidden.has(item.objectiveId) && !(record.reported && record.reported[item.id]) && !support?.has(item.objectiveId));
 };
+/** 학습규칙 with the learner's own adjustments on top. */
+export function effectiveRules(rules: StudyRules, prefs?: PlanPrefs): StudyRules {
+  const minutes = prefs?.dailyMinutes;
+  return minutes && minutes >= 10 && minutes <= 600 ? { ...rules, dailyMinutes: Math.round(minutes) } : rules;
+}
 export const emptyRecord = (): PlanRecord => ({ events: [], sched: {} });
 
 /** Objectives asked about while reading (a note on one of their pages) and not solved alone since. */
@@ -172,7 +193,7 @@ export function subjectOfDeck(settings: PlanSettings, deck: Pick<PlanDeck, "id" 
 }
 
 export function planToday(input: PlanInput): TodayPlan {
-  const rules = input.rules ?? DEFAULT_RULES;
+  const rules = effectiveRules(input.rules ?? DEFAULT_RULES, input.settings.prefs);
   const { now } = input;
   const today = startOfDay(now);
   const recordOf = (deck: PlanDeck) => input.records[deck.id] ?? emptyRecord();
@@ -203,7 +224,7 @@ export function planToday(input: PlanInput): TodayPlan {
       const importance = new Map(deck.objectives.map((objective) => [objective.id, objective.importance ?? "core"]));
       const firstItem = new Map<string, string>();
       for (const item of deck.items) if (!firstItem.has(item.objectiveId)) firstItem.set(item.objectiveId, item.id);
-      usable(deck, record).forEach((item, index) => {
+      usable(deck, record, input.settings.prefs).forEach((item, index) => {
         const order = deckIndex * 1e5 + index;
         counts.items++;
         const weak = isWeak(record, item.id);
@@ -309,7 +330,7 @@ export function renderMemoryAuto(input: { subject: string; decks: PlanDeck[]; re
   const askedRows: string[] = [];
   for (const deck of input.decks) {
     const record = input.records[deck.id] ?? emptyRecord();
-    const list = usable(deck, record);
+    const list = usable(deck, record, input.settings.prefs);
     const objectives = new Map(deck.objectives.map((objective) => [objective.id, objective]));
     const weakByObjective = new Map<string, { misses: number; last: number }>();
     for (const item of list) {
@@ -375,7 +396,14 @@ export function planSettingsFrom(value: unknown): PlanSettings {
   const raw = value as { subjects?: unknown; of?: unknown } | null | undefined;
   const subjects = Array.isArray(raw?.subjects) ? raw.subjects.filter((entry): entry is PlanSubject => Boolean(entry) && typeof (entry as PlanSubject).name === "string").map((entry) => ({ name: entry.name, exam: typeof entry.exam === "string" ? entry.exam : "" })) : [];
   const of = raw?.of && typeof raw.of === "object" ? Object.fromEntries(Object.entries(raw.of as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string")) : {};
-  return { subjects, of };
+  const rawPrefs = (raw as { prefs?: unknown } | null | undefined)?.prefs as PlanPrefs | undefined;
+  const prefs: PlanPrefs = {};
+  if (rawPrefs && typeof rawPrefs === "object") {
+    if (typeof rawPrefs.dailyMinutes === "number") prefs.dailyMinutes = rawPrefs.dailyMinutes;
+    if (typeof rawPrefs.intervalScale === "number") prefs.intervalScale = rawPrefs.intervalScale;
+    if (rawPrefs.detail && typeof rawPrefs.detail === "object") prefs.detail = Object.fromEntries(Object.entries(rawPrefs.detail).filter(([, value]) => value === "core")) as Record<string, "core">;
+  }
+  return { subjects, of, prefs };
 }
 /** A deck's record in the mirrored records map: `<id>@live` for new-engine materials, else `<id>@<sha>` (newest save wins). */
 export function recordFor(records: Record<string, unknown>, deckId: string, sha?: string): PlanRecord {
