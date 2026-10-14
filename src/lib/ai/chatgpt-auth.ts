@@ -6,7 +6,9 @@ import { ModelError } from "./model.ts";
 const ISSUER = "https://auth.openai.com";
 const RESOURCE = "https://api.openai.com/v1";
 const SCOPES = "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct";
-const root = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "chatgpt-auth");
+// The sign-in stays on this computer even when the data folder is shared between computers (STUDY_FORGE_DATA_DIR):
+// two machines refreshing one token file would log each other out.
+const root = () => path.join(process.env.STUDY_FORGE_AUTH_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "chatgpt-auth");
 const idFor = (uid: string) => createHash("sha256").update(uid).digest("hex");
 const accountPath = (uid: string) => path.join(root(), `account-${idFor(uid)}.json`);
 const pendingPath = (state: string) => path.join(root(), `pending-${idFor(state)}.json`);

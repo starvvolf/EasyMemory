@@ -48,6 +48,8 @@ export type DejipgiEnv = {
     connect(): Promise<void>;
     disconnect(): Promise<void>;
   };
+  /** Study records mirrored in the data folder (one history across computers sharing it). */
+  records?: { load(): Promise<{ records: Record<string, unknown>; pending: unknown[]; updatedAt: number } | null>; save(value: { records: Record<string, unknown>; pending: unknown[]; updatedAt: number }): Promise<void> };
   ask?: (turns: Array<{ role: string; content: string }>, options: { signal: AbortSignal; onText: (chunk: { text: string }) => void }) => Promise<void>;
 };
 

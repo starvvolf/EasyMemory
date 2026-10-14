@@ -119,9 +119,32 @@ const Store = {
       all[this.pkey(deck)] = { events:deck.events.slice(-800), sched:deck.sched, hidden:deck.hidden || [], reported:deck.reported || {}, lastPage:deck.lastPage || 0, savedAt:now() };
       localStorage.setItem(this.key, JSON.stringify(all));
     }catch(e){ toast("기록을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요."); }
+    this.schedulePush();
   },
   pendingList(){ if (this.mode !== "local") return []; try{ const v = JSON.parse(localStorage.getItem(this.key + ":pending") || "[]"); return Array.isArray(v) ? v : []; }catch(e){ return []; } },
-  savePending(list){ if (this.mode !== "local") return; try{ localStorage.setItem(this.key + ":pending", JSON.stringify(list)); }catch(e){} }
+  savePending(list){ if (this.mode !== "local") return; try{ localStorage.setItem(this.key + ":pending", JSON.stringify(list)); }catch(e){} this.schedulePush(); },
+  /* Records also live in the data folder (env.records), so another computer sharing that folder sees the same history.
+     The newer save of each material wins; pending materials are joined by id. */
+  pushTimer:null,
+  schedulePush(){
+    if (!env.records || this.mode !== "local") return;
+    clearTimeout(this.pushTimer);
+    this.pushTimer = setTimeout(() => { env.records.save({ records:this.all(), pending:this.pendingList(), updatedAt:now() }).catch(() => {}); }, 1500);
+  },
+  async pull(){
+    if (!env.records || this.mode !== "local") return false;
+    let remote = null;
+    try{ remote = await env.records.load(); }catch(e){ return false; }
+    if (!remote) return false;
+    const local = this.all(); let changed = false;
+    for (const [k, v] of Object.entries(remote.records || {})){
+      if (!local[k] || ((v && v.savedAt) || 0) > (local[k].savedAt || 0)){ local[k] = v; changed = true; }
+    }
+    const pend = this.pendingList(); const ids = new Set(pend.map(p => p && p.id));
+    for (const p of remote.pending || []) if (p && p.id && !ids.has(p.id)){ pend.push(p); changed = true; }
+    try{ localStorage.setItem(this.key, JSON.stringify(local)); localStorage.setItem(this.key + ":pending", JSON.stringify(pend)); }catch(e){ return false; }
+    return changed;
+  }
 };
 // Objectives the learner took out and questions they reported stay in the document but leave practice and review.
 function applyFilters(deck){
@@ -1848,6 +1871,17 @@ loadAccount();
 }
 ensureKatex().then(ok => { if (ok && !disposed) render(); });
 reloadDecks();
+// Bring in records saved on another computer, then send this browser's records back.
+Store.pull().then((changed) => {
+  if (disposed) return;
+  if (changed){
+    for (const d of Object.values(S.decks)) if (!d.pending && !d.example) Store.restore(d);
+    for (const rec of Store.pendingList()) if (rec && rec.id && rec.requestId && !S.decks[rec.id]) S.decks[rec.id] = pendingDeck(rec);
+    if (!S.session) render();
+    pollPending();
+  }
+  Store.schedulePush();
+});
 
 return () => {
   disposed = true;

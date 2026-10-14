@@ -235,6 +235,18 @@ export default function DejipgiStudy() {
           talk: async (input) => (await noteCall<{ note: StudyNote }>({ action: "talk", ...input })).note,
         } satisfies NonNullable<DejipgiEnv["notes"]>,
       } : {}),
+      ...(session.mode === "local-experiment" ? {
+        records: {
+          async load() {
+            return (await readJson<{ data: { records: Record<string, unknown>; pending: unknown[]; updatedAt: number } | null }>(
+              await fetchExperiment("/api/study-records"), "풀이 기록을 불러오지 못했어요.")).data;
+          },
+          async save(value: { records: Record<string, unknown>; pending: unknown[]; updatedAt: number }) {
+            await readJson(await fetchExperiment("/api/study-records", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value) }),
+              "풀이 기록을 저장하지 못했어요.");
+          },
+        },
+      } : {}),
       account: {
         async status() {
           const info = await executorInfo();
