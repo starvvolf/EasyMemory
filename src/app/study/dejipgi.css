@@ -1,36 +1,36 @@
 /* 되짚기(협업/되짚기/되짚기_최신_v9.html) 화면 스타일. 모든 선택자를 .dejipgi 아래로 한정해 Recaller 전역 스타일과 섞이지 않게 한다. */
 .dejipgi{
-  --ground:#EEF1F4; --surface:#FFFFFF; --surface-2:#F6F8FA; --line:#D8DEE5; --line-strong:#B9C2CC;
-  --ink:#16202A; --muted:#5A6774; --faint:#8A96A2;
-  --accent:#1F4FD1; --accent-ink:#FFFFFF; --accent-soft:#E6ECFB;
-  --mark:#F7E26B; --mark-ink:#3A3000;
-  --good:#1D7F52; --good-soft:#E3F3EA; --bad:#B93A26; --bad-soft:#FBE8E4; --help:#9A6400; --help-soft:#FBF0DA; --read:#1B7684; --read-soft:#DFF0F2; --ask:#7A4FD1; --ask-soft:#EFE9FB;
-  --shadow:0 1px 2px rgba(22,32,42,.06),0 8px 24px rgba(22,32,42,.07);
-  --radius:12px;
-  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
-  --display:"Hahmlet","Nanum Myeongjo","AppleMyungjo",serif;
-  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --ground:#F2F3F6; --surface:#FFFFFF; --surface-2:#F5F6F8; --line:#E3E5EA; --line-strong:#CDD1D9;
+  --ink:#17191F; --muted:#666C78; --faint:#9399A4;
+  --accent:#3D4BE0; --accent-ink:#FFFFFF; --accent-soft:#ECEEFD;
+  --mark:#FBE88A; --mark-ink:#3A3000;
+  --good:#14805B; --good-soft:#E4F4EC; --bad:#D23F28; --bad-soft:#FCEBE7; --help:#B06A00; --help-soft:#FCF1DD; --read:#1A7787; --read-soft:#E0F1F3; --ask:#6C4AD8; --ask-soft:#F0EBFC;
+  --ring:0 0 0 1px rgba(23,25,31,.06); --shadow:0 0 0 1px rgba(23,25,31,.05),0 1px 2px rgba(23,25,31,.04),0 6px 20px rgba(23,25,31,.05);
+  --radius:16px;
+  --sans:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --display:var(--sans);
+  --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
   --read-font:"Noto Serif KR","Nanum Myeongjo","AppleMyungjo",serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]) .dejipgi{
     color-scheme:dark;
-    --ground:#0E1318; --surface:#161D24; --surface-2:#1C242C; --line:#2A343E; --line-strong:#3A4652;
-    --ink:#E5EAEF; --muted:#9AA7B3; --faint:#6F7C88;
-    --accent:#7FA2FF; --accent-ink:#0B1222; --accent-soft:#1D2A48;
-    --mark:rgba(247,226,107,.28); --mark-ink:#F5EBB0;
-    --good:#5CC896; --good-soft:#15302A; --bad:#FF8A73; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14; --read:#62C1CD; --read-soft:#14302F; --ask:#B79BFF; --ask-soft:#2A2140;
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+    --ground:#0F1115; --surface:#171A20; --surface-2:#1E222A; --line:#2A2F38; --line-strong:#3A404B;
+    --ink:#E9EBEF; --muted:#9CA2AD; --faint:#6E7480;
+    --accent:#8E98FF; --accent-ink:#0E1030; --accent-soft:#232744;
+    --mark:rgba(251,232,138,.26); --mark-ink:#F6EDB8;
+    --good:#5FCB9A; --good-soft:#15302A; --bad:#FF8C78; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14; --read:#62C1CD; --read-soft:#14302F; --ask:#B79BFF; --ask-soft:#2A2140;
+    --ring:0 0 0 1px rgba(255,255,255,.06); --shadow:0 0 0 1px rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.35);
   }
 }
 :root[data-theme="dark"] .dejipgi{
   color-scheme:dark;
-  --ground:#0E1318; --surface:#161D24; --surface-2:#1C242C; --line:#2A343E; --line-strong:#3A4652;
-  --ink:#E5EAEF; --muted:#9AA7B3; --faint:#6F7C88;
-  --accent:#7FA2FF; --accent-ink:#0B1222; --accent-soft:#1D2A48;
-  --mark:rgba(247,226,107,.28); --mark-ink:#F5EBB0;
-  --good:#5CC896; --good-soft:#15302A; --bad:#FF8A73; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14; --read:#62C1CD; --read-soft:#14302F; --ask:#B79BFF; --ask-soft:#2A2140;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  --ground:#0F1115; --surface:#171A20; --surface-2:#1E222A; --line:#2A2F38; --line-strong:#3A404B;
+  --ink:#E9EBEF; --muted:#9CA2AD; --faint:#6E7480;
+  --accent:#8E98FF; --accent-ink:#0E1030; --accent-soft:#232744;
+  --mark:rgba(251,232,138,.26); --mark-ink:#F6EDB8;
+  --good:#5FCB9A; --good-soft:#15302A; --bad:#FF8C78; --bad-soft:#3A1E19; --help:#E8B458; --help-soft:#3A2D14; --read:#62C1CD; --read-soft:#14302F; --ask:#B79BFF; --ask-soft:#2A2140;
+  --ring:0 0 0 1px rgba(255,255,255,.06); --shadow:0 0 0 1px rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.35);
 }
 .dejipgi,.dejipgi *{box-sizing:border-box}
 .dejipgi [hidden]{display:none!important}
@@ -520,4 +520,119 @@
   .dejipgi .masthead,.dejipgi .sum-tools,.dejipgi .sum-deck header .btn,.dejipgi .sum-meta .linkish,.dejipgi #toast{display:none!important}
   .dejipgi .sum-deck{border:0;padding:0;break-inside:auto}
   .dejipgi .sum-obj{break-inside:avoid}
+}
+
+/* ---------- 2026-10-15 정돈: Pretendard 한 가족, 테두리 대신 면과 간격, 과목은 한 덩어리 ---------- */
+.dejipgi{font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 0}
+.dejipgi h1,.dejipgi h2,.dejipgi h3,.dejipgi h4{letter-spacing:-.02em}
+.dejipgi .num{font-variant-numeric:tabular-nums}
+.dejipgi .top{padding-block:28px 18px}
+.dejipgi .brand h1{font-size:22px;font-weight:800;letter-spacing:-.03em}
+.dejipgi .brand p{font-size:13px}
+.dejipgi .store{border:0;background:transparent;padding:0;font-size:12px}
+.dejipgi .tabs{background:transparent;border:0;padding:0;gap:2px;margin-bottom:26px;border-bottom:1px solid var(--line);width:100%;border-radius:0}
+.dejipgi .tabs button{border-radius:0;padding:10px 14px 11px;font-size:14.5px;font-weight:600;color:var(--faint);position:relative}
+.dejipgi .tabs button:hover{color:var(--ink)}
+.dejipgi .tabs button[aria-selected="true"]{background:transparent;box-shadow:none;color:var(--ink)}
+.dejipgi .tabs button[aria-selected="true"]::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--ink)}
+.dejipgi[data-view="read"] .tabs{border-bottom:0;width:auto}
+.dejipgi[data-view="read"] .tabs button{padding:6px 10px}
+
+.dejipgi .btn{border:0;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);border-radius:10px;padding:9px 15px;font-weight:600;min-height:40px;transition:background-color .12s,box-shadow .12s}
+.dejipgi .btn:hover{border-color:transparent;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line-strong)}
+.dejipgi .btn.primary{background:var(--accent);box-shadow:none;color:var(--accent-ink)}
+.dejipgi .btn.primary:hover{filter:none;background:color-mix(in srgb,var(--accent) 88%,#000)}
+.dejipgi .btn.ghost{box-shadow:none;background:transparent}
+.dejipgi .btn.ghost:hover{background:var(--surface-2);box-shadow:none}
+.dejipgi .btn.small{min-height:34px;padding:6px 12px;font-size:13.5px;border-radius:9px}
+.dejipgi .chip-btn{border:0;box-shadow:inset 0 0 0 1px var(--line-strong);background:var(--surface);padding:6px 12px}
+.dejipgi .chip-btn:hover{box-shadow:inset 0 0 0 1px var(--accent)}
+.dejipgi .chip-btn[aria-pressed="true"]{box-shadow:none;background:var(--ink);color:var(--surface)}
+.dejipgi .chip{border:0;background:var(--surface-2);font-weight:600;padding:2px 9px}
+.dejipgi .chip.page{font-family:var(--sans);font-weight:600}
+.dejipgi .panel{border:0;box-shadow:var(--shadow);border-radius:var(--radius);padding:22px}
+.dejipgi .eyebrow{font-size:13px;font-weight:600;letter-spacing:0;color:var(--muted)}
+.dejipgi .note{border:0;background:var(--surface-2)}
+.dejipgi .linkish{text-decoration:none;font-weight:600}
+.dejipgi .linkish:hover{text-decoration:underline}
+.dejipgi .kbd{font-family:var(--sans);border:0;background:color-mix(in srgb,currentColor 14%,transparent);color:inherit;opacity:.85;padding:0 5px}
+.dejipgi .answer-input,.dejipgi .field input[type=text],.dejipgi .field input[type=number],.dejipgi .field textarea{border:0;box-shadow:inset 0 0 0 1px var(--line-strong);border-radius:10px;background:var(--surface)}
+.dejipgi .answer-input:focus,.dejipgi .field input:focus,.dejipgi .field textarea:focus{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}
+
+/* home */
+.dejipgi .today{gap:20px;padding:26px}
+.dejipgi .today h2{font-family:var(--sans);font-size:24px;font-weight:700;margin-top:2px}
+.dejipgi .counts{gap:28px;margin-top:14px}
+.dejipgi .counts b{font-size:32px;font-weight:700;letter-spacing:-.02em}
+.dejipgi .counts span{font-size:13px}
+.dejipgi .legend{font-size:12.5px;gap:16px;padding-inline:4px}
+.dejipgi .legend span::before{border-radius:50%}
+.dejipgi .decks{gap:8px}
+.dejipgi .deck{border:0;box-shadow:var(--shadow);border-radius:14px;padding:16px 18px}
+.dejipgi .deck h3{font-size:16px;font-weight:650}
+.dejipgi .deck .meta{margin-top:4px}
+.dejipgi .bar{height:4px}
+
+/* subjects */
+.dejipgi .subjects{box-shadow:none;background:transparent;padding:0;gap:10px}
+.dejipgi .subjects .eyebrow{color:var(--ink);font-size:14px;font-weight:700}
+.dejipgi .subj-chip{border:0;box-shadow:var(--shadow);background:var(--surface);padding:7px 7px 7px 14px;font-size:14px}
+.dejipgi .subj-chip:hover{box-shadow:0 0 0 1px var(--accent)}
+.dejipgi .subj-chip[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent);background:var(--surface)}
+.dejipgi .dday{font-family:var(--sans);font-size:12px;font-weight:700;padding:2px 8px}
+.dejipgi .subj-form{background:var(--surface);box-shadow:var(--shadow);border-radius:14px;padding:12px}
+.dejipgi .subj-group{background:var(--surface);box-shadow:var(--shadow);border-radius:var(--radius);overflow:hidden}
+.dejipgi .subj-group .subj-head{padding:20px 20px 16px;align-items:center}
+.dejipgi .subj-title{display:flex;align-items:center;gap:14px}
+.dejipgi .subj-head h2{font-family:var(--sans);font-size:19px;font-weight:700}
+.dejipgi .dday-big{font-size:30px;font-weight:800;letter-spacing:-.04em;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+.dejipgi .dday-big.soon{color:var(--bad)}
+.dejipgi .dday-big.past{color:var(--faint);font-size:20px}
+.dejipgi .subj-group .decks{gap:0}
+.dejipgi .subj-group .deck{box-shadow:none;border-radius:0;border-top:1px solid var(--line);padding:14px 20px}
+.dejipgi .subj-group .deck:hover{background:color-mix(in srgb,var(--surface-2) 60%,transparent)}
+.dejipgi .subj-pick{border:0;background:var(--surface-2);font-weight:600;padding:2px 8px}
+
+/* practice */
+.dejipgi .qcard{border:0;box-shadow:var(--shadow);border-radius:20px;padding:28px 28px 22px}
+.dejipgi .qprompt{font-size:20px;font-weight:650;letter-spacing:-.02em}
+.dejipgi .opt{border:0;box-shadow:inset 0 0 0 1px var(--line);border-radius:12px;padding:12px 14px}
+.dejipgi .opt:hover:not(:disabled){border-color:transparent;box-shadow:inset 0 0 0 1px var(--accent)}
+.dejipgi .opt[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--accent);background:var(--accent-soft)}
+.dejipgi .opt.is-correct{box-shadow:inset 0 0 0 2px var(--good)}
+.dejipgi .opt.is-wrong{box-shadow:inset 0 0 0 2px var(--bad)}
+.dejipgi .opt .k{font-family:var(--sans);border:0;background:var(--surface-2);font-weight:600}
+.dejipgi .actions{border-top:0;padding-top:4px}
+.dejipgi .verdict{border-radius:12px;padding:14px 16px}
+.dejipgi .progress{height:3px}
+.dejipgi .reveal dt{letter-spacing:0;font-size:12.5px}
+
+/* records */
+.dejipgi .tile{border:0;box-shadow:var(--shadow);border-radius:14px}
+.dejipgi .tile b{font-size:26px;font-weight:700}
+.dejipgi .table-wrap{border:0;box-shadow:var(--shadow);border-radius:14px}
+.dejipgi th{background:transparent;font-size:12.5px}
+.dejipgi .trail i{border-radius:50%}
+
+
+/* 정리 정돈 */
+.dejipgi .sum-tools{gap:14px}
+.dejipgi .sum-deck{border:0;box-shadow:var(--shadow);padding:22px 24px;gap:18px}
+.dejipgi .sum-deck h3{font-family:var(--sans);font-size:19px;font-weight:700}
+.dejipgi .sum-sec h4{font-size:15.5px;border-bottom:0;padding-bottom:2px;margin-bottom:2px}
+.dejipgi .sum-part{letter-spacing:0;padding-left:21px;color:var(--faint)}
+.dejipgi .sum-obj{border-bottom:0;padding:10px 0}
+.dejipgi .sum-obj + .sum-obj{border-top:1px solid var(--line)}
+.dejipgi .sum-obj[data-st="weak"]{background:var(--bad-soft);border-radius:12px;padding:12px 10px;margin:4px -10px;border-top:0}
+.dejipgi .sum-obj[data-st="weak"] + .sum-obj{border-top:0}
+.dejipgi .sum-stmt{font-weight:600;font-size:15px}
+.dejipgi .sum-recall{font-family:var(--sans);font-size:15px;border-left:0;padding:8px 12px;background:var(--surface-2);border-radius:10px;color:var(--ink)}
+.dejipgi .sum-obj[data-st="weak"] .sum-recall{background:var(--surface)}
+.dejipgi .sum-cover{border:0;box-shadow:inset 0 0 0 1px var(--line-strong);border-style:dashed;background:transparent;border-radius:10px;padding:8px 14px}
+.dejipgi .sum-meta .chip.bad{background:transparent;padding:0}
+@media (max-width:620px){
+  .dejipgi .subj-group .subj-head,.dejipgi .subj-group .deck{padding-inline:16px}
+  .dejipgi .dday-big{font-size:26px}
+  .dejipgi .sum-deck{padding:18px 16px}
+  .dejipgi .qcard{padding:22px 18px 18px}
 }

@@ -372,6 +372,15 @@ function renderHome(){
   }
   const realDecks = decks.filter(d => !d.example);
   if (realDecks.length) wrap.append(subjectStrip());
+  // Materials grouped by subject, the nearest exam first; materials without a subject come last.
+  const groups = orderedSubjects().map(s => ({ name:s.name, list:decksOf(s.name) })).filter(g => g.list.length);
+  const loose = decks.filter(d => !subjectOf(d)).sort(byTitle);
+  if (loose.length) groups.push({ name:"", list:loose });
+  for (const g of groups){
+    const list = h("div", { class:"decks" });
+    for (const d of g.list) list.append(deckCard(d, growing));
+    wrap.append(g.name || groups.length > 1 ? h("section", { class:"subj-group" }, subjectHead(g.name, g.list), list) : list);
+  }
   wrap.append(h("div", { class:"legend" },
     h("span", { style:"--c:var(--good)", text:"혼자 맞힘" }),
     h("span", { style:"--c:var(--bad)", text:"복습 필요" }),
@@ -379,16 +388,6 @@ function renderHome(){
     h("span", { style:"--c:var(--read)", text:"읽은 직후만 풂" }),
     h("span", { style:"--c:var(--line)", text:"안 풀어봄" })
   ));
-  // Materials grouped by subject, the nearest exam first; materials without a subject come last.
-  const groups = orderedSubjects().map(s => ({ name:s.name, list:decksOf(s.name) })).filter(g => g.list.length);
-  const loose = decks.filter(d => !subjectOf(d)).sort(byTitle);
-  if (loose.length) groups.push({ name:"", list:loose });
-  for (const g of groups){
-    const list = h("div", { class:"decks" });
-    if (g.name || groups.length > 1) list.append(subjectHead(g.name, g.list));
-    for (const d of g.list) list.append(deckCard(d, growing));
-    wrap.append(list);
-  }
   if (S.lib.status === "loading") wrap.append(h("p", { class:"small muted", text:"Recaller 문제를 불러오는 중…" }));
   else if (S.lib.status === "error") wrap.append(h("div", { class:"note err", text:S.lib.error }));
   wrap.append(h("p", { class:"small muted" }, "정답을 보기 전에 스스로 떠올려 맞힌 것만 ‘혼자 맞힘’으로 셉니다. 한 번 맞혔다고 끝내지 않고, 간격을 늘려 가며 다시 물어봅니다."));
@@ -430,10 +429,15 @@ function subjectHead(name, list){
   const weak = weakList(list);
   const objs = new Set(weak.map(w => w.d.id + ":" + w.it.objectiveId)).size;
   const due = list.reduce((sum, d) => sum + deckCounts(d).due, 0);
+  const exam = examOf(name);
   return h("div", { class:"subj-head" },
-    h("div", null,
-      h("div", { class:"row", style:"gap:8px" }, h("h2", { text:name }), n != null ? h("span", { class:`dday${n >= 0 && n <= 3 ? " soon" : ""}${n < 0 ? " past" : ""}`, text:ddayLabel(n) }) : null),
-      h("p", { class:"small muted num", text:`자료 ${list.length} · 약점 목표 ${objs} · 복습 차례 ${due}` })),
+    h("div", { class:"subj-title" },
+      n != null ? h("span", { class:`dday-big${n >= 0 && n <= 3 ? " soon" : ""}${n < 0 ? " past" : ""}`, text: n > 0 ? `D-${n}` : n === 0 ? "D-day" : "끝" }) : null,
+      h("div", null,
+        h("h2", { text:name }),
+        h("p", { class:"small muted num" },
+          exam ? `${Number(exam.slice(5, 7))}월 ${Number(exam.slice(8, 10))}일 시험 · ` : "",
+          `약점 목표 ${objs}개 · 복습 차례 ${due}개`))),
     h("div", { class:"row" },
       h("button", { class:"btn small", onclick: () => openSummary(name) }, "한 장 정리"),
       h("button", { class:"btn small primary", disabled: weak.length ? null : true, onclick: () => startWeak(name) }, `약점 다시 풀기${weak.length ? ` ${Math.min(weak.length, WEAK_MAX)}` : ""}`)));
@@ -460,8 +464,8 @@ function deckCard(d, growing){
       )
     ),
     h("div", { class:"row" },
-      h("button", { class:"btn small", onclick: () => { S.recordsDeck = d.id; setView("records"); } }, "기록"),
-      h("button", { class:"btn small", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기"),
+      h("button", { class:"btn small ghost", onclick: () => { S.recordsDeck = d.id; setView("records"); } }, "기록"),
+      h("button", { class:"btn small ghost", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기"),
       h("button", { class:"btn small primary", onclick: () => startSession(d.id, true) }, c.due || c.fresh ? "연습" : "더 풀기")
     ),
     h("div", { class:"bar", "aria-hidden":"true" },
