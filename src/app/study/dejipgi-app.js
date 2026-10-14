@@ -370,6 +370,8 @@ function renderHome(){
       h("div", { class:"row" }, h("button", { class:"btn small primary", onclick: () => openReader(d.id, d.lastPage || d.pending.from || 1) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기")),
       h("div", { style:"grid-column:1/-1" }, pendingNote(d))));
   }
+  const realDecks = decks.filter(d => !d.example);
+  if (realDecks.length) wrap.append(subjectStrip());
   wrap.append(h("div", { class:"legend" },
     h("span", { style:"--c:var(--good)", text:"혼자 맞힘" }),
     h("span", { style:"--c:var(--bad)", text:"복습 필요" }),
@@ -378,8 +380,6 @@ function renderHome(){
     h("span", { style:"--c:var(--line)", text:"안 풀어봄" })
   ));
   // Materials grouped by subject, the nearest exam first; materials without a subject come last.
-  const real = decks.filter(d => !d.example);
-  if (real.length) wrap.append(subjectStrip());
   const groups = orderedSubjects().map(s => ({ name:s.name, list:decksOf(s.name) })).filter(g => g.list.length);
   const loose = decks.filter(d => !subjectOf(d)).sort(byTitle);
   if (loose.length) groups.push({ name:"", list:loose });
