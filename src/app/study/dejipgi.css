@@ -477,3 +477,47 @@
 .dejipgi .goals small{font-size:12px;overflow-wrap:anywhere}
 .dejipgi .goals .chip{justify-self:start;font-size:11px}
 .dejipgi .goals .part{font-size:11.5px;letter-spacing:.01em}
+
+/* subjects & exam dates (home) */
+.dejipgi .subjects{display:flex;flex-direction:column;gap:10px;padding:14px 16px}
+.dejipgi .subj-chips{gap:8px}
+.dejipgi .subj-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:5px 6px 5px 13px;font-size:13.5px}
+.dejipgi .subj-chip:hover{border-color:var(--accent)}
+.dejipgi .subj-chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.dejipgi .dday{font-family:var(--mono);font-size:11.5px;font-weight:600;border-radius:999px;padding:1px 8px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.dejipgi .dday.soon{background:var(--bad-soft);color:var(--bad)}
+.dejipgi .dday.past{background:var(--surface-2);color:var(--faint)}
+.dejipgi .subj-form{gap:8px}
+.dejipgi .btn.danger{color:var(--bad)}
+.dejipgi .subj-head{display:flex;justify-content:space-between;align-items:flex-end;gap:10px 16px;flex-wrap:wrap;padding:12px 2px 2px}
+.dejipgi .subj-head h2{font-family:var(--display);font-size:20px;font-weight:700}
+.dejipgi .subj-pick{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:600;color:var(--muted);max-width:160px}
+
+/* 정리 (one-page summary) */
+.dejipgi .sum-deck{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.dejipgi .sum-deck h3{font-family:var(--display);font-size:18px;font-weight:700}
+.dejipgi .sum-sec h4{display:flex;align-items:baseline;gap:10px;font-size:15px;font-weight:700;margin:0 0 6px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.dejipgi .sum-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.dejipgi .sum-part{font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--muted);padding:10px 0 2px 22px}
+.dejipgi .sum-obj{display:grid;grid-template-columns:12px 1fr;gap:10px;padding:9px 0;border-bottom:1px dashed color-mix(in srgb,var(--line) 70%,transparent)}
+.dejipgi .sum-obj:last-child{border-bottom:0}
+.dejipgi .sum-dot{width:9px;height:9px;border-radius:50%;margin-top:7px;background:var(--line-strong)}
+.dejipgi .sum-obj[data-st="weak"] .sum-dot{background:var(--bad)}
+.dejipgi .sum-obj[data-st="mid"] .sum-dot{background:var(--help)}
+.dejipgi .sum-obj[data-st="good"] .sum-dot{background:var(--good)}
+.dejipgi .sum-obj[data-st="weak"]{background:linear-gradient(90deg,var(--bad-soft),transparent 60%);border-radius:8px;padding-inline:6px;margin-inline:-6px}
+.dejipgi .sum-body{display:flex;flex-direction:column;gap:4px;min-width:0}
+.dejipgi .sum-stmt{font-weight:600;line-height:1.5}
+.dejipgi .sum-recall{font-family:var(--read-font);font-size:15px;line-height:1.65;color:var(--ink);padding-left:10px;border-left:3px solid var(--accent-soft);overflow-x:auto}
+.dejipgi .sum-recall.quote{font-family:var(--sans);font-size:13.5px}
+.dejipgi .sum-cover{align-self:flex-start;border:1px dashed var(--line-strong);background:var(--surface-2);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--muted)}
+.dejipgi .sum-cover:hover{border-color:var(--accent);color:var(--accent)}
+.dejipgi .sum-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dejipgi .sum-meta .linkish{font-size:12.5px}
+@media (max-width:620px){ .dejipgi .sum-deck{padding:14px} }
+@media print{
+  .dejipgi{background:#fff;padding:0}
+  .dejipgi .masthead,.dejipgi .sum-tools,.dejipgi .sum-deck header .btn,.dejipgi .sum-meta .linkish,.dejipgi #toast{display:none!important}
+  .dejipgi .sum-deck{border:0;padding:0;break-inside:auto}
+  .dejipgi .sum-obj{break-inside:avoid}
+}

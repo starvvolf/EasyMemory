@@ -35,7 +35,11 @@ export type StudyDeck = {
   objectives: StudyObjective[];
   items: StudyItem[];
   skipped: Array<{ questionId: string; reason: string }>;
+  /** New-engine materials: the designed objectives by unit, for the one-page summary (정리). */
+  outline?: StudyOutlineSection[];
 };
+export type StudyOutlineObjective = { id: string; statement: string; recall: string; importance: "core" | "support"; pages: number[]; part?: string };
+export type StudyOutlineSection = { title: string; pages: number[]; objectives: StudyOutlineObjective[] };
 export type StudyArtifactMeta = {
   id: string;
   title: string;

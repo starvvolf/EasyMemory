@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useAuthSession } from "@/components/AuthGate";
 import { authenticatedFetch } from "@/lib/firebase-client";
-import { toStudyDeck, type StudyArtifactMeta, type StudyDeck } from "@/lib/study/from-authoring";
+import { showMath, toStudyDeck, type StudyArtifactMeta, type StudyDeck, type StudyOutlineSection } from "@/lib/study/from-authoring";
 import { buildRemakeBody, buildRequestBody, defaultPurpose, findReusableRequest } from "@/lib/study/request-form";
 import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
@@ -112,7 +112,7 @@ export default function DejipgiStudy() {
     const loadGenDecks = async () => {
       const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
       // Finished runs, and runs still being made whose first sections are authored.
-      return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument }>(
+      return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[] }>(
         await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").catch(() => null)));
     };
     return mountDejipgi(root, {
@@ -266,15 +266,18 @@ export default function DejipgiStudy() {
           loadGenDecks().catch(() => []),
           readJson<{ artifacts: StudyArtifactMeta[] }>(await fetchExperiment("/api/personalization-lab"), "Recaller 출제 문서 목록을 불러오지 못했어요."),
         ]);
-        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument }> = [
+        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[] }> = [
           ...fresh.flatMap((deck) => deck ? [deck] : []), ...artifacts.map((meta) => ({ meta }))];
-        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given }, order) => {
+        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline }, order) => {
           const document = given ?? (await readJson<{ document: AuthoringDocument }>(
             await fetchExperiment(`/api/personalization-lab?id=${encodeURIComponent(meta.id)}`), `${meta.title}을 불러오지 못했어요.`)).document;
           // Questions that fail the item-quality checks stay out of practice; the rest of the document is still usable.
           const excluded = new Map(inspectQuality(document).filter((issue) => issue.severity === "error")
             .map((issue) => [issue.questionId, `검사 제외: ${issue.message}`] as const));
-          return toStudyDeck(meta, document, order, excluded);
+          const deck = toStudyDeck(meta, document, order, excluded);
+          // What to recall shows on the one-page summary; bare LaTeX there renders like answers do.
+          return outline ? { ...deck, outline: outline.map((section) => ({ ...section,
+            objectives: section.objectives.map((objective) => ({ ...objective, recall: showMath(objective.recall) })) })) } : deck;
         }));
         const decks = loaded.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
         if (!decks.length && loaded.some((result) => result.status === "rejected")) {
@@ -317,6 +320,7 @@ export default function DejipgiStudy() {
           <nav className="tabs" role="tablist" id="tabs">
             <button role="tab" data-view="practice" aria-selected="true">연습</button>
             <button role="tab" data-view="read" aria-selected="false">읽기</button>
+            <button role="tab" data-view="summary" aria-selected="false">정리</button>
             <button role="tab" data-view="create" aria-selected="false">자료 만들기</button>
             <button role="tab" data-view="records" aria-selected="false">기록</button>
           </nav>

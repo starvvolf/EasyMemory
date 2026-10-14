@@ -574,7 +574,18 @@ export async function studyDocument(id: string) {
   const pages = state.input.pageNumbers;
   const range = pages.length > 1 ? `p.${pages[0]}–${pages.at(-1)}` : `p.${pages[0]}`;
   const document = { schemaVersion: "problem-authoring-v1" as const, id, title: `${state.input.fileName.replace(/\.pdf$/i, "")} · ${range}${state.input.remake ? " · 다시 만든 문제" : ""}`, questions };
+  // The designed objectives (what to recall, by unit and heading) for the study screen's one-page summary (정리).
+  const confirmed = state.confirmedObjectiveIds ? new Set(state.confirmedObjectiveIds) : null;
+  const outline = state.sections.map((section) => ({
+    title: section.title,
+    pages: section.pages,
+    objectives: (section.design?.objectives ?? []).filter((objective) => !confirmed || confirmed.has(objective.id)).map((objective) => ({
+      id: objective.id, statement: objective.statement, recall: objective.recall, importance: objective.importance, pages: objective.pages,
+      part: section.parts?.find((part) => part.pages.includes(objective.pages[0]))?.title,
+    })),
+  })).filter((section) => section.objectives.length);
   return {
+    outline,
     meta: { id, title: document.title, artifactSha256: createHash("sha256").update(JSON.stringify(document)).digest("hex"), sourceFile: state.input.fileName,
       sourceCatalogId: state.input.sourceId, sourceTotalPages: source?.pageCount ?? Math.max(...pages) },
     document,

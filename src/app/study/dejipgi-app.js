@@ -121,6 +121,19 @@ const Store = {
     }catch(e){ toast("기록을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요."); }
     this.schedulePush();
   },
+  /* Subjects and exam dates, and which material belongs to which subject. Kept as one more entry of the records map
+     (PLAN), so it travels to the other computer and merges by save time like a material's record. */
+  PLAN:"__plan",
+  plan(){
+    const p = this.all()[this.PLAN];
+    return { subjects: p && Array.isArray(p.subjects) ? p.subjects.filter(s => s && typeof s.name === "string") : [], of: p && p.of && typeof p.of === "object" ? p.of : {} };
+  },
+  savePlan(plan){
+    if (this.mode !== "local") return;
+    try{ const all = this.all(); all[this.PLAN] = { subjects:plan.subjects, of:plan.of, savedAt:now() }; localStorage.setItem(this.key, JSON.stringify(all)); }
+    catch(e){ toast("과목 설정을 저장하지 못했어요."); }
+    this.schedulePush();
+  },
   pendingList(){ if (this.mode !== "local") return []; try{ const v = JSON.parse(localStorage.getItem(this.key + ":pending") || "[]"); return Array.isArray(v) ? v : []; }catch(e){ return []; } },
   savePending(list){ if (this.mode !== "local") return; try{ localStorage.setItem(this.key + ":pending", JSON.stringify(list)); }catch(e){} this.schedulePush(); },
   /* Records also live in the data folder (env.records), so another computer sharing that folder sees the same history.
@@ -171,7 +184,10 @@ const S = {
   pdf:{},
   lib:{ status:"loading", error:"" },
   builder:freshBuilder(),
-  account:null
+  account:null,
+  plan:{ subjects:[], of:{} },
+  planEdit:null,            // null | "new" | subject name being edited (home)
+  sum:{ subject:null, weakOnly:false, hide:false, shown:new Set() }
 };
 
 /* ---------- scheduling & status ---------- */
@@ -208,6 +224,70 @@ const STATUS = {
   steady:{ label:"3일 이상 혼자 맞힘", cls:"good" }
 };
 
+/* ---------- weak spots: the last try was missed, "잘 모름", or solved after seeing the answer ---------- */
+function lastTry(deck, item){
+  for (let i = deck.events.length - 1; i >= 0; i--){ const e = deck.events[i]; if (e.item === item.id && (e.kind === "submit" || e.kind === "rate" || e.kind === "reveal")) return e; }
+  return null;
+}
+function isWeak(deck, item){
+  const e = lastTry(deck, item); if (!e) return false;
+  if (e.kind === "reveal" || e.assisted) return true;
+  return e.kind === "submit" ? e.correct !== true : e.rating !== "remembered";
+}
+function missCount(deck, item){
+  return deck.events.filter(e => e.item === item.id && (e.kind === "reveal" || (e.kind === "submit" && !e.correct) || (e.kind === "rate" && e.rating !== "remembered"))).length;
+}
+/* Objective status for the summary: weak beats everything, then never tried, then all solved alone. */
+function objectiveState(deck, objectiveId){
+  const its = deck.items.filter(i => i.objectiveId === objectiveId);
+  if (!its.length) return "none";
+  if (its.some(i => isWeak(deck, i))) return "weak";
+  const st = its.map(i => itemStatus(deck, i));
+  if (st.every(s => s === "new")) return "new";
+  if (st.every(s => s === "recent" || s === "steady")) return "good";
+  return "mid";
+}
+
+/* ---------- subjects & exam dates (S.plan); a material belongs by its registered PDF, so remakes follow it ---------- */
+function planKey(d){ return d.sourceCatalogId || d.id; }
+function subjectOf(d){ const name = S.plan.of[planKey(d)]; return name && S.plan.subjects.some(s => s.name === name) ? name : ""; }
+function setSubject(d, name){ if (name) S.plan.of[planKey(d)] = name; else delete S.plan.of[planKey(d)]; Store.savePlan(S.plan); render(); }
+function examOf(name){ const s = S.plan.subjects.find(x => x.name === name); return s ? s.exam || "" : ""; }
+function daysLeft(exam){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(exam || ""); if (!m) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() - today.getTime()) / DAY);
+}
+function ddayLabel(n){ return n == null ? "" : n > 0 ? `D-${n}` : n === 0 ? "D-day" : "시험 끝"; }
+/* Upcoming exams first (soonest first), then subjects without a date, then finished ones. */
+function orderedSubjects(){
+  const rank = (s) => { const n = daysLeft(s.exam); return n == null ? [1, 0] : n >= 0 ? [0, n] : [2, -n]; };
+  return S.plan.subjects.slice().sort((a, b) => { const x = rank(a), y = rank(b); return x[0] - y[0] || x[1] - y[1] || a.name.localeCompare(b.name, "ko"); });
+}
+const byTitle = (a, b) => (a.example ? 1 : 0) - (b.example ? 1 : 0) || String(a.title).localeCompare(String(b.title), "ko", { numeric:true });
+function decksOf(subject){ return Object.values(S.decks).filter(d => !d.pending && subjectOf(d) === subject).sort(byTitle); }
+function weakList(decks){ return decks.flatMap(d => d.items.filter(it => isWeak(d, it)).map(it => ({ d, it, miss:missCount(d, it) }))); }
+function addSubject(name, exam){
+  name = String(name || "").trim().slice(0, 30);
+  if (!name){ toast("과목 이름을 적어 주세요."); return false; }
+  if (S.plan.subjects.some(s => s.name === name)){ toast("같은 이름의 과목이 있어요."); return false; }
+  S.plan.subjects.push({ name, exam:exam || "" }); Store.savePlan(S.plan); return true;
+}
+function updateSubject(old, name, exam){
+  name = String(name || "").trim().slice(0, 30);
+  if (!name){ toast("과목 이름을 적어 주세요."); return false; }
+  if (name !== old && S.plan.subjects.some(s => s.name === name)){ toast("같은 이름의 과목이 있어요."); return false; }
+  const s = S.plan.subjects.find(x => x.name === old); if (!s) return false;
+  s.name = name; s.exam = exam || "";
+  if (name !== old) for (const k of Object.keys(S.plan.of)) if (S.plan.of[k] === old) S.plan.of[k] = name;
+  Store.savePlan(S.plan); return true;
+}
+function removeSubject(name){
+  S.plan.subjects = S.plan.subjects.filter(s => s.name !== name);
+  for (const k of Object.keys(S.plan.of)) if (S.plan.of[k] === name) delete S.plan.of[k];
+  Store.savePlan(S.plan);
+}
+
 /* ---------- views ---------- */
 function setView(v){
   S.view = v;
@@ -229,6 +309,7 @@ function render(){
   if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
   else if (S.view === "create") app.append(renderBuilder());
   else if (S.view === "read") { app.append(renderReader()); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer(); }
+  else if (S.view === "summary") app.append(renderSummary());
   else app.append(renderRecords());
   if (S.view === "practice" && S.session){
     const f = app.querySelector("[data-autofocus]");
@@ -296,37 +377,98 @@ function renderHome(){
     h("span", { style:"--c:var(--read)", text:"읽은 직후만 풂" }),
     h("span", { style:"--c:var(--line)", text:"안 풀어봄" })
   ));
-  const list = h("div", { class:"decks" });
-  for (const d of decks){
-    const c = deckCounts(d);
-    const pct = (n) => (c.total ? (n / c.total * 100) : 0) + "%";
-    list.append(h("article", { class:"deck" },
-      h("div", null,
-        h("h3", { text:d.title }),
-        h("div", { class:"meta" },
-          h("span", { text:d.sourceName }),
-          h("span", { class:"num", text:`목표 ${d.objectives.length} · 문제 ${d.items.length}` }),
-          c.due ? h("span", { class:"chip bad num", text:`복습 ${c.due}` }) : null,
-          c.fresh ? h("span", { class:"chip num", text:`새 문제 ${c.fresh}` }) : null,
-          d.skipped && d.skipped.length ? h("span", { class:"chip help num", title:d.skipped.map(x => `${x.questionId}: ${x.reason}`).join("\n"), text:`빠진 문항 ${d.skipped.length}` }) : null
-        )
-      ),
-      h("div", { class:"row" },
-        h("button", { class:"btn small", onclick: () => { S.recordsDeck = d.id; setView("records"); } }, "기록"),
-        h("button", { class:"btn small", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기"),
-        h("button", { class:"btn small primary", onclick: () => startSession(d.id, true) }, c.due || c.fresh ? "연습" : "더 풀기")
-      ),
-      h("div", { class:"bar", "aria-hidden":"true" },
-        h("i", { class:"g", style:`width:${pct(c.good)}` }), h("i", { class:"r", style:`width:${pct(c.review)}` }), h("i", { class:"h", style:`width:${pct(c.help)}` }), h("i", { class:"c", style:`width:${pct(c.read)}` })
-      ),
-      growing.has(d.id) ? h("div", { style:"grid-column:1/-1" }, pendingNote(growing.get(d.id))) : null
-    ));
+  // Materials grouped by subject, the nearest exam first; materials without a subject come last.
+  const real = decks.filter(d => !d.example);
+  if (real.length) wrap.append(subjectStrip());
+  const groups = orderedSubjects().map(s => ({ name:s.name, list:decksOf(s.name) })).filter(g => g.list.length);
+  const loose = decks.filter(d => !subjectOf(d)).sort(byTitle);
+  if (loose.length) groups.push({ name:"", list:loose });
+  for (const g of groups){
+    const list = h("div", { class:"decks" });
+    if (g.name || groups.length > 1) list.append(subjectHead(g.name, g.list));
+    for (const d of g.list) list.append(deckCard(d, growing));
+    wrap.append(list);
   }
-  if (S.lib.status === "loading") list.append(h("p", { class:"small muted", text:"Recaller 문제를 불러오는 중…" }));
-  else if (S.lib.status === "error") list.append(h("div", { class:"note err", text:S.lib.error }));
-  wrap.append(list);
+  if (S.lib.status === "loading") wrap.append(h("p", { class:"small muted", text:"Recaller 문제를 불러오는 중…" }));
+  else if (S.lib.status === "error") wrap.append(h("div", { class:"note err", text:S.lib.error }));
   wrap.append(h("p", { class:"small muted" }, "정답을 보기 전에 스스로 떠올려 맞힌 것만 ‘혼자 맞힘’으로 셉니다. 한 번 맞혔다고 끝내지 않고, 간격을 늘려 가며 다시 물어봅니다."));
   return wrap;
+}
+/* Subjects with their exam date: chips to edit, "+ 과목" to add. Inline form, no browser dialogs. */
+function subjectStrip(){
+  const subs = orderedSubjects();
+  const panel = h("section", { class:"panel subjects" });
+  panel.append(h("div", { class:"row", style:"justify-content:space-between" },
+    h("p", { class:"eyebrow", text:"시험 과목" }),
+    S.planEdit ? null : h("button", { class:"btn small ghost", onclick: () => { S.planEdit = "new"; render(); } }, "+ 과목")));
+  if (subs.length) panel.append(h("div", { class:"row subj-chips" }, subs.map(s => {
+    const n = daysLeft(s.exam);
+    return h("button", { class:"subj-chip", "aria-pressed": S.planEdit === s.name ? "true" : "false", title:"눌러서 이름·시험일 고치기", onclick: () => { S.planEdit = S.planEdit === s.name ? null : s.name; render(); } },
+      h("b", { text:s.name }), n != null ? h("span", { class:`dday${n >= 0 && n <= 3 ? " soon" : ""}${n < 0 ? " past" : ""}`, text:ddayLabel(n) }) : h("span", { class:"dday past", text:"날짜 없음" }));
+  })));
+  else if (!S.planEdit) panel.append(h("p", { class:"small muted", text:"과목과 시험일을 넣으면 시험이 가까운 과목부터 모아 보여 주고, 과목별 약점 다시 풀기와 한 장 정리를 쓸 수 있어요." }));
+  if (S.planEdit){
+    const editing = S.planEdit !== "new" ? S.plan.subjects.find(s => s.name === S.planEdit) : null;
+    const name = h("input", { type:"text", class:"answer-input", placeholder:"과목 이름 (예: 컴퓨터그래픽스)", maxlength:"30", style:"flex:1;min-width:160px;font-size:15px;padding:8px 11px" });
+    const date = h("input", { type:"date", class:"answer-input", style:"width:auto;font-size:15px;padding:7px 10px" });
+    name.value = editing ? editing.name : ""; date.value = editing ? editing.exam || "" : "";
+    const save = () => { if (editing ? updateSubject(editing.name, name.value, date.value) : addSubject(name.value, date.value)){ S.planEdit = null; render(); } };
+    name.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing){ e.preventDefault(); save(); } });
+    panel.append(h("div", { class:"row subj-form" }, name, h("label", { class:"row small muted", style:"gap:6px" }, "시험일", date),
+      h("button", { class:"btn small primary", onclick:save }, editing ? "저장" : "추가"),
+      h("button", { class:"btn small ghost", onclick: () => { S.planEdit = null; render(); } }, "취소"),
+      editing ? h("button", { class:"btn small ghost danger", onclick: () => { removeSubject(editing.name); S.planEdit = null; render(); } }, "과목 지우기") : null));
+    if (editing) panel.append(h("p", { class:"small muted", text:"과목을 지워도 자료와 풀이 기록은 그대로 남고, ‘과목 미지정’으로 옮겨져요." }));
+    requestAnimationFrame(() => { if (!editing && name.isConnected) name.focus(); });
+  }
+  return panel;
+}
+function subjectHead(name, list){
+  if (!name) return h("div", { class:"subj-head" }, h("div", null, h("h2", { text:"과목 미지정" }),
+    S.plan.subjects.length ? h("p", { class:"small muted", text:"자료 카드의 과목 칸에서 고르면 그 과목으로 묶여요." }) : null));
+  const n = daysLeft(examOf(name));
+  const weak = weakList(list);
+  const objs = new Set(weak.map(w => w.d.id + ":" + w.it.objectiveId)).size;
+  const due = list.reduce((sum, d) => sum + deckCounts(d).due, 0);
+  return h("div", { class:"subj-head" },
+    h("div", null,
+      h("div", { class:"row", style:"gap:8px" }, h("h2", { text:name }), n != null ? h("span", { class:`dday${n >= 0 && n <= 3 ? " soon" : ""}${n < 0 ? " past" : ""}`, text:ddayLabel(n) }) : null),
+      h("p", { class:"small muted num", text:`자료 ${list.length} · 약점 목표 ${objs} · 복습 차례 ${due}` })),
+    h("div", { class:"row" },
+      h("button", { class:"btn small", onclick: () => openSummary(name) }, "한 장 정리"),
+      h("button", { class:"btn small primary", disabled: weak.length ? null : true, onclick: () => startWeak(name) }, `약점 다시 풀기${weak.length ? ` ${Math.min(weak.length, WEAK_MAX)}` : ""}`)));
+}
+function deckCard(d, growing){
+  const c = deckCounts(d);
+  const pct = (n) => (c.total ? (n / c.total * 100) : 0) + "%";
+  let pick = null;
+  if (!d.example && S.plan.subjects.length){
+    pick = h("select", { class:"subj-pick", "aria-label":"과목", title:"과목" },
+      h("option", { value:"", text:"과목 없음" }), orderedSubjects().map(s => h("option", { value:s.name, text:s.name })));
+    pick.value = subjectOf(d);
+    pick.addEventListener("change", () => setSubject(d, pick.value));
+  }
+  return h("article", { class:"deck" },
+    h("div", null,
+      h("h3", { text:d.title }),
+      h("div", { class:"meta" },
+        pick,
+        h("span", { class:"num", text:`목표 ${d.objectives.length} · 문제 ${d.items.length}` }),
+        c.due ? h("span", { class:"chip bad num", text:`복습 ${c.due}` }) : null,
+        c.fresh ? h("span", { class:"chip num", text:`새 문제 ${c.fresh}` }) : null,
+        d.skipped && d.skipped.length ? h("span", { class:"chip help num", title:d.skipped.map(x => `${x.questionId}: ${x.reason}`).join("\n"), text:`빠진 문항 ${d.skipped.length}` }) : null
+      )
+    ),
+    h("div", { class:"row" },
+      h("button", { class:"btn small", onclick: () => { S.recordsDeck = d.id; setView("records"); } }, "기록"),
+      h("button", { class:"btn small", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기"),
+      h("button", { class:"btn small primary", onclick: () => startSession(d.id, true) }, c.due || c.fresh ? "연습" : "더 풀기")
+    ),
+    h("div", { class:"bar", "aria-hidden":"true" },
+      h("i", { class:"g", style:`width:${pct(c.good)}` }), h("i", { class:"r", style:`width:${pct(c.review)}` }), h("i", { class:"h", style:`width:${pct(c.help)}` }), h("i", { class:"c", style:`width:${pct(c.read)}` })
+    ),
+    growing.has(d.id) ? h("div", { style:"grid-column:1/-1" }, pendingNote(growing.get(d.id))) : null
+  );
 }
 
 /* ----- session ----- */
@@ -346,6 +488,15 @@ function startSession(deckId, allowEarly){
   if (!queue.length){ toast("지금 풀 문제가 없어요."); return; }
   queue = queue.slice(0, 25);
   S.session = { queue, i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"review", viewed:new Set() };
+  prepCurrent(); setView("practice");
+}
+/* 약점 다시 풀기: a subject's weak questions across its materials, most-missed first, regardless of the review day.
+   Results count like review; a question solved alone leaves the weak list. */
+const WEAK_MAX = 30;
+function startWeak(subject){
+  const list = weakList(decksOf(subject)).sort((a, b) => b.miss - a.miss).slice(0, WEAK_MAX);
+  if (!list.length){ toast("약점으로 표시된 문제가 없어요."); return; }
+  S.session = { queue: shuffle(list).map(w => ({ deck:w.d.id, item:w.it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"weak", subject, viewed:new Set() };
   prepCurrent(); setView("practice");
 }
 function itemsOnPage(d, page){
@@ -497,6 +648,7 @@ function renderSession(){
     h("span", { class:"chip page", text:`p.${item.page}` }),
     h("span", { class:"chip", text:FORMAT_LABEL[item.format] }),
     s.mode === "check" ? h("span", { class:"chip read", text:"읽은 직후 확인" }) : null,
+    s.mode === "weak" ? h("span", { class:"chip bad", text:"약점 다시 풀기" }) : null,
     s.queue[s.i].retry ? h("span", { class:"chip help", text:"다시 확인" }) : null,
     h("span", { class:"chip", text:deck.title })
   ));
@@ -611,6 +763,10 @@ function renderSessionEnd(){
         h("div", { class:"tile" }, h("b", { class:"num", style:"color:var(--help)", text:String(help) }), h("span", { text:"정답 보고 풂" }))
       ),
       h("p", { class:"small muted", text: next ? `다음 복습은 ${fmtWhen(next)}에 차례가 와요.` : "" }),
+      S.session.mode === "weak" ? (() => {
+        const left = weakList(decksOf(S.session.subject)).length;
+        return h("p", { class:"small", text: left ? `${S.session.subject} 약점이 ${left}문제 남았어요. 혼자 맞히면 약점에서 빠져요.` : `${S.session.subject} 약점을 모두 풀었어요.` });
+      })() : null,
       S.session.mode === "check"
         ? h("div", { class:"row" },
             h("button", { class:"btn primary", onclick: () => { const d = S.session.queue[0].deck, pg = S.session.page; S.session = null; openReader(d, nextPageWithItems(S.decks[d], pg) || pg); } }, "다음 쪽 읽기"),
@@ -1458,7 +1614,106 @@ function richLines(text){
     const parts = node ? [node] : richText(line);
     return i ? [h("br"), ...parts] : parts;
   });
-}/* ----- records ----- */
+}
+/* ----- 정리: one page per subject — every objective with what to recall, by material, unit and heading.
+   Colored by the learner's own record; "가리기" turns it into a quick self-test before the exam. ----- */
+const SUM_STATE = { weak:["약점", "bad"], new:["안 풀어봄", ""], mid:["푸는 중", "help"], good:["혼자 맞힘", "good"], none:["문제 없음", ""] };
+function openSummary(subject){ S.sum.subject = subject; S.sum.shown = new Set(); S.session = null; setView("summary"); window.scrollTo({ top:0 }); }
+/* The material's units; old-flow decks have no design outline, so their objectives show with the source quote. */
+function summarySections(d){
+  const hidden = new Set(d.hidden || []);
+  if (Array.isArray(d.outline) && d.outline.length) return d.outline.map(sec => ({ title:sec.title, pages:sec.pages,
+    objectives: sec.objectives.filter(o => !hidden.has(o.id)) })).filter(sec => sec.objectives.length);
+  const objs = d.objectives.filter(o => !hidden.has(o.id)).map(o => ({ id:o.id, statement:o.statement, recall:"", quote:o.quote, pages:o.pages, importance:"core" }));
+  return objs.length ? [{ title:"학습목표", pages:[], objectives:objs }] : [];
+}
+function renderSummary(){
+  const all = Object.values(S.decks).filter(d => !d.pending);
+  if (!all.length) return h("div", { class:"panel", text:"아직 자료가 없어요." });
+  const subs = orderedSubjects().filter(s => decksOf(s.name).length);
+  const hasLoose = all.some(d => !subjectOf(d));
+  if (S.sum.subject == null || (S.sum.subject && !subs.some(s => s.name === S.sum.subject)) || (S.sum.subject === "" && !hasLoose)) S.sum.subject = subs.length ? subs[0].name : "";
+  const subject = S.sum.subject;
+  const decks = decksOf(subject);
+  const wrap = h("div", { class:"stack summary" });
+
+  const sel = h("select", { class:"btn", id:"sumSel", style:"font-weight:600" },
+    subs.map(s => h("option", { value:s.name, text:`${s.name}${s.exam ? ` · ${ddayLabel(daysLeft(s.exam))}` : ""}` })),
+    hasLoose ? h("option", { value:"", text:"과목 미지정" }) : null);
+  sel.value = subject;
+  sel.addEventListener("change", () => { S.sum.subject = sel.value; S.sum.shown = new Set(); render(); });
+  const toggle = (key, label) => h("button", { class:"chip-btn", "aria-pressed": S.sum[key] ? "true" : "false", onclick: () => { S.sum[key] = !S.sum[key]; S.sum.shown = new Set(); render(); } }, label);
+
+  // Counts over every objective shown below.
+  let total = 0, weak = 0, fresh = 0;
+  const perDeck = decks.map(d => {
+    const secs = summarySections(d);
+    const st = new Map();
+    for (const sec of secs) for (const o of sec.objectives){ const v = objectiveState(d, o.id); st.set(o.id, v); total++; if (v === "weak") weak++; else if (v === "new") fresh++; }
+    return { d, secs, st };
+  });
+  const weakQs = weakList(decks).length;
+  wrap.append(h("section", { class:"panel sum-tools stack" },
+    h("div", { class:"row", style:"justify-content:space-between" },
+      h("div", { class:"row" }, h("label", { for:"sumSel", class:"small muted", text:"과목" }), sel),
+      h("div", { class:"row" },
+        subject ? h("button", { class:"btn small primary", disabled: weakQs ? null : true, onclick: () => startWeak(subject) }, `약점 다시 풀기${weakQs ? ` ${Math.min(weakQs, WEAK_MAX)}` : ""}`) : null,
+        h("button", { class:"btn small ghost", onclick: () => window.print() }, "인쇄"))),
+    h("div", { class:"row" }, toggle("weakOnly", "약점만"), toggle("hide", "떠올릴 것 가리기"),
+      h("span", { class:"small muted num", text:`목표 ${total} · 약점 ${weak} · 안 풀어봄 ${fresh}` })),
+    S.sum.hide ? h("p", { class:"small muted", text:"목표만 보고 떠올린 뒤 눌러서 확인하세요. 여기서 확인한 것은 풀이 기록에 들어가지 않아요." }) : null));
+
+  if (!decks.length) wrap.append(h("div", { class:"panel small muted", text:"이 과목에 묶인 자료가 없어요. 연습 탭의 자료 카드에서 과목을 골라 주세요." }));
+  for (const { d, secs, st } of perDeck){
+    const box = h("section", { class:"sum-deck" });
+    const dWeak = [...st.values()].filter(v => v === "weak").length;
+    box.append(h("header", { class:"row", style:"justify-content:space-between" },
+      h("div", null, h("h3", { text:d.title }), h("p", { class:"small muted num", text:`목표 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}` })),
+      h("button", { class:"btn small ghost", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, "원문 읽기")));
+    let shownHere = 0;
+    for (const sec of secs){
+      const objs = sec.objectives.filter(o => !S.sum.weakOnly || st.get(o.id) === "weak");
+      if (!objs.length) continue;
+      shownHere += objs.length;
+      const pages = sec.pages && sec.pages.length ? (sec.pages.length > 1 ? `p.${sec.pages[0]}–${sec.pages[sec.pages.length - 1]}` : `p.${sec.pages[0]}`) : "";
+      const ol = h("ol", { class:"sum-list" });
+      let lastPart = null;
+      for (const o of objs){
+        if (o.part && o.part !== lastPart){ ol.append(h("li", { class:"sum-part", text:o.part })); }
+        lastPart = o.part || lastPart;
+        const v = st.get(o.id) || "none";
+        const key = d.id + ":" + o.id;
+        const covered = S.sum.hide && !S.sum.shown.has(key);
+        const recall = o.recall
+          ? (covered
+            ? h("button", { class:"sum-cover", onclick: () => { S.sum.shown.add(key); render(); } }, "떠올린 뒤 눌러서 확인")
+            : h("div", { class:"sum-recall" }, richLines(o.recall)))
+          : o.quote ? (covered
+            ? h("button", { class:"sum-cover", onclick: () => { S.sum.shown.add(key); render(); } }, "떠올린 뒤 눌러서 확인")
+            : h("div", { class:"sum-recall quote" }, h("mark", { class:"quote", text:o.quote }))) : null;
+        ol.append(h("li", { class:"sum-obj", "data-st":v },
+          h("span", { class:"sum-dot", title:SUM_STATE[v][0], "aria-label":SUM_STATE[v][0] }),
+          h("div", { class:"sum-body" },
+            h("p", { class:"sum-stmt" }, richText(o.statement)),
+            recall,
+            h("div", { class:"sum-meta" },
+              v === "weak" ? h("span", { class:"chip bad", text:"약점" }) : null,
+              o.importance === "support" ? h("span", { class:"chip", text:"보조" }) : null,
+              o.pages && o.pages.length ? h("button", { class:"linkish small", onclick: () => openReader(d.id, o.pages[0], o.id) }, `원문 p.${o.pages.join(",")}`) : null))));
+      }
+      box.append(h("div", { class:"sum-sec" }, h("h4", null, h("span", { text:sec.title }), pages ? h("small", { class:"muted num", text:pages }) : null), ol));
+    }
+    if (!shownHere) box.append(h("p", { class:"small muted", text: S.sum.weakOnly ? "이 자료에는 약점이 없어요." : "정리할 목표가 없어요." }));
+    wrap.append(box);
+  }
+  wrap.append(h("div", { class:"legend" },
+    h("span", { style:"--c:var(--bad)", text:"약점 (마지막에 틀림·잘 모름·정답 보고 풂)" }),
+    h("span", { style:"--c:var(--help)", text:"푸는 중" }),
+    h("span", { style:"--c:var(--good)", text:"혼자 맞힘" }),
+    h("span", { style:"--c:var(--line-strong)", text:"안 풀어봄" })));
+  return wrap;
+}
+/* ----- records ----- */
 function renderRecords(){
   const decks = Object.values(S.decks).filter(d => !d.pending).sort((a,b) => (a.example?1:0) - (b.example?1:0) || b.createdAt - a.createdAt);
   if (!decks.length) return h("div", { class:"panel", text:"아직 자료가 없어요." });
@@ -1849,6 +2104,7 @@ function reloadDecks(){
   }).then(() => { if (!disposed && !S.session) render(); });
 }
 Store.init();
+S.plan = Store.plan();
 for (const rec of Store.pendingList()) if (rec && rec.id && rec.requestId) S.decks[rec.id] = pendingDeck(rec);
 updateStoreChip(); render();
 pollPending();
@@ -1875,6 +2131,7 @@ reloadDecks();
 Store.pull().then((changed) => {
   if (disposed) return;
   if (changed){
+    S.plan = Store.plan();
     for (const d of Object.values(S.decks)) if (!d.pending && !d.example) Store.restore(d);
     for (const rec of Store.pendingList()) if (rec && rec.id && rec.requestId && !S.decks[rec.id]) S.decks[rec.id] = pendingDeck(rec);
     if (!S.session) render();
