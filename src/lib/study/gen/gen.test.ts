@@ -445,3 +445,21 @@ test("순서 단답(이름을 화살표로 잇기)은 '한 칸 여러 요소'로
   assert.ok(!inspectQuestion(question(["x축 → y축"])).errors.some((issue) => issue.code === "composite-short-answer"));
   assert.ok(inspectQuestion(question(["a; b; c"])).errors.some((issue) => issue.code === "composite-short-answer"));
 });
+
+test("내용이 있는데 분류 항목이 없는 쪽은 다시 묻는다", () => {
+  const section = { id: "s5", title: "투영", pages: [19, 20] };
+  const texts = new Map([[19, "Perspective projection: x_p = x * d / z, y_p = y * d / z. The field of view (FOV) determines the angle of the view volume, and the projection plane distance d follows from the FOV and the window height."],
+    [20, "Parallel projection keeps lines parallel and is used for engineering drawings and orthographic views of objects."]]);
+  const checked = checkClassify({ items: [{ kind: "핵심 지식", content: "평행 투영", quote: "Parallel projection keeps lines parallel", page: 20 }] }, section, texts);
+  assert.equal(checked.items.length, 1);
+  assert.match(checked.problems.map((problem) => problem.message).join(), /p\.19에 분류 항목이 하나도 없습니다/);
+});
+
+test("공부 화면: 구분자 없이 쓴 LaTeX 정답은 수식으로 감싼다", async () => {
+  const { showMath } = await import("../from-authoring.ts");
+  assert.equal(showMath("\\begin{bmatrix}1&sh_x\\\\0&1\\end{bmatrix}"), "$\\begin{bmatrix}1&sh_x\\\\0&1\\end{bmatrix}$");
+  assert.equal(showMath("x' = x\\cos\\theta - y\\sin\\theta\ny' = x\\sin\\theta + y\\cos\\theta"), "$x' = x\\cos\\theta - y\\sin\\theta$\n$y' = x\\sin\\theta + y\\cos\\theta$");
+  assert.equal(showMath("행렬은 \\begin{bmatrix}1&0\\end{bmatrix} 이다"), "행렬은 $\\begin{bmatrix}1&0\\end{bmatrix}$ 이다");
+  assert.equal(showMath("큐에 들어간 적 없는 정점"), "큐에 들어간 적 없는 정점");
+  assert.equal(showMath("$a^{2}$"), "$a^{2}$");
+});

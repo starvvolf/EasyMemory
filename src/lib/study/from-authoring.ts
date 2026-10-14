@@ -47,6 +47,17 @@ export type StudyArtifactMeta = {
 
 const math = (latex: string) => `$${latex.replace(/\s*\n\s*/g, " ")}$`;
 
+const LATEX = /\\(begin|end|frac|sqrt|cdot|times|theta|alpha|beta|gamma|phi|pi|sin|cos|tan|left|right|mathbf|vec|prime|le|ge|neq|infty|sum|int)\b|[_^]\{/;
+/**
+ * Answers written as bare LaTeX (a matrix, a formula) without $ delimiters showed as code on the study screen
+ * (그래픽스 02 q-s4-o9). Pure math gets wrapped whole; in mixed Korean text only \begin…\end blocks are wrapped.
+ */
+export function showMath(text: string) {
+  if (!text || text.includes("$") || !LATEX.test(text)) return text;
+  if (!/[가-힣]/.test(text)) return text.split(/\n+/).map((line) => line.trim() ? math(line) : line).join("\n");
+  return text.replace(/\\begin\{(\w+)\}[\s\S]*?\\end\{\1\}/g, (block) => math(block));
+}
+
 function blockText(block: AuthoringBlock, responseId: string): string | null {
   switch (block.kind) {
     case "text": return block.text;
@@ -101,7 +112,7 @@ function toItem(question: AuthoredQuestion, response: ResponseContract, shared: 
   }
   if (!response.acceptedAnswers.length) throw new Error("인정 답안이 없습니다.");
   // Recaller가 자기확인으로 정한 서술형은 되짚기의 '떠올리고 확인'으로 보여 준다.
-  if (response.grading === "self-check") return { ...base, format: "card", answer: response.acceptedAnswers.join("\n") };
+  if (response.grading === "self-check") return { ...base, format: "card", answer: showMath(response.acceptedAnswers.join("\n")) };
   return { ...base, format: "value", accepted: response.acceptedAnswers };
 }
 

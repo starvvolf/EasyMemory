@@ -479,7 +479,9 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         if (!checked) throw new Stop("paused-invalid", `${section.title}: 내용 분류 응답을 읽지 못했어요. 다시 시작하면 이 목차부터 이어가요.`);
         // Still-unverified quotes are dropped, not kept: the source must not be misquoted.
         section.classify = { items: checked.items, warnings: [...own.warnings,
-          ...checked.problems.map((problem) => ({ severity: "warning" as const, code: "quote-not-found", message: `원문에서 확인되지 않아 뺀 항목: ${problem.message}` }))] };
+          ...checked.problems.map((problem) => problem.index < 0
+            ? { severity: "warning" as const, code: "page-uncovered", message: `분류되지 않은 쪽이 남았어요: ${problem.message}` }
+            : { severity: "warning" as const, code: "quote-not-found", message: `원문에서 확인되지 않아 뺀 항목: ${problem.message}` })] };
       }
       await saveState(state);
     }

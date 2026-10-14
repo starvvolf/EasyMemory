@@ -3,6 +3,7 @@
 // Tier 2 (not in the source, broken links, unsolvable) returns per-item problems: only those items are asked again.
 // Tier 3 (quality) becomes warnings and never triggers a call.
 import { containsQuote } from "../../../../tools/study-forge-mcp/source-evidence.ts";
+import { meaningfulChars } from "./pages.ts";
 import type { classifyReply, designReply, outlineReply } from "./schemas.ts";
 import type { z } from "zod";
 import { materialKinds, type ClassItem, type Issue, type Objective, type Section, type SectionPart } from "./types.ts";
@@ -147,6 +148,12 @@ export function checkClassify(reply: z.infer<typeof classifyReply>, section: Sec
     items.push({ n: 0, kind: item.kind, content: item.content, quote: item.quote, page });
   });
   items.forEach((item, index) => { item.n = index + 1; });
+  // A page with real content but no item was skipped (그래픽스 01 p.19: a formula page read from its image got none).
+  const covered = new Set(items.map((item) => item.page));
+  for (const page of section.pages) {
+    if (covered.has(page) || meaningfulChars(texts.get(page) ?? "") < 100) continue;
+    problems.push({ index: -1, message: `p.${page}에 분류 항목이 하나도 없습니다. 그 쪽의 정의·식·절차·비교도 분류하세요(그림에서 옮긴 글도 원문입니다).` });
+  }
   return { items, problems };
 }
 
