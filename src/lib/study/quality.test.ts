@@ -56,3 +56,25 @@ test("저장소의 학습규칙/품질.md는 경고 없이 읽힌다", () => {
   assert.equal(rules.easyStreak, 4);
   assert.equal(rules.candidateThreshold, 3);
 });
+
+test("용어 고르기: 같은 자료의 다른 용어가 오답, 같은 단원·비슷한 표기가 먼저, 문장·식은 제외", async () => {
+  const { termChoice, termAnswer } = await import("./quality.ts");
+  const card = (id: string, objectiveId: string, answer: string) => ({ id, objectiveId, format: "card", answer });
+  const deck = {
+    items: [card("q1", "o1", "자아 강도(Ego Strength)"), card("q2", "o2", "통제 위치(Locus of Control)"), card("q3", "o3", "내재론자(internal)"),
+      card("q4", "o4", "외재론자(external)"), card("q5", "o5", "도덕적 의도를 실제 행동으로 옮기는 단계."), card("q6", "o6", "마키아벨리즘(Machiavellianism)"),
+      card("q7", "o7", "윤리적 딜레마")],
+    outline: [{ title: "개인 특성", objectives: ["o1", "o2", "o3", "o4", "o5"].map((id) => ({ id, kind: "용어" })) },
+      { title: "다른 단원", objectives: [{ id: "o6", kind: "용어" }, { id: "o7", kind: "개념" }] }],
+  };
+  const pick = termChoice(deck, "q1", "2026-10-15")!;
+  assert.equal(pick.options.length, 4);
+  assert.equal(pick.options[pick.answer], "자아 강도(Ego Strength)");
+  assert.ok(!pick.options.includes("도덕적 의도를 실제 행동으로 옮기는 단계."));
+  assert.ok(!pick.options.includes("윤리적 딜레마"));
+  assert.deepEqual(termChoice(deck, "q1", "2026-10-15"), pick);
+  assert.equal(termChoice(deck, "q7", "x"), null);
+  assert.equal(termAnswer("\\(P' = M_1 P\\)"), null);
+  assert.equal(termAnswer("준법경영, 사회적 책임, 가치경영(윤리경영)"), null);
+  assert.equal(termAnswer("pixel당 bit 수"), "pixel당 bit 수");
+});

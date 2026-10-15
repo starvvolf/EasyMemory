@@ -34,6 +34,8 @@ export type StudyRules = {
   cardAfterOverrides: number;
   similarHide: number;
   candidateThreshold: number;
+  /** 용어 플래시카드를 같은 자료의 다른 용어를 오답으로 한 고르기로 낸다 (학습규칙/품질.md [용어-고르기]). */
+  termChoice: boolean;
 };
 export const DEFAULT_RULES: StudyRules = {
   dailyMinutes: 90,
@@ -50,8 +52,10 @@ export const DEFAULT_RULES: StudyRules = {
   cardAfterOverrides: 2,
   similarHide: 50,
   candidateThreshold: 3,
+  termChoice: true,
 };
-type NumberKey = Exclude<keyof StudyRules, "seconds" | "diagnose">;
+type NumberKey = Exclude<keyof StudyRules, "seconds" | "diagnose" | "termChoice">;
+const BOOLEAN_KEYS: Record<string, "diagnose" | "termChoice"> = { "첫훑기": "diagnose", "용어-고르기": "termChoice" };
 const NUMBER_KEYS: Record<string, NumberKey> = {
   "하루-시간": "dailyMinutes", "새문제-최대": "newPerDayMax", "시험없음-새문제": "newPerDayNoExam", "마지막-복습일": "finalDays",
   "시험-임박": "urgentDays", "첫훑기-앎-간격": "diagnoseKnownDays", "약점-최대": "weakMax", "한번에": "chunk",
@@ -72,9 +76,10 @@ export function parseRules(markdown: string): { rules: StudyRules; warnings: str
     const match = /^- \[([^\]]+)\]\s*(.*)$/.exec(line.trim());
     if (!match) continue;
     const [, key, raw] = match;
-    if (key === "첫훑기") {
-      if (/^(예|켜기|on|true)/i.test(raw)) rules.diagnose = true;
-      else if (/^(아니오|아니요|끄기|off|false)/i.test(raw)) rules.diagnose = false;
+    const flag = BOOLEAN_KEYS[key];
+    if (flag) {
+      if (/^(예|켜기|on|true)/i.test(raw)) rules[flag] = true;
+      else if (/^(아니오|아니요|끄기|off|false)/i.test(raw)) rules[flag] = false;
       else warnings.push(`[${key}] 값은 '예' 또는 '아니오'여야 해요: ${raw}`);
       continue;
     }

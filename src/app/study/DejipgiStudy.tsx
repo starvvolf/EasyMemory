@@ -13,7 +13,7 @@ import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type Planner
 import { DEFAULT_GEN_MODELS, defaultChosen, type GenState } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
 import { coachCards, type CoachInput } from "@/lib/study/coach";
-import { applyPatches, similarObjectives, tooEasy, type LedgerEntry, type PatchMap } from "@/lib/study/quality";
+import { applyPatches, similarObjectives, termChoice, tooEasy, type LedgerEntry, type PatchMap } from "@/lib/study/quality";
 import { askedObjectives, diagnoseBox, planDeckFrom, planSettingsFrom, planToday, renderMemoryAuto, type PlanNote, type PlanRecord, type StudyRules } from "@/lib/study/plan";
 import "katex/dist/katex.min.css";
 import "./dejipgi.css";
@@ -274,6 +274,7 @@ export default function DejipgiStudy() {
       quality: {
         similar: (hidden, candidates, threshold) => similarObjectives(hidden, candidates, threshold),
         tooEasy: (events, itemId, streak) => tooEasy(events, itemId, streak),
+        termChoice: (deck, itemId, seed) => termChoice(deck, itemId, seed),
         ...(session.mode === "local-experiment" ? {
           list: loadQuality,
           async patch(deckId: string, patch: { kind: "accept"; itemId: string; answer: string } | { kind: "card"; itemId: string }, entry?: LedgerEntry) { await qualityPost({ action: "patch", deckId, patch, entry }); },

@@ -754,11 +754,27 @@ function applyCheck(deck, item){
   // right after reading: never counts as memory evidence; real review starts tomorrow
   const s = schedOf(deck, item.id); s.seen = true; s.due = Math.max(s.due || 0, now() + DAY);
 }
-function curRef(){ const q = S.session.queue[S.session.i]; if (!q) return null; const deck = S.decks[q.deck]; return { deck, item: (deck.allItems || deck.items).find(x => x.id === q.item) }; }
+/* The current question as shown. A 용어 flashcard may be shown as a choice among the material's other terms
+   (학습규칙/품질.md [용어-고르기]); the record still belongs to the same question. */
+function curRef(){
+  const q = S.session.queue[S.session.i]; if (!q) return null;
+  const deck = S.decks[q.deck];
+  const base = (deck.allItems || deck.items).find(x => x.id === q.item);
+  const c = S.session.cur;
+  const v = c && c.itemKey === q.deck + ":" + q.item ? c.asChoice : null;
+  return { deck, item: v ? { ...base, format:"choice", options:v.options, answer:v.answer, termCard:true } : base };
+}
+function termChoiceFor(deck, it){
+  if (it.format !== "card" || !env.quality || !env.quality.termChoice || (S.rules && S.rules.termChoice === false) || S.session.mode === "check") return null;
+  try{ return env.quality.termChoice({ items:deck.allItems || deck.items, outline:deck.outline }, it.id, new Date().toDateString()); }catch(e){ return null; }
+}
 function prepCurrent(){
+  const q = S.session.queue[S.session.i]; if (!q) return;
   const r = curRef(); if (!r) return;
   const it = r.item;
-  S.session.cur = { pick:null, text:"", order:[], pool: it.format === "order" ? shuffle(it.steps.map((s,i) => i)) : [], optOrder: it.format === "choice" ? shuffle(it.options.map((o,i) => i)) : [], verdict:null, overridden:false, cardShown:false };
+  const asChoice = termChoiceFor(r.deck, it);
+  S.session.cur = { itemKey:q.deck + ":" + q.item, asChoice, pick:null, text:"", order:[], pool: it.format === "order" ? shuffle(it.steps.map((s,i) => i)) : [],
+    optOrder: asChoice ? asChoice.options.map((o, i) => i) : it.format === "choice" ? shuffle(it.options.map((o,i) => i)) : [], verdict:null, overridden:false, cardShown:false };
 }
 function logEvent(deck, item, ev){ deck.events.push({ t:now(), item:item.id, ...ev }); }
 function finishItem(outcome){
@@ -788,7 +804,7 @@ function submitAnswer(){
   if (item.format === "choice"){ if (c.pick == null) return; correct = c.pick === item.answer; }
   else if (item.format === "value"){ if (!c.text.trim()) return; correct = item.accepted.some(a => norm(a) === norm(c.text)); }
   else if (item.format === "order"){ if (c.order.length !== item.steps.length) return; correct = c.order.every((v,i) => v === i); }
-  logEvent(deck, item, { kind:"submit", correct, assisted, afterReading:reading, answer: item.format === "value" ? c.text.slice(0, 80) : undefined });
+  logEvent(deck, item, { kind:"submit", correct, assisted, afterReading:reading, answer: item.format === "value" ? c.text.slice(0, 80) : undefined, asChoice: item.termCard || undefined });
   c.verdict = assisted ? "assisted" : reading ? (correct ? "read-good" : "read-bad") : correct ? "good" : "bad";
   finishItem(assisted ? "assisted" : correct ? "correct" : "wrong");
   S.session.phase = "result"; render();
@@ -904,7 +920,7 @@ function renderSession(){
   const card = h("article", { class:"qcard", "aria-live":"polite" });
   card.append(h("div", { class:"qhead" },
     h("span", { class:"chip page", text:`p.${item.page}` }),
-    h("span", { class:"chip", text:FORMAT_LABEL[item.format] }),
+    h("span", { class:"chip", text: item.termCard ? "용어 고르기" : FORMAT_LABEL[item.format] }),
     s.mode === "check" ? h("span", { class:"chip read", text:"읽은 직후 확인" }) : null,
     s.mode === "weak" ? h("span", { class:"chip bad", text:"약점 다시 풀기" }) : null,
     s.queue[s.i].reason && REASON[s.queue[s.i].reason] ? h("span", { class:`chip ${REASON[s.queue[s.i].reason][1]}`, text:REASON[s.queue[s.i].reason][0] }) : null,
@@ -991,6 +1007,7 @@ function renderSession(){
       act.append(h("button", { class:"btn", onclick:dontKnow }, "모르겠어요"));
     }
     act.append(h("span", { class:"spacer" }));
+    if (item.termCard) act.append(h("button", { class:"btn ghost small", title:"보기 없이 떠올리는 카드로 풀어요", onclick: () => { c.asChoice = null; c.optOrder = []; c.pick = null; render(); } }, "카드로 풀기"));
     if (item.format !== "card") act.append(h("button", { class:"btn ghost small", onclick:peek, title:"정답을 먼저 보면 이번 풀이는 혼자 맞힌 기록으로 세지 않아요" }, "정답 먼저 보기"));
   } else if (s.phase === "rate"){
     // Flashcards are judged by the learner, in two steps (docs/DECISIONS.md 2026-10-12 주관식 형식). "잘 모름" counts as a weak spot.

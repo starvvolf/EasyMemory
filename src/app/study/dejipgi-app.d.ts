@@ -41,6 +41,8 @@ export type DejipgiEnv = {
   quality?: {
     similar(hidden: { id: string; statement: string }, candidates: Array<{ id: string; statement: string }>, threshold?: number): string[];
     tooEasy(events: NonNullable<PlannerDeck["events"]>, itemId: string, streak: number): boolean;
+    /** A 용어 flashcard as four options from the material's other terms, or null. */
+    termChoice(deck: { items: Array<{ id: string; objectiveId: string; format: string; answer?: number | string }>; outline?: Array<{ title: string; objectives: Array<{ id: string; kind?: string }> }> }, itemId: string, seed: string): { options: string[]; answer: number } | null;
     list?(): Promise<{ patches: PatchMap; counts: Record<string, number> }>;
     patch?(deckId: string, patch: { kind: "accept"; itemId: string; answer: string } | { kind: "card"; itemId: string }, entry?: LedgerEntry): Promise<void>;
     unpatch?(deckId: string, patchId: string, entry?: LedgerEntry): Promise<void>;

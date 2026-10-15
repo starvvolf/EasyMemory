@@ -112,3 +112,66 @@ export function tooEasy(events: Array<{ t: number; item: string; kind: string; c
   const alone = last.every((event) => !event.assisted && !event.afterReading && (event.kind === "submit" ? event.correct === true : event.kind === "rate" && event.rating === "remembered"));
   return alone && new Set(last.map((event) => new Date(event.t).toDateString())).size >= streak;
 }
+
+/* ---------------------------------------------------------------- term cards as choices (학습규칙/품질.md [용어-고르기]) */
+type TermDeck = {
+  items: Array<{ id: string; objectiveId: string; format: string; answer?: number | string }>;
+  outline?: Array<{ title: string; objectives: Array<{ id: string; kind?: string }> }>;
+};
+const MATH = /\$|\\\(|\\\[|\\begin|\\frac/;
+const squash = (text: string) => text.normalize("NFKC").replace(/[\s·()（）[\]'"’‘“”.,]/g, "").toLowerCase();
+/** A flashcard back that is one term (or one short phrase), not a sentence, list or formula. */
+export function termAnswer(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  if (!text || text.includes("\n") || MATH.test(text) || text.length > 40) return null;
+  if ((/[다요음함]$/.test(text) || /\.$/.test(text)) && text.length > 12) return null;   // a sentence ("…한다", "…단계.")
+  if ((text.match(/,/g) ?? []).length >= 2) return null;               // a list of several things
+  return text;
+}
+/** A name ("앵커링 효과", "Intensity") or a description ("pixel 값을 저장하는 화면 메모리"); options should be one kind. */
+const shape = (text: string) => (/[을를의은는이가에]\s|하는\s|되는\s|[한된]\s/.test(text + " ") ? "desc" : "name");
+const latinShare = (text: string) => (text.match(/[A-Za-z]/g) ?? []).length / Math.max(1, text.replace(/\s/g, "").length);
+function rng(seed: string) {
+  let h = 2166136261;
+  for (const ch of seed) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
+}
+/**
+ * A 용어 flashcard as a four-option choice whose wrong options are the other 용어 answers of the same material, closest
+ * first (same unit, then similar length and script) — the look-alike terms a learner actually mixes up. Null when the
+ * card is not a term card or there are fewer than three such neighbours. `seed` keeps the options stable for a day.
+ */
+export function termChoice(deck: TermDeck, itemId: string, seed: string): { options: string[]; answer: number } | null {
+  const kind = new Map<string, string | undefined>();
+  const unit = new Map<string, string>();
+  for (const section of deck.outline ?? []) for (const objective of section.objectives) { kind.set(objective.id, objective.kind); unit.set(objective.id, section.title); }
+  const item = deck.items.find((entry) => entry.id === itemId);
+  if (!item || item.format !== "card" || kind.get(item.objectiveId) !== "용어") return null;
+  const answer = termAnswer(item.answer);
+  if (!answer) return null;
+  const key = squash(answer);
+  const seen = new Set([key]);
+  const pool: Array<{ text: string; score: number }> = [];
+  for (const other of deck.items) {
+    if (other.id === item.id || other.objectiveId === item.objectiveId || other.format !== "card" || kind.get(other.objectiveId) !== "용어") continue;
+    const text = termAnswer(other.answer);
+    if (!text) continue;
+    const otherKey = squash(text);
+    // Only options of the same kind (names with names, descriptions with descriptions; English with English), or the answer gives itself away.
+    if (seen.has(otherKey) || otherKey.includes(key) || key.includes(otherKey) || shape(text) !== shape(answer)
+      || Math.abs(latinShare(text) - latinShare(answer)) > 0.5) continue;
+    seen.add(otherKey);
+    const score = (unit.get(other.objectiveId) === unit.get(item.objectiveId) ? 0 : 10)
+      + Math.abs(text.length - answer.length) / 4 + Math.abs(latinShare(text) - latinShare(answer)) * 8;
+    pool.push({ text, score });
+  }
+  if (pool.length < 3) return null;
+  const random = rng(`${seed}:${itemId}`);
+  // The closest few, so distractors stay confusable but vary from day to day.
+  const near = pool.sort((a, b) => a.score - b.score).slice(0, 5);
+  const wrong: string[] = [];
+  while (wrong.length < 3) wrong.push(near.splice(Math.floor(random() * near.length), 1)[0].text);
+  const options = [answer, ...wrong];
+  for (let i = options.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [options[i], options[j]] = [options[j], options[i]]; }
+  return { options, answer: options.indexOf(answer) };
+}
