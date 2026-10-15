@@ -134,3 +134,87 @@ function ruleChunk(words: string[], index: number): Chunk {
   while (end + 1 < words.length && end - start < 3 && content(end + 1) && !BREAK_AFTER.test(words[end]) && !BREAK_BEFORE.test(words[end + 1])) end++;
   return { start, end, kind: end > start ? "phrase" : "word" };
 }
+
+/* ---------------------------------------------------------------- important terms (reader highlight) */
+type ImportanceDeck = {
+  outline?: Array<{ title: string; objectives: Array<{ id: string; cue?: string; recall?: string; kind?: string; importance?: "core" | "support" }> }>;
+  items?: Array<{ objectiveId: string; format: string; answer?: unknown }>;
+};
+const TERM_KINDS = new Set(["용어", "개념"]);
+/** `text` reads as a description next to `other`: a Korean phrase with 의/당/하는/되는, or Korean against an English name. */
+const describes = (text: string, other: string) => /(의|당|하는|되는|한|된)\s/.test(text + " ") || (hangul(text) && !hangul(other) && /[A-Za-z]/.test(other));
+/**
+ * The term names inside an objective's cue or recall: the text itself when it is a term ("Scan line", "앵커링 효과"),
+ * the part before a colon ("준법 경영 (Compliance): …"), X of "X의 정의/범위/…", and English names inside Korean
+ * sentences ("Shadow-mask methods가 이용하는 …" → "Shadow-mask methods").
+ */
+export function termCandidates(text: string, whole = true): string[] {
+  const plain = String(text ?? "").replace(/\$[^$]*\$/g, " ").replace(/\s+/g, " ").trim();
+  if (!plain) return [];
+  const out = whole ? [plain] : [];
+  const colon = /^([^:：]{2,40})[:：]/.exec(plain); if (colon) out.push(colon[1].trim());
+  const aspect = /^(.{2,30}?)의\s*(정의|범위|개념|종류|특징|의미|역할|목적|원칙|유형|구성 요소|요소|조건|기능|장점|단점|한계)$/u.exec(plain); if (aspect) out.push(aspect[1].trim());
+  // English names inside Korean text; digits stay attached ("3D viewer"), a leading article goes, and a lone
+  // lowercase word ("red", "pixels") is too common to mark.
+  if (hangul(plain)) for (const m of plain.matchAll(/(?<![A-Za-z0-9])[0-9]*[A-Za-z][A-Za-z0-9\-]*(?:\s+[A-Za-z][A-Za-z0-9\-]*){0,3}/g)) {
+    const name = m[0].trim().replace(/^(a|an|the)\s+/i, "");
+    const single = !/\s/.test(name);
+    if (name.length >= 3 && !STOP.has(name.toLowerCase()) && !(single && /^[a-z]/.test(name))) out.push(name);
+  }
+  return out;
+}
+/**
+ * Terms worth seeing at a glance: what core objectives of kind 용어·개념 ask to recall, and the answers of their
+ * flashcards, when those are short noun phrases (the same filter as the lexicon). One word counts here
+ * ("윤리경영", "Intensity"); support objectives and headings do not.
+ */
+export function importantTerms(deck: ImportanceDeck): Lexicon {
+  const keys = new Map<string, number>(), labels = new Map<string, string>();
+  let maxWords = 1;
+  const core = new Map<string, boolean>();
+  const definitionSide = new Map<string, boolean>();
+  const add = (text: string) => {
+    for (const phrase of phrases(text)) {
+      const key = keyOf(phrase.text);
+      if (key.length < 2 || (!hangul(phrase.text) && key.length < 3)) continue;
+      keys.set(key, 2); if (!labels.has(key)) labels.set(key, phrase.text);
+      maxWords = Math.max(maxWords, Math.min(6, phrase.text.split(/\s+/).length));
+    }
+  };
+  for (const section of deck.outline ?? []) for (const objective of section.objectives) {
+    const important = objective.importance !== "support" && TERM_KINDS.has(objective.kind ?? "");
+    core.set(objective.id, important);
+    // A 용어 objective goes one of two ways: name → definition ("Scan line" → "각 행") or definition → name
+    // ("빛 에너지의 물리적 측정값" → "Intensity"). Only the name side is a term to mark. A Korean term with an
+    // English gloss ("도덕적 지각(Moral Awareness)") is a term in any cue.
+    if (important) {
+      const cue = objective.cue ?? "", recall = objective.recall ?? "";
+      let cueTerm = phrases(cue).length > 0 && (objective.kind === "용어" || /^[^()（）]+[(（][A-Za-z][^)）]*[)）]$/.test(cue.trim()));
+      let recallTerm = true;
+      if (objective.kind === "용어" && cueTerm){
+        const dc = describes(cue, recall), dr = describes(recall, cue);
+        if (dc && !dr) cueTerm = false; else if (dr && !dc) recallTerm = false;
+      }
+      definitionSide.set(objective.id, !recallTerm);
+      for (const candidate of termCandidates(cue, cueTerm)) add(candidate);
+      for (const candidate of termCandidates(recall, recallTerm)) add(candidate);
+    }
+  }
+  // Flashcard backs repeat the recall: only when the recall side is the name.
+  for (const item of deck.items ?? []) if (item.format === "card" && core.get(item.objectiveId) && !definitionSide.get(item.objectiveId)) add(String(item.answer ?? ""));
+  return { keys, maxWords, labels };
+}
+/** Every place on a line where an important term is written (longest first, no overlaps). */
+export function findTerms(words: string[], terms: Lexicon): Array<{ start: number; end: number }> {
+  const found: Array<{ start: number; end: number }> = [];
+  if (!terms.keys.size) return found;
+  for (let start = 0; start < words.length; start++) {
+    if (!bare(words[start])) continue;
+    for (let end = Math.min(words.length - 1, start + terms.maxWords - 1); end >= start; end--) {
+      const span = words.slice(start, end + 1);
+      const hit = terms.keys.has(keyOf(span.join(" "))) || terms.keys.has(keyOf([...span.slice(0, -1), stripParticle(span[span.length - 1])].join(" ")));
+      if (hit) { found.push({ start, end }); start = end; break; }
+    }
+  }
+  return found;
+}

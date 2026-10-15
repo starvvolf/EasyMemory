@@ -274,6 +274,8 @@
 .dejipgi .pagebox .loading{position:absolute;inset:0;display:grid;place-items:center;color:#5A6774;font-size:13.5px}
 .dejipgi .hl{position:absolute;background:rgba(247,226,107,.55);mix-blend-mode:multiply;border-radius:2px;pointer-events:none}
 .dejipgi .hl.dim{background:rgba(247,226,107,.22)}
+.dejipgi .rbar .btn[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);box-shadow:none}
+.dejipgi .tm{position:absolute;pointer-events:none;z-index:1;border-bottom:2.5px solid color-mix(in srgb,var(--accent) 75%,transparent);background:color-mix(in srgb,var(--accent) 9%,transparent);border-radius:2px 2px 0 0}
 .dejipgi .hlnum{position:absolute;transform:translate(-120%,-15%);width:17px;height:17px;border-radius:50%;background:#16202A;color:#F7E26B;font:500 10.5px/17px var(--mono);text-align:center;pointer-events:none}
 .dejipgi .paper{padding:40px 44px 48px;font-family:var(--read-font);font-size:17px;line-height:1.95;white-space:pre-wrap;word-break:keep-all;max-width:none}
 .dejipgi .paper .inner{max-width:66ch;margin-inline:auto}

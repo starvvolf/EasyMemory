@@ -580,7 +580,7 @@ export async function studyDocument(id: string) {
     title: section.title,
     pages: section.pages,
     objectives: (section.design?.objectives ?? []).filter((objective) => !confirmed || confirmed.has(objective.id)).map((objective) => ({
-      id: objective.id, statement: objective.statement, recall: objective.recall, importance: objective.importance, kind: objective.kind, pages: objective.pages,
+      id: objective.id, statement: objective.statement, cue: objective.cue, recall: objective.recall, importance: objective.importance, kind: objective.kind, pages: objective.pages,
       part: section.parts?.find((part) => part.pages.includes(objective.pages[0]))?.title,
     })),
   })).filter((section) => section.objectives.length);

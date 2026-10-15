@@ -1193,7 +1193,31 @@ async function paintBox(box, d, pageNo, cssW){
   box.replaceChildren(entry.canvas,
     ...rects.map(r => h("div", { class:"hl" + (r.dim ? " dim" : "") + (r.line ? " line" : ""), style:`left:${r.x / W * 100}%;top:${r.y / H * 100}%;width:${r.w / W * 100}%;height:${r.h / H * 100}%` })),
     ...badges.map(b => h("div", { class:"hlnum" + (b.line ? " line" : ""), style:`left:${b.x / W * 100}%;top:${b.y / H * 100}%`, text:String(b.num) })),
-    textLayer(entry, cssW), ...noteMarks(d, entry, W, H));
+    ...(() => { const tl = textLayer(entry, cssW); return [...termMarks(d, tl), tl]; })(), ...noteMarks(d, entry, W, H));
+}
+/* 핵심 용어: terms of core 용어·개념 objectives, marked wherever they are written on the page (chunk.ts importantTerms). */
+function termsOn(){ return !(S.plan.prefs && S.plan.prefs.showTerms === false); }
+function importantOf(d){
+  if (!env.chunk || !env.chunk.important) return null;
+  const sig = (d.outline ? d.outline.length : 0) + ":" + (d.patchSig || "") + ":" + (d.items || []).length;
+  if (!d._imp || d._impSig !== sig){ try{ d._imp = env.chunk.important(d); d._impSig = sig; }catch(e){ d._imp = null; } }
+  return d._imp;
+}
+function termMarks(d, tl){
+  if (!termsOn() || !tl._tokens || !tl._tokens.length) return [];
+  const terms = importantOf(d); if (!terms || !terms.keys.size) return [];
+  const out = [], seenLines = new Set();
+  for (const t of tl._tokens){
+    if (seenLines.has(t.line)) continue; seenLines.add(t.line);
+    const words = t.line.map(n => tl._tokens[n].text);
+    for (const m of env.chunk.find(words, terms)){
+      const list = t.line.slice(m.start, m.end + 1).map(n => tl._tokens[n]);
+      const x0 = Math.min(...list.map(k => k.x0)), x1 = Math.max(...list.map(k => k.x1)), y0 = Math.min(...list.map(k => k.y0)), y1 = Math.max(...list.map(k => k.y1));
+      const text = list.map(k => k.text).join(" ");
+      out.push(h("div", { class:"tm", title:`핵심 용어: ${text}`, style:`left:${x0 / tl._W * 100}%;top:${(y0 + (y1 - y0) * 0.1) / tl._H * 100}%;width:${(x1 - x0) / tl._W * 100}%;height:${(y1 - y0) * 0.8 / tl._H * 100}%` }));
+    }
+  }
+  return out;
 }
 async function drawPage(){
   if (S.view !== "read") return;
@@ -1303,7 +1327,10 @@ function renderReader(){
   sel.addEventListener("change", () => openReader(sel.value, firstPage(S.decks[sel.value])));
   const pg = h("input", { class:"num", id:"pgInput", type:"number", min:"1", max:String(total), "aria-label":"쪽 번호" });
   pg.value = String(R.page); pg.addEventListener("change", () => goPage(Number(pg.value)));
-  wrap.append(h("div", { class:"rbar" }, sel, h("span", { class:"grow" }), notesButton(d),
+  wrap.append(h("div", { class:"rbar" }, sel, h("span", { class:"grow" }),
+    env.chunk && env.chunk.important && !d.example ? h("button", { class:"btn small", "aria-pressed": termsOn() ? "true" : "false", title:"핵심 용어·개념 목표의 용어를 쪽에 표시",
+      onclick: () => { (S.plan.prefs || (S.plan.prefs = {})).showTerms = !termsOn(); Store.savePlan(S.plan); render(); } }, "핵심 용어") : null,
+    notesButton(d),
     h("div", { class:"pager" },
       h("button", { class:"qbtn", disabled: R.page <= 1, "aria-label":"이전 쪽", onclick: () => goPage(R.page - 1) }, "‹"),
       pg, h("span", { class:"num", text:`/ ${total}` }),

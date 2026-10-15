@@ -52,7 +52,9 @@ export type DejipgiEnv = {
   /** 앱 안의 코치: cards from the day plan and the quality ledger (src/lib/study/coach.ts). */
   coach?: (input: { plan: TodayPlan; rules: unknown; prefs: unknown; counts: Record<string, number>; waiting: number; unassigned: number; subjectsWithoutDate: string[] }) => CoachCard[];
   /** Meaning units for the reader's hover box: a lexicon from the material, and the unit around a word of a line. */
-  chunk?: { lexicon(deck: PlannerDeck, asked: string[]): Lexicon; at(words: string[], index: number, lexicon: Lexicon | null): Chunk };
+  chunk?: { lexicon(deck: PlannerDeck, asked: string[]): Lexicon; at(words: string[], index: number, lexicon: Lexicon | null): Chunk;
+    /** Terms of core 용어·개념 objectives, and where they are written on a line (reader highlight). */
+    important?(deck: PlannerDeck): Lexicon; find?(words: string[], terms: Lexicon): Array<{ start: number; end: number }> };
   /** 학습규칙/오늘할것.md, parsed on the server. */
   rules?: () => Promise<{ rules: unknown; warnings: string[] }>;
   /** 학습 메모 (study-memory/<과목>.md): the screen rewrites the auto part after studying. */

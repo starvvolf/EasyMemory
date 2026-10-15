@@ -38,7 +38,7 @@ export type StudyDeck = {
   /** New-engine materials: the designed objectives by unit, for the one-page summary (정리). */
   outline?: StudyOutlineSection[];
 };
-export type StudyOutlineObjective = { id: string; statement: string; recall: string; importance: "core" | "support"; pages: number[]; part?: string; kind?: string };
+export type StudyOutlineObjective = { id: string; statement: string; recall: string; importance: "core" | "support"; pages: number[]; part?: string; kind?: string; cue?: string };
 export type StudyOutlineSection = { title: string; pages: number[]; objectives: StudyOutlineObjective[] };
 export type StudyArtifactMeta = {
   id: string;

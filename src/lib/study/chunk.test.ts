@@ -47,3 +47,27 @@ test("전치사·한정사에서 끊는다(along, all)", () => {
   assert.deepEqual(pick("Relocating all the coordinate positions by the same displacement along parallel paths", "displacement"), ["same displacement", "phrase"]);
   assert.deepEqual(pick("Relocating all the coordinate positions by the same displacement along parallel paths", "paths"), ["parallel paths", "phrase"]);
 });
+
+test("중요 용어: 핵심 용어·개념 목표만, 한 낱말도, 쪽에서 찾을 때 조사 붙은 꼴도", async () => {
+  const { importantTerms, findTerms } = await import("./chunk.ts");
+  const terms = importantTerms({
+    outline: [{ title: "t", objectives: [
+      { id: "o1", recall: "앵커링 효과", kind: "용어", importance: "core" },
+      { id: "o2", recall: "윤리경영", kind: "개념", importance: "core" },
+      { id: "o3", recall: "집단 사고", kind: "용어", importance: "support" },
+      { id: "o4", recall: "3가지 수준(Level)과 각 수준별 2개 단계 씩 총 6개 단계(Stage)", kind: "사실", importance: "core" },
+      { id: "o5", recall: "Intensity", kind: "용어", importance: "core" },
+    ] }],
+    items: [{ objectiveId: "o1", format: "card", answer: "앵커링 효과(Anchoring Effect)" }],
+  });
+  const words = "협상에서 앵커링 효과를 보이고 윤리경영 대신 집단 사고 그리고 Anchoring Effect, Intensity".split(" ");
+  assert.deepEqual(findTerms(words, terms).map(({ start, end }) => words.slice(start, end + 1).join(" ")), ["앵커링 효과를", "윤리경영", "Anchoring Effect,", "Intensity"]);
+});
+
+test("용어 이름 꺼내기: 단서·떠올릴 것에서", async () => {
+  const { termCandidates } = await import("./chunk.ts");
+  assert.ok(termCandidates("준법 경영 (Compliance): 법적 테두리를 지키는 최소한의 도덕").includes("준법 경영 (Compliance)"));
+  assert.ok(termCandidates("기업윤리의 정의").includes("기업윤리"));
+  assert.ok(termCandidates("Shadow-mask methods가 이용하는 색 인지 방식").includes("Shadow-mask methods"));
+  assert.ok(termCandidates("Color Cathode-Ray Tubes의 색 표현").includes("Color Cathode-Ray Tubes"));
+});
