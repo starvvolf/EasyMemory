@@ -1146,7 +1146,9 @@ function highlightRects(entry, quote){
     const it = entry.items[i];
     const tx = pdfjs.Util.transform(entry.vp.transform, it.transform);
     const fh = Math.hypot(tx[2], tx[3]);
-    return { x:tx[4], y:tx[5] - fh * 0.95, w:it.width * entry.vp.scale, h:fh * 1.2 };
+    const segs = entry.layout && entry.layout[i];
+    const x = segs ? segs[0].x0 : tx[4], x1 = segs ? segs[segs.length - 1].x1 : tx[4] + it.width * entry.vp.scale;
+    return { x, y:tx[5] - fh * 0.95, w:x1 - x, h:fh * 1.2 };
   }).filter(r => r.w > 0);
 }
 /* which source passages to mark: an explanation line the reader picked, otherwise this page's goals */
@@ -1174,6 +1176,7 @@ async function paintBox(box, d, pageNo, cssW){
       await page.render({ canvas, canvasContext:canvas.getContext("2d"), viewport:vp }).promise;
       const tc = await page.getTextContent();
       entry = { canvas, vp, items:tc.items.filter(it => typeof it.str === "string") };
+      entry.layout = inkLayout(entry);
       P.canv[ck] = entry;
       const keys = Object.keys(P.canv); if (keys.length > 8) delete P.canv[keys[0]];
     }catch(e){ return; }
@@ -1659,18 +1662,76 @@ async function followNote(d, note, q){
 }
 
 /* the transparent text layer over the canvas: lets the reader drag-select the PDF's own words */
+/* Where each word of a text item really sits on the rendered page. pdf.js reports one width per item, but in some
+   slides (PowerPoint, tight kerning) the drawn line is ~10% narrower than that width, and the invisible text font
+   spaces letters differently from the slide font, so hover boxes and highlights drifted off the words.
+   We read the ink of the item's line from the canvas: when the gaps between ink runs match the item's words,
+   each word gets its own measured box; otherwise the item keeps one box trimmed to where its ink ends. */
+function inkLayout(entry){
+  const ctx = entry.canvas.getContext("2d", { willReadFrequently:true });
+  const W = entry.canvas.width, H = entry.canvas.height;
+  const lines = entry.items.map(it => { const tx = pdfjs.Util.transform(entry.vp.transform, it.transform); return { tx, fh:Math.hypot(tx[2], tx[3]) }; });
+  return entry.items.map((it, i) => {
+    const chars = [...it.str]; const { tx, fh } = lines[i];
+    const w = it.width * entry.vp.scale;
+    if (!chars.length || !it.str.trim() || !fh || !w || Math.abs(tx[1]) > 0.01 || Math.abs(tx[2]) > 0.01) return null;   // rotated: leave as is
+    // Search a little past the reported width, but not into the next item on the same line.
+    let right = tx[4] + w * 1.12;
+    for (let k = i + 1; k < entry.items.length; k++){ const o = lines[k]; if (Math.abs(o.tx[5] - tx[5]) < fh * 0.3 && o.tx[4] > tx[4] + 1){ right = Math.min(right, o.tx[4] - 1); break; } }
+    const x0 = Math.max(0, Math.floor(tx[4] - 1)), x1 = Math.min(W, Math.ceil(right)), y0 = Math.max(0, Math.floor(tx[5] - fh * 0.72)), y1 = Math.min(H, Math.ceil(tx[5] + fh * 0.05));
+    if (x1 - x0 < 2 || y1 - y0 < 2) return null;
+    let data; try{ data = ctx.getImageData(x0, y0, x1 - x0, y1 - y0).data; }catch(e){ return null; }
+    const cw = x1 - x0, ch = y1 - y0;
+    // Background = the corner pixel's colour; ink = anything clearly different from it.
+    const bg = [data[0], data[1], data[2]];
+    const ink = new Uint8Array(cw);
+    for (let x = 0; x < cw; x++) for (let y = 0; y < ch; y++){
+      const o = (y * cw + x) * 4;
+      if (Math.max(Math.abs(data[o] - bg[0]), Math.abs(data[o + 1] - bg[1]), Math.abs(data[o + 2] - bg[2])) > 70){ ink[x] = 1; break; }
+    }
+    const runs = []; let start = -1, gap = 0;
+    const minGap = fh * 0.17;
+    for (let x = 0; x <= cw; x++){
+      if (x < cw && ink[x]){ if (start < 0) start = x; gap = 0; continue; }
+      if (start < 0) continue;
+      gap++;
+      if (gap >= minGap || x === cw){ runs.push([start, x - gap + 1]); start = -1; gap = 0; }
+    }
+    if (!runs.length) return null;
+    const words = [...it.str.matchAll(/\S+/gu)].map(m => { const a = [...it.str.slice(0, m.index)].length; return [a, a + [...m[0]].length]; });
+    if (words.length === runs.length) return words.map(([a, b], k) => ({ a, b, x0:x0 + runs[k][0], x1:x0 + runs[k][1] }));
+    const last = runs[runs.length - 1][1] + x0;
+    return [{ a:0, b:chars.length, x0:tx[4], x1: last > tx[4] + w * 0.5 ? last : tx[4] + w }];
+  });
+}
+/* x of character j (or the end of character j - 1 when `end`) of item i, in canvas pixels */
+function charX(entry, i, j, end){
+  const it = entry.items[i], segs = entry.layout && entry.layout[i];
+  const tx = pdfjs.Util.transform(entry.vp.transform, it.transform);
+  if (!segs){ const len = [...it.str].length || 1; return tx[4] + it.width * entry.vp.scale * j / len; }
+  const seg = segs.find(sg => end ? j > sg.a && j <= sg.b : j >= sg.a && j < sg.b) || (end ? segs[segs.length - 1] : segs[0]);
+  const t = Math.min(1, Math.max(0, (j - seg.a) / Math.max(1, seg.b - seg.a)));
+  return seg.x0 + (seg.x1 - seg.x0) * t;
+}
 function textLayer(entry, cssW){
   const W = entry.canvas.width, H = entry.canvas.height, k = cssW / W;
   const tl = h("div", { class:"tl" });
-  for (const it of entry.items){
-    if (!it.str || !it.str.trim()) continue;
+  entry.items.forEach((it, i) => {
+    if (!it.str || !it.str.trim()) return;
     const tx = pdfjs.Util.transform(entry.vp.transform, it.transform);
-    const fh = Math.hypot(tx[2], tx[3]); if (!fh) continue;
+    const fh = Math.hypot(tx[2], tx[3]); if (!fh) return;
     const angle = Math.atan2(tx[1], tx[0]);
-    const span = h("span", { style:`left:${tx[4] / W * 100}%;top:${(tx[5] - fh * 0.86) / H * 100}%;font-size:${(fh * k).toFixed(2)}px` }, it.str);
-    span._w = it.width * entry.vp.scale * k; span._a = angle;
-    tl.append(span, it.hasEOL ? "\n" : " ");
-  }
+    const segs = entry.layout && entry.layout[i];
+    const chars = [...it.str];
+    // One span per measured word (or per item when words could not be told apart), sized to its ink.
+    const parts = segs ? segs.map(sg => ({ text:chars.slice(sg.a, sg.b).join(""), x:sg.x0, w:sg.x1 - sg.x0 })) : [{ text:it.str, x:tx[4], w:it.width * entry.vp.scale }];
+    parts.forEach((part, k2) => {
+      const span = h("span", { style:`left:${part.x / W * 100}%;top:${(tx[5] - fh * 0.86) / H * 100}%;font-size:${(fh * k).toFixed(2)}px` }, part.text);
+      span._w = part.w * k; span._a = angle;
+      tl.append(span, k2 < parts.length - 1 ? " " : "");
+    });
+    tl.append(it.hasEOL ? "\n" : " ");
+  });
   requestAnimationFrame(() => {
     for (const span of tl.querySelectorAll("span")){
       const w = span.offsetWidth; if (!w) continue;
@@ -1734,10 +1795,11 @@ function phraseRects(entry, quote){
   const byItem = new Map();
   for (const [i, j] of map.slice(at, at + q.length)){ const r = byItem.get(i); byItem.set(i, r ? [Math.min(r[0], j), Math.max(r[1], j)] : [j, j]); }
   return [...byItem].map(([i, [a, b]]) => {
-    const it = entry.items[i], len = [...it.str.normalize("NFKC")].length || 1;
+    const it = entry.items[i];
     const tx = pdfjs.Util.transform(entry.vp.transform, it.transform);
-    const fh = Math.hypot(tx[2], tx[3]), w = it.width * entry.vp.scale;
-    return { x:tx[4] + w * a / len, y:tx[5] - fh * 0.95, w:w * (b + 1 - a) / len, h:fh * 1.2 };
+    const fh = Math.hypot(tx[2], tx[3]);
+    const xa = charX(entry, i, a, false), xb = charX(entry, i, b + 1, true);
+    return { x:xa, y:tx[5] - fh * 0.95, w:xb - xa, h:fh * 1.2 };
   }).filter(r => r.w > 0);
 }
 function noteMarks(d, entry, W, H){
