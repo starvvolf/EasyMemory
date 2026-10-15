@@ -36,3 +36,9 @@ test("글머리표·대시는 단위에 넣지 않는다", () => {
   const lexicon = buildLexicon({ outline: [{ title: "Cathode-Ray Tubes (CRT)", objectives: [] }] });
   assert.deepEqual(pick("• Cathode-Ray Tubes (CRT)", "Tubes", lexicon), ["Cathode-Ray Tubes (CRT)", "term"]);
 });
+
+test("제목 속 핵심 용어: 'X의 … 개요'에서 가운데 용어를 꺼낸다(개요는 문장이 아님)", () => {
+  const lexicon = buildLexicon({ outline: [{ title: "개인의 도덕 발달 단계", objectives: [{ id: "o1", part: "Kohlberg의 인지적 도덕 발달 이론 개요" }] }] });
+  assert.deepEqual(pick("Kohlberg의 인지적 도덕 발달 이론 개요", "도덕", lexicon), ["인지적 도덕 발달 이론", "term"]);
+  assert.deepEqual(pick("이것이 인지적 도덕 발달 이론을 만든 배경", "발달", lexicon), ["인지적 도덕 발달 이론을", "term"]);
+});

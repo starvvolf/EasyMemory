@@ -19,7 +19,8 @@ const stripParticle = (token: string) => {
   return hangul(word) && word.length > 1 ? word.replace(PARTICLE, "") || word : word;
 };
 
-export type Lexicon = { keys: Set<string>; maxWords: number };
+/** Phrase key → rank: 2 for terms (recall, answers, asked phrases, the core of a heading), 1 for whole headings. */
+export type Lexicon = { keys: Map<string, number>; maxWords: number };
 type LexiconDeck = {
   objectives?: Array<{ statement?: string }>;
   outline?: Array<{ title: string; objectives: Array<{ id: string; recall?: string; part?: string; kind?: string }> }>;
@@ -27,33 +28,40 @@ type LexiconDeck = {
 };
 
 /** Short phrases only: a term, a heading, an asked phrase. Sentences and formulas are not units. */
-function phrases(text: string): string[] {
+function phrases(text: string, heading = false): Array<{ text: string; rank: number }> {
   const one = String(text ?? "").replace(/\$[^$]*\$/g, " ").replace(/\s+/g, " ").trim();
-  if (!one || one.length > 48 || /[다요]\.?$/.test(one) || one.split(" ").length > 6) return [];
-  const out = [one];
+  // A sentence ("…한다", "…이에요", "…함.") is not a unit; a noun ending in 요 ("개요") is.
+  if (!one || one.length > 48 || /(다|니다|어요|아요|에요|세요|해요|됨|함)\.?$/.test(one) || one.split(" ").length > 6) return [];
+  const out = [{ text: one, rank: heading ? 1 : 2 }];
+  // Headings carry the core term inside: "Kohlberg의 인지적 도덕 발달 이론 개요" → "인지적 도덕 발달 이론" too.
+  const core = one.replace(/^\S+의\s+/u, "").replace(/\s*(의\s*)?(개요|한계점|한계|종류|정의|특징|방법|구성|구조|예시|예|비교|요약|정리|소개)$/u, "").replace(/^\d+[.)]?\s*/, "").trim();
+  if (core && core !== one && core.split(" ").length >= 2) out.push({ text: core, rank: 2 });
+  const noOwner = one.replace(/\s*(의\s*)?(개요|한계점|한계|종류|정의|특징|방법|구성|예시|요약|정리|소개)$/u, "").trim();
+  if (noOwner && noOwner !== one && noOwner !== core) out.push({ text: noOwner, rank: 1 });
   // "통제 위치(Locus of Control)" → also each side alone.
   const paren = /^(.+?)\s*[(（]([^)）]+)[)）]\s*$/.exec(one);
-  if (paren) out.push(paren[1].trim(), paren[2].trim());
+  if (paren) out.push({ text: paren[1].trim(), rank: out[0].rank }, { text: paren[2].trim(), rank: out[0].rank });
   // "Raster-scan displays: ..." style headings → the part before a colon.
-  if (one.includes(":")) out.push(one.split(":")[0].trim());
-  return out.filter((phrase) => keyOf(phrase).length >= 2);
+  if (one.includes(":")) out.push({ text: one.split(":")[0].trim(), rank: out[0].rank });
+  return out.filter((phrase) => keyOf(phrase.text).length >= 2);
 }
 
 export function buildLexicon(deck: LexiconDeck, extra: string[] = []): Lexicon {
-  const keys = new Set<string>();
+  const keys = new Map<string, number>();
   let maxWords = 1;
-  const add = (text: string) => {
-    for (const phrase of phrases(text)) {
-      const words = phrase.split(/\s+/).length;
-      if (words < 2 && !/[-‐]/.test(phrase) && !hangul(phrase)) continue;   // one plain English word adds nothing
-      keys.add(keyOf(phrase));
+  const add = (text: string, heading = false) => {
+    for (const phrase of phrases(text, heading)) {
+      const words = phrase.text.split(/\s+/).length;
+      if (words < 2 && !/[-‐]/.test(phrase.text) && !hangul(phrase.text)) continue;   // one plain English word adds nothing
+      const key = keyOf(phrase.text);
+      keys.set(key, Math.max(keys.get(key) ?? 0, phrase.rank));
       maxWords = Math.max(maxWords, Math.min(8, words + 1));
     }
   };
   const kinds = new Map<string, string | undefined>();
   for (const section of deck.outline ?? []) {
-    add(section.title);
-    for (const objective of section.objectives) { if (objective.recall) add(objective.recall); if (objective.part) add(objective.part); kinds.set(objective.id, objective.kind); }
+    add(section.title, true);
+    for (const objective of section.objectives) { if (objective.recall) add(objective.recall); if (objective.part) add(objective.part, true); kinds.set(objective.id, objective.kind); }
   }
   for (const item of deck.items ?? []) if (item.format === "card" && kinds.get(item.objectiveId) === "용어") add(String(item.answer ?? ""));
   for (const phrase of extra) add(phrase);
@@ -76,15 +84,15 @@ export function chunkAt(words: string[], index: number, lexicon?: Lexicon): Chun
 function findChunk(words: string[], index: number, lexicon?: Lexicon): Chunk {
   if (index < 0 || index >= words.length) return { start: index, end: index, kind: "word" };
   if (lexicon?.keys.size) {
-    let best: Chunk | null = null;
+    let best: Chunk | null = null, bestRank = 0;
     for (let start = Math.max(0, index - lexicon.maxWords + 1); start <= index; start++) {
       for (let end = index; end < Math.min(words.length, start + lexicon.maxWords); end++) {
         const span = words.slice(start, end + 1);
         const joined = keyOf(span.join(" "));
         const withoutParticle = keyOf([...span.slice(0, -1), stripParticle(span[span.length - 1])].join(" "));
-        if (lexicon.keys.has(joined) || lexicon.keys.has(withoutParticle)) {
-          if (!best || end - start > best.end - best.start) best = { start, end, kind: "term" };
-        }
+        const rank = Math.max(lexicon.keys.get(joined) ?? 0, lexicon.keys.get(withoutParticle) ?? 0);
+        // A term beats a whole heading; among equals, the longer one.
+        if (rank && (!best || rank > bestRank || (rank === bestRank && end - start > best.end - best.start))) { best = { start, end, kind: "term" }; bestRank = rank; }
       }
     }
     if (best && best.end > best.start) return best;
