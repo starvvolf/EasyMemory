@@ -739,3 +739,15 @@
 .dejipgi .pulse{animation:panelpulse 1.1s ease-out 2}
 @keyframes panelpulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
 @media (prefers-reduced-motion:reduce){.dejipgi .rpane{transform:none}.dejipgi .pulse,.dejipgi .ex-wait,.dejipgi .ex-body.streaming::after{animation:none}}
+/* 질문 칩: questions for this page (✦ = the model's own follow-up), ✎ to edit first, one action at the end */
+.dejipgi .chat-sugs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.dejipgi .chat-sugs:empty{display:none}
+.dejipgi .sug{display:inline-flex;align-items:stretch;max-width:100%}
+.dejipgi .sug .chip-btn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:0;text-align:left;min-width:0}
+.dejipgi .sug-edit{border:1px solid var(--line-strong);border-left:1px dashed var(--line-strong);background:var(--surface);color:var(--faint);font:inherit;font-size:12px;
+  padding:0 8px;border-radius:0 999px 999px 0;cursor:pointer}
+.dejipgi .sug-edit:hover{color:var(--ink);background:var(--surface-2)}
+.dejipgi .sug.ai .chip-btn{border-color:color-mix(in srgb,var(--ask) 40%,var(--line));background:var(--ask-soft)}
+.dejipgi .sug.ai .sug-edit{border-color:color-mix(in srgb,var(--ask) 40%,var(--line))}
+.dejipgi .sug-ai{color:var(--ask);margin-right:4px;font-size:11px}
+.dejipgi .chip-btn.act{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}

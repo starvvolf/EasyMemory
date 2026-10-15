@@ -1224,6 +1224,7 @@ function termMarks(d, tl){
     }
   }
   pageTermsFound(d, found);
+  if (Chat.el && !Chat.busy) Chat.paintSugs();
   return out;
 }
 async function drawPage(){
@@ -1541,6 +1542,64 @@ function statePane(d, n){
       plan.queue.length && !S.session ? h("button", { class:"btn small", style:"margin-top:6px", onclick: () => startToday() }, "오늘 할 것 이어서") : null) : null,
   ];
 }
+/* ----- 질문 칩: what to ask or do next on this page. Built from the page's own data (free, instant): my weak goal,
+   a pair of look-alike terms, a core term, a formula, the exam angle; plus the model's own follow-ups, which ride
+   on the explanation/answer it was writing anyway ("[다음] q1 | q2", hidden from the text). One action closes it. ----- */
+const clip = (t, n) => { t = String(t ?? "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
+const NEXT_RULE = `- 답 맨 끝에 줄을 바꿔 "[다음] 질문1 | 질문2" 형식으로, 학습자가 이 쪽에 대해 이어서 물어볼 만한 짧은 질문 2개(각 25자 이내)를 적는다. "더 자세히 알려 줘" 같은 뻔한 질문은 쓰지 않는다.`;
+function splitNext(text){
+  text = String(text || "");
+  const m = text.match(/(?:^|\n)[ \t]*\[다음\][ \t]*([^\n]*)\s*$/);
+  if (!m) return { body:text.replace(/\n[ \t]*\[[^\]\n]{0,3}$/, ""), next:[] };   // hide a half-written tag while streaming
+  const next = m[1].split(/\s*[|｜]\s*/).map(q => q.trim().replace(/^["'“‘]+|["'”’]+$/g, ""))
+    .filter(q => q.length >= 4 && q.length <= 40 && !/자세히|더 알려|더 설명/.test(q)).slice(0, 2);
+  return { body:text.slice(0, m.index).trimEnd(), next };
+}
+const shown = (text) => splitNext(text).body;
+function objKind(d, id){ for (const sec of d.outline || []) for (const o of sec.objectives) if (o.id === id) return o.kind || ""; return ""; }
+function objName(d, o){
+  const card = d.items.find(it => it.objectiveId === o.id && it.format === "card" && typeof it.answer === "string" && it.answer.trim().length <= 18 && !it.answer.includes("$"));
+  if (card) return card.answer.trim();
+  // "동차좌표 평행이동 행렬을 쓸 수 있다" → "동차좌표 평행이동 행렬"
+  const name = String(o.statement).replace(/[을를]?\s+\S*(할|쓸|그릴|읽을|풀)\s*수\s*있다\.?\s*$/, "").replace(/[?？]\s*$/, "");
+  return clip(name || o.statement, 20);
+}
+function confusablePair(d, items){
+  if (!env.quality || !env.quality.termChoice) return null;
+  for (const it of items){
+    if (it.format !== "card") continue;
+    let r = null; try{ r = env.quality.termChoice({ items:d.allItems || d.items, outline:d.outline }, it.id, "pair"); }catch(e){}
+    if (!r) continue;
+    const a = r.options[r.answer], b = r.options.find((x, i) => i !== r.answer);
+    if (a && b && a.length <= 18 && b.length <= 18) return [a, b];
+  }
+  return null;
+}
+function pageSuggestions(c){
+  const { d, page } = c, R = S.reader, out = [], seen = new Set();
+  for (const m of Chat.msgs) if (m.role === "user") seen.add(phraseKey(m.content));   // never offer what was just asked
+  const add = (label, why) => { const k = phraseKey(label); if (!label || seen.has(k)) return; seen.add(k); out.push({ label, why }); };
+  const items = itemsOnPage(d, page);
+  const weak = c.objs.find(o => objectiveState(d, o.id) === "weak");
+  if (weak) add(`내가 틀린 ‘${objName(d, weak)}’ 다시 짚어 줘`, "내 약점");
+  const lastA = [...Chat.msgs].reverse().find(m => m.role === "assistant");
+  const ai = lastA && lastA.page === page && lastA.next && lastA.next.length ? lastA.next : Explain.next(d, page);
+  for (const q of ai) add(q, "AI 제안");
+  const pair = confusablePair(d, items);
+  if (pair) add(`‘${pair[0]}’랑 ‘${pair[1]}’ 뭐가 달라?`, "헷갈리는 짝");
+  const terms = R.terms.key === d.id + ":" + page ? R.terms.list : [];
+  if (terms[0]) add(`‘${clip(terms[0], 18)}’ 쉽게 말하면 뭐야?`, "핵심 용어");
+  if (c.objs.some(o => objKind(d, o.id) === "공식")) add("이 식에 숫자 넣어서 한 번 보여 줘", "공식");
+  if (c.objs.length) add("시험엔 이 쪽이 어떻게 나와?", "시험 기준");
+  return out;
+}
+function pageAction(c){
+  if (S.session) return { label:"연습으로 돌아가기", run: () => setView("practice") };
+  const n = itemsOnPage(c.d, c.page).length;
+  if (n) return { label:`✓ 이 쪽 문제 바로 풀기 (${n})`, run: () => startCheck(c.d.id, c.page) };
+  const nxt = nextPageWithItems(c.d, c.page);
+  return nxt ? { label:`문제 있는 다음 쪽 · p.${nxt} →`, run: () => goPage(nxt) } : null;
+}
 /* 쪽마다 쉬운 설명: after 1.5s on a page with enough text, once per page; kept (study-notes/<source>.explain.json)
    so it shows instantly next time. It is not a 모르는 것 note, so it never counts as "물어봄". */
 const Explain = {
@@ -1577,7 +1636,7 @@ const Explain = {
     this.paintNode();
     const prompt = Chat.prompt({ d, page, objs }, text) + `
 [요청]
-이 쪽을 처음 보는 사람에게 쉽게 설명해 줘. 첫 문장은 이 쪽이 무엇에 대한 것인지, 이어서 핵심을 2~4문장으로. 어려운 용어는 원문 그대로 쓰고 바로 뒤 괄호에 쉬운 풀이를 붙인다. 마지막 줄은 "한 줄 요약: "으로 시작한다.`;
+이 쪽을 처음 보는 사람에게 쉽게 설명해 줘. 첫 문장은 이 쪽이 무엇에 대한 것인지, 이어서 핵심을 2~4문장으로. 어려운 용어는 원문 그대로 쓰고 바로 뒤 괄호에 쉬운 풀이를 붙인다. 이어서 "한 줄 요약: "으로 시작하는 줄을 쓰고, 그 다음 줄에 [다음] 줄을 쓴다.`;
     try{
       await ask([{ role:"user", content:prompt }], { signal:run.ctl.signal, onText: ({ text:t }) => { run.text = t; this.paintBody(); } });
       if (this.run !== run) return;
@@ -1603,8 +1662,8 @@ const Explain = {
       ask ? h("label", { class:"ex-auto", title:"쪽을 넘기고 1.5초 머무르면 자동으로 설명해요. 쪽마다 한 번만 만들고 저장해 둬요." }, auto, "자동") : null);
     const again = (label) => h("button", { class:"chip-btn", onclick: () => { this.skip.delete(key); this.go(d, page, true); } }, label);
     let body;
-    if (saved) body = h("div", { class:"ex-body", id:"explainBody" }, richLines(saved));
-    else if (run) body = h("div", { class:"ex-body streaming", id:"explainBody" }, richLines(run.text || "쉬운 설명을 쓰는 중…"));
+    if (saved) body = h("div", { class:"ex-body", id:"explainBody" }, richLines(shown(saved)));
+    else if (run) body = h("div", { class:"ex-body streaming", id:"explainBody" }, richLines(shown(run.text) || "쉬운 설명을 쓰는 중…"));
     else if (!ask) body = h("p", { class:"small muted", text:"질문 답변이 연결되면 쪽마다 쉬운 설명이 여기 바로 떠요." });
     else if (this.err && this.err.key === key) body = h("div", null, h("p", { class:"check", text:this.err.text }), again("다시 설명 받기"));
     else if (this.skip.has(key)) body = h("div", null, h("p", { class:"small muted", text:"글자가 거의 없는 쪽이라 자동 설명은 건너뛰었어요." }), again("그래도 설명 보기"));
@@ -1612,8 +1671,9 @@ const Explain = {
     else body = h("p", { class:"small muted ex-wait", text: e && e.status === "loading" ? "저장된 설명을 불러오는 중…" : "잠깐 머무르면 쉬운 설명이 떠요…" });
     return h("div", { class:"explain", id:"explainCard" }, head, body);
   },
-  paintNode(){ const el = document.getElementById("explainCard"), R = S.reader, d = S.decks[R.deckId]; if (el && d) el.replaceWith(this.node(d, R.page)); },
-  paintBody(){ const b = document.getElementById("explainBody"); if (b && this.run) b.replaceChildren(...richLines(this.run.text || "…")); else this.paintNode(); },
+  next(d, page){ const e = this.src[this.sid(d)], t = e && e.map.get(page); return t ? splitNext(t).next : []; },
+  paintNode(){ const el = document.getElementById("explainCard"), R = S.reader, d = S.decks[R.deckId]; if (el && d) el.replaceWith(this.node(d, R.page)); if (Chat.el && !Chat.busy) Chat.paintSugs(); },
+  paintBody(){ const b = document.getElementById("explainBody"); if (b && this.run) b.replaceChildren(...richLines(shown(this.run.text) || "…")); else this.paintNode(); },
 };
 /* ----- floating question window: lives outside #app so re-renders never reset it.
    Answers need a paid model call, so `ask` stays unset until the user approves wiring it. ----- */
@@ -1752,23 +1812,39 @@ const Chat = {
     const nodes = [];
     if (this.fromNote) nodes.push(h("p", { class:"chat-hint", style:"text-align:center", text:`‘${this.fromNote}’ 카드에서 이어진 대화예요. 여기 대화도 그 카드에 저장돼요.` }));
     if (this.docked && c) nodes.push(Explain.node(c.d, c.page));
-    if (!this.msgs.length){
-      nodes.push(h("p", { class:"chat-hint", text: this.docked ? "더 궁금한 건 바로 물어보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." : "지금 보는 쪽을 근거로 답해요. 바로 물어보거나 아래에서 골라 보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." }));
-      nodes.push(h("div", { class:"chat-sugs" }, (this.docked ? ["핵심만 한 줄로 알려 줘", "원문 줄마다 쉬운 말로 풀어 줘", "예시 숫자로 한 번 보여 줘"] : ["이 쪽 쉽게 설명해 줘", "핵심만 한 줄로 알려 줘", "원문 줄마다 쉬운 말로 풀어 줘", "예시 숫자로 한 번 보여 줘"]).map(q =>
-        h("button", { class:"chip-btn", onclick: () => { this.el.querySelector("textarea").value = q; this.send(); } }, q))));
-    }
+    if (!this.msgs.length)
+      nodes.push(h("p", { class:"chat-hint", text: this.docked ? "더 궁금한 건 바로 물어보거나 아래에서 골라 보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." : "지금 보는 쪽을 근거로 답해요. 바로 물어보거나 아래에서 골라 보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." }));
     for (const m of this.msgs){
       nodes.push(h("div", { class:"bubble " + m.role },
-        m.page ? h("span", { class:"bpage", text:`p.${m.page}` }) : null,
+        m.page && m.role === "user" ? h("span", { class:"bpage", text:`p.${m.page}` }) : null,
         m.quote ? h("div", { class:"qchip", text:`“${m.quote}”` }) : null,
-        h("div", { class:"btext" }, m.role === "assistant" ? richLines(m.content || "…") : m.content)));
+        h("div", { class:"btext" }, m.role === "assistant" ? richLines(shown(m.content) || "…") : m.content)));
     }
     if (this.err) nodes.push(h("p", { class:"check", text:this.err }));
+    nodes.push(this.sugs(c));
     log.replaceChildren(...nodes);
     log.scrollTop = log.scrollHeight;
     const send = this.el.querySelector("#chatSend");
     send.textContent = this.busy ? "멈추기" : "보내기";
     send.onclick = () => this.busy ? (this.ctl && this.ctl.abort()) : this.send();
+  },
+  /* 질문 칩: up to 2–3 questions for this page (✎ puts one in the box to edit) and one next action */
+  sugs(c){
+    const box = h("div", { class:"chat-sugs", id:"chatSugs" });
+    if (!c || this.busy) return box;
+    const act = pageAction(c), qs = pageSuggestions(c).slice(0, act ? 2 : 3);
+    if (!qs.length && !this.msgs.length) qs.push({ label:"이 쪽 쉽게 설명해 줘", why:"" });
+    for (const q of qs) box.append(h("span", { class:"sug" + (q.why === "AI 제안" ? " ai" : "") },
+      h("button", { class:"chip-btn", title:q.why ? `${q.why} · 누르면 바로 물어봐요` : null, onclick: () => { this.el.querySelector("textarea").value = q.label; this.send(); } },
+        q.why === "AI 제안" ? h("span", { class:"sug-ai", "aria-label":"AI 제안", text:"✦" }) : null, q.label),
+      h("button", { class:"sug-edit", title:"입력창에 넣고 고쳐 쓰기", "aria-label":"고쳐서 묻기", onclick: () => { const ta = this.el.querySelector("textarea"); ta.value = q.label; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, "✎")));
+    if (act) box.append(h("button", { class:"chip-btn act", onclick: act.run }, act.label));
+    return box;
+  },
+  paintSugs(){
+    const old = this.el && this.el.querySelector("#chatSugs"); if (!old) return;
+    const log = this.el.querySelector("#chatLog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    old.replaceWith(this.sugs(this.context())); if (atEnd) log.scrollTop = log.scrollHeight;
   },
   prompt(c, text){
     text = String(text || "").slice(0, 6000);
@@ -1780,6 +1856,7 @@ const Chat = {
 - 원문의 기호와 용어는 바꾸지 않는다. 기준점, 방향, 부호, 단위, 조건을 빠뜨리지 않는다. 식은 $...$ 안에 LaTeX로 쓴다.
 - 질문이 이 쪽과 무관하면 짧게 답하고, 이 쪽과 어떻게 이어지는지 한 문장 덧붙인다.
 - 마크다운 기호(#, *, **, -)는 쓰지 않고 평문으로 쓴다. 단계는 "1)" "2)"처럼 적는다.
+${NEXT_RULE}
 
 [자료] ${c.d.title}
 [지금 보는 쪽 p.${c.page}]
@@ -1814,7 +1891,7 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
   },
   async saveTalk(c){
     if (!notesOn(c.d)) return;
-    const turns = this.msgs.slice(this.base).filter(m => m.content).map(m => ({ role:m.role, text:m.content, quote:m.quote || null, page:m.page }));
+    const turns = this.msgs.slice(this.base).filter(m => m.content).map(m => ({ role:m.role, text:m.content, quote:m.quote || null, page: m.role === "user" ? m.page : undefined }));
     if (!turns.some(t => t.role === "assistant")) return;
     try{
       const note = await notesApi.talk({ sourceId:c.d.sourceCatalogId, page:c.page, noteId:this.noteId, turns });
@@ -1835,16 +1912,17 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
     if (this.noteId && this.noteSource !== c.d.sourceCatalogId) this.reset(true);   // another material: a new conversation
     this.msgs.push({ role:"user", content:q, page:c.page, quote:this.quote });
     this.quote = null;
-    const reply = { role:"assistant", content:"" }; this.msgs.push(reply);
+    const reply = { role:"assistant", content:"", page:c.page }; this.msgs.push(reply);
     this.busy = true; this.ctl = new AbortController(); this.paint();
     const history = this.msgs.slice(0, -1).slice(-12).map(m => ({ role:m.role, content: m.role === "user" ? `${m.page ? `(p.${m.page}를 보며) ` : ""}${m.quote ? `[원문 인용] “${m.quote}”\n` : ""}${m.content}` : m.content })).filter(m => m.content);
     const turns = [{ role:"user", content:this.prompt(c, await pageText(c.d, c.page)) }, ...history];
     try{
-      await ask(turns, { signal:this.ctl.signal, onText: ({ text }) => { reply.content = text; const last = this.el.querySelector("#chatLog .bubble.assistant:last-of-type .btext"); if (last) last.replaceChildren(...richLines(text)); } });
+      await ask(turns, { signal:this.ctl.signal, onText: ({ text }) => { reply.content = text; const last = this.el.querySelector("#chatLog .bubble.assistant:last-of-type .btext"); if (last) last.replaceChildren(...richLines(shown(text))); } });
+      const sp = splitNext(reply.content); reply.content = sp.body; reply.next = sp.next;
       if (JSON.stringify(reply.content).includes("$") && !katexLib){ await ensureKatex(); }
       this.saveTalk(c);
     }catch(e){
-      if (e && e.text) reply.content = e.text;
+      if (e && e.text) reply.content = shown(e.text);
       if (!(e && e.code === "cancelled")) this.err = sampleErrorCopy(e);
       if (!reply.content) this.msgs.pop();
     }finally{ this.busy = false; this.ctl = null; this.paint(); }
