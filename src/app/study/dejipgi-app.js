@@ -1820,7 +1820,18 @@ function unitAt(e){
   const tl = e.target.closest && e.target.closest(".tl"); if (!tl || !tl._tokens || !tl._tokens.length) return null;
   const box = tl.getBoundingClientRect(), sx = box.width / tl._W, sy = box.height / tl._H;
   const px = (e.clientX - box.left) / sx, py = (e.clientY - box.top) / sy;
-  const hit = tl._tokens.find(t => px >= t.x0 - 1 && px <= t.x1 + 1 && py >= t.y0 && py <= t.y1);
+  // The word whose box is nearest to the pointer on that line, so small moves in the gaps between words, or just
+  // above or below the letters, keep the same unit instead of falling back to the old single-word guess.
+  let hit = null, best = Infinity;
+  for (const t of tl._tokens){
+    const pad = t.fh * 0.25;
+    if (py < t.y0 - pad || py > t.y1 + pad) continue;
+    const dx = px < t.x0 ? t.x0 - px : px > t.x1 ? px - t.x1 : 0;
+    if (dx > t.fh * 0.6) continue;
+    const dy = py < t.y0 ? t.y0 - py : py > t.y1 ? py - t.y1 : 0;
+    const d = dx + dy * 2;
+    if (d < best){ best = d; hit = t; }
+  }
   if (!hit) return null;
   const words = hit.line.map(n => tl._tokens[n].text);
   const c = e.altKey || !env.chunk ? { start:hit.pos, end:hit.pos, kind:"word" } : env.chunk.at(words, hit.pos, readerLexicon());
@@ -1835,7 +1846,9 @@ on(root, "mousemove", (e) => {
   const sel = window.getSelection();
   if (e.buttons || sel && !sel.isCollapsed || !e.target.closest(".tl")) return;
   const unit = unitAt(e);
-  const word = unit || pdfWordAtPoint(e.clientX, e.clientY); if (!word) return;
+  // Pages with measured words use only those; the caret guess is for pages without them (rotated text and the like).
+  const tlNow = e.target.closest(".tl");
+  const word = unit || (tlNow && tlNow._tokens && tlNow._tokens.length ? null : pdfWordAtPoint(e.clientX, e.clientY)); if (!word) return;
   const r = word.rect;
   wordHover = h("div", { class:`pdf-word-hover${unit && unit.kind === "term" ? " term" : ""}`, "aria-hidden":"true", title: unit && unit.kind === "term" ? "이 자료의 용어" : null,
     style:`left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px` });
@@ -1849,7 +1862,8 @@ on(root, "mouseup", (e) => {
   const press = wordPress; wordPress = null;
   const sel = window.getSelection();
   if (!press || !sel || !sel.isCollapsed || Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) return;
-  const word = unitAt(e) || pdfWordAtPoint(e.clientX, e.clientY); if (!word) return;
+  const tlNow = e.target.closest && e.target.closest(".tl");
+  const word = unitAt(e) || (tlNow && tlNow._tokens && tlNow._tokens.length ? null : pdfWordAtPoint(e.clientX, e.clientY)); if (!word) return;
   sel.removeAllRanges(); sel.addRange(word.range); // Existing selection menu handles the click, not a model call.
 });
 on(root, "mouseleave", clearWordHover);
