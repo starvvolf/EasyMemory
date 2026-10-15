@@ -523,6 +523,7 @@ function touchMemory(subject){
 
 /* ---------- views ---------- */
 function setView(v){
+  if (S.session && S.session.overlay && v !== "read") S.session = null;
   S.view = v;
   if (v !== "read" && Chat.isOpen() && typeof Chat !== "undefined"){ if (Chat.ctl) Chat.ctl.abort(); Chat.el.hidden = true; }
   if (v !== "read" && typeof Chat !== "undefined" && Chat.docked){ Chat.undock(); Explain.stop(); }
@@ -547,6 +548,12 @@ function render(){
   else if (S.view === "read") {
     const typing = Chat.el && Chat.el.contains(document.activeElement);
     app.append(renderReader()); dockChat(typing); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer();
+    if (overlayCheck()){
+      app.append(h("div", { class:"checklayer", role:"dialog", "aria-modal":"true", "aria-label":`p.${S.session.page} 확인 문제`,
+        onclick: (e) => { if (e.target === e.currentTarget) closeCheck(); } }, h("div", { class:"checkbox" }, renderSession())));
+      const f = app.querySelector(".checklayer [data-autofocus]");
+      if (f && !f.disabled && !app.querySelector(".checklayer").contains(document.activeElement)) f.focus({ preventScroll:true });
+    }
   }
   else if (S.view === "summary") app.append(renderSummary());
   else app.append(renderRecords());
@@ -751,8 +758,11 @@ function startCheck(deckId, page){
   const d = S.decks[deckId];
   const items = itemsOnPage(d, page);
   if (!items.length){ toast("이 쪽에 연결된 문제가 없어요."); return; }
-  S.session = { queue: items.map(it => ({ deck:d.id, item:it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"check", page, viewed:new Set() };
-  prepCurrent(); setView("practice");
+  // From the reader the check opens over the page (blurred so the answer can't be read off it) and closes back to it.
+  const overlay = S.view === "read";
+  S.session = { queue: items.map(it => ({ deck:d.id, item:it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"check", page, viewed:new Set(), overlay };
+  prepCurrent();
+  if (overlay){ render(); const f = document.querySelector(".checklayer [data-autofocus]"); if (f) f.focus({ preventScroll:true }); } else setView("practice");
 }
 function assistedNow(deck, item){ return S.session.assisted.has(deck.id + ":" + item.id) || S.session.viewed.has(deck.id + ":" + item.page); }
 function applyCheck(deck, item){
@@ -899,11 +909,20 @@ function renderStem(deck, item){
   }
   return wrap;
 }
+/* 쪽 확인 겹창: closing returns to the same page; the side panel then shows what changed (목표 tab peek). */
+const overlayCheck = () => !!(S.session && S.session.overlay);
+function closeCheck(){
+  const s = S.session; if (!s || !s.overlay) return;
+  const r = s.results, good = r.filter(x => x.outcome === "correct").length;
+  S.session = null; render();
+  if (r.length) toast(`p.${s.page} 확인 ${r.length}문제 · 맞힘 ${good}${r.length - good ? ` · 다시 볼 것 ${r.length - good}` : ""}`);
+}
 function nextItem(){
   S.session.i++; S.session.phase = "ask";
   if (S.session.i >= S.session.queue.length){
     S.session.phase = "done";
     for (const name of new Set(S.session.queue.map(q => S.decks[q.deck] ? subjectOf(S.decks[q.deck]) : ""))) if (name) touchMemory(name);
+    if (S.session.overlay){ closeCheck(); return; }
   }
   else prepCurrent();
   render();
@@ -917,7 +936,8 @@ function renderSession(){
   const obj = deck.objectives.find(o => o.id === item.objectiveId);
   const total = s.queue.length;
   const top = h("div", { class:"session-top" },
-    h("button", { class:"btn ghost small", onclick: () => { S.session = null; render(); } }, "그만하기"),
+    s.overlay ? h("button", { class:"btn ghost small", title:"닫고 이 쪽으로 (Esc) · 푼 것까지는 기록돼요", onclick: closeCheck }, `✕ p.${s.page}로`)
+      : h("button", { class:"btn ghost small", onclick: () => { S.session = null; render(); } }, "그만하기"),
     h("div", { class:"progress", "aria-hidden":"true" }, h("i", { style:`width:${(s.i / total * 100).toFixed(1)}%` })),
     h("span", { class:"mono num muted", text:`${s.i + 1} / ${total}` })
   );
@@ -930,7 +950,7 @@ function renderSession(){
     s.mode === "weak" ? h("span", { class:"chip bad", text:"약점 다시 풀기" }) : null,
     s.queue[s.i].reason && REASON[s.queue[s.i].reason] ? h("span", { class:`chip ${REASON[s.queue[s.i].reason][1]}`, text:REASON[s.queue[s.i].reason][0] }) : null,
     s.queue[s.i].retry ? h("span", { class:"chip help", text:"다시 확인" }) : null,
-    h("span", { class:"chip", text:deck.title })
+    s.overlay ? null : h("span", { class:"chip", text:deck.title })
   ));
   card.append(renderStem(deck, item));
 
@@ -995,7 +1015,7 @@ function renderSession(){
       if (item.explanation) rv.append(h("div", null, h("dt", { text:"설명" }), h("dd", null, richText(item.explanation))));
       if (obj) rv.append(h("div", null, h("dt", { text:"학습목표" }), h("dd", { text:obj.statement })));
       rv.append(h("div", null, h("dt", { text:`원문 근거 · p.${item.page}` }), h("dd", null, h("mark", { class:"quote", text:item.quote || "기록된 인용 없음" }), item.quoteVerified === false ? h("span", { class:"chip help", style:"margin-left:6px", text:"원문과 일치 확인 안 됨" }) : null,
-        h("div", { style:"margin-top:8px" }, h("button", { class:"btn small", onclick: () => openReader(deck.id, item.page, item.objectiveId) }, "원문에서 보기 →")))));
+        h("div", { style:"margin-top:8px" }, h("button", { class:"btn small", onclick: () => { if (s.overlay){ const pg = item.page, oid = item.objectiveId; closeCheck(); S.reader.active = oid; if (S.reader.page !== pg) goPage(pg); else render(); } else openReader(deck.id, item.page, item.objectiveId); } }, s.overlay ? "원문에서 다시 보기" : "원문에서 보기 →")))));
     }
     card.append(rv);
     if (s.phase === "result"){ const fix = quickFix(deck, item, c); if (fix) card.append(fix); card.append(itemFeedback(deck, item, c)); card.append(renderReport(deck, item, c)); }
@@ -1071,9 +1091,10 @@ function fmtWhen(t){
   return `${Math.round(d / DAY)}일 뒤`;
 }
 on(document, "keydown", (e) => {
-  if (S.view !== "practice" || !S.session || e.isComposing) return;
+  if (!S.session || e.isComposing || !(S.view === "practice" || (S.view === "read" && S.session.overlay))) return;
   const tag = (e.target.tagName || "").toLowerCase();
   const s = S.session;
+  if (e.key === "Escape" && s.overlay){ e.preventDefault(); closeCheck(); return; }
   if (e.key === "Enter" && tag !== "textarea" && tag !== "input" && tag !== "button"){
     e.preventDefault();
     if (s.phase === "result") nextItem();
@@ -1096,6 +1117,7 @@ function pageTotal(d){ const P = S.pdf[d.id]; return P && P.doc ? P.doc.numPages
 function resetExplain(){}
 function openReader(deckId, page, objId){
   const R = S.reader;
+  if (S.session && S.session.overlay) S.session = null;
   resetExplain();
   R.deckId = deckId; R.page = page || 1; R.active = objId || null; R.zoom = false; R.attachErr = "";
   rememberPage();
@@ -1103,6 +1125,7 @@ function openReader(deckId, page, objId){
 }
 function goPage(n){
   const R = S.reader, d = S.decks[R.deckId]; if (!d) return;
+  if (overlayCheck()) S.session = null;
   n = Math.max(1, Math.min(pageTotal(d), Math.round(n) || 1));
   if (n === R.page){ render(); return; }
   resetExplain(); R.page = n; R.active = null; R.zoom = false; rememberPage(); render();
@@ -1343,7 +1366,7 @@ function renderReader(){
   const d = S.decks[R.deckId]; ensurePdf(d); loadNotes(d);
   const P = S.pdf[d.id]; const total = pageTotal(d);
   R.page = Math.max(1, Math.min(total, R.page));
-  if (S.session) S.session.viewed.add(d.id + ":" + R.page);
+  if (S.session && !S.session.overlay) S.session.viewed.add(d.id + ":" + R.page);
   const pdfOn = P && (P.status === "ready" || P.status === "loading");
   const wide = pdfOn && pageAspect(d) > 1.15;          // slides: explanation goes below, not beside
   const objs = d.objectives.filter(o => o.pages.includes(R.page) && !(d.hidden || []).includes(o.id));
@@ -1351,7 +1374,7 @@ function renderReader(){
   const nxt = nextPageWithItems(d, R.page);
   const wrap = h("div");
 
-  if (S.session) wrap.append(h("div", { class:"banner", role:"status" },
+  if (S.session && !S.session.overlay) wrap.append(h("div", { class:"banner", role:"status" },
     h("span", { text:"연습 중이에요. 여기서 본 쪽의 문제는 이번 연습에서 ‘정답 보고 풂’으로 기록돼요." }),
     h("button", { class:"btn small", onclick: () => setView("practice") }, "연습으로 돌아가기")));
 
@@ -1412,13 +1435,13 @@ function renderReader(){
     h("span", { class:"where" }, h("b", { text:`p.${R.page}` }), objs.length ? ` · 익힐 것 ${objs.length}` : " · 연결된 목표 없음",
       notesOn(d) && pdfOn ? h("span", { class:"nhint", text:" · 모르는 건 원문을 드래그해 물어보세요" }) : null),
     wide && dockWanted() ? null : h("button", { class:"btn", "aria-pressed": Chat.isOpen() ? "true" : "false", onclick: () => Chat.toggle() }, Chat.isOpen() ? "질문 창 닫기" : "질문하기"),
-    S.session ? h("button", { class:"btn primary", onclick: () => setView("practice") }, "연습으로 돌아가기")
+    S.session && !S.session.overlay ? h("button", { class:"btn primary", onclick: () => setView("practice") }, "연습으로 돌아가기")
       : n ? h("button", { class:"btn primary", title:"읽은 직후 푼 결과는 기억 기록으로 세지 않고, 내일부터 복습에 넣어요.", onclick: () => startCheck(d.id, R.page) }, `이 쪽 문제 풀기 (${n})`)
       : nxt ? h("button", { class:"btn", onclick: () => goPage(nxt) }, `문제 있는 다음 쪽 · p.${nxt} →`) : null));
   return wrap;
 }
 on(document, "keydown", (e) => {
-  if (S.view !== "read" || e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (S.view !== "read" || overlayCheck() || e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return;
   const tag = (e.target.tagName || "").toLowerCase();
   if (tag === "input" || tag === "textarea" || tag === "select") return;
   if (e.key === "Escape" && S.reader.zoom){ S.reader.zoom = false; render(); return; }
@@ -1594,7 +1617,7 @@ function pageSuggestions(c){
   return out;
 }
 function pageAction(c){
-  if (S.session) return { label:"연습으로 돌아가기", run: () => setView("practice") };
+  if (S.session && !S.session.overlay) return { label:"연습으로 돌아가기", run: () => setView("practice") };
   const n = itemsOnPage(c.d, c.page).length;
   if (n) return { label:`✓ 이 쪽 문제 바로 풀기 (${n})`, run: () => startCheck(c.d.id, c.page) };
   const nxt = nextPageWithItems(c.d, c.page);

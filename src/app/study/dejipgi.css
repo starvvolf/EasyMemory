@@ -776,3 +776,12 @@
 .dejipgi .tdot{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;font-weight:700;line-height:1}
 .dejipgi .tdot:empty{min-width:10px;width:10px;height:10px;padding:0;vertical-align:middle}
 .dejipgi .tweak{font-size:11px;font-weight:700;color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);border-radius:999px;padding:1px 6px}
+/* 쪽 확인 겹창: the page stays behind, blurred so the answer can't be read off it */
+.dejipgi .checklayer{position:fixed;inset:0;z-index:30;display:grid;place-items:start center;overflow:auto;padding:min(7vh,64px) 16px 24px;
+  background:color-mix(in srgb,var(--ground) 62%,transparent);backdrop-filter:blur(14px) saturate(.8);-webkit-backdrop-filter:blur(14px) saturate(.8);animation:checkin .2s ease-out}
+.dejipgi .checkbox{width:min(760px,100%);display:flex;flex-direction:column;gap:10px;animation:checkup .24s ease-out}
+.dejipgi .checkbox .session-top{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px 10px;box-shadow:var(--shadow)}
+.dejipgi .checkbox .qcard{box-shadow:0 20px 50px rgb(0 0 0 / .14),var(--shadow)}
+@keyframes checkin{from{opacity:0}}
+@keyframes checkup{from{opacity:0;transform:translateY(14px) scale(.985)}}
+@media (prefers-reduced-motion:reduce){.dejipgi .checklayer,.dejipgi .checkbox{animation:none}}
