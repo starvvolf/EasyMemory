@@ -1933,7 +1933,7 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
 const notesApi = env.notes || null;
 const NOTE_WEAK = 3;
 const NOTE_KIND = { term:["용어","k-term"], procedure:["절차","k-proc"], concept:["개념","k-concept"], talk:["대화","k-talk"] };
-const NT = { src:{}, open:null, asking:null, anchor:null, again:false, err:null, busy:false, drawer:false, filter:"all" };
+const NT = { src:{}, open:null, asking:null, anchor:null, again:false, err:null, busy:false, drawer:false, filter:"all", tab:"notes" };
 function agoText(iso){
   const d = now() - Date.parse(iso);
   if (!(d >= 0)) return "방금";
@@ -2380,6 +2380,42 @@ function notesButton(d){
   const n = noteList(d).length;
   return h("button", { class:"btn small", "data-notes-toggle":"", "aria-pressed": NT.drawer ? "true" : "false", onclick: () => { NT.drawer = !NT.drawer; paintDrawer(); } }, "모르는 것", n ? h("span", { class:"ncount", text:String(n) }) : null);
 }
+/* 목차 (서랍의 두 번째 탭): the material's own AI outline from generation — unit → part → goal — with where I got stuck.
+   Red dot = 모르는 것 notes on those pages; "틀림" = a weak goal. Old-flow materials (no outline) list goals by page. */
+function tocList(d){
+  const R = S.reader, notes = noteList(d), hidden = new Set(d.hidden || []);
+  const notesIn = (pages) => { const set = new Set(pages); return notes.filter(n => set.has(n.page)).length; };
+  const dot = (n, weak) => h("span", { class:"tmarks" }, weak ? h("span", { class:"tweak", text:"틀림" }) : null,
+    n ? h("span", { class:"tdot", title:`모르는 것 ${n}개`, text:String(n) }) : null);
+  const span = (pages) => pages.length ? (pages.length > 1 && pages.at(-1) !== pages[0] ? `p.${pages[0]}–${pages.at(-1)}` : `p.${pages[0]}`) : "";
+  const here = (pages) => pages.includes(R.page);
+  const goal = (o) => { const st = objectiveState(d, o.id), pages = (o.pages || []).slice().sort((a, b) => a - b);
+    return h("button", { class:"trow goal-row" + (here(pages) ? " here" : "") + (st === "weak" ? " weak" : ""), onclick: () => goPage(pages[0] || R.page) },
+      h("span", { class:"tt", text:o.statement }), dot(notesIn(pages), st === "weak"), h("span", { class:"tp", text:span(pages) })); };
+  const outline = Array.isArray(d.outline) && d.outline.length ? d.outline : null;
+  if (!outline){
+    const objs = d.objectives.filter(o => !hidden.has(o.id)).slice().sort((a, b) => (a.pages[0] || 0) - (b.pages[0] || 0));
+    return objs.length ? objs.map(goal) : [h("p", { class:"small muted", style:"padding:8px", text:"아직 목차가 없어요. 문제를 만들면 목표별 목차가 생겨요." })];
+  }
+  return outline.map(sec => {
+    const objs = sec.objectives.filter(o => !hidden.has(o.id));
+    const allPages = [...new Set([...(sec.pages || []), ...objs.flatMap(o => o.pages || [])])].sort((a, b) => a - b);
+    const weakN = objs.filter(o => objectiveState(d, o.id) === "weak").length;
+    const parts = []; const byPart = new Map();
+    for (const o of objs){ const k = o.part || ""; if (!byPart.has(k)){ byPart.set(k, []); parts.push(k); } byPart.get(k).push(o); }
+    return h("section", { class:"tsec" },
+      h("button", { class:"trow sec" + (here(allPages) ? " in" : ""), onclick: () => goPage(allPages[0] || R.page) },
+        h("span", { class:"tt", text:sec.title }), dot(notesIn(allPages), weakN > 0), h("span", { class:"tp", text:span(allPages) })),
+      ...parts.flatMap(k => {
+        const list = byPart.get(k);
+        if (!k) return list.map(goal);
+        const pp = [...new Set(list.flatMap(o => o.pages || []))].sort((a, b) => a - b);
+        return h("div", { class:"tpart" },
+          h("button", { class:"trow part" + (here(pp) ? " in" : ""), onclick: () => goPage(pp[0] || R.page) }, h("span", { class:"tt", text:k }), dot(notesIn(pp), list.some(o => objectiveState(d, o.id) === "weak")), h("span", { class:"tp", text:span(pp) })),
+          list.map(goal));
+      }));
+  });
+}
 /* 모르는 것 서랍: ✕, Esc, or a click anywhere outside it closes it */
 function closeDrawer(){ if (!NT.drawer) return; NT.drawer = false; paintDrawer(); if (S.view === "read") render(); }
 on(document, "keydown", (e) => { if (e.key === "Escape" && NT.drawer && !e.isComposing){ e.preventDefault(); closeDrawer(); } });
@@ -2406,8 +2442,21 @@ function paintDrawer(){
       h("div", { class:"t" }, h("span", { class:"q", text:n.quote }), n.seen >= NOTE_WEAK ? h("span", { class:"nk k-weak", text:"약점" }) : null, h("span", { class:`nk ${kc}`, text: n.status === "marked" ? "모름" : kl })),
       h("div", { class:"s", text: n.status === "marked" ? "아직 안 물어봤어요 · 누르면 물어봐요" : n.kind === "talk" ? `질문 · ${n.answer ? n.answer.lead : ""}` : (n.answer ? n.answer.lead : "") }),
       h("div", { class:"m" }, h("span", { text:`p.${n.page}` }), h("span", { text:agoText(n.askedAt) }), h("span", { text:`다시 본 횟수 ${n.seen}` }))); };
-  const fresh = h("aside", { class:"notesdrawer", id:"notesDrawer", role:"dialog", "aria-label":"모르는 것 노트" },
-    h("div", { class:"dh" }, h("strong", { text:"모르는 것 · 이 자료" }), h("span", { class:"grow" }), h("button", { class:"dclose", title:"닫기 (Esc)", "aria-label":"모르는 것 닫기", onclick: closeDrawer }, "✕")),
+  const dlist = el && el.querySelector(".dlist"), keepTop = dlist && el.dataset.tab === NT.tab ? dlist.scrollTop : null;
+  const tabBtn = (k, label) => h("button", { role:"tab", class:"dtab", "aria-selected": NT.tab === k ? "true" : "false", onclick: () => { NT.tab = k; paintDrawer(); } }, label);
+  const head = h("div", { class:"dh" },
+    h("div", { class:"dtabs", role:"tablist", "aria-label":"모르는 것" }, tabBtn("notes", `노트${noteList(d).length ? " " + noteList(d).length : ""}`), tabBtn("toc", "목차")),
+    h("span", { class:"grow" }), h("button", { class:"dclose", title:"닫기 (Esc)", "aria-label":"모르는 것 닫기", onclick: closeDrawer }, "✕"));
+  if (NT.tab === "toc"){
+    const fresh = h("aside", { class:"notesdrawer", id:"notesDrawer", role:"dialog", "aria-label":"목차", "data-tab":"toc" }, head,
+      h("div", { class:"dlist toc" }, tocList(d)),
+      h("div", { class:"dfoot small muted" }, h("span", { class:"tdot" }), " 모르는 것 노트 수 · ", h("span", { class:"tweak", text:"틀림" }), " 약점 목표 · 누르면 그 쪽으로 가요"));
+    if (el) el.replaceWith(fresh); else root.append(fresh);
+    if (keepTop != null) fresh.querySelector(".dlist").scrollTop = keepTop;
+    else { const here = fresh.querySelector(".here"); if (here) here.scrollIntoView({ block:"center" }); }
+    return;
+  }
+  const fresh = h("aside", { class:"notesdrawer", id:"notesDrawer", role:"dialog", "aria-label":"모르는 것 노트", "data-tab":"notes" }, head,
     h("div", { class:"dfilters" }, filters.map(([k, t]) => h("button", { class:"chip-btn", "aria-pressed": NT.filter === k ? "true" : "false", onclick: () => { NT.filter = k; paintDrawer(); } }, t))),
     h("div", { class:"dlist" }, list.length ? list.map(item) : h("p", { class:"small muted", style:"padding:8px", text: noteList(d).length ? "해당하는 항목이 없어요." : "원문을 드래그해 모르는 것을 물어보면 여기에 쌓여요." })),
     h("div", { class:"dfoot small muted", text:`같은 것을 ${NOTE_WEAK}번 이상 다시 보면 약점으로 표시해요.` }));

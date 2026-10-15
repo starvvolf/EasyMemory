@@ -753,3 +753,26 @@
 .dejipgi .chip-btn.act{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
 .dejipgi .dclose{width:34px;height:34px;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-size:15px;cursor:pointer;display:grid;place-items:center}
 .dejipgi .dclose:hover{background:var(--surface-2);border-color:var(--ink)}
+/* 모르는 것 서랍 탭 + 목차 */
+.dejipgi .dtabs{display:flex;gap:4px;background:var(--surface-2);padding:3px;border-radius:10px}
+.dejipgi .dtab{border:0;background:transparent;font:inherit;font-size:13.5px;font-weight:600;color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer}
+.dejipgi .dtab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0 / .08)}
+.dejipgi .dlist.toc{padding:8px 8px 16px}
+.dejipgi .tsec{margin-bottom:6px}
+.dejipgi .trow{width:100%;display:flex;align-items:center;gap:8px;text-align:left;border:0;background:transparent;font:inherit;color:var(--ink);padding:7px 8px;border-radius:8px;cursor:pointer}
+.dejipgi .trow:hover{background:var(--surface-2)}
+.dejipgi .trow .tt{flex:1;min-width:0}
+.dejipgi .trow .tp{flex:none;font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.dejipgi .trow.sec{font-weight:700;font-size:14.5px;border-top:1px solid var(--line);border-radius:0;padding-top:10px}
+.dejipgi .tsec:first-child .trow.sec{border-top:0}
+.dejipgi .trow.part{font-weight:600;font-size:13.5px;padding-left:16px;color:var(--ink)}
+.dejipgi .trow.goal-row{font-size:13px;color:var(--muted);padding-left:28px;line-height:1.45}
+.dejipgi .tpart .trow.goal-row{padding-left:36px}
+.dejipgi .trow.goal-row.weak .tt{color:var(--ink)}
+.dejipgi .trow.here{background:var(--accent-soft);color:var(--ink)}
+.dejipgi .trow.here::before{content:"";width:3px;align-self:stretch;background:var(--accent);border-radius:2px;margin-left:-6px}
+.dejipgi .trow.in .tt{color:var(--accent)}
+.dejipgi .tmarks{display:inline-flex;align-items:center;gap:4px;flex:none}
+.dejipgi .tdot{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;font-weight:700;line-height:1}
+.dejipgi .tdot:empty{min-width:10px;width:10px;height:10px;padding:0;vertical-align:middle}
+.dejipgi .tweak{font-size:11px;font-weight:700;color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);border-radius:999px;padding:1px 6px}
