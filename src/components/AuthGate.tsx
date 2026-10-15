@@ -201,12 +201,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
           분리가 되지 않은 서버 프로젝트 기능은 아직 사용할 수 없습니다.
         </div>
       ) : null}
-      <div className="fixed right-4 top-3 z-50 flex items-center gap-3 rounded-md border border-[#3F4147] bg-[#1E1F22]/95 px-3 py-2 text-xs text-[#B5BAC1] shadow-lg backdrop-blur">
-        <span className="max-w-48 truncate">{session.mode === "local-experiment" ? "로컬 실험" : session.email}</span>
-        <span className="rounded bg-[#383A40] px-1.5 py-0.5 font-bold text-[#DCDDDE]">
-          {session.mode === "local-experiment" ? "실험" : session.canUseAi ? "운영자" : "일반 회원"}
-        </span>
-        {session.mode !== "local-experiment" ? (
+      {/* The floating account chip covered the study screen's top-right controls (tabs, the notes drawer's ✕).
+          Local experiment mode already says so in the banner above and has no sign-out, so it shows no chip. */}
+      {session.mode !== "local-experiment" ? (
+        <div className="fixed right-4 top-3 z-50 flex items-center gap-3 rounded-md border border-[#3F4147] bg-[#1E1F22]/95 px-3 py-2 text-xs text-[#B5BAC1] shadow-lg backdrop-blur">
+          <span className="max-w-48 truncate">{session.email}</span>
+          <span className="rounded bg-[#383A40] px-1.5 py-0.5 font-bold text-[#DCDDDE]">
+            {session.canUseAi ? "운영자" : "일반 회원"}
+          </span>
           <button
             type="button"
             onClick={() => void handleSignOut()}
@@ -214,8 +216,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
           >
             로그아웃
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {children}
     </AuthSessionContext.Provider>
   );
