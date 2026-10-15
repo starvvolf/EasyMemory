@@ -42,3 +42,8 @@ test("제목 속 핵심 용어: 'X의 … 개요'에서 가운데 용어를 꺼�
   assert.deepEqual(pick("Kohlberg의 인지적 도덕 발달 이론 개요", "도덕", lexicon), ["인지적 도덕 발달 이론", "term"]);
   assert.deepEqual(pick("이것이 인지적 도덕 발달 이론을 만든 배경", "발달", lexicon), ["인지적 도덕 발달 이론을", "term"]);
 });
+
+test("전치사·한정사에서 끊는다(along, all)", () => {
+  assert.deepEqual(pick("Relocating all the coordinate positions by the same displacement along parallel paths", "displacement"), ["same displacement", "phrase"]);
+  assert.deepEqual(pick("Relocating all the coordinate positions by the same displacement along parallel paths", "paths"), ["parallel paths", "phrase"]);
+});

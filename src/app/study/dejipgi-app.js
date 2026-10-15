@@ -1176,7 +1176,7 @@ async function paintBox(box, d, pageNo, cssW){
       await page.render({ canvas, canvasContext:canvas.getContext("2d"), viewport:vp }).promise;
       const tc = await page.getTextContent();
       entry = { canvas, vp, items:tc.items.filter(it => typeof it.str === "string") };
-      entry.layout = inkLayout(entry);
+      entry.layout = inkLayout(entry, page);
       P.canv[ck] = entry;
       const keys = Object.keys(P.canv); if (keys.length > 8) delete P.canv[keys[0]];
     }catch(e){ return; }
@@ -1667,8 +1667,10 @@ async function followNote(d, note, q){
    spaces letters differently from the slide font, so hover boxes and highlights drifted off the words.
    We read the ink of the item's line from the canvas: when the gaps between ink runs match the item's words,
    each word gets its own measured box; otherwise the item keeps one box trimmed to where its ink ends. */
-function inkLayout(entry){
+function inkLayout(entry, page){
   const ctx = entry.canvas.getContext("2d", { willReadFrequently:true });
+  const meter = document.createElement("canvas").getContext("2d");
+  const fontOf = (name) => { try{ const f = page && page.commonObjs.get(name); return f && f.loadedName ? `"${f.loadedName}", sans-serif` : "sans-serif"; }catch(e){ return "sans-serif"; } };
   const W = entry.canvas.width, H = entry.canvas.height;
   const lines = entry.items.map(it => { const tx = pdfjs.Util.transform(entry.vp.transform, it.transform); return { tx, fh:Math.hypot(tx[2], tx[3]) }; });
   return entry.items.map((it, i) => {
@@ -1687,7 +1689,7 @@ function inkLayout(entry){
     const ink = new Uint8Array(cw);
     for (let x = 0; x < cw; x++) for (let y = 0; y < ch; y++){
       const o = (y * cw + x) * 4;
-      if (Math.max(Math.abs(data[o] - bg[0]), Math.abs(data[o + 1] - bg[1]), Math.abs(data[o + 2] - bg[2])) > 70){ ink[x] = 1; break; }
+      if (Math.max(Math.abs(data[o] - bg[0]), Math.abs(data[o + 1] - bg[1]), Math.abs(data[o + 2] - bg[2])) > 40){ ink[x] = 1; break; }
     }
     // Ink runs (any blank column splits), minus specks at the edges.
     const runs = []; let start = -1;
@@ -1695,8 +1697,9 @@ function inkLayout(entry){
       if (x < cw && ink[x]){ if (start < 0) start = x; continue; }
       if (start >= 0){ runs.push([start, x]); start = -1; }
     }
-    while (runs.length > 1 && runs[0][1] - runs[0][0] <= 2) runs.shift();
-    while (runs.length > 1 && runs[runs.length - 1][1] - runs[runs.length - 1][0] <= 2) runs.pop();
+    // A one-pixel speck far from the text (a neighbour's antialiasing) is not a letter; a thin "I" or "l" is.
+    while (runs.length > 1 && runs[0][1] - runs[0][0] <= 1 && runs[1][0] - runs[0][1] > fh * 0.3) runs.shift();
+    while (runs.length > 1 && runs[runs.length - 1][1] - runs[runs.length - 1][0] <= 1 && runs[runs.length - 1][0] - runs[runs.length - 2][1] > fh * 0.3) runs.pop();
     if (!runs.length) return null;
     const words = [...it.str.matchAll(/\S+/gu)].map(m => { const a = [...it.str.slice(0, m.index)].length; return [a, a + [...m[0]].length]; });
     // We know how many words there are: the widest gaps between runs are the spaces. Accept only when those gaps
@@ -1715,7 +1718,22 @@ function inkLayout(entry){
         });
       }
     } else if (words.length === 1) return [{ a:words[0][0], b:words[0][1], x0:x0 + runs[0][0], x1:x0 + runs[runs.length - 1][1] }];
-    const last = runs[runs.length - 1][1] + x0;
+    // Gaps inside words rival the spaces (thin fonts): place words by the slide font's own letter widths across the
+    // ink, then snap each edge to the nearest blank gap so boxes start and end on real letters.
+    const inkFrom = runs[0][0], inkTo = runs[runs.length - 1][1];
+    if (words.length > 1 && inkTo - inkFrom > fh){
+      meter.font = `${fh}px ${fontOf(it.fontName)}`;
+      const full = meter.measureText(it.str.trimEnd()).width || 1, lead = meter.measureText(it.str.slice(0, it.str.length - it.str.trimStart().length)).width;
+      const k = (inkTo - inkFrom) / Math.max(1, full - lead);
+      const at = (ci) => inkFrom + (meter.measureText([...it.str].slice(0, ci).join("")).width - lead) * k;
+      const starts = runs.map(r => r[0]), ends = runs.map(r => r[1]);
+      const snap = (x, list) => { let best = x, d = fh * 0.35; for (const v of list){ const dd = Math.abs(v - x); if (dd < d){ d = dd; best = v; } } return best; };
+      return words.map(([a, b]) => {
+        const left = snap(at(a), starts), right = snap(at(b), ends);
+        return { a, b, x0:x0 + left, x1:x0 + Math.max(right, left + 2) };
+      });
+    }
+    const last = inkTo + x0;
     return [{ a:0, b:chars.length, x0:tx[4], x1: last > tx[4] + w * 0.5 ? last : tx[4] + w }];
   });
 }

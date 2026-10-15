@@ -6,7 +6,9 @@
 
 const PARTICLE = /(은|는|이|가|을|를|의|에|에서|에게|으로|로|와|과|도|만|까지|부터|이다|이며|으로서|로서|처럼|보다)$/u;
 const STOP = new Set(("a an the of in on at to for from by with and or but as is are was were be been being this that these those " +
-  "it its into than then so such which who whom whose what when where how why not no also can may must should would will via per").split(" "));
+  "it its into than then so such which who whom whose what when where how why not no also can may must should would will via per " +
+  "along across through throughout without within between over under about after before during onto upon toward towards against among around " +
+  "behind beyond like near off out up down all each every any some both their his her our your my they them we you he she").split(" "));
 const EDGE = /^[\s"'“”‘’()[\]{}<>.,:;!?·•–—-]+|[\s"'“”‘’()[\]{}<>.,:;!?·•–—-]+$/gu;
 const BREAK_AFTER = /[,.;:!?)\]」』]$/u;   // a token ending like this closes a unit
 const BREAK_BEFORE = /^[([「『]/u;          // a token starting like this opens a new one
