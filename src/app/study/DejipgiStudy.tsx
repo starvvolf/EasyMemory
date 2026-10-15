@@ -13,6 +13,7 @@ import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type Planner
 import { DEFAULT_GEN_MODELS, defaultChosen, type GenState } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
 import { coachCards, type CoachInput } from "@/lib/study/coach";
+import { buildLexicon, chunkAt } from "@/lib/study/chunk";
 import { applyPatches, similarObjectives, termChoice, tooEasy, type LedgerEntry, type PatchMap } from "@/lib/study/quality";
 import { askedObjectives, diagnoseBox, planDeckFrom, planSettingsFrom, planToday, renderMemoryAuto, type PlanNote, type PlanRecord, type StudyRules } from "@/lib/study/plan";
 import "katex/dist/katex.min.css";
@@ -283,6 +284,8 @@ export default function DejipgiStudy() {
         } : {}),
       },
       coach: (input) => coachCards(input as CoachInput),
+      // 읽기 화면의 네모를 의미 단위로 (src/lib/study/chunk.ts): the material's terms, then phrase rules.
+      chunk: { lexicon: (deck, asked) => buildLexicon(deck, asked), at: (words, index, lexicon) => chunkAt(words, index, lexicon ?? undefined) },
       async rules() {
         return (await readJson<{ today: { rules: unknown; warnings: string[] } }>(await fetchExperiment("/api/study-rules"), "학습규칙을 읽지 못했어요.")).today;
       },

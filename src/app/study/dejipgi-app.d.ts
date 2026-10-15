@@ -3,6 +3,7 @@ import type { NoteTurn, StudyNote } from "@/lib/study/notes";
 import type { TodayPlan } from "@/lib/study/plan";
 import type { LedgerEntry, PatchMap } from "@/lib/study/quality";
 import type { CoachCard } from "@/lib/study/coach";
+import type { Chunk, Lexicon } from "@/lib/study/chunk";
 
 /** An objective shown at the one confirmation before authoring (engine v2). Support objectives start unchecked. */
 export type DejipgiObjective = { id: string; section: string; part?: string; statement: string; recall: string; importance: "core" | "support" };
@@ -50,6 +51,8 @@ export type DejipgiEnv = {
   };
   /** 앱 안의 코치: cards from the day plan and the quality ledger (src/lib/study/coach.ts). */
   coach?: (input: { plan: TodayPlan; rules: unknown; prefs: unknown; counts: Record<string, number>; waiting: number; unassigned: number; subjectsWithoutDate: string[] }) => CoachCard[];
+  /** Meaning units for the reader's hover box: a lexicon from the material, and the unit around a word of a line. */
+  chunk?: { lexicon(deck: PlannerDeck, asked: string[]): Lexicon; at(words: string[], index: number, lexicon: Lexicon | null): Chunk };
   /** 학습규칙/오늘할것.md, parsed on the server. */
   rules?: () => Promise<{ rules: unknown; warnings: string[] }>;
   /** 학습 메모 (study-memory/<과목>.md): the screen rewrites the auto part after studying. */

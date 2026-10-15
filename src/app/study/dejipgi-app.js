@@ -1689,17 +1689,32 @@ function inkLayout(entry){
       const o = (y * cw + x) * 4;
       if (Math.max(Math.abs(data[o] - bg[0]), Math.abs(data[o + 1] - bg[1]), Math.abs(data[o + 2] - bg[2])) > 70){ ink[x] = 1; break; }
     }
-    const runs = []; let start = -1, gap = 0;
-    const minGap = fh * 0.17;
+    // Ink runs (any blank column splits), minus specks at the edges.
+    const runs = []; let start = -1;
     for (let x = 0; x <= cw; x++){
-      if (x < cw && ink[x]){ if (start < 0) start = x; gap = 0; continue; }
-      if (start < 0) continue;
-      gap++;
-      if (gap >= minGap || x === cw){ runs.push([start, x - gap + 1]); start = -1; gap = 0; }
+      if (x < cw && ink[x]){ if (start < 0) start = x; continue; }
+      if (start >= 0){ runs.push([start, x]); start = -1; }
     }
+    while (runs.length > 1 && runs[0][1] - runs[0][0] <= 2) runs.shift();
+    while (runs.length > 1 && runs[runs.length - 1][1] - runs[runs.length - 1][0] <= 2) runs.pop();
     if (!runs.length) return null;
     const words = [...it.str.matchAll(/\S+/gu)].map(m => { const a = [...it.str.slice(0, m.index)].length; return [a, a + [...m[0]].length]; });
-    if (words.length === runs.length) return words.map(([a, b], k) => ({ a, b, x0:x0 + runs[k][0], x1:x0 + runs[k][1] }));
+    // We know how many words there are: the widest gaps between runs are the spaces. Accept only when those gaps
+    // clearly stand out from the gaps inside words.
+    if (words.length > 1 && runs.length >= words.length){
+      const gaps = runs.slice(1).map((r, k) => ({ k, size:r[0] - runs[k][1] })).sort((p, q) => q.size - p.size);
+      const cut = gaps.slice(0, words.length - 1), rest = gaps.slice(words.length - 1);
+      const smallestCut = Math.min(...cut.map(g => g.size)), largestRest = rest.length ? Math.max(...rest.map(g => g.size)) : 0;
+      if (smallestCut >= fh * 0.12 && smallestCut > largestRest * 1.3){
+        const bounds = cut.map(g => g.k).sort((p, q) => p - q);
+        let from = 0;
+        return words.map(([a, b], k) => {
+          const to = k < bounds.length ? bounds[k] : runs.length - 1;
+          const seg = { a, b, x0:x0 + runs[from][0], x1:x0 + runs[to][1] };
+          from = to + 1; return seg;
+        });
+      }
+    } else if (words.length === 1) return [{ a:words[0][0], b:words[0][1], x0:x0 + runs[0][0], x1:x0 + runs[runs.length - 1][1] }];
     const last = runs[runs.length - 1][1] + x0;
     return [{ a:0, b:chars.length, x0:tx[4], x1: last > tx[4] + w * 0.5 ? last : tx[4] + w }];
   });
@@ -1716,6 +1731,7 @@ function charX(entry, i, j, end){
 function textLayer(entry, cssW){
   const W = entry.canvas.width, H = entry.canvas.height, k = cssW / W;
   const tl = h("div", { class:"tl" });
+  const tokens = [];
   entry.items.forEach((it, i) => {
     if (!it.str || !it.str.trim()) return;
     const tx = pdfjs.Util.transform(entry.vp.transform, it.transform);
@@ -1729,9 +1745,38 @@ function textLayer(entry, cssW){
       const span = h("span", { style:`left:${part.x / W * 100}%;top:${(tx[5] - fh * 0.86) / H * 100}%;font-size:${(fh * k).toFixed(2)}px` }, part.text);
       span._w = part.w * k; span._a = angle;
       tl.append(span, k2 < parts.length - 1 ? " " : "");
+      // Words with their page box (canvas px), for meaning-unit boxes (chunk.ts).
+      const node = span.firstChild, first = segs ? segs[k2].a : 0;
+      if (!angle) for (const m of part.text.matchAll(/\S+/gu)){
+        const a = [...part.text.slice(0, m.index)].length, b = a + [...m[0]].length;
+        const x0 = segs && parts.length > 1 ? part.x : charX(entry, i, first + a, false);
+        const x1 = segs && parts.length > 1 ? part.x + part.w : charX(entry, i, first + b, true);
+        tokens.push({ text:m[0], node, start:m.index, end:m.index + m[0].length, x0, x1, y0:tx[5] - fh * 0.9, y1:tx[5] + fh * 0.2, base:tx[5], fh });
+      }
     });
     tl.append(it.hasEOL ? "\n" : " ");
   });
+  // Lines: words on the same baseline, left to right, across text items.
+  const lines = [];
+  tokens.map((t, n) => n).sort((a, b) => tokens[a].base - tokens[b].base || tokens[a].x0 - tokens[b].x0).forEach(n => {
+    const t = tokens[n], line = lines[lines.length - 1];
+    if (line && Math.abs(tokens[line[0]].base - t.base) < t.fh * 0.3) line.push(n); else lines.push([n]);
+  });
+  // Pieces that touch on the page are one word ("Raster" "-" "Scan" drawn as separate items → "Raster-Scan").
+  const merged = [];
+  for (const line of lines){
+    line.sort((a, b) => tokens[a].x0 - tokens[b].x0);
+    const out = [];
+    for (const n of line){
+      const t = tokens[n], prev = out[out.length - 1];
+      const hyphen = prev && (/[-‐‑–]$/.test(prev.text) || /^[-‐‑–]/.test(t.text));
+      if (prev && t.x0 - prev.x1 < t.fh * (hyphen ? 0.22 : 0.08)) Object.assign(prev, { text:prev.text + t.text, x1:Math.max(prev.x1, t.x1), endNode:t.endNode || t.node, end:t.end, y0:Math.min(prev.y0, t.y0), y1:Math.max(prev.y1, t.y1) });
+      else out.push({ ...t });
+    }
+    const ids = out.map(t => merged.push(t) - 1);
+    ids.forEach((id, pos) => { merged[id].line = ids; merged[id].pos = pos; });
+  }
+  tl._tokens = merged; tl._W = W; tl._H = H;
   requestAnimationFrame(() => {
     for (const span of tl.querySelectorAll("span")){
       const w = span.offsetWidth; if (!w) continue;
@@ -1763,13 +1808,37 @@ function pdfWordAtPoint(x, y){
   }
   return null;
 }
+/* 의미 단위: the material's terms first, then phrase rules (src/lib/study/chunk.ts); Alt keeps one word. */
+function readerLexicon(){
+  const d = S.decks[S.reader.deckId]; if (!d || !env.chunk) return null;
+  const asked = noteList(d).filter(n => n.kind !== "talk").map(n => n.quote);
+  const sig = asked.length + ":" + (d.outline ? d.outline.length : 0);
+  if (!d._lex || d._lexSig !== sig){ try{ d._lex = env.chunk.lexicon(d, asked); d._lexSig = sig; }catch(e){ d._lex = null; } }
+  return d._lex;
+}
+function unitAt(e){
+  const tl = e.target.closest && e.target.closest(".tl"); if (!tl || !tl._tokens || !tl._tokens.length) return null;
+  const box = tl.getBoundingClientRect(), sx = box.width / tl._W, sy = box.height / tl._H;
+  const px = (e.clientX - box.left) / sx, py = (e.clientY - box.top) / sy;
+  const hit = tl._tokens.find(t => px >= t.x0 - 1 && px <= t.x1 + 1 && py >= t.y0 && py <= t.y1);
+  if (!hit) return null;
+  const words = hit.line.map(n => tl._tokens[n].text);
+  const c = e.altKey || !env.chunk ? { start:hit.pos, end:hit.pos, kind:"word" } : env.chunk.at(words, hit.pos, readerLexicon());
+  const list = hit.line.slice(c.start, c.end + 1).map(n => tl._tokens[n]);
+  const x0 = Math.min(...list.map(t => t.x0)), x1 = Math.max(...list.map(t => t.x1)), y0 = Math.min(...list.map(t => t.y0)), y1 = Math.max(...list.map(t => t.y1));
+  const tail = list[list.length - 1];
+  const range = document.createRange(); range.setStart(list[0].node, list[0].start); range.setEnd(tail.endNode || tail.node, tail.end);
+  return { kind:c.kind, range, rect:{ left:box.left + x0 * sx, top:box.top + y0 * sy + (y1 - y0) * sy * 0.08, width:(x1 - x0) * sx, height:(y1 - y0) * sy * 0.84 } };
+}
 on(root, "mousemove", (e) => {
   clearWordHover();
   const sel = window.getSelection();
   if (e.buttons || sel && !sel.isCollapsed || !e.target.closest(".tl")) return;
-  const word = pdfWordAtPoint(e.clientX, e.clientY); if (!word) return;
+  const unit = unitAt(e);
+  const word = unit || pdfWordAtPoint(e.clientX, e.clientY); if (!word) return;
   const r = word.rect;
-  wordHover = h("div", { class:"pdf-word-hover", "aria-hidden":"true", style:`left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px` });
+  wordHover = h("div", { class:`pdf-word-hover${unit && unit.kind === "term" ? " term" : ""}`, "aria-hidden":"true", title: unit && unit.kind === "term" ? "이 자료의 용어" : null,
+    style:`left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px` });
   root.append(wordHover);
 });
 on(root, "mousedown", (e) => {
@@ -1780,7 +1849,7 @@ on(root, "mouseup", (e) => {
   const press = wordPress; wordPress = null;
   const sel = window.getSelection();
   if (!press || !sel || !sel.isCollapsed || Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) return;
-  const word = pdfWordAtPoint(e.clientX, e.clientY); if (!word) return;
+  const word = unitAt(e) || pdfWordAtPoint(e.clientX, e.clientY); if (!word) return;
   sel.removeAllRanges(); sel.addRange(word.range); // Existing selection menu handles the click, not a model call.
 });
 on(root, "mouseleave", clearWordHover);
