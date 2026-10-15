@@ -1,5 +1,5 @@
 // Explicit one-operation API driver. Checkpoints stay in the private quality-loop folder.
-import { mkdir, readFile, rename, writeFile, access } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile, access, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 
 process.loadEnvFile(".env.local");
@@ -14,9 +14,12 @@ const from = action === "fork" ? argument : null;
 const tag = action === "fork" ? flags.shift() : argument;
 if (!tag || !/^[a-z0-9-]+$/.test(tag) || !flags.includes("--confirmed")) throw new Error("A safe tag and explicit --confirmed are required.");
 if (from && !["design", "author"].includes(from)) throw new Error("Invalid fork phase.");
+const isolateOnly = flags.includes("--isolate-only");
+const dryRun = flags.includes("--dry-run");
+if ((isolateOnly && action !== "fork") || (dryRun && !isolateOnly)) throw new Error("Isolation flags require an existing fork checkpoint.");
 const file = path.join(privateRoot, `${tag}.json`);
 type Job = { action: string; source: string; from: string | null; startedAt: string; id?: string; target?: string; status: string; calls: number; updatedAt?: string; result?: unknown; score?: unknown; error?: string };
-type RemoteState = { id: string; status: string; calls: number; createdAt: string; forkOf?: { genId: string; from: string }; summary?: unknown };
+type RemoteState = { id: string; status: string; calls: number; createdAt: string; forkOf?: { genId: string; from: string }; input?: { origin?: string }; summary?: unknown };
 type ApiData = { runs: RemoteState[]; run: RemoteState; gen: RemoteState; score: { counts: unknown } };
 async function save(job: Job) {
     job.updatedAt = new Date().toISOString();
@@ -38,6 +41,52 @@ async function api(endpoint: string, body?: unknown): Promise<ApiData> {
     if (!response.ok) throw new Error(`API ${response.status}: ${data.message ?? "request failed"}`);
     return data;
 }
+async function isolateCompletedFork(job: Job) {
+    if (job.action !== "fork" || job.status !== "done" || !job.id || job.target !== job.id || job.id === job.source || !/^gen_[a-f0-9]{32}$/.test(job.id)) throw new Error("Only this driver's completed fork can be isolated.");
+    const dataDirectory = await realpath(root!);
+    const storage = await realpath(path.join(dataDirectory, "study-gen"));
+    const checkpointDirectory = await realpath(privateRoot);
+    if (path.dirname(storage) !== dataDirectory || path.dirname(checkpointDirectory) !== dataDirectory) throw new Error("Data subdirectory escaped the configured root.");
+    const directory = await realpath(path.join(storage, job.id));
+    const stateFile = await realpath(path.join(directory, "state.json"));
+    if (path.dirname(directory) !== storage || stateFile !== path.join(directory, "state.json")) throw new Error("Fork storage escaped its expected directory.");
+    const original = await readFile(stateFile, "utf8");
+    const state = JSON.parse(original) as RemoteState;
+    const recorded = job.result as RemoteState | undefined;
+    if (state.id !== job.id || recorded?.id !== job.id || state.status !== "done" || state.calls !== job.calls || state.createdAt !== recorded.createdAt || !Number.isFinite(Date.parse(job.startedAt)) || !Number.isFinite(Date.parse(state.createdAt)) || Date.parse(state.createdAt) < Date.parse(job.startedAt) || state.forkOf?.genId !== job.source || state.forkOf.from !== job.from || !state.input || typeof state.input !== "object" || Array.isArray(state.input)) throw new Error("Fork ownership or terminal state could not be verified.");
+    if ((state.input.origin ?? "lab") === "lab") {
+        job.result = state;
+        console.log(JSON.stringify({ event: "already-isolated", tag, id: job.id }));
+        return;
+    }
+    if (state.input.origin !== "study") throw new Error("Unknown fork origin.");
+    // Never hide a run that has acquired a user's study record or manual patch.
+    let recordFiles: string[];
+    try { recordFiles = await readdir(path.join(root!, "study-records")); }
+    catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e; recordFiles = []; }
+    for (const name of recordFiles.filter(name => name.endsWith(".json"))) {
+        const value = JSON.parse(await readFile(path.join(root!, "study-records", name), "utf8")) as { records?: Record<string, unknown> };
+        if (!value.records || typeof value.records !== "object" || Array.isArray(value.records)) throw new Error("Study record format could not be verified.");
+        if (Object.hasOwn(value.records, job.id)) throw new Error("Fork has a user study record; leave it unchanged.");
+    }
+    try {
+        const patches = JSON.parse(await readFile(path.join(root!, "study-quality", "patches.json"), "utf8")) as Record<string, unknown>;
+        if (!patches || typeof patches !== "object" || Array.isArray(patches) || Object.hasOwn(patches, job.id)) throw new Error("Fork has patches or patch format is unknown; leave it unchanged.");
+    } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e; }
+    console.log(JSON.stringify({ event: dryRun ? "isolation-dry-run" : "isolating", tag, id: job.id }));
+    if (dryRun) return;
+    const backup = path.join(checkpointDirectory, `${tag}-origin-before.json`);
+    try { await writeFile(backup, original, { flag: "wx", mode: 0o600 }); }
+    catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST" || await readFile(backup, "utf8") !== original) throw e;
+    }
+    if (await readFile(stateFile, "utf8") !== original) throw new Error("Fork changed during isolation; leave it unchanged.");
+    state.input.origin = "lab";
+    const temporary = `${stateFile}.quality-${process.pid}.tmp`;
+    await writeFile(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
+    await rename(temporary, stateFile);
+    job.result = state;
+}
 let job: Job;
 try { job = JSON.parse(await readFile(file, "utf8")); }
 catch (e) {
@@ -46,6 +95,12 @@ catch (e) {
 }
 if (job.action !== action || job.source !== genId || job.from !== from) throw new Error("Tag already belongs to another operation.");
 if (await stopped()) throw new Error("STOP exists; no submission.");
+if (isolateOnly) {
+    if (!job.id) throw new Error("Isolation requires an existing completed checkpoint; no submission.");
+    await isolateCompletedFork(job);
+    if (!dryRun) await save(job);
+    process.exit(0);
+}
 try {
     if (!job.id && job.status === "submitting") {
         // Recover an uncertain POST outcome instead of submitting another paid job.
@@ -56,6 +111,10 @@ try {
         await save(job);
     }
     if (!job.id) {
+        if (action === "fork") {
+            const parent = (await api(`/${genId}`)).gen;
+            if (!parent.input || (parent.input.origin ?? "lab") !== "lab") throw new Error("Quality forks require an isolated lab parent; no submission.");
+        }
         job.status = "submitting"; await save(job);
         const response = action === "judge" ? await api(`/${genId}/judge`, { kind: "judge", confirmed: true }) : await api(`/${genId}/fork`, { from, autoConfirm: true, confirmed: true });
         job.id = action === "judge" ? response.run.id : response.gen.id;
@@ -76,6 +135,7 @@ try {
         await new Promise(resolve => setTimeout(resolve, 5000));
     }
     if (job.status === "done") {
+        if (action === "fork") await isolateCompletedFork(job);
         job.score = (await api(`/${job.target}/score`)).score;
         await save(job);
     }
