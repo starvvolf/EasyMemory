@@ -1223,12 +1223,30 @@ async function drawPage(){
   if (S.view !== "read") return;
   const R = S.reader, d = S.decks[R.deckId]; if (!d) return;
   const token = ++drawToken;
+  fitPage(d);
   const box = document.getElementById("pagebox");
   if (box) await paintBox(box, d, R.page, Math.max(200, Math.floor(box.getBoundingClientRect().width)));
   if (token !== drawToken) return;
   const zb = document.getElementById("zoombox");
   if (zb) await paintBox(zb, d, R.page, Math.max(200, Math.floor(zb.getBoundingClientRect().width)));
   placeNoteCard();
+}
+/* One screen, no scrolling: a slide page gets the width that makes its height fit between the reader bar and the
+   action bar; the rail beside it takes the rest. Tall (portrait) pages keep the column width and scroll as before. */
+function fitPage(d){
+  const page = document.querySelector(".rpage.wide"); if (!page) return;
+  const sheet = page.querySelector(".sheet"), rail = page.querySelector(".rrail"), bar = document.querySelector(".ractions");
+  if (!sheet) return;
+  const aspect = pageAspect(d);
+  const top = sheet.getBoundingClientRect().top + window.scrollY;
+  const below = (bar ? bar.offsetHeight : 64) + 18;
+  const availH = Math.max(260, window.innerHeight - top - below);
+  const sideBySide = window.innerWidth >= 1000 && rail && rail.childNodes.length;
+  page.classList.toggle("side", !!sideBySide);
+  const availW = page.clientWidth - (sideBySide ? Math.min(300, Math.max(220, page.clientWidth * 0.22)) + 18 : 0);
+  const w = Math.floor(Math.min(availW, availH * aspect));
+  sheet.style.width = w + "px";
+  if (rail) rail.style.maxHeight = sideBySide ? Math.round(w / aspect) + "px" : "";
 }
 function findRange(text, quote){
   const chars = [...String(quote).replace(/\s+/g, "")].slice(0, 160).map(c => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -1349,8 +1367,11 @@ function renderReader(){
       stored && stored.text.trim() ? markTextRefs(stored.text, activeRefs(d, R.page)) : h("span", { class:"muted", text:"이 쪽은 저장된 텍스트가 없어요." }))));
   }
   page.append(sheet);
+  // Slides fit the screen (fitPage): the page is sized to the height left, and what to learn sits beside it.
+  const holder = wide ? h("aside", { class:"rrail" }) : page;
+  if (wide) page.append(holder);
   if (objs.length){
-    page.append(h("div", { class:"goals" }, h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
+    holder.append(h("div", { class:"goals" }, h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
       objs.map((o, i) => h("div", { class:"goalrow" },
         h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", title:"원문에서 이 부분만 진하게 보기", onclick: () => { R.active = R.active === o.id ? null : o.id; render(); } },
           h("span", { class:"gnum", text:String(i + 1) }), h("span", { text:o.statement })),
@@ -1374,9 +1395,8 @@ function renderReader(){
       notesOn(d) && pdfOn ? h("span", { class:"nhint", text:" · 모르는 건 원문을 드래그해 물어보세요" }) : null),
     h("button", { class:"btn", "aria-pressed": Chat.isOpen() ? "true" : "false", onclick: () => Chat.toggle() }, Chat.isOpen() ? "질문 창 닫기" : "질문하기"),
     S.session ? h("button", { class:"btn primary", onclick: () => setView("practice") }, "연습으로 돌아가기")
-      : n ? h("button", { class:"btn primary", onclick: () => startCheck(d.id, R.page) }, `이 쪽 문제 풀기 (${n})`)
+      : n ? h("button", { class:"btn primary", title:"읽은 직후 푼 결과는 기억 기록으로 세지 않고, 내일부터 복습에 넣어요.", onclick: () => startCheck(d.id, R.page) }, `이 쪽 문제 풀기 (${n})`)
       : nxt ? h("button", { class:"btn", onclick: () => goPage(nxt) }, `문제 있는 다음 쪽 · p.${nxt} →`) : null));
-  if (n && !S.session) wrap.append(h("p", { class:"small muted", style:"margin-top:2px", text:"읽은 직후 푼 결과는 기억 기록으로 세지 않고, 내일부터 복습에 넣어요." }));
   return wrap;
 }
 on(document, "keydown", (e) => {

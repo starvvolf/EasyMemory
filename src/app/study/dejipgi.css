@@ -305,6 +305,16 @@
 .dejipgi .banner .btn{margin-left:auto}
 .dejipgi .scrim{display:none}
 .dejipgi .rpage.wide{max-width:none}
+.dejipgi[data-view="read"] .wrap{max-width:1480px}
+.dejipgi .rpage.wide.side{flex-direction:row;align-items:flex-start;gap:18px}
+.dejipgi .rpage.wide .sheet{flex:none;margin-inline:auto}
+.dejipgi .rpage.wide.side .sheet{margin-inline:0}
+.dejipgi .rrail{display:flex;flex-direction:column;gap:12px;min-width:0}
+.dejipgi .rpage.wide.side .rrail{flex:1;max-width:300px;overflow:auto;padding-right:2px}
+.dejipgi .rpage.wide.side .goalrow{grid-template-columns:1fr}
+.dejipgi[data-view="read"] .rbar{margin-bottom:10px}
+.dejipgi[data-view="read"] .ractions{margin-top:10px}
+.dejipgi[data-view="read"]{padding-bottom:0;min-height:0}
 .dejipgi .sheet{position:relative}
 .dejipgi .zoombtn{position:absolute;top:10px;right:10px;z-index:2;border:1px solid rgba(0,0,0,.12);background:rgba(255,255,255,.92);color:#16202A;border-radius:8px;padding:4px 10px;font-size:12.5px;font-weight:600;opacity:0;transition:opacity .15s}
 .dejipgi .sheet:hover .zoombtn,.dejipgi .zoombtn:focus-visible{opacity:1}
