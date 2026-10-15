@@ -2378,8 +2378,16 @@ on(window, "resize", () => { if (S.view === "read") requestAnimationFrame(placeN
 function notesButton(d){
   if (!notesOn(d)) return null;
   const n = noteList(d).length;
-  return h("button", { class:"btn small", "aria-pressed": NT.drawer ? "true" : "false", onclick: () => { NT.drawer = !NT.drawer; paintDrawer(); } }, "모르는 것", n ? h("span", { class:"ncount", text:String(n) }) : null);
+  return h("button", { class:"btn small", "data-notes-toggle":"", "aria-pressed": NT.drawer ? "true" : "false", onclick: () => { NT.drawer = !NT.drawer; paintDrawer(); } }, "모르는 것", n ? h("span", { class:"ncount", text:String(n) }) : null);
 }
+/* 모르는 것 서랍: ✕, Esc, or a click anywhere outside it closes it */
+function closeDrawer(){ if (!NT.drawer) return; NT.drawer = false; paintDrawer(); if (S.view === "read") render(); }
+on(document, "keydown", (e) => { if (e.key === "Escape" && NT.drawer && !e.isComposing){ e.preventDefault(); closeDrawer(); } });
+on(document, "pointerdown", (e) => {
+  if (!NT.drawer || !e.target.closest) return;
+  if (e.target.closest("#notesDrawer, [data-notes-toggle], .ncard, .selpop, .chatwin")) return;
+  closeDrawer();
+});
 function paintDrawer(){
   let el = document.getElementById("notesDrawer");
   const d = S.decks[S.reader.deckId];
@@ -2399,7 +2407,7 @@ function paintDrawer(){
       h("div", { class:"s", text: n.status === "marked" ? "아직 안 물어봤어요 · 누르면 물어봐요" : n.kind === "talk" ? `질문 · ${n.answer ? n.answer.lead : ""}` : (n.answer ? n.answer.lead : "") }),
       h("div", { class:"m" }, h("span", { text:`p.${n.page}` }), h("span", { text:agoText(n.askedAt) }), h("span", { text:`다시 본 횟수 ${n.seen}` }))); };
   const fresh = h("aside", { class:"notesdrawer", id:"notesDrawer", role:"dialog", "aria-label":"모르는 것 노트" },
-    h("div", { class:"dh" }, h("strong", { text:"모르는 것 · 이 자료" }), h("span", { class:"grow" }), h("button", { class:"qbtn", onclick: () => { NT.drawer = false; paintDrawer(); render(); } }, "닫기")),
+    h("div", { class:"dh" }, h("strong", { text:"모르는 것 · 이 자료" }), h("span", { class:"grow" }), h("button", { class:"dclose", title:"닫기 (Esc)", "aria-label":"모르는 것 닫기", onclick: closeDrawer }, "✕")),
     h("div", { class:"dfilters" }, filters.map(([k, t]) => h("button", { class:"chip-btn", "aria-pressed": NT.filter === k ? "true" : "false", onclick: () => { NT.filter = k; paintDrawer(); } }, t))),
     h("div", { class:"dlist" }, list.length ? list.map(item) : h("p", { class:"small muted", style:"padding:8px", text: noteList(d).length ? "해당하는 항목이 없어요." : "원문을 드래그해 모르는 것을 물어보면 여기에 쌓여요." })),
     h("div", { class:"dfoot small muted", text:`같은 것을 ${NOTE_WEAK}번 이상 다시 보면 약점으로 표시해요.` }));

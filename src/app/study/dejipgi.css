@@ -751,3 +751,5 @@
 .dejipgi .sug.ai .sug-edit{border-color:color-mix(in srgb,var(--ask) 40%,var(--line))}
 .dejipgi .sug-ai{color:var(--ask);margin-right:4px;font-size:11px}
 .dejipgi .chip-btn.act{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
+.dejipgi .dclose{width:34px;height:34px;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-size:15px;cursor:pointer;display:grid;place-items:center}
+.dejipgi .dclose:hover{background:var(--surface-2);border-color:var(--ink)}
