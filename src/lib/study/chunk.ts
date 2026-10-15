@@ -22,7 +22,7 @@ const stripParticle = (token: string) => {
 };
 
 /** Phrase key → rank: 2 for terms (recall, answers, asked phrases, the core of a heading), 1 for whole headings. */
-export type Lexicon = { keys: Map<string, number>; maxWords: number };
+export type Lexicon = { keys: Map<string, number>; maxWords: number; /** key → the phrase as written, for showing the list */ labels: Map<string, string> };
 type LexiconDeck = {
   objectives?: Array<{ statement?: string }>;
   outline?: Array<{ title: string; objectives: Array<{ id: string; recall?: string; part?: string; kind?: string }> }>;
@@ -31,12 +31,21 @@ type LexiconDeck = {
 
 /** Short phrases only: a term, a heading, an asked phrase. Sentences and formulas are not units. */
 function phrases(text: string, heading = false): Array<{ text: string; rank: number }> {
-  const one = String(text ?? "").replace(/\$[^$]*\$/g, " ").replace(/\s+/g, " ").trim();
+  const raw = String(text ?? "");
+  if (/\$|\\\(|\\\[/.test(raw)) return [];   // a formula is not a phrase (removing it left "D Composite …")
+  const one = raw.replace(/\s+/g, " ").trim().replace(/\?$/, "");
   // A sentence ("…한다", "…이에요", "…함.") is not a unit; a noun ending in 요 ("개요") is.
   if (!one || one.length > 48 || /(다|니다|어요|아요|에요|세요|해요|됨|함)\.?$/.test(one) || one.split(" ").length > 6) return [];
+  // A term (not a heading) is a short noun phrase: no list, no quote, no subject/object particle in the middle
+  // ("윤리적 판단이 필수적", "고객, 협력업체, 지역사회" and the like are answers, not terms).
+  if (!heading) {
+    const words = one.split(" ");
+    if (words.length > 4 || /[,'"‘’“”?]/.test(one)) return [];
+    if (words.slice(0, -1).some((word) => hangul(word) && /(이|가|을|를|은|는|에|에서|으로|로|하는|되는|한|된)$/.test(word))) return [];
+  }
   const out = [{ text: one, rank: heading ? 1 : 2 }];
   // Headings carry the core term inside: "Kohlberg의 인지적 도덕 발달 이론 개요" → "인지적 도덕 발달 이론" too.
-  const core = one.replace(/^\S+의\s+/u, "").replace(/\s*(의\s*)?(개요|한계점|한계|종류|정의|특징|방법|구성|구조|예시|예|비교|요약|정리|소개)$/u, "").replace(/^\d+[.)]?\s*/, "").trim();
+  const core = one.replace(/^\S+의\s+/u, "").replace(/\s*(의\s*)?(개요|한계점|한계|종류|정의|특징|방법|구성|구조|예시|예|비교|요약|정리|소개)$/u, "").replace(/^\d+[.)]\s*/, "").trim();   // "02. 개인의 …" numbering only, not "2D …" or "3대 …"
   if (core && core !== one && core.split(" ").length >= 2) out.push({ text: core, rank: 2 });
   const noOwner = one.replace(/\s*(의\s*)?(개요|한계점|한계|종류|정의|특징|방법|구성|예시|요약|정리|소개)$/u, "").trim();
   if (noOwner && noOwner !== one && noOwner !== core) out.push({ text: noOwner, rank: 1 });
@@ -50,6 +59,7 @@ function phrases(text: string, heading = false): Array<{ text: string; rank: num
 
 export function buildLexicon(deck: LexiconDeck, extra: string[] = []): Lexicon {
   const keys = new Map<string, number>();
+  const labels = new Map<string, string>();
   let maxWords = 1;
   const add = (text: string, heading = false) => {
     for (const phrase of phrases(text, heading)) {
@@ -57,6 +67,7 @@ export function buildLexicon(deck: LexiconDeck, extra: string[] = []): Lexicon {
       if (words < 2 && !/[-‐]/.test(phrase.text) && !hangul(phrase.text)) continue;   // one plain English word adds nothing
       const key = keyOf(phrase.text);
       keys.set(key, Math.max(keys.get(key) ?? 0, phrase.rank));
+      if (!labels.has(key)) labels.set(key, phrase.text);
       maxWords = Math.max(maxWords, Math.min(8, words + 1));
     }
   };
@@ -67,7 +78,7 @@ export function buildLexicon(deck: LexiconDeck, extra: string[] = []): Lexicon {
   }
   for (const item of deck.items ?? []) if (item.format === "card" && kinds.get(item.objectiveId) === "용어") add(String(item.answer ?? ""));
   for (const phrase of extra) add(phrase);
-  return { keys, maxWords };
+  return { keys, maxWords, labels };
 }
 
 export type Chunk = { start: number; end: number; kind: "term" | "phrase" | "word" };
