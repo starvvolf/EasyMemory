@@ -77,6 +77,9 @@ export type DejipgiEnv = {
     seen(sourceId: string, noteId: string): Promise<StudyNote>;
     follow(input: { sourceId: string; noteId: string; question: string; pageText: string; title: string }): Promise<StudyNote>;
     talk(input: { sourceId: string; page: number; noteId: string | null; turns: Array<Omit<NoteTurn, "page"> & { page?: number }> }): Promise<StudyNote>;
+    /** 쪽마다 쉬운 설명 (곁 패널), made once and kept. */
+    explanations?(sourceId: string): Promise<Array<{ page: number; text: string; at: string }>>;
+    saveExplanation?(sourceId: string, page: number, text: string): Promise<void>;
   };
   /** ChatGPT account for in-app generation; `show` is false when the host does not generate with ChatGPT. */
   account?: {

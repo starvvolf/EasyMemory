@@ -186,7 +186,8 @@ const S = {
   session:null,
   recordsDeck:null,
   deleting:null,
-  reader:{ deckId:null, page:1, active:null, zoom:false, attachErr:"", attachBusy:false },
+  reader:{ deckId:null, page:1, active:null, zoom:false, attachErr:"", attachBusy:false,
+    panel:"ask", peek:null, badge:new Set(), snap:null, pulse:new Set(), terms:{ key:"", list:[] } },
   pdf:{},
   lib:{ status:"loading", error:"" },
   builder:freshBuilder(),
@@ -524,6 +525,7 @@ function touchMemory(subject){
 function setView(v){
   S.view = v;
   if (v !== "read" && Chat.isOpen() && typeof Chat !== "undefined"){ if (Chat.ctl) Chat.ctl.abort(); Chat.el.hidden = true; }
+  if (v !== "read" && typeof Chat !== "undefined" && Chat.docked){ Chat.undock(); Explain.stop(); }
   root.dataset.view = v;
   if (v === "create") loadAccount();
   if (v !== "read" && typeof hideSel === "function"){ hideSel(); NT.drawer = false; paintDrawer(); }
@@ -542,7 +544,10 @@ function render(){
   if (bar) app.append(bar);
   if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
   else if (S.view === "create") app.append(renderBuilder());
-  else if (S.view === "read") { app.append(renderReader()); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer(); }
+  else if (S.view === "read") {
+    const typing = Chat.el && Chat.el.contains(document.activeElement);
+    app.append(renderReader()); dockChat(typing); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer();
+  }
   else if (S.view === "summary") app.append(renderSummary());
   else app.append(renderRecords());
   if (S.view === "practice" && S.session){
@@ -1204,9 +1209,9 @@ function importantOf(d){
   return d._imp;
 }
 function termMarks(d, tl){
-  if (!termsOn() || !tl._tokens || !tl._tokens.length) return [];
+  if (!tl._tokens || !tl._tokens.length) return [];
   const terms = importantOf(d); if (!terms || !terms.keys.size) return [];
-  const out = [], seenLines = new Set();
+  const out = [], seenLines = new Set(), found = [];
   for (const t of tl._tokens){
     if (seenLines.has(t.line)) continue; seenLines.add(t.line);
     const words = t.line.map(n => tl._tokens[n].text);
@@ -1214,9 +1219,11 @@ function termMarks(d, tl){
       const list = t.line.slice(m.start, m.end + 1).map(n => tl._tokens[n]);
       const x0 = Math.min(...list.map(k => k.x0)), x1 = Math.max(...list.map(k => k.x1)), y0 = Math.min(...list.map(k => k.y0)), y1 = Math.max(...list.map(k => k.y1));
       const text = list.map(k => k.text).join(" ");
-      out.push(h("div", { class:"tm", title:`핵심 용어: ${text}`, style:`left:${x0 / tl._W * 100}%;top:${(y0 + (y1 - y0) * 0.1) / tl._H * 100}%;width:${(x1 - x0) / tl._W * 100}%;height:${(y1 - y0) * 0.8 / tl._H * 100}%` }));
+      if (!found.includes(text)) found.push(text);
+      if (termsOn()) out.push(h("div", { class:"tm", title:`핵심 용어: ${text}`, style:`left:${x0 / tl._W * 100}%;top:${(y0 + (y1 - y0) * 0.1) / tl._H * 100}%;width:${(x1 - x0) / tl._W * 100}%;height:${(y1 - y0) * 0.8 / tl._H * 100}%` }));
     }
   }
+  pageTermsFound(d, found);
   return out;
 }
 async function drawPage(){
@@ -1243,10 +1250,16 @@ function fitPage(d){
   const availH = Math.max(260, window.innerHeight - top - below);
   const sideBySide = window.innerWidth >= 1000 && rail && rail.childNodes.length;
   page.classList.toggle("side", !!sideBySide);
-  const availW = page.clientWidth - (sideBySide ? Math.min(300, Math.max(220, page.clientWidth * 0.22)) + 18 : 0);
+  // The rail holds the docked question window and tabs, so it gets a real column (340–440px).
+  const railW = sideBySide ? Math.round(Math.min(440, Math.max(340, page.clientWidth * 0.3))) : 0;
+  const availW = page.clientWidth - (sideBySide ? railW + 18 : 0);
   const w = Math.floor(Math.min(availW, availH * aspect));
   sheet.style.width = w + "px";
-  if (rail) rail.style.maxHeight = sideBySide ? Math.round(w / aspect) + "px" : "";
+  if (rail){
+    rail.style.width = sideBySide ? Math.max(railW, page.clientWidth - w - 18) + "px" : "";
+    rail.style.height = sideBySide ? Math.max(Math.round(w / aspect), Math.min(availH, 560)) + "px" : "";
+    rail.style.maxHeight = "";
+  }
 }
 function findRange(text, quote){
   const chars = [...String(quote).replace(/\s+/g, "")].slice(0, 160).map(c => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -1367,10 +1380,14 @@ function renderReader(){
       stored && stored.text.trim() ? markTextRefs(stored.text, activeRefs(d, R.page)) : h("span", { class:"muted", text:"이 쪽은 저장된 텍스트가 없어요." }))));
   }
   page.append(sheet);
-  // Slides fit the screen (fitPage): the page is sized to the height left, and what to learn sits beside it.
+  // Slides fit the screen (fitPage): the page is sized to the height left, and the side panel sits beside it:
+  // 설명 (docked question window with this page's easy explanation) · 목표 · 상태, switched like browser tabs.
+  if (wide && dockWanted()) page.append(sidePanel(d, objs, n));
   const holder = wide ? h("aside", { class:"rrail" }) : page;
-  if (wide) page.append(holder);
-  if (objs.length){
+  if (wide && !dockWanted()) page.append(holder);
+  if (wide && !dockWanted() && window.innerWidth >= 1000) holder.append(h("button", { class:"btn small", title:"질문 창을 쪽 옆에 붙이고 쉬운 설명을 바로 보기",
+    onclick: () => { S.plan.prefs.chatFloat = false; Store.savePlan(S.plan); if (Chat.el) Chat.el.hidden = true; render(); } }, "질문 창 옆에 붙이기"));
+  if (objs.length && !(wide && dockWanted())){
     holder.append(h("div", { class:"goals" }, h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
       objs.map((o, i) => h("div", { class:"goalrow" },
         h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", title:"원문에서 이 부분만 진하게 보기", onclick: () => { R.active = R.active === o.id ? null : o.id; render(); } },
@@ -1393,7 +1410,7 @@ function renderReader(){
   wrap.append(h("div", { class:"ractions" },
     h("span", { class:"where" }, h("b", { text:`p.${R.page}` }), objs.length ? ` · 익힐 것 ${objs.length}` : " · 연결된 목표 없음",
       notesOn(d) && pdfOn ? h("span", { class:"nhint", text:" · 모르는 건 원문을 드래그해 물어보세요" }) : null),
-    h("button", { class:"btn", "aria-pressed": Chat.isOpen() ? "true" : "false", onclick: () => Chat.toggle() }, Chat.isOpen() ? "질문 창 닫기" : "질문하기"),
+    wide && dockWanted() ? null : h("button", { class:"btn", "aria-pressed": Chat.isOpen() ? "true" : "false", onclick: () => Chat.toggle() }, Chat.isOpen() ? "질문 창 닫기" : "질문하기"),
     S.session ? h("button", { class:"btn primary", onclick: () => setView("practice") }, "연습으로 돌아가기")
       : n ? h("button", { class:"btn primary", title:"읽은 직후 푼 결과는 기억 기록으로 세지 않고, 내일부터 복습에 넣어요.", onclick: () => startCheck(d.id, R.page) }, `이 쪽 문제 풀기 (${n})`)
       : nxt ? h("button", { class:"btn", onclick: () => goPage(nxt) }, `문제 있는 다음 쪽 · p.${nxt} →`) : null));
@@ -1408,13 +1425,196 @@ on(document, "keydown", (e) => {
   else if (e.key === "ArrowLeft"){ e.preventDefault(); goPage(S.reader.page - 1); }
 });
 let resizeTimer;
-on(window, "resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (S.view === "read") drawPage(); }, 150); });
+on(window, "resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => {
+  if (S.view !== "read") return;
+  // crossing the side-by-side width: the question window moves between the side panel and its own window
+  if (!!document.querySelector(".rside") !== (dockWanted() && !!document.querySelector(".rpage.wide"))) render(); else drawPage();
+}, 150); });
 (function watchDpr(){
   try{
     const mq = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
     on(mq, "change", () => { if (S.view === "read") drawPage(); watchDpr(); }, { once:true });
   }catch(e){}
 })();
+/* ----- 읽기 곁 패널: 설명 (the question window docked, with this page's easy explanation) · 목표 · 상태.
+   Switched like browser tabs. When a goal or the status really changes while the learner is just reading,
+   the panel slides to that tab for a moment, pulses what changed, and slides back (motion off → a dot on the tab). ----- */
+const reducedMotion = () => { try{ return matchMedia("(prefers-reduced-motion: reduce)").matches; }catch(e){ return false; } };
+function dockWanted(){ return window.innerWidth >= 1000 && !(S.plan.prefs && S.plan.prefs.chatFloat); }
+function dockChat(refocus){
+  const slot = document.getElementById("chatDock");
+  if (slot){ Chat.dockInto(slot, refocus); const R = S.reader; Explain.want(S.decks[R.deckId], R.page); }
+  else if (Chat.docked){ Chat.undock(); Explain.stop(); }
+}
+let peekTimer, pulseTimer;
+function setPanelTab(k){
+  const R = S.reader; R.panel = k; R.badge.delete(k);
+  if (R.peek){ R.peek = null; clearTimeout(peekTimer); }
+  showPane(k);
+}
+function showPane(k){
+  const side = document.querySelector(".rside"); if (!side) return;
+  side.classList.toggle("peeking", !!S.reader.peek);
+  side.querySelectorAll(".rtabs [data-tab]").forEach(b => { b.setAttribute("aria-selected", b.dataset.tab === k ? "true" : "false"); b.classList.toggle("dot", S.reader.badge.has(b.dataset.tab)); });
+  side.querySelectorAll(".rpane").forEach(p => p.classList.toggle("on", p.dataset.pane === k));
+}
+const GOAL_STATE = { weak:["약점", "bad"], new:["안 풀어봄", ""], mid:["푸는 중", "help"], good:["혼자 맞힘", "good"], none:["문제 없음", ""] };
+function pageNotes(d, page){ return noteList(d).filter(x => x.page === page).length; }
+function panelSnap(d, objs, n){
+  const c = deckCounts(d);
+  return { key:d.id + ":" + S.reader.page, count:objs.length + ":" + n,
+    goals:new Map(objs.map(o => [o.id, objectiveState(d, o.id)])),
+    state:[c.good, c.due, c.fresh, weakList([d]).length, pageNotes(d, S.reader.page)].join("/") };
+}
+function detectPeek(snap){
+  const R = S.reader, prev = R.snap; R.snap = snap;
+  if (!prev || prev.key !== snap.key) return;
+  const changed = [...snap.goals.keys()].filter(id => prev.goals.get(id) !== snap.goals.get(id));
+  const goals = changed.length || prev.count !== snap.count, state = prev.state !== snap.state;
+  if (!goals && !state) return;
+  R.pulse = new Set(goals ? changed : []); R.pulseState = !goals && state;
+  clearTimeout(pulseTimer); pulseTimer = setTimeout(() => { R.pulse = new Set(); R.pulseState = false; }, 3000);
+  const tab = goals ? "goals" : "state";
+  if (R.panel === tab) return;
+  const ta = Chat.el && Chat.el.querySelector("textarea");
+  const busy = Chat.busy || (ta && (ta.value.trim() || document.activeElement === ta));
+  if (R.panel !== "ask" || busy || reducedMotion()){ R.badge.add(tab); return; }
+  R.peek = { tab };
+  clearTimeout(peekTimer);
+  peekTimer = setTimeout(() => { if (R.peek && R.peek.tab === tab){ R.peek = null; showPane(R.panel); } }, 2600);
+}
+function sidePanel(d, objs, n){
+  const R = S.reader;
+  detectPeek(panelSnap(d, objs, n));
+  const shown = R.peek ? R.peek.tab : R.panel;
+  const tabs = [["ask", "설명"], ["goals", objs.length ? `목표 ${objs.length}` : "목표"], ["state", "상태"]];
+  const bar = h("div", { class:"rtabs", role:"tablist", "aria-label":"곁 패널" },
+    tabs.map(([k, label]) => h("button", { role:"tab", "data-tab":k, class: R.badge.has(k) && k !== shown ? "dot" : null, "aria-selected": shown === k ? "true" : "false", onclick: () => setPanelTab(k) }, label)),
+    h("span", { class:"grow" }),
+    h("button", { class:"qbtn", title:"새 대화 시작 (지금 대화는 노트에 남아요)", onclick: () => { setPanelTab("ask"); Chat.reset(); } }, "새 대화"),
+    h("button", { class:"qbtn", title:"질문 창을 따로 띄우기", "aria-label":"질문 창 띄우기", onclick: () => {
+      (S.plan.prefs || (S.plan.prefs = {})).chatFloat = true; Store.savePlan(S.plan); Chat.undock(); Explain.stop(); render(); Chat.open(); } }, "⧉"));
+  const panes = h("div", { class:"rpanes" },
+    h("div", { class:"rpane", "data-pane":"ask", id:"chatDock", role:"tabpanel" }),
+    h("div", { class:"rpane pad", "data-pane":"goals", role:"tabpanel" }, goalsPane(d, objs, n)),
+    h("div", { class:"rpane pad", "data-pane":"state", role:"tabpanel" }, statePane(d, n)));
+  for (const p of panes.children) if (p.dataset.pane === shown) p.classList.add("on");
+  return h("aside", { class:"rrail rside" + (R.peek ? " peeking" : "") }, bar, panes);
+}
+function goalsPane(d, objs, n){
+  const R = S.reader, nxt = nextPageWithItems(d, R.page);
+  if (!objs.length) return [h("p", { class:"small muted", text: d.pending ? "문제를 만드는 중이에요. 이 쪽의 목표가 생기면 여기에 떠요." : "이 쪽에 연결된 학습목표가 없어요." }),
+    nxt ? h("button", { class:"btn small", onclick: () => goPage(nxt) }, `목표 있는 다음 쪽 · p.${nxt} →`) : null];
+  return [h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
+    ...objs.map((o, i) => { const [label, cls] = GOAL_STATE[objectiveState(d, o.id)] || GOAL_STATE.none;
+      return h("div", { class:"pgoal" + (R.pulse.has(o.id) ? " pulse" : "") },
+        h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", title:"원문에서 이 부분만 진하게 보기", onclick: () => { R.active = R.active === o.id ? null : o.id; render(); } },
+          h("span", { class:"gnum", text:String(i + 1) }), h("span", { text:o.statement })),
+        h("div", { class:"pgoal-foot" }, h("span", { class:"chip " + cls, text:label }), h("span", { class:"grow" }),
+          d.example ? null : h("button", { class:"linkish", title:"이 목표의 문제를 연습·복습에서 빼기", onclick: () => hideObjective(d, o.id) }, "빼기"))); }),
+  ];
+}
+function termChips(list){
+  if (!list.length) return [h("span", { class:"small muted", text:"이 쪽엔 표시된 핵심 용어가 없어요." })];
+  return list.map(t => h("button", { class:"chip-btn", title:"질문 창에 넣기", onclick: () => Chat.quoteIn(t) }, t));
+}
+function pageTermsFound(d, found){
+  const R = S.reader; R.terms = { key:d.id + ":" + R.page, list:found };
+  const el = document.getElementById("pgTerms"); if (el) el.replaceChildren(...termChips(found));
+}
+function statePane(d, n){
+  const R = S.reader, c = deckCounts(d), weak = weakList([d]).length, notes = pageNotes(d, R.page);
+  const key = d.id + ":" + R.page, plan = d.example ? null : todayPlan();
+  const mine = plan ? plan.queue.filter(r => r.deckId === d.id).length : 0;
+  const pct = c.total ? Math.round(c.good / c.total * 100) : 0;
+  const row = (k, v, cls) => h("div", { class:"strow" }, h("span", { text:k }), h("b", { class:"num" + (cls ? " " + cls : ""), text:v }));
+  return [
+    h("div", { class:"stbox" + (R.pulseState ? " pulse" : "") }, h("span", { class:"lbl", text:`이 쪽 · p.${R.page}` }),
+      row("연결된 문제", `${n}개`), row("모르는 것 노트", `${notes}개`, notes ? "ask" : "")),
+    h("div", { class:"stbox" }, h("span", { class:"lbl", text:"이 쪽 핵심 용어" }),
+      h("div", { class:"pgterms", id:"pgTerms" }, R.terms.key === key ? termChips(R.terms.list) : h("span", { class:"small muted", text:"쪽을 그리는 중…" }))),
+    h("div", { class:"stbox" + (R.pulseState ? " pulse" : "") }, h("span", { class:"lbl", text:"이 자료" }),
+      h("div", { class:"stbar", title:`혼자 맞힘 ${c.good} / ${c.total}` }, h("i", { style:`width:${pct}%` })),
+      row("혼자 맞힘", `${c.good} / ${c.total}`), row("약점", `${weak}개`, weak ? "bad" : ""), row("복습 차례", `${c.due}개`), row("새 문제", `${c.fresh}개`)),
+    plan ? h("div", { class:"stbox" }, h("span", { class:"lbl", text:"오늘" }),
+      row("이 자료에서 남은 것", `${mine}개`), row("전체 남은 것", `${plan.queue.length}개`), row("오늘 푼 것", `${plan.doneToday}개`),
+      plan.queue.length && !S.session ? h("button", { class:"btn small", style:"margin-top:6px", onclick: () => startToday() }, "오늘 할 것 이어서") : null) : null,
+  ];
+}
+/* 쪽마다 쉬운 설명: after 1.5s on a page with enough text, once per page; kept (study-notes/<source>.explain.json)
+   so it shows instantly next time. It is not a 모르는 것 note, so it never counts as "물어봄". */
+const Explain = {
+  src:{}, run:null, timer:null, err:null, skip:new Set(),
+  sid(d){ return d.sourceCatalogId || d.id; },
+  auto(){ return !(S.plan.prefs && S.plan.prefs.autoExplain === false); },
+  load(d){
+    const k = this.sid(d); if (this.src[k]) return;
+    const e = this.src[k] = { status:"loading", map:new Map() };
+    if (!notesOn(d) || !notesApi.explanations){ e.status = "ready"; return; }
+    notesApi.explanations(k).then(list => { for (const x of list) e.map.set(x.page, x.text); }, () => {})
+      .then(() => { e.status = "ready"; const R = S.reader, cur = S.decks[R.deckId]; if (S.view === "read" && Chat.docked && cur && this.sid(cur) === k){ this.paintNode(); this.want(cur, R.page); } });
+  },
+  stop(){ clearTimeout(this.timer); this.timer = null; if (this.run && this.run.ctl) this.run.ctl.abort(); this.run = null; },
+  want(d, page){
+    if (!d) return;
+    this.load(d);
+    const key = this.sid(d) + ":" + page;
+    if (this.run && this.run.key === key) return;
+    if (this.run) this.stop();
+    clearTimeout(this.timer); this.timer = null;
+    const e = this.src[this.sid(d)];
+    if (!ask || !this.auto() || e.status !== "ready" || e.map.has(page) || this.skip.has(key) || (this.err && this.err.key === key)) return;
+    this.timer = setTimeout(() => { this.timer = null; const R = S.reader; if (S.view === "read" && Chat.docked && R.deckId === d.id && R.page === page) this.go(d, page, false); }, 1500);
+  },
+  async go(d, page, force){
+    if (!ask) return;
+    const key = this.sid(d) + ":" + page;
+    this.err = null;
+    const text = await pageText(d, page);
+    if (!force && text.replace(/\s/g, "").length < 40){ this.skip.add(key); this.paintNode(); return; }
+    const objs = d.objectives.filter(o => o.pages.includes(page));
+    const run = this.run = { key, text:"", ctl:new AbortController() };
+    this.paintNode();
+    const prompt = Chat.prompt({ d, page, objs }, text) + `
+[요청]
+이 쪽을 처음 보는 사람에게 쉽게 설명해 줘. 첫 문장은 이 쪽이 무엇에 대한 것인지, 이어서 핵심을 2~4문장으로. 어려운 용어는 원문 그대로 쓰고 바로 뒤 괄호에 쉬운 풀이를 붙인다. 마지막 줄은 "한 줄 요약: "으로 시작한다.`;
+    try{
+      await ask([{ role:"user", content:prompt }], { signal:run.ctl.signal, onText: ({ text:t }) => { run.text = t; this.paintBody(); } });
+      if (this.run !== run) return;
+      if (run.text.includes("$") && !katexLib) await ensureKatex();
+      this.run = null;
+      if (run.text.trim()){
+        this.src[this.sid(d)].map.set(page, run.text);
+        if (notesOn(d) && notesApi.saveExplanation) notesApi.saveExplanation(this.sid(d), page, run.text).catch(() => {});
+      }
+    }catch(err){
+      if (this.run !== run) return;
+      this.run = null;
+      if (!(err && err.code === "cancelled")) this.err = { key, text:sampleErrorCopy(err) };
+    }
+    this.paintNode();
+  },
+  node(d, page){
+    const key = this.sid(d) + ":" + page, e = this.src[this.sid(d)];
+    const saved = e && e.map.get(page), run = this.run && this.run.key === key ? this.run : null;
+    const auto = h("input", { type:"checkbox" }); auto.checked = this.auto();
+    auto.addEventListener("change", () => { (S.plan.prefs || (S.plan.prefs = {})).autoExplain = auto.checked; Store.savePlan(S.plan); this.paintNode(); if (auto.checked) this.want(d, page); });
+    const head = h("div", { class:"ex-head" }, h("b", { text:`쉬운 설명 · p.${page}` }), h("span", { class:"grow" }),
+      ask ? h("label", { class:"ex-auto", title:"쪽을 넘기고 1.5초 머무르면 자동으로 설명해요. 쪽마다 한 번만 만들고 저장해 둬요." }, auto, "자동") : null);
+    const again = (label) => h("button", { class:"chip-btn", onclick: () => { this.skip.delete(key); this.go(d, page, true); } }, label);
+    let body;
+    if (saved) body = h("div", { class:"ex-body", id:"explainBody" }, richLines(saved));
+    else if (run) body = h("div", { class:"ex-body streaming", id:"explainBody" }, richLines(run.text || "쉬운 설명을 쓰는 중…"));
+    else if (!ask) body = h("p", { class:"small muted", text:"질문 답변이 연결되면 쪽마다 쉬운 설명이 여기 바로 떠요." });
+    else if (this.err && this.err.key === key) body = h("div", null, h("p", { class:"check", text:this.err.text }), again("다시 설명 받기"));
+    else if (this.skip.has(key)) body = h("div", null, h("p", { class:"small muted", text:"글자가 거의 없는 쪽이라 자동 설명은 건너뛰었어요." }), again("그래도 설명 보기"));
+    else if (!this.auto()) body = again("이 쪽 쉬운 설명 보기");
+    else body = h("p", { class:"small muted ex-wait", text: e && e.status === "loading" ? "저장된 설명을 불러오는 중…" : "잠깐 머무르면 쉬운 설명이 떠요…" });
+    return h("div", { class:"explain", id:"explainCard" }, head, body);
+  },
+  paintNode(){ const el = document.getElementById("explainCard"), R = S.reader, d = S.decks[R.deckId]; if (el && d) el.replaceWith(this.node(d, R.page)); },
+  paintBody(){ const b = document.getElementById("explainBody"); if (b && this.run) b.replaceChildren(...richLines(this.run.text || "…")); else this.paintNode(); },
+};
 /* ----- floating question window: lives outside #app so re-renders never reset it.
    Answers need a paid model call, so `ask` stays unset until the user approves wiring it. ----- */
 const Chat = {
@@ -1423,8 +1623,23 @@ const Chat = {
   noteId:null, noteSource:null, noteTitle:"", fromNote:null, base:0, quote:null,
   box(){ try{ return JSON.parse(localStorage.getItem("dejipgi.chatbox") || "null"); }catch(e){ return null; } },
   saveBox(){ if (!this.el || this.mode !== "normal") return; const r = this.el.getBoundingClientRect(); try{ localStorage.setItem("dejipgi.chatbox", JSON.stringify({ x:r.left, y:r.top, w:r.width, h:r.height })); }catch(e){} },
-  mode:"normal",
-  isOpen(){ return !!(this.el && !this.el.hidden); },
+  mode:"normal", docked:false,
+  isOpen(){ return !!(this.el && !this.el.hidden && !this.docked); },
+  /* 곁 패널에 붙기: the same window, moved into the reader's side panel (no header; the panel's tabs replace it). */
+  dockInto(slot, refocus){
+    if (!this.el) this.build();
+    const log = this.el.querySelector("#chatLog"), top = log ? log.scrollTop : 0;
+    this.docked = true; this.el.classList.add("docked"); this.el.hidden = false;
+    for (const k of ["left","top","width","height"]) this.el.style[k] = "";
+    slot.append(this.el); this.paint();
+    if (log && top) log.scrollTop = top;
+    if (refocus) this.el.querySelector("textarea").focus({ preventScroll:true });
+  },
+  undock(){
+    if (!this.el || !this.docked) return;
+    this.docked = false; this.el.classList.remove("docked"); this.el.hidden = true;
+    root.append(this.el); this.setMode("normal");
+  },
   setMode(m){
     if (!this.el) return;
     if (this.mode === "normal" && m !== "normal" && innerWidth > 700) this.saveBox();
@@ -1445,8 +1660,9 @@ const Chat = {
     if (m !== "min") setTimeout(() => { const log = this.el.querySelector("#chatLog"); if (log) log.scrollTop = log.scrollHeight; }, 0);
   },
   toggle(){ this.isOpen() ? this.close() : this.open(); },
-  close(){ if (this.ctl) this.ctl.abort(); if (this.el) this.el.hidden = true; if (S.view === "read") render(); },
+  close(){ if (this.docked) return; if (this.ctl) this.ctl.abort(); if (this.el) this.el.hidden = true; if (S.view === "read") render(); },
   open(){
+    if (this.docked){ setPanelTab("ask"); setTimeout(() => this.el.querySelector("textarea").focus(), 0); return; }
     if (!this.el) this.build();
     this.el.hidden = false; this.setMode(this.mode === "max" ? "max" : "normal"); this.paint();
     ensureKatex().then(ok => { if (ok && this.isOpen()) this.paint(); });
@@ -1535,9 +1751,10 @@ const Chat = {
     const log = this.el.querySelector("#chatLog");
     const nodes = [];
     if (this.fromNote) nodes.push(h("p", { class:"chat-hint", style:"text-align:center", text:`‘${this.fromNote}’ 카드에서 이어진 대화예요. 여기 대화도 그 카드에 저장돼요.` }));
+    if (this.docked && c) nodes.push(Explain.node(c.d, c.page));
     if (!this.msgs.length){
-      nodes.push(h("p", { class:"chat-hint", text:"지금 보는 쪽을 근거로 답해요. 바로 물어보거나 아래에서 골라 보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." }));
-      nodes.push(h("div", { class:"chat-sugs" }, ["이 쪽 쉽게 설명해 줘", "핵심만 한 줄로 알려 줘", "원문 줄마다 쉬운 말로 풀어 줘", "예시 숫자로 한 번 보여 줘"].map(q =>
+      nodes.push(h("p", { class:"chat-hint", text: this.docked ? "더 궁금한 건 바로 물어보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." : "지금 보는 쪽을 근거로 답해요. 바로 물어보거나 아래에서 골라 보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." }));
+      nodes.push(h("div", { class:"chat-sugs" }, (this.docked ? ["핵심만 한 줄로 알려 줘", "원문 줄마다 쉬운 말로 풀어 줘", "예시 숫자로 한 번 보여 줘"] : ["이 쪽 쉽게 설명해 줘", "핵심만 한 줄로 알려 줘", "원문 줄마다 쉬운 말로 풀어 줘", "예시 숫자로 한 번 보여 줘"]).map(q =>
         h("button", { class:"chip-btn", onclick: () => { this.el.querySelector("textarea").value = q; this.send(); } }, q))));
     }
     for (const m of this.msgs){
@@ -1576,7 +1793,11 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
     if (!keepOpen) this.paint();
   },
   /* 질문 창에 넣기: the dragged text becomes a quote chip on the next question */
-  quoteIn(text){ this.quote = text; if (!this.isOpen()) this.open(); else { this.paint(); this.el.querySelector("textarea").focus(); } },
+  quoteIn(text){
+    this.quote = text;
+    if (this.docked){ setPanelTab("ask"); this.paint(); this.el.querySelector("textarea").focus(); return; }
+    if (!this.isOpen()) this.open(); else { this.paint(); this.el.querySelector("textarea").focus(); }
+  },
   /* 질문 창에서 계속: carry a card's answer and turns into the window; new turns go back to that card */
   continueNote(d, note){
     this.reset(true);
@@ -1982,7 +2203,7 @@ function readSelection(){
 function showSel(){
   const info = readSelection(); if (!info){ hideSel(); return; }
   const d = S.decks[info.deckId]; if (!d) return;
-  const canNote = notesOn(d), chatOpen = Chat.isOpen();
+  const canNote = notesOn(d), chatOpen = Chat.isOpen() || Chat.docked;
   if (!canNote && !chatOpen){ hideSel(); return; }
   hideSel();
   const known = canNote ? findPhrase(d, info.text) : null;

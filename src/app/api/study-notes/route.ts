@@ -5,6 +5,7 @@ import { requireExperimentPrincipal } from "@/lib/local-experiment-auth";
 import { UserDataHttpError } from "@/lib/server-user";
 import { askNote, chatReply, followUp, listNotes, markNote, markSeen, NoteError, removeNote, saveTalk } from "@/lib/study/notes";
 import { boundedJson } from "../mcp-experiment-requests/http";
+import { listExplanations, saveExplanation } from "@/lib/study/explain";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,7 @@ const body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("talk"), sourceId, page, noteId: z.string().max(60).nullish(),
     turns: z.array(z.object({ role: z.enum(["user", "assistant"]), text: text(8000), quote: text(400).nullish(), page: page.optional() })).min(1).max(80),
     usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional() }),
+  z.object({ action: z.literal("explain-save"), sourceId, page, text: text(8000).min(1) }),
 ]);
 
 async function caller(request: Request) {
@@ -42,7 +44,9 @@ function failure(error: unknown) {
 export async function GET(request: Request) {
   try {
     await caller(request);
-    const id = sourceId.parse(new URL(request.url).searchParams.get("sourceId"));
+    const params = new URL(request.url).searchParams;
+    const id = sourceId.parse(params.get("sourceId"));
+    if (params.get("explain")) return NextResponse.json({ pages: await listExplanations(id) }, { headers: { "Cache-Control": "no-store" } });
     return NextResponse.json({ notes: await listNotes(id) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return failure(error); }
 }
@@ -59,6 +63,7 @@ export async function POST(request: Request) {
       case "follow": return NextResponse.json({ note: await followUp(who, input) });
       case "chat": return NextResponse.json(await chatReply(who, input.turns));
       case "talk": return NextResponse.json({ note: await saveTalk(who, input) });
+      case "explain-save": return NextResponse.json({ page: await saveExplanation(input.sourceId, input.page, input.text) });
     }
   } catch (error) { return failure(error); }
 }

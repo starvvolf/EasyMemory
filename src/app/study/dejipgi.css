@@ -697,3 +697,45 @@
   .dejipgi .sum-deck{padding:18px 16px}
   .dejipgi .qcard{padding:22px 18px 18px}
 }
+
+/* ---- 읽기 곁 패널: 설명 · 목표 · 상태 tabs, the question window docked in 설명 ---- */
+.dejipgi .rpage.wide.side .rrail.rside{flex:none;max-width:none;overflow:hidden;padding:0;gap:0;display:flex;flex-direction:column;
+  border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:0 1px 2px rgb(0 0 0 / .04)}
+.dejipgi .rtabs{display:flex;align-items:flex-end;gap:2px;padding:6px 6px 0;background:color-mix(in srgb,var(--line) 35%,var(--surface));border-bottom:1px solid var(--line)}
+.dejipgi .rtabs [role="tab"]{position:relative;border:1px solid transparent;border-bottom:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;
+  padding:7px 14px 8px;border-radius:9px 9px 0 0;cursor:pointer;margin-bottom:-1px;transition:background .18s,color .18s}
+.dejipgi .rtabs [role="tab"]:hover{color:var(--ink);background:color-mix(in srgb,var(--surface) 60%,transparent)}
+.dejipgi .rtabs [role="tab"][aria-selected="true"]{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.dejipgi .rtabs [role="tab"].dot::after{content:"";position:absolute;top:6px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.dejipgi .rside.peeking .rtabs [role="tab"][aria-selected="true"]{color:var(--accent);box-shadow:inset 0 2px 0 var(--accent)}
+.dejipgi .rtabs .qbtn{margin:0 0 4px;font-size:12px}
+.dejipgi .rpanes{position:relative;flex:1;min-height:0}
+.dejipgi .rpane{position:absolute;inset:0;overflow:auto;opacity:0;visibility:hidden;transform:translateX(16px);
+  transition:opacity .24s ease,transform .24s ease,visibility 0s linear .24s}
+.dejipgi .rpane.on{opacity:1;visibility:visible;transform:none;transition:opacity .24s ease,transform .24s ease}
+.dejipgi .rpane.pad{padding:12px;display:flex;flex-direction:column;gap:10px}
+.dejipgi .rpane[data-pane="ask"]{overflow:hidden;display:flex}
+.dejipgi .chatwin.docked{position:static;flex:1;min-width:0;min-height:0;width:auto;height:auto;max-width:none;max-height:none;border:0;border-radius:0;box-shadow:none;background:var(--surface);backdrop-filter:none}
+.dejipgi .chatwin.docked .chat-head,.dejipgi .chatwin.docked .rz{display:none}
+.dejipgi .explain{border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line));background:color-mix(in srgb,var(--accent) 6%,var(--surface));border-radius:12px;padding:10px 12px;margin-bottom:10px}
+.dejipgi .ex-head{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:6px}
+.dejipgi .ex-head b{color:var(--accent)}
+.dejipgi .ex-auto{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer}
+.dejipgi .ex-body{font-size:14px;line-height:1.65}
+.dejipgi .ex-body.streaming::after{content:"▍";animation:exblink 1s steps(2) infinite;color:var(--accent)}
+.dejipgi .ex-wait{animation:exfade 1.6s ease-in-out infinite}
+@keyframes exblink{50%{opacity:0}}
+@keyframes exfade{50%{opacity:.45}}
+.dejipgi .pgoal{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.dejipgi .pgoal .goal{width:100%}
+.dejipgi .pgoal-foot{display:flex;align-items:center;gap:6px}
+.dejipgi .stbox{display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid var(--line);border-radius:10px}
+.dejipgi .strow{display:flex;justify-content:space-between;font-size:13px}
+.dejipgi .strow b.bad{color:var(--bad)}
+.dejipgi .strow b.ask{color:var(--ask)}
+.dejipgi .stbar{height:6px;border-radius:3px;background:color-mix(in srgb,var(--line) 70%,transparent);overflow:hidden}
+.dejipgi .stbar i{display:block;height:100%;background:var(--good,#2f9e6a);border-radius:3px;transition:width .4s ease}
+.dejipgi .pgterms{display:flex;flex-wrap:wrap;gap:5px}
+.dejipgi .pulse{animation:panelpulse 1.1s ease-out 2}
+@keyframes panelpulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+@media (prefers-reduced-motion:reduce){.dejipgi .rpane{transform:none}.dejipgi .pulse,.dejipgi .ex-wait,.dejipgi .ex-body.streaming::after{animation:none}}
