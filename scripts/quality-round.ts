@@ -9,7 +9,7 @@ if (!root || !path.isAbsolute(root)) throw new Error("An absolute private data d
 if (path.basename(process.cwd()) !== "EasyMemory-quality") throw new Error("Quality worktree required.");
 const privateRoot = path.join(root, "품질루프");
 const [action, genId, argument, ...flags] = process.argv.slice(2);
-if (!/^(judge|fork)$/.test(action ?? "") || !/^gen_[a-f0-9]{32}$/.test(genId ?? "")) throw new Error("Usage: judge <genId> <tag> --confirmed | fork <genId> <design|author> <tag> --confirmed");
+if (!/^(judge|fork)$/.test(action ?? "") || !/^gen_[a-f0-9]{32}$/.test(genId ?? "")) throw new Error("Usage: judge <genId> <tag> --confirmed [--models-from=<completed-tag>] | fork <genId> <design|author> <tag> --confirmed");
 const from = action === "fork" ? argument : null;
 const tag = action === "fork" ? flags.shift() : argument;
 if (!tag || !/^[a-z0-9-]+$/.test(tag) || !flags.includes("--confirmed")) throw new Error("A safe tag and explicit --confirmed are required.");
@@ -17,10 +17,31 @@ if (from && !["design", "author"].includes(from)) throw new Error("Invalid fork 
 const isolateOnly = flags.includes("--isolate-only");
 const dryRun = flags.includes("--dry-run");
 if ((isolateOnly && action !== "fork") || (dryRun && !isolateOnly)) throw new Error("Isolation flags require an existing fork checkpoint.");
+const modelFlags = flags.filter(flag => flag.startsWith("--models-from"));
+if (modelFlags.length > 1 || (modelFlags.length && (action !== "judge" || !/^--models-from=[a-z0-9-]+$/.test(modelFlags[0])))) throw new Error("Model replay requires one safe judge checkpoint tag.");
+const modelsFrom = modelFlags[0]?.slice("--models-from=".length);
+if (modelsFrom === tag) throw new Error("A model replay cannot reference itself.");
+if (flags.some(flag => !["--confirmed", "--isolate-only", "--dry-run", ...(modelsFrom ? [`--models-from=${modelsFrom}`] : [])].includes(flag))) throw new Error("Unknown operation flag.");
 const file = path.join(privateRoot, `${tag}.json`);
-type Job = { action: string; source: string; from: string | null; startedAt: string; id?: string; target?: string; status: string; calls: number; updatedAt?: string; result?: unknown; score?: unknown; error?: string };
-type RemoteState = { id: string; status: string; calls: number; createdAt: string; forkOf?: { genId: string; from: string }; input?: { origin?: string }; summary?: unknown };
+type JudgeModels = { solver: { model: string; effort: string }; expert: { model: string; effort: string } };
+type Job = { action: string; source: string; from: string | null; startedAt: string; id?: string; target?: string; status: string; calls: number; modelsFrom?: string; models?: JudgeModels; updatedAt?: string; result?: unknown; score?: unknown; error?: string };
+type RemoteState = { id: string; genId?: string; kind?: string; status: string; calls: number; createdAt: string; forkOf?: { genId: string; from: string }; input?: { origin?: string }; models?: JudgeModels; summary?: unknown };
 type ApiData = { runs: RemoteState[]; run: RemoteState; gen: RemoteState; score: { counts: unknown } };
+function validModels(value: unknown): value is JudgeModels {
+    const models = value as JudgeModels | undefined;
+    const efforts = ["low", "medium", "high", "xhigh"];
+    return models?.solver?.model === "gpt-6-luna" && models?.expert?.model === "gpt-6-sol" && efforts.includes(models.solver.effort) && efforts.includes(models.expert.effort);
+}
+function sameModels(actual: unknown, expected: JudgeModels) {
+    return validModels(actual) && actual.solver.effort === expected.solver.effort && actual.expert.effort === expected.expert.effort;
+}
+let replayModels: JudgeModels | undefined;
+if (modelsFrom) {
+    const reference = JSON.parse(await readFile(path.join(privateRoot, `${modelsFrom}.json`), "utf8")) as Job;
+    const state = reference.result as RemoteState | undefined;
+    if (reference.action !== "judge" || reference.from !== null || reference.source !== genId || reference.target !== genId || reference.status !== "done" || !reference.id || !/^j_[a-f0-9]{16}$/.test(reference.id) || !state || state.id !== reference.id || state.genId !== genId || state.kind !== "judge" || state.status !== "done" || reference.calls !== state.calls || !validModels(state.models)) throw new Error("Model replay requires a matching completed judge checkpoint.");
+    replayModels = { solver: { model: state.models.solver.model, effort: state.models.solver.effort }, expert: { model: state.models.expert.model, effort: state.models.expert.effort } };
+}
 async function save(job: Job) {
     job.updatedAt = new Date().toISOString();
     await mkdir(privateRoot, { recursive: true });
@@ -91,9 +112,9 @@ let job: Job;
 try { job = JSON.parse(await readFile(file, "utf8")); }
 catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
-    job = { action, source: genId, from, startedAt: new Date().toISOString(), status: "new", calls: 0 };
+    job = { action, source: genId, from, startedAt: new Date().toISOString(), status: "new", calls: 0, ...(modelsFrom ? { modelsFrom, models: replayModels } : {}) };
 }
-if (job.action !== action || job.source !== genId || job.from !== from) throw new Error("Tag already belongs to another operation.");
+if (job.action !== action || job.source !== genId || job.from !== from || job.modelsFrom !== modelsFrom || (replayModels && !sameModels(job.models, replayModels))) throw new Error("Tag already belongs to another operation or model replay.");
 if (await stopped()) throw new Error("STOP exists; no submission.");
 if (isolateOnly) {
     if (!job.id) throw new Error("Isolation requires an existing completed checkpoint; no submission.");
@@ -105,7 +126,7 @@ try {
     if (!job.id && job.status === "submitting") {
         // Recover an uncertain POST outcome instead of submitting another paid job.
         const candidates = action === "judge" ? (await api(`/${genId}/judge`)).runs : (await api("")).runs.filter(r => r.forkOf?.genId === genId && r.forkOf?.from === from);
-        const own = candidates.filter(r => Date.parse(r.createdAt) >= Date.parse(job.startedAt));
+        const own = candidates.filter(r => Date.parse(r.createdAt) >= Date.parse(job.startedAt) && (!replayModels || sameModels(r.models, replayModels)));
         if (own.length !== 1) throw new Error("Uncertain submission; inspect the saved checkpoint before another POST.");
         job.id = own[0].id; job.target = action === "judge" ? genId : job.id;
         await save(job);
@@ -116,7 +137,7 @@ try {
             if (!parent.input || (parent.input.origin ?? "lab") !== "lab") throw new Error("Quality forks require an isolated lab parent; no submission.");
         }
         job.status = "submitting"; await save(job);
-        const response = action === "judge" ? await api(`/${genId}/judge`, { kind: "judge", confirmed: true }) : await api(`/${genId}/fork`, { from, autoConfirm: true, confirmed: true });
+        const response = action === "judge" ? await api(`/${genId}/judge`, { kind: "judge", confirmed: true, ...(replayModels ? { models: replayModels } : {}) }) : await api(`/${genId}/fork`, { from, autoConfirm: true, confirmed: true });
         job.id = action === "judge" ? response.run.id : response.gen.id;
         job.target = action === "judge" ? genId : job.id;
         await save(job);
@@ -126,6 +147,7 @@ try {
     while (true) {
         const response = action === "judge" ? await api(`/${genId}/judge/${job.id}`) : await api(`/${job.id}`);
         const state = action === "judge" ? response.run : response.gen;
+        if (replayModels && !sameModels(state.models, replayModels)) throw new Error("Remote models differ from the saved replay.");
         job.status = state.status; job.calls = state.calls; job.result = state;
         await save(job);
         const progress = `${state.status}:${state.calls}`;
