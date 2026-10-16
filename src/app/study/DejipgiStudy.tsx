@@ -1,0 +1,390 @@
+"use client";
+
+import { useCallback, useEffect, useRef } from "react";
+import { useAuthSession } from "@/components/AuthGate";
+import { authenticatedFetch } from "@/lib/firebase-client";
+import { showMath, toStudyDeck, type StudyArtifactMeta, type StudyDeck, type StudyOutlineSection } from "@/lib/study/from-authoring";
+import { buildRemakeBody, buildRequestBody, defaultPurpose, findReusableRequest } from "@/lib/study/request-form";
+import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
+import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
+import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
+import { inspectQuality } from "../../../tools/problem-authoring-lab/quality.ts";
+import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type PlannerDeck } from "./dejipgi-app.js";
+import { DEFAULT_GEN_MODELS, defaultChosen, type GenState } from "@/lib/study/gen/types";
+import type { StudyNote } from "@/lib/study/notes";
+import { coachCards, type CoachInput } from "@/lib/study/coach";
+import { buildLexicon, chunkAt, findTerms, importantTerms } from "@/lib/study/chunk";
+import { applyPatches, similarObjectives, termChoice, tooEasy, type LedgerEntry, type PatchMap } from "@/lib/study/quality";
+import { askedObjectives, diagnoseBox, planDeckFrom, planSettingsFrom, planToday, renderMemoryAuto, type PlanNote, type PlanRecord, type StudyRules } from "@/lib/study/plan";
+import "katex/dist/katex.min.css";
+import "./dejipgi.css";
+
+async function readJson<T>(response: Response, fallback: string): Promise<T> {
+  const data = await response.json().catch(() => null);
+  const reply = data as { message?: string; error?: string } | null;
+  if (!response.ok) throw new Error(reply?.message ?? reply?.error ?? fallback);
+  return data as T;
+}
+
+export default function DejipgiStudy() {
+  const session = useAuthSession();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fetchExperiment = useCallback((url: string, init: RequestInit = {}) => session.mode === "local-experiment"
+    ? fetch(url, { cache: "no-store", ...init })
+    : authenticatedFetch(url, { cache: "no-store", ...init }), [session.mode]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const findSource = async (id: string) => {
+      const { sources: catalog } = await readJson<{ sources: McpSourceCatalogEntry[] }>(
+        await fetchExperiment("/api/mcp-runs/sources"), "원본 자료를 확인하지 못했어요.");
+      const source = catalog.find((item) => item.id === id);
+      if (!source) throw new Error("등록한 원본 PDF를 자료 목록에서 찾지 못했어요.");
+      return source;
+    };
+    const loadArtifacts = async () => readJson<{ artifacts: Array<StudyArtifactMeta & { originRunId: string }> }>(
+      await fetchExperiment("/api/personalization-lab"), "출제 문서 목록을 불러오지 못했어요.");
+    const createQueuedRequest = async (source: McpSourceCatalogEntry, pageText: string, purpose: string,
+      options: Parameters<typeof buildRequestBody>[3]) => {
+      const built = buildRequestBody(source, pageText, purpose, options);
+      if ("error" in built) throw new Error(built.error);
+      // After "멈추기" the earlier request stays queued; wait on it again instead of queuing a second paid run.
+      const { requests } = await readJson<{ requests: ExperimentRequest[] }>(
+        await fetchExperiment("/api/mcp-experiment-requests"), "요청 목록을 확인하지 못했어요.");
+      const existing = findReusableRequest(requests, built.body);
+      if (existing) return existing;
+      const { request } = await readJson<{ request: ExperimentRequest }>(await fetchExperiment("/api/mcp-experiment-requests", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(built.body),
+      }), "생성 요청을 저장하지 못했어요.");
+      return request;
+    };
+    // Model errors keep their code so the card can offer "ChatGPT 연결" or "다시 시도".
+    const noteCall = async <T,>(body: Record<string, unknown>): Promise<T> => {
+      const response = await fetchExperiment("/api/study-notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await response.json().catch(() => null) as (T & { message?: string; code?: string }) | null;
+      if (!response.ok) throw Object.assign(new Error(data?.message ?? "노트 요청을 처리하지 못했어요."), { code: data?.code });
+      return data as T;
+    };
+    // In-app executor (docs/DECISIONS.md 2026-09-30 "ChatGPT 계정으로 생성"). When it is off, requests wait for the MCP chat executor.
+    type ExecutorInfo = { enabled: boolean; provider: string; model: { ready: boolean; message: string }; executor: null | { status: string; phase: string; message: string; stage?: string; attempt?: number } };
+    const executorInfo = async (requestId?: string) => readJson<ExecutorInfo>(await fetchExperiment(
+      `/api/study-executor${requestId ? `?id=${encodeURIComponent(requestId)}` : ""}`), "자동 생성 상태를 읽지 못했어요.");
+    const kickExecutor = async (requestId: string) => {
+      const response = await fetchExperiment("/api/study-executor", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId }),
+      });
+      if (response.status === 409) return;
+      await readJson(response, "자동 생성을 시작하지 못했어요.");
+    };
+    // ---- engine v2 (/api/lab/gen) ----
+    const isGen = (id: string) => /^gen_[a-f0-9]{32}$/.test(id);
+    const genState = async (id: string) => (await readJson<{ gen: GenState; label: string }>(await fetchExperiment(`/api/lab/gen/${id}`), "만드는 상태를 읽지 못했어요."));
+    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean) => {
+      const pageNumbers = Array.from({ length: Math.max(1, to - from + 1) }, (_, index) => from + index);
+      const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
+          models: DEFAULT_GEN_MODELS, origin: "study", readImages, confirmed: true }),
+      }), "문제 만들기를 시작하지 못했어요.");
+      return gen;
+    };
+    const genStatus = async (id: string): Promise<DejipgiMaterialStatus> => {
+      const { gen, label } = await genState(id);
+      const done = gen.sections.filter((section) => section.author).length;
+      const calls = gen.calls ? ` · 호출 ${gen.calls}번` : "";
+      if (gen.status === "awaiting-confirm") {
+        const objectives = gen.sections.flatMap((section) => (section.design?.objectives ?? []).map((objective) => ({
+          id: objective.id, section: section.title, part: section.parts?.find((part) => part.pages.includes(objective.pages[0]))?.title,
+          statement: objective.statement, recall: objective.recall, importance: objective.importance })));
+        return { status: "confirm", message: `목표 ${objectives.length}개를 확인해 주세요`, objectives, chosen: defaultChosen(gen.input.purpose, objectives) };
+      }
+      // Authored sections are a deck already (artifactId), so the learner can start before the rest is made.
+      const partial = gen.sections.some((section) => (section.author?.questionCount ?? 0) > 0) ? { artifactId: id } : {};
+      if (gen.status === "paused-login") return { status: "paused", message: `ChatGPT 로그인이 필요해요 · ${gen.message}`, ...partial };
+      if (gen.status.startsWith("paused") || gen.status === "interrupted") return { status: "paused", message: gen.message, ...partial };
+      if (gen.status === "failed") return { status: "failed", message: gen.message || "문제 만들기가 실패했어요." };
+      if (gen.status === "done") {
+        const questions = gen.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0);
+        return questions ? { status: "ready", message: "", artifactId: id } : { status: "failed", message: gen.message || "만들어진 문제가 없어요." };
+      }
+      if (gen.current?.step === "transcribe" && gen.images) return { status: "running", message: `그림·수식 쪽 읽는 중 · ${gen.images.done.length}/${gen.images.pages.length}쪽${calls}` };
+      if (gen.phase === "author") return { ...partial, status: "authoring", message: `문제 만드는 중 · 목차 ${done}/${gen.sections.length}${label ? ` · ${label}` : ""}${calls}` };
+      const where = gen.phase === "outline" ? "목차 나누는 중" : `자료 파악·학습 설계 중${gen.sections.length ? ` · 목차 ${gen.sections.length}개` : ""}`;
+      return { status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}${calls}` };
+    };
+    const loadGenDecks = async () => {
+      const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
+      // Finished runs, and runs still being made whose first sections are authored.
+      return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[] }>(
+        await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").catch(() => null)));
+    };
+    const loadQuality = async () => readJson<{ patches: PatchMap; counts: Record<string, number> }>(await fetchExperiment("/api/study-quality"), "고친 문제 목록을 읽지 못했어요.");
+    const loadPatches = async () => (await loadQuality()).patches;
+    const qualityPost = async (body: Record<string, unknown>) => readJson<{ patch?: unknown; removed?: boolean }>(await fetchExperiment("/api/study-quality", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), "품질 기록을 저장하지 못했어요.");
+    // The screen's decks carry their record (events, sched, hidden, reported) on the deck object itself.
+    const recordOf = (deck: PlannerDeck): PlanRecord => ({ events: deck.events ?? [], sched: deck.sched ?? {}, hidden: deck.hidden, reported: deck.reported });
+    const recordsOf = (decks: PlannerDeck[]) => Object.fromEntries(decks.map((deck) => [deck.id, recordOf(deck)]));
+    return mountDejipgi(root, {
+      uid: session.uid,
+      defaultPurpose,
+      // One queued request per material (docs/DECISIONS.md 2026-09-29 앱 전체 흐름). The assigned AI runs it
+      // through MCP and records the authored document; the screen only queues and polls.
+      // Materials go through the v2 engine (docs/DECISIONS.md 2026-10-12): outline → design per section → one
+      // confirmation of objectives → authoring. Decks made by the old request flow still load and can be remade.
+      builder: {
+        async start({ file, from, to, purpose, note, readImages }) {
+          if (session.mode !== "local-experiment") throw new Error("자료 등록과 문제 만들기는 로컬 실험 모드에서만 할 수 있어요.");
+          const form = new FormData();
+          form.append("pdf", file);
+          const { source: registered } = await readJson<{ source: { id: string } }>(await fetchExperiment("/api/mcp-runs/sources", {
+            method: "POST", body: form,
+          }), "PDF를 등록하지 못했어요.");
+          const source = await findSource(registered.id);
+          const gen = await startGen(source, from, to, purpose, note, readImages);
+          return { requestId: gen.id, sourceId: source.id };
+        },
+        async restart({ requestId, sourceId, from, to, purpose, note }) {
+          if (!isGen(requestId)) {
+            const previous = await readJson<{ request: ExperimentRequest }>(
+              await fetchExperiment(`/api/mcp-experiment-requests/${encodeURIComponent(requestId)}`), "이전 요청을 확인하지 못했어요.");
+            const request = await createQueuedRequest(await findSource(sourceId), `${from}-${to}`, purpose, { abilities: previous.request.input.abilities });
+            await kickExecutor(request.id);
+            return { requestId: request.id };
+          }
+          const previous = await genState(requestId).catch(() => null);
+          const gen = await startGen(await findSource(sourceId), from, to, previous?.gen.input.purpose ?? purpose, previous?.gen.input.note ?? note ?? "", previous?.gen.input.readImages ?? true);
+          return { requestId: gen.id };
+        },
+        async remake({ artifactId, objectiveIds }) {
+          if (isGen(artifactId)) {
+            // Same objectives, authoring only, with the reported questions shown so the new ones differ.
+            const { gen: base } = await genState(artifactId);
+            const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment(`/api/lab/gen/${artifactId}/fork`, {
+              method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from: "author", objectiveIds, confirmed: true }),
+            }), "다시 만들기를 시작하지 못했어요.");
+            const pages = base.input.pageNumbers;
+            return { requestId: gen.id, sourceId: base.input.sourceId, from: Math.min(...pages), to: Math.max(...pages), purpose: base.input.purpose };
+          }
+          const { artifacts } = await loadArtifacts();
+          const meta = artifacts.find((item) => item.id === artifactId);
+          const { requests } = await readJson<{ requests: ExperimentRequest[] }>(
+            await fetchExperiment("/api/mcp-experiment-requests"), "요청 목록을 확인하지 못했어요.");
+          const origin = meta && requests.find((request) => request.runId === meta.originRunId && request.status === "completed");
+          if (!origin) throw new Error("이 자료는 원래 요청 기록이 없어 다시 만들 수 없어요.");
+          const source = await findSource(origin.input.sourceId);
+          const built = buildRemakeBody(source, origin, objectiveIds);
+          if ("error" in built) throw new Error(built.error);
+          const existing = findReusableRequest(requests, built.body);
+          const request = existing ?? (await readJson<{ request: ExperimentRequest }>(await fetchExperiment("/api/mcp-experiment-requests", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(built.body),
+          }), "다시 만들기 요청을 저장하지 못했어요.")).request;
+          await kickExecutor(request.id);
+          const pages = origin.input.scope.pageNumbers;
+          return { requestId: request.id, sourceId: source.id, from: Math.min(...pages), to: Math.max(...pages), purpose: origin.input.purpose };
+        },
+        async resume(requestId) {
+          if (!isGen(requestId)) { await kickExecutor(requestId); return; }
+          await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/continue`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmed: true }),
+          }), "다시 시작하지 못했어요.");
+        },
+        async confirm(requestId, objectiveIds) {
+          await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/confirm`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ objectiveIds, confirmed: true }),
+          }), "목표를 확정하지 못했어요.");
+        },
+        async check(requestId) {
+          if (isGen(requestId)) return genStatus(requestId);
+          const { request } = await readJson<{ request: ExperimentRequest }>(
+            await fetchExperiment(`/api/mcp-experiment-requests/${encodeURIComponent(requestId)}`), "생성 요청 상태를 읽지 못했어요.");
+          if (request.status === "failed") return { status: "failed", message: request.failure || "담당 AI의 실행이 실패했어요." };
+          const auto = await executorInfo(requestId).catch(() => null);
+          const run = auto?.enabled ? auto.executor : null;
+          if (run?.status === "paused-usage-limit") return { status: "paused", message: run.message };
+          if (run?.status === "interrupted" || run?.status === "paused-invalid") return { status: "paused", message: run.message };
+          if (run?.status === "paused-login") return { status: "paused", message: `ChatGPT 로그인이 필요해요 · ${run.message}` };
+          if (run?.status === "failed") return { status: "failed", message: run.message || "자동 생성이 실패했어요." };
+          if (request.status === "waiting-for-executor") {
+            if (!auto?.enabled) return { status: "waiting", message: "AI 실행 대기 중 · 담당 AI 대화에서 ‘대기 중인 요청 처리해’라고 해 주세요" };
+            if (!run) await kickExecutor(requestId).catch(() => undefined);
+            return { status: "waiting", message: auto.model.ready ? "자동 생성 대기 중" : `자동 생성 대기 중 · ${auto.model.message}` };
+          }
+          const label: Record<string, string> = { analyze: "자료 구조", "concept-tree": "개념 구조", "learning-design": "학습 설계", "activity-design": "활동 설계", cards: "카드" };
+          const retry = run?.attempt && run.attempt > 1 ? ` · 고쳐서 다시 시도 ${run.attempt - 1}번째` : "";
+          if (request.status !== "completed") {
+            const where = run?.stage && label[run.stage] ? `${label[run.stage]} ` : "";
+            return { status: "running", message: `AI가 만드는 중 · ${where}${request.stages.length + 1}/6단계${retry}` };
+          }
+          if (run && run.status !== "done") return { status: "authoring", message: `문제 만들고 검사하는 중 · 6/6단계${retry}` };
+          const { artifacts } = await loadArtifacts();
+          const meta = artifacts.find((item) => item.originRunId === request.runId);
+          return meta
+            ? { status: "ready", message: "", artifactId: meta.id }
+            : { status: "authoring", message: "문제 검사·기록 중 · 6/6단계 · 담당 AI가 출제 편집틀에 기록하면 붙어요" };
+        },
+      },
+      // Question window answers and 모르는 것 노트 go through /api/study-notes (the signed-in ChatGPT account).
+      ...(session.mode === "local-experiment" ? {
+        async ask(turns: Array<{ role: string; content: string }>, options: { signal: AbortSignal; onText: (chunk: { text: string }) => void }) {
+          const response = await fetchExperiment("/api/study-notes", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "chat", turns }), signal: options.signal,
+          });
+          const data = await response.json().catch(() => null) as { text?: string; message?: string; code?: string } | null;
+          if (!response.ok) throw Object.assign(new Error(data?.message ?? "답을 받지 못했어요."), { code: data?.code === "usage_limit" ? "rate_limited" : data?.code });
+          options.onText({ text: data?.text ?? "" });
+        },
+        notes: {
+          async list(sourceId: string) {
+            return (await readJson<{ notes: StudyNote[] }>(await fetchExperiment(`/api/study-notes?sourceId=${encodeURIComponent(sourceId)}`), "노트를 불러오지 못했어요.")).notes;
+          },
+          ask: (input) => noteCall<{ note: StudyNote; reused: boolean }>({ action: "ask", ...input }),
+          mark: async (input) => (await noteCall<{ note: StudyNote }>({ action: "mark", ...input })).note,
+          seen: async (sourceId, noteId) => (await noteCall<{ note: StudyNote }>({ action: "seen", sourceId, noteId })).note,
+          follow: async (input) => (await noteCall<{ note: StudyNote }>({ action: "follow", ...input })).note,
+          talk: async (input) => (await noteCall<{ note: StudyNote }>({ action: "talk", ...input })).note,
+          async explanations(sourceId: string) {
+            return (await readJson<{ pages: Array<{ page: number; text: string; at: string }> }>(await fetchExperiment(`/api/study-notes?sourceId=${encodeURIComponent(sourceId)}&explain=1`), "쉬운 설명을 불러오지 못했어요.")).pages;
+          },
+          saveExplanation: async (sourceId: string, page: number, text: string) => { await noteCall({ action: "explain-save", sourceId, page, text }); },
+        } satisfies NonNullable<DejipgiEnv["notes"]>,
+      } : {}),
+      ...(session.mode === "local-experiment" ? {
+        records: {
+          async load() {
+            return (await readJson<{ data: { records: Record<string, unknown>; pending: unknown[]; updatedAt: number } | null }>(
+              await fetchExperiment("/api/study-records"), "풀이 기록을 불러오지 못했어요.")).data;
+          },
+          async save(value: { records: Record<string, unknown>; pending: unknown[]; updatedAt: number }) {
+            await readJson(await fetchExperiment("/api/study-records", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value) }),
+              "풀이 기록을 저장하지 못했어요.");
+          },
+        },
+      } : {}),
+      // 오늘 할 것 (src/lib/study/plan.ts): the same code /api/study-plan runs for agents.
+      planner: {
+        today({ decks, settings, notes, rules, now }) {
+          return planToday({ decks: decks.map(planDeckFrom), records: recordsOf(decks), settings: planSettingsFrom(settings), notes: notes as Record<string, PlanNote[]>, rules: rules as StudyRules | undefined, now });
+        },
+        asked(deck, notes) {
+          return [...askedObjectives(planDeckFrom(deck), recordOf(deck), notes as PlanNote[]).keys()];
+        },
+        memoryAuto({ subject, decks, settings, notes, now }) {
+          return renderMemoryAuto({ subject, decks: decks.map(planDeckFrom), records: recordsOf(decks), settings: planSettingsFrom(settings), notes: notes as Record<string, PlanNote[]>, now });
+        },
+        diagnoseBox,
+      },
+      // 빠른 고리 (docs/품질_자동화.md): patches over the learner's own questions and the quality ledger, no model calls.
+      quality: {
+        similar: (hidden, candidates, threshold) => similarObjectives(hidden, candidates, threshold),
+        tooEasy: (events, itemId, streak) => tooEasy(events, itemId, streak),
+        termChoice: (deck, itemId, seed) => termChoice(deck, itemId, seed),
+        ...(session.mode === "local-experiment" ? {
+          list: loadQuality,
+          async patch(deckId: string, patch: { kind: "accept"; itemId: string; answer: string } | { kind: "card"; itemId: string }, entry?: LedgerEntry) { await qualityPost({ action: "patch", deckId, patch, entry }); },
+          async unpatch(deckId: string, patchId: string, entry?: LedgerEntry) { await qualityPost({ action: "unpatch", deckId, patchId, entry }); },
+          async log(entries: LedgerEntry[]) { await qualityPost({ action: "log", entries }); },
+        } : {}),
+      },
+      coach: (input) => coachCards(input as CoachInput),
+      // 읽기 화면의 네모를 의미 단위로 (src/lib/study/chunk.ts): the material's terms, then phrase rules.
+      chunk: { lexicon: (deck, asked) => buildLexicon(deck, asked), at: (words, index, lexicon) => chunkAt(words, index, lexicon ?? undefined),
+        important: (deck) => importantTerms(deck), find: (words, terms) => findTerms(words, terms) },
+      async rules() {
+        return (await readJson<{ today: { rules: unknown; warnings: string[] } }>(await fetchExperiment("/api/study-rules"), "학습규칙을 읽지 못했어요.")).today;
+      },
+      ...(session.mode === "local-experiment" ? {
+        memory: {
+          async save(subject: string, auto: string) {
+            await readJson(await fetchExperiment("/api/study-memory", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject, auto }) }),
+              "학습 메모를 저장하지 못했어요.");
+          },
+        },
+      } : {}),
+      account: {
+        async status() {
+          const info = await executorInfo();
+          return { show: info.enabled && info.provider === "chatgpt", ready: info.model.ready, message: info.model.message };
+        },
+        async connect() {
+          const { url } = await readJson<{ url: string }>(await fetchExperiment("/api/auth/chatgpt/start", { method: "POST" }), "ChatGPT 연결을 시작하지 못했어요.");
+          window.location.assign(url);
+        },
+        async disconnect() {
+          await readJson(await fetchExperiment("/api/auth/chatgpt/logout", { method: "POST" }), "ChatGPT 연결을 해제하지 못했어요.");
+        },
+      },
+      async loadDecks(): Promise<StudyDeck[]> {
+        // New-engine materials first (newest first), then documents from the old request flow.
+        // Fixes made while studying (빠른 고리) are laid over each material; patchSig makes the screen reload a patched deck.
+        const patches = session.mode === "local-experiment" ? await loadPatches().catch(() => ({} as PatchMap)) : {};
+        const [fresh, { artifacts }] = await Promise.all([
+          loadGenDecks().catch(() => []),
+          readJson<{ artifacts: StudyArtifactMeta[] }>(await fetchExperiment("/api/personalization-lab"), "Recaller 출제 문서 목록을 불러오지 못했어요."),
+        ]);
+        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[] }> = [
+          ...fresh.flatMap((deck) => deck ? [deck] : []), ...artifacts.map((meta) => ({ meta }))];
+        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline }, order) => {
+          const document = given ?? (await readJson<{ document: AuthoringDocument }>(
+            await fetchExperiment(`/api/personalization-lab?id=${encodeURIComponent(meta.id)}`), `${meta.title}을 불러오지 못했어요.`)).document;
+          // Questions that fail the item-quality checks stay out of practice; the rest of the document is still usable.
+          const excluded = new Map(inspectQuality(document).filter((issue) => issue.severity === "error")
+            .map((issue) => [issue.questionId, `검사 제외: ${issue.message}`] as const));
+          const own = patches[meta.id];
+          const deck = { ...applyPatches(toStudyDeck(meta, document, order, excluded), own, showMath), patchSig: (own ?? []).map((patch) => patch.id).join(",") };
+          // What to recall shows on the one-page summary; bare LaTeX there renders like answers do.
+          return outline ? { ...deck, outline: outline.map((section) => ({ ...section,
+            objectives: section.objectives.map((objective) => ({ ...objective, recall: showMath(objective.recall) })) })) } : deck;
+        }));
+        const decks = loaded.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+        if (!decks.length && loaded.some((result) => result.status === "rejected")) {
+          throw new Error("Recaller 출제 문서를 불러오지 못했어요. 로컬 서버와 로그인 상태를 확인해 주세요.");
+        }
+        return decks;
+      },
+      async loadPdf(sourceCatalogId: string) {
+        const response = await fetchExperiment(`/api/mcp-runs/sources/${encodeURIComponent(sourceCatalogId)}/pdf`);
+        if (!response.ok) throw new Error("원본 PDF를 열지 못했어요.");
+        return response.arrayBuffer();
+      },
+      async loadPdfjs() {
+        // The legacy build carries polyfills (e.g. Map.getOrInsertComputed) that the default v6 build expects natively.
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
+        return pdfjs;
+      },
+      assetUrl: (artifactId: string, assetPath: string) =>
+        `/api/personalization-lab/run-asset?id=${encodeURIComponent(artifactId)}&path=${encodeURIComponent(assetPath)}`,
+      async loadKatex() {
+        return (await import("katex")).default;
+      },
+    });
+  }, [fetchExperiment, session.mode, session.uid]);
+
+  return (
+    <div className="dejipgi" ref={rootRef} data-view="practice">
+      {/* Plain link (no precedence) so a blocked font request never suspends or errors the page. */}
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600&display=swap" />
+      <div className="wrap">
+        <div className="masthead">
+          <header className="top">
+            <div className="brand">
+              <h1>되짚기</h1>
+            </div>
+            <span className="store" id="store" data-mode="memory"><i></i><span id="storeText">저장 준비 중</span></span>
+          </header>
+          <nav className="tabs" role="tablist" id="tabs">
+            <button role="tab" data-view="practice" aria-selected="true">연습</button>
+            <button role="tab" data-view="read" aria-selected="false">읽기</button>
+            <button role="tab" data-view="summary" aria-selected="false">정리</button>
+            <button role="tab" data-view="create" aria-selected="false">자료 만들기</button>
+            <button role="tab" data-view="records" aria-selected="false">기록</button>
+          </nav>
+        </div>
+        <main id="app"></main>
+      </div>
+    </div>
+  );
+}

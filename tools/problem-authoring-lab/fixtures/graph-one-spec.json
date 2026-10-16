@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "curve-line-graph-v1",
+  "id": "curve-line-intersections-v1",
+  "curve": { "a": 1, "b": -4, "c": 3, "label": "y=f(x)" },
+  "line": { "m": 1, "b": -1, "label": "y=g(x)" },
+  "domain": { "xMin": -1, "xMax": 6, "yMin": -4, "yMax": 12 },
+  "intersectionLabels": ["A", "B"],
+  "style": "monochrome-exam"
+}

@@ -1,0 +1,185 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "고정 원문 패킷을 읽었습니다."
+    }
+  ],
+  "structuredContent": {
+    "packet": {
+      "schemaVersion": "authoring-source-packet-v3",
+      "packetId": "mcp-chatgpt-request-cb0b90cecfffa5c231ffe1e6d7b63f8d",
+      "title": "TEST · Geometric Transformations · 2D 변환 기초",
+      "learningGoal": "대학 컴퓨터그래픽스 시험 대비: PDF 2~7쪽의 2차원 평행이동·회전·확대축소, 동차좌표와 3×3 행렬의 의미를 이해하고 좌표 및 행렬 계산에 적용한다.",
+      "sourceFileName": "02_Geometric Transformations.pdf",
+      "selectedPdfPages": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "origin": {
+        "runId": "chatgpt-request-cb0b90cecfffa5c231ffe1e6d7b63f8d",
+        "publishedId": "mcp-run-chatgpt-request-cb0b90cecfffa5c231ffe1e6d7b63f8d",
+        "sha256": {
+          "output": "521de90a0163c1b24fcbb42e354d458f3a563de90d6eba6e8ed81ca68d869c14",
+          "submission": "c36f9183987e1d90d9527ee00f1c022e3e3df4332bb30cf8e12d8b2aff235880",
+          "published": "37918f1dae584a36c5a0fe58d208ade6792ea2d320cca5ce408353951217b729"
+        }
+      },
+      "authoringRequest": {
+        "independentQuestions": 2,
+        "sharedSetQuestions": 2,
+        "revisionLimit": 1,
+        "format": "author-choice"
+      },
+      "items": [
+        {
+          "learningUnitId": "mcp-learning-1",
+          "objectiveId": "mcp-objective-1",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 2,
+          "sourcePages": [
+            2
+          ],
+          "sourceRange": "PDF 2쪽",
+          "sourceText": "Adding offsets to its coordinates; x′ = x + tx, y′ = y + ty (PDF 2쪽).",
+          "target": "주어진 점과 변위에서 평행이동 후 좌표를 계산한다.",
+          "successCriteria": [
+            "x와 y에 각각 대응하는 변위를 더해 새 좌표 두 값을 맞힌다."
+          ],
+          "knowledgeContent": "2차원 평행이동은 좌표 (x,y)에 변위 (tx,ty)를 더하여 (x+tx,y+ty)를 만든다.",
+          "concepts": [
+            {
+              "number": 2,
+              "title": "평행이동"
+            }
+          ]
+        },
+        {
+          "learningUnitId": "mcp-learning-2",
+          "objectiveId": "mcp-objective-2",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 3,
+          "sourcePages": [
+            3,
+            7
+          ],
+          "sourceRange": "PDF 3, 7쪽",
+          "sourceText": "A positive value for the angle θ defines a counterclockwise rotation about the pivot point; R = [cosθ, −sinθ; sinθ, cosθ] (PDF 3, 7쪽).",
+          "target": "양의 90도 회전 행렬을 점에 적용하여 회전 방향과 결과 좌표를 판단한다.",
+          "successCriteria": [
+            "(x,y)를 원점 기준 양의 90도 회전할 때 (−y,x)를 구한다."
+          ],
+          "knowledgeContent": "원점 기준 양의 2차원 회전각은 반시계 방향이고, 회전 행렬의 왼쪽 위 2×2는 [cosθ, −sinθ; sinθ, cosθ]이다.",
+          "concepts": [
+            {
+              "number": 3,
+              "title": "회전"
+            },
+            {
+              "number": 8,
+              "title": "회전 행렬"
+            }
+          ]
+        },
+        {
+          "learningUnitId": "mcp-learning-3",
+          "objectiveId": "mcp-objective-3",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 4,
+          "sourcePages": [
+            4,
+            7
+          ],
+          "sourceRange": "PDF 4, 7쪽",
+          "sourceText": "x′ = x·sx, y′ = y·sy; When sx and sy are assigned the same value, relative object proportions are maintained (PDF 4, 7쪽).",
+          "target": "축별 확대축소 계수를 점에 적용하고 균일 확대축소인지 판단한다.",
+          "successCriteria": [
+            "각 축의 새 좌표를 계산하고 sx=sy 여부로 균일성을 판단한다."
+          ],
+          "knowledgeContent": "원점 기준 확대축소는 x에 sx, y에 sy를 곱하고 3×3 행렬의 대각은 sx, sy, 1이다. sx=sy일 때 원래 비율이 유지된다.",
+          "concepts": [
+            {
+              "number": 4,
+              "title": "확대축소"
+            },
+            {
+              "number": 9,
+              "title": "확대축소 행렬"
+            }
+          ]
+        },
+        {
+          "learningUnitId": "mcp-learning-4",
+          "objectiveId": "mcp-objective-4",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 6,
+          "sourcePages": [
+            6
+          ],
+          "sourceRange": "PDF 6쪽",
+          "sourceText": "The homogeneous parameter h is a non-zero value; x = xh/h, y = yh/h (PDF 6쪽).",
+          "target": "동차좌표의 h가 0이 아니어야 하는 이유와 원래 좌표 복원을 설명한다.",
+          "successCriteria": [
+            "h로 두 좌표를 나누는 복원 관계를 정확히 적는다."
+          ],
+          "knowledgeContent": "동차좌표 (xh,yh,h)에서 h는 0이 아니며 원래 좌표는 x=xh/h, y=yh/h로 복원한다. h=1이면 (x,y,1)이다.",
+          "concepts": [
+            {
+              "number": 6,
+              "title": "동차좌표"
+            }
+          ]
+        },
+        {
+          "learningUnitId": "mcp-learning-5",
+          "objectiveId": "mcp-objective-5",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 7,
+          "sourcePages": [
+            7
+          ],
+          "sourceRange": "PDF 7쪽",
+          "sourceText": "Two-Dimensional Translation Matrix (T); [1 0 tx; 0 1 ty; 0 0 1] (PDF 7쪽).",
+          "target": "3×3 평행이동 행렬에서 변위가 들어갈 위치를 완성한다.",
+          "successCriteria": [
+            "tx, ty가 첫째·둘째 행의 셋째 열에 들어감을 적는다."
+          ],
+          "knowledgeContent": "2차원 평행이동의 3×3 행렬은 [1,0,tx; 0,1,ty; 0,0,1]이고 동차좌표 (x,y,1)에 곱한다.",
+          "concepts": [
+            {
+              "number": 7,
+              "title": "평행이동 행렬"
+            }
+          ]
+        },
+        {
+          "learningUnitId": "mcp-learning-6",
+          "objectiveId": "mcp-objective-6",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 5,
+          "sourcePages": [
+            5
+          ],
+          "sourceRange": "PDF 5쪽",
+          "sourceText": "M1: a 2 × 2 matrix containing multiplicative factors; M2: a two-element column matrix containing translational terms (PDF 5쪽).",
+          "target": "일반 행렬형에서 M1과 M2의 역할을 구별한다.",
+          "successCriteria": [
+            "M1을 곱셈 계수, M2를 평행이동 항으로 바르게 대응한다."
+          ],
+          "knowledgeContent": "2차원 변환의 일반형은 P′=M1·P+M2이며 M1은 곱셈 계수의 2×2 행렬, M2는 평행이동 항의 두 성분 열벡터다. 동차좌표로 두 항을 한 행렬 계산에 합칠 수 있다.",
+          "concepts": [
+            {
+              "number": 5,
+              "title": "행렬과 동차좌표"
+            }
+          ]
+        }
+      ]
+    },
+    "inputHash": "bdc248a43f598d8775758fd73da839121ff4cffce588dbe23558651eb62f5b5c"
+  }
+}

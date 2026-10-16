@@ -1,0 +1,31 @@
+{
+  "rows": [
+    {
+      "caseId": "bfs-2pages-gpt-6-luna",
+      "material": "bfs-2pages",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "requestId": "req_cf57cc2edd05e056e108101d4967cc96",
+      "runId": null,
+      "status": "paused-invalid",
+      "ms": 1022,
+      "modelHttpCalls": 2,
+      "recordedCalls": 3,
+      "retries": 3,
+      "slowest": {
+        "purpose": "stage:analyze",
+        "model": "gpt-6-luna",
+        "effort": "low",
+        "ms": 25,
+        "ok": false
+      },
+      "objectives": null,
+      "pagesPerObjective": null,
+      "reviewAt": "/lab (request req_cf57cc2edd05e056e108101d4967cc96)",
+      "message": "자료 구조 단계가 검사를 3번 통과하지 못했어요: ChatGPT 모델 서버에 연결하지 못했어요. · 다시 시작하면 이 단계부터 다시 시도해요.",
+      "engineChecks": null
+    }
+  ],
+  "modelCallsTotal": 2,
+  "budgetStopped": "same-validation-failure-twice"
+}

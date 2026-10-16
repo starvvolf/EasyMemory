@@ -1,0 +1,18 @@
+{
+  "artifactType": "study-forge-run-checksums",
+  "artifactVersion": "v0",
+  "runId": "20260812T073601Z__generation-lab-05-dfs-bfs__exploratory__r01",
+  "algorithm": "sha256",
+  "files": {
+    "stages/10-analyze.json": "f7660bf91698bca2329a6e1c8e93459d68d46f2438509e3e4afd7d877a2d2333",
+    "stages/20-plan.json": "c2634dcfe890ee64849a4f693aab78b43db70a4818f4d66e6e4b3f2719fac495",
+    "stages/30-recall.json": "323941013cd7864d28f0a5d956e21f6ef0d3e3e368db77f712a6304c6c5704fe",
+    "stages/40-prepare.json": "8f2e5d7c2085c0cc9976fde49d174217ea9e622063c36dbf4ccd44e13c43f6be",
+    "stages/50-cards.json": "7026d1f78d1e81ac7448f48b4fe7a9ee13f5a3c1920760ffa76a827d61a94707",
+    "stages/60-critic.json": "3dd228e91b873fce3ae67f50210fb019f4c6682c60cefaf6526a51854af1b4cb",
+    "stages/70-final-cards.json": "ccf377e319b905fac2ef30dc2ac39ca194e0b9dcc956752d3e9923b08a12e120",
+    "run.json": "93bb827f092e550a5b217c4fe17d6714343b8d60e35dc38b6fad0b10d5ea0ec8",
+    "inputs.json": "1bd2740b6c0b0f6420588ea148cbd70227857d20a9a51b39f0f21dbf50cc9f76",
+    "observations.json": "1193aa262a423dacb1b14a3fbd5ee08b6cbd86760c26b4ee6aa630e8db64050b"
+  }
+}

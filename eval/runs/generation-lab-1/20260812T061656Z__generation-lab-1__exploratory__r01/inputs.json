@@ -1,0 +1,18 @@
+{
+  "artifactType": "study-forge-eval-run-inputs",
+  "artifactVersion": "v0",
+  "runId": "20260812T061656Z__generation-lab-1__exploratory__r01",
+  "runMode": "whole_document_core",
+  "sourceFiles": [
+    {
+      "name": "1.pdf",
+      "mimeType": "application/pdf",
+      "size": 1979761,
+      "sha256": "67d462c4e63ecc9e4ab5efbbbcd67b28c42c1d5281756e10f77a9dd63d979629",
+      "localPath": "eval/local/sources/67d462c4e63ecc9e4ab5efbbbcd67b28c42c1d5281756e10f77a9dd63d979629.pdf"
+    }
+  ],
+  "userSelections": {
+    "instruction": "이 자료 전체의 핵심 개념과 관계를 이해하고 기억할 수 있도록 학습"
+  }
+}

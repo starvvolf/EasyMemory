@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "changeOneStageAtATime": true,
+    "reasoningEffort": "medium",
+    "maxParallelCases": 3,
+    "maxCallsForCurrentWave": 9,
+    "maxEstimatedCostUsdForCurrentWave": null,
+    "stopAfterSameFailureCount": 2
+  },
+  "waves": [
+    {
+      "id": "prepare-sol-to-terra-r1",
+      "stage": "prepare",
+      "baselineModel": "gpt-5.6-sol",
+      "candidateModel": "gpt-5.6-terra",
+      "status": "completed",
+      "blockedReason": null,
+      "cases": [
+        { "id": "opic", "status": "passed_with_review", "artifactCreated": true },
+        { "id": "deadlock", "status": "passed_with_review", "artifactCreated": true },
+        { "id": "dfs-bfs", "status": "passed_with_review", "artifactCreated": true }
+      ]
+    },
+    {
+      "id": "activity-terra-to-luna-r1",
+      "stage": "activity-design",
+      "baselineModel": "gpt-5.6-terra",
+      "candidateModel": "gpt-5.6-luna",
+      "status": "rejected",
+      "blockedReason": null,
+      "cases": [
+        { "id": "opic", "status": "inconclusive_same_validation_failure", "artifactCreated": true },
+        { "id": "deadlock", "status": "failed_quality", "artifactCreated": true },
+        { "id": "dfs-bfs", "status": "failed_quality", "artifactCreated": true }
+      ]
+    },
+    {
+      "id": "cards-terra-to-luna-r1",
+      "stage": "cards",
+      "baselineModel": "gpt-5.6-terra",
+      "candidateModel": "gpt-5.6-luna",
+      "status": "conditional",
+      "blockedReason": "OPIc could not be isolated because both end-to-end attempts hit the same strategy-keywords answer-leak validation failure. Deadlock Luna also needed one retry after a structure-recall ID format error.",
+      "cases": [
+        { "id": "opic", "status": "inconclusive_same_validation_failure", "artifactCreated": true },
+        { "id": "deadlock", "status": "passed_after_one_retry", "artifactCreated": true },
+        { "id": "dfs-bfs", "status": "passed_with_review", "artifactCreated": true }
+      ]
+    }
+  ]
+}

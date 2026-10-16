@@ -1,0 +1,9 @@
+[
+  {
+    "severity": "error",
+    "code": "scope-ambiguity",
+    "message": "표가 여러 결과를 보이지만 지시문이 한 빈칸에서 무엇을 요구하는지 좁혀야 합니다.",
+    "questionId": "q-lu3-blank",
+    "blockId": "q2-title"
+  }
+]

@@ -1,0 +1,2051 @@
+[
+  {
+    "sequence": 1,
+    "stage": "analyze",
+    "startedAt": "2026-09-04T12:37:15.102Z",
+    "completedAt": "2026-09-04T12:37:49.834Z",
+    "durationMs": 34732,
+    "httpStatus": 200,
+    "requestConfiguration": {
+      "model": "gpt-5.6-terra",
+      "reasoning": {
+        "effort": "medium"
+      },
+      "schemaName": "pdf_outline_analysis",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "documentType",
+          "summary",
+          "keyTopics",
+          "outline",
+          "sourceOutline",
+          "suggestedRole"
+        ],
+        "properties": {
+          "documentType": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "keyTopics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outline": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "heading",
+                "points"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string"
+                },
+                "points": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "sourceOutline": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title",
+              "summary",
+              "nodes"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "nodes": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 120,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "parentId",
+                    "order",
+                    "title",
+                    "summary",
+                    "sourceRefs",
+                    "sourceEvidence",
+                    "selectedByDefault",
+                    "structureTags",
+                    "importance"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "parentId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "order": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "sourceRefs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "fileName",
+                          "pageNumbers"
+                        ],
+                        "properties": {
+                          "fileName": {
+                            "type": "string"
+                          },
+                          "pageNumbers": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer",
+                              "minimum": 1
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "sourceEvidence": {
+                      "type": "string"
+                    },
+                    "selectedByDefault": {
+                      "type": "boolean"
+                    },
+                    "structureTags": {
+                      "type": "array",
+                      "maxItems": 4,
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "절차",
+                          "목록",
+                          "관계",
+                          "비교",
+                          "수치",
+                          "공식",
+                          "예외",
+                          "틀"
+                        ]
+                      }
+                    },
+                    "importance": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 3
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "suggestedRole": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "response": {
+      "id": "resp_010a36548c4bf60f006a9abb7b4eec87d0bcbb4fe87464773e",
+      "object": "response",
+      "created_at": 1788525436,
+      "status": "completed",
+      "background": false,
+      "billing": {
+        "payer": "openai"
+      },
+      "completed_at": 1788525468,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-5.6-terra",
+      "moderation": null,
+      "output": [
+        {
+          "id": "rs_010a36548c4bf60f006a9abb7dc8f487d0a46ef1647e7283db",
+          "type": "reasoning",
+          "content": [],
+          "encrypted_content": "gAAAAABqmrucjRx3kvN8_oV79f4rpNFlzNjP3lNYH3XKGkK8WSWZEbtzANOoJwjSsmNMKb7ov3NZ_7LSjqW4r_G5naxljQeebxKpGM6A5qwOj3Ddx3KvMn9RdMjLLNvqJ4oTBmE8qtBviHvEXleMy4HqDee8ELny5ofmhbNCqGrrz1iyHWJtQOB0oYYKy4pcRZ65nk3TG10QX3bNvY1C_YDGEVEBG34ESyf7T_K9Q8MXpqngJpc5Yxm5rmDbAAKAxPcaBvUqNH44BAupPKKuF07QSqQ0pSpT6qZBviHJX0ffHzgXPKI8WzKXfydL9lnpUfAwxQOqRuiSutgwbYqMkhUjpVPph0gV200tvAqZ8uwKxXnBOdY94GQr-uDTKDXnGe7BIcS0KvAGLjBbvLU1tRBbeZIO4JxzMgNdNxlue0ZojRlOmA7QL6dEoM8Ez4RbOZF4meJrrN3MX_yMpOJT8uQpwyFDiTNMyolK_ZT7vC349Qog-HbD1Y7hGRCK_X9Z_o0A9kz1mxuv3PylLqPFXUvDaQnB2v941Ay2YJhrVRsrprNJerMvjxJ1MJpR3kX5zFbGGqZH-v21Y9C43CxcFeGdjlZxzRHE04wtC-Ohi3W6x6qTLO5VOg315jkfXVASwkQSAeB1fVfViZz-RYR2PypNM5mWnpKrwuPXR7v8LLh9_BY6yD-BzsE3S9DZbudquBOiLAyh4eyT0QR4fZG39TsRSug0L882HRxLUMvlnWvh4pRsBZRLX0DceKFsDYaDpDrQcIKI100olLQjXle9uj6oeXUsZentoXsdVbHyMi-6EfGWsIPa5k7dVov9bYox8m1m-igne7od3XYZV6xgrcAL2ZtEElcn_TMh19npgL2hkI9loabYKEfFLm81oeRL2Cc2pUoCt4dHcKd8Yu3S1P3uakv55vQIDSjT4GycECCUEw2t3B9QpR_5ANFNNZ97IOdupfGElFRWJc5g0B1ZCed_ymo4sVXs1r9TXsurxXssD9_17hQGBw88zWqWP-VbuQDRfmVTwgFMBFNsg5Ih3_KBTgRj3bWiIk2_3xwuDj4NTSFLVsczhYzk7Zo3nWeOdazayeAmJ0Q6L29vtpRMxJVQqSi-0ZTWnr0Gs_6VoqTuF_M4U8h8lQgizZ-aZLsUnJw3oJgAeX7IFkP7MqU5ligz7b5nJJMTpBv5A728JGCQH9rbAmoiymd6JXbKTDoyoSh9--BYUXRJZMy4IfFFhYQGDaPW3ZFvNFAckheP7lM_he0FqB19BehokzJQsWsXXFJrQ7pnjN75U3_sCEZqA4R39HDkuuSVDrvYK0iU09i9jtfdE7mk07vLgLYe7QwFwzte1pI1O8U1FU5i9NGWY3kRx6COi54kGCs55YZDRjtDo6z5VgLzg1LxLewuTh8ijjbhtRsV_kNZ6Y0oiTQfespy4Ho3I8VGBCvne8-J-tOwRSRVh_W85wy17Ih-kLEDMQJAGbOR4sPPx-SewOAVA-0A_CNmO2mGO2O_iNu2HvoWISUXL_FW4oOJ90bN-GQL81l6R9O8674lVvOUFphmvID2Npotdzeal1mVUT-1HGCp_FNuTylTuI0I8Gs5dT3mZM0dE_J6D8lXKWomTbo-NAIrVLnW8aeU6aNrBsjdLkVOAZKrik5Mztott60TOoDhI6QSa_dDkxOhX9umSK83K0RnohzBFSJcfEo8iUhoxRIFdOtotOrFmskADhAhHUzq6TCvIbJlcLdoix384o4MbR7oUD3a0dozF0_O6m61GwT2Es8pKyqoFu2-MWtZ-hyGqQIz4kv26mjOOtQpdnju57vHW-v0_52ZZw2n0__cA4rTWKHY6uJ9NEMkH1ogLggfEmvFcTwhgY6yQLuMmmSqcq0CwRF4qq15skN0jprSQEC8PZnK88smnsptQ6Hjxis7XtABTb340HJP1DBovyjdqxZM4ncWEfygimgtzncYS7-3lOrhSDGiXxM=",
+          "summary": []
+        },
+        {
+          "id": "msg_010a36548c4bf60f006a9abb7f955487d088511472b2f2a3a3",
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"documentType\":\"운영체제 과목에서 데드락의 개념·특성화·처리 방안을 설명하는 강의 슬라이드 자료입니다.\",\"summary\":\"이 자료는 데드락의 정의와 발생 조건, 자원 할당 그래프를 통한 판별을 다룹니다. 이어 예방, 회피, 탐지 및 복구라는 데드락 처리 방안을 설명하고 안전 상태와 비안전 상태의 의미를 제시합니다.\",\"keyTopics\":[\"데드락 개념\",\"데드락 발생의 네 가지 조건\",\"자원 할당 그래프\",\"데드락 예방\",\"데드락 회피와 안전 상태\",\"데드락 탐지 및 복구\"],\"outline\":[{\"heading\":\"학습 목표 및 학습 내용\",\"points\":[\"데드락의 개념·발생 조건·처리 방안을 설명하는 것을 목표로 함\",\"학습 내용: Deadlock concept, Deadlock characterization, Methods for handling deadlocks, prevention, avoidance, detection and recovery\"]},{\"heading\":\"What is deadlock?\",\"points\":[\"세마포어 S와 Q를 사용하는 P0, P1의 자원 대기 예시\",\"차단된 프로세스 집합에서 각 프로세스가 자원을 보유한 채 다른 프로세스가 보유한 자원을 기다리는 상태\"]},{\"heading\":\"Deadlock Characterization\",\"points\":[\"시스템 모델링: 프로세스, 자원 유형 및 인스턴스, request-use-release\",\"상호 배제·점유와 대기·비선점·순환 대기의 네 가지 발생 조건\",\"자원 할당 그래프의 요청 간선과 할당 간선\",\"그래프의 사이클 및 자원 인스턴스 수에 따른 데드락 판별\"]},{\"heading\":\"Methods for Handling Deadlocks\",\"points\":[\"예방: 네 조건 중 적어도 하나가 성립하지 않도록 함\",\"회피: 사전 정보를 바탕으로 데드락 상태 진입을 막음\",\"탐지 및 복구: 데드락을 허용한 뒤 탐지하고 복구함\"]},{\"heading\":\"Deadlock Prevention\",\"points\":[\"점유와 대기, 비선점, 순환 대기 조건을 막는 방법\"]},{\"heading\":\"Deadlock Avoidance\",\"points\":[\"즉시 할당 후 안전 상태인지 판단\",\"청구 간선 기반 자원 할당 그래프와 다중 인스턴스의 은행원 알고리즘\",\"비안전 상태 예시: 사이클이 생기는 요청은 거부\"]},{\"heading\":\"Deadlock Detection & Recovery\",\"points\":[\"그래프의 사이클 탐지 알고리즘\",\"프로세스 종료 또는 자원 선점을 통한 복구\"]},{\"heading\":\"Summary\",\"points\":[\"데드락 정의, 네 조건, 예방·회피·탐지 및 복구의 핵심 정리\"]}],\"sourceOutline\":{\"title\":\"Chapter 8. Deadlocks\",\"summary\":\"데드락의 개념과 특성화, 그리고 예방·회피·탐지 및 복구 방법을 다루는 제8장 강의 자료입니다.\",\"nodes\":[{\"id\":\"n1\",\"parentId\":null,\"order\":1,\"title\":\"Chapter 8. Deadlocks\",\"summary\":\"데드락을 주제로 한 장 제목입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[1]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n2\",\"parentId\":\"n1\",\"order\":1,\"title\":\"학습 목표 및 학습 내용\",\"summary\":\"데드락의 개념, 발생 조건 및 처리 방안 학습 목표와 세부 학습 내용을 제시합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[2]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n3\",\"parentId\":\"n2\",\"order\":1,\"title\":\"학습 목표\",\"summary\":\"데드락의 개념, 발생 조건, 처리 방안을 설명하는 능력을 목표로 합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[2]}],\"sourceEvidence\":\"데드락의 개념을 설명할 수 있다. / 데드락의 발생 조건을 설명할 수 있다. / 데드락의 처리 방안을 설명할 수 있다.\",\"selectedByDefault\":false,\"structureTags\":[\"목록\"],\"importance\":0},{\"id\":\"n4\",\"parentId\":\"n2\",\"order\":2,\"title\":\"학습 내용\",\"summary\":\"데드락 개념, 특성화 및 처리 방법의 세부 항목을 열거합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[2]}],\"sourceEvidence\":\"Deadlock concept; Deadlock characterization; Methods for handling deadlocks; Deadlock prevention; Deadlock avoidance; Deadlock detection and recovery\",\"selectedByDefault\":false,\"structureTags\":[\"목록\"],\"importance\":0},{\"id\":\"n5\",\"parentId\":\"n1\",\"order\":2,\"title\":\"What is deadlock?\",\"summary\":\"세마포어 사용 예시로 데드락 상태를 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[3]}],\"sourceEvidence\":\"For a set of blocked processes, each is holding a resource and waiting to acquire a resource held by another process in the set.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\",\"틀\"],\"importance\":3},{\"id\":\"n6\",\"parentId\":\"n1\",\"order\":3,\"title\":\"Deadlock Characterization\",\"summary\":\"시스템 모델, 발생 조건 및 자원 할당 그래프로 데드락을 특성화합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[4,5,6,7]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n7\",\"parentId\":\"n6\",\"order\":1,\"title\":\"System modeling\",\"summary\":\"프로세스, 자원 유형 및 자원 사용 단계를 모델링합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[4]}],\"sourceEvidence\":\"Processes: P1, P2, … Pn. / Resource types: R1, R2, …, Rm / Each process utilizes a resource as follows: request, use, release.\",\"selectedByDefault\":true,\"structureTags\":[\"목록\",\"절차\"],\"importance\":2},{\"id\":\"n8\",\"parentId\":\"n6\",\"order\":2,\"title\":\"Deadlock can arise if four conditions hold simultaneously.\",\"summary\":\"데드락이 발생하기 위한 네 가지 동시 성립 조건을 제시합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n9\",\"parentId\":\"n8\",\"order\":1,\"title\":\"Mutual exclusion\",\"summary\":\"한 번에 하나의 프로세스만 자원을 사용할 수 있는 조건입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"Only one process at a time can use a resource.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n10\",\"parentId\":\"n8\",\"order\":2,\"title\":\"Hold and wait\",\"summary\":\"자원을 보유한 프로세스가 다른 프로세스가 보유한 추가 자원을 기다리는 조건입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"A process holding at least one resource is waiting to acquire additional resources held by other processes.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n11\",\"parentId\":\"n8\",\"order\":3,\"title\":\"No preemption\",\"summary\":\"보유 프로세스가 자발적으로만 자원을 해제할 수 있는 조건입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"A resource can be released only voluntarily by the process holding it.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n12\",\"parentId\":\"n8\",\"order\":4,\"title\":\"Circular wait\",\"summary\":\"대기 프로세스들이 서로가 보유한 자원을 순환하여 기다리는 조건입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"Pn is waiting for a resource that is held by P0.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n13\",\"parentId\":\"n6\",\"order\":3,\"title\":\"Resource allocation graph\",\"summary\":\"프로세스와 자원 유형, 요청 및 할당 간선으로 자원 할당 상태를 표현합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[6]}],\"sourceEvidence\":\"P = {P1, P2, …, Pn}, set of all processes in the system. / R = {R1, R2, …, Rm}, set of all resource types in the system. / Pi → Rj : request; Rj → Pi : assignment\",\"selectedByDefault\":true,\"structureTags\":[\"관계\",\"틀\"],\"importance\":2},{\"id\":\"n14\",\"parentId\":\"n6\",\"order\":4,\"title\":\"Deadlock examples with resource allocation graph\",\"summary\":\"자원 할당 그래프의 사이클과 자원 인스턴스 수에 따른 데드락 판별을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[7]}],\"sourceEvidence\":\"If graph contains no cycles, no deadlock. If graph contains a cycle, if only one instance per resource type, deadlock; if several instances per resource type, possibility of deadlock.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\",\"비교\",\"예외\"],\"importance\":3},{\"id\":\"n15\",\"parentId\":\"n1\",\"order\":4,\"title\":\"Methods for Handling Deadlocks\",\"summary\":\"예방, 회피, 탐지 및 복구의 세 가지 데드락 처리 방안을 제시합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[8]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n16\",\"parentId\":\"n15\",\"order\":1,\"title\":\"Prevention\",\"summary\":\"네 가지 조건 가운데 적어도 하나가 성립하지 않도록 하여 데드락 상태 진입을 막습니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[8]}],\"sourceEvidence\":\"The system will never enter a deadlock state. It ensures that at least one of four conditions cannot hold.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n17\",\"parentId\":\"n15\",\"order\":2,\"title\":\"Avoidance\",\"summary\":\"각 프로세스의 자원 사용에 관한 사전 정보를 이용하여 데드락 상태 진입을 막습니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[8]}],\"sourceEvidence\":\"The system will never enter a deadlock state. It requires a priori information about how each process will utilize resources.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n18\",\"parentId\":\"n15\",\"order\":3,\"title\":\"Detection and recovery\",\"summary\":\"시스템의 데드락 상태 진입을 허용한 후 복구합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[8]}],\"sourceEvidence\":\"It allows the system to enter a deadlock state and then recover.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\"],\"importance\":3},{\"id\":\"n19\",\"parentId\":\"n1\",\"order\":5,\"title\":\"Deadlock Prevention\",\"summary\":\"데드락의 네 가지 조건 중 적어도 하나를 성립하지 않게 하는 방법을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n20\",\"parentId\":\"n19\",\"order\":1,\"title\":\"Mutual Exclusion\",\"summary\":\"상호 배제 조건은 부정하기 어렵다고 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"is impossible to deny the mutual exclusion.\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":1},{\"id\":\"n21\",\"parentId\":\"n19\",\"order\":2,\"title\":\"Hold and Wait\",\"summary\":\"프로세스가 실행 전에 필요한 모든 자원을 요청하고 할당받도록 요구합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"requires process to request and be allocated all its resources before it begins execution.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\"],\"importance\":2},{\"id\":\"n22\",\"parentId\":\"n19\",\"order\":3,\"title\":\"No Preemption\",\"summary\":\"즉시 할당할 수 없는 자원을 요청하면 보유 자원을 해제하고, 이전 및 새 자원을 모두 확보할 수 있을 때 재시작합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"all resources currently being held are released. Process will be restarted only when it can regain its old resources as well as the new ones.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\"],\"importance\":2},{\"id\":\"n23\",\"parentId\":\"n19\",\"order\":4,\"title\":\"Circular Wait\",\"summary\":\"모든 자원 유형에 전체 순서를 부여하고, 프로세스가 증가하는 번호 순서로 자원을 요청하게 합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"imposes a total ordering of all resource types, and requires that each process requests resources in an increasing order of enumeration.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\"],\"importance\":2},{\"id\":\"n24\",\"parentId\":\"n1\",\"order\":6,\"title\":\"Deadlock Avoidance\",\"summary\":\"안전 상태를 판단하여 자원 요청의 즉시 할당 여부를 결정하는 방법을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[10,11,12]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n25\",\"parentId\":\"n24\",\"order\":1,\"title\":\"Deadlock avoidance algorithm\",\"summary\":\"즉시 할당 후 시스템이 안전 상태에 남는지를 판단하며, 안전 상태와 비안전 상태의 의미를 제시합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[10]}],\"sourceEvidence\":\"system must decide if the immediate allocation leaves the system in a safe state. If a system is in safe state, No deadlocks. If a system is in unsafe state, Possibility of deadlock.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\",\"비교\"],\"importance\":3},{\"id\":\"n26\",\"parentId\":\"n24\",\"order\":2,\"title\":\"Resource allocation graph\",\"summary\":\"청구 간선의 변환과 다중 인스턴스 자원에서 은행원 알고리즘 사용을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[11]}],\"sourceEvidence\":\"Claim edge Pi → Rj / Claim edge is converted to request edge … Request edge is converted to assignment edge … Assignment edge is reconverted to claim edge … When multiple instances of a resource type, use the banker’s algorithm.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\",\"예외\"],\"importance\":2},{\"id\":\"n27\",\"parentId\":\"n24\",\"order\":3,\"title\":\"Unsafe state example\",\"summary\":\"P2의 R2 요청을 승인하면 사이클이 형성되므로 요청을 거부하는 예시입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[12]}],\"sourceEvidence\":\"P2 requests R2. If we grant it, a cycle is formed. So, deny!!! / No cycle → safe → grant; Cycle → unsafe → deny\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\"],\"importance\":2},{\"id\":\"n28\",\"parentId\":\"n1\",\"order\":7,\"title\":\"Deadlock Detection & Recovery\",\"summary\":\"데드락을 탐지하고 프로세스 종료 또는 자원 선점으로 복구하는 방법을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[13]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n29\",\"parentId\":\"n28\",\"order\":1,\"title\":\"Detection algorithm\",\"summary\":\"그래프에서 사이클을 찾는 알고리즘을 주기적으로 실행하며, 사이클이 있으면 데드락이 존재합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[13]}],\"sourceEvidence\":\"Periodically invoke an algorithm that searches for a cycle in the graph. If there is a cycle, there exists a deadlock.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\"],\"importance\":2},{\"id\":\"n30\",\"parentId\":\"n28\",\"order\":2,\"title\":\"Recovery scheme\",\"summary\":\"데드락 프로세스를 종료하거나 일부 자원을 선점하여 데드락 사이클을 제거합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[13]}],\"sourceEvidence\":\"Abort all deadlocked processes. / Abort one process at a time until the deadlock cycle is eliminated. / Preempt some resources from processes … until the deadlock cycle is broken.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"목록\"],\"importance\":2},{\"id\":\"n31\",\"parentId\":\"n1\",\"order\":8,\"title\":\"Summary\",\"summary\":\"데드락의 정의, 발생 조건 및 세 가지 처리 방안을 요약합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[14]}],\"sourceEvidence\":\"Deadlock can arise if four conditions; mutual exclusion, hold and wait, no preemption, and circular wait hold simultaneously. / Deadlock prevention, avoidance, detection and recovery\",\"selectedByDefault\":false,\"structureTags\":[\"목록\"],\"importance\":0}]},\"suggestedRole\":\"데드락의 발생 원리와 자원 관리 기반 처리 전략을 학습·복습하는 핵심 개념 자료로 활용합니다.\"}"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+        "format": {
+          "type": "json_schema",
+          "description": null,
+          "name": "pdf_outline_analysis",
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "documentType",
+              "summary",
+              "keyTopics",
+              "outline",
+              "sourceOutline",
+              "suggestedRole"
+            ],
+            "properties": {
+              "documentType": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "keyTopics": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "outline": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "heading",
+                    "points"
+                  ],
+                  "properties": {
+                    "heading": {
+                      "type": "string"
+                    },
+                    "points": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "sourceOutline": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "title",
+                  "summary",
+                  "nodes"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 120,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "parentId",
+                        "order",
+                        "title",
+                        "summary",
+                        "sourceRefs",
+                        "sourceEvidence",
+                        "selectedByDefault",
+                        "structureTags",
+                        "importance"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "parentId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "order": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "sourceRefs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "fileName",
+                              "pageNumbers"
+                            ],
+                            "properties": {
+                              "fileName": {
+                                "type": "string"
+                              },
+                              "pageNumbers": {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "sourceEvidence": {
+                          "type": "string"
+                        },
+                        "selectedByDefault": {
+                          "type": "boolean"
+                        },
+                        "structureTags": {
+                          "type": "array",
+                          "maxItems": 4,
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "절차",
+                              "목록",
+                              "관계",
+                              "비교",
+                              "수치",
+                              "공식",
+                              "예외",
+                              "틀"
+                            ]
+                          }
+                        },
+                        "importance": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 3
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "suggestedRole": {
+                "type": "string"
+              }
+            }
+          },
+          "strict": true
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 14084,
+        "input_tokens_details": {
+          "cache_write_tokens": 14081,
+          "cached_tokens": 0
+        },
+        "output_tokens": 4064,
+        "output_tokens_details": {
+          "reasoning_tokens": 112
+        },
+        "total_tokens": 18148
+      },
+      "user": null,
+      "metadata": {}
+    }
+  },
+  {
+    "sequence": 2,
+    "stage": "plan",
+    "startedAt": "2026-09-04T12:37:49.838Z",
+    "completedAt": "2026-09-04T12:38:08.922Z",
+    "durationMs": 19084,
+    "httpStatus": 200,
+    "requestConfiguration": {
+      "model": "gpt-5.6-terra",
+      "reasoning": {
+        "effort": "medium"
+      },
+      "schemaName": "whole_document_core_plan",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "summary",
+          "learningGoal",
+          "selectionRationale",
+          "areas",
+          "exclusions",
+          "maxLearningUnitCount"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string"
+          },
+          "learningGoal": {
+            "type": "string"
+          },
+          "selectionRationale": {
+            "type": "string"
+          },
+          "areas": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "title",
+                "description",
+                "learningValue",
+                "sourceScope"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "learningValue": {
+                  "type": "string"
+                },
+                "sourceScope": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "exclusions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxLearningUnitCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        }
+      }
+    },
+    "response": {
+      "id": "resp_0c2429b6b14f92b2006a9abb9d0ec887d09f88b635720429bb",
+      "object": "response",
+      "created_at": 1788525469,
+      "status": "completed",
+      "background": false,
+      "billing": {
+        "payer": "openai"
+      },
+      "completed_at": 1788525487,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-5.6-terra",
+      "moderation": null,
+      "output": [
+        {
+          "id": "msg_0c2429b6b14f92b2006a9abb9fa13487d097cbcdb11ac8abdf",
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"summary\":\"데드락의 정의와 발생 구조를 이해하고, 자원 할당 그래프·안전 상태를 근거로 데드락을 판별하며, 예방·회피·탐지 및 복구 방식을 구별하여 설명하는 내용입니다.\",\"learningGoal\":\"데드락의 핵심 개념과 네 가지 발생 조건을 설명하고, 자원 할당 그래프 및 안전 상태로 데드락 위험을 판정하며, 예방·회피·탐지 및 복구 방안의 원리와 적용 방식을 반복 문제를 통해 구별·설명할 수 있다.\",\"selectionRationale\":\"사용자가 전체 범위의 핵심 내용을 반복학습 문제로 익히는 것을 목표로 했으므로, 정의·판별 규칙·처리 전략처럼 독립적으로 회상 및 적용 가능한 교과 지식을 우선 선정했습니다. 표지, 학습 목표 안내, 최종 요약은 새로운 학습 내용을 추가하지 않아 제외했습니다.\",\"areas\":[{\"id\":\"n5\",\"title\":\"What is deadlock?\",\"description\":\"차단된 프로세스 집합의 각 프로세스가 자원을 보유하면서 집합 내 다른 프로세스가 보유한 자원을 기다리는 데드락의 정의와 세마포어 예시의 대기 구조를 학습한다.\",\"learningValue\":\"이후 발생 조건, 그래프 판별, 처리 방안이 모두 데드락 상태의 정확한 정의를 전제로 하므로 핵심 출발점이다.\",\"sourceScope\":[\"n5 | What is deadlock? | 3쪽\"]},{\"id\":\"n6\",\"title\":\"Deadlock Characterization\",\"description\":\"프로세스·자원 유형·자원 인스턴스 및 request-use-release의 시스템 모델을 바탕으로, 상호 배제·점유와 대기·비선점·순환 대기의 네 조건이 동시에 성립할 때 데드락이 발생함을 학습한다. 또한 자원 할당 그래프의 요청 간선과 할당 간선, 사이클 및 자원 인스턴스 수에 따른 판별 규칙을 학습한다.\",\"learningValue\":\"데드락의 발생 원인을 구조적으로 설명하고, 그래프에서 데드락 여부 또는 가능성을 판단하는 데 필요한 핵심 규칙이다.\",\"sourceScope\":[\"n6 | Deadlock Characterization | 4-7쪽\",\"n7 | System modeling | 4쪽\",\"n8 | Deadlock can arise if four conditions hold simultaneously. | 5쪽\",\"n9 | Mutual exclusion | 5쪽\",\"n10 | Hold and wait | 5쪽\",\"n11 | No preemption | 5쪽\",\"n12 | Circular wait | 5쪽\",\"n13 | Resource allocation graph | 6쪽\",\"n14 | Deadlock examples with resource allocation graph | 7쪽\"]},{\"id\":\"n15\",\"title\":\"Methods for Handling Deadlocks\",\"description\":\"데드락 처리의 세 접근법을 구별한다. 예방은 네 발생 조건 중 적어도 하나를 성립하지 않게 하고, 회피는 사전 자원 사용 정보를 바탕으로 안전 상태를 유지하며, 탐지 및 복구는 데드락 진입을 허용한 뒤 이를 찾아 해소한다.\",\"learningValue\":\"세부 기법을 단순 암기하지 않고 각 방법의 개입 시점과 기본 원리를 비교하는 기준이 된다.\",\"sourceScope\":[\"n15 | Methods for Handling Deadlocks | 8쪽\",\"n16 | Prevention | 8쪽\",\"n17 | Avoidance | 8쪽\",\"n18 | Detection and recovery | 8쪽\"]},{\"id\":\"n19\",\"title\":\"Deadlock Prevention\",\"description\":\"예방을 위해 점유와 대기를 막는 선할당 방식, 비선점 조건을 막기 위한 보유 자원 해제 및 재시작 방식, 순환 대기를 막기 위한 자원 유형의 전체 순서와 오름차순 요청 방식을 학습한다. 상호 배제 조건은 일반적으로 부정하기 어렵다는 점도 함께 구별한다.\",\"learningValue\":\"네 발생 조건과 대응 예방 정책을 연결하여, 각 정책이 어떤 대기 구조를 제거하는지 설명할 수 있게 한다.\",\"sourceScope\":[\"n19 | Deadlock Prevention | 9쪽\",\"n20 | Mutual Exclusion | 9쪽\",\"n21 | Hold and Wait | 9쪽\",\"n22 | No Preemption | 9쪽\",\"n23 | Circular Wait | 9쪽\"]},{\"id\":\"n24\",\"title\":\"Deadlock Avoidance\",\"description\":\"자원 요청을 즉시 승인한 뒤에도 안전 상태가 유지되는지 판단하는 회피 원리를 학습한다. 안전 상태와 비안전 상태의 의미, 청구 간선·요청 간선·할당 간선의 변환, 사이클 생성 시 요청 거부 규칙을 다루며, 자원 유형에 여러 인스턴스가 있으면 은행원 알고리즘을 사용한다는 점을 포함한다.\",\"learningValue\":\"예방과 달리 자원 요청마다 미래의 안전성을 판단하는 회피의 의사결정 규칙을 적용할 수 있게 한다.\",\"sourceScope\":[\"n24 | Deadlock Avoidance | 10-12쪽\",\"n25 | Deadlock avoidance algorithm | 10쪽\",\"n26 | Resource allocation graph | 11쪽\",\"n27 | Unsafe state example | 12쪽\"]},{\"id\":\"n28\",\"title\":\"Deadlock Detection & Recovery\",\"description\":\"데드락을 허용한 뒤 그래프에서 사이클을 주기적으로 탐색하여 탐지하는 방식과, 데드락 프로세스 전체 또는 일부를 종료하거나 일부 자원을 선점하여 사이클을 끊는 복구 방식을 학습한다.\",\"learningValue\":\"사전 차단 전략이 아닌 사후 대응 전략의 탐지 기준과 복구 선택지를 구별하는 데 필요하다.\",\"sourceScope\":[\"n28 | Deadlock Detection & Recovery | 13쪽\",\"n29 | Detection algorithm | 13쪽\",\"n30 | Recovery scheme | 13쪽\"]}],\"exclusions\":[\"n1 | Chapter 8. Deadlocks | 1쪽: 장 제목만 제시하며 독립적으로 반복학습할 교과 지식이 없다.\",\"n2, n3, n4 | 학습 목표 및 학습 내용 | 2쪽: 자료의 목표와 항목을 안내하는 메타 정보이며, 실제 개념·규칙 학습은 해당 본문 영역에서 다룬다.\",\"n31 | Summary | 14쪽: 앞선 본문 내용을 압축 반복할 뿐 새로운 개념·규칙·절차를 추가하지 않으므로 별도 학습 영역으로 분리하지 않는다.\",\"세마포어 S·Q의 특정 코드 배열과 개별 그림 구성: 데드락 정의를 설명하는 예시이므로 n5의 맥락으로 활용하되, 예시 자체를 독립 학습 영역으로 두지 않는다.\",\"자원 할당 그래프의 개별 도식 사례: 그래프 간선, 사이클, 인스턴스 수에 따른 판별 규칙을 학습하는 데 사용하되, 각 사례의 도형 배치를 별도 암기 대상으로 두지 않는다.\"],\"maxLearningUnitCount\":18}"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+        "format": {
+          "type": "json_schema",
+          "description": null,
+          "name": "whole_document_core_plan",
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "summary",
+              "learningGoal",
+              "selectionRationale",
+              "areas",
+              "exclusions",
+              "maxLearningUnitCount"
+            ],
+            "properties": {
+              "summary": {
+                "type": "string"
+              },
+              "learningGoal": {
+                "type": "string"
+              },
+              "selectionRationale": {
+                "type": "string"
+              },
+              "areas": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 12,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "title",
+                    "description",
+                    "learningValue",
+                    "sourceScope"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "learningValue": {
+                      "type": "string"
+                    },
+                    "sourceScope": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "exclusions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "maxLearningUnitCount": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              }
+            }
+          },
+          "strict": true
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 19618,
+        "input_tokens_details": {
+          "cache_write_tokens": 19615,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1550,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 21168
+      },
+      "user": null,
+      "metadata": {}
+    }
+  },
+  {
+    "sequence": 3,
+    "stage": "recall",
+    "startedAt": "2026-09-04T12:38:08.924Z",
+    "completedAt": "2026-09-04T12:38:37.020Z",
+    "durationMs": 28096,
+    "httpStatus": 200,
+    "requestConfiguration": {
+      "model": "gpt-5.6-terra",
+      "reasoning": {
+        "effort": "medium"
+      },
+      "schemaName": "recall_training_design",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question",
+          "options",
+          "recommendedOptionId"
+        ],
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "recommendedOptionId": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "title",
+                "cue",
+                "target",
+                "unit",
+                "instruction",
+                "mode",
+                "variants"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "cue": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "instruction": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "flashcard",
+                    "cloze",
+                    "translation"
+                  ]
+                },
+                "variants": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "label",
+                      "description",
+                      "slotMode",
+                      "exampleSource",
+                      "preservePlaceholders",
+                      "sample"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "slotMode": {
+                        "type": "string",
+                        "enum": [
+                          "template",
+                          "filled_example"
+                        ]
+                      },
+                      "exampleSource": {
+                        "type": "string",
+                        "enum": [
+                          "source",
+                          "generated"
+                        ]
+                      },
+                      "preservePlaceholders": {
+                        "type": "boolean"
+                      },
+                      "sample": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "title",
+                          "cue",
+                          "target",
+                          "supportingInfo"
+                        ],
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "cue": {
+                            "type": "string"
+                          },
+                          "target": {
+                            "type": "string"
+                          },
+                          "supportingInfo": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response": {
+      "id": "resp_0c10c44101914e7b006a9abbb019ac87d0aeff01aa4d67f9f7",
+      "object": "response",
+      "created_at": 1788525488,
+      "status": "completed",
+      "background": false,
+      "billing": {
+        "payer": "openai"
+      },
+      "completed_at": 1788525515,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-5.6-terra",
+      "moderation": null,
+      "output": [
+        {
+          "id": "rs_0c10c44101914e7b006a9abbb1962487d08b78c4ee505cd6fc",
+          "type": "reasoning",
+          "content": [],
+          "encrypted_content": "gAAAAABqmrvL8O9yRQGWV3d_CKUjBkGmxKNNAgYWYQv1vrhA3Pj-PdLdkfGOfy85-2-LsnmHlgRsR-Y2ND0fyo9PtH_dTFasRWm3W012PZ8VAwjF342HAGFHZdoLddnYsX9znEYf4q9d2TmoCmTTSQdNwYwf4mE0zVXqJWMydhiFSNmoEnrj6upTcW9m4OYtoUxWYYes3r7hdwtD66W_T2zT4wFQfzHJIbHafStP-zk9DpxxCGMwG0tIqLaR059ZjtR1r20eTP5EPnVuEcQh7jyPSWxQ_plj3UWVjt4jSxmqGtpFonQ5uTO3wgkayvvMeK7jl5zcX9ALscqRADbxeq7c1QB2v6Q4y4g0FCNLyCHc53VaATgEljLFozgwbFu1XtkJlnRyrBHGBRkXZvzhmDveoyFkj7lz1adxowaPu6rbK7CFqso312Dq4_NBXGxyD-AsYE8JL8WEcG1LmdXOgt5DJU5gWMXOXyXk60AdvN9QFzguU48swHT8dxab9vvRIF3IFF6hejn2o0TbmFp9LPKPELhZg8Z7hrzGIzpPGOvZqd_4QBH4yN4p-si4S_I8PbKV8gfVWDeY5FJeEbjR0Ch1G5brOGj7gmqlqMfkytBCUIXyDbCwyGWn7ZsgD8VLDCUkFtXeDbSY_SqJvnj16yfNgeMu5yWqv_JPQjNXwMZ7Ll3xkQTaDGxx2iPgkd-nOUfVUMZJsTVzIMqQxlQl1thnbOhu4jHrWyUPEpHeKH5_rRMAO2xB5WK03AQ99KOa_-GgizXehBriS3kLGyDmuNMrofegTY_bmNgcwhFvS04o84hk1gymhvOpkoM-luaNqSapA9pl8iUJy_4ZMHbUdSouZN09DOll3VluKkggmsB6Sb3isbysyI9rVDb3SDPbWlUSfTdfs3iY6IXChNG8Ybpn941ToGyphbtXa39t6c8GZPUDbFP1LUUXB9kCQxH8eVErdtTtXOYhE0tRazZdtBBsXAg8M0GbHzrXUipnpqNBGIPe2IzOmS6wKT3Mn_B0C86PVN58YuFzeN132AaNNfOXXOqCqxDhI17kGA_Zg0QvCKFEhlaxP69oZ1yirIUuz_GvvUwf5pVm82WBObGam1t7LNTUUu6q9O52CTy8kHUMxc4W56Cx-BPyoWIwPNL0Lj7_j0Glgma0H1uNcCebR9S9JU06tWtn-uMj3jBLg9jnVsJ0fYj-kmOENp4j7Q4IzIriq3p41k1KJ3kbDG4nC2qYwK114czT3fUcs_FUQ8vLzY2-NHbhVly0OAyepOp22gadgIHmRl3NqDBn3AmJPnwaitoWorVL8mYUR_XeGWVQGK0w5gDD3VV1S-sGBKeh0PZxMRXy8t8rXfkN-lc3-7iJlzMsu1j769SsNFL7rxguQ756MNdDWkoq4OJiGp1sx3-Te0doZYVFbfLp0mxdi7Gb2glZlDx7Qq6d8-VdZK8C2XkVXD6Hahpf2VIVLo2MrzlYDffxjIW09nzxdojUjZak9RbxVb8WYeJnEX_6I2vzcF0citjHzA7GU6Q9kBq7WGZrJUOmEm6BNDXydWmpfzB86Xiwxt7L9g93UORKNs92h04I21u7eCgyOzlE0aBLdXFhoKlGcetlmmIlgAlMwq3GSWVOR2nJRtwn8hDIZhwPLnDcy-nx_m6hGykm8m8BcIXtji8Ym-N24hiWGYVy0lZ4IP9V6OLTMq5AN64T6injtXGuxwJVA0Sw0v2juMpYlEXzOdyrfOkvyckqD5ZhgQjxFrWZsOIhTzuvYixqVc2kDqpiaHyjEFBLvuk78zztc7faiOk1uonfkb7XBli_J0ukO8pXcWUHOyhW4KnWcSdhwxBgCeDH4OPmH3Jhr8sCnEV8K_sk6cqxdlNVFlT7PoaeN9sv3Ok0kur8XYNxM9LdDYhGOv1-YRGNJlLr7T2z76VkAflAIL8wGT2kggwZhfqqBh_SaMLw_2SSx8CY_Vvfa6sVjRYY4B54jpe3GBuh-TLr_q-pfaMzGN2_RKqoDxWFyjwGo01NW3LeW_l66bV_1hJusHcHGsjcIypQ1Fpj1TpnjHGmjtkHd-vn5XvTaaLj_7alYKYhg2nFr9vq8AqHmpt01fncx7TNFNnjspTVxPFdiNc2LnJrGpWCSxENObnZg89DziJQQc7uOfE760Q8emPXDekYAM4F2oK-7EsYBk0HAjyoH_BT44cBQb4x7t0egkt6NJlBCTjHrV6KZZ62RJvUETNbczZ666-8UpqftfJsPRTDibpI2dOFQGR0zGVA3wDpi-fVpWQdJYmyASw2UmnYTCx-yfjrMFW3jAPyjtc28XwC7ms-ukxHBZODEkTBzocBbFUeOU1KnhTQ_rmAINupMUMtH64UZx4qTw1P4uhk1_Q5XFu3bxKyBko2i79ywE62Q1EKp3cbwMlTAob8ySNEJYFfp5P_ST8sGevWEBkXY77DH-n-_szE5gzRFC5CYXM7L5rPy1uNqgn8ugDc6jVdx2LHz1_RfBKiEiC5dI7gG_WruS2H_0dfPWi4nYwkTGfExoRaL0Sjy_gTQ8FHMn8gaBmQLeAT8YE2TB93QIVZuX8KoYyeiT_bl6n5SiufvmHRqI7mkibOEDsR7_wrwf5JQN7umVavp9RsyzZ5cbDw6ASz2FjI-ldBSZdmKoEsiTy_RLQ1CTvn2-ryWLNjOhtLvnJaZLyb8qkiWlELKHJv4Q4pMC7jGgnxzIhCczH_vdnai8ZrnkaSekj-7lP0M34YjsPcBhGxqrVBWO2ROCN3fwXY3sSljK7tSdLVwvwwWhAsj5YO3lZzoJ3u-_LrX8aZhzJMGvLl0QjTHGz14Io2N7hgRy2FiC3f6Q8vZTN-H0FDKVggtURHt276NmHWfWPNIryfmxInaFMLrCqd0dC-9Ae_2yfx7Rnod0RYJxtRICFGkx_M_J_dWwP30vmyBbhBa7EHNNMhXxneTNcyqZhVW1Z-515jivo-nZDl0nY45rD3cA34Tq2nJa2ke5K6aRRzBruGbHv98WYNihrHHPWJEegrwy4eDC-Q6TyrvUx62nlEVfAlwHOtK7JV6HFs86ecAt36ENBIPUnHzaycmGK5Rs3DZSavy0qPe51Qcb4KtqPqOvdkGL7fnirG5ltotFukdbJWXGDZEmTwSJeJt_LeqtfqwUL_fs5Jo3i4dES0FfM5qwzYOCNLWYPEOcLxq38VvkX8Ti4m-BiRKSW6f8B_eWDwkfVnUfOZodZmu0mOMtQ3Igsw13-nw9VG1-0w_WJTEjUG--Nn6HOvvjJjIJ-weHrl6WrJ5_qMke03JO2CwbsOBwbbHmllHMQmOlzrZdGAQMbvZW05xQhiZlSmgBdvi_tv5w6behto7fTYeRK_7wedJqs_OqZm733j0WRetvDy2FBBu67YJfwP-rl3tYG1AW_a5klhvqL0ookikHhlDJu6GyETOjIF9l9yIljEzA0rAYdQQaGHg-eH-uWyTP_xhrfh8WY-iziHp_ByJzOEjcvXSakuXXyWz_3Np0WL-KCh8oAoh2tPiK5VTMNBECp9PTidanCnzel2nCwkV0v_Y1-2g-kdt-vT07cdM2uLpwE5EWHmJjvk3kgIv856JkdPhNoUg_MPHPNVDvfMBVqzzSFE8aSZT7sRqNkJtKCuAgIQMIPz_a8OOveasJGE4lp7bR9kl8_RtEwMKwCUr0F5T39ox_UQrD4gC3Brf7dutUQNiyvbfsn9qrOQSrsilfaCNFu7nGbRtUpA3Mu6olnoGUR5zturXsLnTYECMoAiwj2qGFZVDNHQiL0ZnoWlAmyi4QN0A0jSRpbA88X1vJA_A7K8jVcRvg==",
+          "summary": []
+        },
+        {
+          "id": "msg_0c10c44101914e7b006a9abbb838c087d0953c9c1bcacf9545",
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"question\":\"아래 대표 예시처럼 카드 앞면의 단서(Cue)를 보고 카드 뒷면의 지식(Target)을 직접 인출하는 방식 중, 전체 데드락 핵심 범위에 적용할 구조를 고르세요.\",\"recommendedOptionId\":\"option-2\",\"options\":[{\"id\":\"option-1\",\"title\":\"개념·용어 질문 Cue → 정의·규칙 Target\",\"cue\":\"데드락 관련 용어, 그래프 표기, 처리 방식의 이름 또는 핵심 질문을 본다.\",\"target\":\"해당 용어의 정확한 정의, 간선 방향의 의미, 판별 규칙, 정책 내용을 말하거나 쓴다.\",\"unit\":\"핵심 LearningUnit\",\"instruction\":\"각 카드는 하나의 독립적인 핵심 LearningUnit에서 만든다. 앞면에는 용어·상태·정책명 또는 직접적인 질문을 제시하고, 뒷면에는 그에 대응하는 정의·규칙·절차를 완결된 문장 또는 목록으로 재생산하게 한다. 네 발생 조건, 그래프 간선 의미와 사이클 판별, 처리 방식의 차이, 예방 정책, 안전 상태, 탐지·복구 규칙을 우선 추출한다. 하나의 카드에는 서로 다른 핵심 개념을 불필요하게 섞지 않는다.\",\"mode\":\"flashcard\",\"variants\":[{\"id\":\"option-1-template\",\"label\":\"정의·규칙 빈자리형\",\"description\":\"일반화된 질문을 보고, 변수 자리를 포함한 정의 또는 규칙의 구조를 인출합니다.\",\"slotMode\":\"template\",\"exampleSource\":\"source\",\"preservePlaceholders\":true,\"sample\":{\"title\":\"데드락 정의\",\"cue\":\"데드락: 차단된 [프로세스] 집합의 각 구성원은 어떤 상태인가?\",\"target\":\"각 [프로세스]는 [자원]을 보유한 채, 집합 내 다른 [프로세스]가 보유한 [자원]을 획득하기를 기다린다.\",\"supportingInfo\":\"정의의 두 핵심 요소인 ‘자원 보유’와 ‘다른 프로세스가 보유한 자원 대기’를 모두 말한다.\"}},{\"id\":\"option-1-filled\",\"label\":\"정의·규칙 완성형\",\"description\":\"구체적인 질문을 보고, 완성된 정의 또는 규칙을 인출합니다.\",\"slotMode\":\"filled_example\",\"exampleSource\":\"generated\",\"preservePlaceholders\":false,\"sample\":{\"title\":\"데드락 정의\",\"cue\":\"데드락: 차단된 프로세스 집합의 각 구성원은 어떤 상태인가?\",\"target\":\"각 프로세스는 자원을 보유한 채, 집합 내 다른 프로세스가 보유한 자원을 획득하기를 기다린다.\",\"supportingInfo\":\"자원을 단순히 기다리는 상태가 아니라, 보유와 상호 대기가 함께 있는 상태이다.\"}}]},{\"id\":\"option-2\",\"title\":\"상황·조건 Cue → 개념 판정·처리 결정 Target\",\"cue\":\"프로세스의 자원 보유·요청 상황, 자원 할당 그래프의 사이클 조건, 또는 처리 정책의 조건을 본다.\",\"target\":\"해당 상황의 개념명·데드락 판정·안전성·승인 또는 거부·적용 처리 방식을 말하거나 쓴다.\",\"unit\":\"핵심 LearningUnit\",\"instruction\":\"각 카드는 하나의 핵심 LearningUnit을 상황 또는 조건으로 바꾸어 제시한다. 앞면에는 프로세스와 자원의 관계, 그래프의 사이클 및 인스턴스 수, 또는 정책 적용 조건을 구체적으로 제시한다. 뒷면에는 정확한 조건명, 데드락 여부·가능성, 안전 또는 비안전 판정, 승인·거부 결정, 예방·회피·탐지 및 복구 중 해당 방식과 조치를 재생산하게 한다. 판정에는 근거가 되는 규칙을 짧게 함께 쓰게 하며, 자료에 없는 세부 알고리즘 계산은 추가하지 않는다.\",\"mode\":\"flashcard\",\"variants\":[{\"id\":\"option-2-template\",\"label\":\"상황 판정 빈자리형\",\"description\":\"자원 관계와 그래프 조건의 변수를 보고, 개념 판정과 조치를 인출합니다.\",\"slotMode\":\"template\",\"exampleSource\":\"source\",\"preservePlaceholders\":true,\"sample\":{\"title\":\"사이클과 데드락 판정\",\"cue\":\"자원 할당 그래프에 사이클이 있고, 각 [자원 유형]의 인스턴스가 하나뿐이다.\",\"target\":\"데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.\",\"supportingInfo\":\"인스턴스가 여러 개인 경우에는 ‘데드락 가능성’으로 판정이 달라진다.\"}},{\"id\":\"option-2-filled\",\"label\":\"상황 판정 완성형\",\"description\":\"구체적인 자원 관계와 그래프 조건을 보고, 완성된 판정과 조치를 인출합니다.\",\"slotMode\":\"filled_example\",\"exampleSource\":\"generated\",\"preservePlaceholders\":false,\"sample\":{\"title\":\"사이클과 데드락 판정\",\"cue\":\"자원 할당 그래프에 사이클이 있고, 각 자원 유형의 인스턴스가 하나뿐이다.\",\"target\":\"데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.\",\"supportingInfo\":\"사이클 유무와 자원 인스턴스 수를 함께 근거로 답한다.\"}}]},{\"id\":\"option-3\",\"title\":\"분류·절차 뼈대 Cue → 항목·순서 완성 Target\",\"cue\":\"데드락의 상위 범주, 발생 조건 묶음, 예방 대상 조건 또는 복구 방식의 뼈대를 본다.\",\"target\":\"빠진 구성 항목의 이름과 각 항목의 핵심 내용 또는 절차 순서를 완성해 말하거나 쓴다.\",\"unit\":\"핵심 LearningUnit\",\"instruction\":\"각 카드는 목록·비교·변환 절차처럼 함께 기억해야 할 구조화된 핵심 LearningUnit에 사용한다. 앞면에는 범주명과 일부 항목 또는 단계만 제시하고, 뒷면에는 빠진 항목을 포함한 전체 목록, 각 항목의 짧은 정의, 또는 간선 변환 순서를 정해진 순서로 재생산하게 한다. 특히 네 발생 조건, 세 처리 접근법의 차이, 예방 정책과 대상 조건의 대응, 청구·요청·할당 간선의 변환, 복구 선택지를 우선 다룬다. 단순 제목 나열만 요구하지 말고 각 항목의 구별 기준을 포함한다.\",\"mode\":\"cloze\",\"variants\":[{\"id\":\"option-3-template\",\"label\":\"구조 완성 빈자리형\",\"description\":\"분류의 일부와 변수 자리를 보고, 전체 분류와 핵심 기준을 순서대로 완성합니다.\",\"slotMode\":\"template\",\"exampleSource\":\"source\",\"preservePlaceholders\":true,\"sample\":{\"title\":\"데드락 처리 접근법\",\"cue\":\"데드락 처리 접근법: 예방, 회피, ____\",\"target\":\"탐지 및 복구. 예방은 네 발생 조건 중 적어도 하나가 성립하지 않게 한다. 회피는 사전 정보를 이용해 안전 상태를 유지한다. 탐지 및 복구는 데드락 진입을 허용한 뒤 탐지하고 해소한다.\",\"supportingInfo\":\"세 접근법을 개입 시점과 원리까지 연결해 완성한다.\"}},{\"id\":\"option-3-filled\",\"label\":\"구조 완성 완성형\",\"description\":\"구체적인 분류 뼈대를 보고, 전체 분류와 핵심 기준을 순서대로 완성합니다.\",\"slotMode\":\"filled_example\",\"exampleSource\":\"generated\",\"preservePlaceholders\":false,\"sample\":{\"title\":\"데드락 처리 접근법\",\"cue\":\"데드락 처리 접근법: 예방, 회피, 탐지 및 복구\",\"target\":\"예방은 네 발생 조건 중 적어도 하나가 성립하지 않게 한다. 회피는 사전 정보를 이용해 안전 상태를 유지한다. 탐지 및 복구는 데드락 진입을 허용한 뒤 탐지하고 해소한다.\",\"supportingInfo\":\"각 방식의 핵심 원리를 세 방식 모두에 대해 말한다.\"}}]}]}"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+        "format": {
+          "type": "json_schema",
+          "description": null,
+          "name": "recall_training_design",
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "question",
+              "options",
+              "recommendedOptionId"
+            ],
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "recommendedOptionId": {
+                "type": "string"
+              },
+              "options": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "title",
+                    "cue",
+                    "target",
+                    "unit",
+                    "instruction",
+                    "mode",
+                    "variants"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "cue": {
+                      "type": "string"
+                    },
+                    "target": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "instruction": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "flashcard",
+                        "cloze",
+                        "translation"
+                      ]
+                    },
+                    "variants": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "label",
+                          "description",
+                          "slotMode",
+                          "exampleSource",
+                          "preservePlaceholders",
+                          "sample"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "slotMode": {
+                            "type": "string",
+                            "enum": [
+                              "template",
+                              "filled_example"
+                            ]
+                          },
+                          "exampleSource": {
+                            "type": "string",
+                            "enum": [
+                              "source",
+                              "generated"
+                            ]
+                          },
+                          "preservePlaceholders": {
+                            "type": "boolean"
+                          },
+                          "sample": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "title",
+                              "cue",
+                              "target",
+                              "supportingInfo"
+                            ],
+                            "properties": {
+                              "title": {
+                                "type": "string"
+                              },
+                              "cue": {
+                                "type": "string"
+                              },
+                              "target": {
+                                "type": "string"
+                              },
+                              "supportingInfo": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "strict": true
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 22026,
+        "input_tokens_details": {
+          "cache_write_tokens": 22023,
+          "cached_tokens": 0
+        },
+        "output_tokens": 2246,
+        "output_tokens_details": {
+          "reasoning_tokens": 403
+        },
+        "total_tokens": 24272
+      },
+      "user": null,
+      "metadata": {}
+    }
+  },
+  {
+    "sequence": 4,
+    "stage": "prepare",
+    "startedAt": "2026-09-04T12:38:37.022Z",
+    "completedAt": "2026-09-04T12:39:32.331Z",
+    "durationMs": 55309,
+    "httpStatus": 200,
+    "requestConfiguration": {
+      "model": "gpt-5.6-terra",
+      "reasoning": {
+        "effort": "medium"
+      },
+      "schemaName": "study_material_analysis",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "detectedGoal",
+          "sourceType",
+          "keyTopics",
+          "recommendedStrategy",
+          "extractedMaterial",
+          "primaryKnowledgeType",
+          "learningUnits"
+        ],
+        "properties": {
+          "detectedGoal": {
+            "type": "string"
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "concept",
+              "comparison",
+              "script",
+              "definition",
+              "mixed"
+            ]
+          },
+          "keyTopics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recommendedStrategy": {
+            "type": "string"
+          },
+          "extractedMaterial": {
+            "type": "string"
+          },
+          "primaryKnowledgeType": {
+            "type": "string",
+            "enum": [
+              "vocabulary",
+              "fact",
+              "concept",
+              "relationship",
+              "procedure",
+              "formula",
+              "speaking_pattern",
+              "writing_pattern",
+              "problem_solving_pattern",
+              "example",
+              "other"
+            ]
+          },
+          "learningUnits": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 18,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "sourceId",
+                "sourcePage",
+                "sourceRange",
+                "sourceText",
+                "knowledgeType",
+                "fixedPart",
+                "variableSlots",
+                "generalizedForm",
+                "target",
+                "operation",
+                "successCriterion",
+                "rationale"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "sourceId": {
+                  "type": "string"
+                },
+                "sourcePage": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "sourceRange": {
+                  "type": "string"
+                },
+                "sourceText": {
+                  "type": "string"
+                },
+                "knowledgeType": {
+                  "type": "string",
+                  "enum": [
+                    "vocabulary",
+                    "fact",
+                    "concept",
+                    "relationship",
+                    "procedure",
+                    "formula",
+                    "speaking_pattern",
+                    "writing_pattern",
+                    "problem_solving_pattern",
+                    "example",
+                    "other"
+                  ]
+                },
+                "fixedPart": {
+                  "type": "string"
+                },
+                "variableSlots": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "name",
+                      "example"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "example": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "generalizedForm": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                },
+                "operation": {
+                  "type": "string",
+                  "enum": [
+                    "recall",
+                    "reconstruct",
+                    "discriminate",
+                    "apply"
+                  ]
+                },
+                "successCriterion": {
+                  "type": "string"
+                },
+                "rationale": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response": {
+      "id": "resp_0a63368e6d40b6db006a9abbcc38ac87d0b9d5c2906c0ac15c",
+      "object": "response",
+      "created_at": 1788525516,
+      "status": "completed",
+      "background": false,
+      "billing": {
+        "payer": "openai"
+      },
+      "completed_at": 1788525570,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-5.6-terra",
+      "moderation": null,
+      "output": [
+        {
+          "id": "rs_0a63368e6d40b6db006a9abbcd4f3087d08e8316786098ae15",
+          "type": "reasoning",
+          "content": [],
+          "encrypted_content": "gAAAAABqmrwDFQNHR4ZrwOjri2zxFLCbALdrXTPG2hkHIga91x3uRDC4FlMVi9YWjvwZqV7sRJYSsMAdUFpDgHVN6biaT4LaPcKY0IJ74KtZ2-0l8OB5d5LVUO1MYYgHyVUvoQSwQ4Zf1IB4psqYFOwrf1x9mwpQkylA1LWB4tpRdt4m5AIoqYMcDUYPBny7DPam5on1OFbnfQA8ErPgPQmbg6_m_tIGc3nN2p7C9isPltJOcxmUv4XEYp_svTWLVd-kbLkz4Q7tvdoODi6_BAtuR98NoraRxHz12af2oZg8hPsRQ5xsHbomA84YJKOr6NWwbBhHL0wf3lqVtn-tcunpuuckBFRf2RnYR7hNgg_Pu19lRTJXKp3XB4aFeRxNe_jCs6lrj2XrQK-UujOXQuR7S0rXYTVsLaQul9QyvMxSSMyVZzwD-1PvwIFq0h6kwmyhQPBvuAIQdTOK6snLmOa295a2NXPoYfDEcYFpjW8lrGTwkgXTunC1u6hA4NK0_yXnIJvSK6xsw0GpyLAiJV1muqfGEu1nJPJfo80s9Lbn6cYhKARbZUJljBc3J1Uh77qzEDzIKwuZZOBMLsFn-8aksh57vMNlU6A_07ZLieq5Mr2NXp40VlUR_09o0dy55WjxuWMLZtPddg7lPYJxAmnBaEZ9e4B8fzxG_pho79cCylBHNV4dZcZ3ZLsWwa8qhi3ShLZ0SfL5mR5LQh_lkzuCYXfQPg5T20maP4TbOcMgHa-tn_ERxQzS3ciFCtjee53zSmecTh4UtPGqC4_OunVd89oHcBAvBOp961a5gJI5VV-o5uuaCQc8CPQCon9yZwUXumXFc2-7HriamCgp8bWmu3fCf0QGYX2PZlLGVDsigM6C3k_PjQGJLGY7LR6r3jDYo5tDH41hUaUc6S-SzIJpiEmUNFjCrpeE0dCH_HDnhkbFLV1X4Gtnug3EqxG_OlGv7Nl779yZ6pZLC8vYpzcq7IuC2c2cDPdtKI_c_As7XZWg_hSUN5Zi7degBRcdKQHzoEdqPkZ1LNP79kIsJ7lxf6D6kRzR66PzSjsDhPZBBxhvcmvZNiHlpnQh6uR6o1bdbCxF39mL4sBQQAwys8YoOE6Z-sU_ORaRnxqlfofqaNKO5ZXc9gkJzCJUDuiI_U7UNwY7mKzc4T9kY4geMPLhDWmgUOUMGkXnzxt7IrosdtUb9GRCmUzMDGMPT_mLQBPp5asSnhlC6_c4zyjoA2l66MkXgaaXOdjvSmW65OEiZqJJCXBdgKwewaIrFGTDcLBjY-NiHiqTgNkuGLGB9lleHL6v4nK3Q0hPrXcSy_xA1aQWWlhnWIqSLS5JjQ2d1Ds_TxijOVpbOzTiz6U08Xi_FL-DyONlBSXJcUhqGWF6_PXP79yZFAXxYlxqyqTE2H9VP4WbfmOUPStJcSWThw_DYET1vdbH2Lqz7BiplXtve9eyfT51qfS82SvwRWTQu0BPXQ0k_hH_8RvJO8t0mGiUJG4V6oqzlC5G6AaDzz5BDSoQpJGjdT4LiPvBSz7gZO2OTLeVXGPV1no7E2buO5BqNSA8OAiq9ufFjjDYdienmzYTBjax2AoXC_NfO550ySV9Ms_ecgSK0wToC_Vl1Qk1DJ0Wi2HEq6v_-fulAYKl0rrjZKgQxP5LjyRZlhTVLeMlhSucArC9PHPIKG4YEngY4QDK7IBddFIWSdrzRoF5lDd8-bae-SqtdvOoG5FgZm7ZIU6SnOfN7aOZEpDQt9ddaSPBlGtEJlgAz84JCpZm8qRdHoZd0RAamphknkTZHeiTNS3spTfxJqEYFfZDP6wHz1C4ONwYuc-dasxnNuH7eCWpwCfrhN_trm6i6UrPfw9uyBFR9-feMFrTA8-vqWMzjdT6AzRppfrn79e3D8u3NNH-u7AYqZGzXa6gS48gAQw3XZlALTKGlJhTrh9uFJ3SvFHcWcgI4-xvmcV3CviHUVKpDljPNxHvzlbHgQsy40Q5SBz5qhFQHomhktwCMCwbSat_NTldlSt_ddboQ1JfwiDZUiph1eYzAuLFWWoTLA_eck5HqSwgiipzaWLafOLPP8xU4kMZ8_3N--0-LgIxk3mETwUCEST_NGiY9nK-4t5uGhjsgvMecgxL38eFrNH9yF3892mzAGw03a5L6gdub1qtjaQGlON0Amb3Vk2ivUsJDPtdnSxrJz71FbO3qqqKXR_4khmApw2llNLTZ6R0kd1-SFDcuxsDtu6MGKTbHzXy3AQjYPNs3IOZW4cBuyIDC5Q40s7Js5oqhNxauLwHLWaKRHJjPvrSrQR5PYV_MM5t7pO88zfbFuo4JCYkc_uPZT_G7eeKvexpYELI7K7rPCs7P6BYesfIzbRbcNQfzVnHRHOyv9VXlxah516WWbhm2IO2JQ6U70grle8iIpEbd77D4x6H67SiunOkL1fxHhxeaHG9yaBsk2L9-uvBWuwWHJgMLLCKlwBK1JSYKyZcuapHp709u-vILkWd8NscEe-XBCCs_obxmdyF0flREBs0Ij5wIG_js1rPYpzr4xewkdgALsOvEP9SlxUjQRqmpC46gcyQCPK8WHuXlW1xrCGNOS242nVarLGVgU6-YUvurNxAB70ONWp9VTwyiKwj58eY1E8Gpx6Zj1SC6z9TcPt5I5V8u563YVeQSFwZtEeipPmDMRmcT0yYhAsezmOxhc2umEzHzisBFnL_sSacgWVnrD2PMefK1X5-95siz8RbSzRaFw6bLLat23CUpqEY1A54OXv19U0HhcL3qWySf723Z7yo73FulB-rxPo7Cxyr9u58e3G0YAyaDqI13m11lqpbGht2FTP1jkOZkIyDr_0571jyn5K990AM-KxqtX6Ok78pVOSClay_RatieAorzk4GxUCP7OhvFEM46DdZYBImkRE7VazzsNKLtx_UKYQ68gwzyKWRAjzQ_oANVF_tWBla63TUmsPduguZvxy5D5hZ9tEs8ASzi3uH13K_3K8_22QX7IvTWtzruASPgYqdSBhlJ6snBGq7qWLVSaIuyZEyoFpUNopqvBKv9DruBKHp21iMebbBh2kVHGuc91IJLAwJ8Rq-NP-0XbEbBwaqznH_KTAIpN5lfugmlAnkKCSb0vg14f5roVGgwgNKCJuF9WNVlnF7rAWOkmRsghOR311UMWcy1o4Q74jAJ_RXKITY28BDhq_3hOko0AkaeQtyhyGed9okuP-Nd6FiN1Aq4aoeVOKv6X3YWA1Ah49k3tbSMWENLw99HGw9P_fRbtS_fnh5qQZbxWp9s35KzNZhDyuMb9CMg6-9CRl0SNdHMjcUp4p4Im6aCBhKIF_EMEcBJKPfX8r4CJrUDkXwDQL17VEyOVx9Z6gfUaRIki-2Wumc-Bi4uf1y60DiHRdQz12lvWD7rsBbWDehH31-OWpou87Pp--d5bOy4rMFrd43VMMLEvwM8B8kPoIv5P9ToIQLUB3XSR-G9OSUnpBUwmMHNxaFEHl9eONbLVg_5nD0WD1HSLBtQBGDxxEtKAMyhh4zu84ePGsIX36DOEHuraU5GQVoshbX71KyW0thXGGo8cFYfE_tW80lloOdJTPJVJl3B6cAW_CRr8xXF889feU_-k_uzlrYaRruWHKyOHJEhvx_bc7-RPExtf5bD2ELch32PTSZfkEpyS6vaknEojAU8t2n18OLpgJiIPgUPm_u9dueLc40hwugXSf-xf4UK6nffPTQeAL0CkE72kELSeP-LZEAkMf4WcB83VTQxUTpjLcHdTPZzI_WTZnT3lCM-d20H7P8NjmMTR-I4-jFab-N1sSCzrbyWWq6MOCo_tGCgVHf5AJO3Bu6HNT7eEehZBtYlg2f8l2icMpU6Wu1LFo6yISsINxW7hyXmevSr-9SzPTbJUplRDEo8xVJadEqycn45Uj9BQtXkAfrd16hxummcPgwJ4ts1L9eE72JBt6Huv_5OQtvBpV_QN3G0j1ur8KXVW9663PYnHC1Qc_8rzgx5LgyM8cGa5E5e7aIajWBjIj3VXRQQ-ACPur49EGFGTar8LxvAUu5ZIoQ-5atYDMlLU9MKCYpQkkYsZg8g8Ywbh_0Aq6eiBmj4RVx07Yivp0_o1-W-9eynwABMyEdzG98jsSQSf5m40KGSwXv00nBUb1obLSrIlPp1W4HOr6o-NCcy_6PqaqKUCM721YVuZLeh5RlHE_ooJyFNe1qZWVsA7yYd7cZFURlbifyfFA4Qar7f2mZ_k-NDMgo3C-hWnrDlbSnsFj7Jj3adkxTn8jolFBs4T4epooXsd7Dla21PyiZenAzR6_Bd7-nqAcxZnl8wnuKuOJ_8xeLv9hQ9_AbJybJ4CeQ0uQgaDSnLG8_GuL1Rx_JzWHCiv5FWrPPQtMHfHG-QAtDIWmgYpRG2ubP4YKAtblY-ebdwO86ciTB0jTA8hCFg4ZHu_5XK7nA5e9sB88duc-VjgxfX1i_4CODyE12eenUJDyD8aeIvkxW5he7AVWiw_dPVXXm5UtULfrstoZ4CN-HUZI11Akp4EV3_7nWbEFN52fcGl0=",
+          "summary": []
+        },
+        {
+          "id": "rs_0a63368e6d40b6db006a9abbd619b887d080d719d026ece11e",
+          "type": "reasoning",
+          "content": [],
+          "encrypted_content": "gAAAAABqmrwDmi2ipDTve4jyxuzEU_cGzoWI0CmhNCLtt3MbH8BgjtMz7TR0A0UctkCSfDfbxBU7GpudH9SLrzODavk2mTQJUqnzUuc5u0lnvgwSzaJBqNeCO1kqvDYLDIk5qA5Cqr25jgtSVle2W8YsuoS3QAVtPMJD1F_HsQTs4WhnmNaDTapfUgkci8V7HLjbs6FvDqiPmaOa1Xu8mWjNCAWQMLbD8G2qhdK2Pq0fKUDYUs_8VGGAyDJrNKo74tTmubqpDannlls6QIoFacVowwi1OUss6QVfiTGpfmoIbFqi2-JllXMNxr26HCskuGEOe0mIWnKnNoRWFZaDaJ3y9hBsUPUtY_DFfkC7VX3rkSST_Y0raZgvod02mRsuV6BkcnG1a0lhTWgLqjXr5DDc9_4oATALz19Xh4dR_-k3cDZo3kGHrxeaUnawXyMkHXlcyXAI-HVvupYBl-RA-4T3p3UTNDw_1KBPF55hnPAX9Dh2gLwDWs5goK9Aiw5QeV6PZb4Wt66Y9a9DW0JJTRD2tNXLB2dQIk5SihXdPLlGx0JEq3ojXL_5k0ZZF2b7HDhhDdou07G-9_YUnyovQn2IkZc5RWM5NtrIGkYRcw8gL1c0TUwjekuFIW8es-6rXrrPuWvO39fGp1ZfR0dwP-UC5VGs0IX7bXC9JFSVd36S9zHOfTpMDcmZiUEF79DvHhiwtFUFI1slv2TdeofaKeMh7CZYTmGPkygr0S9WImWW_eklBs6Ob4xDG8EWRTQG2qYEafLJyRtdkGYYMdB5eMlEECU5kNre9CUh1pLQ7eXmC2UIIY96K2QJmShal6CnzOuZ4aywh0m5JN8igZe4wZlb3v0d5UBuN_pV5pINyCvLX7U9beSdfIBcTHTBcYeUQ47vBE4GwRJtLQxqCkNLUYZLfy3WSe0qn2HNfTTPHoKIW8zBG5OkcLxorsTdqoEn2syJzVYSXvSheFGlMcJ5mDI9PP-mnr4W-BYp6F_Wc-L6TJYUUI8fisYXL3p1Xrgao7cJTPB_PMe3n-HWb8ErpwgBLGcD88x9cubcY2KY5Qdohj-0_fugW0y07OgiY3PzKOnDgAJQZ05BMywWPTkOpV-hm_qJYt_75AO1vSGWQJemoCO5hrQk5xhygjJe-_chBAkvkSHBAWxkaldVKN1YNNxxzcrkMms1vaVZDn-k33nAO2WHphvJNWaW_oUR8z8K4-3kbbJ-qKgtL_4w9iVFXf_mbJ-Hn92RL1YbQkhtQWsnLQyxwhvgjHOFF2t7S_VNcu5Rf4KPEDW0ZaC07dfeUbx51E_DiePpneGTCXegWIw_G-EGnXI5VdJG-neUG1HgOGSnbmkRiS_spOxzCvvYNSVgTKgzdQIbV7N2i4hWDUrITD6J1_ICroXZP-XXq4yvjsK5bt3C9_82rQdBAGTqr7DaOzz6fhb7eq4DtY8kiXhNYaBQDMNZ2RJft1IYJG6UPRPEWrWIdKH42JrOwFM4NgVYk4YVDPDD0FD0hRk9oDupTjgNaQRgCfd3imggagn6hjbmD1ujp-w4FUQODOycxKK0hNbEc-MG016mmQKtg_P7Lquo_Zs1xJdsIi5hRGZ0g4k3Oj1tJN6t9J9pZmye8fbnI7YIWiCPtQlEX2zlOWCtLtoppoNOJxiI5U_wmmMjP58YTQGoPv_RQ699MHnwG_cB8YMuOa_9IK3sUiYSk8e3_vwtZaPXghtepKJqK5bVhHQ-nqzcvmHKHqwS8J7GOR0Ht-NB6Ps_4xtiqIED9XaOjzLZIpQ17tyOCgG6qXKfOT0jBzILCENRB3ADsjcZwH4QXvBUNmWQAs9Tfse9MsfDZlVt0mhVAeGhUt_-SnlMIwXuqDiw4nVsyRTn52cUviFRAF8c2n-r1Q7_E4TDpvfJMKf-D6PCTf0vr66SOnsuLbgWtjoedWtl6vv-CF3Ga9-SjVhzkEvf5b595W_IlCH0eSIlXNqhjC3-Eb4wH6rh6x_RrRj1cFBeP5eBU43DJY3A00EeyF1S9qdY6eYOyJ6XTxE2q9c2oRS_Ew75PR1pbjxQ8CzkXTvK9r9HwmKx0wRXCVlLszuX3BOfJvoMMYUgVBq0fM2HIpt6OSl_RX6TGikLbpMvAQ_LL3GfgRx7Y-on41qtmX6_P_neuGpo10D0hoSk0SUzNNNquW0JP_d_JqnM3hC1b-eZWydIJQbD_8-SR9GPLSw0dchr-gRWe4N1Pu5rbnOQptjODAJN1W7HfVSFYPhavNFTzBWcy42s9AuwYyXEYHMFwZbSRf1fN9vhAAalWQ30AsKP1YhzmKB4JFuvkGcCJfpoiPmrDBe03M7f4bSwb1ux7lMg-Rr8LowtKHVCwRjBE4q5vy_XMHGBYhxJbakTJ8QlxHWsNle9OZZjH-xuWcEosYqUP72q3umGTos2JKM7PaOHjkvPbayBg4cHBvyF_lJ36qastzdKcAeub7hN24OTqgqM5thl81cpKznXvbehRmJTc_IBNu2RDJYYP7g3zswZzc-sLVX_iHzSSHXu25kn7jhKJ5L8H2N9_12EIlcAMU-l3gdHPrGiKj9qdA9Iflr-frQZ3xMGN7o0YR7rdnhui_ijg63i6bSS_QDXBQ4Y6vmEdt3SDu_MVzAtoci8oMZXrqDP5yU8OqmzVO4wukU-ru01xBfhl3DzryKw_ZOauA3skPJgsZ4F2dQuk73h9J4C4zvaio_PuBfw_GybMCn3Fi4p6oCEHDwT1tKIKz_q9Kr8hoKl8gBlzkz8gLZRqPCSMHubxoIIEztIlu1OaXFugtdq-XB1ZQfbBZ0Pkth5jLzDv4wuoq72D1sxcRQzaRQKDC9DJF_4Cc8_Q6-JQNrKwhCF_JsGEEgok2z4_lNG7nU2Ajiym9bOxl_7cf4WNgSpoVjiZyTboq3OF_4cWtvZNUIMgGdLPUyVySYhbLGwhcYYSjdXJxyYjOvI6Th21ZrPBwLvIW7H225hTYg3MNvTKw9loMDSSaJ9muINxG8g30ZtECM6d_Egdc9BWSeZ2MvAnLTUBfavAHyABzQd9-CyCxX89944K2thJ4DY_yEalorgu2KX9Q8BpDLtkCdRgDLTc0Y4zL43bX_ff9NqNvCODx1Tjtv8KRNTL_hFpazW472fS2xr9_1BycCH3tBYH0KJly3jJAj0AbijWbNRb8u9t270d4DF3EIRZh3Xb40HDdIsCwDbctWdvxfNVOfwh6qUfzUMdElsSPohE7mi2RPx1TSPQZdWV8esVXVAqtN6M2p8TOdzbkcJxX0zWadk3SCEs5TFuKuCiVcMnmZlUBDwHSZcmDKTecC_cB5jwZ-E-SmughLF9ZvlqKaHsFdcywTWTE6dzk3xUvwCdvtkcikey9-6em7KfcRLhIkgNA_BzOPsxikk-CDzFCZqReuNRZBMgaHTlnUJCTN3a_iDi40mBr0-o8gcsAuaLkivaSRMTaC5_XtCs17gX3voLMWo03hF1hDS1ah59L64NsYmgGxGFkkYM0NxZYJPczNNgdSJx99A5qiq_xJA9ZgXSTzbVBRdXHzVU5pn0O3buZPnL1HT4xi-bG8uOkRbXcqiwT5dEgqajQKaSvQdV4PUm3eAw8rk6W0Mo94c6g6sPj9vrqC4dhaeOirTWj7C2z47yyAIl0XeQy1VCIcK9dcjHnXcxPSL0UnelRk2arCIaZo1eZxUwk7wENRMVzikluI0mNujGWyeIcyTH6y77QqTZZ-smrvqQlcD9oMOgCk_dibbYuAM6LKekAr-dlZnlIAxmkuxRzDt8Jscyvwh5hwMWq5qiC1W3zVPwgGKD5tTJ5Zse2RQF-cRIuWKxLHaA9JkmEtK-HGlm1tGueK8-b6P_wgP9gBz4kjTebP7_Ea66F9AB8nA0F3bmD_KPCFhLHR_0km3IJTlu4RoB1wX4RBDtWnYRoi8Jo6PSSeytsXtOvltnK5yXHmtROQwIqkphFIEisrUs2ov7kz_Sg4cQeQ8l_7Sxyl8dOqx9TzQAsbzEDlxeulEFxJXDRfKmelZsYtHr8dADJfCGSuIixQpr_5qqfSXH-b3RksbyhW2NXPWnLfVu6hV3w==",
+          "summary": []
+        },
+        {
+          "id": "msg_0a63368e6d40b6db006a9abbdc6cf487d0974e5c407560a2a4",
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"detectedGoal\":\"데드락의 정의·발생 조건·자원 할당 그래프 판별 규칙·처리 전략을 반복 학습하여, 데드락 구조를 설명하고 상황에 맞는 판별 및 대응 방식을 구별할 수 있어야 합니다.\",\"sourceType\":\"mixed\",\"keyTopics\":[\"데드락의 정의\",\"시스템 모델과 자원 사용 흐름\",\"데드락 발생의 네 조건\",\"자원 할당 그래프와 사이클 판별\",\"예방·회피·탐지 및 복구\",\"예방 정책\",\"안전 상태와 비안전 상태\",\"청구·요청·할당 간선\",\"은행원 알고리즘\",\"탐지 및 복구 방식\"],\"recommendedStrategy\":\"정의와 네 발생 조건은 개별 회상으로 반복하고, 자원 할당 그래프의 간선 의미·사이클 규칙·안전 상태는 그래프 상황 판별 연습으로 학습하는 것이 좋습니다. 예방·회피·탐지 및 복구는 개입 시점과 원리를 비교하는 방식으로 복습하며, 예방 정책과 간선 변환은 대응 관계 및 절차 순서를 재구성하는 반복 학습에 적합합니다.\",\"extractedMaterial\":\"- 3쪽: 데드락은 차단된 프로세스 집합에서 각 프로세스가 자원을 보유하면서, 집합 내 다른 프로세스가 보유한 자원을 획득하기 위해 대기하는 상태이다.\\n- 4쪽: 시스템은 프로세스 P1…Pn, 자원 유형 R1…Rm, 각 자원 유형의 인스턴스 Wi로 모델링하며, 프로세스의 자원 사용 흐름은 request → use → release이다.\\n- 5쪽: 데드락은 상호 배제, 점유와 대기, 비선점, 순환 대기의 네 조건이 동시에 성립할 때 발생할 수 있다.\\n- 6쪽: 자원 할당 그래프에서 Pi → Rj는 요청 간선, Rj → Pi는 할당 간선이다.\\n- 7쪽: 그래프에 사이클이 없으면 데드락은 없다. 사이클이 있고 자원 유형당 인스턴스가 하나이면 데드락이며, 여러 인스턴스이면 데드락 가능성이 있다. 그림은 이 세 경우를 각각 (a) 데드락 아님, (b) 데드락, (c) 데드락 아님으로 보여 준다.\\n- 8쪽: 처리 방법은 예방, 회피, 탐지 및 복구이다. 예방은 네 조건 중 하나 이상이 성립하지 않게 하고, 회피는 사전 자원 사용 정보를 이용하며, 탐지 및 복구는 데드락 진입 후 복구한다.\\n- 9쪽: 점유와 대기는 실행 전 모든 자원을 요청·할당하게 하여 막는다. 비선점은 추가 자원을 즉시 얻지 못하면 보유 자원을 해제하고, 이전 및 새 자원을 모두 얻을 수 있을 때 재시작하게 하여 막는다. 순환 대기는 자원 유형에 전체 순서를 부여하고 오름차순으로 요청하게 하여 막는다.\\n- 10쪽: 회피는 즉시 할당 후에도 안전 상태가 유지되는지 판단한다. 안전 상태는 어떤 순서로든 각 프로세스에 최대 요구량까지 자원을 할당하여 데드락을 피할 수 있는 상태이다. 안전 상태에서는 데드락이 없고, 비안전 상태에서는 데드락 가능성이 있다.\\n- 11쪽: 청구 간선은 Pi가 Rj를 미래에 요청할 수 있음을 나타내는 점선이다. 요청 시 청구 간선은 요청 간선으로, 할당 시 요청 간선은 할당 간선으로, 해제 시 할당 간선은 다시 청구 간선으로 변환된다. 자원 유형에 여러 인스턴스가 있으면 은행원 알고리즘을 사용한다.\\n- 12쪽: 회피 그래프에서 요청을 승인해 사이클이 생기면 비안전 상태이므로 거부하고, 사이클이 생기지 않으면 안전 상태이므로 승인한다.\\n- 13쪽: 탐지는 그래프의 사이클을 찾는 알고리즘을 주기적으로 실행하여 수행한다. 복구는 데드락 프로세스를 모두 종료하거나, 사이클이 없어질 때까지 하나씩 종료하거나, 자원을 선점하여 사이클을 끊는 방식으로 수행한다.\",\"primaryKnowledgeType\":\"concept\",\"learningUnits\":[{\"id\":\"LU01\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":3,\"sourceRange\":\"What is deadlock? — Deadlock 정의 문장\",\"sourceText\":\"For a set of blocked processes, each is holding a resource and waiting to acquire a resource held by another process in the set.\",\"knowledgeType\":\"concept\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"데드락이 차단된 프로세스들이 자원을 보유한 채 서로가 보유한 자원을 기다리는 상태임을 설명한다.\",\"operation\":\"recall\",\"successCriterion\":\"데드락의 보유 자원과 집합 내 다른 프로세스가 보유한 자원에 대한 대기 관계를 포함하여 정의를 말하거나 쓴다.\",\"rationale\":\"3쪽은 데드락을 차단된 프로세스 집합의 자원 보유·상호 대기 상태로 직접 정의하며, 이후 발생 조건과 처리 방안의 출발점이 되는 핵심 개념이다.\"},{\"id\":\"LU02\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":4,\"sourceRange\":\"Deadlock Characterization — System modeling\",\"sourceText\":\"Processes: P1, P2, … Pn. Resource types: R1, R2, …, Rm. Each resource type Ri has Wi instances. Each process utilizes a resource as follows: request, use, release.\",\"knowledgeType\":\"concept\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"데드락 시스템 모델의 프로세스·자원 유형·자원 인스턴스와 request-use-release 자원 사용 흐름을 복원한다.\",\"operation\":\"reconstruct\",\"successCriterion\":\"프로세스 집합, 자원 유형별 인스턴스, request → use → release의 세 요소를 원래 구조로 제시한다.\",\"rationale\":\"4쪽은 데드락을 설명하기 위한 시스템 구성 요소와 자원 사용의 고정된 흐름을 함께 제시하므로 하나의 모델 구조로 복원할 가치가 있다.\"},{\"id\":\"LU03\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":5,\"sourceRange\":\"Deadlock Characterization — Mutual exclusion\",\"sourceText\":\"Mutual exclusion: Only one process at a time can use a resource.\",\"knowledgeType\":\"concept\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"상호 배제 조건의 의미를 설명한다.\",\"operation\":\"recall\",\"successCriterion\":\"한 자원을 한 번에 하나의 프로세스만 사용할 수 있다는 조건을 말하거나 쓴다.\",\"rationale\":\"5쪽은 상호 배제를 데드락 발생의 네 동시 성립 조건 중 하나로 명시하고 정의한다.\"},{\"id\":\"LU04\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":5,\"sourceRange\":\"Deadlock Characterization — Hold and wait\",\"sourceText\":\"Hold and wait: A process holding at least one resource is waiting to acquire additional resources held by other processes.\",\"knowledgeType\":\"concept\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"점유와 대기 조건의 의미를 설명한다.\",\"operation\":\"recall\",\"successCriterion\":\"프로세스가 하나 이상의 자원을 보유하면서 다른 프로세스가 보유한 추가 자원을 기다리는 조건을 말하거나 쓴다.\",\"rationale\":\"5쪽은 점유와 대기를 데드락의 독립 발생 조건으로 정의하며, 예방 정책과 직접 연결된다.\"},{\"id\":\"LU05\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":5,\"sourceRange\":\"Deadlock Characterization — No preemption\",\"sourceText\":\"No preemption: A resource can be released only voluntarily by the process holding it.\",\"knowledgeType\":\"concept\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"비선점 조건의 의미를 설명한다.\",\"operation\":\"recall\",\"successCriterion\":\"자원을 보유한 프로세스가 자발적으로만 해당 자원을 해제할 수 있다는 조건을 말하거나 쓴다.\",\"rationale\":\"5쪽은 비선점을 데드락 발생의 독립 조건으로 직접 정의하고, 9쪽의 예방 정책 이해에 필요하다.\"},{\"id\":\"LU06\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":5,\"sourceRange\":\"Deadlock Characterization — Circular wait\",\"sourceText\":\"Circular wait: There exists a set {P0, P1, …, P0} of waiting processes such that P0 is waiting for a resource that is held by P1, P1 is waiting for a resource that is held by P2, …, and Pn is waiting for a resource that is held by P0.\",\"knowledgeType\":\"relationship\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"순환 대기 조건의 프로세스 간 자원 대기 구조를 설명한다.\",\"operation\":\"recall\",\"successCriterion\":\"각 프로세스가 다음 프로세스가 보유한 자원을 기다리고 마지막 프로세스가 처음 프로세스가 보유한 자원을 기다리는 순환 관계를 말하거나 쓴다.\",\"rationale\":\"5쪽은 순환 대기를 프로세스들의 닫힌 대기 관계로 제시하며, 자원 할당 그래프의 사이클 해석과 연결되는 핵심 관계다.\"},{\"id\":\"LU07\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":6,\"sourceRange\":\"Deadlock Characterization — Resource allocation graph, 간선 종류\",\"sourceText\":\"E is also partitioned into two types. Pi → Rj : request. Rj → Pi : assignment.\",\"knowledgeType\":\"relationship\",\"fixedPart\":\"Pi → Rj : request; Rj → Pi : assignment\",\"variableSlots\":[{\"name\":\"프로세스\",\"example\":\"Pi\"},{\"name\":\"자원 유형\",\"example\":\"Rj\"}],\"generalizedForm\":\"프로세스 → 자원 유형은 요청, 자원 유형 → 프로세스는 할당을 나타낸다.\",\"target\":\"자원 할당 그래프에서 간선 방향에 따라 요청과 할당을 구별한다.\",\"operation\":\"discriminate\",\"successCriterion\":\"제시된 프로세스-자원 간선이 요청 간선인지 할당 간선인지 방향을 근거로 올바르게 판별한다.\",\"rationale\":\"6쪽은 자원 할당 그래프의 두 간선 방향에 각각 요청과 할당이라는 명확한 의미를 부여한다.\"},{\"id\":\"LU08\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":7,\"sourceRange\":\"Deadlock Characterization — Deadlock examples with resource allocation graph, 사이클 판별 규칙\",\"sourceText\":\"If graph contains no cycles, no deadlock. If graph contains a cycle, if only one instance per resource type, deadlock. if several instances per resource type, possibility of deadlock.\",\"knowledgeType\":\"problem_solving_pattern\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"자원 할당 그래프의 사이클 유무와 자원 인스턴스 수를 근거로 데드락 여부 또는 가능성을 판단한다.\",\"operation\":\"apply\",\"successCriterion\":\"새 그래프 조건에서 사이클 유무 및 자원 유형당 인스턴스 수를 사용하여 데드락 없음, 데드락, 또는 데드락 가능성 중 알맞은 결론을 산출한다.\",\"rationale\":\"7쪽은 그래프 조건에 따라 결론이 달라지는 세 가지 판별 규칙을 제시하므로, 실제 그래프 입력에 규칙을 적용하는 학습 단위가 적절하다.\"},{\"id\":\"LU09\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":8,\"sourceRange\":\"Methods for Handling Deadlocks — Prevention, Avoidance, Detection and recovery\",\"sourceText\":\"Prevention: The system will never enter a deadlock state. It ensures that at least one of four conditions cannot hold. Avoidance: The system will never enter a deadlock state. It requires a priori information about how each process will utilize resources. Detection and recovery: It allows the system to enter a deadlock state and then recover.\",\"knowledgeType\":\"relationship\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"데드락 예방·회피·탐지 및 복구의 개입 원리와 시점을 구별한다.\",\"operation\":\"reconstruct\",\"successCriterion\":\"예방은 네 조건 차단, 회피는 사전 정보 기반의 데드락 상태 진입 방지, 탐지 및 복구는 진입 후 복구라는 대응 관계를 완성한다.\",\"rationale\":\"8쪽은 세 처리 방법을 각기 다른 원리와 개입 시점으로 대비하여 제시하므로, 비교 구조 전체를 복원하는 것이 핵심이다.\"},{\"id\":\"LU10\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":9,\"sourceRange\":\"Deadlock Prevention — Hold and Wait\",\"sourceText\":\"Hold and Wait: requires process to request and be allocated all its resources before it begins execution.\",\"knowledgeType\":\"procedure\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"점유와 대기 조건을 막기 위한 선할당 예방 정책을 설명한다.\",\"operation\":\"recall\",\"successCriterion\":\"프로세스가 실행 전에 필요한 모든 자원을 요청하고 할당받아야 한다는 정책을 말하거나 쓴다.\",\"rationale\":\"9쪽은 점유와 대기 조건을 부정하는 구체적인 예방 정책을 명시한다.\"},{\"id\":\"LU11\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":9,\"sourceRange\":\"Deadlock Prevention — No Preemption\",\"sourceText\":\"If a process holding some resources requests another resource that cannot be immediately allocated to it, then all resources currently being held are released. Process will be restarted only when it can regain its old resources as well as the new ones that it is requesting.\",\"knowledgeType\":\"procedure\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"비선점 조건을 막기 위한 자원 해제와 재시작 정책의 흐름을 복원한다.\",\"operation\":\"reconstruct\",\"successCriterion\":\"추가 자원을 즉시 할당받지 못하면 보유 자원을 모두 해제하고, 이전 자원과 새 자원을 모두 확보할 수 있을 때 재시작한다는 흐름을 순서대로 제시한다.\",\"rationale\":\"9쪽은 비선점 예방을 조건-해제-재시작으로 이어지는 고정 절차로 설명한다.\"},{\"id\":\"LU12\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":9,\"sourceRange\":\"Deadlock Prevention — Circular Wait\",\"sourceText\":\"Circular Wait: imposes a total ordering of all resource types, and requires that each process requests resources in an increasing order of enumeration.\",\"knowledgeType\":\"procedure\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"순환 대기 조건을 막기 위한 자원 순서 부여 및 오름차순 요청 정책을 설명한다.\",\"operation\":\"recall\",\"successCriterion\":\"모든 자원 유형에 전체 순서를 부여하고 각 프로세스가 번호 증가 순서로 자원을 요청하게 한다는 정책을 말하거나 쓴다.\",\"rationale\":\"9쪽은 순환 대기 제거를 위한 자원 순서 정책을 독립적인 예방 방법으로 제시한다.\"},{\"id\":\"LU13\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":10,\"sourceRange\":\"Deadlock Avoidance — safe state 및 unsafe state\",\"sourceText\":\"A state is in safe, if the system can allocate resources to each process (up to its maximum) in some order and still avoid a deadlock. If a system is in safe state, No deadlocks. If a system is in unsafe state, Possibility of deadlock.\",\"knowledgeType\":\"relationship\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"안전 상태와 비안전 상태가 데드락 가능성에 대해 뜻하는 바를 구별한다.\",\"operation\":\"discriminate\",\"successCriterion\":\"주어진 상태 설명을 보고 안전 상태는 데드락이 없고 비안전 상태는 데드락 가능성이 있는 상태로 올바르게 구별한다.\",\"rationale\":\"10쪽은 안전 상태의 자원 할당 가능 조건과 안전·비안전 상태의 서로 다른 데드락 의미를 명시한다.\"},{\"id\":\"LU14\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":11,\"sourceRange\":\"Deadlock Avoidance — Resource allocation graph, claim/request/assignment edge 변환\",\"sourceText\":\"Claim edge Pi → Rj: Pi may request Rj. It is represented by a dashed line. Claim edge is converted to request edge, when a process requests a resource. Request edge is converted to assignment edge, when the resource is allocated to the process. Assignment edge is reconverted to claim edge, when a resource is released by a process.\",\"knowledgeType\":\"procedure\",\"fixedPart\":\"청구 간선 → 요청 간선 → 할당 간선 → 청구 간선\",\"variableSlots\":[{\"name\":\"변환 계기\",\"example\":\"요청, 할당, 해제\"}],\"generalizedForm\":\"미래 요청 가능성을 나타내는 청구 간선은 요청·할당·해제 사건에 따라 요청 간선, 할당 간선, 청구 간선으로 순차 변환된다.\",\"target\":\"자원 회피 그래프에서 청구·요청·할당 간선이 요청, 할당, 해제에 따라 변환되는 순서를 복원한다.\",\"operation\":\"reconstruct\",\"successCriterion\":\"요청 시 청구→요청, 할당 시 요청→할당, 해제 시 할당→청구의 세 변환을 해당 사건과 연결하여 순서대로 제시한다.\",\"rationale\":\"11쪽은 세 간선 유형과 각 변환 조건을 하나의 순환 절차로 설명한다.\"},{\"id\":\"LU15\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":11,\"sourceRange\":\"Deadlock Avoidance — Note\",\"sourceText\":\"[Note] When multiple instances of a resource type, use the banker’s algorithm.\",\"knowledgeType\":\"fact\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"자원 유형에 여러 인스턴스가 있을 때 사용하는 데드락 회피 알고리즘을 말한다.\",\"operation\":\"recall\",\"successCriterion\":\"여러 인스턴스를 가진 자원 유형의 경우 은행원 알고리즘을 사용한다고 말하거나 쓴다.\",\"rationale\":\"11쪽은 다중 인스턴스 자원이라는 명확한 조건에 대응하는 알고리즘을 직접 제시한다.\"},{\"id\":\"LU16\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":12,\"sourceRange\":\"Deadlock Avoidance — Unsafe state example\",\"sourceText\":\"P2 requests R2. If we grant it, a cycle is formed. So, deny!!! No cycle → safe → grant. Cycle → unsafe → deny.\",\"knowledgeType\":\"problem_solving_pattern\",\"fixedPart\":\"No cycle → safe → grant; Cycle → unsafe → deny\",\"variableSlots\":[{\"name\":\"요청 프로세스\",\"example\":\"P2\"},{\"name\":\"요청 자원\",\"example\":\"R2\"}],\"generalizedForm\":\"요청을 승인한 결과 사이클이 없으면 안전 상태로 승인하고, 사이클이 생기면 비안전 상태로 요청을 거부한다.\",\"target\":\"자원 요청을 승인했을 때의 그래프 사이클 생성 여부에 따라 요청 승인 또는 거부를 결정한다.\",\"operation\":\"apply\",\"successCriterion\":\"새 요청 상황에서 승인 후 사이클 생성 여부를 근거로 요청을 승인하거나 거부하는 결정을 산출한다.\",\"rationale\":\"12쪽은 요청 승인 후 사이클 생성 여부를 안전성 및 승인·거부 결정에 연결한 적용 규칙을 제시한다.\"},{\"id\":\"LU17\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":13,\"sourceRange\":\"Deadlock Detection & Recovery — Detection algorithm\",\"sourceText\":\"Periodically invoke an algorithm that searches for a cycle in the graph. If there is a cycle, there exists a deadlock.\",\"knowledgeType\":\"procedure\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"데드락 탐지에서 그래프 사이클 탐색과 데드락 판정의 흐름을 설명한다.\",\"operation\":\"reconstruct\",\"successCriterion\":\"그래프의 사이클을 찾는 알고리즘을 주기적으로 실행하고, 사이클이 있으면 데드락이 존재한다고 판정하는 흐름을 제시한다.\",\"rationale\":\"13쪽은 탐지 시점, 탐지 대상, 사이클 존재 시의 판정 결과를 하나의 탐지 절차로 제시한다.\"},{\"id\":\"LU18\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":13,\"sourceRange\":\"Deadlock Detection & Recovery — Recovery scheme\",\"sourceText\":\"Process termination: Abort all deadlocked processes. Abort one process at a time until the deadlock cycle is eliminated. Resource preemption: Preempt some resources from processes and give these resources to other processes until the deadlock cycle is broken.\",\"knowledgeType\":\"procedure\",\"fixedPart\":\"\",\"variableSlots\":[],\"generalizedForm\":\"\",\"target\":\"데드락 복구를 위한 프로세스 종료 방식과 자원 선점 방식을 구분하여 제시한다.\",\"operation\":\"reconstruct\",\"successCriterion\":\"모든 데드락 프로세스 종료, 사이클이 제거될 때까지 하나씩 종료, 자원 선점으로 사이클 단절의 세 복구 방식을 제시한다.\",\"rationale\":\"13쪽은 복구 방안을 프로세스 종료의 두 방식과 자원 선점 방식으로 구체적으로 열거한다.\"}]}"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+        "format": {
+          "type": "json_schema",
+          "description": null,
+          "name": "study_material_analysis",
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "detectedGoal",
+              "sourceType",
+              "keyTopics",
+              "recommendedStrategy",
+              "extractedMaterial",
+              "primaryKnowledgeType",
+              "learningUnits"
+            ],
+            "properties": {
+              "detectedGoal": {
+                "type": "string"
+              },
+              "sourceType": {
+                "type": "string",
+                "enum": [
+                  "concept",
+                  "comparison",
+                  "script",
+                  "definition",
+                  "mixed"
+                ]
+              },
+              "keyTopics": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "recommendedStrategy": {
+                "type": "string"
+              },
+              "extractedMaterial": {
+                "type": "string"
+              },
+              "primaryKnowledgeType": {
+                "type": "string",
+                "enum": [
+                  "vocabulary",
+                  "fact",
+                  "concept",
+                  "relationship",
+                  "procedure",
+                  "formula",
+                  "speaking_pattern",
+                  "writing_pattern",
+                  "problem_solving_pattern",
+                  "example",
+                  "other"
+                ]
+              },
+              "learningUnits": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 18,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "sourceId",
+                    "sourcePage",
+                    "sourceRange",
+                    "sourceText",
+                    "knowledgeType",
+                    "fixedPart",
+                    "variableSlots",
+                    "generalizedForm",
+                    "target",
+                    "operation",
+                    "successCriterion",
+                    "rationale"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sourceId": {
+                      "type": "string"
+                    },
+                    "sourcePage": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "sourceRange": {
+                      "type": "string"
+                    },
+                    "sourceText": {
+                      "type": "string"
+                    },
+                    "knowledgeType": {
+                      "type": "string",
+                      "enum": [
+                        "vocabulary",
+                        "fact",
+                        "concept",
+                        "relationship",
+                        "procedure",
+                        "formula",
+                        "speaking_pattern",
+                        "writing_pattern",
+                        "problem_solving_pattern",
+                        "example",
+                        "other"
+                      ]
+                    },
+                    "fixedPart": {
+                      "type": "string"
+                    },
+                    "variableSlots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "name",
+                          "example"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "example": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "generalizedForm": {
+                      "type": "string"
+                    },
+                    "target": {
+                      "type": "string"
+                    },
+                    "operation": {
+                      "type": "string",
+                      "enum": [
+                        "recall",
+                        "reconstruct",
+                        "discriminate",
+                        "apply"
+                      ]
+                    },
+                    "successCriterion": {
+                      "type": "string"
+                    },
+                    "rationale": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "strict": true
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 20810,
+        "input_tokens_details": {
+          "cache_write_tokens": 20807,
+          "cached_tokens": 0
+        },
+        "output_tokens": 5600,
+        "output_tokens_details": {
+          "reasoning_tokens": 903
+        },
+        "total_tokens": 26410
+      },
+      "user": null,
+      "metadata": {}
+    }
+  },
+  {
+    "sequence": 5,
+    "stage": "cards",
+    "startedAt": "2026-09-04T12:39:32.334Z",
+    "completedAt": "2026-09-04T12:40:25.636Z",
+    "durationMs": 53302,
+    "httpStatus": 200,
+    "requestConfiguration": {
+      "model": "gpt-5.6-terra",
+      "reasoning": {
+        "effort": "medium"
+      },
+      "schemaName": "memory_cards",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cards"
+        ],
+        "properties": {
+          "cards": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "activityType",
+                "front",
+                "back",
+                "clozeText",
+                "answer",
+                "answers",
+                "options",
+                "correctOptionIndex",
+                "correctBoolean",
+                "structureNodes",
+                "structureRecallMode",
+                "recommendationReason",
+                "hint",
+                "tags",
+                "basis",
+                "learningUnitId",
+                "objectiveId",
+                "blueprintId",
+                "strategy",
+                "sourceId",
+                "sourcePage",
+                "sourceRange",
+                "rationale",
+                "difficulty",
+                "qualityPassed",
+                "qualityNotes",
+                "qualityStatus",
+                "explanation"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "flashcard",
+                    "cloze",
+                    "translation"
+                  ]
+                },
+                "activityType": {
+                  "type": "string",
+                  "enum": [
+                    "flashcard",
+                    "true_false",
+                    "multiple_choice",
+                    "structure_recall"
+                  ]
+                },
+                "front": {
+                  "type": "string"
+                },
+                "back": {
+                  "type": "string"
+                },
+                "clozeText": {
+                  "type": "string"
+                },
+                "answer": {
+                  "type": "string"
+                },
+                "answers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "correctOptionIndex": {
+                  "type": "integer"
+                },
+                "correctBoolean": {
+                  "type": "boolean"
+                },
+                "structureNodes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "parentId",
+                      "correctLabel"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "parentId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "correctLabel": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "structureRecallMode": {
+                  "type": "string",
+                  "enum": [
+                    "word_bank",
+                    "free_input"
+                  ]
+                },
+                "recommendationReason": {
+                  "type": "string"
+                },
+                "hint": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "basis": {
+                  "type": "string"
+                },
+                "learningUnitId": {
+                  "type": "string"
+                },
+                "objectiveId": {
+                  "type": "string"
+                },
+                "blueprintId": {
+                  "type": "string"
+                },
+                "strategy": {
+                  "type": "string",
+                  "enum": [
+                    "production",
+                    "recognition",
+                    "concept",
+                    "contrast",
+                    "procedure",
+                    "application"
+                  ]
+                },
+                "sourceId": {
+                  "type": "string"
+                },
+                "sourcePage": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "sourceRange": {
+                  "type": "string"
+                },
+                "rationale": {
+                  "type": "string"
+                },
+                "difficulty": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 5
+                },
+                "qualityPassed": {
+                  "type": "boolean"
+                },
+                "qualityNotes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "qualityStatus": {
+                  "type": "string",
+                  "enum": [
+                    "not_run",
+                    "passed",
+                    "failed",
+                    "waived"
+                  ]
+                },
+                "explanation": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response": {
+      "id": "resp_02f20568e71d65f1006a9abc037d8087d0aa1cd5c527182530",
+      "object": "response",
+      "created_at": 1788525571,
+      "status": "completed",
+      "background": false,
+      "billing": {
+        "payer": "openai"
+      },
+      "completed_at": 1788525624,
+      "error": null,
+      "frequency_penalty": 0,
+      "incomplete_details": null,
+      "instructions": null,
+      "max_output_tokens": null,
+      "max_tool_calls": null,
+      "model": "gpt-5.6-terra",
+      "moderation": null,
+      "output": [
+        {
+          "id": "rs_02f20568e71d65f1006a9abc04328087d0a0b66f6074e07ac7",
+          "type": "reasoning",
+          "content": [],
+          "encrypted_content": "gAAAAABqmrw41-01uRDCo_xS6gbpDitfkEhqeATjB1pWXY7T3zWvHEXVl30n7rCQw8YAjT8eXLw2OUdvB1v3AwkW5IeYsZlHlkDcLB42kzqXFdxODdt-2bt75a5xSvp9eepgTxsg3IHFf_I-ihIXewFiO_AveTzA3ZgdV99VVbFwvnj580V81PftoWj9bqyI2KLZPnCx-_ARQcsdkKpBmzUWvNgMDw_ruv4rCdqs7Ehwz9Y0MEiz1qJ78qLV1I9ryBRtCIAXt8BaiyuY0kzcYgnsvtGlhagNb4cAjmuzoGwMIK7XDUbONefBJsWfOFQQhrQ4UOASyd-NTziAvwwDW7FvTc4kVYqLc-TgZnlMZjRwltIbctUCPmE91bhYCL10O2zNqglWKGusCo4S24x33fPfhZ_-YDSR6GklFP4dBQzFtqxxskm3bIUDiKArIDIPCE8em9rTagyOrcT06CEpOgLg3Mh76JQL-3Nw47WhKq6Jt165GzA1s6Twj-X-22hXvRzlX0VH9YR2pIduDf7BwW6KQNIlire5cOf-13jgmcchC-X2nUq043nkXKGz2GoiAbd2bfeSRJhJ5LZanJ5XRTNVG0vM798mK77GQ8ulMsh01_rTi-Ju9HyCh0z0EVMJBvHAH32aPaNpUPvcFf3jBsfPwHVyfUnkBKmTIRPLl_a729yrhLedEiHp8TAMMUUlRIgmd_wyCXfOqEr-DI68VJor_Aqwg8sFgv88wJA91d6hM4UiOr47jTc0yAfzUmftNojem0U-3bZTjTws_Mr8g5z8OAAR4f9g8yc4QTODBPvOOJcEx0EXngzdn5qd1MviMqIKoPa4NOagLZ-MLI5k10ZAZbtqt9kutsjecfrnEJl40biXup0g9Zad0sFlTIsa5HEFvwzyNh7_Y1rDxNiN8pPGIpbxGYTUdY74P_CV_CPPqdzauUCl8M8O0ZpL8468lphlQnO-sKs789Zp51OEfGfPeL5GZhoIC7K2zIciW23Amc9juw5hXPm0aeLhvYF9fLjIzkG2tt1-fK4IoaKWcnBAZJXYxIQokGMWQ268TwgzzQmWFCHyzHTi7zbNaRBrRqK5v-EpIw7FZPqFjRFpIlLze6xD_5gWBLCuU2g3cKGGY5swjWMvwRwkFdyblF0Jw9neuikpXR7eSP_bn7j4JLrUQTCs2jh9adeBkjRiU530dgL5th8G_FNcus5l25AHCVhdRoP1Mts-mqADQW9LfagJNA1FY9R7TF7ZkAkafrjouw3j8OhykDwtLLAEY9Sq9aCm2mYKNjrSorKwYelRVzJPCRT07_FMddjXdvc-_IczymMOO4uiWJoPBAemJULdMMHcKWgLdMuq-drIkaIaMwnZUfHCAHnkese1FjRNKnatUOLOf4R0geJPyRREbhdQaMkBZpEn4ZmN1V-TA3LruJBzIOf-zD5MSaHj-Q400pLUW7i0OpoC8qRHVWkEHYcloT656h9BZ9iqNgHYeax2kGXT5Ntq3GoWobkguxk7Xb5sAA-oqtv34m6zLW7sq1ElxCbI7owhG8p3MTlhqDREElG4p_7FqerKAMVD_s-hEdh1EH7OXn6FarvkHpkXy2KkpBYJbWHQiRHPf-vlERz-wzej_6RyVFXTNnEMdvSWO2sztnlYrbBSy85pSZ65HOi0Og4mYRpsLriwgeTHc8mZvILDlDn07MvlcjvYsZGaZklTNoHWnBK_fVOHM-PsPq7KOZ7CTGOxvZHwVrTUCJtvszhbL4uCiGwxRJcQ1KzZPMd3ZWuWm3BztATLtONUhMujRBDkXckLIO2iSU8cNqSMlSCxoq8T6w20Qv2CyHG3ZE9-PRDqCei5qP5HtZuOffgZsKwNQLyuweaBi7pUQEdNyiJEo23ssNExe0gPvjAO83uiP8yJjm1TchuMTB93BRYLBbHaf2umCH81i-8kAPA8C5Scjb6URgUisfABQiXJ8OI91UfoTPgqkRybopPR4zQ99ooMZDXaOUe8Kz6fDOYh0zVtmUWnlCC7cn5pODWlLqIh8FM2onojMxI2OcqBxcLLZ48FKhkaR6JMvNEbeWhCyiJUiAqf7xs3uT92YxiRqjec96-QfDtuoZNpgd-eLormkmDWjbEgBp-lYfpMhFZMUPbUSKNht4HRxD4I1o22BeVezC5z-ULPt423OQvBwBLNVeIAg_S6WW0yMVLezj9FgpfPr03nI5CK0ZIF48dml9nDGR1s9NvSxn0iMljhZYIWph8guL_QZTzkcFZc_5UbwwH6z9nm81vuXj9J2o0sM1RKe4wAepfOnZv_H7PySLCVW1RXmAJy79xpLAR7TXYisZnPdVm3g8kp-dTUZ-LTLKPOr_1L3_7nV27NzAae4jkssjtodpQ_p-za22GhbE2E_T0CRj3ctD1zkITsaeyVUCnnKoTE-RNWI8ymkiJEuYuJVTcKloJgNVzGUHbySHvhobBr3TKzCukDzYPqUOuN28Q92l1K0eN8bco=",
+          "summary": []
+        },
+        {
+          "id": "msg_02f20568e71d65f1006a9abc07993c87d09bf8c8a920354d90",
+          "type": "message",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "annotations": [],
+              "logprobs": [],
+              "text": "{\"cards\":[{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"차단된 [프로세스 집합]의 각 프로세스가 자원을 보유한 채, 집합 내 다른 프로세스가 보유한 자원을 기다린다.\",\"back\":\"데드락이다. 차단된 프로세스들이 자원을 보유하면서 서로가 보유한 자원을 기다리는 상태이다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"데드락의 기본 구조를 상황으로 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"정의\"],\"basis\":\"각 프로세스는 자원을 보유하고 집합 내 다른 프로세스가 보유한 자원을 기다린다.\",\"learningUnitId\":\"LU01\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"concept\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":3,\"sourceRange\":\"What is deadlock? — Deadlock 정의 문장\",\"rationale\":\"자원 보유와 상호 대기라는 정의의 핵심 관계를 인출해야 하므로 concept 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"시스템에 [프로세스 집합]과 [자원 유형]이 있고, 각 자원 유형에는 [인스턴스 수]가 있다. 프로세스의 자원 사용 흐름을 복원한다.\",\"back\":\"프로세스는 자원을 request(요청) → use(사용) → release(해제) 순서로 사용한다. 각 자원 유형은 여러 인스턴스를 가질 수 있다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"시스템 모델의 구성 요소와 자원 사용 흐름을 복원한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"시스템 모델\",\"자원\"],\"basis\":\"Processes, resource types, instances; request, use, release.\",\"learningUnitId\":\"LU02\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"procedure\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":4,\"sourceRange\":\"Deadlock Characterization — System modeling\",\"rationale\":\"자원 사용의 고정된 순서를 재구성해야 하므로 procedure 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"하나의 [자원]을 동시에 사용하려는 여러 프로세스가 있을 때, 한 번에 하나의 프로세스만 사용할 수 있다.\",\"back\":\"상호 배제 조건이다. 한 자원은 한 번에 하나의 프로세스만 사용할 수 있다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"데드락 발생 조건의 의미를 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"발생 조건\",\"상호 배제\"],\"basis\":\"Only one process at a time can use a resource.\",\"learningUnitId\":\"LU03\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"concept\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":5,\"sourceRange\":\"Deadlock Characterization — Mutual exclusion\",\"rationale\":\"상황을 발생 조건의 명칭과 정의에 연결해야 하므로 concept 전략을 사용한다.\",\"difficulty\":1,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"[프로세스]가 하나 이상의 자원을 보유하면서, 다른 프로세스가 보유한 추가 자원을 기다린다.\",\"back\":\"점유와 대기 조건이다. 프로세스가 자원을 보유한 상태로 추가 자원을 기다리는 조건이다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"보유와 추가 요청의 결합 조건을 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"발생 조건\",\"점유와 대기\"],\"basis\":\"A process holding at least one resource is waiting to acquire additional resources held by other processes.\",\"learningUnitId\":\"LU04\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"concept\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":5,\"sourceRange\":\"Deadlock Characterization — Hold and wait\",\"rationale\":\"자원 보유와 대기 관계의 의미를 인출해야 하므로 concept 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"[프로세스]가 보유한 자원은 그 프로세스가 자발적으로 해제할 때만 반환될 수 있다.\",\"back\":\"비선점 조건이다. 보유 자원은 보유 프로세스의 자발적 해제로만 회수된다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"자원 회수 가능성에 따른 발생 조건을 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"발생 조건\",\"비선점\"],\"basis\":\"A resource can be released only voluntarily by the process holding it.\",\"learningUnitId\":\"LU05\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"concept\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":5,\"sourceRange\":\"Deadlock Characterization — No preemption\",\"rationale\":\"자발적 해제만 허용되는 조건의 개념을 회상해야 하므로 concept 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"대기 중인 [프로세스 집합]에서 각 프로세스가 다음 프로세스가 보유한 자원을 기다리고, 마지막 프로세스가 처음 프로세스의 자원을 기다린다.\",\"back\":\"순환 대기 조건이다. 프로세스들의 자원 대기 관계가 닫힌 고리를 이룬다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"프로세스 간 순환 대기 구조를 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"발생 조건\",\"순환 대기\"],\"basis\":\"각 프로세스는 다음 프로세스가 보유한 자원을 기다리고 마지막 프로세스는 처음 프로세스의 자원을 기다린다.\",\"learningUnitId\":\"LU06\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"concept\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":5,\"sourceRange\":\"Deadlock Characterization — Circular wait\",\"rationale\":\"순환 구조의 의미와 조건명을 연결해야 하므로 concept 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"자원 할당 그래프에서 [프로세스] → [자원 유형] 간선이 표시되어 있다.\",\"back\":\"요청 간선이다. 프로세스 → 자원 유형은 자원 요청을 나타낸다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"간선 방향으로 요청을 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"자원 할당 그래프\",\"요청 간선\"],\"basis\":\"Pi → Rj : request.\",\"learningUnitId\":\"LU07\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"recognition\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":6,\"sourceRange\":\"Deadlock Characterization — Resource allocation graph, 간선 종류\",\"rationale\":\"제시된 간선 방향의 의미를 식별하는 과제이므로 recognition 전략을 사용한다.\",\"difficulty\":1,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"자원 할당 그래프에서 [자원 유형] → [프로세스] 간선이 표시되어 있다.\",\"back\":\"할당 간선이다. 자원 유형 → 프로세스는 자원 할당을 나타낸다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"간선 방향으로 할당을 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"자원 할당 그래프\",\"할당 간선\"],\"basis\":\"Rj → Pi : assignment.\",\"learningUnitId\":\"LU07\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"recognition\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":6,\"sourceRange\":\"Deadlock Characterization — Resource allocation graph, 간선 종류\",\"rationale\":\"제시된 간선 방향의 의미를 식별하는 과제이므로 recognition 전략을 사용한다.\",\"difficulty\":1,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"자원 할당 그래프에 사이클이 없다.\",\"back\":\"데드락이 없다. 그래프에 사이클이 없으면 데드락이 발생하지 않는다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"사이클 부재에 따른 데드락 여부를 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"자원 할당 그래프\",\"사이클\"],\"basis\":\"If graph contains no cycles, no deadlock.\",\"learningUnitId\":\"LU08\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"application\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":7,\"sourceRange\":\"Deadlock Characterization — Deadlock examples with resource allocation graph, 사이클 판별 규칙\",\"rationale\":\"그래프 조건을 데드락 판정 규칙에 적용해야 하므로 application 전략을 사용한다.\",\"difficulty\":1,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"자원 할당 그래프에 사이클이 있고, 각 [자원 유형]의 인스턴스가 하나뿐이다.\",\"back\":\"데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"사이클과 단일 인스턴스 조건으로 데드락을 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"자원 할당 그래프\",\"사이클\",\"단일 인스턴스\"],\"basis\":\"If graph contains a cycle, if only one instance per resource type, deadlock.\",\"learningUnitId\":\"LU08\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"application\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":7,\"sourceRange\":\"Deadlock Characterization — Deadlock examples with resource allocation graph, 사이클 판별 규칙\",\"rationale\":\"사이클과 인스턴스 수를 함께 적용해 결론을 내려야 하므로 application 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"자원 할당 그래프에 사이클이 있고, 각 [자원 유형]에 여러 인스턴스가 있다.\",\"back\":\"데드락 가능성이 있다. 여러 인스턴스가 있는 경우 사이클은 데드락을 확정하지 않고 가능성을 뜻한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"사이클과 다중 인스턴스 조건으로 데드락 가능성을 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"자원 할당 그래프\",\"사이클\",\"다중 인스턴스\"],\"basis\":\"If several instances per resource type, possibility of deadlock.\",\"learningUnitId\":\"LU08\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"application\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":7,\"sourceRange\":\"Deadlock Characterization — Deadlock examples with resource allocation graph, 사이클 판별 규칙\",\"rationale\":\"사이클의 의미가 인스턴스 수에 따라 달라지는 규칙을 적용해야 하므로 application 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"시스템이 데드락의 네 발생 조건 중 적어도 하나가 성립하지 않도록 만든다.\",\"back\":\"데드락 예방이다. 네 조건 중 적어도 하나를 성립하지 않게 하여 시스템이 데드락 상태에 들어가지 않게 한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"발생 조건 차단 방식으로 예방을 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"처리 방법\",\"예방\"],\"basis\":\"Prevention ensures that at least one of four conditions cannot hold.\",\"learningUnitId\":\"LU09\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"contrast\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":8,\"sourceRange\":\"Methods for Handling Deadlocks — Prevention, Avoidance, Detection and recovery\",\"rationale\":\"처리 방식들을 개입 원리로 구별해야 하므로 contrast 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"시스템이 각 [프로세스]의 미래 자원 사용에 대한 사전 정보를 바탕으로 데드락 상태 진입을 막는다.\",\"back\":\"데드락 회피이다. 각 프로세스의 자원 사용에 관한 사전 정보를 사용하여 데드락 상태에 들어가지 않게 한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"사전 정보 기반 방식으로 회피를 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"처리 방법\",\"회피\"],\"basis\":\"Avoidance requires a priori information about how each process will utilize resources.\",\"learningUnitId\":\"LU09\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"contrast\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":8,\"sourceRange\":\"Methods for Handling Deadlocks — Prevention, Avoidance, Detection and recovery\",\"rationale\":\"예방과 다른 회피의 근거와 개입 원리를 구별해야 하므로 contrast 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"시스템이 데드락 상태에 들어가는 것을 허용한 뒤, 데드락을 찾아 해소한다.\",\"back\":\"데드락 탐지 및 복구이다. 데드락 상태 진입을 허용하고 이후 탐지하여 복구한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"사후 대응 방식으로 탐지 및 복구를 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"처리 방법\",\"탐지\",\"복구\"],\"basis\":\"Detection and recovery allows the system to enter a deadlock state and then recover.\",\"learningUnitId\":\"LU09\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"contrast\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":8,\"sourceRange\":\"Methods for Handling Deadlocks — Prevention, Avoidance, Detection and recovery\",\"rationale\":\"사전 차단 방식과 사후 대응 방식의 시점 차이를 구별해야 하므로 contrast 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"[프로세스]가 실행을 시작하기 전에 필요한 모든 자원을 요청하고 할당받도록 한다.\",\"back\":\"점유와 대기 조건을 막는 예방 정책이다. 실행 전에 필요한 모든 자원을 요청하고 할당받게 한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"선할당 정책과 제거되는 발생 조건을 연결한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"예방\",\"점유와 대기\"],\"basis\":\"requires process to request and be allocated all its resources before it begins execution.\",\"learningUnitId\":\"LU10\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"procedure\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":9,\"sourceRange\":\"Deadlock Prevention — Hold and Wait\",\"rationale\":\"예방 정책의 실행 시점과 조치를 회상해야 하므로 procedure 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"자원을 보유한 [프로세스]가 추가 자원을 요청했지만 즉시 할당받지 못했다.\",\"back\":\"비선점 조건을 막기 위해 현재 보유한 모든 자원을 해제한다. 이전 자원과 새 요청 자원을 모두 다시 얻을 수 있을 때 재시작한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"조건-해제-재시작의 예방 절차를 적용한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"예방\",\"비선점\"],\"basis\":\"즉시 할당되지 않으면 보유 자원을 해제하고, 이전 자원과 새 자원을 모두 얻을 수 있을 때 재시작한다.\",\"learningUnitId\":\"LU11\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"procedure\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":9,\"sourceRange\":\"Deadlock Prevention — No Preemption\",\"rationale\":\"주어진 조건에서 자원 해제와 재시작의 순차 조치를 복원해야 하므로 procedure 전략을 사용한다.\",\"difficulty\":4,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"모든 [자원 유형]에 전체 순서를 부여하고, 각 [프로세스]가 자원을 번호 증가 순서로만 요청하게 한다.\",\"back\":\"순환 대기 조건을 막는 예방 정책이다. 자원 유형의 전체 순서와 오름차순 요청으로 순환 대기를 제거한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"자원 순서 정책과 순환 대기 제거를 연결한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"예방\",\"순환 대기\"],\"basis\":\"imposes a total ordering of all resource types, and requires requests in an increasing order.\",\"learningUnitId\":\"LU12\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"procedure\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":9,\"sourceRange\":\"Deadlock Prevention — Circular Wait\",\"rationale\":\"순환 대기를 없애는 정책의 구성 요소를 회상해야 하므로 procedure 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"시스템이 어떤 순서로든 각 [프로세스]에 최대 필요량까지 자원을 할당하면서 데드락을 피할 수 있다.\",\"back\":\"안전 상태이다. 안전 상태에서는 데드락이 없다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"할당 가능성으로 안전 상태를 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"회피\",\"안전 상태\"],\"basis\":\"각 프로세스에 최대치까지 자원을 어떤 순서로 할당해도 데드락을 피할 수 있으면 safe.\",\"learningUnitId\":\"LU13\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"contrast\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":10,\"sourceRange\":\"Deadlock Avoidance — safe state 및 unsafe state\",\"rationale\":\"안전 상태와 비안전 상태의 데드락 의미를 구별해야 하므로 contrast 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"시스템이 비안전 상태에 있다.\",\"back\":\"데드락 가능성이 있다. 비안전 상태는 데드락이 이미 발생했다는 뜻이 아니라 발생 가능성이 있다는 뜻이다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"비안전 상태의 의미를 안전 상태와 구별한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"회피\",\"비안전 상태\"],\"basis\":\"If a system is in unsafe state, possibility of deadlock.\",\"learningUnitId\":\"LU13\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"contrast\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":10,\"sourceRange\":\"Deadlock Avoidance — safe state 및 unsafe state\",\"rationale\":\"비안전 상태가 확정된 데드락이 아닌 가능성을 뜻함을 구별해야 하므로 contrast 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"[프로세스]가 미래에 [자원 유형]을 요청할 수 있음을 나타내는 청구 간선이 있다. 이후 요청, 할당, 해제가 차례로 발생한다.\",\"back\":\"요청 시 청구 간선 → 요청 간선, 할당 시 요청 간선 → 할당 간선, 해제 시 할당 간선 → 청구 간선으로 변환된다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"사건에 따른 간선 변환 순서를 복원한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"회피\",\"청구 간선\",\"자원 할당 그래프\"],\"basis\":\"청구 간선은 요청·할당·해제에 따라 요청 간선, 할당 간선, 청구 간선으로 순차 변환된다.\",\"learningUnitId\":\"LU14\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"procedure\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":11,\"sourceRange\":\"Deadlock Avoidance — Resource allocation graph, claim/request/assignment edge 변환\",\"rationale\":\"세 사건과 간선 변환의 순서 대응을 재구성해야 하므로 procedure 전략을 사용한다.\",\"difficulty\":4,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"[자원 유형]에 여러 인스턴스가 있는 환경에서 데드락 회피를 수행한다.\",\"back\":\"은행원 알고리즘을 사용한다. 여러 인스턴스를 가진 자원 유형의 회피에는 은행원 알고리즘을 적용한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"다중 인스턴스 조건에 맞는 회피 알고리즘을 판정한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"회피\",\"은행원 알고리즘\"],\"basis\":\"When multiple instances of a resource type, use the banker’s algorithm.\",\"learningUnitId\":\"LU15\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"application\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":11,\"sourceRange\":\"Deadlock Avoidance — Note\",\"rationale\":\"자원 인스턴스 조건에 맞는 알고리즘을 선택해야 하므로 application 전략을 사용한다.\",\"difficulty\":2,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"[프로세스]의 [자원] 요청을 승인해도 자원 할당 그래프에 사이클이 생기지 않는다.\",\"back\":\"안전 상태이므로 요청을 승인한다. 사이클이 없으면 안전하고 승인한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"승인 후 사이클 부재에 따른 회피 결정을 적용한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"회피\",\"안전 상태\",\"승인\"],\"basis\":\"No cycle → safe → grant.\",\"learningUnitId\":\"LU16\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"application\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":12,\"sourceRange\":\"Deadlock Avoidance — Unsafe state example\",\"rationale\":\"가정한 승인 결과를 근거로 요청 승인 여부를 결정해야 하므로 application 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"[프로세스]의 [자원] 요청을 승인하면 자원 할당 그래프에 사이클이 생긴다.\",\"back\":\"비안전 상태이므로 요청을 거부한다. 사이클이 생기면 비안전하고 거부한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"승인 후 사이클 생성에 따른 회피 결정을 적용한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"회피\",\"비안전 상태\",\"거부\"],\"basis\":\"Cycle → unsafe → deny.\",\"learningUnitId\":\"LU16\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"application\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":12,\"sourceRange\":\"Deadlock Avoidance — Unsafe state example\",\"rationale\":\"가정한 승인 결과를 근거로 요청 거부 여부를 결정해야 하므로 application 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"시스템이 그래프의 사이클을 찾는 알고리즘을 주기적으로 실행했고, 사이클을 발견했다.\",\"back\":\"데드락이 존재한다고 판정한다. 탐지에서는 그래프의 사이클을 주기적으로 탐색하며, 사이클이 있으면 데드락이 존재한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"탐지 절차와 사이클 기반 판정을 연결한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"탐지\",\"사이클\"],\"basis\":\"Periodically search for a cycle in the graph. If there is a cycle, there exists a deadlock.\",\"learningUnitId\":\"LU17\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"procedure\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":13,\"sourceRange\":\"Deadlock Detection & Recovery — Detection algorithm\",\"rationale\":\"주기적 탐색과 탐지 결론의 절차적 연결을 회상해야 하므로 procedure 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"데드락이 발생했고, 복구를 위해 [데드락 프로세스]를 종료하는 방식을 선택한다.\",\"back\":\"모든 데드락 프로세스를 종료하거나, 데드락 사이클이 제거될 때까지 한 프로세스씩 종료한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"프로세스 종료 기반 복구 선택지를 구별한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"복구\",\"프로세스 종료\"],\"basis\":\"Abort all deadlocked processes; abort one process at a time until the deadlock cycle is eliminated.\",\"learningUnitId\":\"LU18\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"procedure\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":13,\"sourceRange\":\"Deadlock Detection & Recovery — Recovery scheme\",\"rationale\":\"종료를 통한 복구 방식의 선택지를 재구성해야 하므로 procedure 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"},{\"type\":\"flashcard\",\"activityType\":\"flashcard\",\"front\":\"데드락이 발생했고, 일부 [프로세스]의 자원을 선점하여 다른 프로세스에 주는 방식으로 복구한다.\",\"back\":\"데드락 사이클이 끊어질 때까지 일부 자원을 선점하여 다른 프로세스에 할당한다.\",\"clozeText\":\"\",\"answer\":\"\",\"answers\":[],\"options\":[],\"correctOptionIndex\":0,\"correctBoolean\":false,\"structureNodes\":[],\"structureRecallMode\":\"free_input\",\"recommendationReason\":\"자원 선점 기반 복구 조치를 적용한다.\",\"hint\":\"\",\"tags\":[\"데드락\",\"복구\",\"자원 선점\"],\"basis\":\"Preempt some resources from processes and give these resources to other processes until the deadlock cycle is broken.\",\"learningUnitId\":\"LU18\",\"objectiveId\":\"\",\"blueprintId\":\"\",\"strategy\":\"procedure\",\"sourceId\":\"lecture8.pdf\",\"sourcePage\":13,\"sourceRange\":\"Deadlock Detection & Recovery — Recovery scheme\",\"rationale\":\"자원 선점과 사이클 단절의 복구 절차를 회상해야 하므로 procedure 전략을 사용한다.\",\"difficulty\":3,\"qualityPassed\":false,\"qualityNotes\":[],\"qualityStatus\":\"not_run\",\"explanation\":\"\"}]}"
+            }
+          ],
+          "phase": "final_answer",
+          "role": "assistant"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "presence_penalty": 0,
+      "previous_response_id": null,
+      "prompt_cache_key": null,
+      "prompt_cache_retention": "24h",
+      "reasoning": {
+        "context": "all_turns",
+        "effort": "medium",
+        "mode": "standard",
+        "summary": null
+      },
+      "safety_identifier": null,
+      "service_tier": "default",
+      "store": true,
+      "temperature": 1,
+      "text": {
+        "format": {
+          "type": "json_schema",
+          "description": null,
+          "name": "memory_cards",
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "cards"
+            ],
+            "properties": {
+              "cards": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "activityType",
+                    "front",
+                    "back",
+                    "clozeText",
+                    "answer",
+                    "answers",
+                    "options",
+                    "correctOptionIndex",
+                    "correctBoolean",
+                    "structureNodes",
+                    "structureRecallMode",
+                    "recommendationReason",
+                    "hint",
+                    "tags",
+                    "basis",
+                    "learningUnitId",
+                    "objectiveId",
+                    "blueprintId",
+                    "strategy",
+                    "sourceId",
+                    "sourcePage",
+                    "sourceRange",
+                    "rationale",
+                    "difficulty",
+                    "qualityPassed",
+                    "qualityNotes",
+                    "qualityStatus",
+                    "explanation"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "flashcard",
+                        "cloze",
+                        "translation"
+                      ]
+                    },
+                    "activityType": {
+                      "type": "string",
+                      "enum": [
+                        "flashcard",
+                        "true_false",
+                        "multiple_choice",
+                        "structure_recall"
+                      ]
+                    },
+                    "front": {
+                      "type": "string"
+                    },
+                    "back": {
+                      "type": "string"
+                    },
+                    "clozeText": {
+                      "type": "string"
+                    },
+                    "answer": {
+                      "type": "string"
+                    },
+                    "answers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "options": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "correctOptionIndex": {
+                      "type": "integer"
+                    },
+                    "correctBoolean": {
+                      "type": "boolean"
+                    },
+                    "structureNodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "parentId",
+                          "correctLabel"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "parentId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "correctLabel": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "structureRecallMode": {
+                      "type": "string",
+                      "enum": [
+                        "word_bank",
+                        "free_input"
+                      ]
+                    },
+                    "recommendationReason": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "basis": {
+                      "type": "string"
+                    },
+                    "learningUnitId": {
+                      "type": "string"
+                    },
+                    "objectiveId": {
+                      "type": "string"
+                    },
+                    "blueprintId": {
+                      "type": "string"
+                    },
+                    "strategy": {
+                      "type": "string",
+                      "enum": [
+                        "production",
+                        "recognition",
+                        "concept",
+                        "contrast",
+                        "procedure",
+                        "application"
+                      ]
+                    },
+                    "sourceId": {
+                      "type": "string"
+                    },
+                    "sourcePage": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "sourceRange": {
+                      "type": "string"
+                    },
+                    "rationale": {
+                      "type": "string"
+                    },
+                    "difficulty": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5
+                    },
+                    "qualityPassed": {
+                      "type": "boolean"
+                    },
+                    "qualityNotes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "qualityStatus": {
+                      "type": "string",
+                      "enum": [
+                        "not_run",
+                        "passed",
+                        "failed",
+                        "waived"
+                      ]
+                    },
+                    "explanation": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "strict": true
+        },
+        "verbosity": "medium"
+      },
+      "tool_choice": "auto",
+      "tool_usage": {
+        "image_gen": {
+          "input_tokens": 0,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "output_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "total_tokens": 0
+        },
+        "web_search": {
+          "num_requests": 0
+        }
+      },
+      "tools": [],
+      "top_logprobs": 0,
+      "top_p": 0.98,
+      "truncation": "disabled",
+      "usage": {
+        "input_tokens": 13651,
+        "input_tokens_details": {
+          "cache_write_tokens": 13648,
+          "cached_tokens": 0
+        },
+        "output_tokens": 6958,
+        "output_tokens_details": {
+          "reasoning_tokens": 206
+        },
+        "total_tokens": 20609
+      },
+      "user": null,
+      "metadata": {}
+    }
+  }
+]

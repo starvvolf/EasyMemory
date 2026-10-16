@@ -1,0 +1,8 @@
+{
+  "artifactType": "study-forge-run-errors",
+  "artifactVersion": "v0",
+  "runId": "20260812T061656Z__generation-lab-1__exploratory__r01",
+  "stage": "analyze",
+  "message": "AI 분석 서버에 연결하지 못했습니다. 네트워크 연결 또는 API 서버 상태를 확인한 뒤 다시 시도하세요.",
+  "capturedAt": "2026-08-12T06:16:57.050Z"
+}

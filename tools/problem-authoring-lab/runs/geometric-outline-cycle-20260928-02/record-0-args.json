@@ -1,0 +1,930 @@
+{
+  "runId": "geometric-outline-cycle-20260928-02",
+  "iteration": 0,
+  "packetPath": "runs/geometric-authoring-prototype/source-packet.json",
+  "document": {
+    "schemaVersion": "problem-authoring-v1",
+    "id": "geometric-outline-cycle-20260928-02-v0",
+    "title": "기하 변환 · 원문 하위목차 8개 핵심 확인",
+    "sharedSets": [],
+    "questions": [
+      {
+        "id": "q-outline-3-translation",
+        "source": {
+          "learningUnitId": "mcp-learning-1",
+          "objectiveId": "mcp-objective-1",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 2,
+          "sourcePages": [
+            2
+          ],
+          "sourceRange": "PDF 2쪽",
+          "sourceText": "Adding offsets to its coordinates; x′ = x + tx, y′ = y + ty (PDF 2쪽).",
+          "target": "주어진 점과 변위에서 평행이동 후 좌표를 계산한다.",
+          "successCriteria": [
+            "x와 y에 각각 대응하는 변위를 더해 새 좌표 두 값을 맞힌다."
+          ],
+          "knowledgeContent": "2차원 평행이동은 좌표 (x,y)에 변위 (tx,ty)를 더하여 (x+tx,y+ty)를 만든다.",
+          "concepts": [
+            {
+              "number": 2,
+              "title": "평행이동"
+            }
+          ]
+        },
+        "page": {
+          "width": 760,
+          "height": 390
+        },
+        "blocks": [
+          {
+            "id": "q-outline-3-translation-heading",
+            "kind": "text",
+            "frame": {
+              "x": 55,
+              "y": 40,
+              "width": 650,
+              "height": 75
+            },
+            "style": "heading",
+            "text": "평행이동 뒤 점의 좌표를 구하시오."
+          },
+          {
+            "id": "q-outline-3-translation-context",
+            "kind": "box",
+            "frame": {
+              "x": 55,
+              "y": 130,
+              "width": 650,
+              "height": 65
+            },
+            "label": "점 P=(−4,2)를 x축 방향으로 +7, y축 방향으로 −5만큼 옮긴다.",
+            "tone": "accent"
+          },
+          {
+            "id": "q-outline-3-translation-blank",
+            "kind": "blank",
+            "frame": {
+              "x": 55,
+              "y": 210,
+              "width": 650,
+              "height": 66
+            },
+            "responseId": "r-q-outline-3-translation",
+            "promptBefore": "이동한 점 P′는",
+            "promptAfter": "이다. 좌표쌍으로 쓰시오."
+          },
+          {
+            "id": "q-outline-3-translation-reveal",
+            "kind": "answer-reveal",
+            "frame": {
+              "x": 55,
+              "y": 295,
+              "width": 650,
+              "height": 70
+            },
+            "responseIds": [
+              "r-q-outline-3-translation"
+            ],
+            "title": "정답과 풀이"
+          }
+        ],
+        "responses": [
+          {
+            "id": "r-q-outline-3-translation",
+            "kind": "short-text",
+            "grading": "exact-normalized",
+            "acceptedAnswers": [
+              "(3,−3)",
+              "3,−3"
+            ],
+            "explanation": "평행이동은 각 좌표에 대응하는 변위를 더한다. −4+7=3, 2−5=−3이므로 P′=(3,−3). PDF 2쪽."
+          }
+        ]
+      },
+      {
+        "id": "q-outline-4-rotation",
+        "source": {
+          "learningUnitId": "mcp-learning-2",
+          "objectiveId": "mcp-objective-2",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 3,
+          "sourcePages": [
+            3,
+            7
+          ],
+          "sourceRange": "PDF 3, 7쪽",
+          "sourceText": "A positive value for the angle θ defines a counterclockwise rotation about the pivot point; R = [cosθ, −sinθ; sinθ, cosθ] (PDF 3, 7쪽).",
+          "target": "양의 90도 회전 행렬을 점에 적용하여 회전 방향과 결과 좌표를 판단한다.",
+          "successCriteria": [
+            "(x,y)를 원점 기준 양의 90도 회전할 때 (−y,x)를 구한다."
+          ],
+          "knowledgeContent": "원점 기준 양의 2차원 회전각은 반시계 방향이고, 회전 행렬의 왼쪽 위 2×2는 [cosθ, −sinθ; sinθ, cosθ]이다.",
+          "concepts": [
+            {
+              "number": 3,
+              "title": "회전"
+            },
+            {
+              "number": 8,
+              "title": "회전 행렬"
+            }
+          ]
+        },
+        "page": {
+          "width": 760,
+          "height": 476
+        },
+        "blocks": [
+          {
+            "id": "q-outline-4-rotation-heading",
+            "kind": "text",
+            "frame": {
+              "x": 55,
+              "y": 40,
+              "width": 650,
+              "height": 72
+            },
+            "style": "heading",
+            "text": "점 (3,−2)을 원점 기준 양의 90° 회전하면 어디에 놓이는가?"
+          },
+          {
+            "id": "q-outline-4-rotation-context",
+            "kind": "box",
+            "frame": {
+              "x": 55,
+              "y": 126,
+              "width": 650,
+              "height": 68
+            },
+            "label": "양의 각도는 반시계 방향이다. 점의 부호와 좌표 순서를 함께 판단하시오.",
+            "tone": "accent"
+          },
+          {
+            "id": "q-outline-4-rotation-choices",
+            "kind": "choice-set",
+            "frame": {
+              "x": 55,
+              "y": 208,
+              "width": 650,
+              "height": 175
+            },
+            "responseId": "r-q-outline-4-rotation",
+            "optionIds": [
+              "rot-a",
+              "rot-b",
+              "rot-c",
+              "rot-d"
+            ],
+            "columns": 2
+          },
+          {
+            "id": "q-outline-4-rotation-reveal",
+            "kind": "answer-reveal",
+            "frame": {
+              "x": 55,
+              "y": 401,
+              "width": 650,
+              "height": 66
+            },
+            "responseIds": [
+              "r-q-outline-4-rotation"
+            ],
+            "title": "정답과 풀이"
+          }
+        ],
+        "responses": [
+          {
+            "id": "r-q-outline-4-rotation",
+            "kind": "single-choice",
+            "grading": "exact",
+            "correctOptionId": "rot-b",
+            "options": [
+              {
+                "id": "rot-a",
+                "text": "(−2,−3)"
+              },
+              {
+                "id": "rot-b",
+                "text": "(2,3)"
+              },
+              {
+                "id": "rot-c",
+                "text": "(−3,2)"
+              },
+              {
+                "id": "rot-d",
+                "text": "(2,−3)"
+              }
+            ],
+            "explanation": "원점 기준 양의 90°는 (x,y)→(−y,x)이므로 (3,−2)→(2,3)이다. PDF 3쪽."
+          }
+        ]
+      },
+      {
+        "id": "q-outline-5-scaling",
+        "source": {
+          "learningUnitId": "mcp-learning-3",
+          "objectiveId": "mcp-objective-3",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 4,
+          "sourcePages": [
+            4,
+            7
+          ],
+          "sourceRange": "PDF 4, 7쪽",
+          "sourceText": "x′ = x·sx, y′ = y·sy; When sx and sy are assigned the same value, relative object proportions are maintained (PDF 4, 7쪽).",
+          "target": "축별 확대축소 계수를 점에 적용하고 균일 확대축소인지 판단한다.",
+          "successCriteria": [
+            "각 축의 새 좌표를 계산하고 sx=sy 여부로 균일성을 판단한다."
+          ],
+          "knowledgeContent": "원점 기준 확대축소는 x에 sx, y에 sy를 곱하고 3×3 행렬의 대각은 sx, sy, 1이다. sx=sy일 때 원래 비율이 유지된다.",
+          "concepts": [
+            {
+              "number": 4,
+              "title": "확대축소"
+            },
+            {
+              "number": 9,
+              "title": "확대축소 행렬"
+            }
+          ]
+        },
+        "page": {
+          "width": 760,
+          "height": 476
+        },
+        "blocks": [
+          {
+            "id": "q-outline-5-scaling-heading",
+            "kind": "text",
+            "frame": {
+              "x": 55,
+              "y": 40,
+              "width": 650,
+              "height": 72
+            },
+            "style": "heading",
+            "text": "축별 확대축소 뒤 좌표와 균일 여부를 모두 맞힌 것은?"
+          },
+          {
+            "id": "q-outline-5-scaling-context",
+            "kind": "box",
+            "frame": {
+              "x": 55,
+              "y": 126,
+              "width": 650,
+              "height": 68
+            },
+            "label": "점 P=(−2,4)에 sx=2, sy=1/2를 적용한다.",
+            "tone": "accent"
+          },
+          {
+            "id": "q-outline-5-scaling-choices",
+            "kind": "choice-set",
+            "frame": {
+              "x": 55,
+              "y": 208,
+              "width": 650,
+              "height": 175
+            },
+            "responseId": "r-q-outline-5-scaling",
+            "optionIds": [
+              "scale-a",
+              "scale-b",
+              "scale-c",
+              "scale-d"
+            ],
+            "columns": 2
+          },
+          {
+            "id": "q-outline-5-scaling-reveal",
+            "kind": "answer-reveal",
+            "frame": {
+              "x": 55,
+              "y": 401,
+              "width": 650,
+              "height": 66
+            },
+            "responseIds": [
+              "r-q-outline-5-scaling"
+            ],
+            "title": "정답과 풀이"
+          }
+        ],
+        "responses": [
+          {
+            "id": "r-q-outline-5-scaling",
+            "kind": "single-choice",
+            "grading": "exact",
+            "correctOptionId": "scale-c",
+            "options": [
+              {
+                "id": "scale-a",
+                "text": "P′=(−4,2), 균일 확대축소"
+              },
+              {
+                "id": "scale-b",
+                "text": "P′=(−1,8), 비균일 확대축소"
+              },
+              {
+                "id": "scale-c",
+                "text": "P′=(−4,2), 비균일 확대축소"
+              },
+              {
+                "id": "scale-d",
+                "text": "P′=(4,−2), 비균일 확대축소"
+              }
+            ],
+            "explanation": "x에는 2, y에는 1/2를 곱해 P′=(−4,2)이다. sx≠sy이므로 균일하지 않다. PDF 4쪽."
+          }
+        ]
+      },
+      {
+        "id": "q-outline-7-general-matrix",
+        "source": {
+          "learningUnitId": "mcp-learning-6",
+          "objectiveId": "mcp-objective-6",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 5,
+          "sourcePages": [
+            5
+          ],
+          "sourceRange": "PDF 5쪽",
+          "sourceText": "M1: a 2 × 2 matrix containing multiplicative factors; M2: a two-element column matrix containing translational terms (PDF 5쪽).",
+          "target": "일반 행렬형에서 M1과 M2의 역할을 구별한다.",
+          "successCriteria": [
+            "M1을 곱셈 계수, M2를 평행이동 항으로 바르게 대응한다."
+          ],
+          "knowledgeContent": "2차원 변환의 일반형은 P′=M1·P+M2이며 M1은 곱셈 계수의 2×2 행렬, M2는 평행이동 항의 두 성분 열벡터다. 동차좌표로 두 항을 한 행렬 계산에 합칠 수 있다.",
+          "concepts": [
+            {
+              "number": 5,
+              "title": "행렬과 동차좌표"
+            }
+          ]
+        },
+        "page": {
+          "width": 760,
+          "height": 559
+        },
+        "blocks": [
+          {
+            "id": "q-outline-7-general-matrix-heading",
+            "kind": "text",
+            "frame": {
+              "x": 55,
+              "y": 40,
+              "width": 650,
+              "height": 72
+            },
+            "style": "heading",
+            "text": "일반 변환식에서 M1과 M2의 역할을 옳게 구별한 것은?"
+          },
+          {
+            "id": "q-outline-7-general-matrix-math",
+            "kind": "math",
+            "frame": {
+              "x": 55,
+              "y": 126,
+              "width": 650,
+              "height": 104
+            },
+            "latex": "P'=M_1P+M_2",
+            "displayMode": true
+          },
+          {
+            "id": "q-outline-7-general-matrix-choices",
+            "kind": "choice-set",
+            "frame": {
+              "x": 55,
+              "y": 246,
+              "width": 650,
+              "height": 220
+            },
+            "responseId": "r-q-outline-7-general-matrix",
+            "optionIds": [
+              "general-a",
+              "general-b",
+              "general-c",
+              "general-d"
+            ],
+            "columns": 2
+          },
+          {
+            "id": "q-outline-7-general-matrix-reveal",
+            "kind": "answer-reveal",
+            "frame": {
+              "x": 55,
+              "y": 484,
+              "width": 650,
+              "height": 66
+            },
+            "responseIds": [
+              "r-q-outline-7-general-matrix"
+            ],
+            "title": "정답과 풀이"
+          }
+        ],
+        "responses": [
+          {
+            "id": "r-q-outline-7-general-matrix",
+            "kind": "single-choice",
+            "grading": "exact",
+            "correctOptionId": "general-b",
+            "options": [
+              {
+                "id": "general-a",
+                "text": "M1은 평행이동 두 성분, M2는 곱셈 계수의 2×2 행렬이다."
+              },
+              {
+                "id": "general-b",
+                "text": "M1은 곱셈 계수의 2×2 행렬, M2는 평행이동 두 성분이다."
+              },
+              {
+                "id": "general-c",
+                "text": "M1은 변환 전 좌표, M2는 변환 후 좌표이다."
+              },
+              {
+                "id": "general-d",
+                "text": "M1은 평행이동만, M2는 회전과 확대축소만 표현한다."
+              }
+            ],
+            "explanation": "M1은 P에 곱해지는 2×2 계수 행렬이고 M2는 더해지는 두 성분의 평행이동 항이다. PDF 5쪽."
+          }
+        ]
+      },
+      {
+        "id": "q-outline-8-homogeneous",
+        "source": {
+          "learningUnitId": "mcp-learning-4",
+          "objectiveId": "mcp-objective-4",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 6,
+          "sourcePages": [
+            6
+          ],
+          "sourceRange": "PDF 6쪽",
+          "sourceText": "The homogeneous parameter h is a non-zero value; x = xh/h, y = yh/h (PDF 6쪽).",
+          "target": "동차좌표의 h가 0이 아니어야 하는 이유와 원래 좌표 복원을 설명한다.",
+          "successCriteria": [
+            "h로 두 좌표를 나누는 복원 관계를 정확히 적는다."
+          ],
+          "knowledgeContent": "동차좌표 (xh,yh,h)에서 h는 0이 아니며 원래 좌표는 x=xh/h, y=yh/h로 복원한다. h=1이면 (x,y,1)이다.",
+          "concepts": [
+            {
+              "number": 6,
+              "title": "동차좌표"
+            }
+          ]
+        },
+        "page": {
+          "width": 760,
+          "height": 404
+        },
+        "blocks": [
+          {
+            "id": "q-outline-8-homogeneous-heading",
+            "kind": "text",
+            "frame": {
+              "x": 55,
+              "y": 40,
+              "width": 650,
+              "height": 72
+            },
+            "style": "heading",
+            "text": "동차좌표 H=(18,−12,6)에서 원래 평면 좌표와 h≠0인 이유를 함께 맞힌 것은?"
+          },
+          {
+            "id": "q-outline-8-homogeneous-choices",
+            "kind": "choice-set",
+            "frame": {
+              "x": 55,
+              "y": 126,
+              "width": 650,
+              "height": 185
+            },
+            "responseId": "r-q-outline-8-homogeneous",
+            "optionIds": [
+              "hom-a",
+              "hom-b",
+              "hom-c",
+              "hom-d"
+            ],
+            "columns": 2
+          },
+          {
+            "id": "q-outline-8-homogeneous-reveal",
+            "kind": "answer-reveal",
+            "frame": {
+              "x": 55,
+              "y": 329,
+              "width": 650,
+              "height": 66
+            },
+            "responseIds": [
+              "r-q-outline-8-homogeneous"
+            ],
+            "title": "정답과 풀이"
+          }
+        ],
+        "responses": [
+          {
+            "id": "r-q-outline-8-homogeneous",
+            "kind": "single-choice",
+            "grading": "exact",
+            "correctOptionId": "hom-a",
+            "options": [
+              {
+                "id": "hom-a",
+                "text": "P=(3,−2); h=0이면 h로 나눌 수 없다."
+              },
+              {
+                "id": "hom-b",
+                "text": "P=(3,−2); h=0이어도 같은 좌표를 복원한다."
+              },
+              {
+                "id": "hom-c",
+                "text": "P=(108,−72); h=0이면 h로 나눌 수 없다."
+              },
+              {
+                "id": "hom-d",
+                "text": "P=(3,2); h=0이면 h로 나눌 수 없다."
+              }
+            ],
+            "explanation": "x=18/6=3, y=−12/6=−2이다. 이 복원은 h로 나누므로 h는 0이 아니어야 한다. PDF 6쪽."
+          }
+        ]
+      },
+      {
+        "id": "q-outline-9-translation-matrix",
+        "source": {
+          "learningUnitId": "mcp-learning-5",
+          "objectiveId": "mcp-objective-5",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 7,
+          "sourcePages": [
+            7
+          ],
+          "sourceRange": "PDF 7쪽",
+          "sourceText": "Two-Dimensional Translation Matrix (T); [1 0 tx; 0 1 ty; 0 0 1] (PDF 7쪽).",
+          "target": "3×3 평행이동 행렬에서 변위가 들어갈 위치를 완성한다.",
+          "successCriteria": [
+            "tx, ty가 첫째·둘째 행의 셋째 열에 들어감을 적는다."
+          ],
+          "knowledgeContent": "2차원 평행이동의 3×3 행렬은 [1,0,tx; 0,1,ty; 0,0,1]이고 동차좌표 (x,y,1)에 곱한다.",
+          "concepts": [
+            {
+              "number": 7,
+              "title": "평행이동 행렬"
+            }
+          ]
+        },
+        "page": {
+          "width": 760,
+          "height": 701
+        },
+        "blocks": [
+          {
+            "id": "q-outline-9-translation-matrix-heading",
+            "kind": "text",
+            "frame": {
+              "x": 55,
+              "y": 40,
+              "width": 650,
+              "height": 72
+            },
+            "style": "heading",
+            "text": "변위 (tx,ty)=(−3,4)를 나타내는 3×3 평행이동 행렬은?"
+          },
+          {
+            "id": "q-outline-9-translation-matrix-context",
+            "kind": "box",
+            "frame": {
+              "x": 55,
+              "y": 126,
+              "width": 650,
+              "height": 68
+            },
+            "label": "열벡터 (x,y,1)에 왼쪽에서 행렬을 곱하는 표기다.",
+            "tone": "accent"
+          },
+          {
+            "id": "q-outline-9-translation-matrix-choices",
+            "kind": "choice-set",
+            "frame": {
+              "x": 55,
+              "y": 208,
+              "width": 650,
+              "height": 400
+            },
+            "responseId": "r-q-outline-9-translation-matrix",
+            "optionIds": [
+              "tm-a",
+              "tm-b",
+              "tm-c",
+              "tm-d"
+            ],
+            "columns": 1
+          },
+          {
+            "id": "q-outline-9-translation-matrix-reveal",
+            "kind": "answer-reveal",
+            "frame": {
+              "x": 55,
+              "y": 626,
+              "width": 650,
+              "height": 66
+            },
+            "responseIds": [
+              "r-q-outline-9-translation-matrix"
+            ],
+            "title": "정답과 풀이"
+          }
+        ],
+        "responses": [
+          {
+            "id": "r-q-outline-9-translation-matrix",
+            "kind": "single-choice",
+            "grading": "exact",
+            "correctOptionId": "tm-a",
+            "options": [
+              {
+                "id": "tm-a",
+                "latex": "T=\\begin{bmatrix}1&0&-3\\\\0&1&4\\\\0&0&1\\end{bmatrix}"
+              },
+              {
+                "id": "tm-b",
+                "latex": "T=\\begin{bmatrix}1&0&0\\\\0&1&0\\\\-3&4&1\\end{bmatrix}"
+              },
+              {
+                "id": "tm-c",
+                "latex": "T=\\begin{bmatrix}1&0&4\\\\0&1&-3\\\\0&0&1\\end{bmatrix}"
+              },
+              {
+                "id": "tm-d",
+                "latex": "T=\\begin{bmatrix}-3&0&0\\\\0&4&0\\\\0&0&1\\end{bmatrix}"
+              }
+            ],
+            "explanation": "평행이동 행렬의 첫째·둘째 행 셋째 열에 tx,ty가 들어간다. 따라서 각각 −3,4다. PDF 7쪽."
+          }
+        ]
+      },
+      {
+        "id": "q-outline-10-rotation-matrix",
+        "source": {
+          "learningUnitId": "mcp-learning-2",
+          "objectiveId": "mcp-objective-2",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 3,
+          "sourcePages": [
+            3,
+            7
+          ],
+          "sourceRange": "PDF 3, 7쪽",
+          "sourceText": "A positive value for the angle θ defines a counterclockwise rotation about the pivot point; R = [cosθ, −sinθ; sinθ, cosθ] (PDF 3, 7쪽).",
+          "target": "양의 90도 회전 행렬을 점에 적용하여 회전 방향과 결과 좌표를 판단한다.",
+          "successCriteria": [
+            "(x,y)를 원점 기준 양의 90도 회전할 때 (−y,x)를 구한다."
+          ],
+          "knowledgeContent": "원점 기준 양의 2차원 회전각은 반시계 방향이고, 회전 행렬의 왼쪽 위 2×2는 [cosθ, −sinθ; sinθ, cosθ]이다.",
+          "concepts": [
+            {
+              "number": 3,
+              "title": "회전"
+            },
+            {
+              "number": 8,
+              "title": "회전 행렬"
+            }
+          ]
+        },
+        "page": {
+          "width": 760,
+          "height": 701
+        },
+        "blocks": [
+          {
+            "id": "q-outline-10-rotation-matrix-heading",
+            "kind": "text",
+            "frame": {
+              "x": 55,
+              "y": 40,
+              "width": 650,
+              "height": 72
+            },
+            "style": "heading",
+            "text": "원점 기준 양의 90° 회전을 나타내는 3×3 행렬은?"
+          },
+          {
+            "id": "q-outline-10-rotation-matrix-context",
+            "kind": "box",
+            "frame": {
+              "x": 55,
+              "y": 126,
+              "width": 650,
+              "height": 68
+            },
+            "label": "평행이동 없이 동차좌표 열벡터 (x,y,1)에 작용한다.",
+            "tone": "accent"
+          },
+          {
+            "id": "q-outline-10-rotation-matrix-choices",
+            "kind": "choice-set",
+            "frame": {
+              "x": 55,
+              "y": 208,
+              "width": 650,
+              "height": 400
+            },
+            "responseId": "r-q-outline-10-rotation-matrix",
+            "optionIds": [
+              "rm-a",
+              "rm-b",
+              "rm-c",
+              "rm-d"
+            ],
+            "columns": 1
+          },
+          {
+            "id": "q-outline-10-rotation-matrix-reveal",
+            "kind": "answer-reveal",
+            "frame": {
+              "x": 55,
+              "y": 626,
+              "width": 650,
+              "height": 66
+            },
+            "responseIds": [
+              "r-q-outline-10-rotation-matrix"
+            ],
+            "title": "정답과 풀이"
+          }
+        ],
+        "responses": [
+          {
+            "id": "r-q-outline-10-rotation-matrix",
+            "kind": "single-choice",
+            "grading": "exact",
+            "correctOptionId": "rm-c",
+            "options": [
+              {
+                "id": "rm-a",
+                "latex": "R=\\begin{bmatrix}0&1&0\\\\-1&0&0\\\\0&0&1\\end{bmatrix}"
+              },
+              {
+                "id": "rm-b",
+                "latex": "R=\\begin{bmatrix}-1&0&0\\\\0&-1&0\\\\0&0&1\\end{bmatrix}"
+              },
+              {
+                "id": "rm-c",
+                "latex": "R=\\begin{bmatrix}0&-1&0\\\\1&0&0\\\\0&0&1\\end{bmatrix}"
+              },
+              {
+                "id": "rm-d",
+                "latex": "R=\\begin{bmatrix}0&-1&1\\\\1&0&0\\\\0&0&1\\end{bmatrix}"
+              }
+            ],
+            "explanation": "R(θ)의 왼쪽 위는 [cosθ,−sinθ; sinθ,cosθ]이다. θ=90°이면 [0,−1;1,0]이고 평행이동 열은 0이다. PDF 7쪽."
+          }
+        ]
+      },
+      {
+        "id": "q-outline-11-scaling-matrix",
+        "source": {
+          "learningUnitId": "mcp-learning-3",
+          "objectiveId": "mcp-objective-3",
+          "sourceId": "02_Geometric Transformations.pdf",
+          "sourcePage": 4,
+          "sourcePages": [
+            4,
+            7
+          ],
+          "sourceRange": "PDF 4, 7쪽",
+          "sourceText": "x′ = x·sx, y′ = y·sy; When sx and sy are assigned the same value, relative object proportions are maintained (PDF 4, 7쪽).",
+          "target": "축별 확대축소 계수를 점에 적용하고 균일 확대축소인지 판단한다.",
+          "successCriteria": [
+            "각 축의 새 좌표를 계산하고 sx=sy 여부로 균일성을 판단한다."
+          ],
+          "knowledgeContent": "원점 기준 확대축소는 x에 sx, y에 sy를 곱하고 3×3 행렬의 대각은 sx, sy, 1이다. sx=sy일 때 원래 비율이 유지된다.",
+          "concepts": [
+            {
+              "number": 4,
+              "title": "확대축소"
+            },
+            {
+              "number": 9,
+              "title": "확대축소 행렬"
+            }
+          ]
+        },
+        "page": {
+          "width": 760,
+          "height": 529
+        },
+        "blocks": [
+          {
+            "id": "q-outline-11-scaling-matrix-heading",
+            "kind": "text",
+            "frame": {
+              "x": 55,
+              "y": 40,
+              "width": 650,
+              "height": 72
+            },
+            "style": "heading",
+            "text": "주어진 3×3 확대축소 행렬이 평면의 점에 미치는 효과는?"
+          },
+          {
+            "id": "q-outline-11-scaling-matrix-math",
+            "kind": "math",
+            "frame": {
+              "x": 55,
+              "y": 126,
+              "width": 650,
+              "height": 104
+            },
+            "latex": "S=\\begin{bmatrix}\\tfrac{1}{2}&0&0\\\\0&2&0\\\\0&0&1\\end{bmatrix}",
+            "displayMode": true
+          },
+          {
+            "id": "q-outline-11-scaling-matrix-choices",
+            "kind": "choice-set",
+            "frame": {
+              "x": 55,
+              "y": 246,
+              "width": 650,
+              "height": 190
+            },
+            "responseId": "r-q-outline-11-scaling-matrix",
+            "optionIds": [
+              "sm-a",
+              "sm-b",
+              "sm-c",
+              "sm-d"
+            ],
+            "columns": 2
+          },
+          {
+            "id": "q-outline-11-scaling-matrix-reveal",
+            "kind": "answer-reveal",
+            "frame": {
+              "x": 55,
+              "y": 454,
+              "width": 650,
+              "height": 66
+            },
+            "responseIds": [
+              "r-q-outline-11-scaling-matrix"
+            ],
+            "title": "정답과 풀이"
+          }
+        ],
+        "responses": [
+          {
+            "id": "r-q-outline-11-scaling-matrix",
+            "kind": "single-choice",
+            "grading": "exact",
+            "correctOptionId": "sm-a",
+            "options": [
+              {
+                "id": "sm-a",
+                "text": "x는 절반, y는 두 배가 되고 비균일하다."
+              },
+              {
+                "id": "sm-b",
+                "text": "x는 절반, y는 두 배가 되고 균일하다."
+              },
+              {
+                "id": "sm-c",
+                "text": "x는 두 배, y는 절반이 되고 비균일하다."
+              },
+              {
+                "id": "sm-d",
+                "text": "x는 절반, y는 두 배가 되며 평행이동도 있다."
+              }
+            ],
+            "explanation": "대각의 sx=1/2, sy=2가 각 축에 곱해진다. 두 계수가 다르고 셋째 열 평행이동 항이 0이므로 비균일 확대축소만 있다. PDF 7쪽."
+          }
+        ]
+      }
+    ]
+  },
+  "issues": [],
+  "execution": {
+    "model": "gpt-6-sol (medium)",
+    "sessionId": "01a06c91-acf6-76c1-93e6-41d40849d215",
+    "usage": {
+      "inputTokens": null,
+      "outputTokens": null,
+      "reason": "current host does not expose per-turn token usage to this task"
+    },
+    "toolCalls": [
+      "load_source_packet",
+      "get_authoring_instructions(selection,recall-blank,relationship-structure)",
+      "validate_problem_document",
+      "render_problem_preview",
+      "record_problem_iteration(iteration=0)"
+    ]
+  }
+}

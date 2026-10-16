@@ -1,0 +1,672 @@
+{
+  "artifactType": "study-forge-stage-artifact",
+  "artifactVersion": "v0",
+  "runId": "20260812T073601Z__generation-lab-05-dfs-bfs__exploratory__r01",
+  "stage": "prepare",
+  "status": "executed",
+  "sourceRunId": null,
+  "sourceArtifact": null,
+  "capturedAt": "2026-08-12T07:39:43.505Z",
+  "modelConfiguration": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "medium"
+  },
+  "inputRefs": [
+    "stages/10-analyze.json",
+    "stages/20-plan.json",
+    "stages/30-recall.json"
+  ],
+  "request": {
+    "title": "05 DFS BFS",
+    "subject": "",
+    "tags": [],
+    "sourceText": "",
+    "instruction": "DFS와 BFS에 관해서 학습",
+    "analysisContext": "{\"files\":[{\"fileName\":\"05 DFS BFS.pdf\",\"documentType\":\"코딩 테스트 학습자를 위한 DFS·BFS 그래프 탐색 알고리즘 이론 및 실전 문제 풀이 자료입니다.\",\"summary\":\"자료는 그래프의 노드·간선 개념과 인접 행렬·인접 리스트 표현 방식을 소개한 뒤, 깊이 우선 탐색(DFS)과 너비 우선 탐색(BFS)의 동작 원리, 방문 처리, 파이썬 구현 예제를 설명합니다. 이어서 2차원 배열을 그래프로 모델링하는 관점을 제시하고, DFS로 연결 요소를 세는 ‘음료수 얼려 먹기’와 BFS로 최단 거리를 구하는 ‘미로 탈출’ 실전 문제를 풀이합니다. 마지막 페이지는 다음 장인 정렬의 시작 페이지입니다.\",\"keyTopics\":[\"그래프의 노드·간선과 인접 관계\",\"인접 행렬과 인접 리스트\",\"DFS와 스택·재귀 함수\",\"BFS와 큐·deque\",\"방문 처리와 탐색 순서\",\"2차원 배열의 그래프 모델링\",\"연결 요소 개수 세기\",\"BFS 기반 최단 경로\"],\"outline\":[{\"heading\":\"탐색 알고리즘 DFS/BFS: 그래프 기초와 표현 방식\",\"points\":[\"그래프는 노드(정점)와 간선으로 표현하며, 간선으로 연결된 두 노드는 인접하다고 설명한다.\",\"인접 행렬은 2차원 리스트에 모든 노드 간 연결 비용을 기록하며, 연결되지 않은 경우 큰 값(INF)을 사용한다.\",\"인접 리스트는 각 노드에 연결된 노드 정보만 저장하는 방식이며, 파이썬에서는 2차원 리스트로 구현할 수 있다.\",\"인접 행렬은 두 노드의 연결 여부 확인이 빠르고, 인접 리스트는 메모리를 더 효율적으로 사용한다.\"]},{\"heading\":\"DFS: 깊이 우선 탐색\",\"points\":[\"DFS는 특정 경로를 따라 가능한 한 깊게 탐색한 뒤 되돌아와 다른 경로를 탐색하는 알고리즘이다.\",\"스택을 기반으로 시작 노드를 삽입·방문 처리하고, 방문하지 않은 인접 노드를 계속 삽입하며 탐색한다.\",\"예시 그래프에서 번호가 낮은 인접 노드를 우선 처리하는 과정을 단계별 스택 변화로 설명한다.\",\"재귀 함수와 방문 배열을 이용한 파이썬 DFS 예제를 제시하며, 탐색 시간은 데이터 수가 N개일 때 O(N)이라고 설명한다.\"]},{\"heading\":\"BFS: 너비 우선 탐색\",\"points\":[\"BFS는 시작 노드에서 가까운 노드부터 탐색하는 알고리즘으로, 선입선출 큐를 이용한다.\",\"시작 노드를 큐에 넣고 방문 처리한 뒤, 꺼낸 노드의 미방문 인접 노드를 모두 큐에 넣는 과정을 반복한다.\",\"예시 그래프를 대상으로 큐의 변화와 탐색 순서를 단계별로 설명한다.\",\"collections.deque를 활용한 파이썬 BFS 예제를 제시하며, 탐색 시간은 O(N)이라고 설명한다.\"]},{\"heading\":\"DFS와 BFS 비교 및 2차원 배열 탐색 관점\",\"points\":[\"DFS는 스택을 동작 원리로 하며 재귀 함수로 구현할 수 있고, BFS는 큐 자료구조로 구현한다.\",\"1차원·2차원 배열의 각 원소 또는 좌표도 그래프의 노드로 보고 인접 관계를 구성할 수 있다.\",\"상·하·좌·우 이동이 가능한 2차원 게임 맵을 그래프로 바꾸어 생각하는 방법을 제시한다.\"]},{\"heading\":\"실전 문제 3: 음료수 얼려 먹기\",\"points\":[\"N×M 얼음 틀에서 값이 0인 칸들이 상·하·좌·우로 연결된 묶음의 개수, 즉 생성 가능한 아이스크림 수를 구하는 문제이다.\",\"0으로 이루어진 연결 영역을 그래프로 모델링하고 DFS로 한 영역 전체를 방문 처리한다.\",\"모든 좌표를 순회하면서 아직 방문하지 않은 0에서 DFS가 성공할 때마다 결과를 1 증가시킨다.\",\"재귀 DFS로 범위 확인, 방문 처리(0을 1로 변경), 네 방향 탐색을 수행하는 파이썬 답안 예시를 제공한다.\"]},{\"heading\":\"실전 문제 4: 미로 탈출\",\"points\":[\"N×M 미로에서 괴물이 없는 1의 칸만 상·하·좌·우로 이동하여 시작점 (1, 1)에서 출구 (N, M)까지 가는 최소 칸 수를 구한다.\",\"가까운 노드부터 탐색하는 BFS가 최단 경로 계산에 효과적이라고 설명한다.\",\"처음 방문한 이동 가능 칸에 이전 칸의 거리 값보다 1 큰 값을 기록하여 최단 거리를 저장한다.\",\"deque, 네 방향 이동 배열, 범위·벽·첫 방문 여부 검사를 사용하는 파이썬 BFS 답안 예시를 제공한다.\"]},{\"heading\":\"다음 장 예고: 정렬\",\"points\":[\"마지막 페이지에서 다음 장인 CHAPTER 06 ‘정렬’을 소개한다.\",\"정렬을 연속된 데이터를 기준에 따라 정렬하기 위한 알고리즘으로 제시한다.\"]}],\"suggestedRole\":\"DFS·BFS의 핵심 개념, 구현 패턴, 2차원 그래프 탐색 문제 유형을 복습하는 학습 카드의 원천 자료 역할을 합니다.\"}]}",
+    "studyGuideline": "{\"summary\":\"이 자료의 핵심 학습 범위는 그래프 표현, DFS·BFS의 자료구조 기반 동작 원리와 구현 불변식, 2차원 격자 그래프 모델링, 그리고 연결 요소 개수와 무가중치 최단 거리라는 대표 적용 패턴이다. 상세 도식의 모든 단계보다 ‘언제 DFS/BFS를 선택하고, 방문 처리를 어떻게 하며, 격자 문제를 어떤 탐색 문제로 환원하는가’를 능동 인출할 수 있도록 범위를 구성한다.\",\"selectedGroup\":{\"id\":\"whole-document-core\",\"title\":\"전체 자료 핵심 학습 범위\",\"description\":\"DFS/BFS는 이후 그래프·격자 탐색 문제의 공통 기반이므로, 단순 탐색 순서 암기보다 자료구조(스택/큐), 방문 시점, 인접 노드 처리, 거리 기록의 이유를 독립적으로 회상할 가치가 높다. 두 실전 문제는 각각 ‘연결된 영역의 개수’와 ‘무가중치 최단 경로’라는 재사용성이 높은 핵심 패턴을 대표하므로 높은 비중으로 포함했다.\",\"itemCount\":21,\"itemLabel\":\"핵심 LearningUnit\",\"selectionInstruction\":\"특정 영역 하나로 제한하지 않고 wholeDocumentCore.areas 전체에서 핵심 단위를 추출합니다. 모든 영역을 균등하게 배분하지 말고 learningValue와 estimatedLearningUnitCount의 상대적 비중을 반영합니다. 중요한 하위 영역은 누락하지 않되 예시, 반복 요약, 메타데이터는 핵심 단위보다 낮은 우선순위로 둡니다. wholeDocumentCore.exclusions에 포함된 내용은 핵심 LearningUnit으로 만들지 않습니다.\"},\"wholeDocumentCore\":{\"summary\":\"이 자료의 핵심 학습 범위는 그래프 표현, DFS·BFS의 자료구조 기반 동작 원리와 구현 불변식, 2차원 격자 그래프 모델링, 그리고 연결 요소 개수와 무가중치 최단 거리라는 대표 적용 패턴이다. 상세 도식의 모든 단계보다 ‘언제 DFS/BFS를 선택하고, 방문 처리를 어떻게 하며, 격자 문제를 어떤 탐색 문제로 환원하는가’를 능동 인출할 수 있도록 범위를 구성한다.\",\"learningGoal\":\"학습자는 인접 행렬·인접 리스트를 상황에 맞게 구분하고, DFS와 BFS를 방문 처리와 함께 직접 구현하며, 2차원 격자 문제를 연결 요소 세기 또는 최단 거리 탐색으로 모델링하여 적절한 알고리즘을 선택·적용할 수 있다.\",\"selectionRationale\":\"DFS/BFS는 이후 그래프·격자 탐색 문제의 공통 기반이므로, 단순 탐색 순서 암기보다 자료구조(스택/큐), 방문 시점, 인접 노드 처리, 거리 기록의 이유를 독립적으로 회상할 가치가 높다. 두 실전 문제는 각각 ‘연결된 영역의 개수’와 ‘무가중치 최단 경로’라는 재사용성이 높은 핵심 패턴을 대표하므로 높은 비중으로 포함했다.\",\"areas\":[{\"id\":\"graph-modeling-representation\",\"title\":\"그래프 모델링과 인접 행렬·인접 리스트\",\"description\":\"그래프의 노드(정점), 간선, 인접 관계를 정의하고, 인접 행렬과 인접 리스트의 저장 구조·메모리 특성·연결 여부 확인 방식의 차이를 학습한다. 특히 탐색에서 인접 리스트가 자연스럽게 쓰이는 이유를 설명할 수 있어야 한다.\",\"learningValue\":\"탐색 알고리즘을 적용하려면 문제의 객체와 이동/연결 관계를 그래프로 바꾸고 적절한 자료구조로 표현할 수 있어야 한다. 이후 대부분의 그래프 알고리즘 구현에서 반복 인출되는 기초다.\",\"sourceScope\":[\"PDF 1~3쪽 / 교재 134~136쪽: DFS 도입, 그래프 기본 구조, 인접 행렬, 인접 리스트\"],\"estimatedLearningUnitCount\":3},{\"id\":\"dfs-core-implementation\",\"title\":\"DFS의 깊이 우선 탐색 원리와 구현\",\"description\":\"DFS가 한 경로를 가능한 깊게 탐색한 뒤 되돌아오는 방식임을 이해하고, 스택 기반 절차를 재귀 호출로 구현하는 방법을 학습한다. 현재 노드를 방문 처리한 뒤 미방문 인접 노드를 재귀적으로 탐색하는 구조, 방문 배열의 역할, 인접 노드 순서가 탐색 순서에 미치는 영향을 포함한다.\",\"learningValue\":\"DFS 구현의 핵심은 재귀 문법 자체가 아니라 중복 방문을 막는 방문 처리와 탐색-되돌아감의 구조다. 이를 회상할 수 있으면 그래프 순회와 연결 요소 탐색으로 즉시 확장할 수 있다.\",\"sourceScope\":[\"PDF 4~10쪽 / 교재 137~143쪽: DFS 동작 과정, 방문 처리, 재귀 DFS 예제\"],\"estimatedLearningUnitCount\":4},{\"id\":\"bfs-core-implementation\",\"title\":\"BFS의 너비 우선 탐색 원리와 구현\",\"description\":\"BFS가 시작점에서 가까운 노드부터 레벨 단위로 탐색되는 이유를 FIFO 큐와 연결해 이해한다. 시작점을 큐에 넣어 방문 처리하고, 꺼낸 노드의 모든 미방문 인접 노드를 큐에 삽입하면서 즉시 방문 처리하는 구현 패턴과 deque 사용을 학습한다.\",\"learningValue\":\"BFS의 큐 처리와 방문 처리 시점은 중복 삽입 방지 및 최단 거리 문제의 정확성을 좌우한다. 무가중치 최단 경로의 기반이 되는 가장 중요한 구현 패턴이다.\",\"sourceScope\":[\"PDF 10~14쪽 / 교재 143~147쪽: BFS 원리, 큐 변화 과정, deque 기반 BFS 예제\"],\"estimatedLearningUnitCount\":4},{\"id\":\"dfs-bfs-selection-grid-modeling\",\"title\":\"DFS·BFS 선택 기준과 2차원 격자 그래프 모델링\",\"description\":\"DFS는 깊게 연결된 영역을 방문하는 문제에, BFS는 시작점으로부터 가까운 칸을 순차적으로 처리해야 하는 문제에 적합하다는 선택 기준을 정리한다. 2차원 배열의 각 좌표를 노드로, 상·하·좌·우 이동 가능 조건을 간선으로 보는 모델링과 네 방향 이동·범위 검사 패턴을 학습한다.\",\"learningValue\":\"코딩 테스트에서는 그래프 그림보다 격자 입력으로 탐색 문제가 제시되는 경우가 많다. 격자를 그래프로 전환하고 문제 요구가 ‘영역’인지 ‘최소 거리’인지 판별하는 능력이 알고리즘 선택의 핵심이다.\",\"sourceScope\":[\"PDF 15쪽 / 교재 148쪽: DFS·BFS 비교 및 2차원 배열 그래프 관점\",\"PDF 18쪽 / 교재 151쪽: 격자 상하좌우 탐색과 범위 확인\"],\"estimatedLearningUnitCount\":3},{\"id\":\"connected-components-pattern\",\"title\":\"DFS를 이용한 연결 요소 개수 세기: 음료수 얼려 먹기\",\"description\":\"값이 0인 상하좌우 연결 칸 하나를 시작점으로 DFS하여 해당 연결 영역 전체를 방문 처리하고, 전체 격자를 순회하면서 새 탐색이 시작된 횟수를 세는 패턴을 학습한다. 범위를 벗어난 경우, 벽/이미 방문한 칸인 경우의 종료 조건과 원본 격자를 방문 표시로 갱신하는 방식을 포함한다.\",\"learningValue\":\"연결된 영역의 수를 세는 문제는 섬의 개수, 단지 번호, 그림 개수 등으로 반복 출제되는 대표 DFS/BFS 유형이다. ‘새로운 미방문 유효 칸에서 탐색 성공 시 카운트 증가’라는 불변식을 인출할 수 있어야 한다.\",\"sourceScope\":[\"PDF 16~18쪽 / 교재 149~151쪽: 실전 문제 3 음료수 얼려 먹기, DFS 풀이와 코드\"],\"estimatedLearningUnitCount\":3},{\"id\":\"unweighted-shortest-path-pattern\",\"title\":\"BFS를 이용한 격자 최단 거리: 미로 탈출\",\"description\":\"상하좌우 이동의 비용이 동일한 미로에서 BFS가 처음 도달한 칸의 거리가 최단 거리인 이유를 학습한다. 큐에서 좌표를 꺼내 네 방향을 검사하고, 이동 가능하며 처음 방문하는 칸에 현재 거리+1을 기록한 뒤 큐에 삽입하는 거리 갱신 패턴을 구현한다. 시작 칸과 도착 칸을 포함하는 거리 정의도 확인한다.\",\"learningValue\":\"무가중치 그래프에서 BFS로 최단 거리를 구하는 원리는 매우 높은 재사용성을 가진다. 별도 거리 배열을 쓰거나 격자 값을 거리로 덮어쓰는 구현을 정확히 구분·적용할 수 있어야 한다.\",\"sourceScope\":[\"PDF 19~21쪽 / 교재 152~154쪽: 실전 문제 4 미로 탈출, BFS 거리 기록과 코드\"],\"estimatedLearningUnitCount\":4}],\"exclusions\":[\"DFS와 BFS 예시 그래프의 단계별 스택·큐 그림 전체: 동작 원리 확인에는 유용하지만, 각 단계의 개별 상태를 모두 독립 학습 단위로 암기하는 인출 가치는 낮다.\",\"예시 그래프의 특정 탐색 순서(예: 1-2-7-6-8-3-4-5, 1-2-3-8-7-4-5-6): 인접 리스트의 순서와 문제의 우선순위 조건에 따라 달라질 수 있으므로, 순서 자체보다 ‘인접 노드 순서가 결과에 영향을 준다’는 원칙에 포함한다.\",\"인접 행렬 예제의 특정 INF 숫자값과 가중치 예시: 표현 방식의 의미만 핵심이며, 특정 상수나 예시 수치 암기는 우선순위가 낮다.\",\"DFS와 BFS의 실제 실행 시간 우열에 관한 부연: 자료구조·입력·구현에 따라 달라질 수 있는 보조 설명이며, 알고리즘 선택의 핵심 기준으로 다루지 않는다.\",\"다음 장인 정렬 소개 페이지(PDF 22쪽 / 교재 다음 장 시작): DFS·BFS 학습 목표와 무관하다.\"],\"estimatedLearningUnitCount\":21}}",
+    "recallDesign": "{\"selectedOption\":{\"id\":\"option-3\",\"title\":\"문제 조건·요구 결과 → 선택 알고리즘과 재현 가능한 풀이 절차를 인출\",\"cue\":\"그래프 또는 격자 문제의 이동 조건과 구해야 할 결과를 본다.\",\"target\":\"선택할 그래프 표현 또는 탐색 알고리즘과, 그대로 구현할 방문·반복·거리 기록 절차를 순서대로 쓴다.\",\"unit\":\"핵심 LearningUnit\",\"instruction\":\"총 21장을 만든다. 영역별 배분은 그래프 모델링·표현 3장, DFS 구현 4장, BFS 구현 4장, DFS/BFS 선택과 격자 모델링 3장, 연결 요소 세기 3장, 무가중치 최단 거리 4장으로 한다. 앞면에는 문제의 입력 구조, 이동·연결 조건, 또는 요구 결과를 구체적으로 제시한다. 뒷면에는 선택할 표현 방식이나 DFS/BFS를 먼저 쓰고, 이어서 구현할 핵심 절차를 순서대로 재생산하게 한다. 연결 요소 문제는 ‘미방문 유효 칸에서 탐색 시작 후 카운트 증가’, 최단 거리 문제는 ‘처음 방문한 칸에 현재 거리+1 기록 후 큐 삽입’을 반드시 명시한다. 정의형 단위도 상황을 제시하고 해당 표현·자료구조·확인 절차를 답하게 한다. 특정 예시 그래프의 탐색 순서, 특정 INF 수치, 실행 시간 우열, 정렬 내용은 만들지 않는다.\",\"mode\":\"flashcard\",\"variants\":[{\"id\":\"option-3-template\",\"label\":\"일반 패턴\",\"description\":\"상하좌우로 연결된 유효 칸 묶음의 수를 구하는 문제에서 DFS 풀이 절차를 인출한다.\",\"slotMode\":\"template\",\"exampleSource\":\"source\",\"preservePlaceholders\":true,\"sample\":{\"title\":\"연결된 영역 개수 세기\",\"cue\":\"N×M 격자에서 값이 [유효 값]인 칸들이 상·하·좌·우로 연결된다. 연결된 묶음의 개수를 구한다.\",\"target\":\"DFS를 사용한다. 모든 칸을 순회하며 아직 방문하지 않은 [유효 값] 칸에서 DFS를 시작한다. DFS에서 현재 칸을 방문 처리하고 상·하·좌·우의 미방문 [유효 값] 칸을 재귀적으로 방문한다. DFS가 새로 시작될 때마다 개수를 1 증가시킨다.\",\"supportingInfo\":\"각 좌표를 노드, 상하좌우 이동 가능 관계를 간선으로 본다.\"}},{\"id\":\"option-3-filled\",\"label\":\"완성 예문\",\"description\":\"0으로 연결된 얼음 구멍의 묶음 수를 구하는 문제에서 실제 풀이 절차를 답한다.\",\"slotMode\":\"filled_example\",\"exampleSource\":\"generated\",\"preservePlaceholders\":false,\"sample\":{\"title\":\"음료수 얼려 먹기 풀이\",\"cue\":\"N×M 얼음 틀에서 값이 0인 칸들이 상·하·좌·우로 연결된다. 생성되는 아이스크림의 개수를 구한다.\",\"target\":\"DFS를 사용한다. 모든 칸을 순회하며 아직 방문하지 않은 0인 칸에서 DFS를 시작한다. DFS에서 현재 칸을 1로 바꾸어 방문 처리하고 상·하·좌·우의 미방문 0인 칸을 재귀적으로 방문한다. DFS가 새로 시작될 때마다 아이스크림 개수를 1 증가시킨다.\",\"supportingInfo\":\"한 번의 DFS가 하나의 연결된 0 영역 전체를 방문 처리한다.\"}}]},\"selectedVariant\":{\"id\":\"option-3-template\",\"label\":\"일반 패턴\",\"description\":\"상하좌우로 연결된 유효 칸 묶음의 수를 구하는 문제에서 DFS 풀이 절차를 인출한다.\",\"slotMode\":\"template\",\"exampleSource\":\"source\",\"preservePlaceholders\":true,\"sample\":{\"title\":\"연결된 영역 개수 세기\",\"cue\":\"N×M 격자에서 값이 [유효 값]인 칸들이 상·하·좌·우로 연결된다. 연결된 묶음의 개수를 구한다.\",\"target\":\"DFS를 사용한다. 모든 칸을 순회하며 아직 방문하지 않은 [유효 값] 칸에서 DFS를 시작한다. DFS에서 현재 칸을 방문 처리하고 상·하·좌·우의 미방문 [유효 값] 칸을 재귀적으로 방문한다. DFS가 새로 시작될 때마다 개수를 1 증가시킨다.\",\"supportingInfo\":\"각 좌표를 노드, 상하좌우 이동 가능 관계를 간선으로 본다.\"}}}",
+    "approvedSample": "{\"title\":\"연결된 영역 개수 세기\",\"cue\":\"N×M 격자에서 값이 [유효 값]인 칸들이 상·하·좌·우로 연결된다. 연결된 묶음의 개수를 구한다.\",\"target\":\"DFS를 사용한다. 모든 칸을 순회하며 아직 방문하지 않은 [유효 값] 칸에서 DFS를 시작한다. DFS에서 현재 칸을 방문 처리하고 상·하·좌·우의 미방문 [유효 값] 칸을 재귀적으로 방문한다. DFS가 새로 시작될 때마다 개수를 1 증가시킨다.\",\"supportingInfo\":\"각 좌표를 노드, 상하좌우 이동 가능 관계를 간선으로 본다.\"}",
+    "sampleFeedback": "",
+    "stage": "prepare",
+    "preparedAnalysis": "",
+    "preparedMaterial": "",
+    "mode": "flashcard",
+    "sourceFiles": [
+      {
+        "name": "05 DFS BFS.pdf",
+        "mimeType": "application/pdf",
+        "size": 7714386,
+        "sha256": "7bd68c1e2fbc049167489a90bea1b36cc2a867efd907f11e53fd8ac52a67da31",
+        "localPath": "eval/local/sources/7bd68c1e2fbc049167489a90bea1b36cc2a867efd907f11e53fd8ac52a67da31.pdf"
+      }
+    ]
+  },
+  "response": {
+    "analysis": {
+      "detectedGoal": "그래프의 표현 방식을 구분하고 DFS와 BFS의 동작 원리·방문 처리·파이썬 구현을 기억한 뒤, 2차원 격자를 그래프로 모델링하여 연결 요소 개수 문제에는 DFS를, 동일 비용 이동의 최단 거리 문제에는 BFS를 선택·적용하는 능력을 학습하는 것이다.",
+      "sourceType": "mixed",
+      "keyTopics": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트의 차이",
+        "DFS의 스택 기반 깊이 우선 탐색",
+        "재귀 DFS와 방문 처리",
+        "BFS의 FIFO 큐 기반 너비 우선 탐색",
+        "deque를 이용한 BFS 구현",
+        "2차원 격자의 그래프 모델링",
+        "상하좌우 탐색과 범위 검사",
+        "DFS 연결 요소 개수 세기",
+        "BFS 무가중치 최단 거리"
+      ],
+      "recommendedStrategy": "21개 학습 단위를 정의·비교·절차·문제 해결 패턴으로 나누어 학습한다. 먼저 그래프 표현과 DFS/BFS의 핵심 불변식인 ‘처음 발견했을 때 방문 처리’를 회상하고, 이어서 재귀 DFS와 deque BFS의 공통 코드 골격을 반복해서 직접 작성한다. 격자 문제에서는 각 칸을 노드로, 허용된 이동을 간선으로 변환한 뒤 요구사항이 연결 영역의 개수인지 최소 거리인지 먼저 판별한다. 연결 요소 문제는 ‘새 미방문 유효 칸에서 탐색이 성공할 때 카운트 증가’, 최단 거리 문제는 ‘처음 방문한 칸에 현재 거리+1 기록’이라는 불변식을 중심으로 연습한다. 예시의 특정 탐색 순서나 특정 INF 값은 암기하지 않고, 인접 노드의 처리 순서에 따라 탐색 순서가 달라진다는 원칙만 유지한다.",
+      "extractedMaterial": "1. 그래프는 노드(정점)와 간선으로 표현되며, 간선으로 연결된 두 노드는 인접한다.\n2. 인접 행렬은 2차원 배열에 모든 노드 사이의 연결 관계를 기록한다. 연결되지 않은 노드는 무한 비용을 나타내는 큰 값으로 표시할 수 있다.\n3. 인접 리스트는 각 노드에 실제로 연결된 정보만 저장한다. 인접 행렬보다 메모리는 효율적이지만 특정 두 노드의 연결 여부를 확인하려면 인접 정보를 순차적으로 살펴봐야 한다.\n4. DFS는 한 경로를 가능한 한 깊게 탐색한 후 되돌아가 다른 경로를 탐색하며, 스택 구조를 기반으로 한다.\n5. 방문 처리는 이미 처리한 노드가 다시 삽입되거나 탐색되지 않게 하며 각 노드를 한 번씩 처리하게 한다.\n6. 재귀 DFS는 현재 노드를 방문 처리한 뒤 현재 노드의 미방문 인접 노드마다 DFS를 재귀 호출한다.\n7. 인접 노드의 처리 순서는 DFS 탐색 순서에 영향을 준다. 문제에서 작은 번호 우선 등의 조건이 있으면 인접 정보도 그 순서에 맞춰 처리한다.\n8. BFS는 시작점에서 가까운 노드부터 탐색하며 선입선출 큐를 기반으로 한다.\n9. BFS는 시작점을 큐에 넣어 방문 처리하고, 큐에서 꺼낸 노드의 미방문 인접 노드를 모두 큐에 넣는 과정을 반복한다.\n10. BFS에서는 미방문 노드를 큐에 삽입하는 시점에 즉시 방문 처리하여 같은 노드의 중복 삽입을 막는다.\n11. 파이썬 BFS는 collections.deque의 append()와 popleft()를 이용해 구현한다.\n12. DFS는 깊게 연결된 영역 전체를 방문하는 데 적합하고, BFS는 가까운 노드부터 처리하거나 동일 비용 간선의 최단 거리를 구하는 데 적합하다.\n13. 2차원 배열의 각 좌표를 노드로 보고, 이동 가능한 좌표 사이를 간선으로 보면 격자 탐색 문제를 그래프로 모델링할 수 있다. 자료의 그림은 3×3 배열의 각 좌표를 원으로 바꾸고 상하좌우 이웃을 선으로 연결해 이 대응 관계를 보여준다.\n14. 격자 탐색은 상하좌우 방향을 생성하고, 새 좌표가 범위 안에 있으며 이동 가능한지를 검사한 후 방문하는 공통 절차를 사용한다.\n15. ‘음료수 얼려 먹기’는 상하좌우로 연결된 값 0의 묶음 하나를 하나의 연결 요소로 보고 그 개수를 세는 문제이다. 그림에서는 연결된 0들을 같은 영역으로 묶어 세 개의 묶음을 표현한다.\n16. 연결 요소 DFS는 범위를 벗어나거나 유효하지 않은 칸이면 종료하고, 미방문 0이면 1로 바꾼 뒤 네 방향을 재귀 탐색한다.\n17. 전체 격자를 순회하면서 dfs(i, j)가 새로운 연결 영역을 방문해 True를 반환할 때마다 결과를 1 증가시키면 연결 요소의 개수를 얻는다.\n18. 동일한 이동 비용을 가진 그래프에서 BFS는 시작점과 가까운 칸부터 탐색하므로 어떤 칸에 처음 도달했을 때의 거리가 최단 거리이다.\n19. 미로에서 이동 가능한 칸을 처음 방문하면 graph[nx][ny] = graph[x][y] + 1로 갱신하여 최단 거리 정보를 기록한다. 그림은 시작값 1에서 경로를 따라 2, 3, 4, 5로 증가하는 모습을 보여준다.\n20. 미로 BFS는 좌표를 큐에서 꺼내 네 방향을 검사하고, 범위 밖과 벽을 제외한 처음 방문 칸에 거리를 기록한 뒤 큐에 삽입한다.\n21. ‘미로 탈출’의 거리에는 시작 칸과 마지막 칸이 모두 포함되며, 최종 답은 갱신된 도착 칸 graph[n-1][m-1]의 값이다.",
+      "primaryKnowledgeType": "problem_solving_pattern",
+      "learningUnits": [
+        {
+          "id": "LU01",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 1,
+          "sourceRange": "DFS 도입부의 그래프 기본 구조 설명",
+          "sourceText": "그래프는 노드(Node)와 간선(Edge)으로 표현되며 이때 노드를 정점(Vertex)이라고도 말한다. 그래프 탐색이란 하나의 노드를 시작으로 다수의 노드를 방문하는 것을 말한다. 또한 두 노드가 간선으로 연결되어 있다면 ‘두 노드는 인접하다(Adjacent)’라고 표현한다.",
+          "knowledgeType": "vocabulary",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "intent": "DFS와 BFS가 탐색하는 그래프의 기본 구성 요소와 용어를 정의한다.",
+          "rationale": "노드·정점·간선·인접 관계는 이후 그래프 표현과 탐색 절차를 이해하기 위한 최소 기초 용어이므로 하나의 독립 단위로 선정했다."
+        },
+        {
+          "id": "LU02",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 2,
+          "sourceRange": "인접 행렬 방식 설명과 5-6.py 예제",
+          "sourceText": "인접 행렬(Adjacency Matrix) 방식은 2차원 배열에 각 노드가 연결된 형태를 기록하는 방식이다. 연결이 되어 있지 않은 노드끼리는 무한(Infinity)의 비용이라고 작성한다. 실제 코드에서는 논리적으로 정답이 될 수 없는 큰 값으로 초기화하는 경우가 많다.",
+          "knowledgeType": "concept",
+          "fixedPart": "graph[u][v]에 노드 u와 v 사이의 연결 여부 또는 비용을 저장한다.",
+          "variableSlots": [
+            {
+              "name": "u, v",
+              "example": "노드 1과 노드 7"
+            },
+            {
+              "name": "미연결 표시값",
+              "example": "INF와 같은 충분히 큰 값"
+            }
+          ],
+          "generalizedForm": "인접 행렬 = 모든 노드 쌍의 연결 정보나 비용을 2차원 배열의 해당 위치에 직접 저장하는 표현 방식",
+          "intent": "인접 행렬의 저장 구조와 미연결 상태의 표현 방법을 기억한다.",
+          "rationale": "인접 행렬은 그래프 표현 방식 중 하나이며, 연결 여부를 graph[u][v]로 직접 확인한다는 특성이 다른 표현과 구별되는 핵심이다."
+        },
+        {
+          "id": "LU03",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 3,
+          "sourceRange": "인접 리스트 예제 이후 두 표현 방식의 메모리·속도 비교 문단",
+          "sourceText": "인접 리스트 방식은 연결된 정보만을 저장하기 때문에 메모리를 효율적으로 사용한다. 하지만 이와 같은 속성 때문에 인접 리스트 방식은 인접 행렬 방식에 비해 특정한 두 노드가 연결되어 있는지에 대한 정보를 얻는 속도가 느리다. 인접 리스트 방식에서는 연결된 데이터를 하나씩 확인해야 하기 때문이다.",
+          "knowledgeType": "relationship",
+          "fixedPart": "각 노드의 목록에 실제로 연결된 인접 노드 정보만 저장한다.",
+          "variableSlots": [
+            {
+              "name": "노드",
+              "example": "노드 0"
+            },
+            {
+              "name": "인접 정보",
+              "example": "(1, 7), (2, 5)"
+            }
+          ],
+          "generalizedForm": "인접 리스트는 실제 간선만 저장하여 메모리를 절약하지만, 특정 노드 쌍의 연결 여부는 해당 노드의 인접 목록을 탐색해 확인한다.",
+          "intent": "인접 리스트와 인접 행렬을 메모리 사용과 연결 여부 확인 방식으로 비교한다.",
+          "rationale": "두 표현 방식의 선택에 직접 영향을 주는 핵심 관계이며, 탐색에서 인접 리스트가 자연스럽게 사용되는 이유를 설명하게 한다."
+        },
+        {
+          "id": "LU04",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 4,
+          "sourceRange": "DFS 정의와 스택 기반 동작 과정 도입부",
+          "sourceText": "DFS는 특정한 경로로 탐색하다가 특정한 상황에서 최대한 깊숙이 들어가서 노드를 방문한 후, 다시 돌아가 다른 경로로 탐색하는 알고리즘이다. DFS는 스택 자료구조를 이용한다.",
+          "knowledgeType": "concept",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "intent": "DFS의 깊이 우선 탐색과 되돌아감의 원리를 스택 구조와 연결한다.",
+          "rationale": "DFS를 단순히 재귀 코드로 외우지 않고 한 경로를 깊게 탐색한 뒤 되돌아온다는 본질을 기억하기 위한 핵심 개념이다."
+        },
+        {
+          "id": "LU05",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 4,
+          "sourceRange": "DFS 동작 과정 아래 방문 처리 TIP",
+          "sourceText": "‘방문 처리’는 스택에 한 번 삽입되어 처리된 노드가 다시 삽입되지 않게 체크하는 것을 의미한다. 방문 처리를 함으로써 각 노드를 한 번씩만 처리할 수 있다.",
+          "knowledgeType": "concept",
+          "fixedPart": "노드를 탐색 대상으로 받아들일 때 방문 상태를 기록하고, 이미 방문한 노드는 다시 처리하지 않는다.",
+          "variableSlots": [
+            {
+              "name": "방문 상태 저장소",
+              "example": "visited 리스트"
+            },
+            {
+              "name": "방문 표시값",
+              "example": "True"
+            }
+          ],
+          "generalizedForm": "탐색의 방문 처리 = 이미 발견한 노드의 중복 삽입·중복 처리를 차단하는 상태 기록",
+          "intent": "그래프의 순환이나 여러 경로로 인한 중복 탐색을 방지한다.",
+          "rationale": "방문 처리는 DFS와 BFS 구현의 정확성을 좌우하는 공통 불변식이므로 독립 학습 단위로 분리했다."
+        },
+        {
+          "id": "LU06",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 9,
+          "sourceRange": "5-8.py DFS 예제의 dfs 함수",
+          "sourceText": "def dfs(graph, v, visited):\n    visited[v] = True\n    print(v, end=' ')\n    for i in graph[v]:\n        if not visited[i]:\n            dfs(graph, i, visited)",
+          "knowledgeType": "procedure",
+          "fixedPart": "현재 노드를 방문 처리한 뒤, 현재 노드에 연결된 각 인접 노드가 미방문이면 DFS를 재귀 호출한다.",
+          "variableSlots": [
+            {
+              "name": "graph",
+              "example": "인접 리스트로 표현한 그래프"
+            },
+            {
+              "name": "v",
+              "example": "현재 노드 1"
+            },
+            {
+              "name": "visited",
+              "example": "[False] * 9"
+            }
+          ],
+          "generalizedForm": "DFS(v): 방문 표시(v) → 각 인접 노드 i에 대해 미방문이면 DFS(i)",
+          "intent": "재귀 호출을 이용한 표준 DFS 구현 구조를 재사용할 수 있게 한다.",
+          "rationale": "자료가 제시한 가장 간결한 DFS 구현이며, 그래프 순회와 연결 요소 문제로 그대로 확장되는 절차다."
+        },
+        {
+          "id": "LU07",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 4,
+          "sourceRange": "DFS 예시 그래프 아래 인접 노드 처리 순서 설명과 TIP",
+          "sourceText": "일반적으로 인접한 노드 중에서 방문하지 않은 노드가 여러 개 있으면 번호가 낮은 순서부터 처리한다. DFS의 기능을 생각하면 순서와 상관없이 처리해도 되지만, 코딩 테스트에서는 번호가 낮은 순서부터 처리하도록 명시하는 경우가 종종 있다.",
+          "knowledgeType": "relationship",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "intent": "인접 노드의 나열·처리 순서가 DFS의 구체적인 방문 순서에 영향을 준다는 점을 이해한다.",
+          "rationale": "예시의 특정 방문 순서 자체는 암기 대상이 아니지만, 문제의 우선순위 조건을 인접 리스트 순서에 반영해야 한다는 원칙은 반복 적용된다."
+        },
+        {
+          "id": "LU08",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 10,
+          "sourceRange": "BFS 정의와 큐 자료구조 설명",
+          "sourceText": "BFS(Breadth First Search) 알고리즘은 ‘너비 우선 탐색’이라는 의미를 가진다. 쉽게 말해 가까운 노드부터 탐색하는 알고리즘이다. BFS 구현에서는 선입선출 방식인 큐 자료구조를 이용하는 것이 정석이다.",
+          "knowledgeType": "concept",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "intent": "BFS가 가까운 노드부터 탐색되는 성질을 FIFO 큐와 연결한다.",
+          "rationale": "BFS를 최단 거리 문제에 적용할 수 있는 근거가 되는 핵심 개념이므로 독립 단위로 선정했다."
+        },
+        {
+          "id": "LU09",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 10,
+          "sourceRange": "BFS의 정확한 동작 방식 1~3단계",
+          "sourceText": "탐색 시작 노드를 큐에 삽입하고 방문 처리를 한다. 큐에서 노드를 꺼내 해당 노드의 인접 노드 중에서 방문하지 않은 노드를 모두 큐에 삽입하고 방문 처리를 한다. 이 과정을 더 이상 수행할 수 없을 때까지 반복한다.",
+          "knowledgeType": "procedure",
+          "fixedPart": "시작점 삽입·방문 처리 → 큐에서 노드 꺼내기 → 모든 미방문 인접 노드 삽입·방문 처리 → 큐가 빌 때까지 반복",
+          "variableSlots": [
+            {
+              "name": "시작점",
+              "example": "노드 1"
+            },
+            {
+              "name": "인접 노드 집합",
+              "example": "2, 3, 8"
+            }
+          ],
+          "generalizedForm": "BFS(start): enqueue(start) 및 방문 표시 → while queue: v=dequeue(); 미방문 이웃을 모두 enqueue하고 방문 표시",
+          "intent": "BFS의 표준 큐 처리 절차를 기억하고 구현에 적용한다.",
+          "rationale": "큐에 무엇을 넣고 무엇을 꺼내며 언제 종료하는지를 담은 BFS의 최소 실행 절차다."
+        },
+        {
+          "id": "LU10",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 14,
+          "sourceRange": "5-9.py BFS 예제의 인접 노드 삽입 부분",
+          "sourceText": "for i in graph[v]:\n    if not visited[i]:\n        queue.append(i)\n        visited[i] = True",
+          "knowledgeType": "problem_solving_pattern",
+          "fixedPart": "미방문 인접 노드를 큐에 삽입한 직후 방문 상태를 True로 바꾼다.",
+          "variableSlots": [
+            {
+              "name": "인접 노드",
+              "example": "i"
+            },
+            {
+              "name": "큐",
+              "example": "queue"
+            },
+            {
+              "name": "방문 배열",
+              "example": "visited"
+            }
+          ],
+          "generalizedForm": "if not visited[next]: enqueue(next); visited[next] = True",
+          "intent": "같은 노드가 여러 번 큐에 삽입되는 것을 방지한다.",
+          "rationale": "BFS에서는 큐에서 꺼낼 때가 아니라 큐에 넣을 때 방문 처리하는 것이 중복 삽입 방지의 핵심이므로 별도 단위로 추출했다."
+        },
+        {
+          "id": "LU11",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 14,
+          "sourceRange": "5-9.py BFS 예제의 deque 초기화와 반복문",
+          "sourceText": "from collections import deque\nqueue = deque([start])\nwhile queue:\n    v = queue.popleft()\n    for i in graph[v]:\n        if not visited[i]:\n            queue.append(i)\n            visited[i] = True",
+          "knowledgeType": "procedure",
+          "fixedPart": "collections.deque를 생성하고 append()로 뒤에 삽입하며 popleft()로 앞에서 제거한다.",
+          "variableSlots": [
+            {
+              "name": "초기 원소",
+              "example": "start"
+            },
+            {
+              "name": "큐 원소",
+              "example": "노드 번호 또는 좌표 튜플"
+            }
+          ],
+          "generalizedForm": "queue = deque([start]); while queue: current = queue.popleft(); 필요 대상을 queue.append(next)",
+          "intent": "파이썬에서 FIFO 큐를 효율적으로 구현하는 표준 코드를 익힌다.",
+          "rationale": "자료가 BFS 구현에 deque 사용을 권장하며, 이후 미로 좌표 탐색에서도 같은 구조가 재사용된다."
+        },
+        {
+          "id": "LU12",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 15,
+          "sourceRange": "DFS와 BFS 구현 비교 표 및 직전 설명",
+          "sourceText": "DFS와 BFS의 구현을 간단히 정리하면 다음 표와 같다. DFS의 동작 원리는 스택이고 구현 방법은 재귀 함수 이용이다. BFS의 동작 원리는 큐이고 구현 방법은 큐 자료구조 이용이다.",
+          "knowledgeType": "relationship",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "intent": "DFS와 BFS의 탐색 방향, 기반 자료구조 및 대표 용도를 구분한다.",
+          "rationale": "알고리즘 선택을 위해 DFS는 깊은 탐색·연결 영역, BFS는 가까운 순서·최단 거리라는 차이를 구조적으로 비교할 필요가 있다."
+        },
+        {
+          "id": "LU13",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 15,
+          "sourceRange": "1차원·2차원 배열을 그래프로 보는 설명과 3×3 좌표 그림",
+          "sourceText": "1차원 배열이나 2차원 배열 또한 그래프 형태로 생각하면 수월하게 문제를 풀 수 있다. 게임 맵이 3×3 형태의 2차원 배열이고 각 데이터를 좌표라고 생각해보자. 이때 각 좌표를 상하좌우로만 이동할 수 있다면 모든 좌표의 형태를 그래프의 형태로 바꿔서 생각할 수 있다.",
+          "knowledgeType": "relationship",
+          "fixedPart": "격자의 각 좌표를 노드로 보고, 조건에 따라 이동 가능한 두 좌표 사이를 간선으로 본다.",
+          "variableSlots": [
+            {
+              "name": "격자 크기",
+              "example": "3×3"
+            },
+            {
+              "name": "이동 규칙",
+              "example": "상하좌우 이동"
+            },
+            {
+              "name": "이동 가능 조건",
+              "example": "값이 0인 칸끼리 연결"
+            }
+          ],
+          "generalizedForm": "격자 문제 → 칸은 노드, 허용된 이동은 간선인 그래프 문제로 변환",
+          "intent": "명시적인 그래프 그림이 없는 2차원 배열 문제를 그래프 탐색 문제로 환원한다.",
+          "rationale": "코딩 테스트에서는 그래프 탐색이 격자 형태로 자주 제시되므로 문제 모델링 능력을 위한 핵심 관계다."
+        },
+        {
+          "id": "LU14",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 21,
+          "sourceRange": "5-11.py의 네 방향 정의 및 좌표·범위 검사",
+          "sourceText": "dx = [-1, 1, 0, 0]\ndy = [0, 0, -1, 1]\nfor i in range(4):\n    nx = x + dx[i]\n    ny = y + dy[i]\n    if nx < 0 or ny < 0 or nx >= n or ny >= m:\n        continue",
+          "knowledgeType": "problem_solving_pattern",
+          "fixedPart": "네 방향 변화량으로 다음 좌표를 만들고, 0 ≤ nx < n 및 0 ≤ ny < m인지 검사한다.",
+          "variableSlots": [
+            {
+              "name": "현재 좌표",
+              "example": "(x, y)"
+            },
+            {
+              "name": "격자 크기",
+              "example": "n행 m열"
+            },
+            {
+              "name": "방향 집합",
+              "example": "상, 하, 좌, 우"
+            }
+          ],
+          "generalizedForm": "각 방향 d에 대해 next = current + delta[d]; next가 격자 범위 밖이면 제외한다.",
+          "intent": "2차원 격자 DFS/BFS에 공통으로 사용되는 이웃 생성과 범위 검사를 익힌다.",
+          "rationale": "연결 요소와 미로 최단 거리 풀이 모두에 반복되는 재사용 가능한 격자 탐색 패턴이다."
+        },
+        {
+          "id": "LU15",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 17,
+          "sourceRange": "음료수 얼려 먹기 문제 해설의 그래프 모델링 문단",
+          "sourceText": "이 문제는 DFS로 해결할 수 있다. 얼음을 얼릴 수 있는 공간이 상, 하, 좌, 우로 연결되어 있다고 표현할 수 있으므로 그래프 형태로 모델링할 수 있다. ‘0’인 값이 상, 하, 좌, 우로 연결되어 있는 노드를 묶으면 세 묶음이 나올 것이다.",
+          "knowledgeType": "problem_solving_pattern",
+          "fixedPart": "탐색 가능한 같은 값의 칸들이 상하좌우로 연결된 하나의 묶음을 하나의 연결 요소로 본다.",
+          "variableSlots": [
+            {
+              "name": "탐색 가능한 값",
+              "example": "0"
+            },
+            {
+              "name": "연결 기준",
+              "example": "상하좌우"
+            },
+            {
+              "name": "구할 값",
+              "example": "연결 요소의 개수"
+            }
+          ],
+          "generalizedForm": "격자에서 조건을 만족하며 서로 도달 가능한 칸들의 최대 묶음 수를 연결 요소 탐색으로 계산한다.",
+          "intent": "아이스크림 개수 문제를 값 0으로 이루어진 연결 요소 개수 문제로 변환한다.",
+          "rationale": "섬·단지·그림 개수 등 여러 문제에 재사용되는 대표적인 연결 요소 모델링이므로 선정했다."
+        },
+        {
+          "id": "LU16",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 18,
+          "sourceRange": "5-10.py의 dfs 함수 전체",
+          "sourceText": "def dfs(x, y):\n    if x <= -1 or x >= n or y <= -1 or y >= m:\n        return False\n    if graph[x][y] == 0:\n        graph[x][y] = 1\n        dfs(x - 1, y)\n        dfs(x, y - 1)\n        dfs(x + 1, y)\n        dfs(x, y + 1)\n        return True\n    return False",
+          "knowledgeType": "procedure",
+          "fixedPart": "범위 밖이면 실패하고, 현재 칸이 미방문 유효 칸이면 방문 표시한 뒤 네 방향을 모두 탐색하고 성공을 반환한다.",
+          "variableSlots": [
+            {
+              "name": "유효 칸 조건",
+              "example": "graph[x][y] == 0"
+            },
+            {
+              "name": "방문 표시",
+              "example": "graph[x][y] = 1"
+            },
+            {
+              "name": "방향",
+              "example": "상하좌우"
+            }
+          ],
+          "generalizedForm": "flood_fill(cell): 범위·유효성 검사 → 방문 표시 → 모든 인접 칸 재귀 탐색 → 새 영역을 시작했다면 성공 반환",
+          "intent": "한 시작점과 연결된 전체 영역을 DFS로 방문 처리한다.",
+          "rationale": "연결 요소 하나를 완전히 소거하거나 방문 처리하는 핵심 DFS 절차이며, 원본 격자를 방문 배열로 겸용하는 방식도 포함한다."
+        },
+        {
+          "id": "LU17",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 18,
+          "sourceRange": "5-10.py의 전체 좌표 순회와 result 증가 부분",
+          "sourceText": "result = 0\nfor i in range(n):\n    for j in range(m):\n        if dfs(i, j) == True:\n            result += 1\nprint(result)",
+          "knowledgeType": "problem_solving_pattern",
+          "fixedPart": "모든 좌표를 순회하고, 현재 좌표에서 새 연결 영역 탐색이 시작된 경우에만 카운트를 1 증가시킨다.",
+          "variableSlots": [
+            {
+              "name": "탐색 함수",
+              "example": "dfs(i, j)"
+            },
+            {
+              "name": "결과 변수",
+              "example": "result"
+            },
+            {
+              "name": "새 영역 판정값",
+              "example": "True"
+            }
+          ],
+          "generalizedForm": "count = 0; 각 노드에 대해 아직 방문하지 않은 유효 노드라면 전체 연결 요소를 탐색하고 count += 1",
+          "intent": "연결 요소 각각을 정확히 한 번 세는 외부 순회 불변식을 익힌다.",
+          "rationale": "단순한 DFS 함수와 ‘영역의 개수’를 연결하는 결정적 패턴이므로 연결 요소 탐색과 분리해 추출했다."
+        },
+        {
+          "id": "LU18",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 19,
+          "sourceRange": "미로 탈출 문제 해설 첫 문단",
+          "sourceText": "이 문제는 BFS를 이용했을 때 매우 효과적으로 해결할 수 있다. BFS는 시작 지점에서 가까운 노드부터 차례대로 그래프의 모든 노드를 탐색하기 때문이다. 그러므로 (1, 1) 지점에서부터 BFS를 수행하여 모든 노드의 값을 거리 정보로 넣으면 된다.",
+          "knowledgeType": "relationship",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "intent": "이동 비용이 동일한 미로에서 BFS를 최단 거리 알고리즘으로 선택하는 이유를 이해한다.",
+          "rationale": "가까운 노드부터 처리한다는 BFS의 성질과 무가중치 최단 거리의 정확성을 연결하는 핵심 근거다."
+        },
+        {
+          "id": "LU19",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 21,
+          "sourceRange": "5-11.py의 처음 방문한 칸 최단 거리 기록 부분",
+          "sourceText": "if graph[nx][ny] == 1:\n    graph[nx][ny] = graph[x][y] + 1\n    queue.append((nx, ny))",
+          "knowledgeType": "problem_solving_pattern",
+          "fixedPart": "처음 방문하는 이동 가능 칸에 현재 칸의 거리보다 1 큰 값을 기록하고 큐에 삽입한다.",
+          "variableSlots": [
+            {
+              "name": "현재 칸",
+              "example": "(x, y)"
+            },
+            {
+              "name": "다음 칸",
+              "example": "(nx, ny)"
+            },
+            {
+              "name": "한 번의 이동 비용",
+              "example": "1"
+            }
+          ],
+          "generalizedForm": "if next가 미방문이고 이동 가능: distance[next] = distance[current] + 1; enqueue(next)",
+          "intent": "BFS가 진행되는 동안 각 칸의 최단 거리를 기록한다.",
+          "rationale": "무가중치 격자 최단 거리에서 가장 재사용성이 높은 거리 갱신 불변식이다."
+        },
+        {
+          "id": "LU20",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 21,
+          "sourceRange": "5-11.py BFS 함수의 큐 반복과 네 방향 검사",
+          "sourceText": "queue = deque()\nqueue.append((x, y))\nwhile queue:\n    x, y = queue.popleft()\n    for i in range(4):\n        nx = x + dx[i]\n        ny = y + dy[i]\n        if nx < 0 or ny < 0 or nx >= n or ny >= m:\n            continue\n        if graph[nx][ny] == 0:\n            continue\n        if graph[nx][ny] == 1:\n            graph[nx][ny] = graph[x][y] + 1\n            queue.append((nx, ny))",
+          "knowledgeType": "procedure",
+          "fixedPart": "시작 좌표를 큐에 넣고, 큐에서 좌표를 꺼낼 때마다 네 방향의 범위·벽·첫 방문 여부를 검사하여 유효한 다음 좌표의 거리를 갱신하고 큐에 넣는다.",
+          "variableSlots": [
+            {
+              "name": "시작 좌표",
+              "example": "(0, 0)"
+            },
+            {
+              "name": "벽 표시",
+              "example": "0"
+            },
+            {
+              "name": "미방문 이동 가능 표시",
+              "example": "1"
+            },
+            {
+              "name": "도착 좌표",
+              "example": "(n-1, m-1)"
+            }
+          ],
+          "generalizedForm": "격자 BFS 최단 거리 = 좌표 큐 초기화 → dequeue → 이웃 생성 → 범위·장애물 제외 → 미방문 이웃 거리 갱신·enqueue → 큐가 빌 때까지 반복",
+          "intent": "미로의 최소 이동 칸 수를 계산하는 완전한 BFS 구현 골격을 익힌다.",
+          "rationale": "큐 처리, 좌표 이동, 예외 조건 및 거리 갱신을 하나로 결합한 대표적인 격자 최단 거리 절차다."
+        },
+        {
+          "id": "LU21",
+          "sourceId": "05 DFS BFS.pdf",
+          "sourcePage": 19,
+          "sourceRange": "미로 탈출 문제의 거리 정의 및 출력 조건",
+          "sourceText": "동빈이가 탈출하기 위해 움직여야 하는 최소 칸의 개수를 구하시오. 칸을 셀 때는 시작 칸과 마지막 칸을 모두 포함해서 계산한다.",
+          "knowledgeType": "fact",
+          "fixedPart": "시작 칸의 거리를 1로 두고, BFS 종료 후 도착 칸의 거리 값을 반환한다.",
+          "variableSlots": [
+            {
+              "name": "시작 칸",
+              "example": "(0, 0)"
+            },
+            {
+              "name": "도착 칸",
+              "example": "(n-1, m-1)"
+            },
+            {
+              "name": "반환값",
+              "example": "graph[n-1][m-1]"
+            }
+          ],
+          "generalizedForm": "시작점과 도착점을 포함해 칸 수를 세는 문제에서는 distance[start] = 1로 초기화하고 distance[target]을 답으로 사용한다.",
+          "intent": "간선 이동 횟수와 방문한 칸 수의 차이를 구분하고 문제의 거리 정의에 맞는 값을 반환한다.",
+          "rationale": "이 문제는 시작과 마지막 칸을 모두 포함하므로 시작 거리를 1로 설정해야 하며, 이를 놓치면 답이 1만큼 달라질 수 있어 독립적으로 기억할 가치가 있다."
+        }
+      ]
+    },
+    "organizedMaterial": {
+      "title": "05 DFS BFS",
+      "sections": [
+        {
+          "heading": "DFS와 BFS가 탐색하는 그래프의 기본 구성 요소와 용어를 정의한다.",
+          "content": "그래프는 노드(Node)와 간선(Edge)으로 표현되며 이때 노드를 정점(Vertex)이라고도 말한다. 그래프 탐색이란 하나의 노드를 시작으로 다수의 노드를 방문하는 것을 말한다. 또한 두 노드가 간선으로 연결되어 있다면 ‘두 노드는 인접하다(Adjacent)’라고 표현한다.",
+          "learningUnitIds": [
+            "LU01"
+          ]
+        },
+        {
+          "heading": "인접 행렬의 저장 구조와 미연결 상태의 표현 방법을 기억한다.",
+          "content": "인접 행렬 = 모든 노드 쌍의 연결 정보나 비용을 2차원 배열의 해당 위치에 직접 저장하는 표현 방식",
+          "learningUnitIds": [
+            "LU02"
+          ]
+        },
+        {
+          "heading": "인접 리스트와 인접 행렬을 메모리 사용과 연결 여부 확인 방식으로 비교한다.",
+          "content": "인접 리스트는 실제 간선만 저장하여 메모리를 절약하지만, 특정 노드 쌍의 연결 여부는 해당 노드의 인접 목록을 탐색해 확인한다.",
+          "learningUnitIds": [
+            "LU03"
+          ]
+        },
+        {
+          "heading": "DFS의 깊이 우선 탐색과 되돌아감의 원리를 스택 구조와 연결한다.",
+          "content": "DFS는 특정한 경로로 탐색하다가 특정한 상황에서 최대한 깊숙이 들어가서 노드를 방문한 후, 다시 돌아가 다른 경로로 탐색하는 알고리즘이다. DFS는 스택 자료구조를 이용한다.",
+          "learningUnitIds": [
+            "LU04"
+          ]
+        },
+        {
+          "heading": "그래프의 순환이나 여러 경로로 인한 중복 탐색을 방지한다.",
+          "content": "탐색의 방문 처리 = 이미 발견한 노드의 중복 삽입·중복 처리를 차단하는 상태 기록",
+          "learningUnitIds": [
+            "LU05"
+          ]
+        },
+        {
+          "heading": "재귀 호출을 이용한 표준 DFS 구현 구조를 재사용할 수 있게 한다.",
+          "content": "DFS(v): 방문 표시(v) → 각 인접 노드 i에 대해 미방문이면 DFS(i)",
+          "learningUnitIds": [
+            "LU06"
+          ]
+        },
+        {
+          "heading": "인접 노드의 나열·처리 순서가 DFS의 구체적인 방문 순서에 영향을 준다는 점을 이해한다.",
+          "content": "일반적으로 인접한 노드 중에서 방문하지 않은 노드가 여러 개 있으면 번호가 낮은 순서부터 처리한다. DFS의 기능을 생각하면 순서와 상관없이 처리해도 되지만, 코딩 테스트에서는 번호가 낮은 순서부터 처리하도록 명시하는 경우가 종종 있다.",
+          "learningUnitIds": [
+            "LU07"
+          ]
+        },
+        {
+          "heading": "BFS가 가까운 노드부터 탐색되는 성질을 FIFO 큐와 연결한다.",
+          "content": "BFS(Breadth First Search) 알고리즘은 ‘너비 우선 탐색’이라는 의미를 가진다. 쉽게 말해 가까운 노드부터 탐색하는 알고리즘이다. BFS 구현에서는 선입선출 방식인 큐 자료구조를 이용하는 것이 정석이다.",
+          "learningUnitIds": [
+            "LU08"
+          ]
+        },
+        {
+          "heading": "BFS의 표준 큐 처리 절차를 기억하고 구현에 적용한다.",
+          "content": "BFS(start): enqueue(start) 및 방문 표시 → while queue: v=dequeue(); 미방문 이웃을 모두 enqueue하고 방문 표시",
+          "learningUnitIds": [
+            "LU09"
+          ]
+        },
+        {
+          "heading": "같은 노드가 여러 번 큐에 삽입되는 것을 방지한다.",
+          "content": "if not visited[next]: enqueue(next); visited[next] = True",
+          "learningUnitIds": [
+            "LU10"
+          ]
+        },
+        {
+          "heading": "파이썬에서 FIFO 큐를 효율적으로 구현하는 표준 코드를 익힌다.",
+          "content": "queue = deque([start]); while queue: current = queue.popleft(); 필요 대상을 queue.append(next)",
+          "learningUnitIds": [
+            "LU11"
+          ]
+        },
+        {
+          "heading": "DFS와 BFS의 탐색 방향, 기반 자료구조 및 대표 용도를 구분한다.",
+          "content": "DFS와 BFS의 구현을 간단히 정리하면 다음 표와 같다. DFS의 동작 원리는 스택이고 구현 방법은 재귀 함수 이용이다. BFS의 동작 원리는 큐이고 구현 방법은 큐 자료구조 이용이다.",
+          "learningUnitIds": [
+            "LU12"
+          ]
+        },
+        {
+          "heading": "명시적인 그래프 그림이 없는 2차원 배열 문제를 그래프 탐색 문제로 환원한다.",
+          "content": "격자 문제 → 칸은 노드, 허용된 이동은 간선인 그래프 문제로 변환",
+          "learningUnitIds": [
+            "LU13"
+          ]
+        },
+        {
+          "heading": "2차원 격자 DFS/BFS에 공통으로 사용되는 이웃 생성과 범위 검사를 익힌다.",
+          "content": "각 방향 d에 대해 next = current + delta[d]; next가 격자 범위 밖이면 제외한다.",
+          "learningUnitIds": [
+            "LU14"
+          ]
+        },
+        {
+          "heading": "아이스크림 개수 문제를 값 0으로 이루어진 연결 요소 개수 문제로 변환한다.",
+          "content": "격자에서 조건을 만족하며 서로 도달 가능한 칸들의 최대 묶음 수를 연결 요소 탐색으로 계산한다.",
+          "learningUnitIds": [
+            "LU15"
+          ]
+        },
+        {
+          "heading": "한 시작점과 연결된 전체 영역을 DFS로 방문 처리한다.",
+          "content": "flood_fill(cell): 범위·유효성 검사 → 방문 표시 → 모든 인접 칸 재귀 탐색 → 새 영역을 시작했다면 성공 반환",
+          "learningUnitIds": [
+            "LU16"
+          ]
+        },
+        {
+          "heading": "연결 요소 각각을 정확히 한 번 세는 외부 순회 불변식을 익힌다.",
+          "content": "count = 0; 각 노드에 대해 아직 방문하지 않은 유효 노드라면 전체 연결 요소를 탐색하고 count += 1",
+          "learningUnitIds": [
+            "LU17"
+          ]
+        },
+        {
+          "heading": "이동 비용이 동일한 미로에서 BFS를 최단 거리 알고리즘으로 선택하는 이유를 이해한다.",
+          "content": "이 문제는 BFS를 이용했을 때 매우 효과적으로 해결할 수 있다. BFS는 시작 지점에서 가까운 노드부터 차례대로 그래프의 모든 노드를 탐색하기 때문이다. 그러므로 (1, 1) 지점에서부터 BFS를 수행하여 모든 노드의 값을 거리 정보로 넣으면 된다.",
+          "learningUnitIds": [
+            "LU18"
+          ]
+        },
+        {
+          "heading": "BFS가 진행되는 동안 각 칸의 최단 거리를 기록한다.",
+          "content": "if next가 미방문이고 이동 가능: distance[next] = distance[current] + 1; enqueue(next)",
+          "learningUnitIds": [
+            "LU19"
+          ]
+        },
+        {
+          "heading": "미로의 최소 이동 칸 수를 계산하는 완전한 BFS 구현 골격을 익힌다.",
+          "content": "격자 BFS 최단 거리 = 좌표 큐 초기화 → dequeue → 이웃 생성 → 범위·장애물 제외 → 미방문 이웃 거리 갱신·enqueue → 큐가 빌 때까지 반복",
+          "learningUnitIds": [
+            "LU20"
+          ]
+        },
+        {
+          "heading": "간선 이동 횟수와 방문한 칸 수의 차이를 구분하고 문제의 거리 정의에 맞는 값을 반환한다.",
+          "content": "시작점과 도착점을 포함해 칸 수를 세는 문제에서는 distance[start] = 1로 초기화하고 distance[target]을 답으로 사용한다.",
+          "learningUnitIds": [
+            "LU21"
+          ]
+        }
+      ]
+    },
+    "cards": []
+  }
+}

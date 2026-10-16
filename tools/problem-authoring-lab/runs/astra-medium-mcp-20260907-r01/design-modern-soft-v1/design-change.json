@@ -1,0 +1,7 @@
+{
+  "artifactType": "renderer-only-comparison",
+  "sourceDocument": "tools/problem-authoring-lab/runs/astra-medium-mcp-20260907-r01/iteration-0/document.json",
+  "documentSha256": "797c12138979d8b0497e34af579286676482da574695dfc160db3b21a52ae4b5",
+  "contentChanged": false,
+  "rendererRevision": "modern-soft-v1"
+}

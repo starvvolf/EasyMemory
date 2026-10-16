@@ -1,0 +1,123 @@
+{
+  "question": "전체 핵심 범위에 적용할 카드 구조를 고르세요. 각 선택지는 카드 앞면의 단서(Cue)를 보고 카드 뒷면의 지식(Target)을 직접 재생산하는 방식입니다.",
+  "recommendedOptionId": "option-2",
+  "options": [
+    {
+      "id": "option-1",
+      "title": "개념·상황 단서 → 자료구조·절차·적용 규칙 인출",
+      "cue": "알고리즘명, 그래프 표현명, 또는 격자 탐색 상황을 본다.",
+      "target": "알맞은 자료구조, 방문 처리 규칙, 탐색 절차, 또는 문제 해결 규칙을 말하거나 쓴다.",
+      "unit": "핵심 LearningUnit",
+      "instruction": "각 LearningUnit에서 알고리즘명·표현 방식·문제 상황을 앞면 단서로 제시한다. 뒷면에는 그 단서에 대응하는 자료구조, 핵심 절차의 순서, 방문 처리 조건, 격자 모델링 규칙, 또는 알고리즘 선택과 거리 갱신 규칙을 재생산하도록 작성한다. 단순 정의보다 조건과 행동 순서가 포함된 완결된 답을 우선하며, 한 카드에는 하나의 명확한 인출 대상을 둔다.",
+      "mode": "flashcard",
+      "variants": [
+        {
+          "id": "option-1-template",
+          "label": "템플릿 예시",
+          "description": "일반적인 탐색 상황을 보고 필요한 절차를 인출한다.",
+          "slotMode": "template",
+          "exampleSource": "source",
+          "preservePlaceholders": true,
+          "sample": {
+            "title": "탐색 절차 인출",
+            "cue": "[탐색 알고리즘]에서 시작 노드와 미방문 인접 노드를 처리하는 순서",
+            "target": "시작 노드를 [자료구조]에 삽입하고 방문 처리한다. [자료구조]에서 노드를 처리하며 미방문 인접 노드를 [삽입 방식]으로 넣고 방문 처리한다. 더 이상 처리할 노드가 없을 때까지 반복한다.",
+            "supportingInfo": "절차의 순서와 방문 처리 시점을 함께 말한다."
+          }
+        },
+        {
+          "id": "option-1-filled",
+          "label": "완성 예시",
+          "description": "미로의 최소 이동 칸 수를 구하는 BFS 규칙을 인출한다.",
+          "slotMode": "filled_example",
+          "exampleSource": "generated",
+          "preservePlaceholders": false,
+          "sample": {
+            "title": "미로 BFS 규칙",
+            "cue": "상하좌우로 이동하는 미로에서 시작 칸부터 출구까지의 최소 이동 칸 수를 구하는 방법",
+            "target": "시작 칸을 큐에 넣는다. 큐에서 꺼낸 칸의 네 방향을 확인하고, 범위 안의 벽이 아닌 미방문 칸이면 현재 칸의 거리보다 1 큰 값을 기록해 큐에 넣는다. BFS가 끝난 뒤 출구 칸의 값을 반환한다.",
+            "supportingInfo": "시작 칸과 출구 칸을 포함한 이동 칸 수를 기록한다."
+          }
+        }
+      ]
+    },
+    {
+      "id": "option-2",
+      "title": "코드 빈칸·조건 단서 → DFS/BFS 구현 문장 인출",
+      "cue": "탐색 코드의 일부, 빈칸, 조건문, 자료구조 연산, 또는 격자 갱신식을 본다.",
+      "target": "빠진 코드 조각과 그 직후 수행할 방문·삽입·거리 기록 규칙을 정확히 쓴다.",
+      "unit": "핵심 LearningUnit",
+      "instruction": "각 LearningUnit을 구현 가능한 코드 흐름으로 바꾼다. 앞면에는 Python 코드의 핵심 한두 줄, 빈칸, 조건, 자료구조 상태, 또는 격자 탐색의 갱신 전제를 제시한다. 뒷면에는 빈칸에 들어갈 코드와 이어지는 필수 동작을 재생산하게 한다. DFS는 visited 처리와 재귀 호출, BFS는 deque·popleft·append와 방문 시점, 연결 요소는 0을 1로 바꾸는 처리, 최단 거리는 graph[nx][ny] = graph[x][y] + 1 규칙을 우선 포함한다. 특정 예시의 숫자나 전체 초기화 코드를 암기 대상으로 만들지 않는다.",
+      "mode": "cloze",
+      "variants": [
+        {
+          "id": "option-2-template",
+          "label": "템플릿 예시",
+          "description": "미방문 인접 노드를 발견했을 때의 탐색 코드 흐름을 채운다.",
+          "slotMode": "template",
+          "exampleSource": "source",
+          "preservePlaceholders": true,
+          "sample": {
+            "title": "미방문 인접 노드 처리",
+            "cue": "for [인접 노드] in graph[현재 노드]:\n    if not visited[[인접 노드]]:\n        ____\n        ____",
+            "target": "visited[[인접 노드]] = True\n[자료구조에 인접 노드 삽입 또는 재귀 호출]",
+            "supportingInfo": "중복 삽입을 막기 위해 방문 처리는 새 노드를 처리 대상으로 등록할 때 한다."
+          }
+        },
+        {
+          "id": "option-2-filled",
+          "label": "완성 예시",
+          "description": "BFS에서 새로 발견한 미로 칸의 거리 기록과 큐 삽입을 채운다.",
+          "slotMode": "filled_example",
+          "exampleSource": "generated",
+          "preservePlaceholders": false,
+          "sample": {
+            "title": "BFS 거리 갱신",
+            "cue": "if graph[nx][ny] == 1:\n    ____\n    ____",
+            "target": "graph[nx][ny] = graph[x][y] + 1\nqueue.append((nx, ny))",
+            "supportingInfo": "값이 1인 칸만 처음 방문하는 이동 가능 칸으로 처리한다."
+          }
+        }
+      ]
+    },
+    {
+      "id": "option-3",
+      "title": "입력 그래프·격자 상태 → 탐색 결과와 다음 처리 인출",
+      "cue": "인접 리스트, 작은 격자, 시작점, 방문 상태, 또는 탐색 목적이 주어진 상태를 본다.",
+      "target": "선택할 탐색법, 다음에 방문·삽입할 위치, 연결 영역 수 또는 최단 거리 갱신 결과를 쓴다.",
+      "unit": "핵심 LearningUnit",
+      "instruction": "각 LearningUnit을 작은 실행·적용 문제로 만든다. 앞면에는 정렬된 인접 노드 정보, 일부 방문 상태, 상하좌우 격자, 시작점, 그리고 연결 요소 수 또는 최단 거리라는 목적을 제시한다. 뒷면에는 DFS/BFS 중 선택할 방법, 다음 처리 결과, 또는 최종적으로 세어야 할 값을 직접 산출하게 한다. 탐색 순서는 인접 노드가 여러 개일 때 작은 번호 우선이라는 자료의 조건을 명시한 경우에만 요구한다. 그림의 반복 단계나 원문의 긴 입출력 예시는 사용하지 않는다.",
+      "mode": "flashcard",
+      "variants": [
+        {
+          "id": "option-3-template",
+          "label": "템플릿 예시",
+          "description": "격자의 탐색 목적을 보고 알고리즘과 처리 결과를 산출한다.",
+          "slotMode": "template",
+          "exampleSource": "source",
+          "preservePlaceholders": true,
+          "sample": {
+            "title": "격자 탐색 선택",
+            "cue": "[값]인 칸들이 상·하·좌·우로 연결된 격자에서 [목적]을 구한다.",
+            "target": "[DFS 또는 BFS]를 사용한다. 아직 방문하지 않은 [값] 칸에서 탐색을 시작해 연결된 칸을 모두 방문 처리하고, [결과 갱신 규칙]을 적용한다.",
+            "supportingInfo": "각 칸은 노드, 상하좌우 이동 가능 관계는 간선으로 본다."
+          }
+        },
+        {
+          "id": "option-3-filled",
+          "label": "완성 예시",
+          "description": "0으로 연결된 영역 개수 문제에 DFS를 적용한다.",
+          "slotMode": "filled_example",
+          "exampleSource": "generated",
+          "preservePlaceholders": false,
+          "sample": {
+            "title": "연결된 0 영역 세기",
+            "cue": "0인 칸들이 상·하·좌·우로 연결된 격자에서 연결된 영역의 개수를 구한다.",
+            "target": "DFS를 사용한다. 아직 방문하지 않은 0 칸에서 DFS를 시작해 연결된 모든 0을 1로 바꾸어 방문 처리하고, 새 DFS가 시작될 때마다 결과를 1 증가시킨다.",
+            "supportingInfo": "새 DFS 시작 횟수가 연결된 0 영역의 개수다."
+          }
+        }
+      ]
+    }
+  ]
+}

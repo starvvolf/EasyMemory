@@ -1,0 +1,34 @@
+{
+  "artifactType": "study-forge-run-observations",
+  "artifactVersion": "v0",
+  "runId": "20260812T062928Z__generation-lab-1__exploratory__r01",
+  "counts": {
+    "learningUnits": 13,
+    "generatedCards": 13,
+    "criticCards": 13,
+    "finalCards": 13
+  },
+  "learningUnitCardCoverageBasis": "finalCards",
+  "learningUnitCardCoverage": {
+    "LU01": 1,
+    "LU02": 1,
+    "LU03": 1,
+    "LU04": 1,
+    "LU05": 1,
+    "LU06": 1,
+    "LU07": 1,
+    "LU08": 1,
+    "LU09": 1,
+    "LU10": 1,
+    "LU11": 1,
+    "LU12": 1,
+    "LU13": 1
+  },
+  "zeroCardLearningUnitIds": [],
+  "multipleCardLearningUnitIds": [],
+  "derivation": {
+    "type": "mechanical-from-run-stage-artifacts",
+    "semanticEvaluationPerformed": false
+  },
+  "notes": []
+}

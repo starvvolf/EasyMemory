@@ -1,0 +1,9 @@
+{
+  "artifactType": "study-forge-eval-case",
+  "artifactVersion": "v0",
+  "caseId": "opic-person-description",
+  "title": "OPIc 인물 묘사 패턴",
+  "referencePath": "docs/references/OPIC_PERSON_DESCRIPTION.md",
+  "sourceManifestPath": "eval/cases/opic-person-description/sources/source-manifest.json",
+  "status": "active"
+}

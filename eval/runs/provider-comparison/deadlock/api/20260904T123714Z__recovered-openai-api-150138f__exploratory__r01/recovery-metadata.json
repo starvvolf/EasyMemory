@@ -1,0 +1,69 @@
+{
+  "artifactType": "study-forge-recovered-openai-api-baseline",
+  "recoveryCommit": "150138f73301365b7d07fbfab4b8093c8f4409ca",
+  "comparisonCommit": "115c895df9bc9d279103fc71902855c3a2be27e9",
+  "independentOfCurrentMcpOutput": true,
+  "fixedInput": {
+    "pdfPath": "C:\\Users\\jkh01\\OneDrive\\바탕 화면\\학교\\운영체제시험\\lecture8.pdf",
+    "pdfSha256": "fd8032502b90879df82d4727feb1c45ec8f4e27bbef8aa3d920c0ebd0fbdd954",
+    "scope": "전체 문서",
+    "learningGoal": "이 자료의 핵심 내용을 반복학습 문제로 익힌다.",
+    "runCount": 1
+  },
+  "modelConfiguration": {
+    "default": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "extraction": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "critic": {
+      "enabled": false,
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    }
+  },
+  "startedAt": "2026-09-04T12:37:14.770Z",
+  "completedAt": "2026-09-04T12:40:25.664Z",
+  "wallDurationMs": 190894,
+  "apiSummary": {
+    "callCount": 5,
+    "inputTokens": 90189,
+    "outputTokens": 20418,
+    "totalTokens": 110607,
+    "durationMs": 190523
+  },
+  "candidateComparison": {
+    "parent": "fda889ea29bc8783d290a5836d8f45db9919c07c",
+    "changedFiles": [
+      "A\tscripts/study-forge-mcp-project.test.ts",
+      "A\tscripts/study-forge-mcp.test.ts",
+      "M\tsrc/lib/pipeline/analyze.ts",
+      "M\tsrc/lib/pipeline/generate.ts",
+      "M\tsrc/lib/pipeline/plan.ts",
+      "M\tsrc/lib/types.ts"
+    ],
+    "coreDiff": [
+      "13\t2\tsrc/lib/pipeline/analyze.ts",
+      "21\t9\tsrc/lib/pipeline/generate.ts",
+      "4\t4\tsrc/lib/pipeline/plan.ts"
+    ],
+    "identicalSupportFiles": true
+  },
+  "restoredSourceChecksums": {
+    "src/lib/pipeline/analyze.ts": "18c37af1f3f805597b7fe15d357e9941d4b0dda28b507958248efe6bd7611c23",
+    "src/lib/pipeline/plan.ts": "4281395cf62577b2ff53ed21c16615cd56429144b9015b0dc3198e9417d30d4f",
+    "src/lib/pipeline/recall.ts": "9cb1b83379939eae490c50fb430c66d4a7a22bee38034c32b25fd723ee69d625",
+    "src/lib/pipeline/generate.ts": "4367533107888d65cb193669f3e1d86da1c44f31d00da5c3073c0e3b1aa64d6b",
+    "src/lib/model-config.ts": "355efd9ba3c5636740322669c0f420aac6082f13e505a15bd06bb471b2251473",
+    "src/lib/types.ts": "74ab9c54033eff3a194d76f79759f292bad888eac4eb839b7614b5a19fb62471",
+    "scripts/eval-full-runner.ts": "379fdd05fce9027262ada0b9f8d3dad71e6326159d5bb2ade0a61235f435e27d",
+    "scripts/eval-runner.ts": "f92220306f544caf7f80acb3a16e1eac0a2f07f7fb2f1851ffc1632518a372fa"
+  },
+  "historicalSnapshotEvidence": [
+    "eval/snapshots/2026-08-17-pre-data-structure-shrink/README.md",
+    "eval/snapshots/2026-08-17-card-token-shrink/README.md"
+  ]
+}

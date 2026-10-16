@@ -1,0 +1,139 @@
+{
+  "schemaVersion": "authoring-source-packet-v3",
+  "packetId": "mcp-chatgpt-request-6229f153e7dd736279e90e2f523926c4",
+  "title": "반도체 공학의 이해 · 대표 범위 시험학습",
+  "learningGoal": "자료에서 오래 기억할 핵심을 익히고, 선택한 15~20쪽의 반도체 재료와 전기 전도 개념을 설명·적용한다.",
+  "sourceFileName": "ilovepdf_merged.pdf",
+  "selectedPdfPages": [
+    16,
+    17,
+    18,
+    19,
+    20
+  ],
+  "origin": {
+    "runId": "chatgpt-request-6229f153e7dd736279e90e2f523926c4",
+    "publishedId": null,
+    "sourceRunSha256": "408cf058e4320be37b16704eb04dffec7e328aa713af22990e198e4f6ae97b90",
+    "cardsInputSha256": "2294dc258a3d68544451cfbe321b3b297084f037119dc9c0af1899fb02904af4",
+    "status": "completed-unpublished"
+  },
+  "authoringRequest": {
+    "independentQuestions": 5,
+    "sharedSetQuestions": 0,
+    "revisionLimit": 1,
+    "format": "preserve-confirmed-cards"
+  },
+  "items": [
+    {
+      "learningUnitId": "knowledge-unit-1",
+      "objectiveId": "objective-1",
+      "sourceId": "ilovepdf_merged.pdf",
+      "sourcePage": 16,
+      "sourcePages": [
+        16
+      ],
+      "sourceRange": "반도체의 전도성",
+      "sourceText": "반도체는 전자의 흐름으로 인해 전도체와 부도체의 전기 전도도 크기 사이에 해당하는 전도성을 가지는 물질 (PDF 16쪽).",
+      "target": "전도도 기준으로 반도체를 정의한다.",
+      "successCriteria": [
+        "도체와 부도체 사이의 전도성을 정확히 말한다."
+      ],
+      "knowledgeContent": "반도체는 전기 전도도가 도체와 부도체 사이인 물질이다.",
+      "outlineNodeIds": [
+        "source-1:outline-18"
+      ],
+      "conceptNodeIds": [
+        "concept-002"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-2",
+      "objectiveId": "objective-2",
+      "sourceId": "ilovepdf_merged.pdf",
+      "sourcePage": 17,
+      "sourcePages": [
+        17
+      ],
+      "sourceRange": "전도도와 저항률",
+      "sourceText": "Electrical resistivity: 전기적 저항; Electrical conductivity: 전기 전도도 → 서로 역수 관계; Resistivity: [Ω m]; Conductivity: [S/m] = [Ω m]-1 (PDF 17쪽).",
+      "target": "두 물성의 역수 관계와 단위를 대응한다.",
+      "successCriteria": [
+        "저항률이 커질수록 전도도는 작아짐을 단위와 함께 맞힌다."
+      ],
+      "knowledgeContent": "전기 저항률과 전기 전도도는 서로 역수 관계이며 SI 단위는 각각 Ω m와 S/m이다.",
+      "outlineNodeIds": [
+        "source-1:outline-19"
+      ],
+      "conceptNodeIds": [
+        "concept-003"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-3",
+      "objectiveId": "objective-3",
+      "sourceId": "ilovepdf_merged.pdf",
+      "sourcePage": 18,
+      "sourcePages": [
+        18
+      ],
+      "sourceRange": "옴성·비옴성",
+      "sourceText": "도체는 옴의 법칙을 따른다. 하지만 반도체는 옴의 법칙을 따르지 않는다. 차이가 나는 이유는? 전자 밀도 때문! (PDF 18쪽).",
+      "target": "슬라이드가 제시한 차이와 이유를 설명한다.",
+      "successCriteria": [
+        "도체는 옴성, 반도체는 비옴성이고 전자 밀도와 관련된다는 자료의 설명을 구별한다."
+      ],
+      "knowledgeContent": "강의 슬라이드는 도체의 선형 옴성 거동과 반도체의 비옴성 거동을 대비하고 이유로 전자 밀도를 제시한다.",
+      "outlineNodeIds": [
+        "source-1:outline-20"
+      ],
+      "conceptNodeIds": [
+        "concept-004"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-4",
+      "objectiveId": "objective-4",
+      "sourceId": "ilovepdf_merged.pdf",
+      "sourcePage": 19,
+      "sourcePages": [
+        19
+      ],
+      "sourceRange": "금속의 자유전자",
+      "sourceText": "Free conduction electrons in a crystal; 수많은 자유전자 덕분에 금속은 좋은 전기 전도체! (PDF 19쪽).",
+      "target": "자유전자와 금속의 높은 전도성의 관계를 말한다.",
+      "successCriteria": [
+        "자유전자가 많다는 이유를 포함한다."
+      ],
+      "knowledgeContent": "금속에는 많은 자유전자가 있어서 좋은 전기 전도체가 된다.",
+      "outlineNodeIds": [
+        "source-1:outline-21"
+      ],
+      "conceptNodeIds": [
+        "concept-005"
+      ]
+    },
+    {
+      "learningUnitId": "knowledge-unit-5",
+      "objectiveId": "objective-5",
+      "sourceId": "ilovepdf_merged.pdf",
+      "sourcePage": 20,
+      "sourcePages": [
+        20
+      ],
+      "sourceRange": "금속의 전도도",
+      "sourceText": "σ = neμ; 전자 수(n)가 많을수록, 전자가 빠를수록(μ) 전도도가 높다! (PDF 20쪽).",
+      "target": "두 변수 변화가 전도도에 주는 영향을 판단한다.",
+      "successCriteria": [
+        "n 또는 μ가 증가할 때 σ도 증가한다고 답한다."
+      ],
+      "knowledgeContent": "Drude 모형의 금속 전도도 σ=neμ는 전자 수 밀도 n과 이동도 μ가 클수록 커진다.",
+      "outlineNodeIds": [
+        "source-1:outline-22"
+      ],
+      "conceptNodeIds": [
+        "concept-006"
+      ]
+    }
+  ]
+}

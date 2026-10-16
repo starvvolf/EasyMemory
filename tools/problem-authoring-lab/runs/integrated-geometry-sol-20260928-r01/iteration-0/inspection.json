@@ -1,0 +1,8 @@
+[
+  {
+    "severity": "warning",
+    "code": "plain-matrix",
+    "message": "세미콜론으로 구분한 선지 행렬을 LaTeX로 조판하세요.",
+    "questionId": "question-686aa7b6-dc84-4966-92e3-2450264dd923"
+  }
+]

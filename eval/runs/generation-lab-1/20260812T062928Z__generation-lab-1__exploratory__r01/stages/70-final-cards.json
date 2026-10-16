@@ -1,0 +1,324 @@
+{
+  "artifactType": "study-forge-stage-artifact",
+  "artifactVersion": "v0",
+  "runId": "20260812T062928Z__generation-lab-1__exploratory__r01",
+  "stage": "final-cards",
+  "status": "executed",
+  "sourceRunId": null,
+  "sourceArtifact": null,
+  "capturedAt": "2026-08-12T06:33:16.427Z",
+  "modelConfiguration": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "medium"
+  },
+  "inputRefs": [
+    "stages/60-critic.json"
+  ],
+  "request": null,
+  "response": [
+    {
+      "id": "6bfe5d6c-ede4-4646-9eed-77c62a85dd76",
+      "type": "translation",
+      "front": "인물 묘사 답변의 전개 순서: 배경 설명부터 개인적 평가까지",
+      "back": "배경 설명(이름·나이 등) + 구체적인 설명 → 어떻게 알게 되었는지 → 마무리: 인물에 대한 내 생각",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "답변전략"
+      ],
+      "status": "new",
+      "basis": "- 이름, 나이, 등 배경 설명 + 구체적인 설명\n- 어떻게 알게 되었는지\n- 마무리: 인물에 대한 내 생각",
+      "learningUnitId": "LU01",
+      "strategy": "procedure",
+      "sourceId": "1.pdf",
+      "sourcePage": 1,
+      "sourceRange": "CH.1 인물 묘사 > 1. 답변 전략 > 배경 설명·구체적 설명·알게 된 계기·마무리",
+      "rationale": "인물 묘사 답변을 구성할 때 정보의 배열 순서를 인출해야 하므로 절차 전략을 사용합니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "a7a0522b-cb96-4ff4-9bf4-e12181bc2b01",
+      "type": "translation",
+      "front": "he/she를 주어로 인물 묘사 답변을 할 때의 문법 점검",
+      "back": "주어가 대부분 3인칭 단수이므로 주어와 동사의 수일치를 맞춘다.",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "문법",
+        "답변전략"
+      ],
+      "status": "new",
+      "basis": "주어는 대부분 3인칭 단수: 주어 동사 수일치에 주의하기!",
+      "learningUnitId": "LU02",
+      "strategy": "concept",
+      "sourceId": "1.pdf",
+      "sourcePage": 1,
+      "sourceRange": "CH.1 인물 묘사 > 1. 답변 전략 > 3인칭 단수 및 keyword 주의 사항",
+      "rationale": "인물 묘사 답변에 적용되는 3인칭 단수 주어와 동사의 수일치 원리를 인출하는 카드이므로 개념 전략을 사용합니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": [
+        "계약에서 지정한 핵심 인출과 카드당 하나의 핵심 인출 원칙에 맞게 about·that 뒤 핵심어 확인 내용을 제외하고 3인칭 단수 수일치 규칙에 집중하도록 수정했습니다."
+      ]
+    },
+    {
+      "id": "5a532e91-12a0-4c23-8c64-e6656e006ab9",
+      "type": "translation",
+      "front": "묘사할 인물을 소개하고 이름을 밝힐 때",
+      "back": "I’d like to talk about _____. His/Her name is _____.",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "패턴",
+        "소개"
+      ],
+      "status": "new",
+      "basis": "I’d like to talk about {인물 또는 관계}. {His/Her} name is {이름}.",
+      "learningUnitId": "LU03",
+      "strategy": "production",
+      "sourceId": "1.pdf",
+      "sourcePage": 1,
+      "sourceRange": "CH.1 인물 묘사 > 2. 인물 묘사 PATTERNS > PATTERN #1 및 예문",
+      "rationale": "인물 소개 기능을 보고 빈칸을 보존한 영어 패턴을 직접 산출해야 하므로 생산 전략을 사용합니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "49106dc6-f389-4ec0-b5ca-7647812c0479",
+      "type": "translation",
+      "front": "인물과의 관계 또는 정체, 그리고 대략적인 나이를 말할 때",
+      "back": "He/She is _____ and he/she is about _____ years old.",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "패턴",
+        "관계",
+        "나이"
+      ],
+      "status": "new",
+      "basis": "{He/She} is {관계 또는 정체} and {he/she} is about {나이} years old.",
+      "learningUnitId": "LU04",
+      "strategy": "production",
+      "sourceId": "1.pdf",
+      "sourcePage": 1,
+      "sourceRange": "CH.1 인물 묘사 > 2. 인물 묘사 PATTERNS > PATTERN #2 및 예문",
+      "rationale": "관계·정체와 나이 정보를 영어 문장 틀에 넣어 말하는 생산 과제이므로 생산 전략을 사용합니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "83995cfb-10ea-4f33-8828-a4abcff27d4b",
+      "type": "translation",
+      "front": "인물의 외모나 신체적 특징을 구체적으로 묘사할 때",
+      "back": "To talk about his/her appearance, he/she is _____.",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "패턴",
+        "외모"
+      ],
+      "status": "new",
+      "basis": "To talk about {his/her} appearance, {he/she} is {외모 특징}.",
+      "learningUnitId": "LU05",
+      "strategy": "production",
+      "sourceId": "1.pdf",
+      "sourcePage": 1,
+      "sourceRange": "CH.1 인물 묘사 > 2. 인물 묘사 PATTERNS > PATTERN #3 및 예문",
+      "rationale": "외모 묘사 기능에 맞는 고정 영어 도입부와 빈칸 패턴을 산출해야 하므로 생산 전략을 사용합니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "4991add8-690f-4dd9-969e-16bf914b3d08",
+      "type": "translation",
+      "front": "인물을 특히 좋아하는 구체적인 이유를 말할 때",
+      "back": "I especially like him/her because _____.",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "패턴",
+        "호감이유"
+      ],
+      "status": "new",
+      "basis": "I especially like {him/her} because {호감의 구체적인 이유}.",
+      "learningUnitId": "LU06",
+      "strategy": "production",
+      "sourceId": "1.pdf",
+      "sourcePage": 2,
+      "sourceRange": "CH.1 인물 묘사 > 2. 인물 묘사 PATTERNS > PATTERN #4 및 예문",
+      "rationale": "호감 이유를 제시하는 기능 단서로부터 because를 포함한 영어 패턴을 생성해야 하므로 생산 전략을 사용합니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "c9fba0b7-88b1-4d6f-a0eb-a84e628f5242",
+      "type": "translation",
+      "front": "인물을 처음 알게 된 때 또는 상황을 말할 때",
+      "back": "I first got to know him/her when _____.",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "패턴",
+        "첫만남"
+      ],
+      "status": "new",
+      "basis": "I first got to know {him/her} when {처음 알게 된 때 또는 상황}.",
+      "learningUnitId": "LU07",
+      "strategy": "production",
+      "sourceId": "1.pdf",
+      "sourcePage": 2,
+      "sourceRange": "CH.1 인물 묘사 > 2. 인물 묘사 PATTERNS > PATTERN #5 및 예문",
+      "rationale": "첫 만남의 시점·상황을 나타내는 기능에 맞춰 영어 패턴을 직접 산출해야 하므로 생산 전략을 사용합니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "2f08d980-ad45-4354-b0c1-21254c5cd374",
+      "type": "translation",
+      "front": "첫 만남 이후 형성되거나 변화한 현재 관계를 말할 때",
+      "back": "Since then, he/she has become _____.",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "패턴",
+        "현재관계"
+      ],
+      "status": "new",
+      "basis": "Since then, {he/she} has become {현재 관계 또는 지위}.",
+      "learningUnitId": "LU08",
+      "strategy": "production",
+      "sourceId": "1.pdf",
+      "sourcePage": 2,
+      "sourceRange": "CH.1 인물 묘사 > 2. 인물 묘사 PATTERNS > PATTERN #6 및 예문",
+      "rationale": "과거의 만남 이후 현재 관계를 연결하는 영어 패턴을 기능 단서로부터 생성해야 하므로 생산 전략을 사용합니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "ce3be1e9-2233-46af-8bec-f8653128f828",
+      "type": "translation",
+      "front": "인물에 대한 개인적인 생각이나 종합 평가로 마무리할 때",
+      "back": "I think he/she is _____.",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "패턴",
+        "최종평가"
+      ],
+      "status": "new",
+      "basis": "I think {he/she} is {인물에 대한 최종 평가}.",
+      "learningUnitId": "LU09",
+      "strategy": "production",
+      "sourceId": "1.pdf",
+      "sourcePage": 2,
+      "sourceRange": "CH.1 인물 묘사 > 2. 인물 묘사 PATTERNS > PATTERN #7 및 예문",
+      "rationale": "답변을 최종 평가로 마무리하는 기능에 맞는 영어 패턴을 산출해야 하므로 생산 전략을 사용합니다.",
+      "difficulty": 1,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "3989673b-3ae3-49ab-ba0e-eb05325d6d67",
+      "type": "translation",
+      "front": "학교 동기 또는 이웃을 묘사할 때, 동일한 7단계 틀에 넣을 내용 범주와 첫 만남 정보",
+      "back": "대상 소개·이름 → 관계 또는 정체·나이 → 외모 → 호감 이유 → 첫 만남 상황(학교 첫 수업 또는 이웃의 이사) → 현재 관계 → 최종 평가",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "구조전이",
+        "학교",
+        "이웃"
+      ],
+      "status": "new",
+      "basis": "동일한 7단계 답변 구조가 학교 동기와 이웃에 적용되며, 대상 관계와 첫 만남의 상황이 질문 맥락에 따라 달라집니다.",
+      "learningUnitId": "LU10",
+      "strategy": "application",
+      "sourceId": "1.pdf",
+      "sourcePage": 3,
+      "sourceRange": "CH.1 인물 묘사 > 3. 쉐도잉 스크립트 > 1) 학교 및 2) 동네 및 이웃",
+      "rationale": "학교·이웃이라는 조건에 맞추어 공통 구조를 유지하고 관계 및 첫 만남 정보를 치환해야 하므로 적용 전략을 사용합니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "ca467434-0981-4d48-8398-d961b4cc4305",
+      "type": "translation",
+      "front": "좋아하는 배우 또는 건강한 사람을 묘사할 때, 동일한 7단계 틀에 넣을 내용 범주와 주제별 강조 정보",
+      "back": "대상 소개·이름 → 관계 또는 정체·나이 → 외모 → 호감 이유(능력 또는 태도) → 처음 접한 상황(영화 감상 또는 헬스장 운동) → 현재 관계 또는 지위 → 최종 평가",
+      "tags": [
+        "오픽",
+        "인물묘사",
+        "구조전이",
+        "영화",
+        "건강"
+      ],
+      "status": "new",
+      "basis": "7단계 구조를 유지하면서 질문이 요구하는 능력, 태도, 첫 경험 및 현재 관계를 배우와 건강한 사람 주제에 맞게 선택합니다.",
+      "learningUnitId": "LU11",
+      "strategy": "application",
+      "sourceId": "1.pdf",
+      "sourcePage": 4,
+      "sourceRange": "CH.1 인물 묘사 > 3. 쉐도잉 스크립트 > 3) 영화 및 4) 건강",
+      "rationale": "배우·건강한 사람이라는 주제에 따라 능력, 태도, 첫 경험, 현재 관계를 선택하여 공통 구조에 적용해야 하므로 적용 전략을 사용합니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [
+        "배우 스크립트는 인물을 처음 만난 것이 아니라 영화에서 처음 본 경우이므로, 두 주제를 포괄하도록 ‘첫 만남 상황’을 ‘처음 접한 상황’으로 수정했습니다."
+      ]
+    },
+    {
+      "id": "4f74cf52-0bb5-475d-a151-bd362970cf00",
+      "type": "translation",
+      "front": "쉐도잉의 목적과 따라 할 요소",
+      "back": "전달력(Delivery)을 키우기 위해 원어민의 말투, 전달력, 톤을 따라 한다.",
+      "tags": [
+        "오픽",
+        "쉐도잉",
+        "전달력"
+      ],
+      "status": "new",
+      "basis": "쉐도잉의 목적: 전달력 Delivery를 키우는데 있습니다. 원어민의 말투 / 전달력 / 톤을 따라하시는 방법입니다.",
+      "learningUnitId": "LU12",
+      "strategy": "concept",
+      "sourceId": "1.pdf",
+      "sourcePage": 5,
+      "sourceRange": "CH.1 인물 묘사 > 4. SHADOWING > 1) 쉐도잉의 목적",
+      "rationale": "쉐도잉의 목표와 모방 대상을 이해하고 인출하는 개념 지식이므로 개념 전략을 사용합니다.",
+      "difficulty": 1,
+      "qualityPassed": true,
+      "qualityNotes": []
+    },
+    {
+      "id": "a661c5f9-33d4-4fe7-9067-ad1ffb46fd85",
+      "type": "translation",
+      "front": "쉐도잉에서 음성 지연 시간, 반복 횟수, 동일 스크립트 연습 기간, 하루 집중 분량",
+      "back": "워드 스크립트를 보면서 헤드셋으로 음성을 듣고 약 0.5초 뒤에 따라 한다. 스크립트 하나를 기본 30회 반복하고, 같은 스크립트를 2~3일 동안 연습하며, 하루 2개 스크립트를 정해 쉐도잉한다.",
+      "tags": [
+        "오픽",
+        "쉐도잉",
+        "학습절차",
+        "반복"
+      ],
+      "status": "new",
+      "basis": "음성파일을 틀어놓고 0.5초 뒤에 따라 하시면 됩니다. 기본 30번씩 하셔야 하고, 2-3일 동안 같은 스크립을 하시는 게 효율적입니다. 2개의 스크립을 정해서 쉐도잉하시는 것을 추천드립니다.",
+      "learningUnitId": "LU13",
+      "strategy": "procedure",
+      "sourceId": "1.pdf",
+      "sourcePage": 5,
+      "sourceRange": "CH.1 인물 묘사 > 4. SHADOWING > 2) 하는 방법",
+      "rationale": "쉐도잉을 실행하기 위한 준비 방식, 지연 시간, 반복 기준, 집중 범위를 순서와 수치로 인출해야 하므로 절차 전략을 사용합니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": []
+    }
+  ]
+}

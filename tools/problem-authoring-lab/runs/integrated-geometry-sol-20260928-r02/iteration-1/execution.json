@@ -1,0 +1,18 @@
+{
+  "model": "gpt-6-sol (caller setting; host telemetry unavailable)",
+  "sessionId": "chatgpt-request-789ee8708698831ced8655c04f289698",
+  "usage": {
+    "method": "targeted revision of r02 authoring question; no new generation engine call",
+    "tokenTelemetry": "not-recorded"
+  },
+  "toolCalls": [
+    "load_source_packet",
+    "validate_problem_document",
+    "render_problem_preview",
+    "record_problem_iteration",
+    "apply_problem_patch",
+    "validate_problem_document",
+    "render_problem_preview",
+    "record_problem_iteration"
+  ]
+}
