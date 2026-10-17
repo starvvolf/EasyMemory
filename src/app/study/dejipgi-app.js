@@ -2735,7 +2735,7 @@ const PURPOSES = [
   ["understand", "이해", "왜·어떻게를 설명할 수 있게, 개념과 관계 위주로 적게 골라요."],
   ["all", "통암기", "나온 내용을 빠짐없이 떠올리게 해요. 문제가 많아져요."],
 ];
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[] }; }
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
   const flat = [];
@@ -2800,7 +2800,7 @@ async function startMaterial(){
   const b = S.builder; if (b.busy || !engine || !b.file) return;
   b.busy = true; b.error = ""; b.status = "PDF를 등록하고 문제 만들기를 시작하는 중…"; render();
   try{
-    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages });
+    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
     const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:b.sourceName.replace(/\.pdf$/i, ""), sourceName:b.sourceName,
       pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), createdAt:now(), status:"waiting", message:"" };
     const deck = pendingDeck(rec);
@@ -2972,6 +2972,19 @@ function renderBuilder(){
         h("p", { class:"small muted", text:"여러 개를 고르면 처음부터 끝까지 이어진 범위로 만들어요." })) : null,
       span > 60 ? h("p", { class:"small muted", text:`${span}쪽은 오래 걸려요. 한 주차·한 장씩 나눠 만들면 먼저 끝난 것부터 공부할 수 있어요.` }) : null),
     h("div", { class:"field" }, h("label", { for:"note", text:"3. 메모 (선택)" }), note),
+    engine?.pastExamSources ? h("details", { ontoggle:async(e) => {
+      b.pastExamOpen = e.target.open;
+      if (!e.target.open || b.pastExamSources !== null) return;
+      try { b.pastExamSources = await engine.pastExamSources(); render(); }
+      catch(error) { b.error = error.message; render(); }
+    }, open:b.pastExamOpen ? true : null },
+      h("summary", { text:`기출 함께 쓰기${b.pastExamSourceIds.length ? ` · ${b.pastExamSourceIds.length}개` : " (선택)"}` }),
+      h("p", { class:"small muted", text:"등록한 기출 PDF를 최대 2개 고르세요(파일별 20쪽 이하). 문항을 복사하지 않고 출제 경향만 반영해요. 선택한 강의 범위는 유지돼요. 추가 분석·검사 호출이 발생해요." }),
+      ...(b.pastExamSources || []).map(source => h("label", { class:"row small", style:"gap:8px" },
+        h("input", { type:"checkbox", checked:b.pastExamSourceIds.includes(source.id) ? true : null,
+          disabled:b.busy || (!b.pastExamSourceIds.includes(source.id) && b.pastExamSourceIds.length >= 2),
+          onchange:(e) => { b.pastExamSourceIds = e.target.checked ? [...b.pastExamSourceIds, source.id] : b.pastExamSourceIds.filter(id => id !== source.id); render(); } }), source.fileName)),
+      b.pastExamSources?.length === 0 ? h("p", { class:"small muted", text:"등록된 PDF가 없어요. 먼저 기출 PDF를 자료로 등록해 주세요." }) : null) : null,
     thin ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
       h("input", { type:"checkbox", checked:b.readImages ? true : null, disabled:b.busy, onchange:(e) => { b.readImages = e.target.checked; render(); } }),
       h("span", null, h("b", { text:"그림·수식도 읽기" }), h("span", { class:"muted", text:` · 글자가 적은 ${thin}쪽을 그림으로 읽어요 (약 ${Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 문제에 들어가요.` }))) : null,

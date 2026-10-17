@@ -31,6 +31,46 @@ async function withData<T>(fn: () => Promise<T>) {
 const base = { sourceId: "src_test", fileName: "bfs.pdf", pageNumbers: [1, 2], provider: "fake" as const };
 const steps = async (id: string) => (await readGenCalls(id)).map((call) => `${call.step}${call.sectionId ? `:${call.sectionId}` : ""}#${call.attempt}`);
 
+test("기출 선택: 추상 카드 캐시, 검사 통과 문항만 게시, 원문은 출제 입력에서 분리", async () => withData(async () => {
+  const card = { version: 1, asking: { recall: .25, explain: .25, apply: .25, discriminate: .25 },
+    answer: { choice: .5, short: .25, worked: .25 }, conditions: { plain: .5, scenario: .25, diagram: .25 },
+    traps: { none: .25, boundary: .25, signOrOrder: .25, similarConcept: .25 }, size: { minSteps: 1, maxSteps: 3 },
+    difficulty: { direct: .5, linked: .25, transfer: .25 }, highWeight: { explanation: .5, calculation: .25, construction: .25 } };
+  const secret = "INVENTED_PRIVATE_EXAM_SENTENCE";
+  const pastExams = async () => ({ hashes: ["a".repeat(64)], texts: [secret], images: [] });
+  let reject = false;
+  const fakeReply = (step: GenStep, user: string) => {
+    if (user.startsWith("[기출 느낌 분석]")) return JSON.stringify(card);
+    if (user.startsWith("[베끼기 검사]")) {
+      const questions = JSON.parse(user.split("[새 문항]\n")[1]) as Array<{ objectiveId: string }>;
+      return JSON.stringify({ verdicts: questions.map((q) => ({ objectiveId: q.objectiveId, copied: reject, reason: reject ? "scenario" : "none" })) });
+    }
+    assert.ok(!user.includes(secret), "Exam prose must never reach ordinary author/design prompts");
+    return genFakeReply(step, user);
+  };
+  const input = { ...base, purpose: "core", autoConfirm: true, pastExamSourceIds: ["src_" + "a".repeat(64)] };
+  const first = await runGen((await createGen(input)).id, caller, { pages, pastExams, fakeReply });
+  assert.equal(first.status, "done");
+  assert.ok(first.sections.some((s) => (s.author?.questionCount ?? 0) > 0));
+  assert.ok(first.pastExam?.checks.every((check) => check.passed));
+  assert.ok((await studyDocument(first.id))?.document.title.includes("기출형"));
+  const second = await runGen((await createGen(input)).id, caller, { pages, pastExams, fakeReply });
+  assert.equal((await readGenCalls(second.id)).filter((call) => call.user.startsWith("[기출 느낌 분석]")).length, 0);
+  const sourceId = "src_" + "b".repeat(64);
+  await assert.rejects(createGen({ ...input, sourceId, pastExamSourceIds: [sourceId] }), /강의 PDF 자체/);
+  const plain = await runGen((await createGen({ ...base, sourceId, purpose: "core", autoConfirm: true })).id, caller, { pages });
+  await assert.rejects(forkGen(plain.id, { from: "author", pastExamSourceIds: [sourceId] }), /강의 PDF 자체/);
+  reject = true;
+  const third = await runGen((await createGen(input)).id, caller, { pages, pastExams, fakeReply });
+  assert.equal(third.status, "done");
+  assert.equal(third.sections.reduce((n, s) => n + (s.author?.questionCount ?? 0), 0), 0);
+  assert.ok(third.pastExam?.checks.some((check) => check.attempt === 2 && !check.passed));
+  const missingVerdicts = await runGen((await createGen(input)).id, caller, { pages, pastExams,
+    fakeReply: (step, user) => user.startsWith("[베끼기 검사]") ? JSON.stringify({ verdicts: [] }) : fakeReply(step, user) });
+  assert.equal(missingVerdicts.sections.reduce((n, s) => n + (s.author?.questionCount ?? 0), 0), 0);
+  assert.ok(missingVerdicts.pastExam?.checks.every(check => !check.passed && check.reason.includes("누락")));
+}));
+
 test("모든 응답 스키마는 strict 구조화 출력 규칙을 지킨다(모든 칸 required, 추가 칸 금지)", () => {
   const visit = (node: unknown, where: string) => {
     if (!node || typeof node !== "object") return;

@@ -11,6 +11,7 @@ const TARGET_KINDS: readonly ItemKind[] = ["핵심 지식", "재사용 패턴", 
 const POINTER = /(같은\s*(방법|방식)|위와\s*같|마찬가지|앞(의|에서)\s*(것|내용)|해당\s*(내용|방법)|원문(의|에)\s*(방법|내용))/;
 
 export type Scorecard = {
+  pastExam?: { checked: number; rejected: number; published: number; publishedPassed: number };
   run: { id: string; fileName: string; pages: string; purpose: string; guideDir: string; models: string; status: string;
     /** Set on a fixed-prefix rerun: calls, time and tokens then cover only the steps it redid. */
     forkOf: { genId: string; from: string } | null };
@@ -107,6 +108,12 @@ export function scorecard(state: GenState, calls: GenCall[], documents: Map<stri
       dropped: state.sections.reduce((sum, section) => sum + (section.author?.dropped.length ?? 0), 0),
     },
     formats, objectiveKinds, itemKinds, unusedTargets, suspects, warnings,
+    ...(state.pastExam ? { pastExam: {
+      checked: state.pastExam.checks.length,
+      rejected: state.pastExam.checks.filter((check) => !check.passed).length,
+      published: questions.length,
+      publishedPassed: questions.filter((question) => state.pastExam!.checks.filter((check) => check.objectiveId === question.source.objectiveId).at(-1)?.passed).length,
+    } } : {}),
     calls: {
       total: calls.length, failed: calls.filter((call) => !call.ok).length, retries: calls.filter((call) => call.attempt > 1).length,
       ms: calls.reduce((sum, call) => sum + call.ms, 0),
