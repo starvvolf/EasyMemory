@@ -589,7 +589,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           const question = layoutQuestion(parsed.data, objective, section, input.fileName);
           const meta = metaLabels(parsed.data);
           if (meta.length) warnings.push({ severity: "warning", code: "meta-label-removed", message: `입력칸의 지시 문구를 지웠어요: ${meta.join(" / ").slice(0, 80)}`, ref: objectiveId });
-          const inspected = inspectQuestion(question);
+          const inspected = inspectQuestion(question, { ignoreLatexFormatting: Boolean(state.pastExam) });
           if (inspected.errors.length) { next.set(objectiveId, inspected.errors.map((issue) => issue.message).join(" ")); continue; }
           accepted.set(objectiveId, question);
           warnings.push(...inspected.warnings);

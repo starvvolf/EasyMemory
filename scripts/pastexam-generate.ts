@@ -17,8 +17,10 @@ type Job = { id: string; status: string; calls: number };
 let jobs: Record<string,Job> = {};
 try { jobs = JSON.parse(await readFile(checkpoint,'utf8')); } catch(e) {if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e;}
 // Keep the exact authored policy next to each private candidate, never overwrite a previous round.
-const code = Object.fromEntries(await Promise.all(["runner.ts", "pastexam.ts", "prompts.ts"].map(async name =>
-  [name, await readFile(path.join("src/lib/study/gen", name), "utf8")])));
+const code = Object.fromEntries(await Promise.all([
+  "src/lib/study/gen/runner.ts", "src/lib/study/gen/pastexam.ts", "src/lib/study/gen/prompts.ts",
+  "src/lib/study/gen/layout.ts", "tools/problem-authoring-lab/quality.ts",
+].map(async name => [name, await readFile(name, "utf8")])));
 const signature = createHash("sha256").update(JSON.stringify({ examId, code })).digest("hex");
 const versionFile = path.join(dir, manifestName.replace(/\.json$/, "-code.json"));
 try {
