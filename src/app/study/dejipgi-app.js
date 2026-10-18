@@ -1296,6 +1296,8 @@ async function paintBox(box, d, pageNo, cssW){
     ...rects.map(r => h("div", { class:"hl" + (r.dim ? " dim" : "") + (r.line ? " line" : ""), style:`left:${r.x / W * 100}%;top:${r.y / H * 100}%;width:${r.w / W * 100}%;height:${r.h / H * 100}%` })),
     ...badges.map(b => h("div", { class:"hlnum" + (b.line ? " line" : ""), style:`left:${b.x / W * 100}%;top:${b.y / H * 100}%`, text:String(b.num) })),
     ...(() => { const tl = textLayer(entry, cssW); return [...termMarks(d, tl), tl]; })(), ...noteMarks(d, entry, W, H));
+  const tr = Trans.nodes(d, pageNo, entry);
+  if (tr.length){ entry.canvas.after(...tr); if (tr.some(x => x.classList.contains("trb"))){ box.classList.add("translated"); Trans.fit(box); } }
 }
 /* 핵심 용어: terms of core 용어·개념 objectives, marked wherever they are written on the page (chunk.ts importantTerms). */
 function termsOn(){ return !(S.plan.prefs && S.plan.prefs.showTerms === false); }
@@ -1459,6 +1461,7 @@ function renderReader(){
   wrap.append(h("div", { class:"rbar" }, sel, h("span", { class:"grow" }),
     env.chunk && env.chunk.important && !d.example ? h("button", { class:"btn small", "aria-pressed": termsOn() ? "true" : "false", title:"핵심 용어·개념 목표의 용어를 쪽에 표시",
       onclick: () => { (S.plan.prefs || (S.plan.prefs = {})).showTerms = !termsOn(); Store.savePlan(S.plan); render(); } }, "핵심 용어") : null,
+    pdfOn && Trans.can(d) ? h("button", { class:"btn small", "aria-pressed": Trans.on() ? "true" : "false", title: Trans.on() ? "원문(영어)으로 보기" : "쪽을 한국어로 덧씌워 보기 (핵심 용어는 영어 병기)", onclick: () => Trans.toggle() }, Trans.on() ? "번역 켬" : "번역") : null,
     d.example || (notesApi && notesApi.compose) ? h("button", { class:"btn small", title:"이 자료의 용어를 한국어 뜻·비유와 함께 묶은 지도와 이야기", onclick: () => TermMap.openFor(d) }, "용어 지도") : null,
     notesButton(d),
     h("div", { class:"pager" },
@@ -1817,7 +1820,7 @@ const Explain = {
     const e = this.src[k] = { status:"loading", map:new Map(), goals:new Map() };
     if (!notesOn(d) || !notesApi.explanations){ e.status = "ready"; return; }
     notesApi.explanations(k).then(list => { for (const x of list){ if (x.goal) e.goals.set(x.goal, x.text); else e.map.set(x.page, x.text); } }, () => {})
-      .then(() => { e.status = "ready"; const R = S.reader, cur = S.decks[R.deckId]; if (S.view === "read" && cur && this.sid(cur) === k){ GoalEx.paintAll(); if (TM.open) TermMap.paint(); } if (S.view === "read" && Chat.docked && cur && this.sid(cur) === k){ this.paintNode(); this.want(cur, R.page); } });
+      .then(() => { e.status = "ready"; const R = S.reader, cur = S.decks[R.deckId]; if (S.view === "read" && cur && this.sid(cur) === k){ GoalEx.paintAll(); if (TM.open) TermMap.paint(); if (Trans.on()) drawPage(); } if (S.view === "read" && Chat.docked && cur && this.sid(cur) === k){ this.paintNode(); this.want(cur, R.page); } });
   },
   stop(){ clearTimeout(this.timer); this.timer = null; if (this.run && this.run.ctl) this.run.ctl.abort(); this.run = null; },
   want(d, page){
@@ -1885,6 +1888,149 @@ ${explainAsk().slice(0, 1500)}
   paintNode(){ const el = document.getElementById("explainCard"), R = S.reader, d = S.decks[R.deckId]; if (el && d) el.replaceWith(this.node(d, R.page)); if (Chat.el && !Chat.busy) Chat.paintSugs(); },
   paintBody(){ const b = document.getElementById("explainBody"); if (b && this.run) b.replaceChildren(...richLines(shown(this.run.text) || "…")); else this.paintNode(); },
 };
+/* ----- 번역 보기: the PDF page itself turns Korean. Text lines are grouped into blocks (a bullet, a wrapped paragraph,
+   a title, a label); each block is covered with the page's own background and the translation is written in the same
+   box, so figures and layout stay. Key terms keep their English once per page ("한국어(English)"). One request per page,
+   kept with the explanations (`__tr:<page>`, checked against the block texts); the next page is prepared ahead. ----- */
+const TRANS_RULES = `너는 영어 강의 슬라이드를 한국어로 옮기는 번역가다. 학습자는 내용을 한국어로 이해하면서 영어 핵심 용어도 눈에 익혀야 한다.
+입력은 번호가 붙은 블록들이다. {"t":["1번 블록 번역","2번 블록 번역", ...]} 형식의 JSON 객체 하나로만 답한다. 블록 수와 순서를 그대로 지킨다.
+
+규칙
+- 슬라이드 문체로 간결하게 옮긴다(명사형 또는 "~다"). 원문에 없는 설명을 덧붙이지 않는다.
+- 기술 용어는 이 쪽에서 처음 나올 때 "한국어(English)"로 병기하고, 그 뒤로는 한국어만 쓴다. 우리말로 굳은 말이 없는 용어는 음차하거나 영어 그대로 둔다(예: 픽셀, 래스터).
+- (제목) 블록은 "한국어 제목 (English Title)"로 쓴다.
+- (라벨) 블록은 짧은 한국어로만 쓰고 병기하지 않는다.
+- 수식, 기호, 변수명, 숫자, 단위, 코드, 사람·제품 이름은 그대로 둔다. 옮길 것이 없으면 원문 그대로 쓴다.
+- 블록을 합치거나 나누지 않는다. 한 문장이 여러 블록에 걸쳐 있어도 각 블록 자리에 해당하는 부분만 옮긴다.
+- 글머리표(•, -, 1. 등)는 그대로 둔다.`;
+const TR = { blocks:{}, run:new Map(), err:{} };
+const Trans = {
+  on(){ return !!(S.plan.prefs && S.plan.prefs.translate); },
+  can(d){ return !!(notesApi && notesApi.compose) && !!d.sourceCatalogId; },
+  toggle(){ const p = S.plan.prefs || (S.plan.prefs = {}); p.translate = !this.on(); Store.savePlan(S.plan); render(); },
+  key(n){ return `__tr:${n}`; },
+  /* Blocks in scale-1 page units (independent of the drawn size). */
+  async blocks(d, n){
+    const ck = d.id + ":" + n; if (TR.blocks[ck]) return TR.blocks[ck];
+    const P = S.pdf[d.id]; if (!P || P.status !== "ready") return null;
+    const page = await P.doc.getPage(n), vp = page.getViewport({ scale:1 }), tc = await page.getTextContent();
+    const runs = [];
+    for (const it of tc.items){
+      if (typeof it.str !== "string" || !it.str.trim()) continue;
+      const tx = pdfjs.Util.transform(vp.transform, it.transform), fh = Math.hypot(tx[2], tx[3]);
+      if (!fh || Math.abs(Math.atan2(tx[1], tx[0])) > 0.02) continue;
+      runs.push({ text:it.str, x0:tx[4], x1:tx[4] + it.width, base:tx[5], fh });
+    }
+    runs.sort((a, b) => a.base - b.base || a.x0 - b.x0);
+    const lines = [];
+    for (const r of runs){
+      const l = lines.find(l => Math.abs(l.base - r.base) < r.fh * 0.35 && r.x0 - l.x1 < r.fh * 2.2 && r.x1 > l.x0 - r.fh * 2.2);
+      if (l){ l.parts.push(r); l.x0 = Math.min(l.x0, r.x0); l.x1 = Math.max(l.x1, r.x1); l.fh = Math.max(l.fh, r.fh); }
+      else lines.push({ parts:[r], x0:r.x0, x1:r.x1, base:r.base, fh:r.fh });
+    }
+    for (const l of lines){
+      l.parts.sort((a, b) => a.x0 - b.x0);
+      l.text = l.parts.reduce((t, r, i) => i && r.x0 - l.parts[i - 1].x1 > r.fh * 0.12 && !/\s$/.test(t) ? t + " " + r.text : t + r.text, "").replace(/\s+/g, " ").trim();
+      l.y0 = l.base - l.fh * 0.88; l.y1 = l.base + l.fh * 0.25;
+    }
+    lines.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+    const BULLET = /^([•▪◦●○■□►▶✓✔\-–*]|\(?\d{1,2}[.)]\s|[a-z][.)]\s)/;
+    const blocks = [];
+    for (const l of lines){
+      const b = BULLET.test(l.text) ? null : [...blocks].reverse().find(b => Math.abs(b.fh - l.fh) < b.fh * 0.2 && l.y0 - b.y1 < l.fh * 0.75 && l.y0 >= b.y1 - l.fh * 0.4 && l.x0 < b.x1 && l.x1 > b.x0);
+      if (b){ b.text = /[-‐]$/.test(b.text) ? b.text.slice(0, -1) + l.text : b.text + " " + l.text; b.x0 = Math.min(b.x0, l.x0); b.x1 = Math.max(b.x1, l.x1); b.y1 = l.y1; b.lines++; }
+      else blocks.push({ text:l.text, x0:l.x0, x1:l.x1, y0:l.y0, y1:l.y1, fh:l.fh, lines:1 });
+    }
+    const out = blocks.filter(b => /[A-Za-z]{2}/.test(b.text)).slice(0, 90);
+    const big = Math.max(0, ...out.map(b => b.fh));
+    for (const b of out){
+      b.tag = b.fh >= big * 0.98 && b.fh > 0 && b.y0 < vp.height * 0.3 && out.filter(x => x.fh >= big * 0.98).length <= 2 ? "제목"
+        : b.lines === 1 && b.text.split(/\s+/).length <= 4 && (b.x1 - b.x0) < vp.width * 0.25 ? "라벨" : "";
+    }
+    // A title gets the room to its right (the Korean title also carries the English one).
+    for (const b of out) if (b.tag === "제목"){
+      const right = Math.min(vp.width * 0.96, ...out.filter(x => x !== b && x.x0 > b.x1 && x.y1 > b.y0 && x.y0 < b.y1).map(x => x.x0 - b.fh * 0.5));
+      if (right > b.x1) b.x1 = right;
+    }
+    const res = { W:vp.width, H:vp.height, list:out, sig:this.sig(out) };
+    TR.blocks[ck] = res; return res;
+  },
+  sig(list){ let h1 = 0; for (const c of list.map(b => b.text).join("\n")) h1 = (h1 * 31 + c.codePointAt(0)) >>> 0; return list.length + ":" + h1.toString(36); },
+  saved(d, n, sig){
+    const e = Explain.src[Explain.sid(d)], raw = e && e.goals ? e.goals.get(this.key(n)) : null;
+    if (!raw) return null; try{ const v = JSON.parse(raw); return v.sig === sig && Array.isArray(v.t) ? v.t : null; }catch(err){ return null; }
+  },
+  async ensure(d, n, quiet){
+    const k = Explain.sid(d) + ":" + n;
+    if (TR.run.has(k) || !this.can(d)) return;
+    const B = await this.blocks(d, n); if (!B || !B.list.length) return;
+    const e = Explain.src[Explain.sid(d)]; if (!e || e.status !== "ready") return;
+    if (this.saved(d, n, B.sig)) return;
+    if (quiet && TR.err[k]) return;
+    delete TR.err[k];
+    const task = (async () => {
+      const user = `[자료] ${d.title}\n[쪽] p.${n}\n\n${B.list.map((b, i) => `${i + 1}. ${b.tag ? `(${b.tag}) ` : ""}${b.text}`).join("\n")}`;
+      const raw = await notesApi.compose({ system:TRANS_RULES, user, json:true });
+      const v = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+      const t = B.list.map((b, i) => typeof (v.t || [])[i] === "string" && v.t[i].trim() ? v.t[i].trim().slice(0, 600) : null);
+      const val = JSON.stringify({ sig:B.sig, t });
+      e.goals.set(this.key(n), val);
+      if (notesOn(d) && notesApi.saveExplanation) notesApi.saveExplanation(Explain.sid(d), n, val, this.key(n)).catch(() => {});
+    })();
+    TR.run.set(k, task);
+    if (!quiet) this.repaint(d, n);
+    try{ await task; }catch(err){ TR.err[k] = err instanceof SyntaxError ? "번역을 읽지 못했어요." : sampleErrorCopy(err); }
+    TR.run.delete(k);
+    this.repaint(d, n);
+    // Prepare the next page while this one is read.
+    if (!quiet && this.on() && !TR.err[k] && n < pageTotal(d)) this.ensure(d, n + 1, true);
+  },
+  repaint(d, n){ const R = S.reader; if (S.view === "read" && R.deckId === d.id && R.page === n) drawPage(); },
+  /* Nodes for paintBox: the covered, translated blocks, or a small status chip. Synchronous; work is kicked off. */
+  nodes(d, n, entry){
+    if (!this.on() || !this.can(d)) return [];
+    Explain.load(d);
+    const B = TR.blocks[d.id + ":" + n], k = Explain.sid(d) + ":" + n, e = Explain.src[Explain.sid(d)];
+    if (!B){ this.blocks(d, n).then((x) => { if (x) this.repaint(d, n); }, () => {}); return [this.chip("번역 준비 중…")]; }
+    if (!B.list.length) return [this.chip("이 쪽엔 옮길 글이 없어요")];
+    const t = this.saved(d, n, B.sig);
+    if (!t){
+      if (TR.err[k]) return [this.chip(TR.err[k] + " · 다시 시도", () => { delete TR.err[k]; this.ensure(d, n); })];
+      if (e && e.status === "ready" && !TR.run.has(k)) setTimeout(() => this.ensure(d, n), 0);
+      return [this.chip("이 쪽을 번역하는 중…", null, true)];
+    }
+    const cache = entry._trc || (entry._trc = {});
+    const c = entry.canvas, sx = c.width / B.W, sy = c.height / B.H, ctx = c.getContext("2d", { willReadFrequently:true });
+    const px = (x, y) => { try{ const v = ctx.getImageData(Math.max(0, Math.min(c.width - 1, Math.round(x))), Math.max(0, Math.min(c.height - 1, Math.round(y))), 1, 1).data; return [v[0], v[1], v[2]]; }catch(err){ return [255, 255, 255]; } };
+    const lum = ([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b;
+    return B.list.map((b, i) => {
+      if (!t[i]) return null;
+      const X0 = b.x0 * sx, X1 = b.x1 * sx, Y0 = b.y0 * sy, Y1 = b.y1 * sy, pad = 3, ck2 = n + ":" + i;
+      const [bg, ink] = cache[ck2] || (cache[ck2] = (() => {
+      // Background: the lightest-agreeing sample just outside the box; text: the darkest-contrast ink inside it.
+      const around = [px(X0 - pad, Y0 - pad), px(X1 + pad, Y0 - pad), px(X0 - pad, Y1 + pad), px(X1 + pad, Y1 + pad), px((X0 + X1) / 2, Y0 - pad)];
+      around.sort((a, b2) => lum(a) - lum(b2)); const bg = around[2];
+      let ink = bg, best = 0;
+      for (let gx = 0; gx < 9; gx++) for (let gy = 0; gy < 3; gy++){ const v = px(X0 + (X1 - X0) * (gx + 0.5) / 9, Y0 + (Y1 - Y0) * (gy + 0.5) / 3); const dl = Math.abs(lum(v) - lum(bg)); if (dl > best){ best = dl; ink = v; } }
+      if (best < 60) ink = lum(bg) > 140 ? [20, 22, 28] : [250, 250, 250];
+      return [bg, ink]; })());
+      return h("div", { class:"trb", "data-fs":String(b.fh * 0.92), "data-w":String(B.W), "data-h":String((b.y1 - b.y0) / B.W), title:b.text,
+        style:`left:${b.x0 / B.W * 100}%;top:${b.y0 / B.H * 100}%;width:${(b.x1 - b.x0) / B.W * 100}%;height:${(b.y1 - b.y0) / B.H * 100}%;background:rgb(${bg.join(",")});color:rgb(${ink.join(",")})` + (b.tag === "제목" ? ";font-weight:700" : "") }, t[i]);
+    }).filter(Boolean);
+  },
+  chip(text, onclick, wait){ return h(onclick ? "button" : "div", { class:"trchip" + (wait ? " ex-wait" : ""), onclick }, text); },
+  /* Fit each block's Korean into its box: start at the line's height, shrink until it fits (not below 55%). */
+  fit(box){
+    const bw = box.getBoundingClientRect().width;
+    for (const el of box.querySelectorAll(".trb")){
+      const k = bw / Number(el.dataset.w); let fs = Number(el.dataset.fs) * k; const min = fs * 0.55;
+      el.style.fontSize = fs + "px";
+      while (fs > min && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)){ fs *= 0.92; el.style.fontSize = fs + "px"; }
+      // Still too long at the smallest size: let the box grow downward rather than cut the text.
+      if (el.scrollHeight > el.clientHeight + 1){ el.style.minHeight = el.style.height; el.style.height = "auto"; }
+    }
+  },
+};
 /* ----- 용어 지도: a term-heavy material rebuilt for memory — every term split into Korean word parts, a grounded
    definition, one familiar analogy and its look-alike; grouped as a tree; and one story that walks through all of them.
    Made once per material range (one long request) and kept with the explanations (`__terms:<from>-<to>`). ----- */
@@ -1904,7 +2050,11 @@ const TERMS_RULES = `너는 영어 강의자료의 용어와 개념을 한국어
 - 식은 $...$ 안에 LaTeX로 쓴다. 마크다운 기호는 쓰지 않는다.`;
 const TM = { open:false, run:null, err:null, sel:null, key:"" };
 const TermMap = {
-  range(d){ const ns = (d.pages || []).map(p => p.n).filter(Number.isFinite).sort((a, b) => a - b); return ns.length ? [ns[0], ns[ns.length - 1]] : [1, 1]; },
+  // The studied range: real decks carry no page texts, so it comes from where the objectives and questions sit.
+  range(d){
+    const ns = [...(d.pages || []).map(p => p.n), ...d.objectives.flatMap(o => o.pages || []), ...(d.items || []).map(i => i.page), ...(d.outline || []).flatMap(s => s.pages || [])].filter(Number.isFinite);
+    return ns.length ? [Math.min(...ns), Math.max(...ns)] : [1, pageTotal(d)];
+  },
   key(d){ const [a, b] = this.range(d); return `__terms:${a}-${b}`; },
   saved(d){
     const e = Explain.src[Explain.sid(d)], raw = e && e.goals ? e.goals.get(this.key(d)) : null;

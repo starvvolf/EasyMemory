@@ -867,3 +867,7 @@
 .dejipgi .tm-link{all:unset;cursor:pointer;font-weight:700;color:var(--accent);border-bottom:1px dashed currentColor}
 .dejipgi .tm-link:focus-visible{outline:2px solid var(--accent)}
 .dejipgi .tm-head{display:flex;align-items:center;gap:10px}.dejipgi .tm-head .grow{flex:1}
+/* 번역 보기: Korean written over the page in each text block's own box */
+.dejipgi .trb{position:absolute;box-sizing:border-box;padding:0 .08em;line-height:1.18;font-family:"Pretendard Variable",Pretendard,system-ui,sans-serif;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;overflow:hidden;border-radius:2px;letter-spacing:-.01em}
+.dejipgi .trchip{position:absolute;right:8px;top:8px;z-index:3;font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);box-shadow:var(--shadow)}
+.dejipgi button.trchip{cursor:pointer;color:var(--bad)}
