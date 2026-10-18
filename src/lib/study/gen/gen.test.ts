@@ -555,6 +555,10 @@ test("v3 만들면서 읽기: 두 번 걸린 문항은 보류(공개 안 함), �
   };
   const run = await runGen((await createGen({ ...base, purpose: "core", autoConfirm: true, engine: "v3" })).id, caller,
     { pages, fakeReply, pdf: async () => new Uint8Array([37, 80, 68, 70]) });
+  // The flow marks come in the order the reader shows them: outline, goals, then units, then done.
+  const events = (run.timeline ?? []).map((mark) => mark.event);
+  const at = (event: string) => events.indexOf(event as never);
+  assert.ok(at("start") < at("outline") && at("outline") < at("plan") && at("plan") < at("unit-done") && events.at(-1) === "done", events.join(" "));
   const held = run.sections.flatMap((section) => section.author?.dropped ?? []);
   assert.ok(held.some((drop) => drop.reason.startsWith("보류")), "held back after the second failure");
   const shown = (await studyDocument(run.id))?.document.questions ?? [];

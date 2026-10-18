@@ -117,6 +117,8 @@ export type GenState = {
   current?: { step: GenStep; sectionId?: string; page?: number; attempt: number; progress?: string };
   /** Units being authored right now (v3 makes several at once). */
   making?: string[];
+  /** When each thing the reader shows became available (사용 흐름 점검): wall-clock marks, appended across restarts. */
+  timeline?: GenMark[];
   /** Pages read from their image (readImages): chosen once, then done or failed (failed pages keep the text layer). */
   images?: { pages: number[]; done: number[]; failed: number[] };
   outlineWarnings?: Issue[];
@@ -178,6 +180,8 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
  * What the reader shows while a material is being made (만들면서 바로 읽기): the outline with each unit's goals as
  * soon as they are planned, and where each unit is — waiting, being made, ready, or held back (보류) by the gate.
  */
+export type GenMark = { at: string; event: "start" | "outline" | "plan" | "confirm" | "confirmed" | "unit-start" | "unit-done" | "focus" | "done" | "stopped";
+  sectionId?: string; page?: number; questions?: number; held?: number; note?: string };
 export type GenUnitState = "waiting" | "making" | "ready" | "held";
 export function genOutline(state: GenState) {
   const confirmed = state.confirmedObjectiveIds ? new Set(state.confirmedObjectiveIds) : null;

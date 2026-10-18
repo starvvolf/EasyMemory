@@ -2,7 +2,7 @@
 // Lab screen for the v2 engine (docs/DECISIONS.md 2026-10-12): start a run, watch each call,
 // confirm objectives once, and open the problems of each section as they are authored.
 import { useCallback, useEffect, useState } from "react";
-import type { GenCall, GenState, GenStep, Purpose } from "@/lib/study/gen/types";
+import type { GenCall, GenMark, GenState, GenStep, Purpose } from "@/lib/study/gen/types";
 import type { Scorecard } from "@/lib/study/gen/scorecard";
 import type { JudgeRun } from "@/lib/study/gen/judge";
 import type { VisionProbe } from "@/lib/study/gen/vision";
@@ -304,6 +304,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
         {canResume && <button className="primary" disabled={real && !confirmed} onClick={resume}>멈춘 곳부터 다시 시작</button>}
       </div>
 
+      <FlowPanel gen={gen} onChange={onChange} onError={onError} />
       {gen.outlineWarnings?.map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
       {gen.v3?.map && (() => {
         const map = gen.v3.map, gate = gen.v3.gate ?? [];
@@ -557,5 +558,71 @@ function JudgePanel({ id, real, onDone, onError }: { id: string; real: boolean; 
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * 사용 흐름 점검 (만들면서 바로 읽기): when each thing the study screen shows became available, from the run's own
+ * marks. The study screen polls every 5 s, so on screen each line can appear up to 5 s later than written here.
+ * "읽는 쪽 알리기" does what the reader does on a page change, so the "reading unit first" order can be checked here.
+ */
+function FlowPanel({ gen, onChange, onError }: { gen: GenState; onChange: () => void; onError: (message: string) => void }) {
+  const [page, setPage] = useState(gen.input.pageNumbers[0]);
+  const marks = gen.timeline ?? [];
+  const start = marks.find((mark) => mark.event === "start");
+  const title = (sectionId?: string) => gen.sections.find((section) => section.id === sectionId)?.title ?? sectionId ?? "";
+  const pagesOf = (sectionId?: string) => gen.sections.find((section) => section.id === sectionId)?.pages ?? [];
+  const running = gen.status === "running" || gen.status === "queued";
+  const say = (mark: GenMark) => {
+    switch (mark.event) {
+      case "start": return mark.note && mark.note !== "outline" ? `다시 시작 (${mark.note}부터)` : "시작 — 읽기 화면·PDF·쉬운 설명·번역·물어보기는 이때부터";
+      case "outline": return `목차 보임 · 단원 ${gen.sections.length}개`;
+      case "plan": return `목표 보임 (쪽별 익힐 것) · ${gen.sections.reduce((sum, section) => sum + (section.design?.objectives.length ?? 0), 0)}개`;
+      case "confirm": return "목표 확인을 기다림 (학습자 차례)";
+      case "confirmed": return "목표 확인함";
+      case "focus": return `읽는 쪽 → p.${mark.page}`;
+      case "unit-start": return `${title(mark.sectionId)} 만들기 시작${mark.page ? ` (그때 읽는 쪽 p.${mark.page})` : ""}`;
+      case "unit-done": return mark.questions ? `${title(mark.sectionId)} 문제 열림 · ${mark.questions}개${mark.held ? ` · 보류 ${mark.held}` : ""} → "이 쪽 문제 풀기"` : `${title(mark.sectionId)} 문제 없음${mark.held ? ` · 전부 보류 ${mark.held}` : ""}`;
+      case "done": return "검수 끝 — 전체 완료";
+      case "stopped": return `멈춤 (${mark.note ?? ""})`;
+    }
+  };
+  // Was the unit holding the reading page (or the next one after it) the next unit started after each focus change?
+  const followed = marks.flatMap((mark, index) => {
+    if (mark.event !== "focus" || !mark.page) return [];
+    const next = marks.slice(index + 1).find((later) => later.event === "unit-start");
+    if (!next) return [];
+    const open = gen.sections.filter((section) => {
+      const done = marks.slice(0, marks.indexOf(next)).some((earlier) => earlier.event === "unit-start" && earlier.sectionId === section.id);
+      return !done || section.id === next.sectionId;
+    });
+    const want = open.find((section) => section.pages.includes(mark.page!) || section.pages[0] > mark.page!) ?? open[0];
+    return [{ page: mark.page, got: next.sectionId, want: want?.id, ok: !want || want.id === next.sectionId }];
+  });
+  const tell = async () => {
+    try { await api(`/api/lab/gen/${gen.id}/focus`, "POST", { page }); onChange(); } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+  };
+  if (!marks.length) return null;
+  const t0 = start ? Date.parse(start.at) : Date.parse(marks[0].at);
+  return (
+    <details className="gen-v3" open>
+      <summary>사용 흐름 점검 · 시작부터 각 화면 요소가 뜬 시각 (공부 화면은 5초마다 확인해 최대 5초 늦게 보임)</summary>
+      <table className="calls"><thead><tr><th>경과</th><th>화면에 생기는 것</th><th>쪽</th></tr></thead>
+        <tbody>{marks.map((mark, index) => (
+          <tr key={index}><td>{seconds(Math.max(0, Date.parse(mark.at) - t0))}</td><td>{say(mark)}</td>
+            <td>{mark.sectionId ? (() => { const pages = pagesOf(mark.sectionId); return pages.length ? `p.${pages[0]}–${pages.at(-1)}` : ""; })() : ""}</td></tr>
+        ))}</tbody>
+      </table>
+      {followed.map((check, index) => (
+        <p key={index} className={check.ok ? "muted" : "warnline"}>{check.ok ? "✓" : "✗"} p.{check.page}로 옮긴 뒤 다음 단원: {title(check.got)}{check.ok ? "" : ` (기대: ${title(check.want)})`}</p>
+      ))}
+      {running && (
+        <div className="row">
+          <span className="muted">읽는 쪽 알리기(읽기 화면이 쪽을 넘길 때 하는 일)</span>
+          <input type="number" min={gen.input.pageNumbers[0]} max={gen.input.pageNumbers.at(-1)} value={page} onChange={(event) => setPage(Number(event.target.value))} style={{ width: 70 }} />
+          <button onClick={tell}>알리기</button>
+        </div>
+      )}
+    </details>
   );
 }

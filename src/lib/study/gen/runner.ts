@@ -14,7 +14,7 @@ import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
-import { defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
+import { defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenMark, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { AUTHOR_SYSTEM, authorUser, buildMap, DERIVABLE_SYSTEM, derivableReply, derivableSchema, derivableUser, evidenceInQuestion, formatRules, gateCode, joinUnitMaps, mapItems,
   MAX_PDF_BYTES, MISREAD_SYSTEM, misreadReply, misreadSchema, misreadUser, planReply, planSchema, PLAN_SYSTEM, planToObjectives, planUser, readOutlineReply, readOutlineSchema,
@@ -215,11 +215,13 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
   return state;
 }
 
-const queue = globalThis as typeof globalThis & { __studyGenQueue?: Promise<unknown>; __studyGenQueued?: Set<string>; __studyGenFocus?: Map<string, number> };
+const queue = globalThis as typeof globalThis & { __studyGenQueue?: Promise<unknown>; __studyGenQueued?: Set<string>; __studyGenFocus?: Map<string, number>; __studyGenFocusLog?: Map<string, Array<{ at: string; page: number }>> };
 /** Where the learner is reading while a material is being made: units around this page are authored first. */
 export function setGenFocus(id: string, page: number) {
   if (!idPattern.test(id) || !Number.isInteger(page) || page < 1) throw new GenError(400, "읽는 위치가 올바르지 않습니다.");
-  (queue.__studyGenFocus ??= new Map()).set(id, page);
+  const focus = (queue.__studyGenFocus ??= new Map());
+  if (focus.get(id) !== page) (queue.__studyGenFocusLog ??= new Map()).set(id, [...(queue.__studyGenFocusLog?.get(id) ?? []), { at: new Date().toISOString(), page }].slice(-50));
+  focus.set(id, page);
 }
 /** Units in the order to author: the one being read, then the ones after it, then the ones before. */
 export function byFocus<T extends { pages: number[] }>(sections: T[], page: number | undefined) {
@@ -246,6 +248,7 @@ export async function confirmObjectives(id: string, objectiveIds: string[]) {
   const chosen = [...new Set(objectiveIds)];
   if (chosen.some((objectiveId) => !known.has(objectiveId))) throw new GenError(400, "설계에 없는 목표가 있습니다.");
   state.confirmedObjectiveIds = chosen;
+  (state.timeline ??= []).push({ at: new Date().toISOString(), event: "confirmed" });
   state.phase = chosen.length ? "author" : "done";
   state.status = chosen.length ? "queued" : "done";
   state.message = chosen.length ? "" : "고른 목표가 없어 문제를 만들지 않았어요.";
@@ -398,8 +401,15 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     }
   };
 
+  const mark = (event: GenMark["event"], extra: Omit<GenMark, "at" | "event"> = {}) => {
+    // Focus changes are kept in memory by the route; they are written here so the timeline shows them in order.
+    for (const focus of queue.__studyGenFocusLog?.get(id) ?? []) (state.timeline ??= []).push({ at: focus.at, event: "focus", page: focus.page });
+    queue.__studyGenFocusLog?.delete(id);
+    (state.timeline ??= []).push({ at: new Date().toISOString(), event, ...extra });
+  };
   try {
     state.status = "running"; state.message = "";
+    mark("start", { note: state.phase });
     await saveState(state);
     loaded = await (options.pages ?? registeredPages)(input);
 
@@ -461,6 +471,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       if (!normalized?.sections.length) throw new Stop("paused-invalid", "목차를 만들지 못했어요. 다시 시작하면 목차부터 다시 시도해요.");
       state.sections = normalized.sections.map((section) => ({ ...section }));
       state.outlineWarnings = [...(state.outlineWarnings ?? []).filter((warning) => warning.code === "image-read-failed"), ...normalized.warnings];
+      mark("outline");
       state.phase = "design";
       await saveState(state);
     }
@@ -483,6 +494,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         return state;
       }
       mergeAcrossSections(state.sections);
+      mark("plan");
       state.phase = "confirm";
       await saveState(state);
     }
@@ -492,6 +504,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       const all = state.sections.flatMap((section) => section.design?.objectives ?? []).map((objective) => objective.id);
       if (!input.autoConfirm) {
         state.status = "awaiting-confirm"; state.current = undefined; state.message = `목표 ${all.length}개를 확인해 주세요.`;
+        mark("confirm");
         await saveState(state);
         return state;
       }
@@ -529,8 +542,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         const objectives = (section.design?.objectives ?? []).filter((objective) => chosen.has(objective.id));
         if (!objectives.length) { section.author = { documentPath: null, questionCount: 0, dropped: [], warnings: [] }; return; }
         making.add(section.id); state.making = [...making];
+        mark("unit-start", { sectionId: section.id, ...(queue.__studyGenFocus?.has(id) ? { page: queue.__studyGenFocus.get(id) } : {}) });
         try { await authorSection(section, objectives); }
         finally { making.delete(section.id); state.making = [...making]; }
+        mark("unit-done", { sectionId: section.id, questions: section.author?.questionCount ?? 0, held: section.author?.dropped.filter((drop) => drop.reason.startsWith("보류")).length ?? 0 });
         await saveState(state);
       };
       // The unit being read goes first (setGenFocus). Each free slot picks again, so a jump in reading is followed
@@ -547,6 +562,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       await Promise.all(Array.from({ length: input.engine === "v3" ? PARALLEL : 1 }, worker));
       if (failure) throw failure;
       delete state.making;
+      mark("done");
       state.phase = "done"; state.status = "done"; state.current = undefined; state.message = "";
       await saveState(state);
     }
@@ -554,6 +570,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   } catch (error) {
     const stop = error instanceof Stop ? error : new Stop("failed", error instanceof Error ? error.message : String(error));
     state.status = stop.status; state.message = stop.message;
+    mark("stopped", { note: stop.status });
     await saveState(state);
     return state;
   }
@@ -581,6 +598,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       if (!result.ok || !normalized?.sections.length) throw new Stop("paused-invalid", "전체 읽기(목차)를 만들지 못했어요. 다시 시작하면 처음부터 다시 시도해요.");
       const sections = normalized.sections;
       const skips = result.value.skips;
+      // The outline is shown right away (목차), before the unit maps and the plan.
+      state.sections = sections.map((section) => ({ ...section }));
+      mark("outline");
+      await saveState(state);
       // … then one map call per unit, several at once, each with the same PDF prefix.
       const unitWarnings: Issue[] = [];
       const parts: Array<{ sectionId: string; reply: ReadUnitReply }> = [];
@@ -640,6 +661,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     const planned = planToObjectives(result.value.items, state.sections, map);
     for (const section of state.sections) section.design = { objectives: planned.bySection.get(section.id) ?? [], warnings: [] };
     v3.warnings = [...(v3.warnings ?? []), ...planned.warnings];
+    mark("plan");
     state.phase = "confirm";
     await saveState(state);
     return false;
