@@ -1,0 +1,113 @@
+{
+  "artifactType": "study-forge-eval-run",
+  "artifactVersion": "v0",
+  "runId": "20260812T073601Z__generation-lab-05-dfs-bfs__exploratory__r01",
+  "caseId": "generation-lab-05-dfs-bfs-7bd68c1e",
+  "runKind": "exploratory",
+  "runMode": "whole_document_core",
+  "provenance": "eval-runner-v1-full-pipeline",
+  "status": "completed",
+  "sourceRunId": null,
+  "fromStage": "analyze",
+  "frozenStages": [],
+  "executedStages": [
+    "analyze",
+    "plan",
+    "recall",
+    "prepare",
+    "cards",
+    "critic",
+    "finalCards"
+  ],
+  "startedAt": "2026-08-12T07:36:01.621Z",
+  "completedAt": "2026-08-12T07:41:36.710Z",
+  "code": {
+    "gitCommit": "fda889ea29bc8783d290a5836d8f45db9919c07c",
+    "gitDirty": true,
+    "runtimePromptChecksums": {
+      "src/lib/pipeline/analyze.ts": "31ae0bed1a1d5c255ac3eadc5c189ae2bf471363bef12a86710fa5ac47ddc9a2",
+      "src/lib/pipeline/plan.ts": "f5986f8bcf7c136c703a83806b64b41fcdd96f580794120ce4aa6a7475d3d958",
+      "src/lib/pipeline/recall.ts": "4e8b26849d9aa75dcab5c49076b0ed189aa27acce2bd67b570904b757a8931bc",
+      "src/lib/pipeline/generate.ts": "356cfe8988e991933b27bd8e5319950250105a4aa1bebe54441ff67cf932f3e3",
+      "src/lib/model-config.ts": "e262bd929ea32c0194cf94ff8dfd3f2ed3c577fe0ce1d6bac05b8d8cf9462c6f"
+    }
+  },
+  "modelConfiguration": {
+    "analyze": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "plan": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "recall": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "prepare": {
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "medium"
+    },
+    "cards": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium"
+    },
+    "critic": {
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "medium"
+    },
+    "finalCards": {
+      "model": "gpt-5.6-sol",
+      "reasoningEffort": "medium"
+    }
+  },
+  "overrideFile": null,
+  "overrideChecksum": null,
+  "stageLineage": {
+    "analyze": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "plan": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "recall": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "prepare": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "cards": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "critic": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    },
+    "finalCards": {
+      "status": "executed",
+      "sourceRunId": null,
+      "sourceArtifact": null
+    }
+  },
+  "stageFiles": {
+    "analyze": "stages/10-analyze.json",
+    "plan": "stages/20-plan.json",
+    "recall": "stages/30-recall.json",
+    "prepare": "stages/40-prepare.json",
+    "cards": "stages/50-cards.json",
+    "critic": "stages/60-critic.json",
+    "finalCards": "stages/70-final-cards.json"
+  }
+}

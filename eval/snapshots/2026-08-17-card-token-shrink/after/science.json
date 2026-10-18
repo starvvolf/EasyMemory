@@ -1,0 +1,417 @@
+{
+  "artifactType": "study-forge-compact-card-generation-smoke",
+  "completedAt": "2026-08-16T16:48:25.930Z",
+  "baselinePath": "C:\\Users\\jkh01\\OneDrive\\문서\\CD0625\\eval\\local\\actual-engine-student-smoke\\science-stars-spectrum-student-2026-08-16T154918068Z.json",
+  "baselineCardCount": 10,
+  "cards": [
+    {
+      "id": "8209c9cb-d168-4544-aa7b-9898ba263846",
+      "type": "flashcard",
+      "activityType": "structure_recall",
+      "front": "초기 우주에서 원시별이 탄생하기까지의 과정을 원인에서 결과 순으로 배열하세요.",
+      "structureNodes": [
+        {
+          "id": "n1",
+          "parentId": null,
+          "correctLabel": "밀도 차이"
+        },
+        {
+          "id": "n2",
+          "parentId": "n1",
+          "correctLabel": "상대적으로 강한 중력"
+        },
+        {
+          "id": "n3",
+          "parentId": "n2",
+          "correctLabel": "수소와 헬륨의 집적"
+        },
+        {
+          "id": "n4",
+          "parentId": "n3",
+          "correctLabel": "가스 구름 형성"
+        },
+        {
+          "id": "n5",
+          "parentId": "n4",
+          "correctLabel": "가스 구름의 중력 수축"
+        },
+        {
+          "id": "n6",
+          "parentId": "n5",
+          "correctLabel": "원시별 탄생"
+        }
+      ],
+      "structureRecallMode": "word_bank",
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "밀도 차이로 중력이 상대적으로 강한 곳에 물질이 모여 가스 구름이 형성되고, 가스 구름이 중력 수축하여 원시별이 태어난다.",
+      "learningUnitId": "LU1",
+      "objectiveId": "OBJ-LU1",
+      "blueprintId": "BP-LU1",
+      "strategy": "procedure",
+      "sourceId": "direct-text",
+      "sourcePage": 34,
+      "sourceRange": "‘빅뱅 이후 초기 우주에 수소와 헬륨이 존재하였고’에서 ‘원시 별들이 태어나게 한다’까지",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "밀도 차이가 중력 차이를 만들고, 물질 집적과 가스 구름 형성 뒤 중력 수축을 거쳐 원시별이 탄생한다."
+    },
+    {
+      "id": "104284bc-f668-4af6-b484-28f7fe26074d",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "원시별의 중심 온도가 어느 정도에 이르면 핵융합이 시작되며, 그 결과 무엇을 방출하는 별이 되는가?",
+      "back": "중심 온도가 1000만 K 이상이 되면 핵융합이 시작되어 빛 에너지를 방출한다.",
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "원시별의 중력 수축→중심 온도 상승→1000만 K 이상→핵융합 시작과 에너지 방출",
+      "learningUnitId": "LU2",
+      "objectiveId": "OBJ-LU2",
+      "blueprintId": "BP-LU2",
+      "strategy": "production",
+      "sourceId": "direct-text",
+      "sourcePage": 34,
+      "sourceRange": "‘원시별은 중력 수축으로 인하여’에서 ‘별이 된다’까지",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "중심 온도가 1000만 K 이상이 되면 핵융합이 시작되고 빛 에너지가 방출된다."
+    },
+    {
+      "id": "ec90eba6-02f8-40d2-a6c0-054a01f999df",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "핵융합에서 여러 가벼운 원자핵이 결합하면 원소와 빛은 어떻게 되는가?",
+      "back": "더 무거운 원자핵을 가진 원소가 생성되고 빛이 방출된다.",
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "여러 가벼운 원자핵의 결합→더 무거운 원자핵을 가진 원소 생성+빛 방출",
+      "learningUnitId": "LU3",
+      "objectiveId": "OBJ-LU3",
+      "blueprintId": "BP-LU3",
+      "strategy": "production",
+      "sourceId": "direct-text",
+      "sourcePage": 34,
+      "sourceRange": "‘핵융합 반응이란’에서 ‘빛이 방출된다’까지",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "가벼운 원자핵들이 결합하여 더 무거운 원자핵을 가진 원소가 만들어지고 빛이 방출된다."
+    },
+    {
+      "id": "b7916de6-c151-4cbf-b029-d43ef711313b",
+      "type": "flashcard",
+      "activityType": "structure_recall",
+      "front": "별의 질량이 커질 때의 생성 가능 원소 변화와 핵융합 원소 생성 단계를 순서대로 배열하세요.",
+      "structureNodes": [
+        {
+          "id": "n1",
+          "parentId": null,
+          "correctLabel": "별의 질량 증가"
+        },
+        {
+          "id": "n2",
+          "parentId": "n1",
+          "correctLabel": "생성 가능한 원소의 최대 질량 증가"
+        },
+        {
+          "id": "n3",
+          "parentId": "n2",
+          "correctLabel": "헬륨"
+        },
+        {
+          "id": "n4",
+          "parentId": "n3",
+          "correctLabel": "탄소"
+        },
+        {
+          "id": "n5",
+          "parentId": "n4",
+          "correctLabel": "산소"
+        },
+        {
+          "id": "n6",
+          "parentId": "n5",
+          "correctLabel": "규소"
+        },
+        {
+          "id": "n7",
+          "parentId": "n6",
+          "correctLabel": "철"
+        }
+      ],
+      "structureRecallMode": "word_bank",
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "별의 질량 증가→핵융합으로 생성할 수 있는 원소의 최대 질량 증가; 생성 순서: 헬륨→탄소→산소→규소→철",
+      "learningUnitId": "LU4",
+      "objectiveId": "OBJ-LU4",
+      "blueprintId": "BP-LU4",
+      "strategy": "procedure",
+      "sourceId": "direct-text",
+      "sourcePage": 34,
+      "sourceRange": "‘무거운 별일수록’에서 ‘철(Fe) 순서로 원소를 만들 수 있다’까지",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 4,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "별의 질량이 클수록 더 무거운 원소까지 만들 수 있으며, 제시된 원소는 헬륨부터 철까지 순서대로 생성된다."
+    },
+    {
+      "id": "1ff209da-0453-45cd-86ed-e19aa49424d9",
+      "type": "flashcard",
+      "activityType": "multiple_choice",
+      "front": "다음 중 철보다 무거운 원소가 생성되는 현상으로 옳은 것은?",
+      "back": "초신성 폭발과 중성자별 충돌",
+      "options": [
+        "초신성 폭발과 중성자별 충돌",
+        "원시별의 중력 수축과 핵융합 시작",
+        "고온의 백색광과 저온 기체 통과",
+        "가스 구름 형성과 원시별 탄생"
+      ],
+      "correctOptionIndex": 0,
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "철보다 무거운 원소→초신성 폭발 또는 중성자별 충돌과 같은 현상에서 생성",
+      "learningUnitId": "LU5",
+      "objectiveId": "OBJ-LU5",
+      "blueprintId": "BP-LU5",
+      "strategy": "recognition",
+      "sourceId": "direct-text",
+      "sourcePage": 34,
+      "sourceRange": "‘금(Au), 은(Ag)과 같은’ 문장",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "철보다 무거운 원소는 초신성 폭발 또는 중성자별 충돌과 같은 현상에서 생성된다."
+    },
+    {
+      "id": "74588f0d-aa39-4ab0-ac07-6c48b6bd98bc",
+      "type": "flashcard",
+      "activityType": "multiple_choice",
+      "front": "다음 스펙트럼 모습의 분류가 모두 옳은 것은? ① 연속된 무지개 모양 ② 검은 배경의 불연속적인 밝은 선 ③ 연속 스펙트럼 위의 어두운 선",
+      "back": "① 연속 스펙트럼, ② 선 스펙트럼, ③ 흡수 스펙트럼",
+      "options": [
+        "① 연속 스펙트럼, ② 선 스펙트럼, ③ 흡수 스펙트럼",
+        "① 선 스펙트럼, ② 흡수 스펙트럼, ③ 연속 스펙트럼",
+        "① 흡수 스펙트럼, ② 연속 스펙트럼, ③ 선 스펙트럼",
+        "① 연속 스펙트럼, ② 흡수 스펙트럼, ③ 선 스펙트럼"
+      ],
+      "correctOptionIndex": 0,
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "연속된 무지개 모양→연속 스펙트럼; 검은 배경의 불연속적인 밝은 선→선 스펙트럼; 연속 스펙트럼 위의 어두운 선→흡수 스펙트럼",
+      "learningUnitId": "LU6",
+      "objectiveId": "OBJ-LU6",
+      "blueprintId": "BP-LU6",
+      "strategy": "recognition",
+      "sourceId": "direct-text",
+      "sourcePage": 35,
+      "sourceRange": "‘다양한 색들이 무지개처럼’에서 ‘어두운 선이 나타나는 흡수 스펙트럼’까지",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "연속된 무지개는 연속 스펙트럼, 검은 배경의 밝은 선은 선 스펙트럼, 연속 바탕의 어두운 선은 흡수 스펙트럼이다."
+    },
+    {
+      "id": "8aabd065-dd7d-40f6-b3e0-96b4be1991fe",
+      "type": "flashcard",
+      "activityType": "multiple_choice",
+      "front": "다음 생성 조건과 스펙트럼의 대응이 모두 옳은 것은? ① 고온의 백색광 ② 고온 기체의 방출광 ③ 고온 백색광이 저온 기체를 통과함",
+      "back": "① 연속 스펙트럼, ② 선 스펙트럼, ③ 흡수 스펙트럼",
+      "options": [
+        "① 연속 스펙트럼, ② 선 스펙트럼, ③ 흡수 스펙트럼",
+        "① 선 스펙트럼, ② 흡수 스펙트럼, ③ 연속 스펙트럼",
+        "① 흡수 스펙트럼, ② 연속 스펙트럼, ③ 선 스펙트럼",
+        "① 연속 스펙트럼, ② 흡수 스펙트럼, ③ 선 스펙트럼"
+      ],
+      "correctOptionIndex": 0,
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "고온의 백색광→연속 스펙트럼; 고온 기체의 방출광→선 스펙트럼; 고온 백색광+저온 기체 통과→흡수 스펙트럼",
+      "learningUnitId": "LU7",
+      "objectiveId": "OBJ-LU7",
+      "blueprintId": "BP-LU7",
+      "strategy": "application",
+      "sourceId": "direct-text",
+      "sourcePage": 39,
+      "sourceRange": "‘스펙트럼의 종류를 알아보자’의 01~03 항목",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "고온의 백색광은 연속 스펙트럼, 고온 기체의 방출광은 선 스펙트럼, 저온 기체를 통과한 백색광은 흡수 스펙트럼을 만든다."
+    },
+    {
+      "id": "12f28e90-1245-4919-8fac-0c4d715d0357",
+      "type": "flashcard",
+      "activityType": "structure_recall",
+      "front": "별빛에서 어두운 흡수선이 형성되는 과정을 순서대로 배열하세요.",
+      "structureNodes": [
+        {
+          "id": "n1",
+          "parentId": null,
+          "correctLabel": "연속광 발생"
+        },
+        {
+          "id": "n2",
+          "parentId": "n1",
+          "correctLabel": "저온 기체 통과"
+        },
+        {
+          "id": "n3",
+          "parentId": "n2",
+          "correctLabel": "특정 파장 흡수"
+        },
+        {
+          "id": "n4",
+          "parentId": "n3",
+          "correctLabel": "어두운 흡수선 형성"
+        }
+      ],
+      "structureRecallMode": "word_bank",
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "연속광 발생→저온 기체 통과→특정 파장 흡수→어두운 흡수선 형성",
+      "learningUnitId": "LU8",
+      "objectiveId": "OBJ-LU8",
+      "blueprintId": "BP-LU8",
+      "strategy": "procedure",
+      "sourceId": "direct-text",
+      "sourcePage": 35,
+      "sourceRange": "‘흡수 스펙트럼은 연속 스펙트럼인’ 문장",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "연속광이 저온 기체를 통과할 때 특정 파장이 흡수되어 어두운 흡수선이 나타난다."
+    },
+    {
+      "id": "acf0a046-9803-44d2-a7df-9a29871ddfef",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "관측한 별의 흡수선 파장 위치가 어떤 원소의 선 스펙트럼 위치와 일치한다면, 그 원소에 대해 무엇을 추론할 수 있는가?",
+      "back": "그 원소가 그 별에 존재한다고 추론할 수 있다.",
+      "recommendationReason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "관측된 흡수선의 파장 위치를 원소의 선과 대응→천체에 존재하는 원소 추론",
+      "learningUnitId": "LU9",
+      "objectiveId": "OBJ-LU9",
+      "blueprintId": "BP-LU9",
+      "strategy": "application",
+      "sourceId": "direct-text",
+      "sourcePage": 40,
+      "sourceRange": "‘정리하기’의 04 항목",
+      "rationale": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "관측 흡수선의 위치가 원소의 선 위치와 일치하면 그 원소가 별에 존재한다고 추론한다."
+    },
+    {
+      "id": "09927064-6d07-4860-892d-bcf9c55f97ed",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "빛의 스펙트럼을 분석하면 우주를 이루는 원소에 관해 알 수 있는 두 가지 정보는 무엇인가?",
+      "back": "원소의 종류와 양",
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "가스 구름과 원시별의 형성",
+        "원시별의 중력 수축과 핵융합 시작",
+        "핵융합에 의한 원소와 에너지 생성"
+      ],
+      "status": "new",
+      "basis": "빛의 스펙트럼을 분석하면 우주를 이루고 있는 다양한 원소의 종류와 양을 알 수 있다.",
+      "learningUnitId": "LU10",
+      "objectiveId": "OBJ-LU10",
+      "blueprintId": "BP-LU10",
+      "strategy": "production",
+      "sourceId": "direct-text",
+      "sourcePage": 35,
+      "sourceRange": "‘빛의 스펙트럼을 분석하면’ 문장",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 2,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "스펙트럼 분석으로 원소의 종류와 양을 알 수 있다."
+    }
+  ],
+  "usage": [
+    {
+      "sourceName": "science-stars-spectrum-student-2026-08-16T154918068Z.json",
+      "experimentId": "compact-card-2026-08-16T164805013Z",
+      "stage": "cards",
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium",
+      "inputTokens": 6779,
+      "cachedInputTokens": 6776,
+      "outputTokens": 2892,
+      "reasoningTokens": 739,
+      "totalTokens": 9671,
+      "estimatedCostUsd": 0.036065,
+      "pricingAsOf": "2026-08-13"
+    }
+  ],
+  "machineIssues": []
+}

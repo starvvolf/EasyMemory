@@ -1,0 +1,517 @@
+{
+  "schemaVersion": "problem-authoring-v1",
+  "id": "authoring-chatgpt-request-6229f153e7dd736279e90e2f523926c4",
+  "title": "반도체 공학의 이해 · 대표 범위 시험학습",
+  "questions": [
+    {
+      "id": "question-21b9491a-2732-4c23-89f7-a9275c66d2a3",
+      "source": {
+        "learningUnitId": "knowledge-unit-1",
+        "objectiveId": "objective-1",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 16,
+        "sourcePages": [
+          16
+        ],
+        "sourceRange": "반도체의 전도성",
+        "sourceText": "반도체는 전자의 흐름으로 인해 전도체와 부도체의 전기 전도도 크기 사이에 해당하는 전도성을 가지는 물질 (PDF 16쪽).",
+        "target": "전도도 기준으로 반도체를 정의한다.",
+        "successCriteria": [
+          "도체와 부도체 사이의 전도성을 정확히 말한다."
+        ],
+        "knowledgeContent": "반도체는 전기 전도도가 도체와 부도체 사이인 물질이다.",
+        "outlineNodeIds": [
+          "source-1:outline-18"
+        ],
+        "conceptNodeIds": [
+          "concept-002"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-21b9491a-2732-4c23-89f7-a9275c66d2a3",
+          "kind": "text",
+          "text": "16쪽 슬라이드의 전기 전도도 기준 반도체 정의로 맞는 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-21b9491a-2732-4c23-89f7-a9275c66d2a3",
+          "kind": "choice-set",
+          "responseId": "response-21b9491a-2732-4c23-89f7-a9275c66d2a3",
+          "optionIds": [
+            "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-1",
+            "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-2",
+            "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-3",
+            "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-21b9491a-2732-4c23-89f7-a9275c66d2a3",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-21b9491a-2732-4c23-89f7-a9275c66d2a3"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-21b9491a-2732-4c23-89f7-a9275c66d2a3",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-3",
+              "text": "반도체는 부도체와 같은 전도도를 갖고 전자 이동도만 큰 물질"
+            },
+            {
+              "id": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-1",
+              "text": "반도체는 전도도가 도체와 부도체 사이인 물질"
+            },
+            {
+              "id": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-4",
+              "text": "반도체는 전도도가 아닌 전자 밀도만으로 분류하는 물질"
+            },
+            {
+              "id": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-2",
+              "text": "반도체는 도체와 같은 전도도를 갖고 구성 원소만 다른 물질"
+            }
+          ],
+          "correctOptionId": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-1",
+          "grading": "exact",
+          "explanation": "슬라이드는 전자의 흐름에 따른 전도도가 도체와 부도체 사이인 물질로 정의한다."
+        }
+      ]
+    },
+    {
+      "id": "question-51603efa-746f-4192-85a0-a19fc0bb1088",
+      "source": {
+        "learningUnitId": "knowledge-unit-2",
+        "objectiveId": "objective-2",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 17,
+        "sourcePages": [
+          17
+        ],
+        "sourceRange": "전도도와 저항률",
+        "sourceText": "Electrical resistivity: 전기적 저항; Electrical conductivity: 전기 전도도 → 서로 역수 관계; Resistivity: [Ω m]; Conductivity: [S/m] = [Ω m]-1 (PDF 17쪽).",
+        "target": "두 물성의 역수 관계와 단위를 대응한다.",
+        "successCriteria": [
+          "저항률이 커질수록 전도도는 작아짐을 단위와 함께 맞힌다."
+        ],
+        "knowledgeContent": "전기 저항률과 전기 전도도는 서로 역수 관계이며 SI 단위는 각각 Ω m와 S/m이다.",
+        "outlineNodeIds": [
+          "source-1:outline-19"
+        ],
+        "conceptNodeIds": [
+          "concept-003"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-51603efa-746f-4192-85a0-a19fc0bb1088",
+          "kind": "text",
+          "text": "저항률이 커질 때 전도도는 어떻게 되며, 전도도의 SI 단위는 무엇인가?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-51603efa-746f-4192-85a0-a19fc0bb1088",
+          "kind": "choice-set",
+          "responseId": "response-51603efa-746f-4192-85a0-a19fc0bb1088",
+          "optionIds": [
+            "option-51603efa-746f-4192-85a0-a19fc0bb1088-1",
+            "option-51603efa-746f-4192-85a0-a19fc0bb1088-2",
+            "option-51603efa-746f-4192-85a0-a19fc0bb1088-3",
+            "option-51603efa-746f-4192-85a0-a19fc0bb1088-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-51603efa-746f-4192-85a0-a19fc0bb1088",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-51603efa-746f-4192-85a0-a19fc0bb1088"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-51603efa-746f-4192-85a0-a19fc0bb1088",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-51603efa-746f-4192-85a0-a19fc0bb1088-1",
+              "text": "전도도는 작아지고 단위는 S/m"
+            },
+            {
+              "id": "option-51603efa-746f-4192-85a0-a19fc0bb1088-2",
+              "text": "전도도는 커지고 단위는 S/m"
+            },
+            {
+              "id": "option-51603efa-746f-4192-85a0-a19fc0bb1088-3",
+              "text": "전도도는 작아지고 단위는 Ω m"
+            },
+            {
+              "id": "option-51603efa-746f-4192-85a0-a19fc0bb1088-4",
+              "text": "전도도는 변하지 않고 단위는 Ω m"
+            }
+          ],
+          "correctOptionId": "option-51603efa-746f-4192-85a0-a19fc0bb1088-1",
+          "grading": "exact",
+          "explanation": "두 물성은 역수 관계다. 전도도의 단위는 S/m이며 저항률의 단위는 Ω m이다."
+        }
+      ]
+    },
+    {
+      "id": "question-393e32ad-3146-4c79-b72f-4a727810f73a",
+      "source": {
+        "learningUnitId": "knowledge-unit-3",
+        "objectiveId": "objective-3",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 18,
+        "sourcePages": [
+          18
+        ],
+        "sourceRange": "옴성·비옴성",
+        "sourceText": "도체는 옴의 법칙을 따른다. 하지만 반도체는 옴의 법칙을 따르지 않는다. 차이가 나는 이유는? 전자 밀도 때문! (PDF 18쪽).",
+        "target": "슬라이드가 제시한 차이와 이유를 설명한다.",
+        "successCriteria": [
+          "도체는 옴성, 반도체는 비옴성이고 전자 밀도와 관련된다는 자료의 설명을 구별한다."
+        ],
+        "knowledgeContent": "강의 슬라이드는 도체의 선형 옴성 거동과 반도체의 비옴성 거동을 대비하고 이유로 전자 밀도를 제시한다.",
+        "outlineNodeIds": [
+          "source-1:outline-20"
+        ],
+        "conceptNodeIds": [
+          "concept-004"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-393e32ad-3146-4c79-b72f-4a727810f73a",
+          "kind": "text",
+          "text": "18쪽 강의 슬라이드의 도체와 반도체의 옴성 대비 및 제시된 이유로 옳은 것은?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-393e32ad-3146-4c79-b72f-4a727810f73a",
+          "kind": "choice-set",
+          "responseId": "response-393e32ad-3146-4c79-b72f-4a727810f73a",
+          "optionIds": [
+            "option-393e32ad-3146-4c79-b72f-4a727810f73a-1",
+            "option-393e32ad-3146-4c79-b72f-4a727810f73a-2",
+            "option-393e32ad-3146-4c79-b72f-4a727810f73a-3",
+            "option-393e32ad-3146-4c79-b72f-4a727810f73a-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-393e32ad-3146-4c79-b72f-4a727810f73a",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-393e32ad-3146-4c79-b72f-4a727810f73a"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-393e32ad-3146-4c79-b72f-4a727810f73a",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-393e32ad-3146-4c79-b72f-4a727810f73a-1",
+              "text": "도체는 옴성, 반도체는 비옴성으로 설명하며 차이를 전자 밀도와 연결한다"
+            },
+            {
+              "id": "option-393e32ad-3146-4c79-b72f-4a727810f73a-2",
+              "text": "도체는 비옴성, 반도체는 옴성으로 설명하며 차이를 온도만으로 설명한다"
+            },
+            {
+              "id": "option-393e32ad-3146-4c79-b72f-4a727810f73a-3",
+              "text": "둘 다 언제나 동일한 선형 관계라고 설명한다"
+            },
+            {
+              "id": "option-393e32ad-3146-4c79-b72f-4a727810f73a-4",
+              "text": "둘 다 전압과 무관하게 전류가 흐르지 않는다고 설명한다"
+            }
+          ],
+          "correctOptionId": "option-393e32ad-3146-4c79-b72f-4a727810f73a-1",
+          "grading": "exact",
+          "explanation": "이는 해당 슬라이드의 교육용 대비다. 반도체 소자의 모든 조건에 대한 보편 법칙으로 확대하지 않는다."
+        }
+      ]
+    },
+    {
+      "id": "question-16ac2c5b-3a1c-42b9-821b-5c9506fe2767",
+      "source": {
+        "learningUnitId": "knowledge-unit-4",
+        "objectiveId": "objective-4",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 19,
+        "sourcePages": [
+          19
+        ],
+        "sourceRange": "금속의 자유전자",
+        "sourceText": "Free conduction electrons in a crystal; 수많은 자유전자 덕분에 금속은 좋은 전기 전도체! (PDF 19쪽).",
+        "target": "자유전자와 금속의 높은 전도성의 관계를 말한다.",
+        "successCriteria": [
+          "자유전자가 많다는 이유를 포함한다."
+        ],
+        "knowledgeContent": "금속에는 많은 자유전자가 있어서 좋은 전기 전도체가 된다.",
+        "outlineNodeIds": [
+          "source-1:outline-21"
+        ],
+        "conceptNodeIds": [
+          "concept-005"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-16ac2c5b-3a1c-42b9-821b-5c9506fe2767",
+          "kind": "text",
+          "text": "19쪽 전자 바다 그림에서 금속이 좋은 전기 전도체인 이유는?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-16ac2c5b-3a1c-42b9-821b-5c9506fe2767",
+          "kind": "choice-set",
+          "responseId": "response-16ac2c5b-3a1c-42b9-821b-5c9506fe2767",
+          "optionIds": [
+            "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-1",
+            "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-2",
+            "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-3",
+            "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-16ac2c5b-3a1c-42b9-821b-5c9506fe2767",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-16ac2c5b-3a1c-42b9-821b-5c9506fe2767"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-16ac2c5b-3a1c-42b9-821b-5c9506fe2767",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-2",
+              "text": "금속의 이온 원자핵이 결정 안에서 이동하며 전하를 운반하기 때문이다"
+            },
+            {
+              "id": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-4",
+              "text": "금속에서는 전자 수와 무관하게 전압만 높이면 전도도가 자동으로 커지기 때문이다"
+            },
+            {
+              "id": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-1",
+              "text": "금속의 높은 전도도는 많은 자유전자가 전하를 운반하기 때문이다"
+            },
+            {
+              "id": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-3",
+              "text": "금속의 저항률이 커질수록 전도도도 커지기 때문이다"
+            }
+          ],
+          "correctOptionId": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-1",
+          "grading": "exact",
+          "explanation": "그림은 결정 안에 이동 가능한 자유전자가 다수 있음을 보여준다."
+        }
+      ]
+    },
+    {
+      "id": "question-a6725ce4-a0de-430e-b326-e22facb6c4b7",
+      "source": {
+        "learningUnitId": "knowledge-unit-5",
+        "objectiveId": "objective-5",
+        "sourceId": "ilovepdf_merged.pdf",
+        "sourcePage": 20,
+        "sourcePages": [
+          20
+        ],
+        "sourceRange": "금속의 전도도",
+        "sourceText": "σ = neμ; 전자 수(n)가 많을수록, 전자가 빠를수록(μ) 전도도가 높다! (PDF 20쪽).",
+        "target": "두 변수 변화가 전도도에 주는 영향을 판단한다.",
+        "successCriteria": [
+          "n 또는 μ가 증가할 때 σ도 증가한다고 답한다."
+        ],
+        "knowledgeContent": "Drude 모형의 금속 전도도 σ=neμ는 전자 수 밀도 n과 이동도 μ가 클수록 커진다.",
+        "outlineNodeIds": [
+          "source-1:outline-22"
+        ],
+        "conceptNodeIds": [
+          "concept-006"
+        ]
+      },
+      "page": {
+        "width": 760,
+        "height": 520
+      },
+      "blocks": [
+        {
+          "id": "prompt-a6725ce4-a0de-430e-b326-e22facb6c4b7",
+          "kind": "text",
+          "text": "20쪽의 σ=neμ에서 e와 μ가 일정하고 n만 두 배가 되면 σ는 어떻게 되는가?",
+          "style": "heading",
+          "frame": {
+            "x": 28,
+            "y": 24,
+            "width": 704,
+            "height": 82
+          }
+        },
+        {
+          "id": "choices-a6725ce4-a0de-430e-b326-e22facb6c4b7",
+          "kind": "choice-set",
+          "responseId": "response-a6725ce4-a0de-430e-b326-e22facb6c4b7",
+          "optionIds": [
+            "option-a6725ce4-a0de-430e-b326-e22facb6c4b7-1",
+            "option-a6725ce4-a0de-430e-b326-e22facb6c4b7-2",
+            "option-a6725ce4-a0de-430e-b326-e22facb6c4b7-3",
+            "option-a6725ce4-a0de-430e-b326-e22facb6c4b7-4"
+          ],
+          "columns": 1,
+          "frame": {
+            "x": 28,
+            "y": 128,
+            "width": 704,
+            "height": 264
+          }
+        },
+        {
+          "id": "reveal-a6725ce4-a0de-430e-b326-e22facb6c4b7",
+          "kind": "answer-reveal",
+          "responseIds": [
+            "response-a6725ce4-a0de-430e-b326-e22facb6c4b7"
+          ],
+          "title": "정답과 해설",
+          "frame": {
+            "x": 28,
+            "y": 414,
+            "width": 704,
+            "height": 80
+          }
+        }
+      ],
+      "responses": [
+        {
+          "id": "response-a6725ce4-a0de-430e-b326-e22facb6c4b7",
+          "kind": "single-choice",
+          "options": [
+            {
+              "id": "option-a6725ce4-a0de-430e-b326-e22facb6c4b7-1",
+              "text": "절반이 된다"
+            },
+            {
+              "id": "option-a6725ce4-a0de-430e-b326-e22facb6c4b7-2",
+              "text": "변하지 않는다"
+            },
+            {
+              "id": "option-a6725ce4-a0de-430e-b326-e22facb6c4b7-3",
+              "text": "두 배가 된다"
+            },
+            {
+              "id": "option-a6725ce4-a0de-430e-b326-e22facb6c4b7-4",
+              "text": "네 배가 된다"
+            }
+          ],
+          "correctOptionId": "option-a6725ce4-a0de-430e-b326-e22facb6c4b7-3",
+          "grading": "exact",
+          "explanation": "σ가 n에 비례하므로 n이 두 배면 σ도 두 배다."
+        }
+      ]
+    }
+  ]
+}

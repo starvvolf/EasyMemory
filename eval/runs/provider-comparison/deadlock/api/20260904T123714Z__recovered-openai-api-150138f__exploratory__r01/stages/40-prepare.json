@@ -1,0 +1,494 @@
+{
+  "artifactType": "study-forge-stage-artifact",
+  "artifactVersion": "v0",
+  "runId": "20260904T123714Z__recovered-openai-api-150138f__exploratory__r01",
+  "stage": "prepare",
+  "status": "executed",
+  "sourceRunId": null,
+  "sourceArtifact": null,
+  "capturedAt": "2026-09-04T12:39:32.333Z",
+  "modelConfiguration": {
+    "model": "gpt-5.6-terra",
+    "reasoningEffort": "medium"
+  },
+  "inputRefs": [
+    "stages/10-analyze.json",
+    "stages/20-plan.json",
+    "stages/30-recall.json"
+  ],
+  "request": {
+    "title": "lecture8",
+    "subject": "",
+    "tags": [],
+    "sourceText": "",
+    "instruction": "이 자료의 핵심 내용을 반복학습 문제로 익힌다.",
+    "analysisContext": "{\"files\":[{\"fileName\":\"lecture8.pdf\",\"documentType\":\"운영체제 과목에서 데드락의 개념·특성화·처리 방안을 설명하는 강의 슬라이드 자료입니다.\",\"summary\":\"이 자료는 데드락의 정의와 발생 조건, 자원 할당 그래프를 통한 판별을 다룹니다. 이어 예방, 회피, 탐지 및 복구라는 데드락 처리 방안을 설명하고 안전 상태와 비안전 상태의 의미를 제시합니다.\",\"keyTopics\":[\"데드락 개념\",\"데드락 발생의 네 가지 조건\",\"자원 할당 그래프\",\"데드락 예방\",\"데드락 회피와 안전 상태\",\"데드락 탐지 및 복구\"],\"outline\":[{\"heading\":\"학습 목표 및 학습 내용\",\"points\":[\"데드락의 개념·발생 조건·처리 방안을 설명하는 것을 목표로 함\",\"학습 내용: Deadlock concept, Deadlock characterization, Methods for handling deadlocks, prevention, avoidance, detection and recovery\"]},{\"heading\":\"What is deadlock?\",\"points\":[\"세마포어 S와 Q를 사용하는 P0, P1의 자원 대기 예시\",\"차단된 프로세스 집합에서 각 프로세스가 자원을 보유한 채 다른 프로세스가 보유한 자원을 기다리는 상태\"]},{\"heading\":\"Deadlock Characterization\",\"points\":[\"시스템 모델링: 프로세스, 자원 유형 및 인스턴스, request-use-release\",\"상호 배제·점유와 대기·비선점·순환 대기의 네 가지 발생 조건\",\"자원 할당 그래프의 요청 간선과 할당 간선\",\"그래프의 사이클 및 자원 인스턴스 수에 따른 데드락 판별\"]},{\"heading\":\"Methods for Handling Deadlocks\",\"points\":[\"예방: 네 조건 중 적어도 하나가 성립하지 않도록 함\",\"회피: 사전 정보를 바탕으로 데드락 상태 진입을 막음\",\"탐지 및 복구: 데드락을 허용한 뒤 탐지하고 복구함\"]},{\"heading\":\"Deadlock Prevention\",\"points\":[\"점유와 대기, 비선점, 순환 대기 조건을 막는 방법\"]},{\"heading\":\"Deadlock Avoidance\",\"points\":[\"즉시 할당 후 안전 상태인지 판단\",\"청구 간선 기반 자원 할당 그래프와 다중 인스턴스의 은행원 알고리즘\",\"비안전 상태 예시: 사이클이 생기는 요청은 거부\"]},{\"heading\":\"Deadlock Detection & Recovery\",\"points\":[\"그래프의 사이클 탐지 알고리즘\",\"프로세스 종료 또는 자원 선점을 통한 복구\"]},{\"heading\":\"Summary\",\"points\":[\"데드락 정의, 네 조건, 예방·회피·탐지 및 복구의 핵심 정리\"]}],\"sourceOutline\":{\"title\":\"Chapter 8. Deadlocks\",\"summary\":\"데드락의 개념과 특성화, 그리고 예방·회피·탐지 및 복구 방법을 다루는 제8장 강의 자료입니다.\",\"nodes\":[{\"id\":\"n1\",\"parentId\":null,\"order\":1,\"title\":\"Chapter 8. Deadlocks\",\"summary\":\"데드락을 주제로 한 장 제목입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[1]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n2\",\"parentId\":\"n1\",\"order\":1,\"title\":\"학습 목표 및 학습 내용\",\"summary\":\"데드락의 개념, 발생 조건 및 처리 방안 학습 목표와 세부 학습 내용을 제시합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[2]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n3\",\"parentId\":\"n2\",\"order\":1,\"title\":\"학습 목표\",\"summary\":\"데드락의 개념, 발생 조건, 처리 방안을 설명하는 능력을 목표로 합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[2]}],\"sourceEvidence\":\"데드락의 개념을 설명할 수 있다. / 데드락의 발생 조건을 설명할 수 있다. / 데드락의 처리 방안을 설명할 수 있다.\",\"selectedByDefault\":false,\"structureTags\":[\"목록\"],\"importance\":0},{\"id\":\"n4\",\"parentId\":\"n2\",\"order\":2,\"title\":\"학습 내용\",\"summary\":\"데드락 개념, 특성화 및 처리 방법의 세부 항목을 열거합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[2]}],\"sourceEvidence\":\"Deadlock concept; Deadlock characterization; Methods for handling deadlocks; Deadlock prevention; Deadlock avoidance; Deadlock detection and recovery\",\"selectedByDefault\":false,\"structureTags\":[\"목록\"],\"importance\":0},{\"id\":\"n5\",\"parentId\":\"n1\",\"order\":2,\"title\":\"What is deadlock?\",\"summary\":\"세마포어 사용 예시로 데드락 상태를 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[3]}],\"sourceEvidence\":\"For a set of blocked processes, each is holding a resource and waiting to acquire a resource held by another process in the set.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\",\"틀\"],\"importance\":3},{\"id\":\"n6\",\"parentId\":\"n1\",\"order\":3,\"title\":\"Deadlock Characterization\",\"summary\":\"시스템 모델, 발생 조건 및 자원 할당 그래프로 데드락을 특성화합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[4,5,6,7]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n7\",\"parentId\":\"n6\",\"order\":1,\"title\":\"System modeling\",\"summary\":\"프로세스, 자원 유형 및 자원 사용 단계를 모델링합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[4]}],\"sourceEvidence\":\"Processes: P1, P2, … Pn. / Resource types: R1, R2, …, Rm / Each process utilizes a resource as follows: request, use, release.\",\"selectedByDefault\":true,\"structureTags\":[\"목록\",\"절차\"],\"importance\":2},{\"id\":\"n8\",\"parentId\":\"n6\",\"order\":2,\"title\":\"Deadlock can arise if four conditions hold simultaneously.\",\"summary\":\"데드락이 발생하기 위한 네 가지 동시 성립 조건을 제시합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n9\",\"parentId\":\"n8\",\"order\":1,\"title\":\"Mutual exclusion\",\"summary\":\"한 번에 하나의 프로세스만 자원을 사용할 수 있는 조건입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"Only one process at a time can use a resource.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n10\",\"parentId\":\"n8\",\"order\":2,\"title\":\"Hold and wait\",\"summary\":\"자원을 보유한 프로세스가 다른 프로세스가 보유한 추가 자원을 기다리는 조건입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"A process holding at least one resource is waiting to acquire additional resources held by other processes.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n11\",\"parentId\":\"n8\",\"order\":3,\"title\":\"No preemption\",\"summary\":\"보유 프로세스가 자발적으로만 자원을 해제할 수 있는 조건입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"A resource can be released only voluntarily by the process holding it.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n12\",\"parentId\":\"n8\",\"order\":4,\"title\":\"Circular wait\",\"summary\":\"대기 프로세스들이 서로가 보유한 자원을 순환하여 기다리는 조건입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[5]}],\"sourceEvidence\":\"Pn is waiting for a resource that is held by P0.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n13\",\"parentId\":\"n6\",\"order\":3,\"title\":\"Resource allocation graph\",\"summary\":\"프로세스와 자원 유형, 요청 및 할당 간선으로 자원 할당 상태를 표현합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[6]}],\"sourceEvidence\":\"P = {P1, P2, …, Pn}, set of all processes in the system. / R = {R1, R2, …, Rm}, set of all resource types in the system. / Pi → Rj : request; Rj → Pi : assignment\",\"selectedByDefault\":true,\"structureTags\":[\"관계\",\"틀\"],\"importance\":2},{\"id\":\"n14\",\"parentId\":\"n6\",\"order\":4,\"title\":\"Deadlock examples with resource allocation graph\",\"summary\":\"자원 할당 그래프의 사이클과 자원 인스턴스 수에 따른 데드락 판별을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[7]}],\"sourceEvidence\":\"If graph contains no cycles, no deadlock. If graph contains a cycle, if only one instance per resource type, deadlock; if several instances per resource type, possibility of deadlock.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\",\"비교\",\"예외\"],\"importance\":3},{\"id\":\"n15\",\"parentId\":\"n1\",\"order\":4,\"title\":\"Methods for Handling Deadlocks\",\"summary\":\"예방, 회피, 탐지 및 복구의 세 가지 데드락 처리 방안을 제시합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[8]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n16\",\"parentId\":\"n15\",\"order\":1,\"title\":\"Prevention\",\"summary\":\"네 가지 조건 가운데 적어도 하나가 성립하지 않도록 하여 데드락 상태 진입을 막습니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[8]}],\"sourceEvidence\":\"The system will never enter a deadlock state. It ensures that at least one of four conditions cannot hold.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n17\",\"parentId\":\"n15\",\"order\":2,\"title\":\"Avoidance\",\"summary\":\"각 프로세스의 자원 사용에 관한 사전 정보를 이용하여 데드락 상태 진입을 막습니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[8]}],\"sourceEvidence\":\"The system will never enter a deadlock state. It requires a priori information about how each process will utilize resources.\",\"selectedByDefault\":true,\"structureTags\":[\"관계\"],\"importance\":3},{\"id\":\"n18\",\"parentId\":\"n15\",\"order\":3,\"title\":\"Detection and recovery\",\"summary\":\"시스템의 데드락 상태 진입을 허용한 후 복구합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[8]}],\"sourceEvidence\":\"It allows the system to enter a deadlock state and then recover.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\"],\"importance\":3},{\"id\":\"n19\",\"parentId\":\"n1\",\"order\":5,\"title\":\"Deadlock Prevention\",\"summary\":\"데드락의 네 가지 조건 중 적어도 하나를 성립하지 않게 하는 방법을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n20\",\"parentId\":\"n19\",\"order\":1,\"title\":\"Mutual Exclusion\",\"summary\":\"상호 배제 조건은 부정하기 어렵다고 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"is impossible to deny the mutual exclusion.\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":1},{\"id\":\"n21\",\"parentId\":\"n19\",\"order\":2,\"title\":\"Hold and Wait\",\"summary\":\"프로세스가 실행 전에 필요한 모든 자원을 요청하고 할당받도록 요구합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"requires process to request and be allocated all its resources before it begins execution.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\"],\"importance\":2},{\"id\":\"n22\",\"parentId\":\"n19\",\"order\":3,\"title\":\"No Preemption\",\"summary\":\"즉시 할당할 수 없는 자원을 요청하면 보유 자원을 해제하고, 이전 및 새 자원을 모두 확보할 수 있을 때 재시작합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"all resources currently being held are released. Process will be restarted only when it can regain its old resources as well as the new ones.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\"],\"importance\":2},{\"id\":\"n23\",\"parentId\":\"n19\",\"order\":4,\"title\":\"Circular Wait\",\"summary\":\"모든 자원 유형에 전체 순서를 부여하고, 프로세스가 증가하는 번호 순서로 자원을 요청하게 합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[9]}],\"sourceEvidence\":\"imposes a total ordering of all resource types, and requires that each process requests resources in an increasing order of enumeration.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\"],\"importance\":2},{\"id\":\"n24\",\"parentId\":\"n1\",\"order\":6,\"title\":\"Deadlock Avoidance\",\"summary\":\"안전 상태를 판단하여 자원 요청의 즉시 할당 여부를 결정하는 방법을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[10,11,12]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n25\",\"parentId\":\"n24\",\"order\":1,\"title\":\"Deadlock avoidance algorithm\",\"summary\":\"즉시 할당 후 시스템이 안전 상태에 남는지를 판단하며, 안전 상태와 비안전 상태의 의미를 제시합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[10]}],\"sourceEvidence\":\"system must decide if the immediate allocation leaves the system in a safe state. If a system is in safe state, No deadlocks. If a system is in unsafe state, Possibility of deadlock.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\",\"비교\"],\"importance\":3},{\"id\":\"n26\",\"parentId\":\"n24\",\"order\":2,\"title\":\"Resource allocation graph\",\"summary\":\"청구 간선의 변환과 다중 인스턴스 자원에서 은행원 알고리즘 사용을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[11]}],\"sourceEvidence\":\"Claim edge Pi → Rj / Claim edge is converted to request edge … Request edge is converted to assignment edge … Assignment edge is reconverted to claim edge … When multiple instances of a resource type, use the banker’s algorithm.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\",\"예외\"],\"importance\":2},{\"id\":\"n27\",\"parentId\":\"n24\",\"order\":3,\"title\":\"Unsafe state example\",\"summary\":\"P2의 R2 요청을 승인하면 사이클이 형성되므로 요청을 거부하는 예시입니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[12]}],\"sourceEvidence\":\"P2 requests R2. If we grant it, a cycle is formed. So, deny!!! / No cycle → safe → grant; Cycle → unsafe → deny\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\"],\"importance\":2},{\"id\":\"n28\",\"parentId\":\"n1\",\"order\":7,\"title\":\"Deadlock Detection & Recovery\",\"summary\":\"데드락을 탐지하고 프로세스 종료 또는 자원 선점으로 복구하는 방법을 설명합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[13]}],\"sourceEvidence\":\"\",\"selectedByDefault\":false,\"structureTags\":[],\"importance\":0},{\"id\":\"n29\",\"parentId\":\"n28\",\"order\":1,\"title\":\"Detection algorithm\",\"summary\":\"그래프에서 사이클을 찾는 알고리즘을 주기적으로 실행하며, 사이클이 있으면 데드락이 존재합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[13]}],\"sourceEvidence\":\"Periodically invoke an algorithm that searches for a cycle in the graph. If there is a cycle, there exists a deadlock.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"관계\"],\"importance\":2},{\"id\":\"n30\",\"parentId\":\"n28\",\"order\":2,\"title\":\"Recovery scheme\",\"summary\":\"데드락 프로세스를 종료하거나 일부 자원을 선점하여 데드락 사이클을 제거합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[13]}],\"sourceEvidence\":\"Abort all deadlocked processes. / Abort one process at a time until the deadlock cycle is eliminated. / Preempt some resources from processes … until the deadlock cycle is broken.\",\"selectedByDefault\":true,\"structureTags\":[\"절차\",\"목록\"],\"importance\":2},{\"id\":\"n31\",\"parentId\":\"n1\",\"order\":8,\"title\":\"Summary\",\"summary\":\"데드락의 정의, 발생 조건 및 세 가지 처리 방안을 요약합니다.\",\"sourceRefs\":[{\"fileName\":\"lecture8.pdf\",\"pageNumbers\":[14]}],\"sourceEvidence\":\"Deadlock can arise if four conditions; mutual exclusion, hold and wait, no preemption, and circular wait hold simultaneously. / Deadlock prevention, avoidance, detection and recovery\",\"selectedByDefault\":false,\"structureTags\":[\"목록\"],\"importance\":0}]},\"suggestedRole\":\"데드락의 발생 원리와 자원 관리 기반 처리 전략을 학습·복습하는 핵심 개념 자료로 활용합니다.\"}]}",
+    "studyGuideline": "{\"summary\":\"데드락의 정의와 발생 구조를 이해하고, 자원 할당 그래프·안전 상태를 근거로 데드락을 판별하며, 예방·회피·탐지 및 복구 방식을 구별하여 설명하는 내용입니다.\",\"selectedGroup\":{\"id\":\"whole-document-core\",\"title\":\"전체 자료 핵심 학습 범위\",\"description\":\"사용자가 전체 범위의 핵심 내용을 반복학습 문제로 익히는 것을 목표로 했으므로, 정의·판별 규칙·처리 전략처럼 독립적으로 회상 및 적용 가능한 교과 지식을 우선 선정했습니다. 표지, 학습 목표 안내, 최종 요약은 새로운 학습 내용을 추가하지 않아 제외했습니다.\",\"itemCount\":18,\"itemLabel\":\"핵심 LearningUnit\",\"selectionInstruction\":\"특정 영역 하나로 제한하지 않고 wholeDocumentCore.areas 전체에서 핵심 단위를 추출합니다. 모든 영역을 균등하게 배분하지 말고 learningValue를 반영합니다. 중요한 하위 영역은 누락하지 않되 예시, 반복 요약, 메타데이터는 핵심 단위보다 낮은 우선순위로 둡니다. wholeDocumentCore.exclusions에 포함된 내용은 핵심 LearningUnit으로 만들지 않습니다.\"},\"wholeDocumentCore\":{\"summary\":\"데드락의 정의와 발생 구조를 이해하고, 자원 할당 그래프·안전 상태를 근거로 데드락을 판별하며, 예방·회피·탐지 및 복구 방식을 구별하여 설명하는 내용입니다.\",\"learningGoal\":\"데드락의 핵심 개념과 네 가지 발생 조건을 설명하고, 자원 할당 그래프 및 안전 상태로 데드락 위험을 판정하며, 예방·회피·탐지 및 복구 방안의 원리와 적용 방식을 반복 문제를 통해 구별·설명할 수 있다.\",\"selectionRationale\":\"사용자가 전체 범위의 핵심 내용을 반복학습 문제로 익히는 것을 목표로 했으므로, 정의·판별 규칙·처리 전략처럼 독립적으로 회상 및 적용 가능한 교과 지식을 우선 선정했습니다. 표지, 학습 목표 안내, 최종 요약은 새로운 학습 내용을 추가하지 않아 제외했습니다.\",\"areas\":[{\"id\":\"n5\",\"title\":\"What is deadlock?\",\"description\":\"차단된 프로세스 집합의 각 프로세스가 자원을 보유하면서 집합 내 다른 프로세스가 보유한 자원을 기다리는 데드락의 정의와 세마포어 예시의 대기 구조를 학습한다.\",\"learningValue\":\"이후 발생 조건, 그래프 판별, 처리 방안이 모두 데드락 상태의 정확한 정의를 전제로 하므로 핵심 출발점이다.\",\"sourceScope\":[\"n5 | What is deadlock? | 3쪽\"]},{\"id\":\"n6\",\"title\":\"Deadlock Characterization\",\"description\":\"프로세스·자원 유형·자원 인스턴스 및 request-use-release의 시스템 모델을 바탕으로, 상호 배제·점유와 대기·비선점·순환 대기의 네 조건이 동시에 성립할 때 데드락이 발생함을 학습한다. 또한 자원 할당 그래프의 요청 간선과 할당 간선, 사이클 및 자원 인스턴스 수에 따른 판별 규칙을 학습한다.\",\"learningValue\":\"데드락의 발생 원인을 구조적으로 설명하고, 그래프에서 데드락 여부 또는 가능성을 판단하는 데 필요한 핵심 규칙이다.\",\"sourceScope\":[\"n6 | Deadlock Characterization | 4-7쪽\",\"n7 | System modeling | 4쪽\",\"n8 | Deadlock can arise if four conditions hold simultaneously. | 5쪽\",\"n9 | Mutual exclusion | 5쪽\",\"n10 | Hold and wait | 5쪽\",\"n11 | No preemption | 5쪽\",\"n12 | Circular wait | 5쪽\",\"n13 | Resource allocation graph | 6쪽\",\"n14 | Deadlock examples with resource allocation graph | 7쪽\"]},{\"id\":\"n15\",\"title\":\"Methods for Handling Deadlocks\",\"description\":\"데드락 처리의 세 접근법을 구별한다. 예방은 네 발생 조건 중 적어도 하나를 성립하지 않게 하고, 회피는 사전 자원 사용 정보를 바탕으로 안전 상태를 유지하며, 탐지 및 복구는 데드락 진입을 허용한 뒤 이를 찾아 해소한다.\",\"learningValue\":\"세부 기법을 단순 암기하지 않고 각 방법의 개입 시점과 기본 원리를 비교하는 기준이 된다.\",\"sourceScope\":[\"n15 | Methods for Handling Deadlocks | 8쪽\",\"n16 | Prevention | 8쪽\",\"n17 | Avoidance | 8쪽\",\"n18 | Detection and recovery | 8쪽\"]},{\"id\":\"n19\",\"title\":\"Deadlock Prevention\",\"description\":\"예방을 위해 점유와 대기를 막는 선할당 방식, 비선점 조건을 막기 위한 보유 자원 해제 및 재시작 방식, 순환 대기를 막기 위한 자원 유형의 전체 순서와 오름차순 요청 방식을 학습한다. 상호 배제 조건은 일반적으로 부정하기 어렵다는 점도 함께 구별한다.\",\"learningValue\":\"네 발생 조건과 대응 예방 정책을 연결하여, 각 정책이 어떤 대기 구조를 제거하는지 설명할 수 있게 한다.\",\"sourceScope\":[\"n19 | Deadlock Prevention | 9쪽\",\"n20 | Mutual Exclusion | 9쪽\",\"n21 | Hold and Wait | 9쪽\",\"n22 | No Preemption | 9쪽\",\"n23 | Circular Wait | 9쪽\"]},{\"id\":\"n24\",\"title\":\"Deadlock Avoidance\",\"description\":\"자원 요청을 즉시 승인한 뒤에도 안전 상태가 유지되는지 판단하는 회피 원리를 학습한다. 안전 상태와 비안전 상태의 의미, 청구 간선·요청 간선·할당 간선의 변환, 사이클 생성 시 요청 거부 규칙을 다루며, 자원 유형에 여러 인스턴스가 있으면 은행원 알고리즘을 사용한다는 점을 포함한다.\",\"learningValue\":\"예방과 달리 자원 요청마다 미래의 안전성을 판단하는 회피의 의사결정 규칙을 적용할 수 있게 한다.\",\"sourceScope\":[\"n24 | Deadlock Avoidance | 10-12쪽\",\"n25 | Deadlock avoidance algorithm | 10쪽\",\"n26 | Resource allocation graph | 11쪽\",\"n27 | Unsafe state example | 12쪽\"]},{\"id\":\"n28\",\"title\":\"Deadlock Detection & Recovery\",\"description\":\"데드락을 허용한 뒤 그래프에서 사이클을 주기적으로 탐색하여 탐지하는 방식과, 데드락 프로세스 전체 또는 일부를 종료하거나 일부 자원을 선점하여 사이클을 끊는 복구 방식을 학습한다.\",\"learningValue\":\"사전 차단 전략이 아닌 사후 대응 전략의 탐지 기준과 복구 선택지를 구별하는 데 필요하다.\",\"sourceScope\":[\"n28 | Deadlock Detection & Recovery | 13쪽\",\"n29 | Detection algorithm | 13쪽\",\"n30 | Recovery scheme | 13쪽\"]}],\"exclusions\":[\"n1 | Chapter 8. Deadlocks | 1쪽: 장 제목만 제시하며 독립적으로 반복학습할 교과 지식이 없다.\",\"n2, n3, n4 | 학습 목표 및 학습 내용 | 2쪽: 자료의 목표와 항목을 안내하는 메타 정보이며, 실제 개념·규칙 학습은 해당 본문 영역에서 다룬다.\",\"n31 | Summary | 14쪽: 앞선 본문 내용을 압축 반복할 뿐 새로운 개념·규칙·절차를 추가하지 않으므로 별도 학습 영역으로 분리하지 않는다.\",\"세마포어 S·Q의 특정 코드 배열과 개별 그림 구성: 데드락 정의를 설명하는 예시이므로 n5의 맥락으로 활용하되, 예시 자체를 독립 학습 영역으로 두지 않는다.\",\"자원 할당 그래프의 개별 도식 사례: 그래프 간선, 사이클, 인스턴스 수에 따른 판별 규칙을 학습하는 데 사용하되, 각 사례의 도형 배치를 별도 암기 대상으로 두지 않는다.\"],\"maxLearningUnitCount\":18},\"countPolicy\":\"soft_budget\",\"learningUnitSoftBudget\":{\"max\":18}}",
+    "recallDesign": "{\"selectedOption\":{\"id\":\"option-2\",\"title\":\"상황·조건 Cue → 개념 판정·처리 결정 Target\",\"cue\":\"프로세스의 자원 보유·요청 상황, 자원 할당 그래프의 사이클 조건, 또는 처리 정책의 조건을 본다.\",\"target\":\"해당 상황의 개념명·데드락 판정·안전성·승인 또는 거부·적용 처리 방식을 말하거나 쓴다.\",\"unit\":\"핵심 LearningUnit\",\"instruction\":\"각 카드는 하나의 핵심 LearningUnit을 상황 또는 조건으로 바꾸어 제시한다. 앞면에는 프로세스와 자원의 관계, 그래프의 사이클 및 인스턴스 수, 또는 정책 적용 조건을 구체적으로 제시한다. 뒷면에는 정확한 조건명, 데드락 여부·가능성, 안전 또는 비안전 판정, 승인·거부 결정, 예방·회피·탐지 및 복구 중 해당 방식과 조치를 재생산하게 한다. 판정에는 근거가 되는 규칙을 짧게 함께 쓰게 하며, 자료에 없는 세부 알고리즘 계산은 추가하지 않는다.\",\"mode\":\"flashcard\",\"variants\":[{\"id\":\"option-2-template\",\"label\":\"상황 판정 빈자리형\",\"description\":\"자원 관계와 그래프 조건의 변수를 보고, 개념 판정과 조치를 인출합니다.\",\"slotMode\":\"template\",\"exampleSource\":\"source\",\"preservePlaceholders\":true,\"sample\":{\"title\":\"사이클과 데드락 판정\",\"cue\":\"자원 할당 그래프에 사이클이 있고, 각 [자원 유형]의 인스턴스가 하나뿐이다.\",\"target\":\"데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.\",\"supportingInfo\":\"인스턴스가 여러 개인 경우에는 ‘데드락 가능성’으로 판정이 달라진다.\"}},{\"id\":\"option-2-filled\",\"label\":\"상황 판정 완성형\",\"description\":\"구체적인 자원 관계와 그래프 조건을 보고, 완성된 판정과 조치를 인출합니다.\",\"slotMode\":\"filled_example\",\"exampleSource\":\"generated\",\"preservePlaceholders\":false,\"sample\":{\"title\":\"사이클과 데드락 판정\",\"cue\":\"자원 할당 그래프에 사이클이 있고, 각 자원 유형의 인스턴스가 하나뿐이다.\",\"target\":\"데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.\",\"supportingInfo\":\"사이클 유무와 자원 인스턴스 수를 함께 근거로 답한다.\"}}]},\"selectedVariant\":{\"id\":\"option-2-template\",\"label\":\"상황 판정 빈자리형\",\"description\":\"자원 관계와 그래프 조건의 변수를 보고, 개념 판정과 조치를 인출합니다.\",\"slotMode\":\"template\",\"exampleSource\":\"source\",\"preservePlaceholders\":true,\"sample\":{\"title\":\"사이클과 데드락 판정\",\"cue\":\"자원 할당 그래프에 사이클이 있고, 각 [자원 유형]의 인스턴스가 하나뿐이다.\",\"target\":\"데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.\",\"supportingInfo\":\"인스턴스가 여러 개인 경우에는 ‘데드락 가능성’으로 판정이 달라진다.\"}}}",
+    "approvedSample": "{\"title\":\"사이클과 데드락 판정\",\"cue\":\"자원 할당 그래프에 사이클이 있고, 각 [자원 유형]의 인스턴스가 하나뿐이다.\",\"target\":\"데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.\",\"supportingInfo\":\"인스턴스가 여러 개인 경우에는 ‘데드락 가능성’으로 판정이 달라진다.\"}",
+    "sampleFeedback": "",
+    "activityDesign": "",
+    "activitySelectionMode": "automatic",
+    "stage": "prepare",
+    "preparedAnalysis": "",
+    "preparedMaterial": "",
+    "mode": "flashcard",
+    "sourceFiles": [
+      {
+        "name": "lecture8.pdf",
+        "mimeType": "application/pdf",
+        "size": 317629,
+        "sha256": "fd8032502b90879df82d4727feb1c45ec8f4e27bbef8aa3d920c0ebd0fbdd954",
+        "localPath": "eval/local/sources/fd8032502b90879df82d4727feb1c45ec8f4e27bbef8aa3d920c0ebd0fbdd954.pdf"
+      }
+    ]
+  },
+  "response": {
+    "analysis": {
+      "detectedGoal": "데드락의 정의·발생 조건·자원 할당 그래프 판별 규칙·처리 전략을 반복 학습하여, 데드락 구조를 설명하고 상황에 맞는 판별 및 대응 방식을 구별할 수 있어야 합니다.",
+      "sourceType": "mixed",
+      "keyTopics": [
+        "데드락의 정의",
+        "시스템 모델과 자원 사용 흐름",
+        "데드락 발생의 네 조건",
+        "자원 할당 그래프와 사이클 판별",
+        "예방·회피·탐지 및 복구",
+        "예방 정책",
+        "안전 상태와 비안전 상태",
+        "청구·요청·할당 간선",
+        "은행원 알고리즘",
+        "탐지 및 복구 방식"
+      ],
+      "recommendedStrategy": "정의와 네 발생 조건은 개별 회상으로 반복하고, 자원 할당 그래프의 간선 의미·사이클 규칙·안전 상태는 그래프 상황 판별 연습으로 학습하는 것이 좋습니다. 예방·회피·탐지 및 복구는 개입 시점과 원리를 비교하는 방식으로 복습하며, 예방 정책과 간선 변환은 대응 관계 및 절차 순서를 재구성하는 반복 학습에 적합합니다.",
+      "extractedMaterial": "- 3쪽: 데드락은 차단된 프로세스 집합에서 각 프로세스가 자원을 보유하면서, 집합 내 다른 프로세스가 보유한 자원을 획득하기 위해 대기하는 상태이다.\n- 4쪽: 시스템은 프로세스 P1…Pn, 자원 유형 R1…Rm, 각 자원 유형의 인스턴스 Wi로 모델링하며, 프로세스의 자원 사용 흐름은 request → use → release이다.\n- 5쪽: 데드락은 상호 배제, 점유와 대기, 비선점, 순환 대기의 네 조건이 동시에 성립할 때 발생할 수 있다.\n- 6쪽: 자원 할당 그래프에서 Pi → Rj는 요청 간선, Rj → Pi는 할당 간선이다.\n- 7쪽: 그래프에 사이클이 없으면 데드락은 없다. 사이클이 있고 자원 유형당 인스턴스가 하나이면 데드락이며, 여러 인스턴스이면 데드락 가능성이 있다. 그림은 이 세 경우를 각각 (a) 데드락 아님, (b) 데드락, (c) 데드락 아님으로 보여 준다.\n- 8쪽: 처리 방법은 예방, 회피, 탐지 및 복구이다. 예방은 네 조건 중 하나 이상이 성립하지 않게 하고, 회피는 사전 자원 사용 정보를 이용하며, 탐지 및 복구는 데드락 진입 후 복구한다.\n- 9쪽: 점유와 대기는 실행 전 모든 자원을 요청·할당하게 하여 막는다. 비선점은 추가 자원을 즉시 얻지 못하면 보유 자원을 해제하고, 이전 및 새 자원을 모두 얻을 수 있을 때 재시작하게 하여 막는다. 순환 대기는 자원 유형에 전체 순서를 부여하고 오름차순으로 요청하게 하여 막는다.\n- 10쪽: 회피는 즉시 할당 후에도 안전 상태가 유지되는지 판단한다. 안전 상태는 어떤 순서로든 각 프로세스에 최대 요구량까지 자원을 할당하여 데드락을 피할 수 있는 상태이다. 안전 상태에서는 데드락이 없고, 비안전 상태에서는 데드락 가능성이 있다.\n- 11쪽: 청구 간선은 Pi가 Rj를 미래에 요청할 수 있음을 나타내는 점선이다. 요청 시 청구 간선은 요청 간선으로, 할당 시 요청 간선은 할당 간선으로, 해제 시 할당 간선은 다시 청구 간선으로 변환된다. 자원 유형에 여러 인스턴스가 있으면 은행원 알고리즘을 사용한다.\n- 12쪽: 회피 그래프에서 요청을 승인해 사이클이 생기면 비안전 상태이므로 거부하고, 사이클이 생기지 않으면 안전 상태이므로 승인한다.\n- 13쪽: 탐지는 그래프의 사이클을 찾는 알고리즘을 주기적으로 실행하여 수행한다. 복구는 데드락 프로세스를 모두 종료하거나, 사이클이 없어질 때까지 하나씩 종료하거나, 자원을 선점하여 사이클을 끊는 방식으로 수행한다.",
+      "primaryKnowledgeType": "concept",
+      "learningUnits": [
+        {
+          "id": "LU01",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 3,
+          "sourceRange": "What is deadlock? — Deadlock 정의 문장",
+          "sourceText": "For a set of blocked processes, each is holding a resource and waiting to acquire a resource held by another process in the set.",
+          "knowledgeType": "concept",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "데드락이 차단된 프로세스들이 자원을 보유한 채 서로가 보유한 자원을 기다리는 상태임을 설명한다.",
+          "operation": "recall",
+          "successCriterion": "데드락의 보유 자원과 집합 내 다른 프로세스가 보유한 자원에 대한 대기 관계를 포함하여 정의를 말하거나 쓴다.",
+          "rationale": "3쪽은 데드락을 차단된 프로세스 집합의 자원 보유·상호 대기 상태로 직접 정의하며, 이후 발생 조건과 처리 방안의 출발점이 되는 핵심 개념이다."
+        },
+        {
+          "id": "LU02",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 4,
+          "sourceRange": "Deadlock Characterization — System modeling",
+          "sourceText": "Processes: P1, P2, … Pn. Resource types: R1, R2, …, Rm. Each resource type Ri has Wi instances. Each process utilizes a resource as follows: request, use, release.",
+          "knowledgeType": "concept",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "데드락 시스템 모델의 프로세스·자원 유형·자원 인스턴스와 request-use-release 자원 사용 흐름을 복원한다.",
+          "operation": "reconstruct",
+          "successCriterion": "프로세스 집합, 자원 유형별 인스턴스, request → use → release의 세 요소를 원래 구조로 제시한다.",
+          "rationale": "4쪽은 데드락을 설명하기 위한 시스템 구성 요소와 자원 사용의 고정된 흐름을 함께 제시하므로 하나의 모델 구조로 복원할 가치가 있다."
+        },
+        {
+          "id": "LU03",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 5,
+          "sourceRange": "Deadlock Characterization — Mutual exclusion",
+          "sourceText": "Mutual exclusion: Only one process at a time can use a resource.",
+          "knowledgeType": "concept",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "상호 배제 조건의 의미를 설명한다.",
+          "operation": "recall",
+          "successCriterion": "한 자원을 한 번에 하나의 프로세스만 사용할 수 있다는 조건을 말하거나 쓴다.",
+          "rationale": "5쪽은 상호 배제를 데드락 발생의 네 동시 성립 조건 중 하나로 명시하고 정의한다."
+        },
+        {
+          "id": "LU04",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 5,
+          "sourceRange": "Deadlock Characterization — Hold and wait",
+          "sourceText": "Hold and wait: A process holding at least one resource is waiting to acquire additional resources held by other processes.",
+          "knowledgeType": "concept",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "점유와 대기 조건의 의미를 설명한다.",
+          "operation": "recall",
+          "successCriterion": "프로세스가 하나 이상의 자원을 보유하면서 다른 프로세스가 보유한 추가 자원을 기다리는 조건을 말하거나 쓴다.",
+          "rationale": "5쪽은 점유와 대기를 데드락의 독립 발생 조건으로 정의하며, 예방 정책과 직접 연결된다."
+        },
+        {
+          "id": "LU05",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 5,
+          "sourceRange": "Deadlock Characterization — No preemption",
+          "sourceText": "No preemption: A resource can be released only voluntarily by the process holding it.",
+          "knowledgeType": "concept",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "비선점 조건의 의미를 설명한다.",
+          "operation": "recall",
+          "successCriterion": "자원을 보유한 프로세스가 자발적으로만 해당 자원을 해제할 수 있다는 조건을 말하거나 쓴다.",
+          "rationale": "5쪽은 비선점을 데드락 발생의 독립 조건으로 직접 정의하고, 9쪽의 예방 정책 이해에 필요하다."
+        },
+        {
+          "id": "LU06",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 5,
+          "sourceRange": "Deadlock Characterization — Circular wait",
+          "sourceText": "Circular wait: There exists a set {P0, P1, …, P0} of waiting processes such that P0 is waiting for a resource that is held by P1, P1 is waiting for a resource that is held by P2, …, and Pn is waiting for a resource that is held by P0.",
+          "knowledgeType": "relationship",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "순환 대기 조건의 프로세스 간 자원 대기 구조를 설명한다.",
+          "operation": "recall",
+          "successCriterion": "각 프로세스가 다음 프로세스가 보유한 자원을 기다리고 마지막 프로세스가 처음 프로세스가 보유한 자원을 기다리는 순환 관계를 말하거나 쓴다.",
+          "rationale": "5쪽은 순환 대기를 프로세스들의 닫힌 대기 관계로 제시하며, 자원 할당 그래프의 사이클 해석과 연결되는 핵심 관계다."
+        },
+        {
+          "id": "LU07",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 6,
+          "sourceRange": "Deadlock Characterization — Resource allocation graph, 간선 종류",
+          "sourceText": "E is also partitioned into two types. Pi → Rj : request. Rj → Pi : assignment.",
+          "knowledgeType": "relationship",
+          "fixedPart": "Pi → Rj : request; Rj → Pi : assignment",
+          "variableSlots": [
+            {
+              "name": "프로세스",
+              "example": "Pi"
+            },
+            {
+              "name": "자원 유형",
+              "example": "Rj"
+            }
+          ],
+          "generalizedForm": "프로세스 → 자원 유형은 요청, 자원 유형 → 프로세스는 할당을 나타낸다.",
+          "target": "자원 할당 그래프에서 간선 방향에 따라 요청과 할당을 구별한다.",
+          "operation": "discriminate",
+          "successCriterion": "제시된 프로세스-자원 간선이 요청 간선인지 할당 간선인지 방향을 근거로 올바르게 판별한다.",
+          "rationale": "6쪽은 자원 할당 그래프의 두 간선 방향에 각각 요청과 할당이라는 명확한 의미를 부여한다."
+        },
+        {
+          "id": "LU08",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 7,
+          "sourceRange": "Deadlock Characterization — Deadlock examples with resource allocation graph, 사이클 판별 규칙",
+          "sourceText": "If graph contains no cycles, no deadlock. If graph contains a cycle, if only one instance per resource type, deadlock. if several instances per resource type, possibility of deadlock.",
+          "knowledgeType": "problem_solving_pattern",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "자원 할당 그래프의 사이클 유무와 자원 인스턴스 수를 근거로 데드락 여부 또는 가능성을 판단한다.",
+          "operation": "apply",
+          "successCriterion": "새 그래프 조건에서 사이클 유무 및 자원 유형당 인스턴스 수를 사용하여 데드락 없음, 데드락, 또는 데드락 가능성 중 알맞은 결론을 산출한다.",
+          "rationale": "7쪽은 그래프 조건에 따라 결론이 달라지는 세 가지 판별 규칙을 제시하므로, 실제 그래프 입력에 규칙을 적용하는 학습 단위가 적절하다."
+        },
+        {
+          "id": "LU09",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 8,
+          "sourceRange": "Methods for Handling Deadlocks — Prevention, Avoidance, Detection and recovery",
+          "sourceText": "Prevention: The system will never enter a deadlock state. It ensures that at least one of four conditions cannot hold. Avoidance: The system will never enter a deadlock state. It requires a priori information about how each process will utilize resources. Detection and recovery: It allows the system to enter a deadlock state and then recover.",
+          "knowledgeType": "relationship",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "데드락 예방·회피·탐지 및 복구의 개입 원리와 시점을 구별한다.",
+          "operation": "reconstruct",
+          "successCriterion": "예방은 네 조건 차단, 회피는 사전 정보 기반의 데드락 상태 진입 방지, 탐지 및 복구는 진입 후 복구라는 대응 관계를 완성한다.",
+          "rationale": "8쪽은 세 처리 방법을 각기 다른 원리와 개입 시점으로 대비하여 제시하므로, 비교 구조 전체를 복원하는 것이 핵심이다."
+        },
+        {
+          "id": "LU10",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 9,
+          "sourceRange": "Deadlock Prevention — Hold and Wait",
+          "sourceText": "Hold and Wait: requires process to request and be allocated all its resources before it begins execution.",
+          "knowledgeType": "procedure",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "점유와 대기 조건을 막기 위한 선할당 예방 정책을 설명한다.",
+          "operation": "recall",
+          "successCriterion": "프로세스가 실행 전에 필요한 모든 자원을 요청하고 할당받아야 한다는 정책을 말하거나 쓴다.",
+          "rationale": "9쪽은 점유와 대기 조건을 부정하는 구체적인 예방 정책을 명시한다."
+        },
+        {
+          "id": "LU11",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 9,
+          "sourceRange": "Deadlock Prevention — No Preemption",
+          "sourceText": "If a process holding some resources requests another resource that cannot be immediately allocated to it, then all resources currently being held are released. Process will be restarted only when it can regain its old resources as well as the new ones that it is requesting.",
+          "knowledgeType": "procedure",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "비선점 조건을 막기 위한 자원 해제와 재시작 정책의 흐름을 복원한다.",
+          "operation": "reconstruct",
+          "successCriterion": "추가 자원을 즉시 할당받지 못하면 보유 자원을 모두 해제하고, 이전 자원과 새 자원을 모두 확보할 수 있을 때 재시작한다는 흐름을 순서대로 제시한다.",
+          "rationale": "9쪽은 비선점 예방을 조건-해제-재시작으로 이어지는 고정 절차로 설명한다."
+        },
+        {
+          "id": "LU12",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 9,
+          "sourceRange": "Deadlock Prevention — Circular Wait",
+          "sourceText": "Circular Wait: imposes a total ordering of all resource types, and requires that each process requests resources in an increasing order of enumeration.",
+          "knowledgeType": "procedure",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "순환 대기 조건을 막기 위한 자원 순서 부여 및 오름차순 요청 정책을 설명한다.",
+          "operation": "recall",
+          "successCriterion": "모든 자원 유형에 전체 순서를 부여하고 각 프로세스가 번호 증가 순서로 자원을 요청하게 한다는 정책을 말하거나 쓴다.",
+          "rationale": "9쪽은 순환 대기 제거를 위한 자원 순서 정책을 독립적인 예방 방법으로 제시한다."
+        },
+        {
+          "id": "LU13",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 10,
+          "sourceRange": "Deadlock Avoidance — safe state 및 unsafe state",
+          "sourceText": "A state is in safe, if the system can allocate resources to each process (up to its maximum) in some order and still avoid a deadlock. If a system is in safe state, No deadlocks. If a system is in unsafe state, Possibility of deadlock.",
+          "knowledgeType": "relationship",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "안전 상태와 비안전 상태가 데드락 가능성에 대해 뜻하는 바를 구별한다.",
+          "operation": "discriminate",
+          "successCriterion": "주어진 상태 설명을 보고 안전 상태는 데드락이 없고 비안전 상태는 데드락 가능성이 있는 상태로 올바르게 구별한다.",
+          "rationale": "10쪽은 안전 상태의 자원 할당 가능 조건과 안전·비안전 상태의 서로 다른 데드락 의미를 명시한다."
+        },
+        {
+          "id": "LU14",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 11,
+          "sourceRange": "Deadlock Avoidance — Resource allocation graph, claim/request/assignment edge 변환",
+          "sourceText": "Claim edge Pi → Rj: Pi may request Rj. It is represented by a dashed line. Claim edge is converted to request edge, when a process requests a resource. Request edge is converted to assignment edge, when the resource is allocated to the process. Assignment edge is reconverted to claim edge, when a resource is released by a process.",
+          "knowledgeType": "procedure",
+          "fixedPart": "청구 간선 → 요청 간선 → 할당 간선 → 청구 간선",
+          "variableSlots": [
+            {
+              "name": "변환 계기",
+              "example": "요청, 할당, 해제"
+            }
+          ],
+          "generalizedForm": "미래 요청 가능성을 나타내는 청구 간선은 요청·할당·해제 사건에 따라 요청 간선, 할당 간선, 청구 간선으로 순차 변환된다.",
+          "target": "자원 회피 그래프에서 청구·요청·할당 간선이 요청, 할당, 해제에 따라 변환되는 순서를 복원한다.",
+          "operation": "reconstruct",
+          "successCriterion": "요청 시 청구→요청, 할당 시 요청→할당, 해제 시 할당→청구의 세 변환을 해당 사건과 연결하여 순서대로 제시한다.",
+          "rationale": "11쪽은 세 간선 유형과 각 변환 조건을 하나의 순환 절차로 설명한다."
+        },
+        {
+          "id": "LU15",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 11,
+          "sourceRange": "Deadlock Avoidance — Note",
+          "sourceText": "[Note] When multiple instances of a resource type, use the banker’s algorithm.",
+          "knowledgeType": "fact",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "자원 유형에 여러 인스턴스가 있을 때 사용하는 데드락 회피 알고리즘을 말한다.",
+          "operation": "recall",
+          "successCriterion": "여러 인스턴스를 가진 자원 유형의 경우 은행원 알고리즘을 사용한다고 말하거나 쓴다.",
+          "rationale": "11쪽은 다중 인스턴스 자원이라는 명확한 조건에 대응하는 알고리즘을 직접 제시한다."
+        },
+        {
+          "id": "LU16",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 12,
+          "sourceRange": "Deadlock Avoidance — Unsafe state example",
+          "sourceText": "P2 requests R2. If we grant it, a cycle is formed. So, deny!!! No cycle → safe → grant. Cycle → unsafe → deny.",
+          "knowledgeType": "problem_solving_pattern",
+          "fixedPart": "No cycle → safe → grant; Cycle → unsafe → deny",
+          "variableSlots": [
+            {
+              "name": "요청 프로세스",
+              "example": "P2"
+            },
+            {
+              "name": "요청 자원",
+              "example": "R2"
+            }
+          ],
+          "generalizedForm": "요청을 승인한 결과 사이클이 없으면 안전 상태로 승인하고, 사이클이 생기면 비안전 상태로 요청을 거부한다.",
+          "target": "자원 요청을 승인했을 때의 그래프 사이클 생성 여부에 따라 요청 승인 또는 거부를 결정한다.",
+          "operation": "apply",
+          "successCriterion": "새 요청 상황에서 승인 후 사이클 생성 여부를 근거로 요청을 승인하거나 거부하는 결정을 산출한다.",
+          "rationale": "12쪽은 요청 승인 후 사이클 생성 여부를 안전성 및 승인·거부 결정에 연결한 적용 규칙을 제시한다."
+        },
+        {
+          "id": "LU17",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 13,
+          "sourceRange": "Deadlock Detection & Recovery — Detection algorithm",
+          "sourceText": "Periodically invoke an algorithm that searches for a cycle in the graph. If there is a cycle, there exists a deadlock.",
+          "knowledgeType": "procedure",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "데드락 탐지에서 그래프 사이클 탐색과 데드락 판정의 흐름을 설명한다.",
+          "operation": "reconstruct",
+          "successCriterion": "그래프의 사이클을 찾는 알고리즘을 주기적으로 실행하고, 사이클이 있으면 데드락이 존재한다고 판정하는 흐름을 제시한다.",
+          "rationale": "13쪽은 탐지 시점, 탐지 대상, 사이클 존재 시의 판정 결과를 하나의 탐지 절차로 제시한다."
+        },
+        {
+          "id": "LU18",
+          "sourceId": "lecture8.pdf",
+          "sourcePage": 13,
+          "sourceRange": "Deadlock Detection & Recovery — Recovery scheme",
+          "sourceText": "Process termination: Abort all deadlocked processes. Abort one process at a time until the deadlock cycle is eliminated. Resource preemption: Preempt some resources from processes and give these resources to other processes until the deadlock cycle is broken.",
+          "knowledgeType": "procedure",
+          "fixedPart": "",
+          "variableSlots": [],
+          "generalizedForm": "",
+          "target": "데드락 복구를 위한 프로세스 종료 방식과 자원 선점 방식을 구분하여 제시한다.",
+          "operation": "reconstruct",
+          "successCriterion": "모든 데드락 프로세스 종료, 사이클이 제거될 때까지 하나씩 종료, 자원 선점으로 사이클 단절의 세 복구 방식을 제시한다.",
+          "rationale": "13쪽은 복구 방안을 프로세스 종료의 두 방식과 자원 선점 방식으로 구체적으로 열거한다."
+        }
+      ]
+    },
+    "organizedMaterial": {
+      "title": "lecture8",
+      "sections": [
+        {
+          "heading": "데드락이 차단된 프로세스들이 자원을 보유한 채 서로가 보유한 자원을 기다리는 상태임을 설명한다.",
+          "content": "For a set of blocked processes, each is holding a resource and waiting to acquire a resource held by another process in the set.",
+          "learningUnitIds": [
+            "LU01"
+          ]
+        },
+        {
+          "heading": "데드락 시스템 모델의 프로세스·자원 유형·자원 인스턴스와 request-use-release 자원 사용 흐름을 복원한다.",
+          "content": "Processes: P1, P2, … Pn. Resource types: R1, R2, …, Rm. Each resource type Ri has Wi instances. Each process utilizes a resource as follows: request, use, release.",
+          "learningUnitIds": [
+            "LU02"
+          ]
+        },
+        {
+          "heading": "상호 배제 조건의 의미를 설명한다.",
+          "content": "Mutual exclusion: Only one process at a time can use a resource.",
+          "learningUnitIds": [
+            "LU03"
+          ]
+        },
+        {
+          "heading": "점유와 대기 조건의 의미를 설명한다.",
+          "content": "Hold and wait: A process holding at least one resource is waiting to acquire additional resources held by other processes.",
+          "learningUnitIds": [
+            "LU04"
+          ]
+        },
+        {
+          "heading": "비선점 조건의 의미를 설명한다.",
+          "content": "No preemption: A resource can be released only voluntarily by the process holding it.",
+          "learningUnitIds": [
+            "LU05"
+          ]
+        },
+        {
+          "heading": "순환 대기 조건의 프로세스 간 자원 대기 구조를 설명한다.",
+          "content": "Circular wait: There exists a set {P0, P1, …, P0} of waiting processes such that P0 is waiting for a resource that is held by P1, P1 is waiting for a resource that is held by P2, …, and Pn is waiting for a resource that is held by P0.",
+          "learningUnitIds": [
+            "LU06"
+          ]
+        },
+        {
+          "heading": "자원 할당 그래프에서 간선 방향에 따라 요청과 할당을 구별한다.",
+          "content": "프로세스 → 자원 유형은 요청, 자원 유형 → 프로세스는 할당을 나타낸다.",
+          "learningUnitIds": [
+            "LU07"
+          ]
+        },
+        {
+          "heading": "자원 할당 그래프의 사이클 유무와 자원 인스턴스 수를 근거로 데드락 여부 또는 가능성을 판단한다.",
+          "content": "If graph contains no cycles, no deadlock. If graph contains a cycle, if only one instance per resource type, deadlock. if several instances per resource type, possibility of deadlock.",
+          "learningUnitIds": [
+            "LU08"
+          ]
+        },
+        {
+          "heading": "데드락 예방·회피·탐지 및 복구의 개입 원리와 시점을 구별한다.",
+          "content": "Prevention: The system will never enter a deadlock state. It ensures that at least one of four conditions cannot hold. Avoidance: The system will never enter a deadlock state. It requires a priori information about how each process will utilize resources. Detection and recovery: It allows the system to enter a deadlock state and then recover.",
+          "learningUnitIds": [
+            "LU09"
+          ]
+        },
+        {
+          "heading": "점유와 대기 조건을 막기 위한 선할당 예방 정책을 설명한다.",
+          "content": "Hold and Wait: requires process to request and be allocated all its resources before it begins execution.",
+          "learningUnitIds": [
+            "LU10"
+          ]
+        },
+        {
+          "heading": "비선점 조건을 막기 위한 자원 해제와 재시작 정책의 흐름을 복원한다.",
+          "content": "If a process holding some resources requests another resource that cannot be immediately allocated to it, then all resources currently being held are released. Process will be restarted only when it can regain its old resources as well as the new ones that it is requesting.",
+          "learningUnitIds": [
+            "LU11"
+          ]
+        },
+        {
+          "heading": "순환 대기 조건을 막기 위한 자원 순서 부여 및 오름차순 요청 정책을 설명한다.",
+          "content": "Circular Wait: imposes a total ordering of all resource types, and requires that each process requests resources in an increasing order of enumeration.",
+          "learningUnitIds": [
+            "LU12"
+          ]
+        },
+        {
+          "heading": "안전 상태와 비안전 상태가 데드락 가능성에 대해 뜻하는 바를 구별한다.",
+          "content": "A state is in safe, if the system can allocate resources to each process (up to its maximum) in some order and still avoid a deadlock. If a system is in safe state, No deadlocks. If a system is in unsafe state, Possibility of deadlock.",
+          "learningUnitIds": [
+            "LU13"
+          ]
+        },
+        {
+          "heading": "자원 회피 그래프에서 청구·요청·할당 간선이 요청, 할당, 해제에 따라 변환되는 순서를 복원한다.",
+          "content": "미래 요청 가능성을 나타내는 청구 간선은 요청·할당·해제 사건에 따라 요청 간선, 할당 간선, 청구 간선으로 순차 변환된다.",
+          "learningUnitIds": [
+            "LU14"
+          ]
+        },
+        {
+          "heading": "자원 유형에 여러 인스턴스가 있을 때 사용하는 데드락 회피 알고리즘을 말한다.",
+          "content": "[Note] When multiple instances of a resource type, use the banker’s algorithm.",
+          "learningUnitIds": [
+            "LU15"
+          ]
+        },
+        {
+          "heading": "자원 요청을 승인했을 때의 그래프 사이클 생성 여부에 따라 요청 승인 또는 거부를 결정한다.",
+          "content": "요청을 승인한 결과 사이클이 없으면 안전 상태로 승인하고, 사이클이 생기면 비안전 상태로 요청을 거부한다.",
+          "learningUnitIds": [
+            "LU16"
+          ]
+        },
+        {
+          "heading": "데드락 탐지에서 그래프 사이클 탐색과 데드락 판정의 흐름을 설명한다.",
+          "content": "Periodically invoke an algorithm that searches for a cycle in the graph. If there is a cycle, there exists a deadlock.",
+          "learningUnitIds": [
+            "LU17"
+          ]
+        },
+        {
+          "heading": "데드락 복구를 위한 프로세스 종료 방식과 자원 선점 방식을 구분하여 제시한다.",
+          "content": "Process termination: Abort all deadlocked processes. Abort one process at a time until the deadlock cycle is eliminated. Resource preemption: Preempt some resources from processes and give these resources to other processes until the deadlock cycle is broken.",
+          "learningUnitIds": [
+            "LU18"
+          ]
+        }
+      ]
+    },
+    "cards": []
+  }
+}

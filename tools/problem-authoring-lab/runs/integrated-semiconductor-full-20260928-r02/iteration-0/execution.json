@@ -1,0 +1,17 @@
+{
+  "model": "gpt-6-sol",
+  "sessionId": "codex-full-study-20260928-r02",
+  "usage": {
+    "source": "executor-reported",
+    "tokens": null,
+    "authoringInstructionHash": "0b49bcdcc9b36e1f89bbb83ec7cd62150d2e017283dcf1d76783662fe9d699c5",
+    "visualInspection": "3 states x 2 viewport widths, no measured overflow"
+  },
+  "toolCalls": [
+    "load_source_packet",
+    "get_authoring_instructions",
+    "validate_problem_document",
+    "render_problem_preview",
+    "record_problem_iteration"
+  ]
+}

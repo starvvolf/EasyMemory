@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-10-01T19:55:59.458Z",
+  "proof": {
+    "outgoingFakeCalls": 60,
+    "sixtyFirstBlocked": true,
+    "realCalls": 0
+  },
+  "provider": "chatgpt",
+  "storageReady": true,
+  "credentialStored": true,
+  "ready": true,
+  "message": "ChatGPT 계정으로 생성할 수 있어요.",
+  "notesModel": "gpt-6-sol",
+  "notesEffort": "low",
+  "modelCalls": 13
+}

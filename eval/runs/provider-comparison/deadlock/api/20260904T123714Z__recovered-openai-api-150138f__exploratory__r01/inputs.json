@@ -1,0 +1,169 @@
+{
+  "artifactType": "study-forge-eval-run-inputs",
+  "artifactVersion": "v0",
+  "runId": "20260904T123714Z__recovered-openai-api-150138f__exploratory__r01",
+  "sourceRunId": null,
+  "runMode": "whole_document_core",
+  "sourceFiles": [
+    {
+      "name": "lecture8.pdf",
+      "mimeType": "application/pdf",
+      "size": 317629,
+      "sha256": "fd8032502b90879df82d4727feb1c45ec8f4e27bbef8aa3d920c0ebd0fbdd954",
+      "localPath": "eval/local/sources/fd8032502b90879df82d4727feb1c45ec8f4e27bbef8aa3d920c0ebd0fbdd954.pdf"
+    }
+  ],
+  "userSelections": {
+    "instruction": "이 자료의 핵심 내용을 반복학습 문제로 익힌다.",
+    "wholeDocumentCore": {
+      "summary": "데드락의 정의와 발생 구조를 이해하고, 자원 할당 그래프·안전 상태를 근거로 데드락을 판별하며, 예방·회피·탐지 및 복구 방식을 구별하여 설명하는 내용입니다.",
+      "learningGoal": "데드락의 핵심 개념과 네 가지 발생 조건을 설명하고, 자원 할당 그래프 및 안전 상태로 데드락 위험을 판정하며, 예방·회피·탐지 및 복구 방안의 원리와 적용 방식을 반복 문제를 통해 구별·설명할 수 있다.",
+      "selectionRationale": "사용자가 전체 범위의 핵심 내용을 반복학습 문제로 익히는 것을 목표로 했으므로, 정의·판별 규칙·처리 전략처럼 독립적으로 회상 및 적용 가능한 교과 지식을 우선 선정했습니다. 표지, 학습 목표 안내, 최종 요약은 새로운 학습 내용을 추가하지 않아 제외했습니다.",
+      "areas": [
+        {
+          "id": "n5",
+          "title": "What is deadlock?",
+          "description": "차단된 프로세스 집합의 각 프로세스가 자원을 보유하면서 집합 내 다른 프로세스가 보유한 자원을 기다리는 데드락의 정의와 세마포어 예시의 대기 구조를 학습한다.",
+          "learningValue": "이후 발생 조건, 그래프 판별, 처리 방안이 모두 데드락 상태의 정확한 정의를 전제로 하므로 핵심 출발점이다.",
+          "sourceScope": [
+            "n5 | What is deadlock? | 3쪽"
+          ]
+        },
+        {
+          "id": "n6",
+          "title": "Deadlock Characterization",
+          "description": "프로세스·자원 유형·자원 인스턴스 및 request-use-release의 시스템 모델을 바탕으로, 상호 배제·점유와 대기·비선점·순환 대기의 네 조건이 동시에 성립할 때 데드락이 발생함을 학습한다. 또한 자원 할당 그래프의 요청 간선과 할당 간선, 사이클 및 자원 인스턴스 수에 따른 판별 규칙을 학습한다.",
+          "learningValue": "데드락의 발생 원인을 구조적으로 설명하고, 그래프에서 데드락 여부 또는 가능성을 판단하는 데 필요한 핵심 규칙이다.",
+          "sourceScope": [
+            "n6 | Deadlock Characterization | 4-7쪽",
+            "n7 | System modeling | 4쪽",
+            "n8 | Deadlock can arise if four conditions hold simultaneously. | 5쪽",
+            "n9 | Mutual exclusion | 5쪽",
+            "n10 | Hold and wait | 5쪽",
+            "n11 | No preemption | 5쪽",
+            "n12 | Circular wait | 5쪽",
+            "n13 | Resource allocation graph | 6쪽",
+            "n14 | Deadlock examples with resource allocation graph | 7쪽"
+          ]
+        },
+        {
+          "id": "n15",
+          "title": "Methods for Handling Deadlocks",
+          "description": "데드락 처리의 세 접근법을 구별한다. 예방은 네 발생 조건 중 적어도 하나를 성립하지 않게 하고, 회피는 사전 자원 사용 정보를 바탕으로 안전 상태를 유지하며, 탐지 및 복구는 데드락 진입을 허용한 뒤 이를 찾아 해소한다.",
+          "learningValue": "세부 기법을 단순 암기하지 않고 각 방법의 개입 시점과 기본 원리를 비교하는 기준이 된다.",
+          "sourceScope": [
+            "n15 | Methods for Handling Deadlocks | 8쪽",
+            "n16 | Prevention | 8쪽",
+            "n17 | Avoidance | 8쪽",
+            "n18 | Detection and recovery | 8쪽"
+          ]
+        },
+        {
+          "id": "n19",
+          "title": "Deadlock Prevention",
+          "description": "예방을 위해 점유와 대기를 막는 선할당 방식, 비선점 조건을 막기 위한 보유 자원 해제 및 재시작 방식, 순환 대기를 막기 위한 자원 유형의 전체 순서와 오름차순 요청 방식을 학습한다. 상호 배제 조건은 일반적으로 부정하기 어렵다는 점도 함께 구별한다.",
+          "learningValue": "네 발생 조건과 대응 예방 정책을 연결하여, 각 정책이 어떤 대기 구조를 제거하는지 설명할 수 있게 한다.",
+          "sourceScope": [
+            "n19 | Deadlock Prevention | 9쪽",
+            "n20 | Mutual Exclusion | 9쪽",
+            "n21 | Hold and Wait | 9쪽",
+            "n22 | No Preemption | 9쪽",
+            "n23 | Circular Wait | 9쪽"
+          ]
+        },
+        {
+          "id": "n24",
+          "title": "Deadlock Avoidance",
+          "description": "자원 요청을 즉시 승인한 뒤에도 안전 상태가 유지되는지 판단하는 회피 원리를 학습한다. 안전 상태와 비안전 상태의 의미, 청구 간선·요청 간선·할당 간선의 변환, 사이클 생성 시 요청 거부 규칙을 다루며, 자원 유형에 여러 인스턴스가 있으면 은행원 알고리즘을 사용한다는 점을 포함한다.",
+          "learningValue": "예방과 달리 자원 요청마다 미래의 안전성을 판단하는 회피의 의사결정 규칙을 적용할 수 있게 한다.",
+          "sourceScope": [
+            "n24 | Deadlock Avoidance | 10-12쪽",
+            "n25 | Deadlock avoidance algorithm | 10쪽",
+            "n26 | Resource allocation graph | 11쪽",
+            "n27 | Unsafe state example | 12쪽"
+          ]
+        },
+        {
+          "id": "n28",
+          "title": "Deadlock Detection & Recovery",
+          "description": "데드락을 허용한 뒤 그래프에서 사이클을 주기적으로 탐색하여 탐지하는 방식과, 데드락 프로세스 전체 또는 일부를 종료하거나 일부 자원을 선점하여 사이클을 끊는 복구 방식을 학습한다.",
+          "learningValue": "사전 차단 전략이 아닌 사후 대응 전략의 탐지 기준과 복구 선택지를 구별하는 데 필요하다.",
+          "sourceScope": [
+            "n28 | Deadlock Detection & Recovery | 13쪽",
+            "n29 | Detection algorithm | 13쪽",
+            "n30 | Recovery scheme | 13쪽"
+          ]
+        }
+      ],
+      "exclusions": [
+        "n1 | Chapter 8. Deadlocks | 1쪽: 장 제목만 제시하며 독립적으로 반복학습할 교과 지식이 없다.",
+        "n2, n3, n4 | 학습 목표 및 학습 내용 | 2쪽: 자료의 목표와 항목을 안내하는 메타 정보이며, 실제 개념·규칙 학습은 해당 본문 영역에서 다룬다.",
+        "n31 | Summary | 14쪽: 앞선 본문 내용을 압축 반복할 뿐 새로운 개념·규칙·절차를 추가하지 않으므로 별도 학습 영역으로 분리하지 않는다.",
+        "세마포어 S·Q의 특정 코드 배열과 개별 그림 구성: 데드락 정의를 설명하는 예시이므로 n5의 맥락으로 활용하되, 예시 자체를 독립 학습 영역으로 두지 않는다.",
+        "자원 할당 그래프의 개별 도식 사례: 그래프 간선, 사이클, 인스턴스 수에 따른 판별 규칙을 학습하는 데 사용하되, 각 사례의 도형 배치를 별도 암기 대상으로 두지 않는다."
+      ],
+      "maxLearningUnitCount": 18
+    },
+    "recallOption": {
+      "id": "option-2",
+      "title": "상황·조건 Cue → 개념 판정·처리 결정 Target",
+      "cue": "프로세스의 자원 보유·요청 상황, 자원 할당 그래프의 사이클 조건, 또는 처리 정책의 조건을 본다.",
+      "target": "해당 상황의 개념명·데드락 판정·안전성·승인 또는 거부·적용 처리 방식을 말하거나 쓴다.",
+      "unit": "핵심 LearningUnit",
+      "instruction": "각 카드는 하나의 핵심 LearningUnit을 상황 또는 조건으로 바꾸어 제시한다. 앞면에는 프로세스와 자원의 관계, 그래프의 사이클 및 인스턴스 수, 또는 정책 적용 조건을 구체적으로 제시한다. 뒷면에는 정확한 조건명, 데드락 여부·가능성, 안전 또는 비안전 판정, 승인·거부 결정, 예방·회피·탐지 및 복구 중 해당 방식과 조치를 재생산하게 한다. 판정에는 근거가 되는 규칙을 짧게 함께 쓰게 하며, 자료에 없는 세부 알고리즘 계산은 추가하지 않는다.",
+      "mode": "flashcard",
+      "variants": [
+        {
+          "id": "option-2-template",
+          "label": "상황 판정 빈자리형",
+          "description": "자원 관계와 그래프 조건의 변수를 보고, 개념 판정과 조치를 인출합니다.",
+          "slotMode": "template",
+          "exampleSource": "source",
+          "preservePlaceholders": true,
+          "sample": {
+            "title": "사이클과 데드락 판정",
+            "cue": "자원 할당 그래프에 사이클이 있고, 각 [자원 유형]의 인스턴스가 하나뿐이다.",
+            "target": "데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.",
+            "supportingInfo": "인스턴스가 여러 개인 경우에는 ‘데드락 가능성’으로 판정이 달라진다."
+          }
+        },
+        {
+          "id": "option-2-filled",
+          "label": "상황 판정 완성형",
+          "description": "구체적인 자원 관계와 그래프 조건을 보고, 완성된 판정과 조치를 인출합니다.",
+          "slotMode": "filled_example",
+          "exampleSource": "generated",
+          "preservePlaceholders": false,
+          "sample": {
+            "title": "사이클과 데드락 판정",
+            "cue": "자원 할당 그래프에 사이클이 있고, 각 자원 유형의 인스턴스가 하나뿐이다.",
+            "target": "데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.",
+            "supportingInfo": "사이클 유무와 자원 인스턴스 수를 함께 근거로 답한다."
+          }
+        }
+      ]
+    },
+    "recallVariant": {
+      "id": "option-2-template",
+      "label": "상황 판정 빈자리형",
+      "description": "자원 관계와 그래프 조건의 변수를 보고, 개념 판정과 조치를 인출합니다.",
+      "slotMode": "template",
+      "exampleSource": "source",
+      "preservePlaceholders": true,
+      "sample": {
+        "title": "사이클과 데드락 판정",
+        "cue": "자원 할당 그래프에 사이클이 있고, 각 [자원 유형]의 인스턴스가 하나뿐이다.",
+        "target": "데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.",
+        "supportingInfo": "인스턴스가 여러 개인 경우에는 ‘데드락 가능성’으로 판정이 달라진다."
+      }
+    },
+    "representativeExample": {
+      "title": "사이클과 데드락 판정",
+      "cue": "자원 할당 그래프에 사이클이 있고, 각 [자원 유형]의 인스턴스가 하나뿐이다.",
+      "target": "데드락이다. 사이클이 존재하고 자원 유형당 인스턴스가 하나이면 사이클은 데드락을 의미한다.",
+      "supportingInfo": "인스턴스가 여러 개인 경우에는 ‘데드락 가능성’으로 판정이 달라진다."
+    },
+    "cardMode": "flashcard"
+  },
+  "override": null
+}

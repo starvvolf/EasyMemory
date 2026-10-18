@@ -1,0 +1,24 @@
+{
+  "status": "valid",
+  "counts": {
+    "objectives": 1,
+    "knowledgeUnits": 1,
+    "assessmentBlueprints": 1,
+    "authoringItems": 1
+  },
+  "preserved": [
+    "objective target, operation, importance, and all success criteria",
+    "knowledge-unit content, rationale, kind, outline IDs, and exact source fields",
+    "assessment blueprint given/hidden/response/rubric/difficulty/capabilities",
+    "Plan outline titles, evidence, and source references linked to each unit",
+    "Analyze, Plan, and Learning Design hashes for the original artifact"
+  ],
+  "notForwarded": [
+    "Analyze presentation metadata and legacy outline points; original artifact remains hash-linked",
+    "Plan group question/count UI fields; selected goal and exclusions remain packet context",
+    "organizedMaterial display text; its learning-unit coverage is validated before conversion",
+    "cards and thread IDs; this bridge accepts only the pre-authoring result with zero cards"
+  ],
+  "inputPath": "tools/problem-authoring-lab/fixtures/learning-design-current-engine.json",
+  "outputPath": "tools/problem-authoring-lab/runs/learning-design-bridge-fixture"
+}

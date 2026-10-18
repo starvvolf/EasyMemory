@@ -1,0 +1,185 @@
+{
+  "title": "미분 개념트리",
+  "sourceMode": "topic",
+  "sourceLabel": "GPT 주제: 고등학교 수준의 미분",
+  "topic": "고등학교 수준의 미분",
+  "files": [],
+  "instruction": "계산 예제는 넣지 않고 미분을 이해하는 데 필요한 개념어만 구성한다.",
+  "id": "a2df66b1-d541-48fb-aba5-59f0ad5c81c8",
+  "status": "completed",
+  "createdAt": "2026-08-28T15:17:01.240Z",
+  "tree": {
+    "id": "3223fa1e-9a91-4114-9f67-b0e8481d34db",
+    "runId": "a2df66b1-d541-48fb-aba5-59f0ad5c81c8",
+    "title": "미분 개념트리",
+    "sourceMode": "topic",
+    "sourceLabel": "GPT 주제: 고등학교 수준의 미분",
+    "topic": "고등학교 수준의 미분",
+    "files": [],
+    "outlineText": "미분\n- [선행 개념] 함수\n- [선행 개념] 극한\n- [핵심 개념] 평균변화율\n- [핵심 개념] 순간변화율\n- [표현] 미분계수\n- [표현] 도함수\n  - [계산 규칙] 상수의 미분\n  - [계산 규칙] 합의 미분법\n  - [계산 규칙] 곱의 미분법\n  - [계산 규칙] 몫의 미분법\n  - [계산 규칙] 연쇄법칙\n- [기하적 의미] 접선의 기울기\n- [활용] 함수의 증가와 감소\n- [활용] 극값\n- [활용] 최적화",
+    "nodes": [
+      {
+        "id": "concept-001",
+        "parentId": null,
+        "order": 1,
+        "depth": 0,
+        "title": "미분",
+        "relation": "",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-002",
+        "parentId": "concept-001",
+        "order": 1,
+        "depth": 1,
+        "title": "함수",
+        "relation": "선행 개념",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-003",
+        "parentId": "concept-001",
+        "order": 2,
+        "depth": 1,
+        "title": "극한",
+        "relation": "선행 개념",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-004",
+        "parentId": "concept-001",
+        "order": 3,
+        "depth": 1,
+        "title": "평균변화율",
+        "relation": "핵심 개념",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-005",
+        "parentId": "concept-001",
+        "order": 4,
+        "depth": 1,
+        "title": "순간변화율",
+        "relation": "핵심 개념",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-006",
+        "parentId": "concept-001",
+        "order": 5,
+        "depth": 1,
+        "title": "미분계수",
+        "relation": "표현",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-007",
+        "parentId": "concept-001",
+        "order": 6,
+        "depth": 1,
+        "title": "도함수",
+        "relation": "표현",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-008",
+        "parentId": "concept-007",
+        "order": 1,
+        "depth": 2,
+        "title": "상수의 미분",
+        "relation": "계산 규칙",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-009",
+        "parentId": "concept-007",
+        "order": 2,
+        "depth": 2,
+        "title": "합의 미분법",
+        "relation": "계산 규칙",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-010",
+        "parentId": "concept-007",
+        "order": 3,
+        "depth": 2,
+        "title": "곱의 미분법",
+        "relation": "계산 규칙",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-011",
+        "parentId": "concept-007",
+        "order": 4,
+        "depth": 2,
+        "title": "몫의 미분법",
+        "relation": "계산 규칙",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-012",
+        "parentId": "concept-007",
+        "order": 5,
+        "depth": 2,
+        "title": "연쇄법칙",
+        "relation": "계산 규칙",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-013",
+        "parentId": "concept-001",
+        "order": 7,
+        "depth": 1,
+        "title": "접선의 기울기",
+        "relation": "기하적 의미",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-014",
+        "parentId": "concept-001",
+        "order": 8,
+        "depth": 1,
+        "title": "함수의 증가와 감소",
+        "relation": "활용",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-015",
+        "parentId": "concept-001",
+        "order": 9,
+        "depth": 1,
+        "title": "극값",
+        "relation": "활용",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-016",
+        "parentId": "concept-001",
+        "order": 10,
+        "depth": 1,
+        "title": "최적화",
+        "relation": "활용",
+        "description": "",
+        "sourceRefs": []
+      }
+    ],
+    "warnings": [],
+    "createdAt": "2026-08-28T15:17:01.241Z"
+  }
+}

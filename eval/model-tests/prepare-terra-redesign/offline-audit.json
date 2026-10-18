@@ -1,0 +1,516 @@
+{
+  "generatedAt": "2026-08-17T07:25:13.808Z",
+  "apiCalls": 0,
+  "scope": {
+    "comparisonPairs": 3,
+    "diverseArtifacts": 6,
+    "totalArtifacts": 12
+  },
+  "pairComparisons": [
+    {
+      "id": "opic",
+      "baseline": "eval/local/plan-prepare-v1/opic-evidence-only-attempt-1.json",
+      "candidate": "eval/local/plan-prepare-v1/model-test-prepare-terra-opic-r1.json",
+      "hardChecks": {
+        "exactIdSet": true,
+        "candidateDuplicateIds": 0,
+        "candidateMissingRequired": []
+      },
+      "reviewFlags": {
+        "operationDisagreements": [
+          {
+            "id": "strategy-grammar",
+            "baseline": "apply",
+            "candidate": "recall"
+          },
+          {
+            "id": "strategy-keywords",
+            "baseline": "discriminate",
+            "candidate": "apply"
+          }
+        ],
+        "evidenceLengthFlags": []
+      }
+    },
+    {
+      "id": "dfs-bfs",
+      "baseline": "eval/local/plan-prepare-v1/dfs-bfs-evidence-only-attempt-1.json",
+      "candidate": "eval/local/plan-prepare-v1/model-test-prepare-terra-dfs-bfs-r1.json",
+      "hardChecks": {
+        "exactIdSet": true,
+        "candidateDuplicateIds": 0,
+        "candidateMissingRequired": []
+      },
+      "reviewFlags": {
+        "operationDisagreements": [
+          {
+            "id": "graph-basics",
+            "baseline": "recall",
+            "candidate": "reconstruct"
+          },
+          {
+            "id": "graph-representations",
+            "baseline": "apply",
+            "candidate": "reconstruct"
+          }
+        ],
+        "evidenceLengthFlags": []
+      }
+    },
+    {
+      "id": "deadlock",
+      "baseline": "eval/local/plan-prepare-v1/model-test-prepare-sol-deadlock-r1.json",
+      "candidate": "eval/local/plan-prepare-v1/model-test-prepare-terra-deadlock-r1.json",
+      "hardChecks": {
+        "exactIdSet": true,
+        "candidateDuplicateIds": 0,
+        "candidateMissingRequired": []
+      },
+      "reviewFlags": {
+        "operationDisagreements": [
+          {
+            "id": "banker-algorithm-scope",
+            "baseline": "discriminate",
+            "candidate": "recall"
+          },
+          {
+            "id": "detection",
+            "baseline": "discriminate",
+            "candidate": "apply"
+          },
+          {
+            "id": "rag-edge-semantics",
+            "baseline": "reconstruct",
+            "candidate": "discriminate"
+          }
+        ],
+        "evidenceLengthFlags": []
+      }
+    }
+  ],
+  "artifactAudits": [
+    {
+      "path": "eval/local/plan-prepare-v1/opic-evidence-only-attempt-1.json",
+      "unitCount": 10,
+      "fullAnalysisBytes": 11458,
+      "learningUnitsBytes": 9297,
+      "compactDownstreamBytes": 5095,
+      "compactVsFullReductionPercent": 55.5,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 427,
+        "generalizedForm": 621,
+        "id": 189,
+        "knowledgeType": 325,
+        "operation": 213,
+        "rationale": 2050,
+        "sourceId": 190,
+        "sourcePage": 150,
+        "sourceRange": 764,
+        "sourceText": 909,
+        "successCriterion": 1527,
+        "target": 1016,
+        "variableSlots": 895
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [],
+        "invalidOperation": []
+      }
+    },
+    {
+      "path": "eval/local/plan-prepare-v1/model-test-prepare-terra-opic-r1.json",
+      "unitCount": 10,
+      "fullAnalysisBytes": 13139,
+      "learningUnitsBytes": 10124,
+      "compactDownstreamBytes": 5459,
+      "compactVsFullReductionPercent": 58.5,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 561,
+        "generalizedForm": 635,
+        "id": 189,
+        "knowledgeType": 346,
+        "operation": 207,
+        "rationale": 2150,
+        "sourceId": 190,
+        "sourcePage": 150,
+        "sourceRange": 773,
+        "sourceText": 1306,
+        "successCriterion": 1617,
+        "target": 1285,
+        "variableSlots": 694
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [],
+        "invalidOperation": []
+      }
+    },
+    {
+      "path": "eval/local/plan-prepare-v1/dfs-bfs-evidence-only-attempt-1.json",
+      "unitCount": 9,
+      "fullAnalysisBytes": 19052,
+      "learningUnitsBytes": 16036,
+      "compactDownstreamBytes": 6696,
+      "compactVsFullReductionPercent": 64.9,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 1853,
+        "generalizedForm": 1711,
+        "id": 197,
+        "knowledgeType": 295,
+        "operation": 205,
+        "rationale": 1749,
+        "sourceId": 252,
+        "sourcePage": 140,
+        "sourceRange": 867,
+        "sourceText": 4274,
+        "successCriterion": 1860,
+        "target": 1112,
+        "variableSlots": 1502
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [],
+        "invalidOperation": []
+      }
+    },
+    {
+      "path": "eval/local/plan-prepare-v1/model-test-prepare-terra-dfs-bfs-r1.json",
+      "unitCount": 9,
+      "fullAnalysisBytes": 17174,
+      "learningUnitsBytes": 14411,
+      "compactDownstreamBytes": 5904,
+      "compactVsFullReductionPercent": 65.6,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 1423,
+        "generalizedForm": 1252,
+        "id": 197,
+        "knowledgeType": 295,
+        "operation": 216,
+        "rationale": 1582,
+        "sourceId": 252,
+        "sourcePage": 140,
+        "sourceRange": 753,
+        "sourceText": 4274,
+        "successCriterion": 1618,
+        "target": 1136,
+        "variableSlots": 1254
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [],
+        "invalidOperation": []
+      }
+    },
+    {
+      "path": "eval/local/plan-prepare-v1/model-test-prepare-sol-deadlock-r1.json",
+      "unitCount": 16,
+      "fullAnalysisBytes": 21891,
+      "learningUnitsBytes": 17506,
+      "compactDownstreamBytes": 9614,
+      "compactVsFullReductionPercent": 56.1,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 504,
+        "generalizedForm": 615,
+        "id": 424,
+        "knowledgeType": 466,
+        "operation": 382,
+        "rationale": 3225,
+        "sourceId": 416,
+        "sourcePage": 246,
+        "sourceRange": 1953,
+        "sourceText": 3575,
+        "successCriterion": 3264,
+        "target": 1834,
+        "variableSlots": 569
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [],
+        "invalidOperation": []
+      }
+    },
+    {
+      "path": "eval/local/plan-prepare-v1/model-test-prepare-terra-deadlock-r1.json",
+      "unitCount": 16,
+      "fullAnalysisBytes": 23295,
+      "learningUnitsBytes": 19444,
+      "compactDownstreamBytes": 10262,
+      "compactVsFullReductionPercent": 55.9,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 567,
+        "generalizedForm": 2698,
+        "id": 424,
+        "knowledgeType": 466,
+        "operation": 370,
+        "rationale": 3129,
+        "sourceId": 416,
+        "sourcePage": 246,
+        "sourceRange": 1397,
+        "sourceText": 3575,
+        "successCriterion": 2503,
+        "target": 1745,
+        "variableSlots": 1875
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [],
+        "invalidOperation": []
+      }
+    },
+    {
+      "path": "eval/local/current-app-prepared-smoke/quality-v1-bill-of-rights-selection-a1-2026-08-16T180942991Z.json",
+      "unitCount": 6,
+      "fullAnalysisBytes": 18262,
+      "learningUnitsBytes": 12787,
+      "compactDownstreamBytes": 4169,
+      "compactVsFullReductionPercent": 77.2,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 90,
+        "generalizedForm": 126,
+        "id": 66,
+        "intent": 1108,
+        "knowledgeType": 186,
+        "rationale": 2413,
+        "sourceId": 240,
+        "sourcePage": 90,
+        "sourceRange": 878,
+        "sourceText": 7463,
+        "variableSlots": 114
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [
+          "LU1",
+          "LU2",
+          "LU3",
+          "LU4",
+          "LU5",
+          "LU6"
+        ],
+        "invalidOperation": [
+          "LU1",
+          "LU2",
+          "LU3",
+          "LU4",
+          "LU5",
+          "LU6"
+        ]
+      }
+    },
+    {
+      "path": "eval/local/current-app-prepared-smoke/quality-v1-calculus-problems-selection-a2-2026-08-16T181300380Z.json",
+      "unitCount": 6,
+      "fullAnalysisBytes": 14875,
+      "learningUnitsBytes": 10754,
+      "compactDownstreamBytes": 4714,
+      "compactVsFullReductionPercent": 68.3,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 1394,
+        "generalizedForm": 1466,
+        "id": 239,
+        "intent": 744,
+        "knowledgeType": 224,
+        "rationale": 1618,
+        "sourceId": 282,
+        "sourcePage": 90,
+        "sourceRange": 574,
+        "sourceText": 2592,
+        "variableSlots": 1518
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [
+          "LU1-변화율-미분정의-접선",
+          "LU2-극한-연속성-미분가능성",
+          "LU3-기본-미분규칙",
+          "LU4-음함수-관계식-미분",
+          "LU5-고계-초월함수-미분",
+          "LU6-지수로그-방정식-표준응용"
+        ],
+        "invalidOperation": [
+          "LU1-변화율-미분정의-접선",
+          "LU2-극한-연속성-미분가능성",
+          "LU3-기본-미분규칙",
+          "LU4-음함수-관계식-미분",
+          "LU5-고계-초월함수-미분",
+          "LU6-지수로그-방정식-표준응용"
+        ]
+      }
+    },
+    {
+      "path": "eval/local/current-app-prepared-smoke/quality-v1-moon-phases-selection-a1-2026-08-16T180940026Z.json",
+      "unitCount": 3,
+      "fullAnalysisBytes": 6767,
+      "learningUnitsBytes": 3486,
+      "compactDownstreamBytes": 2057,
+      "compactVsFullReductionPercent": 69.6,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 45,
+        "generalizedForm": 63,
+        "id": 107,
+        "intent": 432,
+        "knowledgeType": 83,
+        "rationale": 1166,
+        "sourceId": 111,
+        "sourcePage": 45,
+        "sourceRange": 483,
+        "sourceText": 887,
+        "variableSlots": 57
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [
+          "LU1-달의-밝은면과-밤쪽",
+          "LU2-공전과-위상변화",
+          "LU3-위상-오개념-구분"
+        ],
+        "invalidOperation": [
+          "LU1-달의-밝은면과-밤쪽",
+          "LU2-공전과-위상변화",
+          "LU3-위상-오개념-구분"
+        ]
+      }
+    },
+    {
+      "path": "eval/local/current-app-prepared-smoke/quality-v1-disaster-checklist-selection-a1-2026-08-16T181458576Z.json",
+      "unitCount": 6,
+      "fullAnalysisBytes": 11837,
+      "learningUnitsBytes": 7811,
+      "compactDownstreamBytes": 3265,
+      "compactVsFullReductionPercent": 72.4,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 90,
+        "generalizedForm": 126,
+        "id": 66,
+        "intent": 746,
+        "knowledgeType": 183,
+        "rationale": 2224,
+        "sourceId": 252,
+        "sourcePage": 90,
+        "sourceRange": 657,
+        "sourceText": 3250,
+        "variableSlots": 114
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [
+          "LU1",
+          "LU2",
+          "LU3",
+          "LU4",
+          "LU5",
+          "LU6"
+        ],
+        "invalidOperation": [
+          "LU1",
+          "LU2",
+          "LU3",
+          "LU4",
+          "LU5",
+          "LU6"
+        ]
+      }
+    },
+    {
+      "path": "eval/local/current-app-prepared-smoke/social-game-economy-student-2026-08-16T162440292Z-2026-08-16T180810307Z.json",
+      "unitCount": 12,
+      "fullAnalysisBytes": 19203,
+      "learningUnitsBytes": 14397,
+      "compactDownstreamBytes": 8752,
+      "compactVsFullReductionPercent": 54.4,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 180,
+        "generalizedForm": 1687,
+        "id": 144,
+        "knowledgeType": 288,
+        "operation": 268,
+        "rationale": 180,
+        "sourceId": 1104,
+        "sourcePage": 192,
+        "sourceRange": 929,
+        "sourceText": 5211,
+        "successCriterion": 2285,
+        "target": 1676,
+        "variableSlots": 228
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [],
+        "invalidOperation": []
+      }
+    },
+    {
+      "path": "eval/local/current-app-prepared-smoke/science-stars-spectrum-student-2026-08-16T162440292Z-2026-08-16T180813201Z.json",
+      "unitCount": 9,
+      "fullAnalysisBytes": 13006,
+      "learningUnitsBytes": 8704,
+      "compactDownstreamBytes": 6070,
+      "compactVsFullReductionPercent": 53.3,
+      "unitFieldMarginalBytes": {
+        "fixedPart": 135,
+        "generalizedForm": 1365,
+        "id": 99,
+        "knowledgeType": 216,
+        "operation": 213,
+        "rationale": 135,
+        "sourceId": 225,
+        "sourcePage": 144,
+        "sourceRange": 918,
+        "sourceText": 2381,
+        "successCriterion": 1510,
+        "target": 1173,
+        "variableSlots": 171
+      },
+      "checks": {
+        "duplicateIds": 0,
+        "missingEvidence": [],
+        "missingTarget": [],
+        "missingSuccessCriterion": [],
+        "invalidOperation": []
+      }
+    }
+  ],
+  "aggregateUnitFieldMarginalBytes": {
+    "sourceText": 39697,
+    "rationale": 21621,
+    "successCriterion": 16184,
+    "generalizedForm": 12365,
+    "target": 10977,
+    "sourceRange": 10946,
+    "variableSlots": 8991,
+    "fixedPart": 7269,
+    "sourceId": 3930,
+    "knowledgeType": 3373,
+    "intent": 3030,
+    "id": 2341,
+    "operation": 2074,
+    "sourcePage": 1723
+  },
+  "notes": [
+    "operation disagreement is a teacher-review flag, not an automatic failure; the Sol baseline can also be wrong.",
+    "compactDownstreamBytes models the data needed by Activity Design, not a proposed production schema.",
+    "sourceText semantic faithfulness cannot be proven by byte length and remains a teacher check."
+  ]
+}

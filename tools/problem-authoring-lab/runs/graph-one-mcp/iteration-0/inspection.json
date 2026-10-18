@@ -1,0 +1,48 @@
+[
+  {
+    "category": "design",
+    "severity": "warning",
+    "code": "process-evidence-limited",
+    "questionId": "graph-one-q1",
+    "message": "목표는 f(x)=g(x)를 사용해 두 교점의 x좌표 합을 구하는 것. 단일 선택으로 입력 부담을 최소화했으나 고정 그래프 눈금에서 1과 4를 읽거나 근과 계수 관계로 답할 수 있어 방정식 설정 및 풀이 과정을 직접 입증하지 못한다. 연구 효과 실증 아님."
+  },
+  {
+    "category": "content",
+    "status": "pass-self-check",
+    "questionId": "graph-one-q1",
+    "message": "고정 원문/spec 함수 유지. 직접 계산: x²−4x+3=x−1 → x²−5x+4=0 → (x−1)(x−4)=0 → x=1,4. f(1)=g(1)=0, f(4)=g(4)=3. 합 5. 출제자가 키를 이미 아는 자기검사이며 블라인드 독립평가 아님."
+  },
+  {
+    "category": "design",
+    "status": "distractor-rationale",
+    "questionId": "graph-one-q1",
+    "message": "−5: 근의 합 −b/a의 부호 오류. 2: 포물선 대칭축 x=2를 요구값으로 혼동. 3: 두 근의 차 4−1을 합 대신 계산(또는 y좌표 합과 혼동). 4: 두 근의 곱 1×4를 합과 혼동(또는 f(x)=0의 두 근 합). 실제 오답 선택 자료로 검증한 근거가 아니라 출제 가설."
+  },
+  {
+    "category": "grading",
+    "status": "pass",
+    "questionId": "graph-one-q1",
+    "message": "서로 다른 수치 선지 −5,2,3,4,5 중 5만 정답. single-choice exact, correctOptionId=graph-one-o5. validate_problem_document valid=true, issues=[]. 정답 후 HTML의 choice correct 및 공개값 5와 일치."
+  },
+  {
+    "category": "layout",
+    "severity": "warning",
+    "code": "asset-legend-axis-overlap",
+    "questionId": "graph-one-q1",
+    "blockId": "graph-one-figure",
+    "message": "제공된 로컬 PNG만 관측함. 실선/파선과 A,B는 식별 가능하나 좌상단 범례 글자 부근에 y축이 지나감. 고정 자산 수정 금지로 그대로 보존. 블록 프레임은 페이지 안에 있고 서로 겹치지 않음. 전체 HTML 화면의 글꼴/줄바꿈/스크롤은 미관측."
+  },
+  {
+    "category": "render",
+    "severity": "warning",
+    "code": "full-html-not-observed",
+    "questionId": "graph-one-q1",
+    "message": "실제 MCP render_problem_preview로 정답 전후 HTML 생성 후 반환 HTML 텍스트 확인. 전 HTML에 풀이/정답 강조 없음, 후 HTML에 풀이와 ⑤만 정답 강조. generated-image 상대경로 assets/curve-line-intersections.svg 및 메타 generator/version/script/spec/SVG·spec hash 그대로 사용. 원문 그림이 아닌 Python/Matplotlib 생성 자산. 실제 파일 hash 재계산 및 전체 HTML의 자산/폰트 로딩 관측은 수행하지 않았으며 outer evaluator에 남김. 브라우저·서버·대체캡처 미실행."
+  },
+  {
+    "category": "design",
+    "status": "initial-draft-preserved",
+    "questionId": "graph-one-q1",
+    "message": "정확히 1문항, iteration 0 초안, patch 없음. 최대 1회 부분수정은 독립검토 피드백에 유보. 공용코드/지침/renderer/기존결과/준비자산 변경 없음. 별도 중복 보고서 없음."
+  }
+]

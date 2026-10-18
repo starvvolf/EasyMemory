@@ -1,0 +1,23 @@
+{
+  "model": "unknown",
+  "sessionId": "unknown",
+  "usage": {
+    "configuredModel": "gpt-6-astra",
+    "configuredReasoning": "medium",
+    "actualModel": "unknown",
+    "actualReasoning": "unknown",
+    "inputTokens": "unknown",
+    "outputTokens": "unknown",
+    "totalTokens": "unknown"
+  },
+  "toolCalls": [
+    "exec_command",
+    "mcp__problem_authoring_lab__load_source_packet",
+    "mcp__problem_authoring_lab__get_authoring_instructions",
+    "exec_command",
+    "view_image",
+    "mcp__problem_authoring_lab__validate_problem_document",
+    "mcp__problem_authoring_lab__render_problem_preview",
+    "mcp__problem_authoring_lab__record_problem_iteration"
+  ]
+}

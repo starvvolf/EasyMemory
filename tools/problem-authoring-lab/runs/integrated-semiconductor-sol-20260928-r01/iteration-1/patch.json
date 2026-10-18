@@ -1,0 +1,65 @@
+{
+  "instruction": "원천 정답과 stable ID를 유지하면서 p16·p19의 극단적·중복 오답을 서로 다른 오개념으로 바꾸고 정답의 표시 위치를 분산한다.",
+  "operations": [
+    {
+      "op": "replace-response",
+      "questionId": "question-21b9491a-2732-4c23-89f7-a9275c66d2a3",
+      "responseId": "response-21b9491a-2732-4c23-89f7-a9275c66d2a3",
+      "value": {
+        "id": "response-21b9491a-2732-4c23-89f7-a9275c66d2a3",
+        "kind": "single-choice",
+        "options": [
+          {
+            "id": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-3",
+            "text": "반도체는 부도체와 같은 전도도를 갖고 전자 이동도만 큰 물질"
+          },
+          {
+            "id": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-1",
+            "text": "반도체는 전도도가 도체와 부도체 사이인 물질"
+          },
+          {
+            "id": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-4",
+            "text": "반도체는 전도도가 아닌 전자 밀도만으로 분류하는 물질"
+          },
+          {
+            "id": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-2",
+            "text": "반도체는 도체와 같은 전도도를 갖고 구성 원소만 다른 물질"
+          }
+        ],
+        "correctOptionId": "option-21b9491a-2732-4c23-89f7-a9275c66d2a3-1",
+        "grading": "exact",
+        "explanation": "슬라이드는 전자의 흐름에 따른 전도도가 도체와 부도체 사이인 물질로 정의한다."
+      }
+    },
+    {
+      "op": "replace-response",
+      "questionId": "question-16ac2c5b-3a1c-42b9-821b-5c9506fe2767",
+      "responseId": "response-16ac2c5b-3a1c-42b9-821b-5c9506fe2767",
+      "value": {
+        "id": "response-16ac2c5b-3a1c-42b9-821b-5c9506fe2767",
+        "kind": "single-choice",
+        "options": [
+          {
+            "id": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-2",
+            "text": "금속의 이온 원자핵이 결정 안에서 이동하며 전하를 운반하기 때문이다"
+          },
+          {
+            "id": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-4",
+            "text": "금속에서는 전자 수와 무관하게 전압만 높이면 전도도가 자동으로 커지기 때문이다"
+          },
+          {
+            "id": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-1",
+            "text": "금속의 높은 전도도는 많은 자유전자가 전하를 운반하기 때문이다"
+          },
+          {
+            "id": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-3",
+            "text": "금속의 저항률이 커질수록 전도도도 커지기 때문이다"
+          }
+        ],
+        "correctOptionId": "option-16ac2c5b-3a1c-42b9-821b-5c9506fe2767-1",
+        "grading": "exact",
+        "explanation": "그림은 결정 안에 이동 가능한 자유전자가 다수 있음을 보여준다."
+      }
+    }
+  ]
+}

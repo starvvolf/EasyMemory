@@ -1,0 +1,25 @@
+{
+  "limit": 60,
+  "calls": [
+    {
+      "n": 1,
+      "at": "2026-10-01T19:22:37.375Z",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "stage": "analyze",
+      "caseId": "bfs-2pages-gpt-6-luna",
+      "phase": "stage5"
+    },
+    {
+      "n": 2,
+      "at": "2026-10-01T19:22:37.404Z",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "stage": "analyze",
+      "caseId": "bfs-2pages-gpt-6-luna",
+      "phase": "stage5"
+    }
+  ],
+  "lastCorrection": "d6a2e5a620b4f665608787fc28616184f67886ca45088985555f09dfbe36618b",
+  "stopped": "same-validation-failure-twice"
+}

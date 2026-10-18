@@ -1,0 +1,20 @@
+{
+  "packetId": "graph-one",
+  "title": "이차함수와 직선의 교점",
+  "items": [
+    {
+      "learningUnitId": "GRAPH-LU1",
+      "objectiveId": "GRAPH-OBJ1",
+      "sourceId": "fixed-math-text",
+      "sourcePage": 1,
+      "sourceRange": "고정 함수 조건 전체",
+      "sourceText": "이차함수 f(x)=x²-4x+3과 직선 g(x)=x-1의 그래프를 이용하여 두 그래프의 교점을 해석한다.",
+      "target": "두 그래프의 교점이 만족하는 방정식을 세우고 교점의 x좌표에 관한 값을 구한다.",
+      "successCriteria": [
+        "교점에서 f(x)=g(x)임을 사용한다.",
+        "x²-5x+4=0을 풀어 두 교점의 x좌표가 1과 4임을 구한다.",
+        "문항이 요구하는 두 x좌표의 합이 5임을 판단한다."
+      ]
+    }
+  ]
+}

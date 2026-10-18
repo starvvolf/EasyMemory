@@ -1,0 +1,8 @@
+[
+  {
+    "severity": "warning",
+    "code": "visual-review-pending-at-record",
+    "questionId": "document",
+    "message": "HTML generated; actual browser screenshot inspection pending at recording time. Supplemental report will record observations without revision."
+  }
+]

@@ -1,0 +1,1328 @@
+{
+  "artifactType": "study-forge-current-app-prepared-smoke",
+  "completedAt": "2026-08-17T06:56:36.839Z",
+  "preparedPath": "C:\\Users\\jkh01\\OneDrive\\문서\\CD0625\\eval\\local\\plan-prepare-v1\\model-test-prepare-terra-dfs-bfs-r1.json",
+  "learningGoal": "그래프와 2차원 격자 문제를 인접 관계로 모델링하고, 연결된 영역을 모두 탐색·계수해야 할 때는 DFS를, 무가중치 격자에서 최소 이동 횟수를 구해야 할 때는 BFS를 선택하여 파이썬으로 구현할 수 있다.",
+  "instruction": "",
+  "analysis": {
+    "detectedGoal": "그래프와 2차원 격자 문제를 인접 관계로 모델링하고, 연결 요소 수에는 DFS를, 무가중치 격자의 최소 이동 칸 수에는 BFS를 적용하여 파이썬으로 구현할 수 있다.",
+    "sourceType": "mixed",
+    "keyTopics": [
+      "그래프의 노드·간선·인접 관계",
+      "인접 행렬과 인접 리스트",
+      "2차원 격자의 그래프 모델링",
+      "DFS의 스택·방문 처리·재귀 구현",
+      "BFS의 큐·deque·방문 처리",
+      "DFS 연결 요소 개수 세기",
+      "BFS 격자 최단 거리 기록"
+    ],
+    "recommendedStrategy": "용어와 표현 방식은 관계를 복원하는 방식으로 학습하고, DFS·BFS는 방문 처리 시점과 자료구조를 포함한 구현 골격을 직접 재현한다. 이후 새로운 격자 입력에서 상하좌우 이웃, 범위 검사, 통과 조건을 적용해 연결 요소 수와 최단 거리 문제를 각각 해결하는 적용 연습을 한다.",
+    "extractedMaterial": "- graph-basics: 그래프는 노드(정점)와 간선으로 표현하며, 간선으로 연결된 두 노드는 인접하다.\n- graph-representations: 인접 행렬은 모든 연결 관계를 2차원 배열에 저장해 특정 두 노드의 연결을 바로 확인할 수 있고, 인접 리스트는 연결된 노드만 저장해 메모리를 효율적으로 사용하지만 연결 여부 확인 시 인접 데이터를 순회한다.\n- grid-as-graph: 2차원 배열의 각 좌표를 노드로 보고 상하좌우 이동 가능 관계를 간선으로 보아 그래프로 모델링한다.\n- dfs-procedure: DFS는 시작 노드를 스택에 넣고 방문 처리한 뒤, 최상단의 미방문 인접 노드로 계속 깊게 진행하고 막히면 꺼내며 반복한다.\n- dfs-recursion: 재귀 DFS는 현재 노드를 방문 처리하고, 인접 노드 중 미방문 노드에 재귀 호출한다.\n- bfs-procedure: BFS는 시작 노드를 큐에 넣고 방문 처리한 뒤, 큐에서 꺼낸 노드의 모든 미방문 인접 노드를 큐에 넣으면서 방문 처리한다.\n- bfs-deque: 파이썬 BFS는 deque의 append와 popleft를 사용하며, 이웃은 큐에 삽입하는 즉시 방문 처리한다.\n- components-dfs: 격자에서 미방문 0을 발견할 때마다 DFS로 그 상하좌우 연결 영역 전체를 방문 처리하고, 그러한 DFS 시작 횟수를 센다.\n- shortest-path-bfs: 이동 가능한 처음 방문 칸에 현재 칸 거리+1을 기록하며 BFS를 수행하고, 도착 칸의 기록값을 최소 이동 칸 수로 반환한다.\n- 격자 문제의 공통 시각 구조: 각 칸은 좌표 노드이고, 상하좌우 이동 후보는 범위 밖·벽 여부를 검사한 후 탐색 대상으로 처리한다.",
+    "primaryKnowledgeType": "problem_solving_pattern",
+    "learningUnits": [
+      {
+        "id": "graph-basics",
+        "sourceId": "05 DFS BFS.pdf",
+        "sourcePage": 1,
+        "sourceRange": "p.1, 「노드·간선·인접 관계」 문단 전체",
+        "sourceText": "그래프는 노드(Node)와 간선(Edge)으로 표현되며 노드를 정점(Vertex)이라고도 한다. 그래프 탐색이란 하나의 노드를 시작으로 다수의 노드를 방문하는 것이다. 두 노드가 간선으로 연결되어 있다면 두 노드는 인접하다(Adjacent)고 표현한다.",
+        "knowledgeType": "concept",
+        "fixedPart": "",
+        "variableSlots": [],
+        "generalizedForm": "",
+        "target": "그래프를 노드(정점), 간선, 인접 관계로 이루어진 구조로 설명한다.",
+        "operation": "reconstruct",
+        "successCriterion": "그래프의 구성 요소와 간선으로 연결된 두 노드가 인접하다는 관계를 빠짐없이 설명하면 성공이다.",
+        "rationale": "그래프 탐색을 적용하기 위한 기본 모델이며, 자료가 노드·정점·간선·인접의 관계를 하나의 기초 개념으로 함께 제시한다."
+      },
+      {
+        "id": "graph-representations",
+        "sourceId": "05 DFS BFS.pdf",
+        "sourcePage": 1,
+        "sourceRange": "p.1~4, 「인접 행렬과 인접 리스트의 선택 기준」 문단 전체",
+        "sourceText": "인접 행렬(Adjacency Matrix)은 2차원 배열로 그래프의 연결 관계를 표현하며, 연결되지 않은 노드끼리는 INF 같은 큰 값으로 둔다. 인접 리스트(Adjacency List)는 각 노드에 연결된 노드 정보만 저장하며 파이썬에서는 2차원 리스트로 구현할 수 있다. 인접 행렬은 graph[1][7]처럼 특정 두 노드의 연결 여부를 바로 확인할 수 있지만 모든 관계를 저장한다. 인접 리스트는 연결된 정보만 저장하여 메모리를 효율적으로 사용하지만 특정 두 노드의 연결 여부는 인접 데이터를 하나씩 확인해야 한다.",
+        "knowledgeType": "relationship",
+        "fixedPart": "",
+        "variableSlots": [],
+        "generalizedForm": "",
+        "target": "인접 행렬과 인접 리스트의 저장 방식 및 연결 확인·메모리 특성의 차이를 설명한다.",
+        "operation": "reconstruct",
+        "successCriterion": "인접 행렬의 전체 관계 저장과 빠른 연결 확인, 인접 리스트의 연결 정보만 저장과 메모리 효율 및 순회 확인 특성을 대응시켜 설명하면 성공이다.",
+        "rationale": "두 표현 방식의 선택 기준은 저장 구조와 장단점의 대응 관계로 제시되어 있으며, 탐색 문제의 그래프 표현을 결정하는 데 필요하다."
+      },
+      {
+        "id": "grid-as-graph",
+        "sourceId": "05 DFS BFS.pdf",
+        "sourcePage": 15,
+        "sourceRange": "p.15, 「2차원 배열을 그래프로 보는 관점」 문단 전체",
+        "sourceText": "1차원 배열이나 2차원 배열 또한 그래프 형태로 생각할 수 있다. 2차원 배열의 각 데이터를 좌표로 보고, 각 좌표를 상하좌우로만 이동할 수 있다면 모든 좌표의 형태를 그래프의 형태로 바꾸어 생각할 수 있다.",
+        "knowledgeType": "problem_solving_pattern",
+        "fixedPart": "2차원 배열의 각 데이터를 좌표로 보고, 상하좌우 이동 관계를 그래프의 관계로 바꾸어 생각한다.",
+        "variableSlots": [
+          {
+            "name": "격자 크기와 좌표",
+            "example": "N×M 격자의 (x, y)"
+          },
+          {
+            "name": "이동 가능 조건",
+            "example": "상하좌우 칸이 범위 안이고 통과 가능함"
+          }
+        ],
+        "generalizedForm": "격자의 각 좌표를 노드로, 허용된 방향의 이동 가능 관계를 간선으로 모델링한다.",
+        "target": "새로운 2차원 배열 문제에서 각 좌표와 상하좌우 이동 관계를 그래프의 노드와 간선으로 모델링한다.",
+        "operation": "apply",
+        "successCriterion": "주어진 격자에서 좌표를 노드로, 허용된 상하좌우 이동을 인접 관계로 정하면 성공이다.",
+        "rationale": "자료는 2차원 배열의 좌표와 상하좌우 이동을 그래프로 전환하는 관점을 직접 제시하며, 뒤의 격자 DFS·BFS 문제에 공통으로 적용된다."
+      },
+      {
+        "id": "dfs-procedure",
+        "sourceId": "05 DFS BFS.pdf",
+        "sourcePage": 4,
+        "sourceRange": "p.4, 「DFS 동작 절차와 방문 처리」 문단 전체",
+        "sourceText": "DFS는 특정한 경로로 탐색하다가 최대한 깊숙이 들어가서 노드를 방문한 후, 다시 돌아가 다른 경로로 탐색한다. ① 탐색 시작 노드를 스택에 삽입하고 방문 처리한다. ② 스택의 최상단 노드에 방문하지 않은 인접 노드가 있으면 그 인접 노드를 스택에 넣고 방문 처리한다. 방문하지 않은 인접 노드가 없으면 스택에서 최상단 노드를 꺼낸다. ③ 더 이상 수행할 수 없을 때까지 반복한다. 방문 처리는 한 번 삽입되어 처리된 노드가 다시 삽입되지 않게 체크하는 것이며, 각 노드를 한 번씩만 처리하게 한다.",
+        "knowledgeType": "procedure",
+        "fixedPart": "시작 노드를 스택에 삽입하고 방문 처리한 뒤, 최상단의 미방문 인접 노드를 삽입·방문 처리하고, 없으면 최상단을 꺼내는 일을 반복한다.",
+        "variableSlots": [
+          {
+            "name": "시작 노드",
+            "example": "1번 노드"
+          },
+          {
+            "name": "미방문 인접 노드",
+            "example": "현재 최상단 노드에 연결된 미방문 노드"
+          }
+        ],
+        "generalizedForm": "스택의 현재 경로를 따라 미방문 이웃으로 깊게 진행하고, 더 진행할 이웃이 없으면 되돌아가며 모든 탐색 가능 노드를 처리한다.",
+        "target": "DFS의 스택 기반 탐색과 방문 처리 절차를 순서대로 재현한다.",
+        "operation": "reconstruct",
+        "successCriterion": "시작 삽입·방문 처리, 미방문 인접 노드 삽입·방문 처리, 인접 노드가 없을 때 꺼내기, 반복의 순서를 모두 재현하면 성공이다.",
+        "rationale": "DFS의 깊이 우선 진행과 되돌아감, 중복 삽입을 막는 방문 처리의 의미가 하나의 연결된 절차로 제시되어 있다."
+      },
+      {
+        "id": "dfs-recursion",
+        "sourceId": "05 DFS BFS.pdf",
+        "sourcePage": 9,
+        "sourceRange": "p.9~10, 「재귀 DFS 구현 골격」 코드 및 설명",
+        "sourceText": "def dfs(graph, v, visited):\n    visited[v] = True\n    print(v, end=' ')\n    for i in graph[v]:\n        if not visited[i]:\n            dfs(graph, i, visited)\nDFS는 스택 자료구조에 기초하며 재귀 함수를 이용하면 간결하게 구현할 수 있다.",
+        "knowledgeType": "procedure",
+        "fixedPart": "def dfs(graph, v, visited):\n    visited[v] = True\n    for i in graph[v]:\n        if not visited[i]:\n            dfs(graph, i, visited)",
+        "variableSlots": [
+          {
+            "name": "현재 노드",
+            "example": "v"
+          },
+          {
+            "name": "인접 노드",
+            "example": "i"
+          },
+          {
+            "name": "방문 기록",
+            "example": "visited"
+          }
+        ],
+        "generalizedForm": "현재 노드를 먼저 방문 처리하고, 현재 노드의 인접 노드 중 미방문 노드마다 같은 DFS 함수를 재귀 호출한다.",
+        "target": "재귀 DFS에서 현재 노드 방문 처리 후 미방문 인접 노드를 재귀 호출하는 구현 구조를 복원한다.",
+        "operation": "reconstruct",
+        "successCriterion": "함수 진입 직후 방문 처리하고, 인접 노드를 순회하며 미방문 노드에만 재귀 호출하는 구조를 작성하면 성공이다.",
+        "rationale": "자료는 스택 기반 DFS를 재귀 함수로 간결하게 구현하는 표준 골격을 코드로 제시한다."
+      },
+      {
+        "id": "bfs-procedure",
+        "sourceId": "05 DFS BFS.pdf",
+        "sourcePage": 10,
+        "sourceRange": "p.10, 「BFS 동작 절차와 큐 삽입 시 방문 처리」 문단 전체",
+        "sourceText": "BFS는 가까운 노드부터 탐색하는 알고리즘이며 선입선출 방식인 큐 자료구조를 이용한다. ① 탐색 시작 노드를 큐에 삽입하고 방문 처리한다. ② 큐에서 노드를 꺼내 해당 노드의 인접 노드 중 방문하지 않은 노드를 모두 큐에 삽입하고 방문 처리한다. ③ 더 이상 수행할 수 없을 때까지 반복한다.",
+        "knowledgeType": "procedure",
+        "fixedPart": "시작 노드를 큐에 삽입하고 방문 처리한 뒤, 큐에서 꺼낸 노드의 모든 미방문 인접 노드를 큐에 삽입하고 방문 처리하는 일을 반복한다.",
+        "variableSlots": [
+          {
+            "name": "시작 노드",
+            "example": "start"
+          },
+          {
+            "name": "현재 큐에서 꺼낸 노드",
+            "example": "v"
+          },
+          {
+            "name": "미방문 인접 노드",
+            "example": "i"
+          }
+        ],
+        "generalizedForm": "선입선출 큐에서 노드를 하나씩 꺼내고, 그 노드의 미방문 이웃을 모두 큐에 등록하여 가까운 노드부터 탐색한다.",
+        "target": "BFS의 큐 기반 탐색과 큐 삽입 시 방문 처리 절차를 순서대로 재현한다.",
+        "operation": "reconstruct",
+        "successCriterion": "시작 노드의 큐 삽입·방문 처리, 꺼낸 노드의 모든 미방문 이웃 삽입·방문 처리, 반복의 순서를 재현하면 성공이다.",
+        "rationale": "BFS의 가까운 노드 우선 성질은 FIFO 큐와 이웃을 모두 삽입하는 절차로 설명되며, 방문 처리 시점이 명시되어 있다."
+      },
+      {
+        "id": "bfs-deque",
+        "sourceId": "05 DFS BFS.pdf",
+        "sourcePage": 14,
+        "sourceRange": "p.14, 「deque 기반 BFS 구현 골격」 코드 및 설명",
+        "sourceText": "from collections import deque\n\ndef bfs(graph, start, visited):\n    queue = deque([start])\n    visited[start] = True\n    while queue:\n        v = queue.popleft()\n        for i in graph[v]:\n            if not visited[i]:\n                queue.append(i)\n                visited[i] = True\nBFS 구현에서는 deque 라이브러리를 사용하는 것이 좋다.",
+        "knowledgeType": "procedure",
+        "fixedPart": "from collections import deque\nqueue = deque([start])\nwhile queue:\n    v = queue.popleft()\n    for i in graph[v]:\n        if not visited[i]:\n            queue.append(i)\n            visited[i] = True",
+        "variableSlots": [
+          {
+            "name": "시작 노드",
+            "example": "start"
+          },
+          {
+            "name": "큐에서 꺼낸 노드",
+            "example": "v"
+          },
+          {
+            "name": "인접 노드",
+            "example": "i"
+          }
+        ],
+        "generalizedForm": "deque로 큐를 만들고 popleft로 현재 노드를 꺼낸 뒤, 미방문 이웃을 append한 즉시 방문 처리한다.",
+        "target": "deque를 사용하는 BFS 구현에서 큐 생성, popleft, 미방문 이웃 append와 즉시 방문 처리의 구조를 복원한다.",
+        "operation": "reconstruct",
+        "successCriterion": "deque로 시작 큐를 만들고, 반복문에서 popleft한 뒤 미방문 이웃을 append하고 그 자리에서 방문 처리하는 코드를 작성하면 성공이다.",
+        "rationale": "자료는 파이썬 BFS 구현에 deque 사용을 권장하고, 큐 조작 및 삽입 시 방문 처리의 완결된 코드 골격을 제공한다."
+      },
+      {
+        "id": "components-dfs",
+        "sourceId": "05 DFS BFS.pdf",
+        "sourcePage": 16,
+        "sourceRange": "p.16~18, 「DFS로 연결된 영역 개수 세기」 문단 및 dfs(x, y) 설명",
+        "sourceText": "값이 0인 칸이 상·하·좌·우로 연결되어 있으면 하나의 연결된 묶음으로 본다. 특정 지점 주변의 상·하·좌·우 중 값이 0이면서 아직 방문하지 않은 지점이 있으면 방문하고, 방문한 지점에서도 같은 탐색을 반복하여 연결된 모든 지점을 방문한다. 모든 노드에 이 과정을 반복하며 방문하지 않은 지점의 수를 센다. dfs(x, y)에서 범위를 벗어나면 False를 반환하고, graph[x][y] == 0이면 graph[x][y] = 1로 방문 처리한 뒤 네 방향을 재귀 호출하고 True를 반환한다. 모든 (i, j)에 대해 dfs(i, j)가 True이면 result += 1 한다.",
+        "knowledgeType": "problem_solving_pattern",
+        "fixedPart": "모든 좌표를 순회하며 미방문 0에서 DFS를 시작하고, DFS가 시작될 때마다 결과를 1 증가시킨다. DFS는 범위를 벗어나면 False를 반환하고, 0인 칸을 1로 바꿔 방문 처리한 뒤 네 방향을 재귀 호출하고 True를 반환한다.",
+        "variableSlots": [
+          {
+            "name": "격자 크기",
+            "example": "N×M"
+          },
+          {
+            "name": "연결로 보는 값",
+            "example": "0"
+          },
+          {
+            "name": "방문 처리 값",
+            "example": "1"
+          },
+          {
+            "name": "인접 방향",
+            "example": "상·하·좌·우"
+          }
+        ],
+        "generalizedForm": "격자를 순회하여 아직 처리되지 않은 통과 가능 칸을 발견할 때마다 탐색으로 해당 연결 영역 전체를 처리하고, 탐색 시작 횟수를 연결 요소 수로 센다.",
+        "target": "상하좌우로 연결된 0 영역의 개수를 세는 격자에서 DFS를 적용해 연결 요소 수를 계산한다.",
+        "operation": "apply",
+        "successCriterion": "주어진 격자에서 미방문 0마다 한 번의 DFS로 연결된 0 전체를 방문 처리하고 DFS 시작 횟수를 결과로 산출하면 성공이다.",
+        "rationale": "자료의 실전 문제는 연결된 0의 묶음을 하나의 영역으로 정의하고, DFS 성공 횟수로 영역 수를 세는 완결된 해결 패턴을 제시한다."
+      },
+      {
+        "id": "shortest-path-bfs",
+        "sourceId": "05 DFS BFS.pdf",
+        "sourcePage": 19,
+        "sourceRange": "p.19~21, 「BFS로 격자 최단 거리 기록하기」 문단 전체",
+        "sourceText": "미로에서 0은 괴물이 있는 벽, 1은 이동 가능한 칸이며 상·하·좌·우로 이동한다. BFS는 시작 지점에서 가까운 노드부터 차례대로 탐색하므로 최소 이동 칸 수 문제에 효과적이다. 현재 (x, y)에서 nx, ny를 계산한 뒤, nx < 0 or ny < 0 or nx >= n or ny >= m이면 무시하고, graph[nx][ny] == 0이면 무시한다. graph[nx][ny] == 1인 처음 방문 칸에만 graph[nx][ny] = graph[x][y] + 1을 기록하고 queue.append((nx, ny)) 한다. 반환값은 graph[n - 1][m - 1]이다.",
+        "knowledgeType": "problem_solving_pattern",
+        "fixedPart": "범위 밖과 값이 0인 칸을 무시하고, 값이 1인 처음 방문 칸에 graph[현재] + 1을 기록한 뒤 큐에 삽입한다. 반환값은 graph[n - 1][m - 1]이다.",
+        "variableSlots": [
+          {
+            "name": "현재 좌표",
+            "example": "(x, y)"
+          },
+          {
+            "name": "이웃 좌표",
+            "example": "(nx, ny)"
+          },
+          {
+            "name": "격자 크기",
+            "example": "n, m"
+          },
+          {
+            "name": "도착 좌표",
+            "example": "(n - 1, m - 1)"
+          }
+        ],
+        "generalizedForm": "무가중치 격자에서 BFS로 처음 도달한 이동 가능 이웃에 현재 거리+1을 기록하고, 도착 칸의 기록값을 최소 거리로 사용한다.",
+        "target": "상하좌우로 이동하는 미로에서 BFS 거리 갱신 규칙을 적용해 도착 칸까지의 최소 이동 칸 수를 계산한다.",
+        "operation": "apply",
+        "successCriterion": "주어진 미로에서 범위 밖과 벽을 제외하고 처음 방문한 이동 가능 칸에 이전 거리+1을 기록하여 도착 칸의 값을 산출하면 성공이다.",
+        "rationale": "자료는 BFS가 가까운 노드부터 탐색한다는 성질을 최소 이동 칸 수 문제에 연결하고, 첫 방문 시 거리 기록과 도착값 반환 규칙을 구체적으로 제시한다."
+      }
+    ]
+  },
+  "material": {
+    "title": "7bd68c1e2fbc049167489a90bea1b36cc2a867efd907f11e53fd8ac52a67da31",
+    "sections": [
+      {
+        "heading": "그래프를 노드(정점), 간선, 인접 관계로 이루어진 구조로 설명한다.",
+        "content": "그래프는 노드(Node)와 간선(Edge)으로 표현되며 노드를 정점(Vertex)이라고도 한다. 그래프 탐색이란 하나의 노드를 시작으로 다수의 노드를 방문하는 것이다. 두 노드가 간선으로 연결되어 있다면 두 노드는 인접하다(Adjacent)고 표현한다.",
+        "learningUnitIds": [
+          "graph-basics"
+        ]
+      },
+      {
+        "heading": "인접 행렬과 인접 리스트의 저장 방식 및 연결 확인·메모리 특성의 차이를 설명한다.",
+        "content": "인접 행렬(Adjacency Matrix)은 2차원 배열로 그래프의 연결 관계를 표현하며, 연결되지 않은 노드끼리는 INF 같은 큰 값으로 둔다. 인접 리스트(Adjacency List)는 각 노드에 연결된 노드 정보만 저장하며 파이썬에서는 2차원 리스트로 구현할 수 있다. 인접 행렬은 graph[1][7]처럼 특정 두 노드의 연결 여부를 바로 확인할 수 있지만 모든 관계를 저장한다. 인접 리스트는 연결된 정보만 저장하여 메모리를 효율적으로 사용하지만 특정 두 노드의 연결 여부는 인접 데이터를 하나씩 확인해야 한다.",
+        "learningUnitIds": [
+          "graph-representations"
+        ]
+      },
+      {
+        "heading": "새로운 2차원 배열 문제에서 각 좌표와 상하좌우 이동 관계를 그래프의 노드와 간선으로 모델링한다.",
+        "content": "격자의 각 좌표를 노드로, 허용된 방향의 이동 가능 관계를 간선으로 모델링한다.",
+        "learningUnitIds": [
+          "grid-as-graph"
+        ]
+      },
+      {
+        "heading": "DFS의 스택 기반 탐색과 방문 처리 절차를 순서대로 재현한다.",
+        "content": "스택의 현재 경로를 따라 미방문 이웃으로 깊게 진행하고, 더 진행할 이웃이 없으면 되돌아가며 모든 탐색 가능 노드를 처리한다.",
+        "learningUnitIds": [
+          "dfs-procedure"
+        ]
+      },
+      {
+        "heading": "재귀 DFS에서 현재 노드 방문 처리 후 미방문 인접 노드를 재귀 호출하는 구현 구조를 복원한다.",
+        "content": "현재 노드를 먼저 방문 처리하고, 현재 노드의 인접 노드 중 미방문 노드마다 같은 DFS 함수를 재귀 호출한다.",
+        "learningUnitIds": [
+          "dfs-recursion"
+        ]
+      },
+      {
+        "heading": "BFS의 큐 기반 탐색과 큐 삽입 시 방문 처리 절차를 순서대로 재현한다.",
+        "content": "선입선출 큐에서 노드를 하나씩 꺼내고, 그 노드의 미방문 이웃을 모두 큐에 등록하여 가까운 노드부터 탐색한다.",
+        "learningUnitIds": [
+          "bfs-procedure"
+        ]
+      },
+      {
+        "heading": "deque를 사용하는 BFS 구현에서 큐 생성, popleft, 미방문 이웃 append와 즉시 방문 처리의 구조를 복원한다.",
+        "content": "deque로 큐를 만들고 popleft로 현재 노드를 꺼낸 뒤, 미방문 이웃을 append한 즉시 방문 처리한다.",
+        "learningUnitIds": [
+          "bfs-deque"
+        ]
+      },
+      {
+        "heading": "상하좌우로 연결된 0 영역의 개수를 세는 격자에서 DFS를 적용해 연결 요소 수를 계산한다.",
+        "content": "격자를 순회하여 아직 처리되지 않은 통과 가능 칸을 발견할 때마다 탐색으로 해당 연결 영역 전체를 처리하고, 탐색 시작 횟수를 연결 요소 수로 센다.",
+        "learningUnitIds": [
+          "components-dfs"
+        ]
+      },
+      {
+        "heading": "상하좌우로 이동하는 미로에서 BFS 거리 갱신 규칙을 적용해 도착 칸까지의 최소 이동 칸 수를 계산한다.",
+        "content": "무가중치 격자에서 BFS로 처음 도달한 이동 가능 이웃에 현재 거리+1을 기록하고, 도착 칸의 기록값을 최소 거리로 사용한다.",
+        "learningUnitIds": [
+          "shortest-path-bfs"
+        ]
+      }
+    ]
+  },
+  "activityDesign": {
+    "recommendations": [
+      {
+        "learningUnitId": "graph-basics",
+        "objectiveId": "obj-graph-basics",
+        "blueprintId": "memorize:obj-graph-basics",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "graph-representations",
+        "objectiveId": "obj-graph-representations",
+        "blueprintId": "memorize:obj-graph-representations",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "grid-as-graph",
+        "objectiveId": "obj-grid-as-graph",
+        "blueprintId": "bp-grid-as-graph",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "dfs-procedure",
+        "objectiveId": "obj-dfs-procedure",
+        "blueprintId": "bp-dfs-procedure",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "structure_recall",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "dfs-recursion",
+        "objectiveId": "obj-dfs-recursion",
+        "blueprintId": "memorize:obj-dfs-recursion",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "bfs-procedure",
+        "objectiveId": "obj-bfs-procedure",
+        "blueprintId": "bp-bfs-procedure",
+        "assessmentLevel": "exact",
+        "supportLevel": "supported",
+        "recommendedType": "structure_recall",
+        "reason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+        "limitation": "",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "bfs-deque",
+        "objectiveId": "obj-bfs-deque",
+        "blueprintId": "memorize:obj-bfs-deque",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "components-dfs",
+        "objectiveId": "obj-components-dfs",
+        "blueprintId": "bp-components-dfs",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      },
+      {
+        "learningUnitId": "shortest-path-bfs",
+        "objectiveId": "obj-shortest-path-bfs",
+        "blueprintId": "bp-shortest-path-bfs",
+        "assessmentLevel": "scaffold",
+        "supportLevel": "partial",
+        "recommendedType": "flashcard",
+        "reason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "limitation": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+        "includeInGeneration": true
+      }
+    ],
+    "objectives": [
+      {
+        "id": "obj-graph-basics",
+        "outlineNodeId": "graph-basics",
+        "learningUnitId": "graph-basics",
+        "target": "그래프를 노드(정점), 간선, 인접 관계로 이루어진 구조로 설명한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-graph-basics",
+            "description": "그래프의 구성 요소와 간선으로 연결된 두 노드가 인접하다는 관계를 빠짐없이 설명한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-graph-representations",
+        "outlineNodeId": "graph-representations",
+        "learningUnitId": "graph-representations",
+        "target": "인접 행렬과 인접 리스트의 저장 방식 및 연결 확인·메모리 특성의 차이를 설명한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-graph-representations",
+            "description": "인접 행렬의 전체 관계 저장과 빠른 연결 확인, 인접 리스트의 연결 정보만 저장과 메모리 효율 및 순회 확인 특성을 대응시켜 설명한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-grid-as-graph",
+        "outlineNodeId": "grid-as-graph",
+        "learningUnitId": "grid-as-graph",
+        "target": "새로운 2차원 배열 문제에서 각 좌표와 상하좌우 이동 관계를 그래프의 노드와 간선으로 모델링한다.",
+        "terminalOperation": "apply",
+        "successCriteria": [
+          {
+            "id": "sc-grid-as-graph",
+            "description": "주어진 격자에서 좌표를 노드로, 허용된 상하좌우 이동을 인접 관계로 정한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-dfs-procedure",
+        "outlineNodeId": "dfs-procedure",
+        "learningUnitId": "dfs-procedure",
+        "target": "DFS의 스택 기반 탐색과 방문 처리 절차를 순서대로 재현한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-dfs-procedure",
+            "description": "시작 삽입·방문 처리, 미방문 인접 노드 삽입·방문 처리, 인접 노드가 없을 때 꺼내기, 반복의 순서를 모두 재현한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-dfs-recursion",
+        "outlineNodeId": "dfs-recursion",
+        "learningUnitId": "dfs-recursion",
+        "target": "재귀 DFS에서 현재 노드 방문 처리 후 미방문 인접 노드를 재귀 호출하는 구현 구조를 복원한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-dfs-recursion",
+            "description": "함수 진입 직후 방문 처리하고, 인접 노드를 순회하며 미방문 노드에만 재귀 호출하는 구조를 작성한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-bfs-procedure",
+        "outlineNodeId": "bfs-procedure",
+        "learningUnitId": "bfs-procedure",
+        "target": "BFS의 큐 기반 탐색과 큐 삽입 시 방문 처리 절차를 순서대로 재현한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-bfs-procedure",
+            "description": "시작 노드의 큐 삽입·방문 처리, 꺼낸 노드의 모든 미방문 이웃 삽입·방문 처리, 반복의 순서를 재현한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-bfs-deque",
+        "outlineNodeId": "bfs-deque",
+        "learningUnitId": "bfs-deque",
+        "target": "deque를 사용하는 BFS 구현에서 큐 생성, popleft, 미방문 이웃 append와 즉시 방문 처리의 구조를 복원한다.",
+        "terminalOperation": "reconstruct",
+        "successCriteria": [
+          {
+            "id": "sc-bfs-deque",
+            "description": "deque로 시작 큐를 만들고, 반복문에서 popleft한 뒤 미방문 이웃을 append하고 그 자리에서 방문 처리하는 코드를 작성한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-components-dfs",
+        "outlineNodeId": "components-dfs",
+        "learningUnitId": "components-dfs",
+        "target": "상하좌우로 연결된 0 영역의 개수를 세는 격자에서 DFS를 적용해 연결 요소 수를 계산한다.",
+        "terminalOperation": "apply",
+        "successCriteria": [
+          {
+            "id": "sc-components-dfs",
+            "description": "주어진 격자에서 미방문 0마다 한 번의 DFS로 연결된 0 전체를 방문 처리하고 DFS 시작 횟수를 결과로 산출한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      },
+      {
+        "id": "obj-shortest-path-bfs",
+        "outlineNodeId": "shortest-path-bfs",
+        "learningUnitId": "shortest-path-bfs",
+        "target": "상하좌우로 이동하는 미로에서 BFS 거리 갱신 규칙을 적용해 도착 칸까지의 최소 이동 칸 수를 계산한다.",
+        "terminalOperation": "apply",
+        "successCriteria": [
+          {
+            "id": "sc-shortest-path-bfs",
+            "description": "주어진 미로에서 범위 밖과 벽을 제외하고 처음 방문한 이동 가능 칸에 이전 거리+1을 기록하여 도착 칸의 값을 산출한다.",
+            "required": true
+          }
+        ],
+        "importance": 3
+      }
+    ],
+    "blueprints": [
+      {
+        "id": "memorize:obj-graph-basics",
+        "objectiveId": "obj-graph-basics",
+        "learningUnitId": "graph-basics",
+        "relationToObjective": "scaffold",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-graph-basics"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "현재 문제 형식으로 최종 수행을 직접 연습하기 어려우므로, 수행에 필요한 핵심 원리·조건·판단 절차를 플래시카드로 떠올리게 합니다. 정답은 문제 앞면에 제시하지 않습니다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "원문에 근거한 핵심 내용: 그래프의 구성 요소와 간선으로 연결된 두 노드가 인접하다는 관계를 빠짐없이 설명한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "그래프의 구성 요소와 간선으로 연결된 두 노드가 인접하다는 관계를 빠짐없이 설명한다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-graph-basics",
+            "description": "정답을 펼쳐 원문의 핵심 원리·조건·판단 절차와 의미가 일치하는지 자기 확인합니다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "memorize:obj-graph-representations",
+        "objectiveId": "obj-graph-representations",
+        "learningUnitId": "graph-representations",
+        "relationToObjective": "scaffold",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-graph-representations"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "현재 문제 형식으로 최종 수행을 직접 연습하기 어려우므로, 수행에 필요한 핵심 원리·조건·판단 절차를 플래시카드로 떠올리게 합니다. 정답은 문제 앞면에 제시하지 않습니다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "원문에 근거한 핵심 내용: 인접 행렬의 전체 관계 저장과 빠른 연결 확인, 인접 리스트의 연결 정보만 저장과 메모리 효율 및 순회 확인 특성을 대응시켜 설명한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "인접 행렬의 전체 관계 저장과 빠른 연결 확인, 인접 리스트의 연결 정보만 저장과 메모리 효율 및 순회 확인 특성을 대응시켜 설명한다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-graph-representations",
+            "description": "정답을 펼쳐 원문의 핵심 원리·조건·판단 절차와 의미가 일치하는지 자기 확인합니다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-grid-as-graph",
+        "objectiveId": "obj-grid-as-graph",
+        "learningUnitId": "grid-as-graph",
+        "relationToObjective": "direct",
+        "elicitedOperation": "apply",
+        "coverageCriterionIds": [
+          "sc-grid-as-graph"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "'.' 칸은 이동 가능하고 '#' 칸은 이동 불가능하며, 이동은 상하좌우로만 가능하다는 격자 이동 규칙"
+          },
+          {
+            "type": "data",
+            "description": "3행 3열 격자: 1행 \"...\", 2행 \".#.\", 3행 \"...\""
+          },
+          {
+            "type": "instruction",
+            "description": "이 격자를 그래프로 볼 때 노드와 허용 이동 간선(인접 관계)을 정하도록 안내한다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "노드는 이동 가능한 좌표 (0,0), (0,1), (0,2), (1,0), (1,2), (2,0), (2,1), (2,2)이다. 양방향 인접 관계는 {(0,0)-(0,1), (0,0)-(1,0), (0,1)-(0,2), (0,2)-(1,2), (1,0)-(2,0), (1,2)-(2,2), (2,0)-(2,1), (2,1)-(2,2)}이다.",
+            "reason": "target_answer"
+          },
+          {
+            "description": "벽 좌표 (1,1)는 노드와 이동 간선에서 제외해야 하며, 대각선 이동은 포함하지 않는다.",
+            "reason": "required_inference"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "structured_text",
+          "description": "이동 가능한 좌표의 노드 집합과 상하좌우 이동으로 생기는 인접 관계"
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-grid-as-graph",
+            "description": "이동 가능한 좌표를 노드로 잡고, 벽과 대각선을 제외한 상하좌우 이동만 인접 관계로 정하면 충족한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "multi_part",
+          "transferDistance": "near_transfer"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-dfs-procedure",
+        "objectiveId": "obj-dfs-procedure",
+        "learningUnitId": "dfs-procedure",
+        "relationToObjective": "direct",
+        "elicitedOperation": "reconstruct",
+        "coverageCriterionIds": [
+          "sc-dfs-procedure"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "스택을 이용하는 DFS의 핵심 동작 라벨을 올바른 실행 순서로 배열하도록 안내한다."
+          },
+          {
+            "type": "data",
+            "description": "배열 대상 라벨: 시작 노드 스택 삽입, 시작 노드 방문 처리, 현재 경로의 미방문 인접 노드 스택 삽입, 삽입한 인접 노드 방문 처리, 더 진행할 인접 노드가 없을 때 스택에서 꺼내기, 탐색 가능 노드가 남아 있는 동안 반복"
+          }
+        ],
+        "hidden": [
+          {
+            "description": "시작 노드를 스택에 삽입하고 방문 처리한다. 현재 경로의 미방문 인접 노드가 있으면 그 노드를 스택에 삽입하고 즉시 방문 처리한다. 더 진행할 미방문 인접 노드가 없으면 스택에서 꺼낸다. 탐색 가능 노드가 남아 있는 동안 이를 반복한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "ordered_structure",
+          "description": "DFS의 시작 처리, 깊이 진행, 되돌아가기, 반복 조건으로 이루어진 순서 구조"
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-dfs-procedure",
+            "description": "시작 삽입과 방문 처리, 미방문 이웃 삽입과 방문 처리, 막혔을 때 꺼내기, 반복 순서를 모두 올바르게 재현하면 충족한다.",
+            "weight": 1,
+            "gradingMode": "exact"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "multi_step",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "structure_recall"
+      },
+      {
+        "id": "memorize:obj-dfs-recursion",
+        "objectiveId": "obj-dfs-recursion",
+        "learningUnitId": "dfs-recursion",
+        "relationToObjective": "scaffold",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-dfs-recursion"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "현재 문제 형식으로 최종 수행을 직접 연습하기 어려우므로, 수행에 필요한 핵심 원리·조건·판단 절차를 플래시카드로 떠올리게 합니다. 정답은 문제 앞면에 제시하지 않습니다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "원문에 근거한 핵심 내용: 함수 진입 직후 방문 처리하고, 인접 노드를 순회하며 미방문 노드에만 재귀 호출하는 구조를 작성한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "함수 진입 직후 방문 처리하고, 인접 노드를 순회하며 미방문 노드에만 재귀 호출하는 구조를 작성한다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-dfs-recursion",
+            "description": "정답을 펼쳐 원문의 핵심 원리·조건·판단 절차와 의미가 일치하는지 자기 확인합니다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-bfs-procedure",
+        "objectiveId": "obj-bfs-procedure",
+        "learningUnitId": "bfs-procedure",
+        "relationToObjective": "direct",
+        "elicitedOperation": "reconstruct",
+        "coverageCriterionIds": [
+          "sc-bfs-procedure"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "큐를 이용하는 BFS의 핵심 동작 라벨을 올바른 실행 순서로 배열하도록 안내한다."
+          },
+          {
+            "type": "data",
+            "description": "배열 대상 라벨: 시작 노드 큐 삽입, 시작 노드 방문 처리, 큐의 앞 노드 꺼내기, 꺼낸 노드의 모든 미방문 인접 노드 큐 삽입, 삽입한 각 인접 노드 즉시 방문 처리, 큐가 빌 때까지 반복"
+          }
+        ],
+        "hidden": [
+          {
+            "description": "시작 노드를 큐에 삽입하고 방문 처리한다. 큐에서 노드를 하나 꺼낸다. 꺼낸 노드의 모든 미방문 인접 노드를 큐에 삽입하고, 삽입한 즉시 방문 처리한다. 큐가 빌 때까지 반복한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "ordered_structure",
+          "description": "BFS의 시작 처리, 큐에서 꺼내기, 모든 미방문 이웃 삽입·즉시 방문 처리, 반복 조건으로 이루어진 순서 구조"
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-bfs-procedure",
+            "description": "시작 노드의 큐 삽입·방문 처리, 꺼낸 노드의 모든 미방문 이웃 삽입·방문 처리, 반복 순서를 재현하면 충족한다.",
+            "weight": 1,
+            "gradingMode": "exact"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "multi_step",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "structure_recall"
+      },
+      {
+        "id": "memorize:obj-bfs-deque",
+        "objectiveId": "obj-bfs-deque",
+        "learningUnitId": "bfs-deque",
+        "relationToObjective": "scaffold",
+        "elicitedOperation": "recall",
+        "coverageCriterionIds": [
+          "sc-bfs-deque"
+        ],
+        "given": [
+          {
+            "type": "instruction",
+            "description": "현재 문제 형식으로 최종 수행을 직접 연습하기 어려우므로, 수행에 필요한 핵심 원리·조건·판단 절차를 플래시카드로 떠올리게 합니다. 정답은 문제 앞면에 제시하지 않습니다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "원문에 근거한 핵심 내용: deque로 시작 큐를 만들고, 반복문에서 popleft한 뒤 미방문 이웃을 append하고 그 자리에서 방문 처리하는 코드를 작성한다.",
+            "reason": "target_answer"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "deque로 시작 큐를 만들고, 반복문에서 popleft한 뒤 미방문 이웃을 append하고 그 자리에서 방문 처리하는 코드를 작성한다."
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-bfs-deque",
+            "description": "정답을 펼쳐 원문의 핵심 원리·조건·판단 절차와 의미가 일치하는지 자기 확인합니다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "medium",
+          "responseComplexity": "atomic",
+          "transferDistance": "same_context"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-components-dfs",
+        "objectiveId": "obj-components-dfs",
+        "learningUnitId": "components-dfs",
+        "relationToObjective": "direct",
+        "elicitedOperation": "apply",
+        "coverageCriterionIds": [
+          "sc-components-dfs"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "0은 통과 가능한 칸, 1은 통과 불가능한 칸이다. 연결은 상하좌우만 인정하고 대각선은 인정하지 않는다."
+          },
+          {
+            "type": "data",
+            "description": "4행 5열 격자: 1행 \"00110\", 2행 \"01110\", 3행 \"10001\", 4행 \"11001\""
+          },
+          {
+            "type": "instruction",
+            "description": "격자를 행 우선으로 순회하면서 아직 방문하지 않은 0을 발견할 때마다 DFS로 그 영역 전체를 방문 처리할 때, DFS 시작 횟수를 구하도록 안내한다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "2",
+            "reason": "target_answer"
+          },
+          {
+            "description": "첫 DFS는 (0,0), (0,1), (1,0)의 영역을 처리하고, 두 번째 DFS는 (2,3), (2,4), (3,3), (3,4)의 영역을 처리한다.",
+            "reason": "required_inference"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "DFS 시작 횟수로 나타낸 연결 요소 수"
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-components-dfs",
+            "description": "미방문 0마다 DFS 한 번으로 해당 영역 전체를 처리하고, 총 DFS 시작 횟수 2를 산출하면 충족한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "low",
+          "responseComplexity": "multi_step",
+          "transferDistance": "near_transfer"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      },
+      {
+        "id": "bp-shortest-path-bfs",
+        "objectiveId": "obj-shortest-path-bfs",
+        "learningUnitId": "shortest-path-bfs",
+        "relationToObjective": "direct",
+        "elicitedOperation": "apply",
+        "coverageCriterionIds": [
+          "sc-shortest-path-bfs"
+        ],
+        "given": [
+          {
+            "type": "context",
+            "description": "S는 시작 칸, G는 도착 칸, '.'은 이동 가능 칸, '#'은 벽이다. 상하좌우로만 이동하며 시작 칸의 거리는 0으로 기록한다."
+          },
+          {
+            "type": "data",
+            "description": "5행 5열 미로: 1행 \"S....\", 2행 \"###.#\", 3행 \"....#\", 4행 \".####\", 5행 \"....G\""
+          },
+          {
+            "type": "instruction",
+            "description": "BFS에서 처음 방문한 이동 가능 이웃에 현재 거리+1을 기록할 때 도착 칸의 기록값을 구하도록 안내한다."
+          }
+        ],
+        "hidden": [
+          {
+            "description": "14",
+            "reason": "target_answer"
+          },
+          {
+            "description": "BFS는 시작점에서 가까운 칸부터 처리하므로 각 이동 가능 칸의 첫 기록값이 최소 거리이다. 도착 칸까지 가능한 최단 경로는 14회 이동이다.",
+            "reason": "required_inference"
+          }
+        ],
+        "expectedResponse": {
+          "kind": "short_text",
+          "description": "도착 칸에 기록되는 최소 이동 횟수"
+        },
+        "scoringRubric": [
+          {
+            "criterionId": "sc-shortest-path-bfs",
+            "description": "벽과 범위 밖을 제외하고 처음 방문한 이웃에 이전 거리+1을 적용하여 도착 칸의 최소 거리 14를 산출하면 충족한다.",
+            "weight": 1,
+            "gradingMode": "self"
+          }
+        ],
+        "difficulty": {
+          "cueLevel": "low",
+          "responseComplexity": "multi_step",
+          "transferDistance": "near_transfer"
+        },
+        "requiredCapabilities": [],
+        "recommendedType": "flashcard"
+      }
+    ]
+  },
+  "cards": [
+    {
+      "id": "876ff9a9-9890-420f-8080-770f01a649f4",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "그래프의 구성 요소와, 간선으로 연결된 두 노드의 관계를 설명하세요.",
+      "back": "그래프는 노드(정점)와 간선으로 표현한다. 간선으로 연결된 두 노드는 인접하다.",
+      "recommendationReason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "tags": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트",
+        "2차원 격자의 그래프 모델링"
+      ],
+      "status": "new",
+      "basis": "그래프는 노드(Node)와 간선(Edge)으로 표현되며 노드를 정점(Vertex)이라고도 한다. 두 노드가 간선으로 연결되어 있다면 두 노드는 인접하다(Adjacent)고 표현한다.",
+      "learningUnitId": "graph-basics",
+      "objectiveId": "obj-graph-basics",
+      "blueprintId": "memorize:obj-graph-basics",
+      "strategy": "concept",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 1,
+      "sourceRange": "p.1, 「노드·간선·인접 관계」 문단 전체",
+      "rationale": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "difficulty": 1,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "그래프는 노드(정점)와 간선으로 이루어지며, 간선으로 연결된 두 노드는 인접하다."
+    },
+    {
+      "id": "32fb9e14-f9ac-4157-bb1a-64ef1bce14c9",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "인접 행렬과 인접 리스트의 저장 방식, 특정 두 노드의 연결 확인 방식, 메모리 특성을 비교하세요.",
+      "back": "인접 행렬은 2차원 배열에 모든 관계를 저장해 두 노드의 연결 여부를 바로 확인한다. 인접 리스트는 연결된 노드 정보만 저장해 메모리를 효율적으로 사용하지만, 두 노드의 연결 여부는 인접 데이터를 확인해야 한다.",
+      "recommendationReason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "tags": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트",
+        "2차원 격자의 그래프 모델링"
+      ],
+      "status": "new",
+      "basis": "인접 행렬은 graph[1][7]처럼 특정 두 노드의 연결 여부를 바로 확인할 수 있지만 모든 관계를 저장한다. 인접 리스트는 연결된 정보만 저장하여 메모리를 효율적으로 사용하지만 특정 두 노드의 연결 여부는 인접 데이터를 하나씩 확인해야 한다.",
+      "learningUnitId": "graph-representations",
+      "objectiveId": "obj-graph-representations",
+      "blueprintId": "memorize:obj-graph-representations",
+      "strategy": "contrast",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 1,
+      "sourceRange": "p.1~4, 「인접 행렬과 인접 리스트의 선택 기준」 문단 전체",
+      "rationale": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "인접 행렬은 모든 관계를 저장해 즉시 확인할 수 있고, 인접 리스트는 연결 정보만 저장해 메모리를 효율적으로 쓴다."
+    },
+    {
+      "id": "25431dc6-a655-4286-baeb-9b7afa4ec9fd",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "다음 격자를 그래프로 모델링하세요. '.'은 이동 가능, '#'은 이동 불가능이며 상하좌우로만 이동합니다.\n\n3×3 격자\n...\n.#.\n...\n\n노드 집합과 양방향 인접 관계를 쓰세요.",
+      "back": "노드: {(0,0), (0,1), (0,2), (1,0), (1,2), (2,0), (2,1), (2,2)}\n간선: {(0,0)-(0,1), (0,0)-(1,0), (0,1)-(0,2), (0,2)-(1,2), (1,0)-(2,0), (1,2)-(2,2), (2,0)-(2,1), (2,1)-(2,2)}",
+      "recommendationReason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "tags": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트",
+        "2차원 격자의 그래프 모델링"
+      ],
+      "status": "new",
+      "basis": "격자의 각 좌표를 노드로, 허용된 방향의 이동 가능 관계를 간선으로 모델링한다.",
+      "learningUnitId": "grid-as-graph",
+      "objectiveId": "obj-grid-as-graph",
+      "blueprintId": "bp-grid-as-graph",
+      "strategy": "application",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 15,
+      "sourceRange": "p.15, 「2차원 배열을 그래프로 보는 관점」 문단 전체",
+      "rationale": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "difficulty": 4,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "이동 가능한 칸만 노드이며, 벽과 대각선 이동은 간선에서 제외한다."
+    },
+    {
+      "id": "978adafa-3fc5-4a31-ba37-a0fc1db462e4",
+      "type": "flashcard",
+      "activityType": "structure_recall",
+      "front": "스택 기반 DFS의 핵심 동작을 실행 순서대로 배열하세요.",
+      "structureNodes": [
+        {
+          "id": "dfs-1",
+          "parentId": null,
+          "correctLabel": "시작 노드 스택 삽입"
+        },
+        {
+          "id": "dfs-2",
+          "parentId": "dfs-1",
+          "correctLabel": "시작 노드 방문 처리"
+        },
+        {
+          "id": "dfs-3",
+          "parentId": "dfs-2",
+          "correctLabel": "현재 경로의 미방문 인접 노드 스택 삽입"
+        },
+        {
+          "id": "dfs-4",
+          "parentId": "dfs-3",
+          "correctLabel": "삽입한 인접 노드 방문 처리"
+        },
+        {
+          "id": "dfs-5",
+          "parentId": "dfs-4",
+          "correctLabel": "더 진행할 인접 노드가 없을 때 스택에서 꺼내기"
+        },
+        {
+          "id": "dfs-6",
+          "parentId": "dfs-5",
+          "correctLabel": "탐색 가능 노드가 남아 있는 동안 반복"
+        }
+      ],
+      "structureRecallMode": "word_bank",
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트",
+        "2차원 격자의 그래프 모델링"
+      ],
+      "status": "new",
+      "basis": "시작 노드를 스택에 삽입하고 방문 처리한다. 현재 경로의 미방문 인접 노드가 있으면 그 노드를 스택에 삽입하고 즉시 방문 처리한다. 더 진행할 미방문 인접 노드가 없으면 스택에서 꺼낸다. 탐색 가능 노드가 남아 있는 동안 이를 반복한다.",
+      "learningUnitId": "dfs-procedure",
+      "objectiveId": "obj-dfs-procedure",
+      "blueprintId": "bp-dfs-procedure",
+      "strategy": "procedure",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 4,
+      "sourceRange": "p.4, 「DFS 동작 절차와 방문 처리」 문단 전체",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "DFS는 시작 노드를 처리한 뒤 미방문 이웃으로 깊게 진행하고, 진행할 이웃이 없을 때 스택에서 꺼내며 반복한다."
+    },
+    {
+      "id": "c1b66e3d-67a0-4ce3-892a-543f87f18ca2",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "재귀 DFS 함수의 핵심 구현 순서를 쓰세요. 현재 노드와 인접 노드 목록이 주어졌다고 가정합니다.",
+      "back": "현재 노드를 먼저 방문 처리하고, 인접 노드를 순회하며 미방문 노드마다 DFS를 재귀 호출한다.",
+      "recommendationReason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "tags": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트",
+        "2차원 격자의 그래프 모델링"
+      ],
+      "status": "new",
+      "basis": "현재 노드를 먼저 방문 처리하고, 현재 노드의 인접 노드 중 미방문 노드마다 같은 DFS 함수를 재귀 호출한다.",
+      "learningUnitId": "dfs-recursion",
+      "objectiveId": "obj-dfs-recursion",
+      "blueprintId": "memorize:obj-dfs-recursion",
+      "strategy": "production",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 9,
+      "sourceRange": "p.9~10, 「재귀 DFS 구현 골격」 코드 및 설명",
+      "rationale": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "재귀 DFS는 함수에 들어오자마자 현재 노드를 방문 처리한 뒤, 미방문 인접 노드에만 재귀 호출한다."
+    },
+    {
+      "id": "1e680f31-fede-46a4-81d8-c86dc9f506b7",
+      "type": "flashcard",
+      "activityType": "structure_recall",
+      "front": "큐 기반 BFS의 핵심 동작을 실행 순서대로 배열하세요.",
+      "structureNodes": [
+        {
+          "id": "bfs-1",
+          "parentId": null,
+          "correctLabel": "시작 노드 큐 삽입"
+        },
+        {
+          "id": "bfs-2",
+          "parentId": "bfs-1",
+          "correctLabel": "시작 노드 방문 처리"
+        },
+        {
+          "id": "bfs-3",
+          "parentId": "bfs-2",
+          "correctLabel": "큐의 앞 노드 꺼내기"
+        },
+        {
+          "id": "bfs-4",
+          "parentId": "bfs-3",
+          "correctLabel": "꺼낸 노드의 모든 미방문 인접 노드 큐 삽입"
+        },
+        {
+          "id": "bfs-5",
+          "parentId": "bfs-4",
+          "correctLabel": "삽입한 각 인접 노드 즉시 방문 처리"
+        },
+        {
+          "id": "bfs-6",
+          "parentId": "bfs-5",
+          "correctLabel": "큐가 빌 때까지 반복"
+        }
+      ],
+      "structureRecallMode": "word_bank",
+      "recommendationReason": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "tags": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트",
+        "2차원 격자의 그래프 모델링"
+      ],
+      "status": "new",
+      "basis": "시작 노드를 큐에 삽입하고 방문 처리한다. 큐에서 노드를 하나 꺼낸다. 꺼낸 노드의 모든 미방문 인접 노드를 큐에 삽입하고, 삽입한 즉시 방문 처리한다. 큐가 빌 때까지 반복한다.",
+      "learningUnitId": "bfs-procedure",
+      "objectiveId": "obj-bfs-procedure",
+      "blueprintId": "bp-bfs-procedure",
+      "strategy": "procedure",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 10,
+      "sourceRange": "p.10, 「BFS 동작 절차와 큐 삽입 시 방문 처리」 문단 전체",
+      "rationale": "목표 행동과 응답을 현재 문제 형식으로 직접 연습하고 채점할 수 있습니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "BFS는 큐에서 앞 노드를 꺼내고, 그 노드의 모든 미방문 이웃을 큐에 넣는 즉시 방문 처리한다."
+    },
+    {
+      "id": "d188fb20-3321-41a2-8991-a80a2e4c2a5e",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "파이썬 deque를 이용한 BFS에서 큐 생성부터 이웃 처리까지의 핵심 구현 구조를 쓰세요.",
+      "back": "deque로 시작 노드를 넣은 큐를 만들고, 반복문에서 popleft한다. 미방문 이웃은 append한 즉시 방문 처리한다.",
+      "recommendationReason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "tags": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트",
+        "2차원 격자의 그래프 모델링"
+      ],
+      "status": "new",
+      "basis": "deque로 큐를 만들고 popleft로 현재 노드를 꺼낸 뒤, 미방문 이웃을 append한 즉시 방문 처리한다.",
+      "learningUnitId": "bfs-deque",
+      "objectiveId": "obj-bfs-deque",
+      "blueprintId": "memorize:obj-bfs-deque",
+      "strategy": "production",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 14,
+      "sourceRange": "p.14, 「deque 기반 BFS 구현 골격」 코드 및 설명",
+      "rationale": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "difficulty": 3,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "deque를 큐로 사용하고, popleft 후 미방문 이웃을 append하는 순간 방문 처리해야 중복 삽입을 막을 수 있다."
+    },
+    {
+      "id": "254ddb19-2739-4d38-a055-be7228c15366",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "0은 통과 가능, 1은 통과 불가능입니다. 상하좌우만 연결로 인정합니다. 격자를 행 우선으로 순회하며 미방문 0을 발견할 때마다 DFS를 시작할 때, DFS 시작 횟수를 구하세요.\n\n00110\n01110\n10001\n11001",
+      "back": "2",
+      "recommendationReason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "tags": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트",
+        "2차원 격자의 그래프 모델링"
+      ],
+      "status": "new",
+      "basis": "격자를 순회하여 아직 처리되지 않은 통과 가능 칸을 발견할 때마다 탐색으로 해당 연결 영역 전체를 처리하고, 탐색 시작 횟수를 연결 요소 수로 센다.",
+      "learningUnitId": "components-dfs",
+      "objectiveId": "obj-components-dfs",
+      "blueprintId": "bp-components-dfs",
+      "strategy": "application",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 16,
+      "sourceRange": "p.16~18, 「DFS로 연결된 영역 개수 세기」 문단 및 dfs(x, y) 설명",
+      "rationale": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "difficulty": 4,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "첫 DFS는 왼쪽 위의 0 영역을, 두 번째 DFS는 오른쪽 아래의 0 영역을 모두 처리한다."
+    },
+    {
+      "id": "fea35def-32ad-4e92-a4da-c3160fb9a361",
+      "type": "flashcard",
+      "activityType": "flashcard",
+      "front": "S는 시작 칸, G는 도착 칸, '.'은 이동 가능 칸, '#'은 벽입니다. 상하좌우로만 이동하고 시작 칸의 거리는 0입니다. BFS에서 처음 방문한 이웃에 현재 거리+1을 기록할 때, G의 최소 이동 횟수를 구하세요.\n\nS....\n###.#\n....#\n.####\n....G",
+      "back": "14",
+      "recommendationReason": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "tags": [
+        "그래프의 노드·간선·인접 관계",
+        "인접 행렬과 인접 리스트",
+        "2차원 격자의 그래프 모델링"
+      ],
+      "status": "new",
+      "basis": "무가중치 격자에서 BFS로 처음 도달한 이동 가능 이웃에 현재 거리+1을 기록하고, 도착 칸의 기록값을 최소 거리로 사용한다.",
+      "learningUnitId": "shortest-path-bfs",
+      "objectiveId": "obj-shortest-path-bfs",
+      "blueprintId": "bp-shortest-path-bfs",
+      "strategy": "application",
+      "sourceId": "05 DFS BFS.pdf",
+      "sourcePage": 19,
+      "sourceRange": "p.19~21, 「BFS로 격자 최단 거리 기록하기」 문단 전체",
+      "rationale": "최종 목표보다 낮은 단계지만 목표 수행에 직접 필요한 능력을 연습합니다.",
+      "difficulty": 5,
+      "qualityPassed": true,
+      "qualityNotes": [],
+      "qualityStatus": "passed",
+      "explanation": "BFS는 가까운 칸부터 처음 방문하므로, 도착 칸에 처음 기록된 거리가 최소 이동 횟수이다."
+    }
+  ],
+  "usage": [
+    {
+      "sourceName": "05 DFS BFS.pdf",
+      "experimentId": "model-test-prepare-terra-dfs-bfs-r1-2026-08-17T065534396Z",
+      "stage": "activity-design",
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium",
+      "inputTokens": 3395,
+      "cachedInputTokens": 0,
+      "outputTokens": 5714,
+      "reasoningTokens": 1201,
+      "totalTokens": 9109,
+      "estimatedCostUsd": 0.094198,
+      "pricingAsOf": "2026-08-17"
+    },
+    {
+      "sourceName": "05 DFS BFS.pdf",
+      "experimentId": "model-test-prepare-terra-dfs-bfs-r1-2026-08-17T065534396Z",
+      "stage": "cards",
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium",
+      "inputTokens": 6228,
+      "cachedInputTokens": 0,
+      "outputTokens": 2223,
+      "reasoningTokens": 179,
+      "totalTokens": 8451,
+      "estimatedCostUsd": 0.048915,
+      "pricingAsOf": "2026-08-17"
+    }
+  ],
+  "checks": {
+    "learningUnitCount": 9,
+    "recommendationCount": 9,
+    "cardCount": 9,
+    "machineIssues": []
+  }
+}

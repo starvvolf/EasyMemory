@@ -1,0 +1,22 @@
+{
+  "assetId": "curve-line-intersections-v1",
+  "mimeType": "image/svg+xml",
+  "generator": "python-matplotlib",
+  "generatorVersion": "3.9.4",
+  "scriptPath": "tools/problem-authoring-lab/graph-assets/generate_curve_line_svg.py",
+  "specPath": "tools/problem-authoring-lab/fixtures/graph-one-spec.json",
+  "specSha256": "4637c2b839b7147cb5ac74e82fc2b7f19932c7ad0e89b56c95d891102c29e255",
+  "sha256": "3199119bf888395fac5c4ccaffc8df301e5509a4ff6380bd57693d05e181e87a",
+  "intersections": [
+    {
+      "label": "A",
+      "x": 1.0,
+      "y": 0.0
+    },
+    {
+      "label": "B",
+      "x": 4.0,
+      "y": 3.0
+    }
+  ]
+}

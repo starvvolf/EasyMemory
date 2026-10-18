@@ -1,0 +1,153 @@
+{
+  "summary": {
+    "passed": 24,
+    "failed": 0,
+    "actualBrowserDisplayVerified": false
+  },
+  "results": [
+    {
+      "name": "문서 계약 오류",
+      "observed": 0,
+      "expected": 0,
+      "pass": true
+    },
+    {
+      "name": "고정 패킷 출처 불일치",
+      "observed": 0,
+      "expected": 0,
+      "pass": true
+    },
+    {
+      "name": "전체 문항 수",
+      "observed": 4,
+      "expected": 4,
+      "pass": true
+    },
+    {
+      "name": "독립 문항 수",
+      "observed": 2,
+      "expected": 2,
+      "pass": true
+    },
+    {
+      "name": "공통 자료 문항 수",
+      "observed": 2,
+      "expected": 2,
+      "pass": true
+    },
+    {
+      "name": "공통 자료 표시 횟수 - 풀이",
+      "observed": 1,
+      "expected": 1,
+      "pass": true
+    },
+    {
+      "name": "공통 자료 표시 횟수 - 직접 풀이",
+      "observed": 1,
+      "expected": 1,
+      "pass": true
+    },
+    {
+      "name": "문항 표시 횟수 - 풀이",
+      "observed": 4,
+      "expected": 4,
+      "pass": true
+    },
+    {
+      "name": "직접 풀이 문항별 제출 단추",
+      "observed": 4,
+      "expected": 4,
+      "pass": true
+    },
+    {
+      "name": "직접 풀이 문항별 정답 공개 단추",
+      "observed": 4,
+      "expected": 4,
+      "pass": true
+    },
+    {
+      "name": "풀이 화면 정답 표시 없음",
+      "observed": 0,
+      "expected": 0,
+      "pass": true
+    },
+    {
+      "name": "정답 화면 객관식 표시",
+      "observed": 2,
+      "expected": 2,
+      "pass": true
+    },
+    {
+      "name": "풀이 화면 정답 설명 미노출",
+      "observed": false,
+      "expected": false,
+      "pass": true
+    },
+    {
+      "name": "정답 화면 정답 설명 노출",
+      "observed": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "name": "q-matrix-roles 올바른 답 채점",
+      "observed": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "name": "q-matrix-roles 오답 채점",
+      "observed": false,
+      "expected": false,
+      "pass": true
+    },
+    {
+      "name": "q-homogeneous 올바른 답 채점",
+      "observed": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "name": "q-homogeneous 오답 채점",
+      "observed": false,
+      "expected": false,
+      "pass": true
+    },
+    {
+      "name": "q-set-rotation 올바른 답 채점",
+      "observed": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "name": "q-set-rotation 오답 채점",
+      "observed": false,
+      "expected": false,
+      "pass": true
+    },
+    {
+      "name": "q-set-translation-matrix 올바른 답 채점",
+      "observed": true,
+      "expected": true,
+      "pass": true
+    },
+    {
+      "name": "q-set-translation-matrix 오답 채점",
+      "observed": false,
+      "expected": false,
+      "pass": true
+    },
+    {
+      "name": "공통 세트 응답 ID 분리",
+      "observed": 2,
+      "expected": 2,
+      "pass": true
+    },
+    {
+      "name": "수정 횟수",
+      "observed": 1,
+      "expected": 1,
+      "pass": true
+    }
+  ]
+}

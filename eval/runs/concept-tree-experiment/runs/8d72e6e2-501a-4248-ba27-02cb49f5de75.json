@@ -1,0 +1,491 @@
+{
+  "title": "운영체제 데드락 개념트리",
+  "sourceMode": "pdf",
+  "sourceLabel": "technical-deadlocks.pdf",
+  "files": [
+    {
+      "fileName": "technical-deadlocks.pdf",
+      "pageCount": 14
+    }
+  ],
+  "instruction": "강의자료에 실제로 등장하는 개념어와 그 관계만 남긴다.",
+  "id": "8d72e6e2-501a-4248-ba27-02cb49f5de75",
+  "status": "completed",
+  "createdAt": "2026-08-28T15:17:01.234Z",
+  "tree": {
+    "id": "a906c542-0abb-4072-b11f-fb30dbd357fa",
+    "runId": "8d72e6e2-501a-4248-ba27-02cb49f5de75",
+    "title": "운영체제 데드락 개념트리",
+    "sourceMode": "pdf",
+    "sourceLabel": "technical-deadlocks.pdf",
+    "files": [
+      {
+        "fileName": "technical-deadlocks.pdf",
+        "pageCount": 14
+      }
+    ],
+    "outlineText": "데드락\n- [정의] 차단된 프로세스 집합 — 서로가 유발할 사건을 무한히 기다리는 상태 (p.3)\n- [시스템 모델] 프로세스 (p.4)\n- [시스템 모델] 자원 유형 (p.4)\n  - [구성] 자원 인스턴스 (p.4)\n- [자원 사용 단계] 요청 (p.4)\n- [자원 사용 단계] 사용 (p.4)\n- [자원 사용 단계] 반납 (p.4)\n- [필요조건] 상호 배제 (p.5)\n- [필요조건] 점유와 대기 (p.5)\n- [필요조건] 비선점 (p.5)\n- [필요조건] 순환 대기 (p.5)\n- [표현] 자원 할당 그래프 (p.6)\n  - [정점] 프로세스 정점 (p.6)\n  - [정점] 자원 유형 정점 (p.6)\n  - [간선] 요청 간선 (p.6)\n  - [간선] 할당 간선 (p.6)\n  - [판별 기준] 사이클 (p.7)\n- [처리 전략] 예방 (p.8-9)\n- [처리 전략] 회피 (p.8,10-12)\n  - [상태] 안전 상태 (p.10)\n  - [상태] 불안전 상태 (p.10,12)\n  - [표현] 클레임 간선 (p.11)\n  - [알고리즘] 은행원 알고리즘 (p.11)\n- [처리 전략] 탐지와 복구 (p.8,13)\n  - [복구] 프로세스 종료 (p.13)\n  - [복구] 자원 선점 (p.13)",
+    "nodes": [
+      {
+        "id": "concept-001",
+        "parentId": null,
+        "order": 1,
+        "depth": 0,
+        "title": "데드락",
+        "relation": "",
+        "description": "",
+        "sourceRefs": []
+      },
+      {
+        "id": "concept-002",
+        "parentId": "concept-001",
+        "order": 1,
+        "depth": 1,
+        "title": "차단된 프로세스 집합",
+        "relation": "정의",
+        "description": "서로가 유발할 사건을 무한히 기다리는 상태",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              3
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-003",
+        "parentId": "concept-001",
+        "order": 2,
+        "depth": 1,
+        "title": "프로세스",
+        "relation": "시스템 모델",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              4
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-004",
+        "parentId": "concept-001",
+        "order": 3,
+        "depth": 1,
+        "title": "자원 유형",
+        "relation": "시스템 모델",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              4
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-005",
+        "parentId": "concept-004",
+        "order": 1,
+        "depth": 2,
+        "title": "자원 인스턴스",
+        "relation": "구성",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              4
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-006",
+        "parentId": "concept-001",
+        "order": 4,
+        "depth": 1,
+        "title": "요청",
+        "relation": "자원 사용 단계",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              4
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-007",
+        "parentId": "concept-001",
+        "order": 5,
+        "depth": 1,
+        "title": "사용",
+        "relation": "자원 사용 단계",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              4
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-008",
+        "parentId": "concept-001",
+        "order": 6,
+        "depth": 1,
+        "title": "반납",
+        "relation": "자원 사용 단계",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              4
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-009",
+        "parentId": "concept-001",
+        "order": 7,
+        "depth": 1,
+        "title": "상호 배제",
+        "relation": "필요조건",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              5
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-010",
+        "parentId": "concept-001",
+        "order": 8,
+        "depth": 1,
+        "title": "점유와 대기",
+        "relation": "필요조건",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              5
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-011",
+        "parentId": "concept-001",
+        "order": 9,
+        "depth": 1,
+        "title": "비선점",
+        "relation": "필요조건",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              5
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-012",
+        "parentId": "concept-001",
+        "order": 10,
+        "depth": 1,
+        "title": "순환 대기",
+        "relation": "필요조건",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              5
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-013",
+        "parentId": "concept-001",
+        "order": 11,
+        "depth": 1,
+        "title": "자원 할당 그래프",
+        "relation": "표현",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              6
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-014",
+        "parentId": "concept-013",
+        "order": 1,
+        "depth": 2,
+        "title": "프로세스 정점",
+        "relation": "정점",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              6
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-015",
+        "parentId": "concept-013",
+        "order": 2,
+        "depth": 2,
+        "title": "자원 유형 정점",
+        "relation": "정점",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              6
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-016",
+        "parentId": "concept-013",
+        "order": 3,
+        "depth": 2,
+        "title": "요청 간선",
+        "relation": "간선",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              6
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-017",
+        "parentId": "concept-013",
+        "order": 4,
+        "depth": 2,
+        "title": "할당 간선",
+        "relation": "간선",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              6
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-018",
+        "parentId": "concept-013",
+        "order": 5,
+        "depth": 2,
+        "title": "사이클",
+        "relation": "판별 기준",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              7
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-019",
+        "parentId": "concept-001",
+        "order": 12,
+        "depth": 1,
+        "title": "예방",
+        "relation": "처리 전략",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              8,
+              9
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-020",
+        "parentId": "concept-001",
+        "order": 13,
+        "depth": 1,
+        "title": "회피",
+        "relation": "처리 전략",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              8,
+              10,
+              11,
+              12
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-021",
+        "parentId": "concept-020",
+        "order": 1,
+        "depth": 2,
+        "title": "안전 상태",
+        "relation": "상태",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              10
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-022",
+        "parentId": "concept-020",
+        "order": 2,
+        "depth": 2,
+        "title": "불안전 상태",
+        "relation": "상태",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              10,
+              12
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-023",
+        "parentId": "concept-020",
+        "order": 3,
+        "depth": 2,
+        "title": "클레임 간선",
+        "relation": "표현",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              11
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-024",
+        "parentId": "concept-020",
+        "order": 4,
+        "depth": 2,
+        "title": "은행원 알고리즘",
+        "relation": "알고리즘",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              11
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-025",
+        "parentId": "concept-001",
+        "order": 14,
+        "depth": 1,
+        "title": "탐지와 복구",
+        "relation": "처리 전략",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              8,
+              13
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-026",
+        "parentId": "concept-025",
+        "order": 1,
+        "depth": 2,
+        "title": "프로세스 종료",
+        "relation": "복구",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              13
+            ]
+          }
+        ]
+      },
+      {
+        "id": "concept-027",
+        "parentId": "concept-025",
+        "order": 2,
+        "depth": 2,
+        "title": "자원 선점",
+        "relation": "복구",
+        "description": "",
+        "sourceRefs": [
+          {
+            "fileName": "technical-deadlocks.pdf",
+            "pageNumbers": [
+              13
+            ]
+          }
+        ]
+      }
+    ],
+    "warnings": [],
+    "createdAt": "2026-08-28T15:17:01.239Z"
+  }
+}
