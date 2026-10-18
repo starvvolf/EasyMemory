@@ -95,3 +95,4 @@ export type DejipgiEnv = {
 };
 
 export function mountDejipgi(root: HTMLElement, env: DejipgiEnv): () => void;
+export function deckDisplayTitle(deck: { id: string; title: string }, peers: Array<{ id: string; title: string }>): string;

@@ -2,6 +2,13 @@
    화면·흐름·기록 규칙은 원본을 따르고, 문제 생성은 하지 않는다. 문제는 Recaller 출제 문서를 env.loadDecks()로 받는다.
    env: see dejipgi-app.d.ts. env.builder (objective design, authoring, save) and env.ask are left unset on purpose. */
 let signInOutcome = null;
+/** Display only: identical generated titles need a stable handle, not a renamed source or new study identity. */
+export function deckDisplayTitle(deck, peers){
+  if (!/^gen_[a-f0-9]{32}$/.test(deck.id) || !peers.some(other => other.id !== deck.id && other.title === deck.title)) return deck.title;
+  const short = deck.id.slice(4, 12);
+  const collision = peers.some(other => other.id !== deck.id && other.title === deck.title && other.id.slice(4, 12) === short);
+  return `${deck.title} · 자료 ${collision ? deck.id.slice(4) : short}`;
+}
 export function mountDejipgi(root, env){
 "use strict";
 const listeners = new AbortController();
@@ -273,6 +280,7 @@ function orderedSubjects(){
   return S.plan.subjects.slice().sort((a, b) => { const x = rank(a), y = rank(b); return x[0] - y[0] || x[1] - y[1] || a.name.localeCompare(b.name, "ko"); });
 }
 const byTitle = (a, b) => (a.example ? 1 : 0) - (b.example ? 1 : 0) || String(a.title).localeCompare(String(b.title), "ko", { numeric:true });
+const displayTitle = deck => deckDisplayTitle(deck, Object.values(S.decks));
 function decksOf(subject){ return Object.values(S.decks).filter(d => !d.pending && subjectOf(d) === subject).sort(byTitle); }
 function weakList(decks){ return decks.flatMap(d => d.items.filter(it => isWeak(d, it)).map(it => ({ d, it, miss:missCount(d, it) }))); }
 function addSubject(name, exam){
@@ -702,7 +710,7 @@ function deckCard(d, growing){
   }
   return h("article", { class:"deck" },
     h("div", null,
-      h("h3", { text:d.title }),
+      h("h3", { text:displayTitle(d) }),
       h("div", { class:"meta" },
         pick,
         h("span", { class:"num", text:`목표 ${d.objectives.length} · 문제 ${d.items.length}` }),
@@ -950,7 +958,7 @@ function renderSession(){
     s.mode === "weak" ? h("span", { class:"chip bad", text:"약점 다시 풀기" }) : null,
     s.queue[s.i].reason && REASON[s.queue[s.i].reason] ? h("span", { class:`chip ${REASON[s.queue[s.i].reason][1]}`, text:REASON[s.queue[s.i].reason][0] }) : null,
     s.queue[s.i].retry ? h("span", { class:"chip help", text:"다시 확인" }) : null,
-    s.overlay ? null : h("span", { class:"chip", text:deck.title })
+    s.overlay ? null : h("span", { class:"chip", text:displayTitle(deck) })
   ));
   card.append(renderStem(deck, item));
 
@@ -1378,7 +1386,7 @@ function renderReader(){
     h("span", { text:"연습 중이에요. 여기서 본 쪽의 문제는 이번 연습에서 ‘정답 보고 풂’으로 기록돼요." }),
     h("button", { class:"btn small", onclick: () => setView("practice") }, "연습으로 돌아가기")));
 
-  const sel = h("select", { id:"readDeck", "aria-label":"자료 고르기" }, decks.map(x => h("option", { value:x.id, selected: x.id === d.id ? "selected" : null }, x.title)));
+  const sel = h("select", { id:"readDeck", "aria-label":"자료 고르기" }, decks.map(x => h("option", { value:x.id, selected: x.id === d.id ? "selected" : null }, displayTitle(x))));
   sel.addEventListener("change", () => openReader(sel.value, firstPage(S.decks[sel.value])));
   const pg = h("input", { class:"num", id:"pgInput", type:"number", min:"1", max:String(total), "aria-label":"쪽 번호" });
   pg.value = String(R.page); pg.addEventListener("change", () => goPage(Number(pg.value)));
@@ -2550,7 +2558,7 @@ function renderSummary(){
     const supportN = (d.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").length;
     const coreOnly = !!(S.plan.prefs && S.plan.prefs.detail && S.plan.prefs.detail[planKey(d)] === "core");
     box.append(h("header", { class:"row", style:"justify-content:space-between" },
-      h("div", null, h("h3", { text:d.title }), h("p", { class:"small muted num", text:`목표 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}${coreOnly ? ` · 핵심만 (보조 ${supportN}개 뺌)` : ""}` })),
+      h("div", null, h("h3", { text:displayTitle(d) }), h("p", { class:"small muted num", text:`목표 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}${coreOnly ? ` · 핵심만 (보조 ${supportN}개 뺌)` : ""}` })),
       h("div", { class:"row" },
         supportN ? h("button", { class:"chip-btn", "aria-pressed": coreOnly ? "true" : "false", title:"보조 목표를 연습·오늘 할 것에서 빼거나 다시 넣어요",
           onclick: () => { const det = prefs().detail || (prefs().detail = {}); if (coreOnly) delete det[planKey(d)]; else det[planKey(d)] = "core";
@@ -2619,7 +2627,7 @@ function renderRecords(){
   if (!decks.length) return h("div", { class:"panel", text:"아직 자료가 없어요." });
   if (!S.recordsDeck || !S.decks[S.recordsDeck]) S.recordsDeck = decks[0].id;
   const deck = S.decks[S.recordsDeck];
-  const sel = h("select", { id:"deckSel", class:"btn", style:"font-weight:500" }, decks.map(d => h("option", { value:d.id, selected: d.id === deck.id ? "selected" : null }, d.title)));
+  const sel = h("select", { id:"deckSel", class:"btn", style:"font-weight:500" }, decks.map(d => h("option", { value:d.id, selected: d.id === deck.id ? "selected" : null }, displayTitle(d))));
   sel.addEventListener("change", () => { S.recordsDeck = sel.value; S.deleting = null; render(); });
   const graded = deck.events.filter(e => e.kind === "submit" && !e.assisted && !e.gaveUp && !e.afterReading);
   const acc = graded.length ? Math.round(graded.filter(e => e.correct).length / graded.length * 100) : null;
