@@ -417,6 +417,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     await saveState(state);
     if (!astraAbort) started = Date.now();
     const record: GenCall = { n, step, sectionId, attempt, model, effort, format: null, startedAt: new Date(started).toISOString(), ms: 0, ok: false,
+      ...(extra.files?.length ? { withPdf: true } : {}),
       system: redactCallText(system), user: redactCallText(user), reply: null, error: null,
       ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
     const callFile = path.join(dirOf(id), "calls", `${n}.json`);
@@ -526,7 +527,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       };
       for (const section of state.sections) seen.published.set(section.id, section.author?.questionCount ?? 0);
       seen.outline = state.sections.length > 0; seen.plan = state.sections.some((section) => section.design?.objectives.length);
-      await runAstra({ state, pdf, save: () => { astraMarks(); return saveState(state); }, getPriorityPage: async () => (input.origin ?? "lab") === "study" ? astraPriorityPage(state) : undefined, pause: (message) => { throw failAstra(new Stop("paused-invalid", message)); },
+      // PDF 1회 통제: astra's later calls read the chosen pages as text, so the text layer is loaded here.
+      const pageTexts = await (options.pages ?? registeredPages)(input).catch(() => new Map<number, string>());
+      const thinPages = input.pageNumbers.filter((page) => needsImage(pageTexts.get(page) ?? ""));
+      await runAstra({ state, pdf, pageTexts, thinPages, save: () => { astraMarks(); return saveState(state); }, getPriorityPage: async () => (input.origin ?? "lab") === "study" ? astraPriorityPage(state) : undefined, pause: (message) => { throw failAstra(new Stop("paused-invalid", message)); },
         ask: async (step, attempt, system, user, parser, files) => {
           const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(astraResponseSchema), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX });
           if (!result.ok) throw failAstra(new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`));
@@ -718,8 +722,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       const pdfSent = Boolean(pdf && pdf.length <= MAX_PDF_BYTES);
       const fileOf = () => [{ filename: input.fileName, dataUrl: `data:application/pdf;base64,${Buffer.from(pdf!).toString("base64")}` }];
       let sent = pdfSent;
-      // ① a short outline call first (it also puts the instructions + PDF into the prompt cache), …
-      const outlineUser = (withPdf: boolean) => readOutlineUser(input, block(input.pageNumbers), withPdf);
+      // ① The one call with the PDF (PDF 1회 통제): outline + transcription of picture pages. A retry sends it again only
+      // when the first reply was unusable.
+      const thinPages = input.pageNumbers.filter((page) => needsImage(loaded.get(page) ?? ""));
+      const outlineUser = (withPdf: boolean) => readOutlineUser(input, block(input.pageNumbers), withPdf, thinPages);
       let result = await askParsed("read", null, 1, READ_SYSTEM, outlineUser(sent), readOutlineSchema, readOutlineReply, undefined, sent ? { files: fileOf() } : {});
       let normalized = result.ok ? normalizeOutline(result.value, input.pageNumbers) : null;
       if (!normalized?.sections.length) {
@@ -733,19 +739,26 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       if (!result.ok || !normalized?.sections.length) throw new Stop("paused-invalid", "전체 읽기(목차)를 만들지 못했어요. 다시 시작하면 처음부터 다시 시도해요.");
       const sections = normalized.sections;
       const skips = result.value.skips;
+      // Notes on picture pages become this run's page readings, so unit maps, authoring, the gate, judges and reruns see them.
+      const notes = result.value.pageNotes.filter((note) => input.pageNumbers.includes(note.page) && note.text.trim());
+      for (const note of notes) {
+        const text = cleanPageText(`${loaded.get(note.page) ?? ""}\n\n[그림·식·표 옮김]\n${note.text.trim()}`.trim());
+        await saveJson(transcriptFile(id, note.page), { page: note.page, text });
+        loaded.set(note.page, text);
+      }
+      state.images = { pages: notes.map((note) => note.page), done: notes.map((note) => note.page), failed: [] };
       // The outline is shown right away (목차), before the unit maps and the plan.
       state.sections = sections.map((section) => ({ ...section }));
       mark("outline");
       await saveState(state);
-      // … then one map call per unit, several at once, each with the same PDF prefix.
+      // … then one map call per unit, several at once, text only (the unit's text layer + the notes above).
       const unitWarnings: Issue[] = [];
       const parts: Array<{ sectionId: string; reply: ReadUnitReply }> = [];
       const readUnit = async (section: Section) => {
         const own = sectionPageTexts(section, sections, loaded).texts;
-        const thin = section.pages.filter((page) => needsImage(loaded.get(page) ?? ""));
-        const user = readUnitUser(input, sections, section, pageBlock(own).text, thin, sent);
-        let unit = await askParsed("read", section.id, 1, READ_SYSTEM, user, readUnitSchema, readUnitReply, undefined, sent ? { files: fileOf() } : {});
-        if (!unit.ok) unit = await askParsed("read", section.id, 2, READ_SYSTEM, `${user}\n\n[이전 시도에서 걸린 것]\n- ${unit.problem}`, readUnitSchema, readUnitReply, undefined, sent ? { files: fileOf() } : {});
+        const user = readUnitUser(input, sections, section, pageBlock(own).text);
+        let unit = await askParsed("read", section.id, 1, READ_SYSTEM, user, readUnitSchema, readUnitReply);
+        if (!unit.ok) unit = await askParsed("read", section.id, 2, READ_SYSTEM, `${user}\n\n[이전 시도에서 걸린 것]\n- ${unit.problem}`, readUnitSchema, readUnitReply);
         if (unit.ok) parts.push({ sectionId: section.id, reply: unit.value });
         else unitWarnings.push({ severity: "warning", code: "unit-map-failed", message: `${section.title}: 단원 지도를 만들지 못했어요(${unit.problem.slice(0, 80)}).` });
       };
@@ -758,15 +771,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       }
       if (!parts.length) throw new Stop("paused-invalid", "단원 지도를 하나도 만들지 못했어요. 다시 시작하면 처음부터 다시 시도해요.");
       parts.sort((a, b) => sections.findIndex((x) => x.id === a.sectionId) - sections.findIndex((x) => x.id === b.sectionId));
-      const joined = joinUnitMaps(parts, skips);
-      // Notes on picture pages become this run's page readings, so authoring, the gate, judges and reruns all see them.
-      const notes = joined.pageNotes.filter((note) => input.pageNumbers.includes(note.page) && note.text.trim());
-      for (const note of notes) {
-        const text = cleanPageText(`${loaded.get(note.page) ?? ""}\n\n[그림·식·표 옮김]\n${note.text.trim()}`.trim());
-        await saveJson(transcriptFile(id, note.page), { page: note.page, text });
-        loaded.set(note.page, text);
-      }
-      state.images = { pages: notes.map((note) => note.page), done: notes.map((note) => note.page), failed: [] };
+      const joined = { ...joinUnitMaps(parts, skips), pageNotes: notes };
       state.sections = sections.map((section) => ({ ...section }));
       const built = buildMap(joined, state.sections, loaded, sent);
       v3.map = built.map;

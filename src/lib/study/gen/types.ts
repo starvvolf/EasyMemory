@@ -152,6 +152,8 @@ export type GenCall = {
   startedAt: string;
   ms: number;
   firstTextMs?: number;
+  /** Whether the whole PDF went with this call (PDF 1회 통제: one per run on the normal path). */
+  withPdf?: boolean;
   ok: boolean;
   system: string;
   user: string;

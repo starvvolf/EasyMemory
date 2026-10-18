@@ -300,7 +300,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
         {label && <span className="muted"> · {label}</span>}
         {gen.images && <div className="muted">그림 쪽 읽기: {gen.images.done.length}/{gen.images.pages.length}쪽{gen.images.failed.length ? ` · 실패 p.${gen.images.failed.join(", ")}` : ""}</div>}
         {gen.forkOf && <div className="muted">고정 재실행({FORK_LABEL[gen.forkOf.from]}) · 기준 실행 {gen.forkOf.genId.slice(0, 12)}… {gen.input.engine === "astra" ? (gen.forkOf.from === "author" ? "의 학습 계획·목표를 그대로 썼어요." : "의 자료 지도를 참고해 학습 계획부터 다시 만들어요.") : `의 목차·분류${gen.forkOf.from === "author" ? "·목표" : ""}를 그대로 썼어요.`} 호출·시간·토큰은 다시 돈 단계만 셉니다.</div>}
-        <div className="muted">호출 {gen.calls}번 · 모델 시간 {seconds(totalMs)} · 토큰 입력 {tokens.input.toLocaleString()}{tokens.cached ? ` (캐시 ${tokens.cached.toLocaleString()})` : ""} / 출력 {tokens.output.toLocaleString()}{formats.length ? ` · 응답 형식 ${formats.join(", ")}` : ""}</div>
+        <div className="muted">호출 {gen.calls}번 (PDF 첨부 {calls.filter((item) => item.withPdf).length}번) · 모델 시간 {seconds(totalMs)} · 토큰 입력 {tokens.input.toLocaleString()}{tokens.cached ? ` (캐시 ${tokens.cached.toLocaleString()})` : ""} / 출력 {tokens.output.toLocaleString()}{formats.length ? ` · 응답 형식 ${formats.join(", ")}` : ""}</div>
         {gen.input.engine === "astra" && <AstraLive gen={gen} />}
         {gen.message && <p className={gen.status === "failed" ? "gen-error" : ""}>{gen.message}</p>}
         {(canResume || gen.status === "awaiting-confirm") && real && (
@@ -380,7 +380,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
       <table className="calls"><thead><tr><th>#</th><th>단계</th><th>목차</th><th>시도</th><th>모델</th><th>형식</th><th>기준</th><th>시간</th><th>토큰</th><th>결과</th></tr></thead>
         <tbody>{calls.map((item) => (
           <tr key={item.n} onClick={() => void openCall(item.n)} className={item.ok ? "" : "bad"}>
-            <td>{item.n}</td><td>{genStepLabel[item.step]}</td><td>{item.sectionId ?? ""}</td><td>{item.attempt}</td><td>{item.model} {item.effort}</td>
+            <td>{item.n}</td><td>{genStepLabel[item.step]}{item.withPdf && <small> · PDF</small>}</td><td>{item.sectionId ?? ""}</td><td>{item.attempt}</td><td>{item.model} {item.effort}</td>
             <td>{item.format ?? ""}</td><td title={item.guide ? `${item.guide.dir} · ${item.guide.files.join(", ")}` : ""}>{item.guide ? `${item.guide.dir === "출제기준" ? "" : `${item.guide.dir} `}${item.guide.version.slice(0, 7)}` : ""}</td><td>{seconds(item.ms)}{item.firstTextMs !== undefined && <small> · 첫 응답 {seconds(item.firstTextMs)}</small>}</td><td>{item.usage ? `${item.usage.inputTokens ?? "?"}${item.usage.cachedInputTokens ? `(캐시 ${item.usage.cachedInputTokens})` : ""}/${item.usage.outputTokens ?? "?"}` : ""}</td><td>{item.ok ? "응답" : item.error}</td>
           </tr>
         ))}</tbody>

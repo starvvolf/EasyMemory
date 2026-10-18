@@ -88,10 +88,12 @@ export type KnowledgeMap = Omit<ReadReply, "sections" | "concepts" | "relations"
  * reuse the prompt cache; what differs (the task, the unit's text) comes after the file.
  */
 const sectionShape = readSchema.properties as Record<string, Json>;
-export const readOutlineSchema = obj({ sections: sectionShape.sections, skips: sectionShape.skips });
-export const readOutlineReply = readReply.pick({ sections: true, skips: true });
-export const readUnitSchema = obj({ concepts: sectionShape.concepts, relations: sectionShape.relations, materials: sectionShape.materials, pageNotes: sectionShape.pageNotes });
-export const readUnitReply = readReply.pick({ concepts: true, relations: true, materials: true, pageNotes: true });
+// PDF는 이 목차 호출에만 붙는다(2026-10-19 PDF 1회 통제). 그래서 그림 쪽 옮김(pageNotes)도 여기서 하고, 단원 지도는
+// 글자 층 + 옮긴 글만 받는다.
+export const readOutlineSchema = obj({ sections: sectionShape.sections, skips: sectionShape.skips, pageNotes: sectionShape.pageNotes });
+export const readOutlineReply = readReply.pick({ sections: true, skips: true, pageNotes: true }).extend({ pageNotes: readReply.shape.pageNotes.default([]) });
+export const readUnitSchema = obj({ concepts: sectionShape.concepts, relations: sectionShape.relations, materials: sectionShape.materials });
+export const readUnitReply = readReply.pick({ concepts: true, relations: true, materials: true }).extend({ pageNotes: readReply.shape.pageNotes.default([]) });
 export type ReadUnitReply = z.infer<typeof readUnitReply>;
 
 export const READ_SYSTEM = [
@@ -106,20 +108,21 @@ export const READ_SYSTEM = [
   "- 원문에 없는 사실을 만들지 않는다. 원문 용어·기호·표기를 바꾸지 않는다.",
   "- 단원(sections)은 공부 단위다. 슬라이드마다 만들지 않고 한 주제를 다루는 여러 쪽을 묶는다(보통 4~10쪽). 고른 쪽을 빠짐없이 원문 순서로 덮는다. startText는 그 단원이 시작되는 원문 글자를 그대로 복사한다.",
   "- importance: 상 = 이 자료를 공부했다면 반드시 알아야 하고 시험에 나올 만한 것, 중 = 알아야 할 세부, 하 = 알면 좋은 보충.",
-  "- 요청의 [작업]에 적힌 것만 출력한다: '목차'면 단원과 제외할 것만, '단원 지도'면 그 단원의 개념·관계·소재·그림 쪽 옮김만.",
+  "- 요청의 [작업]에 적힌 것만 출력한다: '목차'면 단원·제외할 것·그림 쪽 옮김만, '단원 지도'면 그 단원의 개념·관계·소재만.",
   "- 단원 지도에서 relations의 between에는 이 단원 개념 id만 쓴다. 다른 단원과의 관계는 statement에 그 단원 제목과 함께 적는다.",
 ].join("\n");
 
-export function readOutlineUser(input: GenInput, pageText: string, pdfSent: boolean) {
+export function readOutlineUser(input: GenInput, pageText: string, pdfSent: boolean, thinPages: number[] = []) {
   return [`[작업] 목차`, `[자료] ${input.fileName}`, `[고른 쪽] ${input.pageNumbers.join(", ")}`,
-    pdfSent ? "[첨부] 자료 PDF 전체(고른 쪽만 다룬다)" : "[첨부 없음] 글자 층만 준다.", `[원문: 쪽별 추출 글자]\n${pageText}`].join("\n\n");
+    pdfSent ? "[첨부] 자료 PDF 전체(고른 쪽만 다룬다). PDF는 이 호출에만 붙는다." : "[첨부 없음] 글자 층만 준다.",
+    pdfSent && thinPages.length ? `[글자 층이 빈약한 쪽] ${thinPages.join(", ")} — 이 쪽들의 그림·식·표 내용을 pageNotes에 옮긴다. 뒤 단계는 PDF를 못 보고 이 옮김만 본다.` : "",
+    `[원문: 쪽별 추출 글자]\n${pageText}`].filter(Boolean).join("\n\n");
 }
-export function readUnitUser(input: GenInput, sections: Section[], section: Section, unitText: string, thinPages: number[], pdfSent: boolean) {
+export function readUnitUser(input: GenInput, sections: Section[], section: Section, unitText: string) {
   return [`[작업] 단원 지도: ${section.id} ${section.title} (p.${section.pages[0]}–${section.pages.at(-1)})`,
     `[자료] ${input.fileName}`, `[전체 목차] ${sections.map((other) => `${other.id} ${other.title} (p.${other.pages[0]}–${other.pages.at(-1)})`).join(" / ")}`,
-    pdfSent ? "[첨부] 자료 PDF 전체(이 단원 쪽을 다룬다)" : "[첨부 없음] 글자 층만 준다. 그림 내용은 글자 층에 보이는 만큼만 다룬다.",
-    thinPages.length ? `[글자 층이 빈약한 쪽] ${thinPages.join(", ")} — pageNotes에 그림·식·표 내용을 옮긴다.` : "",
-    `[이 단원 원문: 쪽별 추출 글자]\n${unitText}`].filter(Boolean).join("\n\n");
+    "[첨부 없음] 이 단원 원문 글자 층을 준다. 그림·식·표 쪽은 앞 단계에서 PDF를 보고 옮긴 글([그림·식·표 옮김])이 덧붙어 있다.",
+    `[이 단원 원문: 쪽별 추출 글자]\n${unitText}`].join("\n\n");
 }
 
 /** Joins the unit maps: ids become unit-scoped (s2-c1), relations keep their unit's concepts. */

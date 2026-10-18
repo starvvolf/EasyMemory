@@ -37,6 +37,10 @@ test("astra: 확인 후 전체 흐름, 반복된 관계 노출은 독립 풀이 
     await confirmObjectives(start.id, waiting.sections[0].design!.objectives.map(o => o.id));
     const done = await runGen(start.id, { uid: "local-experiment" }, { fakeReply });
     assert.equal(done.status, "done");
+    // PDF 1회 통제: only the plan call carries the PDF; authoring, solving and review read the pages as text.
+    const made = await readGenCalls(start.id);
+    assert.deepEqual(made.filter((call) => call.withPdf).map((call) => call.step), ["astra-plan"]);
+    assert.ok(made.some((call) => call.step === "astra-author" && call.user.includes("[원문 p.")));
     // Same flow marks as v3, so the lab's 사용 흐름 점검 compares the engines on one scale.
     const events = (done.timeline ?? []).map((mark) => mark.event);
     for (const event of ["outline", "plan", "confirm", "confirmed", "unit-start", "unit-done", "done"]) assert.ok(events.includes(event as never), `${event}: ${events.join(" ")}`);
@@ -117,10 +121,11 @@ test("astra 계획: 고른 쪽 밖 목차·개념·연습은 빼고 단원 번�
       { id: "c3", outlineIds: ["s3"], title: "다", essentials: ["다"], conditions: [], evidence: ev(4) }],
     practice: [{ id: "p1", sectionId: "s2", conceptIds: ["c2"], task: "나 쓰기", cue: "", recall: "나", kind: "개념", priority: "essential", questionCount: 1 },
       { id: "p2", sectionId: "s3", conceptIds: ["c3"], task: "다 쓰기", cue: "", recall: "다", kind: "개념", priority: "essential", questionCount: 1 }],
-    uncertain: [],
+    uncertain: [], pageNotes: [{ page: 4, text: "밖" }, { page: 2, text: "그림" }],
   } as Parameters<typeof scopePlan>[0], [1, 2]);
   assert.deepEqual(plan.outline.map((s) => [s.id, s.pages]), [["s1", [1, 2]], ["s2", [2]]]);
   assert.deepEqual(plan.concepts.map((c) => [c.id, c.evidence.map((e) => e.page)]), [["c1", [1]], ["c2", [2]]]);
   assert.deepEqual(plan.practice.map((p) => p.id), ["p1"]);
   assert.equal(dropped.length, 3);
+  assert.deepEqual(plan.pageNotes.map((note) => note.page), [2]);
 });

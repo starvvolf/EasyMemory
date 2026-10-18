@@ -533,6 +533,8 @@ test("v3: 전체 읽기 → 출제 계획 → 출제, 관문이 '꺼낼 것'을 
   const gateCalls = (await readGenCalls(run.id)).filter((call) => call.step === "gate");
   assert.ok(gateCalls.some((call) => call.system.startsWith("너는 이 과목을 공부하지 않은") && !call.user.includes("[단원 원문]")));
   assert.ok(!order.some((step) => /^(outline|classify|design|transcribe)/.test(step)), "v3 does not run the v2 steps");
+  // PDF 1회 통제: only the outline call carries the PDF.
+  assert.deepEqual((await readGenCalls(run.id)).filter((call) => call.withPdf).map((call) => `${call.step}#${call.attempt}:${call.sectionId ?? ""}`), ["read#1:"]);
   const gate = run.v3?.gate ?? [];
   const leaked = gate.find((verdict) => verdict.attempt === 1 && !verdict.passed);
   assert.ok(leaked?.reasons.some((reason) => reason.includes("꺼낼 것")), "the code gate catches the recall written into the stem");
