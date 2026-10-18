@@ -25,6 +25,8 @@ export type ModelRequest = {
   files?: Array<{ filename: string; dataUrl: string }>;
   /** Opt-in stable instructions + files prefix; stage-specific system/user follow it. */
   cachePrefix?: string;
+  /** Streaming progress only, never partial model content. */
+  onProgress?: (receivedChars: number) => void;
 };
 
 export type ModelResult = {

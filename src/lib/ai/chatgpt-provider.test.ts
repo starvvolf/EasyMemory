@@ -105,7 +105,9 @@ test("Responses 요청은 독립 입력·비저장·스트리밍을 사용하고
     controller.enqueue(encode.encode('data: {"type":"response.completed","response":{"model":"gpt-6-sol","usage":{"input_tokens":12,"output_tokens":4,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":8}}}}\n\n'));
     controller.close();
   } });
-  assert.deepEqual(await readResponseStream(stream), { text: '{"ok":true}', model: "gpt-6-sol", usage: { inputTokens: 12, outputTokens: 4, cachedInputTokens: 0, cacheWriteTokens: 8 } });
+  const progress: number[] = [];
+  assert.deepEqual(await readResponseStream(stream, chars => progress.push(chars)), { text: '{"ok":true}', model: "gpt-6-sol", usage: { inputTokens: 12, outputTokens: 4, cachedInputTokens: 0, cacheWriteTokens: 8 } });
+  assert.deepEqual(progress, [6, 11], "실제 delta 수신만 누적 글자 수로 알린다");
   const legacyStream = new ReadableStream<Uint8Array>({ start(controller) {
     controller.enqueue(encode.encode('data: {"type":"response.completed","response":{"usage":{"input_tokens":12},"output":[{"content":[{"type":"output_text","text":"ok"}]}]}}\n\n')); controller.close();
   } });

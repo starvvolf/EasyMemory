@@ -99,7 +99,7 @@ export async function sendWithFallback(send: (format: "schema" | "fallback") => 
   return { response, format };
 }
 
-export async function readResponseStream(body: ReadableStream<Uint8Array>): Promise<{ text: string; usage?: ModelResult["usage"]; model?: string }> {
+export async function readResponseStream(body: ReadableStream<Uint8Array>, onProgress?: ModelRequest["onProgress"]): Promise<{ text: string; usage?: ModelResult["usage"]; model?: string }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "", text = "", completed = false;
@@ -110,7 +110,10 @@ export async function readResponseStream(body: ReadableStream<Uint8Array>): Prom
     if (!data || data === "[DONE]") return;
     let value: { type?: string; delta?: string; response?: { model?: string; usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } }; error?: { code?: string; message?: string }; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> } };
     try { value = JSON.parse(data); } catch { throw new ModelError("transient", "ChatGPT 응답 스트림을 읽지 못했어요."); }
-    if (value.type === "response.output_text.delta") text += value.delta ?? "";
+    if (value.type === "response.output_text.delta") {
+      text += value.delta ?? "";
+      if (value.delta) onProgress?.(text.length);
+    }
     if (value.type === "response.failed") throw responseFailure(0, { error: value.response?.error });
     if (value.type === "response.incomplete" || value.type === "error") throw new ModelError("transient", "ChatGPT 응답이 완료되지 않았어요.");
     if (value.type === "response.completed") {
@@ -165,7 +168,7 @@ export const chatgptBackend: ModelBackend = {
     };
     const { response, format } = await sendWithFallback(send, Boolean(request.schema), Boolean(request.cachePrefix));
     if (!response.body) throw new ModelError("transient", "ChatGPT 응답 스트림이 비어 있어요.");
-    const completed = await readResponseStream(response.body);
+    const completed = await readResponseStream(response.body, request.onProgress);
     const used = !request.schema && !request.json ? "text" as const : format === "schema" ? "json_schema" as const : "json_object" as const;
     return { text: completed.text, model: completed.model ?? request.model ?? "chatgpt", usage: completed.usage, format: used };
   },

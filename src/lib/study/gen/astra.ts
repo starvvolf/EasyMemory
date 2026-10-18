@@ -31,8 +31,9 @@ const reviewSchema = z.object({
 type Review = z.infer<typeof reviewSchema>;
 // One identical strict output contract across stages keeps the schema part of the cache prefix stable.
 export const astraResponseSchema = z.object({ result: z.union([planSchema, questionsSchema, solveSchema, reviewSchema]) });
-type Batch = { ids: string[]; questions?: Candidate[]; solutions?: Solutions };
-export type AstraState = { version: 1; pdfHash?: string; plan?: Plan; batches: Batch[]; review?: Review; repair?: Batch & { review?: Review }; warnings: Issue[] };
+type Batch = { ids: string[]; questions?: Candidate[]; solutions?: Solutions; review?: Review; publishedIds?: string[] };
+export type AstraState = { version: 1; pdfHash?: string; plan?: Plan; batches: Batch[]; review?: Review; repair?: Batch; warnings: Issue[];
+  publishedQuestions?: Candidate[]; timing?: { startedAt: string; firstPublishedAt?: string; completedAt?: string } };
 export type AstraAsk = <T>(step: GenStep, attempt: number, system: string, user: string, parser: z.ZodType<T>, files: NonNullable<ModelRequest["files"]>) => Promise<T>;
 type Context = { state: GenState; pdf: Uint8Array | null; ask: AstraAsk; save: () => Promise<void>; pause: (message: string) => never; publish: (section: SectionState, questions: AuthoredQuestion[]) => Promise<string | null> };
 export function astraJsonSchema(parser: z.ZodType) { return z.toJSONSchema(parser, { target: "draft-7" }) as Record<string, unknown>; }
@@ -103,8 +104,15 @@ function verdict(review: Review | undefined, id: string) {
 }
 
 export async function runAstra(ctx: Context) {
-  const { state, save, ask, pause } = ctx;
+  const { state, save, pause } = ctx;
+  let failure: unknown;
+  const ask: AstraAsk = async (...args) => {
+    if (failure) throw failure;
+    try { return await ctx.ask(...args); } catch (error) { failure = error; throw error; }
+  };
   const data = (state.astra ??= { version: 1, batches: [], warnings: [] });
+  data.timing ??= { startedAt: new Date().toISOString() };
+  data.publishedQuestions ??= [];
   if (state.input.provider === "codex") pause("astra는 전체 PDF 전달을 지원하는 ChatGPT 또는 가짜 모델로 실행해 주세요.");
   if (!ctx.pdf || !ctx.pdf.length || ctx.pdf.length >= 50 * 1024 * 1024) pause("원본 PDF가 없거나 50MB 이상입니다. 글자만으로 대신 실행하지 않습니다.");
   const hash = createHash("sha256").update(ctx.pdf!).digest("hex");
@@ -121,14 +129,17 @@ export async function runAstra(ctx: Context) {
     data.plan = plan; data.batches = []; delete data.review; delete data.repair;
     installPlan(state, plan); state.phase = "confirm"; await save();
   }
-  if (state.input.purpose === "read") { state.status = "done"; state.phase = "done"; state.current = undefined; state.message = "자료 지도를 만들었어요. 그냥 읽기이므로 출제하지 않았어요."; await save(); return; }
+  if (state.input.purpose === "read") { state.status = "done"; state.phase = "done"; state.current = undefined; state.message = "자료 지도를 만들었어요. 그냥 읽기이므로 출제하지 않았어요."; data.timing!.completedAt = new Date().toISOString(); await save(); return; }
   if (state.phase === "confirm") {
     if (!state.input.autoConfirm) { state.status = "awaiting-confirm"; state.current = undefined; state.message = `연습 ${slots(state).length}개를 확인해 주세요.`; await save(); return; }
     state.confirmedObjectiveIds = defaultChosen(state.input.purpose, slots(state)); state.phase = "author"; await save();
   }
   const selected = slots(state).filter(o => state.confirmedObjectiveIds?.includes(o.id));
-  if (!selected.length) { state.status = "done"; state.phase = "done"; state.current = undefined; state.message = "선택한 연습이 없어 문제를 만들지 않았어요."; await save(); return; }
-  if (!data.batches.length) for (let i = 0; i < selected.length; i += 16) data.batches.push({ ids: selected.slice(i, i + 16).map(o => o.id) });
+  if (!selected.length) { state.status = "done"; state.phase = "done"; state.current = undefined; state.message = "선택한 연습이 없어 문제를 만들지 않았어요."; data.timing!.completedAt = new Date().toISOString(); await save(); return; }
+  if (!data.batches.length) {
+    data.batches.push({ ids: selected.slice(0, 3).map(o => o.id) });
+    for (let i = 3; i < selected.length; i += 8) data.batches.push({ ids: selected.slice(i, i + 8).map(o => o.id) });
+  }
   await save();
   const author = async (batch: Batch, attempt: number, reasons: unknown) => {
     if (!batch.questions) {
@@ -140,19 +151,77 @@ export async function runAstra(ctx: Context) {
       batch.solutions = await ask("astra-solve", attempt, SOLVE, JSON.stringify({ pages: context.pages, questions: batch.questions.map(student) }), solveSchema, files); await save();
     }
   };
-  for (const batch of data.batches) await author(batch, 1, null);
-  const review = async (questions: Candidate[], solutions: Solutions, attempt: number) => {
+  const review = async (questions: Candidate[], solutions: Solutions, attempt: number, scope: "batch" | "global" = "global") => {
     const code = questions.map(q => ({ objectiveId: q.objectiveId, problem: candidateProblem(q, state) })).filter(i => i.problem);
-    return ask("astra-review", attempt, REVIEW, JSON.stringify({ context, plan: data.plan, selectedPracticeIds: [...new Set(selected.flatMap(o => o.astra?.practiceIds ?? []))], candidates: questions, solutions, code }), reviewSchema, files);
+    const practiceIds = scope === "batch" ? questions.flatMap(q => q.practiceIds) : selected.flatMap(o => o.astra?.practiceIds ?? []);
+    const scopeRule = scope === "batch" ? "\n같은 practice의 다른 슬롯은 뒤 묶음에 있을 수 있다. 이 묶음에 실제 있는 슬롯의 checkedSkill만 coverage 대상으로 삼고, 나머지 슬롯이 없다는 이유로 partial/missing 판정하지 마라." : "";
+    return ask("astra-review", attempt, REVIEW + scopeRule + (scope === "batch" ? "\n이번에는 묶음 공개 전 검사다. 이 묶음의 문항과 근거만 검수하며, 아직 출제 중인 다른 묶음의 누락을 지적하지 않는다. missedContent는 빈 배열. 전체 범위·중복은 마지막 전역검수가 맡는다." : "\n이번에는 전체 출제 후 전역검수다. 이미공개 IDs는 자동수정하지 않으므로 결함을 명확히 기록한다."), JSON.stringify({ context, scope, plan: data.plan, publishedIds: data.publishedQuestions!.map(q => q.objectiveId), selectedPracticeIds: [...new Set(practiceIds)], candidates: questions, solutions, code }), reviewSchema, files);
   };
+  const refusal = (objective: Objective, candidates: Candidate[], solutions: Solutions["items"], checked: Review) => {
+    const matches = candidates.filter(q => q.objectiveId === objective.id); const q = matches[0]; const v = verdict(checked, objective.id);
+    const solved = solutions.filter(s => s.objectiveId === objective.id);
+    const coverage = (objective.astra?.practiceIds ?? []).map(id => checked.coverage.filter(c => c.practiceId === id));
+    const badCoverage = coverage.some(entries => entries.length !== 1 || entries[0].questionIds.some(id => !candidates.some(candidate => candidate.objectiveId === id && candidate.practiceIds.includes(entries[0].practiceId))));
+    const problem = matches.length !== 1 ? "문항 응답 누락 또는 중복" : solved.length !== 1 ? "독립 풀이 누락 또는 중복" : badCoverage ? "범위 검수 누락·중복 또는 잘못된 문항 연결" : candidateProblem(q, state);
+    if (problem || v.status !== "ready") return problem ?? (v.reasons.join(" / ") || "원문/판정 불확실");
+    if (coverage.some(entries => entries[0].status !== "covered")) return "검수에서 이 묶음의 연습 범위가 충분히 확인되지 않았습니다.";
+    if ((solved[0].uncertain || solved[0].missingConditions.length || solved[0].exposedRelation) && !v.reasons.length) return "독립 풀이의 결함 경고를 검수가 해소하지 않았습니다.";
+    return null;
+  };
+  let publishing = Promise.resolve();
+  const publishReady = (candidates: Candidate[], solutions: Solutions["items"], checked: Review) => {
+    const next = publishing.then(async () => {
+      for (const q of candidates) {
+        const objective = byId(state, q.objectiveId);
+        if (!objective || data.publishedQuestions!.some(old => old.objectiveId === q.objectiveId) || refusal(objective, candidates, solutions, checked)) continue;
+        data.publishedQuestions!.push(structuredClone(q));
+        Object.assign(objective, finalObjective(q, objective));
+      }
+      // Persist publication decisions before materializing documents; restart can recreate the same immutable set.
+      await save();
+      for (const section of state.sections) {
+        const kept = data.publishedQuestions!.filter(q => byId(state, q.objectiveId)?.sectionId === section.id).map(q => render(q, finalObjective(q, byId(state, q.objectiveId)!), section, state.input.fileName));
+        if (!kept.length) continue;
+        section.author = { documentPath: await ctx.publish(section, kept), questionCount: kept.length, dropped: [], warnings: section.author?.warnings ?? [] };
+        if (section.author.documentPath) data.timing!.firstPublishedAt ??= new Date().toISOString();
+      }
+      await save();
+    });
+    publishing = next.catch(error => { failure = error; });
+    return next;
+  };
+  const processBatch = async (batch: Batch) => {
+    try {
+      await author(batch, 1, null);
+      if (data.review) return; // Legacy or resumed global review already covers the saved batch; do not pay again.
+      if (!batch.review) { batch.review = await review(batch.questions!, batch.solutions!, 1, "batch"); await save(); }
+      await publishReady(batch.questions!, batch.solutions!.items, batch.review);
+      batch.publishedIds = batch.ids.filter(id => data.publishedQuestions!.some(q => q.objectiveId === id)); await save();
+    } catch (error) {
+      failure ??= error;
+      // Storage failures must also notify runner's shared abort, not only stop this worker's next call.
+      try { pause(failure instanceof Error ? failure.message : String(failure)); }
+      catch (stop) { failure = stop; throw stop; }
+    }
+  };
+  // First usable questions are prioritized. Later workers only claim new work while no peer has failed.
+  await processBatch(data.batches[0]);
+  let cursor = 1;
+  const worker = async () => { while (!failure && cursor < data.batches.length) { const batch = data.batches[cursor++]; await processBatch(batch); } };
+  const settled = await Promise.allSettled([worker(), worker()]);
+  await publishing;
+  const rejected = settled.find((result): result is PromiseRejectedResult => result.status === "rejected");
+  if (rejected) throw rejected.reason;
+  if (failure) throw failure;
   const initial = data.batches.flatMap(b => b.questions ?? []);
   if (!data.review) { data.review = await review(initial, { items: data.batches.flatMap(b => b.solutions?.items ?? []) }, 1); await save(); }
   if (!data.repair) {
-    const failed = selected.filter(o => initial.filter(q => q.objectiveId === o.id).length !== 1 || verdict(data.review, o.id).status === "revise" || initial.some(q => q.objectiveId === o.id && candidateProblem(q, state)));
+    const unpublished = (id: string) => !data.publishedQuestions!.some(q => q.objectiveId === id);
+    const failed = selected.filter(o => unpublished(o.id) && (initial.filter(q => q.objectiveId === o.id).length !== 1 || verdict(data.review, o.id).status === "revise" || initial.some(q => q.objectiveId === o.id && candidateProblem(q, state))));
     // Coverage is independent of the planner. Include partial/missing selected tasks in the one bounded repair.
     for (const coverage of data.review.coverage.filter(c => c.status !== "covered")) {
       const objective = selected.find(o => o.astra?.practiceIds.includes(coverage.practiceId));
-      if (objective && !failed.includes(objective)) failed.push(objective);
+      if (objective && unpublished(objective.id) && !failed.includes(objective)) failed.push(objective);
     }
     // Truly unplanned material receives a new slot, rather than silently relabelling an existing success.
     for (const missing of state.input.autoConfirm ? data.review.missedContent : []) {
@@ -181,22 +250,23 @@ export async function runAstra(ctx: Context) {
   const finalReview = data.repair?.review ?? data.review;
   const candidates = [...initial.filter(q => !data.repair?.ids.includes(q.objectiveId)), ...(data.repair?.questions ?? [])];
   const solutions = [...data.batches.flatMap(b => b.solutions?.items ?? []).filter(s => !data.repair?.ids.includes(s.objectiveId)), ...(data.repair?.solutions?.items ?? [])];
+  // A later global concern is visible, but never silently changes a question someone may already be studying.
+  for (const q of data.publishedQuestions!) {
+    const objective = byId(state, q.objectiveId)!;
+    const coverageConcern = finalReview.coverage.filter(c => q.practiceIds.includes(c.practiceId) && c.status !== "covered").map(c => `범위 ${c.status}: ${c.reason}`).join(" / ");
+    const reason = refusal(objective, candidates, solutions, finalReview) ?? (coverageConcern || null);
+    if (reason && !data.warnings.some(w => w.code === "published-review-concern" && w.ref === q.objectiveId)) data.warnings.push({ severity: "warning", code: "published-review-concern", ref: q.objectiveId, message: reason });
+  }
+  await publishReady(candidates, solutions, finalReview);
   for (const section of state.sections) {
-    const kept: AuthoredQuestion[] = []; const dropped: Array<{ objectiveId: string; reason: string }> = [];
+    const dropped: Array<{ objectiveId: string; reason: string }> = [];
     for (const objective of selected.filter(o => o.sectionId === section.id)) {
-      const matches = candidates.filter(q => q.objectiveId === objective.id); const q = matches[0]; const v = verdict(finalReview, objective.id);
-      const solved = solutions.filter(s => s.objectiveId === objective.id);
-      const coverage = (objective.astra?.practiceIds ?? []).map(id => finalReview.coverage.filter(c => c.practiceId === id));
-      const badCoverage = coverage.some(entries => entries.length !== 1 || entries[0].questionIds.some(id => !candidates.some(candidate => candidate.objectiveId === id && candidate.practiceIds.includes(entries[0].practiceId))));
-      const problem = matches.length !== 1 ? "문항 응답 누락 또는 중복" : solved.length !== 1 ? "독립 풀이 누락 또는 중복" : badCoverage ? "범위 검수 누락·중복 또는 잘못된 문항 연결" : candidateProblem(q, state);
-      if (problem || v.status !== "ready") { dropped.push({ objectiveId: objective.id, reason: problem ?? (v.reasons.join(" / ") || "원문/판정 불확실") }); continue; }
-      if ((solved[0].uncertain || solved[0].missingConditions.length || solved[0].exposedRelation) && !v.reasons.length) { dropped.push({ objectiveId: objective.id, reason: "독립 풀이의 결함 경고를 검수가 해소하지 않았습니다." }); continue; }
-      Object.assign(objective, finalObjective(q, objective));
-      kept.push(render(q, objective, section, state.input.fileName));
+      if (!data.publishedQuestions!.some(q => q.objectiveId === objective.id)) dropped.push({ objectiveId: objective.id, reason: refusal(objective, candidates, solutions, finalReview) ?? "미공개" });
     }
-    section.author = { documentPath: await ctx.publish(section, kept), questionCount: kept.length, dropped, warnings: [] }; await save();
+    section.author = { documentPath: section.author?.documentPath ?? null, questionCount: section.author?.questionCount ?? 0, dropped, warnings: data.warnings.filter(w => selected.some(o => o.id === w.ref && o.sectionId === section.id)) }; await save();
   }
   state.status = "done"; state.phase = "done"; state.current = undefined;
+  data.timing!.completedAt = new Date().toISOString();
   const held = state.sections.reduce((n, s) => n + (s.author?.dropped.length ?? 0), 0);
   const gaps = finalReview.coverage.filter(c => c.status !== "covered").length + finalReview.missedContent.length;
   state.message = `검수 후 공개. 보류 ${held}개 · 범위 미충족 ${gaps}개. 모델 검수는 정확성 보장이 아닙니다.`;

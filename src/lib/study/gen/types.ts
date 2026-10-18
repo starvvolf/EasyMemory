@@ -116,6 +116,8 @@ export type GenState = {
   calls: number;
   /** What runs now, for the screen. */
   current?: { step: GenStep; sectionId?: string; page?: number; attempt: number };
+  /** astra concurrent calls; counts only, no unfinished question/answer content. */
+  liveCalls?: Array<{ n: number; step: GenStep; startedAt: string; receivedChars: number; firstTextAt?: string }>;
   /** Pages read from their image (readImages): chosen once, then done or failed (failed pages keep the text layer). */
   images?: { pages: number[]; done: number[]; failed: number[] };
   outlineWarnings?: Issue[];
@@ -143,6 +145,7 @@ export type GenCall = {
   format: "json_schema" | "json_object" | "text" | null;
   startedAt: string;
   ms: number;
+  firstTextMs?: number;
   ok: boolean;
   system: string;
   user: string;
