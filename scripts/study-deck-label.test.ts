@@ -16,6 +16,12 @@ test("duplicate generated titles have stable distinct display labels without cha
   assert.equal(JSON.stringify(peers), before);
   assert.equal(deckDisplayTitle(a, [...peers].reverse()), deckDisplayTitle(a, peers));
 });
+test("duplicates with a creation time show when they were made", () => {
+  const x = { ...a, madeAt: new Date(2026, 9, 18, 3, 12).getTime() }, y = { ...b, madeAt: new Date(2026, 9, 18, 4, 5).getTime() };
+  assert.equal(deckDisplayTitle(x, [x, y]), a.title + " · 10/18 03:12 생성");
+  const z = { ...b, madeAt: x.madeAt };
+  assert.equal(deckDisplayTitle(x, [x, z]), a.title + " · 10/18 03:12 생성 · 자료 aaaaaaaa");
+});
 test("short identifier collisions use the full identifier", () => {
   const c = { id: "gen_" + "a".repeat(8) + "c".repeat(24), title: a.title };
   assert.equal(deckDisplayTitle(a, [a, c]), a.title + " · 자료 " + a.id.slice(4));

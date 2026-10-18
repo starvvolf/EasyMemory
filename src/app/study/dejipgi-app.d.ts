@@ -16,6 +16,8 @@ export type DejipgiBuilderEngine = {
   /** `purpose`: core | understand | all (engine v2 purposes); `note`: the learner's free memo. */
   start(input: { file: File; from: number; to: number; purpose: string; note: string; readImages: boolean; pastExamSourceIds?: string[] }): Promise<{ requestId: string; sourceId: string }>;
   pastExamSources?(): Promise<Array<{ id: string; fileName: string }>>;
+  /** Registers an exam PDF without making questions from it. */
+  registerPastExam?(file: File): Promise<{ id: string; fileName: string }>;
   restart(input: { requestId: string; sourceId: string; from: number; to: number; purpose: string; note?: string }): Promise<{ requestId: string }>;
   check(requestId: string): Promise<DejipgiMaterialStatus>;
   /** The one confirmation: author these objectives. */

@@ -797,3 +797,17 @@
 .dejipgi .chatwin.docked .chat-foot textarea{flex:none;box-sizing:border-box;height:40px;min-height:40px;max-height:none;transition:height .22s ease}
 .dejipgi .chatwin.docked .chat-foot:focus-within textarea,.dejipgi .chatwin.docked .chat-foot textarea:not(:placeholder-shown){height:min(42vh,240px)}
 @media (prefers-reduced-motion:reduce){.dejipgi .chatwin.docked .chat-foot textarea{transition:none}}
+/* 기출 */
+.dejipgi .chip.exam{background:var(--ask-soft);color:var(--ask);font-weight:700}
+.dejipgi .exam-field .chat-sugs{align-items:center}
+.dejipgi .exam-chip{display:inline-flex;align-items:stretch}
+.dejipgi .exam-chip .chip-btn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:0}
+.dejipgi .exam-chip.on .chip-btn{background:var(--ask);border-color:var(--ask);color:#fff}
+.dejipgi .exam-x{border:1px solid var(--line-strong);border-left:1px dashed var(--line-strong);background:var(--surface);color:var(--faint);font-size:11px;padding:0 8px;border-radius:0 999px 999px 0;cursor:pointer}
+.dejipgi .exam-chip.on .exam-x{border-color:var(--ask);background:var(--ask-soft);color:var(--ask)}
+.dejipgi .exam-x:hover{color:var(--bad)}
+.dejipgi .exam-add{border-style:dashed;color:var(--ask);cursor:pointer}
+.dejipgi .exam-add.busy{opacity:.6;pointer-events:none}
+.dejipgi .exam-find{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);max-height:220px;overflow:auto}
+.dejipgi .exam-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:8px}
+.dejipgi .exam-row:hover{background:var(--surface)}

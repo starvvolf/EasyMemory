@@ -113,10 +113,10 @@ export default function DejipgiStudy() {
       return { status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}${calls}` };
     };
     const loadGenDecks = async () => {
-      const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number; pastExam?: boolean }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
+      const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number; pastExam?: boolean; createdAt?: string }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
       // Finished runs, and runs still being made whose first sections are authored.
       return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[] }>(
-        await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").then((deck) => ({ ...deck, pastExam: run.pastExam === true })).catch(() => null)));
+        await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").then((deck) => ({ ...deck, pastExam: run.pastExam === true, madeAt: run.createdAt })).catch(() => null)));
     };
     const loadQuality = async () => readJson<{ patches: PatchMap; counts: Record<string, number> }>(await fetchExperiment("/api/study-quality"), "고친 문제 목록을 읽지 못했어요.");
     const loadPatches = async () => (await loadQuality()).patches;
@@ -133,6 +133,15 @@ export default function DejipgiStudy() {
       // Materials go through the v2 engine (docs/DECISIONS.md 2026-10-12): outline → design per section → one
       // confirmation of objectives → authoring. Decks made by the old request flow still load and can be remade.
       builder: {
+        // 기출 PDF: register only (no questions are made from an exam).
+        async registerPastExam(file: File) {
+          if (session.mode !== "local-experiment") throw new Error("기출 등록은 로컬 실험 모드에서만 할 수 있어요.");
+          const form = new FormData();
+          form.append("pdf", file);
+          const { source: registered } = await readJson<{ source: { id: string } }>(await fetchExperiment("/api/mcp-runs/sources", { method: "POST", body: form }), "기출 PDF를 등록하지 못했어요.");
+          const source = await findSource(registered.id);
+          return { id: source.id, fileName: source.fileName };
+        },
         async pastExamSources() {
           const { sources } = await readJson<{ sources: McpSourceCatalogEntry[] }>(await fetchExperiment("/api/mcp-runs/sources"), "등록한 PDF를 읽지 못했어요.");
           return sources.filter((source) => /^src_[a-f0-9]{64}$/.test(source.id));
@@ -326,16 +335,17 @@ export default function DejipgiStudy() {
           loadGenDecks().catch(() => []),
           readJson<{ artifacts: StudyArtifactMeta[] }>(await fetchExperiment("/api/personalization-lab"), "Recaller 출제 문서 목록을 불러오지 못했어요."),
         ]);
-        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[]; pastExam?: boolean }> = [
+        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[]; pastExam?: boolean; madeAt?: string }> = [
           ...fresh.flatMap((deck) => deck ? [deck] : []), ...artifacts.map((meta) => ({ meta }))];
-        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline, pastExam }, order) => {
+        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline, pastExam, madeAt }, order) => {
           const document = given ?? (await readJson<{ document: AuthoringDocument }>(
             await fetchExperiment(`/api/personalization-lab?id=${encodeURIComponent(meta.id)}`), `${meta.title}을 불러오지 못했어요.`)).document;
           // Questions that fail the item-quality checks stay out of practice; the rest of the document is still usable.
           const excluded = new Map(studyQualityIssues(document, pastExam).filter((issue) => issue.severity === "error")
             .map((issue) => [issue.questionId, `검사 제외: ${issue.message}`] as const));
           const own = patches[meta.id];
-          const deck = { ...applyPatches(toStudyDeck(meta, document, order, excluded), own, showMath), patchSig: (own ?? []).map((patch) => patch.id).join(",") };
+          const deck = { ...applyPatches(toStudyDeck(meta, document, order, excluded), own, showMath), patchSig: (own ?? []).map((patch) => patch.id).join(","),
+            ...(pastExam ? { pastExam: true } : {}), ...(madeAt && Date.parse(madeAt) ? { madeAt: Date.parse(madeAt) } : {}) };
           // What to recall shows on the one-page summary; bare LaTeX there renders like answers do.
           return outline ? { ...deck, outline: outline.map((section) => ({ ...section,
             objectives: section.objectives.map((objective) => ({ ...objective, recall: showMath(objective.recall) })) })) } : deck;

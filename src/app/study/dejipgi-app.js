@@ -5,9 +5,14 @@ let signInOutcome = null;
 /** Display only: identical generated titles need a stable handle, not a renamed source or new study identity. */
 export function deckDisplayTitle(deck, peers){
   if (!/^gen_[a-f0-9]{32}$/.test(deck.id) || !peers.some(other => other.id !== deck.id && other.title === deck.title)) return deck.title;
+  // Same title made more than once: show when it was made (a person reads "10/18 03:12", not an ID).
+  const when = (d) => { if (!(d.madeAt > 0)) return ""; const t = new Date(d.madeAt), p = (n) => String(n).padStart(2, "0");
+    return `${t.getMonth() + 1}/${t.getDate()} ${p(t.getHours())}:${p(t.getMinutes())} 생성`; };
+  const mine = when(deck);
+  if (mine && !peers.some(other => other.id !== deck.id && other.title === deck.title && when(other) === mine)) return `${deck.title} · ${mine}`;
   const short = deck.id.slice(4, 12);
   const collision = peers.some(other => other.id !== deck.id && other.title === deck.title && other.id.slice(4, 12) === short);
-  return `${deck.title} · 자료 ${collision ? deck.id.slice(4) : short}`;
+  return `${deck.title} · ${mine ? mine + " · " : ""}자료 ${collision ? deck.id.slice(4) : short}`;
 }
 export function mountDejipgi(root, env){
 "use strict";
@@ -710,7 +715,7 @@ function deckCard(d, growing){
   }
   return h("article", { class:"deck" },
     h("div", null,
-      h("h3", { text:displayTitle(d) }),
+      h("h3", null, d.pastExam ? h("span", { class:"chip exam", style:"margin-right:6px;vertical-align:2px", text:"기출형" }) : null, displayTitle(d).replace(/ · 기출형/, "")),
       h("div", { class:"meta" },
         pick,
         h("span", { class:"num", text:`목표 ${d.objectives.length} · 문제 ${d.items.length}` }),
@@ -958,7 +963,8 @@ function renderSession(){
     s.mode === "weak" ? h("span", { class:"chip bad", text:"약점 다시 풀기" }) : null,
     s.queue[s.i].reason && REASON[s.queue[s.i].reason] ? h("span", { class:`chip ${REASON[s.queue[s.i].reason][1]}`, text:REASON[s.queue[s.i].reason][0] }) : null,
     s.queue[s.i].retry ? h("span", { class:"chip help", text:"다시 확인" }) : null,
-    s.overlay ? null : h("span", { class:"chip", text:displayTitle(deck) })
+    deck.pastExam ? h("span", { class:"chip exam", text:"기출형" }) : null,
+    s.overlay ? null : h("span", { class:"chip", text:displayTitle(deck).replace(/ · 기출형/, "") })
   ));
   card.append(renderStem(deck, item));
 
@@ -2784,6 +2790,57 @@ const PURPOSES = [
   ["understand", "이해", "왜·어떻게를 설명할 수 있게, 개념과 관계 위주로 적게 골라요."],
   ["all", "통암기", "나온 내용을 빠짐없이 떠올리게 해요. 문제가 많아져요."],
 ];
+/* 4. 기출 (선택): exam PDFs are kept apart from lecture PDFs (prefs.pastExams, synced with the plan).
+   Uploading one here only registers it; no questions are made from an exam. */
+const EXAM_NAME = /기출|중간|기말|시험|퀴즈|exam|midterm|final|quiz/i;
+const knownExams = () => (S.plan.prefs && Array.isArray(S.plan.prefs.pastExams)) ? S.plan.prefs.pastExams : [];
+function markExam(src, on){
+  const p = S.plan.prefs || (S.plan.prefs = {});
+  p.pastExams = on ? [...knownExams().filter(x => x.id !== src.id), { id:src.id, fileName:src.fileName }] : knownExams().filter(x => x.id !== src.id);
+  if (!on) S.builder.pastExamSourceIds = S.builder.pastExamSourceIds.filter(id => id !== src.id);
+  Store.savePlan(S.plan);
+}
+function examField(b){
+  const known = knownExams(), picked = b.pastExamSourceIds, full = picked.length >= 2;
+  const toggle = (id) => { b.pastExamSourceIds = picked.includes(id) ? picked.filter(x => x !== id) : [...picked, id].slice(0, 2); render(); };
+  const upload = h("input", { type:"file", accept:"application/pdf", class:"hidden", onchange: async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    b.examBusy = true; b.error = ""; render();
+    try{
+      const src = await engine.registerPastExam(f);
+      markExam(src, true); if (b.pastExamSourceIds.length < 2) b.pastExamSourceIds = [...b.pastExamSourceIds, src.id];
+      toast(`‘${src.fileName}’을 기출로 올렸어요.`);
+    }catch(error){ b.error = error.message || "기출 PDF를 올리지 못했어요."; }
+    finally{ b.examBusy = false; render(); }
+  } });
+  const chips = known.map(x => h("span", { class:"exam-chip" + (picked.includes(x.id) ? " on" : "") },
+    h("button", { class:"chip-btn", "aria-pressed": picked.includes(x.id) ? "true" : "false", disabled: b.busy || (full && !picked.includes(x.id)),
+      title:"이 기출의 느낌을 반영해요", onclick: () => toggle(x.id) }, x.fileName.replace(/\.pdf$/i, "")),
+    h("button", { class:"exam-x", title:"기출 목록에서 빼기 (파일은 그대로)", "aria-label":`${x.fileName} 기출 목록에서 빼기`, disabled:b.busy,
+      onclick: () => { markExam(x, false); render(); } }, "✕")));
+  let finder = null;
+  if (b.pastExamOpen){
+    const ids = new Set(known.map(x => x.id));
+    const rest = (b.pastExamSources || []).filter(x => !ids.has(x.id)).sort((a, c) => (EXAM_NAME.test(c.fileName) ? 1 : 0) - (EXAM_NAME.test(a.fileName) ? 1 : 0) || a.fileName.localeCompare(c.fileName, "ko"));
+    finder = h("div", { class:"exam-find" },
+      b.pastExamSources === null ? h("p", { class:"small muted", text:"등록된 PDF를 불러오는 중…" })
+      : rest.length ? rest.map(x => h("div", { class:"exam-row" },
+          h("span", { class:"small", text:x.fileName }), EXAM_NAME.test(x.fileName) ? h("span", { class:"chip exam", text:"기출 같아요" }) : null, h("span", { class:"grow" }),
+          h("button", { class:"btn small", disabled:b.busy, onclick: () => { markExam(x, true); if (b.pastExamSourceIds.length < 2) b.pastExamSourceIds = [...b.pastExamSourceIds, x.id]; render(); } }, "기출로 표시")))
+      : h("p", { class:"small muted", text:"기출로 표시할 다른 PDF가 없어요." }));
+  }
+  return h("div", { class:"field exam-field" },
+    h("label", { text:"4. 기출 (선택)" }),
+    h("span", { class:"small muted", text:"고른 기출의 느낌(묻는 방식·문제 크기·함정)을 반영해요. 문항은 베끼지 않고, 범위는 위에서 고른 그대로예요. 최대 2개." }),
+    h("div", { class:"chat-sugs" }, ...chips,
+      h("label", { class:"chip-btn exam-add" + (b.examBusy ? " busy" : ""), title:"기출 PDF를 올려 둬요. 기출로는 문제를 만들지 않아요." }, b.examBusy ? "올리는 중…" : "+ 기출 PDF 올리기", upload)),
+    h("button", { class:"linkish small", style:"align-self:flex-start", onclick: async () => {
+      b.pastExamOpen = !b.pastExamOpen; render();
+      if (b.pastExamOpen && b.pastExamSources === null){ try{ b.pastExamSources = await engine.pastExamSources(); }catch(error){ b.pastExamSources = []; b.error = error.message; } render(); }
+    } }, b.pastExamOpen ? "닫기" : "이미 등록한 PDF에서 기출 고르기"),
+    finder,
+    picked.length ? h("p", { class:"small", style:"color:var(--ask)", text:`기출 ${picked.length}개 반영 · 처음 한 번 기출을 분석하고 문제마다 베끼기 검사를 해서 조금 더 걸려요.` }) : null);
+}
 function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
@@ -3021,19 +3078,7 @@ function renderBuilder(){
         h("p", { class:"small muted", text:"여러 개를 고르면 처음부터 끝까지 이어진 범위로 만들어요." })) : null,
       span > 60 ? h("p", { class:"small muted", text:`${span}쪽은 오래 걸려요. 한 주차·한 장씩 나눠 만들면 먼저 끝난 것부터 공부할 수 있어요.` }) : null),
     h("div", { class:"field" }, h("label", { for:"note", text:"3. 메모 (선택)" }), note),
-    engine?.pastExamSources ? h("details", { ontoggle:async(e) => {
-      b.pastExamOpen = e.target.open;
-      if (!e.target.open || b.pastExamSources !== null) return;
-      try { b.pastExamSources = await engine.pastExamSources(); render(); }
-      catch(error) { b.error = error.message; render(); }
-    }, open:b.pastExamOpen ? true : null },
-      h("summary", { text:`기출 함께 쓰기${b.pastExamSourceIds.length ? ` · ${b.pastExamSourceIds.length}개` : " (선택)"}` }),
-      h("p", { class:"small muted", text:"등록한 기출 PDF를 최대 2개 고르세요(파일별 20쪽 이하). 문항을 복사하지 않고 출제 경향만 반영해요. 선택한 강의 범위는 유지돼요. 추가 분석·검사 호출이 발생해요." }),
-      ...(b.pastExamSources || []).map(source => h("label", { class:"row small", style:"gap:8px" },
-        h("input", { type:"checkbox", checked:b.pastExamSourceIds.includes(source.id) ? true : null,
-          disabled:b.busy || (!b.pastExamSourceIds.includes(source.id) && b.pastExamSourceIds.length >= 2),
-          onchange:(e) => { b.pastExamSourceIds = e.target.checked ? [...b.pastExamSourceIds, source.id] : b.pastExamSourceIds.filter(id => id !== source.id); render(); } }), source.fileName)),
-      b.pastExamSources?.length === 0 ? h("p", { class:"small muted", text:"등록된 PDF가 없어요. 먼저 기출 PDF를 자료로 등록해 주세요." }) : null) : null,
+    engine?.pastExamSources ? examField(b) : null,
     thin ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
       h("input", { type:"checkbox", checked:b.readImages ? true : null, disabled:b.busy, onchange:(e) => { b.readImages = e.target.checked; render(); } }),
       h("span", null, h("b", { text:"그림·수식도 읽기" }), h("span", { class:"muted", text:` · 글자가 적은 ${thin}쪽을 그림으로 읽어요 (약 ${Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 문제에 들어가요.` }))) : null,
