@@ -270,11 +270,28 @@ export async function chatReply(caller: ModelCaller, turns: Array<{ role: string
   return { text: reply.text.trim(), usage: reply.usage };
 }
 
-/** One long request (용어 지도: a whole material's text), beyond the question window's per-turn limits. */
-export async function composeReply(caller: ModelCaller, input: { system: string; user: string; json?: boolean }) {
+/* Shapes the screen fills in (structured output): the reply must follow them exactly, so the screen never has to
+   guess where a definition or a block's translation is. Strict mode: every field required, nothing extra. */
+const str = { type: "string" } as const;
+const strict = (properties: Record<string, unknown>) => ({ type: "object", additionalProperties: false, required: Object.keys(properties), properties });
+export const COMPOSE_SCHEMAS = {
+  /** 용어 지도: groups of terms (tree via `under`) and one story with [[en]] links. */
+  terms: strict({
+    groups: { type: "array", items: strict({ name: str, terms: { type: "array", items: strict({
+      en: str, ko: str, parts: str, under: str, def: str, analogy: str, pair: str, page: { type: "integer" } }) } }) },
+    story: str,
+  }),
+  /** 번역 보기: one translation per numbered block, in order. */
+  translate: strict({ t: { type: "array", items: str } }),
+} as const;
+export type ComposeKind = keyof typeof COMPOSE_SCHEMAS;
+
+/** One long request (용어 지도: a whole material's text; 번역: a page's blocks), beyond the question window's per-turn limits. */
+export async function composeReply(caller: ModelCaller, input: { system: string; user: string; kind?: ComposeKind | null }) {
   const { model, effort } = modelSettings();
-  const reply = await callModel({ purpose: "note:compose", system: clip(input.system, 8000), user: clip(input.user, 60000), json: Boolean(input.json), model, effort, caller });
-  return { text: reply.text.trim(), usage: reply.usage };
+  const shape = input.kind ? { json: true, schema: COMPOSE_SCHEMAS[input.kind] as Record<string, unknown>, schemaName: `recaller_${input.kind}` } : {};
+  const reply = await callModel({ purpose: `note:${input.kind ?? "compose"}`, system: clip(input.system, 8000), user: clip(input.user, 60000), ...shape, model, effort, caller });
+  return { text: reply.text.trim(), data: reply.data, usage: reply.usage };
 }
 
 const TITLE_SYSTEM = "학습자와 튜터의 대화를 보고, 무엇을 물었는지 드러나는 한국어 제목을 20자 안팎으로 하나만 쓴다. 따옴표나 마침표 없이 제목만 쓴다.";

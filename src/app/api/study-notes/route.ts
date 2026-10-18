@@ -22,7 +22,7 @@ const body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("talk"), sourceId, page, noteId: z.string().max(60).nullish(),
     turns: z.array(z.object({ role: z.enum(["user", "assistant"]), text: text(8000), quote: text(400).nullish(), page: page.optional() })).min(1).max(80),
     usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional() }),
-  z.object({ action: z.literal("compose"), system: text(8000).min(1), user: text(60000).min(1), json: z.boolean().optional() }),
+  z.object({ action: z.literal("compose"), system: text(8000).min(1), user: text(60000).min(1), kind: z.enum(["terms", "translate"]).nullish() }),
   z.object({ action: z.literal("explain-save"), sourceId, page, text: text(60000).min(1), goal: z.string().min(1).max(160).nullish() }),
 ]);
 

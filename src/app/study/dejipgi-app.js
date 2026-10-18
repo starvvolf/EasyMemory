@@ -1733,7 +1733,7 @@ const PROMPTS = {
     auto:["자료 이름", "학습목표", "목표의 근거 구절", "목표가 걸친 쪽의 원문(최대 3쪽)"] },
   terms: { label:"용어 지도", when:"읽기 화면 위 [용어 지도]로 만드는 자료 전체의 용어 묶음·비유·이야기예요. 자료마다 한 번 만들고 저장해서, 바꾼 요청은 [다시 만들기]부터 적용돼요.", def:"",
     presets:[["기본", ""], ["게임 비유", "비유와 이야기는 게임(fps, 그래픽 옵션, 모니터 설정 등) 경험에 빗대어 써 줘."], ["일상 비유", "비유와 이야기는 집안일·요리·교통 같은 일상생활에 빗대어 써 줘."], ["스마트폰 비유", "비유와 이야기는 스마트폰과 앱을 쓰는 경험에 빗대어 써 줘."]],
-    auto:["자료 이름", "자료 전체 쪽의 원문(쪽마다 앞부분)", "출력 형식(묶음·용어·이야기 JSON)"] },
+    auto:["자료 이름", "자료 전체 쪽의 원문(쪽마다 앞부분)", "출력 양식(묶음·용어·이야기, 형식 고정)"] },
   follow: { label:"카드에서 이어 묻기", when:"모르는 것 카드 아래에서 이어서 물을 때예요.", def:"",
     presets:[["기본", ""], ["더 짧게", "한두 문장으로 답해 줘."], ["예시로", "가능하면 예시 하나로 답해 줘."]],
     auto:["자료 이름", "고른 글", "앞선 답", "이어진 대화", "이 쪽 원문", "새 질문"] },
@@ -1899,7 +1899,7 @@ ${explainAsk().slice(0, 1500)}
    box, so figures and layout stay. Key terms keep their English once per page ("한국어(English)"). One request per page,
    kept with the explanations (`__tr:<page>`, checked against the block texts); the next page is prepared ahead. ----- */
 const TRANS_RULES = `너는 영어 강의 슬라이드를 한국어로 옮기는 번역가다. 학습자는 내용을 한국어로 이해하면서 영어 핵심 용어도 눈에 익혀야 한다.
-입력은 번호가 붙은 블록들이다. {"t":["1번 블록 번역","2번 블록 번역", ...]} 형식의 JSON 객체 하나로만 답한다. 블록 수와 순서를 그대로 지킨다.
+입력은 번호가 붙은 블록들이다. t 배열에 1번 블록부터 차례로 번역을 하나씩 넣는다. 블록 수와 순서를 그대로 지킨다.
 
 규칙
 - 슬라이드 문체로 간결하게 옮긴다(명사형 또는 "~다"). 원문에 없는 설명을 덧붙이지 않는다.
@@ -1976,7 +1976,7 @@ const Trans = {
     delete TR.err[k];
     const task = (async () => {
       const user = `[자료] ${d.title}\n[쪽] p.${n}\n\n${B.list.map((b, i) => `${i + 1}. ${b.tag ? `(${b.tag}) ` : ""}${b.text}`).join("\n")}`;
-      const raw = await notesApi.compose({ system:TRANS_RULES, user, json:true });
+      const raw = await notesApi.compose({ system:TRANS_RULES, user, kind:"translate" });
       const v = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
       const t = B.list.map((b, i) => typeof (v.t || [])[i] === "string" && v.t[i].trim() ? v.t[i].trim().slice(0, 600) : null);
       const val = JSON.stringify({ sig:B.sig, t });
@@ -2041,10 +2041,8 @@ const Trans = {
    definition, one familiar analogy and its look-alike; grouped as a tree; and one story that walks through all of them.
    Made once per material range (one long request) and kept with the explanations (`__terms:<from>-<to>`). ----- */
 const TERMS_RULES = `너는 영어 강의자료의 용어와 개념을 한국어 학습자가 기억하기 쉽게 재구성하는 튜터다.
-아래 [원문]에서 이 자료를 이해하고 시험을 보는 데 필요한 용어·개념을 빠짐없이 뽑아, 다음 형식의 JSON 객체 하나로만 답한다.
-
-{"groups":[{"name":"묶음 이름(한국어, 짧게)","terms":[{"en":"원문 표기 그대로","ko":"한국어 용어","parts":"단어 쪼개기 (예: cathode=음극, ray=선, tube=관)","under":"상위 용어의 en (없으면 빈 문자열)","def":"정의","analogy":"비유","pair":"헷갈리는 짝과 차이 (없으면 빈 문자열)","page":쪽 번호}]}],
- "story":"이야기"}
+아래 [원문]에서 이 자료를 이해하고 시험을 보는 데 필요한 용어·개념을 빠짐없이 뽑아, 정해진 형식(묶음 groups → 용어 terms, 그리고 story)으로 답한다.
+각 용어 칸: en 원문 표기, ko 한국어 용어, parts 단어 쪼개기, under 상위 용어의 en(없으면 빈 문자열), def 정의, analogy 비유, pair 헷갈리는 짝과 차이(없으면 빈 문자열), page 쪽 번호(모르면 0).
 
 규칙
 - groups: 의미가 가까운 용어끼리 묶는다(보통 3~8묶음). 원문 순서보다 개념의 구조를 따른다. 상하 관계가 있으면 under로 잇는다.
@@ -2070,7 +2068,7 @@ const TermMap = {
     const str = (v, n) => String(v ?? "").trim().slice(0, n);
     const groups = (Array.isArray(x && x.groups) ? x.groups : []).map(g => ({ name:str(g.name, 60) || "묶음",
       terms:(Array.isArray(g.terms) ? g.terms : []).map(t => ({ en:str(t.en, 120), ko:str(t.ko, 80), parts:str(t.parts, 200), under:str(t.under, 120),
-        def:str(t.def, 600), analogy:str(t.analogy, 400), pair:str(t.pair, 300), page:Number.isFinite(+t.page) ? +t.page : null })).filter(t => t.en) })).filter(g => g.terms.length);
+        def:str(t.def, 600), analogy:str(t.analogy, 400), pair:str(t.pair, 300), page:Number.isFinite(+t.page) && +t.page > 0 ? +t.page : null })).filter(t => t.en) })).filter(g => g.terms.length);
     if (!groups.length) throw new Error("빈 지도");
     return { groups, story:str(x.story, 8000) };
   },
@@ -2088,7 +2086,7 @@ const TermMap = {
     TM.err = null; TM.run = { key:k, at:Date.now() }; this.paint();
     try{
       const user = `[자료] ${d.title}\n\n${await this.source(d)}`;
-      const raw = await notesApi.compose({ system:this.system(promptOf("terms")), user, json:true });
+      const raw = await notesApi.compose({ system:this.system(promptOf("terms")), user, kind:"terms" });
       const m = raw.indexOf("{"), z = raw.lastIndexOf("}");
       const map = this.clean(JSON.parse(raw.slice(m, z + 1)));
       if (map.story.includes("$") || map.groups.some(g => g.terms.some(t => (t.def + t.analogy).includes("$")))) await ensureKatex();
