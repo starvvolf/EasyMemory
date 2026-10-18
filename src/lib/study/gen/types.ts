@@ -7,12 +7,12 @@ export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", un
 
 /** Model calls, in order. classify and design run per section. */
 /** v3 (lab engine choice) adds read (whole PDF → outline + knowledge map), plan and gate; it does not use classify/design. */
-export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate"] as const;
+export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review"] as const;
 export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
-  read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)" };
+  read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra)", "astra-author": "묶음 출제(astra)", "astra-solve": "정답 없는 풀이(astra)", "astra-review": "전역 검수(astra)" };
 
-export const engines = ["v2", "v3"] as const;
+export const engines = ["v2", "v3", "astra"] as const;
 export type Engine = (typeof engines)[number];
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
@@ -30,6 +30,8 @@ export type GenInput = {
   sourceId: string;
   fileName: string;
   pageNumbers: number[];
+  /** astra lab: prioritize the page the learner is currently reading. */
+  priorityPage?: number;
   purpose: Purpose;
   /** Free text from the learner (what they want, exam scope). */
   note: string;
@@ -48,7 +50,7 @@ export type GenInput = {
   /** Optional registered exams: absent means the original generation path, unchanged. */
   pastExamSourceIds?: string[];
   /** A remake of reported questions: the earlier question per objective, so authoring writes a different one. */
-  remake?: { genId: string; previous: Record<string, string> };
+  remake?: { genId: string; previous: Record<string, string>; reasons?: Record<string, string> };
   /** Engine: v2 (default, outline → classify → design → author) or v3 (협업/설계_생성엔진v3_Claude_20261019.md). */
   engine?: Engine;
 };
@@ -80,6 +82,7 @@ export type Objective = {
   qtype?: string;
   conceptIds?: string[];
   relationIds?: string[];
+  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: import("./astra.ts").AstraEvidence[] };
 };
 
 /** Objectives checked by default at the confirmation: everything for 통암기, otherwise only core ones. */
@@ -119,6 +122,8 @@ export type GenState = {
   making?: string[];
   /** When each thing the reader shows became available (사용 흐름 점검): wall-clock marks, appended across restarts. */
   timeline?: GenMark[];
+  /** astra concurrent calls; counts only, no unfinished question/answer content. */
+  liveCalls?: Array<{ n: number; step: GenStep; startedAt: string; receivedChars: number; firstTextAt?: string }>;
   /** Pages read from their image (readImages): chosen once, then done or failed (failed pages keep the text layer). */
   images?: { pages: number[]; done: number[]; failed: number[] };
   outlineWarnings?: Issue[];
@@ -128,6 +133,7 @@ export type GenState = {
   forkOf?: { genId: string; from: ForkFrom };
   /** v3: the knowledge map (① 전체 읽기), plan warnings and the gate's verdicts per question. */
   v3?: { map?: import("./v3.ts").KnowledgeMap; warnings?: Issue[]; gate?: Array<{ objectiveId: string; attempt: number; passed: boolean; reasons: string[] }> };
+  astra?: import("./astra.ts").AstraState;
   pastExam?: { cacheKey: string; card: import("./pastexam.ts").VibeCard; checks: Array<{ objectiveId: string; attempt: number; passed: boolean; reason: string }> };
 };
 
@@ -145,13 +151,13 @@ export type GenCall = {
   format: "json_schema" | "json_object" | "text" | null;
   startedAt: string;
   ms: number;
+  firstTextMs?: number;
   ok: boolean;
   system: string;
   user: string;
   reply: string | null;
   error: string | null;
-  /** cachedTokens: input tokens served from the prompt cache (when the API reports them). */
-  usage?: { inputTokens?: number; outputTokens?: number; cachedTokens?: number };
+  usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; cacheWriteTokens?: number };
   /** Which criteria went into this call: folder, content hash, files. */
   guide?: { dir: string; version: string; files: string[] };
 };
@@ -174,6 +180,10 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   read: { model: "gpt-6-sol", effort: "medium" },
   plan: { model: "gpt-6-sol", effort: "medium" },
   gate: { model: "gpt-6-sol", effort: "low" },
+  "astra-plan": { model: "gpt-6-sol", effort: "medium" },
+  "astra-author": { model: "gpt-6-sol", effort: "medium" },
+  "astra-solve": { model: "gpt-6-sol", effort: "medium" },
+  "astra-review": { model: "gpt-6-sol", effort: "medium" },
 };
 
 /**

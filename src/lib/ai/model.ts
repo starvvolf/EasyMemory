@@ -25,13 +25,17 @@ export type ModelRequest = {
   files?: Array<{ filename: string; dataUrl: string }>;
   /** Called with the text so far while the reply streams in (progress on screen); the final text is still returned whole. */
   onText?: (text: string) => void;
+  /** Opt-in stable instructions + files prefix; stage-specific system/user follow it. */
+  cachePrefix?: string;
+  /** Streaming progress only, never partial model content. */
+  onProgress?: (receivedChars: number) => void;
 };
 
 export type ModelResult = {
   text: string;
   data?: unknown;
   model: string;
-  usage?: { inputTokens?: number; outputTokens?: number; cachedTokens?: number };
+  usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; cacheWriteTokens?: number };
   /** How the reply was constrained: JSON Schema (structured output), plain JSON mode, or free text. */
   format?: "json_schema" | "json_object" | "text";
 };

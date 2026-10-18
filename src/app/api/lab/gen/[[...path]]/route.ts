@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
 import { ExperimentRequestError } from "@/lib/mcp-experiment-requests";
 import { boundedJson, requireLocalRequest, responseError } from "../../../mcp-experiment-requests/http";
-import { confirmObjectives, createGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, setGenFocus, stepLabel, studyDocument } from "@/lib/study/gen/runner";
+import { astraReadingView, setAstraReadingPage, confirmObjectives, createGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, setGenFocus, stepLabel, studyDocument } from "@/lib/study/gen/runner";
 import { scorecard } from "@/lib/study/gen/scorecard";
 import { listJudges, loadJudge, readJudgeCalls, startJudge } from "@/lib/study/gen/judge";
 import { listVisionProbes, readVisionImage, runVisionProbe } from "@/lib/study/gen/vision";
@@ -46,8 +46,15 @@ async function handle(request: Request, context: Context) {
       if (!gen) throw new GenError(404, "생성을 찾을 수 없습니다.");
       // The list leaves out prompt and reply text; one call's detail has them.
       const calls = (await readGenCalls(p[0])).map((call) => ({ n: call.n, step: call.step, sectionId: call.sectionId, attempt: call.attempt, model: call.model,
-        effort: call.effort, format: call.format, startedAt: call.startedAt, ms: call.ms, ok: call.ok, error: call.error, usage: call.usage, guide: call.guide }));
+        effort: call.effort, format: call.format, startedAt: call.startedAt, ms: call.ms, firstTextMs: call.firstTextMs, ok: call.ok, error: call.error, usage: call.usage, guide: call.guide }));
       result = { gen, label: stepLabel(gen), calls };
+    } else if (p.length === 2 && p[1] === "reading" && method === "GET") {
+      const page = new URL(request.url).searchParams.get("page");
+      result = { reading: await astraReadingView(p[0], page === null ? undefined : Number(page)) };
+    } else if (p.length === 2 && p[1] === "reading" && method === "POST") {
+      const body = z.strictObject({ page: z.number().int().positive().max(500) }).parse(await boundedJson(request));
+      result = await setAstraReadingPage(p[0], body.page);
+      setGenFocus(p[0], body.page);
     } else if (p.length === 2 && p[1] === "study" && method === "GET") {
       // The study screen's deck: all sections as one document.
       const deck = await studyDocument(p[0]);
@@ -97,7 +104,10 @@ async function handle(request: Request, context: Context) {
       result = { gen: await genView(gen.id) };
     } else if (p.length === 2 && p[1] === "focus" && method === "POST") {
       // Where the learner is reading: the unit around this page is authored next. No model call.
-      setGenFocus(p[0], z.object({ page: z.number().int().min(1).max(5000) }).parse(await boundedJson(request)).page);
+      // Same signal for every engine (v2/v3 order by it; astra keeps its own reading page too), so runs compare fairly.
+      const page = z.object({ page: z.number().int().min(1).max(5000) }).parse(await boundedJson(request)).page;
+      setGenFocus(p[0], page);
+      if ((await loadGen(p[0]))?.input.engine === "astra") await setAstraReadingPage(p[0], page);
       result = { ok: true };
     } else if (p.length === 2 && p[1] === "continue" && method === "POST") {
       const body = z.object({ confirmed: z.boolean().optional() }).parse(await boundedJson(request));

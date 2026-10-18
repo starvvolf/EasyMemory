@@ -9,6 +9,7 @@ import { callModel, ModelError, type ModelCaller, type ModelRequest } from "../.
 import { redactCallText } from "../lab-contract.ts";
 import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
+import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, astraResponseSchema, getAstraReadingView, runAstra } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
@@ -96,6 +97,32 @@ export async function loadGen(id: string): Promise<GenState | null> {
   try { return JSON.parse(await readFile(path.join(dirOf(id), "state.json"), "utf8")) as GenState; }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
+function readingPage(state: Pick<GenState, "input">, page: number) {
+  if (state.input.engine !== "astra") throw new GenError(400, "읽는 쪽 우선 출제는 astra 실험에서만 사용할 수 있습니다.");
+  if (!Number.isInteger(page) || !state.input.pageNumbers.includes(page)) throw new GenError(400, "선택한 자료 범위 안의 쪽을 지정해 주세요.");
+  return page;
+}
+async function astraPriorityPage(state: GenState) {
+  try {
+    const saved = JSON.parse(await readFile(path.join(dirOf(state.id), "reading.json"), "utf8")) as { page?: number };
+    if (typeof saved.page === "number" && state.input.pageNumbers.includes(saved.page)) return saved.page;
+  } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  return state.input.priorityPage ?? state.input.pageNumbers[0];
+}
+export async function setAstraReadingPage(id: string, page: number) {
+  const state = await loadGen(id);
+  if (!state) throw new GenError(404, "생성을 찾을 수 없습니다.");
+  readingPage(state, page);
+  // Separate from state.json: a reading click must not overwrite in-flight generation results.
+  await saveJson(path.join(dirOf(id), "reading.json"), { page });
+  return { page };
+}
+export async function astraReadingView(id: string, page?: number) {
+  const state = await loadGen(id);
+  if (!state) throw new GenError(404, "생성을 찾을 수 없습니다.");
+  const selected = readingPage(state, page ?? await astraPriorityPage(state));
+  return getAstraReadingView(state, selected);
+}
 export async function readGenCalls(id: string): Promise<GenCall[]> {
   let files: string[];
   try { files = await readdir(path.join(dirOf(id), "calls")); }
@@ -121,6 +148,7 @@ export const genInputSchema = z.strictObject({
   sourceId: z.string().trim().min(1).max(200),
   fileName: z.string().trim().min(1).max(255),
   pageNumbers: z.array(z.number().int().positive().max(500)).min(1).max(500),
+  priorityPage: z.number().int().positive().max(500).optional(),
   purpose: z.enum(purposes),
   note: z.string().max(2000).default(""),
   autoConfirm: z.boolean().default(false),
@@ -139,6 +167,7 @@ export async function createGen(raw: unknown): Promise<GenState> {
   const input = genInputSchema.parse(raw) as GenInput;
   if (input.pastExamSourceIds?.includes(input.sourceId)) throw new GenError(400, "강의 PDF 자체를 기출로 함께 선택할 수 없습니다.");
   input.pageNumbers = [...new Set(input.pageNumbers)].sort((a, b) => a - b);
+  if (input.priorityPage !== undefined) readingPage({ input }, input.priorityPage);
   const now = new Date().toISOString();
   const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued", phase: "outline", message: "", calls: 0, sections: [] };
   await saveState(state);
@@ -148,12 +177,15 @@ export async function createGen(raw: unknown): Promise<GenState> {
 export const forkInputSchema = z.strictObject({
   from: z.enum(forkFroms),
   /** Only the steps that run again matter; earlier steps keep the base run's results. */
-  models: z.partialRecord(z.enum(["design", "author"]), modelChoice).default({}),
+  models: z.partialRecord(z.enum(["design", "author", "astra-plan", "astra-author", "astra-solve", "astra-review"]), modelChoice).default({}),
   guideDir: z.string().regex(guideDirPattern).optional(),
   autoConfirm: z.boolean().default(true),
   /** With "author": only these objectives, e.g. the ones a learner reported. The earlier questions go to the prompt. */
   objectiveIds: z.array(z.string().max(40)).min(1).max(200).optional(),
   pastExamSourceIds: z.array(z.string().regex(/^src_[a-f0-9]{64}$/)).min(1).max(2).optional(),
+  purpose: z.enum(purposes).optional(),
+  note: z.string().max(2000).optional(),
+  reasons: z.record(z.string().min(1).max(40), z.string().trim().min(1).max(1000)).refine(value => Object.keys(value).length <= 200, "신고 사유가 너무 많습니다.").optional(),
 });
 
 /** Plain text of a question as the learner saw it, plus its answer: what a remake should not repeat. */
@@ -174,12 +206,19 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
   const options = forkInputSchema.parse(raw);
   const base = await loadGen(baseId);
   if (!base) throw new GenError(404, "기준 실행을 찾을 수 없습니다.");
-  if (base.input.purpose === "read") throw new GenError(400, "그냥 읽기 실행은 다시 돌릴 설계·출제가 없습니다.");
+  if ((options.purpose !== undefined || options.note !== undefined) && (base.input.engine !== "astra" || options.from !== "design")) throw new GenError(400, "목적·메모 변경은 astra의 계획부터 다시 만들기에서만 가능합니다.");
+  if (options.reasons !== undefined && (base.input.engine !== "astra" || options.from !== "author" || !options.objectiveIds)) throw new GenError(400, "신고 사유는 astra에서 목표를 골라 출제만 다시 만들 때 전달해 주세요.");
+  if (base.input.purpose === "read" && !(base.input.engine === "astra" && options.from === "design" && base.astra?.plan)) throw new GenError(400, "그냥 읽기 실행은 다시 돌릴 설계·출제가 없습니다.");
   const sections = structuredClone(base.sections);
   if (!sections.length || sections.some((section) => !section.classify)) throw new GenError(409, "기준 실행의 내용 분류가 끝나지 않았습니다.");
   if (options.from === "author" && sections.some((section) => !section.design)) throw new GenError(409, "기준 실행의 학습 설계가 끝나지 않았습니다.");
   const input: GenInput = { ...structuredClone(base.input), autoConfirm: options.autoConfirm,
     models: { ...base.input.models, ...options.models }, guideDir: options.guideDir ?? base.input.guideDir ?? DEFAULT_GUIDE_DIR };
+  if (base.input.engine === "astra") {
+    delete input.remake;
+    if (options.purpose !== undefined) input.purpose = options.purpose;
+    if (options.note !== undefined) input.note = options.note;
+  }
   if (options.pastExamSourceIds) input.pastExamSourceIds = [...new Set(options.pastExamSourceIds)];
   if (input.pastExamSourceIds?.includes(input.sourceId)) throw new GenError(400, "강의 PDF 자체를 기출로 함께 선택할 수 없습니다.");
   for (const section of sections) {
@@ -200,15 +239,17 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
       const known = new Set(objectives.map((objective) => objective.id));
       const chosen = [...new Set(options.objectiveIds)].filter((objectiveId) => known.has(objectiveId));
       if (!chosen.length) throw new GenError(400, "다시 만들 목표가 이 실행에 없습니다.");
+      if (options.reasons && Object.keys(options.reasons).some(id => !chosen.includes(id))) throw new GenError(400, "신고 사유는 다시 만들기로 선택한 목표에만 붙일 수 있습니다.");
       state.confirmedObjectiveIds = chosen;
       const previous: Record<string, string> = {};
       for (const section of base.sections) {
         const document = await readSectionDocument(base.id, section.id) as { questions?: AuthoredQuestion[] } | null;
         for (const question of document?.questions ?? []) if (chosen.includes(question.source.objectiveId)) previous[question.source.objectiveId] = questionText(question);
       }
-      input.remake = { genId: base.id, previous };
+      input.remake = { genId: base.id, previous, ...(options.reasons ? { reasons: options.reasons } : {}) };
     }
   } else if (options.objectiveIds) throw new GenError(400, "목표를 골라 다시 만드는 것은 '출제만 다시'에서만 됩니다.");
+  if (base.input.engine === "astra" && base.astra) state.astra = { version: 1, pdfHash: base.astra.pdfHash, plan: structuredClone(base.astra.plan), batches: [], warnings: [] };
   await saveState(state);
   // Page readings belong to the copied steps: carry them over so the rerun sees the same source text.
   if (base.images?.done.length) await cp(path.join(dirOf(base.id), "pages"), path.join(dirOf(state.id), "pages"), { recursive: true }).catch(() => undefined);
@@ -332,6 +373,20 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const state: GenState = stored;
   if (state.status === "done" || state.status === "failed" || state.status === "awaiting-confirm") return state;
   const input = state.input;
+  const astraAbort = input.engine === "astra" ? new AbortController() : undefined;
+  let astraFailure: Stop | undefined;
+  let progressTimer: ReturnType<typeof setTimeout> | undefined;
+  // saveJson already serializes writes per file, including state snapshots from concurrent batches.
+  const failAstra = (error: unknown): Stop => {
+    const stop = error instanceof Stop ? error
+      : error instanceof ModelError && error.code === "usage_limit" ? new Stop("paused-usage-limit", "ChatGPT 사용량 한도에 닿았어요. 한도가 풀리면 다시 시작해 주세요.")
+        : error instanceof ModelError && (error.code === "login_required" || error.code === "not_configured") ? new Stop("paused-login", error.message)
+          : new Stop("paused-invalid", error instanceof Error ? error.message : String(error));
+    astraFailure ??= stop;
+    astraAbort?.abort();
+    return astraFailure;
+  };
+  if (astraAbort) state.liveCalls = [];
   let callsThisStart = 0;
   let loaded = new Map<number, string>();
   let examEvidence: PastExamEvidence | null = null;
@@ -339,21 +394,28 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
-    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number } = {}) => {
+    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string } = {}) => {
+    if (astraFailure) throw astraFailure;
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
     const cap = Math.max(MAX_CALLS_PER_START, state.sections.length * 4 + 10);
-    if (step !== "transcribe" && callsThisStart >= cap) throw new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${cap})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
+    if (step !== "transcribe" && callsThisStart >= cap) {
+      const stop = new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${cap})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
+      throw astraAbort ? failAstra(stop) : stop;
+    }
     if (input.provider === "fake" && process.env.NODE_ENV === "production") throw new Stop("failed", "가짜 모델은 개발 환경에서만 쓸 수 있어요.");
     if (step !== "transcribe") callsThisStart += 1;
     state.calls += 1;
     const n = state.calls;
+    let started = Date.now();
+    const live: NonNullable<GenState["liveCalls"]>[number] = { n, step, startedAt: new Date(started).toISOString(), receivedChars: 0 };
+    if (astraAbort) state.liveCalls!.push(live);
     const choice = input.models[step];
     const model = choice?.model ?? (process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || "gpt-6-sol");
     const effort = choice?.effort ?? (process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim() || "medium");
     state.current = { step, ...(sectionId ? { sectionId } : {}), ...(extra.page ? { page: extra.page } : {}), attempt };
     await saveState(state);
-    const started = Date.now();
+    if (!astraAbort) started = Date.now();
     const record: GenCall = { n, step, sectionId, attempt, model, effort, format: null, startedAt: new Date(started).toISOString(), ms: 0, ok: false,
       system: redactCallText(system), user: redactCallText(user), reply: null, error: null,
       ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
@@ -362,26 +424,52 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     let lastProgress = 0;
     const onText = (text: string) => {
       const now = Date.now();
+      record.firstTextMs ??= now - started;
       if (now - lastProgress < 1500) return;
       lastProgress = now;
       state.current = { step, ...(sectionId ? { sectionId } : {}), ...(extra.page ? { page: extra.page } : {}), attempt, progress: progressOf(step, text) };
       void saveState(state).catch(() => undefined);
     };
-    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), onText, ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
-      model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}) };
+    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(astraAbort ? {} : { onText }), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
+      model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}),
+      ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}) };
+    if (astraAbort) {
+      request.signal = astraAbort.signal;
+      request.onProgress = receivedChars => {
+        if (astraAbort.signal.aborted) return;
+        live.receivedChars = receivedChars;
+        if (!live.firstTextAt) {
+          live.firstTextAt = new Date().toISOString();
+          record.firstTextMs = Date.now() - started;
+        }
+        if (!progressTimer) progressTimer = setTimeout(() => {
+          progressTimer = undefined;
+          void saveState(state).catch(failAstra);
+        }, 1000);
+      };
+    }
     try {
-      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => genFakeReply(s, u)))(step, user, attempt);
+      if (astraFailure) throw astraFailure;
+      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("astra-") ? astraFakeReply(s, u) : genFakeReply(s, u)))(step, user, attempt);
+      if (extra.cachePrefix && request.fakeReply !== undefined) request.fakeReply = JSON.stringify({ result: JSON.parse(request.fakeReply) });
       const reply = await callModel(request);
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
       await saveJson(callFile, record);
       return schema ? reply.data : reply.text;
     } catch (error) {
+      if (astraAbort) failAstra(error);
       const raw = (error as { rawText?: string }).rawText;
       Object.assign(record, { reply: raw === undefined ? null : redactCallText(raw), error: redactCallText(error instanceof Error ? error.message : String(error)), ms: Date.now() - started });
       await saveJson(callFile, record);
+      if (astraFailure) throw astraFailure;
       if (error instanceof ModelError && error.code === "usage_limit") throw new Stop("paused-usage-limit", "ChatGPT 사용량 한도에 닿았어요. 한도가 풀리면 다시 시작해 주세요.");
       if (error instanceof ModelError && (error.code === "login_required" || error.code === "not_configured")) throw new Stop("paused-login", error.message);
       throw error;
+    } finally {
+      if (astraAbort) {
+        state.liveCalls = state.liveCalls!.filter(call => call.n !== n);
+        await saveState(state);
+      }
     }
   };
   /** A broken criteria folder pauses the run: fix the folder and start again from the same place. */
@@ -391,7 +479,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   };
   /** A call whose reply did not parse or match the schema counts as one try; a dropped connection too. */
   const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide,
-    extra: { files?: ModelRequest["files"] } = {}) => {
+    extra: { files?: ModelRequest["files"]; cachePrefix?: string } = {}) => {
     try {
       const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide, extra));
       return parsed.success ? { ok: true as const, value: parsed.data } : { ok: false as const, problem: "응답이 정해진 JSON 형식과 다릅니다." };
@@ -411,6 +499,48 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     state.status = "running"; state.message = "";
     mark("start", { note: state.phase });
     await saveState(state);
+    if (input.engine === "astra") {
+      if (input.pastExamSourceIds?.length) throw new Stop("paused-invalid", "astra 기출 경향 연결은 아직 구현하지 않았습니다. 일반 출제로 대신하지 않습니다.");
+      const pdf = input.provider === "fake" && !options.pdf ? Buffer.from("%PDF-1.4 fake fixture") : await (options.pdf ?? registeredPdfBytes)(input);
+      // The same flow marks as v2/v3 (사용 흐름 점검), read off astra's own state at each save.
+      const seen = { outline: false, plan: false, confirm: false, batches: new Set<string>(), published: new Map<string, number>() };
+      const sectionOf = (objectiveId: string) => state.sections.find((section) => section.design?.objectives.some((objective) => objective.id === objectiveId))?.id;
+      const astraMarks = () => {
+        if (!seen.outline && state.sections.length) { seen.outline = true; mark("outline"); }
+        if (!seen.plan && state.sections.some((section) => section.design?.objectives.length)) { seen.plan = true; mark("plan"); }
+        if (!seen.confirm && state.status === "awaiting-confirm") { seen.confirm = true; mark("confirm"); }
+        for (const [index, batch] of (state.astra?.batches ?? []).entries()) {
+          const key = `${index}:${batch.ids.join(",")}`;
+          if (batch.startedAt && !seen.batches.has(key)) {
+            seen.batches.add(key);
+            mark("unit-start", { sectionId: sectionOf(batch.ids[0]), note: `묶음 ${batch.ids.length}문항`, ...(queue.__studyGenFocus?.has(id) ? { page: queue.__studyGenFocus.get(id) } : {}) });
+          }
+        }
+        for (const section of state.sections) {
+          const count = section.author?.questionCount ?? 0;
+          if (count > (seen.published.get(section.id) ?? 0)) { seen.published.set(section.id, count); mark("unit-done", { sectionId: section.id, questions: count }); }
+        }
+      };
+      for (const section of state.sections) seen.published.set(section.id, section.author?.questionCount ?? 0);
+      seen.outline = state.sections.length > 0; seen.plan = state.sections.some((section) => section.design?.objectives.length);
+      await runAstra({ state, pdf, save: () => { astraMarks(); return saveState(state); }, getPriorityPage: () => astraPriorityPage(state), pause: (message) => { throw failAstra(new Stop("paused-invalid", message)); },
+        ask: async (step, attempt, system, user, parser, files) => {
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(astraResponseSchema), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX });
+          if (!result.ok) throw failAstra(new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`));
+          return result.value.result;
+        },
+        publish: async (section, questions) => {
+          if (!questions.length) return null;
+          const documentPath = path.join("sections", section.id, "document.json");
+          await saveJson(path.join(dirOf(id), documentPath), sectionDocument(id, section, input.fileName, questions));
+          return documentPath;
+        },
+      });
+      if (progressTimer) clearTimeout(progressTimer);
+      if (astraFailure) throw astraFailure;
+      if (state.status === "done") { mark("done"); await saveState(state); }
+      return state;
+    }
     loaded = await (options.pages ?? registeredPages)(input);
 
     if (input.engine === "v3") {
@@ -568,7 +698,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     }
     return state;
   } catch (error) {
-    const stop = error instanceof Stop ? error : new Stop("failed", error instanceof Error ? error.message : String(error));
+    if (progressTimer) clearTimeout(progressTimer);
+    const stop = astraFailure ?? (error instanceof Stop ? error : new Stop("failed", error instanceof Error ? error.message : String(error)));
     state.status = stop.status; state.message = stop.message;
     mark("stopped", { note: stop.status });
     await saveState(state);

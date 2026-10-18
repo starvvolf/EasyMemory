@@ -1,5 +1,5 @@
 import { chatGptAccessToken, chatGptStorageReady, credentialFor } from "./chatgpt-auth.ts";
-import { ModelError, type ModelBackend, type ModelRequest } from "./model.ts";
+import { ModelError, type ModelBackend, type ModelRequest, type ModelResult } from "./model.ts";
 
 type ApiError = { error?: { code?: string; message?: string }; detail?: string };
 const endpoint = "https://api.openai.com/v1/responses";
@@ -20,14 +20,17 @@ export function responseFailure(status: number, body: ApiError): ModelError {
 /** Structured output asks for a JSON Schema; `fallback` is the plain JSON mode used when the plan route refuses it. */
 type ResponseBody = {
   model: string; instructions: string; store: boolean; stream: boolean;
-  input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail: "high" } | { type: "input_file"; filename: string; file_data: string }> }>;
+  input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string; prompt_cache_breakpoint?: { mode: "explicit" } } | { type: "input_image"; image_url: string; detail: "high" } | { type: "input_file"; filename: string; file_data: string }> }>;
   reasoning?: { effort: string }; text?: { format: { type: string } & Record<string, unknown> };
+  prompt_cache_options?: { mode: "explicit"; ttl: "30m" };
 };
 export function responseRequest(request: ModelRequest, format: "schema" | "fallback" = "schema"): ResponseBody {
   const useSchema = Boolean(request.schema) && format === "schema";
+  if (request.cachePrefix && (!request.files?.length || !request.schema)) throw new ModelError("not_configured", "PDF 캐싱 요청에는 파일과 공통 응답 스키마가 필요해요.");
+  const baseInstructions = request.cachePrefix ?? request.system;
   const instructions = request.schema && !useSchema
-    ? `${request.system}\n\n응답은 다음 JSON Schema를 따르는 JSON 객체 하나만 쓴다.\n${JSON.stringify(request.schema)}`
-    : request.system;
+    ? `${baseInstructions}\n\n응답은 다음 JSON Schema를 따르는 JSON 객체 하나만 쓴다.\n${JSON.stringify(request.schema)}`
+    : baseInstructions;
   // JSON mode (json_object) is refused unless the input itself mentions JSON; the instructions do not count.
   const jsonMode = !useSchema && Boolean(request.json || request.schema);
   const userText = jsonMode && !/json/i.test(request.user) ? `${request.user}\n\n(응답은 JSON 객체 하나로)` : request.user;
@@ -35,7 +38,17 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
     model: request.model ?? "gpt-6-sol",
     instructions,
     // With page images the user turn becomes text plus one labelled image per page.
-    input: [{ role: "user", content: request.images?.length || request.files?.length
+    input: request.cachePrefix ? [
+      { role: "user", content: [
+        ...(request.files ?? []).map(file => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
+        { type: "input_text", text: "첨부 자료 끝", prompt_cache_breakpoint: { mode: "explicit" } },
+      ] },
+      { role: "developer", content: request.system },
+      { role: "user", content: request.images?.length ? [
+        { type: "input_text", text: userText },
+        ...request.images.flatMap(image => [{ type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: "high" as const }]),
+      ] : userText },
+    ] : [{ role: "user", content: request.images?.length || request.files?.length
       // Files go first: a long, identical prefix (instructions + the same PDF) lets later calls reuse the prompt cache.
       ? [...(request.files ?? []).map((file) => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
           { type: "input_text" as const, text: userText },
@@ -44,6 +57,7 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
       : userText }],
     store: false,
     stream: true,
+    ...(request.cachePrefix ? { prompt_cache_options: { mode: "explicit" as const, ttl: "30m" as const } } : {}),
     ...(request.effort ? { reasoning: { effort: request.effort } } : {}),
     ...(useSchema
       ? { text: { format: { type: "json_schema", name: request.schemaName ?? "response", schema: request.schema, strict: true } } }
@@ -63,12 +77,16 @@ const formatState = globalThis as typeof globalThis & { __studyForgeSchemaRefuse
 export function resetSchemaSupport() { formatState.__studyForgeSchemaRefused = undefined; }
 
 /** Sends with the JSON Schema first; on a format refusal, remembers it and sends once more in JSON mode. */
-export async function sendWithFallback(send: (format: "schema" | "fallback") => Promise<Response>, hasSchema: boolean) {
+export async function sendWithFallback(send: (format: "schema" | "fallback") => Promise<Response>, hasSchema: boolean, explicitCache = false) {
   let format: "schema" | "fallback" = hasSchema && !formatState.__studyForgeSchemaRefused ? "schema" : "fallback";
   let response = await send(format);
   if (!response.ok) {
     let body: ApiError = {};
     try { body = await response.json() as ApiError; } catch { /* Some admission failures have no JSON error body. */ }
+    // Do not mistake rejection of the opt-in cache capability for global JSON Schema rejection.
+    if (explicitCache && (body.error?.code === "subscription_sharing_unsupported_capability" || /prompt_cache|cache.breakpoint/i.test(`${body.error?.message ?? ""} ${body.detail ?? ""}`))) {
+      throw new ModelError("not_configured", "PDF 캐싱 요청이 거부됐어요. 계정 경로의 캐싱 지원을 확인해야 해요. 캐싱을 끄고 몰래 재호출하지 않습니다.");
+    }
     if (format !== "schema" || !isFormatRejection(response.status, body)) throw responseFailure(response.status, body);
     formatState.__studyForgeSchemaRefused = true;
     format = "fallback";
@@ -82,25 +100,31 @@ export async function sendWithFallback(send: (format: "schema" | "fallback") => 
   return { response, format };
 }
 
-export async function readResponseStream(body: ReadableStream<Uint8Array>, onText?: (text: string) => void): Promise<{ text: string; usage?: { inputTokens?: number; outputTokens?: number; cachedTokens?: number }; model?: string }> {
+export async function readResponseStream(body: ReadableStream<Uint8Array>, onProgress?: ModelRequest["onProgress"], onText?: ModelRequest["onText"]): Promise<{ text: string; usage?: ModelResult["usage"]; model?: string }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "", text = "", completed = false;
-  let usage: { inputTokens?: number; outputTokens?: number; cachedTokens?: number } | undefined;
+  let usage: ModelResult["usage"];
   let model: string | undefined;
   const event = (raw: string) => {
     const data = raw.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
     if (!data || data === "[DONE]") return;
-    let value: { type?: string; delta?: string; response?: { model?: string; usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } }; error?: { code?: string; message?: string }; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> } };
+    let value: { type?: string; delta?: string; response?: { model?: string; usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } }; error?: { code?: string; message?: string }; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> } };
     try { value = JSON.parse(data); } catch { throw new ModelError("transient", "ChatGPT 응답 스트림을 읽지 못했어요."); }
-    if (value.type === "response.output_text.delta") { text += value.delta ?? ""; if (onText) { try { onText(text); } catch { /* progress only */ } } }
+    if (value.type === "response.output_text.delta") {
+      text += value.delta ?? "";
+      if (value.delta) onProgress?.(text.length);
+      if (value.delta && onText) { try { onText(text); } catch { /* progress only */ } }
+    }
     if (value.type === "response.failed") throw responseFailure(0, { error: value.response?.error });
     if (value.type === "response.incomplete" || value.type === "error") throw new ModelError("transient", "ChatGPT 응답이 완료되지 않았어요.");
     if (value.type === "response.completed") {
       completed = true;
       model = value.response?.model;
-      usage = { inputTokens: value.response?.usage?.input_tokens, outputTokens: value.response?.usage?.output_tokens,
-        ...(value.response?.usage?.input_tokens_details?.cached_tokens !== undefined ? { cachedTokens: value.response.usage.input_tokens_details.cached_tokens } : {}) };
+      usage = { inputTokens: value.response?.usage?.input_tokens, outputTokens: value.response?.usage?.output_tokens };
+      const details = value.response?.usage?.input_tokens_details;
+      if (typeof details?.cached_tokens === "number") usage.cachedInputTokens = details.cached_tokens;
+      if (typeof details?.cache_write_tokens === "number") usage.cacheWriteTokens = details.cache_write_tokens;
       if (!text) text = value.response?.output?.flatMap((item) => item.content ?? []).filter((part) => part.type === "output_text").map((part) => part.text ?? "").join("") ?? "";
     }
   };
@@ -144,9 +168,9 @@ export const chatgptBackend: ModelBackend = {
           body: JSON.stringify(responseRequest(request, format)), signal: request.signal });
       } catch { throw new ModelError("transient", "ChatGPT 모델 서버에 연결하지 못했어요."); }
     };
-    const { response, format } = await sendWithFallback(send, Boolean(request.schema));
+    const { response, format } = await sendWithFallback(send, Boolean(request.schema), Boolean(request.cachePrefix));
     if (!response.body) throw new ModelError("transient", "ChatGPT 응답 스트림이 비어 있어요.");
-    const completed = await readResponseStream(response.body, request.onText);
+    const completed = await readResponseStream(response.body, request.onProgress, request.onText);
     const used = !request.schema && !request.json ? "text" as const : format === "schema" ? "json_schema" as const : "json_object" as const;
     return { text: completed.text, model: completed.model ?? request.model ?? "chatgpt", usage: completed.usage, format: used };
   },
