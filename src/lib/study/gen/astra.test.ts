@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { astraFakeReply, getAstraReadingView, runAstra, type AstraAsk } from "./astra.ts";
+import { astraFakeReply, getAstraReadingView, runAstra, scopePlan, type AstraAsk } from "./astra.ts";
 import { confirmObjectives, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import type { GenState, GenStep } from "./types.ts";
 
@@ -106,4 +106,21 @@ test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 �
   assert.deepEqual(view.currentSectionIds, ["s2"]);
   assert.equal(view.outline[1].generationStatus, "ready");
   assert.ok(state.astra!.timing?.firstPublishedAt && state.astra!.timing.completedAt);
+});
+
+test("astra 계획: 고른 쪽 밖 목차·개념·연습은 빼고 단원 번호를 다시 매긴다 (그래픽스03 1~24쪽에 44쪽 전체 목차)", () => {
+  const ev = (page: number) => [{ page, kind: "text" as const, quote: "", supports: "근거" }];
+  const { plan, dropped } = scopePlan({
+    outline: [{ id: "s1", title: "앞", pages: [1, 2] }, { id: "s2", title: "걸침", pages: [2, 3] }, { id: "s3", title: "밖", pages: [4] }],
+    concepts: [{ id: "c1", outlineIds: ["s1"], title: "가", essentials: ["가"], conditions: [], evidence: ev(1) },
+      { id: "c2", outlineIds: ["s2"], title: "나", essentials: ["나"], conditions: [], evidence: [...ev(2), ...ev(3)] },
+      { id: "c3", outlineIds: ["s3"], title: "다", essentials: ["다"], conditions: [], evidence: ev(4) }],
+    practice: [{ id: "p1", sectionId: "s2", conceptIds: ["c2"], task: "나 쓰기", cue: "", recall: "나", kind: "개념", priority: "essential", questionCount: 1 },
+      { id: "p2", sectionId: "s3", conceptIds: ["c3"], task: "다 쓰기", cue: "", recall: "다", kind: "개념", priority: "essential", questionCount: 1 }],
+    uncertain: [],
+  } as Parameters<typeof scopePlan>[0], [1, 2]);
+  assert.deepEqual(plan.outline.map((s) => [s.id, s.pages]), [["s1", [1, 2]], ["s2", [2]]]);
+  assert.deepEqual(plan.concepts.map((c) => [c.id, c.evidence.map((e) => e.page)]), [["c1", [1]], ["c2", [2]]]);
+  assert.deepEqual(plan.practice.map((p) => p.id), ["p1"]);
+  assert.equal(dropped.length, 3);
 });
