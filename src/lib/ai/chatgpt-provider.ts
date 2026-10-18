@@ -20,9 +20,8 @@ export function responseFailure(status: number, body: ApiError): ModelError {
 /** Structured output asks for a JSON Schema; `fallback` is the plain JSON mode used when the plan route refuses it. */
 type ResponseBody = {
   model: string; instructions: string; store: boolean; stream: boolean;
-  input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string; prompt_cache_breakpoint?: { mode: "explicit" } } | { type: "input_image"; image_url: string; detail: "high" } | { type: "input_file"; filename: string; file_data: string }> }>;
+  input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail: "high" } | { type: "input_file"; filename: string; file_data: string }> }>;
   reasoning?: { effort: string }; text?: { format: { type: string } & Record<string, unknown> };
-  prompt_cache_options?: { mode: "explicit"; ttl: "30m" };
 };
 export function responseRequest(request: ModelRequest, format: "schema" | "fallback" = "schema"): ResponseBody {
   const useSchema = Boolean(request.schema) && format === "schema";
@@ -41,7 +40,7 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
     input: request.cachePrefix ? [
       { role: "user", content: [
         ...(request.files ?? []).map(file => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
-        { type: "input_text", text: "첨부 자료 끝", prompt_cache_breakpoint: { mode: "explicit" } },
+        { type: "input_text", text: "첨부 자료 끝" },
       ] },
       { role: "developer", content: request.system },
       { role: "user", content: request.images?.length ? [
@@ -57,7 +56,6 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
       : userText }],
     store: false,
     stream: true,
-    ...(request.cachePrefix ? { prompt_cache_options: { mode: "explicit" as const, ttl: "30m" as const } } : {}),
     ...(request.effort ? { reasoning: { effort: request.effort } } : {}),
     ...(useSchema
       ? { text: { format: { type: "json_schema", name: request.schemaName ?? "response", schema: request.schema, strict: true } } }
@@ -77,16 +75,12 @@ const formatState = globalThis as typeof globalThis & { __studyForgeSchemaRefuse
 export function resetSchemaSupport() { formatState.__studyForgeSchemaRefused = undefined; }
 
 /** Sends with the JSON Schema first; on a format refusal, remembers it and sends once more in JSON mode. */
-export async function sendWithFallback(send: (format: "schema" | "fallback") => Promise<Response>, hasSchema: boolean, explicitCache = false) {
+export async function sendWithFallback(send: (format: "schema" | "fallback") => Promise<Response>, hasSchema: boolean) {
   let format: "schema" | "fallback" = hasSchema && !formatState.__studyForgeSchemaRefused ? "schema" : "fallback";
   let response = await send(format);
   if (!response.ok) {
     let body: ApiError = {};
     try { body = await response.json() as ApiError; } catch { /* Some admission failures have no JSON error body. */ }
-    // Do not mistake rejection of the opt-in cache capability for global JSON Schema rejection.
-    if (explicitCache && (body.error?.code === "subscription_sharing_unsupported_capability" || /prompt_cache|cache.breakpoint/i.test(`${body.error?.message ?? ""} ${body.detail ?? ""}`))) {
-      throw new ModelError("not_configured", "PDF 캐싱 요청이 거부됐어요. 계정 경로의 캐싱 지원을 확인해야 해요. 캐싱을 끄고 몰래 재호출하지 않습니다.");
-    }
     if (format !== "schema" || !isFormatRejection(response.status, body)) throw responseFailure(response.status, body);
     formatState.__studyForgeSchemaRefused = true;
     format = "fallback";
@@ -168,7 +162,7 @@ export const chatgptBackend: ModelBackend = {
           body: JSON.stringify(responseRequest(request, format)), signal: request.signal });
       } catch { throw new ModelError("transient", "ChatGPT 모델 서버에 연결하지 못했어요."); }
     };
-    const { response, format } = await sendWithFallback(send, Boolean(request.schema), Boolean(request.cachePrefix));
+    const { response, format } = await sendWithFallback(send, Boolean(request.schema));
     if (!response.body) throw new ModelError("transient", "ChatGPT 응답 스트림이 비어 있어요.");
     const completed = await readResponseStream(response.body, request.onProgress, request.onText);
     const used = !request.schema && !request.json ? "text" as const : format === "schema" ? "json_schema" as const : "json_object" as const;
