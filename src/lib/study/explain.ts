@@ -1,6 +1,6 @@
 // 쪽마다 쉬운 설명 (읽기 화면 곁 패널): made once per page, kept beside the notes (study-notes/<source>.explain.json)
 // so reopening a page, or the other computer, shows it without another model call. Not a note: it is not 모르는 것.
-// 목표 설명 entries live in the same file with `goal` (the objective id); one per goal.
+// 목표 설명 entries live in the same file with `goal` (the objective id); one per goal. `__terms:<from>-<to>` holds a 용어 지도 (JSON).
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
@@ -19,7 +19,7 @@ let chain: Promise<unknown> = Promise.resolve();
 export function saveExplanation(sourceId: string, page: number, text: string, goal?: string | null) {
   const work = async () => {
     const pages = (await listExplanations(sourceId)).filter((entry) => goal ? entry.goal !== goal : entry.goal || entry.page !== page);
-    const entry: PageExplanation = { page, ...(goal ? { goal } : {}), text: text.slice(0, 8000), at: new Date().toISOString() };
+    const entry: PageExplanation = { page, ...(goal ? { goal } : {}), text: text.slice(0, goal?.startsWith("__") ? 60000 : 8000), at: new Date().toISOString() };
     pages.push(entry); pages.sort((a, b) => a.page - b.page);
     await mkdir(root(), { recursive: true });
     const target = fileFor(sourceId), temporary = `${target}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;

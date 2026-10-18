@@ -260,6 +260,7 @@ export default function DejipgiStudy() {
           async explanations(sourceId: string) {
             return (await readJson<{ pages: Array<{ page: number; goal?: string; text: string; at: string }> }>(await fetchExperiment(`/api/study-notes?sourceId=${encodeURIComponent(sourceId)}&explain=1`), "쉬운 설명을 불러오지 못했어요.")).pages;
           },
+          compose: async (input: { system: string; user: string; json?: boolean }) => (await noteCall<{ text: string }>({ action: "compose", ...input })).text,
           saveExplanation: async (sourceId: string, page: number, text: string, goal?: string) => { await noteCall({ action: "explain-save", sourceId, page, text, ...(goal ? { goal } : {}) }); },
         } satisfies NonNullable<DejipgiEnv["notes"]>,
       } : {}),

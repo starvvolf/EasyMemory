@@ -1459,6 +1459,7 @@ function renderReader(){
   wrap.append(h("div", { class:"rbar" }, sel, h("span", { class:"grow" }),
     env.chunk && env.chunk.important && !d.example ? h("button", { class:"btn small", "aria-pressed": termsOn() ? "true" : "false", title:"핵심 용어·개념 목표의 용어를 쪽에 표시",
       onclick: () => { (S.plan.prefs || (S.plan.prefs = {})).showTerms = !termsOn(); Store.savePlan(S.plan); render(); } }, "핵심 용어") : null,
+    d.example || (notesApi && notesApi.compose) ? h("button", { class:"btn small", title:"이 자료의 용어를 한국어 뜻·비유와 함께 묶은 지도와 이야기", onclick: () => TermMap.openFor(d) }, "용어 지도") : null,
     notesButton(d),
     h("div", { class:"pager" },
       h("button", { class:"qbtn", disabled: R.page <= 1, "aria-label":"이전 쪽", onclick: () => goPage(R.page - 1) }, "‹"),
@@ -1721,6 +1722,9 @@ const PROMPTS = {
   goal: { label:"목표 설명", when:"‘이 쪽에서 익힐 것’의 목표를 누르면 펼쳐지는 정리예요. 목표마다 처음 한 번 만들고 저장해서, 바꾼 요청은 [다시 정리]부터 적용돼요.", def:"",
     presets:[["기본", ""], ["원문 예시까지", "원문에 나온 예시와 수치도 빠짐없이 함께 정리해 줘."], ["서술형 답안식", "서술형 시험 답안에 그대로 옮겨 쓸 수 있는 문장으로 정리해 줘."], ["용어 풀이 포함", "어려운 용어는 원문 그대로 쓰고 바로 뒤 괄호에 쉬운 풀이를 붙여 줘."]],
     auto:["자료 이름", "학습목표", "목표의 근거 구절", "목표가 걸친 쪽의 원문(최대 3쪽)"] },
+  terms: { label:"용어 지도", when:"읽기 화면 위 [용어 지도]로 만드는 자료 전체의 용어 묶음·비유·이야기예요. 자료마다 한 번 만들고 저장해서, 바꾼 요청은 [다시 만들기]부터 적용돼요.", def:"",
+    presets:[["기본", ""], ["게임 비유", "비유와 이야기는 게임(fps, 그래픽 옵션, 모니터 설정 등) 경험에 빗대어 써 줘."], ["일상 비유", "비유와 이야기는 집안일·요리·교통 같은 일상생활에 빗대어 써 줘."], ["스마트폰 비유", "비유와 이야기는 스마트폰과 앱을 쓰는 경험에 빗대어 써 줘."]],
+    auto:["자료 이름", "자료 전체 쪽의 원문(쪽마다 앞부분)", "출력 형식(묶음·용어·이야기 JSON)"] },
   follow: { label:"카드에서 이어 묻기", when:"모르는 것 카드 아래에서 이어서 물을 때예요.", def:"",
     presets:[["기본", ""], ["더 짧게", "한두 문장으로 답해 줘."], ["예시로", "가능하면 예시 하나로 답해 줘."]],
     auto:["자료 이름", "고른 글", "앞선 답", "이어진 대화", "이 쪽 원문", "새 질문"] },
@@ -1746,6 +1750,7 @@ function fixedText(k){
     const sample = Chat.prompt({ d:{ title:"(자료 이름)" }, page:"N", objs:[{ statement:"(이 쪽 학습목표)" }] }, "(이 쪽 원문)", k === "chat" ? "(내 요청)" : "");
     return k === "explain" ? `${sample}\n[요청]\n(내 요청)\n맨 마지막 줄에는 [다음] 줄을 쓴다.` : sample;
   }
+  if (k === "terms") return TermMap.system("(내 요청)") + "\n\n— 사용자 쪽 —\n[자료] (자료 이름)\n[원문 p.N]\n(쪽마다 원문)";
   if (k === "goal") return GoalEx.prompt({ title:"(자료 이름)" }, { statement:"(학습목표)", quote:"(목표의 근거 구절)" }, "[원문 p.N]\n(그 쪽 원문)", "(내 요청)");
   if (!PS.fixed) return "불러오는 중…";
   return `${PS.fixed[k]}\n\n[학습자가 정한 답변 방식 — 위의 형식·근거 규칙과 충돌하면 위 규칙을 따른다]\n(내 요청)`;
@@ -1812,7 +1817,7 @@ const Explain = {
     const e = this.src[k] = { status:"loading", map:new Map(), goals:new Map() };
     if (!notesOn(d) || !notesApi.explanations){ e.status = "ready"; return; }
     notesApi.explanations(k).then(list => { for (const x of list){ if (x.goal) e.goals.set(x.goal, x.text); else e.map.set(x.page, x.text); } }, () => {})
-      .then(() => { e.status = "ready"; const R = S.reader, cur = S.decks[R.deckId]; if (S.view === "read" && cur && this.sid(cur) === k) GoalEx.paintAll(); if (S.view === "read" && Chat.docked && cur && this.sid(cur) === k){ this.paintNode(); this.want(cur, R.page); } });
+      .then(() => { e.status = "ready"; const R = S.reader, cur = S.decks[R.deckId]; if (S.view === "read" && cur && this.sid(cur) === k){ GoalEx.paintAll(); if (TM.open) TermMap.paint(); } if (S.view === "read" && Chat.docked && cur && this.sid(cur) === k){ this.paintNode(); this.want(cur, R.page); } });
   },
   stop(){ clearTimeout(this.timer); this.timer = null; if (this.run && this.run.ctl) this.run.ctl.abort(); this.run = null; },
   want(d, page){
@@ -1879,6 +1884,119 @@ ${explainAsk().slice(0, 1500)}
   next(d, page){ const e = this.src[this.sid(d)], t = e && e.map.get(page); return t ? splitNext(t).next : []; },
   paintNode(){ const el = document.getElementById("explainCard"), R = S.reader, d = S.decks[R.deckId]; if (el && d) el.replaceWith(this.node(d, R.page)); if (Chat.el && !Chat.busy) Chat.paintSugs(); },
   paintBody(){ const b = document.getElementById("explainBody"); if (b && this.run) b.replaceChildren(...richLines(shown(this.run.text) || "…")); else this.paintNode(); },
+};
+/* ----- 용어 지도: a term-heavy material rebuilt for memory — every term split into Korean word parts, a grounded
+   definition, one familiar analogy and its look-alike; grouped as a tree; and one story that walks through all of them.
+   Made once per material range (one long request) and kept with the explanations (`__terms:<from>-<to>`). ----- */
+const TERMS_RULES = `너는 영어 강의자료의 용어와 개념을 한국어 학습자가 기억하기 쉽게 재구성하는 튜터다.
+아래 [원문]에서 이 자료를 이해하고 시험을 보는 데 필요한 용어·개념을 빠짐없이 뽑아, 다음 형식의 JSON 객체 하나로만 답한다.
+
+{"groups":[{"name":"묶음 이름(한국어, 짧게)","terms":[{"en":"원문 표기 그대로","ko":"한국어 용어","parts":"단어 쪼개기 (예: cathode=음극, ray=선, tube=관)","under":"상위 용어의 en (없으면 빈 문자열)","def":"정의","analogy":"비유","pair":"헷갈리는 짝과 차이 (없으면 빈 문자열)","page":쪽 번호}]}],
+ "story":"이야기"}
+
+규칙
+- groups: 의미가 가까운 용어끼리 묶는다(보통 3~8묶음). 원문 순서보다 개념의 구조를 따른다. 상하 관계가 있으면 under로 잇는다.
+- en: 원문 표기를 그대로 쓴다(약어가 있으면 "Cathode Ray Tube (CRT)"처럼).
+- parts: 영어 단어를 뜻 단위로 쪼개 한국어 뜻을 붙인다. 쪼갤 게 없으면 빈 문자열.
+- def: 원문에 근거한 정의 한두 문장. 원문에 정의가 없으면 원문이 그 용어를 쓰는 맥락으로 쓰고, 지어내지 않는다.
+- analogy: 처음 듣는 사람도 바로 그림이 그려지는 익숙한 비유 한 문장. 개념을 틀리게 만드는 비유는 쓰지 않는다.
+- story: 모든 용어가 원인→결과나 순서로 이어지는 짧은 흐름 글(예: "화면에 그림 한 장이 뜨기까지"). 용어가 나올 때마다 [[en]]처럼 en을 대괄호 두 겹으로 감싼다. 문단은 줄바꿈으로 나눈다.
+- 식은 $...$ 안에 LaTeX로 쓴다. 마크다운 기호는 쓰지 않는다.`;
+const TM = { open:false, run:null, err:null, sel:null, key:"" };
+const TermMap = {
+  range(d){ const ns = (d.pages || []).map(p => p.n).filter(Number.isFinite).sort((a, b) => a - b); return ns.length ? [ns[0], ns[ns.length - 1]] : [1, 1]; },
+  key(d){ const [a, b] = this.range(d); return `__terms:${a}-${b}`; },
+  saved(d){
+    const e = Explain.src[Explain.sid(d)], raw = e && e.goals ? e.goals.get(this.key(d)) : null;
+    if (!raw) return null; try{ return this.clean(JSON.parse(raw)); }catch(err){ return null; }
+  },
+  clean(x){
+    const str = (v, n) => String(v ?? "").trim().slice(0, n);
+    const groups = (Array.isArray(x && x.groups) ? x.groups : []).map(g => ({ name:str(g.name, 60) || "묶음",
+      terms:(Array.isArray(g.terms) ? g.terms : []).map(t => ({ en:str(t.en, 120), ko:str(t.ko, 80), parts:str(t.parts, 200), under:str(t.under, 120),
+        def:str(t.def, 600), analogy:str(t.analogy, 400), pair:str(t.pair, 300), page:Number.isFinite(+t.page) ? +t.page : null })).filter(t => t.en) })).filter(g => g.terms.length);
+    if (!groups.length) throw new Error("빈 지도");
+    return { groups, story:str(x.story, 8000) };
+  },
+  async source(d){
+    const [a, b] = this.range(d), n = b - a + 1, per = Math.max(600, Math.min(3000, Math.floor(52000 / n)));
+    const parts = [];
+    for (let p = a; p <= b; p++){ const t = String(await pageText(d, p) || "").trim(); if (t) parts.push(`[원문 p.${p}]\n${t.slice(0, per)}`); }
+    return parts.join("\n\n");
+  },
+  system(style){ style = String(style || "").trim(); return TERMS_RULES + (style ? `\n\n[학습자가 정한 방식 — 위 규칙·형식과 충돌하면 위 규칙을 따른다]\n${style.slice(0, 1500)}` : ""); },
+  openFor(d){ TM.open = true; TM.sel = null; TM.key = Explain.sid(d) + ":" + this.key(d); Explain.load(d); this.paint(); },
+  async go(d){
+    if (!notesApi || !notesApi.compose) return;
+    const k = Explain.sid(d) + ":" + this.key(d);
+    TM.err = null; TM.run = { key:k, at:Date.now() }; this.paint();
+    try{
+      const user = `[자료] ${d.title}\n\n${await this.source(d)}`;
+      const raw = await notesApi.compose({ system:this.system(promptOf("terms")), user, json:true });
+      const m = raw.indexOf("{"), z = raw.lastIndexOf("}");
+      const map = this.clean(JSON.parse(raw.slice(m, z + 1)));
+      if (map.story.includes("$") || map.groups.some(g => g.terms.some(t => (t.def + t.analogy).includes("$")))) await ensureKatex();
+      const e = Explain.src[Explain.sid(d)]; if (e) e.goals.set(this.key(d), JSON.stringify(map));
+      if (notesOn(d) && notesApi.saveExplanation) notesApi.saveExplanation(Explain.sid(d), this.range(d)[0], JSON.stringify(map), this.key(d)).catch(() => {});
+    }catch(err){
+      TM.err = { key:k, text: err instanceof SyntaxError || (err && err.message === "빈 지도") ? "지도를 읽지 못했어요. 다시 만들어 주세요." : sampleErrorCopy(err) };
+    }
+    TM.run = null; this.paint();
+  },
+  find(map, name){ const n = String(name).trim().toLowerCase(); for (const g of map.groups) for (const t of g.terms) if (t.en.toLowerCase() === n || t.ko.toLowerCase() === n) return t; return null; },
+  pick(t){ TM.sel = TM.sel === t.en ? null : t.en; this.paint();
+    if (TM.sel) requestAnimationFrame(() => { const el = [...document.querySelectorAll("[data-term]")].find(x => x.dataset.term === t.en); if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" }); }); },
+  termNode(d, t, kids){
+    const on = TM.sel === t.en;
+    return h("li", { class:"tm-term" + (on ? " on" : ""), "data-term":t.en },
+      h("button", { class:"tm-name", "aria-expanded": on ? "true" : "false", onclick: () => this.pick(t) },
+        h("b", { text:t.en }), t.ko ? h("span", { text:t.ko }) : null),
+      on ? h("div", { class:"tm-card" },
+        t.parts ? h("p", { class:"tm-parts", text:t.parts }) : null,
+        t.def ? h("p", null, h("span", { class:"tm-k", text:"정의" }), ...richText(t.def)) : null,
+        t.analogy ? h("p", { class:"tm-ana" }, h("span", { class:"tm-k", text:"비유" }), ...richText(t.analogy)) : null,
+        t.pair ? h("p", null, h("span", { class:"tm-k", text:"헷갈리는 짝" }), ...richText(t.pair)) : null,
+        t.page ? h("button", { class:"linkish", onclick: () => { TM.open = false; this.paint(); goPage(t.page); } }, `원문 p.${t.page}로 가기`) : null) : null,
+      kids.length ? h("ul", { class:"tm-sub" }, kids) : null);
+  },
+  tree(d, g){
+    const names = new Set(g.terms.map(t => t.en));
+    const build = (t, seen) => this.termNode(d, t, g.terms.filter(c => c.under === t.en && !seen.has(c.en)).map(c => build(c, new Set([...seen, c.en]))));
+    return g.terms.filter(t => !t.under || !names.has(t.under) || t.under === t.en).map(t => build(t, new Set([t.en])));
+  },
+  story(map){
+    return String(map.story).split(/\n+/).filter(Boolean).map(par => h("p", null, par.split(/\[\[(.+?)\]\]/g).flatMap((bit, i) => {
+      if (i % 2 === 0) return richText(bit);
+      const t = this.find(map, bit);
+      return t ? [h("button", { class:"tm-link", title:t.ko || "", onclick: () => this.pick(t) }, t.en)] : [h("b", { text:bit })];
+    })));
+  },
+  paint(){
+    let el = document.getElementById("termMap");
+    const R = S.reader, d = S.decks[R.deckId];
+    if (!TM.open || !d){ if (el) el.remove(); return; }
+    const k = Explain.sid(d) + ":" + this.key(d), map = this.saved(d), e = Explain.src[Explain.sid(d)];
+    const close = () => { TM.open = false; this.paint(); };
+    let body;
+    if (TM.run && TM.run.key === k) body = h("div", { class:"tm-empty" }, h("p", { class:"ex-wait", text:"자료 전체에서 용어를 뽑아 묶고 이야기를 쓰는 중이에요… (자료가 길면 1~2분)" }));
+    else if (map) body = h("div", { class:"tm-grid" },
+      h("section", { class:"tm-map" }, h("span", { class:"lbl", text:`지도 · 용어 ${map.groups.reduce((n, g) => n + g.terms.length, 0)}개` }),
+        map.groups.map(g => h("div", { class:"tm-group" }, h("div", { class:"tm-gname", text:g.name }), h("ul", { class:"tm-list" }, this.tree(d, g))))),
+      map.story ? h("section", { class:"tm-story" }, h("span", { class:"lbl", text:"이야기로 한 번에 · 비유가 섞여 있어요" }), this.story(map)) : null);
+    else if (e && e.status === "loading") body = h("div", { class:"tm-empty" }, h("p", { class:"small muted", text:"저장된 지도를 불러오는 중…" }));
+    else if (!notesApi || !notesApi.compose) body = h("div", { class:"tm-empty" }, h("p", { class:"small muted", text:"질문 답변이 연결되면 용어 지도를 만들 수 있어요." }));
+    else body = h("div", { class:"tm-empty" },
+      TM.err && TM.err.key === k ? h("p", { class:"check", text:TM.err.text }) : h("p", { class:"small muted", text:"이 자료의 용어를 한국어 뜻·비유와 함께 묶어 지도와 이야기로 만들어요. 자료마다 한 번 만들고 저장해요." }),
+      h("button", { class:"btn primary", onclick: () => this.go(d) }, "용어 지도 만들기"));
+    const fresh = h("div", { class:"pset-layer tm-layer", id:"termMap", onclick: (ev) => { if (ev.target === ev.currentTarget) close(); } },
+      h("aside", { class:"pset tmap", role:"dialog", "aria-label":"용어 지도" },
+        h("div", { class:"row tm-head" }, h("strong", { text:`용어 지도 · ${displayTitle(d)}` }), h("span", { class:"grow" }),
+          map && !(TM.run && TM.run.key === k) ? h("button", { class:"linkish", title:"지금 요청으로 새로 만들어요", onclick: () => this.go(d) }, "다시 만들기") : null,
+          h("button", { class:"ex-gear" + (promptOf("terms") ? " on" : ""), title:"용어 지도 방식 바꾸기 (비유 소재 등)", "aria-label":"용어 지도 설정", onclick: () => openPrompts("terms") }, "⚙"),
+          h("button", { class:"dclose", "aria-label":"닫기", onclick: close }, "✕")),
+        body));
+    if (el) el.replaceWith(fresh); else root.append(fresh);
+  },
 };
 /* ----- 목표 설명: press a goal in "이 쪽에서 익힐 것" and it opens into a compact note of exactly what the goal asks —
    nothing left out, nothing added; length follows the goal, not a line count. Made once per goal and kept beside the
@@ -2732,6 +2850,7 @@ function closeDrawer(){ if (!NT.drawer) return; NT.drawer = false; paintDrawer()
 on(document, "keydown", (e) => {
   if (e.key !== "Escape" || e.isComposing) return;
   if (PS.open){ e.preventDefault(); PS.open = false; paintPrompts(); return; }
+  if (TM.open){ e.preventDefault(); TM.open = false; TermMap.paint(); return; }
   if (NT.drawer){ e.preventDefault(); closeDrawer(); }
 });
 on(document, "pointerdown", (e) => {

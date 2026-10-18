@@ -3,7 +3,7 @@ import { ZodError, z } from "zod";
 import { ModelError } from "@/lib/ai/model";
 import { requireExperimentPrincipal } from "@/lib/local-experiment-auth";
 import { UserDataHttpError } from "@/lib/server-user";
-import { ASK_SYSTEM, askNote, chatReply, FOLLOW_SYSTEM, followUp, listNotes, markNote, markSeen, NoteError, removeNote, saveTalk } from "@/lib/study/notes";
+import { ASK_SYSTEM, askNote, chatReply, composeReply, FOLLOW_SYSTEM, followUp, listNotes, markNote, markSeen, NoteError, removeNote, saveTalk } from "@/lib/study/notes";
 import { boundedJson } from "../mcp-experiment-requests/http";
 import { listExplanations, saveExplanation } from "@/lib/study/explain";
 
@@ -22,7 +22,8 @@ const body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("talk"), sourceId, page, noteId: z.string().max(60).nullish(),
     turns: z.array(z.object({ role: z.enum(["user", "assistant"]), text: text(8000), quote: text(400).nullish(), page: page.optional() })).min(1).max(80),
     usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional() }),
-  z.object({ action: z.literal("explain-save"), sourceId, page, text: text(8000).min(1), goal: z.string().min(1).max(160).nullish() }),
+  z.object({ action: z.literal("compose"), system: text(8000).min(1), user: text(60000).min(1), json: z.boolean().optional() }),
+  z.object({ action: z.literal("explain-save"), sourceId, page, text: text(60000).min(1), goal: z.string().min(1).max(160).nullish() }),
 ]);
 
 async function caller(request: Request) {
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
       case "remove": await removeNote(input.sourceId, input.noteId); return NextResponse.json({ ok: true });
       case "follow": return NextResponse.json({ note: await followUp(who, input) });
       case "chat": return NextResponse.json(await chatReply(who, input.turns));
+      case "compose": return NextResponse.json(await composeReply(who, input));
       case "talk": return NextResponse.json({ note: await saveTalk(who, input) });
       case "explain-save": return NextResponse.json({ page: await saveExplanation(input.sourceId, input.page, input.text, input.goal) });
     }

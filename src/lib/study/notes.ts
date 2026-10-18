@@ -270,6 +270,13 @@ export async function chatReply(caller: ModelCaller, turns: Array<{ role: string
   return { text: reply.text.trim(), usage: reply.usage };
 }
 
+/** One long request (용어 지도: a whole material's text), beyond the question window's per-turn limits. */
+export async function composeReply(caller: ModelCaller, input: { system: string; user: string; json?: boolean }) {
+  const { model, effort } = modelSettings();
+  const reply = await callModel({ purpose: "note:compose", system: clip(input.system, 8000), user: clip(input.user, 60000), json: Boolean(input.json), model, effort, caller });
+  return { text: reply.text.trim(), usage: reply.usage };
+}
+
 const TITLE_SYSTEM = "학습자와 튜터의 대화를 보고, 무엇을 물었는지 드러나는 한국어 제목을 20자 안팎으로 하나만 쓴다. 따옴표나 마침표 없이 제목만 쓴다.";
 
 /**

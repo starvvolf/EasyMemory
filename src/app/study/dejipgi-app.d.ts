@@ -91,6 +91,8 @@ export type DejipgiEnv = {
     /** 쪽마다 쉬운 설명 (곁 패널) and 목표 설명 (`goal` = objective id), made once and kept. */
     explanations?(sourceId: string): Promise<Array<{ page: number; goal?: string; text: string; at: string }>>;
     saveExplanation?(sourceId: string, page: number, text: string, goal?: string): Promise<void>;
+    /** One long model request (용어 지도). */
+    compose?(input: { system: string; user: string; json?: boolean }): Promise<string>;
   };
   /** ChatGPT account for in-app generation; `show` is false when the host does not generate with ChatGPT. */
   account?: {
