@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { beforeEach } from "node:test";
+import { installLegacyResponseFixture } from "./helpers/codex-fixture.ts";
+
+beforeEach(installLegacyResponseFixture);
 
 import {
   materializeCards,
@@ -67,6 +70,7 @@ function responseJson(output: unknown) {
 
 test("AI는 LearningUnit마다 학습목표와 문제 설계서를 하나씩 만든다", async () => {
   const originalFetch = globalThis.fetch;
+  let invalidOperation = true;
   let requestBody: Record<string, unknown> | undefined;
   globalThis.fetch = async (_input, init) => {
     requestBody = JSON.parse(String(init?.body));
@@ -77,7 +81,7 @@ test("AI는 LearningUnit마다 학습목표와 문제 설계서를 하나씩 만
           outlineNodeId: "LU-1",
           learningUnitId: "LU-1",
           target: "DFS가 사용하는 핵심 자료구조를 말한다.",
-          terminalOperation: "apply",
+          terminalOperation: invalidOperation ? "apply" : "recall",
           successCriteria: [{ id: "C-1", description: "스택이라고 말한다.", required: true }],
           importance: 2,
         },
@@ -94,7 +98,7 @@ test("AI는 LearningUnit마다 학습목표와 문제 설계서를 하나씩 만
       blueprints: [
         {
           id: "BP-1", objectiveId: "OBJ-1", learningUnitId: "LU-1",
-          relationToObjective: "direct", elicitedOperation: "reconstruct",
+          relationToObjective: "direct", elicitedOperation: "recall",
           coverageCriterionIds: ["C-1"],
           given: [{ type: "instruction", description: "자료구조를 묻는다." }],
           hidden: [{ description: "스택", reason: "target_answer" }],
@@ -118,14 +122,16 @@ test("AI는 LearningUnit마다 학습목표와 문제 설계서를 하나씩 만
     });
   };
   try {
+    await assert.rejects(() => runActivityDesign(analysis, material), /요구 행동이 문제 설계에서 바뀌었습니다/);
+    invalidOperation = false;
     const result = await runActivityDesign(analysis, material, {
       instruction: "문제 만들기 방향:\n새로운 상황에서 판단하는 문제를 우선한다.",
     });
     assert.deepEqual(result.recommendations.map((item) => item.learningUnitId), ["LU-1", "LU-2"]);
     assert.equal(result.recommendations.every((item) => item.includeInGeneration), true);
     assert.equal(result.blueprints?.[0].recommendedType, "flashcard");
-    assert.equal(result.blueprints?.[0].elicitedOperation, "reconstruct");
-    assert.equal(result.blueprints?.[0].relationToObjective, "scaffold");
+    assert.equal(result.blueprints?.[0].elicitedOperation, "recall");
+    assert.equal(result.blueprints?.[0].relationToObjective, "direct");
     assert.equal(result.objectives?.[0].terminalOperation, "recall");
     assert.deepEqual(result.blueprints?.[0].requiredCapabilities, []);
     assert.equal(result.supportAssessments, undefined);
@@ -281,7 +287,7 @@ test("생성 초안의 자동 채점 필드를 저장용 문제로 보존한다"
   assert.equal(result.recommendationReason, "여러 자료구조 중 구분");
 });
 
-test("보기형 구조복원은 문제 문장에서 답 목록을 제거하고 개별 정답만 보존한다", () => {
+test("저장 변환은 직접 JSON의 앞면과 구조 정답을 조용히 고쳐 쓰지 않는다", () => {
   const draft: CardDraft = {
     type: "flashcard",
     activityType: "structure_recall",
@@ -316,7 +322,7 @@ test("보기형 구조복원은 문제 문장에서 답 목록을 제거하고 �
     explanation: "DFS는 스택을 사용한다.",
   };
   const [card] = materializeCards([draft], "flashcard");
-  assert.equal(card.front, "답변 순서를 완성하세요.");
+  assert.equal(card.front, draft.front);
   assert.deepEqual(
     card.structureNodes?.map((node) => node.correctLabel),
     ["소개", "외모", "계기", "평가"],
@@ -380,8 +386,10 @@ test("새 문제 생성은 기존 Recall 카드 규칙과 분리된 전용 프�
     recommendationReason: "명확한 사실 판별",
     hint: "",
     tags: ["DFS"],
-    basis: "DFS는 스택 자료구조를 이용한다.",
+    basis: "DFS는 스택을 사용한다.",
     learningUnitId: "LU-1",
+    objectiveId: "objective:LU-1",
+    blueprintId: "blueprint:LU-1",
     strategy: "recognition",
     sourceId: "sample.pdf",
     sourcePage: 1,
@@ -462,6 +470,8 @@ test("자동 흐름은 부분 지원 항목을 호출 전에 제외하고 지원
     tags: ["DFS"],
     basis: "DFS는 스택을 사용한다.",
     learningUnitId: "LU-1",
+    objectiveId: "objective:LU-1",
+    blueprintId: "blueprint:LU-1",
     strategy: "recognition",
     sourceId: "sample.pdf",
     sourcePage: 1,

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { beforeEach } from "node:test";
+import { installLegacyResponseFixture } from "./helpers/codex-fixture.ts";
+
+beforeEach(installLegacyResponseFixture);
 
 import { createWholeDocumentCorePlan } from "../src/lib/pipeline/plan.ts";
 import {

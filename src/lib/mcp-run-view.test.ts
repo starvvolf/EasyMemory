@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { getMcpRunView, listMcpRunViews, mcpStageNames, type McpStageView } from "./mcp-run-view.ts";
 
-test("only explicitly allowed MCP runs and separate authoring cycles are listed", async () => {
+test("only allowed, completed-request or verified local MCP runs and authoring cycles are listed", async () => {
   const runs = await listMcpRunViews();
   const fixedIds = new Set([
     "mcp:chatgpt-request-cb0b90cecfffa5c231ffe1e6d7b63f8d",
@@ -20,8 +20,18 @@ test("only explicitly allowed MCP runs and separate authoring cycles are listed"
   for (const id of fixedIds) assert.ok(runs.some((run) => run.id === id));
   for (const run of runs) if (!fixedIds.has(run.id)) {
     assert.equal(run.kind, "mcp-pipeline");
-    assert.equal(run.executionRequestStatus, "completed");
-    assert.ok(run.executionRequestId);
+    if (run.executionRequestId) {
+      assert.equal(run.executionRequestStatus, "completed");
+    } else {
+      // Registered local runs intentionally need not originate from an execution request.
+      assert.equal(run.requestRecordStatus, "not-recorded");
+      assert.equal(run.executionRequestStatus, undefined);
+      const detail = await getMcpRunView(run.id);
+      assert.ok(detail);
+      assert.equal(detail.source.root, "local-data");
+      assert.equal(detail.executionRequest, null);
+      assert.equal(detail.config.status, "recorded");
+    }
   }
   assert.equal(runs.filter((run) => run.kind === "authoring-lab").length, 4);
 });
