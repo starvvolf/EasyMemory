@@ -47,6 +47,7 @@ export function isLocalExperimentApiPath(pathname: string): boolean {
     pathname.startsWith("/api/personalization-lab/") ||
     pathname === "/api/study-executor" ||
     pathname === "/api/study-notes" ||
+    pathname === "/api/tablet" ||
     pathname === "/api/auth/chatgpt/start" ||
     pathname === "/api/auth/chatgpt/callback" ||
     pathname === "/api/auth/chatgpt/logout";

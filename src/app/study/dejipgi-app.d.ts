@@ -53,6 +53,12 @@ export type DejipgiEnv = {
     log?(entries: LedgerEntry[]): Promise<void>;
   };
   /** 앱 안의 코치: cards from the day plan and the quality ledger (src/lib/study/coach.ts). */
+  /** 태블릿 모드 (computer only): pairing code and addresses for the paired-device gate. */
+  tablet?: {
+    info(): Promise<{ urls: string[]; devices: Array<{ name: string; at: string }> }>;
+    code(): Promise<{ code: string; expires: number; urls: string[] }>;
+    revoke(): Promise<void>;
+  };
   coach?: (input: { plan: TodayPlan; rules: unknown; prefs: unknown; counts: Record<string, number>; waiting: number; unassigned: number; subjectsWithoutDate: string[] }) => CoachCard[];
   /** Meaning units for the reader's hover box: a lexicon from the material, and the unit around a word of a line. */
   chunk?: { lexicon(deck: PlannerDeck, asked: string[]): Lexicon; at(words: string[], index: number, lexicon: Lexicon | null): Chunk;

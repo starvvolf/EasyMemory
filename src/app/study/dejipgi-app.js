@@ -575,6 +575,46 @@ function render(){
     if (f && !f.disabled && (document.activeElement === document.body || !app.contains(document.activeElement))) f.focus({ preventScroll:true });
   }
 }
+/* 태블릿 모드: a button beside the save chip opens the pairing card (address + 6-digit code, 10 minutes). */
+const TB = { open:false, code:null, expires:0, urls:[], devices:[], err:"", timer:null };
+function tabletButton(){
+  if (!env.tablet || document.getElementById("tabletBtn")) return;
+  const store = document.getElementById("store"); if (!store) return;
+  const btn = h("button", { class:"tablet-btn", id:"tabletBtn", title:"같은 와이파이의 태블릿에서 열기", onclick: () => toggleTablet() }, "📱 태블릿");
+  store.parentNode.insertBefore(btn, store);
+}
+async function toggleTablet(force){
+  TB.open = force ?? !TB.open; TB.err = "";
+  if (TB.open){ try{ Object.assign(TB, await env.tablet.info()); }catch(e){ TB.err = e.message; } }
+  paintTablet();
+}
+async function newTabletCode(){
+  try{ const r = await env.tablet.code(); Object.assign(TB, { code:r.code, expires:r.expires, urls:r.urls, err:"" }); }catch(e){ TB.err = e.message; }
+  paintTablet();
+}
+function paintTablet(){
+  let el = document.getElementById("tabletCard");
+  if (!TB.open){ if (el) el.remove(); clearInterval(TB.timer); TB.timer = null; return; }
+  const left = Math.max(0, Math.round((TB.expires - Date.now()) / 1000));
+  const live = TB.code && left > 0;
+  const fresh = h("aside", { class:"tablet-card", id:"tabletCard", role:"dialog", "aria-label":"태블릿 연결" },
+    h("div", { class:"row", style:"justify-content:space-between" }, h("strong", { text:"태블릿에서 열기" }),
+      h("button", { class:"dclose", "aria-label":"닫기", onclick: () => toggleTablet(false) }, "✕")),
+    h("ol", { class:"tablet-steps" },
+      h("li", null, "태블릿을 이 컴퓨터와 ", h("b", { text:"같은 와이파이" }), "에 연결해요."),
+      h("li", null, "태블릿 브라우저 주소창에 이렇게 쳐요:",
+        TB.urls.length ? TB.urls.map((u, i) => h("div", { class:"tablet-url" + (i ? " alt" : ""), text:u })) : h("div", { class:"small muted", text:"이 컴퓨터의 와이파이 주소를 찾지 못했어요. 와이파이 연결을 확인해 주세요." }),
+        TB.urls.length > 1 ? h("div", { class:"small muted", text:"첫 번째 주소가 안 열리면 아래 주소를 써 보세요." }) : null),
+      h("li", null, "태블릿에 나온 칸에 이 코드를 넣어요:",
+        live ? h("div", { class:"tablet-code" }, h("b", { text:TB.code.replace(/(\d{3})(\d{3})/, "$1 $2") }), h("span", { class:"small muted", text:` ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} 남음` }))
+          : h("button", { class:"btn primary small", style:"margin-top:6px", onclick:newTabletCode }, TB.code ? "새 코드 받기" : "연결 코드 받기"))),
+    h("p", { class:"small muted", text:"한 번 연결한 태블릿은 다음부터 코드 없이 열려요. 기록은 이 컴퓨터에 저장돼서, 컴퓨터가 켜져 있고 앱이 떠 있어야 해요. 처음 한 번 Windows가 네트워크 허용을 물으면 ‘개인 네트워크’를 허용해 주세요." }),
+    TB.devices.length ? h("div", { class:"row small", style:"justify-content:space-between" }, h("span", { class:"muted", text:`연결된 기기 ${TB.devices.length}대` }),
+      h("button", { class:"linkish", onclick: async () => { try{ await env.tablet.revoke(); Object.assign(TB, { devices:[], code:null }); toast("모든 태블릿 연결을 끊었어요."); }catch(e){ TB.err = e.message; } paintTablet(); } }, "모두 끊기")) : null,
+    TB.err ? h("p", { class:"check", text:TB.err }) : null);
+  if (el) el.replaceWith(fresh); else root.append(fresh);
+  if (live && !TB.timer) TB.timer = setInterval(() => { if (!TB.open || TB.expires < Date.now()){ clearInterval(TB.timer); TB.timer = null; } paintTablet(); }, 1000);
+}
 function updateStoreChip(){
   const chip = document.getElementById("store");
   chip.dataset.mode = Store.mode;
@@ -3127,7 +3167,7 @@ function reloadDecks(){
 Store.init();
 S.plan = Store.plan();
 for (const rec of Store.pendingList()) if (rec && rec.id && rec.requestId) S.decks[rec.id] = pendingDeck(rec);
-updateStoreChip(); render();
+updateStoreChip(); tabletButton(); render();
 pollPending();
 loadAccount();
 {
@@ -3170,6 +3210,7 @@ return () => {
   clearTimeout(pollTimer);
   for (const P of Object.values(S.pdf)) if (P.doc) P.doc.destroy();
   root.querySelectorAll("#toast, .chatwin").forEach(el => el.remove());
+  document.querySelectorAll("#tabletBtn, #tabletCard").forEach(el => el.remove()); clearInterval(TB.timer);
   delete root.dataset.view;
 };
 }

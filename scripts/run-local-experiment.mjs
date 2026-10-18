@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { startTabletProxy } from "./tablet-proxy.mjs";
 
 // ChatGPT tokens are stored encrypted (required on Windows). The key lives in the user's home folder,
 // not next to the tokens in the project data folder, and stays the same across runs.
@@ -41,6 +42,11 @@ const child = spawn(process.execPath, [
   stdio: "inherit",
 });
 
+// 태블릿 모드: a paired-device gate on the home network (scripts/tablet-proxy.mjs). Set STUDY_FORGE_TABLET=0 to turn off.
+const tablet = process.env.STUDY_FORGE_TABLET === "0" ? null : startTabletProxy({ projectRoot: process.cwd() });
+
 child.on("exit", (code) => {
   process.exitCode = code ?? 1;
+  if (tablet) tablet.close();
+  process.exit(process.exitCode);
 });

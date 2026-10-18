@@ -300,6 +300,12 @@ export default function DejipgiStudy() {
         } : {}),
       },
       coach: (input) => coachCards(input as CoachInput),
+      // 태블릿 모드: only on the computer itself (the tablet reaches the app through the paired gate on port 3001).
+      ...(session.mode === "local-experiment" && /^(127\.0\.0\.1|localhost)$/.test(window.location.hostname) ? { tablet: {
+        info: async () => readJson<{ urls: string[]; devices: Array<{ name: string; at: string }> }>(await fetchExperiment("/api/tablet"), "태블릿 연결 정보를 읽지 못했어요."),
+        code: async () => readJson<{ code: string; expires: number; urls: string[] }>(await fetchExperiment("/api/tablet", { method: "POST" }), "연결 코드를 만들지 못했어요."),
+        revoke: async () => { await readJson(await fetchExperiment("/api/tablet", { method: "DELETE" }), "연결을 끊지 못했어요."); },
+      } } : {}),
       // 읽기 화면의 네모를 의미 단위로 (src/lib/study/chunk.ts): the material's terms, then phrase rules.
       chunk: { lexicon: (deck, asked) => buildLexicon(deck, asked), at: (words, index, lexicon) => chunkAt(words, index, lexicon ?? undefined),
         important: (deck) => importantTerms(deck), find: (words, terms) => findTerms(words, terms) },
