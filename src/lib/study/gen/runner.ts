@@ -401,6 +401,9 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     }
   };
 
+  // The reading position steers the order only for materials made on the study screen. Lab runs (engine comparison)
+  // assume the learner reads front to back, so every engine authors in source order there.
+  const readingFocus = () => (input.origin ?? "lab") === "study" ? queue.__studyGenFocus?.get(id) : undefined;
   const mark = (event: GenMark["event"], extra: Omit<GenMark, "at" | "event"> = {}) => {
     // Focus changes are kept in memory by the route; they are written here so the timeline shows them in order.
     for (const focus of queue.__studyGenFocusLog?.get(id) ?? []) (state.timeline ??= []).push({ at: focus.at, event: "focus", page: focus.page });
@@ -550,7 +553,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       };
       // The unit being read goes first (setGenFocus). Each free slot picks again, so a jump in reading is followed
       // as soon as one unit finishes.
-      const pick = () => byFocus(state.sections.filter((section) => !section.author && !making.has(section.id)), queue.__studyGenFocus?.get(id))[0];
+      const pick = () => byFocus(state.sections.filter((section) => !section.author && !making.has(section.id)), readingFocus())[0];
       // v3 units are independent (each has its own source, map slice and plan): several at once, each saved as soon
       // as it is done. v2 keeps one at a time.
       let failure: unknown = null;
