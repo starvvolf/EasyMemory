@@ -403,7 +403,11 @@ test("그림 쪽 읽기: 글자 적은 쪽을 이미지로 한 번 읽어 원문
   const again = await runGen(rerun.id, caller, { pages, fakeReply, pageImages });
   assert.equal(again.status, "done", again.message);
   assert.ok(!(await steps(rerun.id)).some((step) => step.startsWith("transcribe")));
-  assert.match((await readGenCalls(rerun.id)).find((call) => call.step === "design")!.user, /Matrix page/);
+  const imageSection = again.sections.find((section) => section.pages.includes(1));
+  assert.ok(imageSection, "the image-backed section is retained");
+  const imageDesign = (await readGenCalls(rerun.id)).find((call) => call.step === "design" && call.sectionId === imageSection.id);
+  assert.ok(imageDesign, "the image-backed section is redesigned");
+  assert.match(imageDesign.user, /Matrix page/);
 }));
 
 test("신고한 문제 다시 만들기: 그 목표만 출제하고, 이전 문제를 보여 주며, 공부 화면에서 따로 붙는다", () => withData(async () => {
