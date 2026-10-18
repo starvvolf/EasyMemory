@@ -513,9 +513,15 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       const files = pdfSent ? [{ filename: input.fileName, dataUrl: `data:application/pdf;base64,${Buffer.from(pdf!).toString("base64")}` }] : undefined;
       let result = await askParsed("read", null, 1, READ_SYSTEM, user, readSchema, readReply, undefined, { files });
       let normalized = result.ok ? normalizeOutline(result.value, input.pageNumbers) : null;
+      let sent = pdfSent;
       if (!normalized?.sections.length) {
         const problem = result.ok ? "고른 쪽 안의 단원이 하나도 없습니다." : result.problem;
-        result = await askParsed("read", null, 2, READ_SYSTEM, `${user}\n\n[이전 시도에서 걸린 것]\n- ${problem}`, readSchema, readReply, undefined, { files });
+        // A refused call (not a malformed reply) may be the file itself: the account route can decline PDF input.
+        // The second try then goes as text layer only, and the map says so.
+        const fileRefused = !result.ok && result.problem !== "응답이 정해진 JSON 형식과 다릅니다." && Boolean(files);
+        if (fileRefused) sent = false;
+        const retry = fileRefused ? readUser(input, block(input.pageNumbers), thin, false) : `${user}\n\n[이전 시도에서 걸린 것]\n- ${problem}`;
+        result = await askParsed("read", null, 2, READ_SYSTEM, retry, readSchema, readReply, undefined, fileRefused ? {} : { files });
         normalized = result.ok ? normalizeOutline(result.value, input.pageNumbers) : null;
       }
       if (!result.ok || !normalized?.sections.length) throw new Stop("paused-invalid", "전체 읽기(지식 지도)를 만들지 못했어요. 다시 시작하면 처음부터 다시 시도해요.");
@@ -528,10 +534,11 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       }
       state.images = { pages: notes.map((note) => note.page), done: notes.map((note) => note.page), failed: [] };
       state.sections = normalized.sections.map((section) => ({ ...section }));
-      const built = buildMap(result.value, state.sections, loaded, pdfSent);
+      const built = buildMap(result.value, state.sections, loaded, sent);
       v3.map = built.map;
       v3.warnings = [...normalized.warnings, ...built.warnings,
-        ...(pdfSent ? [] : [{ severity: "warning" as const, code: "pdf-not-sent", message: pdf ? "PDF가 커서 글자 층만 보냈어요." : "PDF를 읽지 못해 글자 층만 보냈어요." }])];
+        ...(sent ? [] : [{ severity: "warning" as const, code: "pdf-not-sent",
+          message: pdfSent ? "PDF 첨부 요청이 거절돼 글자 층만으로 다시 읽었어요." : pdf ? "PDF가 커서 글자 층만 보냈어요." : "PDF를 읽지 못해 글자 층만 보냈어요." }])];
       state.outlineWarnings = v3.warnings;
       for (const section of state.sections) section.classify = { items: mapItems(section.id, built.map), warnings: [] };
       state.phase = "design";
