@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { astraFakeReply, runAstra, type AstraAsk } from "./astra.ts";
+import { astraFakeReply, getAstraReadingView, runAstra, type AstraAsk } from "./astra.ts";
 import { confirmObjectives, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import type { GenState, GenStep } from "./types.ts";
 
@@ -51,7 +51,8 @@ test("astra: 확인 후 전체 흐름, 반복된 관계 노출은 독립 풀이 
 });
 
 test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 공개 문항을 바꾸지 않는다", async () => {
-  const state: GenState = { id: "gen_" + "0".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1], purpose: "core", note: "", provider: "fake", engine: "astra", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+  const state: GenState = { id: "gen_" + "0".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2], purpose: "core", note: "", provider: "fake", engine: "astra", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+  let priority = 2;
   let active = 0, peak = 0, stopped = false, failOnce = true;
   const calls: string[] = [], documents = new Map<string, string>();
   const ask: AstraAsk = async (step, _attempt, _system, user, parser) => {
@@ -59,33 +60,47 @@ test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 �
     active++; peak = Math.max(peak, active); calls.push(step);
     try {
       const input = JSON.parse(user);
-      if (step === "astra-author" && input.slots[0].id !== "s1-o1") {
-        assert.ok(documents.has("s1"), "후속 출제 전에 첫 묶음이 공개된다");
+      if (step === "astra-author" && input.slots[0].id !== "s2-o1") {
+        assert.ok(documents.has("s2"), "현재 읽는 두 번째 단원이 먼저 공개된다");
         await new Promise(resolve => setTimeout(resolve, 15));
       }
-      if (step === "astra-solve" && input.questions[0].objectiveId === "s1-o4" && failOnce) {
+      if (step === "astra-solve" && input.questions[0].objectiveId === "s1-o1" && failOnce) {
         failOnce = false; stopped = true; throw new Error("simulated usage stop");
       }
       const result = JSON.parse(astraFakeReply(step, user));
-      if (step === "astra-plan") result.practice = Array.from({ length: 4 }, (_, i) => ({ ...result.practice[0], id: `p${i + 1}`, questionCount: 3 }));
+      if (step === "astra-plan") {
+        result.outline = [{ id: "s1", title: "앞 단원", pages: [1] }, { id: "s2", title: "읽는 단원", pages: [2] }];
+        result.concepts.push({ ...result.concepts[0], id: "c2", outlineIds: ["s2"], evidence: [{ ...result.concepts[0].evidence[0], page: 2 }] });
+        result.practice = Array.from({ length: 4 }, (_, i) => ({ ...result.practice[0], id: `p${i + 1}`, sectionId: i === 3 ? "s2" : "s1", conceptIds: [i === 3 ? "c2" : "c1"], questionCount: 3 }));
+      }
       if (step === "astra-review") {
         result.coverage = input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: input.candidates.filter((q: { practiceIds: string[] }) => q.practiceIds.includes(id)).map((q: { objectiveId: string }) => q.objectiveId), status: "covered", reason: "fixture" }));
-        if (input.scope === "global") for (const item of result.items) if (item.objectiveId === "s1-o1") { item.status = "revise"; item.reasons = ["후발 조건 누락 발견"]; }
+        if (input.scope === "global") {
+          for (const item of result.items) if (item.objectiveId === "s2-o1") { item.status = "revise"; item.reasons = ["후발 조건 누락 발견"]; }
+          result.missedContent = [{ pages: [1], reason: "신고 범위 밖의 추가 과제" }];
+        }
       }
       return parser.parse(result);
     } finally { active--; }
   };
-  const context = { state, pdf: Buffer.from("%PDF-fixture"), ask, save: async () => {}, pause: (message: string): never => { throw new Error(message); }, publish: async (section: { id: string }, questions: unknown[]) => { documents.set(section.id, JSON.stringify(questions)); return `sections/${section.id}/document.json`; } };
+  const context = { state, pdf: Buffer.from("%PDF-fixture"), ask, save: async () => {}, getPriorityPage: async () => priority, pause: (message: string): never => { throw new Error(message); }, publish: async (section: { id: string }, questions: unknown[]) => { documents.set(section.id, JSON.stringify(questions)); priority = 1; return `sections/${section.id}/document.json`; } };
   await assert.rejects(runAstra(context), /simulated usage stop/);
   assert.equal(active, 0, "실패한 실행은 진행 중 작업을 정리한 뒤 반환한다");
   assert.equal(peak, 2);
-  const first = JSON.parse(documents.get("s1")!)[0];
+  const first = JSON.parse(documents.get("s2")!)[0];
+  assert.equal(state.astra!.batches[0].ids[0], "s2-o1");
   const planCalls = calls.filter(s => s === "astra-plan").length;
   stopped = false;
+  state.input.remake = { genId: "previous", previous: {}, reasons: { "s2-o1": "조건 부족" } };
   await runAstra(context);
   assert.equal(calls.filter(s => s === "astra-plan").length, planCalls, "계획 재호출 없이 재개한다");
   assert.equal(state.status, "done");
-  assert.deepEqual(JSON.parse(documents.get("s1")!)[0], first, "전역 검수 후에도 공개 문항은 불변이다");
-  assert.ok(state.astra!.warnings.some(w => w.ref === "s1-o1" && w.message.includes("후발")));
+  assert.deepEqual(JSON.parse(documents.get("s2")!)[0], first, "전역 검수 후에도 공개 문항은 불변이다");
+  assert.ok(state.astra!.warnings.some(w => w.ref === "s2-o1" && w.message.includes("후발")));
+  assert.equal(state.sections.flatMap(s => s.design!.objectives).length, 12, "신고 재생성은 미계획 과제를 덧붙이지 않는다");
+  assert.deepEqual(JSON.parse(documents.get("s1")!).map((q: { id: string }) => q.id), Array.from({ length: 9 }, (_, i) => `q-s1-o${i + 1}`));
+  const view = getAstraReadingView(state, 2);
+  assert.deepEqual(view.currentSectionIds, ["s2"]);
+  assert.equal(view.outline[1].generationStatus, "ready");
   assert.ok(state.astra!.timing?.firstPublishedAt && state.astra!.timing.completedAt);
 });

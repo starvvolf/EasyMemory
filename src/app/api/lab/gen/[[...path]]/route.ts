@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
 import { ExperimentRequestError } from "@/lib/mcp-experiment-requests";
 import { boundedJson, requireLocalRequest, responseError } from "../../../mcp-experiment-requests/http";
-import { confirmObjectives, createGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, stepLabel, studyDocument } from "@/lib/study/gen/runner";
+import { astraReadingView, setAstraReadingPage, confirmObjectives, createGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, stepLabel, studyDocument } from "@/lib/study/gen/runner";
 import { scorecard } from "@/lib/study/gen/scorecard";
 import { listJudges, loadJudge, readJudgeCalls, startJudge } from "@/lib/study/gen/judge";
 import { listVisionProbes, readVisionImage, runVisionProbe } from "@/lib/study/gen/vision";
@@ -48,6 +48,12 @@ async function handle(request: Request, context: Context) {
       const calls = (await readGenCalls(p[0])).map((call) => ({ n: call.n, step: call.step, sectionId: call.sectionId, attempt: call.attempt, model: call.model,
         effort: call.effort, format: call.format, startedAt: call.startedAt, ms: call.ms, firstTextMs: call.firstTextMs, ok: call.ok, error: call.error, usage: call.usage, guide: call.guide }));
       result = { gen, label: stepLabel(gen), calls };
+    } else if (p.length === 2 && p[1] === "reading" && method === "GET") {
+      const page = new URL(request.url).searchParams.get("page");
+      result = { reading: await astraReadingView(p[0], page === null ? undefined : Number(page)) };
+    } else if (p.length === 2 && p[1] === "reading" && method === "POST") {
+      const body = z.strictObject({ page: z.number().int().positive().max(500) }).parse(await boundedJson(request));
+      result = await setAstraReadingPage(p[0], body.page);
     } else if (p.length === 2 && p[1] === "study" && method === "GET") {
       // The study screen's deck: all sections as one document.
       const deck = await studyDocument(p[0]);

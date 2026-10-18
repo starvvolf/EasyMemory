@@ -6,6 +6,7 @@ import type { GenCall, GenInput, GenState, GenStep, Purpose } from "@/lib/study/
 import type { Scorecard } from "@/lib/study/gen/scorecard";
 import type { JudgeRun } from "@/lib/study/gen/judge";
 import type { VisionProbe } from "@/lib/study/gen/vision";
+import type { getAstraReadingView } from "@/lib/study/gen/astra";
 import { DEFAULT_GEN_MODELS, defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
 import "./gen.css";
 
@@ -309,6 +310,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
       </div>
 
       {gen.outlineWarnings?.map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
+      {gen.input.engine === "astra" && <AstraReader gen={gen} onOpenDoc={openDoc} />}
       {gen.input.engine === "astra" && <AstraPanel gen={gen} />}
       {gen.v3?.map && (() => {
         const map = gen.v3.map, gate = gen.v3.gate ?? [];
@@ -326,7 +328,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
 
       {["done", "awaiting-confirm"].includes(gen.status) && <ScorePanel id={id} status={gen.status} real={real} runs={runs} onError={onError} />}
 
-      {["done", "awaiting-confirm"].includes(gen.status) && gen.input.purpose !== "read" && <ForkPanel gen={gen} onOpen={onOpen} onError={onError} />}
+      {["done", "awaiting-confirm"].includes(gen.status) && (gen.input.purpose !== "read" || (gen.input.engine === "astra" && gen.astra?.plan)) && <ForkPanel gen={gen} onOpen={onOpen} onError={onError} />}
 
       {gen.status === "awaiting-confirm" && (
         <div className="confirmbar">
@@ -391,6 +393,62 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
         </div>
       )}
     </div>
+  );
+}
+
+function AstraReader({ gen, onOpenDoc }: { gen: GenState; onOpenDoc: (sectionId: string) => Promise<void> }) {
+  const [page, setPage] = useState(gen.input.pageNumbers[0]);
+  const [draft, setDraft] = useState(String(gen.input.pageNumbers[0]));
+  const [reading, setReading] = useState<ReturnType<typeof getAstraReadingView> | null>(null);
+  const [error, setError] = useState("");
+  const pages = gen.input.pageNumbers;
+  const position = pages.indexOf(page);
+  const pdfUrl = `/api/mcp-runs/sources/${encodeURIComponent(gen.input.sourceId)}/pdf#page=${page}`;
+  useEffect(() => {
+    let cancelled = false;
+    void api<{ reading: ReturnType<typeof getAstraReadingView> }>(`/api/lab/gen/${gen.id}/reading?page=${page}`).then((result) => {
+      if (!cancelled) setReading(result.reading);
+    }, (reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason)); });
+    return () => { cancelled = true; };
+  }, [gen.id, gen.updatedAt, page]);
+  const move = async (next: number) => {
+    if (!pages.includes(next)) { setError("선택한 범위 안의 쪽 번호를 입력하세요."); return; }
+    setPage(next); setDraft(String(next)); setError("");
+    try { await api(`/api/lab/gen/${gen.id}/reading`, "POST", { page: next }); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+  };
+  const current = reading?.outline.filter((section) => section.pages.includes(page)) ?? [];
+  const statusLabels = { pending: "준비 전", generating: "생성 중", ready: "문제 준비됨", partial: "일부 문제 준비됨", held: "보류" };
+  return (
+    <details className="score" open>
+      <summary>읽으면서 생성 · 실험용 원본 보기</summary>
+      <form className="row" onSubmit={(event) => { event.preventDefault(); void move(Number(draft)); }}>
+        <button type="button" disabled={position <= 0} onClick={() => void move(pages[position - 1])}>이전</button>
+        <label>현재 쪽 <input aria-label="읽기 실험 현재 쪽" type="number" min={pages[0]} max={pages.at(-1)} value={draft} onChange={(event) => setDraft(event.target.value)} style={{ width: 80 }} /></label>
+        <button type="submit">이 쪽 읽기</button>
+        <button type="button" disabled={position >= pages.length - 1} onClick={() => void move(pages[position + 1])}>다음</button>
+        <a href={pdfUrl} target="_blank" rel="noreferrer">원본 따로 열기</a>
+      </form>
+      <p className="muted">기본은 선택 범위 첫 쪽부터 현재 단원 → 다음 단원을 원문 순서대로 준비합니다. 위 쪽 이동으로 읽는 위치를 알려주면 아직 시작하지 않은 묶음에 우선순위를 줍니다. PDF 안에서 직접 스크롤한 위치는 추적하지 못합니다. 상태가 갱신돼도 PDF는 다시 열지 않습니다.</p>
+      {error && <p className="gen-error" role="alert">{error}</p>}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        <iframe className="docframe" title={`${gen.input.fileName} 원본 읽기`} src={pdfUrl} style={{ flex: "2 1 360px", minWidth: 0 }} />
+        <aside style={{ flex: "1 1 200px", minWidth: 0 }}>
+          <h4>현재 p.{page}</h4>
+          {reading && <p className="muted">전체 검수: {reading.globalReviewState === "completed" ? "완료" : reading.globalReviewState === "running" ? "진행 중" : "대기"}</p>}
+          {!current.length && <p className="muted">원본은 지금 읽을 수 있어요. 학습 계획이 생기면 이 쪽의 단원·목표가 붙습니다.</p>}
+          {current.map((section) => <div key={section.id}>
+            <b>{section.title}</b> <small>{statusLabels[section.generationStatus]}</small>
+            <details><summary>학습 목표 {section.objectives.length}개</summary><ul>{section.objectives.map((objective) => <li key={objective.id}>{objective.statement}</li>)}</ul></details>
+            {!!section.publishedObjectiveIds.length && <button onClick={() => void onOpenDoc(section.id)}>이 단원 문제 보기 ({section.publishedObjectiveIds.length})</button>}
+            {section.held.map((item) => <p key={item.objectiveId} className="warnline">q-{item.objectiveId}: {item.reason}</p>)}
+          </div>)}
+          <details><summary>학습 목차</summary><ul>{reading?.outline.map((section) => <li key={section.id}><button onClick={() => void move(section.pages[0])}>{section.title}</button> · {statusLabels[section.generationStatus]}</li>)}</ul></details>
+          <details><summary>이 쪽의 개념</summary><ul>{reading?.terms.filter((term) => term.evidence.some((evidence) => evidence.page === page)).map((term) => <li key={term.id}><b>{term.title}</b><div>{term.essentials.join(" / ")}</div></li>)}</ul></details>
+          <p className="muted">문제 보기는 이 쪽만이 아니라 해당 단원 전체 문제를 아래에서 엽니다. 쉬운 설명·번역·질문·복습 화면은 이 실험 패널에 새로 만들지 않습니다.</p>
+        </aside>
+      </div>
+    </details>
   );
 }
 
@@ -535,6 +593,8 @@ function ForkPanel({ gen, onOpen, onError }: { gen: GenState; onOpen: (id: strin
   const astra = gen.input.engine === "astra";
   const designed = gen.sections.every((section) => section.design);
   const [from, setFrom] = useState<"design" | "author">("design");
+  const [purpose, setPurpose] = useState<Purpose>(gen.input.purpose);
+  const [note, setNote] = useState(gen.input.note);
   const [models, setModels] = useState<Record<GenStep, { model: string; effort: string }>>(() =>
     Object.fromEntries([...STEPS, ...STEPS_V3, ...STEPS_ASTRA].map((step) => [step, gen.input.models[step] ?? { ...DEFAULT_GEN_MODELS[step] }])) as Record<GenStep, { model: string; effort: string }>);
   const [guideDir, setGuideDir] = useState(gen.input.guideDir ?? "출제기준");
@@ -545,7 +605,7 @@ function ForkPanel({ gen, onOpen, onError }: { gen: GenState; onOpen: (id: strin
     setBusy(true); onError("");
     try {
       const { gen: next } = await api<{ gen: GenState }>(`/api/lab/gen/${gen.id}/fork`, "POST", {
-        from, guideDir, models: Object.fromEntries(steps.map((step) => [step, models[step]])), confirmed: real ? confirmed : undefined });
+        from, guideDir, ...(astra && from === "design" ? { purpose, note } : {}), models: Object.fromEntries(steps.map((step) => [step, models[step]])), confirmed: real ? confirmed : undefined });
       setConfirmed(false);
       onOpen(next.id);
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
@@ -556,15 +616,19 @@ function ForkPanel({ gen, onOpen, onError }: { gen: GenState; onOpen: (id: strin
       <summary>앞 단계 고정 재실행 <small>{astra ? "자료 지도를 재사용해 계획부터, 또는 같은 목표로 출제·풀이·검수부터" : "목차·분류를 그대로 두고 뒤 단계만 다른 모델·기준으로"}</small></summary>
       <div className="row">
         <label className="chip"><input type="radio" checked={from === "design"} onChange={() => setFrom("design")} />설계부터 다시</label>
-        <label className="chip"><input type="radio" checked={from === "author"} disabled={!designed} onChange={() => setFrom("author")} />출제만 다시(같은 목표)</label>
+        <label className="chip"><input type="radio" checked={from === "author"} disabled={!designed || (astra && gen.input.purpose === "read")} onChange={() => setFrom("author")} />출제만 다시(같은 목표)</label>
       </div>
+      {astra && from === "design" && <>
+        <label>바꿀 학습 목적<select value={purpose} onChange={(event) => setPurpose(event.target.value as Purpose)}>{(Object.keys(purposeLabel) as Purpose[]).map((value) => <option key={value} value={value}>{purposeLabel[value]}</option>)}</select></label>
+        <label>학습 메모<textarea rows={2} maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} /></label>
+      </>}
       {real && <table className="models"><tbody>{steps.map((step) => (
         <tr key={step}><th>{genStepLabel[step]}</th>
           <td><select value={models[step].model} onChange={(event) => setModels({ ...models, [step]: { ...models[step], model: event.target.value } })}>{MODELS.map((m) => <option key={m}>{m}</option>)}</select></td>
           <td><select value={models[step].effort} onChange={(event) => setModels({ ...models, [step]: { ...models[step], effort: event.target.value } })}>{EFFORTS.map((e) => <option key={e}>{e}</option>)}</select></td></tr>
       ))}</tbody></table>}
       {!astra && <label>출제기준 폴더<input value={guideDir} onChange={(event) => setGuideDir(event.target.value.trim())} placeholder="출제기준" /></label>}
-      {astra && <p className="muted">astra 전용 지시문을 사용합니다. 모델만 바꿔 같은 계획의 결과를 비교할 수 있어요.</p>}
+      {astra && <p className="muted">astra 전용 지시문을 사용합니다. 설계부터 다시 할 때는 목적·메모를 바꾸고, 출제만 다시 할 때는 같은 목표로 모델을 비교할 수 있어요. 기출형은 아직 지원하지 않습니다.</p>}
       <p className="muted">목표 확인 없이 끝까지 돌아요. {astra ? `예상 호출: ${from === "design" ? "계획 1 + " : ""}묶음 수 × 3 + 전체 검수 1 (+수정·재검수). 첫 묶음 3문항, 이후 8문항씩 최대 2묶음 동시 진행. 전체 PDF를 다시 사용합니다.` : `예상 호출: 목차 수 × ${steps.length} (+재시도), 목차·분류 호출은 없음.`}</p>
       {real && <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다</label>}
       <button className="primary" disabled={busy || (real && !confirmed)} onClick={() => void start()}>{busy ? "시작하는 중…" : "고정 재실행 시작"}</button>

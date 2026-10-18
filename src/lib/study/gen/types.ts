@@ -30,6 +30,8 @@ export type GenInput = {
   sourceId: string;
   fileName: string;
   pageNumbers: number[];
+  /** astra lab: prioritize the page the learner is currently reading. */
+  priorityPage?: number;
   purpose: Purpose;
   /** Free text from the learner (what they want, exam scope). */
   note: string;
@@ -48,7 +50,7 @@ export type GenInput = {
   /** Optional registered exams: absent means the original generation path, unchanged. */
   pastExamSourceIds?: string[];
   /** A remake of reported questions: the earlier question per objective, so authoring writes a different one. */
-  remake?: { genId: string; previous: Record<string, string> };
+  remake?: { genId: string; previous: Record<string, string>; reasons?: Record<string, string> };
   /** Engine: v2 (default, outline → classify → design → author) or v3 (협업/설계_생성엔진v3_Claude_20261019.md). */
   engine?: Engine;
 };
