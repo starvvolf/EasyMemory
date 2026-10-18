@@ -23,13 +23,15 @@ export type ModelRequest = {
   images?: Array<{ label: string; dataUrl: string }>;
   /** Whole files sent with the user text (e.g. a PDF as a data URL). Same routes as `images`. */
   files?: Array<{ filename: string; dataUrl: string }>;
+  /** Opt-in stable instructions + files prefix; stage-specific system/user follow it. */
+  cachePrefix?: string;
 };
 
 export type ModelResult = {
   text: string;
   data?: unknown;
   model: string;
-  usage?: { inputTokens?: number; outputTokens?: number };
+  usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; cacheWriteTokens?: number };
   /** How the reply was constrained: JSON Schema (structured output), plain JSON mode, or free text. */
   format?: "json_schema" | "json_object" | "text";
 };

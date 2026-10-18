@@ -9,7 +9,7 @@ import { callModel, ModelError, type ModelCaller, type ModelRequest } from "../.
 import { redactCallText } from "../lab-contract.ts";
 import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
-import { astraFakeReply, astraJsonSchema, runAstra } from "./astra.ts";
+import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, astraResponseSchema, runAstra } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
@@ -307,7 +307,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
-    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number } = {}) => {
+    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string } = {}) => {
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
     const cap = Math.max(MAX_CALLS_PER_START, state.sections.length * 4 + 10);
@@ -327,9 +327,11 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
     const callFile = path.join(dirOf(id), "calls", `${n}.json`);
     const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
-      model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}) };
+      model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}),
+      ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}) };
     try {
       if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("astra-") ? astraFakeReply(s, u) : genFakeReply(s, u)))(step, user, attempt);
+      if (extra.cachePrefix && request.fakeReply !== undefined) request.fakeReply = JSON.stringify({ result: JSON.parse(request.fakeReply) });
       const reply = await callModel(request);
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
       await saveJson(callFile, record);
@@ -350,7 +352,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   };
   /** A call whose reply did not parse or match the schema counts as one try; a dropped connection too. */
   const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide,
-    extra: { files?: ModelRequest["files"] } = {}) => {
+    extra: { files?: ModelRequest["files"]; cachePrefix?: string } = {}) => {
     try {
       const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide, extra));
       return parsed.success ? { ok: true as const, value: parsed.data } : { ok: false as const, problem: "응답이 정해진 JSON 형식과 다릅니다." };
@@ -368,9 +370,9 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       const pdf = input.provider === "fake" && !options.pdf ? Buffer.from("%PDF-1.4 fake fixture") : await (options.pdf ?? registeredPdfBytes)(input);
       await runAstra({ state, pdf, save: () => saveState(state), pause: (message) => { throw new Stop("paused-invalid", message); },
         ask: async (step, attempt, system, user, parser, files) => {
-          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(parser), parser, undefined, { files });
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(astraResponseSchema), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX });
           if (!result.ok) throw new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`);
-          return result.value;
+          return result.value.result;
         },
         publish: async (section, questions) => {
           if (!questions.length) return null;

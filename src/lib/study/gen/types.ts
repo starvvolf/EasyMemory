@@ -148,7 +148,7 @@ export type GenCall = {
   user: string;
   reply: string | null;
   error: string | null;
-  usage?: { inputTokens?: number; outputTokens?: number };
+  usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; cacheWriteTokens?: number };
   /** Which criteria went into this call: folder, content hash, files. */
   guide?: { dir: string; version: string; files: string[] };
 };
