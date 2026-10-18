@@ -3,7 +3,7 @@ import { ZodError, z } from "zod";
 import { ModelError } from "@/lib/ai/model";
 import { requireExperimentPrincipal } from "@/lib/local-experiment-auth";
 import { UserDataHttpError } from "@/lib/server-user";
-import { askNote, chatReply, followUp, listNotes, markNote, markSeen, NoteError, removeNote, saveTalk } from "@/lib/study/notes";
+import { ASK_SYSTEM, askNote, chatReply, FOLLOW_SYSTEM, followUp, listNotes, markNote, markSeen, NoteError, removeNote, saveTalk } from "@/lib/study/notes";
 import { boundedJson } from "../mcp-experiment-requests/http";
 import { listExplanations, saveExplanation } from "@/lib/study/explain";
 
@@ -13,11 +13,11 @@ const sourceId = z.string().regex(/^[\w.-]{1,120}$/);
 const page = z.number().int().min(1).max(5000);
 const text = (max: number) => z.string().max(max);
 const body = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("ask"), sourceId, page, quote: text(400).min(1), sentence: text(800).nullish(), pageText: text(20000).nullish(), title: text(300).nullish(), purpose: text(2000).nullish() }),
+  z.object({ action: z.literal("ask"), sourceId, page, quote: text(400).min(1), sentence: text(800).nullish(), pageText: text(20000).nullish(), title: text(300).nullish(), purpose: text(2000).nullish(), style: text(1500).nullish() }),
   z.object({ action: z.literal("mark"), sourceId, page, quote: text(400).min(1), sentence: text(800).nullish() }),
   z.object({ action: z.literal("seen"), sourceId, noteId: z.string().max(60) }),
   z.object({ action: z.literal("remove"), sourceId, noteId: z.string().max(60) }),
-  z.object({ action: z.literal("follow"), sourceId, noteId: z.string().max(60), question: text(1000).min(1), pageText: text(20000).nullish(), title: text(300).nullish() }),
+  z.object({ action: z.literal("follow"), sourceId, noteId: z.string().max(60), question: text(1000).min(1), pageText: text(20000).nullish(), title: text(300).nullish(), style: text(1500).nullish() }),
   z.object({ action: z.literal("chat"), turns: z.array(z.object({ role: z.string().max(20), content: text(40000) })).min(1).max(40) }),
   z.object({ action: z.literal("talk"), sourceId, page, noteId: z.string().max(60).nullish(),
     turns: z.array(z.object({ role: z.enum(["user", "assistant"]), text: text(8000), quote: text(400).nullish(), page: page.optional() })).min(1).max(80),
@@ -45,6 +45,8 @@ export async function GET(request: Request) {
   try {
     await caller(request);
     const params = new URL(request.url).searchParams;
+    // 프롬프트 설정 화면: the fixed instructions, shown read-only next to the learner's own part.
+    if (params.get("prompts")) return NextResponse.json({ ask: ASK_SYSTEM, follow: FOLLOW_SYSTEM });
     const id = sourceId.parse(params.get("sourceId"));
     if (params.get("explain")) return NextResponse.json({ pages: await listExplanations(id) }, { headers: { "Cache-Control": "no-store" } });
     return NextResponse.json({ notes: await listNotes(id) }, { headers: { "Cache-Control": "no-store" } });

@@ -95,7 +95,11 @@ function modelSettings() {
 export type AskInput = {
   sourceId: string; page: number; quote: string; sentence?: string | null;
   pageText?: string | null; title?: string | null; purpose?: string | null;
+  /** The learner's own wording rules (프롬프트 설정); format and grounding rules above still win. */
+  style?: string | null;
 };
+const withStyle = (system: string, style?: string | null) => style?.trim()
+  ? `${system}\n\n[학습자가 정한 답변 방식 — 위의 형식·근거 규칙과 충돌하면 위 규칙을 따른다]\n${clip(style, 1500)}` : system;
 
 const ASK_SCHEMA = {
   type: "object",
@@ -114,7 +118,7 @@ const ASK_SCHEMA = {
   },
 };
 
-const ASK_SYSTEM = [
+export const ASK_SYSTEM = [
   "너는 학습자가 읽고 있는 자료 옆에서 모르는 말을 짧게 풀어 주는 튜터다.",
   "학습자가 [고른 글]을 모른다. [이 쪽 원문]을 근거로, 일반 사전 뜻이 아니라 이 자료에서의 뜻으로 답한다.",
   "원문에 없는 사실(번역어, 일반 지식, 다른 예)은 outsideSource에만 쓴다. lead와 steps에는 원문으로 확인되는 내용만 쓴다.",
@@ -163,11 +167,11 @@ export async function askNote(caller: ModelCaller, input: AskInput): Promise<{ n
   const { model, effort } = modelSettings();
   let reply;
   let wasted = 0;   // a reply that was not JSON still used the plan
-  try { reply = await callModel({ purpose: "note:ask", system: ASK_SYSTEM, user: askUser(input), json: true, schema: ASK_SCHEMA, schemaName: "study_note_answer", model, effort, caller }); }
+  try { reply = await callModel({ purpose: "note:ask", system: withStyle(ASK_SYSTEM, input.style), user: askUser(input), json: true, schema: ASK_SCHEMA, schemaName: "study_note_answer", model, effort, caller }); }
   catch (error) {
     if (!(error instanceof ModelError) || error.code !== "invalid_output") throw error;
     wasted = 1;
-    reply = await callModel({ purpose: "note:ask", system: ASK_SYSTEM, user: `${askUser(input)}\n\n앞선 응답이 JSON 객체가 아니었다. 설명 없이 JSON 객체 하나만 쓴다.`, json: true, schema: ASK_SCHEMA, schemaName: "study_note_answer", model, effort, caller });
+    reply = await callModel({ purpose: "note:ask", system: withStyle(ASK_SYSTEM, input.style), user: `${askUser(input)}\n\n앞선 응답이 JSON 객체가 아니었다. 설명 없이 JSON 객체 하나만 쓴다.`, json: true, schema: ASK_SCHEMA, schemaName: "study_note_answer", model, effort, caller });
   }
   const { kind, answer } = readAnswer(reply.data);
   return locked(async () => {
@@ -223,14 +227,14 @@ export async function removeNote(sourceId: string, noteId: string) {
   });
 }
 
-const FOLLOW_SYSTEM = [
+export const FOLLOW_SYSTEM = [
   "너는 학습자가 읽고 있는 자료 옆에서 돕는 튜터다. 학습자는 [고른 글]에 대한 앞선 답을 보고 이어서 묻는다.",
   "[이 쪽 원문]을 근거로 짧게(보통 2~4문장) 한국어로 답한다. 원문에 없는 내용은 그 문장 앞에 \"원문 밖 설명:\"이라고 밝힌다.",
   "마크다운 기호는 쓰지 않는다. 식은 $...$ 안에 LaTeX로 쓴다.",
 ].join("\n");
 
 /** A follow-up question on a card; the turn is stored with the note. */
-export async function followUp(caller: ModelCaller, input: { sourceId: string; noteId: string; question: string; pageText?: string | null; title?: string | null }) {
+export async function followUp(caller: ModelCaller, input: { sourceId: string; noteId: string; question: string; pageText?: string | null; title?: string | null; style?: string | null }) {
   const question = input.question.trim();
   if (!question) throw new NoteError(400, "질문이 비어 있어요.");
   const note = (await load(input.sourceId)).find((item) => item.id === input.noteId);
@@ -245,7 +249,7 @@ export async function followUp(caller: ModelCaller, input: { sourceId: string; n
     `[새 질문] ${clip(question, 1000)}`,
   ].filter(Boolean).join("\n\n");
   const { model, effort } = modelSettings();
-  const reply = await callModel({ purpose: "note:follow", system: FOLLOW_SYSTEM, user, model, effort, caller });
+  const reply = await callModel({ purpose: "note:follow", system: withStyle(FOLLOW_SYSTEM, input.style), user, model, effort, caller });
   return locked(async () => {
     const notes = await load(input.sourceId);
     const current = notes.find((item) => item.id === input.noteId)!;

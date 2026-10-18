@@ -823,3 +823,17 @@
 /* 답 카드: 곁 패널이 있으면 패널 위에 덮어 연다. 붙은 질문 창(flex 항목)의 z-index가 카드 위로 올라오던 문제도 막는다. */
 .dejipgi .chatwin.docked{z-index:auto}
 .dejipgi .rgrid.noteflt .notecard.onside{z-index:22;overflow:auto;border-radius:14px;box-shadow:var(--shadow),0 16px 40px rgb(0 0 0 / .16);animation:ncard .18s ease-out}
+/* 노트 서랍: 대화 노트는 서랍 안에서 펼쳐 읽기 */
+.dejipgi .nitem.open{cursor:default;border-color:var(--ask);gap:8px}
+.dejipgi .nitem-head{border:0;background:transparent;padding:0;text-align:left;font:inherit;color:inherit;display:flex;flex-direction:column;gap:4px;cursor:pointer}
+.dejipgi .ntalk{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:8px}
+.dejipgi .ntalk-turn{display:grid;grid-template-columns:22px 1fr;gap:6px;font-size:13.5px;line-height:1.6}
+.dejipgi .ntalk-who{font-size:11px;font-weight:700;color:var(--faint);padding-top:2px}
+.dejipgi .ntalk-turn.user .ntalk-text{color:var(--ask);font-weight:600}
+/* 프롬프트 설정 */
+.dejipgi .pset-layer{position:fixed;inset:0;z-index:40;background:rgb(0 0 0 / .25);display:grid;place-items:start center;overflow:auto;padding:min(8vh,60px) 16px 24px}
+.dejipgi .pset{width:min(680px,100%);background:var(--surface);border-radius:16px;box-shadow:var(--shadow),0 20px 50px rgb(0 0 0 / .18);padding:18px;display:flex;flex-direction:column;gap:12px;animation:checkup .2s ease-out}
+.dejipgi .pset-tabs{align-self:flex-start;flex-wrap:wrap}
+.dejipgi .pset-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:5px;vertical-align:2px}
+.dejipgi .pset-pre{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;line-height:1.55;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:300px;overflow:auto;margin:6px 0 0;color:var(--muted)}
+.dejipgi .pset details summary{cursor:pointer;color:var(--muted)}

@@ -255,6 +255,7 @@ export default function DejipgiStudy() {
           mark: async (input) => (await noteCall<{ note: StudyNote }>({ action: "mark", ...input })).note,
           seen: async (sourceId, noteId) => (await noteCall<{ note: StudyNote }>({ action: "seen", sourceId, noteId })).note,
           follow: async (input) => (await noteCall<{ note: StudyNote }>({ action: "follow", ...input })).note,
+          prompts: async () => readJson<{ ask: string; follow: string }>(await fetchExperiment("/api/study-notes?prompts=1"), "기본 지시를 읽지 못했어요."),
           talk: async (input) => (await noteCall<{ note: StudyNote }>({ action: "talk", ...input })).note,
           async explanations(sourceId: string) {
             return (await readJson<{ pages: Array<{ page: number; text: string; at: string }> }>(await fetchExperiment(`/api/study-notes?sourceId=${encodeURIComponent(sourceId)}&explain=1`), "쉬운 설명을 불러오지 못했어요.")).pages;

@@ -81,10 +81,12 @@ export type DejipgiEnv = {
   /** 모르는 것 노트: asked phrases and question-window talks, kept per registered PDF (sourceCatalogId). */
   notes?: {
     list(sourceId: string): Promise<StudyNote[]>;
-    ask(input: { sourceId: string; page: number; quote: string; sentence: string | null; pageText: string; title: string; purpose: string | null }): Promise<{ note: StudyNote; reused: boolean }>;
+    ask(input: { sourceId: string; page: number; quote: string; sentence: string | null; pageText: string; title: string; purpose: string | null; style?: string | null }): Promise<{ note: StudyNote; reused: boolean }>;
     mark(input: { sourceId: string; page: number; quote: string; sentence: string | null }): Promise<StudyNote>;
     seen(sourceId: string, noteId: string): Promise<StudyNote>;
-    follow(input: { sourceId: string; noteId: string; question: string; pageText: string; title: string }): Promise<StudyNote>;
+    follow(input: { sourceId: string; noteId: string; question: string; pageText: string; title: string; style?: string | null }): Promise<StudyNote>;
+    /** Fixed server instructions for the 프롬프트 설정 screen (read-only). */
+    prompts?(): Promise<{ ask: string; follow: string }>;
     talk(input: { sourceId: string; page: number; noteId: string | null; turns: Array<Omit<NoteTurn, "page"> & { page?: number }> }): Promise<StudyNote>;
     /** 쪽마다 쉬운 설명 (곁 패널), made once and kept. */
     explanations?(sourceId: string): Promise<Array<{ page: number; text: string; at: string }>>;

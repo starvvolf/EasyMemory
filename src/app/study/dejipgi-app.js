@@ -597,7 +597,7 @@ function fullscreenButton(){
   label(); store.parentNode.insertBefore(btn, store);
 }
 function tabletButton(){
-  fullscreenButton();
+  fullscreenButton(); promptsButton();
   if (!env.tablet || document.getElementById("tabletBtn")) return;
   const store = document.getElementById("store"); if (!store) return;
   const btn = h("button", { class:"tablet-btn", id:"tabletBtn", title:"같은 와이파이의 태블릿에서 열기", onclick: () => toggleTablet() }, "📱 태블릿");
@@ -1706,7 +1706,93 @@ const EXPLAIN_PRESETS = [
   ["시험 대비", "이 쪽에서 시험에 나올 만한 핵심(정의, 식, 순서, 헷갈리는 짝)을 쉬운 말로 짚어 줘. 무엇을 외워야 하고 무엇을 이해해야 하는지 나눠서. 원문 용어는 그대로 쓴다."],
   ["원문 줄마다", "원문 줄을 짧게 인용하고 바로 아래에 쉬운 말 한두 문장을 붙이는 식으로 이 쪽 전체를 풀어 줘."],
 ];
-const explainAsk = () => (S.plan.prefs && typeof S.plan.prefs.explainAsk === "string" && S.plan.prefs.explainAsk.trim()) || EXPLAIN_ASK;
+/* ----- 프롬프트 설정: every place that asks the model — what is fixed, what is added automatically, and the
+   learner's own part (__plan.prefs.prompts, shared by both computers). Fixed rules always win over the learner's part. ----- */
+const PROMPTS = {
+  explain: { label:"쉬운 설명", when:"쪽을 넘기면 옆 패널에 자동으로 뜨는 설명이에요.", def:EXPLAIN_ASK, presets:EXPLAIN_PRESETS,
+    auto:["자료 이름", "지금 보는 쪽의 원문", "이 쪽 학습목표", "후속 질문 칩용 [다음] 줄 요청"] },
+  chat: { label:"질문 창 답변", when:"질문 창에 직접 물을 때 답하는 방식이에요.", def:"",
+    presets:[["기본", ""], ["더 짧게", "답은 두세 문장 이내로, 핵심만."], ["예시 먼저", "먼저 구체적인 예시나 숫자로 보여 주고, 그다음 원리를 설명해 줘."], ["시험 관점", "답 끝에 이 내용이 시험에서 어떻게 나올 수 있는지 한 줄 덧붙여 줘."]],
+    auto:["자료 이름", "지금 보는 쪽의 원문", "이 쪽 학습목표", "최근 대화 12개", "인용한 원문 구절"] },
+  ask: { label:"용어 물어보기", when:"원문을 드래그해 [물어보기]를 누를 때 나오는 모르는 것 카드예요. 이미 물어본 말은 저장된 답을 다시 보여 줘서, 바꾼 요청은 새로 묻는 말부터 적용돼요.", def:"",
+    presets:[["기본", ""], ["더 쉽게", "중학생도 알아듣게 쉬운 말로. 핵심 답은 한 문장."], ["예시 하나", "덧붙일 한 줄(extra)에 이 자료 맥락의 짧은 예시를 하나 넣어 줘."], ["원어 풀이", "영어 원어 용어는 단어 단위로 뜻을 풀어 줘(예: frame=틀, buffer=임시 저장소)."]],
+    auto:["자료 이름", "학습 목적", "고른 글", "고른 글이 든 문장", "이 쪽 원문"] },
+  follow: { label:"카드에서 이어 묻기", when:"모르는 것 카드 아래에서 이어서 물을 때예요.", def:"",
+    presets:[["기본", ""], ["더 짧게", "한두 문장으로 답해 줘."], ["예시로", "가능하면 예시 하나로 답해 줘."]],
+    auto:["자료 이름", "고른 글", "앞선 답", "이어진 대화", "이 쪽 원문", "새 질문"] },
+};
+function promptOf(k){
+  const p = S.plan.prefs || {};
+  const v = p.prompts && typeof p.prompts[k] === "string" ? p.prompts[k] : (k === "explain" && typeof p.explainAsk === "string" ? p.explainAsk : "");
+  return v.trim();
+}
+const explainAsk = () => promptOf("explain") || EXPLAIN_ASK;
+const PS = { open:false, tab:"explain", draft:{}, fixed:null, preview:null };
+function openPrompts(tab){ PS.open = true; if (tab) PS.tab = tab; PS.preview = null; paintPrompts();
+  if (!PS.fixed && notesApi && notesApi.prompts) notesApi.prompts().then(f => { PS.fixed = f; paintPrompts(); }, () => {}); }
+function savePrompt(k, value){
+  const p = S.plan.prefs || (S.plan.prefs = {}); const v = String(value || "").trim().slice(0, 1500);
+  p.prompts = { ...(p.prompts || {}) };
+  if (!v || v === PROMPTS[k].def) delete p.prompts[k]; else p.prompts[k] = v;
+  if (k === "explain") delete p.explainAsk;
+  Store.savePlan(S.plan); delete PS.draft[k];
+}
+function fixedText(k){
+  if (k === "explain" || k === "chat"){
+    const sample = Chat.prompt({ d:{ title:"(자료 이름)" }, page:"N", objs:[{ statement:"(이 쪽 학습목표)" }] }, "(이 쪽 원문)", k === "chat" ? "(내 요청)" : "");
+    return k === "explain" ? `${sample}\n[요청]\n(내 요청)\n맨 마지막 줄에는 [다음] 줄을 쓴다.` : sample;
+  }
+  if (!PS.fixed) return "불러오는 중…";
+  return `${PS.fixed[k]}\n\n[학습자가 정한 답변 방식 — 위의 형식·근거 규칙과 충돌하면 위 규칙을 따른다]\n(내 요청)`;
+}
+async function buildPreview(k){
+  const R = S.reader, d = S.decks[R.deckId];
+  if ((k === "explain" || k === "chat") && S.view === "read" && d){
+    const c = { d, page:R.page, objs:d.objectives.filter(o => o.pages.includes(R.page)) }, text = await pageText(d, R.page);
+    const mine = (PS.draft[k] ?? promptOf(k)) || PROMPTS[k].def;
+    PS.preview = k === "explain" ? `${Chat.prompt(c, text)}\n[요청]\n${mine}\n맨 마지막 줄에는 [다음] 줄을 쓴다.` : Chat.prompt(c, text, mine) + "\n(이어서 최근 대화와 새 질문)";
+  } else PS.preview = fixedText(k).replace("(내 요청)", (PS.draft[k] ?? promptOf(k)) || "(비어 있음 — 이 부분은 빠져요)");
+  paintPrompts();
+}
+function paintPrompts(){
+  let el = document.getElementById("promptCard");
+  if (!PS.open){ if (el) el.remove(); return; }
+  const k = PS.tab, def = PROMPTS[k], cur = PS.draft[k] ?? (promptOf(k) || def.def);
+  const ta = h("textarea", { class:"ex-prompt", rows:"6", placeholder: def.def ? "" : "비워 두면 기본 방식으로 답해요. 예: 더 짧게, 예시 먼저" });
+  ta.value = cur; ta.addEventListener("input", () => { PS.draft[k] = ta.value; });
+  const custom = !!promptOf(k);
+  const R = S.reader, d = S.decks[R.deckId];
+  const redo = k === "explain" && ask && S.view === "read" && d && Chat.docked;
+  const fresh = h("div", { class:"pset-layer", id:"promptCard", onclick: (e) => { if (e.target === e.currentTarget){ PS.open = false; paintPrompts(); } } },
+    h("aside", { class:"pset", role:"dialog", "aria-label":"프롬프트 설정" },
+      h("div", { class:"row", style:"justify-content:space-between" }, h("strong", { text:"⚙ 프롬프트 설정" }),
+        h("button", { class:"dclose", "aria-label":"닫기", onclick: () => { PS.open = false; paintPrompts(); } }, "✕")),
+      h("div", { class:"dtabs pset-tabs", role:"tablist" }, Object.entries(PROMPTS).map(([key, x]) =>
+        h("button", { role:"tab", class:"dtab", "aria-selected": key === k ? "true" : "false", onclick: () => { PS.tab = key; PS.preview = null; paintPrompts(); } },
+          x.label, promptOf(key) ? h("span", { class:"pset-dot", title:"내 요청 사용 중" }) : null))),
+      h("p", { class:"small muted", text:def.when }),
+      h("div", { class:"field" }, h("label", { text:"내 요청 (바꿀 수 있어요)" }),
+        h("div", { class:"ex-presets" }, def.presets.map(([label, text]) =>
+          h("button", { class:"chip-btn", "aria-pressed": cur.trim() === text ? "true" : "false", onclick: () => { PS.draft[k] = text; paintPrompts(); } }, label))),
+        ta,
+        h("div", { class:"row", style:"gap:6px;justify-content:flex-end" },
+          custom ? h("button", { class:"btn small ghost", onclick: () => { savePrompt(k, def.def); paintPrompts(); toast("기본으로 되돌렸어요."); } }, "기본으로") : null,
+          h("button", { class:"btn small", onclick: () => { savePrompt(k, ta.value); paintPrompts(); toast("저장했어요. 다음 요청부터 적용돼요."); } }, "저장"),
+          redo ? h("button", { class:"btn small primary", onclick: () => { savePrompt(k, ta.value); PS.open = false; paintPrompts();
+            Explain.skip.delete(Explain.sid(d) + ":" + R.page); Explain.go(d, R.page, true); toast("새 요청으로 이 쪽을 다시 설명해요."); } }, "저장하고 이 쪽 다시 설명") : null)),
+      h("div", { class:"field" }, h("label", { text:"자동으로 함께 들어가는 것" }),
+        h("div", { class:"ex-presets" }, def.auto.map(t => h("span", { class:"chip", text:t })))),
+      h("details", null, h("summary", { class:"small", text:"고정 지시 보기 (바꿀 수 없음 · 내 요청보다 우선)" }), h("pre", { class:"pset-pre", text:fixedText(k) })),
+      h("details", { open: PS.preview ? true : null, ontoggle: (e) => { if (e.target.open && !PS.preview) buildPreview(k); } },
+        h("summary", { class:"small", text: (k === "explain" || k === "chat") && S.view === "read" ? "실제로 보내는 모양 (지금 보는 쪽 기준)" : "실제로 보내는 모양" }),
+        h("pre", { class:"pset-pre", text: PS.preview || "만드는 중…" }))));
+  if (el) el.replaceWith(fresh); else root.append(fresh);
+}
+function promptsButton(){
+  if (document.getElementById("promptBtn")) return;
+  const store = document.getElementById("store"); if (!store) return;
+  store.parentNode.insertBefore(h("button", { class:"tablet-btn", id:"promptBtn", title:"설명·답변·용어 풀이를 어떻게 해 줄지 정해요", onclick: () => openPrompts() }, "⚙ 프롬프트"), store);
+}
 /* 쪽마다 쉬운 설명: after 1.5s on a page with enough text, once per page; kept (study-notes/<source>.explain.json)
    so it shows instantly next time. It is not a 모르는 것 note, so it never counts as "물어봄". */
 const Explain = {
@@ -1761,30 +1847,6 @@ ${explainAsk().slice(0, 1500)}
     }
     this.paintNode();
   },
-  editing:false, draft:null,
-  /* ⚙: rewrite how the explanation is asked for. Saved in __plan (both computers); pages already explained keep
-     theirs until "이 쪽 다시 설명". */
-  editor(d, page){
-    const ta = h("textarea", { class:"ex-prompt", rows:"5", "aria-label":"쉬운 설명 요청문" });
-    ta.value = this.draft ?? explainAsk();
-    ta.addEventListener("input", () => { this.draft = ta.value; });
-    const save = (redo) => {
-      const v = ta.value.trim(); const p = S.plan.prefs || (S.plan.prefs = {});
-      if (!v || v === EXPLAIN_ASK) delete p.explainAsk; else p.explainAsk = v.slice(0, 1500);
-      Store.savePlan(S.plan); this.draft = null; this.editing = false;
-      if (redo){ this.skip.delete(this.sid(d) + ":" + page); this.go(d, page, true); } else this.paintNode();
-      toast(redo ? "새 요청문으로 이 쪽을 다시 설명해요." : "요청문을 저장했어요. 새로 여는 쪽부터 적용돼요.");
-    };
-    return h("div", { class:"ex-edit" },
-      h("div", { class:"ex-presets" }, EXPLAIN_PRESETS.map(([label, text]) =>
-        h("button", { class:"chip-btn", "aria-pressed": ta.value.trim() === text ? "true" : "false", onclick: () => { this.draft = text; this.paintNode(); } }, label))),
-      ta,
-      h("p", { class:"small muted", text:"쪽 원문과 학습목표, 기본 규칙(원문 근거, 짧고 쉽게)은 늘 함께 들어가요. 이미 설명한 쪽은 그대로 두고, 새로 여는 쪽부터 적용돼요." }),
-      h("div", { class:"row", style:"gap:6px;justify-content:flex-end" },
-        h("button", { class:"btn small ghost", onclick: () => { this.draft = null; this.editing = false; this.paintNode(); } }, "취소"),
-        h("button", { class:"btn small", onclick: () => save(false) }, "저장"),
-        ask ? h("button", { class:"btn small primary", onclick: () => save(true) }, "저장하고 이 쪽 다시 설명") : null));
-  },
   node(d, page){
     const key = this.sid(d) + ":" + page, e = this.src[this.sid(d)];
     const saved = e && e.map.get(page), run = this.run && this.run.key === key ? this.run : null;
@@ -1792,9 +1854,9 @@ ${explainAsk().slice(0, 1500)}
     auto.addEventListener("change", () => { (S.plan.prefs || (S.plan.prefs = {})).autoExplain = auto.checked; Store.savePlan(S.plan); this.paintNode(); if (auto.checked) this.want(d, page); });
     const head = h("div", { class:"ex-head" }, h("b", { text:`쉬운 설명 · p.${page}` }), h("span", { class:"grow" }),
       ask ? h("label", { class:"ex-auto", title:"쪽을 넘기고 1.5초 머무르면 자동으로 설명해요. 쪽마다 한 번만 만들고 저장해 둬요." }, auto, "자동") : null,
-      h("button", { class:"ex-gear" + (S.plan.prefs && S.plan.prefs.explainAsk ? " on" : ""), "aria-pressed": this.editing ? "true" : "false",
-        title: S.plan.prefs && S.plan.prefs.explainAsk ? "설명 방식 바꾸기 (내 요청문 사용 중)" : "설명 방식 바꾸기", "aria-label":"쉬운 설명 설정",
-        onclick: () => { this.editing = !this.editing; this.draft = null; this.paintNode(); } }, "⚙"));
+      h("button", { class:"ex-gear" + (promptOf("explain") ? " on" : ""), 
+        title: promptOf("explain") ? "설명 방식 바꾸기 (내 요청 사용 중)" : "설명 방식 바꾸기", "aria-label":"쉬운 설명 설정",
+        onclick: () => openPrompts("explain") }, "⚙"));
     const again = (label) => h("button", { class:"chip-btn", onclick: () => { this.skip.delete(key); this.go(d, page, true); } }, label);
     let body;
     if (run) body = h("div", { class:"ex-body streaming", id:"explainBody" }, richLines(shown(run.text) || "쉬운 설명을 쓰는 중…"));
@@ -1804,7 +1866,7 @@ ${explainAsk().slice(0, 1500)}
     else if (this.skip.has(key)) body = h("div", null, h("p", { class:"small muted", text:"글자가 거의 없는 쪽이라 자동 설명은 건너뛰었어요." }), again("그래도 설명 보기"));
     else if (!this.auto()) body = again("이 쪽 쉬운 설명 보기");
     else body = h("p", { class:"small muted ex-wait", text: e && e.status === "loading" ? "저장된 설명을 불러오는 중…" : "잠깐 머무르면 쉬운 설명이 떠요…" });
-    return h("div", { class:"explain", id:"explainCard" }, head, this.editing ? this.editor(d, page) : null, body);
+    return h("div", { class:"explain", id:"explainCard" }, head, body);
   },
   next(d, page){ const e = this.src[this.sid(d)], t = e && e.map.get(page); return t ? splitNext(t).next : []; },
   paintNode(){ const el = document.getElementById("explainCard"), R = S.reader, d = S.decks[R.deckId]; if (el && d) el.replaceWith(this.node(d, R.page)); if (Chat.el && !Chat.busy) Chat.paintSugs(); },
@@ -1984,8 +2046,8 @@ const Chat = {
     const log = this.el.querySelector("#chatLog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
     old.replaceWith(this.sugs(this.context())); if (atEnd) log.scrollTop = log.scrollHeight;
   },
-  prompt(c, text){
-    text = String(text || "").slice(0, 6000);
+  prompt(c, text, style){
+    text = String(text || "").slice(0, 6000); style = String(style || "").trim();
     return `너는 학습자가 지금 읽고 있는 자료를 옆에서 도와주는 튜터다.
 
 규칙
@@ -1995,7 +2057,7 @@ const Chat = {
 - 질문이 이 쪽과 무관하면 짧게 답하고, 이 쪽과 어떻게 이어지는지 한 문장 덧붙인다.
 - 마크다운 기호(#, *, **, -)는 쓰지 않고 평문으로 쓴다. 단계는 "1)" "2)"처럼 적는다.
 ${NEXT_RULE}
-
+${style ? `\n[학습자가 정한 답변 방식 — 위 규칙과 충돌하면 위 규칙을 따른다]\n${style.slice(0, 1500)}\n` : ""}
 [자료] ${c.d.title}
 [지금 보는 쪽 p.${c.page}]
 ${text || "(이 쪽은 추출된 글자가 없다. 이미지 위주의 쪽일 수 있다.)"}
@@ -2053,7 +2115,7 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
     const reply = { role:"assistant", content:"", page:c.page }; this.msgs.push(reply);
     this.busy = true; this.ctl = new AbortController(); this.paint();
     const history = this.msgs.slice(0, -1).slice(-12).map(m => ({ role:m.role, content: m.role === "user" ? `${m.page ? `(p.${m.page}를 보며) ` : ""}${m.quote ? `[원문 인용] “${m.quote}”\n` : ""}${m.content}` : m.content })).filter(m => m.content);
-    const turns = [{ role:"user", content:this.prompt(c, await pageText(c.d, c.page)) }, ...history];
+    const turns = [{ role:"user", content:this.prompt(c, await pageText(c.d, c.page), promptOf("chat")) }, ...history];
     try{
       await ask(turns, { signal:this.ctl.signal, onText: ({ text }) => { reply.content = text; const last = this.el.querySelector("#chatLog .bubble.assistant:last-of-type .btext"); if (last) last.replaceChildren(...richLines(shown(text))); } });
       const sp = splitNext(reply.content); reply.content = sp.body; reply.next = sp.next;
@@ -2120,7 +2182,7 @@ async function askPhrase(d, page, quote, anchor){
   render();
   try{
     const [sentence, text] = await Promise.all([sentenceAround(d, page, quote), pageText(d, page)]);
-    const res = await notesApi.ask({ sourceId:d.sourceCatalogId, page, quote, sentence, pageText:text, title:d.title, purpose:d.purpose || null });
+    const res = await notesApi.ask({ sourceId:d.sourceCatalogId, page, quote, sentence, pageText:text, title:d.title, purpose:d.purpose || null, style: promptOf("ask") || null });
     putNote(d, res.note);
     NT.open = res.note.id; NT.asking = null; NT.again = !!res.reused;
   }catch(e){ NT.err = noteError(e); }
@@ -2141,7 +2203,7 @@ function openNote(d, id, countSeen){
 function closeNote(){ NT.open = null; NT.asking = null; NT.err = null; NT.anchor = null; render(); }
 async function followNote(d, note, q){
   NT.busy = true; NT.err = null; render();
-  try{ putNote(d, await notesApi.follow({ sourceId:d.sourceCatalogId, noteId:note.id, question:q, pageText: await pageText(d, note.page), title:d.title })); }
+  try{ putNote(d, await notesApi.follow({ sourceId:d.sourceCatalogId, noteId:note.id, question:q, pageText: await pageText(d, note.page), title:d.title, style: promptOf("follow") || null })); }
   catch(e){ NT.err = noteError(e); }
   finally{ NT.busy = false; if (!disposed) render(); }
 }
@@ -2566,7 +2628,11 @@ function tocList(d){
 }
 /* 모르는 것 서랍: ✕, Esc, or a click anywhere outside it closes it */
 function closeDrawer(){ if (!NT.drawer) return; NT.drawer = false; paintDrawer(); if (S.view === "read") render(); }
-on(document, "keydown", (e) => { if (e.key === "Escape" && NT.drawer && !e.isComposing){ e.preventDefault(); closeDrawer(); } });
+on(document, "keydown", (e) => {
+  if (e.key !== "Escape" || e.isComposing) return;
+  if (PS.open){ e.preventDefault(); PS.open = false; paintPrompts(); return; }
+  if (NT.drawer){ e.preventDefault(); closeDrawer(); }
+});
 on(document, "pointerdown", (e) => {
   if (!NT.drawer || !e.target.closest) return;
   if (e.target.closest("#notesDrawer, [data-notes-toggle], .ncard, .selpop, .chatwin")) return;
@@ -2579,10 +2645,22 @@ function paintDrawer(){
   const filters = [["all","전체"],["weak","약점"],["term","용어"],["procedure","절차"],["concept","개념"],["talk","대화"],["marked","아직 안 물어봄"]];
   const pass = (n) => NT.filter === "all" || (NT.filter === "weak" ? n.seen >= NOTE_WEAK : NT.filter === "marked" ? n.status === "marked" : n.kind === NT.filter && n.status !== "marked");
   const list = noteList(d).filter(pass).sort((a, b) => b.seen - a.seen || Date.parse(b.askedAt) - Date.parse(a.askedAt));
+  // A saved conversation opens right here to re-read (reading is the drawer's job); "질문 창에서 이어가기" continues it.
+  const talkView = (n) => h("div", { class:"ntalk" },
+    n.thread.slice(-12).map(t => h("div", { class:"ntalk-turn " + t.role }, h("span", { class:"ntalk-who", text: t.role === "user" ? "나" : "답" }),
+      h("div", { class:"ntalk-text" }, t.role === "assistant" ? richLines(shown(t.text)) : t.text))),
+    h("div", { class:"row", style:"gap:6px;justify-content:flex-end;margin-top:4px" },
+      h("button", { class:"btn small ghost", onclick: () => { NT.drawer = false; paintDrawer(); if (S.reader.page !== n.page) goPage(n.page); } }, `p.${n.page}로 가기`),
+      h("button", { class:"btn small", onclick: () => { NT.drawer = false; paintDrawer(); if (S.reader.page !== n.page) goPage(n.page); Chat.openTalk(d, n); } }, "질문 창에서 이어가기")));
   const item = (n) => { const [kl, kc] = NOTE_KIND[n.kind];
+    if (n.kind === "talk" && NT.talkOpen === n.id) return h("div", { class:"nitem open" },
+      h("button", { class:"nitem-head", "aria-expanded":"true", onclick: () => { NT.talkOpen = null; paintDrawer(); } },
+        h("div", { class:"t" }, h("span", { class:"q", text:n.quote }), h("span", { class:`nk ${kc}`, text:kl })),
+        h("div", { class:"m" }, h("span", { text:`p.${n.page}` }), h("span", { text:agoText(n.askedAt) }))),
+      talkView(n));
     return h("button", { class:"nitem", onclick: () => {
+      if (n.kind === "talk"){ NT.talkOpen = n.id; paintDrawer(); return; }
       NT.drawer = false; paintDrawer();
-      if (n.kind === "talk"){ if (S.reader.page !== n.page) goPage(n.page); Chat.openTalk(d, n); return; }
       if (S.reader.page !== n.page) goPage(n.page);
       openNote(d, n.id, true);
       setTimeout(() => { const m = document.querySelector(`.nu[data-note="${n.id}"]`); if (m) m.scrollIntoView({ block:"center", behavior:"smooth" }); }, 400);
@@ -3240,7 +3318,7 @@ return () => {
   clearTimeout(pollTimer);
   for (const P of Object.values(S.pdf)) if (P.doc) P.doc.destroy();
   root.querySelectorAll("#toast, .chatwin").forEach(el => el.remove());
-  document.querySelectorAll("#tabletBtn, #tabletCard, #fsBtn").forEach(el => el.remove()); clearInterval(TB.timer);
+  document.querySelectorAll("#tabletBtn, #tabletCard, #fsBtn, #promptBtn, #promptCard").forEach(el => el.remove()); clearInterval(TB.timer);
   delete root.dataset.view;
 };
 }
