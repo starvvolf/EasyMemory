@@ -785,3 +785,15 @@
 @keyframes checkin{from{opacity:0}}
 @keyframes checkup{from{opacity:0;transform:translateY(14px) scale(.985)}}
 @media (prefers-reduced-motion:reduce){.dejipgi .checklayer,.dejipgi .checkbox{animation:none}}
+/* 쉬운 설명 ⚙ 요청문 편집 */
+.dejipgi .ex-gear{border:0;background:transparent;color:var(--faint);font-size:14px;line-height:1;padding:3px 4px;border-radius:6px;cursor:pointer}
+.dejipgi .ex-gear:hover,.dejipgi .ex-gear[aria-pressed="true"]{color:var(--ink);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.dejipgi .ex-gear.on{color:var(--accent)}
+.dejipgi .ex-edit{display:flex;flex-direction:column;gap:8px;margin:2px 0 10px;padding:10px;border-radius:10px;background:var(--surface);border:1px solid var(--line)}
+.dejipgi .ex-presets{display:flex;flex-wrap:wrap;gap:5px}
+.dejipgi .ex-prompt{width:100%;resize:vertical;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;line-height:1.55;background:var(--surface);color:var(--ink)}
+/* 좁은 곁 패널: 입력칸은 평소 한 줄, 누르거나 글이 있으면 넓게 */
+.dejipgi .chatwin.docked .chat-foot{padding:8px}
+.dejipgi .chatwin.docked .chat-foot textarea{flex:none;box-sizing:border-box;height:40px;min-height:40px;max-height:none;transition:height .22s ease}
+.dejipgi .chatwin.docked .chat-foot:focus-within textarea,.dejipgi .chatwin.docked .chat-foot textarea:not(:placeholder-shown){height:min(42vh,240px)}
+@media (prefers-reduced-motion:reduce){.dejipgi .chatwin.docked .chat-foot textarea{transition:none}}

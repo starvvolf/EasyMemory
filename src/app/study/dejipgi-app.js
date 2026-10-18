@@ -1631,6 +1631,16 @@ function pageAction(c){
   const nxt = nextPageWithItems(c.d, c.page);
   return nxt ? { label:`문제 있는 다음 쪽 · p.${nxt} →`, run: () => goPage(nxt) } : null;
 }
+/* 쉬운 설명 요청문: the learner can rewrite it (⚙ on the card); the [다음] line for follow-up chips is always added. */
+const EXPLAIN_ASK = `이 쪽을 처음 보는 사람에게 쉽게 설명해 줘. 첫 문장은 이 쪽이 무엇에 대한 것인지, 이어서 핵심을 2~4문장으로. 어려운 용어는 원문 그대로 쓰고 바로 뒤 괄호에 쉬운 풀이를 붙인다. 마지막에 "한 줄 요약: "으로 시작하는 줄을 쓴다.`;
+const EXPLAIN_PRESETS = [
+  ["기본", EXPLAIN_ASK],
+  ["아주 짧게", "이 쪽의 핵심만 두세 문장으로 아주 쉽게 설명해 줘. 어려운 용어는 원문 그대로 쓰고 괄호에 쉬운 풀이를 붙인다."],
+  ["예시 위주", "이 쪽을 일상적인 비유나 구체적인 예시(숫자 예시 포함) 하나로 쉽게 설명해 줘. 원문 용어는 그대로 쓰고 괄호에 풀이를 붙인다. 마지막에 \"한 줄 요약: \"으로 시작하는 줄을 쓴다."],
+  ["시험 대비", "이 쪽에서 시험에 나올 만한 핵심(정의, 식, 순서, 헷갈리는 짝)을 쉬운 말로 짚어 줘. 무엇을 외워야 하고 무엇을 이해해야 하는지 나눠서. 원문 용어는 그대로 쓴다."],
+  ["원문 줄마다", "원문 줄을 짧게 인용하고 바로 아래에 쉬운 말 한두 문장을 붙이는 식으로 이 쪽 전체를 풀어 줘."],
+];
+const explainAsk = () => (S.plan.prefs && typeof S.plan.prefs.explainAsk === "string" && S.plan.prefs.explainAsk.trim()) || EXPLAIN_ASK;
 /* 쪽마다 쉬운 설명: after 1.5s on a page with enough text, once per page; kept (study-notes/<source>.explain.json)
    so it shows instantly next time. It is not a 모르는 것 note, so it never counts as "물어봄". */
 const Explain = {
@@ -1667,7 +1677,8 @@ const Explain = {
     this.paintNode();
     const prompt = Chat.prompt({ d, page, objs }, text) + `
 [요청]
-이 쪽을 처음 보는 사람에게 쉽게 설명해 줘. 첫 문장은 이 쪽이 무엇에 대한 것인지, 이어서 핵심을 2~4문장으로. 어려운 용어는 원문 그대로 쓰고 바로 뒤 괄호에 쉬운 풀이를 붙인다. 이어서 "한 줄 요약: "으로 시작하는 줄을 쓰고, 그 다음 줄에 [다음] 줄을 쓴다.`;
+${explainAsk().slice(0, 1500)}
+맨 마지막 줄에는 [다음] 줄을 쓴다.`;
     try{
       await ask([{ role:"user", content:prompt }], { signal:run.ctl.signal, onText: ({ text:t }) => { run.text = t; this.paintBody(); } });
       if (this.run !== run) return;
@@ -1684,23 +1695,50 @@ const Explain = {
     }
     this.paintNode();
   },
+  editing:false, draft:null,
+  /* ⚙: rewrite how the explanation is asked for. Saved in __plan (both computers); pages already explained keep
+     theirs until "이 쪽 다시 설명". */
+  editor(d, page){
+    const ta = h("textarea", { class:"ex-prompt", rows:"5", "aria-label":"쉬운 설명 요청문" });
+    ta.value = this.draft ?? explainAsk();
+    ta.addEventListener("input", () => { this.draft = ta.value; });
+    const save = (redo) => {
+      const v = ta.value.trim(); const p = S.plan.prefs || (S.plan.prefs = {});
+      if (!v || v === EXPLAIN_ASK) delete p.explainAsk; else p.explainAsk = v.slice(0, 1500);
+      Store.savePlan(S.plan); this.draft = null; this.editing = false;
+      if (redo){ this.skip.delete(this.sid(d) + ":" + page); this.go(d, page, true); } else this.paintNode();
+      toast(redo ? "새 요청문으로 이 쪽을 다시 설명해요." : "요청문을 저장했어요. 새로 여는 쪽부터 적용돼요.");
+    };
+    return h("div", { class:"ex-edit" },
+      h("div", { class:"ex-presets" }, EXPLAIN_PRESETS.map(([label, text]) =>
+        h("button", { class:"chip-btn", "aria-pressed": ta.value.trim() === text ? "true" : "false", onclick: () => { this.draft = text; this.paintNode(); } }, label))),
+      ta,
+      h("p", { class:"small muted", text:"쪽 원문과 학습목표, 기본 규칙(원문 근거, 짧고 쉽게)은 늘 함께 들어가요. 이미 설명한 쪽은 그대로 두고, 새로 여는 쪽부터 적용돼요." }),
+      h("div", { class:"row", style:"gap:6px;justify-content:flex-end" },
+        h("button", { class:"btn small ghost", onclick: () => { this.draft = null; this.editing = false; this.paintNode(); } }, "취소"),
+        h("button", { class:"btn small", onclick: () => save(false) }, "저장"),
+        ask ? h("button", { class:"btn small primary", onclick: () => save(true) }, "저장하고 이 쪽 다시 설명") : null));
+  },
   node(d, page){
     const key = this.sid(d) + ":" + page, e = this.src[this.sid(d)];
     const saved = e && e.map.get(page), run = this.run && this.run.key === key ? this.run : null;
     const auto = h("input", { type:"checkbox" }); auto.checked = this.auto();
     auto.addEventListener("change", () => { (S.plan.prefs || (S.plan.prefs = {})).autoExplain = auto.checked; Store.savePlan(S.plan); this.paintNode(); if (auto.checked) this.want(d, page); });
     const head = h("div", { class:"ex-head" }, h("b", { text:`쉬운 설명 · p.${page}` }), h("span", { class:"grow" }),
-      ask ? h("label", { class:"ex-auto", title:"쪽을 넘기고 1.5초 머무르면 자동으로 설명해요. 쪽마다 한 번만 만들고 저장해 둬요." }, auto, "자동") : null);
+      ask ? h("label", { class:"ex-auto", title:"쪽을 넘기고 1.5초 머무르면 자동으로 설명해요. 쪽마다 한 번만 만들고 저장해 둬요." }, auto, "자동") : null,
+      h("button", { class:"ex-gear" + (S.plan.prefs && S.plan.prefs.explainAsk ? " on" : ""), "aria-pressed": this.editing ? "true" : "false",
+        title: S.plan.prefs && S.plan.prefs.explainAsk ? "설명 방식 바꾸기 (내 요청문 사용 중)" : "설명 방식 바꾸기", "aria-label":"쉬운 설명 설정",
+        onclick: () => { this.editing = !this.editing; this.draft = null; this.paintNode(); } }, "⚙"));
     const again = (label) => h("button", { class:"chip-btn", onclick: () => { this.skip.delete(key); this.go(d, page, true); } }, label);
     let body;
-    if (saved) body = h("div", { class:"ex-body", id:"explainBody" }, richLines(shown(saved)));
-    else if (run) body = h("div", { class:"ex-body streaming", id:"explainBody" }, richLines(shown(run.text) || "쉬운 설명을 쓰는 중…"));
+    if (run) body = h("div", { class:"ex-body streaming", id:"explainBody" }, richLines(shown(run.text) || "쉬운 설명을 쓰는 중…"));
+    else if (saved) body = h("div", { class:"ex-body", id:"explainBody" }, richLines(shown(saved)));
     else if (!ask) body = h("p", { class:"small muted", text:"질문 답변이 연결되면 쪽마다 쉬운 설명이 여기 바로 떠요." });
     else if (this.err && this.err.key === key) body = h("div", null, h("p", { class:"check", text:this.err.text }), again("다시 설명 받기"));
     else if (this.skip.has(key)) body = h("div", null, h("p", { class:"small muted", text:"글자가 거의 없는 쪽이라 자동 설명은 건너뛰었어요." }), again("그래도 설명 보기"));
     else if (!this.auto()) body = again("이 쪽 쉬운 설명 보기");
     else body = h("p", { class:"small muted ex-wait", text: e && e.status === "loading" ? "저장된 설명을 불러오는 중…" : "잠깐 머무르면 쉬운 설명이 떠요…" });
-    return h("div", { class:"explain", id:"explainCard" }, head, body);
+    return h("div", { class:"explain", id:"explainCard" }, head, this.editing ? this.editor(d, page) : null, body);
   },
   next(d, page){ const e = this.src[this.sid(d)], t = e && e.map.get(page); return t ? splitNext(t).next : []; },
   paintNode(){ const el = document.getElementById("explainCard"), R = S.reader, d = S.decks[R.deckId]; if (el && d) el.replaceWith(this.node(d, R.page)); if (Chat.el && !Chat.busy) Chat.paintSugs(); },
@@ -1721,6 +1759,7 @@ const Chat = {
     if (!this.el) this.build();
     const log = this.el.querySelector("#chatLog"), top = log ? log.scrollTop : 0;
     this.docked = true; this.el.classList.add("docked"); this.el.hidden = false;
+    this.el.querySelector("textarea").placeholder = "물어보기 · Enter 보내기";
     for (const k of ["left","top","width","height"]) this.el.style[k] = "";
     slot.append(this.el); this.paint();
     if (log && top) log.scrollTop = top;
@@ -1729,6 +1768,7 @@ const Chat = {
   undock(){
     if (!this.el || !this.docked) return;
     this.docked = false; this.el.classList.remove("docked"); this.el.hidden = true;
+    this.el.querySelector("textarea").placeholder = "지금 보는 쪽에 대해 물어보세요 (Enter 보내기, Shift+Enter 줄바꿈)";
     root.append(this.el); this.setMode("normal");
   },
   setMode(m){
