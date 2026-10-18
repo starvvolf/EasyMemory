@@ -9,7 +9,7 @@ import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type PlannerDeck } from "./dejipgi-app.js";
-import { DEFAULT_GEN_MODELS, defaultChosen, genOutline, mapDigest, type GenState } from "@/lib/study/gen/types";
+import { DEFAULT_GEN_MODELS, defaultChosen, genOutline, mapDigest, type Engine, type GenState } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
 import { coachCards, type CoachInput } from "@/lib/study/coach";
 import { buildLexicon, chunkAt, findTerms, importantTerms } from "@/lib/study/chunk";
@@ -79,7 +79,7 @@ export default function DejipgiStudy() {
     // ---- engine v2 (/api/lab/gen) ----
     const isGen = (id: string) => /^gen_[a-f0-9]{32}$/.test(id);
     const genState = async (id: string) => (await readJson<{ gen: GenState; label: string }>(await fetchExperiment(`/api/lab/gen/${id}`), "만드는 상태를 읽지 못했어요."));
-    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[], engine?: "v2" | "v3") => {
+    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[], engine?: Engine) => {
       const pageNumbers = Array.from({ length: Math.max(1, to - from + 1) }, (_, index) => from + index);
       const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
         method: "POST", headers: { "Content-Type": "application/json" },

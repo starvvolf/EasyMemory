@@ -538,7 +538,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       });
       if (progressTimer) clearTimeout(progressTimer);
       if (astraFailure) throw astraFailure;
-      if (state.status === "done") { mark("done"); await saveState(state); }
+      // runAstra changes the status itself (TS still sees "running" here).
+      if ((state.status as string) === "done") { mark("done"); await saveState(state); }
       return state;
     }
     loaded = await (options.pages ?? registeredPages)(input);
