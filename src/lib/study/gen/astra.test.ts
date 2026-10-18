@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { answerInPlace, astraFakeReply, astraJsonSchema, astraResponseSchema, getAstraReadingView, runAstra, scopePlan, type AstraAsk } from "./astra.ts";
+import { answerInPlace, astraFakeReply, candidateHints, valueAsShort, astraJsonSchema, astraResponseSchema, getAstraReadingView, runAstra, scopePlan, type AstraAsk } from "./astra.ts";
 import { confirmObjectives, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import type { GenState, GenStep } from "./types.ts";
 
@@ -57,12 +57,12 @@ test("astra: 확인 후 전체 흐름, 반복된 관계 노출은 독립 풀이 
   }
 });
 
-test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 공개 문항을 바꾸지 않는다", async () => {
+test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 한 번 고쳐 통과할 때만 공개 문항을 바꾼다", async () => {
   const state: GenState = { id: "gen_" + "0".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2], purpose: "core", note: "", provider: "fake", engine: "astra", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
   let priority = 2;
   let active = 0, peak = 0, stopped = false, failOnce = true;
   const calls: string[] = [], documents = new Map<string, string>();
-  const ask: AstraAsk = async (step, _attempt, _system, user, parser) => {
+  const ask: AstraAsk = async (step, attempt, _system, user, parser) => {
     assert.equal(stopped, false, "실패 후 새 요청을 시작하지 않는다");
     active++; peak = Math.max(peak, active); calls.push(step);
     try {
@@ -82,7 +82,7 @@ test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 �
       }
       if (step === "astra-review") {
         result.coverage = input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: input.candidates.filter((q: { practiceIds: string[] }) => q.practiceIds.includes(id)).map((q: { objectiveId: string }) => q.objectiveId), status: "covered", reason: "fixture" }));
-        if (input.scope === "global") {
+        if (input.scope === "global" && attempt === 1) {
           for (const item of result.items) if (item.objectiveId === "s2-o1") { item.status = "revise"; item.reasons = ["후발 조건 누락 발견"]; }
           result.missedContent = [{ pages: [1], reason: "신고 범위 밖의 추가 과제" }];
         }
@@ -102,8 +102,9 @@ test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 �
   await runAstra(context);
   assert.equal(calls.filter(s => s === "astra-plan").length, planCalls, "계획 재호출 없이 재개한다");
   assert.equal(state.status, "done");
-  assert.deepEqual(JSON.parse(documents.get("s2")!)[0], first, "전역 검수 후에도 공개 문항은 불변이다");
-  assert.ok(state.astra!.warnings.some(w => w.ref === "s2-o1" && w.message.includes("후발")));
+  assert.ok(state.astra!.repair!.ids.includes("s2-o1"), "전역 검수가 돌려보낸 공개 문항도 한 번 고쳐 쓴다");
+  assert.equal(JSON.parse(documents.get("s2")!)[0].id, first.id);
+  assert.ok(state.astra!.warnings.some(w => w.ref === "s2-o1" && w.code === "published-revised" && w.message.includes("후발")), "고친 문항이 통과해 바꿨고, 바꾼 사실을 남긴다");
   assert.equal(state.sections.flatMap(s => s.design!.objectives).length, 12, "신고 재생성은 미계획 과제를 덧붙이지 않는다");
   assert.deepEqual(JSON.parse(documents.get("s1")!).map((q: { id: string }) => q.id), Array.from({ length: 9 }, (_, i) => `q-s1-o${i + 1}`));
   const view = getAstraReadingView(state, 2);
@@ -140,4 +141,17 @@ test("astra 답 칸: 응답 형식에 칸 설명이 실리고, self-check 모범
   assert.deepEqual([moved.answer.accepted, moved.answer.after, warnings.length], [["M = [[1,0,0,-1],[0,0,-1,-1]]"], null, 1]);
   const unit = { ...base, answer: { kind: "short" as const, options: null, correctIndex: null, accepted: null, before: null, after: "cm", explanation: "e" } };
   assert.equal(answerInPlace(unit, warnings), unit);
+});
+
+test("astra 형식: 값 하나인 자기확인은 단답으로, 정답 보기만 긴 것·여러 요구를 묶은 것은 검수에 힌트로", () => {
+  const base = { objectiveId: "s1-o1", practiceIds: ["p1"], conceptIds: ["c1"], checkedSkill: "k", requiredPoints: ["r"], evidence: [{ page: 1, kind: "text" as const, quote: "q", supports: "s" }] };
+  const stem = (text: string) => [{ kind: "text" as const, text, latex: null, rows: null }];
+  const value = valueAsShort({ ...base, stem: stem("보기 좌표를 구하라."), answer: { kind: "self-check", options: null, correctIndex: null, accepted: ["(5, −3, 4)"], before: null, after: null, explanation: "e" } });
+  assert.equal(value.answer.kind, "short");
+  assert.ok(value.answer.accepted!.includes("(5,-3,4)"));
+  const prose = { ...base, stem: stem("왜 그런지 설명하라."), answer: { kind: "self-check" as const, options: null, correctIndex: null, accepted: ["깊이 판별에 z가 필요하기 때문이다."], before: null, after: null, explanation: "e" } };
+  assert.equal(valueAsShort(prose), prose);
+  const long = { text: "평행 투영은 투영선이 평행해 상대적 비율을 보존하므로 도면에 맞다", latex: null };
+  const hints = candidateHints({ ...base, stem: stem("u를 구하고, 좌표를 구하고, 순서를 쓰시오."), answer: { kind: "choice", options: [long, { text: "원근", latex: null }, { text: "둘 다", latex: null }, { text: "없음", latex: null }], correctIndex: 0, accepted: null, before: null, after: null, explanation: "e" } });
+  assert.equal(hints.length, 2);
 });
