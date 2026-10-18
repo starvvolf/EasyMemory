@@ -2070,6 +2070,7 @@ function loadNotes(d){
     .then(() => { if (!disposed && (S.view === "read" || (!S.session && S.view !== "create"))) render(); });
 }
 function putNote(d, note){
+  if (!note) return;
   const e = NT.src[d.sourceCatalogId] || (NT.src[d.sourceCatalogId] = { status:"ready", list:[] });
   const i = e.list.findIndex(n => n.id === note.id);
   if (i >= 0) e.list[i] = note; else e.list.push(note);
@@ -2469,6 +2470,15 @@ function renderNoteCard(d){
 }
 /* line the card up with its text and draw the link from the page's right edge (wide layout only) */
 function placeNoteCard(){
+  // Side panel layout (slides, wide screens): the answer card opens over the panel, like a page laid on top of it,
+  // instead of floating in the corner where the docked question window is.
+  const side = document.querySelector(".rside"), flt = document.querySelector(".rgrid.noteflt .notecard");
+  if (flt){
+    flt.classList.toggle("onside", !!side);
+    if (side){ const r = side.getBoundingClientRect();
+      Object.assign(flt.style, { left:r.left + "px", top:Math.max(8, r.top) + "px", width:r.width + "px", height:Math.min(r.height, innerHeight - Math.max(8, r.top) - 8) + "px", right:"auto", bottom:"auto" }); }
+    else for (const k of ["left","top","width","height","right","bottom"]) flt.style[k] = "";
+  }
   const grid = document.querySelector(".rgrid.noteopen"); if (!grid) return;
   const card = grid.querySelector(".notecard"), box = document.getElementById("pagebox");
   grid.querySelectorAll(".nlink,.ntick").forEach(el => el.remove());

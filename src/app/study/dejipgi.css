@@ -820,3 +820,6 @@
 .dejipgi .tablet-url.alt{font-size:13px;color:var(--muted);font-weight:500}
 .dejipgi .tablet-code{margin-top:4px}
 .dejipgi .tablet-code b{font-family:var(--mono);font-size:28px;letter-spacing:.12em;color:var(--ink)}
+/* 답 카드: 곁 패널이 있으면 패널 위에 덮어 연다. 붙은 질문 창(flex 항목)의 z-index가 카드 위로 올라오던 문제도 막는다. */
+.dejipgi .chatwin.docked{z-index:auto}
+.dejipgi .rgrid.noteflt .notecard.onside{z-index:22;overflow:auto;border-radius:14px;box-shadow:var(--shadow),0 16px 40px rgb(0 0 0 / .16);animation:ncard .18s ease-out}
