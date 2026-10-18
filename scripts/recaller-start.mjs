@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const run = (command, args, options = {}) => spawnSync(command, args, { cwd: root, stdio: "inherit", shell: process.platform === "win32", ...options });
+// Node itself runs without a shell: its path is often "C:\\Program Files\\nodejs\\node.exe", and cmd splits it at the space.
+const node = (script, args = []) => spawnSync(process.execPath, [script, ...args], { cwd: root, stdio: "inherit" });
 const quiet = (command, args) => (spawnSync(command, args, { cwd: root, encoding: "utf8", shell: process.platform === "win32" }).stdout ?? "").trim();
 
 console.log("① 코드 받기");
@@ -21,10 +23,10 @@ if (!existsSync(path.join(root, "node_modules")) || (before !== after && quiet("
 
 console.log("③ 데이터 받기");
 const sync = path.join(root, "scripts", "recaller-sync.mjs");
-if (run(process.execPath, [sync, "setup"]).status !== 0 || run(process.execPath, [sync, "pull"]).status !== 0) process.exit(1);
+if (node(sync, ["setup"]).status !== 0 || node(sync, ["pull"]).status !== 0) process.exit(1);
 
 console.log("④ 앱 켜기");
-if (run(process.execPath, [path.join(root, "scripts", "open-study-forge-local.mjs")]).status !== 0) process.exit(1);
+if (node(path.join(root, "scripts", "open-study-forge-local.mjs")).status !== 0) process.exit(1);
 const url = "http://127.0.0.1:3000/study";
 if (process.platform === "win32") spawnSync("cmd", ["/c", "start", "", url], { stdio: "ignore" });
 console.log(`   ${url} 을 열었어요. 다 쓰면 'Recaller 끝내기'를 눌러 주세요.`);
