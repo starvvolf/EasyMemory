@@ -28,16 +28,19 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
   const instructions = request.schema && !useSchema
     ? `${request.system}\n\n응답은 다음 JSON Schema를 따르는 JSON 객체 하나만 쓴다.\n${JSON.stringify(request.schema)}`
     : request.system;
+  // JSON mode (json_object) is refused unless the input itself mentions JSON; the instructions do not count.
+  const jsonMode = !useSchema && Boolean(request.json || request.schema);
+  const userText = jsonMode && !/json/i.test(request.user) ? `${request.user}\n\n(응답은 JSON 객체 하나로)` : request.user;
   return {
     model: request.model ?? "gpt-6-sol",
     instructions,
     // With page images the user turn becomes text plus one labelled image per page.
     input: [{ role: "user", content: request.images?.length || request.files?.length
-      ? [{ type: "input_text" as const, text: request.user },
+      ? [{ type: "input_text" as const, text: userText },
           ...(request.files ?? []).map((file) => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
           ...(request.images ?? []).flatMap((image) => [
             { type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: "high" as const }])]
-      : request.user }],
+      : userText }],
     store: false,
     stream: true,
     ...(request.effort ? { reasoning: { effort: request.effort } } : {}),

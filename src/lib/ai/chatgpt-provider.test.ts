@@ -91,7 +91,10 @@ test("Responses 요청은 독립 입력·비저장·스트리밍을 사용하고
   assert.equal(body.store, false);
   assert.equal(body.stream, true);
   assert.equal(body.instructions, "rule");
-  assert.deepEqual(body.input, [{ role: "user", content: "context" }]);
+  // JSON mode needs the word in the input itself (instructions do not count), so it is added once when missing.
+  assert.deepEqual(body.input, [{ role: "user", content: "context\n\n(응답은 JSON 객체 하나로)" }]);
+  assert.deepEqual(responseRequest({ purpose: "test", system: "rule", user: "JSON으로 답해", caller: { uid: "u" }, json: true }).input, [{ role: "user", content: "JSON으로 답해" }]);
+  assert.deepEqual(responseRequest({ purpose: "test", system: "rule", user: "context", caller: { uid: "u" } }).input, [{ role: "user", content: "context" }]);
   assert.ok("text" in body);
   assert.deepEqual(body.text, { format: { type: "json_object" } });
   assert.ok(!JSON.stringify(body).includes("previous_response_id"));

@@ -185,6 +185,12 @@ function applyFilters(deck){
 
 /* ---------- question window answers: not connected yet (a paid call; wired only after the user approves) ---------- */
 const ask = typeof env.ask === "function" ? env.ask : null;
+/* Long requests (용어 지도·번역) show the server's own reason, so a failure can be told apart from a dropped line. */
+function composeErrorCopy(e){
+  const c = e && e.code;
+  if (c === "rate_limited" || c === "cancelled") return sampleErrorCopy(e);
+  return e && e.message && !/fetch|network/i.test(e.message) ? e.message : sampleErrorCopy(e);
+}
 function sampleErrorCopy(e){
   const c = e && e.code;
   if (c === "rate_limited") return "지금은 요청이 많거나 사용량 한도에 닿았어요. 잠시 뒤 다시 물어봐 주세요.";
@@ -1979,7 +1985,7 @@ const Trans = {
     })();
     TR.run.set(k, task);
     if (!quiet) this.repaint(d, n);
-    try{ await task; }catch(err){ TR.err[k] = err instanceof SyntaxError ? "번역을 읽지 못했어요." : sampleErrorCopy(err); }
+    try{ await task; }catch(err){ TR.err[k] = err instanceof SyntaxError ? "번역을 읽지 못했어요." : composeErrorCopy(err); }
     TR.run.delete(k);
     this.repaint(d, n);
     // Prepare the next page while this one is read.
@@ -2089,7 +2095,7 @@ const TermMap = {
       const e = Explain.src[Explain.sid(d)]; if (e) e.goals.set(this.key(d), JSON.stringify(map));
       if (notesOn(d) && notesApi.saveExplanation) notesApi.saveExplanation(Explain.sid(d), this.range(d)[0], JSON.stringify(map), this.key(d)).catch(() => {});
     }catch(err){
-      TM.err = { key:k, text: err instanceof SyntaxError || (err && err.message === "빈 지도") ? "지도를 읽지 못했어요. 다시 만들어 주세요." : sampleErrorCopy(err) };
+      TM.err = { key:k, text: err instanceof SyntaxError || (err && err.message === "빈 지도") ? "지도를 읽지 못했어요. 다시 만들어 주세요." : composeErrorCopy(err) };
     }
     TM.run = null; this.paint();
   },
