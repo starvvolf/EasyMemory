@@ -268,7 +268,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
   const selected = chosen ?? new Set(defaultChosen(gen.input.purpose, objectives));
   const toggle = (objectiveId: string) => { const next = new Set(selected); if (next.has(objectiveId)) next.delete(objectiveId); else next.add(objectiveId); setChosen(next); };
   const totalMs = calls.reduce((sum, item) => sum + item.ms, 0);
-  const tokens = calls.reduce((sum, item) => ({ input: sum.input + (item.usage?.inputTokens ?? 0), output: sum.output + (item.usage?.outputTokens ?? 0) }), { input: 0, output: 0 });
+  const tokens = calls.reduce((sum, item) => ({ input: sum.input + (item.usage?.inputTokens ?? 0), output: sum.output + (item.usage?.outputTokens ?? 0), cached: sum.cached + (item.usage?.cachedTokens ?? 0) }), { input: 0, output: 0, cached: 0 });
   const formats = [...new Set(calls.map((item) => item.format).filter(Boolean))];
 
   const confirm = async () => {
@@ -296,7 +296,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
         {label && <span className="muted"> · {label}</span>}
         {gen.images && <div className="muted">그림 쪽 읽기: {gen.images.done.length}/{gen.images.pages.length}쪽{gen.images.failed.length ? ` · 실패 p.${gen.images.failed.join(", ")}` : ""}</div>}
         {gen.forkOf && <div className="muted">고정 재실행({FORK_LABEL[gen.forkOf.from]}) · 기준 실행 {gen.forkOf.genId.slice(0, 12)}… 의 목차·분류{gen.forkOf.from === "author" ? "·목표" : ""}를 그대로 썼어요. 호출·시간·토큰은 다시 돈 단계만 셉니다.</div>}
-        <div className="muted">호출 {gen.calls}번 · 모델 시간 {seconds(totalMs)} · 토큰 입력 {tokens.input.toLocaleString()} / 출력 {tokens.output.toLocaleString()}{formats.length ? ` · 응답 형식 ${formats.join(", ")}` : ""}</div>
+        <div className="muted">호출 {gen.calls}번 · 모델 시간 {seconds(totalMs)} · 토큰 입력 {tokens.input.toLocaleString()}{tokens.cached ? ` (캐시 ${tokens.cached.toLocaleString()})` : ""} / 출력 {tokens.output.toLocaleString()}{formats.length ? ` · 응답 형식 ${formats.join(", ")}` : ""}</div>
         {gen.message && <p className={gen.status === "failed" ? "gen-error" : ""}>{gen.message}</p>}
         {(canResume || gen.status === "awaiting-confirm") && real && (
           <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다</label>
@@ -373,7 +373,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
         <tbody>{calls.map((item) => (
           <tr key={item.n} onClick={() => void openCall(item.n)} className={item.ok ? "" : "bad"}>
             <td>{item.n}</td><td>{genStepLabel[item.step]}</td><td>{item.sectionId ?? ""}</td><td>{item.attempt}</td><td>{item.model} {item.effort}</td>
-            <td>{item.format ?? ""}</td><td title={item.guide ? `${item.guide.dir} · ${item.guide.files.join(", ")}` : ""}>{item.guide ? `${item.guide.dir === "출제기준" ? "" : `${item.guide.dir} `}${item.guide.version.slice(0, 7)}` : ""}</td><td>{seconds(item.ms)}</td><td>{item.usage ? `${item.usage.inputTokens ?? "?"}/${item.usage.outputTokens ?? "?"}` : ""}</td><td>{item.ok ? "응답" : item.error}</td>
+            <td>{item.format ?? ""}</td><td title={item.guide ? `${item.guide.dir} · ${item.guide.files.join(", ")}` : ""}>{item.guide ? `${item.guide.dir === "출제기준" ? "" : `${item.guide.dir} `}${item.guide.version.slice(0, 7)}` : ""}</td><td>{seconds(item.ms)}</td><td>{item.usage ? `${item.usage.inputTokens ?? "?"}${item.usage.cachedTokens ? `(캐시 ${item.usage.cachedTokens})` : ""}/${item.usage.outputTokens ?? "?"}` : ""}</td><td>{item.ok ? "응답" : item.error}</td>
           </tr>
         ))}</tbody>
       </table>

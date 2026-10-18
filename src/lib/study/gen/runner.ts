@@ -16,8 +16,9 @@ import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } 
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
 import { defaultChosen, engines, forkFroms, genStepLabel, genSteps, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
-import { AUTHOR_SYSTEM, authorUser, buildMap, formatRules, gateCode, gateReply, gateSchema, GATE_SYSTEM, gateUser, mapItems, MAX_PDF_BYTES, planReply, planSchema,
-  PLAN_SYSTEM, planToObjectives, planUser, readReply, readSchema, READ_SYSTEM, readUser, suggestedCount } from "./v3.ts";
+import { AUTHOR_SYSTEM, authorUser, buildMap, DERIVABLE_SYSTEM, derivableReply, derivableSchema, derivableUser, evidenceInQuestion, formatRules, gateCode, joinUnitMaps, mapItems,
+  MAX_PDF_BYTES, MISREAD_SYSTEM, misreadReply, misreadSchema, misreadUser, planReply, planSchema, PLAN_SYSTEM, planToObjectives, planUser, readOutlineReply, readOutlineSchema,
+  readOutlineUser, READ_SYSTEM, readUnitReply, readUnitSchema, readUnitUser, suggestedCount, type ReadUnitReply } from "./v3.ts";
 import { copyVerdictJsonSchema, copyVerdictSchema, lexicalCopyCheck, readVibeCache, registeredPastExams, vibeCacheKey, vibeCardSchema, vibeJsonSchema, vibePrompt, writeVibeCache, type PastExamEvidence } from "./pastexam.ts";
 
 /** Model calls allowed per start or restart; the total is kept in `calls`. */
@@ -40,6 +41,22 @@ export function pageBlock(texts: Map<number, string>) {
 }
 /** Sections designed at the same time. */
 const PARALLEL = 3;
+/** What a streaming reply has produced so far, in the screen's words. */
+function progressOf(step: GenStep, text: string) {
+  const count = (key: string) => text.split(`"${key}"`).length - 1;
+  switch (step) {
+    case "outline": return `단원 ${count("title")}개`;
+    case "classify": return `항목 ${count("quote")}개`;
+    case "design": return `목표 ${count("recall")}개`;
+    case "author": return `문항 ${count("objectiveId")}개 쓰는 중`;
+    case "read": return count("name") ? `개념 ${count("name")}개 · 관계 ${count("statement")}개` : `단원 ${count("title")}개`;
+    case "plan": return `문항 계획 ${count("mustRecall")}개`;
+    case "gate": return `${count("questionId")}개 검사`;
+    default: return `${Math.round(text.length / 100) * 100}자`;
+  }
+}
+/** v3: unit maps read at the same time (each carries the same PDF prefix, so all but the first batch hit the prompt cache). */
+const READ_PARALLEL = 4;
 
 export const dataRoot = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "study-gen");
 const idPattern = /^gen_[a-f0-9]{32}$/;
@@ -324,7 +341,16 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       system: redactCallText(system), user: redactCallText(user), reply: null, error: null,
       ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
     const callFile = path.join(dirOf(id), "calls", `${n}.json`);
-    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
+    // Progress while the reply streams in: the screen shows how far the current call has got (체감 시간).
+    let lastProgress = 0;
+    const onText = (text: string) => {
+      const now = Date.now();
+      if (now - lastProgress < 1500) return;
+      lastProgress = now;
+      state.current = { step, ...(sectionId ? { sectionId } : {}), ...(extra.page ? { page: extra.page } : {}), attempt, progress: progressOf(step, text) };
+      void saveState(state).catch(() => undefined);
+    };
+    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), onText, ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
       model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}) };
     try {
       if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => genFakeReply(s, u)))(step, user, attempt);
@@ -484,12 +510,25 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         await saveState(state);
       }
       const chosen = new Set(state.confirmedObjectiveIds ?? []);
-      for (const section of state.sections) {
-        if (section.author) continue;
+      const authorOne = async (section: SectionState) => {
         const objectives = (section.design?.objectives ?? []).filter((objective) => chosen.has(objective.id));
-        if (!objectives.length) { section.author = { documentPath: null, questionCount: 0, dropped: [], warnings: [] }; continue; }
+        if (!objectives.length) { section.author = { documentPath: null, questionCount: 0, dropped: [], warnings: [] }; return; }
         await authorSection(section, objectives);
         await saveState(state);
+      };
+      const todo = state.sections.filter((section) => !section.author);
+      if (input.engine === "v3") {
+        // v3 units are independent (each has its own source, map slice and plan): several at once; each unit's
+        // questions are saved as soon as that unit is done.
+        for (let start = 0; start < todo.length; start += PARALLEL) {
+          const settled = await Promise.allSettled(todo.slice(start, start + PARALLEL).map(authorOne));
+          const stop = settled.find((one) => one.status === "rejected" && one.reason instanceof Stop) as PromiseRejectedResult | undefined;
+          if (stop) throw stop.reason;
+          const failed = settled.find((one) => one.status === "rejected") as PromiseRejectedResult | undefined;
+          if (failed) throw failed.reason;
+        }
+      } else {
+        for (const section of todo) await authorOne(section);
       }
       state.phase = "done"; state.status = "done"; state.current = undefined; state.message = "";
       await saveState(state);
@@ -508,37 +547,59 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     if (!v3.map) {
       const pdf = await (options.pdf ?? registeredPdfBytes)(input).catch(() => null);
       const pdfSent = Boolean(pdf && pdf.length <= MAX_PDF_BYTES);
-      const thin = input.pageNumbers.filter((page) => needsImage(loaded.get(page) ?? ""));
-      const user = readUser(input, block(input.pageNumbers), thin, pdfSent);
-      const files = pdfSent ? [{ filename: input.fileName, dataUrl: `data:application/pdf;base64,${Buffer.from(pdf!).toString("base64")}` }] : undefined;
-      let result = await askParsed("read", null, 1, READ_SYSTEM, user, readSchema, readReply, undefined, { files });
-      let normalized = result.ok ? normalizeOutline(result.value, input.pageNumbers) : null;
+      const fileOf = () => [{ filename: input.fileName, dataUrl: `data:application/pdf;base64,${Buffer.from(pdf!).toString("base64")}` }];
       let sent = pdfSent;
+      // ① a short outline call first (it also puts the instructions + PDF into the prompt cache), …
+      const outlineUser = (withPdf: boolean) => readOutlineUser(input, block(input.pageNumbers), withPdf);
+      let result = await askParsed("read", null, 1, READ_SYSTEM, outlineUser(sent), readOutlineSchema, readOutlineReply, undefined, sent ? { files: fileOf() } : {});
+      let normalized = result.ok ? normalizeOutline(result.value, input.pageNumbers) : null;
       if (!normalized?.sections.length) {
         const problem = result.ok ? "고른 쪽 안의 단원이 하나도 없습니다." : result.problem;
         // A refused call (not a malformed reply) may be the file itself: the account route can decline PDF input.
-        // The second try then goes as text layer only, and the map says so.
-        const fileRefused = !result.ok && result.problem !== "응답이 정해진 JSON 형식과 다릅니다." && Boolean(files);
-        if (fileRefused) sent = false;
-        const retry = fileRefused ? readUser(input, block(input.pageNumbers), thin, false) : `${user}\n\n[이전 시도에서 걸린 것]\n- ${problem}`;
-        result = await askParsed("read", null, 2, READ_SYSTEM, retry, readSchema, readReply, undefined, fileRefused ? {} : { files });
+        if (!result.ok && result.problem !== "응답이 정해진 JSON 형식과 다릅니다." && sent) sent = false;
+        const retry = sent ? `${outlineUser(true)}\n\n[이전 시도에서 걸린 것]\n- ${problem}` : outlineUser(false);
+        result = await askParsed("read", null, 2, READ_SYSTEM, retry, readOutlineSchema, readOutlineReply, undefined, sent ? { files: fileOf() } : {});
         normalized = result.ok ? normalizeOutline(result.value, input.pageNumbers) : null;
       }
-      if (!result.ok || !normalized?.sections.length) throw new Stop("paused-invalid", "전체 읽기(지식 지도)를 만들지 못했어요. 다시 시작하면 처음부터 다시 시도해요.");
+      if (!result.ok || !normalized?.sections.length) throw new Stop("paused-invalid", "전체 읽기(목차)를 만들지 못했어요. 다시 시작하면 처음부터 다시 시도해요.");
+      const sections = normalized.sections;
+      const skips = result.value.skips;
+      // … then one map call per unit, several at once, each with the same PDF prefix.
+      const unitWarnings: Issue[] = [];
+      const parts: Array<{ sectionId: string; reply: ReadUnitReply }> = [];
+      const readUnit = async (section: Section) => {
+        const own = sectionPageTexts(section, sections, loaded).texts;
+        const thin = section.pages.filter((page) => needsImage(loaded.get(page) ?? ""));
+        const user = readUnitUser(input, sections, section, pageBlock(own).text, thin, sent);
+        let unit = await askParsed("read", section.id, 1, READ_SYSTEM, user, readUnitSchema, readUnitReply, undefined, sent ? { files: fileOf() } : {});
+        if (!unit.ok) unit = await askParsed("read", section.id, 2, READ_SYSTEM, `${user}\n\n[이전 시도에서 걸린 것]\n- ${unit.problem}`, readUnitSchema, readUnitReply, undefined, sent ? { files: fileOf() } : {});
+        if (unit.ok) parts.push({ sectionId: section.id, reply: unit.value });
+        else unitWarnings.push({ severity: "warning", code: "unit-map-failed", message: `${section.title}: 단원 지도를 만들지 못했어요(${unit.problem.slice(0, 80)}).` });
+      };
+      for (let start = 0; start < sections.length; start += READ_PARALLEL) {
+        const settled = await Promise.allSettled(sections.slice(start, start + READ_PARALLEL).map(readUnit));
+        const stop = settled.find((one) => one.status === "rejected" && one.reason instanceof Stop) as PromiseRejectedResult | undefined;
+        if (stop) throw stop.reason;
+        const failed = settled.find((one) => one.status === "rejected") as PromiseRejectedResult | undefined;
+        if (failed) throw failed.reason;
+      }
+      if (!parts.length) throw new Stop("paused-invalid", "단원 지도를 하나도 만들지 못했어요. 다시 시작하면 처음부터 다시 시도해요.");
+      parts.sort((a, b) => sections.findIndex((x) => x.id === a.sectionId) - sections.findIndex((x) => x.id === b.sectionId));
+      const joined = joinUnitMaps(parts, skips);
       // Notes on picture pages become this run's page readings, so authoring, the gate, judges and reruns all see them.
-      const notes = result.value.pageNotes.filter((note) => input.pageNumbers.includes(note.page) && note.text.trim());
+      const notes = joined.pageNotes.filter((note) => input.pageNumbers.includes(note.page) && note.text.trim());
       for (const note of notes) {
         const text = cleanPageText(`${loaded.get(note.page) ?? ""}\n\n[그림·식·표 옮김]\n${note.text.trim()}`.trim());
         await saveJson(transcriptFile(id, note.page), { page: note.page, text });
         loaded.set(note.page, text);
       }
       state.images = { pages: notes.map((note) => note.page), done: notes.map((note) => note.page), failed: [] };
-      state.sections = normalized.sections.map((section) => ({ ...section }));
-      const built = buildMap(result.value, state.sections, loaded, sent);
+      state.sections = sections.map((section) => ({ ...section }));
+      const built = buildMap(joined, state.sections, loaded, sent);
       v3.map = built.map;
-      v3.warnings = [...normalized.warnings, ...built.warnings,
+      v3.warnings = [...normalized.warnings, ...unitWarnings, ...built.warnings,
         ...(sent ? [] : [{ severity: "warning" as const, code: "pdf-not-sent",
-          message: pdfSent ? "PDF 첨부 요청이 거절돼 글자 층만으로 다시 읽었어요." : pdf ? "PDF가 커서 글자 층만 보냈어요." : "PDF를 읽지 못해 글자 층만 보냈어요." }])];
+          message: pdfSent ? "PDF 첨부 요청이 거절돼 글자 층만으로 읽었어요." : pdf ? "PDF가 커서 글자 층만 보냈어요." : "PDF를 읽지 못해 글자 층만 보냈어요." }])];
       state.outlineWarnings = v3.warnings;
       for (const section of state.sections) section.classify = { items: mapItems(section.id, built.map), warnings: [] };
       state.phase = "design";
@@ -578,17 +639,22 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       const answer = response.kind === "single-choice" ? (response.options.find((option) => option.id === response.correctOptionId)?.text ?? "") : response.acceptedAnswers.join(" / ");
       return { label: `Q${index + 1}`, question, objective, answer, hints: code.hints };
     });
-    const result = await askParsed("gate", section.id, attempt, GATE_SYSTEM, gateUser(sectionText, entries), gateSchema, gateReply);
-    if (result.ok) {
-      for (const verdict of result.value.questions) {
-        const entry = entries.find((candidate) => candidate.label === verdict.questionId.trim().toUpperCase());
-        if (!entry) continue;
-        const list = reasons.get(entry.objective.id) ?? [];
-        if (verdict.derivable) list.push(`문제 글만으로 답이 나옴: ${verdict.derivableEvidence.slice(0, 160)}`);
-        if (verdict.misreading) list.push(`원문과 다르게 읽힘: ${verdict.misreadingDetail.slice(0, 160)}`);
-        if (list.length) reasons.set(entry.objective.id, list);
-      }
+    const add = (objectiveId: string, reason: string) => reasons.set(objectiveId, [...(reasons.get(objectiveId) ?? []), reason]);
+    const byLabel = (label: string) => entries.find((candidate) => candidate.label === label.trim().toUpperCase());
+    // Two light checks at once: derivability sees only the learner's view; misreading sees the unit's source.
+    const [derivable, misread] = await Promise.all([
+      askParsed("gate", section.id, attempt, DERIVABLE_SYSTEM, derivableUser(entries), derivableSchema, derivableReply),
+      askParsed("gate", section.id, attempt, MISREAD_SYSTEM, misreadUser(sectionText, entries), misreadSchema, misreadReply),
+    ]);
+    if (derivable.ok) for (const verdict of derivable.value.questions) {
+      const entry = byLabel(verdict.questionId);
+      if (entry && verdict.derivable && evidenceInQuestion(verdict.evidence, entry.question)) add(entry.objective.id, `문제 글만으로 답이 나옴: ${verdict.evidence.slice(0, 160)}`);
     }
+    if (misread.ok) for (const verdict of misread.value.questions) {
+      const entry = byLabel(verdict.questionId);
+      if (entry && verdict.misreading) add(entry.objective.id, `원문과 다르게 읽힘: ${verdict.detail.slice(0, 160)}`);
+    }
+    const result = { ok: derivable.ok && misread.ok };
     for (const { objective } of fresh) state.v3?.gate?.push({ objectiveId: objective.id, attempt, passed: !reasons.has(objective.id), reasons: reasons.get(objective.id) ?? [] });
     return { reasons, checked: result.ok };
   }
@@ -774,6 +840,6 @@ export function stepLabel(state: GenState) {
   if (!state.current) return "";
   if (state.current.step === "transcribe") return `그림 쪽 읽기 ${state.images?.done.length ?? 0}/${state.images?.pages.length ?? 0}${state.current.page ? ` · p.${state.current.page}` : ""}`;
   const section = state.sections.find((candidate) => candidate.id === state.current?.sectionId);
-  return `${genStepLabel[state.current.step]}${section ? ` · ${section.title}` : ""}${state.current.attempt > 1 ? ` (${state.current.attempt}번째)` : ""}`;
+  return `${genStepLabel[state.current.step]}${section ? ` · ${section.title}` : ""}${state.current.attempt > 1 ? ` (${state.current.attempt}번째)` : ""}${state.current.progress ? ` · ${state.current.progress}` : ""}`;
 }
 export type { Section };

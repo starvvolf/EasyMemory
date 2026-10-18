@@ -23,13 +23,15 @@ export type ModelRequest = {
   images?: Array<{ label: string; dataUrl: string }>;
   /** Whole files sent with the user text (e.g. a PDF as a data URL). Same routes as `images`. */
   files?: Array<{ filename: string; dataUrl: string }>;
+  /** Called with the text so far while the reply streams in (progress on screen); the final text is still returned whole. */
+  onText?: (text: string) => void;
 };
 
 export type ModelResult = {
   text: string;
   data?: unknown;
   model: string;
-  usage?: { inputTokens?: number; outputTokens?: number };
+  usage?: { inputTokens?: number; outputTokens?: number; cachedTokens?: number };
   /** How the reply was constrained: JSON Schema (structured output), plain JSON mode, or free text. */
   format?: "json_schema" | "json_object" | "text";
 };

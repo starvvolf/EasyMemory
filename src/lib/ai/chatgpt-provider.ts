@@ -36,8 +36,9 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
     instructions,
     // With page images the user turn becomes text plus one labelled image per page.
     input: [{ role: "user", content: request.images?.length || request.files?.length
-      ? [{ type: "input_text" as const, text: userText },
-          ...(request.files ?? []).map((file) => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
+      // Files go first: a long, identical prefix (instructions + the same PDF) lets later calls reuse the prompt cache.
+      ? [...(request.files ?? []).map((file) => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
+          { type: "input_text" as const, text: userText },
           ...(request.images ?? []).flatMap((image) => [
             { type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: "high" as const }])]
       : userText }],
@@ -81,24 +82,25 @@ export async function sendWithFallback(send: (format: "schema" | "fallback") => 
   return { response, format };
 }
 
-export async function readResponseStream(body: ReadableStream<Uint8Array>): Promise<{ text: string; usage?: { inputTokens?: number; outputTokens?: number }; model?: string }> {
+export async function readResponseStream(body: ReadableStream<Uint8Array>, onText?: (text: string) => void): Promise<{ text: string; usage?: { inputTokens?: number; outputTokens?: number; cachedTokens?: number }; model?: string }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "", text = "", completed = false;
-  let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+  let usage: { inputTokens?: number; outputTokens?: number; cachedTokens?: number } | undefined;
   let model: string | undefined;
   const event = (raw: string) => {
     const data = raw.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
     if (!data || data === "[DONE]") return;
-    let value: { type?: string; delta?: string; response?: { model?: string; usage?: { input_tokens?: number; output_tokens?: number }; error?: { code?: string; message?: string }; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> } };
+    let value: { type?: string; delta?: string; response?: { model?: string; usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } }; error?: { code?: string; message?: string }; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> } };
     try { value = JSON.parse(data); } catch { throw new ModelError("transient", "ChatGPT 응답 스트림을 읽지 못했어요."); }
-    if (value.type === "response.output_text.delta") text += value.delta ?? "";
+    if (value.type === "response.output_text.delta") { text += value.delta ?? ""; if (onText) { try { onText(text); } catch { /* progress only */ } } }
     if (value.type === "response.failed") throw responseFailure(0, { error: value.response?.error });
     if (value.type === "response.incomplete" || value.type === "error") throw new ModelError("transient", "ChatGPT 응답이 완료되지 않았어요.");
     if (value.type === "response.completed") {
       completed = true;
       model = value.response?.model;
-      usage = { inputTokens: value.response?.usage?.input_tokens, outputTokens: value.response?.usage?.output_tokens };
+      usage = { inputTokens: value.response?.usage?.input_tokens, outputTokens: value.response?.usage?.output_tokens,
+        ...(value.response?.usage?.input_tokens_details?.cached_tokens !== undefined ? { cachedTokens: value.response.usage.input_tokens_details.cached_tokens } : {}) };
       if (!text) text = value.response?.output?.flatMap((item) => item.content ?? []).filter((part) => part.type === "output_text").map((part) => part.text ?? "").join("") ?? "";
     }
   };
@@ -144,7 +146,7 @@ export const chatgptBackend: ModelBackend = {
     };
     const { response, format } = await sendWithFallback(send, Boolean(request.schema));
     if (!response.body) throw new ModelError("transient", "ChatGPT 응답 스트림이 비어 있어요.");
-    const completed = await readResponseStream(response.body);
+    const completed = await readResponseStream(response.body, request.onText);
     const used = !request.schema && !request.json ? "text" as const : format === "schema" ? "json_schema" as const : "json_object" as const;
     return { text: completed.text, model: completed.model ?? request.model ?? "chatgpt", usage: completed.usage, format: used };
   },

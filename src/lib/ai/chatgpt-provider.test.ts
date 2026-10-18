@@ -170,7 +170,7 @@ test("쪽 이미지가 있으면 사용자 입력을 글 + 이름 붙은 이미�
   ]);
 });
 
-test("PDF 파일은 input_file로 보낸다", () => {
+test("PDF 파일은 input_file로, 글보다 앞에 보낸다(같은 PDF를 여러 번 보낼 때 앞부분이 같아 캐시가 맞도록)", () => {
   const request = responseRequest({ purpose: "p", system: "s", user: "질문", caller: { uid: "u" }, files: [{ filename: "a.pdf", dataUrl: "data:application/pdf;base64,JVBE" }] });
-  assert.deepEqual(request.input[0].content, [{ type: "input_text", text: "질문" }, { type: "input_file", filename: "a.pdf", file_data: "data:application/pdf;base64,JVBE" }]);
+  assert.deepEqual(request.input[0].content, [{ type: "input_file", filename: "a.pdf", file_data: "data:application/pdf;base64,JVBE" }, { type: "input_text", text: "질문" }]);
 });

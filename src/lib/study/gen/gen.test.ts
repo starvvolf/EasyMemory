@@ -525,7 +525,13 @@ test("v3: 전체 읽기 → 출제 계획 → 출제, 관문이 '꺼낼 것'을 
     { pages, fakeReply, pdf: async () => new Uint8Array([37, 80, 68, 70]) });
   assert.equal(run.status, "done", run.message);
   const order = await steps(run.id);
-  assert.deepEqual(order.slice(0, 2), ["read#1", "plan#1"]);
+  // Outline first, then one map call per unit, then the plan.
+  const planAt = order.indexOf("plan#1");
+  assert.equal(order[0], "read#1");
+  assert.ok(planAt > 1 && order.slice(1, planAt).every((step) => step.startsWith("read:s")), order.join(" "));
+  // The derivability check sees only the learner's view, never the unit source (first real run: it quoted the source).
+  const gateCalls = (await readGenCalls(run.id)).filter((call) => call.step === "gate");
+  assert.ok(gateCalls.some((call) => call.system.startsWith("너는 이 과목을 공부하지 않은") && !call.user.includes("[단원 원문]")));
   assert.ok(!order.some((step) => /^(outline|classify|design|transcribe)/.test(step)), "v3 does not run the v2 steps");
   const gate = run.v3?.gate ?? [];
   const leaked = gate.find((verdict) => verdict.attempt === 1 && !verdict.passed);

@@ -82,6 +82,18 @@ export type KnowledgeMap = Omit<ReadReply, "sections" | "concepts" | "relations"
   pdfSent: boolean;
 };
 
+/*
+ * 전체 읽기 is split for time (변경 2026-10-19): one outline call, then one map call per unit, several at once.
+ * Every read call has the same instructions and the same PDF first, so after the outline call the unit calls can
+ * reuse the prompt cache; what differs (the task, the unit's text) comes after the file.
+ */
+const sectionShape = readSchema.properties as Record<string, Json>;
+export const readOutlineSchema = obj({ sections: sectionShape.sections, skips: sectionShape.skips });
+export const readOutlineReply = readReply.pick({ sections: true, skips: true });
+export const readUnitSchema = obj({ concepts: sectionShape.concepts, relations: sectionShape.relations, materials: sectionShape.materials, pageNotes: sectionShape.pageNotes });
+export const readUnitReply = readReply.pick({ concepts: true, relations: true, materials: true, pageNotes: true });
+export type ReadUnitReply = z.infer<typeof readUnitReply>;
+
 export const READ_SYSTEM = [
   "너는 강의 자료 한 벌을 처음부터 끝까지 읽고, 시험 공부에 쓸 지식 지도를 만든다. 문제는 아직 만들지 않는다.",
   "첨부 PDF가 있으면 그림·식·표까지 보고, 함께 준 쪽별 글자 층으로 원문 표기를 확인한다. 고른 쪽만 다룬다.",
@@ -94,26 +106,45 @@ export const READ_SYSTEM = [
   "- 원문에 없는 사실을 만들지 않는다. 원문 용어·기호·표기를 바꾸지 않는다.",
   "- 단원(sections)은 공부 단위다. 슬라이드마다 만들지 않고 한 주제를 다루는 여러 쪽을 묶는다(보통 4~10쪽). 고른 쪽을 빠짐없이 원문 순서로 덮는다. startText는 그 단원이 시작되는 원문 글자를 그대로 복사한다.",
   "- importance: 상 = 이 자료를 공부했다면 반드시 알아야 하고 시험에 나올 만한 것, 중 = 알아야 할 세부, 하 = 알면 좋은 보충.",
+  "- 요청의 [작업]에 적힌 것만 출력한다: '목차'면 단원과 제외할 것만, '단원 지도'면 그 단원의 개념·관계·소재·그림 쪽 옮김만.",
+  "- 단원 지도에서 relations의 between에는 이 단원 개념 id만 쓴다. 다른 단원과의 관계는 statement에 그 단원 제목과 함께 적는다.",
 ].join("\n");
 
-export function readUser(input: GenInput, pageText: string, thinPages: number[], pdfSent: boolean) {
-  return [
-    `[자료] ${input.fileName}`,
-    `[고른 쪽] ${input.pageNumbers.join(", ")}`,
-    pdfSent ? "[첨부] 자료 PDF 전체(고른 쪽만 다룬다)" : "[첨부 없음] PDF가 커서 글자 층만 준다. 그림 내용은 글자 층에 보이는 만큼만 다룬다.",
-    thinPages.length ? `[글자 층이 빈약한 쪽] ${thinPages.join(", ")} — 이 쪽들은 pageNotes에 그림·식·표 내용을 옮긴다.` : "",
-    `[원문: 쪽별 추출 글자]\n${pageText}`,
-  ].filter(Boolean).join("\n\n");
+export function readOutlineUser(input: GenInput, pageText: string, pdfSent: boolean) {
+  return [`[작업] 목차`, `[자료] ${input.fileName}`, `[고른 쪽] ${input.pageNumbers.join(", ")}`,
+    pdfSent ? "[첨부] 자료 PDF 전체(고른 쪽만 다룬다)" : "[첨부 없음] 글자 층만 준다.", `[원문: 쪽별 추출 글자]\n${pageText}`].join("\n\n");
+}
+export function readUnitUser(input: GenInput, sections: Section[], section: Section, unitText: string, thinPages: number[], pdfSent: boolean) {
+  return [`[작업] 단원 지도: ${section.id} ${section.title} (p.${section.pages[0]}–${section.pages.at(-1)})`,
+    `[자료] ${input.fileName}`, `[전체 목차] ${sections.map((other) => `${other.id} ${other.title} (p.${other.pages[0]}–${other.pages.at(-1)})`).join(" / ")}`,
+    pdfSent ? "[첨부] 자료 PDF 전체(이 단원 쪽을 다룬다)" : "[첨부 없음] 글자 층만 준다. 그림 내용은 글자 층에 보이는 만큼만 다룬다.",
+    thinPages.length ? `[글자 층이 빈약한 쪽] ${thinPages.join(", ")} — pageNotes에 그림·식·표 내용을 옮긴다.` : "",
+    `[이 단원 원문: 쪽별 추출 글자]\n${unitText}`].filter(Boolean).join("\n\n");
 }
 
+/** Joins the unit maps: ids become unit-scoped (s2-c1), relations keep their unit's concepts. */
+export function joinUnitMaps(parts: Array<{ sectionId: string; reply: ReadUnitReply }>, skips: ReadReply["skips"]): Omit<ReadReply, "sections"> & { owner: Map<string, string> } {
+  const owner = new Map<string, string>();
+  const concepts: ReadReply["concepts"] = [], relations: ReadReply["relations"] = [], materials: ReadReply["materials"] = [], pageNotes: ReadReply["pageNotes"] = [];
+  for (const { sectionId, reply } of parts) {
+    const id = (local: string) => `${sectionId}-${local}`;
+    for (const concept of reply.concepts) { concepts.push({ ...concept, id: id(concept.id) }); owner.set(id(concept.id), sectionId); }
+    for (const relation of reply.relations) relations.push({ ...relation, id: id(relation.id), between: relation.between.map(id) });
+    for (const material of reply.materials) materials.push({ ...material, concepts: material.concepts.map(id) });
+    for (const note of reply.pageNotes) if (!pageNotes.some((other) => other.page === note.page)) pageNotes.push(note);
+  }
+  return { concepts, relations, materials, skips, pageNotes, owner };
+}
+
+
 /** Attaches unit ids and quote checks to the read reply. A quote not found in the text layer is kept but marked. */
-export function buildMap(reply: ReadReply, sections: Section[], texts: Map<number, string>, pdfSent: boolean): { map: KnowledgeMap; warnings: Issue[] } {
-  const sectionOf = (pages: number[]) => (pages.length ? sections.find((section) => section.pages.includes(pages[0])) : undefined)?.id ?? sections[0]?.id ?? "s1";
+export function buildMap(reply: Omit<ReadReply, "sections"> & { owner?: Map<string, string> }, sections: Section[], texts: Map<number, string>, pdfSent: boolean): { map: KnowledgeMap; warnings: Issue[] } {
+  const byPage = (pages: number[]) => (pages.length ? sections.find((section) => section.pages.includes(pages[0])) : undefined)?.id ?? sections[0]?.id ?? "s1";
   const check = (quotes: ReadReply["concepts"][number]["quotes"]) => quotes.map((q) => ({ ...q, verified: locate(texts.get(q.page) ?? "", q.text) >= 0 }));
-  const concepts = reply.concepts.map((concept) => ({ ...concept, sectionId: sectionOf(concept.pages.length ? concept.pages : concept.quotes.map((q) => q.page)), quotes: check(concept.quotes) }));
+  const concepts = reply.concepts.map((concept) => ({ ...concept, sectionId: reply.owner?.get(concept.id) ?? byPage(concept.pages.length ? concept.pages : concept.quotes.map((q) => q.page)), quotes: check(concept.quotes) }));
   const byId = new Map(concepts.map((concept) => [concept.id, concept]));
   const relations = reply.relations.map((relation) => ({ ...relation, quotes: check(relation.quotes),
-    sectionIds: [...new Set([...relation.between.map((id) => byId.get(id)?.sectionId).filter((id): id is string => Boolean(id)), sectionOf(relation.pages)])] }));
+    sectionIds: [...new Set([...relation.between.map((id) => byId.get(id)?.sectionId).filter((id): id is string => Boolean(id)), byPage(relation.pages)])] }));
   const warnings: Issue[] = [];
   const unverified = [...concepts, ...relations].flatMap((item) => item.quotes).filter((q) => !q.verified).length;
   if (unverified) warnings.push({ severity: "warning", code: "map-quote-unverified", message: `글자 층에서 찾지 못한 인용 ${unverified}개(그림 속 글자일 수 있음)` });
@@ -329,29 +360,53 @@ export function gateCode(question: AuthoredQuestion, objective: Objective): { le
   return { leak, hints };
 }
 
-export const gateSchema = obj({
-  questions: arr(obj({
-    questionId: str("문항 머리글(Q1, Q2 …) 그대로"),
-    derivable: bool("과목 지식 없이 문제 글(본문·보기·입력칸 문구)만으로 꺼낼 것이나 정답을 알아낼 수 있는가"),
-    derivableEvidence: str("derivable이면 그렇게 만드는 본문 문장, 아니면 빈 문자열"),
-    misreading: bool("원문과 대조해, 문제를 다르게 읽으면 정답이 틀려지는 해석이 있는가(조건이 빠지거나 넓어져서)"),
-    misreadingDetail: str("misreading이면 그 해석과 빠진 조건, 아니면 빈 문자열"),
-  })),
-});
-export const gateReply = z.object({ questions: z.array(z.object({ questionId: z.string(), derivable: z.boolean(), derivableEvidence: z.string(), misreading: z.boolean(), misreadingDetail: z.string() })) });
+/*
+ * The gate asks two separate questions (변경 2026-10-19): with the unit's source in the same call, the model judged
+ * "answerable from the question alone" by quoting the source (first real run: every question flagged). So the
+ * derivability check sees only what the learner sees; the misreading check sees the source.
+ */
+export const derivableSchema = obj({ questions: arr(obj({
+  questionId: str("문항 머리글(Q1, Q2 …) 그대로"),
+  derivable: bool("과목 지식 없이 문제 글(본문·보기·입력칸 문구)만으로 꺼낼 것을 알아낼 수 있는가"),
+  evidence: str("derivable이면 그렇게 만드는 문제 글의 문장(문제에 실제로 적힌 것만), 아니면 빈 문자열"),
+})) });
+export const derivableReply = z.object({ questions: z.array(z.object({ questionId: z.string(), derivable: z.boolean(), evidence: z.string() })) });
+export const misreadSchema = obj({ questions: arr(obj({
+  questionId: str("문항 머리글(Q1, Q2 …) 그대로"),
+  misreading: bool("원문과 대조해, 문제를 다르게 읽으면 정답이 틀려지는 해석이 있는가(조건이 빠지거나 넓어져서)"),
+  detail: str("misreading이면 그 해석과 빠진 조건, 아니면 빈 문자열"),
+})) });
+export const misreadReply = z.object({ questions: z.array(z.object({ questionId: z.string(), misreading: z.boolean(), detail: z.string() })) });
 
-export const GATE_SYSTEM = [
-  "너는 문항 검사자다. 문항마다 두 가지만 판단한다. 정답이 맞는지는 판단하지 않는다.",
-  "1) derivable: 이 과목을 공부하지 않은 사람이 문제 글만 읽고, 그 글에 적힌 정보로 꺼낼 것·정답을 알아낼 수 있는가. 문제에 외울 내용(목록·대응표·정의·식)이 적혀 있어 세기·찾기·옮겨 쓰기로 답이 나오면 true. 일반 상식으로 맞히는 것, 문제가 준 수치에 기억한 규칙을 적용해 계산하는 것은 false. true면 그렇게 만드는 문장을 derivableEvidence에 옮긴다.",
-  "2) misreading: 원문(요약·계획이 아니라 [단원 원문])과 대조해, 문제가 조건(대상·경우·관례·단위·시간·범위)을 빼거나 넓혀서 정답이 틀리게 읽히는 해석이 있는가. 있으면 그 해석과 빠진 조건을 misreadingDetail에 쓴다.",
-  "확실하지 않으면 false로 둔다. 문항 머리글(Q1, Q2 …)을 questionId에 그대로 쓴다.",
+export const DERIVABLE_SYSTEM = [
+  "너는 이 과목을 공부하지 않은 사람이다. 자료는 볼 수 없고, 아래 문제 글만 보인다.",
+  "문항마다 판단한다: 문제 글에 적힌 정보만으로 '꺼낼 것'을 알아낼 수 있는가. 문제에 외울 내용(목록·대응표·정의·식)이 적혀 있어 세기·찾기·옮겨 쓰기로 답이 나오면 true.",
+  "일반 상식으로 맞히는 것, 문제가 준 수치에 기억해야 하는 규칙을 적용해 계산하는 것은 false다. 확실하지 않으면 false.",
+  "true면 그렇게 만드는 문장을 문제 글에서 그대로 옮겨 evidence에 쓴다. 문제 글에 없는 문장은 쓰지 않는다. 문항 머리글(Q1, Q2 …)을 questionId에 그대로 쓴다.",
+].join("\n");
+export const MISREAD_SYSTEM = [
+  "너는 문항 검사자다. 정답이 맞는지는 판단하지 않는다. 문항마다 하나만 판단한다.",
+  "[단원 원문]과 대조해, 문제가 조건(대상·경우·관례·단위·시간·범위)을 빼거나 넓혀서 정답이 틀리게 읽히는 해석이 있는가. 있으면 그 해석과 빠진 조건을 detail에 쓴다. 확실하지 않으면 false.",
+  "문항 머리글(Q1, Q2 …)을 questionId에 그대로 쓴다.",
 ].join("\n");
 
-export function gateUser(sectionText: string, entries: Array<{ label: string; question: AuthoredQuestion; objective: Objective; answer: string; hints: string[] }>) {
+type GateEntry = { label: string; question: AuthoredQuestion; objective: Objective; answer: string; hints: string[] };
+export function derivableUser(entries: GateEntry[]) {
+  return entries.map((entry) => [questionView(entry.question, entry.label), `꺼낼 것: ${entry.objective.recall}`].join("\n")).join("\n\n");
+}
+export function misreadUser(sectionText: string, entries: GateEntry[]) {
   return [`[단원 원문]\n${sectionText}`, ...entries.map((entry) => [
-    questionView(entry.question, entry.label),
-    `정답: ${entry.answer}`,
-    `꺼낼 것: ${entry.objective.recall}`,
+    questionView(entry.question, entry.label), `정답: ${entry.answer}`,
     entry.hints.length ? `참고(코드 검사): ${entry.hints.join(" / ")}` : "",
   ].filter(Boolean).join("\n"))].join("\n\n");
+}
+
+/** A derivable verdict counts only when its evidence is really in the question text (guards against quoting the source). */
+export function evidenceInQuestion(evidence: string, question: AuthoredQuestion) {
+  const text = loose(questionView(question, ""));
+  const want = loose(evidence);
+  if (want.length < 4) return false;
+  if (text.includes(want)) return true;
+  const parts = evidence.split(/[“”"…]+|\.\.\./).map(loose).filter((part) => part.length >= 6);
+  return parts.length > 0 && parts.every((part) => text.includes(part));
 }

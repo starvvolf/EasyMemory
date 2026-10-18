@@ -114,7 +114,7 @@ export type GenState = {
   /** Total model calls across restarts. */
   calls: number;
   /** What runs now, for the screen. */
-  current?: { step: GenStep; sectionId?: string; page?: number; attempt: number };
+  current?: { step: GenStep; sectionId?: string; page?: number; attempt: number; progress?: string };
   /** Pages read from their image (readImages): chosen once, then done or failed (failed pages keep the text layer). */
   images?: { pages: number[]; done: number[]; failed: number[] };
   outlineWarnings?: Issue[];
@@ -146,7 +146,8 @@ export type GenCall = {
   user: string;
   reply: string | null;
   error: string | null;
-  usage?: { inputTokens?: number; outputTokens?: number };
+  /** cachedTokens: input tokens served from the prompt cache (when the API reports them). */
+  usage?: { inputTokens?: number; outputTokens?: number; cachedTokens?: number };
   /** Which criteria went into this call: folder, content hash, files. */
   guide?: { dir: string; version: string; files: string[] };
 };
