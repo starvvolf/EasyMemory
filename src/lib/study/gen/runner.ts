@@ -14,8 +14,10 @@ import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
-import { defaultChosen, forkFroms, genStepLabel, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
+import { defaultChosen, engines, forkFroms, genStepLabel, genSteps, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
+import { AUTHOR_SYSTEM, authorUser, buildMap, formatRules, gateCode, gateReply, gateSchema, GATE_SYSTEM, gateUser, mapItems, MAX_PDF_BYTES, planReply, planSchema,
+  PLAN_SYSTEM, planToObjectives, planUser, readReply, readSchema, READ_SYSTEM, readUser, suggestedCount } from "./v3.ts";
 import { copyVerdictJsonSchema, copyVerdictSchema, lexicalCopyCheck, readVibeCache, registeredPastExams, vibeCacheKey, vibeCardSchema, vibeJsonSchema, vibePrompt, writeVibeCache, type PastExamEvidence } from "./pastexam.ts";
 
 /** Model calls allowed per start or restart; the total is kept in `calls`. */
@@ -106,13 +108,14 @@ export const genInputSchema = z.strictObject({
   note: z.string().max(2000).default(""),
   autoConfirm: z.boolean().default(false),
   provider: z.enum(["chatgpt", "codex", "fake"]).default("chatgpt"),
-  models: z.partialRecord(z.enum(["transcribe", "outline", "classify", "design", "author"]), modelChoice).default({}),
+  models: z.partialRecord(z.enum(genSteps), modelChoice).default({}),
   signals: z.object({ weakSpots: z.array(z.string().max(300)).max(30), reports: z.array(z.string().max(300)).max(30) }).default({ weakSpots: [], reports: [] }),
   /** 출제기준 folder; a candidate copy (출제기준-후보) lets one run compare criteria without touching the main folder. */
   guideDir: z.string().regex(guideDirPattern).default(DEFAULT_GUIDE_DIR),
   origin: z.enum(["lab", "study"]).default("lab"),
   readImages: z.boolean().default(false),
   pastExamSourceIds: z.array(z.string().regex(/^src_[a-f0-9]{64}$/)).min(1).max(2).optional(),
+  engine: z.enum(engines).default("v2"),
 });
 
 export async function createGen(raw: unknown): Promise<GenState> {
@@ -227,7 +230,14 @@ export type RunOptions = {
   /** Page images (data URLs) for pages read from their image; production renders the registered PDF. */
   pageImages?: (input: GenInput, pages: number[]) => Promise<Map<number, string>>;
   pastExams?: (ids: string[]) => Promise<PastExamEvidence>;
+  /** v3: the PDF bytes sent whole to the read step; production reads the registered PDF. */
+  pdf?: (input: GenInput) => Promise<Uint8Array | null>;
 };
+
+async function registeredPdfBytes(input: GenInput) {
+  const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
+  return readRegisteredMcpSourcePdf(input.sourceId);
+}
 
 async function registeredImages(input: GenInput, pages: number[]) {
   const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
@@ -291,9 +301,11 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   let callsThisStart = 0;
   let loaded = new Map<number, string>();
   let examEvidence: PastExamEvidence | null = null;
+  let v3Rules: string | undefined;
+  const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
-    extra: { images?: ModelRequest["images"]; page?: number } = {}) => {
+    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number } = {}) => {
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
     const cap = Math.max(MAX_CALLS_PER_START, state.sections.length * 4 + 10);
@@ -313,7 +325,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
     const callFile = path.join(dirOf(id), "calls", `${n}.json`);
     const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
-      model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}) };
+      model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}) };
     try {
       if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => genFakeReply(s, u)))(step, user, attempt);
       const reply = await callModel(request);
@@ -335,9 +347,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     catch (error) { throw new Stop("paused-invalid", `${error instanceof Error ? error.message : String(error)} 출제기준 폴더를 고친 뒤 다시 시작해 주세요.`); }
   };
   /** A call whose reply did not parse or match the schema counts as one try; a dropped connection too. */
-  const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide) => {
+  const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide,
+    extra: { files?: ModelRequest["files"] } = {}) => {
     try {
-      const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide));
+      const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide, extra));
       return parsed.success ? { ok: true as const, value: parsed.data } : { ok: false as const, problem: "응답이 정해진 JSON 형식과 다릅니다." };
     } catch (error) {
       if (error instanceof Stop) throw error;
@@ -350,6 +363,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     await saveState(state);
     loaded = await (options.pages ?? registeredPages)(input);
 
+    if (input.engine === "v3") {
+      const done = await runV3Prefix();
+      if (done) return state;
+    } else {
     // ⓪ pages read from their image (readImages), once per page, several at a time. A failed page keeps its text layer.
     if (input.readImages) {
       const images = (state.images ??= { pages: input.pageNumbers.filter((page) => needsImage(loaded.get(page) ?? "")), done: [], failed: [] });
@@ -390,7 +407,6 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         { severity: "warning", code: "image-read-failed", message: `그림으로 읽지 못해 글자 층만 쓴 쪽: p.${images.failed.join(", ")}` }];
       await withTranscripts(id, loaded);
     }
-    const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
     // ① outline (once). Two tries; an unusable outline stops the run.
     if (!state.sections.length) {
@@ -429,6 +445,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       mergeAcrossSections(state.sections);
       state.phase = "confirm";
       await saveState(state);
+    }
     }
 
     if (state.phase === "confirm") {
@@ -483,6 +500,90 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     state.status = stop.status; state.message = stop.message;
     await saveState(state);
     return state;
+  }
+
+  // -- v3: ① 전체 읽기 + ② 출제 계획 (협업/설계_생성엔진v3_Claude_20261019.md). Returns true when the run ends here.
+  async function runV3Prefix(): Promise<boolean> {
+    const v3 = (state.v3 ??= { gate: [] });
+    if (!v3.map) {
+      const pdf = await (options.pdf ?? registeredPdfBytes)(input).catch(() => null);
+      const pdfSent = Boolean(pdf && pdf.length <= MAX_PDF_BYTES);
+      const thin = input.pageNumbers.filter((page) => needsImage(loaded.get(page) ?? ""));
+      const user = readUser(input, block(input.pageNumbers), thin, pdfSent);
+      const files = pdfSent ? [{ filename: input.fileName, dataUrl: `data:application/pdf;base64,${Buffer.from(pdf!).toString("base64")}` }] : undefined;
+      let result = await askParsed("read", null, 1, READ_SYSTEM, user, readSchema, readReply, undefined, { files });
+      let normalized = result.ok ? normalizeOutline(result.value, input.pageNumbers) : null;
+      if (!normalized?.sections.length) {
+        const problem = result.ok ? "고른 쪽 안의 단원이 하나도 없습니다." : result.problem;
+        result = await askParsed("read", null, 2, READ_SYSTEM, `${user}\n\n[이전 시도에서 걸린 것]\n- ${problem}`, readSchema, readReply, undefined, { files });
+        normalized = result.ok ? normalizeOutline(result.value, input.pageNumbers) : null;
+      }
+      if (!result.ok || !normalized?.sections.length) throw new Stop("paused-invalid", "전체 읽기(지식 지도)를 만들지 못했어요. 다시 시작하면 처음부터 다시 시도해요.");
+      // Notes on picture pages become this run's page readings, so authoring, the gate, judges and reruns all see them.
+      const notes = result.value.pageNotes.filter((note) => input.pageNumbers.includes(note.page) && note.text.trim());
+      for (const note of notes) {
+        const text = cleanPageText(`${loaded.get(note.page) ?? ""}\n\n[그림·식·표 옮김]\n${note.text.trim()}`.trim());
+        await saveJson(transcriptFile(id, note.page), { page: note.page, text });
+        loaded.set(note.page, text);
+      }
+      state.images = { pages: notes.map((note) => note.page), done: notes.map((note) => note.page), failed: [] };
+      state.sections = normalized.sections.map((section) => ({ ...section }));
+      const built = buildMap(result.value, state.sections, loaded, pdfSent);
+      v3.map = built.map;
+      v3.warnings = [...normalized.warnings, ...built.warnings,
+        ...(pdfSent ? [] : [{ severity: "warning" as const, code: "pdf-not-sent", message: pdf ? "PDF가 커서 글자 층만 보냈어요." : "PDF를 읽지 못해 글자 층만 보냈어요." }])];
+      state.outlineWarnings = v3.warnings;
+      for (const section of state.sections) section.classify = { items: mapItems(section.id, built.map), warnings: [] };
+      state.phase = "design";
+      await saveState(state);
+    } else {
+      await withTranscripts(id, loaded);
+    }
+    if (state.phase !== "design") return false;
+    if (input.purpose === "read") {
+      state.phase = "done"; state.status = "done"; state.current = undefined; state.message = "그냥 읽기라 문제는 만들지 않았어요.";
+      await saveState(state);
+      return true;
+    }
+    const map = v3.map!;
+    const user = planUser(input, state.sections, map, suggestedCount(input.purpose, input.pageNumbers, map.skips));
+    let result = await askParsed("plan", null, 1, PLAN_SYSTEM, user, planSchema, planReply);
+    if (!result.ok || !result.value.items.length) {
+      result = await askParsed("plan", null, 2, PLAN_SYSTEM, `${user}\n\n[이전 시도에서 걸린 것]\n- ${result.ok ? "계획이 비었습니다." : result.problem}`, planSchema, planReply);
+    }
+    if (!result.ok || !result.value.items.length) throw new Stop("paused-invalid", "출제 계획을 만들지 못했어요. 다시 시작하면 계획부터 이어가요.");
+    const planned = planToObjectives(result.value.items, state.sections, map);
+    for (const section of state.sections) section.design = { objectives: planned.bySection.get(section.id) ?? [], warnings: [] };
+    v3.warnings = [...(v3.warnings ?? []), ...planned.warnings];
+    state.phase = "confirm";
+    await saveState(state);
+    return false;
+  }
+
+  /** v3 관문: code checks + one model check for the questions accepted in this try. Returns the reasons per objective. */
+  async function gateV3(section: SectionState, attempt: number, fresh: Array<{ question: AuthoredQuestion; objective: Objective }>) {
+    const reasons = new Map<string, string[]>();
+    const sectionText = pageBlock(sectionPageTexts(section, state.sections, loaded).texts).text;
+    const entries = fresh.map(({ question, objective }, index) => {
+      const code = gateCode(question, objective);
+      if (code.leak) reasons.set(objective.id, [code.leak]);
+      const response = question.responses[0];
+      const answer = response.kind === "single-choice" ? (response.options.find((option) => option.id === response.correctOptionId)?.text ?? "") : response.acceptedAnswers.join(" / ");
+      return { label: `Q${index + 1}`, question, objective, answer, hints: code.hints };
+    });
+    const result = await askParsed("gate", section.id, attempt, GATE_SYSTEM, gateUser(sectionText, entries), gateSchema, gateReply);
+    if (result.ok) {
+      for (const verdict of result.value.questions) {
+        const entry = entries.find((candidate) => candidate.label === verdict.questionId.trim().toUpperCase());
+        if (!entry) continue;
+        const list = reasons.get(entry.objective.id) ?? [];
+        if (verdict.derivable) list.push(`문제 글만으로 답이 나옴: ${verdict.derivableEvidence.slice(0, 160)}`);
+        if (verdict.misreading) list.push(`원문과 다르게 읽힘: ${verdict.misreadingDetail.slice(0, 160)}`);
+        if (list.length) reasons.set(entry.objective.id, list);
+      }
+    }
+    for (const { objective } of fresh) state.v3?.gate?.push({ objectiveId: objective.id, attempt, passed: !reasons.has(objective.id), reasons: reasons.get(objective.id) ?? [] });
+    return { reasons, checked: result.ok };
   }
 
   // -- per-section steps (closures over state, input, ask) ------------------------------------------------
@@ -541,12 +642,17 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const targets = attempt === 1 ? objectives : objectives.filter((objective) => problems.has(objective.id));
       if (!targets.length) break;
+      const v3 = input.engine === "v3" && state.v3?.map;
       const guide = await guideFor("author", targets.map((objective) => objective.kind));
-      const prompt = authorPrompt(input, section, targets, items, guide.text);
+      const prompt = v3
+        ? { system: `${AUTHOR_SYSTEM}\n${v3Rules ??= await formatRules(input.guideDir ?? DEFAULT_GUIDE_DIR)}`,
+          user: authorUser(input, section, pageBlock(sectionPageTexts(section, state.sections, loaded).texts).text, targets, state.v3!.map!) }
+        : authorPrompt(input, section, targets, items, guide.text);
       if (state.pastExam) prompt.user += "\n\n" + vibePrompt(state.pastExam.card);
       const user = attempt === 1 ? prompt.user
         : retryUser(prompt.user, { questions: targets.map((objective) => previous.get(objective.id)).filter(Boolean) }, targets.map((objective) => `${objective.id}: ${problems.get(objective.id)}`));
-      const result = await askParsed("author", section.id, attempt, prompt.system, user, authorSchema, authorReply, guide);
+      const result = await askParsed("author", section.id, attempt, prompt.system, user, authorSchema, authorReply, v3 ? undefined : guide);
+      const fresh: Array<{ question: AuthoredQuestion; objective: Objective }> = [];
       const next = new Map<string, string>();
       const nextPrevious = new Map<string, unknown>();
       const byId = new Map(targets.map((objective) => [objective.id, objective]));
@@ -592,7 +698,16 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           const inspected = inspectQuestion(question, { ignoreLatexFormatting: Boolean(state.pastExam) });
           if (inspected.errors.length) { next.set(objectiveId, inspected.errors.map((issue) => issue.message).join(" ")); continue; }
           accepted.set(objectiveId, question);
+          fresh.push({ question, objective });
           warnings.push(...inspected.warnings);
+        }
+      }
+      if (v3 && fresh.length) {
+        const gated = await gateV3(section, attempt, fresh);
+        if (!gated.checked) warnings.push({ severity: "warning", code: "gate-unavailable", message: "관문 AI 검사 응답을 읽지 못해 코드 검사만 했어요." });
+        for (const [objectiveId, reasons] of gated.reasons) {
+          if (attempt === 1) { accepted.delete(objectiveId); next.set(objectiveId, `관문 검사에서 걸림 — ${reasons.join(" / ")}. 꺼낼 것은 본문에 쓰지 말고, 원문의 조건을 빠짐없이 넣어 다시 쓰세요.`); }
+          else warnings.push({ severity: "warning", code: "gate-flagged", message: `다시 써도 관문 검사에 걸렸어요: ${reasons.join(" / ").slice(0, 200)}`, ref: objectiveId });
         }
       }
       for (const objective of targets) {

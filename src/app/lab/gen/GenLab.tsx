@@ -15,6 +15,8 @@ type CallSummary = Omit<GenCall, "system" | "user" | "reply">;
 type Detail = { gen: GenState; label: string; calls: CallSummary[] };
 
 const STEPS: GenStep[] = ["transcribe", "outline", "classify", "design", "author"];
+/** v3 (협업/설계_생성엔진v3_Claude_20261019.md): whole-PDF read → plan → author per unit → gate. */
+const STEPS_V3: GenStep[] = ["read", "plan", "author", "gate"];
 const MODELS = ["gpt-6-sol", "gpt-6-astra", "gpt-6-luna"];
 const EFFORTS = ["low", "medium", "high", "xhigh"];
 const STATUS: Record<string, string> = {
@@ -93,7 +95,9 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const [note, setNote] = useState("");
   const [provider, setProvider] = useState<"chatgpt" | "fake">("chatgpt");
   const [models, setModels] = useState<Record<GenStep, { model: string; effort: string }>>(
-    () => Object.fromEntries(STEPS.map((step) => [step, { ...DEFAULT_GEN_MODELS[step] }])) as Record<GenStep, { model: string; effort: string }>);
+    () => Object.fromEntries([...STEPS, ...STEPS_V3].map((step) => [step, { ...DEFAULT_GEN_MODELS[step] }])) as Record<GenStep, { model: string; effort: string }>);
+  const [engine, setEngine] = useState<"v2" | "v3">("v2");
+  const shown = engine === "v3" ? STEPS_V3 : STEPS;
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [guideDir, setGuideDir] = useState("출제기준");
   const [readImages, setReadImages] = useState(false);
@@ -101,14 +105,15 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const [busy, setBusy] = useState(false);
   const source = sources.find((candidate) => candidate.id === sourceId) ?? sources[0];
   const pages = source ? Array.from({ length: Math.max(0, Math.min(to, source.pageCount) - from + 1) }, (_, index) => from + index) : [];
-  const setAll = (key: "model" | "effort", value: string) => setModels((current) => Object.fromEntries(STEPS.map((step) => [step, { ...current[step], [key]: value }])) as typeof current);
+  const setAll = (key: "model" | "effort", value: string) => setModels((current) => ({ ...current, ...Object.fromEntries(shown.map((step) => [step, { ...current[step], [key]: value }])) }) as typeof current);
 
   const start = async () => {
     if (!source || !pages.length) return;
     setBusy(true); onError("");
     try {
       const { gen } = await api<{ gen: GenState }>("/api/lab/gen", "POST", {
-        sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, models, guideDir, readImages, confirmed: provider === "chatgpt" ? confirmed : undefined,
+        sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, guideDir, engine, confirmed: provider === "chatgpt" ? confirmed : undefined,
+        models: Object.fromEntries(shown.map((step) => [step, models[step]])), readImages: engine === "v3" ? false : readImages,
       });
       setConfirmed(false);
       onStarted(gen.id);
@@ -130,6 +135,10 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         <label>시작 쪽<input type="number" min={1} value={from} onChange={(event) => setFrom(Number(event.target.value))} /></label>
         <label>끝 쪽<input type="number" min={from} value={to} onChange={(event) => setTo(Number(event.target.value))} /></label>
       </div>
+      <fieldset><legend>엔진</legend>
+        <label className="chip"><input type="radio" name="engine" checked={engine === "v2"} onChange={() => setEngine("v2")} />v2 (기본)</label>
+        <label className="chip" title="PDF 통째 읽기 → 출제 계획 → 단원별 출제 → 관문 검사"><input type="radio" name="engine" checked={engine === "v3"} onChange={() => setEngine("v3")} />v3 (Claude 안, 실험)</label>
+      </fieldset>
       <fieldset><legend>목적</legend>
         {(Object.keys(purposeLabel) as Purpose[]).map((key) => (
           <label key={key} className="chip"><input type="radio" name="purpose" checked={purpose === key} onChange={() => setPurpose(key)} />{purposeLabel[key]}</label>
@@ -146,7 +155,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
             <label>전체 모델<select onChange={(event) => setAll("model", event.target.value)} defaultValue="">{["", ...MODELS].map((m) => <option key={m} value={m}>{m || "단계별"}</option>)}</select></label>
             <label>전체 강도<select onChange={(event) => setAll("effort", event.target.value)} defaultValue="">{["", ...EFFORTS].map((e) => <option key={e} value={e}>{e || "단계별"}</option>)}</select></label>
           </div>
-          <table className="models"><tbody>{STEPS.map((step) => (
+          <table className="models"><tbody>{shown.map((step) => (
             <tr key={step}><th>{genStepLabel[step]}</th>
               <td><select value={models[step].model} onChange={(event) => setModels({ ...models, [step]: { ...models[step], model: event.target.value } })}>{MODELS.map((m) => <option key={m}>{m}</option>)}</select></td>
               <td><select value={models[step].effort} onChange={(event) => setModels({ ...models, [step]: { ...models[step], effort: event.target.value } })}>{EFFORTS.map((e) => <option key={e}>{e}</option>)}</select></td></tr>
@@ -154,10 +163,10 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         </>}
       </fieldset>
       <label>출제기준 폴더<input value={guideDir} onChange={(event) => setGuideDir(event.target.value.trim())} placeholder="출제기준" title="비교할 때는 출제기준-후보처럼 복사본 이름" /></label>
-      <label className="check" title="글자가 적은 쪽(600자 미만)을 이미지로 한 번 읽어 원문으로 씁니다. 쪽당 호출 1번."><input type="checkbox" checked={readImages} onChange={(event) => setReadImages(event.target.checked)} />그림·수식 쪽 읽기</label>
+      {engine === "v2" && <label className="check" title="글자가 적은 쪽(600자 미만)을 이미지로 한 번 읽어 원문으로 씁니다. 쪽당 호출 1번."><input type="checkbox" checked={readImages} onChange={(event) => setReadImages(event.target.checked)} />그림·수식 쪽 읽기</label>}
       <label className="check"><input type="checkbox" checked={autoConfirm} onChange={(event) => setAutoConfirm(event.target.checked)} />목표 확인 없이 끝까지</label>
       {provider === "chatgpt" && <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다(ChatGPT 사용량이 나갑니다)</label>}
-      <p className="muted">쪽 {pages.length}개 · 예상 호출: 목차 1 + 목차 수 × {purpose === "read" ? "1" : "3"} (+재시도)</p>
+      <p className="muted">쪽 {pages.length}개 · 예상 호출: {engine === "v3" ? "전체 읽기 1(PDF 통째, 그림 포함) + 출제 계획 1 + 단원 수 × 2(출제·관문) (+재출제)" : `목차 1 + 목차 수 × ${purpose === "read" ? "1" : "3"} (+재시도)`}</p>
       <button className="primary" disabled={busy || !source || !pages.length || (provider === "chatgpt" && !confirmed)}>{busy ? "시작하는 중…" : "시작"}</button>
     </form>
   );
@@ -283,7 +292,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
     <div className="gen-run">
       <div className="gen-status">
         <span className={`tag ${tone(gen.status)}`}>{STATUS[gen.status] ?? gen.status}</span>
-        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.guideDir ?? "출제기준"}
+        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.engine === "v3" ? "엔진 v3" : gen.input.guideDir ?? "출제기준"}
         {label && <span className="muted"> · {label}</span>}
         {gen.images && <div className="muted">그림 쪽 읽기: {gen.images.done.length}/{gen.images.pages.length}쪽{gen.images.failed.length ? ` · 실패 p.${gen.images.failed.join(", ")}` : ""}</div>}
         {gen.forkOf && <div className="muted">고정 재실행({FORK_LABEL[gen.forkOf.from]}) · 기준 실행 {gen.forkOf.genId.slice(0, 12)}… 의 목차·분류{gen.forkOf.from === "author" ? "·목표" : ""}를 그대로 썼어요. 호출·시간·토큰은 다시 돈 단계만 셉니다.</div>}
@@ -296,6 +305,19 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
       </div>
 
       {gen.outlineWarnings?.map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
+      {gen.v3?.map && (() => {
+        const map = gen.v3.map, gate = gen.v3.gate ?? [];
+        const firstFail = gate.filter((verdict) => verdict.attempt === 1 && !verdict.passed);
+        const stillFail = gate.filter((verdict) => verdict.attempt === 2 && !verdict.passed);
+        return (
+          <details className="muted">
+            <summary>v3 지식 지도: 개념 {map.concepts.length} · 관계 {map.relations.length} · 그림 쪽 옮김 {map.pageNotes.length} · PDF {map.pdfSent ? "보냄" : "안 보냄"} · 관문 1차 걸림 {firstFail.length} · 재출제 후에도 걸림 {stillFail.length}</summary>
+            {gen.v3.warnings?.filter((warning) => !gen.outlineWarnings?.includes(warning)).map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
+            <ul>{map.relations.map((relation) => <li key={relation.id}>[{relation.kind}] {relation.statement}</li>)}</ul>
+            {gate.filter((verdict) => !verdict.passed).map((verdict, index) => <p key={index}>관문 {verdict.attempt}차 · {verdict.objectiveId}: {verdict.reasons.join(" / ")}</p>)}
+          </details>
+        );
+      })()}
 
       {["done", "awaiting-confirm"].includes(gen.status) && <ScorePanel id={id} status={gen.status} real={real} runs={runs} onError={onError} />}
 
@@ -327,6 +349,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
                   <div>
                     <b>{objective.statement}</b> <span className="kind">{objective.kind}</span>{objective.importance === "support" && <span className="kind">보조</span>}
                     <div className="cue">{objective.cue} → <i>{objective.recall}</i></div>
+                    {objective.qtype && <div className="muted">[{objective.qtype}]{objective.conditions?.length ? ` 조건: ${objective.conditions.join(" / ")}` : ""}</div>}
                     <small>p.{objective.pages.join(", ")} · 근거 {objective.quotes.length}개</small>
                     {dropped && <div className="warnline">문제 없음: {dropped.reason}</div>}
                   </div>
