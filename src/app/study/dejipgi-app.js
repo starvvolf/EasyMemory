@@ -1753,7 +1753,8 @@ const Chat = {
   toggle(){ this.isOpen() ? this.close() : this.open(); },
   close(){ if (this.docked) return; if (this.ctl) this.ctl.abort(); if (this.el) this.el.hidden = true; if (S.view === "read") render(); },
   open(){
-    if (this.docked){ setPanelTab("ask"); setTimeout(() => this.el.querySelector("textarea").focus(), 0); return; }
+    // Docked: the window is already on screen; show what was just loaded into it (a saved talk, a card's thread).
+    if (this.docked){ setPanelTab("ask"); this.paint(); setTimeout(() => this.el.querySelector("textarea").focus(), 0); return; }
     if (!this.el) this.build();
     this.el.hidden = false; this.setMode(this.mode === "max" ? "max" : "normal"); this.paint();
     ensureKatex().then(ok => { if (ok && this.isOpen()) this.paint(); });
@@ -1918,7 +1919,7 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
     this.msgs = note.thread.map(t => ({ role:t.role, content:t.text, quote:t.quote || null, page:t.role === "user" ? t.page : undefined }));
     Object.assign(this, { base:0, noteId:note.id, noteSource:d.sourceCatalogId, noteTitle:note.quote });
     if (this.isOpen()) this.paint(); else this.open();
-    notesApi.seen(d.sourceCatalogId, note.id).then(n => putNote(d, n), () => {});
+    notesApi.seen(d.sourceCatalogId, note.id).then(n => { if (n) putNote(d, n); }, () => {});
   },
   async saveTalk(c){
     if (!notesOn(c.d)) return;
@@ -2465,7 +2466,7 @@ function paintDrawer(){
   const item = (n) => { const [kl, kc] = NOTE_KIND[n.kind];
     return h("button", { class:"nitem", onclick: () => {
       NT.drawer = false; paintDrawer();
-      if (n.kind === "talk"){ Chat.openTalk(d, n); return; }
+      if (n.kind === "talk"){ if (S.reader.page !== n.page) goPage(n.page); Chat.openTalk(d, n); return; }
       if (S.reader.page !== n.page) goPage(n.page);
       openNote(d, n.id, true);
       setTimeout(() => { const m = document.querySelector(`.nu[data-note="${n.id}"]`); if (m) m.scrollIntoView({ block:"center", behavior:"smooth" }); }, 400);
