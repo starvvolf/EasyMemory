@@ -707,6 +707,8 @@ function FlowPanel({ gen, onChange, onError }: { gen: GenState; onChange: () => 
   const title = (sectionId?: string) => gen.sections.find((section) => section.id === sectionId)?.title ?? sectionId ?? "";
   const pagesOf = (sectionId?: string) => gen.sections.find((section) => section.id === sectionId)?.pages ?? [];
   const running = gen.status === "running" || gen.status === "queued";
+  // Lab runs assume reading front to back (engine comparison); the reading position steers only study-screen runs.
+  const steer = gen.input.origin === "study";
   const say = (mark: GenMark) => {
     switch (mark.event) {
       case "start": return mark.note && mark.note !== "outline" ? `다시 시작 (${mark.note}부터)` : "시작 — 읽기 화면·PDF·쉬운 설명·번역·물어보기는 이때부터";
@@ -722,7 +724,7 @@ function FlowPanel({ gen, onChange, onError }: { gen: GenState; onChange: () => 
     }
   };
   // Was the unit holding the reading page (or the next one after it) the next unit started after each focus change?
-  const followed = marks.flatMap((mark, index) => {
+  const followed = !steer ? [] : marks.flatMap((mark, index) => {
     if (mark.event !== "focus" || !mark.page) return [];
     const next = marks.slice(index + 1).find((later) => later.event === "unit-start");
     if (!next) return [];
@@ -750,7 +752,8 @@ function FlowPanel({ gen, onChange, onError }: { gen: GenState; onChange: () => 
       {followed.map((check, index) => (
         <p key={index} className={check.ok ? "muted" : "warnline"}>{check.ok ? "✓" : "✗"} p.{check.page}로 옮긴 뒤 다음 단원: {title(check.got)}{check.ok ? "" : ` (기대: ${title(check.want)})`}</p>
       ))}
-      {running && (
+      {!steer && <p className="muted">실험실 실행은 앞에서부터 순서대로 읽는다고 보고 모든 엔진이 원문 순서로 만들어요(읽는 쪽 우선은 공부 화면에서 만든 자료에만).</p>}
+      {running && steer && (
         <div className="row">
           <span className="muted">읽는 쪽 알리기(읽기 화면이 쪽을 넘길 때 하는 일)</span>
           <input type="number" min={gen.input.pageNumbers[0]} max={gen.input.pageNumbers.at(-1)} value={page} onChange={(event) => setPage(Number(event.target.value))} style={{ width: 70 }} />
