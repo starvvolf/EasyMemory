@@ -577,7 +577,27 @@ function render(){
 }
 /* 태블릿 모드: a button beside the save chip opens the pairing card (address + 6-digit code, 10 minutes). */
 const TB = { open:false, code:null, expires:0, urls:[], devices:[], err:"", timer:null };
+/* 전체화면 (touch screens): hides the browser's address and tab bars. Works over plain http, unlike installing as an app. */
+function fullscreenButton(){
+  const de = document.documentElement;
+  const can = document.fullscreenEnabled || document.webkitFullscreenEnabled;
+  let touch = false; try{ touch = matchMedia("(pointer: coarse)").matches; }catch(e){}
+  if (!can || !touch || document.getElementById("fsBtn")) return;
+  const store = document.getElementById("store"); if (!store) return;
+  const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const btn = h("button", { class:"tablet-btn", id:"fsBtn", title:"주소창과 탭을 숨기고 화면을 꽉 채워요" });
+  const label = () => { btn.textContent = isFs() ? "전체화면 끝내기" : "⛶ 전체화면"; };
+  btn.addEventListener("click", async () => {
+    try{
+      if (isFs()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else await (de.requestFullscreen || de.webkitRequestFullscreen).call(de, { navigationUI:"hide" });
+    }catch(e){ toast("이 브라우저에서는 전체화면을 쓸 수 없어요."); }
+  });
+  on(document, "fullscreenchange", label); on(document, "webkitfullscreenchange", label);
+  label(); store.parentNode.insertBefore(btn, store);
+}
 function tabletButton(){
+  fullscreenButton();
   if (!env.tablet || document.getElementById("tabletBtn")) return;
   const store = document.getElementById("store"); if (!store) return;
   const btn = h("button", { class:"tablet-btn", id:"tabletBtn", title:"같은 와이파이의 태블릿에서 열기", onclick: () => toggleTablet() }, "📱 태블릿");
@@ -3220,7 +3240,7 @@ return () => {
   clearTimeout(pollTimer);
   for (const P of Object.values(S.pdf)) if (P.doc) P.doc.destroy();
   root.querySelectorAll("#toast, .chatwin").forEach(el => el.remove());
-  document.querySelectorAll("#tabletBtn, #tabletCard").forEach(el => el.remove()); clearInterval(TB.timer);
+  document.querySelectorAll("#tabletBtn, #tabletCard, #fsBtn").forEach(el => el.remove()); clearInterval(TB.timer);
   delete root.dataset.view;
 };
 }

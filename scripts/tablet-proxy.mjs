@@ -97,7 +97,9 @@ export function startTabletProxy({ projectRoot, port = TABLET_PORT, target = 300
         return;
       }
     }
-    if (!pairedDevice(dir, cookieOf(req.headers.cookie, COOKIE))) return send(res, 303, "", { Location: "/tablet/pair" });
+    // The web app manifest (and its icon) is fetched without cookies by the browser; it holds nothing private.
+    const open = req.method === "GET" && url.pathname === "/study-manifest";
+    if (!open && !pairedDevice(dir, cookieOf(req.headers.cookie, COOKIE))) return send(res, 303, "", { Location: "/tablet/pair" });
     if (BLOCKED.some((re) => re.test(url.pathname))) return send(res, 403, page("<h1>컴퓨터에서만 할 수 있어요</h1><p>이 기능은 컴퓨터 화면에서 사용해 주세요.</p>"));
     const upstream = http.request({ host: "127.0.0.1", port: target, method: req.method, path: req.url, headers: forwardHeaders(req) }, (up) => {
       const headers = { ...up.headers };
