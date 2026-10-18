@@ -81,18 +81,25 @@ export const authorSchema = obj({
   })),
 });
 
-const authoredStem = z.object({ kind: z.enum(stemKinds), text: z.string().nullable(), latex: z.string().nullable(), rows: z.array(z.array(z.string())).nullable() });
+// The descriptions matter: engines that send this zod schema as the response format (astra) give the model no other
+// explanation of the fields. Without them the model put the model answer into `after` (2026-10-19 비교 실행: 11/16 보류).
+const authoredStem = z.object({
+  kind: z.enum(stemKinds).describe("블록 종류. 배치는 코드가 위에서 아래로 쌓는다"),
+  text: z.string().nullable().describe("heading·text·box의 글"),
+  latex: z.string().nullable().describe("math의 LaTeX"),
+  rows: z.array(z.array(z.string())).nullable().describe("table의 행(첫 행은 머리글)"),
+});
 export const authoredQuestion = z.object({
-  objectiveId: z.string().trim().min(1),
-  stem: z.array(authoredStem),
+  objectiveId: z.string().trim().min(1).describe("이 문항이 확인하는 목표 id"),
+  stem: z.array(authoredStem).describe("공개 전에 보이는 문제 본문 블록, 읽는 순서대로. 정답은 넣지 않는다"),
   answer: z.object({
-    kind: z.enum(answerKinds),
-    options: z.array(z.object({ text: z.string().nullable(), latex: z.string().nullable() })).nullable(),
-    correctIndex: z.number().int().nullable(),
-    accepted: z.array(z.string()).nullable(),
-    before: z.string().nullable(),
-    after: z.string().nullable(),
-    explanation: z.string(),
+    kind: z.enum(answerKinds).describe("choice: 보기 고르기 / short: 짧은 값 하나 입력 / self-check: 떠올린 뒤 모범 답과 비교"),
+    options: z.array(z.object({ text: z.string().nullable(), latex: z.string().nullable() })).nullable().describe("choice일 때 보기 4개, 아니면 null"),
+    correctIndex: z.number().int().nullable().describe("choice 정답 보기 번호(0부터), 아니면 null"),
+    accepted: z.array(z.string()).nullable().describe("정답은 여기에만 쓴다. short: 인정 답안들(원문 표기 먼저) / self-check: 모범 답 하나(필요하면 여러 줄). choice면 null"),
+    before: z.string().nullable().describe("입력칸 바로 앞에 붙는 짧은 꾸밈 글(예: 'x ='). 정답·풀이를 쓰지 않는다. 없으면 null"),
+    after: z.string().nullable().describe("입력칸 바로 뒤에 붙는 짧은 꾸밈 글(예: 단위 'cm'). 정답·풀이를 쓰지 않는다. 없으면 null"),
+    explanation: z.string().describe("정답인 이유 1~2문장(정답 공개 뒤에 보임)"),
   }),
 });
 export type AuthoredReplyQuestion = z.infer<typeof authoredQuestion>;

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { astraFakeReply, getAstraReadingView, runAstra, scopePlan, type AstraAsk } from "./astra.ts";
+import { answerInPlace, astraFakeReply, astraJsonSchema, astraResponseSchema, getAstraReadingView, runAstra, scopePlan, type AstraAsk } from "./astra.ts";
 import { confirmObjectives, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import type { GenState, GenStep } from "./types.ts";
 
@@ -128,4 +128,16 @@ test("astra 계획: 고른 쪽 밖 목차·개념·연습은 빼고 단원 번�
   assert.deepEqual(plan.practice.map((p) => p.id), ["p1"]);
   assert.equal(dropped.length, 3);
   assert.deepEqual(plan.pageNotes.map((note) => note.page), [2]);
+});
+
+test("astra 답 칸: 응답 형식에 칸 설명이 실리고, self-check 모범 답이 after에 들어오면 accepted로 옮긴다 (비교 실행 11/16 보류)", () => {
+  const schema = JSON.stringify(astraJsonSchema(astraResponseSchema));
+  assert.ok(schema.includes("정답은 여기에만 쓴다") && schema.includes("입력칸 바로 뒤에 붙는 짧은 꾸밈 글"));
+  const base = { objectiveId: "s1-o1", stem: [{ kind: "text" as const, text: "행렬을 쓰시오", latex: null, rows: null }], practiceIds: ["p1"], conceptIds: ["c1"], checkedSkill: "k", requiredPoints: ["r"],
+    evidence: [{ page: 1, kind: "text" as const, quote: "q", supports: "s" }] };
+  const warnings: Parameters<typeof answerInPlace>[1] = [];
+  const moved = answerInPlace({ ...base, answer: { kind: "self-check", options: null, correctIndex: null, accepted: null, before: null, after: "M = [[1,0,0,-1],[0,0,-1,-1]]", explanation: "e" } }, warnings);
+  assert.deepEqual([moved.answer.accepted, moved.answer.after, warnings.length], [["M = [[1,0,0,-1],[0,0,-1,-1]]"], null, 1]);
+  const unit = { ...base, answer: { kind: "short" as const, options: null, correctIndex: null, accepted: null, before: null, after: "cm", explanation: "e" } };
+  assert.equal(answerInPlace(unit, warnings), unit);
 });
