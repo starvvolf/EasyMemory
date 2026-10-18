@@ -25,7 +25,8 @@ type ResponseBody = {
 };
 export function responseRequest(request: ModelRequest, format: "schema" | "fallback" = "schema"): ResponseBody {
   const useSchema = Boolean(request.schema) && format === "schema";
-  if (request.cachePrefix && (!request.files?.length || !request.schema)) throw new ModelError("not_configured", "PDF 캐싱 요청에는 파일과 공통 응답 스키마가 필요해요.");
+  // PDF 1회 통제: astra's later calls keep the shared prefix (instructions + schema) but carry no file.
+  if (request.cachePrefix && !request.schema) throw new ModelError("not_configured", "공통 접두부 요청에는 공통 응답 스키마가 필요해요.");
   const baseInstructions = request.cachePrefix ?? request.system;
   const instructions = request.schema && !useSchema
     ? `${baseInstructions}\n\n응답은 다음 JSON Schema를 따르는 JSON 객체 하나만 쓴다.\n${JSON.stringify(request.schema)}`
@@ -38,10 +39,10 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
     instructions,
     // With page images the user turn becomes text plus one labelled image per page.
     input: request.cachePrefix ? [
-      { role: "user", content: [
-        ...(request.files ?? []).map(file => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
-        { type: "input_text", text: "첨부 자료 끝" },
-      ] },
+      ...(request.files?.length ? [{ role: "user", content: [
+        ...request.files.map(file => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
+        { type: "input_text" as const, text: "첨부 자료 끝" },
+      ] }] : []),
       { role: "developer", content: request.system },
       { role: "user", content: request.images?.length ? [
         { type: "input_text", text: userText },
@@ -157,9 +158,11 @@ export const chatgptBackend: ModelBackend = {
   async call(request) {
     const accessToken = await chatGptAccessToken(request.caller.uid);
     const send = async (format: "schema" | "fallback") => {
+      // Built outside the network try: a request the code itself refuses must not read as "could not connect".
+      const body = JSON.stringify(responseRequest(request, format));
       try {
         return await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-          body: JSON.stringify(responseRequest(request, format)), signal: request.signal });
+          body, signal: request.signal });
       } catch { throw new ModelError("transient", "ChatGPT 모델 서버에 연결하지 못했어요."); }
     };
     const { response, format } = await sendWithFallback(send, Boolean(request.schema));

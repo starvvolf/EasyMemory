@@ -189,4 +189,6 @@ test("PDF 파일은 input_file로, 글보다 앞에 보낸다(같은 PDF를 여�
   assert.deepEqual(author.input[0].content, [{ type: "input_file", filename: "a.pdf", file_data: "data:application/pdf;base64,JVBE" }, { type: "input_text", text: "첨부 자료 끝" }]);
   assert.deepEqual(solver.input.slice(1), [{ role: "developer", content: "독립 풀이 지시" }, { role: "user", content: "정답 없는 문제" }]);
   assert.equal(responseRequest(base, "fallback").instructions, responseRequest({ ...base, system: "다른 단계", user: "다른 내용" }, "fallback").instructions);
+  // PDF 1회 통제: later astra calls keep the shared prefix without the file (this threw and read as "could not connect").
+  assert.deepEqual(responseRequest({ ...base, files: [] }).input, [{ role: "developer", content: "출제 지시" }, { role: "user", content: "출제 데이터" }]);
 });
