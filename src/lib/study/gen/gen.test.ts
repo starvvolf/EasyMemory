@@ -507,3 +507,32 @@ test("공부 화면: 구분자 없이 쓴 LaTeX 정답은 수식으로 감싼다
   assert.equal(showMath("큐에 들어간 적 없는 정점"), "큐에 들어간 적 없는 정점");
   assert.equal(showMath("$a^{2}$"), "$a^{2}$");
 });
+
+test("v3: 전체 읽기 → 출제 계획 → 출제, 관문이 '꺼낼 것'을 본문에 쓴 문항을 다시 쓰게 한다", async () => withData(async () => {
+  const sent: string[] = [];
+  const fakeReply = (step: GenStep, user: string, attempt: number) => {
+    sent.push(step);
+    const reply = genFakeReply(step, user);
+    if (step !== "author" || attempt !== 1) return reply;
+    // First try writes what must be recalled into the stem and asks for something countable from it, so the answer
+    // itself is not in the stem (그래픽스03 q-s6-o5: the bit table is given, "which bit is near?" → 5).
+    const parsed = JSON.parse(reply) as { questions: Array<{ stem: Array<{ text: string }>; answer: { kind: string; accepted: string[] } }> };
+    parsed.questions[0].stem[0].text = `${parsed.questions[0].answer.accepted[0]} 위 문장의 낱말 수는?`;
+    parsed.questions[0].answer = { ...parsed.questions[0].answer, kind: "short", accepted: ["17"] };
+    return JSON.stringify(parsed);
+  };
+  const run = await runGen((await createGen({ ...base, purpose: "core", autoConfirm: true, engine: "v3" })).id, caller,
+    { pages, fakeReply, pdf: async () => new Uint8Array([37, 80, 68, 70]) });
+  assert.equal(run.status, "done", run.message);
+  const order = await steps(run.id);
+  assert.deepEqual(order.slice(0, 2), ["read#1", "plan#1"]);
+  assert.ok(!order.some((step) => /^(outline|classify|design|transcribe)/.test(step)), "v3 does not run the v2 steps");
+  const gate = run.v3?.gate ?? [];
+  const leaked = gate.find((verdict) => verdict.attempt === 1 && !verdict.passed);
+  assert.ok(leaked?.reasons.some((reason) => reason.includes("꺼낼 것")), "the code gate catches the recall written into the stem");
+  assert.ok(gate.some((verdict) => verdict.objectiveId === leaked!.objectiveId && verdict.attempt === 2 && verdict.passed), "re-authored once and passed");
+  const objectives = run.sections.flatMap((section) => section.design?.objectives ?? []);
+  assert.equal(run.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0), objectives.length);
+  assert.ok(objectives.every((objective) => objective.given && objective.qtype));
+  assert.ok((await studyDocument(run.id))?.document.questions.length);
+}));
