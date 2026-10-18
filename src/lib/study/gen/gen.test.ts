@@ -7,7 +7,7 @@ import { ModelError } from "../../ai/model.ts";
 import { validateDocument, type AuthoringDocument } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkClassify, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
-import { confirmObjectives, createGen, enqueueGen, forkGen, loadGen, studyDocument, readGenCalls, readSectionDocument, runGen, type RunOptions } from "./runner.ts";
+import { byFocus, confirmObjectives, createGen, enqueueGen, forkGen, loadGen, studyDocument, readGenCalls, readSectionDocument, runGen, type RunOptions } from "./runner.ts";
 import { authorSchema, classifySchema, designSchema, outlineSchema } from "./schemas.ts";
 import type { GenStep, Issue } from "./types.ts";
 
@@ -541,4 +541,29 @@ test("v3: 전체 읽기 → 출제 계획 → 출제, 관문이 '꺼낼 것'을 
   assert.equal(run.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0), objectives.length);
   assert.ok(objectives.every((objective) => objective.given && objective.qtype));
   assert.ok((await studyDocument(run.id))?.document.questions.length);
+}));
+
+test("v3 만들면서 읽기: 두 번 걸린 문항은 보류(공개 안 함), 다시 만들기는 지도를 다시 읽지 않음, 읽는 단원부터", async () => withData(async () => {
+  // Always writes the recall into the stem, so the gate fails it both times.
+  const fakeReply = (step: GenStep, user: string) => {
+    const reply = genFakeReply(step, user);
+    if (step !== "author") return reply;
+    const parsed = JSON.parse(reply) as { questions: Array<{ stem: Array<{ text: string }>; answer: { kind: string; accepted: string[] } }> };
+    parsed.questions[0].stem[0].text = `${parsed.questions[0].answer.accepted[0]} 위 문장의 낱말 수는?`;
+    parsed.questions[0].answer = { ...parsed.questions[0].answer, kind: "short", accepted: ["17"] };
+    return JSON.stringify(parsed);
+  };
+  const run = await runGen((await createGen({ ...base, purpose: "core", autoConfirm: true, engine: "v3" })).id, caller,
+    { pages, fakeReply, pdf: async () => new Uint8Array([37, 80, 68, 70]) });
+  const held = run.sections.flatMap((section) => section.author?.dropped ?? []);
+  assert.ok(held.some((drop) => drop.reason.startsWith("보류")), "held back after the second failure");
+  const shown = (await studyDocument(run.id))?.document.questions ?? [];
+  assert.ok(!shown.some((question) => held.some((drop) => question.id.includes(drop.objectiveId))), "held questions are not published");
+  const fork = await forkGen(run.id, { from: "author" });
+  assert.ok(fork.v3?.map, "the knowledge map is carried over");
+  const rerun = await runGen(fork.id, caller, { pages, pdf: async () => new Uint8Array([37, 80, 68, 70]) });
+  assert.ok(!(await steps(rerun.id)).some((step) => step.startsWith("read")), "remake does not read the PDF again");
+  // Reading order: the unit with the page, then the ones after it, then the ones before.
+  const units = [{ id: "a", pages: [1, 2] }, { id: "b", pages: [3, 4] }, { id: "c", pages: [5] }];
+  assert.deepEqual(byFocus(units, 3).map((unit) => unit.id), ["b", "c", "a"]);
 }));

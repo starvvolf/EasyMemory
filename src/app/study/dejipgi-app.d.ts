@@ -1,4 +1,4 @@
-import type { StudyDeck } from "@/lib/study/from-authoring";
+import type { StudyDeck, StudyOutlineSection } from "@/lib/study/from-authoring";
 import type { NoteTurn, StudyNote } from "@/lib/study/notes";
 import type { TodayPlan } from "@/lib/study/plan";
 import type { LedgerEntry, PatchMap } from "@/lib/study/quality";
@@ -11,10 +11,16 @@ export type DejipgiMaterialStatus = {
   status: "waiting" | "running" | "confirm" | "paused" | "authoring" | "ready" | "failed"; message: string; artifactId?: string;
   /** With "confirm": the designed objectives and the ones checked by default. */
   objectives?: DejipgiObjective[]; chosen?: string[];
+  /** While it is being made: the outline with each unit's planned goals and where the unit is (만드는 중, 보류 …). */
+  outline?: Array<StudyOutlineSection & { state: "waiting" | "making" | "ready" | "held"; held: number }>;
+  /** v3 knowledge map as text (용어 지도 starts from it). */
+  knowledge?: string;
 };
 export type DejipgiBuilderEngine = {
   /** `purpose`: core | understand | all (engine v2 purposes); `note`: the learner's free memo. */
-  start(input: { file: File; from: number; to: number; purpose: string; note: string; readImages: boolean; pastExamSourceIds?: string[] }): Promise<{ requestId: string; sourceId: string }>;
+  start(input: { file: File; from: number; to: number; purpose: string; note: string; readImages: boolean; pastExamSourceIds?: string[]; engine?: "v2" | "v3" }): Promise<{ requestId: string; sourceId: string }>;
+  /** Where the learner is reading while the material is made: that unit is authored next. */
+  focus?(requestId: string, page: number): Promise<void>;
   pastExamSources?(): Promise<Array<{ id: string; fileName: string }>>;
   /** Registers an exam PDF without making questions from it. */
   registerPastExam?(file: File): Promise<{ id: string; fileName: string }>;

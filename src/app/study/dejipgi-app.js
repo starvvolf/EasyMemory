@@ -1216,6 +1216,7 @@ function rememberPage(){
   const d = S.decks[S.reader.deckId]; if (!d || d.example) return;
   d.lastPage = S.reader.page;
   if (d.pending) savePending(); else Store.save(d);
+  tellFocus();
 }
 function hideObjective(d, objectiveId, why){
   d.hidden = [...new Set([...(d.hidden || []), objectiveId])];
@@ -1474,7 +1475,8 @@ function renderReader(){
       h("button", { class:"qbtn", disabled: R.page <= 1, "aria-label":"이전 쪽", onclick: () => goPage(R.page - 1) }, "‹"),
       pg, h("span", { class:"num", text:`/ ${total}` }),
       h("button", { class:"qbtn", disabled: R.page >= total, "aria-label":"다음 쪽", onclick: () => goPage(R.page + 1) }, "›"))));
-  if (d.pending) wrap.append(h("div", { style:"margin-bottom:12px" }, pendingNote(d)));
+  const making = pendingOf(d);
+  if (making) wrap.append(h("div", { style:"margin-bottom:12px" }, pendingNote(making)));
 
   const page = h("section", { class:"rpage" + (wide ? " wide" : "") });
   let sheet;
@@ -2073,8 +2075,10 @@ const TermMap = {
     return { groups, story:str(x.story, 8000) };
   },
   async source(d){
-    const [a, b] = this.range(d), n = b - a + 1, per = Math.max(600, Math.min(3000, Math.floor(52000 / n)));
-    const parts = [];
+    // A v3 material already has a knowledge map from reading the whole PDF: start from it, with less page text.
+    const p = pendingOf(d), known = String(d.knowledge || (p && p.pending.knowledge) || "");
+    const [a, b] = this.range(d), n = b - a + 1, per = Math.max(400, Math.min(3000, Math.floor((52000 - known.length) / n)));
+    const parts = known ? [known] : [];
     for (let p = a; p <= b; p++){ const t = String(await pageText(d, p) || "").trim(); if (t) parts.push(`[원문 p.${p}]\n${t.slice(0, per)}`); }
     return parts.join("\n\n");
   },
@@ -2965,6 +2969,11 @@ function notesButton(d){
 }
 /* 목차 (서랍의 두 번째 탭): the material's own AI outline from generation — unit → part → goal — with where I got stuck.
    Red dot = 모르는 것 notes on those pages; "틀림" = a weak goal. Old-flow materials (no outline) list goals by page. */
+function unitState(d, sec){
+  const p = pendingOf(d), out = p && p.pending.outline;
+  if (!Array.isArray(out)) return null;
+  return out.find(u => u.title === sec.title && (u.pages || [])[0] === (sec.pages || [])[0]) || null;
+}
 function tocList(d){
   const R = S.reader, notes = noteList(d), hidden = new Set(d.hidden || []);
   const notesIn = (pages) => { const set = new Set(pages); return notes.filter(n => set.has(n.page)).length; };
@@ -2984,11 +2993,15 @@ function tocList(d){
     const objs = sec.objectives.filter(o => !hidden.has(o.id));
     const allPages = [...new Set([...(sec.pages || []), ...objs.flatMap(o => o.pages || [])])].sort((a, b) => a - b);
     const weakN = objs.filter(o => objectiveState(d, o.id) === "weak").length;
+    const unit = unitState(d, sec);
     const parts = []; const byPart = new Map();
     for (const o of objs){ const k = o.part || ""; if (!byPart.has(k)){ byPart.set(k, []); parts.push(k); } byPart.get(k).push(o); }
     return h("section", { class:"tsec" },
       h("button", { class:"trow sec" + (here(allPages) ? " in" : ""), onclick: () => goPage(allPages[0] || R.page) },
-        h("span", { class:"tt", text:sec.title }), dot(notesIn(allPages), weakN > 0), h("span", { class:"tp", text:span(allPages) })),
+        h("span", { class:"tt", text:sec.title }),
+        unit && UNIT_LABEL[unit.state] ? h("span", { class:`chip${unit.state === "held" ? " bad" : " acc"}`, text:UNIT_LABEL[unit.state] }) : null,
+        unit && unit.state === "ready" && unit.held ? h("span", { class:"chip", title:"관문 검사를 통과하지 못해 빼 둔 문제", text:`보류 ${unit.held}` }) : null,
+        dot(notesIn(allPages), weakN > 0), h("span", { class:"tp", text:span(allPages) })),
       ...parts.flatMap(k => {
         const list = byPart.get(k);
         if (!k) return list.map(goal);
@@ -3363,7 +3376,7 @@ function examField(b){
     finder,
     picked.length ? h("p", { class:"small", style:"color:var(--ask)", text:`기출 ${picked.length}개 반영 · 처음 한 번 기출을 분석하고 문제마다 베끼기 검사를 해서 조금 더 걸려요.` }) : null);
 }
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, engine:"v2", busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
   const flat = [];
@@ -3423,12 +3436,37 @@ function pendingDeck(rec){
   return { id:rec.id, pending:rec, title:rec.title, sourceName:rec.sourceName, sourceCatalogId:rec.sourceId, pageCount:rec.pageCount,
     createdAt:rec.createdAt, example:false, items:[], allItems:[], objectives:[], pages:[], events:[], sched:{}, hidden:[], reported:{}, lastPage:rec.lastPage || 0, skipped:[] };
 }
-function savePending(){ Store.savePending(Object.values(S.decks).filter(d => d.pending).map(d => ({ ...d.pending, lastPage:d.lastPage }))); }
+function savePending(){ Store.savePending(Object.values(S.decks).filter(d => d.pending).map(d => ({ ...d.pending, outline:undefined, knowledge:undefined, lastPage:d.lastPage }))); }
+/* 만들면서 바로 읽기: the material being made that this deck is (the pending deck itself, or the real deck its first units became). */
+function pendingOf(d){
+  if (!d) return null;
+  if (d.pending) return d;
+  return Object.values(S.decks).find(x => x.pending && x.pending.artifactId === d.id && x.pending.status !== "ready") || null;
+}
+/* The plan's outline and goals show on the pending deck before any question exists (목차, 이 쪽의 목표). */
+function applyPendingOutline(d){
+  const out = d.pending.outline;
+  if (!Array.isArray(out) || !out.length) return;
+  d.outline = out.map(sec => ({ title:sec.title, pages:sec.pages, objectives:sec.objectives }));
+  d.objectives = out.flatMap(sec => sec.objectives.map(o => ({ ...o, pages:(o.pages && o.pages.length ? o.pages : sec.pages) })));
+}
+/* The unit the learner is on goes first in the making queue. */
+let focusTimer = null, focusSent = "";
+function tellFocus(){
+  clearTimeout(focusTimer);
+  focusTimer = setTimeout(() => {
+    const d = S.decks[S.reader.deckId], p = pendingOf(d);
+    if (!p || !engine || !engine.focus || !["running", "authoring", "confirm", "waiting"].includes(p.pending.status)) return;
+    const k = p.pending.requestId + ":" + S.reader.page; if (k === focusSent) return;
+    focusSent = k; engine.focus(p.pending.requestId, S.reader.page).catch(() => {});
+  }, 1200);
+}
+const UNIT_LABEL = { waiting:"만들 차례", making:"만드는 중", held:"보류" };
 async function startMaterial(){
   const b = S.builder; if (b.busy || !engine || !b.file) return;
   b.busy = true; b.error = ""; b.status = "PDF를 등록하고 문제 만들기를 시작하는 중…"; render();
   try{
-    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
+    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.engine === "v3" ? { engine:"v3" } : {}), ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
     const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:b.sourceName.replace(/\.pdf$/i, ""), sourceName:b.sourceName,
       pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), createdAt:now(), status:"waiting", message:"" };
     const deck = pendingDeck(rec);
@@ -3486,6 +3524,9 @@ async function pollPending(){
     catch(e){ next = { status:d.pending.status, message:(e && e.message) || "상태를 확인하지 못했어요." }; }
     if (disposed) return;
     if (next.status !== d.pending.status || (next.message || "") !== d.pending.message) changed = true;
+    const outSig = JSON.stringify(next.outline || null);
+    if (outSig !== JSON.stringify(d.pending.outline || null)){ changed = true; d.pending.outline = next.outline; applyPendingOutline(d); }
+    if (next.knowledge) d.pending.knowledge = next.knowledge;
     // Sections authored so far are already a deck: reload it whenever another section is added.
     if (next.artifactId && next.status !== "ready" && ((next.message || "") !== d.pending.message || !d.pending.artifactId)) grew = true;
     Object.assign(d.pending, { status:next.status, message:next.message || "", artifactId:next.artifactId || d.pending.artifactId });
@@ -3604,6 +3645,9 @@ function renderBuilder(){
     thin ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
       h("input", { type:"checkbox", checked:b.readImages ? true : null, disabled:b.busy, onchange:(e) => { b.readImages = e.target.checked; render(); } }),
       h("span", null, h("b", { text:"그림·수식도 읽기" }), h("span", { class:"muted", text:` · 글자가 적은 ${thin}쪽을 그림으로 읽어요 (약 ${Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 문제에 들어가요.` }))) : null,
+    b.pastExamSourceIds.length ? null : h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
+      h("input", { type:"checkbox", checked:b.engine === "v3" ? true : null, disabled:b.busy, onchange:(e) => { b.engine = e.target.checked ? "v3" : "v2"; render(); } }),
+      h("span", null, h("b", { text:"새 엔진(v3, 실험)" }), h("span", { class:"muted", text:" · PDF를 통째로 읽고 지식 지도 → 출제 계획 → 단원별 출제 → 관문 검사. 읽는 단원부터 만들어요." }))),
     h("div", { class:"row" },
       h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "읽기 시작"),
       h("span", { class:"small muted", text:"바로 읽기로 넘어가요. AI가 목표를 정리하면 한 번 확인을 부탁하고, 그다음 문제가 쪽마다 붙어요." }))));

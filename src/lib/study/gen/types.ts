@@ -115,6 +115,8 @@ export type GenState = {
   calls: number;
   /** What runs now, for the screen. */
   current?: { step: GenStep; sectionId?: string; page?: number; attempt: number; progress?: string };
+  /** Units being authored right now (v3 makes several at once). */
+  making?: string[];
   /** Pages read from their image (readImages): chosen once, then done or failed (failed pages keep the text layer). */
   images?: { pages: number[]; done: number[]; failed: number[] };
   outlineWarnings?: Issue[];
@@ -171,3 +173,34 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   plan: { model: "gpt-6-sol", effort: "medium" },
   gate: { model: "gpt-6-sol", effort: "low" },
 };
+
+/**
+ * What the reader shows while a material is being made (만들면서 바로 읽기): the outline with each unit's goals as
+ * soon as they are planned, and where each unit is — waiting, being made, ready, or held back (보류) by the gate.
+ */
+export type GenUnitState = "waiting" | "making" | "ready" | "held";
+export function genOutline(state: GenState) {
+  const confirmed = state.confirmedObjectiveIds ? new Set(state.confirmedObjectiveIds) : null;
+  return state.sections.map((section) => {
+    const objectives = (section.design?.objectives ?? []).filter((objective) => !confirmed || confirmed.has(objective.id));
+    const held = section.author?.dropped?.length ?? 0;
+    const unit: GenUnitState = section.author ? ((section.author.questionCount ?? 0) > 0 ? "ready" : "held")
+      : state.making?.includes(section.id) || state.current?.sectionId === section.id ? "making" : "waiting";
+    return { title: section.title, pages: section.pages, state: unit, held,
+      objectives: objectives.map((objective) => ({ id: objective.id, statement: objective.statement, cue: objective.cue, recall: objective.recall,
+        importance: objective.importance, kind: objective.kind, pages: objective.pages,
+        part: section.parts?.find((part) => part.pages.includes(objective.pages[0]))?.title })) };
+  });
+}
+
+/** The v3 knowledge map as plain text, for reader features that would otherwise read the pages again (용어 지도). */
+export function mapDigest(state: GenState, limit = 30000) {
+  const map = state.v3?.map;
+  if (!map?.concepts?.length) return "";
+  const lines = ["[지식 지도 — 자료를 통째로 읽고 뽑은 개념·관계]"];
+  for (const concept of map.concepts) {
+    lines.push(`- ${concept.name} (${concept.kind}, p.${concept.pages.join(",")}): ${concept.content}${concept.conditions.length ? ` / 조건: ${concept.conditions.join("; ")}` : ""}`);
+  }
+  for (const relation of map.relations ?? []) lines.push(`- [${relation.kind}] ${relation.statement}`);
+  return lines.join("\n").slice(0, limit);
+}

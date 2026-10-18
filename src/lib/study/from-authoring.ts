@@ -48,6 +48,8 @@ export type StudyDeck = {
   skipped: Array<{ questionId: string; reason: string }>;
   /** New-engine materials: the designed objectives by unit, for the one-page summary (정리). */
   outline?: StudyOutlineSection[];
+  /** v3 knowledge map as text (용어 지도). */
+  knowledge?: string;
 };
 export type StudyOutlineObjective = { id: string; statement: string; recall: string; importance: "core" | "support"; pages: number[]; part?: string; kind?: string; cue?: string };
 export type StudyOutlineSection = { title: string; pages: number[]; objectives: StudyOutlineObjective[] };

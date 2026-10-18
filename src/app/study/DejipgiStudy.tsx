@@ -9,7 +9,7 @@ import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type PlannerDeck } from "./dejipgi-app.js";
-import { DEFAULT_GEN_MODELS, defaultChosen, type GenState } from "@/lib/study/gen/types";
+import { DEFAULT_GEN_MODELS, defaultChosen, genOutline, mapDigest, type GenState } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
 import { coachCards, type CoachInput } from "@/lib/study/coach";
 import { buildLexicon, chunkAt, findTerms, importantTerms } from "@/lib/study/chunk";
@@ -79,12 +79,12 @@ export default function DejipgiStudy() {
     // ---- engine v2 (/api/lab/gen) ----
     const isGen = (id: string) => /^gen_[a-f0-9]{32}$/.test(id);
     const genState = async (id: string) => (await readJson<{ gen: GenState; label: string }>(await fetchExperiment(`/api/lab/gen/${id}`), "만드는 상태를 읽지 못했어요."));
-    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[]) => {
+    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[], engine?: "v2" | "v3") => {
       const pageNumbers = Array.from({ length: Math.max(1, to - from + 1) }, (_, index) => from + index);
       const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
-          models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), confirmed: true }),
+          models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), ...(engine && !pastExamSourceIds?.length ? { engine } : {}), confirmed: true }),
       }), "문제 만들기를 시작하지 못했어요.");
       return gen;
     };
@@ -92,30 +92,32 @@ export default function DejipgiStudy() {
       const { gen, label } = await genState(id);
       const done = gen.sections.filter((section) => section.author).length;
       const calls = gen.calls ? ` · 호출 ${gen.calls}번` : "";
+      // 만들면서 바로 읽기: the outline and planned goals show as soon as they exist, with each unit's state.
+      const shown = { ...(gen.sections.some((section) => section.design) ? { outline: genOutline(gen) } : {}), ...(gen.v3?.map ? { knowledge: mapDigest(gen) } : {}) };
       if (gen.status === "awaiting-confirm") {
         const objectives = gen.sections.flatMap((section) => (section.design?.objectives ?? []).map((objective) => ({
           id: objective.id, section: section.title, part: section.parts?.find((part) => part.pages.includes(objective.pages[0]))?.title,
           statement: objective.statement, recall: objective.recall, importance: objective.importance })));
-        return { status: "confirm", message: `목표 ${objectives.length}개를 확인해 주세요`, objectives, chosen: defaultChosen(gen.input.purpose, objectives) };
+        return { ...shown, status: "confirm", message: `목표 ${objectives.length}개를 확인해 주세요`, objectives, chosen: defaultChosen(gen.input.purpose, objectives) };
       }
       // Authored sections are a deck already (artifactId), so the learner can start before the rest is made.
-      const partial = gen.sections.some((section) => (section.author?.questionCount ?? 0) > 0) ? { artifactId: id } : {};
+      const partial = { ...shown, ...(gen.sections.some((section) => (section.author?.questionCount ?? 0) > 0) ? { artifactId: id } : {}) };
       if (gen.status === "paused-login") return { status: "paused", message: `ChatGPT 로그인이 필요해요 · ${gen.message}`, ...partial };
       if (gen.status.startsWith("paused") || gen.status === "interrupted") return { status: "paused", message: gen.message, ...partial };
       if (gen.status === "failed") return { status: "failed", message: gen.message || "문제 만들기가 실패했어요." };
       if (gen.status === "done") {
         const questions = gen.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0);
-        return questions ? { status: "ready", message: "", artifactId: id } : { status: "failed", message: gen.message || "만들어진 문제가 없어요." };
+        return questions ? { ...shown, status: "ready", message: "", artifactId: id } : { status: "failed", message: gen.message || "만들어진 문제가 없어요." };
       }
-      if (gen.current?.step === "transcribe" && gen.images) return { status: "running", message: `그림·수식 쪽 읽는 중 · ${gen.images.done.length}/${gen.images.pages.length}쪽${calls}` };
+      if (gen.current?.step === "transcribe" && gen.images) return { ...shown, status: "running", message: `그림·수식 쪽 읽는 중 · ${gen.images.done.length}/${gen.images.pages.length}쪽${calls}` };
       if (gen.phase === "author") return { ...partial, status: "authoring", message: `문제 만드는 중 · 목차 ${done}/${gen.sections.length}${label ? ` · ${label}` : ""}${calls}` };
       const where = gen.phase === "outline" ? "목차 나누는 중" : `자료 파악·학습 설계 중${gen.sections.length ? ` · 목차 ${gen.sections.length}개` : ""}`;
-      return { status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}${calls}` };
+      return { ...shown, status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}${calls}` };
     };
     const loadGenDecks = async () => {
       const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number; pastExam?: boolean; createdAt?: string }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
       // Finished runs, and runs still being made whose first sections are authored.
-      return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[] }>(
+      return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string }>(
         await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").then((deck) => ({ ...deck, pastExam: run.pastExam === true, madeAt: run.createdAt })).catch(() => null)));
     };
     const loadQuality = async () => readJson<{ patches: PatchMap; counts: Record<string, number> }>(await fetchExperiment("/api/study-quality"), "고친 문제 목록을 읽지 못했어요.");
@@ -146,7 +148,7 @@ export default function DejipgiStudy() {
           const { sources } = await readJson<{ sources: McpSourceCatalogEntry[] }>(await fetchExperiment("/api/mcp-runs/sources"), "등록한 PDF를 읽지 못했어요.");
           return sources.filter((source) => /^src_[a-f0-9]{64}$/.test(source.id));
         },
-        async start({ file, from, to, purpose, note, readImages, pastExamSourceIds }) {
+        async start({ file, from, to, purpose, note, readImages, pastExamSourceIds, engine }) {
           if (session.mode !== "local-experiment") throw new Error("자료 등록과 문제 만들기는 로컬 실험 모드에서만 할 수 있어요.");
           const form = new FormData();
           form.append("pdf", file);
@@ -154,8 +156,13 @@ export default function DejipgiStudy() {
             method: "POST", body: form,
           }), "PDF를 등록하지 못했어요.");
           const source = await findSource(registered.id);
-          const gen = await startGen(source, from, to, purpose, note, readImages, pastExamSourceIds);
+          const gen = await startGen(source, from, to, purpose, note, readImages, pastExamSourceIds, engine);
           return { requestId: gen.id, sourceId: source.id };
+        },
+        async focus(requestId, page) {
+          if (!isGen(requestId)) return;
+          await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/focus`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ page }) }), "읽는 위치를 알리지 못했어요.");
         },
         async restart({ requestId, sourceId, from, to, purpose, note }) {
           if (!isGen(requestId)) {
@@ -166,7 +173,7 @@ export default function DejipgiStudy() {
             return { requestId: request.id };
           }
           const previous = await genState(requestId).catch(() => null);
-          const gen = await startGen(await findSource(sourceId), from, to, previous?.gen.input.purpose ?? purpose, previous?.gen.input.note ?? note ?? "", previous?.gen.input.readImages ?? true, previous?.gen.input.pastExamSourceIds);
+          const gen = await startGen(await findSource(sourceId), from, to, previous?.gen.input.purpose ?? purpose, previous?.gen.input.note ?? note ?? "", previous?.gen.input.readImages ?? true, previous?.gen.input.pastExamSourceIds, previous?.gen.input.engine);
           return { requestId: gen.id };
         },
         async remake({ artifactId, objectiveIds }) {
@@ -346,9 +353,9 @@ export default function DejipgiStudy() {
           loadGenDecks().catch(() => []),
           readJson<{ artifacts: StudyArtifactMeta[] }>(await fetchExperiment("/api/personalization-lab"), "Recaller 출제 문서 목록을 불러오지 못했어요."),
         ]);
-        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[]; pastExam?: boolean; madeAt?: string }> = [
+        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; pastExam?: boolean; madeAt?: string }> = [
           ...fresh.flatMap((deck) => deck ? [deck] : []), ...artifacts.map((meta) => ({ meta }))];
-        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline, pastExam, madeAt }, order) => {
+        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline, knowledge, pastExam, madeAt }, order) => {
           const document = given ?? (await readJson<{ document: AuthoringDocument }>(
             await fetchExperiment(`/api/personalization-lab?id=${encodeURIComponent(meta.id)}`), `${meta.title}을 불러오지 못했어요.`)).document;
           // Questions that fail the item-quality checks stay out of practice; the rest of the document is still usable.
@@ -356,7 +363,7 @@ export default function DejipgiStudy() {
             .map((issue) => [issue.questionId, `검사 제외: ${issue.message}`] as const));
           const own = patches[meta.id];
           const deck = { ...applyPatches(toStudyDeck(meta, document, order, excluded), own, showMath), patchSig: (own ?? []).map((patch) => patch.id).join(","),
-            ...(pastExam ? { pastExam: true } : {}), ...(madeAt && Date.parse(madeAt) ? { madeAt: Date.parse(madeAt) } : {}) };
+            ...(pastExam ? { pastExam: true } : {}), ...(knowledge ? { knowledge } : {}), ...(madeAt && Date.parse(madeAt) ? { madeAt: Date.parse(madeAt) } : {}) };
           // What to recall shows on the one-page summary; bare LaTeX there renders like answers do.
           return outline ? { ...deck, outline: outline.map((section) => ({ ...section,
             objectives: section.objectives.map((objective) => ({ ...objective, recall: showMath(objective.recall) })) })) } : deck;

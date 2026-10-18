@@ -14,7 +14,7 @@ import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
-import { defaultChosen, engines, forkFroms, genStepLabel, genSteps, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
+import { defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { AUTHOR_SYSTEM, authorUser, buildMap, DERIVABLE_SYSTEM, derivableReply, derivableSchema, derivableUser, evidenceInQuestion, formatRules, gateCode, joinUnitMaps, mapItems,
   MAX_PDF_BYTES, MISREAD_SYSTEM, misreadReply, misreadSchema, misreadUser, planReply, planSchema, PLAN_SYSTEM, planToObjectives, planUser, readOutlineReply, readOutlineSchema,
@@ -189,7 +189,9 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
   const now = new Date().toISOString();
   const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued",
     phase: options.from, message: "", calls: 0, sections, outlineWarnings: base.outlineWarnings, forkOf: { genId: base.id, from: options.from },
-    ...(base.images ? { images: structuredClone(base.images) } : {}) };
+    ...(base.images ? { images: structuredClone(base.images) } : {}),
+    // v3: the knowledge map is the read step's result, so a rerun reuses it (purpose change, remake) instead of reading again.
+    ...(base.v3?.map ? { v3: { map: structuredClone(base.v3.map), warnings: base.v3.warnings ?? [], gate: [] } } : {}) };
   if (options.from === "author") {
     // Same objectives as the base: what it confirmed, or the default choice if it stopped at the confirmation.
     const objectives = sections.flatMap((section) => section.design?.objectives ?? []);
@@ -213,7 +215,19 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
   return state;
 }
 
-const queue = globalThis as typeof globalThis & { __studyGenQueue?: Promise<unknown>; __studyGenQueued?: Set<string> };
+const queue = globalThis as typeof globalThis & { __studyGenQueue?: Promise<unknown>; __studyGenQueued?: Set<string>; __studyGenFocus?: Map<string, number> };
+/** Where the learner is reading while a material is being made: units around this page are authored first. */
+export function setGenFocus(id: string, page: number) {
+  if (!idPattern.test(id) || !Number.isInteger(page) || page < 1) throw new GenError(400, "읽는 위치가 올바르지 않습니다.");
+  (queue.__studyGenFocus ??= new Map()).set(id, page);
+}
+/** Units in the order to author: the one being read, then the ones after it, then the ones before. */
+export function byFocus<T extends { pages: number[] }>(sections: T[], page: number | undefined) {
+  if (!page) return sections;
+  const at = sections.findIndex((section) => section.pages.includes(page) || section.pages[0] > page);
+  if (at < 0) return sections;
+  return [...sections.slice(at), ...sections.slice(0, at)];
+}
 /** Saved as queued/running but not queued in this process: the server stopped mid-run. */
 export async function genView(id: string): Promise<GenState | null> {
   const state = await loadGen(id);
@@ -510,26 +524,29 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         await saveState(state);
       }
       const chosen = new Set(state.confirmedObjectiveIds ?? []);
+      const making = new Set<string>();
       const authorOne = async (section: SectionState) => {
         const objectives = (section.design?.objectives ?? []).filter((objective) => chosen.has(objective.id));
         if (!objectives.length) { section.author = { documentPath: null, questionCount: 0, dropped: [], warnings: [] }; return; }
-        await authorSection(section, objectives);
+        making.add(section.id); state.making = [...making];
+        try { await authorSection(section, objectives); }
+        finally { making.delete(section.id); state.making = [...making]; }
         await saveState(state);
       };
-      const todo = state.sections.filter((section) => !section.author);
-      if (input.engine === "v3") {
-        // v3 units are independent (each has its own source, map slice and plan): several at once; each unit's
-        // questions are saved as soon as that unit is done.
-        for (let start = 0; start < todo.length; start += PARALLEL) {
-          const settled = await Promise.allSettled(todo.slice(start, start + PARALLEL).map(authorOne));
-          const stop = settled.find((one) => one.status === "rejected" && one.reason instanceof Stop) as PromiseRejectedResult | undefined;
-          if (stop) throw stop.reason;
-          const failed = settled.find((one) => one.status === "rejected") as PromiseRejectedResult | undefined;
-          if (failed) throw failed.reason;
+      // The unit being read goes first (setGenFocus). Each free slot picks again, so a jump in reading is followed
+      // as soon as one unit finishes.
+      const pick = () => byFocus(state.sections.filter((section) => !section.author && !making.has(section.id)), queue.__studyGenFocus?.get(id))[0];
+      // v3 units are independent (each has its own source, map slice and plan): several at once, each saved as soon
+      // as it is done. v2 keeps one at a time.
+      let failure: unknown = null;
+      const worker = async () => {
+        for (let section = pick(); section && !failure; section = pick()) {
+          try { await authorOne(section); } catch (error) { failure ??= error; if (error instanceof Stop) failure = error; }
         }
-      } else {
-        for (const section of todo) await authorOne(section);
-      }
+      };
+      await Promise.all(Array.from({ length: input.engine === "v3" ? PARALLEL : 1 }, worker));
+      if (failure) throw failure;
+      delete state.making;
       state.phase = "done"; state.status = "done"; state.current = undefined; state.message = "";
       await saveState(state);
     }
@@ -779,8 +796,11 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         const gated = await gateV3(section, attempt, fresh);
         if (!gated.checked) warnings.push({ severity: "warning", code: "gate-unavailable", message: "관문 AI 검사 응답을 읽지 못해 코드 검사만 했어요." });
         for (const [objectiveId, reasons] of gated.reasons) {
-          if (attempt === 1) { accepted.delete(objectiveId); next.set(objectiveId, `관문 검사에서 걸림 — ${reasons.join(" / ")}. 꺼낼 것은 본문에 쓰지 말고, 원문의 조건을 빠짐없이 넣어 다시 쓰세요.`); }
-          else warnings.push({ severity: "warning", code: "gate-flagged", message: `다시 써도 관문 검사에 걸렸어요: ${reasons.join(" / ").slice(0, 200)}`, ref: objectiveId });
+          // Only questions that passed are shown; one that fails again is held back (보류) and listed, not published.
+          accepted.delete(objectiveId);
+          next.set(objectiveId, attempt === 1
+            ? `관문 검사에서 걸림 — ${reasons.join(" / ")}. 꺼낼 것은 본문에 쓰지 말고, 원문의 조건을 빠짐없이 넣어 다시 쓰세요.`
+            : `보류: 다시 써도 관문 검사에 걸림 — ${reasons.join(" / ").slice(0, 200)}`);
         }
       }
       for (const objective of targets) {
@@ -830,6 +850,8 @@ export async function studyDocument(id: string) {
   })).filter((section) => section.objectives.length);
   return {
     outline,
+    // v3: the knowledge map as text, so the reader's 용어 지도 starts from it instead of reading the pages again.
+    ...(state.v3?.map ? { knowledge: mapDigest(state) } : {}),
     meta: { id, title: document.title, artifactSha256: createHash("sha256").update(JSON.stringify(document)).digest("hex"), sourceFile: state.input.fileName,
       sourceCatalogId: state.input.sourceId, sourceTotalPages: source?.pageCount ?? Math.max(...pages) },
     document,
