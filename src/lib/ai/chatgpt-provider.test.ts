@@ -162,8 +162,6 @@ test("형식 거부면 한 번만 JSON 모드로 다시 보내고 이후 호출�
   assert.equal((await sendWithFallback(async () => json(200, {}), true)).format, "schema");
   assert.equal(isFormatRejection(400, { error: { message: "Invalid schema for response_format 'probe'" } }), true);
   assert.equal(isFormatRejection(429, { error: { code: "subscription_sharing_usage_limit_exceeded" } }), false);
-  await assert.rejects(sendWithFallback(async () => json(400, { error: { code: "subscription_sharing_unsupported_capability" } }), true, true), /캐싱 요청이 거부/);
-  assert.equal((await sendWithFallback(async () => json(200, {}), true)).format, "schema", "캐싱 거부가 다른 엔진의 스키마 설정을 바꾸지 않는다");
   resetSchemaSupport();
 });
 
@@ -187,8 +185,8 @@ test("PDF 파일은 input_file로 보낸다", () => {
   assert.deepEqual(author.input[0], solver.input[0]);
   assert.equal(author.instructions, solver.instructions);
   assert.deepEqual(author.text, solver.text);
-  assert.deepEqual(author.prompt_cache_options, { mode: "explicit", ttl: "30m" });
-  assert.deepEqual(author.input[0].content, [{ type: "input_file", filename: "a.pdf", file_data: "data:application/pdf;base64,JVBE" }, { type: "input_text", text: "첨부 자료 끝", prompt_cache_breakpoint: { mode: "explicit" } }]);
+  assert.ok(!JSON.stringify(author).includes("prompt_cache"), "지원 확인이 안 된 명시적 캐시 옵션은 전송하지 않는다");
+  assert.deepEqual(author.input[0].content, [{ type: "input_file", filename: "a.pdf", file_data: "data:application/pdf;base64,JVBE" }, { type: "input_text", text: "첨부 자료 끝" }]);
   assert.deepEqual(solver.input.slice(1), [{ role: "developer", content: "독립 풀이 지시" }, { role: "user", content: "정답 없는 문제" }]);
   assert.equal(responseRequest(base, "fallback").instructions, responseRequest({ ...base, system: "다른 단계", user: "다른 내용" }, "fallback").instructions);
 });
