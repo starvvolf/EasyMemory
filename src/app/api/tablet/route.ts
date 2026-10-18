@@ -21,8 +21,9 @@ async function writeJson(name: string, value: unknown) {
 /** Home-network addresses of this computer, most likely first (Wi-Fi/LAN 192.168.x before others). */
 function addresses() {
   const out: string[] = [];
-  for (const list of Object.values(networkInterfaces())) for (const net of list ?? []) {
-    if (net.family !== "IPv4" || net.internal) continue;
+  // Virtual adapters (WSL/Hyper-V vEthernet, VirtualBox, VMware) are not reachable from a tablet; skip them.
+  for (const [name, list] of Object.entries(networkInterfaces())) for (const net of list ?? []) {
+    if (net.family !== "IPv4" || net.internal || /vEthernet|VirtualBox|VMware|WSL|Hyper-V|Loopback|Bluetooth|Tailscale|ZeroTier/i.test(name)) continue;
     if (/^(192\.168|10)\./.test(net.address) || /^172\.(1[6-9]|2\d|3[01])\./.test(net.address)) out.push(net.address);
   }
   return out.sort((a, b) => Number(!a.startsWith("192.168")) - Number(!b.startsWith("192.168"))).map((ip) => `http://${ip}:${PORT}`);
