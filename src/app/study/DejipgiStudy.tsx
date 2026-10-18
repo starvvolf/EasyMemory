@@ -258,9 +258,9 @@ export default function DejipgiStudy() {
           prompts: async () => readJson<{ ask: string; follow: string }>(await fetchExperiment("/api/study-notes?prompts=1"), "기본 지시를 읽지 못했어요."),
           talk: async (input) => (await noteCall<{ note: StudyNote }>({ action: "talk", ...input })).note,
           async explanations(sourceId: string) {
-            return (await readJson<{ pages: Array<{ page: number; text: string; at: string }> }>(await fetchExperiment(`/api/study-notes?sourceId=${encodeURIComponent(sourceId)}&explain=1`), "쉬운 설명을 불러오지 못했어요.")).pages;
+            return (await readJson<{ pages: Array<{ page: number; goal?: string; text: string; at: string }> }>(await fetchExperiment(`/api/study-notes?sourceId=${encodeURIComponent(sourceId)}&explain=1`), "쉬운 설명을 불러오지 못했어요.")).pages;
           },
-          saveExplanation: async (sourceId: string, page: number, text: string) => { await noteCall({ action: "explain-save", sourceId, page, text }); },
+          saveExplanation: async (sourceId: string, page: number, text: string, goal?: string) => { await noteCall({ action: "explain-save", sourceId, page, text, ...(goal ? { goal } : {}) }); },
         } satisfies NonNullable<DejipgiEnv["notes"]>,
       } : {}),
       ...(session.mode === "local-experiment" ? {

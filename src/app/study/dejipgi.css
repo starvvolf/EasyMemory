@@ -729,6 +729,11 @@
 .dejipgi .pgoal{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .dejipgi .pgoal .goal{width:100%}
 .dejipgi .pgoal-foot{display:flex;align-items:center;gap:6px}
+.dejipgi .goal[aria-expanded="true"]{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.dejipgi .gx{border-left:3px solid color-mix(in srgb,var(--accent) 55%,var(--line));background:color-mix(in srgb,var(--accent) 5%,var(--surface));border-radius:0 10px 10px 0;padding:8px 10px;display:flex;flex-direction:column;gap:8px}
+.dejipgi .goals .gx{margin:2px 0 6px}
+.dejipgi .gx .ex-body{font-size:13.5px}
+.dejipgi .gx-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .dejipgi .stbox{display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid var(--line);border-radius:10px}
 .dejipgi .strow{display:flex;justify-content:space-between;font-size:13px}
 .dejipgi .strow b.bad{color:var(--bad)}

@@ -22,7 +22,7 @@ const body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("talk"), sourceId, page, noteId: z.string().max(60).nullish(),
     turns: z.array(z.object({ role: z.enum(["user", "assistant"]), text: text(8000), quote: text(400).nullish(), page: page.optional() })).min(1).max(80),
     usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional() }),
-  z.object({ action: z.literal("explain-save"), sourceId, page, text: text(8000).min(1) }),
+  z.object({ action: z.literal("explain-save"), sourceId, page, text: text(8000).min(1), goal: z.string().min(1).max(160).nullish() }),
 ]);
 
 async function caller(request: Request) {
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       case "follow": return NextResponse.json({ note: await followUp(who, input) });
       case "chat": return NextResponse.json(await chatReply(who, input.turns));
       case "talk": return NextResponse.json({ note: await saveTalk(who, input) });
-      case "explain-save": return NextResponse.json({ page: await saveExplanation(input.sourceId, input.page, input.text) });
+      case "explain-save": return NextResponse.json({ page: await saveExplanation(input.sourceId, input.page, input.text, input.goal) });
     }
   } catch (error) { return failure(error); }
 }

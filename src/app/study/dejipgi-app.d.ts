@@ -88,9 +88,9 @@ export type DejipgiEnv = {
     /** Fixed server instructions for the 프롬프트 설정 screen (read-only). */
     prompts?(): Promise<{ ask: string; follow: string }>;
     talk(input: { sourceId: string; page: number; noteId: string | null; turns: Array<Omit<NoteTurn, "page"> & { page?: number }> }): Promise<StudyNote>;
-    /** 쪽마다 쉬운 설명 (곁 패널), made once and kept. */
-    explanations?(sourceId: string): Promise<Array<{ page: number; text: string; at: string }>>;
-    saveExplanation?(sourceId: string, page: number, text: string): Promise<void>;
+    /** 쪽마다 쉬운 설명 (곁 패널) and 목표 설명 (`goal` = objective id), made once and kept. */
+    explanations?(sourceId: string): Promise<Array<{ page: number; goal?: string; text: string; at: string }>>;
+    saveExplanation?(sourceId: string, page: number, text: string, goal?: string): Promise<void>;
   };
   /** ChatGPT account for in-app generation; `show` is false when the host does not generate with ChatGPT. */
   account?: {

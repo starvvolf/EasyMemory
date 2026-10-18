@@ -827,10 +827,10 @@ function startWeak(subject){
 function itemsOnPage(d, page){
   return d.items.filter(it => it.page === page || (d.objectives.find(o => o.id === it.objectiveId)?.pages || []).includes(page));
 }
-function startCheck(deckId, page){
+function startCheck(deckId, page, objId){
   const d = S.decks[deckId];
-  const items = itemsOnPage(d, page);
-  if (!items.length){ toast("이 쪽에 연결된 문제가 없어요."); return; }
+  const items = objId ? d.items.filter(it => it.objectiveId === objId) : itemsOnPage(d, page);
+  if (!items.length){ toast(objId ? "이 목표에 연결된 문제가 없어요." : "이 쪽에 연결된 문제가 없어요."); return; }
   // From the reader the check opens over the page (blurred so the answer can't be read off it) and closes back to it.
   const overlay = S.view === "read";
   S.session = { queue: items.map(it => ({ deck:d.id, item:it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"check", page, viewed:new Set(), overlay };
@@ -1202,7 +1202,7 @@ function goPage(n){
   if (overlayCheck()) S.session = null;
   n = Math.max(1, Math.min(pageTotal(d), Math.round(n) || 1));
   if (n === R.page){ render(); return; }
-  resetExplain(); R.page = n; R.active = null; R.zoom = false; rememberPage(); render();
+  resetExplain(); GoalEx.open = null; R.page = n; R.active = null; R.zoom = false; rememberPage(); render();
   const bar = document.querySelector(".rbar");
   if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ block:"start" });
 }
@@ -1487,10 +1487,10 @@ function renderReader(){
     onclick: () => { S.plan.prefs.chatFloat = false; Store.savePlan(S.plan); if (Chat.el) Chat.el.hidden = true; render(); } }, "질문 창 옆에 붙이기"));
   if (objs.length && !(wide && dockWanted())){
     holder.append(h("div", { class:"goals" }, h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
-      objs.map((o, i) => h("div", { class:"goalrow" },
-        h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", title:"원문에서 이 부분만 진하게 보기", onclick: () => { R.active = R.active === o.id ? null : o.id; render(); } },
+      objs.flatMap((o, i) => [h("div", { class:"goalrow" },
+        h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", "aria-expanded": GoalEx.isOpen(d, o) ? "true" : "false", title:"이 목표를 정리해서 보기 (원문에서도 이 부분을 진하게)", onclick: () => GoalEx.toggle(d, o) },
           h("span", { class:"gnum", text:String(i + 1) }), h("span", { text:o.statement })),
-        d.example ? null : h("button", { class:"linkish", title:"이 목표의 문제를 연습·복습에서 빼기", onclick: () => hideObjective(d, o.id) }, "빼기")))));
+        d.example ? null : h("button", { class:"linkish", title:"이 목표의 문제를 연습·복습에서 빼기", onclick: () => hideObjective(d, o.id) }, "빼기")), GoalEx.node(d, o)])));
   }
   if (P && P.status === "error") page.append(h("p", { class:"attach", text:"원본 PDF를 불러오지 못했어요. 원본 등록 상태를 확인해 주세요." }));
 
@@ -1606,8 +1606,9 @@ function goalsPane(d, objs, n){
   return [h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
     ...objs.map((o, i) => { const [label, cls] = GOAL_STATE[objectiveState(d, o.id)] || GOAL_STATE.none;
       return h("div", { class:"pgoal" + (R.pulse.has(o.id) ? " pulse" : "") },
-        h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", title:"원문에서 이 부분만 진하게 보기", onclick: () => { R.active = R.active === o.id ? null : o.id; render(); } },
+        h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", "aria-expanded": GoalEx.isOpen(d, o) ? "true" : "false", title:"이 목표를 정리해서 보기 (원문에서도 이 부분을 진하게)", onclick: () => GoalEx.toggle(d, o) },
           h("span", { class:"gnum", text:String(i + 1) }), h("span", { text:o.statement })),
+        GoalEx.node(d, o),
         h("div", { class:"pgoal-foot" }, h("span", { class:"chip " + cls, text:label }), h("span", { class:"grow" }),
           d.example ? null : h("button", { class:"linkish", title:"이 목표의 문제를 연습·복습에서 빼기", onclick: () => hideObjective(d, o.id) }, "빼기"))); }),
   ];
@@ -1717,6 +1718,9 @@ const PROMPTS = {
   ask: { label:"용어 물어보기", when:"원문을 드래그해 [물어보기]를 누를 때 나오는 모르는 것 카드예요. 이미 물어본 말은 저장된 답을 다시 보여 줘서, 바꾼 요청은 새로 묻는 말부터 적용돼요.", def:"",
     presets:[["기본", ""], ["더 쉽게", "중학생도 알아듣게 쉬운 말로. 핵심 답은 한 문장."], ["예시 하나", "덧붙일 한 줄(extra)에 이 자료 맥락의 짧은 예시를 하나 넣어 줘."], ["원어 풀이", "영어 원어 용어는 단어 단위로 뜻을 풀어 줘(예: frame=틀, buffer=임시 저장소)."]],
     auto:["자료 이름", "학습 목적", "고른 글", "고른 글이 든 문장", "이 쪽 원문"] },
+  goal: { label:"목표 설명", when:"‘이 쪽에서 익힐 것’의 목표를 누르면 펼쳐지는 정리예요. 목표마다 처음 한 번 만들고 저장해서, 바꾼 요청은 [다시 정리]부터 적용돼요.", def:"",
+    presets:[["기본", ""], ["원문 예시까지", "원문에 나온 예시와 수치도 빠짐없이 함께 정리해 줘."], ["서술형 답안식", "서술형 시험 답안에 그대로 옮겨 쓸 수 있는 문장으로 정리해 줘."], ["용어 풀이 포함", "어려운 용어는 원문 그대로 쓰고 바로 뒤 괄호에 쉬운 풀이를 붙여 줘."]],
+    auto:["자료 이름", "학습목표", "목표의 근거 구절", "목표가 걸친 쪽의 원문(최대 3쪽)"] },
   follow: { label:"카드에서 이어 묻기", when:"모르는 것 카드 아래에서 이어서 물을 때예요.", def:"",
     presets:[["기본", ""], ["더 짧게", "한두 문장으로 답해 줘."], ["예시로", "가능하면 예시 하나로 답해 줘."]],
     auto:["자료 이름", "고른 글", "앞선 답", "이어진 대화", "이 쪽 원문", "새 질문"] },
@@ -1742,6 +1746,7 @@ function fixedText(k){
     const sample = Chat.prompt({ d:{ title:"(자료 이름)" }, page:"N", objs:[{ statement:"(이 쪽 학습목표)" }] }, "(이 쪽 원문)", k === "chat" ? "(내 요청)" : "");
     return k === "explain" ? `${sample}\n[요청]\n(내 요청)\n맨 마지막 줄에는 [다음] 줄을 쓴다.` : sample;
   }
+  if (k === "goal") return GoalEx.prompt({ title:"(자료 이름)" }, { statement:"(학습목표)", quote:"(목표의 근거 구절)" }, "[원문 p.N]\n(그 쪽 원문)", "(내 요청)");
   if (!PS.fixed) return "불러오는 중…";
   return `${PS.fixed[k]}\n\n[학습자가 정한 답변 방식 — 위의 형식·근거 규칙과 충돌하면 위 규칙을 따른다]\n(내 요청)`;
 }
@@ -1751,6 +1756,9 @@ async function buildPreview(k){
     const c = { d, page:R.page, objs:d.objectives.filter(o => o.pages.includes(R.page)) }, text = await pageText(d, R.page);
     const mine = (PS.draft[k] ?? promptOf(k)) || PROMPTS[k].def;
     PS.preview = k === "explain" ? `${Chat.prompt(c, text)}\n[요청]\n${mine}\n맨 마지막 줄에는 [다음] 줄을 쓴다.` : Chat.prompt(c, text, mine) + "\n(이어서 최근 대화와 새 질문)";
+  } else if (k === "goal" && S.view === "read" && d && d.objectives.some(o => o.pages.includes(R.page))){
+    const o = d.objectives.find(x => x.pages.includes(R.page));
+    PS.preview = GoalEx.prompt(d, o, await GoalEx.source(d, o), (PS.draft[k] ?? promptOf(k)) || "");
   } else PS.preview = fixedText(k).replace("(내 요청)", (PS.draft[k] ?? promptOf(k)) || "(비어 있음 — 이 부분은 빠져요)");
   paintPrompts();
 }
@@ -1784,7 +1792,7 @@ function paintPrompts(){
         h("div", { class:"ex-presets" }, def.auto.map(t => h("span", { class:"chip", text:t })))),
       h("details", null, h("summary", { class:"small", text:"고정 지시 보기 (바꿀 수 없음 · 내 요청보다 우선)" }), h("pre", { class:"pset-pre", text:fixedText(k) })),
       h("details", { open: PS.preview ? true : null, ontoggle: (e) => { if (e.target.open && !PS.preview) buildPreview(k); } },
-        h("summary", { class:"small", text: (k === "explain" || k === "chat") && S.view === "read" ? "실제로 보내는 모양 (지금 보는 쪽 기준)" : "실제로 보내는 모양" }),
+        h("summary", { class:"small", text: (k === "explain" || k === "chat" || k === "goal") && S.view === "read" ? "실제로 보내는 모양 (지금 보는 쪽 기준)" : "실제로 보내는 모양" }),
         h("pre", { class:"pset-pre", text: PS.preview || "만드는 중…" }))));
   if (el) el.replaceWith(fresh); else root.append(fresh);
 }
@@ -1801,10 +1809,10 @@ const Explain = {
   auto(){ return !(S.plan.prefs && S.plan.prefs.autoExplain === false); },
   load(d){
     const k = this.sid(d); if (this.src[k]) return;
-    const e = this.src[k] = { status:"loading", map:new Map() };
+    const e = this.src[k] = { status:"loading", map:new Map(), goals:new Map() };
     if (!notesOn(d) || !notesApi.explanations){ e.status = "ready"; return; }
-    notesApi.explanations(k).then(list => { for (const x of list) e.map.set(x.page, x.text); }, () => {})
-      .then(() => { e.status = "ready"; const R = S.reader, cur = S.decks[R.deckId]; if (S.view === "read" && Chat.docked && cur && this.sid(cur) === k){ this.paintNode(); this.want(cur, R.page); } });
+    notesApi.explanations(k).then(list => { for (const x of list){ if (x.goal) e.goals.set(x.goal, x.text); else e.map.set(x.page, x.text); } }, () => {})
+      .then(() => { e.status = "ready"; const R = S.reader, cur = S.decks[R.deckId]; if (S.view === "read" && cur && this.sid(cur) === k) GoalEx.paintAll(); if (S.view === "read" && Chat.docked && cur && this.sid(cur) === k){ this.paintNode(); this.want(cur, R.page); } });
   },
   stop(){ clearTimeout(this.timer); this.timer = null; if (this.run && this.run.ctl) this.run.ctl.abort(); this.run = null; },
   want(d, page){
@@ -1871,6 +1879,99 @@ ${explainAsk().slice(0, 1500)}
   next(d, page){ const e = this.src[this.sid(d)], t = e && e.map.get(page); return t ? splitNext(t).next : []; },
   paintNode(){ const el = document.getElementById("explainCard"), R = S.reader, d = S.decks[R.deckId]; if (el && d) el.replaceWith(this.node(d, R.page)); if (Chat.el && !Chat.busy) Chat.paintSugs(); },
   paintBody(){ const b = document.getElementById("explainBody"); if (b && this.run) b.replaceChildren(...richLines(shown(this.run.text) || "…")); else this.paintNode(); },
+};
+/* ----- 목표 설명: press a goal in "이 쪽에서 익힐 것" and it opens into a compact note of exactly what the goal asks —
+   nothing left out, nothing added; length follows the goal, not a line count. Made once per goal and kept beside the
+   page explanations (study-notes/<source>.explain.json, entries with `goal`). ----- */
+const GOAL_RULES = `너는 학습자가 읽고 있는 자료의 학습목표 하나를 정리해 주는 튜터다.
+
+규칙
+- [학습목표]가 요구하는 내용을 빠짐없이, 그 이상은 덧붙이지 않고 정리된 노트 형태로 쓴다. 분량은 목표에 맞춘다: 정의 하나면 짧게, 조건·단계·비교 항목이 여럿이면 그 수만큼 모두 쓴다.
+- 근거는 아래 [원문]이다. 목표에 필요한데 원문에 없는 부분은 그 자리에 "자료에 없음"이라고만 짧게 밝힌다. 지어내지 않는다.
+- 항목이 여럿이면 "1)" "2)"로 나누고, 과정은 순서대로 쓴다. 식은 $...$ 안에 LaTeX로 쓰고 기호의 뜻을 붙인다.
+- 원문의 기호와 용어는 바꾸지 않는다. 기준점, 방향, 부호, 단위, 조건을 빠뜨리지 않는다.
+- 인사, 서론, 목표를 되풀이하는 첫 문장, "요약하면", 외우기 팁, 후속 질문 같은 덧붙임은 쓰지 않는다.
+- 마크다운 기호(#, *, **, -)는 쓰지 않고 평문으로 쓴다.`;
+const GoalEx = {
+  open:null, run:null, err:null,
+  key(d, o){ return Explain.sid(d) + ":" + o.id; },
+  isOpen(d, o){ return this.open === this.key(d, o); },
+  saved(d, o){ const e = Explain.src[Explain.sid(d)]; return e && e.goals ? e.goals.get(o.id) : undefined; },
+  async source(d, o){
+    const pages = (o.pages && o.pages.length ? o.pages : [S.reader.page]).slice(0, 3);
+    const parts = [];
+    for (const p of pages) parts.push(`[원문 p.${p}]\n${String(await pageText(d, p) || "(추출된 글자가 없는 쪽)").slice(0, 4000)}`);
+    return parts.join("\n\n");
+  },
+  prompt(d, o, source, style){
+    style = String(style || "").trim();
+    return `${GOAL_RULES}
+${style ? `\n[학습자가 정한 방식 — 위 규칙과 충돌하면 위 규칙을 따른다]\n${style.slice(0, 1500)}\n` : ""}
+[자료] ${d.title}
+[학습목표] ${o.statement}${o.quote ? `\n[목표의 근거 구절] ${o.quote}` : ""}
+
+${source}`;
+  },
+  toggle(d, o){
+    const k = this.key(d, o), R = S.reader;
+    if (this.open === k){ this.open = null; if (R.active === o.id) R.active = null; render(); return; }
+    this.open = k; R.active = o.id; Explain.load(d);
+    if (!this.saved(d, o) && !(this.run && this.run.key === k) && !(this.err && this.err.key === k)) this.go(d, o);
+    render();
+  },
+  async go(d, o){
+    if (!ask) return;
+    const k = this.key(d, o);
+    if (this.run && this.run.ctl) this.run.ctl.abort();
+    this.err = null;
+    const run = this.run = { key:k, text:"", ctl:new AbortController() };
+    this.paintAll();
+    try{
+      const prompt = this.prompt(d, o, await this.source(d, o), promptOf("goal"));
+      await ask([{ role:"user", content:prompt }], { signal:run.ctl.signal, onText: ({ text:t }) => { run.text = t; this.paintBody(); } });
+      if (this.run !== run) return;
+      if (run.text.includes("$") && !katexLib) await ensureKatex();
+      this.run = null;
+      const out = shown(run.text).trim();
+      if (out){
+        const e = Explain.src[Explain.sid(d)]; if (e) e.goals.set(o.id, out);
+        if (notesOn(d) && notesApi.saveExplanation) notesApi.saveExplanation(Explain.sid(d), (o.pages && o.pages[0]) || S.reader.page, out, o.id).catch(() => {});
+      }
+    }catch(err){
+      if (this.run !== run) return;
+      this.run = null;
+      if (!(err && err.code === "cancelled")) this.err = { key:k, text:sampleErrorCopy(err) };
+    }
+    this.paintAll();
+  },
+  node(d, o){
+    if (!this.isOpen(d, o)) return null;
+    const k = this.key(d, o), saved = this.saved(d, o), run = this.run && this.run.key === k ? this.run : null;
+    const R = S.reader;
+    let body;
+    if (run) body = h("div", { class:"ex-body streaming", "data-gxbody":k }, richLines(shown(run.text) || "정리하는 중…"));
+    else if (saved) body = h("div", { class:"ex-body" }, richLines(saved));
+    else if (!ask) body = h("p", { class:"small muted", text:"질문 답변이 연결되면 목표를 누를 때 정리가 여기 떠요." });
+    else if (this.err && this.err.key === k) body = h("p", { class:"check", text:this.err.text });
+    else { const e = Explain.src[Explain.sid(d)]; body = h("p", { class:"small muted ex-wait", text: e && e.status === "loading" ? "저장된 정리를 불러오는 중…" : "정리하는 중…" }); }
+    const has = d.items.some(it => it.objectiveId === o.id);
+    return h("div", { class:"gx", "data-gx":k },
+      body,
+      run ? null : h("div", { class:"gx-foot" },
+        has ? h("button", { class:"chip-btn", onclick: () => startCheck(d.id, R.page, o.id) }, "이 목표 문제 풀기") : null,
+        h("button", { class:"chip-btn", onclick: () => Chat.quoteIn(o.statement) }, "질문 창에서 더 묻기"),
+        h("span", { class:"grow" }),
+        ask && (saved || (this.err && this.err.key === k)) ? h("button", { class:"linkish", title:"지금 요청으로 새로 정리해요", onclick: () => this.go(d, o) }, saved ? "다시 정리" : "다시 시도") : null,
+        h("button", { class:"ex-gear" + (promptOf("goal") ? " on" : ""), title:"목표 설명 방식 바꾸기", "aria-label":"목표 설명 설정", onclick: () => openPrompts("goal") }, "⚙")));
+  },
+  paintAll(){
+    const R = S.reader, d = S.decks[R.deckId]; if (!d) return;
+    document.querySelectorAll("[data-gx]").forEach(el => { const o = d.objectives.find(x => this.key(d, x) === el.dataset.gx); const n = o && this.node(d, o); if (n) el.replaceWith(n); else el.remove(); });
+  },
+  paintBody(){
+    const b = this.run && [...document.querySelectorAll("[data-gxbody]")].find(el => el.dataset.gxbody === this.run.key);
+    if (b) b.replaceChildren(...richLines(shown(this.run.text) || "…")); else this.paintAll();
+  },
 };
 /* ----- floating question window: lives outside #app so re-renders never reset it.
    Answers need a paid model call, so `ask` stays unset until the user approves wiring it. ----- */
