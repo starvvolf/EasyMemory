@@ -40,6 +40,8 @@ export type GenInput = {
   origin?: "lab" | "study";
   /** Read pages that are not full text slides from their image once, before the outline (see pages.ts). */
   readImages?: boolean;
+  /** Optional registered exams: absent means the original generation path, unchanged. */
+  pastExamSourceIds?: string[];
   /** A remake of reported questions: the earlier question per objective, so authoring writes a different one. */
   remake?: { genId: string; previous: Record<string, string> };
 };
@@ -107,6 +109,7 @@ export type GenState = {
   confirmedObjectiveIds?: string[];
   /** A rerun that copied the earlier steps of another run and redoes only `from` onward (fair A/B comparison). */
   forkOf?: { genId: string; from: ForkFrom };
+  pastExam?: { cacheKey: string; card: import("./pastexam.ts").VibeCard; checks: Array<{ objectiveId: string; attempt: number; passed: boolean; reason: string }> };
 };
 
 /** Where a fixed-prefix rerun starts: redo design+authoring, or authoring only (same objectives). */

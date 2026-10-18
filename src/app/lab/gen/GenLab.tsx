@@ -399,6 +399,8 @@ function ScorePanel({ id, status, real, runs, onError }: { id: string; status: s
     ["분류 성격", (s) => kinds(s.itemKinds)],
     ["목표로 안 쓰인 핵심·패턴·설명", (s) => `${s.unusedTargets.length}`],
     ["의심 신호", (s) => `${s.suspects.length}`],
+    ["기출 검사: 검사 시도 · 거절", (s) => s.pastExam ? `${s.pastExam.checked} · ${s.pastExam.rejected}` : "—"],
+    ["기출 검사: 게시 통과 / 게시 문항", (s) => s.pastExam ? `${s.pastExam.publishedPassed} / ${s.pastExam.published}` : "—"],
     ["경고", (s) => kinds(s.warnings)],
     ["판정 통과/의심/실패", (s) => s.judge?.summary ? `${s.judge.summary.pass} / ${s.judge.summary.suspect} / ${s.judge.summary.fail}` : "—"],
     ["판정: 노출·모호·정답오류·인정답안누락", (s) => s.judge?.summary ? `${s.judge.summary.exposed} · ${s.judge.summary.ambiguous} · ${s.judge.summary.answerWrong} · ${s.judge.summary.acceptedGap ?? "—"}` : "—"],

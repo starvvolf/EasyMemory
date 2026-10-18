@@ -26,6 +26,18 @@ function blank(id: string, before: string, answers: string[], grading: "exact-no
 const doc = (...questions: AuthoredQuestion[]): AuthoringDocument => ({ schemaVersion: "problem-authoring-v1", id: "d", title: "d", questions });
 const codes = (document: AuthoringDocument) => inspectQuality(document).map((issue) => `${issue.questionId}:${issue.code}`);
 
+test("opt-in ignores LaTeX layout tokens, not literal or natural-language answer leaks", () => {
+  const given = String.raw`A=\begin{bmatrix}2&0\\0&3\end{bmatrix}, B=\begin{bmatrix}4&0\\0&5\end{bmatrix}. AB를 구하라.`;
+  const answer = String.raw`\begin{bmatrix}8&0\\0&15\end{bmatrix}`;
+  const question = doc(blank("matrix", given, [answer], "self-check"));
+  const leaks = (document: AuthoringDocument) => inspectQuality(document, { ignoreLatexFormatting: true })
+    .filter(issue => issue.code === "answer-leak-before-reveal");
+  assert.ok(codes(question).includes("matrix:answer-leak-before-reveal"), "legacy behavior remains unchanged");
+  assert.equal(leaks(question).length, 0, "same formatting is not the same matrix");
+  assert.equal(leaks(doc(blank("literal", `${given} 답: ${answer}`, [answer], "self-check"))).length, 1);
+  assert.equal(leaks(doc(blank("words", "소스는 캐리어 공급 게이트는 채널 제어", ["소스 캐리어 공급 게이트 채널 제어"], "self-check"))).length, 1);
+});
+
 test("answer-leak-before-reveal: 정답이나 정답 낱말 대부분이 본문에 있으면 오류", () => {
   assert.deepEqual(codes(doc(blank("q1", "점 (1,2)를 그대로 두면 (1,2)가 되므로 답은", ["(1,2)"]))), ["q1:answer-leak-before-reveal"]);
   assert.deepEqual(codes(doc(blank("q2", "소스는 캐리어 공급 게이트는 채널 제어를 하므로 역할은", ["소스 캐리어 공급 게이트 채널 제어"], "self-check"))), ["q2:answer-leak-before-reveal"]);

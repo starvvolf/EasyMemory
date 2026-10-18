@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useAuthSession } from "@/components/AuthGate";
 import { authenticatedFetch } from "@/lib/firebase-client";
-import { showMath, toStudyDeck, type StudyArtifactMeta, type StudyDeck, type StudyOutlineSection } from "@/lib/study/from-authoring";
+import { showMath, studyQualityIssues, toStudyDeck, type StudyArtifactMeta, type StudyDeck, type StudyOutlineSection } from "@/lib/study/from-authoring";
 import { buildRemakeBody, buildRequestBody, defaultPurpose, findReusableRequest } from "@/lib/study/request-form";
 import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
-import { inspectQuality } from "../../../tools/problem-authoring-lab/quality.ts";
 import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type PlannerDeck } from "./dejipgi-app.js";
 import { DEFAULT_GEN_MODELS, defaultChosen, type GenState } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
@@ -80,12 +79,12 @@ export default function DejipgiStudy() {
     // ---- engine v2 (/api/lab/gen) ----
     const isGen = (id: string) => /^gen_[a-f0-9]{32}$/.test(id);
     const genState = async (id: string) => (await readJson<{ gen: GenState; label: string }>(await fetchExperiment(`/api/lab/gen/${id}`), "만드는 상태를 읽지 못했어요."));
-    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean) => {
+    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[]) => {
       const pageNumbers = Array.from({ length: Math.max(1, to - from + 1) }, (_, index) => from + index);
       const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
-          models: DEFAULT_GEN_MODELS, origin: "study", readImages, confirmed: true }),
+          models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), confirmed: true }),
       }), "문제 만들기를 시작하지 못했어요.");
       return gen;
     };
@@ -114,10 +113,10 @@ export default function DejipgiStudy() {
       return { status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}${calls}` };
     };
     const loadGenDecks = async () => {
-      const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
+      const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number; pastExam?: boolean }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
       // Finished runs, and runs still being made whose first sections are authored.
       return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[] }>(
-        await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").catch(() => null)));
+        await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").then((deck) => ({ ...deck, pastExam: run.pastExam === true })).catch(() => null)));
     };
     const loadQuality = async () => readJson<{ patches: PatchMap; counts: Record<string, number> }>(await fetchExperiment("/api/study-quality"), "고친 문제 목록을 읽지 못했어요.");
     const loadPatches = async () => (await loadQuality()).patches;
@@ -134,7 +133,11 @@ export default function DejipgiStudy() {
       // Materials go through the v2 engine (docs/DECISIONS.md 2026-10-12): outline → design per section → one
       // confirmation of objectives → authoring. Decks made by the old request flow still load and can be remade.
       builder: {
-        async start({ file, from, to, purpose, note, readImages }) {
+        async pastExamSources() {
+          const { sources } = await readJson<{ sources: McpSourceCatalogEntry[] }>(await fetchExperiment("/api/mcp-runs/sources"), "등록한 PDF를 읽지 못했어요.");
+          return sources.filter((source) => /^src_[a-f0-9]{64}$/.test(source.id));
+        },
+        async start({ file, from, to, purpose, note, readImages, pastExamSourceIds }) {
           if (session.mode !== "local-experiment") throw new Error("자료 등록과 문제 만들기는 로컬 실험 모드에서만 할 수 있어요.");
           const form = new FormData();
           form.append("pdf", file);
@@ -142,7 +145,7 @@ export default function DejipgiStudy() {
             method: "POST", body: form,
           }), "PDF를 등록하지 못했어요.");
           const source = await findSource(registered.id);
-          const gen = await startGen(source, from, to, purpose, note, readImages);
+          const gen = await startGen(source, from, to, purpose, note, readImages, pastExamSourceIds);
           return { requestId: gen.id, sourceId: source.id };
         },
         async restart({ requestId, sourceId, from, to, purpose, note }) {
@@ -154,7 +157,7 @@ export default function DejipgiStudy() {
             return { requestId: request.id };
           }
           const previous = await genState(requestId).catch(() => null);
-          const gen = await startGen(await findSource(sourceId), from, to, previous?.gen.input.purpose ?? purpose, previous?.gen.input.note ?? note ?? "", previous?.gen.input.readImages ?? true);
+          const gen = await startGen(await findSource(sourceId), from, to, previous?.gen.input.purpose ?? purpose, previous?.gen.input.note ?? note ?? "", previous?.gen.input.readImages ?? true, previous?.gen.input.pastExamSourceIds);
           return { requestId: gen.id };
         },
         async remake({ artifactId, objectiveIds }) {
@@ -323,13 +326,13 @@ export default function DejipgiStudy() {
           loadGenDecks().catch(() => []),
           readJson<{ artifacts: StudyArtifactMeta[] }>(await fetchExperiment("/api/personalization-lab"), "Recaller 출제 문서 목록을 불러오지 못했어요."),
         ]);
-        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[] }> = [
+        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[]; pastExam?: boolean }> = [
           ...fresh.flatMap((deck) => deck ? [deck] : []), ...artifacts.map((meta) => ({ meta }))];
-        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline }, order) => {
+        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline, pastExam }, order) => {
           const document = given ?? (await readJson<{ document: AuthoringDocument }>(
             await fetchExperiment(`/api/personalization-lab?id=${encodeURIComponent(meta.id)}`), `${meta.title}을 불러오지 못했어요.`)).document;
           // Questions that fail the item-quality checks stay out of practice; the rest of the document is still usable.
-          const excluded = new Map(inspectQuality(document).filter((issue) => issue.severity === "error")
+          const excluded = new Map(studyQualityIssues(document, pastExam).filter((issue) => issue.severity === "error")
             .map((issue) => [issue.questionId, `검사 제외: ${issue.message}`] as const));
           const own = patches[meta.id];
           const deck = { ...applyPatches(toStudyDeck(meta, document, order, excluded), own, showMath), patchSig: (own ?? []).map((patch) => patch.id).join(",") };

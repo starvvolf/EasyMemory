@@ -2,6 +2,13 @@
    화면·흐름·기록 규칙은 원본을 따르고, 문제 생성은 하지 않는다. 문제는 Recaller 출제 문서를 env.loadDecks()로 받는다.
    env: see dejipgi-app.d.ts. env.builder (objective design, authoring, save) and env.ask are left unset on purpose. */
 let signInOutcome = null;
+/** Display only: identical generated titles need a stable handle, not a renamed source or new study identity. */
+export function deckDisplayTitle(deck, peers){
+  if (!/^gen_[a-f0-9]{32}$/.test(deck.id) || !peers.some(other => other.id !== deck.id && other.title === deck.title)) return deck.title;
+  const short = deck.id.slice(4, 12);
+  const collision = peers.some(other => other.id !== deck.id && other.title === deck.title && other.id.slice(4, 12) === short);
+  return `${deck.title} · 자료 ${collision ? deck.id.slice(4) : short}`;
+}
 export function mountDejipgi(root, env){
 "use strict";
 const listeners = new AbortController();
@@ -273,6 +280,7 @@ function orderedSubjects(){
   return S.plan.subjects.slice().sort((a, b) => { const x = rank(a), y = rank(b); return x[0] - y[0] || x[1] - y[1] || a.name.localeCompare(b.name, "ko"); });
 }
 const byTitle = (a, b) => (a.example ? 1 : 0) - (b.example ? 1 : 0) || String(a.title).localeCompare(String(b.title), "ko", { numeric:true });
+const displayTitle = deck => deckDisplayTitle(deck, Object.values(S.decks));
 function decksOf(subject){ return Object.values(S.decks).filter(d => !d.pending && subjectOf(d) === subject).sort(byTitle); }
 function weakList(decks){ return decks.flatMap(d => d.items.filter(it => isWeak(d, it)).map(it => ({ d, it, miss:missCount(d, it) }))); }
 function addSubject(name, exam){
@@ -702,7 +710,7 @@ function deckCard(d, growing){
   }
   return h("article", { class:"deck" },
     h("div", null,
-      h("h3", { text:d.title }),
+      h("h3", { text:displayTitle(d) }),
       h("div", { class:"meta" },
         pick,
         h("span", { class:"num", text:`목표 ${d.objectives.length} · 문제 ${d.items.length}` }),
@@ -950,7 +958,7 @@ function renderSession(){
     s.mode === "weak" ? h("span", { class:"chip bad", text:"약점 다시 풀기" }) : null,
     s.queue[s.i].reason && REASON[s.queue[s.i].reason] ? h("span", { class:`chip ${REASON[s.queue[s.i].reason][1]}`, text:REASON[s.queue[s.i].reason][0] }) : null,
     s.queue[s.i].retry ? h("span", { class:"chip help", text:"다시 확인" }) : null,
-    s.overlay ? null : h("span", { class:"chip", text:deck.title })
+    s.overlay ? null : h("span", { class:"chip", text:displayTitle(deck) })
   ));
   card.append(renderStem(deck, item));
 
@@ -1378,7 +1386,7 @@ function renderReader(){
     h("span", { text:"연습 중이에요. 여기서 본 쪽의 문제는 이번 연습에서 ‘정답 보고 풂’으로 기록돼요." }),
     h("button", { class:"btn small", onclick: () => setView("practice") }, "연습으로 돌아가기")));
 
-  const sel = h("select", { id:"readDeck", "aria-label":"자료 고르기" }, decks.map(x => h("option", { value:x.id, selected: x.id === d.id ? "selected" : null }, x.title)));
+  const sel = h("select", { id:"readDeck", "aria-label":"자료 고르기" }, decks.map(x => h("option", { value:x.id, selected: x.id === d.id ? "selected" : null }, displayTitle(x))));
   sel.addEventListener("change", () => openReader(sel.value, firstPage(S.decks[sel.value])));
   const pg = h("input", { class:"num", id:"pgInput", type:"number", min:"1", max:String(total), "aria-label":"쪽 번호" });
   pg.value = String(R.page); pg.addEventListener("change", () => goPage(Number(pg.value)));
@@ -2550,7 +2558,7 @@ function renderSummary(){
     const supportN = (d.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").length;
     const coreOnly = !!(S.plan.prefs && S.plan.prefs.detail && S.plan.prefs.detail[planKey(d)] === "core");
     box.append(h("header", { class:"row", style:"justify-content:space-between" },
-      h("div", null, h("h3", { text:d.title }), h("p", { class:"small muted num", text:`목표 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}${coreOnly ? ` · 핵심만 (보조 ${supportN}개 뺌)` : ""}` })),
+      h("div", null, h("h3", { text:displayTitle(d) }), h("p", { class:"small muted num", text:`목표 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}${coreOnly ? ` · 핵심만 (보조 ${supportN}개 뺌)` : ""}` })),
       h("div", { class:"row" },
         supportN ? h("button", { class:"chip-btn", "aria-pressed": coreOnly ? "true" : "false", title:"보조 목표를 연습·오늘 할 것에서 빼거나 다시 넣어요",
           onclick: () => { const det = prefs().detail || (prefs().detail = {}); if (coreOnly) delete det[planKey(d)]; else det[planKey(d)] = "core";
@@ -2619,7 +2627,7 @@ function renderRecords(){
   if (!decks.length) return h("div", { class:"panel", text:"아직 자료가 없어요." });
   if (!S.recordsDeck || !S.decks[S.recordsDeck]) S.recordsDeck = decks[0].id;
   const deck = S.decks[S.recordsDeck];
-  const sel = h("select", { id:"deckSel", class:"btn", style:"font-weight:500" }, decks.map(d => h("option", { value:d.id, selected: d.id === deck.id ? "selected" : null }, d.title)));
+  const sel = h("select", { id:"deckSel", class:"btn", style:"font-weight:500" }, decks.map(d => h("option", { value:d.id, selected: d.id === deck.id ? "selected" : null }, displayTitle(d))));
   sel.addEventListener("change", () => { S.recordsDeck = sel.value; S.deleting = null; render(); });
   const graded = deck.events.filter(e => e.kind === "submit" && !e.assisted && !e.gaveUp && !e.afterReading);
   const acc = graded.length ? Math.round(graded.filter(e => e.correct).length / graded.length * 100) : null;
@@ -2735,7 +2743,7 @@ const PURPOSES = [
   ["understand", "이해", "왜·어떻게를 설명할 수 있게, 개념과 관계 위주로 적게 골라요."],
   ["all", "통암기", "나온 내용을 빠짐없이 떠올리게 해요. 문제가 많아져요."],
 ];
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[] }; }
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
   const flat = [];
@@ -2800,7 +2808,7 @@ async function startMaterial(){
   const b = S.builder; if (b.busy || !engine || !b.file) return;
   b.busy = true; b.error = ""; b.status = "PDF를 등록하고 문제 만들기를 시작하는 중…"; render();
   try{
-    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages });
+    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
     const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:b.sourceName.replace(/\.pdf$/i, ""), sourceName:b.sourceName,
       pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), createdAt:now(), status:"waiting", message:"" };
     const deck = pendingDeck(rec);
@@ -2972,6 +2980,19 @@ function renderBuilder(){
         h("p", { class:"small muted", text:"여러 개를 고르면 처음부터 끝까지 이어진 범위로 만들어요." })) : null,
       span > 60 ? h("p", { class:"small muted", text:`${span}쪽은 오래 걸려요. 한 주차·한 장씩 나눠 만들면 먼저 끝난 것부터 공부할 수 있어요.` }) : null),
     h("div", { class:"field" }, h("label", { for:"note", text:"3. 메모 (선택)" }), note),
+    engine?.pastExamSources ? h("details", { ontoggle:async(e) => {
+      b.pastExamOpen = e.target.open;
+      if (!e.target.open || b.pastExamSources !== null) return;
+      try { b.pastExamSources = await engine.pastExamSources(); render(); }
+      catch(error) { b.error = error.message; render(); }
+    }, open:b.pastExamOpen ? true : null },
+      h("summary", { text:`기출 함께 쓰기${b.pastExamSourceIds.length ? ` · ${b.pastExamSourceIds.length}개` : " (선택)"}` }),
+      h("p", { class:"small muted", text:"등록한 기출 PDF를 최대 2개 고르세요(파일별 20쪽 이하). 문항을 복사하지 않고 출제 경향만 반영해요. 선택한 강의 범위는 유지돼요. 추가 분석·검사 호출이 발생해요." }),
+      ...(b.pastExamSources || []).map(source => h("label", { class:"row small", style:"gap:8px" },
+        h("input", { type:"checkbox", checked:b.pastExamSourceIds.includes(source.id) ? true : null,
+          disabled:b.busy || (!b.pastExamSourceIds.includes(source.id) && b.pastExamSourceIds.length >= 2),
+          onchange:(e) => { b.pastExamSourceIds = e.target.checked ? [...b.pastExamSourceIds, source.id] : b.pastExamSourceIds.filter(id => id !== source.id); render(); } }), source.fileName)),
+      b.pastExamSources?.length === 0 ? h("p", { class:"small muted", text:"등록된 PDF가 없어요. 먼저 기출 PDF를 자료로 등록해 주세요." }) : null) : null,
     thin ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
       h("input", { type:"checkbox", checked:b.readImages ? true : null, disabled:b.busy, onchange:(e) => { b.readImages = e.target.checked; render(); } }),
       h("span", null, h("b", { text:"그림·수식도 읽기" }), h("span", { class:"muted", text:` · 글자가 적은 ${thin}쪽을 그림으로 읽어요 (약 ${Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 문제에 들어가요.` }))) : null,

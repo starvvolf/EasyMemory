@@ -48,7 +48,7 @@ const CONDITION = /(지만|에 따라|경우|때만|단,|조건|[≠=]\s*0|가�
 const ABSOLUTE = /(모두 같|완전히 같|항상|반드시|절대|아무\s*(영향|관계)|전혀)/;
 const INVERSE = /([A-Za-z])\s*(?:⁻¹|\^\{?-1\}?)/g;
 
-export function inspectQuality(document: AuthoringDocument): InspectionIssue[] {
+export function inspectQuality(document: AuthoringDocument, options: { ignoreLatexFormatting?: boolean } = {}): InspectionIssue[] {
   const issues: InspectionIssue[] = [];
   const sets = new Map((document.sharedSets ?? []).map((set) => [set.id, set]));
   const signatures = new Map<string, string>();
@@ -92,7 +92,13 @@ export function inspectQuality(document: AuthoringDocument): InspectionIssue[] {
       const leaked = answers.some((answer) => {
         const normalized = normalizeExactAnswer(answer);
         if (normalized.length >= 3 && normalizeExactAnswer(stem).includes(normalized)) return true;
-        const answerTokens = tokens(answer);
+        // Layout commands are not recalled knowledge. Keep literal-answer detection above unchanged.
+        // Opt-in until the legacy generation path has its own regression evaluation.
+        const words = options.ignoreLatexFormatting
+          ? answer.replace(/\\(?:begin|end)\{[^}]*\}/g, " ")
+            .replace(/\\(?:mathbf|mathrm|mathit|mathsf|mathtt|text|left|right|displaystyle)\b/g, " ")
+          : answer;
+        const answerTokens = tokens(words);
         // substring match so Korean particles (소스는 / 소스) still count
         return answerTokens.length >= 3 && answerTokens.filter((token) => stemLoose.includes(token)).length / answerTokens.length >= 0.7;
       });
