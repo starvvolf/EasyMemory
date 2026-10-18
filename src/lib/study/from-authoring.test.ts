@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
-import { toStudyDeck, type StudyArtifactMeta } from "./from-authoring.ts";
+import { studyQualityIssues, toStudyDeck, type StudyArtifactMeta } from "./from-authoring.ts";
 
 const meta: StudyArtifactMeta = {
   id: "authoring:test", title: "테스트 자료", artifactSha256: "a".repeat(64),
@@ -12,6 +12,27 @@ const source = (objectiveId: string, page: number, sourceRange = "첫 인용 / �
   learningUnitId: "lu", objectiveId, sourceId: "source.pdf", sourcePage: page, sourceRange, sourceText: "요약", target: `${objectiveId} 목표`, successCriteria: [],
 });
 const frame = { x: 0, y: 0, width: 10, height: 10 };
+
+test("기출형 학습 화면은 생성 검사와 같은 수식·순서 기준을 쓰고 실제 답 노출은 막는다", () => {
+  const make = (stem: string, answer: string, grading: "self-check" | "exact-normalized" = "self-check"): AuthoringDocument => ({
+    schemaVersion: "problem-authoring-v1", id: "fake", title: "가짜 문항",
+    questions: [{
+      id: "q", source: source("o", 1), page: { width: 100, height: 100 },
+      blocks: [{ id: "b", kind: "blank", responseId: "r", promptBefore: stem, promptAfter: "", frame }],
+      responses: [{ id: "r", kind: "short-text", acceptedAnswers: [answer], grading }],
+    }],
+  });
+  const stem = String.raw`A=\begin{bmatrix}2&0\\0&3\end{bmatrix}, B=\begin{bmatrix}4&0\\0&5\end{bmatrix}. AB는?`;
+  const answer = String.raw`\begin{bmatrix}8&0\\0&15\end{bmatrix}`;
+  const errors = (doc: AuthoringDocument, pastExam = false) => studyQualityIssues(doc, pastExam).filter(issue => issue.severity === "error");
+  assert.equal(errors(make(stem, answer)).length, 1, "구형 자료 검사 보존");
+  assert.equal(errors(make(stem, answer), true).length, 0);
+  assert.ok(errors(make(`${stem} 답: ${answer}`, answer), true).some(issue => issue.code === "answer-leak-before-reveal"));
+  assert.equal(errors(make("처리 순서는?", "수집 → 검증", "exact-normalized"), true).length, 0);
+  assert.ok(errors(make("처리 순서는?", "수집 → 검증", "exact-normalized")).some(issue => issue.code === "composite-short-answer"));
+  assert.ok(errors(make("처리 순서는 수집 → 검증이다.", "수집 → 검증", "exact-normalized"), true).some(issue => issue.code === "answer-leak-before-reveal"));
+  assert.ok(errors(make("세 내용을 쓰세요.", "a; b; c", "exact-normalized"), true).some(issue => issue.code === "composite-short-answer"));
+});
 
 test("객관식·빈칸·자기확인 문항을 되짚기 형식으로 옮긴다", () => {
   const document: AuthoringDocument = {

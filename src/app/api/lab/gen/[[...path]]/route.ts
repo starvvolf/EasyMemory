@@ -27,7 +27,7 @@ async function handle(request: Request, context: Context) {
       const origin = new URL(request.url).searchParams.get("origin");
       result = { runs: (await listGens()).filter((gen) => !origin || (gen.input.origin ?? "lab") === origin).map((gen) => ({ id: gen.id, createdAt: gen.createdAt, status: gen.status, phase: gen.phase, fileName: gen.input.fileName,
         pages: gen.input.pageNumbers, purpose: gen.input.purpose, provider: gen.input.provider, calls: gen.calls, forkOf: gen.forkOf ?? null, origin: gen.input.origin ?? "lab",
-        sectionsDone: gen.sections.filter((section) => section.author).length, sectionCount: gen.sections.length })) };
+        pastExam: Boolean(gen.pastExam), sectionsDone: gen.sections.filter((section) => section.author).length, sectionCount: gen.sections.length })) };
     } else if (p[0] === "vision") {
       // Image reading probe: render one page, ask the model to read it, compare with the text layer.
       if (p.length === 1 && method === "GET") result = { probes: await listVisionProbes() };

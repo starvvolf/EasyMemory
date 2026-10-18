@@ -1,4 +1,15 @@
 import type { AuthoredQuestion, AuthoringBlock, AuthoringDocument, ResponseContract } from "../../../tools/problem-authoring-lab/contract.ts";
+import { inspectQuality } from "../../../tools/problem-authoring-lab/quality.ts";
+import { isOrderAnswer } from "./gen/layout.ts";
+
+/** Use the same opt-in checks as past-exam authoring, without changing legacy decks. */
+export function studyQualityIssues(document: AuthoringDocument, pastExam = false) {
+  const questions = new Map(document.questions.map((question) => [question.id, question]));
+  return inspectQuality(document, { ignoreLatexFormatting: pastExam }).filter((issue) => {
+    const question = questions.get(issue.questionId);
+    return !(pastExam && issue.code === "composite-short-answer" && question && isOrderAnswer(question));
+  });
+}
 
 // 되짚기 화면이 쓰는 자료 형식. 문제 내용은 Recaller 출제 문서를 그대로 옮기고, 새로 만들거나 고치지 않는다.
 export type StudyObjective = { id: string; statement: string; pages: number[]; quote: string };
