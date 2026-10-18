@@ -9,6 +9,7 @@ import { callModel, ModelError, type ModelCaller, type ModelRequest } from "../.
 import { redactCallText } from "../lab-contract.ts";
 import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
+import { astraFakeReply, astraJsonSchema, runAstra } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
@@ -131,7 +132,7 @@ export async function createGen(raw: unknown): Promise<GenState> {
 export const forkInputSchema = z.strictObject({
   from: z.enum(forkFroms),
   /** Only the steps that run again matter; earlier steps keep the base run's results. */
-  models: z.partialRecord(z.enum(["design", "author"]), modelChoice).default({}),
+  models: z.partialRecord(z.enum(["design", "author", "astra-plan", "astra-author", "astra-solve", "astra-review"]), modelChoice).default({}),
   guideDir: z.string().regex(guideDirPattern).optional(),
   autoConfirm: z.boolean().default(true),
   /** With "author": only these objectives, e.g. the ones a learner reported. The earlier questions go to the prompt. */
@@ -190,6 +191,7 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
       input.remake = { genId: base.id, previous };
     }
   } else if (options.objectiveIds) throw new GenError(400, "목표를 골라 다시 만드는 것은 '출제만 다시'에서만 됩니다.");
+  if (base.input.engine === "astra" && base.astra) state.astra = { version: 1, pdfHash: base.astra.pdfHash, plan: structuredClone(base.astra.plan), batches: [], warnings: [] };
   await saveState(state);
   // Page readings belong to the copied steps: carry them over so the rerun sees the same source text.
   if (base.images?.done.length) await cp(path.join(dirOf(base.id), "pages"), path.join(dirOf(state.id), "pages"), { recursive: true }).catch(() => undefined);
@@ -327,7 +329,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
       model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}) };
     try {
-      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => genFakeReply(s, u)))(step, user, attempt);
+      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("astra-") ? astraFakeReply(s, u) : genFakeReply(s, u)))(step, user, attempt);
       const reply = await callModel(request);
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
       await saveJson(callFile, record);
@@ -361,6 +363,24 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   try {
     state.status = "running"; state.message = "";
     await saveState(state);
+    if (input.engine === "astra") {
+      if (input.pastExamSourceIds?.length) throw new Stop("paused-invalid", "astra 기출 경향 연결은 아직 구현하지 않았습니다. 일반 출제로 대신하지 않습니다.");
+      const pdf = input.provider === "fake" && !options.pdf ? Buffer.from("%PDF-1.4 fake fixture") : await (options.pdf ?? registeredPdfBytes)(input);
+      await runAstra({ state, pdf, save: () => saveState(state), pause: (message) => { throw new Stop("paused-invalid", message); },
+        ask: async (step, attempt, system, user, parser, files) => {
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(parser), parser, undefined, { files });
+          if (!result.ok) throw new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`);
+          return result.value;
+        },
+        publish: async (section, questions) => {
+          if (!questions.length) return null;
+          const documentPath = path.join("sections", section.id, "document.json");
+          await saveJson(path.join(dirOf(id), documentPath), sectionDocument(id, section, input.fileName, questions));
+          return documentPath;
+        },
+      });
+      return state;
+    }
     loaded = await (options.pages ?? registeredPages)(input);
 
     if (input.engine === "v3") {

@@ -7,12 +7,12 @@ export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", un
 
 /** Model calls, in order. classify and design run per section. */
 /** v3 (lab engine choice) adds read (whole PDF → outline + knowledge map), plan and gate; it does not use classify/design. */
-export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate"] as const;
+export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review"] as const;
 export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
-  read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)" };
+  read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra)", "astra-author": "묶음 출제(astra)", "astra-solve": "정답 없는 풀이(astra)", "astra-review": "전역 검수(astra)" };
 
-export const engines = ["v2", "v3"] as const;
+export const engines = ["v2", "v3", "astra"] as const;
 export type Engine = (typeof engines)[number];
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
@@ -80,6 +80,7 @@ export type Objective = {
   qtype?: string;
   conceptIds?: string[];
   relationIds?: string[];
+  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: import("./astra.ts").AstraEvidence[] };
 };
 
 /** Objectives checked by default at the confirmation: everything for 통암기, otherwise only core ones. */
@@ -124,6 +125,7 @@ export type GenState = {
   forkOf?: { genId: string; from: ForkFrom };
   /** v3: the knowledge map (① 전체 읽기), plan warnings and the gate's verdicts per question. */
   v3?: { map?: import("./v3.ts").KnowledgeMap; warnings?: Issue[]; gate?: Array<{ objectiveId: string; attempt: number; passed: boolean; reasons: string[] }> };
+  astra?: import("./astra.ts").AstraState;
   pastExam?: { cacheKey: string; card: import("./pastexam.ts").VibeCard; checks: Array<{ objectiveId: string; attempt: number; passed: boolean; reason: string }> };
 };
 
@@ -169,4 +171,8 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   read: { model: "gpt-6-sol", effort: "medium" },
   plan: { model: "gpt-6-sol", effort: "medium" },
   gate: { model: "gpt-6-sol", effort: "low" },
+  "astra-plan": { model: "gpt-6-sol", effort: "medium" },
+  "astra-author": { model: "gpt-6-sol", effort: "medium" },
+  "astra-solve": { model: "gpt-6-sol", effort: "medium" },
+  "astra-review": { model: "gpt-6-sol", effort: "medium" },
 };

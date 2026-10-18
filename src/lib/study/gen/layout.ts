@@ -100,9 +100,9 @@ export function isOrderAnswer(question: AuthoredQuestion) {
 }
 
 /** Contract errors and quality errors are tier 2 (unsolvable or leaking); quality warnings are tier 3. */
-export function inspectQuestion(question: AuthoredQuestion, options: { ignoreLatexFormatting?: boolean } = {}): { errors: Issue[]; warnings: Issue[] } {
+export function inspectQuestion(question: AuthoredQuestion, options: { ignoreLatexFormatting?: boolean; astraSemanticWarnings?: boolean } = {}): { errors: Issue[]; warnings: Issue[] } {
   const document: AuthoringDocument = { schemaVersion: "problem-authoring-v1", id: "check", title: "check", questions: [question] };
-  const issues = [...validateDocument(document), ...inspectQuality(document, options)]
+  const issues = [...validateDocument(document), ...inspectQuality(document, options).map((issue) => options.astraSemanticWarnings && ["answer-leak-before-reveal", "composite-short-answer"].includes(issue.code) ? { ...issue, severity: "warning" as const } : issue)]
     // An order written with the given names ("A → B → C", 출제기준 단답-5) is one answer, not several in one box.
     .filter((issue) => !(issue.code === "composite-short-answer" && isOrderAnswer(question)))
     .map((issue) => ({ severity: issue.severity, code: issue.code, message: issue.message, ref: question.source.objectiveId }));
