@@ -105,6 +105,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const [readImages, setReadImages] = useState(false);
   // v5 설문 (empty = 알잘딱; the memo above is 개입).
   const [survey, setSurvey] = useState<{ exam?: string; depth?: string; time?: string; known?: string }>({});
+  const [planInput, setPlanInput] = useState<"" | "pdf" | "pages">("");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const source = sources.find((candidate) => candidate.id === sourceId) ?? sources[0];
@@ -118,6 +119,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
       const { gen } = await api<{ gen: GenState }>("/api/lab/gen", "POST", {
         sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, guideDir, engine, confirmed: provider === "chatgpt" ? confirmed : undefined,
         models: Object.fromEntries(shown.map((step) => [step, models[step]])), readImages: engine === "v2" ? readImages : false,
+        ...((engine === "v4" || engine === "v5") && planInput ? { planInput } : {}),
         ...(engine === "v5" && Object.values(survey).some(Boolean) ? { survey: Object.fromEntries(Object.entries(survey).filter(([, value]) => value)) } : {}),
       });
       setConfirmed(false);
@@ -147,6 +149,12 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         <label className="chip" title="astra 구조 그대로 + 답 모양에 맞는 형식, 한 문항 한 과제, 슬롯 차별, 검수 입력 축소, 공개 후 지적 1회 수정"><input type="radio" name="engine" checked={engine === "v4"} onChange={() => setEngine("v4")} />v4 (Claude의 astra 조정안, 실험)</label>
         <label className="chip" title="자료 진단 → 목표마다 수준·형식(객관식·OX·단답·빈칸·플래시카드) → 오개념 기반 오답 → 단원별 즉시 공개, 그림 근거는 그 쪽 그림으로 검수"><input type="radio" name="engine" checked={engine === "v5"} onChange={() => setEngine("v5")} />v5 (Claude, 실험)</label>
       </fieldset>
+      {(engine === "v4" || engine === "v5") && <div className="row">
+        <span className="muted">계획 입력:</span>
+        <select value={planInput} onChange={(event) => setPlanInput(event.target.value as "" | "pdf" | "pages")}>
+          <option value="">기본 ({engine === "v5" ? "쪽 글자+쪽 이미지" : "PDF 파일"})</option><option value="pages">고른 쪽 글자+쪽 이미지</option><option value="pdf">PDF 파일 전체</option>
+        </select>
+      </div>}
       {engine === "v5" && <div className="row">
         <span className="muted">설문(비우면 알잘딱, 메모는 개입):</span>
         <select value={survey.exam ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, exam: event.target.value || undefined }))}><option value="">시험 형태</option><option value="choice">객관식 위주</option><option value="mixed">섞어서</option><option value="written">서술 포함</option></select>

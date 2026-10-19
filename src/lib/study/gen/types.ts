@@ -62,6 +62,8 @@ export type GenInput = {
   engine?: Engine;
   /** v5: survey answers (설문 mode). */
   survey?: GenSurvey;
+  /** v4/v5 plan input: the PDF file, or the chosen pages' text plus one image per page (v5 default). */
+  planInput?: "pdf" | "pages";
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */

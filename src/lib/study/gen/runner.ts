@@ -161,6 +161,7 @@ export const genInputSchema = z.strictObject({
   readImages: z.boolean().default(false),
   pastExamSourceIds: z.array(z.string().regex(/^src_[a-f0-9]{64}$/)).min(1).max(2).optional(),
   engine: z.enum(engines).default("v2"),
+  planInput: z.enum(["pdf", "pages"]).optional(),
   survey: z.strictObject({ exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -573,7 +574,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           try { return await (options.pageImages ?? registeredImages)(input, wanted); } catch { return new Map<number, string>(); }
         },
         ask: async (step, attempt, system, user, parser, files, onPartial, images, maxChars) => {
-          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(responseSchemaFor(input.engine)), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}), ...(images?.length ? { images } : {}), ...(maxChars ? { maxChars } : {}) });
+          // v4/v5 send only this step's response format (the 4-step union was ~2,500 tokens on every call, and the shared
+          // prefix it was kept for hardly hit the cache: parallel batches). astra keeps the union.
+          const shape = z.object({ result: parser });
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(input.engine === "v4" || input.engine === "v5" ? shape : responseSchemaFor(input.engine)), shape, undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}), ...(images?.length ? { images } : {}), ...(maxChars ? { maxChars } : {}) });
           if (!result.ok) throw failAstra(new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`));
           return result.value.result;
         },

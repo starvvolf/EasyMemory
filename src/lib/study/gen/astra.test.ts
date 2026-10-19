@@ -243,12 +243,13 @@ test("v4 스트리밍: 끝난 계획이 검사에 걸려 다시 요청되면 먼
 test("v5: 목표의 형식대로 출제(OX·객관식), 오답 근거 없는 객관식은 보류, 그림 근거 목표는 풀이·검수에 그 쪽 그림, 단원이 통과하면 계획이 끝나기 전에도 공개", async () => {
   const state: GenState = { id: "gen_" + "3".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2], purpose: "core", note: "", provider: "fake", engine: "v5", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
   const documents = new Map<string, Array<{ responses: Array<{ kind: string; options?: unknown[] }> }>>();
-  let planDone = false, publishedBeforePlanEnd = false, solveImages = 0;
+  let planDone = false, publishedBeforePlanEnd = false, solveImages = 0, planInput = "";
   let released: () => void = () => {};
   const firstPublished = new Promise<void>(resolve => { released = resolve; });
-  const ask: AstraAsk = async (step, _attempt, _system, user, parser, _files, onPartial, images) => {
+  const ask: AstraAsk = async (step, _attempt, _system, user, parser, files, onPartial, images) => {
     const input = JSON.parse(user);
     if (step === "astra-plan") {
+      planInput = `파일${files.length} 이미지${images?.length ?? 0} 글자${input.pageTexts?.length ?? 0}`;
       const ev = (page: number, kind: string) => [{ page, kind, quote: kind === "text" ? "q" : "", supports: "s" }];
       const result = {
         outline: [{ id: "s1", title: "구별 단원", pages: [1] }, { id: "s2", title: "그림 단원", pages: [2] }],
@@ -295,6 +296,7 @@ test("v5: 목표의 형식대로 출제(OX·객관식), 오답 근거 없는 객
   assert.ok(state.sections[0].author!.dropped.some(d => d.reason.includes("오답마다")));
   assert.ok(solveImages >= 1, "그림 근거 목표의 풀이에 그 쪽 그림을 보낸다");
   assert.equal((state.astra!.plan as { diagnosis?: { materialType: string } }).diagnosis?.materialType, "개념 비교");
+  assert.equal(planInput, "파일0 이미지2 글자2", "v5 계획은 PDF 대신 고른 쪽 글자와 쪽 이미지");
 });
 
 test("v4 보기 섞기: 정답 위치가 한 칸에 몰리지 않는다 (하위 비트만 쓰던 섞기는 160개 모두 ④)", () => {
