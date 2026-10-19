@@ -114,7 +114,8 @@ export async function readResponseStream(body: ReadableStream<Uint8Array>, onPro
     if (value.type === "response.failed") throw responseFailure(0, { error: value.response?.error });
     if (value.type === "response.incomplete" || value.type === "error") {
       const why = (value as { response?: { incomplete_details?: { reason?: string } }; message?: string; code?: string }).response?.incomplete_details?.reason ?? (value as { code?: string }).code ?? (value as { message?: string }).message;
-      throw new ModelError("transient", `ChatGPT 응답이 완료되지 않았어요.${why ? ` (${String(why).slice(0, 80)})` : ""}`);
+      const detail = why ? String(why) : JSON.stringify(value).replace(/"(?:id|response_id|item_id)":"[^"]*",?/g, "");
+      throw new ModelError("transient", `ChatGPT 응답이 완료되지 않았어요. (${detail.slice(0, 160)})`);
     }
     if (value.type === "response.completed") {
       completed = true;

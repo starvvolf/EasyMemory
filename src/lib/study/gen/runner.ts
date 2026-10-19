@@ -479,7 +479,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       for (let retry = 0; ; retry++) {
         try { reply = await callModel(request); break; }
         catch (error) {
-          if (retry > 0 || runaway || request.signal?.aborted || !(error instanceof ModelError) || error.code !== "transient") throw error;
+          if (retry > 1 || (retry > 0 && !request.images?.length) || runaway || request.signal?.aborted || !(error instanceof ModelError) || error.code !== "transient") throw error;
+          // The same call failing twice with page images (6.1-sol, the repair solve with 3 figure pages): the last try goes
+          // without the images; the page text and figure notes are still in the prompt.
+          if (retry === 1) { delete request.images; Object.assign(record, { imagesDropped: true }); }
           partial = "";
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
