@@ -5,7 +5,7 @@ import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { authoredQuestion } from "./schemas.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
-import { defaultChosen, objectiveKinds, studyFormats, type GenState, type GenStep, type Issue, type Objective, type SectionState } from "./types.ts";
+import { defaultChosen, genStepLabel, objectiveKinds, studyFormats, type GenState, type GenStep, type Issue, type Objective, type SectionState } from "./types.ts";
 
 const text = z.string().trim().min(1);
 const page = z.number().int().positive();
@@ -127,7 +127,16 @@ export function partialV4Plan(raw: string): { outline: unknown[] | null; units: 
 type Batch = { ids: string[]; questions?: Candidate[]; solutions?: Solutions; review?: Review; publishedIds?: string[]; startedAt?: string };
 export type AstraState = { version: 1; pdfHash?: string; plan?: Plan; batches: Batch[]; review?: Review; repair?: Batch; warnings: Issue[];
   publishedQuestions?: Candidate[]; timing?: { startedAt: string; firstPublishedAt?: string; completedAt?: string } };
-export type AstraAsk = <T>(step: GenStep, attempt: number, system: string, user: string, parser: z.ZodType<T>, files: NonNullable<ModelRequest["files"]>, onPartial?: (text: string) => void, images?: NonNullable<ModelRequest["images"]>) => Promise<T>;
+export type AstraAsk = <T>(step: GenStep, attempt: number, system: string, user: string, parser: z.ZodType<T>, files: NonNullable<ModelRequest["files"]>, onPartial?: (text: string) => void, images?: NonNullable<ModelRequest["images"]>, maxChars?: number) => Promise<T>;
+/** A reply cut because it ran far past the expected length (a structured reply that loops and never closes). */
+export class RunawayReply extends Error {
+  readonly limit: number;
+  readonly received: number;
+  constructor(limit: number, received: number) { super(`응답이 ${received.toLocaleString()}자로 상한 ${limit.toLocaleString()}자를 넘어 끊었어요.`); this.limit = limit; this.received = received; }
+}
+/** Expected reply sizes per slot (normal: about 1,900 characters per question, v5 with distractor notes more). */
+const authorLimit = (slots: number) => Math.max(15000, slots * 6000);
+const checkLimit = (slots: number) => Math.max(12000, slots * 3000);
 type Context = { state: GenState; pdf: Uint8Array | null; ask: AstraAsk;
   /** Text layer per page; with the plan's picture-page notes this is what every call after the plan reads. */
   pageTexts?: Map<number, string>; thinPages?: number[];
@@ -146,8 +155,8 @@ const REVIEW = `${BASE}\n출제 답과 독립 풀이를 원문(source: 쪽별 �
  * 그대로 쓰고, 비교 실행에서 남은 문제만 고친다. engine "v4"일 때만 아래 추가 지시와 코드 동작이 켜진다.
  */
 const V4_PLAN = `\n[v4] 응답 형식: outline을 먼저 다 쓴 다음 units에 목차 순서대로 단원마다 { sectionId, pageNotes(그 단원 쪽만), concepts(그 단원 개념, outlineIds에 이 단원 id를 맨 앞에), practice(그 단원 과제) }를 쓴다. 한 단원을 끝낸 뒤 다음 단원을 쓴다(화면과 출제가 단원이 끝나는 대로 시작한다). practice.task는 학습자에게 보이는 목표다: 동사 하나, 40자 안팎의 '~을 떠올릴 수 있다 / 구별할 수 있다 / 설명할 수 있다 / 계산할 수 있다' 꼴로 쓰고 문항 지시를 쓰지 않는다. practice.recall은 떠올릴 핵심 낱말이나 짧은 사실 하나(문항의 숫자·정답 풀이를 쓰지 않는다). 같은 과제에 2~3을 줄 때는 서로 다른 상황·수행이 실제로 있을 때만이다(일반식과 그 식에 숫자만 넣은 문제는 하나로 친다). 과제 종류(상황→방법 고르기, 이유, 구별, 적용·계산, 절차, 대응·분류)는 자료 성격에 맞게 섞는다: 계산·유도 자료라도 이유·구별을, 분류·암기 자료라도 상황에 적용하는 과제를 둔다. 정해진 비율은 없다.`;
-const V4_AUTHOR = `\n[v4] 답이 셋 이상을 순서·대응으로 나열해야 하면 short 대신 choice(보기마다 같은 길이의 나열)로 낸다. 형식은 답의 모양으로 고른다: 답이 하나의 값·이름·좌표·순서·대응으로 정해지면 short(같은 답의 다른 표기를 accepted에 함께) 또는 choice, 이유·비교·도출 과정처럼 서술이 필요할 때만 self-check. 한 문항은 한 과제만 묻는다: '구하고, 설명하고, 쓰시오'처럼 요구를 묶지 말고, 묶어야 의미가 있는 경우(예: 결과와 그 판정 근거)만 self-check으로 하고 requiredPoints에 채점 요소를 모두 적는다. 문제가 요구하는 것과 채점칸이 확인하는 것은 같아야 한다(u와 좌표를 둘 다 물으면 둘 다 채점). choice 보기는 길이·말투·구체성이 비슷해야 하고, 정답만 길거나 자세하면 안 된다. 같은 과제의 슬롯이 여럿이면 각 슬롯은 다른 상황·조건·수행을 다룬다.`;
-const V4_REVIEW = `\n[v4] 다음도 revise 사유다: 답이 하나의 값·대응인데 self-check인 경우, 한 문항이 여러 과제를 묶은 경우, 문제가 요구한 것과 채점칸이 다른 경우, 정답 보기만 눈에 띄게 길거나 자세한 경우, 이미 있는 문항과 같은 지식·수행을 반복하는 경우. code.hints는 코드가 찾은 의심이며 판단은 원문과 문항으로 한다.`;
+const V4_AUTHOR = `\n[v4] 답이 셋 이상을 순서·대응으로 나열해야 하면 short 대신 choice(보기마다 같은 길이의 나열)로 낸다. 형식은 답의 모양으로 고른다: 답이 하나의 값·이름·좌표·순서·대응으로 정해지면 short(같은 답의 다른 표기를 accepted에 함께) 또는 choice, 이유·비교·도출 과정처럼 서술이 필요할 때만 self-check. 한 문항은 한 과제만 묻는다: '구하고, 설명하고, 쓰시오'처럼 요구를 묶지 말고, 묶어야 의미가 있는 경우(예: 결과와 그 판정 근거)만 self-check으로 하고 requiredPoints에 채점 요소를 모두 적는다. 문제가 요구하는 것과 채점칸이 확인하는 것은 같아야 한다(u와 좌표를 둘 다 물으면 둘 다 채점). choice 보기는 길이·말투·구체성이 비슷해야 하고, 정답만 길거나 자세하면 안 된다. 같은 과제의 슬롯이 여럿이면 각 슬롯은 다른 상황·조건·수행을 다룬다. 응답은 짧게: 슬롯마다 문항 하나, accepted는 다른 표기만(6개 이하), explanation 1~2문장, evidence 2개 이하. 같은 내용을 되풀이하지 않는다.`;
+const V4_REVIEW = `\n[v4] 다음도 revise 사유다: 답이 하나의 값·대응인데 self-check인 경우, 한 문항이 여러 과제를 묶은 경우, 문제가 요구한 것과 채점칸이 다른 경우, 정답 보기만 눈에 띄게 길거나 자세한 경우, 이미 있는 문항과 같은 지식·수행을 반복하는 경우. code.hints는 코드가 찾은 의심이며 판단은 원문과 문항으로 한다. missedContent.reason은 빠진 내용을 학습자 목표 꼴(동사 하나, 40자 안팎, '~을 설명할 수 있다 / 구별할 수 있다')로 쓴다. 이 문장이 그대로 보충 목표가 된다.`;
 /* v5: adapt to the material and to the person (개입·설문·알잘딱), goal → level → format, and format-specific quality. */
 const V5_PLAN = `\n[v5] 응답은 outline → diagnosis → units 순서다. diagnosis.mode: context.note에 지시가 있으면 '개입'(그 지시가 최우선), context.survey가 있으면 '설문', 없으면 '알잘딱'. diagnosis.materialType은 자료 성격(계산·유도 / 분류·암기 / 절차 / 개념 비교 / 혼합)을, approach는 그래서 어떻게 공부시킬지를 한두 문장으로 쓴다. 분량은 쪽수가 아니라 핵심 개념의 수·밀도로 정하고, 핵심을 빠짐없이 덮되 같은 지식을 반복하거나 자잘한 사실을 늘리지 않는다. 설문: exam이 choice면 객관식·OX 중심, written이면 설명·플래시카드도 둔다. depth가 core면 essential만, all이면 extra도. time이 short면 핵심 과제만 적게, long이면 적용·구별을 더 둔다. known에 적힌 부분은 가볍게 다룬다. 각 practice에 level(떠올리기·구별·적용·계산·설명·순서)과 format을 정한다: 떠올리기 → flashcard 또는 cloze, 구별 → choice 또는 ox, 적용·계산 → short(값) 또는 choice, 설명 → flashcard(요점 2~3개), 순서 → choice(순서 나열 보기). formatWhy에 한 줄 이유. 각 unit에 misconceptions: 그 단원에서 학습자가 실제로 헷갈릴 지점을 원문 근거로 쓴다(부호·방향 관례 반대, 조건 하나가 바뀐 진술, 비슷한 용어 혼동, 흔한 계산 실수, 순서 뒤바뀜). 오답과 OX 명제의 재료가 된다.`;
 const V5_AUTHOR = `\n[v5] slot.astra.format으로 출제한다(그 형식으로 목표를 확인할 수 없을 때만 다른 형식으로 바꾸고 checkedSkill 끝에 이유를 적는다). 형식별 규격: choice — 보기 4개, 정답 하나, 오답 3개는 plan.misconceptions나 원문에서 나올 만한 실제 오개념으로 만들고 distractors에 option(0부터)·misconception·whyWrong(원문 근거)을 모두 적는다. 보기 길이·말투·구체성을 맞추고, 정답 순서만 뒤집은 보기나 '모두 맞다'류를 쓰지 않는다. ox — stem에 판정할 명제 하나, accepted 없음, options는 비워도 된다(코드가 O·X를 만든다), correctIndex 0=O 1=X. 명제는 원문 진술에서 조건 하나만 바꾸거나 그대로 두며, 틀린 명제면 distractors[0]에 무엇을 바꿨는지 적는다. 참만 계속 내지 않는다. short — 값·이름 하나, 같은 답의 표기 변형을 accepted에. cloze — 원문 핵심 문장 하나에서 핵심어 한 곳을 비우고 before/after에 앞뒤 글을 둔다(앞뒤 글이 답을 드러내지 않게). flashcard — stem은 단서 하나, accepted[0]는 핵심 답(설명이면 요점 2~3개를 한 문단으로), requiredPoints에 채점 요소. 모든 형식: 한 문항 한 과제, 답·관계를 문제 글에 미리 주지 않는다.`;
@@ -246,13 +255,14 @@ export function candidateHints(q: Candidate): string[] {
   if (listed >= 3) hints.push("단답 하나에 셋 이상을 나열하게 합니다. 순서·대응이면 choice가 채점에 낫습니다.");
   return hints;
 }
-/** Choice answers came back with the correct option first every time; the stored order is shuffled (stable per objective). */
+/** Choice answers came back with the correct option first every time; the stored order is shuffled (stable per objective).
+ *  The high bits pick the swap: this LCG's low bits cycle with a short period (low bits put every answer at ④). */
 export function shuffleChoice(q: Candidate): Candidate {
   const a = q.answer;
   if (a.kind !== "choice" || !a.options || a.options.length !== 4 || a.correctIndex === null) return q;
   let seed = [...q.objectiveId].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const order = a.options.map((_, i) => i);
-  for (let i = order.length - 1; i > 0; i--) { seed = (seed * 1103515245 + 12345) >>> 0; const j = seed % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+  for (let i = order.length - 1; i > 0; i--) { seed = (seed * 1103515245 + 12345) >>> 0; const j = (seed >>> 16) % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
   return { ...q, answer: { ...a, options: order.map(i => a.options![i]), correctIndex: order.indexOf(a.correctIndex) } };
 }
 /** A self-check whose model answer is a single value (a number, tuple, symbol or short term) is graded as short. */
@@ -338,7 +348,16 @@ export async function runAstra(ctx: Context) {
   let failure: unknown;
   const ask: AstraAsk = async (...args) => {
     if (failure) throw failure;
-    try { return await ctx.ask(...args); } catch (error) { failure = error; throw error; }
+    // A cut runaway reply is handled where it was asked (author retries smaller, then holds); it does not stop the run.
+    try { return await ctx.ask(...args); } catch (error) {
+      if (error instanceof RunawayReply && args[0] === "astra-author") throw error;
+      failure = error;
+      if (error instanceof RunawayReply) {
+        try { ctx.pause(`${genStepLabel[args[0]]}: ${error.message} 받은 앞뒤 글은 호출 기록에 남겼어요. 다시 시작하면 멈춘 곳부터 이어가요.`); }
+        catch (stop) { failure = stop; throw stop; }
+      }
+      throw error;
+    }
   };
   const data = (state.astra ??= { version: 1, batches: [], warnings: [] });
   // v4 rules apply to v5 too (v5 builds on v4); v5 adds its own.
@@ -372,13 +391,34 @@ export async function runAstra(ctx: Context) {
   let selected: Objective[] = [];
   const author = async (batch: Batch, attempt: number, reasons: unknown) => {
     if (!batch.questions) {
-      const result = await ask("astra-author", attempt, AUTHOR + (v5 ? V5_AUTHOR + (attempt > 1 ? V5_REPAIR : "") : v4 ? V4_AUTHOR : ""), JSON.stringify({ context, plan: data.plan, slots: batch.ids.map(id => byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: sourceOf(pagesOfIds(batch.ids)) }), (v5 ? v5QuestionsSchema : questionsSchema) as typeof questionsSchema, noFiles);
+      const system = AUTHOR + (v5 ? V5_AUTHOR + (attempt > 1 ? V5_REPAIR : "") : v4 ? V4_AUTHOR : "");
+      const user = (cut: boolean) => JSON.stringify({ context, plan: data.plan, slots: batch.ids.map(id => byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: sourceOf(pagesOfIds(batch.ids)),
+        ...(cut ? { lengthWarning: "앞 응답이 예상 길이를 크게 넘어 끊겼다. 슬롯마다 문항 하나, 짧은 문장, 목록은 꼭 필요한 만큼만 쓰고 같은 내용을 되풀이하지 마라." } : {}) });
+      const schema = (v5 ? v5QuestionsSchema : questionsSchema) as typeof questionsSchema;
+      let result: z.infer<typeof questionsSchema>;
+      if (!v4) result = await ask("astra-author", attempt, system, user(false), schema, noFiles);
+      else {
+        // v4/v5: a reply far past the expected length is cut; one shorter retry, then the batch's goals are held
+        // (the global review's repair can still pick them up) instead of waiting minutes or stopping the run.
+        try { result = await ask("astra-author", attempt, system, user(false), schema, noFiles, undefined, undefined, authorLimit(batch.ids.length)); }
+        catch (error) {
+          if (!(error instanceof RunawayReply)) throw error;
+          data.warnings.push({ severity: "warning", code: "astra-runaway", message: `출제 ${batch.ids.join(", ")}: ${error.message} 한 번 더 짧게 요청해요.` });
+          try { result = await ask("astra-author", attempt, system, user(true), schema, noFiles, undefined, undefined, authorLimit(batch.ids.length)); }
+          catch (again) {
+            if (!(again instanceof RunawayReply)) throw again;
+            data.warnings.push({ severity: "warning", code: "astra-runaway", message: `출제 ${batch.ids.join(", ")}: 다시 끊겨 이 목표들은 보류해요.` });
+            batch.questions = []; batch.solutions = { items: [] }; await save();
+            return;
+          }
+        }
+      }
       batch.questions = result.questions.filter(q => batch.ids.includes(q.objectiveId)).map(q => v5 ? fromV5(q as unknown as V5Question) : q)
         .map(q => answerInPlace(q, data.warnings)).map(q => v5 ? shuffleChoice(q) : v4 ? shuffleChoice(valueAsShort(q)) : q); await save();
     }
     if (!batch.solutions) {
       // Explicit projection: no plan, objective recall, answer, explanation or evidence supports can leak here.
-      batch.solutions = await ask("astra-solve", attempt, SOLVE, JSON.stringify({ pages: context.pages, questions: batch.questions.map(student), source: sourceOf(pagesOfIds(batch.ids)) }), solveSchema, noFiles, undefined, await imagesFor(batch.ids)); await save();
+      batch.solutions = batch.questions.length ? await ask("astra-solve", attempt, SOLVE, JSON.stringify({ pages: context.pages, questions: batch.questions.map(student), source: sourceOf(pagesOfIds(batch.ids)) }), solveSchema, noFiles, undefined, await imagesFor(batch.ids), v4 ? checkLimit(batch.questions.length) : undefined) : { items: [] }; await save();
     }
   };
   // The reviewer gets the part of the plan these questions use (batch), or a compact plan (global): the whole plan with
@@ -399,7 +439,7 @@ export async function runAstra(ctx: Context) {
     const scopeRule = (scope === "batch" ? "\n같은 practice의 다른 슬롯은 뒤 묶음에 있을 수 있다. 이 묶음에 실제 있는 슬롯의 checkedSkill만 coverage 대상으로 삼고, 나머지 슬롯이 없다는 이유로 partial/missing 판정하지 마라." : "") + (state.input.remake ? "\n신고 문항 재생성이다. 선택된 목표만 검수하고, 나머지 계획이나 새 학습대상을 미출제 결함으로 취급하지 마라. missedContent는 빈 배열로 반환하라." : "");
     const reviewImages = scope === "batch" ? await imagesFor(questions.map(q => q.objectiveId)) : undefined;
     return ask("astra-review", attempt, REVIEW + (v4 ? V4_REVIEW : "") + (v5 ? V5_REVIEW : "") + scopeRule + (scope === "batch" ? "\n이번에는 묶음 공개 전 검사다. 이 묶음의 문항과 근거만 검수하며, 아직 출제 중인 다른 묶음의 누락을 지적하지 않는다. missedContent는 빈 배열. 전체 범위·중복은 마지막 전역검수가 맡는다." : (v4 ? "\n이번에는 전체 출제 후 전역검수다. 이미 공개된 문항도 결함이 있으면 revise로 판정하라. 한 번 고쳐 쓰고, 고친 문항이 통과할 때만 바꾼다." : "\n이번에는 전체 출제 후 전역검수다. 이미공개 IDs는 자동수정하지 않으므로 결함을 명확히 기록한다.")), JSON.stringify({ context, scope, plan: planFor(questions, scope), publishedIds: data.publishedQuestions!.map(q => q.objectiveId), selectedPracticeIds: [...new Set(practiceIds)], candidates: questions, solutions, code,
-      source: sourceOf(scope === "batch" ? pagesOfIds(questions.map(q => q.objectiveId)) : state.input.pageNumbers) }), reviewSchema, noFiles, undefined, reviewImages);
+      source: sourceOf(scope === "batch" ? pagesOfIds(questions.map(q => q.objectiveId)) : state.input.pageNumbers) }), reviewSchema, noFiles, undefined, reviewImages, v4 ? checkLimit(questions.length) : undefined);
   };
   const refusal = (objective: Objective, candidates: Candidate[], solutions: Solutions["items"], checked: Review) => {
     const matches = candidates.filter(q => q.objectiveId === objective.id); const q = matches[0]; const v = verdict(checked, objective.id);
@@ -445,17 +485,28 @@ export async function runAstra(ctx: Context) {
     return next;
   };
   const pendingPublish: Promise<void>[] = [];
+  // v4/v5 publish in source order: a batch opens after the earlier batches already being made have opened (or held).
+  // Batches nobody has started (skipped for the reading position on the study screen) do not hold later ones back.
+  const opens = new Map<Batch, { done: Promise<void>; finish: () => void }>();
+  const settleOf = (batch: Batch) => {
+    let entry = opens.get(batch);
+    if (!entry) { let finish = () => {}; const done = new Promise<void>(resolve => { finish = resolve; }); entry = { done, finish }; opens.set(batch, entry); }
+    return entry;
+  };
   const processBatch = async (batch: Batch) => {
     const gen = generation;
+    let opened: Promise<unknown> = Promise.resolve();
     try {
       if (!batch.startedAt) { batch.startedAt = new Date().toISOString(); await save(); }
       await author(batch, 1, null);
       if (data.review) return; // Legacy or resumed global review already covers the saved batch; do not pay again.
-      if (!batch.review) { batch.review = await review(batch.questions!, batch.solutions!, 1, "batch"); await save(); }
-      const published = publishReady(batch.questions!, batch.solutions!.items, batch.review, gen).then(async () => {
+      if (!batch.review) { batch.review = batch.questions!.length ? await review(batch.questions!, batch.solutions!, 1, "batch") : { items: [], coverage: [], missedContent: [] }; await save(); }
+      const earlier = v4 ? data.batches.slice(0, Math.max(0, data.batches.indexOf(batch))).filter(b => claimed.has(b)).map(b => settleOf(b).done) : [];
+      const published = Promise.all(earlier).then(() => publishReady(batch.questions!, batch.solutions!.items, batch.review!, gen)).then(async () => {
         if (gen !== generation) return;
         batch.publishedIds = batch.ids.filter(id => data.publishedQuestions!.some(q => q.objectiveId === id)); await save();
       });
+      opened = published;
       // v4 does not wait for publication (it may be waiting for the plan) before taking the next batch.
       if (v4) pendingPublish.push(published.catch(error => { failure ??= error; })); else await published;
     } catch (error) {
@@ -463,6 +514,8 @@ export async function runAstra(ctx: Context) {
       // Storage failures must also notify runner's shared abort, not only stop this worker's next call.
       try { pause(failure instanceof Error ? failure.message : String(failure)); }
       catch (stop) { failure = stop; throw stop; }
+    } finally {
+      void opened.catch(() => undefined).then(() => settleOf(batch).finish());
     }
   };
   // ---- v4: early authoring while the plan streams in ------------------------------------------------------
@@ -680,7 +733,7 @@ export async function runAstra(ctx: Context) {
       data.plan!.practice.push({ id: practiceId, sectionId: section.id, conceptIds: [conceptId], task: missing.reason, cue: missing.reason, recall: "원문에서 확인하여 출제", kind: "관계", priority: "essential", questionCount: 1 });
       const n = (section.classify?.items.length ?? 0) + 1;
       section.classify!.items.push({ n, kind: "핵심 지식", content: missing.reason, quote: "", page: pages[0] });
-      const objective: Objective = { id, sectionId: section.id, statement: missing.reason, cue: missing.reason, recall: "원문에서 확인하여 출제", kind: "관계", importance: "core", itemNumbers: [n], materialNumbers: [], pages, quotes: [], astra: { practiceIds: [practiceId], conceptIds: [conceptId], checkedSkill: missing.reason, requiredPoints: [], evidence } };
+      const objective: Objective = { id, sectionId: section.id, statement: missing.reason, cue: missing.reason, recall: "원문에서 확인하여 출제", kind: "관계", importance: "core", itemNumbers: [n], materialNumbers: [], pages, quotes: [], astra: { practiceIds: [practiceId], conceptIds: [conceptId], checkedSkill: missing.reason, requiredPoints: [], evidence, ...(v4 ? { keepGoal: true } : {}) } };
       section.design!.objectives.push(objective); selected.push(objective); state.confirmedObjectiveIds!.push(id); failed.push(objective);
     }
     if (failed.length) data.repair = { ids: failed.slice(0, 16).map(o => o.id) };

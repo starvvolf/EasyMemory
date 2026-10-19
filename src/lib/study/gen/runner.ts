@@ -9,7 +9,7 @@ import { callModel, ModelError, type ModelCaller, type ModelRequest } from "../.
 import { redactCallText } from "../lab-contract.ts";
 import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
-import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, getAstraReadingView, responseSchemaFor, runAstra } from "./astra.ts";
+import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, getAstraReadingView, responseSchemaFor, runAstra, RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
@@ -396,7 +396,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
-    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string; onPartial?: (text: string) => void } = {}) => {
+    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string; onPartial?: (text: string) => void; maxChars?: number } = {}) => {
     if (astraFailure) throw astraFailure;
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
@@ -433,7 +433,17 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       state.current = { step, ...(sectionId ? { sectionId } : {}), ...(extra.page ? { page: extra.page } : {}), attempt, progress: progressOf(step, text) };
       void saveState(state).catch(() => undefined);
     };
-    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(extra.onPartial ? { onText: extra.onPartial } : astraAbort ? {} : { onText }), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
+    // Runaway guard: a structured reply can loop (same items or blank space) and never close; past maxChars the call is
+    // cut and what came in is kept on the call record (astrav3 첫 실측: 6.6만 자를 267초 받다가 서버를 꺼 증거를 잃음).
+    const cut = extra.maxChars ? new AbortController() : undefined;
+    let partial = "", runaway = false;
+    const baseText = extra.onPartial ?? (astraAbort ? undefined : onText);
+    const guardText = (text: string) => {
+      partial = text;
+      if (cut && !runaway && text.length > extra.maxChars!) { runaway = true; cut.abort(); return; }
+      baseText?.(text);
+    };
+    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(cut || baseText ? { onText: guardText } : {}), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
       model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}),
       ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}) };
     if (astraAbort) {
@@ -451,17 +461,30 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         }, 1000);
       };
     }
+    if (cut) {
+      const parent = request.signal;
+      if (parent) parent.aborted ? cut.abort() : parent.addEventListener("abort", () => cut.abort(), { once: true });
+      request.signal = cut.signal;
+    }
     try {
       if (astraFailure) throw astraFailure;
       if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("astra-") ? astraFakeReply(s, u) : genFakeReply(s, u)))(step, user, attempt);
       if (extra.cachePrefix && request.fakeReply !== undefined) request.fakeReply = JSON.stringify({ result: JSON.parse(request.fakeReply) });
       // The fake model has no stream; hand the reply over in pieces so streaming consumers behave as with a real one.
-      if (request.fakeReply !== undefined && extra.onPartial) for (let at = 200; at < request.fakeReply.length + 200; at += 200) extra.onPartial(request.fakeReply.slice(0, at));
+      if (request.fakeReply !== undefined && (extra.onPartial || cut)) for (let at = 200; at < request.fakeReply.length + 200 && !runaway; at += 200) guardText(request.fakeReply.slice(0, at));
+      if (runaway) throw new Error("cut");
       const reply = await callModel(request);
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
       await saveJson(callFile, record);
       return schema ? reply.data : reply.text;
     } catch (error) {
+      if (runaway) {
+        // Head and tail are enough to see what repeated; the whole text can be tens of thousands of characters.
+        const kept = partial.length > 24000 ? `${partial.slice(0, 12000)}\n…(중략 ${partial.length - 24000}자)…\n${partial.slice(-12000)}` : partial;
+        Object.assign(record, { reply: redactCallText(kept), error: `응답이 ${partial.length.toLocaleString()}자로 상한 ${extra.maxChars!.toLocaleString()}자를 넘어 끊었어요.`, ms: Date.now() - started });
+        await saveJson(callFile, record);
+        throw new RunawayReply(extra.maxChars!, partial.length);
+      }
       if (astraAbort) failAstra(error);
       const raw = (error as { rawText?: string }).rawText;
       Object.assign(record, { reply: raw === undefined ? null : redactCallText(raw), error: redactCallText(error instanceof Error ? error.message : String(error)), ms: Date.now() - started });
@@ -484,12 +507,12 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   };
   /** A call whose reply did not parse or match the schema counts as one try; a dropped connection too. */
   const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide,
-    extra: { files?: ModelRequest["files"]; cachePrefix?: string; onPartial?: (text: string) => void; images?: ModelRequest["images"] } = {}) => {
+    extra: { files?: ModelRequest["files"]; cachePrefix?: string; onPartial?: (text: string) => void; images?: ModelRequest["images"]; maxChars?: number } = {}) => {
     try {
       const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide, extra));
       return parsed.success ? { ok: true as const, value: parsed.data } : { ok: false as const, problem: "응답이 정해진 JSON 형식과 다릅니다." };
     } catch (error) {
-      if (error instanceof Stop) throw error;
+      if (error instanceof Stop || error instanceof RunawayReply) throw error;
       return { ok: false as const, problem: error instanceof Error ? error.message : String(error) };
     }
   };
@@ -539,8 +562,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         pageImages: async (wanted: number[]) => {
           try { return await (options.pageImages ?? registeredImages)(input, wanted); } catch { return new Map<number, string>(); }
         },
-        ask: async (step, attempt, system, user, parser, files, onPartial, images) => {
-          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(responseSchemaFor(input.engine)), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}), ...(images?.length ? { images } : {}) });
+        ask: async (step, attempt, system, user, parser, files, onPartial, images, maxChars) => {
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(responseSchemaFor(input.engine)), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}), ...(images?.length ? { images } : {}), ...(maxChars ? { maxChars } : {}) });
           if (!result.ok) throw failAstra(new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`));
           return result.value.result;
         },

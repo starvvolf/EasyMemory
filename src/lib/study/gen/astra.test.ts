@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { answerInPlace, astraFakeReply, candidateHints, valueAsShort, astraJsonSchema, astraResponseSchema, getAstraReadingView, runAstra, scopePlan, type AstraAsk } from "./astra.ts";
+import { answerInPlace, astraFakeReply, candidateHints, shuffleChoice, valueAsShort, astraJsonSchema, astraResponseSchema, getAstraReadingView, runAstra, scopePlan, type AstraAsk } from "./astra.ts";
 import { confirmObjectives, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import type { GenState, GenStep } from "./types.ts";
 
@@ -295,4 +295,35 @@ test("v5: 목표의 형식대로 출제(OX·객관식), 오답 근거 없는 객
   assert.ok(state.sections[0].author!.dropped.some(d => d.reason.includes("오답마다")));
   assert.ok(solveImages >= 1, "그림 근거 목표의 풀이에 그 쪽 그림을 보낸다");
   assert.equal((state.astra!.plan as { diagnosis?: { materialType: string } }).diagnosis?.materialType, "개념 비교");
+});
+
+test("v4 보기 섞기: 정답 위치가 한 칸에 몰리지 않는다 (하위 비트만 쓰던 섞기는 160개 모두 ④)", () => {
+  const at = new Set<number>();
+  for (let n = 0; n < 40; n++) {
+    const q = { objectiveId: `s${n % 7}-o${n}`, answer: { kind: "choice", options: ["a", "b", "c", "d"].map(text => ({ text, latex: null })), correctIndex: 0 } };
+    at.add((shuffleChoice(q as never).answer as { correctIndex: number }).correctIndex);
+  }
+  assert.equal(at.size, 4);
+});
+
+test("v4 끝없는 응답: 예상 길이를 넘은 출제는 끊고 한 번 짧게 다시, 또 넘으면 보류하고 실행은 이어간다 (astrav3 6.6만 자)", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "v4-runaway-"));
+  const prior = process.env.STUDY_FORGE_DATA_DIR;
+  process.env.STUDY_FORGE_DATA_DIR = dir;
+  try {
+    const start = await createGen({ sourceId: "src_astra_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "v4", provider: "fake", autoConfirm: true });
+    const loop = (step: GenStep, user: string) => {
+      const reply = astraFakeReply(step, user);
+      return step === "astra-author" ? reply.replace("청색은 대기 상태다.", "청색은 대기 상태다. ".repeat(20000)) : reply;
+    };
+    const done = await runGen(start.id, { uid: "local-experiment" }, { fakeReply: loop });
+    assert.equal(done.status, "done", done.message);
+    assert.ok((done.astra?.warnings ?? []).filter(w => w.code === "astra-runaway").length >= 2);
+    const cut = (await readGenCalls(start.id)).filter(call => call.step === "astra-author" && call.error?.includes("끊었어요"));
+    assert.ok(cut.length >= 2 && cut.every(call => (call.reply ?? "").length > 10000), "끊을 때까지 받은 글을 호출 기록에 남긴다");
+    assert.equal(done.astra?.publishedQuestions?.length, 0);
+  } finally {
+    if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;
+    await rm(dir, { recursive: true, force: true });
+  }
 });
