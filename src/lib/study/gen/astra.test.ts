@@ -304,6 +304,9 @@ test("v4 보기 섞기: 정답 위치가 한 칸에 몰리지 않는다 (하위 
     at.add((shuffleChoice(q as never).answer as { correctIndex: number }).correctIndex);
   }
   assert.equal(at.size, 4);
+  // v5 오답 근거는 보기와 함께 움직인다 (안 움직이면 정답 자리를 가리켜 객관식이 '오답 근거 부족'으로 보류: v5 실측 9개 중 7개)
+  const v5 = shuffleChoice({ objectiveId: "s1-o2", answer: { kind: "choice", options: ["a", "b", "c", "d"].map(text => ({ text, latex: null })), correctIndex: 0 }, distractors: [1, 2, 3].map(option => ({ option, misconception: "m", whyWrong: "w" })) } as never) as unknown as { answer: { correctIndex: number; options: Array<{ text: string }> }; distractors: Array<{ option: number }> };
+  assert.deepEqual(v5.distractors.map(d => v5.answer.options[d.option].text).sort(), ["b", "c", "d"]);
 });
 
 test("v4 끝없는 응답: 예상 길이를 넘은 출제는 끊고 한 번 짧게 다시, 또 넘으면 보류하고 실행은 이어간다 (astrav3 6.6만 자)", async () => {

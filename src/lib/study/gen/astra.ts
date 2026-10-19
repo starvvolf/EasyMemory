@@ -263,7 +263,10 @@ export function shuffleChoice(q: Candidate): Candidate {
   let seed = [...q.objectiveId].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const order = a.options.map((_, i) => i);
   for (let i = order.length - 1; i > 0; i--) { seed = (seed * 1103515245 + 12345) >>> 0; const j = (seed >>> 16) % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
-  return { ...q, answer: { ...a, options: order.map(i => a.options![i]), correctIndex: order.indexOf(a.correctIndex) } };
+  // v5 distractor notes point at options by position; they move with their options.
+  const notes = (q as Candidate & { distractors?: Array<{ option: number }> }).distractors;
+  return { ...q, answer: { ...a, options: order.map(i => a.options![i]), correctIndex: order.indexOf(a.correctIndex) },
+    ...(notes ? { distractors: notes.map(d => ({ ...d, option: order.indexOf(d.option) })) } : {}) };
 }
 /** A self-check whose model answer is a single value (a number, tuple, symbol or short term) is graded as short. */
 export function valueAsShort(q: Candidate): Candidate {
