@@ -135,8 +135,10 @@ type Batch = { ids: string[]; questions?: Candidate[]; solutions?: Solutions; re
 type Tier = "code" | "review" | "full";
 const squash = (text: string) => text.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
 export type AstraState = { version: 1; pdfHash?: string; plan?: Plan; batches: Batch[]; review?: Review; repair?: Batch; warnings: Issue[];
-  publishedQuestions?: Candidate[]; lightChecked?: boolean; timing?: { startedAt: string; firstPublishedAt?: string; completedAt?: string } };
-export type AstraAsk = <T>(step: GenStep, attempt: number, system: string, user: string, parser: z.ZodType<T>, files: NonNullable<ModelRequest["files"]>, onPartial?: (text: string) => void, images?: NonNullable<ModelRequest["images"]>, maxChars?: number) => Promise<T>;
+  publishedQuestions?: Candidate[]; lightChecked?: boolean;
+  /** v5 cache mode: the source block every author/solve/review call starts with, fixed once the plan is done. */
+  shared?: string; timing?: { startedAt: string; firstPublishedAt?: string; completedAt?: string } };
+export type AstraAsk = <T>(step: GenStep, attempt: number, system: string, user: string, parser: z.ZodType<T>, files: NonNullable<ModelRequest["files"]>, onPartial?: (text: string) => void, images?: NonNullable<ModelRequest["images"]>, maxChars?: number, shared?: string) => Promise<T>;
 /** A reply cut because it ran far past the expected length (a structured reply that loops and never closes). */
 export class RunawayReply extends Error {
   readonly limit: number;
@@ -393,6 +395,12 @@ export async function runAstra(ctx: Context) {
     const note = data.plan?.pageNotes?.find(x => x.page === n)?.text.trim();
     return `[원문 p.${n}]\n${(ctx.pageTexts?.get(n) ?? "").trim()}${note ? `\n[그림·식·표 옮김]\n${note}` : ""}`;
   }).join("\n\n");
+  // v5 cache mode (실험): every author/solve/review call starts with the same source block (all chosen pages' text and
+  // figure notes) right after the shared instructions and the one common response format, so the prompt cache can reuse
+  // it; each call then names the pages it is about. The plan stays out of the block: the solver must not see it.
+  const sharedMode = v5 && state.input.cacheMode === "shared";
+  const shared = () => sharedMode ? (data.shared ??= `[공통 자료: 고른 쪽 전체 원문(글자 층 + 그림·식 옮김). 각 호출의 source는 이 안의 쪽을 가리킨다]\n${sourceOf(state.input.pageNumbers)}`) : undefined;
+  const src = (pages: number[]) => sharedMode ? `공통 자료의 ${[...new Set(pages)].sort((a, b) => a - b).map(p => `p.${p}`).join(", ")}` : sourceOf(pages);
   const imageCache = new Map<number, string>();
   const imagesFor = async (ids: string[], questions: Candidate[] = []) => {
     if (!v5 || !ctx.pageImages) return undefined;
@@ -432,7 +440,7 @@ export async function runAstra(ctx: Context) {
   const author = async (batch: Batch, attempt: number, reasons: unknown) => {
     if (!batch.questions) {
       const system = AUTHOR + (v5 ? V5_AUTHOR + (attempt > 1 ? V5_REPAIR : "") : v4 ? V4_AUTHOR : "");
-      const user = (cut: boolean) => JSON.stringify({ context, plan: v4 ? authorPlan(batch.ids) : data.plan, slots: batch.ids.map(id => v4 ? slotOf(id) : byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: sourceOf(pagesOfIds(batch.ids)),
+      const user = (cut: boolean) => JSON.stringify({ context, plan: v4 ? authorPlan(batch.ids) : data.plan, slots: batch.ids.map(id => v4 ? slotOf(id) : byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: src(pagesOfIds(batch.ids)),
         ...(cut ? { lengthWarning: "앞 응답이 예상 길이를 크게 넘어 끊겼다. 슬롯마다 문항 하나, 짧은 문장, 목록은 꼭 필요한 만큼만 쓰고 같은 내용을 되풀이하지 마라." } : {}) });
       const schema = (v5 ? v5QuestionsSchema : questionsSchema) as typeof questionsSchema;
       let result: z.infer<typeof questionsSchema>;
@@ -440,11 +448,11 @@ export async function runAstra(ctx: Context) {
       else {
         // v4/v5: a reply far past the expected length is cut; one shorter retry, then the batch's goals are held
         // (the global review's repair can still pick them up) instead of waiting minutes or stopping the run.
-        try { result = await ask("astra-author", attempt, system, user(false), schema, noFiles, undefined, undefined, authorLimit(batch.ids.length)); }
+        try { result = await ask("astra-author", attempt, system, user(false), schema, noFiles, undefined, undefined, authorLimit(batch.ids.length), shared()); }
         catch (error) {
           if (!(error instanceof RunawayReply)) throw error;
           data.warnings.push({ severity: "warning", code: "astra-runaway", message: `출제 ${batch.ids.join(", ")}: ${error.message} 한 번 더 짧게 요청해요.` });
-          try { result = await ask("astra-author", attempt, system, user(true), schema, noFiles, undefined, undefined, authorLimit(batch.ids.length)); }
+          try { result = await ask("astra-author", attempt, system, user(true), schema, noFiles, undefined, undefined, authorLimit(batch.ids.length), shared()); }
           catch (again) {
             if (!(again instanceof RunawayReply)) throw again;
             data.warnings.push({ severity: "warning", code: "astra-runaway", message: `출제 ${batch.ids.join(", ")}: 다시 끊겨 이 목표들은 보류해요.` });
@@ -460,7 +468,7 @@ export async function runAstra(ctx: Context) {
       const tiers = new Map(batch.questions.map(q => [q.objectiveId, tierOf(q)]));
       const need = batch.questions.filter(q => tiers.get(q.objectiveId) === "full");
       const cited = [...new Set(need.flatMap(q => q.evidence.map(e => e.page)))].filter(p => state.input.pageNumbers.includes(p));
-      const solved = need.length ? await ask("astra-solve", attempt, SOLVE, JSON.stringify({ pages: context.pages, questions: need.map(student), source: sourceOf(cited.length ? cited : pagesOfIds(need.map(q => q.objectiveId))) }), solveSchema, noFiles, undefined, await imagesFor(need.map(q => q.objectiveId), need), checkLimit(need.length)) : { items: [] };
+      const solved = need.length ? await ask("astra-solve", attempt, SOLVE, JSON.stringify({ pages: context.pages, questions: need.map(student), source: src(cited.length ? cited : pagesOfIds(need.map(q => q.objectiveId))) }), solveSchema, noFiles, undefined, await imagesFor(need.map(q => q.objectiveId), need), checkLimit(need.length), shared()) : { items: [] };
       // Goals not solved independently get a stand-in so the publish check sees one solution each; review skips them.
       const standIns = batch.questions.filter(q => tiers.get(q.objectiveId) !== "full").map(q => ({ objectiveId: q.objectiveId, answer: "(독립 풀이 생략)", missingConditions: [], exposedRelation: "", uncertain: false, evidence: [], skipped: tiers.get(q.objectiveId) }));
       batch.solutions = { items: [...solved.items, ...standIns] }; await save();
@@ -514,7 +522,7 @@ export async function runAstra(ctx: Context) {
     const reviewPages = scope === "batch" ? pagesOfIds(questions.map(q => q.objectiveId)) : v4 ? pagesOfIds(questions.filter(q => whole(q.objectiveId)).map(q => q.objectiveId)) : state.input.pageNumbers;
     return ask("astra-review", attempt, REVIEW + (v4 ? V4_REVIEW : "") + (v5 ? V5_REVIEW : "") + scopeRule + (scope === "batch" ? "\n이번에는 묶음 공개 전 검사다. 이 묶음의 문항과 근거만 검수하며, 아직 출제 중인 다른 묶음의 누락을 지적하지 않는다. missedContent는 빈 배열. 전체 범위·중복은 마지막 전역검수가 맡는다." : (v4 ? "\n이번에는 전체 출제 후 전역검수다. 이미 공개된 문항도 결함이 있으면 revise로 판정하라. 한 번 고쳐 쓰고, 고친 문항이 통과할 때만 바꾼다. compactIds 문항은 묶음 검수에서 원문 대조를 마친 공개 문항이라 질문·답만 온다: 중복·범위·형식만 보고, 원문이 없다는 이유로 uncertain·revise로 판정하지 마라." : "\n이번에는 전체 출제 후 전역검수다. 이미공개 IDs는 자동수정하지 않으므로 결함을 명확히 기록한다.")), JSON.stringify({ context, scope, plan: planFor(questions, scope), publishedIds: data.publishedQuestions!.map(q => q.objectiveId), selectedPracticeIds: [...new Set(practiceIds)], candidates: shown, solutions: shownSolutions, code,
       ...(v4 && scope === "global" ? { compactIds: questions.filter(q => !whole(q.objectiveId)).map(q => q.objectiveId) } : {}),
-      source: sourceOf(reviewPages) }), reviewSchema, noFiles, undefined, reviewImages, v4 ? checkLimit(questions.length) : undefined);
+      source: src(reviewPages) }), reviewSchema, noFiles, undefined, reviewImages, v4 ? checkLimit(questions.length) : undefined, shared());
   };
   const refusal = (objective: Objective, candidates: Candidate[], solutions: Solutions["items"], checked: Review) => {
     const matches = candidates.filter(q => q.objectiveId === objective.id); const q = matches[0]; const v = verdict(checked, objective.id);
@@ -681,7 +689,8 @@ export async function runAstra(ctx: Context) {
     const user = JSON.stringify({ context: planContext, previousMap: priorMap });
     // v4 (lab, auto-confirmed): show the outline and each unit's goals as soon as they arrive, and start authoring that
     // unit at once. Publication waits for the whole plan's checks below.
-    const earlyOk = v4 && !priorMap && Boolean(state.input.autoConfirm) && !state.input.remake && state.input.purpose !== "read";
+    // Cache mode waits for the whole plan: the shared source block needs every unit's figure notes.
+    const earlyOk = v4 && !sharedMode && !priorMap && Boolean(state.input.autoConfirm) && !state.input.remake && state.input.purpose !== "read";
     if (earlyOk) planGate = new Promise<void>(resolve => { openGate = resolve; });
     const earlyGoal = new Map<string, string>();
     let onPartial: ((text: string) => void) | undefined;

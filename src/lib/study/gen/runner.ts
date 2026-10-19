@@ -162,6 +162,7 @@ export const genInputSchema = z.strictObject({
   pastExamSourceIds: z.array(z.string().regex(/^src_[a-f0-9]{64}$/)).min(1).max(2).optional(),
   engine: z.enum(engines).default("v2"),
   planInput: z.enum(["pdf", "pages"]).optional(),
+  cacheMode: z.enum(["shared"]).optional(),
   survey: z.strictObject({ exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -397,7 +398,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
-    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string; onPartial?: (text: string) => void; maxChars?: number } = {}) => {
+    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string; onPartial?: (text: string) => void; maxChars?: number; sharedContext?: string } = {}) => {
     if (astraFailure) throw astraFailure;
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
@@ -421,6 +422,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     if (!astraAbort) started = Date.now();
     const record: GenCall = { n, step, sectionId, attempt, model, effort, format: null, startedAt: new Date(started).toISOString(), ms: 0, ok: false,
       ...(extra.files?.length ? { withPdf: true } : {}),
+      ...(extra.sharedContext ? { sharedChars: extra.sharedContext.length } : {}),
       system: redactCallText(system), user: redactCallText(user), reply: null, error: null,
       ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
     const callFile = path.join(dirOf(id), "calls", `${n}.json`);
@@ -446,7 +448,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     };
     const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(cut || baseText ? { onText: guardText } : {}), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
       model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}),
-      ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}) };
+      ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}), ...(extra.sharedContext ? { sharedContext: extra.sharedContext } : {}) };
     if (astraAbort) {
       request.signal = astraAbort.signal;
       request.onProgress = receivedChars => {
@@ -518,7 +520,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   };
   /** A call whose reply did not parse or match the schema counts as one try; a dropped connection too. */
   const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide,
-    extra: { files?: ModelRequest["files"]; cachePrefix?: string; onPartial?: (text: string) => void; images?: ModelRequest["images"]; maxChars?: number } = {}) => {
+    extra: { files?: ModelRequest["files"]; cachePrefix?: string; onPartial?: (text: string) => void; images?: ModelRequest["images"]; maxChars?: number; sharedContext?: string } = {}) => {
     try {
       const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide, extra));
       return parsed.success ? { ok: true as const, value: parsed.data } : { ok: false as const, problem: "응답이 정해진 JSON 형식과 다릅니다." };
@@ -573,11 +575,11 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         pageImages: async (wanted: number[]) => {
           try { return await (options.pageImages ?? registeredImages)(input, wanted); } catch { return new Map<number, string>(); }
         },
-        ask: async (step, attempt, system, user, parser, files, onPartial, images, maxChars) => {
+        ask: async (step, attempt, system, user, parser, files, onPartial, images, maxChars, shared) => {
           // v4/v5 send only this step's response format (the 4-step union was ~2,500 tokens on every call, and the shared
           // prefix it was kept for hardly hit the cache: parallel batches). astra keeps the union.
           const shape = z.object({ result: parser });
-          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(input.engine === "v4" || input.engine === "v5" ? shape : responseSchemaFor(input.engine)), shape, undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}), ...(images?.length ? { images } : {}), ...(maxChars ? { maxChars } : {}) });
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema((input.engine === "v4" || input.engine === "v5") && !shared ? shape : responseSchemaFor(input.engine)), shape, undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}), ...(images?.length ? { images } : {}), ...(maxChars ? { maxChars } : {}), ...(shared ? { sharedContext: shared } : {}) });
           if (!result.ok) throw failAstra(new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`));
           return result.value.result;
         },

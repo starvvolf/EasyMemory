@@ -27,6 +27,8 @@ export type ModelRequest = {
   onText?: (text: string) => void;
   /** Opt-in stable instructions + files prefix; stage-specific system/user follow it. */
   cachePrefix?: string;
+  /** With cachePrefix: a block sent as the first user message, identical across calls (shared source for the cache). */
+  sharedContext?: string;
   /** Streaming progress only, never partial model content. */
   onProgress?: (receivedChars: number) => void;
 };

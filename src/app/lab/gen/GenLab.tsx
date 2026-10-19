@@ -106,6 +106,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   // v5 설문 (empty = 알잘딱; the memo above is 개입).
   const [survey, setSurvey] = useState<{ exam?: string; depth?: string; time?: string; known?: string }>({});
   const [planInput, setPlanInput] = useState<"" | "pdf" | "pages">("");
+  const [cacheShared, setCacheShared] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const source = sources.find((candidate) => candidate.id === sourceId) ?? sources[0];
@@ -120,6 +121,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, guideDir, engine, confirmed: provider === "chatgpt" ? confirmed : undefined,
         models: Object.fromEntries(shown.map((step) => [step, models[step]])), readImages: engine === "v2" ? readImages : false,
         ...((engine === "v4" || engine === "v5") && planInput ? { planInput } : {}),
+        ...(engine === "v5" && cacheShared ? { cacheMode: "shared" } : {}),
         ...(engine === "v5" && Object.values(survey).some(Boolean) ? { survey: Object.fromEntries(Object.entries(survey).filter(([, value]) => value)) } : {}),
       });
       setConfirmed(false);
@@ -154,6 +156,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         <select value={planInput} onChange={(event) => setPlanInput(event.target.value as "" | "pdf" | "pages")}>
           <option value="">기본 ({engine === "v5" ? "쪽 글자+쪽 이미지" : "PDF 파일"})</option><option value="pages">고른 쪽 글자+쪽 이미지</option><option value="pdf">PDF 파일 전체</option>
         </select>
+        {engine === "v5" && <label className="chip" title="출제·풀이·검수 호출이 모두 같은 원문 묶음으로 시작해 프롬프트 캐시를 탑니다. 계획이 끝난 뒤 출제를 시작하므로 첫 공개는 늦어질 수 있어요."><input type="checkbox" checked={cacheShared} onChange={(event) => setCacheShared(event.target.checked)} />캐시 공유(공통 앞부분)</label>}
       </div>}
       {engine === "v5" && <div className="row">
         <span className="muted">설문(비우면 알잘딱, 메모는 개입):</span>

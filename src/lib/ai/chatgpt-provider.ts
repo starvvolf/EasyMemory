@@ -43,6 +43,8 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
         ...request.files.map(file => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
         { type: "input_text" as const, text: "첨부 자료 끝" },
       ] }] : []),
+      // Shared source block: same text on every call of a run, right after the shared instructions and schema.
+      ...(request.sharedContext ? [{ role: "user", content: request.sharedContext }] : []),
       { role: "developer", content: request.system },
       { role: "user", content: request.images?.length ? [
         { type: "input_text", text: userText },

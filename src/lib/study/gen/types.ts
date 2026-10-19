@@ -64,6 +64,8 @@ export type GenInput = {
   survey?: GenSurvey;
   /** v4/v5 plan input: the PDF file, or the chosen pages' text plus one image per page (v5 default). */
   planInput?: "pdf" | "pages";
+  /** v5 실험: every author/solve/review call starts with the same source block so the prompt cache can reuse it. */
+  cacheMode?: "shared";
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
@@ -167,6 +169,8 @@ export type GenCall = {
   firstTextMs?: number;
   /** Whether the whole PDF went with this call (PDF 1회 통제: one per run on the normal path). */
   withPdf?: boolean;
+  /** v5 cache mode: length of the shared source block this call started with (the block itself is in state.astra.shared). */
+  sharedChars?: number;
   ok: boolean;
   system: string;
   user: string;

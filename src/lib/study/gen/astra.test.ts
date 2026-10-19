@@ -334,12 +334,14 @@ test("v4 끝없는 응답: 예상 길이를 넘은 출제는 끊고 한 번 짧�
   }
 });
 
-test("v5 확인 강도·고쳐 쓰기: 원문 그대로의 암기 답은 코드로, 객관식은 검수만, 걸린 문항은 묶음 안에서 한 번 고쳐 공개, 무거운 전체 검수 없음", async () => {
-  const state: GenState = { id: "gen_" + "5".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1], purpose: "core", note: "", provider: "fake", engine: "v5", planInput: "pdf", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+for (const cacheMode of [undefined, "shared"] as const) test(`v5 확인 강도·고쳐 쓰기${cacheMode ? " (공통 앞부분)" : ""}: 원문 그대로의 암기 답은 코드로, 객관식은 검수만, 걸린 문항은 묶음 안에서 한 번 고쳐 공개, 무거운 전체 검수 없음`, async () => {
+  const state: GenState = { id: "gen_" + "5".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1], purpose: "core", note: "", provider: "fake", engine: "v5", planInput: "pdf", ...(cacheMode ? { cacheMode } : {}), models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
   const calls: string[] = [];
+  const shares = new Set<string>();
   let authored = 0;
-  const ask: AstraAsk = async (step, _attempt, _system, user, parser) => {
+  const ask: AstraAsk = async (step, _attempt, _system, user, parser, _files, _onPartial, _images, _maxChars, shared) => {
     calls.push(step);
+    if (step !== "astra-plan" && !user.includes("lightCheck")) shares.add(shared ?? "(없음)");
     const input = JSON.parse(user);
     if (input.lightCheck) return parser.parse({ duplicates: [], gaps: [] });
     if (step === "astra-plan") {
@@ -368,4 +370,6 @@ test("v5 확인 강도·고쳐 쓰기: 원문 그대로의 암기 답은 코드�
   assert.deepEqual(state.astra!.publishedQuestions!.map(q => q.objectiveId).sort(), ["s1-o1", "s1-o2"], "걸린 객관식은 묶음 안에서 고쳐 공개");
   assert.ok(!calls.includes("astra-solve"), "암기(코드)·객관식(검수만)은 독립 풀이 없음");
   assert.deepEqual(calls, ["astra-plan", "astra-author", "astra-review", "astra-author", "astra-review", "astra-review"], "원문 없는 가벼운 전체 확인 1번뿐, 끝 고치기 없음");
+  if (cacheMode) assert.ok(shares.size === 1 && [...shares][0].includes("청색이다"), "출제·검수 호출이 모두 같은 공통 자료로 시작한다");
+  else assert.deepEqual([...shares], ["(없음)"]);
 });
