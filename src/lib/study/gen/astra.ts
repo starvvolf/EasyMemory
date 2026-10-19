@@ -210,13 +210,13 @@ export function scopePlan(plan: Plan, allowed: number[]): { plan: Plan; dropped:
   const pageNotes = (plan.pageNotes ?? []).filter(note => inRange.has(note.page) && note.text.trim());
   return { plan: { outline, concepts, practice, uncertain, pageNotes }, dropped };
 }
-function planProblem(plan: Plan, allowed: number[]) {
+function planProblem(plan: Plan, allowed: number[], lenient = false) {
   if (!unique(plan.outline.map(s => s.id)) || !unique(plan.concepts.map(c => c.id)) || !unique(plan.practice.map(p => p.id))) return "계획 ID가 중복됩니다.";
   if (plan.outline.some((s, i) => s.id !== `s${i + 1}` || s.pages.some(p => !allowed.includes(p)))) return "목차 ID 또는 근거 쪽이 잘못됐습니다.";
   if (allowed.some(p => !plan.outline.some(s => s.pages.includes(p)))) return "선택 범위 중 목차에 없는 쪽이 있습니다.";
   if (plan.concepts.some(c => c.outlineIds.some(id => !plan.outline.some(s => s.id === id)) || c.evidence.some(e => !allowed.includes(e.page)))) return "개념의 목차/근거 연결이 잘못됐습니다.";
   if (plan.practice.some(p => !plan.outline.some(s => s.id === p.sectionId) || p.conceptIds.some(id => !plan.concepts.some(c => c.id === id)))) return "연습의 개념/목차 연결이 잘못됐습니다.";
-  if (plan.outline.some(s => !plan.concepts.some(c => c.outlineIds.includes(s.id)))) return "개념 근거가 없는 목차입니다. 제외 사유는 uncertain에 쓰고 목차에는 실제 내용을 남기세요.";
+  if (!lenient && plan.outline.some(s => !plan.concepts.some(c => c.outlineIds.includes(s.id)))) return "개념 근거가 없는 목차입니다. 제외 사유는 uncertain에 쓰고 목차에는 실제 내용을 남기세요.";
   return null;
 }
 function installPlan(state: GenState, plan: Plan, thinPages: number[] = []) {
@@ -574,7 +574,10 @@ export async function runAstra(ctx: Context) {
       if (priorMap) { raw.outline = priorMap.outline; raw.concepts = priorMap.concepts; raw.pageNotes = priorMap.pageNotes; }
       const scoped = scopePlan(raw, state.input.pageNumbers);
       if (v5) scoped.plan = { ...scoped.plan, diagnosis: raw.diagnosis, misconceptions: (raw.misconceptions ?? []).filter(m => state.input.pageNumbers.includes(m.page)) } as PlanX;
-      return { ...scoped, problem: planProblem(scoped.plan, state.input.pageNumbers) };
+      // v4/v5: a heading with no concept (cover, agenda) just gets no goals; asking the whole plan again re-sends the
+      // PDF (gpt-6-luna 그래픽스03: 14만 토큰을 한 번 더). It is listed as a warning instead.
+      const empty = v4 ? scoped.plan.outline.filter(sec => !scoped.plan.concepts.some(c => c.outlineIds.includes(sec.id))).map(sec => `개념 없는 목차 ${sec.title}`) : [];
+      return { ...scoped, dropped: [...scoped.dropped, ...empty], problem: planProblem(scoped.plan, state.input.pageNumbers, v4) };
     };
     const planContext = { ...context, thinPages: ctx.thinPages ?? [] };
     const user = JSON.stringify({ context: planContext, previousMap: priorMap });
@@ -657,7 +660,7 @@ export async function runAstra(ctx: Context) {
     }
     if (result.problem) pause(result.problem);
     const plan = result.plan;
-    if (result.dropped.length) data.warnings.push({ severity: "warning", code: "astra-plan-out-of-range", message: `선택 범위 밖이라 뺀 것 ${result.dropped.length}개: ${result.dropped.slice(0, 6).join(", ")}${result.dropped.length > 6 ? " …" : ""}` });
+    if (result.dropped.length) data.warnings.push({ severity: "warning", code: "astra-plan-out-of-range", message: `계획 정리(범위 밖·개념 없는 목차) ${result.dropped.length}개: ${result.dropped.slice(0, 6).join(", ")}${result.dropped.length > 6 ? " …" : ""}` });
     if (state.input.purpose !== "read" && !plan.practice.length) pause("연습 계획이 비었습니다.");
     data.plan = plan; delete data.review; delete data.repair;
     installPlan(state, plan, ctx.thinPages);
