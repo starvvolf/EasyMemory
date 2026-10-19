@@ -113,6 +113,7 @@ test("Responses 요청은 독립 입력·비저장·스트리밍을 사용하고
   } });
   assert.equal((await readResponseStream(legacyStream)).usage?.cachedInputTokens, undefined, "미제공과 실제 0을 구분한다");
   await assert.rejects(readResponseStream(new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(encode.encode('data: {"type":"response.output_text.delta","delta":"partial"}\n\n')); controller.close(); } })), /완료되지/);
+  await assert.rejects(readResponseStream(new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(encode.encode('data: {"type":"error","error":{"type":"invalid_request_error","code":"subscription_sharing_usage_limit_exceeded","message":"limit"}}\n\n')); controller.close(); } })), (error: { code?: string }) => error.code === "usage_limit", "스트림 안의 한도 오류는 한도로 (재시도하지 않음)");
 });
 
 test("스키마가 있는 요청만 Structured Outputs를 사용하고 사용자 질문은 바꾸지 않는다", () => {

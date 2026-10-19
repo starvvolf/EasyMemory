@@ -112,6 +112,13 @@ export async function readResponseStream(body: ReadableStream<Uint8Array>, onPro
       if (value.delta && onText) { try { onText(text); } catch { /* progress only */ } }
     }
     if (value.type === "response.failed") throw responseFailure(0, { error: value.response?.error });
+    // The plan's usage limit (and a login problem) can arrive as an error event on the stream, not as an HTTP status:
+    // classify it like an HTTP failure so it is not retried as a dropped reply and the run pauses for the right reason.
+    const streamError = (value as { error?: ApiError["error"] }).error;
+    if (value.type === "error" && streamError?.code) {
+      const failure = responseFailure(0, { error: streamError });
+      if (failure.code !== "transient") throw failure;
+    }
     if (value.type === "response.incomplete" || value.type === "error") {
       const why = (value as { response?: { incomplete_details?: { reason?: string } }; message?: string; code?: string }).response?.incomplete_details?.reason ?? (value as { code?: string }).code ?? (value as { message?: string }).message;
       const detail = why ? String(why) : JSON.stringify(value).replace(/"(?:id|response_id|item_id)":"[^"]*",?/g, "");

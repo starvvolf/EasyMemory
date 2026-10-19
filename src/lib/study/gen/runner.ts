@@ -474,15 +474,12 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       // The fake model has no stream; hand the reply over in pieces so streaming consumers behave as with a real one.
       if (request.fakeReply !== undefined && (extra.onPartial || cut)) for (let at = 200; at < request.fakeReply.length + 200 && !runaway; at += 200) guardText(request.fakeReply.slice(0, at));
       if (runaway) throw new Error("cut");
-      // One quiet retry for a dropped or unfinished reply (6.1-sol: an error event 2.5초 만에, no text, stopped the whole run).
+      // One quiet retry for a dropped or unfinished reply.
       let reply: Awaited<ReturnType<typeof callModel>>;
       for (let retry = 0; ; retry++) {
         try { reply = await callModel(request); break; }
         catch (error) {
-          if (retry > 1 || (retry > 0 && !request.images?.length) || runaway || request.signal?.aborted || !(error instanceof ModelError) || error.code !== "transient") throw error;
-          // The same call failing twice with page images (6.1-sol, the repair solve with 3 figure pages): the last try goes
-          // without the images; the page text and figure notes are still in the prompt.
-          if (retry === 1) { delete request.images; Object.assign(record, { imagesDropped: true }); }
+          if (retry > 0 || runaway || request.signal?.aborted || !(error instanceof ModelError) || error.code !== "transient") throw error;
           partial = "";
           await new Promise(resolve => setTimeout(resolve, 2000));
         }

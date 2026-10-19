@@ -165,8 +165,6 @@ export type GenCall = {
   firstTextMs?: number;
   /** Whether the whole PDF went with this call (PDF 1회 통제: one per run on the normal path). */
   withPdf?: boolean;
-  /** The page images were left out on the last retry after the call failed twice with them. */
-  imagesDropped?: boolean;
   ok: boolean;
   system: string;
   user: string;
