@@ -57,8 +57,9 @@ test("astra: 확인 후 전체 흐름, 반복된 관계 노출은 독립 풀이 
   }
 });
 
-test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 한 번 고쳐 통과할 때만 공개 문항을 바꾼다", async () => {
-  const state: GenState = { id: "gen_" + "0".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2], purpose: "core", note: "", provider: "fake", engine: "astra", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+// astra keeps a published question as is after a later global concern; v4 rewrites it once and swaps it only if the rewrite passes.
+for (const engine of ["astra", "v4"] as const) test(`${engine}: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함 처리`, async () => {
+  const state: GenState = { id: "gen_" + "0".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2], purpose: "core", note: "", provider: "fake", engine, models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
   let priority = 2;
   let active = 0, peak = 0, stopped = false, failOnce = true;
   const calls: string[] = [], documents = new Map<string, string>();
@@ -82,7 +83,7 @@ test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 �
       }
       if (step === "astra-review") {
         result.coverage = input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: input.candidates.filter((q: { practiceIds: string[] }) => q.practiceIds.includes(id)).map((q: { objectiveId: string }) => q.objectiveId), status: "covered", reason: "fixture" }));
-        if (input.scope === "global" && attempt === 1) {
+        if (input.scope === "global" && (engine === "astra" || attempt === 1)) {
           for (const item of result.items) if (item.objectiveId === "s2-o1") { item.status = "revise"; item.reasons = ["후발 조건 누락 발견"]; }
           result.missedContent = [{ pages: [1], reason: "신고 범위 밖의 추가 과제" }];
         }
@@ -102,9 +103,13 @@ test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 �
   await runAstra(context);
   assert.equal(calls.filter(s => s === "astra-plan").length, planCalls, "계획 재호출 없이 재개한다");
   assert.equal(state.status, "done");
-  assert.ok(state.astra!.repair!.ids.includes("s2-o1"), "전역 검수가 돌려보낸 공개 문항도 한 번 고쳐 쓴다");
-  assert.equal(JSON.parse(documents.get("s2")!)[0].id, first.id);
-  assert.ok(state.astra!.warnings.some(w => w.ref === "s2-o1" && w.code === "published-revised" && w.message.includes("후발")), "고친 문항이 통과해 바꿨고, 바꾼 사실을 남긴다");
+  if (engine === "astra") {
+    assert.deepEqual(JSON.parse(documents.get("s2")!)[0], first, "astra: 전역 검수 후에도 공개 문항은 불변이다");
+    assert.ok(!state.astra!.repair?.ids.includes("s2-o1"));
+  } else {
+    assert.ok(state.astra!.repair!.ids.includes("s2-o1"), "v4: 전역 검수가 돌려보낸 공개 문항도 한 번 고쳐 쓴다");
+    assert.ok(state.astra!.warnings.some(w => w.ref === "s2-o1" && w.code === "published-revised" && w.message.includes("후발")), "v4: 고친 문항이 통과해 바꿨고, 바꾼 사실을 남긴다");
+  }
   assert.equal(state.sections.flatMap(s => s.design!.objectives).length, 12, "신고 재생성은 미계획 과제를 덧붙이지 않는다");
   assert.deepEqual(JSON.parse(documents.get("s1")!).map((q: { id: string }) => q.id), Array.from({ length: 9 }, (_, i) => `q-s1-o${i + 1}`));
   const view = getAstraReadingView(state, 2);
@@ -154,4 +159,25 @@ test("astra 형식: 값 하나인 자기확인은 단답으로, 정답 보기만
   const long = { text: "평행 투영은 투영선이 평행해 상대적 비율을 보존하므로 도면에 맞다", latex: null };
   const hints = candidateHints({ ...base, stem: stem("u를 구하고, 좌표를 구하고, 순서를 쓰시오."), answer: { kind: "choice", options: [long, { text: "원근", latex: null }, { text: "둘 다", latex: null }, { text: "없음", latex: null }], correctIndex: 0, accepted: null, before: null, after: null, explanation: "e" } });
   assert.equal(hints.length, 2);
+});
+
+test("v4는 astra와 같은 단계를 쓰고 규칙만 더한다 (astra 지시문은 그대로)", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "v4-flow-"));
+  const prior = process.env.STUDY_FORGE_DATA_DIR;
+  process.env.STUDY_FORGE_DATA_DIR = dir;
+  try {
+    const systems = new Map<string, string[]>();
+    for (const engine of ["astra", "v4"] as const) {
+      const start = await createGen({ sourceId: "src_astra_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine, provider: "fake", autoConfirm: true });
+      const done = await runGen(start.id, { uid: "local-experiment" }, {});
+      assert.equal(done.status, "done", done.message);
+      systems.set(engine, (await readGenCalls(start.id)).map(call => `${call.step}:${call.system.includes("[v4]")}`));
+    }
+    assert.ok(systems.get("astra")!.every(entry => entry.endsWith(":false")));
+    assert.deepEqual(systems.get("v4")!.map(entry => entry.split(":")[0]), systems.get("astra")!.map(entry => entry.split(":")[0]), "같은 단계 순서");
+    assert.ok(["astra-plan:true", "astra-author:true", "astra-review:true"].every(entry => systems.get("v4")!.includes(entry)));
+  } finally {
+    if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;
+    await rm(dir, { recursive: true, force: true });
+  }
 });

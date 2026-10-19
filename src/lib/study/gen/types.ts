@@ -10,10 +10,12 @@ export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", un
 export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review"] as const;
 export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
-  read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra)", "astra-author": "묶음 출제(astra)", "astra-solve": "정답 없는 풀이(astra)", "astra-review": "전역 검수(astra)" };
+  read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)" };
 
-export const engines = ["v2", "v3", "astra"] as const;
+export const engines = ["v2", "v3", "astra", "v4"] as const;
 export type Engine = (typeof engines)[number];
+/** astra and v4 (Claude's tuning of astra) share the astra pipeline, steps and state; v4 only adds rules. */
+export const astraFamily = (engine: Engine | undefined) => engine === "astra" || engine === "v4";
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
 export type ItemKind = (typeof itemKinds)[number];

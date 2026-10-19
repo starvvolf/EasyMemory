@@ -7,7 +7,7 @@ import type { Scorecard } from "@/lib/study/gen/scorecard";
 import type { JudgeRun } from "@/lib/study/gen/judge";
 import type { VisionProbe } from "@/lib/study/gen/vision";
 import type { getAstraReadingView } from "@/lib/study/gen/astra";
-import { DEFAULT_GEN_MODELS, defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
+import { DEFAULT_GEN_MODELS, astraFamily, defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
 import "./gen.css";
 
 type Source = { id: string; fileName: string; pageCount: number; available: boolean };
@@ -99,7 +99,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const [models, setModels] = useState<Record<GenStep, { model: string; effort: string }>>(
     () => Object.fromEntries([...STEPS, ...STEPS_V3, ...STEPS_ASTRA].map((step) => [step, { ...DEFAULT_GEN_MODELS[step] }])) as Record<GenStep, { model: string; effort: string }>);
   const [engine, setEngine] = useState<GenInput["engine"]>("v2");
-  const shown = engine === "astra" ? STEPS_ASTRA : engine === "v3" ? STEPS_V3 : STEPS;
+  const shown = astraFamily(engine) ? STEPS_ASTRA : engine === "v3" ? STEPS_V3 : STEPS;
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [guideDir, setGuideDir] = useState("출제기준");
   const [readImages, setReadImages] = useState(false);
@@ -141,8 +141,9 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         <label className="chip"><input type="radio" name="engine" checked={engine === "v2"} onChange={() => setEngine("v2")} />v2 (기본)</label>
         <label className="chip" title="PDF 통째 읽기 → 출제 계획 → 단원별 출제 → 관문 검사"><input type="radio" name="engine" checked={engine === "v3"} onChange={() => setEngine("v3")} />v3 (Claude 안, 실험)</label>
         <label className="chip" title="전체 PDF → 학습 계획 → 묶음 출제 → 정답 없는 풀이 → 원문 검수"><input type="radio" name="engine" checked={engine === "astra"} onChange={() => setEngine("astra")} />astra (GPT 안, 실험)</label>
+        <label className="chip" title="astra 구조 그대로 + 답 모양에 맞는 형식, 한 문항 한 과제, 슬롯 차별, 검수 입력 축소, 공개 후 지적 1회 수정"><input type="radio" name="engine" checked={engine === "v4"} onChange={() => setEngine("v4")} />v4 (Claude의 astra 조정안, 실험)</label>
       </fieldset>
-      {engine === "astra" && <p className="muted">astra는 엔진 이름입니다. 기본 모델은 모든 단계 Sol·medium이며 아래에서 바꿀 수 있어요. 별도 출제기준 폴더 대신 astra 전용 지시문을 사용합니다.</p>}
+      {astraFamily(engine) && <p className="muted">{engine === "v4" ? "v4는 astra와 같은 단계(계획·출제·풀이·검수)를 쓰고 출제·검수 규칙만 다릅니다. " : ""}astra는 엔진 이름입니다. 기본 모델은 모든 단계 Sol·medium이며 아래에서 바꿀 수 있어요. 별도 출제기준 폴더 대신 astra 전용 지시문을 사용합니다.</p>}
       <fieldset><legend>목적</legend>
         {(Object.keys(purposeLabel) as Purpose[]).map((key) => (
           <label key={key} className="chip"><input type="radio" name="purpose" checked={purpose === key} onChange={() => setPurpose(key)} />{purposeLabel[key]}</label>
@@ -166,11 +167,11 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
           ))}</tbody></table>
         </>}
       </fieldset>
-      {engine !== "astra" && <label>출제기준 폴더<input value={guideDir} onChange={(event) => setGuideDir(event.target.value.trim())} placeholder="출제기준" title="비교할 때는 출제기준-후보처럼 복사본 이름" /></label>}
+      {!astraFamily(engine) && <label>출제기준 폴더<input value={guideDir} onChange={(event) => setGuideDir(event.target.value.trim())} placeholder="출제기준" title="비교할 때는 출제기준-후보처럼 복사본 이름" /></label>}
       {engine === "v2" && <label className="check" title="글자가 적은 쪽(600자 미만)을 이미지로 한 번 읽어 원문으로 씁니다. 쪽당 호출 1번."><input type="checkbox" checked={readImages} onChange={(event) => setReadImages(event.target.checked)} />그림·수식 쪽 읽기</label>}
       <label className="check"><input type="checkbox" checked={autoConfirm} onChange={(event) => setAutoConfirm(event.target.checked)} />목표 확인 없이 끝까지</label>
       {provider === "chatgpt" && <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다(ChatGPT 사용량이 나갑니다)</label>}
-      <p className="muted">쪽 {pages.length}개 · 예상 호출: {engine === "astra" ? "계획 1 + 묶음 수 × 3(출제·독립 풀이·묶음 검수) + 전체 검수 1 (+수정·재검수). 첫 묶음 3문항, 이후 8문항씩 최대 2묶음 동시 진행. 매 단계 PDF 통째 입력." : engine === "v3" ? "전체 읽기 1(PDF 통째, 그림 포함) + 출제 계획 1 + 단원 수 × 2(출제·관문) (+재출제)" : `목차 1 + 목차 수 × ${purpose === "read" ? "1" : "3"} (+재시도)`}</p>
+      <p className="muted">쪽 {pages.length}개 · 예상 호출: {astraFamily(engine) ? "계획 1 + 묶음 수 × 3(출제·독립 풀이·묶음 검수) + 전체 검수 1 (+수정·재검수). 첫 묶음 3문항, 이후 8문항씩 최대 2묶음 동시 진행. PDF는 계획 호출에만 첨부." : engine === "v3" ? "전체 읽기 1(PDF 통째, 그림 포함) + 출제 계획 1 + 단원 수 × 2(출제·관문) (+재출제)" : `목차 1 + 목차 수 × ${purpose === "read" ? "1" : "3"} (+재시도)`}</p>
       <button className="primary" disabled={busy || !source || !pages.length || (provider === "chatgpt" && !confirmed)}>{busy ? "시작하는 중…" : "시작"}</button>
     </form>
   );
@@ -296,12 +297,12 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
     <div className="gen-run">
       <div className="gen-status">
         <span className={`tag ${tone(gen.status)}`}>{STATUS[gen.status] ?? gen.status}</span>
-        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.engine === "astra" ? "엔진 astra" : gen.input.engine === "v3" ? "엔진 v3" : gen.input.guideDir ?? "출제기준"}
+        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.engine === "v4" ? "엔진 v4" : astraFamily(gen.input.engine) ? "엔진 astra" : gen.input.engine === "v3" ? "엔진 v3" : gen.input.guideDir ?? "출제기준"}
         {label && <span className="muted"> · {label}</span>}
         {gen.images && <div className="muted">그림 쪽 읽기: {gen.images.done.length}/{gen.images.pages.length}쪽{gen.images.failed.length ? ` · 실패 p.${gen.images.failed.join(", ")}` : ""}</div>}
-        {gen.forkOf && <div className="muted">고정 재실행({FORK_LABEL[gen.forkOf.from]}) · 기준 실행 {gen.forkOf.genId.slice(0, 12)}… {gen.input.engine === "astra" ? (gen.forkOf.from === "author" ? "의 학습 계획·목표를 그대로 썼어요." : "의 자료 지도를 참고해 학습 계획부터 다시 만들어요.") : `의 목차·분류${gen.forkOf.from === "author" ? "·목표" : ""}를 그대로 썼어요.`} 호출·시간·토큰은 다시 돈 단계만 셉니다.</div>}
+        {gen.forkOf && <div className="muted">고정 재실행({FORK_LABEL[gen.forkOf.from]}) · 기준 실행 {gen.forkOf.genId.slice(0, 12)}… {astraFamily(gen.input.engine) ? (gen.forkOf.from === "author" ? "의 학습 계획·목표를 그대로 썼어요." : "의 자료 지도를 참고해 학습 계획부터 다시 만들어요.") : `의 목차·분류${gen.forkOf.from === "author" ? "·목표" : ""}를 그대로 썼어요.`} 호출·시간·토큰은 다시 돈 단계만 셉니다.</div>}
         <div className="muted">호출 {gen.calls}번 (PDF 첨부 {calls.filter((item) => item.withPdf).length}번) · 모델 시간 {seconds(totalMs)} · 토큰 입력 {tokens.input.toLocaleString()}{tokens.cached ? ` (캐시 ${tokens.cached.toLocaleString()})` : ""} / 출력 {tokens.output.toLocaleString()}{formats.length ? ` · 응답 형식 ${formats.join(", ")}` : ""}</div>
-        {gen.input.engine === "astra" && <AstraLive gen={gen} />}
+        {astraFamily(gen.input.engine) && <AstraLive gen={gen} />}
         {gen.message && <p className={gen.status === "failed" ? "gen-error" : ""}>{gen.message}</p>}
         {(canResume || gen.status === "awaiting-confirm") && real && (
           <label className="check warn"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />실제 모델을 호출합니다</label>
@@ -311,8 +312,8 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
 
       <FlowPanel gen={gen} onChange={onChange} onError={onError} />
       {gen.outlineWarnings?.map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
-      {gen.input.engine === "astra" && <AstraReader gen={gen} onOpenDoc={openDoc} />}
-      {gen.input.engine === "astra" && <AstraPanel gen={gen} />}
+      {astraFamily(gen.input.engine) && <AstraReader gen={gen} onOpenDoc={openDoc} />}
+      {astraFamily(gen.input.engine) && <AstraPanel gen={gen} />}
       {gen.v3?.map && (() => {
         const map = gen.v3.map, gate = gen.v3.gate ?? [];
         const firstFail = gate.filter((verdict) => verdict.attempt === 1 && !verdict.passed);
@@ -329,7 +330,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
 
       {["done", "awaiting-confirm"].includes(gen.status) && <ScorePanel id={id} status={gen.status} real={real} runs={runs} onError={onError} />}
 
-      {["done", "awaiting-confirm"].includes(gen.status) && (gen.input.purpose !== "read" || (gen.input.engine === "astra" && gen.astra?.plan)) && <ForkPanel gen={gen} onOpen={onOpen} onError={onError} />}
+      {["done", "awaiting-confirm"].includes(gen.status) && (gen.input.purpose !== "read" || (astraFamily(gen.input.engine) && gen.astra?.plan)) && <ForkPanel gen={gen} onOpen={onOpen} onError={onError} />}
 
       {gen.status === "awaiting-confirm" && (
         <div className="confirmbar">
@@ -343,7 +344,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
           <h3>{section.title} <small>p.{section.pages.join(", ")}</small></h3>
           {section.parts?.length ? <p className="muted parts">{section.parts.map((part) => `${part.title} (p.${part.pages[0]}${part.pages.length > 1 ? `–${part.pages.at(-1)}` : ""})`).join(" · ")}</p> : null}
           {section.classify && (
-            <details><summary>{gen.input.engine === "astra" ? "개념 근거" : "내용 분류"} {section.classify.items.length}개</summary>
+            <details><summary>{astraFamily(gen.input.engine) ? "개념 근거" : "내용 분류"} {section.classify.items.length}개</summary>
               <ol className="items">{section.classify.items.map((item) => <li key={item.n}><span className="kind">{item.kind}</span> {item.content} <small>p.{item.page}</small><q>{item.quote}</q></li>)}</ol>
             </details>
           )}
@@ -368,7 +369,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
           {section.author && (
             <div className="authored">
               문항 {section.author.questionCount}개{section.author.dropped.length ? ` · 뺀 목표 ${section.author.dropped.length}개` : ""}
-              {section.author.documentPath && <button onClick={() => void openDoc(section.id)}>{gen.input.engine === "astra" && doc?.sectionId === section.id ? "문제 다시 불러오기" : "문제 보기"}</button>}
+              {section.author.documentPath && <button onClick={() => void openDoc(section.id)}>{astraFamily(gen.input.engine) && doc?.sectionId === section.id ? "문제 다시 불러오기" : "문제 보기"}</button>}
               {section.author.warnings.map((warning, index) => <p key={index} className="warnline">경고({warning.ref}): {warning.message}</p>)}
             </div>
           )}
@@ -591,7 +592,7 @@ function ScorePanel({ id, status, real, runs, onError }: { id: string; status: s
  */
 function ForkPanel({ gen, onOpen, onError }: { gen: GenState; onOpen: (id: string) => void; onError: (message: string) => void }) {
   const real = gen.input.provider !== "fake";
-  const astra = gen.input.engine === "astra";
+  const astra = astraFamily(gen.input.engine);
   const designed = gen.sections.every((section) => section.design);
   const [from, setFrom] = useState<"design" | "author">("design");
   const [purpose, setPurpose] = useState<Purpose>(gen.input.purpose);
