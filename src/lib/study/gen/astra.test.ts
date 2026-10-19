@@ -261,7 +261,7 @@ test("v5: 목표의 형식대로 출제(OX·객관식), 오답 근거 없는 객
               { id: "p2", sectionId: "s1", conceptIds: ["c1"], task: "대기 신호를 고를 수 있다", cue: "c", recall: "청색", kind: "관계", priority: "essential", questionCount: 1, level: "구별", format: "choice", formatWhy: "오개념 구별" }] },
           { sectionId: "s2", pageNotes: [], misconceptions: [],
             concepts: [{ id: "c2", outlineIds: ["s2"], title: "그림", essentials: ["e"], conditions: [], evidence: ev(2, "figure") }],
-            practice: [{ id: "p3", sectionId: "s2", conceptIds: ["c2"], task: "그림의 대응을 떠올릴 수 있다", cue: "c", recall: "r", kind: "관계", priority: "essential", questionCount: 1, level: "떠올리기", format: "flashcard", formatWhy: "" }] },
+            practice: [{ id: "p3", sectionId: "s2", conceptIds: ["c2"], task: "그림의 대응을 설명할 수 있다", cue: "c", recall: "r", kind: "관계", priority: "essential", questionCount: 1, level: "설명", format: "flashcard", formatWhy: "" }] },
         ],
         uncertain: [],
       };
@@ -331,4 +331,39 @@ test("v4 끝없는 응답: 예상 길이를 넘은 출제는 끊고 한 번 짧�
     if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("v5 확인 강도·고쳐 쓰기: 원문 그대로의 암기 답은 코드로, 객관식은 검수만, 걸린 문항은 묶음 안에서 한 번 고쳐 공개, 전체 검수 없음", async () => {
+  const state: GenState = { id: "gen_" + "5".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1], purpose: "core", note: "", provider: "fake", engine: "v5", planInput: "pdf", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+  const calls: string[] = [];
+  let authored = 0;
+  const ask: AstraAsk = async (step, _attempt, _system, user, parser) => {
+    calls.push(step);
+    const input = JSON.parse(user);
+    if (step === "astra-plan") {
+      const ev = [{ page: 1, kind: "text", quote: "q", supports: "s" }];
+      const practice = (id: string, level: string, format: string) => ({ id, sectionId: "s1", conceptIds: ["c1"], task: `${id} 목표`, cue: "c", recall: "청색", kind: "관계", priority: "essential", questionCount: 3, level, format, formatWhy: "" });
+      return parser.parse({ outline: [{ id: "s1", title: "신호", pages: [1] }], diagnosis: { mode: "알잘딱", materialType: "분류·암기", approach: "a" },
+        units: [{ sectionId: "s1", pageNotes: [], misconceptions: [], concepts: [{ id: "c1", outlineIds: ["s1"], title: "신호", essentials: ["e"], conditions: [], evidence: ev }],
+          practice: [practice("p1", "떠올리기", "short"), practice("p2", "구별", "choice")] }], uncertain: [] });
+    }
+    const result = JSON.parse(astraFakeReply(step, user));
+    if (step === "astra-author") {
+      authored++;
+      for (const q of result.questions) {
+        if (q.objectiveId === "s1-o1") Object.assign(q.answer, { kind: "short", accepted: ["청색"] });
+        // First try: a choice without distractor notes (held by code); the rewrite brings them.
+        if (q.objectiveId === "s1-o2") { Object.assign(q.answer, { kind: "choice", accepted: null, correctIndex: 0, options: ["청색", "녹색", "적색", "황색"].map(text => ({ text, latex: null })) }); if (authored > 1) q.distractors = [1, 2, 3].map(option => ({ option, misconception: "m", whyWrong: "원문은 청색" })); }
+      }
+    }
+    if (step === "astra-review") result.coverage = input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: input.candidates.filter((q: { practiceIds: string[] }) => q.practiceIds.includes(id)).map((q: { objectiveId: string }) => q.objectiveId), status: "covered", reason: "fixture" }));
+    return parser.parse(result);
+  };
+  await runAstra({ state, pdf: Buffer.from("%PDF-fixture"), ask, pageTexts: new Map([[1, "대기 상태를 나타내는 색은 청색이다."]]), save: async () => {}, pause: (message: string): never => { throw new Error(message); },
+    publish: async (section: { id: string }) => `sections/${section.id}/document.json` });
+  assert.equal(state.status, "done", state.message);
+  assert.equal(state.sections[0].design!.objectives.length, 2, "목표당 문항 하나 (questionCount 3이어도)");
+  assert.deepEqual(state.astra!.publishedQuestions!.map(q => q.objectiveId).sort(), ["s1-o1", "s1-o2"], "걸린 객관식은 묶음 안에서 고쳐 공개");
+  assert.ok(!calls.includes("astra-solve"), "암기(코드)·객관식(검수만)은 독립 풀이 없음");
+  assert.deepEqual(calls, ["astra-plan", "astra-author", "astra-review", "astra-author", "astra-review"], "전체 검수·끝 고치기 없음");
 });

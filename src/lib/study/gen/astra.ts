@@ -124,7 +124,13 @@ export function partialV4Plan(raw: string): { outline: unknown[] | null; units: 
   }
   return { outline, units };
 }
-type Batch = { ids: string[]; questions?: Candidate[]; solutions?: Solutions; review?: Review; publishedIds?: string[]; startedAt?: string };
+type Batch = { ids: string[]; questions?: Candidate[]; solutions?: Solutions; review?: Review; publishedIds?: string[]; startedAt?: string;
+  /** v5: the in-batch rewrite of goals the batch review sent back (once), merged into the batch when done. */
+  retry?: Batch; retried?: boolean };
+/** v5 check depth by goal: a recall answer found verbatim in the source is checked by code; choice/OX and recognition
+ *  goals by the review alone; application, explanation and order goals get the independent solve as well. */
+type Tier = "code" | "review" | "full";
+const squash = (text: string) => text.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
 export type AstraState = { version: 1; pdfHash?: string; plan?: Plan; batches: Batch[]; review?: Review; repair?: Batch; warnings: Issue[];
   publishedQuestions?: Candidate[]; timing?: { startedAt: string; firstPublishedAt?: string; completedAt?: string } };
 export type AstraAsk = <T>(step: GenStep, attempt: number, system: string, user: string, parser: z.ZodType<T>, files: NonNullable<ModelRequest["files"]>, onPartial?: (text: string) => void, images?: NonNullable<ModelRequest["images"]>, maxChars?: number) => Promise<T>;
@@ -160,9 +166,9 @@ const V4_PLAN = `\n[v4] 응답 형식: outline을 먼저 다 쓴 다음 units에
 const V4_AUTHOR = `\n[v4] 답이 셋 이상을 순서·대응으로 나열해야 하면 short 대신 choice(보기마다 같은 길이의 나열)로 낸다. 형식은 답의 모양으로 고른다: 답이 하나의 값·이름·좌표·순서·대응으로 정해지면 short(같은 답의 다른 표기를 accepted에 함께) 또는 choice, 이유·비교·도출 과정처럼 서술이 필요할 때만 self-check. 한 문항은 한 과제만 묻는다: '구하고, 설명하고, 쓰시오'처럼 요구를 묶지 말고, 묶어야 의미가 있는 경우(예: 결과와 그 판정 근거)만 self-check으로 하고 requiredPoints에 채점 요소를 모두 적는다. 문제가 요구하는 것과 채점칸이 확인하는 것은 같아야 한다(u와 좌표를 둘 다 물으면 둘 다 채점). choice 보기는 길이·말투·구체성이 비슷해야 하고, 정답만 길거나 자세하면 안 된다. 같은 과제의 슬롯이 여럿이면 각 슬롯은 다른 상황·조건·수행을 다룬다. 응답은 짧게: 슬롯마다 문항 하나, accepted는 다른 표기만(6개 이하), explanation 1~2문장, evidence 2개 이하. 같은 내용을 되풀이하지 않는다.`;
 const V4_REVIEW = `\n[v4] 다음도 revise 사유다: 답이 하나의 값·대응인데 self-check인 경우, 한 문항이 여러 과제를 묶은 경우, 문제가 요구한 것과 채점칸이 다른 경우, 정답 보기만 눈에 띄게 길거나 자세한 경우, 이미 있는 문항과 같은 지식·수행을 반복하는 경우. code.hints는 코드가 찾은 의심이며 판단은 원문과 문항으로 한다. missedContent.reason은 빠진 내용을 학습자 목표 꼴(동사 하나, 40자 안팎, '~을 설명할 수 있다 / 구별할 수 있다')로 쓴다. 이 문장이 그대로 보충 목표가 된다.`;
 /* v5: adapt to the material and to the person (개입·설문·알잘딱), goal → level → format, and format-specific quality. */
-const V5_PLAN = `\n[v5] 응답은 outline → diagnosis → units 순서다. diagnosis.mode: context.note에 지시가 있으면 '개입'(그 지시가 최우선), context.survey가 있으면 '설문', 없으면 '알잘딱'. diagnosis.materialType은 자료 성격(계산·유도 / 분류·암기 / 절차 / 개념 비교 / 혼합)을, approach는 그래서 어떻게 공부시킬지를 한두 문장으로 쓴다. 분량은 쪽수가 아니라 핵심 개념의 수·밀도로 정하고, 핵심을 빠짐없이 덮되 같은 지식을 반복하거나 자잘한 사실을 늘리지 않는다. 설문: exam이 choice면 객관식·OX 중심, written이면 설명·플래시카드도 둔다. depth가 core면 essential만, all이면 extra도. time이 short면 핵심 과제만 적게, long이면 적용·구별을 더 둔다. known에 적힌 부분은 가볍게 다룬다. 각 practice에 level(떠올리기·구별·적용·계산·설명·순서)과 format을 정한다: 떠올리기 → flashcard 또는 cloze, 구별 → choice 또는 ox, 적용·계산 → short(값) 또는 choice, 설명 → flashcard(요점 2~3개), 순서 → choice(순서 나열 보기). formatWhy에 한 줄 이유. 각 unit에 misconceptions: 그 단원에서 학습자가 실제로 헷갈릴 지점을 원문 근거로 쓴다(부호·방향 관례 반대, 조건 하나가 바뀐 진술, 비슷한 용어 혼동, 흔한 계산 실수, 순서 뒤바뀜). 오답과 OX 명제의 재료가 된다.`;
+const V5_PLAN = `\n[v5] 응답은 outline → diagnosis → units 순서다. diagnosis.mode: context.note에 지시가 있으면 '개입'(그 지시가 최우선), context.survey가 있으면 '설문', 없으면 '알잘딱'. diagnosis.materialType은 자료 성격(계산·유도 / 분류·암기 / 절차 / 개념 비교 / 혼합)을, approach는 그래서 어떻게 공부시킬지를 한두 문장으로 쓴다. 분량은 쪽수가 아니라 핵심 개념의 수·밀도로 정하고, 핵심을 빠짐없이 덮되 같은 지식을 반복하거나 자잘한 사실을 늘리지 않는다. 설문: exam이 choice면 객관식·OX 중심, written이면 설명·플래시카드도 둔다. depth가 core면 essential만, all이면 extra도. time이 short면 핵심 과제만 적게, long이면 적용·구별을 더 둔다. known에 적힌 부분은 가볍게 다룬다. 각 practice에 level(떠올리기·구별·적용·계산·설명·순서)과 format을 정한다: 떠올리기 → flashcard 또는 cloze, 구별 → choice 또는 ox, 적용·계산 → short(값) 또는 choice, 설명 → flashcard(요점 2~3개), 순서 → choice(순서 나열 보기). formatWhy에 한 줄 이유. questionCount는 항상 1이다(목표 하나에 문항 하나). 같은 내용을 다른 수행으로 확인해야 하면 서로 다른 practice로 나눈다. 각 unit에 misconceptions: 그 단원에서 학습자가 실제로 헷갈릴 지점을 원문 근거로 쓴다(부호·방향 관례 반대, 조건 하나가 바뀐 진술, 비슷한 용어 혼동, 흔한 계산 실수, 순서 뒤바뀜). 오답과 OX 명제의 재료가 된다.`;
 const V5_AUTHOR = `\n[v5] slot.astra.format으로 출제한다(그 형식으로 목표를 확인할 수 없을 때만 다른 형식으로 바꾸고 checkedSkill 끝에 이유를 적는다). 형식별 규격: choice — 보기 4개, 정답 하나, 오답 3개는 plan.misconceptions나 원문에서 나올 만한 실제 오개념으로 만들고 distractors에 option(0부터)·misconception·whyWrong(원문 근거)을 모두 적는다. 보기 길이·말투·구체성을 맞추고, 정답 순서만 뒤집은 보기나 '모두 맞다'류를 쓰지 않는다. ox — stem에 판정할 명제 하나, accepted 없음, options는 비워도 된다(코드가 O·X를 만든다), correctIndex 0=O 1=X. 명제는 원문 진술에서 조건 하나만 바꾸거나 그대로 두며, 틀린 명제면 distractors[0]에 무엇을 바꿨는지 적는다. 참만 계속 내지 않는다. short — 값·이름 하나, 같은 답의 표기 변형을 accepted에. cloze — 원문 핵심 문장 하나에서 핵심어 한 곳을 비우고 before/after에 앞뒤 글을 둔다(앞뒤 글이 답을 드러내지 않게). flashcard — stem은 단서 하나, accepted[0]는 핵심 답(설명이면 요점 2~3개를 한 문단으로), requiredPoints에 채점 요소. 모든 형식: 한 문항 한 과제, 답·관계를 문제 글에 미리 주지 않는다.`;
-const V5_REVIEW = `\n[v5] 형식별로 본다: choice는 distractors마다 그 오답이 원문으로 확실히 틀렸는지(whyWrong 확인)와 정답처럼 보일 만큼 그럴듯한지, 길이·말투 단서가 없는지. ox는 명제가 조건 하나만 다른지, 참·거짓이 원문으로 확정되는지. cloze는 앞뒤 글이 답을 드러내지 않는지. flashcard는 단서 하나·답 하나인지. 형식이 목표의 level에 맞는지도 본다. 첨부 이미지가 있으면 그 쪽 그림으로 정답을 확인한다.`;
+const V5_REVIEW = `\n[v5] 형식별로 본다: choice는 distractors마다 그 오답이 원문으로 확실히 틀렸는지(whyWrong 확인)와 정답처럼 보일 만큼 그럴듯한지, 길이·말투 단서가 없는지. ox는 명제가 조건 하나만 다른지, 참·거짓이 원문으로 확정되는지. cloze는 앞뒤 글이 답을 드러내지 않는지. flashcard는 단서 하나·답 하나인지. 형식이 목표의 level에 맞는지도 본다. 첨부 이미지가 있으면 그 쪽 그림으로 정답을 확인한다. 독립 풀이만 틀렸고 출제 답이 원문으로 맞으면 ready로 판정하고 reasons에 그 근거를 적는다(풀이 실수로 좋은 문항을 보류하지 않는다). solutions에 없는 문항은 독립 풀이를 생략한 것이니 원문으로 직접 확인한다. revise는 다시 써서 고칠 수 있는 결함에만, 원문 자체가 불확실하면 uncertain.`;
 const V5_REPAIR = "\n[v5] 보류된 목표는 같은 목표로 다시 쓴다. 같은 형식에서 같은 문제가 반복되면 그 목표를 확인할 수 있는 다른 형식으로 바꿔도 된다.";
 
 /**
@@ -230,7 +236,9 @@ function installPlan(state: GenState, plan: Plan, thinPages: number[] = []) {
     for (const practice of plan.practice.filter(p => p.sectionId === section.id)) {
       const cs = plan.concepts.filter(c => practice.conceptIds.includes(c.id));
       const evidence = cs.flatMap(c => c.evidence);
-      for (let i = 0; i < practice.questionCount; i++) objectives.push({ id: `${section.id}-o${objectives.length + 1}`, sectionId: section.id, statement: practice.task, cue: practice.cue, recall: practice.recall,
+      // v5: one question per goal (2~3 copies of the same goal sentence made duplicate questions).
+      const count = state.input.engine === "v5" ? 1 : practice.questionCount;
+      for (let i = 0; i < count; i++) objectives.push({ id: `${section.id}-o${objectives.length + 1}`, sectionId: section.id, statement: practice.task, cue: practice.cue, recall: practice.recall,
         kind: practice.kind, importance: practice.priority === "essential" ? "core" : "support", itemNumbers: concepts.map((c, n) => practice.conceptIds.includes(c.id) ? n + 1 : 0).filter(Boolean), materialNumbers: [],
         pages: [...new Set(evidence.map(e => e.page))], quotes: evidence.map(e => e.quote).filter(Boolean), astra: { practiceIds: [practice.id], conceptIds: practice.conceptIds, checkedSkill: practice.task, requiredPoints: [], evidence, ...(state.input.engine === "v4" || state.input.engine === "v5" ? { keepGoal: true } : {}),
           ...(state.input.engine === "v5" ? { level: (practice as { level?: string }).level, format: (practice as { format?: (typeof studyFormats)[number] }).format,
@@ -445,6 +453,15 @@ export async function runAstra(ctx: Context) {
       batch.questions = result.questions.filter(q => batch.ids.includes(q.objectiveId)).map(q => v5 ? fromV5(q as unknown as V5Question) : q)
         .map(q => answerInPlace(q, data.warnings)).map(q => v5 ? shuffleChoice(q) : v4 ? shuffleChoice(valueAsShort(q)) : q); await save();
     }
+    if (!batch.solutions && v5) {
+      const tiers = new Map(batch.questions.map(q => [q.objectiveId, tierOf(q)]));
+      const need = batch.questions.filter(q => tiers.get(q.objectiveId) === "full");
+      const cited = [...new Set(need.flatMap(q => q.evidence.map(e => e.page)))].filter(p => state.input.pageNumbers.includes(p));
+      const solved = need.length ? await ask("astra-solve", attempt, SOLVE, JSON.stringify({ pages: context.pages, questions: need.map(student), source: sourceOf(cited.length ? cited : pagesOfIds(need.map(q => q.objectiveId))) }), solveSchema, noFiles, undefined, await imagesFor(need.map(q => q.objectiveId), need), checkLimit(need.length)) : { items: [] };
+      // Goals not solved independently get a stand-in so the publish check sees one solution each; review skips them.
+      const standIns = batch.questions.filter(q => tiers.get(q.objectiveId) !== "full").map(q => ({ objectiveId: q.objectiveId, answer: "(독립 풀이 생략)", missingConditions: [], exposedRelation: "", uncertain: false, evidence: [], skipped: tiers.get(q.objectiveId) }));
+      batch.solutions = { items: [...solved.items, ...standIns] }; await save();
+    }
     if (!batch.solutions) {
       // Explicit projection: no plan, objective recall, answer, explanation or evidence supports can leak here.
       // v4/v5: the solver gets the pages the questions cite (not every page of their units).
@@ -452,6 +469,18 @@ export async function runAstra(ctx: Context) {
       const solvePages = v4 && cited.length ? cited : pagesOfIds(batch.ids);
       batch.solutions = batch.questions.length ? await ask("astra-solve", attempt, SOLVE, JSON.stringify({ pages: context.pages, questions: batch.questions.map(student), source: sourceOf(solvePages) }), solveSchema, noFiles, undefined, await imagesFor(batch.ids, batch.questions), v4 ? checkLimit(batch.questions.length) : undefined) : { items: [] }; await save();
     }
+  };
+  const tierOf = (q: Candidate): Tier => {
+    const o = byId(state, q.objectiveId);
+    const format = (q as Candidate & { format?: string }).format ?? o?.astra?.format;
+    const level = o?.astra?.level;
+    if (format === "choice" || format === "ox" || level === "구별") return "review";
+    if (level !== "떠올리기" || !["short", "cloze", "flashcard"].includes(format ?? "")) return "full";
+    const answer = squash(q.answer.accepted?.[0] ?? "");
+    const stem = squash(q.stem.map(b => b.text ?? b.latex ?? "").join(" ") + (q.answer.before ?? "") + (q.answer.after ?? ""));
+    const source = squash(sourceOf(q.evidence.map(e => e.page)));
+    // A short answer that sits verbatim in its cited pages and not in the question: nothing for a solver or reviewer to add.
+    return answer.length >= 2 && answer.length <= 40 && source.includes(answer) && !stem.includes(answer) ? "code" : "review";
   };
   // The reviewer gets the part of the plan these questions use (batch), or a compact plan (global): the whole plan with
   // every concept's evidence was the largest input of a run (그래픽스03 9 reviews, 13.9만 of 40만 tokens).
@@ -478,7 +507,7 @@ export async function runAstra(ctx: Context) {
     const whole = (id: string) => scope === "batch" || !v4 || !publishedSet.has(id) || rewritten.has(id);
     const shown = questions.map(q => whole(q.objectiveId) ? q : { objectiveId: q.objectiveId, practiceIds: q.practiceIds, checkedSkill: q.checkedSkill, stem: q.stem,
       answer: { kind: q.answer.kind, options: q.answer.options, correctIndex: q.answer.correctIndex, accepted: q.answer.accepted, before: q.answer.before, after: q.answer.after } });
-    const shownSolutions = v4 && scope === "global" ? { items: solutions.items.filter(item => whole(item.objectiveId)) } : solutions;
+    const shownSolutions = { items: (v4 && scope === "global" ? solutions.items.filter(item => whole(item.objectiveId)) : solutions.items).filter(item => !(item as { skipped?: string }).skipped) };
     const reviewPages = scope === "batch" ? pagesOfIds(questions.map(q => q.objectiveId)) : v4 ? pagesOfIds(questions.filter(q => whole(q.objectiveId)).map(q => q.objectiveId)) : state.input.pageNumbers;
     return ask("astra-review", attempt, REVIEW + (v4 ? V4_REVIEW : "") + (v5 ? V5_REVIEW : "") + scopeRule + (scope === "batch" ? "\n이번에는 묶음 공개 전 검사다. 이 묶음의 문항과 근거만 검수하며, 아직 출제 중인 다른 묶음의 누락을 지적하지 않는다. missedContent는 빈 배열. 전체 범위·중복은 마지막 전역검수가 맡는다." : (v4 ? "\n이번에는 전체 출제 후 전역검수다. 이미 공개된 문항도 결함이 있으면 revise로 판정하라. 한 번 고쳐 쓰고, 고친 문항이 통과할 때만 바꾼다. compactIds 문항은 묶음 검수에서 원문 대조를 마친 공개 문항이라 질문·답만 온다: 중복·범위·형식만 보고, 원문이 없다는 이유로 uncertain·revise로 판정하지 마라." : "\n이번에는 전체 출제 후 전역검수다. 이미공개 IDs는 자동수정하지 않으므로 결함을 명확히 기록한다.")), JSON.stringify({ context, scope, plan: planFor(questions, scope), publishedIds: data.publishedQuestions!.map(q => q.objectiveId), selectedPracticeIds: [...new Set(practiceIds)], candidates: shown, solutions: shownSolutions, code,
       ...(v4 && scope === "global" ? { compactIds: questions.filter(q => !whole(q.objectiveId)).map(q => q.objectiveId) } : {}),
@@ -527,6 +556,39 @@ export async function runAstra(ctx: Context) {
     publishing = next.catch(error => { failure = error; });
     return next;
   };
+  // v5 batch check by tier: code-checked recall goals are not sent to the reviewer.
+  const checkBatch = async (batch: Batch, attempt: number): Promise<Review> => {
+    const coded = (batch.questions ?? []).filter(q => (batch.solutions?.items.find(s => s.objectiveId === q.objectiveId) as { skipped?: string } | undefined)?.skipped === "code" && !candidateProblem(q, state));
+    const rest = (batch.questions ?? []).filter(q => !coded.includes(q));
+    const checked = rest.length ? await review(rest, { items: batch.solutions!.items.filter(s => rest.some(q => q.objectiveId === s.objectiveId)) }, attempt, "batch") : { items: [], coverage: [], missedContent: [] };
+    return { items: [...checked.items, ...coded.map(q => ({ objectiveId: q.objectiveId, status: "ready" as const, reasons: ["원문에 그대로 있는 답(코드 확인)"] }))],
+      coverage: [...checked.coverage, ...coded.flatMap(q => q.practiceIds.map(practiceId => ({ practiceId, questionIds: [q.objectiveId], status: "covered" as const, reason: "원문에 그대로 있는 답(코드 확인)" })))], missedContent: [] };
+  };
+  // v5 고쳐 쓰기 (A): goals the batch review sent back as fixable (revise, a code problem, or no question) are rewritten
+  // once right away and checked again; the batch then publishes with the rewrites. Unclear source (uncertain) is held.
+  const retryBatch = async (batch: Batch) => {
+    if (batch.retried) return;
+    if (!batch.retry) {
+      const ids = batch.ids.filter(id => {
+        const q = batch.questions!.find(c => c.objectiveId === id);
+        return !q || verdict(batch.review, id).status === "revise" || Boolean(candidateProblem(q, state));
+      });
+      if (!ids.length) { batch.retried = true; await save(); return; }
+      batch.retry = { ids }; await save();
+    }
+    const again = batch.retry;
+    const practiceIds = new Set(again.ids.flatMap(id => byId(state, id)?.astra?.practiceIds ?? []));
+    await author(again, 2, { items: batch.review!.items.filter(i => again.ids.includes(i.objectiveId)), coverage: batch.review!.coverage.filter(c => practiceIds.has(c.practiceId)),
+      code: batch.questions!.filter(q => again.ids.includes(q.objectiveId)).map(q => ({ objectiveId: q.objectiveId, problem: candidateProblem(q, state) })).filter(x => x.problem),
+      previous: batch.questions!.filter(q => again.ids.includes(q.objectiveId)) });
+    if (!again.review) { again.review = await checkBatch(again, 2); await save(); }
+    // Merge: the rewrites and their checks replace the first try for those goals.
+    batch.questions = [...batch.questions!.filter(q => !again.ids.includes(q.objectiveId)), ...(again.questions ?? [])];
+    batch.solutions = { items: [...batch.solutions!.items.filter(s => !again.ids.includes(s.objectiveId)), ...(again.solutions?.items ?? [])] };
+    batch.review = { items: [...batch.review!.items.filter(i => !again.ids.includes(i.objectiveId)), ...again.review.items],
+      coverage: [...batch.review!.coverage.filter(c => !practiceIds.has(c.practiceId)), ...again.review.coverage], missedContent: [] };
+    batch.retried = true; await save();
+  };
   const pendingPublish: Promise<void>[] = [];
   // v4/v5 publish in source order: a batch opens after the earlier batches already being made have opened (or held).
   // Batches nobody has started (skipped for the reading position on the study screen) do not hold later ones back.
@@ -543,7 +605,8 @@ export async function runAstra(ctx: Context) {
       if (!batch.startedAt) { batch.startedAt = new Date().toISOString(); await save(); }
       await author(batch, 1, null);
       if (data.review) return; // Legacy or resumed global review already covers the saved batch; do not pay again.
-      if (!batch.review) { batch.review = batch.questions!.length ? await review(batch.questions!, batch.solutions!, 1, "batch") : { items: [], coverage: [], missedContent: [] }; await save(); }
+      if (!batch.review) { batch.review = v5 ? await checkBatch(batch, 1) : batch.questions!.length ? await review(batch.questions!, batch.solutions!, 1, "batch") : { items: [], coverage: [], missedContent: [] }; await save(); }
+      if (v5) await retryBatch(batch);
       const earlier = v4 ? data.batches.slice(0, Math.max(0, data.batches.indexOf(batch))).filter(b => claimed.has(b)).map(b => settleOf(b).done) : [];
       const published = Promise.all(earlier).then(() => publishReady(batch.questions!, batch.solutions!.items, batch.review!, gen)).then(async () => {
         if (gen !== generation) return;
@@ -765,6 +828,24 @@ export async function runAstra(ctx: Context) {
   const rejected = settled.find((result): result is PromiseRejectedResult => result.status === "rejected");
   if (rejected) throw rejected.reason;
   if (failure) throw failure;
+  if (v5) {
+    // v5: no global review or end-of-run repair (one question per goal; each batch was checked and rewritten in place).
+    const candidates = data.batches.flatMap(b => b.questions ?? []);
+    const solutions = data.batches.flatMap(b => b.solutions?.items ?? []);
+    const merged: Review = { items: data.batches.flatMap(b => b.review?.items ?? []), coverage: data.batches.flatMap(b => b.review?.coverage ?? []), missedContent: [] };
+    for (const section of state.sections) {
+      const dropped = selected.filter(o => o.sectionId === section.id && !data.publishedQuestions!.some(q => q.objectiveId === o.id))
+        .map(o => ({ objectiveId: o.id, reason: refusal(o, candidates, solutions, merged) ?? "미공개" }));
+      section.author = { documentPath: section.author?.documentPath ?? null, questionCount: section.author?.questionCount ?? 0, dropped, warnings: data.warnings.filter(w => selected.some(o => o.id === w.ref && o.sectionId === section.id)) };
+    }
+    state.status = "done"; state.phase = "done"; state.current = undefined;
+    data.timing!.completedAt = new Date().toISOString();
+    const held = state.sections.reduce((n, s) => n + (s.author?.dropped.length ?? 0), 0);
+    const tiers = solutions.reduce((n, s) => { const t = (s as { skipped?: string }).skipped ?? "full"; n[t] = (n[t] ?? 0) + 1; return n; }, {} as Record<string, number>);
+    state.message = `단원별 검수 후 공개. 보류 ${held}개 · 확인 방식: 코드 ${tiers.code ?? 0} / 검수 ${tiers.review ?? 0} / 풀이+검수 ${tiers.full ?? 0}. 모델 검수는 정확성 보장이 아닙니다.`;
+    await save();
+    return;
+  }
   const initial = data.batches.flatMap(b => b.questions ?? []);
   if (!data.review) { data.review = await review(initial, { items: data.batches.flatMap(b => b.solutions?.items ?? []) }, 1); await save(); }
   if (!data.repair) {

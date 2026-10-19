@@ -516,7 +516,7 @@ function AstraPanel({ gen }: { gen: GenState }) {
     <section className="score" aria-label="astra 중간 결과">
       <h3>astra · 무엇을 만들고 걸렀는가</h3>
       <p className="muted">개념 {plan.concepts.length} · 연습 묶음 {plan.practice.length} · 생성 초안 {candidates.length} · 지금 볼 수 있는 문제 {published} · {gen.status === "done" ? "최종 보류" : "현재 보류"} {dropped.length}</p>
-      <p className="muted">묶음 검수 {batchReviews}/{data.batches.length} 완료 · 전체 검수: {review ? (data.repair?.review ? "수정 후 완료" : data.repair ? "1차 완료 · 수정 진행" : "완료") : reviewing ? "진행 중" : "아직 완료되지 않음"}. 묶음 검수를 마친 문제부터 아래 ‘문제 보기’로 열 수 있습니다.</p>
+      <p className="muted">묶음 검수 {batchReviews}/{data.batches.length} 완료 · {gen.input.engine === "v5" ? `묶음 안 고쳐 쓰기 ${data.batches.filter((batch) => batch.retry).length}묶음 · 전체 검수 없음(v5)` : <>전체 검수: {review ? (data.repair?.review ? "수정 후 완료" : data.repair ? "1차 완료 · 수정 진행" : "완료") : reviewing ? "진행 중" : "아직 완료되지 않음"}</>}. 묶음 검수를 마친 문제부터 아래 ‘문제 보기’로 열 수 있습니다.</p>
       <p className="muted">초안 독립 풀이 {solutions.length}개 중 조건·노출·불확실 신호 {flagged.length}개 · 수정 대상 {data.repair?.ids.length ?? 0}개 · 수정 후 독립 풀이 {data.repair?.solutions?.items.length ?? 0}개. {astraFamily(gen.input.engine) && gen.input.engine !== "astra" ? "전체 검수가 돌려보낸 공개 문제는 한 번 고쳐 쓰고, 고친 문제가 통과할 때만 바꿉니다(바뀐 문제는 경고에 남김). 지우지는 않습니다." : "공개된 문제는 이후 검수에서 경고가 생겨도 자동으로 바꾸거나 지우지 않습니다."}</p>
       {lateWarnings.size > 0 && <div role="status"><b>공개 후 발견된 경고 {lateWarnings.size}개</b><ul>{[...lateWarnings].map(([id, reasons]) => <li className="warnline" key={id}>문항 {id.startsWith("q-") ? id : `q-${id}`}: {reasons.join(" / ")}</li>)}</ul></div>}
       <details>
