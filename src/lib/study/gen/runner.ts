@@ -9,7 +9,7 @@ import { callModel, ModelError, type ModelCaller, type ModelRequest } from "../.
 import { redactCallText } from "../lab-contract.ts";
 import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
-import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, astraResponseSchema, getAstraReadingView, runAstra } from "./astra.ts";
+import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, getAstraReadingView, responseSchemaFor, runAstra } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
@@ -394,7 +394,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
-    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string } = {}) => {
+    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string; onPartial?: (text: string) => void } = {}) => {
     if (astraFailure) throw astraFailure;
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
@@ -431,7 +431,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       state.current = { step, ...(sectionId ? { sectionId } : {}), ...(extra.page ? { page: extra.page } : {}), attempt, progress: progressOf(step, text) };
       void saveState(state).catch(() => undefined);
     };
-    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(astraAbort ? {} : { onText }), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
+    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(extra.onPartial ? { onText: extra.onPartial } : astraAbort ? {} : { onText }), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
       model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}),
       ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}) };
     if (astraAbort) {
@@ -453,6 +453,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       if (astraFailure) throw astraFailure;
       if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("astra-") ? astraFakeReply(s, u) : genFakeReply(s, u)))(step, user, attempt);
       if (extra.cachePrefix && request.fakeReply !== undefined) request.fakeReply = JSON.stringify({ result: JSON.parse(request.fakeReply) });
+      // The fake model has no stream; hand the reply over in pieces so streaming consumers behave as with a real one.
+      if (request.fakeReply !== undefined && extra.onPartial) for (let at = 200; at < request.fakeReply.length + 200; at += 200) extra.onPartial(request.fakeReply.slice(0, at));
       const reply = await callModel(request);
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
       await saveJson(callFile, record);
@@ -480,7 +482,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   };
   /** A call whose reply did not parse or match the schema counts as one try; a dropped connection too. */
   const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide,
-    extra: { files?: ModelRequest["files"]; cachePrefix?: string } = {}) => {
+    extra: { files?: ModelRequest["files"]; cachePrefix?: string; onPartial?: (text: string) => void } = {}) => {
     try {
       const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide, extra));
       return parsed.success ? { ok: true as const, value: parsed.data } : { ok: false as const, problem: "응답이 정해진 JSON 형식과 다릅니다." };
@@ -531,8 +533,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       const pageTexts = await (options.pages ?? registeredPages)(input).catch(() => new Map<number, string>());
       const thinPages = input.pageNumbers.filter((page) => needsImage(pageTexts.get(page) ?? ""));
       await runAstra({ state, pdf, pageTexts, thinPages, save: () => { astraMarks(); return saveState(state); }, getPriorityPage: async () => (input.origin ?? "lab") === "study" ? astraPriorityPage(state) : undefined, pause: (message) => { throw failAstra(new Stop("paused-invalid", message)); },
-        ask: async (step, attempt, system, user, parser, files) => {
-          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(astraResponseSchema), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX });
+        ask: async (step, attempt, system, user, parser, files, onPartial) => {
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(responseSchemaFor(input.engine)), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}) });
           if (!result.ok) throw failAstra(new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`));
           return result.value.result;
         },

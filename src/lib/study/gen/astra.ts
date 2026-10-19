@@ -20,6 +20,16 @@ const planSchema = z.object({
   pageNotes: z.array(z.object({ page, text })),
 });
 type Plan = z.infer<typeof planSchema>;
+/*
+ * v4 plan, written unit by unit (outline → for each unit: its page notes, concepts and practice) so the screen and the
+ * authoring can start while the reply is still streaming in. It is turned into the same Plan as astra's.
+ */
+const v4UnitSchema = z.object({ sectionId: text, pageNotes: planSchema.shape.pageNotes, concepts: planSchema.shape.concepts, practice: planSchema.shape.practice });
+const v4PlanSchema = z.object({ outline: planSchema.shape.outline, units: z.array(v4UnitSchema).min(1), uncertain: planSchema.shape.uncertain });
+type V4Plan = z.infer<typeof v4PlanSchema>;
+function v4ToPlan(v: V4Plan): Plan {
+  return { outline: v.outline, concepts: v.units.flatMap(u => u.concepts), practice: v.units.flatMap(u => u.practice), uncertain: v.uncertain, pageNotes: v.units.flatMap(u => u.pageNotes) };
+}
 const questionSchema = authoredQuestion.extend({ practiceIds: z.array(text).min(1), conceptIds: z.array(text).min(1), checkedSkill: text, requiredPoints: z.array(text).min(1), evidence: z.array(evidenceSchema).min(1) });
 const questionsSchema = z.object({ questions: z.array(questionSchema) });
 type Candidate = z.infer<typeof questionSchema>;
@@ -33,10 +43,54 @@ const reviewSchema = z.object({
 type Review = z.infer<typeof reviewSchema>;
 // One identical strict output contract across stages keeps the schema part of the cache prefix stable.
 export const astraResponseSchema = z.object({ result: z.union([planSchema, questionsSchema, solveSchema, reviewSchema]) });
+const v4ResponseSchema = z.object({ result: z.union([v4PlanSchema, questionsSchema, solveSchema, reviewSchema]) });
+/** The one response contract an engine sends on every call (astra and v4 differ only in the plan's shape). */
+export function responseSchemaFor(engine: GenState["input"]["engine"]) { return engine === "v4" ? v4ResponseSchema : astraResponseSchema; }
+
+/**
+ * The finished parts of a reply that is still streaming in: the outline once its array is closed, and each unit object
+ * once its closing brace has arrived. Strings and escapes are respected; nothing is guessed from an unfinished part.
+ */
+export function partialV4Plan(raw: string): { outline: unknown[] | null; units: unknown[] } {
+  const closeOf = (from: number) => {
+    let depth = 0, inString = false;
+    for (let i = from; i < raw.length; i++) {
+      const c = raw[i];
+      if (inString) { if (c === "\\") i++; else if (c === '"') inString = false; continue; }
+      if (c === '"') inString = true;
+      else if (c === "[" || c === "{") depth++;
+      else if (c === "]" || c === "}") { depth--; if (depth === 0) return i; }
+    }
+    return -1;
+  };
+  const valueStart = (key: string) => {
+    const at = raw.indexOf(`"${key}"`);
+    if (at < 0) return -1;
+    let i = raw.indexOf(":", at) + 1;
+    while (i > 0 && i < raw.length && /\s/.test(raw[i])) i++;
+    return i > 0 && i < raw.length ? i : -1;
+  };
+  let outline: unknown[] | null = null;
+  const o = valueStart("outline");
+  if (o >= 0 && raw[o] === "[") { const end = closeOf(o); if (end > 0) { try { outline = JSON.parse(raw.slice(o, end + 1)); } catch { outline = null; } } }
+  const units: unknown[] = [];
+  const u = valueStart("units");
+  if (u >= 0 && raw[u] === "[") {
+    for (let i = u + 1; i < raw.length;) {
+      while (i < raw.length && /[\s,]/.test(raw[i])) i++;
+      if (raw[i] !== "{") break;
+      const end = closeOf(i);
+      if (end < 0) break;
+      try { units.push(JSON.parse(raw.slice(i, end + 1))); } catch { break; }
+      i = end + 1;
+    }
+  }
+  return { outline, units };
+}
 type Batch = { ids: string[]; questions?: Candidate[]; solutions?: Solutions; review?: Review; publishedIds?: string[]; startedAt?: string };
 export type AstraState = { version: 1; pdfHash?: string; plan?: Plan; batches: Batch[]; review?: Review; repair?: Batch; warnings: Issue[];
   publishedQuestions?: Candidate[]; timing?: { startedAt: string; firstPublishedAt?: string; completedAt?: string } };
-export type AstraAsk = <T>(step: GenStep, attempt: number, system: string, user: string, parser: z.ZodType<T>, files: NonNullable<ModelRequest["files"]>) => Promise<T>;
+export type AstraAsk = <T>(step: GenStep, attempt: number, system: string, user: string, parser: z.ZodType<T>, files: NonNullable<ModelRequest["files"]>, onPartial?: (text: string) => void) => Promise<T>;
 type Context = { state: GenState; pdf: Uint8Array | null; ask: AstraAsk;
   /** Text layer per page; with the plan's picture-page notes this is what every call after the plan reads. */
   pageTexts?: Map<number, string>; thinPages?: number[]; save: () => Promise<void>; getPriorityPage?: () => Promise<number | undefined>; pause: (message: string) => never; publish: (section: SectionState, questions: AuthoredQuestion[]) => Promise<string | null> };
@@ -52,8 +106,8 @@ const REVIEW = `${BASE}\n출제 답과 독립 풀이를 원문(source: 쪽별 �
  * v4 (Claude 조정안, 2026-10-19): astra의 구조(계획 1회 → 묶음 출제 → 정답 없는 풀이 → 검수 → 전체 검수·고치기)를
  * 그대로 쓰고, 비교 실행에서 남은 문제만 고친다. engine "v4"일 때만 아래 추가 지시와 코드 동작이 켜진다.
  */
-const V4_PLAN = `\n[v4] 같은 과제에 2~3을 줄 때는 서로 다른 상황·수행이 실제로 있을 때만이다(일반식과 그 식에 숫자만 넣은 문제는 하나로 친다). 과제 종류(상황→방법 고르기, 이유, 구별, 적용·계산, 절차, 대응·분류)는 자료 성격에 맞게 섞는다: 계산·유도 자료라도 이유·구별을, 분류·암기 자료라도 상황에 적용하는 과제를 둔다. 정해진 비율은 없다.`;
-const V4_AUTHOR = `\n[v4] 형식은 답의 모양으로 고른다: 답이 하나의 값·이름·좌표·순서·대응으로 정해지면 short(같은 답의 다른 표기를 accepted에 함께) 또는 choice, 이유·비교·도출 과정처럼 서술이 필요할 때만 self-check. 한 문항은 한 과제만 묻는다: '구하고, 설명하고, 쓰시오'처럼 요구를 묶지 말고, 묶어야 의미가 있는 경우(예: 결과와 그 판정 근거)만 self-check으로 하고 requiredPoints에 채점 요소를 모두 적는다. 문제가 요구하는 것과 채점칸이 확인하는 것은 같아야 한다(u와 좌표를 둘 다 물으면 둘 다 채점). choice 보기는 길이·말투·구체성이 비슷해야 하고, 정답만 길거나 자세하면 안 된다. 같은 과제의 슬롯이 여럿이면 각 슬롯은 다른 상황·조건·수행을 다룬다.`;
+const V4_PLAN = `\n[v4] 응답 형식: outline을 먼저 다 쓴 다음 units에 목차 순서대로 단원마다 { sectionId, pageNotes(그 단원 쪽만), concepts(그 단원 개념, outlineIds에 이 단원 id를 맨 앞에), practice(그 단원 과제) }를 쓴다. 한 단원을 끝낸 뒤 다음 단원을 쓴다(화면과 출제가 단원이 끝나는 대로 시작한다). practice.task는 학습자에게 보이는 목표다: 동사 하나, 40자 안팎의 '~을 떠올릴 수 있다 / 구별할 수 있다 / 설명할 수 있다 / 계산할 수 있다' 꼴로 쓰고 문항 지시를 쓰지 않는다. practice.recall은 떠올릴 핵심 낱말이나 짧은 사실 하나(문항의 숫자·정답 풀이를 쓰지 않는다). 같은 과제에 2~3을 줄 때는 서로 다른 상황·수행이 실제로 있을 때만이다(일반식과 그 식에 숫자만 넣은 문제는 하나로 친다). 과제 종류(상황→방법 고르기, 이유, 구별, 적용·계산, 절차, 대응·분류)는 자료 성격에 맞게 섞는다: 계산·유도 자료라도 이유·구별을, 분류·암기 자료라도 상황에 적용하는 과제를 둔다. 정해진 비율은 없다.`;
+const V4_AUTHOR = `\n[v4] 답이 셋 이상을 순서·대응으로 나열해야 하면 short 대신 choice(보기마다 같은 길이의 나열)로 낸다. 형식은 답의 모양으로 고른다: 답이 하나의 값·이름·좌표·순서·대응으로 정해지면 short(같은 답의 다른 표기를 accepted에 함께) 또는 choice, 이유·비교·도출 과정처럼 서술이 필요할 때만 self-check. 한 문항은 한 과제만 묻는다: '구하고, 설명하고, 쓰시오'처럼 요구를 묶지 말고, 묶어야 의미가 있는 경우(예: 결과와 그 판정 근거)만 self-check으로 하고 requiredPoints에 채점 요소를 모두 적는다. 문제가 요구하는 것과 채점칸이 확인하는 것은 같아야 한다(u와 좌표를 둘 다 물으면 둘 다 채점). choice 보기는 길이·말투·구체성이 비슷해야 하고, 정답만 길거나 자세하면 안 된다. 같은 과제의 슬롯이 여럿이면 각 슬롯은 다른 상황·조건·수행을 다룬다.`;
 const V4_REVIEW = `\n[v4] 다음도 revise 사유다: 답이 하나의 값·대응인데 self-check인 경우, 한 문항이 여러 과제를 묶은 경우, 문제가 요구한 것과 채점칸이 다른 경우, 정답 보기만 눈에 띄게 길거나 자세한 경우, 이미 있는 문항과 같은 지식·수행을 반복하는 경우. code.hints는 코드가 찾은 의심이며 판단은 원문과 문항으로 한다.`;
 /**
  * A self-check whose model answer landed in `after` (the text right after the input box) instead of `accepted`:
@@ -121,7 +175,7 @@ function installPlan(state: GenState, plan: Plan) {
       const evidence = cs.flatMap(c => c.evidence);
       for (let i = 0; i < practice.questionCount; i++) objectives.push({ id: `${section.id}-o${objectives.length + 1}`, sectionId: section.id, statement: practice.task, cue: practice.cue, recall: practice.recall,
         kind: practice.kind, importance: practice.priority === "essential" ? "core" : "support", itemNumbers: concepts.map((c, n) => practice.conceptIds.includes(c.id) ? n + 1 : 0).filter(Boolean), materialNumbers: [],
-        pages: [...new Set(evidence.map(e => e.page))], quotes: evidence.map(e => e.quote).filter(Boolean), astra: { practiceIds: [practice.id], conceptIds: practice.conceptIds, checkedSkill: practice.task, requiredPoints: [], evidence } });
+        pages: [...new Set(evidence.map(e => e.page))], quotes: evidence.map(e => e.quote).filter(Boolean), astra: { practiceIds: [practice.id], conceptIds: practice.conceptIds, checkedSkill: practice.task, requiredPoints: [], evidence, ...(state.input.engine === "v4" ? { keepGoal: true } : {}) } });
     }
     return { ...section, classify: { items, warnings: [] }, design: { objectives, warnings: [] } };
   });
@@ -138,7 +192,18 @@ export function candidateHints(q: Candidate): string[] {
   }
   const ask = q.stem.map(b => b.text ?? "").join(" ");
   if ((ask.match(/(하라|하시오|쓰시오|구하라|설명하라|제시하라|쓰라|밝히고|구하고|설명하고|쓰고)/g) ?? []).length >= 3) hints.push("한 문항이 여러 요구를 묶은 것 같습니다.");
+  const listed = (q.answer.kind === "short" ? q.answer.accepted?.[0] ?? "" : "").split(/,|→|·|\//).filter(x => x.trim()).length;
+  if (listed >= 3) hints.push("단답 하나에 셋 이상을 나열하게 합니다. 순서·대응이면 choice가 채점에 낫습니다.");
   return hints;
+}
+/** Choice answers came back with the correct option first every time; the stored order is shuffled (stable per objective). */
+export function shuffleChoice(q: Candidate): Candidate {
+  const a = q.answer;
+  if (a.kind !== "choice" || !a.options || a.correctIndex === null) return q;
+  let seed = [...q.objectiveId].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const order = a.options.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) { seed = (seed * 1103515245 + 12345) >>> 0; const j = seed % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+  return { ...q, answer: { ...a, options: order.map(i => a.options![i]), correctIndex: order.indexOf(a.correctIndex) } };
 }
 /** A self-check whose model answer is a single value (a number, tuple, symbol or short term) is graded as short. */
 export function valueAsShort(q: Candidate): Candidate {
@@ -169,6 +234,10 @@ function render(q: Candidate, objective: Objective, section: SectionState, fileN
 }
 function finalObjective(q: Candidate, objective: Objective): Objective {
   const answer = q.answer.kind === "choice" ? q.answer.options?.[q.answer.correctIndex ?? -1] : undefined;
+  // v4 keeps the planned goal (short, one verb) as the learner-facing objective; the question's checked skill and answer stay in astra.
+  if (objective.astra?.keepGoal) return { ...objective, cue: q.stem.map(b => b.text ?? b.latex ?? b.rows?.flat().join(" ") ?? "").join(" "),
+    pages: [...new Set(q.evidence.map(e => e.page))], quotes: q.evidence.map(e => e.quote).filter(Boolean),
+    astra: { practiceIds: q.practiceIds, conceptIds: q.conceptIds, checkedSkill: q.checkedSkill, requiredPoints: q.requiredPoints, evidence: q.evidence, keepGoal: true } };
   return { ...objective, statement: q.checkedSkill, cue: q.stem.map(b => b.text ?? b.latex ?? b.rows?.flat().join(" ") ?? "").join(" "),
     recall: q.answer.kind === "choice" ? answer?.text ?? answer?.latex ?? "" : q.answer.accepted?.join(" / ") ?? "",
     pages: [...new Set(q.evidence.map(e => e.page))], quotes: q.evidence.map(e => e.quote).filter(Boolean),
@@ -230,33 +299,226 @@ export async function runAstra(ctx: Context) {
   }).join("\n\n");
   const pagesOfIds = (ids: string[]) => state.sections.filter(sec => ids.some(id => byId(state, id)?.sectionId === sec.id)).flatMap(sec => sec.pages);
   const context = { pages: state.input.pageNumbers, purpose: state.input.purpose, note: state.input.note, signals: state.input.signals, previous: state.input.remake?.previous ?? {}, reportReasons: state.input.remake?.reasons ?? {}, vibe: state.pastExam?.card ?? null };
+  let selected: Objective[] = [];
+  const author = async (batch: Batch, attempt: number, reasons: unknown) => {
+    if (!batch.questions) {
+      const result = await ask("astra-author", attempt, AUTHOR + (v4 ? V4_AUTHOR : ""), JSON.stringify({ context, plan: data.plan, slots: batch.ids.map(id => byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: sourceOf(pagesOfIds(batch.ids)) }), questionsSchema, noFiles);
+      batch.questions = result.questions.filter(q => batch.ids.includes(q.objectiveId)).map(q => answerInPlace(q, data.warnings)).map(q => v4 ? shuffleChoice(valueAsShort(q)) : q); await save();
+    }
+    if (!batch.solutions) {
+      // Explicit projection: no plan, objective recall, answer, explanation or evidence supports can leak here.
+      batch.solutions = await ask("astra-solve", attempt, SOLVE, JSON.stringify({ pages: context.pages, questions: batch.questions.map(student), source: sourceOf(pagesOfIds(batch.ids)) }), solveSchema, noFiles); await save();
+    }
+  };
+  // The reviewer gets the part of the plan these questions use (batch), or a compact plan (global): the whole plan with
+  // every concept's evidence was the largest input of a run (그래픽스03 9 reviews, 13.9만 of 40만 tokens).
+  const planFor = (questions: Candidate[], scope: "batch" | "global") => {
+    const plan = data.plan!;
+    if (!v4) return plan;
+    if (scope === "global") return { outline: plan.outline, concepts: plan.concepts.map(c => ({ id: c.id, outlineIds: c.outlineIds, title: c.title, essentials: c.essentials, conditions: c.conditions })), practice: plan.practice };
+    const practiceIds = new Set(questions.flatMap(q => q.practiceIds));
+    const practice = plan.practice.filter(p => practiceIds.has(p.id));
+    const conceptIds = new Set([...practice.flatMap(p => p.conceptIds), ...questions.flatMap(q => q.conceptIds)]);
+    return { outline: plan.outline.filter(s => practice.some(p => p.sectionId === s.id)), concepts: plan.concepts.filter(c => conceptIds.has(c.id)), practice };
+  };
+  const review = async (questions: Candidate[], solutions: Solutions, attempt: number, scope: "batch" | "global" = "global") => {
+    const code = questions.map(q => ({ objectiveId: q.objectiveId, problem: candidateProblem(q, state), ...(v4 ? { hints: candidateHints(q) } : {}) })).filter(i => i.problem || i.hints?.length);
+    const practiceIds = scope === "batch" ? questions.flatMap(q => q.practiceIds) : selected.flatMap(o => o.astra?.practiceIds ?? []);
+    const scopeRule = (scope === "batch" ? "\n같은 practice의 다른 슬롯은 뒤 묶음에 있을 수 있다. 이 묶음에 실제 있는 슬롯의 checkedSkill만 coverage 대상으로 삼고, 나머지 슬롯이 없다는 이유로 partial/missing 판정하지 마라." : "") + (state.input.remake ? "\n신고 문항 재생성이다. 선택된 목표만 검수하고, 나머지 계획이나 새 학습대상을 미출제 결함으로 취급하지 마라. missedContent는 빈 배열로 반환하라." : "");
+    return ask("astra-review", attempt, REVIEW + (v4 ? V4_REVIEW : "") + scopeRule + (scope === "batch" ? "\n이번에는 묶음 공개 전 검사다. 이 묶음의 문항과 근거만 검수하며, 아직 출제 중인 다른 묶음의 누락을 지적하지 않는다. missedContent는 빈 배열. 전체 범위·중복은 마지막 전역검수가 맡는다." : (v4 ? "\n이번에는 전체 출제 후 전역검수다. 이미 공개된 문항도 결함이 있으면 revise로 판정하라. 한 번 고쳐 쓰고, 고친 문항이 통과할 때만 바꾼다." : "\n이번에는 전체 출제 후 전역검수다. 이미공개 IDs는 자동수정하지 않으므로 결함을 명확히 기록한다.")), JSON.stringify({ context, scope, plan: planFor(questions, scope), publishedIds: data.publishedQuestions!.map(q => q.objectiveId), selectedPracticeIds: [...new Set(practiceIds)], candidates: questions, solutions, code,
+      source: sourceOf(scope === "batch" ? pagesOfIds(questions.map(q => q.objectiveId)) : state.input.pageNumbers) }), reviewSchema, noFiles);
+  };
+  const refusal = (objective: Objective, candidates: Candidate[], solutions: Solutions["items"], checked: Review) => {
+    const matches = candidates.filter(q => q.objectiveId === objective.id); const q = matches[0]; const v = verdict(checked, objective.id);
+    const solved = solutions.filter(s => s.objectiveId === objective.id);
+    const coverage = (objective.astra?.practiceIds ?? []).map(id => checked.coverage.filter(c => c.practiceId === id));
+    const badCoverage = coverage.some(entries => entries.length !== 1 || entries[0].questionIds.some(id => !candidates.some(candidate => candidate.objectiveId === id && candidate.practiceIds.includes(entries[0].practiceId))));
+    const problem = matches.length !== 1 ? "문항 응답 누락 또는 중복" : solved.length !== 1 ? "독립 풀이 누락 또는 중복" : badCoverage ? "범위 검수 누락·중복 또는 잘못된 문항 연결" : candidateProblem(q, state);
+    if (problem || v.status !== "ready") return problem ?? (v.reasons.join(" / ") || "원문/판정 불확실");
+    if (coverage.some(entries => entries[0].status !== "covered")) return "검수에서 이 묶음의 연습 범위가 충분히 확인되지 않았습니다.";
+    if ((solved[0].uncertain || solved[0].missingConditions.length || solved[0].exposedRelation) && !v.reasons.length) return "독립 풀이의 결함 경고를 검수가 해소하지 않았습니다.";
+    return null;
+  };
+  let publishing = Promise.resolve();
+  // v4 authors while the plan is still streaming in; nothing is published until the whole plan passed its checks.
+  // A plan that fails (and is asked again) bumps the generation, so early work from the old plan is never published.
+  let generation = 0;
+  let openGate: (ok: void) => void = () => {};
+  let planGate: Promise<void> = Promise.resolve();
+  const publishReady = (candidates: Candidate[], solutions: Solutions["items"], checked: Review, gen = generation) => {
+    const next = publishing.then(async () => {
+      await planGate;
+      if (gen !== generation) return;
+      for (const q of candidates) {
+        const objective = byId(state, q.objectiveId);
+        if (!objective || data.publishedQuestions!.some(old => old.objectiveId === q.objectiveId) || refusal(objective, candidates, solutions, checked)) continue;
+        data.publishedQuestions!.push(structuredClone(q));
+        Object.assign(objective, finalObjective(q, objective));
+      }
+      // Persist publication decisions before materializing documents; restart can recreate the same immutable set.
+      await save();
+      for (const section of state.sections) {
+        const kept = (section.design?.objectives ?? []).flatMap(objective => {
+          const q = data.publishedQuestions!.find(candidate => candidate.objectiveId === objective.id);
+          return q ? [render(q, finalObjective(q, objective), section, state.input.fileName)] : [];
+        });
+        if (!kept.length) continue;
+        section.author = { documentPath: await ctx.publish(section, kept), questionCount: kept.length, dropped: [], warnings: section.author?.warnings ?? [] };
+        if (section.author.documentPath) data.timing!.firstPublishedAt ??= new Date().toISOString();
+      }
+      await save();
+    });
+    publishing = next.catch(error => { failure = error; });
+    return next;
+  };
+  const pendingPublish: Promise<void>[] = [];
+  const processBatch = async (batch: Batch) => {
+    const gen = generation;
+    try {
+      if (!batch.startedAt) { batch.startedAt = new Date().toISOString(); await save(); }
+      await author(batch, 1, null);
+      if (data.review) return; // Legacy or resumed global review already covers the saved batch; do not pay again.
+      if (!batch.review) { batch.review = await review(batch.questions!, batch.solutions!, 1, "batch"); await save(); }
+      const published = publishReady(batch.questions!, batch.solutions!.items, batch.review, gen).then(async () => {
+        if (gen !== generation) return;
+        batch.publishedIds = batch.ids.filter(id => data.publishedQuestions!.some(q => q.objectiveId === id)); await save();
+      });
+      // v4 does not wait for publication (it may be waiting for the plan) before taking the next batch.
+      if (v4) pendingPublish.push(published.catch(error => { failure ??= error; })); else await published;
+    } catch (error) {
+      failure ??= error;
+      // Storage failures must also notify runner's shared abort, not only stop this worker's next call.
+      try { pause(failure instanceof Error ? failure.message : String(failure)); }
+      catch (stop) { failure = stop; throw stop; }
+    }
+  };
+  // ---- v4: early authoring while the plan streams in ------------------------------------------------------
+  const claimed = new Set<Batch>();
+  const waiters: Array<() => void> = [];
+  const notify = () => { for (const wake of waiters.splice(0)) wake(); };
+  let streaming = false;
+  let stopEarly = false;
+  const earlyWorkers: Promise<void>[] = [];
+  const earlyWorker = async () => {
+    for (;;) {
+      if (failure || stopEarly) return;
+      const next = data.batches.find(b => !claimed.has(b));
+      if (next) { claimed.add(next); await processBatch(next); continue; }
+      if (!streaming) return;
+      await new Promise<void>(resolve => waiters.push(resolve));
+    }
+  };
+  const batchesFor = (objectives: Objective[]) => {
+    const ids = objectives.map(o => o.id);
+    const first = data.batches.length ? [] : ids.slice(0, 3);
+    if (first.length) data.batches.push({ ids: first });
+    const rest = ids.filter(id => !first.includes(id));
+    for (let i = 0; i < rest.length; i += 8) data.batches.push({ ids: rest.slice(i, i + 8) });
+  };
   if (!data.plan || state.phase === "design") {
     const priorMap = data.plan ? { outline: data.plan.outline, concepts: data.plan.concepts, pageNotes: data.plan.pageNotes ?? [] } : null;
     const system = PLAN + (v4 ? V4_PLAN : "") + (priorMap ? "\n앞 단계 고정 재실행이다. previousMap의 ID·원문 목차·개념을 변경하지 말고 이번 목적의 practice만 다시 계획한다." : "");
-    const planned = async (attempt: number, user: string) => {
-      const raw = await ask("astra-plan", attempt, system, user, planSchema, files);
+    const planned = async (attempt: number, user: string, onPartial?: (text: string) => void) => {
+      const raw = v4 ? v4ToPlan(await ask("astra-plan", attempt, system, user, v4PlanSchema, files, onPartial)) : await ask("astra-plan", attempt, system, user, planSchema, files);
       if (priorMap) { raw.outline = priorMap.outline; raw.concepts = priorMap.concepts; raw.pageNotes = priorMap.pageNotes; }
       const scoped = scopePlan(raw, state.input.pageNumbers);
       return { ...scoped, problem: planProblem(scoped.plan, state.input.pageNumbers) };
     };
     const planContext = { ...context, thinPages: ctx.thinPages ?? [] };
     const user = JSON.stringify({ context: planContext, previousMap: priorMap });
-    let result = await planned(1, user);
+    // v4 (lab, auto-confirmed): show the outline and each unit's goals as soon as they arrive, and start authoring that
+    // unit at once. Publication waits for the whole plan's checks below.
+    const earlyOk = v4 && !priorMap && Boolean(state.input.autoConfirm) && !state.input.remake && state.input.purpose !== "read";
+    if (earlyOk) planGate = new Promise<void>(resolve => { openGate = resolve; });
+    const earlyGoal = new Map<string, string>();
+    let onPartial: ((text: string) => void) | undefined;
+    if (earlyOk) {
+      const inRange = new Set(state.input.pageNumbers);
+      const ids = new Map<string, string>();
+      const partial: Plan = { outline: [], concepts: [], practice: [], uncertain: [], pageNotes: [] };
+      let outlineDone = false, unitsDone = 0, seenLength = 0;
+      onPartial = (text: string) => {
+        if (stopEarly || text.length - seenLength < 300) return;
+        seenLength = text.length;
+        const found = partialV4Plan(text);
+        if (!outlineDone && found.outline) {
+          const parsed = planSchema.shape.outline.safeParse(found.outline);
+          if (!parsed.success) { stopEarly = true; return; }
+          outlineDone = true;
+          partial.outline = parsed.data.map(sec => ({ ...sec, pages: sec.pages.filter(pg => inRange.has(pg)) })).filter(sec => sec.pages.length)
+            .map((sec, i) => { ids.set(sec.id, `s${i + 1}`); return { ...sec, id: `s${i + 1}` }; });
+          data.plan = partial; installPlan(state, partial); void save().catch(() => {});
+        }
+        if (!outlineDone) return;
+        let added = false;
+        for (; unitsDone < found.units.length; unitsDone++) {
+          const unit = v4UnitSchema.safeParse(found.units[unitsDone]);
+          if (!unit.success) { stopEarly = true; return; }
+          if (!ids.has(unit.data.sectionId)) continue;
+          partial.pageNotes.push(...unit.data.pageNotes.filter(n => inRange.has(n.page) && n.text.trim()));
+          partial.concepts.push(...unit.data.concepts.map(c => ({ ...c, outlineIds: c.outlineIds.flatMap(x => ids.has(x) ? [ids.get(x)!] : []), evidence: c.evidence.filter(e => inRange.has(e.page)) }))
+            .filter(c => c.outlineIds.length && c.evidence.length));
+          const known = new Set(partial.concepts.map(c => c.id));
+          const practice = unit.data.practice.map(x => ({ ...x, sectionId: ids.get(x.sectionId) ?? "", conceptIds: x.conceptIds.filter(id => known.has(id)) })).filter(x => x.sectionId && x.conceptIds.length);
+          partial.practice.push(...practice);
+          installPlan(state, partial);
+          const fresh = state.sections.filter(sec => practice.some(x => x.sectionId === sec.id)).flatMap(sec => sec.design?.objectives ?? [])
+            .filter(o => !earlyGoal.has(o.id));
+          const chosen = defaultChosen(state.input.purpose, fresh);
+          const picked = fresh.filter(o => chosen.includes(o.id));
+          for (const o of picked) earlyGoal.set(o.id, o.statement);
+          state.confirmedObjectiveIds = [...(state.confirmedObjectiveIds ?? []), ...picked.map(o => o.id)];
+          batchesFor(picked);
+          added = true;
+        }
+        if (added) {
+          if (!earlyWorkers.length) { streaming = true; earlyWorkers.push(earlyWorker(), earlyWorker()); }
+          notify();
+        }
+        void save().catch(() => {});
+      };
+    }
+    const discardEarly = async () => {
+      stopEarly = true; streaming = false; generation++; notify();
+      await Promise.allSettled(earlyWorkers);
+      earlyWorkers.length = 0; claimed.clear(); data.batches = []; earlyGoal.clear(); delete state.confirmedObjectiveIds;
+      stopEarly = false;
+    };
+    let result = await planned(1, user, onPartial);
+    streaming = false; notify();
+    if (failure) { await Promise.allSettled(earlyWorkers); throw failure; }
     // One retry with the reason (e.g. a chosen page no unit covers), then stop as before. Only this retry sends the PDF again.
-    if (result.problem) result = await planned(2, JSON.stringify({ context: planContext, previousMap: priorMap, previousProblem: result.problem }));
+    if (result.problem) {
+      if (earlyGoal.size) await discardEarly();
+      result = await planned(2, JSON.stringify({ context: planContext, previousMap: priorMap, previousProblem: result.problem }));
+    }
     if (result.problem) pause(result.problem);
     const plan = result.plan;
     if (result.dropped.length) data.warnings.push({ severity: "warning", code: "astra-plan-out-of-range", message: `선택 범위 밖이라 뺀 것 ${result.dropped.length}개: ${result.dropped.slice(0, 6).join(", ")}${result.dropped.length > 6 ? " …" : ""}` });
     if (state.input.purpose !== "read" && !plan.practice.length) pause("연습 계획이 비었습니다.");
-    data.plan = plan; data.batches = []; delete data.review; delete data.repair;
-    installPlan(state, plan); state.phase = "confirm"; await save();
+    data.plan = plan; delete data.review; delete data.repair;
+    installPlan(state, plan);
+    // Early work stands only if every early goal is the same objective in the checked plan.
+    const kept = earlyGoal.size > 0 && [...earlyGoal].every(([id, statement]) => byId(state, id)?.statement === statement);
+    if (earlyGoal.size && !kept) await discardEarly();
+    if (kept) {
+      state.confirmedObjectiveIds = defaultChosen(state.input.purpose, slots(state));
+      const batched = new Set(data.batches.flatMap(b => b.ids));
+      batchesFor(slots(state).filter(o => state.confirmedObjectiveIds!.includes(o.id) && !batched.has(o.id)));
+      state.phase = "author";
+    } else {
+      data.batches = [];
+      state.phase = "confirm";
+    }
+    openGate();
+    await save();
   }
   if (state.input.purpose === "read") { state.status = "done"; state.phase = "done"; state.current = undefined; state.message = "자료 지도를 만들었어요. 그냥 읽기이므로 출제하지 않았어요."; data.timing!.completedAt = new Date().toISOString(); await save(); return; }
   if (state.phase === "confirm") {
     if (!state.input.autoConfirm) { state.status = "awaiting-confirm"; state.current = undefined; state.message = `연습 ${slots(state).length}개를 확인해 주세요.`; await save(); return; }
     state.confirmedObjectiveIds = defaultChosen(state.input.purpose, slots(state)); state.phase = "author"; await save();
   }
-  const selected = slots(state).filter(o => state.confirmedObjectiveIds?.includes(o.id));
+  selected = slots(state).filter(o => state.confirmedObjectiveIds?.includes(o.id));
   const priorityPage = async () => {
     try { return await ctx.getPriorityPage?.(); }
     catch (error) { failure ??= error; return pause(error instanceof Error ? error.message : String(error)); }
@@ -282,88 +544,11 @@ export async function runAstra(ctx: Context) {
     }
   }
   await save();
-  const author = async (batch: Batch, attempt: number, reasons: unknown) => {
-    if (!batch.questions) {
-      const result = await ask("astra-author", attempt, AUTHOR + (v4 ? V4_AUTHOR : ""), JSON.stringify({ context, plan: data.plan, slots: batch.ids.map(id => byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: sourceOf(pagesOfIds(batch.ids)) }), questionsSchema, noFiles);
-      batch.questions = result.questions.filter(q => batch.ids.includes(q.objectiveId)).map(q => answerInPlace(q, data.warnings)).map(q => v4 ? valueAsShort(q) : q); await save();
-    }
-    if (!batch.solutions) {
-      // Explicit projection: no plan, objective recall, answer, explanation or evidence supports can leak here.
-      batch.solutions = await ask("astra-solve", attempt, SOLVE, JSON.stringify({ pages: context.pages, questions: batch.questions.map(student), source: sourceOf(pagesOfIds(batch.ids)) }), solveSchema, noFiles); await save();
-    }
-  };
-  // The reviewer gets the part of the plan these questions use (batch), or a compact plan (global): the whole plan with
-  // every concept's evidence was the largest input of a run (그래픽스03 9 reviews, 13.9만 of 40만 tokens).
-  const planFor = (questions: Candidate[], scope: "batch" | "global") => {
-    const plan = data.plan!;
-    if (!v4) return plan;
-    if (scope === "global") return { outline: plan.outline, concepts: plan.concepts.map(c => ({ id: c.id, outlineIds: c.outlineIds, title: c.title })), practice: plan.practice };
-    const practiceIds = new Set(questions.flatMap(q => q.practiceIds));
-    const practice = plan.practice.filter(p => practiceIds.has(p.id));
-    const conceptIds = new Set([...practice.flatMap(p => p.conceptIds), ...questions.flatMap(q => q.conceptIds)]);
-    return { outline: plan.outline.filter(s => practice.some(p => p.sectionId === s.id)), concepts: plan.concepts.filter(c => conceptIds.has(c.id)), practice };
-  };
-  const review = async (questions: Candidate[], solutions: Solutions, attempt: number, scope: "batch" | "global" = "global") => {
-    const code = questions.map(q => ({ objectiveId: q.objectiveId, problem: candidateProblem(q, state), ...(v4 ? { hints: candidateHints(q) } : {}) })).filter(i => i.problem || i.hints?.length);
-    const practiceIds = scope === "batch" ? questions.flatMap(q => q.practiceIds) : selected.flatMap(o => o.astra?.practiceIds ?? []);
-    const scopeRule = (scope === "batch" ? "\n같은 practice의 다른 슬롯은 뒤 묶음에 있을 수 있다. 이 묶음에 실제 있는 슬롯의 checkedSkill만 coverage 대상으로 삼고, 나머지 슬롯이 없다는 이유로 partial/missing 판정하지 마라." : "") + (state.input.remake ? "\n신고 문항 재생성이다. 선택된 목표만 검수하고, 나머지 계획이나 새 학습대상을 미출제 결함으로 취급하지 마라. missedContent는 빈 배열로 반환하라." : "");
-    return ask("astra-review", attempt, REVIEW + (v4 ? V4_REVIEW : "") + scopeRule + (scope === "batch" ? "\n이번에는 묶음 공개 전 검사다. 이 묶음의 문항과 근거만 검수하며, 아직 출제 중인 다른 묶음의 누락을 지적하지 않는다. missedContent는 빈 배열. 전체 범위·중복은 마지막 전역검수가 맡는다." : (v4 ? "\n이번에는 전체 출제 후 전역검수다. 이미 공개된 문항도 결함이 있으면 revise로 판정하라. 한 번 고쳐 쓰고, 고친 문항이 통과할 때만 바꾼다." : "\n이번에는 전체 출제 후 전역검수다. 이미공개 IDs는 자동수정하지 않으므로 결함을 명확히 기록한다.")), JSON.stringify({ context, scope, plan: planFor(questions, scope), publishedIds: data.publishedQuestions!.map(q => q.objectiveId), selectedPracticeIds: [...new Set(practiceIds)], candidates: questions, solutions, code,
-      source: sourceOf(scope === "batch" ? pagesOfIds(questions.map(q => q.objectiveId)) : state.input.pageNumbers) }), reviewSchema, noFiles);
-  };
-  const refusal = (objective: Objective, candidates: Candidate[], solutions: Solutions["items"], checked: Review) => {
-    const matches = candidates.filter(q => q.objectiveId === objective.id); const q = matches[0]; const v = verdict(checked, objective.id);
-    const solved = solutions.filter(s => s.objectiveId === objective.id);
-    const coverage = (objective.astra?.practiceIds ?? []).map(id => checked.coverage.filter(c => c.practiceId === id));
-    const badCoverage = coverage.some(entries => entries.length !== 1 || entries[0].questionIds.some(id => !candidates.some(candidate => candidate.objectiveId === id && candidate.practiceIds.includes(entries[0].practiceId))));
-    const problem = matches.length !== 1 ? "문항 응답 누락 또는 중복" : solved.length !== 1 ? "독립 풀이 누락 또는 중복" : badCoverage ? "범위 검수 누락·중복 또는 잘못된 문항 연결" : candidateProblem(q, state);
-    if (problem || v.status !== "ready") return problem ?? (v.reasons.join(" / ") || "원문/판정 불확실");
-    if (coverage.some(entries => entries[0].status !== "covered")) return "검수에서 이 묶음의 연습 범위가 충분히 확인되지 않았습니다.";
-    if ((solved[0].uncertain || solved[0].missingConditions.length || solved[0].exposedRelation) && !v.reasons.length) return "독립 풀이의 결함 경고를 검수가 해소하지 않았습니다.";
-    return null;
-  };
-  let publishing = Promise.resolve();
-  const publishReady = (candidates: Candidate[], solutions: Solutions["items"], checked: Review) => {
-    const next = publishing.then(async () => {
-      for (const q of candidates) {
-        const objective = byId(state, q.objectiveId);
-        if (!objective || data.publishedQuestions!.some(old => old.objectiveId === q.objectiveId) || refusal(objective, candidates, solutions, checked)) continue;
-        data.publishedQuestions!.push(structuredClone(q));
-        Object.assign(objective, finalObjective(q, objective));
-      }
-      // Persist publication decisions before materializing documents; restart can recreate the same immutable set.
-      await save();
-      for (const section of state.sections) {
-        const kept = (section.design?.objectives ?? []).flatMap(objective => {
-          const q = data.publishedQuestions!.find(candidate => candidate.objectiveId === objective.id);
-          return q ? [render(q, finalObjective(q, objective), section, state.input.fileName)] : [];
-        });
-        if (!kept.length) continue;
-        section.author = { documentPath: await ctx.publish(section, kept), questionCount: kept.length, dropped: [], warnings: section.author?.warnings ?? [] };
-        if (section.author.documentPath) data.timing!.firstPublishedAt ??= new Date().toISOString();
-      }
-      await save();
-    });
-    publishing = next.catch(error => { failure = error; });
-    return next;
-  };
-  const processBatch = async (batch: Batch) => {
-    try {
-      if (!batch.startedAt) { batch.startedAt = new Date().toISOString(); await save(); }
-      await author(batch, 1, null);
-      if (data.review) return; // Legacy or resumed global review already covers the saved batch; do not pay again.
-      if (!batch.review) { batch.review = await review(batch.questions!, batch.solutions!, 1, "batch"); await save(); }
-      await publishReady(batch.questions!, batch.solutions!.items, batch.review);
-      batch.publishedIds = batch.ids.filter(id => data.publishedQuestions!.some(q => q.objectiveId === id)); await save();
-    } catch (error) {
-      failure ??= error;
-      // Storage failures must also notify runner's shared abort, not only stop this worker's next call.
-      try { pause(failure instanceof Error ? failure.message : String(failure)); }
-      catch (stop) { failure = stop; throw stop; }
-    }
-  };
   // First usable questions are prioritized. Later workers only claim new work while no peer has failed.
-  await processBatch(data.batches[0]);
-  const claimed = new Set<Batch>([data.batches[0]]);
+  // v4 batches started during the plan keep going; the same workers take whatever is left.
+  const early = earlyWorkers.length > 0;
+  if (early) { streaming = false; earlyWorkers.push(earlyWorker(), earlyWorker()); }
+  else { claimed.add(data.batches[0]); await processBatch(data.batches[0]); }
   const worker = async () => {
     while (!failure && claimed.size < data.batches.length) {
       const preferred = await priorityPage();
@@ -376,7 +561,8 @@ export async function runAstra(ctx: Context) {
       await processBatch(next.batch);
     }
   };
-  const settled = await Promise.allSettled([worker(), worker()]);
+  const settled = await Promise.allSettled(early ? earlyWorkers : [worker(), worker()]);
+  await Promise.all(pendingPublish);
   await publishing;
   const rejected = settled.find((result): result is PromiseRejectedResult => result.status === "rejected");
   if (rejected) throw rejected.reason;
@@ -457,7 +643,13 @@ export async function runAstra(ctx: Context) {
 /** Demo fixture only; it demonstrates the pipeline, not model quality. */
 export function astraFakeReply(step: GenStep, user: string) {
   const input = JSON.parse(user);
-  if (step === "astra-plan") { const p = input.context.pages[0]; return JSON.stringify({ outline: [{ id: "s1", title: "연습용 관계", pages: input.context.pages }], concepts: [{ id: "c1", outlineIds: ["s1"], title: "상태 신호", essentials: ["청색은 대기, 녹색은 진행"], conditions: [], evidence: [{ page: p, kind: "text", quote: "청색은 대기, 녹색은 진행", supports: "상태와 색의 대응" }] }], practice: [{ id: "p1", sectionId: "s1", conceptIds: ["c1"], task: "상태 신호를 구별한다", cue: "대기 신호", recall: "청색", kind: "관계", priority: "essential", questionCount: 1 }], uncertain: [], pageNotes: [] }); }
+  if (step === "astra-plan") {
+    const p = input.context.pages[0];
+    const concepts = [{ id: "c1", outlineIds: ["s1"], title: "상태 신호", essentials: ["청색은 대기, 녹색은 진행"], conditions: [], evidence: [{ page: p, kind: "text", quote: "청색은 대기, 녹색은 진행", supports: "상태와 색의 대응" }] }];
+    const practice = [{ id: "p1", sectionId: "s1", conceptIds: ["c1"], task: "상태 신호를 구별한다", cue: "대기 신호", recall: "청색", kind: "관계", priority: "essential", questionCount: 1 }];
+    // Both plan shapes: astra reads concepts/practice, v4 reads units (outline first, then unit by unit).
+    return JSON.stringify({ outline: [{ id: "s1", title: "연습용 관계", pages: input.context.pages }], units: [{ sectionId: "s1", pageNotes: [], concepts, practice }], concepts, practice, uncertain: [], pageNotes: [] });
+  }
   if (step === "astra-author") return JSON.stringify({ questions: input.slots.map((o: Objective) => ({ objectiveId: o.id, practiceIds: o.astra!.practiceIds, conceptIds: o.astra!.conceptIds, checkedSkill: o.statement, requiredPoints: ["청색"], evidence: o.astra!.evidence, stem: [{ kind: "text", text: "대기 상태를 나타내는 색은 무엇인가?", latex: null, rows: null }], answer: { kind: "self-check", options: null, correctIndex: null, accepted: ["청색"], before: null, after: null, explanation: "청색은 대기 상태다." } })) });
   if (step === "astra-solve") return JSON.stringify({ items: input.questions.map((q: { objectiveId: string }) => ({ objectiveId: q.objectiveId, answer: "청색", missingConditions: [], exposedRelation: "", uncertain: false, evidence: [] })) });
   if (step === "astra-review") return JSON.stringify({ items: input.candidates.map((q: Candidate) => ({ objectiveId: q.objectiveId, status: "ready", reasons: [] })), coverage: input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: input.candidates.map((q: Candidate) => q.objectiveId), status: "covered", reason: "가짜 실행" })), missedContent: [] });

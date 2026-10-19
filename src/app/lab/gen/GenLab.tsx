@@ -143,7 +143,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         <label className="chip" title="전체 PDF → 학습 계획 → 묶음 출제 → 정답 없는 풀이 → 원문 검수"><input type="radio" name="engine" checked={engine === "astra"} onChange={() => setEngine("astra")} />astra (GPT 안, 실험)</label>
         <label className="chip" title="astra 구조 그대로 + 답 모양에 맞는 형식, 한 문항 한 과제, 슬롯 차별, 검수 입력 축소, 공개 후 지적 1회 수정"><input type="radio" name="engine" checked={engine === "v4"} onChange={() => setEngine("v4")} />v4 (Claude의 astra 조정안, 실험)</label>
       </fieldset>
-      {astraFamily(engine) && <p className="muted">{engine === "v4" ? "v4는 astra와 같은 단계(계획·출제·풀이·검수)를 쓰고 출제·검수 규칙만 다릅니다. " : ""}astra는 엔진 이름입니다. 기본 모델은 모든 단계 Sol·medium이며 아래에서 바꿀 수 있어요. 별도 출제기준 폴더 대신 astra 전용 지시문을 사용합니다.</p>}
+      {astraFamily(engine) && <p className="muted">{engine === "v4" ? "v4는 astra와 같은 단계(계획·출제·풀이·검수)를 쓰되, 계획을 단원별로 스트리밍해 목차·목표를 도중에 보이고 끝난 단원부터 바로 출제합니다(공개는 계획 검사 뒤). 목표는 짧은 한 문장으로 남깁니다. " : ""}astra는 엔진 이름입니다. 기본 모델은 모든 단계 Sol·medium이며 아래에서 바꿀 수 있어요. 별도 출제기준 폴더 대신 astra 전용 지시문을 사용합니다.</p>}
       <fieldset><legend>목적</legend>
         {(Object.keys(purposeLabel) as Purpose[]).map((key) => (
           <label key={key} className="chip"><input type="radio" name="purpose" checked={purpose === key} onChange={() => setPurpose(key)} />{purposeLabel[key]}</label>

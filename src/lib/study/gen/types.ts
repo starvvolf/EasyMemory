@@ -84,7 +84,7 @@ export type Objective = {
   qtype?: string;
   conceptIds?: string[];
   relationIds?: string[];
-  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: import("./astra.ts").AstraEvidence[] };
+  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: import("./astra.ts").AstraEvidence[]; keepGoal?: boolean };
 };
 
 /** Objectives checked by default at the confirmation: everything for 통암기, otherwise only core ones. */

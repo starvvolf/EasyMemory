@@ -80,6 +80,7 @@ for (const engine of ["astra", "v4"] as const) test(`${engine}: 첫 묶음 조�
         result.outline = [{ id: "s1", title: "앞 단원", pages: [1] }, { id: "s2", title: "읽는 단원", pages: [2] }];
         result.concepts.push({ ...result.concepts[0], id: "c2", outlineIds: ["s2"], evidence: [{ ...result.concepts[0].evidence[0], page: 2 }] });
         result.practice = Array.from({ length: 4 }, (_, i) => ({ ...result.practice[0], id: `p${i + 1}`, sectionId: i === 3 ? "s2" : "s1", conceptIds: [i === 3 ? "c2" : "c1"], questionCount: 3 }));
+        result.units = result.outline.map((sec: { id: string }) => ({ sectionId: sec.id, pageNotes: [], concepts: result.concepts.filter((c: { outlineIds: string[] }) => c.outlineIds[0] === sec.id), practice: result.practice.filter((x: { sectionId: string }) => x.sectionId === sec.id) }));
       }
       if (step === "astra-review") {
         result.coverage = input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: input.candidates.filter((q: { practiceIds: string[] }) => q.practiceIds.includes(id)).map((q: { objectiveId: string }) => q.objectiveId), status: "covered", reason: "fixture" }));
@@ -180,4 +181,61 @@ test("v4는 astra와 같은 단계를 쓰고 규칙만 더한다 (astra 지시�
     if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("v4 스트리밍: 목차·목표가 계획 도중에 보이고, 첫 단원 출제가 계획이 끝나기 전에 시작하며, 공개는 계획 검사 뒤", async () => {
+  const state: GenState = { id: "gen_" + "1".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2], purpose: "core", note: "", provider: "fake", engine: "v4", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+  const seen = { outlineDuringPlan: false, goalsDuringPlan: false, authorBeforePlanEnd: false, publishedBeforePlanEnd: false };
+  let planDone = false, authorStarted: () => void = () => {};
+  const authorSeen = new Promise<void>(resolve => { authorStarted = resolve; });
+  const documents = new Map<string, string>();
+  const ask: AstraAsk = async (step, _attempt, _system, user, parser, _files, onPartial) => {
+    const result = JSON.parse(astraFakeReply(step, user));
+    if (step === "astra-plan") {
+      const ev = (page: number) => [{ page, kind: "text", quote: "q", supports: "s" }];
+      result.outline = [{ id: "s1", title: "첫 단원", pages: [1] }, { id: "s2", title: "둘째 단원", pages: [2] }];
+      result.units = [1, 2].map(n => ({ sectionId: `s${n}`, pageNotes: [], concepts: [{ id: `c${n}`, outlineIds: [`s${n}`], title: `개념${n}`, essentials: ["e"], conditions: [], evidence: ev(n) }],
+        practice: [{ id: `p${n}`, sectionId: `s${n}`, conceptIds: [`c${n}`], task: `개념${n}을 구별할 수 있다`, cue: "c", recall: "청색", kind: "관계", priority: "essential", questionCount: 1 }] }));
+      const text = JSON.stringify({ result });
+      for (let at = 50; at < text.length + 50; at += 50) onPartial?.(text.slice(0, at));
+      seen.outlineDuringPlan = state.sections.length === 2;
+      seen.goalsDuringPlan = state.sections[0].design?.objectives[0]?.statement === "개념1을 구별할 수 있다";
+      await Promise.race([authorSeen, new Promise(resolve => setTimeout(resolve, 500))]);
+      seen.publishedBeforePlanEnd = documents.size > 0;
+      planDone = true;
+      return parser.parse(result);
+    }
+    if (step === "astra-author") { if (!planDone) seen.authorBeforePlanEnd = true; authorStarted(); }
+    return parser.parse(result);
+  };
+  await runAstra({ state, pdf: Buffer.from("%PDF-fixture"), ask, save: async () => {}, pause: (message: string): never => { throw new Error(message); },
+    publish: async (section: { id: string }, questions: unknown[]) => { documents.set(section.id, JSON.stringify(questions)); return `sections/${section.id}/document.json`; } });
+  assert.deepEqual(seen, { outlineDuringPlan: true, goalsDuringPlan: true, authorBeforePlanEnd: true, publishedBeforePlanEnd: false });
+  assert.equal(state.status, "done", state.message);
+  assert.deepEqual([...documents.keys()].sort(), ["s1", "s2"]);
+  // The learner-facing goal stays the planned one-verb sentence, not the question's checked skill.
+  assert.equal(state.sections[0].design!.objectives[0].statement, "개념1을 구별할 수 있다");
+});
+
+test("v4 스트리밍: 끝난 계획이 검사에 걸려 다시 요청되면 먼저 만든 문제는 버리고 공개하지 않는다", async () => {
+  const state: GenState = { id: "gen_" + "2".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2], purpose: "core", note: "", provider: "fake", engine: "v4", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+  const documents = new Map<string, string>();
+  const ask: AstraAsk = async (step, attempt, _system, user, parser, _files, onPartial) => {
+    const result = JSON.parse(astraFakeReply(step, user));
+    if (step === "astra-plan") {
+      // Attempt 1 leaves page 2 out of every unit (fails the plan check); attempt 2 covers both pages.
+      result.outline = [{ id: "s1", title: attempt === 1 ? "앞 계획" : "다시 짠 계획", pages: attempt === 1 ? [1] : [1, 2] }];
+      result.units[0].practice[0].task = attempt === 1 ? "버려질 목표" : "다시 짠 목표를 구별할 수 있다";
+      const text = JSON.stringify({ result });
+      for (let at = 50; at < text.length + 50; at += 50) onPartial?.(text.slice(0, at));
+      if (attempt === 1) await new Promise(resolve => setTimeout(resolve, 20));
+      return parser.parse(result);
+    }
+    return parser.parse(result);
+  };
+  await runAstra({ state, pdf: Buffer.from("%PDF-fixture"), ask, save: async () => {}, pause: (message: string): never => { throw new Error(message); },
+    publish: async (section: { id: string }, questions: unknown[]) => { documents.set(section.id, JSON.stringify(questions)); return `sections/${section.id}/document.json`; } });
+  assert.equal(state.status, "done", state.message);
+  assert.equal(state.sections[0].title, "다시 짠 계획");
+  assert.ok(!documents.get("s1")!.includes("버려질 목표"), "앞 계획으로 만든 문제는 공개하지 않는다");
 });
