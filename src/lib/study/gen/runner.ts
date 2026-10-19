@@ -11,7 +11,7 @@ import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normali
 import { genFakeReply } from "./fake.ts";
 import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, getAstraReadingView, responseSchemaFor, runAstra, RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
-import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
+import { needsImage, renderPageFigures, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
@@ -161,7 +161,7 @@ export const genInputSchema = z.strictObject({
   readImages: z.boolean().default(false),
   pastExamSourceIds: z.array(z.string().regex(/^src_[a-f0-9]{64}$/)).min(1).max(2).optional(),
   engine: z.enum(engines).default("v2"),
-  planInput: z.enum(["pdf", "pages"]).optional(),
+  planInput: z.enum(["pdf", "pages", "figures"]).optional(),
   cacheMode: z.enum(["shared"]).optional(),
   survey: z.strictObject({ exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
@@ -572,6 +572,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       const thinPages = input.pageNumbers.filter((page) => needsImage(pageTexts.get(page) ?? ""));
       await runAstra({ state, pdf, pageTexts, thinPages, save: () => { astraMarks(); return saveState(state); }, getPriorityPage: async () => (input.origin ?? "lab") === "study" ? astraPriorityPage(state) : undefined, pause: (message) => { throw failAstra(new Stop("paused-invalid", message)); },
         // v5: page images for figure-based goals (independent solve and review see the figure, not the whole PDF).
+        pageFigures: async (wanted: number[]) => renderPageFigures(pdf ?? new Uint8Array(), wanted),
         pageImages: async (wanted: number[]) => {
           try { return await (options.pageImages ?? registeredImages)(input, wanted); } catch { return new Map<number, string>(); }
         },

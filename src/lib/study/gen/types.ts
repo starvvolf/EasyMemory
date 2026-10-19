@@ -62,8 +62,8 @@ export type GenInput = {
   engine?: Engine;
   /** v5: survey answers (설문 mode). */
   survey?: GenSurvey;
-  /** v4/v5 plan input: the PDF file, or the chosen pages' text plus one image per page (v5 default). */
-  planInput?: "pdf" | "pages";
+  /** v4/v5 plan input: the PDF file, the chosen pages' text plus one image per page, or the text plus only the cropped picture regions (v5 default). */
+  planInput?: "pdf" | "pages" | "figures";
   /** v5 실험: every author/solve/review call starts with the same source block so the prompt cache can reuse it. */
   cacheMode?: "shared";
 };
