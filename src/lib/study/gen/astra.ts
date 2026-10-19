@@ -409,7 +409,8 @@ export async function runAstra(ctx: Context) {
   const slotOf = (id: string) => {
     const o = byId(state, id);
     if (!o) return o;
-    const { quotes: _q, itemNumbers: _i, materialNumbers: _m, importance: _p, ...slot } = o;
+    const slot: Partial<Objective> = { ...o };
+    delete slot.quotes; delete slot.itemNumbers; delete slot.materialNumbers; delete slot.importance;
     return slot;
   };
   const author = async (batch: Batch, attempt: number, reasons: unknown) => {
