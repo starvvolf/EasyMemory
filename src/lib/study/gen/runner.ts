@@ -474,7 +474,16 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       // The fake model has no stream; hand the reply over in pieces so streaming consumers behave as with a real one.
       if (request.fakeReply !== undefined && (extra.onPartial || cut)) for (let at = 200; at < request.fakeReply.length + 200 && !runaway; at += 200) guardText(request.fakeReply.slice(0, at));
       if (runaway) throw new Error("cut");
-      const reply = await callModel(request);
+      // One quiet retry for a dropped or unfinished reply (6.1-sol: an error event 2.5초 만에, no text, stopped the whole run).
+      let reply: Awaited<ReturnType<typeof callModel>>;
+      for (let retry = 0; ; retry++) {
+        try { reply = await callModel(request); break; }
+        catch (error) {
+          if (retry > 0 || runaway || request.signal?.aborted || !(error instanceof ModelError) || error.code !== "transient") throw error;
+          partial = "";
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
       await saveJson(callFile, record);
       return schema ? reply.data : reply.text;
