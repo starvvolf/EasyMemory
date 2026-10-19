@@ -392,10 +392,30 @@ export async function runAstra(ctx: Context) {
   const pagesOfIds = (ids: string[]) => state.sections.filter(sec => ids.some(id => byId(state, id)?.sectionId === sec.id)).flatMap(sec => sec.pages);
   const context = { pages: state.input.pageNumbers, purpose: state.input.purpose, note: state.input.note, ...(v5 && state.input.survey ? { survey: state.input.survey } : {}), signals: state.input.signals, previous: state.input.remake?.previous ?? {}, reportReasons: state.input.remake?.reasons ?? {}, vibe: state.pastExam?.card ?? null };
   let selected: Objective[] = [];
+  // v4/v5 author input (그래픽스03 v5: the whole plan was 37% of every author call's input and grew to 2.5만 자):
+  // full detail only for the slots' own practice, concepts and misconceptions; the rest of the plan as one line per task
+  // (enough to avoid repeats). pageNotes are left out because source already carries them for the pages used.
+  const authorPlan = (ids: string[]) => {
+    const plan = data.plan as PlanX;
+    const own = new Set(ids.flatMap(id => byId(state, id)?.astra?.practiceIds ?? []));
+    const practice = plan.practice.filter(p => own.has(p.id));
+    const conceptIds = new Set(practice.flatMap(p => p.conceptIds));
+    return { outline: plan.outline, ...(plan.diagnosis ? { diagnosis: plan.diagnosis } : {}), concepts: plan.concepts.filter(c => conceptIds.has(c.id)), practice,
+      otherTasks: plan.practice.filter(p => !own.has(p.id)).map(p => ({ id: p.id, sectionId: p.sectionId, task: p.task })),
+      ...(plan.misconceptions ? { misconceptions: plan.misconceptions.filter(m => m.conceptIds.some(id => conceptIds.has(id))) } : {}),
+      uncertain: plan.uncertain };
+  };
+  // quotes repeat astra.evidence; item/material numbers are bookkeeping for the old engines.
+  const slotOf = (id: string) => {
+    const o = byId(state, id);
+    if (!o) return o;
+    const { quotes: _q, itemNumbers: _i, materialNumbers: _m, importance: _p, ...slot } = o;
+    return slot;
+  };
   const author = async (batch: Batch, attempt: number, reasons: unknown) => {
     if (!batch.questions) {
       const system = AUTHOR + (v5 ? V5_AUTHOR + (attempt > 1 ? V5_REPAIR : "") : v4 ? V4_AUTHOR : "");
-      const user = (cut: boolean) => JSON.stringify({ context, plan: data.plan, slots: batch.ids.map(id => byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: sourceOf(pagesOfIds(batch.ids)),
+      const user = (cut: boolean) => JSON.stringify({ context, plan: v4 ? authorPlan(batch.ids) : data.plan, slots: batch.ids.map(id => v4 ? slotOf(id) : byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: sourceOf(pagesOfIds(batch.ids)),
         ...(cut ? { lengthWarning: "앞 응답이 예상 길이를 크게 넘어 끊겼다. 슬롯마다 문항 하나, 짧은 문장, 목록은 꼭 필요한 만큼만 쓰고 같은 내용을 되풀이하지 마라." } : {}) });
       const schema = (v5 ? v5QuestionsSchema : questionsSchema) as typeof questionsSchema;
       let result: z.infer<typeof questionsSchema>;
@@ -743,7 +763,10 @@ export async function runAstra(ctx: Context) {
     await save();
   }
   if (data.repair) {
-    await author(data.repair, 2, { items: data.review.items, coverage: data.review.coverage, missedContent: data.review.missedContent, previous: initial.filter(q => data.repair!.ids.includes(q.objectiveId)) });
+    const ids = data.repair.ids, practiceIds = new Set(ids.flatMap(id => byId(state, id)?.astra?.practiceIds ?? []));
+    // v4/v5: only the review lines about the goals being rewritten (all of them were 2만 자 of the repair call).
+    await author(data.repair, 2, { items: v4 ? data.review.items.filter(i => ids.includes(i.objectiveId)) : data.review.items, coverage: v4 ? data.review.coverage.filter(c => practiceIds.has(c.practiceId)) : data.review.coverage,
+      missedContent: data.review.missedContent, previous: initial.filter(q => ids.includes(q.objectiveId)) });
     if (!data.repair.review) { data.repair.review = await review([...initial.filter(q => !data.repair!.ids.includes(q.objectiveId)), ...(data.repair.questions ?? [])], { items: [...data.batches.flatMap(b => b.solutions?.items ?? []).filter(s => !data.repair!.ids.includes(s.objectiveId)), ...(data.repair.solutions?.items ?? [])] }, 2); await save(); }
   }
   const finalReview = data.repair?.review ?? data.review;
