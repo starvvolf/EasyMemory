@@ -20,7 +20,14 @@ const planSchema = z.object({
   pageNotes: z.array(z.object({ page, text })),
 });
 type Plan = z.infer<typeof planSchema>;
-const questionSchema = authoredQuestion.extend({ practiceIds: z.array(text).min(1), conceptIds: z.array(text).min(1), checkedSkill: text, requiredPoints: z.array(text).min(1), evidence: z.array(evidenceSchema).min(1) });
+const questionSchema = authoredQuestion.extend({
+  answer: authoredQuestion.shape.answer.extend({
+    options: authoredQuestion.shape.answer.shape.options.unwrap().max(4).nullable(),
+    accepted: authoredQuestion.shape.answer.shape.accepted.unwrap().max(8).nullable(),
+  }),
+  practiceIds: z.array(text).min(1), conceptIds: z.array(text).min(1), checkedSkill: text,
+  requiredPoints: z.array(text).min(1), evidence: z.array(evidenceSchema).min(1).max(3),
+});
 const questionsSchema = z.object({ questions: z.array(questionSchema) });
 type Candidate = z.infer<typeof questionSchema>;
 const solveSchema = z.object({ items: z.array(z.object({ objectiveId: text, answer: text, missingConditions: z.array(text), exposedRelation: z.string(), uncertain: z.boolean(), evidence: z.array(evidenceSchema) })) });
@@ -324,7 +331,7 @@ export async function runAstrav3(ctx: Context) {
   await save();
   const author = async (batch: Batch, attempt: number, reasons: unknown) => {
     if (!batch.questions) {
-      const result = await ask("astra-author", attempt, AUTHOR, JSON.stringify({ context, plan: data.plan, slots: batch.ids.map(id => byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: sourceOf(pagesOfIds(batch.ids)) }), questionsSchema, noFiles);
+      const result = await ask("astra-author", attempt, AUTHOR, JSON.stringify({ context, plan: data.plan, slots: batch.ids.map(id => byId(state, id)), alreadyAsked: data.batches.flatMap(b => b.questions ?? []).filter(q => !batch.ids.includes(q.objectiveId)).map(q => ({ id: q.objectiveId, checkedSkill: q.checkedSkill })), revision: reasons, source: sourceOf(pagesOfIds(batch.ids)) }), questionsSchema.extend({ questions: z.array(questionSchema).length(batch.ids.length) }), noFiles);
       batch.questions = result.questions.filter(q => batch.ids.includes(q.objectiveId)).map(q => answerInPlace(q, data.warnings)); await save();
     }
     if (!batch.solutions) {

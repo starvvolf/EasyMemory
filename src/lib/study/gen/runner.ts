@@ -399,14 +399,6 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     const request: ModelRequest = { ...(input.engine === "astrav3" ? { singleAttempt: true } : {}), ...(extra.onTextDelta ? { onTextDelta: extra.onTextDelta } : {}), purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
       model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}),
       ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}) };
-    if (input.engine === "astrav3" && step === "astra-author") {
-      let outputChars = 0;
-      request.onTextDelta = delta => {
-        outputChars += delta.length;
-        // Transport safety, not a question-length or splitting rule. Preserve the partial reply on failure.
-        if (outputChars > 100_000) throw new ModelError("invalid_output", `출제 응답이 안전 상한 100,000자를 넘었습니다(${outputChars}자). 완료 문항으로 채택하지 않고 중단합니다.`);
-      };
-    }
     if (astraAbort) {
       request.signal = astraAbort.signal;
       request.onProgress = receivedChars => {
@@ -422,18 +414,49 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         }, 1000);
       };
     }
+    // Save actual partial text while receiving, so even a process stop leaves useful evidence.
+    // Serialize checkpoints before the terminal record; a late checkpoint must never replace a completed call.
+    let partialText = "", checkpointAt = 0;
+    let checkpointError: unknown;
+    let checkpoints: Promise<void> = Promise.resolve();
+    if (input.engine === "astrav3") {
+      const localAbort = new AbortController();
+      request.signal = request.signal ? AbortSignal.any([request.signal, localAbort.signal]) : localAbort.signal;
+      const consumeDelta = request.onTextDelta;
+      const questionCount = step === "astra-author" ? (JSON.parse(user) as { slots: unknown[] }).slots.length : 0;
+      const charLimit = questionCount * 2_500 * 3;
+      request.onTextDelta = delta => {
+        partialText += delta;
+        const now = Date.now();
+        if (now - checkpointAt >= 1000) {
+          checkpointAt = now;
+          const snapshot = { ...record, partial: true, reply: redactCallText(partialText), ms: now - started };
+          checkpoints = checkpoints.then(() => saveJson(callFile, snapshot)).catch(error => { checkpointError = error; });
+        }
+        if (checkpointError) throw checkpointError;
+        if (questionCount && partialText.length > charLimit) {
+          localAbort.abort();
+          throw new ModelError("invalid_output", `출제 응답이 ${questionCount}문항의 안전 상한 ${charLimit.toLocaleString("en-US")}자를 넘었습니다(${partialText.length}자). 받은 글은 호출 기록에 보존하고 중단합니다.`);
+        }
+        consumeDelta?.(delta);
+      };
+    }
     try {
       if (astraFailure) throw astraFailure;
+      if (input.engine === "astrav3") await saveJson(callFile, { ...record, partial: true });
       if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("astra-") ? (input.engine === "astrav3" ? astrav3.astraFakeReply : input.engine === "astrav2" ? astrav2.astraFakeReply : astraFakeReply)(s, u) : genFakeReply(s, u)))(step, user, attempt);
       if (extra.cachePrefix && request.fakeReply !== undefined) request.fakeReply = JSON.stringify({ result: JSON.parse(request.fakeReply) });
       if (input.provider === "fake" && request.onTextDelta && request.fakeReply) { for (let offset = 0; offset < request.fakeReply.length; offset += 41) { request.onTextDelta(request.fakeReply.slice(offset, offset + 41)); await new Promise(resolve => setImmediate(resolve)); } }
       const reply = await callModel(request);
+      await checkpoints;
+      if (checkpointError) throw checkpointError;
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
       await saveJson(callFile, record);
       return schema ? reply.data : reply.text;
     } catch (error) {
       if (astraAbort) failAstra(error);
-      const raw = (error as { rawText?: string }).rawText;
+      await checkpoints;
+      const raw = (error as { rawText?: string }).rawText ?? (partialText || undefined);
       Object.assign(record, { reply: raw === undefined ? null : redactCallText(raw), error: redactCallText(error instanceof Error ? error.message : String(error)), ms: Date.now() - started });
       await saveJson(callFile, record);
       if (astraFailure) throw astraFailure;

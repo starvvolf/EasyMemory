@@ -137,7 +137,10 @@ export async function readResponseStream(body: ReadableStream<Uint8Array>, onPro
     if (!completed) throw new ModelError("transient", "ChatGPT 응답이 끝까지 완료되지 않았어요.");
     if (!text.trim()) throw new ModelError("invalid_output", "ChatGPT가 빈 응답을 보냈어요.");
   } catch (error) {
-    if (onTextDelta && error instanceof Error) Object.assign(error, { rawText: text });
+    if (onTextDelta) {
+      if (error instanceof Error) Object.assign(error, { rawText: text });
+      await reader.cancel(error).catch(() => {});
+    }
     throw error;
   } finally { reader.releaseLock(); }
   return { text, usage, model };

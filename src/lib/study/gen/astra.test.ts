@@ -181,7 +181,20 @@ test("Astrav3: 실제 델타 단원 경계, 조기 공개, 불완전·중복 중
       ask: (async (step, _attempt, _system, user, parser, files) => {
         assert.equal(files.length, 0);
         const input = JSON.parse(user), result = JSON.parse(astrav3.astraFakeReply(step, user));
-        if (step === "astra-author") for (const q of result.questions) q.answer = { kind: "choice", options: [{ text: "O", latex: null }, { text: "X", latex: null }], correctIndex: 0, accepted: null, before: null, after: null, explanation: "원문과 같다." };
+        if (step === "astra-author") {
+          for (const q of result.questions) q.answer = { kind: "choice", options: [{ text: "O", latex: null }, { text: "X", latex: null }], correctIndex: 0, accepted: null, before: null, after: null, explanation: "원문과 같다." };
+          // Bound list growth as a safeguard against the observed author runaway; its root cause is unconfirmed.
+          const excess = structuredClone(result);
+          excess.questions.push(structuredClone(excess.questions[0]));
+          assert.equal(parser.safeParse(excess).success, false);
+          for (const field of ["options", "accepted", "evidence"] as const) {
+            const repeated = structuredClone(result), q = repeated.questions[0];
+            if (field === "options") q.answer.options = Array(5).fill({ text: "O", latex: null });
+            else if (field === "accepted") q.answer.accepted = Array(9).fill("답");
+            else q.evidence = Array(4).fill(q.evidence[0]);
+            assert.equal(parser.safeParse(repeated).success, false, field);
+          }
+        }
         if (step === "astra-review") result.coverage = input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: input.candidates.filter((q: { practiceIds: string[] }) => q.practiceIds.includes(id)).map((q: { objectiveId: string }) => q.objectiveId), status: "covered", reason: "fixture" }));
         return parser.parse(result);
       }) as AstraAsk,
@@ -207,5 +220,18 @@ test("Astrav3: 실제 델타 단원 경계, 조기 공개, 불완전·중복 중
     const rerun = await runGen(fork.id, { uid: "fixture" });
     assert.equal(rerun.status, "done", rerun.message);
     assert.equal((await readGenCalls(fork.id)).filter(c => c.withPdf).length, 0);
+    const oversized = await createGen({ sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1], purpose: "core", engine: "astrav3", provider: "fake", autoConfirm: true, maxCalls: 15 });
+    const stopped = await runGen(oversized.id, { uid: "fixture" }, { fakeReply: (step, user) => {
+      const result = JSON.parse(astrav3.astraFakeReply(step, user));
+      if (step === "astra-author") result.questions[0].answer.explanation = "x".repeat(7501);
+      return JSON.stringify(result);
+    } });
+    assert.equal(stopped.status, "paused-invalid", stopped.message);
+    const oversizedCalls = await readGenCalls(oversized.id);
+    const failedAuthor = oversizedCalls.find(call => call.step === "astra-author");
+    assert.equal(failedAuthor?.ok, false);
+    assert.ok((failedAuthor?.reply?.length ?? 0) > 7500, "상한을 넘긴 부분 응답을 진단용 호출 기록에 보존한다");
+    assert.equal(oversizedCalls.filter(call => call.withPdf).length, 1);
+    assert.equal(oversizedCalls.filter(call => call.step === "astra-author").length, 1, "상한 초과 후 자동 재출제하지 않는다");
   } finally { if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior; await rm(dir, { recursive: true, force: true }); }
 });
