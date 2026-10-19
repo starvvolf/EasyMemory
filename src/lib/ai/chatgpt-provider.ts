@@ -74,13 +74,13 @@ const formatState = globalThis as typeof globalThis & { __studyForgeSchemaRefuse
 export function resetSchemaSupport() { formatState.__studyForgeSchemaRefused = undefined; }
 
 /** Sends with the JSON Schema first; on a format refusal, remembers it and sends once more in JSON mode. */
-export async function sendWithFallback(send: (format: "schema" | "fallback") => Promise<Response>, hasSchema: boolean) {
+export async function sendWithFallback(send: (format: "schema" | "fallback") => Promise<Response>, hasSchema: boolean, singleAttempt = false) {
   let format: "schema" | "fallback" = hasSchema && !formatState.__studyForgeSchemaRefused ? "schema" : "fallback";
   let response = await send(format);
   if (!response.ok) {
     let body: ApiError = {};
     try { body = await response.json() as ApiError; } catch { /* Some admission failures have no JSON error body. */ }
-    if (format !== "schema" || !isFormatRejection(response.status, body)) throw responseFailure(response.status, body);
+      if (singleAttempt || format !== "schema" || !isFormatRejection(response.status, body)) throw responseFailure(response.status, body);
     formatState.__studyForgeSchemaRefused = true;
     format = "fallback";
     response = await send(format);
@@ -93,7 +93,7 @@ export async function sendWithFallback(send: (format: "schema" | "fallback") => 
   return { response, format };
 }
 
-export async function readResponseStream(body: ReadableStream<Uint8Array>, onProgress?: ModelRequest["onProgress"]): Promise<{ text: string; usage?: ModelResult["usage"]; model?: string }> {
+export async function readResponseStream(body: ReadableStream<Uint8Array>, onProgress?: ModelRequest["onProgress"], onTextDelta?: ModelRequest["onTextDelta"]): Promise<{ text: string; usage?: ModelResult["usage"]; model?: string }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "", text = "", completed = false;
@@ -107,6 +107,7 @@ export async function readResponseStream(body: ReadableStream<Uint8Array>, onPro
     if (value.type === "response.output_text.delta") {
       text += value.delta ?? "";
       if (value.delta) onProgress?.(text.length);
+      if (value.delta) onTextDelta?.(value.delta);
     }
     if (value.type === "response.failed") throw responseFailure(0, { error: value.response?.error });
     if (value.type === "response.incomplete" || value.type === "error") throw new ModelError("transient", "ChatGPT 응답이 완료되지 않았어요.");
@@ -133,9 +134,12 @@ export async function readResponseStream(body: ReadableStream<Uint8Array>, onPro
       }
     }
     if (buffer.trim()) event(buffer);
+    if (!completed) throw new ModelError("transient", "ChatGPT 응답이 끝까지 완료되지 않았어요.");
+    if (!text.trim()) throw new ModelError("invalid_output", "ChatGPT가 빈 응답을 보냈어요.");
+  } catch (error) {
+    if (onTextDelta && error instanceof Error) Object.assign(error, { rawText: text });
+    throw error;
   } finally { reader.releaseLock(); }
-  if (!completed) throw new ModelError("transient", "ChatGPT 응답이 끝까지 완료되지 않았어요.");
-  if (!text.trim()) throw new ModelError("invalid_output", "ChatGPT가 빈 응답을 보냈어요.");
   return { text, usage, model };
 }
 
@@ -160,9 +164,9 @@ export const chatgptBackend: ModelBackend = {
           body: JSON.stringify(responseRequest(request, format)), signal: request.signal });
       } catch { throw new ModelError("transient", "ChatGPT 모델 서버에 연결하지 못했어요."); }
     };
-    const { response, format } = await sendWithFallback(send, Boolean(request.schema));
+    const { response, format } = await sendWithFallback(send, Boolean(request.schema), request.singleAttempt);
     if (!response.body) throw new ModelError("transient", "ChatGPT 응답 스트림이 비어 있어요.");
-    const completed = await readResponseStream(response.body, request.onProgress);
+    const completed = await readResponseStream(response.body, request.onProgress, request.onTextDelta);
     const used = !request.schema && !request.json ? "text" as const : format === "schema" ? "json_schema" as const : "json_object" as const;
     return { text: completed.text, model: completed.model ?? request.model ?? "chatgpt", usage: completed.usage, format: used };
   },

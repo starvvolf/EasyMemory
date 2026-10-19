@@ -27,6 +27,10 @@ export type ModelRequest = {
   cachePrefix?: string;
   /** Streaming progress only, never partial model content. */
   onProgress?: (receivedChars: number) => void;
+  /** Opt-in actual text deltas. Consumers must validate completed records before using them. */
+  onTextDelta?: (delta: string) => void;
+  /** No automatic HTTP format fallback (one-shot whole-PDF reading). */
+  singleAttempt?: boolean;
 };
 
 export type ModelResult = {

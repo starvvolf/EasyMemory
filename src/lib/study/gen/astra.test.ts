@@ -5,8 +5,9 @@ import path from "node:path";
 import test from "node:test";
 import { astraFakeReply, getAstraReadingView, runAstra, type AstraAsk } from "./astra.ts";
 import * as astrav2 from "./astrav2.ts";
-import { responseRequest } from "../../ai/chatgpt-provider.ts";
-import { confirmObjectives, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
+import * as astrav3 from "./astrav3.ts";
+import { responseRequest, sendWithFallback } from "../../ai/chatgpt-provider.ts";
+import { confirmObjectives, createGen, forkGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import type { GenState, GenStep } from "./types.ts";
 
 // Public invented fixture, not the private graphics question. This checks fail-closed orchestration,
@@ -147,4 +148,64 @@ test("astra: 첫 묶음 조기 공개, 병렬 중단·재개, 후발 결함은 �
   assert.deepEqual(view.currentSectionIds, ["s2"]);
   assert.equal(view.outline[1].generationStatus, "ready");
   assert.ok(state.astra!.timing?.firstPublishedAt && state.astra!.timing.completedAt);
+});
+
+test("Astrav3: 실제 델타 단원 경계, 조기 공개, 불완전·중복 중단과 PDF 재전송 금지", async () => {
+  // Deterministic transport/orchestration only, not evidence of model reading or question quality.
+  let http = 0;
+  await assert.rejects(sendWithFallback(async () => { http++; return new Response(JSON.stringify({ error: { message: "text.format json_schema rejected" } }), { status: 400 }); }, true, true));
+  assert.equal(http, 1);
+  for (const mode of ["complete", "truncated", "duplicate"] as const) {
+    const state: GenState = { id: "gen_" + "1".repeat(32), createdAt: "fixture", updatedAt: "fixture", input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2], purpose: "core", note: "", provider: "fake", engine: "astrav3", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+    let reads = 0, readingFinished = false, published = false;
+    let unblock: () => void = () => {};
+    const firstPublication = new Promise<void>(resolve => { unblock = resolve; });
+    const context = { state, pdf: Buffer.from("%PDF-fixture"), pageTexts: new Map([[1, "청색은 대기, 녹색은 진행"], [2, "청색은 대기, 녹색은 진행"]]), save: async () => {}, pause: (message: string): never => { throw new Error(message); },
+      publish: async () => { if (!published) assert.equal(readingFinished, false, "PDF 응답 완료 전에 첫 단원이 공개된다"); published = true; unblock(); return "fixture-document"; },
+      read: async (_system: string, user: string, _schema: Record<string, unknown>, files: unknown[], delta: (text: string) => void) => {
+        reads++; assert.equal(files.length, 1);
+        const result = JSON.parse(astrav3.astraFakeReply("astra-plan", user));
+        result.records[0].outline = [{ id: "s1", title: '앞 {단원} "인용"', pages: [1] }, { id: "s2", title: "뒤 단원", pages: [2] }];
+        const a = result.records[1];
+        const b = structuredClone(a); b.section.sectionId = "s2";
+        b.section.concepts[0].id = "c2"; b.section.concepts[0].outlineIds = ["s2"]; b.section.concepts[0].evidence[0].page = 2;
+        b.section.practice[0].id = "p2"; b.section.practice[0].sectionId = "s2"; b.section.practice[0].conceptIds = ["c2"];
+        const prefix = '{"result":{"records":[' + JSON.stringify(result.records[0]) + ',' + JSON.stringify(a);
+        for (const character of prefix) delta(character);
+        await Promise.race([firstPublication, new Promise((_, reject) => setTimeout(() => reject(new Error("first publication timeout")), 1500))]);
+        if (mode === "truncated") throw new Error("stream incomplete");
+        result.records.push(mode === "duplicate" ? a : b);
+        delta(',' + JSON.stringify(result.records[2]) + ']}}'); readingFinished = true;
+        return { result };
+      },
+      ask: (async (step, _attempt, _system, user, parser, files) => {
+        assert.equal(files.length, 0);
+        const input = JSON.parse(user), result = JSON.parse(astrav3.astraFakeReply(step, user));
+        if (step === "astra-author") for (const q of result.questions) q.answer = { kind: "choice", options: [{ text: "O", latex: null }, { text: "X", latex: null }], correctIndex: 0, accepted: null, before: null, after: null, explanation: "원문과 같다." };
+        if (step === "astra-review") result.coverage = input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: input.candidates.filter((q: { practiceIds: string[] }) => q.practiceIds.includes(id)).map((q: { objectiveId: string }) => q.objectiveId), status: "covered", reason: "fixture" }));
+        return parser.parse(result);
+      }) as AstraAsk,
+    };
+    if (mode === "complete") { await astrav3.runAstrav3(context); assert.equal(state.status, "done"); assert.equal(state.sections.reduce((n, s) => n + (s.author?.questionCount ?? 0), 0), 2); }
+    else {
+      await assert.rejects(astrav3.runAstrav3(context), /incomplete|중복/);
+      assert.notEqual(state.status, "done");
+      await assert.rejects(astrav3.runAstrav3(context), /자동 재전송하지/);
+    }
+    assert.equal(reads, 1);
+  }
+  const dir = await mkdtemp(path.join(os.tmpdir(), "astrav3-flow-")), prior = process.env.STUDY_FORGE_DATA_DIR;
+  process.env.STUDY_FORGE_DATA_DIR = dir;
+  try {
+    const start = await createGen({ sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1], purpose: "core", engine: "astrav3", provider: "fake", autoConfirm: true, maxCalls: 15 });
+    const done = await runGen(start.id, { uid: "fixture" });
+    assert.equal(done.status, "done", done.message);
+    const calls = await readGenCalls(start.id);
+    assert.equal(calls.filter(c => c.withPdf).length, 1);
+    assert.ok(calls.every(c => c.model === "gpt-6.1-sol" && c.effort === "medium"));
+    const fork = await forkGen(start.id, { from: "author" });
+    const rerun = await runGen(fork.id, { uid: "fixture" });
+    assert.equal(rerun.status, "done", rerun.message);
+    assert.equal((await readGenCalls(fork.id)).filter(c => c.withPdf).length, 0);
+  } finally { if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior; await rm(dir, { recursive: true, force: true }); }
 });

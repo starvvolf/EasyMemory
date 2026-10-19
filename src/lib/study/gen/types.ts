@@ -12,7 +12,7 @@ export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
   read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra)", "astra-author": "묶음 출제(astra)", "astra-solve": "정답 없는 풀이(astra)", "astra-review": "전역 검수(astra)" };
 
-export const engines = ["v2", "v3", "astra", "astrav2"] as const;
+export const engines = ["v2", "v3", "astra", "astrav2", "astrav3"] as const;
 export type Engine = (typeof engines)[number];
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
@@ -37,6 +37,8 @@ export type GenInput = {
   note: string;
   /** Lab runs may skip the one confirmation and author every objective. */
   autoConfirm: boolean;
+  /** Optional total logical request limit. Astrav3 also forbids HTTP format retries. */
+  maxCalls?: number;
   provider: "chatgpt" | "codex" | "fake";
   models: Partial<Record<GenStep, ModelChoice>>;
   /** Reserved slot: weak spots from the notes and reported problems. Empty until notes step 2. */

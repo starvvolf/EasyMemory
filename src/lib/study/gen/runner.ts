@@ -10,6 +10,7 @@ import { redactCallText } from "../lab-contract.ts";
 import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normalizeOutline, sectionPageTexts } from "./checks.ts";
 import { genFakeReply } from "./fake.ts";
 import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, astraResponseSchema, getAstraReadingView, runAstra } from "./astra.ts";
+import * as astrav3 from "./astrav3.ts";
 import * as astrav2 from "./astrav2.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { needsImage, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
@@ -82,7 +83,7 @@ export async function loadGen(id: string): Promise<GenState | null> {
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
 function readingPage(state: Pick<GenState, "input">, page: number) {
-  if ((state.input.engine !== "astra" && state.input.engine !== "astrav2")) throw new GenError(400, "읽는 쪽 우선 출제는 astra 실험에서만 사용할 수 있습니다.");
+  if ((state.input.engine !== "astra" && state.input.engine !== "astrav2" && state.input.engine !== "astrav3")) throw new GenError(400, "읽는 쪽 우선 출제는 astra 실험에서만 사용할 수 있습니다.");
   if (!Number.isInteger(page) || !state.input.pageNumbers.includes(page)) throw new GenError(400, "선택한 자료 범위 안의 쪽을 지정해 주세요.");
   return page;
 }
@@ -105,7 +106,7 @@ export async function astraReadingView(id: string, page?: number) {
   const state = await loadGen(id);
   if (!state) throw new GenError(404, "생성을 찾을 수 없습니다.");
   const selected = readingPage(state, page ?? await astraPriorityPage(state));
-  return (state.input.engine === "astrav2" ? astrav2.getAstraReadingView : getAstraReadingView)(state, selected);
+  return ((state.input.engine === "astrav2" || state.input.engine === "astrav3") ? astrav2.getAstraReadingView : getAstraReadingView)(state, selected);
 }
 export async function readGenCalls(id: string): Promise<GenCall[]> {
   let files: string[];
@@ -132,6 +133,7 @@ export const genInputSchema = z.strictObject({
   sourceId: z.string().trim().min(1).max(200),
   fileName: z.string().trim().min(1).max(255),
   pageNumbers: z.array(z.number().int().positive().max(500)).min(1).max(500),
+  maxCalls: z.number().int().positive().max(1000).optional(),
   priorityPage: z.number().int().positive().max(500).optional(),
   purpose: z.enum(purposes),
   note: z.string().max(2000).default(""),
@@ -190,15 +192,16 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
   const options = forkInputSchema.parse(raw);
   const base = await loadGen(baseId);
   if (!base) throw new GenError(404, "기준 실행을 찾을 수 없습니다.");
-  if ((options.purpose !== undefined || options.note !== undefined) && ((base.input.engine !== "astra" && base.input.engine !== "astrav2") || options.from !== "design")) throw new GenError(400, "목적·메모 변경은 astra의 계획부터 다시 만들기에서만 가능합니다.");
-  if (options.reasons !== undefined && ((base.input.engine !== "astra" && base.input.engine !== "astrav2") || options.from !== "author" || !options.objectiveIds)) throw new GenError(400, "신고 사유는 astra에서 목표를 골라 출제만 다시 만들 때 전달해 주세요.");
-  if (base.input.purpose === "read" && !((base.input.engine === "astra" || base.input.engine === "astrav2") && options.from === "design" && base.astra?.plan)) throw new GenError(400, "그냥 읽기 실행은 다시 돌릴 설계·출제가 없습니다.");
+  if ((options.purpose !== undefined || options.note !== undefined) && ((base.input.engine !== "astra" && base.input.engine !== "astrav2" && base.input.engine !== "astrav3") || options.from !== "design")) throw new GenError(400, "목적·메모 변경은 astra의 계획부터 다시 만들기에서만 가능합니다.");
+  if (options.reasons !== undefined && ((base.input.engine !== "astra" && base.input.engine !== "astrav2" && base.input.engine !== "astrav3") || options.from !== "author" || !options.objectiveIds)) throw new GenError(400, "신고 사유는 astra에서 목표를 골라 출제만 다시 만들 때 전달해 주세요.");
+  if (base.input.purpose === "read" && !((base.input.engine === "astra" || (base.input.engine === "astrav2" || base.input.engine === "astrav3")) && options.from === "design" && base.astra?.plan)) throw new GenError(400, "그냥 읽기 실행은 다시 돌릴 설계·출제가 없습니다.");
+  if (base.input.engine === "astrav3" && options.from === "design") throw new GenError(400, "Astrav3는 현재 같은 목표로 출제만 다시 만들 수 있습니다. 새 설계는 새 실행으로 시작해 주세요.");
   const sections = structuredClone(base.sections);
   if (!sections.length || sections.some((section) => !section.classify)) throw new GenError(409, "기준 실행의 내용 분류가 끝나지 않았습니다.");
   if (options.from === "author" && sections.some((section) => !section.design)) throw new GenError(409, "기준 실행의 학습 설계가 끝나지 않았습니다.");
   const input: GenInput = { ...structuredClone(base.input), autoConfirm: options.autoConfirm,
     models: { ...base.input.models, ...options.models }, guideDir: options.guideDir ?? base.input.guideDir ?? DEFAULT_GUIDE_DIR };
-  if ((base.input.engine === "astra" || base.input.engine === "astrav2")) {
+  if ((base.input.engine === "astra" || (base.input.engine === "astrav2" || base.input.engine === "astrav3"))) {
     delete input.remake;
     if (options.purpose !== undefined) input.purpose = options.purpose;
     if (options.note !== undefined) input.note = options.note;
@@ -231,7 +234,12 @@ export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
       input.remake = { genId: base.id, previous, ...(options.reasons ? { reasons: options.reasons } : {}) };
     }
   } else if (options.objectiveIds) throw new GenError(400, "목표를 골라 다시 만드는 것은 '출제만 다시'에서만 됩니다.");
-  if ((base.input.engine === "astra" || base.input.engine === "astrav2") && base.astra) state.astra = { version: 1, pdfHash: base.astra.pdfHash, plan: structuredClone(base.astra.plan), batches: [], warnings: [] };
+  if ((base.input.engine === "astra" || (base.input.engine === "astrav2" || base.input.engine === "astrav3")) && base.astra) state.astra = { version: 1, pdfHash: base.astra.pdfHash, plan: structuredClone(base.astra.plan), batches: [], warnings: [] };
+  if (base.input.engine === "astrav3" && state.astra) {
+    const previous = base.astra as astrav3.AstraState;
+    if (previous.readingStatus !== "completed") throw new GenError(409, "전체 읽기가 끝난 실행만 출제 재실행할 수 있습니다.");
+    Object.assign(state.astra, { readingStatus: "completed", pdfAttempted: true, receivedSectionIds: [...(previous.receivedSectionIds ?? [])] });
+  }
   await saveState(state);
   // Page readings belong to the copied steps: carry them over so the rerun sees the same source text.
   if (base.images?.done.length) await cp(path.join(dirOf(base.id), "pages"), path.join(dirOf(state.id), "pages"), { recursive: true }).catch(() => undefined);
@@ -340,7 +348,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const state: GenState = stored;
   if (state.status === "done" || state.status === "failed" || state.status === "awaiting-confirm") return state;
   const input = state.input;
-  const astraAbort = (input.engine === "astra" || input.engine === "astrav2") ? new AbortController() : undefined;
+  const astraAbort = (input.engine === "astra" || (input.engine === "astrav2" || input.engine === "astrav3")) ? new AbortController() : undefined;
   let astraFailure: Stop | undefined;
   let progressTimer: ReturnType<typeof setTimeout> | undefined;
   // saveJson already serializes writes per file, including state snapshots from concurrent batches.
@@ -361,8 +369,9 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
-    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string } = {}) => {
+    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string; onTextDelta?: ModelRequest["onTextDelta"] } = {}) => {
     if (astraFailure) throw astraFailure;
+    if (input.maxCalls !== undefined && state.calls >= input.maxCalls) throw failAstra(new Stop("paused-invalid", "설정한 전체 호출 상한에 닿았습니다."));
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
     const cap = Math.max(MAX_CALLS_PER_START, state.sections.length * 4 + 10);
@@ -378,8 +387,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     const live: NonNullable<GenState["liveCalls"]>[number] = { n, step, startedAt: new Date(started).toISOString(), receivedChars: 0 };
     if (astraAbort) state.liveCalls!.push(live);
     const choice = input.models[step];
-    const model = choice?.model ?? (process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || "gpt-6-sol");
-    const effort = choice?.effort ?? (process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim() || "medium");
+    const model = choice?.model ?? (input.engine === "astrav3" ? "gpt-6.1-sol" : process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || "gpt-6-sol");
+    const effort = choice?.effort ?? (input.engine === "astrav3" ? "medium" : process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim() || "medium");
     state.current = { step, ...(sectionId ? { sectionId } : {}), ...(extra.page ? { page: extra.page } : {}), attempt };
     await saveState(state);
     if (!astraAbort) started = Date.now();
@@ -387,9 +396,17 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       system: redactCallText(system), user: redactCallText(user), reply: null, error: null, withPdf: Boolean(extra.files?.length),
       ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
     const callFile = path.join(dirOf(id), "calls", `${n}.json`);
-    const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
+    const request: ModelRequest = { ...(input.engine === "astrav3" ? { singleAttempt: true } : {}), ...(extra.onTextDelta ? { onTextDelta: extra.onTextDelta } : {}), purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
       model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}),
       ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}) };
+    if (input.engine === "astrav3" && step === "astra-author") {
+      let outputChars = 0;
+      request.onTextDelta = delta => {
+        outputChars += delta.length;
+        // Transport safety, not a question-length or splitting rule. Preserve the partial reply on failure.
+        if (outputChars > 100_000) throw new ModelError("invalid_output", `출제 응답이 안전 상한 100,000자를 넘었습니다(${outputChars}자). 완료 문항으로 채택하지 않고 중단합니다.`);
+      };
+    }
     if (astraAbort) {
       request.signal = astraAbort.signal;
       request.onProgress = receivedChars => {
@@ -407,8 +424,9 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     }
     try {
       if (astraFailure) throw astraFailure;
-      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("astra-") ? (input.engine === "astrav2" ? astrav2.astraFakeReply : astraFakeReply)(s, u) : genFakeReply(s, u)))(step, user, attempt);
+      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("astra-") ? (input.engine === "astrav3" ? astrav3.astraFakeReply : input.engine === "astrav2" ? astrav2.astraFakeReply : astraFakeReply)(s, u) : genFakeReply(s, u)))(step, user, attempt);
       if (extra.cachePrefix && request.fakeReply !== undefined) request.fakeReply = JSON.stringify({ result: JSON.parse(request.fakeReply) });
+      if (input.provider === "fake" && request.onTextDelta && request.fakeReply) { for (let offset = 0; offset < request.fakeReply.length; offset += 41) { request.onTextDelta(request.fakeReply.slice(offset, offset + 41)); await new Promise(resolve => setImmediate(resolve)); } }
       const reply = await callModel(request);
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
       await saveJson(callFile, record);
@@ -449,15 +467,16 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   try {
     state.status = "running"; state.message = "";
     await saveState(state);
-    if ((input.engine === "astra" || input.engine === "astrav2")) {
+    if ((input.engine === "astra" || (input.engine === "astrav2" || input.engine === "astrav3"))) {
       if (input.pastExamSourceIds?.length) throw new Stop("paused-invalid", "astra 기출 경향 연결은 아직 구현하지 않았습니다. 일반 출제로 대신하지 않습니다.");
       const pdf = input.provider === "fake" && !options.pdf ? Buffer.from("%PDF-1.4 fake fixture") : await (options.pdf ?? registeredPdfBytes)(input);
-      const next = input.engine === "astrav2";
+      const next = (input.engine === "astrav2" || input.engine === "astrav3");
       const pageTexts = next ? await (options.pages ?? (input.provider === "fake" ? async () => new Map<number, string>() : registeredPages))(input) : undefined;
       const thinPages = next ? input.pageNumbers.filter(page => needsImage(pageTexts?.get(page) ?? "")) : undefined;
-      await (next ? astrav2.runAstrav2 : runAstra)({ state, pdf, pageTexts, thinPages, save: () => saveState(state), getPriorityPage: () => astraPriorityPage(state), pause: (message) => { throw failAstra(new Stop("paused-invalid", message)); },
+      await (input.engine === "astrav3" ? astrav3.runAstrav3 : next ? astrav2.runAstrav2 : runAstra)({ state, pdf, pageTexts, thinPages,
+        read: async (system, user, schema, files, onTextDelta) => ask("astra-plan", null, 1, system, user, schema, undefined, { files, cachePrefix: astrav3.ASTRA_CACHE_PREFIX, onTextDelta }), save: () => saveState(state), getPriorityPage: () => astraPriorityPage(state), pause: (message) => { throw failAstra(new Stop("paused-invalid", message)); },
         ask: async (step, attempt, system, user, parser, files) => {
-          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(next ? astrav2.astraResponseSchema : astraResponseSchema), z.object({ result: parser }), undefined, { files, cachePrefix: next ? astrav2.ASTRA_CACHE_PREFIX : ASTRA_CACHE_PREFIX });
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(input.engine === "astrav3" ? z.object({ result: parser }) : next ? astrav2.astraResponseSchema : astraResponseSchema), z.object({ result: parser }), undefined, { files, cachePrefix: next ? astrav2.ASTRA_CACHE_PREFIX : ASTRA_CACHE_PREFIX });
           if (!result.ok) throw failAstra(new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`));
           return result.value.result;
         },
