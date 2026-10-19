@@ -25,7 +25,7 @@ type ResponseBody = {
 };
 export function responseRequest(request: ModelRequest, format: "schema" | "fallback" = "schema"): ResponseBody {
   const useSchema = Boolean(request.schema) && format === "schema";
-  if (request.cachePrefix && (!request.files?.length || !request.schema)) throw new ModelError("not_configured", "PDF 캐싱 요청에는 파일과 공통 응답 스키마가 필요해요.");
+  if (request.cachePrefix && !request.schema) throw new ModelError("not_configured", "공통 지시문 요청에는 공통 응답 스키마가 필요해요.");
   const baseInstructions = request.cachePrefix ?? request.system;
   const instructions = request.schema && !useSchema
     ? `${baseInstructions}\n\n응답은 다음 JSON Schema를 따르는 JSON 객체 하나만 쓴다.\n${JSON.stringify(request.schema)}`
@@ -38,10 +38,10 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
     instructions,
     // With page images the user turn becomes text plus one labelled image per page.
     input: request.cachePrefix ? [
-      { role: "user", content: [
+      ...(request.files?.length ? [{ role: "user", content: [
         ...(request.files ?? []).map(file => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
-        { type: "input_text", text: "첨부 자료 끝" },
-      ] },
+        { type: "input_text" as const, text: "첨부 자료 끝" },
+      ] }] : []),
       { role: "developer", content: request.system },
       { role: "user", content: request.images?.length ? [
         { type: "input_text", text: userText },

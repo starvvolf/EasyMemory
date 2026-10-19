@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { astraFakeReply, getAstraReadingView, runAstra, type AstraAsk } from "./astra.ts";
+import * as astrav2 from "./astrav2.ts";
+import { responseRequest } from "../../ai/chatgpt-provider.ts";
 import { confirmObjectives, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import type { GenState, GenStep } from "./types.ts";
 
@@ -44,6 +46,48 @@ test("astra: 확인 후 전체 흐름, 반복된 관계 노출은 독립 풀이 
     assert.deepEqual(document.questions.map(q => q.id), ["q-s1-o2"]);
     const calls = await readGenCalls(start.id);
     assert.deepEqual(calls.map(c => c.step), ["astra-plan", "astra-author", "astra-solve", "astra-review", "astra-review", "astra-author", "astra-solve", "astra-review"]);
+    // Same invented regression: distinguish a legitimate choice from stem leakage and a scope gap.
+    const newer = await createGen({ sourceId: "src_astra_fixture", fileName: "invented.pdf", pageNumbers: [1], purpose: "core", engine: "astrav2", provider: "fake", autoConfirm: true });
+    let pdfCalls = 0;
+    await astrav2.runAstrav2({ state: newer, pdf: Buffer.from("%PDF-fixture"), pageTexts: new Map([[1, "청색은 대기, 녹색은 진행"]]), save: async () => {}, pause: (message): never => { throw new Error(message); }, publish: async () => "fixture-document",
+      ask: async (step, _attempt, system, user, parser, files) => {
+        if (files.length) { pdfCalls++; assert.equal(step, "astra-plan"); }
+        else {
+          assert.ok(user.includes("[원문 p.1]"));
+          const request = responseRequest({ purpose: "fixture", system, user, caller: { uid: "fixture" }, files, cachePrefix: astrav2.ASTRA_CACHE_PREFIX, schema: astrav2.astraJsonSchema(astrav2.astraResponseSchema) });
+          assert.ok(!JSON.stringify(request).includes("input_file"));
+        }
+        const input = JSON.parse(user);
+        const result = JSON.parse(astrav2.astraFakeReply(step, user));
+        if (step === "astra-plan") {
+          result.outline.push({ id: "s2", title: "선택하지 않은 쪽", pages: [2] });
+          result.pageNotes = [{ page: 2, text: "범위 밖 비공개 원문" }];
+        }
+        if (step === "astra-author") {
+          for (const q of result.questions) q.answer = { kind: "choice", options: ["청색", "녹색", "적색", "황색"].map(text => ({ text, latex: null })), correctIndex: 0, accepted: null, before: null, after: null, explanation: "청색은 대기 상태다." };
+        }
+        if (step === "astra-solve") {
+          assert.ok(!user.includes('"correctIndex"'));
+          for (const item of result.items) item.exposedRelation = "보기 안에 청색이 있다";
+        }
+        if (step === "astra-review") {
+          assert.ok(system.includes("객관식 보기에 정답이 있는 것은 정상"));
+          result.items.forEach((item: { reasons: string[] }) => { item.reasons = ["보기의 청색은 선택 대상일 뿐 본문의 정답 지시가 아니다."]; });
+          result.coverage.forEach((item: { status: string; reason: string }) => { item.status = "partial"; item.reason = "동일 과제의 다른 범위는 아직 충분하지 않음"; });
+          assert.equal(input.candidates.length, 1);
+        }
+        assert.ok(!user.includes("범위 밖 비공개 원문"));
+        return parser.parse(result);
+      },
+    });
+    assert.equal(pdfCalls, 1);
+    assert.equal(newer.status, "done");
+    assert.equal(newer.sections.length, 1);
+    assert.equal(newer.sections[0].author?.questionCount, 1, "개별 정상 문항은 coverage partial만으로 보류하지 않는다");
+    assert.ok(newer.astra!.warnings.some(w => w.code === "published-review-concern"));
+    const viaRunner = await runGen((await createGen({ sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1], purpose: "core", engine: "astrav2", provider: "fake", autoConfirm: true })).id, { uid: "local-experiment" });
+    assert.equal(viaRunner.status, "done", viaRunner.message);
+    assert.equal(viaRunner.sections[0].author?.questionCount, 1);
   } finally {
     if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;
     await rm(dir, { recursive: true, force: true });
