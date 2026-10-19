@@ -32,6 +32,103 @@ export async function renderPageImages(bytes: Uint8Array, pages: readonly number
   return images;
 }
 
+/** A cropped picture region of a page (rendered page pixels, so labels drawn over the picture come along). */
+export type PageFigure = { page: number; label: string; dataUrl: string; area: number };
+type Box = { x0: number; y0: number; x1: number; y1: number };
+const MIN_FIGURE = 0.01;   // smaller pictures (bullets, icons) are left out
+const MERGE_GAP = 0.02;    // pictures this close (fraction of the page width) are one figure
+const MARGIN = 0.015;      // a little room around each figure for nearby labels
+const WHOLE_PAGE = 0.8;    // figures covering more than this: send the page itself
+const LOGO_PAGES = 3;      // the same small picture on this many pages is the slide template
+const area = (b: Box) => Math.max(0, b.x1 - b.x0) * Math.max(0, b.y1 - b.y0);
+const near = (a: Box, b: Box, gap: number) => a.x0 - gap <= b.x1 && b.x0 - gap <= a.x1 && a.y0 - gap <= b.y1 && b.y0 - gap <= a.y1;
+const where = (b: Box, w: number, h: number) => {
+  const cx = (b.x0 + b.x1) / 2 / w, cy = (b.y0 + b.y1) / 2 / h;
+  return `${cy < 0.34 ? "위" : cy > 0.66 ? "아래" : "가운데"}${cx < 0.34 ? " 왼쪽" : cx > 0.66 ? " 오른쪽" : ""}`;
+};
+
+/**
+ * Picture regions of pages, cropped from the rendered page: the plan sees each picture (with the labels and arrows
+ * drawn on it) instead of the whole slide, about half the image tokens on picture slides (그래픽스03 1~24쪽: pictures
+ * cover ~45% of a slide on average). Pages whose pictures fill most of the slide are sent whole; a page with no
+ * picture and almost no text (a vector drawing) is sent whole too. Returns the figures per page in reading order.
+ */
+export async function renderPageFigures(bytes: Uint8Array, pages: readonly number[], width = RENDER_WIDTH) {
+  const [{ createCanvas }, { pdfjs, document }] = await Promise.all([import("@napi-rs/canvas"), openPdf(bytes)]);
+  const OPS = pdfjs.OPS as Record<string, number>;
+  const paint = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject, OPS.paintImageXObjectRepeat].filter(v => v !== undefined));
+  const found = new Map<number, Array<Box & { id: string }>>();
+  const seen = new Map<string, Set<number>>();
+  const result = new Map<number, PageFigure[]>();
+  try {
+    const wanted = [...new Set(pages)].filter(n => Number.isInteger(n) && n >= 1 && n <= document.numPages);
+    // Pass 1: where each picture is painted (user space → viewport), from the operator list and its transforms.
+    for (const n of wanted) {
+      const page = await document.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: width / Math.max(base.width, base.height) });
+      const ops = await page.getOperatorList();
+      let ctm = [1, 0, 0, 1, 0, 0];
+      const stack: number[][] = [];
+      const times = (m: number[], t: number[]) => [m[0] * t[0] + m[2] * t[1], m[1] * t[0] + m[3] * t[1], m[0] * t[2] + m[2] * t[3], m[1] * t[2] + m[3] * t[3], m[0] * t[4] + m[2] * t[5] + m[4], m[1] * t[4] + m[3] * t[5] + m[5]];
+      const boxes: Array<Box & { id: string }> = [];
+      ops.fnArray.forEach((fn, i) => {
+        const args = ops.argsArray[i] as unknown[];
+        if (fn === OPS.save) stack.push(ctm);
+        else if (fn === OPS.restore) ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+        else if (fn === OPS.transform) ctm = times(ctm, args as number[]);
+        else if (fn === OPS.paintFormXObjectBegin) { stack.push(ctm); if (Array.isArray(args?.[0])) ctm = times(ctm, args[0] as number[]); }
+        else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+        else if (paint.has(fn)) {
+          const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => viewport.convertToViewportPoint(ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]));
+          const xs = corners.map(c => c[0]), ys = corners.map(c => c[1]);
+          const box = { x0: Math.max(0, Math.min(...xs)), y0: Math.max(0, Math.min(...ys)), x1: Math.min(viewport.width, Math.max(...xs)), y1: Math.min(viewport.height, Math.max(...ys)), id: String(args?.[0] ?? `inline-${i}`) };
+          if (area(box) >= MIN_FIGURE * viewport.width * viewport.height) boxes.push(box);
+        }
+      });
+      for (const b of boxes) (seen.get(b.id) ?? seen.set(b.id, new Set()).get(b.id)!).add(n);
+      found.set(n, boxes);
+      page.cleanup();
+    }
+    // Pass 2: drop template pictures, merge neighbours, crop from the rendered page.
+    for (const n of wanted) {
+      const page = await document.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: width / Math.max(base.width, base.height) });
+      const W = viewport.width, H = viewport.height, full = W * H;
+      let boxes: Box[] = (found.get(n) ?? []).filter(b => !((seen.get(b.id)?.size ?? 0) >= LOGO_PAGES && area(b) < 0.08 * full)).map(({ x0, y0, x1, y1 }) => ({ x0, y0, x1, y1 }));
+      for (let merged = true; merged;) {
+        merged = false;
+        outer: for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) if (near(boxes[i], boxes[j], MERGE_GAP * W)) {
+          const a = boxes[i], b = boxes[j];
+          boxes[i] = { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) };
+          boxes.splice(j, 1); merged = true; break outer;
+        }
+      }
+      boxes = boxes.map(b => ({ x0: Math.max(0, b.x0 - MARGIN * W), y0: Math.max(0, b.y0 - MARGIN * H), x1: Math.min(W, b.x1 + MARGIN * W), y1: Math.min(H, b.y1 + MARGIN * H) }))
+        .sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+      const covered = boxes.reduce((s, b) => s + area(b), 0) / full;
+      const text = (await page.getTextContent()).items.map(item => ("str" in item ? item.str : "")).join(" ");
+      const whole = covered > WHOLE_PAGE || (!boxes.length && meaningfulChars(text) < 100);
+      if (!boxes.length && !whole) { result.set(n, []); page.cleanup(); continue; }
+      const canvas = createCanvas(Math.ceil(W), Math.ceil(H));
+      const context = canvas.getContext("2d");
+      context.fillStyle = "white";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas: canvas as never, canvasContext: context as never, viewport }).promise;
+      if (whole) result.set(n, [{ page: n, label: `원문 p.${n} (쪽 전체)`, dataUrl: `data:image/jpeg;base64,${canvas.toBuffer("image/jpeg", 85).toString("base64")}`, area: 1 }]);
+      else result.set(n, boxes.map((b, k) => {
+        const w = Math.ceil(b.x1 - b.x0), h = Math.ceil(b.y1 - b.y0);
+        const crop = createCanvas(w, h);
+        crop.getContext("2d").drawImage(canvas as never, b.x0, b.y0, w, h, 0, 0, w, h);
+        return { page: n, label: `원문 p.${n} 그림${k + 1} (${where(b, W, H)})`, dataUrl: `data:image/jpeg;base64,${crop.toBuffer("image/jpeg", 85).toString("base64")}`, area: area(b) / full };
+      }));
+      page.cleanup();
+    }
+  } finally { await document.cleanup(); }
+  return result;
+}
+
 export const meaningfulChars = (text: string) => (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
 
 /** Below this many letters and digits a slide is read from its image; a full text slide is left to its text layer. */
