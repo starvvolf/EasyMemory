@@ -3376,7 +3376,7 @@ function examField(b){
     finder,
     picked.length ? h("p", { class:"small", style:"color:var(--ask)", text:`기출 ${picked.length}개 반영 · 처음 한 번 기출을 분석하고 문제마다 베끼기 검사를 해서 조금 더 걸려요.` }) : null);
 }
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, engine:"v2", busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, engine:"v2", survey:{}, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
   const flat = [];
@@ -3466,7 +3466,7 @@ async function startMaterial(){
   const b = S.builder; if (b.busy || !engine || !b.file) return;
   b.busy = true; b.error = ""; b.status = "PDF를 등록하고 문제 만들기를 시작하는 중…"; render();
   try{
-    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.engine === "v3" ? { engine:"v3" } : {}), ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
+    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.engine !== "v2" ? { engine:b.engine } : {}), ...(b.engine === "v5" && Object.values(b.survey).some(Boolean) ? { survey:b.survey } : {}), ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
     const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:b.sourceName.replace(/\.pdf$/i, ""), sourceName:b.sourceName,
       pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), createdAt:now(), status:"waiting", message:"" };
     const deck = pendingDeck(rec);
@@ -3645,9 +3645,17 @@ function renderBuilder(){
     thin ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
       h("input", { type:"checkbox", checked:b.readImages ? true : null, disabled:b.busy, onchange:(e) => { b.readImages = e.target.checked; render(); } }),
       h("span", null, h("b", { text:"그림·수식도 읽기" }), h("span", { class:"muted", text:` · 글자가 적은 ${thin}쪽을 그림으로 읽어요 (약 ${Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 문제에 들어가요.` }))) : null,
-    b.pastExamSourceIds.length ? null : h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
-      h("input", { type:"checkbox", checked:b.engine === "v3" ? true : null, disabled:b.busy, onchange:(e) => { b.engine = e.target.checked ? "v3" : "v2"; render(); } }),
-      h("span", null, h("b", { text:"새 엔진(v3, 실험)" }), h("span", { class:"muted", text:" · PDF를 통째로 읽고 지식 지도 → 출제 계획 → 단원별 출제 → 관문 검사. 읽는 단원부터 만들어요." }))),
+    // Engine (experimental ones next to the default). v5 asks a short survey; left empty it decides from the material (알잘딱),
+    // and the memo above is a direct instruction (개입).
+    b.pastExamSourceIds.length ? null : h("div", { class:"field" }, h("label", { text:"엔진 (실험)" }),
+      h("div", { class:"chat-sugs" }, [["v2", "기본"], ["v3", "v3"], ["v5", "v5 · 자료 맞춤"]].map(([key, label]) => h("button", { class:"chip-btn", "aria-pressed": b.engine === key ? "true" : "false", disabled:b.busy,
+        onclick: () => { b.engine = key; render(); } }, label))),
+      b.engine === "v5" ? h("div", { class:"row small", style:"gap:6px;flex-wrap:wrap" },
+        h("span", { class:"muted", text:"설문(선택) · 비우면 자료에 맞게 정해요" }),
+        ...[["exam", "시험 형태", [["choice", "객관식 위주"], ["mixed", "섞어서"], ["written", "서술 포함"]]], ["depth", "깊이", [["core", "핵심만"], ["all", "전부"]]], ["time", "시간", [["short", "빠듯함"], ["normal", "보통"], ["long", "넉넉함"]]]]
+          .map(([key, label, opts]) => h("select", { disabled:b.busy, onchange:(e) => { b.survey = { ...b.survey, [key]: e.target.value || undefined }; } },
+            h("option", { value:"", text:label }), ...opts.map(([v, t]) => h("option", { value:v, selected: b.survey[key] === v ? true : null, text:t })))),
+        h("input", { placeholder:"이미 아는 부분", value:b.survey.known || "", disabled:b.busy, oninput:(e) => { b.survey = { ...b.survey, known: e.target.value || undefined }; } })) : null),
     h("div", { class:"row" },
       h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "읽기 시작"),
       h("span", { class:"small muted", text:"바로 읽기로 넘어가요. AI가 목표를 정리하면 한 번 확인을 부탁하고, 그다음 문제가 쪽마다 붙어요." }))));

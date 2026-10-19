@@ -139,7 +139,7 @@ test("astra 계획: 고른 쪽 밖 목차·개념·연습은 빼고 단원 번�
 
 test("astra 답 칸: 응답 형식에 칸 설명이 실리고, self-check 모범 답이 after에 들어오면 accepted로 옮긴다 (비교 실행 11/16 보류)", () => {
   const schema = JSON.stringify(astraJsonSchema(astraResponseSchema));
-  assert.ok(schema.includes("정답은 여기에만 쓴다") && schema.includes("입력칸 바로 뒤에 붙는 짧은 꾸밈 글"));
+  assert.ok(schema.includes("정답은 여기에만 쓴다") && schema.includes("입력칸 바로 뒤에 붙는 글"));
   const base = { objectiveId: "s1-o1", stem: [{ kind: "text" as const, text: "행렬을 쓰시오", latex: null, rows: null }], practiceIds: ["p1"], conceptIds: ["c1"], checkedSkill: "k", requiredPoints: ["r"],
     evidence: [{ page: 1, kind: "text" as const, quote: "q", supports: "s" }] };
   const warnings: Parameters<typeof answerInPlace>[1] = [];
@@ -238,4 +238,61 @@ test("v4 스트리밍: 끝난 계획이 검사에 걸려 다시 요청되면 먼
   assert.equal(state.status, "done", state.message);
   assert.equal(state.sections[0].title, "다시 짠 계획");
   assert.ok(!documents.get("s1")!.includes("버려질 목표"), "앞 계획으로 만든 문제는 공개하지 않는다");
+});
+
+test("v5: 목표의 형식대로 출제(OX·객관식), 오답 근거 없는 객관식은 보류, 그림 근거 목표는 풀이·검수에 그 쪽 그림, 단원이 통과하면 계획이 끝나기 전에도 공개", async () => {
+  const state: GenState = { id: "gen_" + "3".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2], purpose: "core", note: "", provider: "fake", engine: "v5", models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+  const documents = new Map<string, Array<{ responses: Array<{ kind: string; options?: unknown[] }> }>>();
+  let planDone = false, publishedBeforePlanEnd = false, solveImages = 0;
+  let released: () => void = () => {};
+  const firstPublished = new Promise<void>(resolve => { released = resolve; });
+  const ask: AstraAsk = async (step, _attempt, _system, user, parser, _files, onPartial, images) => {
+    const input = JSON.parse(user);
+    if (step === "astra-plan") {
+      const ev = (page: number, kind: string) => [{ page, kind, quote: kind === "text" ? "q" : "", supports: "s" }];
+      const result = {
+        outline: [{ id: "s1", title: "구별 단원", pages: [1] }, { id: "s2", title: "그림 단원", pages: [2] }],
+        diagnosis: { mode: "알잘딱", materialType: "개념 비교", approach: "구별 위주" },
+        units: [
+          { sectionId: "s1", pageNotes: [], misconceptions: [{ conceptIds: ["c1"], wrongIdea: "청색=진행", whyWrong: "원문은 청색=대기", page: 1 }],
+            concepts: [{ id: "c1", outlineIds: ["s1"], title: "신호", essentials: ["청색 대기"], conditions: [], evidence: ev(1, "text") }],
+            practice: [{ id: "p1", sectionId: "s1", conceptIds: ["c1"], task: "신호 색을 구별할 수 있다", cue: "c", recall: "청색", kind: "관계", priority: "essential", questionCount: 1, level: "구별", format: "ox", formatWhy: "참거짓 판별" },
+              { id: "p2", sectionId: "s1", conceptIds: ["c1"], task: "대기 신호를 고를 수 있다", cue: "c", recall: "청색", kind: "관계", priority: "essential", questionCount: 1, level: "구별", format: "choice", formatWhy: "오개념 구별" }] },
+          { sectionId: "s2", pageNotes: [], misconceptions: [],
+            concepts: [{ id: "c2", outlineIds: ["s2"], title: "그림", essentials: ["e"], conditions: [], evidence: ev(2, "figure") }],
+            practice: [{ id: "p3", sectionId: "s2", conceptIds: ["c2"], task: "그림의 대응을 떠올릴 수 있다", cue: "c", recall: "r", kind: "관계", priority: "essential", questionCount: 1, level: "떠올리기", format: "flashcard", formatWhy: "" }] },
+        ],
+        uncertain: [],
+      };
+      const text = JSON.stringify({ result });
+      for (let at = 50; at < text.length + 50; at += 50) onPartial?.(text.slice(0, at));
+      await Promise.race([firstPublished, new Promise(resolve => setTimeout(resolve, 500))]);
+      publishedBeforePlanEnd = documents.size > 0;
+      planDone = true;
+      return parser.parse(result);
+    }
+    const result = JSON.parse(astraFakeReply(step, user));
+    if (step === "astra-author") {
+      for (const q of result.questions) {
+        const slot = input.slots.find((o: { id: string }) => o.id === q.objectiveId);
+        if (slot.astra.format === "ox") Object.assign(q.answer, { kind: "ox", accepted: null, correctIndex: 1 }, q.distractors = [{ option: 1, misconception: "청색=진행", whyWrong: "원문은 대기" }]);
+        if (slot.astra.format === "choice") Object.assign(q.answer, { kind: "choice", accepted: null, correctIndex: 0, options: ["청색", "녹색", "적색", "황색"].map(text => ({ text, latex: null })) });
+      }
+    }
+    if (step === "astra-solve") solveImages += images?.length ?? 0;
+    if (step === "astra-review") {
+      result.coverage = input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: input.candidates.filter((q: { practiceIds: string[] }) => q.practiceIds.includes(id)).map((q: { objectiveId: string }) => q.objectiveId), status: "covered", reason: "fixture" }));
+    }
+    return parser.parse(result);
+  };
+  await runAstra({ state, pdf: Buffer.from("%PDF-fixture"), ask, save: async () => {}, pause: (message: string): never => { throw new Error(message); },
+    pageImages: async (pages) => new Map(pages.map(p => [p, `data:image/jpeg;base64,p${p}`])),
+    publish: async (section: { id: string }, questions: unknown[]) => { documents.set(section.id, questions as never); if (!planDone) released(); return `sections/${section.id}/document.json`; } });
+  assert.equal(state.status, "done", state.message);
+  assert.ok(publishedBeforePlanEnd, "단원 검사를 통과한 문제는 계획이 끝나기 전에 공개된다");
+  const s1 = documents.get("s1")!;
+  assert.deepEqual(s1.map(q => [q.responses[0].kind, q.responses[0].options?.length]), [["single-choice", 2]], "OX는 보기 2개, 오답 근거 없는 객관식은 보류");
+  assert.ok(state.sections[0].author!.dropped.some(d => d.reason.includes("오답마다")));
+  assert.ok(solveImages >= 1, "그림 근거 목표의 풀이에 그 쪽 그림을 보낸다");
+  assert.equal((state.astra!.plan as { diagnosis?: { materialType: string } }).diagnosis?.materialType, "개념 비교");
 });

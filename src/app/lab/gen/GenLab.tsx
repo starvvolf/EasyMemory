@@ -103,6 +103,8 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [guideDir, setGuideDir] = useState("출제기준");
   const [readImages, setReadImages] = useState(false);
+  // v5 설문 (empty = 알잘딱; the memo above is 개입).
+  const [survey, setSurvey] = useState<{ exam?: string; depth?: string; time?: string; known?: string }>({});
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const source = sources.find((candidate) => candidate.id === sourceId) ?? sources[0];
@@ -116,6 +118,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
       const { gen } = await api<{ gen: GenState }>("/api/lab/gen", "POST", {
         sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, guideDir, engine, confirmed: provider === "chatgpt" ? confirmed : undefined,
         models: Object.fromEntries(shown.map((step) => [step, models[step]])), readImages: engine === "v2" ? readImages : false,
+        ...(engine === "v5" && Object.values(survey).some(Boolean) ? { survey: Object.fromEntries(Object.entries(survey).filter(([, value]) => value)) } : {}),
       });
       setConfirmed(false);
       onStarted(gen.id);
@@ -142,8 +145,16 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         <label className="chip" title="PDF 통째 읽기 → 출제 계획 → 단원별 출제 → 관문 검사"><input type="radio" name="engine" checked={engine === "v3"} onChange={() => setEngine("v3")} />v3 (Claude 안, 실험)</label>
         <label className="chip" title="전체 PDF → 학습 계획 → 묶음 출제 → 정답 없는 풀이 → 원문 검수"><input type="radio" name="engine" checked={engine === "astra"} onChange={() => setEngine("astra")} />astra (GPT 안, 실험)</label>
         <label className="chip" title="astra 구조 그대로 + 답 모양에 맞는 형식, 한 문항 한 과제, 슬롯 차별, 검수 입력 축소, 공개 후 지적 1회 수정"><input type="radio" name="engine" checked={engine === "v4"} onChange={() => setEngine("v4")} />v4 (Claude의 astra 조정안, 실험)</label>
+        <label className="chip" title="자료 진단 → 목표마다 수준·형식(객관식·OX·단답·빈칸·플래시카드) → 오개념 기반 오답 → 단원별 즉시 공개, 그림 근거는 그 쪽 그림으로 검수"><input type="radio" name="engine" checked={engine === "v5"} onChange={() => setEngine("v5")} />v5 (Claude, 실험)</label>
       </fieldset>
-      {astraFamily(engine) && <p className="muted">{engine === "v4" ? "v4는 astra와 같은 단계(계획·출제·풀이·검수)를 쓰되, 계획을 단원별로 스트리밍해 목차·목표를 도중에 보이고 끝난 단원부터 바로 출제합니다(공개는 계획 검사 뒤). 목표는 짧은 한 문장으로 남깁니다. " : ""}astra는 엔진 이름입니다. 기본 모델은 모든 단계 Sol·medium이며 아래에서 바꿀 수 있어요. 별도 출제기준 폴더 대신 astra 전용 지시문을 사용합니다.</p>}
+      {engine === "v5" && <div className="row">
+        <span className="muted">설문(비우면 알잘딱, 메모는 개입):</span>
+        <select value={survey.exam ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, exam: event.target.value || undefined }))}><option value="">시험 형태</option><option value="choice">객관식 위주</option><option value="mixed">섞어서</option><option value="written">서술 포함</option></select>
+        <select value={survey.depth ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, depth: event.target.value || undefined }))}><option value="">깊이</option><option value="core">핵심만</option><option value="all">전부</option></select>
+        <select value={survey.time ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, time: event.target.value || undefined }))}><option value="">시간</option><option value="short">빠듯함</option><option value="normal">보통</option><option value="long">넉넉함</option></select>
+        <input placeholder="이미 아는 부분" value={survey.known ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, known: event.target.value || undefined }))} />
+      </div>}
+      {astraFamily(engine) && <p className="muted">{engine === "v5" ? "v5는 자료를 진단해 목표마다 수준과 형식(객관식·OX·단답·빈칸·플래시카드)을 정하고, 오개념으로 오답을 만들며, 단원이 검수를 통과하면 바로 공개합니다. 메모가 있으면 개입, 설문이 있으면 설문, 없으면 알잘딱. " : engine === "v4" ? "v4는 astra와 같은 단계(계획·출제·풀이·검수)를 쓰되, 계획을 단원별로 스트리밍해 목차·목표를 도중에 보이고 끝난 단원부터 바로 출제합니다(공개는 계획 검사 뒤). 목표는 짧은 한 문장으로 남깁니다. " : ""}astra는 엔진 이름입니다. 기본 모델은 모든 단계 Sol·medium이며 아래에서 바꿀 수 있어요. 별도 출제기준 폴더 대신 astra 전용 지시문을 사용합니다.</p>}
       <fieldset><legend>목적</legend>
         {(Object.keys(purposeLabel) as Purpose[]).map((key) => (
           <label key={key} className="chip"><input type="radio" name="purpose" checked={purpose === key} onChange={() => setPurpose(key)} />{purposeLabel[key]}</label>
@@ -297,7 +308,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
     <div className="gen-run">
       <div className="gen-status">
         <span className={`tag ${tone(gen.status)}`}>{STATUS[gen.status] ?? gen.status}</span>
-        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.engine === "v4" ? "엔진 v4" : astraFamily(gen.input.engine) ? "엔진 astra" : gen.input.engine === "v3" ? "엔진 v3" : gen.input.guideDir ?? "출제기준"}
+        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.engine === "v5" ? "엔진 v5" : gen.input.engine === "v4" ? "엔진 v4" : astraFamily(gen.input.engine) ? "엔진 astra" : gen.input.engine === "v3" ? "엔진 v3" : gen.input.guideDir ?? "출제기준"}
         {label && <span className="muted"> · {label}</span>}
         {gen.images && <div className="muted">그림 쪽 읽기: {gen.images.done.length}/{gen.images.pages.length}쪽{gen.images.failed.length ? ` · 실패 p.${gen.images.failed.join(", ")}` : ""}</div>}
         {gen.forkOf && <div className="muted">고정 재실행({FORK_LABEL[gen.forkOf.from]}) · 기준 실행 {gen.forkOf.genId.slice(0, 12)}… {astraFamily(gen.input.engine) ? (gen.forkOf.from === "author" ? "의 학습 계획·목표를 그대로 썼어요." : "의 자료 지도를 참고해 학습 계획부터 다시 만들어요.") : `의 목차·분류${gen.forkOf.from === "author" ? "·목표" : ""}를 그대로 썼어요.`} 호출·시간·토큰은 다시 돈 단계만 셉니다.</div>}

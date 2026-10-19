@@ -9,7 +9,7 @@ import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type PlannerDeck } from "./dejipgi-app.js";
-import { DEFAULT_GEN_MODELS, defaultChosen, genOutline, mapDigest, type Engine, type GenState } from "@/lib/study/gen/types";
+import { DEFAULT_GEN_MODELS, defaultChosen, genOutline, mapDigest, type Engine, type GenState, type GenSurvey } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
 import { coachCards, type CoachInput } from "@/lib/study/coach";
 import { buildLexicon, chunkAt, findTerms, importantTerms } from "@/lib/study/chunk";
@@ -79,12 +79,14 @@ export default function DejipgiStudy() {
     // ---- engine v2 (/api/lab/gen) ----
     const isGen = (id: string) => /^gen_[a-f0-9]{32}$/.test(id);
     const genState = async (id: string) => (await readJson<{ gen: GenState; label: string }>(await fetchExperiment(`/api/lab/gen/${id}`), "만드는 상태를 읽지 못했어요."));
-    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[], engine?: Engine) => {
+    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[], engine?: Engine, survey?: GenSurvey) => {
       const pageNumbers = Array.from({ length: Math.max(1, to - from + 1) }, (_, index) => from + index);
       const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
-          models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), ...(engine && !pastExamSourceIds?.length ? { engine } : {}), confirmed: true }),
+          models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), ...(engine && !pastExamSourceIds?.length ? { engine } : {}),
+          // v5 streams goals and authors right away; a goal the learner does not want is hidden from practice (목표 빼기).
+          ...(engine === "v5" && !pastExamSourceIds?.length ? { autoConfirm: true, ...(survey ? { survey } : {}) } : {}), confirmed: true }),
       }), "문제 만들기를 시작하지 못했어요.");
       return gen;
     };
@@ -148,7 +150,7 @@ export default function DejipgiStudy() {
           const { sources } = await readJson<{ sources: McpSourceCatalogEntry[] }>(await fetchExperiment("/api/mcp-runs/sources"), "등록한 PDF를 읽지 못했어요.");
           return sources.filter((source) => /^src_[a-f0-9]{64}$/.test(source.id));
         },
-        async start({ file, from, to, purpose, note, readImages, pastExamSourceIds, engine }) {
+        async start({ file, from, to, purpose, note, readImages, pastExamSourceIds, engine, survey }) {
           if (session.mode !== "local-experiment") throw new Error("자료 등록과 문제 만들기는 로컬 실험 모드에서만 할 수 있어요.");
           const form = new FormData();
           form.append("pdf", file);
@@ -156,7 +158,7 @@ export default function DejipgiStudy() {
             method: "POST", body: form,
           }), "PDF를 등록하지 못했어요.");
           const source = await findSource(registered.id);
-          const gen = await startGen(source, from, to, purpose, note, readImages, pastExamSourceIds, engine);
+          const gen = await startGen(source, from, to, purpose, note, readImages, pastExamSourceIds, engine, survey);
           return { requestId: gen.id, sourceId: source.id };
         },
         async focus(requestId, page) {

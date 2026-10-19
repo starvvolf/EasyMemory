@@ -97,8 +97,8 @@ export const authoredQuestion = z.object({
     options: z.array(z.object({ text: z.string().nullable(), latex: z.string().nullable() })).nullable().describe("choice일 때 보기 4개, 아니면 null"),
     correctIndex: z.number().int().nullable().describe("choice 정답 보기 번호(0부터), 아니면 null"),
     accepted: z.array(z.string()).nullable().describe("정답은 여기에만 쓴다. short: 인정 답안들(원문 표기 먼저) / self-check: 모범 답 하나(필요하면 여러 줄). choice면 null"),
-    before: z.string().nullable().describe("입력칸 바로 앞에 붙는 짧은 꾸밈 글(예: 'x ='). 정답·풀이를 쓰지 않는다. 없으면 null"),
-    after: z.string().nullable().describe("입력칸 바로 뒤에 붙는 짧은 꾸밈 글(예: 단위 'cm'). 정답·풀이를 쓰지 않는다. 없으면 null"),
+    before: z.string().nullable().describe("입력칸 바로 앞에 붙는 글(예: 'x ='; 빈칸 문제면 빈칸 앞 문장). 정답·풀이를 쓰지 않는다. 없으면 null"),
+    after: z.string().nullable().describe("입력칸 바로 뒤에 붙는 글(예: 단위 'cm'; 빈칸 문제면 빈칸 뒤 문장). 정답·풀이를 쓰지 않는다. 없으면 null"),
     explanation: z.string().describe("정답인 이유 1~2문장(정답 공개 뒤에 보임)"),
   }),
 });

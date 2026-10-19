@@ -44,6 +44,8 @@ export function answerShapeProblem(reply: AuthoredReplyQuestion): string | null 
   if (!reply.stem.some((block) => (block.text ?? block.latex ?? block.rows?.flat().join("") ?? "").trim())) return "문제 본문이 비어 있습니다.";
   if (answer.kind === "choice") {
     const options = answer.options ?? [];
+    // v5 OX: a two-option choice whose options are exactly O and X.
+    if (options.length === 2 && options.map((option) => (option.text ?? "").trim()).join() === "O,X") return answer.correctIndex === 0 || answer.correctIndex === 1 ? null : "OX의 correctIndex가 0(O) 또는 1(X)이 아닙니다.";
     if (options.length !== 4 || options.some((option) => !(option.text ?? option.latex ?? "").trim())) return "choice는 내용이 있는 보기가 정확히 4개여야 합니다.";
     if (answer.correctIndex === null || answer.correctIndex < 0 || answer.correctIndex > 3) return "choice의 correctIndex가 0~3이 아닙니다.";
     const keys = options.map((option) => (option.text ?? option.latex ?? "").trim().toLocaleLowerCase("ko-KR"));

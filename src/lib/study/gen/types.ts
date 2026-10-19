@@ -12,10 +12,15 @@ export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
   read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)" };
 
-export const engines = ["v2", "v3", "astra", "v4"] as const;
+export const engines = ["v2", "v3", "astra", "v4", "v5"] as const;
 export type Engine = (typeof engines)[number];
 /** astra and v4 (Claude's tuning of astra) share the astra pipeline, steps and state; v4 only adds rules. */
-export const astraFamily = (engine: Engine | undefined) => engine === "astra" || engine === "v4";
+export const astraFamily = (engine: Engine | undefined) => engine === "astra" || engine === "v4" || engine === "v5";
+/** v5 learning formats (협업/설계_생성엔진v5_Claude_20261019.md); each maps to one of the study screen's response kinds. */
+export const studyFormats = ["choice", "ox", "short", "cloze", "flashcard"] as const;
+export type StudyFormat = (typeof studyFormats)[number];
+/** v5: a short survey before generation (설문). Absent and no note: the engine decides (알잘딱). */
+export type GenSurvey = { exam?: "choice" | "mixed" | "written"; depth?: "core" | "all"; time?: "short" | "normal" | "long"; known?: string };
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
 export type ItemKind = (typeof itemKinds)[number];
@@ -55,6 +60,8 @@ export type GenInput = {
   remake?: { genId: string; previous: Record<string, string>; reasons?: Record<string, string> };
   /** Engine: v2 (default, outline → classify → design → author) or v3 (협업/설계_생성엔진v3_Claude_20261019.md). */
   engine?: Engine;
+  /** v5: survey answers (설문 mode). */
+  survey?: GenSurvey;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
@@ -84,7 +91,9 @@ export type Objective = {
   qtype?: string;
   conceptIds?: string[];
   relationIds?: string[];
-  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: import("./astra.ts").AstraEvidence[]; keepGoal?: boolean };
+  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: import("./astra.ts").AstraEvidence[]; keepGoal?: boolean;
+    /** v5: what the learner must be able to do, the format chosen for it, and whether a figure is the evidence. */
+    level?: string; format?: StudyFormat; figurePages?: number[] };
 };
 
 /** Objectives checked by default at the confirmation: everything for 통암기, otherwise only core ones. */

@@ -161,6 +161,8 @@ export const genInputSchema = z.strictObject({
   readImages: z.boolean().default(false),
   pastExamSourceIds: z.array(z.string().regex(/^src_[a-f0-9]{64}$/)).min(1).max(2).optional(),
   engine: z.enum(engines).default("v2"),
+  survey: z.strictObject({ exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
+    time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
 
 export async function createGen(raw: unknown): Promise<GenState> {
@@ -482,7 +484,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   };
   /** A call whose reply did not parse or match the schema counts as one try; a dropped connection too. */
   const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide,
-    extra: { files?: ModelRequest["files"]; cachePrefix?: string; onPartial?: (text: string) => void } = {}) => {
+    extra: { files?: ModelRequest["files"]; cachePrefix?: string; onPartial?: (text: string) => void; images?: ModelRequest["images"] } = {}) => {
     try {
       const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide, extra));
       return parsed.success ? { ok: true as const, value: parsed.data } : { ok: false as const, problem: "응답이 정해진 JSON 형식과 다릅니다." };
@@ -533,8 +535,12 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       const pageTexts = await (options.pages ?? registeredPages)(input).catch(() => new Map<number, string>());
       const thinPages = input.pageNumbers.filter((page) => needsImage(pageTexts.get(page) ?? ""));
       await runAstra({ state, pdf, pageTexts, thinPages, save: () => { astraMarks(); return saveState(state); }, getPriorityPage: async () => (input.origin ?? "lab") === "study" ? astraPriorityPage(state) : undefined, pause: (message) => { throw failAstra(new Stop("paused-invalid", message)); },
-        ask: async (step, attempt, system, user, parser, files, onPartial) => {
-          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(responseSchemaFor(input.engine)), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}) });
+        // v5: page images for figure-based goals (independent solve and review see the figure, not the whole PDF).
+        pageImages: async (wanted: number[]) => {
+          try { return await (options.pageImages ?? registeredImages)(input, wanted); } catch { return new Map<number, string>(); }
+        },
+        ask: async (step, attempt, system, user, parser, files, onPartial, images) => {
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema(responseSchemaFor(input.engine)), z.object({ result: parser }), undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}), ...(images?.length ? { images } : {}) });
           if (!result.ok) throw failAstra(new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`));
           return result.value.result;
         },
