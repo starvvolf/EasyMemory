@@ -104,7 +104,7 @@ export async function readResponseStream(body: ReadableStream<Uint8Array>, onPro
   const event = (raw: string) => {
     const data = raw.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
     if (!data || data === "[DONE]") return;
-    let value: { type?: string; delta?: string; response?: { model?: string; usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } }; error?: { code?: string; message?: string }; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> } };
+    let value: { type?: string; delta?: string; response?: { model?: string; usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number }; output_tokens_details?: { reasoning_tokens?: number } }; error?: { code?: string; message?: string }; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> } };
     try { value = JSON.parse(data); } catch { throw new ModelError("transient", "ChatGPT 응답 스트림을 읽지 못했어요."); }
     if (value.type === "response.output_text.delta") {
       text += value.delta ?? "";
@@ -128,6 +128,8 @@ export async function readResponseStream(body: ReadableStream<Uint8Array>, onPro
       completed = true;
       model = value.response?.model;
       usage = { inputTokens: value.response?.usage?.input_tokens, outputTokens: value.response?.usage?.output_tokens };
+      const reasoning = value.response?.usage?.output_tokens_details?.reasoning_tokens;
+      if (typeof reasoning === "number") usage.reasoningTokens = reasoning;
       const details = value.response?.usage?.input_tokens_details;
       if (typeof details?.cached_tokens === "number") usage.cachedInputTokens = details.cached_tokens;
       if (typeof details?.cache_write_tokens === "number") usage.cacheWriteTokens = details.cache_write_tokens;

@@ -35,7 +35,7 @@ export type ModelResult = {
   text: string;
   data?: unknown;
   model: string;
-  usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; cacheWriteTokens?: number };
+  usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; cacheWriteTokens?: number; reasoningTokens?: number };
   /** How the reply was constrained: JSON Schema (structured output), plain JSON mode, or free text. */
   format?: "json_schema" | "json_object" | "text";
 };
