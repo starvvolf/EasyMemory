@@ -463,7 +463,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     }
     if (cut) {
       const parent = request.signal;
-      if (parent) parent.aborted ? cut.abort() : parent.addEventListener("abort", () => cut.abort(), { once: true });
+      if (parent?.aborted) cut.abort();
+      else parent?.addEventListener("abort", () => cut.abort(), { once: true });
       request.signal = cut.signal;
     }
     try {
