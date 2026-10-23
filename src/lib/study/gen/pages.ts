@@ -164,12 +164,13 @@ export async function pageEmphasis(bytes: Uint8Array, pages: readonly number[]) 
         else if (fn === OPS.setFillRGBColor) fill = typeof args?.[0] === "string" ? nameOf(args[0] as string) : null;
         else if (fn === OPS.setFillGray || fn === OPS.setFillCMYKColor) fill = null;
         else if (fn === OPS.showText || fn === OPS.showSpacedText) {
-          if (!fill) return;
+          // Uncoloured text in between ends a run; same-coloured pieces (split by fonts or lines) join into one.
+          const last = runs.at(-1);
+          if (!fill) { if (last?.color) runs.push({ color: "", text: "" }); return; }
           const glyphs = (args?.[0] ?? []) as Array<{ unicode?: string } | number>;
           const text = glyphs.map(g => typeof g === "number" ? (g < -200 ? " " : "") : g?.unicode ?? "").join("");
-          const last = runs.at(-1);
           if (last && last.color === fill) last.text += text; else runs.push({ color: fill, text });
-        } else if (fn === OPS.endText) runs.push({ color: "", text: "" });   // a new text block starts a new run
+        } else if (fn === OPS.endText) { const last = runs.at(-1); if (last?.color) last.text += " "; }
       });
       const kept = [...new Set(runs.filter(r => r.color).map(r => `${r.color}: ${r.text.replace(/\s+/g, " ").trim()}`))]
         .filter(line => meaningfulChars(line.slice(line.indexOf(":") + 1)) >= 2).slice(0, 30);
