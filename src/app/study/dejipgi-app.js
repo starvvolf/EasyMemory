@@ -707,9 +707,7 @@ function renderHome(){
   // under that material. Open state is a per-browser convenience.
   for (const g of groups){
     if (!g.name && groups.length === 1){
-      const list = h("div", { class:"decks" });
-      for (const d of g.list) list.append(deckCard(d, growing));
-      wrap.append(list); continue;
+      wrap.append(h("section", { class:"subj-group" }, materialList(g.list, growing))); continue;
     }
     const key = "s:" + (g.name || "-");
     const open = Fold.is(key);
