@@ -883,3 +883,13 @@
 .dejipgi .md-table th,.dejipgi .md-table td{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
 .dejipgi .md-table th{background:color-mix(in srgb,var(--surface-2) 70%,transparent)}
 .dejipgi .bubble.assistant .btext .md-p{white-space:normal}
+
+.dejipgi .fold-btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;border-radius:8px}
+.dejipgi .fold-btn:focus-visible{outline:2px solid var(--ring);outline-offset:3px}
+.dejipgi .fold-caret{display:inline-block;width:1em;color:var(--muted);font-size:.9em}
+.dejipgi .subj-group.fold:not(.open) .subj-head{padding-bottom:20px}
+.dejipgi .mat-head{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap;border-top:1px solid var(--line);padding:12px 20px}
+.dejipgi .mat-head:hover{background:color-mix(in srgb,var(--surface-2) 60%,transparent)}
+.dejipgi .mat-name{font-weight:600}
+.dejipgi .mat-body .deck{padding-left:44px}
+@media (max-width:640px){.dejipgi .mat-head{padding-inline:16px}.dejipgi .mat-body .deck{padding-left:32px}}

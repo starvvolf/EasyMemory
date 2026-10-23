@@ -703,10 +703,19 @@ function renderHome(){
   const groups = orderedSubjects().map(s => ({ name:s.name, list:decksOf(s.name) })).filter(g => g.list.length);
   const loose = decks.filter(d => !subjectOf(d)).sort(byTitle);
   if (loose.length) groups.push({ name:"", list:loose });
+  // Subjects are folders, closed until clicked; inside, a material's several decks (AI 문제·족보·다시 만든 문제) fold
+  // under that material. Open state is a per-browser convenience.
   for (const g of groups){
-    const list = h("div", { class:"decks" });
-    for (const d of g.list) list.append(deckCard(d, growing));
-    wrap.append(g.name || groups.length > 1 ? h("section", { class:"subj-group" }, subjectHead(g.name, g.list), list) : list);
+    if (!g.name && groups.length === 1){
+      const list = h("div", { class:"decks" });
+      for (const d of g.list) list.append(deckCard(d, growing));
+      wrap.append(list); continue;
+    }
+    const key = "s:" + (g.name || "-");
+    const open = Fold.is(key);
+    const sec = h("section", { class:`subj-group fold${open ? " open" : ""}` }, subjectHead(g.name, g.list, key));
+    if (open) sec.append(materialList(g.list, growing));
+    wrap.append(sec);
   }
   wrap.append(h("div", { class:"legend" },
     h("span", { style:"--c:var(--good)", text:"혼자 맞힘" }),
@@ -749,8 +758,41 @@ function subjectStrip(){
   }
   return panel;
 }
-function subjectHead(name, list){
-  if (!name) return h("div", { class:"subj-head" }, h("div", null, h("h2", { text:"과목 미지정" }),
+const Fold = {
+  KEY:"dejipgi.fold", set:null,
+  load(){ if (this.set) return this.set; try{ this.set = new Set(JSON.parse(localStorage.getItem(this.KEY) || "[]")); }catch(e){ this.set = new Set(); } return this.set; },
+  is(k){ return this.load().has(k); },
+  toggle(k){ const s = this.load(); s.has(k) ? s.delete(k) : s.add(k); try{ localStorage.setItem(this.KEY, JSON.stringify([...s])); }catch(e){} render(); },
+};
+function foldBtn(key, label){
+  const open = Fold.is(key);
+  return h("button", { class:"fold-btn", "aria-expanded": open ? "true" : "false", onclick: () => Fold.toggle(key) }, h("span", { class:"fold-caret", "aria-hidden":"true", text: open ? "▾" : "▸" }), label);
+}
+function materialName(list){
+  const plain = list.find(d => !/^족보/.test(d.sourceName || "")) || list[0];
+  return String(plain.sourceName || plain.title || "").replace(/^족보[^·]*·\s*/, "").replace(/\.pdf$/i, "").replace(/\s*·\s*\d+쪽$/, "");
+}
+/* Decks of one subject grouped by their material (PDF). A material with one deck shows that card directly. */
+function materialList(decks, growing){
+  const byMat = new Map();
+  for (const d of decks){ const k = planKey(d); if (!byMat.has(k)) byMat.set(k, []); byMat.get(k).push(d); }
+  const mats = [...byMat.entries()].map(([k, list]) => ({ k, list, name:materialName(list) })).sort((a, b) => a.name.localeCompare(b.name, "ko", { numeric:true }));
+  const wrap = h("div", { class:"decks" });
+  for (const m of mats){
+    if (m.list.length === 1){ wrap.append(deckCard(m.list[0], growing)); continue; }
+    const key = "m:" + m.k;
+    const open = Fold.is(key);
+    const due = m.list.reduce((n, d) => n + deckCounts(d).due, 0), fresh = m.list.reduce((n, d) => n + deckCounts(d).fresh, 0);
+    wrap.append(h("div", { class:"mat-head" }, foldBtn(key, h("span", { class:"mat-name", text:m.name })),
+      h("span", { class:"meta" }, h("span", { class:"num muted", text:`문제 세트 ${m.list.length}` }),
+        due ? h("span", { class:"chip bad num", text:`복습 ${due}` }) : null, fresh ? h("span", { class:"chip num", text:`새 문제 ${fresh}` }) : null)));
+    if (open){ const inner = h("div", { class:"decks mat-body" }); for (const d of m.list) inner.append(deckCard(d, growing)); wrap.append(inner); }
+  }
+  return wrap;
+}
+function subjectHead(name, list, key){
+  const toggle = (label) => key ? foldBtn(key, label) : label;
+  if (!name) return h("div", { class:"subj-head" }, h("div", null, toggle(h("h2", { text:`과목 미지정 · ${list.length}` })),
     S.plan.subjects.length ? h("p", { class:"small muted", text:"자료 카드의 과목 칸에서 고르면 그 과목으로 묶여요." }) : null));
   const n = daysLeft(examOf(name));
   const weak = weakList(list);
@@ -761,7 +803,7 @@ function subjectHead(name, list){
     h("div", { class:"subj-title" },
       n != null ? h("span", { class:`dday-big${n >= 0 && n <= 3 ? " soon" : ""}${n < 0 ? " past" : ""}`, text: n > 0 ? `D-${n}` : n === 0 ? "D-day" : "끝" }) : null,
       h("div", null,
-        h("h2", { text:name }),
+        toggle(h("h2", { text:`${name} · ${list.length}` })),
         h("p", { class:"small muted num" },
           exam ? `${Number(exam.slice(5, 7))}월 ${Number(exam.slice(8, 10))}일 시험 · ` : "",
           `약점 목표 ${objs}개 · 복습 차례 ${due}개`))),
