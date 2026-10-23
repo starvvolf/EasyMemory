@@ -1394,17 +1394,33 @@ function ensureKatex(){
   if (!katexLoading) katexLoading = env.loadKatex().then((k) => { katexLib = k; return true; }, () => false);
   return katexLoading;
 }
+/* Text and $…$ formulas. An escaped dollar (\$) is a plain "$" outside a formula and does not end one inside
+   ("$/Gb" written in a formula); an unclosed $ stays text. */
+function mathParts(str){
+  const s = String(str ?? ""), out = [];
+  let text = "", i = 0;
+  while (i < s.length){
+    if (s[i] === "\\" && s[i + 1] === "$"){ text += "$"; i += 2; continue; }
+    if (s[i] === "$"){
+      let j = i + 1, ok = false;
+      while (j < s.length && s[j] !== "\n"){ if (s[j] === "\\"){ j += 2; continue; } if (s[j] === "$"){ ok = j > i + 1; break; } j++; }
+      if (ok){ if (text) out.push({ text }); text = ""; out.push({ tex: s.slice(i + 1, j) }); i = j + 1; continue; }
+    }
+    text += s[i]; i++;
+  }
+  if (text) out.push({ text });
+  return out;
+}
 function richText(str){
-  const parts = String(str ?? "").split(/(\$[^$\n]+\$)/g).filter(p => p !== "");
-  return parts.map(p => {
-    if (/^\$[^$]+\$$/.test(p)){
-      const tex = p.slice(1, -1);
+  return mathParts(str).map(p => {
+    if (p.tex !== undefined){
+      const tex = p.tex;
       if (katexLib){
         try{ const span = document.createElement("span"); span.className = "math"; span.innerHTML = katexLib.renderToString(tex, { output:"htmlAndMathml", throwOnError:false, trust:false, strict:"ignore" }); return span; }catch(e){}
       }
       return h("span", { class:"texfb" }, texFallback(tex));
     }
-    return document.createTextNode(p);
+    return document.createTextNode(p.text);
   });
 }
 /* readable fallback when KaTeX is unavailable: Greek letters and operators as symbols, _x and ^x as sub/superscripts */
