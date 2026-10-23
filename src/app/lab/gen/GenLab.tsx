@@ -104,7 +104,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const [guideDir, setGuideDir] = useState("출제기준");
   const [readImages, setReadImages] = useState(false);
   // v5 설문 (empty = 알잘딱; the memo above is 개입).
-  const [survey, setSurvey] = useState<{ exam?: string; depth?: string; time?: string; known?: string }>({});
+  const [survey, setSurvey] = useState<{ style?: string; exam?: string; depth?: string; time?: string; known?: string }>({});
   const [planInput, setPlanInput] = useState<"" | "pdf" | "pages" | "figures">("");
   const [cacheShared, setCacheShared] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -160,6 +160,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
       </div>}
       {engine === "v5" && <div className="row">
         <span className="muted">설문(비우면 알잘딱, 메모는 개입):</span>
+        <select value={survey.style ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, style: event.target.value || undefined }))}><option value="">시험 유형</option><option value="recall">암기형</option><option value="understand">이해형</option></select>
         <select value={survey.exam ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, exam: event.target.value || undefined }))}><option value="">시험 형태</option><option value="choice">객관식 위주</option><option value="mixed">섞어서</option><option value="written">서술 포함</option></select>
         <select value={survey.depth ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, depth: event.target.value || undefined }))}><option value="">깊이</option><option value="core">핵심만</option><option value="all">전부</option></select>
         <select value={survey.time ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, time: event.target.value || undefined }))}><option value="">시간</option><option value="short">빠듯함</option><option value="normal">보통</option><option value="long">넉넉함</option></select>

@@ -163,7 +163,7 @@ export const genInputSchema = z.strictObject({
   engine: z.enum(engines).default("v2"),
   planInput: z.enum(["pdf", "pages", "figures"]).optional(),
   cacheMode: z.enum(["shared"]).optional(),
-  survey: z.strictObject({ exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
+  survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
 

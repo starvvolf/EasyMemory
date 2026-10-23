@@ -20,7 +20,7 @@ export const astraFamily = (engine: Engine | undefined) => engine === "astra" ||
 export const studyFormats = ["choice", "ox", "short", "cloze", "flashcard"] as const;
 export type StudyFormat = (typeof studyFormats)[number];
 /** v5: a short survey before generation (설문). Absent and no note: the engine decides (알잘딱). */
-export type GenSurvey = { exam?: "choice" | "mixed" | "written"; depth?: "core" | "all"; time?: "short" | "normal" | "long"; known?: string };
+export type GenSurvey = { style?: "recall" | "understand"; exam?: "choice" | "mixed" | "written"; depth?: "core" | "all"; time?: "short" | "normal" | "long"; known?: string };
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
 export type ItemKind = (typeof itemKinds)[number];

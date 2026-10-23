@@ -3728,7 +3728,7 @@ function renderBuilder(){
         onclick: () => { b.engine = key; render(); } }, label))),
       b.engine === "v5" ? h("div", { class:"row small", style:"gap:6px;flex-wrap:wrap" },
         h("span", { class:"muted", text:"설문(선택) · 비우면 자료에 맞게 정해요" }),
-        ...[["exam", "시험 형태", [["choice", "객관식 위주"], ["mixed", "섞어서"], ["written", "서술 포함"]]], ["depth", "깊이", [["core", "핵심만"], ["all", "전부"]]], ["time", "시간", [["short", "빠듯함"], ["normal", "보통"], ["long", "넉넉함"]]]]
+        ...[["style", "시험 유형", [["recall", "암기형"], ["understand", "이해형"]]], ["exam", "시험 형태", [["choice", "객관식 위주"], ["mixed", "섞어서"], ["written", "서술 포함"]]], ["depth", "깊이", [["core", "핵심만"], ["all", "전부"]]], ["time", "시간", [["short", "빠듯함"], ["normal", "보통"], ["long", "넉넉함"]]]]
           .map(([key, label, opts]) => h("select", { disabled:b.busy, onchange:(e) => { b.survey = { ...b.survey, [key]: e.target.value || undefined }; } },
             h("option", { value:"", text:label }), ...opts.map(([v, t]) => h("option", { value:v, selected: b.survey[key] === v ? true : null, text:t })))),
         h("input", { placeholder:"이미 아는 부분", value:b.survey.known || "", disabled:b.busy, oninput:(e) => { b.survey = { ...b.survey, known: e.target.value || undefined }; } })) : null),
