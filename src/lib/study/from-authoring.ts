@@ -32,6 +32,8 @@ export type StudyItem = {
   page: number;
   quote: string;
   options?: string[];
+  /** per option (same order): what it is / connects to, shown after the answer */
+  optionNotes?: string[];
   answer?: number | string;
   accepted?: string[];
 };
@@ -125,7 +127,8 @@ function toItem(question: AuthoredQuestion, response: ResponseContract, shared: 
     const options = response.options.map((option) => option.text ?? (option.latex ? math(option.latex) : ""));
     const answer = response.options.findIndex((option) => option.id === response.correctOptionId);
     if (answer < 0 || options.some((text) => !text.trim())) throw new Error("보기나 정답 연결이 비어 있습니다.");
-    return { ...base, format: "choice", options, answer };
+    const notes = response.options.map((option) => option.note?.trim() ?? "");
+    return { ...base, format: "choice", options, answer, ...(notes.some(Boolean) ? { optionNotes: notes } : {}) };
   }
   if (!response.acceptedAnswers.length) throw new Error("인정 답안이 없습니다.");
   // Recaller가 자기확인으로 정한 서술형은 되짚기의 '떠올리고 확인'으로 보여 준다.

@@ -893,3 +893,7 @@
 .dejipgi .mat-name{font-weight:600}
 .dejipgi .mat-body .deck{padding-left:44px}
 @media (max-width:640px){.dejipgi .mat-head{padding-inline:16px}.dejipgi .mat-body .deck{padding-left:32px}}
+
+.dejipgi .opt .opt-note{margin-left:auto;padding-left:16px;max-width:48%;text-align:right;font-size:14px;line-height:1.45;color:var(--muted)}
+.dejipgi .opt.is-correct .opt-note,.dejipgi .opt.is-wrong .opt-note{color:var(--ink)}
+@media (max-width:640px){.dejipgi .opt:has(.opt-note){flex-wrap:wrap}.dejipgi .opt .opt-note{flex-basis:100%;max-width:none;margin-left:0;padding:4px 0 0 34px;text-align:left}}

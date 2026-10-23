@@ -56,7 +56,8 @@ export type ResponseContract =
   | {
       id: string;
       kind: "single-choice";
-      options: Array<{ id: string; text?: string; latex?: string }>;
+      /** note: what the option is / connects to, shown beside it after the answer. */
+      options: Array<{ id: string; text?: string; latex?: string; note?: string }>;
       correctOptionId: string;
       grading: "exact";
       explanation?: string;

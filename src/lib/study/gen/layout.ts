@@ -75,8 +75,10 @@ export function layoutQuestion(reply: AuthoredReplyQuestion, objective: Objectiv
   const answer = reply.answer;
   let response: ResponseContract;
   if (answer.kind === "choice") {
-    const options = (answer.options ?? []).map((option, index): { id: string; text?: string; latex?: string } =>
-      option.latex?.trim() ? { id: `o${index + 1}`, latex: option.latex.trim() } : { id: `o${index + 1}`, text: (option.text ?? "").trim() });
+    const options = (answer.options ?? []).map((option, index): { id: string; text?: string; latex?: string; note?: string } => {
+      const note = (option as { note?: string }).note?.trim();
+      return { ...(option.latex?.trim() ? { id: `o${index + 1}`, latex: option.latex.trim() } : { id: `o${index + 1}`, text: (option.text ?? "").trim() }), ...(note ? { note } : {}) };
+    });
     response = { id: rid, kind: "single-choice", options, correctOptionId: `o${(answer.correctIndex ?? 0) + 1}`, grading: "exact", explanation: answer.explanation };
     const height = options.reduce((sum, option) => sum + lines(option.text ?? option.latex ?? "", 40) * 26 + 22, 8);
     blocks.push({ id: "choices", kind: "choice-set", responseId: rid, optionIds: options.map((option) => option.id), frame: place(height) });

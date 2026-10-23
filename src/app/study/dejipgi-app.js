@@ -1081,7 +1081,8 @@ function renderSession(){
       if (locked && oi === item.answer) cls.push("is-correct");
       else if (locked && c.pick === oi && oi !== item.answer) cls.push("is-wrong");
       box.append(h("button", { class:cls.join(" "), "aria-pressed": c.pick === oi ? "true" : "false", disabled:locked, onclick: () => { c.pick = oi; render(); } },
-        h("span", { class:"k", text:String(pos + 1) }), h("span", null, richText(item.options[oi]))));
+        h("span", { class:"k", text:String(pos + 1) }), h("span", null, richText(item.options[oi])),
+        locked && item.optionNotes && item.optionNotes[oi] ? h("span", { class:"opt-note" }, richText(item.optionNotes[oi])) : null));
     });
     card.append(box);
   } else if (item.format === "value"){
