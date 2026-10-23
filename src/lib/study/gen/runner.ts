@@ -11,7 +11,7 @@ import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normali
 import { genFakeReply } from "./fake.ts";
 import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, getAstraReadingView, responseSchemaFor, runAstra, RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
-import { needsImage, renderPageFigures, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
+import { needsImage, pageEmphasis, renderPageFigures, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
@@ -343,7 +343,9 @@ export async function registeredPages(input: GenInput) {
   const bytes = await readRegisteredMcpSourcePdf(input.sourceId);
   if (!bytes) throw new Stop("failed", "등록된 원본 PDF를 읽을 수 없어요.");
   const texts = await extractPdfPageTexts(bytes, input.pageNumbers);
-  return new Map([...texts].map(([page, text]) => [page, cleanPageText(text)]));
+  // Coloured emphasis is invisible in the text layer; it is added as one line per page (lecturers mark what matters).
+  const emphasis = await pageEmphasis(bytes, input.pageNumbers).catch(() => new Map<number, string[]>());
+  return new Map([...texts].map(([page, text]) => [page, cleanPageText(text) + (emphasis.get(page)?.length ? `\n[색 강조] ${emphasis.get(page)!.join(" · ")}` : "")]));
 }
 
 /** Runs a job after whatever is queued (generation or judging), so model calls of two jobs never overlap. */
