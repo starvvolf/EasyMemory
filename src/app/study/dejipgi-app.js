@@ -1727,7 +1727,7 @@ function pageAction(c){
   return nxt ? { label:`문제 있는 다음 쪽 · p.${nxt} →`, run: () => goPage(nxt) } : null;
 }
 /* 쉬운 설명 요청문: the learner can rewrite it (⚙ on the card); the [다음] line for follow-up chips is always added. */
-const EXPLAIN_ASK = `이 쪽을 처음 보는 사람에게 쉽게 설명해 줘. 첫 문장은 이 쪽이 무엇에 대한 것인지, 이어서 핵심을 2~4문장으로. 어려운 용어는 원문 그대로 쓰고 바로 뒤 괄호에 쉬운 풀이를 붙인다. 마지막에 "한 줄 요약: "으로 시작하는 줄을 쓴다.`;
+const EXPLAIN_ASK = `이 쪽을 처음 보는 비전공자에게 채팅으로 설명하듯 써 줘. 맨 위에 **핵심 한 줄**. 이어서 이 쪽의 성격에 맞는 형식으로: 여러 대상을 비교하면 표나 대상별 목록(같은 기준으로), 과정이면 번호 단계, 개념이면 쉬운 정의와 일상 비유, 역사면 시간 순서. 그림은 읽는 법을 나열하지 말고 무슨 뜻인지만. 어려운 용어는 원문 그대로 쓰고 괄호에 쉬운 풀이. 제목에만 있고 본문에 설명이 없는 용어는 "원문 밖 설명:"으로 짧게 보충. 마지막 줄은 "**시험 포인트:** "로 외울 것이나 헷갈리는 짝 하나.`;
 const EXPLAIN_PRESETS = [
   ["기본", EXPLAIN_ASK],
   ["아주 짧게", "이 쪽의 핵심만 두세 문장으로 아주 쉽게 설명해 줘. 어려운 용어는 원문 그대로 쓰고 괄호에 쉬운 풀이를 붙인다."],
@@ -2398,9 +2398,21 @@ const Chat = {
     if (!d) return null;
     return { d, page:R.page, objs:d.objectives.filter(o => o.pages.includes(R.page)) };
   },
+  /* 쪽마다 대화: moving to another page puts this conversation away (it is in the notes too) and shows that page's
+     own conversation, or an empty window. Not while an answer is streaming in. */
+  threads:new Map(), threadKey:null,
+  switchThread(c){
+    const key = c ? (c.d.sourceCatalogId || c.d.id) + ":" + c.page : null;
+    if (!key || key === this.threadKey || this.busy) return;
+    if (this.threadKey && this.msgs.length) this.threads.set(this.threadKey, { msgs:this.msgs, noteId:this.noteId, noteSource:this.noteSource, noteTitle:this.noteTitle, fromNote:this.fromNote, base:this.base });
+    const saved = this.threads.get(key);
+    Object.assign(this, saved ? { ...saved } : { msgs:[], noteId:null, noteSource:null, noteTitle:"", fromNote:null, base:0 }, { err:"", quote:null });
+    this.threadKey = key;
+  },
   paint(){
     if (!this.el) return;
     const c = this.context();
+    this.switchThread(c);
     this.el.querySelector("#chatTitle").textContent = c ? `질문하기 · p.${c.page}` : "질문하기";
     const saved = this.el.querySelector("#chatSaved");
     saved.hidden = !this.noteTitle; saved.textContent = this.noteTitle ? `노트 · ${this.noteTitle}` : ""; saved.title = saved.textContent;
@@ -2450,10 +2462,11 @@ const Chat = {
 
 규칙
 - 아래 [지금 보는 쪽]의 원문을 근거로 답한다. 원문에 없는 내용을 덧붙일 때는 그 문장 앞에 "원문 밖 설명:"이라고 밝힌다.
-- 쉽고 짧게, 보통 3~6문장. "줄마다 풀어 달라"는 요청이면 원문 줄을 짧게 인용하고 바로 아래에 쉬운 말 한두 문장을 붙인다.
+- ChatGPT·Claude 채팅처럼 답한다: 질문과 내용에 맞는 형식을 고른다. 비교는 대상별 표(| 항목 | A | B |)나 대상별 목록, 과정·순서는 번호 단계, 정의는 한 줄 정의 + 쉬운 비유, 역사는 시간 순서, 짧은 질문에는 짧게. 그림을 위에서부터 묘사하지 말고 "그래서 무슨 뜻인지"를 말한다. 학습자는 비전공자다. 길이는 필요한 만큼.
+- "줄마다 풀어 달라"는 요청이면 원문 줄을 짧게 인용하고 바로 아래에 쉬운 말 한두 문장을 붙인다.
 - 원문의 기호와 용어는 바꾸지 않는다. 기준점, 방향, 부호, 단위, 조건을 빠뜨리지 않는다. 식은 $...$ 안에 LaTeX로 쓴다.
 - 질문이 이 쪽과 무관하면 짧게 답하고, 이 쪽과 어떻게 이어지는지 한 문장 덧붙인다.
-- 마크다운 기호(#, *, **, -)는 쓰지 않고 평문으로 쓴다. 단계는 "1)" "2)"처럼 적는다.
+- 마크다운을 쓴다: **굵게**(핵심어), 목록(- 또는 1.), 표, 짧은 소제목(###). 표 칸 안에는 줄바꿈을 넣지 않는다.
 ${NEXT_RULE}
 ${style ? `\n[학습자가 정한 답변 방식 — 위 규칙과 충돌하면 위 규칙을 따른다]\n${style.slice(0, 1500)}\n` : ""}
 [자료] ${c.d.title}
@@ -2496,7 +2509,8 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
       const first = !this.noteId;
       Object.assign(this, { noteId:note.id, noteSource:c.d.sourceCatalogId, noteTitle: note.kind === "talk" ? note.quote : `‘${note.quote}’ 카드` });
       putNote(c.d, note); this.paint(); paintDrawer();
-      if (first && note.kind === "talk"){ toast("이 대화를 ‘모르는 것’ 노트에 남겼어요."); if (S.view === "read" && !window.getSelection().toString()) render(); }
+      // The window's title already shows the note; no toast or re-render (it pulled the screen away mid-question).
+      if (first && note.kind === "talk") paintDrawer();
     }catch{ /* the answer is already on screen; saving is retried with the next turn */ }
   },
   async send(){
@@ -3097,13 +3111,53 @@ function paintDrawer(){
     h("div", { class:"dfoot small muted", text:`같은 것을 ${NOTE_WEAK}번 이상 다시 보면 약점으로 표시해요.` }));
   if (el) el.replaceWith(fresh); else root.append(fresh);
 }
-function richLines(text){
-  return String(text).split(/\n/).flatMap((line, i) => {
-    const m = line.match(/^\s*원문 밖 설명\s*[:：]\s*(.*)$/);
-    const node = m ? h("span", { class:"outside" }, h("b", { text:"원문 밖 설명" }), ...richText(m[1])) : null;
-    const parts = node ? [node] : richText(line);
-    return i ? [h("br"), ...parts] : parts;
+/* Chat-style answers: paragraphs, **bold**, `code`, # headings, - / 1. lists and | tables |, with $…$ math inside.
+   A line starting with "원문 밖 설명:" is marked as outside the material. */
+function mdInline(text){
+  const out = [];
+  String(text).split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g).filter(Boolean).forEach(part => {
+    if (/^\*\*[^*]+\*\*$/.test(part)) out.push(h("b", null, ...richText(part.slice(2, -2))));
+    else if (/^`[^`]+`$/.test(part)) out.push(h("code", { text:part.slice(1, -1) }));
+    else out.push(...richText(part));
   });
+  return out;
+}
+function mdLine(line){
+  const m = line.match(/^\s*원문 밖 설명\s*[:：]\s*(.*)$/);
+  return m ? [h("span", { class:"outside" }, h("b", { text:"원문 밖 설명" }), " ", ...mdInline(m[1]))] : mdInline(line);
+}
+function richLines(text){
+  const lines = String(text).split("\n"), out = [];
+  const cells = (row) => row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+  let para = [];
+  const flush = () => { if (para.length){ out.push(h("p", { class:"md-p" }, ...para.flatMap((l, i) => i ? [h("br"), ...mdLine(l)] : mdLine(l)))); para = []; } };
+  for (let i = 0; i < lines.length; i++){
+    const line = lines[i];
+    if (/^\s*\|.*\|\s*$/.test(line) && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1] || "")){
+      flush();
+      const head = cells(line), body = [];
+      i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) body.push(cells(lines[i++]));
+      i--;
+      out.push(h("div", { class:"md-table" }, h("table", null, h("thead", null, h("tr", null, head.map(c => h("th", null, ...mdInline(c))))),
+        h("tbody", null, body.map(r => h("tr", null, r.map(c => h("td", null, ...mdInline(c)))))))));
+      continue;
+    }
+    const hd = line.match(/^\s*#{1,4}\s+(.*)$/);
+    if (hd){ flush(); out.push(h("p", { class:"md-h" }, h("b", null, ...mdInline(hd[1])))); continue; }
+    if (/^\s*([-*•]|\d+[.)])\s+/.test(line)){
+      flush();
+      const ordered = /^\s*\d+[.)]\s+/.test(line), items = [], same = ordered ? /^\s*\d+[.)]\s+/ : /^\s*[-*•]\s+/;
+      while (i < lines.length && same.test(lines[i])) items.push(lines[i++].replace(/^\s*([-*•]|\d+[.)])\s+/, ""));
+      i--;
+      out.push(h(ordered ? "ol" : "ul", { class:"md-list" }, items.map(t => h("li", null, ...mdLine(t)))));
+      continue;
+    }
+    if (!line.trim()){ flush(); continue; }
+    para.push(line);
+  }
+  flush();
+  return out;
 }
 /* ----- 정리: one page per subject — every objective with what to recall, by material, unit and heading.
    Colored by the learner's own record; "가리기" turns it into a quick self-test before the exam. ----- */

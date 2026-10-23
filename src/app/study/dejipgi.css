@@ -871,3 +871,15 @@
 .dejipgi .trb{position:absolute;box-sizing:border-box;padding:0 .08em;line-height:1.18;font-family:"Pretendard Variable",Pretendard,system-ui,sans-serif;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;overflow:hidden;border-radius:2px;letter-spacing:-.01em}
 .dejipgi .trchip{position:absolute;right:8px;top:8px;z-index:3;font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);box-shadow:var(--shadow)}
 .dejipgi button.trchip{cursor:pointer;color:var(--bad)}
+
+/* chat-style answers (richLines markdown) */
+.dejipgi .md-p{margin:0 0 .55em}
+.dejipgi .md-p:last-child{margin-bottom:0}
+.dejipgi .md-h{margin:.6em 0 .3em}
+.dejipgi .md-list{margin:.2em 0 .6em;padding-left:1.3em}
+.dejipgi .md-list li{margin:.15em 0}
+.dejipgi .md-table{overflow-x:auto;margin:.3em 0 .7em}
+.dejipgi .md-table table{border-collapse:collapse;font-size:.95em;min-width:100%}
+.dejipgi .md-table th,.dejipgi .md-table td{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
+.dejipgi .md-table th{background:color-mix(in srgb,var(--surface-2) 70%,transparent)}
+.dejipgi .bubble.assistant .btext .md-p{white-space:normal}
