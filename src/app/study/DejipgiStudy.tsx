@@ -248,9 +248,9 @@ export default function DejipgiStudy() {
       },
       // Question window answers and 모르는 것 노트 go through /api/study-notes (the signed-in ChatGPT account).
       ...(session.mode === "local-experiment" ? {
-        async ask(turns: Array<{ role: string; content: string }>, options: { signal: AbortSignal; onText: (chunk: { text: string }) => void }) {
+        async ask(turns: Array<{ role: string; content: string }>, options: { signal: AbortSignal; onText: (chunk: { text: string }) => void; pageImage?: { sourceId: string; page: number } }) {
           const response = await fetchExperiment("/api/study-notes", {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "chat", turns }), signal: options.signal,
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "chat", turns, ...(options.pageImage ? { pageImage: options.pageImage } : {}) }), signal: options.signal,
           });
           const data = await response.json().catch(() => null) as { text?: string; message?: string; code?: string } | null;
           if (!response.ok) throw Object.assign(new Error(data?.message ?? "답을 받지 못했어요."), { code: data?.code === "usage_limit" ? "rate_limited" : data?.code });

@@ -1817,6 +1817,9 @@ function promptsButton(){
   const store = document.getElementById("store"); if (!store) return;
   store.parentNode.insertBefore(h("button", { class:"tablet-btn", id:"promptBtn", title:"설명·답변·용어 풀이를 어떻게 해 줄지 정해요", onclick: () => openPrompts() }, "⚙ 프롬프트"), store);
 }
+/* A page whose text layer says little (a picture slide): the explanation and the question window send its pictures. */
+function picturePage(d, text){ return Boolean(d && d.sourceCatalogId) && ((text || "").match(/[\p{L}\p{N}]/gu) || []).length < 300; }
+
 /* 쪽마다 쉬운 설명: after 1.5s on a page with enough text, once per page; kept (study-notes/<source>.explain.json)
    so it shows instantly next time. It is not a 모르는 것 note, so it never counts as "물어봄". */
 const Explain = {
@@ -1847,7 +1850,9 @@ const Explain = {
     const key = this.sid(d) + ":" + page;
     this.err = null;
     const text = await pageText(d, page);
-    if (!force && text.replace(/\s/g, "").length < 40){ this.skip.add(key); this.paintNode(); return; }
+    // Picture-heavy page: its pictures go with the request instead of skipping it (lecture slides that are mostly images).
+    const pic = picturePage(d, text);
+    if (!force && !pic && text.replace(/\s/g, "").length < 40){ this.skip.add(key); this.paintNode(); return; }
     const objs = d.objectives.filter(o => o.pages.includes(page));
     const run = this.run = { key, text:"", ctl:new AbortController() };
     this.paintNode();
@@ -1856,7 +1861,7 @@ const Explain = {
 ${explainAsk().slice(0, 1500)}
 맨 마지막 줄에는 [다음] 줄을 쓴다.`;
     try{
-      await ask([{ role:"user", content:prompt }], { signal:run.ctl.signal, onText: ({ text:t }) => { run.text = t; this.paintBody(); } });
+      await ask([{ role:"user", content:prompt }], { signal:run.ctl.signal, onText: ({ text:t }) => { run.text = t; this.paintBody(); }, ...(pic ? { pageImage:{ sourceId:d.sourceCatalogId, page } } : {}) });
       if (this.run !== run) return;
       if (run.text.includes("$") && !katexLib) await ensureKatex();
       this.run = null;
@@ -2492,9 +2497,10 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
     const reply = { role:"assistant", content:"", page:c.page }; this.msgs.push(reply);
     this.busy = true; this.ctl = new AbortController(); this.paint();
     const history = this.msgs.slice(0, -1).slice(-12).map(m => ({ role:m.role, content: m.role === "user" ? `${m.page ? `(p.${m.page}를 보며) ` : ""}${m.quote ? `[원문 인용] “${m.quote}”\n` : ""}${m.content}` : m.content })).filter(m => m.content);
-    const turns = [{ role:"user", content:this.prompt(c, await pageText(c.d, c.page), promptOf("chat")) }, ...history];
+    const ctext = await pageText(c.d, c.page);
+    const turns = [{ role:"user", content:this.prompt(c, ctext, promptOf("chat")) }, ...history];
     try{
-      await ask(turns, { signal:this.ctl.signal, onText: ({ text }) => { reply.content = text; const last = this.el.querySelector("#chatLog .bubble.assistant:last-of-type .btext"); if (last) last.replaceChildren(...richLines(shown(text))); } });
+      await ask(turns, { ...(picturePage(c.d, ctext) ? { pageImage:{ sourceId:c.d.sourceCatalogId, page:c.page } } : {}), signal:this.ctl.signal, onText: ({ text }) => { reply.content = text; const last = this.el.querySelector("#chatLog .bubble.assistant:last-of-type .btext"); if (last) last.replaceChildren(...richLines(shown(text))); } });
       const sp = splitNext(reply.content); reply.content = sp.body; reply.next = sp.next;
       if (JSON.stringify(reply.content).includes("$") && !katexLib){ await ensureKatex(); }
       this.saveTalk(c);

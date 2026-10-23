@@ -18,7 +18,9 @@ const body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("seen"), sourceId, noteId: z.string().max(60) }),
   z.object({ action: z.literal("remove"), sourceId, noteId: z.string().max(60) }),
   z.object({ action: z.literal("follow"), sourceId, noteId: z.string().max(60), question: text(1000).min(1), pageText: text(20000).nullish(), title: text(300).nullish(), style: text(1500).nullish() }),
-  z.object({ action: z.literal("chat"), turns: z.array(z.object({ role: z.string().max(20), content: text(40000) })).min(1).max(40) }),
+  z.object({ action: z.literal("chat"), turns: z.array(z.object({ role: z.string().max(20), content: text(40000) })).min(1).max(40),
+    // A picture-heavy page: its picture regions go with the request (the text layer alone says almost nothing).
+    pageImage: z.object({ sourceId, page }).optional() }),
   z.object({ action: z.literal("talk"), sourceId, page, noteId: z.string().max(60).nullish(),
     turns: z.array(z.object({ role: z.enum(["user", "assistant"]), text: text(8000), quote: text(400).nullish(), page: page.optional() })).min(1).max(80),
     usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional() }),
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
       case "seen": return NextResponse.json({ note: await markSeen(input.sourceId, input.noteId) });
       case "remove": await removeNote(input.sourceId, input.noteId); return NextResponse.json({ ok: true });
       case "follow": return NextResponse.json({ note: await followUp(who, input) });
-      case "chat": return NextResponse.json(await chatReply(who, input.turns));
+      case "chat": return NextResponse.json(await chatReply(who, input.turns, input.pageImage));
       case "compose": return NextResponse.json(await composeReply(who, input));
       case "talk": return NextResponse.json({ note: await saveTalk(who, input) });
       case "explain-save": return NextResponse.json({ page: await saveExplanation(input.sourceId, input.page, input.text, input.goal) });

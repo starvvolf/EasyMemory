@@ -261,12 +261,29 @@ export async function followUp(caller: ModelCaller, input: { sourceId: string; n
 }
 
 /** The question window. `turns` are the window's own prompt and history; the reply text is returned as is. */
-export async function chatReply(caller: ModelCaller, turns: Array<{ role: string; content: string }>) {
+/** The picture regions of one page of a registered PDF (the whole page when it is mostly picture); none on failure. */
+async function pageImagesFor(image?: { sourceId: string; page: number }) {
+  if (!image) return [];
+  try {
+    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
+    const bytes = await readRegisteredMcpSourcePdf(image.sourceId);
+    if (!bytes) return [];
+    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const figures = (await renderPageFigures(bytes, [image.page])).get(image.page) ?? [];
+    if (figures.length) return figures.slice(0, 4).map(({ label, dataUrl }) => ({ label, dataUrl }));
+    const whole = (await renderPageImages(bytes, [image.page])).get(image.page);
+    return whole ? [{ label: `원문 p.${image.page}`, dataUrl: whole }] : [];
+  } catch { return []; }
+}
+
+export async function chatReply(caller: ModelCaller, turns: Array<{ role: string; content: string }>, image?: { sourceId: string; page: number }) {
   const [first, ...rest] = turns;
   if (!first?.content) throw new NoteError(400, "질문이 비어 있어요.");
   const { model, effort } = modelSettings();
-  const user = rest.slice(-12).map((turn) => `${turn.role === "user" ? "학습자" : "튜터"}: ${clip(turn.content, 4000)}`).join("\n\n");
-  const reply = await callModel({ purpose: "note:chat", system: clip(first.content, 16000), user, model, effort, caller });
+  const images = await pageImagesFor(image);
+  const user = (images.length ? `[첨부] 이 쪽의 그림·도표 이미지 ${images.length}장. 글자 층에 없는 내용은 그림에서 읽어 설명에 넣는다.\n\n` : "")
+    + rest.slice(-12).map((turn) => `${turn.role === "user" ? "학습자" : "튜터"}: ${clip(turn.content, 4000)}`).join("\n\n");
+  const reply = await callModel({ purpose: "note:chat", system: clip(first.content, 16000), user, model, effort, caller, ...(images.length ? { images } : {}) });
   return { text: reply.text.trim(), usage: reply.usage };
 }
 
