@@ -15,7 +15,7 @@ import { needsImage, pageEmphasis, renderPageFigures, renderPageImages, TRANSCRI
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
-import { astraFamily, defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenMark, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
+import { astraFamily, v5Family, defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenMark, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { AUTHOR_SYSTEM, authorUser, buildMap, DERIVABLE_SYSTEM, derivableReply, derivableSchema, derivableUser, evidenceInQuestion, formatRules, gateCode, joinUnitMaps, mapItems,
   MAX_PDF_BYTES, MISREAD_SYSTEM, misreadReply, misreadSchema, misreadUser, planReply, planSchema, PLAN_SYSTEM, planToObjectives, planUser, readOutlineReply, readOutlineSchema,
@@ -163,7 +163,7 @@ export const genInputSchema = z.strictObject({
   engine: z.enum(engines).default("v2"),
   planInput: z.enum(["pdf", "pages", "figures"]).optional(),
   cacheMode: z.enum(["shared"]).optional(),
-  survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
+  survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
 
@@ -582,7 +582,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           // v4/v5 send only this step's response format (the 4-step union was ~2,500 tokens on every call, and the shared
           // prefix it was kept for hardly hit the cache: parallel batches). astra keeps the union.
           const shape = z.object({ result: parser });
-          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema((input.engine === "v4" || input.engine === "v5") && !shared ? shape : responseSchemaFor(input.engine)), shape, undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}), ...(images?.length ? { images } : {}), ...(maxChars ? { maxChars } : {}), ...(shared ? { sharedContext: shared } : {}) });
+          const result = await askParsed(step, null, attempt, system, user, astraJsonSchema((input.engine === "v4" || v5Family(input.engine)) && !shared ? shape : responseSchemaFor(input.engine)), shape, undefined, { files, cachePrefix: ASTRA_CACHE_PREFIX, ...(onPartial ? { onPartial } : {}), ...(images?.length ? { images } : {}), ...(maxChars ? { maxChars } : {}), ...(shared ? { sharedContext: shared } : {}) });
           if (!result.ok) throw failAstra(new Stop("paused-invalid", `${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`));
           return result.value.result;
         },

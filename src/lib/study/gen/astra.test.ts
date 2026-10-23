@@ -373,3 +373,48 @@ for (const cacheMode of [undefined, "shared"] as const) test(`v5 확인 강도·
   if (cacheMode) assert.ok(shares.size === 1 && [...shares][0].includes("청색이다"), "출제·검수 호출이 모두 같은 공통 자료로 시작한다");
   else assert.deepEqual([...shares], ["(없음)"]);
 });
+
+test("alpha: 계획의 평가 설계(assessment)가 출제 슬롯까지 가고, 난이도·짧은 다른 목표·근거 쪽만 출제에 들어간다", async () => {
+  const state: GenState = { id: "gen_" + "6".repeat(32), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), input: { sourceId: "fixture", fileName: "fixture.pdf", pageNumbers: [1, 2, 3], purpose: "core", note: "", provider: "fake", engine: "alpha", planInput: "pdf", survey: { difficulty: "hard" }, models: {}, signals: { weakSpots: [], reports: [] }, autoConfirm: true }, status: "running", phase: "outline", message: "", calls: 0, sections: [] };
+  const seen: { plan?: string; author?: string; authorUser?: Record<string, unknown> } = {};
+  const assessment = { focus: "원근 나눗셈은 투영 변환 뒤, 뷰포트 변환 전에 한다", operation: "순서판단", decisive: "투영 변환과 뷰포트 변환 사이의 위치" };
+  const ask: AstraAsk = async (step, _attempt, system, user, parser) => {
+    const input = JSON.parse(user);
+    if (input.lightCheck) return parser.parse({ duplicates: [], gaps: [] });
+    if (step === "astra-plan") {
+      seen.plan = system;
+      const ev = (page: number) => [{ page, kind: "text", quote: "q", supports: "s" }];
+      return parser.parse({ outline: [{ id: "s1", title: "투영", pages: [1, 2, 3] }], diagnosis: { mode: "설문", materialType: "절차", approach: "순서 구별" },
+        units: [{ sectionId: "s1", pageNotes: [], misconceptions: [{ conceptIds: ["c1"], wrongIdea: "뷰포트 뒤에 나눈다", whyWrong: "원문 순서", page: 3 }],
+          concepts: [{ id: "c1", outlineIds: ["s1"], title: "원근 나눗셈", essentials: ["w로 나눈다"], conditions: [], evidence: ev(3) }, { id: "c2", outlineIds: ["s1"], title: "뷰포트", essentials: ["화면 좌표"], conditions: [], evidence: ev(1) }],
+          practice: [{ id: "p1", sectionId: "s1", conceptIds: ["c1"], task: "원근 나눗셈의 위치를 고를 수 있다", cue: "c", recall: "w", kind: "절차", priority: "essential", questionCount: 1, level: "순서", format: "choice", formatWhy: "단계 선택", assessment },
+            { id: "p2", sectionId: "s1", conceptIds: ["c2"], task: "뷰포트 변환을 떠올릴 수 있다", cue: "c", recall: "뷰포트", kind: "용어", priority: "extra", questionCount: 1, level: "떠올리기", format: "short", formatWhy: "",
+              assessment: { focus: "뷰포트 변환은 정규화 좌표를 화면 좌표로 바꾼다", operation: "식별", decisive: "정규화 좌표 → 화면 좌표" } }] }],
+        uncertain: [] });
+    }
+    const result = JSON.parse(astraFakeReply(step, user));
+    if (step === "astra-author" && input.slots.some((o: { id: string }) => o.id === "s1-o1")) {
+      seen.author = system; seen.authorUser = input;
+      for (const q of result.questions.filter((q: { objectiveId: string }) => q.objectiveId === "s1-o1")) {
+        Object.assign(q.answer, { kind: "choice", accepted: null, correctIndex: 1, options: ["투영 변환 이전", "투영 변환 이후, 뷰포트 변환 이전", "뷰포트 변환 이후", "뷰잉 변환 이전"].map(text => ({ text, latex: null })) });
+        q.distractors = [0, 2, 3].map(option => ({ option, misconception: "순서 혼동", whyWrong: "원문 p.3 순서" }));
+      }
+    }
+    if (step === "astra-review") result.coverage = input.selectedPracticeIds.map((id: string) => ({ practiceId: id, questionIds: [], status: "covered", reason: "fixture" }));
+    return parser.parse(result);
+  };
+  await runAstra({ state, pdf: Buffer.from("%PDF-fixture"), ask, save: async () => {}, pause: (message: string): never => { throw new Error(message); },
+    pageTexts: new Map([[1, "뷰포트 쪽"], [2, "관련 없는 쪽"], [3, "원근 나눗셈 쪽"]]), publish: async () => "sections/s1/document.json" });
+  assert.equal(state.status, "done", state.message);
+  assert.ok(seen.plan!.includes("[alpha]") && !seen.plan!.includes("[v5]") && !seen.plan!.includes("정해진 비율"), "계획은 alpha 지시(형식 비율·과제 섞기 없음)");
+  assert.ok(seen.author!.includes("[alpha]") && !seen.author!.includes("[v5]"), "출제는 alpha 지시");
+  const user = seen.authorUser!;
+  const slot = (user.slots as Array<{ id: string; astra: { assessment?: unknown } }>).find(o => o.id === "s1-o1")!;
+  assert.deepEqual(slot.astra.assessment, assessment, "평가 설계가 출제 슬롯에 그대로 간다");
+  assert.equal((user.context as { difficulty: string }).difficulty, "hard");
+  const others = (user.plan as { otherTasks: Array<Record<string, string>> }).otherTasks;
+  assert.ok(others.every(o => Object.keys(o).sort().join() === "focus,id"), "다른 목표는 id + focus만");
+  assert.equal(state.sections[0].design!.objectives.find(o => o.id === "s1-o1")!.astra!.assessment?.operation, "순서판단");
+  const source = String(user.source);
+  assert.ok(source.includes("[원문 p.3]") && !source.includes("[원문 p.2]"), "출제 원문은 단원 전체가 아니라 목표 근거 쪽만");
+});

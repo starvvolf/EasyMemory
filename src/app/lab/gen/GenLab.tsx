@@ -104,7 +104,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const [guideDir, setGuideDir] = useState("출제기준");
   const [readImages, setReadImages] = useState(false);
   // v5 설문 (empty = 알잘딱; the memo above is 개입).
-  const [survey, setSurvey] = useState<{ style?: string; exam?: string; depth?: string; time?: string; known?: string }>({});
+  const [survey, setSurvey] = useState<{ style?: string; difficulty?: string; exam?: string; depth?: string; time?: string; known?: string }>({});
   const [planInput, setPlanInput] = useState<"" | "pdf" | "pages" | "figures">("");
   const [cacheShared, setCacheShared] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -113,6 +113,7 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
   const pages = source ? Array.from({ length: Math.max(0, Math.min(to, source.pageCount) - from + 1) }, (_, index) => from + index) : [];
   const setAll = (key: "model" | "effort", value: string) => setModels((current) => ({ ...current, ...Object.fromEntries(shown.map((step) => [step, { ...current[step], [key]: value }])) }) as typeof current);
 
+  const v5ish = engine === "v5" || engine === "alpha";
   const start = async () => {
     if (!source || !pages.length) return;
     setBusy(true); onError("");
@@ -120,9 +121,9 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
       const { gen } = await api<{ gen: GenState }>("/api/lab/gen", "POST", {
         sourceId: source.id, fileName: source.fileName, pageNumbers: pages, purpose, note, provider, autoConfirm, guideDir, engine, confirmed: provider === "chatgpt" ? confirmed : undefined,
         models: Object.fromEntries(shown.map((step) => [step, models[step]])), readImages: engine === "v2" ? readImages : false,
-        ...((engine === "v4" || engine === "v5") && planInput ? { planInput } : {}),
-        ...(engine === "v5" && cacheShared ? { cacheMode: "shared" } : {}),
-        ...(engine === "v5" && Object.values(survey).some(Boolean) ? { survey: Object.fromEntries(Object.entries(survey).filter(([, value]) => value)) } : {}),
+        ...((engine === "v4" || v5ish) && planInput ? { planInput } : {}),
+        ...(v5ish && cacheShared ? { cacheMode: "shared" } : {}),
+        ...(v5ish && Object.values(survey).some(Boolean) ? { survey: Object.fromEntries(Object.entries(survey).filter(([, value]) => value)) } : {}),
       });
       setConfirmed(false);
       onStarted(gen.id);
@@ -150,23 +151,25 @@ function NewRun({ sources, onSources, onStarted, onError }: { sources: Source[];
         <label className="chip" title="전체 PDF → 학습 계획 → 묶음 출제 → 정답 없는 풀이 → 원문 검수"><input type="radio" name="engine" checked={engine === "astra"} onChange={() => setEngine("astra")} />astra (GPT 안, 실험)</label>
         <label className="chip" title="astra 구조 그대로 + 답 모양에 맞는 형식, 한 문항 한 과제, 슬롯 차별, 검수 입력 축소, 공개 후 지적 1회 수정"><input type="radio" name="engine" checked={engine === "v4"} onChange={() => setEngine("v4")} />v4 (Claude의 astra 조정안, 실험)</label>
         <label className="chip" title="자료 진단 → 목표마다 수준·형식(객관식·OX·단답·빈칸·플래시카드) → 오개념 기반 오답 → 단원별 즉시 공개, 그림 근거는 그 쪽 그림으로 검수"><input type="radio" name="engine" checked={engine === "v5"} onChange={() => setEngine("v5")} />v5 (Claude, 실험)</label>
+        <label className="chip" title="GPT의 v5 개선안: 계획이 목표마다 평가 설계(무엇을·어떻게·무엇으로 가를지)를 정하고 출제가 그대로 구현, 형식 비율 없음, 난이도 설정, 근거 쪽만 전달"><input type="radio" name="engine" checked={engine === "alpha"} onChange={() => setEngine("alpha")} />Alpha (v5 개선, 실험)</label>
       </fieldset>
-      {(engine === "v4" || engine === "v5") && <div className="row">
+      {(engine === "v4" || v5ish) && <div className="row">
         <span className="muted">계획 입력:</span>
         <select value={planInput} onChange={(event) => setPlanInput(event.target.value as "" | "pdf" | "pages" | "figures")}>
-          <option value="">기본 ({engine === "v5" ? "쪽 글자+그림 영역만" : "PDF 파일"})</option><option value="figures">고른 쪽 글자+그림 영역만</option><option value="pages">고른 쪽 글자+쪽 전체 이미지</option><option value="pdf">PDF 파일 전체</option>
+          <option value="">기본 ({v5ish ? "쪽 글자+그림 영역만" : "PDF 파일"})</option><option value="figures">고른 쪽 글자+그림 영역만</option><option value="pages">고른 쪽 글자+쪽 전체 이미지</option><option value="pdf">PDF 파일 전체</option>
         </select>
-        {engine === "v5" && <label className="chip" title="출제·풀이·검수 호출이 모두 같은 원문 묶음으로 시작해 프롬프트 캐시를 탑니다. 계획이 끝난 뒤 출제를 시작하므로 첫 공개는 늦어질 수 있어요."><input type="checkbox" checked={cacheShared} onChange={(event) => setCacheShared(event.target.checked)} />캐시 공유(공통 앞부분)</label>}
+        {v5ish && <label className="chip" title="출제·풀이·검수 호출이 모두 같은 원문 묶음으로 시작해 프롬프트 캐시를 탑니다. 계획이 끝난 뒤 출제를 시작하므로 첫 공개는 늦어질 수 있어요."><input type="checkbox" checked={cacheShared} onChange={(event) => setCacheShared(event.target.checked)} />캐시 공유(공통 앞부분)</label>}
       </div>}
-      {engine === "v5" && <div className="row">
+      {v5ish && <div className="row">
         <span className="muted">설문(비우면 알잘딱, 메모는 개입):</span>
         <select value={survey.style ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, style: event.target.value || undefined }))}><option value="">시험 유형</option><option value="recall">암기형</option><option value="understand">이해형</option></select>
+        {engine === "alpha" && <select value={survey.difficulty ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, difficulty: event.target.value || undefined }))}><option value="">난이도(보통)</option><option value="easy">쉬움</option><option value="normal">보통</option><option value="hard">어려움</option></select>}
         <select value={survey.exam ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, exam: event.target.value || undefined }))}><option value="">시험 형태</option><option value="choice">객관식 위주</option><option value="mixed">섞어서</option><option value="written">서술 포함</option></select>
         <select value={survey.depth ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, depth: event.target.value || undefined }))}><option value="">깊이</option><option value="core">핵심만</option><option value="all">전부</option></select>
         <select value={survey.time ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, time: event.target.value || undefined }))}><option value="">시간</option><option value="short">빠듯함</option><option value="normal">보통</option><option value="long">넉넉함</option></select>
         <input placeholder="이미 아는 부분" value={survey.known ?? ""} onChange={(event) => setSurvey((current) => ({ ...current, known: event.target.value || undefined }))} />
       </div>}
-      {astraFamily(engine) && <p className="muted">{engine === "v5" ? "v5는 자료를 진단해 목표마다 수준과 형식(객관식·OX·단답·빈칸·플래시카드)을 정하고, 오개념으로 오답을 만들며, 단원이 검수를 통과하면 바로 공개합니다. 메모가 있으면 개입, 설문이 있으면 설문, 없으면 알잘딱. " : engine === "v4" ? "v4는 astra와 같은 단계(계획·출제·풀이·검수)를 쓰되, 계획을 단원별로 스트리밍해 목차·목표를 도중에 보이고 끝난 단원부터 바로 출제합니다(공개는 계획 검사 뒤). 목표는 짧은 한 문장으로 남깁니다. " : ""}astra는 엔진 이름입니다. 기본 모델은 모든 단계 Sol·medium이며 아래에서 바꿀 수 있어요. 별도 출제기준 폴더 대신 astra 전용 지시문을 사용합니다.</p>}
+      {astraFamily(engine) && <p className="muted">{engine === "alpha" ? "Alpha는 v5와 같은 호출로, 계획이 목표마다 평가 설계(focus·operation·decisive)를 정하고 출제가 그 설계대로 같은 범주 오답을 만듭니다. 형식 비율을 맞추지 않고 시험 형식과 평가 행동에 맞춥니다. 난이도는 정답을 고르는 데 필요한 지식의 정밀도로 조절합니다." : engine === "v5" ? "v5는 자료를 진단해 목표마다 수준과 형식(객관식·OX·단답·빈칸·플래시카드)을 정하고, 오개념으로 오답을 만들며, 단원이 검수를 통과하면 바로 공개합니다. 메모가 있으면 개입, 설문이 있으면 설문, 없으면 알잘딱. " : engine === "v4" ? "v4는 astra와 같은 단계(계획·출제·풀이·검수)를 쓰되, 계획을 단원별로 스트리밍해 목차·목표를 도중에 보이고 끝난 단원부터 바로 출제합니다(공개는 계획 검사 뒤). 목표는 짧은 한 문장으로 남깁니다. " : ""}astra는 엔진 이름입니다. 기본 모델은 모든 단계 Sol·medium이며 아래에서 바꿀 수 있어요. 별도 출제기준 폴더 대신 astra 전용 지시문을 사용합니다.</p>}
       <fieldset><legend>목적</legend>
         {(Object.keys(purposeLabel) as Purpose[]).map((key) => (
           <label key={key} className="chip"><input type="radio" name="purpose" checked={purpose === key} onChange={() => setPurpose(key)} />{purposeLabel[key]}</label>
@@ -320,7 +323,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
     <div className="gen-run">
       <div className="gen-status">
         <span className={`tag ${tone(gen.status)}`}>{STATUS[gen.status] ?? gen.status}</span>
-        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {gen.input.engine === "v5" ? "엔진 v5" : gen.input.engine === "v4" ? "엔진 v4" : astraFamily(gen.input.engine) ? "엔진 astra" : gen.input.engine === "v3" ? "엔진 v3" : gen.input.guideDir ?? "출제기준"}
+        <b>{gen.input.fileName}</b> p.{gen.input.pageNumbers[0]}–{gen.input.pageNumbers.at(-1)} · {purposeLabel[gen.input.purpose]} · {(gen.input.engine === "v5" || gen.input.engine === "alpha") ? "엔진 v5" : gen.input.engine === "v4" ? "엔진 v4" : astraFamily(gen.input.engine) ? "엔진 astra" : gen.input.engine === "v3" ? "엔진 v3" : gen.input.guideDir ?? "출제기준"}
         {label && <span className="muted"> · {label}</span>}
         {gen.images && <div className="muted">그림 쪽 읽기: {gen.images.done.length}/{gen.images.pages.length}쪽{gen.images.failed.length ? ` · 실패 p.${gen.images.failed.join(", ")}` : ""}</div>}
         {gen.forkOf && <div className="muted">고정 재실행({FORK_LABEL[gen.forkOf.from]}) · 기준 실행 {gen.forkOf.genId.slice(0, 12)}… {astraFamily(gen.input.engine) ? (gen.forkOf.from === "author" ? "의 학습 계획·목표를 그대로 썼어요." : "의 자료 지도를 참고해 학습 계획부터 다시 만들어요.") : `의 목차·분류${gen.forkOf.from === "author" ? "·목표" : ""}를 그대로 썼어요.`} 호출·시간·토큰은 다시 돈 단계만 셉니다.</div>}
@@ -520,7 +523,7 @@ function AstraPanel({ gen }: { gen: GenState }) {
     <section className="score" aria-label="astra 중간 결과">
       <h3>astra · 무엇을 만들고 걸렀는가</h3>
       <p className="muted">개념 {plan.concepts.length} · 연습 묶음 {plan.practice.length} · 생성 초안 {candidates.length} · 지금 볼 수 있는 문제 {published} · {gen.status === "done" ? "최종 보류" : "현재 보류"} {dropped.length}</p>
-      <p className="muted">묶음 검수 {batchReviews}/{data.batches.length} 완료 · {gen.input.engine === "v5" ? `묶음 안 고쳐 쓰기 ${data.batches.filter((batch) => batch.retry).length}묶음 · 전체 검수 없음(v5)` : <>전체 검수: {review ? (data.repair?.review ? "수정 후 완료" : data.repair ? "1차 완료 · 수정 진행" : "완료") : reviewing ? "진행 중" : "아직 완료되지 않음"}</>}. 묶음 검수를 마친 문제부터 아래 ‘문제 보기’로 열 수 있습니다.</p>
+      <p className="muted">묶음 검수 {batchReviews}/{data.batches.length} 완료 · {(gen.input.engine === "v5" || gen.input.engine === "alpha") ? `묶음 안 고쳐 쓰기 ${data.batches.filter((batch) => batch.retry).length}묶음 · 전체 검수 없음(v5)` : <>전체 검수: {review ? (data.repair?.review ? "수정 후 완료" : data.repair ? "1차 완료 · 수정 진행" : "완료") : reviewing ? "진행 중" : "아직 완료되지 않음"}</>}. 묶음 검수를 마친 문제부터 아래 ‘문제 보기’로 열 수 있습니다.</p>
       <p className="muted">초안 독립 풀이 {solutions.length}개 중 조건·노출·불확실 신호 {flagged.length}개 · 수정 대상 {data.repair?.ids.length ?? 0}개 · 수정 후 독립 풀이 {data.repair?.solutions?.items.length ?? 0}개. {astraFamily(gen.input.engine) && gen.input.engine !== "astra" ? "전체 검수가 돌려보낸 공개 문제는 한 번 고쳐 쓰고, 고친 문제가 통과할 때만 바꿉니다(바뀐 문제는 경고에 남김). 지우지는 않습니다." : "공개된 문제는 이후 검수에서 경고가 생겨도 자동으로 바꾸거나 지우지 않습니다."}</p>
       {lateWarnings.size > 0 && <div role="status"><b>공개 후 발견된 경고 {lateWarnings.size}개</b><ul>{[...lateWarnings].map(([id, reasons]) => <li className="warnline" key={id}>문항 {id.startsWith("q-") ? id : `q-${id}`}: {reasons.join(" / ")}</li>)}</ul></div>}
       <details>

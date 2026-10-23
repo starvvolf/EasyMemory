@@ -86,7 +86,7 @@ export default function DejipgiStudy() {
         body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
           models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), ...(engine && !pastExamSourceIds?.length ? { engine } : {}),
           // v5 streams goals and authors right away; a goal the learner does not want is hidden from practice (목표 빼기).
-          ...(engine === "v5" && !pastExamSourceIds?.length ? { autoConfirm: true, ...(survey ? { survey } : {}) } : {}), confirmed: true }),
+          ...((engine === "v5" || engine === "alpha") && !pastExamSourceIds?.length ? { autoConfirm: true, ...(survey ? { survey } : {}) } : {}), confirmed: true }),
       }), "문제 만들기를 시작하지 못했어요.");
       return gen;
     };

@@ -12,15 +12,20 @@ export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
   read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)" };
 
-export const engines = ["v2", "v3", "astra", "v4", "v5"] as const;
+export const engines = ["v2", "v3", "astra", "v4", "v5", "alpha"] as const;
 export type Engine = (typeof engines)[number];
 /** astra and v4 (Claude's tuning of astra) share the astra pipeline, steps and state; v4 only adds rules. */
-export const astraFamily = (engine: Engine | undefined) => engine === "astra" || engine === "v4" || engine === "v5";
+export const astraFamily = (engine: Engine | undefined) => engine === "astra" || engine === "v4" || engine === "v5" || engine === "alpha";
+/** v5 and its successor alpha (GPT의 v5 개선안: 계획이 문항 설계 assessment까지 정하고 출제가 그대로 구현) share the v5 pipeline. */
+export const v5Family = (engine: Engine | undefined) => engine === "v5" || engine === "alpha";
 /** v5 learning formats (협업/설계_생성엔진v5_Claude_20261019.md); each maps to one of the study screen's response kinds. */
 export const studyFormats = ["choice", "ox", "short", "cloze", "flashcard"] as const;
 export type StudyFormat = (typeof studyFormats)[number];
 /** v5: a short survey before generation (설문). Absent and no note: the engine decides (알잘딱). */
-export type GenSurvey = { style?: "recall" | "understand"; exam?: "choice" | "mixed" | "written"; depth?: "core" | "all"; time?: "short" | "normal" | "long"; known?: string };
+/** alpha: the plan's item design per goal (internal; never shown to the learner). */
+export const assessmentOperations = ["식별", "구별", "조건판단", "순서판단", "적용", "산출", "이유판단"] as const;
+export type Assessment = { focus: string; operation: (typeof assessmentOperations)[number]; decisive: string };
+export type GenSurvey = { style?: "recall" | "understand"; difficulty?: "easy" | "normal" | "hard"; exam?: "choice" | "mixed" | "written"; depth?: "core" | "all"; time?: "short" | "normal" | "long"; known?: string };
 
 export const itemKinds = ["핵심 지식", "재사용 패턴", "예시", "설명", "학습 지시", "연습문제", "부가 정보"] as const;
 export type ItemKind = (typeof itemKinds)[number];
@@ -97,7 +102,9 @@ export type Objective = {
   relationIds?: string[];
   astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: import("./astra.ts").AstraEvidence[]; keepGoal?: boolean;
     /** v5: what the learner must be able to do, the format chosen for it, and whether a figure is the evidence. */
-    level?: string; format?: StudyFormat; figurePages?: number[] };
+    level?: string; format?: StudyFormat; figurePages?: number[];
+    /** alpha: how the goal is assessed — the knowledge to check, the operation, and what separates the answer from plausible wrong ones. */
+    assessment?: Assessment };
 };
 
 /** Objectives checked by default at the confirmation: everything for 통암기, otherwise only core ones. */
