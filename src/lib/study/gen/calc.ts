@@ -240,6 +240,8 @@ export function checkSteps(steps: Step[]): StepCheck[] {
     try {
       const got = evaluate(s.expr, vars, fns);
       if (s.name?.trim()) vars[s.name.trim()] = got;
+      // A named constant set up from the material ("Q = ((4/5, -3/5, 0), …)", value "정의") has nothing to compare.
+      if (/^(정의|define)$/i.test(s.value.trim()) && s.name?.trim()) return { index, ok: true, got: show(got) };
       return sameValue(got, s.value) ? { index, ok: true, got: show(got) } : { index, ok: false, got: show(got), problem: `${index + 1}단계: ${s.expr} = ${show(got)}인데 ${s.value}라고 적었어요.` };
     } catch (error) {
       return { index, ok: false, problem: `${index + 1}단계 식을 계산하지 못했어요: ${error instanceof Error ? error.message : String(error)}` };

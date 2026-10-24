@@ -57,6 +57,7 @@ test("matrices, judgements, and functions a solution defines from its material",
     { what: "세 번째 열", name: null, expr: "col(M,3)", value: "(2,-2,1)" },
   ];
   assert.deepEqual(checkSteps(steps).filter((c) => !c.ok), []);
+  assert.ok(checkSteps([{ what: "원문의 축 행렬", name: "Q", expr: "((0,1),(1,0))", value: "정의" }])[0].ok, "a named constant from the material");
   const { vars, fns } = stepScope(steps);
   assert.ok(sameValue(evaluate("inv(M)*M", vars, fns), "((1,0,0),(0,1,0),(0,0,1))"));
   assert.match(checkSteps([steps[0], { ...steps[2], expr: "T(2,0)*R(90)" }])[1].problem ?? "", /R/);
