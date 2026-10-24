@@ -15,7 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    // The desktop window (desktop/main.js) marks <html data-shell="desktop"> before React hydrates.
+    <html lang="ko" suppressHydrationWarning>
       <body>
         <AuthGate>{children}</AuthGate>
       </body>
