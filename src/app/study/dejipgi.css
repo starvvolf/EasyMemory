@@ -923,3 +923,28 @@
 @media (max-width:760px){.dejipgi .kp-detail{position:static}}
 .dejipgi .kp-name{font-size:22px;font-weight:700;margin:6px 0 4px}
 .dejipgi .tex-inline{font-family:var(--read-font);font-style:italic}
+
+/* ---------- 2026-10-24 데스크톱 창(desktop/main.js가 html에 data-shell="desktop"을 붙임): 제목 표시줄 = 앱 상단 ----------
+   창 버튼(ㅁ x)은 윈도우가 오른쪽 위에 그리고, 그 자리만큼 비워 둔다. 빈 곳을 끌면 창이 움직이고 탭·버튼은 눌린다. */
+:root[data-shell="desktop"] .dejipgi{--shell-top:40px;padding-top:calc(var(--shell-top) + 20px)}
+:root[data-shell="desktop"] .dejipgi .masthead,
+:root[data-shell="desktop"] .dejipgi[data-view="read"] .masthead{
+  position:fixed;top:0;left:0;right:0;z-index:12;height:var(--shell-top);margin:0;
+  display:flex;align-items:stretch;gap:14px;flex-wrap:nowrap;
+  padding:0 calc(100vw - env(titlebar-area-x,0px) - env(titlebar-area-width,calc(100vw - 140px)) + 10px) 0 16px;
+  background:var(--ground);border-bottom:1px solid var(--line);-webkit-app-region:drag;user-select:none}
+:root[data-shell="desktop"] .dejipgi .masthead .top{display:contents}
+:root[data-shell="desktop"] .dejipgi .masthead .brand{order:0;align-self:center}
+:root[data-shell="desktop"] .dejipgi .masthead .brand h1{font-size:14.5px;font-weight:800;letter-spacing:-.02em}
+:root[data-shell="desktop"] .dejipgi .masthead .tabs{order:1;width:auto;min-width:0;margin:0;padding:0;border:0;gap:0;overflow-x:auto;scrollbar-width:none}
+:root[data-shell="desktop"] .dejipgi .masthead .tabs button{-webkit-app-region:no-drag;padding:0 11px;font-size:13.5px}
+:root[data-shell="desktop"] .dejipgi .masthead .tabs button[aria-selected="true"]::after{bottom:0;left:8px;right:8px}
+:root[data-shell="desktop"] .dejipgi .masthead .store{order:2;margin-left:auto;align-self:center;display:inline-flex}
+:root[data-shell="desktop"] .dejipgi .rexplain{top:calc(var(--shell-top) + 12px)}
+:root[data-shell="desktop"] .dejipgi .kp-detail{top:calc(var(--shell-top) + 12px)}
+:root[data-shell="desktop"] .dejipgi .tm-story{top:var(--shell-top)}
+:root[data-shell="desktop"] .dejipgi .notesdrawer{top:var(--shell-top)}
+:root[data-shell="desktop"] .dejipgi .tablet-card{top:calc(var(--shell-top) + 24px)}
+/* 데스크톱 창은 늘 로컬이라 '로컬 실험모드' 띠는 숨기고(상태는 오른쪽 위 저장 표시로), 태블릿·프롬프트 버튼은 저장 표시 오른쪽에 작게. */
+:root[data-shell="desktop"] [data-shell-hide]{display:none}
+:root[data-shell="desktop"] .dejipgi .masthead .tablet-btn{order:3;align-self:center;margin:0;padding:3px 9px;font-size:12px;-webkit-app-region:no-drag}

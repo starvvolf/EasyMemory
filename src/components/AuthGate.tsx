@@ -191,7 +191,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   return (
     <AuthSessionContext.Provider value={session}>
       {session.mode === "local-experiment" ? (
-        <div className="border-b border-[#F0B232]/40 bg-[#F0B232]/15 px-4 py-3 text-center text-sm font-bold text-[#FFF1C2]">
+        <div data-shell-hide className="border-b border-[#F0B232]/40 bg-[#F0B232]/15 px-4 py-3 text-center text-sm font-bold text-[#FFF1C2]">
           로컬 실험모드입니다. 이 실행은 Google 계정에 연결되지 않으며 기존 클라우드 데이터 기능은 사용할 수 없습니다.
         </div>
       ) : null}

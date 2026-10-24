@@ -2,7 +2,7 @@
 // local server (127.0.0.1:3000), so code changes show on reload (Ctrl+R) without rebuilding this shell.
 // Start: the same steps as 'Recaller 시작' (code, packages, data, server). Close: the same as 'Recaller 끝내기'
 // (stop the server, send this computer's data). See desktop/README.md.
-const { app, BrowserWindow, Menu, shell, dialog } = require("electron");
+const { app, BrowserWindow, Menu, shell, dialog, nativeTheme } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -53,9 +53,15 @@ const boundsFile = () => path.join(app.getPath("userData"), "window.json");
 function savedBounds() { try { return JSON.parse(fs.readFileSync(boundsFile(), "utf8")); } catch { return null; } }
 function saveBounds(w) { try { fs.writeFileSync(boundsFile(), JSON.stringify({ ...w.getNormalBounds(), maximized: w.isMaximized() })); } catch { /* keep going */ } }
 
+// The window has no separate title bar: the app's own top bar (tabs) sits in it and Windows draws ㅁ x on top, in the
+// app's ground color. The page styles that bar when <html data-shell="desktop"> (src/app/study/dejipgi.css).
+const BAR_HEIGHT = 40;
+const barColors = () => nativeTheme.shouldUseDarkColors ? { color: "#0F1115", symbolColor: "#E9EBEF" } : { color: "#F2F3F6", symbolColor: "#17191F" };
+
 function openMain() {
   const b = savedBounds() || { width: 1280, height: 860 };
-  main = new BrowserWindow({ ...b, minWidth: 420, minHeight: 500, title: "Recaller", show: false, autoHideMenuBar: true, backgroundColor: "#F2F3F6",
+  main = new BrowserWindow({ ...b, minWidth: 420, minHeight: 500, title: "Recaller", show: false, autoHideMenuBar: true, backgroundColor: barColors().color,
+    titleBarStyle: "hidden", titleBarOverlay: { ...barColors(), height: BAR_HEIGHT },
     webPreferences: { contextIsolation: true, sandbox: true } });
   if (b.maximized) main.maximize();
   // Pages of the local app stay in the window; anything else (ChatGPT sign-in, links) opens in the normal browser,
@@ -63,6 +69,8 @@ function openMain() {
   const local = (url) => url.startsWith(ORIGIN + "/");
   main.webContents.setWindowOpenHandler(({ url }) => { if (local(url)) return { action: "allow" }; shell.openExternal(url); return { action: "deny" }; });
   main.webContents.on("will-navigate", (event, url) => { if (!local(url)) { event.preventDefault(); shell.openExternal(url); } });
+  main.webContents.on("dom-ready", () => main.webContents.executeJavaScript('document.documentElement.dataset.shell = "desktop"').catch(() => {}));
+  nativeTheme.on("updated", () => { if (main && !main.isDestroyed()) main.setTitleBarOverlay({ ...barColors(), height: BAR_HEIGHT }); });
   main.once("ready-to-show", () => { main.show(); if (splash && !splash.isDestroyed()) splash.close(); splash = null; });
   main.on("close", () => saveBounds(main));
   main.on("closed", () => { main = null; });
