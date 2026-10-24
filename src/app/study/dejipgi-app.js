@@ -624,13 +624,15 @@ function startPoint(k){
   S.session = { queue: shuffle(k.items).map(({ d, it }) => ({ deck:d.id, item:it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"point", viewed:new Set() };
   prepCurrent(); setView("practice");
 }
+/* Subjects that still have materials (a subject whose materials all went to 보관함 drops out of home and 지식). */
+function liveSubjects(){ return orderedSubjects().filter(sub => decksOf(sub.name).length); }
 function currentSubject(){
-  const subs = orderedSubjects();
+  const subs = liveSubjects();
   if (S.kp.subject !== null && (S.kp.subject === "" || subs.some(s => s.name === S.kp.subject))) return S.kp.subject;
   return subs.length ? subs[0].name : "";
 }
 function subjectChips(onPick){
-  const subs = orderedSubjects(), cur = currentSubject();
+  const subs = liveSubjects(), cur = currentSubject();
   const list = [...subs.map(s => [s.name, s.name, daysLeft(s.exam)]), ["", "전체", null]];
   return h("div", { class:"row subj-chips", role:"group", "aria-label":"과목" }, list.map(([key, label, n]) =>
     h("button", { class:"subj-chip", "aria-pressed": cur === key ? "true" : "false", onclick: () => { S.kp.subject = key; S.kp.sel = null; if (onPick) onPick(); render(); } },
@@ -697,7 +699,7 @@ function renderRecallerHome(){
       h("button", { class:"btn primary", onclick: () => setView("create") }, "+ 새 자료")));
     return wrap;
   }
-  if (S.plan.subjects.length) wrap.append(subjectChips());
+  if (liveSubjects().length) wrap.append(subjectChips());
   const subject = currentSubject(), points = knowledgeOf(subject), c = kpCounts(points), total = Math.max(1, points.length - c.none);
   const plan = todayPlan();
   if (plan && plan.queue.length) wrap.append(renderToday(plan, pendings));
@@ -721,7 +723,7 @@ function renderRecallerHome(){
 }
 function renderKnowledge(){
   const wrap = h("div", { class:"stack" });
-  if (S.plan.subjects.length) wrap.append(subjectChips());
+  if (liveSubjects().length) wrap.append(subjectChips());
   const subject = currentSubject(), points = knowledgeOf(subject);
   if (!points.length){ wrap.append(h("div", { class:"panel small muted", text:"이 과목에는 아직 지식 포인트가 없어요. 자료를 넣고 문제를 만들면 생겨요." })); return wrap; }
   const sel = points.find(k => k.key === S.kp.sel) || null;
