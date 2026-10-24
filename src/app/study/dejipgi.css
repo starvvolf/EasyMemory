@@ -997,3 +997,4 @@ body:has(.dejipgi){background:#F2F3F6}
 .dejipgi .fb-box[data-status="error"] .fb-preview{color:var(--bad)}
 .dejipgi .fb .react-flow__handle{width:10px;height:10px;background:var(--accent);border:2px solid var(--surface)}
 @media (max-width:860px){ .dejipgi .fb-main{grid-template-columns:1fr;grid-template-rows:1fr auto} .dejipgi .fb{height:auto} .dejipgi .fb-canvas{height:60vh} }
+.dejipgi .fb-defaults{grid-template-columns:auto auto;justify-content:start}

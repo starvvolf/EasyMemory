@@ -26,7 +26,9 @@ const body = z.discriminatedUnion("action", [
     usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional() }),
   // 작업대 흐름 boxes pick their own model and effort; other callers leave them out and get the note defaults.
   z.object({ action: z.literal("compose"), system: text(8000).min(1), user: text(60000).min(1), kind: z.enum(["terms", "translate"]).nullish(),
-    model: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,39}$/).nullish(), effort: z.enum(["low", "medium", "high", "xhigh"]).nullish() }),
+    model: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,39}$/).nullish(), effort: z.enum(["low", "medium", "high", "xhigh"]).nullish(),
+    // A box set to JSON output: json alone asks for any JSON object, a schema asks for that shape (Structured Outputs).
+    json: z.boolean().nullish(), schema: z.record(z.string(), z.unknown()).nullish() }),
   z.object({ action: z.literal("explain-save"), sourceId, page, text: text(60000).min(1), goal: z.string().min(1).max(160).nullish() }),
 ]);
 

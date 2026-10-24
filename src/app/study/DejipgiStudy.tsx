@@ -273,7 +273,7 @@ export default function DejipgiStudy() {
           async explanations(sourceId: string) {
             return (await readJson<{ pages: Array<{ page: number; goal?: string; text: string; at: string }> }>(await fetchExperiment(`/api/study-notes?sourceId=${encodeURIComponent(sourceId)}&explain=1`), "쉬운 설명을 불러오지 못했어요.")).pages;
           },
-          compose: async (input: { system: string; user: string; kind?: "terms" | "translate"; model?: string; effort?: string }) => {
+          compose: async (input: { system: string; user: string; kind?: "terms" | "translate"; model?: string; effort?: string; json?: boolean; schema?: Record<string, unknown> }) => {
             const reply = await noteCall<{ text: string; data?: unknown }>({ action: "compose", ...input });
             return reply.data !== undefined ? JSON.stringify(reply.data) : reply.text;
           },

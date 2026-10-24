@@ -23,13 +23,14 @@ import {
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 export type FlowApi = {
-  compose: (input: { system: string; user: string; model?: string; effort?: string }) => Promise<string>;
+  compose: (input: { system: string; user: string; model?: string; effort?: string; json?: boolean; schema?: Record<string, unknown> }) => Promise<string>;
   decks: () => Array<{ id: string; title: string; pages: number }>;
   pageText: (deckId: string, from: number, to: number) => Promise<{ title: string; text: string }>;
 };
 
 type InputData = { kind: "input"; name: string; text: string; deckId?: string; from?: number; to?: number };
-type ModelData = { kind: "model"; name: string; model: string; effort: string; system: string };
+/** format: "text" plain reply; "json" a JSON reply, held to `schema` (JSON Schema text) when one is given. */
+type ModelData = { kind: "model"; name: string; model: string; effort: string; system: string; format?: "text" | "json"; schema?: string };
 type BoxData = InputData | ModelData;
 type Box = Node<BoxData>;
 type RunState = { status: "idle" | "running" | "done" | "error"; output?: string; input?: string; error?: string; ms?: number };
@@ -49,6 +50,24 @@ const REFINE = `너는 '프롬프트 다듬기' 담당이다. 학습자가 AI에
 - 결과의 모양(목록, 문제·보기·정답·해설 순서 같은)을 구체적으로 정한다.
 - 목표 → 할 일 → 조건 → 출력 형식 순으로 짧게 쓴다. 이미 충분하면 거의 그대로 둔다.
 다듬은 지시 본문만 출력한다.`;
+// New model boxes start from this (Responses API shape: instructions = 역할·원칙·출력, input = arrows, plain text out).
+// "이 박스를 기본값으로" replaces it in this browser.
+const KEY_DEFAULT = "recaller:flow:default-model:v1";
+const BUILTIN_MODEL: ModelData = {
+  kind: "model", name: "새 모델", model: "gpt-6-sol", effort: "low", format: "text", schema: "",
+  system: `[역할] 너는 ○○를 하는 AI다.
+[원칙] 받은 입력에만 근거한다. 입력에 없는 내용은 그렇다고 밝힌다. 말하지 않은 조건을 지어내지 않는다.
+[출력] (모양을 구체적으로: 예) 번호 붙인 5줄, 각 줄 한 문장. 수식은 $…$로 쓴다.)`,
+};
+const defaultModel = (): ModelData => ({ ...BUILTIN_MODEL, ...load<Partial<ModelData>>(KEY_DEFAULT, {}), kind: "model" });
+const SCHEMA_EXAMPLE = `{
+  "type": "object",
+  "properties": {
+    "items": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["items"],
+  "additionalProperties": false
+}`;
 const RUN = "받은 지시를 그대로 수행한다. 자료가 붙어 있으면 자료에 근거하고, 자료에 없는 내용은 그렇다고 밝힌다. 수식은 $…$로 쓴다.";
 
 function preset(): Saved {
@@ -83,7 +102,7 @@ function BoxView({ id, data, selected }: NodeProps<Box>) {
   const run = useContext(RunCtx)[id];
   const status = run?.status ?? "idle";
   const meta = data.kind === "model"
-    ? `${data.model} · ${effortLabel(data.effort)}`
+    ? `${data.model} · ${effortLabel(data.effort)}${data.format === "json" ? " · JSON" : ""}`
     : [data.text.trim() ? "글" : "", data.deckId ? `자료 p.${data.from ?? 1}${(data.to ?? 1) > (data.from ?? 1) ? "–" + data.to : ""}` : ""].filter(Boolean).join(" + ") || "비어 있음";
   const preview = run?.status === "error" ? run.error : data.kind === "input" && status === "idle" ? data.text : run?.output;
   return (
@@ -143,7 +162,7 @@ function Flow({ api }: { api: FlowApi }) {
     const id = uid();
     const right = nodes.reduce((m, n) => Math.max(m, n.position.x), 0);
     const data: BoxData = kind === "model"
-      ? { kind, name: "새 모델", model: "gpt-6-sol", effort: "low", system: RUN }
+      ? defaultModel()
       : { kind, name: "새 입력", text: "", from: 1, to: 1 };
     setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { id, type: typeOf(data), position: { x: kind === "model" ? right + 320 : 0, y: 80 + (ns.length % 4) * 70 }, data, selected: true }]);
     setSelId(id);
@@ -179,7 +198,14 @@ function Flow({ api }: { api: FlowApi }) {
           // Empty inputs (an input box left blank) drop out; one input goes as is, several get their box names.
           const parts = ins.map((s, i) => ({ name: s.data.name, text: texts[i].trim() })).filter((x) => x.text);
           const user = parts.length === 1 ? parts[0].text : parts.map((x) => `[${x.name}]\n${x.text}`).join("\n\n");
-          const out = await api.compose({ system: d.system.trim() || "받은 입력에 답한다.", user: user.trim() || "시작", model: d.model, effort: d.effort });
+          let schema: Record<string, unknown> | undefined;
+          if (d.format === "json" && d.schema?.trim()) {
+            try { schema = JSON.parse(d.schema); } catch { throw new Error("JSON 스키마를 읽지 못했어요. 형식을 확인해 주세요."); }
+          }
+          const raw = await api.compose({ system: d.system.trim() || "받은 입력에 답한다.", user: user.trim() || "시작", model: d.model, effort: d.effort,
+            ...(d.format === "json" ? { json: true, ...(schema ? { schema } : {}) } : {}) });
+          let out = raw;
+          if (d.format === "json") { try { out = JSON.stringify(JSON.parse(raw), null, 2); } catch { /* keep as sent */ } }
           set(id, { status: "done", output: out, input: user, ms: Date.now() - t0 });
           return out;
         } catch (e) {
@@ -260,7 +286,21 @@ function Flow({ api }: { api: FlowApi }) {
                       {EFFORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                     </select></label>
                   </div>
-                  <label>이 박스가 받는 지시<textarea rows={8} value={sel.data.system} onChange={(e) => patch(sel.id, { system: e.target.value })} /></label>
+                  <label>이 박스가 받는 지시 (instructions)<textarea rows={8} value={sel.data.system} onChange={(e) => patch(sel.id, { system: e.target.value })} /></label>
+                  <label>출력 형식<select value={sel.data.format ?? "text"} onChange={(e) => patch(sel.id, { format: e.target.value as "text" | "json" })}>
+                    <option value="text">글</option>
+                    <option value="json">JSON</option>
+                  </select></label>
+                  {sel.data.format === "json" ? (
+                    <label>JSON 스키마 (비우면 아무 JSON 객체)
+                      <textarea rows={7} value={sel.data.schema ?? ""} placeholder={SCHEMA_EXAMPLE} onChange={(e) => patch(sel.id, { schema: e.target.value })} />
+                      <span className="fb-note">스키마를 주면 그 모양을 지켜서 나와요(Structured Outputs). 모든 객체에 required와 {'"additionalProperties": false'}가 필요해요.</span>
+                    </label>
+                  ) : null}
+                  <div className="fb-row fb-defaults">
+                    <button className="btn" onClick={() => { const { kind: _k, name: _n, ...rest } = sel.data as ModelData; void _k; void _n; save(KEY_DEFAULT, rest); setMsg("새 모델 박스 기본값으로 저장했어요"); }}>이 박스를 기본값으로</button>
+                    <button className="btn fb-ghost" onClick={() => { try { localStorage.removeItem(KEY_DEFAULT); } catch { /* blocked */ } setMsg("기본값을 처음대로 돌렸어요"); }}>기본값 처음대로</button>
+                  </div>
                 </>
               ) : (
                 <>
