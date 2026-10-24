@@ -28,5 +28,9 @@ if (node(sync, ["setup"]).status !== 0 || node(sync, ["pull"]).status !== 0) pro
 console.log("④ 앱 켜기");
 if (node(path.join(root, "scripts", "open-study-forge-local.mjs")).status !== 0) process.exit(1);
 const url = "http://127.0.0.1:3000/study";
-if (process.platform === "win32") spawnSync("cmd", ["/c", "start", "", url], { stdio: "ignore" });
-console.log(`   ${url} 을 열었어요. 다 쓰면 'Recaller 끝내기'를 눌러 주세요.`);
+// The desktop app (desktop/main.js) runs this with --no-open and shows the page in its own window.
+if (process.argv.includes("--no-open")) console.log("   준비됐어요.");
+else {
+  if (process.platform === "win32") spawnSync("cmd", ["/c", "start", "", url], { stdio: "ignore" });
+  console.log(`   ${url} 을 열었어요. 다 쓰면 'Recaller 끝내기'를 눌러 주세요.`);
+}
