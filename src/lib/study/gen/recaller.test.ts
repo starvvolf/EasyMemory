@@ -39,6 +39,9 @@ test("recaller: sections from titles, cards, basic questions per section, then a
   const first = await readSectionDocument(done.id, "s1") as { questions: Array<{ id: string }> };
   assert.ok(first.questions.some((q) => q.id.startsWith("q-s1-q")), JSON.stringify(first.questions.map((q) => q.id)));
   assert.ok(first.questions.some((q) => q.id.startsWith("q-s1-d")), "심화 문제는 첫 카드의 구역에 붙는다");
+  // One situation, asked along its solution: 1-1 then 1-2, each its own question.
+  assert.deepEqual(done.recaller?.deep.g1.parts?.map((q) => q.objectiveId), ["s1-d1-1", "s1-d1-2"]);
+  assert.match(done.recaller!.deep.g1.parts![1].authored.stem.at(-1)!.text ?? "", /^\(1-2\) /);
   assert.equal(done.recaller?.deep.g1.status, "ready");
 }));
 
@@ -69,7 +72,7 @@ test("종합 문제: cards of two earlier runs, one group across them, checked a
 test("a deep question whose blind solve disagrees is rewritten once, then held", () => withData(async () => {
   const fakeReply = (step: GenStep, user: string) => {
     const reply = JSON.parse(recallerFakeReply(step, user));
-    if (step === "rc-solve") reply.choice = (reply.choice + 1) % 4;
+    if (step === "rc-solve") reply.answers = reply.answers.map((a: { choice: number }) => ({ ...a, choice: (a.choice + 1) % 4 }));
     return JSON.stringify(reply);
   };
   const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", deep: true });
@@ -87,10 +90,12 @@ test("cards complete in a streaming reply are picked out before the reply ends",
 test("code checks: a wrong option must be the value its stated mistake gives; a choice needs a note per option", () => {
   const deep = JSON.parse(recallerFakeReply("rc-deep", JSON.stringify({ group: { id: "g1", cardIds: ["s1.c1", "s1.c2"] } }))).question;
   assert.deepEqual(deepProblems(deep), []);
-  assert.match(deepProblems({ ...deep, distractors: deep.distractors.map((d: { option: number }) => d.option === 1 ? { ...d, expr: "2+2" } : d) }).join(), /오답 2/);
-  assert.match(deepProblems({ ...deep, steps: deep.steps.map((s: { value: string }, i: number) => i === 0 ? { ...s, value: "6" } : s) }).join(), /1단계/);
-  const given = `${deep.options[deep.correctIndex]}`.replace(/\$/g, "");
-  assert.match(deepProblems({ ...deep, stem: [{ kind: "text", text: `벡터 $${given}$의 성분은?` }] }).join(), /주어진 값 그대로/);
+  const part = (k: number, change: object) => ({ ...deep, parts: deep.parts.map((p: object, i: number) => i === k ? { ...p, ...change } : p) });
+  assert.match(deepProblems(part(1, { distractors: deep.parts[1].distractors.map((d: { option: number }) => d.option === 1 ? { ...d, expr: "2+2" } : d) })).join(), /소문항 2: 오답 2/);
+  assert.match(deepProblems({ ...deep, steps: deep.steps.map((s: { value: string }, i: number) => i === 1 ? { ...s, value: "6" } : s) }).join(), /2단계/);
+  assert.match(deepProblems(part(0, { upTo: 2 })).join(), /풀이 순서대로/);
+  assert.match(deepProblems(part(1, { ask: "값 20을 확인하라" })).join(), /주어진 값 그대로/);
+  assert.match(deepProblems(part(0, { correctIndex: 1, distractors: [{ option: 0, step: 1, mistake: "x", expr: "" }, { option: 2, step: 1, mistake: "x", expr: "" }, { option: 3, step: 1, mistake: "x", expr: "" }] })).join(), /2단계 값과 다릅니다/);
   const card = { id: "c1", kind: "사실", weight: "핵심" } as never;
   const basic = JSON.parse(recallerFakeReply("rc-author", JSON.stringify({ cards: [{ id: "c1", title: "요지 문장" }] }))).questions[0];
   assert.equal(basicProblem(basic, card), null);

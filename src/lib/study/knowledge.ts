@@ -33,7 +33,7 @@ export function knowledgeLayer(state: GenState): KnowledgeLayer {
       pages: [...new Set(card.evidence.map((e) => e.page))].sort((a, b) => a - b), spans: card.evidence.map((e) => ({ page: e.page, kind: e.quote ? "text" : "figure", quote: e.quote })) })));
     const byObjective: Record<string, string[]> = {};
     for (const unit of Object.values(units)) for (const q of unit.questions ?? []) byObjective[q.objectiveId] = q.cardIds;
-    for (const slot of Object.values(state.recaller.deep)) if (slot.question) byObjective[slot.question.objectiveId] = slot.question.cardIds;
+    for (const slot of Object.values(state.recaller.deep)) for (const q of slot.parts ?? (slot.question ? [slot.question] : [])) byObjective[q.objectiveId] = q.cardIds;
     return { points, byObjective };
   }
   const plan = state.astra?.plan;

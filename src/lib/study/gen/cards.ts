@@ -34,6 +34,10 @@ export const cardSchema = z.object({
   evidence: z.array(z.object({ page, quote: z.string().describe("원문 그대로 짧게(60자 이내). 그림·식에서 읽은 것이면 빈 문자열") })).min(1).max(2),
   mistakes: z.array(text.describe("학습자가 실제로 할 법한 틀린 생각·계산 한 줄")).max(3),
   links: z.array(z.object({ to: text, kind: z.enum(linkKinds) })).describe("같은 쪽 카드와의 연결(없으면 빈 배열)"),
+  // What the knowledge needs and what it produces, in the material's own words: cards whose outputs feed other cards'
+  // inputs can be chained into one long problem, across pages and materials, without anyone naming the chain.
+  takes: z.array(text).max(3).describe("이 지식을 쓰려면 주어져야 하는 것(자료의 말로, 명사구). 계산·판정·절차에 쓰이지 않으면 빈 배열"),
+  gives: z.array(text).max(3).describe("이 지식을 쓰면 나오는 결과(자료의 말로, 명사구). 없으면 빈 배열"),
 });
 export type Card = z.infer<typeof cardSchema>;
 export const organizeSchema = z.object({ cards: z.array(cardSchema) });
@@ -48,6 +52,7 @@ export const ORGANIZE = [
   "evidence.quote는 원문(쪽 글)에 실제로 있는 짧은 구절을 그대로. 그림·식 옮김에서 읽은 것은 빈 문자열.",
   "mistakes는 학습자가 실제로 틀리는 지점 1~2개(부호·방향 관례, 경계값, 단계 순서, 비슷한 용어·공식 혼동). 오답의 재료다.",
   "수업 안내·학습 목표 목록·목차·예시 문장 자체는 카드로 만들지 않는다.",
+  "takes·gives는 이 지식을 실제로 쓸 때 받는 것과 내는 것이다(절차·공식·조건이면 대개 있다). 자료가 쓰는 말 그대로 짧은 명사구로 쓴다. 다른 카드의 결과를 받아 쓰는 지식이면 그 결과의 이름을 takes에 쓴다.",
   "terms는 이 자료 전체에서 쓰는 용어 이름(과 기호)이다. 카드 제목과 용어 이름에는 terms의 표기를 그대로 쓴다: 원문 표기를 유지하고 한국어 이름을 새로 지어 붙이지 않는다. 설명은 한국어로 쓴다. 이미 만든 카드(already)와 같은 지식은 다시 카드로 만들지 않는다.",
 ].join("\n");
 
@@ -104,5 +109,6 @@ export function cardLine(c: Card) {
     : s.form === "procedure" ? s.steps.map((x, i) => `${i + 1}) ${x.action}`).join(" ") : s.form === "formula" ? `${s.expr}${s.when ? ` (${s.when})` : ""}`
     : s.form === "compare" ? `${s.targets.join(" vs ")}: ${s.criteria.map((k) => `${k.name}=${k.values.join("/")}`).join("; ")}`
     : s.form === "concept" ? `${s.claim}${s.reason ? ` — ${s.reason}` : ""}` : s.frame;
-  return `[${c.kind}] ${c.title}: ${body}`;
+  const io = c.takes?.length || c.gives?.length ? ` ⟨받음: ${(c.takes ?? []).join(", ") || "-"} / 냄: ${(c.gives ?? []).join(", ") || "-"}⟩` : "";
+  return `[${c.kind}] ${c.title}: ${body}${io}`;
 }

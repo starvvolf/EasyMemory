@@ -1,6 +1,8 @@
 // 계산 확인 (Recaller 심화 문제, 2026-10-24): every step of a worked solution carries an expression and the value it
-// claims; this evaluates the expression and compares. Numbers, + − × ÷ ^, parentheses, vectors (a, b, c), matrices
-// ((a, b), (c, d)) as rows, and a few functions only. No eval: a hand-written parser, so model text is never run as code.
+// claims; this evaluates the expression and compares. General math only — numbers, + − × ÷ ^, parentheses, vectors
+// (a, b, c), matrices ((a, b), (c, d)) as rows, comparisons — and nothing of any one subject: a formula of the material
+// (a projection, an interest rate, a pH) is defined by the solution itself as a step `f(x, y)` and then called.
+// No eval: a hand-written parser, so model text is never run as code.
 
 export type Value = number | number[] | number[][];
 type Mat = number[][];
@@ -35,27 +37,21 @@ function inverse(a: Mat): Mat {
   }
   return m.map((r) => r.slice(n).map((x) => x + 0));
 }
-const c = (deg: number) => { const x = Math.cos(deg * Math.PI / 180); return Math.abs(x) < 1e-12 ? 0 : x; };
-const s_ = (deg: number) => { const x = Math.sin(deg * Math.PI / 180); return Math.abs(x) < 1e-12 ? 0 : x; };
+// Exact zeros and ones at right angles (cosd(90) is 0, not 6e-17), so matrices built from them compare cleanly.
+const clean = (x: number) => (Math.abs(x) < 1e-12 ? 0 : Math.abs(x - 1) < 1e-12 ? 1 : Math.abs(x + 1) < 1e-12 ? -1 : x);
 
 const FUNCS: Record<string, (...a: Value[]) => Value> = {
   sqrt: (x) => Math.sqrt(num(x)), abs: (x) => Math.abs(num(x)), round: (x) => Math.round(num(x)),
   sin: (x) => Math.sin(num(x)), cos: (x) => Math.cos(num(x)), tan: (x) => Math.tan(num(x)),
-  sind: (x) => Math.sin(num(x) * Math.PI / 180), cosd: (x) => Math.cos(num(x) * Math.PI / 180), tand: (x) => Math.tan(num(x) * Math.PI / 180),
+  sind: (x) => clean(Math.sin(num(x) * Math.PI / 180)), cosd: (x) => clean(Math.cos(num(x) * Math.PI / 180)), tand: (x) => clean(Math.tan(num(x) * Math.PI / 180)),
   atan2: (y, x) => Math.atan2(num(y), num(x)), min: (...a) => Math.min(...a.map(num)), max: (...a) => Math.max(...a.map(num)),
   dot: (a, b) => { const u = vec(a), v = vec(b, u.length); return u.reduce((s, x, i) => s + x * v[i], 0); },
   cross: (a, b) => { const u = vec(a, 3), v = vec(b, 3); return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]].map((x) => x + 0); },
   norm: (a) => Math.hypot(...vec(a)), log: (x) => Math.log(num(x)), exp: (x) => Math.exp(num(x)),
-  // Matrices (rows). transpose, det, inv; eye(n). Homogeneous coordinates: hom(v) appends 1, cart(v) divides by the last.
+  // Matrices (rows): transpose, det, inv, eye(n).
   transpose: (a) => { const m = mat(a); return m[0].map((_, j) => m.map((r) => r[j])); }, det: (a) => det(mat(a)), inv: (a) => inverse(mat(a)), eye: (n) => eye(num(n)),
-  hom: (v) => [...vec(v), 1], cart: (v) => { const u = vec(v); const w = u[u.length - 1]; if (w === 0) throw new Error("w가 0이에요."); return u.slice(0, -1).map((x) => x / w + 0); },
-  // Homogeneous transforms in degrees: 2D (3×3) when given two numbers or one angle with rot2, 3D (4×4) otherwise.
-  translate: (...a) => { const t = a.map(num); const m = eye(t.length + 1); t.forEach((x, i) => { m[i][t.length] = x; }); return m; },
-  scale: (...a) => { const t = a.map(num); const m = eye(t.length + 1); t.forEach((x, i) => { m[i][i] = x; }); return m; },
-  rot2: (d) => { const x = num(d); return [[c(x), -s_(x), 0], [s_(x), c(x), 0], [0, 0, 1]]; },
-  rotx: (d) => { const x = num(d); return [[1, 0, 0, 0], [0, c(x), -s_(x), 0], [0, s_(x), c(x), 0], [0, 0, 0, 1]]; },
-  roty: (d) => { const x = num(d); return [[c(x), 0, s_(x), 0], [0, 1, 0, 0], [-s_(x), 0, c(x), 0], [0, 0, 0, 1]]; },
-  rotz: (d) => { const x = num(d); return [[c(x), -s_(x), 0, 0], [s_(x), c(x), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]; },
+  // Joining: join((1, 2), 1) → (1, 2, 1); join(M, row) adds a row.
+  join: (a, b) => { if (isMat(a)) { const r = vec(b, a[0].length); return [...a, r]; } return [...vec(a), ...(typeof b === "number" ? [b] : vec(b))]; },
   // Judgements as numbers (1 true, 0 false), for steps like clipping tests: lt(x, xmin), and(a, b), pick(cond, a, b).
   lt: (a, b) => +(num(a) < num(b)), le: (a, b) => +(num(a) <= num(b) + 1e-9), gt: (a, b) => +(num(a) > num(b)), ge: (a, b) => +(num(a) >= num(b) - 1e-9), eq: (a, b) => +(Math.abs(num(a) - num(b)) < 1e-9),
   and: (...a) => +a.every((x) => num(x) !== 0), or: (...a) => +a.some((x) => num(x) !== 0), not: (a) => +(num(a) === 0), pick: (cond, a, b) => (num(cond) !== 0 ? a : b),
@@ -106,7 +102,12 @@ function tokens(src: string) {
   return out;
 }
 
-export function evaluate(src: string, vars: Record<string, Value> = {}): Value {
+/** A function a solution defines from the material: `T(tx, ty)` with its body as an expression of the parameters. */
+export type Fn = { params: string[]; body: string };
+export type Fns = Record<string, Fn>;
+
+export function evaluate(src: string, vars: Record<string, Value> = {}, fns: Fns = {}, depth = 0): Value {
+  if (depth > 20) throw new Error("정의한 함수가 너무 깊게 서로를 불러요.");
   const t = tokens(src);
   let i = 0;
   const peek = () => t[i];
@@ -153,11 +154,16 @@ export function evaluate(src: string, vars: Record<string, Value> = {}): Value {
       return items.map(num);
     }
     if (/^[A-Za-zπ_]/.test(tok)) {
-      if (peek() === "(" && FUNCS[tok]) {
+      if (peek() === "(" && (fns[tok] || FUNCS[tok])) {
         take("(");
         const args: Value[] = peek() === ")" ? [] : [expr()];
         while (peek() === ",") { take(); args.push(expr()); }
         take(")");
+        const fn = fns[tok];
+        if (fn) {
+          if (args.length !== fn.params.length) throw new Error(`${tok}는 값 ${fn.params.length}개를 받아요.`);
+          return evaluate(fn.body, { ...vars, ...Object.fromEntries(fn.params.map((p, k) => [p, args[k]])) }, fns, depth + 1);
+        }
         return FUNCS[tok](...args);
       }
       if (tok in vars) return vars[tok];
@@ -195,6 +201,23 @@ export function sameValue(got: Value, claimedRaw: string): boolean {
 }
 
 export type Step = { what: string; expr: string; value: string; name?: string | null };
+const DEFINE = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*$/;
+/** The names and functions a solution's steps define, in order (a step named `f(x)` defines f; others name a value). */
+export function stepScope(steps: Step[]) {
+  const vars: Record<string, Value> = {};
+  const fns: Fns = {};
+  /** Each step's computed value (undefined for definitions, judgements in words, and steps that did not compute). */
+  const values: Array<Value | undefined> = [];
+  for (const s of steps) {
+    const def = DEFINE.exec(s.name ?? "");
+    if (def && s.expr.trim()) { fns[def[1]] = { params: def[2].split(",").map((p) => p.trim()).filter(Boolean), body: s.expr }; values.push(undefined); continue; }
+    let got: Value | undefined;
+    if (s.expr.trim()) { try { got = evaluate(s.expr, vars, fns); } catch { /* reported by checkSteps */ } }
+    if (got !== undefined && s.name?.trim()) vars[s.name.trim()] = got;
+    values.push(got);
+  }
+  return { vars, fns, values };
+}
 export type StepCheck = { index: number; ok: boolean; got?: string; problem?: string };
 /**
  * Checks a worked solution step by step. A step may name its result (name: "z1") and later steps use it. Steps with
@@ -202,11 +225,20 @@ export type StepCheck = { index: number; ok: boolean; got?: string; problem?: st
  */
 export function checkSteps(steps: Step[]): StepCheck[] {
   const vars: Record<string, Value> = {};
+  const fns: Fns = {};
   const show = (v: Value): string => isMat(v) ? `(${v.map((r) => show(r)).join(", ")})` : Array.isArray(v) ? `(${v.map((x) => +x.toFixed(6)).join(", ")})` : String(+v.toFixed(6));
   return steps.map((s, index) => {
     if (!s.expr.trim()) return { index, ok: true };
+    // A definition is checked where it is used (and by the blind solve against the source), not on its own.
+    const def = DEFINE.exec(s.name ?? "");
+    if (def) {
+      const params = def[2].split(",").map((p) => p.trim()).filter(Boolean);
+      if (params.some((p) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(p))) return { index, ok: false, problem: `${index + 1}단계: 매개변수 이름이 이상해요 (${def[2]}).` };
+      fns[def[1]] = { params, body: s.expr };
+      return { index, ok: true };
+    }
     try {
-      const got = evaluate(s.expr, vars);
+      const got = evaluate(s.expr, vars, fns);
       if (s.name?.trim()) vars[s.name.trim()] = got;
       return sameValue(got, s.value) ? { index, ok: true, got: show(got) } : { index, ok: false, got: show(got), problem: `${index + 1}단계: ${s.expr} = ${show(got)}인데 ${s.value}라고 적었어요.` };
     } catch (error) {

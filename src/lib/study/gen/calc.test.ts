@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkSteps, evaluate, sameValue } from "./calc.ts";
+import { checkSteps, evaluate, sameValue, stepScope } from "./calc.ts";
 
 test("numbers, vectors and the functions a solution uses", () => {
   assert.ok(Math.abs((evaluate("(0.02/2 + -0.03) / -1") as number) - 0.02) < 1e-12);
@@ -47,16 +47,20 @@ test("fractions and roots as LaTeX writes them", () => {
   assert.equal(sameValue([2 / Math.sqrt(5), -1 / Math.sqrt(5), 0], "$\\dfrac{(2,-1,0)}{\\sqrt5}$"), true);
 });
 
-test("matrices: rows, products, homogeneous transforms and judgements", () => {
-  // Pivot-point rotation as 02_Geometric Transformations p.11 builds it: T(2,0)·R(90°)·T(-2,0).
-  const M = evaluate("translate(2,0)*rot2(90)*translate(-2,0)");
-  assert.ok(sameValue(M, "((0,-1,2),(1,0,-2),(0,0,1))"));
-  assert.ok(sameValue(M, "$\\begin{pmatrix} 0 & -1 & 2 \\\\ 1 & 0 & -2 \\\\ 0 & 0 & 1 \\end{pmatrix}$"));
-  assert.ok(sameValue(evaluate("cart(M*hom((3,1)))", { M }), "(1,1)"));
-  assert.ok(sameValue(evaluate("col(M,3)", { M }), "(2,-2,1)"));
-  assert.ok(sameValue(evaluate("inv(M)*M", { M }), "((1,0,0),(0,1,0),(0,0,1))"));
+test("matrices, judgements, and functions a solution defines from its material", () => {
+  // The material's matrices are not built in: the solution defines them, then uses them (02_Geometric Transformations p.11).
+  const steps = [
+    { what: "이동 행렬", name: "T(tx, ty)", expr: "((1,0,tx),(0,1,ty),(0,0,1))", value: "정의" },
+    { what: "회전 행렬", name: "R(a)", expr: "((cosd(a),-sind(a),0),(sind(a),cosd(a),0),(0,0,1))", value: "정의" },
+    { what: "고정점 회전", name: "M", expr: "T(2,0)*R(90)*T(-2,0)", value: "$\\begin{pmatrix} 0 & -1 & 2 \\\\ 1 & 0 & -2 \\\\ 0 & 0 & 1 \\end{pmatrix}$" },
+    { what: "점에 적용", name: "p", expr: "M*join((3,1),1)", value: "(1,1,1)" },
+    { what: "세 번째 열", name: null, expr: "col(M,3)", value: "(2,-2,1)" },
+  ];
+  assert.deepEqual(checkSteps(steps).filter((c) => !c.ok), []);
+  const { vars, fns } = stepScope(steps);
+  assert.ok(sameValue(evaluate("inv(M)*M", vars, fns), "((1,0,0),(0,1,0),(0,0,1))"));
+  assert.match(checkSteps([steps[0], { ...steps[2], expr: "T(2,0)*R(90)" }])[1].problem ?? "", /R/);
   assert.equal(evaluate("det([[2,1],[1,3]])"), 5);
-  assert.ok(sameValue(evaluate("translate(2,-1,0)*rotz(90)*translate(-2,1,0)*hom((5,-1,4))"), "(2,2,4,1)"));
   assert.equal(evaluate("and(ge(x,0), le(x,4))", { x: 5 }), 0);
   assert.equal(evaluate("pick(lt(1,2), 7, 8)"), 7);
   assert.throws(() => evaluate("((1,2),(3,4))*(1,2,3)"), /곱할 수 없어요/);
