@@ -200,6 +200,15 @@ export function sameValue(got: Value, claimedRaw: string): boolean {
   return false;
 }
 
+/** A value as a person writes it: fractions with small denominators (3/2, -1/6), else at most four decimals. */
+export function formatValue(v: Value): string {
+  if (Array.isArray(v)) return `(${(v as Array<number | number[]>).map((x) => formatValue(x as Value)).join(", ")})`;
+  const x = Math.abs(v) < 1e-12 ? 0 : v;
+  if (Number.isInteger(Math.round(x * 1e9) / 1e9) && Math.abs(x - Math.round(x)) < 1e-9) return String(Math.round(x));
+  for (let q = 2; q <= 64; q++) { const p = Math.round(x * q); if (Math.abs(x - p / q) < 1e-9) return `${p}/${q}`; }
+  return String(+x.toFixed(4));
+}
+
 export type Step = { what: string; expr: string; value: string; name?: string | null };
 const DEFINE = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*$/;
 /** The names and functions a solution's steps define, in order (a step named `f(x)` defines f; others name a value). */
@@ -240,6 +249,8 @@ export function checkSteps(steps: Step[]): StepCheck[] {
     try {
       const got = evaluate(s.expr, vars, fns);
       if (s.name?.trim()) vars[s.name.trim()] = got;
+      // Left blank, the value is the calculator's to write (filled in afterwards), so there is nothing to compare.
+      if (!s.value.trim()) return { index, ok: true, got: show(got) };
       // A named constant set up from the material ("Q = ((4/5, -3/5, 0), …)", value "정의") has nothing to compare.
       if (/^(정의|define)$/i.test(s.value.trim()) && s.name?.trim()) return { index, ok: true, got: show(got) };
       return sameValue(got, s.value) ? { index, ok: true, got: show(got) } : { index, ok: false, got: show(got), problem: `${index + 1}단계: ${s.expr} = ${show(got)}인데 ${s.value}라고 적었어요.` };

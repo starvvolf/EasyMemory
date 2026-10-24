@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { closeJson, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
-import { basicProblem, completeItems, deepProblems, recallerFakeReply, slotCards } from "./recaller.ts";
+import { basicProblem, codeChains, completeItems, deepProblems, fillValues, recallerFakeReply, slotCards } from "./recaller.ts";
 import type { GenStep } from "./types.ts";
 
 // Invented public pages (not lecture material): two sections by title.
@@ -88,7 +88,8 @@ test("cards complete in a streaming reply are picked out before the reply ends",
 });
 
 test("code checks: a wrong option must be the value its stated mistake gives; a choice needs a note per option", () => {
-  const deep = JSON.parse(recallerFakeReply("rc-deep", JSON.stringify({ group: { id: "g1", cardIds: ["s1.c1", "s1.c2"] } }))).question;
+  // Through JSON, as a reply would come: the test changes parts freely.
+  const deep = JSON.parse(JSON.stringify(fillValues(JSON.parse(recallerFakeReply("rc-deep", JSON.stringify({ group: { id: "g1", cardIds: ["s1.c1", "s1.c2"] } }))).question)));
   assert.deepEqual(deepProblems(deep), []);
   const part = (k: number, change: object) => ({ ...deep, parts: deep.parts.map((p: object, i: number) => i === k ? { ...p, ...change } : p) });
   assert.match(deepProblems(part(1, { distractors: deep.parts[1].distractors.map((d: { option: number }) => d.option === 1 ? { ...d, expr: "2+2" } : d) })).join(), /소문항 2: 오답 2/);
@@ -108,4 +109,35 @@ test("a JSON reply that ran on in blank space after its last value is closed and
   assert.equal(closeJson('{"question":{"a":"unfini'), undefined);
   assert.equal(closeJson('{"question":{"a":1,'), undefined);
   assert.equal(closeJson('{"a":1}'), undefined, "nothing open: not a cut reply");
+});
+
+test("종합 chains the cards' own words join are found by code: longest first, across materials, no shared cards", () => {
+  const card = (id: string, takes: string[], gives: string[]) => ({ id, kind: "공식", title: id, weight: "핵심", shape: { form: "formula", expr: "x", vars: [], when: "" }, evidence: [{ page: 1, quote: "" }], mistakes: [], links: [], takes, gives }) as never;
+  const cards = [card("m1.a", ["거래"], ["분개"]), card("m1.b", ["분개"], ["시산표"]), card("m2.c", ["시산표"], ["재무제표"]), card("m2.d", ["재무제표"], ["비율 분석"]), card("m2.e", ["날씨"], ["기분"])];
+  const chains = codeChains(cards, 2);
+  assert.equal(chains.length, 1);
+  assert.deepEqual(chains[0].cardIds, ["m1.a", "m1.b", "m2.c", "m2.d"]);
+  assert.deepEqual(chains[0].joints.map((j) => j.gives), ["분개", "시산표", "재무제표"]);
+  assert.deepEqual(codeChains([cards[0], cards[1], cards[4]], 2), [], "one material, or nothing joined: no chain");
+});
+
+test("a step that hands back what it was given (identity, the same value) is sent back", () => {
+  // Through JSON, as a reply would come: the test changes parts freely.
+  const deep = JSON.parse(JSON.stringify(fillValues(JSON.parse(recallerFakeReply("rc-deep", JSON.stringify({ group: { id: "g1", cardIds: ["s1.c1", "s1.c2"] } }))).question)));
+  const steps = [{ what: "점", page: null, expr: "(1,2)", value: "(1,2)", name: "p" }, { what: "축 행렬", page: null, expr: "eye(2)", value: "((1,0),(0,1))", name: "R" }, { what: "회전", page: null, expr: "R*p", value: "(1,2)", name: "q" }];
+  const problems = deepProblems({ ...deep, steps, parts: [{ ...deep.parts[0], upTo: 2, options: ["(1,2)", "(2,1)", "(0,0)", "(3,3)"], correctIndex: 0, distractors: deep.parts[0].distractors.map((d: object) => ({ ...d, expr: "" })) }] });
+  assert.ok(problems.some((p) => /2단계가 값을 바꾸지 않습니다\(단위 행렬\)/.test(p)) && problems.some((p) => /3단계가 값을 바꾸지 않습니다\(앞 값 그대로\)/.test(p)), problems.join(" | "));
+});
+
+test("the calculator writes the values: blank step values, and options built from the answer step and distinct mistakes", () => {
+  const raw = JSON.parse(recallerFakeReply("rc-deep", JSON.stringify({ group: { id: "g1", cardIds: ["s1.c1", "s1.c2"] } }))).question;
+  const blank = { ...raw, steps: raw.steps.map((s: { value: string; name: string | null }) => ({ ...s, value: s.name?.includes("(") ? s.value : "" })) };
+  const built = fillValues(blank);
+  assert.deepEqual(built.steps.map((s: { value: string }) => s.value), ["정의", "5", "20"]);
+  // 2+3*4 and "14" are the same value: the second is skipped and the next mistake takes its place.
+  assert.deepEqual(built.parts[1].options, ["$20$", "$14$", "$24$", "$9$"]);
+  assert.deepEqual(built.short, []);
+  assert.deepEqual(deepProblems(built), []);
+  const thin = fillValues({ ...raw, parts: [{ ...raw.parts[0], distractors: raw.parts[0].distractors.map((d: object) => ({ ...d, expr: "2+3" })) }] });
+  assert.match(thin.short.join(), /오답 값이 0개뿐/);
 });

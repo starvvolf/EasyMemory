@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkSteps, evaluate, sameValue, stepScope } from "./calc.ts";
+import { checkSteps, evaluate, formatValue, sameValue, stepScope } from "./calc.ts";
 
 test("numbers, vectors and the functions a solution uses", () => {
   assert.ok(Math.abs((evaluate("(0.02/2 + -0.03) / -1") as number) - 0.02) < 1e-12);
@@ -65,4 +65,11 @@ test("matrices, judgements, and functions a solution defines from its material",
   assert.equal(evaluate("and(ge(x,0), le(x,4))", { x: 5 }), 0);
   assert.equal(evaluate("pick(lt(1,2), 7, 8)"), 7);
   assert.throws(() => evaluate("((1,2),(3,4))*(1,2,3)"), /곱할 수 없어요/);
+});
+
+test("values written as a person would: small fractions, else four decimals", () => {
+  assert.equal(formatValue([2, 1.5, -1 / 6]), "(2, 3/2, -1/6)");
+  assert.equal(formatValue([[0, -1], [1, 0]]), "((0, -1), (1, 0))");
+  assert.equal(formatValue(Math.SQRT2), "1.4142");
+  assert.equal(formatValue(-0), "0");
 });

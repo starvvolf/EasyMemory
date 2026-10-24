@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
-import { checkSteps, evaluate, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
+import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
 import { cardKinds, cardLine, cardSchema, checkCards, ORGANIZE, organizeSchema, organizeUser, type Card, type CardIssue } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
@@ -37,16 +37,19 @@ const basicReplySchema = z.object({ questions: z.array(basicQuestionSchema) });
 type BasicReply = z.infer<typeof basicQuestionSchema>;
 
 const stepSchema = z.object({ what: text, page: z.number().int().positive().nullable(), expr: z.string().describe("계산기 식(숫자·+-*/^·괄호·(a,b,c)·dot·cross·sqrt, 앞 단계 이름). 말로 판단하는 단계면 빈 문자열"),
-  value: text.describe("이 단계의 값 또는 판단"), name: z.string().nullable().describe("뒤 단계에서 쓸 이름(z0, n). 없으면 null") });
+  value: z.string().describe("이 단계의 판단(말). 식으로 계산되는 값이면 빈 문자열(코드가 채운다)"), name: z.string().nullable().describe("뒤 단계에서 쓸 이름(z0, n). 없으면 null") });
 // One situation, one worked solution, and the questions asked along it (1-1, 1-2 …): each part's answer is the value of
 // a step, so a learner who goes wrong sees at which stage. One part when asking once is more natural.
+// The model names the answer's step and the mistakes; the options are built by code (values from the calculator), so
+// two mistakes that happen to give one value cost a candidate, not a rewrite.
 const partSchema = z.object({
   ask: text.describe("이 소문항이 묻는 것 한 문장. 앞 소문항의 답을 알려 주지 않는다"),
   upTo: z.number().int().min(0).describe("이 소문항의 답이 되는 step 번호(0부터). 소문항 순서대로 커진다"),
-  options: z.array(z.string()).length(4),
-  correctIndex: z.number().int().min(0).max(3),
-  distractors: z.array(z.object({ option: z.number().int().min(0).max(3), step: z.number().int().min(0), mistake: text, expr: z.string().describe("그 실수를 적용해 오답 값을 낸 식. 값이 수가 아니면 빈 문자열") })).length(3),
+  answer: z.string().describe("답이 말(판정·이름)이면 그 말. 계산 값이면 빈 문자열(코드가 upTo 단계 값을 쓴다)"),
+  distractors: z.array(z.object({ step: z.number().int().min(0), mistake: text, expr: z.string().describe("그 실수를 적용해 오답 값을 내는 식. 답이 말이면 빈 문자열"), value: z.string().describe("답이 말이면 그 오답의 말. 식이 있으면 빈 문자열") })).min(3).max(5).describe("오답 후보 3~5개(서로 다른 실수)"),
 });
+/** A part as checked and published: four options, the answer first (shuffled when authored), a mistake behind each other one. */
+type BuiltPart = { ask: string; upTo: number; options: string[]; correctIndex: number; distractors: Array<{ option: number; step: number; mistake: string; expr: string }> };
 const deepQuestionSchema = z.object({
   groupId: text,
   goal: text,
@@ -56,9 +59,11 @@ const deepQuestionSchema = z.object({
   explanation: text,
 });
 const deepReplySchema = z.object({ question: deepQuestionSchema });
-type DeepReply = z.infer<typeof deepQuestionSchema>;
+type RawDeep = z.infer<typeof deepQuestionSchema>;
+type DeepReply = Omit<RawDeep, "parts"> & { parts: BuiltPart[] };
 const linkReplySchema = z.object({ groups: z.array(z.object({ id: text, cardIds: z.array(text).min(2).max(5).describe("계산·판단 순서대로"), idea: text.describe("어떻게 엮는지 한 문장: 앞 카드의 결과가 뒤 카드에 어떻게 들어가는지"),
   joints: z.array(z.object({ from: text, to: text, gives: text.describe("from 카드의 냄(gives) 중 하나, 그대로"), takes: text.describe("to 카드의 받음(takes) 중 하나, 그대로") })).describe("이웃한 카드 쌍마다 하나: 앞 카드의 어떤 결과가 뒤 카드의 어떤 입력이 되는지") })) });
+const notesReplySchema = z.object({ notes: z.array(z.object({ part: z.number().int().min(1), option: z.number().int().min(1).max(4), ok: z.boolean(), why: z.string().describe("맞지 않으면 무엇이 다른지 한 줄, 맞으면 빈 문자열") })) });
 const solveReplySchema = z.object({ answers: z.array(z.object({ choice: z.number().int().min(0).max(3), value: z.string() })).describe("소문항 순서대로"), steps: z.array(z.object({ what: text, value: z.string() })), doubts: z.array(z.string()) });
 
 export type RcQuestion = { objectiveId: string; sectionId: string; tier: "basic" | "deep"; cardIds: string[]; format: (typeof formats)[number]; goal: string;
@@ -116,11 +121,15 @@ const LINK = `${BASE}
 const DEEP = `${BASE}
 카드 묶음 하나로 심화 문제를 만든다: 공통 상황(stem) 하나, 단계별 풀이(steps) 하나, 그 풀이를 따라가며 묻는 객관식 소문항(parts). rules(심화 기준)를 따른다.
 stem에는 상황과 주어진 값만 쓰고, 묻는 말은 parts의 ask에만 쓴다.
-소문항: 상황 하나에서 중간 결과를 차례로 물어보는 게 자연스러우면(이걸 구하고, 그걸로 다음을 구하고) 소문항 여러 개로 나누고, 한 번에 묻는 게 자연스러우면 하나로 둔다. 소문항마다 upTo는 답이 되는 step 번호이고, 정답 보기의 값은 그 step의 값과 같다.
-steps의 expr은 계산기가 다시 계산한다: 숫자, + - * / ^, 괄호, 벡터 (a, b, c), dot(), cross(), sqrt(), abs()와 앞 단계 name만 쓴다. ${CALC} 계산이 아닌 판단 단계는 expr을 빈 문자열로 둔다. 소문항의 distractors 3개는 각각 몇 번째 step에서 어떤 실수를 했을 때 나오는 보기인지와, 그 실수로 계산한 식(expr)을 적는다. 수식은 $…$로 쓴다.`;
+소문항: 상황 하나에서 중간 결과를 차례로 물어보는 게 자연스러우면(이걸 구하고, 그걸로 다음을 구하고) 소문항 여러 개로 나누고, 한 번에 묻는 게 자연스러우면 하나로 둔다. 소문항마다 upTo는 답이 되는 step 번호다.
+steps의 expr은 계산기가 다시 계산한다: 숫자, + - * / ^, 괄호, 벡터 (a, b, c), dot(), cross(), sqrt(), abs()와 앞 단계 name만 쓴다. ${CALC} 계산이 아닌 판단 단계는 expr을 빈 문자열로 둔다. 소문항의 distractors는 몇 번째 step에서 어떤 실수를 했는지와, 그 실수로 계산한 식(expr)이다. 수식은 $…$로 쓴다.
+계산은 코드가 한다: 머릿속으로 계산하지 말고 식(expr)만 정확히 쓴다. 식으로 계산되는 step의 value는 빈 문자열로 둔다. 보기는 코드가 만든다: 정답은 upTo 단계의 값(답이 말이면 answer), 오답은 distractors 후보 3~5개(실수마다 그 실수를 적용한 식 expr, 답이 말이면 value)에서 서로 다른 값 셋을 고른다. 값을 고를 때는 계산이 깔끔하게 떨어질 정수·간단한 분수를 고른다.
+짧게: steps의 what은 한 줄(무엇을 하는지만), 같은 식을 되풀이하지 말고 앞 단계 name을 쓴다. 오답의 mistake는 한 줄. explanation은 한두 문장으로, 값 없이 무엇을 어떤 순서로 했는지만 쓴다.`;
 const CHAIN = `${BASE}
-여러 자료의 지식 카드에서 '종합 문제' 묶음을 고른다. 카드마다 받음(takes)과 냄(gives)이 있다. 앞 카드의 냄이 다음 카드의 받음이 되는 카드를 이어, 같은 대상 하나를 처음부터 끝까지 들고 갈 수 있는 사슬을 만든다. 이어지는 만큼 길게(최대 5장), 자료 2개 이상에 걸치게. 이웃한 쌍마다 joints에 어떤 냄이 어떤 받음이 되는지 카드에 적힌 말 그대로 적는다. 억지로 잇지 않는다: 이어지지 않으면 짧게 끊거나 빈 배열.`;
+여러 자료의 지식 카드에서 '종합 문제' 묶음을 고른다. 카드마다 받음(takes)과 냄(gives)이 있다. 앞 카드의 냄이 다음 카드의 받음이 되는 카드를 이어, 같은 대상 하나를 처음부터 끝까지 들고 갈 수 있는 사슬을 만든다. 이어지는 만큼 길게(최대 5장), 자료 2개 이상에 걸치게. 이웃한 쌍마다 joints에 어떤 냄이 어떤 받음이 되는지 카드에 적힌 말 그대로 적는다. 말이 같아도 뜻이 다르면(다른 식의 같은 기호) 잇지 않는다. wordingHints는 코드가 말이 같은 것끼리 이어 본 후보다: 뜻이 맞는 것만 쓴다. 억지로 잇지 않는다: 이어지지 않으면 짧게 끊거나 빈 배열.`;
 const CHAIN_DEEP = "이번 묶음은 종합 문제다. cardIds 순서대로 같은 대상 하나(값, 물체, 사례)를 처음부터 끝까지 들고 간다. joints대로 앞 카드 단계의 결과(name)가 다음 카드 단계의 입력이 된다. 값은 단계마다 결과가 실제로 바뀌게 고른다(그대로 통과하는 값 금지). 문제 글은 상황과 주어진 값, 구할 것만 쓰고 단계 순서를 알려 주지 않는다. 오답 셋은 서로 다른 카드의 단계에서 나온 실수다. 카드마다 그 단계의 결과가 하나씩 나오므로, 그 결과들을 소문항으로 차례로 묻는 것(1-1 앞 카드의 결과, 1-2 그다음 …)을 먼저 생각한다. 중간 결과가 따로 물을 만하지 않으면 묶어서 묻는다.";
+const NOTES = `${BASE}
+심화 문제의 오답 보기마다 적힌 실수(mistake)가 정말 그 보기의 값을 낳는지 본다. 풀이(steps)의 해당 단계(step)에서 그 실수를 했다고 치고, 그 식(expr)이 그 실수를 옮긴 것인지, 그 값(value)이 나오는지 확인한다. 식이 없는 말 보기는 그 실수를 하면 그 말이 나오는지만 본다. 확인할 정보가 모자란 것은 틀린 것이 아니다: 실수와 보기가 분명히 어긋날 때만 ok=false. 오답마다 ok와, 맞지 않으면 why 한 줄. 맞으면 why는 빈 문자열.`;
 const SOLVE = `${BASE}
 정답을 모르는 상태에서 객관식 문제를 직접 푼다. 공통 상황(situation)에서 소문항(parts)을 차례로 푼다. 원문(source)의 절차를 따라 단계별로 계산하고, 소문항마다 고른 보기 번호(choice, 0부터)와 값(value)을 answers에 순서대로 적는다. 문제에 조건이 모자라거나 답이 둘 이상이면 doubts에 적는다. 사고 과정 전체를 쓰지 말고 단계별 결과만 쓴다.`;
 
@@ -210,6 +219,37 @@ export function basicProblem(q: BasicReply, card: Card | undefined): string | nu
 }
 
 /**
+ * The calculator writes what it can: a step's value left blank becomes the value of its expression, and an option left
+ * blank becomes the value of its step (the answer) or of its stated mistake (a wrong option). The model then designs
+ * the question and the calculation and does no arithmetic in its head (that was most of a 60–100 s reply).
+ */
+export function fillValues(q: RawDeep): DeepReply & { short: string[] } {
+  const { vars, fns, values } = stepScope(q.steps);
+  const steps = q.steps.map((s, i) => (!s.value.trim() && values[i] !== undefined ? { ...s, value: formatValue(values[i]!) } : s));
+  const short: string[] = [];
+  const key = (o: string) => o.replace(/\$/g, "").replace(/\s+/g, "");
+  const parts = q.parts.map((p, k): BuiltPart => {
+    const correct = p.answer.trim() || (values[p.upTo] !== undefined ? `$${formatValue(values[p.upTo]!)}$` : "");
+    const seen = new Set([key(correct)]);
+    const picked: BuiltPart["distractors"] = [];
+    const options = [correct];
+    for (const d of p.distractors) {
+      if (picked.length === 3) break;
+      let v = d.value.trim();
+      if (!v && d.expr.trim()) { try { v = `$${formatValue(evaluate(d.expr, vars, fns))}$`; } catch { v = ""; } }
+      if (!v || seen.has(key(v))) continue;
+      seen.add(key(v));
+      picked.push({ option: options.length, step: d.step, mistake: d.mistake, expr: d.expr });
+      options.push(v);
+    }
+    if (!correct || picked.length < 3) short.push(`${q.parts.length > 1 ? `소문항 ${k + 1}: ` : ""}${!correct ? "정답 값을 계산하지 못했습니다(upTo 단계에 식이 없거나 계산되지 않음)." : `서로 다르고 정답과도 다른 오답 값이 ${picked.length}개뿐입니다. 다른 실수를 더 주세요.`}`);
+    while (options.length < 4) options.push("");
+    return { ask: p.ask, upTo: p.upTo, options, correctIndex: 0, distractors: picked };
+  });
+  return { ...q, steps, parts, short };
+}
+
+/**
  * Code checks on a deep question: every step recomputes; each part's answer is the value of its step and is not already
  * written in the question; every wrong option is its stated mistake.
  */
@@ -222,6 +262,16 @@ export function deepProblems(q: DeepReply): string[] {
   const { vars, fns, values } = stepScope(q.steps);
   const squash = (s: string) => clean(s).replace(/\s+/g, "");
   const scenario = q.stem.map((b) => b.text ?? b.latex ?? "").join(" ");
+  // A step that hands its input back unchanged (an identity matrix, axes equal to the world's, a move by zero) teaches
+  // nothing: the values were picked too easily. Plain literals ("(2, 1, 5)") are givens being named, not steps.
+  const isLiteral = (e: string) => { try { evaluate(e); return !/[A-Za-z]/.test(e); } catch { return false; } };
+  values.forEach((v, i) => {
+    if (v === undefined || typeof v === "number" || isLiteral(q.steps[i].expr)) return;
+    const n = Array.isArray(v[0]) ? (v as number[][]).length : 0;
+    const identity = n > 0 && (v as number[][]).every((r, a) => r.length === n && r.every((x, b) => Math.abs(x - (a === b ? 1 : 0)) < 1e-9));
+    const same = values.slice(0, i).some((w) => w !== undefined && typeof w !== "number" && JSON.stringify(w) === JSON.stringify(v));
+    if (identity || same) problems.push(`${i + 1}단계가 값을 바꾸지 않습니다(${identity ? "단위 행렬" : "앞 값 그대로"}). 단계마다 결과가 실제로 바뀌게 주어진 값을 다시 고르세요.`);
+  });
   q.parts.forEach((part, k) => {
     const at = (m: string) => problems.push(q.parts.length > 1 ? `소문항 ${k + 1}: ${m}` : m);
     if (part.upTo >= q.steps.length) { at("답 단계 번호가 풀이 단계 밖입니다."); return; }
@@ -245,11 +295,55 @@ export function deepProblems(q: DeepReply): string[] {
   return problems;
 }
 
+/**
+ * 종합 chains by wording alone: an edge wherever one card's gives is (in its words) another card's takes, then the
+ * longest paths that cross materials, without sharing cards. Only hints for the link step: the same words can mean
+ * different things (one run joined a projection's u to a clipping's u and made a nonsense situation).
+ */
+export function codeChains(cards: Card[], want: number) {
+  const material = (c: Card) => c.id.split(".")[0];
+  const edges = new Map<string, Array<{ to: Card; gives: string; takes: string }>>();
+  for (const a of cards) for (const b of cards) {
+    if (a.id === b.id) continue;
+    const hit = (a.gives ?? []).flatMap((g) => (b.takes ?? []).filter((t) => among(g, [t])).map((t) => ({ gives: g, takes: t })))[0];
+    if (hit) edges.set(a.id, [...(edges.get(a.id) ?? []), { to: b, ...hit }]);
+  }
+  const found: Array<{ cards: Card[]; joints: Array<{ from: string; to: string; gives: string; takes: string }> }> = [];
+  let budget = 20000;
+  const walk = (path: Card[], joints: Array<{ from: string; to: string; gives: string; takes: string }>) => {
+    if (--budget < 0) return;
+    if (path.length >= 3 && new Set(path.map(material)).size >= 2) found.push({ cards: path, joints });
+    if (path.length === 5) return;
+    for (const e of edges.get(path.at(-1)!.id) ?? []) if (!path.includes(e.to)) walk([...path, e.to], [...joints, { from: path.at(-1)!.id, to: e.to.id, gives: e.gives, takes: e.takes }]);
+  };
+  for (const c of cards) walk([c], []);
+  const score = (x: { cards: Card[] }) => x.cards.length * 2 + new Set(x.cards.map(material)).size * 3;
+  const picked: typeof found = [];
+  for (const x of found.sort((a, b) => score(b) - score(a))) {
+    if (picked.length >= want) break;
+    if (picked.some((p) => p.cards.some((c) => x.cards.includes(c)))) continue;
+    picked.push(x);
+  }
+  return picked.map((x) => ({ cardIds: x.cards.map((c) => c.id), idea: x.cards.map((c) => c.title).join(" → "), joints: x.joints }));
+}
+
 /** Errors that pause the whole run (usage limit, login) rather than fail one question; the runner marks them with a status. */
 const pausesRun = (error: unknown) => { const status = (error as { status?: string } | null)?.status; return typeof status === "string" && status.startsWith("paused-") && status !== "paused-invalid"; };
 
-/** A phrase as one of a card's own takes/gives (spelling and spacing aside). */
-const among = (phrase: string, list: string[] = []) => { const k = phrase.toLowerCase().replace(/[\s\p{P}]/gu, ""); return list.some((x) => { const y = x.toLowerCase().replace(/[\s\p{P}]/gu, ""); return !!y && (y === k || y.includes(k) || k.includes(y) || similarity(x, phrase) >= 0.6); }); };
+/**
+ * A phrase as one of a card's own takes/gives (spelling and spacing aside). Containment counts only for names of four
+ * letters or more: "u" or "P" sit inside half the phrases of a material and joined cards that have nothing in common.
+ */
+const among = (phrase: string, list: string[] = []) => {
+  const k = phrase.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+  return list.some((x) => {
+    const y = x.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+    if (!y || !k) return false;
+    if (y === k) return true;
+    const short = Math.min(y.length, k.length);
+    return short >= 4 && (y.includes(k) || k.includes(y) || similarity(x, phrase) >= 0.6);
+  });
+};
 /**
  * A 종합 chain holds only where it says why: every neighbouring pair has a joint whose output is one of the earlier
  * card's gives and whose input is one of the later card's takes. Nothing about the subject is known here; the cards'
@@ -541,12 +635,19 @@ export async function runRecaller(ctx: RecallerContext) {
   if ((input.deep || combine || data.groups) && input.purpose !== "read" && allCards.length >= 2) {
     if (!data.groups) {
       const wanted = combine ? 2 : Math.min(5, Math.max(1, Math.floor(allCards.length / 5)));
-      const reply = await ctx.ask("rc-link", null, 1, combine ? CHAIN : LINK, JSON.stringify({ purpose: input.purpose, want: wanted, cards: allCards.map((c) => ({ id: c.id, ...(combine ? { material: state.sections.find((s) => s.id === c.id.split(".")[0])?.title } : {}), line: cardLine(c), links: c.links })) }), linkReplySchema, { maxChars: 12000 });
       const known = new Set(allCards.map((c) => c.id));
-      // A 종합 묶음 has to cross materials; otherwise it is an ordinary deep question.
       const byIdAll = new Map(allCards.map((c) => [c.id, c]));
+      // 종합: the model reads meaning (the same words can mean different things: a projection's u is not a clipping's u,
+      // and code-only chains joined them), but sees only each card's inputs and outputs, plus the joints code found by
+      // wording as hints (a full card list made this call take 30–40 s).
+      const cardsIn = combine
+        ? allCards.filter((c) => c.takes?.length || c.gives?.length).map((c) => ({ id: c.id, material: c.id.split(".")[0], line: cardLine(c).replace(/ ⟨받음:.*$/, "").slice(0, 140), takes: c.takes ?? [], gives: c.gives ?? [] }))
+        : allCards.map((c) => ({ id: c.id, line: cardLine(c), links: c.links }));
+      const hints = combine ? codeChains(allCards, 5).map((c) => ({ cardIds: c.cardIds, joints: c.joints.map((j) => `${j.gives} → ${j.takes}`) })) : [];
+      const asked = cardsIn.length >= 2 ? (await ctx.ask("rc-link", null, 1, combine ? CHAIN : LINK, JSON.stringify({ purpose: input.purpose, want: wanted, ...(combine ? { materials: Object.fromEntries(state.sections.map((s) => [s.id, s.title])), ...(hints.length ? { wordingHints: hints } : {}) } : {}), cards: cardsIn }), linkReplySchema, { maxChars: 12000 })).groups : [];
+      // A 종합 묶음 has to cross materials and say why at every joint; otherwise it is an ordinary deep question.
       const fits = (g: z.infer<typeof linkReplySchema>["groups"][number]) => g.cardIds.every((id) => known.has(id)) && (combine ? new Set(g.cardIds.map((id) => id.split(".")[0])).size >= 2 && chainHolds(g, byIdAll) : g.cardIds.length <= 3);
-      data.groups = reply.groups.filter(fits).slice(0, wanted).map((g, i) => ({ ...g, id: `g${i + 1}` }));
+      data.groups = asked.filter(fits).slice(0, wanted).map((g, i) => ({ ...g, id: `g${i + 1}` }));
       for (const g of data.groups) data.deep[g.id] ??= { status: "waiting", tries: 0, problems: [] };
       await save();
     }
@@ -571,11 +672,17 @@ export async function runRecaller(ctx: RecallerContext) {
           await save();
           continue;
         }
-        const q = reply.question;
-        const problems = deepProblems(q);
+        const q = fillValues(reply.question);
+        const problems = q.short.length ? q.short : deepProblems(q);
         if (!problems.length) {
-          // Blind solve: the question and options only, no answer, no steps.
-          const solved = await ctx.ask("rc-solve", sectionOfCard(group.cardIds[0]), slot.tries, SOLVE, JSON.stringify({ question: { situation: q.stem, parts: q.parts.map((p) => ({ ask: p.ask, options: p.options })) }, source: sourceOfCards(cards) }), solveReplySchema, { maxChars: combine ? 20000 : 12000 });
+          // Blind solve (the question and options only, no answer, no steps) and, at the same time, a read of the wrong
+          // options: code checks that each is the value of its stated calculation, not that the calculation is the mistake it names.
+          const [solved, read] = await Promise.all([
+            ctx.ask("rc-solve", sectionOfCard(group.cardIds[0]), slot.tries, SOLVE, JSON.stringify({ question: { situation: q.stem, parts: q.parts.map((p) => ({ ask: p.ask, options: p.options })) }, source: sourceOfCards(cards) }), solveReplySchema, { maxChars: combine ? 20000 : 12000 }),
+            ctx.ask("rc-check", sectionOfCard(group.cardIds[0]), slot.tries, NOTES, JSON.stringify({ situation: q.stem, steps: q.steps.map((s, i) => ({ n: i + 1, what: s.what, expr: s.expr, value: s.value })),
+              wrong: q.parts.flatMap((p, k) => p.distractors.map((d) => ({ part: k + 1, option: d.option + 1, value: p.options[d.option], step: d.step + 1, mistake: d.mistake, expr: d.expr }))) }), notesReplySchema, { maxChars: 8000 }).catch((error) => { if (pausesRun(error)) throw error; return { notes: [] }; }),
+          ]);
+          for (const n of read.notes) if (!n.ok) problems.push(`${q.parts.length > 1 ? `소문항 ${n.part}: ` : ""}오답 ${n.option}의 설명이 그 값과 맞지 않습니다: ${n.why}`);
           q.parts.forEach((p, k) => {
             const got = solved.answers[k];
             if (!got || got.choice !== p.correctIndex) problems.push(`${q.parts.length > 1 ? `소문항 ${k + 1}: ` : ""}따로 푼 답(${got ? `${got.choice + 1}번, ${got.value}` : "없음"})이 정답(${p.correctIndex + 1}번)과 다릅니다. 풀이 단계를 다시 확인하세요: ${solved.steps.map((s) => `${s.what}=${s.value}`).join(" / ")}`);
@@ -647,9 +754,10 @@ export function recallerFakeReply(step: GenStep, user: string): string {
         options: null, optionNotes: null, correctIndex: null, accepted: [c.title.slice(0, 80)], before: null, after: null, explanation: "원문 그대로", mistakes: [] }) });
   }
   if (step === "rc-link") {
-    const cards = u.cards as Array<{ id: string; line: string }>;
+    const cards = u.cards as Array<{ id: string; line?: string; takes?: string[] }>;
     // A different material's card when there is one (종합), else the next card; the joint names the first card's output.
-    const other = cards.find((c) => c.id.split(".")[0] !== cards[0]?.id.split(".")[0] && c.line.includes("받음: 결과 1")) ?? cards[1];
+    const takesFirst = (c: { line?: string; takes?: string[] }) => (c.takes ?? []).includes("결과 1") || Boolean(c.line?.includes("받음: 결과 1"));
+    const other = cards.find((c) => c.id.split(".")[0] !== cards[0]?.id.split(".")[0] && takesFirst(c)) ?? cards[1];
     return JSON.stringify({ groups: cards.length >= 2 ? [{ id: "g1", cardIds: [cards[0].id, other.id], idea: "앞 카드의 결과로 뒤 카드를 계산", joints: [{ from: cards[0].id, to: other.id, gives: "결과 1", takes: "결과 1" }] }] : [] });
   }
   if (step === "rc-deep") {
@@ -657,10 +765,14 @@ export function recallerFakeReply(step: GenStep, user: string): string {
     return JSON.stringify({ question: { groupId: group.id, goal: "두 단계를 이어 계산할 수 있다", stem: [{ kind: "text", text: "식 (2+3)*4가 있다.", latex: null, rows: null }],
       steps: [{ what: "곱하기 정의", page: null, expr: "a*b", value: "정의", name: "mul(a, b)" }, { what: "괄호 먼저", page: null, expr: "2+3", value: "5", name: "s" }, { what: "곱하기", page: null, expr: "mul(s, 4)", value: "20", name: null }],
       parts: [
-        { ask: "값을 구하라: 2+3", upTo: 1, options: ["5", "6", "4", "7"], correctIndex: 0, distractors: [{ option: 1, step: 1, mistake: "하나 더 셈", expr: "2+4" }, { option: 2, step: 1, mistake: "하나 덜 셈", expr: "2+2" }, { option: 3, step: 1, mistake: "둘 더 셈", expr: "2+5" }] },
-        { ask: "값을 구하라: (2+3)*4", upTo: 2, options: ["20", "14", "24", "9"], correctIndex: 0, distractors: [{ option: 1, step: 1, mistake: "괄호를 무시함", expr: "2+3*4" }, { option: 2, step: 2, mistake: "4 대신 6을 곱함", expr: "mul(4, 6)" }, { option: 3, step: 2, mistake: "곱하지 않고 더함", expr: "s+4" }] },
+        { ask: "값을 구하라: 2+3", upTo: 1, answer: "", distractors: [{ step: 1, mistake: "하나 더 셈", expr: "2+4", value: "" }, { step: 1, mistake: "하나 덜 셈", expr: "2+2", value: "" }, { step: 1, mistake: "둘 더 셈", expr: "2+5", value: "" }] },
+        { ask: "값을 구하라: (2+3)*4", upTo: 2, answer: "", distractors: [{ step: 1, mistake: "괄호를 무시함", expr: "2+3*4", value: "" }, { step: 2, mistake: "괄호를 무시함(같은 값)", expr: "14", value: "" }, { step: 2, mistake: "4 대신 6을 곱함", expr: "mul(4, 6)", value: "" }, { step: 2, mistake: "곱하지 않고 더함", expr: "s+4", value: "" }] },
       ],
       explanation: "괄호를 먼저 계산한 뒤 곱한다." } });
+  }
+  if (step === "rc-check") {
+    const wrong = (u.wrong ?? []) as Array<{ part: number; option: number }>;
+    return JSON.stringify({ notes: wrong.map((w) => ({ part: w.part, option: w.option, ok: true, why: "" })) });
   }
   if (step === "rc-solve") {
     const q = u.question as { parts: Array<{ ask: string; options: string[] }> };
@@ -668,7 +780,7 @@ export function recallerFakeReply(step: GenStep, user: string): string {
       const expr = /값을 구하라:\s*(.+)$/.exec(p.ask)?.[1] ?? "0";
       let value = "";
       try { value = String(evaluate(expr)); } catch { value = ""; }
-      return { choice: Math.max(0, p.options.findIndex((o) => o.trim() === value)), value };
+      return { choice: Math.max(0, p.options.findIndex((o) => o.replace(/\$/g, "").trim() === value)), value };
     });
     return JSON.stringify({ answers, steps: [{ what: "계산", value: answers.at(-1)?.value ?? "" }], doubts: [] });
   }
