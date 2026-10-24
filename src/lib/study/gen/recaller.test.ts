@@ -50,6 +50,22 @@ test("deep questions are made only when asked", () => withData(async () => {
   assert.ok(calls.includes("rc-author") && !calls.includes("rc-link") && !calls.includes("rc-deep"), calls.join(" "));
 }));
 
+test("종합 문제: cards of two earlier runs, one group across them, checked and published", () => withData(async () => {
+  const run = async () => { const g = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" }); return runGen(g.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages }); };
+  const [a, b] = [await run(), await run()];
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "종합", pageNumbers: [1], purpose: "understand", engine: "recaller", provider: "fake", combine: [a.id, b.id] });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  assert.equal(done.status, "done", done.message);
+  assert.deepEqual(done.sections.map((s) => s.id), ["m1", "m2"]);
+  const calls = (await readGenCalls(done.id)).map((c) => c.step);
+  assert.ok(!calls.includes("rc-organize") && !calls.includes("rc-author") && calls.includes("rc-deep"), calls.join(" "));
+  const group = done.recaller!.groups![0];
+  assert.deepEqual(group.cardIds.map((id) => id.split(".")[0]), ["m1", "m2"]);
+  assert.equal(done.recaller!.deep.g1.status, "ready");
+  const deep = (await readGenCalls(done.id)).find((c) => c.step === "rc-deep")!;
+  assert.match(deep.user, /invented · 원문 p\.1|invented p\.1–2 · 원문 p\.1/);
+}));
+
 test("a deep question whose blind solve disagrees is rewritten once, then held", () => withData(async () => {
   const fakeReply = (step: GenStep, user: string) => {
     const reply = JSON.parse(recallerFakeReply(step, user));

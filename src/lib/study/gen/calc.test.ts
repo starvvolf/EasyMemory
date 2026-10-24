@@ -46,3 +46,18 @@ test("fractions and roots as LaTeX writes them", () => {
   assert.equal(sameValue(Math.sqrt(5), "$\\sqrt5$"), true);
   assert.equal(sameValue([2 / Math.sqrt(5), -1 / Math.sqrt(5), 0], "$\\dfrac{(2,-1,0)}{\\sqrt5}$"), true);
 });
+
+test("matrices: rows, products, homogeneous transforms and judgements", () => {
+  // Pivot-point rotation as 02_Geometric Transformations p.11 builds it: T(2,0)·R(90°)·T(-2,0).
+  const M = evaluate("translate(2,0)*rot2(90)*translate(-2,0)");
+  assert.ok(sameValue(M, "((0,-1,2),(1,0,-2),(0,0,1))"));
+  assert.ok(sameValue(M, "$\\begin{pmatrix} 0 & -1 & 2 \\\\ 1 & 0 & -2 \\\\ 0 & 0 & 1 \\end{pmatrix}$"));
+  assert.ok(sameValue(evaluate("cart(M*hom((3,1)))", { M }), "(1,1)"));
+  assert.ok(sameValue(evaluate("col(M,3)", { M }), "(2,-2,1)"));
+  assert.ok(sameValue(evaluate("inv(M)*M", { M }), "((1,0,0),(0,1,0),(0,0,1))"));
+  assert.equal(evaluate("det([[2,1],[1,3]])"), 5);
+  assert.ok(sameValue(evaluate("translate(2,-1,0)*rotz(90)*translate(-2,1,0)*hom((5,-1,4))"), "(2,2,4,1)"));
+  assert.equal(evaluate("and(ge(x,0), le(x,4))", { x: 5 }), 0);
+  assert.equal(evaluate("pick(lt(1,2), 7, 8)"), 7);
+  assert.throws(() => evaluate("((1,2),(3,4))*(1,2,3)"), /곱할 수 없어요/);
+});

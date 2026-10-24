@@ -164,6 +164,8 @@ export const genInputSchema = z.strictObject({
   readImages: z.boolean().default(false),
   /** recaller: also make deep questions (several cards tied into one worked problem). The learner turns it on. */
   deep: z.boolean().optional(),
+  /** recaller 종합 문제: earlier recaller runs whose cards are tied into one long problem (no new pages are read). */
+  combine: z.array(z.string().regex(/^gen_[a-f0-9]{32}$/)).min(2).max(4).optional(),
   pastExamSourceIds: z.array(z.string().regex(/^src_[a-f0-9]{64}$/)).min(1).max(2).optional(),
   engine: z.enum(engines).default("v2"),
   planInput: z.enum(["pdf", "pages", "figures"]).optional(),
@@ -175,6 +177,7 @@ export const genInputSchema = z.strictObject({
 export async function createGen(raw: unknown): Promise<GenState> {
   const input = genInputSchema.parse(raw) as GenInput;
   if (input.pastExamSourceIds?.includes(input.sourceId)) throw new GenError(400, "강의 PDF 자체를 기출로 함께 선택할 수 없습니다.");
+  if (input.combine && input.engine !== "recaller") throw new GenError(400, "종합 문제는 Recaller 엔진만 만들 수 있습니다.");
   input.pageNumbers = [...new Set(input.pageNumbers)].sort((a, b) => a - b);
   if (input.priorityPage !== undefined) readingPage({ input }, input.priorityPage);
   const now = new Date().toISOString();
@@ -591,6 +594,11 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           get: async (hash, page) => { try { return (JSON.parse(await readFile(readingFile(hash, page), "utf8")) as { text: string }).text; } catch { return null; } },
           put: async (hash, page, text) => { await saveJson(readingFile(hash, page), { page, text }); },
         },
+        combined: async () => Promise.all((input.combine ?? []).map(async (genId) => {
+          const src = await loadGen(genId);
+          if (!src?.recaller || src.input.engine !== "recaller") throw stopWith(`${genId}는 Recaller로 만든 자료가 아니라 종합 문제에 쓸 수 없어요.`);
+          return { genId, fileName: src.input.fileName, sections: src.sections, recaller: src.recaller };
+        })),
         save: () => { marks(); return saveState(state); },
         publish: async (section, questions) => {
           if (!questions.length) return null;

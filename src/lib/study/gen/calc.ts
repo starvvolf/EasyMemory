@@ -1,8 +1,42 @@
 // 계산 확인 (Recaller 심화 문제, 2026-10-24): every step of a worked solution carries an expression and the value it
-// claims; this evaluates the expression and compares. Numbers, + − × ÷ ^, parentheses, vectors (a, b, c) and a few
-// functions only. No eval: a hand-written parser, so model text is never run as code.
+// claims; this evaluates the expression and compares. Numbers, + − × ÷ ^, parentheses, vectors (a, b, c), matrices
+// ((a, b), (c, d)) as rows, and a few functions only. No eval: a hand-written parser, so model text is never run as code.
 
-export type Value = number | number[];
+export type Value = number | number[] | number[][];
+type Mat = number[][];
+
+const isMat = (v: Value): v is Mat => Array.isArray(v) && Array.isArray(v[0]);
+const isVec = (v: Value): v is number[] => Array.isArray(v) && !Array.isArray(v[0]);
+function mat(v: Value): Mat { if (!isMat(v)) throw new Error("행렬이 와야 할 자리예요."); return v; }
+const eye = (n: number): Mat => Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)));
+function matmul(a: Mat, b: Mat): Mat {
+  if (a[0].length !== b.length) throw new Error(`${a.length}×${a[0].length} 행렬과 ${b.length}×${b[0].length} 행렬은 곱할 수 없어요.`);
+  return a.map((row) => b[0].map((_, j) => row.reduce((s, x, k) => s + x * b[k][j], 0) + 0));
+}
+function matvec(a: Mat, v: number[]): number[] {
+  if (a[0].length !== v.length) throw new Error(`${a.length}×${a[0].length} 행렬에 길이 ${v.length} 벡터를 곱할 수 없어요.`);
+  return a.map((row) => row.reduce((s, x, k) => s + x * v[k], 0) + 0);
+}
+function det(a: Mat): number {
+  if (a.length !== a[0].length) throw new Error("정사각 행렬이 아니에요.");
+  if (a.length === 1) return a[0][0];
+  return a[0].reduce((s, x, j) => s + (j % 2 ? -1 : 1) * x * det(a.slice(1).map((r) => r.filter((_, k) => k !== j))), 0);
+}
+function inverse(a: Mat): Mat {
+  const n = a.length;
+  if (n !== a[0].length) throw new Error("정사각 행렬이 아니에요.");
+  const m = a.map((r, i) => [...r, ...eye(n)[i]]);
+  for (let c = 0; c < n; c++) {
+    let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
+    if (Math.abs(m[p][c]) < 1e-12) throw new Error("역행렬이 없어요.");
+    [m[c], m[p]] = [m[p], m[c]];
+    const d = m[c][c]; m[c] = m[c].map((x) => x / d);
+    for (let r = 0; r < n; r++) if (r !== c) { const f = m[r][c]; m[r] = m[r].map((x, k) => x - f * m[c][k]); }
+  }
+  return m.map((r) => r.slice(n).map((x) => x + 0));
+}
+const c = (deg: number) => { const x = Math.cos(deg * Math.PI / 180); return Math.abs(x) < 1e-12 ? 0 : x; };
+const s_ = (deg: number) => { const x = Math.sin(deg * Math.PI / 180); return Math.abs(x) < 1e-12 ? 0 : x; };
 
 const FUNCS: Record<string, (...a: Value[]) => Value> = {
   sqrt: (x) => Math.sqrt(num(x)), abs: (x) => Math.abs(num(x)), round: (x) => Math.round(num(x)),
@@ -12,17 +46,40 @@ const FUNCS: Record<string, (...a: Value[]) => Value> = {
   dot: (a, b) => { const u = vec(a), v = vec(b, u.length); return u.reduce((s, x, i) => s + x * v[i], 0); },
   cross: (a, b) => { const u = vec(a, 3), v = vec(b, 3); return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]].map((x) => x + 0); },
   norm: (a) => Math.hypot(...vec(a)), log: (x) => Math.log(num(x)), exp: (x) => Math.exp(num(x)),
+  // Matrices (rows). transpose, det, inv; eye(n). Homogeneous coordinates: hom(v) appends 1, cart(v) divides by the last.
+  transpose: (a) => { const m = mat(a); return m[0].map((_, j) => m.map((r) => r[j])); }, det: (a) => det(mat(a)), inv: (a) => inverse(mat(a)), eye: (n) => eye(num(n)),
+  hom: (v) => [...vec(v), 1], cart: (v) => { const u = vec(v); const w = u[u.length - 1]; if (w === 0) throw new Error("w가 0이에요."); return u.slice(0, -1).map((x) => x / w + 0); },
+  // Homogeneous transforms in degrees: 2D (3×3) when given two numbers or one angle with rot2, 3D (4×4) otherwise.
+  translate: (...a) => { const t = a.map(num); const m = eye(t.length + 1); t.forEach((x, i) => { m[i][t.length] = x; }); return m; },
+  scale: (...a) => { const t = a.map(num); const m = eye(t.length + 1); t.forEach((x, i) => { m[i][i] = x; }); return m; },
+  rot2: (d) => { const x = num(d); return [[c(x), -s_(x), 0], [s_(x), c(x), 0], [0, 0, 1]]; },
+  rotx: (d) => { const x = num(d); return [[1, 0, 0, 0], [0, c(x), -s_(x), 0], [0, s_(x), c(x), 0], [0, 0, 0, 1]]; },
+  roty: (d) => { const x = num(d); return [[c(x), 0, s_(x), 0], [0, 1, 0, 0], [-s_(x), 0, c(x), 0], [0, 0, 0, 1]]; },
+  rotz: (d) => { const x = num(d); return [[c(x), -s_(x), 0, 0], [s_(x), c(x), 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]; },
+  // Judgements as numbers (1 true, 0 false), for steps like clipping tests: lt(x, xmin), and(a, b), pick(cond, a, b).
+  lt: (a, b) => +(num(a) < num(b)), le: (a, b) => +(num(a) <= num(b) + 1e-9), gt: (a, b) => +(num(a) > num(b)), ge: (a, b) => +(num(a) >= num(b) - 1e-9), eq: (a, b) => +(Math.abs(num(a) - num(b)) < 1e-9),
+  and: (...a) => +a.every((x) => num(x) !== 0), or: (...a) => +a.some((x) => num(x) !== 0), not: (a) => +(num(a) === 0), pick: (cond, a, b) => (num(cond) !== 0 ? a : b),
+  // Parts: row(M, i) and col(M, j) from 1, at(v, i) from 1.
+  row: (m, i) => mat(m)[num(i) - 1], col: (m, j) => mat(m).map((r) => r[num(j) - 1]), at: (v, i) => vec(v)[num(i) - 1],
 };
 const CONSTS: Record<string, number> = { pi: Math.PI, π: Math.PI, e: Math.E };
 
 function num(v: Value): number { if (typeof v !== "number") throw new Error("숫자가 와야 할 자리에 벡터가 있어요."); return v; }
 function vec(v: Value, n?: number): number[] {
-  if (!Array.isArray(v)) throw new Error("벡터가 와야 할 자리에 숫자가 있어요.");
+  if (!isVec(v)) throw new Error(typeof v === "number" ? "벡터가 와야 할 자리에 숫자가 있어요." : "벡터가 와야 할 자리에 행렬이 있어요.");
   if (n !== undefined && v.length !== n) throw new Error(`벡터 길이가 ${n}이 아니에요.`);
   return v;
 }
 function op(a: Value, b: Value, f: (x: number, y: number) => number, name: string): Value {
   if (typeof a === "number" && typeof b === "number") return f(a, b);
+  if (isMat(a) || isMat(b)) {
+    if (name === "*" && isMat(a) && isMat(b)) return matmul(a, b);
+    if (name === "*" && isMat(a) && isVec(b)) return matvec(a, b);
+    if (isMat(a) && isMat(b)) { if (a.length !== b.length || a[0].length !== b[0].length) throw new Error("크기가 다른 행렬끼리 더하거나 뺄 수 없어요."); return a.map((r, i) => r.map((x, j) => f(x, b[i][j]))); }
+    if (typeof b === "number" && (name === "*" || name === "/")) return mat(a).map((r) => r.map((x) => f(x, b)));
+    if (typeof a === "number" && name === "*") return mat(b).map((r) => r.map((x) => f(a, x)));
+    throw new Error("이 행렬 계산은 할 수 없어요 (행렬×행렬, 행렬×벡터, 수×행렬만).");
+  }
   if (Array.isArray(a) && Array.isArray(b)) {
     if (name === "*" || name === "/") throw new Error("벡터끼리는 dot()이나 cross()로 곱해요.");
     if (a.length !== b.length) throw new Error("길이가 다른 벡터끼리 더하거나 뺄 수 없어요.");
@@ -43,6 +100,7 @@ function tokens(src: string) {
     const m = /^(\d+\.?\d*(?:e[-+]?\d+)?|\.\d+)/i.exec(rest) ?? /^([A-Za-zπ_][A-Za-z0-9_]*)/.exec(rest);
     if (m) { out.push(m[1]); i += m[1].length; continue; }
     if ("+-*/^(),".includes(s[i])) { out.push(s[i]); i++; continue; }
+    if (s[i] === "[" || s[i] === "]") { out.push(s[i] === "[" ? "(" : ")"); i++; continue; }
     throw new Error(`읽을 수 없는 글자 '${s[i]}'`);
   }
   return out;
@@ -68,13 +126,17 @@ export function evaluate(src: string, vars: Record<string, Value> = {}): Value {
     }
   };
   const unary = (): Value => {
-    if (peek() === "-") { take(); const v = unary(); return typeof v === "number" ? -v : v.map((x) => -x); }
+    if (peek() === "-") { take(); const v = unary(); return typeof v === "number" ? -v : isMat(v) ? v.map((r) => r.map((x) => -x + 0)) : v.map((x) => -x + 0); }
     if (peek() === "+") { take(); return unary(); }
     return power();
   };
   const power = (): Value => {
     const base = primary();
-    if (peek() === "^") { take(); return Math.pow(num(base), num(unary())); }
+    if (peek() === "^") {
+      take();
+      if (isMat(base)) { const k = num(unary()); let m = eye(base.length); for (let n = 0; n < k; n++) m = matmul(m, base); return m; }
+      return Math.pow(num(base), num(unary()));
+    }
     return base;
   };
   const primary = (): Value => {
@@ -86,6 +148,8 @@ export function evaluate(src: string, vars: Record<string, Value> = {}): Value {
       while (peek() === ",") { take(); items.push(expr()); }
       take(")");
       if (items.length === 1) return items[0];
+      // Rows of the same length make a matrix: ((1, 0), (0, 1)).
+      if (items.every(isVec)) { const rows = items as number[][]; if (rows.some((r) => r.length !== rows[0].length)) throw new Error("행렬의 행 길이가 달라요."); return rows; }
       return items.map(num);
     }
     if (/^[A-Za-zπ_]/.test(tok)) {
@@ -114,6 +178,8 @@ function tolerance(written: string) {
 }
 /** A claimed value as models write it: "$(0,0,2)$", "\\left(1, 2\\right)", "0.30 " → plain text the calculator reads. */
 export function plainValue(claimed: string) {
+  // LaTeX matrices: \begin{pmatrix} 1 & 0 \\ 0 & 1 \end{pmatrix} → ((1, 0), (0, 1)).
+  claimed = claimed.replace(/\\begin\{[pbv]?matrix\}([\s\S]*?)\\end\{[pbv]?matrix\}/g, (_, body: string) => `(${body.split(/\\\\/).map((r) => r.trim()).filter(Boolean).map((r) => `(${r.split("&").map((x) => x.trim()).join(",")})`).join(",")})`);
   return claimed.replace(/\$/g, "").replace(/\\[dt]frac/g, "\\frac").replace(/\\sqrt\s*(\d+(?:\.\d+)?)/g, "sqrt($1)").replace(/\\mathbf\{([^{}]*)\}/g, "$1").replace(/\\left|\\right|\\,|\\!|\\;/g, "").replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1)/($2)").replace(/\\sqrt\{([^{}]+)\}/g, "sqrt($1)").replace(/\\cdot|\\times/g, "*").trim();
 }
 export function sameValue(got: Value, claimedRaw: string): boolean {
@@ -123,7 +189,8 @@ export function sameValue(got: Value, claimedRaw: string): boolean {
   const tol = tolerance(claimed);
   const close = (a: number, b: number) => Math.abs(a - b) <= Math.max(tol, Math.abs(b) * 1e-9);
   if (typeof got === "number" && typeof want === "number") return close(got, want);
-  if (Array.isArray(got) && Array.isArray(want)) return got.length === want.length && got.every((x, k) => close(x, want[k] as number));
+  if (isMat(got) && isMat(want)) return got.length === want.length && got.every((r, i) => r.length === want[i].length && r.every((x, j) => close(x, want[i][j])));
+  if (isVec(got) && isVec(want)) return got.length === want.length && got.every((x, k) => close(x, want[k]));
   return false;
 }
 
@@ -135,7 +202,7 @@ export type StepCheck = { index: number; ok: boolean; got?: string; problem?: st
  */
 export function checkSteps(steps: Step[]): StepCheck[] {
   const vars: Record<string, Value> = {};
-  const show = (v: Value) => Array.isArray(v) ? `(${v.map((x) => +x.toFixed(6)).join(", ")})` : String(+v.toFixed(6));
+  const show = (v: Value): string => isMat(v) ? `(${v.map((r) => show(r)).join(", ")})` : Array.isArray(v) ? `(${v.map((x) => +x.toFixed(6)).join(", ")})` : String(+v.toFixed(6));
   return steps.map((s, index) => {
     if (!s.expr.trim()) return { index, ok: true };
     try {

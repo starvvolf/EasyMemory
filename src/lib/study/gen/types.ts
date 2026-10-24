@@ -63,6 +63,8 @@ export type GenInput = {
   readImages?: boolean;
   /** recaller: deep questions too (off unless asked; light materials have little to tie together). */
   deep?: boolean;
+  /** recaller 종합 문제: the earlier recaller runs whose cards are tied together. */
+  combine?: string[];
   /** Optional registered exams: absent means the original generation path, unchanged. */
   pastExamSourceIds?: string[];
   /** A remake of reported questions: the earlier question per objective, so authoring writes a different one. */
