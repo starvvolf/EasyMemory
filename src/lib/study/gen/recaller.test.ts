@@ -73,6 +73,8 @@ test("code checks: a wrong option must be the value its stated mistake gives; a 
   assert.deepEqual(deepProblems(deep), []);
   assert.match(deepProblems({ ...deep, distractors: deep.distractors.map((d: { option: number }) => d.option === 1 ? { ...d, expr: "2+2" } : d) }).join(), /오답 2/);
   assert.match(deepProblems({ ...deep, steps: deep.steps.map((s: { value: string }, i: number) => i === 0 ? { ...s, value: "6" } : s) }).join(), /1단계/);
+  const given = `${deep.options[deep.correctIndex]}`.replace(/\$/g, "");
+  assert.match(deepProblems({ ...deep, stem: [{ kind: "text", text: `벡터 $${given}$의 성분은?` }] }).join(), /주어진 값 그대로/);
   const card = { id: "c1", kind: "사실", weight: "핵심" } as never;
   const basic = JSON.parse(recallerFakeReply("rc-author", JSON.stringify({ cards: [{ id: "c1", title: "요지 문장" }] }))).questions[0];
   assert.equal(basicProblem(basic, card), null);

@@ -205,6 +205,9 @@ export function deepProblems(q: DeepReply): string[] {
   const vars = namedValues(q.steps);
   const lastCalc = [...q.steps].reverse().find((s) => s.expr.trim());
   const correct = clean(q.options[q.correctIndex] ?? "");
+  // An answer already written in the question needs no steps (3D Viewing: axes that equal the world axes give back W itself).
+  const squash = (s: string) => clean(s).replace(/\s+/g, "");
+  if (isValue(correct) && squash(q.stem.map((b) => b.text ?? b.latex ?? "").join(" ")).includes(squash(correct))) problems.push(`정답(${correct})이 문제에 주어진 값 그대로입니다. 단계마다 값이 실제로 바뀌게 값을 다시 고르세요.`);
   if (lastCalc && isValue(correct)) {
     try { if (!sameValue(evaluate(lastCalc.expr, vars), correct)) problems.push(`정답 보기(${correct})가 마지막 계산 값과 다릅니다.`); } catch { /* reported by checkSteps */ }
   }
