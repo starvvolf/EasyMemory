@@ -897,3 +897,27 @@
 .dejipgi .opt .opt-note{margin-left:auto;padding-left:16px;max-width:48%;text-align:right;font-size:14px;line-height:1.45;color:var(--muted)}
 .dejipgi .opt.is-correct .opt-note,.dejipgi .opt.is-wrong .opt-note{color:var(--ink)}
 @media (max-width:640px){.dejipgi .opt:has(.opt-note){flex-wrap:wrap}.dejipgi .opt .opt-note{flex-basis:100%;max-width:none;margin-left:0;padding:4px 0 0 34px;text-align:left}}
+
+/* ---------- Recaller 2: 홈 · 지식 · 작업대 ---------- */
+.dejipgi .coach-home .answer-input{border-radius:12px}
+.dejipgi .coach-answer{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);line-height:1.65}
+.dejipgi .kp-meter{margin:12px 0 6px}
+.dejipgi .kp-cloud{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.dejipgi .kp-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 11px;font-size:13px;cursor:pointer;text-align:left}
+.dejipgi .kp-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px}
+.dejipgi .kp-chip i{width:8px;height:8px;border-radius:50%;background:var(--line-strong);flex:none}
+.dejipgi .kp-chip.kp-weak i{background:var(--bad)}.dejipgi .kp-chip.kp-weak{border-color:color-mix(in srgb,var(--bad) 35%,var(--line))}
+.dejipgi .kp-chip.kp-mid i{background:var(--help)}
+.dejipgi .kp-chip.kp-good i,.dejipgi .kp-chip.kp-mastered i{background:var(--good)}
+.dejipgi .kp-chip:hover{border-color:var(--accent)}
+.dejipgi .kp-split{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.dejipgi .kp-list{flex:1 1 360px;min-width:0}
+.dejipgi .kp-detail{flex:999 1 420px;min-width:0;position:sticky;top:12px}
+.dejipgi .kp-group{margin-top:14px}
+.dejipgi .kp-group ul,.dejipgi .kp-spans,.dejipgi .mat-mini{list-style:none;margin:0;padding:0}
+.dejipgi .kp-row{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:8px 6px;border-radius:10px;text-align:left;color:var(--ink);cursor:pointer;font-size:14px}
+.dejipgi .kp-row:hover{background:var(--surface-2)}.dejipgi .kp-row.on{background:var(--accent-soft)}
+.dejipgi .kp-row .kp-title{flex:1;min-width:0}
+.dejipgi .kp-ess{margin:8px 0 14px;padding-left:20px;line-height:1.7}
+.dejipgi .kp-spans li,.dejipgi .mat-mini li{padding:6px 0;border-top:1px solid var(--line)}
+@media (max-width:760px){.dejipgi .kp-detail{position:static}}

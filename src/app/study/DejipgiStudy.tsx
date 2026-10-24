@@ -11,6 +11,7 @@ import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/con
 import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type PlannerDeck } from "./dejipgi-app.js";
 import { DEFAULT_GEN_MODELS, defaultChosen, genOutline, mapDigest, type Engine, type GenState, type GenSurvey } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
+import type { KnowledgeLayer } from "@/lib/study/knowledge";
 import { coachCards, type CoachInput } from "@/lib/study/coach";
 import { buildLexicon, chunkAt, findTerms, importantTerms } from "@/lib/study/chunk";
 import { applyPatches, similarObjectives, termChoice, tooEasy, type LedgerEntry, type PatchMap } from "@/lib/study/quality";
@@ -119,7 +120,7 @@ export default function DejipgiStudy() {
     const loadGenDecks = async () => {
       const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number; pastExam?: boolean; createdAt?: string }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
       // Finished runs, and runs still being made whose first sections are authored.
-      return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string }>(
+      return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; points?: KnowledgeLayer }>(
         await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").then((deck) => ({ ...deck, pastExam: run.pastExam === true, madeAt: run.createdAt })).catch(() => null)));
     };
     const loadQuality = async () => readJson<{ patches: PatchMap; counts: Record<string, number> }>(await fetchExperiment("/api/study-quality"), "고친 문제 목록을 읽지 못했어요.");
@@ -355,9 +356,9 @@ export default function DejipgiStudy() {
           loadGenDecks().catch(() => []),
           readJson<{ artifacts: StudyArtifactMeta[] }>(await fetchExperiment("/api/personalization-lab"), "Recaller 출제 문서 목록을 불러오지 못했어요."),
         ]);
-        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; pastExam?: boolean; madeAt?: string }> = [
+        const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; points?: KnowledgeLayer; pastExam?: boolean; madeAt?: string }> = [
           ...fresh.flatMap((deck) => deck ? [deck] : []), ...artifacts.map((meta) => ({ meta }))];
-        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline, knowledge, pastExam, madeAt }, order) => {
+        const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline, knowledge, points, pastExam, madeAt }, order) => {
           const document = given ?? (await readJson<{ document: AuthoringDocument }>(
             await fetchExperiment(`/api/personalization-lab?id=${encodeURIComponent(meta.id)}`), `${meta.title}을 불러오지 못했어요.`)).document;
           // Questions that fail the item-quality checks stay out of practice; the rest of the document is still usable.
@@ -365,7 +366,7 @@ export default function DejipgiStudy() {
             .map((issue) => [issue.questionId, `검사 제외: ${issue.message}`] as const));
           const own = patches[meta.id];
           const deck = { ...applyPatches(toStudyDeck(meta, document, order, excluded), own, showMath), patchSig: (own ?? []).map((patch) => patch.id).join(","),
-            ...(pastExam ? { pastExam: true } : {}), ...(knowledge ? { knowledge } : {}), ...(madeAt && Date.parse(madeAt) ? { madeAt: Date.parse(madeAt) } : {}) };
+            ...(pastExam ? { pastExam: true } : {}), ...(knowledge ? { knowledge } : {}), ...(points ? { points } : {}), ...(madeAt && Date.parse(madeAt) ? { madeAt: Date.parse(madeAt) } : {}) };
           // What to recall shows on the one-page summary; bare LaTeX there renders like answers do.
           return outline ? { ...deck, outline: outline.map((section) => ({ ...section,
             objectives: section.objectives.map((objective) => ({ ...objective, recall: showMath(objective.recall) })) })) } : deck;
@@ -396,7 +397,7 @@ export default function DejipgiStudy() {
   }, [fetchExperiment, session.mode, session.uid]);
 
   return (
-    <div className="dejipgi" ref={rootRef} data-view="practice">
+    <div className="dejipgi" ref={rootRef} data-view="home">
       {/* Plain link (no precedence) so a blocked font request never suspends or errors the page. */}
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600&display=swap" />
@@ -404,16 +405,18 @@ export default function DejipgiStudy() {
         <div className="masthead">
           <header className="top">
             <div className="brand">
-              <h1>되짚기</h1>
+              <h1>Recaller</h1>
             </div>
             <span className="store" id="store" data-mode="memory"><i></i><span id="storeText">저장 준비 중</span></span>
           </header>
           <nav className="tabs" role="tablist" id="tabs">
-            <button role="tab" data-view="practice" aria-selected="true">연습</button>
+            <button role="tab" data-view="home" aria-selected="true">홈</button>
+            <button role="tab" data-view="knowledge" aria-selected="false">지식</button>
             <button role="tab" data-view="read" aria-selected="false">읽기</button>
-            <button role="tab" data-view="summary" aria-selected="false">정리</button>
-            <button role="tab" data-view="create" aria-selected="false">자료 만들기</button>
+            <button role="tab" data-view="practice" aria-selected="false">연습</button>
+            <button role="tab" data-view="create" aria-selected="false">자료</button>
             <button role="tab" data-view="records" aria-selected="false">기록</button>
+            <button role="tab" data-view="bench" aria-selected="false">작업대</button>
           </nav>
         </div>
         <main id="app"></main>

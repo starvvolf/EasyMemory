@@ -7,7 +7,7 @@ export function GET(request: Request) {
     return new Response(icon, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" } });
   }
   return Response.json({
-    name: "되짚기 · Recaller", short_name: "되짚기", start_url: "/study", scope: "/", display: "fullscreen",
+    name: "Recaller", short_name: "Recaller", start_url: "/study", scope: "/", display: "fullscreen",
     display_override: ["fullscreen", "standalone"], background_color: "#F2F3F6", theme_color: "#F2F3F6", orientation: "any",
     icons: [{ src: "/study-manifest?icon", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
   }, { headers: { "Content-Type": "application/manifest+json" } });

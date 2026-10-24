@@ -199,7 +199,8 @@ function sampleErrorCopy(e){
 }
 /* ---------- app state ---------- */
 const S = {
-  view:"practice",
+  view:"home",
+  kp:{ subject:null, sel:null, filter:"all" },
   decks:{},
   session:null,
   recordsDeck:null,
@@ -557,12 +558,223 @@ on(document.getElementById("tabs"), "click", (e) => {
   if (S.session && b.dataset.view !== "practice" && b.dataset.view !== "read") S.session = null;
   setView(b.dataset.view);
 });
+/* ==========================================================================================================
+   Recaller 2 (설계 문서 "Recaller 2 설계", 2026-10-24): 홈 · 지식 · 작업대.
+   What to know (지식 포인트) is kept apart from where it is (원문 쪽·스팬); mastery is read per point from the
+   same records the practice screen writes. Old materials without a plan get one point per goal.
+   ========================================================================================================== */
+const KP_STATE = {
+  weak:{ label:"약점", cls:"bad", rank:0 }, mid:{ label:"푸는 중", cls:"help", rank:1 }, new:{ label:"안 풀어봄", cls:"", rank:2 },
+  good:{ label:"혼자 맞힘", cls:"good", rank:3 }, mastered:{ label:"숙련", cls:"good", rank:4 }, none:{ label:"문제 없음", cls:"", rank:5 }
+};
+function kpKey(title){ return looseText(title).replace(/[()·:,.\-–—]/g, ""); }
+function deckPoints(d){
+  if (d.points && Array.isArray(d.points.points) && d.points.points.length) return d.points;
+  const objs = d.objectives || [];
+  return { points: objs.map(o => ({ id:"o:" + o.id, title:String(o.recall || o.statement || "").slice(0, 80), essentials:[o.statement].filter(Boolean), section:"",
+    pages:o.pages || [], spans:(o.pages || []).map(p => ({ page:p, kind:"text", quote:"" })) })),
+    byObjective: Object.fromEntries(objs.map(o => [o.id, ["o:" + o.id]])) };
+}
+/* Knowledge points of a subject ("" = everything), merged across materials by title: the same concept from an AI
+   deck and from 족보 counts once. */
+function knowledgeOf(subject){
+  const decks = (subject ? decksOf(subject) : realDecks()).filter(d => !d.example);
+  const map = new Map();
+  for (const d of decks){
+    const L = deckPoints(d);
+    const keyOf = new Map();
+    for (const p of L.points){
+      const key = kpKey(p.title) || (d.id + ":" + p.id);
+      keyOf.set(p.id, key);
+      let k = map.get(key);
+      if (!k){ k = { key, title:p.title, essentials:p.essentials || [], section:p.section || "", refs:[], items:[] }; map.set(key, k); }
+      k.refs.push({ d, pages:p.pages || [], spans:p.spans || [] });
+      if ((p.essentials || []).length > k.essentials.length) k.essentials = p.essentials;
+      if (!k.section && p.section) k.section = p.section;
+    }
+    for (const it of d.items){
+      for (const pid of (L.byObjective[it.objectiveId] || [])){ const k = map.get(keyOf.get(pid)); if (k && !k.items.some(x => x.d === d && x.it === it)) k.items.push({ d, it }); }
+    }
+  }
+  return [...map.values()].map(k => ({ ...k, state:kpState(k) }));
+}
+function kpState(k){
+  if (!k.items.length) return "none";
+  if (k.items.some(({ d, it }) => isWeak(d, it))) return "weak";
+  const st = k.items.map(({ d, it }) => itemStatus(d, it));
+  if (st.every(s => s === "new")) return "new";
+  if (st.every(s => s === "recent" || s === "steady")) return st.some(s => s === "steady") ? "mastered" : "good";
+  return "mid";
+}
+function kpCounts(list){
+  const c = { weak:0, mid:0, new:0, good:0, mastered:0, none:0 };
+  for (const k of list) c[k.state]++;
+  return c;
+}
+function startPoint(k){
+  if (!k.items.length){ toast("이 지식 포인트에 묶인 문제가 아직 없어요."); return; }
+  S.session = { queue: shuffle(k.items).map(({ d, it }) => ({ deck:d.id, item:it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"point", viewed:new Set() };
+  prepCurrent(); setView("practice");
+}
+function currentSubject(){
+  const subs = orderedSubjects();
+  if (S.kp.subject !== null && (S.kp.subject === "" || subs.some(s => s.name === S.kp.subject))) return S.kp.subject;
+  return subs.length ? subs[0].name : "";
+}
+function subjectChips(onPick){
+  const subs = orderedSubjects(), cur = currentSubject();
+  const list = [...subs.map(s => [s.name, s.name, daysLeft(s.exam)]), ["", "전체", null]];
+  return h("div", { class:"row subj-chips", role:"group", "aria-label":"과목" }, list.map(([key, label, n]) =>
+    h("button", { class:"subj-chip", "aria-pressed": cur === key ? "true" : "false", onclick: () => { S.kp.subject = key; S.kp.sel = null; if (onPick) onPick(); render(); } },
+      h("b", { text:label }), n != null ? h("span", { class:`dday${n >= 0 && n <= 3 ? " soon" : ""}${n < 0 ? " past" : ""}`, text:ddayLabel(n) }) : null)));
+}
+/* The coach box: one question to the same model the reader's chat uses, with the learner's state as context. */
+const Coach = { text:"", busy:false, err:"", q:"", ctl:null };
+async function askCoach(q){
+  q = String(q || "").trim(); if (!q || !ask || Coach.busy) return;
+  const subject = currentSubject(), points = knowledgeOf(subject), c = kpCounts(points);
+  const weak = points.filter(k => k.state === "weak").slice(0, 12).map(k => "- " + k.title).join("\n") || "(없음)";
+  const plan = todayPlan();
+  const exam = subject ? examOf(subject) : "";
+  const prompt = `너는 학습 앱 Recaller의 코치다. 학습자의 상태를 보고 짧고 구체적으로 답한다. 다음에 할 일이 있으면 앱 안의 행동(오늘 할 것 시작, 약점 다시 풀기, 지식 포인트 열기, 원문 쪽 읽기)으로 제안한다. 모르는 것은 지어내지 않는다.\n\n[학습자 상태]\n과목: ${subject || "전체"}${exam ? ` (시험 ${exam}, ${ddayLabel(daysLeft(exam))})` : ""}\n지식 포인트 ${points.length}개: 숙련 ${c.mastered}, 혼자 맞힘 ${c.good}, 푸는 중 ${c.mid}, 약점 ${c.weak}, 안 풀어봄 ${c.new}\n약점 지식 포인트:\n${weak}\n오늘 할 것: ${plan ? plan.queue.length + "문제" : "없음"}\n\n[질문]\n${q}`;
+  Coach.q = q; Coach.text = ""; Coach.err = ""; Coach.busy = true; Coach.ctl = new AbortController(); render();
+  try{ await ask([{ role:"user", content:prompt }], { signal:Coach.ctl.signal, onText: ({ text }) => { Coach.text = text; paintCoach(); } }); }
+  catch(e){ if (!(e && e.name === "AbortError")) Coach.err = composeErrorCopy(e); }
+  Coach.busy = false; render();
+}
+function paintCoach(){
+  const el = document.getElementById("coachReply"); if (!el) return;
+  el.replaceChildren(...richLines(Coach.text || "…"));
+}
+function renderCoachBox(){
+  const input = h("input", { class:"answer-input", type:"text", placeholder:"무엇을 공부할까요? 예: 내일 시험인데 뭐부터 해?", value:Coach.busy ? Coach.q : "", disabled:Coach.busy ? true : null,
+    "aria-label":"코치에게 질문", style:"flex:1;min-width:0;font-size:15px;padding:12px 14px" });
+  const send = () => { const v = input.value; input.value = ""; askCoach(v); };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing){ e.preventDefault(); send(); } });
+  const plan = todayPlan(), subject = currentSubject();
+  const weakN = weakList(subject ? decksOf(subject) : realDecks()).length;
+  const box = h("section", { class:"panel coach-home" },
+    h("p", { class:"eyebrow", text:"코치" }),
+    h("div", { class:"row", style:"gap:8px;flex-wrap:nowrap" }, input, h("button", { class:"btn primary", disabled:Coach.busy || !ask ? true : null, onclick:send }, Coach.busy ? "답하는 중…" : "묻기")),
+    h("div", { class:"chat-sugs", style:"margin-top:10px" },
+      h("button", { class:"chip-btn", disabled: plan && plan.queue.length ? null : true, onclick:startToday }, `오늘 할 것 시작${plan && plan.queue.length ? ` · ${Math.min(plan.queue.length, chunkSize())}` : ""}`),
+      h("button", { class:"chip-btn", disabled: weakN && subject ? null : true, onclick: () => startWeak(subject) }, `약점 다시 풀기${weakN ? ` · ${Math.min(weakN, WEAK_MAX)}` : ""}`),
+      h("button", { class:"chip-btn", onclick: () => setView("knowledge") }, "지식 지도"),
+      h("button", { class:"chip-btn", onclick: () => setView("create") }, "+ 새 자료")));
+  if (Coach.q && (Coach.text || Coach.busy || Coach.err)){
+    box.append(h("div", { class:"coach-answer" },
+      h("p", { class:"small muted", text:"Q. " + Coach.q }),
+      Coach.err ? h("div", { class:"note err", text:Coach.err }) : h("div", { id:"coachReply", class:"md-body" }, ...richLines(Coach.text || "…"))));
+  }
+  if (!ask) box.append(h("p", { class:"small muted", text:"코치는 ChatGPT 연결 뒤에 쓸 수 있어요(자료 만들기 탭)." }));
+  return box;
+}
+function kpChip(k){
+  const st = KP_STATE[k.state];
+  return h("button", { class:`kp-chip kp-${k.state}`, title:`${k.title} · ${st.label}${k.items.length ? ` · 문제 ${k.items.length}` : ""}`,
+    onclick: () => { S.kp.sel = k.key; setView("knowledge"); } }, h("i", { "aria-hidden":"true" }), h("span", { text:k.title }));
+}
+function renderKpMeter(c, total){
+  const seg = (n, cls) => n ? h("i", { class:cls, style:`width:${n / total * 100}%` }) : null;
+  return h("div", { class:"bar kp-meter", "aria-hidden":"true" }, seg(c.mastered + c.good, "g"), seg(c.weak, "r"), seg(c.mid, "h"));
+}
+function renderRecallerHome(){
+  const all = Object.values(S.decks), pendings = all.filter(d => d.pending);
+  const wrap = h("div", { class:"stack" });
+  wrap.append(renderCoachBox());
+  const real = realDecks();
+  if (!real.length){
+    wrap.append(h("section", { class:"panel" }, h("h2", { text:"첫 자료를 넣어 볼까요" }),
+      h("p", { class:"muted", text:"강의 PDF를 넣으면 AI가 지식 포인트로 나누고, 원문 근거와 함께 문제를 만들어요. 글·코드 자료도 곧 넣을 수 있어요." }),
+      h("button", { class:"btn primary", onclick: () => setView("create") }, "+ 새 자료")));
+    return wrap;
+  }
+  if (S.plan.subjects.length) wrap.append(subjectChips());
+  const subject = currentSubject(), points = knowledgeOf(subject), c = kpCounts(points), total = Math.max(1, points.length - c.none);
+  const plan = todayPlan();
+  if (plan && plan.queue.length) wrap.append(renderToday(plan, pendings));
+  const sorted = points.filter(k => k.state !== "none").sort((a, b) => KP_STATE[a.state].rank - KP_STATE[b.state].rank);
+  wrap.append(h("section", { class:"panel" },
+    h("div", { class:"row", style:"justify-content:space-between;align-items:flex-end" },
+      h("div", null, h("p", { class:"eyebrow", text:"지식 지도" }), h("h2", { text:`${subject || "전체"} · 지식 포인트 ${points.length}개` })),
+      h("button", { class:"btn small", onclick: () => setView("knowledge") }, "전체 보기")),
+    renderKpMeter(c, total),
+    h("p", { class:"small muted num", text:`숙련 ${c.mastered} · 혼자 맞힘 ${c.good} · 푸는 중 ${c.mid} · 약점 ${c.weak} · 안 풀어봄 ${c.new}${c.none ? ` · 문제 없음 ${c.none}` : ""}` }),
+    h("div", { class:"kp-cloud" }, sorted.slice(0, 40).map(kpChip)),
+    sorted.length > 40 ? h("p", { class:"small muted", text:`외 ${sorted.length - 40}개는 지식 탭에서` }) : null));
+  const mats = (subject ? decksOf(subject) : real.sort(byTitle));
+  wrap.append(h("section", { class:"panel" },
+    h("div", { class:"row", style:"justify-content:space-between" }, h("p", { class:"eyebrow", text:`자료 ${mats.length}` }),
+      h("div", { class:"row" }, h("button", { class:"btn small ghost", onclick: () => setView("practice") }, "자료별 연습"), h("button", { class:"btn small", onclick: () => setView("create") }, "+ 새 자료"))),
+    h("ul", { class:"mat-mini" }, mats.slice(0, 8).map(d => h("li", null,
+      h("button", { class:"linkish", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, displayTitle(d)),
+      h("span", { class:"small muted num", text:` · 문제 ${d.items.length}` }))))));
+  return wrap;
+}
+function renderKnowledge(){
+  const wrap = h("div", { class:"stack" });
+  if (S.plan.subjects.length) wrap.append(subjectChips());
+  const subject = currentSubject(), points = knowledgeOf(subject);
+  if (!points.length){ wrap.append(h("div", { class:"panel small muted", text:"이 과목에는 아직 지식 포인트가 없어요. 자료를 넣고 문제를 만들면 생겨요." })); return wrap; }
+  const sel = points.find(k => k.key === S.kp.sel) || null;
+  const filter = S.kp.filter || "all";
+  const shown = points.filter(k => filter === "all" || (filter === "weak" ? k.state === "weak" : filter === "new" ? k.state === "new" : k.state === "good" || k.state === "mastered"));
+  const groups = new Map();
+  for (const k of shown){ const g = k.section || "기타"; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(k); }
+  const c = kpCounts(points);
+  const list = h("section", { class:"panel kp-list" },
+    h("div", { class:"row", style:"justify-content:space-between" },
+      h("h2", { text:`${subject || "전체"} · 지식 포인트 ${points.length}` }),
+      h("button", { class:"btn small ghost", onclick: () => { S.sum.subject = subject || null; setView("summary"); } }, "한 장 정리")),
+    h("div", { class:"chat-sugs" }, [["all", `전체 ${points.length}`], ["weak", `약점 ${c.weak}`], ["new", `안 풀어봄 ${c.new}`], ["good", `혼자 맞힘 ${c.good + c.mastered}`]].map(([key, label]) =>
+      h("button", { class:"chip-btn", "aria-pressed": filter === key ? "true" : "false", onclick: () => { S.kp.filter = key; render(); } }, label))),
+    ...[...groups.entries()].map(([g, ks]) => h("div", { class:"kp-group" }, h("p", { class:"eyebrow", text:g }),
+      h("ul", null, ks.map(k => h("li", null, h("button", { class:`kp-row${sel && sel.key === k.key ? " on" : ""}`, onclick: () => { S.kp.sel = k.key; render(); } },
+        h("span", { class:`chip ${KP_STATE[k.state].cls}`, text:KP_STATE[k.state].label }), h("span", { class:"kp-title", text:k.title }),
+        h("span", { class:"small muted num", text:k.items.length ? `문제 ${k.items.length}` : "" }))))))));
+  const detail = h("section", { class:"panel kp-detail" });
+  if (!sel) detail.append(h("p", { class:"muted", text:"왼쪽에서 지식 포인트를 고르면 원문 근거와 문제가 보여요." }));
+  else {
+    const st = KP_STATE[sel.state];
+    const spans = sel.refs.flatMap(r => (r.spans.length ? r.spans : r.pages.map(p => ({ page:p, kind:"text", quote:"" }))).map(s => ({ ...s, d:r.d })));
+    const seen = new Set(); const uniq = spans.filter(s => { const k = s.d.id + ":" + s.page + ":" + s.quote; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8);
+    detail.append(
+      h("div", { class:"row", style:"gap:8px" }, h("span", { class:`chip ${st.cls}`, text:st.label }), sel.section ? h("span", { class:"small muted", text:sel.section }) : null),
+      h("h2", { text:sel.title }),
+      sel.essentials.length ? h("ul", { class:"kp-ess" }, sel.essentials.map(e => h("li", null, richText(e)))) : null,
+      h("div", { class:"row", style:"gap:8px;flex-wrap:wrap" },
+        h("button", { class:"btn primary", disabled: sel.items.length ? null : true, onclick: () => startPoint(sel) }, sel.items.length ? `이 지식 문제 풀기 · ${sel.items.length}` : "묶인 문제 없음"),
+        uniq.length ? h("button", { class:"btn", onclick: () => openReader(uniq[0].d.id, uniq[0].page) }, `원문 읽기 p.${uniq[0].page}`) : null,
+        h("button", { class:"btn ghost", onclick: () => { setView("home"); askCoach(`"${sel.title}"을(를) 쉽게 설명해 주고, 시험에 어떻게 나올지 알려줘.`); } }, "코치에게 묻기")),
+      h("p", { class:"eyebrow", style:"margin-top:16px", text:`원문 근거 ${uniq.length}` }),
+      h("ul", { class:"kp-spans" }, uniq.map(s => h("li", null,
+        h("button", { class:"linkish", onclick: () => openReader(s.d.id, s.page) }, `${displayTitle(s.d).replace(/ · p\.[\d–]+$/, "")} p.${s.page}`),
+        s.quote ? h("span", { class:"small muted", text:` · ${String(s.quote).slice(0, 90)}` }) : null))));
+  }
+  wrap.append(h("div", { class:"kp-split" }, list, detail));
+  return wrap;
+}
+/* 작업대: where the agent's MD (출제 노하우) and small-sample feedback will live. First version: what is coming. */
+function renderBench(){
+  return h("div", { class:"stack" }, h("section", { class:"panel" },
+    h("p", { class:"eyebrow", text:"작업대" }), h("h2", { text:"MD 하네스와 개선 고리" }),
+    h("p", { class:"muted", text:"에이전트가 어떻게 공부시키고 문제를 낼지는 MD 파일(원칙·자료 읽기·상황 설계·검증·과목 관례·예시)에 적혀 있고, 스스로의 반성과 사람 피드백으로 고쳐 나가요." }),
+    h("ol", { class:"steps" },
+      h("li", { "data-on":"true" }, h("b", null, "스몰샘플 고르기"), h("span", { class:"small muted", text:" 1~2쪽짜리 범위" })),
+      h("li", null, h("b", null, "만들고 풀어 보기"), h("span", { class:"small muted", text:" 하네스 버전이 붙은 결과" })),
+      h("li", null, h("b", null, "피드백 태그"), h("span", { class:"small muted", text:" 좋음·쉬움·지엽·단서 노출·덜 맞물림" })),
+      h("li", null, h("b", null, "MD 수정안 비교"), h("span", { class:"small muted", text:" 가린 채 전후 비교 → 승인" }))),
+    h("p", { class:"small muted", text:"다음 판에서 이 화면에 샘플 실행과 피드백이 들어와요. 지금은 실험실(/lab/gen)에서 엔진 비교를 할 수 있어요." })));
+}
 function render(){
   const app = document.getElementById("app");
   app.replaceChildren();
   const bar = S.view !== "create" && !(S.session && S.session.phase === "ask") ? hideSuggestBar() : null;
   if (bar) app.append(bar);
-  if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
+  if (S.view === "home") app.append(renderRecallerHome());
+  else if (S.view === "knowledge") app.append(renderKnowledge());
+  else if (S.view === "bench") app.append(renderBench());
+  else if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
   else if (S.view === "create") app.append(renderBuilder());
   else if (S.view === "read") {
     const typing = Chat.el && Chat.el.contains(document.activeElement);

@@ -1,6 +1,7 @@
 // Runs one generation (docs/DECISIONS.md 2026-10-12): outline → per-section classify+design (in parallel)
 // → wait for the one confirmation → author section by section in order. Everything is saved as it happens,
 // so a stop (usage limit, login, call cap, server restart) resumes from what is missing.
+import { knowledgeLayer } from "../knowledge.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -1064,6 +1065,8 @@ export async function studyDocument(id: string) {
     outline,
     // v3: the knowledge map as text, so the reader's 용어 지도 starts from it instead of reading the pages again.
     ...(state.v3?.map ? { knowledge: mapDigest(state) } : {}),
+    // Recaller 2: knowledge points and which goal checks which (mastery is kept per point, not per page or deck).
+    points: knowledgeLayer(state),
     meta: { id, title: document.title, artifactSha256: createHash("sha256").update(JSON.stringify(document)).digest("hex"), sourceFile: state.input.fileName,
       sourceCatalogId: state.input.sourceId, sourceTotalPages: source?.pageCount ?? Math.max(...pages) },
     document,
