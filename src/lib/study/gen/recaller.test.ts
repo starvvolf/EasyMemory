@@ -75,12 +75,15 @@ test("a deep question whose blind solve disagrees is rewritten once, then held",
     if (step === "rc-solve") reply.answers = reply.answers.map((a: { choice: number }) => ({ ...a, choice: (a.choice + 1) % 4 }));
     return JSON.stringify(reply);
   };
-  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", deep: true });
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", deep: true, deepDrafts: 2 });
   const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages, fakeReply });
   assert.equal(done.recaller?.deep.g1.status, "held");
   assert.match(done.recaller!.deep.g1.problems[0], /따로 푼 답/);
   // Two drafts at once, both disagree, then one revision of the closer one.
   assert.equal((await readGenCalls(done.id)).filter((c) => c.step === "rc-deep").length, 3);
+  // One draft by default: one try, one revision.
+  const single = await runGen((await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", deep: true })).id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages, fakeReply });
+  assert.equal((await readGenCalls(single.id)).filter((c) => c.step === "rc-deep").length, 2);
 }));
 
 test("cards complete in a streaming reply are picked out before the reply ends", () => {

@@ -714,8 +714,8 @@ export async function runRecaller(ctx: RecallerContext) {
           await save();
           await publish(sid);
       };
-      // Two drafts at once, the first that passes every check wins: a rewrite (another 50–70 s) is needed only when both
-      // fail, and then the one with fewer problems is revised.
+      // With deepDrafts 2, two drafts at once and the first that passes every check wins: a rewrite (another 50–70 s) is
+      // needed only when both fail. It uses twice as much, so it is the learner's choice; one draft by default.
       const first = (tries: Array<Promise<{ q?: DeepReply; problems: string[] }>>) => new Promise<{ won?: DeepReply; tried: Array<{ q?: DeepReply; problems: string[] }> }>((resolve, reject) => {
         const tried: Array<{ q?: DeepReply; problems: string[] }> = [];
         let done = false;
@@ -726,11 +726,13 @@ export async function runRecaller(ctx: RecallerContext) {
           else if (tried.length === tries.length) { done = true; resolve({ tried }); }
         }, (error) => { if (!done) { done = true; reject(error); } });
       });
-      let round = await first(slot.tries === 0 ? [attempt([]), attempt([])] : [attempt(slot.problems)]);
+      const drafts = input.deepDrafts === 2 ? 2 : 1;
+      const limit = drafts + 1;
+      let round = await first(slot.tries === 0 ? Array.from({ length: drafts }, () => attempt([])) : [attempt(slot.problems)]);
       if (!round.won) {
         const best = [...round.tried].sort((a, b) => a.problems.length - b.problems.length)[0];
         slot.problems = best.problems; await save();
-        if (slot.tries < 3) round = await first([attempt(best.problems)]);
+        if (slot.tries < limit) round = await first([attempt(best.problems)]);
       }
       if (round.won) { await accept(round.won); return; }
       slot.problems = round.tried[0]?.problems ?? slot.problems;

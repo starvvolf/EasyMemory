@@ -63,6 +63,8 @@ export type GenInput = {
   readImages?: boolean;
   /** recaller: deep questions too (off unless asked; light materials have little to tie together). */
   deep?: boolean;
+  /** recaller: drafts of each deep question written at once (1 by default; 2 is faster and uses twice as much). */
+  deepDrafts?: 1 | 2;
   /** recaller 종합 문제: the earlier recaller runs whose cards are tied together. */
   combine?: string[];
   /** Optional registered exams: absent means the original generation path, unchanged. */
