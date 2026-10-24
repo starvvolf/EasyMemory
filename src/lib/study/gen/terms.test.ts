@@ -29,6 +29,9 @@ test("cards about the same thing are told apart from ones that only share words"
   assert.equal(sameKnowledge(a, c), false);
   assert.equal(typeof sameKnowledge(a, b), "boolean");
   assert.equal(sameKnowledge({ title: "n-type Extrinsic", mistakes: ["n >> p를 반대로 쓴다"] }, { title: "p-type Extrinsic", mistakes: ["p >> n을 반대로 쓴다"] }), false);
+  // A shared section title with different bodies is two things.
+  assert.equal(sameKnowledge({ title: "Reaction Stoichiometry", mistakes: [], body: "몰 비는 균형 반응식의 계수에서 나온다" }, { title: "Reaction Stoichiometry", mistakes: [], body: "한계 반응물이 생성물의 양을 정한다" }), false);
+  assert.equal(sameKnowledge({ title: "몰 비", mistakes: [], body: "몰 비는 균형 반응식의 계수에서 나온다" }, { title: "몰 비", mistakes: [], body: "몰 비는 균형 반응식 계수에서 나온다" }), true);
 });
 
 test("a Korean name next to its English one keeps only that word, not the particles before it", () => {

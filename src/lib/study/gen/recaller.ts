@@ -63,6 +63,8 @@ type RawDeep = z.infer<typeof deepQuestionSchema>;
 type DeepReply = Omit<RawDeep, "parts"> & { parts: BuiltPart[] };
 const linkReplySchema = z.object({ groups: z.array(z.object({ id: text, cardIds: z.array(text).min(2).max(5).describe("계산·판단 순서대로"), idea: text.describe("어떻게 엮는지 한 문장: 앞 카드의 결과가 뒤 카드에 어떻게 들어가는지"),
   joints: z.array(z.object({ from: text, to: text, gives: text.describe("from 카드의 냄(gives) 중 하나, 그대로"), takes: text.describe("to 카드의 받음(takes) 중 하나, 그대로") })).describe("이웃한 카드 쌍마다 하나: 앞 카드의 어떤 결과가 뒤 카드의 어떤 입력이 되는지") })) });
+const verifyReplySchema = z.object({ choice: z.number().int().nullable().describe("choice·ox: 고른 번호(0부터, ox는 0=O 1=X). 그 밖에는 null"), answer: z.string().describe("short·cloze: 답. 그 밖에는 고른 보기의 글"),
+  unique: z.boolean().describe("원문으로 답이 하나로 정해지는가"), doubt: z.string().describe("답이 하나가 아니거나 원문과 어긋나면 한 줄, 아니면 빈 문자열") });
 const notesReplySchema = z.object({ notes: z.array(z.object({ part: z.number().int().min(1), option: z.number().int().min(1).max(4), ok: z.boolean(), why: z.string().describe("맞지 않으면 무엇이 다른지 한 줄, 맞으면 빈 문자열") })) });
 const solveReplySchema = z.object({ answers: z.array(z.object({ choice: z.number().int().min(0).max(3), value: z.string() })).describe("소문항 순서대로"), steps: z.array(z.object({ what: text, value: z.string() })), doubts: z.array(z.string()) });
 
@@ -135,6 +137,8 @@ const CHAIN = `${BASE}
 const CHAIN_DEEP = "이번 묶음은 종합 문제다. cardIds 순서대로 같은 대상 하나(값, 물체, 사례)를 처음부터 끝까지 들고 간다. joints대로 앞 카드 단계의 결과(name)가 다음 카드 단계의 입력이 된다. 값은 단계마다 결과가 실제로 바뀌게 고른다(그대로 통과하는 값 금지). 문제 글은 상황과 주어진 값, 구할 것만 쓰고 단계 순서를 알려 주지 않는다. 오답 셋은 서로 다른 카드의 단계에서 나온 실수다. 카드마다 그 단계의 결과가 하나씩 나오므로, 그 결과들을 소문항으로 차례로 묻는 것(1-1 앞 카드의 결과, 1-2 그다음 …)을 먼저 생각한다. 중간 결과가 따로 물을 만하지 않으면 묶어서 묻는다.";
 const NOTES = `${BASE}
 심화 문제의 오답 보기마다 적힌 실수(mistake)가 정말 그 보기의 값을 낳는지 본다. 풀이(steps)의 해당 단계(step)에서 그 실수를 했다고 치고, 그 식(expr)이 그 실수를 옮긴 것인지, 그 값(value)이 나오는지 확인한다. 식이 없는 말 보기는 그 실수를 하면 그 말이 나오는지만 본다. 확인할 정보가 모자란 것은 틀린 것이 아니다: 실수와 보기가 분명히 어긋날 때만 ok=false. 오답마다 ok와, 맞지 않으면 why 한 줄. 맞으면 why는 빈 문자열.`;
+const VERIFY = `${BASE}
+정답을 모르는 상태에서 기본 문제 하나를 원문(source)만 보고 푼다. choice·ox면 번호(choice), short·cloze면 답(answer)을 쓴다. 원문으로 답이 하나로 정해지지 않으면(보기 둘이 맞거나, 원문에 없거나, 조건이 모자라면) unique=false와 doubt 한 줄.`;
 const SOLVE = `${BASE}
 정답을 모르는 상태에서 객관식 문제를 직접 푼다. 공통 상황(situation)에서 소문항(parts)을 차례로 푼다. 원문(source)의 절차를 따라 단계별로 계산하고, 소문항마다 고른 보기 번호(choice, 0부터)와 값(value)을 answers에 순서대로 적는다. 문제에 조건이 모자라거나 답이 둘 이상이면 doubts에 적는다. 사고 과정 전체를 쓰지 말고 단계별 결과만 쓴다.`;
 
@@ -267,6 +271,8 @@ export function deepProblems(q: DeepReply): string[] {
   const isValue = (s: string) => { const p = plainValue(s); if (!p || /[A-Za-z가-힣]/.test(p.replace(/sqrt/g, ""))) return false; try { evaluate(p); return true; } catch { return false; } };
   const { vars, fns, values } = stepScope(q.steps);
   const squash = (s: string) => clean(s).replace(/\s+/g, "");
+  // A bare number counts as given only as a number of its own: "4" is not given by "CH4" or "14.2 g".
+  const givenIn = (text: string, value: string) => /^[-+]?[\d.]+(\/\d+)?$/.test(value) ? new RegExp(`(?<![\\w.])${value.replace(/[.+/]/g, (c) => `\\${c}`)}(?![\\w.]|/\\d)`).test(text) : text.includes(value);
   const scenario = q.stem.map((b) => b.text ?? b.latex ?? "").join(" ");
   // A step that hands its input back unchanged (an identity matrix, axes equal to the world's, a move by zero) teaches
   // nothing: the values were picked too easily. Plain literals ("(2, 1, 5)") are givens being named, not steps.
@@ -286,7 +292,7 @@ export function deepProblems(q: DeepReply): string[] {
     if (new Set(part.distractors.map((d) => d.option)).size !== 3 || part.distractors.some((d) => d.option === part.correctIndex)) at("오답 3개에 하나씩 실수가 있어야 합니다(정답 보기 제외).");
     const correct = clean(part.options[part.correctIndex] ?? "");
     // An answer already written in the question needs no steps (3D Viewing: axes equal to the world axes gave back W itself).
-    if (isValue(correct) && squash(`${scenario} ${part.ask}`).includes(squash(correct))) at(`정답(${correct})이 문제에 주어진 값 그대로입니다. 단계마다 값이 실제로 바뀌게 값을 다시 고르세요.`);
+    if (isValue(correct) && givenIn(squash(`${scenario} ${part.ask}`), squash(correct))) at(`정답(${correct})이 문제에 주어진 값 그대로입니다. 단계마다 값이 실제로 바뀌게 값을 다시 고르세요.`);
     const value = values[part.upTo];
     if (value !== undefined && isValue(correct) && !sameValue(value, correct)) at(`정답 보기(${correct})가 ${part.upTo + 1}단계 값과 다릅니다.`);
     for (const d of part.distractors) {
@@ -332,6 +338,10 @@ export function codeChains(cards: Card[], want: number) {
   }
   return picked.map((x) => ({ cardIds: x.cards.map((c) => c.id), idea: x.cards.map((c) => c.title).join(" → "), joints: x.joints }));
 }
+
+/** The same knowledge twice: same name and like body, or the same mistake nearly word for word. */
+const bodyOf = (c: Card) => cardLine(c).replace(/^\[[^\]]+\] [^:]*: /, "");
+const twins = (a: Card, b: Card) => sameKnowledge({ title: a.title, mistakes: a.mistakes, body: bodyOf(a) }, { title: b.title, mistakes: b.mistakes, body: bodyOf(b) });
 
 /** Errors that pause the whole run (usage limit, login) rather than fail one question; the runner marks them with a status. */
 const pausesRun = (error: unknown) => { const status = (error as { status?: string } | null)?.status; return typeof status === "string" && status.startsWith("paused-") && status !== "paused-invalid"; };
@@ -514,10 +524,24 @@ export async function runRecaller(ctx: RecallerContext) {
   // Cards that got (or are getting) a question, material-wide: a later card about the same knowledge gets none.
   const known: Card[] = state.sections.flatMap((s) => data.units[s.id]?.questions?.flatMap((q) => (data.units[s.id].cards ?? []).filter((c) => q.cardIds.includes(c.id))) ?? []);
   const claim = (card: Card) => {
-    const twin = known.find((k) => k.id !== card.id && sameKnowledge(k, card));
+    const twin = known.find((k) => k.id !== card.id && twins(k, card));
     if (twin) { (data.dups ??= {})[card.id] = twin.id; return false; }
     known.push(card);
     return true;
+  };
+  const verifyBasic = async (q: BasicReply, card: Card, attempt: number): Promise<string | null> => {
+    if (q.format === "flashcard") return null;
+    const view = { stem: q.stem.map((b) => b.text ?? b.latex ?? "").join(" "), ...(q.format === "choice" ? { options: q.options } : {}), ...(q.format === "ox" ? { options: ["O", "X"] } : {}),
+      ...(q.format === "cloze" ? { blank: `${q.before ?? ""} ____ ${q.after ?? ""}` } : {}), ...(q.format === "short" ? { input: `${q.before ?? ""} ____ ${q.after ?? ""}` } : {}) };
+    let got: z.infer<typeof verifyReplySchema>;
+    try { got = await ctx.ask("rc-check", card.id.split(".")[0], attempt, VERIFY, JSON.stringify({ format: q.format, question: view, source: sourceOf(card.evidence.map((e) => e.page)) }), verifyReplySchema, { maxChars: 4000 }); }
+    catch (error) { if (pausesRun(error)) throw error; return null; }
+    if (!got.unique) return `따로 푼 쪽이 답이 하나로 정해지지 않는다고 했습니다: ${got.doubt}`;
+    if (q.format === "choice" || q.format === "ox") return got.choice === q.correctIndex ? null : `따로 푼 답(${(got.choice ?? -1) + 1}번)이 정답(${(q.correctIndex ?? -1) + 1}번)과 다릅니다: ${got.doubt || got.answer}`;
+    const norm = (x: string) => x.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+    const a = norm(got.answer);
+    const ok = (q.accepted ?? []).some((x) => { const y = norm(x); return !!y && !!a && (y === a || y.includes(a) || a.includes(y) || similarity(x, got.answer) >= 0.6); });
+    return ok ? null : `따로 푼 답(${got.answer})이 인정 답(${(q.accepted ?? []).join(", ")})과 다릅니다.`;
   };
   const authorOne = async (section: SectionState, k: number, card: Card) => {
     const unit = data.units[section.id];
@@ -546,6 +570,12 @@ export async function runRecaller(ctx: RecallerContext) {
           pages: [...new Set(card.evidence.map((e) => e.page))], quotes: card.evidence.map((e) => e.quote).filter(Boolean), kind: KIND_TO_OBJECTIVE[card.kind], core: card.weight === "핵심",
           distractors: mistakes.map((m) => ({ option: m.option, mistake: m.mistake })), checks: ["모양 검사"] };
         shape = inspectQuestion(render(made, section), { astraSemanticWarnings: true, ignoreLatexFormatting: true }).errors.map((i) => i.message).join(" ") || null;
+        // Solved blind before it is shown: another call reads the source and answers; a different answer, or more than
+        // one answer the source allows, sends the question back once and then holds it.
+        if (!shape) {
+          shape = await verifyBasic(q, card, attempt);
+          if (!shape) made.checks.push("따로 풀기 일치");
+        }
         if (!shape) {
           (chunk.questions ??= []).push(made);
           collect(unit);
@@ -645,7 +675,7 @@ export async function runRecaller(ctx: RecallerContext) {
     for (const chunk of Object.values(unit.chunks ?? {})) {
       chunk.questions = (chunk.questions ?? []).filter((q) => {
         const card = (unit.cards ?? []).find((c) => c.id === q.cardIds[0]);
-        const twin = card && seen.find((x) => sameKnowledge(x.card, card));
+        const twin = card && seen.find((x) => twins(x.card, card));
         if (card && !twin) { seen.push({ card, q }); return true; }
         if (!card) return true;
         (data.dups ??= {})[card.id] = twin!.card.id;
@@ -819,6 +849,10 @@ export function recallerFakeReply(step: GenStep, user: string): string {
         { ask: "값을 구하라: (2+3)*4", upTo: 2, answer: "", distractors: [{ step: 1, mistake: "괄호를 무시함", expr: "2+3*4", value: "" }, { step: 2, mistake: "괄호를 무시함(같은 값)", expr: "14", value: "" }, { step: 2, mistake: "4 대신 6을 곱함", expr: "mul(4, 6)", value: "" }, { step: 2, mistake: "곱하지 않고 더함", expr: "s+4", value: "" }] },
       ],
       explanation: "괄호를 먼저 계산한 뒤 곱한다." } });
+  }
+  if (step === "rc-check" && u.question) {
+    const q = u.question as { options?: string[] };
+    return JSON.stringify({ choice: q.options ? 0 : null, answer: "", unique: true, doubt: "" });
   }
   if (step === "rc-check") {
     const wrong = (u.wrong ?? []) as Array<{ part: number; option: number }>;

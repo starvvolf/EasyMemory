@@ -100,6 +100,7 @@ test("code checks: a wrong option must be the value its stated mistake gives; a 
   assert.match(deepProblems({ ...deep, steps: deep.steps.map((s: { value: string }, i: number) => i === 1 ? { ...s, value: "6" } : s) }).join(), /2단계/);
   assert.match(deepProblems(part(0, { upTo: 2 })).join(), /풀이 순서대로/);
   assert.match(deepProblems(part(1, { ask: "값 20을 확인하라" })).join(), /주어진 값 그대로/);
+  assert.doesNotMatch(deepProblems(part(1, { ask: "값을 구하라: 120개와 CH20" })).join(), /주어진 값 그대로/);
   assert.match(deepProblems(part(0, { correctIndex: 1, distractors: [{ option: 0, step: 1, mistake: "x", expr: "" }, { option: 2, step: 1, mistake: "x", expr: "" }, { option: 3, step: 1, mistake: "x", expr: "" }] })).join(), /2단계 값과 다릅니다/);
   const card = { id: "c1", kind: "사실", weight: "핵심" } as never;
   const basic = JSON.parse(recallerFakeReply("rc-author", JSON.stringify({ cards: [{ id: "c1", title: "요지 문장" }] }))).questions[0];
@@ -156,4 +157,19 @@ test("기준선: one plain call per section, published without cards or checks",
   assert.deepEqual(calls, ["rc-author", "rc-author"]);
   const doc = await readSectionDocument(done.id, "s1") as { questions: unknown[] };
   assert.ok(doc.questions.length >= 1);
+}));
+
+test("a basic question the blind solver answers differently is sent back, then held", () => withData(async () => {
+  const fakeReply = (step: GenStep, user: string) => {
+    const reply = JSON.parse(recallerFakeReply(step, user));
+    if (step === "rc-check" && JSON.parse(user).question) reply.choice = 2;
+    return JSON.stringify(reply);
+  };
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages, fakeReply });
+  assert.equal(done.status, "done", done.message);
+  const units = Object.values(done.recaller!.units);
+  // Choice questions all disagree and are held; flashcards are self-checked and stay.
+  assert.ok(units.every((u) => (u.questions ?? []).every((q) => q.format === "flashcard")), JSON.stringify(units.map((u) => (u.questions ?? []).map((q) => q.format))));
+  assert.ok(units.some((u) => (u.held ?? []).some((h) => /따로 푼 답/.test(h.reason))));
 }));

@@ -78,8 +78,10 @@ export function similarity(a: string, b: string) {
  * mistake nearly word for word. Close is not enough: "n-type Extrinsic" and "p-type Extrinsic" differ in one letter
  * and are different knowledge (반도체 3주차 p.4).
  */
-export function sameKnowledge(a: { title: string; mistakes: string[] }, b: { title: string; mistakes: string[] }) {
+export function sameKnowledge(a: { title: string; mistakes: string[]; body?: string }, b: { title: string; mistakes: string[]; body?: string }) {
   const t = (s: string) => s.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
-  if (t(a.title) && t(a.title) === t(b.title)) return true;
+  // One title is not one thing when the bodies differ: cards on pages without their own heading took the section's
+  // title and were all dropped as one (OpenStax Chemistry: six cards called "Reaction Stoichiometry").
+  if (t(a.title) && t(a.title) === t(b.title)) return a.body === undefined || b.body === undefined || similarity(a.body, b.body) >= 0.5;
   return a.mistakes.some((m) => b.mistakes.some((n) => similarity(m, n) >= 0.85));
 }
