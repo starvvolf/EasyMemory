@@ -28,6 +28,13 @@ test("cards about the same thing are told apart from ones that only share words"
   assert.equal(sameKnowledge(a, { title: "V와 y_view 축", mistakes: [] }), true);
   assert.equal(sameKnowledge(a, c), false);
   assert.equal(typeof sameKnowledge(a, b), "boolean");
+  assert.equal(sameKnowledge({ title: "n-type Extrinsic", mistakes: ["n >> p를 반대로 쓴다"] }, { title: "p-type Extrinsic", mistakes: ["p >> n을 반대로 쓴다"] }), false);
+});
+
+test("a Korean name next to its English one keeps only that word, not the particles before it", () => {
+  const terms = extractTerms(new Map([[1, "메모리는 크게 휘발성(Volatile)과 비휘발성(Non-volatile)으로 나뉜다"]]));
+  assert.ok(terms.some((t) => t.name === "Volatile (휘발성)"), JSON.stringify(terms));
+  assert.ok(terms.some((t) => t.name === "Non-volatile (비휘발성)"), JSON.stringify(terms));
 });
 
 test("an expression is not a symbol", () => {

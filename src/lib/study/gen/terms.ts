@@ -44,7 +44,8 @@ export function extractTerms(texts: Map<number, string> | Record<string, string>
       const head = /^\s*-\s+(?:The\s+)?\*?([A-Z][\w*-]*(?:\s+[A-Z*][\w*-]*){0,4})\*?\s*$/.exec(line);
       if (head) add(head[1], "", page);
       // Korean name with its English one: "투영 변환(Projection Transformation)"
-      for (const m of line.matchAll(/([가-힣][가-힣\s-]{1,15})\s*\(([A-Za-z][A-Za-z\s-]{2,40})\)/g)) add(`${m[2]} (${m[1].trim()})`, "", page);
+      // Only the one word right before the bracket ("크게 휘발성(Volatile)" → 휘발성), particles left out.
+      for (const m of line.matchAll(/([가-힣]{2,10})\s*\(([A-Za-z][A-Za-z\s-]{2,40})\)/g)) add(`${m[2].trim()} (${m[1]})`, "", page);
       const emph = /^\[색 강조\]\s*(.+)$/.exec(line);
       if (emph) for (const part of emph[1].split(" · ")) { const t = part.replace(/^[^:]+:\s*/, ""); if (t.length <= 40) add(t, "", page); }
     }
@@ -67,8 +68,13 @@ export function similarity(a: string, b: string) {
   return both / (x.size + y.size - both);
 }
 
-/** Whether two cards are about the same thing: the same title, or the same mistake (the question they make would repeat). */
+/**
+ * Whether two cards are about the same thing: the same title (written apart only by spacing or case), or the same
+ * mistake nearly word for word. Close is not enough: "n-type Extrinsic" and "p-type Extrinsic" differ in one letter
+ * and are different knowledge (반도체 3주차 p.4).
+ */
 export function sameKnowledge(a: { title: string; mistakes: string[] }, b: { title: string; mistakes: string[] }) {
-  if (similarity(a.title, b.title) >= 0.6) return true;
-  return a.mistakes.some((m) => b.mistakes.some((n) => similarity(m, n) >= 0.7));
+  const t = (s: string) => s.toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+  if (t(a.title) && t(a.title) === t(b.title)) return true;
+  return a.mistakes.some((m) => b.mistakes.some((n) => similarity(m, n) >= 0.85));
 }
