@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, sameValue, type Step } from "./calc.ts";
-import { cardKinds, cardLine, checkCards, ORGANIZE, organizeSchema, organizeUser, type Card, type CardIssue } from "./cards.ts";
+import { cardKinds, cardLine, cardSchema, checkCards, ORGANIZE, organizeSchema, organizeUser, type Card, type CardIssue } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
@@ -55,7 +55,7 @@ const solveReplySchema = z.object({ choice: z.number().int().min(0).max(3), valu
 export type RcQuestion = { objectiveId: string; sectionId: string; tier: "basic" | "deep"; cardIds: string[]; format: (typeof formats)[number]; goal: string;
   authored: AuthoredReplyQuestion; pages: number[]; quotes: string[]; kind: ObjectiveKind; core: boolean;
   steps?: Step[]; distractors?: Array<{ option: number; step?: number; mistake: string }>; checks: string[] };
-type Chunk = { cards?: Card[]; issues?: CardIssue[]; skipped?: Array<{ pages: number[]; reason: string }>; questions?: RcQuestion[]; held?: Array<{ cardId: string; reason: string }> };
+type Chunk = { cards?: Card[]; issues?: CardIssue[]; questions?: RcQuestion[]; held?: Array<{ cardId: string; reason: string }> };
 /** A section: its chunks (two pages each) and, gathered from them in page order, its cards and questions. */
 type Unit = Chunk & { status: "waiting" | "organizing" | "authoring" | "ready" | "failed"; chunks?: Record<string, Chunk>; error?: string };
 export type RecallerState = {
@@ -73,7 +73,7 @@ export type RecallerState = {
 };
 
 export type RecallerAsk = <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, parser: z.ZodType<T>,
-  extra?: { images?: NonNullable<ModelRequest["images"]>; guide?: LoadedGuide; maxChars?: number }) => Promise<T>;
+  extra?: { images?: NonNullable<ModelRequest["images"]>; guide?: LoadedGuide; maxChars?: number; onPartial?: (text: string) => void }) => Promise<T>;
 export type RecallerContext = {
   state: GenState; pdf: Uint8Array | null;
   ask: RecallerAsk;
@@ -107,7 +107,7 @@ const SOLVE = `${BASE}
 const KIND_TO_OBJECTIVE: Record<(typeof cardKinds)[number], ObjectiveKind> = { 용어: "용어", 사실: "사실", 목록: "사실", 조건: "관계", 절차: "절차", 공식: "공식", 비교: "관계", 개념: "개념", 패턴: "패턴" };
 const PARALLEL = 2;
 /** Pages per organize call within a section. */
-const CHUNK = 2;
+const CHUNK = 1;
 
 /** A small semaphore so sections and page readings share a fixed number of parallel calls. */
 function limiter(n: number) {
@@ -118,6 +118,34 @@ function limiter(n: number) {
     active++;
     try { return await task(); } finally { active--; waiting.shift()?.(); }
   };
+}
+
+/**
+ * The objects of `key`'s array that are already complete in a reply still streaming in (strings and escapes respected;
+ * nothing is guessed from an unfinished object).
+ */
+export function completeItems(raw: string, key: string): unknown[] {
+  const at = raw.indexOf(`"${key}"`);
+  if (at < 0) return [];
+  let i = raw.indexOf("[", at);
+  if (i < 0) return [];
+  const out: unknown[] = [];
+  for (i++; i < raw.length;) {
+    while (i < raw.length && /[\s,]/.test(raw[i])) i++;
+    if (raw[i] !== "{") break;
+    let depth = 0, inString = false, end = -1;
+    for (let j = i; j < raw.length; j++) {
+      const c = raw[j];
+      if (inString) { if (c === "\\") j++; else if (c === '"') inString = false; continue; }
+      if (c === '"') inString = true;
+      else if (c === "{" || c === "[") depth++;
+      else if (c === "}" || c === "]") { depth--; if (depth === 0) { end = j; break; } }
+    }
+    if (end < 0) break;
+    try { out.push(JSON.parse(raw.slice(i, end + 1))); } catch { break; }
+    i = end + 1;
+  }
+  return out;
 }
 
 /** Model formats onto the authored contract the study screen reads (OX is a two-option choice, cloze a short answer). */
@@ -281,8 +309,8 @@ export async function runRecaller(ctx: RecallerContext) {
     return next;
   };
 
-  // ③ 정리 + ④ 기본 문제. A section is worked in chunks of two pages at once (one organize call over four slides took
-  // 80 s, mostly output), and each chunk's questions are published as soon as they pass.
+  // ③ 정리 + ④ 기본 문제, streamed: each page is organized on its own, and a card starts its question the moment it is
+  // complete in the reply; a question is published the moment it passes. Nothing waits for a whole reply.
   const chunksOf = (pages: number[]) => Array.from({ length: Math.ceil(pages.length / CHUNK) }, (_, i) => pages.slice(i * CHUNK, i * CHUNK + CHUNK));
   const collect = (unit: Unit) => {
     const parts = Object.entries(unit.chunks ?? {}).sort(([a], [b]) => Number(a) - Number(b)).map(([, c]) => c);
@@ -290,92 +318,99 @@ export async function runRecaller(ctx: RecallerContext) {
     unit.questions = parts.flatMap((c) => c.questions ?? []);
     unit.held = parts.flatMap((c) => c.held ?? []);
     unit.issues = parts.flatMap((c) => c.issues ?? []);
-    unit.skipped = parts.flatMap((c) => c.skipped ?? []);
+  };
+  const convertGuide = guide("convert", [...cardKinds]);
+  const authorOne = async (section: SectionState, k: number, card: Card) => {
+    const unit = data.units[section.id];
+    const chunk = unit.chunks![k];
+    if (chunk.questions?.some((q) => q.cardIds.includes(card.id)) || chunk.held?.some((h) => h.cardId === card.id)) return;
+    const g = await convertGuide;
+    let revision: string | null = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      let reply: z.infer<typeof basicReplySchema>;
+      try {
+        reply = await ctx.ask("rc-author", section.id, attempt, `${AUTHOR}\n\n[변환 기준]\n${g.text}`, JSON.stringify({ purpose: input.purpose, note: input.note || null, section: { id: section.id, title: section.title },
+          cards: [card], ...(revision ? { revision: [{ cardId: card.id, problem: revision }] } : {}) }), basicReplySchema, { guide: g, maxChars: 6000 });
+      } catch (error) {
+        if (!(error instanceof RunawayReply)) throw error;
+        revision = "앞 응답이 끊겼다. 짧게 다시 쓴다.";
+        continue;
+      }
+      const q = reply.questions.find((x) => x.cardId === card.id) ?? reply.questions[0];
+      const problem = !q ? "문제가 없습니다." : basicProblem({ ...q, cardId: card.id }, card);
+      let authored = q && !problem ? toAuthored(q, `${section.id}-q${card.id.split(".")[1]}`) : null;
+      let mistakes = q?.mistakes ?? [];
+      let shape = authored ? answerShapeProblem(authored) : problem;
+      if (q && authored && !shape) {
+        ({ authored, notes: mistakes } = shuffle(authored, mistakes, `${state.id}:${card.id}`));
+        const made: RcQuestion = { objectiveId: authored.objectiveId, sectionId: section.id, tier: "basic", cardIds: [card.id], format: q.format, goal: q.goal, authored,
+          pages: [...new Set(card.evidence.map((e) => e.page))], quotes: card.evidence.map((e) => e.quote).filter(Boolean), kind: KIND_TO_OBJECTIVE[card.kind], core: card.weight === "핵심",
+          distractors: mistakes.map((m) => ({ option: m.option, mistake: m.mistake })), checks: ["모양 검사"] };
+        shape = inspectQuestion(render(made, section), { astraSemanticWarnings: true, ignoreLatexFormatting: true }).errors.map((i) => i.message).join(" ") || null;
+        if (!shape) {
+          (chunk.questions ??= []).push(made);
+          collect(unit);
+          await save();
+          await publish(section.id);
+          return;
+        }
+      }
+      revision = shape ?? problem ?? "형식 오류";
+    }
+    (chunk.held ??= []).push({ cardId: card.id, reason: revision ?? "형식 오류" });
+    collect(unit);
+    await save();
   };
   const organize = async (section: SectionState, k: number, pages: number[]) => {
     const unit = data.units[section.id];
     const chunk = ((unit.chunks ??= {})[k] ??= {});
-    if (chunk.cards) return chunk.cards;
-    const g = await guide("organize", [...cardKinds]);
-    let revision: string[] = [];
-    let result: { cards: Card[]; issues: CardIssue[] } = { cards: [], issues: [] };
-    let skipped: Unit["skipped"] = [];
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      let reply: z.infer<typeof organizeSchema>;
-      // A reply cut for running away (a loop of blank space) is asked once more; a second one leaves the chunk out.
-      try {
-        reply = await ctx.ask("rc-organize", section.id, attempt, `${ORGANIZE}\n\n[정리 기준]\n${g.text}`,
-          organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision }), organizeSchema, { guide: g, maxChars: 14000 * pages.length });
-      } catch (error) {
-        if (!(error instanceof RunawayReply)) throw error;
-        data.warnings.push({ severity: "warning", code: "rc-runaway", message: `정리 p.${pages.join(",")}: ${error.message}${attempt === 1 ? " 한 번 더 요청해요." : " 이 쪽들은 건너뛰어요."}` });
-        await save();
-        if (attempt === 2) break;
-        revision = ["앞 응답이 같은 공백을 끝없이 되풀이해 끊겼다. 카드마다 필요한 칸만 짧게 쓰고 곧바로 끝낸다."];
-        continue;
-      }
-      result = checkCards(reply, { pages }, textMap());
-      skipped = reply.skipped;
-      const errors = result.issues.filter((i) => i.severity === "error");
-      if (!errors.length) break;
-      revision = errors.map((i) => `${i.cardId ?? "전체"}: ${i.message}`);
-    }
-    // Card ids are unique across the material: s2.1c3 (section s2, chunk 1, card c3).
-    const ids = new Map(result.cards.map((c) => [c.id, `${section.id}.${k + 1}${c.id}`]));
-    chunk.cards = result.cards.map((c) => ({ ...c, id: ids.get(c.id)!, links: c.links.map((l) => ({ ...l, to: ids.get(l.to) ?? l.to })) }));
-    chunk.issues = result.issues; chunk.skipped = skipped;
-    collect(unit);
-    await save();
-    return chunk.cards;
-  };
-  const authorBasic = async (section: SectionState, k: number, cards: Card[]) => {
-    const unit = data.units[section.id];
-    const chunk = unit.chunks![k];
-    if (chunk.questions) return;
-    const slots = slotCards(cards, input.purpose);
-    const byId = new Map(cards.map((c) => [c.id, c]));
-    const g = await guide("convert", [...new Set(slots.map((c) => c.kind))]);
-    const kept: RcQuestion[] = [];
-    const held: NonNullable<Unit["held"]> = [];
-    let todo = slots;
-    let revision: Array<{ cardId: string; problem: string }> = [];
-    for (let attempt = 1; attempt <= 2 && todo.length; attempt++) {
-      let reply: z.infer<typeof basicReplySchema>;
-      try {
-        reply = await ctx.ask("rc-author", section.id, attempt, `${AUTHOR}\n\n[변환 기준]\n${g.text}`, JSON.stringify({ purpose: input.purpose, note: input.note || null, section: { id: section.id, title: section.title },
-          cards: todo, otherCards: (unit.cards ?? []).filter((c) => !todo.includes(c)).map(cardLine), ...(revision.length ? { revision } : {}) }), basicReplySchema, { guide: g, maxChars: Math.max(12000, todo.length * 3000) });
-      } catch (error) {
-        if (!(error instanceof RunawayReply)) throw error;
-        data.warnings.push({ severity: "warning", code: "rc-runaway", message: `기본 문제 p.${chunk.cards?.[0]?.evidence[0]?.page ?? ""}: ${error.message}` });
-        if (attempt === 2) { for (const card of todo) held.push({ cardId: card.id, reason: "응답이 끊겨 만들지 못했어요." }); break; }
-        revision = todo.map((c) => ({ cardId: c.id, problem: "앞 응답이 끊겼다. 짧게 다시 쓴다." }));
-        continue;
-      }
-      const next: Card[] = [];
-      revision = [];
-      for (const card of todo) {
-        const q = reply.questions.find((x) => x.cardId === card.id);
-        const problem = !q ? "이 카드의 문제가 없습니다." : basicProblem(q, byId.get(q.cardId));
-        let authored = q && !problem ? toAuthored(q, `${section.id}-q${k + 1}-${kept.length + 1}`) : null;
-        let mistakes = q?.mistakes ?? [];
-        let shape = authored ? answerShapeProblem(authored) : problem;
-        let made: RcQuestion | null = null;
-        if (q && authored && !shape) {
-          ({ authored, notes: mistakes } = shuffle(authored, mistakes, `${state.id}:${card.id}`));
-          made = { objectiveId: authored.objectiveId, sectionId: section.id, tier: "basic", cardIds: [card.id], format: q.format, goal: q.goal, authored,
-            pages: [...new Set(card.evidence.map((e) => e.page))], quotes: card.evidence.map((e) => e.quote).filter(Boolean), kind: KIND_TO_OBJECTIVE[card.kind], core: card.weight === "핵심",
-            distractors: mistakes.map((m) => ({ option: m.option, mistake: m.mistake })), checks: ["모양 검사"] };
-          shape = inspectQuestion(render(made, section), { astraSemanticWarnings: true, ignoreLatexFormatting: true }).errors.map((i) => i.message).join(" ") || null;
+    const authoring: Array<Promise<void>> = [];
+    const slotted = new Set<string>();
+    const idOf = (id: string) => `${section.id}.${k + 1}${id}`;
+    // A card already finished in the stream goes to authoring now, if it is one that gets a question and its quotes are real.
+    const startCard = (raw: unknown) => {
+      const parsed = cardSchema.safeParse(raw);
+      if (!parsed.success || slotted.has(parsed.data.id)) return;
+      const { cards: ok } = checkCards({ cards: [parsed.data] }, { pages }, textMap());
+      if (!ok.length || !slotCards(ok, input.purpose).length) return;
+      slotted.add(parsed.data.id);
+      const card = { ...ok[0], id: idOf(ok[0].id), links: [] };
+      authoring.push(authorOne(section, k, card));
+    };
+    if (!chunk.cards) {
+      const g = await guide("organize", [...cardKinds]);
+      let revision: string[] = [];
+      let result: { cards: Card[]; issues: CardIssue[] } = { cards: [], issues: [] };
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        let reply: z.infer<typeof organizeSchema>;
+        try {
+          reply = await ctx.ask("rc-organize", section.id, attempt, `${ORGANIZE}\n\n[정리 기준]\n${g.text}`,
+            organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision }), organizeSchema,
+            { guide: g, maxChars: 6000 * pages.length, onPartial: (text) => { for (const raw of completeItems(text, "cards")) startCard(raw); } });
+        } catch (error) {
+          if (!(error instanceof RunawayReply)) throw error;
+          data.warnings.push({ severity: "warning", code: "rc-runaway", message: `정리 p.${pages.join(",")}: ${error.message}${attempt === 1 ? " 한 번 더 요청해요." : " 이 쪽은 건너뛰어요."}` });
+          await save();
+          if (attempt === 2) break;
+          revision = ["앞 응답이 같은 공백을 끝없이 되풀이해 끊겼다. 카드마다 필요한 칸만 짧게 쓰고 곧바로 끝낸다."];
+          continue;
         }
-        if (made && !shape) kept.push(made); else if (attempt === 1) { next.push(card); revision.push({ cardId: card.id, problem: shape ?? problem ?? "형식 오류" }); }
-        else held.push({ cardId: card.id, reason: shape ?? problem ?? "형식 오류" });
+        for (const raw of reply.cards) startCard(raw);
+        result = checkCards(reply, { pages }, textMap());
+        if (!result.issues.some((i) => i.severity === "error") || result.cards.length) break;
+        revision = result.issues.filter((i) => i.severity === "error").map((i) => `${i.cardId ?? "전체"}: ${i.message}`);
       }
-      todo = next;
+      const ids = new Map(result.cards.map((c) => [c.id, idOf(c.id)]));
+      chunk.cards = result.cards.map((c) => ({ ...c, id: ids.get(c.id)!, links: c.links.filter((l) => ids.has(l.to)).map((l) => ({ ...l, to: ids.get(l.to)! })) }));
+      chunk.issues = result.issues;
+      collect(unit);
+      await save();
     }
-    chunk.questions = kept; chunk.held = held;
+    // Resumed runs (or cards the stream did not show whole) still get their questions.
+    for (const card of slotCards(chunk.cards, input.purpose)) if (!slotted.has(card.id.split(".")[1].replace(/^\d+/, ""))) authoring.push(authorOne(section, k, card));
+    await Promise.all(authoring);
+    chunk.questions ??= [];
     collect(unit);
-    await save();
-    await publish(section.id);
   };
 
   const order = () => {
@@ -387,7 +422,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const unit = data.units[section.id];
     if (unit.status === "ready") return;
     unit.status = "organizing"; await save();
-    // Each chunk waits only for its own pages; chunks of one section run at once.
+    // Each page waits only for its own reading; the pages of a section run at once.
     await Promise.all(chunksOf(section.pages).map(async (pages, k) => {
       await Promise.all(pages.map(readPage));
       // A section named only by its page number takes its title from the first heading the page reading found.
@@ -395,9 +430,7 @@ export async function runRecaller(ctx: RecallerContext) {
         const heading = section.pages.map((p) => /^#\s*(.+)$/m.exec(data.texts[p] ?? "")?.[1]?.trim()).find(Boolean);
         if (heading) section.title = heading.slice(0, 80);
       }
-      const cards = await organize(section, k, pages);
-      if (cards.length) { unit.status = "authoring"; await authorBasic(section, k, cards); }
-      else { unit.chunks![k].questions = []; collect(unit); }
+      await organize(section, k, pages);
     }));
     unit.status = "ready"; await save();
   }).catch(async (error) => { data.units[section.id].status = "failed"; data.units[section.id].error = error instanceof Error ? error.message : String(error); await save(); throw error; }));
@@ -475,19 +508,19 @@ export function recallerFakeReply(step: GenStep, user: string): string {
     const source = String(u.source ?? "");
     const lines = source.split("\n").map((l) => l.replace(/^\s*-\s*/, "").trim()).filter((l) => l.length > 8 && !l.startsWith("[") && !l.startsWith("#"));
     const pageOf = (line: string) => { const at = source.indexOf(line); const head = source.slice(0, at).match(/\[원문 p\.(\d+)\]/g); return head ? Number(head.at(-1)!.match(/\d+/)![0]) : section.pages[0]; };
-    const cards = lines.slice(0, 3).map((line, i) => ({ id: `c${i + 1}`, kind: "사실", title: line.slice(0, 30), weight: "핵심", summary: line.slice(0, 80),
+    const cards = lines.slice(0, 3).map((line, i) => ({ id: `c${i + 1}`, kind: "사실", title: line.slice(0, 30), weight: "핵심",
       shape: { form: "fact", subject: line.slice(0, 20), value: line.slice(0, 80) }, evidence: [{ page: pageOf(line), quote: line.slice(0, 40) }],
-      mistakes: [{ wrong: "반대로 기억함", why: "원문과 다름" }], links: i ? [{ to: `c${i}`, kind: "앞뒤", note: "" }] : [], examples: [] }));
-    return JSON.stringify({ cards, skipped: [] });
+      mistakes: ["반대로 기억함"], links: i ? [{ to: `c${i}`, kind: "앞뒤" }] : [] }));
+    return JSON.stringify({ cards });
   }
   if (step === "rc-author") {
     const cards = u.cards as Card[];
     return JSON.stringify({ questions: cards.map((c, i) => i % 2 === 0
       ? { cardId: c.id, format: "choice", goal: `${c.title.slice(0, 20)}을 구별할 수 있다`, stem: [{ kind: "text", text: `다음 중 '${c.title.slice(0, 20)}'에 대한 설명으로 맞는 것은?`, latex: null, rows: null }],
-        options: [c.summary.slice(0, 40), `틀린 설명 A ${i}`, `틀린 설명 B ${i}`, `틀린 설명 C ${i}`], optionNotes: ["원문 그대로", "반대로 기억함", "다른 용어와 혼동", "조건을 빠뜨림"], correctIndex: 0,
-        accepted: null, before: null, after: null, explanation: `원문: ${c.summary.slice(0, 60)}`, mistakes: [{ option: 1, mistake: "반대로 기억함" }, { option: 2, mistake: "다른 용어와 혼동" }, { option: 3, mistake: "조건을 빠뜨림" }] }
+        options: [c.title.slice(0, 40), `틀린 설명 A ${i}`, `틀린 설명 B ${i}`, `틀린 설명 C ${i}`], optionNotes: ["원문 그대로", "반대로 기억함", "다른 용어와 혼동", "조건을 빠뜨림"], correctIndex: 0,
+        accepted: null, before: null, after: null, explanation: `원문: ${c.title.slice(0, 60)}`, mistakes: [{ option: 1, mistake: "반대로 기억함" }, { option: 2, mistake: "다른 용어와 혼동" }, { option: 3, mistake: "조건을 빠뜨림" }] }
       : { cardId: c.id, format: "flashcard", goal: `${c.title.slice(0, 20)}을 떠올릴 수 있다`, stem: [{ kind: "text", text: `${c.title.slice(0, 20)}은 무엇인가?`, latex: null, rows: null }],
-        options: null, optionNotes: null, correctIndex: null, accepted: [c.summary.slice(0, 80)], before: null, after: null, explanation: "원문 그대로", mistakes: [] }) });
+        options: null, optionNotes: null, correctIndex: null, accepted: [c.title.slice(0, 80)], before: null, after: null, explanation: "원문 그대로", mistakes: [] }) });
   }
   if (step === "rc-link") {
     const cards = u.cards as Array<{ id: string }>;

@@ -567,7 +567,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         state, pdf,
         ask: async (step, sectionId, attempt, system, user, parser, extra = {}) => {
           const schema = astraJsonSchema(parser);
-          const more = { ...(extra.images ? { images: extra.images } : {}), ...(extra.maxChars ? { maxChars: extra.maxChars } : {}) };
+          const more = { ...(extra.images ? { images: extra.images } : {}), ...(extra.maxChars ? { maxChars: extra.maxChars } : {}), ...(extra.onPartial ? { onPartial: extra.onPartial } : {}) };
           let result = await askParsed(step, sectionId, attempt, system, user, schema, parser, extra.guide, more);
           // One quiet retry for a reply that did not match the format; then the run pauses where it is.
           if (!result.ok) result = await askParsed(step, sectionId, attempt, system, `${user}

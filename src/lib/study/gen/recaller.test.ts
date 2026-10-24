@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
-import { basicProblem, deepProblems, recallerFakeReply, slotCards } from "./recaller.ts";
+import { basicProblem, completeItems, deepProblems, recallerFakeReply, slotCards } from "./recaller.ts";
 import type { GenStep } from "./types.ts";
 
 // Invented public pages (not lecture material): two sections by title.
@@ -30,13 +30,14 @@ test("recaller: sections from titles, cards, basic questions per section, then a
   assert.deepEqual(done.sections.map((s) => s.title), ["Back-Face Detection", "Depth-Buffer Method"]);
   const calls = (await readGenCalls(done.id)).map((c) => c.step);
   assert.equal(calls.filter((s) => s === "rc-organize").length, 2);
-  assert.equal(calls.filter((s) => s === "rc-author").length, 2);
+  // One question per card, started while the organize reply streams in.
+  assert.equal(calls.filter((s) => s === "rc-author").length, 4);
   assert.ok(calls.includes("rc-link") && calls.includes("rc-deep") && calls.includes("rc-solve"), calls.join(" "));
   // The solver never sees the answer or the worked steps.
   const solve = (await readGenCalls(done.id)).find((c) => c.step === "rc-solve")!;
   assert.ok(!solve.user.includes("correctIndex") && !solve.user.includes("steps"));
   const first = await readSectionDocument(done.id, "s1") as { questions: Array<{ id: string }> };
-  assert.ok(first.questions.some((q) => q.id.startsWith("q-s1-q")));
+  assert.ok(first.questions.some((q) => q.id.startsWith("q-s1-q")), JSON.stringify(first.questions.map((q) => q.id)));
   assert.ok(first.questions.some((q) => q.id.startsWith("q-s1-d")), "심화 문제는 첫 카드의 구역에 붙는다");
   assert.equal(done.recaller?.deep.g1.status, "ready");
 }));
@@ -54,13 +55,18 @@ test("a deep question whose blind solve disagrees is rewritten once, then held",
   assert.equal((await readGenCalls(done.id)).filter((c) => c.step === "rc-deep").length, 2);
 }));
 
+test("cards complete in a streaming reply are picked out before the reply ends", () => {
+  const raw = '{"cards":[{"id":"c1","t":"a \\"}\\" b"},{"id":"c2","t":[1,{"x":2}]},{"id":"c3","t":"unfin';
+  assert.deepEqual(completeItems(raw, "cards").map((c) => (c as { id: string }).id), ["c1", "c2"]);
+});
+
 test("code checks: a wrong option must be the value its stated mistake gives; a choice needs a note per option", () => {
   const deep = JSON.parse(recallerFakeReply("rc-deep", JSON.stringify({ group: { id: "g1", cardIds: ["s1.c1", "s1.c2"] } }))).question;
   assert.deepEqual(deepProblems(deep), []);
   assert.match(deepProblems({ ...deep, distractors: deep.distractors.map((d: { option: number }) => d.option === 1 ? { ...d, expr: "2+2" } : d) }).join(), /오답 2/);
   assert.match(deepProblems({ ...deep, steps: deep.steps.map((s: { value: string }, i: number) => i === 0 ? { ...s, value: "6" } : s) }).join(), /1단계/);
   const card = { id: "c1", kind: "사실", weight: "핵심" } as never;
-  const basic = JSON.parse(recallerFakeReply("rc-author", JSON.stringify({ cards: [{ id: "c1", title: "t", summary: "요지 문장" }] }))).questions[0];
+  const basic = JSON.parse(recallerFakeReply("rc-author", JSON.stringify({ cards: [{ id: "c1", title: "요지 문장" }] }))).questions[0];
   assert.equal(basicProblem(basic, card), null);
   assert.match(basicProblem({ ...basic, optionNotes: null }, card)!, /optionNotes/);
   assert.equal(slotCards([{ weight: "보조", kind: "사실" }, { weight: "핵심", kind: "용어" }] as never, "core").length, 1);

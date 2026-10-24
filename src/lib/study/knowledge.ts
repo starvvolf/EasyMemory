@@ -3,6 +3,7 @@
 // pointed at (a page, a region, later a paragraph or code lines). Points and spans are linked many-to-many by evidence,
 // and every question reaches its points through its objective.
 import type { GenState } from "./gen/types";
+import { cardLine } from "./gen/cards.ts";
 
 /** A place in a material. `page` for PDFs now; `para` / `lines` arrive with articles and code. */
 export type Span = { page: number; kind: string; quote: string };
@@ -28,7 +29,7 @@ export function knowledgeLayer(state: GenState): KnowledgeLayer {
   if (state.recaller) {
     const units = state.recaller.units;
     const points: KnowledgePoint[] = state.sections.flatMap((section) => (units[section.id]?.cards ?? []).map((card) => ({
-      id: card.id, title: card.title, essentials: [card.summary, ...card.mistakes.slice(0, 2).map((m) => `헷갈림: ${m.wrong}`)], section: section.title,
+      id: card.id, title: card.title, essentials: [cardLine(card).replace(/^\[[^\]]+\] [^:]+: /, ""), ...card.mistakes.slice(0, 2).map((m) => `헷갈림: ${m}`)], section: section.title,
       pages: [...new Set(card.evidence.map((e) => e.page))].sort((a, b) => a - b), spans: card.evidence.map((e) => ({ page: e.page, kind: e.quote ? "text" : "figure", quote: e.quote })) })));
     const byObjective: Record<string, string[]> = {};
     for (const unit of Object.values(units)) for (const q of unit.questions ?? []) byObjective[q.objectiveId] = q.cardIds;
