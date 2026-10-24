@@ -126,7 +126,7 @@ steps의 expr은 계산기가 다시 계산한다: 숫자, + - * / ^, 괄호, �
 계산은 코드가 한다: 머릿속으로 계산하지 말고 식(expr)만 정확히 쓴다. 식으로 계산되는 step의 value는 빈 문자열로 둔다. 보기는 코드가 만든다: 정답은 upTo 단계의 값(답이 말이면 answer), 오답은 distractors 후보 3~5개(실수마다 그 실수를 적용한 식 expr, 답이 말이면 value)에서 서로 다른 값 셋을 고른다. 값을 고를 때는 계산이 깔끔하게 떨어질 정수·간단한 분수를 고른다.
 짧게: steps의 what은 한 줄(무엇을 하는지만), 같은 식을 되풀이하지 말고 앞 단계 name을 쓴다. 오답의 mistake는 한 줄. explanation은 한두 문장으로, 값 없이 무엇을 어떤 순서로 했는지만 쓴다.`;
 const CHAIN = `${BASE}
-여러 자료의 지식 카드에서 '종합 문제' 묶음을 고른다. 카드마다 받음(takes)과 냄(gives)이 있다. 앞 카드의 냄이 다음 카드의 받음이 되는 카드를 이어, 같은 대상 하나를 처음부터 끝까지 들고 갈 수 있는 사슬을 만든다. 이어지는 만큼 길게(최대 5장), 자료 2개 이상에 걸치게. 이웃한 쌍마다 joints에 어떤 냄이 어떤 받음이 되는지 카드에 적힌 말 그대로 적는다. 말이 같아도 뜻이 다르면(다른 식의 같은 기호) 잇지 않는다. wordingHints는 코드가 말이 같은 것끼리 이어 본 후보다: 뜻이 맞는 것만 쓴다. 억지로 잇지 않는다: 이어지지 않으면 짧게 끊거나 빈 배열.`;
+여러 자료의 지식 카드에서 '종합 문제' 묶음을 고른다. 카드마다 받음(takes)과 냄(gives)이 있다. 앞 카드의 냄이 다음 카드의 받음이 되는 카드를 이어, 같은 대상 하나를 처음부터 끝까지 들고 갈 수 있는 사슬을 만든다. 이어지는 만큼 길게(최대 5장), 자료 2개 이상에 걸치게. 먼저 자료를 가장 많이 거치는 사슬(자료가 넷이면 넷을 모두 거치는 것)을 찾고, 그다음 다른 사슬을 찾는다. 자료 순서가 아니라 계산 순서로 잇는다. 이웃한 쌍마다 joints에 어떤 냄이 어떤 받음이 되는지 카드에 적힌 말 그대로 적는다. 말이 같아도 뜻이 다르면(다른 식의 같은 기호) 잇지 않는다. wordingHints는 코드가 말이 같은 것끼리 이어 본 후보다: 뜻이 맞는 것만 쓴다. 억지로 잇지 않는다: 이어지지 않으면 짧게 끊거나 빈 배열.`;
 const CHAIN_DEEP = "이번 묶음은 종합 문제다. cardIds 순서대로 같은 대상 하나(값, 물체, 사례)를 처음부터 끝까지 들고 간다. joints대로 앞 카드 단계의 결과(name)가 다음 카드 단계의 입력이 된다. 값은 단계마다 결과가 실제로 바뀌게 고른다(그대로 통과하는 값 금지). 문제 글은 상황과 주어진 값, 구할 것만 쓰고 단계 순서를 알려 주지 않는다. 오답 셋은 서로 다른 카드의 단계에서 나온 실수다. 카드마다 그 단계의 결과가 하나씩 나오므로, 그 결과들을 소문항으로 차례로 묻는 것(1-1 앞 카드의 결과, 1-2 그다음 …)을 먼저 생각한다. 중간 결과가 따로 물을 만하지 않으면 묶어서 묻는다.";
 const NOTES = `${BASE}
 심화 문제의 오답 보기마다 적힌 실수(mistake)가 정말 그 보기의 값을 낳는지 본다. 풀이(steps)의 해당 단계(step)에서 그 실수를 했다고 치고, 그 식(expr)이 그 실수를 옮긴 것인지, 그 값(value)이 나오는지 확인한다. 식이 없는 말 보기는 그 실수를 하면 그 말이 나오는지만 본다. 확인할 정보가 모자란 것은 틀린 것이 아니다: 실수와 보기가 분명히 어긋날 때만 ok=false. 오답마다 ok와, 맞지 않으면 why 한 줄. 맞으면 why는 빈 문자열.`;
@@ -237,7 +237,8 @@ export function fillValues(q: RawDeep): DeepReply & { short: string[] } {
       if (picked.length === 3) break;
       let v = d.value.trim();
       if (!v && d.expr.trim()) { try { v = `$${formatValue(evaluate(d.expr, vars, fns))}$`; } catch { v = ""; } }
-      if (!v || seen.has(key(v))) continue;
+      // Next to a clean answer (2, 3/2, (4, 2, 8)), an option like 0.3012 gives itself away as wrong: skip it while others remain.
+      if (!v || seen.has(key(v)) || (!/\d\.\d/.test(correct) && /\d\.\d/.test(v))) continue;
       seen.add(key(v));
       picked.push({ option: options.length, step: d.step, mistake: d.mistake, expr: d.expr });
       options.push(v);
@@ -660,17 +661,16 @@ export async function runRecaller(ctx: RecallerContext) {
       slot.status = "making"; await save();
       const cards = group.cardIds.map((id) => byId.get(id)!).filter(Boolean);
       const pages = [...new Set(cards.flatMap((c) => c.evidence.map((e) => e.page)))];
-      while (slot.tries < 2) {
-        slot.tries++;
-        // A reply that breaks off (cut, not JSON) costs this try, not the run; a paused run (usage, login) still stops.
+      // One try: write, fill the values, check by code, then solve blind and read the wrong options at once.
+      const attempt = async (revision: string[]): Promise<{ q?: DeepReply; problems: string[] }> => {
+        const tryNo = ++slot.tries;
         let reply: z.infer<typeof deepReplySchema>;
         try {
-          reply = await ctx.ask("rc-deep", sectionOfCard(group.cardIds[0]), slot.tries, `${DEEP}${combine ? `\n${CHAIN_DEEP}` : ""}\n\n[심화 기준]\n${g.text}`, JSON.stringify({ purpose: input.purpose, group, cards, source: sourceOfCards(cards), ...(slot.problems.length ? { revision: slot.problems } : {}) }), deepReplySchema, { guide: g, maxChars: combine ? 32000 : 20000 });
+          reply = await ctx.ask("rc-deep", sectionOfCard(group.cardIds[0]), tryNo, `${DEEP}${combine ? `\n${CHAIN_DEEP}` : ""}\n\n[심화 기준]\n${g.text}`, JSON.stringify({ purpose: input.purpose, group, cards, source: sourceOfCards(cards), ...(revision.length ? { revision } : {}) }), deepReplySchema, { guide: g, maxChars: combine ? 32000 : 20000 });
         } catch (error) {
+          // A reply that breaks off (cut, not JSON) costs this try, not the run; a paused run (usage, login) still stops.
           if (pausesRun(error)) throw error;
-          slot.problems = [`응답을 읽지 못했어요: ${error instanceof Error ? error.message : String(error)}`];
-          await save();
-          continue;
+          return { problems: [`응답을 읽지 못했어요: ${error instanceof Error ? error.message : String(error)}`] };
         }
         const q = fillValues(reply.question);
         const problems = q.short.length ? q.short : deepProblems(q);
@@ -678,8 +678,8 @@ export async function runRecaller(ctx: RecallerContext) {
           // Blind solve (the question and options only, no answer, no steps) and, at the same time, a read of the wrong
           // options: code checks that each is the value of its stated calculation, not that the calculation is the mistake it names.
           const [solved, read] = await Promise.all([
-            ctx.ask("rc-solve", sectionOfCard(group.cardIds[0]), slot.tries, SOLVE, JSON.stringify({ question: { situation: q.stem, parts: q.parts.map((p) => ({ ask: p.ask, options: p.options })) }, source: sourceOfCards(cards) }), solveReplySchema, { maxChars: combine ? 20000 : 12000 }),
-            ctx.ask("rc-check", sectionOfCard(group.cardIds[0]), slot.tries, NOTES, JSON.stringify({ situation: q.stem, steps: q.steps.map((s, i) => ({ n: i + 1, what: s.what, expr: s.expr, value: s.value })),
+            ctx.ask("rc-solve", sectionOfCard(group.cardIds[0]), tryNo, SOLVE, JSON.stringify({ question: { situation: q.stem, parts: q.parts.map((p) => ({ ask: p.ask, options: p.options })) }, source: sourceOfCards(cards) }), solveReplySchema, { maxChars: combine ? 20000 : 12000 }),
+            ctx.ask("rc-check", sectionOfCard(group.cardIds[0]), tryNo, NOTES, JSON.stringify({ situation: q.stem, steps: q.steps.map((s, i) => ({ n: i + 1, what: s.what, expr: s.expr, value: s.value })),
               wrong: q.parts.flatMap((p, k) => p.distractors.map((d) => ({ part: k + 1, option: d.option + 1, value: p.options[d.option], step: d.step + 1, mistake: d.mistake, expr: d.expr }))) }), notesReplySchema, { maxChars: 8000 }).catch((error) => { if (pausesRun(error)) throw error; return { notes: [] }; }),
           ]);
           for (const n of read.notes) if (!n.ok) problems.push(`${q.parts.length > 1 ? `소문항 ${n.part}: ` : ""}오답 ${n.option}의 설명이 그 값과 맞지 않습니다: ${n.why}`);
@@ -689,7 +689,9 @@ export async function runRecaller(ctx: RecallerContext) {
           });
           if (!problems.length && solved.doubts.length) problems.push(`따로 푼 쪽이 의심한 점: ${solved.doubts.join(" / ")}`);
         }
-        if (!problems.length) {
+        return { q, problems };
+      };
+      const accept = async (q: DeepReply) => {
           const sid = sectionOfCard(group.cardIds[0]);
           const n = group.id.slice(1);
           const stepLine = (s: Step & { page?: number | null }, i: number) => `${i + 1}) ${s.what}${s.expr.trim() ? `: ${s.expr} = ${s.value}` : ` → ${s.value}`}${s.page ? ` (p.${s.page})` : ""}`;
@@ -711,11 +713,27 @@ export async function runRecaller(ctx: RecallerContext) {
           slot.status = "ready"; slot.problems = [];
           await save();
           await publish(sid);
-          return;
-        }
-        slot.problems = problems;
-        await save();
+      };
+      // Two drafts at once, the first that passes every check wins: a rewrite (another 50–70 s) is needed only when both
+      // fail, and then the one with fewer problems is revised.
+      const first = (tries: Array<Promise<{ q?: DeepReply; problems: string[] }>>) => new Promise<{ won?: DeepReply; tried: Array<{ q?: DeepReply; problems: string[] }> }>((resolve, reject) => {
+        const tried: Array<{ q?: DeepReply; problems: string[] }> = [];
+        let done = false;
+        for (const t of tries) t.then((r) => {
+          if (done) return;
+          tried.push(r);
+          if (!r.problems.length) { done = true; resolve({ won: r.q, tried }); }
+          else if (tried.length === tries.length) { done = true; resolve({ tried }); }
+        }, (error) => { if (!done) { done = true; reject(error); } });
+      });
+      let round = await first(slot.tries === 0 ? [attempt([]), attempt([])] : [attempt(slot.problems)]);
+      if (!round.won) {
+        const best = [...round.tried].sort((a, b) => a.problems.length - b.problems.length)[0];
+        slot.problems = best.problems; await save();
+        if (slot.tries < 3) round = await first([attempt(best.problems)]);
       }
+      if (round.won) { await accept(round.won); return; }
+      slot.problems = round.tried[0]?.problems ?? slot.problems;
       slot.status = "held";
       data.warnings.push({ severity: "warning", code: "rc-deep-held", message: `심화 ${group.id}: ${slot.problems.join(" / ")}` });
       await save();

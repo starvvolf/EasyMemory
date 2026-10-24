@@ -79,7 +79,8 @@ test("a deep question whose blind solve disagrees is rewritten once, then held",
   const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages, fakeReply });
   assert.equal(done.recaller?.deep.g1.status, "held");
   assert.match(done.recaller!.deep.g1.problems[0], /따로 푼 답/);
-  assert.equal((await readGenCalls(done.id)).filter((c) => c.step === "rc-deep").length, 2);
+  // Two drafts at once, both disagree, then one revision of the closer one.
+  assert.equal((await readGenCalls(done.id)).filter((c) => c.step === "rc-deep").length, 3);
 }));
 
 test("cards complete in a streaming reply are picked out before the reply ends", () => {
@@ -140,4 +141,6 @@ test("the calculator writes the values: blank step values, and options built fro
   assert.deepEqual(deepProblems(built), []);
   const thin = fillValues({ ...raw, parts: [{ ...raw.parts[0], distractors: raw.parts[0].distractors.map((d: object) => ({ ...d, expr: "2+3" })) }] });
   assert.match(thin.short.join(), /오답 값이 0개뿐/);
+  const messy = fillValues({ ...raw, parts: [{ ...raw.parts[0], distractors: [{ step: 1, mistake: "a", expr: "sqrt(2)", value: "" }, ...raw.parts[0].distractors] }] });
+  assert.deepEqual(messy.parts[0].options, ["$5$", "$6$", "$4$", "$7$"], "1.4142 beside a clean answer is skipped");
 });
