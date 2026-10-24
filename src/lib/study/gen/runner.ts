@@ -185,6 +185,8 @@ export const genInputSchema = z.strictObject({
   deep: z.boolean().optional(),
   /** recaller: write two drafts of each deep question at once and keep the first that passes (faster, twice the use). */
   deepDrafts: z.union([z.literal(1), z.literal(2)]).optional(),
+  /** recaller 검증 실험: one plain call per section instead of cards and checks (the comparison baseline). */
+  baseline: z.boolean().optional(),
   /** recaller 종합 문제: earlier recaller runs whose cards are tied into one long problem (no new pages are read). */
   combine: z.array(z.string().regex(/^gen_[a-f0-9]{32}$/)).min(2).max(4).optional(),
   pastExamSourceIds: z.array(z.string().regex(/^src_[a-f0-9]{64}$/)).min(1).max(2).optional(),

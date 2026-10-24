@@ -147,3 +147,13 @@ test("the calculator writes the values: blank step values, and options built fro
   const messy = fillValues({ ...raw, parts: [{ ...raw.parts[0], distractors: [{ step: 1, mistake: "a", expr: "sqrt(2)", value: "" }, ...raw.parts[0].distractors] }] });
   assert.deepEqual(messy.parts[0].options, ["$5$", "$6$", "$4$", "$7$"], "1.4142 beside a clean answer is skipped");
 });
+
+test("기준선: one plain call per section, published without cards or checks", () => withData(async () => {
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", baseline: true });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  assert.equal(done.status, "done", done.message);
+  const calls = (await readGenCalls(done.id)).map((c) => c.step);
+  assert.deepEqual(calls, ["rc-author", "rc-author"]);
+  const doc = await readSectionDocument(done.id, "s1") as { questions: unknown[] };
+  assert.ok(doc.questions.length >= 1);
+}));

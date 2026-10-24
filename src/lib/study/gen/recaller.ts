@@ -115,6 +115,11 @@ const AUTHOR = `${BASE}
 지식 카드마다 기본 문제 하나를 만든다. 카드에 있는 지식만 묻고, 형식은 rules(변환 기준)의 이번 목적과 카드 종류 절을 따른다.
 형식별: choice — 보기 4개, 정답 하나, optionNotes에 보기마다 한 줄, mistakes에 오답마다 어떤 실수인지. ox — stem에 명제 하나, correctIndex 0=O 1=X, options·optionNotes는 null, 틀린 명제면 mistakes에 바꾼 것. short — 값·이름 하나, accepted에 표기 변형. cloze — 원문 핵심 문장의 핵심어 하나를 비우고 before/after에 앞뒤 글(답을 드러내지 않게), accepted에 답. flashcard — stem은 단서 하나, accepted[0]에 핵심 답.
 수식은 $…$로 쓴다. stem은 [{kind:"text", text, latex:null, rows:null}] 꼴.`;
+// 기준선 (검증 실험, 2026-10-25): what one plain call makes from the same pages, with the same model and no cards, no
+// checks and no blind solve. Judged by the same judges as Recaller, so the difference is what the pipeline adds.
+const PLAIN = `${BASE}
+원문으로 시험 문제를 만든다: 기본 문제 4개(choice 2, short 1, ox 1)와 원문의 개념을 엮어 새 상황·수치에 적용하는 응용 객관식 2개. 문제마다 정답과 설명을 쓴다.
+형식별: choice — 보기 4개, 정답 하나, optionNotes에 보기마다 한 줄. ox — stem에 명제 하나, correctIndex 0=O 1=X. short — 값·이름 하나, accepted에 표기 변형. cardId는 "plain". mistakes는 빈 배열이어도 된다. 수식은 $…$로 쓴다.`;
 const CALC = "계산기는 일반 수학만 안다: 행렬은 행 단위 ((a, b), (c, d)), 행렬×행렬·행렬×벡터는 *, transpose() det() inv() eye(n), row(M, i) col(M, j) at(v, i)(1부터), 이어 붙이기 join(v, x), 판정 lt le gt ge eq and or not pick(조건, 참일 때, 거짓일 때)(참 1, 거짓 0), sind cosd tand(도). 원문의 공식·행렬은 계산기가 모르므로 먼저 정의 단계를 둔다: name에 'T(tx, ty)'처럼 이름과 매개변수, expr에 원문 식을 매개변수로, value는 '정의'. 뒤 단계에서 T(2, 3)처럼 부른다.";
 const LINK = `${BASE}
 지식 카드 목록에서 함께 엮으면 한 카드만 알아서는 풀 수 없는 응용 문제가 되는 묶음(카드 2~3장)을 고른다. 앞 카드의 결과가 뒤 카드의 입력이 되는 묶음(판정 → 절차, 공식 → 비교, 절차 → 절차)을 우선한다. 구체적인 값으로 계산하거나 판정할 수 있는 묶음만 고른다. 서로 다른 묶음이 같은 카드 조합을 반복하지 않는다. 묶음이 없으면 빈 배열.`;
@@ -471,6 +476,30 @@ export async function runRecaller(ctx: RecallerContext) {
     return next;
   };
 
+  // 기준선: one call per section, published as it comes back. Only what cannot be shown at all is left out.
+  if (input.baseline) {
+    await Promise.allSettled(state.sections.map((section) => sectionLimit(async () => {
+      const unit = data.units[section.id];
+      if (unit.status === "ready") return;
+      await Promise.all(section.pages.map(readPage));
+      const reply = await ctx.ask("rc-author", section.id, 1, PLAIN, JSON.stringify({ material: input.fileName, section: { title: section.title, pages: section.pages }, source: sourceOf(section.pages) }), basicReplySchema, { maxChars: 30000 });
+      const questions: RcQuestion[] = [];
+      reply.questions.forEach((q, i) => {
+        try {
+          const authored = toAuthored(q, `${section.id}-p${i + 1}`);
+          if (answerShapeProblem(authored)) return;
+          questions.push({ objectiveId: authored.objectiveId, sectionId: section.id, tier: i >= 4 ? "deep" : "basic", cardIds: [], format: q.format, goal: q.goal, authored, pages: section.pages, quotes: [], kind: "사실", core: true, checks: [] });
+        } catch { /* not showable */ }
+      });
+      unit.questions = questions; unit.chunks = { 0: { questions } }; unit.status = "ready";
+      await save();
+      await publish(section.id);
+    })));
+    data.timing.basicDoneAt = data.timing.completedAt = new Date().toISOString();
+    state.status = "done"; state.phase = "done"; state.message = "";
+    await save();
+    return;
+  }
   // ③ 정리 + ④ 기본 문제, streamed: each page is organized on its own, and a card starts its question the moment it is
   // complete in the reply; a question is published the moment it passes. Nothing waits for a whole reply.
   const chunksOf = (pages: number[]) => Array.from({ length: Math.ceil(pages.length / CHUNK) }, (_, i) => pages.slice(i * CHUNK, i * CHUNK + CHUNK));
@@ -765,7 +794,8 @@ export function recallerFakeReply(step: GenStep, user: string): string {
     return JSON.stringify({ cards });
   }
   if (step === "rc-author") {
-    const cards = u.cards as Card[];
+    // The baseline asks with the source alone: six questions on its first lines.
+    const cards = (u.cards as Card[] | undefined) ?? String(u.source ?? "").split("\n").filter((l) => l.length > 8 && !l.startsWith("[")).slice(0, 6).map((l) => ({ id: "plain", title: l.replace(/^[#\s-]+/, "") }) as Card);
     return JSON.stringify({ questions: cards.map((c, i) => i % 2 === 0
       ? { cardId: c.id, format: "choice", goal: `${c.title.slice(0, 20)}을 구별할 수 있다`, stem: [{ kind: "text", text: `다음 중 '${c.title.slice(0, 20)}'에 대한 설명으로 맞는 것은?`, latex: null, rows: null }],
         options: [c.title.slice(0, 40), `틀린 설명 A ${i}`, `틀린 설명 B ${i}`, `틀린 설명 C ${i}`], optionNotes: ["원문 그대로", "반대로 기억함", "다른 용어와 혼동", "조건을 빠뜨림"], correctIndex: 0,

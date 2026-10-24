@@ -65,6 +65,8 @@ export type GenInput = {
   deep?: boolean;
   /** recaller: drafts of each deep question written at once (1 by default; 2 is faster and uses twice as much). */
   deepDrafts?: 1 | 2;
+  /** recaller 검증 실험: the plain one-call baseline (no cards, no checks). */
+  baseline?: boolean;
   /** recaller 종합 문제: the earlier recaller runs whose cards are tied together. */
   combine?: string[];
   /** Optional registered exams: absent means the original generation path, unchanged. */
