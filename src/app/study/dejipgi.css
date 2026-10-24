@@ -921,3 +921,4 @@
 .dejipgi .kp-ess{margin:8px 0 14px;padding-left:20px;line-height:1.7}
 .dejipgi .kp-spans li,.dejipgi .mat-mini li{padding:6px 0;border-top:1px solid var(--line)}
 @media (max-width:760px){.dejipgi .kp-detail{position:static}}
+.dejipgi .kp-name{font-size:22px;font-weight:700;margin:6px 0 4px}

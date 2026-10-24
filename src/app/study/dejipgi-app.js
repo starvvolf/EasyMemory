@@ -672,7 +672,7 @@ function renderCoachBox(){
 function kpChip(k){
   const st = KP_STATE[k.state];
   return h("button", { class:`kp-chip kp-${k.state}`, title:`${k.title} · ${st.label}${k.items.length ? ` · 문제 ${k.items.length}` : ""}`,
-    onclick: () => { S.kp.sel = k.key; setView("knowledge"); } }, h("i", { "aria-hidden":"true" }), h("span", { text:k.title }));
+    onclick: () => { S.kp.sel = k.key; setView("knowledge"); } }, h("i", { "aria-hidden":"true" }), h("span", null, richText(k.title)));
 }
 function renderKpMeter(c, total){
   const seg = (n, cls) => n ? h("i", { class:cls, style:`width:${n / total * 100}%` }) : null;
@@ -730,17 +730,21 @@ function renderKnowledge(){
       h("button", { class:"chip-btn", "aria-pressed": filter === key ? "true" : "false", onclick: () => { S.kp.filter = key; render(); } }, label))),
     ...[...groups.entries()].map(([g, ks]) => h("div", { class:"kp-group" }, h("p", { class:"eyebrow", text:g }),
       h("ul", null, ks.map(k => h("li", null, h("button", { class:`kp-row${sel && sel.key === k.key ? " on" : ""}`, onclick: () => { S.kp.sel = k.key; render(); } },
-        h("span", { class:`chip ${KP_STATE[k.state].cls}`, text:KP_STATE[k.state].label }), h("span", { class:"kp-title", text:k.title }),
+        h("span", { class:`chip ${KP_STATE[k.state].cls}`, text:KP_STATE[k.state].label }), h("span", { class:"kp-title" }, richText(k.title)),
         h("span", { class:"small muted num", text:k.items.length ? `문제 ${k.items.length}` : "" }))))))));
   const detail = h("section", { class:"panel kp-detail" });
   if (!sel) detail.append(h("p", { class:"muted", text:"왼쪽에서 지식 포인트를 고르면 원문 근거와 문제가 보여요." }));
   else {
     const st = KP_STATE[sel.state];
     const spans = sel.refs.flatMap(r => (r.spans.length ? r.spans : r.pages.map(p => ({ page:p, kind:"text", quote:"" }))).map(s => ({ ...s, d:r.d })));
-    const seen = new Set(); const uniq = spans.filter(s => { const k = s.d.id + ":" + s.page + ":" + s.quote; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8);
+    // The same PDF made several times gives the same evidence: one line per material page and quote.
+    const seen = new Map();
+    for (const sp of spans){ const k = planKey(sp.d) + ":" + sp.page + ":" + sp.quote; if (seen.has(k)) seen.get(k).n++; else seen.set(k, { ...sp, n:1 }); }
+    const uniq = [...seen.values()].slice(0, 8);
+    const matName = (d) => String(d.sourceName || displayTitle(d)).replace(/^족보[^·]*·\s*/, "").replace(/\.pdf$/i, "").replace(/ · .*$/, "");
     detail.append(
       h("div", { class:"row", style:"gap:8px" }, h("span", { class:`chip ${st.cls}`, text:st.label }), sel.section ? h("span", { class:"small muted", text:sel.section }) : null),
-      h("h2", { text:sel.title }),
+      h("h2", { class:"kp-name" }, richText(sel.title)),
       sel.essentials.length ? h("ul", { class:"kp-ess" }, sel.essentials.map(e => h("li", null, richText(e)))) : null,
       h("div", { class:"row", style:"gap:8px;flex-wrap:wrap" },
         h("button", { class:"btn primary", disabled: sel.items.length ? null : true, onclick: () => startPoint(sel) }, sel.items.length ? `이 지식 문제 풀기 · ${sel.items.length}` : "묶인 문제 없음"),
@@ -748,8 +752,9 @@ function renderKnowledge(){
         h("button", { class:"btn ghost", onclick: () => { setView("home"); askCoach(`"${sel.title}"을(를) 쉽게 설명해 주고, 시험에 어떻게 나올지 알려줘.`); } }, "코치에게 묻기")),
       h("p", { class:"eyebrow", style:"margin-top:16px", text:`원문 근거 ${uniq.length}` }),
       h("ul", { class:"kp-spans" }, uniq.map(s => h("li", null,
-        h("button", { class:"linkish", onclick: () => openReader(s.d.id, s.page) }, `${displayTitle(s.d).replace(/ · p\.[\d–]+$/, "")} p.${s.page}`),
-        s.quote ? h("span", { class:"small muted", text:` · ${String(s.quote).slice(0, 90)}` }) : null))));
+        h("button", { class:"linkish", onclick: () => openReader(s.d.id, s.page) }, `${matName(s.d)} p.${s.page}`),
+        s.n > 1 ? h("span", { class:"small muted", text:` (문제 세트 ${s.n}개)` }) : null,
+        s.quote ? h("div", { class:"small muted", text:String(s.quote).slice(0, 120) }) : null))));
   }
   wrap.append(h("div", { class:"kp-split" }, list, detail));
   return wrap;
