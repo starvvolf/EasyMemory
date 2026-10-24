@@ -201,6 +201,7 @@ function sampleErrorCopy(e){
 const S = {
   view:"home",
   kp:{ subject:null, sel:null, filter:"all" },
+  archive:{ entries:null, err:"" },
   decks:{},
   session:null,
   recordsDeck:null,
@@ -567,6 +568,13 @@ const KP_STATE = {
   weak:{ label:"약점", cls:"bad", rank:0 }, mid:{ label:"푸는 중", cls:"help", rank:1 }, new:{ label:"안 풀어봄", cls:"", rank:2 },
   good:{ label:"혼자 맞힘", cls:"good", rank:3 }, mastered:{ label:"숙련", cls:"good", rank:4 }, none:{ label:"문제 없음", cls:"", rank:5 }
 };
+/* Short labels (지식 포인트 이름): $…$ shown inline with the plain fallback so a chip never grows a math block. */
+function inlineLabel(str){
+  const out = []; const re = /\$\$([\s\S]*?)\$\$|\$([^$]*)\$/g; let last = 0, m; const t = String(str ?? "");
+  while ((m = re.exec(t))){ if (m.index > last) out.push(document.createTextNode(t.slice(last, m.index))); out.push(h("span", { class:"tex-inline" }, ...texFallback(m[1] ?? m[2]))); last = re.lastIndex; }
+  if (last < t.length) out.push(document.createTextNode(t.slice(last)));
+  return out;
+}
 function kpKey(title){ return looseText(title).replace(/[()·:,.\-–—]/g, ""); }
 function deckPoints(d){
   if (d.points && Array.isArray(d.points.points) && d.points.points.length) return d.points;
@@ -671,8 +679,8 @@ function renderCoachBox(){
 }
 function kpChip(k){
   const st = KP_STATE[k.state];
-  return h("button", { class:`kp-chip kp-${k.state}`, title:`${k.title} · ${st.label}${k.items.length ? ` · 문제 ${k.items.length}` : ""}`,
-    onclick: () => { S.kp.sel = k.key; setView("knowledge"); } }, h("i", { "aria-hidden":"true" }), h("span", null, richText(k.title)));
+  return h("button", { class:`kp-chip kp-${k.state}`, title:`${String(k.title).replace(/\$/g, "")} · ${st.label}${k.items.length ? ` · 문제 ${k.items.length}` : ""}`,
+    onclick: () => { S.kp.sel = k.key; setView("knowledge"); } }, h("i", { "aria-hidden":"true" }), h("span", null, ...inlineLabel(k.title)));
 }
 function renderKpMeter(c, total){
   const seg = (n, cls) => n ? h("i", { class:cls, style:`width:${n / total * 100}%` }) : null;
@@ -705,7 +713,7 @@ function renderRecallerHome(){
   const mats = (subject ? decksOf(subject) : real.sort(byTitle));
   wrap.append(h("section", { class:"panel" },
     h("div", { class:"row", style:"justify-content:space-between" }, h("p", { class:"eyebrow", text:`자료 ${mats.length}` }),
-      h("div", { class:"row" }, h("button", { class:"btn small ghost", onclick: () => setView("practice") }, "자료별 연습"), h("button", { class:"btn small", onclick: () => setView("create") }, "+ 새 자료"))),
+      h("div", { class:"row" }, h("button", { class:"btn small ghost", onclick: () => setView("archive") }, "보관함"), h("button", { class:"btn small ghost", onclick: () => setView("practice") }, "자료별 연습"), h("button", { class:"btn small", onclick: () => setView("create") }, "+ 새 자료"))),
     h("ul", { class:"mat-mini" }, mats.slice(0, 8).map(d => h("li", null,
       h("button", { class:"linkish", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, displayTitle(d)),
       h("span", { class:"small muted num", text:` · 문제 ${d.items.length}` }))))));
@@ -730,7 +738,7 @@ function renderKnowledge(){
       h("button", { class:"chip-btn", "aria-pressed": filter === key ? "true" : "false", onclick: () => { S.kp.filter = key; render(); } }, label))),
     ...[...groups.entries()].map(([g, ks]) => h("div", { class:"kp-group" }, h("p", { class:"eyebrow", text:g }),
       h("ul", null, ks.map(k => h("li", null, h("button", { class:`kp-row${sel && sel.key === k.key ? " on" : ""}`, onclick: () => { S.kp.sel = k.key; render(); } },
-        h("span", { class:`chip ${KP_STATE[k.state].cls}`, text:KP_STATE[k.state].label }), h("span", { class:"kp-title" }, richText(k.title)),
+        h("span", { class:`chip ${KP_STATE[k.state].cls}`, text:KP_STATE[k.state].label }), h("span", { class:"kp-title" }, ...inlineLabel(k.title)),
         h("span", { class:"small muted num", text:k.items.length ? `문제 ${k.items.length}` : "" }))))))));
   const detail = h("section", { class:"panel kp-detail" });
   if (!sel) detail.append(h("p", { class:"muted", text:"왼쪽에서 지식 포인트를 고르면 원문 근거와 문제가 보여요." }));
@@ -771,6 +779,70 @@ function renderBench(){
       h("li", null, h("b", null, "MD 수정안 비교"), h("span", { class:"small muted", text:" 가린 채 전후 비교 → 승인" }))),
     h("p", { class:"small muted", text:"다음 판에서 이 화면에 샘플 실행과 피드백이 들어와요. 지금은 실험실(/lab/gen)에서 엔진 비교를 할 수 있어요." })));
 }
+
+/* ---------- 보관함: experiment duplicates put away (kept on disk, restorable) ---------- */
+const ARCHIVE_BEFORE = Date.parse("2026-10-20T00:00:00+09:00");
+/* One-time tidy (2026-10-24, 사용자 요청 "테스트용 몇천 개 치워"): for each PDF, materials made before 10/20 that were never
+   practised are experiment copies. Practised ones stay; when none was practised, the newest stays so the PDF keeps one set.
+   Runs in the learner's browser because practice records live here. */
+function experimentCopies(){
+  const bySource = new Map();
+  for (const d of realDecks()){ const k = planKey(d); if (!bySource.has(k)) bySource.set(k, []); bySource.get(k).push(d); }
+  const out = [];
+  for (const list of bySource.values()){
+    const old = list.filter(d => (d.madeAt || 0) < ARCHIVE_BEFORE && !/^족보/.test(String(d.sourceName || d.title || "")));
+    if (!old.length) continue;
+    const used = old.filter(d => (d.events || []).length);
+    const keep = new Set(used.map(d => d.id));
+    if (!used.length && old.length === list.length){
+      const newest = old.slice().sort((a, b) => (b.madeAt || 0) - (a.madeAt || 0) || String(b.title).localeCompare(String(a.title)))[0];
+      keep.add(newest.id);
+    }
+    for (const d of old) if (!keep.has(d.id)) out.push(d);
+  }
+  return out;
+}
+function tidyDone(){ try{ return !!localStorage.getItem(Store.key + ":tidyV1"); }catch(e){ return true; } }
+function markTidy(){ try{ localStorage.setItem(Store.key + ":tidyV1", stamp()); }catch(e){} }
+async function tidyExperiments(auto){
+  if (!env.archive) return;
+  const list = experimentCopies();
+  if (!list.length){ if (!auto) toast("치울 실험용 문제 세트가 없어요."); markTidy(); return; }
+  try{
+    await env.archive.put(list.map(d => ({ id:d.id, title:displayTitle(d), reason:"실험용 중복(10/20 이전, 풀지 않음)" })));
+    for (const d of list) delete S.decks[d.id];
+    markTidy();
+    const n = list.reduce((sum, d) => sum + d.items.length, 0);
+    toast(`실험용 문제 세트 ${list.length}개(문제 ${n}개)를 보관함으로 옮겼어요.`);
+    S.archive.entries = null; render();
+  }catch(e){ toast("보관함에 옮기지 못했어요: " + (e && e.message || e)); }
+}
+async function loadArchive(){
+  if (!env.archive) return;
+  try{ S.archive.entries = await env.archive.list(); }catch(e){ S.archive.entries = []; S.archive.err = String(e && e.message || e); }
+  render();
+}
+async function restoreArchived(ids){
+  try{ await env.archive.restore(ids); toast(`${ids.length}개를 꺼냈어요.`); S.archive.entries = null; await reloadDecks(); render(); }
+  catch(e){ toast("꺼내지 못했어요: " + (e && e.message || e)); }
+}
+function renderArchive(){
+  const wrap = h("div", { class:"stack" });
+  if (!env.archive){ wrap.append(h("div", { class:"panel small muted", text:"보관함은 로컬 실험 모드에서 쓸 수 있어요." })); return wrap; }
+  if (S.archive.entries === null){ loadArchive(); wrap.append(h("p", { class:"small muted", text:"보관함을 읽는 중…" })); return wrap; }
+  const entries = S.archive.entries.slice().sort((a, b) => String(a.title).localeCompare(String(b.title), "ko", { numeric:true }));
+  wrap.append(h("section", { class:"panel" },
+    h("div", { class:"row", style:"justify-content:space-between" },
+      h("div", null, h("p", { class:"eyebrow", text:"보관함" }), h("h2", { text:`치워 둔 문제 세트 ${entries.length}개` })),
+      h("div", { class:"row" },
+        entries.length ? h("button", { class:"btn small ghost", onclick: () => restoreArchived(entries.map(e => e.id)) }, "모두 꺼내기") : null,
+        h("button", { class:"btn small", onclick: () => tidyExperiments(false) }, "실험용 중복 다시 치우기"))),
+    h("p", { class:"small muted", text:"지워지지 않고 데이터 폴더에 그대로 있어요. 꺼내면 풀이 기록도 그대로 돌아와요." }),
+    entries.length ? h("ul", { class:"mat-mini" }, entries.map(e => h("li", { class:"row", style:"justify-content:space-between;gap:8px" },
+      h("span", null, h("span", { text:e.title }), h("span", { class:"small muted", text:` · ${e.reason}` })),
+      h("button", { class:"btn small ghost", onclick: () => restoreArchived([e.id]) }, "꺼내기")))) : h("p", { class:"muted", text:"비어 있어요." })));
+  return wrap;
+}
 function render(){
   const app = document.getElementById("app");
   app.replaceChildren();
@@ -779,6 +851,7 @@ function render(){
   if (S.view === "home") app.append(renderRecallerHome());
   else if (S.view === "knowledge") app.append(renderKnowledge());
   else if (S.view === "bench") app.append(renderBench());
+  else if (S.view === "archive") app.append(renderArchive());
   else if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
   else if (S.view === "create") app.append(renderBuilder());
   else if (S.view === "read") {
@@ -4058,10 +4131,10 @@ loadAccount();
 }
 ensureKatex().then(ok => { if (ok && !disposed) render(); });
 if (env.rules) env.rules().then((r) => { if (disposed || !r) return; S.rules = r.rules || null; S.rulesWarnings = r.warnings || []; if (!S.session) render(); }, () => {});
-reloadDecks().then(() => { if (!disposed) for (const d of realDecks()) loadNotes(d); });
+const firstLoad = reloadDecks().then(() => { if (!disposed) for (const d of realDecks()) loadNotes(d); });
 loadPatchList();
 // Bring in records saved on another computer, then send this browser's records back.
-Store.pull().then((changed) => {
+const pulled = Store.pull().then((changed) => {
   if (disposed) return;
   if (changed){
     S.plan = Store.plan();
@@ -4072,6 +4145,10 @@ Store.pull().then((changed) => {
   }
   Store.schedulePush();
 });
+// The one-time tidy needs both this browser's and the other computer's records, so it waits for the two.
+// Only a browser that has been studied in decides by itself (a fresh browser has no records and would put everything away).
+const hasRecords = () => Object.entries(Store.all()).some(([k, v]) => k !== Store.PLAN && v && Array.isArray(v.events) && v.events.length);
+Promise.all([firstLoad, pulled]).then(() => { if (!disposed && Store.mode === "local" && !tidyDone() && hasRecords()) tidyExperiments(true); }, () => {});
 
 return () => {
   disposed = true;

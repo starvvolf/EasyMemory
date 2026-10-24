@@ -41,6 +41,12 @@ export type PlannerDeck = StudyDeck & { events?: Array<{ t: number; item: string
 type PlannerNotes = Record<string, Array<{ page: number; quote: string; askedAt: string; kind?: string }>>;
 
 export type DejipgiEnv = {
+  /** 보관함: materials put away from the study screen (kept on disk, restorable). */
+  archive?: {
+    list(): Promise<Array<{ id: string; title: string; at: string; reason: string }>>;
+    put(items: Array<{ id: string; title: string; reason: string }>): Promise<void>;
+    restore(ids: string[]): Promise<void>;
+  };
   /** 오늘 할 것, 물어본 목표, 학습 메모 (src/lib/study/plan.ts). */
   planner?: {
     today(input: { decks: PlannerDeck[]; settings: unknown; notes: PlannerNotes; rules?: unknown; now: number }): TodayPlan;

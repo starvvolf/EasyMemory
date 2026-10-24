@@ -922,3 +922,4 @@
 .dejipgi .kp-spans li,.dejipgi .mat-mini li{padding:6px 0;border-top:1px solid var(--line)}
 @media (max-width:760px){.dejipgi .kp-detail{position:static}}
 .dejipgi .kp-name{font-size:22px;font-weight:700;margin:6px 0 4px}
+.dejipgi .tex-inline{font-family:var(--read-font);font-style:italic}

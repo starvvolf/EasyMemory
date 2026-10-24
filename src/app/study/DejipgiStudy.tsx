@@ -117,10 +117,13 @@ export default function DejipgiStudy() {
       const where = gen.phase === "outline" ? "목차 나누는 중" : `자료 파악·학습 설계 중${gen.sections.length ? ` · 목차 ${gen.sections.length}개` : ""}`;
       return { ...shown, status: gen.status === "queued" ? "waiting" : "running", message: `${where}${label ? ` · ${label}` : ""}${calls}` };
     };
-    const loadGenDecks = async () => {
+    // 보관함: materials put away (experiment duplicates) are not loaded at all; they stay on disk and can be restored.
+    const archivedIds = async () => session.mode !== "local-experiment" ? new Set<string>()
+      : new Set((await readJson<{ entries: Array<{ id: string }> }>(await fetchExperiment("/api/study-archive"), "보관함을 읽지 못했어요.").catch(() => ({ entries: [] }))).entries.map((entry) => entry.id));
+    const loadGenDecks = async (archived: Set<string>) => {
       const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number; pastExam?: boolean; createdAt?: string }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
       // Finished runs, and runs still being made whose first sections are authored.
-      return Promise.all(runs.filter((run) => run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0)).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; points?: KnowledgeLayer }>(
+      return Promise.all(runs.filter((run) => !archived.has(run.id) && (run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0))).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; points?: KnowledgeLayer }>(
         await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").then((deck) => ({ ...deck, pastExam: run.pastExam === true, madeAt: run.createdAt })).catch(() => null)));
     };
     const loadQuality = async () => readJson<{ patches: PatchMap; counts: Record<string, number> }>(await fetchExperiment("/api/study-quality"), "고친 문제 목록을 읽지 못했어요.");
@@ -352,10 +355,12 @@ export default function DejipgiStudy() {
         // New-engine materials first (newest first), then documents from the old request flow.
         // Fixes made while studying (빠른 고리) are laid over each material; patchSig makes the screen reload a patched deck.
         const patches = session.mode === "local-experiment" ? await loadPatches().catch(() => ({} as PatchMap)) : {};
-        const [fresh, { artifacts }] = await Promise.all([
-          loadGenDecks().catch(() => []),
+        const archived = await archivedIds();
+        const [fresh, { artifacts: allArtifacts }] = await Promise.all([
+          loadGenDecks(archived).catch(() => []),
           readJson<{ artifacts: StudyArtifactMeta[] }>(await fetchExperiment("/api/personalization-lab"), "Recaller 출제 문서 목록을 불러오지 못했어요."),
         ]);
+        const artifacts = allArtifacts.filter((meta) => !archived.has(meta.id));
         const sources: Array<{ meta: StudyArtifactMeta; document?: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; points?: KnowledgeLayer; pastExam?: boolean; madeAt?: string }> = [
           ...fresh.flatMap((deck) => deck ? [deck] : []), ...artifacts.map((meta) => ({ meta }))];
         const loaded = await Promise.allSettled(sources.map(async ({ meta, document: given, outline, knowledge, points, pastExam, madeAt }, order) => {
@@ -376,6 +381,15 @@ export default function DejipgiStudy() {
           throw new Error("Recaller 출제 문서를 불러오지 못했어요. 로컬 서버와 로그인 상태를 확인해 주세요.");
         }
         return decks;
+      },
+      archive: {
+        async list() { return (await readJson<{ entries: Array<{ id: string; title: string; at: string; reason: string }> }>(await fetchExperiment("/api/study-archive"), "보관함을 읽지 못했어요.")).entries; },
+        async put(items: Array<{ id: string; title: string; reason: string }>) {
+          await readJson(await fetchExperiment("/api/study-archive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "archive", items }) }), "보관함에 넣지 못했어요.");
+        },
+        async restore(ids: string[]) {
+          await readJson(await fetchExperiment("/api/study-archive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "restore", ids }) }), "보관함에서 꺼내지 못했어요.");
+        },
       },
       async loadPdf(sourceCatalogId: string) {
         const response = await fetchExperiment(`/api/mcp-runs/sources/${encodeURIComponent(sourceCatalogId)}/pdf`);

@@ -47,6 +47,8 @@ export function isLocalExperimentApiPath(pathname: string): boolean {
     pathname.startsWith("/api/personalization-lab/") ||
     pathname === "/api/study-executor" ||
     pathname === "/api/study-notes" ||
+    // Study data routes that check the local principal themselves (records mirror, quality loop, rules, plan, memory, 보관함).
+    ["/api/study-archive", "/api/study-quality", "/api/study-records", "/api/study-rules", "/api/study-plan", "/api/study-memory"].includes(pathname) ||
     pathname === "/api/tablet" ||
     pathname === "/api/auth/chatgpt/start" ||
     pathname === "/api/auth/chatgpt/callback" ||
