@@ -2,8 +2,9 @@
 
 // 작업대 · 흐름 (2026-10-24): boxes on a canvas. An input box holds text (and optionally 1–3 pages of a material);
 // a model box has a name, model, effort and its own instruction, and takes whatever arrows bring in. Running goes
-// along the arrows (one direction only for now; an arrow that would close a loop is refused), boxes whose inputs are
-// ready run at the same time. Flows and the last results are kept in this browser.
+// along the arrows, boxes whose inputs are ready run at the same time. An arrow drawn back to an earlier box is a loop
+// arrow ("다시"): the boxes in between run again until the box it leaves says stop (see flow-run.ts). Flows and the last
+// results are kept in this browser.
 import {
   addEdge,
   Background,
@@ -20,7 +21,8 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { closesLoop, DEFAULT_STOP, runFlow, type BoxRun, type FlowEdge, type StopRule } from "./flow-run";
 
 export type FlowApi = {
   compose: (input: { system: string; user: string; model?: string; effort?: string; json?: boolean; schema?: Record<string, unknown> }) => Promise<string>;
@@ -30,10 +32,11 @@ export type FlowApi = {
 
 type InputData = { kind: "input"; name: string; text: string; deckId?: string; from?: number; to?: number };
 /** format: "text" plain reply; "json" a JSON reply, held to `schema` (JSON Schema text) when one is given. */
-type ModelData = { kind: "model"; name: string; model: string; effort: string; system: string; format?: "text" | "json"; schema?: string };
+/** stop: used when a loop arrow leaves this box (how many times it may run, and what output ends the loop). */
+type ModelData = { kind: "model"; name: string; model: string; effort: string; system: string; format?: "text" | "json"; schema?: string; stop?: StopRule };
 type BoxData = InputData | ModelData;
 type Box = Node<BoxData>;
-type RunState = { status: "idle" | "running" | "done" | "error"; output?: string; input?: string; error?: string; ms?: number };
+type RunState = BoxRun;
 type Saved = { name: string; nodes: Box[]; edges: Edge[] };
 
 const MODELS = ["gpt-6-sol", "gpt-6-luna", "gpt-6-astra", "gpt-6.1-sol", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra"];
@@ -43,6 +46,16 @@ const KEY_DRAFT = "recaller:flow:draft:v1";
 const KEY_SAVED = "recaller:flow:saved:v1";
 const uid = () => "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const edgeStyle = { markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 }, style: { strokeWidth: 1.6 } };
+// Loop arrows go back from right to left, so they take a stepped path around the boxes and are dashed.
+const loopStyle = {
+  type: "smoothstep", animated: true, label: "↺ 다시", data: { loop: true }, className: "fb-loop-edge",
+  markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 }, style: { strokeWidth: 1.6, strokeDasharray: "6 4" },
+  pathOptions: { offset: 36, borderRadius: 14 },
+};
+const isLoop = (e: Edge) => !!(e.data as { loop?: boolean } | undefined)?.loop;
+const asFlowEdges = (es: Edge[]): FlowEdge[] => es.map((e) => ({ id: e.id, source: e.source, target: e.target, loop: isLoop(e) }));
+const stopOf = (d: ModelData): StopRule => ({ ...DEFAULT_STOP, ...d.stop });
+const stopLabel = (r: StopRule) => r.when === "json" ? `${r.field || "pass"} = ${r.value ?? "true"}이면 멈춤` : r.when === "text" ? `'${r.word ?? ""}' 나오면 멈춤` : "횟수만큼";
 
 const REFINE = `너는 '프롬프트 다듬기' 담당이다. 학습자가 AI에게 보낼 지시를 받아, 의도는 바꾸지 않고 AI가 한 번에 잘 수행하도록 고쳐 쓴다.
 - 학습자가 말한 것(대상, 개수, 형식, 난이도, 말투)은 빠짐없이 지킨다. 말하지 않은 조건을 새로 정하지 않는다.
@@ -91,20 +104,63 @@ function preset(): Saved {
   };
 }
 
+const WRITE = `[역할] 받은 지시대로 결과물을 쓴다.
+[원칙] 자료가 붙어 있으면 자료에 근거하고, 자료에 없는 내용은 지어내지 않는다.
+[검토 · 앞 회차]가 있으면 거기 적힌 지적을 모두 고친다. [작성 · 앞 회차 출력]이 있으면 그것을 고쳐 쓰고, 지적받지 않은 부분은 그대로 둔다.
+[출력] 결과물 본문만. 수식은 $…$로 쓴다.`;
+const CHECK = `[역할] 결과물이 지시와 자료를 지켰는지 검토한다.
+[원칙] 틀린 내용, 자료에 없는 내용, 빠진 조건, 답이 둘 이상 되는 보기처럼 실제로 고쳐야 하는 것만 짚는다. 말투나 취향은 짚지 않는다.
+고칠 것이 없으면 pass를 true로, 있으면 false로 하고 problems에 하나씩 적는다.
+[출력] JSON.`;
+const CHECK_SCHEMA = `{
+  "type": "object",
+  "properties": {
+    "pass": { "type": "boolean" },
+    "problems": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["pass", "problems"],
+  "additionalProperties": false
+}`;
+
+function presetLoop(): Saved {
+  const n = (id: string, x: number, y: number, data: BoxData): Box => ({ id, type: typeOf(data), position: { x, y }, data });
+  return {
+    name: "쓰고 검토해서 고치기 (반복)",
+    nodes: [
+      n("in1", 0, 20, { kind: "input", name: "지시", text: "자료 내용으로 개념을 묻는 4지선다 문제 1개 (정답, 해설 포함)" }),
+      n("in2", 0, 240, { kind: "input", name: "자료", text: "", from: 1, to: 1 }),
+      n("m1", 320, 40, { kind: "model", name: "작성", model: "gpt-6-sol", effort: "low", system: WRITE }),
+      n("m2", 640, 140, { kind: "model", name: "검토", model: "gpt-6-sol", effort: "low", system: CHECK, format: "json", schema: CHECK_SCHEMA,
+        stop: { max: 3, when: "json", field: "pass", value: "true" } }),
+    ],
+    edges: [
+      { id: "e1", source: "in1", target: "m1", ...edgeStyle },
+      { id: "e2", source: "in2", target: "m1", ...edgeStyle },
+      { id: "e3", source: "m1", target: "m2", ...edgeStyle },
+      { id: "e4", source: "in1", target: "m2", ...edgeStyle },
+      { id: "e5", source: "in2", target: "m2", ...edgeStyle },
+      { id: "e6", source: "m2", target: "m1", ...loopStyle },
+    ],
+  };
+}
+
 function load<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) as T : fallback; } catch { return fallback; }
 }
 function save(key: string, value: unknown) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* full or blocked */ } }
 
-const RunCtx = createContext<Record<string, RunState>>({});
+const RunCtx = createContext<{ runs: Record<string, RunState>; loopFrom: Set<string> }>({ runs: {}, loopFrom: new Set() });
 
 function BoxView({ id, data, selected }: NodeProps<Box>) {
-  const run = useContext(RunCtx)[id];
+  const { runs, loopFrom } = useContext(RunCtx);
+  const run = runs[id];
   const status = run?.status ?? "idle";
   const meta = data.kind === "model"
     ? `${data.model} · ${effortLabel(data.effort)}${data.format === "json" ? " · JSON" : ""}`
     : [data.text.trim() ? "글" : "", data.deckId ? `자료 p.${data.from ?? 1}${(data.to ?? 1) > (data.from ?? 1) ? "–" + data.to : ""}` : ""].filter(Boolean).join(" + ") || "비어 있음";
   const preview = run?.status === "error" ? run.error : data.kind === "input" && status === "idle" ? data.text : run?.output;
+  const n = run?.rounds?.length ?? 0;
+  const loopRule = data.kind === "model" && loopFrom.has(id) ? stopOf(data) : null;
   return (
     <div className={`fb-box fb-${data.kind}${selected ? " sel" : ""}`} data-status={status}>
       {data.kind === "model" ? <Handle type="target" position={Position.Left} /> : null}
@@ -113,7 +169,12 @@ function BoxView({ id, data, selected }: NodeProps<Box>) {
         <strong>{data.name || "이름 없음"}</strong>
         <i className="fb-dot" title={status} />
       </div>
-      <div className="fb-meta">{meta}{run?.ms ? ` · ${(run.ms / 1000).toFixed(1)}초` : ""}</div>
+      <div className="fb-meta">{meta}{run?.ms ? ` · ${(run.ms / 1000).toFixed(1)}초` : ""}{n > 1 ? ` · ${n}회` : ""}</div>
+      {loopRule ? (
+        <div className="fb-loop" data-ended={run?.ended ?? ""}>
+          ↺ {run?.ended === "pass" ? `통과 (${n}회째)` : run?.ended === "max" ? `${n}회 다 돌고 멈춤` : `최대 ${loopRule.max}회 · ${stopLabel(loopRule)}`}
+        </div>
+      ) : null}
       {preview ? <div className="fb-preview">{preview}</div> : null}
       <Handle type="source" position={Position.Right} />
     </div>
@@ -123,15 +184,6 @@ function BoxView({ id, data, selected }: NodeProps<Box>) {
 const nodeTypes = { inbox: BoxView, model: BoxView };
 const typeOf = (d: BoxData) => d.kind === "input" ? "inbox" : "model";
 const fixTypes = (ns: Box[]) => ns.map((n) => ({ ...n, type: typeOf(n.data) }));
-
-function reaches(edges: Edge[], from: string, to: string) {
-  const seen = new Set<string>(); const stack = [from];
-  while (stack.length) {
-    const id = stack.pop()!; if (id === to) return true; if (seen.has(id)) continue; seen.add(id);
-    for (const e of edges) if (e.source === id) stack.push(e.target);
-  }
-  return false;
-}
 
 function Flow({ api }: { api: FlowApi }) {
   const draft = useMemo(() => load<(Saved & { runs?: Record<string, RunState> }) | null>(KEY_DRAFT, null), []);
@@ -153,10 +205,19 @@ function Flow({ api }: { api: FlowApi }) {
   const patch = (id: string, p: Partial<InputData> | Partial<ModelData>) =>
     setNodes((ns) => ns.map((n) => n.id === id ? { ...n, data: { ...n.data, ...p } as BoxData } : n));
 
+  // An arrow back to an earlier box becomes a loop arrow. A box can't loop onto itself (nothing to check it with).
   const isValidConnection = useCallback((c: Connection | Edge) =>
-    c.source !== c.target && !reaches(edges, c.target, c.source) && nodes.find((n) => n.id === c.target)?.data.kind === "model"
+    c.source !== c.target && nodes.find((n) => n.id === c.target)?.data.kind === "model"
     && !edges.some((e) => e.source === c.source && e.target === c.target), [edges, nodes]);
-  const onConnect = useCallback((c: Connection) => setEdges((es) => addEdge({ ...c, ...edgeStyle }, es)), [setEdges]);
+  const onConnect = useCallback((c: Connection) => {
+    const loop = closesLoop(asFlowEdges(edges), c.source, c.target);
+    setEdges((es) => addEdge({ ...c, ...(loop ? loopStyle : edgeStyle) }, es));
+    if (loop) setMsg("↺ 되돌아가는 화살표예요. 화살표가 나가는 박스에서 멈춤 조건을 정해요");
+  }, [edges, setEdges]);
+  const loopFrom = useMemo(() => new Set(edges.filter(isLoop).map((e) => e.source)), [edges]);
+  const ctx = useMemo(() => ({ runs, loopFrom }), [runs, loopFrom]);
+  const stopRef = useRef(false);
+  const [round, setRound] = useState(0);
 
   const add = (kind: "input" | "model") => {
     const id = uid();
@@ -170,18 +231,17 @@ function Flow({ api }: { api: FlowApi }) {
 
   const runAll = async () => {
     if (busy) return;
-    setBusy(true);
-    const fresh: Record<string, RunState> = Object.fromEntries(nodes.map((n) => [n.id, { status: "idle" as const }]));
-    setRuns(fresh);
-    const set = (id: string, s: RunState) => setRuns((r) => ({ ...r, [id]: s }));
-    const memo = new Map<string, Promise<string>>();
+    setBusy(true); stopRef.current = false;
     const byId = new Map(nodes.map((n) => [n.id, n]));
-    const get = (id: string): Promise<string> => {
-      if (memo.has(id)) return memo.get(id)!;
-      const p = (async () => {
-        const n = byId.get(id)!; const d = n.data; const t0 = Date.now();
-        set(id, { status: "running" });
-        try {
+    try {
+      await runFlow({
+        boxes: nodes.map((n) => ({ id: n.id, name: n.data.name, order: n.position.y, stop: n.data.kind === "model" ? stopOf(n.data) : undefined })),
+        edges: asFlowEdges(edges),
+        stopped: () => stopRef.current,
+        onRound: setRound,
+        onRun: (id, r) => setRuns((all) => ({ ...all, [id]: r })),
+        exec: async (box, ins) => {
+          const d = byId.get(box.id)!.data;
           if (d.kind === "input") {
             let out = d.text.trim();
             if (d.deckId) {
@@ -189,14 +249,10 @@ function Flow({ api }: { api: FlowApi }) {
               const m = await api.pageText(d.deckId, from, to);
               out = `${out}${out ? "\n\n" : ""}[자료: ${m.title} p.${from}${to > from ? "–" + to : ""}]\n${m.text}`;
             }
-            set(id, { status: "done", output: out, ms: Date.now() - t0 });
-            return out;
+            return { output: out };
           }
-          const ins = edges.filter((e) => e.target === id).map((e) => byId.get(e.source)).filter((x): x is Box => !!x)
-            .sort((a, b) => a.position.y - b.position.y);
-          const texts = await Promise.all(ins.map((s) => get(s.id)));
           // Empty inputs (an input box left blank) drop out; one input goes as is, several get their box names.
-          const parts = ins.map((s, i) => ({ name: s.data.name, text: texts[i].trim() })).filter((x) => x.text);
+          const parts = ins.map((x) => ({ name: x.name, text: x.text.trim() })).filter((x) => x.text);
           const user = parts.length === 1 ? parts[0].text : parts.map((x) => `[${x.name}]\n${x.text}`).join("\n\n");
           let schema: Record<string, unknown> | undefined;
           if (d.format === "json" && d.schema?.trim()) {
@@ -206,19 +262,12 @@ function Flow({ api }: { api: FlowApi }) {
             ...(d.format === "json" ? { json: true, ...(schema ? { schema } : {}) } : {}) });
           let out = raw;
           if (d.format === "json") { try { out = JSON.stringify(JSON.parse(raw), null, 2); } catch { /* keep as sent */ } }
-          set(id, { status: "done", output: out, input: user, ms: Date.now() - t0 });
-          return out;
-        } catch (e) {
-          const error = e instanceof Error ? e.message : String(e);
-          set(id, { status: "error", error });
-          throw e;
-        }
-      })();
-      memo.set(id, p);
-      return p;
-    };
-    await Promise.allSettled(nodes.map((n) => get(n.id)));
-    setBusy(false);
+          return { output: out, input: user };
+        },
+      });
+    } finally {
+      setBusy(false); setRound(0);
+    }
   };
 
   const keep = () => {
@@ -227,7 +276,7 @@ function Flow({ api }: { api: FlowApi }) {
     setSaved(next); save(KEY_SAVED, next); setMsg(`'${nm}' 저장했어요`);
   };
   const open = (value: string) => {
-    const f = value === "__preset" ? preset() : value === "__empty" ? { name: "새 흐름", nodes: [], edges: [] } : saved.find((s) => s.name === value);
+    const f = value === "__preset" ? preset() : value === "__loop" ? presetLoop() : value === "__empty" ? { name: "새 흐름", nodes: [], edges: [] } : saved.find((s) => s.name === value);
     if (!f) return;
     setNodes(fixTypes(f.nodes)); setEdges(f.edges); setName(f.name); setRuns({}); setSelId(null);
   };
@@ -235,6 +284,8 @@ function Flow({ api }: { api: FlowApi }) {
   const removeSel = () => { if (!sel) return; setNodes((ns) => ns.filter((n) => n.id !== sel.id)); setEdges((es) => es.filter((e) => e.source !== sel.id && e.target !== sel.id)); setSelId(null); };
 
   const run = sel ? runs[sel.id] : undefined;
+  const [pick, setPick] = useState<{ id: string; i: number } | null>(null);
+  const [cmp, setCmp] = useState(false);
   return (
     <div className="fb">
       <div className="fb-bar">
@@ -243,6 +294,7 @@ function Flow({ api }: { api: FlowApi }) {
         <select className="fb-open" value="" onChange={(e) => open(e.target.value)} aria-label="불러오기">
           <option value="">불러오기…</option>
           <option value="__preset">예시: 다듬고 실행 (원본 비교)</option>
+          <option value="__loop">예시: 쓰고 검토해서 고치기 (반복)</option>
           <option value="__empty">빈 흐름</option>
           {saved.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
         </select>
@@ -251,11 +303,15 @@ function Flow({ api }: { api: FlowApi }) {
         <span style={{ flex: 1 }} />
         <button className="btn" onClick={() => add("input")}>+ 입력 박스</button>
         <button className="btn" onClick={() => add("model")}>+ 모델 박스</button>
-        <button className="btn primary" disabled={busy || !nodes.length} onClick={runAll}>{busy ? "실행 중…" : "▶ 실행"}</button>
+        {busy ? (
+          <button className="btn" onClick={() => { stopRef.current = true; setMsg("지금 도는 박스까지만 하고 멈춰요"); }}>
+            ■ 멈추기{round > 1 ? ` (${round}회차)` : ""}
+          </button>
+        ) : <button className="btn primary" disabled={!nodes.length} onClick={runAll}>▶ 실행</button>}
       </div>
       <div className="fb-main">
         <div className="fb-canvas">
-          <RunCtx.Provider value={runs}>
+          <RunCtx.Provider value={ctx}>
             <ReactFlow
               nodes={nodes} edges={edges} nodeTypes={nodeTypes}
               onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} isValidConnection={isValidConnection}
@@ -273,7 +329,9 @@ function Flow({ api }: { api: FlowApi }) {
               <strong>박스를 누르면 여기서 고쳐요</strong>
               <p>박스 오른쪽 점을 끌어 다른 모델 박스에 놓으면 화살표가 생겨요. 앞 박스의 출력이 뒤 박스의 입력으로 들어가요.</p>
               <p>화살표가 여러 개 들어오면 박스 이름표를 붙여 위에서부터 합쳐요.</p>
-              <p>화살표나 박스를 고르고 Delete 키로 지워요. 되돌아가는 화살표(루프)는 아직 막혀 있어요.</p>
+              <p>뒤 박스에서 앞 박스로 되돌아가는 화살표를 그으면 점선 <b>↺ 다시</b> 화살표가 돼요. 그 사이 박스들이 다시 돌고, 화살표가 나가는 박스(보통 검토 박스)의 멈춤 조건이 맞거나 최대 횟수가 되면 멈춰요.</p>
+              <p>다시 도는 박스는 검토 결과와 자기 앞 회차 출력을 함께 받아요. 회차별 출력은 박스를 눌러 비교해요.</p>
+              <p>화살표나 박스를 고르고 Delete 키로 지워요.</p>
             </div>
           ) : (
             <div className="fb-form">
@@ -301,6 +359,34 @@ function Flow({ api }: { api: FlowApi }) {
                     <button className="btn" onClick={() => { const { kind: _k, name: _n, ...rest } = sel.data as ModelData; void _k; void _n; save(KEY_DEFAULT, rest); setMsg("새 모델 박스 기본값으로 저장했어요"); }}>이 박스를 기본값으로</button>
                     <button className="btn fb-ghost" onClick={() => { try { localStorage.removeItem(KEY_DEFAULT); } catch { /* blocked */ } setMsg("기본값을 처음대로 돌렸어요"); }}>기본값 처음대로</button>
                   </div>
+                  {loopFrom.has(sel.id) ? (() => {
+                    const r = stopOf(sel.data); const setStop = (p: Partial<StopRule>) => patch(sel.id, { stop: { ...r, ...p } });
+                    return (
+                      <fieldset className="fb-stop">
+                        <legend>↺ 반복 · 이 박스에서 되돌아가요</legend>
+                        <div className="fb-row">
+                          <label>최대 횟수<input type="number" min={1} max={10} value={r.max} onChange={(e) => setStop({ max: Math.min(10, Math.max(1, Number(e.target.value) || 1)) })} /></label>
+                          <label>멈춤 조건<select value={r.when} onChange={(e) => setStop({ when: e.target.value as StopRule["when"] })}>
+                            <option value="json">JSON 필드가 이 값이면</option>
+                            <option value="text">출력에 이 말이 있으면</option>
+                            <option value="none">횟수만큼 다 돌기</option>
+                          </select></label>
+                        </div>
+                        {r.when === "json" ? (
+                          <div className="fb-row">
+                            <label>필드<input value={r.field ?? ""} placeholder="pass" onChange={(e) => setStop({ field: e.target.value })} /></label>
+                            <label>값<input value={r.value ?? ""} placeholder="true" onChange={(e) => setStop({ value: e.target.value })} /></label>
+                          </div>
+                        ) : r.when === "text" ? (
+                          <label>이 말<input value={r.word ?? ""} placeholder="통과" onChange={(e) => setStop({ word: e.target.value })} /></label>
+                        ) : null}
+                        <span className="fb-note">
+                          {r.when === "json" && sel.data.format !== "json" ? "출력 형식을 JSON으로 해야 이 조건을 읽을 수 있어요. " : ""}
+                          최대 횟수는 이 박스가 도는 횟수예요(첫 회 포함). 한 회차마다 사이 박스들이 한 번씩 더 호출돼요.
+                        </span>
+                      </fieldset>
+                    );
+                  })() : null}
                 </>
               ) : (
                 <>
@@ -319,14 +405,29 @@ function Flow({ api }: { api: FlowApi }) {
                 </>
               )}
               {run?.status === "error" ? <p className="fb-err">{run.error}</p> : null}
-              {run?.output ? (
-                <div className="fb-out">
-                  <div className="fb-out-head"><strong>출력</strong>
-                    <button className="btn fb-ghost" onClick={() => { void navigator.clipboard?.writeText(run.output ?? ""); setMsg("출력을 복사했어요"); }}>복사</button></div>
-                  <pre>{run.output}</pre>
-                </div>
-              ) : null}
-              {run?.input ? <details className="fb-in"><summary>이 박스에 들어간 입력</summary><pre>{run.input}</pre></details> : null}
+              {run?.output ? (() => {
+                const rs = run.rounds ?? [];
+                const i = pick?.id === sel.id && pick.i < rs.length ? pick.i : rs.length - 1;
+                const cur = rs[i] ?? { round: 1, output: run.output, input: run.input, ms: run.ms ?? 0 };
+                const prev = cmp && i > 0 ? rs[i - 1] : null;
+                return (
+                  <>
+                    <div className="fb-out">
+                      <div className="fb-out-head"><strong>출력</strong>
+                        <button className="btn fb-ghost" onClick={() => { void navigator.clipboard?.writeText(cur.output); setMsg("출력을 복사했어요"); }}>복사</button></div>
+                      {rs.length > 1 ? (
+                        <div className="fb-rounds">
+                          {rs.map((x, k) => <button key={k} className={k === i ? "on" : ""} onClick={() => setPick({ id: sel.id, i: k })}>{k + 1}회</button>)}
+                          <label className="fb-cmp"><input type="checkbox" checked={cmp} onChange={(e) => setCmp(e.target.checked)} />앞 회차와 비교</label>
+                        </div>
+                      ) : null}
+                      {prev ? <><div className="fb-note">{i}회</div><pre className="fb-prev">{prev.output}</pre><div className="fb-note">{i + 1}회</div></> : null}
+                      <pre>{cur.output}</pre>
+                    </div>
+                    {cur.input ? <details className="fb-in"><summary>{rs.length > 1 ? `${i + 1}회에 ` : "이 박스에 "}들어간 입력</summary><pre>{cur.input}</pre></details> : null}
+                  </>
+                );
+              })() : null}
               <button className="btn fb-ghost fb-del" onClick={removeSel}>이 박스 지우기</button>
             </div>
           )}
