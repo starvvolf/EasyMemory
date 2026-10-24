@@ -952,3 +952,20 @@
 body:has(.dejipgi){background:#F2F3F6}
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) body:has(.dejipgi){background:#0F1115} }
 :root[data-theme="dark"] body:has(.dejipgi){background:#0F1115}
+/* 작업대 · 프롬프트 체크 */
+.dejipgi .bench-input{width:100%;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);padding:12px 14px;font-size:15px;line-height:1.6;resize:vertical}
+.dejipgi .bench-input.mono{font-family:var(--mono);font-size:12.5px}
+.dejipgi .bench-opts{gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.dejipgi .bench-select{max-width:320px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:7px 10px;font-size:13.5px}
+.dejipgi .bench-page{width:58px;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:5px 6px;font-size:13.5px}
+.dejipgi .bench-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
+.dejipgi .bench-card{display:flex;flex-direction:column;gap:10px;min-width:0}
+.dejipgi .bench-pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--sans);font-size:14px;line-height:1.65;background:var(--surface-2);border-radius:10px;padding:12px 14px;max-height:420px;overflow:auto}
+.dejipgi .bench-changes{margin:0;padding-left:18px;font-size:13.5px;color:var(--accent)}
+.dejipgi .bench-text{font-size:14.5px;line-height:1.7;max-height:640px;overflow:auto}
+.dejipgi .bench-hist{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.dejipgi .bench-hrow{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;text-align:left;border:0;background:transparent;border-radius:10px;padding:8px 10px}
+.dejipgi .bench-hrow:hover,.dejipgi .bench-hrow.on{background:var(--surface-2)}
+.dejipgi .bench-hraw{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.dejipgi .bench-reuse{font-size:12.5px;color:var(--accent);font-weight:600;cursor:pointer}
+.dejipgi details.panel summary{cursor:pointer}
