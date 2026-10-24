@@ -112,6 +112,16 @@ export default function DejipgiStudy() {
         const questions = gen.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0);
         return questions ? { ...shown, status: "ready", message: "", artifactId: id } : { status: "failed", message: gen.message || "만들어진 문제가 없어요." };
       }
+      // recaller: pages read from their image, sections whose basic questions are out, deep questions ready.
+      if (gen.recaller) {
+        const r = gen.recaller;
+        const units = Object.values(r.units);
+        const ready = units.filter((unit) => unit.status === "ready").length;
+        const reading = r.read.pages.length && r.read.done.length + r.read.failed.length < r.read.pages.length ? `그림·수식 쪽 읽는 중 ${r.read.done.length}/${r.read.pages.length} · ` : "";
+        const deep = Object.values(r.deep);
+        const deepPart = ready === units.length && deep.length ? ` · 심화 ${deep.filter((d) => d.status === "ready").length}/${deep.length}` : "";
+        return { ...partial, status: ready ? "authoring" : "running", message: `${reading}정리·기본 문제 ${ready}/${units.length}구역${deepPart}${calls}` };
+      }
       if (gen.current?.step === "transcribe" && gen.images) return { ...shown, status: "running", message: `그림·수식 쪽 읽는 중 · ${gen.images.done.length}/${gen.images.pages.length}쪽${calls}` };
       if (gen.phase === "author") return { ...partial, status: "authoring", message: `문제 만드는 중 · 목차 ${done}/${gen.sections.length}${label ? ` · ${label}` : ""}${calls}` };
       const where = gen.phase === "outline" ? "목차 나누는 중" : `자료 파악·학습 설계 중${gen.sections.length ? ` · 목차 ${gen.sections.length}개` : ""}`;

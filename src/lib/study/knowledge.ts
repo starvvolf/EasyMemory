@@ -24,6 +24,17 @@ type ObjectiveLike = { id: string; statement: string; recall?: string; pages?: n
  * concept with its evidence as spans; older engines without concepts get one point per goal, so every deck has points.
  */
 export function knowledgeLayer(state: GenState): KnowledgeLayer {
+  // recaller: the knowledge cards are the points (one card, one thing to know), with what learners confuse.
+  if (state.recaller) {
+    const units = state.recaller.units;
+    const points: KnowledgePoint[] = state.sections.flatMap((section) => (units[section.id]?.cards ?? []).map((card) => ({
+      id: card.id, title: card.title, essentials: [card.summary, ...card.mistakes.slice(0, 2).map((m) => `헷갈림: ${m.wrong}`)], section: section.title,
+      pages: [...new Set(card.evidence.map((e) => e.page))].sort((a, b) => a - b), spans: card.evidence.map((e) => ({ page: e.page, kind: e.quote ? "text" : "figure", quote: e.quote })) })));
+    const byObjective: Record<string, string[]> = {};
+    for (const unit of Object.values(units)) for (const q of unit.questions ?? []) byObjective[q.objectiveId] = q.cardIds;
+    for (const slot of Object.values(state.recaller.deep)) if (slot.question) byObjective[slot.question.objectiveId] = slot.question.cardIds;
+    return { points, byObjective };
+  }
   const plan = state.astra?.plan;
   const sectionTitle = (outlineIds: string[]) => state.sections.find((section) => outlineIds.includes(section.id))?.title ?? "";
   const objectives = state.sections.flatMap((section) => ((section.design?.objectives ?? []) as ObjectiveLike[]).map((objective) => ({ objective, section: section.title })));

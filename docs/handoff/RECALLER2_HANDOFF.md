@@ -83,6 +83,8 @@
    - 저장 위치는 브라우저 localStorage: `recaller:flow:draft:v1`, `recaller:flow:saved:v1`, `recaller:flow:default-model:v1`.
    - 실제 ChatGPT로는 아직 한 번도 돌려 보지 않았다. 클라우드에서 응답을 가짜로 바꿔 끼워 화면과 전달값만 확인했다.
 
+6. **recaller 엔진** (2026-10-24, 공부 화면 새 자료의 기본): `gen/prep.ts`(전처리) → `gen/cards.ts`(지식 카드 + 검사) → `gen/recaller.ts`(구역별 기본 문제, 연결 → 심화 문제 + `gen/calc.ts` 계산 확인 + 따로 풀기). 방법은 `출제기준/정리.md·변환.md·심화.md`. 설계 문서: claude.ai "Recaller 문제 생성 파이프라인". 가짜 모델로만 돌렸고 실제 모델 시험은 아직.
+
 ## 4. 안건 (위가 먼저)
 
 1. ~~흐름: 루프~~ (2026-10-24 구현, 실제 모델로는 아직 안 돌림)

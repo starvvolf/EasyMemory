@@ -40,7 +40,26 @@ export function ruleLines(markdown: string, sections?: string[], where = "") {
   return out;
 }
 
-export async function loadGuide(step: "design" | "author", options: { purpose: Purpose; kinds?: readonly ObjectiveKind[]; dir?: string }): Promise<LoadedGuide> {
+/**
+ * recaller engine (Recaller 문제 생성 파이프라인): 정리.md for organizing, 변환.md for basic questions (the purpose's
+ * section and the sections of the card kinds present), 심화.md for deep questions. 공통.md goes with each.
+ */
+export async function loadRecallerGuide(step: "organize" | "convert" | "deep", options: { purpose: Purpose; kinds?: readonly string[]; dir?: string }): Promise<LoadedGuide> {
+  const dir = options.dir ?? DEFAULT_GUIDE_DIR;
+  if (!guideDirPattern.test(dir)) throw new Error("출제기준 폴더 이름이 올바르지 않습니다.");
+  const kinds = [...new Set(options.kinds ?? [])];
+  const file = step === "organize" ? "정리.md" : step === "convert" ? "변환.md" : "심화.md";
+  const purpose = options.purpose === "understand" ? "목적: 이해" : "목적: 암기";
+  const markdown = await read(dir, file);
+  const sections = step === "organize" ? ["원칙", ...kinds.map((k) => `종류: ${k}`)] : step === "convert" ? ["원칙", purpose, ...kinds.map((k) => `종류: ${k}`)] : ["원칙"];
+  // A kind without its own section just adds nothing; the other sections must be there.
+  const rules = sections.flatMap((name) => { try { return ruleLines(markdown, [name], `${dir}/${file}`); } catch (error) { if (name.startsWith("종류: ")) return []; throw error; } });
+  const common = ruleLines(await read(dir, "공통.md"));
+  const text = [`[공통]\n${common.join("\n")}`, `[${file.replace(/\.md$/, "")}]\n${rules.join("\n")}`].join("\n\n");
+  return { dir, files: ["공통.md", file], version: createHash("sha256").update(text).digest("hex").slice(0, 12), text };
+}
+
+export async function loadGuide(step: "design" | "author",options: { purpose: Purpose; kinds?: readonly ObjectiveKind[]; dir?: string }): Promise<LoadedGuide> {
   const dir = options.dir ?? DEFAULT_GUIDE_DIR;
   if (!guideDirPattern.test(dir)) throw new Error("출제기준 폴더 이름이 올바르지 않습니다.");
   if (options.purpose === "read") throw new Error("그냥 읽기는 출제기준을 쓰지 않습니다.");

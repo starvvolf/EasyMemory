@@ -83,7 +83,7 @@ export const authorSchema = obj({
 
 // The descriptions matter: engines that send this zod schema as the response format (astra) give the model no other
 // explanation of the fields. Without them the model put the model answer into `after` (2026-10-19 비교 실행: 11/16 보류).
-const authoredStem = z.object({
+export const authoredStem = z.object({
   kind: z.enum(stemKinds).describe("블록 종류. 배치는 코드가 위에서 아래로 쌓는다"),
   text: z.string().nullable().describe("heading·text·box의 글"),
   latex: z.string().nullable().describe("math의 LaTeX"),

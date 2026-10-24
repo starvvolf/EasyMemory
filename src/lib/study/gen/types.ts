@@ -7,12 +7,14 @@ export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", un
 
 /** Model calls, in order. classify and design run per section. */
 /** v3 (lab engine choice) adds read (whole PDF → outline + knowledge map), plan and gate; it does not use classify/design. */
-export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review"] as const;
+export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review",
+  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check"] as const;
 export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
-  read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)" };
+  read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)",
+  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토" };
 
-export const engines = ["v2", "v3", "astra", "v4", "v5", "alpha"] as const;
+export const engines = ["v2", "v3", "astra", "v4", "v5", "alpha", "recaller"] as const;
 export type Engine = (typeof engines)[number];
 /** astra and v4 (Claude's tuning of astra) share the astra pipeline, steps and state; v4 only adds rules. */
 export const astraFamily = (engine: Engine | undefined) => engine === "astra" || engine === "v4" || engine === "v5" || engine === "alpha";
@@ -156,6 +158,7 @@ export type GenState = {
   /** v3: the knowledge map (① 전체 읽기), plan warnings and the gate's verdicts per question. */
   v3?: { map?: import("./v3.ts").KnowledgeMap; warnings?: Issue[]; gate?: Array<{ objectiveId: string; attempt: number; passed: boolean; reasons: string[] }> };
   astra?: import("./astra.ts").AstraState;
+  recaller?: import("./recaller.ts").RecallerState;
   pastExam?: { cacheKey: string; card: import("./pastexam.ts").VibeCard; checks: Array<{ objectiveId: string; attempt: number; passed: boolean; reason: string }> };
 };
 
@@ -210,6 +213,13 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   "astra-author": { model: "gpt-6-sol", effort: "medium" },
   "astra-solve": { model: "gpt-6-sol", effort: "medium" },
   "astra-review": { model: "gpt-6-sol", effort: "medium" },
+  // recaller: organizing is the one step everything else stands on; basic questions are made from its cards and kept fast.
+  "rc-organize": { model: "gpt-6-sol", effort: "medium" },
+  "rc-link": { model: "gpt-6-sol", effort: "low" },
+  "rc-author": { model: "gpt-6-sol", effort: "low" },
+  "rc-deep": { model: "gpt-6-sol", effort: "medium" },
+  "rc-solve": { model: "gpt-6-sol", effort: "high" },
+  "rc-check": { model: "gpt-6-sol", effort: "low" },
 };
 
 /**

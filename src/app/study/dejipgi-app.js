@@ -3795,7 +3795,7 @@ function examField(b){
     finder,
     picked.length ? h("p", { class:"small", style:"color:var(--ask)", text:`기출 ${picked.length}개 반영 · 처음 한 번 기출을 분석하고 문제마다 베끼기 검사를 해서 조금 더 걸려요.` }) : null);
 }
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, engine:"v2", survey:{}, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, engine:"recaller", survey:{}, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
   const flat = [];
@@ -4067,7 +4067,7 @@ function renderBuilder(){
     // Engine (experimental ones next to the default). v5 asks a short survey; left empty it decides from the material (알잘딱),
     // and the memo above is a direct instruction (개입).
     b.pastExamSourceIds.length ? null : h("div", { class:"field" }, h("label", { text:"엔진 (실험)" }),
-      h("div", { class:"chat-sugs" }, [["v2", "기본"], ["v3", "v3"], ["v5", "v5 · 자료 맞춤"], ["alpha", "Alpha · 첫 출제 품질"]].map(([key, label]) => h("button", { class:"chip-btn", "aria-pressed": b.engine === key ? "true" : "false", disabled:b.busy,
+      h("div", { class:"chat-sugs" }, [["recaller", "Recaller · 기본"], ["v2", "v2"], ["v3", "v3"], ["v5", "v5 · 자료 맞춤"], ["alpha", "Alpha · 첫 출제 품질"]].map(([key, label]) => h("button", { class:"chip-btn", "aria-pressed": b.engine === key ? "true" : "false", disabled:b.busy,
         onclick: () => { b.engine = key; render(); } }, label))),
       b.engine === "v5" || b.engine === "alpha" ? h("div", { class:"row small", style:"gap:6px;flex-wrap:wrap" },
         h("span", { class:"muted", text:"설문(선택) · 비우면 자료에 맞게 정해요" }),

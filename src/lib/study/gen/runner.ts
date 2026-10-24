@@ -13,7 +13,9 @@ import { genFakeReply } from "./fake.ts";
 import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, getAstraReadingView, responseSchemaFor, runAstra, RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { needsImage, pageEmphasis, renderPageFigures, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
-import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, type LoadedGuide } from "./guide.ts";
+import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, loadRecallerGuide, type LoadedGuide } from "./guide.ts";
+import { preparePdf, prepFromTexts, type PrepResult } from "./prep.ts";
+import { recallerFakeReply, runRecaller } from "./recaller.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
 import { astraFamily, v5Family, defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenMark, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
@@ -312,6 +314,8 @@ export type RunOptions = {
   pastExams?: (ids: string[]) => Promise<PastExamEvidence>;
   /** v3: the PDF bytes sent whole to the read step; production reads the registered PDF. */
   pdf?: (input: GenInput) => Promise<Uint8Array | null>;
+  /** recaller: the prepared pages; production reads the PDF (or, without one, the page texts). */
+  prep?: (pdf: Uint8Array | null, pages: number[]) => Promise<PrepResult>;
 };
 
 async function registeredPdfBytes(input: GenInput) {
@@ -380,7 +384,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const state: GenState = stored;
   if (state.status === "done" || state.status === "failed" || state.status === "awaiting-confirm") return state;
   const input = state.input;
-  const astraAbort = astraFamily(input.engine) ? new AbortController() : undefined;
+  const astraAbort = astraFamily(input.engine) || input.engine === "recaller" ? new AbortController() : undefined;
   let astraFailure: Stop | undefined;
   let progressTimer: ReturnType<typeof setTimeout> | undefined;
   // saveJson already serializes writes per file, including state snapshots from concurrent batches.
@@ -475,7 +479,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     }
     try {
       if (astraFailure) throw astraFailure;
-      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("astra-") ? astraFakeReply(s, u) : genFakeReply(s, u)))(step, user, attempt);
+      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("rc-") ? recallerFakeReply(s, u) : s.startsWith("astra-") ? astraFakeReply(s, u) : genFakeReply(s, u)))(step, user, attempt);
       if (extra.cachePrefix && request.fakeReply !== undefined) request.fakeReply = JSON.stringify({ result: JSON.parse(request.fakeReply) });
       // The fake model has no stream; hand the reply over in pieces so streaming consumers behave as with a real one.
       if (request.fakeReply !== undefined && (extra.onPartial || cut)) for (let at = 200; at < request.fakeReply.length + 200 && !runaway; at += 200) guardText(request.fakeReply.slice(0, at));
@@ -546,6 +550,58 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     state.status = "running"; state.message = "";
     mark("start", { note: state.phase });
     await saveState(state);
+    if (input.engine === "recaller") {
+      const pdf = await (options.pdf ?? registeredPdfBytes)(input).catch(() => null);
+      const marked = { outline: false, published: new Map(state.sections.map((s) => [s.id, s.author?.questionCount ?? 0])) };
+      const marks = () => {
+        if (!marked.outline && state.sections.length) { marked.outline = true; mark("outline"); }
+        for (const section of state.sections) {
+          const count = section.author?.questionCount ?? 0;
+          if (count > (marked.published.get(section.id) ?? 0)) { marked.published.set(section.id, count); mark("unit-done", { sectionId: section.id, questions: count }); }
+        }
+      };
+      const readingFile = (hash: string, page: number) => path.join(dataRoot(), "readings", hash.replace(/[^a-z0-9:_-]/gi, "_").slice(0, 80), `${page}.json`);
+      const stopWith = (message: string) => failAstra(new Stop("paused-invalid", message));
+      await runRecaller({
+        state, pdf,
+        ask: async (step, sectionId, attempt, system, user, parser, extra = {}) => {
+          const schema = astraJsonSchema(parser);
+          const more = { ...(extra.images ? { images: extra.images } : {}), ...(extra.maxChars ? { maxChars: extra.maxChars } : {}) };
+          let result = await askParsed(step, sectionId, attempt, system, user, schema, parser, extra.guide, more);
+          // One quiet retry for a reply that did not match the format; then the run pauses where it is.
+          if (!result.ok) result = await askParsed(step, sectionId, attempt, system, `${user}
+
+[앞 응답 문제] ${result.problem} 정해진 JSON 형식으로만 다시 답한다.`, schema, parser, extra.guide, more);
+          if (!result.ok) throw stopWith(`${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`);
+          return result.value;
+        },
+        askText: async (step, page, attempt, system, user, images) => String(await ask(step, null, attempt, system, user, null, undefined, { images, page })),
+        prepare: options.prep ?? (async (bytes, pages) => bytes ? preparePdf(bytes, pages) : prepFromTexts(await (options.pages ?? registeredPages)(input), pages)),
+        emphasis: async (pages) => pdf ? pageEmphasis(pdf, pages) : new Map(),
+        pageImages: async (wanted) => (options.pageImages ?? registeredImages)(input, wanted),
+        pageFigures: async (wanted) => pdf ? renderPageFigures(pdf, wanted) : new Map(),
+        guide: async (step, kinds) => {
+          try { return await loadRecallerGuide(step, { purpose: input.purpose, kinds, dir: input.guideDir ?? DEFAULT_GUIDE_DIR }); }
+          catch (error) { throw stopWith(`${error instanceof Error ? error.message : String(error)} 출제기준 폴더를 고친 뒤 다시 시작해 주세요.`); }
+        },
+        reading: {
+          get: async (hash, page) => { try { return (JSON.parse(await readFile(readingFile(hash, page), "utf8")) as { text: string }).text; } catch { return null; } },
+          put: async (hash, page, text) => { await saveJson(readingFile(hash, page), { page, text }); },
+        },
+        save: () => { marks(); return saveState(state); },
+        publish: async (section, questions) => {
+          if (!questions.length) return null;
+          const documentPath = path.join("sections", section.id, "document.json");
+          await saveJson(path.join(dirOf(id), documentPath), sectionDocument(id, section, input.fileName, questions));
+          return documentPath;
+        },
+        priorityPage: () => readingFocus(),
+      }).catch((error) => { throw error instanceof Stop ? error : failAstra(error); });
+      if (progressTimer) clearTimeout(progressTimer);
+      if (astraFailure) throw astraFailure;
+      if ((state.status as string) === "done") { mark("done"); await saveState(state); }
+      return state;
+    }
     if (astraFamily(input.engine)) {
       if (input.pastExamSourceIds?.length) throw new Stop("paused-invalid", "astra 기출 경향 연결은 아직 구현하지 않았습니다. 일반 출제로 대신하지 않습니다.");
       const pdf = input.provider === "fake" && !options.pdf ? Buffer.from("%PDF-1.4 fake fixture") : await (options.pdf ?? registeredPdfBytes)(input);
