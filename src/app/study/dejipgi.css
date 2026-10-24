@@ -948,3 +948,7 @@
 /* 데스크톱 창은 늘 로컬이라 '로컬 실험모드' 띠는 숨기고(상태는 오른쪽 위 저장 표시로), 태블릿·프롬프트 버튼은 저장 표시 오른쪽에 작게. */
 :root[data-shell="desktop"] [data-shell-hide]{display:none}
 :root[data-shell="desktop"] .dejipgi .masthead .tablet-btn{order:3;align-self:center;margin:0;padding:3px 9px;font-size:12px;-webkit-app-region:no-drag}
+/* 읽기 화면은 높이를 내용만큼만 써서(min-height:0) 큰 화면·전체 화면에서 아래로 body의 검은 바탕이 보였다. body도 같은 바탕으로. */
+body:has(.dejipgi){background:#F2F3F6}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) body:has(.dejipgi){background:#0F1115} }
+:root[data-theme="dark"] body:has(.dejipgi){background:#0F1115}
