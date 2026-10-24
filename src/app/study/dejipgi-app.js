@@ -770,147 +770,26 @@ function renderKnowledge(){
   return wrap;
 }
 /* 작업대: where the agent's MD (출제 노하우) and small-sample feedback will live. First version: what is coming. */
-/* ---------- 작업대 · 프롬프트 체크 (2026-10-24): 내가 쓴 지시를 AI가 먼저 다듬고 그 다듬은 지시로 실행한다.
-   실제 흐름에서는 다듬고 바로 실행하지만, 여기서는 어떻게 다듬었는지(바꾼 점)와 결과를 원본과 나란히 본다.
-   다듬기 지시는 이 화면에서 고쳐 볼 수 있고(이 브라우저에 저장), 실행 기록도 이 브라우저에 30개까지 남는다. */
-const REFINE_DEFAULT = `너는 학습 앱 Recaller의 '프롬프트 다듬기' 담당이다. 학습자가 AI에게 보낼 지시를 받아, 의도는 바꾸지 않고 AI가 한 번에 잘 수행하도록 고쳐 쓴다.
-- 학습자가 말한 것(대상, 개수, 형식, 난이도, 말투)은 빠짐없이 지킨다. 말하지 않은 조건을 새로 정하지 않는다. 꼭 필요한 빈칸만 무난한 기본값으로 채우고, 채운 것은 '바꾼 점'에 적는다.
-- 자료가 붙어 있으면 자료에 근거하라고 적고, 자료 밖 내용은 따로 표시하게 한다.
-- 결과의 모양(목록, 문제·보기·정답·해설 순서 같은)을 구체적으로 정한다.
-- 목표 → 할 일 → 조건 → 출력 형식 순으로 짧게 쓴다. 군더더기는 뺀다.
-- 원래 지시가 이미 충분하면 거의 그대로 둔다.
-답은 정확히 이 형식으로만 쓴다:
-### 다듬은 프롬프트
-(다듬은 지시 전문)
-### 바꾼 점
-- (한 줄씩, 최대 5개)`;
-const RUN_SYSTEM = "너는 학습 앱 Recaller의 AI다. 받은 지시를 그대로 수행한다. 자료가 붙어 있으면 자료에 근거하고, 자료에 없는 내용은 그렇다고 밝힌다. 수식은 $…$로 쓴다.";
-const BENCH_CASES = [
-  "이 쪽 내용으로 헷갈리기 쉬운 객관식 3문제 내줘",
-  "핵심만 5줄로 정리",
-  "시험 전날 10분 동안 볼 수 있게 외울 것만 뽑아줘",
-  "이 개념 처음 배우는 사람한테 비유로 설명해줘",
-];
-const Bench = { draft:"", deckId:"", from:1, to:1, compare:true, busy:false, step:"", err:"", cur:null, sel:null, showRefiner:false, ctl:null };
-const benchKey = (k) => Store.key + ":bench:" + k;
-function benchGet(k, fallback){ try{ const v = localStorage.getItem(benchKey(k)); return v == null ? fallback : JSON.parse(v); }catch(e){ return fallback; } }
-function benchSet(k, v){ try{ localStorage.setItem(benchKey(k), JSON.stringify(v)); }catch(e){} }
-const refinerText = () => benchGet("refiner", null) || REFINE_DEFAULT;
-function splitRefined(text){
-  const t = String(text || "");
-  const m = /###\s*다듬은 프롬프트\s*\n([^]*?)(?:\n###\s*바꾼 점\s*\n([^]*))?$/.exec(t);
-  if (!m) return { prompt:t.trim(), changes:[] };
-  const changes = String(m[2] || "").split("\n").map(l => l.replace(/^\s*[-*•]\s*/, "").trim()).filter(Boolean).slice(0, 8);
-  return { prompt:m[1].trim(), changes };
-}
-async function benchMaterial(){
-  const d = Bench.deckId && S.decks[Bench.deckId];
-  if (!d) return null;
-  ensurePdf(d);
-  for (let i = 0; i < 40 && S.pdf[d.id] && S.pdf[d.id].status === "loading"; i++) await new Promise(r => setTimeout(r, 250));
-  const from = Math.max(1, Math.min(Bench.from, Bench.to)), to = Math.min(Math.max(Bench.from, Bench.to), from + 2);
-  const parts = [];
-  for (let n = from; n <= to; n++) parts.push(`[p.${n}]\n${await pageText(d, n)}`);
-  return { title:displayTitle(d), from, to, text:parts.join("\n\n").slice(0, 14000) };
-}
-const withMaterial = (prompt, mat) => mat ? `${prompt}\n\n[자료: ${mat.title} p.${mat.from}${mat.to > mat.from ? "–" + mat.to : ""}]\n${mat.text}` : prompt;
-async function runBench(){
-  const raw = Bench.draft.trim();
-  const compose = env.notes && env.notes.compose;
-  if (!raw || Bench.busy || !compose) return;
-  Bench.busy = true; Bench.err = ""; Bench.step = "자료 읽는 중"; render();
-  const run = { id:"b" + now(), at:stamp(), raw, refiner:refinerText(), material:null, refined:"", changes:[], result:"", rawResult:null, ms:{} };
-  Bench.cur = run; Bench.sel = null;
-  try{
-    const mat = await benchMaterial();
-    run.material = mat && { title:mat.title, from:mat.from, to:mat.to };
-    Bench.step = "다듬는 중"; render();
-    let t0 = now();
-    const note = mat ? `\n\n(이 지시에는 자료 ${mat.title} p.${mat.from}${mat.to > mat.from ? "–" + mat.to : ""}가 붙어서 함께 간다. 앞부분:\n${mat.text.slice(0, 1200)})` : "\n\n(붙은 자료 없음)";
-    const refinedText = await compose({ system:run.refiner, user:`[학습자의 지시]\n${raw}${note}` });
-    const sp = splitRefined(refinedText); run.refined = sp.prompt; run.changes = sp.changes; run.ms.refine = now() - t0;
-    Bench.step = Bench.compare ? "다듬은 것과 원본 실행 중" : "다듬은 것으로 실행 중"; render();
-    t0 = now();
-    const jobs = [compose({ system:RUN_SYSTEM, user:withMaterial(run.refined, mat) }).then(t => { run.result = t; run.ms.run = now() - t0; })];
-    if (Bench.compare) jobs.push(compose({ system:RUN_SYSTEM, user:withMaterial(raw, mat) }).then(t => { run.rawResult = t; run.ms.raw = now() - t0; }));
-    await Promise.all(jobs);
-    const hist = benchGet("history", []); hist.unshift(run); benchSet("history", hist.slice(0, 30));
-  }catch(e){ Bench.err = composeErrorCopy(e); }
-  Bench.busy = false; Bench.step = ""; render();
-}
-function benchResultCard(title, sub, text, extra){
-  return h("section", { class:"panel bench-card" },
-    h("div", { class:"row", style:"justify-content:space-between;align-items:baseline" }, h("strong", { text:title }), sub ? h("span", { class:"small muted", text:sub }) : null),
-    extra || null,
-    h("div", { class:"bench-text md" }, ...(text ? richLines(text) : [h("p", { class:"muted", text:"…" })])));
-}
-const secs = (ms) => ms ? `${(ms / 1000).toFixed(1)}초` : "";
-function renderBenchRun(run){
-  if (!run) return null;
-  const mat = run.material ? `${run.material.title} p.${run.material.from}${run.material.to > run.material.from ? "–" + run.material.to : ""}` : "자료 없음";
-  return h("div", { class:"stack" },
-    h("div", { class:"bench-grid" },
-      h("section", { class:"panel bench-card" },
-        h("div", { class:"row", style:"justify-content:space-between;align-items:baseline" }, h("strong", { text:"내가 쓴 지시" }), h("span", { class:"small muted", text:mat })),
-        h("pre", { class:"bench-pre", text:run.raw })),
-      h("section", { class:"panel bench-card" },
-        h("div", { class:"row", style:"justify-content:space-between;align-items:baseline" }, h("strong", { text:"AI가 다듬은 지시" }), h("span", { class:"small muted", text:secs(run.ms && run.ms.refine) })),
-        run.changes.length ? h("ul", { class:"bench-changes" }, ...run.changes.map(c => h("li", { text:c }))) : null,
-        h("pre", { class:"bench-pre", text:run.refined || "…" }))),
-    h("div", { class:"bench-grid" },
-      benchResultCard("결과 · 다듬은 지시로", secs(run.ms && run.ms.run), run.result),
-      run.rawResult != null ? benchResultCard("결과 · 원본 그대로", secs(run.ms && run.ms.raw), run.rawResult) : null));
-}
+/* ---------- 작업대 · 흐름 (2026-10-24): 입력 박스와 모델 박스를 화살표로 이어 돌려 보는 캔버스.
+   The canvas is a React component (FlowBench.tsx) mounted once into a host that survives re-renders. */
+let flowHost = null;
+const flowApi = {
+  compose: (input) => env.notes.compose(input),
+  decks: () => realDecks().map(d => ({ id:d.id, title:displayTitle(d), pages:pageTotal(d) })).sort((a, b) => a.title.localeCompare(b.title)),
+  pageText: async (id, from, to) => {
+    const d = S.decks[id]; if (!d) throw new Error("자료를 찾지 못했어요.");
+    ensurePdf(d);
+    for (let i = 0; i < 40 && S.pdf[d.id] && S.pdf[d.id].status === "loading"; i++) await new Promise(r => setTimeout(r, 250));
+    const parts = [];
+    for (let n = from; n <= to; n++) parts.push(`[p.${n}]\n${await pageText(d, n)}`);
+    return { title:displayTitle(d), text:parts.join("\n\n").slice(0, 14000) };
+  },
+};
 function renderBench(){
-  const compose = env.notes && env.notes.compose;
-  const wrap = h("div", { class:"stack" });
-  const ta = h("textarea", { class:"bench-input", rows:"4", placeholder:"AI에게 보낼 지시를 평소처럼 써 보세요. 예: 이 쪽으로 헷갈리는 문제 3개", disabled:Bench.busy ? true : null, "aria-label":"내 지시" });
-  ta.value = Bench.draft;
-  ta.addEventListener("input", () => { Bench.draft = ta.value; });
-  ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); runBench(); } });
-  const decks = realDecks().slice().sort((a, b) => displayTitle(a).localeCompare(displayTitle(b)));
-  const deckSel = h("select", { class:"bench-select", "aria-label":"붙일 자료", disabled:Bench.busy ? true : null },
-    h("option", { value:"", text:"자료 없이" }), ...decks.map(d => h("option", { value:d.id, text:displayTitle(d) })));
-  deckSel.value = Bench.deckId;
-  deckSel.addEventListener("change", () => { Bench.deckId = deckSel.value; Bench.from = Bench.to = 1; render(); });
-  const d = Bench.deckId && S.decks[Bench.deckId];
-  const pageIn = (key) => { const el = h("input", { type:"number", min:"1", max:String(d ? pageTotal(d) : 1), class:"bench-page", value:String(Bench[key]), "aria-label":key === "from" ? "시작 쪽" : "끝 쪽" }); el.addEventListener("change", () => { Bench[key] = Math.max(1, Number(el.value) || 1); }); return el; };
-  const cmp = h("input", { type:"checkbox" }); cmp.checked = Bench.compare; cmp.addEventListener("change", () => { Bench.compare = cmp.checked; });
-  wrap.append(h("section", { class:"panel" },
-    h("p", { class:"eyebrow", text:"작업대 · 프롬프트 체크" }),
-    h("h2", { text:"내 지시 → AI가 다듬기 → 실행" }),
-    h("p", { class:"small muted", style:"margin:4px 0 12px", text:"실제로는 다듬고 바로 실행해요. 여기서는 어떻게 다듬었는지와 결과를 원본과 나란히 봐요. (ChatGPT 계정으로 2~3번 부릅니다)" }),
-    ta,
-    h("div", { class:"chat-sugs", style:"margin-top:8px" }, ...BENCH_CASES.map(c => h("button", { class:"chip-btn", disabled:Bench.busy ? true : null, onclick: () => { Bench.draft = c; render(); } }, c))),
-    h("div", { class:"row bench-opts" },
-      deckSel,
-      d ? h("span", { class:"row", style:"gap:4px;flex-wrap:nowrap" }, h("span", { class:"small muted", text:"p." }), pageIn("from"), h("span", { class:"small muted", text:"–" }), pageIn("to"), h("span", { class:"small muted", text:"(최대 3쪽)" })) : null,
-      h("label", { class:"small row", style:"gap:6px;flex-wrap:nowrap" }, cmp, "원본도 같이 실행해서 비교"),
-      h("span", { style:"flex:1" }),
-      h("button", { class:"btn primary", disabled:Bench.busy || !compose ? true : null, onclick:runBench }, Bench.busy ? `${Bench.step}…` : "다듬고 실행")),
-    !compose ? h("p", { class:"small muted", style:"margin-top:8px", text:"로컬 실험 모드(ChatGPT 로그인)에서만 실행할 수 있어요." }) : null,
-    Bench.err ? h("p", { class:"small", style:"margin-top:8px;color:var(--bad)", text:Bench.err }) : null));
-  const shown = Bench.sel ? benchGet("history", []).find(r => r.id === Bench.sel) : Bench.cur;
-  if (shown) wrap.append(renderBenchRun(shown));
-  // 다듬기 지시: the knob being tuned. Saved per browser; '처음대로' brings back the default.
-  const refTa = h("textarea", { class:"bench-input mono", rows:"12", "aria-label":"다듬기 지시" }); refTa.value = refinerText();
-  const det = h("details", { class:"panel" }, h("summary", null, h("strong", { text:"다듬기 지시 보기·고치기" }), h("span", { class:"small muted", text: benchGet("refiner", null) ? "  · 고친 판 사용 중" : "  · 기본" })),
-    h("p", { class:"small muted", style:"margin:8px 0", text:"AI가 내 지시를 다듬을 때 받는 지시예요. 고치면 다음 실행부터 써요." }), refTa,
-    h("div", { class:"row", style:"margin-top:8px;gap:8px" },
-      h("button", { class:"btn primary", onclick: () => { benchSet("refiner", refTa.value.trim() === REFINE_DEFAULT.trim() ? null : refTa.value); Bench.showRefiner = true; toast("다듬기 지시를 저장했어요."); render(); } }, "저장"),
-      h("button", { class:"btn", onclick: () => { benchSet("refiner", null); Bench.showRefiner = true; render(); } }, "처음대로")));
-  if (Bench.showRefiner) det.open = true;
-  det.addEventListener("toggle", () => { Bench.showRefiner = det.open; });
-  wrap.append(det);
-  const hist = benchGet("history", []);
-  if (hist.length) wrap.append(h("section", { class:"panel" },
-    h("p", { class:"eyebrow", text:`지난 실행 ${hist.length}` }),
-    h("div", { class:"bench-hist" }, ...hist.map(r => h("button", { class:"bench-hrow" + ((Bench.sel || (Bench.cur && Bench.cur.id)) === r.id ? " on" : ""), onclick: () => { Bench.sel = r.id; render(); window.scrollTo({ top:0, behavior:"smooth" }); } },
-      h("span", { class:"bench-hraw", text:r.raw }),
-      h("span", { class:"small muted", text:`${r.material ? r.material.title + " p." + r.material.from : "자료 없음"} · ${new Date(r.at).toLocaleString("ko-KR", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })}${r.refiner !== REFINE_DEFAULT ? " · 고친 다듬기" : ""}` }),
-      h("span", { class:"bench-reuse", role:"button", tabindex:"0", text:"다시 쓰기", onclick: (e) => { e.stopPropagation(); Bench.draft = r.raw; Bench.sel = null; Bench.cur = null; render(); window.scrollTo({ top:0, behavior:"smooth" }); } }))))));
-  wrap.append(h("p", { class:"small muted", text:"다음 판: 같은 지시로 여러 케이스를 한 번에 돌리고, 좋음·별로 표시를 다듬기 지시 수정안으로 이어 가요." }));
-  return wrap;
+  if (!(env.notes && env.notes.compose) || !env.mountFlow)
+    return h("div", { class:"panel small muted", text:"작업대 흐름은 로컬 실험 모드(ChatGPT 로그인)에서 쓸 수 있어요." });
+  if (!flowHost){ flowHost = h("div", { class:"flow-host" }); env.mountFlow(flowHost, flowApi); }
+  return flowHost;
 }
 
 /* ---------- 보관함: experiment duplicates put away (kept on disk, restorable) ---------- */

@@ -952,20 +952,48 @@
 body:has(.dejipgi){background:#F2F3F6}
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) body:has(.dejipgi){background:#0F1115} }
 :root[data-theme="dark"] body:has(.dejipgi){background:#0F1115}
-/* 작업대 · 프롬프트 체크 */
-.dejipgi .bench-input{width:100%;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);padding:12px 14px;font-size:15px;line-height:1.6;resize:vertical}
-.dejipgi .bench-input.mono{font-family:var(--mono);font-size:12.5px}
-.dejipgi .bench-opts{gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap}
-.dejipgi .bench-select{max-width:320px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:7px 10px;font-size:13.5px}
-.dejipgi .bench-page{width:58px;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:5px 6px;font-size:13.5px}
-.dejipgi .bench-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
-.dejipgi .bench-card{display:flex;flex-direction:column;gap:10px;min-width:0}
-.dejipgi .bench-pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--sans);font-size:14px;line-height:1.65;background:var(--surface-2);border-radius:10px;padding:12px 14px;max-height:420px;overflow:auto}
-.dejipgi .bench-changes{margin:0;padding-left:18px;font-size:13.5px;color:var(--accent)}
-.dejipgi .bench-text{font-size:14.5px;line-height:1.7;max-height:640px;overflow:auto}
-.dejipgi .bench-hist{display:flex;flex-direction:column;gap:2px;margin-top:6px}
-.dejipgi .bench-hrow{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;text-align:left;border:0;background:transparent;border-radius:10px;padding:8px 10px}
-.dejipgi .bench-hrow:hover,.dejipgi .bench-hrow.on{background:var(--surface-2)}
-.dejipgi .bench-hraw{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
-.dejipgi .bench-reuse{font-size:12.5px;color:var(--accent);font-weight:600;cursor:pointer}
-.dejipgi details.panel summary{cursor:pointer}
+/* 작업대 · 흐름 (FlowBench.tsx) */
+.dejipgi[data-view="bench"] .wrap{max-width:none}
+.dejipgi .fb{display:flex;flex-direction:column;gap:10px;height:calc(100vh - var(--shell-top,0px) - 150px);min-height:520px}
+:root[data-shell="desktop"] .dejipgi .fb{height:calc(100vh - var(--shell-top) - 60px)}
+.dejipgi .fb-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dejipgi .fb-name{font-weight:700;font-size:15px;border:1px solid transparent;background:transparent;border-radius:8px;padding:6px 8px;min-width:200px}
+.dejipgi .fb-name:hover,.dejipgi .fb-name:focus{border-color:var(--line);background:var(--surface)}
+.dejipgi .fb-open,.dejipgi .fb-form select,.dejipgi .fb-form input,.dejipgi .fb-form textarea{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:6px 9px;font-size:13.5px;width:100%}
+.dejipgi .fb-open{width:auto}
+.dejipgi .fb-msg{font-size:12.5px;color:var(--good)}
+.dejipgi .fb-ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.dejipgi .fb-main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 380px;gap:12px}
+.dejipgi .fb-canvas{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface);min-height:0}
+.dejipgi .fb-canvas .react-flow{--xy-background-color:var(--surface)}
+.dejipgi .fb-side{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:14px;overflow:auto;min-height:0}
+.dejipgi .fb-help p{font-size:13.5px;color:var(--muted);margin-top:8px}
+.dejipgi .fb-form{display:flex;flex-direction:column;gap:10px}
+.dejipgi .fb-form label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.dejipgi .fb-form textarea{font-family:var(--mono);font-size:12.5px;line-height:1.55;resize:vertical;color:var(--ink)}
+.dejipgi .fb-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dejipgi .fb-pages{grid-template-columns:1fr 1fr auto;align-items:end}
+.dejipgi .fb-note{font-size:12px;color:var(--faint);padding-bottom:8px}
+.dejipgi .fb-err{color:var(--bad);font-size:13px}
+.dejipgi .fb-out{border-top:1px solid var(--line);padding-top:10px}
+.dejipgi .fb-out-head{display:flex;justify-content:space-between;align-items:center}
+.dejipgi .fb-out pre,.dejipgi .fb-in pre{white-space:pre-wrap;word-break:break-word;font-family:var(--sans);font-size:13.5px;line-height:1.65;margin:6px 0 0;background:var(--surface-2);border-radius:10px;padding:10px 12px}
+.dejipgi .fb-in summary{cursor:pointer;font-size:12.5px;color:var(--muted)}
+.dejipgi .fb-del{align-self:flex-start;color:var(--bad)}
+.dejipgi .fb-box{width:230px;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);color:var(--ink);padding:10px 12px;font-size:12.5px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.dejipgi .fb-box.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.dejipgi .fb-input{background:var(--surface-2)}
+.dejipgi .fb-head{display:flex;align-items:center;gap:6px}
+.dejipgi .fb-head strong{font-size:13.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .fb-kind{font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 5px;background:var(--accent-soft);color:var(--accent)}
+.dejipgi .fb-input .fb-kind{background:var(--read-soft);color:var(--read)}
+.dejipgi .fb-dot{width:8px;height:8px;border-radius:50%;background:var(--line-strong)}
+.dejipgi .fb-box[data-status="running"] .fb-dot{background:var(--help);animation:fbpulse 1s infinite}
+.dejipgi .fb-box[data-status="done"] .fb-dot{background:var(--good)}
+.dejipgi .fb-box[data-status="error"] .fb-dot{background:var(--bad)}
+@keyframes fbpulse{50%{opacity:.3}}
+.dejipgi .fb-meta{color:var(--faint);font-size:11.5px;margin-top:2px}
+.dejipgi .fb-preview{margin-top:6px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;line-height:1.45}
+.dejipgi .fb-box[data-status="error"] .fb-preview{color:var(--bad)}
+.dejipgi .fb .react-flow__handle{width:10px;height:10px;background:var(--accent);border:2px solid var(--surface)}
+@media (max-width:860px){ .dejipgi .fb-main{grid-template-columns:1fr;grid-template-rows:1fr auto} .dejipgi .fb{height:auto} .dejipgi .fb-canvas{height:60vh} }

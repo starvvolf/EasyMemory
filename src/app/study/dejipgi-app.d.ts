@@ -87,6 +87,8 @@ export type DejipgiEnv = {
   loadPdf(sourceCatalogId: string): Promise<ArrayBuffer>;
   loadPdfjs(): Promise<unknown>;
   loadKatex(): Promise<unknown>;
+  /** 작업대 흐름 canvas (FlowBench.tsx); returns an unmount function. */
+  mountFlow?(host: HTMLElement, api: import("./FlowBench").FlowApi): () => void;
   /** URL of a generated SVG figure recorded with an authored document. */
   assetUrl?: (artifactId: string, assetPath: string) => string;
   /** Queues one generation request per material and reports its progress (the assigned AI runs it through MCP). */
@@ -105,7 +107,7 @@ export type DejipgiEnv = {
     explanations?(sourceId: string): Promise<Array<{ page: number; goal?: string; text: string; at: string }>>;
     saveExplanation?(sourceId: string, page: number, text: string, goal?: string): Promise<void>;
     /** One long model request (용어 지도·번역). With `kind`, the reply follows that fixed shape (structured output) and comes back as JSON text. */
-    compose?(input: { system: string; user: string; kind?: "terms" | "translate" }): Promise<string>;
+    compose?(input: { system: string; user: string; kind?: "terms" | "translate"; model?: string; effort?: string }): Promise<string>;
   };
   /** ChatGPT account for in-app generation; `show` is false when the host does not generate with ChatGPT. */
   account?: {

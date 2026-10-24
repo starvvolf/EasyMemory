@@ -24,7 +24,9 @@ const body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("talk"), sourceId, page, noteId: z.string().max(60).nullish(),
     turns: z.array(z.object({ role: z.enum(["user", "assistant"]), text: text(8000), quote: text(400).nullish(), page: page.optional() })).min(1).max(80),
     usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional() }),
-  z.object({ action: z.literal("compose"), system: text(8000).min(1), user: text(60000).min(1), kind: z.enum(["terms", "translate"]).nullish() }),
+  // 작업대 흐름 boxes pick their own model and effort; other callers leave them out and get the note defaults.
+  z.object({ action: z.literal("compose"), system: text(8000).min(1), user: text(60000).min(1), kind: z.enum(["terms", "translate"]).nullish(),
+    model: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,39}$/).nullish(), effort: z.enum(["low", "medium", "high", "xhigh"]).nullish() }),
   z.object({ action: z.literal("explain-save"), sourceId, page, text: text(60000).min(1), goal: z.string().min(1).max(160).nullish() }),
 ]);
 

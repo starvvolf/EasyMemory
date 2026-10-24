@@ -304,8 +304,9 @@ export const COMPOSE_SCHEMAS = {
 export type ComposeKind = keyof typeof COMPOSE_SCHEMAS;
 
 /** One long request (용어 지도: a whole material's text; 번역: a page's blocks), beyond the question window's per-turn limits. */
-export async function composeReply(caller: ModelCaller, input: { system: string; user: string; kind?: ComposeKind | null }) {
-  const { model, effort } = modelSettings();
+export async function composeReply(caller: ModelCaller, input: { system: string; user: string; kind?: ComposeKind | null; model?: string | null; effort?: string | null }) {
+  const settings = modelSettings();
+  const model = input.model || settings.model, effort = input.effort || settings.effort;
   const shape = input.kind ? { json: true, schema: COMPOSE_SCHEMAS[input.kind] as Record<string, unknown>, schemaName: `recaller_${input.kind}` } : {};
   const reply = await callModel({ purpose: `note:${input.kind ?? "compose"}`, system: clip(input.system, 8000), user: clip(input.user, 60000), ...shape, model, effort, caller });
   return { text: reply.text.trim(), data: reply.data, usage: reply.usage };
