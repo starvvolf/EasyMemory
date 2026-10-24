@@ -472,9 +472,9 @@ export async function runRecaller(ctx: RecallerContext) {
   data.timing.basicDoneAt ??= new Date().toISOString();
   await save();
 
-  // ⑤ 연결 → ⑥ 심화 문제 (not for 그냥 읽기).
+  // ⑤ 연결 → ⑥ 심화 문제: only when the learner asked for them (runs from before the choice kept theirs), not for 그냥 읽기.
   const allCards = state.sections.flatMap((s) => data.units[s.id]?.cards ?? []);
-  if (input.purpose !== "read" && allCards.length >= 2) {
+  if ((input.deep || data.groups) && input.purpose !== "read" && allCards.length >= 2) {
     if (!data.groups) {
       const wanted = Math.min(5, Math.max(1, Math.floor(allCards.length / 5)));
       const reply = await ctx.ask("rc-link", null, 1, LINK, JSON.stringify({ purpose: input.purpose, want: wanted, cards: allCards.map((c) => ({ id: c.id, line: cardLine(c), links: c.links })) }), linkReplySchema, { maxChars: 12000 });

@@ -24,7 +24,7 @@ async function withData<T>(run: () => Promise<T>) {
 }
 
 test("recaller: sections from titles, cards, basic questions per section, then a deep question that passed its checks", () => withData(async () => {
-  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" });
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", deep: true });
   const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
   assert.equal(done.status, "done", done.message);
   assert.deepEqual(done.sections.map((s) => s.title), ["Back-Face Detection", "Depth-Buffer Method"]);
@@ -42,13 +42,21 @@ test("recaller: sections from titles, cards, basic questions per section, then a
   assert.equal(done.recaller?.deep.g1.status, "ready");
 }));
 
+test("deep questions are made only when asked", () => withData(async () => {
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  assert.equal(done.status, "done", done.message);
+  const calls = (await readGenCalls(done.id)).map((c) => c.step);
+  assert.ok(calls.includes("rc-author") && !calls.includes("rc-link") && !calls.includes("rc-deep"), calls.join(" "));
+}));
+
 test("a deep question whose blind solve disagrees is rewritten once, then held", () => withData(async () => {
   const fakeReply = (step: GenStep, user: string) => {
     const reply = JSON.parse(recallerFakeReply(step, user));
     if (step === "rc-solve") reply.choice = (reply.choice + 1) % 4;
     return JSON.stringify(reply);
   };
-  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" });
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", deep: true });
   const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages, fakeReply });
   assert.equal(done.recaller?.deep.g1.status, "held");
   assert.match(done.recaller!.deep.g1.problems[0], /따로 푼 답/);

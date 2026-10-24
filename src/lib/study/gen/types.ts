@@ -61,6 +61,8 @@ export type GenInput = {
   origin?: "lab" | "study";
   /** Read pages that are not full text slides from their image once, before the outline (see pages.ts). */
   readImages?: boolean;
+  /** recaller: deep questions too (off unless asked; light materials have little to tie together). */
+  deep?: boolean;
   /** Optional registered exams: absent means the original generation path, unchanged. */
   pastExamSourceIds?: string[];
   /** A remake of reported questions: the earlier question per objective, so authoring writes a different one. */

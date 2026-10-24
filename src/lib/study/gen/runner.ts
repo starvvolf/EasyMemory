@@ -162,6 +162,8 @@ export const genInputSchema = z.strictObject({
   guideDir: z.string().regex(guideDirPattern).default(DEFAULT_GUIDE_DIR),
   origin: z.enum(["lab", "study"]).default("lab"),
   readImages: z.boolean().default(false),
+  /** recaller: also make deep questions (several cards tied into one worked problem). The learner turns it on. */
+  deep: z.boolean().optional(),
   pastExamSourceIds: z.array(z.string().regex(/^src_[a-f0-9]{64}$/)).min(1).max(2).optional(),
   engine: z.enum(engines).default("v2"),
   planInput: z.enum(["pdf", "pages", "figures"]).optional(),
