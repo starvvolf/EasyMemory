@@ -450,7 +450,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     const baseText = extra.onPartial ?? (astraAbort ? undefined : onText);
     const guardText = (text: string) => {
       partial = text;
-      if (cut && !runaway && text.length > extra.maxChars!) { runaway = true; cut.abort(); return; }
+      // A structured reply stuck emitting blank space (seen with recaller's organize) is cut as soon as it shows, not at the limit.
+      if (cut && !runaway && (text.length > extra.maxChars! || /\s{1500}$/.test(text))) { runaway = true; cut.abort(); return; }
       baseText?.(text);
     };
     const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(cut || baseText ? { onText: guardText } : {}), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),

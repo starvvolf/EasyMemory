@@ -112,7 +112,12 @@ function tolerance(written: string) {
   const d = /\.(\d+)/.exec(written)?.[1].length;
   return d !== undefined ? 0.5 * Math.pow(10, -d) + 1e-9 : 1e-6;
 }
-export function sameValue(got: Value, claimed: string): boolean {
+/** A claimed value as models write it: "$(0,0,2)$", "\\left(1, 2\\right)", "0.30 " → plain text the calculator reads. */
+export function plainValue(claimed: string) {
+  return claimed.replace(/\$/g, "").replace(/\\[dt]frac/g, "\\frac").replace(/\\sqrt\s*(\d+(?:\.\d+)?)/g, "sqrt($1)").replace(/\\mathbf\{([^{}]*)\}/g, "$1").replace(/\\left|\\right|\\,|\\!|\\;/g, "").replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1)/($2)").replace(/\\sqrt\{([^{}]+)\}/g, "sqrt($1)").replace(/\\cdot|\\times/g, "*").trim();
+}
+export function sameValue(got: Value, claimedRaw: string): boolean {
+  const claimed = plainValue(claimedRaw);
   let want: Value;
   try { want = evaluate(claimed); } catch { return false; }
   const tol = tolerance(claimed);

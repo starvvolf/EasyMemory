@@ -34,3 +34,15 @@ test("every step of a correct solution checks out, and a broken step is caught b
   assert.equal(result[3].ok, false);
   assert.match(result[3].problem!, /^4단계/);
 });
+
+test("values written as math ($…$, \\left( \\right)) are read as plain values", () => {
+  assert.equal(sameValue([0, 0, 2], "$(0,0,2)$"), true);
+  assert.equal(sameValue(2, "$2$"), true);
+  assert.equal(sameValue([1, 0, 0], "\\left(1, 0, 0\\right)"), true);
+  assert.equal(sameValue(0.5, "\\frac{1}{2}"), true);
+});
+
+test("fractions and roots as LaTeX writes them", () => {
+  assert.equal(sameValue(Math.sqrt(5), "$\\sqrt5$"), true);
+  assert.equal(sameValue([2 / Math.sqrt(5), -1 / Math.sqrt(5), 0], "$\\dfrac{(2,-1,0)}{\\sqrt5}$"), true);
+});

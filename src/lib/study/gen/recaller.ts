@@ -9,6 +9,7 @@ import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/c
 import { checkSteps, evaluate, sameValue, type Step } from "./calc.ts";
 import { cardKinds, cardLine, checkCards, ORGANIZE, organizeSchema, organizeUser, type Card, type CardIssue } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
+import { RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
 import { TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { pageText, type PrepResult, type PrepRoute } from "./prep.ts";
@@ -54,8 +55,9 @@ const solveReplySchema = z.object({ choice: z.number().int().min(0).max(3), valu
 export type RcQuestion = { objectiveId: string; sectionId: string; tier: "basic" | "deep"; cardIds: string[]; format: (typeof formats)[number]; goal: string;
   authored: AuthoredReplyQuestion; pages: number[]; quotes: string[]; kind: ObjectiveKind; core: boolean;
   steps?: Step[]; distractors?: Array<{ option: number; step?: number; mistake: string }>; checks: string[] };
-type Unit = { status: "waiting" | "organizing" | "authoring" | "ready" | "failed"; cards?: Card[]; issues?: CardIssue[]; skipped?: Array<{ pages: number[]; reason: string }>;
-  questions?: RcQuestion[]; held?: Array<{ cardId: string; reason: string }>; error?: string };
+type Chunk = { cards?: Card[]; issues?: CardIssue[]; skipped?: Array<{ pages: number[]; reason: string }>; questions?: RcQuestion[]; held?: Array<{ cardId: string; reason: string }> };
+/** A section: its chunks (two pages each) and, gathered from them in page order, its cards and questions. */
+type Unit = Chunk & { status: "waiting" | "organizing" | "authoring" | "ready" | "failed"; chunks?: Record<string, Chunk>; error?: string };
 export type RecallerState = {
   version: 1; pdfHash?: string;
   prep?: { version: string; pages: Array<{ page: number; title: string; route: PrepRoute; score: number; reasons: string[] }> };
@@ -103,7 +105,9 @@ const SOLVE = `${BASE}
 정답을 모르는 상태에서 객관식 문제를 직접 푼다. 원문(source)의 절차를 따라 단계별로 계산하고, 고른 보기 번호(choice, 0부터)와 최종 값(value)을 적는다. 문제에 조건이 모자라거나 답이 둘 이상이면 doubts에 적는다. 사고 과정 전체를 쓰지 말고 단계별 결과만 쓴다.`;
 
 const KIND_TO_OBJECTIVE: Record<(typeof cardKinds)[number], ObjectiveKind> = { 용어: "용어", 사실: "사실", 목록: "사실", 조건: "관계", 절차: "절차", 공식: "공식", 비교: "관계", 개념: "개념", 패턴: "패턴" };
-const PARALLEL = 3;
+const PARALLEL = 2;
+/** Pages per organize call within a section. */
+const CHUNK = 2;
 
 /** A small semaphore so sections and page readings share a fixed number of parallel calls. */
 function limiter(n: number) {
@@ -197,7 +201,9 @@ export function slotCards(cards: Card[], purpose: GenState["input"]["purpose"]) 
 export async function runRecaller(ctx: RecallerContext) {
   const { state, save } = ctx;
   const input = state.input;
-  const parallel = limiter(ctx.parallel ?? PARALLEL);
+  // Separate limits: page readings run inside section work, so sharing one limit could leave every slot waiting on a reading.
+  const sectionLimit = limiter(ctx.parallel ?? PARALLEL);
+  const readLimit = limiter(4);
   const data = (state.recaller ??= { version: 1, texts: {}, read: { pages: [], done: [], failed: [] }, units: {}, deep: {}, warnings: [], timing: { startedAt: new Date().toISOString() } });
   const hash = ctx.pdf?.length ? createHash("sha256").update(ctx.pdf).digest("hex") : `pages:${input.sourceId}`;
   data.pdfHash ??= hash;
@@ -222,7 +228,7 @@ export async function runRecaller(ctx: RecallerContext) {
   const reading = new Map<number, Promise<void>>();
   const readPage = (page: number) => {
     if (!data.read.pages.includes(page) || data.read.done.includes(page) || data.read.failed.includes(page)) return Promise.resolve();
-    if (!reading.has(page)) reading.set(page, parallel(async () => {
+    if (!reading.has(page)) reading.set(page, readLimit(async () => {
       const cached = await ctx.reading?.get(hash, page).catch(() => null);
       let reply = cached ?? "";
       if (!reply) {
@@ -275,40 +281,57 @@ export async function runRecaller(ctx: RecallerContext) {
     return next;
   };
 
-  // ③ 정리 + ④ 기본 문제, section by section.
-  const organize = async (section: SectionState) => {
+  // ③ 정리 + ④ 기본 문제. A section is worked in chunks of two pages at once (one organize call over four slides took
+  // 80 s, mostly output), and each chunk's questions are published as soon as they pass.
+  const chunksOf = (pages: number[]) => Array.from({ length: Math.ceil(pages.length / CHUNK) }, (_, i) => pages.slice(i * CHUNK, i * CHUNK + CHUNK));
+  const collect = (unit: Unit) => {
+    const parts = Object.entries(unit.chunks ?? {}).sort(([a], [b]) => Number(a) - Number(b)).map(([, c]) => c);
+    unit.cards = parts.flatMap((c) => c.cards ?? []);
+    unit.questions = parts.flatMap((c) => c.questions ?? []);
+    unit.held = parts.flatMap((c) => c.held ?? []);
+    unit.issues = parts.flatMap((c) => c.issues ?? []);
+    unit.skipped = parts.flatMap((c) => c.skipped ?? []);
+  };
+  const organize = async (section: SectionState, k: number, pages: number[]) => {
     const unit = data.units[section.id];
-    if (unit.cards) return unit.cards;
-    unit.status = "organizing"; await save();
-    // A section named only by its page number takes its title from the first heading the page reading found.
-    if (/^p\.\d+$|\(이어서\)$/.test(section.title)) {
-      const heading = section.pages.map((p) => /^#\s*(.+)$/m.exec(data.texts[p] ?? "")?.[1]?.trim()).find(Boolean);
-      if (heading) section.title = heading.slice(0, 80);
-    }
+    const chunk = ((unit.chunks ??= {})[k] ??= {});
+    if (chunk.cards) return chunk.cards;
     const g = await guide("organize", [...cardKinds]);
     let revision: string[] = [];
     let result: { cards: Card[]; issues: CardIssue[] } = { cards: [], issues: [] };
     let skipped: Unit["skipped"] = [];
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const reply = await ctx.ask("rc-organize", section.id, attempt, `${ORGANIZE}\n\n[정리 기준]\n${g.text}`,
-        organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages: section.pages }, source: sourceOf(section.pages), purpose: input.purpose, note: input.note, revision }), organizeSchema, { guide: g, maxChars: 60000 });
-      result = checkCards(reply, section, textMap());
+      let reply: z.infer<typeof organizeSchema>;
+      // A reply cut for running away (a loop of blank space) is asked once more; a second one leaves the chunk out.
+      try {
+        reply = await ctx.ask("rc-organize", section.id, attempt, `${ORGANIZE}\n\n[정리 기준]\n${g.text}`,
+          organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision }), organizeSchema, { guide: g, maxChars: 14000 * pages.length });
+      } catch (error) {
+        if (!(error instanceof RunawayReply)) throw error;
+        data.warnings.push({ severity: "warning", code: "rc-runaway", message: `정리 p.${pages.join(",")}: ${error.message}${attempt === 1 ? " 한 번 더 요청해요." : " 이 쪽들은 건너뛰어요."}` });
+        await save();
+        if (attempt === 2) break;
+        revision = ["앞 응답이 같은 공백을 끝없이 되풀이해 끊겼다. 카드마다 필요한 칸만 짧게 쓰고 곧바로 끝낸다."];
+        continue;
+      }
+      result = checkCards(reply, { pages }, textMap());
       skipped = reply.skipped;
       const errors = result.issues.filter((i) => i.severity === "error");
       if (!errors.length) break;
       revision = errors.map((i) => `${i.cardId ?? "전체"}: ${i.message}`);
     }
-    // Card ids are made unique across the material: s2.c3.
-    const ids = new Map(result.cards.map((c) => [c.id, `${section.id}.${c.id}`]));
-    unit.cards = result.cards.map((c) => ({ ...c, id: ids.get(c.id)!, links: c.links.map((l) => ({ ...l, to: ids.get(l.to) ?? l.to })) }));
-    unit.issues = result.issues; unit.skipped = skipped;
+    // Card ids are unique across the material: s2.1c3 (section s2, chunk 1, card c3).
+    const ids = new Map(result.cards.map((c) => [c.id, `${section.id}.${k + 1}${c.id}`]));
+    chunk.cards = result.cards.map((c) => ({ ...c, id: ids.get(c.id)!, links: c.links.map((l) => ({ ...l, to: ids.get(l.to) ?? l.to })) }));
+    chunk.issues = result.issues; chunk.skipped = skipped;
+    collect(unit);
     await save();
-    return unit.cards;
+    return chunk.cards;
   };
-  const authorBasic = async (section: SectionState, cards: Card[]) => {
+  const authorBasic = async (section: SectionState, k: number, cards: Card[]) => {
     const unit = data.units[section.id];
-    if (unit.questions) return;
-    unit.status = "authoring"; await save();
+    const chunk = unit.chunks![k];
+    if (chunk.questions) return;
     const slots = slotCards(cards, input.purpose);
     const byId = new Map(cards.map((c) => [c.id, c]));
     const g = await guide("convert", [...new Set(slots.map((c) => c.kind))]);
@@ -317,14 +340,23 @@ export async function runRecaller(ctx: RecallerContext) {
     let todo = slots;
     let revision: Array<{ cardId: string; problem: string }> = [];
     for (let attempt = 1; attempt <= 2 && todo.length; attempt++) {
-      const reply = await ctx.ask("rc-author", section.id, attempt, `${AUTHOR}\n\n[변환 기준]\n${g.text}`, JSON.stringify({ purpose: input.purpose, note: input.note || null, section: { id: section.id, title: section.title },
-        cards: todo, otherCards: cards.filter((c) => !todo.includes(c)).map(cardLine), ...(revision.length ? { revision } : {}) }), basicReplySchema, { guide: g, maxChars: Math.max(20000, todo.length * 4000) });
+      let reply: z.infer<typeof basicReplySchema>;
+      try {
+        reply = await ctx.ask("rc-author", section.id, attempt, `${AUTHOR}\n\n[변환 기준]\n${g.text}`, JSON.stringify({ purpose: input.purpose, note: input.note || null, section: { id: section.id, title: section.title },
+          cards: todo, otherCards: (unit.cards ?? []).filter((c) => !todo.includes(c)).map(cardLine), ...(revision.length ? { revision } : {}) }), basicReplySchema, { guide: g, maxChars: Math.max(12000, todo.length * 3000) });
+      } catch (error) {
+        if (!(error instanceof RunawayReply)) throw error;
+        data.warnings.push({ severity: "warning", code: "rc-runaway", message: `기본 문제 p.${chunk.cards?.[0]?.evidence[0]?.page ?? ""}: ${error.message}` });
+        if (attempt === 2) { for (const card of todo) held.push({ cardId: card.id, reason: "응답이 끊겨 만들지 못했어요." }); break; }
+        revision = todo.map((c) => ({ cardId: c.id, problem: "앞 응답이 끊겼다. 짧게 다시 쓴다." }));
+        continue;
+      }
       const next: Card[] = [];
       revision = [];
       for (const card of todo) {
         const q = reply.questions.find((x) => x.cardId === card.id);
         const problem = !q ? "이 카드의 문제가 없습니다." : basicProblem(q, byId.get(q.cardId));
-        let authored = q && !problem ? toAuthored(q, `${section.id}-q${kept.length + 1}`) : null;
+        let authored = q && !problem ? toAuthored(q, `${section.id}-q${k + 1}-${kept.length + 1}`) : null;
         let mistakes = q?.mistakes ?? [];
         let shape = authored ? answerShapeProblem(authored) : problem;
         let made: RcQuestion | null = null;
@@ -340,7 +372,8 @@ export async function runRecaller(ctx: RecallerContext) {
       }
       todo = next;
     }
-    unit.questions = kept; unit.held = held; unit.status = "ready";
+    chunk.questions = kept; chunk.held = held;
+    collect(unit);
     await save();
     await publish(section.id);
   };
@@ -350,17 +383,25 @@ export async function runRecaller(ctx: RecallerContext) {
     const sections = [...state.sections];
     return page === undefined ? sections : [...sections.filter((s) => s.pages.includes(page)), ...sections.filter((s) => !s.pages.includes(page))];
   };
-  const organized = order().map((section) => parallel(async () => {
+  const work = order().map((section) => sectionLimit(async () => {
     const unit = data.units[section.id];
-    if (unit.status === "ready") return unit.cards ?? [];
-    await Promise.all(section.pages.map(readPage));
-    const cards = await organize(section);
-    if (cards.length) await authorBasic(section, cards);
-    else { unit.status = "ready"; unit.questions = []; await save(); }
-    return cards;
-  }).catch(async (error) => { unit(section.id).status = "failed"; unit(section.id).error = error instanceof Error ? error.message : String(error); await save(); throw error; }));
-  function unit(id: string) { return data.units[id]; }
-  const settled = await Promise.allSettled(organized);
+    if (unit.status === "ready") return;
+    unit.status = "organizing"; await save();
+    // Each chunk waits only for its own pages; chunks of one section run at once.
+    await Promise.all(chunksOf(section.pages).map(async (pages, k) => {
+      await Promise.all(pages.map(readPage));
+      // A section named only by its page number takes its title from the first heading the page reading found.
+      if (k === 0 && /^p\.\d+$|\(이어서\)$/.test(section.title)) {
+        const heading = section.pages.map((p) => /^#\s*(.+)$/m.exec(data.texts[p] ?? "")?.[1]?.trim()).find(Boolean);
+        if (heading) section.title = heading.slice(0, 80);
+      }
+      const cards = await organize(section, k, pages);
+      if (cards.length) { unit.status = "authoring"; await authorBasic(section, k, cards); }
+      else { unit.chunks![k].questions = []; collect(unit); }
+    }));
+    unit.status = "ready"; await save();
+  }).catch(async (error) => { data.units[section.id].status = "failed"; data.units[section.id].error = error instanceof Error ? error.message : String(error); await save(); throw error; }));
+  const settled = await Promise.allSettled(work);
   const stop = settled.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
   if (stop) throw stop.reason;
   data.timing.basicDoneAt ??= new Date().toISOString();
@@ -380,7 +421,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const g = await guide("deep", []);
     const byId = new Map(allCards.map((c) => [c.id, c]));
     const sectionOfCard = (id: string) => id.split(".")[0];
-    await Promise.allSettled(data.groups.map((group) => parallel(async () => {
+    await Promise.allSettled(data.groups.map((group) => sectionLimit(async () => {
       const slot = data.deep[group.id];
       if (slot.status === "ready" || slot.status === "held") return;
       slot.status = "making"; await save();
@@ -434,9 +475,8 @@ export function recallerFakeReply(step: GenStep, user: string): string {
     const source = String(u.source ?? "");
     const lines = source.split("\n").map((l) => l.replace(/^\s*-\s*/, "").trim()).filter((l) => l.length > 8 && !l.startsWith("[") && !l.startsWith("#"));
     const pageOf = (line: string) => { const at = source.indexOf(line); const head = source.slice(0, at).match(/\[원문 p\.(\d+)\]/g); return head ? Number(head.at(-1)!.match(/\d+/)![0]) : section.pages[0]; };
-    const empty = { term: null, fact: null, list: null, rule: null, procedure: null, formula: null, compare: null, concept: null, pattern: null };
     const cards = lines.slice(0, 3).map((line, i) => ({ id: `c${i + 1}`, kind: "사실", title: line.slice(0, 30), weight: "핵심", summary: line.slice(0, 80),
-      shape: { ...empty, fact: { subject: line.slice(0, 20), value: line.slice(0, 80) } }, evidence: [{ page: pageOf(line), quote: line.slice(0, 40) }],
+      shape: { form: "fact", subject: line.slice(0, 20), value: line.slice(0, 80) }, evidence: [{ page: pageOf(line), quote: line.slice(0, 40) }],
       mistakes: [{ wrong: "반대로 기억함", why: "원문과 다름" }], links: i ? [{ to: `c${i}`, kind: "앞뒤", note: "" }] : [], examples: [] }));
     return JSON.stringify({ cards, skipped: [] });
   }
