@@ -13,7 +13,7 @@ const page = z.number().int().positive();
 // One shape per kind, told apart by `form` (a union, so a card writes only its own part: eight null parts per card made
 // replies long and once sent a reply into an endless run of blank space).
 const shapeSchema = z.union([
-  z.object({ form: z.literal("term"), name: text, definition: text, neighbors: z.array(text) }).describe("용어: 이름, 정의, 헷갈리는 이웃 용어"),
+  z.object({ form: z.literal("term"), name: text, symbol: z.string().describe("기호(없으면 빈 문자열)"), definition: text, neighbors: z.array(text) }).describe("용어: 원문 표기 이름, 기호, 정의, 헷갈리는 이웃 용어"),
   z.object({ form: z.literal("fact"), subject: text, value: text }).describe("사실: 무엇이, 어떠하다"),
   z.object({ form: z.literal("list"), name: text, items: z.array(text).min(2), ordered: z.boolean() }).describe("목록: 이름, 원소, 순서가 의미 있는지"),
   z.object({ form: z.literal("rule"), premise: z.string(), condition: text, result: text, boundary: z.string() }).describe("조건: 전제(좌표계 등), 조건, 결론, 경계값에서 어떻게 되는지"),
@@ -48,10 +48,12 @@ export const ORGANIZE = [
   "evidence.quote는 원문(쪽 글)에 실제로 있는 짧은 구절을 그대로. 그림·식 옮김에서 읽은 것은 빈 문자열.",
   "mistakes는 학습자가 실제로 틀리는 지점 1~2개(부호·방향 관례, 경계값, 단계 순서, 비슷한 용어·공식 혼동). 오답의 재료다.",
   "수업 안내·학습 목표 목록·목차·예시 문장 자체는 카드로 만들지 않는다.",
+  "terms는 이 자료 전체에서 쓰는 용어 이름(과 기호)이다. 카드 제목과 용어 이름에는 terms의 표기를 그대로 쓴다: 원문 표기를 유지하고 한국어 이름을 새로 지어 붙이지 않는다. 설명은 한국어로 쓴다. 이미 만든 카드(already)와 같은 지식은 다시 카드로 만들지 않는다.",
 ].join("\n");
 
-export function organizeUser(o: { fileName: string; section: { id: string; title: string; pages: number[] }; source: string; purpose: string; note: string; guide?: string; revision?: string[] }) {
+export function organizeUser(o: { fileName: string; section: { id: string; title: string; pages: number[] }; source: string; purpose: string; note: string; guide?: string; revision?: string[]; terms?: string[]; already?: string[] }) {
   return JSON.stringify({ material: o.fileName, section: o.section, purpose: o.purpose, note: o.note || null, ...(o.guide ? { rules: o.guide } : {}),
+    ...(o.terms?.length ? { terms: o.terms } : {}), ...(o.already?.length ? { already: o.already } : {}),
     ...(o.revision?.length ? { revision: { problems: o.revision, ask: "앞 응답의 이 문제들을 고쳐 전체를 다시 쓴다." } } : {}), source: o.source });
 }
 
@@ -97,7 +99,7 @@ export function checkCards(o: Organized, section: { pages: number[] }, pageTexts
 /** A card as one compact line for later prompts and screens. */
 export function cardLine(c: Card) {
   const s = c.shape;
-  const body = s.form === "term" ? `${s.name}: ${s.definition}` : s.form === "fact" ? `${s.subject} — ${s.value}` : s.form === "list" ? `${s.name}: ${s.items.join(s.ordered ? " → " : ", ")}`
+  const body = s.form === "term" ? `${s.name}${s.symbol ? ` (${s.symbol})` : ""}: ${s.definition}` : s.form === "fact" ? `${s.subject} — ${s.value}` : s.form === "list" ? `${s.name}: ${s.items.join(s.ordered ? " → " : ", ")}`
     : s.form === "rule" ? `${s.premise ? `[${s.premise}] ` : ""}${s.condition} ⇒ ${s.result}${s.boundary ? ` (경계: ${s.boundary})` : ""}`
     : s.form === "procedure" ? s.steps.map((x, i) => `${i + 1}) ${x.action}`).join(" ") : s.form === "formula" ? `${s.expr}${s.when ? ` (${s.when})` : ""}`
     : s.form === "compare" ? `${s.targets.join(" vs ")}: ${s.criteria.map((k) => `${k.name}=${k.values.join("/")}`).join("; ")}`

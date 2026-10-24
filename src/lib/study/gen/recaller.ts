@@ -13,6 +13,7 @@ import { RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
 import { TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { pageText, type PrepResult, type PrepRoute } from "./prep.ts";
+import { extractTerms, sameKnowledge, termLines } from "./terms.ts";
 import { authoredStem, type AuthoredReplyQuestion } from "./schemas.ts";
 import type { GenStep, GenState, Issue, Objective, ObjectiveKind, SectionState } from "./types.ts";
 
@@ -67,6 +68,8 @@ export type RecallerState = {
   units: Record<string, Unit>;
   groups?: Array<{ id: string; cardIds: string[]; idea: string }>;
   deep: Record<string, { status: "waiting" | "making" | "ready" | "held"; tries: number; problems: string[]; question?: RcQuestion }>;
+  /** Cards left without a question because an earlier card already holds the same knowledge (card id → that card). */
+  dups?: Record<string, string>;
   warnings: Issue[];
   timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string };
   guides?: Record<string, string>;
@@ -320,6 +323,14 @@ export async function runRecaller(ctx: RecallerContext) {
     unit.issues = parts.flatMap((c) => c.issues ?? []);
   };
   const convertGuide = guide("convert", [...cardKinds]);
+  // Cards that got (or are getting) a question, material-wide: a later card about the same knowledge gets none.
+  const known: Card[] = state.sections.flatMap((s) => data.units[s.id]?.questions?.flatMap((q) => (data.units[s.id].cards ?? []).filter((c) => q.cardIds.includes(c.id))) ?? []);
+  const claim = (card: Card) => {
+    const twin = known.find((k) => k.id !== card.id && sameKnowledge(k, card));
+    if (twin) { (data.dups ??= {})[card.id] = twin.id; return false; }
+    known.push(card);
+    return true;
+  };
   const authorOne = async (section: SectionState, k: number, card: Card) => {
     const unit = data.units[section.id];
     const chunk = unit.chunks![k];
@@ -375,7 +386,7 @@ export async function runRecaller(ctx: RecallerContext) {
       if (!ok.length || !slotCards(ok, input.purpose).length) return;
       slotted.add(parsed.data.id);
       const card = { ...ok[0], id: idOf(ok[0].id), links: [] };
-      authoring.push(authorOne(section, k, card));
+      if (claim(card)) authoring.push(authorOne(section, k, card));
     };
     if (!chunk.cards) {
       const g = await guide("organize", [...cardKinds]);
@@ -385,7 +396,8 @@ export async function runRecaller(ctx: RecallerContext) {
         let reply: z.infer<typeof organizeSchema>;
         try {
           reply = await ctx.ask("rc-organize", section.id, attempt, `${ORGANIZE}\n\n[정리 기준]\n${g.text}`,
-            organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision }), organizeSchema,
+            organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision,
+              terms: termLines(extractTerms(data.texts)), already: known.map((c) => c.title).slice(0, 40) }), organizeSchema,
             { guide: g, maxChars: 6000 * pages.length, onPartial: (text) => { for (const raw of completeItems(text, "cards")) startCard(raw); } });
         } catch (error) {
           if (!(error instanceof RunawayReply)) throw error;
@@ -407,7 +419,7 @@ export async function runRecaller(ctx: RecallerContext) {
       await save();
     }
     // Resumed runs (or cards the stream did not show whole) still get their questions.
-    for (const card of slotCards(chunk.cards, input.purpose)) if (!slotted.has(card.id.split(".")[1].replace(/^\d+/, ""))) authoring.push(authorOne(section, k, card));
+    for (const card of slotCards(chunk.cards, input.purpose)) if (!slotted.has(card.id.split(".")[1].replace(/^\d+/, "")) && !data.dups?.[card.id] && (known.includes(card) || known.some((x) => x.id === card.id) || claim(card))) authoring.push(authorOne(section, k, card));
     await Promise.all(authoring);
     chunk.questions ??= [];
     collect(unit);
@@ -437,6 +449,26 @@ export async function runRecaller(ctx: RecallerContext) {
   const settled = await Promise.allSettled(work);
   const stop = settled.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
   if (stop) throw stop.reason;
+  // Two pages organized at the same moment can still both make a card on one thing: the later question is held back.
+  const seen: Array<{ card: Card; q: RcQuestion }> = [];
+  const touched = new Set<string>();
+  for (const section of state.sections) {
+    const unit = data.units[section.id];
+    for (const chunk of Object.values(unit.chunks ?? {})) {
+      chunk.questions = (chunk.questions ?? []).filter((q) => {
+        const card = (unit.cards ?? []).find((c) => c.id === q.cardIds[0]);
+        const twin = card && seen.find((x) => sameKnowledge(x.card, card));
+        if (card && !twin) { seen.push({ card, q }); return true; }
+        if (!card) return true;
+        (data.dups ??= {})[card.id] = twin!.card.id;
+        (chunk.held ??= []).push({ cardId: card.id, reason: `앞 문제(${twin!.q.objectiveId})와 같은 지식이라 뺐어요.` });
+        touched.add(section.id);
+        return false;
+      });
+    }
+    collect(unit);
+  }
+  for (const id of touched) await publish(id);
   data.timing.basicDoneAt ??= new Date().toISOString();
   await save();
 
@@ -510,7 +542,7 @@ export function recallerFakeReply(step: GenStep, user: string): string {
     const pageOf = (line: string) => { const at = source.indexOf(line); const head = source.slice(0, at).match(/\[원문 p\.(\d+)\]/g); return head ? Number(head.at(-1)!.match(/\d+/)![0]) : section.pages[0]; };
     const cards = lines.slice(0, 3).map((line, i) => ({ id: `c${i + 1}`, kind: "사실", title: line.slice(0, 30), weight: "핵심",
       shape: { form: "fact", subject: line.slice(0, 20), value: line.slice(0, 80) }, evidence: [{ page: pageOf(line), quote: line.slice(0, 40) }],
-      mistakes: ["반대로 기억함"], links: i ? [{ to: `c${i}`, kind: "앞뒤" }] : [] }));
+      mistakes: [`${line.slice(0, 30)}를 반대로 기억함`], links: i ? [{ to: `c${i}`, kind: "앞뒤" }] : [] }));
     return JSON.stringify({ cards });
   }
   if (step === "rc-author") {
