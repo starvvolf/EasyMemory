@@ -115,11 +115,12 @@ const LINK = `${BASE}
 지식 카드 목록에서 함께 엮으면 한 카드만 알아서는 풀 수 없는 응용 문제가 되는 묶음(카드 2~3장)을 고른다. 앞 카드의 결과가 뒤 카드의 입력이 되는 묶음(판정 → 절차, 공식 → 비교, 절차 → 절차)을 우선한다. 구체적인 값으로 계산하거나 판정할 수 있는 묶음만 고른다. 서로 다른 묶음이 같은 카드 조합을 반복하지 않는다. 묶음이 없으면 빈 배열.`;
 const DEEP = `${BASE}
 카드 묶음 하나로 심화 문제를 만든다: 공통 상황(stem) 하나, 단계별 풀이(steps) 하나, 그 풀이를 따라가며 묻는 객관식 소문항(parts). rules(심화 기준)를 따른다.
+stem에는 상황과 주어진 값만 쓰고, 묻는 말은 parts의 ask에만 쓴다.
 소문항: 상황 하나에서 중간 결과를 차례로 물어보는 게 자연스러우면(이걸 구하고, 그걸로 다음을 구하고) 소문항 여러 개로 나누고, 한 번에 묻는 게 자연스러우면 하나로 둔다. 소문항마다 upTo는 답이 되는 step 번호이고, 정답 보기의 값은 그 step의 값과 같다.
 steps의 expr은 계산기가 다시 계산한다: 숫자, + - * / ^, 괄호, 벡터 (a, b, c), dot(), cross(), sqrt(), abs()와 앞 단계 name만 쓴다. ${CALC} 계산이 아닌 판단 단계는 expr을 빈 문자열로 둔다. 소문항의 distractors 3개는 각각 몇 번째 step에서 어떤 실수를 했을 때 나오는 보기인지와, 그 실수로 계산한 식(expr)을 적는다. 수식은 $…$로 쓴다.`;
 const CHAIN = `${BASE}
 여러 자료의 지식 카드에서 '종합 문제' 묶음을 고른다. 카드마다 받음(takes)과 냄(gives)이 있다. 앞 카드의 냄이 다음 카드의 받음이 되는 카드를 이어, 같은 대상 하나를 처음부터 끝까지 들고 갈 수 있는 사슬을 만든다. 이어지는 만큼 길게(최대 5장), 자료 2개 이상에 걸치게. 이웃한 쌍마다 joints에 어떤 냄이 어떤 받음이 되는지 카드에 적힌 말 그대로 적는다. 억지로 잇지 않는다: 이어지지 않으면 짧게 끊거나 빈 배열.`;
-const CHAIN_DEEP = "이번 묶음은 종합 문제다. cardIds 순서대로 같은 대상 하나(값, 물체, 사례)를 처음부터 끝까지 들고 간다. joints대로 앞 카드 단계의 결과(name)가 다음 카드 단계의 입력이 된다. 값은 단계마다 결과가 실제로 바뀌게 고른다(그대로 통과하는 값 금지). 문제 글은 상황과 주어진 값, 구할 것만 쓰고 단계 순서를 알려 주지 않는다. 오답 셋은 서로 다른 카드의 단계에서 나온 실수다.";
+const CHAIN_DEEP = "이번 묶음은 종합 문제다. cardIds 순서대로 같은 대상 하나(값, 물체, 사례)를 처음부터 끝까지 들고 간다. joints대로 앞 카드 단계의 결과(name)가 다음 카드 단계의 입력이 된다. 값은 단계마다 결과가 실제로 바뀌게 고른다(그대로 통과하는 값 금지). 문제 글은 상황과 주어진 값, 구할 것만 쓰고 단계 순서를 알려 주지 않는다. 오답 셋은 서로 다른 카드의 단계에서 나온 실수다. 카드마다 그 단계의 결과가 하나씩 나오므로, 그 결과들을 소문항으로 차례로 묻는 것(1-1 앞 카드의 결과, 1-2 그다음 …)을 먼저 생각한다. 중간 결과가 따로 물을 만하지 않으면 묶어서 묻는다.";
 const SOLVE = `${BASE}
 정답을 모르는 상태에서 객관식 문제를 직접 푼다. 공통 상황(situation)에서 소문항(parts)을 차례로 푼다. 원문(source)의 절차를 따라 단계별로 계산하고, 소문항마다 고른 보기 번호(choice, 0부터)와 값(value)을 answers에 순서대로 적는다. 문제에 조건이 모자라거나 답이 둘 이상이면 doubts에 적는다. 사고 과정 전체를 쓰지 말고 단계별 결과만 쓴다.`;
 
@@ -243,6 +244,9 @@ export function deepProblems(q: DeepReply): string[] {
   });
   return problems;
 }
+
+/** Errors that pause the whole run (usage limit, login) rather than fail one question; the runner marks them with a status. */
+const pausesRun = (error: unknown) => { const status = (error as { status?: string } | null)?.status; return typeof status === "string" && status.startsWith("paused-") && status !== "paused-invalid"; };
 
 /** A phrase as one of a card's own takes/gives (spelling and spacing aside). */
 const among = (phrase: string, list: string[] = []) => { const k = phrase.toLowerCase().replace(/[\s\p{P}]/gu, ""); return list.some((x) => { const y = x.toLowerCase().replace(/[\s\p{P}]/gu, ""); return !!y && (y === k || y.includes(k) || k.includes(y) || similarity(x, phrase) >= 0.6); }); };
@@ -549,7 +553,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const g = await guide("deep", []);
     const byId = new Map(allCards.map((c) => [c.id, c]));
     const sectionOfCard = (id: string) => id.split(".")[0];
-    await Promise.allSettled(data.groups.map((group) => sectionLimit(async () => {
+    const deepRuns = await Promise.allSettled(data.groups.map((group) => sectionLimit(async () => {
       const slot = data.deep[group.id];
       if (slot.status === "ready" || slot.status === "held") return;
       slot.status = "making"; await save();
@@ -557,7 +561,16 @@ export async function runRecaller(ctx: RecallerContext) {
       const pages = [...new Set(cards.flatMap((c) => c.evidence.map((e) => e.page)))];
       while (slot.tries < 2) {
         slot.tries++;
-        const reply = await ctx.ask("rc-deep", sectionOfCard(group.cardIds[0]), slot.tries, `${DEEP}${combine ? `\n${CHAIN_DEEP}` : ""}\n\n[심화 기준]\n${g.text}`, JSON.stringify({ purpose: input.purpose, group, cards, source: sourceOfCards(cards), ...(slot.problems.length ? { revision: slot.problems } : {}) }), deepReplySchema, { guide: g, maxChars: combine ? 32000 : 20000 });
+        // A reply that breaks off (cut, not JSON) costs this try, not the run; a paused run (usage, login) still stops.
+        let reply: z.infer<typeof deepReplySchema>;
+        try {
+          reply = await ctx.ask("rc-deep", sectionOfCard(group.cardIds[0]), slot.tries, `${DEEP}${combine ? `\n${CHAIN_DEEP}` : ""}\n\n[심화 기준]\n${g.text}`, JSON.stringify({ purpose: input.purpose, group, cards, source: sourceOfCards(cards), ...(slot.problems.length ? { revision: slot.problems } : {}) }), deepReplySchema, { guide: g, maxChars: combine ? 32000 : 20000 });
+        } catch (error) {
+          if (pausesRun(error)) throw error;
+          slot.problems = [`응답을 읽지 못했어요: ${error instanceof Error ? error.message : String(error)}`];
+          await save();
+          continue;
+        }
         const q = reply.question;
         const problems = deepProblems(q);
         if (!problems.length) {
@@ -600,6 +613,11 @@ export async function runRecaller(ctx: RecallerContext) {
       data.warnings.push({ severity: "warning", code: "rc-deep-held", message: `심화 ${group.id}: ${slot.problems.join(" / ")}` });
       await save();
     })));
+    // A slot left half made (the run paused under it) goes back to waiting, so a restart makes it again.
+    for (const slot of Object.values(data.deep)) if (slot.status === "making") slot.status = "waiting";
+    await save();
+    const paused = deepRuns.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+    if (paused) throw paused.reason;
   }
   data.timing.completedAt = new Date().toISOString();
   state.status = "done"; state.phase = "done"; state.message = "";

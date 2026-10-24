@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
+import { closeJson, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import { basicProblem, completeItems, deepProblems, recallerFakeReply, slotCards } from "./recaller.ts";
 import type { GenStep } from "./types.ts";
 
@@ -101,4 +101,11 @@ test("code checks: a wrong option must be the value its stated mistake gives; a 
   assert.equal(basicProblem(basic, card), null);
   assert.match(basicProblem({ ...basic, optionNotes: null }, card)!, /optionNotes/);
   assert.equal(slotCards([{ weight: "보조", kind: "사실" }, { weight: "핵심", kind: "용어" }] as never, "core").length, 1);
+});
+
+test("a JSON reply that ran on in blank space after its last value is closed and read; an unfinished one is not", () => {
+  assert.deepEqual(closeJson('{"question":{"a":[1,2],"b":"x}"}' + " \t".repeat(800)), { question: { a: [1, 2], b: "x}" } });
+  assert.equal(closeJson('{"question":{"a":"unfini'), undefined);
+  assert.equal(closeJson('{"question":{"a":1,'), undefined);
+  assert.equal(closeJson('{"a":1}'), undefined, "nothing open: not a cut reply");
 });

@@ -44,8 +44,13 @@ export function extractTerms(texts: Map<number, string> | Record<string, string>
       const head = /^\s*-\s+(?:The\s+)?\*?([A-Z][\w*-]*(?:\s+[A-Z*][\w*-]*){0,4})\*?\s*$/.exec(line);
       if (head) add(head[1], "", page);
       // Korean name with its English one: "투영 변환(Projection Transformation)"
-      // Only the one word right before the bracket ("크게 휘발성(Volatile)" → 휘발성), particles left out.
-      for (const m of line.matchAll(/([가-힣]{2,10})\s*\(([A-Za-z][A-Za-z\s-]{2,40})\)/g)) add(`${m[2].trim()} (${m[1]})`, "", page);
+      // As many Korean words before the bracket as the English name has ("크게 휘발성(Volatile)" → 휘발성,
+      // "보상 시스템(Reward Systems)" → 보상 시스템), so words of the sentence around it stay out.
+      for (const m of line.matchAll(/((?:[가-힣]+\s+){0,3}[가-힣]{1,10})\s*\(([A-Za-z][A-Za-z\s-]{2,40})\)/g)) {
+        const english = m[2].trim();
+        const korean = m[1].trim().split(/\s+/).slice(-english.split(/\s+/).length).join(" ");
+        if (korean.length >= 2) add(`${english} (${korean})`, "", page);
+      }
       const emph = /^\[색 강조\]\s*(.+)$/.exec(line);
       if (emph) for (const part of emph[1].split(" · ")) { const t = part.replace(/^[^:]+:\s*/, ""); if (t.length <= 40) add(t, "", page); }
     }

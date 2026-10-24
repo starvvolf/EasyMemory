@@ -70,6 +70,25 @@ export class GenError extends Error {
   readonly status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
+/**
+ * A JSON text that stopped after a complete value inside open objects/arrays: closes them and parses. Undefined when the
+ * text stops inside a string, after a key or a comma, or does not parse — those are unfinished, not merely unclosed.
+ */
+export function closeJson(text: string): unknown {
+  const t = text.trimEnd();
+  const open: string[] = [];
+  let inString = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (inString) { if (ch === "\\") i++; else if (ch === '"') inString = false; continue; }
+    if (ch === '"') inString = true;
+    else if (ch === "{" || ch === "[") open.push(ch === "{" ? "}" : "]");
+    else if (ch === "}" || ch === "]") open.pop();
+  }
+  if (inString || !open.length || /[,:{[]$/.test(t)) return undefined;
+  try { return JSON.parse(t + open.reverse().join("")); } catch { return undefined; }
+}
+
 class Stop extends Error {
   readonly status: GenState["status"];
   constructor(status: GenState["status"], message: string) { super(message); this.status = status; }
@@ -504,6 +523,14 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       await saveJson(callFile, record);
       return schema ? reply.data : reply.text;
     } catch (error) {
+      // A finished JSON reply that then ran on in blank space (seen with nested replies: every field written, only the last
+      // closing brace missing) is read as finished: close what is open, and only if nothing is left mid-string.
+      const closed = runaway && schema ? closeJson(partial) : undefined;
+      if (closed !== undefined) {
+        Object.assign(record, { ok: true, reply: redactCallText(partial.trimEnd()), note: "빈칸이 이어져 끊고, 닫는 괄호만 채워 읽었어요.", ms: Date.now() - started });
+        await saveJson(callFile, record);
+        return closed;
+      }
       if (runaway) {
         // Head and tail are enough to see what repeated; the whole text can be tens of thousands of characters.
         const kept = partial.length > 24000 ? `${partial.slice(0, 12000)}\n…(중략 ${partial.length - 24000}자)…\n${partial.slice(-12000)}` : partial;

@@ -35,6 +35,8 @@ test("a Korean name next to its English one keeps only that word, not the partic
   const terms = extractTerms(new Map([[1, "메모리는 크게 휘발성(Volatile)과 비휘발성(Non-volatile)으로 나뉜다"]]));
   assert.ok(terms.some((t) => t.name === "Volatile (휘발성)"), JSON.stringify(terms));
   assert.ok(terms.some((t) => t.name === "Non-volatile (비휘발성)"), JSON.stringify(terms));
+  const more = extractTerms(new Map([[1, "기업은 보상 시스템(Reward Systems)과 도덕적 이탈(Moral Disengagement)을 본다"]]));
+  assert.ok(more.some((t) => t.name === "Reward Systems (보상 시스템)") && more.some((t) => t.name === "Moral Disengagement (도덕적 이탈)"), JSON.stringify(more));
 });
 
 test("an expression is not a symbol", () => {
