@@ -22,6 +22,7 @@ import "./workspace/workspace.css";
 import TimerChip from "./workspace/TimerChip";
 import KnowledgeSidebar from "./workspace/KnowledgeSidebar";
 import AgentScreen from "./workspace/AgentScreen";
+import MoreMenu from "./workspace/MoreMenu";
 
 async function readJson<T>(response: Response, fallback: string): Promise<T> {
   const data = await response.json().catch(() => null);
@@ -441,9 +442,10 @@ export default function DejipgiStudy() {
         return (await import("katex")).default;
       },
       // 지식창 · 코드 · 일정: React screens mounted into hosts the vanilla app keeps across re-renders, like the flow canvas.
-      mountView(name: "knowledge" | "code" | "plan", host: HTMLElement, props: Record<string, unknown>) {
+      mountView(name: "knowledge" | "code" | "plan" | "web" | "start" | "today", host: HTMLElement, props: Record<string, unknown>) {
         let root: import("react-dom/client").Root | null = null, gone = false;
-        const load = name === "knowledge" ? import("./workspace/KnowledgeWindow") : name === "code" ? import("./workspace/CodeStudy") : import("./workspace/PlanView");
+        const load = { knowledge: () => import("./workspace/KnowledgeWindow"), code: () => import("./workspace/CodeStudy"), plan: () => import("./workspace/PlanView"),
+          web: () => import("./workspace/WebStudy"), start: () => import("./workspace/NewStudy"), today: () => import("./workspace/TodayBoard") }[name]();
         void Promise.all([import("react-dom/client"), load]).then(([{ createRoot }, mod]) => {
           if (gone) return;
           root = createRoot(host);
@@ -487,28 +489,24 @@ export default function DejipgiStudy() {
           <header className="top">
             <div className="brand">
               <h1>Recaller</h1>
+              <p>공부한 것이 지식으로 쌓이고, 잊을 때쯤 다시 물어봐요</p>
             </div>
-            {session.mode === "local-experiment" ? <div className="row ws-tools" style={{ marginLeft: "auto", gap: 6 }}>
+            {session.mode === "local-experiment" ? <div className="ws-tools">
               <TimerChip />
-              <button className={`tablet-btn sb-toggle${side ? " on" : ""}`} style={{ margin: 0 }} aria-pressed={side} onClick={() => toggleSide(!side)} title="오른쪽 지식 사이드바">지식 사이드바</button>
+              <MoreMenu />
             </div> : null}
             <span className="store" id="store" data-mode="memory"><i></i><span id="storeText">저장 준비 중</span></span>
           </header>
           <nav className="tabs" role="tablist" id="tabs">
-            <button role="tab" data-view="home" aria-selected="true">홈</button>
+            <button role="tab" data-view="home" aria-selected="true">오늘</button>
+            <button role="tab" data-view="practice" aria-selected="false">공부</button>
             <button role="tab" data-view="knowledge" aria-selected="false">지식</button>
-            <button role="tab" data-view="read" aria-selected="false">읽기</button>
-            <button role="tab" data-view="practice" aria-selected="false">연습</button>
-            <button role="tab" data-view="code" aria-selected="false">코드</button>
             <button role="tab" data-view="plan" aria-selected="false">일정</button>
-            <button role="tab" data-view="create" aria-selected="false">자료</button>
-            <button role="tab" data-view="records" aria-selected="false">기록</button>
-            <button role="tab" data-view="bench" aria-selected="false">작업대</button>
           </nav>
         </div>
         <main id="app"></main>
       </div>
-      {session.mode === "local-experiment" ? <KnowledgeSidebar open={side} onClose={() => toggleSide(false)} /> : null}
+      {session.mode === "local-experiment" ? <KnowledgeSidebar open={side} onClose={() => toggleSide(false)} onOpen={() => toggleSide(true)} /> : null}
       {session.mode === "local-experiment" ? <AgentScreen /> : null}
     </div>
   );

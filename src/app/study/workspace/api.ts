@@ -32,6 +32,16 @@ export function folderPaths(folders: Folder[]) {
   return folders.map((f) => ({ id: f.id, path: pathOf(f.id) })).sort((a, b) => a.path.localeCompare(b.path, "ko"));
 }
 /** Tell the rest of the app (the old screen, the sidebar) to go somewhere. */
-export function go(view: string, detail: Record<string, unknown> = {}) { window.dispatchEvent(new CustomEvent("recaller:go", { detail: { view, ...detail } })); }
+/** What a "go" asked the next screen to open (a screen mounted after the event reads it from here). */
+export const handoff: { start?: "pdf" | "web" | "code"; webId?: string; codeId?: string; knowledgeId?: string } = {};
+export function go(view: string, detail: { kind?: "pdf" | "web" | "code"; id?: string } = {}) {
+  if (view === "start") handoff.start = detail.kind;
+  if (view === "web" && detail.id) handoff.webId = detail.id;
+  if (view === "code" && detail.id) handoff.codeId = detail.id;
+  if (view === "knowledge" && detail.id) handoff.knowledgeId = detail.id;
+  window.dispatchEvent(new CustomEvent("recaller:go", { detail: { view, ...detail } }));
+  const name = { web: "recaller:web-open", code: "recaller:code-open", knowledge: "recaller:knowledge-focus" }[view];
+  if (name && detail.id) setTimeout(() => window.dispatchEvent(new CustomEvent(name, { detail: { id: detail.id } })), 60);
+}
 export type ScreenContext = { view: string; title: string; refs: string[]; knowledgeIds: string[]; problemId?: string; selection?: string; text?: string };
 export function shareContext(context: ScreenContext) { window.dispatchEvent(new CustomEvent("recaller:context", { detail: context })); }

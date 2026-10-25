@@ -3,7 +3,7 @@
 // 돌려 처음 틀린 하나만 보여 준다. Whether the code is right is the judge's call; the AI next to the code explains,
 // hints in three steps, checks an approach before submitting and looks for a counterexample.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { call, errorText, later, shareContext } from "./api";
+import { call, errorText, handoff, later, shareContext } from "./api";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
 
@@ -25,7 +25,7 @@ const storedLang = (): Lang => { try { return (localStorage.getItem("code:lang")
 export default function CodeStudy({ openId }: { openId?: string }) {
   const [list, setList] = useState<ProblemLite[]>([]);
   const [langs, setLangs] = useState<LangInfo[]>([]);
-  const [current, setCurrent] = useState<string | null>(openId ?? null);
+  const [current, setCurrent] = useState<string | null>(() => { const id = openId ?? handoff.codeId ?? null; handoff.codeId = undefined; return id; });
   const [filter, setFilter] = useState<"all" | ProblemLite["status"]>("all");
   const [error, setError] = useState("");
   const load = useCallback(async () => {
@@ -43,8 +43,8 @@ export default function CodeStudy({ openId }: { openId?: string }) {
   return (
     <div className="cs stack">
       <header className="row" style={{ justifyContent: "space-between" }}>
-        <div><h2>코드</h2><p className="small muted">문제를 풀면 결과가 그 문제의 지식 기록에 남아요.</p></div>
-        <div className="row small">{langs.map((l) => <span key={l.lang} className={`chip ${l.ready ? "good" : ""}`} title={l.ready ? l.version : l.help}>{l.label} {l.ready ? "✓" : "설치 안 됨"}</span>)}</div>
+        <div><h2>코드 문제</h2><p className="small muted">직접 짜서 실행하고 채점해요. 결과는 그 문제의 지식 기록에 남아요.</p></div>
+        {langs.some((l) => !l.ready) ? <div className="row small">{langs.filter((l) => !l.ready).map((l) => <span key={l.lang} className="chip help" title={l.help}>{l.label} 설치 안 됨</span>)}</div> : null}
       </header>
       {error ? <p className="ws-err">{error}</p> : null}
       <MakeProblem langs={langs} onMade={(id) => { void load(); setCurrent(id); }} />

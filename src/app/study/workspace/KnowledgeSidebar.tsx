@@ -10,7 +10,7 @@ import { Rich } from "./Rich";
 
 type Answer = { answer: string; link: { from: string; to: string; relation: string } };
 
-export default function KnowledgeSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: boolean; onClose: () => void; onOpen: () => void }) {
   const [context, setContext] = useState<ScreenContext | null>(null);
   const [related, setRelated] = useState<ItemLite[]>([]);
   const [recent, setRecent] = useState<ItemLite[]>([]);
@@ -30,7 +30,6 @@ export default function KnowledgeSidebar({ open, onClose }: { open: boolean; onC
     return () => window.removeEventListener("recaller:context", on);
   }, []);
   const loadRelated = useCallback(async () => {
-    if (!open) return;
     try {
       const fromRefs = context?.refs.length ? (await call<{ items: ItemLite[] }>(`/api/knowledge/related?prefix=1&${context.refs.slice(0, 20).map((r) => `ref=${encodeURIComponent(r)}`).join("&")}`)).items : [];
       const { items } = await call<Tree>("/api/knowledge");
@@ -40,7 +39,7 @@ export default function KnowledgeSidebar({ open, onClose }: { open: boolean; onC
       setRelated(merged.sort((a, b) => (a.state === "unknown" ? -1 : 0) - (b.state === "unknown" ? -1 : 0) || b.weak - a.weak).slice(0, 30));
       setRecent([...items].sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, 8));
     } catch (e) { setError(errorText(e)); }
-  }, [open, context]);
+  }, [context]);
   useEffect(() => later(() => void loadRelated()), [loadRelated]);
   const pick = useCallback(async (id: string) => { setQuestion(null); try { setSel(await call<Detail>(`/api/knowledge/item/${id}`)); } catch (e) { setError(errorText(e)); } }, []);
   useEffect(() => {
@@ -80,9 +79,10 @@ export default function KnowledgeSidebar({ open, onClose }: { open: boolean; onC
   };
 
   const list = hits ?? related;
+  if (!open) return <button className="sb-handle" onClick={onOpen} title="지식 사이드바 열기" aria-label="지식 사이드바 열기"><span>지식</span>{related.length ? <i className="num">{related.length}</i> : null}</button>;
   return (
-    <aside className="sb" hidden={!open} aria-label="지식 사이드바">
-      <div className="sb-head"><b>지식</b><div className="row"><button className="btn ghost small" onClick={() => go("knowledge")}>지식창</button><button className="btn ghost small" aria-label="닫기" onClick={onClose}>✕</button></div></div>
+    <aside className="sb" aria-label="지식 사이드바">
+      <div className="sb-head"><b>지식</b><div className="row"><button className="btn ghost small" onClick={() => go("knowledge")}>지식창 열기</button><button className="btn ghost small" aria-label="사이드바 닫기" title="닫기" onClick={onClose}>→</button></div></div>
       <input className="ws-input" type="search" placeholder="지식 찾기" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="사이드바 지식 찾기" />
       {error ? <p className="ws-err" onClick={() => setError("")}>{error}</p> : null}
 

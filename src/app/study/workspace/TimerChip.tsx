@@ -51,7 +51,7 @@ export default function TimerChip() {
   return (
     <div className="tm">
       <button className={`tablet-btn tm-chip${running ? " on" : ""}`} onClick={() => setOpen(!open)} aria-expanded={open} title="타이머">
-        ⏱ {running || paused ? <span className="num">{left !== null ? (left > 0 ? clock(left) : `+${clock(-left)}`) : clock(elapsed)}</span> : "타이머"}
+        ⏱ {running || paused ? <span className="num">{left !== null ? (left > 0 ? clock(left) : `+${clock(-left)}`) : clock(elapsed)}</span> : <span className="tm-idle">타이머</span>}
       </button>
       {open ? (
         <div className="tm-card" role="dialog" aria-label="타이머">

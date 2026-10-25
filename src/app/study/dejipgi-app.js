@@ -359,7 +359,7 @@ function renderToday(plan, pendings){
         : plan.doneToday ? `오늘 ${plan.doneToday}문제를 풀었어요. 내일 할 것은 내일 아침에 다시 계산해요.` : "새 자료를 올리거나, 과목에 시험일을 넣어 보세요." })),
     h("div", { class:"row" },
       left ? h("button", { class:"btn primary big", "data-autofocus":"1", onclick:startToday }, plan.doneToday ? "이어서 하기" : "시작하기", h("span", { class:"btn-sub num", text:`${Math.min(left, chunkSize())}문제` })) : null,
-      h("button", { class:"btn", onclick: () => setView("create") }, "+ 새 자료"))));
+      h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부"))));
   if (total) panel.append(h("div", { class:"today2-bar", "aria-hidden":"true" }, h("i", { style:`width:${(plan.doneToday / total * 100).toFixed(1)}%` })));
   const rows = h("div", { class:"today2-rows" });
   for (const sp of plan.subjects){
@@ -543,6 +543,9 @@ function touchMemory(subject){
 }
 
 /* ---------- views ---------- */
+/* 메뉴 넷 (2026-10-26): 오늘 · 공부 · 지식 · 일정. Every screen belongs to one of them; the rest live under ⋯ 더보기. */
+const TAB_OF = { home:"home", practice:"practice", read:"practice", code:"practice", web:"practice", start:"practice", create:"practice",
+  knowledge:"knowledge", summary:"knowledge", plan:"plan" };
 function setView(v){
   if (S.session && S.session.overlay && v !== "read") S.session = null;
   S.view = v;
@@ -551,7 +554,8 @@ function setView(v){
   root.dataset.view = v;
   if (v === "create") loadAccount();
   if (v !== "read" && typeof hideSel === "function"){ hideSel(); NT.drawer = false; paintDrawer(); }
-  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === v ? "true" : "false"));
+  const group = TAB_OF[v] || "";
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === group ? "true" : "false"));
   render();
 }
 on(document.getElementById("tabs"), "click", (e) => {
@@ -657,26 +661,25 @@ function paintCoach(){
   el.replaceChildren(...richLines(Coach.text || "…"));
 }
 function renderCoachBox(){
-  const input = h("input", { class:"answer-input", type:"text", placeholder:"무엇을 공부할까요? 예: 내일 시험인데 뭐부터 해?", value:Coach.busy ? Coach.q : "", disabled:Coach.busy ? true : null,
+  const input = h("input", { class:"answer-input", type:"text", placeholder:"막히거나 궁금한 것을 물어보세요. 예: 내일 시험인데 뭐부터 해?", value:Coach.busy ? Coach.q : "", disabled:Coach.busy ? true : null,
     "aria-label":"코치에게 질문", style:"flex:1;min-width:0;font-size:15px;padding:12px 14px" });
   const send = () => { const v = input.value; input.value = ""; askCoach(v); };
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing){ e.preventDefault(); send(); } });
   const plan = todayPlan(), subject = currentSubject();
   const weakN = weakList(subject ? decksOf(subject) : realDecks()).length;
   const box = h("section", { class:"panel coach-home" },
-    h("p", { class:"eyebrow", text:"코치" }),
+    h("p", { class:"eyebrow", text:"코치에게 묻기" }),
     h("div", { class:"row", style:"gap:8px;flex-wrap:nowrap" }, input, h("button", { class:"btn primary", disabled:Coach.busy || !ask ? true : null, onclick:send }, Coach.busy ? "답하는 중…" : "묻기")),
     h("div", { class:"chat-sugs", style:"margin-top:10px" },
       h("button", { class:"chip-btn", disabled: plan && plan.queue.length ? null : true, onclick:startToday }, `오늘 할 것 시작${plan && plan.queue.length ? ` · ${Math.min(plan.queue.length, chunkSize())}` : ""}`),
       h("button", { class:"chip-btn", disabled: weakN && subject ? null : true, onclick: () => startWeak(subject) }, `약점 다시 풀기${weakN ? ` · ${Math.min(weakN, WEAK_MAX)}` : ""}`),
-      h("button", { class:"chip-btn", onclick: () => setView("knowledge") }, "지식 지도"),
-      h("button", { class:"chip-btn", onclick: () => setView("create") }, "+ 새 자료")));
+      h("button", { class:"chip-btn", onclick: () => setView("knowledge") }, "지식 보기")));
   if (Coach.q && (Coach.text || Coach.busy || Coach.err)){
     box.append(h("div", { class:"coach-answer" },
       h("p", { class:"small muted", text:"Q. " + Coach.q }),
       Coach.err ? h("div", { class:"note err", text:Coach.err }) : h("div", { id:"coachReply", class:"md-body" }, ...richLines(Coach.text || "…"))));
   }
-  if (!ask) box.append(h("p", { class:"small muted", text:"코치는 ChatGPT 연결 뒤에 쓸 수 있어요(자료 만들기 탭)." }));
+  if (!ask) box.append(h("p", { class:"small muted", text:"코치는 ChatGPT 연결 뒤에 쓸 수 있어요 (⋯ 더보기 → 학습 기록 · 계정)." }));
   return box;
 }
 function kpChip(k){
@@ -688,37 +691,27 @@ function renderKpMeter(c, total){
   const seg = (n, cls) => n ? h("i", { class:cls, style:`width:${n / total * 100}%` }) : null;
   return h("div", { class:"bar kp-meter", "aria-hidden":"true" }, seg(c.mastered + c.good, "g"), seg(c.weak, "r"), seg(c.mid, "h"));
 }
+/* 오늘 (2026-10-26): what to do today, in the order a learner wants it — start something, the day's review and
+   to-dos, then the PDF plan and the coach. The knowledge cloud moved to 지식, the material list to 공부. */
 function renderRecallerHome(){
   const all = Object.values(S.decks), pendings = all.filter(d => d.pending);
   const wrap = h("div", { class:"stack" });
-  wrap.append(renderCoachBox());
+  const today = new Date().toLocaleDateString("ko-KR", { month:"long", day:"numeric", weekday:"long" });
   const real = realDecks();
-  if (!real.length){
-    wrap.append(h("section", { class:"panel" }, h("h2", { text:"첫 자료를 넣어 볼까요" }),
-      h("p", { class:"muted", text:"강의 PDF를 넣으면 AI가 지식 포인트로 나누고, 원문 근거와 함께 문제를 만들어요. 글·코드 자료도 곧 넣을 수 있어요." }),
-      h("button", { class:"btn primary", onclick: () => setView("create") }, "+ 새 자료")));
-    return wrap;
+  wrap.append(h("section", { class:"panel hero" },
+    h("p", { class:"eyebrow", text:today }),
+    h("h2", { text:"무엇을 공부할까요?" }),
+    h("p", { class:"muted", text:"PDF·웹 글·코드 무엇이든 넣으면, 알아야 할 지식을 뽑고 문제로 확인해요. 잊을 때쯤 다시 물어보고, 시험이 있으면 날짜까지 나눠 드려요." }),
+    h("div", { class:"row" },
+      h("button", { class:"btn primary", onclick: () => setView("start") }, "+ 새 공부 시작"),
+      real.length ? h("button", { class:"btn", onclick: () => setView("practice") }, "내 공부 보기") : null)));
+  if (env.mountView) wrap.append(viewHost("today", {}));
+  if (real.length){
+    if (liveSubjects().length) wrap.append(subjectChips());
+    const plan = todayPlan();
+    if (plan && plan.queue.length) wrap.append(renderToday(plan, pendings));
   }
-  if (liveSubjects().length) wrap.append(subjectChips());
-  const subject = currentSubject(), points = knowledgeOf(subject), c = kpCounts(points), total = Math.max(1, points.length - c.none);
-  const plan = todayPlan();
-  if (plan && plan.queue.length) wrap.append(renderToday(plan, pendings));
-  const sorted = points.filter(k => k.state !== "none").sort((a, b) => KP_STATE[a.state].rank - KP_STATE[b.state].rank);
-  wrap.append(h("section", { class:"panel" },
-    h("div", { class:"row", style:"justify-content:space-between;align-items:flex-end" },
-      h("div", null, h("p", { class:"eyebrow", text:"지식 지도" }), h("h2", { text:`${subject || "전체"} · 지식 포인트 ${points.length}개` })),
-      h("button", { class:"btn small", onclick: () => setView("knowledge") }, "전체 보기")),
-    renderKpMeter(c, total),
-    h("p", { class:"small muted num", text:`숙련 ${c.mastered} · 혼자 맞힘 ${c.good} · 푸는 중 ${c.mid} · 약점 ${c.weak} · 안 풀어봄 ${c.new}${c.none ? ` · 문제 없음 ${c.none}` : ""}` }),
-    h("div", { class:"kp-cloud" }, sorted.slice(0, 40).map(kpChip)),
-    sorted.length > 40 ? h("p", { class:"small muted", text:`외 ${sorted.length - 40}개는 지식 탭에서` }) : null));
-  const mats = (subject ? decksOf(subject) : real.sort(byTitle));
-  wrap.append(h("section", { class:"panel" },
-    h("div", { class:"row", style:"justify-content:space-between" }, h("p", { class:"eyebrow", text:`자료 ${mats.length}` }),
-      h("div", { class:"row" }, h("button", { class:"btn small ghost", onclick: () => setView("archive") }, "보관함"), h("button", { class:"btn small ghost", onclick: () => setView("practice") }, "자료별 연습"), h("button", { class:"btn small", onclick: () => setView("create") }, "+ 새 자료"))),
-    h("ul", { class:"mat-mini" }, mats.slice(0, 8).map(d => h("li", null,
-      h("button", { class:"linkish", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, displayTitle(d)),
-      h("span", { class:"small muted num", text:` · 문제 ${d.items.length}` }))))));
+  wrap.append(renderCoachBox());
   return wrap;
 }
 function renderKnowledge(){
@@ -785,8 +778,8 @@ function viewHost(name, props){
 /* What is on screen, for the knowledge sidebar and the agent's current_view (the code screen reports its own). */
 let lastContextKey = "";
 function emitContext(){
-  if (S.view === "code") return;
-  let ctx = { view:S.view, title:{ home:"홈", knowledge:"지식", practice:"연습", create:"자료", records:"기록", bench:"작업대", plan:"일정", summary:"정리", archive:"보관함" }[S.view] || S.view, refs:[], knowledgeIds:[] };
+  if (S.view === "code" || S.view === "web") return;
+  let ctx = { view:S.view, title:{ home:"오늘", knowledge:"지식", practice:"공부 · PDF 자료", create:"자료 넣기", records:"학습 기록", bench:"작업대", plan:"일정", summary:"한 장 정리", archive:"보관함", web:"공부 · 웹 글", start:"새 공부" }[S.view] || S.view, refs:[], knowledgeIds:[] };
   if (S.view === "read" && S.reader && S.reader.deckId && S.decks[S.reader.deckId]){
     const d = S.decks[S.reader.deckId];
     ctx = { ...ctx, title:`${displayTitle(d)} p.${S.reader.page}`, refs:[d.id + ":"] };
@@ -800,7 +793,19 @@ function emitContext(){
   lastContextKey = key;
   try{ window.dispatchEvent(new CustomEvent("recaller:context", { detail: ctx })); }catch(e){}
 }
-on(window, "recaller:go", (e) => { const v = e.detail && e.detail.view; if (!v) return; if (v === "knowledge") S.kp.legacy = false; if (S.session && v !== "practice" && v !== "read") S.session = null; setView(v); });
+on(window, "recaller:go", (e) => {
+  let v = e.detail && e.detail.view; if (!v) return;
+  if (v === "knowledge-legacy"){ S.kp.legacy = true; v = "knowledge"; } else if (v === "knowledge") S.kp.legacy = false;
+  if (S.session && v !== "practice" && v !== "read") S.session = null;
+  setView(v); window.scrollTo({ top:0 });
+});
+/* 공부 안의 갈래: PDF 자료 · 웹 글 · 코드, and "+ 새 공부" — the same bar on each, so the three feel like one place. */
+function studyNav(active){
+  const seg = h("div", { class:"seg study-seg", role:"tablist", "aria-label":"공부 종류" },
+    [["practice", "PDF 자료"], ["web", "웹 글"], ["code", "코드"]].map(([v, label]) =>
+      h("button", { role:"tab", "aria-selected": active === v ? "true" : "false", class: active === v ? "on" : "", onclick: () => { S.session = null; setView(v); } }, label)));
+  return h("div", { class:"study-nav" }, seg, h("button", { class:"btn primary small", onclick: () => setView("start") }, "+ 새 공부"));
+}
 /* 작업대: where the agent's MD (출제 노하우) and small-sample feedback will live. First version: what is coming. */
 /* ---------- 작업대 · 흐름 (2026-10-24): 입력 박스와 모델 박스를 화살표로 이어 돌려 보는 캔버스.
    The canvas is a React component (FlowBench.tsx) mounted once into a host that survives re-renders. */
@@ -894,12 +899,14 @@ function render(){
   if (bar) app.append(bar);
   if (S.view === "home") app.append(renderRecallerHome());
   else if (S.view === "knowledge") app.append(S.kp.legacy || !env.mountView ? renderKnowledgeLegacy() : viewHost("knowledge", { onLegacy: () => { S.kp.legacy = true; render(); } }));
-  else if (S.view === "code") app.append(env.mountView ? viewHost("code", {}) : h("div", { class:"panel small muted", text:"코드 학습은 로컬 실험 모드에서 쓸 수 있어요." }));
+  else if (S.view === "code") app.append(studyNav("code"), env.mountView ? viewHost("code", {}) : h("div", { class:"panel small muted", text:"코드 학습은 로컬 실험 모드에서 쓸 수 있어요." }));
+  else if (S.view === "web") app.append(studyNav("web"), env.mountView ? viewHost("web", {}) : h("div", { class:"panel small muted", text:"웹 글 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
+  else if (S.view === "start") app.append(env.mountView ? viewHost("start", {}) : renderBuilder());
   else if (S.view === "plan") app.append(env.mountView ? viewHost("plan", {}) : h("div", { class:"panel small muted", text:"일정은 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "bench") app.append(renderBench());
   else if (S.view === "archive") app.append(renderArchive());
-  else if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
-  else if (S.view === "create") app.append(renderBuilder());
+  else if (S.view === "practice"){ if (S.session) app.append(renderSession()); else app.append(studyNav("practice"), renderHome()); }
+  else if (S.view === "create") app.append(h("div", { class:"study-nav" }, h("button", { class:"btn ghost small", onclick: () => setView("start") }, "← 새 공부"), h("span", { class:"small muted", text:"PDF · 강의 자료 넣기" })), renderBuilder());
   else if (S.view === "read") {
     const typing = Chat.el && Chat.el.contains(document.activeElement);
     app.append(renderReader()); dockChat(typing); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer();
@@ -1022,7 +1029,7 @@ function renderHome(){
     ),
     h("div", { class:"row" },
       h("button", { class:"btn primary", disabled: !(due || fresh), onclick: () => startSession(null) }, "전체 연습 시작"),
-      h("button", { class:"btn", onclick: () => setView("create") }, "+ 새 자료")
+      h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부")
     )
   ));
   // A material still being made whose first sections are ready shows as its real deck with the progress note.

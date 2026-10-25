@@ -3,7 +3,7 @@
 // Left: folders (drag items or folders onto a folder to move them). Middle: the folder's items. Right: one item —
 // its meaning, names, chains, where it came from and its record — with 확인 문제, 합치기 and the state buttons.
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
-import { call, errorText, folderPaths, later, STATE_LABEL, EVENT_LABEL, type Detail, type Folder, type ItemLite, type KState, type Question, type Tree } from "./api";
+import { call, errorText, folderPaths, handoff, later, STATE_LABEL, EVENT_LABEL, type Detail, type Folder, type ItemLite, type KState, type Question, type Tree } from "./api";
 import { QuestionRun } from "./QuestionCard";
 import { Rich } from "./Rich";
 
@@ -24,7 +24,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const [sort, setSort] = useState<"recent" | "weak" | "name">("recent");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<ItemLite[] | null>(null);
-  const [sel, setSel] = useState<string | null>(focusId ?? null);
+  const [sel, setSel] = useState<string | null>(() => { const id = focusId ?? handoff.knowledgeId ?? null; handoff.knowledgeId = undefined; return id; });
   const [detail, setDetail] = useState<Detail | null>(null);
   const [run, setRun] = useState<{ title: string; questions: Question[] } | null>(null);
   const [overview, setOverview] = useState("");
@@ -124,6 +124,14 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
           <button className="btn small" onClick={() => { setMaking("item"); setDraft(""); }}>+ 지식</button>
           <button className="btn small" onClick={() => { setMaking("folder"); setDraft(""); }}>+ 폴더</button>
           <button className="btn primary small" onClick={startQuiz}>복습하기</button>
+          <details className="ws-menu">
+            <summary aria-label="지식 더보기">⋯</summary>
+            <div className="ws-menu-card">
+              <button className="mm-item" onClick={async (e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; if (!showOverview) { try { setOverview((await call<{ text: string }>("/api/knowledge/memory?level=1")).text); } catch (err) { setError(errorText(err)); } } setShowOverview(!showOverview); }}>
+                <span>{showOverview ? "AI가 보는 요약 닫기" : "AI가 보는 요약"}</span><small>메모리 1단계: AI가 매번 보는 내 공부의 큰 그림</small></button>
+              {onLegacy ? <button className="mm-item" onClick={onLegacy}><span>자료별 지식 포인트</span><small>예전 화면 (PDF 자료마다)</small></button> : null}
+            </div>
+          </details>
         </div>
       </header>
       {making ? (
@@ -134,6 +142,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
         </form>
       ) : null}
       {error ? <p className="ws-err" onClick={() => setError("")}>{error}</p> : null}
+      {showOverview ? <section className="panel"><div className="row" style={{ justifyContent: "space-between" }}><b className="small">AI가 보는 요약 (메모리 1단계)</b><button className="btn ghost small" onClick={() => setShowOverview(false)}>닫기</button></div><pre className="kw-overview">{overview}</pre></section> : null}
       {run ? <QuestionRun title={run.title} questions={run.questions} onClose={() => { setRun(null); void load(); if (sel) void loadDetail(sel); }} /> : null}
 
       <div className="kw-grid">
@@ -141,11 +150,8 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
           <div className={`kw-folder root${folder === "all" ? " on" : ""}`} {...dropZone(null)}><button className="kw-fname" onClick={() => { setFolder("all"); setQuery(""); }}>전체</button><span className="kw-count num">{counts.total}</span></div>
           <ul>{(children.get(null) ?? []).map((f) => <FolderRow key={f.id} f={f} depth={0} />)}</ul>
           <div className={`kw-folder root${folder === "none" ? " on" : ""}`} {...dropZone(null)}><button className="kw-fname" onClick={() => { setFolder("none"); setQuery(""); }}>폴더 없음</button><span className="kw-count num">{tree.items.filter((i) => !i.folderId).length}</span></div>
-          {folder !== "all" && folder !== "none" ? <FolderTools key={folder} folder={tree.folders.find((f) => f.id === folder)!} onAct={act} onGone={() => setFolder("all")} /> : null}
+          {folder !== "all" && folder !== "none" && tree.folders.some((f) => f.id === folder) ? <details className="ws-fold kw-ftools-fold"><summary>폴더 설정</summary><FolderTools key={folder} folder={tree.folders.find((f) => f.id === folder)!} onAct={act} onGone={() => setFolder("all")} /></details> : null}
           <p className="small muted kw-tip">지식이나 폴더를 끌어다 폴더에 놓으면 옮겨져요.</p>
-          <button className="btn ghost small" onClick={async () => { if (!showOverview) { try { setOverview((await call<{ text: string }>("/api/knowledge/memory?level=1")).text); } catch (e) { setError(errorText(e)); } } setShowOverview(!showOverview); }}>{showOverview ? "AI가 보는 요약 닫기" : "AI가 보는 요약 (메모리 1단계)"}</button>
-          {showOverview ? <pre className="kw-overview">{overview}</pre> : null}
-          {onLegacy ? <button className="btn ghost small" onClick={onLegacy}>자료별 지식 포인트 (예전 화면)</button> : null}
         </nav>
 
         <section className="kw-list panel" aria-label="지식 목록">
@@ -257,13 +263,13 @@ function ItemDetail({ detail, folders, onAct, onOpen, onGone, onQuiz }: { detail
         ) : <div className="row"><button className="btn ghost small" onClick={() => setMode("link")}>+ 고리 잇기</button><button className="btn ghost small" onClick={() => setMode("merge")}>같은 지식 합치기</button></div>}
       </div>
 
-      <div><p className="eyebrow">어디서 만났나</p>
+      <details className="ws-fold"><summary>어디서 만났나 · {item.sources.length}</summary>
         <ul className="kw-sources">{item.sources.slice().reverse().slice(0, 12).map((src, i) => <li key={i} className="small"><span className="chip">{{ pdf: "PDF", web: "웹 글", code: "코드", chat: "대화", manual: "직접" }[src.kind] ?? src.kind}</span>{" "}
-          {src.url ? <a href={src.url} target="_blank" rel="noreferrer">{src.title}</a> : src.title}{src.page ? ` p.${src.page}` : ""}{src.quote ? <span className="muted"> · “{src.quote.slice(0, 80)}”</span> : null}</li>)}</ul></div>
+          {src.url ? <a href={src.url} target="_blank" rel="noreferrer">{src.title}</a> : src.title}{src.page ? ` p.${src.page}` : ""}{src.quote ? <span className="muted"> · “{src.quote.slice(0, 80)}”</span> : null}</li>)}</ul></details>
 
-      <div><p className="eyebrow">내 기록 (메모리 3단계)</p>
+      <details className="ws-fold" open={s.wrong + s.hint + s.asked > 0}><summary>내 기록 · 맞힘 {s.correct} · 틀림 {s.wrong} · 힌트 {s.hint} · 물어봄 {s.asked}</summary>
         <p className="small muted num">맞힘 {s.correct} · 틀림 {s.wrong} · 힌트 {s.hint} · 물어봄 {s.asked}{s.correctDays.length ? ` · 연속으로 맞힌 날 ${s.correctDays.length}/3` : ""}</p>
-        <ol className="kw-events">{detail.events.slice(0, 20).map((e) => <li key={e.id}><span className={`chip ev-${e.kind}`}>{EVENT_LABEL[e.kind]}</span> <span className="small">{e.detail}</span> <span className="small muted">{e.source ? `${e.source.title} · ` : ""}{ago(e.at)}</span></li>)}</ol></div>
+        <ol className="kw-events">{detail.events.slice(0, 20).map((e) => <li key={e.id}><span className={`chip ev-${e.kind}`}>{EVENT_LABEL[e.kind]}</span> <span className="small">{e.detail}</span> <span className="small muted">{e.source ? `${e.source.title} · ` : ""}{ago(e.at)}</span></li>)}</ol></details>
 
       {mode === "delete" ? <div className="row small"><span>이 지식과 기록을 모두 지울까요?</span><button className="btn small danger" onClick={() => void onAct(() => call(`/api/knowledge/item/${item.id}`, undefined, "DELETE"), onGone)}>지우기</button><button className="btn ghost small" onClick={() => setMode("")}>취소</button></div>
         : <button className="btn ghost small kw-del" onClick={() => setMode("delete")}>지식 지우기</button>}

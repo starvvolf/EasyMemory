@@ -5,18 +5,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "../study/dejipgi.css";
 import "../study/workspace/workspace.css";
-import { call, errorText, folderPaths, later, type Question, type Tree } from "../study/workspace/api";
-import { QuestionRun } from "../study/workspace/QuestionCard";
-import { StateChip } from "../study/workspace/KnowledgeWindow";
+import { call, errorText, folderPaths, later, type Tree } from "../study/workspace/api";
+import { ArticleGoals, ArticleKnowledge, type SourceView } from "../study/workspace/ArticleStudy";
 import { Rich } from "../study/workspace/Rich";
 
 type Article = { title: string; url: string; text: string; selection?: string; error?: string };
-type GoalId = "terms" | "claim" | "chains" | "recognize";
-type SourceView = {
-  id: string; title: string; url: string; claim: { text: string; basis: string[] }; chains: Array<{ from: string; relation: string; to: string }>;
-  againIds: string[]; knowledgeIds: string[]; goals: Record<GoalId, { done: boolean; note?: string }>; goalText: Record<GoalId, string>;
-  items: Array<{ id: string; title: string; state: "met" | "unknown" | "known"; graduated: boolean; again: boolean; quote: string }>;
-};
 type Explained = { answer: string; otherView: string; knowledge: { id: string; title: string; created: boolean } | null };
 const fromExtension = (e: MessageEvent) => e.source === window.parent && /^chrome-extension:\/\//.test(e.origin);
 
@@ -30,9 +23,6 @@ export default function ExtPanel() {
   const [selection, setSelection] = useState("");
   const [question, setQuestion] = useState("");
   const [explained, setExplained] = useState<Explained | null>(null);
-  const [run, setRun] = useState<{ title: string; questions: Question[] } | null>(null);
-  const [claim, setClaim] = useState("");
-  const [claimResult, setClaimResult] = useState<{ verdict: string; feedback: string; claim: { text: string } } | null>(null);
   const [changed, setChanged] = useState(false);
   const parentOrigin = useRef("*");
 
@@ -51,7 +41,7 @@ export default function ExtPanel() {
       const msg = e.data as { type?: string } & Partial<Article> & { ask?: boolean };
       if (msg.type === "recaller:article") {
         if (msg.error) { setError(msg.error); return; }
-        setError(""); setChanged(false); setArticle({ title: msg.title ?? "", url: msg.url ?? "", text: msg.text ?? "" }); setExplained(null); setClaimResult(null);
+        setError(""); setChanged(false); setArticle({ title: msg.title ?? "", url: msg.url ?? "", text: msg.text ?? "" }); setExplained(null);
         void openSourceFor(msg.url ?? "");
       }
       if (msg.type === "recaller:selection" && msg.text) { setSelection(msg.text); setExplained(null); }
@@ -76,31 +66,6 @@ export default function ExtPanel() {
     try { setExplained(await call<Explained>("/api/knowledge/explain", { title: article?.title || "웹 글", url: article?.url, text: article?.text ?? "", selection, ...(question.trim() ? { question } : {}), ...(folder ? { folder } : {}) })); setQuestion(""); }
     catch (e) { setError(errorText(e)); } finally { setBusy(""); }
   };
-  const refresh = async () => { if (source) setSource((await call<{ source: SourceView }>(`/api/knowledge/source/${source.id}`)).source); };
-  const quiz = async (goal: GoalId) => {
-    if (!source) return;
-    setError("");
-    try {
-      if (goal === "recognize") { const { questions } = await call<{ questions: Question[] }>(`/api/knowledge/source/${source.id}/recognize`); setRun({ title: "다른 글에서 알아보기", questions }); return; }
-      const chainTitles = new Set(source.chains.flatMap((c) => [c.from, c.to]));
-      const pick = source.items.filter((i) => goal === "chains" ? chainTitles.has(i.title) : !chainTitles.has(i.title) || source.items.every((x) => chainTitles.has(x.title)));
-      const questions: Question[] = [];
-      for (const item of pick.slice(0, 10)) {
-        const qs = (await call<{ questions: Question[] }>(`/api/knowledge/item/${item.id}/questions`)).questions;
-        const want = goal === "chains" ? qs.find((q) => q.kind === "blank") : qs.find((q) => q.kind === "choice") ?? qs[0];
-        if (want) questions.push(want);
-      }
-      setRun({ title: goal === "chains" ? "고리 빈칸" : "용어 확인", questions });
-    } catch (e) { setError(errorText(e)); }
-  };
-  const checkClaim = async () => {
-    if (!source || !claim.trim()) return;
-    setBusy("claim");
-    try { setClaimResult(await call("/api/knowledge/claim", { sourceId: source.id, answer: claim })); await refresh(); } catch (e) { setError(errorText(e)); } finally { setBusy(""); }
-  };
-
-  const again = source?.items.filter((i) => i.again) ?? [];
-  const fresh = source?.items.filter((i) => !i.again) ?? [];
   return (
     <div className="dejipgi ext" data-view="ext">
       <div className="ext-wrap stack">
@@ -121,16 +86,7 @@ export default function ExtPanel() {
           </div>
         </section>
 
-        {source ? (
-          <section className="panel stack">
-            <p className="eyebrow">이 글의 지식</p>
-            {again.length ? <div className="ext-again"><b className="small">예전에 배운 것 {again.length}</b>
-              <ul className="sb-list">{again.map((i) => <li key={i.id} className="sb-item"><StateChip state={i.state} graduated={i.graduated} /><span>{i.title}</span></li>)}</ul></div> : null}
-            <b className="small">새로 만난 것 {fresh.length}</b>
-            <ul className="sb-list">{fresh.map((i) => <li key={i.id} className="sb-item"><StateChip state={i.state} graduated={i.graduated} /><span>{i.title}</span></li>)}</ul>
-            {source.chains.length ? <><b className="small">고리</b><ul className="kw-links small">{source.chains.map((c, k) => <li key={k}>{c.from} <span className="muted">—{c.relation}→</span> {c.to}</li>)}</ul></> : null}
-          </section>
-        ) : null}
+        {source ? <section className="panel stack"><p className="eyebrow">이 글의 지식</p><ArticleKnowledge source={source} /></section> : null}
 
         <section className="panel stack">
           <p className="eyebrow">드래그해서 묻기</p>
@@ -143,27 +99,7 @@ export default function ExtPanel() {
             {explained.knowledge ? <p className="small muted">“{explained.knowledge.title}”을(를) 몰랐음으로 {explained.knowledge.created ? "저장" : "표시"}했어요. 나중에 확인 문제로 나와요.</p> : null}</div> : null}
         </section>
 
-        {source ? (
-          <section className="panel stack">
-            <p className="eyebrow">잘 읽었는지 확인</p>
-            {(["terms", "claim", "chains", "recognize"] as GoalId[]).map((g) => (
-              <div key={g} className="ext-goal">
-                <span className={`chip ${source.goals[g].done ? "good" : ""}`}>{source.goals[g].done ? "✓ 달성" : "아직"}</span>
-                <span className="ext-goal-text">{source.goalText[g]}</span>
-                {g === "claim" ? null : g === "recognize" && !source.againIds.length ? <span className="small muted">예전에 배운 지식이 나오면 열려요</span>
-                  : <button className="btn small" onClick={() => void quiz(g)}>풀기</button>}
-              </div>
-            ))}
-            <form className="stack" onSubmit={(e) => { e.preventDefault(); void checkClaim(); }}>
-              <label className="small muted" htmlFor="claim">글을 덮고, 이 글의 주장을 한 줄로 써 보세요.</label>
-              <textarea id="claim" className="ws-input" rows={2} value={claim} onChange={(e) => setClaim(e.target.value)} />
-              <button className="btn small" disabled={!claim.trim() || busy === "claim"}>{busy === "claim" ? "확인 중…" : "주장 확인"}</button>
-            </form>
-            {claimResult ? <div className={`ws-q-result ${claimResult.verdict === "맞음" ? "good" : "bad"}`}><b>{claimResult.verdict}</b> · {claimResult.feedback}
-              <div className="small muted">글의 주장: {claimResult.claim.text}</div></div> : null}
-            {run ? <QuestionRun title={run.title} questions={run.questions} sourceId={source.id} onClose={() => { setRun(null); void refresh(); }} /> : null}
-          </section>
-        ) : null}
+        {source ? <section className="panel"><ArticleGoals source={source} onChanged={setSource} /></section> : null}
       </div>
     </div>
   );
