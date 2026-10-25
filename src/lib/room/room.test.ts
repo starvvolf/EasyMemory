@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { argsFor, createRoom, DEFAULT_COMMANDS, explain, exportRoom, runCli, loadRoom, mentionsOf, promptFor, runRounds, say, setExec, stop, summarize, updateRoom, type BotId } from "./room.ts";
+import { argsFor, clearRoom, createRoom, DEFAULT_COMMANDS, deleteRoom, explain, exportRoom, runCli, untag, loadRoom, mentionsOf, promptFor, runRounds, say, setExec, stop, summarize, updateRoom, type BotId } from "./room.ts";
 
 async function withData<T>(run: (dir: string) => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "room-"));
@@ -43,7 +43,7 @@ test("a learner's line gets one answer from each bot, each seeing what was said 
   const after = (await loadRoom(room.id))!;
   assert.deepEqual(after.messages.map((m) => m.from), ["user", "claude", "codex", "gemini"]);
   assert.match(calls[1].prompt, /Claude: claude 답/, "Codex sees Claude's answer");
-  assert.match(calls[0].prompt, /\[주제\] 발표 주장 정하기/);
+  assert.match(calls[0].prompt, /\[방 이름\] 발표 주장 정하기/);
   assert.match(calls[0].prompt, /파일을 열거나/, "files off by default");
   assert.equal(after.thinking, null);
 }));
@@ -87,10 +87,10 @@ test("long conversations keep the latest turns in full and say how many were lef
   const room = { id: "room_000000000000", title: "t", createdAt: "", updatedAt: "", bots: ["claude", "codex"] as BotId[], readFiles: true, thinking: null, pending: [],
     messages: Array.from({ length: 30 }, (_, i) => ({ id: String(i), at: "", from: "user" as const, text: `말 ${i}` })) };
   const p = promptFor(room, "claude");
-  assert.match(p, /앞의 대화 6개 생략/);
+  assert.match(p, /앞의 대화 6개는 생략/);
   assert.match(p, /사용자: 말 29/);
   assert.doesNotMatch(p, /사용자: 말 5\n/);
-  assert.match(p, /저장소\)의 문서와 코드를 읽어도/);
+  assert.match(p, /저장소의 문서와 코드를 읽어도/);
 });
 
 test("AIs hand the word on with @name, a few times at most, with a pause; answers are kept short", () => withData(async () => {
@@ -104,7 +104,7 @@ test("AIs hand the word on with @name, a few times at most, with a pause; answer
   const after = (await loadRoom(room.id))!;
   assert.deepEqual(after.messages.map((m) => m.from), ["user", "claude", "codex", "gemini", "claude"], "three hand-offs, then it stops");
   assert.ok(after.messages[1].text.length <= 160 && after.messages[1].text.endsWith("… @Codex"), `cut at 1.5× the length, keeping the hand-off: ${after.messages[1].text.slice(-20)}`);
-  assert.match(calls[0].prompt, /100자 이내/);
+  assert.match(calls[0].prompt, /100자 안팎/);
   assert.match(calls[0].prompt, /@Codex 또는 @Gemini/);
   assert.ok(calls[1].at - calls[0].at >= 40, "waits between AI turns");
   // In rounds, naming someone does not add turns.
@@ -133,3 +133,21 @@ test("a CLI that takes the prompt as an argument gets it whole, without a shell"
   assert.equal(got, prompt.trim());
   assert.match(explain("Failed to sign in. Message: This client is no longer supported for Gemini Code Assist for individuals."), /agy/);
 });
+
+test("the prompt reads like a group chat: character, tone, memo; the room name is not a topic to return to; clear and delete", () => withData(async () => {
+  const room = await createRoom("발표 주장");
+  await updateRoom(room.id, { memo: "미팅은 10/30", settings: { tone: "날카로운 리뷰", speech: "반말", personas: { codex: "숫자로만 말한다" } } });
+  const p = promptFor((await loadRoom(room.id))!, "codex");
+  assert.match(p, /너는 Codex\(OpenAI\)다/);
+  assert.match(p, /\[너의 결\] 숫자로만 말한다/);
+  assert.match(p, /빈틈과 위험을 찾는 리뷰어.*반말로/);
+  assert.match(p, /\[이 방에서 알고 있을 것\]\n미팅은 10\/30/);
+  assert.match(p, /매번 돌아갈 주제는 아니다/);
+  assert.equal(untag("claude", "**Claude:** 좋아요"), "좋아요");
+  setExec(async () => "답");
+  await (await say(room.id, "안녕")).done;
+  assert.equal((await clearRoom(room.id)).messages.length, 0);
+  assert.equal((await loadRoom(room.id))!.memo, "미팅은 10/30", "clearing keeps the memo");
+  await deleteRoom(room.id);
+  assert.equal(await loadRoom(room.id), null);
+}));

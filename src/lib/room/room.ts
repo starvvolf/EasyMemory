@@ -24,19 +24,40 @@ export type RoomSettings = {
   /** AIs may hand the word to another with @name; at most chainMax such hand-offs after each line of the learner. */
   chain: boolean; chainMax: number;
   models: Record<BotId, BotModel>;
+  /** How the room talks: a preset (TONES) or the learner's own words, and 존댓말 or 반말. */
+  tone: string; speech: "존댓말" | "반말";
+  /** Each AI's character in this room (empty: PERSONAS). */
+  personas: Record<BotId, string>;
 };
-export const DEFAULT_SETTINGS: RoomSettings = { maxChars: 300, delaySec: 2, chain: true, chainMax: 6, models: { claude: { model: "", effort: "" }, codex: { model: "", effort: "" }, gemini: { model: "", effort: "" } } };
+export const TONES: Record<string, string> = {
+  "편한 동료": "친한 팀 동료와 메신저로 얘기하듯 편하고 솔직하게. 가끔 가볍게 맞장구치거나 농담해도 된다.",
+  "기획 회의": "기획 회의에서처럼 정돈되게, 핵심부터. 결론과 이유가 분명하게.",
+  "날카로운 리뷰": "빈틈과 위험을 찾는 리뷰어처럼 날카롭게. 다만 무례하지 않게, 대안도 함께.",
+  "멘토": "먼저 해 본 선배처럼 차근차근. 왜 그런지 이해되게 풀어서.",
+};
+export const PERSONAS: Record<BotId, string> = {
+  claude: "생각이 깊고 차분하다. 전제와 숨은 가정을 짚고, 놓친 위험이나 사용자 입장을 챙긴다. 모르는 건 모른다고 한다.",
+  codex: "실용적이고 직설적이다. 구현 가능성, 걸리는 시간과 비용, 지금 바로 할 수 있는 다음 행동으로 이야기를 끌고 간다.",
+  gemini: "넓게 본다. 다른 서비스나 연구 사례, 새로운 각도의 아이디어를 가져온다.",
+};
+// Newest models as of 2026-10-25: Claude Code's "opus" alias follows the newest Opus (Opus 5.5); gpt-6.1-sol answered on
+// this PC's Codex CLI after its update to 0.164 (docs/DECISIONS.md 2026-10-25).
+export const DEFAULT_SETTINGS: RoomSettings = { maxChars: 300, delaySec: 2, chain: true, chainMax: 6, models: { claude: { model: "opus", effort: "" }, codex: { model: "gpt-6.1-sol", effort: "medium" }, gemini: { model: "", effort: "" } },
+  tone: "편한 동료", speech: "존댓말", personas: { claude: "", codex: "", gemini: "" } };
 export type Room = {
   id: string; title: string; createdAt: string; updatedAt: string;
   bots: BotId[]; readFiles: boolean; messages: Message[];
   /** The bot answering now, and the turns still waiting (shown as "생각 중" and a queue). */
   thinking: BotId | null; pending: BotId[];
   settings?: RoomSettings;
+  /** What every turn should know besides the conversation (decisions made elsewhere, deadlines, constraints). */
+  memo?: string;
 };
 /** Settings with defaults filled in (rooms made before settings existed have none). */
 export function settingsOf(room: Pick<Room, "settings">): RoomSettings {
   const s = room.settings;
-  return { ...DEFAULT_SETTINGS, ...s, models: Object.fromEntries(botIds.map((b) => [b, { ...DEFAULT_SETTINGS.models[b], ...s?.models?.[b] }])) as Record<BotId, BotModel> };
+  return { ...DEFAULT_SETTINGS, ...s, models: Object.fromEntries(botIds.map((b) => [b, { ...DEFAULT_SETTINGS.models[b], ...s?.models?.[b] }])) as Record<BotId, BotModel>,
+    personas: { ...DEFAULT_SETTINGS.personas, ...s?.personas } };
 }
 
 /**
@@ -59,11 +80,11 @@ export const DEFAULT_COMMANDS: Record<BotId, BotCommand> = {
 };
 /** Suggestions shown next to the model field (any name the CLI accepts works; empty keeps the CLI's default). */
 export const MODEL_HINTS: Record<BotId, string[]> = {
-  claude: ["opus", "sonnet", "haiku"],
-  codex: ["gpt-5-codex", "gpt-5", "o4-mini"],
+  claude: ["opus", "sonnet", "haiku", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
+  codex: ["gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra", "gpt-6-luna"],
   gemini: [],
 };
-export const EFFORTS: Record<BotId, string[]> = { claude: [], codex: ["minimal", "low", "medium", "high"], gemini: ["low", "medium", "high"] };
+export const EFFORTS: Record<BotId, string[]> = { claude: [], codex: ["low", "medium", "high", "xhigh"], gemini: ["low", "medium", "high"] };
 /** The arguments for one turn: the command's own, with model, effort and file flags where `{flags}` stands. */
 export function argsFor(command: BotCommand, m: BotModel, readFiles: boolean, out = "") {
   const flags = [
@@ -105,12 +126,16 @@ export async function createRoom(title: string, bots: BotId[] = [...botIds], rea
   await save(room);
   return room;
 }
-export async function updateRoom(id: string, change: { title?: string; bots?: BotId[]; readFiles?: boolean; settings?: Partial<Omit<RoomSettings, "models">> & { models?: Partial<Record<BotId, Partial<BotModel>>> } }) {
+export type SettingsChange = Partial<Omit<RoomSettings, "models" | "personas">> & { models?: Partial<Record<BotId, Partial<BotModel>>>; personas?: Partial<Record<BotId, string>> };
+export async function updateRoom(id: string, change: { title?: string; bots?: BotId[]; readFiles?: boolean; memo?: string; settings?: SettingsChange; resetSettings?: boolean }) {
   const room = await mustLoad(id);
+  if (change.resetSettings) room.settings = undefined;
   if (change.settings) {
     const now = settingsOf(room); const s = change.settings;
-    room.settings = { ...now, ...s, models: Object.fromEntries(botIds.map((b) => [b, { ...now.models[b], ...s.models?.[b] }])) as Record<BotId, BotModel> };
+    room.settings = { ...now, ...s, models: Object.fromEntries(botIds.map((b) => [b, { ...now.models[b], ...s.models?.[b] }])) as Record<BotId, BotModel>,
+      personas: { ...now.personas, ...s.personas } as Record<BotId, string> };
   }
+  if (change.memo !== undefined) room.memo = change.memo.slice(0, 3000);
   if (change.title !== undefined) room.title = change.title.trim().slice(0, 120) || room.title;
   if (change.bots) room.bots = botIds.filter((b) => change.bots!.includes(b));
   if (change.readFiles !== undefined) room.readFiles = change.readFiles;
@@ -127,30 +152,48 @@ export function mentionsOf(text: string): BotId[] {
   return MENTIONS.map(([re, id]) => ({ id, at: text.search(re) })).filter((m) => m.at >= 0).sort((a, b) => a.at - b.at).map((m) => m.id);
 }
 
-/** The prompt one turn gets: who it is, the room's rules, the topic, and the conversation (the latest part, in full). */
+const MAKER: Record<BotId, string> = { claude: "Anthropic", codex: "OpenAI", gemini: "Google" };
+/**
+ * The prompt one turn gets. It reads like a group chat seen from one member: who they are and how they talk, what the
+ * room should keep in mind, then the conversation, newest last. The room's name is where the talk started, not a
+ * topic to come back to every turn (AIs kept steering back to the title).
+ */
 export function promptFor(room: Room, bot: BotId, limit = 24) {
-  const others = room.bots.filter((b) => b !== bot).map((b) => botName[b]).join(", ") || "없음";
-  const shown = room.messages.filter((m) => m.from !== "system").slice(-limit);
-  const skipped = room.messages.filter((m) => m.from !== "system").length - shown.length;
-  const who = (m: Message) => m.from === "user" ? "사용자" : botName[m.from as BotId];
   const s = settingsOf(room);
-  const handOff = s.chain && room.bots.length > 1
-    ? `다른 AI에게 꼭 묻거나 반론을 듣고 싶으면 말 끝에 @${room.bots.filter((b) => b !== bot).map((b) => botName[b]).join(" 또는 @")}처럼 한 명만 불러 넘긴다. 필요할 때만 부르고, 할 말이 끝났으면 부르지 않는다.`
-    : "다른 AI를 @로 부르지 않는다.";
+  const others = room.bots.filter((b) => b !== bot);
+  const talk = room.messages.filter((m) => m.from !== "system" && !m.error);
+  const shown = talk.slice(-limit);
+  const skipped = talk.length - shown.length;
+  const who = (m: Message) => m.from === "user" ? "사용자" : botName[m.from as BotId];
+  const tone = TONES[s.tone] ?? s.tone;
+  const handOff = s.chain && others.length
+    ? `다른 AI의 생각을 꼭 듣고 싶으면 말 끝에 @${others.map((b) => botName[b]).join(" 또는 @")}처럼 한 명만 불러 넘겨도 된다. 할 말을 다 했거나 사용자에게 묻는 거라면 부르지 않는다.`
+    : "";
   return [
-    `너는 ${botName[bot]}다. 이 방은 사용자와 AI 여럿(${botName[bot]}, ${others})이 사용자의 프로젝트(Recaller, 이 저장소) 기획을 함께 토론하는 채팅방이다.`,
-    `규칙: ${s.maxChars}자 이내로 짧게 대화체로 쓴다(제목·목록 없이). 직전 발언에 바로 반응한다. 동의만 하지 말고 근거를 들어 반박하거나 보완하고, 새 관점이 있으면 하나 더한다. 사용자의 말이 있으면 그것을 먼저 다룬다.`,
-    handOff,
-    room.readFiles ? "근거가 필요하면 현재 폴더(저장소)의 문서와 코드를 읽어도 된다. 파일은 고치지 않는다." : "파일을 열거나 명령을 실행하지 말고 대화만으로 답한다.",
+    `너는 ${botName[bot]}(${MAKER[bot]})다. 지금 단체 채팅방에서 사용자${others.length ? `, ${others.map((b) => botName[b]).join(", ")}` : ""}와 이야기하고 있다. 사용자는 Recaller라는 AI 학습 앱(지금 이 폴더의 저장소)을 만들고 있는 대학생이다.`,
     "",
-    `[주제] ${room.title}`,
-    "[대화]",
-    ...(skipped > 0 ? [`(앞의 대화 ${skipped}개 생략)`] : []),
-    ...(shown.length ? shown.map((m) => `${who(m)}: ${m.text.length > 1500 ? `${m.text.slice(0, 1500)}…` : m.text}`) : ["(아직 없음. 주제에 대한 첫 의견을 낸다.)"]),
+    `[너의 결] ${s.personas[bot]?.trim() || PERSONAS[bot]}`,
+    `[말투] ${tone} 사용자에게도 다른 AI에게도 ${s.speech}로 말한다.`,
+    "[대화하는 법]",
+    "- 사람이 채팅하듯 자연스럽게 말한다. 보고서나 발표문처럼 쓰지 않는다. 필요하면 짧은 목록이나 **굵은 글씨**를 써도 된다.",
+    "- 가장 최근 말, 특히 사용자의 마지막 말에 반응한다. 대화가 다른 쪽으로 흘렀으면 그 흐름을 따른다.",
+    "- 다르게 보면 이유를 들어 분명히 말하고, 동의하면 짧게 하고 새 생각을 보탠다. 이미 나온 말을 되풀이하거나 정리해 주지 않는다.",
+    "- 상대를 이름으로 부르거나, 사용자에게 되물어도 된다.",
+    `- 길이는 ${s.maxChars}자 안팎. 이름표("${botName[bot]}:")는 붙이지 않는다.`,
+    ...(handOff ? [`- ${handOff}`] : []),
+    room.readFiles ? "- 근거가 필요하면 저장소의 문서와 코드를 읽어도 된다. 파일은 고치지 않는다." : "- 파일을 열거나 명령을 실행하지 말고 대화만으로 답한다.",
+    ...(room.memo?.trim() ? ["", `[이 방에서 알고 있을 것]\n${room.memo.trim()}`] : []),
     "",
-    `[${botName[bot]} 차례] 네 말만 쓴다.`,
+    `[방 이름] ${room.title} (대화를 시작한 계기일 뿐, 매번 돌아갈 주제는 아니다)`,
+    "[지금까지의 대화]",
+    ...(skipped > 0 ? [`(앞의 대화 ${skipped}개는 생략)`] : []),
+    ...(shown.length ? shown.map((m) => `${who(m)}: ${m.text.length > 1500 ? `${m.text.slice(0, 1500)}…` : m.text}`) : ["(아직 아무도 말하지 않았다. 방 이름을 보고 가볍게 첫마디를 연다.)"]),
+    "",
+    `[${botName[bot]} 차례] ${botName[bot]}로서 다음 말만 쓴다.`,
   ].join("\n");
 }
+/** A name tag the model added anyway ("Claude: …") is taken off. */
+export function untag(bot: BotId, text: string) { return text.replace(new RegExp(`^\\s*\\**${botName[bot]}\\**\\s*[:：]\\s*(\\*\\*\\s*)?`, "i"), "").trim(); }
 const SUMMARY = "지금까지의 토론을 정리한다. 세 덩어리로, 각 1~3줄: '합의:' 모두 동의한 것, '쟁점:' 아직 갈린 것과 각자의 입장, '사용자가 정할 것:' 결정이 필요한 질문. 다른 말은 쓰지 않는다.";
 
 // ---- running a CLI ------------------------------------------------------------------------------------------------
@@ -250,7 +293,7 @@ function versionOk(cmd: string) {
 // ---- turns ------------------------------------------------------------------------------------------------------
 /** A turn: a bot answering (by the round, the learner's line, or another bot's @), or the closing summary. */
 type Turn = { bot: BotId; kind: "turn" | "summary"; after: "user" | "bot" };
-type Worker = { queue: Turn[]; working: boolean; abort?: AbortController; mode: "chat" | "rounds"; handOffs: number };
+type Worker = { queue: Turn[]; working: boolean; abort?: AbortController; mode: "chat" | "rounds"; handOffs: number; lastPrompt?: { bot: BotId; prompt: string; at: string } };
 const workers: Map<string, Worker> = ((globalThis as { __roomWorkers?: Map<string, Worker> }).__roomWorkers ??= new Map<string, Worker>());
 let exec: Exec = runCli;
 /** Tests swap the CLI runner for a fake. */
@@ -279,11 +322,12 @@ async function work(id: string) {
       const command: BotCommand = { ...cmds[bot], cmd: where, args: argsFor(cmds[bot], s.models[bot], room.readFiles, "{out}") };
       const current = await mustLoad(id);
       const prompt = turn.kind === "summary" ? `${promptFor(current, bot, 60).split(`\n[${botName[bot]} 차례]`)[0]}\n\n${SUMMARY}` : promptFor(current, bot);
+      w.lastPrompt = { bot, prompt, at: new Date().toISOString() };
       const started = Date.now();
       let said: Message;
       let named: BotId | undefined;
       try {
-        let text = await exec(bot, command, prompt, w.abort.signal);
+        let text = untag(bot, await exec(bot, command, prompt, w.abort.signal));
         named = mentionsOf(text).find((b) => b !== bot);
         // Cut a long answer, keeping the hand-off it ended with.
         if (turn.kind === "turn" && text.length > s.maxChars * 1.5) text = `${text.slice(0, Math.round(s.maxChars * 1.5)).trimEnd()}…${named ? ` @${botName[named]}` : ""}`;
@@ -346,6 +390,26 @@ export async function stop(id: string) {
   const room = await mustLoad(id);
   room.thinking = null; room.pending = []; await save(room);
   return room;
+}
+
+/** Empties the conversation (the room, its settings and memo stay). */
+export async function clearRoom(id: string) {
+  await stop(id);
+  const w = workers.get(id); if (w) { w.queue = []; w.handOffs = 0; }
+  const room = await mustLoad(id);
+  room.messages = []; room.thinking = null; room.pending = [];
+  await save(room);
+  return room;
+}
+export async function deleteRoom(id: string) {
+  await stop(id).catch(() => undefined);
+  workers.delete(id);
+  await rm(fileOf(id), { force: true });
+}
+/** What a bot would be sent now, and what was last sent (to see how the prompt is put together). */
+export async function promptPreview(id: string, bot: BotId) {
+  const room = await mustLoad(id);
+  return { next: promptFor(room, bot), last: workers.get(id)?.lastPrompt ?? null };
 }
 
 /** The room as markdown, for 협업/토론 (the public repository: only the conversation, which the learner chose to export). */
