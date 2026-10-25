@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Recaller 사이드바",
+  "version": "0.1.0",
+  "description": "웹에서 칼럼·강의 글을 읽으면서 옆에서 Recaller로 지식을 잡고, 드래그해서 묻고, 확인 문제를 풀어요.",
+  "permissions": ["sidePanel", "tabs", "contextMenus"],
+  "host_permissions": ["http://127.0.0.1:3000/*"],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "panel.html" },
+  "action": { "default_title": "Recaller 사이드바 열기" },
+  "content_scripts": [{ "matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_idle" }]
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { useAuthSession } from "@/components/AuthGate";
 import { authenticatedFetch } from "@/lib/firebase-client";
 import { showMath, studyQualityIssues, toStudyDeck, type StudyArtifactMeta, type StudyDeck, type StudyOutlineSection } from "@/lib/study/from-authoring";
@@ -18,6 +18,10 @@ import { applyPatches, similarObjectives, termChoice, tooEasy, type LedgerEntry,
 import { askedObjectives, diagnoseBox, planDeckFrom, planSettingsFrom, planToday, renderMemoryAuto, type PlanNote, type PlanRecord, type StudyRules } from "@/lib/study/plan";
 import "katex/dist/katex.min.css";
 import "./dejipgi.css";
+import "./workspace/workspace.css";
+import TimerChip from "./workspace/TimerChip";
+import KnowledgeSidebar from "./workspace/KnowledgeSidebar";
+import AgentScreen from "./workspace/AgentScreen";
 
 async function readJson<T>(response: Response, fallback: string): Promise<T> {
   const data = await response.json().catch(() => null);
@@ -29,6 +33,15 @@ async function readJson<T>(response: Response, fallback: string): Promise<T> {
 export default function DejipgiStudy() {
   const session = useAuthSession();
   const rootRef = useRef<HTMLDivElement>(null);
+  // 지식 사이드바: open by default on wide screens; the choice is remembered in this browser.
+  const [side, setSide] = useState(false);
+  useEffect(() => {
+    let open = window.matchMedia("(min-width: 1300px)").matches;
+    try { const saved = localStorage.getItem("recaller:side"); if (saved) open = saved === "1"; } catch { /* storage off */ }
+    const t = setTimeout(() => setSide(open), 0);
+    return () => clearTimeout(t);
+  }, []);
+  const toggleSide = (open: boolean) => { setSide(open); try { localStorage.setItem("recaller:side", open ? "1" : "0"); } catch { /* storage off */ } };
   const fetchExperiment = useCallback((url: string, init: RequestInit = {}) => session.mode === "local-experiment"
     ? fetch(url, { cache: "no-store", ...init })
     : authenticatedFetch(url, { cache: "no-store", ...init }), [session.mode]);
@@ -387,6 +400,16 @@ export default function DejipgiStudy() {
             objectives: section.objectives.map((objective) => ({ ...objective, recall: showMath(objective.recall) })) })) } : deck;
         }));
         const decks = loaded.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+        // 지식창: each material's knowledge points come in once as 만남, under 자료 이름 / 구역 (src/lib/knowledge/store.ts importPoints).
+        if (session.mode === "local-experiment") {
+          const points = decks.flatMap((deck) => {
+            const layer = (deck as { points?: KnowledgeLayer }).points;
+            const material = String(deck.sourceName || deck.title).replace(/\.pdf$/i, "");
+            return (layer?.points ?? []).map((point) => ({ ref: `${deck.id}:${point.id}`, title: point.title.slice(0, 120), essentials: point.essentials.slice(0, 6).map((e) => e.slice(0, 600)),
+              folder: `${material.slice(0, 60)}${point.section ? `/${point.section.slice(0, 60)}` : ""}`, material: material.slice(0, 200), ...(point.pages[0] ? { page: point.pages[0] } : {}) }));
+          });
+          if (points.length) void fetchExperiment("/api/knowledge/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ points: points.slice(0, 2000) }) }).catch(() => undefined);
+        }
         if (!decks.length && loaded.some((result) => result.status === "rejected")) {
           throw new Error("Recaller 출제 문서를 불러오지 못했어요. 로컬 서버와 로그인 상태를 확인해 주세요.");
         }
@@ -417,6 +440,30 @@ export default function DejipgiStudy() {
       async loadKatex() {
         return (await import("katex")).default;
       },
+      // 지식창 · 코드 · 일정: React screens mounted into hosts the vanilla app keeps across re-renders, like the flow canvas.
+      mountView(name: "knowledge" | "code" | "plan", host: HTMLElement, props: Record<string, unknown>) {
+        let root: import("react-dom/client").Root | null = null, gone = false;
+        const load = name === "knowledge" ? import("./workspace/KnowledgeWindow") : name === "code" ? import("./workspace/CodeStudy") : import("./workspace/PlanView");
+        void Promise.all([import("react-dom/client"), load]).then(([{ createRoot }, mod]) => {
+          if (gone) return;
+          root = createRoot(host);
+          const View = mod.default as unknown as (p: Record<string, unknown>) => ReactElement;
+          root.render(<View {...props} />);
+        });
+        return () => { gone = true; root?.unmount(); };
+      },
+      // A practice result on a PDF question goes to the knowledge its objective covers (맞힘 / 틀림 / 정답 보고).
+      onPractice(deck: { id: string; title?: string; sourceName?: string; points?: KnowledgeLayer }, item: { objectiveId?: string; id: string }, outcome: string) {
+        if (session.mode !== "local-experiment" || !deck.points || !item.objectiveId) return;
+        const ids = deck.points.byObjective[item.objectiveId] ?? [];
+        if (!ids.length) return;
+        const kind = outcome === "correct" ? "correct" : outcome === "wrong" ? "wrong" : outcome === "assisted" ? "hint" : null;
+        if (!kind) return;
+        const detail = outcome === "assisted" ? "정답 보고 풂" : outcome === "wrong" ? "PDF 문제를 틀림" : "PDF 문제를 맞힘";
+        void fetchExperiment("/api/knowledge/ref-event", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refs: ids.slice(0, 20).map((pid) => `${deck.id}:${pid}`), kind, detail, material: String(deck.sourceName || deck.title || "").slice(0, 200) }) })
+          .then(() => window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar"))).catch(() => undefined);
+      },
       // 작업대 흐름: a React Flow canvas mounted into a host element the vanilla app keeps across re-renders.
       mountFlow(host, api) {
         let root: import("react-dom/client").Root | null = null, gone = false;
@@ -431,7 +478,7 @@ export default function DejipgiStudy() {
   }, [fetchExperiment, session.mode, session.uid]);
 
   return (
-    <div className="dejipgi" ref={rootRef} data-view="home">
+    <div className={`dejipgi${side ? " with-side" : ""}`} ref={rootRef} data-view="home">
       {/* Plain link (no precedence) so a blocked font request never suspends or errors the page. */}
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600&display=swap" />
@@ -441,6 +488,10 @@ export default function DejipgiStudy() {
             <div className="brand">
               <h1>Recaller</h1>
             </div>
+            {session.mode === "local-experiment" ? <div className="row ws-tools" style={{ marginLeft: "auto", gap: 6 }}>
+              <TimerChip />
+              <button className={`tablet-btn sb-toggle${side ? " on" : ""}`} style={{ margin: 0 }} aria-pressed={side} onClick={() => toggleSide(!side)} title="오른쪽 지식 사이드바">지식 사이드바</button>
+            </div> : null}
             <span className="store" id="store" data-mode="memory"><i></i><span id="storeText">저장 준비 중</span></span>
           </header>
           <nav className="tabs" role="tablist" id="tabs">
@@ -448,6 +499,8 @@ export default function DejipgiStudy() {
             <button role="tab" data-view="knowledge" aria-selected="false">지식</button>
             <button role="tab" data-view="read" aria-selected="false">읽기</button>
             <button role="tab" data-view="practice" aria-selected="false">연습</button>
+            <button role="tab" data-view="code" aria-selected="false">코드</button>
+            <button role="tab" data-view="plan" aria-selected="false">일정</button>
             <button role="tab" data-view="create" aria-selected="false">자료</button>
             <button role="tab" data-view="records" aria-selected="false">기록</button>
             <button role="tab" data-view="bench" aria-selected="false">작업대</button>
@@ -455,6 +508,8 @@ export default function DejipgiStudy() {
         </div>
         <main id="app"></main>
       </div>
+      {session.mode === "local-experiment" ? <KnowledgeSidebar open={side} onClose={() => toggleSide(false)} /> : null}
+      {session.mode === "local-experiment" ? <AgentScreen /> : null}
     </div>
   );
 }

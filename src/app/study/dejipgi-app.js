@@ -769,6 +769,38 @@ function renderKnowledge(){
   wrap.append(h("div", { class:"kp-split" }, list, detail));
   return wrap;
 }
+/* 지식창 (2026-10-26): the new learner-wide knowledge window is a React screen (workspace/KnowledgeWindow.tsx). The
+   per-subject view above stays as "자료별 지식 포인트" (예전 화면), one button away. */
+function renderKnowledgeLegacy(){
+  const wrap = renderKnowledge();
+  if (env.mountView) wrap.prepend(h("div", { class:"row" }, h("button", { class:"btn small ghost", onclick: () => { S.kp.legacy = false; render(); } }, "← 새 지식창으로")));
+  return wrap;
+}
+/* 지식창 · 코드 · 일정 hosts: made once, kept across re-renders (like the flow canvas), so their state survives. */
+const viewHosts = {};
+function viewHost(name, props){
+  if (!viewHosts[name]){ const el = h("div", { class:`view-host view-${name}` }); viewHosts[name] = { el, stop: env.mountView(name, el, props) }; }
+  return viewHosts[name].el;
+}
+/* What is on screen, for the knowledge sidebar and the agent's current_view (the code screen reports its own). */
+let lastContextKey = "";
+function emitContext(){
+  if (S.view === "code") return;
+  let ctx = { view:S.view, title:{ home:"홈", knowledge:"지식", practice:"연습", create:"자료", records:"기록", bench:"작업대", plan:"일정", summary:"정리", archive:"보관함" }[S.view] || S.view, refs:[], knowledgeIds:[] };
+  if (S.view === "read" && S.reader && S.reader.deckId && S.decks[S.reader.deckId]){
+    const d = S.decks[S.reader.deckId];
+    ctx = { ...ctx, title:`${displayTitle(d)} p.${S.reader.page}`, refs:[d.id + ":"] };
+  } else if (S.session && S.session.queue && S.session.queue[S.session.i]){
+    const r = curRef();
+    if (r){ const ids = (r.deck.points && r.deck.points.byObjective && r.deck.points.byObjective[r.item.objectiveId]) || [];
+      ctx = { ...ctx, title:`${displayTitle(r.deck)} · 연습`, refs: ids.length ? ids.map(id => r.deck.id + ":" + id) : [r.deck.id + ":"] }; }
+  }
+  const key = JSON.stringify(ctx);
+  if (key === lastContextKey) return;
+  lastContextKey = key;
+  try{ window.dispatchEvent(new CustomEvent("recaller:context", { detail: ctx })); }catch(e){}
+}
+on(window, "recaller:go", (e) => { const v = e.detail && e.detail.view; if (!v) return; if (v === "knowledge") S.kp.legacy = false; if (S.session && v !== "practice" && v !== "read") S.session = null; setView(v); });
 /* 작업대: where the agent's MD (출제 노하우) and small-sample feedback will live. First version: what is coming. */
 /* ---------- 작업대 · 흐름 (2026-10-24): 입력 박스와 모델 박스를 화살표로 이어 돌려 보는 캔버스.
    The canvas is a React component (FlowBench.tsx) mounted once into a host that survives re-renders. */
@@ -861,7 +893,9 @@ function render(){
   const bar = S.view !== "create" && !(S.session && S.session.phase === "ask") ? hideSuggestBar() : null;
   if (bar) app.append(bar);
   if (S.view === "home") app.append(renderRecallerHome());
-  else if (S.view === "knowledge") app.append(renderKnowledge());
+  else if (S.view === "knowledge") app.append(S.kp.legacy || !env.mountView ? renderKnowledgeLegacy() : viewHost("knowledge", { onLegacy: () => { S.kp.legacy = true; render(); } }));
+  else if (S.view === "code") app.append(env.mountView ? viewHost("code", {}) : h("div", { class:"panel small muted", text:"코드 학습은 로컬 실험 모드에서 쓸 수 있어요." }));
+  else if (S.view === "plan") app.append(env.mountView ? viewHost("plan", {}) : h("div", { class:"panel small muted", text:"일정은 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "bench") app.append(renderBench());
   else if (S.view === "archive") app.append(renderArchive());
   else if (S.view === "practice") app.append(S.session ? renderSession() : renderHome());
@@ -878,6 +912,7 @@ function render(){
   }
   else if (S.view === "summary") app.append(renderSummary());
   else app.append(renderRecords());
+  emitContext();
   if (S.view === "practice" && S.session){
     const f = app.querySelector("[data-autofocus]");
     if (f && !f.disabled && (document.activeElement === document.body || !app.contains(document.activeElement))) f.focus({ preventScroll:true });
@@ -1230,6 +1265,7 @@ function finishItem(outcome){
     }
   }
   S.session.results.push({ deck:deck.id, item:item.id, outcome });
+  if (env.onPractice && S.session.mode !== "check") { try{ env.onPractice(deck, item, outcome); }catch(e){} }
   S.session.assisted.add(deck.id + ":" + item.id); // the result screen shows the answer, so a retry later in this session is not independent
   Store.save(deck);
 }
@@ -1349,7 +1385,10 @@ function nextItem(){
   render();
   const f = document.querySelector("[data-autofocus]"); if (f) f.focus();
 }
-const FORMAT_LABEL = { choice:"고르기", value:"값 쓰기", order:"순서 맞추기", card:"떠올리고 확인" };
+/* 문제 이름 (2026-10-26): the same names as the knowledge window's question blocks — 객관식 · 주관식 · OX · 순서 · 플래시카드. */
+const FORMAT_LABEL = { choice:"객관식", value:"주관식", order:"순서", card:"플래시카드" };
+const isOX = (item) => item.format === "choice" && Array.isArray(item.options) && item.options.length === 2 && item.options.every(o => /^\s*(O|X|○|×|참|거짓|맞다|틀리다|예|아니오)\s*$/i.test(String(o)));
+const formatLabel = (item) => item.termCard ? "객관식 · 용어" : isOX(item) ? "OX" : FORMAT_LABEL[item.format];
 function renderSession(){
   const s = S.session;
   if (s.phase === "done") return renderSessionEnd();
@@ -1366,7 +1405,7 @@ function renderSession(){
   const card = h("article", { class:"qcard", "aria-live":"polite" });
   card.append(h("div", { class:"qhead" },
     h("span", { class:"chip page", text:`p.${item.page}` }),
-    h("span", { class:"chip", text: item.termCard ? "용어 고르기" : FORMAT_LABEL[item.format] }),
+    h("span", { class:"chip", text: formatLabel(item) }),
     s.mode === "check" ? h("span", { class:"chip read", text:"읽은 직후 확인" }) : null,
     s.mode === "weak" ? h("span", { class:"chip bad", text:"약점 다시 풀기" }) : null,
     s.queue[s.i].reason && REASON[s.queue[s.i].reason] ? h("span", { class:`chip ${REASON[s.queue[s.i].reason][1]}`, text:REASON[s.queue[s.i].reason][0] }) : null,
@@ -4176,6 +4215,7 @@ return () => {
   for (const P of Object.values(S.pdf)) if (P.doc) P.doc.destroy();
   root.querySelectorAll("#toast, .chatwin").forEach(el => el.remove());
   document.querySelectorAll("#tabletBtn, #tabletCard, #fsBtn, #promptBtn, #promptCard").forEach(el => el.remove()); clearInterval(TB.timer);
+  Object.values(viewHosts).forEach(v => { try{ v.stop(); }catch(e){} });
   delete root.dataset.view;
 };
 }

@@ -1,0 +1,37 @@
+// Same-origin JSON calls for the 지식 · 코드 · 일정 screens (local experiment mode only).
+export async function call<T>(url: string, body?: unknown, method?: string): Promise<T> {
+  const res = await fetch(url, { method: method ?? (body === undefined ? "GET" : "POST"), cache: "no-store",
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { message?: string }).message ?? `요청이 실패했어요 (${res.status})`);
+  return data as T;
+}
+/** Run after the effect returns (so state set by `run` is not set synchronously inside the effect). */
+export function later(run: () => void, ms = 0) { const t = setTimeout(run, ms); return () => clearTimeout(t); }
+export const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
+
+export type KState = "met" | "unknown" | "known";
+export const STATE_LABEL: Record<KState, string> = { met: "만남", unknown: "몰랐음", known: "앎" };
+export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string };
+export type ItemLite = { id: string; title: string; state: KState; graduated: boolean; folderId: string | null; updatedAt: string; lastAt: string; line: string; links: number; weak: number };
+export type Tree = { folders: Folder[]; items: ItemLite[] };
+export type KEvent = { id: string; at: string; knowledgeId: string; kind: "met" | "asked" | "wrong" | "hint" | "correct" | "note"; detail: string; source?: { kind: string; title: string } };
+export const EVENT_LABEL: Record<KEvent["kind"], string> = { met: "만남", asked: "물어봄", wrong: "틀림", hint: "힌트 받음", correct: "맞힘", note: "메모" };
+export type Knowledge = { id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean; aliases: string[];
+  links: Array<{ to: string; relation: string }>; sources: Array<{ kind: string; title: string; url?: string; page?: number; quote?: string; at: string }>;
+  stats: { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] }; createdAt: string; updatedAt: string; lastAt: string };
+export type Detail = { item: Knowledge; path: string; links: Array<{ to: string; relation: string; item: ItemLite }>; backlinks: Array<{ relation: string; item: ItemLite }>; events: KEvent[] };
+export type Question = { id: string; kind: "flashcard" | "choice" | "ox" | "blank" | "short" | "recognize"; label: string; knowledgeId: string; prompt: string; context?: string;
+  options?: string[]; answer: string; accept?: string[]; explain: string };
+export type Graded = { correct: boolean; expected: string; note: string };
+
+/** Paths of folders, for pickers: "주식 / 금리". */
+export function folderPaths(folders: Folder[]) {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const pathOf = (id: string) => { const parts: string[] = []; let cur = byId.get(id); let guard = 0; while (cur && guard++ < 20) { parts.unshift(cur.name); cur = cur.parentId ? byId.get(cur.parentId) : undefined; } return parts.join(" / "); };
+  return folders.map((f) => ({ id: f.id, path: pathOf(f.id) })).sort((a, b) => a.path.localeCompare(b.path, "ko"));
+}
+/** Tell the rest of the app (the old screen, the sidebar) to go somewhere. */
+export function go(view: string, detail: Record<string, unknown> = {}) { window.dispatchEvent(new CustomEvent("recaller:go", { detail: { view, ...detail } })); }
+export type ScreenContext = { view: string; title: string; refs: string[]; knowledgeIds: string[]; problemId?: string; selection?: string; text?: string };
+export function shareContext(context: ScreenContext) { window.dispatchEvent(new CustomEvent("recaller:context", { detail: context })); }

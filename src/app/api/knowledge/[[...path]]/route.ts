@@ -1,0 +1,162 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
+import { createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, itemsByRef, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
+  recordEvent, reviewQueue, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
+import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
+import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
+import { askKnowledge, checkClaim, explainSelection, extractFromText } from "@/lib/assist/knowledge-ai";
+
+export const runtime = "nodejs";
+const state = z.enum(["met", "unknown", "known"]);
+const id = z.string().regex(/^(k|fld)_[a-f0-9]{12}$/);
+const sourceRef = z.object({ kind: z.enum(["pdf", "web", "code", "chat", "manual"]), title: z.string().max(200), ref: z.string().max(200).optional(), url: z.string().max(2000).optional(),
+  page: z.number().int().optional(), quote: z.string().max(400).optional() });
+
+async function allItems() {
+  const { items } = await tree();
+  return Promise.all(items.map(async (i) => (await getKnowledge(i.id)).item));
+}
+/** Goals of a read article, checked against the knowledge they cover. */
+async function withGoals(source: ReadSource) {
+  const items = await allItems();
+  const mine = items.filter((i) => source.knowledgeIds.includes(i.id));
+  const chainTitles = new Set(source.chains.flatMap((c) => [c.from, c.to]));
+  const chainItems = mine.filter((i) => chainTitles.has(i.title));
+  const known = (list: typeof mine) => list.length > 0 && list.every((i) => i.state === "known");
+  const termItems = mine.filter((i) => !chainTitles.has(i.title));
+  const goals = {
+    terms: { ...source.goals.terms, done: source.goals.terms.done || known(termItems.length ? termItems : mine) },
+    claim: source.goals.claim,
+    chains: { ...source.goals.chains, done: source.goals.chains.done || (chainItems.length > 0 && known(chainItems)) },
+    recognize: source.goals.recognize,
+  };
+  return { ...source, text: undefined, textLength: source.text.length, goals, goalText: GOAL_TEXT,
+    items: mine.map((i) => ({ id: i.id, title: i.title, state: i.state, graduated: i.graduated, again: source.againIds.includes(i.id), quote: source.quotes[i.id] ?? "" })) };
+}
+
+async function handle(request: Request, context: RouteContext) {
+  try {
+    await guard(request);
+    const p = (await context.params).path ?? [];
+    const m = request.method;
+    const url = new URL(request.url);
+    const body = async <T extends z.ZodType>(schema: T): Promise<z.infer<T>> => schema.parse(await boundedJson(request));
+    const json = (value: unknown) => NextResponse.json(value);
+
+    if (!p.length && m === "GET") return json(await tree());
+    if (p[0] === "search" && m === "GET") return json({ hits: await searchKnowledge(url.searchParams.get("q") ?? "", { limit: Number(url.searchParams.get("limit") ?? 10), folderId: url.searchParams.get("folderId") ?? undefined }) });
+    if (p[0] === "memory" && m === "GET") {
+      const level = url.searchParams.get("level") ?? "1";
+      if (level === "1") return json(await memoryOverview());
+      if (level === "2") return json(await memorySummary(url.searchParams.get("topic") ?? ""));
+      return json(await memoryEvents({ knowledgeId: url.searchParams.get("knowledgeId") ?? undefined, folderId: url.searchParams.get("folderId") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 30) }));
+    }
+    if (p[0] === "review" && m === "GET") return json({ items: await reviewQueue({ folderId: url.searchParams.get("folderId") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 20) }) });
+
+    // items
+    if (p[0] === "item" && p.length === 1 && m === "POST") {
+      const input = await body(z.object({ title: z.string().min(1).max(120), body: z.string().max(4000).optional(), state: state.optional(), folderId: id.nullable().optional(), folder: z.string().max(200).optional(),
+        aliases: z.array(z.string().max(120)).max(20).optional(), source: sourceRef.optional(), links: z.array(z.object({ to: z.string().optional(), title: z.string().max(120).optional(), relation: z.string().max(60) })).max(20).optional() }));
+      return json(await saveKnowledge(input));
+    }
+    if (p[0] === "item" && p[1]) {
+      const itemId = id.parse(p[1]);
+      if (p.length === 2 && m === "GET") return json(await getKnowledge(itemId));
+      if (p.length === 2 && m === "PATCH") return json({ item: await updateKnowledge(itemId, await body(z.object({ title: z.string().max(120).optional(), body: z.string().max(4000).optional(),
+        aliases: z.array(z.string().max(120)).max(20).optional(), folderId: id.nullable().optional() }))) });
+      if (p.length === 2 && m === "DELETE") return json(await deleteKnowledge(itemId));
+      if (p[2] === "state" && m === "POST") return json({ item: await setKnowledgeState(itemId, await body(z.object({ state: state.optional(), graduated: z.boolean().optional() }))) });
+      if (p[2] === "event" && m === "POST") {
+        const e = await body(z.object({ kind: z.enum(["met", "asked", "wrong", "hint", "correct", "note"]), detail: z.string().max(600).optional(), source: z.object({ kind: sourceRef.shape.kind, title: z.string().max(200), ref: z.string().max(200).optional() }).optional() }));
+        return json({ item: await recordEvent(itemId, e.kind, e.detail ?? "", e.source) });
+      }
+      if (p[2] === "questions" && m === "GET") {
+        const pool = await allItems();
+        const item = pool.find((x) => x.id === itemId);
+        if (!item) return NextResponse.json({ message: "지식을 찾을 수 없어요." }, { status: 404 });
+        return json({ questions: questionsFor(item, pool, url.searchParams.get("seed") ?? String(Date.now())) });
+      }
+    }
+    if (p[0] === "merge" && m === "POST") { const b = await body(z.object({ keep: id, drop: id })); return json({ item: await mergeKnowledge(b.keep, b.drop) }); }
+    if (p[0] === "link" && m === "POST") { const b = await body(z.object({ from: id, to: id, relation: z.string().max(60) })); return json({ item: await linkKnowledge(b.from, b.to, b.relation) }); }
+    if (p[0] === "link" && m === "DELETE") { const b = await body(z.object({ from: id, to: id })); return json({ item: await unlinkKnowledge(b.from, b.to) }); }
+
+    // folders
+    if (p[0] === "folder" && p.length === 1 && m === "POST") { const b = await body(z.object({ name: z.string().min(1).max(60), parentId: id.nullable().optional() })); return json({ folder: await createFolder(b.name, b.parentId ?? null) }); }
+    if (p[0] === "folder" && p[1] && m === "PATCH") return json({ folder: await updateFolder(id.parse(p[1]), await body(z.object({ name: z.string().max(60).optional(), parentId: id.nullable().optional(), order: z.number().int().min(0).optional(), note: z.string().max(2000).optional() }))) });
+    if (p[0] === "folder" && p[1] && m === "DELETE") return json(await deleteFolder(id.parse(p[1])));
+
+    // review session: questions over a folder (or the review queue), mixed kinds
+    if (p[0] === "quiz" && m === "GET") {
+      const pool = await allItems();
+      const folderId = url.searchParams.get("folderId") ?? undefined;
+      const count = Math.min(30, Number(url.searchParams.get("count") ?? 10));
+      const queue = await reviewQueue({ folderId, limit: count });
+      const picked = queue.length ? queue : (await tree()).items.filter((i) => !folderId || i.folderId === folderId).slice(0, count);
+      const seed = String(Date.now());
+      const questions = picked.flatMap((lite, n) => {
+        const item = pool.find((x) => x.id === lite.id);
+        if (!item) return [];
+        const qs = questionsFor(item, pool, seed);
+        return [qs[(n + qs.length - 1) % qs.length]];
+      });
+      return json({ questions });
+    }
+    if (p[0] === "grade" && m === "POST") {
+      const b = await body(z.object({ question: z.object({ id: z.string(), kind: z.enum(["flashcard", "choice", "ox", "blank", "short", "recognize"]), knowledgeId: z.string(), answer: z.string(), accept: z.array(z.string()).optional() }).passthrough(),
+        answer: z.string().max(2000), sourceId: z.string().max(40).optional() }));
+      const q = b.question as unknown as Question;
+      const g = grade(q, b.answer);
+      await recordEvent(q.knowledgeId, g.correct ? "correct" : "wrong", `${QUESTION_LABEL[q.kind]}${g.correct ? "" : `: "${b.answer.slice(0, 60)}"`}`).catch(() => undefined);
+      if (q.kind === "recognize" && g.correct && b.sourceId) await markGoal(b.sourceId, "recognize", true, "예전 지식을 알아봄").catch(() => undefined);
+      return json(g);
+    }
+    if (p[0] === "related" && m === "GET") return json({ items: await itemsByRef(url.searchParams.getAll("ref").slice(0, 200), url.searchParams.get("prefix") === "1") });
+    if (p[0] === "ref-event" && m === "POST") {
+      const b = await body(z.object({ refs: z.array(z.string().max(200)).min(1).max(20), kind: z.enum(["met", "asked", "wrong", "hint", "correct", "note"]), detail: z.string().max(600).optional(), material: z.string().max(200).optional() }));
+      return json(await recordByRef(b.refs, b.kind, b.detail ?? "", b.material ? { kind: "pdf", title: b.material } : undefined));
+    }
+    if (p[0] === "import" && m === "POST") {
+      const b = await body(z.object({ points: z.array(z.object({ ref: z.string().max(200), title: z.string().min(1).max(120), essentials: z.array(z.string().max(600)).max(8), folder: z.string().max(200), material: z.string().max(200), page: z.number().int().optional() })).max(2000) }));
+      return json(await importPoints(b.points));
+    }
+
+    // read articles
+    if (p[0] === "sources" && m === "GET") return json({ sources: await listSources() });
+    if (p[0] === "source" && p[1] && m === "GET") { const s = await getSource(p[1]); if (!s) return NextResponse.json({ message: "읽은 글을 찾을 수 없어요." }, { status: 404 }); return json({ source: await withGoals(s) }); }
+    if (p[0] === "source" && p[1] && p[2] === "goal" && m === "POST") { const b = await body(z.object({ goal: z.enum(["terms", "claim", "chains", "recognize"]), done: z.boolean() })); return json({ source: await markGoal(p[1], b.goal as GoalId, b.done) }); }
+    if (p[0] === "source" && p[1] && p[2] === "recognize" && m === "GET") {
+      const s = await getSource(p[1]);
+      if (!s) return NextResponse.json({ message: "읽은 글을 찾을 수 없어요." }, { status: 404 });
+      const pool = await allItems();
+      return json({ questions: s.againIds.flatMap((kid) => { const item = pool.find((x) => x.id === kid); return item ? [recognizeQuestion(item, s.quotes[kid] || item.title, pool, s.id)] : []; }) });
+    }
+
+    // model calls
+    if (p[0] === "extract" && m === "POST") {
+      const b = await body(z.object({ kind: z.enum(["web", "lesson"]), title: z.string().min(1).max(300), url: z.string().max(2000).optional(), text: z.string().min(1).max(200000), folder: z.string().max(200).optional() }));
+      const r = await extractFromText(b);
+      return json({ source: await withGoals(r.source), items: r.items.map((i) => ({ id: i.id, title: i.title, body: i.body, state: i.state, again: i.again, created: i.created, kind: i.kind, quote: i.quote })) });
+    }
+    if (p[0] === "explain" && m === "POST") {
+      const b = await body(z.object({ title: z.string().max(300), url: z.string().max(2000).optional(), text: z.string().max(200000), selection: z.string().min(1).max(4000), question: z.string().max(2000).optional(), folder: z.string().max(200).optional() }));
+      return json(await explainSelection(b));
+    }
+    if (p[0] === "claim" && m === "POST") {
+      const b = await body(z.object({ sourceId: z.string().max(40), answer: z.string().min(1).max(1000) }));
+      const r = await checkClaim(b.sourceId, b.answer);
+      if (r.verdict === "맞음") await markGoal(b.sourceId, "claim", true, b.answer).catch(() => undefined);
+      return json(r);
+    }
+    if (p[0] === "ask" && m === "POST") {
+      const b = await body(z.object({ question: z.string().min(1).max(2000), focusIds: z.array(z.string().max(40)).max(6).optional(), context: z.string().max(6000).optional() }));
+      return json(await askKnowledge(b.question, b.focusIds, b.context));
+    }
+    return NextResponse.json({ message: "경로를 찾을 수 없어요." }, { status: 404 });
+  } catch (error) { return fail(error); }
+}
+export const GET = handle;
+export const POST = handle;
+export const PATCH = handle;
+export const DELETE = handle;

@@ -89,6 +89,10 @@ export type DejipgiEnv = {
   loadKatex(): Promise<unknown>;
   /** 작업대 흐름 canvas (FlowBench.tsx); returns an unmount function. */
   mountFlow?(host: HTMLElement, api: import("./FlowBench").FlowApi): () => void;
+  /** 지식창 · 코드 · 일정 (workspace/*.tsx) mounted into a host the app keeps across re-renders. */
+  mountView?(name: "knowledge" | "code" | "plan", host: HTMLElement, props: Record<string, unknown>): () => void;
+  /** A practice result passed on to the knowledge store (outcome: correct / wrong / assisted / unsure). */
+  onPractice?(deck: { id: string; title?: string; sourceName?: string; points?: import("@/lib/study/knowledge").KnowledgeLayer }, item: { objectiveId?: string; id: string }, outcome: string): void;
   /** URL of a generated SVG figure recorded with an authored document. */
   assetUrl?: (artifactId: string, assetPath: string) => string;
   /** Queues one generation request per material and reports its progress (the assigned AI runs it through MCP). */
