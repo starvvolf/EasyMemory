@@ -30,7 +30,14 @@ test("mentions pick who answers, in the order they are named", () => {
 
 test("a learner's line gets one answer from each bot, each seeing what was said before it", () => withData(async () => {
   const calls: Array<{ bot: BotId; prompt: string }> = [];
-  setExec(fake(calls));
+  setExec(async (bot, command, prompt) => {
+    if (bot === "codex") {
+      const option = command.args.indexOf("mcp_servers.studyforge.enabled=false");
+      assert.ok(option > 0);
+      assert.equal(command.args[option - 1], "-c", "room Codex skips the optional Study Forge MCP without changing global config");
+    } else assert.ok(!command.args.includes("mcp_servers.studyforge.enabled=false"));
+    return fake(calls)(bot, command, prompt);
+  });
   const room = await createRoom("발표 주장 정하기");
   await (await say(room.id, "검증이 핵심 아님?")).done;
   const after = (await loadRoom(room.id))!;

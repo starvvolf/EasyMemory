@@ -29,7 +29,7 @@ export type Room = {
 export type BotCommand = { cmd: string; args: string[]; readArgs?: string[]; noReadArgs?: string[]; out?: boolean };
 export const DEFAULT_COMMANDS: Record<BotId, BotCommand> = {
   claude: { cmd: "claude", args: ["-p", "--output-format", "text"], readArgs: ["--allowedTools", "Read,Grep,Glob"], noReadArgs: ["--disallowedTools", "Read,Grep,Glob,Bash,Edit,Write,WebFetch,WebSearch"] },
-  codex: { cmd: "codex", args: ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", "{out}", "-"], out: true },
+  codex: { cmd: "codex", args: ["exec", "-c", "mcp_servers.studyforge.enabled=false", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", "{out}", "-"], out: true },
   gemini: { cmd: "gemini", args: [] },
 };
 
