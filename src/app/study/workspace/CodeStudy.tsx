@@ -141,10 +141,12 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     setDrafts(d); setLang(next); setCode(d[next] ?? problem!.starters[next]);
     try { localStorage.setItem("code:lang", next); } catch { /* storage off */ }
   };
+  // The editor is the source of truth at the moment of a click (state may lag a keystroke behind).
+  const now = () => editor.current?.value() ?? code;
   const judge = async (mode: "example" | "submit") => {
     setRunning(mode); setError("");
     try {
-      const r = await call<Judged>(`/api/code/problem/${id}/submit`, { lang, code, mode, hints });
+      const r = await call<Judged>(`/api/code/problem/${id}/submit`, { lang, code: now(), mode, hints });
       setResult({ ...r, mode });
       if (mode === "submit") {
         setSubs((await call<{ submissions: SubLite[] }>(`/api/code/problem/${id}`)).submissions);
@@ -155,7 +157,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   };
   const runCustom = async () => {
     setRunning("custom");
-    try { const r = await call<{ ok: boolean; stdout?: string; stderr?: string; error?: string; timedOut?: boolean; ms?: number }>("/api/code/run", { lang, code, input: custom.input });
+    try { const r = await call<{ ok: boolean; stdout?: string; stderr?: string; error?: string; timedOut?: boolean; ms?: number }>("/api/code/run", { lang, code: now(), input: custom.input });
       setCustom((c) => ({ ...c, out: r.ok ? `${r.stdout ?? ""}${r.stderr ? `\n[에러]\n${r.stderr}` : ""}${r.timedOut ? "\n[5초 안에 끝나지 않아 멈췄어요]" : ""}` : r.error ?? "" })); }
     catch (e) { setError(errorText(e)); } finally { setRunning(""); }
   };
@@ -172,17 +174,17 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     } catch (e) { setMsgs((m) => [...m, { who: "ai", text: `답을 받지 못했어요: ${errorText(e)}`, tag }]); }
     finally { setAsking(false); }
   };
-  const hint = (level: 1 | 2 | 3) => { setHints((h) => h + 1); void assist(`힌트 ${level}`, ["", "방향만 알려 줘", "어느 줄이 문제인지 짚어 줘", "고친 코드를 보여 줘"][level], () => call(`/api/code/problem/${id}/hint`, { lang, code, level, last })); };
+  const hint = (level: 1 | 2 | 3) => { setHints((h) => h + 1); void assist(`힌트 ${level}`, ["", "방향만 알려 줘", "어느 줄이 문제인지 짚어 줘", "고친 코드를 보여 줘"][level], () => call(`/api/code/problem/${id}/hint`, { lang, code: now(), level, last })); };
   const explainSel = () => {
     const sel = editor.current?.selection() ?? "";
     if (!sel.trim()) { setMsgs((m) => [...m, { who: "ai", text: "편집기에서 설명을 듣고 싶은 부분을 드래그한 다음 눌러 주세요." }]); return; }
-    void assist("설명", `이 부분 설명해 줘:\n\`\`\`\n${sel.slice(0, 600)}\n\`\`\``, () => call("/api/code/explain", { problemId: id, lang, code, selection: sel }));
+    void assist("설명", `이 부분 설명해 줘:\n\`\`\`\n${sel.slice(0, 600)}\n\`\`\``, () => call("/api/code/explain", { problemId: id, lang, code: now(), selection: sel }));
   };
   const ask = () => {
     if (!question.trim()) return;
     const sel = editor.current?.selection() ?? "";
     const q = question; setQuestion("");
-    void assist("질문", q, () => call("/api/code/explain", { problemId: id, lang, code, selection: sel.trim() ? sel : code.slice(0, 6000), question: q }));
+    void assist("질문", q, () => call("/api/code/explain", { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q }));
   };
   const startTimer = async () => { try { await call("/api/schedule/timer/start", { label: problem?.title ?? "코드" }); window.dispatchEvent(new Event("recaller:timer-changed")); } catch (e) { setError(errorText(e)); } };
   const openSubmission = async (sid: string) => {
@@ -230,7 +232,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {result ? (
           <div className={`cs-result ${VERDICT[result.verdict]?.[1] ?? ""}`}>
             <div className="row"><b>{VERDICT[result.verdict]?.[0] ?? result.verdict}</b><span className="small muted num">{result.mode === "example" ? "예제" : "제출"} · {result.passed}/{result.total} 통과 · {(result.ms / 1000).toFixed(1)}초</span>
-              {result.compile || failed?.stderr ? <button className="btn ghost small" disabled={asking} onClick={() => void assist("에러", "이 에러가 무슨 뜻이야?", () => call("/api/code/error", { problemId: id, lang, code, error: result.compile || failed?.stderr || "" }))}>에러 설명</button> : null}</div>
+              {result.compile || failed?.stderr ? <button className="btn ghost small" disabled={asking} onClick={() => void assist("에러", "이 에러가 무슨 뜻이야?", () => call("/api/code/error", { problemId: id, lang, code: now(), error: result.compile || failed?.stderr || "" }))}>에러 설명</button> : null}</div>
             {result.compile ? <pre className="cs-out">{result.compile}</pre> : null}
             {result.shown.map((r) => (
               <details key={r.index} open={r.verdict !== "AC"} className="cs-case">
@@ -252,9 +254,9 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           <button className="btn small" disabled={asking} onClick={() => hint(3)}>힌트 3 · 고친 코드</button>
         </div>
         <div className="cs-hints">
-          <button className="btn ghost small" disabled={asking} onClick={() => void assist("확인", "제출 전에 접근이 맞는지 봐 줘", () => call(`/api/code/problem/${id}/review`, { lang, code }))}>맞는지 봐 줘</button>
+          <button className="btn ghost small" disabled={asking} onClick={() => void assist("확인", "제출 전에 접근이 맞는지 봐 줘", () => call(`/api/code/problem/${id}/review`, { lang, code: now() }))}>맞는지 봐 줘</button>
           <button className="btn ghost small" disabled={asking} onClick={explainSel}>드래그한 부분 설명</button>
-          {problem.hasReference ? <button className="btn ghost small" disabled={asking} onClick={() => void assist("반례", "내 코드가 틀리는 입력 찾아 줘", () => call(`/api/code/problem/${id}/counter`, { lang, code }))}>반례 찾기</button> : null}
+          {problem.hasReference ? <button className="btn ghost small" disabled={asking} onClick={() => void assist("반례", "내 코드가 틀리는 입력 찾아 줘", () => call(`/api/code/problem/${id}/counter`, { lang, code: now() }))}>반례 찾기</button> : null}
         </div>
         <div className="cs-chat">
           {!msgs.length ? <p className="small muted">막히면 힌트 1부터 받아 보세요. 편집기에서 코드를 드래그하고 질문하면 그 부분을 설명해요.</p> : null}

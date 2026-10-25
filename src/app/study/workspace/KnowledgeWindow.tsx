@@ -37,6 +37,8 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const loadDetail = useCallback(async (id: string) => { try { setDetail(await call<Detail>(`/api/knowledge/item/${id}`)); } catch (e) { setError(errorText(e)); setDetail(null); } }, []);
   useEffect(() => later(() => void load()), [load]);
   useEffect(() => later(() => { if (sel) void loadDetail(sel); else setDetail(null); }), [sel, loadDetail]);
+  // One column (narrow screens): the detail is below the list, so bring it into view when an item is chosen.
+  useEffect(() => later(() => { if (sel && detail?.item.id === sel && window.innerWidth < 1100) document.querySelector(".kw-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50), [sel, detail?.item.id]);
   useEffect(() => {
     const onFocus = (e: Event) => { const id = (e as CustomEvent<{ id?: string }>).detail?.id; if (id) setSel(id); };
     const onChanged = () => { void load(); if (sel) void loadDetail(sel); };

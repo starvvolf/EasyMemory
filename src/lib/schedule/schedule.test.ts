@@ -53,7 +53,7 @@ test("a deadline without a folder splits the amount given; the week shows sessio
   const now = new Date("2026-10-26T01:00:00Z");
   const d = await addDeadline({ title: "네트워크 강의", date: "2026-11-01", amount: 10, unit: "강" });
   const made = await makeSchedule(d.id, now);
-  assert.equal(made.todos[0].text, "네트워크 강의 강 1~2");
+  assert.equal(made.todos[0].text, "네트워크 강의 1~2강");
   await addTodo({ text: "바킹독 0x12 읽기", date: "2026-10-27" });
   const w = await week(undefined, now);
   assert.equal(w.start, "2026-10-26");

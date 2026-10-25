@@ -124,7 +124,7 @@ async function handle(request: Request, context: RouteContext) {
 
     // read articles
     if (p[0] === "sources" && m === "GET") return json({ sources: await listSources() });
-    if (p[0] === "source" && p[1] && m === "GET") { const s = await getSource(p[1]); if (!s) return NextResponse.json({ message: "읽은 글을 찾을 수 없어요." }, { status: 404 }); return json({ source: await withGoals(s) }); }
+    if (p[0] === "source" && p[1] && p.length === 2 && m === "GET") { const s = await getSource(p[1]); if (!s) return NextResponse.json({ message: "읽은 글을 찾을 수 없어요." }, { status: 404 }); return json({ source: await withGoals(s) }); }
     if (p[0] === "source" && p[1] && p[2] === "goal" && m === "POST") { const b = await body(z.object({ goal: z.enum(["terms", "claim", "chains", "recognize"]), done: z.boolean() })); return json({ source: await markGoal(p[1], b.goal as GoalId, b.done) }); }
     if (p[0] === "source" && p[1] && p[2] === "recognize" && m === "GET") {
       const s = await getSource(p[1]);

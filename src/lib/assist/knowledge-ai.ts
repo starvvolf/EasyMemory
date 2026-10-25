@@ -97,6 +97,6 @@ export async function askKnowledge(question: string, focusIds: string[] = [], co
   const user = [`[학습자 지식 전체]\n${overview.text}`, focus.some(Boolean) ? `[지금 보고 있는 지식]\n${focus.filter(Boolean).map((d) => lines(d!)).join("\n")}` : "",
     found.length ? `[질문과 관련 있어 보이는 지식] ${found.map((h) => `${h.title}: ${h.line}`).join(" / ")}` : "", context ? `[지금 화면] ${context.slice(0, 4000)}` : "", `[질문] ${question.slice(0, 1500)}`].filter(Boolean).join("\n\n");
   return askJson<{ answer: string; link: { from: string; to: string; relation: string } }>("knowledge:ask",
-    "학습자의 지식 저장소를 아는 튜터다. 질문에 짧게 답한다 (2~6문장). 학습자의 지식과 이어지는 점이 있으면 그 지식 이름을 그대로 써서 짚는다. 두 지식 사이에 고리를 새로 이을 만하면 link에 from/to(지식 이름 그대로)/relation을 채우고, 아니면 셋 다 빈 문자열.",
+    "학습자의 지식 저장소를 아는 튜터다. 질문에 짧게 답한다 (2~6문장). 학습자의 지식과 이어지는 점이 있으면 그 지식 이름을 그대로 써서 짚는다. 두 지식 사이에 고리를 새로 이을 만하면 link에 from/to(지식 이름 그대로)/relation(“그러면”, “때문에”, “의 예”처럼 10자 이내)을 채우고, 아니면 셋 다 빈 문자열.",
     user, S.obj({ answer: S.str, link: S.obj({ from: S.str, to: S.str, relation: S.str }) }));
 }

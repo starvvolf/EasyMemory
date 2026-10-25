@@ -19,7 +19,7 @@ export default function AgentScreen() {
       try { const r = await call<{ blocks: Block[] }>(`/api/agent/screen?after=${encodeURIComponent(since)}`); if (!gone) setBlocks(r.blocks.filter((b) => !b.answered)); } catch { /* local only */ }
     };
     void poll();
-    const i = setInterval(() => void poll(), 4000);
+    const i = setInterval(() => { if (!document.hidden) void poll(); }, 8000);
     return () => { gone = true; clearInterval(i); };
   }, []);
   // What is on screen goes to the agent's current_view tool (at most every 3 seconds).

@@ -140,7 +140,7 @@ export async function makeSchedule(deadlineId: string, now = new Date()) {
     what = `${name} 지식`;
   } else {
     units = Array.from({ length: deadline.amount || 1 }, (_, i) => `${i + 1}`);
-    what = deadline.unit ? `${deadline.title} ${deadline.unit}` : deadline.title;
+    what = deadline.title;
   }
   const studyDays = Math.max(1, left - 1);
   const per = Math.ceil(units.length / studyDays);
@@ -148,7 +148,7 @@ export async function makeSchedule(deadlineId: string, now = new Date()) {
   for (let d = 0; d < studyDays && d * per < units.length; d++) {
     const chunk = units.slice(d * per, (d + 1) * per);
     const text = deadline.folderId ? `${what} ${chunk.length}개 보기: ${chunk.slice(0, 4).join(", ")}${chunk.length > 4 ? " …" : ""}`
-      : `${what} ${chunk[0]}${chunk.length > 1 ? `~${chunk.at(-1)}` : ""}`;
+      : `${what} ${chunk[0]}${chunk.length > 1 ? `~${chunk.at(-1)}` : ""}${deadline.unit}`;
     plan.push({ date: addDays(start, d), text });
   }
   if (left >= 2) plan.push({ date: addDays(deadline.date, -1), text: `${deadline.title}: 전체 훑기 + 약한 것 몰아 보기` });
