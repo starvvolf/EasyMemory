@@ -51,14 +51,19 @@ export default function RoomApp() {
     setRoom(next);
     try { localStorage.setItem("room:last", id); } catch { /* storage off */ }
   }, []);
+  // First load: state is set only in the request's callbacks, not in the effect body (react-hooks/set-state-in-effect).
   useEffect(() => {
-    loadList().then((list) => {
+    let alive = true;
+    api<{ rooms: RoomSummary[] } & Meta>("/api/room").then(async (data) => {
+      if (!alive) return;
+      setRooms(data.rooms); setMeta({ bots: data.bots, why: data.why, hints: data.hints, efforts: data.efforts });
       let last = "";
       try { last = localStorage.getItem("room:last") ?? ""; } catch { /* storage off */ }
-      const pick = list.find((r) => r.id === last) ?? list[0];
-      if (pick) return open(pick.id); setMaking(true);
-    }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [loadList, open]);
+      const pick = data.rooms.find((r) => r.id === last) ?? data.rooms[0];
+      if (pick) await open(pick.id); else setMaking(true);
+    }).catch((e) => { if (alive) setError(e instanceof Error ? e.message : String(e)); });
+    return () => { alive = false; };
+  }, [open]);
 
   const busy = Boolean(room?.thinking || room?.pending.length);
   const roomId = room?.id;
