@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createRoom, exportRoom, loadRoom, mentionsOf, promptFor, runRounds, say, setExec, stop, summarize, type BotId } from "./room.ts";
+import { argsFor, createRoom, DEFAULT_COMMANDS, exportRoom, loadRoom, mentionsOf, promptFor, runRounds, say, setExec, stop, summarize, updateRoom, type BotId } from "./room.ts";
 
 async function withData<T>(run: (dir: string) => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "room-"));
@@ -91,4 +91,32 @@ test("long conversations keep the latest turns in full and say how many were lef
   assert.match(p, /사용자: 말 29/);
   assert.doesNotMatch(p, /사용자: 말 5\n/);
   assert.match(p, /저장소\)의 문서와 코드를 읽어도/);
+});
+
+test("AIs hand the word on with @name, a few times at most, with a pause; answers are kept short", () => withData(async () => {
+  const calls: Array<{ bot: BotId; prompt: string; at: number }> = [];
+  // Claude names Codex, Codex names Gemini, Gemini names Claude … a loop the hand-off limit has to end.
+  const nextOf: Record<BotId, string> = { claude: "@Codex", codex: "@제미나이", gemini: "@claude" };
+  setExec(async (bot, _c, prompt) => { calls.push({ bot, prompt, at: Date.now() }); return `${bot} 생각 ${"가".repeat(800)} ${nextOf[bot]} 어때?`; });
+  const room = await createRoom("손넘기기");
+  await updateRoom(room.id, { settings: { chainMax: 3, delaySec: 0.05, maxChars: 100 } });
+  await (await say(room.id, "@claude 시작")).done;
+  const after = (await loadRoom(room.id))!;
+  assert.deepEqual(after.messages.map((m) => m.from), ["user", "claude", "codex", "gemini", "claude"], "three hand-offs, then it stops");
+  assert.ok(after.messages[1].text.length <= 160 && after.messages[1].text.endsWith("… @Codex"), `cut at 1.5× the length, keeping the hand-off: ${after.messages[1].text.slice(-20)}`);
+  assert.match(calls[0].prompt, /100자 이내/);
+  assert.match(calls[0].prompt, /@Codex 또는 @Gemini/);
+  assert.ok(calls[1].at - calls[0].at >= 40, "waits between AI turns");
+  // In rounds, naming someone does not add turns.
+  calls.length = 0;
+  await (await runRounds(room.id, 1)).done;
+  assert.deepEqual(calls.map((c) => c.bot), ["claude", "codex", "gemini"]);
+}));
+
+test("model and effort flags go where the command wants them", () => {
+  const codex = argsFor(DEFAULT_COMMANDS.codex, { model: "gpt-5", effort: "high" }, false, "/tmp/o.txt");
+  assert.deepEqual(codex, ["exec", "-c", "mcp_servers.studyforge.enabled=false", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", "/tmp/o.txt", "-m", "gpt-5", "-c", "model_reasoning_effort=high", "-"]);
+  const claude = argsFor(DEFAULT_COMMANDS.claude, { model: "", effort: "" }, true);
+  assert.deepEqual(claude, ["-p", "--output-format", "text", "--allowedTools", "Read,Grep,Glob"]);
+  assert.deepEqual(argsFor(DEFAULT_COMMANDS.gemini, { model: "gemini-2.5-pro", effort: "" }, false), ["-m", "gemini-2.5-pro"]);
 });
