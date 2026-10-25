@@ -40,6 +40,8 @@ export function localExperimentStatusPayload(
 
 export function isLocalExperimentApiPath(pathname: string): boolean {
   return pathname.startsWith("/api/lab/") || pathname === "/api/mcp-runs" ||
+    // 토론방 (src/app/room): the route checks the local principal itself.
+    pathname === "/api/room" || pathname.startsWith("/api/room/") ||
     pathname.startsWith("/api/mcp-runs/") ||
     pathname === "/api/mcp-experiment-requests" ||
     pathname.startsWith("/api/mcp-experiment-requests/") ||
