@@ -53,15 +53,17 @@ export const DEFAULT_COMMANDS: Record<BotId, BotCommand> = {
     readArgs: ["--allowedTools", "Read,Grep,Glob"], noReadArgs: ["--disallowedTools", "Read,Grep,Glob,Bash,Edit,Write,WebFetch,WebSearch"] },
   codex: { cmd: "codex", args: ["exec", "-c", "mcp_servers.studyforge.enabled=false", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", "{out}", "{flags}", "-"], out: true,
     modelArgs: ["-m", "{model}"], effortArgs: ["-c", "model_reasoning_effort={effort}"] },
-  gemini: { cmd: "gemini", args: [], modelArgs: ["-m", "{model}"] },
+  // Gemini CLI no longer signs in personal Google accounts (2026-09, "migrate to the Antigravity suite"); its successor
+  // `agy` takes the prompt only as an argument in print mode, so it runs without a shell (see runCli).
+  gemini: { cmd: "agy", args: ["-p", "{prompt}", "--output-format", "text", "--disable-slash-commands", "--print-timeout", "110s"], modelArgs: ["--model", "{model}"], effortArgs: ["--effort", "{effort}"] },
 };
 /** Suggestions shown next to the model field (any name the CLI accepts works; empty keeps the CLI's default). */
 export const MODEL_HINTS: Record<BotId, string[]> = {
   claude: ["opus", "sonnet", "haiku"],
   codex: ["gpt-5-codex", "gpt-5", "o4-mini"],
-  gemini: ["gemini-2.5-pro", "gemini-2.5-flash"],
+  gemini: [],
 };
-export const EFFORTS: Record<BotId, string[]> = { claude: [], codex: ["minimal", "low", "medium", "high"], gemini: [] };
+export const EFFORTS: Record<BotId, string[]> = { claude: [], codex: ["minimal", "low", "medium", "high"], gemini: ["low", "medium", "high"] };
 /** The arguments for one turn: the command's own, with model, effort and file flags where `{flags}` stands. */
 export function argsFor(command: BotCommand, m: BotModel, readFiles: boolean, out = "") {
   const flags = [
@@ -165,6 +167,9 @@ const quote = (a: string) => (/[\s"&|<>^]/.test(a) ? `"${a.replace(/"/g, '\\"')}
  */
 export function explain(stderr: string) {
   const lines = stderr.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (/no longer supported for Gemini Code Assist for individuals|Antigravity/i.test(stderr))
+    return "Gemini CLI는 이제 개인 Google 계정 로그인을 받지 않아요. Antigravity CLI(agy)를 설치해 로그인하면 토론방이 그것을 써요: PowerShell에서 irm https://antigravity.google/cli/install.ps1 | iex 를 실행한 뒤 agy를 한 번 실행해 로그인하세요.";
+  if (/authentication required/i.test(stderr)) return "agy 로그인이 필요해요. 터미널에서 agy를 한 번 실행해 Google 계정으로 로그인해 주세요.";
   if (/IneligibleOrProjectId|GOOGLE_CLOUD_PROJECT|requires.*project/i.test(stderr))
     return "Gemini가 이 Google 계정으로는 Cloud 프로젝트가 있어야 한다고 해요. 터미널에서 gemini를 실행해 /auth로 AI Pro를 구독한 개인 계정으로 다시 로그인하거나(학교·회사 계정이면 바꾸기), 그 계정을 써야 하면 RecallerData/rooms/bots.json의 gemini에 \"env\": {\"GOOGLE_CLOUD_PROJECT\": \"프로젝트ID\"}를 넣어 주세요.";
   if (/login|log in|not authenticated|auth/i.test(stderr) && /required|please|expired|missing/i.test(stderr))
@@ -172,14 +177,24 @@ export function explain(stderr: string) {
   const message = lines.filter((l) => !/^at\s|^\s*at\s|^file:\/\/|node:internal/.test(l));
   return (message.slice(-3).join(" ") || lines.slice(0, 2).join(" ")).slice(0, 300);
 }
-/** Runs a CLI with the prompt on stdin; codex's last message comes from its output file. Plain text back, trimmed. */
+/**
+ * Runs a CLI with the prompt on stdin, or as the `{prompt}` argument for a CLI that only takes it that way; then no
+ * shell is used (the argument goes to the program whole, newlines and quotes included). codex's last message comes
+ * from its output file. Plain text back, trimmed.
+ */
 export const runCli: Exec = async (_bot, command, prompt, signal) => {
   const out = command.out ? path.join(os.tmpdir(), `room-${randomBytes(6).toString("hex")}.txt`) : "";
-  const args = command.args.map((a) => a.replace("{out}", out)).filter((a) => a !== "{flags}");
+  const inArgs = command.args.includes("{prompt}");
+  // Windows caps a command line near 32,000 characters; the newest part of the conversation is what matters.
+  const asArg = prompt.length > 24_000 ? `${prompt.slice(0, 2_000)}\n…\n${prompt.slice(-21_000)}` : prompt;
+  const args = command.args.map((a) => (a === "{prompt}" ? asArg : a.replace("{out}", out))).filter((a) => a !== "{flags}");
   return new Promise<string>((resolve, reject) => {
     let child: ChildProcess;
-    try { child = spawn([command.cmd, ...args].map(quote).join(" "), { shell: true, cwd: process.cwd(), windowsHide: true, env: { ...process.env, NO_COLOR: "1", ...command.env } }); }
-    catch (error) { reject(error); return; }
+    const env = { ...process.env, NO_COLOR: "1", ...command.env };
+    try {
+      child = inArgs ? spawn(command.cmd, args, { cwd: process.cwd(), windowsHide: true, env })
+        : spawn([command.cmd, ...args].map(quote).join(" "), { shell: true, cwd: process.cwd(), windowsHide: true, env });
+    } catch (error) { reject(error); return; }
     let stdout = "", stderr = "";
     child.stdout?.on("data", (d) => { stdout += d; if (stdout.length > 200_000) stdout = stdout.slice(-200_000); });
     child.stderr?.on("data", (d) => { stderr += d; if (stderr.length > 20_000) stderr = stderr.slice(-20_000); });
@@ -195,7 +210,7 @@ export const runCli: Exec = async (_bot, command, prompt, signal) => {
       if (code !== 0 && !text) reject(new Error(explain(stderr) || `${command.cmd}가 코드 ${code}로 끝났어요.`));
       else resolve(text);
     });
-    child.stdin?.end(prompt);
+    child.stdin?.end(inArgs ? "" : prompt);
   });
 };
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { argsFor, createRoom, DEFAULT_COMMANDS, explain, exportRoom, loadRoom, mentionsOf, promptFor, runRounds, say, setExec, stop, summarize, updateRoom, type BotId } from "./room.ts";
+import { argsFor, createRoom, DEFAULT_COMMANDS, explain, exportRoom, runCli, loadRoom, mentionsOf, promptFor, runRounds, say, setExec, stop, summarize, updateRoom, type BotId } from "./room.ts";
 
 async function withData<T>(run: (dir: string) => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "room-"));
@@ -118,11 +118,18 @@ test("model and effort flags go where the command wants them", () => {
   assert.deepEqual(codex, ["exec", "-c", "mcp_servers.studyforge.enabled=false", "--skip-git-repo-check", "--sandbox", "read-only", "--output-last-message", "/tmp/o.txt", "-m", "gpt-5", "-c", "model_reasoning_effort=high", "-"]);
   const claude = argsFor(DEFAULT_COMMANDS.claude, { model: "", effort: "" }, true);
   assert.deepEqual(claude, ["-p", "--output-format", "text", "--allowedTools", "Read,Grep,Glob"]);
-  assert.deepEqual(argsFor(DEFAULT_COMMANDS.gemini, { model: "gemini-2.5-pro", effort: "" }, false), ["-m", "gemini-2.5-pro"]);
+  assert.deepEqual(argsFor(DEFAULT_COMMANDS.gemini, { model: "gemini-3.8-flash-medium", effort: "high" }, false).slice(-4), ["--model", "gemini-3.8-flash-medium", "--effort", "high"]);
 });
 
 test("a CLI's error is told by its message and remedy, not its stack trace", () => {
   const gemini = "Error: something\n    at throwIneligibleOrProjectIdError (file:///C:/x/chunk.js:1:1)\n    at _doSetupUser (file:///C:/x/chunk.js:2:2)";
   assert.match(explain(gemini), /GOOGLE_CLOUD_PROJECT/);
   assert.equal(explain("TypeError: fetch failed\n    at a (b.js:1:1)\n    at node:internal/x"), "TypeError: fetch failed");
+});
+
+test("a CLI that takes the prompt as an argument gets it whole, without a shell", async () => {
+  const prompt = "줄 하나\n\"따옴표\" & | < > ^ %PATH% $HOME\n끝";
+  const got = await runCli("gemini", { cmd: process.execPath, args: ["-e", "process.stdout.write(process.argv[1])", "{prompt}"] }, prompt, new AbortController().signal);
+  assert.equal(got, prompt.trim());
+  assert.match(explain("Failed to sign in. Message: This client is no longer supported for Gemini Code Assist for individuals."), /agy/);
 });

@@ -207,7 +207,7 @@ export default function RoomApp() {
             {BOTS.map((b) => (
               <div key={b} className={`model model-${b}`}>
                 <label htmlFor={`m-${b}`}><span className="face">{MARK[b]}</span>{NAME[b]}<small>{PLAN[b]}</small></label>
-                <input id={`m-${b}`} list={`hint-${b}`} defaultValue={s.models[b].model} key={`${room.id}-${b}-${s.models[b].model}`} placeholder="비우면 CLI 기본값"
+                <input id={`m-${b}`} list={`hint-${b}`} defaultValue={s.models[b].model} key={`${room.id}-${b}-${s.models[b].model}`} placeholder={b === "gemini" ? "비우면 기본값 (이름 목록: agy models)" : "비우면 CLI 기본값"}
                   onBlur={(e) => { if (e.target.value.trim() !== s.models[b].model) setModel(b, { model: e.target.value.trim() }); }} />
                 <datalist id={`hint-${b}`}>{(meta?.hints[b] ?? []).map((h) => <option key={h} value={h} />)}</datalist>
                 {(meta?.efforts[b] ?? []).length ? (
