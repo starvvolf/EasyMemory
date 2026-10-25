@@ -49,15 +49,15 @@ export default function TimerChip() {
   };
   const running = Boolean(t?.running), paused = Boolean(t && !t.running && t.carriedMs > 0);
   return (
-    <div className="tm">
-      <button className={`tablet-btn tm-chip${running ? " on" : ""}`} onClick={() => setOpen(!open)} aria-expanded={open} title="타이머">
-        ⏱ {running || paused ? <span className="num">{left !== null ? (left > 0 ? clock(left) : `+${clock(-left)}`) : clock(elapsed)}</span> : <span className="tm-idle">타이머</span>}
+    <div className="wtm">
+      <button className={`tablet-btn wtm-chip${running ? " on" : ""}`} onClick={() => setOpen(!open)} aria-expanded={open} title="타이머">
+        ⏱ {running || paused ? <span className="num">{left !== null ? (left > 0 ? clock(left) : `+${clock(-left)}`) : clock(elapsed)}</span> : <span className="wtm-idle">타이머</span>}
       </button>
       {open ? (
-        <div className="tm-card" role="dialog" aria-label="타이머">
+        <div className="wtm-card" role="dialog" aria-label="타이머">
           {running || paused ? (
             <>
-              <p className="tm-big num">{left !== null ? (left > 0 ? clock(left) : `+${clock(-left)}`) : clock(elapsed)}</p>
+              <p className="wtm-big num">{left !== null ? (left > 0 ? clock(left) : `+${clock(-left)}`) : clock(elapsed)}</p>
               <p className="small muted">{t?.label || "공부"} · {t?.mode === "pomodoro" ? `뽀모도로 ${t.targetMin}분` : "스톱워치"}{paused ? " · 멈춤" : ""}</p>
               <div className="row">{running ? <button className="btn small" onClick={() => void act("pause")}>잠깐 멈춤</button> : <button className="btn small" onClick={() => void act("start")}>이어서</button>}
                 <button className="btn primary small" onClick={() => void act("stop")}>끝내고 저장</button></div>

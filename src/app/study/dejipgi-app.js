@@ -352,14 +352,14 @@ function renderToday(plan, pendings){
   const panel = h("section", { class:"panel today2" });
   panel.append(h("div", { class:"today2-head" },
     h("div", null,
-      h("p", { class:"today2-date", text:`${d0.getMonth() + 1}월 ${d0.getDate()}일 ${weekday(d0)}요일` }),
+      S.view === "home" ? h("p", { class:"eyebrow", text:"PDF 자료 · 시험일 기준" }) : h("p", { class:"today2-date", text:`${d0.getMonth() + 1}월 ${d0.getDate()}일 ${weekday(d0)}요일` }),
       h("h2", { text:title }),
       h("p", { class:"small muted num", text: left
         ? `${left}문제 · 약 ${minutesLeft}분 남음${plan.doneToday ? ` · 오늘 ${plan.doneToday}문제 풂` : ""} · 하루 ${plan.budgetMinutes}분 기준`
         : plan.doneToday ? `오늘 ${plan.doneToday}문제를 풀었어요. 내일 할 것은 내일 아침에 다시 계산해요.` : "새 자료를 올리거나, 과목에 시험일을 넣어 보세요." })),
     h("div", { class:"row" },
       left ? h("button", { class:"btn primary big", "data-autofocus":"1", onclick:startToday }, plan.doneToday ? "이어서 하기" : "시작하기", h("span", { class:"btn-sub num", text:`${Math.min(left, chunkSize())}문제` })) : null,
-      h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부"))));
+      S.view === "home" ? null : h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부"))));
   if (total) panel.append(h("div", { class:"today2-bar", "aria-hidden":"true" }, h("i", { style:`width:${(plan.doneToday / total * 100).toFixed(1)}%` })));
   const rows = h("div", { class:"today2-rows" });
   for (const sp of plan.subjects){
@@ -1016,11 +1016,10 @@ function renderHome(){
   let due = 0, fresh = 0;
   decks.forEach(d => { const c = deckCounts(d); due += c.due; fresh += Math.min(c.fresh, 10); });
   const wrap = h("div", { class:"stack" });
-  const plan = todayPlan();
-  if (plan && decks.some(d => !d.example)) wrap.append(renderToday(plan, pendings));
-  else wrap.append(h("section", { class:"panel today" },
+  // 공부 → PDF 자료: the day's plan lives on 오늘; here, the counts and one button, then the materials.
+  wrap.append(h("section", { class:"panel today" },
     h("div", null,
-      h("p", { class:"eyebrow", text:"오늘" }),
+      h("p", { class:"eyebrow", text:"PDF 자료 연습" }),
       h("h2", { text: due ? "복습할 문제가 기다리고 있어요" : fresh ? "새 문제로 시작해 볼까요" : pendings.length ? "문제를 만드는 동안 먼저 읽어 두세요" : decks.length ? "오늘 할 문제를 모두 마쳤어요" : "새 자료로 시작해 볼까요" }),
       h("div", { class:"counts" },
         h("div", null, h("b", { class:"num", text:String(due) }), h("span", { text:"복습 차례" })),
@@ -1028,8 +1027,7 @@ function renderHome(){
       )
     ),
     h("div", { class:"row" },
-      h("button", { class:"btn primary", disabled: !(due || fresh), onclick: () => startSession(null) }, "전체 연습 시작"),
-      h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부")
+      h("button", { class:"btn primary", disabled: !(due || fresh), onclick: () => startSession(null) }, "전체 연습 시작")
     )
   ));
   // A material still being made whose first sections are ready shows as its real deck with the progress note.

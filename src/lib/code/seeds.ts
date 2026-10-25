@@ -14,6 +14,17 @@ const distinct = (r: () => number, n: number, lo: number, hi: number) => { const
 
 const READ_JS = "const d = require(\"fs\").readFileSync(0, \"utf8\").trim().split(/\\s+/).map(Number);\nlet p = 0;\n";
 
+/** What each seed problem's knowledge means, so the 지식창 shows a meaning (and can quiz it) from the first day. */
+export const SEED_KNOWLEDGE: Record<string, string> = {
+  "이분 탐색": "정렬된 배열에서 가운데 값과 비교해 찾는 범위를 절반씩 줄여 가며 찾는 방법. 한 번 찾는 데 O(log N).",
+  "정렬": "값을 크기 순서로 늘어놓는 것. 이분 탐색·투 포인터처럼 순서를 이용하는 방법은 정렬된 배열에서만 쓸 수 있다.",
+  "lower_bound": "정렬된 배열에서 x 이상인 값이 처음 나오는 위치. 없으면 배열 길이(N). 찾는 범위를 [0, N)으로 잡는다.",
+  "누적 합": "앞에서부터의 합 S[i]를 미리 만들어 두면 l~r 구간의 합을 S[r] - S[l-1] 한 번으로 구한다.",
+  "자료형 범위(오버플로)": "int는 약 21억(2^31-1)까지만 담는다. 합이 이를 넘을 수 있으면 C++·C#은 long long/long을 쓴다.",
+  "투 포인터": "정렬된 배열의 양 끝(또는 같은 쪽)에 둔 두 위치를 조건에 따라 옮기며, 모든 쌍을 보지 않고 답을 찾는 방법. O(N).",
+  "탐색 범위의 경계": "이분 탐색에서 반복 조건(st <= en)과 범위 줄이기(st = mid + 1, en = mid - 1)를 맞게 잡아야 마지막 후보를 빠뜨리거나 무한 반복하지 않는다.",
+};
+
 export const SEEDS: Seed[] = [
   {
     id: "cp_seed_find_cards", title: "가진 카드 확인하기", kind: "full", folder: "알고리즘/이분 탐색", knowledge: ["이분 탐색", "정렬"],

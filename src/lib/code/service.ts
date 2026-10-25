@@ -3,11 +3,18 @@
 import { recordEvent, saveMany } from "../knowledge/store.ts";
 import { listProblems, readProblem, setProblemKnowledge, submit, type Problem } from "./problems.ts";
 import { VERDICT_LABEL, type Lang } from "./run.ts";
+import { SEED_KNOWLEDGE } from "./seeds.ts";
+
+const filled = new Set<string>();
 
 /** The problem's knowledge names as items (만남 the first time), ids written back on the problem. */
 export async function ensureProblemKnowledge(problem: Problem) {
-  if (problem.knowledgeIds.length === problem.knowledge.length && problem.knowledgeIds.length) return problem;
-  const results = await saveMany(problem.knowledge.map((title) => ({ title, folder: problem.folder, source: { kind: "code" as const, title: problem.title, ref: `code:${problem.id}` } })));
+  // Seed problems also fill in their knowledge's meaning once per run (an item made before keeps its own text).
+  const seedFill = problem.source.kind === "seed" && !filled.has(problem.id);
+  if (problem.knowledgeIds.length === problem.knowledge.length && problem.knowledgeIds.length && !seedFill) return problem;
+  filled.add(problem.id);
+  const results = await saveMany(problem.knowledge.map((title) => ({ title, folder: problem.folder, ...(SEED_KNOWLEDGE[title] ? { body: SEED_KNOWLEDGE[title] } : {}),
+    source: { kind: "code" as const, title: problem.title, ref: `code:${problem.id}` } })));
   return setProblemKnowledge(problem.id, results.map((r) => r.item.id));
 }
 export async function listProblemsWithKnowledge() {

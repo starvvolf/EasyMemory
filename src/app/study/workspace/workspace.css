@@ -168,10 +168,10 @@
 @media (max-width:900px){ .dejipgi .pl-week{grid-template-columns:repeat(2,minmax(0,1fr))} .dejipgi .pl-grid{grid-template-columns:minmax(0,1fr)} }
 
 /* 타이머 */
-.dejipgi .tm{position:relative}
-.dejipgi .tm-chip.on{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
-.dejipgi .tm-card{position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:270px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:8px}
-.dejipgi .tm-big{font-size:34px;font-weight:700;letter-spacing:-.01em}
+.dejipgi .wtm{position:relative}
+.dejipgi .wtm-chip.on{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.dejipgi .wtm-card{position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:270px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:8px}
+.dejipgi .wtm-big{font-size:34px;font-weight:700;letter-spacing:-.01em}
 
 /* 에이전트 블록 */
 .dejipgi .ag{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:70;display:flex;flex-direction:column;gap:8px;width:min(360px,calc(100vw - 32px))}
@@ -194,7 +194,7 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .ws-tools{display:flex;gap:6px;align-items:center;margin-left:auto}
 .dejipgi .tabs{width:100%;max-width:520px;display:grid;grid-template-columns:repeat(4,1fr);overflow:visible}
 .dejipgi .tabs button{padding:8px 10px;font-size:15px}
-.dejipgi .tm-chip{margin:0}
+.dejipgi .wtm-chip{margin:0}
 /* ⋯ menus */
 .dejipgi .mm,.dejipgi .ws-menu{position:relative}
 .dejipgi .mm-btn,.dejipgi .ws-menu>summary{list-style:none;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;min-width:34px;height:30px;padding:0 10px;font-size:17px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
@@ -258,4 +258,4 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .ag-goal-n{grid-row:1/3;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);font-weight:700;font-size:13px}
 .dejipgi .ag-goal.done .ag-goal-n{background:var(--good-soft);color:var(--good)}
 .dejipgi .ag-goal-t{font-weight:600;font-size:14px}
-@media (max-width:900px){ .dejipgi .tm-idle{display:none} }
+@media (max-width:900px){ .dejipgi .wtm-idle{display:none} }
