@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { argsFor, createRoom, DEFAULT_COMMANDS, exportRoom, loadRoom, mentionsOf, promptFor, runRounds, say, setExec, stop, summarize, updateRoom, type BotId } from "./room.ts";
+import { argsFor, createRoom, DEFAULT_COMMANDS, explain, exportRoom, loadRoom, mentionsOf, promptFor, runRounds, say, setExec, stop, summarize, updateRoom, type BotId } from "./room.ts";
 
 async function withData<T>(run: (dir: string) => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "room-"));
@@ -119,4 +119,10 @@ test("model and effort flags go where the command wants them", () => {
   const claude = argsFor(DEFAULT_COMMANDS.claude, { model: "", effort: "" }, true);
   assert.deepEqual(claude, ["-p", "--output-format", "text", "--allowedTools", "Read,Grep,Glob"]);
   assert.deepEqual(argsFor(DEFAULT_COMMANDS.gemini, { model: "gemini-2.5-pro", effort: "" }, false), ["-m", "gemini-2.5-pro"]);
+});
+
+test("a CLI's error is told by its message and remedy, not its stack trace", () => {
+  const gemini = "Error: something\n    at throwIneligibleOrProjectIdError (file:///C:/x/chunk.js:1:1)\n    at _doSetupUser (file:///C:/x/chunk.js:2:2)";
+  assert.match(explain(gemini), /GOOGLE_CLOUD_PROJECT/);
+  assert.equal(explain("TypeError: fetch failed\n    at a (b.js:1:1)\n    at node:internal/x"), "TypeError: fetch failed");
 });

@@ -45,7 +45,9 @@ export function settingsOf(room: Pick<Room, "settings">): RoomSettings {
  * so nothing has to be quoted for the Windows shell. A `bots.json` in the rooms folder overrides any of these, for flag
  * names that change between CLI versions.
  */
-export type BotCommand = { cmd: string; args: string[]; readArgs?: string[]; noReadArgs?: string[]; modelArgs?: string[]; effortArgs?: string[]; out?: boolean };
+export type BotCommand = { cmd: string; args: string[]; readArgs?: string[]; noReadArgs?: string[]; modelArgs?: string[]; effortArgs?: string[]; out?: boolean;
+  /** Extra environment for this CLI only (bots.json), e.g. GOOGLE_CLOUD_PROJECT for a Gemini account that needs one. */
+  env?: Record<string, string> };
 export const DEFAULT_COMMANDS: Record<BotId, BotCommand> = {
   claude: { cmd: "claude", args: ["-p", "--output-format", "text"], modelArgs: ["--model", "{model}"],
     readArgs: ["--allowedTools", "Read,Grep,Glob"], noReadArgs: ["--disallowedTools", "Read,Grep,Glob,Bash,Edit,Write,WebFetch,WebSearch"] },
@@ -157,13 +159,26 @@ async function commands(): Promise<Record<BotId, BotCommand>> {
   catch { return DEFAULT_COMMANDS; }
 }
 const quote = (a: string) => (/[\s"&|<>^]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a);
+/**
+ * What a CLI's error output says, in a line: the message, not the stack trace under it, and for errors with a known
+ * remedy, the remedy (Gemini signed in with an account that needs a Google Cloud project, or not signed in at all).
+ */
+export function explain(stderr: string) {
+  const lines = stderr.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (/IneligibleOrProjectId|GOOGLE_CLOUD_PROJECT|requires.*project/i.test(stderr))
+    return "Gemini가 이 Google 계정으로는 Cloud 프로젝트가 있어야 한다고 해요. 터미널에서 gemini를 실행해 /auth로 AI Pro를 구독한 개인 계정으로 다시 로그인하거나(학교·회사 계정이면 바꾸기), 그 계정을 써야 하면 RecallerData/rooms/bots.json의 gemini에 \"env\": {\"GOOGLE_CLOUD_PROJECT\": \"프로젝트ID\"}를 넣어 주세요.";
+  if (/login|log in|not authenticated|auth/i.test(stderr) && /required|please|expired|missing/i.test(stderr))
+    return `로그인이 필요해요. 터미널에서 이 CLI를 한 번 실행해 로그인해 주세요. (${(lines.find((l) => !/^at\s/.test(l)) ?? "").slice(0, 160)})`;
+  const message = lines.filter((l) => !/^at\s|^\s*at\s|^file:\/\/|node:internal/.test(l));
+  return (message.slice(-3).join(" ") || lines.slice(0, 2).join(" ")).slice(0, 300);
+}
 /** Runs a CLI with the prompt on stdin; codex's last message comes from its output file. Plain text back, trimmed. */
 export const runCli: Exec = async (_bot, command, prompt, signal) => {
   const out = command.out ? path.join(os.tmpdir(), `room-${randomBytes(6).toString("hex")}.txt`) : "";
   const args = command.args.map((a) => a.replace("{out}", out)).filter((a) => a !== "{flags}");
   return new Promise<string>((resolve, reject) => {
     let child: ChildProcess;
-    try { child = spawn([command.cmd, ...args].map(quote).join(" "), { shell: true, cwd: process.cwd(), windowsHide: true, env: { ...process.env, NO_COLOR: "1" } }); }
+    try { child = spawn([command.cmd, ...args].map(quote).join(" "), { shell: true, cwd: process.cwd(), windowsHide: true, env: { ...process.env, NO_COLOR: "1", ...command.env } }); }
     catch (error) { reject(error); return; }
     let stdout = "", stderr = "";
     child.stdout?.on("data", (d) => { stdout += d; if (stdout.length > 200_000) stdout = stdout.slice(-200_000); });
@@ -177,7 +192,7 @@ export const runCli: Exec = async (_bot, command, prompt, signal) => {
       let text = stdout;
       if (out) { try { text = await readFile(out, "utf8"); } catch { /* fall back to stdout */ } await rm(out, { force: true }).catch(() => undefined); }
       text = text.replace(/\x1b\[[0-9;]*m/g, "").trim();
-      if (code !== 0 && !text) reject(new Error(stderr.trim().split("\n").slice(-3).join(" ").slice(0, 300) || `${command.cmd}가 코드 ${code}로 끝났어요.`));
+      if (code !== 0 && !text) reject(new Error(explain(stderr) || `${command.cmd}가 코드 ${code}로 끝났어요.`));
       else resolve(text);
     });
     child.stdin?.end(prompt);
