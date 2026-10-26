@@ -1,0 +1,3592 @@
+{
+ "source": "https://github.com/encrypted-def/basic-algo-lecture/tree/master/workbook",
+ "fetchedAt": "2026-10-26",
+ "chapters": [
+  {
+   "chapter": "0x0B",
+   "title": "재귀",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1629",
+     "title": "곱셈",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/1629.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11729",
+     "title": "하노이 탑 이동 순서",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/11729.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1074",
+     "title": "Z",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/1074.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "17478",
+     "title": "재귀함수가 뭔가요?",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/17478.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1780",
+     "title": "종이의 개수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/1780.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2630",
+     "title": "색종이 만들기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/2630.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1992",
+     "title": "쿼드트리",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/1992.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2447",
+     "title": "별 찍기 - 10",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/2447.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2448",
+     "title": "별 찍기 - 11",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/2448.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "14956",
+     "title": "Philosopher’s Walk",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0B/solutions/14956.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x0C",
+   "title": "백트래킹",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "15649",
+     "title": "N과 M (1)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15649.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "9663",
+     "title": "N-Queen",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/9663.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1182",
+     "title": "부분수열의 합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/1182.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15650",
+     "title": "N과 M (2)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15650.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15651",
+     "title": "N과 M (3)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15651.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15652",
+     "title": "N과 M (4)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15652.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15654",
+     "title": "N과 M (5)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15654.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15655",
+     "title": "N과 M (6)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15655.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15656",
+     "title": "N과 M (7)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15656.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15657",
+     "title": "N과 M (8)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15657.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15663",
+     "title": "N과 M (9)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15663.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15664",
+     "title": "N과 M (10)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15664.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15665",
+     "title": "N과 M (11)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15665.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15666",
+     "title": "N과 M (12)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/15666.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "6603",
+     "title": "로또",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/6603.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1759",
+     "title": "암호 만들기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/1759.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1941",
+     "title": "소문난 칠공주",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/1941.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "16987",
+     "title": "계란으로 계란치기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/16987.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "18809",
+     "title": "Gaaaaaaaaaarden",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/18809.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1799",
+     "title": "비숍",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0C/solutions/1799.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x0D",
+   "title": "시뮬레이션",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "15683",
+     "title": "감시",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/15683.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "18808",
+     "title": "스티커 붙이기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/18808.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "12100",
+     "title": "2048 (Easy)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/12100.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "15686",
+     "title": "치킨 배달",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/15686.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "11559",
+     "title": "Puyo Puyo",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/11559.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14891",
+     "title": "톱니바퀴",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/14891.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14499",
+     "title": "주사위 굴리기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/14499.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "13335",
+     "title": "트럭",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/13335.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "16985",
+     "title": "Maaaaaaaaaze",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/16985.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14503",
+     "title": "로봇 청소기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/14503.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "3190",
+     "title": "뱀",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/3190.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14500",
+     "title": "테트로미노",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/14500.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "13460",
+     "title": "구슬 탈출 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/13460.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14502",
+     "title": "연구소",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/14502.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14888",
+     "title": "연산자 끼워넣기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/14888.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14889",
+     "title": "스타트와 링크",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/14889.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14890",
+     "title": "경사로",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/14890.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15684",
+     "title": "사다리 조작",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/15684.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15685",
+     "title": "드래곤 커브",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/15685.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17281",
+     "title": "⚾",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17281.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "5373",
+     "title": "큐빙",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/5373.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "16234",
+     "title": "인구 이동",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/16234.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "16235",
+     "title": "나무 재테크",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/16235.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "16236",
+     "title": "아기 상어",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/16236.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17140",
+     "title": "이차원 배열과 연산",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17140.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17141",
+     "title": "연구소 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17141.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17142",
+     "title": "연구소 3",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17142.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17143",
+     "title": "낚시왕",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17143.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17144",
+     "title": "미세먼지 안녕!",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17144.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "4991",
+     "title": "로봇 청소기",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "16986",
+     "title": "인싸들의 가위바위보",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/16986.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17779",
+     "title": "게리맨더링 2",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17837",
+     "title": "새로운 게임 2",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17822",
+     "title": "원판 돌리기",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17825",
+     "title": "주사위 윷놀이",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17825.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "19235",
+     "title": "모노미노도미노",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/19235.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "20061",
+     "title": "모노미노도미노 2",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "19236",
+     "title": "청소년 상어",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/19236.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "19237",
+     "title": "어른 상어",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/19237.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "19238",
+     "title": "스타트 택시",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "20055",
+     "title": "컨베이어 벨트 위의 로봇",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/20055.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "20056",
+     "title": "마법사 상어와 파이어볼",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "20057",
+     "title": "마법사 상어와 토네이도",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "20058",
+     "title": "마법사 상어와 파이어스톰",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "16637",
+     "title": "괄호 추가하기",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17070",
+     "title": "파이프 옮기기 1",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17070.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17135",
+     "title": "캐슬 디펜스",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17135.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17136",
+     "title": "색종이 붙이기",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17406",
+     "title": "배열 돌리기 4",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17406.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17471",
+     "title": "게리맨더링",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/17471.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17472",
+     "title": "다리 만들기 2",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "15898",
+     "title": "피아의 아틀리에 ~신비한 대회의 연금술사~",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "21608",
+     "title": "상어 초등학교",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/21608.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "21609",
+     "title": "상어 중학교",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "21610",
+     "title": "마법사 상어와 비바라기",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "21611",
+     "title": "마법사 상어와 블리자드",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "23288",
+     "title": "주사위 굴리기 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/23288.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "23289",
+     "title": "온풍기 안녕!",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "23290",
+     "title": "마법사 상어와 복제",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0D/solutions/23290.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "23291",
+     "title": "어항 정리",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2478",
+     "title": "자물쇠",
+     "solution": ""
+    }
+   ]
+  },
+  {
+   "chapter": "0x0E",
+   "title": "정렬 I",
+   "problems": [
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2750",
+     "title": "수 정렬하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0E/solutions/2750.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2751",
+     "title": "수 정렬하기 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0E/solutions/2751.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "10989",
+     "title": "수 정렬하기 3",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0E/solutions/10989.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11931",
+     "title": "수 정렬하기 4",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0E/solutions/11931.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "15688",
+     "title": "수 정렬하기 5",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0E/solutions/15688.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "10814",
+     "title": "나이순 정렬",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0E/solutions/10814.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11650",
+     "title": "좌표 정렬하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0E/solutions/11650.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11651",
+     "title": "좌표 정렬하기 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0E/solutions/11651.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x0F",
+   "title": "정렬 II",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1431",
+     "title": "시리얼 번호",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0F/solutions/1431.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11652",
+     "title": "카드",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0F/solutions/11652.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "5648",
+     "title": "역원소 정렬",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0F/solutions/5648.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1181",
+     "title": "단어 정렬",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0F/solutions/1181.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2910",
+     "title": "빈도 정렬",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0F/solutions/2910.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "10814",
+     "title": "나이순 정렬",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0F/solutions/10814.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11656",
+     "title": "접미사 배열",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0F/solutions/11656.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "10825",
+     "title": "국영수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0F/solutions/10825.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "7795",
+     "title": "먹을 것인가 먹힐 것인가",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x0F/solutions/7795.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x1A",
+   "title": "위상 정렬",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "2252",
+     "title": "줄 세우기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1A/solutions/2252.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2623",
+     "title": "음악프로그램",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1A/solutions/2623.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "21276",
+     "title": "계보 복원가 호석",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1A/solutions/21276.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1766",
+     "title": "문제집",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1A/solutions/1766.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "2056",
+     "title": "작업",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1A/solutions/2056.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1005",
+     "title": "ACM Craft",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1A/solutions/1005.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "2637",
+     "title": "장난감 조립",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1A/solutions/2637.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x1B",
+   "title": "최소 신장 트리",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1197",
+     "title": "최소 스패닝 트리",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1B/solutions/1197.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1368",
+     "title": "물대기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1B/solutions/1368.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "9372",
+     "title": "상근이의 여행",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1B/solutions/9372.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "16398",
+     "title": "행성 연결",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1B/solutions/16398.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1647",
+     "title": "도시 분할 계획",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1B/solutions/1647.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "13418",
+     "title": "학교 탐방하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1B/solutions/13418.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1774",
+     "title": "우주신과의 교감",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1B/solutions/1774.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "10423",
+     "title": "전기가 부족해",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1B/solutions/10423.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "2887",
+     "title": "행성 터널",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1B/solutions/2887.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x1C",
+   "title": "플로이드 알고리즘",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11404",
+     "title": "플로이드",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/11404.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11780",
+     "title": "플로이드 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/11780.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14938",
+     "title": "서강그라운드",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/14938.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "21940",
+     "title": "가운데에서 만나기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/21940.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17182",
+     "title": "우주 탐사선",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/17182.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "13168",
+     "title": "내일로 여행",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/13168.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1956",
+     "title": "운동",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/1956.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "11562",
+     "title": "백양로 브레이크",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/11562.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1507",
+     "title": "궁금한 민호",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/1507.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1719",
+     "title": "택배",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/1719.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "13314",
+     "title": "플로이드에 오타가?",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/13314.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "23286",
+     "title": "허들 넘기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/23286.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "13141",
+     "title": "Ignition",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/13141.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "23258",
+     "title": "밤편지",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1C/solutions/23258.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1602",
+     "title": "도망자 원숭이",
+     "solution": ""
+    }
+   ]
+  },
+  {
+   "chapter": "0x1D",
+   "title": "다익스트라 알고리즘",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1753",
+     "title": "최단경로",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/1753.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11779",
+     "title": "최소비용 구하기 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/11779.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1238",
+     "title": "파티",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/1238.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1504",
+     "title": "특정한 최단 경로",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/1504.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1916",
+     "title": "최소비용 구하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/1916.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1261",
+     "title": "알고스팟",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/1261.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "17835",
+     "title": "면접보는 승범이네",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/17835.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "20183",
+     "title": "골목 대장 호석 - 효율성 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/20183.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "24042",
+     "title": "횡단보도",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/24042.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1162",
+     "title": "도로포장",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/1162.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1854",
+     "title": "K번째 최단경로 찾기",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "5719",
+     "title": "거의 최단 경로",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/5719.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "13907",
+     "title": "세금",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1D/solutions/13907.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "22870",
+     "title": "산책 (large)",
+     "solution": ""
+    }
+   ]
+  },
+  {
+   "chapter": "0x1E",
+   "title": "KMP",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "16916",
+     "title": "부분 문자열",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1E/solutions/16916.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "16172",
+     "title": "나는 친구가 적다 (Large)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1E/solutions/16172.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1786",
+     "title": "찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1E/solutions/1786.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1893",
+     "title": "시저 암호",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1E/solutions/1893.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1305",
+     "title": "광고",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1E/solutions/1305.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "4354",
+     "title": "문자열 제곱",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1E/solutions/4354.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "11585",
+     "title": "속타는 저녁 메뉴",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1E/solutions/11585.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "10266",
+     "title": "시계 사진들",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1E/solutions/10266.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x1F",
+   "title": "트라이",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "14425",
+     "title": "문자열 집합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/14425.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14426",
+     "title": "접두사 찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/14426.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "5052",
+     "title": "전화번호 목록",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/5052.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "7432",
+     "title": "디스크 트리",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/7432.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "14725",
+     "title": "개미굴",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/14725.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "16934",
+     "title": "게임 닉네임",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/16934.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "9202",
+     "title": "Boggle",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/9202.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "16906",
+     "title": "욱제어",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/16906.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "5670",
+     "title": "휴대폰 자판",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/5670.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "5446",
+     "title": "용량 부족",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x1F/solutions/5446.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x02",
+   "title": "기초 코드 작성 요령 II",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "10871",
+     "title": "X보다 작은 수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/10871.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1000",
+     "title": "A+B",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/1000.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2557",
+     "title": "Hello World",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2557.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "10171",
+     "title": "고양이",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/10171.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "10869",
+     "title": "사칙연산",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/10869.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "9498",
+     "title": "시험 성적",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/9498.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2752",
+     "title": "세수정렬",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2752.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2753",
+     "title": "윤년",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2753.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2480",
+     "title": "주사위 세개",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2480.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2490",
+     "title": "윷놀이",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2490.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2576",
+     "title": "홀수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2576.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2587",
+     "title": "대표값2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2587.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2309",
+     "title": "일곱 난쟁이",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2309.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "10093",
+     "title": "숫자",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/10093.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1267",
+     "title": "핸드폰 요금",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/1267.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "10804",
+     "title": "카드 역배치",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/10804.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15552",
+     "title": "빠른 A+B",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/15552.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2438",
+     "title": "별 찍기 - 1",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2438.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2439",
+     "title": "별 찍기 - 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2439.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2440",
+     "title": "별 찍기 - 3",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2440.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2441",
+     "title": "별 찍기 - 4",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2441.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2442",
+     "title": "별 찍기 - 5",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2442.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2443",
+     "title": "별 찍기 - 6",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2443.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2444",
+     "title": "별 찍기 - 7",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2444.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2445",
+     "title": "별 찍기 - 8",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2445.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2446",
+     "title": "별 찍기 - 9",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2446.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2562",
+     "title": "최댓값",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x02/solutions/2562.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x03",
+   "title": "배열",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "10808",
+     "title": "알파벳 개수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x03/solutions/10808.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2577",
+     "title": "숫자의 개수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x03/solutions/2577.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1475",
+     "title": "방 번호",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x03/solutions/1475.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "3273",
+     "title": "두 수의 합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x03/solutions/3273.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "10807",
+     "title": "개수 세기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x03/solutions/10807.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "13300",
+     "title": "방 배정",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x03/solutions/13300.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11328",
+     "title": "Strfry",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x03/solutions/11328.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1919",
+     "title": "애너그램 만들기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x03/solutions/1919.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x04",
+   "title": "연결 리스트",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1406",
+     "title": "에디터",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x04/solutions/1406.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "5397",
+     "title": "키로거",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x04/solutions/5397.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1158",
+     "title": "요세푸스 문제",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x04/solutions/1158.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x05",
+   "title": "스택",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "10828",
+     "title": "스택",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x05/solutions/10828.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "10773",
+     "title": "제로",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x05/solutions/10773.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1874",
+     "title": "스택 수열",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x05/solutions/1874.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2493",
+     "title": "탑",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x05/solutions/2493.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "6198",
+     "title": "옥상 정원 꾸미기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x05/solutions/6198.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "17298",
+     "title": "오큰수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x05/solutions/17298.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "3015",
+     "title": "오아시스 재결합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x05/solutions/3015.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "6549",
+     "title": "히스토그램에서 가장 큰 직사각형",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x05/solutions/6549.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x06",
+   "title": "큐",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "10845",
+     "title": "큐",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x06/solutions/10845.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "18258",
+     "title": "큐 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x06/solutions/18258.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2164",
+     "title": "카드2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x06/solutions/2164.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x07",
+   "title": "덱",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "10866",
+     "title": "덱",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x07/solutions/10866.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1021",
+     "title": "회전하는 큐",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x07/solutions/1021.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "5430",
+     "title": "AC",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x07/solutions/5430.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "11003",
+     "title": "최솟값 찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x07/solutions/11003.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x08",
+   "title": "스택의 활용(수식의 괄호 쌍)",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "4949",
+     "title": "균형잡힌 세상",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x08/solutions/4949.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "3986",
+     "title": "좋은 단어",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x08/solutions/3986.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "9012",
+     "title": "괄호",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x08/solutions/9012.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "10799",
+     "title": "쇠막대기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x08/solutions/10799.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2504",
+     "title": "괄호의 값",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x08/solutions/2504.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x09",
+   "title": "BFS",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1926",
+     "title": "그림",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/1926.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "2178",
+     "title": "미로 탐색",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/2178.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "7576",
+     "title": "토마토",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/7576.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "4179",
+     "title": "불!",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/4179.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1697",
+     "title": "숨바꼭질",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/1697.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1012",
+     "title": "유기농 배추",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/1012.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "10026",
+     "title": "적록색약",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/10026.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "7569",
+     "title": "토마토",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/7569.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "7562",
+     "title": "나이트의 이동",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/7562.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "5427",
+     "title": "불",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/5427.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2583",
+     "title": "영역 구하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/2583.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2667",
+     "title": "단지번호붙이기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/2667.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "5014",
+     "title": "스타트링크",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/5014.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2468",
+     "title": "안전 영역",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/2468.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "6593",
+     "title": "상범 빌딩",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/6593.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2206",
+     "title": "벽 부수고 이동하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/2206.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "9466",
+     "title": "텀 프로젝트",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/9466.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2573",
+     "title": "빙산",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/2573.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2146",
+     "title": "다리 만들기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/2146.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "13549",
+     "title": "숨바꼭질 3",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/13549.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1600",
+     "title": "말이 되고픈 원숭이",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/1600.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "13913",
+     "title": "숨바꼭질 4",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/13913.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "14442",
+     "title": "벽 부수고 이동하기 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/14442.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "16933",
+     "title": "벽 부수고 이동하기 3",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/16933.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "16920",
+     "title": "확장 게임",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/16920.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "11967",
+     "title": "불켜기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/11967.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "17071",
+     "title": "숨바꼭질 5",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/17071.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "9328",
+     "title": "열쇠",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/9328.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "3197",
+     "title": "백조의 호수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/3197.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "20304",
+     "title": "비밀번호 제작",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x09/solutions/20304.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x10",
+   "title": "다이나믹 프로그래밍",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1463",
+     "title": "1로 만들기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/1463.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "9095",
+     "title": "1, 2, 3 더하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/9095.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "2579",
+     "title": "계단 오르기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/2579.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1149",
+     "title": "RGB거리",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/1149.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11726",
+     "title": "2×n 타일링",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/11726.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11659",
+     "title": "구간 합 구하기 4",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/11659.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "12852",
+     "title": "1로 만들기 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/12852.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1003",
+     "title": "피보나치 함수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/1003.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1932",
+     "title": "정수 삼각형",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/1932.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "11727",
+     "title": "2×n 타일링 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/11727.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2193",
+     "title": "이친수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/2193.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1912",
+     "title": "연속합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/1912.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "11055",
+     "title": "가장 큰 증가하는 부분 수열",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/11055.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "11053",
+     "title": "가장 긴 증가하는 부분 수열",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/11053.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "9461",
+     "title": "파도반 수열",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/9461.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "14501",
+     "title": "퇴사",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/14501.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15486",
+     "title": "퇴사 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/15486.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "10844",
+     "title": "쉬운 계단 수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/10844.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2748",
+     "title": "피보나치 수 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/2748.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2240",
+     "title": "자두나무",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/2240.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "14002",
+     "title": "가장 긴 증가하는 부분 수열 4",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/14002.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2156",
+     "title": "포도주 시식",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/2156.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "15988",
+     "title": "1, 2, 3 더하기 3",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/15988.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2302",
+     "title": "극장 좌석",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/2302.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11052",
+     "title": "카드 구매하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/11052.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "9465",
+     "title": "스티커",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/9465.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11057",
+     "title": "오르막 수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/11057.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2293",
+     "title": "동전 1",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/2293.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1904",
+     "title": "01타일",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/1904.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1788",
+     "title": "피보나치 수의 확장",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/1788.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "4883",
+     "title": "삼각 그래프",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x10/solutions/4883.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x11",
+   "title": "그리디",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11047",
+     "title": "동전 0",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/11047.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1931",
+     "title": "회의실 배정",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/1931.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "2217",
+     "title": "로프",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/2217.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1026",
+     "title": "보물",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/1026.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "11399",
+     "title": "ATM",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/11399.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2457",
+     "title": "공주님의 정원",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/2457.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1541",
+     "title": "잃어버린 괄호",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/1541.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "11501",
+     "title": "주식",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/11501.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1744",
+     "title": "수 묶기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/1744.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2847",
+     "title": "게임을 만든 동준이",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/2847.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1439",
+     "title": "뒤집기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/1439.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11000",
+     "title": "강의실 배정",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/11000.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "15903",
+     "title": "카드 합체 놀이",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/15903.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2170",
+     "title": "선 긋기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/2170.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1700",
+     "title": "멀티탭 스케줄링",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/1700.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "8980",
+     "title": "택배",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/8980.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "7570",
+     "title": "줄 세우기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x11/solutions/7570.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x12",
+   "title": "수학",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1978",
+     "title": "소수 찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1978.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1929",
+     "title": "소수 구하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1929.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11653",
+     "title": "소인수분해",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/11653.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "6064",
+     "title": "카잉 달력",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/6064.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11050",
+     "title": "이항 계수 1",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/11050.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11051",
+     "title": "이항 계수 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/11051.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15894",
+     "title": "수학은 체육과목 입니다",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/15894.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "4796",
+     "title": "캠핑",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/4796.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2960",
+     "title": "에라토스테네스의 체",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/2960.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1193",
+     "title": "분수찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1193.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "4948",
+     "title": "베르트랑 공준",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/4948.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1676",
+     "title": "팩토리얼 0의 개수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1676.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "9613",
+     "title": "GCD 합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/9613.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2292",
+     "title": "벌집",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/2292.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2869",
+     "title": "달팽이는 올라가고 싶다",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/2869.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "10610",
+     "title": "30",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/10610.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "6359",
+     "title": "만취한 상범",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/6359.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "10250",
+     "title": "ACM 호텔",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/10250.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1456",
+     "title": "거의 소수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1456.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2839",
+     "title": "설탕 배달",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/2839.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17103",
+     "title": "골드바흐 파티션",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/17103.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2312",
+     "title": "수 복원하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/2312.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "9020",
+     "title": "골드바흐의 추측",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/9020.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "5347",
+     "title": "LCM",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/5347.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1476",
+     "title": "날짜 계산",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1476.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1011",
+     "title": "Fly me to the Alpha Centauri",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1011.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1038",
+     "title": "감소하는 수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1038.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1057",
+     "title": "토너먼트",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1057.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2004",
+     "title": "조합 0의 개수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/2004.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1292",
+     "title": "쉽게 푸는 문제",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1292.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1790",
+     "title": "수 이어 쓰기 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1790.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "3036",
+     "title": "링",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/3036.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1735",
+     "title": "분수 합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1735.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "3343",
+     "title": "장미",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/3343.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1963",
+     "title": "소수 경로",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1963.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1747",
+     "title": "소수&amp;팰린드롬",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1747.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1256",
+     "title": "사전",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/1256.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "2089",
+     "title": "-2진수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x12/solutions/2089.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1019",
+     "title": "책 페이지",
+     "solution": ""
+    }
+   ]
+  },
+  {
+   "chapter": "0x13",
+   "title": "이분탐색",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1920",
+     "title": "수 찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/1920.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "10816",
+     "title": "숫자 카드 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/10816.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "18870",
+     "title": "좌표 압축",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/18870.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "2295",
+     "title": "세 수의 합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/2295.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1654",
+     "title": "랜선 자르기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/1654.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "10815",
+     "title": "숫자 카드",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/10815.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1822",
+     "title": "차집합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/1822.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "16401",
+     "title": "과자 나눠주기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/16401.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2805",
+     "title": "나무 자르기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/2805.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "18869",
+     "title": "멀티버스 Ⅱ",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/18869.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2467",
+     "title": "용액",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/2467.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "3151",
+     "title": "합이 0",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/3151.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "14921",
+     "title": "용액 합성하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/14921.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1253",
+     "title": "좋다",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/1253.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "2143",
+     "title": "두 배열의 합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/2143.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2473",
+     "title": "세 용액",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/2473.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2110",
+     "title": "공유기 설치",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/2110.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "7453",
+     "title": "합이 0인 네 정수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/7453.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "12015",
+     "title": "가장 긴 증가하는 부분 수열 2",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "2512",
+     "title": "예산",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/2512.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1477",
+     "title": "휴게소 세우기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x13/solutions/1477.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x14",
+   "title": "투 포인터",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "2230",
+     "title": "수 고르기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/2230.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1806",
+     "title": "부분합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/1806.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1644",
+     "title": "소수의 연속합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/1644.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2003",
+     "title": "수들의 합 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/2003.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "13144",
+     "title": "List of Unique Numbers",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/13144.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "22862",
+     "title": "가장 긴 짝수 연속한 부분 수열 (large)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/22862.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2531",
+     "title": "회전 초밥",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/2531.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "20922",
+     "title": "겹치는 건 싫어",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/20922.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "2461",
+     "title": "대표 선수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/2461.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "2283",
+     "title": "구간 자르기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/2283.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "20366",
+     "title": "같이 눈사람 만들래?",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x14/solutions/20366.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x15",
+   "title": "해시",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "7785",
+     "title": "회사에 있는 사람",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x15/solutions/7785.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1620",
+     "title": "나는야 포켓몬 마스터 이다솜",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x15/solutions/1620.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "13414",
+     "title": "수강신청",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x15/solutions/13414.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "17219",
+     "title": "비밀번호 찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x15/solutions/17219.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "9375",
+     "title": "패션왕 신해빈",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x15/solutions/9375.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "16165",
+     "title": "걸그룹 마스터 준석이",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x15/solutions/16165.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11478",
+     "title": "서로 다른 부분 문자열의 개수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x15/solutions/11478.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "19583",
+     "title": "싸이버개강총회",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x15/solutions/19583.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "20166",
+     "title": "문자열 지옥에 빠진 호석",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x15/solutions/20166.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x16",
+   "title": "이진 검색 트리",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "7662",
+     "title": "이중 우선순위 큐",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x16/solutions/7662.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1202",
+     "title": "보석 도둑",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x16/solutions/1202.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "21939",
+     "title": "문제 추천 시스템 Version 1",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x16/solutions/21939.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "23326",
+     "title": "홍익 투어리스트",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x16/solutions/23326.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "21944",
+     "title": "문제 추천 시스템 Version 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x16/solutions/21944.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "19700",
+     "title": "수업",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x16/solutions/19700.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1539",
+     "title": "이진 검색 트리",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x16/solutions/1539.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x17",
+   "title": "우선순위 큐",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11286",
+     "title": "절댓값 힙",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x17/solutions/11286.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1715",
+     "title": "카드 정렬하기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x17/solutions/1715.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1927",
+     "title": "최소 힙",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x17/solutions/1927.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2075",
+     "title": "N번째 큰 수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x17/solutions/2075.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "11279",
+     "title": "최대 힙",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x17/solutions/11279.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "13975",
+     "title": "파일 합치기 3",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x17/solutions/13975.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1655",
+     "title": "가운데를 말해요",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x17/solutions/1655.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1781",
+     "title": "컵라면",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x17/solutions/1781.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x18",
+   "title": "그래프",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11724",
+     "title": "연결 요소의 개수",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/11724.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1260",
+     "title": "DFS와 BFS",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/1260.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2606",
+     "title": "바이러스",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/2606.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "5567",
+     "title": "결혼식",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/5567.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "11403",
+     "title": "경로 찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/11403.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2660",
+     "title": "회장뽑기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/2660.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1389",
+     "title": "케빈 베이컨의 6단계 법칙",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/1389.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1325",
+     "title": "효율적인 해킹",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/1325.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "6118",
+     "title": "숨바꼭질",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/6118.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1707",
+     "title": "이분 그래프",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/1707.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2617",
+     "title": "구슬 찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/2617.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1043",
+     "title": "거짓말",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/1043.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "5214",
+     "title": "환승",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x18/solutions/5214.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "0x19",
+   "title": "트리",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11725",
+     "title": "트리의 부모 찾기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/11725.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1991",
+     "title": "트리 순회",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/1991.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "4803",
+     "title": "트리",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/4803.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15681",
+     "title": "트리와 쿼리",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/15681.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1240",
+     "title": "노드사이의 거리",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/1240.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "22856",
+     "title": "트리 순회",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/22856.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1068",
+     "title": "트리",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/1068.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "20955",
+     "title": "민서의 응급 수술",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/20955.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "14267",
+     "title": "회사 문화 1",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/14267.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2250",
+     "title": "트리의 높이와 너비",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/2250.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "2533",
+     "title": "사회망 서비스(SNS)",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/2533.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1967",
+     "title": "트리의 지름",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/1967.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "1167",
+     "title": "트리의 지름",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/0x19/solutions/1167.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "Appendix A",
+   "title": "문자열 기초",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1543",
+     "title": "문서 검색",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/1543.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "2941",
+     "title": "크로아티아 알파벳",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/2941.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "9996",
+     "title": "한국이 그리울 땐 서버에 접속하지",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/9996.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "3613",
+     "title": "Java vs C++",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/3613.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2870",
+     "title": "수학숙제",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/2870.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1969",
+     "title": "DNA",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/1969.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2999",
+     "title": "비밀 이메일",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/2999.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "9536",
+     "title": "여우는 어떻게 울지?",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/9536.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15312",
+     "title": "이름 궁합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/15312.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "3107",
+     "title": "IPv6",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "16719",
+     "title": "ZOAC",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "16113",
+     "title": "시그널",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/16113.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "23304",
+     "title": "아카라카",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/23304.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "6581",
+     "title": "HTML",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/6581.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "17413",
+     "title": "단어 뒤집기 2",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": false,
+     "number": "1213",
+     "title": "팰린드롬 만들기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20A/solutions/1213.cpp"
+    }
+   ]
+  },
+  {
+   "chapter": "Appendix C",
+   "title": "비트마스킹",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "11723",
+     "title": "집합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20C/solutions/11723.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1497",
+     "title": "기타콘서트",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20C/solutions/1497.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2961",
+     "title": "도영이가 만든 맛있는 음식",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "15787",
+     "title": "기차가 어둠을 헤치고 은하수를",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "24389",
+     "title": "2의 보수",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2064",
+     "title": "IP 주소",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "17114",
+     "title": "하이퍼 토마토",
+     "solution": ""
+    }
+   ]
+  },
+  {
+   "chapter": "Appendix D",
+   "title": "Union-Find",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1717",
+     "title": "집합의 표현",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20D/solutions/1717.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "7511",
+     "title": "소셜 네트워킹 어플리케이션",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20D/solutions/7511.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1976",
+     "title": "여행 가자",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "20040",
+     "title": "사이클 게임",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "18116",
+     "title": "로봇 조립",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "17619",
+     "title": "개구리 점프",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "14595",
+     "title": "동방 프로젝트 (Large)",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "10775",
+     "title": "공항",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": false,
+     "number": "2162",
+     "title": "선분 그룹",
+     "solution": ""
+    }
+   ]
+  },
+  {
+   "chapter": "Appendix E",
+   "title": "다이나믹 프로그래밍 심화",
+   "problems": [
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "9251",
+     "title": "LCS",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/9251.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "9084",
+     "title": "동전",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/9084.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "12865",
+     "title": "평범한 배낭",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/12865.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1915",
+     "title": "가장 큰 정사각형",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/1915.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1351",
+     "title": "무한 수열",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/1351.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1937",
+     "title": "욕심쟁이 판다",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/1937.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1949",
+     "title": "우수 마을",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/1949.cpp"
+    },
+    {
+     "category": "연습 문제",
+     "recommended": false,
+     "number": "1005",
+     "title": "ACM Craft",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/1005.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "10942",
+     "title": "팰린드롬?",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/10942.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "1699",
+     "title": "제곱수의 합",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/1699.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "9657",
+     "title": "돌 게임 3",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/9657.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "11660",
+     "title": "구간 합 구하기 5",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/11660.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "2011",
+     "title": "암호코드",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/2011.cpp"
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "12784",
+     "title": "인하니카 공화국",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "25515",
+     "title": "트리 노드 합의 최댓값",
+     "solution": ""
+    },
+    {
+     "category": "기본 문제",
+     "recommended": true,
+     "number": "21276",
+     "title": "계보 복원가 호석",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2294",
+     "title": "동전 2",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/2294.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2133",
+     "title": "타일 채우기",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/2133.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "1520",
+     "title": "내리막 길",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/1520.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2482",
+     "title": "색상환",
+     "solution": "https://raw.githubusercontent.com/encrypted-def/basic-algo-lecture/master/Appendix%20E/solutions/2482.cpp"
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "27501",
+     "title": "RGB트리",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "24232",
+     "title": "망가진 나무",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "3665",
+     "title": "최종 순위",
+     "solution": ""
+    },
+    {
+     "category": "응용 문제",
+     "recommended": true,
+     "number": "2611",
+     "title": "자동차경주",
+     "solution": ""
+    }
+   ]
+  }
+ ]
+}

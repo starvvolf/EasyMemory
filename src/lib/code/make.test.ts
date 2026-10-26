@@ -86,6 +86,20 @@ test("examples the model calls 원문 but that are not in the pasted text do not
     assert.equal(await savedCount(), 0);
   }));
 
+test("a person's solution must print the same as the reference on every test; when it does, the check says so", () => withFake(
+  [draft({ sourceExamples: [{ input: "3\n1 2 3", output: "6" }], exampleInputs: [] })],
+  async (seen) => {
+    const human = { lang: "javascript" as const, code: SUM_BRUTE };
+    const made = await makeProblem({ lesson: PASTED, kind: "full", human, id: "cp_boj_9999", folder: "바킹독/0x00 시험" });
+    assert.equal(seen.length, 1);
+    const saved = await readProblem("cp_boj_9999");
+    assert.deepEqual(saved.check, { by: "source", cases: 1, tries: 1, human: "match" });
+    assert.equal(saved.folder, "바킹독/0x00 시험");
+    assert.equal(made.id, "cp_boj_9999");
+    const wrongHuman = { lang: "javascript" as const, code: SUM_MISSING_LAST };
+    await assert.rejects(makeProblem({ lesson: PASTED, kind: "full", human: wrongHuman }), /사람이 쓴 정답 코드와 모범 풀이가 다름/);
+  }));
+
 test("a problem with more than one right answer is refused at once (not yet gradable)", () => withFake(
   [draft({ answerKind: "many" })],
   async (seen) => {

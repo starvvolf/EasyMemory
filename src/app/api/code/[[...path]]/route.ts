@@ -5,6 +5,7 @@ import { languages, LANGS } from "@/lib/code/run";
 import { deleteProblem, publicProblem, readDrafts, readProblem, readSubmissions, runCustom, saveDraft } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, submitAndRecord } from "@/lib/code/service";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach } from "@/lib/assist/code-ai";
+import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
 
 export const runtime = "nodejs";
 const lang = z.enum(LANGS);
@@ -34,6 +35,12 @@ async function handle(request: Request, context: RouteContext) {
       const b = await body(z.object({ topic: z.string().max(300).optional(), lesson: z.string().max(60_000).optional(), kind: z.enum(["full", "blank"]), lang: lang.optional(),
         sourceTitle: z.string().max(300).optional(), sourceUrl: z.string().max(2000).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim(), "주제나 강의 글이 필요해요."));
       const made = await ensureProblemKnowledge(await makeProblem(b));
+      return json({ problem: publicProblem(made) });
+    }
+    // 바킹독 문제집: the built-in list, and filling one problem the first time it is picked.
+    if (p[0] === "bakingdog" && p.length === 1 && m === "GET") return json({ chapters: await bakingdogChapters() });
+    if (p[0] === "bakingdog" && p[2] === "fill" && m === "POST") {
+      const made = await ensureProblemKnowledge(await fillProblem(z.string().regex(/^\d{1,6}$/).parse(p[1])));
       return json({ problem: publicProblem(made) });
     }
     if (p[0] === "problem" && p[1]) {

@@ -24,7 +24,8 @@ export type Problem = {
   check?: ProblemCheck;
   createdAt: string;
 };
-export type ProblemCheck = { by: "source" | "cross"; cases: number; tries: number };
+/** `human`: a person's solution (from the import's sources) agreed with the reference on every test, or could not run here. */
+export type ProblemCheck = { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped" };
 export type ProblemLite = Pick<Problem, "id" | "title" | "kind" | "knowledge" | "folder" | "createdAt"> & { source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string };
 export type Submission = { id: string; at: string; problemId: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; code: string; ms: number };
 

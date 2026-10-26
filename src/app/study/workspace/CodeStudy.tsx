@@ -13,7 +13,7 @@ type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledg
 type TestCase = { input: string; output: string };
 type Problem = { id: string; title: string; statement: string; inputText: string; outputText: string; examples: TestCase[]; hiddenTests: number; kind: "full" | "blank"; knowledge: string[]; knowledgeIds: string[];
   folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number;
-  examplesFrom?: "source" | "made"; check?: { by: "source" | "cross"; cases: number; tries: number } };
+  examplesFrom?: "source" | "made"; check?: { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped" } };
 type Result = { index: number; verdict: string; ms: number; input: string; expected: string; got: string; stderr: string };
 type Judged = { verdict: string; passed: number; total: number; shown: Result[]; compile: string; ms: number };
 type SubLite = { id: string; at: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; lines: number };
@@ -49,6 +49,7 @@ export default function CodeStudy({ openId }: { openId?: string }) {
       </header>
       {error ? <p className="ws-err">{error}</p> : null}
       <MakeProblem langs={langs} onMade={(id) => { void load(); setCurrent(id); }} />
+      <Bakingdog onFilled={() => void load()} onOpen={setCurrent} />
       <section className="panel stack">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <b>문제 {list.length}</b>
@@ -68,6 +69,64 @@ export default function CodeStudy({ openId }: { openId?: string }) {
         </ul>
       </section>
     </div>
+  );
+}
+
+type Fill = { status: "ready" | "failed"; problemId?: string; reason?: string };
+type BdProblem = { category: string; recommended: boolean; number: string; title: string; hasSolution: boolean; fill: Fill | null };
+type BdChapter = { chapter: string; title: string; problems: BdProblem[] };
+
+/** 바킹독 실전 알고리즘: the built-in workbook list. A problem is filled (original + lecture solution, checked) the first time it is picked. */
+function Bakingdog({ onFilled, onOpen }: { onFilled: () => void; onOpen: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [chapters, setChapters] = useState<BdChapter[]>([]);
+  const [working, setWorking] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const loadList = async () => { try { setChapters((await call<{ chapters: BdChapter[] }>("/api/code/bakingdog")).chapters); } catch (e) { setError(errorText(e)); } };
+  const setFill = (number: string, fill: Fill) => setChapters((cs) => cs.map((c) => ({ ...c, problems: c.problems.map((p) => p.number === number ? { ...p, fill } : p) })));
+  const fill = async (number: string) => {
+    setWorking((w) => [...w, number]);
+    try {
+      const { problem } = await call<{ problem: { id: string } }>(`/api/code/bakingdog/${number}/fill`, {});
+      setFill(number, { status: "ready", problemId: problem.id }); onFilled();
+      return problem.id;
+    } catch (e) { setFill(number, { status: "failed", reason: errorText(e) }); return null; }
+    finally { setWorking((w) => w.filter((n) => n !== number)); }
+  };
+  const fillChapter = async (c: BdChapter) => { for (const p of c.problems) if (p.fill?.status !== "ready") await fill(p.number); };
+  if (!open) return <div className="row"><button className="btn" onClick={() => { setOpen(true); void loadList(); }}>바킹독 실전 알고리즘 문제집</button></div>;
+  return (
+    <section className="panel stack">
+      <div className="row" style={{ justifyContent: "space-between" }}><b>바킹독 실전 알고리즘 문제집</b><button className="btn ghost small" onClick={() => setOpen(false)}>닫기</button></div>
+      <p className="small muted">처음 고른 문제는 인터넷 아카이브에서 원문을, 강의 GitHub에서 정답 코드를 받아 확인한 뒤 만들어요 (문제마다 1분쯤, AI 호출 1~3번). 한 번 만든 문제는 다시 받지 않아요.</p>
+      {chapters.map((c) => {
+        const ready = c.problems.filter((p) => p.fill?.status === "ready").length;
+        return (
+          <details key={c.chapter}>
+            <summary className="row small"><b>{c.chapter} {c.title}</b><span className="muted">준비됨 {ready}/{c.problems.length}</span></summary>
+            <div className="row"><button className="btn small" disabled={working.length > 0 || ready === c.problems.length} onClick={() => void fillChapter(c)}>{working.length && c.problems.some((p) => working.includes(p.number)) ? `채우는 중… (${ready}/${c.problems.length})` : "이 단원 채우기"}</button></div>
+            <ul className="cs-list">
+              {c.problems.map((p) => {
+                const state = working.includes(p.number) ? ["준비 중…", "help"] : p.fill?.status === "ready" ? ["준비됨", "good"] : p.fill?.status === "failed" ? ["실패", "bad"] : ["준비 안 됨", ""];
+                return (
+                  <li key={p.number} className="stack">
+                    <div className="row small">
+                      <span className={`chip ${state[1]}`}>{state[0]}</span>
+                      <span>BOJ {p.number} · {p.title}</span>
+                      <span className="chip">{p.category}{p.recommended ? " ✔" : ""}</span>
+                      {p.fill?.status === "ready" && p.fill.problemId ? <button className="linkish small" onClick={() => onOpen(p.fill!.problemId!)}>열기</button>
+                        : <button className="linkish small" disabled={working.includes(p.number)} onClick={() => void fill(p.number).then((id) => { if (id) onOpen(id); })}>{p.fill?.status === "failed" ? "다시 시도" : "채우고 열기"}</button>}
+                    </div>
+                    {p.fill?.status === "failed" && p.fill.reason ? <p className="small muted">{p.fill.reason}</p> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        );
+      })}
+      {error ? <p className="ws-err">{error}</p> : null}
+    </section>
   );
 }
 
@@ -209,7 +268,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           <div key={i} className="cs-example"><p className="eyebrow">예제 {i + 1}</p><div className="cs-io"><pre aria-label="예제 입력">{ex.input}</pre><pre aria-label="예제 출력">{ex.output}</pre></div></div>
         ))}
         <p className="small muted">숨은 테스트 {problem.hiddenTests}개 · 시간 제한 {problem.timeLimitMs / 1000}초
-          {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}` : ""}</p>
+          {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}${problem.check.human === "match" ? " · 사람이 쓴 정답 코드와 일치" : ""}` : ""}</p>
         <div className="row small"><span className="muted">확인하는 지식</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div>
         {subs.length ? <><p className="eyebrow">내 제출</p><ul className="cs-subs">{subs.filter((s) => s.mode === "submit").slice(0, 8).map((s) => <li key={s.id}><button className="linkish small" onClick={() => void openSubmission(s.id)}>
           <span className={`chip ${VERDICT[s.verdict]?.[1] ?? ""}`}>{VERDICT[s.verdict]?.[0] ?? s.verdict}</span> {s.lang} · {new Date(s.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{s.hints ? ` · 힌트 ${s.hints}` : ""}</button></li>)}</ul></> : null}

@@ -103,7 +103,8 @@ const CROSS_MIN = 10;
 
 type Checked = { ok: true; examples: TestCase[]; tests: TestCase[]; check: Omit<ProblemCheck, "tries">; from: "source" | "made" } | { ok: false; reason: string };
 /** One draft through the check. Returns the reason it failed (sent back to the model) or the tests that survived. */
-async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted: string): Promise<Checked> {
+type Human = { lang: Lang; code: string };
+async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted: string, human?: Human): Promise<Checked> {
   // An example counts as the answer key only if its input and output are really in the pasted text (spacing ignored).
   const squash = (text: string) => text.replace(/\s+/g, "");
   const inPasted = (text: string) => !squash(text) || squash(pasted).includes(squash(text));
@@ -126,6 +127,14 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
   }
   const answered = await answerWithReference(d.reference, d.testInputs.slice(0, 14));
   if (answered.tests.length + examples.length < 3 || !examples.length) return { ok: false, reason: `모범 풀이로 답이 나온 테스트가 부족함 (${answered.dropped.length}개 실패: ${answered.dropped.slice(0, 2).map((x) => x.why).join(" / ")})` };
+  if (human) {
+    // A person's solution from the sources outranks the model's: it must print the same on every kept test.
+    const theirs = await judge(human.lang, human.code, [...examples, ...answered.tests], { stopAtFirstFail: true });
+    const miss = theirs.results.find((r) => r.verdict !== "AC");
+    if (theirs.verdict === "MISSING" || theirs.verdict === "CE") check = { ...check, human: "skipped" };
+    else if (miss) return { ok: false, reason: `사람이 쓴 정답 코드와 모범 풀이가 다름: 테스트 입력 (${miss.input.replace(/\n/g, " ⏎ ").slice(0, 80)})에서 모범 풀이 ${miss.expected.slice(0, 60)}, 사람 코드 ${(miss.got || miss.verdict).slice(0, 60)}` };
+    else check = { ...check, human: "match" };
+  }
   if (kind === "blank") {
     if (!d.blank.code.includes("____") || !d.blank.filled.trim()) return { ok: false, reason: "빈칸 코드(____)나 채운 코드가 비어 있음" };
     const filled = await judge(lang, d.blank.filled, [...examples, ...answered.tests], { stopAtFirstFail: true });
@@ -136,7 +145,7 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
 }
 
 /** A new problem from a topic, a lesson or a pasted problem. Saved only after the check passes; otherwise refused with the reason. */
-export async function makeProblem(input: { topic?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; sourceTitle?: string; sourceUrl?: string }) {
+export async function makeProblem(input: { topic?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; sourceTitle?: string; sourceUrl?: string; human?: Human; folder?: string; id?: string }) {
   const names = (await searchKnowledge(input.topic || input.lesson?.slice(0, 200) || "", { limit: 12 })).map((h) => h.title);
   const user = [input.topic ? `[주제] ${input.topic}` : "", input.lesson ? `[강의 글 또는 붙여 넣은 문제]\n${input.lesson.slice(0, 30000)}` : "", names.length ? `[학습자 지식 목록] ${names.join(", ")}` : "",
     input.kind === "blank" ? `[빈칸 문제 언어] ${LANG_LABEL[input.lang ?? "python"]}` : "[빈칸 문제 아님]"].filter(Boolean).join("\n\n");
@@ -146,11 +155,11 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     const retry = reasons.length ? `\n\n[지난 시도에서 막힌 곳]\n${reasons.map((r, i) => `${i + 1}. ${r}`).join("\n")}\n같은 실수가 없게 다시 세팅한다.` : "";
     const d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + retry, MAKE_SCHEMA, { heavy: true });
     if (d.answerKind !== "one") throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요.");
-    const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "");
+    const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human);
     if (!checked.ok) { reasons.push(checked.reason); continue; }
-    return saveProblem({ title: d.title, statement: d.statement, inputText: d.inputText, outputText: d.outputText, examples: checked.examples, tests: checked.tests, timeLimitMs: 2000,
+    return saveProblem({ ...(input.id ? { id: input.id } : {}), title: d.title, statement: d.statement, inputText: d.inputText, outputText: d.outputText, examples: checked.examples, tests: checked.tests, timeLimitMs: 2000,
       kind: input.kind, templates: input.kind === "blank" ? { [lang]: d.blank.code } : {}, reference: { lang: "javascript", code: d.reference },
-      knowledge: d.knowledge.slice(0, 3), folder: d.folder || "알고리즘", examplesFrom: checked.from, check: { ...checked.check, tries },
+      knowledge: d.knowledge.slice(0, 3), folder: input.folder || d.folder || "알고리즘", examplesFrom: checked.from, check: { ...checked.check, tries },
       source: { kind: "ai", title: input.sourceTitle || (input.topic ? `주제: ${input.topic}` : "강의 글"), ...(input.sourceUrl ? { url: input.sourceUrl } : {}) } });
   }
   throw new CodeError(422, `모범 풀이를 확인하지 못해서 저장하지 않았어요 (${1 + MAKE_RETRIES}번 시도). 마지막에 막힌 곳: ${reasons.at(-1)}`);
