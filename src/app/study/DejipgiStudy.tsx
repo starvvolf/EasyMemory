@@ -459,11 +459,13 @@ export default function DejipgiStudy() {
         if (session.mode !== "local-experiment" || !deck.points || !item.objectiveId) return;
         const ids = deck.points.byObjective[item.objectiveId] ?? [];
         if (!ids.length) return;
-        const kind = outcome === "correct" ? "correct" : outcome === "wrong" ? "wrong" : outcome === "assisted" ? "hint" : null;
+        // "내 답도 맞아요" takes the 틀림 just sent back: as 맞힘 in practice, as nothing right after reading.
+        const takeBack = outcome === "override" ? "correct" : outcome === "override-read" ? "read" : undefined;
+        const kind = takeBack ? "correct" : outcome === "correct" ? "correct" : outcome === "wrong" ? "wrong" : outcome === "assisted" ? "hint" : null;
         if (!kind) return;
         const detail = outcome === "assisted" ? "정답 보고 풂" : outcome === "wrong" ? "PDF 문제를 틀림" : "PDF 문제를 맞힘";
         void fetchExperiment("/api/knowledge/ref-event", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refs: ids.slice(0, 20).map((pid) => `${deck.id}:${pid}`), kind, detail, material: String(deck.sourceName || deck.title || "").slice(0, 200) }) })
+          body: JSON.stringify({ refs: ids.slice(0, 20).map((pid) => `${deck.id}:${pid}`), kind, detail, material: String(deck.sourceName || deck.title || "").slice(0, 200), ...(takeBack ? { takeBack } : {}) }) })
           .then(() => window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar"))).catch(() => undefined);
       },
       // 작업대 흐름: a React Flow canvas mounted into a host element the vanilla app keeps across re-renders.

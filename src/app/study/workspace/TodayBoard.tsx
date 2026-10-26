@@ -26,7 +26,7 @@ export default function TodayBoard() {
   }, []);
   useEffect(() => later(() => void load()), [load]);
   const toggle = async (t: Todo) => { await call(`/api/schedule/todos/${t.id}`, { done: !t.done }, "PATCH").catch(() => undefined); void load(); };
-  const startReview = async () => { const { questions } = await call<{ questions: Question[] }>("/api/knowledge/quiz?count=10"); setRun(questions); };
+  const startReview = async () => { const { questions } = await call<{ questions: Question[] }>("/api/knowledge/quiz?count=10"); if (questions.length) setRun(questions); else void load(); };
 
   const today = week?.today ?? "";
   const todos = week ? week.days.filter((d) => d.date <= today).flatMap((d) => d.todos).filter((t) => !t.done || t.date === today) : [];
@@ -44,7 +44,7 @@ export default function TodayBoard() {
       <div className="td-grid">
         {review.length ? (
           <section className="td-card">
-            <p className="eyebrow">다시 볼 지식</p>
+            <p className="eyebrow">지금 복습할 지식</p>
             <p className="td-big num">{review.length}<small>개</small></p>
             <p className="small muted">{unknown ? `몰랐던 것 ${unknown}개부터` : "오래 안 본 것부터"} 10문제씩</p>
             <button className="btn primary small" onClick={() => void startReview()}>바로 복습</button>

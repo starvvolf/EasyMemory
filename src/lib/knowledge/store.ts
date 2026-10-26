@@ -7,6 +7,8 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { scheduleNextReview } from "../spaced-repetition.ts";
+import type { SpacedRepetitionSchedule } from "../types.ts";
 
 export type KState = "met" | "unknown" | "known";
 export const STATE_LABEL: Record<KState, string> = { met: "만남", unknown: "몰랐음", known: "앎" };
@@ -17,6 +19,10 @@ export type KStats = { asked: number; wrong: number; hint: number; correct: numb
 export type Knowledge = {
   id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean;
   aliases: string[]; links: KLink[]; sources: KSource[]; stats: KStats; createdAt: string; updatedAt: string; lastAt: string;
+  /** When to ask again (FSRS). Set by every 맞힘 / 틀림 / 힌트 / 물어봄; none until the first one. */
+  review?: SpacedRepetitionSchedule;
+  /** The schedule before the last result, so "내 답도 맞아요" can take a grader's miss back. */
+  reviewBefore?: SpacedRepetitionSchedule | null;
 };
 export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string; createdAt: string };
 export type KEventKind = "met" | "asked" | "wrong" | "hint" | "correct" | "note";
@@ -330,6 +336,12 @@ export async function recordEvent(knowledgeId: string, kind: KEventKind, detail 
       if (!item.stats.correctDays.includes(day)) item.stats.correctDays.push(day);
       if (item.stats.correctDays.length >= GRADUATE_DAYS) item.graduated = true;
     }
+    if (kind === "asked" || kind === "wrong" || kind === "hint" || kind === "correct") {
+      item.reviewBefore = item.review ?? null;
+      // Results can arrive out of order (two computers, a late request); a schedule only moves forward in time.
+      const when = Math.max(Date.parse(at), Date.parse(item.review?.lastReviewAt ?? "") || 0);
+      item.review = scheduleNextReview(item.review, kind === "correct", new Date(when));
+    }
     item.lastAt = at; item.updatedAt = at;
     return item;
   });
@@ -337,12 +349,40 @@ export async function recordEvent(knowledgeId: string, kind: KEventKind, detail 
   return item;
 }
 
+/** How long a 틀림 can still be taken back by "내 답도 맞아요". */
+const TAKE_BACK_MS = 6 * 60 * 60 * 1000;
+/**
+ * "내 답도 맞아요": the last 틀림 was the grader's miss, not the learner's. It is taken back — the record line, the count
+ * and the review date — and, when the answer counts as recall (not right after reading), it becomes 맞힘.
+ */
+export async function takeBackWrong(knowledgeId: string, asCorrect: boolean, source?: KEvent["source"], at = nowIso()) {
+  const removed = await serial(async () => {
+    const events = await readEvents();
+    let index = -1;
+    for (let i = events.length - 1; i >= 0; i--) if (events[i].knowledgeId === knowledgeId) { if (events[i].kind === "wrong") index = i; break; }
+    if (index < 0 || Date.parse(at) - Date.parse(events[index].at) > TAKE_BACK_MS) return false;
+    events.splice(index, 1);
+    await rewriteEvents(events);
+    return true;
+  });
+  if (removed) await change((store) => {
+    const item = store.items.find((x) => x.id === knowledgeId);
+    if (!item) return;
+    item.stats.wrong = Math.max(0, item.stats.wrong - 1);
+    if (item.reviewBefore !== undefined) { item.review = item.reviewBefore ?? undefined; item.reviewBefore = undefined; }
+    if (!asCorrect) item.state = item.stats.wrong + item.stats.hint + item.stats.asked > 0 ? "unknown" : item.stats.correct ? "known" : "met";
+    item.updatedAt = at;
+  });
+  if (asCorrect) return recordEvent(knowledgeId, "correct", "내 답도 맞아요 (표기만 다름)", source, at);
+  return (await getKnowledge(knowledgeId)).item;
+}
+
 /* ---------- reading ---------- */
-export type ItemLite = Pick<Knowledge, "id" | "title" | "state" | "graduated" | "folderId" | "updatedAt" | "lastAt"> & { line: string; links: number; weak: number };
+export type ItemLite = Pick<Knowledge, "id" | "title" | "state" | "graduated" | "folderId" | "updatedAt" | "lastAt"> & { line: string; links: number; weak: number; dueAt?: string };
 const firstLine = (body: string) => body.split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 120) ?? "";
 const weakness = (item: Knowledge) => item.stats.wrong * 2 + item.stats.hint + item.stats.asked;
 const lite = (item: Knowledge): ItemLite => ({ id: item.id, title: item.title, state: item.state, graduated: item.graduated, folderId: item.folderId,
-  updatedAt: item.updatedAt, lastAt: item.lastAt, line: firstLine(item.body), links: item.links.length, weak: weakness(item) });
+  updatedAt: item.updatedAt, lastAt: item.lastAt, line: firstLine(item.body), links: item.links.length, weak: weakness(item), ...(item.review ? { dueAt: item.review.dueAt } : {}) });
 
 export async function tree() {
   const store = await readStore();
@@ -440,13 +480,30 @@ export async function memoryEvents(options: { knowledgeId?: string; folderId?: s
   return { text: text || "기록이 없어요.", events: events.map((e) => ({ ...e, title: byId.get(e.knowledgeId)?.title ?? "" })) };
 }
 
-/** What to look at again: 몰랐음 first (most missed first), then 앎 not yet graduated, longest unseen first. */
-export async function reviewQueue(options: { folderId?: string; limit?: number } = {}) {
+/** When an item is due: its FSRS date, or now when it has none yet (몰랐음 or 앎 from before review dates existed). */
+const dueTime = (item: Knowledge) => { const t = item.review ? Date.parse(item.review.dueAt) : 0; return Number.isFinite(t) ? t : 0; };
+const inReview = (item: Knowledge) => !item.graduated && item.state !== "met";
+/**
+ * What to look at again: 몰랐음 first, then 앎 not yet graduated. With dueOnly, only what is due by now (FSRS date),
+ * soonest first — the review session. Without it, everything still in review, most missed first (deadline planning).
+ */
+export async function reviewQueue(options: { folderId?: string; limit?: number; dueOnly?: boolean; now?: Date } = {}) {
   const store = await readStore();
   const inFolder = options.folderId ? subtree(store, options.folderId) : null;
-  const pool = store.items.filter((i) => !i.graduated && i.state !== "met" && (!inFolder || (i.folderId && inFolder.has(i.folderId))));
-  return pool.sort((a, b) => (a.state === b.state ? 0 : a.state === "unknown" ? -1 : 1) || weakness(b) - weakness(a) || a.lastAt.localeCompare(b.lastAt))
+  const now = (options.now ?? new Date()).getTime();
+  const pool = store.items.filter((i) => inReview(i) && (!inFolder || (i.folderId && inFolder.has(i.folderId))) && (!options.dueOnly || dueTime(i) <= now));
+  const byState = (a: Knowledge, b: Knowledge) => (a.state === b.state ? 0 : a.state === "unknown" ? -1 : 1);
+  return pool.sort((a, b) => byState(a, b) || (options.dueOnly ? dueTime(a) - dueTime(b) : 0) || weakness(b) - weakness(a) || a.lastAt.localeCompare(b.lastAt))
     .slice(0, options.limit ?? 20).map(lite);
+}
+/** How many are due now, and when the next one comes due (for "다음 복습은 …"). */
+export async function reviewStatus(options: { folderId?: string; now?: Date } = {}) {
+  const store = await readStore();
+  const inFolder = options.folderId ? subtree(store, options.folderId) : null;
+  const now = (options.now ?? new Date()).getTime();
+  const pool = store.items.filter((i) => inReview(i) && (!inFolder || (i.folderId && inFolder.has(i.folderId))));
+  const later = pool.map(dueTime).filter((t) => t > now).sort((a, b) => a - b);
+  return { due: pool.filter((i) => dueTime(i) <= now).length, next: later.length ? new Date(later[0]).toISOString() : null };
 }
 
 /** Knowledge points of PDF materials (the engine's knowledge layer), brought in as 만남 under 자료 이름/구역. Idempotent. */
@@ -467,8 +524,11 @@ export async function itemsByRef(refs: string[], prefix = false) {
   return store.items.filter((i) => i.sources.some((s) => match(s.ref))).map(lite);
 }
 /** A practice result on a PDF question, passed on to the knowledge its objective covers. */
-export async function recordByRef(refs: string[], kind: KEventKind, detail = "", source?: KEvent["source"]) {
+export async function recordByRef(refs: string[], kind: KEventKind, detail = "", source?: KEvent["source"], takeBack?: "correct" | "read") {
   const items = await itemsByRef(refs);
-  for (const item of items) await recordEvent(item.id, kind, detail, source);
+  for (const item of items) {
+    if (takeBack) await takeBackWrong(item.id, takeBack === "correct", source);
+    else await recordEvent(item.id, kind, detail, source);
+  }
   return { recorded: items.length };
 }

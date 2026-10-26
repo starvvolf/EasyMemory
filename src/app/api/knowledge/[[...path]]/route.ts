@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, itemsByRef, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
-  recordEvent, reviewQueue, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
+  recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
 import { askKnowledge, checkClaim, explainSelection, extractFromText } from "@/lib/assist/knowledge-ai";
@@ -52,7 +52,10 @@ async function handle(request: Request, context: RouteContext) {
       if (level === "2") return json(await memorySummary(url.searchParams.get("topic") ?? ""));
       return json(await memoryEvents({ knowledgeId: url.searchParams.get("knowledgeId") ?? undefined, folderId: url.searchParams.get("folderId") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 30) }));
     }
-    if (p[0] === "review" && m === "GET") return json({ items: await reviewQueue({ folderId: url.searchParams.get("folderId") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 20) }) });
+    if (p[0] === "review" && m === "GET") {
+      const folderId = url.searchParams.get("folderId") ?? undefined;
+      return json({ items: await reviewQueue({ folderId, limit: Number(url.searchParams.get("limit") ?? 20), dueOnly: url.searchParams.get("all") !== "1" }), ...(await reviewStatus({ folderId })) });
+    }
 
     // items
     if (p[0] === "item" && p.length === 1 && m === "POST") {
@@ -87,13 +90,14 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "folder" && p[1] && m === "PATCH") return json({ folder: await updateFolder(id.parse(p[1]), await body(z.object({ name: z.string().max(60).optional(), parentId: id.nullable().optional(), order: z.number().int().min(0).optional(), note: z.string().max(2000).optional() }))) });
     if (p[0] === "folder" && p[1] && m === "DELETE") return json(await deleteFolder(id.parse(p[1])));
 
-    // review session: questions over a folder (or the review queue), mixed kinds
+    // review session: questions over what is due now (FSRS dates), mixed kinds. Nothing due → no questions, and when
+    // the next one comes due; never random items to fill the session.
     if (p[0] === "quiz" && m === "GET") {
       const pool = await allItems();
       const folderId = url.searchParams.get("folderId") ?? undefined;
       const count = Math.min(30, Number(url.searchParams.get("count") ?? 10));
-      const queue = await reviewQueue({ folderId, limit: count });
-      const picked = queue.length ? queue : (await tree()).items.filter((i) => !folderId || i.folderId === folderId).slice(0, count);
+      const picked = await reviewQueue({ folderId, limit: count, dueOnly: true });
+      const status = await reviewStatus({ folderId });
       const seed = String(Date.now());
       const questions = picked.flatMap((lite, n) => {
         const item = pool.find((x) => x.id === lite.id);
@@ -101,21 +105,23 @@ async function handle(request: Request, context: RouteContext) {
         const qs = questionsFor(item, pool, seed);
         return [qs[(n + qs.length - 1) % qs.length]];
       });
-      return json({ questions });
+      return json({ questions, due: status.due, next: status.next });
     }
     if (p[0] === "grade" && m === "POST") {
       const b = await body(z.object({ question: z.object({ id: z.string(), kind: z.enum(["flashcard", "choice", "ox", "blank", "short", "recognize"]), knowledgeId: z.string(), answer: z.string(), accept: z.array(z.string()).optional() }).passthrough(),
         answer: z.string().max(2000), sourceId: z.string().max(40).optional() }));
       const q = b.question as unknown as Question;
       const g = grade(q, b.answer);
-      await recordEvent(q.knowledgeId, g.correct ? "correct" : "wrong", `${QUESTION_LABEL[q.kind]}${g.correct ? "" : `: "${b.answer.slice(0, 60)}"`}`).catch(() => undefined);
+      // A flashcard's "answer" is the learner's own call (knew / didnt), not words worth keeping in the record.
+      await recordEvent(q.knowledgeId, g.correct ? "correct" : "wrong", `${QUESTION_LABEL[q.kind]}${g.correct || q.kind === "flashcard" ? "" : `: "${b.answer.slice(0, 60)}"`}`).catch(() => undefined);
       if (q.kind === "recognize" && g.correct && b.sourceId) await markGoal(b.sourceId, "recognize", true, "예전 지식을 알아봄").catch(() => undefined);
       return json(g);
     }
     if (p[0] === "related" && m === "GET") return json({ items: await itemsByRef(url.searchParams.getAll("ref").slice(0, 200), url.searchParams.get("prefix") === "1") });
     if (p[0] === "ref-event" && m === "POST") {
-      const b = await body(z.object({ refs: z.array(z.string().max(200)).min(1).max(20), kind: z.enum(["met", "asked", "wrong", "hint", "correct", "note"]), detail: z.string().max(600).optional(), material: z.string().max(200).optional() }));
-      return json(await recordByRef(b.refs, b.kind, b.detail ?? "", b.material ? { kind: "pdf", title: b.material } : undefined));
+      const b = await body(z.object({ refs: z.array(z.string().max(200)).min(1).max(20), kind: z.enum(["met", "asked", "wrong", "hint", "correct", "note"]), detail: z.string().max(600).optional(), material: z.string().max(200).optional(),
+        takeBack: z.enum(["correct", "read"]).optional() }));
+      return json(await recordByRef(b.refs, b.kind, b.detail ?? "", b.material ? { kind: "pdf", title: b.material } : undefined, b.takeBack));
     }
     if (p[0] === "import" && m === "POST") {
       const b = await body(z.object({ points: z.array(z.object({ ref: z.string().max(200), title: z.string().min(1).max(120), essentials: z.array(z.string().max(600)).max(8), folder: z.string().max(200), material: z.string().max(200), page: z.number().int().optional() })).max(2000) }));

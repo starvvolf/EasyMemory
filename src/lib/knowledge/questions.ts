@@ -11,14 +11,28 @@ export type Question = {
 };
 export type Graded = { correct: boolean; expected: string; note: string };
 
-type Pool = Pick<Knowledge, "id" | "title" | "body" | "aliases" | "folderId" | "links">[];
+type Pool = Array<Pick<Knowledge, "id" | "title" | "body" | "aliases" | "folderId" | "links"> & { sources?: Knowledge["sources"] }>;
 function rng(seed: string) { let h = 2166136261; for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => { h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 2 ** 32; }; }
 function shuffle<T>(items: T[], r: () => number) { const a = [...items]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-const line = (body: string) => body.split("\n").map((l) => l.trim()).filter(Boolean).filter((l) => !/^헷갈림:/.test(l)).join(" ").slice(0, 220);
-/** Others to pick wrong options from: the same folder first, then everything else with a usable line. */
+// ⟨받음: … / 냄: …⟩ is the engine's wiring between knowledge points; it names other items, so it never goes into a question.
+const line = (body: string) => body.split("\n").map((l) => l.replace(/⟨[^⟩]*⟩/g, "").trim()).filter(Boolean).filter((l) => !/^헷갈림:/.test(l)).join(" ").slice(0, 220);
+/** The meaning without the name in front ("z_vp — 뷰 평면의 위치…" → "뷰 평면의 위치…"), so an option does not give away whose it is. */
+export function meaningOf(item: Pick<Knowledge, "title" | "body">) {
+  const m = line(item.body), t = item.title.trim();
+  for (const sep of [" — ", " – ", " - ", ": ", "："]) if (t && m.startsWith(t + sep)) return m.slice(t.length + sep.length).trim();
+  return m;
+}
+const materials = (x: Pool[number]) => new Set((x.sources ?? []).map((s) => s.title.replace(/\.pdf$/i, "")).filter(Boolean));
+/**
+ * Others to pick wrong options from: the same folder first, then the same material. Never knowledge from another
+ * subject — a 3D viewing item with an algorithm's meaning as an option is no question at all.
+ */
 const others = (item: Pool[number], pool: Pool) => {
-  const usable = pool.filter((x) => x.id !== item.id && line(x.body) && normalize(line(x.body)) !== normalize(line(item.body)));
-  return [...usable.filter((x) => x.folderId === item.folderId), ...usable.filter((x) => x.folderId !== item.folderId)];
+  const mine = materials(item);
+  const usable = pool.filter((x) => x.id !== item.id && meaningOf(x) && normalize(meaningOf(x)) !== normalize(meaningOf(item)));
+  const sameFolder = usable.filter((x) => x.folderId === item.folderId);
+  const sameMaterial = usable.filter((x) => !sameFolder.includes(x) && [...materials(x)].some((m) => mine.has(m)));
+  return [...sameFolder, ...sameMaterial];
 };
 
 /**
@@ -27,15 +41,16 @@ const others = (item: Pool[number], pool: Pool) => {
  */
 export function questionsFor(item: Pool[number], pool: Pool, seed = ""): Question[] {
   const r = rng(`${item.id}:${seed}`);
-  const meaning = line(item.body);
+  const meaning = meaningOf(item);
   const out: Question[] = [];
   const id = (kind: string) => `${item.id}:${kind}:${seed}`;
   out.push({ id: id("flashcard"), kind: "flashcard", label: QUESTION_LABEL.flashcard, knowledgeId: item.id, prompt: item.title, answer: meaning || "(설명이 아직 없어요. 지식창에서 적어 주세요.)", explain: "" });
   const wrong = others(item, pool);
   if (meaning && wrong.length >= 1) {
-    const picks = shuffle(wrong, r).slice(0, 3).map((x) => line(x.body));
+    const picks = shuffle(wrong, r).slice(0, 3).map((x) => meaningOf(x));
     const options = shuffle([meaning, ...picks], r);
-    out.push({ id: id("choice"), kind: "choice", label: QUESTION_LABEL.choice, knowledgeId: item.id, prompt: `"${item.title}"의 뜻으로 맞는 것은?`, options, answer: meaning, explain: `${item.title}: ${meaning}` });
+    // 객관식 needs at least three options to be worth asking; with one other, only OX.
+    if (picks.length >= 2) out.push({ id: id("choice"), kind: "choice", label: QUESTION_LABEL.choice, knowledgeId: item.id, prompt: `"${item.title}"의 뜻으로 맞는 것은?`, options, answer: meaning, explain: `${item.title}: ${meaning}` });
     const truth = r() < 0.5;
     const shown = truth ? meaning : picks[0];
     out.push({ id: id("ox"), kind: "ox", label: QUESTION_LABEL.ox, knowledgeId: item.id, prompt: `${item.title}: ${shown}`, options: ["O", "X"], answer: truth ? "O" : "X",

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createFolder, deleteFolder, getKnowledge, importPoints, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
-  recordEvent, reviewQueue, saveKnowledge, saveMany, searchKnowledge, setKnowledgeState, similarity, tree, updateFolder } from "./store.ts";
+  recordEvent, reviewQueue, reviewStatus, saveKnowledge, saveMany, searchKnowledge, setKnowledgeState, similarity, takeBackWrong, tree, updateFolder } from "./store.ts";
 
 async function withData<T>(run: () => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "knowledge-"));
@@ -139,4 +139,70 @@ test("questions from knowledge: flashcard always, 객관식/OX with others to mi
   const rq = recognizeQuestion(pool[0], "한국은행이 금리를 0.25%p 내렸다", pool);
   assert.equal(rq.label, "알아보기");
   assert.ok(rq.options!.includes("금리 인하"));
+});
+
+test("review dates: a miss comes back soon, a correct answer waits longer, and only what is due is in the session", () => withData(async () => {
+  const { item } = await saveKnowledge({ title: "뷰 업 벡터", body: "y_view 방향을 정한다" });
+  const t0 = "2026-10-26T10:00:00Z";
+  const missed = await recordEvent(item.id, "wrong", "OX를 틀림", undefined, t0);
+  assert.ok(missed.review, "a result sets a review date");
+  assert.equal(missed.review!.lapses + missed.review!.repetitions >= 1, true);
+  const dueAfterMiss = Date.parse(missed.review!.dueAt) - Date.parse(t0);
+  assert.ok(dueAfterMiss > 0 && dueAfterMiss <= 60 * 60 * 1000, "a miss is asked again within the hour");
+  assert.equal((await reviewQueue({ dueOnly: true, now: new Date(t0) })).length, 0, "not due the same second");
+  assert.equal((await reviewQueue({ dueOnly: true, now: new Date(Date.parse(t0) + dueAfterMiss) })).length, 1);
+  // Correct on the next days: the gap grows.
+  let at = Date.parse(t0) + dueAfterMiss;
+  const gaps: number[] = [];
+  for (let n = 0; n < 3; n++) {
+    const done = await recordEvent(item.id, "correct", "", undefined, new Date(at).toISOString());
+    const gap = Date.parse(done.review!.dueAt) - at; gaps.push(gap); at += gap;
+  }
+  assert.ok(gaps[2] > gaps[0], `gaps grow: ${gaps.map((g) => Math.round(g / 60000)).join(", ")} min`);
+  const status = await reviewStatus({ now: new Date(at - 1000) });
+  assert.equal(status.due, 0);
+  assert.ok(status.next, "the next date is known");
+  assert.equal((await reviewQueue({ dueOnly: false })).length, 1, "deadline planning still sees it");
+}));
+
+test("내 답도 맞아요 takes the last miss back: as 맞힘 in practice, as nothing right after reading", () => withData(async () => {
+  const { item } = await saveKnowledge({ title: "viewing origin", body: "P0" });
+  const before = await recordEvent(item.id, "correct", "", undefined, "2026-10-26T09:00:00Z");
+  await recordEvent(item.id, "wrong", "주관식", undefined, "2026-10-26T10:00:00Z");
+  const fixed = await takeBackWrong(item.id, true, undefined, "2026-10-26T10:00:30Z");
+  assert.equal(fixed.stats.wrong, 0);
+  assert.equal(fixed.stats.correct, 2);
+  assert.equal(fixed.state, "known");
+  const kinds = (await memoryEvents({ knowledgeId: item.id })).events.map((e) => e.kind);
+  assert.deepEqual(kinds.filter((k) => k !== "met"), ["correct", "correct"], "the 틀림 line is gone");
+  assert.ok(Date.parse(fixed.review!.dueAt) > Date.parse(before.review!.dueAt), "the date moved on, not back to a miss");
+
+  const { item: other } = await saveKnowledge({ title: "z_vp", body: "뷰 평면 위치" });
+  await recordEvent(other.id, "wrong", "읽은 직후", undefined, "2026-10-26T10:00:00Z");
+  const read = await takeBackWrong(other.id, false, undefined, "2026-10-26T10:01:00Z");
+  assert.equal(read.state, "met", "nothing happened to it after all");
+  assert.equal(read.review, undefined);
+  assert.equal(read.stats.wrong, 0);
+}));
+
+test("review questions mix only knowledge of the same folder or material, and options do not carry the name", async () => {
+  const { questionsFor, meaningOf } = await import("./questions.ts");
+  const src = (title: string) => [{ kind: "pdf" as const, title, at: "2026-10-26T00:00:00Z" }];
+  const base = { aliases: [] as string[], links: [] as Array<{ to: string; relation: string }> };
+  const pool = [
+    { ...base, id: "a", title: "z_vp", body: "z_vp — 뷰 평면의 위치를 정하는 스칼라", folderId: "f1", sources: src("3D뷰잉.pdf") },
+    { ...base, id: "b", title: "V", body: "V — y_view 방향을 정한다", folderId: "f1", sources: src("3D뷰잉.pdf") },
+    { ...base, id: "c", title: "N", body: "뷰 평면의 법선", folderId: "f2", sources: src("3D뷰잉") },
+    { ...base, id: "d", title: "이분 탐색", body: "범위를 절반씩 줄여 찾는다", folderId: "f9", sources: src("알고리즘") },
+  ];
+  assert.equal(meaningOf(pool[0]), "뷰 평면의 위치를 정하는 스칼라");
+  for (const seed of ["1", "2", "3", "4", "5"]) {
+    const qs = questionsFor(pool[0], pool, seed);
+    const choice = qs.find((q) => q.kind === "choice")!;
+    assert.ok(choice, "two others of the same material make a 객관식");
+    assert.ok(!choice.options!.some((o) => o.includes("절반")), "no option from another subject");
+    assert.ok(!choice.options!.some((o) => o.startsWith("V —") || o.startsWith("z_vp —")), "no name in front of an option");
+  }
+  const lonely = questionsFor(pool[3], pool, "1");
+  assert.deepEqual(lonely.map((q) => q.kind), ["flashcard"], "nothing of its own subject to mix in: a flashcard only");
 });

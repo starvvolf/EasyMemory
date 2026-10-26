@@ -3,7 +3,7 @@
 // Left: folders (drag items or folders onto a folder to move them). Middle: the folder's items. Right: one item —
 // its meaning, names, chains, where it came from and its record — with 확인 문제, 합치기 and the state buttons.
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
-import { call, errorText, folderPaths, handoff, later, STATE_LABEL, EVENT_LABEL, type Detail, type Folder, type ItemLite, type KState, type Question, type Tree } from "./api";
+import { call, errorText, folderPaths, handoff, later, STATE_LABEL, EVENT_LABEL, whenText, type Detail, type Folder, type ItemLite, type KState, type Question, type ReviewStatus, type Tree } from "./api";
 import { QuestionRun } from "./QuestionCard";
 import { Rich } from "./Rich";
 
@@ -30,6 +30,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const [overview, setOverview] = useState("");
   const [showOverview, setShowOverview] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [making, setMaking] = useState<"" | "item" | "folder">("");
   const [draft, setDraft] = useState("");
 
@@ -71,6 +72,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
     return list;
   }, [hits, tree.items, folder, filter, sort, subtree]);
 
+  const dueNow = tree.items.filter((i) => !i.graduated && i.state !== "met" && (!i.dueAt || Date.parse(i.dueAt) <= Date.now())).length;
   const counts = { total: tree.items.length, unknown: tree.items.filter((i) => i.state === "unknown").length, known: tree.items.filter((i) => i.state === "known").length, met: tree.items.filter((i) => i.state === "met").length };
   const folderName = folder === "all" ? "전체" : folder === "none" ? "폴더 없음" : folderPaths(tree.folders).find((f) => f.id === folder)?.path ?? "";
 
@@ -87,7 +89,12 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
 
   const startQuiz = async () => {
     const q = folder !== "all" && folder !== "none" ? `?folderId=${folder}&count=10` : "?count=10";
-    try { const { questions } = await call<{ questions: Question[] }>(`/api/knowledge/quiz${q}`); setRun({ title: `복습 · ${folderName}`, questions }); } catch (e) { setError(errorText(e)); }
+    setNotice("");
+    try {
+      const { questions, next } = await call<{ questions: Question[] } & ReviewStatus>(`/api/knowledge/quiz${q}`);
+      if (questions.length) setRun({ title: `복습 · ${folderName}`, questions });
+      else setNotice(next ? `지금 복습할 지식이 없어요. 다음 복습은 ${whenText(next)}이에요.` : "복습할 지식이 아직 없어요. 문제를 풀다 틀리거나 물어본 지식이 여기로 와요.");
+    } catch (e) { setError(errorText(e)); }
   };
   const create = async () => {
     const name = draft.trim(); if (!name) return;
@@ -117,7 +124,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
       <header className="kw-top">
         <div>
           <h2>지식</h2>
-          <p className="small muted num">전체 {counts.total} · 몰랐음 {counts.unknown} · 앎 {counts.known} · 만남 {counts.met}</p>
+          <p className="small muted num">전체 {counts.total} · 몰랐음 {counts.unknown} · 앎 {counts.known} · 만남 {counts.met}{dueNow ? <> · <b>복습 차례 {dueNow}</b></> : null}</p>
         </div>
         <div className="row">
           <input className="ws-input kw-search" type="search" placeholder="지식 찾기 (이름·설명)" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="지식 찾기" />
@@ -142,6 +149,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
         </form>
       ) : null}
       {error ? <p className="ws-err" onClick={() => setError("")}>{error}</p> : null}
+      {notice ? <p className="small muted" onClick={() => setNotice("")}>{notice}</p> : null}
       {showOverview ? <section className="panel"><div className="row" style={{ justifyContent: "space-between" }}><b className="small">AI가 보는 요약 (메모리 1단계)</b><button className="btn ghost small" onClick={() => setShowOverview(false)}>닫기</button></div><pre className="kw-overview">{overview}</pre></section> : null}
       {run ? <QuestionRun title={run.title} questions={run.questions} onClose={() => { setRun(null); void load(); if (sel) void loadDetail(sel); }} /> : null}
 
@@ -269,6 +277,7 @@ function ItemDetail({ detail, folders, onAct, onOpen, onGone, onQuiz }: { detail
 
       <details className="ws-fold" open={s.wrong + s.hint + s.asked > 0}><summary>내 기록 · 맞힘 {s.correct} · 틀림 {s.wrong} · 힌트 {s.hint} · 물어봄 {s.asked}</summary>
         <p className="small muted num">맞힘 {s.correct} · 틀림 {s.wrong} · 힌트 {s.hint} · 물어봄 {s.asked}{s.correctDays.length ? ` · 연속으로 맞힌 날 ${s.correctDays.length}/3` : ""}</p>
+        {item.review && !item.graduated && item.state !== "met" ? <p className="small muted">다음 복습: {whenText(item.review.dueAt)}</p> : null}
         <ol className="kw-events">{detail.events.slice(0, 20).map((e) => <li key={e.id}><span className={`chip ev-${e.kind}`}>{EVENT_LABEL[e.kind]}</span> <span className="small">{e.detail}</span> <span className="small muted">{e.source ? `${e.source.title} · ` : ""}{ago(e.at)}</span></li>)}</ol></details>
 
       {mode === "delete" ? <div className="row small"><span>이 지식과 기록을 모두 지울까요?</span><button className="btn small danger" onClick={() => void onAct(() => call(`/api/knowledge/item/${item.id}`, undefined, "DELETE"), onGone)}>지우기</button><button className="btn ghost small" onClick={() => setMode("")}>취소</button></div>

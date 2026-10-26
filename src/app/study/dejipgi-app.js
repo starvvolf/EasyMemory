@@ -1270,7 +1270,9 @@ function finishItem(outcome){
     }
   }
   S.session.results.push({ deck:deck.id, item:item.id, outcome });
-  if (env.onPractice && S.session.mode !== "check") { try{ env.onPractice(deck, item, outcome); }catch(e){} }
+  // To the knowledge window: every result in practice, and a miss right after reading too (missing what was just read
+  // is the clearest 몰랐음); a correct answer right after reading is not memory evidence, so it is not passed on.
+  if (env.onPractice && (S.session.mode !== "check" || outcome === "wrong")) { try{ env.onPractice(deck, item, outcome); }catch(e){} }
   S.session.assisted.add(deck.id + ":" + item.id); // the result screen shows the answer, so a retry later in this session is not independent
   Store.save(deck);
 }
@@ -1315,6 +1317,8 @@ function overrideCorrect(){
   const { deck, item } = curRef(); const c = S.session.cur;
   const ev = [...deck.events].reverse().find(e => e.item === item.id && e.kind === "submit");
   if (ev){ ev.correct = true; ev.override = true; }
+  // The knowledge window got a 틀림 for this; take it back (and, outside reading checks, count it as 맞힘).
+  if (env.onPractice) { try{ env.onPractice(deck, item, S.session.mode === "check" ? "override-read" : "override"); }catch(e){} }
   if (S.session.mode === "check"){ c.verdict = "read-good"; c.overridden = true; S.session.queue = S.session.queue.filter((q, idx) => !(idx > S.session.i && q.retry && q.item === item.id)); Store.save(deck); render(); return; }
   const s = schedOf(deck, item.id); s.box = Math.min(s.box + 1, INTERVALS.length - 1); s.due = now() + gap(s.box); s.lastIndep = now();
   const res = S.session.results[S.session.results.length - 1]; if (res) res.outcome = "correct";
