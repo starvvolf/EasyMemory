@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
+import { calibration } from "@/lib/code/calibrate";
 import { deleteProblem, publicProblem, readDrafts, readProblem, readSubmissions, runCustom, saveDraft } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, submitAndRecord } from "@/lib/code/service";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach } from "@/lib/assist/code-ai";
@@ -22,7 +23,9 @@ async function handle(request: Request, context: RouteContext) {
     const body = async <T extends z.ZodType>(schema: T): Promise<z.infer<T>> => schema.parse(await boundedJson(request));
     const json = (value: unknown) => NextResponse.json(value);
 
-    if (p[0] === "langs" && m === "GET") return json({ langs: await languages() });
+    if (p[0] === "langs" && m === "GET") { void calibration(); return json({ langs: await languages() }); } // measure in the background while the tab opens
+    if (p[0] === "calibration" && m === "GET") return json({ calibration: await calibration() });
+    if (p[0] === "calibration" && m === "POST") return json({ calibration: await calibration(true) });
     if (p[0] === "problems" && m === "GET") return json({ problems: await listProblemsWithKnowledge() });
     if (p[0] === "run" && m === "POST") { const b = await body(z.object({ lang, code, input: z.string().max(500_000) })); return json(await runCustom(b.lang, b.code, b.input)); }
     if (p[0] === "explain" && m === "POST") {

@@ -7,7 +7,7 @@
 // ends), resumes it, and waits until no process is left in the job. stdin/stdout/stderr are passed straight through.
 // CPU time is user + kernel of every process in the job, checked every few ms; over cpuMs the job is killed. The
 // wall-clock limit stays in Node (a program waiting for input uses no CPU), which kills this helper and so the job.
-// stats.json: {"exit":n,"cpuMs":n,"userMs":n,"kernelMs":n,"peakKb":n,"hit":"cpu"|"mem"|"","error":""}
+// stats.json: {"exit":n,"cpuMs":n,"userMs":n,"kernelMs":n,"peakKb":n,"procs":n,"hit":"cpu"|"mem"|"","error":""}
 using System;
 using System.ComponentModel;
 using System.IO;
@@ -73,9 +73,9 @@ static class JobRun {
     return sb.ToString();
   }
 
-  static void Write(string file, uint exit, long user, long kernel, long peak, string hit, string error) {
+  static void Write(string file, uint exit, long user, long kernel, long peak, string hit, string error, uint procs) {
     var json = "{\"exit\":" + exit + ",\"cpuMs\":" + ((user + kernel) / 10000) + ",\"userMs\":" + (user / 10000) + ",\"kernelMs\":" + (kernel / 10000)
-      + ",\"peakKb\":" + (peak / 1024) + ",\"hit\":\"" + hit + "\",\"error\":\"" + error.Replace("\\", "\\\\").Replace("\"", "'") + "\"}";
+      + ",\"peakKb\":" + (peak / 1024) + ",\"procs\":" + procs + ",\"hit\":\"" + hit + "\",\"error\":\"" + error.Replace("\\", "\\\\").Replace("\"", "'") + "\"}";
     File.WriteAllText(file, json);
   }
 
@@ -90,7 +90,7 @@ static class JobRun {
     limit.Basic.LimitFlags = LIMIT_JOB_MEMORY | LIMIT_KILL_ON_JOB_CLOSE | LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
     limit.JobMemoryLimit = new UIntPtr((ulong)memMb * 1024 * 1024);
     if (!SetInformationJobObject(job, ExtendedLimitInformation, ref limit, Marshal.SizeOf(typeof(ExtendedLimit)))) {
-      Write(stats, 0, 0, 0, 0, "", "SetInformationJobObject: " + new Win32Exception().Message); return 3;
+      Write(stats, 0, 0, 0, 0, "", "SetInformationJobObject: " + new Win32Exception().Message, 0); return 3;
     }
     IntPtr port = CreateIoCompletionPort(new IntPtr(-1), IntPtr.Zero, UIntPtr.Zero, 1);
     var assoc = new CompletionPort(); assoc.CompletionKey = job; assoc.Port = port;
@@ -101,12 +101,12 @@ static class JobRun {
     foreach (var h in new[] { si.hStdInput, si.hStdOutput, si.hStdError }) SetHandleInformation(h, 1, 1);
     ProcessInfo pi;
     if (!CreateProcess(null, cmd, IntPtr.Zero, IntPtr.Zero, true, CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero, null, ref si, out pi)) {
-      Write(stats, 0, 0, 0, 0, "", "CreateProcess: " + new Win32Exception().Message); return 3;
+      Write(stats, 0, 0, 0, 0, "", "CreateProcess: " + new Win32Exception().Message, 0); return 3;
     }
     if (!AssignProcessToJobObject(job, pi.hProcess)) {
       string why = new Win32Exception().Message;
       ResumeThread(pi.hThread); // still run it, just without limits; Node's wall clock still applies
-      Write(stats, 0, 0, 0, 0, "", "AssignProcessToJobObject: " + why);
+      Write(stats, 0, 0, 0, 0, "", "AssignProcessToJobObject: " + why, 0);
       WaitForSingleObject(pi.hProcess, 0xFFFFFFFF); uint c0; GetExitCodeProcess(pi.hProcess, out c0); return (int)c0;
     }
     ResumeThread(pi.hThread); CloseHandle(pi.hThread);
@@ -125,7 +125,7 @@ static class JobRun {
     uint exit; GetExitCodeProcess(pi.hProcess, out exit);
     QueryInformationJobObject(job, BasicAccountingInformation, out acc, Marshal.SizeOf(typeof(Accounting)), IntPtr.Zero);
     ExtendedLimit after; QueryInformationJobObject(job, ExtendedLimitInformation, out after, Marshal.SizeOf(typeof(ExtendedLimit)), IntPtr.Zero);
-    Write(stats, exit, acc.TotalUserTime, acc.TotalKernelTime, (long)after.PeakJobMemoryUsed.ToUInt64(), hit, "");
+    Write(stats, exit, acc.TotalUserTime, acc.TotalKernelTime, (long)after.PeakJobMemoryUsed.ToUInt64(), hit, "", acc.TotalProcesses);
     return 0;
   }
 }

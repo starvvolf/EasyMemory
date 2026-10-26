@@ -18,7 +18,7 @@ const SOURCE: Record<Lang, string> = { python: "main.py", javascript: "main.js",
 const win = process.platform === "win32";
 
 /** CPU time (user + kernel, every process the program started) and peak committed memory, from the job object. */
-export type Usage = { cpuMs: number; peakKb: number; hit: "cpu" | "mem" | "" };
+export type Usage = { cpuMs: number; peakKb: number; procs: number; hit: "cpu" | "mem" | "" };
 export type Exec = { stdout: string; stderr: string; code: number | null; timedOut: boolean; tooMuch: boolean; ms: number; failedToStart?: string; usage?: Usage };
 export type Limits = { cpuMs: number; memMb: number };
 const OUTPUT_CAP = 8_000_000;
@@ -30,10 +30,10 @@ export async function execute(cmd: string, args: string[], options: { cwd: strin
   const stats = path.join(options.cwd, `job-${randomBytes(4).toString("hex")}.json`);
   const out = await spawnOnce(helper, [stats, String(options.limits.cpuMs), String(options.limits.memMb), cmd, ...args], options);
   try {
-    const s = JSON.parse(await readFile(stats, "utf8")) as { exit: number; cpuMs: number; peakKb: number; hit: Usage["hit"]; error: string };
+    const s = JSON.parse(await readFile(stats, "utf8")) as { exit: number; cpuMs: number; peakKb: number; procs?: number; hit: Usage["hit"]; error: string };
     await rm(stats, { force: true });
     if (s.error) return out; // the job could not be set up: the run still happened, without measurements
-    return { ...out, code: s.exit > 0x7fffffff ? s.exit - 0x100000000 : s.exit, usage: { cpuMs: s.cpuMs, peakKb: s.peakKb, hit: s.hit } };
+    return { ...out, code: s.exit > 0x7fffffff ? s.exit - 0x100000000 : s.exit, usage: { cpuMs: s.cpuMs, peakKb: s.peakKb, procs: s.procs ?? 1, hit: s.hit } };
   } catch { return out; } // killed by the wall clock before it could write
 }
 
@@ -68,9 +68,12 @@ function spawnOnce(cmd: string, args: string[], options: { cwd: string; input?: 
 }
 
 /* ---------- 작업 개체 도우미 (Windows): jobrun/JobRun.cs, built once with the csc.exe that ships with Windows ---------- */
-const jobCache = globalThis as unknown as { __jobrun?: Promise<string | null> };
+// Bump when JobRun.cs changes, so a dev server that hot-reloads picks up the new build (the exe name has the source hash).
+const JOBRUN_VERSION = 2;
+const jobCache = globalThis as unknown as { __jobrun?: Promise<string | null>; __jobrunVersion?: number };
 export function jobrun(): Promise<string | null> {
   if (!win || process.env.RECALLER_NO_JOBRUN) return Promise.resolve(null);
+  if (jobCache.__jobrunVersion !== JOBRUN_VERSION) { jobCache.__jobrun = undefined; jobCache.__jobrunVersion = JOBRUN_VERSION; }
   jobCache.__jobrun ??= (async () => {
     try {
       const source = await readFile(path.join(process.cwd(), "src", "lib", "code", "jobrun", "JobRun.cs"), "utf8");
@@ -216,35 +219,50 @@ export type TestResult = { index: number; verdict: Verdict; ms: number; input: s
 export type Judgement = { verdict: Verdict; passed: number; total: number; results: TestResult[]; compile: string; ms: number; /** false when CPU time and memory could not be measured (not Windows, or the helper failed) */ measured?: boolean };
 
 /**
+ * This PC against the reference PC (calibrate.ts): `speed` > 1 means slower, so CPU time is divided by it; `base` is
+ * what an empty program of each language costs here (start-up CPU, memory), taken off before comparing with the limit.
+ */
+export type Calibration = { speed: number; base: Partial<Record<Lang, { cpuMs: number; peakKb: number }>> };
+
+/**
  * Limits as a judge would apply them, with an allowance band for this PC not being the judge's machine: a run over the
  * limit but inside the band still gets its verdict, marked `near`; past the band it is TLE / MLE. The wall clock
- * (a program waiting for input uses no CPU) is a generous multiple of the time limit.
+ * (a program waiting for input uses no CPU) is a generous multiple of the time limit. With a calibration, the hard
+ * limits handed to the job object are in this PC's raw terms (scaled by speed, plus the language's empty-program cost).
  */
-export function limitsFor(timeLimitMs: number, memoryLimitMb: number) {
+export function limitsFor(timeLimitMs: number, memoryLimitMb: number, lang?: Lang, cal?: Calibration) {
   const timeBand = Math.max(300, Math.round(timeLimitMs * 0.3)), memBand = Math.max(16, Math.round(memoryLimitMb * 0.1));
-  return { cpuMs: timeLimitMs + timeBand, memMb: memoryLimitMb + memBand, wallMs: Math.max(timeLimitMs * 3, timeLimitMs + 3000) };
+  const speed = cal?.speed ?? 1, base = lang ? cal?.base[lang] : undefined;
+  const cpuMs = Math.round((timeLimitMs + timeBand) * speed + (base?.cpuMs ?? 0));
+  const memMb = Math.round(memoryLimitMb + memBand + (base?.peakKb ?? 0) / 1024);
+  return { cpuMs, memMb, wallMs: Math.max(cpuMs * 3, cpuMs + 3000) };
+}
+/** Raw job-object numbers → what the solution itself used, in reference-PC terms. */
+export function effectiveUsage(u: { cpuMs: number; peakKb: number }, lang: Lang, cal?: Calibration) {
+  const base = cal?.base[lang];
+  return { cpuMs: Math.max(0, Math.round((u.cpuMs - (base?.cpuMs ?? 0)) / (cal?.speed ?? 1))), peakKb: Math.max(0, u.peakKb - (base?.peakKb ?? 0)) };
 }
 export const DEFAULT_MEMORY_MB = 256;
 
 export type CompareHow = { mode?: "exact" | "approx"; eps?: number };
 const clipText = (text: string, n = 4000) => text.length > n ? `${text.slice(0, n)}\n… (${text.length - n}자 더)` : text;
 
-export async function judge(lang: Lang, code: string, tests: TestCase[], options: { timeLimitMs?: number; memoryLimitMb?: number; stopAtFirstFail?: boolean; compare?: CompareHow } = {}): Promise<Judgement> {
+export async function judge(lang: Lang, code: string, tests: TestCase[], options: { timeLimitMs?: number; memoryLimitMb?: number; stopAtFirstFail?: boolean; compare?: CompareHow; calibration?: Calibration } = {}): Promise<Judgement> {
   const started = Date.now();
   const prepared = await prepare(lang, code);
   try {
     if (!prepared.ok) return { verdict: prepared.kind === "missing" ? "MISSING" : "CE", passed: 0, total: tests.length, results: [], compile: clipText(prepared.error, 8000), ms: Date.now() - started };
     const results: TestResult[] = [];
     const limit = options.timeLimitMs ?? 2000, memory = options.memoryLimitMb ?? DEFAULT_MEMORY_MB;
-    const hard = limitsFor(limit, memory);
+    const hard = limitsFor(limit, memory, lang, options.calibration);
     let measured = true;
     for (const [index, test] of tests.entries()) {
       const out = await execute(prepared.cmd, prepared.args, { cwd: prepared.dir, input: test.input, timeMs: hard.wallMs, limits: { cpuMs: hard.cpuMs, memMb: hard.memMb }, ...(prepared.env ? { env: prepared.env } : {}) });
-      const u = out.usage;
+      const u = out.usage ? { ...out.usage, ...effectiveUsage(out.usage, lang, options.calibration) } : undefined;
       if (!u) measured = false;
       // Without measurements (not Windows) the wall clock is all there is, held to the time limit itself.
-      const slow = u ? u.hit === "cpu" || out.timedOut : out.timedOut || out.ms > limit;
-      const memoryOut = Boolean(u && (u.hit === "mem" || (out.code !== 0 && u.peakKb >= hard.memMb * 1024 * 0.97)));
+      const slow = u ? u.hit === "cpu" || out.timedOut || u.cpuMs > limit + Math.max(300, Math.round(limit * 0.3)) : out.timedOut || out.ms > limit;
+      const memoryOut = Boolean(u && (u.hit === "mem" || (out.code !== 0 && out.usage!.peakKb >= hard.memMb * 1024 * 0.97)));
       const ran = !out.failedToStart && !slow && !memoryOut && !out.tooMuch && out.code === 0;
       const same = ran ? compareOutput(out.stdout, test.output, options.compare) : null;
       const verdict: Verdict = out.failedToStart ? "RE" : slow ? "TLE" : memoryOut ? "MLE" : !ran ? "RE" : same!.ok ? "AC" : "WA";

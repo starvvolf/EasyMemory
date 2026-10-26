@@ -49,6 +49,7 @@ export default function CodeStudy({ openId }: { openId?: string }) {
         <div><h2>코드 문제</h2><p className="small muted">직접 짜서 실행하고 채점해요. 결과는 그 문제의 지식 기록에 남아요.</p></div>
         {langs.some((l) => !l.ready) ? <div className="row small">{langs.filter((l) => !l.ready).map((l) => <span key={l.lang} className="chip help" title={l.help}>{l.label} 설치 안 됨</span>)}</div> : null}
       </header>
+      <Calibrated />
       {error ? <p className="ws-err">{error}</p> : null}
       <MakeProblem langs={langs} onMade={(id) => { void load(); setCurrent(id); }} />
       <Bakingdog onFilled={() => void load()} onOpen={setCurrent} />
@@ -129,6 +130,29 @@ function Bakingdog({ onFilled, onOpen }: { onFilled: () => void; onOpen: (id: st
       })}
       {error ? <p className="ws-err">{error}</p> : null}
     </section>
+  );
+}
+
+type Cal = { speed: number; at: string; via: string; base: Partial<Record<Lang, { cpuMs: number; peakKb: number }>>; ratios: Record<string, number> };
+const LANG_SHORT: Record<Lang, string> = { python: "Python", javascript: "JS", cpp: "C++", csharp: "C#" };
+/** 채점 보정: this PC's speed against the reference PC and each language's empty-program cost, taken off every run. */
+function Calibrated() {
+  const [cal, setCal] = useState<Cal | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const get = useCallback(async (again: boolean) => {
+    setBusy(true);
+    try { setCal((await call<{ calibration: Cal | null }>("/api/code/calibration", again ? {} : undefined)).calibration); } catch { setCal(null); } finally { setBusy(false); }
+  }, []);
+  useEffect(() => later(() => void get(false)), [get]);
+  if (cal === null && !busy) return null; // this PC can't measure (not Windows): judged by the wall clock
+  const speed = cal ? (cal.speed >= 1 ? `기준 PC보다 ${cal.speed.toFixed(2)}배 느림` : `기준 PC보다 ${(1 / cal.speed).toFixed(2)}배 빠름`) : "";
+  return (
+    <details className="small muted">
+      <summary>{busy || !cal ? "채점 보정: 이 PC를 재는 중… (처음 한 번, 10~20초)" : `채점 보정: ${Math.abs(cal.speed - 1) < 0.05 ? "기준 PC와 같은 속도" : speed}`}</summary>
+      {cal ? <p>시간은 이 PC 속도로 나눠 기준 PC 기준으로 재고, 언어마다 빈 프로그램이 쓰는 양을 빼요: {(Object.keys(LANG_SHORT) as Lang[]).filter((l) => cal.base[l]).map((l) => `${LANG_SHORT[l]} ${(cal.base[l]!.peakKb / 1024).toFixed(1)}MB·${cal.base[l]!.cpuMs}ms`).join(", ")}.
+        {" "}벤치마크({cal.via === "cpp" ? "C++" : "JS"}) 계산 {cal.ratios.arith?.toFixed(2)} · 메모리 읽기 {cal.ratios.memory?.toFixed(2)} · 정렬 {cal.ratios.sort?.toFixed(2)}배. {new Date(cal.at).toLocaleDateString("ko-KR")}에 잼.
+        {" "}<button className="btn ghost small" disabled={busy} onClick={() => void get(true)}>{busy ? "재는 중…" : "다시 재기"}</button></p> : null}
+    </details>
   );
 }
 
