@@ -27,9 +27,33 @@ function TeX({ tex }: { tex: string }) {
  * become $…$. Longer words with "_" (lower_bound, snake_case) stay text; so do $ amounts ("$5 and $10").
  */
 const BARE = /(?<![\w$\\])([A-Za-z]{1,2}(?:_\{[^{}\s]{1,16}\}|_[A-Za-z0-9]{1,4})(?:\^\{[^{}]{1,8}\}|\^[A-Za-z0-9])?|[A-Za-z]\^\{[^{}]{1,8}\})(?![\w{])/g;
-const isTex = (inner: string) => /[\\_^{}]/.test(inner) || /^[A-Za-z]$/.test(inner);
+const isTex = (inner: string) => /[\\_^{}=|]/.test(inner) || /^[A-Za-z]$/.test(inner);
+/*
+ * Formulas written with plain signs (n = N/|N|, u = (V × n)/|V × n|, P_0=(x_0,y_0,z_0)): a run of one- or two-letter
+ * names, digits and signs that holds = or × becomes one $…$, cut where its brackets close.
+ */
+const TOK = String.raw`(?:[A-Za-z0-9]{1,2}(?![A-Za-z0-9])(?:_\{[^{}\s]{1,12}\}|_[A-Za-z0-9]{1,4}(?![A-Za-z0-9]))?|[()|/×·=+\-−,])`;
+const RUN = new RegExp(String.raw`(?<![A-Za-z0-9_\\$])${TOK}(?:[ ]?${TOK})*`, "g");
+const toTex = (s: string) => s.replace(/×/g, " \\times ").replace(/·/g, " \\cdot ").replace(/−/g, "-").replace(/_([A-Za-z0-9]{2,4})(?![A-Za-z0-9])/g, "_{$1}").replace(/\s+/g, " ").trim();
+function equations(text: string) {
+  return text.replace(RUN, (m) => {
+    const lead = m.match(/^(?:\d+\)|[\s,)])*/)?.[0] ?? "";
+    const rest = m.slice(lead.length);
+    let depth = 0, end = 0;
+    for (let i = 0; i < rest.length; i++) {
+      const c = rest[i];
+      if (c === "(") depth++; else if (c === ")") { if (!depth) break; depth--; }
+      if (!depth && /[A-Za-z0-9)|]/.test(c)) end = i + 1;
+    }
+    const core = rest.slice(0, end);
+    if (!/[=×]/.test(core) || core.replace(/\s/g, "").length < 4 || !/^[A-Za-z(|]/.test(core)) return m;
+    return `${lead}$${toTex(core)}$${rest.slice(end)}`;
+  });
+}
+const outsideMath = (text: string, change: (plain: string) => string) =>
+  text.split(/(\$[^$\n]+\$)/g).map((seg) => seg.length > 2 && seg.startsWith("$") && seg.endsWith("$") ? seg : change(seg)).join("");
 export function mathify(text: string) {
-  return text.split(/(\$[^$\n]+\$)/g).map((seg) => seg.length > 2 && seg.startsWith("$") && seg.endsWith("$") ? seg : seg.replace(BARE, (m) => `$${m.replace(/_([A-Za-z0-9]{2,4})(?=\^|$)/, "_{$1}")}$`)).join("");
+  return outsideMath(outsideMath(text, equations), (plain) => plain.replace(BARE, (m) => `$${m.replace(/_([A-Za-z0-9]{2,4})(?=\^|$)/, "_{$1}")}$`));
 }
 function bold(text: string, key: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => part.startsWith("**") && part.endsWith("**") && part.length > 4 ? <b key={`${key}${i}`}>{part.slice(2, -2)}</b> : <Fragment key={`${key}${i}`}>{part}</Fragment>);
