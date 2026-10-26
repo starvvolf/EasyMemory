@@ -1,0 +1,80 @@
+{
+  "checked_on": "2026-09-11",
+  "period": [
+    "2025-09-01",
+    "2026-08-31"
+  ],
+  "terms": [
+    "Quizlet",
+    "NotebookLM",
+    "Wooclap",
+    "Knowt",
+    "Kahoot"
+  ],
+  "type": "search term",
+  "category": "all",
+  "search": "web",
+  "measure": "chart Average, separately normalized per country",
+  "rows": [
+    {
+      "geo": "US",
+      "country": "미국",
+      "values": [
+        40,
+        4,
+        0,
+        1,
+        57
+      ],
+      "url": "https://trends.google.com/trends/explore?date=2025-09-01%202026-08-31&geo=US&q=Quizlet,NotebookLM,Wooclap,Knowt,Kahoot&hl=en"
+    },
+    {
+      "geo": "KR",
+      "country": "한국",
+      "values": [
+        14,
+        57,
+        0,
+        0,
+        13
+      ],
+      "url": "https://trends.google.com/trends/explore?date=2025-09-01%202026-08-31&geo=KR&q=Quizlet,NotebookLM,Wooclap,Knowt,Kahoot&hl=en"
+    },
+    {
+      "geo": "GB",
+      "country": "영국",
+      "values": [
+        9,
+        4,
+        0,
+        0,
+        25
+      ],
+      "url": "https://trends.google.com/trends/explore?date=2025-09-01%202026-08-31&geo=GB&q=Quizlet,NotebookLM,Wooclap,Knowt,Kahoot&hl=en"
+    },
+    {
+      "geo": "DE",
+      "country": "독일",
+      "values": [
+        2,
+        7,
+        0,
+        0,
+        25
+      ],
+      "url": "https://trends.google.com/trends/explore?date=2025-09-01%202026-08-31&geo=DE&q=Quizlet,NotebookLM,Wooclap,Knowt,Kahoot&hl=en"
+    },
+    {
+      "geo": "FR",
+      "country": "프랑스",
+      "values": [
+        4,
+        9,
+        6,
+        0,
+        35
+      ],
+      "url": "https://trends.google.com/trends/explore?date=2025-09-01%202026-08-31&geo=FR&q=Quizlet,NotebookLM,Wooclap,Knowt,Kahoot&hl=en"
+    }
+  ]
+}

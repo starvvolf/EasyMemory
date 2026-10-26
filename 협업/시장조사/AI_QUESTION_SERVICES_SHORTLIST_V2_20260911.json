@@ -1,0 +1,902 @@
+{
+  "version": 2,
+  "checked_on": "2026-09-11",
+  "counts": {
+    "규모 근거 우선 검증": 9,
+    "규모 우열 미정": 14,
+    "별도 비교 역할 유지": 13,
+    "범위 후순위": 14,
+    "핵심 경로 확인 보류": 9,
+    "코드 구조 참고": 3,
+    "현재 생성 비교 제외": 3
+  },
+  "decisions": [
+    {
+      "id": "01",
+      "name": "Quizlet",
+      "previous_status": "생성 비교",
+      "status": "규모 근거 우선 검증",
+      "reason": "공개된 이용 규모 근거가 있으므로 기능 중복만으로 대기시키지 않고 우선 검증.",
+      "scale_evidence": {
+        "display": "6,000만+",
+        "unit": "월간 활성 사용자",
+        "limitation": "공식 광고 자료; 수치 기준 연도 미기재, 주변 자료는 2022년. 2026년 새 측정치로 단정하지 않음.",
+        "source": "https://quizlet.com/ads/media-kit"
+      },
+      "function_sources": [
+        "https://quizlet.com/features/ai-flashcard-generator",
+        "https://quizlet.com/mission"
+      ],
+      "restored": false
+    },
+    {
+      "id": "02",
+      "name": "StudySmarter",
+      "previous_status": "대기 후보",
+      "status": "규모 근거 우선 검증",
+      "reason": "공개된 이용 규모 근거가 있으므로 기능 중복만으로 대기시키지 않고 우선 검증.",
+      "scale_evidence": {
+        "display": "4,000만+",
+        "unit": "학습자",
+        "limitation": "공식 홈페이지 현재 표시; 활성 기간·집계 범위 미기재.",
+        "source": "https://www.studysmarter.co.uk/"
+      },
+      "function_sources": [
+        "https://www.studysmarter.co.uk/"
+      ],
+      "restored": true
+    },
+    {
+      "id": "03",
+      "name": "Gizmo",
+      "previous_status": "대기 후보",
+      "status": "규모 근거 우선 검증",
+      "reason": "공개된 이용 규모 근거가 있으므로 기능 중복만으로 대기시키지 않고 우선 검증.",
+      "scale_evidence": {
+        "display": "1,300만+",
+        "unit": "사용자/학습자",
+        "limitation": "2026-04-15 운영사 보도자료; 월간 활성 수 아님.",
+        "source": "https://www.prnewswire.com/news-releases/gizmo-raises-22-million-series-a-to-make-learning-addictive-for-13-million-learners-worldwide-302741943.html"
+      },
+      "function_sources": [
+        "https://gizmo.ai/"
+      ],
+      "restored": true
+    },
+    {
+      "id": "04",
+      "name": "Turbo AI (구 TurboLearn)",
+      "previous_status": "대기 후보",
+      "status": "규모 근거 우선 검증",
+      "reason": "공개된 이용 규모 근거가 있으므로 기능 중복만으로 대기시키지 않고 우선 검증.",
+      "scale_evidence": {
+        "display": "1,000만+",
+        "unit": "학습자",
+        "limitation": "공식 홈페이지 현재 표시; 활성 기간 미기재.",
+        "source": "https://www.turbo.ai/"
+      },
+      "function_sources": [
+        "https://www.turbo.ai/"
+      ],
+      "restored": true
+    },
+    {
+      "id": "05",
+      "name": "StudyFetch",
+      "previous_status": "생성 비교",
+      "status": "규모 근거 우선 검증",
+      "reason": "공개된 이용 규모 근거가 있으므로 기능 중복만으로 대기시키지 않고 우선 검증.",
+      "scale_evidence": {
+        "display": "800만+",
+        "unit": "사용자",
+        "limitation": "공식 홈페이지 현재 표시; 활성 기간 미기재.",
+        "source": "https://www.studyfetch.com/"
+      },
+      "function_sources": [
+        "https://www.studyfetch.com/practice-test-maker",
+        "https://www.studyfetch.com/features/flashcards",
+        "https://studyfetch.mintlify.dev/docs/tutorial-doc-format/creatingstudysets"
+      ],
+      "restored": false
+    },
+    {
+      "id": "06",
+      "name": "Knowt",
+      "previous_status": "생성 비교",
+      "status": "규모 근거 우선 검증",
+      "reason": "공개된 이용 규모 근거가 있으므로 기능 중복만으로 대기시키지 않고 우선 검증.",
+      "scale_evidence": {
+        "display": "약 830만",
+        "unit": "사용자",
+        "limitation": "공식 페이지 추출 8,326,480; 다른 페이지 8,309,435 및 FAQ 500만 병존. 표시값이며 정밀 실시간 사용자 수로 인증하지 않음.",
+        "source": "https://knowt.com/"
+      },
+      "function_sources": [
+        "https://knowt.com/flashcards",
+        "https://knowt.com/plans"
+      ],
+      "restored": false
+    },
+    {
+      "id": "07",
+      "name": "Quizgecko",
+      "previous_status": "대기 후보",
+      "status": "규모 근거 우선 검증",
+      "reason": "공개된 이용 규모 근거가 있으므로 기능 중복만으로 대기시키지 않고 우선 검증.",
+      "scale_evidence": {
+        "display": "200만+",
+        "unit": "학생",
+        "limitation": "공식 플랜 페이지 현재 표시; 활성 기간 미기재.",
+        "source": "https://quizgecko.com/plans"
+      },
+      "function_sources": [
+        "https://quizgecko.com/pdf-to-quiz",
+        "https://quizgecko.com/use-cases",
+        "https://quizgecko.com/plans"
+      ],
+      "restored": true
+    },
+    {
+      "id": "08",
+      "name": "Jungle",
+      "previous_status": "대기 후보",
+      "status": "규모 근거 우선 검증",
+      "reason": "공개된 이용 규모 근거가 있으므로 기능 중복만으로 대기시키지 않고 우선 검증.",
+      "scale_evidence": {
+        "display": "100만+",
+        "unit": "학생",
+        "limitation": "공식 모바일 페이지 현재 표시; 활성 기간 미기재.",
+        "source": "https://jungleai.com/mobile"
+      },
+      "function_sources": [
+        "https://jungleai.com/mobile",
+        "https://play.google.com/store/apps/details?id=com.app.jungleai"
+      ],
+      "restored": true
+    },
+    {
+      "id": "09",
+      "name": "Raena AI",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "과거 100만 이정표는 있으나 현재 동기간 지표 미확보. 선정 제품보다 작다고 확정하지 않고 짧은 생성 검증 후보로 유지.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://helpcenter.raena.ai/articles/4277621-how-does-the-ai-quiz-generator-work",
+        "https://raena.ai/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "10",
+      "name": "NotebookLM",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "자료 기반 Studio 퀴즈·카드; 기존 실생성 기록과 대중 인지도",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://blog.google/innovation-and-ai/models-and-research/google-labs/notebooklm-app-quizzes-flashcards/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "11",
+      "name": "RemNote",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "PDF 읽기·노트·카드·반복학습의 연결 비교",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://help.remnote.com/en/articles/10102901-generating-flashcards-with-ai",
+        "https://help.remnote.com/en/articles/6690975-learning-from-pdfs-and-files-with-the-remnote-reader",
+        "https://help.remnote.com/en/articles/15724936-guided-learn-mode"
+      ],
+      "restored": false
+    },
+    {
+      "id": "12",
+      "name": "Brainscape",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "2023년 1,000만 사용자 자료는 현재 활성 규모가 아님. 최신 수치/직접 자료 생성 경로를 확인하기 전 규모 탈락 철회.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.brainscape.com/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "13",
+      "name": "Mindgrasp",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "비교 가능한 활성/누적 사용자 수 미확보. 기능 중복만으로 탈락시키지 않음.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.mindgrasp.ai/quiz-maker",
+        "https://www.mindgrasp.ai/ai-study-tools"
+      ],
+      "restored": false
+    },
+    {
+      "id": "14",
+      "name": "Revisely",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "생성 문제 수는 사람 수가 아님. 규모 우열 미정; 생성 검증 후보.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.revisely.com/quiz-generator",
+        "https://www.revisely.com/flashcard-generator"
+      ],
+      "restored": false
+    },
+    {
+      "id": "15",
+      "name": "Study-Genie (study-genie.ai)",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "검색 지수 0과 사용자 수 부재를 규모 열세로 취급하지 않음.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.study-genie.ai/en/quiz-generator"
+      ],
+      "restored": false
+    },
+    {
+      "id": "16",
+      "name": "QuizWhiz",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "공식 시나리오/학습 추적 안내가 있어 후보 유지. 규모·실제 생성 기능의 짧은 검증 필요.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.quizwhiz.ai/",
+        "https://www.quizwhiz.ai/help/create-a-quiz/",
+        "https://www.quizwhiz.ai/about/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "17",
+      "name": "NODI (노디)",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "원문 근거·오답 개념 변형·숙달 확인을 명시한 국내 직접 비교 후보",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://nodilearn.com/",
+        "https://nodilearn.com/guides/pdf-evidence-questions"
+      ],
+      "restored": false
+    },
+    {
+      "id": "18",
+      "name": "Kahoot!",
+      "previous_status": "대기 후보",
+      "status": "규모 근거 우선 검증",
+      "reason": "공개된 이용 규모 근거가 있으므로 기능 중복만으로 대기시키지 않고 우선 검증.",
+      "scale_evidence": {
+        "display": "1,000만+",
+        "unit": "연간 이용 교육자",
+        "limitation": "공식 회사 소개는 annually로 명시. 학생/전체 사용자 수와 비교 금지.",
+        "source": "https://kahoot.com/company/"
+      },
+      "function_sources": [
+        "https://kahoot.com/ai-tools/",
+        "https://support.kahoot.com/hc/en-us/articles/40803785990675-How-to-generate-a-kahoot-with-AI"
+      ],
+      "restored": true
+    },
+    {
+      "id": "19",
+      "name": "MagicSchool",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "교사 업무 전반이라는 범위 차이로 후순위. 기존 교육자 규모 자료가 있어도 개인 자료 출제 이용량을 뜻하지 않음. 사용자 수가 작아서 뺀 것이 아님.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.magicschool.ai/",
+        "https://www.magicschool.ai/pricing",
+        "https://www.magicschool.ai/faq"
+      ],
+      "restored": false
+    },
+    {
+      "id": "20",
+      "name": "Wayground (구 Quizizz)",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "자료 출제→편집→풀이·재시도·리포트 연결 비교",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://help.wayground.com/support/solutions/articles/158000405091-wayground-ai-generate-assessments-from-prompts-documents-videos-more",
+        "https://help.wayground.com/support/solutions/articles/158000404930-navigate-session-settings"
+      ],
+      "restored": false
+    },
+    {
+      "id": "21",
+      "name": "Formative",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "실시간 채점/Practice Sets가 있으므로 단순히 Wayground보다 낮게 두지 않음. 같은 기간 규모 또는 실험으로 결정.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://help.formative.com/en/articles/7054157-use-ai-to-generate-questions",
+        "https://www.formative.com/c/build-it-once",
+        "https://help.formative.com/en/articles/8125921-create-student-practice-sets"
+      ],
+      "restored": false
+    },
+    {
+      "id": "22",
+      "name": "QuestionWell",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "학습목표 기반 출제·문항 선택·외부 내보내기 비교",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://questionwell.org/product",
+        "https://questionwell.org/upload",
+        "https://questionwell.org/export-options",
+        "https://questionwell.org/faqs"
+      ],
+      "restored": false
+    },
+    {
+      "id": "23",
+      "name": "Edcafe",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "학생 응답/피드백 기능 있음. 비교 가능한 이용 규모 미확보; 탈락 미확정.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.edcafe.ai/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "24",
+      "name": "Conker",
+      "previous_status": "확인 보류",
+      "status": "핵심 경로 확인 보류",
+      "reason": "이번 자료 기반 비교의 핵심인 직접 PDF 입력·최신 이용 경로 확인이 부족.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.conker.ai/",
+        "https://www.conker.ai/quiz-maker"
+      ],
+      "restored": false
+    },
+    {
+      "id": "25",
+      "name": "Diffit",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "읽기자료 재작성·수업 활동지 쪽을 별도 검토할 때 재편입. 규모 탈락 아님.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://web.diffit.me/home",
+        "https://web.diffit.me/diffit-and-literacy"
+      ],
+      "restored": false
+    },
+    {
+      "id": "26",
+      "name": "Wooclap",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "실시간 참여·그림 라벨 평가 회차로 분리. Google 관심도는 크지만 개인 자료 출제 사용자 수로 환산하지 않음.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://docs.wooclap.com/en/articles/8774298-question-builder",
+        "https://www.wooclap.com/en/ai-artificial-intelligence-future/",
+        "https://www.wooclap.com/en/features/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "27",
+      "name": "Quizalize",
+      "previous_status": "확인 보류",
+      "status": "핵심 경로 확인 보류",
+      "reason": "학급 게임·mastery가 Wayground와 겹치며 자료 입력 범위 확인 부족.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.quizalize.com/",
+        "https://resources.quizalize.com/view/quiz/complex-question-types-sample-375fd94b-fe3e-42ab-9f36-1fcbfee840fa"
+      ],
+      "restored": false
+    },
+    {
+      "id": "28",
+      "name": "ClassPoint AI",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "PowerPoint 확장 경로이므로 이번 웹 직접 생성 회차와 분리. 낮은 규모를 이유로 한 제외 아님.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.classpoint.io/ai-quiz-generator",
+        "https://www.classpoint.io/blog/qa-in-powerpoint",
+        "https://www.classpoint.io/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "29",
+      "name": "Questgen",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "순서·짝맞추기 등 다양한 문항 형식의 생성 범위 비교",
+      "scale_evidence": {
+        "display": "15만+",
+        "unit": "사용자",
+        "limitation": "공식 홈페이지 현재 표시; 활성 기간 미기재. Quizgecko와 숫자만으로 동등 조건 비교하지 않음.",
+        "source": "https://www.questgen.ai/"
+      },
+      "function_sources": [
+        "https://www.questgen.ai/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "30",
+      "name": "Quillionz",
+      "previous_status": "확인 보류",
+      "status": "핵심 경로 확인 보류",
+      "reason": "기존 조사상 영어 중심·현재 제공 조건 미확정. 영어 자료 전용 비교 때 재검토.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://quillionz.com/",
+        "https://gptapp.quillionz.com/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "31",
+      "name": "PrepAI",
+      "previous_status": "확인 보류",
+      "status": "핵심 경로 확인 보류",
+      "reason": "접속 문제로 현재 입력·결과 확인 경로를 확보하지 못함. 품질 탈락 아님.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.prepai.io/blog/getting-started-with-prepai-a-beginners-guide/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "32",
+      "name": "OpExams",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "1,000만 생성 문제는 사용자 수가 아님. Questgen보다 작다는 근거 없음; 생성 검증 후보.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://opexams.com/ai-quiz-generator/",
+        "https://opexams.com/quizzes/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "33",
+      "name": "Quizbot.ai",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "Quizgecko/Questgen보다 규모가 작다는 자료 없음. 계산·다유형 생성 짧은 검증 후보.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://quizbot.ai/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "34",
+      "name": "QuizRise",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "규모 우열 미정. 무료 입력/풀이 경로 확인 후 같은 역할 후보와 비교.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.quizrise.com/",
+        "https://www.quizrise.com/ai-question-generator"
+      ],
+      "restored": false
+    },
+    {
+      "id": "35",
+      "name": "Smallpdf",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "PDF 편집 도구 전체 브랜드 규모를 AI 출제 이용 규모로 쓰지 않음. 간단 PDF 질문 생성 기준이 필요할 때 추가.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://smallpdf.com/question-generator"
+      ],
+      "restored": false
+    },
+    {
+      "id": "36",
+      "name": "Jotform AI Quiz Generator",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "폼·응답 수집 중심의 별도 사용 장면. 플랫폼 전체 사용자를 AI 학습 출제 사용자로 비교하지 않음.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.jotform.com/ai/quiz-generator/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "37",
+      "name": "Eduaide",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "수업 설계 전반 참고 회차로 분리. QuestionWell보다 작다고 판정한 것은 아님.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.eduaide.ai/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "38",
+      "name": "문제G",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "국어 중심 지문·문항·시험지 제작 비교",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.moonjeg.com/",
+        "https://www.moonjeg.com/sign-up",
+        "https://www.difinition.co.kr/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "39",
+      "name": "PlanA AI",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "영어 내신·수능 변형문제 비교; 파일 변환과 문제 생성을 분리",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://plana-ai.com/",
+        "https://plana-ai.com/guides/tools",
+        "https://plana-ai.com/updates",
+        "https://plana-ai.com/blog/content-creation-quality-update"
+      ],
+      "restored": false
+    },
+    {
+      "id": "40",
+      "name": "문항공방",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "한국 시험 문항 생성과 오답·정답 검토 기능 비교",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://munhang.co.kr/english",
+        "https://munhang.co.kr/guide",
+        "https://munhang.co.kr/pricing"
+      ],
+      "restored": false
+    },
+    {
+      "id": "41",
+      "name": "페듀",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "영어 지문 출제→학생 응답→채점·복습 연결 비교",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.pedu.co.kr/",
+        "https://www.pedu.co.kr/faq"
+      ],
+      "restored": false
+    },
+    {
+      "id": "42",
+      "name": "똑스 (DOKDOK)",
+      "previous_status": "확인 보류",
+      "status": "핵심 경로 확인 보류",
+      "reason": "교사 첨부자료→출제·기록 연결 및 QGen/Pullim과의 경계를 추가 확인해야 함.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.dokdok.co/teacher",
+        "https://www.dokdok.co/student",
+        "https://www.dokdok.co/ai-tools/ai-quiz-multiple",
+        "https://www.dokdok.co/ai-tools/ai-essay-feedback"
+      ],
+      "restored": false
+    },
+    {
+      "id": "43",
+      "name": "OpenTutor (zijinz456)",
+      "previous_status": "코드 참고",
+      "status": "코드 구조 참고",
+      "reason": "내용 트리·다양한 문항·검사/수정·FSRS 구조",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://github.com/zijinz456/OpenTutor",
+        "https://github.com/zijinz456/OpenTutor/blob/377286db8182806407faa76bb62f64fc0aa7f14c/apps/api/services/parser/quiz.py",
+        "https://github.com/zijinz456/OpenTutor/blob/377286db8182806407faa76bb62f64fc0aa7f14c/apps/api/services/spaced_repetition/fsrs.py"
+      ],
+      "restored": false
+    },
+    {
+      "id": "44",
+      "name": "Studium (EmaadAkhter)",
+      "previous_status": "코드 참고",
+      "status": "코드 구조 참고",
+      "reason": "생성 후 critic·필터·중복 제거 구조와 검증 누락 사례",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://github.com/EmaadAkhter/Studium",
+        "https://github.com/EmaadAkhter/Studium/blob/main/services/ingestion/app/services/quiz_generator.py"
+      ],
+      "restored": false
+    },
+    {
+      "id": "45",
+      "name": "Quizzer (suncloudsmoon)",
+      "previous_status": "코드 참고",
+      "status": "코드 구조 참고",
+      "reason": "페이지 분석·다양한 인출 유형·학습 상태 반영 구조",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://github.com/suncloudsmoon/quizzer",
+        "https://github.com/suncloudsmoon/quizzer/blob/main/src/quizzer/learner_state.py",
+        "https://github.com/suncloudsmoon/quizzer/blob/main/src/quizzer/quiz_creator.py"
+      ],
+      "restored": false
+    },
+    {
+      "id": "46",
+      "name": "Exameow",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "생성 코드가 아니라 문제은행·모의시험 UX 비교에서 우선 재검토. 사용자/별점 규모로 코드 우열을 매기지 않음.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://github.com/heshengtao/exameow",
+        "https://github.com/heshengtao/exameow/releases"
+      ],
+      "restored": false
+    },
+    {
+      "id": "47",
+      "name": "MK-QuizFlow",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "경량 구현·규칙/AI 혼합 흐름을 참고할 때 재검토. 이용 규모 미확인.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://github.com/mk-knight23/MK-QuizFlow",
+        "https://github.com/mk-knight23/MK-QuizFlow/blob/b56763bb33fad1dfffb94bbf2e38dee5a8573fdc/public/llms.txt"
+      ],
+      "restored": false
+    },
+    {
+      "id": "48",
+      "name": "Slay School",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "Studley보다 작거나 열등하다는 근거 없음. 카드·피드백·내보내기 역할의 대체 후보 유지.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.slayschool.com/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "49",
+      "name": "Shiken",
+      "previous_status": "확인 보류",
+      "status": "핵심 경로 확인 보류",
+      "reason": "현재 자료 입력과 AI 생성 유형의 공식 근거가 충분하지 않음.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://shiken.ai/how-to-learn/best-ai-quiz-generator-effortlessly-create-custom-quizzes-online",
+        "https://app.shiken.ai/store?page=6"
+      ],
+      "restored": false
+    },
+    {
+      "id": "50",
+      "name": "Penseum",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "튜터·캔버스 상호작용 회차로 분리. 과거 160만 주장만으로 현재 사용자 규모를 확정하지 않음.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.penseum.com/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "51",
+      "name": "Coursebox",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "코스·LMS 운영 회차로 분리. 생성 코스 수와 사용자 수는 다름.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.coursebox.ai/ai-quiz-generator"
+      ],
+      "restored": false
+    },
+    {
+      "id": "52",
+      "name": "HyNote",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "과거 100만+ 전문가·학생 혼합 주장을 개인 학습 사용자와 직접 비교하지 않음. 미정으로 유지.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://hynote.ai/pdf-quiz"
+      ],
+      "restored": false
+    },
+    {
+      "id": "53",
+      "name": "Quiz-Maker",
+      "previous_status": "대기 후보",
+      "status": "규모 우열 미정",
+      "reason": "규모 미확정. 수학 검사 주장과 무료 제한을 실제 확인할 때 재선별.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.quiz-maker.com/AI-Quiz-Generator"
+      ],
+      "restored": false
+    },
+    {
+      "id": "54",
+      "name": "Reinforz",
+      "previous_status": "확인 보류",
+      "status": "핵심 경로 확인 보류",
+      "reason": "현재 서비스·유료 기능 운영 상태 확인이 부족.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.reinforz.ai/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "55",
+      "name": "easy-quiz.ai",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "실시간 다인 풀이·이미지 매칭 회차로 분리. 규모 열세로 판정한 것이 아님.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://easy-quiz.ai/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "56",
+      "name": "Scholarcy",
+      "previous_status": "이번 생성 비교 제외",
+      "status": "현재 생성 비교 제외",
+      "reason": "주로 구조화 요약 카드여서 이번 질문·정답 기반 문제 생성 비교 범위 밖.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.scholarcy.com/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "57",
+      "name": "Curea QGen / Pullim",
+      "previous_status": "확인 보류",
+      "status": "핵심 경로 확인 보류",
+      "reason": "B2B/API 문의와 출시/제공 상태 확인이 필요한 별도 경로. 직접 웹 실험군에서 보류.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://curea.co/",
+        "https://curea.co/news/doks-ai-learning-tools-launch"
+      ],
+      "restored": false
+    },
+    {
+      "id": "58",
+      "name": "ChatGPT",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "그냥 ChatGPT에 자료를 주고 부탁하는 방식과 비교",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://learn.chatgpt.com/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "59",
+      "name": "Gemini",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "사용자가 비교를 요청한 범용 AI이며 기존 생성 결과가 있음",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://support.google.com/gemini/answer/16275879?hl=en",
+        "https://support.google.com/gemini/answer/16972047?hl=en"
+      ],
+      "restored": false
+    },
+    {
+      "id": "60",
+      "name": "Claude",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "사용자가 지명하고 기존 자료가 있는 ChatGPT·Gemini로 범용 기준 실험을 시작. Claude 이용 규모 열세라는 의미 없음.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.anthropic.com/news/introducing-claude-for-education",
+        "https://support.anthropic.com/en/articles/11139144-faqs-on-using-the-claude-enterprise-plan-at-your-university"
+      ],
+      "restored": false
+    },
+    {
+      "id": "61",
+      "name": "Anki",
+      "previous_status": "이번 생성 비교 제외",
+      "status": "현재 생성 비교 제외",
+      "reason": "본체를 AI 자동 출제 제품으로 볼 수 없음. 복습 기능 비교 자료로는 보존.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://docs.ankiweb.net/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "62",
+      "name": "Monic.ai",
+      "previous_status": "이번 생성 비교 제외",
+      "status": "현재 생성 비교 제외",
+      "reason": "기존 조사에서 공식 종료 공지 확인. 현재 생성 테스트에서 제외.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://monic.ai/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "63",
+      "name": "YouLearn",
+      "previous_status": "확인 보류",
+      "status": "핵심 경로 확인 보류",
+      "reason": "현재 퀴즈/시험 생성 경로에 대한 근거가 부족.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.youlearn.ai/"
+      ],
+      "restored": false
+    },
+    {
+      "id": "64",
+      "name": "Algor Education",
+      "previous_status": "대기 후보",
+      "status": "범위 후순위",
+      "reason": "개념도·구조 시각화 회차로 분리. 퀴즈 생성 후보 기록은 유지하며 규모 미확인.",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.algoreducation.com/en"
+      ],
+      "restored": false
+    },
+    {
+      "id": "65",
+      "name": "Studley",
+      "previous_status": "생성 비교",
+      "status": "별도 비교 역할 유지",
+      "reason": "객관식·빈칸·서술시험과 답안 피드백 비교",
+      "scale_evidence": null,
+      "function_sources": [
+        "https://www.studley.ai/flashcard-maker",
+        "https://www.studley.ai/ai-test-maker"
+      ],
+      "restored": false
+    }
+  ]
+}
