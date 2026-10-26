@@ -13,13 +13,27 @@ const SUM = `${READ} let s = 0; for (let i = 1; i <= n; i++) s += t[i]; console.
 const SUM_PLUS_ONE = `${READ} let s = 1; for (let i = 1; i <= n; i++) s += t[i]; console.log(s);`;
 const SUM_MISSING_LAST = `${READ} let s = 0; for (let i = 1; i < n; i++) s += t[i]; console.log(s);`;
 const SUM_BRUTE = `${READ} console.log(t.slice(1, n + 1).reduce((a, b) => a + b, 0));`;
-const SMALL = Array.from({ length: 12 }, (_, k) => `${k % 4 + 1}\n${Array.from({ length: k % 4 + 1 }, (_, j) => j * 3 - k).join(" ")}\n`);
 const PASTED = "문제: N개의 수의 합을 구하라.\n입력: 첫 줄에 N, 둘째 줄에 수 N개\n출력: 합\n예제 입력 1\n3\n1 2 3\n예제 출력 1\n6";
+// 숨은 테스트 생성기 (testgen/harness.mjs): 1 ≤ N ≤ 1000, -100 ≤ A_i ≤ 100.
+const GENERATOR = `module.exports = {
+  tests: [ { kind: "min", size: "min", count: 1 }, { kind: "random", size: "mid", count: 3 }, { kind: "allMax", size: "max", count: 1 } ],
+  smallKinds: ["random", "same", "neg"],
+  gen(kind, size, rnd) {
+    const n = size === "min" ? 1 : size === "small" ? rnd.int(1, 5) : size === "mid" ? rnd.int(10, 200) : 1000;
+    const v = () => kind === "allMax" ? 100 : kind === "same" ? 7 : kind === "neg" ? rnd.int(-100, -1) : rnd.int(-100, 100);
+    return n + "\\n" + Array.from({ length: n }, v).join(" ") + "\\n";
+  },
+  check(input) {
+    const t = input.trim().split(/\\s+/).map(Number);
+    return t[0] >= 1 && t[0] <= 1000 && t.length === t[0] + 1 && t.slice(1).every((x) => Number.isInteger(x) && x >= -100 && x <= 100) || "제약 밖";
+  },
+};`;
 
 const draft = (over: Record<string, unknown>) => JSON.stringify({
   title: "수의 합", statement: "N개의 수의 합을 구한다.", inputText: "첫 줄에 N, 둘째 줄에 수 N개", outputText: "합", answerKind: "one",
-  sourceExamples: [], exampleInputs: ["2\n5 7\n"], testInputs: ["1\n4\n", "3\n-1 0 1\n", "5\n1 1 1 1 1\n", "2\n100 200\n"],
-  reference: SUM, brute: "", smallInputs: [], knowledge: ["누적 합"], folder: "알고리즘/합", blank: { code: "", filled: "" }, ...over,
+  constraints: "1 ≤ N ≤ 1000\n-100 ≤ A_i ≤ 100", timeLimitMs: 0,
+  sourceExamples: [], exampleInputs: ["2\n5 7\n"], generator: GENERATOR, reference: SUM, brute: SUM_BRUTE, mutants: [],
+  knowledge: ["누적 합"], folder: "알고리즘/합", blank: { code: "", filled: "" }, ...over,
 });
 
 /** A data folder and a fake model that answers code:make with the given replies in order; returns the requests it saw. */
@@ -47,9 +61,14 @@ test("a pasted problem's examples are the answer key: a reference that prints th
     assert.equal(seen.length, 1);
     const saved = await readProblem(made.id);
     assert.equal(saved.examplesFrom, "source");
-    assert.deepEqual(saved.check, { by: "source", cases: 1, tries: 1 });
+    assert.equal(saved.check?.by, "source");
+    assert.equal(saved.check?.cases, 1);
+    assert.equal(saved.check?.tries, 1);
     assert.deepEqual(saved.examples, [{ input: "3\n1 2 3", output: "6" }]);
-    assert.equal(saved.tests.length, 4);
+    assert.ok(saved.tests.length >= 5, `hidden tests from the generator: ${saved.tests.length}`);
+    assert.equal(saved.check?.maxTests, 1);
+    assert.ok(saved.tests.some((x) => x.output === "100000"), "the max test: 1000 × 100");
+    assert.equal(saved.testgen?.generator, GENERATOR);
   }));
 
 test("a reference that misses a source example is asked again with the reason, then refused and not saved", () => withFake(
@@ -67,14 +86,16 @@ test("a reference that misses a source example is asked again with the reason, t
   }));
 
 test("with no source examples the reference is cross-checked against a simple solution; a mismatch is retried", () => withFake(
-  [draft({ reference: SUM_MISSING_LAST, brute: SUM_BRUTE, smallInputs: SMALL }), draft({ brute: SUM_BRUTE, smallInputs: SMALL })],
+  [draft({ reference: SUM_MISSING_LAST }), draft({})],
   async (seen) => {
     const made = await makeProblem({ topic: "누적 합", kind: "full" });
     assert.equal(seen.length, 2);
     assert.match(seen[1].user, /작은 입력 \d+번 .*: 단순 풀이 -?\d+, 모범 풀이 -?\d+/);
     const saved = await readProblem(made.id);
     assert.equal(saved.examplesFrom, "made");
-    assert.deepEqual(saved.check, { by: "cross", cases: SMALL.length, tries: 2 });
+    assert.equal(saved.check?.by, "cross");
+    assert.ok((saved.check?.cases ?? 0) >= 30, `small inputs agreed: ${saved.check?.cases}`);
+    assert.equal(saved.check?.tries, 2);
     assert.deepEqual(saved.examples, [{ input: "2\n5 7\n", output: "12" }]);
   }));
 
@@ -93,7 +114,7 @@ test("a person's solution must print the same as the reference on every test; wh
     const made = await makeProblem({ lesson: PASTED, kind: "full", human, id: "cp_boj_9999", folder: "바킹독/0x00 시험" });
     assert.equal(seen.length, 1);
     const saved = await readProblem("cp_boj_9999");
-    assert.deepEqual(saved.check, { by: "source", cases: 1, tries: 1, human: "match" });
+    assert.equal(saved.check?.human, "match");
     assert.equal(saved.folder, "바킹독/0x00 시험");
     assert.equal(made.id, "cp_boj_9999");
     const wrongHuman = { lang: "javascript" as const, code: SUM_MISSING_LAST };
@@ -106,4 +127,24 @@ test("a problem with more than one right answer is refused at once (not yet grad
     await assert.rejects(makeProblem({ topic: "아무 해나 출력", kind: "full" }), /아직 채점할 수 없어서/);
     assert.equal(seen.length, 1);
     assert.equal(await savedCount(), 0);
+  }));
+
+test("faulty solutions are scored, not a gate: the problem is saved with how many of them the tests caught", () => withFake(
+  [draft({ mutants: [
+    { flaw: "경계값", code: SUM_MISSING_LAST },
+    { flaw: "초기화", code: SUM_PLUS_ONE },
+    { flaw: "사실은 맞는 풀이", code: SUM_BRUTE },
+  ] })],
+  async () => {
+    const made = await makeProblem({ topic: "누적 합", kind: "full" });
+    const saved = await readProblem(made.id);
+    assert.deepEqual(saved.check?.mutation, { killed: 2, total: 2, survived: [], added: 0 });
+  }));
+
+test("a generator that breaks its own constraints is sent back with the reason", () => withFake(
+  [draft({ generator: GENERATOR.replace('size === "max" ? 1000 : 1000', "").replace(": 1000;", ": 5000;") }), draft({})],
+  async (seen) => {
+    await makeProblem({ topic: "누적 합", kind: "full" });
+    assert.equal(seen.length, 2);
+    assert.match(seen[1].user, /검사기가 숨은 테스트\(allMax\/max\) 입력을 거부함/);
   }));

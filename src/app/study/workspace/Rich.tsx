@@ -59,13 +59,13 @@ function bold(text: string, key: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => part.startsWith("**") && part.endsWith("**") && part.length > 4 ? <b key={`${key}${i}`}>{part.slice(2, -2)}</b> : <Fragment key={`${key}${i}`}>{part}</Fragment>);
 }
 function withMath(text: string, key: string): ReactNode[] {
-  return mathify(text).split(/(\$[^$\n]+\$)/g).flatMap((seg, j) => seg.length > 2 && seg.startsWith("$") && seg.endsWith("$") && isTex(seg.slice(1, -1))
+  return mathify(text).split(/(\$[^$\n]+\$)/g).flatMap<ReactNode>((seg, j) => seg.length > 2 && seg.startsWith("$") && seg.endsWith("$") && isTex(seg.slice(1, -1))
     ? [<TeX key={`${key}m${j}`} tex={seg.slice(1, -1)} />] : bold(seg, `${key}t${j}.`));
 }
 
 /** Chat-style text as elements: paragraphs, - / 1. lists, **bold**, `code`, ``` code blocks, and formulas. */
 function inline(text: string): ReactNode[] {
-  return text.split(/(`[^`\n]+`)/g).flatMap((part, i) =>
+  return text.split(/(`[^`\n]+`)/g).flatMap<ReactNode>((part, i) =>
     part.startsWith("`") && part.endsWith("`") && part.length > 2 ? [<code key={`c${i}`}>{part.slice(1, -1)}</code>] : withMath(part, `p${i}.`));
 }
 /** One line of text (a title, a question, an option) with its formulas, no paragraphs. */

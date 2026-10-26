@@ -13,7 +13,9 @@ type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledg
 type TestCase = { input: string; output: string };
 type Problem = { id: string; title: string; statement: string; inputText: string; outputText: string; examples: TestCase[]; hiddenTests: number; kind: "full" | "blank"; knowledge: string[]; knowledgeIds: string[];
   folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number;
-  examplesFrom?: "source" | "made"; check?: { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped" } };
+  examplesFrom?: "source" | "made"; constraints?: string;
+  check?: { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped"; tests?: number; maxTests?: number; compared?: number;
+    mutation?: { killed: number; total: number; survived: string[]; added: number } } };
 type Result = { index: number; verdict: string; ms: number; input: string; expected: string; got: string; stderr: string };
 type Judged = { verdict: string; passed: number; total: number; shown: Result[]; compile: string; ms: number };
 type SubLite = { id: string; at: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; lines: number };
@@ -155,7 +157,7 @@ function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string
       <div className="row">
         <label className="row small"><input type="checkbox" checked={blank} onChange={(e) => setBlank(e.target.checked)} /> 빈칸 코드 문제로</label>
         {blank ? <select className="ws-select" value={lang} onChange={(e) => setLang(e.target.value as Lang)}>{langs.filter((l) => l.ready).map((l) => <option key={l.lang} value={l.lang}>{l.label}</option>)}</select> : null}
-        <button className="btn primary small" disabled={busy || !(topic.trim() || lesson.trim())} onClick={() => void make()}>{busy ? "만드는 중… (30초쯤)" : "만들기"}</button>
+        <button className="btn primary small" disabled={busy || !(topic.trim() || lesson.trim())} onClick={() => void make()}>{busy ? "만드는 중… (1~2분쯤: 모범 풀이와 숨은 테스트를 확인해요)" : "만들기"}</button>
         <button className="btn ghost small" onClick={() => setOpen(false)}>닫기</button>
       </div>
       {error ? <p className="ws-err">{error}</p> : null}
@@ -267,8 +269,10 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {problem.examples.map((ex, i) => (
           <div key={i} className="cs-example"><p className="eyebrow">예제 {i + 1}</p><div className="cs-io"><pre aria-label="예제 입력">{ex.input}</pre><pre aria-label="예제 출력">{ex.output}</pre></div></div>
         ))}
-        <p className="small muted">숨은 테스트 {problem.hiddenTests}개 · 시간 제한 {problem.timeLimitMs / 1000}초
-          {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}${problem.check.human === "match" ? " · 사람이 쓴 정답 코드와 일치" : ""}` : ""}</p>
+        {problem.constraints ? <p className="small muted">제약: {problem.constraints.split("\n").join(" · ")}</p> : null}
+        <p className="small muted">숨은 테스트 {problem.hiddenTests}개{problem.check?.maxTests ? ` (최대 크기 ${problem.check.maxTests}개)` : ""} · 시간 제한 {problem.timeLimitMs / 1000}초
+          {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}${problem.check.by === "source" && problem.check.compared ? `, 단순 풀이와 작은 입력 ${problem.check.compared}개 일치` : ""}${problem.check.human === "match" ? " · 사람이 쓴 정답 코드와 일치" : ""}` : ""}
+          {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}</p>
         <div className="row small"><span className="muted">확인하는 지식</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div>
         {subs.length ? <><p className="eyebrow">내 제출</p><ul className="cs-subs">{subs.filter((s) => s.mode === "submit").slice(0, 8).map((s) => <li key={s.id}><button className="linkish small" onClick={() => void openSubmission(s.id)}>
           <span className={`chip ${VERDICT[s.verdict]?.[1] ?? ""}`}>{VERDICT[s.verdict]?.[0] ?? s.verdict}</span> {s.lang} · {new Date(s.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{s.hints ? ` · 힌트 ${s.hints}` : ""}</button></li>)}</ul></> : null}

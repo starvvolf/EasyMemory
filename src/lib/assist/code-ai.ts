@@ -1,8 +1,9 @@
 // 코드 학습의 AI 부분: 힌트 3단계, 드래그한 코드 설명, "맞는지 봐 줘", 에러 설명, 반례 입력, 문제 만들기.
 // Whether code is right is never the model's call: that is the judge (src/lib/code). The model explains and hints.
 import { askJson, askText, S } from "./model.ts";
-import { LANG_LABEL, judge, normalizeOutput, type Lang, type TestCase } from "../code/run.ts";
-import { answerWithReference, CodeError, crossCheck, findCounterexample, matchSourceExamples, readProblem, saveProblem, type Problem, type ProblemCheck } from "../code/problems.ts";
+import { LANG_LABEL, judge, type Lang, type TestCase } from "../code/run.ts";
+import { CodeError, findCounterexample, readProblem, saveProblem, type Problem, type ProblemCheck } from "../code/problems.ts";
+import { runTestgen } from "../code/testgen/index.ts";
 import { memoryEvents, searchKnowledge } from "../knowledge/store.ts";
 import { currentAttempt } from "../code/service.ts";
 
@@ -76,32 +77,53 @@ export async function counterexample(input: { problemId: string; lang: Lang; cod
 }
 
 /* ---------- 문제 만들기 ---------- */
-// docs/DECISIONS.md 2026-10-26 "코드 문제 받아오기": every input (topic, lesson, a pasted problem) ends as the same problem
-// shape and goes through the same check. A pasted problem's examples are the answer key; without them the reference is
-// cross-checked against a simple solution. A draft that fails is asked again with the reason, twice at most, then refused.
+// docs/DECISIONS.md 2026-10-26 "코드 문제 받아오기" · "로컬 채점": every input (topic, lesson, a pasted problem) ends as the
+// same problem shape and goes through the same check. The model does not write test inputs: it writes a generator and a
+// checker (JavaScript), and testgen/harness.mjs makes the hidden tests — min, max, worst-case shapes, random — in one
+// process. A pasted problem's examples are the answer key; without them the reference must agree with a simple solution
+// on hundreds of small inputs. Faulty solutions measure how strong the tests are (a score, not a gate). A draft that fails
+// is asked again with the reason, twice at most, then refused and not saved.
 type Drafted = {
   title: string; statement: string; inputText: string; outputText: string; answerKind: "one" | "many" | "approx";
-  sourceExamples: Array<{ input: string; output: string }>; exampleInputs: string[]; testInputs: string[];
-  reference: string; brute: string; smallInputs: string[]; knowledge: string[]; folder: string; blank: { code: string; filled: string };
+  constraints: string; timeLimitMs: number;
+  sourceExamples: Array<{ input: string; output: string }>; exampleInputs: string[];
+  generator: string; reference: string; brute: string; mutants: Array<{ flaw: string; code: string }>;
+  knowledge: string[]; folder: string; blank: { code: string; filled: string };
 };
-const MAKE_SYSTEM = `알고리즘 연습 문제를 하나 세팅한다. 입력은 주제, 강의 글, 또는 학습자가 붙여 넣은 문제 글이다.
-- 붙여 넣은 글에 이미 문제(설명과 예제 입출력)가 있으면 그 문제를 그대로 세팅한다. statement·inputText·outputText는 원문 뜻 그대로 한국어로, 예제는 sourceExamples에 원문 글자 그대로(입력과 출력 모두) 옮긴다. 원문에 없는 예제는 sourceExamples에 넣지 않는다.
+const MAKE_SYSTEM = `알고리즘 연습 문제를 하나 세팅한다. 입력은 주제, 강의 글, 또는 학습자가 붙여 넣은 문제 글이다. 표준 입력 → 표준 출력 문제다.
+- 붙여 넣은 글에 이미 문제(설명과 예제 입출력)가 있으면 그 문제를 그대로 세팅한다. statement·inputText·outputText는 원문 뜻 그대로 한국어로, 예제는 sourceExamples에 원문 글자 그대로(입력과 출력 모두) 옮긴다. 원문에 없는 예제는 넣지 않는다.
 - 그런 문제가 없으면 공부한 내용을 직접 써먹는 문제를 새로 쓴다. 기존 저지 문제를 베끼지 않는다. statement는 한국어, 상황과 핵심을 짧게. sourceExamples는 빈 배열.
-- answerKind: 정답 출력이 하나로 정해지면 "one", 정답이 여러 개 가능하면(아무거나 출력) "many", 실수 오차를 허용하면 "approx".
-- exampleInputs: sourceExamples가 비었을 때만 예제 입력 1~2개, 아니면 빈 배열. testInputs: 채점용 입력 8~12개. 작은 경계 경우와 큰 경우를 섞는다 (큰 경우는 문자열 길이 20만자 이내). 모든 입력은 문제의 입력 형식과 범위를 지킨다.
-- reference: 정답 프로그램. 반드시 JavaScript(Node.js), require("fs").readFileSync(0, "utf8")로 표준입력을 읽고 console.log로 출력. 출력은 이것으로 만든다.
-- brute: sourceExamples가 비었을 때만. reference와 다른 방법의, 느리지만 단순해서 틀리기 어려운 풀이(모든 경우를 다 해 보기). 같은 입출력 규칙의 JavaScript. 아니면 빈 문자열.
-- smallInputs: sourceExamples가 비었을 때만. brute가 1초 안에 푸는 작은 입력 20~30개 (최소 크기, 경계, 같은 값 반복 포함). 아니면 빈 배열.
+- answerKind: 정답 출력이 하나로 정해지면 "one", 정답이 여러 개 가능하면 "many", 실수 오차를 허용하면 "approx".
+- constraints: 입력 제약을 한 줄씩 (예: "2 ≤ N ≤ 100,000", "-10^9 ≤ A_i ≤ 10^9"). timeLimitMs: 원문에 시간 제한이 있으면 그 값(ms), 없으면 0.
+- exampleInputs: sourceExamples가 비었을 때만 예제 입력 1~2개, 아니면 빈 배열.
+- 모든 프로그램은 JavaScript(Node.js)이고 같은 규칙을 지킨다: 입력은 require("fs").readFileSync(0, "utf8")로 통째로 읽고, 출력은 모아서 console.log 한 번(또는 몇 번)으로. 동기 코드만(setTimeout·Promise 금지). 2^53을 넘을 수 있는 값은 읽을 때부터 BigInt로 계산한다(Number로 계산한 뒤 바꾸면 늦다).
+- reference: 정답 프로그램. 제약의 최대 입력을 1초 안에 푸는 효율적인 풀이.
+- brute: reference와 다른 방법의, 느리지만 단순해서 틀리기 어려운 풀이(모든 경우를 다 해 보기). 작은 입력에서만 쓴다. 원문 예제가 있어도 쓴다.
+- generator: 숨은 테스트를 만드는 JavaScript 모듈. 정확히 이 꼴:
+  module.exports = {
+    tests: [ { kind: "min", size: "min", count: 2 }, { kind: "random", size: "mid", count: 4 }, { kind: "max_random", size: "max", count: 1 }, ... ],
+    smallKinds: ["random", "edge", ...],
+    gen(kind, size, rnd) { ...; return "입력 문자열"; },
+    check(input) { ...; return true; /* 제약을 어기면 이유 문자열 */ },
+  };
+  · size는 "min" | "small" | "mid" | "max". "small"은 brute가 바로 푸는 크기(예: N ≤ 8), "max"는 제약의 최대.
+  · tests에는 문제에 맞는 종류를 고른다: 최소, 경계, 모두 같은 값, 정렬·역순, 극단값(값이 최대 → 오버플로를 잡음), 크기별 무작위, 그리고 최대 크기는 max_random / max_sorted / max_reverse / max_duplicates / max_adversarial(흔한 틀린 접근의 최악 입력)처럼 모양을 나눈다. max는 종류마다 1개, 전체 숨은 테스트는 20~40개.
+  · smallKinds: brute와 비교할 작은 입력의 종류들(같은 함수 gen(kind, "small", rnd)로 만든다). 경계·같은 값·무작위를 섞는다.
+  · rnd: int(lo, hi), bigint(lo, hi), pick(arr), shuffle(arr), perm(n), string(len, alphabet), next(). Math.random은 쓰지 않는다.
+  · check는 입력이 제약을 지키는지 끝까지 확인한다(개수, 범위, 형식). 원문 예제도 통과해야 한다.
+- mutants: 이 문제에서 학습자가 흔히 하는 실수가 들어간 "틀린 풀이" 3~5개. { flaw, code }. flaw는 실수 이름(정수 범위, 초기화, 경계값, off-by-one, 중복 처리, 잘못된 그리디, 시간 초과, 재귀 깊이 등 이 문제에 해당하는 것만). 정상 실행되지만 특정 입력에서 틀리거나 느린 코드여야 한다(문법 오류 금지). 32비트 정수 오버플로는 결과에 |0 을 써서 흉내 낸다.
 - knowledge: 이 문제가 확인하는 지식 이름 1~3개 (학습자 지식 목록에 같은 것이 있으면 그 이름 그대로).
 - folder: "알고리즘/이분 탐색"처럼.
 - blank: 빈칸 문제를 요청받았을 때만. code는 요청한 언어의 완성된 풀이에서 핵심 줄 2~4곳을 ____ 로 바꾼 것, filled는 빈칸을 채운 완성 코드. 아니면 둘 다 빈 문자열.`;
 const MAKE_SCHEMA = S.obj({ title: S.str, statement: S.str, inputText: S.str, outputText: S.str, answerKind: S.oneOf("one", "many", "approx"),
-  sourceExamples: S.arr(S.obj({ input: S.str, output: S.str })), exampleInputs: S.arr(S.str), testInputs: S.arr(S.str), reference: S.str, brute: S.str, smallInputs: S.arr(S.str),
+  constraints: S.str, timeLimitMs: S.int, sourceExamples: S.arr(S.obj({ input: S.str, output: S.str })), exampleInputs: S.arr(S.str),
+  generator: S.str, reference: S.str, brute: S.str, mutants: S.arr(S.obj({ flaw: S.str, code: S.str })),
   knowledge: S.arr(S.str), folder: S.str, blank: S.obj({ code: S.str, filled: S.str }) });
 const MAKE_RETRIES = 2;
-const CROSS_MIN = 10;
+/** Without source examples, the simple solution must agree with the reference on at least this many small inputs. */
+const CROSS_MIN = 30;
 
-type Checked = { ok: true; examples: TestCase[]; tests: TestCase[]; check: Omit<ProblemCheck, "tries">; from: "source" | "made" } | { ok: false; reason: string };
+type Checked = { ok: true; examples: TestCase[]; tests: TestCase[]; check: Omit<ProblemCheck, "tries">; from: "source" | "made"; seed: number } | { ok: false; reason: string };
 /** One draft through the check. Returns the reason it failed (sent back to the model) or the tests that survived. */
 type Human = { lang: Lang; code: string };
 async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted: string, human?: Human): Promise<Checked> {
@@ -111,25 +133,20 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
   const given = d.sourceExamples.filter((ex) => ex.input.trim() || ex.output.trim());
   const source = given.filter((ex) => inPasted(ex.input) && inPasted(ex.output)).slice(0, 5);
   if (given.length && source.length < given.length) return { ok: false, reason: `sourceExamples ${given.length - source.length}개가 붙여 넣은 글에 없음 (원문에 있는 예제만 넣는다)` };
-  let examples: TestCase[]; let check: Omit<ProblemCheck, "tries">;
-  if (source.length) {
-    const mismatch = await matchSourceExamples(d.reference, source);
-    if (mismatch) return { ok: false, reason: mismatch };
-    examples = source.map((ex) => ({ input: ex.input, output: normalizeOutput(ex.output) }));
-    check = { by: "source", cases: source.length };
-  } else {
-    if (!d.brute.trim()) return { ok: false, reason: "원문 예제가 없는데 단순 풀이(brute)가 비어 있음" };
-    const cross = await crossCheck(d.reference, d.brute, d.smallInputs.slice(0, 30));
-    if (cross.mismatch) return { ok: false, reason: cross.mismatch };
-    if (cross.compared < CROSS_MIN) return { ok: false, reason: `단순 풀이로 확인된 작은 입력이 ${cross.compared}개뿐 (${CROSS_MIN}개 이상 필요)` };
-    examples = (await answerWithReference(d.reference, d.exampleInputs.slice(0, 3))).tests;
-    check = { by: "cross", cases: cross.compared };
-  }
-  const answered = await answerWithReference(d.reference, d.testInputs.slice(0, 14));
-  if (answered.tests.length + examples.length < 3 || !examples.length) return { ok: false, reason: `모범 풀이로 답이 나온 테스트가 부족함 (${answered.dropped.length}개 실패: ${answered.dropped.slice(0, 2).map((x) => x.why).join(" / ")})` };
+  if (!d.generator.trim()) return { ok: false, reason: "generator(숨은 테스트 생성기)가 비어 있음" };
+  if (!source.length && !d.brute.trim()) return { ok: false, reason: "원문 예제가 없는데 단순 풀이(brute)가 비어 있음" };
+  const seed = 1 + Math.floor(Math.random() * 1_000_000);
+  const made = await runTestgen({ generator: d.generator, reference: d.reference, brute: d.brute, mutants: d.mutants.slice(0, 6), seed,
+    sourceExamples: source, exampleInputs: source.length ? [] : d.exampleInputs.slice(0, 3), needCompared: source.length ? 0 : CROSS_MIN, smallCount: 300 });
+  if (!made.ok) return { ok: false, reason: made.reason };
+  const examples: TestCase[] = made.examples;
+  const tests: TestCase[] = made.tests.map(({ input, output }) => ({ input, output }));
+  const { killed, total, survived, added } = made.mutation;
+  let check: Omit<ProblemCheck, "tries"> = { by: source.length ? "source" : "cross", cases: source.length || made.compared, tests: tests.length, maxTests: made.maxTests,
+    compared: made.compared, mutation: { killed, total, survived, added } };
   if (human) {
     // A person's solution from the sources outranks the model's: it must print the same on every kept test.
-    const theirs = await judge(human.lang, human.code, [...examples, ...answered.tests], { stopAtFirstFail: true });
+    const theirs = await judge(human.lang, human.code, [...examples, ...tests], { stopAtFirstFail: true, timeLimitMs: 10_000 });
     const miss = theirs.results.find((r) => r.verdict !== "AC");
     if (theirs.verdict === "MISSING" || theirs.verdict === "CE") check = { ...check, human: "skipped" };
     else if (miss) return { ok: false, reason: `사람이 쓴 정답 코드와 모범 풀이가 다름: 테스트 입력 (${miss.input.replace(/\n/g, " ⏎ ").slice(0, 80)})에서 모범 풀이 ${miss.expected.slice(0, 60)}, 사람 코드 ${(miss.got || miss.verdict).slice(0, 60)}` };
@@ -137,11 +154,11 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
   }
   if (kind === "blank") {
     if (!d.blank.code.includes("____") || !d.blank.filled.trim()) return { ok: false, reason: "빈칸 코드(____)나 채운 코드가 비어 있음" };
-    const filled = await judge(lang, d.blank.filled, [...examples, ...answered.tests], { stopAtFirstFail: true });
+    const filled = await judge(lang, d.blank.filled, [...examples, ...tests], { stopAtFirstFail: true, timeLimitMs: 10_000 });
     if (filled.verdict === "MISSING") throw new CodeError(422, `${LANG_LABEL[lang]} 실행기가 없어 빈칸 문제를 확인할 수 없어요.`);
     if (filled.verdict !== "AC") return { ok: false, reason: `빈칸을 채운 코드가 테스트를 통과하지 못함 (${filled.verdict})` };
   }
-  return { ok: true, examples, tests: answered.tests, check, from: source.length ? "source" : "made" };
+  return { ok: true, examples, tests, check, from: source.length ? "source" : "made", seed };
 }
 
 /** A new problem from a topic, a lesson or a pasted problem. Saved only after the check passes; otherwise refused with the reason. */
@@ -157,7 +174,8 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     if (d.answerKind !== "one") throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요.");
     const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human);
     if (!checked.ok) { reasons.push(checked.reason); continue; }
-    return saveProblem({ ...(input.id ? { id: input.id } : {}), title: d.title, statement: d.statement, inputText: d.inputText, outputText: d.outputText, examples: checked.examples, tests: checked.tests, timeLimitMs: 2000,
+    return saveProblem({ ...(input.id ? { id: input.id } : {}), title: d.title, statement: d.statement, inputText: d.inputText, outputText: d.outputText, examples: checked.examples, tests: checked.tests, timeLimitMs: d.timeLimitMs > 0 ? Math.min(Math.max(Math.round(d.timeLimitMs), 500), 10_000) : 2000,
+      constraints: d.constraints.slice(0, 1000), testgen: { generator: d.generator, seed: checked.seed },
       kind: input.kind, templates: input.kind === "blank" ? { [lang]: d.blank.code } : {}, reference: { lang: "javascript", code: d.reference },
       knowledge: d.knowledge.slice(0, 3), folder: input.folder || d.folder || "알고리즘", examplesFrom: checked.from, check: { ...checked.check, tries },
       source: { kind: "ai", title: input.sourceTitle || (input.topic ? `주제: ${input.topic}` : "강의 글"), ...(input.sourceUrl ? { url: input.sourceUrl } : {}) } });

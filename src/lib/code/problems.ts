@@ -22,10 +22,18 @@ export type Problem = {
   examplesFrom?: "source" | "made";
   /** How the reference was checked before saving: against the source examples, or against a simple solution on small inputs. */
   check?: ProblemCheck;
+  /** The constraints as the model read them (N·값 범위), shown with the problem. */
+  constraints?: string;
+  /** How the hidden tests were made (testgen/harness.mjs): the generator and its seed, so they can be made again. */
+  testgen?: { generator: string; seed: number };
   createdAt: string;
 };
 /** `human`: a person's solution (from the import's sources) agreed with the reference on every test, or could not run here. */
-export type ProblemCheck = { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped" };
+export type ProblemCheck = { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped";
+  /** Hidden tests made by the generator, how many are max-size, and small inputs the simple solution agreed on. */
+  tests?: number; maxTests?: number; compared?: number;
+  /** 결함 풀이 검출: faulty solutions the tests failed, out of those that really are faulty (a score, not a gate). */
+  mutation?: { killed: number; total: number; survived: string[]; added: number } };
 export type ProblemLite = Pick<Problem, "id" | "title" | "kind" | "knowledge" | "folder" | "createdAt"> & { source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string };
 export type Submission = { id: string; at: string; problemId: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; code: string; ms: number };
 
@@ -135,9 +143,10 @@ export async function readProblem(id: string): Promise<Problem> {
     throw new CodeError(404, "문제를 찾을 수 없어요.");
   }
 }
-/** What the screen may see: no hidden tests, no reference. */
+/** What the screen may see: no hidden tests, no reference, no generator. */
 export function publicProblem(problem: Problem) {
-  const { tests, reference, ...rest } = problem;
+  const { tests, reference, testgen, ...rest } = problem;
+  void testgen;
   return { ...rest, hiddenTests: tests.length, hasReference: Boolean(reference), starters: Object.fromEntries(LANGS.map((lang) => [lang, problem.templates[lang] ?? STARTERS[lang]])) as Record<Lang, string> };
 }
 export async function saveProblem(input: Omit<Problem, "id" | "createdAt" | "knowledgeIds"> & { id?: string; knowledgeIds?: string[] }) {
