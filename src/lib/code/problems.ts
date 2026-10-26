@@ -18,8 +18,13 @@ export type Problem = {
   /** Knowledge this problem checks, by name; ids are filled when the problem is saved into the knowledge store. */
   knowledge: string[]; knowledgeIds: string[];
   folder: string; source: { kind: "seed" | "ai" | "manual"; title: string; url?: string };
+  /** Where the examples came from: copied from the pasted problem ("source") or made by the model ("made"). */
+  examplesFrom?: "source" | "made";
+  /** How the reference was checked before saving: against the source examples, or against a simple solution on small inputs. */
+  check?: ProblemCheck;
   createdAt: string;
 };
+export type ProblemCheck = { by: "source" | "cross"; cases: number; tries: number };
 export type ProblemLite = Pick<Problem, "id" | "title" | "kind" | "knowledge" | "folder" | "createdAt"> & { source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string };
 export type Submission = { id: string; at: string; problemId: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; code: string; ms: number };
 
@@ -60,6 +65,45 @@ export async function answerWithReference(reference: string, inputs: string[], t
     else kept.push({ input, output: normalizeOutput(out.stdout) });
   }
   return { tests: kept, dropped };
+}
+
+// 정답 풀이 검사 (docs/DECISIONS.md 2026-10-26 "코드 문제 받아오기"): a reference is trusted only after one of these passes.
+const short = (text: string, n = 80) => { const one = text.replace(/\n/g, " ⏎ "); return one.length > n ? `${one.slice(0, n)}…` : one || "(빈 출력)"; };
+function ranBadly(out: Awaited<ReturnType<typeof runOnce>>) {
+  if (!out.ok) return `실행하지 못함 (${out.error.slice(0, 200)})`;
+  if (out.timedOut) return "시간 초과";
+  if (out.tooMuch || out.code !== 0) return `실행 중 에러 (${out.stderr.slice(0, 200) || `종료 코드 ${out.code}`})`;
+  return "";
+}
+/** The reference must print each source example's output. Returns the first mismatch as a reason, or "" when all match. */
+export async function matchSourceExamples(reference: string, examples: TestCase[], timeLimitMs = 5000) {
+  for (const [i, ex] of examples.entries()) {
+    const out = await runOnce("javascript", reference, ex.input, timeLimitMs, true);
+    const bad = ranBadly(out);
+    if (bad) return `예제 ${i + 1}번: 모범 풀이 ${bad}`;
+    const got = normalizeOutput(out.ok ? out.stdout : ""), want = normalizeOutput(ex.output);
+    if (got !== want) return `예제 ${i + 1}번: 기대 ${short(want)}, 모범 풀이 ${short(got)}`;
+  }
+  return "";
+}
+/**
+ * 교차 확인: with no source examples to trust, the reference and a slow-but-simple solution must agree on small inputs.
+ * An input the simple solution cannot answer is skipped (not compared); `compared` counts the ones that agreed.
+ */
+export async function crossCheck(reference: string, brute: string, inputs: string[], timeLimitMs = 5000) {
+  let compared = 0;
+  for (const [i, input] of inputs.entries()) {
+    const slow = await runOnce("javascript", brute, input, timeLimitMs, true);
+    if (!slow.ok) return { compared, mismatch: `단순 풀이 ${ranBadly(slow)}` };
+    if (ranBadly(slow) || !slow.stdout.trim()) continue;
+    const fast = await runOnce("javascript", reference, input, timeLimitMs, true);
+    const bad = ranBadly(fast);
+    if (bad) return { compared, mismatch: `작은 입력 ${i + 1}번 (${short(input, 60)}): 모범 풀이 ${bad}` };
+    const a = normalizeOutput(slow.stdout), b = normalizeOutput(fast.ok ? fast.stdout : "");
+    if (a !== b) return { compared, mismatch: `작은 입력 ${i + 1}번 (${short(input, 60)}): 단순 풀이 ${short(a)}, 모범 풀이 ${short(b)}` };
+    compared++;
+  }
+  return { compared, mismatch: "" };
 }
 
 /** The seed problems are written once, with outputs from their references, the first time the list is read. */

@@ -1,0 +1,95 @@
+// 문제 만들기의 정답 풀이 검사 (docs/DECISIONS.md 2026-10-26): the fake model stands in for the AI, the references really run.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { setFakeModelResponder, type ModelRequest } from "../ai/model.ts";
+import { makeProblem } from "../assist/code-ai.ts";
+import { readProblem } from "./problems.ts";
+
+const READ = `const t = require("fs").readFileSync(0, "utf8").trim().split(/\\s+/).map(Number); const n = t[0];`;
+const SUM = `${READ} let s = 0; for (let i = 1; i <= n; i++) s += t[i]; console.log(s);`;
+const SUM_PLUS_ONE = `${READ} let s = 1; for (let i = 1; i <= n; i++) s += t[i]; console.log(s);`;
+const SUM_MISSING_LAST = `${READ} let s = 0; for (let i = 1; i < n; i++) s += t[i]; console.log(s);`;
+const SUM_BRUTE = `${READ} console.log(t.slice(1, n + 1).reduce((a, b) => a + b, 0));`;
+const SMALL = Array.from({ length: 12 }, (_, k) => `${k % 4 + 1}\n${Array.from({ length: k % 4 + 1 }, (_, j) => j * 3 - k).join(" ")}\n`);
+const PASTED = "문제: N개의 수의 합을 구하라.\n입력: 첫 줄에 N, 둘째 줄에 수 N개\n출력: 합\n예제 입력 1\n3\n1 2 3\n예제 출력 1\n6";
+
+const draft = (over: Record<string, unknown>) => JSON.stringify({
+  title: "수의 합", statement: "N개의 수의 합을 구한다.", inputText: "첫 줄에 N, 둘째 줄에 수 N개", outputText: "합", answerKind: "one",
+  sourceExamples: [], exampleInputs: ["2\n5 7\n"], testInputs: ["1\n4\n", "3\n-1 0 1\n", "5\n1 1 1 1 1\n", "2\n100 200\n"],
+  reference: SUM, brute: "", smallInputs: [], knowledge: ["누적 합"], folder: "알고리즘/합", blank: { code: "", filled: "" }, ...over,
+});
+
+/** A data folder and a fake model that answers code:make with the given replies in order; returns the requests it saw. */
+async function withFake(replies: string[], run: (seen: ModelRequest[]) => Promise<void>) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "code-make-"));
+  const prior = { data: process.env.STUDY_FORGE_DATA_DIR, provider: process.env.STUDY_FORGE_MODEL_PROVIDER };
+  process.env.STUDY_FORGE_DATA_DIR = dir;
+  process.env.STUDY_FORGE_MODEL_PROVIDER = "fake";
+  const seen: ModelRequest[] = [];
+  setFakeModelResponder((request) => { if (request.purpose === "code:make") seen.push(request); return replies[Math.min(seen.length, replies.length) - 1] ?? "{}"; });
+  try { await run(seen); } finally {
+    setFakeModelResponder(null);
+    for (const [key, value] of [["STUDY_FORGE_DATA_DIR", prior.data], ["STUDY_FORGE_MODEL_PROVIDER", prior.provider]] as const) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+const savedCount = async () => (await readdir(path.join(process.env.STUDY_FORGE_DATA_DIR!, "code", "problems")).catch(() => [])).length;
+
+test("a pasted problem's examples are the answer key: a reference that prints them is saved, marked 원문", () => withFake(
+  [draft({ sourceExamples: [{ input: "3\n1 2 3", output: "6" }], exampleInputs: [] })],
+  async (seen) => {
+    const made = await makeProblem({ lesson: PASTED, kind: "full" });
+    assert.equal(seen.length, 1);
+    const saved = await readProblem(made.id);
+    assert.equal(saved.examplesFrom, "source");
+    assert.deepEqual(saved.check, { by: "source", cases: 1, tries: 1 });
+    assert.deepEqual(saved.examples, [{ input: "3\n1 2 3", output: "6" }]);
+    assert.equal(saved.tests.length, 4);
+  }));
+
+test("a reference that misses a source example is asked again with the reason, then refused and not saved", () => withFake(
+  [draft({ sourceExamples: [{ input: "3\n1 2 3", output: "6" }], exampleInputs: [], reference: SUM_PLUS_ONE })],
+  async (seen) => {
+    await assert.rejects(makeProblem({ lesson: PASTED, kind: "full" }), (error: Error & { status?: number }) => {
+      assert.equal(error.status, 422);
+      assert.match(error.message, /저장하지 않았어요/);
+      assert.match(error.message, /예제 1번: 기대 6, 모범 풀이 7/);
+      return true;
+    });
+    assert.equal(seen.length, 3, "first try and two retries");
+    assert.match(seen[1].user, /\[지난 시도에서 막힌 곳\]\n1\. 예제 1번: 기대 6, 모범 풀이 7/);
+    assert.equal(await savedCount(), 0);
+  }));
+
+test("with no source examples the reference is cross-checked against a simple solution; a mismatch is retried", () => withFake(
+  [draft({ reference: SUM_MISSING_LAST, brute: SUM_BRUTE, smallInputs: SMALL }), draft({ brute: SUM_BRUTE, smallInputs: SMALL })],
+  async (seen) => {
+    const made = await makeProblem({ topic: "누적 합", kind: "full" });
+    assert.equal(seen.length, 2);
+    assert.match(seen[1].user, /작은 입력 \d+번 .*: 단순 풀이 -?\d+, 모범 풀이 -?\d+/);
+    const saved = await readProblem(made.id);
+    assert.equal(saved.examplesFrom, "made");
+    assert.deepEqual(saved.check, { by: "cross", cases: SMALL.length, tries: 2 });
+    assert.deepEqual(saved.examples, [{ input: "2\n5 7\n", output: "12" }]);
+  }));
+
+test("examples the model calls 원문 but that are not in the pasted text do not count as the answer key", () => withFake(
+  [draft({ sourceExamples: [{ input: "2\n5 7", output: "12" }], exampleInputs: [] })],
+  async (seen) => {
+    await assert.rejects(makeProblem({ topic: "누적 합", kind: "full" }), /붙여 넣은 글에 없음/);
+    assert.equal(seen.length, 3);
+    assert.equal(await savedCount(), 0);
+  }));
+
+test("a problem with more than one right answer is refused at once (not yet gradable)", () => withFake(
+  [draft({ answerKind: "many" })],
+  async (seen) => {
+    await assert.rejects(makeProblem({ topic: "아무 해나 출력", kind: "full" }), /아직 채점할 수 없어서/);
+    assert.equal(seen.length, 1);
+    assert.equal(await savedCount(), 0);
+  }));
