@@ -52,8 +52,10 @@ async function handle(request: Request, context: RouteContext) {
       }
       if (p[2] === "hint" && m === "POST") {
         const b = await body(z.object({ lang, code, level: z.union([z.literal(1), z.literal(2), z.literal(3)]), last }));
+        // Ask first, record after: recorded first, this very hint was in the "earlier misses" the model sees ("지난번에도").
+        const out = await hint({ problemId: id, ...b });
         await recordHint(id, b.level);
-        return json(await hint({ problemId: id, ...b }));
+        return json(out);
       }
       if (p[2] === "review" && m === "POST") { const b = await body(z.object({ lang, code, note: z.string().max(1000).optional() })); return json(await reviewApproach({ problemId: id, ...b })); }
       if (p[2] === "counter" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await counterexample({ problemId: id, ...b })); }
