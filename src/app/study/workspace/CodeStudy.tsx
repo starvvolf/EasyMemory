@@ -130,6 +130,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     }).catch((e) => setError(errorText(e)));
   }, [id]);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [msgs]);
+  // Leaving the problem ends this attempt: its 틀림 · 힌트 · 물어봄 go into the knowledge record (src/lib/code/service.ts).
+  useEffect(() => () => { void call(`/api/code/problem/${id}/end`, {}).catch(() => undefined); }, [id]);
   const onCode = useCallback((v: string) => {
     setCode(v);
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -247,7 +249,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
 
       <aside className="cs-ai panel" aria-label="코드 옆 AI">
         <b>AI</b>
-        <p className="small muted">통과 여부는 채점기가 정해요. AI는 설명과 힌트만 줘요. 힌트를 받으면 지식 기록에 남아요.</p>
+        <p className="small muted">통과 여부는 채점기가 정해요. AI는 설명과 힌트만 줘요. 힌트·틀린 제출은 이번 풀이에 모아 두었다가, 맞히거나 문제를 나가면 지식 기록에 남아요.</p>
         <div className="cs-hints">
           <button className="btn small" disabled={asking} onClick={() => hint(1)}>힌트 1 · 방향</button>
           <button className="btn small" disabled={asking} onClick={() => hint(2)}>힌트 2 · 줄 짚기</button>
