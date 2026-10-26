@@ -50,3 +50,6 @@ eval/**/*.secret.*
 
 # Authoring output of local generation runs (/study and /lab): personal run data, like .study-forge-data/
 tools/problem-authoring-lab/runs/chatgpt-request-*/
+
+# 강의 슬라이드 원문 캡처는 비공개 저장소(recaller-data)에 둔다
+협업/캡처/**/*-source-*.jpg
