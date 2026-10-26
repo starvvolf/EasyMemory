@@ -7,8 +7,22 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { scheduleNextReview } from "../spaced-repetition.ts";
-import type { SpacedRepetitionSchedule } from "../types.ts";
+
+/*
+ * 복습 간격: the same boxes as PDF practice (src/app/study/dejipgi-app.js INTERVALS), so one piece of knowledge waits the
+ * same way wherever it was met. 맞힘 moves up one box; 틀림 · 힌트 · 물어봄 go back to the first box and come again tomorrow
+ * (no re-ask minutes later: 사용자 결정 2026-10-12).
+ */
+const MIN = 60_000, DAY = 86_400_000;
+export const REVIEW_BOXES = [10 * MIN, 1 * DAY, 3 * DAY, 7 * DAY, 16 * DAY, 35 * DAY];
+export type KReview = { algorithm: "leitner"; box: number; dueAt: string; lastReviewAt: string; repetitions: number; lapses: number };
+export function nextReview(current: KReview | undefined, remembered: boolean, at: Date): KReview {
+  const prior = current?.algorithm === "leitner" ? current : undefined;
+  const t = at.getTime();
+  if (!remembered) return { algorithm: "leitner", box: 0, dueAt: new Date(t + DAY).toISOString(), lastReviewAt: at.toISOString(), repetitions: (prior?.repetitions ?? 0) + 1, lapses: (prior?.lapses ?? 0) + 1 };
+  const box = Math.min((prior?.box ?? 0) + 1, REVIEW_BOXES.length - 1);
+  return { algorithm: "leitner", box, dueAt: new Date(t + REVIEW_BOXES[box]).toISOString(), lastReviewAt: at.toISOString(), repetitions: (prior?.repetitions ?? 0) + 1, lapses: prior?.lapses ?? 0 };
+}
 
 export type KState = "met" | "unknown" | "known";
 export const STATE_LABEL: Record<KState, string> = { met: "만남", unknown: "몰랐음", known: "앎" };
@@ -19,10 +33,10 @@ export type KStats = { asked: number; wrong: number; hint: number; correct: numb
 export type Knowledge = {
   id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean;
   aliases: string[]; links: KLink[]; sources: KSource[]; stats: KStats; createdAt: string; updatedAt: string; lastAt: string;
-  /** When to ask again (FSRS). Set by every 맞힘 / 틀림 / 힌트 / 물어봄; none until the first one. */
-  review?: SpacedRepetitionSchedule;
+  /** When to ask again (상자 단계). Set by every 맞힘 / 틀림 / 힌트 / 물어봄; none until the first one. */
+  review?: KReview;
   /** The schedule before the last result, so "내 답도 맞아요" can take a grader's miss back. */
-  reviewBefore?: SpacedRepetitionSchedule | null;
+  reviewBefore?: KReview | null;
 };
 export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string; createdAt: string };
 export type KEventKind = "met" | "asked" | "wrong" | "hint" | "correct" | "note";
@@ -340,7 +354,7 @@ export async function recordEvent(knowledgeId: string, kind: KEventKind, detail 
       item.reviewBefore = item.review ?? null;
       // Results can arrive out of order (two computers, a late request); a schedule only moves forward in time.
       const when = Math.max(Date.parse(at), Date.parse(item.review?.lastReviewAt ?? "") || 0);
-      item.review = scheduleNextReview(item.review, kind === "correct", new Date(when));
+      item.review = nextReview(item.review, kind === "correct", new Date(when));
     }
     item.lastAt = at; item.updatedAt = at;
     return item;
@@ -480,11 +494,11 @@ export async function memoryEvents(options: { knowledgeId?: string; folderId?: s
   return { text: text || "기록이 없어요.", events: events.map((e) => ({ ...e, title: byId.get(e.knowledgeId)?.title ?? "" })) };
 }
 
-/** When an item is due: its FSRS date, or now when it has none yet (몰랐음 or 앎 from before review dates existed). */
+/** When an item is due: its box date, or now when it has none yet (몰랐음 or 앎 from before review dates existed). */
 const dueTime = (item: Knowledge) => { const t = item.review ? Date.parse(item.review.dueAt) : 0; return Number.isFinite(t) ? t : 0; };
 const inReview = (item: Knowledge) => !item.graduated && item.state !== "met";
 /**
- * What to look at again: 몰랐음 first, then 앎 not yet graduated. With dueOnly, only what is due by now (FSRS date),
+ * What to look at again: 몰랐음 first, then 앎 not yet graduated. With dueOnly, only what is due by now (box date),
  * soonest first — the review session. Without it, everything still in review, most missed first (deadline planning).
  */
 export async function reviewQueue(options: { folderId?: string; limit?: number; dueOnly?: boolean; now?: Date } = {}) {

@@ -46,7 +46,7 @@ export const TOOLS: Tool[] = [
     ({ from, to, relation }) => linkKnowledge(from, to, relation)),
   tool("knowledge_set_state", "지식", "지식 상태 바꾸기", "상태(만남/몰랐음/앎)나 졸업(복습에서 빼기, 기록은 남음)을 바꾼다.", { id: z.string().max(40), state: state.optional(), graduated: z.boolean().optional() },
     ({ id, ...patch }) => setKnowledgeState(id, patch)),
-  tool("review_queue", "지식", "복습할 것", "지금 복습 차례인 지식(FSRS 날짜가 된 것): 몰랐음 먼저, 그다음 졸업 전의 앎(날짜가 이른 순).", { folderId: z.string().max(40).optional(), limit: z.number().int().min(1).max(50).optional() },
+  tool("review_queue", "지식", "복습할 것", "지금 복습 차례인 지식(상자 단계 날짜가 된 것): 몰랐음 먼저, 그다음 졸업 전의 앎(날짜가 이른 순).", { folderId: z.string().max(40).optional(), limit: z.number().int().min(1).max(50).optional() },
     (input) => reviewQueue({ ...input, dueOnly: true })),
   // 자료
   tool("material_list", "자료", "자료 목록", "읽은 웹 글·강의 글, 등록된 PDF, 코드 문제 목록.", {}, async () => ({

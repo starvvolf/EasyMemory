@@ -277,7 +277,7 @@ function ItemDetail({ detail, folders, onAct, onOpen, onGone, onQuiz }: { detail
 
       <details className="ws-fold" open={s.wrong + s.hint + s.asked > 0}><summary>내 기록 · 맞힘 {s.correct} · 틀림 {s.wrong} · 힌트 {s.hint} · 물어봄 {s.asked}</summary>
         <p className="small muted num">맞힘 {s.correct} · 틀림 {s.wrong} · 힌트 {s.hint} · 물어봄 {s.asked}{s.correctDays.length ? ` · 연속으로 맞힌 날 ${s.correctDays.length}/3` : ""}</p>
-        {item.review && !item.graduated && item.state !== "met" ? <p className="small muted">다음 복습: {whenText(item.review.dueAt)}</p> : null}
+        {item.review && !item.graduated && item.state !== "met" ? <p className="small muted">다음 복습: {whenText(item.review.dueAt)} · 복습 {item.review.box + 1}단계 / 6</p> : null}
         <ol className="kw-events">{detail.events.slice(0, 20).map((e) => <li key={e.id}><span className={`chip ev-${e.kind}`}>{EVENT_LABEL[e.kind]}</span> <span className="small">{e.detail}</span> <span className="small muted">{e.source ? `${e.source.title} · ` : ""}{ago(e.at)}</span></li>)}</ol></details>
 
       {mode === "delete" ? <div className="row small"><span>이 지식과 기록을 모두 지울까요?</span><button className="btn small danger" onClick={() => void onAct(() => call(`/api/knowledge/item/${item.id}`, undefined, "DELETE"), onGone)}>지우기</button><button className="btn ghost small" onClick={() => setMode("")}>취소</button></div>

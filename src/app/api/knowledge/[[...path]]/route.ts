@@ -90,7 +90,7 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "folder" && p[1] && m === "PATCH") return json({ folder: await updateFolder(id.parse(p[1]), await body(z.object({ name: z.string().max(60).optional(), parentId: id.nullable().optional(), order: z.number().int().min(0).optional(), note: z.string().max(2000).optional() }))) });
     if (p[0] === "folder" && p[1] && m === "DELETE") return json(await deleteFolder(id.parse(p[1])));
 
-    // review session: questions over what is due now (FSRS dates), mixed kinds. Nothing due → no questions, and when
+    // review session: questions over what is due now (box dates), mixed kinds. Nothing due → no questions, and when
     // the next one comes due; never random items to fill the session.
     if (p[0] === "quiz" && m === "GET") {
       const pool = await allItems();

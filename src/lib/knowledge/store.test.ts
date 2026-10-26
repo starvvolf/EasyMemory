@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createFolder, deleteFolder, getKnowledge, importPoints, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
-  recordEvent, reviewQueue, reviewStatus, saveKnowledge, saveMany, searchKnowledge, setKnowledgeState, similarity, takeBackWrong, tree, updateFolder } from "./store.ts";
+  recordEvent, reviewQueue, reviewStatus, saveKnowledge, saveMany, searchKnowledge, setKnowledgeState, similarity, takeBackWrong, tree, updateFolder, nextReview } from "./store.ts";
 
 async function withData<T>(run: () => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "knowledge-"));
@@ -141,30 +141,30 @@ test("questions from knowledge: flashcard always, 객관식/OX with others to mi
   assert.ok(rq.options!.includes("금리 인하"));
 });
 
-test("review dates: a miss comes back soon, a correct answer waits longer, and only what is due is in the session", () => withData(async () => {
+test("review boxes: a miss comes back tomorrow, each correct answer moves up a box, and only what is due is in the session", () => withData(async () => {
   const { item } = await saveKnowledge({ title: "뷰 업 벡터", body: "y_view 방향을 정한다" });
-  const t0 = "2026-10-26T10:00:00Z";
-  const missed = await recordEvent(item.id, "wrong", "OX를 틀림", undefined, t0);
-  assert.ok(missed.review, "a result sets a review date");
-  assert.equal(missed.review!.lapses + missed.review!.repetitions >= 1, true);
-  const dueAfterMiss = Date.parse(missed.review!.dueAt) - Date.parse(t0);
-  assert.ok(dueAfterMiss > 0 && dueAfterMiss <= 60 * 60 * 1000, "a miss is asked again within the hour");
-  assert.equal((await reviewQueue({ dueOnly: true, now: new Date(t0) })).length, 0, "not due the same second");
-  assert.equal((await reviewQueue({ dueOnly: true, now: new Date(Date.parse(t0) + dueAfterMiss) })).length, 1);
-  // Correct on the next days: the gap grows.
-  let at = Date.parse(t0) + dueAfterMiss;
+  const t0 = Date.parse("2026-10-26T10:00:00Z"), DAY = 86_400_000;
+  const missed = await recordEvent(item.id, "wrong", "OX를 틀림", undefined, new Date(t0).toISOString());
+  assert.equal(missed.review!.box, 0);
+  assert.equal(Date.parse(missed.review!.dueAt) - t0, DAY, "a miss is asked again tomorrow, not minutes later");
+  assert.equal((await reviewQueue({ dueOnly: true, now: new Date(t0 + DAY - 1000) })).length, 0, "not due before then");
+  assert.equal((await reviewQueue({ dueOnly: true, now: new Date(t0 + DAY) })).length, 1);
+  let at = t0 + DAY;
   const gaps: number[] = [];
-  for (let n = 0; n < 3; n++) {
+  for (let n = 0; n < 2; n++) {
     const done = await recordEvent(item.id, "correct", "", undefined, new Date(at).toISOString());
-    const gap = Date.parse(done.review!.dueAt) - at; gaps.push(gap); at += gap;
+    const gap = Date.parse(done.review!.dueAt) - at; gaps.push(gap / DAY); at += gap;
   }
-  assert.ok(gaps[2] > gaps[0], `gaps grow: ${gaps.map((g) => Math.round(g / 60000)).join(", ")} min`);
+  assert.deepEqual(gaps, [1, 3], "boxes 1 → 3 days, as in PDF practice (then 7, 16, 35)");
   const status = await reviewStatus({ now: new Date(at - 1000) });
   assert.equal(status.due, 0);
-  assert.ok(status.next, "the next date is known");
+  assert.equal(status.next, new Date(at).toISOString(), "the next date is known");
   assert.equal((await reviewQueue({ dueOnly: false })).length, 1, "deadline planning still sees it");
+  const again = await recordEvent(item.id, "hint", "힌트 1단계", undefined, new Date(at).toISOString());
+  assert.equal(again.review!.box, 0, "a hint sends it back to the first box");
+  assert.equal(nextReview(again.review, true, new Date(at)).box, 1);
+  assert.equal(nextReview({ ...again.review!, box: 5 }, true, new Date(at)).box, 5, "the last box is the longest wait");
 }));
-
 test("내 답도 맞아요 takes the last miss back: as 맞힘 in practice, as nothing right after reading", () => withData(async () => {
   const { item } = await saveKnowledge({ title: "viewing origin", body: "P0" });
   const before = await recordEvent(item.id, "correct", "", undefined, "2026-10-26T09:00:00Z");

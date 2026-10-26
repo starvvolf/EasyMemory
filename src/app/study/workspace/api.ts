@@ -36,7 +36,7 @@ export const EVENT_LABEL: Record<KEvent["kind"], string> = { met: "만남", aske
 export type Knowledge = { id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean; aliases: string[];
   links: Array<{ to: string; relation: string }>; sources: Array<{ kind: string; title: string; url?: string; page?: number; quote?: string; at: string }>;
   stats: { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] }; createdAt: string; updatedAt: string; lastAt: string;
-  review?: { dueAt: string; state: string; repetitions: number; lapses: number; stability: number } };
+  review?: { algorithm: "leitner"; box: number; dueAt: string; repetitions: number; lapses: number } };
 export type Detail = { item: Knowledge; path: string; links: Array<{ to: string; relation: string; item: ItemLite }>; backlinks: Array<{ relation: string; item: ItemLite }>; events: KEvent[] };
 export type Question = { id: string; kind: "flashcard" | "choice" | "ox" | "blank" | "short" | "recognize"; label: string; knowledgeId: string; prompt: string; context?: string;
   options?: string[]; answer: string; accept?: string[]; explain: string };
