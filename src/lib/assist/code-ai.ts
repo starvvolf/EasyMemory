@@ -3,7 +3,7 @@
 import { askJson, askText, S } from "./model.ts";
 import { LANG_LABEL, judge, type Lang, type TestCase } from "../code/run.ts";
 import { CodeError, findCounterexample, readProblem, saveProblem, type Problem, type ProblemCheck } from "../code/problems.ts";
-import { runTestgen } from "../code/testgen/index.ts";
+import { runTestgen, runVerify } from "../code/testgen/index.ts";
 import { memoryEvents, searchKnowledge } from "../knowledge/store.ts";
 import { currentAttempt } from "../code/service.ts";
 
@@ -120,6 +120,26 @@ const MAKE_SCHEMA = S.obj({ title: S.str, statement: S.str, inputText: S.str, ou
   generator: S.str, reference: S.str, brute: S.str, mutants: S.arr(S.obj({ flaw: S.str, code: S.str })),
   knowledge: S.arr(S.str), folder: S.str, blank: S.obj({ code: S.str, filled: S.str }) });
 const MAKE_RETRIES = 2;
+/** 2026-10-27 (사용자): problems are set by GPT-5.6 Terra ("알고리즘은 5.6도 충분히 잘 풀 것"). */
+const MAKE_MODEL = () => process.env.RECALLER_CODE_MAKE_MODEL?.trim() || "gpt-5.6-terra";
+/** The second, independent solution (안전장치 ⑤): its model is chosen by comparing several (docs/DECISIONS.md). */
+export const SOLVE_MODEL = () => process.env.RECALLER_CODE_SOLVE_MODEL?.trim() || "gpt-5.6-terra";
+
+const SOLVE_SYSTEM = `알고리즘 문제를 JavaScript(Node.js)로 푼다. 문제 글과 예제만 보고 처음부터 직접 푼다.
+- 입력은 require("fs").readFileSync(0, "utf8")로 통째로 읽고, 출력은 모아서 console.log로. 동기 코드만.
+- 제약의 최대 입력을 1초 안에 푸는 효율적인 풀이. 2^53을 넘을 수 있는 값은 읽을 때부터 BigInt로 계산한다.
+- code에 프로그램 전체만 넣는다.`;
+const SOLVE_SCHEMA = S.obj({ code: S.str });
+type Statement = { statement: string; inputText: string; outputText: string; constraints?: string; examples: TestCase[] };
+/** A solution written from the statement alone, in its own call (it never sees the reference). */
+export async function solveAlone(p: Statement, model = SOLVE_MODEL(), effort?: string) {
+  const user = [`[문제]\n${p.statement}`, `[입력]\n${p.inputText}`, `[출력]\n${p.outputText}`, p.constraints ? `[제약]\n${p.constraints}` : "",
+    ...p.examples.slice(0, 3).map((ex, i) => `[예제 ${i + 1}]\n입력:\n${ex.input}\n출력:\n${ex.output}`)].filter(Boolean).join("\n\n");
+  const started = Date.now();
+  const { code } = await askJson<{ code: string }>("code:solve", SOLVE_SYSTEM, user, SOLVE_SCHEMA, { model, ...(effort ? { effort } : {}) });
+  if (typeof code !== "string" || !code.trim()) throw new Error("독립 풀이 답에 code가 없음");
+  return { code, model, ms: Date.now() - started };
+}
 /** Without source examples, the simple solution must agree with the reference on at least this many small inputs. */
 const CROSS_MIN = 30;
 
@@ -136,14 +156,22 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
   if (!d.generator.trim()) return { ok: false, reason: "generator(숨은 테스트 생성기)가 비어 있음" };
   if (!source.length && !d.brute.trim()) return { ok: false, reason: "원문 예제가 없는데 단순 풀이(brute)가 비어 있음" };
   const seed = 1 + Math.floor(Math.random() * 1_000_000);
+  // The independent solution is asked for while the tests are being made (it needs only the statement).
+  const second = solveAlone({ statement: d.statement, inputText: d.inputText, outputText: d.outputText, constraints: d.constraints, examples: source.length ? source : [] })
+    .catch((e: unknown) => { console.warn(`[code] independent solution failed: ${(e as Error).message}`); return null; });
   const made = await runTestgen({ generator: d.generator, reference: d.reference, brute: d.brute, mutants: d.mutants.slice(0, 6), seed,
     sourceExamples: source, exampleInputs: source.length ? [] : d.exampleInputs.slice(0, 3), needCompared: source.length ? 0 : CROSS_MIN, smallCount: 300 });
-  if (!made.ok) return { ok: false, reason: made.reason };
+  if (!made.ok) { void second; return { ok: false, reason: made.reason }; }
   const examples: TestCase[] = made.examples;
   const tests: TestCase[] = made.tests.map(({ input, output }) => ({ input, output }));
+  // 안전장치 ⑤: a solution from another call must print the same on every test, big ones included.
+  const alone = await second;
+  const verified = alone ? await runVerify({ verify: { code: alone.code, brute: d.brute, tests: [...examples, ...made.tests] } }) : null;
+  if (verified && !verified.ok) return { ok: false, reason: verified.reason };
   const { killed, total, survived, added } = made.mutation;
   let check: Omit<ProblemCheck, "tries"> = { by: source.length ? "source" : "cross", cases: source.length || made.compared, tests: tests.length, maxTests: made.maxTests,
-    compared: made.compared, mutation: { killed, total, survived, added } };
+    compared: made.compared, mutation: { killed, total, survived, added },
+    ...(alone && verified?.ok ? { second: { model: alone.model, status: verified.status, agreed: verified.agreed, total: verified.total, unchecked: verified.unchecked } } : { second: { model: alone?.model ?? "", status: "skipped" as const, agreed: 0, total: 0, unchecked: 0 } }) };
   if (human) {
     // A person's solution from the sources outranks the model's: it must print the same on every kept test.
     const theirs = await judge(human.lang, human.code, [...examples, ...tests], { stopAtFirstFail: true, timeLimitMs: 10_000 });
@@ -170,7 +198,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   const reasons: string[] = [];
   for (let tries = 1; tries <= 1 + MAKE_RETRIES; tries++) {
     const retry = reasons.length ? `\n\n[지난 시도에서 막힌 곳]\n${reasons.map((r, i) => `${i + 1}. ${r}`).join("\n")}\n같은 실수가 없게 다시 세팅한다.` : "";
-    const d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + retry, MAKE_SCHEMA, { heavy: true });
+    const d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + retry, MAKE_SCHEMA, { heavy: true, model: MAKE_MODEL() });
     if (d.answerKind !== "one") throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요.");
     const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human);
     if (!checked.ok) { reasons.push(checked.reason); continue; }
@@ -181,4 +209,17 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
       source: { kind: "ai", title: input.sourceTitle || (input.topic ? `주제: ${input.topic}` : "강의 글"), ...(input.sourceUrl ? { url: input.sourceUrl } : {}) } });
   }
   throw new CodeError(422, `모범 풀이를 확인하지 못해서 저장하지 않았어요 (${1 + MAKE_RETRIES}번 시도). 마지막에 막힌 곳: ${reasons.at(-1)}`);
+}
+
+/**
+ * 실험: which model writes the independent solution best. Solves a saved problem from its statement alone and judges
+ * the result on that problem's own tests (whose answers were already checked). One model call per run.
+ */
+export async function solveCheck(problemId: string, model: string, effort?: string) {
+  const p = await readProblem(problemId);
+  const alone = await solveAlone({ statement: p.statement, inputText: p.inputText, outputText: p.outputText, constraints: p.constraints, examples: p.examplesFrom === "made" ? [] : p.examples }, model, effort);
+  const judged = await judge("javascript", alone.code, [...p.examples, ...p.tests], { timeLimitMs: 10_000, stopAtFirstFail: true });
+  const miss = judged.results.find((r) => r.verdict !== "AC");
+  return { problemId, title: p.title, model, effort: effort ?? "", aiMs: alone.ms, verdict: judged.verdict, passed: judged.passed, total: judged.total,
+    ...(miss ? { fail: { verdict: miss.verdict, input: miss.input.slice(0, 200), expected: miss.expected.slice(0, 100), got: miss.got.slice(0, 100) } } : {}), ...(judged.compile ? { compile: judged.compile.slice(0, 300) } : {}) };
 }

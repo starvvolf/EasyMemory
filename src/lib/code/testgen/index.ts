@@ -26,21 +26,30 @@ export type TestgenResult =
 const HARNESS = () => path.join(process.cwd(), "src", "lib", "code", "testgen", "harness.mjs");
 const WAIT_MS = 180_000;
 
+export type VerifyJob = { verify: { code: string; brute?: string; tests: Array<{ input: string; output: string; refMs?: number; kind?: string; size?: string }> }; compare?: TestgenJob["compare"] };
+export type VerifyResult =
+  | { ok: true; status: "agreed" | "second-wrong" | "unchecked" | "broken"; agreed: number; total: number; unchecked: number; secondWrong: number; reason?: string }
+  | { ok: false; reason: string };
+/** 안전장치 ⑤: a second solution from another model call, run on every test (see verify() in harness.mjs). */
+export function runVerify(job: VerifyJob): Promise<VerifyResult> { return runHarness(job) as Promise<VerifyResult>; }
+
 /** Runs one job in its own process. Only what Node needs to start is passed on: no keys, no tokens, no app settings. */
-export function runTestgen(job: TestgenJob): Promise<TestgenResult> {
+export function runTestgen(job: TestgenJob): Promise<TestgenResult> { return runHarness(job) as Promise<TestgenResult>; }
+
+function runHarness(job: TestgenJob | VerifyJob): Promise<TestgenResult | VerifyResult> {
   return new Promise((resolve) => {
     const env = {} as NodeJS.ProcessEnv;
     for (const key of ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR"]) if (process.env[key]) env[key] = process.env[key];
     const child = spawn(process.execPath, ["--max-old-space-size=2048", "--stack-size=65500", HARNESS()], { env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     const out: Buffer[] = []; let err = ""; let settled = false;
-    const done = (result: TestgenResult) => { if (settled) return; settled = true; clearTimeout(timer); resolve(result); };
+    const done = (result: TestgenResult | VerifyResult) => { if (settled) return; settled = true; clearTimeout(timer); resolve(result); };
     const timer = setTimeout(() => { child.kill("SIGKILL"); done({ ok: false, reason: `테스트 만들기가 ${WAIT_MS / 1000}초 안에 끝나지 않음 (생성기나 풀이가 너무 느림)` }); }, WAIT_MS);
     child.stdout.on("data", (c: Buffer) => out.push(c));
     child.stderr.on("data", (c: Buffer) => { err += c.toString("utf8"); if (err.length > 20_000) err = err.slice(-20_000); });
     child.on("error", (e) => done({ ok: false, reason: `테스트 만들기 실행기를 띄우지 못함: ${e.message}` }));
     child.on("close", (code) => {
       const text = Buffer.concat(out).toString("utf8");
-      try { done(JSON.parse(text) as TestgenResult); }
+      try { done(JSON.parse(text) as TestgenResult | VerifyResult); }
       catch { done({ ok: false, reason: code === 134 || /heap out of memory/i.test(err) ? "테스트를 만들다 메모리가 모자람 (입력이 너무 큼)" : `테스트 만들기 실행기가 비정상 종료 (${code}): ${err.slice(-300)}` }); }
     });
     child.stdin.on("error", () => undefined);

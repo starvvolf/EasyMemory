@@ -36,14 +36,22 @@ const draft = (over: Record<string, unknown>) => JSON.stringify({
   knowledge: ["누적 합"], folder: "알고리즘/합", blank: { code: "", filled: "" }, ...over,
 });
 
-/** A data folder and a fake model that answers code:make with the given replies in order; returns the requests it saw. */
-async function withFake(replies: string[], run: (seen: ModelRequest[]) => Promise<void>) {
+/**
+ * A data folder and a fake model that answers code:make with the given replies in order; returns the requests it saw.
+ * code:solve (the independent solution) gets `solve` if given, else the latest draft's own reference.
+ */
+async function withFake(replies: string[], run: (seen: ModelRequest[]) => Promise<void>, solve?: string) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "code-make-"));
   const prior = { data: process.env.STUDY_FORGE_DATA_DIR, provider: process.env.STUDY_FORGE_MODEL_PROVIDER };
   process.env.STUDY_FORGE_DATA_DIR = dir;
   process.env.STUDY_FORGE_MODEL_PROVIDER = "fake";
   const seen: ModelRequest[] = [];
-  setFakeModelResponder((request) => { if (request.purpose === "code:make") seen.push(request); return replies[Math.min(seen.length, replies.length) - 1] ?? "{}"; });
+  const latest = () => replies[Math.min(seen.length, replies.length) - 1] ?? "{}";
+  setFakeModelResponder((request) => {
+    if (request.purpose === "code:solve") return JSON.stringify({ code: solve ?? (JSON.parse(latest()) as { reference: string }).reference });
+    if (request.purpose === "code:make") seen.push(request);
+    return latest();
+  });
   try { await run(seen); } finally {
     setFakeModelResponder(null);
     for (const [key, value] of [["STUDY_FORGE_DATA_DIR", prior.data], ["STUDY_FORGE_MODEL_PROVIDER", prior.provider]] as const) {
@@ -148,3 +156,40 @@ test("a generator that breaks its own constraints is sent back with the reason",
     assert.equal(seen.length, 2);
     assert.match(seen[1].user, /검사기가 숨은 테스트\(allMax\/max\) 입력을 거부함/);
   }));
+
+// 안전장치 ⑤: a solution from another model call is run on every test.
+const SUM_WRONG_WHEN_BIG = `${READ} let s = 0; for (let i = 1; i <= n; i++) s += t[i]; console.log(n > 500 ? s + 1 : s);`;
+const BRUTE_SMALL_ONLY = `${READ} if (n > 50) while (true) {} console.log(t.slice(1, n + 1).reduce((a, b) => a + b, 0));`;
+
+test("the independent solution agrees on every test: saved, and the check says which model and how many", () => withFake(
+  [draft({})],
+  async () => {
+    const saved = await readProblem((await makeProblem({ topic: "누적 합", kind: "full" })).id);
+    assert.equal(saved.check?.second?.status, "agreed");
+    assert.equal(saved.check?.second?.agreed, saved.check?.second?.total);
+    assert.ok((saved.check?.second?.total ?? 0) >= saved.tests.length);
+  }));
+
+test("it disagrees on a big input the simple solution can't finish: nobody knows who is right, so the draft is asked again", { timeout: 60_000 }, () => withFake(
+  [draft({ brute: BRUTE_SMALL_ONLY }), draft({ brute: BRUTE_SMALL_ONLY }), draft({ brute: BRUTE_SMALL_ONLY })],
+  async (seen) => {
+    await assert.rejects(makeProblem({ topic: "누적 합", kind: "full" }), /저장하지 않았어요/);
+    assert.equal(seen.length, 3);
+    assert.match(seen[1].user, /다른 호출에서 쓴 독립 풀이.*가릴 수 없음/);
+    assert.equal(await savedCount(), 0);
+  }, SUM_WRONG_WHEN_BIG));
+
+test("where the simple solution can decide, it sides with the reference: the second solution is the wrong one, the problem is saved", () => withFake(
+  [draft({})],
+  async () => {
+    const saved = await readProblem((await makeProblem({ topic: "누적 합", kind: "full" })).id);
+    assert.equal(saved.check?.second?.status, "second-wrong");
+  }, SUM_WRONG_WHEN_BIG));
+
+test("when the reference is the one that's wrong, the simple and the independent solution outvote it", () => withFake(
+  [draft({ reference: `${READ} let s = 0; for (let i = 1; i <= n; i++) s += t[i]; console.log(n > 500 ? s + 1 : s);`, sourceExamples: [{ input: "3\n1 2 3", output: "6" }], exampleInputs: [] }), draft({ sourceExamples: [{ input: "3\n1 2 3", output: "6" }], exampleInputs: [] })],
+  async (seen) => {
+    await makeProblem({ lesson: PASTED, kind: "full" });
+    assert.equal(seen.length, 2);
+    assert.match(seen[1].user, /모범 풀이가 틀림/);
+  }, SUM));

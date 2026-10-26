@@ -19,13 +19,15 @@ export function assistSettings(heavy = false) {
 }
 const clip = (text: string, n: number) => text.length > n ? `${text.slice(0, n)}\n…(이하 생략)` : text;
 
-export async function askText(purpose: string, system: string, user: string, options: { heavy?: boolean; caller?: ModelCaller } = {}) {
-  const { model, effort } = assistSettings(options.heavy);
+type AskOptions = { heavy?: boolean; caller?: ModelCaller; /** this call only: a model and effort other than the assist settings */ model?: string; effort?: string };
+const settingsFor = (options: AskOptions) => { const s = assistSettings(options.heavy); return { model: options.model || s.model, effort: options.effort || s.effort }; };
+export async function askText(purpose: string, system: string, user: string, options: AskOptions = {}) {
+  const { model, effort } = settingsFor(options);
   const reply = await callModel({ purpose, system: clip(system, 12000), user: clip(user, 60000), model, effort, caller: options.caller ?? LOCAL_CALLER });
   return reply.text.trim();
 }
-export async function askJson<T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, options: { heavy?: boolean; caller?: ModelCaller } = {}): Promise<T> {
-  const { model, effort } = assistSettings(options.heavy);
+export async function askJson<T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, options: AskOptions = {}): Promise<T> {
+  const { model, effort } = settingsFor(options);
   const reply = await callModel({ purpose, system: clip(`${system}\n출력은 JSON으로만 한다.`, 12000), user: clip(user, 60000), json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`,
     model, effort, caller: options.caller ?? LOCAL_CALLER });
   return reply.data as T;

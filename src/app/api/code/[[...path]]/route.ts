@@ -5,7 +5,7 @@ import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
 import { deleteProblem, publicProblem, readDrafts, readProblem, readSubmissions, runCustom, saveDraft } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, submitAndRecord } from "@/lib/code/service";
-import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach } from "@/lib/assist/code-ai";
+import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
 
 export const runtime = "nodejs";
@@ -68,6 +68,8 @@ async function handle(request: Request, context: RouteContext) {
         return json(out);
       }
       // 문제 목록으로 돌아가거나 다른 문제로: this attempt's 틀림 · 힌트 · 물어봄 go into the knowledge record now.
+      // 실험: one model call — which model writes the independent solution (안전장치 ⑤) best.
+      if (p[2] === "solve-check" && m === "POST") { const b = await body(z.object({ model: z.string().regex(/^[a-z0-9.-]{3,40}$/), effort: z.enum(["low", "medium", "high"]).optional() })); return json(await solveCheck(id, b.model, b.effort)); }
       if (p[2] === "end" && m === "POST") return json(await endAttempt(id));
       if (p[2] === "review" && m === "POST") { const b = await body(z.object({ lang, code, note: z.string().max(1000).optional() })); return json(await reviewApproach({ problemId: id, ...b })); }
       if (p[2] === "counter" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await counterexample({ problemId: id, ...b })); }

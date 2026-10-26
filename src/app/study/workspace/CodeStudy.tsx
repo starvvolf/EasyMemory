@@ -15,7 +15,8 @@ type Problem = { id: string; title: string; statement: string; inputText: string
   folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number; memoryLimitMb?: number;
   examplesFrom?: "source" | "made"; constraints?: string;
   check?: { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped"; tests?: number; maxTests?: number; compared?: number;
-    mutation?: { killed: number; total: number; survived: string[]; added: number } } };
+    mutation?: { killed: number; total: number; survived: string[]; added: number };
+    second?: { model: string; status: string; agreed: number; total: number; unchecked: number } } };
 type Result = { index: number; verdict: string; ms: number; input: string; expected: string; got: string; stderr: string; diff?: string; cpuMs?: number; peakKb?: number; near?: "time" | "memory" };
 type Judged = { verdict: string; passed: number; total: number; shown: Result[]; compile: string; ms: number };
 type SubLite = { id: string; at: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; lines: number };
@@ -237,7 +238,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {problem.constraints ? <p className="small muted">제약: {problem.constraints.split("\n").join(" · ")}</p> : null}
         <p className="small muted">숨은 테스트 {problem.hiddenTests}개{problem.check?.maxTests ? ` (최대 크기 ${problem.check.maxTests}개)` : ""} · 시간 제한 {problem.timeLimitMs / 1000}초 · 메모리 제한 {problem.memoryLimitMb ?? 256}MB
           {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}${problem.check.by === "source" && problem.check.compared ? `, 단순 풀이와 작은 입력 ${problem.check.compared}개 일치` : ""}${problem.check.human === "match" ? " · 사람이 쓴 정답 코드와 일치" : ""}` : ""}
-          {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}</p>
+          {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}
+          {problem.check?.second && problem.check.second.status !== "skipped" ? ` · ${problem.check.second.status === "agreed" ? `다른 호출의 독립 풀이(${problem.check.second.model})와 테스트 ${problem.check.second.agreed}/${problem.check.second.total}개 일치` : problem.check.second.status === "second-wrong" ? "독립 풀이가 틀려서 큰 입력 대조는 못 함" : "독립 풀이로 대조하지 못함"}` : ""}</p>
         <div className="row small"><span className="muted">확인하는 지식</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div>
         {subs.length ? <><p className="eyebrow">내 제출</p><ul className="cs-subs">{subs.filter((s) => s.mode === "submit").slice(0, 8).map((s) => <li key={s.id}><button className="linkish small" onClick={() => void openSubmission(s.id)}>
           <span className={`chip ${VERDICT[s.verdict]?.[1] ?? ""}`}>{VERDICT[s.verdict]?.[0] ?? s.verdict}</span> {s.lang} · {new Date(s.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{s.hints ? ` · 힌트 ${s.hints}` : ""}</button></li>)}</ul></> : null}

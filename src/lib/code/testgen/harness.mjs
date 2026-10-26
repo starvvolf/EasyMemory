@@ -189,11 +189,40 @@ function main(job) {
   return { ok: true, examples, tests, compared, small: small.length, maxTests: tests.filter((t) => t.size === "max").length, mutation };
 }
 
+/**
+ * 독립 풀이 대조 (안전장치 ⑤): a second solution, written in a separate model call from the statement alone, runs on
+ * every test. Where it disagrees, the simple solution decides if it can finish on that input: agreeing with the
+ * reference means the second solution is the wrong one; otherwise the expected output is wrong. Where the simple
+ * solution can't decide (a big input), nobody knows which is right, and that is reported too.
+ */
+function verify(job) {
+  const v = job.verify;
+  const same = (got, want) => compareOutput(got, want, job.compare).ok;
+  const second = compile(v.code, "second");
+  if (second.error) return { ok: true, status: "broken", agreed: 0, total: v.tests.length, unchecked: v.tests.length, secondWrong: 0, reason: second.error };
+  const brute = v.brute ? compile(v.brute, "brute") : null;
+  let agreed = 0, unchecked = 0, secondWrong = 0;
+  for (const [i, t] of v.tests.entries()) {
+    const r = run(second, t.input, Math.max(2000, (t.refMs ?? 0) * 20));
+    if (r.timedOut || r.error) { unchecked++; continue; } // a slow or crashing second solution says nothing about the answer
+    if (same(r.stdout, t.output)) { agreed++; continue; }
+    const where = `${i + 1}번 테스트${t.kind ? ` (${t.kind}/${t.size})` : ""}`;
+    const b = brute && !brute.error ? run(brute, t.input, 3000) : null;
+    if (b && !b.timedOut && !b.error) {
+      if (same(b.stdout, t.output)) { secondWrong++; continue; }
+      return { ok: false, reason: `${where}: 단순 풀이와 독립 풀이가 모두 ${short(norm(b.stdout))}인데 기대 출력은 ${short(norm(t.output))} (모범 풀이가 틀림)` };
+    }
+    return { ok: false, reason: `${where}: 모범 풀이 ${short(norm(t.output))}, 다른 호출에서 쓴 독립 풀이 ${short(norm(r.stdout))} — 큰 입력이라 단순 풀이로 가릴 수 없음 (어느 쪽이 맞는지 다시 확인)` };
+  }
+  const status = secondWrong ? "second-wrong" : agreed === 0 ? "unchecked" : "agreed";
+  return { ok: true, status, agreed, total: v.tests.length, unchecked, secondWrong };
+}
+
 let raw = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (c) => { raw += c; });
 process.stdin.on("end", () => {
   let result;
-  try { result = main(JSON.parse(raw)); } catch (e) { result = { ok: false, reason: `테스트 만들기 실행기 에러: ${String(e && e.message || e).slice(0, 300)}` }; }
+  try { const job = JSON.parse(raw); result = job.verify ? verify(job) : main(job); } catch (e) { result = { ok: false, reason: `테스트 만들기 실행기 에러: ${String(e && e.message || e).slice(0, 300)}` }; }
   process.stdout.write(JSON.stringify(result));
 });

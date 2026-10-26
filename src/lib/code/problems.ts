@@ -36,7 +36,9 @@ export type ProblemCheck = { by: "source" | "cross"; cases: number; tries: numbe
   /** Hidden tests made by the generator, how many are max-size, and small inputs the simple solution agreed on. */
   tests?: number; maxTests?: number; compared?: number;
   /** 결함 풀이 검출: faulty solutions the tests failed, out of those that really are faulty (a score, not a gate). */
-  mutation?: { killed: number; total: number; survived: string[]; added: number } };
+  mutation?: { killed: number; total: number; survived: string[]; added: number };
+  /** 안전장치 ⑤: a solution from another model call agreed on `agreed` of `total` tests (`unchecked`: it was too slow or crashed). */
+  second?: { model: string; status: "agreed" | "second-wrong" | "unchecked" | "broken" | "skipped"; agreed: number; total: number; unchecked: number } };
 export type ProblemLite = Pick<Problem, "id" | "title" | "kind" | "knowledge" | "folder" | "createdAt"> & { source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string };
 export type Submission = { id: string; at: string; problemId: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; code: string; ms: number };
 
