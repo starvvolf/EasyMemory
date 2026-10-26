@@ -16,7 +16,7 @@ type Problem = { id: string; title: string; statement: string; inputText: string
   examplesFrom?: "source" | "made"; constraints?: string;
   check?: { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped"; tests?: number; maxTests?: number; compared?: number;
     mutation?: { killed: number; total: number; survived: string[]; added: number } } };
-type Result = { index: number; verdict: string; ms: number; input: string; expected: string; got: string; stderr: string };
+type Result = { index: number; verdict: string; ms: number; input: string; expected: string; got: string; stderr: string; diff?: string };
 type Judged = { verdict: string; passed: number; total: number; shown: Result[]; compile: string; ms: number };
 type SubLite = { id: string; at: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; lines: number };
 type Msg = { who: "me" | "ai"; text: string; tag?: string };
@@ -305,6 +305,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
               <details key={r.index} open={r.verdict !== "AC"} className="cs-case">
                 <summary><span className={`chip ${VERDICT[r.verdict]?.[1] ?? ""}`}>{VERDICT[r.verdict]?.[0]}</span> {result.mode === "example" ? `예제 ${r.index + 1}` : "처음 틀린 테스트"} · {r.ms}ms</summary>
                 <div className="cs-io three"><div><p className="eyebrow">입력</p><pre>{r.input}</pre></div><div><p className="eyebrow">기대 출력</p><pre>{r.expected}</pre></div><div><p className="eyebrow">내 출력</p><pre>{r.got}</pre></div></div>
+                {r.diff ? <p className="muted small">{r.diff}</p> : null}
                 {r.stderr ? <pre className="cs-out bad">{r.stderr}</pre> : null}
               </details>
             ))}

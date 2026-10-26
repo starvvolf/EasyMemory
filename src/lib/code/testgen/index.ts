@@ -15,6 +15,8 @@ export type TestgenJob = {
   /** Small inputs the simple solution must agree on (only asked for problems without source examples). */
   needCompared?: number;
   smallCount?: number; runMs?: number; seed?: number;
+  /** How outputs are compared (compare.mjs); exact when left out. */
+  compare?: { mode?: "exact" | "approx"; eps?: number };
 };
 export type Mutation = { killed: number; total: number; survived: string[]; added: number; maybeRight: string[] };
 export type TestgenResult =

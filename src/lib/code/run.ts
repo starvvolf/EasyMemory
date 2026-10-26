@@ -7,6 +7,9 @@ import { randomBytes } from "node:crypto";
 import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { compareOutput, normalizeOutput } from "./compare.mjs";
+
+export { normalizeOutput };
 
 export const LANGS = ["python", "javascript", "cpp", "csharp"] as const;
 export type Lang = (typeof LANGS)[number];
@@ -158,14 +161,13 @@ export async function cleanup(prepared: Prepared) { await rm(prepared.dir, { rec
 export type Verdict = "AC" | "WA" | "TLE" | "RE" | "CE" | "MISSING";
 export const VERDICT_LABEL: Record<Verdict, string> = { AC: "맞았습니다", WA: "틀렸습니다", TLE: "시간 초과", RE: "런타임 에러", CE: "컴파일 에러", MISSING: "실행기 없음" };
 export type TestCase = { input: string; output: string };
-export type TestResult = { index: number; verdict: Verdict; ms: number; input: string; expected: string; got: string; stderr: string };
+export type TestResult = { index: number; verdict: Verdict; ms: number; input: string; expected: string; got: string; stderr: string; /** where a wrong answer first differs */ diff?: string };
 export type Judgement = { verdict: Verdict; passed: number; total: number; results: TestResult[]; compile: string; ms: number };
 
-/** Output as judges compare it: \r\n as \n, spaces at line ends and blank lines at the end ignored. */
-export const normalizeOutput = (text: string) => text.replace(/\r\n?/g, "\n").split("\n").map((l) => l.replace(/[ \t]+$/, "")).join("\n").replace(/\n+$/, "");
+export type CompareHow = { mode?: "exact" | "approx"; eps?: number };
 const clipText = (text: string, n = 4000) => text.length > n ? `${text.slice(0, n)}\n… (${text.length - n}자 더)` : text;
 
-export async function judge(lang: Lang, code: string, tests: TestCase[], options: { timeLimitMs?: number; stopAtFirstFail?: boolean } = {}): Promise<Judgement> {
+export async function judge(lang: Lang, code: string, tests: TestCase[], options: { timeLimitMs?: number; stopAtFirstFail?: boolean; compare?: CompareHow } = {}): Promise<Judgement> {
   const started = Date.now();
   const prepared = await prepare(lang, code);
   try {
@@ -174,10 +176,12 @@ export async function judge(lang: Lang, code: string, tests: TestCase[], options
     const limit = options.timeLimitMs ?? 2000;
     for (const [index, test] of tests.entries()) {
       const out = await execute(prepared.cmd, prepared.args, { cwd: prepared.dir, input: test.input, timeMs: limit, ...(prepared.env ? { env: prepared.env } : {}) });
-      const verdict: Verdict = out.failedToStart ? "RE" : out.timedOut ? "TLE" : out.tooMuch || out.code !== 0 ? "RE"
-        : normalizeOutput(out.stdout) === normalizeOutput(test.output) ? "AC" : "WA";
+      const ran = !out.failedToStart && !out.timedOut && !out.tooMuch && out.code === 0;
+      const same = ran ? compareOutput(out.stdout, test.output, options.compare) : null;
+      const verdict: Verdict = out.failedToStart ? "RE" : out.timedOut ? "TLE" : !ran ? "RE" : same!.ok ? "AC" : "WA";
       results.push({ index, verdict, ms: out.ms, input: clipText(test.input), expected: clipText(test.output), got: clipText(out.stdout),
-        stderr: clipText(out.failedToStart ?? (out.tooMuch ? "출력이 너무 많아요 (8MB 넘음)." : out.stderr), 3000) });
+        stderr: clipText(out.failedToStart ?? (out.tooMuch ? "출력이 너무 많아요 (8MB 넘음)." : out.stderr), 3000),
+        ...(same && !same.ok ? { diff: same.why } : {}) });
       if (verdict !== "AC" && options.stopAtFirstFail) break;
     }
     const failed = results.find((r) => r.verdict !== "AC");

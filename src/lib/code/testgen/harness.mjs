@@ -7,6 +7,7 @@
 import vm from "node:vm";
 import util from "node:util";
 import { performance } from "node:perf_hooks";
+import { compareOutput, normalizeOutput as norm } from "../compare.mjs";
 
 const EXIT = Symbol("exit");
 const MAX_TESTS = 60;
@@ -70,13 +71,13 @@ function loadGenerator(code) {
     check: (input) => call(callCheck, { __input: input }, 10000) } };
 }
 
-const norm = (t) => String(t).replace(/\r\n?/g, "\n").split("\n").map((l) => l.replace(/[ \t]+$/, "")).join("\n").replace(/\n+$/, "");
 const short = (t, n = 80) => { const one = String(t).replace(/\n/g, " ⏎ "); return one.length > n ? `${one.slice(0, n)}…` : one || "(빈 출력)"; };
 const badRun = (r) => r.timedOut ? "시간 초과" : r.error ? `실행 중 에러 (${r.error})` : !r.stdout.trim() ? "출력 없음" : "";
 
 function main(job) {
   const runMs = job.runMs ?? 5000;
   const fail = (reason) => ({ ok: false, reason });
+  const same = (got, want) => compareOutput(got, want, job.compare).ok;
   const loaded = loadGenerator(job.generator);
   if (loaded.error) return fail(loaded.error);
   const { g } = loaded;
@@ -105,7 +106,7 @@ function main(job) {
     const r = run(reference, ex.input, runMs);
     const why = badRun(r);
     if (why) return fail(`예제 ${i + 1}번: 모범 풀이 ${why}`);
-    if (norm(r.stdout) !== norm(ex.output)) return fail(`예제 ${i + 1}번: 기대 ${short(norm(ex.output))}, 모범 풀이 ${short(norm(r.stdout))}`);
+    if (!same(r.stdout, ex.output)) return fail(`예제 ${i + 1}번: 기대 ${short(norm(ex.output))}, 모범 풀이 ${short(norm(r.stdout))}`);
     examples.push({ input: ex.input, output: norm(ex.output) });
   }
   for (const [i, input] of (job.exampleInputs ?? []).entries()) {
@@ -136,7 +137,7 @@ function main(job) {
     if (!brute) continue;
     const slow = run(brute, s.input, runMs);
     if (badRun(slow)) continue;
-    if (norm(slow.stdout) !== norm(fast.stdout)) return fail(`작은 입력 ${i + 1}번 (${s.kind}: ${short(s.input, 60)}): 단순 풀이 ${short(norm(slow.stdout))}, 모범 풀이 ${short(norm(fast.stdout))}`);
+    if (!same(slow.stdout, fast.stdout)) return fail(`작은 입력 ${i + 1}번 (${s.kind}: ${short(s.input, 60)}): 단순 풀이 ${short(norm(slow.stdout))}, 모범 풀이 ${short(norm(fast.stdout))}`);
     compared++;
   }
   if (job.needCompared && compared < job.needCompared) return fail(`단순 풀이로 확인된 작은 입력이 ${compared}개뿐 (${job.needCompared}개 이상 필요)`);
@@ -170,13 +171,13 @@ function main(job) {
     for (const t of [...examples, ...tests]) {
       const limit = Math.max(1000, (t.refMs ?? 0) * 10);
       const r = run(script, t.input, limit);
-      if (r.timedOut || r.error || norm(r.stdout) !== t.output) { killed = true; break; }
+      if (r.timedOut || r.error || !same(r.stdout, t.output)) { killed = true; break; }
     }
     if (killed) { mutation.total++; mutation.killed++; continue; }
     let found = null;
     if (brute) for (const s of small) {
       const r = run(script, s.input, runMs);
-      if (r.timedOut || r.error || norm(r.stdout) !== smallOut.get(s.input)) { found = s; break; }
+      if (r.timedOut || r.error || !same(r.stdout, smallOut.get(s.input))) { found = s; break; }
     }
     if (found) {
       mutation.total++; mutation.killed++;
