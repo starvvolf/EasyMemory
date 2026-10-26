@@ -3,8 +3,8 @@
 // killed with everything it started. Nothing is sandboxed beyond that: this is the learner's own code on their own PC,
 // and the server only answers loopback requests (local experiment mode).
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { access, mkdir, rm, writeFile } from "node:fs/promises";
+import { createHash, randomBytes } from "node:crypto";
+import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { compareOutput, normalizeOutput } from "./compare.mjs";
@@ -17,11 +17,27 @@ export const LANG_LABEL: Record<Lang, string> = { python: "Python", javascript: 
 const SOURCE: Record<Lang, string> = { python: "main.py", javascript: "main.js", cpp: "main.cpp", csharp: "Main.cs" };
 const win = process.platform === "win32";
 
-export type Exec = { stdout: string; stderr: string; code: number | null; timedOut: boolean; tooMuch: boolean; ms: number; failedToStart?: string };
+/** CPU time (user + kernel, every process the program started) and peak committed memory, from the job object. */
+export type Usage = { cpuMs: number; peakKb: number; hit: "cpu" | "mem" | "" };
+export type Exec = { stdout: string; stderr: string; code: number | null; timedOut: boolean; tooMuch: boolean; ms: number; failedToStart?: string; usage?: Usage };
+export type Limits = { cpuMs: number; memMb: number };
 const OUTPUT_CAP = 8_000_000;
 
 /** Run one program: stdin in, stdout/stderr out, killed (with its children) after `timeMs`. */
-export function execute(cmd: string, args: string[], options: { cwd: string; input?: string; timeMs: number; env?: Record<string, string> }): Promise<Exec> {
+export async function execute(cmd: string, args: string[], options: { cwd: string; input?: string; timeMs: number; env?: Record<string, string>; limits?: Limits }): Promise<Exec> {
+  const helper = options.limits ? await jobrun() : null;
+  if (!helper || !options.limits) return spawnOnce(cmd, args, options);
+  const stats = path.join(options.cwd, `job-${randomBytes(4).toString("hex")}.json`);
+  const out = await spawnOnce(helper, [stats, String(options.limits.cpuMs), String(options.limits.memMb), cmd, ...args], options);
+  try {
+    const s = JSON.parse(await readFile(stats, "utf8")) as { exit: number; cpuMs: number; peakKb: number; hit: Usage["hit"]; error: string };
+    await rm(stats, { force: true });
+    if (s.error) return out; // the job could not be set up: the run still happened, without measurements
+    return { ...out, code: s.exit > 0x7fffffff ? s.exit - 0x100000000 : s.exit, usage: { cpuMs: s.cpuMs, peakKb: s.peakKb, hit: s.hit } };
+  } catch { return out; } // killed by the wall clock before it could write
+}
+
+function spawnOnce(cmd: string, args: string[], options: { cwd: string; input?: string; timeMs: number; env?: Record<string, string> }): Promise<Exec> {
   return new Promise((resolve) => {
     const started = Date.now();
     let stdout = "", stderr = "", timedOut = false, tooMuch = false, settled = false;
@@ -51,6 +67,32 @@ export function execute(cmd: string, args: string[], options: { cwd: string; inp
   });
 }
 
+/* ---------- 작업 개체 도우미 (Windows): jobrun/JobRun.cs, built once with the csc.exe that ships with Windows ---------- */
+const jobCache = globalThis as unknown as { __jobrun?: Promise<string | null> };
+export function jobrun(): Promise<string | null> {
+  if (!win || process.env.RECALLER_NO_JOBRUN) return Promise.resolve(null);
+  jobCache.__jobrun ??= (async () => {
+    try {
+      const source = await readFile(path.join(process.cwd(), "src", "lib", "code", "jobrun", "JobRun.cs"), "utf8");
+      const dir = path.join(os.tmpdir(), "recaller-code");
+      const exe = path.join(dir, `jobrun-${createHash("sha1").update(source).digest("hex").slice(0, 10)}.exe`);
+      if (await exists(exe)) return exe;
+      await mkdir(dir, { recursive: true });
+      const windir = process.env.WINDIR ?? process.env.windir ?? "C:\\Windows";
+      const csc = path.join(windir, "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+      const work = path.join(dir, `jobrun-build-${randomBytes(4).toString("hex")}`);
+      await mkdir(work, { recursive: true });
+      await writeFile(path.join(work, "JobRun.cs"), source, "utf8");
+      const out = await spawnOnce(csc, ["/nologo", "/optimize+", "/out:jobrun.exe", "JobRun.cs"], { cwd: work, timeMs: 60_000 });
+      if (out.code !== 0) { console.warn(`[code] jobrun build failed: ${out.stdout.slice(0, 500)}`); return null; }
+      await rename(path.join(work, "jobrun.exe"), exe).catch(() => undefined);
+      await rm(work, { recursive: true, force: true }).catch(() => undefined);
+      return (await exists(exe)) ? exe : null;
+    } catch (e) { console.warn(`[code] jobrun unavailable: ${(e as Error).message}`); return null; }
+  })();
+  return jobCache.__jobrun;
+}
+
 /* ---------- which compilers this computer has ---------- */
 type Tool = { cmd: string; pre: string[]; version: string };
 const exists = async (file: string) => { try { await access(file); return true; } catch { return false; } };
@@ -72,7 +114,14 @@ async function findTools(): Promise<Toolchain> {
   const env = process.env;
   const python = await firstOf([
     ...(env.RECALLER_PYTHON ? [() => probe(env.RECALLER_PYTHON!, [], ["--version"], /Python 3/)] : []),
-    ...(win ? [() => probe("py", ["-3"], ["--version"], /Python 3/)] : []),
+    // The py launcher stays running as a second process (and ~30MB) next to python.exe; use python.exe directly.
+    ...(win ? [async () => {
+      const t = await probe("py", ["-3"], ["--version"], /Python 3/);
+      if (!t) return null;
+      const where = await execute("py", ["-3", "-c", "import sys; print(sys.executable)"], { cwd: os.tmpdir(), timeMs: 8000 });
+      const exe = where.stdout.trim();
+      return exe && where.code === 0 && await exists(exe) ? { cmd: exe, pre: [], version: t.version } : t;
+    }] : []),
     () => probe(win ? "python" : "python3", [], ["--version"], /Python 3/),
     () => probe(win ? "python3" : "python", [], ["--version"], /Python 3/),
   ]);
@@ -133,7 +182,8 @@ export async function prepare(lang: Lang, code: string): Promise<Prepared> {
   if (lang === "cpp") {
     const exe = win ? "main.exe" : "main";
     // Static linking on Windows: a MinGW program then runs without its DLLs on PATH.
-    const error = await compile(found.cmd, [...found.pre, "-O2", "-std=gnu++17", ...(win ? ["-static"] : []), "-o", exe, SOURCE.cpp]);
+    // A 256MB stack on Windows (the default is 1MB): judges let deep recursion use the memory limit.
+    const error = await compile(found.cmd, [...found.pre, "-O2", "-std=gnu++17", ...(win ? ["-static", "-Wl,--stack,268435456"] : []), "-o", exe, SOURCE.cpp]);
     if (error) return { ok: false, kind: "compile", error, dir };
     return { ok: true, cmd: path.join(dir, exe), args: [], dir, compileMs: Date.now() - started };
   }
@@ -158,34 +208,54 @@ export async function prepare(lang: Lang, code: string): Promise<Prepared> {
 export async function cleanup(prepared: Prepared) { await rm(prepared.dir, { recursive: true, force: true }).catch(() => undefined); }
 
 /* ---------- judging ---------- */
-export type Verdict = "AC" | "WA" | "TLE" | "RE" | "CE" | "MISSING";
-export const VERDICT_LABEL: Record<Verdict, string> = { AC: "맞았습니다", WA: "틀렸습니다", TLE: "시간 초과", RE: "런타임 에러", CE: "컴파일 에러", MISSING: "실행기 없음" };
+export type Verdict = "AC" | "WA" | "TLE" | "MLE" | "RE" | "CE" | "MISSING";
+export const VERDICT_LABEL: Record<Verdict, string> = { AC: "맞았습니다", WA: "틀렸습니다", TLE: "시간 초과", MLE: "메모리 초과", RE: "런타임 에러", CE: "컴파일 에러", MISSING: "실행기 없음" };
 export type TestCase = { input: string; output: string };
-export type TestResult = { index: number; verdict: Verdict; ms: number; input: string; expected: string; got: string; stderr: string; /** where a wrong answer first differs */ diff?: string };
-export type Judgement = { verdict: Verdict; passed: number; total: number; results: TestResult[]; compile: string; ms: number };
+export type TestResult = { index: number; verdict: Verdict; ms: number; input: string; expected: string; got: string; stderr: string; /** where a wrong answer first differs */ diff?: string;
+  /** CPU time and peak memory (Windows job object); `near` when over the limit but inside the allowance band */ cpuMs?: number; peakKb?: number; near?: "time" | "memory" };
+export type Judgement = { verdict: Verdict; passed: number; total: number; results: TestResult[]; compile: string; ms: number; /** false when CPU time and memory could not be measured (not Windows, or the helper failed) */ measured?: boolean };
+
+/**
+ * Limits as a judge would apply them, with an allowance band for this PC not being the judge's machine: a run over the
+ * limit but inside the band still gets its verdict, marked `near`; past the band it is TLE / MLE. The wall clock
+ * (a program waiting for input uses no CPU) is a generous multiple of the time limit.
+ */
+export function limitsFor(timeLimitMs: number, memoryLimitMb: number) {
+  const timeBand = Math.max(300, Math.round(timeLimitMs * 0.3)), memBand = Math.max(16, Math.round(memoryLimitMb * 0.1));
+  return { cpuMs: timeLimitMs + timeBand, memMb: memoryLimitMb + memBand, wallMs: Math.max(timeLimitMs * 3, timeLimitMs + 3000) };
+}
+export const DEFAULT_MEMORY_MB = 256;
 
 export type CompareHow = { mode?: "exact" | "approx"; eps?: number };
 const clipText = (text: string, n = 4000) => text.length > n ? `${text.slice(0, n)}\n… (${text.length - n}자 더)` : text;
 
-export async function judge(lang: Lang, code: string, tests: TestCase[], options: { timeLimitMs?: number; stopAtFirstFail?: boolean; compare?: CompareHow } = {}): Promise<Judgement> {
+export async function judge(lang: Lang, code: string, tests: TestCase[], options: { timeLimitMs?: number; memoryLimitMb?: number; stopAtFirstFail?: boolean; compare?: CompareHow } = {}): Promise<Judgement> {
   const started = Date.now();
   const prepared = await prepare(lang, code);
   try {
     if (!prepared.ok) return { verdict: prepared.kind === "missing" ? "MISSING" : "CE", passed: 0, total: tests.length, results: [], compile: clipText(prepared.error, 8000), ms: Date.now() - started };
     const results: TestResult[] = [];
-    const limit = options.timeLimitMs ?? 2000;
+    const limit = options.timeLimitMs ?? 2000, memory = options.memoryLimitMb ?? DEFAULT_MEMORY_MB;
+    const hard = limitsFor(limit, memory);
+    let measured = true;
     for (const [index, test] of tests.entries()) {
-      const out = await execute(prepared.cmd, prepared.args, { cwd: prepared.dir, input: test.input, timeMs: limit, ...(prepared.env ? { env: prepared.env } : {}) });
-      const ran = !out.failedToStart && !out.timedOut && !out.tooMuch && out.code === 0;
+      const out = await execute(prepared.cmd, prepared.args, { cwd: prepared.dir, input: test.input, timeMs: hard.wallMs, limits: { cpuMs: hard.cpuMs, memMb: hard.memMb }, ...(prepared.env ? { env: prepared.env } : {}) });
+      const u = out.usage;
+      if (!u) measured = false;
+      // Without measurements (not Windows) the wall clock is all there is, held to the time limit itself.
+      const slow = u ? u.hit === "cpu" || out.timedOut : out.timedOut || out.ms > limit;
+      const memoryOut = Boolean(u && (u.hit === "mem" || (out.code !== 0 && u.peakKb >= hard.memMb * 1024 * 0.97)));
+      const ran = !out.failedToStart && !slow && !memoryOut && !out.tooMuch && out.code === 0;
       const same = ran ? compareOutput(out.stdout, test.output, options.compare) : null;
-      const verdict: Verdict = out.failedToStart ? "RE" : out.timedOut ? "TLE" : !ran ? "RE" : same!.ok ? "AC" : "WA";
+      const verdict: Verdict = out.failedToStart ? "RE" : slow ? "TLE" : memoryOut ? "MLE" : !ran ? "RE" : same!.ok ? "AC" : "WA";
+      const near = u && verdict !== "TLE" && verdict !== "MLE" ? (u.cpuMs > limit ? "time" as const : u.peakKb > memory * 1024 ? "memory" as const : undefined) : undefined;
       results.push({ index, verdict, ms: out.ms, input: clipText(test.input), expected: clipText(test.output), got: clipText(out.stdout),
         stderr: clipText(out.failedToStart ?? (out.tooMuch ? "출력이 너무 많아요 (8MB 넘음)." : out.stderr), 3000),
-        ...(same && !same.ok ? { diff: same.why } : {}) });
+        ...(same && !same.ok ? { diff: same.why } : {}), ...(u ? { cpuMs: u.cpuMs, peakKb: u.peakKb } : {}), ...(near ? { near } : {}) });
       if (verdict !== "AC" && options.stopAtFirstFail) break;
     }
     const failed = results.find((r) => r.verdict !== "AC");
-    return { verdict: failed?.verdict ?? "AC", passed: results.filter((r) => r.verdict === "AC").length, total: tests.length, results, compile: "", ms: Date.now() - started };
+    return { verdict: failed?.verdict ?? "AC", passed: results.filter((r) => r.verdict === "AC").length, total: tests.length, results, compile: "", ms: Date.now() - started, measured };
   } finally { await cleanup(prepared); }
 }
 /** "실행": the learner's own input, no expected answer. */
@@ -193,7 +263,7 @@ export async function runOnce(lang: Lang, code: string, input: string, timeLimit
   const prepared = await prepare(lang, code);
   try {
     if (!prepared.ok) return { ok: false as const, kind: prepared.kind, error: clipText(prepared.error, 8000) };
-    const out = await execute(prepared.cmd, prepared.args, { cwd: prepared.dir, input, timeMs: timeLimitMs, ...(prepared.env ? { env: prepared.env } : {}) });
-    return { ok: true as const, stdout: full ? out.stdout : clipText(out.stdout, 20_000), tooMuch: out.tooMuch, stderr: clipText(out.failedToStart ?? out.stderr, 4000), code: out.code, timedOut: out.timedOut, ms: out.ms };
+    const out = await execute(prepared.cmd, prepared.args, { cwd: prepared.dir, input, timeMs: timeLimitMs, limits: { cpuMs: timeLimitMs, memMb: 2048 }, ...(prepared.env ? { env: prepared.env } : {}) });
+    return { ok: true as const, ...(out.usage ? { cpuMs: out.usage.cpuMs, peakKb: out.usage.peakKb } : {}), stdout: full ? out.stdout : clipText(out.stdout, 20_000), tooMuch: out.tooMuch, stderr: clipText(out.failedToStart ?? out.stderr, 4000), code: out.code, timedOut: out.timedOut, ms: out.ms };
   } finally { await cleanup(prepared); }
 }

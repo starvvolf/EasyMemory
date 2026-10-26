@@ -12,16 +12,16 @@ type LangInfo = { lang: Lang; label: string; ready: boolean; version: string; he
 type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledge: string[]; folder: string; source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string; createdAt: string };
 type TestCase = { input: string; output: string };
 type Problem = { id: string; title: string; statement: string; inputText: string; outputText: string; examples: TestCase[]; hiddenTests: number; kind: "full" | "blank"; knowledge: string[]; knowledgeIds: string[];
-  folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number;
+  folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number; memoryLimitMb?: number;
   examplesFrom?: "source" | "made"; constraints?: string;
   check?: { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped"; tests?: number; maxTests?: number; compared?: number;
     mutation?: { killed: number; total: number; survived: string[]; added: number } } };
-type Result = { index: number; verdict: string; ms: number; input: string; expected: string; got: string; stderr: string; diff?: string };
+type Result = { index: number; verdict: string; ms: number; input: string; expected: string; got: string; stderr: string; diff?: string; cpuMs?: number; peakKb?: number; near?: "time" | "memory" };
 type Judged = { verdict: string; passed: number; total: number; shown: Result[]; compile: string; ms: number };
 type SubLite = { id: string; at: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; lines: number };
 type Msg = { who: "me" | "ai"; text: string; tag?: string };
 
-const VERDICT: Record<string, [string, string]> = { AC: ["맞았습니다", "good"], WA: ["틀렸습니다", "bad"], TLE: ["시간 초과", "help"], RE: ["런타임 에러", "bad"], CE: ["컴파일 에러", "bad"], MISSING: ["실행기 없음", "help"] };
+const VERDICT: Record<string, [string, string]> = { AC: ["맞았습니다", "good"], WA: ["틀렸습니다", "bad"], TLE: ["시간 초과", "help"], MLE: ["메모리 초과", "help"], RE: ["런타임 에러", "bad"], CE: ["컴파일 에러", "bad"], MISSING: ["실행기 없음", "help"] };
 const STATUS: Record<ProblemLite["status"], [string, string]> = { new: ["새 문제", ""], tried: ["풀어 봄", "help"], wrong: ["틀림", "bad"], solved: ["맞음", "good"] };
 const storedLang = (): Lang => { try { return (localStorage.getItem("code:lang") as Lang) || "python"; } catch { return "python"; } };
 
@@ -270,7 +270,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           <div key={i} className="cs-example"><p className="eyebrow">예제 {i + 1}</p><div className="cs-io"><pre aria-label="예제 입력">{ex.input}</pre><pre aria-label="예제 출력">{ex.output}</pre></div></div>
         ))}
         {problem.constraints ? <p className="small muted">제약: {problem.constraints.split("\n").join(" · ")}</p> : null}
-        <p className="small muted">숨은 테스트 {problem.hiddenTests}개{problem.check?.maxTests ? ` (최대 크기 ${problem.check.maxTests}개)` : ""} · 시간 제한 {problem.timeLimitMs / 1000}초
+        <p className="small muted">숨은 테스트 {problem.hiddenTests}개{problem.check?.maxTests ? ` (최대 크기 ${problem.check.maxTests}개)` : ""} · 시간 제한 {problem.timeLimitMs / 1000}초 · 메모리 제한 {problem.memoryLimitMb ?? 256}MB
           {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}${problem.check.by === "source" && problem.check.compared ? `, 단순 풀이와 작은 입력 ${problem.check.compared}개 일치` : ""}${problem.check.human === "match" ? " · 사람이 쓴 정답 코드와 일치" : ""}` : ""}
           {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}</p>
         <div className="row small"><span className="muted">확인하는 지식</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div>
@@ -303,7 +303,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
             {result.compile ? <pre className="cs-out">{result.compile}</pre> : null}
             {result.shown.map((r) => (
               <details key={r.index} open={r.verdict !== "AC"} className="cs-case">
-                <summary><span className={`chip ${VERDICT[r.verdict]?.[1] ?? ""}`}>{VERDICT[r.verdict]?.[0]}</span> {result.mode === "example" ? `예제 ${r.index + 1}` : "처음 틀린 테스트"} · {r.ms}ms</summary>
+                <summary><span className={`chip ${VERDICT[r.verdict]?.[1] ?? ""}`}>{VERDICT[r.verdict]?.[0]}</span> {result.mode === "example" ? `예제 ${r.index + 1}` : "처음 틀린 테스트"} · {r.cpuMs !== undefined ? `CPU ${r.cpuMs}ms · 메모리 ${(r.peakKb! / 1024).toFixed(1)}MB` : `${r.ms}ms`}</summary>
+                {r.near ? <p className="muted small">{r.near === "time" ? "시간 제한을 조금 넘었지만 이 PC와 채점 서버의 차이로 보고 봐줬어요. 실제 저지에서는 시간 초과일 수 있어요." : "메모리 제한을 조금 넘었지만 봐줬어요. 실제 저지에서는 메모리 초과일 수 있어요."}</p> : null}
                 <div className="cs-io three"><div><p className="eyebrow">입력</p><pre>{r.input}</pre></div><div><p className="eyebrow">기대 출력</p><pre>{r.expected}</pre></div><div><p className="eyebrow">내 출력</p><pre>{r.got}</pre></div></div>
                 {r.diff ? <p className="muted small">{r.diff}</p> : null}
                 {r.stderr ? <pre className="cs-out bad">{r.stderr}</pre> : null}

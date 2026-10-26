@@ -10,7 +10,7 @@ import { SEEDS } from "./seeds.ts";
 
 export type Problem = {
   id: string; title: string; statement: string; inputText: string; outputText: string;
-  examples: TestCase[]; tests: TestCase[]; timeLimitMs: number;
+  examples: TestCase[]; tests: TestCase[]; timeLimitMs: number; /** MB; 256 when left out */ memoryLimitMb?: number;
   /** "full": write the whole program. "blank": fill the ____ in a given program. */
   kind: "full" | "blank";
   templates: Partial<Record<Lang, string>>;
@@ -218,7 +218,7 @@ export async function submit(problemId: string, lang: Lang, code: string, mode: 
   const problem = await readProblem(problemId);
   if (problem.kind === "blank" && code.includes(BLANK)) throw new CodeError(400, "빈칸(____)을 모두 채워 주세요.");
   const tests = mode === "example" ? problem.examples : [...problem.examples, ...problem.tests];
-  const result = await judge(lang, code, tests, { timeLimitMs: problem.timeLimitMs, stopAtFirstFail: mode === "submit", compare: problem.compare });
+  const result = await judge(lang, code, tests, { timeLimitMs: problem.timeLimitMs, memoryLimitMb: problem.memoryLimitMb, stopAtFirstFail: mode === "submit", compare: problem.compare });
   const shown = mode === "example" ? result.results : result.results.filter((r) => r.verdict !== "AC").slice(0, 1);
   const submission: Submission = { id: `sub_${randomBytes(5).toString("hex")}`, at: new Date().toISOString(), problemId, lang, mode, verdict: result.verdict,
     passed: result.passed, total: result.total, hints, code: code.slice(0, 100_000), ms: result.ms };
@@ -236,7 +236,7 @@ export async function findCounterexample(problemId: string, lang: Lang, code: st
   if (!problem.reference) throw new CodeError(400, "이 문제에는 모범 풀이가 없어서 반례를 찾을 수 없어요.");
   const { tests } = await answerWithReference(problem.reference.code, inputs.slice(0, 30));
   if (!tests.length) return { found: false as const, tried: 0 };
-  const result = await judge(lang, code, tests, { timeLimitMs: problem.timeLimitMs, stopAtFirstFail: true, compare: problem.compare });
+  const result = await judge(lang, code, tests, { timeLimitMs: problem.timeLimitMs, memoryLimitMb: problem.memoryLimitMb, stopAtFirstFail: true, compare: problem.compare });
   const bad = result.results.find((r) => r.verdict !== "AC");
   return bad ? { found: true as const, tried: result.results.length, case: bad, compile: result.compile } : { found: false as const, tried: tests.length, compile: result.compile };
 }
