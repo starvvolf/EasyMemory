@@ -4,7 +4,7 @@
 // which also writes the result into the knowledge record.
 import { useState } from "react";
 import { call, errorText, type Graded, type Question } from "./api";
-import { Rich } from "./Rich";
+import { Inline, Rich } from "./Rich";
 
 export function QuestionCard({ question, sourceId, onDone, compact }: { question: Question; sourceId?: string; onDone?: (g: Graded) => void; compact?: boolean }) {
   const [text, setText] = useState("");
@@ -25,7 +25,7 @@ export function QuestionCard({ question, sourceId, onDone, compact }: { question
     <article className={`ws-q${compact ? " compact" : ""}`} aria-live="polite">
       <div className="ws-q-head"><span className="chip">{question.label}</span></div>
       {question.context ? <blockquote className="ws-q-context">{question.context}</blockquote> : null}
-      <p className="ws-q-prompt">{question.prompt}</p>
+      <p className="ws-q-prompt"><Inline text={question.prompt} /></p>
       {question.kind === "flashcard" ? (
         !shown ? <button className="btn" onClick={() => setShown(true)}>뜻 보기</button> : (
           <>
@@ -35,7 +35,7 @@ export function QuestionCard({ question, sourceId, onDone, compact }: { question
         )
       ) : question.options ? (
         <div className={`ws-opts${question.kind === "ox" ? " ox" : ""}`} role="group">
-          {question.options.map((o, i) => <button key={o} className={optionClass(o)} disabled={busy || Boolean(result)} onClick={() => submit(o)}>{question.kind === "ox" ? null : <span className="k">{i + 1}</span>}<span>{o}</span></button>)}
+          {question.options.map((o, i) => <button key={o} className={optionClass(o)} disabled={busy || Boolean(result)} onClick={() => submit(o)}>{question.kind === "ox" ? null : <span className="k">{i + 1}</span>}<span><Inline text={o} /></span></button>)}
         </div>
       ) : (
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (text.trim()) submit(text); }}>
@@ -46,9 +46,9 @@ export function QuestionCard({ question, sourceId, onDone, compact }: { question
       {result ? (
         <div className={`ws-q-result ${result.correct ? "good" : "bad"}`}>
           <b>{question.kind === "flashcard" ? (result.correct ? "알았어요 → 앎" : "몰랐어요 → 몰랐음") : result.correct ? "맞았어요" : "틀렸어요"}</b>
-          {!result.correct && question.kind !== "flashcard" ? <span> · 정답: {result.expected}</span> : null}
+          {!result.correct && question.kind !== "flashcard" ? <span> · 정답: <Inline text={result.expected} /></span> : null}
           {result.note ? <span className="muted"> · {result.note}</span> : null}
-          {question.explain && !(question.kind === "flashcard") ? <div className="small muted">{question.explain}</div> : null}
+          {question.explain && !(question.kind === "flashcard") ? <div className="small muted"><Inline text={question.explain} /></div> : null}
         </div>
       ) : null}
       {error ? <p className="ws-err">{error}</p> : null}

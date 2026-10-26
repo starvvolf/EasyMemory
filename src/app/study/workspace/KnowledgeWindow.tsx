@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import { call, errorText, folderPaths, handoff, later, STATE_LABEL, EVENT_LABEL, whenText, type Detail, type Folder, type ItemLite, type KState, type Question, type ReviewStatus, type Tree } from "./api";
 import { QuestionRun } from "./QuestionCard";
-import { Rich } from "./Rich";
+import { Inline, Rich } from "./Rich";
 
 type Filter = "all" | KState | "graduated";
 const FILTERS: Array<[Filter, string]> = [["all", "전체"], ["unknown", "몰랐음"], ["known", "앎"], ["met", "만남"], ["graduated", "졸업"]];
@@ -173,8 +173,8 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
             {shown.slice(0, 400).map((i) => (
               <li key={i.id}>
                 <button className={`kw-item${sel === i.id ? " on" : ""}`} onClick={() => setSel(i.id)} {...dragOf("item", i.id)}>
-                  <span className="kw-item-top"><StateChip state={i.state} graduated={i.graduated} /><span className="kw-title">{i.title}</span>{i.links ? <span className="small muted" title="이어진 지식">↔ {i.links}</span> : null}</span>
-                  {i.line ? <span className="kw-line">{i.line}</span> : null}
+                  <span className="kw-item-top"><StateChip state={i.state} graduated={i.graduated} /><span className="kw-title"><Inline text={i.title} /></span>{i.links ? <span className="small muted" title="이어진 지식">↔ {i.links}</span> : null}</span>
+                  {i.line ? <span className="kw-line"><Inline text={i.line} /></span> : null}
                   <span className="kw-meta small muted">{hits && i.folderId ? `${folderPaths(tree.folders).find((f) => f.id === i.folderId)?.path ?? ""} · ` : ""}{ago(i.lastAt)}{i.weak ? ` · 막힘 ${i.weak}` : ""}</span>
                 </button>
               </li>
@@ -229,7 +229,7 @@ function ItemDetail({ detail, folders, onAct, onOpen, onGone, onQuiz }: { detail
   return (
     <div className="kw-d stack">
       <p className="small muted">{detail.path || "폴더 없음"}</p>
-      {editing ? <input className="ws-input kw-d-title" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="지식 이름" /> : <h3 className="kw-d-title" onDoubleClick={() => setEditing(true)}>{item.title}</h3>}
+      {editing ? <input className="ws-input kw-d-title" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="지식 이름" /> : <h3 className="kw-d-title" onDoubleClick={() => setEditing(true)}><Inline text={item.title} /></h3>}
       <div className="ws-seg" role="radiogroup" aria-label="상태">
         {(["met", "unknown", "known"] as KState[]).map((st) => <button key={st} role="radio" aria-checked={item.state === st && !item.graduated} className={item.state === st && !item.graduated ? "on" : ""} onClick={() => setState({ state: st })}>{STATE_LABEL[st]}</button>)}
         <button role="radio" aria-checked={item.graduated} className={item.graduated ? "on" : ""} onClick={() => setState({ graduated: !item.graduated })} title="복습에서 빼요. 기록은 남아요.">졸업</button>
