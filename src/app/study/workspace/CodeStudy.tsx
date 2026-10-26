@@ -52,7 +52,6 @@ export default function CodeStudy({ openId }: { openId?: string }) {
       <Calibrated />
       {error ? <p className="ws-err">{error}</p> : null}
       <MakeProblem langs={langs} onMade={(id) => { void load(); setCurrent(id); }} />
-      <Bakingdog onFilled={() => void load()} onOpen={setCurrent} />
       <section className="panel stack">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <b>문제 {list.length}</b>
@@ -72,64 +71,6 @@ export default function CodeStudy({ openId }: { openId?: string }) {
         </ul>
       </section>
     </div>
-  );
-}
-
-type Fill = { status: "ready" | "failed"; problemId?: string; reason?: string };
-type BdProblem = { category: string; recommended: boolean; number: string; title: string; hasSolution: boolean; fill: Fill | null };
-type BdChapter = { chapter: string; title: string; problems: BdProblem[] };
-
-/** 바킹독 실전 알고리즘: the built-in workbook list. A problem is filled (original + lecture solution, checked) the first time it is picked. */
-function Bakingdog({ onFilled, onOpen }: { onFilled: () => void; onOpen: (id: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [chapters, setChapters] = useState<BdChapter[]>([]);
-  const [working, setWorking] = useState<string[]>([]);
-  const [error, setError] = useState("");
-  const loadList = async () => { try { setChapters((await call<{ chapters: BdChapter[] }>("/api/code/bakingdog")).chapters); } catch (e) { setError(errorText(e)); } };
-  const setFill = (number: string, fill: Fill) => setChapters((cs) => cs.map((c) => ({ ...c, problems: c.problems.map((p) => p.number === number ? { ...p, fill } : p) })));
-  const fill = async (number: string) => {
-    setWorking((w) => [...w, number]);
-    try {
-      const { problem } = await call<{ problem: { id: string } }>(`/api/code/bakingdog/${number}/fill`, {});
-      setFill(number, { status: "ready", problemId: problem.id }); onFilled();
-      return problem.id;
-    } catch (e) { setFill(number, { status: "failed", reason: errorText(e) }); return null; }
-    finally { setWorking((w) => w.filter((n) => n !== number)); }
-  };
-  const fillChapter = async (c: BdChapter) => { for (const p of c.problems) if (p.fill?.status !== "ready") await fill(p.number); };
-  if (!open) return <div className="row"><button className="btn" onClick={() => { setOpen(true); void loadList(); }}>바킹독 실전 알고리즘 문제집</button></div>;
-  return (
-    <section className="panel stack">
-      <div className="row" style={{ justifyContent: "space-between" }}><b>바킹독 실전 알고리즘 문제집</b><button className="btn ghost small" onClick={() => setOpen(false)}>닫기</button></div>
-      <p className="small muted">처음 고른 문제는 인터넷 아카이브에서 원문을, 강의 GitHub에서 정답 코드를 받아 확인한 뒤 만들어요 (문제마다 1분쯤, AI 호출 1~3번). 한 번 만든 문제는 다시 받지 않아요.</p>
-      {chapters.map((c) => {
-        const ready = c.problems.filter((p) => p.fill?.status === "ready").length;
-        return (
-          <details key={c.chapter}>
-            <summary className="row small"><b>{c.chapter} {c.title}</b><span className="muted">준비됨 {ready}/{c.problems.length}</span></summary>
-            <div className="row"><button className="btn small" disabled={working.length > 0 || ready === c.problems.length} onClick={() => void fillChapter(c)}>{working.length && c.problems.some((p) => working.includes(p.number)) ? `채우는 중… (${ready}/${c.problems.length})` : "이 단원 채우기"}</button></div>
-            <ul className="cs-list">
-              {c.problems.map((p) => {
-                const state = working.includes(p.number) ? ["준비 중…", "help"] : p.fill?.status === "ready" ? ["준비됨", "good"] : p.fill?.status === "failed" ? ["실패", "bad"] : ["준비 안 됨", ""];
-                return (
-                  <li key={p.number} className="stack">
-                    <div className="row small">
-                      <span className={`chip ${state[1]}`}>{state[0]}</span>
-                      <span>BOJ {p.number} · {p.title}</span>
-                      <span className="chip">{p.category}{p.recommended ? " ✔" : ""}</span>
-                      {p.fill?.status === "ready" && p.fill.problemId ? <button className="linkish small" onClick={() => onOpen(p.fill!.problemId!)}>열기</button>
-                        : <button className="linkish small" disabled={working.includes(p.number)} onClick={() => void fill(p.number).then((id) => { if (id) onOpen(id); })}>{p.fill?.status === "failed" ? "다시 시도" : "채우고 열기"}</button>}
-                    </div>
-                    {p.fill?.status === "failed" && p.fill.reason ? <p className="small muted">{p.fill.reason}</p> : null}
-                  </li>
-                );
-              })}
-            </ul>
-          </details>
-        );
-      })}
-      {error ? <p className="ws-err">{error}</p> : null}
-    </section>
   );
 }
 
