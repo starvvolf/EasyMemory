@@ -148,14 +148,18 @@ export function similarity(a: string, b: string) {
   for (const n of y.values()) total += n;
   return total ? (2 * both) / total : 0;
 }
-const namesOf = (item: Knowledge) => [item.title, ...item.aliases];
-/** The item this title already is: the same name after normalizing, or a very close name (≥ 0.88) for names of 4+ letters. */
-function sameAs(items: Knowledge[], title: string, aliases: string[] = []) {
+const namesOf = (item: Pick<Knowledge, "title" | "aliases">) => [item.title, ...item.aliases];
+/**
+ * 1단계 (이름): the item this title already is — the same name after normalizing, or a very close name (≥ 0.88) for
+ * names of 4+ letters. Exported for the duplicate-check evaluation, which runs it on items that are not saved.
+ */
+export const sameName = <T extends Pick<Knowledge, "title" | "aliases">>(items: T[], title: string, aliases: string[] = []) => sameAs(items, title, aliases);
+function sameAs<T extends Pick<Knowledge, "title" | "aliases">>(items: T[], title: string, aliases: string[] = []): T | undefined {
   const wanted = [title, ...aliases].map(normalize).filter(Boolean);
   const exact = items.find((item) => namesOf(item).some((name) => wanted.includes(normalize(name))));
   if (exact) return exact;
   if (normalize(title).length < 4) return undefined;
-  let best: Knowledge | undefined, score = 0;
+  let best: T | undefined, score = 0;
   for (const item of items) for (const name of namesOf(item)) {
     if (normalize(name).length < 4) continue;
     const s = similarity(title, name);

@@ -50,6 +50,8 @@ async function embed(texts: string[]): Promise<Float32Array[]> {
   holder.__recallerEmbed ??= loadGemma().catch((error) => { holder.__recallerEmbed = undefined; throw error; });
   return (await holder.__recallerEmbed).run(texts);
 }
+/** Vectors for texts that are not saved items (the duplicate-check evaluation); unit length, so a dot product is the cosine. */
+export const embedTexts = (texts: string[]) => embed(texts.map((t) => t));
 function unit(v: Float32Array) {
   let s = 0; for (const x of v) s += x * x;
   const n = Math.sqrt(s) || 1;

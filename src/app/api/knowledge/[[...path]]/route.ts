@@ -6,6 +6,7 @@ import { createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
 import { similarKnowledge } from "@/lib/knowledge/embed";
+import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
 import { openDuplicates, resolveDuplicate, runDuplicateCheck, scheduleDuplicateCheck } from "@/lib/knowledge/dedupe";
 import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing } from "@/lib/assist/knowledge-ai";
 
@@ -157,6 +158,11 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "dupes" && p[1] && m === "POST") {
       const b = await body(z.object({ action: z.enum(["merge", "dismiss"]), keep: id.optional() }));
       return json({ pair: await resolveDuplicate(p[1], b.action, b.keep) });
+    }
+    // 같은 지식 찾기 시험: 가상 시험지로 3단계를 모델마다 (학습자 지식은 건드리지 않음). 실험용.
+    if (p[0] === "dedupe-eval" && m === "POST") {
+      const b = await body(z.object({ models: z.array(z.object({ model: z.string().max(60), effort: z.enum(["low", "medium", "high"]).optional() })).min(1).max(6) }));
+      return json(await runDedupeEval(b.models));
     }
     // 빈 뜻·다른 이름 채우기 (모델 호출 1번, 최대 40개).
     if (p[0] === "fill" && m === "POST") { const b = await body(z.object({ ids: z.array(id).max(200).optional() })); return json(await fillMissing({ ids: b.ids })); }

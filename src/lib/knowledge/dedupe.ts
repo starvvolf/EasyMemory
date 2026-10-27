@@ -53,13 +53,38 @@ reason: 한국어 한 문장. n과 m은 받은 번호를 그대로 쓴다.`;
 type Judged = { items: Array<{ n: number; candidates: Array<{ m: number; verdict: Verdict; reason: string }> }> };
 const JUDGE_SCHEMA = S.obj({ items: S.arr(S.obj({ n: S.int, candidates: S.arr(S.obj({ m: S.int, verdict: S.oneOf("same", "narrower", "broader", "related", "different"), reason: S.str })) })) });
 
-const line = (d: { item: { title: string; aliases: string[]; body: string }; path: string }) =>
-  `${d.item.title}${d.item.aliases.length ? ` (다른 이름: ${d.item.aliases.slice(0, 5).join(", ")})` : ""} [${d.path || "폴더 없음"}] ${d.item.body.split("\n").find((l) => l.trim() && !l.startsWith("헷갈림:"))?.slice(0, 160) ?? "(뜻 없음)"}`;
+export type JudgeItem = { title: string; aliases: string[]; body: string; path: string };
+const line = (d: JudgeItem) =>
+  `${d.title}${d.aliases.length ? ` (다른 이름: ${d.aliases.slice(0, 5).join(", ")})` : ""} [${d.path || "폴더 없음"}] ${d.body.split("\n").find((l) => l.trim() && !l.startsWith("헷갈림:"))?.slice(0, 160) ?? "(뜻 없음)"}`;
+const asJudgeItem = (d: Awaited<ReturnType<typeof getKnowledge>>): JudgeItem => ({ title: d.item.title, aliases: d.item.aliases, body: d.item.body, path: d.path });
+
+/** The model this check uses: RECALLER_DEDUPE_MODEL / _EFFORT, else the assist defaults (src/lib/assist/model.ts). */
+const judgeModel = () => ({ model: process.env.RECALLER_DEDUPE_MODEL?.trim() || undefined, effort: process.env.RECALLER_DEDUPE_EFFORT?.trim() || undefined });
+/**
+ * 3단계 AI 판정 for a batch: each new item with its candidates (closest first) → one verdict per candidate, in order.
+ * A candidate the model left out counts as "different"; past two 관련 per item, the rest are "different" too.
+ * Exported for the evaluation (dedupe-eval.ts), which runs the same judgment with other models.
+ */
+export async function judgeBatch(work: Array<{ item: JudgeItem; cands: JudgeItem[] }>, options: { model?: string; effort?: string } = judgeModel()) {
+  const out = work.map((w) => w.cands.map(() => ({ verdict: "different" as Verdict, reason: "" })));
+  if (!work.length) return out;
+  const user = work.map((w, n) => `[새 지식 ${n}] ${line(w.item)}\n${w.cands.map((c, m) => `  후보 ${m}. ${line(c)}`).join("\n")}`).join("\n\n");
+  const judged = await askJson<Judged>("knowledge:dedupe", JUDGE_SYSTEM, user, JUDGE_SCHEMA, options);
+  for (const j of judged.items ?? []) {
+    if (!out[j.n]) continue;
+    for (const c of j.candidates ?? []) if (out[j.n][c.m]) out[j.n][c.m] = { verdict: c.verdict, reason: (c.reason ?? "").slice(0, 200) };
+    // A few strong links are worth more than many weak ones: at most two 관련 per new item, closest first.
+    let related = 0;
+    for (const v of out[j.n]) if (v.verdict === "related" && ++related > MAX_RELATED) v.verdict = "different";
+  }
+  return out;
+}
 
 /** One batch: candidates by meaning, one model call, then pairs and links. */
 async function checkBatch(ids: string[], data: DupFile): Promise<DupPair[]> {
   const known = new Set(data.pairs.flatMap((p) => [`${p.newId}|${p.otherId}`, `${p.otherId}|${p.newId}`]));
-  const work: Array<{ d: Awaited<ReturnType<typeof getKnowledge>>; cands: Array<{ d: Awaited<ReturnType<typeof getKnowledge>>; score: number }> }> = [];
+  type Full = Awaited<ReturnType<typeof getKnowledge>>;
+  const work: Array<{ d: Full; cands: Array<{ d: Full; score: number }> }> = [];
   for (const id of ids) {
     const d = await getKnowledge(id).catch(() => null);
     if (!d) continue;
@@ -73,28 +98,18 @@ async function checkBatch(ids: string[], data: DupFile): Promise<DupPair[]> {
     if (cands.length) work.push({ d, cands });
   }
   if (!work.length) return [];
-  const user = work.map((w, n) => `[새 지식 ${n}] ${line(w.d)}\n${w.cands.map((c, m) => `  후보 ${m}. ${line(c.d)}`).join("\n")}`).join("\n\n");
-  const judged = await askJson<Judged>("knowledge:dedupe", JUDGE_SYSTEM, user, JUDGE_SCHEMA);
+  const verdicts = await judgeBatch(work.map((w) => ({ item: asJudgeItem(w.d), cands: w.cands.map((c) => asJudgeItem(c.d)) })));
   const at = new Date().toISOString();
   const found: DupPair[] = [];
-  for (const j of judged.items ?? []) {
-    const w = work[j.n];
-    if (!w) continue;
-    let related = 0;
-    for (const c of j.candidates ?? []) {
-      const cand = w.cands[c.m];
-      if (!cand || c.verdict === "different" || known.has(`${w.d.item.id}|${cand.d.item.id}`)) continue;
-      // A few strong links are worth more than many weak ones: at most two 관련 per new item, closest first.
-      if (c.verdict === "related" && ++related > MAX_RELATED) continue;
-      known.add(`${w.d.item.id}|${cand.d.item.id}`); known.add(`${cand.d.item.id}|${w.d.item.id}`);
-      const pair: DupPair = { id: `dup_${randomBytes(6).toString("hex")}`, newId: w.d.item.id, otherId: cand.d.item.id, verdict: c.verdict, reason: (c.reason ?? "").slice(0, 200),
-        score: cand.score, at, status: c.verdict === "same" ? "open" : "linked" };
-      // 포함: the broader one points to the narrower one; 관련: the new one points to the other.
-      if (c.verdict === "narrower") await linkKnowledge(cand.d.item.id, w.d.item.id, "포함").catch(() => undefined);
-      else if (c.verdict === "broader") await linkKnowledge(w.d.item.id, cand.d.item.id, "포함").catch(() => undefined);
-      else if (c.verdict === "related") await linkKnowledge(w.d.item.id, cand.d.item.id, "관련").catch(() => undefined);
-      found.push(pair);
-    }
+  for (const [n, w] of work.entries()) for (const [m, cand] of w.cands.entries()) {
+    const { verdict, reason } = verdicts[n][m];
+    if (verdict === "different" || known.has(`${w.d.item.id}|${cand.d.item.id}`)) continue;
+    known.add(`${w.d.item.id}|${cand.d.item.id}`); known.add(`${cand.d.item.id}|${w.d.item.id}`);
+    // 포함: the broader one points to the narrower one; 관련: the new one points to the other.
+    if (verdict === "narrower") await linkKnowledge(cand.d.item.id, w.d.item.id, "포함").catch(() => undefined);
+    else if (verdict === "broader") await linkKnowledge(w.d.item.id, cand.d.item.id, "포함").catch(() => undefined);
+    else if (verdict === "related") await linkKnowledge(w.d.item.id, cand.d.item.id, "관련").catch(() => undefined);
+    found.push({ id: `dup_${randomBytes(6).toString("hex")}`, newId: w.d.item.id, otherId: cand.d.item.id, verdict, reason, score: cand.score, at, status: verdict === "same" ? "open" : "linked" });
   }
   return found;
 }
