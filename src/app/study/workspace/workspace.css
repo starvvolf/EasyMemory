@@ -51,6 +51,7 @@
 .dejipgi .kw-top h2{font-size:22px}
 .dejipgi .row>.ws-input.kw-search{flex:0 1 240px}
 .dejipgi .kw-make{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.dejipgi .kw-fill{gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
 .dejipgi .kw-grid{display:grid;grid-template-columns:236px minmax(0,1fr) minmax(0,400px);gap:12px;align-items:start}
 .dejipgi .kw-grid>.panel{padding:12px;min-width:0}
 .dejipgi .kw-tree{position:sticky;top:8px;max-height:calc(100vh - 32px);overflow:auto;display:flex;flex-direction:column;gap:4px}
@@ -92,7 +93,7 @@
 .dejipgi .kw-del{align-self:flex-start;color:var(--faint)}
 .dejipgi .chip.ev-wrong,.dejipgi .chip.ev-hint,.dejipgi .chip.ev-asked{color:var(--bad);background:var(--bad-soft);border-color:transparent}
 .dejipgi .chip.ev-correct{color:var(--good);background:var(--good-soft);border-color:transparent}
-@media (max-width:1100px){ .dejipgi .kw-grid{grid-template-columns:200px minmax(0,1fr)} .dejipgi .kw-detail{grid-column:1/-1;position:static;max-height:none} }
+@media (max-width:1100px){ .dejipgi .kw-grid{grid-template-columns:200px minmax(0,1fr)} .dejipgi .kw-detail{grid-column:1/-1;position:static;max-height:none} .dejipgi .kw-tree{position:static} }
 @media (max-width:700px){ .dejipgi .kw-grid{grid-template-columns:minmax(0,1fr)} .dejipgi .kw-tree{position:static;max-height:none} }
 
 /* 지식 사이드바 (fixed at the right; the page makes room on wide screens) */

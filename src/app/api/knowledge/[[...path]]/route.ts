@@ -5,7 +5,7 @@ import { createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints
   recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
-import { askKnowledge, checkClaim, explainSelection, extractFromText } from "@/lib/assist/knowledge-ai";
+import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing } from "@/lib/assist/knowledge-ai";
 
 export const runtime = "nodejs";
 const state = z.enum(["met", "unknown", "known"]);
@@ -140,6 +140,8 @@ async function handle(request: Request, context: RouteContext) {
     }
 
     // model calls
+    // 빈 뜻·다른 이름 채우기 (모델 호출 1번, 최대 40개).
+    if (p[0] === "fill" && m === "POST") { const b = await body(z.object({ ids: z.array(id).max(200).optional() })); return json(await fillMissing({ ids: b.ids })); }
     if (p[0] === "extract" && m === "POST") {
       const b = await body(z.object({ kind: z.enum(["web", "lesson"]), title: z.string().min(1).max(300), url: z.string().max(2000).optional(), text: z.string().min(1).max(200000), folder: z.string().max(200).optional() }));
       const r = await extractFromText(b);

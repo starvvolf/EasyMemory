@@ -33,6 +33,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const [notice, setNotice] = useState("");
   const [making, setMaking] = useState<"" | "item" | "folder">("");
   const [draft, setDraft] = useState("");
+  const [filling, setFilling] = useState(false);
 
   const load = useCallback(async () => { try { setTree(await call<Tree>("/api/knowledge")); } catch (e) { setError(errorText(e)); } }, []);
   const loadDetail = useCallback(async (id: string) => { try { setDetail(await call<Detail>(`/api/knowledge/item/${id}`)); } catch (e) { setError(errorText(e)); setDetail(null); } }, []);
@@ -147,6 +148,13 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
           <input className="ws-input" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={making === "folder" ? "폴더 이름" : "지식 이름 (예: 기준금리)"} maxLength={making === "folder" ? 60 : 120} />
           <button className="btn primary small" disabled={!draft.trim()}>만들기</button><button type="button" className="btn ghost small" onClick={() => setMaking("")}>취소</button>
         </form>
+      ) : null}
+      {tree.items.some((i) => !i.line) ? (
+        <p className="kw-fill row small"><span className="muted">뜻이 빈 지식 {tree.items.filter((i) => !i.line).length}개 — 복습 문제가 플래시카드만 나와요.</span>
+          <button className="btn small" disabled={filling} onClick={() => { setFilling(true); void act(async () => {
+            const r = await call<{ asked: number; changed: string[] }>("/api/knowledge/fill", {});
+            setNotice(`AI가 ${r.asked}개를 보고 ${r.changed.length}개에 뜻·다른 이름을 채웠어요. 틀린 데가 있으면 편집으로 고쳐 주세요.`);
+          }, () => setFilling(false)).finally(() => setFilling(false)); }}>{filling ? "채우는 중…" : "AI로 뜻 채우기"}</button></p>
       ) : null}
       {error ? <p className="ws-err" onClick={() => setError("")}>{error}</p> : null}
       {notice ? <p className="small muted" onClick={() => setNotice("")}>{notice}</p> : null}

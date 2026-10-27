@@ -292,6 +292,27 @@ async function appendEvents(events: KEvent[]) {
   await serial(async () => { await mkdir(dir(), { recursive: true }); await appendFile(eventsFile(), events.map((e) => JSON.stringify(e)).join("\n") + "\n", "utf8"); });
 }
 
+/**
+ * Fill in what is missing without touching what the learner wrote: a meaning only where there is none, other names
+ * (English name, abbreviation, the Korean name of an English term) added unless another item already goes by them.
+ */
+export const enrichKnowledge = (entries: Array<{ id: string; body?: string; aliases?: string[] }>) => change((store) => {
+  const taken = new Map(store.items.flatMap((i) => namesOf(i).map((n) => [normalize(n), i.id] as const)));
+  const changed: string[] = [];
+  for (const entry of entries) {
+    const item = store.items.find((x) => x.id === entry.id);
+    if (!item) continue;
+    let touched = false;
+    if (!item.body.trim() && entry.body?.trim()) { item.body = entry.body.trim().slice(0, 4000); touched = true; }
+    for (const alias of entry.aliases ?? []) {
+      const a = alias.trim().slice(0, 120), key = normalize(a);
+      if (!key || item.aliases.length >= 20 || (taken.has(key) && taken.get(key) !== item.id)) continue;
+      if (!namesOf(item).some((n) => normalize(n) === key)) { item.aliases.push(a); taken.set(key, item.id); touched = true; }
+    }
+    if (touched) { item.updatedAt = nowIso(); changed.push(item.id); }
+  }
+  return { changed };
+});
 export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null }) => change((store) => {
   const item = store.items.find((x) => x.id === id);
   if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");

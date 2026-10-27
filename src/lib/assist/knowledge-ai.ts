@@ -1,7 +1,7 @@
 // 글에서 지식 잡기, 드래그해서 묻기, 주장 확인, 사이드바 질문 — the model parts of the knowledge tools.
 // The model only reads and writes text; saving, merging and states are done by the knowledge store.
 import { askJson, S } from "./model.ts";
-import { getKnowledge, memoryOverview, recordEvent, saveKnowledge, saveMany, searchKnowledge, tree, pathOf, type SaveResult } from "../knowledge/store.ts";
+import { enrichKnowledge, getKnowledge, memoryOverview, recordEvent, saveKnowledge, saveMany, searchKnowledge, tree, pathOf, type SaveResult } from "../knowledge/store.ts";
 import { saveSource, sourceIdOf, getSource, type ReadSource } from "../knowledge/sources.ts";
 
 const EXTRACT_SYSTEM = `학습자가 읽은 글에서 "알아야 할 지식"을 뽑는다.
@@ -9,6 +9,7 @@ const EXTRACT_SYSTEM = `학습자가 읽은 글에서 "알아야 할 지식"을 
   - kind "term": 용어. body는 사전 정의가 아니라 이 글의 문맥에서의 뜻을 1~2문장으로.
   - kind "idea": 일반적인 원리·규칙·패턴(예: "금리가 내리면 대출이 늘어난다", "정렬된 배열은 절반씩 버리며 찾을 수 있다").
   - quote: 그 지식이 나온 글의 문장을 그대로 (80자 이내).
+  - aliases: 같은 것을 가리키는 다른 이름. 영어 이름, 약어(PER, DFS), 영어 용어면 한국어 이름. 확실한 것만, 없으면 빈 배열.
   - 오늘의 시세·날짜·특정 회사의 이번 분기 숫자처럼 시간이 지나면 의미가 없어지는 사실은 지식으로 뽑지 않는다.
   - 학습자가 이미 가진 지식과 같은 것이면 그 이름을 그대로 쓴다 (목록이 주어진다).
 - chains: 지식 사이의 고리. from/to는 반드시 knowledge의 title 중 하나. relation은 "그러면", "때문에", "의 예" 같은 짧은 말.
@@ -16,11 +17,11 @@ const EXTRACT_SYSTEM = `학습자가 읽은 글에서 "알아야 할 지식"을 
 - folder: 이 지식들을 넣을 폴더 경로 ("주식/금리", "알고리즘/이분 탐색"). 학습자 폴더 목록에 맞는 것이 있으면 그것을 쓴다.
 개수는 글 길이에 맞게, 보통 4~12개.`;
 
-type Extracted = { folder: string; claim: { text: string; basis: string[] }; knowledge: Array<{ title: string; body: string; kind: "term" | "idea"; quote: string }>; chains: Array<{ from: string; relation: string; to: string }> };
+type Extracted = { folder: string; claim: { text: string; basis: string[] }; knowledge: Array<{ title: string; body: string; kind: "term" | "idea"; quote: string; aliases: string[] }>; chains: Array<{ from: string; relation: string; to: string }> };
 const EXTRACT_SCHEMA = S.obj({
   folder: S.str,
   claim: S.obj({ text: S.str, basis: S.arr(S.str) }),
-  knowledge: S.arr(S.obj({ title: S.str, body: S.str, kind: S.oneOf("term", "idea"), quote: S.str })),
+  knowledge: S.arr(S.obj({ title: S.str, body: S.str, kind: S.oneOf("term", "idea"), quote: S.str, aliases: S.arr(S.str) })),
   chains: S.arr(S.obj({ from: S.str, relation: S.str, to: S.str })),
 });
 
@@ -45,7 +46,7 @@ export async function extractFromText(input: { kind: "web" | "lesson"; title: st
   const ref = { kind: input.kind === "lesson" ? "web" as const : "web" as const, title: input.title, ...(input.url ? { url: input.url } : {}) };
   const chainsByFrom = new Map<string, Array<{ title: string; relation: string }>>();
   for (const c of data.chains) chainsByFrom.set(c.from, [...(chainsByFrom.get(c.from) ?? []), { title: c.to, relation: c.relation }]);
-  const results = await saveMany(data.knowledge.map((k) => ({ title: k.title, body: k.body, folder, source: { ...ref, quote: k.quote.slice(0, 200) },
+  const results = await saveMany(data.knowledge.map((k) => ({ title: k.title, body: k.body, folder, aliases: (k.aliases ?? []).slice(0, 6), source: { ...ref, quote: k.quote.slice(0, 200) },
     links: chainsByFrom.get(k.title) ?? [] })));
   const items = results.map((r, i) => ({ ...r.item, again: r.again, created: r.created, kind: data.knowledge[i].kind, quote: data.knowledge[i].quote }));
   const id = sourceIdOf(input.url ?? "", input.title);
@@ -99,4 +100,28 @@ export async function askKnowledge(question: string, focusIds: string[] = [], co
   return askJson<{ answer: string; link: { from: string; to: string; relation: string } }>("knowledge:ask",
     "학습자의 지식 저장소를 아는 튜터다. 질문에 짧게 답한다 (2~6문장). 학습자의 지식과 이어지는 점이 있으면 그 지식 이름을 그대로 써서 짚는다. 두 지식 사이에 고리를 새로 이을 만하면 link에 from/to(지식 이름 그대로)/relation(“그러면”, “때문에”, “의 예”처럼 10자 이내)을 채우고, 아니면 셋 다 빈 문자열.",
     user, S.obj({ answer: S.str, link: S.obj({ from: S.str, to: S.str, relation: S.str }) }));
+}
+
+const FILL_SYSTEM = `학습자의 지식 저장소에서 빠진 것을 채운다. 지식마다 이름, 폴더, 어디서 만났는지가 주어진다.
+- body: 뜻이 비어 있다고 표시된 지식만 쓴다. 그 폴더·자료의 공부 맥락에서의 뜻을 한국어 1~2문장으로. 핵심 조건·복잡도·식이 있으면 넣는다. 이름을 앞에 되풀이하지 않는다. 뜻이 있는 지식은 빈 문자열.
+- aliases: 같은 것을 가리키는 다른 이름. 영어 이름, 널리 쓰는 약어(DFS, LIS, PER), 영어 용어면 한국어 이름. 확실한 것만, 없으면 빈 배열. 상위·하위 개념이나 비슷한 다른 개념은 넣지 않는다(이분 탐색 ↔ lower_bound는 다른 지식).
+- n은 받은 번호를 그대로 쓴다.`;
+type Filled = { items: Array<{ n: number; body: string; aliases: string[] }> };
+/**
+ * 빈 뜻 채우기: one model call for up to 40 items — meanings where there are none, and other names (English name,
+ * abbreviation, Korean name) for items that have no other name yet. What the learner wrote is never replaced.
+ */
+export async function fillMissing(options: { ids?: string[]; limit?: number } = {}) {
+  const { folders, items } = await tree();
+  const pick = items.filter((i) => !options.ids || options.ids.includes(i.id));
+  const full = await Promise.all(pick.map((i) => getKnowledge(i.id)));
+  const need = full.filter((d) => !d.item.body.trim() || !d.item.aliases.length)
+    .sort((a, b) => Number(Boolean(a.item.body.trim())) - Number(Boolean(b.item.body.trim()))).slice(0, Math.min(options.limit ?? 40, 40));
+  if (!need.length) return { asked: 0, changed: [] as string[] };
+  const user = need.map((d, n) => `${n}. ${d.item.title}${d.item.aliases.length ? ` (다른 이름: ${d.item.aliases.join(", ")})` : ""} | 폴더: ${pathOf({ folders }, d.item.folderId) || "없음"}`
+    + ` | 만난 곳: ${[...new Set(d.item.sources.map((s) => s.title))].slice(0, 3).join(", ") || "없음"} | ${d.item.body.trim() ? `뜻 있음: ${d.item.body.slice(0, 120).replace(/\n/g, " ")}` : "뜻 비어 있음"}`).join("\n");
+  const data = await askJson<Filled>("knowledge:fill", FILL_SYSTEM, user, S.obj({ items: S.arr(S.obj({ n: S.int, body: S.str, aliases: S.arr(S.str) })) }));
+  const entries = data.items.flatMap((x) => need[x.n] ? [{ id: need[x.n].item.id, body: x.body, aliases: (x.aliases ?? []).slice(0, 6) }] : []);
+  const { changed } = await enrichKnowledge(entries);
+  return { asked: need.length, changed };
 }
