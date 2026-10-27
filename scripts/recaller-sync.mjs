@@ -5,7 +5,7 @@
 //   node scripts/recaller-sync.mjs push    save this computer's changes (run after stopping the app)
 // Sign-in tokens never go there: they stay in this project's .study-forge-data/chatgpt-auth.
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,6 +47,14 @@ function pullRemote(dir) {
 
 const command = process.argv[2];
 let dir = configuredDir();
+
+// A data folder that already has files but is not a RecallerData clone (a test data folder set in .env.local):
+// nothing to sync — say so and let the app start with it, instead of trying to clone over it.
+const nonEmpty = (d) => { try { return readdirSync(d).length > 0; } catch { return false; } };
+if (dir && ["setup", "pull", "push"].includes(command) && !existsSync(path.join(dir, ".git")) && nonEmpty(dir)) {
+  console.log(`[데이터 동기화] ${dir} 는 RecallerData 저장소가 아니라서(테스트용 데이터 폴더) 동기화를 건너뛰어요. 다른 컴퓨터와 데이터가 공유되지 않아요.`);
+  process.exit(0);
+}
 
 if (command === "setup") {
   dir = dir ?? defaultDir();
