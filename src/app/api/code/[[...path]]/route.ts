@@ -7,6 +7,7 @@ import { deleteProblem, publicProblem, readDrafts, readProblemMeta, readSubmissi
 import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, submitAndRecord } from "@/lib/code/service";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
+import { resolveSource } from "@/lib/code/source";
 
 export const runtime = "nodejs";
 const lang = z.enum(LANGS);
@@ -36,8 +37,13 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "error" && m === "POST") { const b = await body(z.object({ problemId: pid.optional(), lang, code, error: z.string().min(1).max(12000) })); return json(await explainError(b)); }
     if (p[0] === "make" && m === "POST") {
       const b = await body(z.object({ topic: z.string().max(300).optional(), lesson: z.string().max(60_000).optional(), kind: z.enum(["full", "blank"]), lang: lang.optional(),
-        sourceTitle: z.string().max(300).optional(), sourceUrl: z.string().max(2000).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim(), "주제나 강의 글이 필요해요."));
-      const made = await ensureProblemKnowledge(await makeProblem(b));
+        sourceTitle: z.string().max(300).optional(), sourceUrl: z.string().max(2000).optional(),
+        /** 주소로 가져오기: a blog or problem page address, or a Baekjoon number (src/lib/code/source.ts). */
+        from: z.string().max(2000).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
+      const { from, ...rest } = b;
+      const got = from?.trim() ? await resolveSource(from) : null;
+      const made = await ensureProblemKnowledge(await makeProblem(got ? { ...rest, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
+        sourceTitle: got.title, sourceUrl: got.url } : rest));
       return json({ problem: publicProblem(made) });
     }
     // 바킹독 문제집: the built-in list, and filling one problem the first time it is picked.

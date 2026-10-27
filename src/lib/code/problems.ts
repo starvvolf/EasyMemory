@@ -38,7 +38,9 @@ export type ProblemCheck = { by: "source" | "cross"; cases: number; tries: numbe
   /** 결함 풀이 검출: faulty solutions the tests failed, out of those that really are faulty (a score, not a gate). */
   mutation?: { killed: number; total: number; survived: string[]; added: number };
   /** 안전장치 ⑤: a solution from another model call agreed on `agreed` of `total` tests (`unchecked`: it was too slow or crashed). */
-  second?: { model: string; status: "agreed" | "second-wrong" | "unchecked" | "broken" | "skipped"; agreed: number; total: number; unchecked: number } };
+  second?: { model: string; status: "agreed" | "second-wrong" | "unchecked" | "broken" | "skipped"; agreed: number; total: number; unchecked: number };
+  /** Each try of the problem maker: where its time went (ms) and why it failed (the last one passed). */
+  attempts?: Array<{ draftMs: number; testsMs: number; secondMs: number; verifyMs: number; reason?: string }> };
 export type ProblemLite = Pick<Problem, "id" | "title" | "kind" | "knowledge" | "folder" | "createdAt"> & { source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string };
 export type Submission = { id: string; at: string; problemId: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; code: string; ms: number };
 

@@ -101,6 +101,7 @@ function Calibrated() {
 function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [topic, setTopic] = useState("");
+  const [from, setFrom] = useState("");
   const [lesson, setLesson] = useState("");
   const [blank, setBlank] = useState(false);
   const [lang, setLang] = useState<Lang>(storedLang());
@@ -110,20 +111,21 @@ function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string
   const make = async () => {
     setBusy(true); setError("");
     try {
-      const { problem } = await call<{ problem: { id: string } }>("/api/code/make", { ...(topic.trim() ? { topic } : {}), ...(lesson.trim() ? { lesson } : {}), kind: blank ? "blank" : "full", lang });
-      setOpen(false); setTopic(""); setLesson(""); onMade(problem.id);
+      const { problem } = await call<{ problem: { id: string } }>("/api/code/make", { ...(topic.trim() ? { topic } : {}), ...(from.trim() ? { from: from.trim() } : {}), ...(lesson.trim() ? { lesson } : {}), kind: blank ? "blank" : "full", lang });
+      setOpen(false); setTopic(""); setFrom(""); setLesson(""); onMade(problem.id);
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };
   return (
     <section className="panel stack">
       <b>문제 만들기</b>
-      <p className="small muted">주제만 적거나, 공부한 강의 글(바킹독 블로그 같은)이나 백준식 문제 글을 붙여 넣어요. 모범 풀이가 원문 예제(없으면 단순 풀이)와 맞아야 저장해요.</p>
+      <p className="small muted">주제만 적거나, 문제·풀이 블로그 주소나 백준 번호를 넣거나, 강의 글이나 문제 글을 붙여 넣어요. 모범 풀이가 원문 예제(없으면 단순 풀이)와 맞아야 저장해요.</p>
+      <input className="ws-input" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="주소나 백준 번호 (예: https://…/123, 7785)" />
       <input className="ws-input" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="주제 (예: 이분 탐색으로 경계 찾기)" />
       <textarea className="ws-input" rows={5} value={lesson} onChange={(e) => setLesson(e.target.value)} placeholder="강의 글이나 문제 글 붙여 넣기 (선택)" />
       <div className="row">
         <label className="row small"><input type="checkbox" checked={blank} onChange={(e) => setBlank(e.target.checked)} /> 빈칸 코드 문제로</label>
         {blank ? <select className="ws-select" value={lang} onChange={(e) => setLang(e.target.value as Lang)}>{langs.filter((l) => l.ready).map((l) => <option key={l.lang} value={l.lang}>{l.label}</option>)}</select> : null}
-        <button className="btn primary small" disabled={busy || !(topic.trim() || lesson.trim())} onClick={() => void make()}>{busy ? "만드는 중… (1~2분쯤: 모범 풀이와 숨은 테스트를 확인해요)" : "만들기"}</button>
+        <button className="btn primary small" disabled={busy || !(topic.trim() || lesson.trim() || from.trim())} onClick={() => void make()}>{busy ? (from.trim() ? "글을 가져와 만드는 중… (2~5분쯤)" : "만드는 중… (2~5분쯤: 모범 풀이와 숨은 테스트를 확인해요)") : "만들기"}</button>
         <button className="btn ghost small" onClick={() => setOpen(false)}>닫기</button>
       </div>
       {error ? <p className="ws-err">{error}</p> : null}
