@@ -18,6 +18,10 @@ export { recordEvent, memoryOverview, memorySummary, memoryEvents } from "./stor
 /* ---------- 복습 ---------- */
 export { reviewQueue, reviewStatus, dayOf } from "./store.ts";
 
+/* ---------- 비슷한 지식 후보 (임베딩, 2026-10-28 추가) ---------- */
+export { similarKnowledge } from "./embed.ts";
+export type { SimilarHit } from "./embed.ts";
+
 /* ---------- 지식에서 바로 만드는 문제 (AI 호출 없음) ---------- */
 export { questionsFor, grade, QUESTION_LABEL } from "./questions.ts";
 

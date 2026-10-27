@@ -5,6 +5,7 @@ import { createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints
   recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
+import { similarKnowledge } from "@/lib/knowledge/embed";
 import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing } from "@/lib/assist/knowledge-ai";
 
 export const runtime = "nodejs";
@@ -73,6 +74,10 @@ async function handle(request: Request, context: RouteContext) {
       if (p[2] === "event" && m === "POST") {
         const e = await body(z.object({ kind: z.enum(["met", "asked", "wrong", "hint", "correct", "note"]), detail: z.string().max(600).optional(), source: z.object({ kind: sourceRef.shape.kind, title: z.string().max(200), ref: z.string().max(200).optional() }).optional() }));
         return json({ item: await recordEvent(itemId, e.kind, e.detail ?? "", e.source) });
+      }
+      if (p[2] === "similar" && m === "GET") {
+        try { return json(await similarKnowledge({ id: itemId }, { limit: Math.min(Number(url.searchParams.get("limit") ?? 8) || 8, 20) })); }
+        catch (error) { return NextResponse.json({ message: `비슷한 지식을 찾는 모델을 불러오지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
       }
       if (p[2] === "questions" && m === "GET") {
         const pool = await allItems();

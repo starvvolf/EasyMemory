@@ -279,6 +279,8 @@ function ItemDetail({ detail, folders, onAct, onOpen, onGone, onQuiz }: { detail
         ) : <div className="row"><button className="btn ghost small" onClick={() => setMode("link")}>+ 고리 잇기</button><button className="btn ghost small" onClick={() => setMode("merge")}>같은 지식 합치기</button></div>}
       </div>
 
+      <Similar itemId={item.id} onOpen={onOpen} onAct={onAct} />
+
       <details className="ws-fold"><summary>어디서 만났나 · {item.sources.length}</summary>
         <ul className="kw-sources">{item.sources.slice().reverse().slice(0, 12).map((src, i) => <li key={i} className="small"><span className="chip">{{ pdf: "PDF", web: "웹 글", code: "코드", chat: "대화", manual: "직접" }[src.kind] ?? src.kind}</span>{" "}
           {src.url ? <a href={src.url} target="_blank" rel="noreferrer">{src.title}</a> : src.title}{src.page ? ` p.${src.page}` : ""}{src.quote ? <span className="muted"> · “{src.quote.slice(0, 80)}”</span> : null}</li>)}</ul></details>
@@ -290,6 +292,34 @@ function ItemDetail({ detail, folders, onAct, onOpen, onGone, onQuiz }: { detail
 
       {mode === "delete" ? <div className="row small"><span>이 지식과 기록을 모두 지울까요?</span><button className="btn small danger" onClick={() => void onAct(() => call(`/api/knowledge/item/${item.id}`, undefined, "DELETE"), onGone)}>지우기</button><button className="btn ghost small" onClick={() => setMode("")}>취소</button></div>
         : <button className="btn ghost small kw-del" onClick={() => setMode("delete")}>지식 지우기</button>}
+    </div>
+  );
+}
+
+type SimilarHit = ItemLite & { score: number; linked: boolean };
+/**
+ * 비슷한 지식: candidates by meaning (EmbeddingGemma on the app server). Close is not the same — the learner decides
+ * whether to merge, link, or leave it. The first search downloads the model once (about 300 MB).
+ */
+function Similar({ itemId, onOpen, onAct }: { itemId: string; onOpen: (id: string) => void; onAct: (run: () => Promise<unknown>, after?: () => void) => Promise<void> }) {
+  const [hits, setHits] = useState<SimilarHit[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => later(() => { setHits(null); setErr(""); }), [itemId]);
+  const find = async () => {
+    setBusy(true); setErr("");
+    try { setHits((await call<{ hits: SimilarHit[] }>(`/api/knowledge/item/${itemId}/similar?limit=5`)).hits); } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
+  };
+  return (
+    <div><p className="eyebrow">비슷한 지식</p>
+      {hits === null ? <div className="row"><button className="btn ghost small" disabled={busy} onClick={() => void find()}>{busy ? "찾는 중… (처음 한 번은 모델을 내려받아 1~2분)" : "뜻이 비슷한 지식 찾기"}</button></div> : null}
+      {err ? <p className="ws-err small">{err}</p> : null}
+      {hits?.length === 0 ? <p className="small muted">비슷한 지식이 없어요.</p> : null}
+      {hits?.length ? <><ul className="kw-links">{hits.map((h) => <li key={h.id}>
+        <button className="linkish" onClick={() => onOpen(h.id)}>{h.title}</button> <span className="small muted num">{Math.round(h.score * 100)}%{h.linked ? " · 이어짐" : ""}</span>{" "}
+        <button className="btn ghost small" onClick={() => { if (window.confirm(`"${h.title}"을(를) 이 지식으로 합칠까요? 이름·출처·고리·기록이 이쪽으로 옵니다.`)) void onAct(() => call("/api/knowledge/merge", { keep: itemId, drop: h.id }), () => setHits(null)); }}>같은 것 · 합치기</button>
+        {!h.linked ? <button className="btn ghost small" onClick={() => void onAct(() => call("/api/knowledge/link", { from: itemId, to: h.id, relation: "관련" }), () => setHits((x) => x?.map((y) => y.id === h.id ? { ...y, linked: true } : y) ?? null))}>관련 · 잇기</button> : null}
+      </li>)}</ul><p className="small muted">뜻이 가까운 순서예요. 가깝다고 같은 지식은 아니에요(깊이·너비 우선 탐색처럼 반대 개념도 가깝게 나와요).</p></> : null}
     </div>
   );
 }
