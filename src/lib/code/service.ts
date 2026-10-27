@@ -7,7 +7,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { recordEvent, saveMany, type KEventKind } from "../knowledge/store.ts";
+import { recordEvent, saveMany, type KEventKind } from "../knowledge/api.ts";
 import { listProblems, readProblemMeta, setProblemKnowledge, submit, type Problem, type ProblemMeta } from "./problems.ts";
 import { VERDICT_LABEL, type Lang } from "./run.ts";
 import { SEED_KNOWLEDGE } from "./seeds.ts";

@@ -4,7 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { reviewQueue, tree, dayOf } from "../knowledge/store.ts";
+import { reviewQueue, tree, dayOf } from "../knowledge/api.ts";
 
 export class ScheduleError extends Error {
   status: number;

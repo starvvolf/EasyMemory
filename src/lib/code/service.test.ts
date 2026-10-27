@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getKnowledge, memoryEvents } from "../knowledge/store.ts";
+import { getKnowledge, memoryEvents } from "../knowledge/api.ts";
 import { readProblem } from "./problems.ts";
 import { currentAttempt, endAttempt, endIdleAttempts, listProblemsWithKnowledge, recordAsked, recordHint, ATTEMPT_IDLE_MS } from "./service.ts";
 

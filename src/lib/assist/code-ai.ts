@@ -4,7 +4,7 @@ import { askJson, askText, S } from "./model.ts";
 import { LANG_LABEL, judge, type Lang, type TestCase } from "../code/run.ts";
 import { CodeError, findCounterexample, readProblem, readProblemMeta, saveProblem, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
 import { runTestgen, runVerify } from "../code/testgen/index.ts";
-import { memoryEvents, searchKnowledge } from "../knowledge/store.ts";
+import { memoryEvents, searchKnowledge } from "../knowledge/api.ts";
 import { currentAttempt } from "../code/service.ts";
 
 const TUTOR = `너는 알고리즘을 가르치는 튜터다. 학습자가 스스로 고치게 돕는다. 한국어로 짧게 답한다.

@@ -2,9 +2,9 @@
 // materials, questions and grading, code, records, deadlines and schedule, the screen. Judging is always a tool
 // (grade, code_judge), never the agent's own call. Served at /api/agent and, for CLI agents, by tools/recaller-agent-mcp.
 import { z } from "zod";
-import { getKnowledge, linkKnowledge, memoryEvents, memoryOverview, memorySummary, recordEvent, saveKnowledge, searchKnowledge, setKnowledgeState, tree, reviewQueue } from "@/lib/knowledge/store";
-import { grade, questionsFor, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
-import { getSource, listSources } from "@/lib/knowledge/sources";
+import { getKnowledge, linkKnowledge, memoryEvents, memoryOverview, memorySummary, recordEvent, saveKnowledge, searchKnowledge, setKnowledgeState, tree, reviewQueue } from "@/lib/knowledge/api";
+import { grade, questionsFor, QUESTION_LABEL, type Question } from "@/lib/knowledge/api";
+import { getSource, listSources } from "@/lib/knowledge/api";
 import { LANGS, runOnce } from "@/lib/code/run";
 import { listProblems, publicProblem, readProblemMeta } from "@/lib/code/problems";
 import { submitAndRecord } from "@/lib/code/service";

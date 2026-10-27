@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { addDeadline, addTodo, getTimer, listTodos, makeSchedule, pauseTimer, startTimer, stopTimer, updateTodo, week, readSessions } from "./store.ts";
-import { recordEvent, saveMany, tree } from "../knowledge/store.ts";
+import { recordEvent, saveMany, tree } from "../knowledge/api.ts";
 
 async function withData<T>(run: () => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "sched-"));
