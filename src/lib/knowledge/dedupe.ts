@@ -22,7 +22,7 @@ export type DupPair = { id: string; newId: string; otherId: string; verdict: Exc
   status: "open" | "merged" | "dismissed" | "linked" };
 type DupFile = { checked: string[]; pairs: DupPair[] };
 
-const BATCH = 25, CANDIDATES = 5, BATCHES_PER_RUN = 3, WAIT_MS = 4000;
+const BATCH = 25, CANDIDATES = 5, BATCHES_PER_RUN = 3, WAIT_MS = 4000, MAX_RELATED = 2;
 const file = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "knowledge", "dupes.json");
 async function read(): Promise<DupFile> {
   try { const d = JSON.parse(await readFile(file(), "utf8")) as Partial<DupFile>; return { checked: d.checked ?? [], pairs: d.pairs ?? [] }; }
@@ -46,9 +46,9 @@ const JUDGE_SYSTEM = `학습자의 지식 저장소에 새 지식이 들어왔�
 - same: 같은 개념을 다른 말로 부른 것(이진 탐색 = 이분 탐색 = Binary Search, 깊이 우선 탐색 = DFS). 둘을 합쳐도 아무것도 잃지 않을 때만.
 - narrower: 새 지식이 후보의 한 부분·하위 개념·특수한 경우(lower_bound는 이분 탐색의 하위).
 - broader: 후보가 새 지식의 한 부분·하위 개념.
-- related: 같이 쓰이거나 이어지는 다른 개념(다익스트라 ↔ 우선순위 큐).
-- different: 관계가 약하거나 반대·대비되는 개념(깊이 우선 탐색 ↔ 너비 우선 탐색, 기준금리 ↔ 시장금리). 뜻이 가까워 보여도 다르면 different.
-애매하면 same이 아니라 related나 different를 고른다. 잘못 합치는 것이 놓치는 것보다 나쁘다.
+- related: 한쪽이 다른 쪽의 정의나 대표적인 방법에 직접 들어가는 사이만(다익스트라는 우선순위 큐를 쓴다, 구간 합은 누적 합으로 구한다). 학습자가 고리로 이어 두면 복습할 때 도움이 될 만큼 가까워야 한다.
+- different: 그 밖의 모든 것. 관계가 약하거나("X의 시간 복잡도를 분석할 수 있다", "X에도 주의할 수 있다", "둘 다 순서를 쓴다"), 같은 과목일 뿐이거나, 반대·대비되는 개념(깊이 우선 탐색 ↔ 너비 우선 탐색, 기준금리 ↔ 시장금리).
+대부분의 후보는 different다. 애매하면 same이 아니라 different를 고른다. 잘못 합치거나 억지로 잇는 것이 놓치는 것보다 나쁘다. 새 지식 하나에 related는 많아야 2개.
 reason: 한국어 한 문장. n과 m은 받은 번호를 그대로 쓴다.`;
 type Judged = { items: Array<{ n: number; candidates: Array<{ m: number; verdict: Verdict; reason: string }> }> };
 const JUDGE_SCHEMA = S.obj({ items: S.arr(S.obj({ n: S.int, candidates: S.arr(S.obj({ m: S.int, verdict: S.oneOf("same", "narrower", "broader", "related", "different"), reason: S.str })) })) });
@@ -80,9 +80,12 @@ async function checkBatch(ids: string[], data: DupFile): Promise<DupPair[]> {
   for (const j of judged.items ?? []) {
     const w = work[j.n];
     if (!w) continue;
+    let related = 0;
     for (const c of j.candidates ?? []) {
       const cand = w.cands[c.m];
       if (!cand || c.verdict === "different" || known.has(`${w.d.item.id}|${cand.d.item.id}`)) continue;
+      // A few strong links are worth more than many weak ones: at most two 관련 per new item, closest first.
+      if (c.verdict === "related" && ++related > MAX_RELATED) continue;
       known.add(`${w.d.item.id}|${cand.d.item.id}`); known.add(`${cand.d.item.id}|${w.d.item.id}`);
       const pair: DupPair = { id: `dup_${randomBytes(6).toString("hex")}`, newId: w.d.item.id, otherId: cand.d.item.id, verdict: c.verdict, reason: (c.reason ?? "").slice(0, 200),
         score: cand.score, at, status: c.verdict === "same" ? "open" : "linked" };
