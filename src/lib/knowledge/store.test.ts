@@ -227,6 +227,11 @@ test("PDF points: 냄 → 받음 become 고리, the wiring and the repeated name
   const uvn = await getKnowledge(byTitle["uvn 좌표계"].id);
   assert.deepEqual(uvn.links.map((l) => [l.item.title, l.relation]), [["관찰 변환 행렬", "냄: u"]]);
   assert.equal((await importPoints(points)).linked, 0, "running again changes nothing");
+  // A card that takes the normal "N" is fed by the card named "…(N)", not by the one that gives the unit vector "n".
+  const up = card("up", "view-up vector (V)", "V를 N에 수직인 평면에 투영 ⟨받음: N / 냄: 조정된 V⟩");
+  await importPoints([...points.slice(0, 1), up, ...points.slice(1)]);
+  const fed = await getKnowledge((await tree()).items.find((i) => i.title === "view-up vector (V)")!.id);
+  assert.deepEqual(fed.backlinks.map((l) => l.item.title).sort(), ["view-plane normal vector (N)"]);
 }));
 
 test("old FSRS schedules read as the first box; saving what is already there keeps 최근 순", () => withData(async () => {

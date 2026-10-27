@@ -590,7 +590,12 @@ export async function importPoints(points: Array<{ ref: string; title: string; e
   const linked = await changeIf((s) => {
     let dirty = false;
     const byRef = new Map(s.items.flatMap((i) => i.sources.filter((x) => x.ref).map((x) => [x.ref!, i] as const)));
-    for (const p of points) { const item = byRef.get(p.ref); if (item && item.body.includes("⟨받음:")) { item.body = pointBody(item.title, item.body.split("\n")); dirty = true; } }
+    for (const p of points) {
+      const item = byRef.get(p.ref);
+      if (!item) continue;
+      const body = pointBody(item.title, item.body.split("\n"));
+      if (body && body !== item.body && (item.body.includes("⟨받음:") || p.essentials.some((e) => stripWiring(e).startsWith(item.title)))) { item.body = body; dirty = true; }
+    }
     let added = 0;
     const groups = new Map<string, Array<{ item: Knowledge; takes: string[]; gives: string[] }>>();
     for (const p of points) {
@@ -598,19 +603,36 @@ export async function importPoints(points: Array<{ ref: string; title: string; e
       if (!item) continue;
       groups.set(p.material, [...(groups.get(p.material) ?? []), { item, ...parseWiring(p.essentials) }]);
     }
-    const link = (from: Knowledge, to: Knowledge, relation: string) => {
-      if (from.id === to.id || from.links.some((l) => l.to === to.id) || to.links.some((l) => l.to === from.id)) return;
-      from.links.push({ to: to.id, relation: relation.slice(0, 60) }); added++; dirty = true;
-    };
-    const isName = (wanted: string, item: Knowledge) => namesOf(item).some((n) => normalize(n) === normalize(wanted) || (normalize(wanted).length >= 4 && similarity(n, wanted) >= 0.75));
-    for (const cards of groups.values()) for (const to of cards) for (const wanted of to.takes) {
-      // What a card takes is either a result another card gives, or another card itself (its name).
-      // Short names repeat (N, n, u): the nearest card before this one that gives it, else any card that does.
-      const gives = (c: (typeof cards)[number]) => c.gives.some((g) => normalize(g) === normalize(wanted));
-      const giver = cards.slice(0, cards.indexOf(to)).reverse().find(gives) ?? cards.find((c) => c !== to && gives(c));
-      if (giver) { link(giver.item, to.item, `냄: ${wanted}`); continue; }
-      const named = cards.find((c) => isName(wanted, c.item));
-      if (named) link(named.item, to.item, "입력으로 씀");
+    // Symbols are case-sensitive (N is the normal, n its unit vector); longer names compare like everywhere else.
+    const symbol = (text: string) => text.replace(/\s+/g, "");
+    const same = (a: string, b: string) => normalize(a).length <= 2 || normalize(b).length <= 2 ? symbol(a) === symbol(b) : normalize(a) === normalize(b);
+    const isName = (wanted: string, item: Knowledge) => namesOf(item).some((n) => same(n, wanted) || n.trim().endsWith(`(${wanted.trim()})`)
+      || (normalize(wanted).length >= 4 && similarity(n, wanted) >= 0.75));
+    const MADE = (relation: string) => relation.startsWith("냄: ") || relation === "입력으로 씀";
+    for (const cards of groups.values()) {
+      const want = new Map<string, Map<string, string>>(); // from id → (to id → relation)
+      for (const to of cards) for (const wanted of to.takes) {
+        // What a card takes is a result another card gives, or another card itself (its name). Short names repeat:
+        // the nearest card before this one that gives it, else any card that does.
+        const gives = (c: (typeof cards)[number]) => c !== to && c.gives.some((g) => same(g, wanted));
+        const giver = cards.slice(0, cards.indexOf(to)).reverse().find(gives) ?? cards.find(gives);
+        const from = giver ?? cards.find((c) => c !== to && isName(wanted, c.item));
+        if (!from || from.item.id === to.item.id) continue;
+        const row = want.get(from.item.id) ?? new Map<string, string>();
+        if (!row.has(to.item.id)) row.set(to.item.id, giver ? `냄: ${wanted}` : "입력으로 씀");
+        want.set(from.item.id, row);
+      }
+      // Links this tidy-up made earlier and no longer finds go (a wrong match fixed later); the learner's own stay.
+      const inGroup = new Set(cards.map((c) => c.item.id));
+      for (const { item } of cards) {
+        const keep = item.links.filter((l) => !(MADE(l.relation) && inGroup.has(l.to) && !want.get(item.id)?.has(l.to)));
+        if (keep.length !== item.links.length) { item.links = keep; dirty = true; }
+      }
+      for (const { item } of cards) for (const [toId, relation] of want.get(item.id) ?? []) {
+        const target = cards.find((c) => c.item.id === toId)!.item;
+        if (item.links.some((l) => l.to === toId) || target.links.some((l) => l.to === item.id)) continue;
+        item.links.push({ to: toId, relation: relation.slice(0, 60) }); added++; dirty = true;
+      }
     }
     return { dirty, out: added };
   });
