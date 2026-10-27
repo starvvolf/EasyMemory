@@ -22,6 +22,12 @@ export function meaningOf(item: Pick<Knowledge, "title" | "body">) {
   for (const sep of [" — ", " – ", " - ", ": ", "："]) if (t && m.startsWith(t + sep)) return m.slice(t.length + sep.length).trim();
   return m;
 }
+/**
+ * The meaning as it may stand among options: without a leading "[맥락]" (it names the topic, so it gives the answer
+ * away). A numbered procedure ("1) … 2) …") is never an option — its shape alone tells which one it is.
+ */
+const optionText = (item: Pick<Knowledge, "title" | "body">) => meaningOf(item).replace(/^\[[^\]]{1,80}\]\s*/, "").trim();
+const isSteps = (text: string) => /(^|\s)1\)\s.*\s2\)\s/.test(text);
 const materials = (x: Pool[number]) => new Set((x.sources ?? []).map((s) => s.title.replace(/\.pdf$/i, "")).filter(Boolean));
 /**
  * Others to pick wrong options from: the same folder first, then the same material. Never knowledge from another
@@ -29,7 +35,7 @@ const materials = (x: Pool[number]) => new Set((x.sources ?? []).map((s) => s.ti
  */
 const others = (item: Pool[number], pool: Pool) => {
   const mine = materials(item);
-  const usable = pool.filter((x) => x.id !== item.id && meaningOf(x) && normalize(meaningOf(x)) !== normalize(meaningOf(item)));
+  const usable = pool.filter((x) => x.id !== item.id && optionText(x) && !isSteps(optionText(x)) && normalize(optionText(x)) !== normalize(optionText(item)));
   const sameFolder = usable.filter((x) => x.folderId === item.folderId);
   const sameMaterial = usable.filter((x) => !sameFolder.includes(x) && [...materials(x)].some((m) => mine.has(m)));
   return [...sameFolder, ...sameMaterial];
@@ -46,13 +52,16 @@ export function questionsFor(item: Pool[number], pool: Pool, seed = ""): Questio
   const id = (kind: string) => `${item.id}:${kind}:${seed}`;
   out.push({ id: id("flashcard"), kind: "flashcard", label: QUESTION_LABEL.flashcard, knowledgeId: item.id, prompt: item.title, answer: meaning || "(설명이 아직 없어요. 지식창에서 적어 주세요.)", explain: "" });
   const wrong = others(item, pool);
-  if (meaning && wrong.length >= 1) {
-    const picks = shuffle(wrong, r).slice(0, 3).map((x) => meaningOf(x));
-    const options = shuffle([meaning, ...picks], r);
-    // 객관식 needs at least three options to be worth asking; with one other, only OX.
-    if (picks.length >= 2) out.push({ id: id("choice"), kind: "choice", label: QUESTION_LABEL.choice, knowledgeId: item.id, prompt: `"${item.title}"의 뜻으로 맞는 것은?`, options, answer: meaning, explain: `${item.title}: ${meaning}` });
+  const own = optionText(item);
+  if (own && wrong.length >= 1) {
+    // Wrong options close to the answer in length (from a few random ones), so the longest option is not the answer.
+    const picks = shuffle(wrong, r).slice(0, 6).map((x) => optionText(x))
+      .sort((a, b) => Math.abs(a.length - own.length) - Math.abs(b.length - own.length)).slice(0, 3);
+    const options = shuffle([own, ...picks], r);
+    // 객관식 needs at least three options to be worth asking; with one other, only OX. A procedure is asked as a card.
+    if (picks.length >= 2 && !isSteps(own)) out.push({ id: id("choice"), kind: "choice", label: QUESTION_LABEL.choice, knowledgeId: item.id, prompt: `"${item.title}"의 뜻으로 맞는 것은?`, options, answer: own, explain: `${item.title}: ${meaning}` });
     const truth = r() < 0.5;
-    const shown = truth ? meaning : picks[0];
+    const shown = truth ? own : picks[0];
     out.push({ id: id("ox"), kind: "ox", label: QUESTION_LABEL.ox, knowledgeId: item.id, prompt: `${item.title}: ${shown}`, options: ["O", "X"], answer: truth ? "O" : "X",
       explain: truth ? "맞는 설명이에요." : `${item.title}의 뜻은 "${meaning}"이에요. 보기의 설명은 다른 지식의 것이에요.` });
   }

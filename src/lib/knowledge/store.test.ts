@@ -110,8 +110,8 @@ test("search finds by letters first and by look-alike names, without a model; me
 
 test("PDF knowledge points come in once as 만남; the learner can graduate or reset an item by hand", () => withData(async () => {
   const points = [{ ref: "deck1:p1", title: "TCP", essentials: ["신뢰성 있는 전송"], folder: "네트워크/전송 계층", material: "네트워크 3장", page: 12 }];
-  assert.deepEqual(await importPoints(points), { added: 1, merged: 0 });
-  assert.deepEqual(await importPoints(points), { added: 0, merged: 0 });
+  assert.deepEqual(await importPoints(points), { added: 1, merged: 0, linked: 0 });
+  assert.deepEqual(await importPoints(points), { added: 0, merged: 0, linked: 0 });
   const [{ id }] = (await tree()).items;
   assert.equal((await setKnowledgeState(id, { graduated: true })).state, "known");
   assert.equal((await setKnowledgeState(id, { state: "unknown" })).state, "unknown");
@@ -205,4 +205,57 @@ test("review questions mix only knowledge of the same folder or material, and op
   }
   const lonely = questionsFor(pool[3], pool, "1");
   assert.deepEqual(lonely.map((q) => q.kind), ["flashcard"], "nothing of its own subject to mix in: a flashcard only");
+});
+
+test("PDF points: 냄 → 받음 become 고리, the wiring and the repeated name leave the text, a file-name folder is tidied", () => withData(async () => {
+  const card = (id: string, title: string, line: string) => ({ ref: `deck1:${id}`, title, essentials: [line, "헷갈림: 순서"], folder: "3D뷰잉_좌표계/관찰 좌표", material: "3D뷰잉_좌표계", page: 1 });
+  const points = [
+    card("n", "view-plane normal vector (N)", "view-plane normal vector (N) — 뷰 평면의 법선 ⟨받음: - / 냄: N⟩"),
+    card("v", "view-up vector (V)", "위쪽 방향을 정하는 벡터 ⟨받음: - / 냄: V⟩"),
+    card("uvn", "uvn 좌표계", "1) n = N/|N| 2) u = V × n 3) v = n × u ⟨받음: view-plane normal (N), view-up vector (V) / 냄: u, v, n⟩"),
+    card("m", "관찰 변환 행렬", "u, v, n을 행으로 쓴다 ⟨받음: u, v, n / 냄: M⟩"),
+  ];
+  const first = await importPoints(points);
+  assert.equal(first.added, 4);
+  assert.equal(first.linked, 3, "N → uvn and V → uvn by name, uvn → 행렬 by what it gives");
+  const { folders, items } = await tree();
+  assert.deepEqual(folders.filter((f) => !f.parentId).map((f) => f.name), ["3D뷰잉 좌표계"]);
+  const byTitle = Object.fromEntries(items.map((i) => [i.title, i]));
+  const n = await getKnowledge(byTitle["view-plane normal vector (N)"].id);
+  assert.equal(n.item.body, "뷰 평면의 법선\n헷갈림: 순서", "no wiring, no name in front");
+  assert.equal(n.links[0].item.title, "uvn 좌표계");
+  const uvn = await getKnowledge(byTitle["uvn 좌표계"].id);
+  assert.deepEqual(uvn.links.map((l) => [l.item.title, l.relation]), [["관찰 변환 행렬", "냄: u"]]);
+  assert.equal((await importPoints(points)).linked, 0, "running again changes nothing");
+}));
+
+test("old FSRS schedules read as the first box; saving what is already there keeps 최근 순", () => withData(async () => {
+  const { writeFile, mkdir } = await import("node:fs/promises");
+  const dir = path.join(process.env.STUDY_FORGE_DATA_DIR!, "knowledge");
+  await mkdir(dir, { recursive: true });
+  const old = { id: "k_old", title: "이분 탐색", body: "반씩 줄여 찾기", folderId: null, state: "unknown", graduated: false, aliases: [], links: [], sources: [],
+    stats: { asked: 0, wrong: 1, hint: 0, correct: 0, correctDays: [] }, createdAt: "2026-10-26T00:00:00.000Z", updatedAt: "2026-10-26T00:00:00.000Z", lastAt: "2026-10-26T00:00:00.000Z",
+    review: { algorithm: "fsrs", dueAt: "2026-10-26T12:00:00.000Z", stability: 0.2, repetitions: 1, lapses: 0, state: "learning", lastReviewAt: "2026-10-26T11:00:00.000Z" } };
+  await writeFile(path.join(dir, "store.json"), JSON.stringify({ version: 1, folders: [], items: [old] }), "utf8");
+  const { item } = await getKnowledge("k_old");
+  assert.deepEqual(item.review, { algorithm: "leitner", box: 0, dueAt: "2026-10-26T12:00:00.000Z", lastReviewAt: "2026-10-26T11:00:00.000Z", repetitions: 1, lapses: 0 });
+  const again = await saveKnowledge({ title: "이분 탐색" });
+  assert.equal(again.item.lastAt, "2026-10-26T00:00:00.000Z", "nothing new, so it does not jump to the top");
+  const more = await saveKnowledge({ title: "이분 탐색", aliases: ["Binary Search"] });
+  assert.notEqual(more.item.lastAt, "2026-10-26T00:00:00.000Z");
+}));
+
+test("review options give nothing away: no [맥락] in front, no procedure among options, lengths close to the answer", async () => {
+  const { questionsFor } = await import("./questions.ts");
+  const base = { aliases: [], folderId: "f", links: [] as Array<{ to: string; relation: string }> };
+  const pool = [
+    { ...base, id: "a", title: "view-up vector (V)", body: "[N이 z_view 축을 정하는 좌표계] V를 N에 수직인 평면에 투영해 y_view를 정한다" },
+    { ...base, id: "b", title: "uvn 좌표계", body: "1) n = N/|N| 2) u = V × n 3) v = n × u" },
+    { ...base, id: "c", title: "법선 벡터 N", body: "뷰 평면에 수직인 방향으로 z_view 축을 정한다" },
+    { ...base, id: "d", title: "z_vp", body: "관찰 원점에서 뷰 평면까지의 거리" },
+  ];
+  const choice = questionsFor(pool[0], pool, "s").find((q) => q.kind === "choice")!;
+  assert.ok(choice.options!.every((o) => !o.startsWith("[")), "no context bracket on any option");
+  assert.ok(!choice.options!.some((o) => o.startsWith("1)")), "the procedure is not an option");
+  assert.equal(questionsFor(pool[1], pool, "s").some((q) => q.kind === "choice"), false, "a procedure is asked as a card, not 객관식");
 });

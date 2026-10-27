@@ -68,8 +68,25 @@ async function readStore(): Promise<Store> {
     throw error;
   }
 }
-const fill = (item: Knowledge): Knowledge => ({ ...item, aliases: item.aliases ?? [], links: item.links ?? [], sources: item.sources ?? [],
-  stats: { ...{ asked: 0, wrong: 0, hint: 0, correct: 0, correctDays: [] as string[] }, ...(item.stats as Partial<KStats> | undefined) }, graduated: item.graduated === true, body: item.body ?? "" });
+/**
+ * Schedules saved before the 상자 방식 (2026-10-26) were FSRS (`algorithm: "fsrs"`, no box). Read them as the first box,
+ * keeping their due date and counts, so "복습 n단계" never shows NaN; the next write stores the new form.
+ */
+function asLeitner(review: unknown): KReview | undefined {
+  if (!review || typeof review !== "object") return undefined;
+  const r = review as Partial<KReview> & { algorithm?: string };
+  if (r.algorithm === "leitner" && Number.isInteger(r.box)) return r as KReview;
+  const at = typeof r.lastReviewAt === "string" ? r.lastReviewAt : typeof r.dueAt === "string" ? r.dueAt : new Date(0).toISOString();
+  return { algorithm: "leitner", box: 0, dueAt: typeof r.dueAt === "string" ? r.dueAt : at, lastReviewAt: at,
+    repetitions: Number(r.repetitions) || 0, lapses: Number(r.lapses) || 0 };
+}
+const fill = (item: Knowledge): Knowledge => {
+  const out: Knowledge = { ...item, aliases: item.aliases ?? [], links: item.links ?? [], sources: item.sources ?? [],
+    stats: { ...{ asked: 0, wrong: 0, hint: 0, correct: 0, correctDays: [] as string[] }, ...(item.stats as Partial<KStats> | undefined) }, graduated: item.graduated === true, body: item.body ?? "" };
+  if (item.review !== undefined) { const r = asLeitner(item.review); if (r) out.review = r; else delete out.review; }
+  if (item.reviewBefore) out.reviewBefore = asLeitner(item.reviewBefore) ?? null;
+  return out;
+};
 async function writeStore(store: Store) {
   await mkdir(dir(), { recursive: true });
   const tmp = `${storeFile()}.${randomBytes(4).toString("hex")}.tmp`;
@@ -101,10 +118,22 @@ function serial<T>(run: () => Promise<T>): Promise<T> {
 async function change<T>(run: (store: Store) => T | Promise<T>): Promise<T> {
   return serial(async () => { const store = await readStore(); const out = await run(store); await writeStore(store); return out; });
 }
+/** Like change, but writes only when the run says it changed something (for tidy-ups that run on every page load). */
+async function changeIf<T>(run: (store: Store) => { dirty: boolean; out: T }): Promise<T> {
+  return serial(async () => { const store = await readStore(); const { dirty, out } = run(store); if (dirty) await writeStore(store); return out; });
+}
 
 /* ---------- matching: same knowledge under another wording ---------- */
 /** Letters and digits only, lower case, so "기준 금리" and "기준금리" and "PER" / "per" meet. */
 export const normalize = (text: string) => text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+/** The PDF engine writes what a card takes and gives as ` ⟨받음: a, b / 냄: c⟩`. It becomes 고리, not text to read. */
+const WIRING = /\s*⟨받음:\s*([^/⟩]*)\/\s*냄:\s*([^⟩]*)⟩/;
+const stripWiring = (line: string) => line.replace(new RegExp(WIRING.source, "g"), "").trim();
+function parseWiring(lines: string[]) {
+  const names = (text: string) => text.split(/[,，]/).map((s) => s.trim()).filter((s) => s && s !== "-");
+  for (const line of lines) { const m = WIRING.exec(line); if (m) return { takes: names(m[1]), gives: names(m[2]) }; }
+  return { takes: [] as string[], gives: [] as string[] };
+}
 function bigrams(text: string) {
   const s = normalize(text); const out = new Map<string, number>();
   if (s.length < 2) { if (s) out.set(s, 1); return out; }
@@ -217,6 +246,9 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   const item = existing ?? blank(title);
   const fromNewPlace = Boolean(existing && input.source && !existing.sources.some((s) => sameSource(s, input.source!)));
   if (!existing) store.items.push(item);
+  // Saving what is already there (a code problem opened again, a page reloaded) is not "seeing it again": the item keeps
+  // its place in "최근 순" unless something about it actually changed.
+  const before = existing ? JSON.stringify([item.body, item.aliases, item.sources.length, item.folderId, item.state, item.graduated, item.links]) : "";
   if (input.body && (!item.body || (!existing && input.body))) item.body = input.body.trim().slice(0, 4000);
   for (const alias of [...(input.aliases ?? []), ...(existing && normalize(title) !== normalize(item.title) ? [title] : [])]) {
     const a = alias.trim().slice(0, 120);
@@ -235,7 +267,7 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
     const target = link.to ? store.items.find((x) => x.id === link.to) : link.title ? sameAs(store.items, link.title) ?? saveInto(store, { title: link.title, folderId: item.folderId, source: input.source }, events).item : undefined;
     if (target && target.id !== item.id && !item.links.some((l) => l.to === target.id)) item.links.push({ to: target.id, relation: link.relation.trim().slice(0, 60) || "이어짐" });
   }
-  item.updatedAt = at; item.lastAt = at;
+  if (!existing || before !== JSON.stringify([item.body, item.aliases, item.sources.length, item.folderId, item.state, item.graduated, item.links])) { item.updatedAt = at; item.lastAt = at; }
   if (!existing || fromNewPlace) events.push({ id: newId("ev"), at, knowledgeId: item.id, kind: "met", detail: existing ? "다른 자료에서 다시 만남" : "처음 만남",
     ...(input.source ? { source: { kind: input.source.kind, title: input.source.title, ...(input.source.ref ? { ref: input.source.ref } : {}) } } : {}) });
   if (input.state === "unknown") events.push({ id: newId("ev"), at, knowledgeId: item.id, kind: "asked", detail: "저장하면서 몰랐음으로 표시" });
@@ -393,7 +425,7 @@ export async function takeBackWrong(knowledgeId: string, asCorrect: boolean, sou
 
 /* ---------- reading ---------- */
 export type ItemLite = Pick<Knowledge, "id" | "title" | "state" | "graduated" | "folderId" | "updatedAt" | "lastAt"> & { line: string; links: number; weak: number; dueAt?: string };
-const firstLine = (body: string) => body.split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 120) ?? "";
+const firstLine = (body: string) => body.split("\n").map((l) => stripWiring(l)).find(Boolean)?.slice(0, 120) ?? "";
 const weakness = (item: Knowledge) => item.stats.wrong * 2 + item.stats.hint + item.stats.asked;
 const lite = (item: Knowledge): ItemLite => ({ id: item.id, title: item.title, state: item.state, graduated: item.graduated, folderId: item.folderId,
   updatedAt: item.updatedAt, lastAt: item.lastAt, line: firstLine(item.body), links: item.links.length, weak: weakness(item), ...(item.review ? { dueAt: item.review.dueAt } : {}) });
@@ -520,15 +552,69 @@ export async function reviewStatus(options: { folderId?: string; now?: Date } = 
   return { due: pool.filter((i) => dueTime(i) <= now).length, next: later.length ? new Date(later[0]).toISOString() : null };
 }
 
-/** Knowledge points of PDF materials (the engine's knowledge layer), brought in as 만남 under 자료 이름/구역. Idempotent. */
+/** "3D뷰잉_좌표계" → "3D뷰잉 좌표계": a file name read as a folder name. */
+const folderName = (text: string) => text.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
+/** A point's lines as the knowledge's meaning: no engine wiring, no name repeated in front ("z_vp — 뷰 평면의 위치…"). */
+function pointBody(title: string, essentials: string[]) {
+  return essentials.map((line, i) => {
+    let l = stripWiring(line);
+    if (i === 0) for (const sep of [" — ", " – ", " - ", ": "]) if (l.startsWith(title.trim() + sep)) { l = l.slice(title.trim().length + sep.length).trim(); break; }
+    return l;
+  }).filter(Boolean).join("\n");
+}
+/**
+ * Knowledge points of PDF materials (the engine's knowledge layer), brought in as 만남 under 자료 이름/구역. Idempotent:
+ * runs on every load, so it also tidies points brought in before (wiring out of the text, the file-name folder renamed)
+ * and turns each card's 냄 → 받음 into 고리 inside one material, without a model call.
+ */
 export async function importPoints(points: Array<{ ref: string; title: string; essentials: string[]; folder: string; material: string; page?: number }>) {
+  // Folders named after the file before this tidy-up take the cleaned name first (unless it is taken), so new points
+  // land in the same folder. Only the material folders these points name are touched, never one the learner made.
+  const raw = new Set(points.map((p) => p.folder.split("/")[0] ?? "").filter((name) => name.includes("_")));
+  if (raw.size) await changeIf((s) => {
+    let dirty = false;
+    for (const f of s.folders) if (!f.parentId && raw.has(f.name)) {
+      const name = folderName(f.name);
+      if (!s.folders.some((g) => g !== f && !g.parentId && normalize(g.name) === normalize(name))) { f.name = name.slice(0, 60); dirty = true; }
+    }
+    return { dirty, out: null };
+  });
   const store = await readStore();
   const have = new Set(store.items.flatMap((i) => i.sources.map((s) => s.ref).filter(Boolean)));
   const fresh = points.filter((p) => !have.has(p.ref)).slice(0, 400);
-  if (!fresh.length) return { added: 0, merged: 0 };
-  const results = await saveMany(fresh.map((p) => ({ title: p.title, body: p.essentials.join("\n"), folder: p.folder,
-    source: { kind: "pdf" as const, title: p.material, ref: p.ref, ...(p.page ? { page: p.page } : {}) } })));
-  return { added: results.filter((r) => r.created).length, merged: results.filter((r) => r.merged).length };
+  const results = fresh.length ? await saveMany(fresh.map((p) => {
+    const [material, ...rest] = p.folder.split("/");
+    return { title: p.title, body: pointBody(p.title, p.essentials), folder: [folderName(material ?? ""), ...rest].join("/"),
+      source: { kind: "pdf" as const, title: p.material, ref: p.ref, ...(p.page ? { page: p.page } : {}) } };
+  })) : [];
+  const linked = await changeIf((s) => {
+    let dirty = false;
+    const byRef = new Map(s.items.flatMap((i) => i.sources.filter((x) => x.ref).map((x) => [x.ref!, i] as const)));
+    for (const p of points) { const item = byRef.get(p.ref); if (item && item.body.includes("⟨받음:")) { item.body = pointBody(item.title, item.body.split("\n")); dirty = true; } }
+    let added = 0;
+    const groups = new Map<string, Array<{ item: Knowledge; takes: string[]; gives: string[] }>>();
+    for (const p of points) {
+      const item = byRef.get(p.ref);
+      if (!item) continue;
+      groups.set(p.material, [...(groups.get(p.material) ?? []), { item, ...parseWiring(p.essentials) }]);
+    }
+    const link = (from: Knowledge, to: Knowledge, relation: string) => {
+      if (from.id === to.id || from.links.some((l) => l.to === to.id) || to.links.some((l) => l.to === from.id)) return;
+      from.links.push({ to: to.id, relation: relation.slice(0, 60) }); added++; dirty = true;
+    };
+    const isName = (wanted: string, item: Knowledge) => namesOf(item).some((n) => normalize(n) === normalize(wanted) || (normalize(wanted).length >= 4 && similarity(n, wanted) >= 0.75));
+    for (const cards of groups.values()) for (const to of cards) for (const wanted of to.takes) {
+      // What a card takes is either a result another card gives, or another card itself (its name).
+      // Short names repeat (N, n, u): the nearest card before this one that gives it, else any card that does.
+      const gives = (c: (typeof cards)[number]) => c.gives.some((g) => normalize(g) === normalize(wanted));
+      const giver = cards.slice(0, cards.indexOf(to)).reverse().find(gives) ?? cards.find((c) => c !== to && gives(c));
+      if (giver) { link(giver.item, to.item, `냄: ${wanted}`); continue; }
+      const named = cards.find((c) => isName(wanted, c.item));
+      if (named) link(named.item, to.item, "입력으로 씀");
+    }
+    return { dirty, out: added };
+  });
+  return { added: results.filter((r) => r.created).length, merged: results.filter((r) => r.merged).length, linked };
 }
 
 /** Items that came from given places (a PDF material's points: "deckId:pointId"), by exact ref or ref prefix. */
