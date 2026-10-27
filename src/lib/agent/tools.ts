@@ -6,7 +6,7 @@ import { getKnowledge, linkKnowledge, memoryEvents, memoryOverview, memorySummar
 import { grade, questionsFor, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { getSource, listSources } from "@/lib/knowledge/sources";
 import { LANGS, runOnce } from "@/lib/code/run";
-import { listProblems, publicProblem, readProblem } from "@/lib/code/problems";
+import { listProblems, publicProblem, readProblemMeta } from "@/lib/code/problems";
 import { submitAndRecord } from "@/lib/code/service";
 import { makeProblem } from "@/lib/assist/code-ai";
 import { addDeadline, addTodo, getTimer, listDeadlines, listTodos, makeSchedule, week } from "@/lib/schedule/store";
@@ -94,7 +94,7 @@ export const TOOLS: Tool[] = [
   tool("code_judge", "코드", "코드 채점", "문제의 예제(example) 또는 전체 테스트(submit)로 채점. submit은 결과가 지식 기록에 남는다.",
     { problemId: z.string().max(60), lang, code: z.string().max(100000), mode: z.enum(["example", "submit"]), hints: z.number().int().min(0).max(10).optional() },
     async ({ problemId, lang: l, code, mode, hints }) => { const r = await submitAndRecord(problemId, l, code, mode, hints ?? 0); return { verdict: r.verdict, passed: r.passed, total: r.total, shown: r.shown, compile: r.compile }; }),
-  tool("code_problem", "코드", "코드 문제 보기", "문제 설명과 예제 (숨은 테스트와 모범 풀이는 빼고).", { problemId: z.string().max(60) }, async ({ problemId }) => publicProblem(await readProblem(problemId))),
+  tool("code_problem", "코드", "코드 문제 보기", "문제 설명과 예제 (숨은 테스트와 모범 풀이는 빼고).", { problemId: z.string().max(60) }, async ({ problemId }) => publicProblem(await readProblemMeta(problemId))),
   tool("code_problem_make", "코드", "코드 문제 만들기", "주제나 강의 글로 새 문제를 만든다. 테스트는 모범 풀이로 확인된 것만 남는다. kind blank는 빈칸 코드 문제.",
     { topic: z.string().max(300).optional(), lesson: z.string().max(30000).optional(), kind: z.enum(["full", "blank"]), lang: lang.optional() },
     async (input) => publicProblem(await makeProblem(input))),

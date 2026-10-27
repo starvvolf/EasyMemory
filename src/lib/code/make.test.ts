@@ -193,3 +193,27 @@ test("when the reference is the one that's wrong, the simple and the independent
     assert.equal(seen.length, 2);
     assert.match(seen[1].user, /모범 풀이가 틀림/);
   }, SUM));
+
+test("a problem is two files: the list and the problem screen never read the hidden tests; a file from before is split on first read", () => withFake(
+  [draft({})],
+  async () => {
+    const { readProblemMeta, listProblems } = await import("./problems.ts");
+    const { readFile, writeFile, stat } = await import("node:fs/promises");
+    const made = await makeProblem({ topic: "누적 합", kind: "full" });
+    const dir = path.join(process.env.STUDY_FORGE_DATA_DIR!, "code", "problems");
+    const metaFile = path.join(dir, `${made.id}.json`), testsFile = path.join(dir, `${made.id}.tests.json`);
+    const meta = JSON.parse(await readFile(metaFile, "utf8"));
+    assert.equal(meta.tests, undefined, "the problem file has no tests");
+    assert.equal(meta.hiddenTests, made.tests.length);
+    assert.equal(JSON.parse(await readFile(testsFile, "utf8")).length, made.tests.length);
+    assert.equal((await readProblemMeta(made.id)).hiddenTests, made.tests.length);
+    assert.deepEqual((await readProblem(made.id)).tests, made.tests);
+    // A file written before the split: tests inline, no tests file.
+    const { hiddenTests, ...old } = meta; void hiddenTests;
+    await writeFile(metaFile, JSON.stringify({ ...old, tests: made.tests.slice(0, 2) }), "utf8");
+    await (await import("node:fs/promises")).rm(testsFile);
+    assert.ok((await listProblems()).some((p) => p.id === made.id));
+    assert.equal(JSON.parse(await readFile(metaFile, "utf8")).tests, undefined, "split on first read");
+    assert.ok((await stat(testsFile)).size > 0);
+    assert.equal((await readProblem(made.id)).tests.length, 2);
+  }));

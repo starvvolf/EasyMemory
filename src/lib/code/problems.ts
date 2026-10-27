@@ -3,7 +3,7 @@
 // Recaller): a test the reference cannot answer is dropped, so a wrong expected output never grades the learner.
 // The screen gets examples only; hidden tests and the reference stay on the server.
 import { randomBytes } from "node:crypto";
-import { appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { calibration } from "./calibrate.ts";
 import { judge, LANGS, normalizeOutput, runOnce, type CompareHow, type Judgement, type Lang, type TestCase } from "./run.ts";
@@ -62,12 +62,57 @@ const submissionsFile = () => path.join(root(), "submissions.jsonl");
 const idPattern = /^cp_[a-z0-9_-]{3,40}$/;
 const fileOf = (dir: string, id: string) => { if (!idPattern.test(id)) throw new CodeError(400, "문제 ID가 올바르지 않아요."); return path.join(dir, `${id}.json`); };
 const newId = () => `cp_${randomBytes(6).toString("hex")}`;
-async function writeJson(file: string, value: unknown) {
+async function writeJson(file: string, value: unknown, compact = false) {
   await mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${randomBytes(4).toString("hex")}.tmp`;
-  await writeFile(tmp, JSON.stringify(value, null, 1), "utf8");
+  await writeFile(tmp, compact ? JSON.stringify(value) : JSON.stringify(value, null, 1), "utf8");
   await rename(tmp, file);
 }
+
+/* ---------- 문제 파일 (2026-10-28): the problem and its hidden tests are two files ----------
+   <id>.json is what the list and the problem screen need (a few KB); <id>.tests.json holds the hidden tests (up to
+   tens of MB with max-size inputs). The list never opens the tests; opening a problem starts reading them, so they
+   are in memory by the time the learner submits. Files from before kept the tests inline and are split on first read. */
+/** A problem without its hidden tests (and how many there are). */
+export type ProblemMeta = Omit<Problem, "tests"> & { hiddenTests: number };
+const testsFileOf = (id: string) => fileOf(problemsDir(), id).replace(/\.json$/, ".tests.json");
+const testsCache = globalThis as unknown as { __codeTests?: Map<string, { mtimeMs: number; tests: TestCase[] }> };
+const cache = () => (testsCache.__codeTests ??= new Map());
+const remember = (id: string, mtimeMs: number, tests: TestCase[]) => {
+  const c = cache(); c.delete(id); c.set(id, { mtimeMs, tests });
+  while (c.size > 4) c.delete(c.keys().next().value!); // the few problems open lately
+};
+async function writeProblem(problem: Problem) {
+  const { tests, ...rest } = problem;
+  await writeJson(testsFileOf(problem.id), tests, true); // tests first: a problem file means its tests are there
+  remember(problem.id, (await stat(testsFileOf(problem.id))).mtimeMs, tests);
+  await writeJson(fileOf(problemsDir(), problem.id), { ...rest, hiddenTests: tests.length });
+}
+async function readMeta(id: string): Promise<ProblemMeta> {
+  let raw: (ProblemMeta & { tests?: TestCase[] });
+  try { raw = JSON.parse(await readFile(fileOf(problemsDir(), id), "utf8")); }
+  catch (error) { if (error instanceof CodeError) throw error; throw new CodeError(404, "문제를 찾을 수 없어요."); }
+  if (Array.isArray(raw.tests)) { // a file from before the split
+    const { tests, ...rest } = raw;
+    await writeProblem({ ...(rest as Omit<Problem, "tests">), tests });
+    return { ...rest, hiddenTests: tests.length };
+  }
+  return raw;
+}
+async function readTests(id: string): Promise<TestCase[]> {
+  const file = testsFileOf(id);
+  const { mtimeMs } = await stat(file).catch(() => ({ mtimeMs: -1 }));
+  if (mtimeMs < 0) return [];
+  const hit = cache().get(id);
+  if (hit && hit.mtimeMs === mtimeMs) return hit.tests;
+  const tests = JSON.parse(await readFile(file, "utf8")) as TestCase[];
+  remember(id, mtimeMs, tests);
+  return tests;
+}
+/** The problem without its hidden tests: for the list, the problem screen and the tutor. */
+export const readProblemMeta = readMeta;
+/** Start reading a problem's hidden tests now (the problem was just opened), so judging doesn't wait for them. */
+export function warmTests(id: string) { void readTests(id).catch(() => undefined); }
 
 /** Expected outputs from the reference solution; inputs it fails on are dropped. Returns the tests that survived. */
 export async function answerWithReference(reference: string, inputs: string[], timeLimitMs = 5000) {
@@ -135,40 +180,42 @@ async function ensureSeeds() {
     const problem: Problem = { id: seed.id, title: seed.title, statement: seed.statement, inputText: seed.inputText, outputText: seed.outputText,
       examples, tests, timeLimitMs: seed.timeLimitMs ?? 2000, kind: seed.kind, templates: seed.templates ?? {}, reference: { lang: "javascript", code: seed.reference },
       knowledge: seed.knowledge, knowledgeIds: [], folder: seed.folder, source: { kind: "seed", title: "Recaller 기본 문제" }, createdAt: new Date().toISOString() };
-    await writeJson(fileOf(problemsDir(), problem.id), problem);
+    await writeProblem(problem);
     done.push(seed.id);
   }
   await writeJson(marker, done);
 }
 
+/** The whole problem, hidden tests included: for judging. */
 export async function readProblem(id: string): Promise<Problem> {
-  try { return JSON.parse(await readFile(fileOf(problemsDir(), id), "utf8")) as Problem; }
-  catch (error) {
-    if (error instanceof CodeError) throw error;
-    throw new CodeError(404, "문제를 찾을 수 없어요.");
-  }
+  const { hiddenTests, ...meta } = await readMeta(id);
+  void hiddenTests;
+  return { ...meta, tests: await readTests(id) };
 }
 /** What the screen may see: no hidden tests, no reference, no generator. */
-export function publicProblem(problem: Problem) {
-  const { tests, reference, testgen, ...rest } = problem;
+export function publicProblem(problem: Problem | ProblemMeta) {
+  const { reference, testgen, ...rest } = problem;
   void testgen;
-  return { ...rest, hiddenTests: tests.length, hasReference: Boolean(reference), starters: Object.fromEntries(LANGS.map((lang) => [lang, problem.templates[lang] ?? STARTERS[lang]])) as Record<Lang, string> };
+  const hiddenTests = "tests" in problem ? problem.tests.length : problem.hiddenTests;
+  if ("tests" in rest) delete (rest as { tests?: unknown }).tests;
+  return { ...rest, hiddenTests, hasReference: Boolean(reference), starters: Object.fromEntries(LANGS.map((lang) => [lang, problem.templates[lang] ?? STARTERS[lang]])) as Record<Lang, string> };
 }
 export async function saveProblem(input: Omit<Problem, "id" | "createdAt" | "knowledgeIds"> & { id?: string; knowledgeIds?: string[] }) {
   if (!input.title.trim()) throw new CodeError(400, "문제 제목이 비어 있어요.");
   if (!input.tests.length && !input.examples.length) throw new CodeError(400, "테스트가 하나도 없어요.");
   const problem: Problem = { ...input, id: input.id ?? newId(), knowledgeIds: input.knowledgeIds ?? [], createdAt: new Date().toISOString() };
-  await writeJson(fileOf(problemsDir(), problem.id), problem);
+  await writeProblem(problem);
   return problem;
 }
+/** Only the problem file changes; the tests stay as they are. */
 export async function setProblemKnowledge(id: string, knowledgeIds: string[]) {
-  const problem = await readProblem(id);
-  problem.knowledgeIds = knowledgeIds;
-  await writeJson(fileOf(problemsDir(), id), problem);
-  return problem;
+  const meta = await readMeta(id);
+  await writeJson(fileOf(problemsDir(), id), { ...meta, knowledgeIds });
 }
 export async function deleteProblem(id: string) {
   await rm(fileOf(problemsDir(), id), { force: true });
+  await rm(testsFileOf(id), { force: true });
+  cache().delete(id);
   await rm(fileOf(draftsDir(), id), { force: true });
   return { ok: true };
 }
@@ -193,7 +240,7 @@ export async function listProblems(): Promise<ProblemLite[]> {
   const out: ProblemLite[] = [];
   for (const name of names) {
     try {
-      const p = JSON.parse(await readFile(path.join(problemsDir(), name), "utf8")) as Problem;
+      const p = await readMeta(name.replace(/\.json$/, ""));
       const mine = subs.filter((s) => s.problemId === p.id);
       out.push({ id: p.id, title: p.title, kind: p.kind, knowledge: p.knowledge, folder: p.folder, createdAt: p.createdAt, source: p.source.title,
         status: statusOf(mine), tries: mine.filter((s) => s.mode === "submit").length, lastAt: mine.at(-1)?.at ?? "" });

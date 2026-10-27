@@ -8,7 +8,7 @@ import path from "node:path";
 import workbook from "./bakingdog-workbook.json" with { type: "json" };
 import { archivedBojProblem, type Fetcher } from "./archive.ts";
 import { judge, type Lang } from "./run.ts";
-import { CodeError, deleteProblem, readProblem, type Problem } from "./problems.ts";
+import { CodeError, deleteProblem, readProblemMeta, type Problem, type ProblemMeta } from "./problems.ts";
 import { makeProblem } from "../assist/code-ai.ts";
 
 export type WorkbookProblem = { category: string; recommended: boolean; number: string; title: string; solution: string };
@@ -38,11 +38,11 @@ const LANG_OF: Record<string, Lang> = { cpp: "cpp", cc: "cpp", py: "python", js:
 type Deps = { fetcher: Fetcher; make: typeof makeProblem };
 
 /** Fills one problem. Refuses (and records why) when there is no archived original, no solution, or a check fails. */
-export async function fillProblem(number: string, deps: Deps = { fetcher: fetch, make: makeProblem }): Promise<Problem> {
+export async function fillProblem(number: string, deps: Deps = { fetcher: fetch, make: makeProblem }): Promise<Problem | ProblemMeta> {
   const chapter = CHAPTERS.find((c) => c.problems.some((p) => p.number === number));
   const row = chapter?.problems.find((p) => p.number === number);
   if (!chapter || !row) throw new CodeError(404, "바킹독 문제집에 없는 문제예요.");
-  const existing = await readProblem(problemIdOf(number)).catch(() => null);
+  const existing = await readProblemMeta(problemIdOf(number)).catch(() => null);
   if (existing) return existing;
   const fail = async (reason: string): Promise<never> => { await writeFill(number, { status: "failed", reason, at: new Date().toISOString() }); throw new CodeError(422, reason); };
 

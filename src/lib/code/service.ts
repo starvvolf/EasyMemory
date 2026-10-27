@@ -8,26 +8,28 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { recordEvent, saveMany, type KEventKind } from "../knowledge/store.ts";
-import { listProblems, readProblem, setProblemKnowledge, submit, type Problem } from "./problems.ts";
+import { listProblems, readProblemMeta, setProblemKnowledge, submit, type Problem, type ProblemMeta } from "./problems.ts";
 import { VERDICT_LABEL, type Lang } from "./run.ts";
 import { SEED_KNOWLEDGE } from "./seeds.ts";
 
 const filled = new Set<string>();
 
 /** The problem's knowledge names as items (만남 the first time), ids written back on the problem. */
-export async function ensureProblemKnowledge(problem: Problem) {
+export async function ensureProblemKnowledge<T extends Problem | ProblemMeta>(problem: T): Promise<T> {
   // Seed problems also fill in their knowledge's meaning once per run (an item made before keeps its own text).
   const seedFill = problem.source.kind === "seed" && !filled.has(problem.id);
   if (problem.knowledgeIds.length === problem.knowledge.length && problem.knowledgeIds.length && !seedFill) return problem;
   filled.add(problem.id);
   const results = await saveMany(problem.knowledge.map((title) => ({ title, folder: problem.folder, ...(SEED_KNOWLEDGE[title] ? { body: SEED_KNOWLEDGE[title] } : {}),
     source: { kind: "code" as const, title: problem.title, ref: `code:${problem.id}` } })));
-  return setProblemKnowledge(problem.id, results.map((r) => r.item.id));
+  const knowledgeIds = results.map((r) => r.item.id);
+  await setProblemKnowledge(problem.id, knowledgeIds);
+  return { ...problem, knowledgeIds };
 }
 export async function listProblemsWithKnowledge() {
   await endIdleAttempts();
   const list = await listProblems();
-  for (const p of list) { try { await ensureProblemKnowledge(await readProblem(p.id)); } catch { /* listed anyway */ } }
+  for (const p of list) { try { await ensureProblemKnowledge(await readProblemMeta(p.id)); } catch { /* listed anyway */ } }
   return list;
 }
 
@@ -79,7 +81,7 @@ export async function endAttempt(problemId: string, ending?: { kind: "correct" |
     return found;
   });
   if (!attempt?.events.length && !ending) return { recorded: 0 };
-  const problem = await ensureProblemKnowledge(await readProblem(problemId));
+  const problem = await ensureProblemKnowledge(await readProblemMeta(problemId));
   const source = { kind: "code" as const, title: problem.title, ref: `code:${problem.id}` };
   for (const id of problem.knowledgeIds) {
     for (const e of attempt?.events ?? []) await recordEvent(id, e.kind, e.detail, source, e.at).catch(() => undefined);
@@ -99,7 +101,7 @@ export async function endIdleAttempts(now = Date.now()) {
  * "예제 실행" leave the knowledge alone.
  */
 export async function submitAndRecord(problemId: string, lang: Lang, code: string, mode: "example" | "submit", hints: number) {
-  await ensureProblemKnowledge(await readProblem(problemId));
+  await ensureProblemKnowledge(await readProblemMeta(problemId));
   const result = await submit(problemId, lang, code, mode, hints);
   if (mode === "submit" && result.verdict !== "CE" && result.verdict !== "MISSING") {
     if (result.verdict === "AC") await endAttempt(problemId, hints ? { kind: "note", detail: `힌트 ${hints}번 받고 통과` } : { kind: "correct", detail: "힌트 없이 통과" });
@@ -111,11 +113,11 @@ export async function submitAndRecord(problemId: string, lang: Lang, code: strin
   return result;
 }
 export async function recordHint(problemId: string, level: number) {
-  const problem = await readProblem(problemId);
+  const problem = await readProblemMeta(problemId);
   await hold(problemId, "hint", `힌트 ${level}단계: ${problem.title}`);
 }
 export async function recordAsked(problemId: string | undefined, detail: string) {
   if (!problemId) return;
-  await readProblem(problemId);
+  await readProblemMeta(problemId);
   await hold(problemId, "asked", detail.slice(0, 200));
 }

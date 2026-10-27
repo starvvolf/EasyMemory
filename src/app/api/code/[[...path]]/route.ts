@@ -3,7 +3,7 @@ import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
-import { deleteProblem, publicProblem, readDrafts, readProblem, readSubmissions, runCustom, saveDraft } from "@/lib/code/problems";
+import { deleteProblem, publicProblem, readDrafts, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, submitAndRecord } from "@/lib/code/service";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
@@ -49,7 +49,8 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "problem" && p[1]) {
       const id = pid.parse(p[1]);
       if (p.length === 2 && m === "GET") {
-        const problem = await ensureProblemKnowledge(await readProblem(id));
+        warmTests(id); // read the hidden tests now, so 제출 doesn't wait for them
+        const problem = await ensureProblemKnowledge(await readProblemMeta(id));
         const subs = (await readSubmissions(id)).slice(-30).reverse().map(({ code: c, ...rest }) => ({ ...rest, lines: c.split("\n").length }));
         return json({ problem: publicProblem(problem), drafts: await readDrafts(id), submissions: subs });
       }

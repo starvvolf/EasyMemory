@@ -2,7 +2,7 @@
 // Whether code is right is never the model's call: that is the judge (src/lib/code). The model explains and hints.
 import { askJson, askText, S } from "./model.ts";
 import { LANG_LABEL, judge, type Lang, type TestCase } from "../code/run.ts";
-import { CodeError, findCounterexample, readProblem, saveProblem, type Problem, type ProblemCheck } from "../code/problems.ts";
+import { CodeError, findCounterexample, readProblem, readProblemMeta, saveProblem, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
 import { runTestgen, runVerify } from "../code/testgen/index.ts";
 import { memoryEvents, searchKnowledge } from "../knowledge/store.ts";
 import { currentAttempt } from "../code/service.ts";
@@ -13,7 +13,7 @@ const TUTOR = `너는 알고리즘을 가르치는 튜터다. 학습자가 스�
 - [이번 풀이에서 있었던 일]은 지금 이 문제를 푸는 중에 일어난 일이다. "지난번"이라고 하지 않고, 앞서 준 힌트에 이어서 말한다.
 - 코드 블록은 꼭 필요할 때만, 짧게.`;
 
-function problemBlock(p: Problem) {
+function problemBlock(p: ProblemMeta) {
   return `[문제] ${p.title}\n${p.statement}\n[입력] ${p.inputText}\n[출력] ${p.outputText}\n[이 문제가 확인하는 지식] ${p.knowledge.join(", ")}`;
 }
 export type LastResult = { verdict?: string; input?: string; expected?: string; got?: string; stderr?: string; compile?: string };
@@ -23,7 +23,7 @@ function resultBlock(r?: LastResult) {
   return `[채점 결과] ${r.verdict ?? ""}\n[실패한 입력]\n${(r.input ?? "").slice(0, 1500)}\n[기대 출력]\n${(r.expected ?? "").slice(0, 800)}\n[내 출력]\n${(r.got ?? "").slice(0, 800)}${r.stderr ? `\n[에러]\n${r.stderr.slice(0, 1500)}` : ""}`;
 }
 /** Memory level 3 for this problem's knowledge: the learner's own earlier misses, so a hint can say "지난번에도". */
-async function pastMisses(p: Problem) {
+async function pastMisses(p: ProblemMeta) {
   const lines: string[] = [];
   for (const id of p.knowledgeIds.slice(0, 4)) {
     const { text } = await memoryEvents({ knowledgeId: id, kinds: ["wrong", "hint", "asked"], limit: 5 });
@@ -33,7 +33,7 @@ async function pastMisses(p: Problem) {
 }
 const ATTEMPT_LABEL = { wrong: "틀림", hint: "힌트 받음", asked: "물어봄" } as const;
 /** This attempt so far (src/lib/code/service.ts): hints given and misses since the problem was opened. */
-async function thisAttempt(p: Problem) {
+async function thisAttempt(p: ProblemMeta) {
   const events = await currentAttempt(p.id);
   return events.length ? `[이번 풀이에서 있었던 일]\n${events.map((e) => `- ${ATTEMPT_LABEL[e.kind]}: ${e.detail}`).join("\n")}` : "";
 }
@@ -44,24 +44,24 @@ const LEVELS: Record<1 | 2 | 3, string> = {
   3: "힌트 3단계: 고친 코드를 보여 준다. 바꾼 줄만, 바꾼 이유와 함께. 전체 코드를 다시 쓰지 않는다.",
 };
 export async function hint(input: { problemId: string; lang: Lang; code: string; level: 1 | 2 | 3; last?: LastResult }) {
-  const p = await readProblem(input.problemId);
+  const p = await readProblemMeta(input.problemId);
   const user = [problemBlock(p), `[언어] ${LANG_LABEL[input.lang]}`, `[학습자 코드]\n${input.code.slice(0, 20000)}`, resultBlock(input.last), await pastMisses(p), await thisAttempt(p), LEVELS[input.level]].filter(Boolean).join("\n\n");
   return { text: await askText("code:hint", TUTOR, user, { heavy: input.level > 1 }) };
 }
 export async function explainCode(input: { problemId?: string; lang: Lang; code: string; selection: string; question?: string }) {
-  const p = input.problemId ? await readProblem(input.problemId).catch(() => null) : null;
+  const p = input.problemId ? await readProblemMeta(input.problemId).catch(() => null) : null;
   const user = [p ? problemBlock(p) : "", `[언어] ${LANG_LABEL[input.lang]}`, `[전체 코드]\n${input.code.slice(0, 20000)}`, `[학습자가 드래그한 부분]\n${input.selection.slice(0, 4000)}`,
     input.question ? `[질문] ${input.question}` : "드래그한 부분이 무엇을 하는지 한 줄씩 쉽게 설명한다."].filter(Boolean).join("\n\n");
   return { text: await askText("code:explain", TUTOR, user) };
 }
 export async function reviewApproach(input: { problemId: string; lang: Lang; code: string; note?: string }) {
-  const p = await readProblem(input.problemId);
+  const p = await readProblemMeta(input.problemId);
   const user = [problemBlock(p), `[언어] ${LANG_LABEL[input.lang]}`, `[학습자 코드 (아직 제출 전)]\n${input.code.slice(0, 20000)}`, input.note ? `[학습자 메모] ${input.note}` : "", await pastMisses(p), await thisAttempt(p),
     "학습자가 '맞는지 봐 줘'라고 했다. 접근이 문제에 맞는지, 시간 안에 돌지(입력 크기 기준), 놓친 경우(경계, 자료형 범위)가 있는지 짧게 확인해 준다. 고친 코드는 주지 않는다."].filter(Boolean).join("\n\n");
   return { text: await askText("code:review", TUTOR, user, { heavy: true }) };
 }
 export async function explainError(input: { problemId?: string; lang: Lang; code: string; error: string }) {
-  const p = input.problemId ? await readProblem(input.problemId).catch(() => null) : null;
+  const p = input.problemId ? await readProblemMeta(input.problemId).catch(() => null) : null;
   const user = [p ? problemBlock(p) : "", `[언어] ${LANG_LABEL[input.lang]}`, `[코드]\n${input.code.slice(0, 20000)}`, `[에러 메시지]\n${input.error.slice(0, 6000)}`,
     "에러가 무슨 뜻인지, 몇 번째 줄의 무엇 때문인지 쉬운 말로 설명한다. 고치는 방향만 말하고 고친 코드는 주지 않는다."].filter(Boolean).join("\n\n");
   return { text: await askText("code:error", TUTOR, user) };
@@ -69,7 +69,7 @@ export async function explainError(input: { problemId?: string; lang: Lang; code
 
 /** 반례 찾기: the model proposes small tricky inputs; the reference and the learner's code decide which one breaks it. */
 export async function counterexample(input: { problemId: string; lang: Lang; code: string }) {
-  const p = await readProblem(input.problemId);
+  const p = await readProblemMeta(input.problemId);
   const data = await askJson<{ inputs: string[] }>("code:counter",
     "문제의 입력 형식을 정확히 지키는 작고 까다로운 입력을 10개 만든다 (경계값, 최소 크기, 같은 값 반복, 음수, 자료형 범위). 각 입력은 프로그램 표준입력에 그대로 들어갈 문자열.",
     [problemBlock(p), `[학습자 코드]\n${input.code.slice(0, 12000)}`].join("\n\n"), S.obj({ inputs: S.arr(S.str) }));
