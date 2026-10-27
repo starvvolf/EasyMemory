@@ -12,6 +12,8 @@ import { compareOutput, normalizeOutput as norm } from "../compare.mjs";
 const EXIT = Symbol("exit");
 const MAX_TESTS = 60;
 const MAX_TOTAL_INPUT = 40_000_000;
+/** The simple solution's time per small input, and how many slow ones before its comparison stops. */
+const BRUTE_MS = 500, BRUTE_GIVE_UP = 20;
 
 /* ---------- seeded random, handed to the generator ---------- */
 function rng(seed) {
@@ -134,14 +136,17 @@ function main(job) {
     seen.add(made.input); small.push({ kind, input: made.input });
   }
   if (!small.length) return fail(`작은 입력을 하나도 못 만듦 (검사기가 모두 거부)${FIX}`);
-  let compared = 0;
+  let compared = 0, bruteSlow = 0;
   const smallOut = new Map();
   for (const [i, s] of small.entries()) {
     const fast = run(reference, s.input, runMs); const why = badRun(fast);
     if (why) return fail(`작은 입력 ${i + 1}번 (${s.kind}: ${short(s.input, 60)}): 모범 풀이 ${why}`);
     smallOut.set(s.input, norm(fast.stdout));
-    if (!brute) continue;
-    const slow = run(brute, s.input, runMs);
+    if (!brute || bruteSlow >= BRUTE_GIVE_UP) continue;
+    // The simple solution gets a short leash per input: a small input that still takes it long (values too big for
+    // trying everything) is left out of the comparison, and after enough of those the comparison stops.
+    const slow = run(brute, s.input, BRUTE_MS);
+    if (slow.timedOut) { bruteSlow++; continue; }
     if (badRun(slow)) continue;
     if (!same(slow.stdout, fast.stdout)) return fail(`작은 입력 ${i + 1}번 (${s.kind}: ${short(s.input, 60)}): 단순 풀이 ${short(norm(slow.stdout))}, 모범 풀이 ${short(norm(fast.stdout))}`);
     compared++;
@@ -149,7 +154,7 @@ function main(job) {
   if (job.needCompared && compared < job.needCompared) return fail(`단순 풀이로 확인된 작은 입력이 ${compared}개뿐 (${job.needCompared}개 이상 필요)`);
 
   // 3. 숨은 테스트: the generator's plan (kinds × sizes), plus a few distinct small ones, answered by the reference.
-  const tests = []; let total = 0;
+  const tests = []; let total = 0; const holes = []; let lastHole = "";
   const add = (t) => { if (tests.length >= MAX_TESTS || total + t.input.length > MAX_TOTAL_INPUT) return false; tests.push(t); total += t.input.length; return true; };
   for (const [p, item] of g.tests.entries()) {
     const count = Math.max(0, Math.min(Number(item.count) || 1, item.size === "max" ? 3 : 10));
@@ -163,9 +168,10 @@ function main(job) {
       if (why) return fail(`숨은 테스트(${item.kind}/${item.size}): 모범 풀이 ${why}${r.timedOut ? ` — ${runMs}ms 안에 못 풂, 모범 풀이가 느리거나 입력이 제약보다 큼` : ""}`);
       if (!add({ input: made.input, output: norm(r.stdout), kind: item.kind, size: item.size, refMs: Math.round(r.ms) })) break;
     }
-    // A planned test kind that never passes the checker would leave a hole (a max-size one above all): the draft goes back.
-    if (count && !kept && lastRejected) return fail(lastRejected + FIX);
+    // A planned kind that never passes the checker is left out; a max-size one is not (it is what catches slow solutions).
+    if (count && !kept && lastRejected) { if (item.size === "max") return fail(lastRejected + FIX); holes.push(`${item.kind}/${item.size}`); lastHole = lastRejected; }
   }
+  if (holes.length && holes.length * 2 >= g.tests.length) return fail(`계획한 테스트 종류 ${g.tests.length}개 중 ${holes.length}개를 검사기가 모두 거부함 (${holes.join(", ")}): ${lastHole}${FIX}`);
   if (tests.length && tests.every((t) => !t.output.trim())) return fail("모범 풀이가 모든 숨은 테스트에서 아무것도 출력하지 않음 (출력을 빠뜨렸거나 입력을 못 읽음)");
   const picked = new Set();
   for (const s of small) { if (picked.size >= 10) break; if (![...picked].some((x) => x.kind === s.kind) || picked.size >= g.smallKinds.length) picked.add(s); }
@@ -199,7 +205,7 @@ function main(job) {
   }
 
   return { ok: true, examples, tests, compared, small: small.length, maxTests: tests.filter((t) => t.size === "max").length, mutation,
-    rejected: { small: rejected.small, tests: rejected.tests, kinds: [...rejected.kinds] } };
+    rejected: { small: rejected.small, tests: rejected.tests, kinds: [...rejected.kinds], holes }, bruteSlow };
 }
 
 /**

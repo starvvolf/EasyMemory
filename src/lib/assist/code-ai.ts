@@ -108,7 +108,7 @@ const MAKE_SYSTEM = `알고리즘 연습 문제를 하나 세팅한다. 입력�
     gen(kind, size, rnd) { ...; return "입력 문자열"; },
     check(input) { ...; return true; /* 제약을 어기면 이유 문자열 */ },
   };
-  · size는 "min" | "small" | "mid" | "max". "small"은 brute가 바로 푸는 크기(예: N ≤ 8), "max"는 제약의 최대.
+  · size는 "min" | "small" | "mid" | "max". "small"은 brute가 바로(0.1초 안에) 푸는 크기 — N뿐 아니라 값의 범위도 작게(예: N ≤ 8, 값 ≤ 20; brute가 값을 하나씩 다 해 보는 풀이라면 특히). "max"는 제약의 최대.
   · tests에는 문제에 맞는 종류를 고른다: 최소, 경계, 모두 같은 값, 정렬·역순, 극단값(값이 최대 → 오버플로를 잡음), 크기별 무작위, 그리고 최대 크기는 max_random / max_sorted / max_reverse / max_duplicates / max_adversarial(흔한 틀린 접근의 최악 입력)처럼 모양을 나눈다. max는 종류마다 1개, 전체 숨은 테스트는 20~40개.
   · smallKinds: brute와 비교할 작은 입력의 종류들(같은 함수 gen(kind, "small", rnd)로 만든다). 경계·같은 값·무작위를 섞는다.
   · rnd: int(lo, hi), bigint(lo, hi), pick(arr), shuffle(arr), perm(n), string(len, alphabet), next(). Math.random은 쓰지 않는다.

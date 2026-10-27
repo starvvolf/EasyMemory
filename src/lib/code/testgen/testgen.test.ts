@@ -91,6 +91,10 @@ test("small inputs the checker refuses are dropped, a planned test kind it alway
   const ok = await runTestgen({ ...base, generator: flaky });
   assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
   if (ok.ok) { assert.ok((ok.rejected?.small ?? 0) > 0, "some were dropped"); assert.deepEqual(ok.rejected?.kinds, ["tiny/small"]); }
+  // "allNeg" (a mid-size kind) never passes: left out, the rest goes on.
+  const hole = await runTestgen({ ...base, generator: GENERATOR.replace('if (kind === "allNeg") return line(vals(LO, -1));', 'if (kind === "allNeg") return size === "small" ? line(vals(LO, -1)) : "5\\n1\\n";') });
+  assert.equal(hole.ok, true, hole.ok ? "" : hole.reason);
+  if (hole.ok) assert.deepEqual(hole.rejected?.holes, ["allNeg/mid"]);
   // "extreme" (a planned max-size test) never passes: back to the model, with how to fix it.
   const broken = await runTestgen({ ...base, generator: GENERATOR.replace("if (kind === \"extreme\") return line(Array.from({ length: n }, () => HI));", "if (kind === \"extreme\") return \"5\\n1\\n\";") });
   assert.equal(broken.ok, false);
@@ -105,4 +109,13 @@ test("an empty output can be the right answer; a reference that never prints any
     reference: `${READ} let x = -Infinity, y = -Infinity; for (const v of a) { if (v > x) { y = x; x = v; } else if (v > y) y = v; } if (x + y !== -2) console.log(String(x + y));`,
     brute: `${READ} let best = -Infinity; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) best = Math.max(best, a[i] + a[j]); if (best !== -2) console.log(String(best));` });
   assert.equal(emptyExample.ok, true, emptyExample.ok ? "" : emptyExample.reason);
+});
+
+test("a simple solution that is slow even on small inputs is left out of the comparison instead of stalling everything", { timeout: 60_000 }, async () => {
+  const slowBrute = `${READ} const end = Date.now() + 2000; while (Date.now() < end) {} console.log("0");`;
+  const started = Date.now();
+  const r = await runTestgen({ ...base, brute: slowBrute, needCompared: 0, smallCount: 100 });
+  assert.equal(r.ok, true, r.ok ? "" : r.reason);
+  if (r.ok) { assert.equal(r.compared, 0); assert.equal(r.bruteSlow, 20); }
+  assert.ok(Date.now() - started < 40_000, `gave up quickly (${Date.now() - started}ms)`);
 });
