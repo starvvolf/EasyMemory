@@ -34,8 +34,12 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const [making, setMaking] = useState<"" | "item" | "folder">("");
   const [draft, setDraft] = useState("");
   const [filling, setFilling] = useState(false);
+  const [dupes, setDupes] = useState<Dup[]>([]);
 
-  const load = useCallback(async () => { try { setTree(await call<Tree>("/api/knowledge")); } catch (e) { setError(errorText(e)); } }, []);
+  const load = useCallback(async () => {
+    try { setTree(await call<Tree>("/api/knowledge")); } catch (e) { setError(errorText(e)); }
+    call<{ pairs: Dup[] }>("/api/knowledge/dupes").then((r) => setDupes(r.pairs)).catch(() => undefined);
+  }, []);
   const loadDetail = useCallback(async (id: string) => { try { setDetail(await call<Detail>(`/api/knowledge/item/${id}`)); } catch (e) { setError(errorText(e)); setDetail(null); } }, []);
   useEffect(() => later(() => void load()), [load]);
   useEffect(() => later(() => { if (sel) void loadDetail(sel); else setDetail(null); }), [sel, loadDetail]);
@@ -149,6 +153,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
           <button className="btn primary small" disabled={!draft.trim()}>만들기</button><button type="button" className="btn ghost small" onClick={() => setMaking("")}>취소</button>
         </form>
       ) : null}
+      {dupes.length ? <Duplicates pairs={dupes} onOpen={setSel} onAct={act} /> : null}
       {tree.items.some((i) => !i.line) ? (
         <p className="kw-fill row small"><span className="muted">뜻이 빈 지식 {tree.items.filter((i) => !i.line).length}개 — 복습 문제가 플래시카드만 나와요.</span>
           <button className="btn small" disabled={filling} onClick={() => { setFilling(true); void act(async () => {
@@ -321,5 +326,26 @@ function Similar({ itemId, onOpen, onAct }: { itemId: string; onOpen: (id: strin
         {!h.linked ? <button className="btn ghost small" onClick={() => void onAct(() => call("/api/knowledge/link", { from: itemId, to: h.id, relation: "관련" }), () => setHits((x) => x?.map((y) => y.id === h.id ? { ...y, linked: true } : y) ?? null))}>관련 · 잇기</button> : null}
       </li>)}</ul><p className="small muted">뜻이 가까운 순서예요. 가깝다고 같은 지식은 아니에요(깊이·너비 우선 탐색처럼 반대 개념도 가깝게 나와요).</p></> : null}
     </div>
+  );
+}
+
+type Dup = { id: string; newId: string; otherId: string; verdict: string; reason: string; score: number; newTitle: string; newLine: string; otherTitle: string; otherLine: string };
+/**
+ * 중복 의심: pairs the duplicate check (이름 → 뜻이 가까운 후보 → AI 판정) found to be the same knowledge. Nothing is
+ * merged without the learner: 합치기 keeps the older one (its record and name stay; the other name becomes 다른 이름).
+ */
+function Duplicates({ pairs, onOpen, onAct }: { pairs: Dup[]; onOpen: (id: string) => void; onAct: (run: () => Promise<unknown>, after?: () => void) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="panel kw-dupes">
+      <button className="linkish" onClick={() => setOpen((x) => !x)}><b>같은 지식일 수 있어요 · {pairs.length}</b> <span className="small muted">{open ? "접기" : "확인하기"}</span></button>
+      {open ? <ul className="kw-links">{pairs.map((p) => <li key={p.id} className="stack">
+        <span><button className="linkish" onClick={() => onOpen(p.otherId)}>{p.otherTitle}</button> <span className="muted">↔</span> <button className="linkish" onClick={() => onOpen(p.newId)}>{p.newTitle}</button>
+          <span className="small muted"> · {p.reason}</span></span>
+        <span className="row">
+          <button className="btn small" onClick={() => void onAct(() => call(`/api/knowledge/dupes/${p.id}`, { action: "merge", keep: p.otherId }))}>“{p.otherTitle}”으로 합치기</button>
+          <button className="btn ghost small" onClick={() => void onAct(() => call(`/api/knowledge/dupes/${p.id}`, { action: "dismiss" }))}>다른 지식이에요</button>
+        </span></li>)}</ul> : null}
+    </section>
   );
 }

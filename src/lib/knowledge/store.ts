@@ -274,10 +274,24 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   return { item, merged: Boolean(existing), created: !existing, again: fromNewPlace };
 }
 
+/*
+ * After a save that made new items, whoever listens is told (the duplicate check, src/lib/knowledge/dedupe.ts, which
+ * the knowledge API registers). Kept on globalThis so every route bundle of the dev server shares one listener;
+ * nothing listens in tests unless a test registers one.
+ */
+type AfterCreate = (ids: string[]) => void;
+const listener = globalThis as unknown as { __knowledgeAfterCreate?: AfterCreate };
+export function onKnowledgeCreated(run: AfterCreate | null) { listener.__knowledgeAfterCreate = run ?? undefined; }
+function told(results: SaveResult[]) {
+  const ids = results.filter((r) => r.created).map((r) => r.item.id);
+  if (ids.length) try { listener.__knowledgeAfterCreate?.(ids); } catch { /* a listener never breaks a save */ }
+}
+
 export async function saveKnowledge(input: SaveInput): Promise<SaveResult> {
   const events: KEvent[] = [];
   const result = await change((store) => saveInto(store, input, events));
   await appendEvents(events);
+  told([result]);
   return result;
 }
 /** Many at once (a whole article's knowledge): one write, results in the given order. */
@@ -285,6 +299,7 @@ export async function saveMany(inputs: SaveInput[]): Promise<SaveResult[]> {
   const events: KEvent[] = [];
   const results = await change((store) => inputs.map((input) => saveInto(store, input, events)));
   await appendEvents(events);
+  told(results);
   return results;
 }
 async function appendEvents(events: KEvent[]) {

@@ -2,13 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, itemsByRef, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
-  recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
+  onKnowledgeCreated, recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
 import { similarKnowledge } from "@/lib/knowledge/embed";
+import { openDuplicates, resolveDuplicate, runDuplicateCheck, scheduleDuplicateCheck } from "@/lib/knowledge/dedupe";
 import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing } from "@/lib/assist/knowledge-ai";
 
 export const runtime = "nodejs";
+// 같은 지식 찾기 3단계: every save that makes new items (PDF, 웹 글, 코드, 직접) is checked a few seconds later.
+onKnowledgeCreated(() => scheduleDuplicateCheck());
 const state = z.enum(["met", "unknown", "known"]);
 const id = z.string().regex(/^(k|fld)_[a-f0-9]{12}$/);
 const sourceRef = z.object({ kind: z.enum(["pdf", "web", "code", "chat", "manual"]), title: z.string().max(200), ref: z.string().max(200).optional(), url: z.string().max(2000).optional(),
@@ -145,6 +148,16 @@ async function handle(request: Request, context: RouteContext) {
     }
 
     // model calls
+    // 중복 의심: open pairs (and a check of anything not checked yet); the learner's answer on one.
+    if (p[0] === "dupes" && p.length === 1 && m === "GET") { scheduleDuplicateCheck(); return json({ pairs: await openDuplicates() }); }
+    if (p[0] === "dupes" && p[1] === "check" && m === "POST") {
+      try { return json(await runDuplicateCheck()); }
+      catch (error) { return NextResponse.json({ message: `중복 확인을 하지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
+    }
+    if (p[0] === "dupes" && p[1] && m === "POST") {
+      const b = await body(z.object({ action: z.enum(["merge", "dismiss"]), keep: id.optional() }));
+      return json({ pair: await resolveDuplicate(p[1], b.action, b.keep) });
+    }
     // 빈 뜻·다른 이름 채우기 (모델 호출 1번, 최대 40개).
     if (p[0] === "fill" && m === "POST") { const b = await body(z.object({ ids: z.array(id).max(200).optional() })); return json(await fillMissing({ ids: b.ids })); }
     if (p[0] === "extract" && m === "POST") {
