@@ -39,7 +39,9 @@ async function handle(request: Request, context: RouteContext) {
       const b = await body(z.object({ topic: z.string().max(300).optional(), lesson: z.string().max(60_000).optional(), kind: z.enum(["full", "blank"]), lang: lang.optional(),
         sourceTitle: z.string().max(300).optional(), sourceUrl: z.string().max(2000).optional(),
         /** 주소로 가져오기: a blog or problem page address, or a Baekjoon number (src/lib/code/source.ts). */
-        from: z.string().max(2000).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
+        from: z.string().max(2000).optional(),
+        /** 실험: the draft's model for this request only (e.g. "gpt-5.6-luna"). */
+        model: z.string().regex(/^[a-z0-9.-]{3,40}$/).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
       const { from, ...rest } = b;
       const got = from?.trim() ? await resolveSource(from) : null;
       const made = await ensureProblemKnowledge(await makeProblem(got ? { ...rest, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),

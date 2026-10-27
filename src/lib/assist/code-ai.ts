@@ -201,15 +201,17 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
 
 export type MakeAttempt = TryTimes & { reason?: string };
 /** One line per try in STUDY_FORGE_DATA_DIR/code/make-log.jsonl: what was asked, where the time went, why it failed. */
-async function logTry(what: string, tries: number, times: TryTimes, reason: string) {
+async function logTry(what: string, tries: number, times: TryTimes, reason: string, model = MAKE_MODEL()) {
   const file = path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "make-log.jsonl");
-  const line = { at: new Date().toISOString(), what, try: tries, model: MAKE_MODEL(), ...times, ok: !reason, ...(reason ? { reason: reason.slice(0, 500) } : {}) };
+  const line = { at: new Date().toISOString(), what, try: tries, model, ...times, ok: !reason, ...(reason ? { reason: reason.slice(0, 500) } : {}) };
   console.log(`[code:make] ${what.slice(0, 40)} #${tries} 초안 ${(times.draftMs / 1000).toFixed(0)}s · 테스트 ${(times.testsMs / 1000).toFixed(0)}s · 독립 풀이 대기 ${(times.secondMs / 1000).toFixed(0)}s · 대조 ${(times.verifyMs / 1000).toFixed(0)}s${reason ? ` → ${reason.slice(0, 120)}` : " → 통과"}`);
   try { await mkdir(path.dirname(file), { recursive: true }); await appendFile(file, JSON.stringify(line) + "\n", "utf8"); } catch { /* the log is a help, not a must */ }
 }
 
 /** A new problem from a topic, a lesson or a pasted problem. Saved only after the check passes; otherwise refused with the reason. */
-export async function makeProblem(input: { topic?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; sourceTitle?: string; sourceUrl?: string; human?: Human; folder?: string; id?: string }) {
+export async function makeProblem(input: { topic?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; sourceTitle?: string; sourceUrl?: string; human?: Human; folder?: string; id?: string;
+  /** 실험: this request only, a model other than MAKE_MODEL for the draft (the independent solution keeps its own). */ model?: string }) {
+  const makeModel = input.model || MAKE_MODEL();
   const names = (await searchKnowledge(input.topic || input.lesson?.slice(0, 200) || "", { limit: 12 })).map((h) => h.title);
   const user = [input.topic ? `[주제] ${input.topic}` : "", input.lesson ? `[강의 글 또는 붙여 넣은 문제]\n${input.lesson.slice(0, 30000)}` : "", names.length ? `[학습자 지식 목록] ${names.join(", ")}` : "",
     input.kind === "blank" ? `[빈칸 문제 언어] ${LANG_LABEL[input.lang ?? "python"]}` : "[빈칸 문제 아님]"].filter(Boolean).join("\n\n");
@@ -222,13 +224,13 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     const times: TryTimes = { draftMs: 0, testsMs: 0, secondMs: 0, verifyMs: 0 };
     const started = Date.now();
     let d: Drafted;
-    try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + retry, MAKE_SCHEMA, { heavy: true, model: MAKE_MODEL() }); }
-    catch (error) { await logTry(what, tries, { ...times, draftMs: Date.now() - started }, `모델 호출 실패: ${(error as Error).message}`); throw error; }
+    try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + retry, MAKE_SCHEMA, { heavy: true, model: makeModel }); }
+    catch (error) { await logTry(what, tries, { ...times, draftMs: Date.now() - started }, `모델 호출 실패: ${(error as Error).message}`, makeModel); throw error; }
     times.draftMs = Date.now() - started;
-    if (d.answerKind !== "one") { await logTry(what, tries, times, "답이 여러 개이거나 실수 오차 문제"); throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요."); }
+    if (d.answerKind !== "one") { await logTry(what, tries, times, "답이 여러 개이거나 실수 오차 문제", makeModel); throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요."); }
     const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human, times);
     attempts.push({ ...times, ...(checked.ok ? {} : { reason: checked.reason.slice(0, 300) }) });
-    await logTry(what, tries, times, checked.ok ? "" : checked.reason);
+    await logTry(what, tries, times, checked.ok ? "" : checked.reason, makeModel);
     if (!checked.ok) { reasons.push(checked.reason); continue; }
     return saveProblem({ ...(input.id ? { id: input.id } : {}), title: d.title, statement: d.statement, inputText: d.inputText, outputText: d.outputText, examples: checked.examples, tests: checked.tests, timeLimitMs: d.timeLimitMs > 0 ? Math.min(Math.max(Math.round(d.timeLimitMs), 500), 10_000) : 2000,
       constraints: d.constraints.slice(0, 1000), testgen: { generator: d.generator, seed: checked.seed },
