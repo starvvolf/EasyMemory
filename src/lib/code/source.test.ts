@@ -86,3 +86,18 @@ test("addresses that read better in another form, and how a page names its probl
   assert.equal(bojNumberOf(page("풀이", ["https://www.acmicpc.net/problem/1654"])), "1654");
   assert.equal(bojNumberOf(page("풀이", ["https://www.acmicpc.net/problem/1000", "https://www.acmicpc.net/problem/2000"])), undefined);
 });
+
+test("when the closest-copy lookup answers empty, the list of copies is asked (with or without www)", async () => {
+  const { archivedUrl } = await import("./archive.ts");
+  const seen: string[] = [];
+  const fetcher = async (url: string) => {
+    seen.push(url);
+    if (url.includes("/wayback/available")) return Response.json({ archived_snapshots: {} });
+    if (url.includes("/cdx/search/cdx")) return Response.json([["timestamp", "original"], ["20250101000000", "https://www.acmicpc.net/problem/1920"], ["20260301000000", "https://acmicpc.net/problem/1920"]]);
+    return new Response("", { status: 404 });
+  };
+  assert.equal(await archivedUrl("https://www.acmicpc.net/problem/1920", fetcher), "https://web.archive.org/web/20260301000000id_/https://acmicpc.net/problem/1920");
+  assert.match(seen[1], /cdx\/search\/cdx\?url=acmicpc\.net%2Fproblem%2F1920/);
+  const none = async (url: string) => url.includes("/cdx/") ? Response.json([]) : Response.json({ archived_snapshots: {} });
+  assert.equal(await archivedUrl("https://www.acmicpc.net/problem/1", none), null);
+});

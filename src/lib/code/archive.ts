@@ -22,14 +22,28 @@ export function htmlToText(html: string) {
     .replace(/[ \t ]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-/** The Internet Archive copy of a page, when one exists (raw page, no archive toolbar). */
+/**
+ * The Internet Archive copy of a page, when one exists (raw page, no archive toolbar). The "closest copy" lookup
+ * sometimes answers empty for pages that are there, so the list of copies (CDX) is asked next — it also covers the
+ * address with and without "www.".
+ */
 export async function archivedUrl(url: string, fetcher: Fetcher = fetch) {
-  const response = await fetcher(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(20_000) });
-  if (!response.ok) return null;
-  const data = await response.json() as { archived_snapshots?: { closest?: { available?: boolean; status?: string; timestamp?: string } } };
-  const closest = data.archived_snapshots?.closest;
-  if (!closest?.available || closest.status !== "200" || !closest.timestamp) return null;
-  return `https://web.archive.org/web/${closest.timestamp}id_/${url}`;
+  try {
+    const response = await fetcher(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(20_000) });
+    if (response.ok) {
+      const data = await response.json() as { archived_snapshots?: { closest?: { available?: boolean; status?: string; timestamp?: string } } };
+      const closest = data.archived_snapshots?.closest;
+      if (closest?.available && closest.status === "200" && closest.timestamp) return `https://web.archive.org/web/${closest.timestamp}id_/${url}`;
+    }
+  } catch { /* try the list */ }
+  const bare = url.replace(/^https?:\/\/(www\.)?/i, "");
+  try {
+    const response = await fetcher(`https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(bare)}&output=json&filter=statuscode:200&limit=-3&fl=timestamp,original`, { signal: AbortSignal.timeout(25_000) });
+    if (!response.ok) return null;
+    const rows = (await response.json().catch(() => [])) as string[][];
+    const last = rows.filter((r) => /^\d{14}$/.test(r[0] ?? "")).at(-1);
+    return last ? `https://web.archive.org/web/${last[0]}id_/${last[1]}` : null;
+  } catch { return null; }
 }
 
 const section = (html: string, id: string) => new RegExp(`id="${id}"[^>]*>([\\s\\S]*?)</(?:div|section|pre)>`).exec(html)?.[1] ?? "";
