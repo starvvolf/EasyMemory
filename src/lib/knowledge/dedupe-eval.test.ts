@@ -25,11 +25,11 @@ test("the evaluation scores judges against the answers", async () => {
   });
   try {
     const report = await runDedupeEval([{ model: "always-same" }, { model: "always-different" }]);
-    const [yes, no] = report.results as Array<{ same: { total: number; caught: number; byName: number }; falseMerge: number; calls: number }>;
+    const [yes, no] = report.results as Array<{ same: { total: number; caught: number }; falseMerge: number; calls: number }>;
     assert.equal(report.candidateRecall.byName, 2, "주가수익비율 (alias) and 기준 금리 (spacing) merge by name");
     assert.ok(yes.falseMerge > 10, "saying same to everything merges the wrong things");
     assert.equal(no.falseMerge, 0);
-    assert.equal(no.same.caught, no.same.byName, "saying different finds only what the names find");
+    assert.equal(no.same.caught, 2, "saying different finds only what the names find");
     assert.equal(yes.calls, Math.ceil((INCOMING.length - 2) / 25));
   } finally {
     setFakeModelResponder(null); setEmbedder(null);

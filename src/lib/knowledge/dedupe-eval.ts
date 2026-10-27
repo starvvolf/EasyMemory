@@ -33,44 +33,55 @@ async function prepare() {
   return { byKey, step1, work };
 }
 
+/**
+ * The answer for any two items. Items that are the same knowledge share one concept (the base item's key), so
+ * "이진 탐색 ↔ Binary Search" is 같음 too, and a relation given for one name holds for its other names; the other
+ * way round, 포함 flips (narrower ↔ broader). Anything not given is 다름.
+ */
+function truthOf(a: string, b: string): string[] {
+  const group = (k: string) => INCOMING.find((x) => x.key === k && Object.entries(x.truth).some(([, ok]) => ok.length === 1 && ok[0] === "same"))
+    ? Object.entries(INCOMING.find((x) => x.key === k)!.truth).find(([, ok]) => ok.length === 1 && ok[0] === "same")![0] : k;
+  const ga = group(a), gb = group(b);
+  if (ga === gb) return ["same"];
+  const flip = (v: string) => v === "narrower" ? "broader" : v === "broader" ? "narrower" : v;
+  for (const x of INCOMING) for (const [k, ok] of Object.entries(x.truth)) {
+    if (ok.length === 1 && ok[0] === "same") continue;
+    if (group(x.key) === ga && group(k) === gb) return [...ok];
+    if (group(x.key) === gb && group(k) === ga) return ok.map(flip);
+  }
+  return ["different"];
+}
+
 function score(prep: Awaited<ReturnType<typeof prepare>>, verdicts: Array<Array<{ verdict: Verdict; reason: string }>>) {
   const { byKey, step1, work } = prep;
-  const pairs: PairOut[] = [];
-  const extra: PairOut[] = [];
   const t = (k: string) => byKey.get(k)!.title;
+  const all: PairOut[] = [];
   for (const n of INCOMING) {
     const merged = step1.get(n.key);
+    if (merged) { const ok = truthOf(n.key, merged); all.push({ from: t(n.key), to: t(merged), truth: ok.join("/"), verdict: "1단계 합침", ok: ok.includes("same"), reason: "이름·별칭이 같음" }); }
     const w = work.findIndex((x) => x.key === n.key);
+    if (w >= 0) work[w].cands.forEach((c, m) => { const ok = truthOf(n.key, c.key), v = verdicts[w][m];
+      all.push({ from: t(n.key), to: t(c.key), truth: ok.join("/"), verdict: v.verdict, ok: ok.includes(v.verdict) || (v.verdict !== "same" && v.verdict !== "different" && !ok.includes("same") && ok.length > 1), reason: v.reason }); });
+    // Pairs the answer cares about that never reached the model (not among the five candidates).
     for (const [other, ok] of Object.entries(n.truth)) {
-      const truth = ok.join("/");
-      if (merged) { pairs.push({ from: t(n.key), to: t(other), truth, verdict: "1단계 합침", ok: merged === other ? ok.includes("same") : !ok.includes("same"), reason: `이름으로 ${t(merged)}에 합침` }); continue; }
-      const m = work[w].cands.findIndex((c) => c.key === other);
-      if (m < 0) { pairs.push({ from: t(n.key), to: t(other), truth, verdict: "후보에 없음", ok: !ok.includes("same") && ok.includes("different"), reason: "" }); continue; }
-      const v = verdicts[w][m];
-      pairs.push({ from: t(n.key), to: t(other), truth, verdict: v.verdict, ok: ok.includes(v.verdict), reason: v.reason });
+      if (merged === other || (w >= 0 && work[w].cands.some((c) => c.key === other))) continue;
+      all.push({ from: t(n.key), to: t(other), truth: ok.join("/"), verdict: "후보에 없음", ok: ok.includes("different"), reason: "" });
     }
-    // Merged by name into something the answer does not call the same: a wrong merge too.
-    if (merged && !n.truth[merged]?.includes("same")) extra.push({ from: t(n.key), to: t(merged), truth: "(정답 없음 = 다름)", verdict: "same", ok: false, reason: "이름으로 합침" });
-    if (w < 0) continue;
-    // What the model said about candidates the answer does not mention: those are "다름", anything else is noise.
-    work[w].cands.forEach((c, m) => {
-      if (n.truth[c.key]) return;
-      const back = INCOMING.find((x) => x.key === c.key)?.truth[n.key];
-      if (back) return;
-      const v = verdicts[w][m];
-      if (v.verdict !== "different") extra.push({ from: t(n.key), to: t(c.key), truth: "(정답 없음 = 다름)", verdict: v.verdict, ok: false, reason: v.reason });
-    });
   }
-  const sameTruth = pairs.filter((p) => p.truth === "same");
-  const notSameTruth = pairs.filter((p) => !p.truth.split("/").includes("same"));
-  const falseMerge = [...pairs.filter((p) => !p.truth.split("/").includes("same") && (p.verdict === "same")), ...extra.filter((p) => p.verdict === "same")];
+  const isSame = (p: PairOut) => p.truth === "same";
+  const sameKeys = new Set<string>();
+  const same = all.filter(isSame).filter((p) => { const k = [p.from, p.to].sort().join("|"); if (sameKeys.has(k)) return false; sameKeys.add(k); return true; });
+  const judgedSame = (p: PairOut) => p.verdict === "same" || p.verdict === "1단계 합침";
   return {
-    same: { total: sameTruth.length, caught: sameTruth.filter((p) => p.ok).length, byName: sameTruth.filter((p) => p.verdict === "1단계 합침" && p.ok).length,
-      notInCandidates: sameTruth.filter((p) => p.verdict === "후보에 없음").length, missedByModel: sameTruth.filter((p) => !p.ok && p.verdict !== "후보에 없음" && p.verdict !== "1단계 합침").length },
-    falseMerge: falseMerge.length,
-    relations: { total: notSameTruth.length, right: notSameTruth.filter((p) => p.ok).length },
-    noiseLinks: extra.filter((p) => p.verdict !== "same").length,
-    wrong: [...pairs.filter((p) => !p.ok), ...extra],
+    same: { total: same.length, caught: same.filter(judgedSame).length, notInCandidates: same.filter((p) => p.verdict === "후보에 없음").length,
+      missedByModel: same.filter((p) => !judgedSame(p) && p.verdict !== "후보에 없음").length },
+    falseMerge: all.filter((p) => judgedSame(p) && !isSame(p)).length,
+    relations: { total: all.filter((p) => !isSame(p) && p.truth !== "different").length, right: all.filter((p) => !isSame(p) && p.truth !== "different" && p.ok).length },
+    // Links the answer does not have: not always wrong (최대 힙 ↔ 힙 정렬), but each one is a link the learner did not ask for.
+    extraLinks: all.filter((p) => p.truth === "different" && ["narrower", "broader", "related"].includes(p.verdict)).length,
+    wrong: all.filter((p) => !p.ok && !(p.truth === "different" && p.verdict !== "same")),
+    extra: all.filter((p) => p.truth === "different" && ["narrower", "broader", "related"].includes(p.verdict)),
+    all,
   };
 }
 
