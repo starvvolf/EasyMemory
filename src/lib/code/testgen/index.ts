@@ -20,7 +20,7 @@ export type TestgenJob = {
 };
 export type Mutation = { killed: number; total: number; survived: string[]; added: number; maybeRight: string[] };
 export type TestgenResult =
-  | { ok: true; examples: Array<{ input: string; output: string }>; tests: GenTest[]; compared: number; small: number; maxTests: number; mutation: Mutation }
+  | { ok: true; examples: Array<{ input: string; output: string }>; tests: GenTest[]; compared: number; small: number; maxTests: number; mutation: Mutation; /** inputs the checker refused and that were dropped */ rejected?: { small: number; tests: number; kinds: string[] } }
   | { ok: false; reason: string };
 
 const HARNESS = () => path.join(process.cwd(), "src", "lib", "code", "testgen", "harness.mjs");

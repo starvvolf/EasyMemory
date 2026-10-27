@@ -113,6 +113,7 @@ const MAKE_SYSTEM = `알고리즘 연습 문제를 하나 세팅한다. 입력�
   · smallKinds: brute와 비교할 작은 입력의 종류들(같은 함수 gen(kind, "small", rnd)로 만든다). 경계·같은 값·무작위를 섞는다.
   · rnd: int(lo, hi), bigint(lo, hi), pick(arr), shuffle(arr), perm(n), string(len, alphabet), next(). Math.random은 쓰지 않는다.
   · check는 입력이 제약을 지키는지 끝까지 확인한다(개수, 범위, 형식). 원문 예제도 통과해야 한다.
+  · gen(kind, size)는 tests에 쓴 조합뿐 아니라 smallKinds의 각 kind를 size "small"로 불러도 check를 통과해야 한다. 크기(N 등)를 먼저 정하고, 첫 줄의 개수와 실제 값의 개수가 그 크기와 같게 만든다. 문제 조건(중복 금지, 이미 있는 것만 삭제 등)도 gen이 지킨다.
 - mutants: 이 문제에서 학습자가 흔히 하는 실수가 들어간 "틀린 풀이" 3~5개. { flaw, code }. flaw는 실수 이름(정수 범위, 초기화, 경계값, off-by-one, 중복 처리, 잘못된 그리디, 시간 초과, 재귀 깊이 등 이 문제에 해당하는 것만). 정상 실행되지만 특정 입력에서 틀리거나 느린 코드여야 한다(문법 오류 금지). 32비트 정수 오버플로는 결과에 |0 을 써서 흉내 낸다.
 - knowledge: 이 문제가 확인하는 지식 이름 1~3개 (학습자 지식 목록에 같은 것이 있으면 그 이름 그대로).
 - folder: "알고리즘/이분 탐색"처럼.

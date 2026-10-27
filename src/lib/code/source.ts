@@ -46,7 +46,7 @@ export function unusable(page: Page) {
 /** The one Baekjoon problem a page is about (its address in the links, or "백준 1234" / "BOJ 1234" in the title), if exactly one. */
 export function bojNumberOf(page: Page) {
   const fromLinks = new Set(page.links.flatMap((l) => { const m = /acmicpc\.net\/problem\/(\d{3,6})\b/.exec(l); return m ? [m[1]] : []; }));
-  const fromTitle = /(?:백준|BOJ|boj|baekjoon)\D{0,4}(\d{3,6})\b/.exec(page.title)?.[1];
+  const fromTitle = /(?:백준|BOJ|boj|baekjoon)[^\d\n]{0,16}?(\d{3,6})\b/i.exec(page.title)?.[1];
   if (fromTitle && (!fromLinks.size || fromLinks.has(fromTitle))) return fromTitle;
   return fromLinks.size === 1 ? [...fromLinks][0] : undefined;
 }

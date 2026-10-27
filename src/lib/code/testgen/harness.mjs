@@ -72,7 +72,8 @@ function loadGenerator(code) {
 }
 
 const short = (t, n = 80) => { const one = String(t).replace(/\n/g, " ⏎ "); return one.length > n ? `${one.slice(0, n)}…` : one || "(빈 출력)"; };
-const badRun = (r) => r.timedOut ? "시간 초과" : r.error ? `실행 중 에러 (${r.error})` : !r.stdout.trim() ? "출력 없음" : "";
+// An empty output can be the answer ("nobody is left"); a reference that prints nothing on every test is caught below.
+const badRun = (r) => r.timedOut ? "시간 초과" : r.error ? `실행 중 에러 (${r.error})` : "";
 
 function main(job) {
   const runMs = job.runMs ?? 5000;
@@ -95,8 +96,10 @@ function main(job) {
     try { input = g.gen(kind, size, rng(seed)); } catch (e) { return { error: `생성기가 ${where}(${kind}/${size})에서 에러: ${String(e.message).slice(0, 160)}` }; }
     if (typeof input !== "string" || !input.trim()) return { error: `생성기가 ${where}(${kind}/${size})에서 빈 입력을 냄` };
     const bad = checkInput(input, `${where}(${kind}/${size})`);
-    return bad ? { error: bad } : { input };
+    return bad ? { rejected: bad } : { input };
   };
+  const FIX = " — gen(kind, size)는 tests와 smallKinds의 모든 kind × size 조합에서 check를 통과하는 입력을 내야 한다(smallKinds의 kind는 size=\"small\"로도 불린다)";
+  const rejected = { small: 0, tests: 0, kinds: new Set() };
 
   // 1. 원문 예제: the checker must accept them, the reference must print them.
   const examples = [];
@@ -125,9 +128,12 @@ function main(job) {
     const kind = g.smallKinds[i % g.smallKinds.length];
     const made = make(kind, "small", seed0 * 7919 + i, "작은 입력");
     if (made.error) return fail(made.error);
+    // A small input the checker refuses is dropped (it says nothing either way); too many of them is a broken generator.
+    if (made.rejected) { rejected.small++; rejected.kinds.add(`${kind}/small`); if (rejected.small > smallCount) return fail(made.rejected + FIX); continue; }
     if (seen.has(made.input)) continue;
     seen.add(made.input); small.push({ kind, input: made.input });
   }
+  if (!small.length) return fail(`작은 입력을 하나도 못 만듦 (검사기가 모두 거부)${FIX}`);
   let compared = 0;
   const smallOut = new Map();
   for (const [i, s] of small.entries()) {
@@ -147,14 +153,20 @@ function main(job) {
   const add = (t) => { if (tests.length >= MAX_TESTS || total + t.input.length > MAX_TOTAL_INPUT) return false; tests.push(t); total += t.input.length; return true; };
   for (const [p, item] of g.tests.entries()) {
     const count = Math.max(0, Math.min(Number(item.count) || 1, item.size === "max" ? 3 : 10));
+    let kept = 0, lastRejected = "";
     for (let c = 0; c < count; c++) {
       const made = make(item.kind, item.size, seed0 * 104729 + p * 101 + c, "숨은 테스트");
       if (made.error) return fail(made.error);
+      if (made.rejected) { rejected.tests++; rejected.kinds.add(`${item.kind}/${item.size}`); lastRejected = made.rejected; continue; }
+      kept++;
       const r = run(reference, made.input, runMs); const why = badRun(r);
       if (why) return fail(`숨은 테스트(${item.kind}/${item.size}): 모범 풀이 ${why}${r.timedOut ? ` — ${runMs}ms 안에 못 풂, 모범 풀이가 느리거나 입력이 제약보다 큼` : ""}`);
       if (!add({ input: made.input, output: norm(r.stdout), kind: item.kind, size: item.size, refMs: Math.round(r.ms) })) break;
     }
+    // A planned test kind that never passes the checker would leave a hole (a max-size one above all): the draft goes back.
+    if (count && !kept && lastRejected) return fail(lastRejected + FIX);
   }
+  if (tests.length && tests.every((t) => !t.output.trim())) return fail("모범 풀이가 모든 숨은 테스트에서 아무것도 출력하지 않음 (출력을 빠뜨렸거나 입력을 못 읽음)");
   const picked = new Set();
   for (const s of small) { if (picked.size >= 10) break; if (![...picked].some((x) => x.kind === s.kind) || picked.size >= g.smallKinds.length) picked.add(s); }
   for (const s of picked) add({ input: s.input, output: smallOut.get(s.input), kind: s.kind, size: "small", refMs: 0 });
@@ -186,7 +198,8 @@ function main(job) {
     else { mutation.total++; mutation.survived.push(m.flaw); }
   }
 
-  return { ok: true, examples, tests, compared, small: small.length, maxTests: tests.filter((t) => t.size === "max").length, mutation };
+  return { ok: true, examples, tests, compared, small: small.length, maxTests: tests.filter((t) => t.size === "max").length, mutation,
+    rejected: { small: rejected.small, tests: rejected.tests, kinds: [...rejected.kinds] } };
 }
 
 /**

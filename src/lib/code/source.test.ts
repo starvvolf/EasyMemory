@@ -82,6 +82,7 @@ test("addresses that read better in another form, and how a page names its probl
   const page = (title: string, links: string[] = []) => ({ url: "", title, text: "", links });
   assert.equal(bojNumberOf(page("[BOJ] 1920 수 찾기")), "1920");
   assert.equal(bojNumberOf(page("백준 2805번 나무 자르기")), "2805");
+  assert.equal(bojNumberOf(page("[백준 / C++] 7785번 회사에 있는 사람")), "7785");
   assert.equal(bojNumberOf(page("풀이", ["https://www.acmicpc.net/problem/1654"])), "1654");
   assert.equal(bojNumberOf(page("풀이", ["https://www.acmicpc.net/problem/1000", "https://www.acmicpc.net/problem/2000"])), undefined);
 });

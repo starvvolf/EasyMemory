@@ -82,3 +82,27 @@ test("the harness sees no environment: the app's keys stay out", { timeout: 30_0
   assert.equal(r.ok, true, r.ok ? "" : r.reason);
   if (r.ok) assert.ok(r.tests.every((t) => t.output === "1"));
 });
+
+test("small inputs the checker refuses are dropped, a planned test kind it always refuses sends the draft back", { timeout: 60_000 }, async () => {
+  // "tiny" at size small now breaks the count half the time: those are dropped and the rest still compare.
+  const flaky = GENERATOR.replace('if (kind === "min" || kind === "tiny") return line(vals(-5, 5).slice(0, Math.max(2, Math.min(n, 3))));',
+    'if (kind === "tiny" && rnd.int(0, 1)) return "3\\n1 2\\n"; if (kind === "min" || kind === "tiny") return line(vals(-5, 5).slice(0, Math.max(2, Math.min(n, 3))));');
+  assert.notEqual(flaky, GENERATOR);
+  const ok = await runTestgen({ ...base, generator: flaky });
+  assert.equal(ok.ok, true, ok.ok ? "" : ok.reason);
+  if (ok.ok) { assert.ok((ok.rejected?.small ?? 0) > 0, "some were dropped"); assert.deepEqual(ok.rejected?.kinds, ["tiny/small"]); }
+  // "extreme" (a planned max-size test) never passes: back to the model, with how to fix it.
+  const broken = await runTestgen({ ...base, generator: GENERATOR.replace("if (kind === \"extreme\") return line(Array.from({ length: n }, () => HI));", "if (kind === \"extreme\") return \"5\\n1\\n\";") });
+  assert.equal(broken.ok, false);
+  assert.match(!broken.ok ? broken.reason : "", /숨은 테스트\(extreme\/max\).*모든 kind × size 조합/);
+});
+
+test("an empty output can be the right answer; a reference that never prints anything is caught", { timeout: 60_000 }, async () => {
+  const quiet = await runTestgen({ ...base, brute: "", needCompared: 0, exampleInputs: [], reference: `${READ} void a;` });
+  assert.equal(quiet.ok, false);
+  assert.match(!quiet.ok ? quiet.reason : "", /아무것도 출력하지 않음/);
+  const emptyExample = await runTestgen({ ...base, exampleInputs: [], sourceExamples: [{ input: "2\n-1 -1\n", output: "" }],
+    reference: `${READ} let x = -Infinity, y = -Infinity; for (const v of a) { if (v > x) { y = x; x = v; } else if (v > y) y = v; } if (x + y !== -2) console.log(String(x + y));`,
+    brute: `${READ} let best = -Infinity; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) best = Math.max(best, a[i] + a[j]); if (best !== -2) console.log(String(best));` });
+  assert.equal(emptyExample.ok, true, emptyExample.ok ? "" : emptyExample.reason);
+});
