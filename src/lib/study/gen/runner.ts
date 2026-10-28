@@ -195,7 +195,8 @@ export const genInputSchema = z.strictObject({
   cacheMode: z.enum(["shared"]).optional(),
   lab: z.strictObject({ router: z.enum(prepRouters).optional(), skimOnly: z.boolean().optional(), pageParallel: z.number().int().min(1).max(64).optional(),
     readParallel: z.number().int().min(1).max(64).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
-    outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional() }).optional(),
+    outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional(),
+    chunk: z.number().int().min(1).max(4).optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });

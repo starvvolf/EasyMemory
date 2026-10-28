@@ -530,7 +530,8 @@ export async function runRecaller(ctx: RecallerContext) {
   }
   // ③ 정리 + ④ 기본 문제, streamed: each page is organized on its own, and a card starts its question the moment it is
   // complete in the reply; a question is published the moment it passes. Nothing waits for a whole reply.
-  const chunksOf = (pages: number[]) => Array.from({ length: Math.ceil(pages.length / CHUNK) }, (_, i) => pages.slice(i * CHUNK, i * CHUNK + CHUNK));
+  const chunk = lab.chunk ?? CHUNK;
+  const chunksOf = (pages: number[]) => Array.from({ length: Math.ceil(pages.length / chunk) }, (_, i) => pages.slice(i * chunk, i * chunk + chunk));
   const collect = (unit: Unit) => {
     const parts = Object.entries(unit.chunks ?? {}).sort(([a], [b]) => Number(a) - Number(b)).map(([, c]) => c);
     unit.cards = parts.flatMap((c) => c.cards ?? []);

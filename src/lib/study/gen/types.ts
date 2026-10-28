@@ -103,6 +103,8 @@ export type RecallerLab = {
   consolidate?: boolean;
   /** 빠른 전처리: read and draw pages in this many worker processes in one pass (a drawing crash ends a worker, not the server). */
   fastPrep?: number;
+  /** Pages per 정리 call within a section (default 1). */
+  chunk?: number;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
