@@ -14,7 +14,7 @@ const EXTRACT_SYSTEM = `학습자가 읽은 글에서 "알아야 할 지식"을 
   - 학습자가 이미 가진 지식과 같은 것이면 그 이름을 그대로 쓴다 (목록이 주어진다).
 - chains: 지식 사이의 고리. from/to는 반드시 knowledge의 title 중 하나. relation은 "그러면", "때문에", "의 예" 같은 짧은 말.
 - claim: 글쓴이의 주장 한 줄과 그 근거들 (설명 글이라 주장이 없으면 글의 요지).
-개수는 글 길이에 맞게 보통 3~8개, 아무리 긴 글도 8개까지. 글의 핵심부터. 주제(폴더)는 저장 뒤 따로 정리하니 고르지 않는다.`;
+개수는 [잡을 지식 수]를 기준으로 하되 자르지 않는다. 글에 알아야 할 지식이 더 있으면 더 잡고, 적으면 억지로 채우지 않는다. 글의 핵심부터. 주제(폴더)는 저장 뒤 따로 정리하니 고르지 않는다.`;
 
 type Extracted = { claim: { text: string; basis: string[] }; knowledge: Array<{ title: string; body: string; kind: "term" | "idea"; quote: string; aliases: string[] }>; chains: Array<{ from: string; relation: string; to: string }> };
 const EXTRACT_SCHEMA = S.obj({
@@ -33,13 +33,17 @@ async function knownNames(limit = 160) {
 
 export type ExtractResult = { source: ReadSource; items: Array<SaveResult["item"] & { again: boolean; created: boolean; termKind: string; quote: string }> };
 /** Read a web article or a lesson: knowledge saved as 만남 (or "다시 만남"), chains as links, the article kept with its goals. */
+/** About how many items an article of this length holds (약 650자에 1개, 최소 3개); a guide for the model, not a cap. */
+export const knowledgeTarget = (chars: number) => Math.max(3, Math.round(chars / 650));
 /**
  * 지식 잡기 호출 (2026-10-29 빠르게): 생각 강도 low가 기본(RECALLER_EXTRACT_EFFORT로 바꿈). 예전에는 medium이라 466자 글도
  * 23초쯤 걸렸다. 주제(폴더)는 저장 뒤 주제 정리가 정하니 여기서 받지 않는다.
  */
 export async function readKnowledge(input: { title: string; url?: string; text: string; folder?: string }, options: { effort?: string; model?: string } = {}) {
   const known = await knownNames();
-  const user = [`[글 제목] ${input.title}`, input.url ? `[주소] ${input.url}` : "", `[학습자가 이미 가진 지식 이름] ${known.names.join(", ") || "(없음)"}`,
+  // 글 길이에 맞춘 개수 (2026-10-29 사용자: "길이 맞춤으로, 안 잘리게"): 약 650자에 1개, 최소 3개. 상한 없이 기준만 준다.
+  const target = knowledgeTarget(input.text.length);
+  const user = [`[글 제목] ${input.title}`, input.url ? `[주소] ${input.url}` : "", `[잡을 지식 수] 약 ${target}개`, `[학습자가 이미 가진 지식 이름] ${known.names.join(", ") || "(없음)"}`,
     `[본문]\n${input.text.slice(0, 40000)}`].filter(Boolean).join("\n\n");
   return askJson<Extracted>("knowledge:extract", EXTRACT_SYSTEM, user, EXTRACT_SCHEMA, { effort: options.effort || process.env.RECALLER_EXTRACT_EFFORT?.trim() || "low",
     model: options.model || process.env.RECALLER_EXTRACT_MODEL?.trim() || undefined });
