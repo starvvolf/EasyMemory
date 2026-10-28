@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ROOT, listCourses, loadCourse, knowledgeName, type Course } from "../lib/course.ts";
 import { answer, diagnose, getIntake, markConfirmed, normalizePlan, startIntake } from "../lib/intake.ts";
-import { PORTS, updateBridgeIfOld, check, devStatus, explain, hint, openEditor, predict, skip, startDev, startStage, stopDev, tryRequest, workspaceOf, workspaceStage } from "../lib/learn.ts";
+import { PORTS, openAtStartup, updateBridgeIfOld, check, devStatus, explain, hint, openEditor, predict, skip, startDev, startStage, stopDev, tryRequest, workspaceOf, workspaceStage } from "../lib/learn.ts";
 import { addRun, candidates, getRun, recordsFile, runs, setActive, type Run } from "../lib/store.ts";
 import { aiStatus } from "../lib/ai.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
@@ -94,7 +94,12 @@ const routes: [string, RegExp, Handler][] = [
   ["GET", /^\/api\/status$/, async () => {
     const f = await runs();
     return { node: nodeSupport(), ai: await aiStatus(), active: f.active ?? null, ports: PORTS,
-      runs: await Promise.all(f.runs.slice(-10).reverse().map(async (r) => ({ id: r.id, course: r.courseId, createdAt: r.createdAt, current: r.current, start: r.plan.start, done: Object.values(r.stages).filter((s) => s.doneAt).length }))) };
+      runs: await Promise.all(f.runs.slice(-10).reverse().map(async (r) => {
+        const course = await loadCourse(r.courseId).catch(() => null);
+        const st = course?.stages.find((s) => s.n === r.current);
+        return { id: r.id, course: r.courseId, courseTitle: course?.title ?? r.courseId, stageTitle: st?.title ?? "", createdAt: r.createdAt, current: r.current, start: r.plan.start,
+          done: Object.values(r.stages).filter((s) => s.doneAt).length, workspace: st ? workspaceOf(r, st.template) : null };
+      })) };
   }],
   ["GET", /^\/api\/courses$/, async () => (await listCourses()).map((c) => ({ id: c.id, title: c.title, summary: c.summary, stack: c.stack, audience: c.audience, stages: c.stages.map((s) => ({ n: s.n, title: s.title, goal: s.goal, transfer: !!s.transfer })) }))],
 
@@ -105,7 +110,7 @@ const routes: [string, RegExp, Handler][] = [
   ["POST", /^\/api\/intake\/(\w+)\/confirm$/, async (req, m) => {
     const b = await body(req);
     const it = await getIntake(m[1]);
-    if (it.confirmedRun) return { runId: it.confirmedRun };
+    if (it.confirmedRun) { const r = await getRun(it.confirmedRun); const c = await loadCourse(r.courseId); return { runId: r.id, workspace: workspaceOf(r, c.stages.find((s) => s.n === r.current)!.template) }; }
     if (!it.plan) throw Object.assign(new Error("계획이 아직 없어요."), { status: 409 });
     const course = await loadCourse(it.courseId);
     const plan = normalizePlan(course, (b.plan ?? {}) as never, it.plan);
@@ -113,8 +118,8 @@ const routes: [string, RegExp, Handler][] = [
       profile: { ...it.profile, requests: it.requests, diag: it.diag }, plan, current: plan.start, workspaces: {}, stages: {} };
     await addRun(run);
     await markConfirmed(it.id, run.id, plan);
-    await startStage(run.id, plan.start);
-    return { runId: run.id };
+    const out = await startStage(run.id, plan.start);
+    return { runId: run.id, workspace: out.workspace };
   }],
 
   ["GET", /^\/api\/runs\/(\w+)$/, async (_q, m) => runView(await getRun(m[1]))],
@@ -210,4 +215,5 @@ server.listen(PORT, "127.0.0.1", () => {
   const n = nodeSupport();
   console.log(`프로젝트 코스 실험: http://127.0.0.1:${PORT}  (창을 닫으면 실습 서버도 같이 꺼져요)`);
   if (!n.ok) console.log(n.message);
+  if (process.env.PC_OPEN === "1") openAtStartup(PORT).catch((e) => console.error("VS Code 열기 실패:", e.message));
 });

@@ -1,7 +1,8 @@
 // Recaller 튜터 연결 (화면 없는 VS Code 확장). 의존 패키지 없음.
 // VS Code → Recaller(127.0.0.1:4100): 보는 파일·줄, 드래그한 부분, 저장 안 한 내용, 빨간 줄, 저장, "튜터에게 묻기"
 // Recaller → VS Code: 줄 열고 강조(open), 빈칸 뼈대 넣기(blank, Ctrl+Z로 되돌림), 줄 옆 안내 글(note), 지우기(clear)
-// 학습자 작업 폴더(.recaller/stage.json이 있는 폴더)에서만 켜진다.
+// 학습자 작업 폴더(.recaller/stage.json)와 시작 폴더(.recaller/lobby.json, 코스 정하기)에서만 켜진다.
+// 튜터 탭 안의 화면이 "이 폴더를 열어 줘"라고 하면(코스 확정·이어 하기) 이 창을 그 폴더로 바꾼다.
 const vscode = require("vscode");
 const http = require("http");
 const fs = require("fs");
@@ -30,6 +31,7 @@ let myVersion = "0";
 let panelOnline = null;   // 튜터 탭이 지금 튜터 화면(true)인지 "꺼져 있어요" 안내(false)인지
 let offlineTimer = null;
 let updateAsked = false;
+let lobby = false;         // 시작 폴더(아직 코스 없음)
 
 function request(method, url, body) {
   return new Promise((resolve, reject) => {
@@ -68,12 +70,19 @@ async function connect() {
   try {
     const hello = await request("POST", "/api/bridge/hello", { root, vscode: vscode.version, version: myVersion });
     runId = hello.runId;
+    lobby = !!hello.lobby;
     clearTimeout(offlineTimer);
     if (panel && panelOnline !== true) renderTutor();
     if (hello.update && !updateAsked) {
       updateAsked = true;
       vscode.window.showInformationMessage("Recaller 튜터 연결이 새 버전으로 바뀌었어요. 창을 다시 불러오면 적용돼요.", "다시 불러오기")
         .then((pick) => { if (pick) vscode.commands.executeCommand("workbench.action.reloadWindow"); });
+    }
+    if (lobby) {
+      setStatus("$(mortar-board) Recaller", "코스를 정하는 곳이에요. 누르면 오른쪽에 튜터가 열려요.", false);
+      if (!autoOpened && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
+      retryTimer = setTimeout(connect, 10000); // 코스 프로그램이 꺼지면 알아채려고 가끔 확인
+      return;
     }
     setStatus("$(mortar-board) Recaller 연결됨", `튜터와 이어졌어요 (${hello.stage}단계). 누르면 오른쪽에 튜터가 열려요. 코드를 드래그하고 우클릭 → "이건 뭐예요?"`, true);
     if (!autoOpened && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
@@ -263,9 +272,21 @@ async function openTutor() {
   panel = vscode.window.createWebviewPanel("recallerTutor", "Recaller 튜터", { viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
     { enableScripts: true, retainContextWhenHidden: true });
   panel.iconPath = new vscode.ThemeIcon("mortar-board");
-  panel.webview.onDidReceiveMessage((m) => { if (m && m.retry) connect(); });
+  panel.webview.onDidReceiveMessage((m) => {
+    if (m && m.retry) connect();
+    if (m && typeof m.openFolder === "string") openFolder(m.openFolder);
+  });
   panel.onDidDispose(() => { panel = null; panelOnline = null; });
-  if (runId) await renderTutor(); else renderOffline();
+  if (runId || lobby) await renderTutor(); else renderOffline();
+}
+
+/** 튜터 화면이 부탁한 폴더로 이 창을 바꾼다. Recaller 폴더(.recaller가 있는 곳)만 연다. */
+function openFolder(p) {
+  const target = path.resolve(p);
+  const ok = ["stage.json", "lobby.json"].some((f) => fs.existsSync(path.join(target, ".recaller", f)));
+  if (!ok) { vscode.window.showWarningMessage("Recaller: 열 수 없는 폴더예요."); return; }
+  if (root && path.resolve(root).toLowerCase() === target.toLowerCase()) return;
+  vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(target), { forceReuseWindow: true });
 }
 
 /** 튜터 화면(코스 서버의 페이지)을 탭에 띄운다. */
@@ -274,13 +295,13 @@ async function renderTutor() {
   const base = await vscode.env.asExternalUri(vscode.Uri.parse(`http://${HOST}:${PORT}/`));
   const origin = base.toString(true).replace(/\/$/, "");
   const mono = vscode.workspace.getConfiguration("editor").get("fontFamily") || "Consolas, monospace";
-  const url = `${origin}/?embed=1&theme=${themeName()}&mono=${encodeURIComponent(mono)}${runId ? `#/run/${runId}` : ""}`;
+  const url = `${origin}/?embed=1&theme=${themeName()}&mono=${encodeURIComponent(mono)}&root=${encodeURIComponent(root)}${runId ? `#/run/${runId}` : "#/home"}`;
   panelOnline = true;
   panel.webview.html = `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin} http://127.0.0.1:${PORT} http://localhost:${PORT}; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <style>html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--vscode-editor-background)}iframe{border:0;width:100%;height:100%;display:block}</style>
 </head><body><iframe id="t" src="${url}" allow="clipboard-read; clipboard-write"></iframe>
-<script>window.addEventListener("message",(e)=>{const f=document.getElementById("t");if(e.data&&e.data.recallerTheme&&f.contentWindow)f.contentWindow.postMessage(e.data,"*");});</script>
+<script>const vs=acquireVsCodeApi();window.addEventListener("message",(e)=>{const f=document.getElementById("t");if(!e.data)return;if(e.data.recallerTheme&&f.contentWindow&&e.source!==f.contentWindow)f.contentWindow.postMessage(e.data,"*");if(e.data.recallerOpenFolder&&e.source===f.contentWindow)vs.postMessage({openFolder:String(e.data.recallerOpenFolder)});});</script>
 </body></html>`;
 }
 
@@ -306,7 +327,8 @@ button:hover{background:var(--vscode-button-hoverBackground)}
 <li>검은 창이 뜨고 몇 초 지나면 여기 튜터가 저절로 다시 나타나요.</li>
 </ol>
 <p>코드는 그대로 있어요. 걱정하지 않아도 돼요.</p>
-<button onclick="acquireVsCodeApi().postMessage({retry:true})">다시 연결해 보기</button>
+<button id="r">다시 연결해 보기</button>
+<script>const vs=acquireVsCodeApi();document.getElementById("r").onclick=()=>vs.postMessage({retry:true});</script>
 </body></html>`;
 }
 function goOfflineSoon() {
@@ -315,7 +337,7 @@ function goOfflineSoon() {
 }
 
 function activate(context) {
-  const folder = (vscode.workspace.workspaceFolders || []).find((f) => fs.existsSync(path.join(f.uri.fsPath, ".recaller", "stage.json")));
+  const folder = (vscode.workspace.workspaceFolders || []).find((f) => ["stage.json", "lobby.json"].some((n) => fs.existsSync(path.join(f.uri.fsPath, ".recaller", n))));
   if (!folder) return;
   root = folder.uri.fsPath;
   myVersion = (context.extension && context.extension.packageJSON && context.extension.packageJSON.version) || "0";
@@ -337,7 +359,7 @@ function activate(context) {
     vscode.window.onDidChangeVisibleTextEditors(() => applyFocus()),
     vscode.window.onDidChangeActiveColorTheme(() => { if (panel) panel.webview.postMessage({ recallerTheme: themeName() }); }),
     vscode.commands.registerCommand("recaller.reconnect", connect),
-    vscode.commands.registerCommand("recaller.openTutor", () => { if (runId) openTutor(); else connect(); }),
+    vscode.commands.registerCommand("recaller.openTutor", () => { if (runId || lobby) openTutor(); else connect(); }),
     vscode.window.onDidChangeActiveTextEditor((ed) => { if (ed && inRoot(ed.document)) lastEditor = ed; scheduleReport(); }),
     vscode.window.onDidChangeTextEditorSelection(() => scheduleReport(700)),
     vscode.workspace.onDidChangeTextDocument((e) => { if (inRoot(e.document)) { scheduleReport(1200); applyFocus(); } }),

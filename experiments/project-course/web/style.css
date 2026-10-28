@@ -374,3 +374,13 @@ textarea.explain { width: 100%; min-height: 70px; border: 1px solid var(--line);
 .hstep .path { margin-top: 4px; }
 kbd { font-family: var(--mono); font-size: 11px; padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--panel); }
 .busyline { display: flex; align-items: center; gap: 8px; }
+.resume { display: grid; gap: 8px; text-align: left; margin: 0 auto 28px; max-width: 460px; }
+.rcard { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel, transparent); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.rcard:hover { border-color: var(--acc); }
+.rcard .rt { font-weight: 600; }
+.rcard:not(.first) .btn.primary { background: transparent; color: var(--acc); }
+.spin { width: 22px; height: 22px; margin: 0 auto; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--acc); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.embed .empty { padding: 0 16px; }
+.embed .empty h1 { font-size: 16px; }
+.plan .chip { white-space: normal; max-width: 100%; }

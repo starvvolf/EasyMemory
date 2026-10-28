@@ -1,14 +1,14 @@
 // 코스 진행: 단계 시작(작업 폴더), 예측, 없애 보기, 검사, 힌트, 설명, 빠르게 넘기기, 실습 서버, 요청 보내기.
 // 학습 기록 후보는 학습자가 직접 한 활동에서만 나온다. AI가 정답 줄을 보여 준 뒤의 통과는 "앎"으로 치지 않는다.
 import { spawn } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { APP_ROOT, knowledgeName, loadCourse, solutionDiff, stageFiles, stageOf, type Course, type Stage } from "./course.ts";
 import { writeWorkspace } from "./stagegen.ts";
 import { runChecks, send, type RunResult } from "./checker.ts";
 import { startServer, type Running } from "./proc.ts";
 import { AiUnavailable, aiText } from "./ai.ts";
-import { WORKSPACES, addCandidates, getRun, saveRun, stageProgress, type Candidate, type Run } from "./store.ts";
+import { DATA, WORKSPACES, addCandidates, getRun, runs, saveRun, stageProgress, type Candidate, type Run } from "./store.ts";
 
 export const PORTS = { app: 4100, dev: 4101, check: 4102 };
 const now = () => new Date().toISOString();
@@ -314,4 +314,43 @@ export async function openEditor(runId: string) {
     ok: opened.ok, path: ws, bridgeInstalled: bridge.installed,
     message: opened.ok ? (bridge.installed ? "VS Code에 Recaller 연결 확장을 깔고 열었어요." : "") : `VS Code를 열지 못했어요: ${opened.out.slice(0, 200)}`,
   };
+}
+
+/* ---------- 시작 폴더(로비) ---------- */
+// 진행 중인 코스가 없을 때 VS Code가 여는 빈 폴더. 확장은 여기서도 켜져서 오른쪽 탭에 "코스 정하기"를 띄운다.
+export const LOBBY = path.join(DATA, "lobby");
+export async function ensureLobby() {
+  await mkdir(path.join(LOBBY, ".recaller"), { recursive: true });
+  await writeFile(path.join(LOBBY, ".recaller", "lobby.json"), JSON.stringify({ lobby: true }) + "\n");
+  const readme = path.join(LOBBY, "시작하기.md");
+  if (!(await exists(readme))) await writeFile(readme, "# Recaller 프로젝트 코스\n\n오른쪽 **Recaller 튜터** 탭에서 코스를 정하면, 이 창이 저절로 작업 폴더로 바뀌어요.\n\n튜터 탭이 안 보이면 왼쪽 아래 상태 표시줄의 **Recaller**를 누르세요.\n");
+  return LOBBY;
+}
+
+/** 지금 이어서 할 폴더: 진행 중인 코스의 이번 단계 작업 폴더, 없으면 로비. */
+export async function resumeFolder() {
+  const f = await runs();
+  const run = f.runs.find((r) => r.id === f.active) ?? f.runs.at(-1);
+  if (run) {
+    try {
+      const course = await loadCourse(run.courseId);
+      const ws = workspaceOf(run, stageOf(course, run.current).template);
+      if (await exists(path.join(ws, ".recaller", "stage.json"))) return { folder: ws, runId: run.id };
+    } catch { /* 코스가 바뀌었으면 로비로 */ }
+  }
+  return { folder: await ensureLobby(), runId: null as string | null };
+}
+
+/** .cmd로 켤 때: 연결 확장을 깔고 VS Code를 연다. VS Code를 못 찾으면 브라우저를 연다. */
+export async function openAtStartup(port: number) {
+  const target = await resumeFolder();
+  const bridge = await ensureBridge();
+  const missing = (bridge as { missing?: boolean }).missing;
+  const opened = missing ? { ok: false } : await codeCli([target.folder], 20000);
+  if (opened.ok) { console.log(`VS Code를 열었어요: ${target.folder}`); return { vscode: true, ...target }; }
+  console.log(missing ? "VS Code 명령(code)을 찾지 못해서 브라우저로 열어요." : "VS Code를 열지 못해서 브라우저로 열어요.");
+  const url = `http://127.0.0.1:${port}/`;
+  if (process.platform === "win32") spawn(`start "" "${url}"`, { shell: true, windowsHide: true });
+  else spawn("xdg-open", [url]).on("error", () => {});
+  return { vscode: false, ...target };
 }

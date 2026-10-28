@@ -3,7 +3,7 @@
 // - 보내는 것: open(줄 열고 강조), blank(빈칸 뼈대), note(줄 옆 안내), clear, toast
 import path from "node:path";
 import type { ServerResponse } from "node:http";
-import { runs } from "./store.ts";
+import { DATA, runs } from "./store.ts";
 
 export type BridgeState = {
   at: string; file: string | null; line?: number;
@@ -29,6 +29,7 @@ export function onBridgeConnect(fn: (runId: string) => void) { onConnect = fn; }
 
 export async function hello(root: string) {
   const want = norm(root);
+  if (want === norm(path.join(DATA, "lobby"))) return { runId: null, stage: 0, lobby: true };
   const f = await runs();
   const run = [...f.runs].reverse().find((r) => Object.values(r.workspaces).some((w) => norm(w) === want));
   if (!run) throw Object.assign(new Error("이 폴더는 Recaller 코스의 작업 폴더가 아니에요."), { status: 404 });

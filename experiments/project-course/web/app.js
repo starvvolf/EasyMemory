@@ -13,6 +13,17 @@ if (EMBED) {
   // VS Code 테마를 바꾸면 확장이 알려 준다
   window.addEventListener("message", (e) => { if (e.data && e.data.recallerTheme) setTheme(e.data.recallerTheme); });
 }
+// VS Code 탭 안이면 확장이 지금 열린 폴더를 알려 준다(root). 다른 폴더가 필요하면 확장에 "그 폴더 열어 줘"를 보낸다.
+const VS_ROOT = EMBED ? new URLSearchParams(location.search).get("root") : null;
+const normPath = (p) => String(p || "").replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
+const inThisFolder = (p) => !VS_ROOT || normPath(p) === normPath(VS_ROOT);
+function openFolder(p) { window.parent.postMessage({ recallerOpenFolder: p }, "*"); }
+function switchingNote(text) {
+  view.replaceChildren(h("div", { class: "empty", style: "margin:48px auto" },
+    h("div", { class: "spin" }), h("h1", { style: "margin-top:14px" }, text),
+    h("p", {}, "VS Code 창이 작업 폴더로 바뀌면서 잠깐 새로 고쳐져요. 튜터는 오른쪽에 다시 떠요."),
+    h("p", { class: "mut small" }, "\"이 폴더의 작성자를 신뢰합니까?\" 창이 뜨면 [예, 작성자를 신뢰합니다]를 누르세요.")));
+}
 const view = $("#view");
 let status = null;
 
@@ -78,6 +89,7 @@ async function route() {
     if ((m = /^#\/run\/(\w+)\/cards/.exec(hash))) return await renderRun(m[1]);
     if ((m = /^#\/run\/(\w+)\/vscode/.exec(hash))) return await renderHandoff(m[1]);
     if ((m = /^#\/run\/(\w+)/.exec(hash))) return await renderRunOrLesson(m[1]);
+    if (hash === "#/home" || EMBED) return renderHome();
     if (status?.active) return go(`#/run/${status.active}`);
     renderHome();
   } catch (e) {
@@ -86,9 +98,20 @@ async function route() {
 }
 window.addEventListener("hashchange", route);
 
+function resumeRun(r) {
+  if (EMBED && r.workspace && !inThisFolder(r.workspace)) { switchingNote("하던 곳으로 가는 중이에요"); openFolder(r.workspace); return; }
+  go(`#/run/${r.id}`);
+}
 function renderHome() {
-  view.replaceChildren(h("div", { class: "empty" },
-    h("h1", {}, "무엇을 만들면서 배울지 정해 볼까요?"),
+  const list = status?.runs ?? [];
+  const resume = list.length ? h("div", { class: "resume" },
+    h("div", { class: "mut small" }, "이어서 하기"),
+    list.slice(0, 3).map((r, i) => h("button", { class: `rcard ${i === 0 ? "first" : ""}`, onclick: () => resumeRun(r) },
+      h("div", { class: "grow" }, h("div", { class: "rt" }, r.courseTitle ?? r.course), h("div", { class: "mut small" }, `${r.current}단계 · ${r.stageTitle ?? ""}`)),
+      h("span", { class: "btn small primary" }, "이어 하기")))) : null;
+  view.replaceChildren(h("div", { class: "empty home" },
+    resume,
+    h("h1", {}, list.length ? "새 코스를 정할까요?" : "무엇을 만들면서 배울지 정해 볼까요?"),
     h("p", {}, "몇 가지 묻고 짧은 확인 문제를 푼 뒤, 준비된 코스에서 어디부터 어떻게 할지 계획을 세워요."),
     h("div", { class: "row", style: "justify-content:center;margin-top:16px" },
       h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => { const it = await api("POST", "/api/intake", { mode: "script" }); go(`#/intake/${it.id}`); }) }, "코스 정하기 시작")),
@@ -185,9 +208,10 @@ function planCard(it, ask) {
       tl,
       h("ul", {}, ask.plan.reasons.map((r) => h("li", {}, r))),
       ask.plan.notes.length ? h("ul", { class: "mut small" }, ask.plan.notes.map((r) => h("li", {}, r))) : null,
-      h("div", { class: "mut small" }, "직접 하기: 예측 → 없애 보기 → VS Code에서 고치기 → 재검사. 빠르게: 예측만 하고 정답 코드로 넘어갈 수 있음. 건너뛴 단계의 코드는 완성된 상태로 받아요."),
+      h("div", { class: "mut small" }, "직접 하기: 튜터와 코드를 읽고 직접 고쳐요. · 빠르게: 설명만 보고 정답 코드로 넘어가요. · 건너뛰기: 그 단계 코드는 완성된 채로 받아요. 단계마다 아래 칸에서 바꿀 수 있어요."),
       h("div", { class: "row" }, h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => {
         const out = await api("POST", `/api/intake/${it.id}/confirm`, { plan });
+        if (EMBED) { if (inThisFolder(out.workspace)) return go(`#/run/${out.runId}`); switchingNote("작업 폴더를 여는 중이에요"); openFolder(out.workspace); return; }
         go(`#/run/${out.runId}/vscode`);
       }) }, "이 계획으로 시작")));
   };
@@ -457,6 +481,16 @@ let lessonCtx = null;
 let events = null;
 async function renderRunOrLesson(id) {
   const run = await api("GET", `/api/runs/${id}`);
+  if (EMBED && run.workspace && !inThisFolder(run.workspace)) {
+    const st = run.stages.find((x) => x.n === run.current);
+    view.replaceChildren(h("div", { class: "empty", style: "margin:40px auto" },
+      h("div", { class: "chip acc" }, `${run.current}단계`), h("h1", { style: "margin-top:8px" }, st?.title ?? ""),
+      h("p", {}, "이 단계는 다른 작업 폴더에서 해요. 아래 버튼을 누르면 VS Code가 그 폴더로 바뀌어요."),
+      h("div", { class: "row", style: "justify-content:center;margin-top:12px" },
+        h("button", { class: "btn primary", onclick: () => { switchingNote("작업 폴더를 여는 중이에요"); openFolder(run.workspace); } }, "작업 폴더 열기"),
+        h("button", { class: "btn", onclick: () => go("#/home") }, "코스 목록"))));
+    return;
+  }
   if (!run.lesson) {
     if (!EMBED) return renderRun(id);
     current = run;
@@ -583,7 +617,7 @@ function drawLesson() {
       h("div", { class: "mut small" }, "작업 폴더"),
       h("div", { class: "path" }, ws),
       h("div", { class: "row" },
-        EMBED ? null : h("button", { class: "btn small primary", onclick: () => go(`#/run/${run.id}/vscode`) }, "VS Code에서 하기"),
+        EMBED ? h("button", { class: "btn small", title: "이어 하기 · 새 코스 정하기", onclick: () => go("#/home") }, "코스 목록") : h("button", { class: "btn small primary", onclick: () => go(`#/run/${run.id}/vscode`) }, "VS Code에서 하기"),
         EMBED ? null : dev?.running
           ? h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/stop`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 끄기")
           : h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/start`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 켜기")),
