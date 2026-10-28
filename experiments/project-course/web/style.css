@@ -173,3 +173,54 @@ textarea.explain { width: 100%; min-height: 70px; border: 1px solid var(--line);
   .tryp .form { grid-template-columns: 80px 1fr; }
   .cmp { grid-template-columns: 44px 1fr; }
 }
+
+/* ---------- 수업 (대화) ---------- */
+.lesson { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 24px; max-width: 1100px; margin: 0 auto; padding: 18px 16px 0; }
+.lside { position: sticky; top: 64px; align-self: start; display: grid; gap: 16px; }
+.lstage h2 { margin-top: 6px; }
+.lprog { display: flex; gap: 4px; }
+.lprog span { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
+.lprog span.on { background: var(--acc); }
+.lprog span.cur { background: color-mix(in srgb, var(--acc) 45%, var(--line)); }
+.lteach ul { margin: 4px 0 0; padding-left: 18px; font-size: 14px; }
+.lws { display: grid; gap: 8px; }
+.lmore { display: grid; gap: 4px; font-size: 13px; }
+.lmain { min-width: 0; display: flex; flex-direction: column; min-height: calc(100vh - 64px); }
+.lchat { flex: 1; display: grid; gap: 14px; align-content: start; padding-bottom: 20px; }
+.lmsg { display: flex; gap: 10px; align-items: flex-start; }
+.lmsg.me { justify-content: flex-end; }
+.lmsg .avatar { flex: none; width: 30px; height: 30px; border-radius: 10px; background: var(--acc); color: var(--acc-ink); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+.lcol { display: grid; gap: 8px; max-width: min(640px, 100%); min-width: 0; }
+.lmsg.me .bubble { background: var(--acc); color: var(--acc-ink); padding: 9px 14px; border-radius: 14px; border-top-right-radius: 4px; }
+.lmsg.tutor .bubble { background: var(--panel); border: 1px solid var(--line); padding: 12px 16px; border-radius: 14px; border-top-left-radius: 4px; }
+.lnote { text-align: center; font-size: 13px; color: var(--mut); }
+.rich p { margin: 0; }
+.rich .gap { height: 8px; }
+.rich ul, .rich ol { margin: 4px 0; padding-left: 20px; }
+.rich li { margin: 2px 0; }
+.ic { background: var(--soft); padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+.flink { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 6px; background: var(--acc-soft); text-decoration: none; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.flink:hover { outline: 1px solid var(--acc); }
+.flink .fi { font-weight: 700; }
+.lcard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.lcard.reply { display: grid; gap: 6px; }
+.rline { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 8px; }
+.rbody { background: var(--soft); border-radius: 8px; padding: 8px 10px; font-family: var(--mono); font-size: 12.5px; }
+.lcard.hint pre.sol { font-family: var(--mono); font-size: 12.5px; margin-top: 6px; }
+.typing { display: flex; gap: 4px; padding: 14px 16px !important; }
+.typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--mut); animation: blink 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+.lfoot { position: sticky; bottom: 0; display: grid; gap: 8px; padding: 12px 0 16px; background: linear-gradient(transparent, var(--bg) 22%); }
+.lfoot form { display: flex; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px; box-shadow: 0 4px 20px rgba(0,0,0,.06); }
+.lfoot input { flex: 1; border: 0; background: transparent; padding: 8px 10px; outline: none; min-width: 0; }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.quick:empty { display: none; }
+.savebar { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--mut); padding: 0 4px; transition: color .2s; }
+.savebar.hit { color: var(--ok); font-weight: 600; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: blink 1.6s infinite; }
+@media (max-width: 860px) {
+  .lesson { grid-template-columns: 1fr; }
+  .lside { position: static; }
+  .lteach, .lmore { display: none; }
+}

@@ -63,7 +63,8 @@ async function route() {
   try {
     if ((m = /^#\/intake\/(\w+)/.exec(hash))) return await renderIntake(m[1]);
     if ((m = /^#\/run\/(\w+)\/summary/.exec(hash))) return await renderSummary(m[1]);
-    if ((m = /^#\/run\/(\w+)/.exec(hash))) return await renderRun(m[1]);
+    if ((m = /^#\/run\/(\w+)\/cards/.exec(hash))) return await renderRun(m[1]);
+    if ((m = /^#\/run\/(\w+)/.exec(hash))) return await renderRunOrLesson(m[1]);
     if (status?.active) return go(`#/run/${status.active}`);
     renderHome();
   } catch (e) {
@@ -399,6 +400,156 @@ function recordsCard(run) {
     items.length ? h("div", { class: "recs" }, items.map((r) => h("div", { class: "rec" }, h("span", { class: `chip ${KIND[r.kind]?.[1] || ""}` }, KIND[r.kind]?.[0] || r.kind), h("span", {}, h("strong", {}, r.knowledgeName), " · ", r.detail))))
       : h("div", { class: "mut small" }, "아직 없어요."),
     h("div", { class: "path", style: "margin-top:8px" }, run.records.file));
+}
+
+/* =================== 수업 (대화) =================== */
+let lessonCtx = null;
+let events = null;
+async function renderRunOrLesson(id) {
+  const run = await api("GET", `/api/runs/${id}`);
+  if (!run.lesson) return renderRun(id);
+  current = run;
+  api("POST", `/api/runs/${id}/activate`).catch(() => {});
+  const lesson = await api("GET", `/api/runs/${id}/lesson/${run.current}`);
+  lessonCtx = { run, lesson };
+  drawLesson();
+  if (events) events.close();
+  events = new EventSource(`/api/runs/${id}/events`);
+  events.onmessage = async (e) => {
+    if (!lessonCtx || lessonCtx.run.id !== id || !/^#\/run\/\w+$/.test(location.hash)) return;
+    if (e.data === "saved") flashSaved();
+    if (e.data === "lesson") { lessonCtx.lesson = await api("GET", `/api/runs/${id}/lesson/${lessonCtx.run.current}`); lessonCtx.run.dev = lessonCtx.lesson.dev; drawLesson(); }
+  };
+}
+
+/** 튜터 글: **굵게**, `코드`, 목록, [[파일:줄]] → VS Code 링크 */
+function rich(text, ws) {
+  const box = h("div", { class: "rich" });
+  let list = null;
+  for (const line of String(text || "").split("\n")) {
+    const m = /^(\s*)([-*]|\d+\.)\s+(.*)$/.exec(line);
+    if (m) {
+      const ordered = /\d/.test(m[2]);
+      if (!list || list.tagName !== (ordered ? "OL" : "UL")) { list = h(ordered ? "ol" : "ul"); box.append(list); }
+      list.append(h("li", {}, inline(m[3], ws)));
+      continue;
+    }
+    list = null;
+    box.append(line.trim() ? h("p", {}, inline(line, ws)) : h("div", { class: "gap" }));
+  }
+  return box;
+}
+function inline(text, ws) {
+  const out = [];
+  const re = /\*\*([^*]+)\*\*|`([^`]+)`|\[\[([^\]:]+):(\d+)\]\]/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m[1]) out.push(h("strong", {}, m[1]));
+    else if (m[2]) out.push(h("code", { class: "ic" }, m[2]));
+    else out.push(fileLink(ws, m[3], Number(m[4])));
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+function fileLink(ws, file, line) {
+  const abs = `${ws.replace(/\\/g, "/").replace(/\/$/, "")}/${file}`;
+  const href = `vscode://file/${abs.replace(/^\//, "")}:${line}`;
+  return h("a", { class: "flink", href, title: "VS Code에서 이 줄 열기" }, h("span", { class: "fi" }, "⌗"), `${file} ${line}번째 줄`);
+}
+
+function flashSaved() {
+  const b = $(".savebar");
+  if (!b) return;
+  b.classList.add("hit"); b.textContent = "저장을 봤어요";
+  setTimeout(() => b.classList.remove("hit"), 1500);
+}
+
+function drawLesson() {
+  const { run, lesson } = lessonCtx;
+  const ws = lesson.workspace;
+  const msgs = lesson.messages;
+  const lastActIdx = msgs.map((m) => !!m.actions).lastIndexOf(true);
+  const pending = lastActIdx >= 0 && !lesson.busy && (lesson.waiting === "action" || lesson.waiting === "save") ? msgs[lastActIdx].actions : [];
+  const send = (body) => (e) => busy(e?.target, async () => {
+    lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, body);
+    if (lessonCtx.lesson.waiting === "done") {
+      const next = run.stages.find((s) => s.inPlan && s.n > run.current);
+      if (next) { await api("POST", `/api/runs/${run.id}/stage/${next.n}/start`, {}); return go(`#/run/${run.id}`); }
+    }
+    drawLesson();
+  });
+
+  const chat = h("div", { class: "lchat" });
+  for (const m of msgs) {
+    if (m.role === "note") { chat.append(h("div", { class: "lnote" }, m.text)); continue; }
+    const row = h("div", { class: `lmsg ${m.role}` });
+    if (m.role === "tutor") row.append(h("div", { class: "avatar" }, "R"));
+    const col = h("div", { class: "lcol" });
+    if (m.text) col.append(m.role === "me" ? h("div", { class: "bubble" }, m.text) : h("div", { class: "bubble" }, rich(m.text, ws)));
+    if (m.card) col.append(lessonCard(m.card, run, lesson, send, ws));
+    row.append(col);
+    chat.append(row);
+  }
+  if (lesson.busy) chat.append(h("div", { class: "lmsg tutor" }, h("div", { class: "avatar" }, "R"), h("div", { class: "bubble typing" }, h("span"), h("span"), h("span"))));
+
+  const input = h("input", { placeholder: "튜터에게 물어보기 — 예: 라우터가 뭐예요?", "aria-label": "튜터에게 물어보기" });
+  const askBtn = h("button", { class: "btn primary", type: "submit" }, "물어보기");
+  const form = h("form", { onsubmit: (e) => { e.preventDefault(); const t = input.value.trim(); if (!t) return; input.value = ""; send({ do: "ask", text: t })({ target: askBtn }); } }, input, askBtn);
+  const quick = h("div", { class: "quick" }, pending.map((a) => h("button", { class: `btn ${a.do === "hint" ? "" : "primary"}`, onclick: (e) => {
+    if (a.do === "hint" && a.label.includes("정답") && !confirm("정답 줄을 볼까요? 이걸 본 뒤의 통과는 '직접 고침'으로 기록하지 않아요.")) return;
+    send({ do: a.do })(e);
+  } }, a.label)));
+  const savebar = lesson.waiting === "save" ? h("div", { class: "savebar" }, h("span", { class: "pulse" }), "VS Code에서 고치고 저장하면 자동으로 확인해요") : null;
+
+  const dev = lesson.dev || run.dev;
+  const side = h("aside", { class: "lside" },
+    h("div", { class: "lstage" }, h("span", { class: "chip acc" }, `${lesson.stage}단계`), h("h2", {}, lesson.title)),
+    h("div", { class: "lprog" }, Array.from({ length: lesson.beats }, (_, i) => h("span", { class: i < lesson.beat ? "on" : i === lesson.beat ? "cur" : "" }))),
+    h("div", { class: "lteach" }, h("div", { class: "mut small" }, "이번에 배울 것"), h("ul", {}, lesson.teach.map((t) => h("li", {}, t)))),
+    h("div", { class: "lws" },
+      h("div", { class: "mut small" }, "작업 폴더"),
+      h("div", { class: "path" }, ws),
+      h("div", { class: "row" },
+        h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { const r = await api("POST", `/api/runs/${run.id}/editor`); toast(r.ok ? "VS Code를 열었어요. 이 창 옆에 나란히 두면 편해요." : r.message, 6000); }) }, "VS Code로 열기"),
+        dev?.running
+          ? h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/stop`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 끄기")
+          : h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/start`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 켜기")),
+      h("div", { class: "small" }, dev?.running ? h("span", { class: "chip ok" }, "서버 켜짐 :4101") : h("span", { class: "chip" }, "서버 꺼짐"))),
+    h("div", { class: "lmore" },
+      h("a", { href: `#/run/${run.id}/cards` }, "단계 카드 화면으로"),
+      h("a", { href: `#/run/${run.id}/summary` }, "결과와 기록 후보")));
+
+  const y = window.scrollY, atBottom = window.innerHeight + y >= document.body.scrollHeight - 80;
+  view.replaceChildren(h("div", { class: "lesson" }, side, h("main", { class: "lmain" }, chat, h("div", { class: "lfoot" }, savebar, quick, form))));
+  if (atBottom || !drawLesson.drawn) window.scrollTo({ top: document.body.scrollHeight });
+  drawLesson.drawn = true;
+}
+
+function lessonCard(card, run, lesson, send, ws) {
+  if (card.type === "choice") {
+    const done = card.picked !== undefined;
+    return h("div", { class: "lcard" }, h("div", { class: "opts" }, card.options.map((o, i) =>
+      h("button", { class: `opt ${done ? (i === card.answer ? "right" : i === card.picked ? "wrong" : "") : ""}`, disabled: done, onclick: (e) => send({ do: "choice", choice: i })(e) }, o))));
+  }
+  if (card.type === "reply") {
+    const head = card.timedOut ? "답장 없음 (3초 기다림)" : card.error ? `연결 실패: ${card.error}` : `${card.status}`;
+    const cls = card.timedOut || card.error || card.status >= 500 ? "bad" : card.status >= 400 ? "warn" : "ok";
+    return h("div", { class: "lcard reply" },
+      h("div", { class: "rline" }, h("span", { class: "mut small" }, "보낸 편지"), h("code", {}, card.request)),
+      h("div", { class: "rline" }, h("span", { class: "mut small" }, "답장"), h("span", { class: `chip ${cls}` }, head)),
+      Object.keys(card.headers || {}).length ? h("pre", { class: "rbody mut" }, Object.entries(card.headers).map(([k, v]) => `${k}: ${v}`).join("\n")) : null,
+      card.body ? h("pre", { class: "rbody" }, card.body) : null);
+  }
+  if (card.type === "check") return h("div", { class: "lcard" }, h("div", { class: "mut small" }, "확인 결과"), resultsList(card.result, { group: true }));
+  if (card.type === "hint") return h("div", { class: "lcard hint" }, h("div", { class: "mut small" }, `힌트 ${card.level}단계 · ${card.source.startsWith("ai") ? "AI 튜터" : card.source === "solution" ? "준비된 정답 줄" : "준비된 힌트"}`), card.level === 3 ? h("pre", { class: "sol" }, card.text) : rich(card.text, ws));
+  if (card.type === "explain") {
+    if (card.done) return h("div", { class: "lcard" }, h("div", { class: "mut small" }, "내 설명"), card.done);
+    const ta = h("textarea", { class: "explain", placeholder: "내 말로 짧게" });
+    return h("div", { class: "lcard" }, ta, h("div", { class: "row", style: "margin-top:8px" }, h("button", { class: "btn primary", onclick: (e) => { if (!ta.value.trim()) return toast("한 문장이라도 적어 주세요."); send({ do: "explain", text: ta.value })(e); } }, "적어 두기")));
+  }
+  return null;
 }
 
 /* =================== 결과 =================== */

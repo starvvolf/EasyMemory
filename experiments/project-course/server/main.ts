@@ -13,6 +13,7 @@ import { aiStatus } from "../lib/ai.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
 import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
+import { act, closeWatchers, lessonView, loadPlan, subscribe } from "../lib/lesson.ts";
 
 if (process.env.PC_FAKE_AI === "1") installFakeAi();
 
@@ -61,6 +62,7 @@ async function runView(run: Run) {
     stages: course.stages.map((s) => ({ n: s.n, title: s.title, transfer: !!s.transfer, inPlan: shown.includes(s.n), before: s.n < run.plan.start && !s.transfer,
       quick: run.plan.quick.includes(s.n), status: run.stages[String(s.n)] ? { started: !!run.stages[String(s.n)].startedAt, done: !!run.stages[String(s.n)].doneAt, independent: run.stages[String(s.n)].independent, skipped: !!run.stages[String(s.n)].skipped } : null })),
     stage: stageView(course, run, run.current),
+    lesson: !!(await loadPlan(course.id, run.current)),
     dev: devStatus(run.id),
     lastCheck: lastCheck.get(`${run.id}:${run.current}`) ?? null,
     records: { file: recordsFile(run.id), count: recs.length, items: recs.filter((r) => r.stage === run.current).slice(-40) },
@@ -132,6 +134,12 @@ const routes: [string, RegExp, Handler][] = [
   ["POST", /^\/api\/runs\/(\w+)\/dev\/stop$/, async (_q, m) => stopDev(m[1])],
   ["GET", /^\/api\/runs\/(\w+)\/dev$/, async (_q, m) => devStatus(m[1])],
   ["POST", /^\/api\/runs\/(\w+)\/try$/, async (req, m) => tryRequest(m[1], (await body(req)) as never)],
+  ["GET", /^\/api\/runs\/(\w+)\/lesson\/(\d+)$/, async (_q, m) => {
+    const v = await lessonView(m[1], Number(m[2]));
+    if (!v) throw Object.assign(new Error("이 단계의 수업 계획서가 없어요."), { status: 404 });
+    return v;
+  }],
+  ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/act$/, async (req, m) => { await act(m[1], Number(m[2]), (await body(req)) as never); return lessonView(m[1], Number(m[2])); }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => openEditor(m[1])],
 ];
 
@@ -139,6 +147,8 @@ const TYPES: Record<string, string> = { ".html": "text/html; charset=utf-8", ".j
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
   try {
+    const ev = /^\/api\/runs\/(\w+)\/events$/.exec(url.pathname);
+    if (ev) { subscribe(ev[1], res); return; }
     if (url.pathname.startsWith("/api/")) {
       for (const [method, re, fn] of routes) {
         const m = re.exec(url.pathname);
@@ -159,7 +169,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
-const shutdown = () => { killAll(); process.exit(0); };
+const shutdown = () => { killAll(); closeWatchers(); process.exit(0); };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 process.on("SIGHUP", shutdown);
