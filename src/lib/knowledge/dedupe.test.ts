@@ -15,7 +15,9 @@ const fakeEmbed = async (texts: string[]) => texts.map((t) => {
   const v = new Float32Array(64); for (const ch of t.normalize("NFKC").toLowerCase()) if (/\p{L}|\p{N}/u.test(ch)) v[ch.codePointAt(0)! % 64] += 1; return v; });
 // The judge: what a careful model would say for these names.
 const RULES: Record<string, string> = { "이진 탐색|이분 탐색": "same", "lower_bound|이분 탐색": "narrower", "다익스트라|우선순위 큐": "uses",
-  "이분 탐색|정렬": "needs", "Map|해시": "near" };
+  "이분 탐색|정렬": "requires", "Map|해시": "near" };
+// The model says the wrong direction here, but names the right side in from: the code flips it back.
+const FLIPPED: Record<string, string> = { "다익스트라|우선순위 큐": "used_by" };
 const NOTES: Record<string, string> = { "다익스트라|우선순위 큐": "거리가 가장 짧은 정점을 우선순위 큐로 꺼낸다", "이분 탐색|정렬": "정렬된 배열이어야 이분 탐색을 쓴다" };
 function judge(request: ModelRequest) {
   const blocks = request.user.split("\n\n");
@@ -24,7 +26,10 @@ function judge(request: ModelRequest) {
     const name = head.replace(/^\[새 지식 \d+\] /, "").split(" [")[0].split(" (")[0];
     return { n, candidates: cands.map((c, m) => {
       const other = c.replace(/^\s*후보 \d+\. /, "").split(" [")[0].split(" (")[0];
-      return { m, verdict: RULES[`${name}|${other}`] ?? "different", note: NOTES[`${name}|${other}`] ?? "", reason: `${name}와 ${other}` };
+      const verdict = RULES[`${name}|${other}`] ?? "different";
+      // from: the side the arrow leaves (as a careful model would name it); one deliberate mix-up is fixed by it.
+      const from = ({ narrower: other, broader: name, uses: name, needs: other, requires: other } as Record<string, string>)[verdict] ?? "";
+      return { m, verdict: FLIPPED[`${name}|${other}`] ?? verdict, from, note: NOTES[`${name}|${other}`] ?? "", reason: `${name}와 ${other}` };
     }) };
   }) };
 }
@@ -109,7 +114,7 @@ test("고리 종류: 선수는 먼저 알 쪽에서, 가까움은 고리 없이;
   await runDuplicateCheck();
   const byTitle = Object.fromEntries((await tree()).items.map((i) => [i.title, i.id]));
   const sort = await getKnowledge(byTitle["정렬"]);
-  assert.deepEqual(sort.links.map((l) => [l.item.title, l.relation, l.note]), [["이분 탐색", "먼저 알기", "정렬된 배열이어야 이분 탐색을 쓴다"]], "정렬 —먼저 알기→ 이분 탐색 (기본 broad)");
+  assert.deepEqual(sort.links.map((l) => [l.item.title, l.relation, l.note]), [["이분 탐색", "조건", "정렬된 배열이어야 이분 탐색을 쓴다"]], "정렬 —조건→ 이분 탐색 (기본 C)");
   assert.deepEqual((await getKnowledge(byTitle["Map"])).links, [], "가까움: no link");
   assert.deepEqual((await nearOf(byTitle["Map"])).map((n) => n.title), ["해시"]);
   assert.deepEqual((await nearOf(byTitle["해시"])).map((n) => n.title), ["Map"]);
@@ -119,7 +124,7 @@ test("고리 종류: 선수는 먼저 알 쪽에서, 가까움은 고리 없이;
   const again = await rejudgeLinks();
   assert.equal(again.checked, 4);
   assert.deepEqual((await getKnowledge(byTitle["해시"])).links.map((l) => l.relation), ["내가 이음"]);
-  assert.deepEqual((await getKnowledge(byTitle["정렬"])).links.map((l) => l.relation), ["먼저 알기"]);
+  assert.deepEqual((await getKnowledge(byTitle["정렬"])).links.map((l) => l.relation), ["조건"]);
   assert.equal((await dupeStatus()).pairs.filter((p) => p.status === "near").length, 1, "가까움 is not doubled");
 }));
 
@@ -127,4 +132,6 @@ test("군더더기 고리: 정렬 —먼저→ 이분 탐색 —포함→ lower_
   const { impliedLinks } = await import("./dedupe.ts");
   const links = [{ from: "sort", to: "bin", relation: "먼저" }, { from: "bin", to: "lb", relation: "포함" }, { from: "sort", to: "lb", relation: "먼저" }, { from: "sort", to: "tp", relation: "조건" }];
   assert.deepEqual(impliedLinks(links), [links[2]]);
+  const uses = [{ from: "lis", to: "bin", relation: "씀" }, { from: "lis", to: "lb", relation: "씀" }, { from: "bin", to: "lb", relation: "포함" }];
+  assert.deepEqual(impliedLinks(uses), [uses[0]], "LIS —씀→ lower_bound is enough");
 });

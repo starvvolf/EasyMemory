@@ -26,10 +26,11 @@ const VERDICTS = ["same", "narrower", "broader", "uses", "used_by", "requires", 
  * 고리 정의 두 가지 (2026-10-28 비교 중, 사용자 "B C 둘 다 테스트"):
  *   broad (B): 먼저 알기 = 이해하거나 제대로 쓰려면 먼저 알아야 함 (배우는 순서와 쓰는 조건을 하나로).
  *   split (C): 먼저 = 배우는 순서만, 조건 = 쓰려면 데이터·상황이 그 상태여야 함 (정렬 —조건→ 이분 탐색).
- * RECALLER_LINK_MODE=broad|split, default broad until the learner picks.
+ * 2026-10-28 사용자 결정: C(split). 실제 데이터 미리보기에서 B는 "…도 중요하다" 수준의 약한 먼저 알기가 붙었고, C는 조건이
+ * 정렬 → 이분 탐색·투 포인터에만, 먼저는 정수 범위 → 오버플로처럼 배우는 순서에만 붙었다. RECALLER_LINK_MODE=broad로 B.
  */
 export type LinkMode = "broad" | "split";
-export const linkMode = (): LinkMode => (process.env.RECALLER_LINK_MODE?.trim() === "split" ? "split" : "broad");
+export const linkMode = (): LinkMode => (process.env.RECALLER_LINK_MODE?.trim() === "broad" ? "broad" : "split");
 const LABEL: Record<LinkMode, { needs: string; requires: string }> = { broad: { needs: "먼저 알기", requires: "먼저 알기" }, split: { needs: "먼저", requires: "조건" } };
 export type DupPair = { id: string; newId: string; otherId: string; verdict: Exclude<Verdict, "different">; reason: string; score: number; at: string;
   note?: string; status: "open" | "merged" | "dismissed" | "linked" | "near" };
@@ -76,11 +77,13 @@ const JUDGE_TAIL: Record<LinkMode, string> = {
 - different: 그 밖의 모든 것. 관계가 약하거나("X의 시간 복잡도를 분석할 수 있다", "둘 다 순서를 쓴다"), 같은 과목일 뿐이거나, 반대·대비되는 개념(깊이 우선 탐색 ↔ 너비 우선 탐색, 기준금리 ↔ 시장금리).
 대부분의 후보는 different다. 애매하면 same이 아니라 near나 different를 고른다. 잘못 합치거나 억지로 잇는 것이 놓치는 것보다 나쁘다. 새 지식 하나에 uses·used_by는 많아야 2개, needs·needed_by도 많아야 2개.
 note: narrower·broader·uses·used_by·needs·needed_by면 두 지식이 어떻게 이어지는지 학습자가 읽을 한국어 한 문장, 40자 안쪽("누적 합으로 구간 합을 한 번에 구한다", "정렬된 배열이어야 이분 탐색을 쓸 수 있다"). 그 밖에는 빈 문자열 "".
+from: 고리면 화살표가 나가는 쪽 지식의 이름을 그대로 쓴다(포함은 넓은 쪽, 씀은 쓰는 쪽, 먼저 알기는 먼저 알 쪽). 그 밖에는 빈 문자열 "".
 n과 m은 받은 번호를 그대로 쓴다.`,
   split: `- near: 뜻이 겹치거나 같은 문제에서 자주 같이 나오지만 위 관계와 방향이 분명하지 않다(해시 ↔ Map, 시간 복잡도 ↔ 시간 복잡도 분석). 고리는 만들지 않고 "가까운 지식"으로만 보인다.
 - different: 그 밖의 모든 것. 관계가 약하거나("X의 시간 복잡도를 분석할 수 있다", "둘 다 순서를 쓴다"), 같은 과목일 뿐이거나, 반대·대비되는 개념(깊이 우선 탐색 ↔ 너비 우선 탐색, 기준금리 ↔ 시장금리).
 대부분의 후보는 different다. 애매하면 same이 아니라 near나 different를 고른다. 잘못 합치거나 억지로 잇는 것이 놓치는 것보다 나쁘다. 새 지식 하나에 uses·used_by, requires·required_by, needs·needed_by는 각각 많아야 2개.
 note: narrower·broader·uses·used_by·requires·required_by·needs·needed_by면 두 지식이 어떻게 이어지는지 학습자가 읽을 한국어 한 문장, 40자 안쪽("누적 합으로 구간 합을 한 번에 구한다", "정렬된 배열이어야 이분 탐색을 쓸 수 있다"). 그 밖에는 빈 문자열 "".
+from: 고리면 화살표가 나가는 쪽 지식의 이름을 그대로 쓴다(포함은 넓은 쪽, 씀은 쓰는 쪽, 조건은 갖춰져야 하는 상태 쪽, 먼저는 먼저 배울 쪽). 그 밖에는 빈 문자열 "".
 n과 m은 받은 번호를 그대로 쓴다.`,
 };
 /** The judge's instructions for one link mode. B never offers requires (its 먼저 알기 covers 조건). */
@@ -90,9 +93,12 @@ const judgeSystem = (mode: LinkMode) => [JUDGE_HEAD, JUDGE_PRE[mode], JUDGE_TAIL
 const REASON_SAME = "reason: same이면 왜 같은지 한국어 한 문장. same이 아니면 빈 문자열 \"\".";
 const REASON_ALL = "reason: 한국어 한 문장.";
 export const reasonMode = (): "same" | "all" => (process.env.RECALLER_DEDUPE_REASONS?.trim() === "all" ? "all" : "same");
-type Judged = { items: Array<{ n: number; candidates: Array<{ m: number; verdict: Verdict; note: string; reason: string }> }> };
+type Judged = { items: Array<{ n: number; candidates: Array<{ m: number; verdict: Verdict; from: string; note: string; reason: string }> }> };
 const schemaFor = (mode: LinkMode) => S.obj({ items: S.arr(S.obj({ n: S.int, candidates: S.arr(S.obj({ m: S.int,
-  verdict: S.oneOf(...VERDICTS.filter((v) => mode === "split" || (v !== "requires" && v !== "required_by"))), note: S.str, reason: S.str })) })) });
+  verdict: S.oneOf(...VERDICTS.filter((v) => mode === "split" || (v !== "requires" && v !== "required_by"))), from: S.str, note: S.str, reason: S.str })) })) });
+/** Which side a link verdict starts from: "new" (새 지식 → 후보) or "cand". */
+const FROM_NEW: Partial<Record<Verdict, "new" | "cand">> = { broader: "new", narrower: "cand", uses: "new", used_by: "cand", requires: "cand", required_by: "new", needs: "cand", needed_by: "new" };
+const FLIP: Partial<Record<Verdict, Verdict>> = { broader: "narrower", narrower: "broader", uses: "used_by", used_by: "uses", requires: "required_by", required_by: "requires", needs: "needed_by", needed_by: "needs" };
 const AUTO_RELATIONS = new Set(["포함", "관련", "씀", "먼저", "먼저 알기", "조건", "비슷한 말"]);
 const LINKS = new Set<Verdict>(["narrower", "broader", "uses", "used_by", "requires", "required_by", "needs", "needed_by"]);
 
@@ -113,6 +119,7 @@ const judgeModel = () => ({ model: process.env.RECALLER_DEDUPE_MODEL?.trim() || 
 export async function judgeBatch(work: Array<{ item: JudgeItem; cands: JudgeItem[] }>, options: { model?: string; effort?: string; reasons?: "same" | "all"; mode?: LinkMode } = judgeModel()) {
   const mode = options.mode ?? linkMode();
   const out = work.map((w) => w.cands.map(() => ({ verdict: "different" as Verdict, reason: "", note: "" })));
+  let flipped = 0;
   if (!work.length) return out;
   const user = work.map((w, n) => `[새 지식 ${n}] ${line(w.item)}\n${w.cands.map((c, m) => `  후보 ${m}. ${line(c)}`).join("\n")}`).join("\n\n");
   const system = `${judgeSystem(mode)}\n${(options.reasons ?? reasonMode()) === "all" ? REASON_ALL : REASON_SAME}`;
@@ -122,7 +129,12 @@ export async function judgeBatch(work: Array<{ item: JudgeItem; cands: JudgeItem
     for (const c of j.candidates ?? []) if (out[j.n][c.m] && (VERDICTS as readonly string[]).includes(c.verdict)) {
       // 어휘: two words with the same meaning stay two items, joined as 비슷한 말.
       const sameWordsOnly = c.verdict === "same" && vocabPair(work[j.n].item, work[j.n].cands[c.m]);
-      out[j.n][c.m] = { verdict: sameWordsOnly ? "related" : c.verdict, reason: (sameWordsOnly ? "뜻이 같은 다른 단어(비슷한 말)라 합치지 않아요. " : "") + (c.reason ?? "").slice(0, 200),
+      // 방향 검사: the model also names the knowledge the arrow leaves from. When that name is clearly the other side,
+      // the verdict's direction was mixed up (다익스트라 —씀→ 최단 거리) and is flipped; a name that fits neither is ignored.
+      let verdict: Verdict = c.verdict;
+      const side = sideOf(c.from ?? "", work[j.n].item, work[j.n].cands[c.m]);
+      if (side && FROM_NEW[verdict] && FROM_NEW[verdict] !== side) { verdict = FLIP[verdict]!; flipped++; }
+      out[j.n][c.m] = { verdict: sameWordsOnly ? "related" : verdict, reason: (sameWordsOnly ? "뜻이 같은 다른 단어(비슷한 말)라 합치지 않아요. " : "") + (c.reason ?? "").slice(0, 200),
         note: LINKS.has(c.verdict) ? (c.note ?? "").trim().slice(0, 80) : "" };
     }
     // A few strong links are worth more than many weak ones: per new item at most two 활용 and two 선수, closest first;
@@ -133,7 +145,16 @@ export async function judgeBatch(work: Array<{ item: JudgeItem; cands: JudgeItem
       if (["uses", "needs", "requires"].includes(group) && (count[group] = (count[group] ?? 0) + 1) > MAX_RELATED) { v.verdict = "near"; v.note = ""; }
     }
   }
+  if (flipped) console.info(`[knowledge:dedupe] 방향을 바로잡은 고리 ${flipped}개`);
   return out;
+}
+/** "new" / "cand" when the name matches one side only (title or another name), else "". */
+function sideOf(name: string, item: JudgeItem, cand: JudgeItem): "new" | "cand" | "" {
+  const n = normalize(name);
+  if (!n) return "";
+  const is = (d: JudgeItem) => [d.title, ...d.aliases].some((x) => normalize(x) === n);
+  const a = is(item), b = is(cand);
+  return a && !b ? "new" : b && !a ? "cand" : "";
 }
 
 type Full = Awaited<ReturnType<typeof getKnowledge>>;
@@ -196,12 +217,16 @@ async function checkBatch(ids: string[], data: DupFile): Promise<DupPair[]> {
 
 const PRE = new Set(["먼저", "먼저 알기", "조건"]);
 /**
- * 군더더기 고리 빼기: A —먼저→ Y is not needed when A —먼저→ Z and Z —포함→ Y already say it (정렬 → 이분 탐색 → lower_bound).
+ * 군더더기 고리 빼기: A —먼저→ Y is not needed when A —먼저→ Z and Z —포함→ Y already say it (정렬 → 이분 탐색 → lower_bound);
+ * A —씀→ Y is not needed when A —씀→ Z and Y —포함→ Z (LIS —씀→ lower_bound says more than LIS —씀→ 이분 탐색).
  * Works on a list of links; returns the ones to drop.
  */
 export function impliedLinks(links: Array<{ from: string; to: string; relation: string }>) {
   const has = (from: string, to: string, rel: (r: string) => boolean) => links.some((l) => l.from === from && l.to === to && rel(l.relation));
-  return links.filter((l) => PRE.has(l.relation) && links.some((z) => z.from === l.from && PRE.has(z.relation) && z.to !== l.to && has(z.to, l.to, (r) => r === "포함")));
+  return links.filter((l) =>
+    (PRE.has(l.relation) && links.some((z) => z.from === l.from && PRE.has(z.relation) && z.to !== l.to && has(z.to, l.to, (r) => r === "포함")))
+    // A —씀→ 이분 탐색 is not needed when A —씀→ lower_bound and 이분 탐색 —포함→ lower_bound (the narrower one says more).
+    || (l.relation === "씀" && links.some((z) => z.from === l.from && z.relation === "씀" && z.to !== l.to && has(l.to, z.to, (r) => r === "포함"))));
 }
 async function pruneImplied() {
   const { items } = await tree();
