@@ -239,24 +239,111 @@ textarea.explain { width: 100%; min-height: 70px; border: 1px solid var(--line);
 .lpocket { display: grid; gap: 6px; }
 .pitem { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13px; display: grid; gap: 4px; }
 
-/* ---------- VS Code 오른쪽 탭 안 (embed) ---------- */
-.embed body { font-size: 14px; }
+/* ---------- VS Code 오른쪽 탭 안 (embed) ----------
+   VS Code 기본 테마(Dark Modern / Light Modern)의 색·글꼴·간격을 따른다.
+   테마는 확장이 ?theme=dark|light 로 넘기고, 바꾸면 postMessage로 알려 준다. */
+.embed {
+  --bg: #1f1f1f; --panel: #181818; --ink: #cccccc; --mut: #9d9d9d; --line: #2b2b2b; --soft: #2a2d2e;
+  --acc: #0078d4; --acc-ink: #ffffff; --acc-soft: #04395e; --input: #313131; --input-line: #3c3c3c;
+  --btn2: #313131; --btn2-ink: #cccccc; --btn2-hover: #3c3c3c; --code: #2b2b2b; --link: #4daafc;
+  --ok: #89d185; --ok-soft: rgba(137, 209, 133, .12); --bad: #f48771; --bad-soft: rgba(244, 135, 113, .12);
+  --warn: #cca700; --warn-soft: rgba(204, 167, 0, .14);
+  --ui: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", system-ui, "Malgun Gothic", sans-serif;
+  --radius: 4px;
+}
+.embed[data-vs="light"] {
+  --bg: #ffffff; --panel: #f8f8f8; --ink: #3b3b3b; --mut: #6e7681; --line: #e5e5e5; --soft: #f2f2f2;
+  --acc: #005fb8; --acc-ink: #ffffff; --acc-soft: #e8f1fb; --input: #ffffff; --input-line: #cecece;
+  --btn2: #e5e5e5; --btn2-ink: #000000; --btn2-hover: #cccccc; --code: #f3f3f3; --link: #005fb8;
+  --ok: #388a34; --ok-soft: rgba(56, 138, 52, .1); --bad: #c72e0f; --bad-soft: rgba(199, 46, 15, .08);
+  --warn: #8a6d00; --warn-soft: rgba(191, 136, 3, .12);
+}
+.embed body { font: 13px/1.55 var(--ui); background: var(--bg); color: var(--ink); }
+.embed code, .embed pre, .embed .mono, .embed .ic, .embed .rbody, .embed .flink, .embed .path { font-family: var(--mono); }
+.embed ::-webkit-scrollbar { width: 10px; height: 10px; }
+.embed ::-webkit-scrollbar-thumb { background: rgba(121, 121, 121, .4); }
+.embed ::-webkit-scrollbar-track { background: transparent; }
 .embed .top, .embed #nodeWarn { display: none; }
-.embed .lesson { grid-template-columns: 1fr; gap: 10px; padding: 10px 12px 0; }
-.embed .lside { position: static; display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.embed .lstage { display: flex; align-items: center; gap: 8px; }
-.embed .lstage h2 { margin: 0; font-size: 15px; }
-.embed .lprog { grid-column: 1 / -1; }
+.embed a { color: var(--link); }
+
+/* 버튼·입력: VS Code 모양 */
+.embed .btn { border: 0; border-radius: 2px; padding: 4px 12px; background: var(--btn2); color: var(--btn2-ink); font-size: 13px; line-height: 18px; }
+.embed .btn:hover { background: var(--btn2-hover); border: 0; }
+.embed .btn.primary { background: var(--acc); color: var(--acc-ink); font-weight: 400; }
+.embed .btn.primary:hover { filter: brightness(1.1); }
+.embed .btn.small { padding: 2px 8px; font-size: 12px; }
+.embed .chip { border-radius: 3px; font-size: 11px; padding: 1px 6px; }
+.embed .opt { border-radius: 4px; padding: 6px 10px; background: transparent; border: 1px solid var(--input-line); }
+.embed .opt:hover { border-color: var(--acc); background: var(--soft); }
+.embed .opt.right { border-color: var(--ok); color: var(--ok); }
+.embed .opt.wrong { border-color: var(--bad); color: var(--bad); }
+.embed textarea.explain { background: var(--input); border: 1px solid var(--input-line); border-radius: 4px; color: var(--ink); }
+.embed textarea.explain:focus { outline: 1px solid var(--acc); border-color: var(--acc); }
+
+/* 위쪽 한 줄: 단계·진행·상태 */
+.embed .lesson { grid-template-columns: 1fr; gap: 0; padding: 0; max-width: none; }
+.embed .lside { position: sticky; top: 0; z-index: 3; background: var(--bg); display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 10px 16px 8px; border-bottom: 1px solid var(--line); }
+.embed .lstage { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.embed .lstage .chip { background: var(--acc-soft); color: var(--ink); }
+.embed .lstage h2 { margin: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.embed .lprog { grid-column: 1 / -1; gap: 3px; }
+.embed .lprog span { height: 2px; border-radius: 0; }
 .embed .lteach, .embed .lmore, .embed .lws .path, .embed .lws > .mut { display: none; }
 .embed .lws { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
 .embed .lws .row { gap: 6px; }
-.embed .seeing { grid-column: 1 / -1; }
-.embed .lpocket { grid-column: 1 / -1; max-height: 120px; overflow: auto; }
-.embed .lpocket .pitem { padding: 4px 8px; }
-.embed .lmain { min-height: calc(100vh - 90px); }
-.embed .lmsg .avatar { width: 24px; height: 24px; font-size: 12px; border-radius: 8px; }
-.embed .lmsg.tutor .bubble { padding: 10px 12px; }
-.embed .lcol { max-width: 100%; }
-.embed .chunk.sub { margin-left: 10px; }
-.embed .course { grid-template-columns: 1fr; padding: 10px 12px 40px; }
-.embed .chat { padding: 12px 12px 120px; }
+.embed .seeing { font-size: 11.5px; }
+.embed .lpocket { grid-column: 1 / -1; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.embed .lpocket > .mut { flex: none; align-self: center; }
+.embed .lpocket .pitem { flex: none; display: flex; gap: 6px; align-items: center; padding: 2px 8px; border-radius: 10px; background: var(--soft); border: 0; font-size: 12px; white-space: nowrap; }
+
+/* 대화: 튜터는 말풍선 없이, 학습자는 옅은 상자 */
+.embed .lmain { min-height: calc(100vh - 60px); padding: 0 16px; }
+.embed .lchat { gap: 16px; padding-top: 14px; }
+.embed .lmsg { gap: 8px; }
+.embed .lmsg .avatar { width: 20px; height: 20px; font-size: 11px; border-radius: 4px; margin-top: 1px; }
+.embed .lcol { max-width: 100%; gap: 8px; }
+.embed .lmsg.tutor .bubble { background: transparent; border: 0; padding: 0; border-radius: 0; }
+.embed .lmsg.me { justify-content: flex-end; }
+.embed .lmsg.me .lcol { max-width: 85%; }
+.embed .lmsg.me .bubble { background: var(--soft); color: var(--ink); border-radius: 6px; padding: 6px 10px; }
+.embed .lnote { font-size: 12px; }
+.embed .rich p { margin: 0; }
+.embed .rich .gap { height: 6px; }
+.embed .ic { background: var(--code); border-radius: 3px; padding: 0 4px; font-size: 12px; }
+.embed .flink { background: transparent; padding: 0; border-radius: 0; color: var(--link); font-size: 12px; }
+.embed .flink:hover { outline: 0; text-decoration: underline; }
+.embed .flink .fi { display: none; }
+
+/* 카드 */
+.embed .lcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.embed .rbody { background: var(--code); border-radius: 3px; font-size: 12px; }
+.embed .rline { grid-template-columns: 56px 1fr; }
+.embed .res { border-radius: 3px; padding: 6px 10px; }
+.embed .res.bad { background: var(--bad-soft); }
+.embed .cmp { grid-template-columns: 40px 1fr; font-size: 12px; }
+.embed .chunk { border-radius: 3px; padding: 5px 8px; background: transparent; border-color: var(--line); }
+.embed .chunk.on { background: var(--acc-soft); border-color: var(--acc); }
+.embed .chunk .cl { font-size: 13px; }
+.embed .chunk.sub { margin-left: 12px; }
+.embed .hintbox, .embed .lcard.hint { border-left: 2px solid var(--warn); }
+
+/* 아래 입력창 */
+.embed .lfoot { padding: 10px 0 14px; background: linear-gradient(transparent, var(--bg) 18%); gap: 8px; }
+.embed .lfoot form { background: var(--input); border: 1px solid var(--input-line); border-radius: 6px; padding: 4px; box-shadow: none; }
+.embed .lfoot form:focus-within { border-color: var(--acc); }
+.embed .lfoot input { padding: 6px 8px; color: var(--ink); font-size: 13px; }
+.embed .lfoot input::placeholder { color: var(--mut); }
+.embed .lfoot .btn.primary { border-radius: 4px; }
+.embed .quick { gap: 6px; }
+.embed .quick .btn { border-radius: 4px; }
+.embed .savebar { font-size: 12px; }
+.embed .typing { padding: 4px 0 !important; }
+
+/* 코스 정하기·카드 화면도 VS Code 안에서는 좁게 */
+.embed .course { grid-template-columns: 1fr; padding: 12px 16px 40px; }
+.embed .card { border-radius: var(--radius); background: var(--panel); }
+.embed .chat { padding: 12px 16px 120px; }
+.embed .msg.assistant .bubble { background: transparent; border: 0; padding: 0; }
+.embed .msg.user .bubble { background: var(--soft); color: var(--ink); border-radius: 6px; }
+.embed .ask { background: var(--panel); border-radius: var(--radius); }
+.embed .composer form { background: var(--input); border: 1px solid var(--input-line); border-radius: 6px; box-shadow: none; }

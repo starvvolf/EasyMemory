@@ -242,18 +242,25 @@ async function what() {
 }
 
 /* ---------- 오른쪽 튜터 탭 ---------- */
+function themeName() {
+  const k = vscode.window.activeColorTheme.kind; // 1 Light, 2 Dark, 3 HighContrast, 4 HighContrastLight
+  return k === 1 || k === 4 ? "light" : "dark";
+}
 async function openTutor() {
   if (panel) { panel.reveal(vscode.ViewColumn.Two, true); return; }
   const base = await vscode.env.asExternalUri(vscode.Uri.parse(`http://${HOST}:${PORT}/`));
   const origin = base.toString(true).replace(/\/$/, "");
-  const url = `${origin}/?embed=1${runId ? `#/run/${runId}` : ""}`;
+  const mono = vscode.workspace.getConfiguration("editor").get("fontFamily") || "Consolas, monospace";
+  const url = `${origin}/?embed=1&theme=${themeName()}&mono=${encodeURIComponent(mono)}${runId ? `#/run/${runId}` : ""}`;
   panel = vscode.window.createWebviewPanel("recallerTutor", "Recaller 튜터", { viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
     { enableScripts: true, retainContextWhenHidden: true });
   panel.iconPath = new vscode.ThemeIcon("mortar-board");
   panel.webview.html = `<!doctype html><html><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin} http://127.0.0.1:${PORT} http://localhost:${PORT}; style-src 'unsafe-inline';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin} http://127.0.0.1:${PORT} http://localhost:${PORT}; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <style>html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--vscode-editor-background)}iframe{border:0;width:100%;height:100%;display:block}</style>
-</head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
+</head><body><iframe id="t" src="${url}" allow="clipboard-read; clipboard-write"></iframe>
+<script>window.addEventListener("message",(e)=>{const f=document.getElementById("t");if(e.data&&e.data.recallerTheme&&f.contentWindow)f.contentWindow.postMessage(e.data,"*");});</script>
+</body></html>`;
   panel.onDidDispose(() => { panel = null; });
 }
 
@@ -277,6 +284,7 @@ function activate(context) {
     vscode.commands.registerCommand("recaller.ask", ask),
     vscode.commands.registerCommand("recaller.what", what),
     vscode.window.onDidChangeVisibleTextEditors(() => applyFocus()),
+    vscode.window.onDidChangeActiveColorTheme(() => { if (panel) panel.webview.postMessage({ recallerTheme: themeName() }); }),
     vscode.commands.registerCommand("recaller.reconnect", connect),
     vscode.commands.registerCommand("recaller.openTutor", () => { if (runId) openTutor(); else connect(); }),
     vscode.window.onDidChangeActiveTextEditor((ed) => { if (ed && inRoot(ed.document)) lastEditor = ed; scheduleReport(); }),

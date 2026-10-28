@@ -3,7 +3,16 @@
 const $ = (s, el = document) => el.querySelector(s);
 // VS Code 오른쪽 탭 안에서 열릴 때(?embed=1): 위쪽 바와 VS Code 열기 버튼을 빼고 좁은 폭에 맞춘다.
 const EMBED = new URLSearchParams(location.search).has("embed");
-if (EMBED) document.documentElement.classList.add("embed");
+if (EMBED) {
+  const root = document.documentElement;
+  const q = new URLSearchParams(location.search);
+  root.classList.add("embed");
+  const setTheme = (t) => { root.dataset.vs = t === "light" ? "light" : "dark"; };
+  setTheme(q.get("theme"));
+  root.style.setProperty("--mono", `${q.get("mono") ? `${q.get("mono")}, ` : ""}Consolas, "Cascadia Mono", "D2Coding", ui-monospace, monospace`);
+  // VS Code 테마를 바꾸면 확장이 알려 준다
+  window.addEventListener("message", (e) => { if (e.data && e.data.recallerTheme) setTheme(e.data.recallerTheme); });
+}
 const view = $("#view");
 let status = null;
 
@@ -525,7 +534,7 @@ function drawLesson() {
           ? h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/stop`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 끄기")
           : h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/start`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 켜기")),
       h("div", { class: "row small" }, dev?.running ? h("span", { class: "chip ok" }, "서버 켜짐 :4101") : h("span", { class: "chip" }, "서버 꺼짐"),
-        lesson.bridge?.connected ? h("span", { class: "chip ok" }, "VS Code 연결됨") : h("span", { class: "chip", title: "[VS Code로 열기]를 누르면 연결 확장을 깔고 열어요" }, "VS Code 연결 안 됨")),
+        lesson.bridge?.connected ? (EMBED ? null : h("span", { class: "chip ok" }, "VS Code 연결됨")) : h("span", { class: "chip", title: "[VS Code로 열기]를 누르면 연결 확장을 깔고 열어요" }, "VS Code 연결 안 됨")),
       lesson.bridge?.connected ? h("div", { class: "seeing small" }, lesson.bridge.file
         ? [h("span", { class: "mut" }, "튜터가 보는 곳 "), h("code", {}, `${lesson.bridge.file}:${lesson.bridge.line}`),
            lesson.bridge.selection ? h("span", { class: "mut" }, ` · ${lesson.bridge.selection.from}~${lesson.bridge.selection.to}줄 선택`) : null,
