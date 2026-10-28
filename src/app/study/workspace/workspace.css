@@ -394,3 +394,25 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .am-tag{font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:6px;padding:0 5px}
 .dejipgi .am-again{margin-left:8px;font-size:11px;font-weight:600;color:var(--read);background:var(--read-soft);border-radius:6px;padding:1px 6px}
 .dejipgi .am-more{align-self:flex-start}
+
+/* 자료 지도 (MaterialMap.tsx, 2026-10-29) */
+.mm2-overlay{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--ground) 92%,transparent);overflow:auto;padding:18px}
+.dejipgi .mm2{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.dejipgi .mm2-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dejipgi .mm2-bar{display:flex;height:8px;border-radius:6px;overflow:hidden;background:var(--surface-2);border:1px solid var(--line)}
+.dejipgi .mm2-seg.bad{background:var(--bad)} .dejipgi .mm2-seg.read{background:var(--read)} .dejipgi .mm2-seg.good{background:var(--good)} .dejipgi .mm2-seg:not(.bad):not(.read):not(.good){background:var(--line-strong)}
+.dejipgi .chip.read{color:var(--read);background:var(--read-soft);border-color:transparent}
+.dejipgi .mm2-sections{display:flex;flex-direction:column;gap:14px}
+.dejipgi .mm2-sec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.dejipgi .mm2-sec-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.dejipgi .mm2-dots{display:inline-flex;gap:3px;flex-wrap:wrap}
+.dejipgi .mm2-dots .dot{width:8px;height:8px;border-radius:50%;background:var(--line-strong)} .dejipgi .mm2-dots .dot.read{background:var(--read)} .dejipgi .mm2-dots .dot.good{background:var(--good)}
+.dejipgi .mm2-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.dejipgi .mm2-card{border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:6px;font-size:14px;background:var(--surface)}
+.dejipgi .mm2-card.st-unknown{border-left-color:var(--bad)} .dejipgi .mm2-card.st-met{border-left-color:var(--read)} .dejipgi .mm2-card.st-known,.dejipgi .mm2-card.st-graduated{border-left-color:var(--good)}
+.dejipgi .mm2-card p,.dejipgi .mm2-card ol,.dejipgi .mm2-card ul{margin:0}
+.dejipgi .mm2-title{font-size:14.5px}
+.dejipgi .mm2-steps{padding-left:20px;display:flex;flex-direction:column;gap:3px}
+.dejipgi .mm2-list,.dejipgi .mm2-mist{padding-left:18px}
+.dejipgi .mm2-expr{font-size:15px;overflow-x:auto}
+.dejipgi .mm2-table{border-collapse:collapse;font-size:13px;width:100%} .dejipgi .mm2-table th,.dejipgi .mm2-table td{border:1px solid var(--line);padding:3px 6px;text-align:left;vertical-align:top}

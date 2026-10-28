@@ -1920,6 +1920,7 @@ function renderReader(){
       onclick: () => { (S.plan.prefs || (S.plan.prefs = {})).showTerms = !termsOn(); Store.savePlan(S.plan); render(); } }, "핵심 용어") : null,
     pdfOn && Trans.can(d) ? h("button", { class:"btn small", "aria-pressed": Trans.on() ? "true" : "false", title: Trans.on() ? "원문(영어)으로 보기" : "쪽을 한국어로 덧씌워 보기 (핵심 용어는 영어 병기)", onclick: () => Trans.toggle() }, Trans.on() ? "번역 켬" : "번역") : null,
     d.example || (notesApi && notesApi.compose) ? h("button", { class:"btn small", title:"이 자료의 용어를 한국어 뜻·비유와 함께 묶은 지도와 이야기", onclick: () => TermMap.openFor(d) }, "용어 지도") : null,
+    env.mountView && /^gen_/.test(d.id) ? h("button", { class:"btn small", title:"목차와 지식을 한 화면에: 구역마다 알아야 할 것과 내 상태(몰랐음·만남·앎)", onclick: () => MaterialMapView.open(d) }, "자료 지도") : null,
     notesButton(d),
     h("div", { class:"pager" },
       h("button", { class:"qbtn", disabled: R.page <= 1, "aria-label":"이전 쪽", onclick: () => goPage(R.page - 1) }, "‹"),
@@ -2510,6 +2511,20 @@ const TERMS_RULES = `너는 영어 강의자료의 용어와 개념을 한국어
 - story: 모든 용어가 원인→결과나 순서로 이어지는 짧은 흐름 글(예: "화면에 그림 한 장이 뜨기까지"). 용어가 나올 때마다 [[en]]처럼 en을 대괄호 두 겹으로 감싼다. 문단은 줄바꿈으로 나눈다.
 - 식은 $...$ 안에 LaTeX로 쓴다. 마크다운 기호는 쓰지 않는다.`;
 const TM = { open:false, run:null, err:null, sel:null, key:"" };
+/* 자료 지도 (workspace/MaterialMap.tsx, 2026-10-29): the outline and its knowledge on one screen, over the reader.
+   Kept outside #app so a re-render of the reader does not close it; a page picked there opens in the reader. */
+const MaterialMapView = {
+  cur: null,
+  open(d){
+    this.close();
+    const ov = h("div", { class:"mm2-overlay" }), host = h("div");
+    ov.append(host);
+    (document.getElementById("app").closest(".dejipgi") || document.body).append(ov);
+    const stop = env.mountView("map", host, { genId: d.id, onPage: (p) => { this.close(); goPage(p); }, onClose: () => this.close() });
+    this.cur = { ov, stop };
+  },
+  close(){ if (this.cur){ this.cur.stop(); this.cur.ov.remove(); this.cur = null; } },
+};
 const TermMap = {
   // The studied range: real decks carry no page texts, so it comes from where the objectives and questions sit.
   range(d){
