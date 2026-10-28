@@ -758,7 +758,7 @@ export async function runRecaller(ctx: RecallerContext) {
   const stop = settled.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
   if (stop) throw stop.reason;
   data.timing.skimDoneAt ??= new Date().toISOString();
-  const merged = lab.consolidate === false || (data.consolidated && !data.consolidated.error) ? Promise.resolve() : lab.consolidate ? consolidate() : merging();
+  const merged = lab.consolidate === false || (lab.skimOnly && !lab.consolidate) || (data.consolidated && !data.consolidated.error) ? Promise.resolve() : lab.consolidate ? consolidate() : merging();
   merged.catch(() => undefined); // awaited below; a pause that ends the run first must not leave it unhandled
   if (lab.skimOnly) {
     await merged;
