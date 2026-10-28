@@ -52,7 +52,8 @@ async function diagnoseAsk(course: Course): Promise<Ask> {
 export async function startIntake(mode?: "ai" | "script") {
   const courses = await listCourses();
   const course = courses.find((c) => c.id === "board-api") ?? courses[0];
-  const useAi = (mode ?? (aiMode() === "off" ? "script" : "ai")) === "ai" && aiMode() !== "off";
+  // 기본은 정해진 질문(빠르고 AI 호출 0). AI 대화는 학습자가 고를 때만(10/29: 대화 한 번에 8회 호출이라).
+  const useAi = mode === "ai" && aiMode() !== "off";
   const it: Intake = { id: randomBytes(6).toString("hex"), createdAt: now(), mode: useAi ? "ai" : "script", courseId: course.id, turns: 0, messages: [], profile: {}, requests: [] };
   it.messages.push({ role: "assistant", at: now(), text:
     `안녕하세요. 직접 만들면서 머리에 남게 공부하는 코스를 같이 정해 볼게요.\n지금 준비된 코스는 "${course.title}"(${course.stack})예요. 몇 가지 묻고, 짧은 확인 문제를 푼 뒤 어디서부터 어떻게 할지 계획을 제안할게요.`,

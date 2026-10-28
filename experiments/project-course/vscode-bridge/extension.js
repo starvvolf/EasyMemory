@@ -26,6 +26,10 @@ let focus = null;         // { file, chunks: [{ anchor, label, desc, focus }] }
 let panel = null;         // 오른쪽 튜터 탭
 let lastEditor = null;    // 튜터 탭을 누르고 있어도 "보던 코드"를 기억
 let autoOpened = false;
+let myVersion = "0";
+let panelOnline = null;   // 튜터 탭이 지금 튜터 화면(true)인지 "꺼져 있어요" 안내(false)인지
+let offlineTimer = null;
+let updateAsked = false;
 
 function request(method, url, body) {
   return new Promise((resolve, reject) => {
@@ -62,14 +66,22 @@ async function connect() {
   clearTimeout(retryTimer);
   if (stream) { stream.destroy(); stream = null; }
   try {
-    const hello = await request("POST", "/api/bridge/hello", { root, vscode: vscode.version });
+    const hello = await request("POST", "/api/bridge/hello", { root, vscode: vscode.version, version: myVersion });
     runId = hello.runId;
+    clearTimeout(offlineTimer);
+    if (panel && panelOnline !== true) renderTutor();
+    if (hello.update && !updateAsked) {
+      updateAsked = true;
+      vscode.window.showInformationMessage("Recaller 튜터 연결이 새 버전으로 바뀌었어요. 창을 다시 불러오면 적용돼요.", "다시 불러오기")
+        .then((pick) => { if (pick) vscode.commands.executeCommand("workbench.action.reloadWindow"); });
+    }
     setStatus("$(mortar-board) Recaller 연결됨", `튜터와 이어졌어요 (${hello.stage}단계). 누르면 오른쪽에 튜터가 열려요. 코드를 드래그하고 우클릭 → "이건 뭐예요?"`, true);
     if (!autoOpened && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
     listen();
     scheduleReport(0);
   } catch (e) {
     setStatus("$(debug-disconnect) Recaller", `튜터 화면(127.0.0.1:${PORT})에 연결하지 못했어요. 프로젝트코스 실험.cmd가 켜져 있는지 확인하세요. (${e.message})`, false);
+    goOfflineSoon();
     retryTimer = setTimeout(connect, 4000);
   }
 }
@@ -89,9 +101,9 @@ function listen() {
         if (data) { try { handle(JSON.parse(data)); } catch (e) { console.error("[recaller]", e); } }
       }
     });
-    res.on("end", () => { setStatus("$(debug-disconnect) Recaller", "연결이 끊겼어요. 다시 잇는 중…", false); retryTimer = setTimeout(connect, 3000); });
+    res.on("end", () => { setStatus("$(debug-disconnect) Recaller", "연결이 끊겼어요. 다시 잇는 중…", false); goOfflineSoon(); retryTimer = setTimeout(connect, 3000); });
   });
-  req.on("error", () => { setStatus("$(debug-disconnect) Recaller", "연결이 끊겼어요. 다시 잇는 중…", false); retryTimer = setTimeout(connect, 3000); });
+  req.on("error", () => { setStatus("$(debug-disconnect) Recaller", "연결이 끊겼어요. 다시 잇는 중…", false); goOfflineSoon(); retryTimer = setTimeout(connect, 3000); });
 }
 
 /* ---------- VS Code → 튜터: 지금 상황 ---------- */
@@ -248,26 +260,65 @@ function themeName() {
 }
 async function openTutor() {
   if (panel) { panel.reveal(vscode.ViewColumn.Two, true); return; }
+  panel = vscode.window.createWebviewPanel("recallerTutor", "Recaller 튜터", { viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
+    { enableScripts: true, retainContextWhenHidden: true });
+  panel.iconPath = new vscode.ThemeIcon("mortar-board");
+  panel.webview.onDidReceiveMessage((m) => { if (m && m.retry) connect(); });
+  panel.onDidDispose(() => { panel = null; panelOnline = null; });
+  if (runId) await renderTutor(); else renderOffline();
+}
+
+/** 튜터 화면(코스 서버의 페이지)을 탭에 띄운다. */
+async function renderTutor() {
+  if (!panel) return;
   const base = await vscode.env.asExternalUri(vscode.Uri.parse(`http://${HOST}:${PORT}/`));
   const origin = base.toString(true).replace(/\/$/, "");
   const mono = vscode.workspace.getConfiguration("editor").get("fontFamily") || "Consolas, monospace";
   const url = `${origin}/?embed=1&theme=${themeName()}&mono=${encodeURIComponent(mono)}${runId ? `#/run/${runId}` : ""}`;
-  panel = vscode.window.createWebviewPanel("recallerTutor", "Recaller 튜터", { viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
-    { enableScripts: true, retainContextWhenHidden: true });
-  panel.iconPath = new vscode.ThemeIcon("mortar-board");
+  panelOnline = true;
   panel.webview.html = `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin} http://127.0.0.1:${PORT} http://localhost:${PORT}; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <style>html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--vscode-editor-background)}iframe{border:0;width:100%;height:100%;display:block}</style>
 </head><body><iframe id="t" src="${url}" allow="clipboard-read; clipboard-write"></iframe>
 <script>window.addEventListener("message",(e)=>{const f=document.getElementById("t");if(e.data&&e.data.recallerTheme&&f.contentWindow)f.contentWindow.postMessage(e.data,"*");});</script>
 </body></html>`;
-  panel.onDidDispose(() => { panel = null; });
+}
+
+/** 코스 서버가 꺼져 있을 때: 브라우저 오류 화면 대신 무엇을 하면 되는지 알려 준다. 다시 켜지면 저절로 튜터로 바뀐다. */
+function renderOffline() {
+  if (!panel) return;
+  panelOnline = false;
+  panel.webview.html = `<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+<style>
+body{margin:0;padding:32px 24px;font:13px/1.6 var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background)}
+h2{font-size:15px;margin:0 0 8px}p{margin:6px 0;color:var(--vscode-descriptionForeground)}
+ol{padding-left:20px;margin:12px 0}li{margin:6px 0}
+code{font-family:var(--vscode-editor-font-family);background:var(--vscode-textCodeBlock-background);padding:1px 5px;border-radius:3px}
+button{margin-top:12px;padding:5px 14px;border:0;border-radius:2px;background:var(--vscode-button-background);color:var(--vscode-button-foreground);cursor:pointer;font:inherit}
+button:hover{background:var(--vscode-button-hoverBackground)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--vscode-charts-yellow);margin-right:6px;animation:b 1.4s infinite}@keyframes b{50%{opacity:.3}}
+</style></head><body>
+<h2>튜터가 잠시 쉬고 있어요</h2>
+<p><span class="dot"></span>Recaller 코스 프로그램이 꺼져 있어서 튜터를 불러오지 못했어요.</p>
+<ol>
+<li>작업 폴더(<code>recaller-integration\experiments\project-course</code>)의 <code>프로젝트코스 실험.cmd</code>를 더블클릭하세요.</li>
+<li>검은 창이 뜨고 몇 초 지나면 여기 튜터가 저절로 다시 나타나요.</li>
+</ol>
+<p>코드는 그대로 있어요. 걱정하지 않아도 돼요.</p>
+<button onclick="acquireVsCodeApi().postMessage({retry:true})">다시 연결해 보기</button>
+</body></html>`;
+}
+function goOfflineSoon() {
+  clearTimeout(offlineTimer);
+  offlineTimer = setTimeout(() => { if (panel && panelOnline !== false) renderOffline(); }, 4000);
 }
 
 function activate(context) {
   const folder = (vscode.workspace.workspaceFolders || []).find((f) => fs.existsSync(path.join(f.uri.fsPath, ".recaller", "stage.json")));
   if (!folder) return;
   root = folder.uri.fsPath;
+  myVersion = (context.extension && context.extension.packageJSON && context.extension.packageJSON.version) || "0";
   status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   status.command = "recaller.openTutor";
   status.show();
@@ -297,6 +348,8 @@ function activate(context) {
   if (vscode.window.activeTextEditor && inRoot(vscode.window.activeTextEditor.document)) lastEditor = vscode.window.activeTextEditor;
   setStatus("$(sync~spin) Recaller", "튜터에 연결하는 중…", false);
   connect();
+  // 코스 프로그램이 꺼져 있어도 튜터 자리에 안내가 보이게
+  setTimeout(() => { if (!panel && !runId && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); } }, 6000);
 }
 function deactivate() { if (stream) stream.destroy(); }
 module.exports = { activate, deactivate };

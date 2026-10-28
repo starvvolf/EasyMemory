@@ -362,3 +362,15 @@ textarea.explain { width: 100%; min-height: 70px; border: 1px solid var(--line);
 .lmsg .avatar.ghost { background: transparent; }
 .lchat .lmsg.cont { margin-top: -8px; }
 .embed .lchat .lmsg.cont { margin-top: -10px; }
+/* VS Code로 넘어가기 */
+.handoff { display: grid; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+.hsteps { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 12px; }
+.hstep { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; }
+.hstep .hdot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--soft); color: var(--mut); }
+.hstep.done .hdot { background: var(--ok-soft); color: var(--ok); }
+.hstep.bad .hdot { background: var(--bad-soft); color: var(--bad); }
+.hstep.now .hdot { border: 2px solid var(--acc); border-top-color: transparent; animation: spin .9s linear infinite; background: transparent; }
+.hstep.wait { opacity: .6; }
+.hstep .path { margin-top: 4px; }
+kbd { font-family: var(--mono); font-size: 11px; padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--panel); }
+.busyline { display: flex; align-items: center; gap: 8px; }

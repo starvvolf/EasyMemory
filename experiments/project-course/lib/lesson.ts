@@ -122,7 +122,9 @@ export async function lessonView(runId: string, n: number) {
   let s = await read<State | null>(file(runId, n), null);
   if (!s) {
     const due = await takeDue(runId, n);
+    const first = n === run.plan.start;
     s = await change(runId, n, (st, push) => {
+      if (first) push({ role: "tutor", text: "반가워요! 저는 이 코스를 같이 할 튜터예요. 먼저 쓰는 법 세 가지만 알려 드릴게요.\n\n- **왼쪽은 코드, 오른쪽(여기)은 저예요.** 제가 설명하면서 왼쪽에 필요한 줄을 열어 드려요.\n- **모르는 코드**는 드래그한 뒤 **우클릭 → \"이건 뭐예요?\"**를 누르세요. 바로 알려 드려요.\n- **궁금한 건** 아래 칸에 그냥 적으세요. 제가 직접 코드를 열어 보고, 돌려 보고 알려 드려요.\n\n코드를 고친 뒤에는 **Ctrl+S**(저장)를 누르면 제가 바로 확인해요. 그럼 시작해 볼게요." });
       if (due.length) push({ role: "tutor", text: `시작하기 전에, 주머니에 넣어 뒀던 것부터 꺼낼게요. 전에 물어본 ${[...new Set(due.flatMap((d) => d.terms.filter((t) => t.stage === n).map((t) => `**${t.name}**`)))].join(", ")}이(가) 이번 단계에서 나와요. 나올 때 자세히 짚어 드릴게요.` });
       enter(plan, st, 0, push, course);
     });

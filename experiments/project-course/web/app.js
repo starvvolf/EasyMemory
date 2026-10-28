@@ -76,6 +76,7 @@ async function route() {
     if ((m = /^#\/intake\/(\w+)/.exec(hash))) return await renderIntake(m[1]);
     if ((m = /^#\/run\/(\w+)\/summary/.exec(hash))) return await renderSummary(m[1]);
     if ((m = /^#\/run\/(\w+)\/cards/.exec(hash))) return await renderRun(m[1]);
+    if ((m = /^#\/run\/(\w+)\/vscode/.exec(hash))) return await renderHandoff(m[1]);
     if ((m = /^#\/run\/(\w+)/.exec(hash))) return await renderRunOrLesson(m[1]);
     if (status?.active) return go(`#/run/${status.active}`);
     renderHome();
@@ -90,8 +91,8 @@ function renderHome() {
     h("h1", {}, "무엇을 만들면서 배울지 정해 볼까요?"),
     h("p", {}, "몇 가지 묻고 짧은 확인 문제를 푼 뒤, 준비된 코스에서 어디부터 어떻게 할지 계획을 세워요."),
     h("div", { class: "row", style: "justify-content:center;margin-top:16px" },
-      h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => { const it = await api("POST", "/api/intake", {}); go(`#/intake/${it.id}`); }) }, "코스 정하기 시작"),
-      h("button", { class: "btn", onclick: (e) => busy(e.target, async () => { const it = await api("POST", "/api/intake", { mode: "script" }); go(`#/intake/${it.id}`); }) }, "AI 없이 정하기"))));
+      h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => { const it = await api("POST", "/api/intake", { mode: "script" }); go(`#/intake/${it.id}`); }) }, "코스 정하기 시작")),
+    h("p", { class: "small", style: "margin-top:14px" }, h("a", { href: "#", onclick: (e) => { e.preventDefault(); busy(null, async () => { const it = await api("POST", "/api/intake", { mode: "ai" }); go(`#/intake/${it.id}`); }); } }, "AI와 이야기하면서 정하기"), " (조금 느려요)")));
 }
 
 /* =================== 코스 정하기 =================== */
@@ -103,7 +104,7 @@ async function renderIntake(id) {
   const lastAskIdx = it.messages.map((m) => !!m.ask).lastIndexOf(true);
   it.messages.forEach((m, i) => {
     if (m.text) box.append(h("div", { class: `msg ${m.role}` }, h("div", { class: "bubble" }, m.text)));
-    if (m.ask && i === lastAskIdx && !it.confirmedRun) box.append(askCard(it, m.ask));
+    if (m.ask && i === lastAskIdx && !it.confirmedRun) { const card = askCard(it, m.ask); if (card) box.append(card); }
   });
   if (it.confirmedRun) box.append(h("div", { class: "row", style: "margin-top:12px" }, h("button", { class: "btn primary", onclick: () => go(`#/run/${it.confirmedRun}`) }, "코스로 가기")));
   const input = h("input", { placeholder: "자유롭게 적어도 돼요 (Enter)", "aria-label": "메시지" });
@@ -117,7 +118,7 @@ async function renderIntake(id) {
 
 function askCard(it, ask) {
   const id = it.id;
-  if (ask.kind === "text") return null; // 아래 입력창으로 답한다
+  if (ask.kind === "text") return h("div", { class: "ask" }, h("div", { class: "q" }, ask.question), h("div", { class: "mut small" }, "↓ 아래 칸에 적고 Enter를 누르세요. 짧아도 괜찮아요.")); // 답은 아래 입력창으로
   if (ask.kind === "choice") {
     const picked = new Set();
     const opts = h("div", { class: "opts" });
@@ -187,8 +188,7 @@ function planCard(it, ask) {
       h("div", { class: "mut small" }, "직접 하기: 예측 → 없애 보기 → VS Code에서 고치기 → 재검사. 빠르게: 예측만 하고 정답 코드로 넘어갈 수 있음. 건너뛴 단계의 코드는 완성된 상태로 받아요."),
       h("div", { class: "row" }, h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => {
         const out = await api("POST", `/api/intake/${it.id}/confirm`, { plan });
-        toast("작업 폴더를 만들었어요.");
-        go(`#/run/${out.runId}`);
+        go(`#/run/${out.runId}/vscode`);
       }) }, "이 계획으로 시작")));
   };
   draw();
@@ -414,12 +414,62 @@ function recordsCard(run) {
     h("div", { class: "path", style: "margin-top:8px" }, run.records.file));
 }
 
+/* =================== VS Code로 넘어가기 =================== */
+// 코스를 정하면 VS Code가 저절로 열리고, 이 창은 "어디서 계속하는지"만 알려 준다.
+let handoffTimer = null;
+async function renderHandoff(id) {
+  clearInterval(handoffTimer);
+  const run = await api("GET", `/api/runs/${id}`);
+  const step = (state, title, desc) => h("li", { class: `hstep ${state}` }, h("span", { class: "hdot" }, state === "done" ? "✓" : state === "now" ? "" : "·"), h("div", {}, h("strong", {}, title), desc ? h("div", { class: "mut small" }, desc) : null));
+  const box = h("div", { class: "handoff" });
+  let opened = null;
+  const draw = (connected) => {
+    box.replaceChildren(
+      h("h1", {}, connected ? "준비됐어요!" : "VS Code에서 이어서 해요"),
+      h("p", { class: "mut" }, connected
+        ? "VS Code 오른쪽에 튜터가 나타났어요. 이제 이 창은 닫아도 돼요."
+        : "공부는 VS Code에서 해요. 왼쪽에 코드, 오른쪽에 튜터가 뜨고, 튜터가 하나씩 알려 드려요."),
+      h("ol", { class: "hsteps" },
+        step("done", "작업 폴더를 만들었어요", run.workspace),
+        step(opened === null ? "now" : opened.ok ? "done" : "bad", "VS Code 열기", opened === null ? "여는 중… 처음에는 '이 작성자를 신뢰하시겠습니까?' 창이 뜰 수 있어요. [예]를 누르세요." : opened.ok ? (opened.message || "열었어요.") : opened.message),
+        step(connected ? "done" : opened?.ok ? "now" : "wait", "튜터 연결", connected ? "연결됐어요." : "VS Code가 열리면 오른쪽에 튜터가 저절로 떠요. 30초가 지나도 안 뜨면 VS Code에서 Ctrl+Shift+P → \"Reload Window\"를 입력하세요.")),
+      opened && !opened.ok ? h("div", { class: "banner warn", style: "margin:0" },
+        h("div", {}, "VS Code를 자동으로 열지 못했어요. VS Code를 직접 켜고 [파일 → 폴더 열기]에서 아래 폴더를 여세요."),
+        h("div", { class: "path", style: "margin-top:6px" }, run.workspace),
+        h("button", { class: "btn small", style: "margin-top:6px", onclick: () => { navigator.clipboard?.writeText(run.workspace); toast("경로를 복사했어요."); } }, "경로 복사")) : null,
+      h("div", { class: "row", style: "margin-top:8px" },
+        h("button", { class: "btn", onclick: (e) => busy(e.target, open) }, "VS Code 다시 열기"),
+        h("button", { class: "btn ghost", onclick: () => { clearInterval(handoffTimer); go(`#/run/${id}`); } }, "VS Code 없이 이 브라우저에서 하기")));
+  };
+  const open = async () => { opened = await api("POST", `/api/runs/${id}/editor`).catch((e) => ({ ok: false, message: e.message })); draw(false); };
+  view.replaceChildren(h("div", { class: "empty", style: "text-align:left" }, box));
+  draw(false);
+  open();
+  handoffTimer = setInterval(async () => {
+    if (!location.hash.includes("/vscode")) return clearInterval(handoffTimer);
+    const l = await api("GET", `/api/runs/${id}/lesson/${run.current}`).catch(() => null);
+    if (l?.bridge?.connected) { clearInterval(handoffTimer); draw(true); }
+  }, 1500);
+}
+
 /* =================== 수업 (대화) =================== */
 let lessonCtx = null;
 let events = null;
 async function renderRunOrLesson(id) {
   const run = await api("GET", `/api/runs/${id}`);
-  if (!run.lesson) return renderRun(id);
+  if (!run.lesson) {
+    if (!EMBED) return renderRun(id);
+    current = run;
+    const st = run.stages.find((x) => x.n === run.current);
+    const prev = [...run.stages].reverse().find((x) => x.n < run.current && x.status?.started);
+    view.replaceChildren(h("div", { class: "empty", style: "text-align:left;margin:32px auto" },
+      h("div", { class: "chip acc" }, `${run.current}단계`), h("h1", { style: "margin-top:8px" }, st?.title ?? ""),
+      h("p", {}, "이 단계의 대화형 수업은 아직 준비 중이에요. 지금은 단계 카드(예측 → 확인 → 고치기 → 검사)로 할 수 있어요. 막히면 카드 화면 아래에서도 힌트를 받을 수 있어요."),
+      h("div", { class: "row", style: "margin-top:12px" },
+        h("button", { class: "btn primary", onclick: () => go(`#/run/${id}/cards`) }, "단계 카드로 하기"),
+        prev ? h("button", { class: "btn", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${id}/stage/${prev.n}/start`, {}); go(`#/run/${id}`); }) }, `${prev.n}단계로 돌아가기`) : null)));
+    return;
+  }
   current = run;
   api("POST", `/api/runs/${id}/activate`).catch(() => {});
   const lesson = await api("GET", `/api/runs/${id}/lesson/${run.current}`);
@@ -513,7 +563,7 @@ function drawLesson() {
     row.append(col);
     chat.append(row);
   }
-  if (lesson.busy) chat.append(h("div", { class: "lmsg tutor" }, h("div", { class: "avatar" }, "R"), h("div", { class: "bubble typing" }, h("span"), h("span"), h("span"))));
+  if (lesson.busy) chat.append(h("div", { class: "lmsg tutor cont" }, h("div", { class: "avatar ghost" }), h("div", { class: "busyline" }, h("div", { class: "bubble typing" }, h("span"), h("span"), h("span")), h("span", { class: "mut small" }, "튜터가 확인하는 중이에요. 10~30초쯤 걸려요."))));
 
   const input = h("input", { placeholder: "튜터에게 물어보기 — 예: 라우터가 뭐예요?", "aria-label": "튜터에게 물어보기" });
   const askBtn = h("button", { class: "btn primary", type: "submit" }, "물어보기");
@@ -522,7 +572,7 @@ function drawLesson() {
     if (a.do === "hint" && a.label.includes("정답") && !confirm("정답 줄을 볼까요? 이걸 본 뒤의 통과는 '직접 고침'으로 기록하지 않아요.")) return;
     send({ do: a.do })(e);
   } }, a.label)));
-  const savebar = lesson.waiting === "save" ? h("div", { class: "savebar" }, h("span", { class: "pulse" }), "VS Code에서 고치고 저장하면 자동으로 확인해요") : null;
+  const savebar = lesson.waiting === "save" ? h("div", { class: "savebar" }, h("span", { class: "pulse" }), "VS Code에서 고친 뒤 ", h("kbd", {}, "Ctrl"), "+", h("kbd", {}, "S"), " (저장)를 누르면 제가 바로 확인해요") : null;
 
   const dev = lesson.dev || run.dev;
   const side = h("aside", { class: "lside" },
@@ -533,12 +583,12 @@ function drawLesson() {
       h("div", { class: "mut small" }, "작업 폴더"),
       h("div", { class: "path" }, ws),
       h("div", { class: "row" },
-        EMBED ? null : h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { const r = await api("POST", `/api/runs/${run.id}/editor`); toast(r.ok ? (r.message || "VS Code를 열었어요. 튜터는 VS Code 오른쪽에도 열려요.") : r.message, 7000); }) }, "VS Code로 열기"),
-        dev?.running
+        EMBED ? null : h("button", { class: "btn small primary", onclick: () => go(`#/run/${run.id}/vscode`) }, "VS Code에서 하기"),
+        EMBED ? null : dev?.running
           ? h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/stop`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 끄기")
           : h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/start`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 켜기")),
-      h("div", { class: "row small" }, dev?.running ? h("span", { class: "chip ok" }, "서버 켜짐 :4101") : h("span", { class: "chip" }, "서버 꺼짐"),
-        lesson.bridge?.connected ? (EMBED ? null : h("span", { class: "chip ok" }, "VS Code 연결됨")) : h("span", { class: "chip", title: "[VS Code로 열기]를 누르면 연결 확장을 깔고 열어요" }, "VS Code 연결 안 됨")),
+      h("div", { class: "row small" }, EMBED ? null : dev?.running ? h("span", { class: "chip ok" }, "서버 켜짐 :4101") : h("span", { class: "chip" }, "서버 꺼짐"),
+        lesson.bridge?.connected ? (EMBED ? null : h("span", { class: "chip ok" }, "VS Code 연결됨")) : h("span", { class: "chip", title: "VS Code에서 하기를 누르면 연결돼요" }, "VS Code 연결 안 됨")),
       lesson.bridge?.connected ? h("div", { class: "seeing small" }, lesson.bridge.file
         ? [h("span", { class: "mut" }, "튜터가 보는 곳 "), h("code", {}, `${lesson.bridge.file}:${lesson.bridge.line}`),
            lesson.bridge.selection ? h("span", { class: "mut" }, ` · ${lesson.bridge.selection.from}~${lesson.bridge.selection.to}줄 선택`) : null,

@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ROOT, listCourses, loadCourse, knowledgeName, type Course } from "../lib/course.ts";
 import { answer, diagnose, getIntake, markConfirmed, normalizePlan, startIntake } from "../lib/intake.ts";
-import { PORTS, check, devStatus, explain, hint, openEditor, predict, skip, startDev, startStage, stopDev, tryRequest, workspaceOf, workspaceStage } from "../lib/learn.ts";
+import { PORTS, updateBridgeIfOld, check, devStatus, explain, hint, openEditor, predict, skip, startDev, startStage, stopDev, tryRequest, workspaceOf, workspaceStage } from "../lib/learn.ts";
 import { addRun, candidates, getRun, recordsFile, runs, setActive, type Run } from "../lib/store.ts";
 import { aiStatus } from "../lib/ai.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
@@ -141,7 +141,13 @@ const routes: [string, RegExp, Handler][] = [
     return v;
   }],
   ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/act$/, async (req, m) => { await act(m[1], Number(m[2]), (await body(req)) as never); return lessonView(m[1], Number(m[2])); }],
-  ["POST", /^\/api\/bridge\/hello$/, async (req) => { const b = await body(req); return bridgeHello(String(b.root ?? "")); }],
+  ["POST", /^\/api\/bridge\/hello$/, async (req) => {
+    const b = await body(req);
+    const out = await bridgeHello(String(b.root ?? ""));
+    // 옛 확장이 붙으면 새 것을 깔아 두고 "다시 불러오기"를 띄우게 한다(초보가 Reload Window를 몰라도 되게)
+    const update = typeof b.version === "string" ? await updateBridgeIfOld(b.version).catch(() => false) : false;
+    return { ...out, update };
+  }],
   ["POST", /^\/api\/bridge\/state$/, async (req) => { const b = await body(req) as Record<string, never>; await getRun(String(b.runId)); const { runId, ...state } = b; bridgeSetState(runId, state); return { ok: true }; }],
   ["POST", /^\/api\/bridge\/ask$/, async (req) => {
     const b = await body(req);

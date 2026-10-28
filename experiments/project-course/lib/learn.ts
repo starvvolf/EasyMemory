@@ -275,7 +275,19 @@ const BRIDGE_ID = "recaller-local.recaller-bridge";
 const BRIDGE_VSIX = path.join(APP_ROOT, "experiments", "project-course", "vscode-bridge", "recaller-bridge.vsix");
 let bridgeChecked = false;
 /** 연결 확장을 깔아 둔다(없거나 버전이 다르면). 한 번만 확인. */
-async function ensureBridge() {
+export async function bridgeVersion() {
+  try { return JSON.parse(await readFile(path.join(path.dirname(BRIDGE_VSIX), "package.json"), "utf8")).version as string; } catch { return "0"; }
+}
+const newer = (a: string, b: string) => { const x = a.split(".").map(Number), y = b.split(".").map(Number); for (let i = 0; i < 3; i++) { if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); } return false; };
+/** 연결된 확장이 옛 버전이면 새 것을 깔아 두고 true(확장이 "다시 불러오기"를 띄운다). */
+export async function updateBridgeIfOld(have: string) {
+  const want = await bridgeVersion();
+  if (!newer(want, have || "0")) return false;
+  bridgeChecked = false;
+  const r = await ensureBridge();
+  return r.ok;
+}
+export async function ensureBridge() {
   if (bridgeChecked) return { ok: true, installed: false };
   if (!(await exists(BRIDGE_VSIX))) return { ok: false, installed: false, message: "연결 확장 파일(recaller-bridge.vsix)이 없어요." };
   const want = JSON.parse(await readFile(path.join(path.dirname(BRIDGE_VSIX), "package.json"), "utf8")).version;
