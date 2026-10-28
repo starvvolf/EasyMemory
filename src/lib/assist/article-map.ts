@@ -4,7 +4,7 @@
 //   글 종류 · 이 글이 답하는 질문 · 흐름 · 요지 · 핵심 아이디어 3~5개(완성된 지식) · 개념어(이름 + 이 글에서의 한 줄 뜻)
 // 개념어는 학습자가 이미 아는 것(앎·졸업)이면 known으로 표시한다. 지금은 미리보기만(저장하지 않음).
 import { askJson, S } from "./model.ts";
-import { sameName, tree } from "../knowledge/store.ts";
+import { readAll, sameName } from "../knowledge/store.ts";
 
 const GENRES = ["concept", "case", "opinion", "news", "other"] as const;
 export const GENRE_LABEL: Record<(typeof GENRES)[number], string> = { concept: "개념 설명", case: "사례·설계", opinion: "주장·칼럼", news: "소식", other: "기타" };
@@ -29,7 +29,7 @@ const MAP_SCHEMA = S.obj({
 
 /** One model call: the map, and each term marked with what the learner already has (known = 앎·졸업, met = 만남·몰랐음). */
 export async function mapArticle(input: { title: string; text: string }, options: { model?: string; effort?: string } = {}) {
-  const { items } = await tree();
+  const { items } = await readAll();
   const names = [...items].sort((a, b) => b.lastAt.localeCompare(a.lastAt)).slice(0, 160).map((i) => i.title);
   const user = [`[글 제목] ${input.title}`, `[학습자가 이미 가진 지식 이름] ${names.join(", ") || "(없음)"}`, `[본문]\n${input.text.slice(0, 40000)}`].join("\n\n");
   const data = await askJson<Mapped>("knowledge:map", MAP_SYSTEM, user, MAP_SCHEMA,
