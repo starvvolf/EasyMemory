@@ -18,6 +18,8 @@ export type Problem = {
   reference: { lang: "javascript"; code: string } | null;
   /** Knowledge this problem checks, by name; ids are filled when the problem is saved into the knowledge store. */
   knowledge: string[]; knowledgeIds: string[];
+  /** The meaning of each knowledge name, one sentence, same order (from the draft; fills an item's empty meaning). */
+  knowledgeBodies?: string[];
   folder: string; source: { kind: "seed" | "ai" | "manual"; title: string; url?: string };
   /** Where the examples came from: copied from the pasted problem ("source") or made by the model ("made"). */
   examplesFrom?: "source" | "made";
@@ -110,6 +112,21 @@ async function readTests(id: string): Promise<TestCase[]> {
   const tests = JSON.parse(await readFile(file, "utf8")) as TestCase[];
   remember(id, mtimeMs, tests);
   return tests;
+}
+/** The same address, compared loosely (http/https, www, a trailing slash or #part don't count). */
+export const sourceKey = (url: string) => url.trim().replace(/^https?:\/\//i, "").replace(/^(www\.|m\.)/i, "").replace(/#.*$/, "").replace(/\/+$/, "").toLowerCase();
+/** A problem already made from this address (and of this kind), newest first: making it again is usually by mistake. */
+export async function findBySource(url: string, kind: Problem["kind"]) {
+  const key = sourceKey(url);
+  if (!key) return null;
+  let names: string[] = [];
+  try { names = (await readdir(problemsDir())).filter((n) => /^cp_[a-z0-9_-]+\.json$/.test(n)); } catch { return null; }
+  const hits: ProblemMeta[] = [];
+  for (const name of names) {
+    try { const p = await readMeta(name.replace(/\.json$/, "")); if (p.kind === kind && p.source.url && sourceKey(p.source.url) === key) hits.push(p); } catch { /* skipped */ }
+  }
+  const newest = hits.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  return newest ? { id: newest.id, title: newest.title, createdAt: newest.createdAt, count: hits.length } : null;
 }
 /** The problem without its hidden tests: for the list, the problem screen and the tutor. */
 export const readProblemMeta = readMeta;

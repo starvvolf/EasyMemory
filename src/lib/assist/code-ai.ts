@@ -90,7 +90,7 @@ type Drafted = {
   constraints: string; timeLimitMs: number;
   sourceExamples: Array<{ input: string; output: string }>; exampleInputs: string[];
   generator: string; reference: string; brute: string; mutants: Array<{ flaw: string; code: string }>;
-  knowledge: string[]; folder: string; blank: { code: string; filled: string };
+  knowledge: string[]; knowledgeBodies: string[]; folder: string; blank: { code: string; filled: string };
 };
 const MAKE_SYSTEM = `알고리즘 연습 문제를 하나 세팅한다. 입력은 주제, 강의 글, 또는 학습자가 붙여 넣은 문제 글이다. 표준 입력 → 표준 출력 문제다.
 - 붙여 넣은 글에 이미 문제(설명과 예제 입출력)가 있으면 그 문제를 그대로 세팅한다. statement·inputText·outputText는 원문 뜻 그대로 한국어로, 예제는 sourceExamples에 원문 글자 그대로(입력과 출력 모두) 옮긴다. 원문에 없는 예제는 넣지 않는다.
@@ -116,15 +116,17 @@ const MAKE_SYSTEM = `알고리즘 연습 문제를 하나 세팅한다. 입력�
   · gen(kind, size)는 tests에 쓴 조합뿐 아니라 smallKinds의 각 kind를 size "small"로 불러도 check를 통과해야 한다. 크기(N 등)를 먼저 정하고, 첫 줄의 개수와 실제 값의 개수가 그 크기와 같게 만든다. 문제 조건(중복 금지, 이미 있는 것만 삭제 등)도 gen이 지킨다.
 - mutants: 이 문제에서 학습자가 흔히 하는 실수가 들어간 "틀린 풀이" 3~5개. { flaw, code }. flaw는 실수 이름(정수 범위, 초기화, 경계값, off-by-one, 중복 처리, 잘못된 그리디, 시간 초과, 재귀 깊이 등 이 문제에 해당하는 것만). 정상 실행되지만 특정 입력에서 틀리거나 느린 코드여야 한다(문법 오류 금지). 32비트 정수 오버플로는 결과에 |0 을 써서 흉내 낸다.
 - knowledge: 이 문제가 확인하는 지식 이름 1~3개 (학습자 지식 목록에 같은 것이 있으면 그 이름 그대로).
+- knowledgeBodies: knowledge와 같은 순서로, 그 지식의 뜻을 한 문장씩(이 문제 이야기가 아니라 일반적인 뜻. 예: "이분 탐색: 정렬된 범위를 절반씩 줄여 가며 답을 찾는 방법"에서 콜론 뒤만).
 - folder: "알고리즘/이분 탐색"처럼.
 - blank: 빈칸 문제를 요청받았을 때만. code는 요청한 언어의 완성된 풀이에서 핵심 줄 2~4곳을 ____ 로 바꾼 것, filled는 빈칸을 채운 완성 코드. 아니면 둘 다 빈 문자열.`;
 const MAKE_SCHEMA = S.obj({ title: S.str, statement: S.str, inputText: S.str, outputText: S.str, answerKind: S.oneOf("one", "many", "approx"),
   constraints: S.str, timeLimitMs: S.int, sourceExamples: S.arr(S.obj({ input: S.str, output: S.str })), exampleInputs: S.arr(S.str),
   generator: S.str, reference: S.str, brute: S.str, mutants: S.arr(S.obj({ flaw: S.str, code: S.str })),
-  knowledge: S.arr(S.str), folder: S.str, blank: S.obj({ code: S.str, filled: S.str }) });
+  knowledge: S.arr(S.str), knowledgeBodies: S.arr(S.str), folder: S.str, blank: S.obj({ code: S.str, filled: S.str }) });
 const MAKE_RETRIES = 2;
-/** 2026-10-27 (사용자): problems are set by GPT-5.6 Terra ("알고리즘은 5.6도 충분히 잘 풀 것"). */
-const MAKE_MODEL = () => process.env.RECALLER_CODE_MAKE_MODEL?.trim() || "gpt-5.6-terra";
+/** 2026-10-28 (사용자, docs/DECISIONS.md): drafts by GPT-6.1 Terra (모델 비교: 5개 모두 첫 시도 통과, 약 60초). The
+ * independent solution stays on another model on purpose, so the two don't share a mistake. */
+const MAKE_MODEL = () => process.env.RECALLER_CODE_MAKE_MODEL?.trim() || "gpt-6.1-terra";
 /** The second, independent solution (안전장치 ⑤): its model is chosen by comparing several (docs/DECISIONS.md). */
 export const SOLVE_MODEL = () => process.env.RECALLER_CODE_SOLVE_MODEL?.trim() || "gpt-5.6-terra";
 
@@ -235,7 +237,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     return saveProblem({ ...(input.id ? { id: input.id } : {}), title: d.title, statement: d.statement, inputText: d.inputText, outputText: d.outputText, examples: checked.examples, tests: checked.tests, timeLimitMs: d.timeLimitMs > 0 ? Math.min(Math.max(Math.round(d.timeLimitMs), 500), 10_000) : 2000,
       constraints: d.constraints.slice(0, 1000), testgen: { generator: d.generator, seed: checked.seed },
       kind: input.kind, templates: input.kind === "blank" ? { [lang]: d.blank.code } : {}, reference: { lang: "javascript", code: d.reference },
-      knowledge: d.knowledge.slice(0, 3), folder: input.folder || d.folder || "알고리즘", examplesFrom: checked.from, check: { ...checked.check, tries, attempts },
+      knowledge: d.knowledge.slice(0, 3), knowledgeBodies: d.knowledge.slice(0, 3).map((_, i) => (d.knowledgeBodies?.[i] ?? "").trim().slice(0, 300)), folder: input.folder || d.folder || "알고리즘", examplesFrom: checked.from, check: { ...checked.check, tries, attempts },
       source: { kind: "ai", title: input.sourceTitle || (input.topic ? `주제: ${input.topic}` : "강의 글"), ...(input.sourceUrl ? { url: input.sourceUrl } : {}) } });
   }
   throw new CodeError(422, `모범 풀이를 확인하지 못해서 저장하지 않았어요 (${1 + MAKE_RETRIES}번 시도). 마지막에 막힌 곳: ${reasons.at(-1)}`);

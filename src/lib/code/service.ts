@@ -20,7 +20,8 @@ export async function ensureProblemKnowledge<T extends Problem | ProblemMeta>(pr
   const seedFill = problem.source.kind === "seed" && !filled.has(problem.id);
   if (problem.knowledgeIds.length === problem.knowledge.length && problem.knowledgeIds.length && !seedFill) return problem;
   filled.add(problem.id);
-  const results = await saveMany(problem.knowledge.map((title) => ({ title, folder: problem.folder, ...(SEED_KNOWLEDGE[title] ? { body: SEED_KNOWLEDGE[title] } : {}),
+  const results = await saveMany(problem.knowledge.map((title, i) => ({ title, folder: problem.folder,
+    ...(SEED_KNOWLEDGE[title] || problem.knowledgeBodies?.[i] ? { body: SEED_KNOWLEDGE[title] || problem.knowledgeBodies![i] } : {}),
     source: { kind: "code" as const, title: problem.title, ref: `code:${problem.id}` } })));
   const knowledgeIds = results.map((r) => r.item.id);
   await setProblemKnowledge(problem.id, knowledgeIds);

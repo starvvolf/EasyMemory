@@ -3,7 +3,7 @@ import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
-import { deleteProblem, publicProblem, readDrafts, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
+import { deleteProblem, findBySource, publicProblem, readDrafts, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, submitAndRecord } from "@/lib/code/service";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
@@ -40,10 +40,14 @@ async function handle(request: Request, context: RouteContext) {
         sourceTitle: z.string().max(300).optional(), sourceUrl: z.string().max(2000).optional(),
         /** 주소로 가져오기: a blog or problem page address, or a Baekjoon number (src/lib/code/source.ts). */
         from: z.string().max(2000).optional(),
+        /** Make it again even when a problem from the same address is there (otherwise that one is offered). */
+        again: z.boolean().optional(),
         /** 실험: the draft's model for this request only (e.g. "gpt-5.6-luna"). */
         model: z.string().regex(/^[a-z0-9.-]{3,40}$/).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
-      const { from, ...rest } = b;
+      const { from, again, ...rest } = b;
       const got = from?.trim() ? await resolveSource(from) : null;
+      const existing = got && !again ? await findBySource(got.url, rest.kind) : null;
+      if (existing) return json({ existing });
       const made = await ensureProblemKnowledge(await makeProblem(got ? { ...rest, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
         sourceTitle: got.title, sourceUrl: got.url } : rest));
       return json({ problem: publicProblem(made) });

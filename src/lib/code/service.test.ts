@@ -4,8 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getKnowledge, memoryEvents } from "../knowledge/api.ts";
-import { readProblem } from "./problems.ts";
-import { currentAttempt, endAttempt, endIdleAttempts, listProblemsWithKnowledge, recordAsked, recordHint, ATTEMPT_IDLE_MS } from "./service.ts";
+import { findBySource, readProblem, saveProblem, sourceKey } from "./problems.ts";
+import { ensureProblemKnowledge, currentAttempt, endAttempt, endIdleAttempts, listProblemsWithKnowledge, recordAsked, recordHint, ATTEMPT_IDLE_MS } from "./service.ts";
 
 async function withData<T>(run: () => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "code-svc-"));
@@ -48,4 +48,26 @@ test("an attempt left for two hours ends as it stands; ending one with nothing i
   await endIdleAttempts(Date.now() + ATTEMPT_IDLE_MS + 60_000);
   assert.equal((await currentAttempt(problem.id)).length, 0);
   assert.equal((await getKnowledge(problem.knowledgeIds[0])).item.stats.hint, 1);
+}));
+
+const made = (url: string, kind: "full" | "blank" = "full") => saveProblem({ title: "랜선 자르기", statement: "s", inputText: "i", outputText: "o", examples: [], tests: [{ input: "1\n", output: "1" }], timeLimitMs: 1000,
+  kind, templates: {}, reference: null, knowledge: ["매개 변수 탐색", "자른 개수 세기"], knowledgeBodies: ["답을 정해 놓고 되는지 확인하며 범위를 줄이는 방법", ""], folder: "알고리즘",
+  source: { kind: "ai", title: "BOJ 1654", url } });
+
+test("a problem's knowledge comes with its meaning; a meaning the learner wrote is kept", () => withData(async () => {
+  const p = await ensureProblemKnowledge(await made("https://www.acmicpc.net/problem/1654"));
+  const [param, binary] = await Promise.all(p.knowledgeIds.map(async (id) => (await getKnowledge(id)).item));
+  assert.equal(param.body, "답을 정해 놓고 되는지 확인하며 범위를 줄이는 방법");
+  assert.equal(binary.body, "", "no meaning given, none made up (and no seed meaning for this name)");
+}));
+
+test("the same address is found again (loosely), but not for the other kind", () => withData(async () => {
+  assert.equal(sourceKey("https://www.acmicpc.net/problem/1654/"), sourceKey("http://acmicpc.net/problem/1654#top"));
+  assert.equal(await findBySource("https://www.acmicpc.net/problem/1654", "full"), null);
+  const first = await made("https://www.acmicpc.net/problem/1654");
+  const hit = await findBySource("http://acmicpc.net/problem/1654", "full");
+  assert.equal(hit?.id, first.id);
+  assert.equal(hit?.count, 1);
+  assert.equal(await findBySource("https://www.acmicpc.net/problem/1654", "blank"), null);
+  assert.equal(await findBySource("https://www.acmicpc.net/problem/16540", "full"), null);
 }));

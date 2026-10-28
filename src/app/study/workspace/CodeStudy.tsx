@@ -107,12 +107,15 @@ function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string
   const [lang, setLang] = useState<Lang>(storedLang());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /** A problem made before from the same address: open it, or make a new one anyway. */
+  const [existing, setExisting] = useState<{ id: string; title: string; createdAt: string; count: number } | null>(null);
   if (!open) return <div className="row"><button className="btn" onClick={() => setOpen(true)}>+ 문제 만들기 (AI)</button></div>;
-  const make = async () => {
-    setBusy(true); setError("");
+  const done = (id: string) => { setOpen(false); setTopic(""); setFrom(""); setLesson(""); setExisting(null); onMade(id); };
+  const make = async (again = false) => {
+    setBusy(true); setError(""); setExisting(null);
     try {
-      const { problem } = await call<{ problem: { id: string } }>("/api/code/make", { ...(topic.trim() ? { topic } : {}), ...(from.trim() ? { from: from.trim() } : {}), ...(lesson.trim() ? { lesson } : {}), kind: blank ? "blank" : "full", lang });
-      setOpen(false); setTopic(""); setFrom(""); setLesson(""); onMade(problem.id);
+      const made = await call<{ problem?: { id: string }; existing?: { id: string; title: string; createdAt: string; count: number } }>("/api/code/make", { ...(topic.trim() ? { topic } : {}), ...(from.trim() ? { from: from.trim() } : {}), ...(lesson.trim() ? { lesson } : {}), kind: blank ? "blank" : "full", lang, ...(again ? { again: true } : {}) });
+      if (made.existing) setExisting(made.existing); else if (made.problem) done(made.problem.id);
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };
   return (
@@ -128,6 +131,13 @@ function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string
         <button className="btn primary small" disabled={busy || !(topic.trim() || lesson.trim() || from.trim())} onClick={() => void make()}>{busy ? (from.trim() ? "글을 가져와 만드는 중… (2~5분쯤)" : "만드는 중… (2~5분쯤: 모범 풀이와 숨은 테스트를 확인해요)") : "만들기"}</button>
         <button className="btn ghost small" onClick={() => setOpen(false)}>닫기</button>
       </div>
+      {existing ? (
+        <div className="row small">
+          <span>이 주소로 만든 문제가 이미 있어요: <b>{existing.title}</b> ({existing.createdAt.slice(5, 10).replace("-", "/")}{existing.count > 1 ? ` 외 ${existing.count - 1}개` : ""})</span>
+          <button className="btn primary small" onClick={() => done(existing.id)}>열기</button>
+          <button className="btn ghost small" disabled={busy} onClick={() => void make(true)}>새로 만들기</button>
+        </div>
+      ) : null}
       {error ? <p className="ws-err">{error}</p> : null}
     </section>
   );
