@@ -4163,7 +4163,8 @@ function renderBuilder(){
       h("span", null, h("b", { text:"심화 빠르게" }), h("span", { class:"muted", text:" · 초안 두 개를 동시에 써서 먼저 통과한 것을 써요. 사용량이 두 배예요." }))) : null,
     // Engine (experimental ones next to the default). v5 asks a short survey; left empty it decides from the material (알잘딱),
     // and the memo above is a direct instruction (개입).
-    b.pastExamSourceIds.length ? null : h("div", { class:"field" }, h("label", { text:"엔진 (실험)" }),
+    // 엔진 선택지는 개발용: 엔진 실험 서버(3002)나 주소에 ?engines=1 일 때만 (10/29 사용자, 시연 화면 정리). 고른 값이 없으면 기본 recaller.
+    b.pastExamSourceIds.length || !(location.port === "3002" || /[?&]engines=1/.test(location.search)) ? null : h("div", { class:"field" }, h("label", { text:"엔진 (실험)" }),
       h("div", { class:"chat-sugs" }, [["recaller", "Recaller · 기본"], ["v2", "v2"], ["v3", "v3"], ["v5", "v5 · 자료 맞춤"], ["alpha", "Alpha · 첫 출제 품질"]].map(([key, label]) => h("button", { class:"chip-btn", "aria-pressed": b.engine === key ? "true" : "false", disabled:b.busy,
         onclick: () => { b.engine = key; render(); } }, label))),
       b.engine === "v5" || b.engine === "alpha" ? h("div", { class:"row small", style:"gap:6px;flex-wrap:wrap" },
