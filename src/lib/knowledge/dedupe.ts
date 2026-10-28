@@ -166,6 +166,8 @@ export function scheduleDuplicateCheck() {
   state.__dedupeTimer = setTimeout(() => { state.__dedupeTimer = undefined; void runDuplicateCheck().catch((e) => console.warn("[knowledge:dedupe]", e instanceof Error ? e.message : e)); }, WAIT_MS);
 }
 
+/** For the 점검 보고서: which items were checked, and every pair the check found (any status). */
+export async function dupeStatus() { return read(); }
 export type DupView = DupPair & { newTitle: string; newLine: string; otherTitle: string; otherLine: string };
 /** 중복 의심: open pairs whose two items still exist, newest first. */
 export async function openDuplicates(): Promise<DupView[]> {

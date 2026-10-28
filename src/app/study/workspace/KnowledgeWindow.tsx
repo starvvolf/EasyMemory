@@ -159,6 +159,8 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
             <div className="ws-menu-card">
               <button className="mm-item" onClick={async (e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; if (!showOverview) { try { setOverview((await call<{ text: string }>("/api/knowledge/memory?level=1")).text); } catch (err) { setError(errorText(err)); } } setShowOverview(!showOverview); }}>
                 <span>{showOverview ? "AI가 보는 요약 닫기" : "AI가 보는 요약"}</span><small>메모리 1단계: AI가 매번 보는 내 공부의 큰 그림</small></button>
+              <button className="mm-item" onClick={() => window.open("/api/knowledge/report", "_blank", "noopener")}><span>점검 보고서</span><small>저장소 전체를 글로: 요약·점검·주제별 지식·목표 (.md)</small></button>
+              <button className="mm-item" onClick={() => { window.location.href = "/api/knowledge/report?download=1"; }}><span>점검 보고서 받기</span><small>.md 파일로 저장</small></button>
               {onLegacy ? <button className="mm-item" onClick={onLegacy}><span>자료별 지식 포인트</span><small>예전 화면 (PDF 자료마다)</small></button> : null}
             </div>
           </details>

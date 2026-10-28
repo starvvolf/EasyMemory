@@ -9,6 +9,7 @@ import { similarKnowledge } from "@/lib/knowledge/embed";
 import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
 import { openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
 import { scheduleAfterSave } from "@/lib/knowledge/after-save";
+import { knowledgeReport } from "@/lib/knowledge/report";
 import { runClassify } from "@/lib/knowledge/classify";
 import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, sourceKey, syncSubjects,
   updateGoal } from "@/lib/knowledge/goals";
@@ -60,6 +61,13 @@ async function handle(request: Request, context: RouteContext) {
     if (!p.length && m === "GET") return json(await tree());
 
     // 목표 (2026-10-28 "4개 축"): 수업·시험, 코테 준비 … — 자료를 넣으면 그 자료의 지식이 따라온다.
+    // 점검 보고서: the whole store as markdown text, with checks (report.ts). ?download=1 saves it as a file.
+    if (p[0] === "report" && m === "GET") {
+      const { markdown } = await knowledgeReport();
+      const name = `지식저장소_점검_${new Date().toISOString().slice(0, 10)}.md`;
+      return new NextResponse(markdown, { headers: { "content-type": "text/markdown; charset=utf-8",
+        ...(url.searchParams.get("download") ? { "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}` } : {}) } });
+    }
     if (p[0] === "goals" && p.length === 1 && m === "GET") return json({ goals: await goalOverview(), itemGoals: await goalsOfItems() });
     if (p[0] === "goals" && p.length === 1 && m === "POST") {
       const b = await body(z.object({ name: z.string().min(1).max(60), date: z.string().max(10).nullable().optional(), note: z.string().max(400).optional(), sources: z.array(goalSource).max(50).optional() }));

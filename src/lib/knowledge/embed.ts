@@ -86,6 +86,14 @@ async function writeVectors(data: VectorFile) {
   await rename(tmp, vectorsFile());
 }
 
+/** For the 점검 보고서: how many items have a vector that matches their text now (no model is loaded). */
+export async function vectorStatus(items: Array<Pick<Knowledge, "id" | "title" | "aliases" | "body">>) {
+  const data = await readVectors();
+  const fresh = items.filter((i) => data.items[i.id]?.hash === hashOf(embedText(i))).length;
+  const live = new Set(items.map((i) => i.id));
+  return { model: data.model, fresh, stale: items.length - fresh, orphan: Object.keys(data.items).filter((id) => !live.has(id)).length };
+}
+
 /** Vectors for every item, made only for items that are new or whose name, other names or meaning changed. */
 async function allVectors() {
   const { items } = await tree();
