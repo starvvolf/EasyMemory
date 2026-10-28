@@ -1,5 +1,5 @@
 {
-  "about": "물음표 주머니용 용어집. 학습자가 VS Code에서 '이건 뭐예요?'를 누르면 고른 코드에서 아래 match(정규식)를 찾아 답한다. stage: 이 단계부터 자세히 다룬다(지금 단계 이상이면 짧게 답하고 주머니에 넣는다). 0은 언제든 바로 답한다. null은 이 코스에서는 몰라도 되는 것. 용어집에 없는 것만 AI에게 묻는다. kind: 지식 저장소 종류. 문법은 어휘(vocab) — 2026-10-28 사용자 결정. 도구·API 이름은 개념(concept) — Claude 판단, 사용자 확인 대기. topic: 주제 힌트.",
+  "about": "물음표 주머니용 용어집. 학습자가 VS Code에서 '이건 뭐예요?'를 누르면 고른 코드에서 아래 match(정규식)를 찾아 답한다. stage: 이 단계부터 자세히 다룬다(지금 단계 이상이면 짧게 답하고 주머니에 넣는다). 0은 언제든 바로 답한다. null은 이 코스에서는 몰라도 되는 것. 용어집에 없는 것만 AI에게 묻는다. kind: 지식 저장소 종류. 코드에 그대로 적히는 말(문법·도구·API 이름)은 모두 어휘(vocab), 원리는 코스 지식(course.json)에서 개념 — 2026-10-28 사용자 결정. topic: 주제 힌트.",
   "terms": [
     {
       "id": "g-comment",
@@ -43,8 +43,8 @@
       "match": "\\bcreateServer\\b",
       "stage": 1,
       "short": "서버를 만드는 Node.js 도구예요. 괄호 안에 넣은 함수가 **편지(요청)가 올 때마다** 한 번씩 실행돼요.",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-req-res",
@@ -52,8 +52,8 @@
       "match": "\\b(req|res)\\b",
       "stage": 1,
       "short": "`req`는 받은 편지(요청), `res`는 지금 쓰고 있는 답장(응답)이에요. 편지에서 정보를 꺼낼 땐 `req`, 답장을 보낼 땐 `res`를 써요.",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-url",
@@ -61,8 +61,8 @@
       "match": "\\bURL\\b|pathname",
       "stage": 1,
       "short": "편지에 적힌 주소 글자를 조각으로 나눠 주는 도구예요. `url.pathname`은 `/health`처럼 주소의 경로 부분이에요.",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-method",
@@ -70,8 +70,8 @@
       "match": "\\bmethod\\b|\\bGET\\b|\\bDELETE\\b|\\bPOST\\b|\\bPATCH\\b",
       "stage": 1,
       "short": "편지에 적힌 '방식'이에요. GET은 가져다줘, POST는 새로 만들어 줘, PATCH는 고쳐 줘, DELETE는 지워 줘.",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-nullish",
@@ -88,8 +88,8 @@
       "match": "router\\.match|\\bfound\\b|allowed|handler",
       "stage": 1,
       "short": "라우터에게 \"이 방식+주소를 맡은 함수가 있나요?\" 묻는 줄이에요. 답이 `found`에 담겨요. 맡은 함수가 있으면 `found.handler`, 없으면 그 주소에서 되는 방식 목록이 `found.allowed`에 있어요.",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-sendJson",
@@ -97,8 +97,8 @@
       "match": "\\bsendJson\\b",
       "stage": 1,
       "short": "답장을 보내는 우리 도구예요(http.ts). `sendJson(res, 상태코드, 내용)` 순서로 넣으면 상태 코드와 JSON 내용을 담아 보내요.",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-if",
@@ -142,8 +142,8 @@
       "match": "readFile|import\\.meta",
       "stage": null,
       "short": "파일을 읽는 도구예요. 여기서는 게시판 첫 화면(index.html)을 읽어서 보내요. 이 코스의 핵심은 아니라 몰라도 돼요.",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-env",
@@ -151,8 +151,8 @@
       "match": "process\\.env",
       "stage": null,
       "short": "컴퓨터에 적어 둔 설정값을 읽어요. `process.env.PORT`가 있으면 그 포트, 없으면 4101을 써요. 몰라도 돼요.",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-listen",
@@ -160,8 +160,8 @@
       "match": "\\blisten\\b",
       "stage": 1,
       "short": "서버를 켜는 줄이에요. \"이 번호의 문에서 편지를 기다리기 시작해요.\"",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-console",
@@ -169,8 +169,8 @@
       "match": "console\\.",
       "stage": 0,
       "short": "검은 창(로그)에 글을 찍어요. 화면이나 답장에는 안 나가요.",
-      "kind": "concept",
-      "topic": "CS/웹 백엔드/Node.js"
+      "kind": "vocab",
+      "topic": "프로그래밍 언어/Node.js/도구"
     },
     {
       "id": "g-types",
