@@ -124,7 +124,7 @@ const AUTHOR = `${BASE}
 const PLAIN = `${BASE}
 원문으로 시험 문제를 만든다: 기본 문제 4개(choice 2, short 1, ox 1)와 원문의 개념을 엮어 새 상황·수치에 적용하는 응용 객관식 2개. 문제마다 정답과 설명을 쓴다.
 형식별: choice — 보기 4개, 정답 하나, optionNotes에 보기마다 한 줄. ox — stem에 명제 하나, correctIndex 0=O 1=X. short — 값·이름 하나, accepted에 표기 변형. cardId는 "plain". mistakes는 빈 배열이어도 된다. 수식은 $…$로 쓴다.`;
-const INLINE_READ = "그림·식이 필요한 쪽은 따로 옮겨 쓰지 않고 이미지를 첨부했다(라벨에 쪽 번호). 이미지에서 읽은 지식도 카드로 만들고, 그 근거의 quote는 빈 문자열로 둔다. 원문 글자는 글자 층(source)이 기준이다.";
+const INLINE_READ = "그림·식이 필요한 쪽은 따로 옮겨 쓰지 않고 이미지를 첨부했다(라벨에 쪽 번호). 이미지에서 읽은 지식도 카드로 만들고, 그 근거의 quote는 빈 문자열로 둔다. 원문 글자는 글자 층(source)이 기준이다. 식의 아래첨자는 x_0, V_{pz}처럼 _로 쓰고 유니코드 아래첨자 글자(ₓ, ᵤ)는 쓰지 않는다.";
 const CALC = "계산기는 일반 수학만 안다: 행렬은 행 단위 ((a, b), (c, d)), 행렬×행렬·행렬×벡터는 *, transpose() det() inv() eye(n), row(M, i) col(M, j) at(v, i)(1부터), 이어 붙이기 join(v, x), 판정 lt le gt ge eq and or not pick(조건, 참일 때, 거짓일 때)(참 1, 거짓 0), sind cosd tand(도). 원문의 공식·행렬은 계산기가 모르므로 먼저 정의 단계를 둔다: name에 'T(tx, ty)'처럼 이름과 매개변수, expr에 원문 식을 매개변수로, value는 '정의'. 뒤 단계에서 T(2, 3)처럼 부른다.";
 const LINK = `${BASE}
 지식 카드 목록에서 함께 엮으면 한 카드만 알아서는 풀 수 없는 응용 문제가 되는 묶음(카드 2~3장)을 고른다. 앞 카드의 결과가 뒤 카드의 입력이 되는 묶음(판정 → 절차, 공식 → 비교, 절차 → 절차)을 우선한다. 구체적인 값으로 계산하거나 판정할 수 있는 묶음만 고른다. 서로 다른 묶음이 같은 카드 조합을 반복하지 않는다. 묶음이 없으면 빈 배열.`;
@@ -542,6 +542,8 @@ export async function runRecaller(ctx: RecallerContext) {
     const view = { stem: q.stem.map((b) => b.text ?? b.latex ?? "").join(" "), ...(q.format === "choice" ? { options: q.options } : {}), ...(q.format === "ox" ? { options: ["O", "X"] } : {}),
       ...(q.format === "cloze" ? { blank: `${q.before ?? ""} ____ ${q.after ?? ""}` } : {}), ...(q.format === "short" ? { input: `${q.before ?? ""} ____ ${q.after ?? ""}` } : {}) };
     let got: z.infer<typeof verifyReplySchema>;
+    // inlineRead: the page's reading runs beside 정리; the blind solve waits for it so it sees what the picture says.
+    if (lab.inlineRead) await Promise.all(card.evidence.map((e) => readPage(e.page)));
     try { got = await ctx.ask("rc-check", card.id.split(".")[0], attempt, VERIFY, JSON.stringify({ format: q.format, question: view, source: sourceOf(card.evidence.map((e) => e.page)) }), verifyReplySchema, { maxChars: 4000 }); }
     catch (error) { if (pausesRun(error)) throw error; return null; }
     if (!got.unique) return `따로 푼 쪽이 답이 하나로 정해지지 않는다고 했습니다: ${got.doubt}`;
@@ -678,6 +680,8 @@ export async function runRecaller(ctx: RecallerContext) {
     // Each page waits only for its own reading; the pages of a section run at once.
     await Promise.all(chunksOf(section.pages).map(async (pages, k) => pageLimit(async () => {
       if (!lab.inlineRead) await Promise.all(pages.map(readPage));
+      // inlineRead with questions: the reading starts now, beside 정리, for the checks that come after (not for skimOnly).
+      else if (!lab.skimOnly) for (const p of pages) void readPage(p).catch(() => undefined);
       // A section named only by its page number takes its title from the first heading the page reading found.
       if (k === 0 && /^p\.\d+$|\(이어서\)$/.test(section.title)) {
         const heading = section.pages.map((p) => /^#\s*(.+)$/m.exec(data.texts[p] ?? "")?.[1]?.trim()).find(Boolean);
@@ -741,6 +745,7 @@ export async function runRecaller(ctx: RecallerContext) {
       for (const g of data.groups) data.deep[g.id] ??= { status: "waiting", tries: 0, problems: [] };
       await save();
     }
+    if (lab.inlineRead) await Promise.all(allCards.flatMap((c) => c.evidence.map((e) => readPage(e.page))));
     const g = await guide("deep", []);
     const byId = new Map(allCards.map((c) => [c.id, c]));
     const sectionOfCard = (id: string) => id.split(".")[0];
