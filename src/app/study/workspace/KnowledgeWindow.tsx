@@ -11,6 +11,12 @@ import { Inline, Rich } from "./Rich";
 type Filter = "all" | KState | "graduated";
 const FILTERS: Array<[Filter, string]> = [["all", "전체"], ["unknown", "몰랐음"], ["known", "앎"], ["met", "만남"], ["graduated", "졸업"]];
 const stateClass: Record<KState, string> = { met: "met", unknown: "bad", known: "good" };
+/**
+ * 고리를 이 지식 쪽에서 읽는 말: "이것 —씀→ X"는 X 앞에 "씀", "X —씀→ 이것"은 "쓰임". 모르는 관계(직접 적은 것)는 화살표로.
+ */
+const REL_WORDS: Record<string, [string, string]> = { 포함: ["하위", "상위"], 씀: ["씀", "쓰임"], 조건: ["조건이 됨", "조건"], 먼저: ["다음 단계", "먼저 알 것"], "먼저 알기": ["다음 단계", "먼저 알 것"],
+  "입력으로 씀": ["입력이 됨", "입력"], "비슷한 말": ["비슷한 말", "비슷한 말"] };
+const relWord = (relation: string, out: boolean) => REL_WORDS[relation]?.[out ? 0 : 1] ?? null;
 const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; };
 
 export function StateChip({ state, graduated }: { state: KState; graduated?: boolean }) {
@@ -293,7 +299,9 @@ function ItemDetail({ detail, folders, goals, mine, onAct, onOpen, onGone, onQui
   const quiz = async () => { const { questions } = await call<{ questions: Question[] }>(`/api/knowledge/item/${item.id}/questions`); onQuiz(questions); };
   const s = item.stats;
   const myGoals = goals.filter((g) => mine.includes(g.id));
-  const links = [...detail.links.map((l) => ({ ...l, out: true })), ...detail.backlinks.map((l) => ({ ...l, out: false }))];
+  // 틀렸을 때 먼저 볼 것(먼저 알 것·조건·상위)이 위로.
+  const order = (w: string | null) => ["먼저 알 것", "조건", "상위", "씀", "하위", "쓰임", "다음 단계", "조건이 됨"].indexOf(w ?? "") >>> 0;
+  const links = [...detail.links.map((l) => ({ ...l, out: true })), ...detail.backlinks.map((l) => ({ ...l, out: false }))].sort((a, b) => order(relWord(a.relation, a.out)) - order(relWord(b.relation, b.out)));
   const next = item.review && !item.graduated && item.state !== "met" ? item.review : null;
   return (
     <div className="kw-d stack">
@@ -318,7 +326,8 @@ function ItemDetail({ detail, folders, goals, mine, onAct, onOpen, onGone, onQui
 
       {links.length ? <section><p className="eyebrow">이어진 지식 · {links.length}</p>
         <ul className="kw-rels">{links.map((l) => <li key={`${l.out ? "f" : "b"}${l.item.id}`}>
-          <span className="kw-rel-head"><span className="kw-rel">{l.relation}</span><span className="kw-dir" aria-hidden>{l.out ? "→" : "←"}</span>
+          <span className="kw-rel-head">{relWord(l.relation, l.out) ? <span className="kw-rel" title={l.out ? `이것 —${l.relation}→ ${l.item.title}` : `${l.item.title} —${l.relation}→ 이것`}>{relWord(l.relation, l.out)}</span>
+              : <><span className="kw-rel">{l.relation}</span><span className="kw-dir" aria-hidden>{l.out ? "→" : "←"}</span></>}
             <button className="linkish" onClick={() => onOpen(l.item.id)}><Inline text={l.item.title} /></button>
             {l.out ? <button className="kw-x" aria-label="고리 지우기" onClick={() => void onAct(() => call("/api/knowledge/link", { from: item.id, to: l.item.id }, "DELETE"))}>×</button> : null}</span>
           {l.note ? <span className="kw-note">{l.note}</span> : null}</li>)}</ul></section> : null}
