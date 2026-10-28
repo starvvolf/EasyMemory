@@ -80,6 +80,9 @@ export type Candidate = {
   detail: string;
   evidence: { activity: "start" | "predict" | "hint" | "check" | "explain" | "skip" | "transfer"; independent: boolean };
   source: { kind: "project"; title: string; ref: string };
+  /** 지식 저장소에 붙일 때 쓸 종류·주제 힌트(문법은 어휘 vocab, 2026-10-28 사용자 결정) */
+  knowledgeKind?: "concept" | "procedure" | "fact" | "formula" | "vocab";
+  topic?: string;
 };
 export const recordsFile = (runId: string) => path.join(DATA, "records", `${runId}.jsonl`);
 export async function addCandidates(list: Candidate[]) {

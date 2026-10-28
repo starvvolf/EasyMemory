@@ -7,7 +7,7 @@ import path from "node:path";
 import { COURSES } from "./course.ts";
 import { DATA, addCandidates, read, update } from "./store.ts";
 
-type Term = { id: string; name: string; match: string; stage: number | null; short: string };
+type Term = { id: string; name: string; match: string; stage: number | null; short: string; kind?: "concept" | "vocab"; topic?: string };
 export type PocketItem = {
   id: string; at: string; stage: number; file: string; from: number; to: number; code: string;
   terms: { id: string; name: string; stage: number | null }[];
@@ -58,6 +58,7 @@ export async function explainWhat(runId: string, courseId: string, stage: number
     detail: `"이건 뭐예요?" ${quote.file} ${quote.from}줄: ${code.trim().slice(0, 80)}`,
     evidence: { activity: "hint" as const, independent: false },
     source: { kind: "project" as const, title: `코드 읽기 ${stage}단계`, ref: `${courseId}:${t.id}` },
+    knowledgeKind: t.kind ?? "concept", topic: t.topic,
   })));
   return { text: lines.join("\n"), item };
 }
