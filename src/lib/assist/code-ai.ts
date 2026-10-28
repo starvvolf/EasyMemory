@@ -164,7 +164,7 @@ const solveAloneSafe = (p: Statement) => solveAlone(p).catch((e: unknown) => { c
 /** Without source examples, the simple solution must agree with the reference on at least this many small inputs. */
 const CROSS_MIN = 30;
 
-type Checked = { ok: true; examples: TestCase[]; tests: TestCase[]; check: Omit<ProblemCheck, "tries">; from: "source" | "made"; seed: number } | { ok: false; reason: string };
+type Checked = { ok: true; examples: TestCase[]; tests: TestCase[]; check: Omit<ProblemCheck, "tries">; from: "source" | "made"; seed: number } | { ok: false; reason: string; /** the independent solution disagreed: it may be the wrong one */ verify?: boolean };
 /** One draft through the check. Returns the reason it failed (sent back to the model) or the tests that survived. */
 type Human = { lang: Lang; code: string };
 /** Where one try spent its time (ms): writing the draft, making the tests, waiting for the independent solution, comparing with it. */
@@ -195,7 +195,7 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
   times.secondMs = Date.now() - mark; mark = Date.now();
   const verified = alone ? await runVerify({ verify: { code: alone.code, brute: d.brute, tests: [...examples, ...made.tests] } }) : null;
   times.verifyMs = Date.now() - mark;
-  if (verified && !verified.ok) return { ok: false, reason: verified.reason };
+  if (verified && !verified.ok) return { ok: false, reason: verified.reason, verify: true };
   const { killed, total, survived, added } = made.mutation;
   let check: Omit<ProblemCheck, "tries"> = { by: source.length ? "source" : "cross", cases: source.length || made.compared, tests: tests.length, maxTests: made.maxTests,
     compared: made.compared, mutation: { killed, total, survived, added },
@@ -244,7 +244,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   const what = (input.sourceUrl || input.topic || input.lesson || "").replace(/\s+/g, " ").slice(0, 120);
   // 시간 줄이기 (2026-10-29): with the original at hand, the second solution needs nothing from the draft — ask both at once.
   const original = input.original && input.kind === "full" ? input.original : undefined;
-  const early = original ? solveAloneSafe({ ...original, examples: original.examples.slice(0, 3) }) : undefined;
+  let early = original ? solveAloneSafe({ ...original, examples: original.examples.slice(0, 3) }) : undefined;
   const originalText = original ? [`[문제]\n${original.statement}`, `[입력]\n${original.inputText}`, `[출력]\n${original.outputText}`,
     ...original.examples.slice(0, 3).map((ex, i) => `[예제 ${i + 1}]\n입력:\n${ex.input}\n출력:\n${ex.output}`)].join("\n\n") : "";
   const mutantsOf = original ? askJson<{ mutants: Drafted["mutants"] }>("code:mutants", MUTANTS_SYSTEM, originalText, MUTANTS_SCHEMA, { model: input.mutantsModel || MUTANTS_MODEL() || makeModel })
@@ -265,7 +265,12 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human, times, early);
     attempts.push({ ...times, ...(checked.ok ? {} : { reason: checked.reason.slice(0, 300) }) });
     await logTry(what, tries, times, checked.ok ? "" : checked.reason, makeLabel);
-    if (!checked.ok) { reasons.push(checked.reason); continue; }
+    if (!checked.ok) {
+      reasons.push(checked.reason);
+      // The shared independent solution disagreed: it may be the wrong one, so the next try gets a fresh one too.
+      if (checked.verify && original) early = solveAloneSafe({ ...original, examples: original.examples.slice(0, 3) });
+      continue;
+    }
     return saveProblem({ ...(input.id ? { id: input.id } : {}), title: d.title, statement: d.statement, inputText: d.inputText, outputText: d.outputText, examples: checked.examples, tests: checked.tests, timeLimitMs: d.timeLimitMs > 0 ? Math.min(Math.max(Math.round(d.timeLimitMs), 500), 10_000) : 2000,
       constraints: d.constraints.slice(0, 1000), testgen: { generator: d.generator, seed: checked.seed },
       kind: input.kind, templates: input.kind === "blank" ? { [lang]: d.blank.code } : {}, reference: { lang: "javascript", code: d.reference },
