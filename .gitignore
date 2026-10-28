@@ -5,6 +5,8 @@
 # next.js
 /.next/
 /.next-engine/
+# Next writes this on every server start; the main (3000) and engine (3002) servers point it at different build folders.
+next-env.d.ts
 /out/
 
 # production
