@@ -270,7 +270,9 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   "rc-solve": { model: "gpt-6-sol", effort: "high" },
   "rc-check": { model: "gpt-6-sol", effort: "low" },
   // 연구 1 3번 (실험): one text-only pass over every card of the material.
-  "rc-merge": { model: "gpt-6-sol", effort: "low" },
+  // 자료 지도의 자료 전체 정리 (10/29 C, 44쪽 같은 카드로 비교): terra·low 19–22초·주제 8–9개·핵심 고르기가 기준표와 가장 가까움,
+  // sol·low 28–38초·주제가 5–7개로 뭉치고 이름 충돌을 덜 고침, medium은 생각만 40초.
+  "rc-merge": { model: "gpt-6.1-terra", effort: "low" },
 };
 
 /**

@@ -134,12 +134,12 @@ const OUTLINE_HINT = "outline은 자료 전체의 쪽 제목과 앞뒤 쪽 첫 �
 // 자료 전체 정리, written as changes only (10/29): the full form (every card's id, title, topic, weight and links) took
 // 99 s for 87 cards on 44쪽 because the reply is the time; cards are numbered n and only what differs is written.
 const MERGE = `${BASE}
-한 자료의 지식 카드 전체를 한 번에 본다. 카드는 쪽마다 따로 만들어져 중요도가 모두 높게 매겨져 있고, 겹치거나 이름이 쪽 제목 그대로인 것이 있다. 이 결과는 학습자가 시험 전에 자료 전체를 한눈에 보는 지도에 쓰인다. 카드는 번호 n으로 가리키고, 바뀌는 것만 짧게 쓴다.
-- topics: 자료의 큰 주제를 자료의 흐름 순서로 {name, cards}. name은 15자 안팎, cards는 그 주제에 속한 카드 n. 모든 카드가 정확히 한 주제에 들어간다. 카드는 쪽 순서라 한 주제는 대개 이어진 구간이다. 보통 5~12개.
+한 자료의 지식 카드 전체를 한 번에 본다(sameNames: 이름이 같은 카드 묶음). 카드는 쪽마다 따로 만들어져 중요도가 모두 높게 매겨져 있고, 겹치거나 이름이 쪽 제목 그대로인 것이 있다. 이 결과는 학습자가 시험 전에 자료 전체를 한눈에 보는 지도에 쓰인다. 카드는 번호 n으로 가리키고, 바뀌는 것만 짧게 쓴다.
+- topics: 자료의 큰 주제를 자료의 흐름 순서로 {name, cards}. name은 15자 안팎, cards는 그 주제에 속한 카드 n. 모든 카드가 정확히 한 주제에 들어간다. 카드는 쪽 순서라 한 주제는 대개 이어진 구간이다. 보통 6~12개이고, 한 주제가 15장을 넘으면 나눈다.
 - core: 시험 전날 이것만 보면 되는 중심 지식의 n, 중요한 것부터. coreMax개를 넘지 않는다. 넣는 것: 정의·절차·공식·행렬·판정 규칙·알고리즘 단계처럼 시험에서 직접 묻거나 다른 카드가 기대는 것, 두 방법의 핵심 차이. 넣지 않는 것: 개요에서 이름만 소개된 것(뒤에서 다룰 주제 예고), 응용 예·효과, 도구·API 관례, 다른 카드의 되풀이, 큰 식에서 한 성분만 떼어 낸 것. 쪽마다 따로 정한 중요도는 믿지 않는다.
 - same: 앞선 카드와 사실상 같은 지식인 카드만 {n, of: 앞 카드 n}. 이름만 같고 내용이 다르면 넣지 않는다.
-- rename: 이름을 바꿔야 하는 카드만 {n, title}: 쪽 제목 그대로라 무엇을 담았는지 모르는 것, 다른 카드와 구별이 안 되는 것, 같은 대상을 다른 카드와 다른 말(영어/한국어)로 부르는 것. title은 담은 지식의 구체적인 이름(원문 용어를 살림, 40자 이내).
-- links: 뜻으로 이어지는 두 카드 {a, b, why}. 카드마다 이어지는 카드를 찾아 a로 1~2개 쓴다(정말 동떨어진 카드만 빼므로 links 수는 보통 카드 수와 비슷하다). 다른 주제·다른 쪽의 카드와의 연결을 먼저 쓴다. why는 a에서 본 b의 관계를 12자 이내로 구체적으로("결과를 b가 씀", "b가 바탕", "대비", "일반화", "특수한 경우", "다음 단계", "적용 예"). "관련", "행렬 구성"처럼 막연한 말은 쓰지 않는다. same으로 묶은 카드끼리는 넣지 않는다.`;
+- rename: 이름을 바꿔야 하는 카드만 {n, title}: 쪽 제목 그대로라 무엇을 담았는지 모르는 것, sameNames에 묶인 카드 중 같은 지식이 아닌 것(서로 구별되게), 같은 대상을 다른 카드와 다른 말로 부르는 것. 보통 카드의 5분의 1을 넘지 않는다. title은 담은 지식의 구체적인 이름이다. 원문의 전문 용어(영어 원문이면 영어 그대로)를 그대로 두고 번역하지 않는다(40자 이내).
+- links: 뜻으로 이어지는 두 카드 {a, b, why}. 카드마다 이어지는 카드를 찾아 a로 1~2개 쓴다(정말 동떨어진 카드만 빼므로 links 수는 보통 카드 수와 비슷하다). 다른 주제·다른 쪽의 카드와의 연결을 먼저 쓴다. why는 a에서 본 b가 무엇인지 12자 이내 명사구로 구체적으로 쓴다(예: "다음 단계", "바탕 개념", "결과를 쓰는 곳", "대비", "일반형", "특수한 경우", "적용 예", "같은 원리"). a·b 같은 기호나 "관련", "행렬 구성"처럼 막연한 말은 쓰지 않는다. same으로 묶은 카드끼리는 넣지 않는다.`;
 const num = z.number().int();
 // Required throughout: with structured output an optional field is simply left out (44쪽 실측, 2026-10-29).
 // Topics as lists of cards (not one number per card in order: a 90-long list drifted by one at section boundaries).
@@ -724,7 +724,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const all = state.sections.flatMap((s) => data.units[s.id]?.cards ?? []);
     if (all.length < 2) return;
     const t0 = Date.now();
-    const reply = await ctx.ask("rc-merge", null, 1, MERGE, JSON.stringify({ material: input.fileName, count: all.length, coreMax: coreMax(all.length), outline: data.prep!.pages.map((p) => `p.${p.page} ${p.title}`),
+    const reply = await ctx.ask("rc-merge", null, 1, MERGE, JSON.stringify({ material: input.fileName, count: all.length, coreMax: coreMax(all.length), sameNames: sameNames(all), outline: data.prep!.pages.map((p) => `p.${p.page} ${p.title}`),
       cards: all.map((c, n) => ({ n, pages: [...new Set(c.evidence.map((e) => e.page))], line: cardLine(c).replace(/ ⟨받음:.*$/, "").slice(0, 220) })) }), mergeReplySchema, { maxChars: 140 * all.length + 3000 });
     data.consolidated = { ms: Date.now() - t0, cards: unfoldMerge(reply, all) };
     await save();
@@ -918,8 +918,10 @@ export async function runRecaller(ctx: RecallerContext) {
 export function unfoldMerge(reply: z.infer<typeof mergeReplySchema>, all: Array<{ id: string; title: string }>) {
   const ok = (n: number) => Number.isInteger(n) && n >= 0 && n < all.length;
   // At most a third is 핵심 (the map's 핵심만 is the night-before view); the reply lists the most central first.
-  const core = new Set([...new Set(reply.core.filter(ok))].slice(0, coreMax(all.length)));
   const sameAs = new Map(reply.same.filter((x) => ok(x.n) && ok(x.of) && x.n !== x.of).map((x) => [x.n, x.of]));
+  // 핵심 on a card joined to an earlier one goes to that one (the map shows the joined knowledge once, on the first card).
+  const head = (n: number) => { let at = n; for (let i = 0; i < 5 && sameAs.has(at); i++) at = sameAs.get(at)!; return at; };
+  const core = new Set([...new Set(reply.core.filter(ok).map(head))].slice(0, coreMax(all.length)));
   const rename = new Map(reply.rename.filter((x) => ok(x.n) && x.title.trim()).map((x) => [x.n, x.title.trim().slice(0, 60)]));
   const topicOf = new Map<number, string>();
   for (const t of reply.topics) for (const n of t.cards) if (ok(n) && !topicOf.has(n) && t.name.trim()) topicOf.set(n, t.name.trim());
@@ -936,6 +938,12 @@ export function unfoldMerge(reply: z.infer<typeof mergeReplySchema>, all: Array<
     topic: topic[n], weight: (core.has(n) ? "핵심" : "보조") as "핵심" | "보조", links: links.get(n) ?? [] }));
 }
 const coreMax = (cards: number) => Math.max(1, Math.round(cards / 3));
+/** Cards that carry the same name (n lists): the pass either joins them (same) or tells them apart (rename). */
+function sameNames(all: Array<{ title: string }>) {
+  const by = new Map<string, number[]>();
+  all.forEach((c, n) => { const k = c.title.toLowerCase().replace(/[\s\p{P}]/gu, ""); if (k) by.set(k, [...(by.get(k) ?? []), n]); });
+  return [...by.values()].filter((ns) => ns.length > 1);
+}
 
 /** Fake replies for every recaller step (the fake provider): shaped from the request so the whole flow runs without a model. */
 export function recallerFakeReply(step: GenStep, user: string): string {
