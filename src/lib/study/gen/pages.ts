@@ -10,8 +10,25 @@ async function openPdf(bytes: Uint8Array) {
   return { pdfjs, document: await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise };
 }
 
+/**
+ * Page drawing is CPU and memory bound (each call opens the whole PDF and paints 1600px canvases). Many at once took the
+ * server down (연구 1, 2026-10-28: 16 pages of a 10 MB vector-drawn deck at once). Every drawing in this process waits for
+ * one of two slots; model calls stay as parallel as they were.
+ */
+const RENDER_SLOTS = 2;
+const slots = globalThis as typeof globalThis & { __pageRenderSlots?: { active: number; waiting: Array<() => void> } };
+async function renderSlot<T>(task: () => Promise<T>): Promise<T> {
+  const s = (slots.__pageRenderSlots ??= { active: 0, waiting: [] });
+  if (s.active >= RENDER_SLOTS) await new Promise<void>((resolve) => s.waiting.push(resolve));
+  s.active++;
+  try { return await task(); } finally { s.active--; s.waiting.shift()?.(); }
+}
+
 /** Renders pages to JPEG data URLs. */
 export async function renderPageImages(bytes: Uint8Array, pages: readonly number[], width = RENDER_WIDTH) {
+  return renderSlot(() => drawPageImages(bytes, pages, width));
+}
+async function drawPageImages(bytes: Uint8Array, pages: readonly number[], width: number) {
   const [{ createCanvas }, { document }] = await Promise.all([import("@napi-rs/canvas"), openPdf(bytes)]);
   const images = new Map<number, string>();
   try {
@@ -54,6 +71,9 @@ const where = (b: Box, w: number, h: number) => {
  * picture and almost no text (a vector drawing) is sent whole too. Returns the figures per page in reading order.
  */
 export async function renderPageFigures(bytes: Uint8Array, pages: readonly number[], width = RENDER_WIDTH) {
+  return renderSlot(() => drawPageFigures(bytes, pages, width));
+}
+async function drawPageFigures(bytes: Uint8Array, pages: readonly number[], width: number) {
   const [{ createCanvas }, { pdfjs, document }] = await Promise.all([import("@napi-rs/canvas"), openPdf(bytes)]);
   const OPS = pdfjs.OPS as Record<string, number>;
   const paint = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject, OPS.paintImageXObjectRepeat].filter(v => v !== undefined));
