@@ -81,6 +81,22 @@ export type GenInput = {
   planInput?: "pdf" | "pages" | "figures";
   /** v5 실험: every author/solve/review call starts with the same source block so the prompt cache can reuse it. */
   cacheMode?: "shared";
+  /** recaller 실험 손잡이 (연구 1, 2026-10-28: 큰 PDF의 첫 훑기). Absent means today's pipeline, unchanged. */
+  lab?: RecallerLab;
+};
+export type RecallerLab = {
+  /** prep-2: math-alphabet letters no longer send a page to the model; only garbled math fonts, pictures and bare pages do. */
+  router?: "prep-1" | "prep-2";
+  /** Stop after 정리 (cards only): measures the first pass over the material without questions. */
+  skimOnly?: boolean;
+  /** Pages read+organized at once, across sections (default: 2 sections at a time, every page of a section at once). */
+  pageParallel?: number;
+  /** Page readings at once (default 4). */
+  readParallel?: number;
+  /** Long side of a page image in pixels (default 1600). */
+  imageWidth?: number;
+  /** Pages that need the picture: 정리 looks at the page image itself, no separate reading call. */
+  inlineRead?: boolean;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */

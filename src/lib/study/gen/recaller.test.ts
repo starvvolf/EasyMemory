@@ -45,6 +45,17 @@ test("recaller: sections from titles, cards, basic questions per section, then a
   assert.equal(done.recaller?.deep.g1.status, "ready");
 }));
 
+test("lab.skimOnly (연구 1): cards for every page and no questions; the first pass is timed per page", () => withData(async () => {
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", lab: { skimOnly: true, pageParallel: 4 } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  assert.equal(done.status, "done", done.message);
+  const calls = (await readGenCalls(done.id)).map((c) => c.step);
+  assert.deepEqual(calls, ["rc-organize", "rc-organize"]);
+  assert.ok(done.sections.every((s) => (done.recaller!.units[s.id].cards ?? []).length > 0));
+  assert.deepEqual(Object.keys(done.recaller!.timing.organizedAt ?? {}).sort(), ["1", "2"]);
+  assert.ok(done.recaller!.timing.skimDoneAt);
+}));
+
 test("deep questions are made only when asked", () => withData(async () => {
   const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" });
   const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });

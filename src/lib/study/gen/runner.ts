@@ -14,7 +14,7 @@ import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, getAstraReadingVie
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
 import { needsImage, pageEmphasis, renderPageFigures, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, loadRecallerGuide, type LoadedGuide } from "./guide.ts";
-import { preparePdf, prepFromTexts, type PrepResult } from "./prep.ts";
+import { preparePdf, prepFromTexts, prepRouters, type PrepResult } from "./prep.ts";
 import { recallerFakeReply, runRecaller } from "./recaller.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
@@ -193,6 +193,8 @@ export const genInputSchema = z.strictObject({
   engine: z.enum(engines).default("v2"),
   planInput: z.enum(["pdf", "pages", "figures"]).optional(),
   cacheMode: z.enum(["shared"]).optional(),
+  lab: z.strictObject({ router: z.enum(prepRouters).optional(), skimOnly: z.boolean().optional(), pageParallel: z.number().int().min(1).max(16).optional(),
+    readParallel: z.number().int().min(1).max(16).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -355,7 +357,7 @@ async function registeredImages(input: GenInput, pages: number[]) {
   const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
   const bytes = await readRegisteredMcpSourcePdf(input.sourceId);
   if (!bytes) throw new Stop("failed", "등록된 원본 PDF를 읽을 수 없어요.");
-  return renderPageImages(bytes, pages);
+  return renderPageImages(bytes, pages, input.lab?.imageWidth);
 }
 
 // ---- pages read from their image -------------------------------------------------------------------------
@@ -613,10 +615,10 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           return result.value;
         },
         askText: async (step, page, attempt, system, user, images) => String(await ask(step, null, attempt, system, user, null, undefined, { images, page })),
-        prepare: options.prep ?? (async (bytes, pages) => bytes ? preparePdf(bytes, pages) : prepFromTexts(await (options.pages ?? registeredPages)(input), pages)),
+        prepare: options.prep ?? (async (bytes, pages) => bytes ? preparePdf(bytes, pages, input.lab?.router) : prepFromTexts(await (options.pages ?? registeredPages)(input), pages)),
         emphasis: async (pages) => pdf ? pageEmphasis(pdf, pages) : new Map(),
         pageImages: async (wanted) => (options.pageImages ?? registeredImages)(input, wanted),
-        pageFigures: async (wanted) => pdf ? renderPageFigures(pdf, wanted) : new Map(),
+        pageFigures: async (wanted) => pdf ? renderPageFigures(pdf, wanted, input.lab?.imageWidth) : new Map(),
         guide: async (step, kinds) => {
           try { return await loadRecallerGuide(step, { purpose: input.purpose, kinds, dir: input.guideDir ?? DEFAULT_GUIDE_DIR }); }
           catch (error) { throw stopWith(`${error instanceof Error ? error.message : String(error)} 출제기준 폴더를 고친 뒤 다시 시작해 주세요.`); }

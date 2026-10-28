@@ -12,7 +12,7 @@ import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
 import { TRANSCRIBE_SYSTEM } from "./pages.ts";
-import { pageText, type PrepResult, type PrepRoute } from "./prep.ts";
+import { pageText, type PrepResult, type PrepRoute, type PrepRouter } from "./prep.ts";
 import { extractTerms, sameKnowledge, similarity, termLines } from "./terms.ts";
 import { authoredStem, type AuthoredReplyQuestion } from "./schemas.ts";
 import type { GenStep, GenState, Issue, Objective, ObjectiveKind, SectionState } from "./types.ts";
@@ -86,7 +86,9 @@ export type RecallerState = {
   /** Cards left without a question because an earlier card already holds the same knowledge (card id → that card). */
   dups?: Record<string, string>;
   warnings: Issue[];
-  timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string };
+  timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string;
+    /** 연구 1: when each page's reading and cards were done (the first pass over the material). */
+    readAt?: Record<string, string>; organizedAt?: Record<string, string>; skimDoneAt?: string };
   guides?: Record<string, string>;
 };
 
@@ -96,7 +98,7 @@ export type RecallerContext = {
   state: GenState; pdf: Uint8Array | null;
   ask: RecallerAsk;
   askText: (step: GenStep, page: number, attempt: number, system: string, user: string, images: NonNullable<ModelRequest["images"]>) => Promise<string>;
-  prepare: (pdf: Uint8Array | null, pages: number[]) => Promise<PrepResult>;
+  prepare: (pdf: Uint8Array | null, pages: number[], router?: PrepRouter) => Promise<PrepResult>;
   emphasis: (pages: number[]) => Promise<Map<number, string[]>>;
   pageImages: (pages: number[]) => Promise<Map<number, string>>;
   pageFigures: (pages: number[]) => Promise<Map<number, Array<{ label: string; dataUrl: string }>>>;
@@ -122,6 +124,7 @@ const AUTHOR = `${BASE}
 const PLAIN = `${BASE}
 원문으로 시험 문제를 만든다: 기본 문제 4개(choice 2, short 1, ox 1)와 원문의 개념을 엮어 새 상황·수치에 적용하는 응용 객관식 2개. 문제마다 정답과 설명을 쓴다.
 형식별: choice — 보기 4개, 정답 하나, optionNotes에 보기마다 한 줄. ox — stem에 명제 하나, correctIndex 0=O 1=X. short — 값·이름 하나, accepted에 표기 변형. cardId는 "plain". mistakes는 빈 배열이어도 된다. 수식은 $…$로 쓴다.`;
+const INLINE_READ = "그림·식이 필요한 쪽은 따로 옮겨 쓰지 않고 이미지를 첨부했다(라벨에 쪽 번호). 이미지에서 읽은 지식도 카드로 만들고, 그 근거의 quote는 빈 문자열로 둔다. 원문 글자는 글자 층(source)이 기준이다.";
 const CALC = "계산기는 일반 수학만 안다: 행렬은 행 단위 ((a, b), (c, d)), 행렬×행렬·행렬×벡터는 *, transpose() det() inv() eye(n), row(M, i) col(M, j) at(v, i)(1부터), 이어 붙이기 join(v, x), 판정 lt le gt ge eq and or not pick(조건, 참일 때, 거짓일 때)(참 1, 거짓 0), sind cosd tand(도). 원문의 공식·행렬은 계산기가 모르므로 먼저 정의 단계를 둔다: name에 'T(tx, ty)'처럼 이름과 매개변수, expr에 원문 식을 매개변수로, value는 '정의'. 뒤 단계에서 T(2, 3)처럼 부른다.";
 const LINK = `${BASE}
 지식 카드 목록에서 함께 엮으면 한 카드만 알아서는 풀 수 없는 응용 문제가 되는 묶음(카드 2~3장)을 고른다. 앞 카드의 결과가 뒤 카드의 입력이 되는 묶음(판정 → 절차, 공식 → 비교, 절차 → 절차)을 우선한다. 구체적인 값으로 계산하거나 판정할 수 있는 묶음만 고른다. 서로 다른 묶음이 같은 카드 조합을 반복하지 않는다. 묶음이 없으면 빈 배열.`;
@@ -381,8 +384,12 @@ export async function runRecaller(ctx: RecallerContext) {
   const { state, save } = ctx;
   const input = state.input;
   // Separate limits: page readings run inside section work, so sharing one limit could leave every slot waiting on a reading.
-  const sectionLimit = limiter(ctx.parallel ?? PARALLEL);
-  const readLimit = limiter(4);
+  const lab = input.lab ?? {};
+  // 연구 1 손잡이: pageParallel limits pages (read + 정리) across sections instead of two sections at a time.
+  const sectionLimit = limiter(lab.pageParallel ? 1000 : ctx.parallel ?? PARALLEL);
+  const pageLimit = lab.pageParallel ? limiter(lab.pageParallel) : <T>(task: () => Promise<T>) => task();
+  const readLimit = limiter(lab.readParallel ?? 4);
+  const stamp = (key: "readAt" | "organizedAt", pages: number[]) => { const at = new Date().toISOString(); for (const p of pages) (data.timing[key] ??= {})[p] ??= at; };
   const data = (state.recaller ??= { version: 1, texts: {}, read: { pages: [], done: [], failed: [] }, units: {}, deep: {}, warnings: [], timing: { startedAt: new Date().toISOString() } });
   const hash = ctx.pdf?.length ? createHash("sha256").update(ctx.pdf).digest("hex") : `pages:${input.sourceId}`;
   data.pdfHash ??= hash;
@@ -409,7 +416,7 @@ export async function runRecaller(ctx: RecallerContext) {
   // ① 전처리: code only, one pass over the chosen pages. Sections come from the slide titles.
   if (!data.prep) {
     const t0 = Date.now();
-    const prep = await ctx.prepare(ctx.pdf, input.pageNumbers);
+    const prep = await ctx.prepare(ctx.pdf, input.pageNumbers, lab.router);
     const emphasis = await ctx.emphasis(input.pageNumbers).catch(() => new Map<number, string[]>());
     data.prep = { version: prep.version, pages: prep.pages.map(({ page, title, route, score, reasons }) => ({ page, title, route, score, reasons })) };
     for (const p of prep.pages) data.texts[p.page] = pageText(p) + (emphasis.get(p.page)?.length ? `\n[색 강조] ${emphasis.get(p.page)!.join(" · ")}` : "");
@@ -443,6 +450,7 @@ export async function runRecaller(ctx: RecallerContext) {
       }
       data.texts[page] = routeOf(page) === "figures" ? `${data.texts[page] ?? ""}\n[그림·식·표 옮김]\n${reply.trim()}` : reply.trim();
       data.read.done.push(page);
+      stamp("readAt", [page]);
       await save();
     }));
     return reading.get(page)!;
@@ -598,6 +606,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const idOf = (id: string) => `${section.id}.${k + 1}${id}`;
     // A card already finished in the stream goes to authoring now, if it is one that gets a question and its quotes are real.
     const startCard = (raw: unknown) => {
+      if (lab.skimOnly) return;
       const parsed = cardSchema.safeParse(raw);
       if (!parsed.success || slotted.has(parsed.data.id)) return;
       const { cards: ok } = checkCards({ cards: [parsed.data] }, { pages }, textMap());
@@ -606,6 +615,18 @@ export async function runRecaller(ctx: RecallerContext) {
       const card = { ...ok[0], id: idOf(ok[0].id), links: [] };
       if (claim(card)) authoring.push(authorOne(section, k, card));
     };
+    // inlineRead: pages that need their picture are not read first; 정리 looks at the picture itself.
+    const inline = lab.inlineRead ? pages.filter((p) => (routeOf(p) === "page" || routeOf(p) === "figures") && !data.read.done.includes(p)) : [];
+    const inlineImages: NonNullable<ModelRequest["images"]> = [];
+    if (inline.length && !chunk.cards) {
+      const figs = await ctx.pageFigures(inline.filter((p) => routeOf(p) === "figures")).catch(() => new Map<number, Array<{ label: string; dataUrl: string }>>());
+      const wholes = await ctx.pageImages(inline.filter((p) => routeOf(p) === "page" || !(figs.get(p)?.length))).catch(() => new Map<number, string>());
+      for (const p of inline) {
+        const f = figs.get(p) ?? [];
+        if (f.length) inlineImages.push(...f.map((x) => ({ label: `p.${p} ${x.label}`, dataUrl: x.dataUrl })));
+        else if (wholes.get(p)) inlineImages.push({ label: `원문 p.${p}`, dataUrl: wholes.get(p)! });
+      }
+    }
     if (!chunk.cards) {
       const g = await guide("organize", [...cardKinds]);
       let revision: string[] = [];
@@ -613,10 +634,10 @@ export async function runRecaller(ctx: RecallerContext) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         let reply: z.infer<typeof organizeSchema>;
         try {
-          reply = await ctx.ask("rc-organize", section.id, attempt, `${ORGANIZE}\n\n[정리 기준]\n${g.text}`,
+          reply = await ctx.ask("rc-organize", section.id, attempt, `${ORGANIZE}${inlineImages.length ? `\n${INLINE_READ}` : ""}\n\n[정리 기준]\n${g.text}`,
             organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision,
               terms: termLines(extractTerms(data.texts)), already: known.map((c) => c.title).slice(0, 40) }), organizeSchema,
-            { guide: g, maxChars: 6000 * pages.length, onPartial: (text) => { for (const raw of completeItems(text, "cards")) startCard(raw); } });
+            { guide: g, maxChars: 6000 * pages.length, ...(inlineImages.length ? { images: inlineImages } : {}), onPartial: (text) => { for (const raw of completeItems(text, "cards")) startCard(raw); } });
         } catch (error) {
           if (!(error instanceof RunawayReply)) throw error;
           data.warnings.push({ severity: "warning", code: "rc-runaway", message: `정리 p.${pages.join(",")}: ${error.message}${attempt === 1 ? " 한 번 더 요청해요." : " 이 쪽은 건너뛰어요."}` });
@@ -633,9 +654,11 @@ export async function runRecaller(ctx: RecallerContext) {
       const ids = new Map(result.cards.map((c) => [c.id, idOf(c.id)]));
       chunk.cards = result.cards.map((c) => ({ ...c, id: ids.get(c.id)!, links: c.links.filter((l) => ids.has(l.to)).map((l) => ({ ...l, to: ids.get(l.to)! })) }));
       chunk.issues = result.issues;
+      stamp("organizedAt", pages);
       collect(unit);
       await save();
     }
+    if (lab.skimOnly) { chunk.questions ??= []; collect(unit); return; }
     // Resumed runs (or cards the stream did not show whole) still get their questions.
     for (const card of slotCards(chunk.cards, input.purpose)) if (!slotted.has(card.id.split(".")[1].replace(/^\d+/, "")) && !data.dups?.[card.id] && (known.includes(card) || known.some((x) => x.id === card.id) || claim(card))) authoring.push(authorOne(section, k, card));
     await Promise.all(authoring);
@@ -653,20 +676,27 @@ export async function runRecaller(ctx: RecallerContext) {
     if (unit.status === "ready") return;
     unit.status = "organizing"; await save();
     // Each page waits only for its own reading; the pages of a section run at once.
-    await Promise.all(chunksOf(section.pages).map(async (pages, k) => {
-      await Promise.all(pages.map(readPage));
+    await Promise.all(chunksOf(section.pages).map(async (pages, k) => pageLimit(async () => {
+      if (!lab.inlineRead) await Promise.all(pages.map(readPage));
       // A section named only by its page number takes its title from the first heading the page reading found.
       if (k === 0 && /^p\.\d+$|\(이어서\)$/.test(section.title)) {
         const heading = section.pages.map((p) => /^#\s*(.+)$/m.exec(data.texts[p] ?? "")?.[1]?.trim()).find(Boolean);
         if (heading) section.title = heading.slice(0, 80);
       }
       await organize(section, k, pages);
-    }));
+    })));
     unit.status = "ready"; await save();
   }).catch(async (error) => { data.units[section.id].status = "failed"; data.units[section.id].error = error instanceof Error ? error.message : String(error); await save(); throw error; }));
   const settled = await Promise.allSettled(work);
   const stop = settled.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
   if (stop) throw stop.reason;
+  data.timing.skimDoneAt ??= new Date().toISOString();
+  if (lab.skimOnly) {
+    data.timing.completedAt = new Date().toISOString();
+    state.status = "done"; state.phase = "done"; state.message = "";
+    await save();
+    return;
+  }
   // Two pages organized at the same moment can still both make a card on one thing: the later question is held back.
   const seen: Array<{ card: Card; q: RcQuestion }> = [];
   const touched = new Set<string>();

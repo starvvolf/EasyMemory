@@ -11,7 +11,9 @@ export type Line = { y: number; x: number; h: number; bullet: string | null; tex
 export type PrepRoute = "layer" | "figures" | "page" | "empty";
 export type PageStats = { chars: number; mathChars: number; brokenChars: number; lines: number; orphanLines: number;
   /** Area share of content pictures (template pictures that repeat on many pages left out). */
-  pictureCover: number; pathOps: number };
+  pictureCover: number; pathOps: number;
+  /** prep-2: letters from a math font with no real ToUnicode (PowerPoint subsets: subscripts come out as !"#$%). */
+  garbledChars?: number };
 export type PrepPage = { page: number; title: string; text: string; route: PrepRoute; score: number; reasons: string[]; stats: PageStats };
 export type PrepSection = { id: string; title: string; pages: number[] };
 export type PrepResult = { version: string; pages: PrepPage[]; sections: PrepSection[] };
@@ -100,7 +102,8 @@ export function structure(lines: Line[], pageHeight: number): { title: string; t
  * text layer at all, so a page with them goes to the model as well — cropped pictures when the rest is clean text,
  * the whole page when the formulas or drawings are part of the text flow.
  */
-export function routePage(stats: PageStats): { route: PrepRoute; score: number; reasons: string[] } {
+export function routePage(stats: PageStats, router: PrepRouter = "prep-1"): { route: PrepRoute; score: number; reasons: string[] } {
+  if (router === "prep-2") return routePage2(stats);
   const reasons: string[] = [];
   const orphan = stats.lines ? stats.orphanLines / stats.lines : 0;
   const broken = stats.chars ? stats.brokenChars / (stats.chars + stats.brokenChars) : 0;
@@ -113,6 +116,31 @@ export function routePage(stats: PageStats): { route: PrepRoute; score: number; 
   if (stats.chars < 40) return { route: "page", score, reasons: [...reasons, stats.pictureCover > 0.3 ? "그림으로 된 쪽" : "글자 층 거의 없음(스캔·그림)"] };
   if (stats.pictureCover > 0.6) return { route: "page", score, reasons: [...reasons, "그림이 쪽 대부분"] };
   if (score < 0.7 || stats.mathChars >= 5) return { route: "page", score, reasons };
+  if (stats.pathOps > 150) return { route: "page", score, reasons: [...reasons, "선으로 그린 도식"] };
+  if (stats.pictureCover >= 0.08) return { route: "figures", score, reasons: [...reasons, `그림 ${Math.round(stats.pictureCover * 100)}%`] };
+  return { route: "layer", score, reasons };
+}
+
+export const prepRouters = ["prep-1", "prep-2"] as const;
+export type PrepRouter = (typeof prepRouters)[number];
+/**
+ * prep-2 (실험, 2026-10-28 연구 1): math-alphabet letters (𝑃, 𝑧) read fine once NFKC turns them into P, z, so they no longer
+ * send a page to the model. What does: letters the text layer cannot give (a math font with no ToUnicode, short runs
+ * of broken lines), pictures, and pages with almost no text.
+ */
+function routePage2(stats: PageStats): { route: PrepRoute; score: number; reasons: string[] } {
+  const reasons: string[] = [];
+  const orphan = stats.lines ? stats.orphanLines / stats.lines : 0;
+  const broken = stats.chars ? stats.brokenChars / (stats.chars + stats.brokenChars) : 0;
+  let score = 1 - Math.min(0.5, orphan) - Math.min(0.5, broken * 5);
+  if (stats.garbledChars) { score -= 0.3; reasons.push(`깨진 수식 글자 ${stats.garbledChars}자`); }
+  if (orphan > 0.25) reasons.push(`짧게 끊긴 줄 ${Math.round(orphan * 100)}%`);
+  if (broken > 0.02) reasons.push("깨진 글자");
+  score = Math.max(0, Math.round(score * 100) / 100);
+  if (stats.chars < 5 && stats.pictureCover < 0.05 && stats.pathOps < 20) return { route: "empty", score, reasons: [...reasons, "내용 없음"] };
+  if (stats.chars < 40) return { route: "page", score, reasons: [...reasons, stats.pictureCover > 0.3 ? "그림으로 된 쪽" : "글자 층 거의 없음(스캔·그림)"] };
+  if (stats.pictureCover > 0.6) return { route: "page", score, reasons: [...reasons, "그림이 쪽 대부분"] };
+  if (score < 0.7 || stats.garbledChars) return { route: "page", score, reasons };
   if (stats.pathOps > 150) return { route: "page", score, reasons: [...reasons, "선으로 그린 도식"] };
   if (stats.pictureCover >= 0.08) return { route: "figures", score, reasons: [...reasons, `그림 ${Math.round(stats.pictureCover * 100)}%`] };
   return { route: "layer", score, reasons };
@@ -157,15 +185,15 @@ const MATH = /[\u{1D400}-\u{1D7FF}]/gu;
 const BROKEN = /[�-]/gu;
 
 /** Reads the chosen pages of a PDF with pdf.js (text layer + where pictures are painted) and prepares them. */
-export async function preparePdf(bytes: Uint8Array, pageNumbers: readonly number[]): Promise<PrepResult> {
+export async function preparePdf(bytes: Uint8Array, pageNumbers: readonly number[], router: PrepRouter = "prep-1"): Promise<PrepResult> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
+  const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes), ...(router === "prep-2" ? { fontExtraProperties: true } : {}) }).promise;
   const OPS = pdfjs.OPS as Record<string, number>;
   const paint = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject, OPS.paintImageXObjectRepeat].filter((v) => v !== undefined));
   const pages: PrepPage[] = [];
   const pictures = new Map<number, Array<{ id: string; area: number; box: Box }>>();
   const seen = new Map<string, Set<number>>();
-  const raw = new Map<number, { lines: Line[]; width: number; height: number; area: number; chars: number; mathChars: number; brokenChars: number; pathOps: number }>();
+  const raw = new Map<number, { lines: Line[]; width: number; height: number; area: number; chars: number; mathChars: number; brokenChars: number; pathOps: number; garbledChars: number }>();
   try {
     const wanted = [...new Set(pageNumbers)].filter((n) => Number.isInteger(n) && n >= 1 && n <= document.numPages).sort((a, b) => a - b);
     for (const n of wanted) {
@@ -203,8 +231,24 @@ export async function preparePdf(bytes: Uint8Array, pageNumbers: readonly number
       });
       for (const f of found) (seen.get(f.id) ?? seen.set(f.id, new Set()).get(f.id)!).add(n);
       pictures.set(n, found);
+      // prep-2: a math font whose code points fall back to a plain 8-bit table (no ToUnicode) gives "!"#$%" for its
+      // letters; the fonts are known once the operator list has run.
+      let garbledChars = 0;
+      if (router === "prep-2") {
+        const garbled = new Map<string, boolean>();
+        const isGarbled = (name: string) => {
+          if (!garbled.has(name)) {
+            let g = false;
+            try { const font = page.commonObjs.get(name) as { name?: string; toUnicode?: { _map?: string[] } }; const m = font.toUnicode?._map ?? [];
+              g = /Math|Symbol/i.test(font.name ?? "") && m[33] === "!" && m[34] === "\"" && m[35] === "#"; } catch { g = false; }
+            garbled.set(name, g);
+          }
+          return garbled.get(name)!;
+        };
+        for (const run of runs) if (run.font && run.str.trim() && isGarbled(run.font)) garbledChars += run.str.trim().length;
+      }
       raw.set(n, { lines: linesFrom(runs), width: viewport.width, height: viewport.height, area: viewport.width * viewport.height, chars: meaningful(normalizeText(all)),
-        mathChars: (all.match(MATH) ?? []).length, brokenChars: (all.match(BROKEN) ?? []).length, pathOps });
+        mathChars: (all.match(MATH) ?? []).length, brokenChars: (all.match(BROKEN) ?? []).length, pathOps, garbledChars });
       page.cleanup();
     }
     // A line that sits in the top or bottom strip of half the pages or more (course name, author, date) is a running header or footer.
@@ -218,11 +262,12 @@ export async function preparePdf(bytes: Uint8Array, pageNumbers: readonly number
       // Template pictures (a logo or frame on three or more pages) are not content.
       const cover = coverage((pictures.get(n) ?? []).filter((f) => (seen.get(f.id)?.size ?? 0) < 3).map((f) => f.box), r.width, r.height);
       const { title, text, orphanLines } = structure(r.lines, r.height);
-      const stats: PageStats = { chars: r.chars, mathChars: r.mathChars, brokenChars: r.brokenChars, lines: text ? text.split("\n").length : 0, orphanLines, pictureCover: cover, pathOps: r.pathOps };
-      pages.push({ page: n, title, text, ...routePage(stats), stats });
+      const stats: PageStats = { chars: r.chars, mathChars: r.mathChars, brokenChars: r.brokenChars, lines: text ? text.split("\n").length : 0, orphanLines, pictureCover: cover, pathOps: r.pathOps,
+        ...(router === "prep-2" ? { garbledChars: r.garbledChars } : {}) };
+      pages.push({ page: n, title, text, ...routePage(stats, router), stats });
     }
   } finally { await document.cleanup(); }
-  return { version: PREP_VERSION, pages, sections: splitSections(pages) };
+  return { version: router === "prep-2" ? "prep-2" : PREP_VERSION, pages, sections: splitSections(pages) };
 }
 
 /** Without the PDF (tests, a text-only source): page texts as already extracted, each on the text layer. */

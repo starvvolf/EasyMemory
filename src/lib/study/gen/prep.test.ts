@@ -41,6 +41,16 @@ test("route: clean text stays on the text layer; pictures, formulas, drawings an
   assert.equal(routePage({ ...base, chars: 0, lines: 0, pathOps: 0 }).route, "empty");
 });
 
+test("prep-2 (실험): math letters stay on the text layer; garbled math fonts and short broken lines still go to the model", () => {
+  const base: PageStats = { chars: 400, mathChars: 0, brokenChars: 0, lines: 10, orphanLines: 0, pictureCover: 0, pathOps: 5 };
+  assert.equal(routePage({ ...base, mathChars: 12 }, "prep-2").route, "layer");
+  assert.equal(routePage({ ...base, mathChars: 12, pictureCover: 0.3 }, "prep-2").route, "figures");
+  assert.equal(routePage({ ...base, garbledChars: 6 }, "prep-2").route, "page");
+  assert.equal(routePage({ ...base, orphanLines: 5 }, "prep-2").route, "page");
+  // The default router is unchanged.
+  assert.equal(routePage({ ...base, mathChars: 12 }).route, "page");
+});
+
 test("pictures hanging off the page and overlapping count once", () => {
   assert.equal(coverage([[0, 0, 480, 540], [240, 0, 960, 540]], 960, 540), 1);
   assert.equal(coverage([[0, 0, 480, 540]], 960, 540), 0.5);
