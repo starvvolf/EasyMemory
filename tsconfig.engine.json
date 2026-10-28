@@ -1,0 +1,5 @@
+{
+  "//": "엔진 실험 서버(3002, scripts/run-engine-lab.mjs)만 쓰는 설정. next dev가 켤 때 .next-engine 경로를 여기에 쓴다.",
+  "extends": "./tsconfig.json",
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next-engine/types/**/*.ts", ".next-engine/dev/types/**/*.ts"]
+}
