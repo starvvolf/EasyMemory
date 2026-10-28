@@ -1289,11 +1289,29 @@ function submitAnswer(){
   const assisted = assistedNow(deck, item); const reading = S.session.mode === "check" || undefined;
   let correct = null;
   if (item.format === "choice"){ if (c.pick == null) return; correct = c.pick === item.answer; }
-  else if (item.format === "value"){ if (!c.text.trim()) return; correct = item.accepted.some(a => norm(a) === norm(c.text)); }
+  else if (item.format === "value"){
+    if (!c.text.trim()) return;
+    correct = item.accepted.some(a => norm(a) === norm(c.text));
+    // 직접 확인 (2026-10-28): a typed answer the grader cannot match is not called wrong yet — answers to formulas and
+    // names are written many ways, so the learner sees theirs beside the answer and decides. Nothing is recorded until then.
+    if (!correct && !assisted){ S.session.phase = "judge"; render(); return; }
+  }
   else if (item.format === "order"){ if (c.order.length !== item.steps.length) return; correct = c.order.every((v,i) => v === i); }
   logEvent(deck, item, { kind:"submit", correct, assisted, afterReading:reading, answer: item.format === "value" ? c.text.slice(0, 80) : undefined, asChoice: item.termCard || undefined });
   c.verdict = assisted ? "assisted" : reading ? (correct ? "read-good" : "read-bad") : correct ? "good" : "bad";
   finishItem(assisted ? "assisted" : correct ? "correct" : "wrong");
+  S.session.phase = "result"; render();
+}
+/* 직접 확인: the learner's own call on a typed answer the grader could not match. Recorded once, as chosen. */
+function judgeSelf(ok){
+  const { deck, item } = curRef(); const c = S.session.cur;
+  if (S.session.phase !== "judge") return;
+  const reading = S.session.mode === "check" || undefined;
+  logEvent(deck, item, { kind:"submit", correct:ok, assisted:false, selfJudged:true, override: ok || undefined, afterReading:reading, answer:c.text.slice(0, 80) });
+  c.verdict = reading ? (ok ? "read-good" : "read-bad") : ok ? "good" : "bad";
+  c.selfJudged = true; c.overridden = ok;
+  if (ok) ledger({ deck, item, signal:"직접 확인: 맞았어요", action:"이번 풀이를 맞음으로", cause:"인정답안누락", detail:`내 답 "${c.text.slice(0, 60)}" / 정답 "${(item.accepted || [])[0] || ""}"` });
+  finishItem(ok ? "correct" : "wrong");
   S.session.phase = "result"; render();
 }
 function dontKnow(){
@@ -1470,6 +1488,15 @@ function renderSession(){
     }
   }
 
+  // 직접 확인: the learner's answer beside the expected one, and their call.
+  if (s.phase === "judge"){
+    card.append(h("div", { class:"judge" },
+      h("dl", { class:"reveal" },
+        h("div", null, h("dt", { text:"내 답" }), h("dd", { style:"white-space:pre-line" }, richText(c.text))),
+        h("div", null, h("dt", { text:"정답" }), h("dd", { style:"white-space:pre-line;font-weight:600" }, richText(item.accepted[0] || "")))),
+      h("p", { class:"small", style:"margin:8px 0 0", text:"자동 채점으로는 판단하지 못했어요. 정답과 같은 뜻인가요?" })));
+  }
+
   // result
   if (s.phase === "rate" || s.phase === "result"){
     const rv = h("dl", { class:"reveal" });
@@ -1479,7 +1506,7 @@ function renderSession(){
     }
     if (s.phase === "result"){
       const map = {
-        good:["good", c.overridden ? "맞음으로 고쳤어요" : "혼자 맞혔어요", c.overridden ? "자동 채점이 놓친 답을 직접 인정했어요. 기록에 표시해 둡니다." : "다음에는 간격을 늘려 다시 물어볼게요."],
+        good:["good", c.selfJudged ? "맞음으로 표시했어요 (직접 확인)" : c.overridden ? "맞음으로 고쳤어요" : "혼자 맞혔어요", c.overridden ? "자동 채점이 놓친 답을 직접 인정했어요. 기록에 표시해 둡니다." : "다음에는 간격을 늘려 다시 물어볼게요."],
         bad:["bad", item.format === "card" ? "잘 모른다고 표시했어요" : "이번엔 떠올리지 못했어요", "복습 필요로 표시해 뒀어요. 내일 복습에 다시 나와요."],
         assisted:["help", "정답을 보고 확인했어요", "혼자 맞힌 기록으로 세지 않아요. 내일 복습에 다시 나와요."],
         "self-good":["self", "알고 있다고 표시했어요", "자기평가라서 자동 채점보다 약한 근거로 기록돼요."],
@@ -1489,7 +1516,7 @@ function renderSession(){
         "read-bad":["bad", "읽은 직후에도 헷갈렸어요", "아래 ‘원문에서 보기’로 다시 읽어 보세요. 복습 필요로 표시해 뒀어요."]
       }[c.verdict];
       card.append(h("div", { class:`verdict ${map[0]}` }, h("strong", { text:map[1] }), h("span", { class:"small", text:map[2] }),
-        (item.format === "value" && (c.verdict === "bad" || c.verdict === "read-bad") && !c.overridden && c.text.trim()) ? h("span", null, h("button", { class:"linkish", onclick:overrideCorrect }, "내 답도 맞아요 (표기만 달라요)")) : null
+        (item.format === "value" && (c.verdict === "bad" || c.verdict === "read-bad") && !c.overridden && !c.selfJudged && c.text.trim()) ? h("span", null, h("button", { class:"linkish", onclick:overrideCorrect }, "내 답도 맞아요 (표기만 달라요)")) : null
       ));
       if (item.explanation) rv.append(h("div", null, h("dt", { text:"설명" }), h("dd", null, richText(item.explanation))));
       if (obj) rv.append(h("div", null, h("dt", { text:"학습목표" }), h("dd", { text:obj.statement })));
@@ -1513,6 +1540,12 @@ function renderSession(){
     act.append(h("span", { class:"spacer" }));
     if (item.termCard) act.append(h("button", { class:"btn ghost small", title:"보기 없이 떠올리는 카드로 풀어요", onclick: () => { c.asChoice = null; c.optOrder = []; c.pick = null; render(); } }, "카드로 풀기"));
     if (item.format !== "card") act.append(h("button", { class:"btn ghost small", onclick:peek, title:"정답을 먼저 보면 이번 풀이는 혼자 맞힌 기록으로 세지 않아요" }, "정답 먼저 보기"));
+  } else if (s.phase === "judge"){
+    act.append(h("span", { class:"small muted", text:"내 답과 정답을 비교해 보세요" }));
+    act.append(h("div", { class:"rate" },
+      h("button", { class:"btn", onclick: () => judgeSelf(false) }, "틀렸어요 ", h("span", { class:"kbd", text:"2" })),
+      h("button", { class:"btn primary", "data-autofocus":"1", onclick: () => judgeSelf(true) }, "맞았어요 ", h("span", { class:"kbd", text:"1" }))
+    ));
   } else if (s.phase === "rate"){
     // Flashcards are judged by the learner, in two steps (docs/DECISIONS.md 2026-10-12 주관식 형식). "잘 모름" counts as a weak spot.
     act.append(h("span", { class:"small muted", text:"떠올린 것과 비교해 보세요" }));
@@ -1578,6 +1611,8 @@ on(document, "keydown", (e) => {
     e.preventDefault();
     if (s.phase === "result") nextItem();
     else if (s.phase === "ask"){ const r = curRef(); if (r.item.format === "card") showCard(); else submitAnswer(); }
+  } else if (s.phase === "judge" && (e.key === "1" || e.key === "2") && tag !== "textarea"){
+    e.preventDefault(); judgeSelf(e.key === "1");
   } else if (s.phase === "ask" && /^[1-4]$/.test(e.key) && tag !== "input" && tag !== "textarea"){
     const r = curRef(); if (r.item.format === "choice"){ const oi = s.cur.optOrder[Number(e.key) - 1]; if (oi != null){ s.cur.pick = oi; render(); } }
   }
