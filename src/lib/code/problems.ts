@@ -113,8 +113,8 @@ async function readTests(id: string): Promise<TestCase[]> {
   remember(id, mtimeMs, tests);
   return tests;
 }
-/** The same address, compared loosely (http/https, www, a trailing slash or #part don't count). */
-export const sourceKey = (url: string) => url.trim().replace(/^https?:\/\//i, "").replace(/^(www\.|m\.)/i, "").replace(/#.*$/, "").replace(/\/+$/, "").toLowerCase();
+/** The same address, compared loosely (an archive copy's prefix, http/https, www, a trailing slash or #part don't count). */
+export const sourceKey = (url: string) => url.trim().replace(/^https?:\/\/web\.archive\.org\/web\/\d+[a-z_]*\//i, "").replace(/^https?:\/\//i, "").replace(/^(www\.|m\.)/i, "").replace(/#.*$/, "").replace(/\/+$/, "").toLowerCase();
 /** A problem already made from this address (and of this kind), newest first: making it again is usually by mistake. */
 export async function findBySource(url: string, kind: Problem["kind"]) {
   const key = sourceKey(url);

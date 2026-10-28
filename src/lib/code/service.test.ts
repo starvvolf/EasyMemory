@@ -63,6 +63,7 @@ test("a problem's knowledge comes with its meaning; a meaning the learner wrote 
 
 test("the same address is found again (loosely), but not for the other kind", () => withData(async () => {
   assert.equal(sourceKey("https://www.acmicpc.net/problem/1654/"), sourceKey("http://acmicpc.net/problem/1654#top"));
+  assert.equal(sourceKey("https://web.archive.org/web/20260418224535id_/https://www.acmicpc.net/problem/1654"), sourceKey("https://web.archive.org/web/20261001000000id_/https://www.acmicpc.net/problem/1654"), "a different archive copy is the same problem");
   assert.equal(await findBySource("https://www.acmicpc.net/problem/1654", "full"), null);
   const first = await made("https://www.acmicpc.net/problem/1654");
   const hit = await findBySource("http://acmicpc.net/problem/1654", "full");
