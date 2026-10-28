@@ -126,12 +126,17 @@ const MAKE_SCHEMA = S.obj({ title: S.str, statement: S.str, inputText: S.str, ou
 const MAKE_RETRIES = 2;
 // 시간 줄이기 (2026-10-29): an imported original lets the faulty solutions be written by their own call, at the same time
 // as the draft (they are a score of the tests, not a gate), and the statement and examples are taken as published.
-const ORIGINAL_NOTE = `[원문 그대로 쓰기] 이 문제는 가져온 원문이 있다. statement·inputText·outputText는 빈 문자열, sourceExamples와 mutants는 빈 배열로 둔다(앱이 원문과 따로 만든 틀린 풀이를 쓴다). 나머지(constraints, timeLimitMs, generator, reference, brute, knowledge, knowledgeBodies, folder, blank)는 평소대로 쓴다.`;
+const ORIGINAL_NOTE = `[원문 그대로 쓰기] 이 문제는 가져온 원문이 있다. statement·inputText·outputText·generator는 빈 문자열, sourceExamples와 mutants는 빈 배열로 둔다(앱이 원문과, 따로 만든 테스트 생성기·틀린 풀이를 쓴다). 나머지(constraints, timeLimitMs, reference, brute, knowledge, knowledgeBodies, folder, blank)는 평소대로 쓴다.`;
 const MUTANTS_SYSTEM = `알고리즘 문제 하나에 대해, 학습자가 흔히 하는 실수가 들어간 "틀린 풀이" 3~5개를 JavaScript(Node.js)로 쓴다.
 - 입력은 require("fs").readFileSync(0, "utf8")로 통째로 읽고, 출력은 console.log로. 동기 코드만. 2^53을 넘을 수 있는 값은 읽을 때부터 BigInt로(실수로 Number를 쓰는 풀이는 예외).
 - { flaw, code }. flaw는 실수 이름(정수 범위, 초기화, 경계값, off-by-one, 중복 처리, 잘못된 그리디, 시간 초과, 재귀 깊이 등 이 문제에 해당하는 것만).
 - 정상 실행되지만 특정 입력에서 틀리거나 느린 코드여야 한다(문법 오류 금지). 32비트 정수 오버플로는 결과에 |0 을 써서 흉내 낸다.`;
 const MUTANTS_SCHEMA = S.obj({ mutants: S.arr(S.obj({ flaw: S.str, code: S.str })) });
+// The test generator too, from the original, by its own call next to the draft (the same rules as in MAKE_SYSTEM).
+const GEN_RULES = MAKE_SYSTEM.slice(MAKE_SYSTEM.indexOf("- generator:"), MAKE_SYSTEM.indexOf("- mutants:"));
+const GEN_SYSTEM = `알고리즘 문제 하나의 숨은 테스트 생성기를 JavaScript로 쓴다. 이 문제의 정답 풀이와 단순 풀이(작은 입력에서 모든 경우를 다 해 보는 풀이, "brute")는 다른 사람이 따로 쓴다. 입력 형식과 제약은 문제 글 그대로 지킨다.
+${GEN_RULES}`;
+const GEN_SCHEMA = S.obj({ generator: S.str });
 /** 2026-10-28 (사용자, docs/DECISIONS.md): drafts by GPT-6.1 Terra (모델 비교: 5개 모두 첫 시도 통과, 약 60초). The
  * independent solution stays on another model on purpose, so the two don't share a mistake. */
 const MAKE_MODEL = () => process.env.RECALLER_CODE_MAKE_MODEL?.trim() || "gpt-6.1-terra";
@@ -246,9 +251,12 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     const times: TryTimes = { draftMs: 0, testsMs: 0, secondMs: 0, verifyMs: 0 };
     const started = Date.now();
     let d: Drafted;
+    // Asked for again on every try (a failed check is often the generator's), with the same reasons as the draft.
+    const generatorOf = original ? askJson<{ generator: string }>("code:generator", GEN_SYSTEM, originalText + retry, GEN_SCHEMA, { model: makeModel }).then((g) => g.generator) : undefined;
     try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + (original ? `\n\n${ORIGINAL_NOTE}` : "") + retry, MAKE_SCHEMA, { heavy: true, model: makeModel, ...(input.effort ? { effort: input.effort } : {}) }); }
     catch (error) { await logTry(what, tries, { ...times, draftMs: Date.now() - started }, `모델 호출 실패: ${(error as Error).message}`, makeLabel); throw error; }
-    if (original) d = { ...d, statement: original.statement, inputText: original.inputText, outputText: original.outputText, sourceExamples: original.examples, mutants: await mutantsOf! };
+    if (original) d = { ...d, statement: original.statement, inputText: original.inputText, outputText: original.outputText, sourceExamples: original.examples, mutants: await mutantsOf!,
+      generator: await generatorOf!.catch((e: unknown) => { throw new Error(`테스트 생성기 호출 실패: ${(e as Error).message}`); }) };
     times.draftMs = Date.now() - started;
     if (d.answerKind !== "one") { await logTry(what, tries, times, "답이 여러 개이거나 실수 오차 문제", makeLabel); throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요."); }
     const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human, times, early);
