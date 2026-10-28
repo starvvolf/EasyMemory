@@ -445,7 +445,7 @@ function hideSuggestBar(){
   if (!list.length){ S.hideSuggest = null; return null; }
   return h("section", { class:"panel suggest" },
     h("p", null, h("b", { text:`비슷한 목표 ${list.length}개도 뺄까요?` }), h("span", { class:"small muted", text:` ‘${g.from.slice(0, 40)}’를 뺐어요.` })),
-    h("ul", { class:"small" }, list.slice(0, 6).map(o => h("li", { text:o.statement }))),
+    h("ul", { class:"small" }, list.slice(0, 6).map(o => h("li", null, richText(o.statement)))),
     h("div", { class:"row" },
       h("button", { class:"btn small primary", onclick: () => {
         d.hidden = [...new Set([...(d.hidden || []), ...g.ids])]; applyFilters(d); Store.save(d);
@@ -1519,7 +1519,7 @@ function renderSession(){
         (item.format === "value" && (c.verdict === "bad" || c.verdict === "read-bad") && !c.overridden && !c.selfJudged && c.text.trim()) ? h("span", null, h("button", { class:"linkish", onclick:overrideCorrect }, "내 답도 맞아요 (표기만 달라요)")) : null
       ));
       if (item.explanation) rv.append(h("div", null, h("dt", { text:"설명" }), h("dd", null, richText(item.explanation))));
-      if (obj) rv.append(h("div", null, h("dt", { text:"학습목표" }), h("dd", { text:obj.statement })));
+      if (obj) rv.append(h("div", null, h("dt", { text:"학습목표" }), h("dd", null, richText(obj.statement))));
       rv.append(h("div", null, h("dt", { text:`원문 근거 · p.${item.page}` }), h("dd", null, h("mark", { class:"quote", text:item.quote || "기록된 인용 없음" }), item.quoteVerified === false ? h("span", { class:"chip help", style:"margin-left:6px", text:"원문과 일치 확인 안 됨" }) : null,
         h("div", { style:"margin-top:8px" }, h("button", { class:"btn small", onclick: () => { if (s.overlay){ const pg = item.page, oid = item.objectiveId; closeCheck(); S.reader.active = oid; if (S.reader.page !== pg) goPage(pg); else render(); } else openReader(deck.id, item.page, item.objectiveId); } }, s.overlay ? "원문에서 다시 보기" : "원문에서 보기 →")))));
     }
@@ -1951,7 +1951,7 @@ function renderReader(){
     holder.append(h("div", { class:"goals" }, h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
       objs.flatMap((o, i) => [h("div", { class:"goalrow" },
         h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", "aria-expanded": GoalEx.isOpen(d, o) ? "true" : "false", title:"이 목표를 정리해서 보기 (원문에서도 이 부분을 진하게)", onclick: () => GoalEx.toggle(d, o) },
-          h("span", { class:"gnum", text:String(i + 1) }), h("span", { text:o.statement })),
+          h("span", { class:"gnum", text:String(i + 1) }), h("span", null, richText(o.statement))),
         d.example ? null : h("button", { class:"linkish", title:"이 목표의 문제를 연습·복습에서 빼기", onclick: () => hideObjective(d, o.id) }, "빼기")), GoalEx.node(d, o)])));
   }
   if (P && P.status === "error") page.append(h("p", { class:"attach", text:"원본 PDF를 불러오지 못했어요. 원본 등록 상태를 확인해 주세요." }));
@@ -2069,7 +2069,7 @@ function goalsPane(d, objs, n){
     ...objs.map((o, i) => { const [label, cls] = GOAL_STATE[objectiveState(d, o.id)] || GOAL_STATE.none;
       return h("div", { class:"pgoal" + (R.pulse.has(o.id) ? " pulse" : "") },
         h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", "aria-expanded": GoalEx.isOpen(d, o) ? "true" : "false", title:"이 목표를 정리해서 보기 (원문에서도 이 부분을 진하게)", onclick: () => GoalEx.toggle(d, o) },
-          h("span", { class:"gnum", text:String(i + 1) }), h("span", { text:o.statement })),
+          h("span", { class:"gnum", text:String(i + 1) }), h("span", null, richText(o.statement))),
         GoalEx.node(d, o),
         h("div", { class:"pgoal-foot" }, h("span", { class:"chip " + cls, text:label }), h("span", { class:"grow" }),
           d.example ? null : h("button", { class:"linkish", title:"이 목표의 문제를 연습·복습에서 빼기", onclick: () => hideObjective(d, o.id) }, "빼기"))); }),
@@ -2122,7 +2122,7 @@ function objName(d, o){
   if (card) return card.answer.trim();
   // "동차좌표 평행이동 행렬을 쓸 수 있다" → "동차좌표 평행이동 행렬"
   const name = String(o.statement).replace(/[을를]?\s+\S*(할|쓸|그릴|읽을|풀)\s*수\s*있다\.?\s*$/, "").replace(/[?？]\s*$/, "");
-  return clip(name || o.statement, 20);
+  return clip((name || o.statement).replace(/\$/g, ""), 20);
 }
 function confusablePair(d, items){
   if (!env.quality || !env.quality.termChoice) return null;
@@ -3453,7 +3453,7 @@ function tocList(d){
   const here = (pages) => pages.includes(R.page);
   const goal = (o) => { const st = objectiveState(d, o.id), pages = (o.pages || []).slice().sort((a, b) => a - b);
     return h("button", { class:"trow goal-row" + (here(pages) ? " here" : "") + (st === "weak" ? " weak" : ""), onclick: () => goPage(pages[0] || R.page) },
-      h("span", { class:"tt", text:o.statement }), dot(notesIn(pages), st === "weak"), h("span", { class:"tp", text:span(pages) })); };
+      h("span", { class:"tt" }, richText(o.statement)), dot(notesIn(pages), st === "weak"), h("span", { class:"tp", text:span(pages) })); };
   const outline = Array.isArray(d.outline) && d.outline.length ? d.outline : null;
   if (!outline){
     const objs = d.objectives.filter(o => !hidden.has(o.id)).slice().sort((a, b) => (a.pages[0] || 0) - (b.pages[0] || 0));
@@ -3747,7 +3747,7 @@ function renderRecords(){
     const s = deck.sched[it.id];
     const status = STATUS[st[idx]];
     tbody.append(h("tr", null,
-      h("td", null, h("div", { style:"font-weight:600", text:o ? o.statement : it.prompt }), h("div", { class:"small muted" }, `p.${it.page} · ${FORMAT_LABEL[it.format]} · `, h("button", { class:"linkish", onclick: () => openReader(deck.id, it.page, it.objectiveId) }, "원문"))),
+      h("td", null, h("div", { style:"font-weight:600" }, richText(o ? o.statement : it.prompt)), h("div", { class:"small muted" }, `p.${it.page} · ${FORMAT_LABEL[it.format]} · `, h("button", { class:"linkish", onclick: () => openReader(deck.id, it.page, it.objectiveId) }, "원문"))),
       h("td", null, h("span", { class:`chip ${status.cls}`, text:status.label })),
       h("td", null, h("div", { class:"trail", title:"왼쪽이 오래된 기록" }, evs.slice(-14).map(e => {
         const ok = e.kind === "submit" ? e.correct : e.rating === "remembered";
@@ -3776,7 +3776,7 @@ function renderRecords(){
       h("p", { class:"eyebrow", text:"연습에서 뺀 것" }),
       hiddenObjs.length ? h("div", { class:"itemlist" }, hiddenObjs.map(o => h("div", { class:"item" },
         h("div", { class:"meta" }, h("span", { class:"chip", text:"뺀 목표" }), h("span", { class:"chip page", text:"p." + o.pages.join(",") })),
-        h("p", { text:o.statement }),
+        h("p", null, richText(o.statement)),
         h("div", null, h("button", { class:"btn small", onclick: () => { deck.hidden = deck.hidden.filter(x => x !== o.id); restore(); } }, "다시 넣기"))))) : null,
       reportedItems.length ? h("div", { class:"itemlist" }, reportedItems.map(it => h("div", { class:"item" },
         h("div", { class:"meta" }, h("span", { class:"chip help", text:`신고 · ${deck.reported[it.id].reason}` }), h("span", { class:"chip page", text:"p." + it.page })),
@@ -4074,7 +4074,7 @@ function goalPanel(d){
     groups.map(g => h("section", null, h("h4", { text:g.title }),
       h("ul", null, g.list.map(o => h("li", null, h("label", null,
         h("input", { type:"checkbox", checked:chosen.has(o.id) ? true : null, onchange: () => toggle(o.id) }),
-        h("span", null, o.part ? h("small", { class:"muted part", text:o.part }) : null, h("span", { text:o.statement }), o.importance === "support" ? h("span", { class:"chip", text:"보조" }) : null,
+        h("span", null, o.part ? h("small", { class:"muted part", text:o.part }) : null, h("span", null, richText(o.statement)), o.importance === "support" ? h("span", { class:"chip", text:"보조" }) : null,
           h("small", { class:"muted", text:`떠올릴 것: ${o.recall}` })))))))),
     h("div", { class:"row" },
       h("button", { class:"btn primary", disabled:p.confirming ? true : null, onclick: () => confirmGoals(d) }, p.confirming ? "확정하는 중…" : `이 목표 ${chosen.size}개로 문제 만들기`),
