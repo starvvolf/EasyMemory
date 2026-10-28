@@ -37,11 +37,12 @@ export type ExtractResult = { source: ReadSource; items: Array<SaveResult["item"
  * 지식 잡기 호출 (2026-10-29 빠르게): 생각 강도 low가 기본(RECALLER_EXTRACT_EFFORT로 바꿈). 예전에는 medium이라 466자 글도
  * 23초쯤 걸렸다. 주제(폴더)는 저장 뒤 주제 정리가 정하니 여기서 받지 않는다.
  */
-export async function readKnowledge(input: { title: string; url?: string; text: string; folder?: string }, options: { effort?: string } = {}) {
+export async function readKnowledge(input: { title: string; url?: string; text: string; folder?: string }, options: { effort?: string; model?: string } = {}) {
   const known = await knownNames();
   const user = [`[글 제목] ${input.title}`, input.url ? `[주소] ${input.url}` : "", `[학습자가 이미 가진 지식 이름] ${known.names.join(", ") || "(없음)"}`,
     `[본문]\n${input.text.slice(0, 40000)}`].filter(Boolean).join("\n\n");
-  return askJson<Extracted>("knowledge:extract", EXTRACT_SYSTEM, user, EXTRACT_SCHEMA, { effort: options.effort || process.env.RECALLER_EXTRACT_EFFORT?.trim() || "low" });
+  return askJson<Extracted>("knowledge:extract", EXTRACT_SYSTEM, user, EXTRACT_SCHEMA, { effort: options.effort || process.env.RECALLER_EXTRACT_EFFORT?.trim() || "low",
+    model: options.model || process.env.RECALLER_EXTRACT_MODEL?.trim() || undefined });
 }
 export async function extractFromText(input: { kind: "web" | "lesson"; title: string; url?: string; text: string; folder?: string }): Promise<ExtractResult> {
   const text = input.text.replace(/\s+\n/g, "\n").trim();

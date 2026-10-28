@@ -247,9 +247,9 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "fill" && m === "POST") { const b = await body(z.object({ ids: z.array(id).max(200).optional() })); return json(await fillMissing({ ids: b.ids })); }
     // 지식 잡기 미리보기: the model call only, nothing saved (to compare 생각 강도 on the same article).
     if (p[0] === "extract-preview" && m === "POST") {
-      const b = await body(z.object({ title: z.string().min(1).max(300), text: z.string().min(80).max(200000), effort: z.enum(["minimal", "low", "medium", "high"]).optional() }));
+      const b = await body(z.object({ title: z.string().min(1).max(300), text: z.string().min(80).max(200000), effort: z.enum(["minimal", "low", "medium", "high"]).optional(), model: z.string().max(60).optional() }));
       const started = Date.now();
-      const data = await readKnowledge(b, { effort: b.effort });
+      const data = await readKnowledge(b, { effort: b.effort, model: b.model });
       return json({ ms: Date.now() - started, ...data });
     }
     if (p[0] === "extract" && m === "POST") {
