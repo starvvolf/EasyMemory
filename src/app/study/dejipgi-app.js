@@ -1920,7 +1920,7 @@ function renderReader(){
       onclick: () => { (S.plan.prefs || (S.plan.prefs = {})).showTerms = !termsOn(); Store.savePlan(S.plan); render(); } }, "핵심 용어") : null,
     pdfOn && Trans.can(d) ? h("button", { class:"btn small", "aria-pressed": Trans.on() ? "true" : "false", title: Trans.on() ? "원문(영어)으로 보기" : "쪽을 한국어로 덧씌워 보기 (핵심 용어는 영어 병기)", onclick: () => Trans.toggle() }, Trans.on() ? "번역 켬" : "번역") : null,
     d.example || (notesApi && notesApi.compose) ? h("button", { class:"btn small", title:"이 자료의 용어를 한국어 뜻·비유와 함께 묶은 지도와 이야기", onclick: () => TermMap.openFor(d) }, "용어 지도") : null,
-    env.mountView && /^gen_/.test(d.id) ? h("button", { class:"btn small", title:"목차와 지식을 한 화면에: 구역마다 알아야 할 것과 내 상태(몰랐음·만남·앎)", onclick: () => MaterialMapView.open(d) }, "자료 지도") : null,
+    env.mountView && /^(pending:)?gen_/.test(d.id) ? h("button", { class:"btn small", title:"목차와 지식을 한 화면에: 구역마다 알아야 할 것과 내 상태(몰랐음·만남·앎)", onclick: () => MaterialMapView.open(d) }, "자료 지도") : null,
     notesButton(d),
     h("div", { class:"pager" },
       h("button", { class:"qbtn", disabled: R.page <= 1, "aria-label":"이전 쪽", onclick: () => goPage(R.page - 1) }, "‹"),
@@ -2520,7 +2520,7 @@ const MaterialMapView = {
     const ov = h("div", { class:"mm2-overlay" }), host = h("div");
     ov.append(host);
     (document.getElementById("app").closest(".dejipgi") || document.body).append(ov);
-    const stop = env.mountView("map", host, { genId: d.id, onPage: (p) => { this.close(); goPage(p); }, onClose: () => this.close() });
+    const stop = env.mountView("map", host, { genId: String(d.id).replace(/^pending:/, ""), onPage: (p) => { this.close(); goPage(p); }, onClose: () => this.close() });
     this.cur = { ov, stop };
   },
   close(){ if (this.cur){ this.cur.stop(); this.cur.ov.remove(); this.cur = null; } },
