@@ -234,7 +234,7 @@ async function handle(request: Request, context: RouteContext) {
     // 빈 뜻·다른 이름 채우기 (모델 호출 1번, 최대 40개).
     // 쉽게 풀어 보기 미리보기: saves nothing (to compare explanations across kinds of knowledge).
     if (p[0] === "explain-preview" && m === "POST") {
-      const b = await body(z.object({ title: z.string().min(1).max(120), body: z.string().max(2000), kind: kind.optional(), aliases: z.array(z.string().max(120)).max(10).optional(), path: z.string().max(200).optional(), example: z.string().max(600).optional() }));
+      const b = await body(z.object({ title: z.string().min(1).max(120), body: z.string().max(2000), kind: kind.optional(), aliases: z.array(z.string().max(120)).max(10).optional(), path: z.string().max(200).optional(), example: z.string().max(600).optional(), source: z.string().max(200).optional() }));
       try { return json(await makeExplanation({ ...b, aliases: b.aliases ?? [] })); }
       catch (error) { return NextResponse.json({ message: `설명을 만들지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
     }

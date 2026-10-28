@@ -360,6 +360,7 @@ function ItemDetail({ detail, folders, goals, mine, quizzing, onAct, onOpen, onG
               {ex ? <>
                 {ex.plain ? <Rich text={ex.plain} /> : null}
                 {extra.slice(0, more ? 3 : 1).map((x) => <div key={x.label} className="kw-part"><span className="kw-part-tag">{x.label}</span> <div className="kw-part-text"><Rich text={x.text} /></div></div>)}
+                {ex.differs ? <p className="kw-differs"><span className="kw-differs-tag">다른 관점</span><span><Inline text={ex.differs} /> <span className="kw-differs-note">시험·과제는 배운 자료 기준으로</span></span></p> : null}
                 {extra.length > 1 && !more ? <button className="linkish small kw-more-btn" onClick={() => setMore(true)}>{extra.slice(1).map((x) => x.label).join(" · ")} 더 보기</button> : null}
               </> : oldParts.map((t, n) => <Rich key={n} text={t} />)}
               {see.length ? <p className="small kw-see">{see.some((q) => q.sure) ? <span className="muted">먼저 알 것 </span> : null}{see.filter((q) => q.sure).map((q) => <button key={q.title} className="chip" onClick={() => onOpen(q.id!)}>{q.title}</button>)}

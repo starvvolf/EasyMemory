@@ -362,3 +362,6 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .kw-part-tag{margin-top:2px}
 .dejipgi .kw-part-text{min-width:0;flex:1}
 .dejipgi .kw-part-text p{margin:0}
+.dejipgi .kw-differs{display:flex;gap:8px;align-items:baseline;margin:0;padding:8px 10px;border-radius:8px;background:var(--help-soft);font-size:13px}
+.dejipgi .kw-differs-tag{flex:none;font-size:11px;font-weight:700;color:var(--help)}
+.dejipgi .kw-differs-note{color:var(--muted);font-size:12px}
