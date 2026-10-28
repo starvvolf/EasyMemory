@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>게시판</title>
+<style>
+  :root { --bg:#fafaf9; --fg:#1c1917; --mut:#78716c; --line:#e7e5e4; --acc:#2563eb; --bad:#b91c1c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1c1917; --fg:#f5f5f4; --mut:#a8a29e; --line:#44403c; --acc:#60a5fa; --bad:#f87171; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:24px 16px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .mut { color:var(--mut); font-size:13px; }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px; margin:14px 0; }
+  input, textarea { width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit; font:inherit; margin:4px 0; }
+  button { padding:6px 12px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit; cursor:pointer; }
+  button.p { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .post { border-top:1px solid var(--line); padding:10px 0; }
+  .post h3 { margin:0; font-size:16px; }
+  .err { color:var(--bad); font-size:13px; min-height:18px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>게시판</h1>
+  <div class="mut" id="health">서버 확인 중…</div>
+
+  <section id="auth" hidden>
+    <div id="who" class="mut"></div>
+    <div id="loginForm">
+      <input id="u" placeholder="아이디 (영문 소문자·숫자 3~20자)" autocomplete="username">
+      <input id="pw" type="password" placeholder="비밀번호 (8자 이상)" autocomplete="current-password">
+      <div class="row"><button class="p" id="login">로그인</button><button id="signup">가입</button></div>
+    </div>
+    <button id="logout" hidden>로그아웃</button>
+    <div class="err" id="authErr"></div>
+  </section>
+
+  <section id="write" hidden>
+    <input id="title" placeholder="제목">
+    <textarea id="body" rows="3" placeholder="내용"></textarea>
+    <button class="p" id="send">글쓰기</button>
+    <div class="err" id="writeErr"></div>
+  </section>
+
+  <section id="list" hidden>
+    <div class="row"><strong>글 목록</strong><span class="mut" id="pageInfo"></span>
+      <button id="prev">이전</button><button id="next">다음</button></div>
+    <div id="posts"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let page = 1, me = null;
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  const text = await r.text();
+  let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  return { status: r.status, data, headers: r.headers };
+}
+const msg = (r) => `${r.status} ${r.data && r.data.error ? r.data.error : ""}`;
+
+async function boot() {
+  const h = await api("GET", "/health");
+  $("health").textContent = h.status === 200 ? "서버 연결됨" : `서버 응답: ${h.status}`;
+  const m = await api("GET", "/me");
+  if (m.status !== 404) { $("auth").hidden = false; me = m.status === 200 ? m.data : null; }
+  const p = await api("GET", "/posts");
+  if (p.status !== 404) { $("list").hidden = false; $("write").hidden = false; }
+  render();
+}
+function render() {
+  $("who").textContent = me ? `${me.username} 님으로 로그인함` : "로그인하지 않음";
+  $("loginForm").hidden = !!me; $("logout").hidden = !me;
+  loadPosts();
+}
+async function loadPosts() {
+  if ($("list").hidden) return;
+  const r = await api("GET", `/posts?page=${page}`);
+  const total = r.headers.get("x-total-count");
+  $("pageInfo").textContent = total ? `${page}쪽 · 전체 ${total}개` : "";
+  $("prev").hidden = $("next").hidden = !total;
+  const box = $("posts"); box.innerHTML = "";
+  if (r.status !== 200) { box.textContent = msg(r); return; }
+  for (const post of r.data) {
+    const el = document.createElement("div"); el.className = "post";
+    const h = document.createElement("h3"); h.textContent = `#${post.id} ${post.title}`;
+    const b = document.createElement("div"); b.textContent = post.body;
+    const meta = document.createElement("div"); meta.className = "mut"; meta.textContent = `${post.author_id ? `작성자 ${post.author_id} · ` : ""}${post.created_at}`;
+    const err = document.createElement("div"); err.className = "err";
+    const edit = document.createElement("button"); edit.textContent = "고치기";
+    edit.onclick = async () => { const t = prompt("새 제목", post.title); if (t === null) return; const r2 = await api("PATCH", `/posts/${post.id}`, { title: t }); r2.status === 200 ? loadPosts() : err.textContent = msg(r2); };
+    const del = document.createElement("button"); del.textContent = "지우기";
+    del.onclick = async () => { const r2 = await api("DELETE", `/posts/${post.id}`); r2.status === 204 ? loadPosts() : err.textContent = msg(r2); };
+    const row = document.createElement("div"); row.className = "row"; row.append(edit, del);
+    el.append(h, b, meta, row, err); box.append(el);
+  }
+}
+$("send").onclick = async () => {
+  const r = await api("POST", "/posts", { title: $("title").value, body: $("body").value });
+  $("writeErr").textContent = r.status === 201 ? "" : msg(r);
+  if (r.status === 201) { $("title").value = ""; $("body").value = ""; page = 1; loadPosts(); }
+};
+$("login").onclick = async () => {
+  const r = await api("POST", "/login", { username: $("u").value, password: $("pw").value });
+  $("authErr").textContent = r.status === 200 ? "" : msg(r);
+  if (r.status === 200) { me = r.data; render(); }
+};
+$("signup").onclick = async () => {
+  const r = await api("POST", "/signup", { username: $("u").value, password: $("pw").value });
+  $("authErr").textContent = r.status === 201 ? "가입했어요. 이제 로그인하세요." : msg(r);
+};
+$("logout").onclick = async () => { await api("POST", "/logout"); me = null; render(); };
+$("prev").onclick = () => { if (page > 1) { page--; loadPosts(); } };
+$("next").onclick = () => { page++; loadPosts(); };
+boot();
+</script>
+</body>
+</html>

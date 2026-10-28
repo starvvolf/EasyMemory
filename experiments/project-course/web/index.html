@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>프로젝트 코스 · Recaller 실험</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="mark">R</span><span>프로젝트 코스</span><span class="tag">실험</span></div>
+  <div class="top-right">
+    <span id="aiChip" class="chip"></span>
+    <select id="runPick" aria-label="진행 중인 코스"></select>
+    <button id="newIntake" class="btn ghost">새 코스 정하기</button>
+  </div>
+</header>
+<div id="nodeWarn" class="banner bad" hidden></div>
+<main id="view"></main>
+<div id="toast" class="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

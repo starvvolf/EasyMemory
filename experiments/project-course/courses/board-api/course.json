@@ -1,0 +1,374 @@
+{
+  "id": "board-api",
+  "title": "게시판 API 만들기",
+  "summary": "로그인 있는 게시판 서버를 단계별로 완성한다. AI가 대부분의 코드를 준비하고, 각 단계의 핵심 몇 줄은 학습자가 직접 고친다. 실제 서버와 DB에 실제 요청을 보내 검사한다.",
+  "stack": "Node.js(22.13 이상) · TypeScript(빌드 없이 실행) · SQLite(Node 내장) · VS Code",
+  "audience": "문법은 알지만 웹 서버를 혼자 만들어 본 적이 적은 초급~초중급",
+  "templates": {
+    "board": { "dir": "template" },
+    "memo": { "dir": "memo-overlay", "base": { "template": "board", "stage": 99, "drop": ["src/routes/posts.ts", "src/validate.ts"] } }
+  },
+  "auth": { "board": 4, "memo": 0 },
+
+  "knowledge": [
+    { "id": "k-status", "name": "HTTP 상태 코드의 뜻", "essentials": "2xx는 성공, 4xx는 요청한 쪽의 잘못, 5xx는 서버의 잘못. 클라이언트는 숫자만 보고도 다음 행동을 정한다." },
+    { "id": "k-routing", "name": "라우팅", "essentials": "메서드 + 주소 한 쌍을 처리 함수 하나로 보낸다. 같은 주소라도 GET과 DELETE는 다른 경로다." },
+    { "id": "k-always-respond", "name": "모든 요청에는 응답이 있어야 한다", "essentials": "서버가 응답을 끝내지 않으면 클라이언트는 시간 초과까지 기다린다. 처리할 수 없는 요청에도 실패 응답을 보낸다." },
+    { "id": "k-404-405", "name": "404와 405의 차이", "essentials": "주소 자체가 없으면 404, 주소는 있는데 그 메서드를 받지 않으면 405와 Allow 헤더." },
+    { "id": "k-persistence", "name": "영속성: 메모리와 DB", "essentials": "프로그램 안의 변수는 서버가 꺼지면 사라진다. 꺼져도 남아야 하는 것은 DB(파일)에 쓴다." },
+    { "id": "k-crud-http", "name": "CRUD와 HTTP 메서드", "essentials": "만들기 POST→201+Location, 읽기 GET→200, 고치기 PATCH→200, 지우기 DELETE→204. 없는 것은 404." },
+    { "id": "k-prepared", "name": "준비된 문(? 자리표시자)", "essentials": "SQL 문자열에 값을 이어 붙이지 않고 ?로 자리를 두고 값을 따로 넘긴다. 값이 SQL로 해석되지 않는다(SQL 주입 방지)." },
+    { "id": "k-validate", "name": "입력 검증은 저장 전에, 경계값까지", "essentials": "들어온 값은 믿지 않는다. 타입·빈 값·길이 한도를 저장 전에 검사하고, 한도 바로 안(100자)과 바로 밖(101자)을 둘 다 확인한다." },
+    { "id": "k-400-500", "name": "400과 500의 구분", "essentials": "요청이 잘못된 것(잘못된 JSON, 규칙 위반)은 400. 500은 서버 코드가 예상 못 한 실패라서, 요청 잘못을 500으로 내면 서버 버그처럼 보인다." },
+    { "id": "k-password-hash", "name": "비밀번호는 소금 친 느린 해시로", "essentials": "평문·단순 해시는 DB가 새면 바로 뚫린다. 사람마다 다른 소금(salt)과 느린 해시(scrypt 등)로 저장하고, 확인은 같은 방법으로 다시 계산해 비교한다." },
+    { "id": "k-session", "name": "세션 쿠키", "essentials": "로그인하면 추측할 수 없는 토큰을 만들어 서버 표에 사용자와 묶어 두고, 쿠키(HttpOnly)로 준다. 다음 요청부터 쿠키로 누구인지 찾는다." },
+    { "id": "k-authn-authz", "name": "인증과 인가의 차이", "essentials": "인증은 '누구인가'(모르면 401), 인가는 '이 사람이 이걸 해도 되는가'(안 되면 403). 로그인했다고 모든 것을 해도 되는 것은 아니다." },
+    { "id": "k-ownership", "name": "자원 소유권 검사", "essentials": "남의 것을 바꾸는 모든 경로(고치기·지우기)에서 요청한 사람이 주인인지 서버가 확인한다. 화면에서 버튼을 숨기는 것으로는 막을 수 없다." },
+    { "id": "k-403", "name": "HTTP 403 Forbidden", "essentials": "누구인지는 알지만 이 작업은 허락되지 않음. 로그인을 다시 해도 결과가 같다." },
+    { "id": "k-repro-first", "name": "버그는 먼저 재현하는 검사로", "essentials": "고치기 전에 신고를 재현하는 실패 검사를 만든다(돌린다). 고친 뒤 그 검사가 통과하면 고쳐진 것이고, 남겨 두면 같은 버그가 다시 들어오는 것을 막는다(회귀 검사)." },
+    { "id": "k-pagination", "name": "페이지 나누기의 OFFSET", "essentials": "1쪽부터 셀 때 건너뛸 개수는 (쪽 - 1) × 쪽 크기. 경계(첫 쪽, 마지막 쪽, 0이나 글자 같은 잘못된 쪽 번호)를 확인한다." },
+    { "id": "k-hide-existence", "name": "남의 비공개 자원은 404로 숨기기", "essentials": "있는지조차 알려 주면 안 되는 자원은 주인이 아니면 403 대신 404를 준다. 조회 조건에 주인을 넣어(WHERE owner_id = ?) 남의 것은 처음부터 찾지 않는다." }
+  ],
+
+  "parts": [
+    { "id": "p-server", "name": "서버", "files": ["src/server.ts"], "role": "요청을 받아 라우터로 넘기고, 처리 중 오류를 상태 코드로 바꿔 응답한다.", "core": "어떤 요청이든 반드시 응답 하나로 끝난다.", "io": "HTTP 요청 → 처리 함수 호출 또는 404/405/500 응답", "links": ["p-router", "p-http"], "without": "없는 주소나 오류에서 클라이언트가 응답을 못 받고 기다린다.", "mistake": "경로가 없을 때 응답을 안 보냄, 모든 오류를 500으로 보냄", "knowledge": ["k-always-respond", "k-404-405", "k-status"] },
+    { "id": "p-router", "name": "라우터", "files": ["src/router.ts", "src/app.ts"], "role": "메서드+주소를 처리 함수로 연결한다. app.ts에 서버가 받는 요청 전체가 모여 있다.", "core": "메서드와 주소 한 쌍 = 처리 함수 하나", "io": "메서드, 주소 → 처리 함수 + 주소 속 값(:id) 또는 허용 메서드 목록", "links": ["p-server"], "without": "모든 요청을 한 함수에서 if로 나눠야 한다.", "mistake": "주소만 보고 메서드를 안 봄", "knowledge": ["k-routing", "k-404-405"] },
+    { "id": "p-http", "name": "HTTP 도우미", "files": ["src/http.ts"], "role": "본문을 JSON으로 읽고, JSON으로 응답하고, 쿠키를 읽는다.", "core": "요청 쪽 잘못은 HttpError(4xx)로 던져서 서버가 알맞게 응답하게 한다.", "io": "요청 본문 → 객체 / 상태+값 → 응답", "links": ["p-server", "p-posts"], "without": "처리 함수마다 같은 코드를 반복한다.", "mistake": "깨진 JSON을 그냥 JSON.parse해서 500이 남", "knowledge": ["k-400-500"] },
+    { "id": "p-db", "name": "DB 연결", "files": ["src/db.ts"], "role": "SQLite 파일에 표를 만들고 연결을 열어 둔다.", "core": "꺼져도 남아야 하는 것은 여기에 쓴다.", "io": "SQL + 값 → 행", "links": ["p-posts", "p-auth"], "without": "서버를 껐다 켜면 글이 사라진다.", "mistake": "값을 SQL 문자열에 이어 붙임", "knowledge": ["k-persistence", "k-prepared"] },
+    { "id": "p-posts", "name": "글 처리", "files": ["src/routes/posts.ts"], "role": "글 목록·쓰기·읽기·고치기·지우기.", "core": "검증 → (권한) → DB → 알맞은 상태 코드", "io": "요청 → 201/200/204 또는 400/401/403/404", "links": ["p-validate", "p-auth", "p-owner", "p-db"], "without": "게시판이 없다.", "mistake": "저장하지 않고 201을 돌려줌, 없는 글에 200", "knowledge": ["k-crud-http", "k-persistence"] },
+    { "id": "p-validate", "name": "입력 검증", "files": ["src/validate.ts", "src/http.ts"], "role": "저장 전에 들어온 값이 규칙에 맞는지 본다.", "core": "들어온 값은 믿지 않는다. 틀리면 400과 이유.", "io": "요청 값 → 정리된 값 또는 400", "links": ["p-posts"], "without": "빈 제목, 숫자 제목, 아주 긴 글이 그대로 저장된다.", "mistake": "경계값(100자/101자)을 안 봄, 고치기 경로에서 검증을 빠뜨림", "knowledge": ["k-validate", "k-400-500"] },
+    { "id": "p-auth", "name": "인증(비밀번호·세션)", "files": ["src/auth.ts", "src/routes/users.ts"], "role": "비밀번호를 안전하게 저장·확인하고, 세션으로 누구인지 알아낸다.", "core": "비밀번호는 되돌릴 수 없게, 로그인 상태는 추측할 수 없는 토큰으로.", "io": "쿠키 → 사용자 또는 401", "links": ["p-db", "p-posts"], "without": "누가 썼는지 모른다. 평문이면 DB 유출 = 비밀번호 유출.", "mistake": "평문 저장, 모두에게 같은 소금, 아이디가 없을 때와 비밀번호가 틀릴 때 다른 응답", "knowledge": ["k-password-hash", "k-session", "k-authn-authz"] },
+    { "id": "p-owner", "name": "소유권 검사", "files": ["src/routes/posts.ts"], "role": "고치기·지우기 전에 요청한 사람이 글 주인인지 확인한다.", "core": "인증 다음에 인가: 누구인지 안 뒤, 해도 되는지 본다.", "io": "사용자 + 글 → 통과 또는 403", "links": ["p-auth", "p-posts"], "without": "로그인한 누구나 남의 글을 고치고 지운다.", "mistake": "고치기에만 넣고 지우기에 빠뜨림, 403 대신 401", "knowledge": ["k-authn-authz", "k-ownership", "k-403"] },
+    { "id": "p-paging", "name": "목록 쪽 나누기", "files": ["src/routes/posts.ts"], "role": "최신 글부터 10개씩 쪽으로 나눠 준다.", "core": "건너뛸 개수 = (쪽 - 1) × 10", "io": "?page=N → 그 쪽의 글 + 전체 개수 헤더", "links": ["p-posts"], "without": "글이 많아지면 한 번에 전부 보낸다.", "mistake": "OFFSET을 쪽 × 10으로 계산(첫 쪽을 건너뜀)", "knowledge": ["k-pagination", "k-repro-first"] },
+    { "id": "p-memos", "name": "메모 처리(전이)", "files": ["src/routes/memos.ts"], "role": "개인 메모. 남의 메모는 있는지도 몰라야 한다.", "core": "조회 조건에 주인을 넣어 남의 것은 처음부터 찾지 않는다.", "io": "요청 → 내 메모만 / 남의 것은 404", "links": ["p-auth", "p-db"], "without": "아무나 남의 메모를 읽는다.", "mistake": "하나를 고치고 목록은 빠뜨림", "knowledge": ["k-hide-existence", "k-ownership", "k-authn-authz"] }
+  ],
+
+  "stages": [
+    {
+      "n": 1, "template": "board", "title": "서버와 HTTP 요청", "goal": "어떤 요청이든 알맞은 상태 코드로 응답하게 한다.",
+      "parts": ["p-server", "p-router", "p-http"], "knowledge": ["k-status", "k-routing", "k-always-respond", "k-404-405"],
+      "intro": "서버(server.ts)와 라우터(router.ts, app.ts)는 준비되어 있다. /health 는 잘 응답한다. 그런데 없는 주소로 요청하면 어떻게 될까?",
+      "predict": [
+        { "id": "p1", "q": "server.ts는 맞는 경로가 없을 때 아무것도 하지 않는다. 이 서버에 GET /nothing 을 보내면 클라이언트에서는?", "options": ["404가 자동으로 온다", "빈 200이 온다", "응답이 오지 않아 기다리다 시간 초과", "서버가 꺼진다"], "answer": 2, "why": "HTTP 서버는 상태 코드를 알아서 정하지 않는다. 처리 함수가 응답을 끝내지 않으면 연결이 열린 채로 남고, 클라이언트는 시간 초과까지 기다린다.", "knowledge": ["k-always-respond"] },
+        { "id": "p2", "q": "/health 는 GET만 받는다. DELETE /health 에 알맞은 응답은?", "options": ["404 Not Found", "405 Method Not Allowed", "400 Bad Request", "200 OK"], "answer": 1, "why": "주소는 있지만 그 메서드를 받지 않으면 405다. Allow 헤더로 받는 메서드를 알려 준다.", "knowledge": ["k-404-405", "k-routing"] }
+      ],
+      "observe": { "text": "예측을 확인하자. 지금 코드에 실제 요청을 보내 본다(검사기는 2초 기다린다).", "checks": ["s1-404", "s1-405"] },
+      "fix": { "text": "server.ts에서 맞는 경로가 없을 때의 응답을 채운다. 주소가 없으면 404, 주소는 있는데 메서드가 틀리면 405와 allow 헤더. 응답은 sendJson으로 { error: \"…\" } 꼴.", "files": ["src/server.ts"] },
+      "explain": { "q": "404와 405는 각각 언제 보내는지 한 문장씩 적어 보자.", "knowledge": ["k-404-405"] },
+      "hints": {
+        "1": "router.match가 돌려주는 값을 보자. handler가 없을 때 allowed 목록이 비어 있는지 아닌지로 두 경우가 갈린다.",
+        "2": "server.ts의 TODO 자리에서 found.allowed.length가 있으면 405(allow 헤더 포함), 없으면 404를 sendJson으로 보내고 return한다."
+      },
+      "try": [
+        { "label": "GET /health", "method": "GET", "path": "/health" },
+        { "label": "GET /nothing (없는 주소)", "method": "GET", "path": "/nothing" },
+        { "label": "DELETE /health (틀린 메서드)", "method": "DELETE", "path": "/health" }
+      ]
+    },
+    {
+      "n": 2, "template": "board", "title": "게시물 CRUD와 DB", "goal": "글을 DB에 저장해서 서버를 껐다 켜도 남게 한다.",
+      "parts": ["p-db", "p-posts"], "knowledge": ["k-persistence", "k-crud-http", "k-prepared"],
+      "intro": "글 처리(posts.ts)와 DB 연결(db.ts)이 생겼다. 목록·읽기·고치기·지우기는 DB를 쓰는데, 글쓰기는 아직 저장하지 않고 받은 내용만 돌려준다.",
+      "predict": [
+        { "id": "p1", "q": "글쓰기 요청에 201 Created와 { id: 1, … }이 왔다. 이 글을 GET /posts/1 로 읽으면?", "options": ["반드시 200: 201은 저장됐다는 뜻이다", "서버 코드가 실제로 저장했는지에 달렸다", "항상 404"], "answer": 1, "why": "상태 코드는 서버 코드가 고른 숫자일 뿐이다. 201을 돌려주면서 저장하지 않는 코드도 얼마든지 짤 수 있다. 그래서 검사는 응답만이 아니라 DB까지 본다.", "knowledge": ["k-crud-http", "k-persistence"] }
+      ],
+      "observe": { "text": "글을 쓰고 다시 읽어 본다. 응답과 DB가 어떻게 다른지 보자.", "checks": ["s2-create", "s2-persist"] },
+      "fix": { "text": "posts.ts의 create에서 글을 posts 표에 INSERT하고(값은 ? 자리표시자로), 새 번호(lastInsertRowid)로 다시 읽어서 돌려준다.", "files": ["src/routes/posts.ts"] },
+      "explain": { "q": "201을 돌려줬는데 글이 없을 수 있는 이유는?", "knowledge": ["k-crud-http"] },
+      "hints": {
+        "1": "다른 처리 함수(update, remove)가 DB를 어떻게 쓰는지 보자. db.prepare(SQL).run(값들)이 돌려주는 결과에 새 번호가 들어 있다.",
+        "2": "create의 TODO 자리: db.prepare(\"INSERT INTO posts (title, body) VALUES (?, ?)\").run(post.title, post.body)의 결과에서 lastInsertRowid를 꺼내 findPost로 다시 읽는다."
+      },
+      "try": [
+        { "label": "글쓰기", "method": "POST", "path": "/posts", "body": { "title": "첫 글", "body": "안녕하세요" } },
+        { "label": "목록", "method": "GET", "path": "/posts" },
+        { "label": "1번 글 읽기", "method": "GET", "path": "/posts/1" }
+      ]
+    },
+    {
+      "n": 3, "template": "board", "title": "입력 검증", "goal": "잘못된 입력을 저장하지 않고 400과 이유로 돌려보낸다.",
+      "parts": ["p-validate", "p-http"], "knowledge": ["k-validate", "k-400-500", "k-status"],
+      "intro": "validate.ts가 생겼다. 규칙은 주석에 적혀 있다. 지금은 아무 값이나 통과시키고, 깨진 JSON에는 서버가 죽은 것처럼 500을 낸다.",
+      "predict": [
+        { "id": "p1", "q": "제목이 공백뿐인 글쓰기 요청이 왔다. 알맞은 응답은?", "options": ["201 Created (일단 저장)", "400 Bad Request", "500 Internal Server Error", "404 Not Found"], "answer": 1, "why": "요청 쪽 잘못이므로 4xx, 그중 '요청 내용이 규칙에 어긋남'은 400이다. 저장하지 않는다.", "knowledge": ["k-validate", "k-status"] },
+        { "id": "p2", "q": "본문이 { 제목: 망가짐 처럼 깨진 JSON이면?", "options": ["400: 요청이 잘못됐다", "500: 파싱이 실패했으니 서버 오류", "200: 빈 객체로 본다"], "answer": 0, "why": "JSON.parse가 던지는 것은 서버 코드의 실패처럼 보이지만, 원인은 요청이다. 500은 '서버를 고쳐야 한다'는 신호라서, 요청 잘못에 내면 운영자가 엉뚱한 곳을 찾는다.", "knowledge": ["k-400-500"] }
+      ],
+      "observe": { "text": "규칙에 어긋난 요청을 보내 보고, DB에 무엇이 남았는지도 본다.", "checks": ["s3-empty-title", "s3-bad-json"] },
+      "fix": { "text": "validate.ts의 validatePost를 주석의 규칙대로 채운다. 그리고 http.ts의 readJson이 깨진 JSON에 400을 던지게 한다(본문이 { } 객체가 아닐 때도 400).", "files": ["src/validate.ts", "src/http.ts"] },
+      "explain": { "q": "왜 깨진 JSON은 500이 아니라 400이어야 할까?", "knowledge": ["k-400-500"] },
+      "hints": {
+        "1": "검사 결과에서 실패한 것들을 둘로 나눠 보자. 규칙 위반(빈 제목, 숫자 제목, 101자)은 validate.ts, 깨진 JSON은 http.ts다.",
+        "2": "validatePost: typeof로 글자인지 보고, title.trim()이 비었거나 100자를 넘으면 new HttpError(400, 이유)를 던진다. 저장할 값은 trim한 제목. readJson: JSON.parse를 try/catch로 감싸 catch에서 HttpError(400)."
+      },
+      "try": [
+        { "label": "빈 제목", "method": "POST", "path": "/posts", "body": { "title": "   ", "body": "x" } },
+        { "label": "숫자 제목", "method": "POST", "path": "/posts", "body": { "title": 123 } },
+        { "label": "깨진 JSON", "method": "POST", "path": "/posts", "raw": "{제목: 망가짐" }
+      ]
+    },
+    {
+      "n": 4, "template": "board", "title": "회원가입과 로그인", "goal": "비밀번호를 안전하게 저장하고, 세션으로 누구인지 알아낸다.",
+      "parts": ["p-auth"], "knowledge": ["k-password-hash", "k-session", "k-authn-authz"],
+      "intro": "가입·로그인·세션이 생겼고, 글쓰기는 로그인해야 한다. 세션은 준비되어 있다. 그런데 비밀번호가 DB에 그대로 들어간다.",
+      "predict": [
+        { "id": "p1", "q": "DB 파일이 통째로 유출됐다. 비밀번호를 어떻게 저장해 뒀어야 피해가 가장 적을까?", "options": ["그대로 (어차피 DB가 새면 끝)", "암호화 (키는 서버 설정 파일에)", "SHA-256 한 번", "사람마다 다른 소금을 친 느린 해시(scrypt)"], "answer": 3, "why": "암호화는 키가 같이 새면 풀린다. 빠른 해시 한 번은 흔한 비밀번호를 미리 계산해 둔 표로 바로 찾는다. 소금이 사람마다 다르면 표를 미리 만들 수 없고, 느린 해시는 하나씩 맞춰 보는 비용을 키운다.", "knowledge": ["k-password-hash"] },
+        { "id": "p2", "q": "로그인 안 한 사람이 POST /posts 로 글을 쓰려 하면?", "options": ["401 Unauthorized", "403 Forbidden", "400 Bad Request"], "answer": 0, "why": "누구인지 모르는 것(인증 실패)은 401이다. 로그인하면 결과가 달라질 수 있다.", "knowledge": ["k-authn-authz"] }
+      ],
+      "observe": { "text": "가입한 뒤 DB의 users 표에 무엇이 저장됐는지 직접 본다.", "checks": ["s4-signup", "s4-salt"] },
+      "fix": { "text": "auth.ts의 hashPassword와 verifyPassword를 채운다. 소금은 randomBytes(16), 해시는 scryptSync(비밀번호, 소금, 32), 저장 꼴은 \"scrypt:소금:해시\"(16진수). 확인은 저장된 소금으로 다시 계산해서 timingSafeEqual로 비교.", "files": ["src/auth.ts"] },
+      "explain": { "q": "같은 비밀번호인데 두 사람의 저장값이 달라야 하는 이유는?", "knowledge": ["k-password-hash"] },
+      "hints": {
+        "1": "검사기가 DB에서 본 password_hash 값이 비밀번호 그대로다. auth.ts에서 DB에 넣을 값을 만드는 함수가 어디인지 찾자.",
+        "2": "hashPassword: const salt = randomBytes(16).toString(\"hex\"); 해시는 scryptSync(password, salt, 32).toString(\"hex\"); 반환은 `scrypt:${salt}:${hash}`. verifyPassword는 stored를 \":\"로 나눠 같은 소금으로 다시 계산해 비교한다."
+      },
+      "try": [
+        { "label": "A로 가입", "method": "POST", "path": "/signup", "body": { "username": "alice", "password": "pass1234" } },
+        { "label": "A로 로그인", "method": "POST", "path": "/login", "body": { "username": "alice", "password": "pass1234" }, "as": "A" },
+        { "label": "내 정보 (A)", "method": "GET", "path": "/me", "as": "A" },
+        { "label": "로그인 없이 글쓰기", "method": "POST", "path": "/posts", "body": { "title": "누구?" } }
+      ]
+    },
+    {
+      "n": 5, "template": "board", "title": "작성자 권한 검사", "goal": "다른 사람의 글은 고치거나 지울 수 없게 한다.",
+      "parts": ["p-owner", "p-auth"], "knowledge": ["k-authn-authz", "k-ownership", "k-403"],
+      "intro": "글에 작성자(author_id)가 붙었다. 로그인은 확인하지만, 누구의 글인지는 확인하지 않는다.",
+      "predict": [
+        { "id": "p1", "q": "B가 로그인한 채로 A의 글을 고치려 한다(PATCH /posts/1). 서버가 올바르면?", "options": ["200 OK", "401 Unauthorized", "403 Forbidden", "404 Not Found"], "answer": 2, "why": "B가 누구인지는 안다(인증 통과). 하지만 A의 글을 고칠 권한이 없다(인가 실패) → 403. 다시 로그인해도 결과는 같다.", "knowledge": ["k-authn-authz", "k-403"] },
+        { "id": "p2", "q": "로그인하지 않은 사람이 같은 요청을 보내면?", "options": ["401", "403", "404"], "answer": 0, "why": "누구인지 모르면 주인인지 따질 수도 없다. 먼저 인증(401), 그다음 인가(403).", "knowledge": ["k-authn-authz"] }
+      ],
+      "observe": { "text": "A가 쓴 글을 B가 고치고 지워 본다. 응답과 DB의 글이 어떻게 되는지 보자.", "checks": ["s5-edit-others", "s5-delete-others"] },
+      "fix": { "text": "posts.ts의 고치기와 지우기에서, 글을 찾은 뒤 요청한 사람이 작성자가 아니면 HttpError(403)를 던진다. 두 경로 모두.", "files": ["src/routes/posts.ts"] },
+      "explain": { "q": "이 게시판을 예로 401과 403의 차이를 설명해 보자.", "knowledge": ["k-authn-authz"] },
+      "hints": {
+        "1": "update와 remove는 requireUser로 user를 얻고 findPost로 post를 얻는다. 그 둘을 비교하는 줄이 없다.",
+        "2": "findPost 다음 줄에 if (post.author_id !== user.id) throw new HttpError(403, \"…\"); 를 update와 remove 둘 다에 넣는다. 고치기에만 넣으면 지우기 검사가 계속 실패한다."
+      },
+      "try": [
+        { "label": "A 가입", "method": "POST", "path": "/signup", "body": { "username": "alice", "password": "pass1234" } },
+        { "label": "A 로그인", "method": "POST", "path": "/login", "body": { "username": "alice", "password": "pass1234" }, "as": "A" },
+        { "label": "B 가입", "method": "POST", "path": "/signup", "body": { "username": "bob", "password": "pass1234" } },
+        { "label": "B 로그인", "method": "POST", "path": "/login", "body": { "username": "bob", "password": "pass1234" }, "as": "B" },
+        { "label": "A가 글쓰기", "method": "POST", "path": "/posts", "body": { "title": "A의 글", "body": "원래 내용" }, "as": "A" },
+        { "label": "B가 1번 글 고치기", "method": "PATCH", "path": "/posts/1", "body": { "title": "B가 바꿈" }, "as": "B" }
+      ]
+    },
+    {
+      "n": 6, "template": "board", "title": "버그 수정과 회귀 검사", "goal": "신고된 버그를 재현하는 검사로 확인하고 고친다.",
+      "parts": ["p-paging"], "knowledge": ["k-repro-first", "k-pagination"],
+      "intro": "요구 변경: 목록을 최신 글부터 10개씩 쪽으로 나눈다(?page=1이 첫 쪽). AI가 구현해 두었는데 사용자 신고가 들어왔다. \"1쪽에 최신 글이 안 보여요.\"",
+      "predict": [
+        { "id": "p1", "q": "신고를 받았다. 가장 먼저 할 일은?", "options": ["코드를 읽으며 바로 고친다", "신고를 재현하는 검사를 만들어(또는 돌려) 실패를 확인한다", "서버를 다시 켠다", "AI에게 목록 기능을 처음부터 다시 짜게 한다"], "answer": 1, "why": "재현되는 실패가 있어야 고쳤는지 판단할 수 있다. 고친 뒤 그 검사를 남기면 같은 버그가 다시 들어오는 것을 막는다.", "knowledge": ["k-repro-first"] },
+        { "id": "p2", "q": "한 쪽에 10개, 1쪽부터 센다. 3쪽을 보려면 앞에서 몇 개를 건너뛰어야 하나?", "options": ["10", "20", "30"], "answer": 1, "why": "(3 - 1) × 10 = 20. 1쪽은 0개를 건너뛴다.", "knowledge": ["k-pagination"] }
+      ],
+      "observe": { "text": "글 12개를 쓰고 1쪽과 2쪽을 요청하는 검사로 신고를 재현한다. 전체 검사를 돌리면 2단계의 '목록에 방금 쓴 글이 있다'(회귀 검사)도 깨져 있다. 회귀 검사가 같은 버그를 먼저 잡고 있었던 것이다.", "checks": ["s6-first-page", "s2-list"] },
+      "breaks": ["s2-list"],
+      "fix": { "text": "검사 결과의 파일:줄에서 원인을 찾아 고친다. 고친 뒤 이전 단계 검사까지 모두 다시 돌려 다른 것을 깨지 않았는지 본다.", "files": ["src/routes/posts.ts"] },
+      "explain": { "q": "고친 뒤에도 이 검사를 남겨 두는 이유는?", "knowledge": ["k-repro-first"] },
+      "hints": {
+        "1": "검사 결과를 보면 1쪽 첫 글이 최신 글이 아니라 2번째 글이다. 처음 몇 개를 건너뛰었는지 세어 보자.",
+        "2": "list의 OFFSET 값이 page * PAGE_SIZE다. 1쪽일 때 이 값이 0이어야 한다."
+      },
+      "try": [
+        { "label": "1쪽", "method": "GET", "path": "/posts?page=1", "as": "A" },
+        { "label": "2쪽", "method": "GET", "path": "/posts?page=2", "as": "A" }
+      ]
+    },
+    {
+      "n": 7, "template": "memo", "transfer": true, "title": "전이 과제: 메모 API", "goal": "게시판에서 배운 권한 원리를 구조가 다른 기능에 적용한다.",
+      "parts": ["p-memos", "p-auth"], "knowledge": ["k-hide-existence", "k-ownership", "k-authn-authz"],
+      "intro": "새 프로젝트: 개인 메모 API. 요구사항: 메모는 주인만 볼 수 있고, 남의 메모는 있는지조차 알 수 없어야 한다. 기본 코드는 AI가 짰다(memos.ts). 게시판과 달리 읽기도 막아야 하고, 응답 코드도 다르다.",
+      "predict": [
+        { "id": "p1", "q": "B가 A의 메모 GET /memos/3 을 요청한다. 요구사항에 맞는 응답은?", "options": ["200", "401", "403", "404"], "answer": 3, "why": "403은 '있지만 너는 안 된다'고 알려 준다. 메모는 있는지조차 숨겨야 하므로 주인이 아니면 '없다'(404)로 답한다. 게시판 글은 공개라 403이 맞았다.", "knowledge": ["k-hide-existence", "k-authn-authz"] }
+      ],
+      "observe": { "text": "A가 메모를 쓰고 B가 읽고 목록을 보고 지워 본다.", "checks": ["s7-others-get", "s7-others-list"] },
+      "fix": { "text": "memos.ts에서 남의 메모가 보이거나 지워지는 곳을 모두 찾아 고친다. 어떻게 고칠지는 스스로 정한다.", "files": ["src/routes/memos.ts"] },
+      "explain": { "q": "게시판은 403, 메모는 404. 왜 다르게 했나?", "knowledge": ["k-hide-existence"] },
+      "hints": {
+        "1": "남의 메모가 새는 경로가 하나가 아니다. 목록, 하나 읽기, 지우기를 각각 B의 입장에서 따라가 보자.",
+        "2": "SQL 조회 조건에 owner_id = ? 를 넣으면 남의 메모는 처음부터 찾지 않는다. findMemo와 list 두 곳."
+      },
+      "try": [
+        { "label": "A 가입", "method": "POST", "path": "/signup", "body": { "username": "alice", "password": "pass1234" } },
+        { "label": "A 로그인", "method": "POST", "path": "/login", "body": { "username": "alice", "password": "pass1234" }, "as": "A" },
+        { "label": "B 가입", "method": "POST", "path": "/signup", "body": { "username": "bob", "password": "pass1234" } },
+        { "label": "B 로그인", "method": "POST", "path": "/login", "body": { "username": "bob", "password": "pass1234" }, "as": "B" },
+        { "label": "A가 메모", "method": "POST", "path": "/memos", "body": { "text": "A의 비밀" }, "as": "A" },
+        { "label": "B가 1번 메모 읽기", "method": "GET", "path": "/memos/1", "as": "B" },
+        { "label": "B의 목록", "method": "GET", "path": "/memos", "as": "B" }
+      ]
+    }
+  ],
+
+  "checks": [
+    { "id": "s1-health", "stage": 1, "template": "board", "kind": "normal", "title": "GET /health 는 200과 { ok: true }", "knowledge": ["k-status"], "where": { "file": "src/app.ts", "anchor": "router.add(\"GET\", \"/health\"" },
+      "steps": [ { "req": "GET /health", "expect": { "status": 200, "json": { "ok": true } } } ] },
+    { "id": "s1-404", "stage": 1, "template": "board", "kind": "error", "target": true, "title": "없는 주소에는 404 JSON 응답", "knowledge": ["k-always-respond", "k-404-405"], "where": { "file": "src/server.ts", "anchor": "const found = router.match" },
+      "steps": [ { "req": "GET /nothing-here", "expect": { "status": 404, "header": { "content-type": "application/json" }, "has": ["error"] } } ] },
+    { "id": "s1-405", "stage": 1, "template": "board", "kind": "error", "target": true, "title": "있는 주소에 틀린 메서드면 405와 allow 헤더", "knowledge": ["k-404-405", "k-routing"], "where": { "file": "src/server.ts", "anchor": "const found = router.match" },
+      "steps": [ { "req": "DELETE /health", "expect": { "status": 405, "header": { "allow": "GET" } } } ] },
+
+    { "id": "s2-create", "stage": 2, "template": "board", "kind": "normal", "target": true, "title": "글쓰기는 201, 그 번호로 다시 읽을 수 있고 DB에 있다", "knowledge": ["k-crud-http", "k-persistence"], "where": { "file": "src/routes/posts.ts", "anchor": "export async function create" },
+      "steps": [
+        { "req": "POST /posts", "body": { "title": "첫 글 {run}", "body": "안녕" }, "expect": { "status": 201, "json": { "title": "첫 글 {run}" }, "header": { "location": "^/posts/\\d+$" } }, "save": { "pid": "body.id" } },
+        { "req": "GET /posts/{pid}", "expect": { "status": 200, "json": { "title": "첫 글 {run}" } } },
+        { "db": "SELECT title FROM posts WHERE id = ?", "params": ["{pid}"], "expect": { "rows": 1, "row": { "title": "첫 글 {run}" } } }
+      ] },
+    { "id": "s2-persist", "stage": 2, "template": "board", "kind": "normal", "target": true, "title": "서버를 껐다 켜도 글이 남는다", "knowledge": ["k-persistence"], "where": { "file": "src/routes/posts.ts", "anchor": "export async function create" },
+      "steps": [
+        { "req": "POST /posts", "body": { "title": "남아야 함 {run}" }, "expect": { "status": 201 }, "save": { "pid": "body.id" } },
+        { "restart": true },
+        { "req": "GET /posts/{pid}", "expect": { "status": 200, "json": { "title": "남아야 함 {run}" } } }
+      ] },
+    { "id": "s2-list", "stage": 2, "template": "board", "kind": "normal", "title": "목록에 방금 쓴 글이 있다", "knowledge": ["k-crud-http"], "where": { "file": "src/routes/posts.ts", "anchor": "export function list" },
+      "steps": [
+        { "req": "POST /posts", "body": { "title": "목록 확인 {run}" }, "expect": { "status": 201 } },
+        { "req": "GET /posts", "expect": { "status": 200, "some": { "title": "목록 확인 {run}" } } }
+      ] },
+    { "id": "s2-404", "stage": 2, "template": "board", "kind": "boundary", "title": "없는 글은 404", "knowledge": ["k-crud-http"], "where": { "file": "src/routes/posts.ts", "anchor": "function findPost" },
+      "steps": [ { "req": "GET /posts/999999", "expect": { "status": 404 } } ] },
+    { "id": "s2-delete", "stage": 2, "template": "board", "kind": "normal", "target": true, "title": "지우면 204, 다시 읽으면 404, DB에서도 없다", "knowledge": ["k-crud-http"], "where": { "file": "src/routes/posts.ts", "anchor": "export function remove" },
+      "steps": [
+        { "req": "POST /posts", "body": { "title": "지울 글 {run}" }, "expect": { "status": 201 }, "save": { "pid": "body.id" } },
+        { "req": "DELETE /posts/{pid}", "expect": { "status": 204 } },
+        { "req": "GET /posts/{pid}", "expect": { "status": 404 } },
+        { "db": "SELECT id FROM posts WHERE id = ?", "params": ["{pid}"], "expect": { "rows": 0 } }
+      ] },
+
+    { "id": "s3-empty-title", "stage": 3, "template": "board", "kind": "error", "target": true, "title": "공백뿐인 제목은 400, 저장하지 않는다", "knowledge": ["k-validate"], "where": { "file": "src/validate.ts", "anchor": "export function validatePost" },
+      "steps": [
+        { "req": "POST /posts", "body": { "title": "   ", "body": "빈 제목 {run}" }, "expect": { "status": 400, "has": ["error"] } },
+        { "db": "SELECT id FROM posts WHERE body = ?", "params": ["빈 제목 {run}"], "expect": { "rows": 0 } }
+      ] },
+    { "id": "s3-missing-type", "stage": 3, "template": "board", "kind": "error", "target": true, "title": "제목이 없거나 글자가 아니면 400", "knowledge": ["k-validate"], "where": { "file": "src/validate.ts", "anchor": "export function validatePost" },
+      "steps": [
+        { "req": "POST /posts", "body": { "body": "제목 없음" }, "expect": { "status": 400 } },
+        { "req": "POST /posts", "body": { "title": 123 }, "expect": { "status": 400 } },
+        { "req": "POST /posts", "body": { "title": "정상", "body": ["배열"] }, "expect": { "status": 400 } }
+      ] },
+    { "id": "s3-boundary", "stage": 3, "template": "board", "kind": "boundary", "target": true, "title": "제목 100자는 되고 101자는 400", "knowledge": ["k-validate"], "where": { "file": "src/validate.ts", "anchor": "export function validatePost" },
+      "steps": [
+        { "req": "POST /posts", "body": { "title": "{repeat:가:100}" }, "expect": { "status": 201 } },
+        { "req": "POST /posts", "body": { "title": "{repeat:가:101}" }, "expect": { "status": 400 } }
+      ] },
+    { "id": "s3-trim", "stage": 3, "template": "board", "kind": "boundary", "target": true, "title": "제목 앞뒤 공백은 빼고 저장", "knowledge": ["k-validate"], "where": { "file": "src/validate.ts", "anchor": "export function validatePost" },
+      "steps": [ { "req": "POST /posts", "body": { "title": "  공백 {run}  " }, "expect": { "status": 201, "json": { "title": "공백 {run}" } } } ] },
+    { "id": "s3-bad-json", "stage": 3, "template": "board", "kind": "error", "target": true, "title": "깨진 JSON은 500이 아니라 400", "knowledge": ["k-400-500"], "where": { "file": "src/http.ts", "anchor": "export async function readJson" },
+      "steps": [
+        { "req": "POST /posts", "raw": "{제목: 망가짐", "expect": { "status": 400 } },
+        { "req": "POST /posts", "raw": "[1, 2]", "expect": { "status": 400 } }
+      ] },
+    { "id": "s3-update-validate", "stage": 3, "template": "board", "kind": "error", "target": true, "title": "고치기에서도 검증한다(빈 제목 400, 글은 그대로)", "knowledge": ["k-validate"], "where": { "file": "src/validate.ts", "anchor": "export function validatePost" },
+      "steps": [
+        { "req": "POST /posts", "body": { "title": "고칠 글 {run}" }, "expect": { "status": 201 }, "save": { "pid": "body.id" } },
+        { "req": "PATCH /posts/{pid}", "body": { "title": "" }, "expect": { "status": 400 } },
+        { "db": "SELECT title FROM posts WHERE id = ?", "params": ["{pid}"], "expect": { "row": { "title": "고칠 글 {run}" } } }
+      ] },
+
+    { "id": "s4-signup", "stage": 4, "template": "board", "kind": "normal", "target": true, "title": "가입하면 201, DB에는 비밀번호가 아니라 소금 친 해시", "knowledge": ["k-password-hash"], "where": { "file": "src/auth.ts", "anchor": "export function hashPassword" },
+      "steps": [
+        { "as": null, "req": "POST /signup", "body": { "username": "s{run}", "password": "pass1234" }, "expect": { "status": 201, "json": { "username": "s{run}" } } },
+        { "db": "SELECT password_hash FROM users WHERE username = ?", "params": ["s{run}"], "expect": { "rows": 1, "rowNot": { "password_hash": "pass1234" }, "rowMatch": { "password_hash": "^scrypt:[0-9a-f]{32}:[0-9a-f]{64}$" } } }
+      ] },
+    { "id": "s4-salt", "stage": 4, "template": "board", "kind": "boundary", "target": true, "title": "같은 비밀번호라도 사람마다 저장값이 다르다", "knowledge": ["k-password-hash"], "where": { "file": "src/auth.ts", "anchor": "export function hashPassword" },
+      "steps": [
+        { "as": null, "req": "POST /signup", "body": { "username": "x{run}", "password": "samepass1" }, "expect": { "status": 201 } },
+        { "as": null, "req": "POST /signup", "body": { "username": "y{run}", "password": "samepass1" }, "expect": { "status": 201 } },
+        { "db": "SELECT COUNT(DISTINCT password_hash) AS n FROM users WHERE username IN (?, ?)", "params": ["x{run}", "y{run}"], "expect": { "row": { "n": 2 } } }
+      ] },
+    { "id": "s4-login", "stage": 4, "template": "board", "kind": "normal", "target": true, "title": "맞는 비밀번호로 로그인하면 HttpOnly 세션 쿠키, 그 쿠키로 /me", "knowledge": ["k-session", "k-password-hash"], "where": { "file": "src/auth.ts", "anchor": "export function verifyPassword" },
+      "steps": [
+        { "as": null, "req": "POST /signup", "body": { "username": "l{run}", "password": "pass1234" }, "expect": { "status": 201 } },
+        { "as": "L", "req": "POST /login", "body": { "username": "l{run}", "password": "pass1234" }, "expect": { "status": 200, "header": { "set-cookie": "HttpOnly" } } },
+        { "as": "L", "req": "GET /me", "expect": { "status": 200, "json": { "username": "l{run}" } } }
+      ] },
+    { "id": "s4-wrong-pw", "stage": 4, "template": "board", "kind": "error", "title": "틀린 비밀번호는 401, 쿠키 없음", "knowledge": ["k-authn-authz"], "where": { "file": "src/auth.ts", "anchor": "export function verifyPassword" },
+      "steps": [
+        { "as": null, "req": "POST /signup", "body": { "username": "w{run}", "password": "pass1234" }, "expect": { "status": 201 } },
+        { "as": null, "req": "POST /login", "body": { "username": "w{run}", "password": "wrong-pass" }, "expect": { "status": 401, "noHeader": ["set-cookie"] } }
+      ] },
+    { "id": "s4-dup", "stage": 4, "template": "board", "kind": "error", "title": "이미 있는 아이디는 409", "knowledge": ["k-status"], "where": { "file": "src/routes/users.ts", "anchor": "export async function signup" },
+      "steps": [
+        { "as": null, "req": "POST /signup", "body": { "username": "d{run}", "password": "pass1234" }, "expect": { "status": 201 } },
+        { "as": null, "req": "POST /signup", "body": { "username": "d{run}", "password": "pass5678" }, "expect": { "status": 409 } }
+      ] },
+    { "id": "s4-need-login", "stage": 4, "template": "board", "kind": "error", "title": "로그인 없이 글쓰기는 401", "knowledge": ["k-authn-authz"], "where": { "file": "src/routes/posts.ts", "anchor": "export async function create" },
+      "steps": [ { "as": null, "req": "POST /posts", "body": { "title": "누구?" }, "expect": { "status": 401 } } ] },
+
+    { "id": "s5-edit-others", "stage": 5, "template": "board", "kind": "error", "target": true, "title": "B가 A의 글을 고치면 403, 글은 그대로", "knowledge": ["k-authn-authz", "k-ownership", "k-403"], "where": { "file": "src/routes/posts.ts", "anchor": "export async function update" },
+      "steps": [
+        { "as": "A", "req": "POST /posts", "body": { "title": "A의 글 {run}", "body": "원래 내용" }, "expect": { "status": 201 }, "save": { "pid": "body.id" } },
+        { "as": "B", "req": "PATCH /posts/{pid}", "body": { "title": "B가 바꿈" }, "expect": { "status": 403 } },
+        { "db": "SELECT title FROM posts WHERE id = ?", "params": ["{pid}"], "expect": { "row": { "title": "A의 글 {run}" } } }
+      ] },
+    { "id": "s5-delete-others", "stage": 5, "template": "board", "kind": "error", "target": true, "title": "B가 A의 글을 지우면 403, 글은 남는다", "knowledge": ["k-ownership", "k-403"], "where": { "file": "src/routes/posts.ts", "anchor": "export function remove" },
+      "steps": [
+        { "as": "A", "req": "POST /posts", "body": { "title": "지키는 글 {run}" }, "expect": { "status": 201 }, "save": { "pid": "body.id" } },
+        { "as": "B", "req": "DELETE /posts/{pid}", "expect": { "status": 403 } },
+        { "db": "SELECT id FROM posts WHERE id = ?", "params": ["{pid}"], "expect": { "rows": 1 } }
+      ] },
+    { "id": "s5-edit-own", "stage": 5, "template": "board", "kind": "normal", "title": "자기 글은 고칠 수 있다", "knowledge": ["k-ownership"], "where": { "file": "src/routes/posts.ts", "anchor": "export async function update" },
+      "steps": [
+        { "as": "A", "req": "POST /posts", "body": { "title": "내 글 {run}" }, "expect": { "status": 201 }, "save": { "pid": "body.id" } },
+        { "as": "A", "req": "PATCH /posts/{pid}", "body": { "title": "고친 내 글 {run}" }, "expect": { "status": 200, "json": { "title": "고친 내 글 {run}" } } }
+      ] },
+    { "id": "s5-anon", "stage": 5, "template": "board", "kind": "error", "title": "로그인 없이 고치면 403이 아니라 401", "knowledge": ["k-authn-authz"], "where": { "file": "src/routes/posts.ts", "anchor": "export async function update" },
+      "steps": [
+        { "as": "A", "req": "POST /posts", "body": { "title": "익명 시험 {run}" }, "expect": { "status": 201 }, "save": { "pid": "body.id" } },
+        { "as": null, "req": "PATCH /posts/{pid}", "body": { "title": "누구?" }, "expect": { "status": 401 } }
+      ] },
+    { "id": "s5-missing", "stage": 5, "template": "board", "kind": "boundary", "title": "없는 글을 고치면 404", "knowledge": ["k-crud-http"], "where": { "file": "src/routes/posts.ts", "anchor": "export async function update" },
+      "steps": [ { "as": "B", "req": "PATCH /posts/999999", "body": { "title": "x" }, "expect": { "status": 404 } } ] },
+
+    { "id": "s6-first-page", "stage": 6, "template": "board", "kind": "normal", "target": true, "title": "1쪽은 최신 글 10개, 2쪽은 그다음부터", "knowledge": ["k-pagination", "k-repro-first"], "where": { "file": "src/routes/posts.ts", "anchor": "LIMIT ? OFFSET ?" },
+      "steps": [
+        { "as": "A", "seed": { "count": 12, "body": { "title": "쪽 {run}-{i}" } } },
+        { "req": "GET /posts?page=1", "expect": { "status": 200, "length": 10, "json": { "0.title": "쪽 {run}-12", "9.title": "쪽 {run}-3" } } },
+        { "req": "GET /posts?page=2", "expect": { "status": 200, "json": { "0.title": "쪽 {run}-2", "1.title": "쪽 {run}-1" } } }
+      ] },
+    { "id": "s6-default-page", "stage": 6, "template": "board", "kind": "boundary", "target": true, "title": "쪽 번호가 없거나 0·글자면 1쪽", "knowledge": ["k-pagination"], "where": { "file": "src/routes/posts.ts", "anchor": "const page =" },
+      "steps": [
+        { "as": "A", "req": "POST /posts", "body": { "title": "최신 {run}" }, "expect": { "status": 201 } },
+        { "req": "GET /posts", "expect": { "status": 200, "json": { "0.title": "최신 {run}" } } },
+        { "req": "GET /posts?page=0", "expect": { "status": 200, "json": { "0.title": "최신 {run}" } } },
+        { "req": "GET /posts?page=abc", "expect": { "status": 200, "json": { "0.title": "최신 {run}" } } }
+      ] },
+    { "id": "s6-total", "stage": 6, "template": "board", "kind": "normal", "title": "전체 개수는 x-total-count 헤더로", "knowledge": ["k-pagination"], "where": { "file": "src/routes/posts.ts", "anchor": "x-total-count" },
+      "steps": [ { "req": "GET /posts", "expect": { "status": 200, "header": { "x-total-count": "^\\d+$" } } } ] },
+
+    { "id": "s7-own", "stage": 7, "template": "memo", "kind": "normal", "title": "자기 메모는 쓰고 읽을 수 있다", "knowledge": ["k-ownership"], "where": { "file": "src/routes/memos.ts", "anchor": "export async function create" },
+      "steps": [
+        { "as": "A", "req": "POST /memos", "body": { "text": "A 메모 {run}" }, "expect": { "status": 201 }, "save": { "mid": "body.id" } },
+        { "as": "A", "req": "GET /memos/{mid}", "expect": { "status": 200, "json": { "text": "A 메모 {run}" } } },
+        { "as": "A", "req": "GET /memos", "expect": { "status": 200, "some": { "text": "A 메모 {run}" } } }
+      ] },
+    { "id": "s7-others-get", "stage": 7, "template": "memo", "kind": "error", "target": true, "title": "B가 A의 메모를 읽으면 404", "knowledge": ["k-hide-existence"], "where": { "file": "src/routes/memos.ts", "anchor": "function findMemo" },
+      "steps": [
+        { "as": "A", "req": "POST /memos", "body": { "text": "비밀 {run}" }, "expect": { "status": 201 }, "save": { "mid": "body.id" } },
+        { "as": "B", "req": "GET /memos/{mid}", "expect": { "status": 404 } }
+      ] },
+    { "id": "s7-others-list", "stage": 7, "template": "memo", "kind": "error", "target": true, "title": "B의 목록에 A의 메모가 없다", "knowledge": ["k-hide-existence", "k-ownership"], "where": { "file": "src/routes/memos.ts", "anchor": "export function list" },
+      "steps": [
+        { "as": "A", "req": "POST /memos", "body": { "text": "목록 비밀 {run}" }, "expect": { "status": 201 } },
+        { "as": "B", "req": "GET /memos", "expect": { "status": 200, "none": { "text": "목록 비밀 {run}" } } }
+      ] },
+    { "id": "s7-others-delete", "stage": 7, "template": "memo", "kind": "error", "target": true, "title": "B가 A의 메모를 지우면 404, 메모는 남는다", "knowledge": ["k-hide-existence", "k-ownership"], "where": { "file": "src/routes/memos.ts", "anchor": "export function remove" },
+      "steps": [
+        { "as": "A", "req": "POST /memos", "body": { "text": "지키는 메모 {run}" }, "expect": { "status": 201 }, "save": { "mid": "body.id" } },
+        { "as": "B", "req": "DELETE /memos/{mid}", "expect": { "status": 404 } },
+        { "db": "SELECT id FROM memos WHERE id = ?", "params": ["{mid}"], "expect": { "rows": 1 } }
+      ] },
+    { "id": "s7-anon", "stage": 7, "template": "memo", "kind": "error", "title": "로그인 없이 목록은 401", "knowledge": ["k-authn-authz"], "where": { "file": "src/routes/memos.ts", "anchor": "export function list" },
+      "steps": [ { "as": null, "req": "GET /memos", "expect": { "status": 401 } } ] }
+  ],
+
+  "intake": {
+    "diagnose": [
+      { "id": "d1", "stage": 1, "q": "웹 서버에 없는 주소를 요청하면 보통 받는 상태 코드는?", "options": ["200", "301", "404", "500", "잘 모르겠어요"], "answer": 2 },
+      { "id": "d2", "stage": 2, "q": "서버 프로그램 안의 배열(메모리)에 글을 저장했다. 서버를 껐다 켜면?", "options": ["글이 남아 있다", "글이 사라진다", "절반만 남는다", "잘 모르겠어요"], "answer": 1 },
+      { "id": "d3", "stage": 3, "q": "사용자가 보낸 값이 규칙에 어긋날 때 알맞은 상태 코드는 어느 쪽?", "options": ["2xx", "3xx", "4xx", "5xx", "잘 모르겠어요"], "answer": 2 },
+      { "id": "d4", "stage": 4, "q": "비밀번호를 DB에 저장하는 가장 알맞은 방법은?", "options": ["그대로", "base64로 바꿔서", "사람마다 다른 소금을 친 느린 해시", "서버 키로 암호화", "잘 모르겠어요"], "answer": 2 },
+      { "id": "d5", "stage": 5, "q": "로그인은 했지만 그 작업을 할 권한이 없을 때 상태 코드는?", "options": ["401", "403", "404", "500", "잘 모르겠어요"], "answer": 1 },
+      { "id": "d6", "stage": 6, "q": "버그 신고를 받았다. 고치기 전에 먼저 할 일은?", "options": ["관련 코드를 다시 짠다", "신고를 재현하는 실패를 만든다", "로그를 지운다", "잘 모르겠어요"], "answer": 1 }
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메모</title>
+<style>
+  :root { --bg:#fafaf9; --fg:#1c1917; --mut:#78716c; --line:#e7e5e4; --acc:#2563eb; --bad:#b91c1c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1c1917; --fg:#f5f5f4; --mut:#a8a29e; --line:#44403c; --acc:#60a5fa; --bad:#f87171; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:24px 16px; }
+  section { border:1px solid var(--line); border-radius:10px; padding:14px; margin:14px 0; }
+  input, textarea { width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit; font:inherit; margin:4px 0; }
+  button { padding:6px 12px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit; cursor:pointer; }
+  button.p { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .mut { color:var(--mut); font-size:13px; } .err { color:var(--bad); font-size:13px; min-height:18px; }
+  .memo { border-top:1px solid var(--line); padding:8px 0; display:flex; justify-content:space-between; gap:8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1 style="font-size:20px">내 메모</h1>
+  <section>
+    <div class="mut" id="who"></div>
+    <div id="loginForm">
+      <input id="u" placeholder="아이디"><input id="pw" type="password" placeholder="비밀번호 (8자 이상)">
+      <button class="p" id="login">로그인</button> <button id="signup">가입</button>
+    </div>
+    <button id="logout" hidden>로그아웃</button>
+    <div class="err" id="err"></div>
+  </section>
+  <section id="memoBox" hidden>
+    <textarea id="text" rows="2" placeholder="메모"></textarea>
+    <button class="p" id="add">저장</button>
+    <div id="memos"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let me = null;
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  const t = await r.text(); let d = null; try { d = t ? JSON.parse(t) : null; } catch { d = t; }
+  return { status: r.status, data: d };
+}
+async function render() {
+  $("who").textContent = me ? `${me.username} 님` : "로그인하지 않음";
+  $("loginForm").hidden = !!me; $("logout").hidden = !me; $("memoBox").hidden = !me;
+  if (!me) return;
+  const r = await api("GET", "/memos"); const box = $("memos"); box.innerHTML = "";
+  for (const m of r.data || []) {
+    const row = document.createElement("div"); row.className = "memo";
+    const t = document.createElement("span"); t.textContent = `#${m.id} ${m.text}`;
+    const del = document.createElement("button"); del.textContent = "지우기";
+    del.onclick = async () => { await api("DELETE", `/memos/${m.id}`); render(); };
+    row.append(t, del); box.append(row);
+  }
+}
+$("login").onclick = async () => { const r = await api("POST", "/login", { username: $("u").value, password: $("pw").value }); $("err").textContent = r.status === 200 ? "" : `${r.status} ${r.data?.error ?? ""}`; if (r.status === 200) { me = r.data; render(); } };
+$("signup").onclick = async () => { const r = await api("POST", "/signup", { username: $("u").value, password: $("pw").value }); $("err").textContent = r.status === 201 ? "가입했어요. 로그인하세요." : `${r.status} ${r.data?.error ?? ""}`; };
+$("logout").onclick = async () => { await api("POST", "/logout"); me = null; render(); };
+$("add").onclick = async () => { const r = await api("POST", "/memos", { text: $("text").value }); if (r.status === 201) { $("text").value = ""; render(); } else $("err").textContent = `${r.status} ${r.data?.error ?? ""}`; };
+api("GET", "/me").then((r) => { me = r.status === 200 ? r.data : null; render(); });
+</script>
+</body>
+</html>
