@@ -109,7 +109,7 @@ test("고리 종류: 선수는 먼저 알 쪽에서, 가까움은 고리 없이;
   await runDuplicateCheck();
   const byTitle = Object.fromEntries((await tree()).items.map((i) => [i.title, i.id]));
   const sort = await getKnowledge(byTitle["정렬"]);
-  assert.deepEqual(sort.links.map((l) => [l.item.title, l.relation, l.note]), [["이분 탐색", "먼저", "정렬된 배열이어야 이분 탐색을 쓴다"]], "정렬 —먼저→ 이분 탐색");
+  assert.deepEqual(sort.links.map((l) => [l.item.title, l.relation, l.note]), [["이분 탐색", "먼저 알기", "정렬된 배열이어야 이분 탐색을 쓴다"]], "정렬 —먼저 알기→ 이분 탐색 (기본 broad)");
   assert.deepEqual((await getKnowledge(byTitle["Map"])).links, [], "가까움: no link");
   assert.deepEqual((await nearOf(byTitle["Map"])).map((n) => n.title), ["해시"]);
   assert.deepEqual((await nearOf(byTitle["해시"])).map((n) => n.title), ["Map"]);
@@ -119,6 +119,12 @@ test("고리 종류: 선수는 먼저 알 쪽에서, 가까움은 고리 없이;
   const again = await rejudgeLinks();
   assert.equal(again.checked, 4);
   assert.deepEqual((await getKnowledge(byTitle["해시"])).links.map((l) => l.relation), ["내가 이음"]);
-  assert.deepEqual((await getKnowledge(byTitle["정렬"])).links.map((l) => l.relation), ["먼저"]);
+  assert.deepEqual((await getKnowledge(byTitle["정렬"])).links.map((l) => l.relation), ["먼저 알기"]);
   assert.equal((await dupeStatus()).pairs.filter((p) => p.status === "near").length, 1, "가까움 is not doubled");
 }));
+
+test("군더더기 고리: 정렬 —먼저→ 이분 탐색 —포함→ lower_bound 이면 정렬 —먼저→ lower_bound는 뺀다", async () => {
+  const { impliedLinks } = await import("./dedupe.ts");
+  const links = [{ from: "sort", to: "bin", relation: "먼저" }, { from: "bin", to: "lb", relation: "포함" }, { from: "sort", to: "lb", relation: "먼저" }, { from: "sort", to: "tp", relation: "조건" }];
+  assert.deepEqual(impliedLinks(links), [links[2]]);
+});

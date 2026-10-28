@@ -7,7 +7,7 @@ import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question }
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
 import { similarKnowledge } from "@/lib/knowledge/embed";
 import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
-import { nearOf, rejudgeLinks, openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
+import { nearOf, previewLinks, rejudgeLinks, openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
 import { scheduleAfterSave } from "@/lib/knowledge/after-save";
 import { knowledgeReport } from "@/lib/knowledge/report";
 import { runClassify } from "@/lib/knowledge/classify";
@@ -62,7 +62,13 @@ async function handle(request: Request, context: RouteContext) {
 
     // 목표 (2026-10-28 "4개 축"): 수업·시험, 코테 준비 … — 자료를 넣으면 그 자료의 지식이 따라온다.
     // 고리 다시 판정: links the check made are judged again with the current kinds (포함·씀·먼저·가까움). One model call per 25 items.
-    if (p[0] === "relink" && m === "POST") {
+    // 고리 미리보기: what 다시 판정 would make with mode broad (B: 먼저 알기) or split (C: 먼저 + 조건), nothing changed.
+    if (p[0] === "relink" && p[1] === "preview" && m === "POST") {
+      const b = await body(z.object({ mode: z.enum(["broad", "split"]) }));
+      try { return json(await previewLinks(b.mode)); }
+      catch (error) { return NextResponse.json({ message: `미리보기를 하지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
+    }
+    if (p[0] === "relink" && p.length === 1 && m === "POST") {
       try { return json(await rejudgeLinks()); }
       catch (error) { return NextResponse.json({ message: `고리를 다시 판정하지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
     }
