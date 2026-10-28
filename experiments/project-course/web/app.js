@@ -529,6 +529,10 @@ function drawLesson() {
            lesson.bridge.dirty ? h("span", { class: "chip warn" }, "저장 안 함") : null,
            lesson.bridge.errors ? h("span", { class: "chip bad" }, `빨간 줄 ${lesson.bridge.errors}`) : null]
         : h("span", { class: "mut" }, "작업 폴더 밖 파일을 보고 있어요")) : null),
+    lesson.pocket?.length ? h("div", { class: "lpocket" }, h("div", { class: "mut small" }, `물음표 주머니 (${lesson.pocket.length})`),
+      lesson.pocket.map((p) => h("div", { class: "pitem" },
+        h("div", {}, p.terms.length ? p.terms.join(", ") : h("code", {}, p.code)),
+        h("div", { class: "row" }, p.later.length ? p.later.map((n) => h("span", { class: "chip warn" }, `${n}단계에서`)) : h("span", { class: "chip ok" }, "답함"), p.ai ? h("span", { class: "chip" }, "AI") : null)))) : null,
     h("div", { class: "lmore" },
       h("a", { href: `#/run/${run.id}/cards` }, "단계 카드 화면으로"),
       h("a", { href: `#/run/${run.id}/summary` }, "결과와 기록 후보")));
@@ -554,6 +558,12 @@ function lessonCard(card, run, lesson, send, ws) {
       Object.keys(card.headers || {}).length ? h("pre", { class: "rbody mut" }, Object.entries(card.headers).map(([k, v]) => `${k}: ${v}`).join("\n")) : null,
       card.body ? h("pre", { class: "rbody" }, card.body) : null);
   }
+  if (card.type === "map") return h("div", { class: "lcard map" },
+    h("div", { class: "mut small" }, `${card.file} 지도 · 누르면 VS Code에서 그 덩어리가 열려요`),
+    h("div", { class: "chunks" }, card.chunks.map((c) => h("button", { class: `chunk ${c.focus ? "on" : ""} ${/-/.test(c.label) ? "sub" : ""}`, onclick: () => {
+      if (lessonCtx?.lesson?.bridge?.connected) api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "open", file: card.file, line: c.line }).catch(() => {});
+      else location.href = `vscode://file/${ws.replace(/\\/g, "/")}/${card.file}:${c.line}`;
+    } }, h("span", { class: "cl" }, c.label), h("span", { class: "cd" }, c.desc || ""), h("span", { class: "cn mono" }, `${c.line}줄`)))));
   if (card.type === "code") return h("div", { class: "lcard code" }, h("div", { class: "mut small" }, fileLink(ws, card.file, card.from), card.to > card.from ? ` ~ ${card.to}번째 줄` : ""), h("pre", { class: "rbody" }, card.code));
   if (card.type === "check") return h("div", { class: "lcard" }, h("div", { class: "mut small" }, "확인 결과"), resultsList(card.result, { group: true }));
   if (card.type === "hint") return h("div", { class: "lcard hint" }, h("div", { class: "mut small" }, `힌트 ${card.level}단계 · ${card.source.startsWith("ai") ? "AI 튜터" : card.source === "solution" ? "준비된 정답 줄" : "준비된 힌트"}`), card.level === 3 ? h("pre", { class: "sol" }, card.text) : rich(card.text, ws));

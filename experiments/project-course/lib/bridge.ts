@@ -15,13 +15,17 @@ export type BridgeCommand =
   | { type: "note"; file: string; line: number; note: string }
   | { type: "blank"; file: string; from: string; to?: string; text: string; note?: string }
   | { type: "clear" }
+  | { type: "focus"; file: string; chunks: { anchor: string; label: string; desc?: string; focus?: boolean }[] }
+  | { type: "clearFocus" }
   | { type: "toast"; text: string };
 
 const norm = (p: string) => { const r = path.resolve(p).replace(/\\/g, "/").replace(/\/$/, ""); return process.platform === "win32" ? r.toLowerCase() : r; };
 const states = new Map<string, BridgeState>();
 const streams = new Map<string, Set<ServerResponse>>();
 let onChange: (runId: string) => void = () => {};
+let onConnect: (runId: string) => void = () => {};
 export function onBridgeChange(fn: (runId: string) => void) { onChange = fn; }
+export function onBridgeConnect(fn: (runId: string) => void) { onConnect = fn; }
 
 export async function hello(root: string) {
   const want = norm(root);
@@ -37,6 +41,7 @@ export function events(runId: string, res: ServerResponse) {
   const set = streams.get(runId) ?? new Set();
   set.add(res); streams.set(runId, set);
   onChange(runId);
+  setTimeout(() => onConnect(runId), 300);
   const ping = setInterval(() => res.write(": ping\n\n"), 15000);
   res.on("close", () => { clearInterval(ping); set.delete(res); if (!set.size) states.delete(runId); onChange(runId); });
 }

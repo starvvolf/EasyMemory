@@ -13,8 +13,8 @@ import { aiStatus } from "../lib/ai.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
 import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
-import { act, ask as lessonAsk, closeWatchers, lessonView, loadPlan, notifyLesson, subscribe } from "../lib/lesson.ts";
-import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, setState as bridgeSetState } from "../lib/bridge.ts";
+import { act, ask as lessonAsk, closeWatchers, lessonView, loadPlan, notifyLesson, refocus, subscribe, what as lessonWhat } from "../lib/lesson.ts";
+import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeConnect, setState as bridgeSetState } from "../lib/bridge.ts";
 
 if (process.env.PC_FAKE_AI === "1") installFakeAi();
 
@@ -148,7 +148,9 @@ const routes: [string, RegExp, Handler][] = [
     const run = await getRun(String(b.runId));
     const plan = await loadPlan(run.courseId, run.current);
     if (!plan) throw Object.assign(new Error("이 단계에는 튜터 수업이 없어요."), { status: 409 });
-    void lessonAsk(run.id, run.current, plan, String(b.question ?? ""), { file: String(b.file), from: Number(b.from), to: Number(b.to), code: String(b.code ?? "").slice(0, 4000) }).catch((e) => console.error(e));
+    const quote = { file: String(b.file), from: Number(b.from), to: Number(b.to), code: String(b.code ?? "").slice(0, 4000) };
+    if (b.mode === "what") void lessonWhat(run.id, run.current, plan, quote).catch((e) => console.error(e));
+    else void lessonAsk(run.id, run.current, plan, String(b.question ?? ""), quote).catch((e) => console.error(e));
     return { ok: true };
   }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => openEditor(m[1])],
@@ -187,6 +189,7 @@ const server = createServer(async (req, res) => {
 });
 
 onBridgeChange((id) => notifyLesson(id));
+onBridgeConnect((id) => { refocus(id).catch(() => {}); });
 const shutdown = () => { killAll(); closeWatchers(); process.exit(0); };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

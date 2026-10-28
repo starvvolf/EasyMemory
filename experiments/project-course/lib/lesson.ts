@@ -12,11 +12,14 @@ import { AiUnavailable, aiText } from "./ai.ts";
 import { DATA, getRun, read, update } from "./store.ts";
 import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridgeSend } from "./bridge.ts";
 import { writeFile } from "node:fs/promises";
+import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
 
 type Action = { label: string; do: string; try?: { method: string; path: string; body?: unknown; as?: string } };
 type Open = { file: string; anchor: string; toAnchor?: string; note?: string };
 type Scaffold = { file: string; from: string; to?: string; text: string; note?: string };
-type Beat = { id: string; kind: "say" | "predict" | "fix" | "explain"; text: string; actions?: Action[]; after?: Action[]; predict?: string; open?: Open; scaffold?: Scaffold };
+type Chunk = { anchor: string; label: string; desc?: string; focus?: boolean };
+type Focus = { file: string; chunks: Chunk[] };
+type Beat = { id: string; kind: "say" | "predict" | "fix" | "explain" | "map"; text: string; actions?: Action[]; after?: Action[]; predict?: string; open?: Open; scaffold?: Scaffold; focus?: Focus; clearFocus?: boolean };
 export type Plan = { stage: number; title: string; teach: string[]; tutorNotes: string; beats: Beat[] };
 
 type Card =
@@ -25,9 +28,11 @@ type Card =
   | { type: "check"; result: RunResult }
   | { type: "hint"; level: number; text: string; source: string }
   | { type: "explain"; done?: string }
-  | { type: "code"; file: string; from: number; to: number; code: string };
+  | { type: "code"; file: string; from: number; to: number; code: string }
+  | { type: "map"; file: string; chunks: Chunk[] };
 export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[] };
-type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Open[]; scaffolded?: boolean };
+type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null };
+type Todo = { open?: Open; focus?: Focus; clear?: boolean };
 
 const now = () => new Date().toISOString();
 const file = (runId: string, n: number) => path.join(DATA, "lessons", `${runId}-${n}.json`);
@@ -63,7 +68,11 @@ async function change(runId: string, n: number, fn: (s: State, push: (m: Omit<LM
   s.todo = [];
   await update<State>(file(runId, n), s, () => { out = s; return s; });
   notify(runId, "lesson");
-  for (const o of todo) await openInEditor(runId, n, o).catch(() => {});
+  for (const t of todo) {
+    if (t.open) await openInEditor(runId, n, t.open).catch(() => {});
+    if (t.focus) bridgeSend(runId, { type: "focus", file: t.focus.file, chunks: t.focus.chunks });
+    if (t.clear) bridgeSend(runId, { type: "clearFocus" });
+  }
   return out;
 }
 
@@ -71,8 +80,13 @@ function enter(plan: Plan, s: State, idx: number, push: (m: Omit<LMsg, "id" | "a
   s.beat = idx;
   const b = plan.beats[idx];
   if (!b) { s.waiting = "done"; return; }
-  if (b.open) (s.todo ??= []).push(b.open);
-  if (b.kind === "say") {
+  if (b.focus) { s.focus = b.focus; (s.todo ??= []).push({ focus: b.focus }); }
+  if (b.clearFocus) { s.focus = null; (s.todo ??= []).push({ clear: true }); }
+  if (b.open) (s.todo ??= []).push({ open: b.open });
+  if (b.kind === "map") {
+    push({ role: "tutor", text: b.text, card: { type: "map", file: b.focus!.file, chunks: b.focus!.chunks }, actions: b.actions ?? [{ label: "다음", do: "next" }] });
+    s.waiting = "action";
+  } else if (b.kind === "say") {
     push({ role: "tutor", text: b.text, actions: b.actions ?? [{ label: "다음", do: "next" }] });
     s.waiting = "action";
   } else if (b.kind === "predict") {
@@ -95,7 +109,13 @@ export async function lessonView(runId: string, n: number) {
   const plan = await loadPlan(course.id, n);
   if (!plan) return null;
   let s = await read<State | null>(file(runId, n), null);
-  if (!s) s = await change(runId, n, (st, push) => enter(plan, st, 0, push, course));
+  if (!s) {
+    const due = await takeDue(runId, n);
+    s = await change(runId, n, (st, push) => {
+      if (due.length) push({ role: "tutor", text: `시작하기 전에, 주머니에 넣어 뒀던 것부터 꺼낼게요. 전에 물어본 ${[...new Set(due.flatMap((d) => d.terms.filter((t) => t.stage === n).map((t) => `**${t.name}**`)))].join(", ")}이(가) 이번 단계에서 나와요. 나올 때 자세히 짚어 드릴게요.` });
+      enter(plan, st, 0, push, course);
+    });
+  }
   const ws = workspaceOf(run, stageOf(course, n).template);
   watchFor(runId, n, ws);
   // [[파일#찾을 글]] → [[파일:줄]] (코드가 바뀌어도 줄을 다시 찾는다)
@@ -107,7 +127,13 @@ export async function lessonView(runId: string, n: number) {
   const messages = s.messages.map((m) => ({ ...m, text: m.text?.replace(/\[\[([^\]#]+)#([^\]]+)\]\]/g, (all) => lines.get(all) ?? all) }));
   const bs = bridgeState(runId);
   const bridge = bridgeConnected(runId) ? { connected: true, file: bs?.file ?? null, line: bs?.line ?? null, dirty: !!bs?.dirty, errors: bs?.errors?.length ?? 0, selection: bs?.selection ? { from: bs.selection.from, to: bs.selection.to } : null } : { connected: false };
-  return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge };
+  // 지도 카드: 덩어리마다 지금 몇 번째 줄인지(누르면 VS Code가 그 덩어리를 연다)
+  for (const m of messages) if (m.card?.type === "map") {
+    const card = m.card;
+    m.card = { ...card, chunks: await Promise.all(card.chunks.map(async (c) => ({ ...c, line: (await locate(ws, { file: card.file, anchor: c.anchor }))?.line ?? 1 }))) } as Card;
+  }
+  const pocket = (await pocketItems(runId)).slice(-12).reverse().map((p) => ({ id: p.id, stage: p.stage, file: p.file, from: p.from, code: p.code.trim().slice(0, 60), terms: p.terms.map((t) => t.name), later: p.later, ai: !!p.ai }));
+  return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge, pocket };
 }
 
 /* ---------- 학습자가 한 것 ---------- */
@@ -334,4 +360,26 @@ async function scaffold(runId: string, n: number, plan: Plan, course: Awaited<Re
     push({ role: "tutor", text: `${how}\n\n빈칸마다 번호가 붙어 있어요. 하나씩 채우고 저장하면 제가 확인할게요. 빈칸을 다 채우기 전에는 서버가 켜지지 않을 수 있어요(아직 문장이 덜 끝난 상태라서요).`,
       actions: [{ label: "지금 확인해 줘", do: "check" }, { label: "힌트 줘", do: "hint" }] });
   });
+}
+
+/* ---------- 물음표 주머니: "이건 뭐예요?" ---------- */
+export async function what(runId: string, n: number, plan: Plan, quote: { file: string; from: number; to: number; code: string }) {
+  const run = await getRun(runId);
+  const out = await explainWhat(runId, run.courseId, n, quote);
+  if (out.text) {
+    return change(runId, n, (_s, push) => {
+      push({ role: "me", text: "이건 뭐예요?", card: { type: "code", ...quote } });
+      push({ role: "tutor", text: out.text! + (out.item?.later.length ? "" : "\n\n그럼 하던 것으로 돌아가 볼게요.") });
+    });
+  }
+  // 용어집에 없으면 AI 튜터에게
+  await rememberAi(runId, n, quote);
+  return ask(runId, n, plan, "이건 뭐예요? 처음 보는 사람에게 이 코드가 하는 일을 쉽게 알려 주세요. 이 단계에서 몰라도 되는 거면 그렇다고 말해 주세요.", quote);
+}
+
+/** 확장이 (다시) 연결되면 지금 단계의 지도(밝게·흐리게)를 다시 보낸다. */
+export async function refocus(runId: string) {
+  const run = await getRun(runId);
+  const s = await read<State | null>(file(runId, run.current), null);
+  if (s?.focus) bridgeSend(runId, { type: "focus", file: s.focus.file, chunks: s.focus.chunks });
 }

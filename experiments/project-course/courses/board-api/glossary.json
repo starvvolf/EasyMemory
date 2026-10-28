@@ -1,0 +1,25 @@
+{
+  "about": "물음표 주머니용 용어집. 학습자가 VS Code에서 '이건 뭐예요?'를 누르면 고른 코드에서 아래 match(정규식)를 찾아 답한다. stage: 이 단계부터 자세히 다룬다(지금 단계 이상이면 짧게 답하고 주머니에 넣는다). 0은 언제든 바로 답한다. null은 이 코스에서는 몰라도 되는 것. 용어집에 없는 것만 AI에게 묻는다.",
+  "terms": [
+    { "id": "g-comment", "name": "// 주석", "match": "^\\s*//", "stage": 0, "short": "`//` 뒤는 사람이 읽으라고 적은 메모예요. 프로그램은 이 줄을 실행하지 않아요." },
+    { "id": "g-import", "name": "import", "match": "\\bimport\\b", "stage": null, "short": "다른 파일이나 Node.js가 가진 도구를 빌려 오는 줄이에요. `import { A } from \"B\"`는 \"B에서 A를 가져와 쓸게요\"라는 뜻이에요. 무엇을 빌려 왔는지 이름만 알면 충분해요." },
+    { "id": "g-const", "name": "const", "match": "\\bconst\\b", "stage": 0, "short": "값에 이름표를 붙이는 거예요. `const port = 4101`이면 이제 `port`라고 부르면 4101이에요. 한 번 붙이면 다른 값으로 바꾸지 않아요." },
+    { "id": "g-arrow", "name": "=> (화살표 함수)", "match": "=>", "stage": 0, "short": "짧게 쓴 함수예요. `(req, res) => { … }`는 \"req와 res를 받으면 { } 안을 실행해요\"라는 뜻이에요." },
+    { "id": "g-createServer", "name": "createServer", "match": "\\bcreateServer\\b", "stage": 1, "short": "서버를 만드는 Node.js 도구예요. 괄호 안에 넣은 함수가 **편지(요청)가 올 때마다** 한 번씩 실행돼요." },
+    { "id": "g-req-res", "name": "req · res", "match": "\\b(req|res)\\b", "stage": 1, "short": "`req`는 받은 편지(요청), `res`는 지금 쓰고 있는 답장(응답)이에요. 편지에서 정보를 꺼낼 땐 `req`, 답장을 보낼 땐 `res`를 써요." },
+    { "id": "g-url", "name": "new URL / pathname", "match": "\\bURL\\b|pathname", "stage": 1, "short": "편지에 적힌 주소 글자를 조각으로 나눠 주는 도구예요. `url.pathname`은 `/health`처럼 주소의 경로 부분이에요." },
+    { "id": "g-method", "name": "method (GET·DELETE…)", "match": "\\bmethod\\b|\\bGET\\b|\\bDELETE\\b|\\bPOST\\b|\\bPATCH\\b", "stage": 1, "short": "편지에 적힌 '방식'이에요. GET은 가져다줘, POST는 새로 만들어 줘, PATCH는 고쳐 줘, DELETE는 지워 줘." },
+    { "id": "g-nullish", "name": "?? (없으면 이걸로)", "match": "\\?\\?", "stage": 0, "short": "`A ?? B`는 \"A가 없으면 B를 써요\"예요. `req.method ?? \"GET\"`은 방식이 안 적혀 있으면 GET으로 본다는 뜻이에요." },
+    { "id": "g-router-match", "name": "router.match / found", "match": "router\\.match|\\bfound\\b|allowed|handler", "stage": 1, "short": "라우터에게 \"이 방식+주소를 맡은 함수가 있나요?\" 묻는 줄이에요. 답이 `found`에 담겨요. 맡은 함수가 있으면 `found.handler`, 없으면 그 주소에서 되는 방식 목록이 `found.allowed`에 있어요." },
+    { "id": "g-sendJson", "name": "sendJson", "match": "\\bsendJson\\b", "stage": 1, "short": "답장을 보내는 우리 도구예요(http.ts). `sendJson(res, 상태코드, 내용)` 순서로 넣으면 상태 코드와 JSON 내용을 담아 보내요." },
+    { "id": "g-if", "name": "if", "match": "\\bif\\b", "stage": 0, "short": "\"만약 ~이면 { } 안을 해요\"예요. 괄호 안이 참일 때만 실행돼요." },
+    { "id": "g-return", "name": "return", "match": "\\breturn\\b", "stage": 0, "short": "여기서 이 함수를 끝내고 나가요. 답장을 보냈으면 return으로 끝내야 아래 코드가 또 답장을 쓰지 않아요." },
+    { "id": "g-async", "name": "async · await", "match": "\\basync\\b|\\bawait\\b", "stage": 2, "short": "시간이 걸리는 일(파일 읽기, DB)을 기다린다는 표시예요." },
+    { "id": "g-try", "name": "try · catch", "match": "\\btry\\b|\\bcatch\\b|\\bthrow\\b|instanceof|HttpError", "stage": 3, "short": "실행하다 문제가 생기면 catch 쪽으로 넘어가서 대신 처리하는 구조예요. 문제를 '던지는'(throw) 쪽과 '받는'(catch) 쪽이 있어요." },
+    { "id": "g-readFile", "name": "readFile / import.meta.url", "match": "readFile|import\\.meta", "stage": null, "short": "파일을 읽는 도구예요. 여기서는 게시판 첫 화면(index.html)을 읽어서 보내요. 이 코스의 핵심은 아니라 몰라도 돼요." },
+    { "id": "g-env", "name": "process.env", "match": "process\\.env", "stage": null, "short": "컴퓨터에 적어 둔 설정값을 읽어요. `process.env.PORT`가 있으면 그 포트, 없으면 4101을 써요. 몰라도 돼요." },
+    { "id": "g-listen", "name": "listen", "match": "\\blisten\\b", "stage": 1, "short": "서버를 켜는 줄이에요. \"이 번호의 문에서 편지를 기다리기 시작해요.\"" },
+    { "id": "g-console", "name": "console.log / console.error", "match": "console\\.", "stage": 0, "short": "검은 창(로그)에 글을 찍어요. 화면이나 답장에는 안 나가요." },
+    { "id": "g-types", "name": "타입 표시 (: Ctx, type …)", "match": ":\\s*[A-Z]\\w*(\\[\\])?\\b|\\btype\\b|\\bas\\s+[A-Z]", "stage": null, "short": "TypeScript의 타입 표시예요. 이 값이 어떤 모양인지 적어 둔 메모라서, 실행할 때는 지워져요. 읽을 때 건너뛰어도 돼요." }
+  ]
+}

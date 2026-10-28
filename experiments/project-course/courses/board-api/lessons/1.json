@@ -52,6 +52,68 @@
       }
     },
     {
+      "id": "map",
+      "kind": "map",
+      "text": "이번엔 이 답장을 만든 **서버 파일** `server.ts`를 같이 볼 거예요.\n\n처음 보면 모르는 게 잔뜩이라 \"이건 뭐지?\" 싶을 거예요. 괜찮아요. **처음부터 다 이해할 필요는 없어요.** 개발자도 처음 보는 코드는 먼저 덩어리로 훑어보고, 필요한 곳만 자세히 읽어요.\n\n그래서 지도부터 볼게요. 이 파일은 크게 네 덩어리예요. VS Code에도 이름표를 붙여 뒀어요. 오늘은 **밝게 보이는 곳만** 보면 되고, 흐린 곳은 나중 단계에서 하나씩 밝아져요.\n\n읽다가 모르는 게 나오면 그 부분을 드래그하고 **우클릭 → \"이건 뭐예요?\"**를 눌러 보세요. 지금 필요한 건 바로 알려 드리고, 나중 것은 주머니에 넣어 뒀다가 그 단계에서 꺼내 드릴게요.",
+      "focus": {
+        "file": "src/server.ts",
+        "chunks": [
+          {
+            "anchor": "// 부품: 서버",
+            "label": "① 도구 빌려 오기",
+            "desc": "다른 파일에서 쓸 도구를 가져와요",
+            "focus": false
+          },
+          {
+            "anchor": "const port",
+            "label": "② 몇 번 문으로 받을지",
+            "desc": "4101번 문에서 편지를 받아요",
+            "focus": false
+          },
+          {
+            "anchor": "const server = createServer",
+            "label": "③ 편지가 올 때마다 실행되는 곳",
+            "desc": "편지에서 주소와 방식을 꺼내요",
+            "focus": true
+          },
+          {
+            "anchor": "if (method === \"GET\" && (url.pathname",
+            "label": "③-1 게시판 첫 화면 보내기",
+            "desc": "지금은 몰라도 돼요",
+            "focus": false
+          },
+          {
+            "anchor": "const found = router.match",
+            "label": "③-2 라우터에게 묻고 답장하기",
+            "desc": "오늘 볼 곳",
+            "focus": true
+          },
+          {
+            "anchor": "} catch (error)",
+            "label": "③-3 문제가 생겼을 때",
+            "desc": "3단계에서 봐요",
+            "focus": false
+          },
+          {
+            "anchor": "server.listen",
+            "label": "④ 서버 켜기",
+            "desc": "문을 열고 편지를 기다리기 시작해요",
+            "focus": false
+          }
+        ]
+      },
+      "open": {
+        "file": "src/server.ts",
+        "anchor": "const server = createServer"
+      },
+      "actions": [
+        {
+          "label": "지도 봤어요",
+          "do": "next"
+        }
+      ]
+    },
+    {
       "id": "predict-nothing",
       "kind": "predict",
       "predict": "p1",
@@ -127,7 +189,8 @@
           "label": "2단계로",
           "do": "next_stage"
         }
-      ]
+      ],
+      "clearFocus": true
     }
   ]
 }

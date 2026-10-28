@@ -2,27 +2,66 @@
   "name": "recaller-bridge",
   "displayName": "Recaller 튜터 연결",
   "description": "Recaller 프로젝트 코스의 튜터(브라우저)와 VS Code를 잇는다. 화면은 없고, 지금 보는 코드를 튜터에게 알려 주고 튜터가 보낸 줄 열기·빈칸 넣기를 한다.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "recaller-local",
   "private": true,
   "license": "UNLICENSED",
-  "repository": { "type": "git", "url": "https://github.com/starvvolf/EasyMemory" },
-  "engines": { "vscode": "^1.80.0" },
-  "categories": ["Education"],
-  "activationEvents": ["workspaceContains:.recaller/stage.json"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/starvvolf/EasyMemory"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Education"
+  ],
+  "activationEvents": [
+    "workspaceContains:.recaller/stage.json"
+  ],
   "main": "./extension.js",
   "contributes": {
     "commands": [
-      { "command": "recaller.ask", "title": "Recaller: 튜터에게 이 코드 묻기" },
-      { "command": "recaller.reconnect", "title": "Recaller: 튜터에 다시 연결" }
+      {
+        "command": "recaller.what",
+        "title": "Recaller: 이건 뭐예요?"
+      },
+      {
+        "command": "recaller.ask",
+        "title": "Recaller: 튜터에게 이 코드 묻기"
+      },
+      {
+        "command": "recaller.reconnect",
+        "title": "Recaller: 튜터에 다시 연결"
+      }
     ],
     "menus": {
       "editor/context": [
-        { "command": "recaller.ask", "group": "navigation@0", "when": "recaller.connected" }
+        {
+          "command": "recaller.what",
+          "group": "navigation@0",
+          "when": "recaller.connected"
+        },
+        {
+          "command": "recaller.ask",
+          "group": "navigation@1",
+          "when": "recaller.connected"
+        }
       ]
     },
     "keybindings": [
-      { "command": "recaller.ask", "key": "ctrl+alt+r", "mac": "cmd+alt+r", "when": "editorTextFocus && recaller.connected" }
+      {
+        "command": "recaller.what",
+        "key": "ctrl+alt+w",
+        "mac": "cmd+alt+w",
+        "when": "editorTextFocus && recaller.connected"
+      },
+      {
+        "command": "recaller.ask",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorTextFocus && recaller.connected"
+      }
     ]
   }
 }

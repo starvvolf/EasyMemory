@@ -19,6 +19,10 @@ let status = null;
 let deco = null;
 let decoTimer = null;
 let lastSent = "";
+let dimDeco = null;       // 오늘 안 볼 덩어리: 흐리게
+let labelDeco = null;     // 덩어리 이름표
+let labelFocusDeco = null;
+let focus = null;         // { file, chunks: [{ anchor, label, desc, focus }] }
 
 function request(method, url, body) {
   return new Promise((resolve, reject) => {
@@ -134,10 +138,34 @@ function mark(ed, range, note) {
   decoTimer = setTimeout(() => ed.setDecorations(deco, []), 15000);
 }
 
+/* ---------- 지도: 덩어리 이름표 + 오늘 안 볼 곳 흐리게 ---------- */
+function applyFocus() {
+  for (const ed of vscode.window.visibleTextEditors) {
+    if (!focus || !inRoot(ed.document) || rel(ed.document.uri.fsPath) !== focus.file) {
+      ed.setDecorations(dimDeco, []); ed.setDecorations(labelDeco, []); ed.setDecorations(labelFocusDeco, []);
+      continue;
+    }
+    const doc = ed.document;
+    const starts = focus.chunks.map((c) => ({ c, line: findLine(doc, c.anchor) })).filter((x) => x.line >= 0).sort((a, b) => a.line - b.line);
+    const dims = [], labels = [], labelsOn = [];
+    starts.forEach((x, i) => {
+      const end = i + 1 < starts.length ? starts[i + 1].line - 1 : doc.lineCount - 1;
+      if (!x.c.focus && end >= x.line) dims.push(new vscode.Range(x.line, 0, end, doc.lineAt(end).text.length));
+      const text = `   ◀ ${x.c.label}${x.c.desc ? ` · ${x.c.desc}` : ""}`;
+      const item = { range: new vscode.Range(x.line, 0, x.line, doc.lineAt(x.line).text.length), renderOptions: { after: { contentText: text } } };
+      (x.c.focus ? labelsOn : labels).push(item);
+    });
+    ed.setDecorations(dimDeco, dims);
+    ed.setDecorations(labelDeco, labels);
+    ed.setDecorations(labelFocusDeco, labelsOn);
+  }
+}
+
 async function handle(cmd) {
   if (cmd.type === "open") {
     const { ed, range } = await openAt(cmd.file, cmd.line, cmd.toLine);
     if (cmd.highlight !== false) mark(ed, range, cmd.note);
+    applyFocus();
   } else if (cmd.type === "note") {
     const { ed } = await openAt(cmd.file, cmd.line);
     const doc = ed.document;
@@ -156,7 +184,14 @@ async function handle(cmd) {
     edit.replace(doc.uri, new vscode.Range(a, 0, b, doc.lineAt(b).text.length), text);
     await vscode.workspace.applyEdit(edit);
     const { ed } = await openAt(cmd.file, a + 1, a + cmd.text.split("\n").length);
+    applyFocus();
     mark(ed, new vscode.Range(a, 0, a + cmd.text.split("\n").length - 1, 0), cmd.note || "빈칸 ①②③…을 채우고 저장하세요");
+  } else if (cmd.type === "focus") {
+    focus = { file: cmd.file, chunks: cmd.chunks || [] };
+    applyFocus();
+  } else if (cmd.type === "clearFocus") {
+    focus = null;
+    applyFocus();
   } else if (cmd.type === "clear") {
     for (const ed of vscode.window.visibleTextEditors) ed.setDecorations(deco, []);
   } else if (cmd.type === "toast") {
@@ -182,6 +217,25 @@ async function ask() {
   }
 }
 
+/* ---------- 이건 뭐예요? (입력 없이 바로, 물음표 주머니로) ---------- */
+async function what() {
+  const ed = vscode.window.activeTextEditor;
+  if (!ed || !inRoot(ed.document) || !runId) { vscode.window.showWarningMessage("Recaller: 작업 폴더의 코드에서 써 주세요."); return; }
+  const doc = ed.document;
+  let range = ed.selection;
+  if (range.isEmpty) {
+    const word = doc.getWordRangeAtPosition(range.active, /[\w.$?]+|=>|\?\?/);
+    range = word || doc.lineAt(range.active.line).range;
+  }
+  const code = doc.getText(range);
+  try {
+    await request("POST", "/api/bridge/ask", { runId, mode: "what", file: rel(doc.uri.fsPath), from: range.start.line + 1, to: range.end.line + 1, code: code.slice(0, 4000) });
+    vscode.window.setStatusBarMessage("$(question) 튜터에게 물었어요. Recaller 화면에 답이 와요.", 4000);
+  } catch (e) {
+    vscode.window.showErrorMessage(`Recaller: 보내지 못했어요 (${e.message})`);
+  }
+}
+
 function activate(context) {
   const folder = (vscode.workspace.workspaceFolders || []).find((f) => fs.existsSync(path.join(f.uri.fsPath, ".recaller", "stage.json")));
   if (!folder) return;
@@ -194,13 +248,18 @@ function activate(context) {
     backgroundColor: new vscode.ThemeColor("editor.findMatchHighlightBackground"),
     after: { color: new vscode.ThemeColor("editorCodeLens.foreground"), fontStyle: "italic" },
   });
+  dimDeco = vscode.window.createTextEditorDecorationType({ opacity: "0.35" });
+  labelDeco = vscode.window.createTextEditorDecorationType({ after: { color: new vscode.ThemeColor("editorCodeLens.foreground"), fontStyle: "italic" } });
+  labelFocusDeco = vscode.window.createTextEditorDecorationType({ after: { color: new vscode.ThemeColor("textLink.foreground"), fontWeight: "bold" } });
   context.subscriptions.push(
-    status, deco,
+    status, deco, dimDeco, labelDeco, labelFocusDeco,
     vscode.commands.registerCommand("recaller.ask", ask),
+    vscode.commands.registerCommand("recaller.what", what),
+    vscode.window.onDidChangeVisibleTextEditors(() => applyFocus()),
     vscode.commands.registerCommand("recaller.reconnect", connect),
     vscode.window.onDidChangeActiveTextEditor(() => scheduleReport()),
     vscode.window.onDidChangeTextEditorSelection(() => scheduleReport(700)),
-    vscode.workspace.onDidChangeTextDocument((e) => { if (inRoot(e.document)) scheduleReport(1200); }),
+    vscode.workspace.onDidChangeTextDocument((e) => { if (inRoot(e.document)) { scheduleReport(1200); applyFocus(); } }),
     vscode.workspace.onDidSaveTextDocument(() => scheduleReport(100)),
     vscode.languages.onDidChangeDiagnostics(() => scheduleReport(800)),
     { dispose: () => { clearTimeout(retryTimer); clearTimeout(reportTimer); if (stream) stream.destroy(); } },
