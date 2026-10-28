@@ -258,7 +258,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     const generatorOf = original ? askJson<{ generator: string }>("code:generator", GEN_SYSTEM, originalText + retry, GEN_SCHEMA, { model: makeModel }).then((g) => g.generator) : undefined;
     try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + (original ? `\n\n${ORIGINAL_NOTE}` : "") + retry, MAKE_SCHEMA, { heavy: true, model: makeModel, ...(input.effort ? { effort: input.effort } : {}) }); }
     catch (error) { await logTry(what, tries, { ...times, draftMs: Date.now() - started }, `모델 호출 실패: ${(error as Error).message}`, makeLabel); throw error; }
-    if (original) d = { ...d, statement: original.statement, inputText: original.inputText, outputText: original.outputText, sourceExamples: original.examples, mutants: await mutantsOf!,
+    if (original) d = { ...d, title: input.sourceTitle?.replace(/^BOJ (\d+) /, "BOJ $1번: ") || d.title, statement: original.statement, inputText: original.inputText, outputText: original.outputText, sourceExamples: original.examples, mutants: await mutantsOf!,
       generator: await generatorOf!.catch((e: unknown) => { throw new Error(`테스트 생성기 호출 실패: ${(e as Error).message}`); }) };
     times.draftMs = Date.now() - started;
     if (d.answerKind !== "one") { await logTry(what, tries, times, "답이 여러 개이거나 실수 오차 문제", makeLabel); throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요."); }
