@@ -12,6 +12,7 @@ import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type Planner
 import { DEFAULT_GEN_MODELS, defaultChosen, genOutline, mapDigest, type Engine, type GenState, type GenSurvey } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
 import type { KnowledgeLayer } from "@/lib/study/knowledge";
+import { IMPORT_LIMITS, importPayload, practiceRefs } from "@/lib/study/knowledge-contract";
 import { coachCards, type CoachInput } from "@/lib/study/coach";
 import { buildLexicon, chunkAt, findTerms, importantTerms } from "@/lib/study/chunk";
 import { applyPatches, similarObjectives, termChoice, tooEasy, type LedgerEntry, type PatchMap } from "@/lib/study/quality";
@@ -403,13 +404,9 @@ export default function DejipgiStudy() {
         const decks = loaded.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
         // 지식창: each material's knowledge points come in once as 만남, under 자료 이름 / 구역 (src/lib/knowledge/store.ts importPoints).
         if (session.mode === "local-experiment") {
-          const points = decks.flatMap((deck) => {
-            const layer = (deck as { points?: KnowledgeLayer }).points;
-            const material = String(deck.sourceName || deck.title).replace(/\.pdf$/i, "");
-            return (layer?.points ?? []).map((point) => ({ ref: `${deck.id}:${point.id}`, title: point.title.slice(0, 120), essentials: point.essentials.slice(0, 6).map((e) => e.slice(0, 600)),
-              folder: `${material.slice(0, 60)}${point.section ? `/${point.section.slice(0, 60)}` : ""}`, material: material.slice(0, 200), ...(point.pages[0] ? { page: point.pages[0] } : {}) }));
-          });
-          if (points.length) void fetchExperiment("/api/knowledge/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ points: points.slice(0, 2000) }) }).catch(() => undefined);
+          // The engine ↔ knowledge store contract: src/lib/study/knowledge-contract.ts (and its test).
+          const points = decks.flatMap((deck) => importPayload(deck, (deck as { points?: KnowledgeLayer }).points));
+          if (points.length) void fetchExperiment("/api/knowledge/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ points: points.slice(0, IMPORT_LIMITS.points) }) }).catch(() => undefined);
         }
         if (!decks.length && loaded.some((result) => result.status === "rejected")) {
           throw new Error("Recaller 출제 문서를 불러오지 못했어요. 로컬 서버와 로그인 상태를 확인해 주세요.");
@@ -456,16 +453,16 @@ export default function DejipgiStudy() {
       },
       // A practice result on a PDF question goes to the knowledge its objective covers (맞힘 / 틀림 / 정답 보고).
       onPractice(deck: { id: string; title?: string; sourceName?: string; points?: KnowledgeLayer }, item: { objectiveId?: string; id: string }, outcome: string) {
-        if (session.mode !== "local-experiment" || !deck.points || !item.objectiveId) return;
-        const ids = deck.points.byObjective[item.objectiveId] ?? [];
-        if (!ids.length) return;
+        if (session.mode !== "local-experiment") return;
+        const refs = practiceRefs(deck.id, deck.points, item.objectiveId);
+        if (!refs.length) return;
         // "내 답도 맞아요" takes the 틀림 just sent back: as 맞힘 in practice, as nothing right after reading.
         const takeBack = outcome === "override" ? "correct" : outcome === "override-read" ? "read" : undefined;
         const kind = takeBack ? "correct" : outcome === "correct" ? "correct" : outcome === "wrong" ? "wrong" : outcome === "assisted" ? "hint" : null;
         if (!kind) return;
         const detail = outcome === "assisted" ? "정답 보고 풂" : outcome === "wrong" ? "PDF 문제를 틀림" : "PDF 문제를 맞힘";
         void fetchExperiment("/api/knowledge/ref-event", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refs: ids.slice(0, 20).map((pid) => `${deck.id}:${pid}`), kind, detail, material: String(deck.sourceName || deck.title || "").slice(0, 200), ...(takeBack ? { takeBack } : {}) }) })
+          body: JSON.stringify({ refs, kind, detail, material: String(deck.sourceName || deck.title || "").slice(0, 200), ...(takeBack ? { takeBack } : {}) }) })
           .then(() => window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar"))).catch(() => undefined);
       },
       // 작업대 흐름: a React Flow canvas mounted into a host element the vanilla app keeps across re-renders.

@@ -4,6 +4,7 @@
 
 # next.js
 /.next/
+/.next-engine/
 /out/
 
 # production
