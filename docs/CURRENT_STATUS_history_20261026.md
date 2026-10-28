@@ -39,4 +39,4 @@
 - 바탕화면 `Recaller/project`와 3100 주소는 수정 전 검토본이다. 코드 수정 장소가 아니다.
 - 같은 컴퓨터라도 주소·포트가 다르면 브라우저 학습 기록이 다르므로 임의로 바꾸지 않는다.
 - [출제 MCP 사용법](../tools/problem-authoring-lab/README.md)
-- [과거 상태 기록](CURRENT_STATUS_history_20260928.md) · [과거 통합 기록](product-flow/MVP_EXECUTION_20260928_history.md)
+- [과거 상태 기록](보관/CURRENT_STATUS_history_20260928.md) · [과거 통합 기록](product-flow/MVP_EXECUTION_20260928_history.md)

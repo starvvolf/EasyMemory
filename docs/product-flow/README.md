@@ -133,7 +133,7 @@ flowchart TD
 
 ## 확인 근거와 갱신 규칙
 
-- 경로 설명: [MCP 생성 문서](../PERSONAL_MCP_GENERATION.md)
+- 경로 설명: [MCP 생성 문서](../보관/PERSONAL_MCP_GENERATION.md)
 - 실제 단계·저장: [MCP 구현](../../tools/study-forge-mcp/chatgpt-parity.ts), [도구 등록](../../tools/study-forge-mcp/server.ts)
 - 초기 코드 통합·검증 범위: [통합 보고서](../handoff/INTEGRATION_REPORT.md)
 - 실제 두 PDF MCP 실행·문항 연결: `eval/local/mcp-exec-20260928-sol-medium-r01/EXECUTION_REPORT.md` (로컬 실험 파일, GitHub 미포함)

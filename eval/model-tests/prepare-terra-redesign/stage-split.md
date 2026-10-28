@@ -258,4 +258,4 @@ A안이 동일한 operation 실패를 두 번 반복할 때만 B안으로 넘어
 - PDF 이동·하이라이트 사용: `src/app/PdfReviewViewer.tsx`, `src/lib/pdf-mask.ts`
 - 출처 복원과 카드 태그: `src/lib/pipeline/compact-card-output.ts`
 - 과거 Prepare 축소 실패 기록: `eval/snapshots/2026-08-17-pre-data-structure-shrink/README.md`
-- 고정 핵심 로직: `docs/CORE_GENERATION_LOGIC.md`
+- 고정 핵심 로직: `docs/보관/CORE_GENERATION_LOGIC.md`
