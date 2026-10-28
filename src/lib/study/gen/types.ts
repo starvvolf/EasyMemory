@@ -109,6 +109,8 @@ export type RecallerLab = {
   hedgeMs?: number;
   /** A shorter 정리 reply: no links/takes/gives, one mistake and one piece of evidence per card. */
   lean?: boolean;
+  /** A quote not found in the text layer becomes picture evidence instead of sending the page back. */
+  lenientQuotes?: boolean;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */

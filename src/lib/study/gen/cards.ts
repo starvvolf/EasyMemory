@@ -70,7 +70,7 @@ const squash = (s: string) => s.normalize("NFKC").toLowerCase().replace(/[\s\p{P
  * Code checks on one section's cards (정리 검사): the shape filled for the kind, quotes really on the cited page, pages
  * inside the section, links to cards that exist, and duplicates. Errors go back to the model once; warnings ride along.
  */
-export function checkCards(o: Organized, section: { pages: number[] }, pageTexts: Map<number, string>): { cards: Card[]; issues: CardIssue[] } {
+export function checkCards(o: Organized, section: { pages: number[] }, pageTexts: Map<number, string>, options: { lenientQuotes?: boolean } = {}): { cards: Card[]; issues: CardIssue[] } {
   const issues: CardIssue[] = [];
   const ids = new Set<string>();
   const seenTitles = new Map<string, string>();
@@ -84,7 +84,11 @@ export function checkCards(o: Organized, section: { pages: number[] }, pageTexts
     const outside = card.evidence.filter((e) => !section.pages.includes(e.page));
     if (outside.length) { err(`구역 밖 쪽을 근거로 댔습니다(p.${outside.map((e) => e.page).join(",")}).`); continue; }
     const missing = card.evidence.filter((e) => e.quote.trim() && !squash(pageTexts.get(e.page) ?? "").includes(squash(e.quote)));
-    if (missing.length) { err(`인용이 원문에 없습니다: "${missing[0].quote.slice(0, 40)}" (p.${missing[0].page})`); continue; }
+    // lenientQuotes (실험, 그림을 바로 본 정리): a quote read off the picture is kept as picture evidence (no quote), not a rejected card.
+    if (missing.length && options.lenientQuotes) {
+      issues.push({ cardId: card.id, severity: "warning", message: `인용이 글자 층에 없어 그림 근거로 바꿨습니다: "${missing[0].quote.slice(0, 40)}" (p.${missing[0].page})` });
+      card.evidence = card.evidence.map((e) => missing.includes(e) ? { ...e, quote: "" } : e);
+    } else if (missing.length) { err(`인용이 원문에 없습니다: "${missing[0].quote.slice(0, 40)}" (p.${missing[0].page})`); continue; }
     const key = squash(card.title);
     if (seenTitles.has(key)) { issues.push({ cardId: card.id, severity: "warning", message: `${seenTitles.get(key)}와 제목이 같아 뺐습니다.` }); continue; }
     seenTitles.set(key, card.id);

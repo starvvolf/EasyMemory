@@ -623,7 +623,7 @@ export async function runRecaller(ctx: RecallerContext) {
       if (lab.skimOnly) return;
       const parsed = cardSchema.safeParse(raw);
       if (!parsed.success || slotted.has(parsed.data.id)) return;
-      const { cards: ok } = checkCards({ cards: [parsed.data] }, { pages }, textMap());
+      const { cards: ok } = checkCards({ cards: [parsed.data] }, { pages }, textMap(), { lenientQuotes: lab.lenientQuotes });
       if (!ok.length || !slotCards(ok, input.purpose).length) return;
       slotted.add(parsed.data.id);
       const card = { ...ok[0], id: idOf(ok[0].id), links: [] };
@@ -670,7 +670,7 @@ export async function runRecaller(ctx: RecallerContext) {
           continue;
         }
         for (const raw of reply.cards) startCard(raw);
-        result = checkCards(reply, { pages }, textMap());
+        result = checkCards(reply, { pages }, textMap(), { lenientQuotes: lab.lenientQuotes });
         if (!result.issues.some((i) => i.severity === "error") || result.cards.length) break;
         revision = result.issues.filter((i) => i.severity === "error").map((i) => `${i.cardId ?? "전체"}: ${i.message}`);
       }
