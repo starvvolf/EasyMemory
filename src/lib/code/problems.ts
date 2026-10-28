@@ -29,6 +29,8 @@ export type Problem = {
   constraints?: string;
   /** How the hidden tests were made (testgen/harness.mjs): the generator and its seed, so they can be made again. */
   testgen?: { generator: string; seed: number };
+  /** 바로 열기 (2026-10-29): saved from the original at once, the hidden tests still being made; submit waits for them. */
+  preparing?: { from: string; since: string; error?: string };
   /** How outputs are compared (compare.mjs); exact when left out. */
   compare?: CompareHow;
   createdAt: string;
@@ -43,7 +45,7 @@ export type ProblemCheck = { by: "source" | "cross"; cases: number; tries: numbe
   second?: { model: string; status: "agreed" | "second-wrong" | "unchecked" | "broken" | "skipped"; agreed: number; total: number; unchecked: number };
   /** Each try of the problem maker: where its time went (ms) and why it failed (the last one passed). */
   attempts?: Array<{ draftMs: number; testsMs: number; secondMs: number; verifyMs: number; reason?: string }> };
-export type ProblemLite = Pick<Problem, "id" | "title" | "kind" | "knowledge" | "folder" | "createdAt"> & { source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string };
+export type ProblemLite = Pick<Problem, "id" | "title" | "kind" | "knowledge" | "folder" | "createdAt"> & { source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string; preparing?: boolean };
 export type Submission = { id: string; at: string; problemId: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; code: string; ms: number };
 
 export class CodeError extends Error {
@@ -226,6 +228,21 @@ export async function saveProblem(input: Omit<Problem, "id" | "createdAt" | "kno
   await writeProblem(problem);
   return problem;
 }
+/** The original problem to read and try at once; makeProblem later saves the full problem under the same id. */
+export async function savePreparing(input: Pick<Problem, "title" | "statement" | "inputText" | "outputText" | "examples" | "folder" | "source"> & { from: string }) {
+  if (!input.title.trim() || !input.examples.length) throw new CodeError(400, "원문에 제목이나 예제가 없어요.");
+  const { from, ...rest } = input;
+  const problem: Problem = { ...rest, id: newId(), kind: "full", tests: [], timeLimitMs: 2000, templates: {}, reference: null, knowledge: [], knowledgeIds: [],
+    examplesFrom: "source", preparing: { from, since: new Date().toISOString() }, createdAt: new Date().toISOString() };
+  await writeProblem(problem);
+  return problem;
+}
+/** Making the hidden tests failed: the problem stays readable, with the reason and a way to try again. */
+export async function setPreparing(id: string, preparing: Problem["preparing"]) {
+  const meta = await readMeta(id);
+  if (!meta.preparing) return; // already made
+  await writeJson(fileOf(problemsDir(), id), { ...meta, preparing });
+}
 /** Only the problem file changes; the tests stay as they are. */
 export async function setProblemKnowledge(id: string, knowledgeIds: string[]) {
   const meta = await readMeta(id);
@@ -262,7 +279,7 @@ export async function listProblems(): Promise<ProblemLite[]> {
       const p = await readMeta(name.replace(/\.json$/, ""));
       const mine = subs.filter((s) => s.problemId === p.id);
       out.push({ id: p.id, title: p.title, kind: p.kind, knowledge: p.knowledge, folder: p.folder, createdAt: p.createdAt, source: p.source.title,
-        status: statusOf(mine), tries: mine.filter((s) => s.mode === "submit").length, lastAt: mine.at(-1)?.at ?? "" });
+        status: statusOf(mine), tries: mine.filter((s) => s.mode === "submit").length, lastAt: mine.at(-1)?.at ?? "", ...(p.preparing ? { preparing: true } : {}) });
     } catch { /* a broken file is skipped */ }
   }
   return out.sort((a, b) => (b.lastAt || b.createdAt).localeCompare(a.lastAt || a.createdAt));
@@ -285,6 +302,7 @@ export type SubmitResult = Judgement & { submission: Submission; shown: Judgemen
  */
 export async function submit(problemId: string, lang: Lang, code: string, mode: "example" | "submit", hints = 0): Promise<SubmitResult> {
   const problem = await readProblem(problemId);
+  if (problem.preparing && mode === "submit") throw new CodeError(409, problem.preparing.error ? "숨은 테스트를 만들지 못했어요. 문제 위의 [다시 시도]를 눌러 주세요." : "숨은 테스트를 아직 만드는 중이에요. 잠시 뒤 제출해 주세요.");
   if (problem.kind === "blank" && code.includes(BLANK)) throw new CodeError(400, "빈칸(____)을 모두 채워 주세요.");
   const tests = mode === "example" ? problem.examples : [...problem.examples, ...problem.tests];
   const result = await judge(lang, code, tests, { timeLimitMs: problem.timeLimitMs, memoryLimitMb: problem.memoryLimitMb, stopAtFirstFail: mode === "submit", compare: problem.compare, calibration: (await calibration()) ?? undefined });

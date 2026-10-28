@@ -9,11 +9,12 @@ import { Rich } from "./Rich";
 
 type Lang = "python" | "javascript" | "cpp" | "csharp";
 type LangInfo = { lang: Lang; label: string; ready: boolean; version: string; help: string };
-type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledge: string[]; folder: string; source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string; createdAt: string };
+type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledge: string[]; folder: string; source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string; createdAt: string; preparing?: boolean };
 type TestCase = { input: string; output: string };
 type Problem = { id: string; title: string; statement: string; inputText: string; outputText: string; examples: TestCase[]; hiddenTests: number; kind: "full" | "blank"; knowledge: string[]; knowledgeIds: string[];
   folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number; memoryLimitMb?: number;
   examplesFrom?: "source" | "made"; constraints?: string;
+  /** 바로 열기: the hidden tests are still being made (or failed) */ preparing?: { since: string; error?: string };
   check?: { by: "source" | "cross"; cases: number; tries: number; human?: "match" | "skipped"; tests?: number; maxTests?: number; compared?: number;
     mutation?: { killed: number; total: number; survived: string[]; added: number };
     second?: { model: string; status: string; agreed: number; total: number; unchecked: number } } };
@@ -62,7 +63,7 @@ export default function CodeStudy({ openId }: { openId?: string }) {
         <ul className="cs-list">
           {shown.map((p) => (
             <li key={p.id}><button className="cs-row" onClick={() => setCurrent(p.id)}>
-              <span className={`chip ${STATUS[p.status][1]}`}>{STATUS[p.status][0]}</span>
+              <span className={`chip ${p.preparing ? "help" : STATUS[p.status][1]}`}>{p.preparing ? "준비 중" : STATUS[p.status][0]}</span>
               <span className="cs-title">{p.title}</span>
               {p.kind === "blank" ? <span className="chip">빈칸</span> : null}
               <span className="small muted">{p.knowledge.join(" · ")}</span>
@@ -128,7 +129,7 @@ function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string
       <div className="row">
         <label className="row small"><input type="checkbox" checked={blank} onChange={(e) => setBlank(e.target.checked)} /> 빈칸 코드 문제로</label>
         {blank ? <select className="ws-select" value={lang} onChange={(e) => setLang(e.target.value as Lang)}>{langs.filter((l) => l.ready).map((l) => <option key={l.lang} value={l.lang}>{l.label}</option>)}</select> : null}
-        <button className="btn primary small" disabled={busy || !(topic.trim() || lesson.trim() || from.trim())} onClick={() => void make()}>{busy ? (from.trim() ? "글을 가져와 만드는 중… (2~5분쯤)" : "만드는 중… (2~5분쯤: 모범 풀이와 숨은 테스트를 확인해요)") : "만들기"}</button>
+        <button className="btn primary small" disabled={busy || !(topic.trim() || lesson.trim() || from.trim())} onClick={() => void make()}>{busy ? (from.trim() ? "가져오는 중… (백준 문제는 몇 초면 열려요)" : "만드는 중… (30초~1분: 모범 풀이와 숨은 테스트를 확인해요)") : "만들기"}</button>
         <button className="btn ghost small" onClick={() => setOpen(false)}>닫기</button>
       </div>
       {existing ? (
@@ -169,6 +170,24 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
       shareContext({ view: "code", title: r.problem.title, refs: [`code:${id}`], knowledgeIds: r.problem.knowledgeIds, problemId: id, text: r.problem.statement });
     }).catch((e) => setError(errorText(e)));
   }, [id]);
+  // 바로 열기: while the hidden tests are made in the background, look again every 2 seconds (the code typed so far stays).
+  const preparing = problem?.preparing && !problem.preparing.error ? problem.preparing.since : "";
+  useEffect(() => {
+    if (!preparing) return;
+    const timer = setInterval(() => {
+      void call<{ problem: Problem }>(`/api/code/problem/${id}`).then((r) => {
+        if (r.problem.preparing && !r.problem.preparing.error) return;
+        setProblem(r.problem);
+        shareContext({ view: "code", title: r.problem.title, refs: [`code:${id}`], knowledgeIds: r.problem.knowledgeIds, problemId: id, text: r.problem.statement });
+      }).catch(() => undefined);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [id, preparing]);
+  const retryPrepare = async () => {
+    setError("");
+    try { await call(`/api/code/problem/${id}/prepare`, {}); setProblem((p) => p ? { ...p, preparing: { since: new Date().toISOString() } } : p); }
+    catch (e) { setError(errorText(e)); }
+  };
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [msgs]);
   // Leaving the problem ends this attempt: its 틀림 · 힌트 · 물어봄 go into the knowledge record (src/lib/code/service.ts).
   useEffect(() => () => { void call(`/api/code/problem/${id}/end`, {}).catch(() => undefined); }, [id]);
@@ -243,6 +262,9 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         <div className="row" style={{ justifyContent: "space-between" }}><button className="btn ghost small" onClick={onBack}>← 문제 목록</button><button className="btn ghost small" onClick={() => void startTimer()}>⏱ 타이머 켜고 풀기</button></div>
         <div className="row"><span className="chip">{problem.kind === "blank" ? "빈칸" : "코드"}</span><span className="small muted">{problem.folder}</span></div>
         <h2>{problem.title}</h2>
+        {problem.preparing ? (problem.preparing.error
+          ? <div className="ws-err small">숨은 테스트를 만들지 못했어요: {problem.preparing.error} <button className="btn small" onClick={() => void retryPrepare()}>다시 시도</button></div>
+          : <p className="small muted">숨은 테스트를 만드는 중이에요(보통 15~20초). 그동안 문제를 읽고 코드를 짜고, 예제 실행을 해 볼 수 있어요. 제출은 준비가 끝나면 열려요.</p>) : null}
         <Rich text={problem.statement} />
         <p className="eyebrow">입력</p><Rich text={problem.inputText} className="small" />
         <p className="eyebrow">출력</p><Rich text={problem.outputText} className="small" />
@@ -250,11 +272,11 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           <div key={i} className="cs-example"><p className="eyebrow">예제 {i + 1}</p><div className="cs-io"><pre aria-label="예제 입력">{ex.input}</pre><pre aria-label="예제 출력">{ex.output}</pre></div></div>
         ))}
         {problem.constraints ? <p className="small muted">제약: {problem.constraints.split("\n").join(" · ")}</p> : null}
-        <p className="small muted">숨은 테스트 {problem.hiddenTests}개{problem.check?.maxTests ? ` (최대 크기 ${problem.check.maxTests}개)` : ""} · 시간 제한 {problem.timeLimitMs / 1000}초 · 메모리 제한 {problem.memoryLimitMb ?? 256}MB
+        {problem.preparing ? null : <p className="small muted">숨은 테스트 {problem.hiddenTests}개{problem.check?.maxTests ? ` (최대 크기 ${problem.check.maxTests}개)` : ""} · 시간 제한 {problem.timeLimitMs / 1000}초 · 메모리 제한 {problem.memoryLimitMb ?? 256}MB
           {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}${problem.check.by === "source" && problem.check.compared ? `, 단순 풀이와 작은 입력 ${problem.check.compared}개 일치` : ""}${problem.check.human === "match" ? " · 사람이 쓴 정답 코드와 일치" : ""}` : ""}
           {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}
-          {problem.check?.second && problem.check.second.status !== "skipped" ? ` · ${problem.check.second.status === "agreed" ? `다른 호출의 독립 풀이(${problem.check.second.model})와 테스트 ${problem.check.second.agreed}/${problem.check.second.total}개 일치` : problem.check.second.status === "second-wrong" ? "독립 풀이가 틀려서 큰 입력 대조는 못 함" : "독립 풀이로 대조하지 못함"}` : ""}</p>
-        <div className="row small"><span className="muted">확인하는 지식</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div>
+          {problem.check?.second && problem.check.second.status !== "skipped" ? ` · ${problem.check.second.status === "agreed" ? `다른 호출의 독립 풀이(${problem.check.second.model})와 테스트 ${problem.check.second.agreed}/${problem.check.second.total}개 일치` : problem.check.second.status === "second-wrong" ? "독립 풀이가 틀려서 큰 입력 대조는 못 함" : "독립 풀이로 대조하지 못함"}` : ""}</p>}
+        {problem.knowledge.length ? <div className="row small"><span className="muted">확인하는 지식</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
         {subs.length ? <><p className="eyebrow">내 제출</p><ul className="cs-subs">{subs.filter((s) => s.mode === "submit").slice(0, 8).map((s) => <li key={s.id}><button className="linkish small" onClick={() => void openSubmission(s.id)}>
           <span className={`chip ${VERDICT[s.verdict]?.[1] ?? ""}`}>{VERDICT[s.verdict]?.[0] ?? s.verdict}</span> {s.lang} · {new Date(s.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{s.hints ? ` · 힌트 ${s.hints}` : ""}</button></li>)}</ul></> : null}
       </section>
@@ -268,7 +290,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           <span className="cs-gap" />
           <button className="btn small" onClick={() => setCustom((c) => ({ ...c, open: !c.open }))}>직접 입력</button>
           <button className="btn small" disabled={Boolean(running) || !info?.ready} onClick={() => void judge("example")}>{running === "example" ? "도는 중…" : "예제 실행"}</button>
-          <button className="btn primary small" disabled={Boolean(running) || !info?.ready} onClick={() => void judge("submit")}>{running === "submit" ? "채점 중…" : "제출"}</button>
+          <button className="btn primary small" disabled={Boolean(running) || !info?.ready || Boolean(problem.preparing)} title={problem.preparing ? "숨은 테스트를 만드는 중이에요" : undefined} onClick={() => void judge("submit")}>{running === "submit" ? "채점 중…" : problem.preparing && !problem.preparing.error ? "테스트 준비 중…" : "제출"}</button>
         </div>
         {info && !info.ready ? <p className="ws-err">{info.label} 실행기가 없어요. {info.help}</p> : null}
         <CodeEditor value={code} lang={lang} onChange={onCode} handle={(h) => { editor.current = h; }} />

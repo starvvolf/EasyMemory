@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getKnowledge, memoryEvents } from "../knowledge/api.ts";
-import { findBySource, readProblem, saveProblem, sourceKey } from "./problems.ts";
+import { findBySource, readProblem, readProblemMeta, savePreparing, saveProblem, setPreparing, sourceKey, submit } from "./problems.ts";
 import { ensureProblemKnowledge, currentAttempt, endAttempt, endIdleAttempts, listProblemsWithKnowledge, recordAsked, recordHint, ATTEMPT_IDLE_MS } from "./service.ts";
 
 async function withData<T>(run: () => Promise<T>) {
@@ -71,4 +71,22 @@ test("the same address is found again (loosely), but not for the other kind", ()
   assert.equal(hit?.count, 1);
   assert.equal(await findBySource("https://www.acmicpc.net/problem/1654", "blank"), null);
   assert.equal(await findBySource("https://www.acmicpc.net/problem/16540", "full"), null);
+}));
+
+test("바로 열기: a preparing problem runs its examples, refuses a submit, and the full one replaces it under the same id", () => withData(async () => {
+  const pending = await savePreparing({ title: "BOJ 1번: A+B", statement: "두 수의 합", inputText: "a b", outputText: "a+b", examples: [{ input: "1 2\n", output: "3" }],
+    folder: "알고리즘", source: { kind: "ai", title: "BOJ 1 A+B", url: "https://www.acmicpc.net/problem/1" }, from: "1" });
+  const code = "a, b = map(int, input().split())\nprint(a + b)";
+  const ran = await submit(pending.id, "python", code, "example").catch((e: Error) => e);
+  assert.ok(!(ran instanceof Error) || /실행기/.test(ran.message), "examples run while preparing");
+  await assert.rejects(submit(pending.id, "python", code, "submit"), /만드는 중/);
+  await setPreparing(pending.id, { from: "1", since: pending.preparing!.since, error: "테스트를 못 만듦" });
+  await assert.rejects(submit(pending.id, "python", code, "submit"), /다시 시도/);
+  await saveProblem({ id: pending.id, title: "BOJ 1번: A+B", statement: "s", inputText: "i", outputText: "o", examples: pending.examples, tests: [{ input: "2 3\n", output: "5" }], timeLimitMs: 1000,
+    kind: "full", templates: {}, reference: null, knowledge: ["사칙연산"], folder: "알고리즘", source: pending.source });
+  const done = await readProblemMeta(pending.id);
+  assert.equal(done.preparing, undefined, "the full problem is no longer preparing");
+  assert.equal(done.hiddenTests, 1);
+  await setPreparing(pending.id, { from: "1", since: "x", error: "late" });
+  assert.equal((await readProblemMeta(pending.id)).preparing, undefined, "a late failure does not mark a finished problem");
 }));

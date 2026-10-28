@@ -3,11 +3,23 @@ import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
-import { deleteProblem, findBySource, publicProblem, readDrafts, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
+import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, submitAndRecord } from "@/lib/code/service";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
-import { resolveSource } from "@/lib/code/source";
+import { resolveSource, type Resolved } from "@/lib/code/source";
+
+type MakeInput = Parameters<typeof makeProblem>[0];
+/** The full problem from an imported original, under the id the learner already has open (바로 열기, 2026-10-29). */
+async function prepare(id: string, got: Resolved, rest: Omit<MakeInput, "lesson" | "sourceTitle" | "sourceUrl" | "original" | "id"> & { lesson?: string }) {
+  try {
+    await ensureProblemKnowledge(await makeProblem({ ...rest, id, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
+      sourceTitle: got.title, sourceUrl: got.url, ...(got.original ? { original: got.original } : {}) }));
+  } catch (error) {
+    const meta = await readProblemMeta(id).catch(() => null);
+    if (meta?.preparing) await setPreparing(id, { ...meta.preparing, error: (error as Error).message.slice(0, 500) }).catch(() => undefined);
+  }
+}
 
 export const runtime = "nodejs";
 const lang = z.enum(LANGS);
@@ -49,11 +61,20 @@ async function handle(request: Request, context: RouteContext) {
         /** 실험: the draft's thinking effort for this request only. */
         effort: z.enum(["low", "medium", "high"]).optional(),
         /** 실험: the faulty solutions' model for this request only. */
-        mutantsModel: z.string().regex(/^[a-z0-9.-]{3,40}$/).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
-      const { from, again, ...rest } = b;
+        mutantsModel: z.string().regex(/^[a-z0-9.-]{3,40}$/).optional(),
+        /** Wait for the whole problem even when it could open at once (time measurements). */
+        wait: z.boolean().optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
+      const { from, again, wait, ...rest } = b;
       const got = from?.trim() ? await resolveSource(from) : null;
       const existing = got && !again ? await findBySource(got.url, rest.kind) : null;
       if (existing) return json({ existing });
+      // 바로 열기: an imported original is shown at once (read it, run the examples); the hidden tests follow in the background.
+      if (got?.original && rest.kind === "full" && !wait) {
+        const pending = await savePreparing({ title: got.title.replace(/^BOJ (\d+) /, "BOJ $1번: "), statement: got.original.statement, inputText: got.original.inputText, outputText: got.original.outputText,
+          examples: got.original.examples, folder: "알고리즘", source: { kind: "ai", title: got.title, url: got.url }, from: from!.trim() });
+        void prepare(pending.id, got, rest);
+        return json({ problem: publicProblem(pending) });
+      }
       const made = await ensureProblemKnowledge(await makeProblem(got ? { ...rest, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
         sourceTitle: got.title, sourceUrl: got.url, ...(got.original ? { original: got.original } : {}) } : rest));
       return json({ problem: publicProblem(made) });
@@ -90,6 +111,15 @@ async function handle(request: Request, context: RouteContext) {
       // 실험: one model call — which model writes the independent solution (안전장치 ⑤) best.
       if (p[2] === "solve-check" && m === "POST") { const b = await body(z.object({ model: z.string().regex(/^[a-z0-9.-]{3,40}$/), effort: z.enum(["low", "medium", "high"]).optional() })); return json(await solveCheck(id, b.model, b.effort)); }
       if (p[2] === "end" && m === "POST") return json(await endAttempt(id));
+      // 바로 열기 failed: make the hidden tests again from the same address.
+      if (p[2] === "prepare" && m === "POST") {
+        const meta = await readProblemMeta(id);
+        if (!meta.preparing) return json({ ok: true });
+        const got = await resolveSource(meta.preparing.from);
+        await setPreparing(id, { from: meta.preparing.from, since: new Date().toISOString() });
+        void prepare(id, got, { kind: "full" });
+        return json({ ok: true });
+      }
       if (p[2] === "review" && m === "POST") { const b = await body(z.object({ lang, code, note: z.string().max(1000).optional() })); return json(await reviewApproach({ problemId: id, ...b })); }
       if (p[2] === "counter" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await counterexample({ problemId: id, ...b })); }
     }
