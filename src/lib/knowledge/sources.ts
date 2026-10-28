@@ -16,7 +16,7 @@ export type ReadSource = {
 };
 export type ArticleMapSaved = {
   genre: string; question: string; flow: string[]; consider: string[];
-  ideas: Array<{ title: string; body: string; id: string }>;
+  ideas: Array<{ title: string; body: string; ask?: string; id: string }>;
   terms: Array<{ name: string; line: string; have: "new" | "met" | "known"; id?: string }>;
   termIds: string[];
 };

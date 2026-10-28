@@ -58,6 +58,8 @@ export type Knowledge = {
    */
   example?: string;
   explain?: string;
+  /** 확인 질문 (2026-10-29): 글 지도의 핵심 아이디어처럼 이름만으로는 떠올릴 단서가 약할 때, 카드 앞면에 쓰는 질문. */
+  ask?: string;
   /** 쉽게 풀어 보기의 칸들 (explain은 이것을 이은 글, 예전 데이터·검색용). */
   explainParts?: ExplainParts;
   /** 쉽게 풀어 보기와 함께 보여 줄 지식: sure = 이미 고리로 이어져 있음(먼저 알 것), 아니면 함께 알아보기. */
@@ -264,6 +266,8 @@ export type SaveInput = {
   kind?: KKind;
   /** No 주제 folder yet; where it came in, for sorting (classify.ts). */
   topicHint?: string;
+  /** 확인 질문 (카드 앞면). */
+  ask?: string;
 };
 export type SaveResult = { item: Knowledge; merged: boolean; created: boolean; again: boolean };
 
@@ -298,6 +302,7 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   // "앎" (checked) — meeting it again never erases what is known about it.
   if (!existing) item.state = input.state ?? "met";
   if (input.kind && !item.kind) item.kind = input.kind;
+  if (input.ask?.trim() && !item.ask) item.ask = input.ask.trim().slice(0, 300);
   if (!existing && input.topicHint && item.folderId === null) item.topicHint = input.topicHint.slice(0, 200);
   else if (input.state === "unknown" || input.state === "known") item.state = input.state;
   if (item.state === "unknown") item.graduated = false;

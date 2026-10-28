@@ -18,16 +18,18 @@ question·flow·claim·ideas·terms는 글이 말한 것만 담는다. 글의 �
 - ideas: 이 글에서 가져갈 핵심 아이디어 3~5개. 글 종류에 맞게 고른다.
   concept는 개념 사이의 원리("금리가 오르면 기존 채권 가격이 내린다"), case는 문제·해결·그 이유("초과 판매를 막으려고 사용량을 구매번호 집합으로 센다"),
   opinion은 주장과 근거, news는 무엇이 왜 일어났고 무엇이 바뀌나.
-  title은 짧은 이름, body는 1~2문장, quote는 근거가 된 글의 문장 그대로 80자 이내. 개념어 하나의 정의는 ideas가 아니라 terms에 둔다.
+  title은 짧은 이름인데 글에 실제로 나온 말로 짓는다(새로 지은 말 금지: "편의와 비용의 맞교환" 대신 "ETF의 장단점"). body는 1~2문장,
+  ask는 이 핵심을 떠올리게 하는 질문 한 줄(글의 맥락을 담아, 답이 body가 되게: "이 글에서 ETF가 편리한 대신 치르는 비용은?"),
+  quote는 근거가 된 글의 문장 그대로 80자 이내. 개념어 하나의 정의는 ideas가 아니라 terms에 둔다.
 - terms: 글을 이해하는 데 필요한 개념어(이름이 붙은 개념)를 글에 나온 순서로, 많아야 20개. line은 이 글에서의 뜻 한 줄(30자 안팎).
   명령어·함수·제품 이름은 그것으로 하는 일이 중요할 때만 넣고, 그 일 단위로 묶는다(SADD·SCARD·SREM → "Redis Set 연산"). 일상어는 넣지 않는다.
   학습자가 이미 가진 지식 이름과 같은 것이면 그 이름을 그대로 쓴다.
 - consider: 읽는 사람이 생각해 볼 점 0~2개(글이 빠뜨린 조건, 반대로 볼 여지, 글의 설명과 다르게 알려진 점). 확실할 때만, 없으면 빈 배열.`;
 type Mapped = { genre: (typeof GENRES)[number]; question: string; flow: string[]; claim: { text: string; basis: string[] };
-  ideas: Array<{ title: string; body: string; quote: string }>; terms: Array<{ name: string; line: string }>; consider: string[] };
+  ideas: Array<{ title: string; body: string; ask: string; quote: string }>; terms: Array<{ name: string; line: string }>; consider: string[] };
 const MAP_SCHEMA = S.obj({
   genre: S.oneOf(...GENRES), question: S.str, flow: S.arr(S.str), claim: S.obj({ text: S.str, basis: S.arr(S.str) }),
-  ideas: S.arr(S.obj({ title: S.str, body: S.str, quote: S.str })), terms: S.arr(S.obj({ name: S.str, line: S.str })), consider: S.arr(S.str),
+  ideas: S.arr(S.obj({ title: S.str, body: S.str, ask: S.str, quote: S.str })), terms: S.arr(S.obj({ name: S.str, line: S.str })), consider: S.arr(S.str),
 });
 
 /** One model call: the map, and each term marked with what the learner already has (known = 앎·졸업, met = 만남·몰랐음). */

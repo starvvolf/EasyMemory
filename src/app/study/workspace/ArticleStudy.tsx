@@ -16,7 +16,7 @@ export type SourceView = {
 /** 글 지도 (2026-10-29): 읽기 전에 보는 질문·흐름·핵심, 그리고 모르는 것만 고르는 개념어. */
 export type ArticleMapView = {
   genre: string; question: string; flow: string[]; consider: string[];
-  ideas: Array<{ title: string; body: string; id: string }>;
+  ideas: Array<{ title: string; body: string; ask?: string; id: string }>;
   terms: Array<{ name: string; line: string; have: "new" | "met" | "known"; id?: string }>;
   termIds: string[];
 };
@@ -29,37 +29,71 @@ const GENRE: Record<string, string> = { concept: "개념 설명", case: "사례�
 export function ArticleMap({ source, onChanged }: { source: SourceView; onChanged: (s: SourceView) => void }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [all, setAll] = useState(false);
   const map = source.map;
   if (!map) return null;
   const picked = new Set(map.termIds);
-  const isPicked = (t: ArticleMapView["terms"][number]) => Boolean(t.id && picked.has(t.id));
-  const toggle = async (t: ArticleMapView["terms"][number]) => {
+  type Term = ArticleMapView["terms"][number];
+  const isPicked = (t: Term) => Boolean(t.id && picked.has(t.id));
+  const toggle = async (t: Term) => {
     setBusy(t.name); setError("");
     try { onChanged((await call<{ source: SourceView }>(`/api/knowledge/source/${source.id}/terms`, { names: [t.name], on: !isPicked(t) })).source); }
     catch (e) { setError(errorText(e)); } finally { setBusy(""); }
   };
-  const chosen = map.terms.filter(isPicked);
-  const known = map.terms.filter((t) => t.have === "known").length;
+  // 개념어는 "이름 — 이 글에서의 뜻"으로 늘 보이게 (A 10/29: 마우스를 올려야 보이면 고르기 어렵고 태블릿에선 안 보임).
+  // 모르는 것을 고르기 쉽게 아는 것(✓)은 뒤로, 처음엔 8개만.
+  const terms = [...map.terms].sort((x, y) => Number(x.have === "known") - Number(y.have === "known"));
+  const shown = all ? terms : terms.slice(0, 8);
+  const known = terms.filter((t) => t.have === "known");
+  const againIdeas = map.ideas.filter((x) => source.againIds.includes(x.id));
   return (
     <div className="am stack">
       <div className="am-head"><span className="chip">{GENRE[map.genre] ?? "글"}</span><p className="am-q">{map.question}</p></div>
       {map.flow.length ? <ol className="am-flow">{map.flow.map((f, i) => <li key={i}>{f}</li>)}</ol> : null}
       <div><p className="eyebrow">이 글의 핵심 {map.ideas.length}</p>
-        <ul className="am-ideas">{map.ideas.map((x) => <li key={x.id}><b>{x.title}</b><span>{x.body}</span></li>)}</ul></div>
+        <ul className="am-ideas">{map.ideas.map((x) => <li key={x.id}><b>{x.title}{source.againIds.includes(x.id) ? <span className="am-again">이미 있던 지식</span> : null}</b><span>{x.body}</span></li>)}</ul></div>
       <div className="stack">
-        <p className="eyebrow">개념어 {map.terms.length} · 모르는 것만 눌러 주세요{known ? ` (이미 아는 것 ${known})` : ""}</p>
-        <div className="am-terms">{map.terms.map((t) => (
-          <button key={t.name} className={`am-term ${t.have}${isPicked(t) ? " on" : ""}`} disabled={t.have === "known" || busy === t.name} title={t.line} aria-pressed={isPicked(t)} onClick={() => void toggle(t)}>
-            {t.have === "known" ? "✓ " : isPicked(t) ? "＋ " : ""}{t.name}</button>))}</div>
-        {chosen.length ? <ul className="am-picked">{chosen.map((t) => <li key={t.name}><b>{t.name}</b><span>{t.line}</span></li>)}</ul>
-          : <p className="small muted">누른 말은 ‘몰랐음’으로 지식창에 들어가 복습에 나와요. 다시 누르면 고른 것에서 빠져요.</p>}
+        <p className="eyebrow">개념어 {terms.length} · 모르는 것만 눌러 주세요</p>
+        <ul className="am-terms">{shown.map((t) => (
+          <li key={t.name}><button className={`am-term ${t.have}${isPicked(t) ? " on" : ""}`} disabled={t.have === "known" || busy === t.name} aria-pressed={isPicked(t)} onClick={() => void toggle(t)}>
+            <span className="am-mark" aria-hidden>{t.have === "known" ? "✓" : isPicked(t) ? "＋" : ""}</span>
+            <b>{t.name}</b><span className="am-line">{t.line}</span>{t.have === "met" ? <span className="am-tag">만난 적 있음</span> : t.have === "known" ? <span className="am-tag">아는 말</span> : null}
+          </button></li>))}</ul>
+        {terms.length > 8 ? <button className="linkish small am-more" onClick={() => setAll(!all)}>{all ? "접기" : `나머지 ${terms.length - 8}개 보기`}</button> : null}
+        <p className="small muted">누른 말은 ‘몰랐음’으로 지식창에 들어가 복습에 나와요{map.termIds.length ? ` · 지금 ${map.termIds.length}개 골랐어요` : ""}. 다시 누르면 빠져요.
+          {known.length || againIdeas.length ? ` 이미 아는 것: ${[...againIdeas.map((x) => x.title), ...known.map((t) => t.name)].join(", ")}.` : ""}</p>
       </div>
       {map.consider.length ? <details className="ws-fold"><summary>생각해 볼 점 {map.consider.length}</summary><ul className="small am-consider">{map.consider.map((c, i) => <li key={i}>{c}</li>)}</ul>
         <p className="small muted">글에 없는 AI의 의견이에요. 글의 내용과 따로 봐 주세요.</p></details> : null}
+      <GoalPlace source={source} />
       {error ? <p className="ws-err">{error}</p> : null}
     </div>
   );
 }
+
+/** 목표·기한에 넣기 (웹 글은 기한이 보통 없어 접어 둔다): 이 글을 목표에 넣으면 이 글의 지식이 그 목표로 따라간다. */
+function GoalPlace({ source }: { source: SourceView }) {
+  const [goals, setGoals] = useState<Array<{ id: string; name: string; closed: boolean }> | null>(null);
+  const [name, setName] = useState("");
+  const [note, setNote] = useState("");
+  const load = async () => { try { setGoals((await call<{ goals: Array<{ id: string; name: string; closed: boolean }> }>("/api/knowledge/goals")).goals.filter((g) => !g.closed)); } catch { setGoals([]); } };
+  const put = async (goalId: string, label: string) => {
+    try { await call(`/api/knowledge/goals/${goalId}/source`, { kind: "web", title: source.title, ...(source.url ? { url: source.url } : {}), on: true }); setNote(`‘${label}’ 목표에 넣었어요. 기한은 일정에서 정할 수 있어요.`); }
+    catch (e) { setNote(errorText(e)); }
+  };
+  return (
+    <details className="ws-fold" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open && !goals) void load(); }}><summary>목표·기한에 넣기 (시험이나 수업 자료라면)</summary>
+      <div className="row small">
+        {goals?.length ? <select className="ws-select" value="" aria-label="목표에 넣기" onChange={(e) => { const g = goals.find((x) => x.id === e.target.value); if (g) void put(g.id, g.name); }}>
+          <option value="">있는 목표에…</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select> : null}
+        <form className="row" onSubmit={(e) => { e.preventDefault(); if (name.trim()) void call<{ goal: { id: string } }>("/api/knowledge/goals", { name: name.trim() }).then((r) => put(r.goal.id, name.trim())).catch((err) => setNote(errorText(err))); }}>
+          <input className="ws-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="새 목표 이름" maxLength={60} /><button className="btn small" disabled={!name.trim()}>만들어 넣기</button></form>
+      </div>
+      {note ? <p className="small muted">{note}</p> : null}
+    </details>
+  );
+}
+
 const GOALS: GoalId[] = ["terms", "claim", "chains", "recognize"];
 
 export function ArticleKnowledge({ source }: { source: SourceView }) {

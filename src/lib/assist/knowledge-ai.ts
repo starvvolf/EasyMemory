@@ -61,7 +61,7 @@ export async function extractFromText(input: { kind: "web" | "lesson"; title: st
   // A folder the learner chose is kept; otherwise 주제 정리 (classify.ts) places the new items a few seconds later.
   const placed = input.folder ? { folder: input.folder } : { topicHint: input.kind === "lesson" ? "강의" : "읽은 글" };
   const ref = { kind: "web" as const, title: input.title, ...(input.url ? { url: input.url } : {}) };
-  const results = await saveMany(map.ideas.map((k) => ({ title: k.title, body: k.body, ...placed, source: { ...ref, quote: k.quote.slice(0, 200) } })));
+  const results = await saveMany(map.ideas.map((k) => ({ title: k.title, body: k.body, ask: k.ask, ...placed, source: { ...ref, quote: k.quote.slice(0, 200) } })));
   const items = results.map((r, i) => ({ ...r.item, again: r.again, created: r.created, termKind: "idea", quote: map.ideas[i].quote }));
   const id = sourceIdOf(input.url ?? "", input.title);
   const prior = await getSource(id);
@@ -75,7 +75,7 @@ export async function extractFromText(input: { kind: "web" | "lesson"; title: st
     quotes: Object.fromEntries(items.map((i) => [i.id, i.quote])),
     goals: prior?.goals ?? { terms: { done: false }, claim: { done: false }, chains: { done: false }, recognize: { done: false } },
     map: { genre: map.genre, question: map.question, flow: map.flow, consider: map.consider,
-      ideas: map.ideas.map((k, i) => ({ title: k.title, body: k.body, id: items[i].id })),
+      ideas: map.ideas.map((k, i) => ({ title: k.title, body: k.body, ask: k.ask, id: items[i].id })),
       terms: map.terms.map((t) => ({ name: t.name, line: t.line, have: t.have as "new" | "met" | "known", ...(t.id ? { id: t.id } : {}) })), termIds },
   };
   await saveSource(source);

@@ -383,3 +383,14 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .am-picked li{display:flex;gap:8px;align-items:baseline}
 .dejipgi .am-picked span{color:var(--muted)}
 .dejipgi .am-consider{margin:6px 0;padding-left:18px}
+/* 개념어를 "이름 — 뜻" 줄로 (2026-10-29 A 점검) */
+.dejipgi ul.am-terms{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.dejipgi ul.am-terms .am-term{width:100%;display:flex;gap:8px;align-items:baseline;text-align:left;border-radius:10px;padding:7px 10px;flex-wrap:wrap}
+.dejipgi ul.am-terms .am-term b{font-size:14px}
+.dejipgi .am-mark{width:14px;flex:none;color:var(--accent);font-weight:700}
+.dejipgi .am-term.known .am-mark{color:var(--faint)}
+.dejipgi .am-line{color:var(--muted);font-size:13px;flex:1;min-width:12em}
+.dejipgi .am-term.on .am-line{color:var(--ink)}
+.dejipgi .am-tag{font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:6px;padding:0 5px}
+.dejipgi .am-again{margin-left:8px;font-size:11px;font-weight:600;color:var(--read);background:var(--read-soft);border-radius:6px;padding:1px 6px}
+.dejipgi .am-more{align-self:flex-start}

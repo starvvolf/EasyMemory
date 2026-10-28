@@ -11,7 +11,7 @@ export type Question = {
 };
 export type Graded = { correct: boolean; expected: string; note: string };
 
-type Pool = Array<Pick<Knowledge, "id" | "title" | "body" | "aliases" | "folderId" | "links"> & { sources?: Knowledge["sources"]; kind?: Knowledge["kind"] }>;
+type Pool = Array<Pick<Knowledge, "id" | "title" | "body" | "aliases" | "folderId" | "links"> & { sources?: Knowledge["sources"]; kind?: Knowledge["kind"]; ask?: string }>;
 function rng(seed: string) { let h = 2166136261; for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => { h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 2 ** 32; }; }
 function shuffle<T>(items: T[], r: () => number) { const a = [...items]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 // ⟨받음: … / 냄: …⟩ is the engine's wiring between knowledge points; it names other items, so it never goes into a question.
@@ -50,7 +50,7 @@ export function questionsFor(item: Pool[number], pool: Pool, seed = ""): Questio
   const meaning = meaningOf(item);
   const out: Question[] = [];
   const id = (kind: string) => `${item.id}:${kind}:${seed}`;
-  out.push({ id: id("flashcard"), kind: "flashcard", label: QUESTION_LABEL.flashcard, knowledgeId: item.id, prompt: item.title, answer: meaning || "(설명이 아직 없어요. 지식창에서 적어 주세요.)", explain: "" });
+  out.push({ id: id("flashcard"), kind: "flashcard", label: QUESTION_LABEL.flashcard, knowledgeId: item.id, prompt: item.ask || item.title, answer: meaning || "(설명이 아직 없어요. 지식창에서 적어 주세요.)", explain: item.ask ? item.title : "" });
   // 어휘 (종류 vocab): a word is learned both ways — the word from its meaning (주관식), and which word fits (객관식).
   if (item.kind === "vocab" && meaning) {
     out.push({ id: id("short"), kind: "short", label: QUESTION_LABEL.short, knowledgeId: item.id, prompt: `뜻에 맞는 단어를 쓰세요.\n${meaning}`, answer: item.title, accept: item.aliases,
@@ -68,7 +68,7 @@ export function questionsFor(item: Pool[number], pool: Pool, seed = ""): Questio
       .sort((a, b) => Math.abs(a.length - own.length) - Math.abs(b.length - own.length)).slice(0, 3);
     const options = shuffle([own, ...picks], r);
     // 객관식 needs at least three options to be worth asking; with one other, only OX. A procedure is asked as a card.
-    if (picks.length >= 2 && !isSteps(own)) out.push({ id: id("choice"), kind: "choice", label: QUESTION_LABEL.choice, knowledgeId: item.id, prompt: `"${item.title}"의 뜻으로 맞는 것은?`, options, answer: own, explain: `${item.title}: ${meaning}` });
+    if (picks.length >= 2 && !isSteps(own)) out.push({ id: id("choice"), kind: "choice", label: QUESTION_LABEL.choice, knowledgeId: item.id, prompt: item.ask ? `${item.ask} 맞는 것은?` : `"${item.title}"의 뜻으로 맞는 것은?`, options, answer: own, explain: `${item.title}: ${meaning}` });
     const truth = r() < 0.5;
     const shown = truth ? own : picks[0];
     out.push({ id: id("ox"), kind: "ox", label: QUESTION_LABEL.ox, knowledgeId: item.id, prompt: `${item.title}: ${shown}`, options: ["O", "X"], answer: truth ? "O" : "X",

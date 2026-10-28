@@ -34,7 +34,7 @@ export default function NewStudy() {
           </button>
         ))}
       </div>
-      {kind === "web" ? <WebForm onMade={setMade} /> : kind === "code" ? <CodeForm onMade={setMade} /> : null}
+      {kind === "web" ? <WebForm onMade={(m) => { setMade(null); setKind(null); go("web", { id: m.id }); }} /> : kind === "code" ? <CodeForm onMade={setMade} /> : null}
     </div>
   );
 }
@@ -63,7 +63,7 @@ function WebForm({ onMade }: { onMade: (m: Made) => void }) {
       <input className="ws-input" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} placeholder="제목 (비워 두면 첫 줄)" />
       <input className="ws-input" value={v.url} onChange={(e) => setV({ ...v, url: e.target.value })} placeholder="주소 (선택)" />
       <textarea className="ws-input" rows={8} value={v.text} onChange={(e) => setV({ ...v, text: e.target.value })} placeholder="글 본문을 붙여 넣어요" />
-      <div className="row"><button className="btn primary" disabled={busy || v.text.trim().length < 80} onClick={() => void make()}>{/* 기다리는 시간 어림 (2026-10-29 실측): 첫 글자까지 약 3초 + 지식 1개(약 650자에 1개)에 약 2초 */}{busy ? `지식 잡는 중… (${Math.max(3, Math.round(v.text.trim().length / 650)) * 2 + 5}초쯤)` : "지식 잡기"}</button>
+      <div className="row"><button className="btn primary" disabled={busy || v.text.trim().length < 80} onClick={() => void make()}>{/* 기다리는 시간 (2026-10-29 글 지도 실측): 글 길이와 거의 상관없이 14~20초 */}{busy ? "지식 잡는 중… (20초쯤)" : "지식 잡기"}</button>
         {v.text.trim() && v.text.trim().length < 80 ? <span className="small muted">본문이 조금 더 필요해요.</span> : null}</div>
       {error ? <p className="ws-err">{error}</p> : null}
     </section>
