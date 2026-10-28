@@ -204,7 +204,9 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     catch (e) { setError(errorText(e)); } finally { setRunning(""); }
   };
   const failed = result?.shown.find((s) => s.verdict !== "AC") ?? result?.shown[0];
-  const last = result ? (result.compile ? { verdict: result.verdict, compile: result.compile } : failed ? { verdict: failed.verdict, input: failed.input, expected: failed.expected, got: failed.got, stderr: failed.stderr } : { verdict: result.verdict }) : undefined;
+  // What the tutor sees of the last run. A max-size test is megabytes; the server takes 4,000 characters a field.
+  const clip = (text?: string) => text && text.length > 3900 ? `${text.slice(0, 3900)}\n… (${(text.length - 3900).toLocaleString()}자 더)` : text;
+  const last = result ? (result.compile ? { verdict: result.verdict, compile: clip(result.compile) } : failed ? { verdict: failed.verdict, input: clip(failed.input), expected: clip(failed.expected), got: clip(failed.got), stderr: clip(failed.stderr) } : { verdict: result.verdict }) : undefined;
   const assist = async (tag: string, me: string, run: () => Promise<{ text?: string; found?: boolean; case?: Result; tried?: number; compile?: string }>) => {
     if (asking) return;
     setAsking(true); setMsgs((m) => [...m, { who: "me", text: me, tag }]);

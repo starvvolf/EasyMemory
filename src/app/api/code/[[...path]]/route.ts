@@ -13,8 +13,10 @@ export const runtime = "nodejs";
 const lang = z.enum(LANGS);
 const code = z.string().max(100_000);
 const pid = z.string().regex(/^cp_[a-z0-9_-]{3,40}$/);
-const last = z.object({ verdict: z.string().max(20).optional(), input: z.string().max(4000).optional(), expected: z.string().max(4000).optional(), got: z.string().max(4000).optional(),
-  stderr: z.string().max(4000).optional(), compile: z.string().max(8000).optional() }).optional();
+// The last run the tutor sees: a max-size test can be megabytes, so long fields are cut, not refused.
+const cut = (n: number) => z.string().transform((s) => s.length > n ? `${s.slice(0, n - 30)}\n… (${s.length - n + 30}자 더)` : s);
+const last = z.object({ verdict: z.string().max(20).optional(), input: cut(4000).optional(), expected: cut(4000).optional(), got: cut(4000).optional(),
+  stderr: cut(4000).optional(), compile: cut(8000).optional() }).optional();
 
 async function handle(request: Request, context: RouteContext) {
   try {
