@@ -10,6 +10,7 @@ import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
 import { nearOf, previewLinks, rejudgeLinks, openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
 import { scheduleAfterSave } from "@/lib/knowledge/after-save";
 import { knowledgeReport } from "@/lib/knowledge/report";
+import { explainKnowledge, runLayer } from "@/lib/knowledge/layer";
 import { runClassify } from "@/lib/knowledge/classify";
 import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, sourceKey, syncSubjects,
   updateGoal } from "@/lib/knowledge/goals";
@@ -132,12 +133,17 @@ async function handle(request: Request, context: RouteContext) {
       const itemId = id.parse(p[1]);
       if (p.length === 2 && m === "GET") return json({ ...await getKnowledge(itemId), near: await nearOf(itemId) });
       if (p.length === 2 && m === "PATCH") return json({ item: await updateKnowledge(itemId, await body(z.object({ title: z.string().max(120).optional(), body: z.string().max(4000).optional(),
-        aliases: z.array(z.string().max(120)).max(20).optional(), folderId: id.nullable().optional(), kind: kind.optional() }))) });
+        aliases: z.array(z.string().max(120)).max(20).optional(), folderId: id.nullable().optional(), kind: kind.optional(), example: z.string().max(600).optional(), explain: z.string().max(3000).optional() }))) });
       if (p.length === 2 && m === "DELETE") return json(await deleteKnowledge(itemId));
       if (p[2] === "state" && m === "POST") return json({ item: await setKnowledgeState(itemId, await body(z.object({ state: state.optional(), graduated: z.boolean().optional() }))) });
       if (p[2] === "event" && m === "POST") {
         const e = await body(z.object({ kind: z.enum(["met", "asked", "wrong", "hint", "correct", "note"]), detail: z.string().max(600).optional(), source: z.object({ kind: sourceRef.shape.kind, title: z.string().max(200), ref: z.string().max(200).optional() }).optional() }));
         return json({ item: await recordEvent(itemId, e.kind, e.detail ?? "", e.source) });
+      }
+      if (p[2] === "explain" && m === "POST") {
+        const b = await body(z.object({ question: z.string().max(400).optional() }));
+        try { return json(await explainKnowledge(itemId, b.question ?? "")); }
+        catch (error) { return NextResponse.json({ message: `설명을 만들지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
       }
       if (p[2] === "similar" && m === "GET") {
         try { return json(await similarKnowledge({ id: itemId }, { limit: Math.min(Number(url.searchParams.get("limit") ?? 8) || 8, 20) })); }
@@ -226,6 +232,12 @@ async function handle(request: Request, context: RouteContext) {
       return json(await runDedupeEval(b.models));
     }
     // 빈 뜻·다른 이름 채우기 (모델 호출 1번, 최대 40개).
+    // 층 나누기: 뜻에서 만난 곳의 사연을 예로 옮기고 빈 뜻을 채운다 (layer.ts). Up to 3 batches of 20 per press.
+    if (p[0] === "layer" && m === "POST") {
+      const b = await body(z.object({ ids: z.array(id).max(200).optional() }));
+      try { return json(await runLayer({ ids: b.ids, batches: 3 })); }
+      catch (error) { return NextResponse.json({ message: `뜻을 정리하지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
+    }
     if (p[0] === "fill" && m === "POST") { const b = await body(z.object({ ids: z.array(id).max(200).optional() })); return json(await fillMissing({ ids: b.ids })); }
     if (p[0] === "extract" && m === "POST") {
       const b = await body(z.object({ kind: z.enum(["web", "lesson"]), title: z.string().min(1).max(300), url: z.string().max(2000).optional(), text: z.string().min(1).max(200000), folder: z.string().max(200).optional() }));

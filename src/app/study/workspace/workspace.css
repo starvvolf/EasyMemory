@@ -327,3 +327,14 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .kw-folds>.ws-fold[open]{padding-bottom:10px}
 .dejipgi .kw-manage .stack{gap:14px;margin-top:6px}
 .dejipgi .row>.ws-input.kw-rel-in{flex:0 1 90px}
+
+/* 카드의 층: 예 · 만난 곳 · 쉽게 풀어 보기 (2026-10-28) */
+.dejipgi .kw-ex{display:flex;gap:8px;align-items:baseline;margin:-4px 0 0;font-size:13.5px;color:var(--muted);line-height:1.5}
+.dejipgi .kw-ex-tag{flex:none;font-size:11px;font-weight:700;color:var(--read);background:var(--read-soft);border-radius:6px;padding:1px 6px}
+.dejipgi .kw-met{display:flex;gap:10px;flex-wrap:wrap;margin:-6px 0 0;font-size:12px;color:var(--faint)}
+.dejipgi .kw-met a,.dejipgi .kw-met .linkish{color:var(--muted);font-size:12px}
+.dejipgi .kw-explain{border:1px solid var(--line);border-radius:10px;padding:2px 12px}
+.dejipgi .kw-explain>summary{cursor:pointer;list-style:none;font-size:13.5px;font-weight:600;padding:8px 0;color:var(--accent)}
+.dejipgi .kw-explain>summary::-webkit-details-marker{display:none}
+.dejipgi .kw-explain>summary::before{content:"💡 "}
+.dejipgi .kw-explain-body{display:flex;flex-direction:column;gap:10px;padding:0 0 12px;font-size:14px;line-height:1.65}

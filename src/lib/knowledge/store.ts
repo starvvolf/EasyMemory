@@ -50,6 +50,15 @@ export type Knowledge = {
   topicHint?: string;
   /** The learner put it in this folder by hand: 주제 정리 never moves it. */
   placedByHand?: boolean;
+  /**
+   * 층 나누기 (2026-10-28): body is the 뜻 to recall (general, short); `example` is how it was used where it was met
+   * ("이 문제에선 이름 → 누적 포인트를 O(1)에"); `explain` is a longer, easier explanation made when the learner says
+   * 잘 모르겠어요. `layered`: the 뜻 was checked once for source context mixed in; `bodyBefore`: the 뜻 before that.
+   */
+  example?: string;
+  explain?: string;
+  layered?: boolean;
+  bodyBefore?: string;
 };
 /** `hand`: made by the learner (+ 폴더), kept even when empty; folders made on the way by saving or sorting are not. */
 export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string; createdAt: string; hand?: boolean };
@@ -335,6 +344,31 @@ async function appendEvents(events: KEvent[]) {
  * Fill in what is missing without touching what the learner wrote: a meaning only where there is none, other names
  * (English name, abbreviation, the Korean name of an English term) added unless another item already goes by them.
  */
+/**
+ * 층 나누기 결과 넣기: a general 뜻 in body (the old one kept in bodyBefore), the source's own case in example, a 헷갈림
+ * line when there was none. Every entry is marked layered so it is not asked again.
+ */
+export const layerKnowledge = (entries: Array<{ id: string; body?: string; example?: string; confusion?: string }>) => change((store) => {
+  const changed: string[] = [];
+  for (const entry of entries) {
+    const item = store.items.find((x) => x.id === entry.id);
+    if (!item) continue;
+    const old = item.body.split("\n");
+    const confusions = old.filter((l) => /^헷갈림:/.test(l.trim()));
+    const meaning = entry.body?.trim();
+    let touched = false;
+    if (meaning && meaning !== old.filter((l) => !/^헷갈림:/.test(l.trim())).join("\n").trim()) {
+      if (item.body.trim()) item.bodyBefore = item.body;
+      item.body = [meaning, ...confusions].join("\n").slice(0, 4000);
+      touched = true;
+    }
+    if (entry.confusion?.trim() && !confusions.length) { item.body = `${item.body}\n헷갈림: ${entry.confusion.trim()}`.slice(0, 4000); touched = true; }
+    if (entry.example?.trim() && !item.example) { item.example = entry.example.trim().slice(0, 600); touched = true; }
+    item.layered = true;
+    if (touched) { item.updatedAt = nowIso(); changed.push(item.id); }
+  }
+  return { changed };
+});
 export const enrichKnowledge = (entries: Array<{ id: string; body?: string; aliases?: string[] }>) => change((store) => {
   const taken = new Map(store.items.flatMap((i) => namesOf(i).map((n) => [normalize(n), i.id] as const)));
   const changed: string[] = [];
@@ -352,7 +386,7 @@ export const enrichKnowledge = (entries: Array<{ id: string; body?: string; alia
   }
   return { changed };
 });
-export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null; kind?: KKind }) => change((store) => {
+export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null; kind?: KKind; example?: string; explain?: string }) => change((store) => {
   const item = store.items.find((x) => x.id === id);
   if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
   if (patch.title !== undefined) { if (!patch.title.trim()) throw new KnowledgeError(400, "지식 이름이 비어 있어요."); item.title = patch.title.trim().slice(0, 120); }
@@ -365,6 +399,8 @@ export const updateKnowledge = (id: string, patch: { title?: string; body?: stri
     item.placedByHand = true;
   }
   if (patch.kind !== undefined) item.kind = patch.kind;
+  if (patch.example !== undefined) item.example = patch.example.trim().slice(0, 600) || undefined;
+  if (patch.explain !== undefined) item.explain = patch.explain.trim().slice(0, 3000) || undefined;
   item.updatedAt = nowIso();
   return item;
 });
