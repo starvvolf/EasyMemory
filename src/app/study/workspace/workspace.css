@@ -273,3 +273,57 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 
 /* 고리의 연결 문장 (2026-10-28) */
 .dejipgi .kw-note{display:block;font-size:12.5px;color:var(--muted);margin:1px 0 0 2px}
+
+/* 지식창 다듬기 (2026-10-28): 볼 것(이름·상태·뜻·확인 문제·이어진 지식)은 앞에, 고치기·정리는 접어 둔다. */
+.dejipgi .dot.good{background:var(--good)}
+.dejipgi .kw-sum{display:flex;gap:12px;flex-wrap:wrap;margin-top:2px}
+.dejipgi .kw-actions{gap:6px}
+.dejipgi .kw-review{display:inline-flex;align-items:center;gap:6px}
+.dejipgi .kw-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;font-size:12px;font-weight:700;background:color-mix(in srgb,#fff 28%,transparent);color:inherit}
+.dejipgi .kw-chores{border:1px solid var(--line);border-radius:12px;background:var(--surface);margin:0 0 10px}
+.dejipgi .kw-chores>summary{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;list-style:none;font-size:14px}
+.dejipgi .kw-chores>summary::-webkit-details-marker{display:none}
+.dejipgi .kw-chores>summary::after{content:"▸";margin-left:auto;color:var(--faint)}
+.dejipgi .kw-chores[open]>summary::after{content:"▾"}
+.dejipgi .kw-chores-what{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dejipgi .kw-chores-body{padding:0 12px 12px}
+.dejipgi .kw-chores-body .kw-dupes{margin:0;background:var(--surface-2);border:0}
+/* 목록 */
+.dejipgi .kw-item{gap:3px;padding:9px 10px}
+.dejipgi .kw-line{-webkit-line-clamp:1}
+.dejipgi .kw-line.kw-empty{color:var(--faint);font-style:italic}
+.dejipgi .kw-item-side{display:inline-flex;gap:8px;font-size:12px;color:var(--faint);flex:none}
+.dejipgi .kw-weak{color:var(--bad)}
+.dejipgi .kw-meta{font-size:11.5px;color:var(--faint)}
+/* 자세히 */
+.dejipgi .kw-d{gap:14px}
+.dejipgi .kw-d-head{display:flex;flex-direction:column;gap:4px}
+.dejipgi .kw-crumb{font-size:12px;color:var(--faint);margin:0}
+.dejipgi .kw-d-title{margin:0;line-height:1.3}
+.dejipgi .kw-d-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.dejipgi .kw-aka{color:var(--faint)}
+.dejipgi .kw-aka::before{content:"·";margin-right:8px;color:var(--faint)}
+.dejipgi .kw-body{line-height:1.6}
+.dejipgi .kw-body>.kw-edit{opacity:0;transition:opacity .15s}
+.dejipgi .kw-body:hover>.kw-edit,.dejipgi .kw-body>.kw-edit:focus-visible{opacity:.8}
+.dejipgi .kw-d-act{gap:10px;align-items:center}
+.dejipgi .kw-rels{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.dejipgi .kw-rels>li{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:8px}
+.dejipgi .kw-rels>li:hover{background:var(--surface-2)}
+.dejipgi .kw-rel-head{display:flex;align-items:center;gap:6px;font-size:14px;min-width:0}
+.dejipgi .kw-rel{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--accent-soft);color:var(--accent);flex:none}
+.dejipgi .kw-dir{color:var(--faint);font-size:12px}
+.dejipgi .kw-rel-head .kw-x{margin-left:auto;opacity:0}
+.dejipgi .kw-rels>li:hover .kw-x{opacity:1}
+.dejipgi .kw-rels .kw-note{margin:0 0 0 2px}
+.dejipgi .kw-d-goals{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.dejipgi .kw-d-goals .eyebrow{margin-right:2px}
+.dejipgi .kw-near{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;margin:0}
+.dejipgi .kw-near .muted{cursor:help;text-decoration:underline dotted;text-underline-offset:3px}
+.dejipgi .kw-folds{display:flex;flex-direction:column;border-top:1px solid var(--line);padding-top:6px}
+.dejipgi .kw-folds>.ws-fold{border-bottom:1px solid var(--line);padding:4px 0}
+.dejipgi .kw-folds>.ws-fold:last-child{border-bottom:0}
+.dejipgi .kw-folds>.ws-fold>summary .muted{font-weight:500;margin-left:6px}
+.dejipgi .kw-folds>.ws-fold[open]{padding-bottom:10px}
+.dejipgi .kw-manage .stack{gap:14px;margin-top:6px}
+.dejipgi .row>.ws-input.kw-rel-in{flex:0 1 90px}
