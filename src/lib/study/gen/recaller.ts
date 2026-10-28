@@ -127,6 +127,7 @@ const PLAIN = `${BASE}
 원문으로 시험 문제를 만든다: 기본 문제 4개(choice 2, short 1, ox 1)와 원문의 개념을 엮어 새 상황·수치에 적용하는 응용 객관식 2개. 문제마다 정답과 설명을 쓴다.
 형식별: choice — 보기 4개, 정답 하나, optionNotes에 보기마다 한 줄. ox — stem에 명제 하나, correctIndex 0=O 1=X. short — 값·이름 하나, accepted에 표기 변형. cardId는 "plain". mistakes는 빈 배열이어도 된다. 수식은 $…$로 쓴다.`;
 const INLINE_READ = "그림·식이 필요한 쪽은 따로 옮겨 쓰지 않고 이미지를 첨부했다(라벨에 쪽 번호). 이미지에서 읽은 지식도 카드로 만들고, 그 근거의 quote는 빈 문자열로 둔다. 원문 글자는 글자 층(source)이 기준이다. 식의 아래첨자는 x_0, V_{pz}처럼 _로 쓰고 유니코드 아래첨자 글자(ₓ, ᵤ)는 쓰지 않는다.";
+const LEAN = "이번에는 빠른 첫 정리다: links·takes·gives는 빈 배열로 두고, mistakes는 카드마다 1개만, evidence는 1개만 쓴다.";
 const OUTLINE_HINT = "outline은 자료 전체의 쪽 제목과 앞뒤 쪽 첫 줄이다(맥락용, 원문 근거 아님). 다른 쪽이 따로 다루는 지식은 이 쪽에서 카드로 만들지 않고, 이 쪽에서 처음 나오거나 이 쪽이 중심인 지식만 카드로 만든다. 카드 title은 쪽 제목을 반복하지 말고 그 카드가 담은 지식의 구체적인 이름으로 쓴다.";
 const MERGE = `${BASE}
 한 자료의 지식 카드 전체를 한 번에 본다(쪽마다 따로 만들어져 겹치거나 이름이 쪽 제목 그대로인 것이 있다). 카드마다 다음을 정한다.
@@ -647,7 +648,7 @@ export async function runRecaller(ctx: RecallerContext) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         let reply: z.infer<typeof organizeSchema>;
         try {
-          const system = `${ORGANIZE}${inlineImages.length ? `\n${INLINE_READ}` : ""}${lab.outline ? `\n${OUTLINE_HINT}` : ""}\n\n[정리 기준]\n${g.text}`;
+          const system = `${ORGANIZE}${inlineImages.length ? `\n${INLINE_READ}` : ""}${lab.outline ? `\n${OUTLINE_HINT}` : ""}${lab.lean ? `\n${LEAN}` : ""}\n\n[정리 기준]\n${g.text}`;
           const user = organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision,
             terms: termLines(extractTerms(data.texts)), already: known.map((c) => c.title).slice(0, 40), ...(lab.outline ? { outline: outlineFor(pages) } : {}) });
           const extra = { guide: g, maxChars: 6000 * pages.length, ...(inlineImages.length ? { images: inlineImages } : {}) };

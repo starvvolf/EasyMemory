@@ -107,6 +107,8 @@ export type RecallerLab = {
   chunk?: number;
   /** A 정리 reply still out after this many ms gets a second, identical request; the first to finish wins. */
   hedgeMs?: number;
+  /** A shorter 정리 reply: no links/takes/gives, one mistake and one piece of evidence per card. */
+  lean?: boolean;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
