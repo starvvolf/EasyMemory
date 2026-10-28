@@ -342,7 +342,8 @@
 .dejipgi .rowtext .ref{font-family:var(--read-font);font-size:13.5px;color:var(--muted);line-height:1.55;border-left:2px solid var(--line-strong);padding-left:9px;overflow-wrap:anywhere}
 .dejipgi .rowtext .easy{font-size:15.5px;line-height:1.75}
 .dejipgi .exaside{display:flex;flex-direction:column;gap:12px}
-.dejipgi .math{display:inline-block;max-width:100%;overflow-x:auto;overflow-y:hidden;vertical-align:middle;padding:.15em 1px;margin-block:-.15em}
+.dejipgi .math{display:inline-block;max-width:100%;overflow-x:auto;overflow-y:hidden;vertical-align:middle;padding:.15em .15em;margin-block:-.15em;scrollbar-width:none}
+.dejipgi .math::-webkit-scrollbar{display:none}
 .dejipgi .math math{font-size:1.06em}
 .dejipgi .texfb{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;font-style:italic;white-space:nowrap}
 .dejipgi .texfb sub,.dejipgi .texfb sup{font-size:.72em;font-style:italic}
