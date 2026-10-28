@@ -605,6 +605,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       const stopWith = (message: string) => failAstra(new Stop("paused-invalid", message));
       // 빠른 전처리: pages drawn while 전처리 read them (data URLs) and their picture regions, for this run only.
       const drawn = new Map<number, string>(), drawnFigures = new Map<number, number[][]>();
+      let fastEmphasis: Map<number, string[]> | undefined;
       await runRecaller({
         state, pdf,
         ask: async (step, sectionId, attempt, system, user, parser, extra = {}) => {
@@ -625,11 +626,12 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           // 빠른 전처리 (연구 1 실험): read and draw in worker processes; the drawings are kept for 정리 and the reading step.
           const fast = await preparePdfFast(bytes, pages, input.lab.router ?? "prep-1", { procs: input.lab.fastPrep, width: input.lab.imageWidth ?? 1024, workerPath: path.join(process.cwd(), "src/lib/study/gen/prep-worker.ts") });
           for (const [n, image] of fast.images) drawn.set(n, image);
+          fastEmphasis = fast.emphasis;
           for (const p of fast.prep.pages) if (p.figures) drawnFigures.set(p.page, p.figures);
           if (fast.failed.length) state.recaller?.warnings.push({ severity: "warning", code: "rc-draw-failed", message: `p.${fast.failed.join(", ")}를 그리지 못해 글자 층만 써요.` });
           return fast.prep;
         }),
-        emphasis: async (pages) => pdf ? pageEmphasis(pdf, pages) : new Map(),
+        emphasis: async (pages) => fastEmphasis ?? (pdf ? pageEmphasis(pdf, pages) : new Map()),
         pageImages: async (wanted) => {
           const missing = wanted.filter((p) => !drawn.has(p));
           const more = missing.length && !input.lab?.fastPrep ? await (options.pageImages ?? registeredImages)(input, missing) : new Map<number, string>();

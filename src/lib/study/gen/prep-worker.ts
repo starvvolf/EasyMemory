@@ -9,5 +9,6 @@ const bytes = new Uint8Array(await readFile(file));
 const pages = list.split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
 await readPdfPages(bytes, pages, (router || "prep-1") as PrepRouter, {
   ...(Number(width) > 0 ? { render: { width: Number(width) } } : {}),
+  emphasis: true,
   onPage: (raw) => { process.stdout.write(`${JSON.stringify(raw)}\n`); },
 });

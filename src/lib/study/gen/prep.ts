@@ -192,7 +192,9 @@ const BROKEN = /[�-]/gu;
  * `image`: the page drawn while its operator list is still warm, when asked (fast path).
  */
 export type RawPage = { n: number; lines: Line[]; width: number; height: number; chars: number; mathChars: number; brokenChars: number; pathOps: number; garbledChars: number;
-  pictures: Array<{ id: string; area: number; box: Box }>; image?: string };
+  pictures: Array<{ id: string; area: number; box: Box }>; image?: string;
+  /** 빠른 전처리: the page's coloured text (pageEmphasis), from the same operator list. */
+  emphasis?: string[] };
 
 /** Reads the chosen pages of a PDF with pdf.js (text layer + where pictures are painted) and prepares them. */
 export async function preparePdf(bytes: Uint8Array, pageNumbers: readonly number[], router: PrepRouter = "prep-1"): Promise<PrepResult> {
@@ -201,7 +203,7 @@ export async function preparePdf(bytes: Uint8Array, pageNumbers: readonly number
 
 /** Page by page; `render` also draws each page (JPEG data URL, long side `width`), `onPage` hears each page as it is done. */
 export async function readPdfPages(bytes: Uint8Array, pageNumbers: readonly number[], router: PrepRouter = "prep-1",
-  options: { render?: { width: number; quality?: number }; onPage?: (raw: RawPage) => void } = {}): Promise<RawPage[]> {
+  options: { render?: { width: number; quality?: number }; emphasis?: boolean; onPage?: (raw: RawPage) => void } = {}): Promise<RawPage[]> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const canvasLib = options.render ? await import("@napi-rs/canvas") : null;
   const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes), ...(router === "prep-2" ? { fontExtraProperties: true } : {}) }).promise;
@@ -270,7 +272,8 @@ export async function readPdfPages(bytes: Uint8Array, pageNumbers: readonly numb
         await page.render({ canvas: canvas as never, canvasContext: context as never, viewport: scaled }).promise;
         image = `data:image/jpeg;base64,${canvas.toBuffer("image/jpeg", options.render.quality ?? 85).toString("base64")}`;
       }
-      const raw: RawPage = { n, lines: linesFrom(runs), width: viewport.width, height: viewport.height, chars: meaningful(normalizeText(all)),
+      const emphasis = options.emphasis ? (await import("./pages.ts")).emphasisFromOps(ops as never, OPS) : undefined;
+      const raw: RawPage = { ...(emphasis?.length ? { emphasis } : {}), n, lines: linesFrom(runs), width: viewport.width, height: viewport.height, chars: meaningful(normalizeText(all)),
         mathChars: (all.match(MATH) ?? []).length, brokenChars: (all.match(BROKEN) ?? []).length, pathOps, garbledChars, pictures: found, ...(image ? { image } : {}) };
       out.push(raw);
       options.onPage?.(raw);
@@ -365,7 +368,8 @@ export async function preparePdfFast(bytes: Uint8Array, pageNumbers: readonly nu
   }
   const raws = pages.map((n) => got.get(n)!).filter(Boolean);
   const images = new Map(raws.filter((r) => r.image).map((r) => [r.n, r.image!]));
-  return { prep: finishPrep(raws.map(({ image: _image, ...r }) => r), router), images, failed };
+  const emphasis = new Map(raws.filter((r) => r.emphasis?.length).map((r) => [r.n, r.emphasis!]));
+  return { prep: finishPrep(raws.map(({ image: _image, emphasis: _emphasis, ...r }) => r), router), images, emphasis, failed };
 }
 
 /** Without the PDF (tests, a text-only source): page texts as already extracted, each on the text layer. */

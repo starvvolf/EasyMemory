@@ -187,6 +187,20 @@ export async function pageEmphasis(bytes: Uint8Array, pages: readonly number[]) 
   const { pdfjs, document } = await openPdf(bytes);
   const OPS = pdfjs.OPS as Record<string, number>;
   const result = new Map<number, string[]>();
+  try {
+    for (const n of [...new Set(pages)]) {
+      if (!Number.isInteger(n) || n < 1 || n > document.numPages) continue;
+      const page = await document.getPage(n);
+      const kept = emphasisFromOps(await page.getOperatorList(), OPS);
+      if (kept.length) result.set(n, kept);
+      page.cleanup();
+    }
+  } finally { await document.cleanup(); }
+  return result;
+}
+
+/** The coloured runs of text in one page's operator list (shared with 빠른 전처리, which already has the list). */
+export function emphasisFromOps(ops: { fnArray: number[]; argsArray: unknown[] }, OPS: Record<string, number>) {
   const nameOf = (hex: string) => {
     const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
     if (!m) return null;
@@ -198,36 +212,26 @@ export async function pageEmphasis(bytes: Uint8Array, pages: readonly number[]) 
     if (g > 120 && r < 110 && b < 130) return "초록";
     return "색";
   };
-  try {
-    for (const n of [...new Set(pages)]) {
-      if (!Number.isInteger(n) || n < 1 || n > document.numPages) continue;
-      const page = await document.getPage(n);
-      const ops = await page.getOperatorList();
-      let fill: string | null = null;
-      const stack: Array<string | null> = [];
-      const runs: Array<{ color: string; text: string }> = [];
-      ops.fnArray.forEach((fn, i) => {
-        const args = ops.argsArray[i] as unknown[];
-        if (fn === OPS.save) stack.push(fill);
-        else if (fn === OPS.restore) fill = stack.pop() ?? null;
-        else if (fn === OPS.setFillRGBColor) fill = typeof args?.[0] === "string" ? nameOf(args[0] as string) : null;
-        else if (fn === OPS.setFillGray || fn === OPS.setFillCMYKColor) fill = null;
-        else if (fn === OPS.showText || fn === OPS.showSpacedText) {
-          // Uncoloured text in between ends a run; same-coloured pieces (split by fonts or lines) join into one.
-          const last = runs.at(-1);
-          if (!fill) { if (last?.color) runs.push({ color: "", text: "" }); return; }
-          const glyphs = (args?.[0] ?? []) as Array<{ unicode?: string } | number>;
-          const text = glyphs.map(g => typeof g === "number" ? (g < -200 ? " " : "") : g?.unicode ?? "").join("");
-          if (last && last.color === fill) last.text += text; else runs.push({ color: fill, text });
-        } else if (fn === OPS.endText) { const last = runs.at(-1); if (last?.color) last.text += " "; }
-      });
-      const kept = [...new Set(runs.filter(r => r.color).map(r => `${r.color}: ${r.text.replace(/\s+/g, " ").trim()}`))]
-        .filter(line => meaningfulChars(line.slice(line.indexOf(":") + 1)) >= 2).slice(0, 30);
-      if (kept.length) result.set(n, kept);
-      page.cleanup();
-    }
-  } finally { await document.cleanup(); }
-  return result;
+  let fill: string | null = null;
+  const stack: Array<string | null> = [];
+  const runs: Array<{ color: string; text: string }> = [];
+  ops.fnArray.forEach((fn, i) => {
+    const args = ops.argsArray[i] as unknown[];
+    if (fn === OPS.save) stack.push(fill);
+    else if (fn === OPS.restore) fill = stack.pop() ?? null;
+    else if (fn === OPS.setFillRGBColor) fill = typeof args?.[0] === "string" ? nameOf(args[0] as string) : null;
+    else if (fn === OPS.setFillGray || fn === OPS.setFillCMYKColor) fill = null;
+    else if (fn === OPS.showText || fn === OPS.showSpacedText) {
+      // Uncoloured text in between ends a run; same-coloured pieces (split by fonts or lines) join into one.
+      const last = runs.at(-1);
+      if (!fill) { if (last?.color) runs.push({ color: "", text: "" }); return; }
+      const glyphs = (args?.[0] ?? []) as Array<{ unicode?: string } | number>;
+      const text = glyphs.map(g => typeof g === "number" ? (g < -200 ? " " : "") : g?.unicode ?? "").join("");
+      if (last && last.color === fill) last.text += text; else runs.push({ color: fill, text });
+    } else if (fn === OPS.endText) { const last = runs.at(-1); if (last?.color) last.text += " "; }
+  });
+  return [...new Set(runs.filter(r => r.color).map(r => `${r.color}: ${r.text.replace(/\s+/g, " ").trim()}`))]
+    .filter(line => meaningfulChars(line.slice(line.indexOf(":") + 1)) >= 2).slice(0, 30);
 }
 
 export const meaningfulChars = (text: string) => (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
