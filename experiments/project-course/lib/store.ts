@@ -1,6 +1,6 @@
 // 진도·대화·기록 후보 저장. 모두 experiments/project-course/.data/ 아래 파일(깃에 안 올라감).
 // 실제 지식 저장소(src/lib/knowledge)에는 쓰지 않는다. 최종에 붙일 때 records를 knowledge/api.ts로 넘긴다.
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ROOT } from "./course.ts";
 
@@ -18,15 +18,32 @@ export function update<T>(file: string, fallback: T, fn: (value: T) => T | void)
     const value = await readJson(file, fallback);
     const out = (fn(value) ?? value) as T;
     await mkdir(path.dirname(file), { recursive: true });
-    const tmp = `${file}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify(out, null, 1));
-    await rename(tmp, file);
+    await writeAtomic(file, JSON.stringify(out, null, 1));
     return out;
   });
   queues.set(file, next.catch(() => undefined));
   return next;
 }
 export const read = readJson;
+
+/**
+ * 임시 파일에 쓰고 바꿔치기. Windows는 다른 곳(화면이 보내는 읽기, 백신)이 파일을 잠깐 열고 있으면
+ * 바꿔치기를 EPERM/EBUSY/EACCES로 거절한다 → 조금 기다렸다 다시, 끝내 안 되면 직접 덮어쓴다.
+ */
+export async function writeAtomic(file: string, text: string) {
+  const tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+  await writeFile(tmp, text);
+  for (let i = 0; i < 8; i++) {
+    try { await rename(tmp, file); return; }
+    catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES") throw e;
+      await new Promise((r) => setTimeout(r, 25 * (i + 1)));
+    }
+  }
+  await writeFile(file, text);
+  await rm(tmp, { force: true }).catch(() => {});
+}
 
 /* ---------- 진도 ---------- */
 export type StageProgress = {

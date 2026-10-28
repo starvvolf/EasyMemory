@@ -61,7 +61,15 @@ function notify(runId: string, what: string) {
 }
 
 /* ---------- 상태 ---------- */
-async function change(runId: string, n: number, fn: (s: State, push: (m: Omit<LMsg, "id" | "at">) => void) => void | Promise<void>) {
+/** 같은 수업 기록은 한 번에 하나씩 고친다(에이전트가 도구 결과를 연달아 쓰고, 화면이 동시에 다른 동작을 보내도 기록이 사라지지 않게). */
+const lessonQueues = new Map<string, Promise<unknown>>();
+function change(runId: string, n: number, fn: (s: State, push: (m: Omit<LMsg, "id" | "at">) => void) => void | Promise<void>): Promise<State> {
+  const key = file(runId, n);
+  const job = (lessonQueues.get(key) ?? Promise.resolve()).then(() => changeNow(runId, n, fn));
+  lessonQueues.set(key, job.catch(() => undefined));
+  return job;
+}
+async function changeNow(runId: string, n: number, fn: (s: State, push: (m: Omit<LMsg, "id" | "at">) => void) => void | Promise<void>) {
   let out!: State;
   // update()는 동기 함수만 받으므로, 읽고 → 비동기 작업 → 저장을 직접 차례로 한다.
   const s = await read<State>(file(runId, n), { beat: -1, waiting: "action", messages: [], hints: 0 });
@@ -281,8 +289,9 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
     try {
       answer = await runAgent({
         runId, n, ws, context,
-        show: async (card) => { await change(runId, n, (_s, push) => push({ role: "tutor", card })); },
-        say: async (text) => { await change(runId, n, (_s, push) => push({ role: "tutor", text })); },
+        // 채팅 기록 저장이 실패해도 도구 결과는 그대로 쓴다(저장 실패를 도구 실패로 착각하지 않게)
+        show: async (card) => { await change(runId, n, (_s, push) => push({ role: "tutor", card })).catch((e) => console.error("[lesson] 기록 저장 실패", e)); },
+        say: async (text) => { await change(runId, n, (_s, push) => push({ role: "tutor", text })).catch((e) => console.error("[lesson] 기록 저장 실패", e)); },
         quiet: (ms) => { quietUntil.set(`${runId}:${n}`, Date.now() + ms); },
       }, q);
     } catch (e) {
