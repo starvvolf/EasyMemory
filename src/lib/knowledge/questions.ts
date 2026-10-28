@@ -11,7 +11,7 @@ export type Question = {
 };
 export type Graded = { correct: boolean; expected: string; note: string };
 
-type Pool = Array<Pick<Knowledge, "id" | "title" | "body" | "aliases" | "folderId" | "links"> & { sources?: Knowledge["sources"] }>;
+type Pool = Array<Pick<Knowledge, "id" | "title" | "body" | "aliases" | "folderId" | "links"> & { sources?: Knowledge["sources"]; kind?: Knowledge["kind"] }>;
 function rng(seed: string) { let h = 2166136261; for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => { h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 2 ** 32; }; }
 function shuffle<T>(items: T[], r: () => number) { const a = [...items]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 // ⟨받음: … / 냄: …⟩ is the engine's wiring between knowledge points; it names other items, so it never goes into a question.
@@ -51,6 +51,15 @@ export function questionsFor(item: Pool[number], pool: Pool, seed = ""): Questio
   const out: Question[] = [];
   const id = (kind: string) => `${item.id}:${kind}:${seed}`;
   out.push({ id: id("flashcard"), kind: "flashcard", label: QUESTION_LABEL.flashcard, knowledgeId: item.id, prompt: item.title, answer: meaning || "(설명이 아직 없어요. 지식창에서 적어 주세요.)", explain: "" });
+  // 어휘 (종류 vocab): a word is learned both ways — the word from its meaning (주관식), and which word fits (객관식).
+  if (item.kind === "vocab" && meaning) {
+    out.push({ id: id("short"), kind: "short", label: QUESTION_LABEL.short, knowledgeId: item.id, prompt: `뜻에 맞는 단어를 쓰세요.\n${meaning}`, answer: item.title, accept: item.aliases,
+      explain: `${item.title}: ${meaning}` });
+    const words = shuffle(pool.filter((x) => x.id !== item.id && x.kind === "vocab" && x.folderId === item.folderId && normalize(x.title) !== normalize(item.title)), r).slice(0, 3).map((x) => x.title);
+    if (words.length >= 2) out.push({ id: id("choice"), kind: "choice", label: QUESTION_LABEL.choice, knowledgeId: item.id, prompt: `뜻에 맞는 단어는?\n${meaning}`, options: shuffle([item.title, ...words], r),
+      answer: item.title, explain: `${item.title}: ${meaning}` });
+    return out;
+  }
   const wrong = others(item, pool);
   const own = optionText(item);
   if (own && wrong.length >= 1) {

@@ -207,7 +207,7 @@ test("review questions mix only knowledge of the same folder or material, and op
   assert.deepEqual(lonely.map((q) => q.kind), ["flashcard"], "nothing of its own subject to mix in: a flashcard only");
 });
 
-test("PDF points: 냄 → 받음 become 고리, the wiring and the repeated name leave the text, a file-name folder is tidied", () => withData(async () => {
+test("PDF points: 냄 → 받음 become 고리, the wiring and the repeated name leave the text, no file-name folder", () => withData(async () => {
   const card = (id: string, title: string, line: string) => ({ ref: `deck1:${id}`, title, essentials: [line, "헷갈림: 순서"], folder: "3D뷰잉_좌표계/관찰 좌표", material: "3D뷰잉_좌표계", page: 1 });
   const points = [
     card("n", "view-plane normal vector (N)", "view-plane normal vector (N) — 뷰 평면의 법선 ⟨받음: - / 냄: N⟩"),
@@ -219,7 +219,8 @@ test("PDF points: 냄 → 받음 become 고리, the wiring and the repeated name
   assert.equal(first.added, 4);
   assert.equal(first.linked, 3, "N → uvn and V → uvn by name, uvn → 행렬 by what it gives");
   const { folders, items } = await tree();
-  assert.deepEqual(folders.filter((f) => !f.parentId).map((f) => f.name), ["3D뷰잉 좌표계"]);
+  assert.deepEqual(folders, [], "no folder named after the file: 주제 정리 places the points (classify.ts)");
+  assert.equal((await getKnowledge(items[0].id)).item.topicHint, "3D뷰잉 좌표계 / 관찰 좌표", "where it came in is kept as a hint");
   const byTitle = Object.fromEntries(items.map((i) => [i.title, i]));
   const n = await getKnowledge(byTitle["view-plane normal vector (N)"].id);
   assert.equal(n.item.body, "뷰 평면의 법선\n헷갈림: 순서", "no wiring, no name in front");

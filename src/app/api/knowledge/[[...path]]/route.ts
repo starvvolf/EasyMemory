@@ -7,14 +7,22 @@ import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question }
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
 import { similarKnowledge } from "@/lib/knowledge/embed";
 import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
-import { openDuplicates, resolveDuplicate, runDuplicateCheck, scheduleDuplicateCheck } from "@/lib/knowledge/dedupe";
+import { openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
+import { scheduleAfterSave } from "@/lib/knowledge/after-save";
+import { runClassify } from "@/lib/knowledge/classify";
+import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, syncSubjects,
+  updateGoal } from "@/lib/knowledge/goals";
 import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing } from "@/lib/assist/knowledge-ai";
 
 export const runtime = "nodejs";
 // 같은 지식 찾기 3단계: every save that makes new items (PDF, 웹 글, 코드, 직접) is checked a few seconds later.
-onKnowledgeCreated(() => scheduleDuplicateCheck());
+// After every save that makes new items (PDF, 웹 글, 코드, 직접): 주제 정리, then 같은 지식 찾기, a few seconds later.
+onKnowledgeCreated(() => scheduleAfterSave());
 const state = z.enum(["met", "unknown", "known"]);
 const id = z.string().regex(/^(k|fld)_[a-f0-9]{12}$/);
+const goalId = z.string().regex(/^goal_[a-f0-9]{12}$/);
+const kind = z.enum(["concept", "procedure", "fact", "formula", "vocab"]);
+const goalSource = z.object({ key: z.string().min(1).max(300), kind: z.enum(["pdf", "web", "code", "chat", "manual"]), title: z.string().max(200) });
 const sourceRef = z.object({ kind: z.enum(["pdf", "web", "code", "chat", "manual"]), title: z.string().max(200), ref: z.string().max(200).optional(), url: z.string().max(2000).optional(),
   page: z.number().int().optional(), quote: z.string().max(400).optional() });
 
@@ -50,6 +58,34 @@ async function handle(request: Request, context: RouteContext) {
     const json = (value: unknown) => NextResponse.json(value);
 
     if (!p.length && m === "GET") return json(await tree());
+
+    // 목표 (2026-10-28 "4개 축"): 수업·시험, 코테 준비 … — 자료를 넣으면 그 자료의 지식이 따라온다.
+    if (p[0] === "goals" && p.length === 1 && m === "GET") return json({ goals: await goalOverview(), itemGoals: await goalsOfItems() });
+    if (p[0] === "goals" && p.length === 1 && m === "POST") {
+      const b = await body(z.object({ name: z.string().min(1).max(60), date: z.string().max(10).nullable().optional(), note: z.string().max(400).optional(), sources: z.array(goalSource).max(50).optional() }));
+      return json({ goal: await createGoal(b) });
+    }
+    if (p[0] === "goals" && p[1] === "sync" && m === "POST") {
+      const b = await body(z.object({ subjects: z.array(z.object({ name: z.string().max(60), exam: z.string().max(10).optional() })).max(50),
+        materials: z.array(z.object({ subject: z.string().max(60), title: z.string().max(200) })).max(500) }));
+      return json({ goals: await syncSubjects(b.subjects, b.materials) });
+    }
+    if (p[0] === "goals" && p[1] && p.length === 2) {
+      const gid = goalId.parse(p[1]);
+      if (m === "PATCH") return json({ goal: await updateGoal(gid, await body(z.object({ name: z.string().max(60).optional(), date: z.string().max(10).nullable().optional(), closed: z.boolean().optional(), note: z.string().max(400).optional() }))) });
+      if (m === "DELETE") return json(await deleteGoal(gid));
+    }
+    if (p[0] === "goals" && p[1] && p[2] === "source" && m === "POST") { const b = await body(goalSource.extend({ on: z.boolean() })); return json({ goal: await setGoalSource(goalId.parse(p[1]), b, b.on) }); }
+    if (p[0] === "goals" && p[1] && p[2] === "item" && m === "POST") { const b = await body(z.object({ itemId: id, on: z.boolean() })); return json({ goal: await setGoalItem(goalId.parse(p[1]), b.itemId, b.on) }); }
+    if (p[0] === "goals" && p[1] && p[2] === "items" && m === "GET") return json({ ids: await goalItemIds(goalId.parse(p[1])) });
+    if (p[0] === "materials" && p.length === 1 && m === "GET") return json({ materials: await listMaterials() });
+    if (p[0] === "materials" && p[1] === "accept" && m === "POST") { const b = await body(goalSource); return json({ goal: await acceptSuggestion(b.key, b.title, b.kind) }); }
+    if (p[0] === "materials" && p[1] === "ignore" && m === "POST") { const b = await body(z.object({ key: z.string().min(1).max(300) })); return json(await ignoreMaterial(b.key)); }
+    // 주제 정리 now (it also runs by itself after saves).
+    if (p[0] === "classify" && m === "POST") {
+      try { return json(await runClassify()); }
+      catch (error) { return NextResponse.json({ message: `주제 정리를 하지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
+    }
     if (p[0] === "search" && m === "GET") return json({ hits: await searchKnowledge(url.searchParams.get("q") ?? "", { limit: Number(url.searchParams.get("limit") ?? 10), folderId: url.searchParams.get("folderId") ?? undefined }) });
     if (p[0] === "memory" && m === "GET") {
       const level = url.searchParams.get("level") ?? "1";
@@ -59,7 +95,8 @@ async function handle(request: Request, context: RouteContext) {
     }
     if (p[0] === "review" && m === "GET") {
       const folderId = url.searchParams.get("folderId") ?? undefined;
-      return json({ items: await reviewQueue({ folderId, limit: Number(url.searchParams.get("limit") ?? 20), dueOnly: url.searchParams.get("all") !== "1" }), ...(await reviewStatus({ folderId })) });
+      const ids = url.searchParams.get("goalId") ? await goalItemIds(goalId.parse(url.searchParams.get("goalId"))) : undefined;
+      return json({ items: await reviewQueue({ folderId, ids, limit: Number(url.searchParams.get("limit") ?? 20), dueOnly: url.searchParams.get("all") !== "1" }), ...(await reviewStatus({ folderId, ids })) });
     }
 
     // items
@@ -72,7 +109,7 @@ async function handle(request: Request, context: RouteContext) {
       const itemId = id.parse(p[1]);
       if (p.length === 2 && m === "GET") return json(await getKnowledge(itemId));
       if (p.length === 2 && m === "PATCH") return json({ item: await updateKnowledge(itemId, await body(z.object({ title: z.string().max(120).optional(), body: z.string().max(4000).optional(),
-        aliases: z.array(z.string().max(120)).max(20).optional(), folderId: id.nullable().optional() }))) });
+        aliases: z.array(z.string().max(120)).max(20).optional(), folderId: id.nullable().optional(), kind: kind.optional() }))) });
       if (p.length === 2 && m === "DELETE") return json(await deleteKnowledge(itemId));
       if (p[2] === "state" && m === "POST") return json({ item: await setKnowledgeState(itemId, await body(z.object({ state: state.optional(), graduated: z.boolean().optional() }))) });
       if (p[2] === "event" && m === "POST") {
@@ -104,9 +141,10 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "quiz" && m === "GET") {
       const pool = await allItems();
       const folderId = url.searchParams.get("folderId") ?? undefined;
+      const ids = url.searchParams.get("goalId") ? await goalItemIds(goalId.parse(url.searchParams.get("goalId"))) : undefined;
       const count = Math.min(30, Number(url.searchParams.get("count") ?? 10));
-      const picked = await reviewQueue({ folderId, limit: count, dueOnly: true });
-      const status = await reviewStatus({ folderId });
+      const picked = await reviewQueue({ folderId, ids, limit: count, dueOnly: true });
+      const status = await reviewStatus({ folderId, ids });
       const seed = String(Date.now());
       const questions = picked.flatMap((lite, n) => {
         const item = pool.find((x) => x.id === lite.id);
@@ -150,7 +188,7 @@ async function handle(request: Request, context: RouteContext) {
 
     // model calls
     // 중복 의심: open pairs (and a check of anything not checked yet); the learner's answer on one.
-    if (p[0] === "dupes" && p.length === 1 && m === "GET") { scheduleDuplicateCheck(); return json({ pairs: await openDuplicates() }); }
+    if (p[0] === "dupes" && p.length === 1 && m === "GET") { scheduleAfterSave(); return json({ pairs: await openDuplicates() }); }
     if (p[0] === "dupes" && p[1] === "check" && m === "POST") {
       try { return json(await runDuplicateCheck()); }
       catch (error) { return NextResponse.json({ message: `중복 확인을 하지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }

@@ -29,6 +29,12 @@ export const STATE_LABEL: Record<KState, string> = { met: "만남", unknown: "�
 export type SourceKind = "pdf" | "web" | "code" | "chat" | "manual";
 export type KSource = { kind: SourceKind; title: string; ref?: string; url?: string; page?: number; quote?: string; at: string };
 export type KLink = { to: string; relation: string };
+/**
+ * 종류 (2026-10-28 결정 "4개 축"): how the item is learned — it decides the review questions and whether two items
+ * with the same meaning are the same knowledge (어휘: never; big and large are two words to learn).
+ */
+export type KKind = "concept" | "procedure" | "fact" | "formula" | "vocab";
+export const KIND_LABEL: Record<KKind, string> = { concept: "개념·용어", procedure: "절차·방법", fact: "사실·수치", formula: "공식", vocab: "어휘" };
 export type KStats = { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] };
 export type Knowledge = {
   id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean;
@@ -37,6 +43,12 @@ export type Knowledge = {
   review?: KReview;
   /** The schedule before the last result, so "내 답도 맞아요" can take a grader's miss back. */
   reviewBefore?: KReview | null;
+  /** 종류; none until the item is sorted (classify.ts, a few seconds after it is saved). */
+  kind?: KKind;
+  /** Where the item came in (a PDF's section, an article's topic): a hint for sorting it into 주제, cleared once sorted. */
+  topicHint?: string;
+  /** The learner put it in this folder by hand: 주제 정리 never moves it. */
+  placedByHand?: boolean;
 };
 export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string; createdAt: string };
 export type KEventKind = "met" | "asked" | "wrong" | "hint" | "correct" | "note";
@@ -232,6 +244,10 @@ export const deleteFolder = (id: string) => change((store) => {
 export type SaveInput = {
   title: string; body?: string; state?: KState; folderId?: string | null; folder?: string; aliases?: string[];
   source?: Omit<KSource, "at"> & { at?: string }; links?: Array<{ to?: string; title?: string; relation: string }>;
+  /** 종류 when the caller knows it; otherwise sorting decides. */
+  kind?: KKind;
+  /** No 주제 folder yet; where it came in, for sorting (classify.ts). */
+  topicHint?: string;
 };
 export type SaveResult = { item: Knowledge; merged: boolean; created: boolean; again: boolean };
 
@@ -265,6 +281,8 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   // A new item takes the state it was saved with; an existing one only moves down to "몰랐음" (asked about) or up to
   // "앎" (checked) — meeting it again never erases what is known about it.
   if (!existing) item.state = input.state ?? "met";
+  if (input.kind && !item.kind) item.kind = input.kind;
+  if (!existing && input.topicHint && item.folderId === null) item.topicHint = input.topicHint.slice(0, 200);
   else if (input.state === "unknown" || input.state === "known") item.state = input.state;
   if (item.state === "unknown") item.graduated = false;
   for (const link of input.links ?? []) {
@@ -332,7 +350,7 @@ export const enrichKnowledge = (entries: Array<{ id: string; body?: string; alia
   }
   return { changed };
 });
-export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null }) => change((store) => {
+export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null; kind?: KKind }) => change((store) => {
   const item = store.items.find((x) => x.id === id);
   if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
   if (patch.title !== undefined) { if (!patch.title.trim()) throw new KnowledgeError(400, "지식 이름이 비어 있어요."); item.title = patch.title.trim().slice(0, 120); }
@@ -341,7 +359,10 @@ export const updateKnowledge = (id: string, patch: { title?: string; body?: stri
   if (patch.folderId !== undefined) {
     if (patch.folderId && !store.folders.some((f) => f.id === patch.folderId)) throw new KnowledgeError(404, "폴더를 찾을 수 없어요.");
     item.folderId = patch.folderId;
+    item.topicHint = undefined;
+    item.placedByHand = true;
   }
+  if (patch.kind !== undefined) item.kind = patch.kind;
   item.updatedAt = nowIso();
   return item;
 });
@@ -464,11 +485,12 @@ export async function takeBackWrong(knowledgeId: string, asCorrect: boolean, sou
 }
 
 /* ---------- reading ---------- */
-export type ItemLite = Pick<Knowledge, "id" | "title" | "state" | "graduated" | "folderId" | "updatedAt" | "lastAt"> & { line: string; links: number; weak: number; dueAt?: string };
+export type ItemLite = Pick<Knowledge, "id" | "title" | "state" | "graduated" | "folderId" | "updatedAt" | "lastAt" | "kind"> & { line: string; links: number; weak: number; dueAt?: string };
 const firstLine = (body: string) => body.split("\n").map((l) => stripWiring(l)).find(Boolean)?.slice(0, 120) ?? "";
 const weakness = (item: Knowledge) => item.stats.wrong * 2 + item.stats.hint + item.stats.asked;
 const lite = (item: Knowledge): ItemLite => ({ id: item.id, title: item.title, state: item.state, graduated: item.graduated, folderId: item.folderId,
-  updatedAt: item.updatedAt, lastAt: item.lastAt, line: firstLine(item.body), links: item.links.length, weak: weakness(item), ...(item.review ? { dueAt: item.review.dueAt } : {}) });
+  updatedAt: item.updatedAt, lastAt: item.lastAt, line: firstLine(item.body), links: item.links.length, weak: weakness(item), ...(item.review ? { dueAt: item.review.dueAt } : {}),
+  ...(item.kind ? { kind: item.kind } : {}) });
 
 export async function tree() {
   const store = await readStore();
@@ -573,24 +595,59 @@ const inReview = (item: Knowledge) => !item.graduated && item.state !== "met";
  * What to look at again: 몰랐음 first, then 앎 not yet graduated. With dueOnly, only what is due by now (box date),
  * soonest first — the review session. Without it, everything still in review, most missed first (deadline planning).
  */
-export async function reviewQueue(options: { folderId?: string; limit?: number; dueOnly?: boolean; now?: Date } = {}) {
+export async function reviewQueue(options: { folderId?: string; limit?: number; dueOnly?: boolean; now?: Date; ids?: string[] } = {}) {
   const store = await readStore();
   const inFolder = options.folderId ? subtree(store, options.folderId) : null;
+  const only = options.ids ? new Set(options.ids) : null;
   const now = (options.now ?? new Date()).getTime();
-  const pool = store.items.filter((i) => inReview(i) && (!inFolder || (i.folderId && inFolder.has(i.folderId))) && (!options.dueOnly || dueTime(i) <= now));
+  const pool = store.items.filter((i) => inReview(i) && (!inFolder || (i.folderId && inFolder.has(i.folderId))) && (!only || only.has(i.id)) && (!options.dueOnly || dueTime(i) <= now));
   const byState = (a: Knowledge, b: Knowledge) => (a.state === b.state ? 0 : a.state === "unknown" ? -1 : 1);
   return pool.sort((a, b) => byState(a, b) || (options.dueOnly ? dueTime(a) - dueTime(b) : 0) || weakness(b) - weakness(a) || a.lastAt.localeCompare(b.lastAt))
     .slice(0, options.limit ?? 20).map(lite);
 }
 /** How many are due now, and when the next one comes due (for "다음 복습은 …"). */
-export async function reviewStatus(options: { folderId?: string; now?: Date } = {}) {
+export async function reviewStatus(options: { folderId?: string; now?: Date; ids?: string[] } = {}) {
   const store = await readStore();
   const inFolder = options.folderId ? subtree(store, options.folderId) : null;
+  const only = options.ids ? new Set(options.ids) : null;
   const now = (options.now ?? new Date()).getTime();
-  const pool = store.items.filter((i) => inReview(i) && (!inFolder || (i.folderId && inFolder.has(i.folderId))));
+  const pool = store.items.filter((i) => inReview(i) && (!inFolder || (i.folderId && inFolder.has(i.folderId))) && (!only || only.has(i.id)));
   const later = pool.map(dueTime).filter((t) => t > now).sort((a, b) => a - b);
   return { due: pool.filter((i) => dueTime(i) <= now).length, next: later.length ? new Date(later[0]).toISOString() : null };
 }
+
+/** Every item in full with the folders (for goals and sorting, inside the knowledge store; not part of api.ts). */
+export async function readAll() { const store = await readStore(); return { folders: store.folders, items: store.items }; }
+/**
+ * 주제 정리: put items into topic paths ("CS/알고리즘/탐색", made on the way) and set their 종류; then remove folders
+ * this emptied (never a folder that still holds items or folders). One write.
+ */
+export const sortItems = (entries: Array<{ id: string; topic?: string; kind?: KKind }>) => change((store) => {
+  const moved: string[] = [], before = new Set<string>();
+  for (const e of entries) {
+    const item = store.items.find((x) => x.id === e.id);
+    if (!item) continue;
+    if (e.topic?.trim()) {
+      const folderId = ensurePath(store, e.topic);
+      if (folderId && folderId !== item.folderId) { if (item.folderId) before.add(item.folderId); item.folderId = folderId; moved.push(item.id); }
+      item.topicHint = undefined;
+    }
+    if (e.kind) item.kind = e.kind;
+    item.updatedAt = nowIso();
+  }
+  // Folders left empty by the move go, and their parents if those are empty too.
+  let gone = true;
+  while (gone) {
+    gone = false;
+    for (const f of [...store.folders]) {
+      if (!before.has(f.id) || store.items.some((i) => i.folderId === f.id) || store.folders.some((g) => g.parentId === f.id)) continue;
+      store.folders = store.folders.filter((g) => g.id !== f.id);
+      if (f.parentId) before.add(f.parentId);
+      gone = true;
+    }
+  }
+  return { moved };
+});
 
 /** "3D뷰잉_좌표계" → "3D뷰잉 좌표계": a file name read as a folder name. */
 const folderName = (text: string) => text.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
@@ -622,9 +679,11 @@ export async function importPoints(points: Array<{ ref: string; title: string; e
   const store = await readStore();
   const have = new Set(store.items.flatMap((i) => i.sources.map((s) => s.ref).filter(Boolean)));
   const fresh = points.filter((p) => !have.has(p.ref)).slice(0, 400);
+  // No folder named after the file (2026-10-28 "4개 축"): the material is the 출처, and 주제 정리 places the points in
+  // the topic tree a few seconds later; "자료 / 구역" is its hint.
   const results = fresh.length ? await saveMany(fresh.map((p) => {
     const [material, ...rest] = p.folder.split("/");
-    return { title: p.title, body: pointBody(p.title, p.essentials), folder: [folderName(material ?? ""), ...rest].join("/"),
+    return { title: p.title, body: pointBody(p.title, p.essentials), topicHint: [folderName(material ?? ""), ...rest].join(" / "),
       source: { kind: "pdf" as const, title: p.material, ref: p.ref, ...(p.page ? { page: p.page } : {}) } };
   })) : [];
   const linked = await changeIf((s) => {

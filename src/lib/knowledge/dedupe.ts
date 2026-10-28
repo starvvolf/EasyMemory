@@ -15,14 +15,14 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { askJson, S } from "../assist/model.ts";
 import { similarKnowledge } from "./embed.ts";
-import { getKnowledge, linkKnowledge, mergeKnowledge, tree } from "./store.ts";
+import { getKnowledge, KIND_LABEL, linkKnowledge, mergeKnowledge, normalize, tree, type KKind } from "./store.ts";
 
 export type Verdict = "same" | "narrower" | "broader" | "related" | "different";
 export type DupPair = { id: string; newId: string; otherId: string; verdict: Exclude<Verdict, "different">; reason: string; score: number; at: string;
   status: "open" | "merged" | "dismissed" | "linked" };
 type DupFile = { checked: string[]; pairs: DupPair[] };
 
-const BATCH = 25, CANDIDATES = 5, BATCHES_PER_RUN = 3, WAIT_MS = 4000, MAX_RELATED = 2;
+const BATCH = 25, CANDIDATES = 5, BATCHES_PER_RUN = 3, WAIT_MS = 4000, MAX_RELATED = 2, OTHER_FIELD_SCORE = 0.8;
 const file = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "knowledge", "dupes.json");
 async function read(): Promise<DupFile> {
   try { const d = JSON.parse(await readFile(file(), "utf8")) as Partial<DupFile>; return { checked: d.checked ?? [], pairs: d.pairs ?? [] }; }
@@ -53,10 +53,12 @@ reason: 한국어 한 문장. n과 m은 받은 번호를 그대로 쓴다.`;
 type Judged = { items: Array<{ n: number; candidates: Array<{ m: number; verdict: Verdict; reason: string }> }> };
 const JUDGE_SCHEMA = S.obj({ items: S.arr(S.obj({ n: S.int, candidates: S.arr(S.obj({ m: S.int, verdict: S.oneOf("same", "narrower", "broader", "related", "different"), reason: S.str })) })) });
 
-export type JudgeItem = { title: string; aliases: string[]; body: string; path: string };
+export type JudgeItem = { title: string; aliases: string[]; body: string; path: string; kind?: KKind };
 const line = (d: JudgeItem) =>
-  `${d.title}${d.aliases.length ? ` (다른 이름: ${d.aliases.slice(0, 5).join(", ")})` : ""} [${d.path || "폴더 없음"}] ${d.body.split("\n").find((l) => l.trim() && !l.startsWith("헷갈림:"))?.slice(0, 160) ?? "(뜻 없음)"}`;
-const asJudgeItem = (d: Awaited<ReturnType<typeof getKnowledge>>): JudgeItem => ({ title: d.item.title, aliases: d.item.aliases, body: d.item.body, path: d.path });
+  `${d.title}${d.aliases.length ? ` (다른 이름: ${d.aliases.slice(0, 5).join(", ")})` : ""} [${d.path || "폴더 없음"}${d.kind ? ` · ${KIND_LABEL[d.kind]}` : ""}] ${d.body.split("\n").find((l) => l.trim() && !l.startsWith("헷갈림:"))?.slice(0, 160) ?? "(뜻 없음)"}`;
+const asJudgeItem = (d: Awaited<ReturnType<typeof getKnowledge>>): JudgeItem => ({ title: d.item.title, aliases: d.item.aliases, body: d.item.body, path: d.path, ...(d.item.kind ? { kind: d.item.kind } : {}) });
+/** 어휘: two words with the same meaning are two things to learn (big, large) — never 같음, at most 비슷한 말 (관련). */
+const vocabPair = (a: JudgeItem, b: JudgeItem) => (a.kind === "vocab" || b.kind === "vocab") && ![a.title, ...a.aliases].some((x) => [b.title, ...b.aliases].some((y) => normalize(x) === normalize(y)));
 
 /** The model this check uses: RECALLER_DEDUPE_MODEL / _EFFORT, else the assist defaults (src/lib/assist/model.ts). */
 const judgeModel = () => ({ model: process.env.RECALLER_DEDUPE_MODEL?.trim() || undefined, effort: process.env.RECALLER_DEDUPE_EFFORT?.trim() || undefined });
@@ -72,7 +74,10 @@ export async function judgeBatch(work: Array<{ item: JudgeItem; cands: JudgeItem
   const judged = await askJson<Judged>("knowledge:dedupe", JUDGE_SYSTEM, user, JUDGE_SCHEMA, options);
   for (const j of judged.items ?? []) {
     if (!out[j.n]) continue;
-    for (const c of j.candidates ?? []) if (out[j.n][c.m]) out[j.n][c.m] = { verdict: c.verdict, reason: (c.reason ?? "").slice(0, 200) };
+    for (const c of j.candidates ?? []) if (out[j.n][c.m]) {
+      const sameWordsOnly = c.verdict === "same" && vocabPair(work[j.n].item, work[j.n].cands[c.m]);
+      out[j.n][c.m] = { verdict: sameWordsOnly ? "related" : c.verdict, reason: (sameWordsOnly ? "뜻이 같은 다른 단어(비슷한 말)라 합치지 않아요. " : "") + (c.reason ?? "").slice(0, 200) };
+    }
     // A few strong links are worth more than many weak ones: at most two 관련 per new item, closest first.
     let related = 0;
     for (const v of out[j.n]) if (v.verdict === "related" && ++related > MAX_RELATED) v.verdict = "different";
@@ -88,7 +93,13 @@ async function checkBatch(ids: string[], data: DupFile): Promise<DupPair[]> {
   for (const id of ids) {
     const d = await getKnowledge(id).catch(() => null);
     if (!d) continue;
-    const { hits } = await similarKnowledge({ id }, { limit: CANDIDATES });
+    // Candidates from the same 주제 (first level: CS, 경제, 어학 …) first; another field only when very close.
+    const root = (p: string) => p.split(" / ")[0] ?? "";
+    const { hits: wide } = await similarKnowledge({ id }, { limit: CANDIDATES * 2 });
+    const rootOf = new Map((await tree()).folders.map((f) => [f.id, f] as const));
+    const rootName = (folderId: string | null) => { let f = folderId ? rootOf.get(folderId) : undefined; let g = 0; while (f?.parentId && g++ < 20) f = rootOf.get(f.parentId); return f?.name ?? ""; };
+    const mine = root(d.path);
+    const hits = wide.filter((h) => !mine || !rootName(h.folderId) || rootName(h.folderId) === mine || h.score >= OTHER_FIELD_SCORE).slice(0, CANDIDATES);
     const cands = [];
     for (const h of hits) {
       if (h.linked || known.has(`${id}|${h.id}`)) continue;
@@ -121,7 +132,8 @@ export async function runDuplicateCheck(options: { batches?: number } = {}) {
   const run = (async () => {
     const done = new Set((await read()).checked);
     const { items } = await tree();
-    const todo = items.filter((i) => !done.has(i.id)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    // Only items already sorted into a 주제 (classify.ts runs first), so candidates can be taken from the same field.
+    const todo = items.filter((i) => !done.has(i.id) && i.kind).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     let checked = 0, found = 0;
     for (let b = 0; b < (options.batches ?? BATCHES_PER_RUN) && checked < todo.length; b++) {
       const ids = todo.slice(checked, checked + BATCH).map((i) => i.id);

@@ -33,7 +33,7 @@ async function knownNames(limit = 160) {
   return { paths, names };
 }
 
-export type ExtractResult = { source: ReadSource; items: Array<SaveResult["item"] & { again: boolean; created: boolean; kind: string; quote: string }> };
+export type ExtractResult = { source: ReadSource; items: Array<SaveResult["item"] & { again: boolean; created: boolean; termKind: string; quote: string }> };
 /** Read a web article or a lesson: knowledge saved as 만남 (or "다시 만남"), chains as links, the article kept with its goals. */
 export async function extractFromText(input: { kind: "web" | "lesson"; title: string; url?: string; text: string; folder?: string }): Promise<ExtractResult> {
   const text = input.text.replace(/\s+\n/g, "\n").trim();
@@ -42,13 +42,15 @@ export async function extractFromText(input: { kind: "web" | "lesson"; title: st
   const user = [`[글 제목] ${input.title}`, input.url ? `[주소] ${input.url}` : "", input.folder ? `[학습자가 고른 폴더] ${input.folder}` : "",
     `[학습자 폴더 목록] ${known.paths.join(", ") || "(없음)"}`, `[학습자가 이미 가진 지식 이름] ${known.names.join(", ") || "(없음)"}`, `[본문]\n${text.slice(0, 40000)}`].filter(Boolean).join("\n\n");
   const data = await askJson<Extracted>("knowledge:extract", EXTRACT_SYSTEM, user, EXTRACT_SCHEMA, { heavy: true });
-  const folder = input.folder || data.folder || (input.kind === "lesson" ? "강의" : "읽은 글");
+  // A folder the learner chose is kept; otherwise the model's folder is only a hint and 주제 정리 (classify.ts) places
+  // the new items in the one topic tree a few seconds later.
+  const placed = input.folder ? { folder: input.folder } : { topicHint: data.folder || (input.kind === "lesson" ? "강의" : "읽은 글") };
   const ref = { kind: input.kind === "lesson" ? "web" as const : "web" as const, title: input.title, ...(input.url ? { url: input.url } : {}) };
   const chainsByFrom = new Map<string, Array<{ title: string; relation: string }>>();
   for (const c of data.chains) chainsByFrom.set(c.from, [...(chainsByFrom.get(c.from) ?? []), { title: c.to, relation: c.relation }]);
-  const results = await saveMany(data.knowledge.map((k) => ({ title: k.title, body: k.body, folder, aliases: (k.aliases ?? []).slice(0, 6), source: { ...ref, quote: k.quote.slice(0, 200) },
+  const results = await saveMany(data.knowledge.map((k) => ({ title: k.title, body: k.body, ...placed, aliases: (k.aliases ?? []).slice(0, 6), source: { ...ref, quote: k.quote.slice(0, 200) },
     links: chainsByFrom.get(k.title) ?? [] })));
-  const items = results.map((r, i) => ({ ...r.item, again: r.again, created: r.created, kind: data.knowledge[i].kind, quote: data.knowledge[i].quote }));
+  const items = results.map((r, i) => ({ ...r.item, again: r.again, created: r.created, termKind: data.knowledge[i].kind, quote: data.knowledge[i].quote }));
   const id = sourceIdOf(input.url ?? "", input.title);
   const prior = await getSource(id);
   const source: ReadSource = {
@@ -73,7 +75,7 @@ export async function explainSelection(input: { title: string; url?: string; tex
   const data = await askJson<Explained>("knowledge:explain", EXPLAIN_SYSTEM, user, S.obj({ answer: S.str, other_view: S.str, term: S.obj({ title: S.str, body: S.str }) }));
   let saved: SaveResult | null = null;
   if (data.term.title.trim()) {
-    saved = await saveKnowledge({ title: data.term.title, body: data.term.body, folder: input.folder || "읽은 글", source: { kind: "web", title: input.title, ...(input.url ? { url: input.url } : {}), quote: input.selection.slice(0, 200) } });
+    saved = await saveKnowledge({ title: data.term.title, body: data.term.body, ...(input.folder ? { folder: input.folder } : { topicHint: "읽은 글" }), source: { kind: "web", title: input.title, ...(input.url ? { url: input.url } : {}), quote: input.selection.slice(0, 200) } });
     await recordEvent(saved.item.id, "asked", input.question || `"${input.selection.slice(0, 80)}" 드래그해서 물어봄`, { kind: "web", title: input.title });
   }
   return { answer: data.answer, otherView: data.other_view, knowledge: saved ? { id: saved.item.id, title: saved.item.title, created: saved.created } : null };

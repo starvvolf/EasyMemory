@@ -45,13 +45,13 @@ async function withFakes(run: (calls: ModelRequest[]) => Promise<void>) {
 }
 
 test("3단계: same becomes a pair to confirm, part-of and related become links, different leaves nothing", () => withFakes(async (calls) => {
-  await saveMany([{ title: "이분 탐색", body: "정렬된 범위를 반씩 줄여 찾는다", folder: "알고리즘" }, { title: "우선순위 큐", body: "작은 것부터 꺼내는 자료구조", folder: "알고리즘" },
-    { title: "기준금리", body: "중앙은행이 정하는 금리", folder: "경제" }]);
+  await saveMany([{ kind: "concept" as const, title: "이분 탐색", body: "정렬된 범위를 반씩 줄여 찾는다", folder: "알고리즘" }, { kind: "concept" as const, title: "우선순위 큐", body: "작은 것부터 꺼내는 자료구조", folder: "알고리즘" },
+    { kind: "concept" as const, title: "기준금리", body: "중앙은행이 정하는 금리", folder: "경제" }]);
   assert.deepEqual(await runDuplicateCheck(), { checked: 3, found: 0, left: 0 }, "the first items have nothing to be the same as");
   const before = calls.length;
   const told: string[][] = [];
   onKnowledgeCreated((ids) => told.push(ids));
-  await saveMany([{ title: "이진 탐색", body: "정렬된 배열을 반으로 나눠 찾는다" }, { title: "lower_bound", body: "x 이상이 처음 나오는 자리" }, { title: "다익스트라", body: "최단 거리" }]);
+  await saveMany([{ kind: "concept" as const, title: "이진 탐색", body: "정렬된 배열을 반으로 나눠 찾는다" }, { kind: "concept" as const, title: "lower_bound", body: "x 이상이 처음 나오는 자리" }, { kind: "concept" as const, title: "다익스트라", body: "최단 거리" }]);
   assert.equal(told.length, 1, "the listener hears about a save that made new items");
   assert.equal(told[0].length, 3);
   const result = await runDuplicateCheck();
@@ -77,9 +77,9 @@ test("3단계: same becomes a pair to confirm, part-of and related become links,
 }));
 
 test("다른 지식이에요 closes the pair and it is not asked again", () => withFakes(async () => {
-  await saveKnowledge({ title: "이분 탐색", body: "반씩 줄여 찾기" });
+  await saveKnowledge({ kind: "concept" as const, title: "이분 탐색", body: "반씩 줄여 찾기" });
   await runDuplicateCheck();
-  await saveKnowledge({ title: "이진 탐색", body: "반으로 나눠 찾기" });
+  await saveKnowledge({ kind: "concept" as const, title: "이진 탐색", body: "반으로 나눠 찾기" });
   await runDuplicateCheck();
   const [pair] = await openDuplicates();
   await resolveDuplicate(pair.id, "dismiss");
