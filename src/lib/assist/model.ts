@@ -24,12 +24,15 @@ const clip = (text: string, n: number) => text.length > n ? `${text.slice(0, n)}
 type AskOptions = { heavy?: boolean; caller?: ModelCaller; /** this call only: a model and effort other than the assist settings */ model?: string; effort?: string };
 const settingsFor = (options: AskOptions) => { const s = assistSettings(options.heavy); return { model: options.model || s.model, effort: options.effort || s.effort }; };
 /** 걸린 시간 기록 (2026-10-29, 시연 시간 재기): one line per call in <data>/assist-log.jsonl — what for, which model, how long. */
-async function timed<T>(purpose: string, model: string, effort: string, inChars: number, run: () => Promise<T>, outChars: (r: T) => number): Promise<T> {
+// firstTextMs: when the answer began to come (before it, the model was thinking); tokens as the model reports them.
+type Usage = { inputTokens?: number; outputTokens?: number; reasoningTokens?: number; cachedInputTokens?: number };
+async function timed<T extends { usage?: Usage }>(purpose: string, model: string, effort: string, inChars: number, run: (onText: () => void) => Promise<T>, outChars: (r: T) => number): Promise<T> {
   const started = Date.now();
-  let ok = false, out = 0;
-  try { const r = await run(); ok = true; out = outChars(r); return r; }
+  let ok = false, out = 0, first = 0, usage: Usage | undefined;
+  try { const r = await run(() => { if (!first) first = Date.now(); }); ok = true; out = outChars(r); usage = r.usage; return r; }
   finally {
-    const line = { at: new Date(started).toISOString(), purpose, model, effort, ms: Date.now() - started, ok, inChars, outChars: out };
+    const line = { at: new Date(started).toISOString(), purpose, model, effort, ms: Date.now() - started, ...(first ? { firstTextMs: first - started } : {}), ok, inChars, outChars: out,
+      ...(usage ? { tokens: { in: usage.inputTokens, cached: usage.cachedInputTokens, out: usage.outputTokens, reasoning: usage.reasoningTokens } } : {}) };
     const file = path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "assist-log.jsonl");
     void mkdir(path.dirname(file), { recursive: true }).then(() => appendFile(file, JSON.stringify(line) + "\n", "utf8")).catch(() => undefined);
   }
@@ -37,13 +40,13 @@ async function timed<T>(purpose: string, model: string, effort: string, inChars:
 export async function askText(purpose: string, system: string, user: string, options: AskOptions = {}) {
   const { model, effort } = settingsFor(options);
   const reply = await timed(purpose, model, effort, system.length + user.length,
-    () => callModel({ purpose, system: clip(system, 12000), user: clip(user, 60000), model, effort, caller: options.caller ?? LOCAL_CALLER }), (r) => r.text.length);
+    (onText) => callModel({ purpose, system: clip(system, 12000), user: clip(user, 60000), model, effort, caller: options.caller ?? LOCAL_CALLER, onText }), (r) => r.text.length);
   return reply.text.trim();
 }
 export async function askJson<T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, options: AskOptions = {}): Promise<T> {
   const { model, effort } = settingsFor(options);
   const reply = await timed(purpose, model, effort, system.length + user.length,
-    () => callModel({ purpose, system: clip(`${system}\n출력은 JSON으로만 한다.`, 12000), user: clip(user, 60000), json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`,
-      model, effort, caller: options.caller ?? LOCAL_CALLER }), (r) => JSON.stringify(r.data ?? "").length);
+    (onText) => callModel({ purpose, system: clip(`${system}\n출력은 JSON으로만 한다.`, 12000), user: clip(user, 60000), json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`,
+      model, effort, caller: options.caller ?? LOCAL_CALLER, onText }), (r) => JSON.stringify(r.data ?? "").length);
   return reply.data as T;
 }

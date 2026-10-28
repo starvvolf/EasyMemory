@@ -212,8 +212,10 @@ async function logTry(what: string, tries: number, times: TryTimes, reason: stri
 
 /** A new problem from a topic, a lesson or a pasted problem. Saved only after the check passes; otherwise refused with the reason. */
 export async function makeProblem(input: { topic?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; sourceTitle?: string; sourceUrl?: string; human?: Human; folder?: string; id?: string;
-  /** 실험: this request only, a model other than MAKE_MODEL for the draft (the independent solution keeps its own). */ model?: string }) {
+  /** 실험: this request only, a model other than MAKE_MODEL for the draft (the independent solution keeps its own). */ model?: string;
+  /** 실험: this request only, the draft's thinking effort (default: the heavy assist effort, medium). */ effort?: "low" | "medium" | "high" }) {
   const makeModel = input.model || MAKE_MODEL();
+  const makeLabel = input.effort ? `${makeModel} ${input.effort}` : makeModel;
   const names = (await searchKnowledge(input.topic || input.lesson?.slice(0, 200) || "", { limit: 12 })).map((h) => h.title);
   const user = [input.topic ? `[주제] ${input.topic}` : "", input.lesson ? `[강의 글 또는 붙여 넣은 문제]\n${input.lesson.slice(0, 30000)}` : "", names.length ? `[학습자 지식 목록] ${names.join(", ")}` : "",
     input.kind === "blank" ? `[빈칸 문제 언어] ${LANG_LABEL[input.lang ?? "python"]}` : "[빈칸 문제 아님]"].filter(Boolean).join("\n\n");
@@ -226,10 +228,10 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     const times: TryTimes = { draftMs: 0, testsMs: 0, secondMs: 0, verifyMs: 0 };
     const started = Date.now();
     let d: Drafted;
-    try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + retry, MAKE_SCHEMA, { heavy: true, model: makeModel }); }
-    catch (error) { await logTry(what, tries, { ...times, draftMs: Date.now() - started }, `모델 호출 실패: ${(error as Error).message}`, makeModel); throw error; }
+    try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + retry, MAKE_SCHEMA, { heavy: true, model: makeModel, ...(input.effort ? { effort: input.effort } : {}) }); }
+    catch (error) { await logTry(what, tries, { ...times, draftMs: Date.now() - started }, `모델 호출 실패: ${(error as Error).message}`, makeLabel); throw error; }
     times.draftMs = Date.now() - started;
-    if (d.answerKind !== "one") { await logTry(what, tries, times, "답이 여러 개이거나 실수 오차 문제", makeModel); throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요."); }
+    if (d.answerKind !== "one") { await logTry(what, tries, times, "답이 여러 개이거나 실수 오차 문제", makeLabel); throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요."); }
     const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human, times);
     attempts.push({ ...times, ...(checked.ok ? {} : { reason: checked.reason.slice(0, 300) }) });
     await logTry(what, tries, times, checked.ok ? "" : checked.reason, makeModel);
