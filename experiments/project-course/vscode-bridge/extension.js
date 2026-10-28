@@ -23,6 +23,9 @@ let dimDeco = null;       // 오늘 안 볼 덩어리: 흐리게
 let labelDeco = null;     // 덩어리 이름표
 let labelFocusDeco = null;
 let focus = null;         // { file, chunks: [{ anchor, label, desc, focus }] }
+let panel = null;         // 오른쪽 튜터 탭
+let lastEditor = null;    // 튜터 탭을 누르고 있어도 "보던 코드"를 기억
+let autoOpened = false;
 
 function request(method, url, body) {
   return new Promise((resolve, reject) => {
@@ -61,7 +64,8 @@ async function connect() {
   try {
     const hello = await request("POST", "/api/bridge/hello", { root, vscode: vscode.version });
     runId = hello.runId;
-    setStatus("$(mortar-board) Recaller 연결됨", `튜터와 이어졌어요 (${hello.stage}단계). 코드를 드래그하고 우클릭 → "튜터에게 이 코드 묻기"`, true);
+    setStatus("$(mortar-board) Recaller 연결됨", `튜터와 이어졌어요 (${hello.stage}단계). 누르면 오른쪽에 튜터가 열려요. 코드를 드래그하고 우클릭 → "이건 뭐예요?"`, true);
+    if (!autoOpened && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
     listen();
     scheduleReport(0);
   } catch (e) {
@@ -97,7 +101,7 @@ function scheduleReport(ms = 500) {
 }
 async function report() {
   if (!runId) return;
-  const ed = vscode.window.activeTextEditor;
+  const ed = vscode.window.activeTextEditor || lastEditor;
   let state = { file: null };
   if (ed && inRoot(ed.document)) {
     const doc = ed.document;
@@ -120,7 +124,7 @@ async function report() {
 /* ---------- 튜터 → VS Code: 명령 ---------- */
 async function openAt(file, line, toLine) {
   const doc = await vscode.workspace.openTextDocument(absOf(file));
-  const ed = await vscode.window.showTextDocument(doc, { preview: false });
+  const ed = await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.One, preserveFocus: !!panel && panel.active });
   const l = Math.max(0, Math.min(doc.lineCount - 1, (line || 1) - 1));
   const end = Math.max(l, Math.min(doc.lineCount - 1, (toLine || line || 1) - 1));
   const range = new vscode.Range(l, 0, end, doc.lineAt(end).text.length);
@@ -184,6 +188,7 @@ async function handle(cmd) {
     edit.replace(doc.uri, new vscode.Range(a, 0, b, doc.lineAt(b).text.length), text);
     await vscode.workspace.applyEdit(edit);
     const { ed } = await openAt(cmd.file, a + 1, a + cmd.text.split("\n").length);
+    await vscode.window.showTextDocument(ed.document, { viewColumn: vscode.ViewColumn.One, preserveFocus: false });
     applyFocus();
     mark(ed, new vscode.Range(a, 0, a + cmd.text.split("\n").length - 1, 0), cmd.note || "빈칸 ①②③…을 채우고 저장하세요");
   } else if (cmd.type === "focus") {
@@ -236,12 +241,28 @@ async function what() {
   }
 }
 
+/* ---------- 오른쪽 튜터 탭 ---------- */
+async function openTutor() {
+  if (panel) { panel.reveal(vscode.ViewColumn.Two, true); return; }
+  const base = await vscode.env.asExternalUri(vscode.Uri.parse(`http://${HOST}:${PORT}/`));
+  const origin = base.toString(true).replace(/\/$/, "");
+  const url = `${origin}/?embed=1${runId ? `#/run/${runId}` : ""}`;
+  panel = vscode.window.createWebviewPanel("recallerTutor", "Recaller 튜터", { viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
+    { enableScripts: true, retainContextWhenHidden: true });
+  panel.iconPath = new vscode.ThemeIcon("mortar-board");
+  panel.webview.html = `<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin} http://127.0.0.1:${PORT} http://localhost:${PORT}; style-src 'unsafe-inline';">
+<style>html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--vscode-editor-background)}iframe{border:0;width:100%;height:100%;display:block}</style>
+</head><body><iframe src="${url}" allow="clipboard-read; clipboard-write"></iframe></body></html>`;
+  panel.onDidDispose(() => { panel = null; });
+}
+
 function activate(context) {
   const folder = (vscode.workspace.workspaceFolders || []).find((f) => fs.existsSync(path.join(f.uri.fsPath, ".recaller", "stage.json")));
   if (!folder) return;
   root = folder.uri.fsPath;
   status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  status.command = "recaller.reconnect";
+  status.command = "recaller.openTutor";
   status.show();
   deco = vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
@@ -257,13 +278,15 @@ function activate(context) {
     vscode.commands.registerCommand("recaller.what", what),
     vscode.window.onDidChangeVisibleTextEditors(() => applyFocus()),
     vscode.commands.registerCommand("recaller.reconnect", connect),
-    vscode.window.onDidChangeActiveTextEditor(() => scheduleReport()),
+    vscode.commands.registerCommand("recaller.openTutor", () => { if (runId) openTutor(); else connect(); }),
+    vscode.window.onDidChangeActiveTextEditor((ed) => { if (ed && inRoot(ed.document)) lastEditor = ed; scheduleReport(); }),
     vscode.window.onDidChangeTextEditorSelection(() => scheduleReport(700)),
     vscode.workspace.onDidChangeTextDocument((e) => { if (inRoot(e.document)) { scheduleReport(1200); applyFocus(); } }),
     vscode.workspace.onDidSaveTextDocument(() => scheduleReport(100)),
     vscode.languages.onDidChangeDiagnostics(() => scheduleReport(800)),
-    { dispose: () => { clearTimeout(retryTimer); clearTimeout(reportTimer); if (stream) stream.destroy(); } },
+    { dispose: () => { clearTimeout(retryTimer); clearTimeout(reportTimer); if (stream) stream.destroy(); if (panel) panel.dispose(); } },
   );
+  if (vscode.window.activeTextEditor && inRoot(vscode.window.activeTextEditor.document)) lastEditor = vscode.window.activeTextEditor;
   setStatus("$(sync~spin) Recaller", "튜터에 연결하는 중…", false);
   connect();
 }

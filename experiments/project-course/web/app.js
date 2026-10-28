@@ -1,6 +1,9 @@
 // 프로젝트 코스 화면. 빌드 없이 도는 바닐라 JS.
 // #/intake/<id> 코스 정하기 · #/run/<id> 코스 진행 · #/run/<id>/summary 결과
 const $ = (s, el = document) => el.querySelector(s);
+// VS Code 오른쪽 탭 안에서 열릴 때(?embed=1): 위쪽 바와 VS Code 열기 버튼을 빼고 좁은 폭에 맞춘다.
+const EMBED = new URLSearchParams(location.search).has("embed");
+if (EMBED) document.documentElement.classList.add("embed");
 const view = $("#view");
 let status = null;
 
@@ -517,7 +520,7 @@ function drawLesson() {
       h("div", { class: "mut small" }, "작업 폴더"),
       h("div", { class: "path" }, ws),
       h("div", { class: "row" },
-        h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { const r = await api("POST", `/api/runs/${run.id}/editor`); toast(r.ok ? (r.message || "VS Code를 열었어요. 이 창 옆에 나란히 두면 편해요.") : r.message, 7000); }) }, "VS Code로 열기"),
+        EMBED ? null : h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { const r = await api("POST", `/api/runs/${run.id}/editor`); toast(r.ok ? (r.message || "VS Code를 열었어요. 튜터는 VS Code 오른쪽에도 열려요.") : r.message, 7000); }) }, "VS Code로 열기"),
         dev?.running
           ? h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/stop`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 끄기")
           : h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/start`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 켜기")),

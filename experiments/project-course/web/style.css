@@ -238,3 +238,25 @@ textarea.explain { width: 100%; min-height: 70px; border: 1px solid var(--line);
 .chunk .cn { grid-area: n; align-self: center; font-size: 12px; color: var(--mut); }
 .lpocket { display: grid; gap: 6px; }
 .pitem { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13px; display: grid; gap: 4px; }
+
+/* ---------- VS Code 오른쪽 탭 안 (embed) ---------- */
+.embed body { font-size: 14px; }
+.embed .top, .embed #nodeWarn { display: none; }
+.embed .lesson { grid-template-columns: 1fr; gap: 10px; padding: 10px 12px 0; }
+.embed .lside { position: static; display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.embed .lstage { display: flex; align-items: center; gap: 8px; }
+.embed .lstage h2 { margin: 0; font-size: 15px; }
+.embed .lprog { grid-column: 1 / -1; }
+.embed .lteach, .embed .lmore, .embed .lws .path, .embed .lws > .mut { display: none; }
+.embed .lws { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.embed .lws .row { gap: 6px; }
+.embed .seeing { grid-column: 1 / -1; }
+.embed .lpocket { grid-column: 1 / -1; max-height: 120px; overflow: auto; }
+.embed .lpocket .pitem { padding: 4px 8px; }
+.embed .lmain { min-height: calc(100vh - 90px); }
+.embed .lmsg .avatar { width: 24px; height: 24px; font-size: 12px; border-radius: 8px; }
+.embed .lmsg.tutor .bubble { padding: 10px 12px; }
+.embed .lcol { max-width: 100%; }
+.embed .chunk.sub { margin-left: 10px; }
+.embed .course { grid-template-columns: 1fr; padding: 10px 12px 40px; }
+.embed .chat { padding: 12px 12px 120px; }

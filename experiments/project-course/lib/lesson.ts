@@ -244,11 +244,11 @@ const TUTOR = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친
 - 맞았다/틀렸다를 단정하지 않는다. 그건 확인(검사)이 정한다.
 - 답한 뒤 한 문장으로 지금 하던 것으로 자연스럽게 돌아오게 한다.`;
 
-export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }) {
+export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string) {
   const q = text.trim().slice(0, 1000) || (quote ? "이 코드가 뭐 하는 거예요?" : "");
   if (!q) throw err(400, "질문을 적어 주세요.");
   const s0 = await change(runId, n, (s, push) => {
-    push({ role: "me", text: q, card: quote ? { type: "code", ...quote } : undefined });
+    push({ role: "me", text: shown ?? q, card: quote ? { type: "code", ...quote } : undefined });
     s.busy = true;
   });
   const run = await getRun(runId);
@@ -374,7 +374,7 @@ export async function what(runId: string, n: number, plan: Plan, quote: { file: 
   }
   // 용어집에 없으면 AI 튜터에게
   await rememberAi(runId, n, quote);
-  return ask(runId, n, plan, "이건 뭐예요? 처음 보는 사람에게 이 코드가 하는 일을 쉽게 알려 주세요. 이 단계에서 몰라도 되는 거면 그렇다고 말해 주세요.", quote);
+  return ask(runId, n, plan, "이건 뭐예요? 처음 보는 사람에게 이 코드가 하는 일을 쉽게 알려 주세요. 이 단계에서 몰라도 되는 거면 그렇다고 말해 주세요.", quote, "이건 뭐예요?");
 }
 
 /** 확장이 (다시) 연결되면 지금 단계의 지도(밝게·흐리게)를 다시 보낸다. */

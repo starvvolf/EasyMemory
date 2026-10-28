@@ -43,7 +43,7 @@ export async function explainWhat(runId: string, courseId: string, stage: number
   const lines: string[] = [];
   const later: number[] = [];
   for (const t of shown) {
-    if (t.stage === null) lines.push(`- **${t.name}**: ${t.short} _(이 코스에서는 몰라도 돼요)_`);
+    if (t.stage === null) lines.push(`- **${t.name}**: ${t.short} (이 코스에서는 몰라도 돼요)`);
     else if (t.stage > stage) { lines.push(`- **${t.name}**: ${t.short} 자세한 건 **${t.stage}단계**에서 해요. 주머니에 넣어 둘게요.`); later.push(t.stage); }
     else lines.push(`- **${t.name}**: ${t.short}`);
   }

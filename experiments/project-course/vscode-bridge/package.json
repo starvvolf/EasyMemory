@@ -2,7 +2,7 @@
   "name": "recaller-bridge",
   "displayName": "Recaller 튜터 연결",
   "description": "Recaller 프로젝트 코스의 튜터(브라우저)와 VS Code를 잇는다. 화면은 없고, 지금 보는 코드를 튜터에게 알려 주고 튜터가 보낸 줄 열기·빈칸 넣기를 한다.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "recaller-local",
   "private": true,
   "license": "UNLICENSED",
@@ -22,6 +22,10 @@
   "main": "./extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "recaller.openTutor",
+        "title": "Recaller: 튜터를 옆에 열기"
+      },
       {
         "command": "recaller.what",
         "title": "Recaller: 이건 뭐예요?"
@@ -62,6 +66,16 @@
         "mac": "cmd+alt+r",
         "when": "editorTextFocus && recaller.connected"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Recaller",
+      "properties": {
+        "recaller.openTutorBeside": {
+          "type": "boolean",
+          "default": true,
+          "description": "튜터에 연결되면 오른쪽에 튜터 탭을 자동으로 연다."
+        }
+      }
+    }
   }
 }
