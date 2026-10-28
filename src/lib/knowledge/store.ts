@@ -34,7 +34,7 @@ export type KLink = { to: string; relation: string; note?: string };
  * 종류 (2026-10-28 결정 "4개 축"): how the item is learned — it decides the review questions and whether two items
  * with the same meaning are the same knowledge (어휘: never; big and large are two words to learn).
  */
-export type ExplainParts = { summary: string; why: string; analogy: string; example: string; elsewhere: string };
+export type ExplainParts = { plain: string; extras: Array<{ label: string; text: string }> };
 export type KKind = "concept" | "procedure" | "fact" | "formula" | "vocab";
 export const KIND_LABEL: Record<KKind, string> = { concept: "개념·용어", procedure: "절차·방법", fact: "사실·수치", formula: "공식", vocab: "어휘" };
 export type KStats = { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] };

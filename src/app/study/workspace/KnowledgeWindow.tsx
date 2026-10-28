@@ -301,9 +301,10 @@ function ItemDetail({ detail, folders, goals, mine, quizzing, onAct, onOpen, onG
   const explain = (question = "") => { setExplaining(true); setExplainOpen(true); setMore(false); void onAct(async () => { await call(`/api/knowledge/item/${item.id}/explain`, { question });
     setAsking(false); setWhy(""); }).finally(() => setExplaining(false)); };
   // 쉽게 풀어 보기: 요약과 왜 필요한지를 먼저, 비유·작은 예·다른 데서는 한 번 더 펼쳐서. 예전 글로만 된 설명은 문단 그대로.
-  const ex = item.explainParts;
+  // 쉽게 풀어 보기: 쉬운 말 + 칸(비유·작은 예·따라가 보기 …). 칸 형식이 아닌 예전 설명은 문단 그대로.
+  const ex = item.explainParts?.plain !== undefined ? item.explainParts : undefined;
   const oldParts = !ex ? (item.explain ?? "").split(/\n\s*\n/).map((t) => t.replace(/^한 줄로:\s*/, "").trim()).filter(Boolean) : [];
-  const extra: Array<[string, string]> = ex ? ([["비유", ex.analogy], ["예", ex.example], ["다른 데서", ex.elsewhere]] as Array<[string, string]>).filter(([, t]) => t) : [];
+  const extra = ex?.extras ?? [];
   const see = item.explainSee ?? [];
   // 뜻 박스: 뜻 줄과 "헷갈림:" 줄을 나눠, 헷갈림은 머리말 대신 "주의" 칸으로.
   const meaningText = item.body.split("\n").filter((l) => !/^\s*헷갈림\s*:/.test(l)).join("\n").trim();
@@ -357,10 +358,9 @@ function ItemDetail({ detail, folders, goals, mine, quizzing, onAct, onOpen, onG
             <summary>쉽게 풀어 보기</summary>
             <div className="kw-explain-body">{explaining && !item.explain ? <p className="small muted">설명을 만드는 중이에요… (10초쯤)</p> : null}
               {ex ? <>
-                {ex.summary ? <p className="kw-sum-line"><Inline text={ex.summary} /></p> : null}
-                {ex.why ? <p><Inline text={ex.why} /></p> : null}
-                {extra.length ? (more ? extra.map(([tag, t]) => <p key={tag} className="kw-part"><span className="kw-part-tag">{tag}</span><span><Inline text={t} /></span></p>)
-                  : <button className="linkish small kw-more-btn" onClick={() => setMore(true)}>비유·예 더 보기</button>) : null}
+                {ex.plain ? <Rich text={ex.plain} /> : null}
+                {extra.slice(0, more ? 3 : 1).map((x) => <div key={x.label} className="kw-part"><span className="kw-part-tag">{x.label}</span> <div className="kw-part-text"><Rich text={x.text} /></div></div>)}
+                {extra.length > 1 && !more ? <button className="linkish small kw-more-btn" onClick={() => setMore(true)}>{extra.slice(1).map((x) => x.label).join(" · ")} 더 보기</button> : null}
               </> : oldParts.map((t, n) => <Rich key={n} text={t} />)}
               {see.length ? <p className="small kw-see">{see.some((q) => q.sure) ? <span className="muted">먼저 알 것 </span> : null}{see.filter((q) => q.sure).map((q) => <button key={q.title} className="chip" onClick={() => onOpen(q.id!)}>{q.title}</button>)}
                 {see.some((q) => !q.sure) ? <span className="muted">함께 알아보기 </span> : null}{see.filter((q) => !q.sure).map((q) => q.id ? <button key={q.title} className="chip soft" onClick={() => onOpen(q.id!)}>{q.title}</button> : <span key={q.title} className="chip soft">{q.title}</span>)}</p> : null}

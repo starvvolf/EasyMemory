@@ -1,8 +1,8 @@
 // 지식 카드의 층 (2026-10-28, 사용자 "뜻 한 줄로 이해가 안 되는 사람은?"):
 //   뜻 (body)   — 복습 때 떠올릴 답. 일반적인 뜻을 짧게. 만난 문제·글의 사연은 넣지 않는다.
 //   예 (example) — 그 뜻이 만난 곳에서 어떻게 쓰였나 ("이 문제에선 이름 → 누적 포인트를 O(1)에").
-//   쉽게 풀어 보기 (explainParts) — 학습자가 "설명이 어려워요"를 누르면 그때 만든다: 한 줄 요약, 왜 필요한지, 비유, 작은 예,
-//   다른 데서는. 한 번 만들면 남는다. 지식창에서 누르면 복습 단계는 그대로(기록만), 복습 중 답 전에 누르면 물어봄.
+//   쉽게 풀어 보기 (explainParts) — 학습자가 "설명이 어려워요"를 누르면 그때 만든다: 쉬운 말 + 그 지식에 맞는 칸 1~3개
+//   (비유·작은 예·따라가 보기·기호 뜻·예문·이유 단계·다른 데서 …). 한 번 만들면 남는다. 지식창에서 누르면 복습 단계는 그대로(기록만), 복습 중 답 전에 누르면 물어봄.
 // runLayer: 아직 나누지 않은 지식을 20개씩 AI 한 번으로 (저장 뒤 자동, 또는 "정리할 것"에서). explainKnowledge: 하나씩.
 import { askJson, S } from "../assist/model.ts";
 import { getKnowledge, layerKnowledge, pathOf, readAll, recordEvent, sameName, updateKnowledge, KIND_LABEL, type ExplainParts, type Knowledge } from "./store.ts";
@@ -43,18 +43,33 @@ export async function runLayer(options: { ids?: string[]; batches?: number } = {
   return { done, changed, left, calls };
 }
 
-const EXPLAIN_SYSTEM = `학습자가 지식 카드의 뜻만 보고는 이해가 안 된다고 했다. 처음 배우는 사람에게 쉽게 풀어 준다. 어려운 말은 풀어서, 칸마다 짧게.
-- summary: 핵심을 한 문장으로(머리말 없이 바로 내용).
-- why: 이게 왜 필요한지, 어떤 불편을 없애는지 1~2문장.
-- analogy: 일상 비유 하나, 1~2문장.
-- example: 아주 작은 예 하나(숫자나 짧은 코드 한 줄도 좋다). 만난 곳의 상황이 주어지면 그것을 써도 된다. 1~2문장.
-- elsewhere: 다른 상황에서는 어떻게 쓰이는지 한 문장(예: "사용자 ID로 계정 찾기, 상품 코드로 재고 찾기"). 만난 곳과 다른 상황으로.
-- 복잡도처럼 조건이 붙는 말은 조건을 밝힌다("평균 O(1)", "정렬돼 있을 때").
-- see: 함께 보면 좋은 개념 이름 0~3개. 이것을 이해하는 데 정말 필요한 더 기본적인 것만(해시라면 키와 값, 배열 인덱스, 해시 함수). 그것을 몰라도 이것을 설명할 수 있으면 넣지 않는다. 학습자의 지식 목록에 있으면 그 이름을 그대로.
-- 학습자가 따로 물은 것이 있으면 그것을 중심으로 칸을 채운다.`;
-type Explained = ExplainParts & { see: string[] };
-const PARTS_SCHEMA = S.obj({ summary: S.str, why: S.str, analogy: S.str, example: S.str, elsewhere: S.str, see: S.arr(S.str) });
-const joinParts = (p: ExplainParts) => [p.summary, p.why, p.analogy && `비유: ${p.analogy}`, p.example && `예: ${p.example}`, p.elsewhere && `다른 데서: ${p.elsewhere}`].filter(Boolean).join("\n\n");
+// 쉽게 풀어 보기 = 모든 지식에 공통인 "쉬운 말" + 그 지식에 도움이 되는 칸 1~3개 (2026-10-28 사용자: "보편적으로 접근하면서도
+// 비유나 예, 다른 데서를 넣을 수 있게"). 칸 이름은 정해진 목록에서만 골라 화면이 늘 같은 모양이다.
+export const EXPLAIN_LABELS = ["비유", "작은 예", "따라가 보기", "기호 뜻", "숫자 넣어 보기", "헷갈리는 짝", "외우는 요령", "예문", "비슷한 말과 차이", "이유 단계", "조건·예외", "사례", "다른 데서"] as const;
+const EXPLAIN_SYSTEM = `학습자가 지식 카드의 뜻만 보고는 이해가 안 된다고 했다. 처음 배우는 사람에게 쉽게 풀어 준다.
+- plain: 쉬운 말 2~3문장. 카드의 뜻을 그대로 되풀이하지 말고, 어려운 말을 풀어서 무엇이고 왜 필요한지(또는 왜 그런지)를 말한다.
+  복잡도·규칙처럼 조건이 붙는 말은 조건을 밝힌다("평균 O(1)", "정렬돼 있을 때").
+- extras: 이 지식을 이해하는 데 가장 도움이 되는 칸 1~3개. label은 아래 목록에서만 고르고, text는 1~3문장(따라가 보기는 짧은 단계 줄 여러 개도 된다).
+  ${EXPLAIN_LABELS.join(", ")}
+  고르는 기준(정해진 틀이 아니라 도움이 되는 것만): 개념이면 비유·작은 예·다른 데서, 절차·알고리즘이면 작은 입력으로 따라가 보기, 공식이면 기호 뜻·숫자 넣어 보기,
+  사실·수치면 헷갈리는 짝·외우는 요령, 외국어 어휘면 예문(뜻 함께)·비슷한 말과 차이, 원리·인과(경제 등)면 이유 단계·조건·예외·사례.
+  억지 비유는 넣지 않는다. 만난 곳의 상황을 예로 써도 되지만 "다른 데서"는 다른 상황으로.
+- see: 이것을 이해하는 데 정말 필요한 더 기본적인 개념 이름 0~3개(해시라면 키와 값, 배열 인덱스, 해시 함수). 그것을 몰라도 이것을 설명할 수 있으면 넣지 않는다. 학습자의 지식 목록에 있으면 그 이름을 그대로.
+- 학습자가 따로 물은 것이 있으면 그것을 중심으로 쓴다.`;
+type Explained = { plain: string; extras: Array<{ label: string; text: string }>; see: string[] };
+const PARTS_SCHEMA = S.obj({ plain: S.str, extras: S.arr(S.obj({ label: S.oneOf(...EXPLAIN_LABELS), text: S.str })), see: S.arr(S.str) });
+const joinParts = (p: ExplainParts) => [p.plain, ...p.extras.map((x) => `${x.label}: ${x.text}`)].filter(Boolean).join("\n\n");
+type ExplainInput = { title: string; aliases: string[]; body: string; kind?: string; path?: string; example?: string; before?: string[]; question?: string; names?: string[] };
+/** One explanation, not saved (used by explainKnowledge and the preview that compares kinds). */
+export async function makeExplanation(input: ExplainInput) {
+  const user = [`[지식] ${input.title}${input.aliases.length ? ` (다른 이름: ${input.aliases.join(", ")})` : ""} | 종류: ${input.kind ? KIND_LABEL[input.kind as keyof typeof KIND_LABEL] ?? input.kind : "?"} | 주제: ${input.path || "없음"}`,
+    `[뜻] ${input.body.trim() || "(비어 있음)"}`, input.example ? `[만난 곳에서] ${input.example}` : "",
+    input.before?.length ? `[이어진 앞선 지식] ${input.before.join(", ")}` : "", input.question?.trim() ? `[학습자가 물은 것] ${input.question.trim().slice(0, 300)}` : "",
+    input.names?.length ? `[학습자의 지식 목록 일부] ${input.names.slice(0, 120).join(", ")}` : ""].filter(Boolean).join("\n");
+  const data = await askJson<Explained>("knowledge:explain-item", EXPLAIN_SYSTEM, user, PARTS_SCHEMA);
+  const parts: ExplainParts = { plain: (data.plain ?? "").trim(), extras: (data.extras ?? []).filter((x) => (EXPLAIN_LABELS as readonly string[]).includes(x.label) && x.text?.trim()).slice(0, 3).map((x) => ({ label: x.label, text: x.text.trim() })) };
+  return { parts, see: (data.see ?? []).slice(0, 3) };
+}
 export async function explainKnowledge(id: string, question = "", from: "detail" | "review" = "detail") {
   const d = await getKnowledge(id);
   const { items } = await readAll();
@@ -62,13 +77,9 @@ export async function explainKnowledge(id: string, question = "", from: "detail"
   const sureIds = new Set([...d.backlinks.filter((l) => ["먼저", "먼저 알기", "조건", "포함"].includes(l.relation)).map((l) => l.item.id),
     ...d.links.filter((l) => l.relation === "씀").map((l) => l.item.id)]);
   const before = items.filter((i) => sureIds.has(i.id)).map((i) => i.title);
-  const user = [`[지식] ${d.item.title}${d.item.aliases.length ? ` (다른 이름: ${d.item.aliases.join(", ")})` : ""} | 주제: ${d.path || "없음"}`,
-    `[뜻] ${d.item.body.trim() || "(비어 있음)"}`, d.item.example ? `[만난 곳에서] ${d.item.example}` : "",
-    before.length ? `[이어진 앞선 지식] ${before.join(", ")}` : "", question.trim() ? `[학습자가 물은 것] ${question.trim().slice(0, 300)}` : "",
-    `[학습자의 지식 목록 일부] ${items.slice(0, 120).map((i) => i.title).join(", ")}`].filter(Boolean).join("\n");
-  const data = await askJson<Explained>("knowledge:explain-item", EXPLAIN_SYSTEM, user, PARTS_SCHEMA);
-  const parts: ExplainParts = { summary: (data.summary ?? "").trim(), why: (data.why ?? "").trim(), analogy: (data.analogy ?? "").trim(), example: (data.example ?? "").trim(), elsewhere: (data.elsewhere ?? "").trim() };
-  const see = (data.see ?? []).slice(0, 3).map((name) => { const hit = sameName(items, name); return { title: hit?.title ?? name, id: hit?.id ?? null, sure: Boolean(hit && sureIds.has(hit.id)) }; })
+  const made = await makeExplanation({ title: d.item.title, aliases: d.item.aliases, body: d.item.body, kind: d.item.kind, path: d.path, example: d.item.example, before, question, names: items.map((i) => i.title) });
+  const parts = made.parts;
+  const see = made.see.map((name) => { const hit = sameName(items, name); return { title: hit?.title ?? name, id: hit?.id ?? null, sure: Boolean(hit && sureIds.has(hit.id)) }; })
     .filter((q) => q.id !== id);
   // Linked items that the model did not name still show as 먼저 알 것.
   for (const i of items.filter((x) => sureIds.has(x.id) && !see.some((q) => q.id === x.id)).slice(0, 2)) see.unshift({ title: i.title, id: i.id, sure: true });

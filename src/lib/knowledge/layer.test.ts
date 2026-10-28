@@ -15,8 +15,8 @@ test("층 나누기와 잘 모르겠어요", async () => {
   const calls: ModelRequest[] = [];
   setFakeModelResponder((r) => {
     calls.push(r);
-    if (r.system.includes("이해가 안 된다고")) return JSON.stringify({ summary: "키로 자리를 계산해 바로 찾는다.", why: "처음부터 훑지 않아도 된다.", analogy: "사물함 번호를 이름에서 계산해 바로 찾아가는 것.",
-      example: "'민수' → 7번 칸", elsewhere: "사용자 ID로 계정 찾기", see: ["배열", "없는 개념"] });
+    if (r.system.includes("이해가 안 된다고")) return JSON.stringify({ plain: "키로 자리를 계산해 바로 찾는다. 처음부터 훑지 않아도 된다.",
+      extras: [{ label: "비유", text: "사물함 번호를 이름에서 계산해 바로 찾아가는 것." }, { label: "아무 칸", text: "목록에 없는 칸은 버린다" }, { label: "다른 데서", text: "사용자 ID로 계정 찾기" }], see: ["배열", "없는 개념"] });
     const lines = r.user.split("\n").filter((l) => /^\d+\. /.test(l));
     const n = (t: string) => lines.findIndex((l) => l.includes(`. ${t} `) || l.includes(`. ${t}|`));
     return JSON.stringify({ items: [{ n: n("해시"), meaning: "키를 해시 함수로 자리 번호로 바꿔 바로 저장하고 찾는 방법.", example: "이 문제에선 이름을 키로 누적 포인트를 O(1)에 찾는다.", confusion: "충돌: 다른 키가 같은 자리로 갈 수 있다" },
@@ -42,7 +42,7 @@ test("층 나누기와 잘 모르겠어요", async () => {
     assert.match(e.explain, /비유: 사물함/);
     assert.deepEqual(e.see, [{ title: "배열", id: arr.item.id, sure: false }, { title: "없는 개념", id: null, sure: false }], "not linked yet: 함께 알아보기");
     const after = await getKnowledge(hash.item.id);
-    assert.equal(after.item.explainParts!.elsewhere, "사용자 ID로 계정 찾기");
+    assert.deepEqual(after.item.explainParts!.extras.map((x) => x.label), ["비유", "다른 데서"]);
     assert.equal(after.item.explainSee!.length, 2);
     assert.equal(after.item.state, "met", "설명을 본 것은 기억 실패가 아니다: 복습 단계 그대로");
     assert.equal(after.events[0].kind, "note");
