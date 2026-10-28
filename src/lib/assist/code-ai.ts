@@ -131,6 +131,8 @@ const MUTANTS_SYSTEM = `알고리즘 문제 하나에 대해, 학습자가 흔�
 - 입력은 require("fs").readFileSync(0, "utf8")로 통째로 읽고, 출력은 console.log로. 동기 코드만. 2^53을 넘을 수 있는 값은 읽을 때부터 BigInt로(실수로 Number를 쓰는 풀이는 예외).
 - { flaw, code }. flaw는 실수 이름(정수 범위, 초기화, 경계값, off-by-one, 중복 처리, 잘못된 그리디, 시간 초과, 재귀 깊이 등 이 문제에 해당하는 것만).
 - 정상 실행되지만 특정 입력에서 틀리거나 느린 코드여야 한다(문법 오류 금지). 32비트 정수 오버플로는 결과에 |0 을 써서 흉내 낸다.`;
+/** The faulty solutions' model: only a score of the tests, so the cheapest that writes them well (docs/DECISIONS.md). */
+const MUTANTS_MODEL = () => process.env.RECALLER_CODE_MUTANTS_MODEL?.trim() || "";
 const MUTANTS_SCHEMA = S.obj({ mutants: S.arr(S.obj({ flaw: S.str, code: S.str })) });
 // The test generator too, from the original, by its own call next to the draft (the same rules as in MAKE_SYSTEM).
 const GEN_RULES = MAKE_SYSTEM.slice(MAKE_SYSTEM.indexOf("- generator:"), MAKE_SYSTEM.indexOf("- mutants:"));
@@ -228,6 +230,7 @@ async function logTry(what: string, tries: number, times: TryTimes, reason: stri
 export async function makeProblem(input: { topic?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; sourceTitle?: string; sourceUrl?: string; human?: Human; folder?: string; id?: string;
   /** 실험: this request only, a model other than MAKE_MODEL for the draft (the independent solution keeps its own). */ model?: string;
   /** 실험: this request only, the draft's thinking effort (default: the heavy assist effort, medium). */ effort?: "low" | "medium" | "high";
+  /** 실험: this request only, the faulty solutions' model (imported problems). */ mutantsModel?: string;
   /** An imported original (statement and examples as published): the independent solution starts from it with the draft. */
   original?: { statement: string; inputText: string; outputText: string; examples: TestCase[] } }) {
   const makeModel = input.model || MAKE_MODEL();
@@ -244,7 +247,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   const early = original ? solveAloneSafe({ ...original, examples: original.examples.slice(0, 3) }) : undefined;
   const originalText = original ? [`[문제]\n${original.statement}`, `[입력]\n${original.inputText}`, `[출력]\n${original.outputText}`,
     ...original.examples.slice(0, 3).map((ex, i) => `[예제 ${i + 1}]\n입력:\n${ex.input}\n출력:\n${ex.output}`)].join("\n\n") : "";
-  const mutantsOf = original ? askJson<{ mutants: Drafted["mutants"] }>("code:mutants", MUTANTS_SYSTEM, originalText, MUTANTS_SCHEMA, { model: makeModel })
+  const mutantsOf = original ? askJson<{ mutants: Drafted["mutants"] }>("code:mutants", MUTANTS_SYSTEM, originalText, MUTANTS_SCHEMA, { model: input.mutantsModel || MUTANTS_MODEL() || makeModel })
     .then((m) => m.mutants).catch((e: unknown) => { console.warn(`[code] faulty solutions failed: ${(e as Error).message}`); return [] as Drafted["mutants"]; }) : undefined;
   for (let tries = 1; tries <= 1 + MAKE_RETRIES; tries++) {
     const retry = reasons.length ? `\n\n[지난 시도에서 막힌 곳]\n${reasons.map((r, i) => `${i + 1}. ${r}`).join("\n")}\n같은 실수가 없게 다시 세팅한다.` : "";

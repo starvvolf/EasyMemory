@@ -47,7 +47,9 @@ async function handle(request: Request, context: RouteContext) {
         /** 실험: the draft's model for this request only (e.g. "gpt-5.6-luna"). */
         model: z.string().regex(/^[a-z0-9.-]{3,40}$/).optional(),
         /** 실험: the draft's thinking effort for this request only. */
-        effort: z.enum(["low", "medium", "high"]).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
+        effort: z.enum(["low", "medium", "high"]).optional(),
+        /** 실험: the faulty solutions' model for this request only. */
+        mutantsModel: z.string().regex(/^[a-z0-9.-]{3,40}$/).optional() }).refine((x) => x.topic?.trim() || x.lesson?.trim() || x.from?.trim(), "주제나 강의 글, 주소가 필요해요."));
       const { from, again, ...rest } = b;
       const got = from?.trim() ? await resolveSource(from) : null;
       const existing = got && !again ? await findBySource(got.url, rest.kind) : null;
