@@ -9,7 +9,7 @@ import { ROOT } from "./course.ts";
 import { DATA, read, update } from "./store.ts";
 
 const APP_ROOT = path.resolve(ROOT, "..", "..");
-export const AI_LIMIT = Number(process.env.PC_AI_LIMIT || 20);
+export const AI_LIMIT = Number(process.env.PC_AI_LIMIT || 50); // 사용자 허락 10/28: 20 → 50
 const USAGE = () => path.join(DATA, "ai-usage.json");
 type Usage = { count: number; calls: { at: string; purpose: string; ok: boolean; note?: string }[] };
 

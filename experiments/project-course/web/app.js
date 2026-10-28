@@ -499,10 +499,14 @@ function drawLesson() {
   });
 
   const chat = h("div", { class: "lchat" });
+  let prevRole = "";
   for (const m of msgs) {
-    if (m.role === "note") { chat.append(h("div", { class: "lnote" }, m.text)); continue; }
-    const row = h("div", { class: `lmsg ${m.role}` });
-    if (m.role === "tutor") row.append(h("div", { class: "avatar" }, "R"));
+    if (m.role === "note") { chat.append(h("div", { class: "lnote" }, m.text)); prevRole = "note"; continue; }
+    // 튜터가 이어서 말하면(도구 쓰는 중) 아이콘은 첫 줄에만
+    const cont = m.role === "tutor" && prevRole === "tutor";
+    prevRole = m.role;
+    const row = h("div", { class: `lmsg ${m.role} ${cont ? "cont" : ""}` });
+    if (m.role === "tutor") row.append(h("div", { class: `avatar ${cont ? "ghost" : ""}` }, cont ? "" : "R"));
     const col = h("div", { class: "lcol" });
     if (m.text) col.append(m.role === "me" ? h("div", { class: "bubble" }, m.text) : h("div", { class: "bubble" }, rich(m.text, ws)));
     if (m.card) col.append(lessonCard(m.card, run, lesson, send, ws));
@@ -570,6 +574,14 @@ function lessonCard(card, run, lesson, send, ws) {
       Object.keys(card.headers || {}).length ? h("pre", { class: "rbody mut" }, Object.entries(card.headers).map(([k, v]) => `${k}: ${v}`).join("\n")) : null,
       card.body ? h("pre", { class: "rbody" }, card.body) : null);
   }
+  if (card.type === "tool") return h("details", { class: `lcard tool ${card.ok ? "" : "bad"}` },
+    h("summary", {}, h("span", { class: "ti" }, card.icon), h("span", {}, card.label)),
+    card.detail ? h("pre", { class: "rbody" }, card.detail) : null);
+  if (card.type === "diff") return h("div", { class: `lcard diff ${card.undone ? "undone" : ""}` },
+    h("div", { class: "row" }, h("span", { class: "chip warn" }, "튜터가 고침"), h("code", {}, card.file), h("span", { class: "grow" }),
+      card.undone ? h("span", { class: "chip" }, "되돌림") : h("button", { class: "btn small", onclick: (e) => send({ do: "undo", text: card.id })(e) }, "되돌리기")),
+    card.why ? h("div", { class: "small" }, card.why) : null,
+    h("pre", { class: "rbody dl" }, card.diff.split("\n").map((l) => h("div", { class: l.startsWith("+ ") ? "add" : l.startsWith("- ") ? "del" : "" }, l))));
   if (card.type === "map") return h("div", { class: "lcard map" },
     h("div", { class: "mut small" }, `${card.file} 지도 · 누르면 VS Code에서 그 덩어리가 열려요`),
     h("div", { class: "chunks" }, card.chunks.map((c) => h("button", { class: `chunk ${c.focus ? "on" : ""} ${/-/.test(c.label) ? "sub" : ""}`, onclick: () => {

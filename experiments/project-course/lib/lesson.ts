@@ -13,6 +13,8 @@ import { DATA, getRun, read, update } from "./store.ts";
 import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridgeSend } from "./bridge.ts";
 import { writeFile } from "node:fs/promises";
 import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
+import { runAgent, undoEdit, type DiffCard, type ToolCard } from "./agent.ts";
+import { aiMode } from "./ai.ts";
 
 type Action = { label: string; do: string; try?: { method: string; path: string; body?: unknown; as?: string } };
 type Open = { file: string; anchor: string; toAnchor?: string; note?: string };
@@ -29,7 +31,8 @@ type Card =
   | { type: "hint"; level: number; text: string; source: string }
   | { type: "explain"; done?: string }
   | { type: "code"; file: string; from: number; to: number; code: string }
-  | { type: "map"; file: string; chunks: Chunk[] };
+  | { type: "map"; file: string; chunks: Chunk[] }
+  | ToolCard | DiffCard;
 export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[] };
 type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null };
 type Todo = { open?: Open; focus?: Focus; clear?: boolean };
@@ -146,6 +149,15 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   if (input.do === "ask") return ask(runId, n, plan, String(input.text ?? ""));
   if (input.do === "open") { await openLine(runId, String(input.file ?? ""), Number(input.line) || 1); return null; }
   if (input.do === "scaffold") return scaffold(runId, n, plan, course);
+  if (input.do === "undo") {
+    const id = String(input.text ?? "");
+    const rec = await undoEdit(runId, await wsOf(runId, n), id);
+    quietUntil.set(`${runId}:${n}`, Date.now() + 2500);
+    return change(runId, n, (s, push) => {
+      for (const m of s.messages) if (m.card?.type === "diff" && m.card.id === id) m.card.undone = true;
+      push({ role: "note", text: `튜터가 고친 ${rec.file}을(를) 되돌렸어요.` });
+    });
+  }
   if (input.do === "check") return runCheck(runId, n, plan, course, "버튼");
   if (input.do === "hint") return giveHint(runId, n, input.level);
 
@@ -256,6 +268,30 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
   const ws = workspaceOf(run, stageOf(course, n).template);
   const b = plan.beats[s0.beat];
   let answer = "";
+  // 수업 맥락(계획서·지금 순서·최근 대화·마지막 확인): 에이전트와 단순 답 모두 쓴다
+  const recentText = s0.messages.slice(-14).map((m) => m.role === "me" ? `학습자: ${m.text}` : m.text ? `강사: ${m.text}` : m.card?.type === "reply" ? `(요청 결과: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : m.card.status})` : m.card?.type === "check" ? `(확인 결과: ${m.card.result.passed}개 통과, ${m.card.result.failed}개 실패)` : m.card?.type === "tool" ? `(튜터가 ${m.card.label})` : "").filter(Boolean).join("\n");
+  const context = [
+    `[수업 계획서] ${plan.stage}단계 ${plan.title}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}\n고칠 곳(학습자가 직접 쓸 핵심): ${stageOf(course, n).fix.text}`,
+    `[지금 하는 순서] ${s0.beat + 1}/${plan.beats.length}: ${b?.text ?? "끝"}`,
+    s0.lastCheck ? `[마지막 확인] ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}: 기대 ${r.failure?.expected} / 실제 ${r.failure?.actual}`).join("; ") || "모두 통과"}` : "",
+    quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
+    `[최근 대화]\n${recentText}`,
+  ].filter(Boolean).join("\n\n");
+  if (aiMode() !== "off") {
+    try {
+      answer = await runAgent({
+        runId, n, ws, context,
+        show: async (card) => { await change(runId, n, (_s, push) => push({ role: "tutor", card })); },
+        say: async (text) => { await change(runId, n, (_s, push) => push({ role: "tutor", text })); },
+        quiet: (ms) => { quietUntil.set(`${runId}:${n}`, Date.now() + ms); },
+      }, q);
+    } catch (e) {
+      answer = e instanceof AiUnavailable
+        ? `지금은 AI 튜터에게 물어볼 수 없어요 (${e.message}).\n막히면 **힌트 줘**를 눌러 주세요. 준비된 힌트가 나와요.`
+        : `답을 만들지 못했어요: ${(e as Error).message}`;
+    }
+    return change(runId, n, (s, push) => { s.busy = false; push({ role: "tutor", text: answer }); });
+  }
   try {
     const live = bridgeState(runId);
     const files = [...new Set([...stageOf(course, n).fix.files, ...(quote ? [quote.file] : []), ...(live?.file ? [live.file] : [])])].slice(0, 4);
@@ -302,7 +338,9 @@ function watchFor(runId: string, n: number, ws: string) {
     watchers.set(key, { w, ws });
   } catch { /* 폴더가 아직 없음: 다음 화면 요청 때 다시 */ }
 }
+const quietUntil = new Map<string, number>();
 async function onSave(runId: string, n: number) {
+  if ((quietUntil.get(`${runId}:${n}`) ?? 0) > Date.now()) return;
   const s = await read<State | null>(file(runId, n), null);
   notify(runId, "saved");
   if (!s || s.waiting !== "save" || s.busy) return;

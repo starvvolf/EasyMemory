@@ -347,3 +347,18 @@ textarea.explain { width: 100%; min-height: 70px; border: 1px solid var(--line);
 .embed .msg.user .bubble { background: var(--soft); color: var(--ink); border-radius: 6px; }
 .embed .ask { background: var(--panel); border-radius: var(--radius); }
 .embed .composer form { background: var(--input); border: 1px solid var(--input-line); border-radius: 6px; box-shadow: none; }
+/* 튜터가 쓴 도구 한 줄, 고친 코드 */
+.lcard.tool { padding: 4px 10px; font-size: 12.5px; background: transparent; border-style: dashed; }
+.lcard.tool summary { cursor: pointer; list-style: none; display: flex; gap: 6px; align-items: baseline; color: var(--mut); }
+.lcard.tool summary::-webkit-details-marker { display: none; }
+.lcard.tool[open] summary { margin-bottom: 6px; }
+.lcard.tool.bad summary { color: var(--bad); }
+.lcard.tool .ti { width: 16px; text-align: center; flex: none; }
+.lcard.diff { display: grid; gap: 6px; }
+.lcard.diff.undone { opacity: .55; }
+.rbody.dl div { white-space: pre-wrap; }
+.rbody.dl .add { background: rgba(46, 160, 67, .18); }
+.rbody.dl .del { background: rgba(248, 81, 73, .16); text-decoration: line-through; opacity: .8; }
+.lmsg .avatar.ghost { background: transparent; }
+.lchat .lmsg.cont { margin-top: -8px; }
+.embed .lchat .lmsg.cont { margin-top: -10px; }
