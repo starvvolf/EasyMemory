@@ -144,11 +144,12 @@ export async function goalOverview(now = new Date()) {
 /** Every 자료 the items came from, with how many items each has and the goals holding it (for "자료별" and goal picking). */
 export async function listMaterials() {
   const [{ goals, suggestions, ignored }, { items }] = await Promise.all([read(), readAll()]);
-  const byKey = new Map<string, { key: string; kind: SourceKind; title: string; items: number; lastAt: string }>();
+  const byKey = new Map<string, { key: string; kind: SourceKind; title: string; items: number; itemIds: string[]; lastAt: string }>();
   for (const i of items) for (const s of i.sources) {
     const key = sourceKey(s);
-    const m = byKey.get(key) ?? { key, kind: s.kind, title: s.title, items: 0, lastAt: "" };
-    m.items += 1; if (s.at > m.lastAt) m.lastAt = s.at;
+    const m = byKey.get(key) ?? { key, kind: s.kind, title: s.title, items: 0, itemIds: [], lastAt: "" };
+    if (!m.itemIds.includes(i.id)) { m.items += 1; m.itemIds.push(i.id); }
+    if (s.at > m.lastAt) m.lastAt = s.at;
     byKey.set(key, m);
   }
   return [...byKey.values()].sort((a, b) => b.lastAt.localeCompare(a.lastAt)).map((m) => ({ ...m,

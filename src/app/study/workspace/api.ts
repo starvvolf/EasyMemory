@@ -13,7 +13,18 @@ export const errorText = (e: unknown) => e instanceof Error ? e.message : String
 export type KState = "met" | "unknown" | "known";
 export const STATE_LABEL: Record<KState, string> = { met: "만남", unknown: "몰랐음", known: "앎" };
 export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string };
-export type ItemLite = { id: string; title: string; state: KState; graduated: boolean; folderId: string | null; updatedAt: string; lastAt: string; line: string; links: number; weak: number; dueAt?: string };
+export type KKind = "concept" | "procedure" | "fact" | "formula" | "vocab";
+export const KIND_LABEL: Record<KKind, string> = { concept: "개념·용어", procedure: "절차·방법", fact: "사실·수치", formula: "공식", vocab: "어휘" };
+export type ItemLite = { id: string; title: string; state: KState; graduated: boolean; folderId: string | null; updatedAt: string; lastAt: string; line: string; links: number; weak: number; dueAt?: string; kind?: KKind };
+/** 목표 (2026-10-28 "4개 축"): why and until when; its 자료 bring their items. */
+export type SourceKindName = "pdf" | "web" | "code" | "chat" | "manual";
+export type GoalSource = { key: string; kind: SourceKindName; title: string };
+export type GoalView = { id: string; name: string; date: string | null; closed: boolean; sources: GoalSource[]; itemIds: string[]; note: string; daysLeft: number | null;
+  counts: { total: number; unknown: number; known: number; met: number; graduated: number; due: number } };
+export type Material = { key: string; kind: SourceKindName; title: string; items: number; itemIds: string[]; lastAt: string; goals: string[]; ignored: boolean;
+  suggestion: { goalId: string; name: string; reason: string } | null };
+export const SOURCE_LABEL: Record<SourceKindName, string> = { pdf: "PDF", web: "웹 글", code: "코드", chat: "대화", manual: "직접" };
+export const dday = (n: number | null) => n === null ? "" : n === 0 ? "D-day" : n > 0 ? `D-${n}` : `D+${-n}`;
 /** What the review session says when nothing is due: how many are due now and when the next one comes. */
 export type ReviewStatus = { due: number; next: string | null };
 /** "내일 오후 3시", "3일 뒤", "11월 2일" — when the next review comes, in the learner's words. */
@@ -33,7 +44,7 @@ export function whenText(iso: string, now = Date.now()) {
 export type Tree = { folders: Folder[]; items: ItemLite[] };
 export type KEvent = { id: string; at: string; knowledgeId: string; kind: "met" | "asked" | "wrong" | "hint" | "correct" | "note"; detail: string; source?: { kind: string; title: string } };
 export const EVENT_LABEL: Record<KEvent["kind"], string> = { met: "만남", asked: "물어봄", wrong: "틀림", hint: "힌트 받음", correct: "맞힘", note: "메모" };
-export type Knowledge = { id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean; aliases: string[];
+export type Knowledge = { id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean; aliases: string[]; kind?: KKind;
   links: Array<{ to: string; relation: string }>; sources: Array<{ kind: string; title: string; url?: string; page?: number; quote?: string; at: string }>;
   stats: { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] }; createdAt: string; updatedAt: string; lastAt: string;
   review?: { algorithm: "leitner"; box: number; dueAt: string; repetitions: number; lapses: number } };

@@ -51,6 +51,15 @@
 .dejipgi .kw-top h2{font-size:22px}
 .dejipgi .row>.ws-input.kw-search{flex:0 1 240px}
 .dejipgi .kw-make{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.dejipgi .kw-goals{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin:0 0 8px}
+.dejipgi .kw-goal{padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.dejipgi .kw-goal.soon{border-color:var(--accent)}
+.dejipgi .kw-goal-name{display:flex;gap:6px;align-items:center;text-align:left}
+.dejipgi .kw-view{margin:0 0 6px}
+.dejipgi .kw-view .dot{margin-left:4px}
+.dejipgi .kw-kind{font-size:11px;padding:0 6px}
+.dejipgi .kw-mat .kw-fname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.dejipgi .kw-mat-goals{padding:0 6px 6px 8px;gap:4px;flex-wrap:wrap}
 .dejipgi .kw-dupes{margin:0 0 8px;padding:10px 12px}
 .dejipgi .kw-fill{gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
 .dejipgi .kw-grid{display:grid;grid-template-columns:236px minmax(0,1fr) minmax(0,400px);gap:12px;align-items:start}
