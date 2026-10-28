@@ -46,6 +46,8 @@ export type KEvent = { id: string; at: string; knowledgeId: string; kind: "met" 
 export const EVENT_LABEL: Record<KEvent["kind"], string> = { met: "만남", asked: "물어봄", wrong: "틀림", hint: "힌트 받음", correct: "맞힘", note: "메모" };
 export type Knowledge = { id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean; aliases: string[]; kind?: KKind;
   example?: string; explain?: string;
+  explainParts?: { summary: string; why: string; analogy: string; example: string; elsewhere: string };
+  explainSee?: Array<{ title: string; id: string | null; sure: boolean }>;
   links: Array<{ to: string; relation: string; note?: string }>; sources: Array<{ kind: string; title: string; ref?: string; url?: string; page?: number; quote?: string; at: string }>;
   stats: { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] }; createdAt: string; updatedAt: string; lastAt: string;
   review?: { algorithm: "leitner"; box: number; dueAt: string; repetitions: number; lapses: number } };

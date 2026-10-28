@@ -141,8 +141,8 @@ async function handle(request: Request, context: RouteContext) {
         return json({ item: await recordEvent(itemId, e.kind, e.detail ?? "", e.source) });
       }
       if (p[2] === "explain" && m === "POST") {
-        const b = await body(z.object({ question: z.string().max(400).optional() }));
-        try { return json(await explainKnowledge(itemId, b.question ?? "")); }
+        const b = await body(z.object({ question: z.string().max(400).optional(), from: z.enum(["detail", "review"]).optional() }));
+        try { return json(await explainKnowledge(itemId, b.question ?? "", b.from ?? "detail")); }
         catch (error) { return NextResponse.json({ message: `설명을 만들지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
       }
       if (p[2] === "similar" && m === "GET") {

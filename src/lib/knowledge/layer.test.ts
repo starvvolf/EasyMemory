@@ -15,7 +15,8 @@ test("층 나누기와 잘 모르겠어요", async () => {
   const calls: ModelRequest[] = [];
   setFakeModelResponder((r) => {
     calls.push(r);
-    if (r.system.includes("이해가 안 된다고")) return JSON.stringify({ explain: "사물함 번호를 이름에서 계산해 바로 찾아가는 것.\n\n한 줄로: 키로 자리를 계산한다.", prereqs: ["배열", "없는 개념"] });
+    if (r.system.includes("이해가 안 된다고")) return JSON.stringify({ summary: "키로 자리를 계산해 바로 찾는다.", why: "처음부터 훑지 않아도 된다.", analogy: "사물함 번호를 이름에서 계산해 바로 찾아가는 것.",
+      example: "'민수' → 7번 칸", elsewhere: "사용자 ID로 계정 찾기", see: ["배열", "없는 개념"] });
     const lines = r.user.split("\n").filter((l) => /^\d+\. /.test(l));
     const n = (t: string) => lines.findIndex((l) => l.includes(`. ${t} `) || l.includes(`. ${t}|`));
     return JSON.stringify({ items: [{ n: n("해시"), meaning: "키를 해시 함수로 자리 번호로 바꿔 바로 저장하고 찾는 방법.", example: "이 문제에선 이름을 키로 누적 포인트를 O(1)에 찾는다.", confusion: "충돌: 다른 키가 같은 자리로 갈 수 있다" },
@@ -38,12 +39,15 @@ test("층 나누기와 잘 모르겠어요", async () => {
     assert.deepEqual(await runLayer(), { done: 0, changed: [], left: 0, calls: 0 }, "once each");
 
     const e = await explainKnowledge(hash.item.id);
-    assert.match(e.explain, /사물함/);
-    assert.deepEqual(e.prereqs, [{ title: "배열", id: arr.item.id }, { title: "없는 개념", id: null }]);
+    assert.match(e.explain, /비유: 사물함/);
+    assert.deepEqual(e.see, [{ title: "배열", id: arr.item.id, sure: false }, { title: "없는 개념", id: null, sure: false }], "not linked yet: 함께 알아보기");
     const after = await getKnowledge(hash.item.id);
-    assert.match(after.item.explain!, /한 줄로/);
-    assert.equal(after.item.state, "unknown", "잘 모르겠어요 is 물어봄: back to review");
-    assert.equal(after.events[0].kind, "asked");
+    assert.equal(after.item.explainParts!.elsewhere, "사용자 ID로 계정 찾기");
+    assert.equal(after.item.explainSee!.length, 2);
+    assert.equal(after.item.state, "met", "설명을 본 것은 기억 실패가 아니다: 복습 단계 그대로");
+    assert.equal(after.events[0].kind, "note");
+    await explainKnowledge(hash.item.id, "", "review");
+    assert.equal((await getKnowledge(hash.item.id)).item.state, "unknown", "복습 중 답 전에 누른 것은 물어봄");
   } finally {
     setFakeModelResponder(null);
     for (const [key, value] of [["STUDY_FORGE_DATA_DIR", prior.data], ["STUDY_FORGE_MODEL_PROVIDER", prior.provider]] as const) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }

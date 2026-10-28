@@ -245,7 +245,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
               <li key={i.id}>
                 <button className={`kw-item${sel === i.id ? " on" : ""}`} onClick={() => setSel(i.id)} {...dragOf("item", i.id)}>
                   <span className="kw-item-top"><StateChip state={i.state} graduated={i.graduated} /><span className="kw-title"><Inline text={i.title} /></span>
-                    <span className="kw-item-side">{i.weak ? <span className="kw-weak" title="틀림·힌트·물어봄">막힘 {i.weak}</span> : null}{i.links ? <span title="이어진 지식">↔{i.links}</span> : null}</span></span>
+                    <span className="kw-item-side">{i.weak ? <span className="kw-weak" title="틀림·힌트·물어봄을 합친 수">막힘 {i.weak}회</span> : null}{i.links ? <span title="이어진 지식">고리 {i.links}</span> : null}</span></span>
                   {i.line ? <span className="kw-line"><Inline text={i.line} /></span> : <span className="kw-line kw-empty">뜻이 아직 없어요</span>}
                   <span className="kw-meta">{hits && i.folderId ? `${folderPaths(tree.folders).find((f) => f.id === i.folderId)?.path ?? ""} · ` : ""}{i.kind ? `${KIND_LABEL[i.kind]} · ` : ""}{ago(i.lastAt)}</span>
                 </button>
@@ -255,7 +255,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
         </section>
 
         <section className="kw-detail panel" aria-label="지식 자세히">
-          {detail ? <ItemDetail key={detail.item.id} detail={detail} folders={tree.folders} goals={goals} mine={itemGoals[detail.item.id] ?? []} onAct={act} onOpen={setSel} onGone={() => setSel(null)}
+          {detail ? <ItemDetail key={detail.item.id} detail={detail} folders={tree.folders} goals={goals} mine={itemGoals[detail.item.id] ?? []} quizzing={Boolean(run)} onAct={act} onOpen={setSel} onGone={() => setSel(null)}
             onQuiz={(questions) => setRun({ title: `확인 문제 · ${detail.item.title}`, questions })} /> : <p className="muted small">왼쪽에서 지식을 고르면 뜻, 이어진 지식, 내 기록이 여기 보여요.</p>}
         </section>
       </div>
@@ -281,7 +281,7 @@ function FolderTools({ folder, onAct, onGone }: { folder: Folder; onAct: (run: (
   );
 }
 
-function ItemDetail({ detail, folders, goals, mine, onAct, onOpen, onGone, onQuiz }: { detail: Detail; folders: Folder[]; goals: GoalView[]; mine: string[]; onAct: (run: () => Promise<unknown>, after?: () => void) => Promise<void>; onOpen: (id: string) => void; onGone: () => void; onQuiz: (q: Question[]) => void }) {
+function ItemDetail({ detail, folders, goals, mine, quizzing, onAct, onOpen, onGone, onQuiz }: { detail: Detail; folders: Folder[]; goals: GoalView[]; mine: string[]; quizzing: boolean; onAct: (run: () => Promise<unknown>, after?: () => void) => Promise<void>; onOpen: (id: string) => void; onGone: () => void; onQuiz: (q: Question[]) => void }) {
   const { item } = detail;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.title);
@@ -295,11 +295,28 @@ function ItemDetail({ detail, folders, goals, mine, onAct, onOpen, onGone, onQui
   // 잘 모르겠어요 → 풀어 쓴 설명 (AI, saved on the item) and what to know first.
   const [explaining, setExplaining] = useState(false);
   const [explainOpen, setExplainOpen] = useState(false);
-  const [prereqs, setPrereqs] = useState<Array<{ title: string; id: string | null }>>([]);
+  const [more, setMore] = useState(false);
   const [why, setWhy] = useState("");
   const [asking, setAsking] = useState(false);
-  const explain = (question = "") => { setExplaining(true); void onAct(async () => { const r = await call<{ explain: string; prereqs: Array<{ title: string; id: string | null }> }>(`/api/knowledge/item/${item.id}/explain`, { question });
-    setPrereqs(r.prereqs); setExplainOpen(true); setAsking(false); setWhy(""); }).finally(() => setExplaining(false)); };
+  const explain = (question = "") => { setExplaining(true); setExplainOpen(true); setMore(false); void onAct(async () => { await call(`/api/knowledge/item/${item.id}/explain`, { question });
+    setAsking(false); setWhy(""); }).finally(() => setExplaining(false)); };
+  // 쉽게 풀어 보기: 요약과 왜 필요한지를 먼저, 비유·작은 예·다른 데서는 한 번 더 펼쳐서. 예전 글로만 된 설명은 문단 그대로.
+  const ex = item.explainParts;
+  const oldParts = !ex ? (item.explain ?? "").split(/\n\s*\n/).map((t) => t.replace(/^한 줄로:\s*/, "").trim()).filter(Boolean) : [];
+  const extra: Array<[string, string]> = ex ? ([["비유", ex.analogy], ["예", ex.example], ["다른 데서", ex.elsewhere]] as Array<[string, string]>).filter(([, t]) => t) : [];
+  const see = item.explainSee ?? [];
+  // 뜻 박스: 뜻 줄과 "헷갈림:" 줄을 나눠, 헷갈림은 머리말 대신 "주의" 칸으로.
+  const meaningText = item.body.split("\n").filter((l) => !/^\s*헷갈림\s*:/.test(l)).join("\n").trim();
+  const traps = item.body.split("\n").filter((l) => /^\s*헷갈림\s*:/.test(l)).map((l) => l.replace(/^\s*헷갈림\s*:\s*/, "").trim()).filter(Boolean);
+  // 예와 만난 곳을 한 줄로: "코드 문제 「이름별 누적 포인트 조회」에서 이름을 키로 … 문제 보기 →"
+  const srcs = [...new Map(item.sources.map((src) => [src.title, src])).values()];
+  const main = srcs[0];
+  const KIND_NAME: Record<string, string> = { pdf: "PDF", web: "웹 글", code: "코드 문제", chat: "대화", manual: "직접 적은 것" };
+  const where = main && main.kind !== "manual" ? `${KIND_NAME[main.kind] ?? main.kind} 「${main.title}」${main.page ? ` ${main.page}쪽` : ""}` : "";
+  const exampleText = (item.example ?? "").replace(/^(이|그|해당)\s*(문제|글|자료|강의|코드)\s*(에서는|에선|에서)\s*/, "").replace(/^「[^」]{1,80}」\s*(에서는|에선|에서)\s*/, "");
+  const codeId = main?.kind === "code" && main.ref?.startsWith("code:") ? main.ref.slice(5) : null;
+  const openSource = main?.url ? <a className="kw-ex-go" href={main.url} target="_blank" rel="noreferrer">원문 ↗</a>
+    : codeId ? <button className="linkish kw-ex-go" onClick={() => go("code", { id: codeId })}>문제 보기 →</button> : null;
   useEffect(() => {
     return later(() => { if (!linkQuery.trim()) { setLinkHits([]); return; } call<{ hits: ItemLite[] }>(`/api/knowledge/search?q=${encodeURIComponent(linkQuery)}&limit=8`).then((r) => setLinkHits(r.hits.filter((h) => h.id !== item.id))).catch(() => setLinkHits([])); }, linkQuery.trim() ? 160 : 0);
   }, [linkQuery, item.id]);
@@ -327,27 +344,35 @@ function ItemDetail({ detail, folders, goals, mine, onAct, onOpen, onGone, onQui
           <label className="stack small"><span className="eyebrow">예 (만난 곳에서 어떻게 쓰였나)</span>
           <textarea className="ws-input" rows={2} value={example} onChange={(e) => setExample(e.target.value)} placeholder="예: 이 문제에선 이름을 키로 누적 포인트를 O(1)에 찾는다" /></label>
           <div className="row"><button className="btn primary small" onClick={save}>저장</button><button className="btn ghost small" onClick={() => { setEditing(false); setTitle(item.title); setBody(item.body); setExample(item.example ?? ""); }}>취소</button></div></>
-      ) : (
-        <div className="kw-body" onDoubleClick={() => setEditing(true)}>{item.body.trim() ? <Rich text={item.body} /> : <p className="muted small">뜻이 아직 없어요. 편집으로 적거나, 위 “정리할 것”에서 AI로 채울 수 있어요.</p>}
-          <button className="btn ghost small kw-edit" onClick={() => setEditing(true)} aria-label="이름·뜻 편집">편집</button></div>
+      ) : quizzing ? <p className="kw-hide">확인 문제를 푸는 동안 뜻과 예를 가려 뒀어요.</p> : (
+        <>
+          <div className="kw-body" onDoubleClick={() => setEditing(true)}>{meaningText ? <Rich text={meaningText} /> : <p className="muted small">뜻이 아직 없어요. 편집으로 적거나, 위 “정리할 것”에서 AI로 채울 수 있어요.</p>}
+            {traps.map((t, n) => <p key={n} className="kw-trap"><span className="kw-trap-tag">주의</span><span><Inline text={t} /></span></p>)}
+            <button className="btn ghost small kw-edit" onClick={() => setEditing(true)} aria-label="이름·뜻 편집">편집</button></div>
+          {where || item.example ? <p className="kw-ex">
+            <span className={`kw-ex-tag${item.example ? "" : " soft"}`}>{item.example ? "예" : "만난 곳"}</span>
+            <span>{where ? <span className="kw-ex-where">{where}{item.example ? "에서 " : ""}</span> : null}{item.example ? <Inline text={exampleText} /> : null}
+              {openSource}{srcs.length > 1 ? <span className="kw-ex-more"> · 외 {srcs.length - 1}곳</span> : null}</span></p> : null}
+          {item.explain || explaining ? <details className="kw-explain" open={explainOpen} onToggle={(e) => setExplainOpen((e.currentTarget as HTMLDetailsElement).open)}>
+            <summary>쉽게 풀어 보기</summary>
+            <div className="kw-explain-body">{explaining && !item.explain ? <p className="small muted">설명을 만드는 중이에요… (10초쯤)</p> : null}
+              {ex ? <>
+                {ex.summary ? <p className="kw-sum-line"><Inline text={ex.summary} /></p> : null}
+                {ex.why ? <p><Inline text={ex.why} /></p> : null}
+                {extra.length ? (more ? extra.map(([tag, t]) => <p key={tag} className="kw-part"><span className="kw-part-tag">{tag}</span><span><Inline text={t} /></span></p>)
+                  : <button className="linkish small kw-more-btn" onClick={() => setMore(true)}>비유·예 더 보기</button>) : null}
+              </> : oldParts.map((t, n) => <Rich key={n} text={t} />)}
+              {see.length ? <p className="small kw-see">{see.some((q) => q.sure) ? <span className="muted">먼저 알 것 </span> : null}{see.filter((q) => q.sure).map((q) => <button key={q.title} className="chip" onClick={() => onOpen(q.id!)}>{q.title}</button>)}
+                {see.some((q) => !q.sure) ? <span className="muted">함께 알아보기 </span> : null}{see.filter((q) => !q.sure).map((q) => q.id ? <button key={q.title} className="chip soft" onClick={() => onOpen(q.id!)}>{q.title}</button> : <span key={q.title} className="chip soft">{q.title}</span>)}</p> : null}
+              {asking ? <form className="row" onSubmit={(e) => { e.preventDefault(); if (why.trim()) explain(why); }}><input className="ws-input" autoFocus value={why} onChange={(e) => setWhy(e.target.value)} placeholder="어디가 막히나요? (예: 해시 함수가 뭔지 모르겠어요)" maxLength={300} />
+                <button className="btn small" disabled={explaining || !why.trim()}>{explaining ? "만드는 중…" : "물어보기"}</button></form>
+                : item.explain ? <button className="btn ghost small" onClick={() => setAsking(true)}>그래도 모르겠어요</button> : null}</div></details>
+            : <button className="linkish small kw-hard" onClick={() => explain()} title="AI가 쉬운 말·비유·작은 예로 풀어 줘요. 복습 단계는 그대로예요.">설명이 어려워요</button>}
+        </>
       )}
-      {!editing && item.example ? <p className="kw-ex"><span className="kw-ex-tag">예</span><span><Inline text={item.example} /></span></p> : null}
-      {!editing && item.sources.length ? <p className="kw-met">{[...new Map(item.sources.slice().reverse().map((src) => [src.title, src])).values()].slice(0, 3).map((src, n) => {
-        const label = `${SOURCE_LABEL[src.kind as keyof typeof SOURCE_LABEL] ?? src.kind} ${src.title}${src.page ? ` p.${src.page}` : ""}`;
-        const code = src.kind === "code" && src.ref?.startsWith("code:") ? src.ref.slice(5) : null;
-        return <span key={n}>{src.url ? <a href={src.url} target="_blank" rel="noreferrer">{label} ↗</a> : code ? <button className="linkish" onClick={() => go("code", { id: code })}>{label} →</button> : label}</span>;
-      })}{item.sources.length > 3 ? <span>외 {new Set(item.sources.map((x) => x.title)).size - 3}</span> : null}</p> : null}
-      {!editing && (item.explain || explainOpen) ? <details className="kw-explain" open={explainOpen} onToggle={(e) => setExplainOpen((e.currentTarget as HTMLDetailsElement).open)}>
-        <summary>쉽게 풀어 보기</summary>
-        <div className="kw-explain-body">{item.explain ? <Rich text={item.explain} /> : null}
-          {prereqs.length ? <p className="small"><span className="muted">먼저 알면 좋아요 </span>{prereqs.map((q) => q.id ? <button key={q.title} className="chip" onClick={() => onOpen(q.id!)}>{q.title}</button> : <span key={q.title} className="chip">{q.title}</span>)}</p> : null}
-          {asking ? <form className="row" onSubmit={(e) => { e.preventDefault(); if (why.trim()) explain(why); }}><input className="ws-input" autoFocus value={why} onChange={(e) => setWhy(e.target.value)} placeholder="어디가 막히나요? (예: 해시 함수가 뭔지 모르겠어요)" maxLength={300} />
-            <button className="btn small" disabled={explaining || !why.trim()}>{explaining ? "만드는 중…" : "물어보기"}</button></form>
-            : <button className="btn ghost small" onClick={() => setAsking(true)}>그래도 모르겠어요</button>}</div></details> : null}
-      <div className="row kw-d-act">
-        <button className="btn primary small" onClick={() => void quiz()}>확인 문제</button>
-        {!item.explain ? <button className="btn ghost small" disabled={explaining} onClick={() => explain()} title="AI가 쉬운 말과 비유로 풀어 줘요. 누르면 '물어봄'으로 기록돼 복습에 다시 나와요.">{explaining ? "설명 만드는 중…" : "잘 모르겠어요"}</button> : null}
-        <span className="small muted">{item.graduated ? "졸업했어요 · 복습에서 빠져요" : next ? `다음 복습 ${whenText(next.dueAt)} · ${next.box + 1}/6단계` : item.state === "met" ? "아직 물어본 적 없어요" : ""}</span>
+      <div className="kw-d-act">
+        <button className="btn primary kw-quiz" disabled={quizzing} onClick={() => void quiz()}>확인 문제</button>
+        <span className="small muted">{item.graduated ? "졸업했어요 · 복습에서 빠져요" : next ? `다음 복습 ${whenText(next.dueAt)}` : item.state === "met" ? "아직 물어본 적 없어요" : ""}</span>
       </div>
 
       {links.length ? <section><p className="eyebrow">이어진 지식 · {links.length}</p>

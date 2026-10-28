@@ -338,3 +338,23 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .kw-explain>summary::-webkit-details-marker{display:none}
 .dejipgi .kw-explain>summary::before{content:"💡 "}
 .dejipgi .kw-explain-body{display:flex;flex-direction:column;gap:10px;padding:0 0 12px;font-size:14px;line-height:1.65}
+
+/* 상세 배치 다시 (2026-10-28 밤): 뜻 → 예·만난 곳 한 줄 → 설명이 어려워요/쉽게 풀어 보기 → 확인 문제 */
+.dejipgi .kw-ex-tag.soft{color:var(--muted);background:var(--surface-2)}
+.dejipgi .kw-ex-where{color:var(--ink);font-weight:600}
+.dejipgi .kw-ex-go{margin-left:8px;font-size:12.5px;white-space:nowrap}
+.dejipgi .kw-ex-more{color:var(--faint);font-size:12px}
+.dejipgi .kw-hard{align-self:flex-start;font-size:13px;color:var(--accent);margin-top:-6px}
+.dejipgi .kw-hard::before{content:"💡 "}
+.dejipgi .kw-more-btn{align-self:flex-start;color:var(--accent)}
+.dejipgi .kw-see{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.dejipgi .chip.soft{background:transparent;border:1px dashed var(--line-strong)}
+.dejipgi .kw-d-act{display:flex;gap:12px;align-items:center;padding:4px 0 2px}
+.dejipgi .btn.kw-quiz{padding-left:22px;padding-right:22px}
+.dejipgi .kw-hide{margin:0;padding:18px 12px;border:1px dashed var(--line-strong);border-radius:10px;text-align:center;font-size:13.5px;color:var(--muted)}
+.dejipgi .kw-trap{display:flex;gap:8px;align-items:baseline;margin:8px 0 0;padding-top:8px;border-top:1px dashed var(--line-strong);font-size:13.5px;color:var(--muted)}
+.dejipgi .kw-trap-tag{flex:none;font-size:11px;font-weight:700;color:var(--help);background:var(--help-soft);border-radius:6px;padding:1px 6px}
+.dejipgi .kw-sum-line{font-weight:700;font-size:15px;margin:0}
+.dejipgi .kw-part{display:flex;gap:8px;align-items:baseline;margin:0}
+.dejipgi .kw-part-tag{flex:none;font-size:11px;font-weight:700;color:var(--muted);background:var(--surface-2);border-radius:6px;padding:1px 6px;min-width:44px;text-align:center}
+.dejipgi .kw-explain-body p{margin:0}

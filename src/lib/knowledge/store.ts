@@ -34,6 +34,7 @@ export type KLink = { to: string; relation: string; note?: string };
  * 종류 (2026-10-28 결정 "4개 축"): how the item is learned — it decides the review questions and whether two items
  * with the same meaning are the same knowledge (어휘: never; big and large are two words to learn).
  */
+export type ExplainParts = { summary: string; why: string; analogy: string; example: string; elsewhere: string };
 export type KKind = "concept" | "procedure" | "fact" | "formula" | "vocab";
 export const KIND_LABEL: Record<KKind, string> = { concept: "개념·용어", procedure: "절차·방법", fact: "사실·수치", formula: "공식", vocab: "어휘" };
 export type KStats = { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] };
@@ -57,6 +58,10 @@ export type Knowledge = {
    */
   example?: string;
   explain?: string;
+  /** 쉽게 풀어 보기의 칸들 (explain은 이것을 이은 글, 예전 데이터·검색용). */
+  explainParts?: ExplainParts;
+  /** 쉽게 풀어 보기와 함께 보여 줄 지식: sure = 이미 고리로 이어져 있음(먼저 알 것), 아니면 함께 알아보기. */
+  explainSee?: Array<{ title: string; id: string | null; sure: boolean }>;
   layered?: boolean;
   bodyBefore?: string;
 };
@@ -386,7 +391,8 @@ export const enrichKnowledge = (entries: Array<{ id: string; body?: string; alia
   }
   return { changed };
 });
-export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null; kind?: KKind; example?: string; explain?: string }) => change((store) => {
+export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null; kind?: KKind; example?: string; explain?: string;
+  explainParts?: ExplainParts; explainSee?: Knowledge["explainSee"] }) => change((store) => {
   const item = store.items.find((x) => x.id === id);
   if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
   if (patch.title !== undefined) { if (!patch.title.trim()) throw new KnowledgeError(400, "지식 이름이 비어 있어요."); item.title = patch.title.trim().slice(0, 120); }
@@ -401,6 +407,8 @@ export const updateKnowledge = (id: string, patch: { title?: string; body?: stri
   if (patch.kind !== undefined) item.kind = patch.kind;
   if (patch.example !== undefined) item.example = patch.example.trim().slice(0, 600) || undefined;
   if (patch.explain !== undefined) item.explain = patch.explain.trim().slice(0, 3000) || undefined;
+  if (patch.explainParts !== undefined) item.explainParts = patch.explainParts;
+  if (patch.explainSee !== undefined) item.explainSee = patch.explainSee.slice(0, 5);
   item.updatedAt = nowIso();
   return item;
 });
