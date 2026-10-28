@@ -49,7 +49,12 @@ const JUDGE_SYSTEM = `학습자의 지식 저장소에 새 지식이 들어왔�
 - related: 한쪽이 다른 쪽의 정의나 대표적인 방법에 직접 들어가는 사이만(다익스트라는 우선순위 큐를 쓴다, 구간 합은 누적 합으로 구한다). 학습자가 고리로 이어 두면 복습할 때 도움이 될 만큼 가까워야 한다.
 - different: 그 밖의 모든 것. 관계가 약하거나("X의 시간 복잡도를 분석할 수 있다", "X에도 주의할 수 있다", "둘 다 순서를 쓴다"), 같은 과목일 뿐이거나, 반대·대비되는 개념(깊이 우선 탐색 ↔ 너비 우선 탐색, 기준금리 ↔ 시장금리).
 대부분의 후보는 different다. 애매하면 same이 아니라 different를 고른다. 잘못 합치거나 억지로 잇는 것이 놓치는 것보다 나쁘다. 새 지식 하나에 related는 많아야 2개.
-reason: 한국어 한 문장. n과 m은 받은 번호를 그대로 쓴다.`;
+n과 m은 받은 번호를 그대로 쓴다.`;
+// 이유 (2026-10-28 사용자 결정): 평소에는 same만 이유를 쓴다(학습자가 합칠지 고르는 카드에 보임). 나머지 이유는 답만 길게 해
+// 느려지므로 비운다. 고리가 이상하게 붙는 등 문제가 생겨 따져 볼 때만 RECALLER_DEDUPE_REASONS=all로 전부 쓰게 한다.
+const REASON_SAME = "reason: same이면 왜 같은지 한국어 한 문장. same이 아니면 빈 문자열 \"\".";
+const REASON_ALL = "reason: 한국어 한 문장.";
+export const reasonMode = (): "same" | "all" => (process.env.RECALLER_DEDUPE_REASONS?.trim() === "all" ? "all" : "same");
 type Judged = { items: Array<{ n: number; candidates: Array<{ m: number; verdict: Verdict; reason: string }> }> };
 const JUDGE_SCHEMA = S.obj({ items: S.arr(S.obj({ n: S.int, candidates: S.arr(S.obj({ m: S.int, verdict: S.oneOf("same", "narrower", "broader", "related", "different"), reason: S.str })) })) });
 
@@ -67,11 +72,12 @@ const judgeModel = () => ({ model: process.env.RECALLER_DEDUPE_MODEL?.trim() || 
  * A candidate the model left out counts as "different"; past two 관련 per item, the rest are "different" too.
  * Exported for the evaluation (dedupe-eval.ts), which runs the same judgment with other models.
  */
-export async function judgeBatch(work: Array<{ item: JudgeItem; cands: JudgeItem[] }>, options: { model?: string; effort?: string } = judgeModel()) {
+export async function judgeBatch(work: Array<{ item: JudgeItem; cands: JudgeItem[] }>, options: { model?: string; effort?: string; reasons?: "same" | "all" } = judgeModel()) {
   const out = work.map((w) => w.cands.map(() => ({ verdict: "different" as Verdict, reason: "" })));
   if (!work.length) return out;
   const user = work.map((w, n) => `[새 지식 ${n}] ${line(w.item)}\n${w.cands.map((c, m) => `  후보 ${m}. ${line(c)}`).join("\n")}`).join("\n\n");
-  const judged = await askJson<Judged>("knowledge:dedupe", JUDGE_SYSTEM, user, JUDGE_SCHEMA, options);
+  const system = `${JUDGE_SYSTEM}\n${(options.reasons ?? reasonMode()) === "all" ? REASON_ALL : REASON_SAME}`;
+  const judged = await askJson<Judged>("knowledge:dedupe", system, user, JUDGE_SCHEMA, { model: options.model, effort: options.effort });
   for (const j of judged.items ?? []) {
     if (!out[j.n]) continue;
     for (const c of j.candidates ?? []) if (out[j.n][c.m]) {

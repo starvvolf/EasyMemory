@@ -86,3 +86,14 @@ test("다른 지식이에요 closes the pair and it is not asked again", () => w
   assert.deepEqual(await openDuplicates(), []);
   assert.equal((await tree()).items.length, 2);
 }));
+
+test("이유는 평소 같음에만 쓰게 하고, RECALLER_DEDUPE_REASONS=all이면 전부", () => withFakes(async (calls) => {
+  const { judgeBatch } = await import("./dedupe.ts");
+  const work = [{ item: { title: "이진 탐색", aliases: [], body: "", path: "" }, cands: [{ title: "이분 탐색", aliases: [], body: "", path: "" }] }];
+  await judgeBatch(work);
+  assert.match(calls.at(-1)!.system, /same이 아니면 빈 문자열/);
+  process.env.RECALLER_DEDUPE_REASONS = "all";
+  try { await judgeBatch(work); } finally { delete process.env.RECALLER_DEDUPE_REASONS; }
+  assert.doesNotMatch(calls.at(-1)!.system, /same이 아니면/);
+  assert.match(calls.at(-1)!.system, /reason: 한국어 한 문장\./);
+}));
