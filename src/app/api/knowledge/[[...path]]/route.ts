@@ -247,10 +247,14 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "fill" && m === "POST") { const b = await body(z.object({ ids: z.array(id).max(200).optional() })); return json(await fillMissing({ ids: b.ids })); }
     // 지식 잡기 미리보기: the model call only, nothing saved (to compare 생각 강도 on the same article).
     if (p[0] === "extract-preview" && m === "POST") {
-      const b = await body(z.object({ title: z.string().min(1).max(300), text: z.string().min(80).max(200000), effort: z.enum(["minimal", "low", "medium", "high"]).optional(), model: z.string().max(60).optional() }));
+      const b = await body(z.object({ title: z.string().min(1).max(300), text: z.string().max(200000).optional(), url: z.string().url().max(2000).optional(),
+        effort: z.enum(["minimal", "low", "medium", "high"]).optional(), model: z.string().max(60).optional() }));
+      // A real article by its address (the app server reads the page): for measuring on real articles without copying them.
+      const text = b.text ?? (b.url ? pageText(await (await fetch(b.url, { headers: { "user-agent": "Mozilla/5.0 Recaller-measure" } })).text()) : "");
+      if (text.length < 80) return NextResponse.json({ message: "본문을 읽지 못했어요." }, { status: 400 });
       const started = Date.now();
-      const data = await readKnowledge(b, { effort: b.effort, model: b.model });
-      return json({ ms: Date.now() - started, ...data });
+      const data = await readKnowledge({ title: b.title, text }, { effort: b.effort, model: b.model });
+      return json({ ms: Date.now() - started, chars: text.length, ...data });
     }
     if (p[0] === "extract" && m === "POST") {
       const b = await body(z.object({ kind: z.enum(["web", "lesson"]), title: z.string().min(1).max(300), url: z.string().max(2000).optional(), text: z.string().min(1).max(200000), folder: z.string().max(200).optional() }));
@@ -278,3 +282,11 @@ export const GET = handle;
 export const POST = handle;
 export const PATCH = handle;
 export const DELETE = handle;
+
+/** Rough article text from HTML (for measuring only): the <article> or <main> part, without scripts, styles and tags. */
+function pageText(html: string) {
+  const part = html.match(/<article[\s\S]*?<\/article>/i)?.[0] ?? html.match(/<main[\s\S]*?<\/main>/i)?.[0] ?? html;
+  return part.replace(/<(script|style|noscript|svg|figure|nav|footer|header)[\s\S]*?<\/\1>/gi, " ").replace(/<br\s*\/?>|<\/(p|li|h[1-6]|div)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n\n").trim();
+}
