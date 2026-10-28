@@ -18,7 +18,7 @@ import { preparePdf, preparePdfFast, prepFromTexts, prepRouters, type PrepResult
 import { recallerFakeReply, runRecaller } from "./recaller.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
-import { astraFamily, v5Family, defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenMark, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
+import { DEFAULT_GEN_MODELS, astraFamily, v5Family, defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenMark, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { AUTHOR_SYSTEM, authorUser, buildMap, DERIVABLE_SYSTEM, derivableReply, derivableSchema, derivableUser, evidenceInQuestion, formatRules, gateCode, joinUnitMaps, mapItems,
   MAX_PDF_BYTES, MISREAD_SYSTEM, misreadReply, misreadSchema, misreadUser, planReply, planSchema, PLAN_SYSTEM, planToObjectives, planUser, readOutlineReply, readOutlineSchema,
@@ -473,7 +473,9 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     let started = Date.now();
     const live: NonNullable<GenState["liveCalls"]>[number] = { n, step, startedAt: new Date(started).toISOString(), receivedChars: 0 };
     if (astraAbort) state.liveCalls!.push(live);
-    const choice = input.models[step];
+    // A step the start did not name runs on the step's measured default (an API start with no models ran every step on
+    // sol·medium: 정리 35초·자료 전체 정리 99초, 10/29 A 실측), then on the environment's model.
+    const choice = input.models[step] ?? DEFAULT_GEN_MODELS[step];
     const model = choice?.model ?? (process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || "gpt-6-sol");
     const effort = choice?.effort ?? (process.env.STUDY_FORGE_EXECUTOR_EFFORT?.trim() || "medium");
     state.current = { step, ...(sectionId ? { sectionId } : {}), ...(extra.page ? { page: extra.page } : {}), attempt };
