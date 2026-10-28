@@ -56,6 +56,18 @@ test("lab.skimOnly (연구 1): cards for every page and no questions; the first 
   assert.ok(done.recaller!.timing.skimDoneAt);
 }));
 
+test("lab.outline and lab.consolidate (연구 1 3번): each 정리 call sees the material's page titles; one pass names, joins and files every card", () => withData(async () => {
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", lab: { skimOnly: true, outline: true, consolidate: true } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  assert.equal(done.status, "done", done.message);
+  const calls = await readGenCalls(done.id);
+  assert.deepEqual(calls.map((c) => c.step), ["rc-organize", "rc-organize", "rc-merge"]);
+  const organize = JSON.parse(calls[0].user) as { outline?: { pages: string[] } };
+  assert.deepEqual(organize.outline?.pages, ["p.1 Back-Face Detection", "p.2 Depth-Buffer Method"]);
+  const cards = done.sections.flatMap((s) => done.recaller!.units[s.id].cards ?? []);
+  assert.deepEqual(done.recaller!.consolidated!.cards.map((c) => c.id), cards.map((c) => c.id));
+}));
+
 test("deep questions are made only when asked", () => withData(async () => {
   const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" });
   const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });

@@ -8,11 +8,11 @@ export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", un
 /** Model calls, in order. classify and design run per section. */
 /** v3 (lab engine choice) adds read (whole PDF → outline + knowledge map), plan and gate; it does not use classify/design. */
 export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review",
-  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check"] as const;
+  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check", "rc-merge"] as const;
 export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
   read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)",
-  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토" };
+  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토", "rc-merge": "자료 전체 정리" };
 
 export const engines = ["v2", "v3", "astra", "v4", "v5", "alpha", "recaller"] as const;
 export type Engine = (typeof engines)[number];
@@ -97,6 +97,10 @@ export type RecallerLab = {
   imageWidth?: number;
   /** Pages that need the picture: 정리 looks at the page image itself, no separate reading call. */
   inlineRead?: boolean;
+  /** 3번(가): every 정리 call also gets the whole material's page titles and the neighbouring pages' first lines (no extra call). */
+  outline?: boolean;
+  /** 3번(나): after the first pass, one text-only call over all cards names each specifically, marks duplicates and gives a topic. */
+  consolidate?: boolean;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
@@ -245,6 +249,8 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   "rc-deep": { model: "gpt-6-sol", effort: "low" },
   "rc-solve": { model: "gpt-6-sol", effort: "high" },
   "rc-check": { model: "gpt-6-sol", effort: "low" },
+  // 연구 1 3번 (실험): one text-only pass over every card of the material.
+  "rc-merge": { model: "gpt-6-sol", effort: "low" },
 };
 
 /**

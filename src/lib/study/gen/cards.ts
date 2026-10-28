@@ -57,8 +57,8 @@ export const ORGANIZE = [
   "terms는 이 자료 전체에서 쓰는 용어 이름(과 기호)이다. 카드 제목과 용어 이름에는 terms의 표기를 그대로 쓴다: 원문 표기를 유지하고 한국어 이름을 새로 지어 붙이지 않는다. 설명은 한국어로 쓴다. 이미 만든 카드(already)와 같은 지식은 다시 카드로 만들지 않는다.",
 ].join("\n");
 
-export function organizeUser(o: { fileName: string; section: { id: string; title: string; pages: number[] }; source: string; purpose: string; note: string; guide?: string; revision?: string[]; terms?: string[]; already?: string[] }) {
-  return JSON.stringify({ material: o.fileName, section: o.section, purpose: o.purpose, note: o.note || null, ...(o.guide ? { rules: o.guide } : {}),
+export function organizeUser(o: { fileName: string; section: { id: string; title: string; pages: number[] }; source: string; purpose: string; note: string; guide?: string; revision?: string[]; terms?: string[]; already?: string[]; outline?: { pages: string[]; before?: string; after?: string } }) {
+  return JSON.stringify({ material: o.fileName, section: o.section, purpose: o.purpose, note: o.note || null, ...(o.guide ? { rules: o.guide } : {}), ...(o.outline ? { outline: o.outline } : {}),
     ...(o.terms?.length ? { terms: o.terms } : {}), ...(o.already?.length ? { already: o.already } : {}),
     ...(o.revision?.length ? { revision: { problems: o.revision, ask: "앞 응답의 이 문제들을 고쳐 전체를 다시 쓴다." } } : {}), source: o.source });
 }
