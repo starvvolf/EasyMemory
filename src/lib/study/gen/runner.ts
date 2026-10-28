@@ -197,7 +197,7 @@ export const genInputSchema = z.strictObject({
     readParallel: z.number().int().min(1).max(64).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
     outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional(),
     chunk: z.number().int().min(1).max(4).optional(), hedgeMs: z.number().int().min(1000).max(120000).optional(),
-    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional() }).optional(),
+    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -442,7 +442,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     if (astraFailure) throw astraFailure;
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
-    const cap = Math.max(MAX_CALLS_PER_START, state.sections.length * 4 + 10);
+    const cap = input.lab?.callCap ?? Math.max(MAX_CALLS_PER_START, state.sections.length * 4 + 10);
     if (step !== "transcribe" && callsThisStart >= cap) {
       const stop = new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${cap})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
       throw astraAbort ? failAstra(stop) : stop;

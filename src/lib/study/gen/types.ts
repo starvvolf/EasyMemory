@@ -111,6 +111,8 @@ export type RecallerLab = {
   lean?: boolean;
   /** A quote not found in the text layer becomes picture evidence instead of sending the page back. */
   lenientQuotes?: boolean;
+  /** Calls allowed per start (other than page readings); default grows with the sections. */
+  callCap?: number;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */
