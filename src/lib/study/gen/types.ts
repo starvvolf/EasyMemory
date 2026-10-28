@@ -105,6 +105,8 @@ export type RecallerLab = {
   fastPrep?: number;
   /** Pages per 정리 call within a section (default 1). */
   chunk?: number;
+  /** A 정리 reply still out after this many ms gets a second, identical request; the first to finish wins. */
+  hedgeMs?: number;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */

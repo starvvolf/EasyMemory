@@ -647,10 +647,19 @@ export async function runRecaller(ctx: RecallerContext) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         let reply: z.infer<typeof organizeSchema>;
         try {
-          reply = await ctx.ask("rc-organize", section.id, attempt, `${ORGANIZE}${inlineImages.length ? `\n${INLINE_READ}` : ""}${lab.outline ? `\n${OUTLINE_HINT}` : ""}\n\n[정리 기준]\n${g.text}`,
-            organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision,
-              terms: termLines(extractTerms(data.texts)), already: known.map((c) => c.title).slice(0, 40), ...(lab.outline ? { outline: outlineFor(pages) } : {}) }), organizeSchema,
-            { guide: g, maxChars: 6000 * pages.length, ...(inlineImages.length ? { images: inlineImages } : {}), onPartial: (text) => { for (const raw of completeItems(text, "cards")) startCard(raw); } });
+          const system = `${ORGANIZE}${inlineImages.length ? `\n${INLINE_READ}` : ""}${lab.outline ? `\n${OUTLINE_HINT}` : ""}\n\n[정리 기준]\n${g.text}`;
+          const user = organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision,
+            terms: termLines(extractTerms(data.texts)), already: known.map((c) => c.title).slice(0, 40), ...(lab.outline ? { outline: outlineFor(pages) } : {}) });
+          const extra = { guide: g, maxChars: 6000 * pages.length, ...(inlineImages.length ? { images: inlineImages } : {}) };
+          const first = ctx.ask("rc-organize", section.id, attempt, system, user, organizeSchema, { ...extra, onPartial: (text) => { for (const raw of completeItems(text, "cards")) startCard(raw); } });
+          // lab.hedgeMs (실험): a reply still out after this long gets a second, identical request; the first to finish is used.
+          reply = lab.hedgeMs ? await new Promise<z.infer<typeof organizeSchema>>((resolve, reject) => {
+            let settled = false, failures = 0, started = 1;
+            const win = (r: z.infer<typeof organizeSchema>) => { if (!settled) { settled = true; resolve(r); } };
+            const lose = (error: unknown) => { if (++failures >= started && !settled) { settled = true; reject(error); } };
+            first.then(win, lose);
+            setTimeout(() => { if (settled) return; started++; ctx.ask("rc-organize", section.id, attempt, system, user, organizeSchema, extra).then(win, lose); }, lab.hedgeMs);
+          }) : await first;
         } catch (error) {
           if (!(error instanceof RunawayReply)) throw error;
           data.warnings.push({ severity: "warning", code: "rc-runaway", message: `정리 p.${pages.join(",")}: ${error.message}${attempt === 1 ? " 한 번 더 요청해요." : " 이 쪽은 건너뛰어요."}` });
