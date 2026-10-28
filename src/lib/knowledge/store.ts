@@ -50,7 +50,8 @@ export type Knowledge = {
   /** The learner put it in this folder by hand: 주제 정리 never moves it. */
   placedByHand?: boolean;
 };
-export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string; createdAt: string };
+/** `hand`: made by the learner (+ 폴더), kept even when empty; folders made on the way by saving or sorting are not. */
+export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string; createdAt: string; hand?: boolean };
 export type KEventKind = "met" | "asked" | "wrong" | "hint" | "correct" | "note";
 export const EVENT_LABEL: Record<KEventKind, string> = { met: "만남", asked: "물어봄", wrong: "틀림", hint: "힌트 받음", correct: "맞힘", note: "메모" };
 export type KEvent = { id: string; at: string; knowledgeId: string; kind: KEventKind; detail: string; source?: { kind: SourceKind; title: string; ref?: string } };
@@ -209,7 +210,7 @@ function ensurePath(store: Store, pathText: string): string | null {
 export const createFolder = (name: string, parentId: string | null = null) => change((store) => {
   if (!name.trim()) throw new KnowledgeError(400, "폴더 이름을 적어 주세요.");
   if (parentId && !store.folders.some((f) => f.id === parentId)) throw new KnowledgeError(404, "상위 폴더를 찾을 수 없어요.");
-  const folder: Folder = { id: newId("fld"), name: name.trim().slice(0, 60), parentId, order: store.folders.filter((f) => f.parentId === parentId).length, note: "", createdAt: nowIso() };
+  const folder: Folder = { id: newId("fld"), name: name.trim().slice(0, 60), parentId, order: store.folders.filter((f) => f.parentId === parentId).length, note: "", createdAt: nowIso(), hand: true };
   store.folders.push(folder);
   return folder;
 });
@@ -635,12 +636,14 @@ export const sortItems = (entries: Array<{ id: string; topic?: string; kind?: KK
     if (e.kind) item.kind = e.kind;
     item.updatedAt = nowIso();
   }
-  // Folders left empty by the move go, and their parents if those are empty too.
+  // Folders left empty go, and their parents if those are empty too: the ones this move emptied, and any folder made
+  // on the way (not by the learner's + 폴더) that holds nothing — the old file-name and source folders.
   let gone = true;
   while (gone) {
     gone = false;
     for (const f of [...store.folders]) {
-      if (!before.has(f.id) || store.items.some((i) => i.folderId === f.id) || store.folders.some((g) => g.parentId === f.id)) continue;
+      if ((!before.has(f.id) && f.hand) || store.items.some((i) => i.folderId === f.id) || store.folders.some((g) => g.parentId === f.id)) continue;
+      if (!before.has(f.id) && f.note.trim()) continue;
       store.folders = store.folders.filter((g) => g.id !== f.id);
       if (f.parentId) before.add(f.parentId);
       gone = true;

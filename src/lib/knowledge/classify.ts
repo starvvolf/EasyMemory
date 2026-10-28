@@ -89,6 +89,9 @@ export async function runClassify(options: { batches?: number; model?: string; e
         suggested += picks.filter((p) => p.name).length;
       }
     }
+    // Empty folders made on the way (old file-name and source folders) go, even when nothing was sorted this run.
+    const { folders, items } = await readAll();
+    if (folders.some((f) => !f.hand && !items.some((i) => i.folderId === f.id) && !folders.some((g) => g.parentId === f.id))) await sortItems([]);
     const left = pending((await readAll()).items).length;
     return { sorted, suggested, left, calls };
   })();

@@ -472,7 +472,8 @@ function PlaceMaterials({ materials, goals, onAct }: { materials: Material[]; go
   const [each, setEach] = useState<string | null>(null);
   const live = goals.filter((g) => !g.closed);
   const groups = new Map<string, Material[]>();
-  for (const m of materials) { const k = m.suggestion?.name ? `${m.suggestion.goalId}|${m.suggestion.name}` : "|"; groups.set(k, [...(groups.get(k) ?? []), m]); }
+  // "|" = not asked yet (sorting asks a few at a time), "-|" = asked, no goal fits.
+  for (const m of materials) { const k = m.suggestion?.name ? `${m.suggestion.goalId}|${m.suggestion.name}` : m.suggestion ? "-|" : "|"; groups.set(k, [...(groups.get(k) ?? []), m]); }
   const put = (m: Material, goalId: string) => call(`/api/knowledge/goals/${goalId}/source`, { key: m.key, kind: m.kind, title: m.title, on: true });
   const acceptAll = (list: Material[]) => onAct(async () => { for (const m of list) await call("/api/knowledge/materials/accept", { key: m.key, kind: m.kind, title: m.title }); });
   const row = (m: Material) => <li key={m.key} className="row small"><span className="chip">{SOURCE_LABEL[m.kind] ?? m.kind}</span> {m.title} <span className="muted">· 지식 {m.items}</span>
@@ -486,7 +487,8 @@ function PlaceMaterials({ materials, goals, onAct }: { materials: Material[]; go
         const [goalId, name] = k.split("|");
         const target = goals.find((g) => g.id === goalId)?.name ?? name;
         return <li key={k} className="stack">
-          <span className="row">{name ? <button className="btn small" onClick={() => void acceptAll(list)}>“{target}”{goalId ? "에" : " 목표를 만들어"} 넣기 · 자료 {list.length}</button> : <b className="small">추천을 기다리는 자료 {list.length}</b>}
+          <span className="row">{name ? <button className="btn small" onClick={() => void acceptAll(list)}>“{target}”{goalId ? "에" : " 목표를 만들어"} 넣기 · 자료 {list.length}</button>
+            : <b className="small">{goalId === "-" ? `맞는 목표를 못 찾은 자료 ${list.length}` : `추천을 기다리는 자료 ${list.length}`}</b>}
             <span className="small muted">{list.slice(0, 3).map((m) => m.title).join(", ")}{list.length > 3 ? " …" : ""}</span>
             <button className="btn ghost small" onClick={() => setEach(each === k ? null : k)}>{each === k ? "접기" : "하나씩"}</button></span>
           {each === k ? <ul className="kw-links">{list.map(row)}</ul> : null}
