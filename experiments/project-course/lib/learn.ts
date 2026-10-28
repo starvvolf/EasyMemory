@@ -256,18 +256,50 @@ export async function tryRequest(runId: string, input: { method: string; path: s
 }
 
 /* ---------- VS Code로 열기 ---------- */
+/* code 명령 한 번 실행 (Windows는 code.cmd라 셸로). 출력과 종료 코드를 돌려준다. */
+function codeCli(args: string[], timeoutMs = 60000) {
+  return new Promise<{ ok: boolean; out: string; missing?: boolean }>((resolve) => {
+    const quoted = args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(" ");
+    const child = process.platform === "win32"
+      ? spawn(`code ${quoted}`, { shell: true, windowsHide: true })
+      : spawn("code", args);
+    let out = "";
+    child.stdout?.on("data", (c) => { out += c; });
+    child.stderr?.on("data", (c) => { out += c; });
+    const t = setTimeout(() => { child.kill(); resolve({ ok: false, out: "시간 초과" }); }, timeoutMs);
+    child.on("error", () => { clearTimeout(t); resolve({ ok: false, out: "", missing: true }); });
+    child.on("exit", (code) => { clearTimeout(t); resolve({ ok: code === 0, out, missing: process.platform === "win32" && code === 1 && /not recognized|인식되지/.test(out) }); });
+  });
+}
+const BRIDGE_ID = "recaller-local.recaller-bridge";
+const BRIDGE_VSIX = path.join(APP_ROOT, "experiments", "project-course", "vscode-bridge", "recaller-bridge.vsix");
+let bridgeChecked = false;
+/** 연결 확장을 깔아 둔다(없거나 버전이 다르면). 한 번만 확인. */
+async function ensureBridge() {
+  if (bridgeChecked) return { ok: true, installed: false };
+  if (!(await exists(BRIDGE_VSIX))) return { ok: false, installed: false, message: "연결 확장 파일(recaller-bridge.vsix)이 없어요." };
+  const want = JSON.parse(await readFile(path.join(path.dirname(BRIDGE_VSIX), "package.json"), "utf8")).version;
+  const list = await codeCli(["--list-extensions", "--show-versions"]);
+  if (list.missing) return { ok: false, installed: false, missing: true };
+  if (list.out.toLowerCase().includes(`${BRIDGE_ID}@${want}`)) { bridgeChecked = true; return { ok: true, installed: false }; }
+  const inst = await codeCli(["--install-extension", BRIDGE_VSIX, "--force"], 120000);
+  bridgeChecked = inst.ok;
+  return { ok: inst.ok, installed: inst.ok, message: inst.ok ? "" : `연결 확장을 설치하지 못했어요: ${inst.out.slice(0, 200)}` };
+}
+
+/** VS Code로 열기: 연결 확장을 깔고, 작업 폴더와 이번 단계의 첫 파일을 연다. */
 export async function openEditor(runId: string) {
   const run = await getRun(runId);
   const course = await loadCourse(run.courseId);
-  const ws = workspaceOf(run, stageOf(course, run.current).template);
+  const st = stageOf(course, run.current);
+  const ws = workspaceOf(run, st.template);
   if (!(await exists(ws))) throw err(409, "작업 폴더가 아직 없어요.");
-  return new Promise<{ ok: boolean; path: string; message?: string }>((resolve) => {
-    const child = process.platform === "win32"
-      ? spawn(`code "${ws}"`, { shell: true, detached: true, stdio: "ignore", windowsHide: true })
-      : spawn("code", [ws], { detached: true, stdio: "ignore" });
-    child.on("error", () => resolve({ ok: false, path: ws, message: "VS Code 명령(code)을 찾지 못했어요. VS Code에서 [파일 → 폴더 열기]로 이 경로를 열어 주세요." }));
-    child.on("exit", (code) => resolve(code === 0 || code === null ? { ok: true, path: ws } : { ok: false, path: ws, message: "VS Code 명령(code)이 실패했어요. VS Code에서 이 경로를 직접 열어 주세요." }));
-    setTimeout(() => resolve({ ok: true, path: ws }), 4000);
-    child.unref();
-  });
+  const bridge = await ensureBridge();
+  if ((bridge as { missing?: boolean }).missing) return { ok: false, path: ws, message: "VS Code 명령(code)을 찾지 못했어요. VS Code에서 [파일 → 폴더 열기]로 이 경로를 열어 주세요. (VS Code 설치 때 'PATH에 추가'를 켜면 자동으로 열려요)" };
+  const first = path.join(ws, st.fix.files[0] ?? "src/server.ts");
+  const opened = await codeCli([ws, "--goto", `${first}:1`], 20000);
+  return {
+    ok: opened.ok, path: ws, bridgeInstalled: bridge.installed,
+    message: opened.ok ? (bridge.installed ? "VS Code에 Recaller 연결 확장을 깔고 열었어요." : "") : `VS Code를 열지 못했어요: ${opened.out.slice(0, 200)}`,
+  };
 }

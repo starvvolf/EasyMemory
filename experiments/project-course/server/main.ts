@@ -13,7 +13,8 @@ import { aiStatus } from "../lib/ai.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
 import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
-import { act, closeWatchers, lessonView, loadPlan, subscribe } from "../lib/lesson.ts";
+import { act, ask as lessonAsk, closeWatchers, lessonView, loadPlan, notifyLesson, subscribe } from "../lib/lesson.ts";
+import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, setState as bridgeSetState } from "../lib/bridge.ts";
 
 if (process.env.PC_FAKE_AI === "1") installFakeAi();
 
@@ -140,6 +141,16 @@ const routes: [string, RegExp, Handler][] = [
     return v;
   }],
   ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/act$/, async (req, m) => { await act(m[1], Number(m[2]), (await body(req)) as never); return lessonView(m[1], Number(m[2])); }],
+  ["POST", /^\/api\/bridge\/hello$/, async (req) => { const b = await body(req); return bridgeHello(String(b.root ?? "")); }],
+  ["POST", /^\/api\/bridge\/state$/, async (req) => { const b = await body(req) as Record<string, never>; await getRun(String(b.runId)); const { runId, ...state } = b; bridgeSetState(runId, state); return { ok: true }; }],
+  ["POST", /^\/api\/bridge\/ask$/, async (req) => {
+    const b = await body(req);
+    const run = await getRun(String(b.runId));
+    const plan = await loadPlan(run.courseId, run.current);
+    if (!plan) throw Object.assign(new Error("이 단계에는 튜터 수업이 없어요."), { status: 409 });
+    void lessonAsk(run.id, run.current, plan, String(b.question ?? ""), { file: String(b.file), from: Number(b.from), to: Number(b.to), code: String(b.code ?? "").slice(0, 4000) }).catch((e) => console.error(e));
+    return { ok: true };
+  }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => openEditor(m[1])],
 ];
 
@@ -149,6 +160,12 @@ const server = createServer(async (req, res) => {
   try {
     const ev = /^\/api\/runs\/(\w+)\/events$/.exec(url.pathname);
     if (ev) { subscribe(ev[1], res); return; }
+    if (url.pathname === "/api/bridge/events") {
+      const id = url.searchParams.get("run") ?? "";
+      await getRun(id);
+      bridgeEvents(id, res);
+      return;
+    }
     if (url.pathname.startsWith("/api/")) {
       for (const [method, re, fn] of routes) {
         const m = re.exec(url.pathname);
@@ -169,6 +186,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
+onBridgeChange((id) => notifyLesson(id));
 const shutdown = () => { killAll(); closeWatchers(); process.exit(0); };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

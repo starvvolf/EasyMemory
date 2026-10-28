@@ -224,3 +224,6 @@ textarea.explain { width: 100%; min-height: 70px; border: 1px solid var(--line);
   .lside { position: static; }
   .lteach, .lmore { display: none; }
 }
+.seeing { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.seeing code { font-size: 12px; }
+.lmsg.me .lcard.code { background: var(--panel); color: var(--ink); }

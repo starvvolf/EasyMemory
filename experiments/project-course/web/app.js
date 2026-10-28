@@ -456,7 +456,12 @@ function inline(text, ws) {
 function fileLink(ws, file, line) {
   const abs = `${ws.replace(/\\/g, "/").replace(/\/$/, "")}/${file}`;
   const href = `vscode://file/${abs.replace(/^\//, "")}:${line}`;
-  return h("a", { class: "flink", href, title: "VS Code에서 이 줄 열기" }, h("span", { class: "fi" }, "⌗"), `${file} ${line}번째 줄`);
+  return h("a", { class: "flink", href, title: "VS Code에서 이 줄 열기", onclick: (e) => {
+    // 연결 확장이 있으면 그쪽으로 연다(브라우저의 "VS Code 열기" 확인 창이 안 뜸)
+    if (!lessonCtx?.lesson?.bridge?.connected) return;
+    e.preventDefault();
+    api("POST", `/api/runs/${lessonCtx.run.id}/lesson/${lessonCtx.run.current}/act`, { do: "open", file, line }).catch(() => { location.href = href; });
+  } }, h("span", { class: "fi" }, "⌗"), `${file} ${line}번째 줄`);
 }
 
 function flashSaved() {
@@ -512,11 +517,18 @@ function drawLesson() {
       h("div", { class: "mut small" }, "작업 폴더"),
       h("div", { class: "path" }, ws),
       h("div", { class: "row" },
-        h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { const r = await api("POST", `/api/runs/${run.id}/editor`); toast(r.ok ? "VS Code를 열었어요. 이 창 옆에 나란히 두면 편해요." : r.message, 6000); }) }, "VS Code로 열기"),
+        h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { const r = await api("POST", `/api/runs/${run.id}/editor`); toast(r.ok ? (r.message || "VS Code를 열었어요. 이 창 옆에 나란히 두면 편해요.") : r.message, 7000); }) }, "VS Code로 열기"),
         dev?.running
           ? h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/stop`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 끄기")
           : h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/start`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 켜기")),
-      h("div", { class: "small" }, dev?.running ? h("span", { class: "chip ok" }, "서버 켜짐 :4101") : h("span", { class: "chip" }, "서버 꺼짐"))),
+      h("div", { class: "row small" }, dev?.running ? h("span", { class: "chip ok" }, "서버 켜짐 :4101") : h("span", { class: "chip" }, "서버 꺼짐"),
+        lesson.bridge?.connected ? h("span", { class: "chip ok" }, "VS Code 연결됨") : h("span", { class: "chip", title: "[VS Code로 열기]를 누르면 연결 확장을 깔고 열어요" }, "VS Code 연결 안 됨")),
+      lesson.bridge?.connected ? h("div", { class: "seeing small" }, lesson.bridge.file
+        ? [h("span", { class: "mut" }, "튜터가 보는 곳 "), h("code", {}, `${lesson.bridge.file}:${lesson.bridge.line}`),
+           lesson.bridge.selection ? h("span", { class: "mut" }, ` · ${lesson.bridge.selection.from}~${lesson.bridge.selection.to}줄 선택`) : null,
+           lesson.bridge.dirty ? h("span", { class: "chip warn" }, "저장 안 함") : null,
+           lesson.bridge.errors ? h("span", { class: "chip bad" }, `빨간 줄 ${lesson.bridge.errors}`) : null]
+        : h("span", { class: "mut" }, "작업 폴더 밖 파일을 보고 있어요")) : null),
     h("div", { class: "lmore" },
       h("a", { href: `#/run/${run.id}/cards` }, "단계 카드 화면으로"),
       h("a", { href: `#/run/${run.id}/summary` }, "결과와 기록 후보")));
@@ -542,6 +554,7 @@ function lessonCard(card, run, lesson, send, ws) {
       Object.keys(card.headers || {}).length ? h("pre", { class: "rbody mut" }, Object.entries(card.headers).map(([k, v]) => `${k}: ${v}`).join("\n")) : null,
       card.body ? h("pre", { class: "rbody" }, card.body) : null);
   }
+  if (card.type === "code") return h("div", { class: "lcard code" }, h("div", { class: "mut small" }, fileLink(ws, card.file, card.from), card.to > card.from ? ` ~ ${card.to}번째 줄` : ""), h("pre", { class: "rbody" }, card.code));
   if (card.type === "check") return h("div", { class: "lcard" }, h("div", { class: "mut small" }, "확인 결과"), resultsList(card.result, { group: true }));
   if (card.type === "hint") return h("div", { class: "lcard hint" }, h("div", { class: "mut small" }, `힌트 ${card.level}단계 · ${card.source.startsWith("ai") ? "AI 튜터" : card.source === "solution" ? "준비된 정답 줄" : "준비된 힌트"}`), card.level === 3 ? h("pre", { class: "sol" }, card.text) : rich(card.text, ws));
   if (card.type === "explain") {

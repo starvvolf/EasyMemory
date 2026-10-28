@@ -10,9 +10,13 @@ import { locate, type RunResult } from "./checker.ts";
 import { check, devStatus, explain, hint, predict, startDev, tryRequest, workspaceOf } from "./learn.ts";
 import { AiUnavailable, aiText } from "./ai.ts";
 import { DATA, getRun, read, update } from "./store.ts";
+import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridgeSend } from "./bridge.ts";
+import { writeFile } from "node:fs/promises";
 
 type Action = { label: string; do: string; try?: { method: string; path: string; body?: unknown; as?: string } };
-type Beat = { id: string; kind: "say" | "predict" | "fix" | "explain"; text: string; actions?: Action[]; after?: Action[]; predict?: string };
+type Open = { file: string; anchor: string; toAnchor?: string; note?: string };
+type Scaffold = { file: string; from: string; to?: string; text: string; note?: string };
+type Beat = { id: string; kind: "say" | "predict" | "fix" | "explain"; text: string; actions?: Action[]; after?: Action[]; predict?: string; open?: Open; scaffold?: Scaffold };
 export type Plan = { stage: number; title: string; teach: string[]; tutorNotes: string; beats: Beat[] };
 
 type Card =
@@ -20,9 +24,10 @@ type Card =
   | { type: "reply"; request: string; status: number; timedOut: boolean; error?: string; headers: Record<string, string>; body: string }
   | { type: "check"; result: RunResult }
   | { type: "hint"; level: number; text: string; source: string }
-  | { type: "explain"; done?: string };
+  | { type: "explain"; done?: string }
+  | { type: "code"; file: string; from: number; to: number; code: string };
 export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[] };
-type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean };
+type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Open[]; scaffolded?: boolean };
 
 const now = () => new Date().toISOString();
 const file = (runId: string, n: number) => path.join(DATA, "lessons", `${runId}-${n}.json`);
@@ -42,6 +47,7 @@ export function subscribe(runId: string, res: ServerResponse) {
   const ping = setInterval(() => res.write(": ping\n\n"), 20000);
   res.on("close", () => { clearInterval(ping); set.delete(res); });
 }
+export function notifyLesson(runId: string) { notify(runId, "lesson"); }
 function notify(runId: string, what: string) {
   for (const res of subs.get(runId) ?? []) res.write(`data: ${what}\n\n`);
 }
@@ -53,8 +59,11 @@ async function change(runId: string, n: number, fn: (s: State, push: (m: Omit<LM
   const s = await read<State>(file(runId, n), { beat: -1, waiting: "action", messages: [], hints: 0 });
   const push = (m: Omit<LMsg, "id" | "at">) => s.messages.push({ id: (s.messages.at(-1)?.id ?? 0) + 1, at: now(), ...m });
   await fn(s, push);
+  const todo = s.todo ?? [];
+  s.todo = [];
   await update<State>(file(runId, n), s, () => { out = s; return s; });
   notify(runId, "lesson");
+  for (const o of todo) await openInEditor(runId, n, o).catch(() => {});
   return out;
 }
 
@@ -62,6 +71,7 @@ function enter(plan: Plan, s: State, idx: number, push: (m: Omit<LMsg, "id" | "a
   s.beat = idx;
   const b = plan.beats[idx];
   if (!b) { s.waiting = "done"; return; }
+  if (b.open) (s.todo ??= []).push(b.open);
   if (b.kind === "say") {
     push({ role: "tutor", text: b.text, actions: b.actions ?? [{ label: "다음", do: "next" }] });
     s.waiting = "action";
@@ -70,7 +80,7 @@ function enter(plan: Plan, s: State, idx: number, push: (m: Omit<LMsg, "id" | "a
     push({ role: "tutor", text: b.text, card: { type: "choice", pid: p.id, options: p.options } });
     s.waiting = "choice";
   } else if (b.kind === "fix") {
-    push({ role: "tutor", text: b.text, actions: [{ label: "지금 확인해 줘", do: "check" }, { label: "힌트 줘", do: "hint" }] });
+    push({ role: "tutor", text: b.text, actions: [...(b.scaffold ? [{ label: "빈칸으로 도와줘", do: "scaffold" }] : []), { label: "지금 확인해 줘", do: "check" }, { label: "힌트 줘", do: "hint" }] });
     s.waiting = "save";
   } else if (b.kind === "explain") {
     push({ role: "tutor", text: b.text, card: { type: "explain" } });
@@ -95,17 +105,21 @@ export async function lessonView(runId: string, n: number) {
     lines.set(hit[0], `[[${hit[1]}:${loc?.line ?? 1}]]`);
   }
   const messages = s.messages.map((m) => ({ ...m, text: m.text?.replace(/\[\[([^\]#]+)#([^\]]+)\]\]/g, (all) => lines.get(all) ?? all) }));
-  return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId) };
+  const bs = bridgeState(runId);
+  const bridge = bridgeConnected(runId) ? { connected: true, file: bs?.file ?? null, line: bs?.line ?? null, dirty: !!bs?.dirty, errors: bs?.errors?.length ?? 0, selection: bs?.selection ? { from: bs.selection.from, to: bs.selection.to } : null } : { connected: false };
+  return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge };
 }
 
 /* ---------- 학습자가 한 것 ---------- */
-export async function act(runId: string, n: number, input: { do: string; choice?: number; text?: string; level?: number }) {
+export async function act(runId: string, n: number, input: { do: string; choice?: number; text?: string; level?: number; file?: string; line?: number }) {
   const run = await getRun(runId);
   const course = await loadCourse(run.courseId);
   const plan = await loadPlan(course.id, n);
   if (!plan) throw err(404, "이 단계의 수업 계획서가 없어요.");
 
   if (input.do === "ask") return ask(runId, n, plan, String(input.text ?? ""));
+  if (input.do === "open") { await openLine(runId, String(input.file ?? ""), Number(input.line) || 1); return null; }
+  if (input.do === "scaffold") return scaffold(runId, n, plan, course);
   if (input.do === "check") return runCheck(runId, n, plan, course, "버튼");
   if (input.do === "hint") return giveHint(runId, n, input.level);
 
@@ -153,6 +167,13 @@ const pick = (h: Record<string, string>) => Object.fromEntries(Object.entries(h)
 
 /* ---------- 확인(검사) ---------- */
 async function runCheck(runId: string, n: number, plan: Plan, course: Awaited<ReturnType<typeof loadCourse>>, why: string) {
+  // 빈칸 뼈대를 넣었다면, 아직 남은 빈칸 번호(①②…)를 찾아 둔다.
+  const wsDir = await wsOf(runId, n);
+  const left = new Set<string>();
+  for (const f of stageOf(course, n).fix.files) {
+    const t = await readFile(path.join(wsDir, f), "utf8").catch(() => "");
+    for (const m of t.matchAll(/\/\* ([①②③④⑤⑥⑦⑧⑨]) /g)) left.add(m[1]);
+  }
   await change(runId, n, (s, push) => { s.busy = true; if (why === "저장") push({ role: "note", text: "저장한 걸 봤어요. 바로 확인해 볼게요…" }); else push({ role: "me", text: "지금 확인해 줘" }); });
   let result: Awaited<ReturnType<typeof check>> | null = null;
   let failed = "";
@@ -170,7 +191,7 @@ async function runCheck(runId: string, n: number, plan: Plan, course: Awaited<Re
       const first = bad[0];
       const where = first?.where ? ` [[${first.where.file}:${first.where.line ?? 1}]]` : "";
       push({ role: "tutor", text: !result.started
-        ? "서버가 아예 켜지지 않았어요. 고치다가 문법이 깨진 것 같아요. 위 카드의 오류 위치를 열어 보세요."
+        ? (left.size ? `아직 빈칸 ${[...left].join("")}이(가) 남아 있어서 서버가 켜지지 않아요. 빈칸을 모두 채우고 저장해 주세요. 하나씩 막히면 그 줄을 드래그해서 물어보세요.` : "서버가 아예 켜지지 않았어요. 고치다가 문법이 깨진 것 같아요. 위 카드의 오류 위치를 열어 보세요.")
         : `아직 ${bad.length}개가 기대와 달라요. 먼저 "${first.title}"을 보세요. 기대는 **${first.failure?.expected}** 인데 실제는 **${first.failure?.actual}** 이에요.${where}\n\n다시 고치고 저장하면 또 확인할게요. 막히면 물어보거나 힌트를 눌러 주세요.`,
         actions: [{ label: "힌트 줘", do: "hint" }] });
     }
@@ -197,22 +218,33 @@ const TUTOR = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친
 - 맞았다/틀렸다를 단정하지 않는다. 그건 확인(검사)이 정한다.
 - 답한 뒤 한 문장으로 지금 하던 것으로 자연스럽게 돌아오게 한다.`;
 
-async function ask(runId: string, n: number, plan: Plan, text: string) {
-  const q = text.trim().slice(0, 1000);
+export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }) {
+  const q = text.trim().slice(0, 1000) || (quote ? "이 코드가 뭐 하는 거예요?" : "");
   if (!q) throw err(400, "질문을 적어 주세요.");
-  const s0 = await change(runId, n, (s, push) => { push({ role: "me", text: q }); s.busy = true; });
+  const s0 = await change(runId, n, (s, push) => {
+    push({ role: "me", text: q, card: quote ? { type: "code", ...quote } : undefined });
+    s.busy = true;
+  });
   const run = await getRun(runId);
   const course = await loadCourse(run.courseId);
   const ws = workspaceOf(run, stageOf(course, n).template);
   const b = plan.beats[s0.beat];
   let answer = "";
   try {
-    const code = await Promise.all(stageOf(course, n).fix.files.map(async (f) => `[학습자 파일 ${f}]\n${(await readFile(path.join(ws, f), "utf8").catch(() => "(없음)")).split(/\r?\n/).map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}`));
+    const live = bridgeState(runId);
+    const files = [...new Set([...stageOf(course, n).fix.files, ...(quote ? [quote.file] : []), ...(live?.file ? [live.file] : [])])].slice(0, 4);
+    const code = await Promise.all(files.map(async (f) => {
+      const unsaved = live?.file === f && live.dirty && live.text ? live.text : null;
+      const text = unsaved ?? (await readFile(path.join(ws, f), "utf8").catch(() => "(없음)"));
+      return `[학습자 파일 ${f}${unsaved ? " — VS Code에서 고치는 중, 아직 저장 안 함" : ""}]\n${text.split(/\r?\n/).map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}`;
+    }));
     const recent = s0.messages.slice(-14).map((m) => m.role === "me" ? `학습자: ${m.text}` : m.text ? `강사: ${m.text}` : m.card?.type === "reply" ? `(요청 결과: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : m.card.status})` : m.card?.type === "check" ? `(확인 결과: ${m.card.result.passed}개 통과, ${m.card.result.failed}개 실패)` : "").filter(Boolean).join("\n");
     const user = [
       `[수업 계획서] ${plan.stage}단계 ${plan.title}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}`,
       `[지금 하는 순서] ${s0.beat + 1}/${plan.beats.length}: ${b?.text ?? "끝"}`,
       ...code,
+      bridgeContext(runId),
+      quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
       s0.lastCheck ? `[마지막 확인] ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}: 기대 ${r.failure?.expected} / 실제 ${r.failure?.actual}`).join("; ") || "모두 통과"}` : "",
       `[최근 대화]\n${recent}`,
       `[학습자 질문] ${q}`,
@@ -254,3 +286,52 @@ async function onSave(runId: string, n: number) {
   if (plan) await runCheck(runId, n, plan, course, "저장");
 }
 export function closeWatchers() { for (const { w } of watchers.values()) w.close(); watchers.clear(); }
+
+/* ---------- VS Code 쪽으로 ---------- */
+async function wsOf(runId: string, n: number) {
+  const run = await getRun(runId);
+  const course = await loadCourse(run.courseId);
+  return workspaceOf(run, stageOf(course, n).template);
+}
+async function openInEditor(runId: string, n: number, o: Open) {
+  if (!bridgeConnected(runId)) return false;
+  const ws = await wsOf(runId, n);
+  const a = await locate(ws, { file: o.file, anchor: o.anchor });
+  const b = o.toAnchor ? await locate(ws, { file: o.file, anchor: o.toAnchor }) : null;
+  return bridgeSend(runId, { type: "open", file: o.file, line: a?.line ?? 1, toLine: b?.line ?? undefined, note: o.note });
+}
+/** 화면의 파일 줄 링크: 확장이 있으면 그쪽으로 연다(브라우저의 "VS Code 열기" 확인 창 없이). */
+export async function openLine(runId: string, file: string, line: number) {
+  if (!/^[\w./-]+$/.test(file) || file.includes("..")) throw err(400, "파일 경로가 이상해요.");
+  if (!bridgeSend(runId, { type: "open", file, line })) throw err(409, "VS Code가 연결돼 있지 않아요.");
+}
+/** 빈칸 뼈대: 계획서에 준비된 것만 넣는다. 확장이 있으면 편집기에서(Ctrl+Z 가능), 없으면 파일에 직접 쓴다. */
+async function scaffold(runId: string, n: number, plan: Plan, course: Awaited<ReturnType<typeof loadCourse>>) {
+  const s = await read<State>(file(runId, n), { beat: 0, waiting: "action", messages: [], hints: 0 });
+  const b = plan.beats[s.beat];
+  if (s.waiting !== "save" || !b?.scaffold) throw err(409, "지금은 빈칸을 넣을 때가 아니에요.");
+  const sc = b.scaffold;
+  const ws = await wsOf(runId, n);
+  let how = "";
+  if (bridgeSend(runId, { type: "blank", file: sc.file, from: sc.from, to: sc.to, text: sc.text, note: sc.note })) how = "VS Code에 빈칸을 넣었어요. 마음에 안 들면 VS Code에서 Ctrl+Z로 되돌릴 수 있어요.";
+  else {
+    const abs = path.join(ws, sc.file);
+    const raw = await readFile(abs, "utf8");
+    const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+    const lines = raw.split(/\r?\n/);
+    const a = lines.findIndex((l) => l.includes(sc.from));
+    const z = sc.to ? lines.findIndex((l, i) => i >= a && l.includes(sc.to!)) : a;
+    if (a < 0 || z < 0) throw err(409, "빈칸을 넣을 자리를 찾지 못했어요. 이미 고친 것 같아요.");
+    const indent = lines[a].match(/^\s*/)![0];
+    lines.splice(a, z - a + 1, ...sc.text.split("\n").map((l) => (l ? indent + l : l)));
+    await writeFile(abs, lines.join(eol));
+    how = "파일에 빈칸을 넣었어요. VS Code에서 그 파일을 열면 보여요.";
+  }
+  void course;
+  return change(runId, n, (st, push) => {
+    st.scaffolded = true;
+    push({ role: "me", text: "빈칸으로 도와줘" });
+    push({ role: "tutor", text: `${how}\n\n빈칸마다 번호가 붙어 있어요. 하나씩 채우고 저장하면 제가 확인할게요. 빈칸을 다 채우기 전에는 서버가 켜지지 않을 수 있어요(아직 문장이 덜 끝난 상태라서요).`,
+      actions: [{ label: "지금 확인해 줘", do: "check" }, { label: "힌트 줘", do: "hint" }] });
+  });
+}
