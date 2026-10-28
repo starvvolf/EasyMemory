@@ -1,5 +1,7 @@
 // One door to the model for the new study tools (지식, 코드, 칼럼): the same signed-in ChatGPT account the question
 // window uses (src/lib/ai/model.ts), with structured output when a shape is given.
+import { appendFile, mkdir } from "node:fs/promises";
+import path from "node:path";
 import { callModel, type ModelCaller } from "../ai/model.ts";
 
 export const LOCAL_CALLER: ModelCaller = { uid: "local-experiment" };
@@ -21,14 +23,27 @@ const clip = (text: string, n: number) => text.length > n ? `${text.slice(0, n)}
 
 type AskOptions = { heavy?: boolean; caller?: ModelCaller; /** this call only: a model and effort other than the assist settings */ model?: string; effort?: string };
 const settingsFor = (options: AskOptions) => { const s = assistSettings(options.heavy); return { model: options.model || s.model, effort: options.effort || s.effort }; };
+/** 걸린 시간 기록 (2026-10-29, 시연 시간 재기): one line per call in <data>/assist-log.jsonl — what for, which model, how long. */
+async function timed<T>(purpose: string, model: string, effort: string, inChars: number, run: () => Promise<T>, outChars: (r: T) => number): Promise<T> {
+  const started = Date.now();
+  let ok = false, out = 0;
+  try { const r = await run(); ok = true; out = outChars(r); return r; }
+  finally {
+    const line = { at: new Date(started).toISOString(), purpose, model, effort, ms: Date.now() - started, ok, inChars, outChars: out };
+    const file = path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "assist-log.jsonl");
+    void mkdir(path.dirname(file), { recursive: true }).then(() => appendFile(file, JSON.stringify(line) + "\n", "utf8")).catch(() => undefined);
+  }
+}
 export async function askText(purpose: string, system: string, user: string, options: AskOptions = {}) {
   const { model, effort } = settingsFor(options);
-  const reply = await callModel({ purpose, system: clip(system, 12000), user: clip(user, 60000), model, effort, caller: options.caller ?? LOCAL_CALLER });
+  const reply = await timed(purpose, model, effort, system.length + user.length,
+    () => callModel({ purpose, system: clip(system, 12000), user: clip(user, 60000), model, effort, caller: options.caller ?? LOCAL_CALLER }), (r) => r.text.length);
   return reply.text.trim();
 }
 export async function askJson<T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, options: AskOptions = {}): Promise<T> {
   const { model, effort } = settingsFor(options);
-  const reply = await callModel({ purpose, system: clip(`${system}\n출력은 JSON으로만 한다.`, 12000), user: clip(user, 60000), json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`,
-    model, effort, caller: options.caller ?? LOCAL_CALLER });
+  const reply = await timed(purpose, model, effort, system.length + user.length,
+    () => callModel({ purpose, system: clip(`${system}\n출력은 JSON으로만 한다.`, 12000), user: clip(user, 60000), json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`,
+      model, effort, caller: options.caller ?? LOCAL_CALLER }), (r) => JSON.stringify(r.data ?? "").length);
   return reply.data as T;
 }
