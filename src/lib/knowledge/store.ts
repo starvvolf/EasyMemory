@@ -28,7 +28,8 @@ export type KState = "met" | "unknown" | "known";
 export const STATE_LABEL: Record<KState, string> = { met: "만남", unknown: "몰랐음", known: "앎" };
 export type SourceKind = "pdf" | "web" | "code" | "chat" | "manual";
 export type KSource = { kind: SourceKind; title: string; ref?: string; url?: string; page?: number; quote?: string; at: string };
-export type KLink = { to: string; relation: string };
+/** `note`: a short 연결 문장 for the learner ("누적 합으로 구간 합을 한 번에 구한다"), from the link check. */
+export type KLink = { to: string; relation: string; note?: string };
 /**
  * 종류 (2026-10-28 결정 "4개 축"): how the item is learned — it decides the review questions and whether two items
  * with the same meaning are the same knowledge (어휘: never; big and large are two words to learn).
@@ -399,13 +400,14 @@ export async function mergeKnowledge(keepId: string, dropId: string) {
   await serial(async () => rewriteEvents((await readEvents()).map((e) => e.knowledgeId === dropId ? { ...e, knowledgeId: keepId } : e)));
   return item;
 }
-export const linkKnowledge = (fromId: string, toId: string, relation: string) => change((store) => {
+export const linkKnowledge = (fromId: string, toId: string, relation: string, note?: string) => change((store) => {
   const from = store.items.find((x) => x.id === fromId), to = store.items.find((x) => x.id === toId);
   if (!from || !to) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
   if (fromId === toId) throw new KnowledgeError(400, "자기 자신과는 이을 수 없어요.");
   const existing = from.links.find((l) => l.to === toId);
-  if (existing) existing.relation = relation.trim().slice(0, 60) || existing.relation;
-  else from.links.push({ to: toId, relation: relation.trim().slice(0, 60) || "이어짐" });
+  const text = note?.trim().slice(0, 120);
+  if (existing) { existing.relation = relation.trim().slice(0, 60) || existing.relation; if (text) existing.note = text; }
+  else from.links.push({ to: toId, relation: relation.trim().slice(0, 60) || "이어짐", ...(text ? { note: text } : {}) });
   from.updatedAt = nowIso();
   return from;
 });
@@ -503,7 +505,7 @@ export async function getKnowledge(id: string) {
   if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
   const byId = new Map(store.items.map((x) => [x.id, x]));
   const links = item.links.flatMap((l) => byId.has(l.to) ? [{ ...l, item: lite(byId.get(l.to)!) }] : []);
-  const backlinks = store.items.flatMap((x) => x.links.filter((l) => l.to === id).map((l) => ({ relation: l.relation, item: lite(x) })));
+  const backlinks = store.items.flatMap((x) => x.links.filter((l) => l.to === id).map((l) => ({ relation: l.relation, ...(l.note ? { note: l.note } : {}), item: lite(x) })));
   const events = (await readEvents()).filter((e) => e.knowledgeId === id).slice(-40).reverse();
   return { item, path: pathOf(store, item.folderId), links, backlinks, events };
 }

@@ -7,7 +7,7 @@ import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question }
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
 import { similarKnowledge } from "@/lib/knowledge/embed";
 import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
-import { openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
+import { nearOf, rejudgeLinks, openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
 import { scheduleAfterSave } from "@/lib/knowledge/after-save";
 import { knowledgeReport } from "@/lib/knowledge/report";
 import { runClassify } from "@/lib/knowledge/classify";
@@ -61,6 +61,11 @@ async function handle(request: Request, context: RouteContext) {
     if (!p.length && m === "GET") return json(await tree());
 
     // 목표 (2026-10-28 "4개 축"): 수업·시험, 코테 준비 … — 자료를 넣으면 그 자료의 지식이 따라온다.
+    // 고리 다시 판정: links the check made are judged again with the current kinds (포함·씀·먼저·가까움). One model call per 25 items.
+    if (p[0] === "relink" && m === "POST") {
+      try { return json(await rejudgeLinks()); }
+      catch (error) { return NextResponse.json({ message: `고리를 다시 판정하지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
+    }
     // 점검 보고서: the whole store as markdown text, with checks (report.ts). ?download=1 saves it as a file.
     if (p[0] === "report" && m === "GET") {
       const { markdown } = await knowledgeReport();
@@ -119,7 +124,7 @@ async function handle(request: Request, context: RouteContext) {
     }
     if (p[0] === "item" && p[1]) {
       const itemId = id.parse(p[1]);
-      if (p.length === 2 && m === "GET") return json(await getKnowledge(itemId));
+      if (p.length === 2 && m === "GET") return json({ ...await getKnowledge(itemId), near: await nearOf(itemId) });
       if (p.length === 2 && m === "PATCH") return json({ item: await updateKnowledge(itemId, await body(z.object({ title: z.string().max(120).optional(), body: z.string().max(4000).optional(),
         aliases: z.array(z.string().max(120)).max(20).optional(), folderId: id.nullable().optional(), kind: kind.optional() }))) });
       if (p.length === 2 && m === "DELETE") return json(await deleteKnowledge(itemId));

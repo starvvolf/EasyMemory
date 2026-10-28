@@ -45,10 +45,12 @@ export type Tree = { folders: Folder[]; items: ItemLite[] };
 export type KEvent = { id: string; at: string; knowledgeId: string; kind: "met" | "asked" | "wrong" | "hint" | "correct" | "note"; detail: string; source?: { kind: string; title: string } };
 export const EVENT_LABEL: Record<KEvent["kind"], string> = { met: "만남", asked: "물어봄", wrong: "틀림", hint: "힌트 받음", correct: "맞힘", note: "메모" };
 export type Knowledge = { id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean; aliases: string[]; kind?: KKind;
-  links: Array<{ to: string; relation: string }>; sources: Array<{ kind: string; title: string; url?: string; page?: number; quote?: string; at: string }>;
+  links: Array<{ to: string; relation: string; note?: string }>; sources: Array<{ kind: string; title: string; url?: string; page?: number; quote?: string; at: string }>;
   stats: { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] }; createdAt: string; updatedAt: string; lastAt: string;
   review?: { algorithm: "leitner"; box: number; dueAt: string; repetitions: number; lapses: number } };
-export type Detail = { item: Knowledge; path: string; links: Array<{ to: string; relation: string; item: ItemLite }>; backlinks: Array<{ relation: string; item: ItemLite }>; events: KEvent[] };
+export type Detail = { item: Knowledge; path: string; links: Array<{ to: string; relation: string; note?: string; item: ItemLite }>; backlinks: Array<{ relation: string; note?: string; item: ItemLite }>; events: KEvent[];
+  /** 가까운 지식: close, but no clear link (AI 판정 "가까움"). */
+  near?: Array<{ id: string; title: string; line: string }> };
 export type Question = { id: string; kind: "flashcard" | "choice" | "ox" | "blank" | "short" | "recognize"; label: string; knowledgeId: string; prompt: string; context?: string;
   options?: string[]; answer: string; accept?: string[]; explain: string };
 export type Graded = { correct: boolean; expected: string; note: string };

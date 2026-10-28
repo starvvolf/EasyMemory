@@ -2,9 +2,11 @@
 //
 //   1. 이름·별칭 비교 — at save time, in the store (sameAs): an exact match merges right away.
 //   2. 임베딩 후보 — for each item that check did not catch, the 5 closest items by meaning (embed.ts).
-//   3. AI 판정 — one model call for a batch of new items and their candidates: 같음 / 포함 / 관련 / 다름.
+//   3. AI 판정 — one model call for a batch of new items and their candidates: 같음 / 포함 / 활용 / 선수 / 가까움 / 다름
+//      (2026-10-28 고리 종류: 고리는 "학습에 쓸 수 있는 관계"만. SKOS의 상하·연관, 교육 연구의 선수 관계를 따름).
 //      같음 → a "중복 의심" pair for the learner (합치기 or 다른 지식) — never merged automatically, not yet.
-//      포함 · 관련 → a link (고리), which the learner can remove.
+//      포함("포함") · 활용("씀") · 선수("먼저") → a link with a short 연결 문장 (note), which the learner can remove.
+//      가까움 → no link, only listed as 가까운 지식 (해시 ↔ Map: close, but no clear direction).
 //
 // It runs a few seconds after saves that made new items (the store tells the listener the knowledge API registers),
 // off the request, so saving never waits for the model. Every item is checked once; items from before this check
@@ -15,11 +17,13 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { askJson, S } from "../assist/model.ts";
 import { similarKnowledge } from "./embed.ts";
-import { getKnowledge, KIND_LABEL, linkKnowledge, mergeKnowledge, normalize, tree, type KKind } from "./store.ts";
+import { getKnowledge, KIND_LABEL, linkKnowledge, mergeKnowledge, normalize, tree, unlinkKnowledge, type KKind } from "./store.ts";
 
-export type Verdict = "same" | "narrower" | "broader" | "related" | "different";
+// "related" is the old 관련 (before 2026-10-28 evening) and now only 어휘 비슷한 말.
+export type Verdict = "same" | "narrower" | "broader" | "uses" | "used_by" | "needs" | "needed_by" | "near" | "related" | "different";
+const VERDICTS = ["same", "narrower", "broader", "uses", "used_by", "needs", "needed_by", "near", "different"] as const;
 export type DupPair = { id: string; newId: string; otherId: string; verdict: Exclude<Verdict, "different">; reason: string; score: number; at: string;
-  status: "open" | "merged" | "dismissed" | "linked" };
+  note?: string; status: "open" | "merged" | "dismissed" | "linked" | "near" };
 type DupFile = { checked: string[]; pairs: DupPair[] };
 
 const BATCH = 25, CANDIDATES = 5, BATCHES_PER_RUN = 3, WAIT_MS = 4000, MAX_RELATED = 2, OTHER_FIELD_SCORE = 0.8;
@@ -43,20 +47,27 @@ async function write(data: DupFile) {
 }
 
 const JUDGE_SYSTEM = `학습자의 지식 저장소에 새 지식이 들어왔다. 새 지식마다 뜻이 가까운 기존 지식 후보가 있다. 후보마다 관계를 하나 고른다.
+고리는 복습할 때 쓸모 있는 관계만 만든다("틀렸을 때 무엇을 다시 볼까", "아는 것을 어디에 쓸까"). 위에서부터 맞는 첫 번째를 고른다.
 - same: 같은 개념을 다른 말로 부른 것(이진 탐색 = 이분 탐색 = Binary Search, 깊이 우선 탐색 = DFS). 둘을 합쳐도 아무것도 잃지 않을 때만.
-- narrower: 새 지식이 후보의 한 부분·하위 개념·특수한 경우(lower_bound는 이분 탐색의 하위).
-- broader: 후보가 새 지식의 한 부분·하위 개념.
-- related: 한쪽이 다른 쪽의 정의나 대표적인 방법에 직접 들어가는 사이만(다익스트라는 우선순위 큐를 쓴다, 구간 합은 누적 합으로 구한다). 학습자가 고리로 이어 두면 복습할 때 도움이 될 만큼 가까워야 한다.
-- different: 그 밖의 모든 것. 관계가 약하거나("X의 시간 복잡도를 분석할 수 있다", "X에도 주의할 수 있다", "둘 다 순서를 쓴다"), 같은 과목일 뿐이거나, 반대·대비되는 개념(깊이 우선 탐색 ↔ 너비 우선 탐색, 기준금리 ↔ 시장금리).
-대부분의 후보는 different다. 애매하면 same이 아니라 different를 고른다. 잘못 합치거나 억지로 잇는 것이 놓치는 것보다 나쁘다. 새 지식 하나에 related는 많아야 2개.
+- narrower: 새 지식이 후보의 한 종류·부분·특수한 경우(lower_bound는 이분 탐색의 하위, 문자열 정렬은 정렬의 한 종류).
+- broader: 후보가 새 지식의 한 종류·부분·특수한 경우.
+- uses: 새 지식이 후보를 도구로 쓰거나 후보로 구한다(다익스트라는 우선순위 큐를 쓴다, 구간 합은 누적 합으로 구한다).
+- used_by: 후보가 새 지식을 도구로 쓰거나 새 지식으로 구한다.
+- needs: 새 지식을 이해하려면 후보를 먼저 알아야 한다(이분 탐색은 정렬된 배열이 전제라 정렬을 먼저). 어느 쪽이 먼저인지 분명할 때만.
+- needed_by: 후보를 이해하려면 새 지식을 먼저 알아야 한다.
+- near: 뜻이 겹치거나 같은 문제에서 자주 같이 나오지만 위 관계와 방향이 분명하지 않다(해시 ↔ Map, 시간 복잡도 ↔ 시간 복잡도 분석). 고리는 만들지 않고 "가까운 지식"으로만 보인다.
+- different: 그 밖의 모든 것. 관계가 약하거나("X의 시간 복잡도를 분석할 수 있다", "둘 다 순서를 쓴다"), 같은 과목일 뿐이거나, 반대·대비되는 개념(깊이 우선 탐색 ↔ 너비 우선 탐색, 기준금리 ↔ 시장금리).
+대부분의 후보는 different다. 애매하면 same이 아니라 near나 different를 고른다. 잘못 합치거나 억지로 잇는 것이 놓치는 것보다 나쁘다. 새 지식 하나에 uses·used_by는 많아야 2개, needs·needed_by도 많아야 2개.
+note: narrower·broader·uses·used_by·needs·needed_by면 두 지식이 어떻게 이어지는지 학습자가 읽을 한국어 한 문장, 40자 안쪽("누적 합으로 구간 합을 한 번에 구한다", "정렬된 배열이어야 이분 탐색을 쓸 수 있다"). 그 밖에는 빈 문자열 "".
 n과 m은 받은 번호를 그대로 쓴다.`;
 // 이유 (2026-10-28 사용자 결정): 평소에는 same만 이유를 쓴다(학습자가 합칠지 고르는 카드에 보임). 나머지 이유는 답만 길게 해
 // 느려지므로 비운다. 고리가 이상하게 붙는 등 문제가 생겨 따져 볼 때만 RECALLER_DEDUPE_REASONS=all로 전부 쓰게 한다.
 const REASON_SAME = "reason: same이면 왜 같은지 한국어 한 문장. same이 아니면 빈 문자열 \"\".";
 const REASON_ALL = "reason: 한국어 한 문장.";
 export const reasonMode = (): "same" | "all" => (process.env.RECALLER_DEDUPE_REASONS?.trim() === "all" ? "all" : "same");
-type Judged = { items: Array<{ n: number; candidates: Array<{ m: number; verdict: Verdict; reason: string }> }> };
-const JUDGE_SCHEMA = S.obj({ items: S.arr(S.obj({ n: S.int, candidates: S.arr(S.obj({ m: S.int, verdict: S.oneOf("same", "narrower", "broader", "related", "different"), reason: S.str })) })) });
+type Judged = { items: Array<{ n: number; candidates: Array<{ m: number; verdict: Verdict; note: string; reason: string }> }> };
+const JUDGE_SCHEMA = S.obj({ items: S.arr(S.obj({ n: S.int, candidates: S.arr(S.obj({ m: S.int, verdict: S.oneOf(...VERDICTS), note: S.str, reason: S.str })) })) });
+const LINKS = new Set<Verdict>(["narrower", "broader", "uses", "used_by", "needs", "needed_by"]);
 
 export type JudgeItem = { title: string; aliases: string[]; body: string; path: string; kind?: KKind };
 const line = (d: JudgeItem) =>
@@ -73,20 +84,26 @@ const judgeModel = () => ({ model: process.env.RECALLER_DEDUPE_MODEL?.trim() || 
  * Exported for the evaluation (dedupe-eval.ts), which runs the same judgment with other models.
  */
 export async function judgeBatch(work: Array<{ item: JudgeItem; cands: JudgeItem[] }>, options: { model?: string; effort?: string; reasons?: "same" | "all" } = judgeModel()) {
-  const out = work.map((w) => w.cands.map(() => ({ verdict: "different" as Verdict, reason: "" })));
+  const out = work.map((w) => w.cands.map(() => ({ verdict: "different" as Verdict, reason: "", note: "" })));
   if (!work.length) return out;
   const user = work.map((w, n) => `[새 지식 ${n}] ${line(w.item)}\n${w.cands.map((c, m) => `  후보 ${m}. ${line(c)}`).join("\n")}`).join("\n\n");
   const system = `${JUDGE_SYSTEM}\n${(options.reasons ?? reasonMode()) === "all" ? REASON_ALL : REASON_SAME}`;
   const judged = await askJson<Judged>("knowledge:dedupe", system, user, JUDGE_SCHEMA, { model: options.model, effort: options.effort });
   for (const j of judged.items ?? []) {
     if (!out[j.n]) continue;
-    for (const c of j.candidates ?? []) if (out[j.n][c.m]) {
+    for (const c of j.candidates ?? []) if (out[j.n][c.m] && (VERDICTS as readonly string[]).includes(c.verdict)) {
+      // 어휘: two words with the same meaning stay two items, joined as 비슷한 말.
       const sameWordsOnly = c.verdict === "same" && vocabPair(work[j.n].item, work[j.n].cands[c.m]);
-      out[j.n][c.m] = { verdict: sameWordsOnly ? "related" : c.verdict, reason: (sameWordsOnly ? "뜻이 같은 다른 단어(비슷한 말)라 합치지 않아요. " : "") + (c.reason ?? "").slice(0, 200) };
+      out[j.n][c.m] = { verdict: sameWordsOnly ? "related" : c.verdict, reason: (sameWordsOnly ? "뜻이 같은 다른 단어(비슷한 말)라 합치지 않아요. " : "") + (c.reason ?? "").slice(0, 200),
+        note: LINKS.has(c.verdict) ? (c.note ?? "").trim().slice(0, 80) : "" };
     }
-    // A few strong links are worth more than many weak ones: at most two 관련 per new item, closest first.
-    let related = 0;
-    for (const v of out[j.n]) if (v.verdict === "related" && ++related > MAX_RELATED) v.verdict = "different";
+    // A few strong links are worth more than many weak ones: per new item at most two 활용 and two 선수, closest first;
+    // the rest are only 가까움.
+    let uses = 0, needs = 0;
+    for (const v of out[j.n]) {
+      if ((v.verdict === "uses" || v.verdict === "used_by") && ++uses > MAX_RELATED) v.verdict = "near";
+      if ((v.verdict === "needs" || v.verdict === "needed_by") && ++needs > MAX_RELATED) v.verdict = "near";
+    }
   }
   return out;
 }
@@ -119,14 +136,16 @@ async function checkBatch(ids: string[], data: DupFile): Promise<DupPair[]> {
   const at = new Date().toISOString();
   const found: DupPair[] = [];
   for (const [n, w] of work.entries()) for (const [m, cand] of w.cands.entries()) {
-    const { verdict, reason } = verdicts[n][m];
+    const { verdict, reason, note } = verdicts[n][m];
     if (verdict === "different" || known.has(`${w.d.item.id}|${cand.d.item.id}`)) continue;
     known.add(`${w.d.item.id}|${cand.d.item.id}`); known.add(`${cand.d.item.id}|${w.d.item.id}`);
-    // 포함: the broader one points to the narrower one; 관련: the new one points to the other.
-    if (verdict === "narrower") await linkKnowledge(cand.d.item.id, w.d.item.id, "포함").catch(() => undefined);
-    else if (verdict === "broader") await linkKnowledge(w.d.item.id, cand.d.item.id, "포함").catch(() => undefined);
-    else if (verdict === "related") await linkKnowledge(w.d.item.id, cand.d.item.id, "관련").catch(() => undefined);
-    found.push({ id: `dup_${randomBytes(6).toString("hex")}`, newId: w.d.item.id, otherId: cand.d.item.id, verdict, reason, score: cand.score, at, status: verdict === "same" ? "open" : "linked" });
+    // Every link reads "A —관계→ B": 포함 from the broader one, 씀 from the one that uses, 먼저 from the one to learn first.
+    const [a, b] = [w.d.item.id, cand.d.item.id];
+    const link = ({ narrower: [b, a, "포함"], broader: [a, b, "포함"], uses: [a, b, "씀"], used_by: [b, a, "씀"], needs: [b, a, "먼저"], needed_by: [a, b, "먼저"],
+      related: [a, b, "비슷한 말"] } as Partial<Record<Verdict, [string, string, string]>>)[verdict];
+    if (link) await linkKnowledge(link[0], link[1], link[2], note).catch(() => undefined);
+    found.push({ id: `dup_${randomBytes(6).toString("hex")}`, newId: a, otherId: b, verdict, reason, ...(note ? { note } : {}), score: cand.score, at,
+      status: verdict === "same" ? "open" : verdict === "near" ? "near" : "linked" });
   }
   return found;
 }
@@ -164,6 +183,36 @@ export function scheduleDuplicateCheck() {
   if (process.env.RECALLER_DEDUPE === "off") return;
   if (state.__dedupeTimer) clearTimeout(state.__dedupeTimer);
   state.__dedupeTimer = setTimeout(() => { state.__dedupeTimer = undefined; void runDuplicateCheck().catch((e) => console.warn("[knowledge:dedupe]", e instanceof Error ? e.message : e)); }, WAIT_MS);
+}
+
+/** 가까운 지식: items the judge found close to this one without a clear link (가까움), still there. */
+export async function nearOf(id: string) {
+  const data = await read();
+  const ids = [...new Set(data.pairs.filter((p) => p.status === "near" && (p.newId === id || p.otherId === id)).map((p) => (p.newId === id ? p.otherId : p.newId)))];
+  const { items } = await tree();
+  return ids.flatMap((x) => { const i = items.find((y) => y.id === x); return i ? [{ id: i.id, title: i.title, line: i.line }] : []; });
+}
+
+const AUTO_RELATIONS = new Set(["포함", "관련", "씀", "먼저", "비슷한 말"]);
+/**
+ * 고리 다시 판정 (2026-10-28, 고리 종류를 바꾸면서): the links this check made earlier are taken off, their pairs and the
+ * 가까움 pairs are forgotten, and every item is checked again with the current rules. Pairs the learner answered (합치기,
+ * 다른 지식) and open 같음 pairs stay; links the learner or a PDF made are not touched.
+ */
+export async function rejudgeLinks(options: { batches?: number } = {}) {
+  await serialFile(async () => {
+    const data = await read();
+    for (const p of data.pairs.filter((x) => x.status === "linked")) {
+      for (const [from, to] of [[p.newId, p.otherId], [p.otherId, p.newId]]) {
+        const d = await getKnowledge(from).catch(() => null);
+        if (d?.item.links.some((l) => l.to === to && AUTO_RELATIONS.has(l.relation))) await unlinkKnowledge(from, to).catch(() => undefined);
+      }
+    }
+    data.pairs = data.pairs.filter((x) => x.status !== "linked" && x.status !== "near");
+    data.checked = [];
+    await write(data);
+  });
+  return runDuplicateCheck({ batches: options.batches ?? 20 });
 }
 
 /** For the 점검 보고서: which items were checked, and every pair the check found (any status). */

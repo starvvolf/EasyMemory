@@ -318,9 +318,9 @@ function ItemDetail({ detail, folders, goals, mine, onAct, onOpen, onGone, onQui
       <div><p className="eyebrow">이어진 지식</p>
         {!detail.links.length && !detail.backlinks.length ? <p className="small muted">아직 이어진 지식이 없어요.</p> : null}
         <ul className="kw-links">
-          {detail.backlinks.map((l) => <li key={`b${l.item.id}`}><button className="linkish" onClick={() => onOpen(l.item.id)}>{l.item.title}</button> <span className="muted">—{l.relation}→</span> <b>이것</b></li>)}
+          {detail.backlinks.map((l) => <li key={`b${l.item.id}`}><button className="linkish" onClick={() => onOpen(l.item.id)}>{l.item.title}</button> <span className="muted">—{l.relation}→</span> <b>이것</b>{l.note ? <span className="kw-note">{l.note}</span> : null}</li>)}
           {detail.links.map((l) => <li key={`f${l.item.id}`}><b>이것</b> <span className="muted">—{l.relation}→</span> <button className="linkish" onClick={() => onOpen(l.item.id)}>{l.item.title}</button>
-            <button className="kw-x" aria-label="고리 지우기" onClick={() => void onAct(() => call("/api/knowledge/link", { from: item.id, to: l.item.id }, "DELETE"))}>×</button></li>)}
+            <button className="kw-x" aria-label="고리 지우기" onClick={() => void onAct(() => call("/api/knowledge/link", { from: item.id, to: l.item.id }, "DELETE"))}>×</button>{l.note ? <span className="kw-note">{l.note}</span> : null}</li>)}
         </ul>
         {mode === "link" || mode === "merge" ? (
           <div className="kw-pick">
@@ -334,6 +334,9 @@ function ItemDetail({ detail, folders, goals, mine, onAct, onOpen, onGone, onQui
         ) : <div className="row"><button className="btn ghost small" onClick={() => setMode("link")}>+ 고리 잇기</button><button className="btn ghost small" onClick={() => setMode("merge")}>같은 지식 합치기</button></div>}
       </div>
 
+      {detail.near?.length ? <div><p className="eyebrow">가까운 지식</p>
+        <ul className="kw-links">{detail.near.map((n) => <li key={n.id}><button className="linkish" onClick={() => onOpen(n.id)}>{n.title}</button> <span className="small muted">{n.line.slice(0, 60)}</span></li>)}</ul>
+        <p className="small muted">뜻이 겹치거나 같이 나오지만 어느 쪽이 먼저인지·무엇을 쓰는지는 분명하지 않아 고리로 잇지 않았어요.</p></div> : null}
       <Similar itemId={item.id} onOpen={onOpen} onAct={onAct} />
 
       <details className="ws-fold"><summary>어디서 만났나 · {item.sources.length}</summary>

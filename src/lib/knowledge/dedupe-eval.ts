@@ -52,6 +52,10 @@ function truthOf(a: string, b: string): string[] {
   return ["different"];
 }
 
+// Verdicts that make a link (2026-10-28 고리 종류: 포함·활용·선수; "related" is the old 관련 and 어휘 비슷한 말). 가까움 makes none.
+const LINK_VERDICTS: string[] = ["narrower", "broader", "uses", "used_by", "needs", "needed_by", "related"];
+// The test set's truth still says "related" for 관련: any of the new link kinds or 가까움 counts as that.
+const asTruth = (v: string) => (["uses", "used_by", "needs", "needed_by", "near"].includes(v) ? "related" : v);
 function score(prep: Awaited<ReturnType<typeof prepare>>, verdicts: Array<Array<{ verdict: Verdict; reason: string }>>) {
   const { byKey, step1, work } = prep;
   const t = (k: string) => byKey.get(k)!.title;
@@ -61,7 +65,7 @@ function score(prep: Awaited<ReturnType<typeof prepare>>, verdicts: Array<Array<
     if (merged) { const ok = truthOf(n.key, merged); all.push({ from: t(n.key), to: t(merged), truth: ok.join("/"), verdict: "1단계 합침", ok: ok.includes("same"), reason: "이름·별칭이 같음" }); }
     const w = work.findIndex((x) => x.key === n.key);
     if (w >= 0) work[w].cands.forEach((c, m) => { const ok = truthOf(n.key, c.key), v = verdicts[w][m];
-      all.push({ from: t(n.key), to: t(c.key), truth: ok.join("/"), verdict: v.verdict, ok: ok.includes(v.verdict) || (v.verdict !== "same" && v.verdict !== "different" && !ok.includes("same") && ok.length > 1), reason: v.reason }); });
+      all.push({ from: t(n.key), to: t(c.key), truth: ok.join("/"), verdict: v.verdict, ok: ok.includes(asTruth(v.verdict) as never) || (v.verdict !== "same" && v.verdict !== "different" && !ok.includes("same") && ok.length > 1), reason: v.reason }); });
     // Pairs the answer cares about that never reached the model (not among the five candidates).
     for (const [other, ok] of Object.entries(n.truth)) {
       if (merged === other || (w >= 0 && work[w].cands.some((c) => c.key === other))) continue;
@@ -78,9 +82,9 @@ function score(prep: Awaited<ReturnType<typeof prepare>>, verdicts: Array<Array<
     falseMerge: all.filter((p) => judgedSame(p) && !isSame(p)).length,
     relations: { total: all.filter((p) => !isSame(p) && p.truth !== "different").length, right: all.filter((p) => !isSame(p) && p.truth !== "different" && p.ok).length },
     // Links the answer does not have: not always wrong (최대 힙 ↔ 힙 정렬), but each one is a link the learner did not ask for.
-    extraLinks: all.filter((p) => p.truth === "different" && ["narrower", "broader", "related"].includes(p.verdict)).length,
+    extraLinks: all.filter((p) => p.truth === "different" && LINK_VERDICTS.includes(p.verdict)).length,
     wrong: all.filter((p) => !p.ok && !(p.truth === "different" && p.verdict !== "same")),
-    extra: all.filter((p) => p.truth === "different" && ["narrower", "broader", "related"].includes(p.verdict)),
+    extra: all.filter((p) => p.truth === "different" && LINK_VERDICTS.includes(p.verdict)),
     all,
   };
 }

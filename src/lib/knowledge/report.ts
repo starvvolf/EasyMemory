@@ -72,7 +72,8 @@ export async function knowledgeReport(now = new Date()) {
     `| 지금 복습 차례 | ${due}개 |`,
     `| 목표 | ${goals.filter((g) => !g.closed).length}개 열림${goals.some((g) => g.closed) ? `, ${goals.filter((g) => g.closed).length}개 닫힘` : ""} · 목표 없는 자료 ${materials.filter((m) => !m.goals.length && !m.ignored).length}개 |`,
     `| 기록 | ${events.length}개 (마지막 ${events.at(-1) ? dayOf(events.at(-1)!.at) : "-"}) |`,
-    `| 같은 지식 찾기 | 거친 지식 ${items.filter((i) => checked.has(i.id)).length}개 · 같음 의심 ${dupes.pairs.filter((p) => p.verdict === "same").length}쌍(확인 안 함 ${openPairs.length}) |`,
+    `| 같은 지식 찾기 | 거친 지식 ${items.filter((i) => checked.has(i.id)).length}개 · 같음 의심 ${dupes.pairs.filter((p) => p.verdict === "same").length}쌍(확인 안 함 ${openPairs.length}) · 가까움 ${dupes.pairs.filter((p) => p.status === "near").length}쌍 |`,
+    `| 고리 종류 | ${[...new Set(items.flatMap((i) => i.links.map((l) => l.relation)))].map((r) => `${r} ${items.reduce((n, i) => n + i.links.filter((l) => l.relation === r).length, 0)}`).join(" · ") || "-"} |`,
     `| 임베딩 | ${vectors.fresh}/${items.length}개 최신 |`, "");
 
   out.push("## 점검", "");
@@ -93,7 +94,7 @@ export async function knowledgeReport(now = new Date()) {
     const meaning = meaningOf(i);
     extra.push(meaning ? one(meaning) : "(뜻 없음)");
     if (i.aliases.length) extra.push(`다른 이름: ${i.aliases.slice(0, 6).join(", ")}`);
-    const links = [...i.links.map((l) => `→${byId.get(l.to)?.title ?? "?"}(${l.relation})`),
+    const links = [...i.links.map((l) => `→${byId.get(l.to)?.title ?? "?"}(${l.relation}${l.note ? `: ${l.note}` : ""})`),
       ...items.filter((o) => o.links.some((l) => l.to === i.id)).map((o) => `←${o.title}(${o.links.find((l) => l.to === i.id)!.relation})`)];
     if (links.length) extra.push(`고리: ${links.slice(0, 6).join(", ")}${links.length > 6 ? " …" : ""}`);
     const srcs = [...new Set(i.sources.map((s) => `${SOURCE[s.kind] ?? s.kind} ${one(s.title, 30)}`))];

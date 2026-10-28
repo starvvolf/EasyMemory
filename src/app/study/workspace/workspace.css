@@ -270,3 +270,6 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .ag-goal.done .ag-goal-n{background:var(--good-soft);color:var(--good)}
 .dejipgi .ag-goal-t{font-weight:600;font-size:14px}
 @media (max-width:900px){ .dejipgi .wtm-idle{display:none} }
+
+/* 고리의 연결 문장 (2026-10-28) */
+.dejipgi .kw-note{display:block;font-size:12.5px;color:var(--muted);margin:1px 0 0 2px}
