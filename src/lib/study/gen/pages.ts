@@ -65,6 +65,35 @@ const where = (b: Box, w: number, h: number) => {
 };
 
 /**
+ * 빠른 전처리 (연구 1 실험): the picture regions of a page already drawn (`figures` as top-left fractions from 전처리),
+ * merged and cropped the same way as renderPageFigures. A page whose pictures fill most of it is returned whole.
+ */
+export async function cropFigures(page: number, image: string, figures: number[][]): Promise<PageFigure[]> {
+  const { createCanvas, loadImage } = await import("@napi-rs/canvas");
+  const picture = await loadImage(Buffer.from(image.split(",")[1], "base64"));
+  const W = picture.width, H = picture.height, full = W * H;
+  let boxes: Box[] = figures.map(([x0, y0, x1, y1]) => ({ x0: x0 * W, y0: y0 * H, x1: x1 * W, y1: y1 * H })).filter((b) => area(b) >= MIN_FIGURE * full);
+  for (let merged = true; merged;) {
+    merged = false;
+    outer: for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) if (near(boxes[i], boxes[j], MERGE_GAP * W)) {
+      const a = boxes[i], b = boxes[j];
+      boxes[i] = { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) };
+      boxes.splice(j, 1); merged = true; break outer;
+    }
+  }
+  boxes = boxes.map((b) => ({ x0: Math.max(0, b.x0 - MARGIN * W), y0: Math.max(0, b.y0 - MARGIN * H), x1: Math.min(W, b.x1 + MARGIN * W), y1: Math.min(H, b.y1 + MARGIN * H) }))
+    .sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  if (!boxes.length) return [];
+  if (boxes.reduce((s, b) => s + area(b), 0) / full > WHOLE_PAGE) return [{ page, label: `원문 p.${page} (쪽 전체)`, dataUrl: image, area: 1 }];
+  return boxes.map((b, k) => {
+    const w = Math.max(1, Math.round(b.x1 - b.x0)), h = Math.max(1, Math.round(b.y1 - b.y0));
+    const canvas = createCanvas(w, h);
+    canvas.getContext("2d").drawImage(picture, b.x0, b.y0, w, h, 0, 0, w, h);
+    return { page, label: `p.${page} 그림 ${k + 1} (${where(b, W, H)})`, dataUrl: `data:image/jpeg;base64,${canvas.toBuffer("image/jpeg", 85).toString("base64")}`, area: area(b) / full };
+  });
+}
+
+/**
  * Picture regions of pages, cropped from the rendered page: the plan sees each picture (with the labels and arrows
  * drawn on it) instead of the whole slide, about half the image tokens on picture slides (그래픽스03 1~24쪽: pictures
  * cover ~45% of a slide on average). Pages whose pictures fill most of the slide are sent whole; a page with no

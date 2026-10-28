@@ -101,6 +101,8 @@ export type RecallerLab = {
   outline?: boolean;
   /** 3번(나): after the first pass, one text-only call over all cards names each specifically, marks duplicates and gives a topic. */
   consolidate?: boolean;
+  /** 빠른 전처리: read and draw pages in this many worker processes in one pass (a drawing crash ends a worker, not the server). */
+  fastPrep?: number;
 };
 
 /** `startText` is where the section begins on its first page; a page shared by two sections is split there. */

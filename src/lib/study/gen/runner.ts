@@ -12,9 +12,9 @@ import { checkClassify, checkDesign, cleanPageText, mergeAcrossSections, normali
 import { genFakeReply } from "./fake.ts";
 import { ASTRA_CACHE_PREFIX, astraFakeReply, astraJsonSchema, getAstraReadingView, responseSchemaFor, runAstra, RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion, metaLabels, sectionDocument } from "./layout.ts";
-import { needsImage, pageEmphasis, renderPageFigures, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
+import { cropFigures, needsImage, pageEmphasis, renderPageFigures, renderPageImages, TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, loadRecallerGuide, type LoadedGuide } from "./guide.ts";
-import { preparePdf, prepFromTexts, prepRouters, type PrepResult } from "./prep.ts";
+import { preparePdf, preparePdfFast, prepFromTexts, prepRouters, type PrepResult } from "./prep.ts";
 import { recallerFakeReply, runRecaller } from "./recaller.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
@@ -193,9 +193,9 @@ export const genInputSchema = z.strictObject({
   engine: z.enum(engines).default("v2"),
   planInput: z.enum(["pdf", "pages", "figures"]).optional(),
   cacheMode: z.enum(["shared"]).optional(),
-  lab: z.strictObject({ router: z.enum(prepRouters).optional(), skimOnly: z.boolean().optional(), pageParallel: z.number().int().min(1).max(16).optional(),
-    readParallel: z.number().int().min(1).max(16).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
-    outline: z.boolean().optional(), consolidate: z.boolean().optional() }).optional(),
+  lab: z.strictObject({ router: z.enum(prepRouters).optional(), skimOnly: z.boolean().optional(), pageParallel: z.number().int().min(1).max(64).optional(),
+    readParallel: z.number().int().min(1).max(64).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
+    outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -602,6 +602,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       };
       const readingFile = (hash: string, page: number) => path.join(dataRoot(), "readings", hash.replace(/[^a-z0-9:_-]/gi, "_").slice(0, 80), `${page}.json`);
       const stopWith = (message: string) => failAstra(new Stop("paused-invalid", message));
+      // 빠른 전처리: pages drawn while 전처리 read them (data URLs) and their picture regions, for this run only.
+      const drawn = new Map<number, string>(), drawnFigures = new Map<number, number[][]>();
       await runRecaller({
         state, pdf,
         ask: async (step, sectionId, attempt, system, user, parser, extra = {}) => {
@@ -616,10 +618,27 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           return result.value;
         },
         askText: async (step, page, attempt, system, user, images) => String(await ask(step, null, attempt, system, user, null, undefined, { images, page })),
-        prepare: options.prep ?? (async (bytes, pages) => bytes ? preparePdf(bytes, pages, input.lab?.router) : prepFromTexts(await (options.pages ?? registeredPages)(input), pages)),
+        prepare: options.prep ?? (async (bytes, pages) => {
+          if (!bytes) return prepFromTexts(await (options.pages ?? registeredPages)(input), pages);
+          if (!input.lab?.fastPrep) return preparePdf(bytes, pages, input.lab?.router);
+          // 빠른 전처리 (연구 1 실험): read and draw in worker processes; the drawings are kept for 정리 and the reading step.
+          const fast = await preparePdfFast(bytes, pages, input.lab.router ?? "prep-1", { procs: input.lab.fastPrep, width: input.lab.imageWidth ?? 1024, workerPath: path.join(process.cwd(), "src/lib/study/gen/prep-worker.ts") });
+          for (const [n, image] of fast.images) drawn.set(n, image);
+          for (const p of fast.prep.pages) if (p.figures) drawnFigures.set(p.page, p.figures);
+          if (fast.failed.length) state.recaller?.warnings.push({ severity: "warning", code: "rc-draw-failed", message: `p.${fast.failed.join(", ")}를 그리지 못해 글자 층만 써요.` });
+          return fast.prep;
+        }),
         emphasis: async (pages) => pdf ? pageEmphasis(pdf, pages) : new Map(),
-        pageImages: async (wanted) => (options.pageImages ?? registeredImages)(input, wanted),
-        pageFigures: async (wanted) => pdf ? renderPageFigures(pdf, wanted, input.lab?.imageWidth) : new Map(),
+        pageImages: async (wanted) => {
+          const missing = wanted.filter((p) => !drawn.has(p));
+          const more = missing.length && !input.lab?.fastPrep ? await (options.pageImages ?? registeredImages)(input, missing) : new Map<number, string>();
+          return new Map(wanted.map((p) => [p, drawn.get(p) ?? more.get(p)]).filter((e): e is [number, string] => Boolean(e[1])));
+        },
+        pageFigures: async (wanted) => {
+          if (!pdf) return new Map();
+          if (!input.lab?.fastPrep) return renderPageFigures(pdf, wanted, input.lab?.imageWidth);
+          return new Map(await Promise.all(wanted.filter((p) => drawn.has(p)).map(async (p) => [p, drawnFigures.has(p) ? await cropFigures(p, drawn.get(p)!, drawnFigures.get(p)!) : []] as const)));
+        },
         guide: async (step, kinds) => {
           try { return await loadRecallerGuide(step, { purpose: input.purpose, kinds, dir: input.guideDir ?? DEFAULT_GUIDE_DIR }); }
           catch (error) { throw stopWith(`${error instanceof Error ? error.message : String(error)} 출제기준 폴더를 고친 뒤 다시 시작해 주세요.`); }

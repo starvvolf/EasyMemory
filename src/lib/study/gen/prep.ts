@@ -14,7 +14,9 @@ export type PageStats = { chars: number; mathChars: number; brokenChars: number;
   pictureCover: number; pathOps: number;
   /** prep-2: letters from a math font with no real ToUnicode (PowerPoint subsets: subscripts come out as !"#$%). */
   garbledChars?: number };
-export type PrepPage = { page: number; title: string; text: string; route: PrepRoute; score: number; reasons: string[]; stats: PageStats };
+export type PrepPage = { page: number; title: string; text: string; route: PrepRoute; score: number; reasons: string[]; stats: PageStats;
+  /** Content pictures as [x0, y0, x1, y1] fractions of the page from the top left (template pictures left out). */
+  figures?: number[][] };
 export type PrepSection = { id: string; title: string; pages: number[] };
 export type PrepResult = { version: string; pages: PrepPage[]; sections: PrepSection[] };
 
@@ -184,16 +186,28 @@ export function coverage(boxes: Box[], width: number, height: number) {
 const MATH = /[\u{1D400}-\u{1D7FF}]/gu;
 const BROKEN = /[�-]/gu;
 
+/**
+ * What one page gives before the material-wide steps (running headers, template pictures). Plain data, so pages can be
+ * read in other processes (연구 1: a vector-drawn deck spends ~0.3 s per page here and ~0.9 s more drawing it).
+ * `image`: the page drawn while its operator list is still warm, when asked (fast path).
+ */
+export type RawPage = { n: number; lines: Line[]; width: number; height: number; chars: number; mathChars: number; brokenChars: number; pathOps: number; garbledChars: number;
+  pictures: Array<{ id: string; area: number; box: Box }>; image?: string };
+
 /** Reads the chosen pages of a PDF with pdf.js (text layer + where pictures are painted) and prepares them. */
 export async function preparePdf(bytes: Uint8Array, pageNumbers: readonly number[], router: PrepRouter = "prep-1"): Promise<PrepResult> {
+  return finishPrep(await readPdfPages(bytes, pageNumbers, router), router);
+}
+
+/** Page by page; `render` also draws each page (JPEG data URL, long side `width`), `onPage` hears each page as it is done. */
+export async function readPdfPages(bytes: Uint8Array, pageNumbers: readonly number[], router: PrepRouter = "prep-1",
+  options: { render?: { width: number; quality?: number }; onPage?: (raw: RawPage) => void } = {}): Promise<RawPage[]> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const canvasLib = options.render ? await import("@napi-rs/canvas") : null;
   const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes), ...(router === "prep-2" ? { fontExtraProperties: true } : {}) }).promise;
   const OPS = pdfjs.OPS as Record<string, number>;
   const paint = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject, OPS.paintImageXObjectRepeat].filter((v) => v !== undefined));
-  const pages: PrepPage[] = [];
-  const pictures = new Map<number, Array<{ id: string; area: number; box: Box }>>();
-  const seen = new Map<string, Set<number>>();
-  const raw = new Map<number, { lines: Line[]; width: number; height: number; area: number; chars: number; mathChars: number; brokenChars: number; pathOps: number; garbledChars: number }>();
+  const out: RawPage[] = [];
   try {
     const wanted = [...new Set(pageNumbers)].filter((n) => Number.isInteger(n) && n >= 1 && n <= document.numPages).sort((a, b) => a - b);
     for (const n of wanted) {
@@ -229,8 +243,6 @@ export async function preparePdf(bytes: Uint8Array, pageNumbers: readonly number
           if (area >= 0.01) found.push({ id: String(args?.[0] ?? `inline-${i}`), area, box });
         }
       });
-      for (const f of found) (seen.get(f.id) ?? seen.set(f.id, new Set()).get(f.id)!).add(n);
-      pictures.set(n, found);
       // prep-2: a math font whose code points fall back to a plain 8-bit table (no ToUnicode) gives "!"#$%" for its
       // letters; the fonts are known once the operator list has run.
       let garbledChars = 0;
@@ -247,27 +259,113 @@ export async function preparePdf(bytes: Uint8Array, pageNumbers: readonly number
         };
         for (const run of runs) if (run.font && run.str.trim() && isGarbled(run.font)) garbledChars += run.str.trim().length;
       }
-      raw.set(n, { lines: linesFrom(runs), width: viewport.width, height: viewport.height, area: viewport.width * viewport.height, chars: meaningful(normalizeText(all)),
-        mathChars: (all.match(MATH) ?? []).length, brokenChars: (all.match(BROKEN) ?? []).length, pathOps, garbledChars });
+      let image: string | undefined;
+      if (options.render && canvasLib) {
+        // Drawn now, while this page's operator list is still in pdf.js's cache (drawing it later parses it again).
+        const scaled = page.getViewport({ scale: options.render.width / Math.max(viewport.width, viewport.height) });
+        const canvas = canvasLib.createCanvas(Math.ceil(scaled.width), Math.ceil(scaled.height));
+        const context = canvas.getContext("2d");
+        context.fillStyle = "white";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvas: canvas as never, canvasContext: context as never, viewport: scaled }).promise;
+        image = `data:image/jpeg;base64,${canvas.toBuffer("image/jpeg", options.render.quality ?? 85).toString("base64")}`;
+      }
+      const raw: RawPage = { n, lines: linesFrom(runs), width: viewport.width, height: viewport.height, chars: meaningful(normalizeText(all)),
+        mathChars: (all.match(MATH) ?? []).length, brokenChars: (all.match(BROKEN) ?? []).length, pathOps, garbledChars, pictures: found, ...(image ? { image } : {}) };
+      out.push(raw);
+      options.onPage?.(raw);
       page.cleanup();
     }
-    // A line that sits in the top or bottom strip of half the pages or more (course name, author, date) is a running header or footer.
-    const edgeKey = (l: Line, h: number) => (l.y < h * 0.12 || l.y > h * 0.93) ? l.text.replace(/\d+/g, "#") : null;
-    const counts = new Map<string, number>();
-    for (const n of wanted) for (const key of new Set(raw.get(n)!.lines.map((l) => edgeKey(l, raw.get(n)!.height)).filter((k): k is string => !!k))) counts.set(key, (counts.get(key) ?? 0) + 1);
-    const running = new Set([...counts].filter(([, c]) => wanted.length >= 3 && c >= Math.max(3, wanted.length / 2)).map(([k]) => k));
-    for (const n of wanted) {
-      const r = raw.get(n)!;
-      r.lines = r.lines.filter((l) => { const key = edgeKey(l, r.height); return !key || !running.has(key); });
-      // Template pictures (a logo or frame on three or more pages) are not content.
-      const cover = coverage((pictures.get(n) ?? []).filter((f) => (seen.get(f.id)?.size ?? 0) < 3).map((f) => f.box), r.width, r.height);
-      const { title, text, orphanLines } = structure(r.lines, r.height);
-      const stats: PageStats = { chars: r.chars, mathChars: r.mathChars, brokenChars: r.brokenChars, lines: text ? text.split("\n").length : 0, orphanLines, pictureCover: cover, pathOps: r.pathOps,
-        ...(router === "prep-2" ? { garbledChars: r.garbledChars } : {}) };
-      pages.push({ page: n, title, text, ...routePage(stats, router), stats });
-    }
   } finally { await document.cleanup(); }
+  return out;
+}
+
+/** The material-wide steps over pages read one by one: running headers and footers, template pictures, then each page's route. */
+export function finishPrep(raws: RawPage[], router: PrepRouter = "prep-1"): PrepResult {
+  const sorted = [...raws].sort((a, b) => a.n - b.n);
+  const wanted = sorted.map((r) => r.n);
+  const raw = new Map(sorted.map((r) => [r.n, { ...r, lines: [...r.lines] }]));
+  const seen = new Map<string, Set<number>>();
+  for (const r of sorted) for (const f of r.pictures) (seen.get(f.id) ?? seen.set(f.id, new Set()).get(f.id)!).add(r.n);
+  const pages: PrepPage[] = [];
+  // A line that sits in the top or bottom strip of half the pages or more (course name, author, date) is a running header or footer.
+  const edgeKey = (l: Line, h: number) => (l.y < h * 0.12 || l.y > h * 0.93) ? l.text.replace(/\d+/g, "#") : null;
+  const counts = new Map<string, number>();
+  for (const n of wanted) for (const key of new Set(raw.get(n)!.lines.map((l) => edgeKey(l, raw.get(n)!.height)).filter((k): k is string => !!k))) counts.set(key, (counts.get(key) ?? 0) + 1);
+  const running = new Set([...counts].filter(([, c]) => wanted.length >= 3 && c >= Math.max(3, wanted.length / 2)).map(([k]) => k));
+  for (const n of wanted) {
+    const r = raw.get(n)!;
+    r.lines = r.lines.filter((l) => { const key = edgeKey(l, r.height); return !key || !running.has(key); });
+    // Template pictures (a logo or frame on three or more pages) are not content.
+    const content = r.pictures.filter((f) => (seen.get(f.id)?.size ?? 0) < 3);
+    const cover = coverage(content.map((f) => f.box), r.width, r.height);
+    const { title, text, orphanLines } = structure(r.lines, r.height);
+    const stats: PageStats = { chars: r.chars, mathChars: r.mathChars, brokenChars: r.brokenChars, lines: text ? text.split("\n").length : 0, orphanLines, pictureCover: cover, pathOps: r.pathOps,
+      ...(router === "prep-2" ? { garbledChars: r.garbledChars } : {}) };
+    // Where the content pictures are, as fractions of the page from the top left (for cropping a page drawn elsewhere).
+    const figures = content.map((f) => [f.box[0] / r.width, 1 - f.box[3] / r.height, f.box[2] / r.width, 1 - f.box[1] / r.height]);
+    pages.push({ page: n, title, text, ...routePage(stats, router), stats, ...(figures.length ? { figures } : {}) });
+  }
   return { version: router === "prep-2" ? "prep-2" : PREP_VERSION, pages, sections: splitSections(pages) };
+}
+
+/**
+ * 빠른 전처리 (연구 1 실험): the pages split over `procs` processes (round robin, so heavy pages spread out), each reading
+ * and, with `width`, drawing its pages in one pass. Returns the prepared material and the page images drawn on the way.
+ * Falls back to one process when a worker cannot start.
+ */
+export async function preparePdfFast(bytes: Uint8Array, pageNumbers: readonly number[], router: PrepRouter, options: { procs: number; width?: number; workerPath: string }) {
+  const [{ spawn }, { mkdtemp, writeFile, rm }, os, path] = await Promise.all([import("node:child_process"), import("node:fs/promises"), import("node:os"), import("node:path")]);
+  const pages = [...new Set(pageNumbers)].sort((a, b) => a - b);
+  const procs = Math.max(1, Math.min(options.procs, pages.length));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "recaller-prep-"));
+  const file = path.join(dir, "source.pdf");
+  await writeFile(file, bytes);
+  const got = new Map<number, RawPage>();
+  const failed: number[] = [];
+  // One worker over `list` in order; resolves with the pages it did not finish (a native crash while drawing ends the process).
+  const run = (list: number[], width: number) => new Promise<number[]>((resolve) => {
+    const child = spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", options.workerPath, file, list.join(","), router, String(width)], { stdio: ["ignore", "pipe", "ignore"] });
+    let buffer = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      buffer += chunk;
+      for (let at = buffer.indexOf("\n"); at >= 0; at = buffer.indexOf("\n")) {
+        const line = buffer.slice(0, at); buffer = buffer.slice(at + 1);
+        if (line.trim()) { try { const raw = JSON.parse(line) as RawPage; got.set(raw.n, raw); } catch { /* a line cut by the crash */ } }
+      }
+    });
+    const done = () => resolve(list.filter((n) => !got.has(n)));
+    child.on("error", done);
+    child.on("close", done);
+  });
+  // A worker that dies goes on from the page after the one it died on; that page is tried twice more alone, then read
+  // without its picture (pdf.js + @napi-rs/canvas crash on some transparency-heavy slides: 반도체07 p.29, p.35 about 1 in 3).
+  const work = async (list: number[]) => {
+    let rest = await run(list, options.width ?? 0);
+    while (rest.length) {
+      const [hit, ...after] = rest;
+      let left = await run([hit], options.width ?? 0);
+      if (left.length && options.width) left = await run([hit], options.width);
+      if (left.length && options.width) { left = await run([hit], 0); if (!left.length) failed.push(hit); }
+      if (left.length) return false;
+      rest = after.length ? await run(after, options.width ?? 0) : [];
+    }
+    return true;
+  };
+  let ok = true;
+  try {
+    const results = await Promise.all(Array.from({ length: procs }, (_, k) => work(pages.filter((_, i) => i % procs === k))));
+    ok = results.every(Boolean);
+  } finally { await rm(dir, { recursive: true, force: true }).catch(() => undefined); }
+  // No worker could run at all (an older Node without type stripping): read in this process, without drawing.
+  if (!ok || got.size < pages.length) {
+    console.warn("[빠른 전처리] 일꾼이 돌지 않아 이 프로세스에서 그림 없이 읽어요.");
+    for (const raw of await readPdfPages(bytes, pages.filter((n) => !got.has(n)), router)) got.set(raw.n, raw);
+  }
+  const raws = pages.map((n) => got.get(n)!).filter(Boolean);
+  const images = new Map(raws.filter((r) => r.image).map((r) => [r.n, r.image!]));
+  return { prep: finishPrep(raws.map(({ image: _image, ...r }) => r), router), images, failed };
 }
 
 /** Without the PDF (tests, a text-only source): page texts as already extracted, each on the text layer. */

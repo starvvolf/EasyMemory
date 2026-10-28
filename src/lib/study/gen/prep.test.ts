@@ -64,3 +64,16 @@ test("consecutive slides with the same title are one section", () => {
   ]);
   assert.deepEqual(sections.map((s) => s.pages), [[4, 5], [6, 7, 8]]);
 });
+
+test("빠른 전처리 (실험): worker processes read and draw the pages; the result is the same as reading in one process", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const path = await import("node:path");
+  const { preparePdf, preparePdfFast } = await import("./prep.ts");
+  const bytes = new Uint8Array(await readFile(path.join(process.cwd(), "eval/corpus/user-test-pdfs/cornell-bfs-2pages.pdf")));
+  const slow = await preparePdf(bytes, [1, 2], "prep-2");
+  const fast = await preparePdfFast(bytes, [1, 2], "prep-2", { procs: 2, width: 512, workerPath: path.join(process.cwd(), "src/lib/study/gen/prep-worker.ts") });
+  assert.deepEqual(fast.prep, slow);
+  assert.deepEqual([...fast.images.keys()].sort(), [1, 2]);
+  assert.ok([...fast.images.values()].every((d) => d.startsWith("data:image/jpeg;base64,")));
+  assert.deepEqual(fast.failed, []);
+});
