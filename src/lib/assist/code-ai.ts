@@ -234,7 +234,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     if (d.answerKind !== "one") { await logTry(what, tries, times, "답이 여러 개이거나 실수 오차 문제", makeLabel); throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요."); }
     const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human, times);
     attempts.push({ ...times, ...(checked.ok ? {} : { reason: checked.reason.slice(0, 300) }) });
-    await logTry(what, tries, times, checked.ok ? "" : checked.reason, makeModel);
+    await logTry(what, tries, times, checked.ok ? "" : checked.reason, makeLabel);
     if (!checked.ok) { reasons.push(checked.reason); continue; }
     return saveProblem({ ...(input.id ? { id: input.id } : {}), title: d.title, statement: d.statement, inputText: d.inputText, outputText: d.outputText, examples: checked.examples, tests: checked.tests, timeLimitMs: d.timeLimitMs > 0 ? Math.min(Math.max(Math.round(d.timeLimitMs), 500), 10_000) : 2000,
       constraints: d.constraints.slice(0, 1000), testgen: { generator: d.generator, seed: checked.seed },
