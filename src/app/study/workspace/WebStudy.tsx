@@ -2,7 +2,7 @@
 // 공부 → 웹 글: articles read with the Chrome extension or pasted here, each with its knowledge and its four goals.
 import { useCallback, useEffect, useState } from "react";
 import { call, errorText, go, handoff, later } from "./api";
-import { ArticleGoals, ArticleKnowledge, type GoalId, type SourceView } from "./ArticleStudy";
+import { ArticleGoals, ArticleKnowledge, ArticleMap, type GoalId, type SourceView } from "./ArticleStudy";
 
 type SourceLite = { id: string; kind: string; title: string; url: string; readAt: string; againIds: string[]; knowledgeIds: string[]; goals: Record<GoalId, { done: boolean }> };
 
@@ -25,8 +25,9 @@ export default function WebStudy() {
       <section className="panel stack">
         <h2 className="ws-title">{open.title}</h2>
         {open.url ? <a className="small" href={open.url} target="_blank" rel="noreferrer">원문 열기 ↗</a> : null}
-        <details className="ws-fold"><summary>이 글의 주장 보기</summary><p>{open.claim.text}</p>{open.claim.basis.length ? <ul className="small muted">{open.claim.basis.map((b, i) => <li key={i}>{b}</li>)}</ul> : null}</details>
+        <details className="ws-fold"><summary>이 글의 요지 보기</summary><p>{open.claim.text}</p>{open.claim.basis.length ? <ul className="small muted">{open.claim.basis.map((b, i) => <li key={i}>{b}</li>)}</ul> : null}</details>
       </section>
+      {open.map ? <section className="panel"><ArticleMap source={open} onChanged={setOpen} /></section> : null}
       <section className="panel"><ArticleGoals source={open} onChanged={setOpen} /></section>
       <section className="panel stack"><b>이 글의 지식</b><ArticleKnowledge source={open} /></section>
     </div>

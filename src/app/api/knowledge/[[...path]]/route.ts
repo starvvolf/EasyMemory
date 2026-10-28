@@ -15,7 +15,7 @@ import { explainKnowledge, makeExplanation, runLayer } from "@/lib/knowledge/lay
 import { runClassify } from "@/lib/knowledge/classify";
 import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, sourceKey, syncSubjects,
   updateGoal } from "@/lib/knowledge/goals";
-import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing, readKnowledge } from "@/lib/assist/knowledge-ai";
+import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing, pickTerms, readKnowledge } from "@/lib/assist/knowledge-ai";
 
 export const runtime = "nodejs";
 // 같은 지식 찾기 3단계: every save that makes new items (PDF, 웹 글, 코드, 직접) is checked a few seconds later.
@@ -38,16 +38,18 @@ async function withGoals(source: ReadSource) {
   const items = await allItems();
   const mine = items.filter((i) => source.knowledgeIds.includes(i.id));
   const chainTitles = new Set(source.chains.flatMap((c) => [c.from, c.to]));
-  const chainItems = mine.filter((i) => chainTitles.has(i.title));
+  // 글 지도가 있는 글: 용어 = 학습자가 모른다고 고른 개념어, 고리 자리 = 핵심 아이디어 ("핵심을 설명할 수 있다").
+  const ideaIds = new Set(source.map?.ideas.map((x) => x.id) ?? []);
+  const chainItems = source.map ? mine.filter((i) => ideaIds.has(i.id)) : mine.filter((i) => chainTitles.has(i.title));
   const known = (list: typeof mine) => list.length > 0 && list.every((i) => i.state === "known");
-  const termItems = mine.filter((i) => !chainTitles.has(i.title));
+  const termItems = source.map ? mine.filter((i) => source.map!.termIds.includes(i.id)) : mine.filter((i) => !chainTitles.has(i.title));
   const goals = {
-    terms: { ...source.goals.terms, done: source.goals.terms.done || known(termItems.length ? termItems : mine) },
+    terms: { ...source.goals.terms, done: source.goals.terms.done || (source.map ? known(termItems) : known(termItems.length ? termItems : mine)) },
     claim: source.goals.claim,
     chains: { ...source.goals.chains, done: source.goals.chains.done || (chainItems.length > 0 && known(chainItems)) },
     recognize: source.goals.recognize,
   };
-  return { ...source, text: undefined, textLength: source.text.length, goals, goalText: GOAL_TEXT,
+  return { ...source, text: undefined, textLength: source.text.length, goals, goalText: source.map ? { ...GOAL_TEXT, terms: "모르던 개념어를 안다", chains: "핵심을 설명할 수 있다" } : GOAL_TEXT,
     items: mine.map((i) => ({ id: i.id, title: i.title, state: i.state, graduated: i.graduated, again: source.againIds.includes(i.id), quote: source.quotes[i.id] ?? "" })) };
 }
 
@@ -206,6 +208,11 @@ async function handle(request: Request, context: RouteContext) {
     }
 
     // read articles
+    // 글 지도의 개념어 고르기: 모른다고 누른 개념어는 지식(몰랐음)이 된다.
+    if (p[0] === "source" && p[1] && p[2] === "terms" && m === "POST") {
+      const b = await body(z.object({ names: z.array(z.string().min(1).max(120)).min(1).max(30), on: z.boolean() }));
+      return json({ source: await withGoals(await pickTerms(p[1], b.names, b.on)) });
+    }
     if (p[0] === "sources" && m === "GET") return json({ sources: await listSources() });
     if (p[0] === "source" && p[1] && p.length === 2 && m === "GET") { const s = await getSource(p[1]); if (!s) return NextResponse.json({ message: "읽은 글을 찾을 수 없어요." }, { status: 404 }); return json({ source: await withGoals(s) }); }
     if (p[0] === "source" && p[1] && p[2] === "goal" && m === "POST") { const b = await body(z.object({ goal: z.enum(["terms", "claim", "chains", "recognize"]), done: z.boolean() })); return json({ source: await markGoal(p[1], b.goal as GoalId, b.done) }); }

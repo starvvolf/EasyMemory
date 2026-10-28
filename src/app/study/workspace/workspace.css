@@ -365,3 +365,21 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .kw-differs{display:flex;gap:8px;align-items:baseline;margin:0;padding:8px 10px;border-radius:8px;background:var(--help-soft);font-size:13px}
 .dejipgi .kw-differs-tag{flex:none;font-size:11px;font-weight:700;color:var(--help)}
 .dejipgi .kw-differs-note{color:var(--muted);font-size:12px}
+
+/* 글 지도 (2026-10-29): 질문 → 흐름 → 핵심 → 모르는 개념어만 고르기 */
+.dejipgi .am{gap:16px}
+.dejipgi .am-head{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.dejipgi .am-q{margin:0;font-size:17px;font-weight:700;line-height:1.45}
+.dejipgi .am-flow{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px;font-size:13.5px;color:var(--muted)}
+.dejipgi .am-ideas{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dejipgi .am-ideas li{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:10px;background:var(--surface-2);font-size:14px;line-height:1.55}
+.dejipgi .am-terms{display:flex;flex-wrap:wrap;gap:6px}
+.dejipgi .am-term{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:4px 12px;font-size:13.5px;cursor:pointer}
+.dejipgi .am-term:hover:not(:disabled){border-color:var(--accent)}
+.dejipgi .am-term.met{border-style:dashed}
+.dejipgi .am-term.known{color:var(--faint);background:transparent;border-color:var(--line);cursor:default}
+.dejipgi .am-term.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.dejipgi .am-picked{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.dejipgi .am-picked li{display:flex;gap:8px;align-items:baseline}
+.dejipgi .am-picked span{color:var(--muted)}
+.dejipgi .am-consider{margin:6px 0;padding-left:18px}

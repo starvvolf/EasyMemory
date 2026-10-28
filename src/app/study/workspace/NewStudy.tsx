@@ -7,7 +7,7 @@ import { call, errorText, folderPaths, go, handoff, later, type GoalView, type T
 import type { SourceView } from "./ArticleStudy";
 
 type Kind = "pdf" | "web" | "code";
-type Made = { kind: "web"; id: string; title: string; url: string; folderId: string | null; count: number; again: number } | { kind: "code"; id: string; title: string; folderId: string | null };
+type Made = { kind: "web"; id: string; title: string; url: string; folderId: string | null; count: number; again: number; question?: string; terms?: number } | { kind: "code"; id: string; title: string; folderId: string | null };
 const KINDS: Array<{ kind: Kind; title: string; text: string; eg: string }> = [
   { kind: "pdf", title: "PDF · 강의 자료", text: "외울 것을 뽑아 문제로 만들고, 시험일까지 복습을 잡아요.", eg: "전공 PPT, 암기 과목, 교재 PDF" },
   { kind: "web", title: "웹 글 · 칼럼", text: "글에서 알아야 할 지식과 고리를 잡고, 다음 글에서 다시 만나면 알려 줘요.", eg: "주식 칼럼, 기술 블로그, 뉴스 해설" },
@@ -54,7 +54,7 @@ function WebForm({ onMade }: { onMade: (m: Made) => void }) {
       const r = await call<{ source: SourceView }>("/api/knowledge/extract", { kind: "web", title: v.title.trim() || v.text.trim().split("\n")[0].slice(0, 80) || "웹 글", ...(v.url.trim() ? { url: v.url.trim() } : {}), text: v.text });
       const first = r.source.items[0];
       const folderId = first ? (await call<{ item: { folderId: string | null } }>(`/api/knowledge/item/${first.id}`)).item.folderId : null;
-      onMade({ kind: "web", id: r.source.id, title: r.source.title, url: r.source.url ?? "", folderId, count: r.source.items.length, again: r.source.againIds.length });
+      onMade({ kind: "web", id: r.source.id, title: r.source.title, url: r.source.url ?? "", folderId, count: r.source.items.length, again: r.source.againIds.length, question: r.source.map?.question, terms: r.source.map?.terms.length });
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };
   return (
@@ -120,7 +120,9 @@ function Deadline({ made, onAgain }: { made: Made; onAgain: () => void }) {
       <section className="panel stack">
         <p className="eyebrow">만들었어요</p>
         <h2 className="ws-title">{made.title}</h2>
-        {made.kind === "web" ? <p className="muted">지식 {made.count}개를 잡았어요{made.again ? ` · 그중 ${made.again}개는 예전에 배운 것이에요` : ""}.</p> : <p className="muted">문제를 만들고 테스트를 확인했어요.</p>}
+        {made.kind === "web" ? (made.question ? <><p><b>이 글이 답하는 질문</b> · {made.question}</p>
+          <p className="muted">핵심 {made.count}개를 잡았어요{made.terms ? ` · 개념어 ${made.terms}개 중 모르는 것만 골라 주세요` : ""}{made.again ? ` · ${made.again}개는 이미 아는 것이에요` : ""}.</p></>
+          : <p className="muted">지식 {made.count}개를 잡았어요{made.again ? ` · 그중 ${made.again}개는 예전에 배운 것이에요` : ""}.</p>) : <p className="muted">문제를 만들고 테스트를 확인했어요.</p>}
       </section>
       <section className="panel stack">
         {step === "ask" ? <><b>시험이나 기한이 있나요?</b><div className="row"><button className="btn primary small" onClick={() => setStep("date")}>있어요</button><button className="btn small" onClick={() => setStep("none")}>없어요</button></div></> : null}
@@ -133,7 +135,7 @@ function Deadline({ made, onAgain }: { made: Made; onAgain: () => void }) {
         {step === "none" ? <p className="small">기한 없이 복습 간격대로 다시 물어볼게요.</p> : null}
         {step === "done" ? <p className="small">{note}</p> : null}
         {error ? <p className="ws-err">{error}</p> : null}
-        {step !== "ask" && step !== "date" ? <div className="row"><button className="btn primary" onClick={open}>{made.kind === "web" ? "확인 문제 풀러 가기" : "문제 풀러 가기"}</button><button className="btn ghost small" onClick={onAgain}>다른 공부 시작</button></div> : null}
+        {step !== "ask" && step !== "date" ? <div className="row"><button className="btn primary" onClick={open}>{made.kind === "web" ? (made.question ? "글 지도 보고 개념어 고르기" : "확인 문제 풀러 가기") : "문제 풀러 가기"}</button><button className="btn ghost small" onClick={onAgain}>다른 공부 시작</button></div> : null}
       </section>
     </div>
   );

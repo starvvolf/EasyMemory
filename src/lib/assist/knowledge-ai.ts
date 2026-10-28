@@ -3,6 +3,7 @@
 import { askJson, S } from "./model.ts";
 import { enrichKnowledge, getKnowledge, memoryOverview, recordEvent, saveKnowledge, saveMany, searchKnowledge, tree, pathOf, type SaveResult } from "../knowledge/store.ts";
 import { saveSource, sourceIdOf, getSource, type ReadSource } from "../knowledge/sources.ts";
+import { mapArticle } from "./article-map.ts";
 
 const EXTRACT_SYSTEM = `학습자가 읽은 글에서 "알아야 할 지식"을 뽑는다.
 - knowledge: 글을 이해하고 나중에 다른 글에서도 써먹으려면 알아야 하는 것. 한 항목에 하나만.
@@ -49,29 +50,58 @@ export async function readKnowledge(input: { title: string; url?: string; text: 
   return askJson<Extracted>("knowledge:extract", EXTRACT_SYSTEM, user, EXTRACT_SCHEMA, { effort: options.effort || process.env.RECALLER_EXTRACT_EFFORT?.trim() || "low",
     model: options.model || process.env.RECALLER_EXTRACT_MODEL?.trim() || "gpt-6.1-terra" });
 }
+/**
+ * 웹 글 읽기 (2026-10-29 글 지도로 바꿈): 핵심 아이디어 3~5개만 지식(만남)이 되고, 개념어는 후보로 글에 남는다 —
+ * 학습자가 모른다고 고른 것만 pickTerms가 지식(몰랐음)으로 만든다. 이미 가진 개념어는 "예전에 배운 것"으로 센다.
+ */
 export async function extractFromText(input: { kind: "web" | "lesson"; title: string; url?: string; text: string; folder?: string }): Promise<ExtractResult> {
   const text = input.text.replace(/\s+\n/g, "\n").trim();
   if (text.length < 80) throw new Error("본문이 너무 짧아요. 글 전체가 보이는지 확인해 주세요.");
-  const data = await readKnowledge({ ...input, text });
-  // A folder the learner chose is kept; otherwise 주제 정리 (classify.ts) places the new items in the topic tree a few
-  // seconds later.
+  const map = await mapArticle({ title: input.title, text });
+  // A folder the learner chose is kept; otherwise 주제 정리 (classify.ts) places the new items a few seconds later.
   const placed = input.folder ? { folder: input.folder } : { topicHint: input.kind === "lesson" ? "강의" : "읽은 글" };
-  const ref = { kind: input.kind === "lesson" ? "web" as const : "web" as const, title: input.title, ...(input.url ? { url: input.url } : {}) };
-  const chainsByFrom = new Map<string, Array<{ title: string; relation: string }>>();
-  for (const c of data.chains) chainsByFrom.set(c.from, [...(chainsByFrom.get(c.from) ?? []), { title: c.to, relation: c.relation }]);
-  const results = await saveMany(data.knowledge.map((k) => ({ title: k.title, body: k.body, ...placed, aliases: (k.aliases ?? []).slice(0, 6), source: { ...ref, quote: k.quote.slice(0, 200) },
-    links: chainsByFrom.get(k.title) ?? [] })));
-  const items = results.map((r, i) => ({ ...r.item, again: r.again, created: r.created, termKind: data.knowledge[i].kind, quote: data.knowledge[i].quote }));
+  const ref = { kind: "web" as const, title: input.title, ...(input.url ? { url: input.url } : {}) };
+  const results = await saveMany(map.ideas.map((k) => ({ title: k.title, body: k.body, ...placed, source: { ...ref, quote: k.quote.slice(0, 200) } })));
+  const items = results.map((r, i) => ({ ...r.item, again: r.again, created: r.created, termKind: "idea", quote: map.ideas[i].quote }));
   const id = sourceIdOf(input.url ?? "", input.title);
   const prior = await getSource(id);
+  const knownTermIds = map.terms.filter((t) => t.have !== "new" && t.id).map((t) => t.id!);
+  // Terms the learner already picked on an earlier read of this article stay picked.
+  const termIds = (prior?.map?.termIds ?? []).filter((x) => map.terms.some((t) => t.id === x) || prior?.knowledgeIds.includes(x));
   const source: ReadSource = {
     id, kind: input.kind, title: input.title, url: input.url ?? "", text: text.slice(0, 60000), readAt: new Date().toISOString(),
-    claim: data.claim, chains: data.chains, knowledgeIds: items.map((i) => i.id), againIds: items.filter((i) => i.again).map((i) => i.id),
+    claim: map.claim, chains: [], knowledgeIds: [...new Set([...items.map((i) => i.id), ...termIds])],
+    againIds: [...new Set([...items.filter((i) => i.again).map((i) => i.id), ...knownTermIds])],
     quotes: Object.fromEntries(items.map((i) => [i.id, i.quote])),
     goals: prior?.goals ?? { terms: { done: false }, claim: { done: false }, chains: { done: false }, recognize: { done: false } },
+    map: { genre: map.genre, question: map.question, flow: map.flow, consider: map.consider,
+      ideas: map.ideas.map((k, i) => ({ title: k.title, body: k.body, id: items[i].id })),
+      terms: map.terms.map((t) => ({ name: t.name, line: t.line, have: t.have as "new" | "met" | "known", ...(t.id ? { id: t.id } : {}) })), termIds },
   };
   await saveSource(source);
   return { source, items };
+}
+
+/**
+ * 개념어 고르기: 학습자가 모른다고 누른 개념어는 지식이 되고 "물어봄"으로 기록돼 복습에 들어간다(몰랐음). 다시 누르면 고른 것만 풀린다
+ * (지식은 남는다). 이미 있던 지식이면 그 지식에 기록만 더한다.
+ */
+export async function pickTerms(sourceId: string, names: string[], on: boolean) {
+  const source = await getSource(sourceId);
+  if (!source?.map) throw new Error("글 지도가 있는 글이 아니에요.");
+  const map = source.map;
+  const chosen = map.terms.filter((t) => names.includes(t.name));
+  if (!on) { map.termIds = map.termIds.filter((x) => !chosen.some((t) => t.id === x)); await saveSource(source); return source; }
+  const ref = { kind: "web" as const, title: source.title, ...(source.url ? { url: source.url } : {}) };
+  const results = await saveMany(chosen.map((t) => ({ title: t.name, body: t.line, topicHint: source.kind === "lesson" ? "강의" : "읽은 글", source: ref })));
+  for (const [n, r] of results.entries()) {
+    await recordEvent(r.item.id, "asked", "글 지도에서 모른다고 고름", { kind: "web", title: source.title, ...(source.url ? { ref: source.url } : {}) });
+    chosen[n].id = r.item.id;
+    if (!map.termIds.includes(r.item.id)) map.termIds.push(r.item.id);
+    if (!source.knowledgeIds.includes(r.item.id)) source.knowledgeIds.push(r.item.id);
+  }
+  await saveSource(source);
+  return source;
 }
 
 const EXPLAIN_SYSTEM = `학습자가 글을 읽다가 드래그한 부분을 묻는다. 이 글의 문맥에 맞춰 짧고 정확하게 답한다 (3~6문장).

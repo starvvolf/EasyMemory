@@ -11,6 +11,14 @@ export type ReadSource = {
   claim: { text: string; basis: string[] }; chains: Array<{ from: string; relation: string; to: string }>;
   knowledgeIds: string[]; againIds: string[]; quotes: Record<string, string>;
   goals: Record<GoalId, { done: boolean; at?: string; note?: string }>;
+  /** 글 지도 (2026-10-29): 읽기 전에 보는 질문·흐름·핵심 아이디어·개념어. ideaIds는 지식이 된 핵심, termIds는 학습자가 모른다고 고른 개념어. */
+  map?: ArticleMapSaved;
+};
+export type ArticleMapSaved = {
+  genre: string; question: string; flow: string[]; consider: string[];
+  ideas: Array<{ title: string; body: string; id: string }>;
+  terms: Array<{ name: string; line: string; have: "new" | "met" | "known"; id?: string }>;
+  termIds: string[];
 };
 const dir = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "knowledge", "sources");
 export const sourceIdOf = (url: string, title: string) => `src_${createHash("sha256").update(url || title).digest("hex").slice(0, 16)}`;

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "../study/dejipgi.css";
 import "../study/workspace/workspace.css";
 import { call, errorText, folderPaths, later, type Tree } from "../study/workspace/api";
-import { ArticleGoals, ArticleKnowledge, type SourceView } from "../study/workspace/ArticleStudy";
+import { ArticleGoals, ArticleKnowledge, ArticleMap, type SourceView } from "../study/workspace/ArticleStudy";
 import { Rich } from "../study/workspace/Rich";
 
 type Article = { title: string; url: string; text: string; selection?: string; error?: string };
@@ -86,7 +86,8 @@ export default function ExtPanel() {
           </div>
         </section>
 
-        {source ? <section className="panel stack"><p className="eyebrow">이 글의 지식</p><ArticleKnowledge source={source} /></section> : null}
+        {source?.map ? <section className="panel"><ArticleMap source={source} onChanged={setSource} /></section>
+          : source ? <section className="panel stack"><p className="eyebrow">이 글의 지식</p><ArticleKnowledge source={source} /></section> : null}
 
         <section className="panel stack">
           <p className="eyebrow">드래그해서 묻기</p>
