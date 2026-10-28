@@ -43,7 +43,7 @@ export function isLocalExperimentApiPath(pathname: string): boolean {
     // 토론방 (src/app/room): the route checks the local principal itself.
     pathname === "/api/room" || pathname.startsWith("/api/room/") ||
     // 지식 · 코드 · 일정 · 에이전트 툴 (2026-10-26): routes that check the local principal themselves.
-    ["/api/knowledge", "/api/code", "/api/schedule", "/api/agent"].some((base) => pathname === base || pathname.startsWith(`${base}/`)) ||
+    ["/api/knowledge", "/api/code", "/api/schedule", "/api/agent", "/api/study-map"].some((base) => pathname === base || pathname.startsWith(`${base}/`)) ||
     pathname.startsWith("/api/mcp-runs/") ||
     pathname === "/api/mcp-experiment-requests" ||
     pathname.startsWith("/api/mcp-experiment-requests/") ||
