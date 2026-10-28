@@ -10,6 +10,7 @@ import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
 import { nearOf, previewLinks, rejudgeLinks, openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
 import { scheduleAfterSave } from "@/lib/knowledge/after-save";
 import { knowledgeReport } from "@/lib/knowledge/report";
+import { mapArticle } from "@/lib/assist/article-map";
 import { explainKnowledge, makeExplanation, runLayer } from "@/lib/knowledge/layer";
 import { runClassify } from "@/lib/knowledge/classify";
 import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, sourceKey, syncSubjects,
@@ -245,6 +246,15 @@ async function handle(request: Request, context: RouteContext) {
       catch (error) { return NextResponse.json({ message: `뜻을 정리하지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
     }
     if (p[0] === "fill" && m === "POST") { const b = await body(z.object({ ids: z.array(id).max(200).optional() })); return json(await fillMissing({ ids: b.ids })); }
+    // 글 지도 미리보기 (article-map.ts): 질문·흐름·요지·핵심 아이디어·개념어. Nothing saved.
+    if (p[0] === "map-preview" && m === "POST") {
+      const b = await body(z.object({ title: z.string().min(1).max(300), text: z.string().max(200000).optional(), url: z.string().url().max(2000).optional(), model: z.string().max(60).optional() }));
+      const text = b.text ?? (b.url ? pageText(await (await fetch(b.url, { headers: { "user-agent": "Mozilla/5.0 Recaller-measure" } })).text()) : "");
+      if (text.length < 80) return NextResponse.json({ message: "본문을 읽지 못했어요." }, { status: 400 });
+      const started = Date.now();
+      const data = await mapArticle({ title: b.title, text }, { model: b.model });
+      return json({ ms: Date.now() - started, chars: text.length, ...data });
+    }
     // 지식 잡기 미리보기: the model call only, nothing saved (to compare 생각 강도 on the same article).
     if (p[0] === "extract-preview" && m === "POST") {
       const b = await body(z.object({ title: z.string().min(1).max(300), text: z.string().max(200000).optional(), url: z.string().url().max(2000).optional(),
