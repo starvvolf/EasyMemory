@@ -66,6 +66,16 @@ test("lab.outline and lab.consolidate (연구 1 3번): each 정리 call sees the
   assert.deepEqual(organize.outline?.pages, ["p.1 Back-Face Detection", "p.2 Depth-Buffer Method"]);
   const cards = done.sections.flatMap((s) => done.recaller!.units[s.id].cards ?? []);
   assert.deepEqual(done.recaller!.consolidated!.cards.map((c) => c.id), cards.map((c) => c.id));
+  assert.equal(done.recaller!.consolidated!.cards[0].weight, "핵심");
+}));
+
+test("자료 지도: the whole-material pass runs by default beside the questions, and lab.consolidate=false turns it off", () => withData(async () => {
+  const on = await runGen((await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" })).id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  assert.equal(on.status, "done", on.message);
+  assert.ok(on.recaller!.consolidated?.cards.length, "the pass ran");
+  assert.ok((await readGenCalls(on.id)).some((c) => c.step === "rc-author"), "questions were made as before");
+  const off = await runGen((await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", lab: { consolidate: false } })).id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  assert.equal(off.recaller!.consolidated, undefined);
 }));
 
 test("deep questions are made only when asked", () => withData(async () => {

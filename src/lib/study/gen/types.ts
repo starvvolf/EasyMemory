@@ -99,7 +99,9 @@ export type RecallerLab = {
   inlineRead?: boolean;
   /** 3번(가): every 정리 call also gets the whole material's page titles and the neighbouring pages' first lines (no extra call). */
   outline?: boolean;
-  /** 3번(나): after the first pass, one text-only call over all cards names each specifically, marks duplicates and gives a topic. */
+  /** 3번(나): after the first pass, one text-only call over all cards names each specifically, marks duplicates, gives a topic,
+   *  a material-wide weight and links (자료 지도). On by default since 2026-10-29, beside the questions and never failing the run;
+   *  true makes it blocking and its failure fatal (the old 실험), false turns it off. */
   consolidate?: boolean;
   /** 빠른 전처리: read and draw pages in this many worker processes in one pass (a drawing crash ends a worker, not the server). */
   fastPrep?: number;

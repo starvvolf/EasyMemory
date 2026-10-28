@@ -18,10 +18,10 @@ type Shape =
   | { form: "pattern"; frame: string; slots: string[]; example: string };
 type MapState = "new" | "met" | "unknown" | "known" | "graduated";
 type Card = { id: string; ref: string; kind: string; title: string; core: boolean; shape: Shape; pages: number[]; quotes: string[]; mistakes: string[];
-  takes: string[]; gives: string[]; questions: number; same: Array<{ id: string; pages: number[] }>; state: MapState; knowledgeId?: string; dueAt?: string };
+  takes: string[]; gives: string[]; questions: number; same: Array<{ id: string; pages: number[] }>; state: MapState; knowledgeId?: string; dueAt?: string; topic?: string };
 type Section = { id: string; title: string; pages: number[]; cards: Card[] };
-type MatMap = { id: string; title: string; status: string; pages: number; sections: Section[]; chains: Array<{ from: string; to: string; what: string }>;
-  counts: Record<MapState, number> & { cards: number; questions: number } };
+type MatMap = { id: string; title: string; status: string; pages: number; sections: Section[]; chains: Array<{ from: string; to: string; what: string; by?: string }>;
+  topics?: string[]; counts: Record<MapState, number> & { cards: number; questions: number; core?: number } };
 
 const STATE: Record<MapState, [string, string]> = { unknown: ["몰랐음", "bad"], met: ["만남", "read"], known: ["앎", "good"], graduated: ["졸업", "good"], new: ["아직", ""] };
 const range = (pages: number[]) => !pages.length ? "" : pages.length === 1 ? `p.${pages[0]}` : `p.${Math.min(...pages)}–${Math.max(...pages)}`;
@@ -46,12 +46,26 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
   const [error, setError] = useState("");
   const [only, setOnly] = useState<"all" | "unknown" | "new">("all");
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = useState<"outline" | "topic">("outline");
+  const [coreOnly, setCoreOnly] = useState(false);
   useEffect(() => { call<{ map: MatMap }>(`/api/study-map/${genId}`).then((r) => setMap(r.map)).catch((e) => setError(errorText(e))); }, [genId]);
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", esc); return () => document.removeEventListener("keydown", esc); }, [onClose]);
   const titles = useMemo(() => new Map(map?.sections.flatMap((s) => s.cards.map((c) => [c.id, c.title] as const)) ?? []), [map]);
-  const next = useMemo(() => { const m = new Map<string, Array<{ to: string; what: string }>>(); for (const c of map?.chains ?? []) m.set(c.from, [...(m.get(c.from) ?? []), { to: c.to, what: c.what }]); return m; }, [map]);
+  // Links both ways: a card shows where it leads and what it rests on.
+  const next = useMemo(() => { const m = new Map<string, Array<{ to: string; what: string; back: boolean }>>();
+    for (const c of map?.chains ?? []) { m.set(c.from, [...(m.get(c.from) ?? []), { to: c.to, what: c.what, back: false }]); if (c.by === "meaning") m.set(c.to, [...(m.get(c.to) ?? []), { to: c.from, what: c.what, back: true }]); }
+    return m; }, [map]);
+  // 개념별: the whole-material pass's larger ideas, across sections (cards without one stay under 기타).
+  const groups = useMemo(() => {
+    if (!map) return [];
+    if (view === "outline" || !map.topics?.length) return map.sections.map((s) => ({ key: s.id, title: s.title, pages: s.pages, cards: s.cards }));
+    const all = map.sections.flatMap((s) => s.cards);
+    const named = [...map.topics, ...(all.some((c) => !c.topic) ? ["기타"] : [])];
+    return named.map((t) => { const cards = all.filter((c) => (c.topic ?? "기타") === t); return { key: `t:${t}`, title: t, pages: [...new Set(cards.flatMap((c) => c.pages))].sort((a, b) => a - b), cards }; });
+  }, [map, view]);
+  const jump = (id: string) => { const el = document.getElementById(`mm2-${id}`); if (!el) return; el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1200); };
   if (!map) return <div className="mm2"><div className="mm2-head"><b>자료 지도</b><button className="btn ghost small" onClick={onClose}>닫기</button></div><p className="small muted">{error || "지도를 그리는 중…"}</p></div>;
-  const shown = (c: Card) => only === "all" || (only === "unknown" ? c.state === "unknown" : c.state === "new" || c.state === "met");
+  const shown = (c: Card) => (!coreOnly || c.core) && (only === "all" || (only === "unknown" ? c.state === "unknown" : c.state === "new" || c.state === "met"));
   const n = map.counts;
   return (
     <div className="mm2" role="dialog" aria-label="자료 지도">
@@ -68,22 +82,29 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
         <div className="ws-seg">{([["all", "전체"], ["unknown", "몰랐음만"], ["new", "아직 확인 안 한 것"]] as const).map(([k, label]) =>
           <button key={k} aria-pressed={only === k} onClick={() => setOnly(k)}>{label}</button>)}</div>
       </div>
+      <div className="row small">
+        {map.topics?.length ? <div className="ws-seg">{([["outline", "목차별"], ["topic", "개념별"]] as const).map(([k, label]) =>
+          <button key={k} aria-pressed={view === k} onClick={() => setView(k)}>{label}</button>)}</div> : null}
+        <label className="row small"><input type="checkbox" checked={coreOnly} onChange={(e) => setCoreOnly(e.target.checked)} /> 핵심만{n.core !== undefined ? ` (${n.core})` : ""}</label>
+        {map.status !== "done" && !map.topics?.length ? <span className="muted">개념별 보기는 자료 전체 정리가 끝나면 생겨요</span> : null}
+      </div>
       <div className="mm2-sections">
-        {map.sections.map((s) => {
+        {groups.map((s) => {
           const cards = s.cards.filter(shown);
           if (!cards.length) return null;
           return (
-            <section key={s.id} className="mm2-sec">
+            <section key={s.key} className="mm2-sec">
               <div className="mm2-sec-head"><b>{s.title}</b><span className="small muted">{range(s.pages)}</span>
                 <span className="mm2-dots">{s.cards.map((c) => <span key={c.id} className={`dot ${STATE[c.state][1]}`} title={`${c.title}: ${STATE[c.state][0]}`} />)}</span></div>
               <div className="mm2-cards">
                 {cards.map((c) => (
-                  <article key={c.id} className={`mm2-card st-${c.state}`}>
-                    <div className="row small"><span className="chip">{c.kind}</span><span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span><span className="cs-gap" />
+                  <article key={c.id} id={`mm2-${c.id}`} className={`mm2-card st-${c.state}${c.core ? "" : " minor"}`}>
+                    <div className="row small"><span className="chip">{c.kind}</span>{c.core ? <span className="chip core">핵심</span> : null}<span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span><span className="cs-gap" />
                       {c.pages.map((p) => <button key={p} className="linkish small" onClick={() => onPage(p)} title="이 쪽 원문으로">p.{p}</button>)}</div>
                     <b className="mm2-title"><Rich text={c.title} /></b>
                     <Body s={c.shape} />
-                    {next.get(c.id)?.length ? <p className="small muted">→ 이어짐: {next.get(c.id)!.map((x) => titles.get(x.to)).filter(Boolean).join(", ")}</p> : null}
+                    {next.get(c.id)?.length ? <p className="small muted mm2-links">{next.get(c.id)!.filter((x) => titles.has(x.to)).map((x, i) =>
+                      <span key={i}>{x.back ? "← " : "→ "}<button className="linkish small" onClick={() => jump(x.to)}>{titles.get(x.to)}</button>{x.what && x.what.length <= 20 ? ` (${x.what})` : ""}</span>)}</p> : null}
                     {c.same.length ? <p className="small muted">같은 지식: {c.same.map((x) => range(x.pages)).join(", ")}</p> : null}
                     {c.mistakes.length ? (open === c.id
                       ? <ul className="mm2-mist small">{c.mistakes.map((m, i) => <li key={i}><Rich text={m} /></li>)}</ul>

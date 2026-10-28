@@ -54,5 +54,22 @@ test("the same knowledge on two pages is one card with both pages, and a card's 
   const map = materialMap(state, {})!;
   assert.deepEqual(map.sections.map((s) => s.cards.map((c) => c.id)), [["c1"], ["c3"]]);
   assert.deepEqual(map.sections[0].cards[0].pages, [1, 2]);
-  assert.deepEqual(map.chains, [{ from: "c1", to: "c3", what: "View Matrix" }]);
+  assert.deepEqual(map.chains, [{ from: "c1", to: "c3", what: "View Matrix", by: "wording" }]);
+  assert.deepEqual(map.topics, []);
+});
+
+test("the whole-material pass gives each card its weight, its larger idea and links across sections", () => {
+  const card = (id: string, page: number) => ({ id, kind: "개념", title: id, weight: "핵심", shape: { form: "fact", subject: id, value: "v" },
+    evidence: [{ page, quote: "" }], mistakes: [], links: [], takes: [], gives: [] });
+  const state = { id: "gen_y", status: "done", input: { fileName: "a.pdf", pageNumbers: [1, 2] }, sections: [{ id: "s1", title: "앞", pages: [1] }, { id: "s2", title: "뒤", pages: [2] }],
+    recaller: { units: { s1: { cards: [card("c1", 1), card("c2", 1)] }, s2: { cards: [card("c3", 2)] } }, deep: {},
+      consolidated: { ms: 1, cards: [
+        { id: "c1", title: "투영 행렬", sameAs: null, topic: "투영", weight: "핵심", links: [] },
+        { id: "c2", title: "예시", sameAs: null, topic: "투영", weight: "보조", links: [] },
+        { id: "c3", title: "클리핑", sameAs: null, topic: "클리핑", weight: "핵심", links: [{ to: "c1", why: "바탕 개념" }] }] } } } as unknown as Parameters<typeof materialMap>[0];
+  const map = materialMap(state, {})!;
+  assert.deepEqual(map.sections.flatMap((s) => s.cards.map((c) => [c.title, c.core, c.topic])), [["투영 행렬", true, "투영"], ["예시", false, "투영"], ["클리핑", true, "클리핑"]]);
+  assert.deepEqual(map.topics, ["투영", "클리핑"]);
+  assert.equal(map.counts.core, 2);
+  assert.deepEqual(map.chains, [{ from: "c3", to: "c1", what: "바탕 개념", by: "meaning" }]);
 });

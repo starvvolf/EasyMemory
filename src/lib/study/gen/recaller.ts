@@ -87,7 +87,7 @@ export type RecallerState = {
   dups?: Record<string, string>;
   warnings: Issue[];
   /** 연구 1 3번(나), 실험: the whole-material pass over the cards — a specific name, the earlier card it repeats, a topic. Cards are not changed. */
-  consolidated?: { ms: number; cards: Array<{ id: string; title: string; sameAs: string | null; topic: string }> };
+  consolidated?: { ms: number; error?: string; cards: Array<{ id: string; title: string; sameAs: string | null; topic: string; weight?: "핵심" | "보조"; links?: Array<{ to: string; why: string }> }> };
   timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string;
     /** 연구 1: when each page's reading and cards were done (the first pass over the material). */
     readAt?: Record<string, string>; organizedAt?: Record<string, string>; skimDoneAt?: string };
@@ -136,8 +136,11 @@ const MERGE = `${BASE}
 - title: 그 카드가 담은 지식의 구체적인 이름(쪽 제목을 그대로 쓰지 않는다, 원문 표기 유지, 40자 이내).
 - sameAs: 앞선 다른 카드와 사실상 같은 지식이면 그 카드 id, 아니면 null. 이름만 같고 내용이 다르면 같은 지식이 아니다.
 - topic: 이 카드가 속한 상위 개념(자료의 큰 주제, 15자 안팎). 같은 상위 개념이면 같은 말을 쓴다.
+- weight: 자료 전체를 놓고 볼 때 이 자료를 이해하고 시험을 보려면 꼭 알아야 하는 중심 지식이면 "핵심", 예시·보충·세부·되풀이면 "보조". 쪽마다 따로 정한 중요도는 믿지 말고 자료 전체에서 다시 정한다. 핵심은 전체의 절반을 넘지 않는다.
+- links: 이 카드와 뜻으로 이어지는 다른 카드(최대 2개). to는 그 카드 id, why는 관계를 12자 이내로(예: "바탕 개념", "대비", "다음 단계", "적용 예"). 같은 쪽 안의 뻔한 연결보다 다른 쪽에 있는 카드와의 연결을 먼저 쓴다. sameAs로 묶은 카드는 넣지 않는다. 없으면 빈 배열.
 모든 카드를 순서대로 빠짐없이 쓴다.`;
-const mergeReplySchema = z.object({ cards: z.array(z.object({ id: text, title: text, sameAs: z.string().nullable(), topic: text })) });
+const mergeReplySchema = z.object({ cards: z.array(z.object({ id: text, title: text, sameAs: z.string().nullable(), topic: text,
+  weight: z.enum(["핵심", "보조"]).optional(), links: z.array(z.object({ to: text, why: text })).max(4).optional() })) });
 const CALC = "계산기는 일반 수학만 안다: 행렬은 행 단위 ((a, b), (c, d)), 행렬×행렬·행렬×벡터는 *, transpose() det() inv() eye(n), row(M, i) col(M, j) at(v, i)(1부터), 이어 붙이기 join(v, x), 판정 lt le gt ge eq and or not pick(조건, 참일 때, 거짓일 때)(참 1, 거짓 0), sind cosd tand(도). 원문의 공식·행렬은 계산기가 모르므로 먼저 정의 단계를 둔다: name에 'T(tx, ty)'처럼 이름과 매개변수, expr에 원문 식을 매개변수로, value는 '정의'. 뒤 단계에서 T(2, 3)처럼 부른다.";
 const LINK = `${BASE}
 지식 카드 목록에서 함께 엮으면 한 카드만 알아서는 풀 수 없는 응용 문제가 되는 묶음(카드 2~3장)을 고른다. 앞 카드의 결과가 뒤 카드의 입력이 되는 묶음(판정 → 절차, 공식 → 비교, 절차 → 절차)을 우선한다. 구체적인 값으로 계산하거나 판정할 수 있는 묶음만 고른다. 서로 다른 묶음이 같은 카드 조합을 반복하지 않는다. 묶음이 없으면 빈 배열.`;
@@ -720,9 +723,13 @@ export async function runRecaller(ctx: RecallerContext) {
     const reply = await ctx.ask("rc-merge", null, 1, MERGE, JSON.stringify({ material: input.fileName, outline: data.prep!.pages.map((p) => `p.${p.page} ${p.title}`),
       cards: all.map((c) => ({ id: c.id, pages: [...new Set(c.evidence.map((e) => e.page))], line: cardLine(c).replace(/ ⟨받음:.*$/, "").slice(0, 220) })) }), mergeReplySchema, { maxChars: 400 * all.length + 4000 });
     const ids = new Set(all.map((c) => c.id));
-    data.consolidated = { ms: Date.now() - t0, cards: reply.cards.filter((c) => ids.has(c.id)).map((c) => ({ id: c.id, title: c.title, sameAs: c.sameAs && ids.has(c.sameAs) && c.sameAs !== c.id ? c.sameAs : null, topic: c.topic })) };
+    data.consolidated = { ms: Date.now() - t0, cards: reply.cards.filter((c) => ids.has(c.id)).map((c) => ({ id: c.id, title: c.title, sameAs: c.sameAs && ids.has(c.sameAs) && c.sameAs !== c.id ? c.sameAs : null, topic: c.topic,
+      ...(c.weight ? { weight: c.weight } : {}), links: (c.links ?? []).filter((l) => ids.has(l.to) && l.to !== c.id).slice(0, 2).map((l) => ({ to: l.to, why: l.why.slice(0, 20) })) })) };
     await save();
   };
+  // 자료 지도 (2026-10-29): the whole-material pass runs by default, beside the questions (it changes no card and no question).
+  // It never fails the run: a failed pass leaves the map on the pages' own weights and wording links.
+  const merging = () => consolidate().catch(async (error) => { data.consolidated = { ms: 0, error: error instanceof Error ? error.message : String(error), cards: [] }; await save(); });
 
   const order = () => {
     const page = ctx.priorityPage?.();
@@ -751,8 +758,10 @@ export async function runRecaller(ctx: RecallerContext) {
   const stop = settled.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
   if (stop) throw stop.reason;
   data.timing.skimDoneAt ??= new Date().toISOString();
-  if (lab.consolidate && !data.consolidated) await consolidate();
+  const merged = lab.consolidate === false || (data.consolidated && !data.consolidated.error) ? Promise.resolve() : lab.consolidate ? consolidate() : merging();
+  merged.catch(() => undefined); // awaited below; a pause that ends the run first must not leave it unhandled
   if (lab.skimOnly) {
+    await merged;
     data.timing.completedAt = new Date().toISOString();
     state.status = "done"; state.phase = "done"; state.message = "";
     await save();
@@ -897,6 +906,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const paused = deepRuns.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
     if (paused) throw paused.reason;
   }
+  await merged;
   data.timing.completedAt = new Date().toISOString();
   state.status = "done"; state.phase = "done"; state.message = "";
   await save();
@@ -952,7 +962,8 @@ export function recallerFakeReply(step: GenStep, user: string): string {
   }
   if (step === "rc-merge") {
     const cards = u.cards as Array<{ id: string; line: string }>;
-    return JSON.stringify({ cards: cards.map((c, i) => ({ id: c.id, title: c.line.replace(/^\[[^\]]+\] /, "").slice(0, 30), sameAs: i > 0 && c.line === cards[i - 1].line ? cards[i - 1].id : null, topic: "가짜 주제" })) });
+    return JSON.stringify({ cards: cards.map((c, i) => ({ id: c.id, title: c.line.replace(/^\[[^\]]+\] /, "").slice(0, 30), sameAs: i > 0 && c.line === cards[i - 1].line ? cards[i - 1].id : null, topic: "가짜 주제",
+      weight: i === 0 ? "핵심" : "보조", links: i > 0 ? [{ to: cards[0].id, why: "바탕 개념" }] : [] })) });
   }
   if (step === "rc-solve") {
     const q = u.question as { parts: Array<{ ask: string; options: string[] }> };

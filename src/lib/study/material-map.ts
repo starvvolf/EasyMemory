@@ -16,13 +16,18 @@ export type MapCard = {
   /** Cards elsewhere that hold the same knowledge (the engine's dups / consolidation): shown once, here. */
   same: Array<{ id: string; pages: number[] }>;
   state: MapState; knowledgeId?: string; dueAt?: string;
+  /** The whole-material pass (consolidated): its larger idea, and whether the weight came from it rather than the page. */
+  topic?: string;
 };
 export type MapSection = { id: string; title: string; pages: number[]; cards: MapCard[] };
-export type MapChain = { from: string; to: string; what: string };
+/** wording: one card's result is another's input (takes/gives); group: a deep question joins them; meaning: the whole-material pass. */
+export type MapChain = { from: string; to: string; what: string; by: "wording" | "group" | "meaning" };
 export type MaterialMap = {
   id: string; title: string; status: GenState["status"]; pages: number;
   sections: MapSection[]; chains: MapChain[];
-  counts: Record<MapState, number> & { cards: number; questions: number };
+  /** Larger ideas across the sections, in first-seen order (empty until the whole-material pass has run). */
+  topics: string[];
+  counts: Record<MapState, number> & { cards: number; questions: number; core: number };
 };
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s·()[\]{}'"`.,:;!?-]+/g, "");
@@ -41,7 +46,7 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
   const sameAs = new Map<string, string>(Object.entries(rc.dups ?? {}));
   for (const c of rc.consolidated?.cards ?? []) if (c.sameAs && c.sameAs !== c.id) sameAs.set(c.id, c.sameAs);
   const root = (id: string) => { let at = id; for (let i = 0; i < 5 && sameAs.has(at); i++) at = sameAs.get(at)!; return at; };
-  const named = new Map((rc.consolidated?.cards ?? []).map((c) => [c.id, c.title]));
+  const merged = new Map((rc.consolidated?.cards ?? []).map((c) => [c.id, c]));
 
   const all = state.sections.flatMap((section) => (rc.units[section.id]?.cards ?? []).map((card) => ({ section, card })));
   const byId = new Map(all.map(({ card }) => [card.id, card]));
@@ -55,7 +60,8 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
     cards: (rc.units[section.id]?.cards ?? []).filter((card) => root(card.id) === card.id || !byId.has(root(card.id))).map((card): MapCard => {
       const ref = `${state.id}:${card.id}`, k = knowledge[ref];
       const same = extra.get(card.id) ?? [];
-      return { id: card.id, ref, kind: card.kind, title: named.get(card.id) || card.title, core: card.weight === "핵심", shape: card.shape,
+      const m = merged.get(card.id);
+      return { id: card.id, ref, kind: card.kind, title: m?.title || card.title, core: (m?.weight ?? card.weight) === "핵심", shape: card.shape, ...(m?.topic ? { topic: m.topic } : {}),
         pages: [...new Set([...card.evidence.map((e) => e.page), ...same.flatMap((s) => s.pages)])].sort((a, b) => a - b),
         quotes: card.evidence.map((e) => e.quote).filter(Boolean), mistakes: card.mistakes, takes: card.takes ?? [], gives: card.gives ?? [],
         questions: (asked.get(card.id) ?? 0) + same.reduce((n, s) => n + (asked.get(s.id) ?? 0), 0), same,
@@ -72,15 +78,21 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
   for (const c of shown) for (const t of c.takes) for (const from of givers.get(norm(t)) ?? []) {
     const key = `${from}>${c.id}`;
     if (from === c.id || seen.has(key)) continue;
-    seen.add(key); chains.push({ from, to: c.id, what: t });
+    seen.add(key); chains.push({ from, to: c.id, what: t, by: "wording" });
   }
   for (const group of rc.groups ?? []) for (let i = 1; i < group.cardIds.length; i++) {
     const from = root(group.cardIds[i - 1]), to = root(group.cardIds[i]), key = `${from}>${to}`;
-    if (from !== to && !seen.has(key) && shown.some((c) => c.id === from) && shown.some((c) => c.id === to)) { seen.add(key); chains.push({ from, to, what: group.idea }); }
+    if (from !== to && !seen.has(key) && shown.some((c) => c.id === from) && shown.some((c) => c.id === to)) { seen.add(key); chains.push({ from, to, what: group.idea, by: "group" }); }
   }
+  const ids = new Set(shown.map((c) => c.id));
+  for (const c of rc.consolidated?.cards ?? []) for (const link of c.links ?? []) {
+    const from = root(c.id), to = root(link.to), key = `${from}>${to}`;
+    if (from !== to && ids.has(from) && ids.has(to) && !seen.has(key) && !seen.has(`${to}>${from}`)) { seen.add(key); chains.push({ from, to, what: link.why, by: "meaning" }); }
+  }
+  const topics = [...new Set(shown.map((c) => c.topic).filter((t): t is string => Boolean(t)))];
 
-  const counts = { new: 0, met: 0, unknown: 0, known: 0, graduated: 0, cards: shown.length, questions: 0 };
-  for (const c of shown) { counts[c.state]++; counts.questions += c.questions; }
+  const counts = { new: 0, met: 0, unknown: 0, known: 0, graduated: 0, cards: shown.length, questions: 0, core: 0 };
+  for (const c of shown) { counts[c.state]++; counts.questions += c.questions; if (c.core) counts.core++; }
   const pages = state.input.pageNumbers?.length ? Math.max(...state.input.pageNumbers) : Math.max(0, ...state.sections.flatMap((s) => s.pages));
-  return { id: state.id, title, status: state.status, pages, sections, chains, counts };
+  return { id: state.id, title, status: state.status, pages, sections, chains, topics, counts };
 }

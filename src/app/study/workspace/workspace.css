@@ -418,3 +418,9 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm2-table{border-collapse:collapse;font-size:13px;width:100%} .dejipgi .mm2-table th,.dejipgi .mm2-table td{border:1px solid var(--line);padding:3px 6px;text-align:left;vertical-align:top}
 .dejipgi .mm2-tablewrap{overflow-x:auto;max-width:100%}
 .mm2-overlay{background:var(--ground)}
+
+/* 자료 지도: 핵심/보조, 연결 이동 (2026-10-29) */
+.mm2-card.minor{opacity:.82}
+.mm2-card.flash{outline:2px solid var(--accent, #4a7);outline-offset:2px;transition:outline-color .3s}
+.chip.core{font-weight:600}
+.mm2-links{display:flex;flex-wrap:wrap;gap:.2em .8em}
