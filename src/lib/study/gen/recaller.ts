@@ -140,7 +140,8 @@ const MERGE = `${BASE}
 - links: 이 카드와 뜻으로 이어지는 다른 카드(최대 2개). to는 그 카드 id, why는 관계를 12자 이내로(예: "바탕 개념", "대비", "다음 단계", "적용 예"). 같은 쪽 안의 뻔한 연결보다 다른 쪽에 있는 카드와의 연결을 먼저 쓴다. sameAs로 묶은 카드는 넣지 않는다. 없으면 빈 배열.
 모든 카드를 순서대로 빠짐없이 쓴다.`;
 const mergeReplySchema = z.object({ cards: z.array(z.object({ id: text, title: text, sameAs: z.string().nullable(), topic: text,
-  weight: z.enum(["핵심", "보조"]).optional(), links: z.array(z.object({ to: text, why: text })).max(4).optional() })) });
+  // Required: with structured output an optional field is simply left out (44쪽 실측, 2026-10-29: 97장 모두 빠짐).
+  weight: z.enum(["핵심", "보조"]), links: z.array(z.object({ to: text, why: text })).max(4) })) });
 const CALC = "계산기는 일반 수학만 안다: 행렬은 행 단위 ((a, b), (c, d)), 행렬×행렬·행렬×벡터는 *, transpose() det() inv() eye(n), row(M, i) col(M, j) at(v, i)(1부터), 이어 붙이기 join(v, x), 판정 lt le gt ge eq and or not pick(조건, 참일 때, 거짓일 때)(참 1, 거짓 0), sind cosd tand(도). 원문의 공식·행렬은 계산기가 모르므로 먼저 정의 단계를 둔다: name에 'T(tx, ty)'처럼 이름과 매개변수, expr에 원문 식을 매개변수로, value는 '정의'. 뒤 단계에서 T(2, 3)처럼 부른다.";
 const LINK = `${BASE}
 지식 카드 목록에서 함께 엮으면 한 카드만 알아서는 풀 수 없는 응용 문제가 되는 묶음(카드 2~3장)을 고른다. 앞 카드의 결과가 뒤 카드의 입력이 되는 묶음(판정 → 절차, 공식 → 비교, 절차 → 절차)을 우선한다. 구체적인 값으로 계산하거나 판정할 수 있는 묶음만 고른다. 서로 다른 묶음이 같은 카드 조합을 반복하지 않는다. 묶음이 없으면 빈 배열.`;
