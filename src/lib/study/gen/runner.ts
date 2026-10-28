@@ -256,6 +256,28 @@ function questionText(question: AuthoredQuestion) {
  * the chosen set) into a new run, so only the later steps differ. Comparisons of models or criteria then see the
  * same input instead of a different classification by chance, and the copied steps cost no calls.
  */
+/** 실험: a recaller run's cards, the 자료 전체 정리 alone done again (one call), so its wording or model can be compared on
+ *  the same cards without reading the pages again (사용자 10/29: 44쪽을 매번 처음부터 돌리면 호출 45번). */
+export async function remergeGen(baseId: string, raw: unknown): Promise<GenState> {
+  const options = z.strictObject({ model: modelChoice.optional() }).parse(raw ?? {});
+  const base = await loadGen(baseId);
+  if (!base?.recaller?.prep || base.input.engine !== "recaller") throw new GenError(404, "카드가 있는 Recaller 실행을 찾을 수 없습니다.");
+  if (state0Cards(base) < 2) throw new GenError(409, "기준 실행에 카드가 두 장 이상 있어야 합니다.");
+  const recaller = structuredClone(base.recaller);
+  delete recaller.consolidated;
+  recaller.timing = { startedAt: new Date().toISOString(), ...(recaller.timing.skimDoneAt ? { skimDoneAt: recaller.timing.skimDoneAt } : {}) };
+  const sections = structuredClone(base.sections);
+  for (const s of sections) if (recaller.units[s.id]) recaller.units[s.id].status = "ready";
+  const input: GenInput = { ...structuredClone(base.input), lab: { ...base.input.lab, skimOnly: true, consolidate: true },
+    models: { ...base.input.models, ...(options.model ? { "rc-merge": options.model } : {}) } };
+  const now = new Date().toISOString();
+  const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued", phase: "author", message: "", calls: 0,
+    sections, recaller, remergeOf: base.id };
+  await saveState(state);
+  return state;
+}
+const state0Cards = (gen: GenState) => Object.values(gen.recaller?.units ?? {}).reduce((n, u) => n + (u.cards?.length ?? 0), 0);
+
 export async function forkGen(baseId: string, raw: unknown): Promise<GenState> {
   const options = forkInputSchema.parse(raw);
   const base = await loadGen(baseId);

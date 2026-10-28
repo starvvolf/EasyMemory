@@ -134,16 +134,16 @@ const OUTLINE_HINT = "outline은 자료 전체의 쪽 제목과 앞뒤 쪽 첫 �
 // 자료 전체 정리, written as changes only (10/29): the full form (every card's id, title, topic, weight and links) took
 // 99 s for 87 cards on 44쪽 because the reply is the time; cards are numbered n and only what differs is written.
 const MERGE = `${BASE}
-한 자료의 지식 카드 전체를 한 번에 본다(쪽마다 따로 만들어져 겹치거나 이름이 쪽 제목 그대로인 것이 있다). 카드는 번호 n으로 가리킨다. 바뀌는 것만 짧게 쓴다.
-- topics: 자료의 상위 개념(큰 주제) 이름 목록(15자 안팎, 보통 5~15개).
-- topicOf: 카드 순서대로 그 카드가 속한 topics의 번호(0부터). 카드 수와 길이가 같다.
-- core: 자료 전체를 놓고 볼 때 이 자료를 이해하고 시험을 보려면 꼭 알아야 하는 중심 지식 카드의 n. 예시·보충·세부·되풀이는 넣지 않는다. 쪽마다 따로 정한 중요도는 믿지 말고 자료 전체에서 다시 정한다. 개수는 coreMax를 넘지 않는다(보통 카드 수의 3분의 1 안팎).
-- same: 앞선 다른 카드와 사실상 같은 지식인 카드만 {n, of: 앞 카드 n}. 이름만 같고 내용이 다르면 넣지 않는다.
-- rename: 이름이 쪽 제목 그대로이거나 다른 카드와 구별이 안 되거나 뜻이 흐린 카드만 {n, title}. title은 그 카드가 담은 지식의 구체적인 이름(원문 표기 유지, 40자 이내). 괜찮은 이름은 쓰지 않는다.
-- links: 뜻으로 이어지는 두 카드 {a, b, why}. 카드마다 이어지는 카드를 찾아 a로 1~2개 쓴다(정말 동떨어진 카드만 빼므로 links 수는 보통 카드 수와 비슷하다). why는 a에서 본 b의 관계를 12자 이내로(예: "바탕 개념", "대비", "다음 단계", "적용 예"). 같은 쪽 안의 뻔한 연결보다 다른 쪽에 있는 카드와의 연결을 먼저 쓴다. same으로 묶은 카드끼리는 넣지 않는다.`;
+한 자료의 지식 카드 전체를 한 번에 본다. 카드는 쪽마다 따로 만들어져 중요도가 모두 높게 매겨져 있고, 겹치거나 이름이 쪽 제목 그대로인 것이 있다. 이 결과는 학습자가 시험 전에 자료 전체를 한눈에 보는 지도에 쓰인다. 카드는 번호 n으로 가리키고, 바뀌는 것만 짧게 쓴다.
+- topics: 자료의 큰 주제를 자료의 흐름 순서로 {name, cards}. name은 15자 안팎, cards는 그 주제에 속한 카드 n. 모든 카드가 정확히 한 주제에 들어간다. 카드는 쪽 순서라 한 주제는 대개 이어진 구간이다. 보통 5~12개.
+- core: 시험 전날 이것만 보면 되는 중심 지식의 n, 중요한 것부터. coreMax개를 넘지 않는다. 넣는 것: 정의·절차·공식·행렬·판정 규칙·알고리즘 단계처럼 시험에서 직접 묻거나 다른 카드가 기대는 것, 두 방법의 핵심 차이. 넣지 않는 것: 개요에서 이름만 소개된 것(뒤에서 다룰 주제 예고), 응용 예·효과, 도구·API 관례, 다른 카드의 되풀이, 큰 식에서 한 성분만 떼어 낸 것. 쪽마다 따로 정한 중요도는 믿지 않는다.
+- same: 앞선 카드와 사실상 같은 지식인 카드만 {n, of: 앞 카드 n}. 이름만 같고 내용이 다르면 넣지 않는다.
+- rename: 이름을 바꿔야 하는 카드만 {n, title}: 쪽 제목 그대로라 무엇을 담았는지 모르는 것, 다른 카드와 구별이 안 되는 것, 같은 대상을 다른 카드와 다른 말(영어/한국어)로 부르는 것. title은 담은 지식의 구체적인 이름(원문 용어를 살림, 40자 이내).
+- links: 뜻으로 이어지는 두 카드 {a, b, why}. 카드마다 이어지는 카드를 찾아 a로 1~2개 쓴다(정말 동떨어진 카드만 빼므로 links 수는 보통 카드 수와 비슷하다). 다른 주제·다른 쪽의 카드와의 연결을 먼저 쓴다. why는 a에서 본 b의 관계를 12자 이내로 구체적으로("결과를 b가 씀", "b가 바탕", "대비", "일반화", "특수한 경우", "다음 단계", "적용 예"). "관련", "행렬 구성"처럼 막연한 말은 쓰지 않는다. same으로 묶은 카드끼리는 넣지 않는다.`;
 const num = z.number().int();
 // Required throughout: with structured output an optional field is simply left out (44쪽 실측, 2026-10-29).
-const mergeReplySchema = z.object({ topics: z.array(text), topicOf: z.array(num), core: z.array(num), same: z.array(z.object({ n: num, of: num })),
+// Topics as lists of cards (not one number per card in order: a 90-long list drifted by one at section boundaries).
+const mergeReplySchema = z.object({ topics: z.array(z.object({ name: text, cards: z.array(num) })), core: z.array(num), same: z.array(z.object({ n: num, of: num })),
   rename: z.array(z.object({ n: num, title: text })), links: z.array(z.object({ a: num, b: num, why: text })) });
 const CALC = "계산기는 일반 수학만 안다: 행렬은 행 단위 ((a, b), (c, d)), 행렬×행렬·행렬×벡터는 *, transpose() det() inv() eye(n), row(M, i) col(M, j) at(v, i)(1부터), 이어 붙이기 join(v, x), 판정 lt le gt ge eq and or not pick(조건, 참일 때, 거짓일 때)(참 1, 거짓 0), sind cosd tand(도). 원문의 공식·행렬은 계산기가 모르므로 먼저 정의 단계를 둔다: name에 'T(tx, ty)'처럼 이름과 매개변수, expr에 원문 식을 매개변수로, value는 '정의'. 뒤 단계에서 T(2, 3)처럼 부른다.";
 const LINK = `${BASE}
@@ -724,8 +724,8 @@ export async function runRecaller(ctx: RecallerContext) {
     const all = state.sections.flatMap((s) => data.units[s.id]?.cards ?? []);
     if (all.length < 2) return;
     const t0 = Date.now();
-    const reply = await ctx.ask("rc-merge", null, 1, MERGE, JSON.stringify({ material: input.fileName, count: all.length, coreMax: Math.floor(all.length / 2), outline: data.prep!.pages.map((p) => `p.${p.page} ${p.title}`),
-      cards: all.map((c, n) => ({ n, pages: [...new Set(c.evidence.map((e) => e.page))], line: cardLine(c).replace(/ ⟨받음:.*$/, "").slice(0, 220) })) }), mergeReplySchema, { maxChars: 160 * all.length + 3000 });
+    const reply = await ctx.ask("rc-merge", null, 1, MERGE, JSON.stringify({ material: input.fileName, count: all.length, coreMax: coreMax(all.length), outline: data.prep!.pages.map((p) => `p.${p.page} ${p.title}`),
+      cards: all.map((c, n) => ({ n, pages: [...new Set(c.evidence.map((e) => e.page))], line: cardLine(c).replace(/ ⟨받음:.*$/, "").slice(0, 220) })) }), mergeReplySchema, { maxChars: 140 * all.length + 3000 });
     data.consolidated = { ms: Date.now() - t0, cards: unfoldMerge(reply, all) };
     await save();
   };
@@ -917,9 +917,15 @@ export async function runRecaller(ctx: RecallerContext) {
 /** The changes-only 자료 전체 정리 reply, spread back into one entry per card (the shape the 자료 지도 reads). */
 export function unfoldMerge(reply: z.infer<typeof mergeReplySchema>, all: Array<{ id: string; title: string }>) {
   const ok = (n: number) => Number.isInteger(n) && n >= 0 && n < all.length;
-  const core = new Set(reply.core.filter(ok));
+  // At most a third is 핵심 (the map's 핵심만 is the night-before view); the reply lists the most central first.
+  const core = new Set([...new Set(reply.core.filter(ok))].slice(0, coreMax(all.length)));
   const sameAs = new Map(reply.same.filter((x) => ok(x.n) && ok(x.of) && x.n !== x.of).map((x) => [x.n, x.of]));
   const rename = new Map(reply.rename.filter((x) => ok(x.n) && x.title.trim()).map((x) => [x.n, x.title.trim().slice(0, 60)]));
+  const topicOf = new Map<number, string>();
+  for (const t of reply.topics) for (const n of t.cards) if (ok(n) && !topicOf.has(n) && t.name.trim()) topicOf.set(n, t.name.trim());
+  // A card the reply left out takes the topic of the card before it (cards are in page order).
+  let last = reply.topics.find((t) => t.name.trim())?.name.trim() ?? "";
+  const topic = all.map((_, n) => (last = topicOf.get(n) ?? last));
   const links = new Map<number, Array<{ to: string; why: string }>>();
   for (const l of reply.links) {
     if (!ok(l.a) || !ok(l.b) || l.a === l.b) continue;
@@ -927,8 +933,9 @@ export function unfoldMerge(reply: z.infer<typeof mergeReplySchema>, all: Array<
     if (list.length < 2 && !list.some((x) => x.to === all[l.b].id)) links.set(l.a, [...list, { to: all[l.b].id, why: l.why.slice(0, 20) }]);
   }
   return all.map((c, n) => ({ id: c.id, title: rename.get(n) ?? c.title, sameAs: sameAs.has(n) ? all[sameAs.get(n)!].id : null,
-    topic: reply.topics[reply.topicOf[n]] ?? reply.topics[0] ?? "", weight: (core.has(n) ? "핵심" : "보조") as "핵심" | "보조", links: links.get(n) ?? [] }));
+    topic: topic[n], weight: (core.has(n) ? "핵심" : "보조") as "핵심" | "보조", links: links.get(n) ?? [] }));
 }
+const coreMax = (cards: number) => Math.max(1, Math.round(cards / 3));
 
 /** Fake replies for every recaller step (the fake provider): shaped from the request so the whole flow runs without a model. */
 export function recallerFakeReply(step: GenStep, user: string): string {
@@ -980,7 +987,7 @@ export function recallerFakeReply(step: GenStep, user: string): string {
   }
   if (step === "rc-merge") {
     const cards = u.cards as Array<{ n: number; line: string }>;
-    return JSON.stringify({ topics: ["가짜 주제"], topicOf: cards.map(() => 0), core: cards.length ? [0] : [],
+    return JSON.stringify({ topics: [{ name: "가짜 주제", cards: cards.map((c) => c.n) }], core: cards.length ? [0] : [],
       same: cards.flatMap((c, i) => i > 0 && c.line === cards[i - 1].line ? [{ n: c.n, of: cards[i - 1].n }] : []),
       rename: cards.map((c) => ({ n: c.n, title: c.line.replace(/^\[[^\]]+\] /, "").slice(0, 30) })), links: cards.slice(1).map((c) => ({ a: c.n, b: 0, why: "바탕 개념" })) });
   }

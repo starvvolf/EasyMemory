@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
 import { ExperimentRequestError } from "@/lib/mcp-experiment-requests";
 import { boundedJson, requireLocalRequest, responseError } from "../../../mcp-experiment-requests/http";
-import { astraReadingView, setAstraReadingPage, confirmObjectives, createGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, setGenFocus, stepLabel, studyDocument } from "@/lib/study/gen/runner";
+import { astraReadingView, setAstraReadingPage, confirmObjectives, createGen, remergeGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, setGenFocus, stepLabel, studyDocument } from "@/lib/study/gen/runner";
 import { scorecard } from "@/lib/study/gen/scorecard";
 import { listJudges, loadJudge, readJudgeCalls, startJudge } from "@/lib/study/gen/judge";
 import { listVisionProbes, readVisionImage, runVisionProbe } from "@/lib/study/gen/vision";
@@ -101,6 +101,15 @@ async function handle(request: Request, context: Context) {
       if (base.input.provider !== "fake" && confirmed !== true) throw new ExperimentRequestError(400, "실제 모델 실행 확인이 필요합니다.");
       const gen = await forkGen(p[0], options);
       if (gen.status === "queued") await enqueueGen(gen.id, caller, { confirmedRealCalls: confirmed === true });
+      result = { gen: await genView(gen.id) };
+    } else if (p.length === 2 && p[1] === "remerge" && method === "POST") {
+      // 실험: the same cards, only the whole-material pass again (one call). Body: { model?: { model, effort }, confirmed }.
+      const body = z.object({ confirmed: z.boolean().optional() }).passthrough().parse(await boundedJson(request));
+      const { confirmed, ...options } = body;
+      const base = await loadGen(p[0]);
+      if (base && base.input.provider !== "fake" && confirmed !== true) throw new ExperimentRequestError(400, "실제 모델 실행 확인이 필요합니다.");
+      const gen = await remergeGen(p[0], options);
+      await enqueueGen(gen.id, caller, { confirmedRealCalls: confirmed === true });
       result = { gen: await genView(gen.id) };
     } else if (p.length === 2 && p[1] === "focus" && method === "POST") {
       // Where the learner is reading: the unit around this page is authored next. No model call.

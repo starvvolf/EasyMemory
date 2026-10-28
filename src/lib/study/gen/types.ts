@@ -199,6 +199,8 @@ export type GenState = {
   confirmedObjectiveIds?: string[];
   /** A rerun that copied the earlier steps of another run and redoes only `from` onward (fair A/B comparison). */
   forkOf?: { genId: string; from: ForkFrom };
+  /** 실험: made from this run's cards, with only the 자료 전체 정리 done again (runner.remergeGen). */
+  remergeOf?: string;
   /** v3: the knowledge map (① 전체 읽기), plan warnings and the gate's verdicts per question. */
   v3?: { map?: import("./v3.ts").KnowledgeMap; warnings?: Issue[]; gate?: Array<{ objectiveId: string; attempt: number; passed: boolean; reasons: string[] }> };
   astra?: import("./astra.ts").AstraState;
