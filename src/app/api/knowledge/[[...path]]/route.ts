@@ -14,7 +14,7 @@ import { explainKnowledge, makeExplanation, runLayer } from "@/lib/knowledge/lay
 import { runClassify } from "@/lib/knowledge/classify";
 import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, sourceKey, syncSubjects,
   updateGoal } from "@/lib/knowledge/goals";
-import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing } from "@/lib/assist/knowledge-ai";
+import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing, readKnowledge } from "@/lib/assist/knowledge-ai";
 
 export const runtime = "nodejs";
 // 같은 지식 찾기 3단계: every save that makes new items (PDF, 웹 글, 코드, 직접) is checked a few seconds later.
@@ -245,6 +245,13 @@ async function handle(request: Request, context: RouteContext) {
       catch (error) { return NextResponse.json({ message: `뜻을 정리하지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
     }
     if (p[0] === "fill" && m === "POST") { const b = await body(z.object({ ids: z.array(id).max(200).optional() })); return json(await fillMissing({ ids: b.ids })); }
+    // 지식 잡기 미리보기: the model call only, nothing saved (to compare 생각 강도 on the same article).
+    if (p[0] === "extract-preview" && m === "POST") {
+      const b = await body(z.object({ title: z.string().min(1).max(300), text: z.string().min(80).max(200000), effort: z.enum(["minimal", "low", "medium", "high"]).optional() }));
+      const started = Date.now();
+      const data = await readKnowledge(b, { effort: b.effort });
+      return json({ ms: Date.now() - started, ...data });
+    }
     if (p[0] === "extract" && m === "POST") {
       const b = await body(z.object({ kind: z.enum(["web", "lesson"]), title: z.string().min(1).max(300), url: z.string().max(2000).optional(), text: z.string().min(1).max(200000), folder: z.string().max(200).optional() }));
       const r = await extractFromText(b);

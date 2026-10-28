@@ -9,17 +9,15 @@ const EXTRACT_SYSTEM = `학습자가 읽은 글에서 "알아야 할 지식"을 
   - kind "term": 용어. body는 사전 정의가 아니라 이 글의 문맥에서의 뜻을 1~2문장으로.
   - kind "idea": 일반적인 원리·규칙·패턴(예: "금리가 내리면 대출이 늘어난다", "정렬된 배열은 절반씩 버리며 찾을 수 있다").
   - quote: 그 지식이 나온 글의 문장을 그대로 (80자 이내).
-  - aliases: 같은 것을 가리키는 다른 이름. 영어 이름, 약어(PER, DFS), 영어 용어면 한국어 이름. 확실한 것만, 없으면 빈 배열.
+  - aliases: 같은 것을 가리키는 다른 이름. 영어 이름, 약어(PER, DFS), 영어 용어면 한국어 이름. 확실한 것만 3개까지, 없으면 빈 배열.
   - 오늘의 시세·날짜·특정 회사의 이번 분기 숫자처럼 시간이 지나면 의미가 없어지는 사실은 지식으로 뽑지 않는다.
   - 학습자가 이미 가진 지식과 같은 것이면 그 이름을 그대로 쓴다 (목록이 주어진다).
 - chains: 지식 사이의 고리. from/to는 반드시 knowledge의 title 중 하나. relation은 "그러면", "때문에", "의 예" 같은 짧은 말.
 - claim: 글쓴이의 주장 한 줄과 그 근거들 (설명 글이라 주장이 없으면 글의 요지).
-- folder: 이 지식들을 넣을 폴더 경로 ("주식/금리", "알고리즘/이분 탐색"). 학습자 폴더 목록에 맞는 것이 있으면 그것을 쓴다.
-개수는 글 길이에 맞게, 보통 4~12개.`;
+개수는 글 길이에 맞게 보통 3~8개, 아무리 긴 글도 8개까지. 글의 핵심부터. 주제(폴더)는 저장 뒤 따로 정리하니 고르지 않는다.`;
 
-type Extracted = { folder: string; claim: { text: string; basis: string[] }; knowledge: Array<{ title: string; body: string; kind: "term" | "idea"; quote: string; aliases: string[] }>; chains: Array<{ from: string; relation: string; to: string }> };
+type Extracted = { claim: { text: string; basis: string[] }; knowledge: Array<{ title: string; body: string; kind: "term" | "idea"; quote: string; aliases: string[] }>; chains: Array<{ from: string; relation: string; to: string }> };
 const EXTRACT_SCHEMA = S.obj({
-  folder: S.str,
   claim: S.obj({ text: S.str, basis: S.arr(S.str) }),
   knowledge: S.arr(S.obj({ title: S.str, body: S.str, kind: S.oneOf("term", "idea"), quote: S.str, aliases: S.arr(S.str) })),
   chains: S.arr(S.obj({ from: S.str, relation: S.str, to: S.str })),
@@ -35,16 +33,23 @@ async function knownNames(limit = 160) {
 
 export type ExtractResult = { source: ReadSource; items: Array<SaveResult["item"] & { again: boolean; created: boolean; termKind: string; quote: string }> };
 /** Read a web article or a lesson: knowledge saved as 만남 (or "다시 만남"), chains as links, the article kept with its goals. */
+/**
+ * 지식 잡기 호출 (2026-10-29 빠르게): 생각 강도 low가 기본(RECALLER_EXTRACT_EFFORT로 바꿈). 예전에는 medium이라 466자 글도
+ * 23초쯤 걸렸다. 주제(폴더)는 저장 뒤 주제 정리가 정하니 여기서 받지 않는다.
+ */
+export async function readKnowledge(input: { title: string; url?: string; text: string; folder?: string }, options: { effort?: string } = {}) {
+  const known = await knownNames();
+  const user = [`[글 제목] ${input.title}`, input.url ? `[주소] ${input.url}` : "", `[학습자가 이미 가진 지식 이름] ${known.names.join(", ") || "(없음)"}`,
+    `[본문]\n${input.text.slice(0, 40000)}`].filter(Boolean).join("\n\n");
+  return askJson<Extracted>("knowledge:extract", EXTRACT_SYSTEM, user, EXTRACT_SCHEMA, { effort: options.effort || process.env.RECALLER_EXTRACT_EFFORT?.trim() || "low" });
+}
 export async function extractFromText(input: { kind: "web" | "lesson"; title: string; url?: string; text: string; folder?: string }): Promise<ExtractResult> {
   const text = input.text.replace(/\s+\n/g, "\n").trim();
   if (text.length < 80) throw new Error("본문이 너무 짧아요. 글 전체가 보이는지 확인해 주세요.");
-  const known = await knownNames();
-  const user = [`[글 제목] ${input.title}`, input.url ? `[주소] ${input.url}` : "", input.folder ? `[학습자가 고른 폴더] ${input.folder}` : "",
-    `[학습자 폴더 목록] ${known.paths.join(", ") || "(없음)"}`, `[학습자가 이미 가진 지식 이름] ${known.names.join(", ") || "(없음)"}`, `[본문]\n${text.slice(0, 40000)}`].filter(Boolean).join("\n\n");
-  const data = await askJson<Extracted>("knowledge:extract", EXTRACT_SYSTEM, user, EXTRACT_SCHEMA, { heavy: true });
-  // A folder the learner chose is kept; otherwise the model's folder is only a hint and 주제 정리 (classify.ts) places
-  // the new items in the one topic tree a few seconds later.
-  const placed = input.folder ? { folder: input.folder } : { topicHint: data.folder || (input.kind === "lesson" ? "강의" : "읽은 글") };
+  const data = await readKnowledge({ ...input, text });
+  // A folder the learner chose is kept; otherwise 주제 정리 (classify.ts) places the new items in the topic tree a few
+  // seconds later.
+  const placed = input.folder ? { folder: input.folder } : { topicHint: input.kind === "lesson" ? "강의" : "읽은 글" };
   const ref = { kind: input.kind === "lesson" ? "web" as const : "web" as const, title: input.title, ...(input.url ? { url: input.url } : {}) };
   const chainsByFrom = new Map<string, Array<{ title: string; relation: string }>>();
   for (const c of data.chains) chainsByFrom.set(c.from, [...(chainsByFrom.get(c.from) ?? []), { title: c.to, relation: c.relation }]);
