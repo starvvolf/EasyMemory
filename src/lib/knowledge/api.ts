@@ -17,6 +17,8 @@ export { recordEvent, memoryOverview, memorySummary, memoryEvents } from "./stor
 
 /* ---------- 복습 ---------- */
 export { reviewQueue, reviewStatus, dayOf } from "./store.ts";
+// 자료 지도(src/lib/study/material-map.ts, A 10/29): 카드 ref마다 저장된 지식, 읽기만.
+export { itemsForRefs } from "./store.ts";
 
 /* ---------- 비슷한 지식 후보 (임베딩, 2026-10-28 추가) ---------- */
 export { similarKnowledge } from "./embed.ts";

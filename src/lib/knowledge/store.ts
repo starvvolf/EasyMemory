@@ -798,6 +798,13 @@ export async function itemsByRef(refs: string[], prefix = false) {
   const match = (ref?: string) => Boolean(ref) && refs.some((r) => prefix ? ref!.startsWith(r) : ref === r);
   return store.items.filter((i) => i.sources.some((s) => match(s.ref))).map(lite);
 }
+/** 자료 지도: the item saved for each ref (`<material>:<card>`), one read of the store. Refs with no item are left out. */
+export async function itemsForRefs(refs: string[]): Promise<Record<string, ItemLite>> {
+  const store = await readStore();
+  const wanted = new Set(refs), out: Record<string, ItemLite> = {};
+  for (const item of store.items) for (const s of item.sources) if (s.ref && wanted.has(s.ref) && !out[s.ref]) out[s.ref] = lite(item);
+  return out;
+}
 /** A practice result on a PDF question, passed on to the knowledge its objective covers. */
 export async function recordByRef(refs: string[], kind: KEventKind, detail = "", source?: KEvent["source"], takeBack?: "correct" | "read") {
   const items = await itemsByRef(refs);
