@@ -246,3 +246,13 @@ test("공부 화면 Recaller starts with the fast first pass; the lab keeps its 
   const lab = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" });
   assert.equal(lab.input.lab, undefined);
 }));
+
+test("자료 전체 정리 written as changes only is spread back per card; bad numbers and extra links are dropped", async () => {
+  const { unfoldMerge } = await import("./recaller.ts");
+  const all = [{ id: "s1.1c1", title: "A" }, { id: "s1.1c2", title: "B" }, { id: "s2.1c1", title: "C" }];
+  const out = unfoldMerge({ topics: ["뷰잉", "투영"], topicOf: [0, 0, 1], core: [2, 9], same: [{ n: 1, of: 0 }, { n: 2, of: 2 }], rename: [{ n: 0, title: "뷰 좌표계" }, { n: 7, title: "x" }],
+    links: [{ a: 0, b: 2, why: "다음 단계" }, { a: 0, b: 1, why: "대비" }, { a: 0, b: 1, why: "대비" }, { a: 0, b: 2, why: "또" }, { a: 2, b: 5, why: "x" }, { a: 1, b: 1, why: "x" }] }, all);
+  assert.deepEqual(out.map((c) => [c.title, c.sameAs, c.topic, c.weight]), [["뷰 좌표계", null, "뷰잉", "보조"], ["B", "s1.1c1", "뷰잉", "보조"], ["C", null, "투영", "핵심"]]);
+  assert.deepEqual(out[0].links, [{ to: "s2.1c1", why: "다음 단계" }, { to: "s1.1c2", why: "대비" }]);
+  assert.deepEqual(out[2].links, []);
+});
