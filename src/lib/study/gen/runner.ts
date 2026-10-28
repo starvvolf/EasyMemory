@@ -208,10 +208,18 @@ export async function createGen(raw: unknown): Promise<GenState> {
   if (input.combine && input.engine !== "recaller") throw new GenError(400, "종합 문제는 Recaller 엔진만 만들 수 있습니다.");
   input.pageNumbers = [...new Set(input.pageNumbers)].sort((a, b) => a - b);
   if (input.priorityPage !== undefined) readingPage({ input }, input.priorityPage);
+  // 공부 화면의 Recaller는 빠른 첫 정리로 (docs/DECISIONS.md 2026-10-29): 실험 서버의 /lab/gen은 고른 손잡이 그대로.
+  if (input.engine === "recaller" && input.origin === "study" && !input.lab && !input.combine) input.lab = studyRecallerLab(input.pageNumbers.length);
   const now = new Date().toISOString();
   const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued", phase: "outline", message: "", calls: 0, sections: [] };
   await saveState(state);
   return state;
+}
+
+/** 빠른 첫 정리 (연구 1): pages sorted by code (prep-2) and drawn in worker processes, every page organized at once with its
+ *  picture and the material's outline. 44쪽 첫 훑기 47초 → 14초 (terra), and no drawing inside the server process (canvas 오류로 서버가 꺼지던 일). */
+export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
+  return { router: "prep-2", inlineRead: true, outline: true, pageParallel: Math.min(64, Math.max(1, pages)), fastPrep: 8, imageWidth: 1024, lenientQuotes: true };
 }
 
 export const forkInputSchema = z.strictObject({
@@ -445,7 +453,9 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     if (astraFailure) throw astraFailure;
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
-    const cap = input.lab?.callCap ?? Math.max(MAX_CALLS_PER_START, state.sections.length * 4 + 10);
+    // Recaller: about 2 cards a page, each a question and its blind check (≈ 5.5 calls a page measured), plus deep questions;
+    // 8 a page + 40 lets a 44-page material finish in one start and still stops a run that loops.
+    const cap = input.lab?.callCap ?? Math.max(MAX_CALLS_PER_START, input.engine === "recaller" ? input.pageNumbers.length * 8 + 40 : state.sections.length * 4 + 10);
     if (step !== "transcribe" && callsThisStart >= cap) {
       const stop = new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${cap})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
       throw astraAbort ? failAstra(stop) : stop;
@@ -623,6 +633,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           if (!result.ok) throw stopWith(`${genStepLabel[step]}: ${result.problem} 완료 단계는 보존됩니다.`);
           return result.value;
         },
+        halted: () => Boolean(astraFailure),
         askText: async (step, page, attempt, system, user, images) => String(await ask(step, null, attempt, system, user, null, undefined, { images, page })),
         prepare: options.prep ?? (async (bytes, pages) => {
           if (!bytes) return prepFromTexts(await (options.pages ?? registeredPages)(input), pages);

@@ -112,6 +112,8 @@ export type RecallerContext = {
   priorityPage?: () => number | undefined;
   /** Parallel calls at most (sections organized and authored at once, pages read at once). */
   parallel?: number;
+  /** True once the run is stopping (call cap, usage limit, login): a page reading cut by the stop is not a failed reading. */
+  halted?: () => boolean;
   /** 종합 문제 (input.combine): the earlier recaller runs whose cards are tied into one long problem. */
   combined?: () => Promise<Array<{ genId: string; fileName: string; sections: SectionState[]; recaller: RecallerState }>>;
 };
@@ -439,6 +441,14 @@ export async function runRecaller(ctx: RecallerContext) {
     await save();
   }
   const routeOf = (page: number) => data.prep!.pages.find((p) => p.page === page)?.route ?? "layer";
+  // A restart reads again the pages whose reading failed, where their section still has work to do.
+  const pending = new Set(state.sections.filter((s) => data.units[s.id]?.status !== "ready").flatMap((s) => s.pages));
+  const retry = data.read.failed.filter((p) => pending.has(p));
+  if (retry.length) {
+    data.read.failed = data.read.failed.filter((p) => !pending.has(p));
+    data.warnings = data.warnings.filter((w) => !(w.code === "rc-read-failed" && retry.some((p) => w.message.startsWith(`p.${p}를`))));
+    await save();
+  }
 
   // ② 그림 쪽 읽기: each page once, shared by the sections that need it.
   const reading = new Map<number, Promise<void>>();
@@ -455,7 +465,10 @@ export async function runRecaller(ctx: RecallerContext) {
         const layer = data.texts[page] ?? "";
         const user = `[자료] ${input.fileName} p.${page}\n${route === "figures" ? "[읽을 것] 이 쪽의 그림 영역만 잘라 보낸다. 그림 안의 글자·식·표·도식만 옮긴다. 글자 층에 있는 본문은 다시 쓰지 않는다.\n" : ""}\n[글자 층]\n${layer || "(없음)"}`;
         for (let attempt = 1; attempt <= 2 && !reply.trim(); attempt++) {
-          try { reply = await ctx.askText("transcribe", page, attempt, TRANSCRIBE_SYSTEM, user, images); } catch (error) { if (attempt === 2) { data.read.failed.push(page); data.warnings.push({ severity: "warning", code: "rc-read-failed", message: `p.${page}를 그림으로 읽지 못해 글자 층만 써요: ${error instanceof Error ? error.message : String(error)}` }); await save(); return; } }
+          try { reply = await ctx.askText("transcribe", page, attempt, TRANSCRIBE_SYSTEM, user, images); } catch (error) {
+            // Cut by the run stopping: left unread, so the restart reads it from its picture (사용자 점검 10/29: 25쪽이 글자 층만 남음).
+            if (ctx.halted?.()) { reading.delete(page); return; }
+            if (attempt === 2) { data.read.failed.push(page); data.warnings.push({ severity: "warning", code: "rc-read-failed", message: `p.${page}를 그림으로 읽지 못해 글자 층만 써요: ${error instanceof Error ? error.message : String(error)}` }); await save(); return; } }
         }
         await ctx.reading?.put(hash, page, reply.trim()).catch(() => undefined);
       }
@@ -612,6 +625,8 @@ export async function runRecaller(ctx: RecallerContext) {
     collect(unit);
     await save();
   };
+  // A question started from the stream is awaited after 정리; if 정리 throws first (the run stopped), its rejection is not left unhandled.
+  const quiet = <T>(p: Promise<T>) => { p.catch(() => undefined); return p; };
   const organize = async (section: SectionState, k: number, pages: number[]) => {
     const unit = data.units[section.id];
     const chunk = ((unit.chunks ??= {})[k] ??= {});
@@ -627,7 +642,7 @@ export async function runRecaller(ctx: RecallerContext) {
       if (!ok.length || !slotCards(ok, input.purpose).length) return;
       slotted.add(parsed.data.id);
       const card = { ...ok[0], id: idOf(ok[0].id), links: [] };
-      if (claim(card)) authoring.push(authorOne(section, k, card));
+      if (claim(card)) authoring.push(quiet(authorOne(section, k, card)));
     };
     // inlineRead: pages that need their picture are not read first; 정리 looks at the picture itself.
     const inline = lab.inlineRead ? pages.filter((p) => (routeOf(p) === "page" || routeOf(p) === "figures") && !data.read.done.includes(p)) : [];
@@ -683,7 +698,7 @@ export async function runRecaller(ctx: RecallerContext) {
     }
     if (lab.skimOnly) { chunk.questions ??= []; collect(unit); return; }
     // Resumed runs (or cards the stream did not show whole) still get their questions.
-    for (const card of slotCards(chunk.cards, input.purpose)) if (!slotted.has(card.id.split(".")[1].replace(/^\d+/, "")) && !data.dups?.[card.id] && (known.includes(card) || known.some((x) => x.id === card.id) || claim(card))) authoring.push(authorOne(section, k, card));
+    for (const card of slotCards(chunk.cards, input.purpose)) if (!slotted.has(card.id.split(".")[1].replace(/^\d+/, "")) && !data.dups?.[card.id] && (known.includes(card) || known.some((x) => x.id === card.id) || claim(card))) authoring.push(quiet(authorOne(section, k, card)));
     await Promise.all(authoring);
     chunk.questions ??= [];
     collect(unit);

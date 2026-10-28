@@ -209,3 +209,30 @@ test("the judges read a recaller run's own page texts (picture pages as read), n
   assert.equal(texts.get(2), done.recaller!.texts[2]);
   assert.match(texts.get(1)!, /Back-Face Detection/);
 }));
+
+test("a restart reads again a picture page whose reading failed, when its section still has work (사용자 점검 10/29)", () => withData(async () => {
+  const { prepFromTexts } = await import("./prep.ts");
+  const { writeFile } = await import("node:fs/promises");
+  const prep = async () => { const p = prepFromTexts(pages, [1, 2]); p.pages = p.pages.map((x) => ({ ...x, route: "page" as const })); return p; };
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", lab: { skimOnly: true } });
+  const fakeReply = (step: GenStep, user: string) => step === "transcribe" ? "# Read from the picture\n- read" : recallerFakeReply(step, user);
+  // First start: no picture for p.2, so its reading fails.
+  const first = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, prep, fakeReply, pageImages: async (_input, wanted) => new Map(wanted.filter((p) => p === 1).map((p) => [p, "data:image/png;base64,AA=="])) });
+  assert.deepEqual(first.recaller!.read.failed, [2]);
+  // The run stopped before p.2's section was finished; the restart has the picture.
+  const s2 = first.sections.find((s) => s.pages.includes(2))!.id;
+  first.status = "paused-invalid"; first.recaller!.units[s2] = { status: "waiting" };
+  await writeFile(path.join(process.env.STUDY_FORGE_DATA_DIR!, "study-gen", first.id, "state.json"), JSON.stringify(first));
+  const again = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, prep, fakeReply, pageImages: async (_input, wanted) => new Map(wanted.map((p) => [p, "data:image/png;base64,AA=="])) });
+  assert.equal(again.status, "done", again.message);
+  assert.deepEqual(again.recaller!.read.failed, []);
+  assert.ok(again.recaller!.read.done.includes(2));
+}));
+
+test("공부 화면 Recaller starts with the fast first pass; the lab keeps its own knobs", () => withData(async () => {
+  const { studyRecallerLab } = await import("./runner.ts");
+  const study = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", origin: "study" });
+  assert.deepEqual(study.input.lab, studyRecallerLab(2));
+  const lab = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" });
+  assert.equal(lab.input.lab, undefined);
+}));

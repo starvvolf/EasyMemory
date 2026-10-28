@@ -255,7 +255,9 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   "astra-review": { model: "gpt-6-sol", effort: "medium" },
   // recaller: organizing is the one step everything else stands on; basic questions are made from its cards and kept fast.
   // sol·low wrote half as much as sol·medium with no loss seen (3D Viewing p.8–11, 2026-10-24); luna and terra were not faster.
-  "rc-organize": { model: "gpt-6-sol", effort: "low" },
+  // 2026-10-28 (C, 사용자 "6.1 terra 써"): with the fast first pass, terra·low judged as well as sol (24·17·1 vs 18·20·0) and
+  // the first question came 4 s sooner.
+  "rc-organize": { model: "gpt-6.1-terra", effort: "low" },
   "rc-link": { model: "gpt-6-sol", effort: "low" },
   "rc-author": { model: "gpt-6-sol", effort: "low" },
   "rc-deep": { model: "gpt-6-sol", effort: "low" },
