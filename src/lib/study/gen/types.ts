@@ -180,6 +180,8 @@ export type GenState = {
   message: string;
   /** Total model calls across restarts. */
   calls: number;
+  /** Times the run went on by itself after a connection hiccup (recaller). */
+  autoResumes?: number;
   /** What runs now, for the screen. */
   current?: { step: GenStep; sectionId?: string; page?: number; attempt: number; progress?: string };
   /** Units being authored right now (v3 makes several at once). */

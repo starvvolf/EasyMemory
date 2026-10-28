@@ -91,8 +91,14 @@ export function closeJson(text: string): unknown {
 
 class Stop extends Error {
   readonly status: GenState["status"];
+  /** A connection or server hiccup (not the call cap, a limit or a bad reply): the run picks itself up again. */
+  transient = false;
   constructor(status: GenState["status"], message: string) { super(message); this.status = status; }
 }
+/** Times a run picks itself up after a connection hiccup, before it waits for the learner (사용자 점검 10/29). */
+const AUTO_RESUMES = 3;
+const AUTO_RESUME_MS = 10_000;
+const TRANSIENT_WAITS = [2000, 5000, 12000];
 
 // ---- storage -------------------------------------------------------------------------------------------
 const writes = (globalThis as typeof globalThis & { __studyGenWrites?: Map<string, Promise<void>> });
@@ -436,7 +442,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     const stop = error instanceof Stop ? error
       : error instanceof ModelError && error.code === "usage_limit" ? new Stop("paused-usage-limit", "ChatGPT 사용량 한도에 닿았어요. 한도가 풀리면 다시 시작해 주세요.")
         : error instanceof ModelError && (error.code === "login_required" || error.code === "not_configured") ? new Stop("paused-login", error.message)
-          : new Stop("paused-invalid", error instanceof Error ? error.message : String(error));
+          : Object.assign(new Stop("paused-invalid", error instanceof Error ? error.message : String(error)), { transient: error instanceof ModelError && error.code === "transient" });
     astraFailure ??= stop;
     astraAbort?.abort();
     return astraFailure;
@@ -536,9 +542,11 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       for (let retry = 0; ; retry++) {
         try { reply = await callModel(request); break; }
         catch (error) {
-          if (retry > 0 || runaway || request.signal?.aborted || !(error instanceof ModelError) || error.code !== "transient") throw error;
+          // A connection hiccup is retried a few times, spread out so calls that failed together do not come back together.
+          if (retry >= TRANSIENT_WAITS.length || runaway || request.signal?.aborted || !(error instanceof ModelError) || error.code !== "transient") throw error;
           partial = "";
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, TRANSIENT_WAITS[retry] * (0.75 + Math.random() / 2)));
+          if (request.signal?.aborted) throw error;
         }
       }
       Object.assign(record, { ok: true, reply: redactCallText(reply.text), model: reply.model, usage: reply.usage, format: reply.format ?? null, ms: Date.now() - started });
@@ -899,7 +907,15 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     const stop = astraFailure ?? (error instanceof Stop ? error : new Stop("failed", error instanceof Error ? error.message : String(error)));
     state.status = stop.status; state.message = stop.message;
     mark("stopped", { note: stop.status });
+    // Recaller after a connection hiccup: it goes on by itself a few times (what is done is kept), so a long material is not
+    // left half made while the learner reads. The call cap, usage limit and login still wait for the learner.
+    const again = stop.transient && input.engine === "recaller" && input.provider !== "fake" && (state.autoResumes ?? 0) < AUTO_RESUMES;
+    if (again) {
+      state.autoResumes = (state.autoResumes ?? 0) + 1;
+      state.message = `연결이 잠깐 끊겼어요. ${AUTO_RESUME_MS / 1000}초 뒤 멈춘 곳부터 저절로 이어 가요.`;
+    }
     await saveState(state);
+    if (again) setTimeout(() => { void enqueueGen(id, caller, { ...options, confirmedRealCalls: true }).catch(() => undefined); }, AUTO_RESUME_MS).unref?.();
     return state;
   }
 
