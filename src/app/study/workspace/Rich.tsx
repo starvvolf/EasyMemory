@@ -90,3 +90,7 @@ export function Rich({ text, className }: { text: string; className?: string }) 
   });
   return <div className={`ws-rich ${className ?? ""}`}>{out}</div>;
 }
+/** One line inside other text (no paragraph): math and `code` still render (자료 지도 cards, 2026-10-29). */
+export function RichInline({ text }: { text: string }) {
+  return <span className="ws-rich-inline">{inline(text.replace(/\s*\n+\s*/g, " "))}</span>;
+}

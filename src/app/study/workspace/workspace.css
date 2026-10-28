@@ -416,3 +416,5 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm2-list,.dejipgi .mm2-mist{padding-left:18px}
 .dejipgi .mm2-expr{font-size:15px;overflow-x:auto}
 .dejipgi .mm2-table{border-collapse:collapse;font-size:13px;width:100%} .dejipgi .mm2-table th,.dejipgi .mm2-table td{border:1px solid var(--line);padding:3px 6px;text-align:left;vertical-align:top}
+.dejipgi .mm2-tablewrap{overflow-x:auto;max-width:100%}
+.mm2-overlay{background:var(--ground)}

@@ -4,7 +4,7 @@
 // Data: GET /api/study-map/<material> (src/lib/study/material-map.ts). Opened from the PDF reader's bar.
 import { useEffect, useMemo, useState } from "react";
 import { call, errorText } from "./api";
-import { Rich } from "./Rich";
+import { RichInline as Rich } from "./Rich";
 
 type Shape =
   | { form: "term"; name: string; symbol: string; definition: string; neighbors: string[] }
@@ -31,8 +31,8 @@ function Body({ s }: { s: Shape }) {
     case "procedure": return <ol className="mm2-steps">{s.steps.map((st, i) => <li key={i}><Rich text={st.action} />{st.input || st.output ? <span className="small muted"> {st.input ? <Rich text={st.input} /> : "…"} → {st.output ? <Rich text={st.output} /> : "…"}</span> : null}</li>)}</ol>;
     case "rule": return <p className="mm2-rule">{s.premise ? <span className="small muted"><Rich text={s.premise} /> · </span> : null}<b><Rich text={s.condition} /></b> → <Rich text={s.result} />{s.boundary ? <span className="small muted"> (경계: <Rich text={s.boundary} />)</span> : null}</p>;
     case "formula": return <div><p className="mm2-expr"><Rich text={s.expr.includes("$") ? s.expr : `$${s.expr}$`} /></p>{s.vars.length ? <p className="small muted">{s.vars.map((v, i) => <span key={i}>{i ? " · " : ""}<Rich text={v.symbol} />: <Rich text={v.meaning} /></span>)}</p> : null}{s.when ? <p className="small muted">쓸 때: <Rich text={s.when} /></p> : null}</div>;
-    case "compare": return <table className="mm2-table"><thead><tr><th /> {s.targets.map((t) => <th key={t}><Rich text={t} /></th>)}</tr></thead>
-      <tbody>{s.criteria.map((c) => <tr key={c.name}><th><Rich text={c.name} /></th>{s.targets.map((_, i) => <td key={i}><Rich text={c.values[i] ?? ""} /></td>)}</tr>)}</tbody></table>;
+    case "compare": return <div className="mm2-tablewrap"><table className="mm2-table"><thead><tr><th /> {s.targets.map((t) => <th key={t}><Rich text={t} /></th>)}</tr></thead>
+      <tbody>{s.criteria.map((c) => <tr key={c.name}><th><Rich text={c.name} /></th>{s.targets.map((_, i) => <td key={i}><Rich text={c.values[i] ?? ""} /></td>)}</tr>)}</tbody></table></div>;
     case "list": return <ul className="mm2-list">{s.items.map((it, i) => <li key={i}>{s.ordered ? `${i + 1}. ` : ""}<Rich text={it} /></li>)}</ul>;
     case "term": return <p><Rich text={s.definition} />{s.neighbors.length ? <span className="small muted"> · 헷갈리는 말: {s.neighbors.join(", ")}</span> : null}</p>;
     case "fact": return <p><Rich text={s.subject} />: <Rich text={s.value} /></p>;
