@@ -463,23 +463,34 @@ function MaterialNav({ materials, goals, sel, onPick, onAct }: { materials: Mate
       {!materials.length ? <li className="small muted">아직 자료가 없어요.</li> : null}</ul>
   );
 }
-/** 자료 that no goal holds: the goal sorting suggested, one click to accept, or pick another, or leave it without a goal. */
+/**
+ * 자료 that no goal holds, grouped by the goal sorting suggested (15 code problems → one "코테 준비에 넣기"); one click puts
+ * the whole group in, or each can go elsewhere or stay without a goal.
+ */
 function PlaceMaterials({ materials, goals, onAct }: { materials: Material[]; goals: GoalView[]; onAct: Act }) {
   const [open, setOpen] = useState(true);
+  const [each, setEach] = useState<string | null>(null);
   const live = goals.filter((g) => !g.closed);
+  const groups = new Map<string, Material[]>();
+  for (const m of materials) { const k = m.suggestion?.name ? `${m.suggestion.goalId}|${m.suggestion.name}` : "|"; groups.set(k, [...(groups.get(k) ?? []), m]); }
+  const put = (m: Material, goalId: string) => call(`/api/knowledge/goals/${goalId}/source`, { key: m.key, kind: m.kind, title: m.title, on: true });
+  const acceptAll = (list: Material[]) => onAct(async () => { for (const m of list) await call("/api/knowledge/materials/accept", { key: m.key, kind: m.kind, title: m.title }); });
+  const row = (m: Material) => <li key={m.key} className="row small"><span className="chip">{SOURCE_LABEL[m.kind] ?? m.kind}</span> {m.title} <span className="muted">· 지식 {m.items}</span>
+    {live.length ? <select className="ws-select" value="" aria-label="다른 목표에 넣기" onChange={(e) => { if (e.target.value) void onAct(() => put(m, e.target.value)); }}>
+      <option value="">다른 목표에</option>{live.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select> : null}
+    <button className="btn ghost small" onClick={() => void onAct(() => call("/api/knowledge/materials/ignore", { key: m.key }))}>목표 없이 두기</button></li>;
   return (
     <section className="panel kw-dupes">
       <button className="linkish" onClick={() => setOpen((x) => !x)}><b>목표를 정할 자료 · {materials.length}</b> <span className="small muted">{open ? "접기" : "보기"}</span></button>
-      {open ? <ul className="kw-links">{materials.slice(0, 12).map((m) => {
-        const s = m.suggestion?.name ? m.suggestion : null;
-        const target = s ? goals.find((g) => g.id === s.goalId)?.name ?? s.name : "";
-        return <li key={m.key} className="stack"><span><span className="chip">{SOURCE_LABEL[m.kind] ?? m.kind}</span> {m.title} <span className="small muted">· 지식 {m.items}{s?.reason ? ` · ${s.reason}` : ""}</span></span>
-          <span className="row">
-            {s ? <button className="btn small" onClick={() => void onAct(() => call("/api/knowledge/materials/accept", { key: m.key, kind: m.kind, title: m.title }))}>“{target}”{s.goalId ? "에 넣기" : " 목표 만들어 넣기"}</button> : <span className="small muted">추천을 기다리는 중</span>}
-            {live.length ? <select className="ws-select" value="" aria-label="다른 목표에 넣기" onChange={(e) => { if (e.target.value) void onAct(() => call(`/api/knowledge/goals/${e.target.value}/source`, { key: m.key, kind: m.kind, title: m.title, on: true })); }}>
-              <option value="">다른 목표에</option>{live.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select> : null}
-            <button className="btn ghost small" onClick={() => void onAct(() => call("/api/knowledge/materials/ignore", { key: m.key }))}>목표 없이 두기</button>
-          </span></li>;
+      {open ? <ul className="kw-links">{[...groups.entries()].map(([k, list]) => {
+        const [goalId, name] = k.split("|");
+        const target = goals.find((g) => g.id === goalId)?.name ?? name;
+        return <li key={k} className="stack">
+          <span className="row">{name ? <button className="btn small" onClick={() => void acceptAll(list)}>“{target}”{goalId ? "에" : " 목표를 만들어"} 넣기 · 자료 {list.length}</button> : <b className="small">추천을 기다리는 자료 {list.length}</b>}
+            <span className="small muted">{list.slice(0, 3).map((m) => m.title).join(", ")}{list.length > 3 ? " …" : ""}</span>
+            <button className="btn ghost small" onClick={() => setEach(each === k ? null : k)}>{each === k ? "접기" : "하나씩"}</button></span>
+          {each === k ? <ul className="kw-links">{list.map(row)}</ul> : null}
+        </li>;
       })}</ul> : null}
     </section>
   );
