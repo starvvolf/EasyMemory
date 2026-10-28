@@ -4,7 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { reviewQueue, tree, dayOf } from "../knowledge/api.ts";
+import { reviewQueue, tree, dayOf, listGoals, goalItemIds, updateGoal } from "../knowledge/api.ts";
 
 export class ScheduleError extends Error {
   status: number;
@@ -99,28 +99,46 @@ export const updateTodo = (id: string, patch: { text?: string; date?: string | n
 export const deleteTodo = (id: string) => serial(async () => { await writeJson("todos.json", (await readJson<Todo[]>("todos.json", [])).filter((t) => t.id !== id)); return { ok: true }; });
 
 /* ---------- 기한과 나누기 ---------- */
-export type Deadline = { id: string; title: string; date: string; folderId: string | null; amount: number; unit: string; createdAt: string };
-export async function listDeadlines() { return (await readJson<Deadline[]>("deadlines.json", [])).sort((a, b) => a.date.localeCompare(b.date)); }
-export const addDeadline = (input: { title: string; date: string; folderId?: string | null; amount?: number; unit?: string }) => serial(async () => {
-  if (!input.title.trim()) throw new ScheduleError(400, "무엇의 기한인지 적어 주세요.");
+// 기한 (2026-10-28 "4개 축"): 시험·마감은 목표의 날짜다. 날짜가 있는 열린 목표는 그대로 기한으로 보이고(id "goal:<목표 id>"),
+// 목표를 골라 기한을 넣으면 목표에 날짜가 붙는다. 목표 없이 분량만 적는 기한과 예전 폴더 기한은 deadlines.json에 남는다.
+export type Deadline = { id: string; title: string; date: string; folderId: string | null; goalId?: string | null; amount: number; unit: string; createdAt: string };
+const GOAL = "goal:";
+async function goalDeadlines(): Promise<Deadline[]> {
+  return (await listGoals()).filter((g) => !g.closed && g.date).map((g) => ({ id: `${GOAL}${g.id}`, title: g.name, date: g.date!, folderId: null, goalId: g.id, amount: 0, unit: "", createdAt: g.createdAt }));
+}
+export async function listDeadlines() {
+  return [...await readJson<Deadline[]>("deadlines.json", []), ...await goalDeadlines()].sort((a, b) => a.date.localeCompare(b.date));
+}
+export const addDeadline = async (input: { title?: string; date: string; folderId?: string | null; goalId?: string | null; amount?: number; unit?: string }) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new ScheduleError(400, "날짜는 2026-10-30 형식으로 적어요.");
-  const list = await readJson<Deadline[]>("deadlines.json", []);
-  const deadline: Deadline = { id: newId("dl"), title: input.title.trim().slice(0, 80), date: input.date, folderId: input.folderId ?? null,
-    amount: Math.max(0, Math.round(input.amount ?? 0)), unit: (input.unit ?? "").slice(0, 10), createdAt: new Date().toISOString() };
-  list.push(deadline);
-  await writeJson("deadlines.json", list);
-  return deadline;
-});
-export const deleteDeadline = (id: string) => serial(async () => {
-  await writeJson("deadlines.json", (await readJson<Deadline[]>("deadlines.json", [])).filter((d) => d.id !== id));
-  await writeJson("todos.json", (await readJson<Todo[]>("todos.json", [])).filter((t) => t.deadlineId !== id || t.done));
-  return { ok: true };
-});
+  if (input.goalId) {
+    const goal = await updateGoal(input.goalId, { date: input.date });
+    return (await goalDeadlines()).find((d) => d.goalId === goal.id)!;
+  }
+  return serial(async () => {
+    if (!input.title?.trim()) throw new ScheduleError(400, "무엇의 기한인지 적어 주세요.");
+    const list = await readJson<Deadline[]>("deadlines.json", []);
+    const deadline: Deadline = { id: newId("dl"), title: input.title.trim().slice(0, 80), date: input.date, folderId: input.folderId ?? null,
+      amount: Math.max(0, Math.round(input.amount ?? 0)), unit: (input.unit ?? "").slice(0, 10), createdAt: new Date().toISOString() };
+    list.push(deadline);
+    await writeJson("deadlines.json", list);
+    return deadline;
+  });
+};
+/** A goal's deadline goes by taking the date off the goal (the goal and its knowledge stay). */
+export const deleteDeadline = async (id: string) => {
+  if (id.startsWith(GOAL)) await updateGoal(id.slice(GOAL.length), { date: null });
+  return serial(async () => {
+    await writeJson("deadlines.json", (await readJson<Deadline[]>("deadlines.json", [])).filter((d) => d.id !== id));
+    await writeJson("todos.json", (await readJson<Todo[]>("todos.json", [])).filter((t) => t.deadlineId !== id || t.done));
+    return { ok: true };
+  });
+};
 
 /**
  * 날짜별로 나누기: from today to the day before the deadline, the work is split evenly; the last day before is for
- * going over everything and the weak ones (시험 직전 몰아 보기). With a folder, the work is its items still in review
- * (몰랐음 first); without one, the amount the learner gave (쪽, 강 …). Earlier schedule items not yet done are replaced.
+ * going over everything and the weak ones (시험 직전 몰아 보기). With a goal (or an old folder), the work is its items
+ * still in review (몰랐음 first); without one, the amount the learner gave (쪽, 강 …). Earlier schedule items not yet done are replaced.
  */
 export async function makeSchedule(deadlineId: string, now = new Date()) {
   const deadline = (await listDeadlines()).find((d) => d.id === deadlineId);
@@ -130,7 +148,15 @@ export async function makeSchedule(deadlineId: string, now = new Date()) {
   if (left < 1) throw new ScheduleError(400, "기한이 오늘이거나 지났어요.");
   let units: string[];
   let what: string;
-  if (deadline.folderId) {
+  const scoped = Boolean(deadline.goalId || deadline.folderId);
+  if (deadline.goalId) {
+    const ids = await goalItemIds(deadline.goalId);
+    const items = ids.length ? await reviewQueue({ ids, limit: 500 }) : [];
+    const only = new Set(ids);
+    const pool = items.length ? items : (await tree()).items.filter((i) => only.has(i.id) && !i.graduated);
+    units = pool.map((i) => i.title);
+    what = `${deadline.title} 지식`;
+  } else if (deadline.folderId) {
     const { folders } = await tree();
     const name = folders.find((f) => f.id === deadline.folderId)?.name ?? "폴더";
     const items = await reviewQueue({ folderId: deadline.folderId, limit: 500 });
@@ -147,7 +173,7 @@ export async function makeSchedule(deadlineId: string, now = new Date()) {
   const plan: Array<{ date: string; text: string }> = [];
   for (let d = 0; d < studyDays && d * per < units.length; d++) {
     const chunk = units.slice(d * per, (d + 1) * per);
-    const text = deadline.folderId ? `${what} ${chunk.length}개 보기: ${chunk.slice(0, 4).join(", ")}${chunk.length > 4 ? " …" : ""}`
+    const text = scoped ? `${what} ${chunk.length}개 보기: ${chunk.slice(0, 4).join(", ")}${chunk.length > 4 ? " …" : ""}`
       : `${what} ${chunk[0]}${chunk.length > 1 ? `~${chunk.at(-1)}` : ""}${deadline.unit}`;
     plan.push({ date: addDays(start, d), text });
   }

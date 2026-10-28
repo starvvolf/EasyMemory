@@ -104,8 +104,8 @@ export const TOOLS: Tool[] = [
   // 일정
   tool("deadline_ask", "일정", "기한 묻기", "학습자에게 '시험이나 기한이 있나요?'를 화면에 묻는다. 답은 screen_answers로 읽는다.", { about: z.string().max(100) },
     ({ about }) => showBlock({ kind: "ask", title: `${about}: 시험이나 기한이 있나요?`, body: "있으면 날짜를 적어 주세요 (예: 2026-11-03).", choices: ["기한 없음"], ref: "deadline" })),
-  tool("deadline_add", "일정", "기한 추가", "기한(시험일 등)을 추가한다. folderId가 있으면 그 폴더 지식을 기준으로 나눈다.",
-    { title: z.string().min(1).max(80), date: day, folderId: z.string().max(40).optional(), amount: z.number().int().min(0).max(1000).optional(), unit: z.string().max(10).optional() },
+  tool("deadline_add", "일정", "기한 추가", "기한(시험일 등)을 추가한다. goalId가 있으면 그 목표에 날짜를 붙이고 그 목표의 지식으로 나눈다(title 불필요). folderId가 있으면 그 주제 폴더 지식으로 나눈다.",
+    { title: z.string().max(80).optional(), date: day, goalId: z.string().max(40).optional(), folderId: z.string().max(40).optional(), amount: z.number().int().min(0).max(1000).optional(), unit: z.string().max(10).optional() },
     (input) => addDeadline(input)),
   tool("schedule_make", "일정", "날짜별로 나누기", "기한까지 남은 날에 공부를 나눠 할 일로 만든다. 마지막 날은 전체 훑기와 약한 것 몰아 보기.", { deadlineId: z.string().max(40) }, ({ deadlineId }) => makeSchedule(deadlineId)),
   tool("todo_add", "일정", "할 일 추가", "할 일을 추가한다 (날짜는 선택).", { text: z.string().min(1).max(200), date: day.optional() }, ({ text, date }) => addTodo({ text, date: date ?? null, origin: "agent" })),

@@ -451,6 +451,13 @@ export default function DejipgiStudy() {
         });
         return () => { gone = true; root?.unmount(); };
       },
+      // 과목·시험일 → 지식 저장소의 목표 (2026-10-28 "4개 축"): a subject is a goal, its materials are the goal's 자료.
+      onSubjects(subjects: Array<{ name: string; exam: string }>, materials: Array<{ subject: string; title: string }>, renamed?: { from: string; to: string }) {
+        if (session.mode !== "local-experiment") return;
+        void fetchExperiment("/api/knowledge/goals/sync", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subjects: subjects.slice(0, 50), materials: materials.slice(0, 500), ...(renamed ? { renamed } : {}) }) })
+          .then(() => window.dispatchEvent(new Event("recaller:knowledge-changed"))).catch(() => undefined);
+      },
       // A practice result on a PDF question goes to the knowledge its objective covers (맞힘 / 틀림 / 정답 보고).
       onPractice(deck: { id: string; title?: string; sourceName?: string; points?: KnowledgeLayer }, item: { objectiveId?: string; id: string }, outcome: string) {
         if (session.mode !== "local-experiment") return;

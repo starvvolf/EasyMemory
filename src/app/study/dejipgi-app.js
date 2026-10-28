@@ -279,7 +279,7 @@ function objectiveState(deck, objectiveId){
 /* ---------- subjects & exam dates (S.plan); a material belongs by its registered PDF, so remakes follow it ---------- */
 function planKey(d){ return d.sourceCatalogId || d.id; }
 function subjectOf(d){ const name = S.plan.of[planKey(d)]; return name && S.plan.subjects.some(s => s.name === name) ? name : ""; }
-function setSubject(d, name){ const old = subjectOf(d); if (name) S.plan.of[planKey(d)] = name; else delete S.plan.of[planKey(d)]; Store.savePlan(S.plan); if (old) touchMemory(old); if (name) touchMemory(name); render(); }
+function setSubject(d, name){ const old = subjectOf(d); if (name) S.plan.of[planKey(d)] = name; else delete S.plan.of[planKey(d)]; Store.savePlan(S.plan); syncSubjects(); if (old) touchMemory(old); if (name) touchMemory(name); render(); }
 function examOf(name){ const s = S.plan.subjects.find(x => x.name === name); return s ? s.exam || "" : ""; }
 function daysLeft(exam){
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(exam || ""); if (!m) return null;
@@ -296,11 +296,18 @@ const byTitle = (a, b) => (a.example ? 1 : 0) - (b.example ? 1 : 0) || String(a.
 const displayTitle = deck => deckDisplayTitle(deck, Object.values(S.decks));
 function decksOf(subject){ return Object.values(S.decks).filter(d => !d.pending && subjectOf(d) === subject).sort(byTitle); }
 function weakList(decks){ return decks.flatMap(d => d.items.filter(it => isWeak(d, it)).map(it => ({ d, it, miss:missCount(d, it) }))); }
+/* 과목 = 목표 (2026-10-28 "4개 축"): subjects and their materials go to the knowledge store's goals whenever they change,
+   so the 지식 screen and 일정 use the same 과목·시험일 (env.onSubjects in DejipgiStudy.tsx; nothing outside local mode). */
+function syncSubjects(renamed){
+  if (!env.onSubjects) return;
+  const materials = Object.values(S.decks).filter(d => !d.pending && subjectOf(d)).map(d => ({ subject:subjectOf(d), title:String(d.sourceName || d.title || "").replace(/\.pdf$/i, "") }));
+  try{ env.onSubjects(S.plan.subjects.map(s => ({ name:s.name, exam:s.exam || "" })), materials, renamed); }catch(e){}
+}
 function addSubject(name, exam){
   name = String(name || "").trim().slice(0, 30);
   if (!name){ toast("과목 이름을 적어 주세요."); return false; }
   if (S.plan.subjects.some(s => s.name === name)){ toast("같은 이름의 과목이 있어요."); return false; }
-  S.plan.subjects.push({ name, exam:exam || "" }); Store.savePlan(S.plan); return true;
+  S.plan.subjects.push({ name, exam:exam || "" }); Store.savePlan(S.plan); syncSubjects(); return true;
 }
 function updateSubject(old, name, exam){
   name = String(name || "").trim().slice(0, 30);
@@ -309,12 +316,13 @@ function updateSubject(old, name, exam){
   const s = S.plan.subjects.find(x => x.name === old); if (!s) return false;
   s.name = name; s.exam = exam || "";
   if (name !== old) for (const k of Object.keys(S.plan.of)) if (S.plan.of[k] === old) S.plan.of[k] = name;
-  Store.savePlan(S.plan); return true;
+  Store.savePlan(S.plan); syncSubjects(name !== old ? { from:old, to:name } : undefined); return true;
 }
 function removeSubject(name){
   S.plan.subjects = S.plan.subjects.filter(s => s.name !== name);
   for (const k of Object.keys(S.plan.of)) if (S.plan.of[k] === name) delete S.plan.of[k];
   Store.savePlan(S.plan);
+  syncSubjects();
 }
 
 /* ---------- 오늘 할 것 (env.planner = src/lib/study/plan.ts, rules from 학습규칙/오늘할것.md) ---------- */
@@ -4167,6 +4175,7 @@ function reloadDecks(){
     if (decks.length || Object.values(S.decks).some(x => x.pending)) delete S.decks.example;
     else if (!S.decks.example){ const ex = exampleDeck(); Store.restore(ex); S.decks[ex.id] = ex; }
     S.lib = { status:"ready", error:"" };
+    syncSubjects();
   }, (e) => {
     if (disposed) return;
     if (!Object.keys(S.decks).length){ const ex = exampleDeck(); Store.restore(ex); S.decks[ex.id] = ex; }

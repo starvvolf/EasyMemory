@@ -6,7 +6,7 @@
 //
 // 누가 무엇을 쓰나 (10/28 기준)
 // - 코드 문제(src/lib/code/service.ts, src/lib/assist/code-ai.ts): saveMany, recordEvent, memoryEvents, searchKnowledge, KEventKind
-// - 일정(src/lib/schedule/store.ts): reviewQueue, tree, dayOf
+// - 일정(src/lib/schedule/store.ts): reviewQueue, tree, dayOf, listGoals, goalItemIds, updateGoal (기한 = 목표의 날짜)
 // - 에이전트 툴(src/lib/agent/tools.ts): 지식 읽기·쓰기, 지식에서 만드는 문제, 읽은 글
 
 /* ---------- 지식 저장·찾기 ---------- */
@@ -21,6 +21,10 @@ export { reviewQueue, reviewStatus, dayOf } from "./store.ts";
 /* ---------- 비슷한 지식 후보 (임베딩, 2026-10-28 추가) ---------- */
 export { similarKnowledge } from "./embed.ts";
 export type { SimilarHit } from "./embed.ts";
+
+/* ---------- 목표 (4개 축, 2026-10-28 추가): 자료를 넣으면 지식이 따라오고, 날짜가 시험·마감 ---------- */
+export { listGoals, getGoal, createGoal, updateGoal, goalItemIds, goalReview, sourceKey } from "./goals.ts";
+export type { Goal, GoalSource } from "./goals.ts";
 
 /* ---------- 지식에서 바로 만드는 문제 (AI 호출 없음) ---------- */
 export { questionsFor, grade, QUESTION_LABEL } from "./questions.ts";

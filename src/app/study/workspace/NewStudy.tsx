@@ -1,12 +1,13 @@
 "use client";
 // 새 공부 시작: "무엇을 공부할까요?" → 자료 종류 (PDF·강의 자료 / 웹 글 / 코드) → 만들기 → "시험이나 기한이 있나요?" → 공부하러 가기.
 // PDF goes to the existing material builder (자료 넣기); 웹 글 and 코드 are made here.
+// 기한은 목표의 날짜다 (2026-10-28 "4개 축"): 만든 자료를 목표에 넣고(있는 목표 또는 새 목표) 그 목표에 날짜를 붙여 나눈다.
 import { useEffect, useState } from "react";
-import { call, errorText, folderPaths, go, handoff, later, type Tree } from "./api";
+import { call, errorText, folderPaths, go, handoff, later, type GoalView, type Tree } from "./api";
 import type { SourceView } from "./ArticleStudy";
 
 type Kind = "pdf" | "web" | "code";
-type Made = { kind: "web"; id: string; title: string; folderId: string | null; count: number; again: number } | { kind: "code"; id: string; title: string; folderId: string | null };
+type Made = { kind: "web"; id: string; title: string; url: string; folderId: string | null; count: number; again: number } | { kind: "code"; id: string; title: string; folderId: string | null };
 const KINDS: Array<{ kind: Kind; title: string; text: string; eg: string }> = [
   { kind: "pdf", title: "PDF · 강의 자료", text: "외울 것을 뽑아 문제로 만들고, 시험일까지 복습을 잡아요.", eg: "전공 PPT, 암기 과목, 교재 PDF" },
   { kind: "web", title: "웹 글 · 칼럼", text: "글에서 알아야 할 지식과 고리를 잡고, 다음 글에서 다시 만나면 알려 줘요.", eg: "주식 칼럼, 기술 블로그, 뉴스 해설" },
@@ -53,7 +54,7 @@ function WebForm({ onMade }: { onMade: (m: Made) => void }) {
       const r = await call<{ source: SourceView }>("/api/knowledge/extract", { kind: "web", title: v.title.trim() || v.text.trim().split("\n")[0].slice(0, 80) || "웹 글", ...(v.url.trim() ? { url: v.url.trim() } : {}), text: v.text });
       const first = r.source.items[0];
       const folderId = first ? (await call<{ item: { folderId: string | null } }>(`/api/knowledge/item/${first.id}`)).item.folderId : null;
-      onMade({ kind: "web", id: r.source.id, title: r.source.title, folderId, count: r.source.items.length, again: r.source.againIds.length });
+      onMade({ kind: "web", id: r.source.id, title: r.source.title, url: r.source.url ?? "", folderId, count: r.source.items.length, again: r.source.againIds.length });
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };
   return (
@@ -100,11 +101,18 @@ function Deadline({ made, onAgain }: { made: Made; onAgain: () => void }) {
   const [date, setDate] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [goals, setGoals] = useState<GoalView[]>([]);
+  const [pick, setPick] = useState("new");
+  const [name, setName] = useState(made.title.slice(0, 60));
+  useEffect(() => later(() => void call<{ goals: GoalView[] }>("/api/knowledge/goals").then((r) => setGoals(r.goals.filter((g) => !g.closed))).catch(() => setGoals([]))), []);
   const open = () => made.kind === "web" ? go("web", { id: made.id }) : go("code", { id: made.id });
   const plan = async () => {
     try {
-      const r = await call<{ schedule?: { todos: unknown[] } }>("/api/schedule/deadlines", { title: made.title.slice(0, 80), date, folderId: made.folderId, ...(made.folderId ? {} : { amount: 1, unit: "번" }), plan: true });
-      setNote(`${date}까지 할 일 ${r.schedule?.todos.length ?? 0}개를 일정에 넣었어요.`); setStep("done");
+      const goalId = pick === "new" ? (await call<{ goal: { id: string } }>("/api/knowledge/goals", { name: name.trim() || made.title.slice(0, 60) })).goal.id : pick;
+      await call(`/api/knowledge/goals/${goalId}/source`, made.kind === "web" ? { kind: "web", title: made.title, url: made.url, on: true } : { kind: "code", title: made.title, ref: `code:${made.id}`, on: true });
+      const r = await call<{ schedule?: { todos: unknown[] } }>("/api/schedule/deadlines", { goalId, date, plan: true });
+      setNote(`목표 ‘${goals.find((g) => g.id === goalId)?.name ?? name}’에 넣고, ${date}까지 할 일 ${r.schedule?.todos.length ?? 0}개를 일정에 넣었어요.`); setStep("done");
+      window.dispatchEvent(new Event("recaller:knowledge-changed"));
     } catch (e) { setError(errorText(e)); }
   };
   return (
@@ -116,7 +124,12 @@ function Deadline({ made, onAgain }: { made: Made; onAgain: () => void }) {
       </section>
       <section className="panel stack">
         {step === "ask" ? <><b>시험이나 기한이 있나요?</b><div className="row"><button className="btn primary small" onClick={() => setStep("date")}>있어요</button><button className="btn small" onClick={() => setStep("none")}>없어요</button></div></> : null}
-        {step === "date" ? <form className="row" onSubmit={(e) => { e.preventDefault(); if (date) void plan(); }}><span>언제까지인가요?</span><input className="ws-input pl-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /><button className="btn primary small" disabled={!date}>날짜별로 나누기</button></form> : null}
+        {step === "date" ? <form className="stack" onSubmit={(e) => { e.preventDefault(); if (date) void plan(); }}>
+          <label className="row small">어느 목표인가요
+            <select className="ws-select" value={pick} onChange={(e) => { setPick(e.target.value); const g = goals.find((x) => x.id === e.target.value); if (g?.date) setDate(g.date); }}>
+              <option value="new">새 목표 만들기</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.name}{g.date ? ` · ${g.date}` : ""}</option>)}</select>
+            {pick === "new" ? <input className="ws-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="목표 이름 (예: 컴퓨터그래픽스 중간고사)" maxLength={60} required /> : null}</label>
+          <div className="row"><span>언제까지인가요?</span><input className="ws-input pl-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required /><button className="btn primary small" disabled={!date}>날짜별로 나누기</button></div></form> : null}
         {step === "none" ? <p className="small">기한 없이 복습 간격대로 다시 물어볼게요.</p> : null}
         {step === "done" ? <p className="small">{note}</p> : null}
         {error ? <p className="ws-err">{error}</p> : null}

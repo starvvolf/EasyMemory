@@ -93,6 +93,8 @@ export type DejipgiEnv = {
   mountView?(name: "knowledge" | "code" | "plan" | "web" | "start" | "today", host: HTMLElement, props: Record<string, unknown>): () => void;
   /** A practice result passed on to the knowledge store (outcome: correct / wrong / assisted / unsure). */
   onPractice?(deck: { id: string; title?: string; sourceName?: string; points?: import("@/lib/study/knowledge").KnowledgeLayer }, item: { objectiveId?: string; id: string }, outcome: string): void;
+  /** 과목·시험일 → 지식 저장소의 목표 (2026-10-28 "4개 축"), whenever subjects or a material's subject change. */
+  onSubjects?(subjects: Array<{ name: string; exam: string }>, materials: Array<{ subject: string; title: string }>, renamed?: { from: string; to: string }): void;
   /** URL of a generated SVG figure recorded with an authored document. */
   assetUrl?: (artifactId: string, assetPath: string) => string;
   /** Queues one generation request per material and reports its progress (the assigned AI runs it through MCP). */

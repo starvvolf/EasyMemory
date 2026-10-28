@@ -10,7 +10,7 @@ import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
 import { openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
 import { scheduleAfterSave } from "@/lib/knowledge/after-save";
 import { runClassify } from "@/lib/knowledge/classify";
-import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, syncSubjects,
+import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, sourceKey, syncSubjects,
   updateGoal } from "@/lib/knowledge/goals";
 import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing } from "@/lib/assist/knowledge-ai";
 
@@ -67,15 +67,19 @@ async function handle(request: Request, context: RouteContext) {
     }
     if (p[0] === "goals" && p[1] === "sync" && m === "POST") {
       const b = await body(z.object({ subjects: z.array(z.object({ name: z.string().max(60), exam: z.string().max(10).optional() })).max(50),
-        materials: z.array(z.object({ subject: z.string().max(60), title: z.string().max(200) })).max(500) }));
-      return json({ goals: await syncSubjects(b.subjects, b.materials) });
+        materials: z.array(z.object({ subject: z.string().max(60), title: z.string().max(200) })).max(500), renamed: z.object({ from: z.string().max(60), to: z.string().max(60) }).optional() }));
+      return json({ goals: await syncSubjects(b.subjects, b.materials, b.renamed) });
     }
     if (p[0] === "goals" && p[1] && p.length === 2) {
       const gid = goalId.parse(p[1]);
       if (m === "PATCH") return json({ goal: await updateGoal(gid, await body(z.object({ name: z.string().max(60).optional(), date: z.string().max(10).nullable().optional(), closed: z.boolean().optional(), note: z.string().max(400).optional() }))) });
       if (m === "DELETE") return json(await deleteGoal(gid));
     }
-    if (p[0] === "goals" && p[1] && p[2] === "source" && m === "POST") { const b = await body(goalSource.extend({ on: z.boolean() })); return json({ goal: await setGoalSource(goalId.parse(p[1]), b, b.on) }); }
+    if (p[0] === "goals" && p[1] && p[2] === "source" && m === "POST") {
+      // The key may be left out: then it is made from the source as saved (a code problem's ref, an article's address).
+      const b = await body(goalSource.extend({ key: z.string().max(300).optional(), ref: z.string().max(300).optional(), url: z.string().max(2000).optional(), on: z.boolean() }));
+      return json({ goal: await setGoalSource(goalId.parse(p[1]), { key: b.key || sourceKey({ kind: b.kind, title: b.title, ref: b.ref ?? "", url: b.url }), kind: b.kind, title: b.title }, b.on) });
+    }
     if (p[0] === "goals" && p[1] && p[2] === "item" && m === "POST") { const b = await body(z.object({ itemId: id, on: z.boolean() })); return json({ goal: await setGoalItem(goalId.parse(p[1]), b.itemId, b.on) }); }
     if (p[0] === "goals" && p[1] && p[2] === "items" && m === "GET") return json({ ids: await goalItemIds(goalId.parse(p[1])) });
     if (p[0] === "materials" && p.length === 1 && m === "GET") return json({ materials: await listMaterials() });

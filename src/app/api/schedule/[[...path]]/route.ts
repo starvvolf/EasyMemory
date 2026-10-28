@@ -32,7 +32,7 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "deadlines") {
       if (p.length === 1 && m === "GET") return json({ deadlines: await listDeadlines() });
       if (p.length === 1 && m === "POST") {
-        const b = await body(z.object({ title: z.string().min(1).max(80), date: day, folderId: z.string().max(40).nullable().optional(), amount: z.number().int().min(0).max(1000).optional(), unit: z.string().max(10).optional(), plan: z.boolean().optional() }));
+        const b = await body(z.object({ title: z.string().max(80).optional(), date: day, folderId: z.string().max(40).nullable().optional(), goalId: z.string().max(40).nullable().optional(), amount: z.number().int().min(0).max(1000).optional(), unit: z.string().max(10).optional(), plan: z.boolean().optional() }));
         const deadline = await addDeadline(b);
         return json({ deadline, ...(b.plan ? { schedule: await makeSchedule(deadline.id) } : {}) });
       }

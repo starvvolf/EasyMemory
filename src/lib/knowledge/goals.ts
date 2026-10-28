@@ -184,7 +184,9 @@ export async function acceptSuggestion(key: string, title: string, kind: SourceK
  * and its exam date, and each material set to that subject is one of its 자료. Run whenever the subjects are saved;
  * goals made by hand are not touched, and a subject that was removed leaves its goal (the learner can delete it).
  */
-export const syncSubjects = (subjects: Array<{ name: string; exam?: string }>, materials: Array<{ subject: string; title: string }>) => change((data) => {
+export const syncSubjects = (subjects: Array<{ name: string; exam?: string }>, materials: Array<{ subject: string; title: string }>, renamed?: { from: string; to: string }) => change((data) => {
+  // A renamed subject keeps its goal (and its 자료 put in by hand) under the new name.
+  if (renamed) { const g = data.goals.find((x) => !x.closed && x.name === renamed.from); if (g && !data.goals.some((x) => !x.closed && x.name === renamed.to)) g.name = renamed.to.trim().slice(0, 60); }
   for (const s of subjects) {
     const name = s.name.trim().slice(0, 60);
     if (!name) continue;

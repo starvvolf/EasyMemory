@@ -4,7 +4,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { addDeadline, addTodo, getTimer, listTodos, makeSchedule, pauseTimer, startTimer, stopTimer, updateTodo, week, readSessions } from "./store.ts";
-import { recordEvent, saveMany, tree } from "../knowledge/api.ts";
+import { recordEvent, saveMany, tree, createGoal, getGoal, sourceKey } from "../knowledge/api.ts";
+import { setGoalSource } from "../knowledge/goals.ts";
+import { deleteDeadline, listDeadlines } from "./store.ts";
 
 async function withData<T>(run: () => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "sched-"));
@@ -59,4 +61,23 @@ test("a deadline without a folder splits the amount given; the week shows sessio
   assert.equal(w.start, "2026-10-26");
   assert.equal(w.days[1].todos.some((t) => t.text === "바킹독 0x12 읽기"), true);
   assert.equal(w.days.find((x) => x.date === "2026-11-01")!.deadlines[0].title, "네트워크 강의");
+}));
+
+test("기한 = 목표의 날짜: a goal with a date is a deadline, splitting uses the goal's knowledge, deleting takes the date off", () => withData(async () => {
+  const src = { kind: "pdf" as const, title: "그래픽스 03", ref: "d:c1" };
+  await saveMany([...Array.from({ length: 6 }, (_, i) => ({ title: `투영 ${i + 1}`, body: "뜻", source: src })), { title: "다른 과목", body: "뜻" }]);
+  const goal = await createGoal({ name: "컴퓨터그래픽스" });
+  await setGoalSource(goal.id, { key: sourceKey(src), kind: "pdf", title: src.title }, true);
+  assert.deepEqual(await listDeadlines(), [], "no date yet: not a deadline");
+  const d = await addDeadline({ goalId: goal.id, date: "2026-10-30" });
+  assert.equal(d.id, `goal:${goal.id}`);
+  assert.equal((await getGoal(goal.id)).date, "2026-10-30", "the date is put on the goal");
+  const plan = await makeSchedule(d.id, new Date("2026-10-26T01:00:00Z"));
+  assert.equal(plan.todos.length, 4, "3 study days + the day before");
+  assert.ok(plan.todos.slice(0, 3).every((t) => /^컴퓨터그래픽스 지식 2개 보기: 투영/.test(t.text)), "only the goal's items");
+  assert.ok(!plan.todos.some((t) => t.text.includes("다른 과목")));
+  assert.equal((await week("2026-10-26", new Date("2026-10-26T01:00:00Z"))).upcoming[0].title, "컴퓨터그래픽스");
+  await deleteDeadline(d.id);
+  assert.equal((await getGoal(goal.id)).date, null, "the goal stays, without a date");
+  assert.deepEqual((await listTodos()).filter((t) => t.deadlineId === d.id), []);
 }));
