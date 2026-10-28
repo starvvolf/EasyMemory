@@ -368,6 +368,9 @@ const transcriptFile = (id: string, page: number) => path.join(dirOf(id), "pages
 /** Replaces page texts with the readings saved for this run (later steps, the judges and reruns all use them). */
 export async function withTranscripts(id: string, texts: Map<number, string>) {
   const state = await loadGen(id);
+  // recaller keeps its page texts in the run (the cleaned text layer, and what was read off the picture for picture pages):
+  // the judges read the same source the questions were made from, not the bare text layer (그림 속 행렬·식이 "원문에 없음"이 되던 것).
+  for (const [key, text] of Object.entries(state?.recaller?.texts ?? {})) if (/^\d+$/.test(key) && text.trim()) texts.set(Number(key), text);
   for (const page of state?.images?.done ?? []) {
     try { texts.set(page, (JSON.parse(await readFile(transcriptFile(id, page), "utf8")) as { text: string }).text); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }

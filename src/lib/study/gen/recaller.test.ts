@@ -196,3 +196,16 @@ test("a basic question the blind solver answers differently is sent back, then h
   assert.ok(units.every((u) => (u.questions ?? []).every((q) => q.format === "flashcard")), JSON.stringify(units.map((u) => (u.questions ?? []).map((q) => q.format))));
   assert.ok(units.some((u) => (u.held ?? []).some((h) => /따로 푼 답/.test(h.reason))));
 }));
+
+test("the judges read a recaller run's own page texts (picture pages as read), not the bare text layer", () => withData(async () => {
+  const { withTranscripts } = await import("./runner.ts");
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", lab: { skimOnly: true } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  const { writeFile } = await import("node:fs/promises");
+  const file = path.join(process.env.STUDY_FORGE_DATA_DIR!, "study-gen", done.id, "state.json");
+  done.recaller!.texts[2] = "# Depth-Buffer Method\n[그림·식·표 옮김]\n$z' = z - A/C$";
+  await writeFile(file, JSON.stringify(done));
+  const texts = await withTranscripts(done.id, new Map([[1, "layer one"], [2, "layer two"]]));
+  assert.equal(texts.get(2), done.recaller!.texts[2]);
+  assert.match(texts.get(1)!, /Back-Face Detection/);
+}));
