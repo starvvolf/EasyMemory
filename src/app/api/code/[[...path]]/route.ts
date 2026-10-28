@@ -53,7 +53,7 @@ async function handle(request: Request, context: RouteContext) {
       const existing = got && !again ? await findBySource(got.url, rest.kind) : null;
       if (existing) return json({ existing });
       const made = await ensureProblemKnowledge(await makeProblem(got ? { ...rest, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
-        sourceTitle: got.title, sourceUrl: got.url } : rest));
+        sourceTitle: got.title, sourceUrl: got.url, ...(got.original ? { original: got.original } : {}) } : rest));
       return json({ problem: publicProblem(made) });
     }
     // 바킹독 문제집: the built-in list, and filling one problem the first time it is picked.

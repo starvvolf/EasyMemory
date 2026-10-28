@@ -124,6 +124,14 @@ const MAKE_SCHEMA = S.obj({ title: S.str, statement: S.str, inputText: S.str, ou
   generator: S.str, reference: S.str, brute: S.str, mutants: S.arr(S.obj({ flaw: S.str, code: S.str })),
   knowledge: S.arr(S.str), knowledgeBodies: S.arr(S.str), folder: S.str, blank: S.obj({ code: S.str, filled: S.str }) });
 const MAKE_RETRIES = 2;
+// 시간 줄이기 (2026-10-29): an imported original lets the faulty solutions be written by their own call, at the same time
+// as the draft (they are a score of the tests, not a gate), and the statement and examples are taken as published.
+const ORIGINAL_NOTE = `[원문 그대로 쓰기] 이 문제는 가져온 원문이 있다. statement·inputText·outputText는 빈 문자열, sourceExamples와 mutants는 빈 배열로 둔다(앱이 원문과 따로 만든 틀린 풀이를 쓴다). 나머지(constraints, timeLimitMs, generator, reference, brute, knowledge, knowledgeBodies, folder, blank)는 평소대로 쓴다.`;
+const MUTANTS_SYSTEM = `알고리즘 문제 하나에 대해, 학습자가 흔히 하는 실수가 들어간 "틀린 풀이" 3~5개를 JavaScript(Node.js)로 쓴다.
+- 입력은 require("fs").readFileSync(0, "utf8")로 통째로 읽고, 출력은 console.log로. 동기 코드만. 2^53을 넘을 수 있는 값은 읽을 때부터 BigInt로(실수로 Number를 쓰는 풀이는 예외).
+- { flaw, code }. flaw는 실수 이름(정수 범위, 초기화, 경계값, off-by-one, 중복 처리, 잘못된 그리디, 시간 초과, 재귀 깊이 등 이 문제에 해당하는 것만).
+- 정상 실행되지만 특정 입력에서 틀리거나 느린 코드여야 한다(문법 오류 금지). 32비트 정수 오버플로는 결과에 |0 을 써서 흉내 낸다.`;
+const MUTANTS_SCHEMA = S.obj({ mutants: S.arr(S.obj({ flaw: S.str, code: S.str })) });
 /** 2026-10-28 (사용자, docs/DECISIONS.md): drafts by GPT-6.1 Terra (모델 비교: 5개 모두 첫 시도 통과, 약 60초). The
  * independent solution stays on another model on purpose, so the two don't share a mistake. */
 const MAKE_MODEL = () => process.env.RECALLER_CODE_MAKE_MODEL?.trim() || "gpt-6.1-terra";
@@ -145,6 +153,7 @@ export async function solveAlone(p: Statement, model = SOLVE_MODEL(), effort?: s
   if (typeof code !== "string" || !code.trim()) throw new Error("독립 풀이 답에 code가 없음");
   return { code, model, ms: Date.now() - started };
 }
+const solveAloneSafe = (p: Statement) => solveAlone(p).catch((e: unknown) => { console.warn(`[code] independent solution failed: ${(e as Error).message}`); return null; });
 /** Without source examples, the simple solution must agree with the reference on at least this many small inputs. */
 const CROSS_MIN = 30;
 
@@ -153,7 +162,8 @@ type Checked = { ok: true; examples: TestCase[]; tests: TestCase[]; check: Omit<
 type Human = { lang: Lang; code: string };
 /** Where one try spent its time (ms): writing the draft, making the tests, waiting for the independent solution, comparing with it. */
 export type TryTimes = { draftMs: number; testsMs: number; secondMs: number; verifyMs: number };
-async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted: string, human: Human | undefined, times: TryTimes): Promise<Checked> {
+/** `early`: an independent solution already asked for from the original statement (imported problems), shared by every try. */
+async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted: string, human: Human | undefined, times: TryTimes, early?: ReturnType<typeof solveAloneSafe>): Promise<Checked> {
   // An example counts as the answer key only if its input and output are really in the pasted text (spacing ignored).
   const squash = (text: string) => text.replace(/\s+/g, "");
   const inPasted = (text: string) => !squash(text) || squash(pasted).includes(squash(text));
@@ -164,8 +174,7 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
   if (!source.length && !d.brute.trim()) return { ok: false, reason: "원문 예제가 없는데 단순 풀이(brute)가 비어 있음" };
   const seed = 1 + Math.floor(Math.random() * 1_000_000);
   // The independent solution is asked for while the tests are being made (it needs only the statement).
-  const second = solveAlone({ statement: d.statement, inputText: d.inputText, outputText: d.outputText, constraints: d.constraints, examples: source.length ? source : [] })
-    .catch((e: unknown) => { console.warn(`[code] independent solution failed: ${(e as Error).message}`); return null; });
+  const second = early ?? solveAloneSafe({ statement: d.statement, inputText: d.inputText, outputText: d.outputText, constraints: d.constraints, examples: source.length ? source : [] });
   let mark = Date.now();
   const made = await runTestgen({ generator: d.generator, reference: d.reference, brute: d.brute, mutants: d.mutants.slice(0, 6), seed,
     sourceExamples: source, exampleInputs: source.length ? [] : d.exampleInputs.slice(0, 3), needCompared: source.length ? 0 : CROSS_MIN, smallCount: 300 });
@@ -213,7 +222,9 @@ async function logTry(what: string, tries: number, times: TryTimes, reason: stri
 /** A new problem from a topic, a lesson or a pasted problem. Saved only after the check passes; otherwise refused with the reason. */
 export async function makeProblem(input: { topic?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; sourceTitle?: string; sourceUrl?: string; human?: Human; folder?: string; id?: string;
   /** 실험: this request only, a model other than MAKE_MODEL for the draft (the independent solution keeps its own). */ model?: string;
-  /** 실험: this request only, the draft's thinking effort (default: the heavy assist effort, medium). */ effort?: "low" | "medium" | "high" }) {
+  /** 실험: this request only, the draft's thinking effort (default: the heavy assist effort, medium). */ effort?: "low" | "medium" | "high";
+  /** An imported original (statement and examples as published): the independent solution starts from it with the draft. */
+  original?: { statement: string; inputText: string; outputText: string; examples: TestCase[] } }) {
   const makeModel = input.model || MAKE_MODEL();
   const makeLabel = input.effort ? `${makeModel} ${input.effort}` : makeModel;
   const names = (await searchKnowledge(input.topic || input.lesson?.slice(0, 200) || "", { limit: 12 })).map((h) => h.title);
@@ -223,16 +234,24 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   const reasons: string[] = [];
   const attempts: MakeAttempt[] = [];
   const what = (input.sourceUrl || input.topic || input.lesson || "").replace(/\s+/g, " ").slice(0, 120);
+  // 시간 줄이기 (2026-10-29): with the original at hand, the second solution needs nothing from the draft — ask both at once.
+  const original = input.original && input.kind === "full" ? input.original : undefined;
+  const early = original ? solveAloneSafe({ ...original, examples: original.examples.slice(0, 3) }) : undefined;
+  const originalText = original ? [`[문제]\n${original.statement}`, `[입력]\n${original.inputText}`, `[출력]\n${original.outputText}`,
+    ...original.examples.slice(0, 3).map((ex, i) => `[예제 ${i + 1}]\n입력:\n${ex.input}\n출력:\n${ex.output}`)].join("\n\n") : "";
+  const mutantsOf = original ? askJson<{ mutants: Drafted["mutants"] }>("code:mutants", MUTANTS_SYSTEM, originalText, MUTANTS_SCHEMA, { model: makeModel })
+    .then((m) => m.mutants).catch((e: unknown) => { console.warn(`[code] faulty solutions failed: ${(e as Error).message}`); return [] as Drafted["mutants"]; }) : undefined;
   for (let tries = 1; tries <= 1 + MAKE_RETRIES; tries++) {
     const retry = reasons.length ? `\n\n[지난 시도에서 막힌 곳]\n${reasons.map((r, i) => `${i + 1}. ${r}`).join("\n")}\n같은 실수가 없게 다시 세팅한다.` : "";
     const times: TryTimes = { draftMs: 0, testsMs: 0, secondMs: 0, verifyMs: 0 };
     const started = Date.now();
     let d: Drafted;
-    try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + retry, MAKE_SCHEMA, { heavy: true, model: makeModel, ...(input.effort ? { effort: input.effort } : {}) }); }
+    try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + (original ? `\n\n${ORIGINAL_NOTE}` : "") + retry, MAKE_SCHEMA, { heavy: true, model: makeModel, ...(input.effort ? { effort: input.effort } : {}) }); }
     catch (error) { await logTry(what, tries, { ...times, draftMs: Date.now() - started }, `모델 호출 실패: ${(error as Error).message}`, makeLabel); throw error; }
+    if (original) d = { ...d, statement: original.statement, inputText: original.inputText, outputText: original.outputText, sourceExamples: original.examples, mutants: await mutantsOf! };
     times.draftMs = Date.now() - started;
     if (d.answerKind !== "one") { await logTry(what, tries, times, "답이 여러 개이거나 실수 오차 문제", makeLabel); throw new CodeError(422, "답이 여러 개이거나 소수점 오차를 허용하는 문제는 아직 채점할 수 없어서 만들지 않았어요."); }
-    const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human, times);
+    const checked = await checkDraft(d, input.kind, lang, input.lesson ?? "", input.human, times, early);
     attempts.push({ ...times, ...(checked.ok ? {} : { reason: checked.reason.slice(0, 300) }) });
     await logTry(what, tries, times, checked.ok ? "" : checked.reason, makeLabel);
     if (!checked.ok) { reasons.push(checked.reason); continue; }

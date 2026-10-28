@@ -10,7 +10,8 @@ import { archivedBojProblem, archivedUrl, decodeEntities, htmlToText, type Fetch
 import { CodeError } from "./problems.ts";
 
 export type Page = { url: string; title: string; text: string; links: string[] };
-export type Resolved = { lesson: string; title: string; url: string; via: "boj-archive" | "page" | "page-archive"; boj?: string };
+export type Resolved = { lesson: string; title: string; url: string; via: "boj-archive" | "page" | "page-archive"; boj?: string;
+  /** The archived Baekjoon original, when there is one: the independent solution can start from it at once. */ original?: Original };
 
 const PAGE_TEXT_CAP = 30_000;
 const absolute = (href: string, base: string) => { try { return new URL(decodeEntities(href), base).toString(); } catch { return ""; } };
@@ -61,7 +62,7 @@ export async function resolveSource(input: string, fetcher: Fetcher = fetch): Pr
   if (boj && !/^https?:\/\/(?!(?:www\.)?acmicpc\.net)/i.test(text)) {
     const original = await archivedBojProblem(boj, fetcher).catch(() => null);
     if (!original) throw new CodeError(422, `백준 ${boj}번 원문을 인터넷 아카이브에서 찾지 못했어요. 그 문제를 푼 블로그 주소를 넣거나 문제 글을 붙여 넣어 주세요.`);
-    return { lesson: lessonOf(original, boj), title: `BOJ ${boj} ${original.title}`, url: original.url, via: "boj-archive", boj };
+    return { lesson: lessonOf(original, boj), title: `BOJ ${boj} ${original.title}`, url: original.url, via: "boj-archive", boj, original };
   }
   if (!/^https?:\/\//i.test(text)) throw new CodeError(400, "http(s)로 시작하는 주소나 백준 문제 번호를 넣어 주세요.");
   const url = readableUrl(text);
@@ -78,7 +79,7 @@ export async function resolveSource(input: string, fetcher: Fetcher = fetch): Pr
   const number = bojNumberOf(page);
   if (number) {
     const original = await archivedBojProblem(number, fetcher).catch(() => null);
-    if (original) return { lesson: `${lessonOf(original, number)}\n\n[참고: 이 문제를 다룬 글 ${text}]\n${page.text.slice(0, 8000)}`, title: `BOJ ${number} ${original.title}`, url: original.url, via: "boj-archive", boj: number };
+    if (original) return { lesson: `${lessonOf(original, number)}\n\n[참고: 이 문제를 다룬 글 ${text}]\n${page.text.slice(0, 8000)}`, title: `BOJ ${number} ${original.title}`, url: original.url, via: "boj-archive", boj: number, original };
   }
   return { lesson: `[가져온 글] ${page.title}\n${text}\n\n${page.text}`, title: page.title || text, url: text, via };
 }
