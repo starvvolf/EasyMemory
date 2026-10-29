@@ -266,6 +266,14 @@ const TUTOR = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친
 - 맞았다/틀렸다를 단정하지 않는다. 그건 확인(검사)이 정한다.
 - 답한 뒤 한 문장으로 지금 하던 것으로 자연스럽게 돌아오게 한다.`;
 
+/** 아직 안 한 순서: 튜터가 학습자가 직접 맞히거나 고칠 것을 미리 말하지 않게 */
+function upcoming(plan: Plan, beat: number) {
+  const rest = plan.beats.slice(beat + 1).filter((x) => x.kind === "predict" || x.kind === "fix");
+  if (!rest.length) return "";
+  const lines = rest.map((x) => x.kind === "predict" ? `- 예측 문제: ${x.text.split("\n")[0].slice(0, 120)}` : `- 학습자가 직접 고치는 차례: ${x.text.split("\n")[0].slice(0, 120)}`);
+  return `[앞으로 할 순서 — 학습자가 직접 맞히고 고칠 것이라 답을 미리 말하지 않는다]\n${lines.join("\n")}\n이것과 관련된 질문에는 어디를 보면 되는지까지만 말하고, 상태 코드 숫자나 고칠 코드는 "곧 같이 해 볼 거예요"라며 미룬다.`;
+}
+
 export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string) {
   const q = text.trim().slice(0, 1000) || (quote ? "이 코드가 뭐 하는 거예요?" : "");
   if (!q) throw err(400, "질문을 적어 주세요.");
@@ -283,6 +291,11 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
   const context = [
     `[수업 계획서] ${plan.stage}단계 ${plan.title}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}\n고칠 곳(학습자가 직접 쓸 핵심): ${stageOf(course, n).fix.text}`,
     `[지금 하는 순서] ${s0.beat + 1}/${plan.beats.length}: ${b?.text ?? "끝"}`,
+    // 실사용 확인(10/30): "로그인은 언제?"에 "나중 단계"라고만 답함 → 코스 전체 순서와 학습자 목표를 준다
+    `[코스 전체 순서] ${course.stages.map((x) => `${x.transfer ? "전이 과제" : `${x.n}단계`} ${x.title}${x.n === n ? "(지금)" : run.plan.stages.includes(x.n) || x.transfer ? "" : "(건너뜀)"}`).join(" / ")}`,
+    (run.profile as { goal?: string } | undefined)?.goal ? `[학습자 목표] ${(run.profile as { goal?: string }).goal}` : "",
+    // 실사용 확인(10/30): 막혔다는 말에 뒤에 나올 예측 문제의 답(405)을 먼저 말해 버림 → 앞으로 할 순서를 알리고 미리 말하지 않게
+    upcoming(plan, s0.beat),
     s0.lastCheck ? `[마지막 확인] ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}: 기대 ${r.failure?.expected} / 실제 ${r.failure?.actual}`).join("; ") || "모두 통과"}` : "",
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
     `[최근 대화]\n${recentText}`,
@@ -315,6 +328,11 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
     const user = [
       `[수업 계획서] ${plan.stage}단계 ${plan.title}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}`,
       `[지금 하는 순서] ${s0.beat + 1}/${plan.beats.length}: ${b?.text ?? "끝"}`,
+    // 실사용 확인(10/30): "로그인은 언제?"에 "나중 단계"라고만 답함 → 코스 전체 순서와 학습자 목표를 준다
+    `[코스 전체 순서] ${course.stages.map((x) => `${x.transfer ? "전이 과제" : `${x.n}단계`} ${x.title}${x.n === n ? "(지금)" : run.plan.stages.includes(x.n) || x.transfer ? "" : "(건너뜀)"}`).join(" / ")}`,
+    (run.profile as { goal?: string } | undefined)?.goal ? `[학습자 목표] ${(run.profile as { goal?: string }).goal}` : "",
+    // 실사용 확인(10/30): 막혔다는 말에 뒤에 나올 예측 문제의 답(405)을 먼저 말해 버림 → 앞으로 할 순서를 알리고 미리 말하지 않게
+    upcoming(plan, s0.beat),
       ...code,
       bridgeContext(runId),
       quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",

@@ -24,6 +24,11 @@ function switchingNote(text) {
     h("p", {}, "VS Code 창이 작업 폴더로 바뀌면서 잠깐 새로 고쳐져요. 튜터는 오른쪽에 다시 떠요."),
     h("p", { class: "mut small" }, "\"이 폴더의 작성자를 신뢰합니까?\" 창이 뜨면 [예, 작성자를 신뢰합니다]를 누르세요.")));
 }
+// 화면 조립 때 "조건 ? 요소 : null"을 그대로 넣어도 "null" 글자가 찍히지 않게(초보 화면에 null이 보이던 문제)
+for (const name of ["replaceChildren", "append", "prepend"]) {
+  const orig = Element.prototype[name];
+  Element.prototype[name] = function (...kids) { return orig.apply(this, kids.filter((k) => k !== null && k !== undefined && k !== false)); };
+}
 const view = $("#view");
 let status = null;
 

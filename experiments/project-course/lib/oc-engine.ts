@@ -203,6 +203,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   live.set(sid, l);
   const from = h.events.length;
   const text = [io.context, bridgeContext(io.runId), `[학습자 질문] ${question}`].filter(Boolean).join("\n\n");
+  if (process.env.OC_DEBUG) console.log("[oc prompt]\n" + text);
   try {
     await h.oc.sessions.prompt({ sessionID: sid, text });
     const end = await new Promise<any>((resolve) => {
