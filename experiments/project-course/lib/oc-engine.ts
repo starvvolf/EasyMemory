@@ -7,6 +7,7 @@
 import http from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { lineDiff, ROOT } from "./course.ts";
 import { aiBudget, aiMode, AiUnavailable, chatGptBearer, countCalls } from "./ai.ts";
 import { bridgeContext, bridgeState, send as bridgeSend } from "./bridge.ts";
@@ -56,13 +57,15 @@ let host: Promise<Host | null> | null = null;
 export function ready(): Promise<{ run: (io: AgentIO, q: string) => Promise<string> } | null> {
   if (process.env.PC_ENGINE === "classic" || aiMode() === "off") return Promise.resolve(null);
   if (Number(process.versions.node.split(".")[0]) < 24) return Promise.resolve(null);
-  host ??= start().catch((e) => { console.error("[튜터 엔진] OpenCode를 켜지 못해 기존 엔진을 써요:", (e as Error).message); return null; });
+  host ??= start().catch((e) => { startError = (e as Error).message; console.error("[튜터 엔진] OpenCode를 켜지 못해 기존 엔진을 써요:", startError); return null; });
   return host.then((h) => (h ? { run: (io: AgentIO, q: string) => run(h, io, q) } : null));
 }
-export async function engineName() { return (await ready()) ? `OpenCode ${OC_VERSION}` : "기본"; }
+let startError = "";
+export async function engineName() { return (await ready()) ? `OpenCode ${OC_VERSION}` : `기본${startError ? ` (OpenCode 실패: ${startError.slice(0, 160)})` : ""}`; }
 
 async function start(): Promise<Host> {
-  const { OpenCode } = await import(path.join(ROOT, "node_modules", "@opencode", "sdk", "dist", "index.js"));
+  // Windows에서는 절대 경로를 그대로 import하면 안 되고 file:// 주소로 바꿔야 한다
+  const { OpenCode } = await import(pathToFileURL(path.join(ROOT, "node_modules", "@opencode", "sdk", "dist", "index.js")).href);
   const fake = aiMode() === "fake";
   const mockUrl = fake ? await startMock() : undefined;
   const dir = path.join(DATA, "opencode");
