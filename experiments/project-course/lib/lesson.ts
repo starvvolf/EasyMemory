@@ -5,11 +5,11 @@ import { watch, type FSWatcher } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ServerResponse } from "node:http";
-import { COURSES, loadCourse, stageOf } from "./course.ts";
+import { COURSES, loadCourse, solutionDiff, stageOf } from "./course.ts";
 import { locate, type RunResult } from "./checker.ts";
 import { check, devStatus, explain, hint, peekDb, predict, startDev, tryRequest, workspaceOf } from "./learn.ts";
 import { AiUnavailable, aiText } from "./ai.ts";
-import { DATA, getRun, read, update } from "./store.ts";
+import { DATA, getRun, read, saveRun, stageProgress, update } from "./store.ts";
 import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridgeSend } from "./bridge.ts";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -307,7 +307,7 @@ const TUTOR = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친
 /* ---------- 흐름 투어 ("실제 동작 설명해 주세요", "구조 설명해 주세요") ---------- */
 const TOUR_INTENT = /(실제|진짜)\s*(동작|작동)|어떻게\s*(돌아|동작|작동|움직|흘러)|흐름|구조|따라가|투어|순서대로\s*(보여|설명)/;
 const TOUR_Q = `[흐름 투어로 답하기] show_tour 도구로 답한다. 이 단계에서 의미 있는 대표 요청 하나(예: GET /health)를 정하고, 그 요청이 들어와 답장이 나갈 때까지 실제로 지나가는 코드 덩어리를 실행 순서대로 4~8걸음.
-- 걸음마다 file, from, to(5~20줄), anchor(그 덩어리 첫 줄 코드 일부를 파일 그대로), title(짧은 이름, 예: "편지 도착"), text(해요체 2~4문장 마크다운: 여기서 무슨 일이 일어나는지 + 다음에 어느 파일·덩어리로 넘어가는지. 수업의 "편지와 답장" 비유를 잇는다).
+- 걸음마다 file, from, to(그 일을 하는 줄만 2~15줄. 파일 머리 주석·import 줄은 빼고), anchor(그 덩어리 첫 줄 코드 일부를 파일 그대로), title(짧은 이름, 예: "편지 도착"), text(해요체 2~4문장 마크다운: 여기서 무슨 일이 일어나는지 + 다음에 어느 파일·덩어리로 넘어가는지. 수업의 "편지와 답장" 비유를 잇는다).
 - 파일들은 위에 붙어 있으니 다시 읽지 않는다. 아직 없는 파일(뒤 단계)은 넣지 않는다. 앞으로 할 예측 문제의 답은 말하지 않는다.
 - 도구를 부른 뒤에는 한두 문장으로만 마무리한다.`;
 /** 투어용: 작업 폴더의 코드 파일 전부(작은 프로젝트라 한 번에 붙인다) */
@@ -328,6 +328,27 @@ async function allFiles(ws: string) {
   }
   await walk("", "");
   return out.join("\n\n");
+}
+
+/** 튜터가 답에 이 단계 정답 줄을 보여 줬으면 "정답 줄을 봤다"(힌트 3단계)로 친다.
+ *  실사용 확인(10/30): "그냥 코드 알려 주세요"에 정답 두 줄을 줬는데, 그걸 붙여 넣고 통과하면 "직접 통과"로 기록되던 것. */
+const solutionLines = new Map<string, string[]>();
+async function revealedSolution(runId: string, n: number, answer: string) {
+  const run = await getRun(runId);
+  const course = await loadCourse(run.courseId);
+  const key = `${course.id}:${n}`;
+  if (!solutionLines.has(key)) {
+    const lines = (await solutionDiff(course, n)).flatMap((d) => d.diff.split("\n").filter((l) => l.startsWith("+ ")).map((l) => l.slice(2).replace(/\s+/g, "")))
+      .filter((l) => l.length >= 18 && !l.startsWith("//"));
+    solutionLines.set(key, lines);
+  }
+  const flat = answer.replace(/\s+/g, "");
+  const hit = solutionLines.get(key)!.filter((l) => flat.includes(l));
+  if (!hit.length) return;
+  await saveRun(runId, (r) => { stageProgress(r, n).hints.push({ level: 3, at: new Date().toISOString(), source: "tutor-answer" }); });
+  await change(runId, n, (s, push) => {
+    if (s.hints < 3) { s.hints = 3; push({ role: "note", text: "튜터가 정답 줄을 보여 줬어요. 이번 단계는 \"정답 보고 고침\"으로 기록하고, 나중 복습에서 코드 없이 한 번 더 확인할게요." }); }
+  });
 }
 
 /** 질문·답을 프로젝트 노트에: 어느 파일에 대한 것인지 정해서 그 파일 밑에 */
@@ -429,6 +450,7 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
     try {
       answer = await runAgent(io as Parameters<typeof runAgent>[0], q);
       await remember(runId, n, ws, s0, { q, shown, quote, mode: opts.mode, answer }).catch((e) => console.error("[notes]", e));
+      await revealedSolution(runId, n, answer).catch((e) => console.error("[reveal]", e));
       if (opts.onAnswer) await opts.onAnswer(answer).catch(() => {});
       if (io.streamed) return change(runId, n, (s) => { s.busy = false; });
     } catch (e) {
