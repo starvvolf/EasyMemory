@@ -21,6 +21,8 @@ async function course<T>(pathname: string, init?: { method?: string; body?: unkn
   const res = await fetch(`${COURSE}/api/${pathname}`, { method: init?.method ?? "GET", cache: "no-store", signal: AbortSignal.timeout(init?.method === "POST" ? 20000 : 4000),
     headers: init?.body === undefined ? undefined : { "Content-Type": "application/json" }, body: init?.body === undefined ? undefined : JSON.stringify(init.body) });
   const data = await res.json().catch(() => ({}));
+  // 옛 코스 서버(지식 연결 전)는 sync 주소를 모른다 → 다시 켜 달라고 말한다
+  if (res.status === 404 && pathname.endsWith("/sync")) throw Object.assign(new Error("프로젝트 코스를 껐다가 다시 켜 주세요. 새 연결 기능이 아직 안 들어가 있어요."), { status: 502 });
   if (!res.ok) throw Object.assign(new Error((data as { error?: string; message?: string }).error ?? (data as { message?: string }).message ?? `프로젝트 코스 서버 오류 (${res.status})`), { status: 502 });
   return data as T;
 }
