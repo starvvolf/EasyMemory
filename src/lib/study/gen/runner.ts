@@ -208,7 +208,7 @@ export const genInputSchema = z.strictObject({
     readParallel: z.number().int().min(1).max(64).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
     outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional(),
     chunk: z.number().int().min(1).max(4).optional(), hedgeMs: z.number().int().min(1000).max(120000).optional(),
-    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
+    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });

@@ -121,6 +121,8 @@ export type RecallerLab = {
   intentLean?: boolean;
   /** with intentPass: 정리 starts at once (deciding intents itself) and the pass runs beside it; preview pages' cards are dropped when it ends. */
   intentParallel?: boolean;
+  /** each page's 정리 also reads its outline section's other pages (text) and makes only the cards its page owns (10/29 실험). */
+  sectionContext?: boolean;
   /** Calls allowed per start (other than page readings); default grows with the sections. */
   callCap?: number;
 };

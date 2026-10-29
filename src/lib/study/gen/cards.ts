@@ -70,6 +70,12 @@ export const PAGE_INTENT_GIVEN = [
   "예제 쪽은 그 풀이를 카드 하나로 만든다: 종류 절차, title은 '예제: 무엇을 구하나', steps는 실제 값을 넣은 단계와 결과.",
   "카드 title은 그 카드에 담긴 지식을 가리키는 이름이다. pageTitles에 있는 쪽 제목을 그대로 title로 쓰지 않는다(그 쪽이 그 용어 하나를 정의하는 경우만 예외). 같은 쪽의 카드끼리 title이 겹치지 않게 한다.",
 ].join("\n");
+/** lab.sectionContext: each page's call also reads its outline section's other pages (text only), to own only its part. */
+export const SECTION_SCOPE = [
+  "sectionPages는 목차상 같은 구역의 다른 쪽 글이다(맥락이며 근거가 아니다). 이 구역의 각 쪽은 따로 동시에 정리되고 있다.",
+  "이 쪽에서 처음 나오거나 이 쪽이 가장 자세히 다루는 지식만 카드로 만든다. 같은 식·규칙·비교·분류가 구역의 다른 쪽에서 먼저 또는 더 자세히 나오면 이 쪽에서는 만들지 않는다(그 쪽이 만든다).",
+  "다만 이 쪽에만 있는 새 내용(새 식, 값, 조건, 단계, 예제)은 반드시 카드로 만든다. 맡을 것이 없으면 0장이어도 된다.",
+].join("\n");
 export const PAGE_INTENT = [
   "먼저 pages에 쪽마다 의도를 하나 정한다: 표지 · 예고(뒤에서 다룰 주제를 이름만 소개하는 개요) · 안내(목차·학습 목표·구역 간지) · 정의 · 공식(식·행렬과 그 유도) · 절차(공정·단계·흐름) · 비교 · 분류(구분 체계·종류 표) · 개념 · 현황(시장 규모·점유율·순위·전망 같은 시점 수치) · 예제(값을 넣어 푸는 예) · 이어서(앞 쪽 내용을 그림·설명으로 이어 가거나 되풀이) · 요약 · 연습문제.",
   "표지·안내 쪽은 카드를 만들지 않는다.",
@@ -95,9 +101,9 @@ export const ORGANIZE = [
 ].join("\n");
 
 export function organizeUser(o: { fileName: string; section: { id: string; title: string; pages: number[] }; source: string; purpose: string; note: string; guide?: string; revision?: string[]; terms?: string[]; already?: string[]; outline?: { pages: string[]; before?: string; after?: string };
-  pageTitles?: Record<string, string>; prevPage?: { page: number; text: string }; intents?: Record<string, string> }) {
+  pageTitles?: Record<string, string>; prevPage?: { page: number; text: string }; intents?: Record<string, string>; sectionPages?: Array<{ page: number; title: string; text: string }> }) {
   return JSON.stringify({ material: o.fileName, section: o.section, purpose: o.purpose, note: o.note || null, ...(o.guide ? { rules: o.guide } : {}), ...(o.outline ? { outline: o.outline } : {}),
-    ...(o.intents ? { intents: o.intents } : {}), ...(o.pageTitles ? { pageTitles: o.pageTitles } : {}), ...(o.prevPage ? { prevPage: o.prevPage } : {}),
+    ...(o.intents ? { intents: o.intents } : {}), ...(o.sectionPages?.length ? { sectionPages: o.sectionPages } : {}), ...(o.pageTitles ? { pageTitles: o.pageTitles } : {}), ...(o.prevPage ? { prevPage: o.prevPage } : {}),
     ...(o.terms?.length ? { terms: o.terms } : {}), ...(o.already?.length ? { already: o.already } : {}),
     ...(o.revision?.length ? { revision: { problems: o.revision, ask: "앞 응답의 이 문제들을 고쳐 전체를 다시 쓴다." } } : {}), source: o.source });
 }

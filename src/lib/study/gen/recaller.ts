@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
-import { cardKinds, cardLine, cardSchema, checkCards, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
+import { cardKinds, cardLine, cardSchema, checkCards, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
@@ -685,10 +685,11 @@ export async function runRecaller(ctx: RecallerContext) {
         try {
           const given = lab.intentPass && !lab.intentParallel && data.intents ? data.intents.pages : null;
           const inCall = lab.intent || lab.intentParallel;
-          const system = `${ORGANIZE}${given ? `\n${PAGE_INTENT_GIVEN}` : inCall ? `\n${PAGE_INTENT}` : ""}${inlineImages.length ? `\n${INLINE_READ}` : ""}${lab.outline ? `\n${OUTLINE_HINT}` : ""}${lab.lean ? `\n${LEAN}` : ""}\n\n[정리 기준]\n${g.text}`;
+          const system = `${ORGANIZE}${given ? `\n${PAGE_INTENT_GIVEN}` : inCall ? `\n${PAGE_INTENT}` : ""}${inlineImages.length ? `\n${INLINE_READ}` : ""}${lab.outline ? `\n${OUTLINE_HINT}` : ""}${lab.sectionContext && section.pages.length > pages.length ? `\n${SECTION_SCOPE}` : ""}${lab.lean ? `\n${LEAN}` : ""}\n\n[정리 기준]\n${g.text}`;
           const prev = Math.min(...pages) - 1;
           const user = organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision,
             terms: termLines(extractTerms(data.texts)), already: known.map((c) => c.title).slice(0, 40), ...(lab.outline ? { outline: outlineFor(pages) } : {}),
+            ...(lab.sectionContext ? { sectionPages: section.pages.filter((p) => !pages.includes(p)).map((p) => ({ page: p, title: data.prep!.pages.find((x) => x.page === p)?.title ?? "", text: (data.texts[p] ?? "").slice(0, 700) })) } : {}),
             ...(given ? { intents: Object.fromEntries(given.filter((x) => Math.abs(x.page - Math.min(...pages)) <= 2 || pages.includes(x.page)).map((x) => [`p.${x.page}`, `${x.intent}${x.continues ? `(p.${x.continues})` : ""}${x.gist ? ` · ${x.gist}` : ""}`])) } : {}),
             ...(inCall || given ? { pageTitles: Object.fromEntries(pages.map((p) => [`p.${p}`, data.prep!.pages.find((x) => x.page === p)?.title ?? ""])),
               ...(data.texts[prev] !== undefined ? { prevPage: { page: prev, text: (data.texts[prev] ?? "").slice(0, 1500) } } : {}) } : {}) });
