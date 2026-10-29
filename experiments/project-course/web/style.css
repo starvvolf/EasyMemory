@@ -443,3 +443,20 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 0 5px; border: 1px sol
 .lmsg .bubble { overflow-wrap: anywhere; }
 .cbody, .lcard pre { max-width: 100%; overflow-x: auto; }
 .lmain, .lchat { min-width: 0; overflow-x: hidden; }
+
+/* ===== 글꼴: Pretendard(OFL-1.1, web/Pretendard-LICENSE.txt) — 한글이 깔끔하게 (10/30) ===== */
+@font-face { font-family: "Pretendard Variable"; font-weight: 45 920; font-style: normal; font-display: swap; src: url("PretendardVariable.woff2") format("woff2-variations"); }
+:root, .embed { --ui: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif; }
+body, .embed body { font-family: var(--ui); -webkit-font-smoothing: antialiased; letter-spacing: -0.01em; }
+button, input, select, textarea { font-family: inherit; }
+.rich, .embed .rich { font-size: 14.5px; line-height: 1.78; letter-spacing: -0.012em; }
+.rich strong { font-weight: 650; }
+.rich h3 { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin-top: 22px; }
+.rich h4 { font-size: 14.5px; font-weight: 650; margin-top: 18px; }
+.rich li { margin: 5px 0; }
+.lmsg.me .bubble, .embed .lmsg.me .bubble { font-size: 14px; }
+.embed .lside .lstage h2 { font-size: 13.5px; font-weight: 650; }
+.toolrow .titem { font-size: 12px; }
+.lfoot input, .embed .lfoot input { font-size: 14px; }
+.embed[data-vs="dark"] .rich { color: #d9dde3; }
+.embed[data-vs="dark"] .rich strong, .embed[data-vs="dark"] .rich h3, .embed[data-vs="dark"] .rich h4 { color: #f2f4f7; }
