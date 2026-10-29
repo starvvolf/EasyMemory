@@ -1,0 +1,9 @@
+{
+  "name": "recaller-opencode-exp",
+  "private": true,
+  "type": "module",
+  "description": "OpenCode를 튜터 엔진으로 쓸 수 있는지 보는 실험 (2026-10-29). 설치: OpenCode 실험.cmd",
+  "dependencies": {
+    "@opencode/sdk": "2.2.1"
+  }
+}

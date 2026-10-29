@@ -1,1 +1,5 @@
 .data/
+opencode-exp/node_modules/
+opencode-exp/.node24/
+opencode-exp/package-lock.json
+opencode-exp/*.log
