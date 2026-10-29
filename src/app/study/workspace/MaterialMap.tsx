@@ -78,7 +78,7 @@ function keyLine(s: Shape): string {
     case "fact": return clip(s.value);
     case "rule": return clip(`${s.condition} → ${s.result}`);
     case "procedure": return clip(s.steps.map((st) => st.action).join(" → "));
-    case "compare": return clip(s.targets.join(" vs "));
+    case "compare": return clip(s.targets.join("  ·  "));
     case "list": return clip(s.items.join(" · "));
     case "concept": return clip(s.claim);
     case "pattern": return clip(s.frame);
