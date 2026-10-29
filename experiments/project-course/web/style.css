@@ -460,3 +460,13 @@ button, input, select, textarea { font-family: inherit; }
 .lfoot input, .embed .lfoot input { font-size: 14px; }
 .embed[data-vs="dark"] .rich { color: #d9dde3; }
 .embed[data-vs="dark"] .rich strong, .embed[data-vs="dark"] .rich h3, .embed[data-vs="dark"] .rich h4 { color: #f2f4f7; }
+/* 코드 블록 색: VS Code 테마에서 받은 색(없으면 GitHub 어두운 색) */
+.cb { background: var(--cb-bg, #0d1117); color: var(--cb-fg, #e6edf3); }
+.vscode-code .cb { border-color: color-mix(in srgb, var(--cb-fg, #fff) 12%, transparent); }
+.vscode-code .cbh { background: color-mix(in srgb, var(--cb-bg) 88%, var(--cb-fg, #fff)); color: color-mix(in srgb, var(--cb-fg, #fff) 65%, transparent); }
+.cbody { font-size: var(--cb-size, 12.5px); }
+.cbody .kc { color: var(--c-kc, #ff7b72); } .cbody .tk { color: var(--c-kw, #ff7b72); } .cbody .tb { color: var(--c-kb, #79c0ff); }
+.cbody .ts { color: var(--c-str, #a5d6ff); } .cbody .tc { color: var(--c-com, #8b949e); } .cbody .tn { color: var(--c-num, #79c0ff); }
+.cbody .tf { color: var(--c-fn, #d2a8ff); } .cbody .ty { color: var(--c-ty, #ffa657); }
+.cbody .tv { color: var(--c-var, inherit); }
+.vscode-code .cbh .flink { color: var(--c-kw, var(--link)); }

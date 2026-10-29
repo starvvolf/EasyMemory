@@ -2,7 +2,7 @@
   "name": "recaller-bridge",
   "displayName": "Recaller 튜터 연결",
   "description": "Recaller 프로젝트 코스의 튜터를 VS Code 오른쪽 탭에 띄우고, 지금 보는 코드를 튜터에게 알려 주고 튜터가 보낸 줄 열기·빈칸 넣기를 한다.",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "publisher": "recaller-local",
   "private": true,
   "license": "UNLICENSED",

@@ -351,6 +351,69 @@ function openFolder(p) {
   vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(target), { forceReuseWindow: true });
 }
 
+/* ---------- 코드 블록 색을 VS Code 테마와 맞추기 ----------
+ * 지금 색 테마(workbench.colorTheme)의 테마 파일을 직접 읽어 키워드·문자열·주석 등의 색을 뽑는다(include로 이어진 바탕 테마까지). */
+function readJsonc(file) {
+  const t = fs.readFileSync(file, "utf8").replace(/^\uFEFF/, "");
+  // 문자열 안은 건드리지 않고 주석·끝 쉼표만 지운다
+  const noComments = t.replace(/("(?:\\.|[^"\\])*")|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (m, str) => str || "");
+  return JSON.parse(noComments.replace(/,(\s*[}\]])/g, "$1"));
+}
+function loadTheme(file, depth = 0) {
+  const out = { colors: {}, rules: [] };
+  if (depth > 5 || !fs.existsSync(file)) return out;
+  const j = readJsonc(file);
+  if (j.include) { const base = loadTheme(path.join(path.dirname(file), j.include), depth + 1); Object.assign(out.colors, base.colors); out.rules.push(...base.rules); }
+  Object.assign(out.colors, j.colors || {});
+  let tc = j.tokenColors;
+  if (typeof tc === "string") { try { tc = readJsonc(path.join(path.dirname(file), tc)); tc = tc.settings || tc; } catch { tc = []; } }
+  if (Array.isArray(tc)) out.rules.push(...tc);
+  return out;
+}
+function themeFile() {
+  const name = vscode.workspace.getConfiguration("workbench").get("colorTheme");
+  for (const ext of vscode.extensions.all) {
+    const themes = (ext.packageJSON.contributes && ext.packageJSON.contributes.themes) || [];
+    const t = themes.find((x) => x.id === name || x.label === name);
+    if (t) return path.join(ext.extensionPath, t.path);
+  }
+  return null;
+}
+/** 범위 이름(scope) 목록 중 가장 잘 맞는 규칙의 글자색 */
+function scopeColor(rules, wanted) {
+  let best = null, bestLen = -1;
+  for (const r of rules) {
+    if (!r.settings || !r.settings.foreground) continue;
+    const scopes = (Array.isArray(r.scope) ? r.scope : String(r.scope || "").split(",")).map((x) => x.trim()).filter(Boolean);
+    for (const sc of scopes) {
+      if (sc.includes(" ")) continue; // "a b" 같은 자손 범위는 건너뜀
+      for (const w of wanted) if ((w === sc || w.startsWith(sc + ".")) && sc.length >= bestLen) { best = r.settings.foreground; bestLen = sc.length; }
+    }
+  }
+  return best;
+}
+function codeColors() {
+  try {
+    const file = themeFile(); if (!file) return null;
+    const { colors, rules } = loadTheme(file);
+    const ed = vscode.workspace.getConfiguration("editor");
+    return {
+      bg: colors["editor.background"] || null, fg: colors["editor.foreground"] || null,
+      kw: scopeColor(rules, ["storage.type.ts", "storage.type", "storage.modifier"]),
+      kc: scopeColor(rules, ["keyword.control.flow.ts", "keyword.control.import.ts", "keyword.control"]),
+      kb: scopeColor(rules, ["constant.language.boolean.true.ts", "constant.language"]),
+      str: scopeColor(rules, ["string.quoted.double.ts", "string"]),
+      com: scopeColor(rules, ["comment.line.double-slash.ts", "comment"]),
+      num: scopeColor(rules, ["constant.numeric.decimal.ts", "constant.numeric"]),
+      fn: scopeColor(rules, ["entity.name.function.ts", "entity.name.function", "support.function"]),
+      vr: scopeColor(rules, ["variable.other.readwrite.ts", "variable"]),
+      ty: scopeColor(rules, ["entity.name.type.ts", "entity.name.type", "support.type"]),
+      size: ed.get("fontSize") || null,
+    };
+  } catch (e) { console.error("[recaller] 테마 색을 읽지 못함", e); return null; }
+}
+function sendCodeColors() { if (panel) panel.webview.postMessage({ recallerCode: codeColors() }); }
+
 /** 튜터 화면(코스 서버의 페이지)을 탭에 띄운다. */
 async function renderTutor() {
   if (!panel) return;
@@ -363,7 +426,9 @@ async function renderTutor() {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin} http://127.0.0.1:${PORT} http://localhost:${PORT}; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 <style>html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--vscode-editor-background)}iframe{border:0;width:100%;height:100%;display:block}</style>
 </head><body><iframe id="t" src="${url}" allow="clipboard-read; clipboard-write"></iframe>
-<script>const vs=acquireVsCodeApi();window.addEventListener("message",(e)=>{const f=document.getElementById("t");if(!e.data)return;if(e.data.recallerTheme&&f.contentWindow&&e.source!==f.contentWindow)f.contentWindow.postMessage(e.data,"*");if(e.data.recallerOpenFolder&&e.source===f.contentWindow)vs.postMessage({openFolder:String(e.data.recallerOpenFolder)});});</script>
+<script>const vs=acquireVsCodeApi();let code=${JSON.stringify(JSON.stringify(codeColors()))};const f=document.getElementById("t");
+f.addEventListener("load",()=>{if(code&&f.contentWindow)f.contentWindow.postMessage({recallerCode:JSON.parse(code)},"*");});
+window.addEventListener("message",(e)=>{if(!e.data)return;if(e.source!==f.contentWindow&&f.contentWindow){if(e.data.recallerCode!==undefined)code=JSON.stringify(e.data.recallerCode);if(e.data.recallerTheme||e.data.recallerCode!==undefined)f.contentWindow.postMessage(e.data,"*");}if(e.data.recallerOpenFolder&&e.source===f.contentWindow)vs.postMessage({openFolder:String(e.data.recallerOpenFolder)});if(e.data.recallerReady&&e.source===f.contentWindow&&code)f.contentWindow.postMessage({recallerCode:JSON.parse(code)},"*");});</script>
 </body></html>`;
 }
 
@@ -421,7 +486,8 @@ function activate(context) {
     vscode.commands.registerCommand("recaller.explainBlock", explainBlock),
     vscode.languages.registerCodeLensProvider([{ scheme: "file", language: "typescript" }, { scheme: "file", language: "javascript" }], lensProvider),
     vscode.window.onDidChangeVisibleTextEditors(() => applyFocus()),
-    vscode.window.onDidChangeActiveColorTheme(() => { if (panel) panel.webview.postMessage({ recallerTheme: themeName() }); }),
+    vscode.window.onDidChangeActiveColorTheme(() => { if (panel) { panel.webview.postMessage({ recallerTheme: themeName() }); setTimeout(sendCodeColors, 300); } }),
+    vscode.workspace.onDidChangeConfiguration((e) => { if (e.affectsConfiguration("editor.fontSize") || e.affectsConfiguration("workbench.colorTheme")) sendCodeColors(); }),
     vscode.commands.registerCommand("recaller.reconnect", connect),
     vscode.commands.registerCommand("recaller.openTutor", () => { if (runId || lobby) openTutor(); else connect(); }),
     vscode.window.onDidChangeActiveTextEditor((ed) => { if (ed && inRoot(ed.document)) lastEditor = ed; scheduleReport(); }),

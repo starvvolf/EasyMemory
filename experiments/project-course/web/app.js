@@ -11,7 +11,19 @@ if (EMBED) {
   setTheme(q.get("theme"));
   root.style.setProperty("--mono", `${q.get("mono") ? `${q.get("mono")}, ` : ""}Consolas, "Cascadia Mono", "D2Coding", ui-monospace, monospace`);
   // VS Code 테마를 바꾸면 확장이 알려 준다
-  window.addEventListener("message", (e) => { if (e.data && e.data.recallerTheme) setTheme(e.data.recallerTheme); });
+  window.addEventListener("message", (e) => {
+    if (e.data && e.data.recallerTheme) setTheme(e.data.recallerTheme);
+    // VS Code 색 테마의 코드 색(키워드·문자열·주석…)을 받아 코드 블록에 그대로 쓴다
+    if (e.data && "recallerCode" in e.data) {
+      const c = e.data.recallerCode || {};
+      const set = (k, v) => { if (v) root.style.setProperty(k, v); else root.style.removeProperty(k); };
+      set("--cb-bg", c.bg); set("--cb-fg", c.fg); set("--c-kw", c.kw); set("--c-kc", c.kc); set("--c-kb", c.kb); set("--c-str", c.str);
+      set("--c-com", c.com); set("--c-num", c.num); set("--c-fn", c.fn); set("--c-var", c.vr); set("--c-ty", c.ty);
+      set("--cb-size", c.size ? `${c.size}px` : null);
+      root.classList.toggle("vscode-code", !!c.bg);
+    }
+  });
+  try { window.parent.postMessage({ recallerReady: true }, "*"); } catch { /* */ }
 }
 // VS Code 탭 안이면 확장이 지금 열린 폴더를 알려 준다(root). 다른 폴더가 필요하면 확장에 "그 폴더 열어 줘"를 보낸다.
 const VS_ROOT = EMBED ? new URLSearchParams(location.search).get("root") : null;
@@ -577,11 +589,11 @@ function codeBlock(code, lang, info, ws) {
 function highlight(code, lang) {
   const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   if (!/^(ts|js|typescript|javascript|tsx|jsx|)$/i.test(lang)) return esc(code);
-  const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\b(const|let|var|function|async|await|return|if|else|for|of|in|while|try|catch|finally|throw|new|class|extends|import|export|from|default|type|interface|instanceof|typeof|null|undefined|true|false|this)\b|\b(\d+(?:\.\d+)?)\b|([A-Za-z_$][\w$]*)(?=\s*\()/g;
+  const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\b(if|else|for|of|in|while|do|switch|case|break|continue|return|await|try|catch|finally|throw|import|export|from|default|as)\b|\b(const|let|var|function|async|new|class|extends|type|interface|instanceof|typeof|void|delete|static|readonly|public|private)\b|\b(null|undefined|true|false|this)\b|\b(\d+(?:\.\d+)?)\b|([A-Za-z_$][\w$]*)(?=\s*\()|\b([A-Z][\w$]*)\b|([a-z_$][\w$]*)/g;
   let out = "", last = 0, m;
   while ((m = re.exec(code))) {
     out += esc(code.slice(last, m.index));
-    const cls = m[1] ? "tc" : m[2] ? "ts" : m[3] ? "tk" : m[4] ? "tn" : "tf";
+    const cls = m[1] ? "tc" : m[2] ? "ts" : m[3] ? "kc" : m[4] ? "tk" : m[5] ? "tb" : m[6] ? "tn" : m[7] ? "tf" : m[8] ? "ty" : "tv";
     out += `<span class="${cls}">${esc(m[0])}</span>`;
     last = re.lastIndex;
   }
