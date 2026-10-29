@@ -14,13 +14,14 @@ test("글 지도: 핵심은 저장, 개념어는 고를 때만", async () => {
   process.env.STUDY_FORGE_DATA_DIR = dir; process.env.STUDY_FORGE_MODEL_PROVIDER = "fake"; process.env.RECALLER_AFTER_SAVE = "off";
   setFakeModelResponder(() => JSON.stringify({ genre: "concept", question: "금리가 내리면 채권은?", flow: ["금리", "채권 가격"], claim: { text: "금리와 채권 가격은 반대로 움직인다", basis: [] },
     ideas: [{ title: "금리와 채권 가격의 역관계", body: "금리가 오르면 기존 채권 가격이 내린다.", ask: "이 글에서 금리가 오르면 기존 채권 가격은?", quote: "금리가 오르면 채권 가격은 내리고" }],
-    terms: [{ name: "듀레이션", line: "금리 변화에 대한 채권 가격 민감도" }, { name: "채권", line: "돈을 빌려주고 받는 증서" }], consider: ["신용위험은 다루지 않았다"] }));
+    terms: [{ name: "듀레이션", line: "금리 변화에 대한 채권 가격 민감도" }, { name: "채권", line: "돈을 빌려주고 받는 증서" }, { name: "금리와 채권 가격의 역관계", line: "핵심과 같은 이름" }], consider: ["신용위험은 다루지 않았다"] }));
   try {
     const known = await saveKnowledge({ title: "채권", body: "돈을 빌려주는 증서" });
     await recordEvent(known.item.id, "correct");
     const r = await extractFromText({ kind: "web", title: "채권 기초", url: "https://ex.com/bond", text: "금리가 오르면 채권 가격은 내리고 금리가 내리면 채권 가격은 오른다. ".repeat(4) });
     assert.deepEqual((await tree()).items.map((i) => i.title).sort(), ["금리와 채권 가격의 역관계", "채권"], "only the idea is new; 듀레이션 is not saved yet");
     assert.equal(r.source.map!.terms.find((t) => t.name === "채권")!.have, "known");
+    assert.ok(!r.source.map!.terms.some((t) => t.name === "금리와 채권 가격의 역관계"), "a term with an idea's name is not listed twice");
     assert.ok(r.source.againIds.includes(known.item.id), "a known term counts as 예전에 배운 것");
     assert.deepEqual(r.source.map!.consider, ["신용위험은 다루지 않았다"]);
     const idea = (await tree()).items.find((i) => i.title === "금리와 채권 가격의 역관계")!;

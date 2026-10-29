@@ -39,10 +39,12 @@ export async function mapArticle(input: { title: string; text: string }, options
   const user = [`[글 제목] ${input.title}`, `[학습자가 이미 가진 지식 이름] ${names.join(", ") || "(없음)"}`, `[본문]\n${input.text.slice(0, 40000)}`].join("\n\n");
   const data = await askJson<Mapped>("knowledge:map", MAP_SYSTEM, user, MAP_SCHEMA,
     { model: options.model || process.env.RECALLER_EXTRACT_MODEL?.trim() || "gpt-6.1-terra", effort: options.effort || process.env.RECALLER_EXTRACT_EFFORT?.trim() || "low" });
-  const terms = (data.terms ?? []).slice(0, 20).map((t) => {
+  // 핵심 아이디어로 이미 저장되는 이름은 개념어 목록에 다시 두지 않는다 (차익거래가 두 군데 뜨던 것, 10/30 동작 점검).
+  const ideas = (data.ideas ?? []).slice(0, 5);
+  const terms = (data.terms ?? []).filter((t) => !sameName(ideas.map((k) => ({ title: k.title, aliases: [] as string[] })), t.name)).slice(0, 20).map((t) => {
     const hit = sameName(items, t.name);
     const have = !hit ? "new" : hit.graduated || hit.state === "known" ? "known" : "met";
     return { ...t, have, ...(hit ? { id: hit.id } : {}) };
   });
-  return { ...data, ideas: (data.ideas ?? []).slice(0, 5), terms, consider: (data.consider ?? []).slice(0, 2) };
+  return { ...data, ideas, terms, consider: (data.consider ?? []).slice(0, 2) };
 }
