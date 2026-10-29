@@ -552,7 +552,7 @@ function touchMemory(subject){
 
 /* ---------- views ---------- */
 /* 메뉴 넷 (2026-10-26): 오늘 · 공부 · 지식 · 일정. Every screen belongs to one of them; the rest live under ⋯ 더보기. */
-const TAB_OF = { home:"home", practice:"practice", read:"practice", code:"practice", web:"practice", start:"practice", create:"practice",
+const TAB_OF = { home:"home", practice:"practice", read:"practice", code:"practice", web:"practice", project:"practice", start:"practice", create:"practice",
   knowledge:"knowledge", summary:"knowledge", plan:"plan" };
 function setView(v){
   if (S.session && S.session.overlay && v !== "read") S.session = null;
@@ -787,7 +787,7 @@ function viewHost(name, props){
 let lastContextKey = "";
 function emitContext(){
   if (S.view === "code" || S.view === "web") return;
-  let ctx = { view:S.view, title:{ home:"오늘", knowledge:"지식", practice:"공부 · PDF 자료", create:"자료 넣기", records:"학습 기록", bench:"작업대", plan:"일정", summary:"한 장 정리", archive:"보관함", web:"공부 · 웹 글", start:"새 공부" }[S.view] || S.view, refs:[], knowledgeIds:[] };
+  let ctx = { view:S.view, title:{ home:"오늘", knowledge:"지식", practice:"공부 · PDF 자료", create:"자료 넣기", records:"학습 기록", bench:"작업대", plan:"일정", summary:"한 장 정리", archive:"보관함", web:"공부 · 웹 글", project:"공부 · 프로젝트", start:"새 공부" }[S.view] || S.view, refs:[], knowledgeIds:[] };
   if (S.view === "read" && S.reader && S.reader.deckId && S.decks[S.reader.deckId]){
     const d = S.decks[S.reader.deckId];
     ctx = { ...ctx, title:`${displayTitle(d)} p.${S.reader.page}`, refs:[d.id + ":"] };
@@ -807,10 +807,10 @@ on(window, "recaller:go", (e) => {
   if (S.session && v !== "practice" && v !== "read") S.session = null;
   setView(v); window.scrollTo({ top:0 });
 });
-/* 공부 안의 갈래: PDF 자료 · 웹 글 · 코드, and "+ 새 공부" — the same bar on each, so the three feel like one place. */
+/* 공부 안의 갈래: PDF 자료 · 웹 글 · 코드 · 프로젝트(2026-10-30, D), and "+ 새 공부" — the same bar on each, so the three feel like one place. */
 function studyNav(active){
   const seg = h("div", { class:"seg study-seg", role:"tablist", "aria-label":"공부 종류" },
-    [["practice", "PDF 자료"], ["web", "웹 글"], ["code", "코드"]].map(([v, label]) =>
+    [["practice", "PDF 자료"], ["web", "웹 글"], ["code", "코드"], ["project", "프로젝트"]].map(([v, label]) =>
       h("button", { role:"tab", "aria-selected": active === v ? "true" : "false", class: active === v ? "on" : "", onclick: () => { S.session = null; setView(v); } }, label)));
   return h("div", { class:"study-nav" }, seg, h("button", { class:"btn primary small", onclick: () => setView("start") }, "+ 새 공부"));
 }
@@ -908,6 +908,7 @@ function render(){
   if (S.view === "home") app.append(renderRecallerHome());
   else if (S.view === "knowledge") app.append(S.kp.legacy || !env.mountView ? renderKnowledgeLegacy() : viewHost("knowledge", { onLegacy: () => { S.kp.legacy = true; render(); } }));
   else if (S.view === "code") app.append(studyNav("code"), env.mountView ? viewHost("code", {}) : h("div", { class:"panel small muted", text:"코드 학습은 로컬 실험 모드에서 쓸 수 있어요." }));
+  else if (S.view === "project") app.append(studyNav("project"), env.mountView ? viewHost("project", {}) : h("div", { class:"panel small muted", text:"프로젝트 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "web") app.append(studyNav("web"), env.mountView ? viewHost("web", {}) : h("div", { class:"panel small muted", text:"웹 글 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "start") app.append(env.mountView ? viewHost("start", {}) : renderBuilder());
   else if (S.view === "plan") app.append(env.mountView ? viewHost("plan", {}) : h("div", { class:"panel small muted", text:"일정은 로컬 실험 모드에서 쓸 수 있어요." }));

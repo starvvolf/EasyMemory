@@ -6,12 +6,13 @@ import { useEffect, useState } from "react";
 import { call, errorText, folderPaths, go, handoff, later, type GoalView, type Tree } from "./api";
 import type { SourceView } from "./ArticleStudy";
 
-type Kind = "pdf" | "web" | "code";
+type Kind = "pdf" | "web" | "code" | "project";
 type Made = { kind: "web"; id: string; title: string; url: string; folderId: string | null; count: number; again: number; question?: string; terms?: number } | { kind: "code"; id: string; title: string; folderId: string | null };
 const KINDS: Array<{ kind: Kind; title: string; text: string; eg: string }> = [
   { kind: "pdf", title: "PDF · 강의 자료", text: "외울 것을 뽑아 문제로 만들고, 시험일까지 복습을 잡아요.", eg: "전공 PPT, 암기 과목, 교재 PDF" },
   { kind: "web", title: "웹 글 · 칼럼", text: "글에서 알아야 할 지식과 고리를 잡고, 다음 글에서 다시 만나면 알려 줘요.", eg: "주식 칼럼, 기술 블로그, 뉴스 해설" },
   { kind: "code", title: "코드 · 알고리즘", text: "배운 개념으로 문제를 만들고, 직접 짜서 실행·채점해요.", eg: "바킹독 강의, 백준 대비, 언어 문법" },
+  { kind: "project", title: "프로젝트 · 직접 만들기", text: "VS Code에서 작은 서비스를 한 단계씩 만들고, 옆의 튜터가 알려 줘요.", eg: "게시판 API, 로그인, DB 저장" },
 ];
 
 export default function NewStudy() {
@@ -29,7 +30,7 @@ export default function NewStudy() {
       <header><h2 className="ws-title">무엇을 공부할까요?</h2><p className="muted">자료를 넣으면 알아야 할 지식을 뽑고, 문제로 확인하고, 잊을 때쯤 다시 물어봐요.</p></header>
       <div className="ns-kinds">
         {KINDS.map((k) => (
-          <button key={k.kind} className={`ns-kind${kind === k.kind ? " on" : ""}`} onClick={() => { if (k.kind === "pdf") go("create"); else setKind(k.kind); }}>
+          <button key={k.kind} className={`ns-kind${kind === k.kind ? " on" : ""}`} onClick={() => { if (k.kind === "pdf") go("create"); else if (k.kind === "project") go("project"); else setKind(k.kind); }}>
             <b>{k.title}</b><span>{k.text}</span><small>{k.eg}</small>
           </button>
         ))}
