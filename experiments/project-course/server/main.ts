@@ -11,6 +11,7 @@ import { PORTS, openAtStartup, updateBridgeIfOld, check, devStatus, explain, hin
 import { addRun, candidates, getRun, recordsFile, runs, setActive, type Run } from "../lib/store.ts";
 import { aiStatus } from "../lib/ai.ts";
 import { knowledgeExport, notesView } from "../lib/notes.ts";
+import { markSent, pending } from "../lib/sync.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
 import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
@@ -169,6 +170,9 @@ const routes: [string, RegExp, Handler][] = [
   }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => openEditor(m[1])],
   ["GET", /^\/api\/runs\/(\w+)\/knowledge-export$/, async (_q, m) => { const run = await getRun(m[1]); const course = await loadCourse(run.courseId); return knowledgeExport(run.id, course.title); }],
+  // 앱 지식 저장소 잇기: 앱(3000)이 안 보낸 것을 받아 넣고, 넣은 열쇠를 돌려준다(lib/sync.ts)
+  ["GET", /^\/api\/runs\/(\w+)\/sync$/, async (_q, m) => { const run = await getRun(m[1]); return pending(run.id, await loadCourse(run.courseId)); }],
+  ["POST", /^\/api\/runs\/(\w+)\/sync$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return markSent(m[1], Array.isArray(b.keys) ? b.keys.map(String) : []); }],
   ["GET", /^\/api\/runs\/(\w+)\/notes$/, async (_q, m) => {
     // 프로젝트 노트: 파일별 기록 + 연결 + 만난 말, 파일 역할은 코스의 부품 카드에서
     const run = await getRun(m[1]);
