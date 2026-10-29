@@ -714,7 +714,7 @@ export async function runRecaller(ctx: RecallerContext) {
         }
         const intents = (reply as { pages?: Chunk["intents"] }).pages;
         if (intents) { noteIntents(intents); chunk.intents = intents.filter((x) => pages.includes(x.page)); }
-        if (lab.intentParallel) { await intentReady; noteIntents(data.intents?.pages ?? []); }
+        if (lab.intentParallel) noteIntents(data.intents?.pages ?? []);
         if (lab.intent || lab.intentPass) reply = { ...reply, cards: reply.cards.filter((c) => !onSilentPage(c)) };
         // 현황 (시점 수치) pages, as the first pass saw them: their cards are 보조 (no basic question by default).
         const stats = new Set((data.intents?.pages ?? []).filter((x) => x.intent === "현황").map((x) => x.page));
@@ -730,6 +730,16 @@ export async function runRecaller(ctx: RecallerContext) {
       stamp("organizedAt", pages);
       collect(unit);
       await save();
+      // intentParallel: the cards show at once (자료 지도); when the pages' intents come, cover/guide/preview cards go and 현황 cards
+      // turn 보조 (10/30: the intent pass once took 21 s, and the map stayed empty that long while it waited).
+      if (lab.intentParallel) {
+        await intentReady;
+        noteIntents(data.intents?.pages ?? []);
+        const stats = new Set((data.intents?.pages ?? []).filter((x) => x.intent === "현황").map((x) => x.page));
+        chunk.cards = chunk.cards.filter((c) => !onSilentPage(c)).map((c) => stats.size && c.evidence.every((e) => stats.has(e.page)) ? { ...c, weight: "보조" as const } : c);
+        collect(unit);
+        await save();
+      }
     }
     cardsIn(section.id, k);
     if (lab.skimOnly) { chunk.questions ??= []; collect(unit); return; }

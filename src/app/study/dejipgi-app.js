@@ -4120,7 +4120,7 @@ function renderBuilder(){
   wrap.append(h("ol", { class:"steps" },
     h("li", { "data-on": step === 1 ? "true" : "false", "data-done": step > 1 ? "true" : "false" }, "자료 올리기"),
     h("li", { "data-on": step === 2 ? "true" : "false" }, "방향 정하기"),
-    h("li", { "data-on":"false" }, "읽기 시작")));
+    h("li", { "data-on":"false" }, "지식 정리 시작")));
   if (!engine) wrap.append(h("div", { class:"note warn", text:"이 화면에서는 생성 요청을 보낼 수 없어요. 로컬 실험 모드에서 열어 주세요." }));
   const acc = accountNote(); if (acc) wrap.append(acc);
   if (b.error) wrap.append(h("div", { class:"note err", role:"alert", text:b.error }));
@@ -4194,7 +4194,7 @@ function renderBuilder(){
             h("option", { value:"", text:label }), ...opts.map(([v, t]) => h("option", { value:v, selected: b.survey[key] === v ? true : null, text:t })))),
         h("input", { placeholder:"이미 아는 부분", value:b.survey.known || "", disabled:b.busy, oninput:(e) => { b.survey = { ...b.survey, known: e.target.value || undefined }; } })) : null),
     h("div", { class:"row" },
-      h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "읽기 시작"),
+      h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "지식 정리 시작"),
       h("span", { class:"small muted", text:"바로 자료 지도로 넘어가요. 지식이 정리되는 대로 채워지고, 문제는 쪽마다 붙어요." }))));
   return wrap;
 }
