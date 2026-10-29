@@ -95,6 +95,11 @@ class Stop extends Error {
   transient = false;
   constructor(status: GenState["status"], message: string) { super(message); this.status = status; }
 }
+/** A reply stuck saying the same short piece (1–12 chars) at least 40 times in a row at its end. */
+export function repeating(text: string) {
+  const tail = text.slice(-600);
+  return tail.length >= 200 && /([\s\S]{1,12}?)\1{39,}$/.test(tail);
+}
 /** Times a run picks itself up after a connection hiccup, before it waits for the learner (사용자 점검 10/29). */
 const AUTO_RESUMES = 3;
 const AUTO_RESUME_MS = 10_000;
@@ -530,7 +535,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     const guardText = (text: string) => {
       partial = text;
       // A structured reply stuck emitting blank space (seen with recaller's organize) is cut as soon as it shows, not at the limit.
-      if (cut && !runaway && (text.length > extra.maxChars! || /\s{1500}$/.test(text))) { runaway = true; cut.abort(); return; }
+      // …or one short piece said over and over ("다. 다. 다." for 6,000자 took 27 s on 32쪽 p.31, 10/29).
+      if (cut && !runaway && (text.length > extra.maxChars! || /\s{1500}$/.test(text) || repeating(text))) { runaway = true; cut.abort(); return; }
       baseText?.(text);
     };
     const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(cut || baseText ? { onText: guardText } : {}), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
@@ -591,7 +597,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       if (runaway) {
         // Head and tail are enough to see what repeated; the whole text can be tens of thousands of characters.
         const kept = partial.length > 24000 ? `${partial.slice(0, 12000)}\n…(중략 ${partial.length - 24000}자)…\n${partial.slice(-12000)}` : partial;
-        Object.assign(record, { reply: redactCallText(kept), error: `응답이 ${partial.length.toLocaleString()}자로 상한 ${extra.maxChars!.toLocaleString()}자를 넘어 끊었어요.`, ms: Date.now() - started });
+        Object.assign(record, { reply: redactCallText(kept), error: repeating(partial) ? `응답이 같은 글을 되풀이해 ${partial.length.toLocaleString()}자에서 끊었어요.` : `응답이 ${partial.length.toLocaleString()}자로 상한 ${extra.maxChars!.toLocaleString()}자를 넘어 끊었어요.`, ms: Date.now() - started });
         await saveJson(callFile, record);
         throw new RunawayReply(extra.maxChars!, partial.length);
       }

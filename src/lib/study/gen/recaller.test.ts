@@ -309,3 +309,10 @@ test("자료 전체 정리 starts when the cards are in, beside the questions", 
   assert.ok(t.cardsDoneAt && done.recaller!.consolidated?.cards.length);
   assert.ok(t.cardsDoneAt! <= t.basicDoneAt!, `${t.cardsDoneAt} ${t.basicDoneAt}`);
 }));
+
+test("a reply stuck saying one short piece over and over is caught early", async () => {
+  const { repeating } = await import("./runner.ts");
+  assert.equal(repeating(`{"cards":[{"title":"x","value":"${"다. ".repeat(60)}`), true);
+  assert.equal(repeating(`{"cards":[{"title":"x","value":"${"가나다라마바사아자차카타파하 ".repeat(20)}`), false);
+  assert.equal(repeating("[" + Array.from({ length: 80 }, (_, i) => i).join(", ")), false);
+});

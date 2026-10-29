@@ -326,7 +326,8 @@ test("v4 끝없는 응답: 예상 길이를 넘은 출제는 끊고 한 번 짧�
     assert.equal(done.status, "done", done.message);
     assert.ok((done.astra?.warnings ?? []).filter(w => w.code === "astra-runaway").length >= 2);
     const cut = (await readGenCalls(start.id)).filter(call => call.step === "astra-author" && call.error?.includes("끊었어요"));
-    assert.ok(cut.length >= 2 && cut.every(call => (call.reply ?? "").length > 10000), "끊을 때까지 받은 글을 호출 기록에 남긴다");
+    // A reply repeating one short piece is cut as soon as the repetition shows (10/29), so what was kept is short.
+    assert.ok(cut.length >= 2 && cut.every(call => (call.reply ?? "").length > 400), "끊을 때까지 받은 글을 호출 기록에 남긴다");
     assert.equal(done.astra?.publishedQuestions?.length, 0);
   } finally {
     if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;
