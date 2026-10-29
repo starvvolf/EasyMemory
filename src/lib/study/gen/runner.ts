@@ -233,7 +233,10 @@ export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
   // 자료 성격·쪽 의도 (10/29, C): one short pass over every page (small pictures + text) beside 정리 decides the material's
   // kind and each page's intent; cover/guide/preview pages make no card, 현황 pages' cards are 보조, a worked example is a card.
   return { router: "prep-2", inlineRead: true, outline: true, pageParallel: Math.min(64, Math.max(1, pages)), fastPrep: 8, imageWidth: 1024, lenientQuotes: true,
-    intentPass: true, intentLean: true, intentParallel: true };
+    intentPass: true, intentLean: true, intentParallel: true,
+    // 그림 쪽 읽기 (blind checks wait for it): drawing is done in the workers already, so this is only model calls in flight
+    // (4 at a time made a first-time 32쪽 wait about 70 s for its 25 picture pages, 10/29).
+    readParallel: Math.min(32, Math.max(4, pages)) };
 }
 
 export const forkInputSchema = z.strictObject({
