@@ -90,10 +90,12 @@ export function firstLine(md: string, max = 90) {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 /** 답 글에서 `코드` 이름들(설명 속 말) */
-export const codeTerms = (md: string) => [...new Set([...md.replace(/```[\s\S]*?```/g, "").matchAll(/`([^`\n]{1,30})`/g)].map((m) => m[1].trim()))]
+export const codeTerms = (md: string) => [...new Set([...md.replace(/```[\s\S]*?```/g, "").matchAll(/`([^`\n]{1,40})`/g)].map((m) => normTerm(m[1])))]
   .filter(isTerm).slice(0, 20);
+/** readJson(req) → readJson, ...post → post 처럼 같은 말로 모은다(…은 문법이라 따로) */
+export const normTerm = (t: string) => { const x = t.trim(); return /^[\w$.]+\(.*\)$/.test(x) ? x.replace(/\(.*\)$/, "") : /^\.\.\.\w/.test(x) ? x.slice(3) : x; };
 /** 코드에 적히는 말만(한글·띄어쓰기·주소·글자값·숫자는 빼고) */
-export const isTerm = (t: string) => !!t && !/[\uac00-\ud7a3]/.test(t) && !/\s/.test(t) && !/^["'\/]/.test(t) && !/^\d+$/.test(t) && t.length <= 30;
+export const isTerm = (t: string) => !!t && !/[\uac00-\ud7a3]/.test(t) && !/\s/.test(t) && !/^["'\/]/.test(t) && !/^\d+$/.test(t) && t.length <= 30 && !/\.(ts|js|mjs|json|db|html)$/.test(t);
 
 export async function addEntry(runId: string, ws: string, rel: string, e: Omit<NoteEntry, "id" | "at">) {
   const f = rel.replace(/\\/g, "/");

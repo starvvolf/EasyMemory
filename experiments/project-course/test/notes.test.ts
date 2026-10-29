@@ -15,6 +15,7 @@ test("말 나누기: 문법 / 도구 / 프로젝트 이름", () => {
 });
 test("코드 말만 뽑기, 첫 문단 요약", () => {
   assert.deepEqual(codeTerms("`req` — 받은 편지, `💬 설명`, `/health`, `req.method ?? \"GET\"`, `??`\n```ts\n`x`\n```"), ["req", "??"]);
-  assert.ok(isTerm("found.handler")); assert.ok(!isTerm("주소 읽기"));
+  assert.ok(isTerm("found.handler")); assert.ok(!isTerm("주소 읽기")); assert.ok(!isTerm("http.ts"));
+  assert.deepEqual(codeTerms("`readJson(req)` `readJson` `...post` `...`"), ["readJson", "post", "..."]);
   assert.equal(firstLine("### 제목\n\n이 덩어리는 **편지**를 받는 곳이에요. [[src/server.ts:9]] 참고.\n\n- 목록"), "이 덩어리는 편지를 받는 곳이에요. src/server.ts 9줄 참고.");
 });

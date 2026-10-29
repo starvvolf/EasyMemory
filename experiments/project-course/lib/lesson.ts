@@ -355,7 +355,8 @@ async function revealedSolution(runId: string, n: number, answer: string) {
 async function remember(runId: string, n: number, ws: string, s0: State, x: { q: string; shown?: string; quote?: { file: string; from: number; to: number }; mode?: string; answer: string }) {
   if (!x.answer || /^(답을|지금은 AI|생각이 너무)/.test(x.answer) || x.mode === "tour") return; // 투어는 카드에서 따로
   const word = /^"(.+)"는 뭐예요\?$/.exec(x.shown ?? "")?.[1];
-  const target = x.quote?.file ?? lastQuoteFile(s0) ?? bridgeState(runId)?.file ?? null;
+  // 어느 파일 이야기인지: 고른 코드 → 최근에 물은 코드 → VS Code에서 보던 파일 → 답에 처음 나온 [[파일:줄]]
+  const target = x.quote?.file ?? lastQuoteFile(s0) ?? bridgeState(runId)?.file ?? /\[\[([^\]:#]+)[:#]/.exec(x.answer)?.[1] ?? null;
   if (!target) return;
   if (x.mode === "explain" && x.quote) return; // 덩어리 설명은 explainBlock에서
   await addEntry(runId, ws, target, word
