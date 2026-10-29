@@ -300,3 +300,12 @@ test("쪽 의도 옆에서 (lab.intentParallel): 정리 starts at once; the cove
   assert.ok(units.flatMap((u) => u.questions ?? []).every((q) => !q.pages.every((p) => p === 1)));
   assert.match((await readGenCalls(done.id)).find((c) => c.step === "rc-organize")!.system, /먼저 pages에 쪽마다 의도/);
 }));
+
+test("자료 전체 정리 starts when the cards are in, beside the questions", () => withData(async () => {
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake" });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  assert.equal(done.status, "done", done.message);
+  const t = done.recaller!.timing;
+  assert.ok(t.cardsDoneAt && done.recaller!.consolidated?.cards.length);
+  assert.ok(t.cardsDoneAt! <= t.basicDoneAt!, `${t.cardsDoneAt} ${t.basicDoneAt}`);
+}));

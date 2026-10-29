@@ -94,7 +94,8 @@ export type RecallerState = {
   consolidated?: { ms: number; error?: string; cards: Array<{ id: string; title: string; sameAs: string | null; topic: string; weight?: "핵심" | "보조"; links?: Array<{ to: string; why: string }> }> };
   timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string;
     /** 연구 1: when each page's reading and cards were done (the first pass over the material). */
-    readAt?: Record<string, string>; organizedAt?: Record<string, string>; skimDoneAt?: string };
+    readAt?: Record<string, string>; organizedAt?: Record<string, string>; skimDoneAt?: string;
+    /** every page's cards are in (자료 전체 정리 starts here) */ cardsDoneAt?: string };
   guides?: Record<string, string>;
 };
 
@@ -729,6 +730,7 @@ export async function runRecaller(ctx: RecallerContext) {
       collect(unit);
       await save();
     }
+    cardsIn(section.id, k);
     if (lab.skimOnly) { chunk.questions ??= []; collect(unit); return; }
     // Resumed runs (or cards the stream did not show whole) still get their questions.
     for (const card of slotCards(chunk.cards, input.purpose)) if (!slotted.has(card.id.split(".")[1].replace(/^\d+/, "")) && !data.dups?.[card.id] && (known.includes(card) || known.some((x) => x.id === card.id) || claim(card))) authoring.push(quiet(authorOne(section, k, card)));
@@ -786,6 +788,19 @@ export async function runRecaller(ctx: RecallerContext) {
     if (lab.intentParallel) { intentReady = intentPass(); intentReady.catch(() => undefined); }
     else await intentPass();
   }
+  // 자료 전체 정리 needs only the cards: it starts when the last page's cards are in, beside the questions (10/29: it waited for
+  // every question, so the map's 핵심·주제·연결 came at 59 s on 32쪽 instead of about 35 s).
+  const cardsLeft = new Set(state.sections.filter((s) => data.units[s.id]?.status !== "ready").flatMap((s) => chunksOf(s.pages).map((_, k) => `${s.id}:${k}`)
+    .filter((key) => !data.units[s.id]?.chunks?.[Number(key.split(":")[1])]?.cards)));
+  let cardsDone: () => void = () => undefined;
+  const cardsReady = new Promise<void>((resolve) => { cardsDone = resolve; });
+  function cardsIn(sectionId: string, k: number) {
+    cardsLeft.delete(`${sectionId}:${k}`);
+    if (!cardsLeft.size) { data.timing.cardsDoneAt ??= new Date().toISOString(); cardsDone(); }
+  }
+  if (!cardsLeft.size) cardsDone();
+  const mergeEarly = !combine && !lab.skimOnly && lab.consolidate === undefined && !(data.consolidated && !data.consolidated.error) ? cardsReady.then(() => merging()) : null;
+  mergeEarly?.catch(() => undefined);
   const work = order().map((section) => sectionLimit(async () => {
     const unit = data.units[section.id];
     if (unit.status === "ready") return;
@@ -805,10 +820,11 @@ export async function runRecaller(ctx: RecallerContext) {
     unit.status = "ready"; await save();
   }).catch(async (error) => { data.units[section.id].status = "failed"; data.units[section.id].error = error instanceof Error ? error.message : String(error); await save(); throw error; }));
   const settled = await Promise.allSettled(work);
+  cardsDone(); // whatever is left (a chunk with no cards to wait for) does not hold the pass back
   const stop = settled.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
   if (stop) throw stop.reason;
   data.timing.skimDoneAt ??= new Date().toISOString();
-  const merged = lab.consolidate === false || (lab.skimOnly && !lab.consolidate) || (data.consolidated && !data.consolidated.error) ? Promise.resolve() : lab.consolidate ? consolidate() : merging();
+  const merged = mergeEarly ?? (lab.consolidate === false || (lab.skimOnly && !lab.consolidate) || (data.consolidated && !data.consolidated.error) ? Promise.resolve() : lab.consolidate ? consolidate() : merging());
   merged.catch(() => undefined); // awaited below; a pause that ends the run first must not leave it unhandled
   if (lab.skimOnly) {
     await merged;
