@@ -225,7 +225,10 @@ export async function createGen(raw: unknown): Promise<GenState> {
 /** 빠른 첫 정리 (연구 1): pages sorted by code (prep-2) and drawn in worker processes, every page organized at once with its
  *  picture and the material's outline. 44쪽 첫 훑기 47초 → 14초 (terra), and no drawing inside the server process (canvas 오류로 서버가 꺼지던 일). */
 export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
-  return { router: "prep-2", inlineRead: true, outline: true, pageParallel: Math.min(64, Math.max(1, pages)), fastPrep: 8, imageWidth: 1024, lenientQuotes: true };
+  // 자료 성격·쪽 의도 (10/29, C): one short pass over every page (small pictures + text) beside 정리 decides the material's
+  // kind and each page's intent; cover/guide/preview pages make no card, 현황 pages' cards are 보조, a worked example is a card.
+  return { router: "prep-2", inlineRead: true, outline: true, pageParallel: Math.min(64, Math.max(1, pages)), fastPrep: 8, imageWidth: 1024, lenientQuotes: true,
+    intentPass: true, intentLean: true, intentParallel: true };
 }
 
 export const forkInputSchema = z.strictObject({
