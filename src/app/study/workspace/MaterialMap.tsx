@@ -31,7 +31,7 @@ function Body({ s }: { s: Shape }) {
     case "procedure": return <ol className="mm2-steps">{s.steps.map((st, i) => <li key={i}><Rich text={st.action} />{st.input || st.output ? <span className="small muted"> {st.input ? <Rich text={st.input} /> : "…"} → {st.output ? <Rich text={st.output} /> : "…"}</span> : null}</li>)}</ol>;
     case "rule": return <p className="mm2-rule">{s.premise ? <span className="small muted"><Rich text={s.premise} /> · </span> : null}<b><Rich text={s.condition} /></b> → <Rich text={s.result} />{s.boundary ? <span className="small muted"> (경계: <Rich text={s.boundary} />)</span> : null}</p>;
     case "formula": return <div><p className="mm2-expr"><Rich text={s.expr.includes("$") ? s.expr : `$${s.expr}$`} /></p>{s.vars.length ? <p className="small muted">{s.vars.map((v, i) => <span key={i}>{i ? " · " : ""}<Rich text={v.symbol} />: <Rich text={v.meaning} /></span>)}</p> : null}{s.when ? <p className="small muted">쓸 때: <Rich text={s.when} /></p> : null}</div>;
-    case "compare": return <div className="mm2-tablewrap"><table className="mm2-table"><thead><tr><th /> {s.targets.map((t) => <th key={t}><Rich text={t} /></th>)}</tr></thead>
+    case "compare": return <div className="mm2-tablewrap"><table className="mm2-table"><thead><tr><th />{s.targets.map((t) => <th key={t}><Rich text={t} /></th>)}</tr></thead>
       <tbody>{s.criteria.map((c) => <tr key={c.name}><th><Rich text={c.name} /></th>{s.targets.map((_, i) => <td key={i}><Rich text={c.values[i] ?? ""} /></td>)}</tr>)}</tbody></table></div>;
     case "list": return <ul className="mm2-list">{s.items.map((it, i) => <li key={i}>{s.ordered ? `${i + 1}. ` : ""}<Rich text={it} /></li>)}</ul>;
     case "term": return <p><Rich text={s.definition} />{s.neighbors.length ? <span className="small muted"> · 헷갈리는 말: {s.neighbors.join(", ")}</span> : null}</p>;
@@ -41,13 +41,33 @@ function Body({ s }: { s: Shape }) {
   }
 }
 
+// One line per piece of knowledge: what to recall at a glance (the formula itself, a rule's condition → result, a procedure's
+// steps). The whole shape opens on a click.
+function keyLine(s: Shape): string {
+  const clip = (x: string, n = 90) => (x.length > n ? `${x.slice(0, n - 1)}…` : x);
+  switch (s.form) {
+    case "formula": return s.expr.includes("$") ? s.expr : `$${s.expr}$`;
+    case "term": return clip(s.definition);
+    case "fact": return clip(s.value);
+    case "rule": return clip(`${s.condition} → ${s.result}`);
+    case "procedure": return clip(s.steps.map((st) => st.action).join(" → "));
+    case "compare": return clip(s.targets.join(" vs "));
+    case "list": return clip(s.items.join(" · "));
+    case "concept": return clip(s.claim);
+    case "pattern": return clip(s.frame);
+  }
+}
+
 export default function MaterialMap({ genId, onPage, onClose }: { genId: string; onPage: (page: number) => void; onClose: () => void }) {
   const [map, setMap] = useState<MatMap | null>(null);
   const [error, setError] = useState("");
   const [only, setOnly] = useState<"all" | "unknown" | "new">("all");
-  const [open, setOpen] = useState<string | null>(null);
   const [view, setView] = useState<"outline" | "topic">("outline");
   const [coreOnly, setCoreOnly] = useState(false);
+  // 첫 화면은 목차만 (사용자 10/30): every group starts folded; a group opens to one line per piece of knowledge, a line to its card.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  const [openCard, setOpenCard] = useState<string | null>(null);
+  const [openMistakes, setOpenMistakes] = useState<string | null>(null);
   // While the material is still being made, the map refills every few seconds (cards, then 핵심·주제·연결).
   useEffect(() => {
     let alive = true, timer: ReturnType<typeof setTimeout> | undefined, misses = 0;
@@ -61,7 +81,7 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
   }, [genId]);
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", esc); return () => document.removeEventListener("keydown", esc); }, [onClose]);
   const titles = useMemo(() => new Map(map?.sections.flatMap((s) => s.cards.map((c) => [c.id, c.title] as const)) ?? []), [map]);
-  // Links both ways: a card shows where it leads and what it rests on.
+  // Where a card leads (→) and what leads to it (←), once each.
   const next = useMemo(() => { const m = new Map<string, Array<{ to: string; what: string; back: boolean }>>();
     for (const c of map?.chains ?? []) { m.set(c.from, [...(m.get(c.from) ?? []), { to: c.to, what: c.what, back: false }]); if (c.by === "meaning") m.set(c.to, [...(m.get(c.to) ?? []), { to: c.from, what: c.what, back: true }]); }
     return m; }, [map]);
@@ -73,61 +93,90 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
     const named = [...map.topics, ...(all.some((c) => !c.topic) ? ["기타"] : [])];
     return named.map((t) => { const cards = all.filter((c) => (c.topic ?? "기타") === t); return { key: `t:${t}`, title: t, pages: [...new Set(cards.flatMap((c) => c.pages))].sort((a, b) => a - b), cards }; });
   }, [map, view]);
-  const jump = (id: string) => { const el = document.getElementById(`mm2-${id}`); if (!el) return; el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1200); };
+  const groupOf = (id: string) => groups.find((g) => g.cards.some((c) => c.id === id))?.key;
+  const toggleGroup = (key: string) => setOpenGroups((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  const jump = (id: string) => {
+    const g = groupOf(id);
+    if (g) setOpenGroups((prev) => new Set(prev).add(g));
+    setOpenCard(id);
+    setTimeout(() => { const el = document.getElementById(`mm3-${id}`); if (!el) return; el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1200); }, 60);
+  };
   if (!map) return <div className="mm2"><div className="mm2-head"><b>자료 지도</b><button className="btn ghost small" onClick={onClose}>닫기</button></div><p className="small muted">{error || "지식을 정리하는 중… 첫 카드까지 10~15초쯤 걸려요."}</p></div>;
   const shown = (c: Card) => (!coreOnly || c.core) && (only === "all" || (only === "unknown" ? c.state === "unknown" : c.state === "new" || c.state === "met"));
   const n = map.counts;
+  const making = map.status !== "done";
+  const visible = groups.map((g) => ({ ...g, list: g.cards.filter(shown) })).filter((g) => g.list.length);
+  const allOpen = visible.length > 0 && visible.every((g) => openGroups.has(g.key));
+  // State dots say something only once the learner has answered (all 만남 at first is one colour, noise).
+  const marked = Boolean(n.unknown || n.known || n.graduated);
   return (
-    <div className="mm2" role="dialog" aria-label="자료 지도">
+    <div className="mm2 mm3" role="dialog" aria-label="자료 지도">
       <div className="mm2-head">
-        <div><p className="eyebrow">자료 지도</p><b>{map.title}</b> <span className="small muted">· {map.pages}쪽 · 구역 {map.sections.length} · 지식 {n.cards} · 문제 {n.questions}{map.status !== "done" ? " · 만드는 중" : ""}</span></div>
+        <div><p className="eyebrow">자료 지도</p><b>{map.title.replace(/\.pdf$/i, "")}</b>
+          <span className="small muted"> · {map.pages}쪽 · 지식 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""} · 문제 {n.questions}</span>
+          {making ? <span className="small mm3-making"> · {map.topics?.length ? "문제 만드는 중" : n.cards ? "지식 정리 중" : "자료 읽는 중"}…</span> : null}</div>
         <button className="btn ghost small" onClick={onClose}>닫기</button>
       </div>
-      <div className="mm2-bar" aria-label="내 상태">
-        {(["unknown", "met", "known", "graduated", "new"] as const).filter((k) => n[k]).map((k) => <span key={k} className={`mm2-seg ${STATE[k][1]}`} style={{ flexGrow: n[k] }} title={`${STATE[k][0]} ${n[k]}`} />)}
-      </div>
-      <div className="row small">
-        {(["unknown", "met", "known", "graduated", "new"] as const).filter((k) => n[k]).map((k) => <span key={k} className={`chip ${STATE[k][1]}`}>{STATE[k][0]} {n[k]}</span>)}
-        <span className="cs-gap" />
-        <div className="ws-seg">{([["all", "전체"], ["unknown", "몰랐음만"], ["new", "아직 확인 안 한 것"]] as const).map(([k, label]) =>
-          <button key={k} aria-pressed={only === k} onClick={() => setOnly(k)}>{label}</button>)}</div>
-      </div>
-      <div className="row small">
+      <div className="row small mm3-tools">
         {map.topics?.length ? <div className="ws-seg">{([["outline", "목차별"], ["topic", "개념별"]] as const).map(([k, label]) =>
-          <button key={k} aria-pressed={view === k} onClick={() => setView(k)}>{label}</button>)}</div> : null}
-        <label className="row small"><input type="checkbox" checked={coreOnly} onChange={(e) => setCoreOnly(e.target.checked)} /> 핵심만{n.core !== undefined ? ` (${n.core})` : ""}</label>
-        {map.status !== "done" && !map.topics?.length ? <span className="muted">개념별 보기는 자료 전체 정리가 끝나면 생겨요</span> : null}
+          <button key={k} aria-pressed={view === k} onClick={() => { setView(k); setOpenGroups(new Set()); setOpenCard(null); }}>{label}</button>)}</div> : null}
+        {map.topics?.length ? <label className="row small"><input type="checkbox" checked={coreOnly} onChange={(e) => setCoreOnly(e.target.checked)} /> 핵심만</label> : null}
+        {n.unknown || n.known || n.graduated ? <div className="ws-seg">{([["all", "전체"], ["unknown", `몰랐음 ${n.unknown}`], ["new", "아직 확인 안 한 것"]] as const).map(([k, label]) =>
+          <button key={k} aria-pressed={only === k} onClick={() => setOnly(k)}>{label}</button>)}</div> : null}
+        <span className="cs-gap" />
+        {visible.length ? <button className="linkish small" onClick={() => setOpenGroups(allOpen ? new Set() : new Set(visible.map((g) => g.key)))}>{allOpen ? "모두 접기" : "모두 펼치기"}</button> : null}
       </div>
-      <div className="mm2-sections">
-        {groups.map((s) => {
-          const cards = s.cards.filter(shown);
-          if (!cards.length) return null;
+      <ol className="mm3-toc">
+        {visible.map((g, gi) => {
+          const open = openGroups.has(g.key);
+          const core = g.list.filter((c) => c.core).length;
           return (
-            <section key={s.key} className="mm2-sec">
-              <div className="mm2-sec-head"><b>{s.title}</b><span className="small muted">{range(s.pages)}</span>
-                <span className="mm2-dots">{s.cards.map((c) => <span key={c.id} className={`dot ${STATE[c.state][1]}`} title={`${c.title}: ${STATE[c.state][0]}`} />)}</span></div>
-              <div className="mm2-cards">
-                {cards.map((c) => (
-                  <article key={c.id} id={`mm2-${c.id}`} className={`mm2-card st-${c.state}${c.core ? "" : " minor"}`}>
-                    <div className="row small"><span className="chip">{c.kind}</span>{c.core ? <span className="chip core">핵심</span> : null}<span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span><span className="cs-gap" />
-                      {c.pages.map((p) => <button key={p} className="linkish small" onClick={() => onPage(p)} title="이 쪽 원문으로">p.{p}</button>)}</div>
-                    <b className="mm2-title"><Rich text={c.title} /></b>
-                    <Body s={c.shape} />
-                    {next.get(c.id)?.length ? <p className="small muted mm2-links">{next.get(c.id)!.filter((x) => titles.has(x.to)).map((x, i) =>
-                      <span key={i}>{x.back ? "← " : "→ "}<button className="linkish small" onClick={() => jump(x.to)}>{titles.get(x.to)}</button>{x.what && x.what.length <= 20 ? ` (${x.what})` : ""}</span>)}</p> : null}
-                    {c.same.length ? <p className="small muted">같은 지식: {c.same.map((x) => range(x.pages)).join(", ")}</p> : null}
-                    {c.mistakes.length ? (open === c.id
-                      ? <ul className="mm2-mist small">{c.mistakes.map((m, i) => <li key={i}><Rich text={m} /></li>)}</ul>
-                      : <button className="linkish small" onClick={() => setOpen(c.id)}>헷갈리는 점 {c.mistakes.length}</button>) : null}
-                    <div className="row small"><span className="muted">{c.questions ? `문제 ${c.questions}개` : "문제 없음"}</span><span className="cs-gap" />
-                      {c.questions ? <button className="btn small" onClick={() => onPage(c.pages[0])}>그 쪽 문제 풀기</button> : null}</div>
-                  </article>
-                ))}
-              </div>
-            </section>
+            <li key={g.key} className={`mm3-group${open ? " open" : ""}`}>
+              <button className="mm3-ghead" aria-expanded={open} onClick={() => toggleGroup(g.key)}>
+                <span className="mm3-caret" aria-hidden>{open ? "▾" : "▸"}</span>
+                <span className="mm3-num">{gi + 1}</span>
+                <b className="mm3-gtitle"><Rich text={g.title} /></b>
+                <span className="small muted">{range(g.pages)}</span>
+                <span className="cs-gap" />
+                <span className="small muted">{map.topics?.length && core ? `★${core} · ` : ""}{g.list.length}개</span>
+                {marked ? <span className="mm2-dots" aria-hidden>{g.list.map((c) => <span key={c.id} className={`dot ${STATE[c.state][1]}`} />)}</span> : null}
+              </button>
+              {open ? <ul className="mm3-items">
+                {g.list.map((c) => {
+                  const isOpen = openCard === c.id;
+                  const links = (next.get(c.id) ?? []).filter((x) => titles.has(x.to)).slice(0, 4);
+                  return (
+                    <li key={c.id} id={`mm3-${c.id}`} className={`mm3-item st-${c.state}${c.core ? " core" : ""}${isOpen ? " open" : ""}`}>
+                      <button className="mm3-line" aria-expanded={isOpen} onClick={() => setOpenCard(isOpen ? null : c.id)}>
+                        <span className="mm3-star" aria-label={c.core ? "핵심" : undefined}>{map.topics?.length && c.core ? "★" : ""}</span>
+                        <span className="mm3-name"><Rich text={c.title} /></span>
+                        <span className="mm3-key"><Rich text={keyLine(c.shape)} /></span>
+                        {marked ? <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /> : <span />}
+                      </button>
+                      {isOpen ? <div className="mm3-detail">
+                        <Body s={c.shape} />
+                        {links.length ? <p className="small muted mm2-links">{links.map((x, i) =>
+                          <span key={i}>{x.back ? "← " : "→ "}<button className="linkish small" onClick={() => jump(x.to)}>{titles.get(x.to)}</button>{x.what && x.what.length <= 20 ? ` (${x.what})` : ""}</span>)}</p> : null}
+                        {c.mistakes.length ? (openMistakes === c.id
+                          ? <ul className="mm2-mist small">{c.mistakes.map((m, i) => <li key={i}><Rich text={m} /></li>)}</ul>
+                          : <button className="linkish small" onClick={() => setOpenMistakes(c.id)}>헷갈리는 점 {c.mistakes.length}</button>) : null}
+                        <div className="row small">
+                          <span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span>
+                          <span className="muted">{c.kind}{c.same.length ? ` · 같은 지식 ${c.same.map((x) => range(x.pages)).join(", ")}` : ""}</span>
+                          <span className="cs-gap" />
+                          {c.pages.map((p) => <button key={p} className="linkish small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
+                          {c.questions ? <button className="btn small" onClick={() => onPage(c.pages[0])}>문제 {c.questions}개 풀기</button> : null}
+                        </div>
+                      </div> : null}
+                    </li>
+                  );
+                })}
+              </ul> : null}
+            </li>
           );
         })}
-      </div>
+      </ol>
+      {!visible.length ? <p className="small muted">{making ? "지식을 정리하는 중… 첫 카드까지 10~15초쯤 걸려요." : "고른 조건에 맞는 지식이 없어요."}</p> : null}
     </div>
   );
 }

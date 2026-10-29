@@ -424,3 +424,39 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .mm2-card.flash{outline:2px solid var(--accent, #4a7);outline-offset:2px;transition:outline-color .3s}
 .chip.core{font-weight:600}
 .mm2-links{display:flex;flex-wrap:wrap;gap:.2em .8em}
+
+/* 자료 지도: 목차만 먼저 (2026-10-30, 사용자 "첫 화면엔 목차만"). Folded groups; one line per piece of knowledge; a click opens it. */
+.dejipgi .mm3{max-width:900px}
+.dejipgi .mm3-making{color:var(--read)}
+.dejipgi .mm3-tools{gap:10px;flex-wrap:wrap}
+.dejipgi .mm3-toc{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.dejipgi .mm3-group{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.dejipgi .mm3-ghead{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
+.dejipgi .mm3-ghead:hover{background:var(--surface-2)}
+.dejipgi .mm3-ghead:focus-visible{outline:2px solid var(--accent,#4a7);outline-offset:-2px}
+.dejipgi .mm3-caret{width:12px;color:var(--muted,#888);font-size:12px}
+.dejipgi .mm3-num{font-variant-numeric:tabular-nums;color:var(--muted,#888);min-width:1.4em;font-size:13px}
+.dejipgi .mm3-gtitle{font-size:15px}
+.dejipgi .mm3-items{list-style:none;margin:0;padding:0 0 6px;border-top:1px solid var(--line)}
+.dejipgi .mm3-item{border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+.dejipgi .mm3-item:last-child{border-bottom:0}
+.dejipgi .mm3-line{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:18px minmax(120px,32%) 1fr 10px;align-items:center;gap:10px;padding:8px 14px 8px 36px;cursor:pointer;font-size:14px}
+.dejipgi .mm3-line:hover{background:var(--surface-2)}
+.dejipgi .mm3-line:focus-visible{outline:2px solid var(--accent,#4a7);outline-offset:-2px}
+.dejipgi .mm3-star{color:var(--read);font-size:13px}
+.dejipgi .mm3-item:not(.core) .mm3-name{color:var(--muted,#888)}
+.dejipgi .mm3-item.core .mm3-name{font-weight:600}
+.dejipgi .mm3-name,.dejipgi .mm3-key{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.dejipgi .mm3-key{color:var(--muted,#888);font-size:13px}
+.dejipgi .mm3-key .katex{font-size:1em}
+.dejipgi .mm3-line .dot{width:8px;height:8px;border-radius:50%;background:var(--line-strong)} .dejipgi .mm3-line .dot.read{background:var(--read)} .dejipgi .mm3-line .dot.good{background:var(--good)} .dejipgi .mm3-line .dot.bad{background:var(--bad)}
+.dejipgi .mm3-detail{padding:4px 14px 12px 64px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.dejipgi .mm3-detail p,.dejipgi .mm3-detail ol,.dejipgi .mm3-detail ul{margin:0}
+.dejipgi .mm3-detail .mm2-expr{overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
+.dejipgi .mm3-item.flash{outline:2px solid var(--accent,#4a7);outline-offset:-2px}
+.dejipgi .mm2-dots .dot.bad{background:var(--bad)}
+@media (max-width:640px){
+  .dejipgi .mm3-line{grid-template-columns:16px 1fr 10px;padding-left:20px}
+  .dejipgi .mm3-key{display:none}
+  .dejipgi .mm3-detail{padding-left:20px}
+}
