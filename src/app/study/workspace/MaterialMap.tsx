@@ -26,17 +26,57 @@ type MatMap = { id: string; title: string; status: string; pages: number; sectio
 const STATE: Record<MapState, [string, string]> = { unknown: ["몰랐음", "bad"], met: ["만남", "read"], known: ["앎", "good"], graduated: ["졸업", "good"], new: ["아직", ""] };
 const range = (pages: number[]) => !pages.length ? "" : pages.length === 1 ? `p.${pages[0]}` : `p.${Math.min(...pages)}–${Math.max(...pages)}`;
 
+// A formula with its matrices drawn as grids (MathML's matrices came out cramped and misaligned): the text between them stays math.
+function splitMatrices(expr: string): Array<{ text: string } | { rows: string[][] }> {
+  const parts: Array<{ text: string } | { rows: string[][] }> = [];
+  let i = 0, plain = "";
+  while (i < expr.length) {
+    if (expr.startsWith("[[", i)) {
+      let depth = 0, j = i;
+      for (; j < expr.length; j++) { if (expr[j] === "[") depth++; else if (expr[j] === "]" && --depth === 0) break; }
+      if (j < expr.length) {
+        const rows = expr.slice(i + 2, j - 1).split(/\]\s*,\s*\[/).map((row) => {
+          const cells: string[] = []; let d = 0, cur = "";
+          for (const ch of row) { if ("([{".includes(ch)) d++; if (")]}".includes(ch)) d--; if (ch === "," && d === 0) { cells.push(cur.trim()); cur = ""; } else cur += ch; }
+          cells.push(cur.trim());
+          return cells;
+        });
+        if (plain.trim()) parts.push({ text: plain });
+        plain = "";
+        parts.push({ rows });
+        i = j + 1;
+        continue;
+      }
+    }
+    plain += expr[i++];
+  }
+  if (plain.trim()) parts.push({ text: plain });
+  return parts;
+}
+function Formula({ expr }: { expr: string }) {
+  if (expr.includes("$")) return <div className="mm3-formula"><Rich text={expr} /></div>;
+  // "a; b; c": one equation per line.
+  const lines = expr.split(/\s*;\s*/).filter(Boolean);
+  return <div className="mm3-formula">{lines.map((line, k) => <div key={k} className="mm3-eq">{splitMatrices(line).map((part, i) => "rows" in part
+    ? <span key={i} className="mm3-matrix" style={{ gridTemplateColumns: `repeat(${Math.max(...part.rows.map((r) => r.length))}, auto)` }}>
+        {part.rows.flatMap((r, ri) => r.map((cell, ci) => <span key={`${ri}-${ci}`}><Rich text={`$${cell}$`} /></span>))}</span>
+    : <Rich key={i} text={`$${part.text.trim()}$`} />)}</div>)}</div>;
+}
+
 function Body({ s }: { s: Shape }) {
   switch (s.form) {
-    case "procedure": return <ol className="mm2-steps">{s.steps.map((st, i) => <li key={i}><Rich text={st.action} />{st.input || st.output ? <span className="small muted"> {st.input ? <Rich text={st.input} /> : "…"} → {st.output ? <Rich text={st.output} /> : "…"}</span> : null}</li>)}</ol>;
-    case "rule": return <p className="mm2-rule">{s.premise ? <span className="small muted"><Rich text={s.premise} /> · </span> : null}<b><Rich text={s.condition} /></b> → <Rich text={s.result} />{s.boundary ? <span className="small muted"> (경계: <Rich text={s.boundary} />)</span> : null}</p>;
-    case "formula": return <div><p className="mm2-expr"><Rich text={asMath(s.expr)} /></p>{s.vars.length ? <p className="small muted">{s.vars.map((v, i) => <span key={i}>{i ? " · " : ""}<Rich text={v.symbol} />: <Rich text={v.meaning} /></span>)}</p> : null}{s.when ? <p className="small muted">쓸 때: <Rich text={s.when} /></p> : null}</div>;
+    case "procedure": return <ol className="mm3-steps">{s.steps.map((st, i) => <li key={i}><span className="mm3-stepn">{i + 1}</span><div><Rich text={st.action} />{st.output ? <div className="mm3-stepio"><Rich text={`→ ${st.output}`} /></div> : null}</div></li>)}</ol>;
+    case "rule": return <div className="mm3-body"><p className="mm3-rule"><span className="mm3-tag">조건</span><Rich text={s.condition} /></p><p className="mm3-rule"><span className="mm3-tag">결과</span><b><Rich text={s.result} /></b></p>
+      {s.premise ? <p className="mm3-when"><span className="mm3-tag">전제</span><Rich text={s.premise} /></p> : null}{s.boundary ? <p className="mm3-when"><span className="mm3-tag">경계</span><Rich text={s.boundary} /></p> : null}</div>;
+    case "formula": return <div className="mm3-body"><Formula expr={s.expr} />
+      {s.when ? <p className="mm3-when"><span className="mm3-tag">쓸 때</span><Rich text={s.when} /></p> : null}
+      {s.vars.length ? <dl className="mm3-vars">{s.vars.map((v, i) => <div key={i}><dt><Rich text={v.symbol.includes("$") ? v.symbol : `$${v.symbol}$`} /></dt><dd><Rich text={v.meaning} /></dd></div>)}</dl> : null}</div>;
     case "compare": return <div className="mm2-tablewrap"><table className="mm2-table"><thead><tr><th />{s.targets.map((t) => <th key={t}><Rich text={t} /></th>)}</tr></thead>
       <tbody>{s.criteria.map((c) => <tr key={c.name}><th><Rich text={c.name} /></th>{s.targets.map((_, i) => <td key={i}><Rich text={c.values[i] ?? ""} /></td>)}</tr>)}</tbody></table></div>;
-    case "list": return <ul className="mm2-list">{s.items.map((it, i) => <li key={i}>{s.ordered ? `${i + 1}. ` : ""}<Rich text={it} /></li>)}</ul>;
-    case "term": return <p><Rich text={s.definition} />{s.neighbors.length ? <span className="small muted"> · 헷갈리는 말: {s.neighbors.join(", ")}</span> : null}</p>;
-    case "fact": return <p><Rich text={s.subject} />: <Rich text={s.value} /></p>;
-    case "concept": return <p><Rich text={s.claim} />{s.reason ? <span className="small muted"> · 왜: <Rich text={s.reason} /></span> : null}{s.limit ? <span className="small muted"> · 한계: <Rich text={s.limit} /></span> : null}</p>;
+    case "list": return s.ordered ? <ol className="mm3-steps">{s.items.map((it, i) => <li key={i}><span className="mm3-stepn">{i + 1}</span><div><Rich text={it} /></div></li>)}</ol> : <ul className="mm3-bullets">{s.items.map((it, i) => <li key={i}><Rich text={it} /></li>)}</ul>;
+    case "term": return <div className="mm3-body"><p className="mm3-lead"><Rich text={s.definition} /></p>{s.neighbors.length ? <p className="mm3-when"><span className="mm3-tag">헷갈리는 말</span><Rich text={s.neighbors.join(", ")} /></p> : null}</div>;
+    case "fact": return <p className="mm3-lead"><Rich text={s.value} /></p>;
+    case "concept": return <div className="mm3-body"><p className="mm3-lead"><Rich text={s.claim} /></p>{s.reason ? <p className="mm3-when"><span className="mm3-tag">왜</span><Rich text={s.reason} /></p> : null}{s.limit ? <p className="mm3-when"><span className="mm3-tag">한계</span><Rich text={s.limit} /></p> : null}</div>;
     case "pattern": return <p><Rich text={s.frame} />{s.example ? <span className="small muted"> · 예: <Rich text={s.example} /></span> : null}</p>;
   }
 }
@@ -64,7 +104,6 @@ function matrices(expr: string): string {
   }
   return out;
 }
-const asMath = (expr: string) => (expr.includes("$") ? expr : `$${matrices(expr)}$`);
 // On the one-line view a matrix would make the line tall: it shows as [⋯] there and whole when opened.
 const asLine = (expr: string) => (expr.includes("$") ? expr : `$${matrices(expr).replace(/\\begin\{bmatrix\}[\s\S]*?\\end\{bmatrix\}/g, "[\\cdots]")}$`);
 
@@ -200,18 +239,25 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
                         {marked ? <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /> : <span />}
                       </button>
                       {isOpen ? <div className="mm3-detail">
-                        <Body s={c.shape} />
-                        {c.mistakes.length ? <div className="mm3-sub"><span className="mm3-label">헷갈리는 점</span>
-                          <ul className="mm2-mist small">{c.mistakes.slice(0, 2).map((m, i) => <li key={i}><Rich text={m} /></li>)}</ul></div> : null}
-                        {links.length ? <div className="mm3-sub"><span className="mm3-label">이어지는 지식</span>
-                          <ul className="mm3-links small">{links.map((x, i) =>
-                            <li key={i}><span className="muted">{x.back ? "←" : "→"}</span> <button className="linkish small" onClick={() => jump(x.to)}><Rich text={titles.get(x.to) ?? ""} /></button>{x.what && x.what.length <= 20 ? <span className="muted"> · {x.what}</span> : null}</li>)}</ul></div> : null}
-                        <div className="row small">
-                          <span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span>
-                          <span className="muted">{c.kind}{c.same.length ? ` · 같은 지식 ${c.same.map((x) => range(x.pages)).join(", ")}` : ""}</span>
+                        <div className="mm3-dhead">
+                          <b className="mm3-dtitle"><Rich text={c.title} /></b>
+                          <span className="mm3-kind">{c.kind}</span>
+                          {c.core ? <span className="mm3-kind core">핵심</span> : null}
                           <span className="cs-gap" />
-                          {c.pages.map((p) => <button key={p} className="linkish small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
-                          {c.questions ? <button className="btn small" onClick={() => onPage(c.pages[0])}>문제 {c.questions}개 풀기</button> : null}
+                          {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
+                        </div>
+                        <Body s={c.shape} />
+                        {c.mistakes.length ? <div className="mm3-warn"><span className="mm3-tag warn">헷갈리기 쉬운 점</span>
+                          <ul>{c.mistakes.slice(0, 2).map((m, i) => <li key={i}><Rich text={m} /></li>)}</ul></div> : null}
+                        {links.length ? <div className="mm3-rel"><span className="mm3-tag">이어지는 지식</span>
+                          <div className="mm3-relchips">{links.map((x, i) =>
+                            <button key={i} className="mm3-relchip" onClick={() => jump(x.to)} title={x.what || undefined}>
+                              <span className="mm3-arrow">{x.back ? "←" : "→"}</span><Rich text={titles.get(x.to) ?? ""} />{x.what && x.what.length <= 20 ? <em>{x.what}</em> : null}</button>)}</div></div> : null}
+                        <div className="mm3-dfoot">
+                          {marked ? <span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span> : null}
+                          {c.same.length ? <span className="small muted">같은 내용: {c.same.map((x) => range(x.pages)).join(", ")}</span> : null}
+                          <span className="cs-gap" />
+                          {c.questions ? <button className="btn small primary" onClick={() => onPage(c.pages[0])}>이 지식 문제 풀기 ({c.questions})</button> : null}
                         </div>
                       </div> : null}
                     </li>

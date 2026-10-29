@@ -470,3 +470,41 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm3-principle{display:flex;flex-direction:column;gap:4px;font-size:14px}
 .dejipgi .mm3-uses{gap:6px;flex-wrap:wrap}
 .dejipgi .mm3-uses .chip{cursor:pointer}
+
+/* 자료 지도: 펼친 카드 (2026-10-30, 사용자 "눌렀을 때 나오는 화면이 UI가 구려") */
+.dejipgi .mm3-detail{margin:2px 14px 12px 36px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:12px;font-size:14.5px;line-height:1.55}
+.dejipgi .mm3-dhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dejipgi .mm3-dtitle{font-size:16px}
+.dejipgi .mm3-kind{font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted,#888)}
+.dejipgi .mm3-kind.core{color:var(--read);border-color:color-mix(in srgb,var(--read) 50%,transparent)}
+.dejipgi .mm3-body{display:flex;flex-direction:column;gap:8px}
+.dejipgi .mm3-body p,.dejipgi .mm3-detail p{margin:0}
+.dejipgi .mm3-lead{font-size:15px}
+.dejipgi .mm3-formula{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--line);overflow-x:auto;font-size:16px}
+.dejipgi .mm3-eq{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;white-space:nowrap}
+.dejipgi .mm3-matrix{display:inline-grid;column-gap:14px;row-gap:2px;padding:2px 8px;border-left:2px solid currentColor;border-right:2px solid currentColor;border-radius:4px;text-align:center;font-size:14.5px}
+.dejipgi .mm3-tag{display:inline-block;font-size:11.5px;font-weight:600;color:var(--muted,#888);margin-right:8px;min-width:3.2em}
+.dejipgi .mm3-tag.warn{color:var(--bad)}
+.dejipgi .mm3-when,.dejipgi .mm3-rule{display:flex;align-items:baseline;gap:4px}
+.dejipgi .mm3-when{color:var(--muted,#888);font-size:13.5px}
+.dejipgi .mm3-vars{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:13.5px}
+.dejipgi .mm3-vars>div{display:contents}
+.dejipgi .mm3-vars dt{text-align:right;white-space:nowrap}
+.dejipgi .mm3-vars dd{margin:0;color:var(--muted,#888)}
+.dejipgi .mm3-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.dejipgi .mm3-steps>li{display:flex;gap:10px;align-items:flex-start}
+.dejipgi .mm3-stepn{flex:none;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;background:var(--surface);border:1px solid var(--line)}
+.dejipgi .mm3-stepio{font-size:13px;color:var(--muted,#888)}
+.dejipgi .mm3-bullets{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.dejipgi .mm3-warn{border-left:3px solid var(--bad);padding:6px 10px;border-radius:6px;background:color-mix(in srgb,var(--bad) 7%,transparent)}
+.dejipgi .mm3-warn ul{margin:4px 0 0;padding-left:18px;font-size:13.5px;display:flex;flex-direction:column;gap:2px}
+.dejipgi .mm3-rel{display:flex;flex-direction:column;gap:6px}
+.dejipgi .mm3-relchips{display:flex;flex-wrap:wrap;gap:6px}
+.dejipgi .mm3-relchip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;max-width:100%}
+.dejipgi .mm3-relchip:hover{border-color:var(--read)}
+.dejipgi .mm3-relchip:focus-visible{outline:2px solid var(--accent,#4a7)}
+.dejipgi .mm3-relchip em{font-style:normal;color:var(--muted,#888);font-size:12px}
+.dejipgi .mm3-arrow{color:var(--read)}
+.dejipgi .mm3-dfoot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
+.dejipgi .mm3-item.open>.mm3-line{background:var(--surface-2)}
+@media (max-width:640px){ .dejipgi .mm3-detail{margin:2px 8px 10px} }
