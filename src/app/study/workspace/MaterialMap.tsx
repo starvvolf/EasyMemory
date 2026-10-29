@@ -114,7 +114,17 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
   // 개념별: the whole-material pass's larger ideas, across sections (cards without one stay under 기타).
   const groups = useMemo(() => {
     if (!map) return [];
-    if (view === "outline" || !map.topics?.length) return map.sections.map((s) => ({ key: s.id, title: s.title, pages: s.pages, cards: s.cards }));
+    // 목차별: a section the engine cut only for size (same title, next pages) shows as one with the one before.
+    if (view === "outline" || !map.topics?.length) {
+      const base = (t: string) => t.replace(/\s*\(이어서\)$/, "").trim().toLowerCase();
+      const merged: Array<{ key: string; title: string; pages: number[]; cards: Card[] }> = [];
+      for (const s of map.sections) {
+        const last = merged.at(-1);
+        if (last && base(last.title) === base(s.title)) { last.pages = [...last.pages, ...s.pages]; last.cards = [...last.cards, ...s.cards]; }
+        else merged.push({ key: s.id, title: s.title.replace(/\s*\(이어서\)$/, ""), pages: [...s.pages], cards: [...s.cards] });
+      }
+      return merged;
+    }
     const all = map.sections.flatMap((s) => s.cards);
     const named = [...map.topics, ...(all.some((c) => !c.topic) ? ["기타"] : [])];
     return named.map((t) => { const cards = all.filter((c) => (c.topic ?? "기타") === t); return { key: `t:${t}`, title: t, pages: [...new Set(cards.flatMap((c) => c.pages))].sort((a, b) => a - b), cards }; });
