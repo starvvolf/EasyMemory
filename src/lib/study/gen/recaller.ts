@@ -90,7 +90,7 @@ export type RecallerState = {
   warnings: Issue[];
   /** 연구 1 3번(나), 실험: the whole-material pass over the cards — a specific name, the earlier card it repeats, a topic. Cards are not changed. */
   /** lab.intentPass: every page's intent and gist from the first short pass, and how long it took. */
-  intents?: { ms: number; pages: Array<{ page: number; intent: PageIntent; continues: number | null; gist: string }> };
+  intents?: { ms: number; kind?: string; pages: Array<{ page: number; intent: PageIntent; continues: number | null; gist: string }> };
   consolidated?: { ms: number; error?: string; cards: Array<{ id: string; title: string; sameAs: string | null; topic: string; weight?: "핵심" | "보조"; links?: Array<{ to: string; why: string }> }> };
   timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string;
     /** 연구 1: when each page's reading and cards were done (the first pass over the material). */
@@ -651,6 +651,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const silent = new Set<number>();
     const noteIntents = (items: unknown[]) => { for (const it of items) { const x = it as { page?: number; intent?: PageIntent }; if (x.page && x.intent && NO_CARD_INTENTS.includes(x.intent)) silent.add(x.page); } };
     if (lab.intentPass && !lab.intentParallel) noteIntents(data.intents?.pages ?? []);
+    const onStatsPage = (card: { evidence: Array<{ page: number }> }) => input.purpose !== "all" && card.evidence.every((e) => data.intents?.pages.some((x) => x.page === e.page && x.intent === "현황"));
     const onSilentPage = (card: { evidence: Array<{ page: number }> }) => (lab.intent === true || lab.intentPass === true) && card.evidence.every((e) => silent.has(e.page));
     const startCard = (raw: unknown) => {
       if (lab.skimOnly) return;
@@ -660,7 +661,7 @@ export async function runRecaller(ctx: RecallerContext) {
       if (!ok.length || !slotCards(ok, input.purpose).length) return;
       slotted.add(parsed.data.id);
       const card = { ...ok[0], id: idOf(ok[0].id), links: [] };
-      if (claim(card)) authoring.push(quiet(lab.intentParallel ? intentReady.then(() => { noteIntents(data.intents?.pages ?? []); return onSilentPage(card) ? undefined : authorOne(section, k, card); }) : authorOne(section, k, card)));
+      if (claim(card)) authoring.push(quiet(lab.intentParallel ? intentReady.then(() => { noteIntents(data.intents?.pages ?? []); return onSilentPage(card) || onStatsPage(card) ? undefined : authorOne(section, k, card); }) : authorOne(section, k, card)));
     };
     // inlineRead: pages that need their picture are not read first; 정리 looks at the picture itself.
     const inline = lab.inlineRead ? pages.filter((p) => (routeOf(p) === "page" || routeOf(p) === "figures") && !data.read.done.includes(p)) : [];
@@ -713,6 +714,9 @@ export async function runRecaller(ctx: RecallerContext) {
         if (intents) { noteIntents(intents); chunk.intents = intents.filter((x) => pages.includes(x.page)); }
         if (lab.intentParallel) { await intentReady; noteIntents(data.intents?.pages ?? []); }
         if (lab.intent || lab.intentPass) reply = { ...reply, cards: reply.cards.filter((c) => !onSilentPage(c)) };
+        // 현황 (시점 수치) pages, as the first pass saw them: their cards are 보조 (no basic question by default).
+        const stats = new Set((data.intents?.pages ?? []).filter((x) => x.intent === "현황").map((x) => x.page));
+        if (stats.size) reply = { ...reply, cards: reply.cards.map((c) => c.evidence.every((e) => stats.has(e.page)) ? { ...c, weight: "보조" as const } : c) };
         for (const raw of reply.cards) startCard(raw);
         result = checkCards(reply, { pages }, textMap(), { lenientQuotes: lab.lenientQuotes });
         if (!result.issues.some((i) => i.severity === "error") || result.cards.length) break;
@@ -764,11 +768,14 @@ export async function runRecaller(ctx: RecallerContext) {
   const intentPass = async () => {
     const t0 = Date.now();
     const lines = data.prep!.pages.map((p) => ({ page: p.page, title: p.title, text: (data.texts[p.page] ?? "").replace(/\s+/g, " ").slice(0, 300) }));
+    // Every page as a small picture too (detail low, about 85 tokens each): many slides are pictures with an empty text layer.
+    const drawn = await ctx.pageImages(lines.map((l) => l.page)).catch(() => new Map<number, string>());
+    const thumbs = lines.filter((l) => drawn.get(l.page)).map((l) => ({ label: `p.${l.page}`, dataUrl: drawn.get(l.page)!, detail: "low" as const }));
     try {
       const reply = await ctx.ask("rc-intent", null, 1, lab.intentLean ? `${INTENT_PASS}\ngist는 쓰지 않는다.` : INTENT_PASS, JSON.stringify({ material: input.fileName, pages: lines }),
-        (lab.intentLean ? intentLeanSchema : intentPassSchema) as typeof intentPassSchema, { maxChars: 120 * lines.length + 2000 });
+        (lab.intentLean ? intentLeanSchema : intentPassSchema) as typeof intentPassSchema, { maxChars: 120 * lines.length + 2000, ...(thumbs.length ? { images: thumbs } : {}) });
       const known = new Set(lines.map((l) => l.page));
-      data.intents = { ms: Date.now() - t0, pages: reply.pages.filter((x) => known.has(x.page)).map((x) => ({ ...x, gist: x.gist ?? "" })) };
+      data.intents = { ms: Date.now() - t0, kind: reply.kind, pages: reply.pages.filter((x) => known.has(x.page)).map((x) => ({ ...x, gist: x.gist ?? "" })) };
     } catch (error) {
       if (pausesRun(error)) throw error;
       data.intents = { ms: Date.now() - t0, pages: [] };
@@ -1036,7 +1043,7 @@ export function recallerFakeReply(step: GenStep, user: string): string {
   }
   if (step === "rc-intent") {
     const pages = u.pages as Array<{ page: number; title: string }>;
-    return JSON.stringify({ pages: pages.map((p, i) => ({ page: p.page, intent: i === 0 && pages.length > 1 ? "표지" : "정의", continues: null, gist: i === 0 && pages.length > 1 ? "" : p.title.slice(0, 20) })) });
+    return JSON.stringify({ kind: "이론·계산 강의", pages: pages.map((p, i) => ({ page: p.page, intent: i === 0 && pages.length > 1 ? "표지" : "정의", continues: null, gist: i === 0 && pages.length > 1 ? "" : p.title.slice(0, 20) })) });
   }
   if (step === "rc-merge") {
     const cards = u.cards as Array<{ n: number; line: string }>;

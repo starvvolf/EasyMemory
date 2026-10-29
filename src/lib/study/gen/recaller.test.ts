@@ -276,6 +276,7 @@ test("쪽 의도 먼저 (lab.intentPass): one short pass, then a cover page make
   const calls = await readGenCalls(done.id);
   assert.equal(calls[0].step, "rc-intent");
   assert.deepEqual(done.recaller!.intents!.pages.map((x) => x.intent), ["표지", "정의", "정의"]);
+  assert.equal(done.recaller!.intents!.kind, "이론·계산 강의");
   const cards = Object.values(done.recaller!.units).flatMap((u) => u.cards ?? []);
   assert.ok(cards.length && cards.every((c) => c.evidence.some((e) => e.page !== 1)), JSON.stringify(cards.map((c) => c.evidence)));
   assert.match(calls.find((c) => c.step === "rc-organize")!.user, /"intents"/);

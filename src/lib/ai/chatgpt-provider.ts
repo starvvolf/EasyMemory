@@ -20,7 +20,7 @@ export function responseFailure(status: number, body: ApiError): ModelError {
 /** Structured output asks for a JSON Schema; `fallback` is the plain JSON mode used when the plan route refuses it. */
 type ResponseBody = {
   model: string; instructions: string; store: boolean; stream: boolean;
-  input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail: "high" } | { type: "input_file"; filename: string; file_data: string }> }>;
+  input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail: "high" | "low" } | { type: "input_file"; filename: string; file_data: string }> }>;
   reasoning?: { effort: string }; text?: { format: { type: string } & Record<string, unknown> };
 };
 export function responseRequest(request: ModelRequest, format: "schema" | "fallback" = "schema"): ResponseBody {
@@ -48,14 +48,14 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
       { role: "developer", content: request.system },
       { role: "user", content: request.images?.length ? [
         { type: "input_text", text: userText },
-        ...request.images.flatMap(image => [{ type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: "high" as const }]),
+        ...request.images.flatMap(image => [{ type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: image.detail ?? "high" as const }]),
       ] : userText },
     ] : [{ role: "user", content: request.images?.length || request.files?.length
       // Files go first: a long, identical prefix (instructions + the same PDF) lets later calls reuse the prompt cache.
       ? [...(request.files ?? []).map((file) => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
           { type: "input_text" as const, text: userText },
           ...(request.images ?? []).flatMap((image) => [
-            { type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: "high" as const }])]
+            { type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: image.detail ?? "high" as const }])]
       : userText }],
     store: false,
     stream: true,

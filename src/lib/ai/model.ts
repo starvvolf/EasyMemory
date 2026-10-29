@@ -20,7 +20,7 @@ export type ModelRequest = {
   fakeReply?: string;
   signal?: AbortSignal;
   /** Page images sent with the user text (data URLs). Only the ChatGPT route sends them; others refuse. */
-  images?: Array<{ label: string; dataUrl: string }>;
+  images?: Array<{ label: string; dataUrl: string; /** "low": a small fixed-size view (about 85 tokens), enough to see a slide's layout and title. */ detail?: "low" | "high" }>;
   /** Whole files sent with the user text (e.g. a PDF as a data URL). Same routes as `images`. */
   files?: Array<{ filename: string; dataUrl: string }>;
   /** Called with the text so far while the reply streams in (progress on screen); the final text is still returned whole. */
