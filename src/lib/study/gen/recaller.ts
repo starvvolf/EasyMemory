@@ -654,8 +654,8 @@ export async function runRecaller(ctx: RecallerContext) {
     // lab.intent: the pages' intents come first in the reply; a card resting only on a cover, preview or guide page is dropped.
     const silent = new Set<number>();
     // A page's own call cannot tell a preview from a slide whose formulas are pictures (10/30: p.7 T·R·S 행렬, p.10 연속 회전 were
-    // dropped as 예고), so only the whole-material pass decides 예고; a page's own call may still mark a cover or a guide page.
-    const noteIntents = (items: unknown[], fromPass = false) => { for (const it of items) { const x = it as { page?: number; intent?: PageIntent }; if (x.page && x.intent && (fromPass ? NO_CARD_INTENTS.includes(x.intent) : x.intent === "표지" || x.intent === "안내")) silent.add(x.page); } };
+    // dropped as 예고), so only the whole-material pass decides 예고 and 안내 (p.7 was dropped as 안내 too); a page's own call may still mark a cover.
+    const noteIntents = (items: unknown[], fromPass = false) => { for (const it of items) { const x = it as { page?: number; intent?: PageIntent }; if (x.page && x.intent && (fromPass ? NO_CARD_INTENTS.includes(x.intent) : x.intent === "표지")) silent.add(x.page); } };
     if (lab.intentPass && !lab.intentParallel) noteIntents(data.intents?.pages ?? [], true);
     const onStatsPage = (card: { evidence: Array<{ page: number }> }) => input.purpose !== "all" && card.evidence.every((e) => data.intents?.pages.some((x) => x.page === e.page && x.intent === "현황"));
     const onSilentPage = (card: { evidence: Array<{ page: number }> }) => (lab.intent === true || lab.intentPass === true) && card.evidence.every((e) => silent.has(e.page));
