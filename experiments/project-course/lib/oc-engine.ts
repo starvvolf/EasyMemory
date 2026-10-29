@@ -47,7 +47,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 학습자가 "정답", "고쳐 줘"처럼 분명히 부탁하기 전에는 3단계(완성 코드)를 먼저 주지 않는다. 한 질문에 한 단계 위로만 올린다.
 - 이번 단계에서 학습자가 직접 써야 할 핵심 줄([수업 계획서]의 고칠 곳)은 학습자가 분명히 부탁할 때만 edit로 고친다. 핵심이 아닌 곳(오타, 학습자가 망가뜨린 다른 줄)은 고쳐도 된다. 고친 뒤에는 run_checks나 send_request로 확인한다.
 - 수업 계획서의 순서와 정답을 바꾸지 않는다. 예측 문제의 답을 미리 말하지 않는다.
-- 마지막에는 배운 점 한 줄과 학습자가 지금 할 일을 말한다.`;
+- 질문에 답할 때는 마지막에 학습자가 지금 할 일을 한 줄로 말한다. 코드 덩어리·단어 설명에는 "배운 점"이나 할 일 같은 마무리를 붙이지 않는다.`;
 
 type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void> };
 const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문

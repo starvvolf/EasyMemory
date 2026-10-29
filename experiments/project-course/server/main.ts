@@ -21,6 +21,7 @@ if (process.env.PC_FAKE_AI === "1") installFakeAi();
 const PORT = Number(process.env.PC_PORT || PORTS.app);
 const WEB = path.join(ROOT, "web");
 const lastCheck = new Map<string, RunResult>();
+const BOOT = Date.now().toString(36);
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -190,7 +191,9 @@ const server = createServer(async (req, res) => {
     }
     const file = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
     if (!/^[\w.-]+$/.test(file)) { res.writeHead(404); res.end(); return; }
-    const data = await readFile(path.join(WEB, file));
+    let data: Buffer | string = await readFile(path.join(WEB, file));
+    // 새로 올린 화면 파일이 옛 것(캐시)으로 보이지 않게 주소에 켠 시각을 붙인다
+    if (file === "index.html") data = data.toString("utf8").replace(/(app\.js|style\.css)(["'])/g, `$1?v=${BOOT}$2`);
     res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream", "cache-control": "no-store" });
     res.end(data);
   } catch (error) {
