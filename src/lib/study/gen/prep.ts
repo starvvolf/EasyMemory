@@ -120,6 +120,9 @@ export function routePage(stats: PageStats, router: PrepRouter = "prep-1"): { ro
   if (score < 0.7 || stats.mathChars >= 5) return { route: "page", score, reasons };
   if (stats.pathOps > 150) return { route: "page", score, reasons: [...reasons, "선으로 그린 도식"] };
   if (stats.pictureCover >= 0.08) return { route: "figures", score, reasons: [...reasons, `그림 ${Math.round(stats.pictureCover * 100)}%`] };
+  // Little text beside small pictures: the pictures are the content (10/30: Geometric p.7 "Translation Matrix T" with the 3×3
+  // matrices as pictures went text-only, and its page made no card).
+  if (stats.pictureCover > 0 && stats.chars < 300) return { route: "figures", score, reasons: [...reasons, "글이 짧고 그림(식)이 있음"] };
   return { route: "layer", score, reasons };
 }
 
@@ -145,6 +148,9 @@ function routePage2(stats: PageStats): { route: PrepRoute; score: number; reason
   if (score < 0.7 || stats.garbledChars) return { route: "page", score, reasons };
   if (stats.pathOps > 150) return { route: "page", score, reasons: [...reasons, "선으로 그린 도식"] };
   if (stats.pictureCover >= 0.08) return { route: "figures", score, reasons: [...reasons, `그림 ${Math.round(stats.pictureCover * 100)}%`] };
+  // Little text beside small pictures: the pictures are the content (10/30: Geometric p.7 "Translation Matrix T" with the 3×3
+  // matrices as pictures went text-only, and its page made no card).
+  if (stats.pictureCover > 0 && stats.chars < 300) return { route: "figures", score, reasons: [...reasons, "글이 짧고 그림(식)이 있음"] };
   return { route: "layer", score, reasons };
 }
 
