@@ -30,7 +30,7 @@ function Body({ s }: { s: Shape }) {
   switch (s.form) {
     case "procedure": return <ol className="mm2-steps">{s.steps.map((st, i) => <li key={i}><Rich text={st.action} />{st.input || st.output ? <span className="small muted"> {st.input ? <Rich text={st.input} /> : "…"} → {st.output ? <Rich text={st.output} /> : "…"}</span> : null}</li>)}</ol>;
     case "rule": return <p className="mm2-rule">{s.premise ? <span className="small muted"><Rich text={s.premise} /> · </span> : null}<b><Rich text={s.condition} /></b> → <Rich text={s.result} />{s.boundary ? <span className="small muted"> (경계: <Rich text={s.boundary} />)</span> : null}</p>;
-    case "formula": return <div><p className="mm2-expr"><Rich text={s.expr.includes("$") ? s.expr : `$${s.expr}$`} /></p>{s.vars.length ? <p className="small muted">{s.vars.map((v, i) => <span key={i}>{i ? " · " : ""}<Rich text={v.symbol} />: <Rich text={v.meaning} /></span>)}</p> : null}{s.when ? <p className="small muted">쓸 때: <Rich text={s.when} /></p> : null}</div>;
+    case "formula": return <div><p className="mm2-expr"><Rich text={asMath(s.expr)} /></p>{s.vars.length ? <p className="small muted">{s.vars.map((v, i) => <span key={i}>{i ? " · " : ""}<Rich text={v.symbol} />: <Rich text={v.meaning} /></span>)}</p> : null}{s.when ? <p className="small muted">쓸 때: <Rich text={s.when} /></p> : null}</div>;
     case "compare": return <div className="mm2-tablewrap"><table className="mm2-table"><thead><tr><th />{s.targets.map((t) => <th key={t}><Rich text={t} /></th>)}</tr></thead>
       <tbody>{s.criteria.map((c) => <tr key={c.name}><th><Rich text={c.name} /></th>{s.targets.map((_, i) => <td key={i}><Rich text={c.values[i] ?? ""} /></td>)}</tr>)}</tbody></table></div>;
     case "list": return <ul className="mm2-list">{s.items.map((it, i) => <li key={i}>{s.ordered ? `${i + 1}. ` : ""}<Rich text={it} /></li>)}</ul>;
@@ -41,12 +41,37 @@ function Body({ s }: { s: Shape }) {
   }
 }
 
+// Matrices the engine writes as nested lists ([[1, 0, t_x], [0, 1, t_y], [0, 0, 1]]) read as matrices.
+function matrices(expr: string): string {
+  let out = "", i = 0;
+  while (i < expr.length) {
+    if (expr.startsWith("[[", i)) {
+      let depth = 0, j = i;
+      for (; j < expr.length; j++) { if (expr[j] === "[") depth++; else if (expr[j] === "]" && --depth === 0) break; }
+      if (j < expr.length) {
+        const rows = expr.slice(i + 2, j - 1).split(/\]\s*,\s*\[/).map((row) => {
+          const cells: string[] = []; let d = 0, cur = "";
+          for (const ch of row) { if (ch === "(" || ch === "[" || ch === "{") d++; if (ch === ")" || ch === "]" || ch === "}") d--; if (ch === "," && d === 0) { cells.push(cur.trim()); cur = ""; } else cur += ch; }
+          cells.push(cur.trim());
+          return cells.join(" & ");
+        });
+        out += `\\begin{bmatrix}${rows.join(" \\\\ ")}\\end{bmatrix}`;
+        i = j + 1;
+        continue;
+      }
+    }
+    out += expr[i++];
+  }
+  return out;
+}
+const asMath = (expr: string) => (expr.includes("$") ? expr : `$${matrices(expr)}$`);
+
 // One line per piece of knowledge: what to recall at a glance (the formula itself, a rule's condition → result, a procedure's
 // steps). The whole shape opens on a click.
 function keyLine(s: Shape): string {
   const clip = (x: string, n = 90) => (x.length > n ? `${x.slice(0, n - 1)}…` : x);
   switch (s.form) {
-    case "formula": return s.expr.includes("$") ? s.expr : `$${s.expr}$`;
+    case "formula": return asMath(s.expr);
     case "term": return clip(s.definition);
     case "fact": return clip(s.value);
     case "rule": return clip(`${s.condition} → ${s.result}`);
@@ -67,7 +92,6 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
   // 첫 화면은 목차만 (사용자 10/30): every group starts folded; a group opens to one line per piece of knowledge, a line to its card.
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [openCard, setOpenCard] = useState<string | null>(null);
-  const [openMistakes, setOpenMistakes] = useState<string | null>(null);
   // While the material is still being made, the map refills every few seconds (cards, then 핵심·주제·연결).
   useEffect(() => {
     let alive = true, timer: ReturnType<typeof setTimeout> | undefined, misses = 0;
@@ -155,11 +179,11 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
                       </button>
                       {isOpen ? <div className="mm3-detail">
                         <Body s={c.shape} />
-                        {links.length ? <p className="small muted mm2-links">{links.map((x, i) =>
-                          <span key={i}>{x.back ? "← " : "→ "}<button className="linkish small" onClick={() => jump(x.to)}>{titles.get(x.to)}</button>{x.what && x.what.length <= 20 ? ` (${x.what})` : ""}</span>)}</p> : null}
-                        {c.mistakes.length ? (openMistakes === c.id
-                          ? <ul className="mm2-mist small">{c.mistakes.map((m, i) => <li key={i}><Rich text={m} /></li>)}</ul>
-                          : <button className="linkish small" onClick={() => setOpenMistakes(c.id)}>헷갈리는 점 {c.mistakes.length}</button>) : null}
+                        {c.mistakes.length ? <div className="mm3-sub"><span className="mm3-label">헷갈리는 점</span>
+                          <ul className="mm2-mist small">{c.mistakes.slice(0, 2).map((m, i) => <li key={i}><Rich text={m} /></li>)}</ul></div> : null}
+                        {links.length ? <div className="mm3-sub"><span className="mm3-label">이어지는 지식</span>
+                          <ul className="mm3-links small">{links.map((x, i) =>
+                            <li key={i}><span className="muted">{x.back ? "←" : "→"}</span> <button className="linkish small" onClick={() => jump(x.to)}><Rich text={titles.get(x.to) ?? ""} /></button>{x.what && x.what.length <= 20 ? <span className="muted"> · {x.what}</span> : null}</li>)}</ul></div> : null}
                         <div className="row small">
                           <span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span>
                           <span className="muted">{c.kind}{c.same.length ? ` · 같은 지식 ${c.same.map((x) => range(x.pages)).join(", ")}` : ""}</span>
