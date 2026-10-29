@@ -2,7 +2,7 @@
   "name": "recaller-bridge",
   "displayName": "Recaller 튜터 연결",
   "description": "Recaller 프로젝트 코스의 튜터를 VS Code 오른쪽 탭에 띄우고, 지금 보는 코드를 튜터에게 알려 주고 튜터가 보낸 줄 열기·빈칸 넣기를 한다.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "recaller-local",
   "private": true,
   "license": "UNLICENSED",
@@ -38,6 +38,10 @@
       {
         "command": "recaller.reconnect",
         "title": "Recaller: 튜터에 다시 연결"
+      },
+      {
+        "command": "recaller.explainBlock",
+        "title": "Recaller: 이 덩어리 설명해 줘"
       }
     ],
     "menus": {
@@ -46,6 +50,11 @@
           "command": "recaller.what",
           "group": "navigation@0",
           "when": "recaller.connected"
+        },
+        {
+          "command": "recaller.explainBlock",
+          "group": "navigation@0",
+          "when": "recaller.connected && editorHasSelection"
         },
         {
           "command": "recaller.ask",

@@ -88,6 +88,7 @@ async function connect() {
     if (!autoOpened && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
     listen();
     scheduleReport(0);
+    lensChanged.fire();
   } catch (e) {
     setStatus("$(debug-disconnect) Recaller", `튜터 화면(127.0.0.1:${PORT})에 연결하지 못했어요. 프로젝트코스 실험.cmd가 켜져 있는지 확인하세요. (${e.message})`, false);
     goOfflineSoon();
@@ -262,6 +263,66 @@ async function what() {
   }
 }
 
+/* ---------- 덩어리마다 [설명] (코드를 복사해 AI에게 묻던 것을 한 번 클릭으로) ---------- */
+const BLOCK_START = /^(export\s+)?(default\s+)?(async\s+)?function\b|^(export\s+)?(const|let|var)\s+[\w{}\s,]+=.*(=>\s*\{|\{|\(|\[)\s*$|^(if|for|while|switch|try)\b.*\{\s*$|^(export\s+)?(class|interface|type)\b.*\{\s*$|^[\w.]+\(.*(=>\s*\{|\{|\()\s*$/;
+/** 줄 i에서 시작한 괄호 덩어리가 끝나는 줄(문자열·주석은 대충 건너뜀) */
+function blockEnd(lines, i) {
+  let depth = 0, seen = false;
+  for (let j = i; j < lines.length && j < i + 400; j++) {
+    const t = lines[j].replace(/(["'`])(?:\\.|(?!\1).)*\1/g, "\"\"").replace(/\/\/.*$/, ""); // 글자 먼저 지우고("http://" 안의 //) 주석
+    for (const ch of t) { if ("{([".includes(ch)) { depth++; seen = true; } else if ("})]".includes(ch)) depth--; }
+    if (seen && depth <= 0) return j;
+  }
+  return -1;
+}
+/** 설명할 덩어리 찾기: 맨 위 import 묶음 + 바깥쪽 두 겹까지의 함수·if·객체 */
+function findBlocks(doc) {
+  const lines = []; for (let i = 0; i < doc.lineCount; i++) lines.push(doc.lineAt(i).text);
+  const out = [];
+  let imp = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^import\b/.test(lines[i])) { if (imp < 0) imp = i; continue; }
+    if (imp < 0 && (/^\s*(\/\/|\/\*|\*)/.test(lines[i]) || !lines[i].trim())) continue; // 맨 위 설명 주석은 건너뜀
+    if (imp >= 0 && lines[i].trim() === "") continue;
+    if (imp >= 0) { let e = i - 1; while (e > imp && !lines[e].trim()) e--; if (e > imp) out.push({ from: imp, to: e, label: "가져오기(import) 묶음" }); imp = -1; }
+    break;
+  }
+  for (let i = 0; i < lines.length && out.length < 20; i++) {
+    const raw = lines[i]; const indent = raw.search(/\S/); const t = raw.trim();
+    if (indent < 0 || indent > 4 || !BLOCK_START.test(t)) continue;
+    const end = blockEnd(lines, i);
+    if (end - i < 2) continue;
+    out.push({ from: i, to: end });
+  }
+  return out;
+}
+const lensChanged = new vscode.EventEmitter();
+const lensProvider = {
+  onDidChangeCodeLenses: lensChanged.event,
+  provideCodeLenses(doc) {
+    if (!runId || !inRoot(doc) || !/\.(ts|js|mjs)$/.test(doc.uri.fsPath)) return [];
+    return findBlocks(doc).map((b) => new vscode.CodeLens(new vscode.Range(b.from, 0, b.from, 0), {
+      title: `💬 설명 (${b.from + 1}~${b.to + 1}줄)`, tooltip: "이 덩어리가 뭘 하는지 튜터가 줄마다 쉽게 설명해요",
+      command: "recaller.explainBlock", arguments: [doc.uri, b.from, b.to] }));
+  },
+};
+async function explainBlock(uri, from, to) {
+  const ed = vscode.window.activeTextEditor;
+  let doc = ed && ed.document;
+  if (uri && (!doc || doc.uri.toString() !== uri.toString())) doc = await vscode.workspace.openTextDocument(uri);
+  if (!doc || !inRoot(doc) || !runId) { vscode.window.showWarningMessage("Recaller: 작업 폴더의 코드에서 써 주세요."); return; }
+  if (from === undefined) { const sel = ed.selection; from = sel.start.line; to = sel.isEmpty ? sel.start.line : sel.end.line; }
+  const code = doc.getText(new vscode.Range(from, 0, to, doc.lineAt(to).text.length));
+  if (ed && ed.document === doc) ed.setDecorations(deco, [{ range: new vscode.Range(from, 0, to, 0) }]);
+  try {
+    await request("POST", "/api/bridge/ask", { runId, mode: "block", file: rel(doc.uri.fsPath), from: from + 1, to: to + 1, code: code.slice(0, 6000) });
+    vscode.window.setStatusBarMessage("$(comment-discussion) 튜터가 설명하는 중이에요. 오른쪽 탭을 보세요.", 4000);
+    if (panel) panel.reveal(vscode.ViewColumn.Two, true);
+  } catch (e) {
+    vscode.window.showErrorMessage(`Recaller: 보내지 못했어요 (${e.message})`);
+  }
+}
+
 /* ---------- 오른쪽 튜터 탭 ---------- */
 function themeName() {
   const k = vscode.window.activeColorTheme.kind; // 1 Light, 2 Dark, 3 HighContrast, 4 HighContrastLight
@@ -356,6 +417,8 @@ function activate(context) {
     status, deco, dimDeco, labelDeco, labelFocusDeco,
     vscode.commands.registerCommand("recaller.ask", ask),
     vscode.commands.registerCommand("recaller.what", what),
+    vscode.commands.registerCommand("recaller.explainBlock", explainBlock),
+    vscode.languages.registerCodeLensProvider([{ scheme: "file", language: "typescript" }, { scheme: "file", language: "javascript" }], lensProvider),
     vscode.window.onDidChangeVisibleTextEditors(() => applyFocus()),
     vscode.window.onDidChangeActiveColorTheme(() => { if (panel) panel.webview.postMessage({ recallerTheme: themeName() }); }),
     vscode.commands.registerCommand("recaller.reconnect", connect),

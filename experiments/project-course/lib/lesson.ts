@@ -11,7 +11,8 @@ import { check, devStatus, explain, hint, predict, startDev, tryRequest, workspa
 import { AiUnavailable, aiText } from "./ai.ts";
 import { DATA, getRun, read, update } from "./store.ts";
 import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridgeSend } from "./bridge.ts";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
 import { runAgent, undoEdit, type DiffCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
@@ -156,7 +157,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   const plan = await loadPlan(course.id, n);
   if (!plan) throw err(404, "이 단계의 수업 계획서가 없어요.");
 
-  if (input.do === "ask") return ask(runId, n, plan, String(input.text ?? ""));
+  if (input.do === "ask") return ask(runId, n, plan, String(input.text ?? ""), undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : undefined);
   if (input.do === "open") { await openLine(runId, String(input.file ?? ""), Number(input.line) || 1); return null; }
   if (input.do === "scaffold") return scaffold(runId, n, plan, course);
   if (input.do === "undo") {
@@ -274,7 +275,7 @@ function upcoming(plan: Plan, beat: number) {
   return `[앞으로 할 순서 — 학습자가 직접 맞히고 고칠 것이라 답을 미리 말하지 않는다]\n${lines.join("\n")}\n이것과 관련된 질문에는 어디를 보면 되는지까지만 말하고, 상태 코드 숫자나 고칠 코드는 "곧 같이 해 볼 거예요"라며 미룬다.`;
 }
 
-export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string) {
+export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: { mode?: "explain"; onAnswer?: (text: string) => Promise<void> } = {}) {
   const q = text.trim().slice(0, 1000) || (quote ? "이 코드가 뭐 하는 거예요?" : "");
   if (!q) throw err(400, "질문을 적어 주세요.");
   const s0 = await change(runId, n, (s, push) => {
@@ -301,14 +302,28 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
     `[최근 대화]\n${recentText}`,
   ].filter(Boolean).join("\n\n");
   if (aiMode() !== "off") {
-    try {
-      answer = await runAgent({
-        runId, n, ws, context,
+    // 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선을 고친다)
+    const bubbles = new Map<string, number>();
+    const io = {
+        runId, n, ws, context, mode: opts.mode,
+        stream: async (key: string, text: string) => {
+          await change(runId, n, (s, push) => {
+            const id = bubbles.get(key);
+            const m = id !== undefined ? s.messages.find((x) => x.id === id) : undefined;
+            if (m) m.text = text;
+            else { push({ role: "tutor", text }); bubbles.set(key, s.messages.at(-1)!.id); }
+          }).catch((e) => console.error("[lesson] 기록 저장 실패", e));
+        },
         // 채팅 기록 저장이 실패해도 도구 결과는 그대로 쓴다(저장 실패를 도구 실패로 착각하지 않게)
         show: async (card) => { await change(runId, n, (_s, push) => push({ role: "tutor", card })).catch((e) => console.error("[lesson] 기록 저장 실패", e)); },
         say: async (text) => { await change(runId, n, (_s, push) => push({ role: "tutor", text })).catch((e) => console.error("[lesson] 기록 저장 실패", e)); },
-        quiet: (ms) => { quietUntil.set(`${runId}:${n}`, Date.now() + ms); },
-      }, q);
+        quiet: (ms: number) => { quietUntil.set(`${runId}:${n}`, Date.now() + ms); },
+        streamed: false,
+      };
+    try {
+      answer = await runAgent(io as Parameters<typeof runAgent>[0], q);
+      if (opts.onAnswer) await opts.onAnswer(answer).catch(() => {});
+      if (io.streamed) return change(runId, n, (s) => { s.busy = false; });
     } catch (e) {
       answer = e instanceof AiUnavailable
         ? `지금은 AI 튜터에게 물어볼 수 없어요 (${e.message}).\n막히면 **힌트 줘**를 눌러 주세요. 준비된 힌트가 나와요.`
@@ -442,6 +457,36 @@ export async function what(runId: string, n: number, plan: Plan, quote: { file: 
   // 용어집에 없으면 AI 튜터에게
   await rememberAi(runId, n, quote);
   return ask(runId, n, plan, "이건 뭐예요? 처음 보는 사람에게 이 코드가 하는 일을 쉽게 알려 주세요. 이 단계에서 몰라도 되는 거면 그렇다고 말해 주세요.", quote, "이건 뭐예요?");
+}
+
+/* ---------- 덩어리 설명 (VS Code의 [💬 설명] / 드래그 + 우클릭) ----------
+ * 학습자가 코드를 복사해 ChatGPT에 "이거 뭐야" 하던 것을 한 번 클릭으로. 확인 질문은 하지 않는다(사용자 10/30).
+ * 같은 코스·같은 코드면 한 번 만든 설명을 저장해 두고 바로 보여 준다(AI 호출 없음). */
+const BLOCK_Q = `이 코드 덩어리를 문법을 모르는 사람에게 설명해 주세요. 해요체로, ChatGPT에 코드를 붙여 넣고 물었을 때처럼 넉넉하게. 순서:
+1. **한 줄 요약** — 이 덩어리가 하는 일을 일상 비유로 한 문장.
+2. **줄마다** — 줄(또는 2~3줄 묶음)마다 \`코드 조각\` → 우리말 뜻. 목록으로. 덩어리의 모든 줄을 빠짐없이.
+3. **여기 나온 문법** — 처음 배우는 사람이 막힐 문법·기호 2~5개(예: \`=>\`, \`if\`, \`await\`, \`??\`)를 쉬운 말로 한 줄씩.
+4. **이어지는 곳** — 이 덩어리가 부르는 다른 파일·함수가 있으면 직접 열어 읽어 보고 [[파일:줄]]로 한두 줄.
+코드를 고치거나 정답을 알려 주지 않는다. 확인 질문은 하지 않는다. 앞으로 할 예측 문제의 답은 말하지 않는다.`;
+const cacheFile = (courseId: string, code: string) => path.join(DATA, "explain-cache", courseId, `${createHash("sha1").update(code.replace(/\s+/g, " ").trim()).digest("hex").slice(0, 16)}.json`);
+export async function explainBlock(runId: string, n: number, plan: Plan, quote: { file: string; from: number; to: number; code: string }) {
+  const run = await getRun(runId);
+  const cf = cacheFile(run.courseId, `${quote.file}\n${quote.code}`);
+  const cached = await read<{ text: string } | null>(cf, null);
+  if (cached?.text) {
+    return change(runId, n, (_s, push) => {
+      push({ role: "me", text: "이 덩어리 설명해 주세요", card: { type: "code", ...quote } });
+      push({ role: "tutor", text: cached.text });
+    });
+  }
+  return ask(runId, n, plan, BLOCK_Q, quote, "이 덩어리 설명해 주세요", {
+    mode: "explain",
+    onAnswer: async (text) => {
+      if (!text || text.length < 80 || /^답을|^지금은 AI|^생각이 너무/.test(text)) return;
+      await mkdir(path.dirname(cf), { recursive: true });
+      await writeFile(cf, JSON.stringify({ at: new Date().toISOString(), file: quote.file, from: quote.from, to: quote.to, text }));
+    },
+  });
 }
 
 /** 확장이 (다시) 연결되면 지금 단계의 지도(밝게·흐리게)를 다시 보낸다. */

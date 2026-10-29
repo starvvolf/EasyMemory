@@ -25,6 +25,11 @@ export type AgentIO = {
   say: (text: string) => Promise<void>;
   /** 튜터가 고친 파일 때문에 저장 감지가 다시 확인하지 않게 */
   quiet: (ms: number) => void;
+  /** explain: 설명만(고치기 도구를 주지 않음) */
+  mode?: "normal" | "explain";
+  /** 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선). 엔진이 썼으면 streamed=true */
+  stream?: (key: string, text: string) => Promise<void>;
+  streamed?: boolean;
 };
 
 export const TOOLS = ["list_files", "read_file", "open_in_editor", "start_server", "send_request", "run_checks", "edit_file", "none"] as const;

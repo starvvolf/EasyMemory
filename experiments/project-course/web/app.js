@@ -547,7 +547,7 @@ function inline(text, ws) {
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index));
     if (m[1]) out.push(h("strong", {}, m[1]));
-    else if (m[2]) out.push(h("code", { class: "ic" }, m[2]));
+    else if (m[2]) out.push(h("code", { class: m[2].length <= 40 ? "ic ask" : "ic", title: m[2].length <= 40 ? "누르면 이게 뭔지 이어서 물어봐요" : undefined }, m[2]));
     else out.push(fileLink(ws, m[3], Number(m[4])));
     last = re.lastIndex;
   }
@@ -588,6 +588,12 @@ function drawLesson() {
   });
 
   const chat = h("div", { class: "lchat" });
+  // 튜터 설명 속 코드 이름(`found.handler` 등)을 누르면 "이건 뭐예요?"를 이어서 묻는다 — 복사해서 다시 묻지 않게
+  chat.addEventListener("click", (e) => {
+    const c = e.target.closest?.(".lmsg.tutor .rich code.ask");
+    if (!c || lessonCtx?.lesson?.busy) return;
+    send({ do: "ask", text: `방금 설명에 나온 \`${c.textContent}\`는 뭐예요? 문법을 모르는 사람에게 이 코드에서의 뜻으로 쉽게 알려 주세요.`, shown: `"${c.textContent}"는 뭐예요?` })(e);
+  });
   let prevRole = "";
   for (const m of msgs) {
     if (m.role === "note") { chat.append(h("div", { class: "lnote" }, m.text)); prevRole = "note"; continue; }

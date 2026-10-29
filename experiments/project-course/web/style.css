@@ -384,3 +384,6 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 0 5px; border: 1px sol
 .embed .empty { padding: 0 16px; }
 .embed .empty h1 { font-size: 16px; }
 .plan .chip { white-space: normal; max-width: 100%; }
+.lmsg.tutor .rich code.ask { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.lmsg.tutor .rich code.ask:hover { background: var(--acc-soft, rgba(80,120,255,.15)); }
+.lcard.code pre { max-height: 11em; overflow: auto; }

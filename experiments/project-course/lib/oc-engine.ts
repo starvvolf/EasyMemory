@@ -30,7 +30,8 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 목표는 대신 개발해 주는 게 아니라, 개발자가 어떻게 확인하고 고치는지 보여 주며 가르치는 것이다.
 
 말투
-- 한국어 해요체로만 쓴다("~합니다" 금지). 짧게, 5~8문장 안. 어려운 말은 일상 비유로 풀고, 줄 번호를 짚는다.
+- 한국어 해요체로만 쓴다("~합니다" 금지). 보통은 짧게(5~8문장). 학습자가 덩어리 설명을 부탁하면 넉넉하게. 어려운 말은 일상 비유로 풀고, 줄 번호를 짚는다.
+- 코드에 나오는 이름·기호는 꼭 \`백틱\`으로 감싼다(학습자가 눌러서 다시 물어볼 수 있다). 파일·줄은 [[src/router.ts:21]]처럼 쓰면 눌러서 VS Code에서 열린다.
 - 도구를 쓰기 전에 무엇을 왜 보는지 한 문장으로 말한다("직접 보내서 확인해 볼게요").
 
 도구
@@ -47,7 +48,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 - 수업 계획서의 순서와 정답을 바꾸지 않는다. 예측 문제의 답을 미리 말하지 않는다.
 - 마지막에는 배운 점 한 줄과 학습자가 지금 할 일을 말한다.`;
 
-type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string };
+type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void> };
 const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문
 const sessions = new Map<string, string>(); // runId:n → sessionID (대화를 이어 간다)
 
@@ -105,12 +106,16 @@ function policyPlugin(fake: boolean) {
         ev.request = new Request(ev.request, { headers: hd });
       });
       await ctx.session.hook("title", (ev: any) => { ev.result = "튜터 대화"; }); // 제목 만들기 호출 생략
-      await ctx.session.hook("context", (ev: any) => { for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k)) delete ev.tools[k]; });
+      await ctx.session.hook("context", (ev: any) => {
+        const l = live.get(ev.sessionID);
+        for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k) || (l?.io.mode === "explain" && EDITS.has(k))) delete ev.tools[k];
+      });
       await ctx.permission.hook("evaluate", (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);
         const l = live.get(ev.sessionID);
         if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
         if (EDITS.has(ev.action)) {
+          if (l?.io.mode === "explain") { ev.effect = "deny"; ev.message = "지금은 설명만 하는 시간이에요."; return; }
           const files: string[] = (ev.resources ?? []).map((r: string) => String(r).replace(/\\/g, "/"));
           if (files.some((f) => /(^|\/)(\.recaller|node_modules)(\/|$)/.test(f))) { ev.effect = "deny"; ev.message = "이 파일은 고칠 수 없어요."; return; }
           const st = l ? bridgeState(l.io.runId) : null;
@@ -183,14 +188,25 @@ async function recordEdit(l: Live, rel: string) {
 function onEvent(e: any) {
   if (process.env.OC_DEBUG && /tool\.failed|execution\.failed/.test(e?.type)) console.log("[oc ev]", e.type, JSON.stringify(e.data).slice(0, 300));
   const l = live.get(e?.data?.sessionID); if (!l) return;
+  const key = () => `${l.sid}:${l.steps}`;
   if (e.type === "session.step.started") { l.steps++; l.cur = ""; }
-  else if (e.type === "session.tool.input.started") { const said = l.cur.trim(); l.cur = ""; if (said) void l.io.say(said); } // 도구 앞의 한마디를 도구 결과보다 먼저
-  else if (e.type === "session.text.delta") l.cur += String(e.data.delta ?? "");
+  else if (e.type === "session.tool.input.started") { const said = l.cur.trim(); l.cur = ""; if (said) emit(l, key(), said, true); } // 도구 앞의 한마디를 도구 결과보다 먼저
+  else if (e.type === "session.text.delta") { l.cur += String(e.data.delta ?? ""); if (l.io.stream && Date.now() - l.lastFlush > 450) emit(l, key(), l.cur.trim(), false); }
   else if (e.type === "session.step.ended") {
     const said = l.cur.trim(); l.cur = "";
-    if (e.data.finish === "tool-calls") { if (said) void l.io.say(said); }
-    else if (said) l.texts.push(said);
+    if (e.data.finish === "tool-calls") { if (said) emit(l, key(), said, true); }
+    else if (said) { l.texts.push(said); if (l.io.stream) emit(l, key(), said, true); }
   }
+}
+
+/** 말한 것을 채팅에: 흘려 보내기가 되면 같은 말풍선을 계속 고치고, 아니면 끝난 말만 한 번 */
+function emit(l: Live, key: string, text: string, final: boolean) {
+  if (!text) return;
+  if (l.io.stream) {
+    l.lastFlush = Date.now(); l.io.streamed = true;
+    const stream = l.io.stream;
+    l.chain = l.chain.then(() => stream(key, text)).catch(() => {});
+  } else if (final) void l.io.say(text);
 }
 
 /* ---------- 질문 하나 ---------- */
@@ -199,7 +215,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   const key = `${io.runId}:${io.n}`;
   let sid = sessions.get(key);
   if (!sid) { sid = (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string; sessions.set(key, sid); }
-  const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "" };
+  const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve() };
   live.set(sid, l);
   const from = h.events.length;
   const text = [io.context, bridgeContext(io.runId), `[학습자 질문] ${question}`].filter(Boolean).join("\n\n");
@@ -214,7 +230,8 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
       const timer = setTimeout(() => { h.waiters.delete(check); resolve({ type: "timeout" }); }, 180_000);
       h.waiters.add(check); check();
     });
-    await countCalls("agent", l.steps, end.type === "session.execution.succeeded");
+    await l.chain; // 흘려 보내던 글을 다 쓴 뒤에 끝낸다
+    await countCalls(io.mode === "explain" ? "explain" : "agent", l.steps, end.type === "session.execution.succeeded");
     if (end.type === "timeout") { await h.oc.sessions.interrupt?.({ sessionID: sid }).catch(() => {}); return "생각이 너무 길어져서 멈췄어요. 질문을 조금 나눠서 다시 물어봐 주세요."; }
     if (end.type !== "session.execution.succeeded") {
       const msg = JSON.stringify(end.data?.error ?? end.data ?? "").slice(0, 300);
@@ -242,7 +259,7 @@ async function startMock(): Promise<string> {
     const base = { id: "c", object: "chat.completion.chunk", created: 0, model: "fake" };
     const send = (o: unknown) => res.write(`data: ${JSON.stringify({ ...base, ...(o as object) })}\n\n`);
     const file = /src\/[\w./-]+\.ts/.exec(userText)?.[0] ?? "src/server.ts";
-    const wantFix = /고쳐|정답/.test(userText.split("[학습자 질문]").pop() ?? "");
+    const wantFix = /고쳐 주|정답 알려/.test(userText.split("[학습자 질문]").pop() ?? "");
     let call: { name: string; args: unknown; say: string } | null = null;
     if (tools.length && sinceUser === 0) call = { name: "read", args: { path: file }, say: `${file}부터 볼게요.` };
     else if (tools.length && sinceUser === 1 && wantFix) call = tools.includes("patch")
@@ -254,7 +271,7 @@ async function startMock(): Promise<string> {
       send({ choices: [{ index: 0, delta: { role: "assistant", content: call.say, tool_calls: [{ index: 0, id: `c${Date.now()}`, type: "function", function: { name: call.name, arguments: JSON.stringify(call.args) } }] }, finish_reason: null }] });
       send({ choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] });
     } else {
-      send({ choices: [{ index: 0, delta: { role: "assistant", content: `(가짜 AI) ${file} 18번째 줄은 요청에 맞는 처리 함수를 찾는 줄이에요. 직접 열어서 확인해 보세요.` }, finish_reason: null }] });
+      send({ choices: [{ index: 0, delta: { role: "assistant", content: `(가짜 AI) **한 줄 요약**: ${file}의 이 덩어리는 편지를 받아 담당자를 찾아 주는 안내 데스크예요.\n- \`createServer\` → 서버를 만들어요\n- \`req\` → 받은 편지, \`res\` → 보낼 답장\n18번째 줄은 요청에 맞는 처리 함수를 찾는 줄이에요. [[src/router.ts:22]]에 이어져요.` }, finish_reason: null }] });
       send({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] });
     }
     res.end("data: [DONE]\n\n");

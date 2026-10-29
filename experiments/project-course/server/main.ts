@@ -13,7 +13,7 @@ import { aiStatus } from "../lib/ai.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
 import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
-import { act, ask as lessonAsk, closeWatchers, lessonView, loadPlan, notifyLesson, refocus, subscribe, what as lessonWhat } from "../lib/lesson.ts";
+import { act, ask as lessonAsk, explainBlock as lessonBlock, closeWatchers, lessonView, loadPlan, notifyLesson, refocus, subscribe, what as lessonWhat } from "../lib/lesson.ts";
 import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeConnect, setState as bridgeSetState } from "../lib/bridge.ts";
 
 if (process.env.PC_FAKE_AI === "1") installFakeAi();
@@ -161,6 +161,7 @@ const routes: [string, RegExp, Handler][] = [
     if (!plan) throw Object.assign(new Error("이 단계에는 튜터 수업이 없어요."), { status: 409 });
     const quote = { file: String(b.file), from: Number(b.from), to: Number(b.to), code: String(b.code ?? "").slice(0, 4000) };
     if (b.mode === "what") void lessonWhat(run.id, run.current, plan, quote).catch((e) => console.error(e));
+    else if (b.mode === "block") void lessonBlock(run.id, run.current, plan, { ...quote, code: String(b.code ?? "").slice(0, 6000) }).catch((e) => console.error(e));
     else void lessonAsk(run.id, run.current, plan, String(b.question ?? ""), quote).catch((e) => console.error(e));
     return { ok: true };
   }],
