@@ -165,6 +165,20 @@ function mark(ed, range, note) {
 }
 
 /* ---------- 지도: 덩어리 이름표 + 오늘 안 볼 곳 흐리게 ---------- */
+let tour = null, tourDeco = null, tourDim = null;
+function applyTour(only) {
+  for (const ed of only ? [only] : vscode.window.visibleTextEditors) {
+    if (!tour || !inRoot(ed.document) || rel(ed.document.uri.fsPath) !== tour.file) { ed.setDecorations(tourDeco, []); ed.setDecorations(tourDim, []); continue; }
+    const doc = ed.document, last = doc.lineCount - 1;
+    const lit = new vscode.Range(tour.from, 0, tour.to, doc.lineAt(tour.to).text.length);
+    const firstEnd = doc.lineAt(tour.from).text.length;
+    ed.setDecorations(tourDeco, [{ range: lit }, ...(tour.label ? [{ range: new vscode.Range(tour.from, firstEnd, tour.from, firstEnd), renderOptions: { after: { contentText: `   ◀ ${tour.label}`, color: new vscode.ThemeColor("textLink.foreground"), fontWeight: "bold" } } }] : [])]);
+    const dim = [];
+    if (tour.from > 0) dim.push(new vscode.Range(0, 0, tour.from - 1, doc.lineAt(tour.from - 1).text.length));
+    if (tour.to < last) dim.push(new vscode.Range(tour.to + 1, 0, last, doc.lineAt(last).text.length));
+    ed.setDecorations(tourDim, dim);
+  }
+}
 function applyFocus() {
   for (const ed of vscode.window.visibleTextEditors) {
     if (!focus || !inRoot(ed.document) || rel(ed.document.uri.fsPath) !== focus.file) {
@@ -221,6 +235,15 @@ async function handle(cmd) {
     applyFocus();
   } else if (cmd.type === "clear") {
     for (const ed of vscode.window.visibleTextEditors) ed.setDecorations(deco, []);
+  } else if (cmd.type === "tour") {
+    // 흐름 투어: 이번 걸음의 덩어리에 불을 켜고 나머지는 흐리게(다음 걸음이나 끝날 때까지)
+    const { ed, doc } = await openAt(cmd.file, cmd.from, cmd.to);
+    tour = { file: cmd.file, from: cmd.from - 1, to: Math.min(doc.lineCount - 1, cmd.to - 1), label: cmd.label || "" };
+    applyTour(ed);
+  } else if (cmd.type === "tourEnd") {
+    tour = null;
+    for (const ed of vscode.window.visibleTextEditors) { ed.setDecorations(tourDeco, []); ed.setDecorations(tourDim, []); }
+    applyFocus();
   } else if (cmd.type === "toast") {
     vscode.window.showInformationMessage(`Recaller: ${cmd.text}`);
   }
@@ -477,15 +500,17 @@ function activate(context) {
     after: { color: new vscode.ThemeColor("editorCodeLens.foreground"), fontStyle: "italic" },
   });
   dimDeco = vscode.window.createTextEditorDecorationType({ opacity: "0.35" });
+  tourDeco = vscode.window.createTextEditorDecorationType({ isWholeLine: true, backgroundColor: new vscode.ThemeColor("editor.wordHighlightStrongBackground"), borderWidth: "0 0 0 3px", borderStyle: "solid", borderColor: new vscode.ThemeColor("focusBorder"), overviewRulerColor: new vscode.ThemeColor("focusBorder"), overviewRulerLane: vscode.OverviewRulerLane ? vscode.OverviewRulerLane.Full : undefined });
+  tourDim = vscode.window.createTextEditorDecorationType({ opacity: "0.3" });
   labelDeco = vscode.window.createTextEditorDecorationType({ after: { color: new vscode.ThemeColor("editorCodeLens.foreground"), fontStyle: "italic" } });
   labelFocusDeco = vscode.window.createTextEditorDecorationType({ after: { color: new vscode.ThemeColor("textLink.foreground"), fontWeight: "bold" } });
   context.subscriptions.push(
-    status, deco, dimDeco, labelDeco, labelFocusDeco,
+    status, deco, dimDeco, labelDeco, labelFocusDeco, tourDeco, tourDim,
     vscode.commands.registerCommand("recaller.ask", ask),
     vscode.commands.registerCommand("recaller.what", what),
     vscode.commands.registerCommand("recaller.explainBlock", explainBlock),
     vscode.languages.registerCodeLensProvider([{ scheme: "file", language: "typescript" }, { scheme: "file", language: "javascript" }], lensProvider),
-    vscode.window.onDidChangeVisibleTextEditors(() => applyFocus()),
+    vscode.window.onDidChangeVisibleTextEditors(() => { applyFocus(); applyTour(); }),
     vscode.window.onDidChangeActiveColorTheme(() => { if (panel) { panel.webview.postMessage({ recallerTheme: themeName() }); setTimeout(sendCodeColors, 300); } }),
     vscode.workspace.onDidChangeConfiguration((e) => { if (e.affectsConfiguration("editor.fontSize") || e.affectsConfiguration("workbench.colorTheme")) sendCodeColors(); }),
     vscode.commands.registerCommand("recaller.reconnect", connect),

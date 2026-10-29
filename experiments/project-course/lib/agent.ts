@@ -14,19 +14,21 @@ import { DATA, read, saveRun, stageProgress } from "./store.ts";
 export const MAX_STEPS = 5;
 
 export type ToolCard = { type: "tool"; icon: string; label: string; detail?: string; ok: boolean };
+export type TourStep = { file: string; from: number; to: number; title: string; text: string; code: string };
+export type TourCard = { type: "tour"; id: string; title: string; steps: TourStep[] };
 export type DiffCard = { type: "diff"; id: string; file: string; why: string; diff: string; undone?: boolean };
 export type AgentIO = {
   runId: string; n: number; ws: string;
   /** 지금까지의 수업 맥락(계획서·지금 순서·최근 대화·마지막 확인) */
   context: string;
   /** 채팅에 바로 보이게 */
-  show: (card: ToolCard | DiffCard) => Promise<void>;
+  show: (card: ToolCard | DiffCard | TourCard) => Promise<void>;
   /** 도구를 쓰기 전 튜터의 한마디 */
   say: (text: string) => Promise<void>;
   /** 튜터가 고친 파일 때문에 저장 감지가 다시 확인하지 않게 */
   quiet: (ms: number) => void;
   /** explain: 설명만(고치기 도구를 주지 않음) */
-  mode?: "normal" | "explain";
+  mode?: "normal" | "explain" | "tour";
   /** 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선). 엔진이 썼으면 streamed=true */
   stream?: (key: string, text: string) => Promise<void>;
   streamed?: boolean;

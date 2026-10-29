@@ -20,7 +20,7 @@ const MAX_STEPS = 8;
 const READ = new Set(["read", "glob", "grep"]);
 const OURS = ["open_in_editor", "start_server", "send_request", "run_checks"] as const;
 const EDITS = new Set(["edit", "write", "patch"]); // GPT 모델에서는 patch(apply_patch)로 고친다
-const SHOWN = new Set([...READ, ...EDITS, ...OURS]);
+const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour"]);
 /** 고치기 도구 입력에서 파일 경로들 */
 const editPaths = (tool: string, input: any): string[] => tool === "patch"
   ? [...String(input?.patchText ?? "").matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)].map((m) => m[1].trim())
@@ -110,12 +110,13 @@ function policyPlugin(fake: boolean) {
       await ctx.session.hook("context", (ev: any) => {
         const l = live.get(ev.sessionID);
         // 덩어리 설명: 필요한 파일은 이미 붙여 보냈으니 도구 없이 한 번에 답한다(호출 1번)
-        for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k) || l?.io.mode === "explain") delete ev.tools[k];
+        // 흐름 투어: 파일은 붙여 보냈으니 show_tour 하나만
+        for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k) || l?.io.mode === "explain" || (l?.io.mode === "tour" && k !== "show_tour")) delete ev.tools[k];
       });
       await ctx.permission.hook("evaluate", (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);
         const l = live.get(ev.sessionID);
-        if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
+        if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action) || ev.action === "show_tour") { ev.effect = "allow"; return; }
         if (EDITS.has(ev.action)) {
           if (l?.io.mode === "explain") { ev.effect = "deny"; ev.message = "지금은 설명만 하는 시간이에요."; return; }
           const files: string[] = (ev.resources ?? []).map((r: string) => String(r).replace(/\\/g, "/"));
@@ -154,6 +155,23 @@ function policyPlugin(fake: boolean) {
         run_checks: ["이번 단계 자동 검사를 돌린다(통과 판정은 검사기가 한다).", {}, []],
       };
       await ctx.tool.transform((ed: any) => {
+        ed.add({ name: "show_tour", options: { codemode: false },
+          description: "실행 흐름 투어를 보여 준다: 요청 하나가 들어와 답장이 나갈 때까지 지나가는 코드 덩어리를 실행 순서대로. 학습자 VS Code에서 걸음마다 그 덩어리에 불이 켜지고 튜터 화면에 설명이 나온다. 구조·실제 동작·흐름을 물으면 쓴다.",
+          input: { type: "object", required: ["title", "steps"], properties: {
+            title: { type: "string", description: "투어 이름(예: GET /health 요청이 지나가는 길)" },
+            steps: { type: "array", minItems: 2, maxItems: 10, items: { type: "object", required: ["file", "from", "to", "anchor", "title", "text"], properties: {
+              file: { type: "string" }, from: { type: "number" }, to: { type: "number" },
+              anchor: { type: "string", description: "덩어리 첫 줄의 코드 일부를 파일 그대로(줄 번호를 바로잡는 데 씀)" },
+              title: { type: "string", description: "짧은 이름(예: 편지 도착)" },
+              text: { type: "string", description: "해요체 2~4문장 마크다운: 여기서 무슨 일이 일어나고 다음에 어디로 넘어가는지" } } } } } },
+          execute: async (input: any, c: any) => {
+            const l = live.get(c.sessionID);
+            if (!l) return { content: "지금은 쓸 수 없어요." };
+            const card = await buildTour(l.io.ws, input);
+            if (!card.steps.length) return { content: "걸음의 파일·줄을 찾지 못했어요. 파일 경로와 anchor를 파일 그대로 다시 적어 주세요." };
+            await l.io.show(card);
+            return { content: `학습자 화면에 ${card.steps.length}걸음 투어를 띄웠어요. 이제 한두 문장으로만 마무리하세요(걸음 내용을 다시 쓰지 말 것).` };
+          } });
         for (const name of OURS) {
           const [description, properties, required] = desc[name];
           ed.add({ name, description, options: { codemode: false }, input: { type: "object", properties, required },
@@ -167,6 +185,31 @@ function policyPlugin(fake: boolean) {
       });
     },
   };
+}
+
+/** AI가 적은 걸음을 실제 파일에 맞춘다: anchor로 줄을 바로잡고, 범위를 파일 안으로, 코드 조각을 붙인다 */
+async function buildTour(ws: string, input: any) {
+  const steps: { file: string; from: number; to: number; title: string; text: string; code: string }[] = [];
+  for (const st of (Array.isArray(input?.steps) ? input.steps : []).slice(0, 10)) {
+    let rel: string, abs: string;
+    try { ({ rel, abs } = safePath(ws, String(st.file ?? ""))); } catch { continue; }
+    const text = await readFile(abs, "utf8").catch(() => null);
+    if (text === null) continue;
+    const lines = text.split(/\r?\n/);
+    let from = Math.max(1, Math.min(lines.length, Number(st.from) || 1));
+    let to = Math.max(from, Math.min(lines.length, Number(st.to) || from));
+    const anchor = String(st.anchor ?? "").trim();
+    if (anchor && !lines[from - 1]?.includes(anchor)) {
+      // 적어 준 줄 근처에서 anchor가 있는 줄을 찾는다(없으면 파일 전체)
+      const hits = lines.map((x, i) => (x.includes(anchor) ? i + 1 : -1)).filter((i) => i > 0);
+      if (hits.length) { const near = hits.reduce((a, b) => (Math.abs(b - from) < Math.abs(a - from) ? b : a)); to = Math.min(lines.length, near + (to - from)); from = near; }
+    }
+    if (to - from > 25) to = from + 25;
+    const chunk = lines.slice(from - 1, to);
+    const pad = Math.min(...chunk.filter((x) => x.trim()).map((x) => x.match(/^\s*/)![0].length)); // 공통 들여쓰기 빼기
+    steps.push({ file: rel, from, to, title: String(st.title ?? "").slice(0, 40), text: String(st.text ?? "").slice(0, 1200), code: chunk.map((x) => x.slice(Number.isFinite(pad) ? pad : 0)).join("\n") });
+  }
+  return { type: "tour" as const, id: `t${Date.now().toString(36)}`, title: String(input?.title ?? "실제로 지나가는 길").slice(0, 80), steps };
 }
 
 async function recordEdit(l: Live, rel: string) {
@@ -263,7 +306,14 @@ async function startMock(): Promise<string> {
     const file = /src\/[\w./-]+\.ts/.exec(userText)?.[0] ?? "src/server.ts";
     const wantFix = /고쳐 주|정답 알려/.test(userText.split("[학습자 질문]").pop() ?? "");
     let call: { name: string; args: unknown; say: string } | null = null;
-    if (tools.length && sinceUser === 0) call = { name: "read", args: { path: file }, say: `${file}부터 볼게요.` };
+    if (tools.includes("show_tour") && tools.length === 1) {
+      call = sinceUser === 0 ? { name: "show_tour", say: "GET /health 요청을 따라가 볼게요.", args: { title: "GET /health 요청이 지나가는 길", steps: [
+        { file: "src/server.ts", from: 9, to: 11, anchor: "const server = createServer", title: "편지 도착", text: "브라우저가 보낸 편지(`req`)가 여기로 와요. 주소와 방식을 꺼내 두고 **다음 줄들**로 넘어가요." },
+        { file: "src/server.ts", from: 18, to: 22, anchor: "const found = router.match", title: "담당자 찾기", text: "`router.match`에게 담당자를 물어봐요. 이제 [[src/router.ts:22]]로 넘어가요." },
+        { file: "src/router.ts", from: 22, to: 32, anchor: "match(method", title: "명단 넘겨 보기", text: "등록된 길 목록을 하나씩 보며 주소와 방식이 맞는 담당자를 찾아요." },
+        { file: "src/app.ts", from: 1, to: 8, anchor: "router", title: "담당자 명단", text: "`/health` 담당자가 여기 적혀 있어요. 찾으면 다시 server.ts로 돌아가 담당자에게 편지를 넘겨요." } ] } }
+        : null;
+    } else if (tools.length && sinceUser === 0) call = { name: "read", args: { path: file }, say: `${file}부터 볼게요.` };
     else if (tools.length && sinceUser === 1 && wantFix) call = tools.includes("patch")
       ? { name: "patch", args: { patchText: "*** Begin Patch\n*** Update File: src/server.ts\n@@\n-    const found = router.match(method, url.pathname);\n+    const found = router.match(method, url.pathname); // 튜터가 고침\n*** End Patch" }, say: "부탁하셔서 고쳐 볼게요." }
       : { name: "edit", args: { path: "src/server.ts", oldString: "const found = router.match(method, url.pathname);", newString: "const found = router.match(method, url.pathname); // 튜터가 고침" }, say: "부탁하셔서 고쳐 볼게요." };

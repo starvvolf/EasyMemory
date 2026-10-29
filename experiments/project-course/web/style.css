@@ -470,3 +470,20 @@ button, input, select, textarea { font-family: inherit; }
 .cbody .tf { color: var(--c-fn, #d2a8ff); } .cbody .ty { color: var(--c-ty, #ffa657); }
 .cbody .tv { color: var(--c-var, inherit); }
 .vscode-code .cbh .flink { color: var(--c-kw, var(--link)); }
+/* 흐름 투어 카드 */
+.lcard.tour { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--panel); display: grid; gap: 10px; }
+.tourh { display: flex; align-items: center; gap: 8px; }
+.tourh .tico { font-size: 16px; }
+.tdots { display: flex; gap: 6px; flex-wrap: wrap; }
+.tdot { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--mut); font-size: 11px; cursor: pointer; padding: 0; }
+.tdot.past { background: var(--acc-soft); color: var(--ink); border-color: transparent; }
+.tdot.cur { background: var(--acc); color: var(--acc-ink); border-color: var(--acc); font-weight: 700; }
+.tstep { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.tnum { font-size: 11px; color: var(--mut); font-variant-numeric: tabular-nums; }
+.tour .cb { margin: 0; }
+.tctl { gap: 6px; flex-wrap: wrap; }
+.tbar { height: 3px; background: var(--soft); border-radius: 2px; overflow: hidden; }
+.tbar span { display: block; height: 100%; background: var(--acc); animation: tbar linear forwards; width: 0; }
+@keyframes tbar { to { width: 100%; } }
+.tourlist { margin: 0; padding-left: 22px; font-size: 13px; }
+.lcard.tour.done { opacity: .9; }

@@ -731,7 +731,57 @@ function drawLesson() {
   drawLesson.drawn = true;
 }
 
+/* ---------- 흐름 투어 카드: 걸음마다 VS Code에서 그 덩어리에 불이 켜진다 ---------- */
+const tours = {}; // 카드 id → { i, auto, timer, done, sent }
+function tourGo(run, card, i) {
+  const t = tours[card.id];
+  t.i = Math.max(0, Math.min(card.steps.length - 1, i)); t.sent = t.i;
+  api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "tour", text: card.id, choice: t.i }).catch(() => {});
+  scheduleTour(run, card);
+  drawLesson();
+}
+function stepSeconds(st) { return Math.min(20, Math.max(6, 5 + (st.text.length + st.code.length / 3) * 0.05)); }
+function scheduleTour(run, card) {
+  const t = tours[card.id];
+  clearTimeout(t.timer);
+  if (!t.auto || t.done) return;
+  const st = card.steps[t.i];
+  t.due = Date.now() + stepSeconds(st) * 1000;
+  t.timer = setTimeout(() => {
+    if (t.i >= card.steps.length - 1) { t.auto = false; drawLesson(); return; }
+    tourGo(run, card, t.i + 1);
+  }, stepSeconds(st) * 1000);
+}
+function tourCard(card, run, lesson, send, ws) {
+  const latest = [...(lesson.messages || [])].reverse().find((m) => m.card?.type === "tour")?.card?.id === card.id;
+  const t = (tours[card.id] ??= { i: 0, auto: false, done: !latest, sent: -1 });
+  if (!t.done && t.sent !== t.i) { t.sent = t.i; api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "tour", text: card.id, choice: t.i }).catch(() => {}); }
+  const n = card.steps.length, st = card.steps[t.i];
+  const head = h("div", { class: "tourh" }, h("span", { class: "tico" }, "🧭"), h("b", { class: "grow" }, card.title),
+    t.done ? h("button", { class: "btn small", onclick: () => { t.done = false; t.sent = -1; tourGo(run, card, 0); } }, "다시 보기")
+      : h("button", { class: "btn small", title: "투어 끝내기", onclick: () => { t.done = true; t.auto = false; clearTimeout(t.timer); api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "tourEnd" }).catch(() => {}); drawLesson(); } }, "끝내기"));
+  if (t.done) return h("div", { class: "lcard tour done" }, head,
+    h("ol", { class: "tourlist" }, card.steps.map((x) => h("li", {}, `${x.title} `, h("span", { class: "mut" }, `${x.file.split("/").pop()} ${x.from}~${x.to}줄`)))));
+  const dots = h("div", { class: "tdots" }, card.steps.map((x, k) => h("button", { class: `tdot ${k < t.i ? "past" : k === t.i ? "cur" : ""}`, title: `${k + 1}. ${x.title}`, onclick: () => tourGo(run, card, k) }, String(k + 1))));
+  const last = t.i === n - 1;
+  const nextBtn = last
+    ? h("button", { class: "btn primary small", onclick: () => { t.done = true; t.auto = false; clearTimeout(t.timer); api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "tourEnd" }).catch(() => {}); drawLesson(); } }, "다 봤어요 ✓")
+    : h("button", { class: "btn primary small", onclick: () => tourGo(run, card, t.i + 1) }, "확인했어요, 다음 ▶");
+  const autoBtn = h("button", { class: "btn small", onclick: () => { t.auto = !t.auto; scheduleTour(run, card); drawLesson(); } }, t.auto ? "⏸ 멈추기" : "⏵ 자동 넘기기");
+  const dur = stepSeconds(st), gone = t.due ? Math.max(0, dur - (t.due - Date.now()) / 1000) : 0;
+  const bar = t.auto && !last ? h("div", { class: "tbar", title: "자동으로 넘어가요" }, h("span", { style: `animation-duration:${dur}s;animation-delay:-${gone.toFixed(2)}s` })) : null;
+  return h("div", { class: "lcard tour" }, head, dots,
+    h("div", { class: "tstep" }, h("span", { class: "tnum" }, `${t.i + 1}/${n}`), h("b", {}, st.title), h("span", { class: "mut small" }, " · ", fileLink(ws, st.file, st.from), `~${st.to}줄`)),
+    codeBlock(st.code, "ts", `${st.file}:${st.from}`, ws),
+    rich(st.text, ws),
+    h("div", { class: "row tctl" },
+      h("button", { class: "btn small", disabled: t.i === 0, onclick: () => tourGo(run, card, t.i - 1) }, "◀ 이전"), nextBtn, h("span", { class: "grow" }), autoBtn,
+      h("button", { class: "btn small", title: "이 걸음을 더 자세히", onclick: (e) => send({ do: "ask", mode: "explain", shown: `${st.title} 더 자세히 알려 주세요`, text: `흐름 투어 ${t.i + 1}걸음(${st.file} ${st.from}~${st.to}줄, "${st.title}")을 문법을 모르는 사람에게 더 자세히 설명해 주세요. 줄마다 무슨 뜻인지 짧게.\n\n\`\`\`ts\n${st.code}\n\`\`\`` })(e) }, "더 자세히")),
+    bar);
+}
+
 function lessonCard(card, run, lesson, send, ws) {
+  if (card.type === "tour") return tourCard(card, run, lesson, send, ws);
   if (card.type === "choice") {
     const done = card.picked !== undefined;
     return h("div", { class: "lcard" }, h("div", { class: "opts" }, card.options.map((o, i) =>

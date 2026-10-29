@@ -17,7 +17,9 @@ export type BridgeCommand =
   | { type: "clear" }
   | { type: "focus"; file: string; chunks: { anchor: string; label: string; desc?: string; focus?: boolean }[] }
   | { type: "clearFocus" }
-  | { type: "toast"; text: string };
+  | { type: "toast"; text: string }
+  | { type: "tour"; file: string; from: number; to: number; label?: string }
+  | { type: "tourEnd" };
 
 const norm = (p: string) => { const r = path.resolve(p).replace(/\\/g, "/").replace(/\/$/, ""); return process.platform === "win32" ? r.toLowerCase() : r; };
 const states = new Map<string, BridgeState>();

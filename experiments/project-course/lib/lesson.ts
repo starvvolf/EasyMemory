@@ -2,7 +2,7 @@
 // - 순서·정답·판정은 계획서와 검사기가 정한다. AI는 학습자의 질문에 답하고 빈틈을 메운다(계획을 바꾸지 않는다).
 // - VS Code와는 "이어진 것처럼": 파일 줄 링크(vscode://), 저장하면 튜터가 알아채고 바로 확인한다.
 import { watch, type FSWatcher } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ServerResponse } from "node:http";
 import { COURSES, loadCourse, stageOf } from "./course.ts";
@@ -157,9 +157,22 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   const plan = await loadPlan(course.id, n);
   if (!plan) throw err(404, "이 단계의 수업 계획서가 없어요.");
 
-  if (input.do === "ask") return ask(runId, n, plan, String(input.text ?? ""), undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : undefined, input.mode === "explain" ? { mode: "explain" } : {});
+  if (input.do === "ask") {
+    const t = String(input.text ?? "");
+    const mode = input.mode === "explain" ? "explain" : input.mode === "tour" || TOUR_INTENT.test(t) ? "tour" : undefined;
+    return ask(runId, n, plan, mode === "tour" ? `${t}\n\n${TOUR_Q}` : t, undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : mode === "tour" ? t : undefined, mode ? { mode } : {});
+  }
   if (input.do === "open") { await openLine(runId, String(input.file ?? ""), Number(input.line) || 1); return null; }
   if (input.do === "scaffold") return scaffold(runId, n, plan, course);
+  if (input.do === "tour") {
+    // 흐름 투어 걸음: VS Code에서 그 덩어리에 불 켜기(AI 호출 없음)
+    const st = await read<State>(file(runId, n), { beat: -1, waiting: "action", messages: [], hints: 0 });
+    const card = [...st.messages].reverse().find((m) => m.card?.type === "tour" && (!input.text || m.card.id === input.text))?.card as { steps: { file: string; from: number; to: number; title: string }[] } | undefined;
+    const step = card?.steps[Number(input.choice) || 0];
+    if (step) bridgeSend(runId, { type: "tour", file: step.file, from: step.from, to: step.to, label: `${(Number(input.choice) || 0) + 1}/${card!.steps.length} ${step.title}` });
+    return null;
+  }
+  if (input.do === "tourEnd") { bridgeSend(runId, { type: "tourEnd" }); return null; }
   if (input.do === "undo") {
     const id = String(input.text ?? "");
     const rec = await undoEdit(runId, await wsOf(runId, n), id);
@@ -267,6 +280,32 @@ const TUTOR = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친
 - 맞았다/틀렸다를 단정하지 않는다. 그건 확인(검사)이 정한다.
 - 답한 뒤 한 문장으로 지금 하던 것으로 자연스럽게 돌아오게 한다.`;
 
+/* ---------- 흐름 투어 ("실제 동작 설명해 주세요", "구조 설명해 주세요") ---------- */
+const TOUR_INTENT = /(실제|진짜)\s*(동작|작동)|어떻게\s*(돌아|동작|작동|움직|흘러)|흐름|구조|따라가|투어|순서대로\s*(보여|설명)/;
+const TOUR_Q = `[흐름 투어로 답하기] show_tour 도구로 답한다. 이 단계에서 의미 있는 대표 요청 하나(예: GET /health)를 정하고, 그 요청이 들어와 답장이 나갈 때까지 실제로 지나가는 코드 덩어리를 실행 순서대로 4~8걸음.
+- 걸음마다 file, from, to(5~20줄), anchor(그 덩어리 첫 줄 코드 일부를 파일 그대로), title(짧은 이름, 예: "편지 도착"), text(해요체 2~4문장 마크다운: 여기서 무슨 일이 일어나는지 + 다음에 어느 파일·덩어리로 넘어가는지. 수업의 "편지와 답장" 비유를 잇는다).
+- 파일들은 위에 붙어 있으니 다시 읽지 않는다. 아직 없는 파일(뒤 단계)은 넣지 않는다. 앞으로 할 예측 문제의 답은 말하지 않는다.
+- 도구를 부른 뒤에는 한두 문장으로만 마무리한다.`;
+/** 투어용: 작업 폴더의 코드 파일 전부(작은 프로젝트라 한 번에 붙인다) */
+async function allFiles(ws: string) {
+  const out: string[] = [];
+  let total = 0;
+  async function walk(dir: string, rel: string) {
+    for (const e of await readdir(path.join(ws, dir), { withFileTypes: true }).catch(() => [])) {
+      if ([".recaller", "node_modules", "data", ".git", "public"].includes(e.name)) continue;
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) await walk(path.join(dir, e.name), r);
+      else if (/\.(ts|js|mjs)$/.test(e.name) && total < 1500) {
+        const t = await readFile(path.join(ws, dir, e.name), "utf8").catch(() => "");
+        const lines = t.split(/\r?\n/); total += lines.length;
+        out.push(`[파일 ${r}]\n${lines.map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}`);
+      }
+    }
+  }
+  await walk("", "");
+  return out.join("\n\n");
+}
+
 /** 최근에 물어본 코드의 파일(설명 속 단어를 눌러 이어 물을 때 같은 파일을 붙이려고) */
 function lastQuoteFile(s: State) { return [...s.messages].reverse().find((m) => m.card?.type === "code")?.card?.file as string | undefined; }
 /** 파일 내용을 줄 번호와 함께. withImports면 그 파일이 가져오는 이 프로젝트 파일(./x.ts)도 */
@@ -295,7 +334,7 @@ function upcoming(plan: Plan, beat: number) {
   return `[앞으로 할 순서 — 학습자가 직접 맞히고 고칠 것이라 답을 미리 말하지 않는다]\n${lines.join("\n")}\n이것과 관련된 질문에는 어디를 보면 되는지까지만 말하고, 상태 코드 숫자나 고칠 코드는 "곧 같이 해 볼 거예요"라며 미룬다.`;
 }
 
-export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: { mode?: "explain"; onAnswer?: (text: string) => Promise<void> } = {}) {
+export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void> } = {}) {
   const q = text.trim().slice(0, 1000) || (quote ? "이 코드가 뭐 하는 거예요?" : "");
   if (!q) throw err(400, "질문을 적어 주세요.");
   const s0 = await change(runId, n, (s, push) => {
@@ -323,7 +362,7 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
     `[최근 대화]\n${recentText}`,
     // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
-    await filesFor(ws, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, opts.mode === "explain"),
+    opts.mode === "tour" ? await allFiles(ws) : await filesFor(ws, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, opts.mode === "explain"),
   ].filter(Boolean).join("\n\n");
   if (aiMode() !== "off") {
     // 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선을 고친다)
