@@ -65,13 +65,15 @@ function matrices(expr: string): string {
   return out;
 }
 const asMath = (expr: string) => (expr.includes("$") ? expr : `$${matrices(expr)}$`);
+// On the one-line view a matrix would make the line tall: it shows as [⋯] there and whole when opened.
+const asLine = (expr: string) => (expr.includes("$") ? expr : `$${matrices(expr).replace(/\\begin\{bmatrix\}[\s\S]*?\\end\{bmatrix\}/g, "[\\cdots]")}$`);
 
 // One line per piece of knowledge: what to recall at a glance (the formula itself, a rule's condition → result, a procedure's
 // steps). The whole shape opens on a click.
 function keyLine(s: Shape): string {
   const clip = (x: string, n = 90) => (x.length > n ? `${x.slice(0, n - 1)}…` : x);
   switch (s.form) {
-    case "formula": return asMath(s.expr);
+    case "formula": return asLine(s.expr);
     case "term": return clip(s.definition);
     case "fact": return clip(s.value);
     case "rule": return clip(`${s.condition} → ${s.result}`);

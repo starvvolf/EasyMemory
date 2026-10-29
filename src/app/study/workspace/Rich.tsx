@@ -43,7 +43,7 @@ function equations(text: string) {
     for (let i = 0; i < rest.length; i++) {
       const c = rest[i];
       if (c === "(") depth++; else if (c === ")") { if (!depth) break; depth--; }
-      if (!depth && /[A-Za-z0-9)|]/.test(c)) end = i + 1;
+      if (!depth && /[A-Za-z0-9)|}]/.test(c)) end = i + 1; // } closes a subscript (y = y_{ref})
     }
     const core = rest.slice(0, end);
     if (!/[=×]/.test(core) || core.replace(/\s/g, "").length < 4 || !/^[A-Za-z(|]/.test(core)) return m;
