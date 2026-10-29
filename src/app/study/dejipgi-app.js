@@ -2539,7 +2539,14 @@ const MaterialMapView = {
     const deckNow = () => S.decks[gid] || S.decks["pending:" + gid] || d;
     const stop = env.mountView("map", host, { genId: gid,
       onPage: (p) => SourcePeek.open(deckNow(), p),
-      onPractice: (p) => { if (!S.decks[gid]){ toast("문제가 아직 연습에 붙지 않았어요. 잠시 뒤 다시 눌러 주세요."); return; } this.close(); S.session = null; startCheck(gid, p); },
+      // The card's own question (objective "s4-q4c3" for card "s4.4c3"), or the page's when it has none of its own.
+      onPractice: (p, cardId) => {
+        const real = S.decks[gid];
+        if (!real){ toast("문제가 아직 연습에 붙지 않았어요. 잠시 뒤 다시 눌러 주세요."); return; }
+        const objId = String(cardId || "").replace(/^(s\d+)\.(.+)$/, "$1-q$2");
+        this.close(); S.session = null;
+        startCheck(gid, p, real.items.some(it => it.objectiveId === objId) ? objId : undefined);
+      },
       onMakeQuestions: () => makeQuestions(deckNow()),
       onClose: () => this.close() });
     this.cur = { ov, stop };

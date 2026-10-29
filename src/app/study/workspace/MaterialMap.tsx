@@ -130,7 +130,7 @@ function keyLine(s: Shape): string {
 // 사용자 10/30: the map is where a material is studied (no reading screen): 원문 opens one page over it, 문제 풀기 starts that
 // page's questions, and a material made without questions gets them here (문제 만들기).
 export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions, onClose }: { genId: string; onPage: (page: number) => void;
-  onPractice?: (page: number) => void; onMakeQuestions?: () => Promise<boolean>; onClose: () => void }) {
+  onPractice?: (page: number, cardId: string) => void; onMakeQuestions?: () => Promise<boolean>; onClose: () => void }) {
   const [map, setMap] = useState<MatMap | null>(null);
   const [asking, setAsking] = useState(false);
   const [reload, setReload] = useState(0);
@@ -265,7 +265,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
                         {c.same.length || c.questions ? <div className="mm3-dfoot">
                           {c.same.length ? <span className="small muted">같은 내용: {c.same.map((x) => range(x.pages)).join(", ")}</span> : null}
                           <span className="cs-gap" />
-                          {c.questions ? <button className="btn small primary" onClick={() => (onPractice ?? onPage)(c.pages[0])}>이 지식 문제 풀기 ({c.questions})</button> : null}
+                          {c.questions ? <button className="btn small primary" onClick={() => onPractice ? onPractice(c.pages[0], c.id) : onPage(c.pages[0])}>이 지식 문제 풀기 ({c.questions})</button> : null}
                         </div> : null}
                       </div> : null}
                     </li>
