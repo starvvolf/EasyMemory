@@ -74,7 +74,7 @@ test("자료 without a goal, a suggestion accepted makes the goal; the study scr
   assert.equal(daysLeft({ date: "2026-10-29" }, new Date("2026-10-28T16:00:00.000Z")), 0, "Korean day: 10/29 01:00 KST is the day itself");
 }));
 
-test("주제 정리: one call sorts new items into one topic tree with a 종류, keeps hand-placed ones, suggests goals for 자료", () => withData(async (calls) => {
+test("주제 정리: one call sorts new items into one topic tree with a 종류, keeps hand-placed ones (목표 추천은 2026-10-30에 뺐다)", () => withData(async (calls) => {
   const [a, b, c] = await saveMany([
     { title: "이분 탐색", folder: "바킹독/0x13", source: code("가진 카드", "p1") },
     { title: "원근 투영", topicHint: "그래픽스 03 / 투영", source: pdf("그래픽스 03", "deck1:c1") },
@@ -84,7 +84,8 @@ test("주제 정리: one call sorts new items into one topic tree with a 종류,
   const fld = (await tree()).folders.find((f) => f.name === "바킹독")!;
   await updateKnowledge(mine.item.id, { folderId: fld.id });
   const result = await runClassify();
-  assert.equal(calls.length, 1, "one call for the batch and the 자료");
+  assert.equal(calls.length, 1, "one call for the batch");
+  assert.ok(!calls[0].user.includes("목표"), "no goals in the request");
   assert.match(calls[0].user, /힌트: 그래픽스 03 \/ 투영/);
   assert.equal(result.sorted, 4);
   assert.equal(result.left, 0);
@@ -96,16 +97,11 @@ test("주제 정리: one call sorts new items into one topic tree with a 종류,
   assert.equal((await getKnowledge(mine.item.id)).item.kind, "concept", "left out by the model: still gets a 종류");
   assert.equal((await getKnowledge(b.item.id)).item.topicHint, undefined);
   assert.ok(!(await tree()).folders.some((f) => f.name === "0x13"), "the emptied source folder is gone");
-  const mats = await listMaterials();
-  assert.equal(mats.find((m) => m.key === "pdf:그래픽스 03")!.suggestion!.name, "컴퓨터그래픽스");
   assert.deepEqual(await runClassify(), { sorted: 0, suggested: 0, left: 0, calls: 0 }, "each item is sorted once");
 }, (r) => {
   const items = r.user.split("[정리할 지식]\n")[1].split("\n\n")[0].split("\n");
   const n = (t: string) => items.findIndex((l) => l.includes(`. ${t}`));
-  const mats = r.user.split("[목표가 없는 자료]\n")[1].split("\n");
-  const m = (t: string) => mats.findIndex((l) => l.includes(t));
-  return { items: [{ n: n("이분 탐색"), topic: "CS/알고리즘/탐색", kind: "procedure" }, { n: n("원근 투영"), topic: "CS / 그래픽스 / 투영", kind: "concept" }, { n: n("abandon"), topic: "어학/영어/어휘", kind: "vocab" }],
-    materials: [{ m: m("그래픽스 03"), goalId: "", name: "컴퓨터그래픽스", reason: "그래픽스 강의" }] };
+  return { items: [{ n: n("이분 탐색"), topic: "CS/알고리즘/탐색", kind: "procedure" }, { n: n("원근 투영"), topic: "CS / 그래픽스 / 투영", kind: "concept" }, { n: n("abandon"), topic: "어학/영어/어휘", kind: "vocab" }] };
 }));
 
 test("어휘: words with the same meaning are asked both ways and never offered as the same knowledge", async () => {

@@ -5,10 +5,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { knowledgeReport } from "./report.ts";
-import { createGoal, setGoalSource, sourceKey } from "./goals.ts";
 import { linkKnowledge, saveMany, sortItems } from "./store.ts";
 
-test("점검 보고서: summary, checks, items by 주제, goals and 자료", async () => {
+test("점검 보고서: summary, checks, items by 주제 and 자료 (목표 없음)", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "knowledge-report-"));
   const prior = process.env.STUDY_FORGE_DATA_DIR;
   process.env.STUDY_FORGE_DATA_DIR = dir;
@@ -17,13 +16,12 @@ test("점검 보고서: summary, checks, items by 주제, goals and 자료", asy
     const [a, b] = await saveMany([{ title: "원근 투영", body: "멀수록 작게", source: src }, { title: "투영 행렬", body: "4x4 행렬", source: src }]);
     await sortItems([{ id: a.item.id, topic: "CS/그래픽스/투영", kind: "concept" }, { id: b.item.id, topic: "CS/그래픽스/투영", kind: "formula" }]);
     await linkKnowledge(a.item.id, b.item.id, "포함");
-    const g = await createGoal({ name: "컴퓨터그래픽스", date: "2026-11-20" });
-    await setGoalSource(g.id, { key: sourceKey(src), kind: "pdf", title: src.title }, true);
     const ok = await knowledgeReport(new Date("2026-10-28T10:00:00Z"));
     assert.equal(ok.fails, 0, ok.markdown);
     assert.match(ok.markdown, /### CS \/ 그래픽스 \/ 투영 \(2\)/);
-    assert.match(ok.markdown, /\*\*원근 투영\*\* · 개념·용어 · 만남 — 멀수록 작게 \| 고리: →투영 행렬\(포함\) \| 출처: PDF 그래픽스 03 \| 목표: 컴퓨터그래픽스/);
-    assert.match(ok.markdown, /\*\*컴퓨터그래픽스\*\* · 2026-11-20 \(D-23\) · 지식 2/);
+    assert.match(ok.markdown, /\*\*원근 투영\*\* · 개념·용어 · 만남 — 멀수록 작게 \| 고리: →투영 행렬\(포함\) \| 출처: PDF 그래픽스 03$/m);
+    assert.ok(!ok.markdown.includes("목표"), "no goals in the report");
+    assert.match(ok.markdown, /PDF \*\*그래픽스 03\*\* · 지식 2/);
 
     // Break it by hand: a link to nothing, and a second item named like the first.
     const file = path.join(dir, "knowledge", "store.json");

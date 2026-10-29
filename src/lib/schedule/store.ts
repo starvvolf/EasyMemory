@@ -76,7 +76,9 @@ export async function addSession(input: { start: string; minutes: number; label?
 
 /* ---------- 할 일 ---------- */
 export type Todo = { id: string; text: string; date: string | null; done: boolean; doneAt: string | null; createdAt: string; origin: "user" | "schedule" | "agent"; deadlineId: string | null };
-export async function listTodos() { return (await readJson<Todo[]>("todos.json", [])).sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999") || a.createdAt.localeCompare(b.createdAt)); }
+// 목표 기한에서 나눠 만든 할 일(아직 안 한 것)은 목표를 없애며 안 보인다(2026-10-30). 한 것과 직접 적은 할 일은 그대로.
+const fromGoal = (t: Todo) => Boolean(t.deadlineId?.startsWith(GOAL)) && t.origin === "schedule" && !t.done;
+export async function listTodos() { return (await readJson<Todo[]>("todos.json", [])).filter((t) => !fromGoal(t)).sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999") || a.createdAt.localeCompare(b.createdAt)); }
 export const addTodo = (input: { text: string; date?: string | null; origin?: Todo["origin"]; deadlineId?: string | null }) => serial(async () => {
   if (!input.text.trim()) throw new ScheduleError(400, "할 일을 적어 주세요.");
   if (input.date && !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new ScheduleError(400, "날짜는 2026-10-30 형식으로 적어요.");
@@ -106,8 +108,10 @@ const GOAL = "goal:";
 async function goalDeadlines(): Promise<Deadline[]> {
   return (await listGoals()).filter((g) => !g.closed && g.date).map((g) => ({ id: `${GOAL}${g.id}`, title: g.name, date: g.date!, folderId: null, goalId: g.id, amount: 0, unit: "", createdAt: g.createdAt }));
 }
+// 목표는 없앴다(2026-10-30 사용자 "목표 없애. 코테, 시험 이런 거 고려 X"): 목표의 날짜는 더 이상 기한으로 보이지 않는다.
+// (goalId로 넣는 길은 예전 데이터를 위해 남겨 두지만, 화면에서는 부르지 않는다.)
 export async function listDeadlines() {
-  return [...await readJson<Deadline[]>("deadlines.json", []), ...await goalDeadlines()].sort((a, b) => a.date.localeCompare(b.date));
+  return (await readJson<Deadline[]>("deadlines.json", [])).sort((a, b) => a.date.localeCompare(b.date));
 }
 export const addDeadline = async (input: { title?: string; date: string; folderId?: string | null; goalId?: string | null; amount?: number; unit?: string }) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new ScheduleError(400, "날짜는 2026-10-30 형식으로 적어요.");

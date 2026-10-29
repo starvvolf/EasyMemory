@@ -13,7 +13,7 @@ import { knowledgeReport } from "@/lib/knowledge/report";
 import { mapArticle } from "@/lib/assist/article-map";
 import { explainKnowledge, makeExplanation, runLayer } from "@/lib/knowledge/layer";
 import { runClassify } from "@/lib/knowledge/classify";
-import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, sourceKey, syncSubjects,
+import { acceptSuggestion, createGoal, deleteGoal, goalItemIds, goalOverview, goalsOfItems, ignoreMaterial, listMaterials, setGoalItem, setGoalSource, sourceKey,
   updateGoal } from "@/lib/knowledge/goals";
 import { askKnowledge, checkClaim, explainSelection, extractFromText, fillMissing, pickTerms, readKnowledge } from "@/lib/assist/knowledge-ai";
 
@@ -91,7 +91,9 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "goals" && p[1] === "sync" && m === "POST") {
       const b = await body(z.object({ subjects: z.array(z.object({ name: z.string().max(60), exam: z.string().max(10).optional() })).max(50),
         materials: z.array(z.object({ subject: z.string().max(60), title: z.string().max(200) })).max(500), renamed: z.object({ from: z.string().max(60), to: z.string().max(60) }).optional() }));
-      return json({ goals: await syncSubjects(b.subjects, b.materials, b.renamed) });
+      // 목표를 없앴다(2026-10-30 사용자 "목표 없애"): 공부 화면의 과목은 더 이상 목표가 되지 않는다. 부르는 쪽(공부 화면)은 그대로 둔다.
+      void b;
+      return json({ goals: [] });
     }
     if (p[0] === "goals" && p[1] && p.length === 2) {
       const gid = goalId.parse(p[1]);

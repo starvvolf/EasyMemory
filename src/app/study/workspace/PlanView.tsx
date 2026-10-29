@@ -1,9 +1,8 @@
 "use client";
 // 일정: 이번 주 시간표(공부한 시간, 할 일, 기한), 할 일, 기한. 기한을 넣을 때는 먼저 "시험이나 기한이 있나요?"를 묻고,
 // 있으면 그날까지 날짜별로 나눠 할 일을 만든다. 없으면 복습 간격대로 간다.
-// 2026-10-28 "4개 축": 시험·마감은 목표의 날짜다. 목표를 고르면 그 목표에 날짜가 붙고 그 목표의 지식으로 나눈다.
 import { useCallback, useEffect, useState } from "react";
-import { call, errorText, folderPaths, later, type GoalView, type Tree } from "./api";
+import { call, errorText, folderPaths, later, type Tree } from "./api";
 
 type Session = { id: string; start: string; end: string; minutes: number; label: string };
 type Todo = { id: string; text: string; date: string | null; done: boolean; origin: "user" | "schedule" | "agent"; deadlineId: string | null };
@@ -93,22 +92,19 @@ function Deadlines({ tree, week, onAct }: { tree: Tree; week: Week; onAct: (run:
   const blank = { title: "", date: "", scope: "", amount: 0, unit: "쪽" };
   const [f, setF] = useState(blank);
   const [list, setList] = useState<Deadline[]>([]);
-  const [goals, setGoals] = useState<GoalView[]>([]);
   const load = useCallback(async () => {
     try { setList((await call<{ deadlines: Deadline[] }>("/api/schedule/deadlines")).deadlines); } catch { setList([]); }
-    try { setGoals((await call<{ goals: GoalView[] }>("/api/knowledge/goals")).goals.filter((g) => !g.closed)); } catch { setGoals([]); }
   }, []);
   useEffect(() => later(() => void load()), [load, week]);
   const paths = folderPaths(tree.folders);
-  const goal = f.scope.startsWith("goal:") ? goals.find((g) => g.id === f.scope.slice(5)) : undefined;
   const folderId = f.scope.startsWith("folder:") ? f.scope.slice(7) : "";
-  const scoped = Boolean(goal || folderId);
-  const send = () => call("/api/schedule/deadlines", goal ? { goalId: goal.id, date: f.date, plan: true }
-    : { title: f.title, date: f.date, folderId: folderId || null, amount: folderId ? 0 : f.amount, unit: f.unit, plan: true });
+  const scoped = Boolean(folderId);
+  // 목표는 없앴다(2026-10-30): 기한은 주제(폴더) 또는 분량으로만.
+  const send = () => call("/api/schedule/deadlines", { title: f.title, date: f.date, folderId: folderId || null, amount: folderId ? 0 : f.amount, unit: f.unit, plan: true });
   return (
     <section className="panel stack">
       <b>기한</b>
-      {step === "" ? <button className="btn small" onClick={() => setStep("ask")}>+ 공부 목표 넣기</button> : null}
+      {step === "" ? <button className="btn small" onClick={() => setStep("ask")}>+ 기한 넣기</button> : null}
       {step === "ask" ? (
         <div className="stack"><p>시험이나 기한이 있나요?</p>
           <div className="row"><button className="btn primary small" onClick={() => setStep("form")}>있어요</button><button className="btn small" onClick={() => setStep("none")}>없어요</button></div></div>
@@ -117,14 +113,12 @@ function Deadlines({ tree, week, onAct }: { tree: Tree; week: Week; onAct: (run:
       {step === "form" ? (
         <form className="stack" onSubmit={(e) => { e.preventDefault(); void onAct(send).then(() => { setStep(""); setF(blank); void load(); }); }}>
           <label className="row small">무엇의 기한인가요
-            <select className="ws-select" value={f.scope} onChange={(e) => { const g = goals.find((x) => `goal:${x.id}` === e.target.value); setF({ ...f, scope: e.target.value, date: g?.date ?? f.date }); }}>
-              <option value="">목표 없이 분량으로 적기</option>
-              {goals.length ? <optgroup label="목표 (그 목표의 지식으로 나눠요)">{goals.map((g) => <option key={g.id} value={`goal:${g.id}`}>{g.name} · 지식 {g.counts.total}개{g.date ? ` · ${g.date}` : ""}</option>)}</optgroup> : null}
+            <select className="ws-select" value={f.scope} onChange={(e) => setF({ ...f, scope: e.target.value })}>
+              <option value="">분량으로 적기</option>
               {paths.length ? <optgroup label="주제">{paths.map((p) => <option key={p.id} value={`folder:${p.id}`}>{p.path}</option>)}</optgroup> : null}
             </select></label>
-          {!goal ? <input className="ws-input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="이름 (예: 한국사 중간고사)" required /> : null}
+          <input className="ws-input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="이름 (예: 한국사 중간고사)" required />
           <label className="row small">날짜 <input className="ws-input pl-date" type="date" value={f.date} min={week.today} onChange={(e) => setF({ ...f, date: e.target.value })} required /></label>
-          {goal ? <p className="small muted">‘{goal.name}’ 목표의 날짜가 {f.date || "이 날"}로 바뀌어요. 지식창의 목표 카드에도 D-day가 떠요.</p> : null}
           {!scoped ? <label className="row small">분량 <input className="ws-input pl-num" type="number" min={1} max={1000} value={f.amount || ""} onChange={(e) => setF({ ...f, amount: Number(e.target.value) })} required />
             <select className="ws-select" value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}>{["쪽", "강", "장", "문제", "단원"].map((u) => <option key={u}>{u}</option>)}</select></label> : null}
           <p className="small muted">기한 전날까지 날짜별로 나눠 할 일로 넣고, 마지막 날은 전체 훑기와 약한 것 몰아 보기로 잡아요.</p>
@@ -132,9 +126,9 @@ function Deadlines({ tree, week, onAct }: { tree: Tree; week: Week; onAct: (run:
         </form>
       ) : null}
       <ul className="pl-dls">{list.map((d) => { const n = dleft(d.date, week.today); return (
-        <li key={d.id} className="row"><span className={`chip ${n < 0 ? "" : n <= 3 ? "bad" : "help"}`}>{n < 0 ? "지남" : n === 0 ? "오늘" : `D-${n}`}</span><b>{d.title}</b><span className="small muted">{d.date}{d.goalId ? " · 목표" : d.folderId ? ` · ${paths.find((p) => p.id === d.folderId)?.path ?? "폴더"}` : d.amount ? ` · ${d.amount}${d.unit}` : ""}</span>
+        <li key={d.id} className="row"><span className={`chip ${n < 0 ? "" : n <= 3 ? "bad" : "help"}`}>{n < 0 ? "지남" : n === 0 ? "오늘" : `D-${n}`}</span><b>{d.title}</b><span className="small muted">{d.date}{d.folderId ? ` · ${paths.find((p) => p.id === d.folderId)?.path ?? "폴더"}` : d.amount ? ` · ${d.amount}${d.unit}` : ""}</span>
           {n > 0 ? <button className="btn ghost small" onClick={() => void onAct(() => call(`/api/schedule/deadlines/${d.id}/schedule`, {}))}>다시 나누기</button> : null}
-          <button className="kw-x" aria-label={d.goalId ? "목표에서 날짜 빼기" : "기한 지우기"} title={d.goalId ? "목표와 지식은 남고 날짜만 빠져요" : undefined} onClick={() => void onAct(async () => { await call(`/api/schedule/deadlines/${d.id}`, undefined, "DELETE"); await load(); })}>×</button></li>); })}</ul>
+          <button className="kw-x" aria-label="기한 지우기" onClick={() => void onAct(async () => { await call(`/api/schedule/deadlines/${d.id}`, undefined, "DELETE"); await load(); })}>×</button></li>); })}</ul>
     </section>
   );
 }

@@ -1,9 +1,9 @@
 // 점검 보고서 (2026-10-28): the whole knowledge store as one markdown text — a summary, checks that should all pass,
-// then every item under its 주제, the 목표 and 자료. For a person to read and see that the store is sound, or to paste
+// then every item under its 주제, and the 자료 (목표는 2026-10-30에 없앴다). For a person to read and see that the store is sound, or to paste
 // to someone. Read-only, no model call: GET /api/knowledge/report (?download=1 for a .md file).
 import { dupeStatus } from "./dedupe.ts";
 import { vectorStatus } from "./embed.ts";
-import { goalOverview, goalsOfItems, listGoals, listMaterials } from "./goals.ts";
+import { listMaterials } from "./goals.ts";
 import { KIND_LABEL, REVIEW_BOXES, STATE_LABEL, normalize, pathOf, readAll, readEvents, dayOf, type Knowledge } from "./store.ts";
 
 const SOURCE = { pdf: "PDF", web: "웹 글", code: "코드 문제", chat: "대화", manual: "직접" } as const;
@@ -12,12 +12,10 @@ const meaningOf = (i: Knowledge) => i.body.split("\n").map((l) => l.trim()).find
 
 export async function knowledgeReport(now = new Date()) {
   const { folders, items } = await readAll();
-  const [events, dupes, goals, overview, materials, itemGoals] = await Promise.all([readEvents(), dupeStatus(), listGoals(), goalOverview(now), listMaterials(), goalsOfItems()]);
+  const [events, dupes, materials] = await Promise.all([readEvents(), dupeStatus(), listMaterials()]);
   const vectors = await vectorStatus(items);
   const byId = new Map(items.map((i) => [i.id, i]));
   const folderIds = new Set(folders.map((f) => f.id));
-  const goalName = new Map(goals.map((g) => [g.id, g.name]));
-  const goalsOf = new Map(Object.entries(itemGoals).map(([id, gs]) => [id, gs.map((g) => goalName.get(g) ?? "?")]));
 
   /* ---------- 점검 ---------- */
   type Check = { name: string; bad: string[]; note?: string; warnOnly?: boolean };
@@ -47,7 +45,6 @@ export async function knowledgeReport(now = new Date()) {
   add("졸업한 지식은 앎 상태다", items.filter((i) => i.graduated && i.state !== "known").map((i) => `${i.title} (${STATE_LABEL[i.state]})`));
   add("기록이 있는 지식을 가리킨다", [...new Set(events.filter((e) => !byId.has(e.knowledgeId)).map((e) => e.knowledgeId))].map((id) => `기록 ${events.filter((e) => e.knowledgeId === id).length}개 → (없는 지식 ${id})`),
     { warnOnly: true, note: "지운·합친 지식의 옛 기록일 수 있어요." });
-  add("목표에 손으로 넣은 지식이 있다", goals.flatMap((g) => g.itemIds.filter((id) => !byId.has(id)).map((id) => `${g.name} → (없는 지식 ${id})`)));
   add("임베딩이 지금 이름·뜻과 맞다", vectors.stale ? [`${vectors.stale}개가 아직 없거나 옛 글자 기준`] : [], { warnOnly: true, note: "다음 \"뜻이 비슷한 지식 찾기\"나 같은 지식 찾기 때 새로 만들어요." });
   add("임베딩에 지운 지식이 남아 있지 않다", vectors.orphan ? [`${vectors.orphan}개`] : [], { warnOnly: true });
   const openPairs = dupes.pairs.filter((p) => p.status === "open" && byId.has(p.newId) && byId.has(p.otherId));
@@ -70,7 +67,6 @@ export async function knowledgeReport(now = new Date()) {
     `| 종류 | ${[...Object.values(KIND_LABEL), "정리 대기"].map((k) => `${k} ${items.filter((i) => kindName(i) === k).length}`).filter((s) => !s.endsWith(" 0")).join(" · ") || "-"} |`,
     `| 주제 | 맨 위 ${folders.filter((f) => !f.parentId).map((f) => f.name).join(", ") || "-"} · 폴더 ${folders.length}개 |`,
     `| 지금 복습 차례 | ${due}개 |`,
-    `| 목표 | ${goals.filter((g) => !g.closed).length}개 열림${goals.some((g) => g.closed) ? `, ${goals.filter((g) => g.closed).length}개 닫힘` : ""} · 목표 없는 자료 ${materials.filter((m) => !m.goals.length && !m.ignored).length}개 |`,
     `| 기록 | ${events.length}개 (마지막 ${events.at(-1) ? dayOf(events.at(-1)!.at) : "-"}) |`,
     `| 같은 지식 찾기 | 거친 지식 ${items.filter((i) => checked.has(i.id)).length}개 · 같음 의심 ${dupes.pairs.filter((p) => p.verdict === "same").length}쌍(확인 안 함 ${openPairs.length}) · 가까움 ${dupes.pairs.filter((p) => p.status === "near").length}쌍 |`,
     `| 고리 종류 | ${[...new Set(items.flatMap((i) => i.links.map((l) => l.relation)))].map((r) => `${r} ${items.reduce((n, i) => n + i.links.filter((l) => l.relation === r).length, 0)}`).join(" · ") || "-"} |`,
@@ -99,7 +95,6 @@ export async function knowledgeReport(now = new Date()) {
     if (links.length) extra.push(`고리: ${links.slice(0, 6).join(", ")}${links.length > 6 ? " …" : ""}`);
     const srcs = [...new Set(i.sources.map((s) => `${SOURCE[s.kind] ?? s.kind} ${one(s.title, 30)}`))];
     if (srcs.length) extra.push(`출처: ${srcs.slice(0, 3).join(", ")}${srcs.length > 3 ? ` 외 ${srcs.length - 3}` : ""}`);
-    if (goalsOf.get(i.id)?.length) extra.push(`목표: ${goalsOf.get(i.id)!.join(", ")}`);
     if (i.placedByHand) extra.push("손으로 옮김");
     return `- ${parts.join(" · ")} — ${extra.join(" | ")}`;
   };
@@ -113,20 +108,11 @@ export async function knowledgeReport(now = new Date()) {
   const loose = items.filter((i) => !i.folderId || !folderIds.has(i.folderId));
   if (loose.length) out.push(`### 주제 없음 (${loose.length})`, "", ...loose.map(itemLine), "");
 
-  /* ---------- 목표·자료 ---------- */
-  out.push("## 목표", "");
-  if (!overview.length) out.push("(없음)");
-  for (const g of overview) {
-    const c = g.counts;
-    out.push(`- **${g.name}**${g.closed ? " (닫힘)" : ""} · ${g.date ? `${g.date}${g.daysLeft !== null ? ` (${g.daysLeft >= 0 ? `D-${g.daysLeft}` : "지남"})` : ""}` : "날짜 없음"} · 지식 ${c.total} (몰랐음 ${c.unknown} · 앎 ${c.known} · 만남 ${c.met} · 졸업 ${c.graduated} · 복습 차례 ${c.due})`
-      + ` — 자료: ${g.sources.map((s) => `${SOURCE[s.kind] ?? s.kind} ${one(s.title, 30)}`).join(", ") || "없음"}${g.itemIds.length ? ` · 손으로 넣은 지식 ${g.itemIds.length}` : ""}`);
-  }
-  out.push("", "## 자료", "");
+  /* ---------- 자료 ---------- */
+  out.push("## 자료", "");
   if (!materials.length) out.push("(없음)");
   for (const m of [...materials].sort((a, b) => b.lastAt.localeCompare(a.lastAt))) {
-    const where = m.goals.length ? `목표: ${m.goals.map((id) => goals.find((g) => g.id === id)?.name ?? "?").join(", ")}`
-      : m.ignored ? "목표 없이 둠" : m.suggestion ? (m.suggestion.name ? `추천: ${m.suggestion.name} (${one(m.suggestion.reason, 40)})` : "맞는 목표 못 찾음") : "추천 기다림";
-    out.push(`- ${SOURCE[m.kind] ?? m.kind} **${one(m.title, 50)}** · 지식 ${m.items} · ${where}`);
+    out.push(`- ${SOURCE[m.kind] ?? m.kind} **${one(m.title, 50)}** · 지식 ${m.items}`);
   }
   out.push("");
   return { markdown: out.join("\n"), fails, warns };

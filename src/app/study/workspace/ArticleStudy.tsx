@@ -65,32 +65,8 @@ export function ArticleMap({ source, onChanged }: { source: SourceView; onChange
       </div>
       {map.consider.length ? <details className="ws-fold"><summary>생각해 볼 점 {map.consider.length}</summary><ul className="small am-consider">{map.consider.map((c, i) => <li key={i}>{c}</li>)}</ul>
         <p className="small muted">글에 없는 AI의 의견이에요. 글의 내용과 따로 봐 주세요.</p></details> : null}
-      <GoalPlace source={source} />
       {error ? <p className="ws-err">{error}</p> : null}
     </div>
-  );
-}
-
-/** 목표·기한에 넣기 (웹 글은 기한이 보통 없어 접어 둔다): 이 글을 목표에 넣으면 이 글의 지식이 그 목표로 따라간다. */
-function GoalPlace({ source }: { source: SourceView }) {
-  const [goals, setGoals] = useState<Array<{ id: string; name: string; closed: boolean }> | null>(null);
-  const [name, setName] = useState("");
-  const [note, setNote] = useState("");
-  const load = async () => { try { setGoals((await call<{ goals: Array<{ id: string; name: string; closed: boolean }> }>("/api/knowledge/goals")).goals.filter((g) => !g.closed)); } catch { setGoals([]); } };
-  const put = async (goalId: string, label: string) => {
-    try { await call(`/api/knowledge/goals/${goalId}/source`, { kind: "web", title: source.title, ...(source.url ? { url: source.url } : {}), on: true }); setNote(`‘${label}’ 목표에 넣었어요. 기한은 일정에서 정할 수 있어요.`); }
-    catch (e) { setNote(errorText(e)); }
-  };
-  return (
-    <details className="ws-fold" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open && !goals) void load(); }}><summary>목표·기한에 넣기 (시험이나 수업 자료라면)</summary>
-      <div className="row small">
-        {goals?.length ? <select className="ws-select" value="" aria-label="목표에 넣기" onChange={(e) => { const g = goals.find((x) => x.id === e.target.value); if (g) void put(g.id, g.name); }}>
-          <option value="">있는 목표에…</option>{goals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select> : null}
-        <form className="row" onSubmit={(e) => { e.preventDefault(); if (name.trim()) void call<{ goal: { id: string } }>("/api/knowledge/goals", { name: name.trim() }).then((r) => put(r.goal.id, name.trim())).catch((err) => setNote(errorText(err))); }}>
-          <input className="ws-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="새 목표 이름" maxLength={60} /><button className="btn small" disabled={!name.trim()}>만들어 넣기</button></form>
-      </div>
-      {note ? <p className="small muted">{note}</p> : null}
-    </details>
   );
 }
 
