@@ -2,9 +2,12 @@
   "name": "recaller-project-course",
   "private": true,
   "type": "module",
-  "description": "D 스레드 실험: 프로젝트 코스(게시판 API). 앱과 따로 도는 시제품. 의존 패키지 없음(Node 22.13 이상).",
+  "description": "D 스레드 실험: 프로젝트 코스(게시판 API). 앱과 따로 도는 시제품. 튜터 엔진은 OpenCode(@opencode/sdk, Node 24 이상, 이 폴더의 .node24로 돈다). 없으면 의존 없이 기본 엔진(Node 22.13 이상).",
   "scripts": {
     "start": "node --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON server/main.ts",
     "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@opencode/sdk": "2.2.1"
   }
 }

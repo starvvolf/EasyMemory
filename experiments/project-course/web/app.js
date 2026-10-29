@@ -67,7 +67,7 @@ async function loadStatus() {
   const chip = $("#aiChip");
   chip.className = "chip " + (ai.mode === "off" ? "" : ai.used >= ai.limit ? "bad" : "acc");
   chip.textContent = ai.mode === "off" ? "AI 꺼짐 · 준비된 힌트" : ai.mode === "fake" ? "AI 가짜(시험용)" : `AI ${ai.used}/${ai.limit}회`;
-  chip.title = ai.mode === "app" ? "앱(3000)과 같은 ChatGPT 로그인을 써요. 이 실험의 허용 횟수예요." : "";
+  chip.title = (ai.mode === "app" ? "앱(3000)과 같은 ChatGPT 로그인을 써요. 이 실험의 허용 횟수예요." : "") + (status.engine ? ` 튜터 엔진: ${status.engine}` : "");
   const pick = $("#runPick");
   pick.innerHTML = "";
   pick.append(h("option", { value: "" }, status.runs.length ? "진행 중인 코스…" : "진행 중인 코스 없음"));

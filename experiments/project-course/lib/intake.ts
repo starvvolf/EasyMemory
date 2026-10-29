@@ -121,8 +121,22 @@ export async function answer(id: string, input: { text?: string; choice?: number
   return it;
 }
 function scriptLead(ask: Ask, p: Profile) {
-  if (ask.id === "level" && p.goal) return "좋아요.";
+  if (ask.id === "level" && p.goal) return goalReply(p.goal);
   return "";
+}
+/** 정해진 질문 모드에서도 적은 목표에 맞춰 한마디(지금 준비된 코스는 게시판 API 하나). */
+export function goalReply(goal: string) {
+  const g = goal.toLowerCase();
+  const hits = [
+    [/게시판|글\s*(쓰|올)|crud|포스트|post|댓글/, "글 쓰기·읽기·고치기·지우기(CRUD)"],
+    [/로그인|회원|가입|인증|auth|세션|쿠키/, "회원가입·로그인"],
+    [/권한|내\s*글|남의\s*글|작성자/, "내 글만 고칠 수 있게 막는 권한 검사"],
+    [/서버|api|백엔드|backend|http|node/, "서버와 HTTP 요청"],
+    [/db|데이터베이스|sql|저장/, "SQLite에 저장하기"],
+  ].filter(([re]) => (re as RegExp).test(g)).map(([, t]) => t as string);
+  if (hits.length >= 2 || (hits.length && /게시판/.test(g))) return `딱 맞는 코스가 있어요. "게시판 API 만들기"에서 ${hits.join(", ")}까지 직접 만들어요. 몇 가지만 더 여쭤볼게요.`;
+  if (hits.length) return `좋아요. "게시판 API 만들기" 코스에서 ${hits[0]}도 직접 다뤄요. 몇 가지만 더 여쭤볼게요.`;
+  return "좋아요. 지금 준비된 코스는 게시판 API 하나예요. 서버의 기본(요청·저장·로그인·권한)을 직접 만들어 보면 다른 것을 만들 때도 그대로 쓰여요. 몇 가지만 더 여쭤볼게요.";
 }
 
 /* ---------- AI 대화 한 턴 ---------- */

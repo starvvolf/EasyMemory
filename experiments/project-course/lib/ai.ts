@@ -48,6 +48,21 @@ function loadAssist(): Promise<Assist> {
   return assist;
 }
 
+/** OpenCode 엔진용: 앱과 같은 ChatGPT 로그인의 지금 쓸 수 있는 접근 토큰(갱신 포함). 메모리에서만 쓴다. */
+export async function chatGptBearer(): Promise<string> {
+  await loadAssist();
+  const auth = await import(pathToFileURL(path.join(APP_ROOT, "src", "lib", "ai", "chatgpt-auth.ts")).href) as { chatGptAccessToken: (uid: string) => Promise<string> };
+  const assistMod = await import(pathToFileURL(path.join(APP_ROOT, "src", "lib", "assist", "model.ts")).href) as { LOCAL_CALLER: { uid: string } };
+  try { return await auth.chatGptAccessToken(assistMod.LOCAL_CALLER.uid); }
+  catch (error) { throw explain(error); }
+}
+/** 다른 엔진(OpenCode)이 부른 AI 호출도 같은 한도에 센다. */
+export async function aiBudget(purpose: string) { if (aiMode() === "app") await budget(purpose); }
+export async function countCalls(purpose: string, n: number, ok = true) {
+  if (aiMode() !== "app" || n <= 0) return;
+  await update<Usage>(USAGE(), { count: 0, calls: [] }, (u) => { u.count += n; u.calls.push({ at: new Date().toISOString(), purpose, ok, note: n > 1 ? `${n}회` : undefined }); });
+}
+
 let fakeReply: ((purpose: string, user: string) => unknown) | null = null;
 /** 테스트용: 호출 없이 정해 둔 답. */
 export function setFakeAi(fn: typeof fakeReply) { fakeReply = fn; }

@@ -37,7 +37,9 @@ AI와 함께 소프트웨어를 만들되, 그 과정에서 배운 원리를 직
 | `lib/proc.ts` | 실습 서버 켜기·끄기, 포트 확인, 코스 서버가 꺼질 때 정리 |
 | `lib/intake.ts` | 코스 정하기 (AI 대화 / 대본, 진단, 계획) |
 | `lib/learn.ts` | 단계 진행, 기록 후보 만들기, 힌트, 실습 서버, VS Code 열기 |
-| `lib/ai.ts` | 앱 모델 호출 다리 + 20회 한도 (`.data/ai-usage.json`) |
+| `lib/ai.ts` | 앱 모델 호출 다리 + 50회 한도 (`.data/ai-usage.json`) |
+| `lib/oc-engine.ts` | 튜터 엔진: OpenCode(`@opencode/sdk` 2.2.1)를 같은 프로세스에 띄우고 교육 정책(읽기·우리 도구만 허용, 고치기는 기록하고 직접 통과 아님, 명령 실행·웹 막음)·VS Code·기록을 플러그인으로 붙인다. Node 24 이상 + 설치돼 있을 때만, 아니면 `lib/agent.ts`의 작은 루프 |
+| `lib/agent.ts` | 튜터 도구(VS Code 열기·실습 서버·요청·검사·고치기)와 기본 엔진 |
 | `lib/store.ts` | 진도(`runs.json`), 기록 후보(`records/<run>.jsonl`) |
 | `server/main.ts`, `web/` | 코스 서버와 화면 |
 

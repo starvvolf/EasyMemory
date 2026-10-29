@@ -3,3 +3,7 @@ opencode-exp/node_modules/
 opencode-exp/.node24/
 opencode-exp/package-lock.json
 opencode-exp/*.log
+node_modules
+.node24/
+package-lock.json
+install-*.log

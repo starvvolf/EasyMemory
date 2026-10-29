@@ -93,7 +93,7 @@ type Handler = (req: IncomingMessage, m: RegExpExecArray, url: URL) => Promise<u
 const routes: [string, RegExp, Handler][] = [
   ["GET", /^\/api\/status$/, async () => {
     const f = await runs();
-    return { node: nodeSupport(), ai: await aiStatus(), active: f.active ?? null, ports: PORTS,
+    return { node: nodeSupport(), ai: await aiStatus(), engine: await import("../lib/oc-engine.ts").then((m) => m.engineName()).catch(() => "기본"), active: f.active ?? null, ports: PORTS,
       runs: await Promise.all(f.runs.slice(-10).reverse().map(async (r) => {
         const course = await loadCourse(r.courseId).catch(() => null);
         const st = course?.stages.find((s) => s.n === r.current);

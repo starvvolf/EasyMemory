@@ -27,8 +27,8 @@ export type AgentIO = {
   quiet: (ms: number) => void;
 };
 
-const TOOLS = ["list_files", "read_file", "open_in_editor", "start_server", "send_request", "run_checks", "edit_file", "none"] as const;
-type ToolName = (typeof TOOLS)[number];
+export const TOOLS = ["list_files", "read_file", "open_in_editor", "start_server", "send_request", "run_checks", "edit_file", "none"] as const;
+export type ToolName = (typeof TOOLS)[number];
 
 const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친절한 강사이자, 학습자의 프로젝트 폴더를 직접 다룰 수 있는 개발자다.
 목표는 대신 개발해 주는 게 아니라, 개발자가 어떻게 확인하고 고치는지 보여 주며 가르치는 것이다.
@@ -54,7 +54,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 const SCHEMA = S.obj({ say: S.str, tool: S.oneOf(...TOOLS), args: S.str });
 type Step = { say: string; tool: ToolName; args: string };
 
-const safePath = (ws: string, p: string) => {
+export const safePath = (ws: string, p: string) => {
   const rel = String(p || "").replace(/\\/g, "/").replace(/^\.?\//, "");
   if (!rel || rel.includes("..") || path.isAbsolute(rel) || rel.startsWith(".recaller") || rel.startsWith("node_modules")) throw new Error(`이 경로는 다룰 수 없어요: ${p}`);
   return { rel, abs: path.join(ws, ...rel.split("/")) };
@@ -78,8 +78,8 @@ async function listFiles(ws: string) {
 }
 
 /* ---------- 고친 것 되돌리기 ---------- */
-const editsDir = (runId: string) => path.join(DATA, "agent-edits", runId);
-type EditRecord = { id: string; file: string; before: string; after: string; at: string };
+export const editsDir = (runId: string) => path.join(DATA, "agent-edits", runId);
+export type EditRecord = { id: string; file: string; before: string; after: string; at: string };
 
 export async function undoEdit(runId: string, ws: string, id: string) {
   const rec = await read<EditRecord | null>(path.join(editsDir(runId), `${id}.json`), null);
@@ -92,7 +92,7 @@ export async function undoEdit(runId: string, ws: string, id: string) {
 }
 
 /* ---------- 도구 실행 ---------- */
-async function runTool(io: AgentIO, tool: ToolName, args: Record<string, unknown>): Promise<string> {
+export async function runTool(io: AgentIO, tool: ToolName, args: Record<string, unknown>): Promise<string> {
   const { runId, n, ws } = io;
   if (tool === "list_files") {
     const files = await listFiles(ws);
@@ -167,8 +167,14 @@ async function runTool(io: AgentIO, tool: ToolName, args: Record<string, unknown
   return "";
 }
 
-/** 질문 하나에 대한 에이전트 실행. 마지막 답(문장)을 돌려준다. */
+/** 질문 하나에 대한 에이전트 실행. 마지막 답(문장)을 돌려준다.
+ *  엔진: OpenCode(Node 24 이상 + 설치돼 있을 때, 2026-10-30 사용자 결정) → 없으면 아래의 작은 자체 루프. */
 export async function runAgent(io: AgentIO, question: string): Promise<string> {
+  const oc = await import("./oc-engine.ts").then((m) => m.ready()).catch(() => null);
+  if (oc) return oc.run(io, question);
+  return runAgentClassic(io, question);
+}
+export async function runAgentClassic(io: AgentIO, question: string): Promise<string> {
   let files = "";
   try { files = (await listFiles(io.ws)).join(", "); } catch { /* */ }
   const transcript: string[] = [];
