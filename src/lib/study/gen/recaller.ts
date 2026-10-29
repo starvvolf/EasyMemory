@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
-import { cardKinds, cardLine, cardSchema, checkCards, ORGANIZE, organizeSchema, organizeUser, type Card, type CardIssue } from "./cards.ts";
+import { cardKinds, cardLine, cardSchema, checkCards, INTENT_PASS, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
@@ -71,7 +71,9 @@ const solveReplySchema = z.object({ answers: z.array(z.object({ choice: z.number
 export type RcQuestion = { objectiveId: string; sectionId: string; tier: "basic" | "deep"; cardIds: string[]; format: (typeof formats)[number]; goal: string;
   authored: AuthoredReplyQuestion; pages: number[]; quotes: string[]; kind: ObjectiveKind; core: boolean;
   steps?: Step[]; distractors?: Array<{ option: number; step?: number; mistake: string }>; checks: string[] };
-type Chunk = { cards?: Card[]; issues?: CardIssue[]; questions?: RcQuestion[]; held?: Array<{ cardId: string; reason: string }> };
+type Chunk = { cards?: Card[]; issues?: CardIssue[];
+  /** lab.intent: what each page of the chunk is there to do (쪽 의도), decided before its cards. */
+  intents?: Array<{ page: number; intent: PageIntent; continues: number | null }>; questions?: RcQuestion[]; held?: Array<{ cardId: string; reason: string }> };
 /** A section: its chunks (two pages each) and, gathered from them in page order, its cards and questions. */
 type Unit = Chunk & { status: "waiting" | "organizing" | "authoring" | "ready" | "failed"; chunks?: Record<string, Chunk>; error?: string };
 export type RecallerState = {
@@ -87,6 +89,8 @@ export type RecallerState = {
   dups?: Record<string, string>;
   warnings: Issue[];
   /** 연구 1 3번(나), 실험: the whole-material pass over the cards — a specific name, the earlier card it repeats, a topic. Cards are not changed. */
+  /** lab.intentPass: every page's intent and gist from the first short pass, and how long it took. */
+  intents?: { ms: number; pages: Array<{ page: number; intent: PageIntent; continues: number | null; gist: string }> };
   consolidated?: { ms: number; error?: string; cards: Array<{ id: string; title: string; sameAs: string | null; topic: string; weight?: "핵심" | "보조"; links?: Array<{ to: string; why: string }> }> };
   timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string;
     /** 연구 1: when each page's reading and cards were done (the first pass over the material). */
@@ -641,10 +645,15 @@ export async function runRecaller(ctx: RecallerContext) {
     const slotted = new Set<string>();
     const idOf = (id: string) => `${section.id}.${k + 1}${id}`;
     // A card already finished in the stream goes to authoring now, if it is one that gets a question and its quotes are real.
+    // lab.intent: the pages' intents come first in the reply; a card resting only on a cover, preview or guide page is dropped.
+    const silent = new Set<number>();
+    const noteIntents = (items: unknown[]) => { for (const it of items) { const x = it as { page?: number; intent?: PageIntent }; if (x.page && x.intent && NO_CARD_INTENTS.includes(x.intent)) silent.add(x.page); } };
+    if (lab.intentPass) noteIntents(data.intents?.pages ?? []);
+    const onSilentPage = (card: { evidence: Array<{ page: number }> }) => (lab.intent === true || lab.intentPass === true) && card.evidence.every((e) => silent.has(e.page));
     const startCard = (raw: unknown) => {
       if (lab.skimOnly) return;
       const parsed = cardSchema.safeParse(raw);
-      if (!parsed.success || slotted.has(parsed.data.id)) return;
+      if (!parsed.success || slotted.has(parsed.data.id) || onSilentPage(parsed.data)) return;
       const { cards: ok } = checkCards({ cards: [parsed.data] }, { pages }, textMap(), { lenientQuotes: lab.lenientQuotes });
       if (!ok.length || !slotCards(ok, input.purpose).length) return;
       slotted.add(parsed.data.id);
@@ -670,18 +679,24 @@ export async function runRecaller(ctx: RecallerContext) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         let reply: z.infer<typeof organizeSchema>;
         try {
-          const system = `${ORGANIZE}${inlineImages.length ? `\n${INLINE_READ}` : ""}${lab.outline ? `\n${OUTLINE_HINT}` : ""}${lab.lean ? `\n${LEAN}` : ""}\n\n[정리 기준]\n${g.text}`;
+          const given = lab.intentPass && data.intents ? data.intents.pages : null;
+          const system = `${ORGANIZE}${given ? `\n${PAGE_INTENT_GIVEN}` : lab.intent ? `\n${PAGE_INTENT}` : ""}${inlineImages.length ? `\n${INLINE_READ}` : ""}${lab.outline ? `\n${OUTLINE_HINT}` : ""}${lab.lean ? `\n${LEAN}` : ""}\n\n[정리 기준]\n${g.text}`;
+          const prev = Math.min(...pages) - 1;
           const user = organizeUser({ fileName: input.fileName, section: { id: section.id, title: section.title, pages }, source: sourceOf(pages), purpose: input.purpose, note: input.note, revision,
-            terms: termLines(extractTerms(data.texts)), already: known.map((c) => c.title).slice(0, 40), ...(lab.outline ? { outline: outlineFor(pages) } : {}) });
+            terms: termLines(extractTerms(data.texts)), already: known.map((c) => c.title).slice(0, 40), ...(lab.outline ? { outline: outlineFor(pages) } : {}),
+            ...(given ? { intents: Object.fromEntries(given.filter((x) => Math.abs(x.page - Math.min(...pages)) <= 2 || pages.includes(x.page)).map((x) => [`p.${x.page}`, `${x.intent}${x.continues ? `(p.${x.continues})` : ""}${x.gist ? ` · ${x.gist}` : ""}`])) } : {}),
+            ...(lab.intent || given ? { pageTitles: Object.fromEntries(pages.map((p) => [`p.${p}`, data.prep!.pages.find((x) => x.page === p)?.title ?? ""])),
+              ...(data.texts[prev] !== undefined ? { prevPage: { page: prev, text: (data.texts[prev] ?? "").slice(0, 1500) } } : {}) } : {}) });
           const extra = { guide: g, maxChars: 6000 * pages.length, ...(inlineImages.length ? { images: inlineImages } : {}) };
-          const first = ctx.ask("rc-organize", section.id, attempt, system, user, organizeSchema, { ...extra, onPartial: (text) => { for (const raw of completeItems(text, "cards")) startCard(raw); } });
+          const schema = (lab.intent && !given ? organizeIntentSchema : organizeSchema) as typeof organizeSchema;
+          const first = ctx.ask("rc-organize", section.id, attempt, system, user, schema, { ...extra, onPartial: (text) => { if (lab.intent) noteIntents(completeItems(text, "pages")); for (const raw of completeItems(text, "cards")) startCard(raw); } });
           // lab.hedgeMs (실험): a reply still out after this long gets a second, identical request; the first to finish is used.
           reply = lab.hedgeMs ? await new Promise<z.infer<typeof organizeSchema>>((resolve, reject) => {
             let settled = false, failures = 0, started = 1;
             const win = (r: z.infer<typeof organizeSchema>) => { if (!settled) { settled = true; resolve(r); } };
             const lose = (error: unknown) => { if (++failures >= started && !settled) { settled = true; reject(error); } };
             first.then(win, lose);
-            setTimeout(() => { if (settled) return; started++; ctx.ask("rc-organize", section.id, attempt, system, user, organizeSchema, extra).then(win, lose); }, lab.hedgeMs);
+            setTimeout(() => { if (settled) return; started++; ctx.ask("rc-organize", section.id, attempt, system, user, schema, extra).then(win, lose); }, lab.hedgeMs);
           }) : await first;
         } catch (error) {
           if (!(error instanceof RunawayReply)) throw error;
@@ -691,6 +706,9 @@ export async function runRecaller(ctx: RecallerContext) {
           revision = ["앞 응답이 같은 공백을 끝없이 되풀이해 끊겼다. 카드마다 필요한 칸만 짧게 쓰고 곧바로 끝낸다."];
           continue;
         }
+        const intents = (reply as { pages?: Chunk["intents"] }).pages;
+        if (intents) { noteIntents(intents); chunk.intents = intents.filter((x) => pages.includes(x.page)); }
+        if (lab.intent || lab.intentPass) reply = { ...reply, cards: reply.cards.filter((c) => !onSilentPage(c)) };
         for (const raw of reply.cards) startCard(raw);
         result = checkCards(reply, { pages }, textMap(), { lenientQuotes: lab.lenientQuotes });
         if (!result.issues.some((i) => i.severity === "error") || result.cards.length) break;
@@ -738,6 +756,20 @@ export async function runRecaller(ctx: RecallerContext) {
     const sections = [...state.sections];
     return page === undefined ? sections : [...sections.filter((s) => s.pages.includes(page)), ...sections.filter((s) => !s.pages.includes(page))];
   };
+  // lab.intentPass: every page's intent first, in one short call over titles and text (no pictures), then 정리 follows it.
+  if (lab.intentPass && !data.intents) {
+    const t0 = Date.now();
+    const lines = data.prep!.pages.map((p) => ({ page: p.page, title: p.title, text: (data.texts[p.page] ?? "").replace(/\s+/g, " ").slice(0, 300) }));
+    try {
+      const reply = await ctx.ask("rc-intent", null, 1, INTENT_PASS, JSON.stringify({ material: input.fileName, pages: lines }), intentPassSchema, { maxChars: 120 * lines.length + 2000 });
+      const known = new Set(lines.map((l) => l.page));
+      data.intents = { ms: Date.now() - t0, pages: reply.pages.filter((x) => known.has(x.page)) };
+    } catch (error) {
+      if (pausesRun(error)) throw error;
+      data.intents = { ms: Date.now() - t0, pages: [] };
+    }
+    await save();
+  }
   const work = order().map((section) => sectionLimit(async () => {
     const unit = data.units[section.id];
     if (unit.status === "ready") return;
@@ -956,7 +988,7 @@ export function recallerFakeReply(step: GenStep, user: string): string {
     const cards = lines.slice(0, 3).map((line, i) => ({ id: `c${i + 1}`, kind: "사실", title: line.slice(0, 30), weight: "핵심",
       shape: { form: "fact", subject: line.slice(0, 20), value: line.slice(0, 80) }, evidence: [{ page: pageOf(line), quote: line.slice(0, 40) }],
       mistakes: [`${line.slice(0, 30)}를 반대로 기억함`], links: i ? [{ to: `c${i}`, kind: "앞뒤" }] : [], takes: i ? [`결과 ${i}`] : [], gives: [`결과 ${i + 1}`] }));
-    return JSON.stringify({ cards });
+    return JSON.stringify({ pages: section.pages.map((page) => ({ page, intent: "정의", continues: null })), cards });
   }
   if (step === "rc-author") {
     // The baseline asks with the source alone: six questions on its first lines.
@@ -992,6 +1024,10 @@ export function recallerFakeReply(step: GenStep, user: string): string {
   if (step === "rc-check") {
     const wrong = (u.wrong ?? []) as Array<{ part: number; option: number }>;
     return JSON.stringify({ notes: wrong.map((w) => ({ part: w.part, option: w.option, ok: true, why: "" })) });
+  }
+  if (step === "rc-intent") {
+    const pages = u.pages as Array<{ page: number; title: string }>;
+    return JSON.stringify({ pages: pages.map((p, i) => ({ page: p.page, intent: i === 0 && pages.length > 1 ? "표지" : "정의", continues: null, gist: i === 0 && pages.length > 1 ? "" : p.title.slice(0, 20) })) });
   }
   if (step === "rc-merge") {
     const cards = u.cards as Array<{ n: number; line: string }>;

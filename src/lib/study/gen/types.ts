@@ -8,11 +8,11 @@ export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", un
 /** Model calls, in order. classify and design run per section. */
 /** v3 (lab engine choice) adds read (whole PDF → outline + knowledge map), plan and gate; it does not use classify/design. */
 export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review",
-  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check", "rc-merge"] as const;
+  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check", "rc-merge", "rc-intent"] as const;
 export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
   read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)",
-  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토", "rc-merge": "자료 전체 정리" };
+  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토", "rc-merge": "자료 전체 정리", "rc-intent": "쪽 의도" };
 
 export const engines = ["v2", "v3", "astra", "v4", "v5", "alpha", "recaller"] as const;
 export type Engine = (typeof engines)[number];
@@ -113,6 +113,10 @@ export type RecallerLab = {
   lean?: boolean;
   /** A quote not found in the text layer becomes picture evidence instead of sending the page back. */
   lenientQuotes?: boolean;
+  /** 쪽 의도 먼저 (10/29): each page's intent before its cards; cover/preview/guide pages make none, a continuing page only what is new. */
+  intent?: boolean;
+  /** 쪽 의도를 먼저 한 번에 (10/29 실험): one fast call gives every page's intent and a one-line gist; 정리 gets them instead of deciding. */
+  intentPass?: boolean;
   /** Calls allowed per start (other than page readings); default grows with the sections. */
   callCap?: number;
 };
@@ -273,6 +277,8 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   // 자료 지도의 자료 전체 정리 (10/29 C, 44쪽 같은 카드로 비교): terra·low 19–22초·주제 8–9개·핵심 고르기가 기준표와 가장 가까움,
   // sol·low 28–38초·주제가 5–7개로 뭉치고 이름 충돌을 덜 고침, medium은 생각만 40초.
   "rc-merge": { model: "gpt-6.1-terra", effort: "low" },
+  // 쪽 의도 먼저 (실험, 10/29): one short pass over every page's title and text before 정리.
+  "rc-intent": { model: "gpt-6.1-terra", effort: "low" },
 };
 
 /**

@@ -267,3 +267,24 @@ test("실험: the 자료 전체 정리 alone again on a run's cards, one call", 
   assert.deepEqual((await readGenCalls(done.id)).map((c) => [c.step, c.model]), [["rc-merge", "gpt-6.1-terra"]]);
   assert.equal(done.recaller!.consolidated!.cards.length, Object.values(base.recaller!.units).reduce((n, u) => n + (u.cards?.length ?? 0), 0));
 }));
+
+test("쪽 의도 먼저 (lab.intentPass): one short pass, then a cover page makes no card and 정리 sees the intents", () => withData(async () => {
+  const three = new Map([[1, "# Computer Graphics\n- Three Dimensional Viewing lecture by someone"], ...pages].map(([p, t], i) => [i + 1, t] as [number, string]));
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "core", engine: "recaller", provider: "fake", lab: { skimOnly: true, intentPass: true } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => three });
+  assert.equal(done.status, "done", done.message);
+  const calls = await readGenCalls(done.id);
+  assert.equal(calls[0].step, "rc-intent");
+  assert.deepEqual(done.recaller!.intents!.pages.map((x) => x.intent), ["표지", "정의", "정의"]);
+  const cards = Object.values(done.recaller!.units).flatMap((u) => u.cards ?? []);
+  assert.ok(cards.length && cards.every((c) => c.evidence.some((e) => e.page !== 1)), JSON.stringify(cards.map((c) => c.evidence)));
+  assert.match(calls.find((c) => c.step === "rc-organize")!.user, /"intents"/);
+}));
+
+test("쪽 의도 (lab.intent): 정리 writes each page's intent first and it is kept", () => withData(async () => {
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", lab: { skimOnly: true, intent: true } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
+  assert.equal(done.status, "done", done.message);
+  const chunks = Object.values(done.recaller!.units).flatMap((u) => Object.values(u.chunks ?? {}));
+  assert.ok(chunks.every((c) => c.intents?.length), JSON.stringify(chunks.map((c) => c.intents)));
+}));
