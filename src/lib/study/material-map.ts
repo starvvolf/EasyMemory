@@ -27,6 +27,9 @@ export type MaterialMap = {
   sections: MapSection[]; chains: MapChain[];
   /** Larger ideas across the sections, in first-seen order (empty until the whole-material pass has run). */
   topics: string[];
+  /** 자료 전체 정리: what each topic is there to say, and ideas used across topics (with the cards that use them). */
+  topicNotes?: Record<string, string>;
+  principles?: Array<{ title: string; line: string; cardIds: string[] }>;
   counts: Record<MapState, number> & { cards: number; questions: number; core: number };
 };
 
@@ -94,5 +97,7 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
   const counts = { new: 0, met: 0, unknown: 0, known: 0, graduated: 0, cards: shown.length, questions: 0, core: 0 };
   for (const c of shown) { counts[c.state]++; counts.questions += c.questions; if (c.core) counts.core++; }
   const pages = state.input.pageNumbers?.length ? Math.max(...state.input.pageNumbers) : Math.max(0, ...state.sections.flatMap((s) => s.pages));
-  return { id: state.id, title, status: state.status, pages, sections, chains, topics, counts };
+  const principles = (rc.consolidated?.principles ?? []).map((p) => ({ ...p, cardIds: [...new Set(p.cardIds.map(root))].filter((id) => ids.has(id)) })).filter((p) => p.cardIds.length >= 2);
+  return { id: state.id, title, status: state.status, pages, sections, chains, topics, counts,
+    ...(rc.consolidated?.topicNotes ? { topicNotes: rc.consolidated.topicNotes } : {}), ...(principles.length ? { principles } : {}) };
 }

@@ -91,7 +91,9 @@ export type RecallerState = {
   /** 연구 1 3번(나), 실험: the whole-material pass over the cards — a specific name, the earlier card it repeats, a topic. Cards are not changed. */
   /** lab.intentPass: every page's intent and gist from the first short pass, and how long it took. */
   intents?: { ms: number; kind?: string; pages: Array<{ page: number; intent: PageIntent; continues: number | null; gist: string }> };
-  consolidated?: { ms: number; error?: string; cards: Array<{ id: string; title: string; sameAs: string | null; topic: string; weight?: "핵심" | "보조"; links?: Array<{ to: string; why: string }> }> };
+  consolidated?: { ms: number; error?: string; cards: Array<{ id: string; title: string; sameAs: string | null; topic: string; weight?: "핵심" | "보조"; links?: Array<{ to: string; why: string }> }>;
+    /** what each topic is there to say (one line) */ topicNotes?: Record<string, string>;
+    /** ideas the material uses again and again across its topics (10/30: "옮기고 → 변환 → 되돌리기") */ principles?: Array<{ title: string; line: string; cardIds: string[] }> };
   timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string;
     /** 연구 1: when each page's reading and cards were done (the first pass over the material). */
     readAt?: Record<string, string>; organizedAt?: Record<string, string>; skimDoneAt?: string;
@@ -140,15 +142,16 @@ const OUTLINE_HINT = "outline은 자료 전체의 쪽 제목과 앞뒤 쪽 첫 �
 // 99 s for 87 cards on 44쪽 because the reply is the time; cards are numbered n and only what differs is written.
 const MERGE = `${BASE}
 한 자료의 지식 카드 전체를 한 번에 본다(sameNames: 이름이 같은 카드 묶음). 카드는 쪽마다 따로 만들어져 중요도가 모두 높게 매겨져 있고, 겹치거나 이름이 쪽 제목 그대로인 것이 있다. 이 결과는 학습자가 시험 전에 자료 전체를 한눈에 보는 지도에 쓰인다. 카드는 번호 n으로 가리키고, 바뀌는 것만 짧게 쓴다.
-- topics: 자료의 큰 주제를 자료의 흐름 순서로 {name, cards}. name은 15자 안팎, cards는 그 주제에 속한 카드 n. 모든 카드가 정확히 한 주제에 들어간다. 카드는 쪽 순서라 한 주제는 대개 이어진 구간이다. 보통 6~12개이고, 한 주제가 15장을 넘으면 나눈다.
-- core: 시험 전날 이것만 보면 되는 중심 지식의 n, 중요한 것부터. coreMax개를 넘지 않는다. 넣는 것: 정의·절차·공식·행렬·판정 규칙·알고리즘 단계처럼 시험에서 직접 묻거나 다른 카드가 기대는 것, 두 방법의 핵심 차이. 넣지 않는 것: 개요에서 이름만 소개된 것(뒤에서 다룰 주제 예고), 응용 예·효과, 도구·API 관례, 다른 카드의 되풀이, 큰 식에서 한 성분만 떼어 낸 것. 쪽마다 따로 정한 중요도는 믿지 않는다.
+- topics: 자료의 큰 주제를 자료의 흐름 순서로 {name, gist, cards}. name은 15자 안팎, gist는 이 주제가 말하려는 것 한 줄(40자 안팎, 앞 주제와 어떻게 이어지는지가 보이게: 예 "이동은 덧셈이라 곱으로 못 묶어 3×3 동차 좌표로 바꾼다"), cards는 그 주제에 속한 카드 n. 모든 카드가 정확히 한 주제에 들어간다. 카드는 쪽 순서라 한 주제는 대개 이어진 구간이다. 보통 6~12개이고, 한 주제가 15장을 넘으면 나눈다.
+- principles: 이 자료가 여러 주제에 걸쳐 되풀이해 쓰는 원리·패턴 0~3개 {title, line, cards}. 예: 임의 점 회전·고정점 크기 변환·임의 축 회전이 모두 "원점으로 옮기고 → 기본 변환 → 되돌리기"인 것. title은 15자 안팎, line은 원리 한 문장, cards는 그 원리가 쓰인 카드 n(2개 이상). 한 주제 안에서만 쓰이거나 억지로 만든 것은 쓰지 않는다.
+- core: 시험 전날 이것만 보면 되는 중심 지식의 n, 중요한 것부터. coreMax개를 넘지 않는다. 넣는 것: 정의·절차·공식·행렬·판정 규칙·알고리즘 단계처럼 시험에서 직접 묻거나 다른 카드가 기대는 것, 두 방법의 핵심 차이. 넣지 않는 것: 개요에서 이름만 소개된 것(뒤에서 다룰 주제 예고), 응용 예·효과, 도구·API 관례, 다른 카드의 되풀이, 큰 식에서 한 성분만 떼어 낸 것. 쪽마다 따로 정한 중요도는 믿지 않는다. 핵심은 자료 전체에 고르게 고르고 한 쪽에서 셋 이상 고르지 않는다.
 - same: 앞선 카드와 사실상 같은 지식인 카드만 {n, of: 앞 카드 n}. 이름만 같고 내용이 다르면 넣지 않는다.
 - rename: 이름을 바꿔야 하는 카드만 {n, title}: 쪽 제목 그대로라 무엇을 담았는지 모르는 것, sameNames에 묶인 카드 중 같은 지식이 아닌 것(서로 구별되게), 같은 대상을 다른 카드와 다른 말로 부르는 것. 보통 카드의 5분의 1을 넘지 않는다. title은 담은 지식의 구체적인 이름이다. 원문의 전문 용어(영어 원문이면 영어 그대로)를 그대로 두고 번역하지 않는다(40자 이내).
 - links: 뜻으로 이어지는 두 카드 {a, b, why}. 카드마다 이어지는 카드를 찾아 a로 1~2개 쓴다(정말 동떨어진 카드만 빼므로 links 수는 보통 카드 수와 비슷하다). 다른 주제·다른 쪽의 카드와의 연결을 먼저 쓴다. why는 a에서 본 b가 무엇인지 12자 이내 명사구로 구체적으로 쓴다(예: "다음 단계", "바탕 개념", "결과를 쓰는 곳", "대비", "일반형", "특수한 경우", "적용 예", "같은 원리"). a·b 같은 기호나 "관련", "행렬 구성"처럼 막연한 말은 쓰지 않는다. same으로 묶은 카드끼리는 넣지 않는다.`;
 const num = z.number().int();
 // Required throughout: with structured output an optional field is simply left out (44쪽 실측, 2026-10-29).
 // Topics as lists of cards (not one number per card in order: a 90-long list drifted by one at section boundaries).
-const mergeReplySchema = z.object({ topics: z.array(z.object({ name: text, cards: z.array(num) })), core: z.array(num), same: z.array(z.object({ n: num, of: num })),
+const mergeReplySchema = z.object({ topics: z.array(z.object({ name: text, gist: z.string(), cards: z.array(num) })), principles: z.array(z.object({ title: z.string(), line: z.string(), cards: z.array(num) })), core: z.array(num), same: z.array(z.object({ n: num, of: num })),
   rename: z.array(z.object({ n: num, title: text })), links: z.array(z.object({ a: num, b: num, why: text })) });
 const CALC = "계산기는 일반 수학만 안다: 행렬은 행 단위 ((a, b), (c, d)), 행렬×행렬·행렬×벡터는 *, transpose() det() inv() eye(n), row(M, i) col(M, j) at(v, i)(1부터), 이어 붙이기 join(v, x), 판정 lt le gt ge eq and or not pick(조건, 참일 때, 거짓일 때)(참 1, 거짓 0), sind cosd tand(도). 원문의 공식·행렬은 계산기가 모르므로 먼저 정의 단계를 둔다: name에 'T(tx, ty)'처럼 이름과 매개변수, expr에 원문 식을 매개변수로, value는 '정의'. 뒤 단계에서 T(2, 3)처럼 부른다.";
 const LINK = `${BASE}
@@ -650,8 +653,10 @@ export async function runRecaller(ctx: RecallerContext) {
     // A card already finished in the stream goes to authoring now, if it is one that gets a question and its quotes are real.
     // lab.intent: the pages' intents come first in the reply; a card resting only on a cover, preview or guide page is dropped.
     const silent = new Set<number>();
-    const noteIntents = (items: unknown[]) => { for (const it of items) { const x = it as { page?: number; intent?: PageIntent }; if (x.page && x.intent && NO_CARD_INTENTS.includes(x.intent)) silent.add(x.page); } };
-    if (lab.intentPass && !lab.intentParallel) noteIntents(data.intents?.pages ?? []);
+    // A page's own call cannot tell a preview from a slide whose formulas are pictures (10/30: p.7 T·R·S 행렬, p.10 연속 회전 were
+    // dropped as 예고), so only the whole-material pass decides 예고; a page's own call may still mark a cover or a guide page.
+    const noteIntents = (items: unknown[], fromPass = false) => { for (const it of items) { const x = it as { page?: number; intent?: PageIntent }; if (x.page && x.intent && (fromPass ? NO_CARD_INTENTS.includes(x.intent) : x.intent === "표지" || x.intent === "안내")) silent.add(x.page); } };
+    if (lab.intentPass && !lab.intentParallel) noteIntents(data.intents?.pages ?? [], true);
     const onStatsPage = (card: { evidence: Array<{ page: number }> }) => input.purpose !== "all" && card.evidence.every((e) => data.intents?.pages.some((x) => x.page === e.page && x.intent === "현황"));
     const onSilentPage = (card: { evidence: Array<{ page: number }> }) => (lab.intent === true || lab.intentPass === true) && card.evidence.every((e) => silent.has(e.page));
     const startCard = (raw: unknown) => {
@@ -662,7 +667,7 @@ export async function runRecaller(ctx: RecallerContext) {
       if (!ok.length || !slotCards(ok, input.purpose).length) return;
       slotted.add(parsed.data.id);
       const card = { ...ok[0], id: idOf(ok[0].id), links: [] };
-      if (claim(card)) authoring.push(quiet(lab.intentParallel ? intentReady.then(() => { noteIntents(data.intents?.pages ?? []); return onSilentPage(card) || onStatsPage(card) ? undefined : authorOne(section, k, card); }) : authorOne(section, k, card)));
+      if (claim(card)) authoring.push(quiet(lab.intentParallel ? intentReady.then(() => { noteIntents(data.intents?.pages ?? [], true); return onSilentPage(card) || onStatsPage(card) ? undefined : authorOne(section, k, card); }) : authorOne(section, k, card)));
     };
     // inlineRead: pages that need their picture are not read first; 정리 looks at the picture itself.
     const inline = lab.inlineRead ? pages.filter((p) => (routeOf(p) === "page" || routeOf(p) === "figures") && !data.read.done.includes(p)) : [];
@@ -714,7 +719,7 @@ export async function runRecaller(ctx: RecallerContext) {
         }
         const intents = (reply as { pages?: Chunk["intents"] }).pages;
         if (intents) { noteIntents(intents); chunk.intents = intents.filter((x) => pages.includes(x.page)); }
-        if (lab.intentParallel) noteIntents(data.intents?.pages ?? []);
+        if (lab.intentParallel) noteIntents(data.intents?.pages ?? [], true);
         if (lab.intent || lab.intentPass) reply = { ...reply, cards: reply.cards.filter((c) => !onSilentPage(c)) };
         // 현황 (시점 수치) pages, as the first pass saw them: their cards are 보조 (no basic question by default).
         const stats = new Set((data.intents?.pages ?? []).filter((x) => x.intent === "현황").map((x) => x.page));
@@ -734,7 +739,7 @@ export async function runRecaller(ctx: RecallerContext) {
       // turn 보조 (10/30: the intent pass once took 21 s, and the map stayed empty that long while it waited).
       if (lab.intentParallel) {
         await intentReady;
-        noteIntents(data.intents?.pages ?? []);
+        noteIntents(data.intents?.pages ?? [], true);
         const stats = new Set((data.intents?.pages ?? []).filter((x) => x.intent === "현황").map((x) => x.page));
         chunk.cards = chunk.cards.filter((c) => !onSilentPage(c)).map((c) => stats.size && c.evidence.every((e) => stats.has(e.page)) ? { ...c, weight: "보조" as const } : c);
         collect(unit);
@@ -764,8 +769,12 @@ export async function runRecaller(ctx: RecallerContext) {
     if (all.length < 2) return;
     const t0 = Date.now();
     const reply = await ctx.ask("rc-merge", null, 1, MERGE, JSON.stringify({ material: input.fileName, count: all.length, coreMax: coreMax(all.length), sameNames: sameNames(all), outline: data.prep!.pages.map((p) => `p.${p.page} ${p.title}`),
-      cards: all.map((c, n) => ({ n, pages: [...new Set(c.evidence.map((e) => e.page))], line: cardLine(c).replace(/ ⟨받음:.*$/, "").slice(0, 220) })) }), mergeReplySchema, { maxChars: 140 * all.length + 3000 });
-    data.consolidated = { ms: Date.now() - t0, cards: unfoldMerge(reply, all) };
+      cards: all.map((c, n) => ({ n, pages: [...new Set(c.evidence.map((e) => e.page))], line: cardLine(c).replace(/ ⟨받음:.*$/, "").slice(0, 220) })) }), mergeReplySchema, { maxChars: 140 * all.length + 5000 });
+    const ok = (n: number) => Number.isInteger(n) && n >= 0 && n < all.length;
+    data.consolidated = { ms: Date.now() - t0, cards: unfoldMerge(reply, all),
+      topicNotes: Object.fromEntries(reply.topics.filter((t) => t.name.trim() && t.gist.trim()).map((t) => [t.name.trim(), t.gist.trim().slice(0, 120)])),
+      principles: reply.principles.filter((p) => p.title.trim() && p.cards.filter(ok).length >= 2).slice(0, 3)
+        .map((p) => ({ title: p.title.trim().slice(0, 60), line: p.line.trim().slice(0, 200), cardIds: [...new Set(p.cards.filter(ok))].map((n) => all[n].id) })) };
     await save();
   };
   // 자료 지도 (2026-10-29): the whole-material pass runs by default, beside the questions (it changes no card and no question).
@@ -1074,7 +1083,7 @@ export function recallerFakeReply(step: GenStep, user: string): string {
   }
   if (step === "rc-merge") {
     const cards = u.cards as Array<{ n: number; line: string }>;
-    return JSON.stringify({ topics: [{ name: "가짜 주제", cards: cards.map((c) => c.n) }], core: cards.length ? [0] : [],
+    return JSON.stringify({ topics: [{ name: "가짜 주제", gist: "가짜 요지", cards: cards.map((c) => c.n) }], principles: cards.length >= 2 ? [{ title: "가짜 원리", line: "두 카드가 같은 방식을 쓴다", cards: [0, 1] }] : [], core: cards.length ? [0] : [],
       same: cards.flatMap((c, i) => i > 0 && c.line === cards[i - 1].line ? [{ n: c.n, of: cards[i - 1].n }] : []),
       rename: cards.map((c) => ({ n: c.n, title: c.line.replace(/^\[[^\]]+\] /, "").slice(0, 30) })), links: cards.slice(1).map((c) => ({ a: c.n, b: 0, why: "바탕 개념" })) });
   }

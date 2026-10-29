@@ -21,7 +21,7 @@ type Card = { id: string; ref: string; kind: string; title: string; core: boolea
   takes: string[]; gives: string[]; questions: number; same: Array<{ id: string; pages: number[] }>; state: MapState; knowledgeId?: string; dueAt?: string; topic?: string };
 type Section = { id: string; title: string; pages: number[]; cards: Card[] };
 type MatMap = { id: string; title: string; status: string; pages: number; sections: Section[]; chains: Array<{ from: string; to: string; what: string; by?: string }>;
-  topics?: string[]; counts: Record<MapState, number> & { cards: number; questions: number; core?: number } };
+  topics?: string[]; topicNotes?: Record<string, string>; principles?: Array<{ title: string; line: string; cardIds: string[] }>; counts: Record<MapState, number> & { cards: number; questions: number; core?: number } };
 
 const STATE: Record<MapState, [string, string]> = { unknown: ["몰랐음", "bad"], met: ["만남", "read"], known: ["앎", "good"], graduated: ["졸업", "good"], new: ["아직", ""] };
 const range = (pages: number[]) => !pages.length ? "" : pages.length === 1 ? `p.${pages[0]}` : `p.${Math.min(...pages)}–${Math.max(...pages)}`;
@@ -89,7 +89,8 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
   const [map, setMap] = useState<MatMap | null>(null);
   const [error, setError] = useState("");
   const [only, setOnly] = useState<"all" | "unknown" | "new">("all");
-  const [view, setView] = useState<"outline" | "topic">("outline");
+  // 개념별 (the whole-material pass's topics, each with what it is there to say) once it exists; 목차별 keeps the slides' own titles.
+  const [picked, setView] = useState<"outline" | "topic" | null>(null);
   const [coreOnly, setCoreOnly] = useState(false);
   // 첫 화면은 목차만 (사용자 10/30): every group starts folded; a group opens to one line per piece of knowledge, a line to its card.
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
@@ -106,6 +107,7 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [genId]);
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", esc); return () => document.removeEventListener("keydown", esc); }, [onClose]);
+  const view = picked ?? (map?.topics?.length ? "topic" : "outline");
   const titles = useMemo(() => new Map(map?.sections.flatMap((s) => s.cards.map((c) => [c.id, c.title] as const)) ?? []), [map]);
   // Where a card leads (→) and what leads to it (←), once each.
   const next = useMemo(() => { const m = new Map<string, Array<{ to: string; what: string; back: boolean }>>();
@@ -162,6 +164,13 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
         <span className="cs-gap" />
         {visible.length ? <button className="linkish small" onClick={() => setOpenGroups(allOpen ? new Set() : new Set(visible.map((g) => g.key)))}>{allOpen ? "모두 접기" : "모두 펼치기"}</button> : null}
       </div>
+      {map.principles?.length ? <section className="mm3-principles" aria-label="이 자료를 꿰는 원리">
+        <p className="mm3-label">이 자료를 꿰는 원리</p>
+        {map.principles.map((p, i) => <div key={i} className="mm3-principle">
+          <b><Rich text={p.title} /></b> <span><Rich text={p.line} /></span>
+          <div className="row small mm3-uses">{p.cardIds.filter((id) => titles.has(id)).map((id) => <button key={id} className="chip" onClick={() => jump(id)}><Rich text={titles.get(id)!} /></button>)}</div>
+        </div>)}
+      </section> : null}
       <ol className="mm3-toc">
         {visible.map((g, gi) => {
           const open = openGroups.has(g.key);
@@ -171,7 +180,8 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
               <button className="mm3-ghead" aria-expanded={open} onClick={() => toggleGroup(g.key)}>
                 <span className="mm3-caret" aria-hidden>{open ? "▾" : "▸"}</span>
                 <span className="mm3-num">{gi + 1}</span>
-                <b className="mm3-gtitle"><Rich text={g.title} /></b>
+                <span className="mm3-gtext"><b className="mm3-gtitle"><Rich text={g.title} /></b>
+                  {view === "topic" && map.topicNotes?.[g.title] ? <span className="mm3-gist"><Rich text={map.topicNotes[g.title]} /></span> : null}</span>
                 <span className="small muted">{range(g.pages)}</span>
                 <span className="cs-gap" />
                 <span className="small muted">{map.topics?.length && core ? `★${core} · ` : ""}{g.list.length}개</span>
