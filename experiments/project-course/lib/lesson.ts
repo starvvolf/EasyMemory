@@ -157,7 +157,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   const plan = await loadPlan(course.id, n);
   if (!plan) throw err(404, "이 단계의 수업 계획서가 없어요.");
 
-  if (input.do === "ask") return ask(runId, n, plan, String(input.text ?? ""), undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : undefined);
+  if (input.do === "ask") return ask(runId, n, plan, String(input.text ?? ""), undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : undefined, input.mode === "explain" ? { mode: "explain" } : {});
   if (input.do === "open") { await openLine(runId, String(input.file ?? ""), Number(input.line) || 1); return null; }
   if (input.do === "scaffold") return scaffold(runId, n, plan, course);
   if (input.do === "undo") {
@@ -267,6 +267,26 @@ const TUTOR = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친
 - 맞았다/틀렸다를 단정하지 않는다. 그건 확인(검사)이 정한다.
 - 답한 뒤 한 문장으로 지금 하던 것으로 자연스럽게 돌아오게 한다.`;
 
+/** 최근에 물어본 코드의 파일(설명 속 단어를 눌러 이어 물을 때 같은 파일을 붙이려고) */
+function lastQuoteFile(s: State) { return [...s.messages].reverse().find((m) => m.card?.type === "code")?.card?.file as string | undefined; }
+/** 파일 내용을 줄 번호와 함께. withImports면 그 파일이 가져오는 이 프로젝트 파일(./x.ts)도 */
+async function filesFor(ws: string, file: string | null, withImports: boolean) {
+  if (!file || file.includes("..")) return "";
+  const num = (t: string, max: number) => t.split(/\r?\n/).slice(0, max).map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n");
+  const main = await readFile(path.join(ws, file), "utf8").catch(() => null);
+  if (main === null) return "";
+  const out = [`[파일 ${file} — 이미 붙여 두었으니 다시 읽지 않아도 된다]\n${num(main, 300)}`];
+  if (withImports) {
+    const dir = path.posix.dirname(file);
+    const deps = [...main.matchAll(/from\s+["'](\.\.?\/[^"']+)["']/g)].map((m) => path.posix.normalize(path.posix.join(dir, m[1]))).slice(0, 4);
+    for (const d of deps) {
+      const t = await readFile(path.join(ws, d), "utf8").catch(() => null);
+      if (t !== null) out.push(`[이 파일이 가져오는 ${d}]\n${num(t, 150)}`);
+    }
+  }
+  return out.join("\n\n");
+}
+
 /** 아직 안 한 순서: 튜터가 학습자가 직접 맞히거나 고칠 것을 미리 말하지 않게 */
 function upcoming(plan: Plan, beat: number) {
   const rest = plan.beats.slice(beat + 1).filter((x) => x.kind === "predict" || x.kind === "fix");
@@ -288,7 +308,9 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
   const b = plan.beats[s0.beat];
   let answer = "";
   // 수업 맥락(계획서·지금 순서·최근 대화·마지막 확인): 에이전트와 단순 답 모두 쓴다
-  const recentText = s0.messages.slice(-14).map((m) => m.role === "me" ? `학습자: ${m.text}` : m.text ? `강사: ${m.text}` : m.card?.type === "reply" ? `(요청 결과: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : m.card.status})` : m.card?.type === "check" ? `(확인 결과: ${m.card.result.passed}개 통과, ${m.card.result.failed}개 실패)` : m.card?.type === "tool" ? `(튜터가 ${m.card.label})` : "").filter(Boolean).join("\n");
+  // 최근 대화는 짧게(긴 설명을 통째로 다시 보내면 매번 수천 토큰) — 10/30 사용자 "컨텍스트 조정"
+  const clip = (t: string, k = 300) => (t.length > k ? `${t.slice(0, k)}…` : t);
+  const recentText = s0.messages.slice(-8).map((m) => m.role === "me" ? `학습자: ${clip(m.text ?? "", 200)}` : m.text ? `강사: ${clip(m.text)}` : m.card?.type === "reply" ? `(요청 결과: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : m.card.status})` : m.card?.type === "check" ? `(확인 결과: ${m.card.result.passed}개 통과, ${m.card.result.failed}개 실패)` : m.card?.type === "tool" ? `(튜터가 ${m.card.label})` : "").filter(Boolean).join("\n");
   const context = [
     `[수업 계획서] ${plan.stage}단계 ${plan.title}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}\n고칠 곳(학습자가 직접 쓸 핵심): ${stageOf(course, n).fix.text}`,
     `[지금 하는 순서] ${s0.beat + 1}/${plan.beats.length}: ${b?.text ?? "끝"}`,
@@ -300,6 +322,8 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
     s0.lastCheck ? `[마지막 확인] ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}: 기대 ${r.failure?.expected} / 실제 ${r.failure?.actual}`).join("; ") || "모두 통과"}` : "",
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
     `[최근 대화]\n${recentText}`,
+    // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
+    await filesFor(ws, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, opts.mode === "explain"),
   ].filter(Boolean).join("\n\n");
   if (aiMode() !== "off") {
     // 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선을 고친다)
@@ -462,13 +486,21 @@ export async function what(runId: string, n: number, plan: Plan, quote: { file: 
 /* ---------- 덩어리 설명 (VS Code의 [💬 설명] / 드래그 + 우클릭) ----------
  * 학습자가 코드를 복사해 ChatGPT에 "이거 뭐야" 하던 것을 한 번 클릭으로. 확인 질문은 하지 않는다(사용자 10/30).
  * 같은 코스·같은 코드면 한 번 만든 설명을 저장해 두고 바로 보여 준다(AI 호출 없음). */
-const BLOCK_Q = `이 코드 덩어리를 문법을 모르는 사람에게 설명해 주세요. 해요체로, ChatGPT에 코드를 붙여 넣고 물었을 때처럼 넉넉하게. 순서:
-1. **한 줄 요약** — 이 덩어리가 하는 일을 일상 비유로 한 문장.
-2. **줄마다** — 줄(또는 2~3줄 묶음)마다 \`코드 조각\` → 우리말 뜻. 목록으로. 덩어리의 모든 줄을 빠짐없이.
-3. **여기 나온 문법** — 처음 배우는 사람이 막힐 문법·기호 2~5개(예: \`=>\`, \`if\`, \`await\`, \`??\`)를 쉬운 말로 한 줄씩.
-4. **이어지는 곳** — 이 덩어리가 부르는 다른 파일·함수가 있으면 직접 열어 읽어 보고 [[파일:줄]]로 한두 줄.
-코드를 고치거나 정답을 알려 주지 않는다. 확인 질문은 하지 않는다. 앞으로 할 예측 문제의 답은 말하지 않는다.`;
-const cacheFile = (courseId: string, code: string) => path.join(DATA, "explain-cache", courseId, `${createHash("sha1").update(code.replace(/\s+/g, " ").trim()).digest("hex").slice(0, 16)}.json`);
+const BLOCK_Q = `이 코드 덩어리를 문법을 모르는 사람에게 설명해 주세요. 파일은 위에 붙어 있으니 도구 없이 바로 답한다. 해요체, 아래 모양 그대로:
+
+**한 줄 요약** — 이 덩어리가 하는 일을 일상 비유로 한 문장.
+
+**하나씩 보기**
+- 의미가 이어지는 1~3줄을 한 묶음으로, 묶음마다 "[[파일:시작줄]] \`핵심 조각\` → 우리말 뜻" 한 줄. 핵심 조각은 짧게(코드 전체를 다시 쓰지 않는다).
+- 닫는 괄호 \`}\`, 빈 줄, 주석은 따로 설명하지 않는다.
+
+**여기 나온 문법**
+- 처음 배우는 사람이 막힐 문법·기호 2~5개를 "\`기호\` — 쉬운 말" 한 줄씩.
+
+**이어지는 곳** — 다른 파일과 이어지면 [[파일:줄]]로 한두 줄(없으면 이 칸은 뺀다).
+
+제목에 #을 쓰지 않는다. 코드를 고치거나 정답을 알려 주지 않는다. 확인 질문을 하지 않는다. 앞으로 할 예측 문제의 답은 말하지 않는다. "배운 점" 같은 마무리는 쓰지 않는다.`;
+const cacheFile = (courseId: string, code: string) => path.join(DATA, "explain-cache", "v2", courseId, `${createHash("sha1").update(code.replace(/\s+/g, " ").trim()).digest("hex").slice(0, 16)}.json`);
 export async function explainBlock(runId: string, n: number, plan: Plan, quote: { file: string; from: number; to: number; code: string }) {
   const run = await getRun(runId);
   const cf = cacheFile(run.courseId, `${quote.file}\n${quote.code}`);

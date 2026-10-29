@@ -294,7 +294,8 @@ function findBlocks(doc) {
     if (end - i < 2) continue;
     out.push({ from: i, to: end });
   }
-  return out;
+  // 거의 같은 덩어리가 겹치면(9~33 안의 12~32처럼) 바깥 것만 — 버튼이 줄줄이 붙으면 어수선
+  return out.filter((b) => !out.some((a) => a !== b && a.from < b.from && a.to >= b.to && (b.to - b.from) / Math.max(1, a.to - a.from) > 0.7));
 }
 const lensChanged = new vscode.EventEmitter();
 const lensProvider = {

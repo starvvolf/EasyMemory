@@ -536,9 +536,18 @@ function rich(text, ws) {
       continue;
     }
     list = null;
+    const hd = /^\s*#{1,4}\s+(.*)$/.exec(line);
+    if (hd) { box.append(h("p", { class: "rh" }, inline(hd[1].replace(/\*\*/g, ""), ws))); continue; }
     box.append(line.trim() ? h("p", {}, inline(line, ws)) : h("div", { class: "gap" }));
   }
   return box;
+}
+/** 도구 카드 글을 짧게: "파일을 읽었어요: src/app.ts" → "app.ts 읽음" */
+function shortTool(label) {
+  let m;
+  if ((m = /^파일을 읽었어요: (.+)$/.exec(label))) return `${m[1].split("/").pop()} 읽음`;
+  if ((m = /^VS Code에서 (.+?) (\d+)번째 줄을 열었어요/.exec(label))) return `${m[1].split("/").pop()} ${m[2]}줄 열어 줌`;
+  return label.replace(/했어요$|었어요$|았어요$/, "");
 }
 function inline(text, ws) {
   const out = [];
@@ -562,7 +571,7 @@ function fileLink(ws, file, line) {
     if (!lessonCtx?.lesson?.bridge?.connected) return;
     e.preventDefault();
     api("POST", `/api/runs/${lessonCtx.run.id}/lesson/${lessonCtx.run.current}/act`, { do: "open", file, line }).catch(() => { location.href = href; });
-  } }, h("span", { class: "fi" }, "⌗"), `${file} ${line}번째 줄`);
+  } }, `${file.split("/").pop()} ${line}줄`);
 }
 
 function flashSaved() {
@@ -592,10 +601,20 @@ function drawLesson() {
   chat.addEventListener("click", (e) => {
     const c = e.target.closest?.(".lmsg.tutor .rich code.ask");
     if (!c || lessonCtx?.lesson?.busy) return;
-    send({ do: "ask", text: `방금 설명에 나온 \`${c.textContent}\`는 뭐예요? 문법을 모르는 사람에게 이 코드에서의 뜻으로 쉽게 알려 주세요.`, shown: `"${c.textContent}"는 뭐예요?` })(e);
+    send({ do: "ask", text: `방금 설명에 나온 \`${c.textContent}\`는 뭐예요? 문법을 모르는 사람에게 이 코드에서의 뜻으로 쉽게, 3~6문장으로 알려 주세요. 파일은 위에 붙어 있으니 도구 없이 바로 답해요.`, shown: `"${c.textContent}"는 뭐예요?`, mode: "explain" })(e);
   });
   let prevRole = "";
+  let toolRow = null; // 이어지는 도구 카드는 한 줄로 묶는다(카드가 줄줄이 쌓이면 어수선 — 10/30)
   for (const m of msgs) {
+    if (m.role === "tutor" && m.card?.type === "tool" && !m.text) {
+      const item = h("span", { class: `titem ${m.card.ok ? "" : "bad"}`, title: m.card.detail || "" }, m.card.icon, " ", shortTool(m.card.label));
+      if (toolRow) { toolRow.append(h("span", { class: "tsep" }, "·"), item); continue; }
+      const cont = prevRole === "tutor"; prevRole = "tutor";
+      toolRow = h("div", { class: "toolrow" }, item);
+      chat.append(h("div", { class: `lmsg tutor ${cont ? "cont" : ""}` }, h("div", { class: `avatar ${cont ? "ghost" : ""}` }, cont ? "" : "R"), h("div", { class: "lcol" }, toolRow)));
+      continue;
+    }
+    toolRow = null;
     if (m.role === "note") { chat.append(h("div", { class: "lnote" }, m.text)); prevRole = "note"; continue; }
     // 튜터가 이어서 말하면(도구 쓰는 중) 아이콘은 첫 줄에만
     const cont = m.role === "tutor" && prevRole === "tutor";
@@ -683,7 +702,7 @@ function lessonCard(card, run, lesson, send, ws) {
       if (lessonCtx?.lesson?.bridge?.connected) api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "open", file: card.file, line: c.line }).catch(() => {});
       else location.href = `vscode://file/${ws.replace(/\\/g, "/")}/${card.file}:${c.line}`;
     } }, h("span", { class: "cl" }, c.label), h("span", { class: "cd" }, c.desc || ""), h("span", { class: "cn mono" }, `${c.line}줄`)))));
-  if (card.type === "code") return h("div", { class: "lcard code" }, h("div", { class: "mut small" }, fileLink(ws, card.file, card.from), card.to > card.from ? ` ~ ${card.to}번째 줄` : ""), h("pre", { class: "rbody" }, card.code));
+  if (card.type === "code") return h("div", { class: "lcard code" }, h("div", { class: "mut small" }, fileLink(ws, card.file, card.from), card.to > card.from ? `~${card.to}줄` : ""), h("pre", { class: "rbody" }, card.code));
   if (card.type === "check") return h("div", { class: "lcard" }, h("div", { class: "mut small" }, "확인 결과"), resultsList(card.result, { group: true }));
   if (card.type === "hint") return h("div", { class: "lcard hint" }, h("div", { class: "mut small" }, `힌트 ${card.level}단계 · ${card.source.startsWith("ai") ? "AI 튜터" : card.source === "solution" ? "준비된 정답 줄" : "준비된 힌트"}`), card.level === 3 ? h("pre", { class: "sol" }, card.text) : rich(card.text, ws));
   if (card.type === "explain") {

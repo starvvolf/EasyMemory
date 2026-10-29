@@ -35,7 +35,8 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 - 도구를 쓰기 전에 무엇을 왜 보는지 한 문장으로 말한다("직접 보내서 확인해 볼게요").
 
 도구
-- read/glob/grep으로 먼저 보고, 추측으로 단정하지 않는다. [VS Code]에 학습자가 보는 파일·줄이 있으면 그것부터 본다.
+- 질문에 [파일 …]이 붙어 있으면 다시 읽지 말고 바로 쓴다. 다른 파일이 꼭 필요할 때만 read/glob/grep으로 본다. 추측으로 단정하지 않는다.
+- 제목에 #을 쓰지 않는다(굵게 **…**만).
 - 학습자에게 보여 줄 곳은 open_in_editor로 VS Code에서 연다.
 - 동작을 확인할 때는 send_request(실제 요청)나 run_checks(자동 검사)를 쓴다. 명령 실행은 못 한다.
 
@@ -108,7 +109,8 @@ function policyPlugin(fake: boolean) {
       await ctx.session.hook("title", (ev: any) => { ev.result = "튜터 대화"; }); // 제목 만들기 호출 생략
       await ctx.session.hook("context", (ev: any) => {
         const l = live.get(ev.sessionID);
-        for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k) || (l?.io.mode === "explain" && EDITS.has(k))) delete ev.tools[k];
+        // 덩어리 설명: 필요한 파일은 이미 붙여 보냈으니 도구 없이 한 번에 답한다(호출 1번)
+        for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k) || l?.io.mode === "explain") delete ev.tools[k];
       });
       await ctx.permission.hook("evaluate", (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);
@@ -271,7 +273,7 @@ async function startMock(): Promise<string> {
       send({ choices: [{ index: 0, delta: { role: "assistant", content: call.say, tool_calls: [{ index: 0, id: `c${Date.now()}`, type: "function", function: { name: call.name, arguments: JSON.stringify(call.args) } }] }, finish_reason: null }] });
       send({ choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] });
     } else {
-      send({ choices: [{ index: 0, delta: { role: "assistant", content: `(가짜 AI) **한 줄 요약**: ${file}의 이 덩어리는 편지를 받아 담당자를 찾아 주는 안내 데스크예요.\n- \`createServer\` → 서버를 만들어요\n- \`req\` → 받은 편지, \`res\` → 보낼 답장\n18번째 줄은 요청에 맞는 처리 함수를 찾는 줄이에요. [[src/router.ts:22]]에 이어져요.` }, finish_reason: null }] });
+      send({ choices: [{ index: 0, delta: { role: "assistant", content: `**한 줄 요약** — (가짜 AI) ${file}의 이 덩어리는 편지를 받아 담당자를 찾아 주는 안내 데스크예요.\n\n**하나씩 보기**\n- [[${file}:9]] \`createServer\` → 편지가 오면 할 일을 정해요\n- [[${file}:10]] \`new URL(...)\` → 주소를 읽어요\n\n**여기 나온 문법**\n- \`=>\` — 이게 오면 오른쪽 일을 해요\n\n**이어지는 곳** — [[src/router.ts:22]]의 \`match\`가 담당자를 찾아요. (도구 ${tools.length}개)` }, finish_reason: null }] });
       send({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] });
     }
     res.end("data: [DONE]\n\n");

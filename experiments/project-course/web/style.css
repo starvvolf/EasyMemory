@@ -387,3 +387,9 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 0 5px; border: 1px sol
 .lmsg.tutor .rich code.ask { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 .lmsg.tutor .rich code.ask:hover { background: var(--acc-soft, rgba(80,120,255,.15)); }
 .lcard.code pre { max-height: 11em; overflow: auto; }
+.toolrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; color: var(--mut, #888); padding: 2px 0; }
+.toolrow .titem.bad { color: var(--bad, #d55); }
+.toolrow .tsep { opacity: .5; }
+.rich p.rh { font-weight: 600; margin-top: 12px; }
+.rich p.rh:first-child { margin-top: 0; }
+.flink { font-family: var(--mono); font-size: .9em; padding: 0 4px; border-radius: 3px; background: var(--soft, rgba(127,127,127,.12)); text-decoration: none; white-space: nowrap; }
