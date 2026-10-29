@@ -87,19 +87,22 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const subtree = useCallback((id: string) => { const ids = new Set([id]); let grew = true; while (grew) { grew = false; for (const f of tree.folders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true; } } return ids; }, [tree.folders]);
   const countIn = useCallback((id: string) => { const ids = subtree(id); const list = tree.items.filter((i) => i.folderId && ids.has(i.folderId)); return { total: list.length, unknown: list.filter((i) => i.state === "unknown").length, known: list.filter((i) => i.state === "known").length }; }, [subtree, tree.items]);
 
+  // 자료 보기는 출처로 묶는다 (2026-10-30 사용자: "웹/PDF는 자료 출처로 묶고, 프로젝트는 프로젝트로 묶어"). 같은 프로젝트 코스를
+  // 여러 번 진행해도 프로젝트 하나로 보인다.
+  const navMaterials = useMemo(() => groupMaterials(materials), [materials]);
   const shown = useMemo(() => {
-    const inMaterial = view === "material" && matSel ? new Set(materials.find((m) => m.key === matSel)?.itemIds ?? []) : null;
+    const inMaterial = view === "material" && matSel ? new Set(navMaterials.find((m) => m.key === matSel)?.itemIds ?? []) : null;
     let list = hits ?? tree.items.filter((i) => view === "goal" && goalSel ? (itemGoals[i.id] ?? []).includes(goalSel) : inMaterial ? inMaterial.has(i.id)
       : view !== "topic" || folder === "all" ? true : folder === "none" ? !i.folderId : Boolean(i.folderId && subtree(folder).has(i.folderId)));
     if (filter === "graduated") list = list.filter((i) => i.graduated); else if (filter !== "all") list = list.filter((i) => i.state === filter && !i.graduated);
     if (!hits) list = [...list].sort((a, b) => sort === "weak" ? b.weak - a.weak || b.lastAt.localeCompare(a.lastAt) : sort === "name" ? a.title.localeCompare(b.title, "ko") : b.lastAt.localeCompare(a.lastAt));
     return list;
-  }, [hits, tree.items, folder, filter, sort, subtree, view, goalSel, matSel, itemGoals, materials]);
+  }, [hits, tree.items, folder, filter, sort, subtree, view, goalSel, matSel, itemGoals, navMaterials]);
 
   const dueNow = tree.items.filter((i) => !i.graduated && i.state !== "met" && (!i.dueAt || Date.parse(i.dueAt) <= Date.now())).length;
   const counts = { total: tree.items.length, unknown: tree.items.filter((i) => i.state === "unknown").length, known: tree.items.filter((i) => i.state === "known").length, met: tree.items.filter((i) => i.state === "met").length };
   const goal = goals.find((g) => g.id === goalSel) ?? null;
-  const material = materials.find((m) => m.key === matSel) ?? null;
+  const material = navMaterials.find((m) => m.key === matSel) ?? null;
   const folderName = view === "goal" && goal ? goal.name : view === "material" && material ? material.title
     : view !== "topic" || folder === "all" ? "전체" : folder === "none" ? "주제 없음" : folderPaths(tree.folders).find((f) => f.id === folder)?.path ?? "";
   const unsorted = tree.items.filter((i) => !i.kind).length;
@@ -224,7 +227,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
               onClick={() => { setView(k); setQuery(""); }}>{label}{k === "material" && toPlace.length ? <i className="dot bad" /> : null}</button>)}
           </div>
           {view === "goal" ? <GoalNav goals={goals} sel={goalSel} onPick={(id) => { setGoalSel(id); setQuery(""); }} onAct={act} /> : null}
-          {view === "material" ? <MaterialNav materials={materials} goals={goals} sel={matSel} onPick={(k) => { setMatSel(k); setQuery(""); }} onAct={act} /> : null}
+          {view === "material" ? <MaterialNav materials={navMaterials} goals={goals} sel={matSel} onPick={(k) => { setMatSel(k); setQuery(""); }} onAct={act} /> : null}
           {view === "topic" ? <>
           <div className={`kw-folder root${folder === "all" ? " on" : ""}`} {...dropZone(null)}><button className="kw-fname" onClick={() => { setFolder("all"); setQuery(""); }}>전체</button><span className="kw-count num">{counts.total}</span></div>
           <ul>{(children.get(null) ?? []).map((f) => <FolderRow key={f.id} f={f} depth={0} />)}</ul>
@@ -544,16 +547,47 @@ function GoalTools({ goal, onAct, onGone }: { goal: GoalView; onAct: Act; onGone
     </details>
   );
 }
-/** 자료 보기: every 자료 the items came from, with its goals; pick one to see its items, or put it in a goal. */
-function MaterialNav({ materials, goals, sel, onPick, onAct }: { materials: Material[]; goals: GoalView[]; sel: string | null; onPick: (key: string | null) => void; onAct: Act }) {
+/** A row of the 자료 view: one 자료, or one project course made of every run of it (keys: the sources underneath). */
+type NavMaterial = Material & { group: "material" | "project" | "code"; keys: string[] };
+const PROJECT_PREFIX = "프로젝트 코스: ";
+/** PDF·웹 글 = 자료, 프로젝트 코스(ref project:…) = 프로젝트 (같은 코스는 하나로), 나머지 코드 = 코드 문제. */
+function groupMaterials(materials: Material[]): NavMaterial[] {
+  const out: NavMaterial[] = [];
+  const projects = new Map<string, NavMaterial>();
+  for (const m of materials) {
+    if (m.kind === "code" && m.key.startsWith("code:project:")) {
+      const title = m.title.startsWith(PROJECT_PREFIX) ? m.title.slice(PROJECT_PREFIX.length) : m.title;
+      const p = projects.get(title);
+      if (!p) { const row: NavMaterial = { ...m, title, key: `project:${title}`, group: "project", keys: [m.key] }; projects.set(title, row); out.push(row); continue; }
+      p.keys.push(m.key);
+      p.itemIds = [...new Set([...p.itemIds, ...m.itemIds])]; p.items = p.itemIds.length;
+      p.goals = [...new Set([...p.goals, ...m.goals])];
+      if (m.lastAt > p.lastAt) p.lastAt = m.lastAt;
+      continue;
+    }
+    out.push({ ...m, group: m.kind === "pdf" || m.kind === "web" ? "material" : "code", keys: [m.key] });
+  }
+  return out;
+}
+const MAT_GROUPS = [["material", "자료", "PDF · 웹 글"], ["project", "프로젝트", ""], ["code", "코드 문제", ""]] as const;
+/** 자료 보기: 출처 묶음(자료 · 프로젝트 · 코드 문제)마다 접히는 폴더; pick one to see its items, or put it in a goal. */
+function MaterialNav({ materials, goals, sel, onPick, onAct }: { materials: NavMaterial[]; goals: GoalView[]; sel: string | null; onPick: (key: string | null) => void; onAct: Act }) {
   const open = goals.filter((g) => !g.closed);
+  const row = (m: NavMaterial) => <li key={m.key}><div className={`kw-folder kw-mat${sel === m.key ? " on" : ""}`}>
+    <button className="kw-fname" onClick={() => onPick(m.key)} title={m.title}>{m.group === "material" ? <><span className="chip">{SOURCE_LABEL[m.kind] ?? m.kind}</span> </> : null}{m.title}</button><span className="kw-count num">{m.items}</span></div>
+    <div className="row small kw-mat-goals">{m.goals.map((id) => goals.find((g) => g.id === id)).filter(Boolean).map((g) => <span key={g!.id} className="chip">{g!.name}</span>)}
+      {open.some((g) => !m.goals.includes(g.id)) ? <select className="ws-select" value="" aria-label="목표에 넣기" onChange={(e) => { const gid = e.target.value; if (gid) void onAct(async () => { for (const key of m.keys) await call(`/api/knowledge/goals/${gid}/source`, { key, kind: m.kind, title: m.group === "project" ? `${PROJECT_PREFIX}${m.title}` : m.title, on: true }); }); }}>
+        <option value="">+ 목표</option>{open.filter((g) => !m.goals.includes(g.id)).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select> : null}</div></li>;
+  if (!materials.length) return <ul><li className="small muted">아직 자료가 없어요.</li></ul>;
   return (
-    <ul>{materials.map((m) => <li key={m.key}><div className={`kw-folder kw-mat${sel === m.key ? " on" : ""}`}>
-      <button className="kw-fname" onClick={() => onPick(m.key)} title={m.title}><span className="chip">{SOURCE_LABEL[m.kind] ?? m.kind}</span> {m.title}</button><span className="kw-count num">{m.items}</span></div>
-      <div className="row small kw-mat-goals">{m.goals.map((id) => goals.find((g) => g.id === id)).filter(Boolean).map((g) => <span key={g!.id} className="chip">{g!.name}</span>)}
-        {open.some((g) => !m.goals.includes(g.id)) ? <select className="ws-select" value="" aria-label="목표에 넣기" onChange={(e) => { if (e.target.value) void onAct(() => call(`/api/knowledge/goals/${e.target.value}/source`, { key: m.key, kind: m.kind, title: m.title, on: true })); }}>
-          <option value="">+ 목표</option>{open.filter((g) => !m.goals.includes(g.id)).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select> : null}</div></li>)}
-      {!materials.length ? <li className="small muted">아직 자료가 없어요.</li> : null}</ul>
+    <div className="kw-mgroups">{MAT_GROUPS.map(([g, label, hint]) => {
+      const list = materials.filter((m) => m.group === g);
+      if (!list.length) return null;
+      return <details key={g} className="kw-mgroup" open={g !== "code" || list.some((m) => m.key === sel)}>
+        <summary><b>{label}</b>{hint ? <span className="small muted"> {hint}</span> : null}<span className="kw-count num">{list.length}</span></summary>
+        <ul>{list.map(row)}</ul>
+      </details>;
+    })}</div>
   );
 }
 /**

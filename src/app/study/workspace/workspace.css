@@ -60,6 +60,13 @@
 .dejipgi .kw-kind{font-size:11px;padding:0 6px}
 .dejipgi .kw-mat .kw-fname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .dejipgi .kw-mat-goals{padding:0 6px 6px 8px;gap:4px;flex-wrap:wrap}
+.dejipgi .kw-mgroup{margin-bottom:6px}
+.dejipgi .kw-mgroup>summary{display:flex;align-items:center;gap:6px;padding:6px 8px;cursor:pointer;list-style:none;border-radius:8px}
+.dejipgi .kw-mgroup>summary::-webkit-details-marker{display:none}
+.dejipgi .kw-mgroup>summary::before{content:"▸";font-size:11px;opacity:.6}
+.dejipgi .kw-mgroup[open]>summary::before{content:"▾"}
+.dejipgi .kw-mgroup>summary .kw-count{margin-left:auto}
+.dejipgi .kw-mgroup>ul{padding-left:10px}
 .dejipgi .kw-dupes{margin:0 0 8px;padding:10px 12px}
 .dejipgi .kw-fill{gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
 .dejipgi .kw-grid{display:grid;grid-template-columns:236px minmax(0,1fr) minmax(0,400px);gap:12px;align-items:start}
