@@ -82,8 +82,8 @@ async function loadStatus() {
   status = await api("GET", "/api/status");
   const ai = status.ai;
   const chip = $("#aiChip");
-  chip.className = "chip " + (ai.mode === "off" ? "" : ai.used >= ai.limit ? "bad" : "acc");
-  chip.textContent = ai.mode === "off" ? "AI 꺼짐 · 준비된 힌트" : ai.mode === "fake" ? "AI 가짜(시험용)" : `AI ${ai.used}/${ai.limit}회`;
+  chip.className = "chip " + (ai.mode === "off" ? "" : ai.limit && ai.used >= ai.limit ? "bad" : "acc");
+  chip.textContent = ai.mode === "off" ? "AI 꺼짐 · 준비된 힌트" : ai.mode === "fake" ? "AI 가짜(시험용)" : ai.limit ? `AI ${ai.used}/${ai.limit}회` : `AI ${ai.used}회`;
   chip.title = (ai.mode === "app" ? "앱(3000)과 같은 ChatGPT 로그인을 써요. 이 실험의 허용 횟수예요." : "") + (status.engine ? ` 튜터 엔진: ${status.engine}` : "");
   const pick = $("#runPick");
   pick.innerHTML = "";
@@ -105,6 +105,7 @@ async function route() {
     if ((m = /^#\/run\/(\w+)\/summary/.exec(hash))) return await renderSummary(m[1]);
     if ((m = /^#\/run\/(\w+)\/cards/.exec(hash))) return await renderRun(m[1]);
     if ((m = /^#\/run\/(\w+)\/vscode/.exec(hash))) return await renderHandoff(m[1]);
+    if ((m = /^#\/run\/(\w+)\/notes/.exec(hash))) return await renderNotes(m[1]);
     if ((m = /^#\/run\/(\w+)/.exec(hash))) return await renderRunOrLesson(m[1]);
     if (hash === "#/home" || EMBED) return renderHome();
     if (status?.active) return go(`#/run/${status.active}`);
@@ -493,6 +494,53 @@ async function renderHandoff(id) {
   }, 1500);
 }
 
+/* =================== 프로젝트 노트 (학습자 기억, 파일별) =================== */
+const NOTE_KIND = { block: ["💬", "덩어리 설명"], asked: ["❓", "질문"], word: ["🔤", "물어본 말"], what: ["🔤", "이건 뭐예요"], tour: ["🧭", "흐름 투어"], fixed: ["✅", "고침"], edited: ["🛠", "튜터가 고침"] };
+const SCOPE_CLS = { 문법: "s-syn", 도구: "s-tool", 프로젝트: "s-proj" };
+async function renderNotes(id) {
+  const run = await api("GET", `/api/runs/${id}`);
+  const nv = await api("GET", `/api/runs/${id}/notes`);
+  const ws = nv.workspace;
+  const askAbout = (text, shown) => busy(null, async () => { await api("POST", `/api/runs/${id}/lesson/${run.current}/act`, { do: "ask", mode: "explain", text, shown }); go(`#/run/${id}`); });
+  const openF = (file, line = 1) => api("POST", `/api/runs/${id}/lesson/${run.current}/act`, { do: "open", file, line }).catch(() => {});
+  // 연결 지도: import로 이어진 순서(아무도 가져다 쓰지 않는 파일 = 시작점부터)
+  const byFile = new Map(nv.files.map((f) => [f.file, f]));
+  const roots = nv.files.filter((f) => f.exists && !f.usedBy.length).map((f) => f.file);
+  const seen = new Set();
+  const tree = (f, depth) => {
+    if (seen.has(f) || depth > 6) return [];
+    seen.add(f);
+    const x = byFile.get(f);
+    const n = x?.entries.length ?? 0;
+    return [h("div", { class: "tnode", style: `padding-left:${depth * 16}px` }, depth ? h("span", { class: "mut" }, "└ ") : null,
+      h("a", { href: "#", onclick: (e) => { e.preventDefault(); document.getElementById(`nf-${f}`)?.scrollIntoView({ behavior: "smooth" }); } }, f.split("/").pop()),
+      x?.part ? h("span", { class: "mut small" }, ` ${x.part.name}`) : null, n ? h("span", { class: "chip acc" }, `${n}`) : null),
+      ...(x?.uses ?? []).flatMap((u) => tree(u.file, depth + 1))];
+  };
+  const map = h("div", { class: "lcard notesmap" }, h("div", { class: "mut small" }, "파일 연결 지도 — 위 파일이 아래 파일을 가져다 써요 · 숫자는 기록 수"), ...roots.flatMap((r) => tree(r, 0)));
+  const fileCard = (x) => h("div", { class: `lcard nfile ${x.entries.length ? "" : "quiet"}`, id: `nf-${x.file}` },
+    h("div", { class: "row" }, h("b", { class: "grow" }, h("a", { href: "#", onclick: (e) => { e.preventDefault(); openF(x.file); } }, x.file)), x.exists ? null : h("span", { class: "chip" }, "이 단계엔 없음")),
+    x.part ? h("div", { class: "small" }, h("b", {}, x.part.name), " — ", x.part.role) : null,
+    x.uses.length || x.usedBy.length || x.flowOut.length || x.flowIn.length ? h("div", { class: "nlinks small" },
+      x.uses.length ? h("div", {}, h("span", { class: "mut" }, "가져다 씀 → "), x.uses.map((u) => h("span", { class: "nl" }, `${u.file.split("/").pop()}${u.names.length ? ` (${u.names.slice(0, 3).join(", ")})` : ""}`))) : null,
+      x.usedBy.length ? h("div", {}, h("span", { class: "mut" }, "여기를 쓰는 곳 ← "), x.usedBy.map((u) => h("span", { class: "nl" }, u.file.split("/").pop()))) : null,
+      x.flowOut.map((l) => h("div", {}, h("span", { class: "mut" }, "흐름 → "), fileLink(ws, l.to.file, l.to.line), ` ${l.label}`, h("span", { class: "mut" }, ` (여기 ${l.from.line}줄에서)`))),
+      x.flowIn.map((l) => h("div", {}, h("span", { class: "mut" }, "흐름 ← "), fileLink(ws, l.from.file, l.from.line), h("span", { class: "mut" }, ` 에서 넘어옴 (${l.to.line}줄 ${l.label})`)))) : null,
+    x.terms.length ? h("div", { class: "nterms" }, x.terms.slice(0, 18).map((t) => h("button", { class: `nterm ${SCOPE_CLS[t.scope]}`, title: `${t.scope}${t.asked ? ` · ${t.asked}번 물어봄` : ""} — 누르면 다시 물어봐요`, onclick: () => askAbout(`\`${t.name}\`는 뭐예요? ${x.file}에서 쓰인 뜻으로, 문법을 모르는 사람에게 3~6문장으로.`, `"${t.name}"는 뭐예요?`) }, t.name, t.asked ? h("sup", {}, t.asked) : null))) : null,
+    x.entries.length ? h("ul", { class: "nentries" }, x.entries.slice(0, 30).map((e) => h("li", {},
+      h("span", { class: "nk", title: NOTE_KIND[e.kind]?.[1] }, NOTE_KIND[e.kind]?.[0] ?? "•"), " ",
+      e.from ? h("a", { href: "#", class: "mono small", onclick: (ev) => { ev.preventDefault(); openF(x.file, e.from); } }, `${e.from}${e.to && e.to !== e.from ? `~${e.to}` : ""}줄`) : null, e.from ? " " : null,
+      h("b", {}, e.title), e.summary ? h("div", { class: "small mut" }, e.summary) : null))) : h("div", { class: "small mut" }, "아직 여기서 물어본 게 없어요. 코드 위 💬 설명을 눌러 보세요."));
+  const active = nv.files.filter((f) => f.entries.length), quiet = nv.files.filter((f) => !f.entries.length && f.exists);
+  const termsAll = h("div", { class: "lcard" }, h("div", { class: "mut small" }, "만난 말 — 문법·도구는 다른 프로젝트에서도 같은 뜻(복습 카드로 넘어가요), 프로젝트 이름은 이 프로젝트에서만"),
+    ...["문법", "도구", "프로젝트"].map((k) => nv.terms[k].length ? h("div", { class: "nterms" }, h("span", { class: "mut small" }, `${k} `), nv.terms[k].map((t) => h("span", { class: `nterm ${SCOPE_CLS[k]}` }, t.name, t.asked ? h("sup", {}, t.asked) : null))) : null));
+  view.replaceChildren(h("div", { class: "notes" },
+    h("div", { class: "row" }, h("h2", { class: "grow" }, "📒 프로젝트 노트"), h("button", { class: "btn small", onclick: () => go(`#/run/${id}`) }, "수업으로")),
+    h("p", { class: "small mut" }, "이 프로젝트에서 물어보고 배운 것을 파일별로 모아 둬요. 파일 사이가 어떻게 이어지는지(가져다 쓰기·흐름 투어)도 같이 보여요."),
+    map, ...active.map(fileCard), Object.values(nv.terms).some((x) => x.length) ? termsAll : null,
+    quiet.length ? h("details", { class: "lcard" }, h("summary", {}, `아직 기록 없는 파일 ${quiet.length}개`), ...quiet.map(fileCard)) : null));
+}
+
 /* =================== 수업 (대화) =================== */
 let lessonCtx = null;
 let events = null;
@@ -705,6 +753,7 @@ function drawLesson() {
       h("div", { class: "mut small" }, "작업 폴더"),
       h("div", { class: "path" }, ws),
       h("div", { class: "row" },
+        h("button", { class: "btn small", title: "파일별로 물어본 것·배운 것과 파일 사이 연결", onclick: () => go(`#/run/${run.id}/notes`) }, "📒 노트"),
         EMBED ? h("button", { class: "btn small", title: "이어 하기 · 새 코스 정하기", onclick: () => go("#/home") }, "코스 목록") : h("button", { class: "btn small primary", onclick: () => go(`#/run/${run.id}/vscode`) }, "VS Code에서 하기"),
         EMBED ? null : dev?.running
           ? h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/dev/stop`); lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); }) }, "서버 끄기")
@@ -782,6 +831,11 @@ function tourCard(card, run, lesson, send, ws) {
 
 function lessonCard(card, run, lesson, send, ws) {
   if (card.type === "tour") return tourCard(card, run, lesson, send, ws);
+  if (card.type === "table") return h("div", { class: "lcard table" },
+    h("div", { class: "mut small" }, "🗄 DB 들여다보기 · ", h("code", { class: "ic" }, card.sql)),
+    card.columns.length ? h("div", { class: "tscroll" }, h("table", {}, h("thead", {}, h("tr", {}, card.columns.map((c) => h("th", {}, c)))),
+      h("tbody", {}, card.rows.map((r) => h("tr", {}, r.map((v) => h("td", { title: String(v ?? "") }, v === null ? "NULL" : String(v).length > 48 ? String(v).slice(0, 48) + "…" : String(v)))))))) : null,
+    card.note ? h("div", { class: "small mut" }, card.note) : null);
   if (card.type === "choice") {
     const done = card.picked !== undefined;
     return h("div", { class: "lcard" }, h("div", { class: "opts" }, card.options.map((o, i) =>

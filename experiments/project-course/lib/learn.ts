@@ -354,3 +354,22 @@ export async function openAtStartup(port: number) {
   else spawn("xdg-open", [url]).on("error", () => {});
   return { vscode: false, ...target };
 }
+
+/* ---------- DB 들여다보기 (실습 서버가 쓰는 data/board.db, 읽기만) ---------- */
+export async function peekDb(runId: string, sql: string) {
+  const run = await getRun(runId);
+  const course = await loadCourse(run.courseId);
+  const ws = workspaceOf(run, stageOf(course, run.current).template);
+  const q = String(sql || "").trim().replace(/;\s*$/, "");
+  if (!/^select\b/i.test(q) || q.includes(";")) throw err(400, "DB는 SELECT로 읽기만 할 수 있어요.");
+  const file = path.join(ws, "data", "board.db");
+  if (!(await exists(file))) return { sql: q, columns: [] as string[], rows: [] as unknown[][], note: "아직 DB 파일이 없어요. 서버를 켜고 요청을 한 번 보내면 생겨요." };
+  const { DatabaseSync } = await import("node:sqlite");
+  const db = new DatabaseSync(file, { readOnly: true } as never);
+  try {
+    const rows = db.prepare(/\blimit\b/i.test(q) ? q : `${q} LIMIT 20`).all() as Record<string, unknown>[];
+    const columns = rows.length ? Object.keys(rows[0]) : [];
+    return { sql: q, columns, rows: rows.map((r) => columns.map((c) => r[c])), note: rows.length ? "" : "비어 있어요(0줄)." };
+  } catch (e) { return { sql: q, columns: [], rows: [], note: `읽지 못했어요: ${(e as Error).message}` }; }
+  finally { db.close(); }
+}

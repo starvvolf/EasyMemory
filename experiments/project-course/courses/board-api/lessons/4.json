@@ -1,0 +1,207 @@
+{
+  "stage": 4,
+  "title": "회원가입과 로그인",
+  "passText": "이제 비밀번호가 소금 친 해시로 저장되고, 로그인도 그 값으로 확인해요.",
+  "teach": [
+    "인증: 이 사람이 누구인지 알아내기(401)",
+    "세션과 쿠키: 로그인하면 받는 출입증",
+    "비밀번호는 그대로 저장하지 않는다: 소금 + 느린 해시",
+    "해시는 되돌릴 수 없고, 확인은 다시 계산해서 비교"
+  ],
+  "tutorNotes": "비유: 세션은 '놀이공원 손목밴드'(로그인하면 받고, 다음부터는 밴드만 보여 줌), 쿠키는 '브라우저가 대신 들고 다니는 밴드', 해시는 '갈아 버린 고기(되돌릴 수 없음)', 소금은 '사람마다 다른 양념'. 암호학 세부(scrypt 원리)는 깊게 들어가지 않는다. 남의 글 고치기(권한, 403)는 '5단계에서 해요'. 해시 코드를 통째로 주지 않는다.",
+  "beats": [
+    {
+      "id": "intro",
+      "kind": "say",
+      "text": "이제 게시판에 **회원가입과 로그인**이 생겼어요. 로그인이 하는 일은 한마디로 **\"이 편지를 보낸 사람이 누구인지\"** 알아내는 거예요. 이걸 **인증**이라고 해요.\n\n흐름은 놀이공원과 비슷해요.\n1. **가입**: 매표소에 이름과 비밀번호를 등록해요 (`users` 장부)\n2. **로그인**: 비밀번호가 맞으면 **손목밴드**(세션)를 채워 줘요\n3. 그다음부터는 편지마다 **밴드만 보여 주면** 돼요. 브라우저가 밴드를 대신 들고 다니는데, 이걸 **쿠키**라고 해요.\n\n직접 해 볼게요.",
+      "actions": [
+        {
+          "label": "가입하고 로그인하고 내 정보 보기",
+          "do": "start_dev,try",
+          "tries": [
+            {
+              "method": "POST",
+              "path": "/signup",
+              "body": {
+                "username": "alice",
+                "password": "pass1234"
+              }
+            },
+            {
+              "method": "POST",
+              "path": "/login",
+              "body": {
+                "username": "alice",
+                "password": "pass1234"
+              },
+              "as": "A"
+            },
+            {
+              "method": "GET",
+              "path": "/me",
+              "as": "A"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cookie",
+      "kind": "say",
+      "text": "로그인 답장에 `set-cookie: sid=…`가 붙어 왔죠? 그게 **손목밴드**예요. 그다음 `/me`(내 정보) 편지에는 브라우저가 그 밴드를 같이 보내서, 서버가 \"아, alice구나\" 하고 알아본 거예요.\n\n이 일을 하는 코드는 `auth.ts`에 모여 있어요. 덩어리로 볼게요.",
+      "actions": [
+        {
+          "label": "알겠어요, 다음",
+          "do": "next"
+        }
+      ]
+    },
+    {
+      "id": "map",
+      "kind": "map",
+      "text": "`auth.ts`의 지도예요. 오늘 고칠 곳은 **② 비밀번호 저장값 만들기**와 **③ 비밀번호 확인**이에요. 나머지(밴드 만들기·알아보기)는 이미 돼 있어요.\n\n밴드가 어떻게 오가는지 흐름 전체가 궁금하면 아래 칸에 **\"로그인 실제 동작 설명해 주세요\"**라고 적어 보세요. 파일을 넘나들며 따라가 드릴게요.",
+      "focus": {
+        "file": "src/auth.ts",
+        "chunks": [
+          {
+            "anchor": "// 부품: 인증",
+            "label": "① 도구 빌려 오기",
+            "desc": "암호 도구·DB·쿠키 읽기",
+            "focus": false
+          },
+          {
+            "anchor": "export function hashPassword",
+            "label": "② 비밀번호 저장값 만들기",
+            "desc": "오늘 고칠 곳",
+            "focus": true
+          },
+          {
+            "anchor": "export function verifyPassword",
+            "label": "③ 비밀번호 확인",
+            "desc": "오늘 고칠 곳",
+            "focus": true
+          },
+          {
+            "anchor": "const SESSION_DAYS",
+            "label": "④ 밴드 만들기",
+            "desc": "로그인하면 세션을 만들어요",
+            "focus": false
+          },
+          {
+            "anchor": "export function currentUser",
+            "label": "⑤ 밴드로 알아보기",
+            "desc": "쿠키의 세션으로 누구인지 찾아요",
+            "focus": false
+          },
+          {
+            "anchor": "export function requireUser",
+            "label": "⑥ 로그인 필수",
+            "desc": "모르는 사람이면 401",
+            "focus": false
+          }
+        ]
+      },
+      "open": {
+        "file": "src/auth.ts",
+        "anchor": "export function hashPassword",
+        "note": "② 오늘 고칠 곳"
+      },
+      "actions": [
+        {
+          "label": "봤어요",
+          "do": "next"
+        }
+      ]
+    },
+    {
+      "id": "predict-401",
+      "kind": "predict",
+      "predict": "p2",
+      "text": "밴드 없이(로그인 안 하고) 글을 쓰려고 하면 어떤 답장이 올까요?",
+      "after": [
+        {
+          "label": "로그인 없이 글쓰기 보내 보기",
+          "do": "try",
+          "tries": [
+            {
+              "method": "POST",
+              "path": "/posts",
+              "body": {
+                "title": "누구?"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "plain",
+      "kind": "say",
+      "text": "**401**(\"누구인지 모르겠어요\")이 왔어요. 글쓰기 맨 앞의 `requireUser`가 밴드를 확인해서 막은 거예요. 여기까지는 잘 되고 있어요.\n\n그런데 큰 문제가 하나 숨어 있어요. 아까 가입한 alice의 정보가 창고에 **어떻게** 들어갔는지 볼까요?",
+      "actions": [
+        {
+          "label": "users 장부 열어 보기",
+          "do": "db",
+          "sql": "SELECT id, username, password_hash FROM users"
+        }
+      ]
+    },
+    {
+      "id": "predict-hash",
+      "kind": "predict",
+      "predict": "p1",
+      "text": "비밀번호 `pass1234`가 **그대로** 저장돼 있어요! 만약 이 창고 파일이 통째로 유출되면 모든 사람의 비밀번호가 그대로 보여요. 사람들은 여러 사이트에 같은 비밀번호를 쓰니 피해가 더 커지죠.\n\n비밀번호를 **어떻게 저장해 뒀어야** 피해가 가장 적을까요?"
+    },
+    {
+      "id": "salt",
+      "kind": "say",
+      "text": "핵심은 두 가지예요.\n\n- **해시**: 고기를 갈아 버리는 것처럼 **되돌릴 수 없게** 바꿔요. 같은 비밀번호는 늘 같은 결과가 나와서, 로그인할 때 **다시 갈아서 비교**하면 돼요.\n- **소금**: 사람마다 다른 **양념**을 섞어서 갈아요. 그러면 alice와 bob이 같은 비밀번호여도 저장값이 달라져서, 미리 계산해 둔 \"비밀번호 → 해시\" 표로 한꺼번에 풀 수 없어요.\n\n여기에 **일부러 느린** 해시(`scrypt`)를 써서, 하나씩 맞춰 보는 공격도 오래 걸리게 해요.\n\n고칠 곳은 [[src/auth.ts#export function hashPassword]] 와 바로 아래 [[src/auth.ts#export function verifyPassword]] 예요.",
+      "actions": [
+        {
+          "label": "알겠어요, 다음",
+          "do": "next"
+        }
+      ],
+      "open": {
+        "file": "src/auth.ts",
+        "anchor": "export function hashPassword",
+        "toAnchor": "return password === stored;",
+        "note": "② ③ 여기를 고쳐요"
+      }
+    },
+    {
+      "id": "fix",
+      "kind": "fix",
+      "text": "직접 고칠 차례예요.\n\n**② `hashPassword`**: 소금은 `randomBytes(16)`, 해시는 `scryptSync(비밀번호, 소금, 32)`. 둘 다 16진수 글자(`.toString(\"hex\")`)로 바꿔서 `\"scrypt:소금:해시\"` 꼴로 돌려줘요.\n\n**③ `verifyPassword`**: 저장값을 `\":\"`로 나눠 소금을 꺼내고, 들어온 비밀번호를 **같은 소금으로 다시 갈아서** 저장된 해시와 비교해요. 비교는 `timingSafeEqual`로 해요(비교 시간으로 힌트를 주지 않게).\n\n필요한 도구는 이미 맨 위에서 빌려 왔어요: [[src/auth.ts#import { randomBytes, scryptSync, timingSafeEqual }]]\n\n참고로 고친 뒤에는 아까 그대로 저장된 alice는 로그인이 안 돼요. 새 아이디로 가입해서 시험해 보세요.\n\n**저장하면 바로 확인할게요.** ②가 막막하면 [빈칸으로 도와줘]를 누르세요.",
+      "open": {
+        "file": "src/auth.ts",
+        "anchor": "TODO(4단계): 비밀번호를 그대로",
+        "note": "② 여기부터"
+      },
+      "scaffold": {
+        "file": "src/auth.ts",
+        "from": "// TODO(4단계): 비밀번호를 그대로",
+        "to": "return password;",
+        "note": "①~③ 빈칸을 채우고 저장하세요 (그다음 verifyPassword도)",
+        "text": "// ①~③ 빈칸을 채워 보세요.\nconst salt = /* ① 무작위 소금 16바이트를 16진수 글자로 */;\nconst hash = /* ② 비밀번호를 그 소금으로 scryptSync(…, …, 32) 해서 16진수 글자로 */;\nreturn /* ③ \"scrypt:소금:해시\" 꼴의 글자 */;"
+      }
+    },
+    {
+      "id": "explain",
+      "kind": "explain",
+      "text": "**내 말로** 한 문장 적어 볼까요?\n\n**같은 비밀번호인데 두 사람의 저장값이 달라야 하는 이유는 뭘까요?**"
+    },
+    {
+      "id": "wrap",
+      "kind": "say",
+      "text": "4단계 끝이에요! 정리하면\n\n- **인증** = 누구인지 알아내기. 모르면 **401**\n- 로그인하면 **세션(손목밴드)**을 주고, 브라우저는 **쿠키**로 들고 다닌다\n- 비밀번호는 **그대로 저장하지 않는다.** 사람마다 다른 **소금** + 일부러 **느린 해시**\n- 확인은 되돌리는 게 아니라 **같은 소금으로 다시 계산해서 비교**한다\n\n이제 \"로그인 되는 게시판\"이 됐어요! 다음 단계에서는 **남의 글은 못 고치게** 막아 볼 거예요.",
+      "actions": [
+        {
+          "label": "5단계로",
+          "do": "next_stage"
+        }
+      ],
+      "clearFocus": true
+    }
+  ]
+}

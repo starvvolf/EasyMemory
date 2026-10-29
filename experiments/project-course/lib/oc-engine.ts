@@ -18,7 +18,7 @@ export const OC_VERSION = "2.2.1";
 const MODEL = process.env.RECALLER_ASSIST_MODEL?.trim() || "gpt-6-sol";
 const MAX_STEPS = 8;
 const READ = new Set(["read", "glob", "grep"]);
-const OURS = ["open_in_editor", "start_server", "send_request", "run_checks"] as const;
+const OURS = ["open_in_editor", "start_server", "send_request", "run_checks", "look_db"] as const;
 const EDITS = new Set(["edit", "write", "patch"]); // GPT 모델에서는 patch(apply_patch)로 고친다
 const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour"]);
 /** 고치기 도구 입력에서 파일 경로들 */
@@ -153,6 +153,7 @@ function policyPlugin(fake: boolean) {
         start_server: ["학습자의 실습 서버(4101)를 켠다.", {}, []],
         send_request: ["실습 서버에 실제 HTTP 요청을 보내고 답장을 본다. as는 로그인한 사람(A/B) 또는 비움.", { method: { type: "string" }, path: { type: "string" }, body: {}, as: { type: "string" } }, ["method", "path"]],
         run_checks: ["이번 단계 자동 검사를 돌린다(통과 판정은 검사기가 한다).", {}, []],
+        look_db: ["실습 서버가 쓰는 DB(SQLite)를 읽기만 한다. 응답이 아니라 실제로 저장된 값을 보여 줄 때 쓴다. SELECT만, 20줄까지.", { sql: { type: "string" } }, ["sql"]],
       };
       await ctx.tool.transform((ed: any) => {
         ed.add({ name: "show_tour", options: { codemode: false },

@@ -6,7 +6,7 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { lineDiff } from "./course.ts";
-import { check, devStatus, startDev, tryRequest } from "./learn.ts";
+import { check, devStatus, peekDb, startDev, tryRequest } from "./learn.ts";
 import { AiUnavailable, aiJson, S } from "./ai.ts";
 import { bridgeContext, bridgeState, send as bridgeSend } from "./bridge.ts";
 import { DATA, read, saveRun, stageProgress } from "./store.ts";
@@ -34,7 +34,7 @@ export type AgentIO = {
   streamed?: boolean;
 };
 
-export const TOOLS = ["list_files", "read_file", "open_in_editor", "start_server", "send_request", "run_checks", "edit_file", "none"] as const;
+export const TOOLS = ["list_files", "read_file", "open_in_editor", "start_server", "send_request", "run_checks", "edit_file", "look_db", "none"] as const;
 export type ToolName = (typeof TOOLS)[number];
 
 const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친절한 강사이자, 학습자의 프로젝트 폴더를 직접 다룰 수 있는 개발자다.
@@ -47,6 +47,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 - start_server {}: 실습 서버 켜기(4101)
 - send_request {"method":"GET","path":"/nothing","body":null,"as":null}: 실습 서버에 실제 요청(as는 "A"/"B"/null)
 - run_checks {}: 이번 단계 자동 검사(판정은 검사기가 한다)
+- look_db {"sql":"SELECT * FROM posts"}: 실습 서버의 DB를 읽기만(SELECT)
 - edit_file {"path":"src/server.ts","find":"바꿀 원래 글(파일 안에 딱 한 번 나와야 함)","replace":"새 글","why":"왜 바꾸는지 한 줄"}: 코드 고치기
 - none: 도구 없이 답을 마친다
 
@@ -142,6 +143,11 @@ export async function runTool(io: AgentIO, tool: ToolName, args: Record<string, 
     const bad = res.results.filter((x) => !x.ok);
     await io.show({ type: "tool", icon: "✓", label: `검사를 돌렸어요: ${res.passed}개 통과 · ${res.failed}개 실패`, detail: bad.slice(0, 4).map((x) => `✗ ${x.title}: 기대 ${x.failure?.expected} / 실제 ${x.failure?.actual}`).join("\n") || undefined, ok: res.failed === 0 });
     return !res.started ? `서버가 켜지지 않음: ${res.startError}` : bad.length ? bad.map((x) => `✗ ${x.title}: ${x.failure?.request ?? ""} 기대 ${x.failure?.expected} / 실제 ${x.failure?.actual} (위치 ${x.where?.file}:${x.where?.line})`).join("\n") : "모두 통과";
+  }
+  if (tool === "look_db") {
+    const t = await peekDb(runId, String(args.sql ?? ""));
+    await io.show({ type: "tool", icon: "🗄", label: `DB를 봤어요: ${t.sql.slice(0, 60)}`, detail: t.columns.length ? [t.columns.join(" | "), ...t.rows.slice(0, 8).map((r) => r.map((v) => String(v)).join(" | "))].join("\n") : t.note, ok: !t.note.startsWith("읽지") });
+    return t.columns.length ? [t.columns.join(" | "), ...t.rows.map((r) => r.map((v) => String(v)).join(" | "))].join("\n") : t.note;
   }
   if (tool === "edit_file") {
     const { rel, abs } = safePath(ws, String(args.path));

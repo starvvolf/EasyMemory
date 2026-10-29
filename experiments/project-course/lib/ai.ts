@@ -1,5 +1,5 @@
 // AI 호출: 앱과 같은 ChatGPT 로그인을 쓴다(src/lib/assist/model.ts를 읽기만 하고 고치지 않는다).
-// 이 실험에 허락된 유료 호출은 20회(인계 문서). 넘기 전에 멈추고 화면에 알린다.
+// 호출 수는 .data/ai-usage.json에 센다. 한도는 10/30 사용자 결정으로 없음(PC_AI_LIMIT을 주면 그만큼).
 // AI는 판정하지 않는다: 코스 고르기 대화와 힌트·설명만 한다.
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -9,7 +9,8 @@ import { ROOT } from "./course.ts";
 import { DATA, read, update } from "./store.ts";
 
 const APP_ROOT = path.resolve(ROOT, "..", "..");
-export const AI_LIMIT = Number(process.env.PC_AI_LIMIT || 50); // 사용자 허락 10/28: 20 → 50
+// 사용자 결정 10/30: 한도 없음(호출 수는 계속 센다). 필요하면 PC_AI_LIMIT으로만 제한
+export const AI_LIMIT = process.env.PC_AI_LIMIT ? Number(process.env.PC_AI_LIMIT) : Infinity;
 const USAGE = () => path.join(DATA, "ai-usage.json");
 type Usage = { count: number; calls: { at: string; purpose: string; ok: boolean; note?: string }[] };
 
@@ -25,7 +26,7 @@ export function aiMode(): "off" | "fake" | "app" {
 }
 export async function aiStatus() {
   const u = await read<Usage>(USAGE(), { count: 0, calls: [] });
-  return { mode: aiMode(), used: u.count, limit: AI_LIMIT };
+  return { mode: aiMode(), used: u.count, limit: Number.isFinite(AI_LIMIT) ? AI_LIMIT : null };
 }
 
 type Assist = {

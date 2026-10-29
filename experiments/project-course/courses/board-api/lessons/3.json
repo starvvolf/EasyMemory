@@ -1,0 +1,150 @@
+{
+  "stage": 3,
+  "title": "입력 검증",
+  "passText": "이제 이상한 값은 저장하지 않고 400과 이유를 돌려줘요.",
+  "teach": [
+    "입력 검증: 저장하기 전에 규칙 확인",
+    "400(요청이 잘못됨) vs 500(서버가 잘못됨)",
+    "규칙에 어긋나면 이유와 함께 돌려보내기",
+    "앞뒤 공백 정리(trim)"
+  ],
+  "tutorNotes": "비유: 검증은 '창고 입구의 검수', 400은 '손님이 잘못 보낸 편지라 돌려보냄', 500은 '가게 안에서 사고가 남'. 사용자는 실수든 장난이든 이상한 값을 보낸다는 감각을 준다. typeof, trim, throw는 처음 나오면 한 줄로 쉽게. 로그인 이야기는 '4단계에서 해요'.",
+  "beats": [
+    {
+      "id": "intro",
+      "kind": "say",
+      "text": "게시판이 생겼으니 이제 **아무나** 글을 써요. 그리고 사람들은 생각보다 이상한 걸 보내요.\n\n- 제목이 띄어쓰기뿐인 글\n- 제목 자리에 숫자 `123`\n- 아예 깨진 편지 (`{제목: 망가짐`)\n\n서버는 이런 걸 **창고에 넣기 전에 검사**해야 해요. 창고 입구의 검수 담당이라고 생각하면 돼요. 규칙은 이미 [[src/validate.ts#* 규칙]] 에 적어 뒀어요. 한번 읽어 보세요.",
+      "actions": [
+        {
+          "label": "알겠어요, 다음",
+          "do": "next"
+        }
+      ],
+      "open": {
+        "file": "src/validate.ts",
+        "anchor": "* 규칙",
+        "toAnchor": "* - 규칙에 어긋나면",
+        "note": "검수 규칙"
+      }
+    },
+    {
+      "id": "predict-blank",
+      "kind": "predict",
+      "predict": "p1",
+      "text": "제목이 **띄어쓰기뿐인** 글쓰기 요청이 왔어요. 어떤 답장이 맞을까요?",
+      "after": [
+        {
+          "label": "직접 빈 제목 보내 보기",
+          "do": "start_dev,try",
+          "tries": [
+            {
+              "method": "POST",
+              "path": "/posts",
+              "body": {
+                "title": "   ",
+                "body": "x"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "blank-saved",
+      "kind": "say",
+      "text": "지금 서버는 **201(만들었어요)**이라고 답했어요. 검수 없이 그냥 들여보낸 거예요. 창고를 열어 볼게요.",
+      "actions": [
+        {
+          "label": "DB 창고 열어 보기",
+          "do": "db",
+          "sql": "SELECT id, '[' || title || ']' AS title, body FROM posts ORDER BY id DESC"
+        }
+      ]
+    },
+    {
+      "id": "blank-explain",
+      "kind": "say",
+      "text": "제목이 `[   ]` 처럼 **빈 글이 진짜로 저장됐어요.** 목록에 제목 없는 글이 쌓이면 게시판이 엉망이 되겠죠.\n\n검수 함수는 [[src/validate.ts#export function validatePost]] 예요. 지금은 [[src/validate.ts#TODO(3단계)]] 아래에서 **아무 값이나 통과**시켜요.",
+      "actions": [
+        {
+          "label": "알겠어요, 다음",
+          "do": "next"
+        }
+      ],
+      "open": {
+        "file": "src/validate.ts",
+        "anchor": "export function validatePost",
+        "note": "지금은 아무거나 통과"
+      }
+    },
+    {
+      "id": "predict-json",
+      "kind": "predict",
+      "predict": "p2",
+      "text": "하나 더요. 편지가 아예 **깨져서** 읽을 수 없으면(`{제목: 망가짐`) 어떤 답장이 맞을까요?",
+      "after": [
+        {
+          "label": "직접 깨진 편지 보내 보기",
+          "do": "try",
+          "tries": [
+            {
+              "method": "POST",
+              "path": "/posts",
+              "raw": "{제목: 망가짐"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "json-explain",
+      "kind": "say",
+      "text": "지금은 **500**이 와요. 500은 \"가게 안에서 사고가 났어요\", 즉 **서버 코드를 고쳐야 한다**는 신호예요. 그런데 이건 손님이 편지를 잘못 쓴 거잖아요. 그러면 **400**(\"편지가 잘못됐어요\")이 맞아요.\n\n- **4xx**: 요청(손님) 쪽 잘못 → 손님이 고쳐서 다시 보내면 돼요\n- **5xx**: 서버(가게) 쪽 잘못 → 운영자가 고쳐야 해요\n\n깨진 편지를 읽다가 터지는 곳은 [[src/http.ts#return JSON.parse(text)]] 예요. `JSON.parse`가 읽지 못하면 **오류를 던지는데**, 아무도 받아 주지 않아서 500이 돼요.",
+      "actions": [
+        {
+          "label": "알겠어요, 다음",
+          "do": "next"
+        }
+      ],
+      "open": {
+        "file": "src/http.ts",
+        "anchor": "return JSON.parse(text)",
+        "note": "깨진 편지면 여기서 터져요"
+      }
+    },
+    {
+      "id": "fix",
+      "kind": "fix",
+      "text": "이제 두 곳을 고쳐요.\n\n**1. 검수** — [[src/validate.ts#TODO(3단계)]] 에서 주석의 규칙대로 검사하고, 어긋나면 `throw new HttpError(400, \"이유\")`로 돌려보내요. 제목은 **앞뒤 공백을 뺀 값**(`trim()`)으로 저장해요.\n\n**2. 깨진 편지** — [[src/http.ts#return JSON.parse(text)]] 를 `try { … } catch { … }`로 감싸서, 읽지 못하면 `HttpError(400, …)`를 던지게 해요. 읽었는데 `{ }` 모양(객체)이 아니어도 400이에요.\n\n`throw`는 \"여기서 멈추고 이 오류를 위로 던져\"라는 뜻이에요. 던진 `HttpError`는 1단계에서 본 [[src/server.ts#catch (error)]] 가 받아서 그 숫자로 답장해요.\n\n**저장하면 바로 확인할게요.** 검수 쪽이 막막하면 [빈칸으로 도와줘]를 누르세요.",
+      "open": {
+        "file": "src/validate.ts",
+        "anchor": "TODO(3단계)",
+        "note": "여기부터 채워요"
+      },
+      "scaffold": {
+        "file": "src/validate.ts",
+        "from": "// TODO(3단계)",
+        "to": "return { title: String(input.title",
+        "note": "①~④ 빈칸을 채우고 저장하세요",
+        "text": "// ①~④ 빈칸을 채워 보세요.\nif (/* ① title이 글자(string)가 아니면 */) throw new HttpError(400, \"제목은 글자여야 해요.\");\nconst title = /* ② 앞뒤 공백을 뺀 제목 */;\nif (/* ③ 비었거나 TITLE_MAX보다 길면 */) throw new HttpError(400, \"제목은 1~100자예요.\");\nconst body = input.body ?? \"\";\nif (/* ④ body가 글자가 아니거나 BODY_MAX보다 길면 */) throw new HttpError(400, \"본문은 5000자까지의 글자예요.\");\nreturn { title, body: body as string };"
+      }
+    },
+    {
+      "id": "explain",
+      "kind": "explain",
+      "text": "**내 말로** 한 문장 적어 볼까요?\n\n**깨진 편지(JSON)에는 왜 500이 아니라 400을 보내야 할까요?**"
+    },
+    {
+      "id": "wrap",
+      "kind": "say",
+      "text": "3단계 끝이에요! 정리하면\n\n- 들어온 값은 **창고에 넣기 전에 검수**한다\n- 규칙에 어긋나면 **400 + 이유**로 돌려보낸다 (저장하지 않음)\n- **4xx는 손님 잘못, 5xx는 가게 잘못.** 깨진 편지에 500을 내면 운영자가 엉뚱한 곳을 찾는다\n- 제목은 **앞뒤 공백을 뺀 값**으로 저장한다\n\n다음 단계는 드디어 **회원가입과 로그인**이에요.",
+      "actions": [
+        {
+          "label": "4단계로",
+          "do": "next_stage"
+        }
+      ],
+      "clearFocus": true
+    }
+  ]
+}

@@ -10,6 +10,7 @@ import { answer, diagnose, getIntake, markConfirmed, normalizePlan, startIntake 
 import { PORTS, openAtStartup, updateBridgeIfOld, check, devStatus, explain, hint, openEditor, predict, skip, startDev, startStage, stopDev, tryRequest, workspaceOf, workspaceStage } from "../lib/learn.ts";
 import { addRun, candidates, getRun, recordsFile, runs, setActive, type Run } from "../lib/store.ts";
 import { aiStatus } from "../lib/ai.ts";
+import { knowledgeExport, notesView } from "../lib/notes.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
 import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
@@ -167,6 +168,16 @@ const routes: [string, RegExp, Handler][] = [
     return { ok: true };
   }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => openEditor(m[1])],
+  ["GET", /^\/api\/runs\/(\w+)\/knowledge-export$/, async (_q, m) => { const run = await getRun(m[1]); const course = await loadCourse(run.courseId); return knowledgeExport(run.id, course.title); }],
+  ["GET", /^\/api\/runs\/(\w+)\/notes$/, async (_q, m) => {
+    // 프로젝트 노트: 파일별 기록 + 연결 + 만난 말, 파일 역할은 코스의 부품 카드에서
+    const run = await getRun(m[1]);
+    const course = await loadCourse(run.courseId);
+    const ws = workspaceOf(run, course.stages.find((s) => s.n === run.current)!.template);
+    const view = await notesView(run.id, ws);
+    const role = (f: string) => course.parts.find((p) => p.files.includes(f));
+    return { ...view, workspace: ws, files: view.files.map((x) => ({ ...x, part: role(x.file) ? { name: role(x.file)!.name, role: role(x.file)!.role } : null })) };
+  }],
 ];
 
 const TYPES: Record<string, string> = { ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml" };

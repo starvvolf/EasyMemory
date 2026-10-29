@@ -7,23 +7,26 @@ import path from "node:path";
 import type { ServerResponse } from "node:http";
 import { COURSES, loadCourse, stageOf } from "./course.ts";
 import { locate, type RunResult } from "./checker.ts";
-import { check, devStatus, explain, hint, predict, startDev, tryRequest, workspaceOf } from "./learn.ts";
+import { check, devStatus, explain, hint, peekDb, predict, startDev, tryRequest, workspaceOf } from "./learn.ts";
 import { AiUnavailable, aiText } from "./ai.ts";
 import { DATA, getRun, read, update } from "./store.ts";
 import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridgeSend } from "./bridge.ts";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
+import { addEntry, addTour, codeTerms, firstLine, notesContext } from "./notes.ts";
 import { runAgent, undoEdit, type DiffCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
 
-type Action = { label: string; do: string; try?: { method: string; path: string; body?: unknown; as?: string } };
+type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string };
+/** do: next | try | start_dev,try | observe(검사로 지금 상태 보기) | db(DB 들여다보기) | next_stage …  tries: 요청 여러 개를 차례로 */
+type Action = { label: string; do: string; try?: Try; tries?: Try[]; sql?: string };
 type Open = { file: string; anchor: string; toAnchor?: string; note?: string };
 type Scaffold = { file: string; from: string; to?: string; text: string; note?: string };
 type Chunk = { anchor: string; label: string; desc?: string; focus?: boolean };
 type Focus = { file: string; chunks: Chunk[] };
 type Beat = { id: string; kind: "say" | "predict" | "fix" | "explain" | "map"; text: string; actions?: Action[]; after?: Action[]; predict?: string; open?: Open; scaffold?: Scaffold; focus?: Focus; clearFocus?: boolean };
-export type Plan = { stage: number; title: string; teach: string[]; tutorNotes: string; beats: Beat[] };
+export type Plan = { stage: number; title: string; teach: string[]; tutorNotes: string; beats: Beat[]; passText?: string };
 
 type Card =
   | { type: "choice"; pid: string; options: string[]; picked?: number; answer?: number }
@@ -33,6 +36,7 @@ type Card =
   | { type: "explain"; done?: string }
   | { type: "code"; file: string; from: number; to: number; code: string }
   | { type: "map"; file: string; chunks: Chunk[] }
+  | { type: "table"; sql: string; columns: string[]; rows: unknown[][]; note?: string }
   | ToolCard | DiffCard;
 export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[] };
 type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null };
@@ -188,21 +192,40 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   return change(runId, n, async (s, push) => {
     const b = plan.beats[s.beat];
     const lastActions = [...s.messages].reverse().find((m) => m.actions)?.actions ?? [];
-    if ((input.do === "next" || input.do === "start_dev,try" || input.do === "try" || input.do === "next_stage") && s.waiting !== "action") throw err(409, "지금 하던 것을 먼저 마쳐 주세요.");
+    if (["next", "start_dev,try", "try", "next_stage", "observe", "db"].includes(input.do) && s.waiting !== "action") throw err(409, "지금 하던 것을 먼저 마쳐 주세요.");
     if (input.do === "next") {
       enter(plan, s, s.beat + 1, push, course);
     } else if (input.do === "start_dev,try" || input.do === "try") {
       const a = [...(b?.actions ?? []), ...(b?.after ?? [])].find((x) => x.do === input.do) ?? lastActions.find((x) => x.do === input.do);
-      if (!a?.try) throw err(400, "보낼 요청이 없어요.");
+      const reqs = a?.tries ?? (a?.try ? [a.try] : []);
+      if (!a || !reqs.length) throw err(400, "보낼 요청이 없어요.");
       push({ role: "me", text: a.label });
       if (input.do === "start_dev,try" && !devStatus(runId).running) {
         const d = await startDev(runId);
         push({ role: "note", text: d.running ? "서버를 켰어요 (http://127.0.0.1:4101)" : "서버가 켜지지 않았어요. 아래 로그를 보세요." });
         if (!d.running) return;
       }
-      if (!devStatus(runId).running) { push({ role: "tutor", text: "서버가 꺼져 있어요. 위의 [서버 켜기]를 누른 뒤 다시 보내 주세요.", actions: [{ label: "서버 켜고 다시 보내기", do: "start_dev,try", try: a.try }] }); return; }
-      const r = await tryRequest(runId, a.try);
-      push({ role: "tutor", card: { type: "reply", request: r.request, status: r.status, timedOut: r.timedOut, error: r.error, headers: pick(r.headers), body: r.body } });
+      if (!devStatus(runId).running) { const d = await startDev(runId); if (!d.running) { push({ role: "tutor", text: "서버가 켜지지 않았어요. 고치다가 문법이 깨진 것 같아요. 저장한 코드를 확인하거나 물어봐 주세요.", actions: [{ label: "다시 보내기", do: "start_dev,try", tries: reqs }] }); return; } }
+      for (const q of reqs) {
+        const r = await tryRequest(runId, q);
+        push({ role: "tutor", card: { type: "reply", request: r.request, status: r.status, timedOut: r.timedOut, error: r.error, headers: pick(r.headers), body: r.body } });
+      }
+      enter(plan, s, s.beat + 1, push, course);
+    } else if (input.do === "db") {
+      // DB 들여다보기: 응답이 아니라 실제로 저장된 것을 본다
+      const a = [...(b?.actions ?? []), ...(b?.after ?? [])].find((x) => x.do === "db") ?? lastActions.find((x) => x.do === "db");
+      if (!a?.sql) throw err(400, "볼 표가 없어요.");
+      push({ role: "me", text: a.label });
+      const t = await peekDb(runId, a.sql);
+      push({ role: "tutor", card: { type: "table", ...t } });
+      enter(plan, s, s.beat + 1, push, course);
+    } else if (input.do === "observe") {
+      // 지금 코드로 이번 단계 확인을 돌려 본다(고치기 전: 무엇이 기대와 다른지 보기)
+      push({ role: "me", text: (b?.actions ?? []).find((x) => x.do === "observe")?.label ?? "확인해 보기" });
+      try {
+        const r = await check(runId, n, "observe");
+        push({ role: "tutor", card: { type: "check", result: r } });
+      } catch (e) { push({ role: "tutor", text: `확인하지 못했어요: ${(e as Error).message}` }); }
       enter(plan, s, s.beat + 1, push, course);
     } else if (input.do === "choice") {
       if (s.waiting !== "choice" || b?.kind !== "predict") throw err(409, "지금은 고를 때가 아니에요.");
@@ -246,7 +269,8 @@ async function runCheck(runId: string, n: number, plan: Plan, course: Awaited<Re
     s.lastCheck = result;
     push({ role: "tutor", card: { type: "check", result } });
     if (result.stageOk) {
-      push({ role: "tutor", text: s.hints >= 3 ? "통과했어요. 정답 줄을 보고 고친 거라, 이 부분은 다음 복습에서 코드 없이 한 번 더 확인할게요." : "**통과!** 직접 고쳐서 모든 확인을 통과했어요. 이제 없는 주소에도, 틀린 방식에도 서버가 제대로 답장해요." });
+      for (const f of stageOf(course, n).fix.files) void addEntry(runId, wsDir, f, { stage: n, kind: "fixed", title: s.hints >= 3 ? "정답 줄 보고 고침" : "직접 고침", summary: `${plan.title}: ${stageOf(course, n).fix.text}`.slice(0, 120) }).catch(() => {});
+      push({ role: "tutor", text: s.hints >= 3 ? "통과했어요. 정답 줄을 보고 고친 거라, 이 부분은 다음 복습에서 코드 없이 한 번 더 확인할게요." : `**통과!** 직접 고쳐서 모든 확인을 통과했어요. ${plan.passText ?? ""}`.trim() });
       if (s.waiting === "save") enter(plan, s, s.beat + 1, push, course);
     } else {
       const bad = result.results.filter((r) => !r.ok);
@@ -306,6 +330,18 @@ async function allFiles(ws: string) {
   return out.join("\n\n");
 }
 
+/** 질문·답을 프로젝트 노트에: 어느 파일에 대한 것인지 정해서 그 파일 밑에 */
+async function remember(runId: string, n: number, ws: string, s0: State, x: { q: string; shown?: string; quote?: { file: string; from: number; to: number }; mode?: string; answer: string }) {
+  if (!x.answer || /^(답을|지금은 AI|생각이 너무)/.test(x.answer) || x.mode === "tour") return; // 투어는 카드에서 따로
+  const word = /^"(.+)"는 뭐예요\?$/.exec(x.shown ?? "")?.[1];
+  const target = x.quote?.file ?? lastQuoteFile(s0) ?? bridgeState(runId)?.file ?? null;
+  if (!target) return;
+  if (x.mode === "explain" && x.quote) return; // 덩어리 설명은 explainBlock에서
+  await addEntry(runId, ws, target, word
+    ? { stage: n, kind: "word", title: word, summary: firstLine(x.answer), terms: [word] }
+    : { stage: n, kind: "asked", from: x.quote?.from, to: x.quote?.to, title: (x.shown ?? x.q).replace(/\s+/g, " ").slice(0, 50), summary: firstLine(x.answer), terms: codeTerms(x.answer).slice(0, 8) });
+}
+
 /** 최근에 물어본 코드의 파일(설명 속 단어를 눌러 이어 물을 때 같은 파일을 붙이려고) */
 function lastQuoteFile(s: State) { return [...s.messages].reverse().find((m) => m.card?.type === "code")?.card?.file as string | undefined; }
 /** 파일 내용을 줄 번호와 함께. withImports면 그 파일이 가져오는 이 프로젝트 파일(./x.ts)도 */
@@ -361,6 +397,8 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
     s0.lastCheck ? `[마지막 확인] ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}: 기대 ${r.failure?.expected} / 실제 ${r.failure?.actual}`).join("; ") || "모두 통과"}` : "",
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
     `[최근 대화]\n${recentText}`,
+    // 학습자 기억(프로젝트 노트): 이 프로젝트에서 이미 본 것
+    await notesContext(runId, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null).catch(() => ""),
     // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
     opts.mode === "tour" ? await allFiles(ws) : await filesFor(ws, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, opts.mode === "explain"),
   ].filter(Boolean).join("\n\n");
@@ -378,13 +416,19 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
           }).catch((e) => console.error("[lesson] 기록 저장 실패", e));
         },
         // 채팅 기록 저장이 실패해도 도구 결과는 그대로 쓴다(저장 실패를 도구 실패로 착각하지 않게)
-        show: async (card) => { await change(runId, n, (_s, push) => push({ role: "tutor", card })).catch((e) => console.error("[lesson] 기록 저장 실패", e)); },
+        show: async (card) => {
+          await change(runId, n, (_s, push) => push({ role: "tutor", card })).catch((e) => console.error("[lesson] 기록 저장 실패", e));
+          // 프로젝트 노트: 투어 걸음은 파일별로, 파일 사이 넘어간 길은 연결로 / 튜터가 고친 것은 그 파일에
+          if (card.type === "tour") await addTour(runId, ws, n, card.title, card.steps).catch(() => {});
+          if (card.type === "diff") await addEntry(runId, ws, card.file, { stage: n, kind: "edited", title: "튜터가 고침", summary: card.why || "튜터가 코드를 고쳤어요(직접 통과 아님)" }).catch(() => {});
+        },
         say: async (text) => { await change(runId, n, (_s, push) => push({ role: "tutor", text })).catch((e) => console.error("[lesson] 기록 저장 실패", e)); },
         quiet: (ms: number) => { quietUntil.set(`${runId}:${n}`, Date.now() + ms); },
         streamed: false,
       };
     try {
       answer = await runAgent(io as Parameters<typeof runAgent>[0], q);
+      await remember(runId, n, ws, s0, { q, shown, quote, mode: opts.mode, answer }).catch((e) => console.error("[notes]", e));
       if (opts.onAnswer) await opts.onAnswer(answer).catch(() => {});
       if (io.streamed) return change(runId, n, (s) => { s.busy = false; });
     } catch (e) {
@@ -512,6 +556,8 @@ export async function what(runId: string, n: number, plan: Plan, quote: { file: 
   const run = await getRun(runId);
   const out = await explainWhat(runId, run.courseId, n, quote);
   if (out.text) {
+    const names = (out.item?.terms ?? []).map((t: { name: string }) => t.name.replace(/^\/\/ /, ""));
+    await addEntry(runId, await wsOf(runId, n), quote.file, { stage: n, kind: "what", from: quote.from, to: quote.to, title: names.join(", ") || quote.code.trim().slice(0, 30), summary: firstLine(out.text), terms: names.length ? names : [quote.code.trim().slice(0, 30)] }).catch(() => {});
     return change(runId, n, (_s, push) => {
       push({ role: "me", text: "이건 뭐예요?", card: { type: "code", ...quote } });
       push({ role: "tutor", text: out.text! + (out.item?.later.length ? "" : "\n\n그럼 하던 것으로 돌아가 볼게요.") });
@@ -549,7 +595,10 @@ export async function explainBlock(runId: string, n: number, plan: Plan, quote: 
   const run = await getRun(runId);
   const cf = cacheFile(run.courseId, `${quote.file}\n${quote.code}`);
   const cached = await read<{ text: string } | null>(cf, null);
+  const wsNow = await wsOf(runId, n);
+  const note = (text: string) => addEntry(runId, wsNow, quote.file, { stage: n, kind: "block", from: quote.from, to: quote.to, title: `${quote.from}~${quote.to}줄 덩어리`, summary: firstLine(text), terms: codeTerms(text) }).catch(() => {});
   if (cached?.text) {
+    await note(cached.text);
     return change(runId, n, (_s, push) => {
       push({ role: "me", text: "이 덩어리 설명해 주세요", card: { type: "code", ...quote } });
       push({ role: "tutor", text: cached.text });
@@ -559,6 +608,7 @@ export async function explainBlock(runId: string, n: number, plan: Plan, quote: 
     mode: "explain",
     onAnswer: async (text) => {
       if (!text || text.length < 80 || /^답을|^지금은 AI|^생각이 너무/.test(text)) return;
+      await note(text);
       await mkdir(path.dirname(cf), { recursive: true });
       await writeFile(cf, JSON.stringify({ at: new Date().toISOString(), file: quote.file, from: quote.from, to: quote.to, text }));
     },
