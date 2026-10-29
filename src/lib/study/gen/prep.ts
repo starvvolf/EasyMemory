@@ -174,7 +174,9 @@ export function splitSections(pages: Array<Pick<PrepPage, "page" | "title" | "ro
 
 /** The page text every later step reads, before any model reading: title first, then the structured lines. */
 export function pageText(p: Pick<PrepPage, "title" | "text">) {
-  return [p.title ? `# ${p.title}` : "", p.text].filter(Boolean).join("\n");
+  // Equation objects (MathType) leave placeholder text such as "PPMTPR" in the text layer; the formula itself is a picture.
+  const clean = (s: string) => s.replace(/\s?PPM[A-Za-z]{0,6}\s?PR\b/g, "");
+  return [p.title ? `# ${clean(p.title)}` : "", clean(p.text)].filter(Boolean).join("\n");
 }
 
 type Box = [number, number, number, number];

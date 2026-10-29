@@ -318,3 +318,10 @@ test("a reply stuck saying one short piece over and over is caught early", async
   assert.equal(repeating(`{"cards":[{"title":"x","value":"${"가나다라마바사아자차카타파하 ".repeat(20)}`), false);
   assert.equal(repeating("[" + Array.from({ length: 80 }, (_, i) => i).join(", ")), false);
 });
+
+test("핵심 at most two from one page", async () => {
+  const { unfoldMerge } = await import("./recaller.ts");
+  const all = [1, 2, 3, 4, 5, 6].map((i) => ({ id: `c${i}`, title: `t${i}`, evidence: [{ page: i <= 3 ? 7 : i }] }));
+  const out = unfoldMerge({ topics: [{ name: "t", gist: "", cards: [0, 1, 2, 3, 4, 5] }], principles: [], core: [0, 1, 2, 3], same: [], rename: [], links: [] }, all);
+  assert.deepEqual(out.filter((c) => c.weight === "핵심").map((c) => c.id), ["c1", "c2"]);
+});

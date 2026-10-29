@@ -999,13 +999,20 @@ export async function runRecaller(ctx: RecallerContext) {
 }
 
 /** The changes-only 자료 전체 정리 reply, spread back into one entry per card (the shape the 자료 지도 reads). */
-export function unfoldMerge(reply: z.infer<typeof mergeReplySchema>, all: Array<{ id: string; title: string }>) {
+export function unfoldMerge(reply: z.infer<typeof mergeReplySchema>, all: Array<{ id: string; title: string; evidence?: Array<{ page: number }> }>) {
   const ok = (n: number) => Number.isInteger(n) && n >= 0 && n < all.length;
   // At most a third is 핵심 (the map's 핵심만 is the night-before view); the reply lists the most central first.
   const sameAs = new Map(reply.same.filter((x) => ok(x.n) && ok(x.of) && x.n !== x.of).map((x) => [x.n, x.of]));
   // 핵심 on a card joined to an earlier one goes to that one (the map shows the joined knowledge once, on the first card).
   const head = (n: number) => { let at = n; for (let i = 0; i < 5 && sameAs.has(at); i++) at = sameAs.get(at)!; return at; };
-  const core = new Set([...new Set(reply.core.filter(ok).map(head))].slice(0, coreMax(all.length)));
+  // …and at most two from one page, so one slide of three matrices does not take the 핵심 of a whole topic.
+  const perPage = new Map<number, number>();
+  const core = new Set([...new Set(reply.core.filter(ok).map(head))].filter((n) => {
+    const p = all[n].evidence?.[0]?.page;
+    if (p === undefined) return true;
+    perPage.set(p, (perPage.get(p) ?? 0) + 1);
+    return perPage.get(p)! <= 2;
+  }).slice(0, coreMax(all.length)));
   const rename = new Map(reply.rename.filter((x) => ok(x.n) && x.title.trim()).map((x) => [x.n, x.title.trim().slice(0, 60)]));
   const topicOf = new Map<number, string>();
   for (const t of reply.topics) for (const n of t.cards) if (ok(n) && !topicOf.has(n) && t.name.trim()) topicOf.set(n, t.name.trim());
