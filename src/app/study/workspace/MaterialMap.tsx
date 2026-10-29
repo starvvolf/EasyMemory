@@ -242,25 +242,21 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
                       </button>
                       {isOpen ? <div className="mm3-detail">
                         <div className="mm3-dhead">
-                          <b className="mm3-dtitle"><Rich text={c.title} /></b>
                           <span className="mm3-kind">{c.kind}</span>
                           {c.core ? <span className="mm3-kind core">핵심</span> : null}
                           <span className="cs-gap" />
                           {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
                         </div>
                         <Body s={c.shape} />
-                        {c.mistakes.length ? <div className="mm3-warn"><span className="mm3-tag warn">헷갈리기 쉬운 점</span>
-                          <ul>{c.mistakes.slice(0, 2).map((m, i) => <li key={i}><Rich text={m} /></li>)}</ul></div> : null}
                         {links.length ? <div className="mm3-rel"><span className="mm3-tag">이어지는 지식</span>
                           <div className="mm3-relchips">{links.map((x, i) =>
                             <button key={i} className="mm3-relchip" onClick={() => jump(x.to)} title={x.what || undefined}>
                               <span className="mm3-arrow">{x.back ? "←" : "→"}</span><Rich text={titles.get(x.to) ?? ""} />{x.what && x.what.length <= 20 ? <em>{x.what}</em> : null}</button>)}</div></div> : null}
-                        <div className="mm3-dfoot">
-                          {marked ? <span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span> : null}
+                        {c.same.length || c.questions ? <div className="mm3-dfoot">
                           {c.same.length ? <span className="small muted">같은 내용: {c.same.map((x) => range(x.pages)).join(", ")}</span> : null}
                           <span className="cs-gap" />
                           {c.questions ? <button className="btn small primary" onClick={() => onPage(c.pages[0])}>이 지식 문제 풀기 ({c.questions})</button> : null}
-                        </div>
+                        </div> : null}
                       </div> : null}
                     </li>
                   );

@@ -1519,6 +1519,9 @@ function renderSession(){
       card.append(h("div", { class:`verdict ${map[0]}` }, h("strong", { text:map[1] }), h("span", { class:"small", text:map[2] }),
         (item.format === "value" && (c.verdict === "bad" || c.verdict === "read-bad") && !c.overridden && !c.selfJudged && c.text.trim()) ? h("span", null, h("button", { class:"linkish", onclick:overrideCorrect }, "내 답도 맞아요 (표기만 달라요)")) : null
       ));
+      // The note on the option the learner picked says which slip it comes from; shown only when they fell for it.
+      const slip = item.format === "choice" && c.pick != null && c.pick !== item.answer && item.optionNotes ? item.optionNotes[c.pick] : "";
+      if (slip) rv.append(h("div", null, h("dt", { text:"이렇게 헷갈렸어요" }), h("dd", null, richText(slip))));
       if (item.explanation) rv.append(h("div", null, h("dt", { text:"설명" }), h("dd", null, richText(item.explanation))));
       if (obj) rv.append(h("div", null, h("dt", { text:"학습목표" }), h("dd", null, richText(obj.statement))));
       rv.append(h("div", null, h("dt", { text:`원문 근거 · p.${item.page}` }), h("dd", null, h("mark", { class:"quote", text:item.quote || "기록된 인용 없음" }), item.quoteVerified === false ? h("span", { class:"chip help", style:"margin-left:6px", text:"원문과 일치 확인 안 됨" }) : null,
