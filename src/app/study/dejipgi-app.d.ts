@@ -8,7 +8,7 @@ import type { Chunk, Lexicon } from "@/lib/study/chunk";
 /** An objective shown at the one confirmation before authoring (engine v2). Support objectives start unchecked. */
 export type DejipgiObjective = { id: string; section: string; part?: string; statement: string; recall: string; importance: "core" | "support" };
 export type DejipgiMaterialStatus = {
-  status: "waiting" | "running" | "confirm" | "paused" | "authoring" | "ready" | "failed"; message: string; artifactId?: string;
+  status: "waiting" | "running" | "confirm" | "paused" | "authoring" | "cards" | "ready" | "failed"; message: string; artifactId?: string;
   /** With "confirm": the designed objectives and the ones checked by default. */
   objectives?: DejipgiObjective[]; chosen?: string[];
   /** While it is being made: the outline with each unit's planned goals and where the unit is (만드는 중, 보류 …). */
@@ -29,6 +29,8 @@ export type DejipgiBuilderEngine = {
   check(requestId: string): Promise<DejipgiMaterialStatus>;
   /** The one confirmation: author these objectives. */
   confirm?(requestId: string, objectiveIds: string[]): Promise<void>;
+  /** 문제 만들기: a material whose knowledge is organized ("cards") goes on to its questions. */
+  questions?(requestId: string): Promise<void>;
   /** Remake only these objectives of a recorded document (e.g. after "이 문제 이상해요" reports). */
   remake(input: { artifactId: string; objectiveIds: string[] }): Promise<{ requestId: string; sourceId: string; from: number; to: number; purpose: string }>;
   /** Continue a request the in-app executor paused (usage limit reached, or ChatGPT login needed). */

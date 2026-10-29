@@ -323,6 +323,9 @@
 .dejipgi .zoombar{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#E5EAEF;font-family:var(--mono);font-size:13px;width:min(calc(100vw - 32px),1600px)}
 .dejipgi .zoombar .qbtn{color:#E5EAEF}
 .dejipgi .zoomlayer .pagebox{border-radius:6px;overflow:hidden;min-height:0}
+/* 원문 보기 over the 자료 지도 (z-index 60) */
+.dejipgi .zoomlayer.peek{z-index:70}
+.dejipgi .zoomlayer.peek .pagebox{background:#fff;display:flex;align-items:center;justify-content:center;color:#555}
 .dejipgi .hl.line{background:rgba(31,79,209,.16);mix-blend-mode:multiply;outline:1.5px solid rgba(31,79,209,.55)}
 .dejipgi .hlnum.line{background:#1F4FD1;color:#fff}
 .dejipgi mark.quote.line{background:var(--accent-soft);color:var(--ink);outline:1.5px solid color-mix(in srgb,var(--accent) 55%,transparent)}

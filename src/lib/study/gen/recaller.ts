@@ -413,6 +413,8 @@ export async function runRecaller(ctx: RecallerContext) {
   const input = state.input;
   // Separate limits: page readings run inside section work, so sharing one limit could leave every slot waiting on a reading.
   const lab = input.lab ?? {};
+  // 공부 화면 (사용자 10/30): 지식 정리만 하고 멈춘다. 문제는 학습자가 자료 지도에서 "문제 만들기"를 누르면 같은 실행을 이어 만든다.
+  const cardsOnly = lab.skimOnly === true || input.questionsLater === true;
   // 연구 1 손잡이: pageParallel limits pages (read + 정리) across sections instead of two sections at a time.
   const sectionLimit = limiter(lab.pageParallel ? 1000 : ctx.parallel ?? PARALLEL);
   const pageLimit = lab.pageParallel ? limiter(lab.pageParallel) : <T>(task: () => Promise<T>) => task();
@@ -660,7 +662,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const onStatsPage = (card: { evidence: Array<{ page: number }> }) => input.purpose !== "all" && card.evidence.every((e) => data.intents?.pages.some((x) => x.page === e.page && x.intent === "현황"));
     const onSilentPage = (card: { evidence: Array<{ page: number }> }) => (lab.intent === true || lab.intentPass === true) && card.evidence.every((e) => silent.has(e.page));
     const startCard = (raw: unknown) => {
-      if (lab.skimOnly) return;
+      if (cardsOnly) return;
       const parsed = cardSchema.safeParse(raw);
       if (!parsed.success || slotted.has(parsed.data.id) || onSilentPage(parsed.data)) return;
       const { cards: ok } = checkCards({ cards: [parsed.data] }, { pages }, textMap(), { lenientQuotes: lab.lenientQuotes });
@@ -747,7 +749,7 @@ export async function runRecaller(ctx: RecallerContext) {
       }
     }
     cardsIn(section.id, k);
-    if (lab.skimOnly) { chunk.questions ??= []; collect(unit); return; }
+    if (cardsOnly) { chunk.questions ??= []; collect(unit); return; }
     // Resumed runs (or cards the stream did not show whole) still get their questions.
     for (const card of slotCards(chunk.cards, input.purpose)) if (!slotted.has(card.id.split(".")[1].replace(/^\d+/, "")) && !data.dups?.[card.id] && (known.includes(card) || known.some((x) => x.id === card.id) || claim(card))) authoring.push(quiet(authorOne(section, k, card)));
     await Promise.all(authoring);
@@ -829,7 +831,7 @@ export async function runRecaller(ctx: RecallerContext) {
     await Promise.all(chunksOf(section.pages).map(async (pages, k) => pageLimit(async () => {
       if (!lab.inlineRead) await Promise.all(pages.map(readPage));
       // inlineRead with questions: the reading starts now, beside 정리, for the checks that come after (not for skimOnly).
-      else if (!lab.skimOnly) for (const p of pages) void readPage(p).catch(() => undefined);
+      else if (!cardsOnly) for (const p of pages) void readPage(p).catch(() => undefined);
       // A section named only by its page number takes its title from the first heading the page reading found.
       if (k === 0 && /^p\.\d+$|\(이어서\)$/.test(section.title)) {
         const heading = section.pages.map((p) => /^#\s*(.+)$/m.exec(data.texts[p] ?? "")?.[1]?.trim()).find(Boolean);
@@ -846,7 +848,7 @@ export async function runRecaller(ctx: RecallerContext) {
   data.timing.skimDoneAt ??= new Date().toISOString();
   const merged = mergeEarly ?? (lab.consolidate === false || (lab.skimOnly && !lab.consolidate) || (data.consolidated && !data.consolidated.error) ? Promise.resolve() : lab.consolidate ? consolidate() : merging());
   merged.catch(() => undefined); // awaited below; a pause that ends the run first must not leave it unhandled
-  if (lab.skimOnly) {
+  if (cardsOnly) {
     await merged;
     data.timing.completedAt = new Date().toISOString();
     state.status = "done"; state.phase = "done"; state.message = "";

@@ -1045,7 +1045,9 @@ function renderHome(){
     if (d.pending.artifactId && growing.has(d.pending.artifactId)) continue;
     wrap.append(h("article", { class:"deck" },
       h("div", null, h("h3", { text:d.title }), h("div", { class:"meta" }, h("span", { text:d.sourceName }), h("span", { class:`chip ${d.pending.status === "failed" ? "bad" : "acc"}`, text:PENDING_LABEL[d.pending.status] || "준비 중" }))),
-      h("div", { class:"row" }, h("button", { class:"btn small primary", onclick: () => openReader(d.id, d.lastPage || d.pending.from || 1) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기")),
+      h("div", { class:"row" }, genDeck(d.id)
+        ? h("button", { class:"btn small primary", onclick: () => MaterialMapView.open(d) }, "자료 지도")
+        : h("button", { class:"btn small primary", onclick: () => openReader(d.id, d.lastPage || d.pending.from || 1) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기")),
       h("div", { style:"grid-column:1/-1" }, pendingNote(d))));
   }
   const realDecks = decks.filter(d => !d.example);
@@ -1183,7 +1185,8 @@ function deckCard(d, growing){
     ),
     h("div", { class:"row" },
       h("button", { class:"btn small ghost", onclick: () => { S.recordsDeck = d.id; setView("records"); } }, "기록"),
-      h("button", { class:"btn small ghost", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기"),
+      genDeck(d.id) ? h("button", { class:"btn small ghost", onclick: () => MaterialMapView.open(d) }, "자료 지도")
+        : h("button", { class:"btn small ghost", onclick: () => openReader(d.id, d.lastPage || firstPage(d)) }, d.lastPage ? `이어 읽기 p.${d.lastPage}` : "읽기"),
       h("button", { class:"btn small primary", onclick: () => startSession(d.id, true) }, c.due || c.fresh ? "연습" : "더 풀기")
     ),
     h("div", { class:"bar", "aria-hidden":"true" },
@@ -1589,7 +1592,11 @@ function renderSessionEnd(){
         return h("p", { class:"small", text: left ? `${S.session.subject} 약점이 ${left}문제 남았어요. 혼자 맞히면 약점에서 빠져요.` : `${S.session.subject} 약점을 모두 풀었어요.` });
       })() : null,
       S.session.mode !== "check" && S.session.results.length ? sessionFeedback() : null,
-      S.session.mode === "check"
+      S.session.mode === "check" && genDeck(S.session.queue[0].deck)
+        ? h("div", { class:"row" },
+            h("button", { class:"btn primary", onclick: () => { const d = S.decks[S.session.queue[0].deck]; S.session = null; setView("practice"); if (d) MaterialMapView.open(d); } }, "자료 지도로 돌아가기"),
+            h("button", { class:"btn", onclick: () => { S.session = null; setView("practice"); } }, "공부 목록"))
+      : S.session.mode === "check"
         ? h("div", { class:"row" },
             h("button", { class:"btn primary", onclick: () => { const d = S.session.queue[0].deck, pg = S.session.page; S.session = null; openReader(d, nextPageWithItems(S.decks[d], pg) || pg); } }, "다음 쪽 읽기"),
             h("button", { class:"btn", onclick: () => { const d = S.session.queue[0].deck, pg = S.session.page; S.session = null; openReader(d, pg); } }, `p.${S.session.page}로 돌아가기`))
@@ -1634,6 +1641,7 @@ function maxPage(d){ return d.pageCount || Math.max(1, ...d.pages.map(p => p.n),
 function pageTotal(d){ const P = S.pdf[d.id]; return P && P.doc ? P.doc.numPages : maxPage(d); }
 function resetExplain(){}
 function openReader(deckId, page, objId){
+  if (genDeck(deckId) && S.decks[deckId]){ if (S.session && S.session.overlay) S.session = null; SourcePeek.open(S.decks[deckId], page); return; }
   const R = S.reader;
   if (S.session && S.session.overlay) S.session = null;
   resetExplain();
@@ -2517,6 +2525,9 @@ const TERMS_RULES = `너는 영어 강의자료의 용어와 개념을 한국어
 const TM = { open:false, run:null, err:null, sel:null, key:"" };
 /* 자료 지도 (workspace/MaterialMap.tsx, 2026-10-29): the outline and its knowledge on one screen, over the reader.
    Kept outside #app so a re-render of the reader does not close it; a page picked there opens in the reader. */
+// 사용자 10/30: a material the engine made is studied from its map, not a reading screen. 원문 opens one page over the map,
+// 문제 풀기 starts that page's questions, and a material made without questions gets them here (문제 만들기).
+const genDeck = (id) => !!env.mountView && /^(pending:)?gen_/.test(String(id || ""));
 const MaterialMapView = {
   cur: null,
   open(d){
@@ -2524,10 +2535,53 @@ const MaterialMapView = {
     const ov = h("div", { class:"mm2-overlay" }), host = h("div");
     ov.append(host);
     (document.getElementById("app").closest(".dejipgi") || document.body).append(ov);
-    const stop = env.mountView("map", host, { genId: String(d.id).replace(/^pending:/, ""), onPage: (p) => { this.close(); goPage(p); }, onClose: () => this.close() });
+    const gid = String(d.id).replace(/^pending:/, "");
+    const deckNow = () => S.decks[gid] || S.decks["pending:" + gid] || d;
+    const stop = env.mountView("map", host, { genId: gid,
+      onPage: (p) => SourcePeek.open(deckNow(), p),
+      onPractice: (p) => { if (!S.decks[gid]){ toast("문제가 아직 연습에 붙지 않았어요. 잠시 뒤 다시 눌러 주세요."); return; } this.close(); S.session = null; startCheck(gid, p); },
+      onMakeQuestions: () => makeQuestions(deckNow()),
+      onClose: () => this.close() });
     this.cur = { ov, stop };
   },
   close(){ if (this.cur){ this.cur.stop(); this.cur.ov.remove(); this.cur = null; } },
+};
+/* 원문 보기: one page of the PDF in a window over whatever is on screen (the map, a result), ‹ › to turn, Esc to close. */
+const SourcePeek = {
+  cur: null,
+  open(d, page){
+    if (!d) return;
+    this.close();
+    ensurePdf(d);
+    const total = pageTotal(d);
+    const box = h("div", { class:"pagebox" }), label = h("span", { class:"num" });
+    const prev = h("button", { class:"qbtn", "aria-label":"이전 쪽", onclick: () => this.go(-1) }, "‹");
+    const next = h("button", { class:"qbtn", "aria-label":"다음 쪽", onclick: () => this.go(1) }, "›");
+    const ov = h("div", { class:"zoomlayer peek", role:"dialog", "aria-label":"원문 보기", onclick: (e) => { if (e.target === e.currentTarget) this.close(); } },
+      h("div", { class:"zoombar" }, h("span", { class:"row" }, prev, label, next), h("button", { class:"qbtn", onclick: () => this.close() }, "닫기 ✕")), box);
+    (document.getElementById("app").closest(".dejipgi") || document.body).append(ov);
+    const key = (e) => {
+      if (e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); this.close(); }
+      else if (e.key === "ArrowLeft"){ e.stopPropagation(); this.go(-1); }
+      else if (e.key === "ArrowRight"){ e.stopPropagation(); this.go(1); }
+    };
+    document.addEventListener("keydown", key, true);
+    this.cur = { d, page: Math.max(1, Math.min(total, page || 1)), total, ov, box, label, prev, next, key };
+    this.paint();
+  },
+  go(k){ const c = this.cur; if (!c) return; const n = c.page + k; if (n < 1 || n > c.total) return; c.page = n; this.paint(); },
+  async paint(){
+    const c = this.cur; if (!c) return;
+    c.label.textContent = `p.${c.page} / ${c.total}`; c.prev.disabled = c.page <= 1; c.next.disabled = c.page >= c.total;
+    const P = S.pdf[c.d.id];
+    if (!P || P.status === "loading"){ c.box.textContent = "원본 PDF를 불러오는 중…"; setTimeout(() => { if (this.cur === c) this.paint(); }, 300); return; }
+    if (P.status === "error"){ c.box.textContent = "원본 PDF를 불러오지 못했어요."; return; }
+    const a = pageAspect(c.d);
+    c.box.style.cssText = `width:min(calc(100vw - 32px), calc((100vh - 90px) * ${a}));aspect-ratio:${a}`;
+    c.box.dataset.key = c.d.id + ":" + c.page;
+    await paintBox(c.box, c.d, c.page, Math.max(200, Math.floor(c.box.getBoundingClientRect().width)));
+  },
+  close(){ const c = this.cur; if (!c) return; document.removeEventListener("keydown", c.key, true); c.ov.remove(); this.cur = null; },
 };
 const TermMap = {
   // The studied range: real decks carry no page texts, so it comes from where the objectives and questions sit.
@@ -3965,7 +4019,7 @@ function pendingDeck(rec){
   return { id:rec.id, pending:rec, title:rec.title, sourceName:rec.sourceName, sourceCatalogId:rec.sourceId, pageCount:rec.pageCount,
     createdAt:rec.createdAt, example:false, items:[], allItems:[], objectives:[], pages:[], events:[], sched:{}, hidden:[], reported:{}, lastPage:rec.lastPage || 0, skipped:[] };
 }
-function savePending(){ Store.savePending(Object.values(S.decks).filter(d => d.pending).map(d => ({ ...d.pending, outline:undefined, knowledge:undefined, lastPage:d.lastPage }))); }
+function savePending(){ Store.savePending(Object.values(S.decks).filter(d => d.pending).map(d => ({ ...d.pending, outline:undefined, knowledge:undefined, making:undefined, lastPage:d.lastPage }))); }
 /* 만들면서 바로 읽기: the material being made that this deck is (the pending deck itself, or the real deck its first units became). */
 function pendingOf(d){
   if (!d) return null;
@@ -4005,9 +4059,8 @@ async function startMaterial(){
     S.builder = freshBuilder();
     // 사용자 10/30: 시작하면 PDF 읽기 대신 자료 지도로 바로 (지식이 정리되는 대로 채워짐). 닫으면 그 아래 읽기 화면.
     const toMap = env.mountView && /^(pending:)?gen_/.test(deck.id);
-    toast(toMap ? "문제 만들기를 시작했어요. 지식이 정리되는 대로 자료 지도에 채워져요." : "문제 만들기를 시작했어요. 그동안 읽어 두세요.");
-    openReader(deck.id, rec.from);
-    if (toMap) MaterialMapView.open(deck);
+    toast(toMap ? "지식 정리를 시작했어요. 정리되는 대로 자료 지도에 채워져요." : "문제 만들기를 시작했어요. 그동안 읽어 두세요.");
+    if (toMap){ setView("practice"); MaterialMapView.open(deck); } else openReader(deck.id, rec.from);
     pollPending();
   }catch(e){
     b.busy = false; b.status = ""; b.error = (e && e.message) || "요청을 올리지 못했어요."; render();
@@ -4042,12 +4095,13 @@ async function resumeMaterial(d){
     savePending(); render(); pollPending();
   }catch(e){ toast(e.message || "다시 시작하지 못했어요."); }
 }
-const PENDING_LABEL = { waiting:"시작 대기", running:"자료 파악 중", confirm:"목표 확인 필요", paused:"잠시 멈춤", authoring:"문제 만드는 중", ready:"준비됨", failed:"실패" };
+const PENDING_LABEL = { waiting:"시작 대기", running:"자료 파악 중", confirm:"목표 확인 필요", paused:"잠시 멈춤", authoring:"문제 만드는 중", cards:"지식 정리됨", ready:"준비됨", failed:"실패" };
 let pollTimer = null;
 async function pollPending(){
   clearTimeout(pollTimer);
   if (disposed || !engine) return;
-  const list = Object.values(S.decks).filter(d => d.pending && d.pending.status !== "failed");
+  // "cards": knowledge organized, no questions until the learner asks (문제 만들기 starts polling again).
+  const list = Object.values(S.decks).filter(d => d.pending && d.pending.status !== "failed" && d.pending.status !== "cards");
   if (!list.length) return;
   let changed = false, ready = false, grew = false;
   for (const d of list){
@@ -4073,6 +4127,20 @@ async function pollPending(){
   if (ready || grew) await reloadDecks();
   if (changed || ready){ savePending(); if (!S.session && S.view !== "create") render(); }
   pollTimer = setTimeout(pollPending, 5000);
+}
+/* 문제 만들기 (사용자 10/30): a material made without questions ("cards") goes on to them; true once started. */
+async function makeQuestions(d){
+  const pd = pendingOf(d); if (!pd || !engine || !engine.questions) return false;
+  const p = pd.pending; if (p.making) return false;
+  p.making = true; render();
+  try{
+    await engine.questions(p.requestId);
+    Object.assign(p, { status:"authoring", message:"문제 만드는 중" });
+    savePending(); pollPending();
+    toast("문제를 만들기 시작했어요. 만들어지는 대로 연습에 붙어요.");
+    return true;
+  }catch(e){ toast((e && e.message) || "문제 만들기를 시작하지 못했어요."); return false; }
+  finally{ p.making = false; render(); }
 }
 async function confirmGoals(d){
   const p = d.pending; if (!engine || !engine.confirm || p.confirming) return;
@@ -4108,7 +4176,8 @@ function pendingNote(d){
     h("div", { style:"flex:1;min-width:0" }, h("strong", { text:`문제 준비 중 · ${p.message || PENDING_LABEL.confirm}` }), goalPanel(d)));
   const text = p.message || PENDING_LABEL[p.status] || "";
   return h("div", { class:`note row${p.status === "failed" ? " err" : ""}`, role:"status" },
-    h("span", { style:"flex:1;min-width:0", text: p.status === "failed" ? `문제 만들기 실패 · ${text}` : `문제 준비 중 · ${text}` }),
+    h("span", { style:"flex:1;min-width:0", text: p.status === "failed" ? `문제 만들기 실패 · ${text}` : p.status === "cards" ? text : p.status === "authoring" ? `문제 준비 중 · ${text}` : `준비 중 · ${text}` }),
+    p.status === "cards" && engine && engine.questions ? h("button", { class:"btn small", disabled:p.making ? true : null, onclick: () => makeQuestions(d) }, p.making ? "시작하는 중…" : "문제 만들기") : null,
     p.status === "paused" && account && S.account && S.account.show && !S.account.ready ? h("button", { class:"btn small", onclick:connectAccount }, "ChatGPT 연결") : null,
     p.status === "paused" && engine && engine.resume ? h("button", { class:"btn small", onclick: () => resumeMaterial(d) }, "다시 시작") : null,
     p.status === "failed" ? h("button", { class:"btn small", onclick: () => restartMaterial(d) }, "다시 요청") : null,
@@ -4199,7 +4268,7 @@ function renderBuilder(){
         h("input", { placeholder:"이미 아는 부분", value:b.survey.known || "", disabled:b.busy, oninput:(e) => { b.survey = { ...b.survey, known: e.target.value || undefined }; } })) : null),
     h("div", { class:"row" },
       h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "지식 정리 시작"),
-      h("span", { class:"small muted", text:"바로 자료 지도로 넘어가요. 지식이 정리되는 대로 채워지고, 문제는 쪽마다 붙어요." }))));
+      h("span", { class:"small muted", text:"바로 자료 지도로 넘어가요. 지식이 정리되는 대로 채워지고, 문제는 지도에서 원할 때 만들어요." }))));
   return wrap;
 }
 

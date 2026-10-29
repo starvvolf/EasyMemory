@@ -21,7 +21,8 @@ type Card = { id: string; ref: string; kind: string; title: string; core: boolea
   takes: string[]; gives: string[]; questions: number; same: Array<{ id: string; pages: number[] }>; state: MapState; knowledgeId?: string; dueAt?: string; topic?: string };
 type Section = { id: string; title: string; pages: number[]; cards: Card[] };
 type MatMap = { id: string; title: string; status: string; pages: number; sections: Section[]; chains: Array<{ from: string; to: string; what: string; by?: string }>;
-  topics?: string[]; topicNotes?: Record<string, string>; principles?: Array<{ title: string; line: string; cardIds: string[] }>; counts: Record<MapState, number> & { cards: number; questions: number; core?: number } };
+  topics?: string[]; topicNotes?: Record<string, string>; principles?: Array<{ title: string; line: string; cardIds: string[] }>; counts: Record<MapState, number> & { cards: number; questions: number; core?: number };
+  questionsLater?: boolean };
 
 const STATE: Record<MapState, [string, string]> = { unknown: ["몰랐음", "bad"], met: ["만남", "read"], known: ["앎", "good"], graduated: ["졸업", "good"], new: ["아직", ""] };
 const range = (pages: number[]) => !pages.length ? "" : pages.length === 1 ? `p.${pages[0]}` : `p.${Math.min(...pages)}–${Math.max(...pages)}`;
@@ -126,8 +127,13 @@ function keyLine(s: Shape): string {
   }
 }
 
-export default function MaterialMap({ genId, onPage, onClose }: { genId: string; onPage: (page: number) => void; onClose: () => void }) {
+// 사용자 10/30: the map is where a material is studied (no reading screen): 원문 opens one page over it, 문제 풀기 starts that
+// page's questions, and a material made without questions gets them here (문제 만들기).
+export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions, onClose }: { genId: string; onPage: (page: number) => void;
+  onPractice?: (page: number) => void; onMakeQuestions?: () => Promise<boolean>; onClose: () => void }) {
   const [map, setMap] = useState<MatMap | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [reload, setReload] = useState(0);
   const [error, setError] = useState("");
   const [only, setOnly] = useState<"all" | "unknown" | "new">("all");
   // 개념별 (the whole-material pass's topics, each with what it is there to say) once it exists; 목차별 keeps the slides' own titles.
@@ -146,7 +152,7 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
       .catch((e) => { if (!alive) return; if (++misses > 40) setError(errorText(e)); else timer = setTimeout(load, 3000); });
     load();
     return () => { alive = false; if (timer) clearTimeout(timer); };
-  }, [genId]);
+  }, [genId, reload]);
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", esc); return () => document.removeEventListener("keydown", esc); }, [onClose]);
   const view = picked ?? (map?.topics?.length ? "topic" : "outline");
   const titles = useMemo(() => new Map(map?.sections.flatMap((s) => s.cards.map((c) => [c.id, c.title] as const)) ?? []), [map]);
@@ -192,9 +198,13 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
     <div className="mm2 mm3" role="dialog" aria-label="자료 지도">
       <div className="mm2-head">
         <div><p className="eyebrow">자료 지도</p><b>{map.title.replace(/\.pdf$/i, "")}</b>
-          <span className="small muted"> · {map.pages}쪽 · 지식 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""} · 문제 {n.questions}</span>
-          {making ? <span className="small mm3-making"> · {map.topics?.length ? "문제 만드는 중" : n.cards ? "지식 정리 중" : "자료 읽는 중"}…</span> : null}</div>
-        <button className="btn ghost small" onClick={onClose}>닫기</button>
+          <span className="small muted"> · {map.pages}쪽 · 지식 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater ? "" : ` · 문제 ${n.questions}`}</span>
+          {making ? <span className="small mm3-making"> · {map.questionsLater ? (n.cards ? "지식 정리 중" : "자료 읽는 중") : map.topics?.length ? "문제 만드는 중" : n.cards ? "지식 정리 중" : "자료 읽는 중"}…</span> : null}</div>
+        <span className="row small">
+          {map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="지식마다 확인 문제를 만들어 연습·복습에 붙여요"
+            onClick={() => { setAsking(true); void onMakeQuestions().then((ok) => { if (ok) setReload((k) => k + 1); }).finally(() => setAsking(false)); }}>{asking ? "시작하는 중…" : "문제 만들기"}</button> : null}
+          <button className="btn ghost small" onClick={onClose}>닫기</button>
+        </span>
       </div>
       <div className="row small mm3-tools">
         {map.topics?.length ? <div className="ws-seg">{([["outline", "목차별"], ["topic", "개념별"]] as const).map(([k, label]) =>
@@ -255,7 +265,7 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
                         {c.same.length || c.questions ? <div className="mm3-dfoot">
                           {c.same.length ? <span className="small muted">같은 내용: {c.same.map((x) => range(x.pages)).join(", ")}</span> : null}
                           <span className="cs-gap" />
-                          {c.questions ? <button className="btn small primary" onClick={() => onPage(c.pages[0])}>이 지식 문제 풀기 ({c.questions})</button> : null}
+                          {c.questions ? <button className="btn small primary" onClick={() => (onPractice ?? onPage)(c.pages[0])}>이 지식 문제 풀기 ({c.questions})</button> : null}
                         </div> : null}
                       </div> : null}
                     </li>

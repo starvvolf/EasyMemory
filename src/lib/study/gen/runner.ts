@@ -194,6 +194,7 @@ export const genInputSchema = z.strictObject({
   readImages: z.boolean().default(false),
   /** recaller: also make deep questions (several cards tied into one worked problem). The learner turns it on. */
   deep: z.boolean().optional(),
+  questionsLater: z.boolean().optional(),
   /** recaller: write two drafts of each deep question at once and keep the first that passes (faster, twice the use). */
   deepDrafts: z.union([z.literal(1), z.literal(2)]).optional(),
   /** recaller 검증 실험: one plain call per section instead of cards and checks (the comparison baseline). */
@@ -284,6 +285,20 @@ export async function remergeGen(baseId: string, raw: unknown): Promise<GenState
   const now = new Date().toISOString();
   const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued", phase: "author", message: "", calls: 0,
     sections, recaller, remergeOf: base.id };
+  await saveState(state);
+  return state;
+}
+/** 문제 만들기 (사용자 10/30): a study run that stopped after its cards (questionsLater) goes on to the questions, in the
+ *  same run: the cards and 자료 전체 정리 stay, every section is authored as a resumed run would be. */
+export async function questionsGen(id: string): Promise<GenState> {
+  const state = await loadGen(id);
+  if (!state?.recaller || state.input.engine !== "recaller") throw new GenError(404, "카드가 있는 Recaller 실행을 찾을 수 없습니다.");
+  if (!state.input.questionsLater) return state;
+  if (state.status !== "done") throw new GenError(409, "지식 정리가 끝난 뒤에 문제를 만들 수 있어요.");
+  if (!state0Cards(state)) throw new GenError(409, "문제로 만들 지식 카드가 없어요.");
+  state.input.questionsLater = false;
+  for (const s of state.sections) if (state.recaller.units[s.id]) state.recaller.units[s.id].status = "waiting";
+  state.status = "queued"; state.phase = "author"; state.message = "";
   await saveState(state);
   return state;
 }

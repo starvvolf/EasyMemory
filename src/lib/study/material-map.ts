@@ -31,6 +31,8 @@ export type MaterialMap = {
   topicNotes?: Record<string, string>;
   principles?: Array<{ title: string; line: string; cardIds: string[] }>;
   counts: Record<MapState, number> & { cards: number; questions: number; core: number };
+  /** 공부 화면: the run stopped after its cards; the learner makes the questions from the map (문제 만들기). */
+  questionsLater?: boolean;
 };
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s·()[\]{}'"`.,:;!?-]+/g, "");
@@ -98,6 +100,6 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
   for (const c of shown) { counts[c.state]++; counts.questions += c.questions; if (c.core) counts.core++; }
   const pages = state.input.pageNumbers?.length ? Math.max(...state.input.pageNumbers) : Math.max(0, ...state.sections.flatMap((s) => s.pages));
   const principles = (rc.consolidated?.principles ?? []).map((p) => ({ ...p, cardIds: [...new Set(p.cardIds.map(root))].filter((id) => ids.has(id)) })).filter((p) => p.cardIds.length >= 2);
-  return { id: state.id, title, status: state.status, pages, sections, chains, topics, counts,
+  return { id: state.id, title, status: state.status, pages, sections, chains, topics, counts, ...(state.input.questionsLater ? { questionsLater: true } : {}),
     ...(rc.consolidated?.topicNotes ? { topicNotes: rc.consolidated.topicNotes } : {}), ...(principles.length ? { principles } : {}) };
 }

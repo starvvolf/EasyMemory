@@ -100,7 +100,7 @@ export default function DejipgiStudy() {
       const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
-          models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(engine === "recaller" && deep ? { deep: true, ...(deepDrafts === 2 ? { deepDrafts } : {}) } : {}), ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), ...(engine && !pastExamSourceIds?.length ? { engine } : {}),
+          models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(engine === "recaller" ? { questionsLater: true } : {}), ...(engine === "recaller" && deep ? { deep: true, ...(deepDrafts === 2 ? { deepDrafts } : {}) } : {}), ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), ...(engine && !pastExamSourceIds?.length ? { engine } : {}),
           // v5 streams goals and authors right away; a goal the learner does not want is hidden from practice (목표 빼기).
           ...((engine === "v5" || engine === "alpha") && !pastExamSourceIds?.length ? { autoConfirm: true, ...(survey ? { survey } : {}) } : {}), confirmed: true }),
       }), "문제 만들기를 시작하지 못했어요.");
@@ -125,6 +125,8 @@ export default function DejipgiStudy() {
       if (gen.status === "failed") return { status: "failed", message: gen.message || "문제 만들기가 실패했어요." };
       if (gen.status === "done") {
         const questions = gen.sections.reduce((sum, section) => sum + (section.author?.questionCount ?? 0), 0);
+        // 공부 화면 Recaller: 지식 정리만 끝났고, 문제는 학습자가 자료 지도에서 만들 때까지 없다.
+        if (!questions && gen.input.questionsLater) return { ...shown, status: "cards", message: "지식 정리 끝 · 문제는 자료 지도에서 만들 수 있어요" };
         return questions ? { ...shown, status: "ready", message: "", artifactId: id } : { status: "failed", message: gen.message || "만들어진 문제가 없어요." };
       }
       // recaller: pages read from their image, sections whose basic questions are out, deep questions ready.
@@ -135,6 +137,7 @@ export default function DejipgiStudy() {
         const reading = r.read.pages.length && r.read.done.length + r.read.failed.length < r.read.pages.length ? `그림·수식 쪽 읽는 중 ${r.read.done.length}/${r.read.pages.length} · ` : "";
         const deep = Object.values(r.deep);
         const deepPart = ready === units.length && deep.length ? ` · 심화 ${deep.filter((d) => d.status === "ready").length}/${deep.length}` : "";
+        if (gen.input.questionsLater) return { ...partial, status: "running", message: `지식 정리 중 ${ready}/${units.length}구역${calls}` };
         return { ...partial, status: ready ? "authoring" : "running", message: `${reading}정리·기본 문제 ${ready}/${units.length}구역${deepPart}${calls}` };
       }
       if (gen.current?.step === "transcribe" && gen.images) return { ...shown, status: "running", message: `그림·수식 쪽 읽는 중 · ${gen.images.done.length}/${gen.images.pages.length}쪽${calls}` };
@@ -239,6 +242,11 @@ export default function DejipgiStudy() {
           await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/continue`, {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmed: true }),
           }), "다시 시작하지 못했어요.");
+        },
+        async questions(requestId: string) {
+          await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/questions`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmed: true }),
+          }), "문제 만들기를 시작하지 못했어요.");
         },
         async confirm(requestId, objectiveIds) {
           await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/confirm`, {

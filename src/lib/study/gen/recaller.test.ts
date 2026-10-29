@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { closeJson, createGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
+import { closeJson, createGen, questionsGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import { basicProblem, codeChains, completeItems, deepProblems, fillValues, recallerFakeReply, slotCards } from "./recaller.ts";
 import type { GenStep } from "./types.ts";
 
@@ -54,6 +54,30 @@ test("lab.skimOnly (연구 1): cards for every page and no questions; the first 
   assert.ok(done.sections.every((s) => (done.recaller!.units[s.id].cards ?? []).length > 0));
   assert.deepEqual(Object.keys(done.recaller!.timing.organizedAt ?? {}).sort(), ["1", "2"]);
   assert.ok(done.recaller!.timing.skimDoneAt);
+}));
+
+test("questionsLater (공부 화면 10/30): cards and 자료 전체 정리 only, then 문제 만들기 goes on in the same run", () => withData(async () => {
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", questionsLater: true });
+  const io = { pdf: async () => null, pages: async () => pages };
+  const first = await runGen(start.id, { uid: "local-experiment" }, io);
+  assert.equal(first.status, "done", first.message);
+  let calls = (await readGenCalls(first.id)).map((c) => c.step);
+  assert.ok(!calls.includes("rc-author"), calls.join(" "));
+  assert.ok(calls.includes("rc-merge"), "지식만 정리해도 자료 전체 정리는 한다");
+  assert.ok(first.sections.every((s) => !s.author));
+  const cards = first.sections.flatMap((s) => first.recaller!.units[s.id].cards ?? []).map((c) => c.id);
+  const queued = await questionsGen(first.id);
+  assert.equal(queued.status, "queued");
+  const second = await runGen(first.id, { uid: "local-experiment" }, io);
+  assert.equal(second.status, "done", second.message);
+  calls = (await readGenCalls(second.id)).map((c) => c.step);
+  assert.equal(calls.filter((s) => s === "rc-organize").length, 2, "카드는 다시 만들지 않는다");
+  assert.equal(calls.filter((s) => s === "rc-merge").length, 1, "자료 전체 정리도 다시 하지 않는다");
+  assert.equal(calls.filter((s) => s === "rc-author").length, 4);
+  assert.deepEqual(second.sections.flatMap((s) => second.recaller!.units[s.id].cards ?? []).map((c) => c.id), cards);
+  assert.ok(second.sections.every((s) => (s.author?.questionCount ?? 0) > 0));
+  // A second press does nothing.
+  assert.equal((await questionsGen(first.id)).status, "done");
 }));
 
 test("lab.outline and lab.consolidate (연구 1 3번): each 정리 call sees the material's page titles; one pass names, joins and files every card", () => withData(async () => {
