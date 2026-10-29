@@ -26,10 +26,10 @@ export default function ProjectStudy() {
       const out = await call<Synced>("/api/project-course/sync", {});
       if (!out.online) return;
       const sum = out.runs.reduce((a, r) => ({ items: a.items + r.items, created: a.created + r.created, events: a.events + r.events }), { items: 0, created: 0, events: 0 });
-      setSynced({ at: new Date(), ...sum });
-      if (sum.items) window.dispatchEvent(new Event("recaller:knowledge-changed"));
       const bad = out.runs.find((r) => r.error);
-      if (bad && !quiet) setMsg(`지식에 넣다가 멈췄어요: ${bad.error}`);
+      if (bad) setMsg(`지식에 넣지 못했어요: ${bad.error}`);
+      if (!bad || out.runs.some((r) => !r.error)) setSynced({ at: new Date(), ...sum });
+      if (sum.items) window.dispatchEvent(new Event("recaller:knowledge-changed"));
     } catch (e) { if (!quiet) setMsg(errorText(e)); }
     finally { syncing.current = false; }
   }, []);
@@ -86,7 +86,7 @@ export default function ProjectStudy() {
           <section className="td-card" style={{ marginTop: 16 }}>
             <p className="eyebrow">지식과 연결</p>
             <p className="small" style={{ margin: "6px 0 10px" }}>
-              {synced ? (synced.items ? `${synced.at.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}에 ${synced.items}개를 지식에 넣었어요${synced.created ? ` (새 지식 ${synced.created}개)` : ""}.` : "새로 넣을 것은 없어요. 프로젝트에서 물어보거나 단계를 통과하면 여기로 들어와요.") : "확인하는 중…"}
+              {synced ? (synced.items ? `${synced.at.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}에 ${synced.items}개를 지식에 넣었어요${synced.created ? ` (새 지식 ${synced.created}개)` : ""}.` : "새로 넣을 것은 없어요. 프로젝트에서 물어보거나 단계를 통과하면 여기로 들어와요.") : msg ? "아직 못 넣었어요(위 안내를 봐 주세요)." : "확인하는 중…"}
             </p>
             <p className="small muted" style={{ margin: "0 0 10px" }}>코스 개념(상태 코드, 라우팅…)은 <b>개념</b>으로, 물어본 문법·도구(await, JSON.parse…)는 <b>어휘</b>로 들어가요. 이 프로젝트에서만 쓰는 이름은 넣지 않아요.</p>
             <div className="row" style={{ gap: 8 }}>
