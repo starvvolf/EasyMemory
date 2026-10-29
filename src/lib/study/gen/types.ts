@@ -117,6 +117,10 @@ export type RecallerLab = {
   intent?: boolean;
   /** 쪽 의도를 먼저 한 번에 (10/29 실험): one fast call gives every page's intent and a one-line gist; 정리 gets them instead of deciding. */
   intentPass?: boolean;
+  /** with intentPass: intents only, no one-line gist (shorter reply, sooner cards). */
+  intentLean?: boolean;
+  /** with intentPass: 정리 starts at once (deciding intents itself) and the pass runs beside it; preview pages' cards are dropped when it ends. */
+  intentParallel?: boolean;
   /** Calls allowed per start (other than page readings); default grows with the sections. */
   callCap?: number;
 };

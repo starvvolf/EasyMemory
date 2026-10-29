@@ -288,3 +288,14 @@ test("쪽 의도 (lab.intent): 정리 writes each page's intent first and it is 
   const chunks = Object.values(done.recaller!.units).flatMap((u) => Object.values(u.chunks ?? {}));
   assert.ok(chunks.every((c) => c.intents?.length), JSON.stringify(chunks.map((c) => c.intents)));
 }));
+
+test("쪽 의도 옆에서 (lab.intentParallel): 정리 starts at once; the cover page's cards are dropped when the pass ends", () => withData(async () => {
+  const three = new Map([[1, "# Computer Graphics\n- Three Dimensional Viewing lecture by someone"], ...pages].map(([p, t], i) => [i + 1, t] as [number, string]));
+  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "core", engine: "recaller", provider: "fake", lab: { intentPass: true, intentParallel: true } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => three });
+  assert.equal(done.status, "done", done.message);
+  const units = Object.values(done.recaller!.units);
+  assert.ok(units.flatMap((u) => u.cards ?? []).every((c) => c.evidence.some((e) => e.page !== 1)));
+  assert.ok(units.flatMap((u) => u.questions ?? []).every((q) => !q.pages.every((p) => p === 1)));
+  assert.match((await readGenCalls(done.id)).find((c) => c.step === "rc-organize")!.system, /먼저 pages에 쪽마다 의도/);
+}));
