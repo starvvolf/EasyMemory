@@ -36,7 +36,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 
 도구
 - 질문에 [파일 …]이 붙어 있으면 다시 읽지 말고 바로 쓴다. 다른 파일이 꼭 필요할 때만 read/glob/grep으로 본다. 추측으로 단정하지 않는다.
-- 제목에 #을 쓰지 않는다(굵게 **…**만).
+- 답은 마크다운으로 보기 좋게: 필요하면 짧은 소제목(###), 목록, 코드를 보여 줄 때는 \`\`\`ts 파일경로:시작줄 로 여는 코드 블록. 짧은 답에는 소제목을 쓰지 않는다.
 - 학습자에게 보여 줄 곳은 open_in_editor로 VS Code에서 연다.
 - 동작을 확인할 때는 send_request(실제 요청)나 run_checks(자동 검사)를 쓴다. 명령 실행은 못 한다.
 
@@ -273,7 +273,7 @@ async function startMock(): Promise<string> {
       send({ choices: [{ index: 0, delta: { role: "assistant", content: call.say, tool_calls: [{ index: 0, id: `c${Date.now()}`, type: "function", function: { name: call.name, arguments: JSON.stringify(call.args) } }] }, finish_reason: null }] });
       send({ choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] });
     } else {
-      send({ choices: [{ index: 0, delta: { role: "assistant", content: `**한 줄 요약** — (가짜 AI) ${file}의 이 덩어리는 편지를 받아 담당자를 찾아 주는 안내 데스크예요.\n\n**하나씩 보기**\n- [[${file}:9]] \`createServer\` → 편지가 오면 할 일을 정해요\n- [[${file}:10]] \`new URL(...)\` → 주소를 읽어요\n\n**여기 나온 문법**\n- \`=>\` — 이게 오면 오른쪽 일을 해요\n\n**이어지는 곳** — [[src/router.ts:22]]의 \`match\`가 담당자를 찾아요. (도구 ${tools.length}개)` }, finish_reason: null }] });
+      send({ choices: [{ index: 0, delta: { role: "assistant", content: "(가짜 AI) 이 덩어리는 **편지를 받아 담당자에게 건네주는 안내 데스크**예요.\n\n### 하나씩 보기\n#### ① 편지 뜯어보기 (9~11줄)\n```ts src/server.ts:9\nconst server = createServer(async (req, res) => {\n  const url = new URL(req.url ?? \"/\", \"http://localhost\");\n  const method = req.method ?? \"GET\";\n```\n- `req` — 받은 편지, `res` — 보낼 답장\n- `req.method ?? \"GET\"` — 요청 방식이 없으면 GET으로 쳐요\n\n#### ② 담당자 찾기 (18~22줄)\n```ts src/server.ts:18\nconst found = router.match(method, url.pathname);\nif (found.handler) {\n  await found.handler({ req, res, params: found.params, query: url.searchParams });\n  return;\n}\n```\n- `router.match` — 주소와 방식으로 담당자를 찾아요\n\n### 여기 나온 문법\n- `=>` — 이게 오면 오른쪽 일을 해요\n- `??` — 왼쪽이 없으면 오른쪽을 써요\n\n> 팁: 코드 옆 `💬 설명`을 누르면 다른 덩어리도 볼 수 있어요.\n\n### 이어지는 곳\n- [[src/router.ts:22]]의 `match`가 담당자를 찾아요. (도구 " + tools.length + "개)" }, finish_reason: null }] });
       send({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] });
     }
     res.end("data: [DONE]\n\n");

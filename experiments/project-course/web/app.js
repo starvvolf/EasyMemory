@@ -523,24 +523,69 @@ async function renderRunOrLesson(id) {
   };
 }
 
-/** 튜터 글: **굵게**, `코드`, 목록, [[파일:줄]] → VS Code 링크 */
+/** 튜터 글(마크다운): 제목, 목록, 인용, ```코드 블록```(색칠·복사·줄 링크), **굵게**, *기울임*, `코드`, [[파일:줄]] */
 function rich(text, ws) {
   const box = h("div", { class: "rich" });
-  let list = null;
-  for (const line of String(text || "").split("\n")) {
-    const m = /^(\s*)([-*]|\d+\.)\s+(.*)$/.exec(line);
-    if (m) {
-      const ordered = /\d/.test(m[2]);
-      if (!list || list.tagName !== (ordered ? "OL" : "UL")) { list = h(ordered ? "ol" : "ul"); box.append(list); }
-      list.append(h("li", {}, inline(m[3], ws)));
+  const lines = String(text || "").split("\n");
+  let list = null, para = [];
+  // 한 줄 바꿈은 그대로 줄바꿈으로(수업 대본이 줄바꿈으로 나눠 쓴 글을 지키려고)
+  const flush = () => { if (para.length) { box.append(h("p", {}, para.flatMap((l, k) => (k ? [h("br"), ...inline(l, ws)] : inline(l, ws))))); para = []; } };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const fence = /^\s*```\s*([\w+-]*)\s*(.*)$/.exec(line);
+    if (fence) {
+      flush(); list = null;
+      const body = [];
+      for (i++; i < lines.length && !/^\s*```\s*$/.test(lines[i]); i++) body.push(lines[i]);
+      box.append(codeBlock(body.join("\n"), fence[1] || "", fence[2] || "", ws));
       continue;
     }
-    list = null;
-    const hd = /^\s*#{1,4}\s+(.*)$/.exec(line);
-    if (hd) { box.append(h("p", { class: "rh" }, inline(hd[1].replace(/\*\*/g, ""), ws))); continue; }
-    box.append(line.trim() ? h("p", {}, inline(line, ws)) : h("div", { class: "gap" }));
+    const hd = /^\s*(#{1,4})\s+(.*)$/.exec(line);
+    if (hd) { flush(); list = null; box.append(h(hd[1].length <= 2 ? "h3" : "h4", { class: "rh" }, inline(hd[2].replace(/\*\*/g, ""), ws))); continue; }
+    const q = /^\s*>\s?(.*)$/.exec(line);
+    if (q) { flush(); list = null; box.append(h("blockquote", {}, inline(q[1], ws))); continue; }
+    const li = /^(\s*)([-*•]|\d+[.)])\s+(.*)$/.exec(line);
+    if (li) {
+      flush();
+      const ordered = /\d/.test(li[2]);
+      if (!list || list.tagName !== (ordered ? "OL" : "UL")) { list = h(ordered ? "ol" : "ul"); box.append(list); }
+      list.append(h("li", {}, inline(li[3], ws)));
+      continue;
+    }
+    if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flush(); list = null; box.append(h("hr")); continue; }
+    if (!line.trim()) { flush(); list = null; continue; }
+    if (list && /^\s{2,}\S/.test(line)) { list.lastChild?.append(" ", ...inline(line.trim(), ws)); continue; }
+    list = null; para.push(line.trim());
   }
+  flush();
   return box;
+}
+/** 코드 블록: 머리줄(언어·파일 줄 링크·복사) + 색칠한 코드. 정보 줄 예: ```ts src/server.ts:9 */
+function codeBlock(code, lang, info, ws) {
+  const loc = /([\w./-]+\.[a-z]+):(\d+)/.exec(info);
+  const copy = h("button", { class: "cbcopy", type: "button", onclick: async (e) => {
+    try { await navigator.clipboard.writeText(code); e.target.textContent = "복사됨"; setTimeout(() => (e.target.textContent = "복사"), 1200); } catch { e.target.textContent = "복사 안 됨"; }
+  } }, "복사");
+  const pre = h("pre", { class: "cbody" });
+  pre.innerHTML = highlight(code, lang);
+  return h("div", { class: "cb" },
+    h("div", { class: "cbh" }, h("span", { class: "cblang" }, ({ ts: "TypeScript", typescript: "TypeScript", js: "JavaScript", javascript: "JavaScript", json: "JSON", sql: "SQL", bash: "터미널", sh: "터미널", http: "HTTP" })[lang.toLowerCase()] || lang || "코드"),
+      loc && ws ? fileLink(ws, loc[1], Number(loc[2])) : null, h("span", { class: "grow" }), copy),
+    pre);
+}
+/** 아주 작은 색칠기(TS/JS 위주): 주석·문자열·키워드·숫자·함수 이름 */
+function highlight(code, lang) {
+  const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  if (!/^(ts|js|typescript|javascript|tsx|jsx|)$/i.test(lang)) return esc(code);
+  const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|\b(const|let|var|function|async|await|return|if|else|for|of|in|while|try|catch|finally|throw|new|class|extends|import|export|from|default|type|interface|instanceof|typeof|null|undefined|true|false|this)\b|\b(\d+(?:\.\d+)?)\b|([A-Za-z_$][\w$]*)(?=\s*\()/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(code))) {
+    out += esc(code.slice(last, m.index));
+    const cls = m[1] ? "tc" : m[2] ? "ts" : m[3] ? "tk" : m[4] ? "tn" : "tf";
+    out += `<span class="${cls}">${esc(m[0])}</span>`;
+    last = re.lastIndex;
+  }
+  return out + esc(code.slice(last));
 }
 /** 도구 카드 글을 짧게: "파일을 읽었어요: src/app.ts" → "app.ts 읽음" */
 function shortTool(label) {
@@ -551,12 +596,13 @@ function shortTool(label) {
 }
 function inline(text, ws) {
   const out = [];
-  const re = /\*\*([^*]+)\*\*|`([^`]+)`|\[\[([^\]:]+):(\d+)\]\]/g;
+  const re = /\*\*([^*]+)\*\*|`([^`]+)`|\[\[([^\]:]+):(\d+)\]\]|(?<![\w*])\*([^*\s][^*]*?)\*(?!\w)/g;
   let last = 0, m;
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index));
     if (m[1]) out.push(h("strong", {}, m[1]));
     else if (m[2]) out.push(h("code", { class: m[2].length <= 40 ? "ic ask" : "ic", title: m[2].length <= 40 ? "누르면 이게 뭔지 이어서 물어봐요" : undefined }, m[2]));
+    else if (m[5]) out.push(h("em", {}, m[5]));
     else out.push(fileLink(ws, m[3], Number(m[4])));
     last = re.lastIndex;
   }
@@ -601,7 +647,7 @@ function drawLesson() {
   chat.addEventListener("click", (e) => {
     const c = e.target.closest?.(".lmsg.tutor .rich code.ask");
     if (!c || lessonCtx?.lesson?.busy) return;
-    send({ do: "ask", text: `방금 설명에 나온 \`${c.textContent}\`는 뭐예요? 문법을 모르는 사람에게 이 코드에서의 뜻으로 쉽게, 3~6문장으로 알려 주세요. 파일은 위에 붙어 있으니 도구 없이 바로 답해요.`, shown: `"${c.textContent}"는 뭐예요?`, mode: "explain" })(e);
+    send({ do: "ask", text: `방금 설명에 나온 \`${c.textContent}\`는 뭐예요? 문법을 모르는 사람에게 이 코드에서의 뜻으로 쉽게, 3~6문장으로 알려 주세요. 필요하면 짧은 코드 블록으로 보여 주세요. 파일은 위에 붙어 있으니 도구 없이 바로 답해요.`, shown: `"${c.textContent}"는 뭐예요?`, mode: "explain" })(e);
   });
   let prevRole = "";
   let toolRow = null; // 이어지는 도구 카드는 한 줄로 묶는다(카드가 줄줄이 쌓이면 어수선 — 10/30)

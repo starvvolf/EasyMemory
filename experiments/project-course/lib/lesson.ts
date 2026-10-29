@@ -486,21 +486,26 @@ export async function what(runId: string, n: number, plan: Plan, quote: { file: 
 /* ---------- 덩어리 설명 (VS Code의 [💬 설명] / 드래그 + 우클릭) ----------
  * 학습자가 코드를 복사해 ChatGPT에 "이거 뭐야" 하던 것을 한 번 클릭으로. 확인 질문은 하지 않는다(사용자 10/30).
  * 같은 코스·같은 코드면 한 번 만든 설명을 저장해 두고 바로 보여 준다(AI 호출 없음). */
-const BLOCK_Q = `이 코드 덩어리를 문법을 모르는 사람에게 설명해 주세요. 파일은 위에 붙어 있으니 도구 없이 바로 답한다. 해요체, 아래 모양 그대로:
+const BLOCK_Q = `이 코드 덩어리를 문법을 모르는 사람에게 설명해 주세요. ChatGPT에 코드를 붙여 넣고 물었을 때처럼, 마크다운으로 보기 좋게. 파일은 위에 붙어 있으니 도구 없이 바로 답한다. 해요체. 모양:
 
-**한 줄 요약** — 이 덩어리가 하는 일을 일상 비유로 한 문장.
+첫 문단: 이 덩어리가 하는 일을 일상 비유로 한두 문장(제목 없이).
 
-**하나씩 보기**
-- 의미가 이어지는 1~3줄을 한 묶음으로, 묶음마다 "[[파일:시작줄]] \`핵심 조각\` → 우리말 뜻" 한 줄. 핵심 조각은 짧게(코드 전체를 다시 쓰지 않는다).
-- 닫는 괄호 \`}\`, 빈 줄, 주석은 따로 설명하지 않는다.
+### 하나씩 보기
+덩어리를 뜻이 이어지는 3~6조각으로 나눈다. 조각마다:
+#### ① 조각 이름 (몇~몇 줄)
+\`\`\`ts 파일경로:시작줄
+(그 조각의 코드를 파일 그대로, 주석은 빼도 됨)
+\`\`\`
+- 줄마다 또는 표현마다 "\`조각\` — 우리말 뜻"을 1~4개 목록으로.
 
-**여기 나온 문법**
-- 처음 배우는 사람이 막힐 문법·기호 2~5개를 "\`기호\` — 쉬운 말" 한 줄씩.
+### 여기 나온 문법
+- "\`기호\` — 쉬운 말" 2~5개.
 
-**이어지는 곳** — 다른 파일과 이어지면 [[파일:줄]]로 한두 줄(없으면 이 칸은 뺀다).
+### 이어지는 곳
+- 다른 파일과 이어지면 [[파일:줄]]로 한두 줄(없으면 이 칸은 뺀다).
 
-제목에 #을 쓰지 않는다. 코드를 고치거나 정답을 알려 주지 않는다. 확인 질문을 하지 않는다. 앞으로 할 예측 문제의 답은 말하지 않는다. "배운 점" 같은 마무리는 쓰지 않는다.`;
-const cacheFile = (courseId: string, code: string) => path.join(DATA, "explain-cache", "v2", courseId, `${createHash("sha1").update(code.replace(/\s+/g, " ").trim()).digest("hex").slice(0, 16)}.json`);
+코드를 고치거나 정답을 알려 주지 않는다. 확인 질문, "배운 점" 같은 마무리는 쓰지 않는다. 앞으로 할 예측 문제의 답은 말하지 않는다.`;
+const cacheFile = (courseId: string, code: string) => path.join(DATA, "explain-cache", "v3", courseId, `${createHash("sha1").update(code.replace(/\s+/g, " ").trim()).digest("hex").slice(0, 16)}.json`);
 export async function explainBlock(runId: string, n: number, plan: Plan, quote: { file: string; from: number; to: number; code: string }) {
   const run = await getRun(runId);
   const cf = cacheFile(run.courseId, `${quote.file}\n${quote.code}`);

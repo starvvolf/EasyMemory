@@ -174,8 +174,9 @@ export async function runTool(io: AgentIO, tool: ToolName, args: Record<string, 
 
 /** 질문 하나에 대한 에이전트 실행. 마지막 답(문장)을 돌려준다.
  *  엔진: OpenCode(Node 24 이상 + 설치돼 있을 때, 2026-10-30 사용자 결정) → 없으면 아래의 작은 자체 루프. */
+let loggedOcError = false;
 export async function runAgent(io: AgentIO, question: string): Promise<string> {
-  const oc = await import("./oc-engine.ts").then((m) => m.ready()).catch(() => null);
+  const oc = await import("./oc-engine.ts").then((m) => m.ready()).catch((e) => { if (!loggedOcError) { loggedOcError = true; console.error("[튜터 엔진] OpenCode 엔진 파일을 읽지 못해 기본 엔진을 써요:", (e as Error).message); } return null; });
   if (oc) return oc.run(io, question);
   return runAgentClassic(io, question);
 }
