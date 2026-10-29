@@ -10,7 +10,7 @@ process.env.PC_DATA_DIR = dir;
 const { pending, markSent } = await import("../lib/sync.ts");
 const { loadCourse } = await import("../lib/course.ts");
 
-test("개념은 concept, 문법·도구는 vocab, 프로젝트 이름은 빼고, 보낸 것은 다음에 빠진다", async () => {
+test("개념은 concept, 물어본 문법·도구는 vocab, 나오기만 한 말·프로젝트 이름은 빼고, 보낸 것은 다음에 빠진다", async () => {
   const course = await loadCourse("board-api");
   await mkdir(path.join(dir, "records"), { recursive: true });
   await mkdir(path.join(dir, "notes"), { recursive: true });
@@ -22,13 +22,13 @@ test("개념은 concept, 문법·도구는 vocab, 프로젝트 이름은 빼고,
     router: { name: "router", scope: "프로젝트", files: ["src/app.ts"], asked: 1, lastAt: "2026-10-30T01:02:00Z" } } }));
 
   const p = await pending("r1", course);
-  assert.equal(p.source.ref, "project:r1");
+  assert.equal(p.source.ref, "project:board-api");
   const by = Object.fromEntries(p.items.map((i) => [i.title, i]));
   assert.equal(by["HTTP 상태 코드의 뜻"].kind, "concept");
   assert.ok(by["HTTP 상태 코드의 뜻"].body.includes("2xx"));
   assert.deepEqual(by["HTTP 상태 코드의 뜻"].events.map((e) => e.kind), ["wrong"]); // met은 저장이 대신한다
   assert.equal(by.await.kind, "vocab"); assert.equal(by.await.state, "unknown"); assert.equal(by.await.events.length, 2);
-  assert.equal(by["JSON.parse"].state, "met"); assert.equal(by["JSON.parse"].events.length, 0);
+  assert.ok(!by["JSON.parse"]); // 설명에 나오기만 한 말은 안 보낸다
   assert.ok(!by.router);
 
   await markSent("r1", p.items.flatMap((i) => [i.key, ...i.events.map((e) => e.key)]));

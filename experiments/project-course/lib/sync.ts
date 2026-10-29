@@ -2,7 +2,8 @@
 // 이 서버는 앱 데이터에 직접 쓰지 않는다. 앱(3000)의 /api/project-course/sync가 여기서 "아직 안 보낸 것"을 받아
 // 지식 저장소(saveMany·recordEvent)에 넣고, 넣은 것의 열쇠를 돌려준다(보낸 열쇠는 .data/sync/<run>.json).
 // - 코스 개념(기록 후보 records) = 개념(concept). 물어봄·틀림·힌트·맞힘을 그대로 사건으로.
-// - 노트의 문법·도구 말 = 어휘(vocab). 물어본 횟수만큼 "물어봄". 프로젝트 이름(router, findPost…)은 안 보낸다.
+// - 노트의 문법·도구 말 중 학습자가 눌러 보거나 물어본 것만 = 어휘(vocab). 물어본 횟수만큼 "물어봄".
+//   튜터 설명에 나오기만 한 말, 프로젝트 이름(router, findPost…)은 안 보낸다(2026-10-30 실제 데이터 확인 뒤).
 import path from "node:path";
 import type { Course } from "./course.ts";
 import { notesOf } from "./notes.ts";
@@ -20,7 +21,7 @@ const TOPIC: Record<string, string> = { 문법: "프로그래밍 언어/TypeScri
 /** 지금까지 쌓인 것 전부를 앱이 받을 꼴로. 보낸 열쇠는 빼고(sent), 안 보낸 사건이 없고 이미 보낸 지식이면 지식째 뺀다. */
 export async function pending(runId: string, course: Course): Promise<SyncPayload> {
   const sent = new Set((await read<Ledger>(ledgerFile(runId), { sent: [] })).sent);
-  const source = { kind: "code" as const, title: `프로젝트 코스: ${course.title}`, ref: `project:${runId}` };
+  const source = { kind: "code" as const, title: `프로젝트 코스: ${course.title}`, ref: `project:${course.id}` }; // 같은 코스를 다시 해도 "다른 자료"가 아니다
   const byKey = new Map<string, SyncItem>();
 
   for (const r of await candidates(runId)) {
@@ -35,7 +36,8 @@ export async function pending(runId: string, course: Course): Promise<SyncPayloa
 
   const notes = await notesOf(runId);
   for (const t of Object.values(notes.terms)) {
-    if (t.scope === "프로젝트") continue;
+    // 프로젝트 이름은 안 보낸다. 튜터 설명에 나오기만 한 말도 안 보낸다(노트에만) — 학습자가 눌러 보거나 물어본 말만 어휘로.
+    if (t.scope === "프로젝트" || t.asked < 1) continue;
     const key = `t:${t.name}`;
     if (byKey.has(key)) continue;
     const where = t.files[0] ? `${t.files[0]}에서` : "코드에서";
