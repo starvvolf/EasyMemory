@@ -3999,8 +3999,11 @@ async function startMaterial(){
     if (b.pdfDoc) S.pdf[deck.id] = { status:"ready", doc:b.pdfDoc, canv:{}, aspect: await docAspect(b.pdfDoc) };
     savePending();
     S.builder = freshBuilder();
-    toast("문제 만들기를 시작했어요. 목표가 정리되면 확인을 부탁할게요. 그동안 읽어 두세요.");
+    // 사용자 10/30: 시작하면 PDF 읽기 대신 자료 지도로 바로 (지식이 정리되는 대로 채워짐). 닫으면 그 아래 읽기 화면.
+    const toMap = env.mountView && /^(pending:)?gen_/.test(deck.id);
+    toast(toMap ? "문제 만들기를 시작했어요. 지식이 정리되는 대로 자료 지도에 채워져요." : "문제 만들기를 시작했어요. 그동안 읽어 두세요.");
     openReader(deck.id, rec.from);
+    if (toMap) MaterialMapView.open(deck);
     pollPending();
   }catch(e){
     b.busy = false; b.status = ""; b.error = (e && e.message) || "요청을 올리지 못했어요."; render();
@@ -4192,7 +4195,7 @@ function renderBuilder(){
         h("input", { placeholder:"이미 아는 부분", value:b.survey.known || "", disabled:b.busy, oninput:(e) => { b.survey = { ...b.survey, known: e.target.value || undefined }; } })) : null),
     h("div", { class:"row" },
       h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "읽기 시작"),
-      h("span", { class:"small muted", text:"바로 읽기로 넘어가요. AI가 목표를 정리하면 한 번 확인을 부탁하고, 그다음 문제가 쪽마다 붙어요." }))));
+      h("span", { class:"small muted", text:"바로 자료 지도로 넘어가요. 지식이 정리되는 대로 채워지고, 문제는 쪽마다 붙어요." }))));
   return wrap;
 }
 

@@ -48,7 +48,17 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
   const [open, setOpen] = useState<string | null>(null);
   const [view, setView] = useState<"outline" | "topic">("outline");
   const [coreOnly, setCoreOnly] = useState(false);
-  useEffect(() => { call<{ map: MatMap }>(`/api/study-map/${genId}`).then((r) => setMap(r.map)).catch((e) => setError(errorText(e))); }, [genId]);
+  // While the material is still being made, the map refills every few seconds (cards, then 핵심·주제·연결).
+  useEffect(() => {
+    let alive = true, timer: ReturnType<typeof setTimeout> | undefined, misses = 0;
+    // Right after the start there are no cards yet (the server answers 422/404 until the first page is organized): keep
+    // trying quietly for about two minutes before showing why.
+    const load = () => call<{ map: MatMap }>(`/api/study-map/${genId}`)
+      .then((r) => { if (!alive) return; setMap(r.map); setError(""); if (r.map.status !== "done" && r.map.status !== "failed") timer = setTimeout(load, 3000); })
+      .catch((e) => { if (!alive) return; if (++misses > 40) setError(errorText(e)); else timer = setTimeout(load, 3000); });
+    load();
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+  }, [genId]);
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", esc); return () => document.removeEventListener("keydown", esc); }, [onClose]);
   const titles = useMemo(() => new Map(map?.sections.flatMap((s) => s.cards.map((c) => [c.id, c.title] as const)) ?? []), [map]);
   // Links both ways: a card shows where it leads and what it rests on.
@@ -64,7 +74,7 @@ export default function MaterialMap({ genId, onPage, onClose }: { genId: string;
     return named.map((t) => { const cards = all.filter((c) => (c.topic ?? "기타") === t); return { key: `t:${t}`, title: t, pages: [...new Set(cards.flatMap((c) => c.pages))].sort((a, b) => a - b), cards }; });
   }, [map, view]);
   const jump = (id: string) => { const el = document.getElementById(`mm2-${id}`); if (!el) return; el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1200); };
-  if (!map) return <div className="mm2"><div className="mm2-head"><b>자료 지도</b><button className="btn ghost small" onClick={onClose}>닫기</button></div><p className="small muted">{error || "지도를 그리는 중…"}</p></div>;
+  if (!map) return <div className="mm2"><div className="mm2-head"><b>자료 지도</b><button className="btn ghost small" onClick={onClose}>닫기</button></div><p className="small muted">{error || "지식을 정리하는 중… 첫 카드까지 10~15초쯤 걸려요."}</p></div>;
   const shown = (c: Card) => (!coreOnly || c.core) && (only === "all" || (only === "unknown" ? c.state === "unknown" : c.state === "new" || c.state === "met"));
   const n = map.counts;
   return (
