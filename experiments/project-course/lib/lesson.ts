@@ -15,7 +15,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
 import { addEntry, addTour, codeTerms, firstLine, notesContext } from "./notes.ts";
-import { runAgent, undoEdit, type DiffCard, type ToolCard } from "./agent.ts";
+import { runAgent, undoEdit, type AskCard, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string };
@@ -37,7 +37,7 @@ type Card =
   | { type: "code"; file: string; from: number; to: number; code: string }
   | { type: "map"; file: string; chunks: Chunk[] }
   | { type: "table"; sql: string; columns: string[]; rows: unknown[][]; note?: string }
-  | ToolCard | DiffCard;
+  | ToolCard | DiffCard | AskCard | SnippetCard;
 export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[] };
 type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null };
 type Todo = { open?: Open; focus?: Focus; clear?: boolean };
@@ -63,6 +63,39 @@ export function subscribe(runId: string, res: ServerResponse) {
 export function notifyLesson(runId: string) { notify(runId, "lesson"); }
 function notify(runId: string, what: string) {
   for (const res of subs.get(runId) ?? []) res.write(`data: ${what}\n\n`);
+}
+
+/* ---------- 답하는 중: 생각 한 줄 · 되묻기 · 멈추기 (10/30, GPT 앱처럼 넓히기 1~3) ---------- */
+// 저장하지 않고 메모리에만: 답이 끝나면 사라지는 것들
+const thinking = new Map<string, string>();
+const askWaiters = new Map<string, { id: string; finish: (answer: string) => void }>();
+const inflight = new Set<string>();
+const lk = (runId: string, n: number) => `${runId}:${n}`;
+
+/** 튜터가 고르게 물은 것에 학습자가 답한다 */
+export async function answerAsk(runId: string, n: number, input: { id?: string; choice?: number; text?: string }) {
+  const w = askWaiters.get(lk(runId, n));
+  if (!w || w.id !== input.id) throw err(409, "이미 지난 질문이에요.");
+  let answer = "";
+  await change(runId, n, (s, push) => {
+    const m = s.messages.find((x) => x.card?.type === "ask" && x.card.id === input.id);
+    const card = m?.card as AskCard | undefined;
+    answer = input.text?.trim().slice(0, 300) || (card && input.choice !== undefined ? card.options[input.choice] ?? "" : "");
+    if (card) { card.picked = input.choice; card.answer = answer; }
+    if (answer) push({ role: "me", text: answer });
+  });
+  w.finish(answer);
+  return lessonView(runId, n);
+}
+
+/** [멈추기]: 지금 답하는 질문을 멈춘다 */
+export async function stopAsk(runId: string, n: number) {
+  askWaiters.get(lk(runId, n))?.finish("");
+  const { stopRun } = await import("./oc-engine.ts");
+  const stopped = await stopRun(runId, n).catch(() => false);
+  thinking.delete(lk(runId, n));
+  await change(runId, n, (s, push) => { if (s.busy) push({ role: "note", text: "멈췄어요. 다른 걸 물어보거나, 원하는 쪽을 다시 적어 주세요." }); if (!stopped) s.busy = false; });
+  return lessonView(runId, n);
 }
 
 /* ---------- 상태 ---------- */
@@ -151,7 +184,8 @@ export async function lessonView(runId: string, n: number) {
     m.card = { ...card, chunks: await Promise.all(card.chunks.map(async (c) => ({ ...c, line: (await locate(ws, { file: card.file, anchor: c.anchor }))?.line ?? 1 }))) } as Card;
   }
   const pocket = (await pocketItems(runId)).slice(-12).reverse().map((p) => ({ id: p.id, stage: p.stage, file: p.file, from: p.from, code: p.code.trim().slice(0, 60), terms: p.terms.map((t) => t.name), later: p.later, ai: !!p.ai }));
-  return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge, pocket };
+  return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge, pocket,
+    thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null };
 }
 
 /* ---------- 학습자가 한 것 ---------- */
@@ -395,6 +429,13 @@ function upcoming(plan: Plan, beat: number) {
 export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void> } = {}) {
   const q = text.trim().slice(0, 1000) || (quote ? "이 코드가 뭐 하는 거예요?" : "");
   if (!q) throw err(400, "질문을 적어 주세요.");
+  // 한 번에 하나만: 답하는 중에 또 물으면 대화가 엉킨다(10/30 시험에서 되묻기 카드가 섞임)
+  if (inflight.has(lk(runId, n))) throw err(409, "아직 답하는 중이에요. 기다리거나 [멈추기]를 누른 뒤 물어봐 주세요.");
+  inflight.add(lk(runId, n));
+  try { return await askInner(runId, n, plan, q, text, quote, shown, opts); } finally { inflight.delete(lk(runId, n)); }
+}
+async function askInner(runId: string, n: number, plan: Plan, q: string, text: string, quote: { file: string; from: number; to: number; code: string } | undefined, shown: string | undefined, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void> }) {
+  void text;
   const s0 = await change(runId, n, (s, push) => {
     push({ role: "me", text: shown ?? q, card: quote ? { type: "code", ...quote } : undefined });
     s.busy = true;
@@ -447,19 +488,32 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
         say: async (text) => { await change(runId, n, (_s, push) => push({ role: "tutor", text })).catch((e) => console.error("[lesson] 기록 저장 실패", e)); },
         quiet: (ms: number) => { quietUntil.set(`${runId}:${n}`, Date.now() + ms); },
         streamed: false,
+        think: (t: string | null) => { if (t) thinking.set(lk(runId, n), t); else thinking.delete(lk(runId, n)); notify(runId, "lesson"); },
+        choose: async (q: { question: string; options: string[] }) => {
+          const id = `q${Date.now().toString(36)}`;
+          await change(runId, n, (_s, push) => push({ role: "tutor", card: { type: "ask", id, question: q.question, options: q.options } }));
+          return new Promise<string>((resolve) => {
+            const finish = (a: string) => { clearTimeout(timer); if (askWaiters.get(lk(runId, n))?.id === id) askWaiters.delete(lk(runId, n)); notify(runId, "lesson"); resolve(a); };
+            const timer = setTimeout(() => finish(""), 150_000);
+            askWaiters.set(lk(runId, n), { id, finish });
+            notify(runId, "lesson");
+          });
+        },
       };
     try {
       answer = await runAgent(io as Parameters<typeof runAgent>[0], q);
       await remember(runId, n, ws, s0, { q, shown, quote, mode: opts.mode, answer }).catch((e) => console.error("[notes]", e));
       await revealedSolution(runId, n, answer).catch((e) => console.error("[reveal]", e));
       if (opts.onAnswer) await opts.onAnswer(answer).catch(() => {});
+      thinking.delete(lk(runId, n));
       if (io.streamed) return change(runId, n, (s) => { s.busy = false; });
     } catch (e) {
       answer = e instanceof AiUnavailable
         ? `지금은 AI 튜터에게 물어볼 수 없어요 (${e.message}).\n막히면 **힌트 줘**를 눌러 주세요. 준비된 힌트가 나와요.`
         : `답을 만들지 못했어요: ${(e as Error).message}`;
     }
-    return change(runId, n, (s, push) => { s.busy = false; push({ role: "tutor", text: answer }); });
+    thinking.delete(lk(runId, n));
+    return change(runId, n, (s, push) => { s.busy = false; if (answer) push({ role: "tutor", text: answer }); });
   }
   try {
     const live = bridgeState(runId);

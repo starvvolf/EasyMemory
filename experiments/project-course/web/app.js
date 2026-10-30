@@ -628,10 +628,17 @@ function codeBlock(code, lang, info, ws) {
   } }, "복사");
   const pre = h("pre", { class: "cbody" });
   pre.innerHTML = highlight(code, lang);
+  // 파일에서 떼어 온 코드가 아닌 짧은 JS/TS 예시는 [▶ 돌려 보기] (따로 떨어진 곳에서 4초까지)
+  const out = h("pre", { class: "sout", hidden: true });
+  const runnable = !loc && /^(ts|js|typescript|javascript)$/i.test(lang) && code.split("\n").length <= 30 && lessonCtx?.run?.id;
+  const runBtn = runnable ? h("button", { class: "cbcopy", type: "button", title: "이 코드만 따로 돌려 봐요", onclick: (e) => busy(e.target, async () => {
+    const r = await api("POST", `/api/runs/${lessonCtx.run.id}/snippet`, { code });
+    out.hidden = false; out.className = `sout ${r.ok ? "" : "err"}`; out.textContent = r.output;
+  }) }, "▶ 돌려 보기") : null;
   return h("div", { class: "cb" },
     h("div", { class: "cbh" }, h("span", { class: "cblang" }, ({ ts: "TypeScript", typescript: "TypeScript", js: "JavaScript", javascript: "JavaScript", json: "JSON", sql: "SQL", bash: "터미널", sh: "터미널", http: "HTTP" })[lang.toLowerCase()] || lang || "코드"),
-      loc && ws ? fileLink(ws, loc[1], Number(loc[2])) : null, h("span", { class: "grow" }), copy),
-    pre);
+      loc && ws ? fileLink(ws, loc[1], Number(loc[2])) : null, h("span", { class: "grow" }), runBtn, copy),
+    pre, out);
 }
 /** 아주 작은 색칠기(TS/JS 위주): 주석·문자열·키워드·숫자·함수 이름 */
 function highlight(code, lang) {
@@ -713,7 +720,9 @@ function drawLesson() {
   let toolRow = null; // 이어지는 도구 카드는 한 줄로 묶는다(카드가 줄줄이 쌓이면 어수선 — 10/30)
   for (const m of msgs) {
     if (m.role === "tutor" && m.card?.type === "tool" && !m.text) {
-      const item = h("span", { class: `titem ${m.card.ok ? "" : "bad"}`, title: m.card.detail || "" }, m.card.icon, " ", shortTool(m.card.label));
+      const item = m.card.url
+        ? h("a", { class: `titem ${m.card.ok ? "" : "bad"}`, href: m.card.url, target: "_blank", rel: "noreferrer", title: "공식 문서 열기" }, m.card.icon, " ", shortTool(m.card.label))
+        : h("span", { class: `titem ${m.card.ok ? "" : "bad"}`, title: m.card.detail || "" }, m.card.icon, " ", shortTool(m.card.label));
       if (toolRow) { toolRow.append(h("span", { class: "tsep" }, "·"), item); continue; }
       const cont = prevRole === "tutor"; prevRole = "tutor";
       toolRow = h("div", { class: "toolrow" }, item);
@@ -733,7 +742,11 @@ function drawLesson() {
     row.append(col);
     chat.append(row);
   }
-  if (lesson.busy) chat.append(h("div", { class: "lmsg tutor cont" }, h("div", { class: "avatar ghost" }), h("div", { class: "busyline" }, h("div", { class: "bubble typing" }, h("span"), h("span"), h("span")), h("span", { class: "mut small" }, "튜터가 확인하는 중이에요. 10~30초쯤 걸려요."))));
+  if (lesson.busy) chat.append(h("div", { class: "lmsg tutor cont" }, h("div", { class: "avatar ghost" }), h("div", { class: "busyline" },
+    h("div", { class: "bubble typing" }, h("span"), h("span"), h("span")),
+    // 생각 요약 한 줄(GPT 앱의 "~하는 중"), 없으면 기다림 안내
+    lesson.asking ? h("span", { class: "mut small" }, "위 질문에 골라 주세요.") : h("span", { class: `mut small ${lesson.thinking ? "think" : ""}` }, lesson.thinking ? `💭 ${lesson.thinking}` : "튜터가 확인하는 중이에요. 10~30초쯤 걸려요."),
+    h("button", { class: "btn small stopbtn", title: "지금 답하는 걸 멈춰요", onclick: (e) => busy(e.target, async () => { lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/lesson/${run.current}/stop`); drawLesson(); }) }, "■ 멈추기"))));
 
   const input = h("input", { placeholder: "튜터에게 물어보기 — 예: 라우터가 뭐예요?", "aria-label": "튜터에게 물어보기" });
   const askBtn = h("button", { class: "btn primary", type: "submit" }, "물어보기");
@@ -841,6 +854,20 @@ function lessonCard(card, run, lesson, send, ws) {
     return h("div", { class: "lcard" }, h("div", { class: "opts" }, card.options.map((o, i) =>
       h("button", { class: `opt ${done ? (i === card.answer ? "right" : i === card.picked ? "wrong" : "") : ""}`, disabled: done, onclick: (e) => send({ do: "choice", choice: i })(e) }, o))));
   }
+  if (card.type === "ask") {
+    // 튜터가 고르게 물음: 지금 기다리는 질문이면 버튼, 지난 질문이면 고른 답만
+    const open = lesson.asking === card.id && card.answer === undefined;
+    const answer = (body) => (e) => busy(e?.target, async () => { lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/lesson/${run.current}/answer`, { id: card.id, ...body }); drawLesson(); });
+    const own = h("input", { placeholder: "직접 적기", "aria-label": "직접 적어서 답하기" });
+    return h("div", { class: "lcard askq" }, h("div", { class: "aq" }, "❓ ", card.question),
+      h("div", { class: "opts" }, card.options.map((o, i) => h("button", { class: `opt ${card.answer !== undefined && card.picked === i ? "right" : ""}`, disabled: !open, onclick: answer({ choice: i }) }, o))),
+      open ? h("form", { class: "aqown", onsubmit: (e) => { e.preventDefault(); const t = own.value.trim(); if (t) answer({ text: t })(e); } }, own, h("button", { class: "btn small", type: "submit" }, "보내기"))
+        : card.answer !== undefined && card.picked === undefined && card.answer ? h("div", { class: "small mut" }, `직접 적음: ${card.answer}`) : !card.answer && !open ? h("div", { class: "small mut" }, "답하지 않고 넘어갔어요") : null);
+  }
+  if (card.type === "snippet") return h("div", { class: `lcard snip ${card.ok ? "" : "bad"}` },
+    h("div", { class: "mut small" }, "▶ 코드 조각을 돌려 봤어요", h("span", { class: "grow" }), `${card.ms}ms`),
+    codeBlock(card.code, "ts", "", ws),
+    h("pre", { class: `sout ${card.ok ? "" : "err"}` }, card.output));
   if (card.type === "reply") {
     const head = card.timedOut ? "답장 없음 (3초 기다림)" : card.error ? `연결 실패: ${card.error}` : `${card.status}`;
     const cls = card.timedOut || card.error || card.status >= 500 ? "bad" : card.status >= 400 ? "warn" : "ok";

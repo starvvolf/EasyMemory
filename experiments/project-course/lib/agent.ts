@@ -13,7 +13,11 @@ import { DATA, read, saveRun, stageProgress } from "./store.ts";
 
 export const MAX_STEPS = 5;
 
-export type ToolCard = { type: "tool"; icon: string; label: string; detail?: string; ok: boolean };
+export type ToolCard = { type: "tool"; icon: string; label: string; detail?: string; ok: boolean; url?: string };
+/** 코드 조각을 따로 돌려 본 결과 (튜터 도구 run_snippet, 10/30) */
+export type SnippetCard = { type: "snippet"; code: string; output: string; ok: boolean; ms: number };
+/** 튜터가 학습자에게 고르게 묻기 (튜터 도구 ask_learner, 10/30) */
+export type AskCard = { type: "ask"; id: string; question: string; options: string[]; picked?: number; answer?: string };
 export type TourStep = { file: string; from: number; to: number; title: string; text: string; code: string };
 export type TourCard = { type: "tour"; id: string; title: string; steps: TourStep[] };
 export type DiffCard = { type: "diff"; id: string; file: string; why: string; diff: string; undone?: boolean };
@@ -22,7 +26,7 @@ export type AgentIO = {
   /** 지금까지의 수업 맥락(계획서·지금 순서·최근 대화·마지막 확인) */
   context: string;
   /** 채팅에 바로 보이게 */
-  show: (card: ToolCard | DiffCard | TourCard) => Promise<void>;
+  show: (card: ToolCard | DiffCard | TourCard | SnippetCard) => Promise<void>;
   /** 도구를 쓰기 전 튜터의 한마디 */
   say: (text: string) => Promise<void>;
   /** 튜터가 고친 파일 때문에 저장 감지가 다시 확인하지 않게 */
@@ -32,6 +36,10 @@ export type AgentIO = {
   /** 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선). 엔진이 썼으면 streamed=true */
   stream?: (key: string, text: string) => Promise<void>;
   streamed?: boolean;
+  /** 생각 요약 한 줄("라우터 쪽 보는 중"). null이면 지운다 */
+  think?: (text: string | null) => void;
+  /** 학습자에게 고르게 묻고 답을 기다린다(답이 없으면 빈 글) */
+  choose?: (q: { question: string; options: string[] }) => Promise<string>;
 };
 
 export const TOOLS = ["list_files", "read_file", "open_in_editor", "start_server", "send_request", "run_checks", "edit_file", "look_db", "none"] as const;

@@ -15,6 +15,8 @@ import { markSent, pending } from "../lib/sync.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
 import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
+import { answerAsk, stopAsk } from "../lib/lesson.ts";
+import { runSnippet } from "../lib/tutor-tools.ts";
 import { act, ask as lessonAsk, explainBlock as lessonBlock, closeWatchers, lessonView, loadPlan, notifyLesson, refocus, subscribe, what as lessonWhat } from "../lib/lesson.ts";
 import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeConnect, setState as bridgeSetState } from "../lib/bridge.ts";
 
@@ -149,6 +151,11 @@ const routes: [string, RegExp, Handler][] = [
     return v;
   }],
   ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/act$/, async (req, m) => { await act(m[1], Number(m[2]), (await body(req)) as never); return lessonView(m[1], Number(m[2])); }],
+  // 답하는 중에: 멈추기 · 튜터가 고르게 물은 것에 답하기 (10/30)
+  ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/stop$/, async (_q, m) => { await getRun(m[1]); return stopAsk(m[1], Number(m[2])); }],
+  ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/answer$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return answerAsk(m[1], Number(m[2]), { id: String(b.id ?? ""), choice: typeof b.choice === "number" ? b.choice : undefined, text: typeof b.text === "string" ? b.text : undefined }); }],
+  // 튜터 설명 속 코드 블록 [▶ 돌려 보기]: 따로 떨어진 곳에서 4초까지
+  ["POST", /^\/api\/runs\/(\w+)\/snippet$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return runSnippet(String(b.code ?? "")); }],
   ["POST", /^\/api\/bridge\/hello$/, async (req) => {
     const b = await body(req);
     const out = await bridgeHello(String(b.root ?? ""));

@@ -13,6 +13,7 @@ import { aiBudget, aiMode, AiUnavailable, chatGptBearer, countCalls } from "./ai
 import { bridgeContext, bridgeState, send as bridgeSend } from "./bridge.ts";
 import { editsDir, runTool, safePath, type AgentIO, type EditRecord, type ToolName } from "./agent.ts";
 import { DATA, saveRun, stageProgress } from "./store.ts";
+import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
 
 export const OC_VERSION = "2.2.1";
 const MODEL = process.env.RECALLER_ASSIST_MODEL?.trim() || "gpt-6-sol";
@@ -20,7 +21,11 @@ const MAX_STEPS = 8;
 const READ = new Set(["read", "glob", "grep"]);
 const OURS = ["open_in_editor", "start_server", "send_request", "run_checks", "look_db"] as const;
 const EDITS = new Set(["edit", "write", "patch"]); // GPT 모델에서는 patch(apply_patch)로 고친다
-const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour"]);
+// GPT 앱처럼 넓히기(10/30 사용자 "45까지 해봐"): 되묻기 · 코드 조각 돌려 보기 · 공식 문서 찾기
+const EXTRA = ["ask_learner", "run_snippet", "look_docs"] as const;
+const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour", ...EXTRA]);
+/** 생각 요약(reasoning summary)을 받는다. 계정이 안 받아 주면 한 번 실패한 뒤 끈다 */
+let reasoningSummary = process.env.PC_REASONING_SUMMARY !== "0";
 /** 고치기 도구 입력에서 파일 경로들 */
 const editPaths = (tool: string, input: any): string[] => tool === "patch"
   ? [...String(input?.patchText ?? "").matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)].map((m) => m[1].trim())
@@ -39,6 +44,9 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 - 답은 마크다운으로 보기 좋게: 필요하면 짧은 소제목(###), 목록, 코드를 보여 줄 때는 \`\`\`ts 파일경로:시작줄 로 여는 코드 블록. 짧은 답에는 소제목을 쓰지 않는다.
 - 학습자에게 보여 줄 곳은 open_in_editor로 VS Code에서 연다.
 - 동작을 확인할 때는 send_request(실제 요청)나 run_checks(자동 검사)를 쓴다. 명령 실행은 못 한다.
+- 학습자가 "이건 뭐가 나와요?"처럼 작은 코드의 결과를 궁금해하면 → 설명하기 전에 run_snippet으로 직접 돌려 보여 준다(학습자 파일은 못 읽는 따로 떨어진 곳에서 돈다).
+- 문법·내장 함수의 정확한 규칙(인자 순서, 돌려주는 값, 예외)을 말해야 하면 → 기억으로 단정하지 말고 look_docs로 공식 문서를 찾아보고, 답 끝에 "(출처: MDN JSON.parse)"처럼 짧게 적는다.
+- 학습자가 무엇을 원하는지 갈래가 둘 이상이거나, 고치기 전에 학습자 생각을 먼저 들어야 하면 → ask_learner로 보기 2~4개를 주고 고르게 한다. 한 질문에 한 번만, 답하기 쉬운 짧은 보기로.
 
 가르치는 순서(힌트는 한 번에 한 단계씩)
 1. 어디를 보면 되는지(파일·줄)와 무엇을 확인할지
@@ -49,7 +57,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 - 수업 계획서의 순서와 정답을 바꾸지 않는다. 예측 문제의 답을 미리 말하지 않는다.
 - 질문에 답할 때는 마지막에 학습자가 지금 할 일을 한 줄로 말한다. 코드 덩어리·단어 설명에는 "배운 점"이나 할 일 같은 마무리를 붙이지 않는다.`;
 
-type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void> };
+type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void>; reason: string; lastThink: number; asked: number; stopped: boolean };
 const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문
 const sessions = new Map<string, string>(); // runId:n → sessionID (대화를 이어 간다)
 
@@ -104,7 +112,15 @@ function policyPlugin(fake: boolean) {
       if (!fake) await ctx.session.hook("http.request", async (ev: any) => {
         const token = await chatGptBearer();
         const hd = new Headers(ev.request.headers); hd.set("authorization", `Bearer ${token}`);
-        ev.request = new Request(ev.request, { headers: hd });
+        let body: string | undefined;
+        // 생각 요약을 함께 받는다(화면에 "라우터 쪽 보는 중" 한 줄로). 모델 응답(/responses) 요청에만
+        if (reasoningSummary && ev.request.method === "POST" && /\/responses$/.test(new URL(ev.request.url).pathname)) {
+          try {
+            const j = JSON.parse(await ev.request.clone().text());
+            if (j && typeof j === "object" && !j.reasoning?.summary) { j.reasoning = { ...(j.reasoning ?? {}), summary: "auto" }; body = JSON.stringify(j); hd.delete("content-length"); }
+          } catch { /* 본문이 JSON이 아니면 그대로 */ }
+        }
+        ev.request = body === undefined ? new Request(ev.request, { headers: hd }) : new Request(ev.request.url, { method: "POST", headers: hd, body, signal: ev.request.signal });
       });
       await ctx.session.hook("title", (ev: any) => { ev.result = "튜터 대화"; }); // 제목 만들기 호출 생략
       await ctx.session.hook("context", (ev: any) => {
@@ -116,7 +132,7 @@ function policyPlugin(fake: boolean) {
       await ctx.permission.hook("evaluate", (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);
         const l = live.get(ev.sessionID);
-        if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action) || ev.action === "show_tour") { ev.effect = "allow"; return; }
+        if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action) || ev.action === "show_tour" || (EXTRA as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
         if (EDITS.has(ev.action)) {
           if (l?.io.mode === "explain") { ev.effect = "deny"; ev.message = "지금은 설명만 하는 시간이에요."; return; }
           const files: string[] = (ev.resources ?? []).map((r: string) => String(r).replace(/\\/g, "/"));
@@ -172,6 +188,48 @@ function policyPlugin(fake: boolean) {
             if (!card.steps.length) return { content: "걸음의 파일·줄을 찾지 못했어요. 파일 경로와 anchor를 파일 그대로 다시 적어 주세요." };
             await l.io.show(card);
             return { content: `학습자 화면에 ${card.steps.length}걸음 투어를 띄웠어요. 이제 한두 문장으로만 마무리하세요(걸음 내용을 다시 쓰지 말 것).` };
+          } });
+        ed.add({ name: "ask_learner", options: { codemode: false },
+          description: "학습자에게 보기 2~4개로 묻고 고른 답을 받는다(튜터 화면에 버튼으로 뜬다). 원하는 게 갈래로 나뉘거나, 고치기 전에 학습자 생각을 먼저 들어야 할 때만. 한 질문에 한 번.",
+          input: { type: "object", required: ["question", "options"], properties: {
+            question: { type: "string", description: "해요체 한 문장" },
+            options: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", description: "짧은 보기(20자 안팎)" } } } },
+          execute: async (input: any, c: any) => {
+            const l = live.get(c.sessionID);
+            if (!l?.io.choose) return { content: "지금은 물어볼 수 없어요. 가장 그럴듯한 쪽으로 답하세요." };
+            if (l.asked >= 1) return { content: "이번 질문에서는 이미 한 번 물었어요. 그 답을 바탕으로 이어서 답하세요." };
+            l.asked++;
+            const options = (Array.isArray(input?.options) ? input.options : []).map((o: unknown) => String(o).slice(0, 80)).filter(Boolean).slice(0, 4);
+            if (options.length < 2) return { content: "보기를 2개 이상 주세요." };
+            l.io.think?.(null);
+            const answer = await l.io.choose({ question: String(input?.question ?? "어느 쪽이에요?").slice(0, 200), options });
+            if (l.stopped) return { content: "학습자가 멈췄어요. 더 하지 말고 끝내세요." };
+            return { content: answer ? `학습자의 답: ${answer}` : "학습자가 답하지 않았어요. 가장 흔한 경우로 짧게 답하고, 다르면 말해 달라고 하세요." };
+          } });
+        ed.add({ name: "run_snippet", options: { codemode: false },
+          description: "작은 JS/TS 코드 조각을 따로 떨어진 곳에서 돌려 출력(console.log, 마지막 줄의 값)을 본다. 학습자 파일·네트워크 서버와는 상관없는 문법·내장 함수 확인용. 4초 제한.",
+          input: { type: "object", required: ["code"], properties: { code: { type: "string", description: "20줄 이내. 마지막 줄이 값이면 그 값이 찍힌다." } } },
+          execute: async (input: any, c: any) => {
+            const l = live.get(c.sessionID);
+            if (!l) return { content: "지금은 쓸 수 없어요." };
+            const r = await runSnippet(String(input?.code ?? ""));
+            await l.io.show({ type: "snippet", code: r.code, output: r.output, ok: r.ok, ms: r.ms });
+            return { content: `${r.ok ? "실행됨" : "오류"} (${r.ms}ms)\n출력:\n${r.output}` };
+          } });
+        ed.add({ name: "look_docs", options: { codemode: false },
+          description: `공식 문서만 찾아본다. query: "JSON.parse", "Array.prototype.map", "fs.readFile", "crypto.scryptSync" 같은 이름. site: "mdn"(JS·웹) 또는 "node"(Node.js). url을 주면 그 문서를 읽는다(${DOC_HOSTS.join(", ")}만).`,
+          input: { type: "object", properties: { query: { type: "string" }, site: { type: "string", enum: ["mdn", "node"] }, url: { type: "string" } } },
+          execute: async (input: any, c: any) => {
+            const l = live.get(c.sessionID);
+            if (!l) return { content: "지금은 쓸 수 없어요." };
+            try {
+              const d = await lookDocs({ query: input?.query, site: input?.site, url: input?.url });
+              await l.io.show({ type: "tool", icon: "📚", label: d.ok ? `공식 문서를 찾아봤어요: ${d.site} · ${d.title}` : `공식 문서에서 못 찾았어요: ${d.title}`, ok: d.ok, url: d.url || undefined });
+              return { content: d.ok ? `[${d.site}] ${d.title}\n${d.url}\n\n${d.text}${d.others.length ? `\n\n다른 문서: ${d.others.map((o) => `${o.title} ${o.url}`).join(" / ")}` : ""}` : d.text };
+            } catch (e) {
+              await l.io.show({ type: "tool", icon: "📚", label: `문서를 열지 못했어요: ${(e as Error).message.slice(0, 80)}`, ok: false });
+              return { content: `문서를 열지 못했어요: ${(e as Error).message}. 아는 범위에서 답하되 확실하지 않은 건 그렇다고 말하세요.` };
+            }
           } });
         for (const name of OURS) {
           const [description, properties, required] = desc[name];
@@ -236,13 +294,38 @@ function onEvent(e: any) {
   const l = live.get(e?.data?.sessionID); if (!l) return;
   const key = () => `${l.sid}:${l.steps}`;
   if (e.type === "session.step.started") { l.steps++; l.cur = ""; }
+  else if (e.type === "session.reasoning.started") { l.reason = ""; }
+  else if (e.type === "session.reasoning.delta") {
+    l.reason += String(e.data?.delta ?? e.data?.text ?? "");
+    if (l.io.think && Date.now() - l.lastThink > 500) { const t = thinkLine(l.reason); if (t) { l.lastThink = Date.now(); l.io.think(t); } }
+  }
   else if (e.type === "session.tool.input.started") { const said = l.cur.trim(); l.cur = ""; if (said) emit(l, key(), said, true); } // 도구 앞의 한마디를 도구 결과보다 먼저
-  else if (e.type === "session.text.delta") { l.cur += String(e.data.delta ?? ""); if (l.io.stream && Date.now() - l.lastFlush > 450) emit(l, key(), l.cur.trim(), false); }
+  else if (e.type === "session.text.delta") { if (!l.cur) l.io.think?.(null); l.cur += String(e.data.delta ?? ""); if (l.io.stream && Date.now() - l.lastFlush > 450) emit(l, key(), l.cur.trim(), false); }
   else if (e.type === "session.step.ended") {
     const said = l.cur.trim(); l.cur = "";
     if (e.data.finish === "tool-calls") { if (said) emit(l, key(), said, true); }
     else if (said) { l.texts.push(said); if (l.io.stream) emit(l, key(), said, true); }
   }
+}
+
+/** 생각 요약에서 화면에 띄울 한 줄: 맨 끝 굵은 제목("**Checking the router**")이 있으면 그것, 없으면 마지막 문장 */
+export function thinkLine(text: string) {
+  const titles = [...text.matchAll(/\*\*([^*\n]{3,80})\*\*/g)].map((m) => m[1].trim());
+  if (titles.length) return titles.at(-1)!;
+  const sents = text.replace(/\s+/g, " ").trim().split(/(?<=[.!?。])\s/).filter((x) => x.length > 3);
+  const last = sents.at(-1) ?? "";
+  return last.length > 90 ? `${last.slice(0, 88)}…` : last;
+}
+
+/** 학습자가 [멈추기]를 누르면: 지금 답하는 질문을 멈춘다 */
+export async function stopRun(runId: string, n: number) {
+  const sid = sessions.get(`${runId}:${n}`);
+  if (!sid || !host) return false;
+  const h = await host; if (!h) return false;
+  const l = live.get(sid);
+  if (l) l.stopped = true;
+  await h.oc.sessions.interrupt({ sessionID: sid }).catch(() => {});
+  return !!l;
 }
 
 /** 말한 것을 채팅에: 흘려 보내기가 되면 같은 말풍선을 계속 고치고, 아니면 끝난 말만 한 번 */
@@ -261,7 +344,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   const key = `${io.runId}:${io.n}`;
   let sid = sessions.get(key);
   if (!sid) { sid = (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string; sessions.set(key, sid); }
-  const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve() };
+  const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve(), reason: "", lastThink: 0, asked: 0, stopped: false };
   live.set(sid, l);
   const from = h.events.length;
   const text = [io.context, bridgeContext(io.runId), `[학습자 질문] ${question}`].filter(Boolean).join("\n\n");
@@ -273,14 +356,18 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
         const hit = h.events.slice(from).find((e) => e?.data?.sessionID === sid && /^session\.execution\.(succeeded|failed|interrupted)$/.test(e.type));
         if (hit) { h.waiters.delete(check); clearTimeout(timer); resolve(hit); }
       };
-      const timer = setTimeout(() => { h.waiters.delete(check); resolve({ type: "timeout" }); }, 180_000);
+      const timer = setTimeout(() => { h.waiters.delete(check); resolve({ type: "timeout" }); }, 300_000); // 학습자에게 되묻고 기다리는 시간까지
       h.waiters.add(check); check();
     });
     await l.chain; // 흘려 보내던 글을 다 쓴 뒤에 끝낸다
+    io.think?.(null);
+    if (l.stopped) return l.texts.join("\n\n"); // 멈춘 건 화면에 이미 "멈췄어요"가 있다
     await countCalls(io.mode === "explain" ? "explain" : "agent", l.steps, end.type === "session.execution.succeeded");
     if (end.type === "timeout") { await h.oc.sessions.interrupt?.({ sessionID: sid }).catch(() => {}); return "생각이 너무 길어져서 멈췄어요. 질문을 조금 나눠서 다시 물어봐 주세요."; }
     if (end.type !== "session.execution.succeeded") {
       const msg = JSON.stringify(end.data?.error ?? end.data ?? "").slice(0, 300);
+      // 생각 요약을 이 계정이 못 받으면 끄고 한 번 더(요약은 있으면 좋은 것이지 꼭 필요한 건 아니다)
+      if (reasoningSummary && /summary|verif/i.test(msg)) { reasoningSummary = false; console.error("[튜터 엔진] 생각 요약을 끕니다:", msg); live.delete(sid); return run(h, io, question); }
       if (/login|401|unauthorized/i.test(msg)) throw new AiUnavailable("login_required", "ChatGPT 로그인이 필요해요. Recaller 앱(3000)에서 로그인한 뒤 다시 해 주세요.");
       if (/usage|429|rate/i.test(msg)) throw new AiUnavailable("usage_limit", "ChatGPT 사용량 한도에 닿았어요.");
       return `답을 끝까지 만들지 못했어요. (${msg})`;
@@ -305,7 +392,11 @@ async function startMock(): Promise<string> {
     const base = { id: "c", object: "chat.completion.chunk", created: 0, model: "fake" };
     const send = (o: unknown) => res.write(`data: ${JSON.stringify({ ...base, ...(o as object) })}\n\n`);
     const file = /src\/[\w./-]+\.ts/.exec(userText)?.[0] ?? "src/server.ts";
-    const wantFix = /고쳐 주|정답 알려/.test(userText.split("[학습자 질문]").pop() ?? "");
+    const asked = userText.split("[학습자 질문]").pop() ?? "";
+    const wantFix = /고쳐 주|정답 알려/.test(asked);
+    // 생각 요약(가짜): 실제 모델의 reasoning summary처럼 굵은 제목 + 문장
+    send({ choices: [{ index: 0, delta: { role: "assistant", reasoning_content: "**Checking the server file** I should look at how requests are routed. " }, finish_reason: null }] });
+    await new Promise((r) => setTimeout(r, 700));
     let call: { name: string; args: unknown; say: string } | null = null;
     if (tools.includes("show_tour") && tools.length === 1) {
       call = sinceUser === 0 ? { name: "show_tour", say: "GET /health 요청을 따라가 볼게요.", args: { title: "GET /health 요청이 지나가는 길", steps: [
@@ -314,7 +405,11 @@ async function startMock(): Promise<string> {
         { file: "src/router.ts", from: 22, to: 32, anchor: "match(method", title: "명단 넘겨 보기", text: "등록된 길 목록을 하나씩 보며 주소와 방식이 맞는 담당자를 찾아요." },
         { file: "src/app.ts", from: 1, to: 8, anchor: "router", title: "담당자 명단", text: "`/health` 담당자가 여기 적혀 있어요. 찾으면 다시 server.ts로 돌아가 담당자에게 편지를 넘겨요." } ] } }
         : null;
-    } else if (tools.length && sinceUser === 0) call = { name: "read", args: { path: file }, say: `${file}부터 볼게요.` };
+    } else if (tools.length && sinceUser === 0 && /돌려 봐/.test(asked) && tools.includes("run_snippet")) call = { name: "run_snippet", args: { code: "String(5) + 1" }, say: "직접 돌려 볼게요." };
+    else if (tools.length && sinceUser === 0 && /문서/.test(asked) && tools.includes("look_docs")) call = { name: "look_docs", args: { query: "JSON.parse" }, say: "공식 문서를 볼게요." };
+    else if (tools.length && sinceUser === 0 && /골라/.test(asked) && tools.includes("ask_learner")) call = { name: "ask_learner", args: { question: "어느 쪽이 궁금해요?", options: ["왜 404가 나요", "어떻게 고쳐요"] }, say: "먼저 하나만 물어볼게요." };
+    else if (tools.length && sinceUser === 0 && /오래/.test(asked)) { await new Promise((r) => setTimeout(r, 8000)); call = { name: "read", args: { path: file }, say: `${file}부터 볼게요.` }; }
+    else if (tools.length && sinceUser === 0) call = { name: "read", args: { path: file }, say: `${file}부터 볼게요.` };
     else if (tools.length && sinceUser === 1 && wantFix) call = tools.includes("patch")
       ? { name: "patch", args: { patchText: "*** Begin Patch\n*** Update File: src/server.ts\n@@\n-    const found = router.match(method, url.pathname);\n+    const found = router.match(method, url.pathname); // 튜터가 고침\n*** End Patch" }, say: "부탁하셔서 고쳐 볼게요." }
       : { name: "edit", args: { path: "src/server.ts", oldString: "const found = router.match(method, url.pathname);", newString: "const found = router.match(method, url.pathname); // 튜터가 고침" }, say: "부탁하셔서 고쳐 볼게요." };
