@@ -127,14 +127,14 @@ svg text{font-family:var(--sans);fill:var(--fg);pointer-events:none}
       <g class="hit" data-k="cs" tabindex="0" role="button" aria-label="CS 세부 구조">
         <rect class="src" x="30" y="70" width="220" height="110" rx="12"/>
         <text x="50" y="102" class="t-lg">CS · 이론</text>
-        <text x="50" y="128" class="t-md">PDF (+전처리)</text>
+        <text x="50" y="128" class="t-md">PDF → 자료 지도</text>
         <text x="50" y="150" class="t-md">평문 글</text>
       </g>
       <path class="arrow" d="M250,125 L292,125" marker-end="url(#ah)"/>
       <g class="hit" data-k="cs" tabindex="0" role="button" aria-label="CS의 AI 세부 구조">
         <rect class="ai" x="296" y="90" width="236" height="70" rx="10"/>
         <text x="314" y="120" class="t-md">AI</text>
-        <text x="314" y="142" class="t-sm">지식 카드 뽑기</text>
+        <text x="314" y="142" class="t-sm">지식 카드 → 자료 지도 · 문제는 원할 때</text>
       </g>
       <g class="tag io"><rect x="296" y="168" width="196" height="26"/><text x="306" y="186">입출력 · 비용·품질·속도</text></g>
       <path class="arrow" d="M532,125 L596,150" marker-end="url(#ah)"/>
@@ -230,17 +230,8 @@ svg text{font-family:var(--sans);fill:var(--fg);pointer-events:none}
 
 <script>
 const D = {
-  cs: { title: "CS · 이론", sub: "PDF와 글에서 지식을 뽑는다", lanes: [
-    { label: "PDF", steps: [
-      ["code","전처리","쪽마다 읽는 길 정하기 · 2초"],
-      ["ai","지식 카드 뽑기","모든 쪽 동시 · 14초"],
-      ["chk","인용 확인","원문에 있는 근거만"],
-      ["ai","문제 만들기","카드 1장에 1번"],
-      ["chk","따로 풀어 검증","다르면 고침·보류"],
-      ["code","화면에 붙음","첫 문제 약 20초"] ] },
-    { label: "PDF · 동시에", steps: [
-      ["ai par","자료 전체 정리","중요도 · 연결 · 같은 지식"] ] },
-    { label: "웹 글", steps: [
+  cs: { title: "CS · 이론", sub: "PDF를 올리면 쪽마다 지식 카드를 뽑아 자료 지도로 보여 주고, 문제는 원할 때 만든다 · 엔진 recaller", svgs: "cs", lanes: [
+    { label: "웹 글 (B 담당)", steps: [
       ["user","붙여 넣기",""],
       ["ai","글 지도","AI 1번 · 흐름·핵심 3~5개"],
       ["code","핵심만 지식으로","개념어는 후보"],
@@ -304,7 +295,45 @@ const DEFS = `<defs><marker id="dah" viewBox="0 0 10 10" refX="9" refY="5" marke
 const svg = (w, h, label, body) => `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(label)}">${DEFS}${body}</svg>`;
 const chipRow = (names, cls) => `<div class="chips">${names.map(([n, m]) => `<span class="chip2 ${cls}"><code>${esc(n)}</code>${esc(m)}</span>`).join("")}</div>`;
 
-const FIGS = { project: [
+const FIGS = { cs: [
+  { cap: "① PDF는 이렇게 지식이 돼요", hint: "칸을 누르면 뜻과 하는 일이 나와요. 점선 칸은 옆 칸과 동시에 돌아요.", start: "cards",
+    svg: svg(1000, 400, "PDF에서 지식과 문제까지", [
+      P("pme", 20, 40, 130, 100, "user", "나", "PDF 올리기"),
+      P("prep", 190, 40, 150, 100, "code", "전처리", "쪽마다 읽는 길"),
+      P("cards", 380, 40, 190, 100, "ai", "쪽마다 지식 카드", "모든 쪽 동시에"),
+      `<g class="pk" data-p="intent" tabindex="0" role="button" aria-label="자료 성격 파악 설명 보기"><rect class="b-ai" x="380" y="175" width="190" height="80" rx="12" stroke-dasharray="6 5"/>` +
+        `<text x="475" y="207" class="t-lg" text-anchor="middle">자료 성격 파악</text><text x="475" y="230" class="t-sm" text-anchor="middle">쪽마다 의도 → ② 그림</text></g>`,
+      P("check", 610, 40, 150, 100, "chk", "카드 검사", "근거가 원문에 있나"),
+      P("merge", 800, 40, 180, 100, "ai", "자료 전체 정리", "주제 · 핵심 · 원리"),
+      P("map", 800, 280, 180, 100, "user", "자료 지도", "한 화면에 보기"),
+      P("qmake", 500, 280, 200, 100, "ai", "문제 만들기", "누를 때만"),
+      P("verify", 260, 280, 170, 100, "chk", "따로 풀어 검증", "원문만 보고"),
+      P("pkn", 40, 280, 170, 100, "chk", "연습 · 지식", "복습으로"),
+      A("M150,90 H186"),
+      A("M340,90 H376"),
+      A("M265,140 V215 H376"),
+      A("M475,175 V144", [505, 163, "의도"]),
+      A("M570,90 H606"),
+      A("M760,90 H796"),
+      A("M890,140 V276", [935, 212, "다 모이면"]),
+      A("M685,140 C685,200 800,230 830,276", [700, 215, "나오는 대로"]),
+      A("M800,330 H704", [752, 320, "누르면"]),
+      A("M500,330 H434"),
+      A("M260,330 H214"),
+    ].join("")) },
+  { cap: "② 쪽마다 의도를 먼저 봐요", hint: "강의 PDF는 쪽마다 하는 일이 달라요. 표지·예고 쪽까지 카드로 만들지 않게, 모든 쪽을 작게 한 번 훑어 의도를 정해요.", start: "judge",
+    svg: svg(1000, 330, "쪽 의도에 따라 카드 만드는 법", [
+      P("thumbs", 20, 115, 170, 100, "code", "쪽 썸네일", "모든 쪽을 작게"),
+      P("judge", 240, 115, 210, 100, "ai", "의도 판정", "AI 1번 · 약 5초"),
+      P("skip", 540, 20, 440, 80, "ext", "카드 안 만듦", "표지 · 예고 · 안내"),
+      P("make", 540, 125, 440, 80, "use", "그대로 카드로", "정의 · 공식 · 절차 · 비교 · 분류 · 개념 · 요약"),
+      P("shape", 540, 230, 440, 80, "chk", "다르게 다룸", "예제 · 현황 · 이어서"),
+      A("M190,165 H236"),
+      A("M450,165 C495,165 495,60 536,60"),
+      A("M450,165 H536"),
+      A("M450,165 C495,165 495,270 536,270"),
+    ].join("")) } ],
+  project: [
   { cap: "① 프로젝트는 이렇게 돌아가요", hint: "칸을 누르면 뜻과 하는 일이 나와요.", start: "me",
     svg: svg(1000, 330, "프로젝트 전체 구조", [
       P("me", 20, 120, 140, 90, "user", "나", "학습자"),
@@ -341,6 +370,24 @@ const FIGS = { project: [
     ].join("")) } ] };
 
 const INFO = {
+  pme: ["나 (학습자)", "공부할 강의 PDF를 올리는 사람이에요.", ["공부 → 새 공부 → PDF에서 올리고 범위(몇 쪽부터 몇 쪽)를 골라 “지식 정리 시작”을 눌러요.", "읽기 화면을 거치지 않고 바로 자료 지도로 넘어가요. 지식이 정리되는 대로 지도가 채워져요."]],
+  prep: ["전처리", "AI에 보내기 전에 프로그램이 쪽마다 어떻게 읽을지 정해요.", ["글자가 충분한 쪽은 글자 그대로, 식·그림이 중요한 쪽은 그림을 잘라 붙이고, 스캔한 쪽은 쪽 전체를 이미지로 보내요.", "쪽 제목으로 목차를 잡아 AI에게 “이 자료 전체가 무엇을 다루는지” 힌트로 같이 줘요.", "따로 도는 작업 프로세스 8개가 쪽을 그려서, 44쪽이 약 2초."]],
+  intent: ["자료 성격 파악", "모든 쪽을 작게 한 번 훑어서 자료가 어떤 종류인지, 쪽마다 무슨 일을 하는지 정해요.", ["카드 뽑기와 동시에 돌아서 기다리게 하지 않아요. 결과가 오면 표지·예고 쪽 카드를 빼고, 현황 쪽 카드는 보조로 내려요.", "자세한 건 ② 그림."]],
+  cards: ["쪽마다 지식 카드", "쪽 하나를 읽고 시험에 나올 지식만 ‘지식 카드’로 뽑아요. 이 앱의 중심 단계예요.", ["모든 쪽을 동시에 보내요(최대 64쪽). 답이 조금씩 흘러오므로 카드 한 장이 다 써지는 순간 지도에 떠요.", "쪽당 1~3장. 이름만 있는 카드는 안 만들고, 그 쪽이 말하는 결과(예: 연속 회전은 각을 더한 회전 하나)를 써요.", "카드마다 근거 쪽과 원문 인용이 붙어요. 헷갈리기 쉬운 점도 만들지만 화면엔 안 보이고 오답 보기 재료로만 써요.", "끊기면 2·5·12초 뒤 다시 묻고, 그래도 멈추면 멈춘 곳부터 이어 해요(3번까지).", "모델: gpt-6.1-terra · low. 14쪽 약 10초, 44쪽 약 15초."], [
+    ["카드 종류 9가지 (내용마다 모양이 달라요)", "use", [["용어", "정의"], ["사실", "값"], ["목록", "원소들"], ["조건", "조건 → 결론"], ["절차", "단계"], ["공식", "식 · 변수"], ["비교", "대상 × 기준"], ["개념", "주장 · 이유 · 한계"], ["패턴", "틀 · 빈칸"]]] ]],
+  check: ["카드 검사", "AI가 지어낸 내용이 들어가지 않게 프로그램이 확인해요.", ["카드의 인용이 그 쪽 원문에 실제로 있는지 봐요. 없으면 다시 쓰게 하고, 그래도 안 되면 뺍니다.", "그림에서 읽은 내용은 인용 대신 쪽 번호로 근거를 남겨요."]],
+  merge: ["자료 전체 정리", "쪽마다 따로 만든 카드 전체를 한 번에 보고 자료 단위로 다시 정리해요.", ["쪽마다 만들면 모든 카드가 ‘중요’가 되고, 겹치고, 이름이 쪽 제목 그대로인 게 생겨요. 그걸 여기서 고쳐요.", "바뀐 것만 답하게 해서 빨라요(44쪽 99초 → 약 20초). 실패해도 카드는 그대로 남아요.", "모델: gpt-6.1-terra · low · AI 1번."], [
+    ["만드는 것", "ours", [["주제", "강의 흐름대로 묶음 + 한 줄"], ["원리", "여러 주제에 되풀이되는 생각"], ["핵심", "시험 전날 볼 것 · 쪽당 2개까지"], ["같음", "겹치는 카드 묶기"], ["이름", "알아보게 고치기"], ["연결", "이어지는 카드끼리"]]] ]],
+  map: ["자료 지도", "지식 카드를 목차(또는 개념)별로 접어서 한 화면에 보여 줘요. PDF 읽기 화면 대신 여기서 공부해요.", ["첫 화면은 목차만. 펼치면 지식 한 줄씩, 누르면 카드 내용(조건·결과, 식, 단계…)과 원문 쪽.", "맨 위 ‘이 자료를 꿰는 원리’, ★는 핵심. 원문 p.7을 누르면 그 쪽만 창으로 떠요.", "데드락 14쪽 실측: 시작부터 지도 완성까지 약 35초, AI 호출 16번."]],
+  qmake: ["문제 만들기", "지도 오른쪽 위 버튼을 누를 때만 카드마다 문제를 만들어요.", ["지식만 보고 싶은 사람에게는 문제를 만들지 않아요(호출이 65번 → 16번으로 줄었어요).", "이미 만든 카드와 정리를 그대로 쓰고 문제만 만들어요. 14쪽 24문제 약 22초.", "형식은 카드 종류에 맞춰: 객관식 · OX · 단답 · 빈칸 · 플래시카드. 모델: gpt-6-sol · low."]],
+  verify: ["따로 풀어 검증", "만든 문제를 다른 AI 호출이 정답을 모른 채 원문만 보고 풀어 봐요.", ["답이 다르거나 원문으로는 답이 하나로 안 정해지면 한 번 고쳐 오게 하고, 그래도 안 되면 보류해요.", "보기 위치를 섞고, 화면에 낼 수 있는 모양인지도 프로그램이 검사해요."]],
+  pkn: ["연습 · 지식", "통과한 문제는 바로 연습에 붙고, 푼 결과는 앱의 지식 저장소에 쌓여요.", ["지도에서 카드의 ‘이 지식 문제 풀기’를 누르면 그 카드 문제를 바로 풀어요.", "틀리면 고른 오답이 어떤 실수에서 나왔는지 “이렇게 헷갈렸어요”로 보여 줘요.", "이후는 지식 칸의 복습 고리(몰랐음 → 앎 → 졸업)로 이어져요."]],
+  thumbs: ["쪽 썸네일", "모든 쪽을 작은 그림으로 만들어 한 번에 보내요.", ["글자를 다 읽히는 게 아니라 쪽의 생김새(제목만 큰 쪽, 목록, 식, 예제 풀이)를 보게 해요. 그래서 빨라요."]],
+  judge: ["의도 판정", "자료 전체가 무슨 종류인지, 쪽마다 무슨 일을 하는지 정해요.", ["카드 뽑기와 나란히 돌고, 약 5초 걸려요(gpt-6.1-terra · low).", "예고·안내는 이 판정으로만 정해요. 쪽 혼자 보면 식이 그림으로 된 쪽을 ‘예고’로 잘못 봐서 카드를 지운 적이 있어요."], [
+    ["자료 성격", "use", [["이론·계산 강의", ""], ["개념 설명 강의", ""], ["개론·현황 자료", ""], ["서술형 교재", ""], ["규정·제도", ""], ["문제·기출", ""]]] ]],
+  skip: ["카드 안 만듦", "배울 내용이 없는 쪽이에요.", ["표지, “오늘 배울 것” 예고, 수업 안내·학습 목표 쪽.", "이런 쪽에서 나온 카드는 지도에서 빠져요."]],
+  make: ["그대로 카드로", "보통의 강의 쪽이에요. 쪽이 말하는 지식을 그 모양대로 카드로 만들어요.", ["정의 → 용어 카드, 공식 → 공식 카드, 절차 → 단계 카드처럼 쪽의 의도가 카드 종류를 정하는 데 도움이 돼요.", "요약 쪽은 앞에서 이미 만든 카드와 겹치면 자료 전체 정리에서 하나로 묶어요."]],
+  shape: ["다르게 다룸", "그대로 카드로 만들면 이상해지는 쪽이에요.", ["예제: 예제 풀이를 쪼개지 않고 “예제: …” 카드 1장으로.", "현황(그 시점의 수치·순위): 카드는 만들되 보조로 내려요.", "이어서(앞 쪽에 이어지는 쪽): 앞 쪽과 겹치는 건 빼고 새로 나온 것만."]],
   me: ["나 (학습자)", "프로젝트를 직접 만드는 사람이에요.", ["VS Code에서 코드를 고치고, 모르는 건 오른쪽 튜터 탭에 물어요.", "앱의 공부 → 프로젝트에서 시작하거나 이어 해요."]],
   vscode: ["VS Code", "코드를 쓰고 고치는 프로그램(코드 편집기)이에요.", ["왼쪽에 내 코드 파일(server.ts, app.ts …), 오른쪽에 Recaller 튜터 탭이 열려요.", "코드 덩어리 위 💬 설명을 누르면 그 덩어리를, 코드 속 단어를 누르면 그 뜻을 알려 줘요.", "“실제 동작 설명해 주세요”라고 하면 요청이 지나가는 줄에 차례로 불이 켜져요(흐름 투어)."]],
   lesson: ["수업 진행표", "단계마다 무엇을 할지 정해 둔 계획이에요.", ["코스: 게시판 API 만들기 7단계 (서버 → 글 저장 → 입력 검사 → 로그인 → 권한 → 버그 → 응용).", "한 단계: 결과를 먼저 예측 → 일부러 고장 낸 걸 직접 봄 → 내가 고침 → 자동 검사로 채점 → 내 말로 설명.", "자동 검사는 실제로 서버에 요청을 보내 봐요(전부 33개). 수업 계획은 1~4단계까지 있어요."]],
@@ -373,6 +420,12 @@ function wireFig(fig, start) {
   });
   pick(start);
 }
+function lanesHtml(lanes) {
+  return lanes.map((lane) =>
+    `<div class="lane"><div class="lane-label">${esc(lane.label)}</div><div class="flow${lane.set ? " set" : ""}">` +
+    lane.steps.map(([cls, t, s], i) => `${i ? '<span class="ar" aria-hidden="true">→</span>' : ""}<div class="st ${cls}"><b>${esc(t)}</b>${s ? `<small>${esc(s)}</small>` : ""}</div>`).join("") +
+    `</div></div>`).join("");
+}
 function show(k) {
   if (!D[k]) k = "cs";
   const d = D[k];
@@ -382,13 +435,12 @@ function show(k) {
     const body = document.getElementById("d-body");
     body.innerHTML = FIGS[d.svgs].map((f) => `<figure class="fig" style="margin:0"><div class="fig-cap">${esc(f.cap)}<span>${esc(f.hint)}</span></div><div class="fig-box">${f.svg}</div><div class="info" aria-live="polite"></div></figure>`).join("");
     body.querySelectorAll(".fig").forEach((fig, i) => wireFig(fig, FIGS[d.svgs][i].start));
+    // A part drawn as figures may still list a simpler flow under them (CS: 웹 글).
+    if (d.lanes) body.insertAdjacentHTML("beforeend", lanesHtml(d.lanes));
     document.querySelectorAll(".hit").forEach((g) => g.classList.toggle("on", g.dataset.k === k));
     return;
   }
-  document.getElementById("d-body").innerHTML = d.lanes.map((lane) =>
-    `<div class="lane"><div class="lane-label">${esc(lane.label)}</div><div class="flow${lane.set ? " set" : ""}">` +
-    lane.steps.map(([cls, t, s], i) => `${i ? '<span class="ar" aria-hidden="true">→</span>' : ""}<div class="st ${cls}"><b>${esc(t)}</b>${s ? `<small>${esc(s)}</small>` : ""}</div>`).join("") +
-    `</div></div>`).join("");
+  document.getElementById("d-body").innerHTML = lanesHtml(d.lanes);
   document.querySelectorAll(".hit").forEach((g) => g.classList.toggle("on", g.dataset.k === k));
 }
 document.querySelectorAll(".hit").forEach((g) => {

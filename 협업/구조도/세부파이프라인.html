@@ -81,20 +81,20 @@ footer{color:var(--muted);font-size:12.5px}
   </div>
 
   <section class="pipe" id="pdf">
-    <div class="pipe-head"><h2>PDF → 지식 카드 → 문제</h2><span class="who">엔진 recaller · C 담당</span><span class="time">44쪽: 카드까지 14초 · 첫 문제 약 20초</span></div>
+    <div class="pipe-head"><h2>PDF → 지식 카드 → 자료 지도 → (원할 때) 문제</h2><span class="who">엔진 recaller · C 담당</span><span class="time">14쪽: 지도 완성 약 35초 · 문제 24개 약 22초 더</span></div>
     <div class="steps">
       <div class="step"><h3>전처리</h3><div class="chips"><span class="chip code">코드</span></div><p>쪽마다 읽는 길을 정한다: 글자 층 그대로 / 그림만 잘라 붙임 / 쪽 전체 이미지. 작업자 프로세스 8개가 쪽을 1024px로 그리고, 쪽 제목으로 목차를 잡는다.</p><p class="num">44쪽 약 2초</p></div>
-      <div class="step"><h3>지식 카드 뽑기</h3><div class="chips"><span class="chip ai">AI · terra low</span></div><p>모든 쪽을 동시에. 쪽 원문 + 그림 + 목차 힌트를 받아 카드를 만들고, 답을 스트리밍으로 받는다. 카드 9종류(용어·사실·목록·조건·절차·공식·비교·개념·패턴), 카드마다 근거 쪽·인용.</p></div>
-      <div class="step check"><h3>카드 검사</h3><div class="chips"><span class="chip code">코드</span><span class="chip chk">검증</span></div><p>인용이 실제 원문에 있는지 확인하고, 문제로 낼 카드를 고른다. 카드 하나가 다 써지는 순간 다음 단계로 넘긴다.</p></div>
-      <div class="step"><h3>카드마다 문제 만들기</h3><div class="chips"><span class="chip ai">AI · sol low</span><span class="chip code">모양 검사</span></div><p>출제 기준을 붙여 카드 1장에 호출 1번. 객관식·OX·빈칸·단답·플래시카드·순서. 보기 위치를 섞고, 화면에 낼 수 있는 모양인지 코드로 검사한다.</p></div>
-      <div class="step check"><h3>따로 풀어서 검증</h3><div class="chips"><span class="chip ai">AI</span><span class="chip chk">검증</span></div><p>다른 호출이 원문만 보고 푼다. 답이 다르거나 원문이 답을 여럿 허용하면 한 번 고쳐 오게 하고, 그래도 안 되면 보류.</p></div>
-      <div class="step"><h3>화면에 바로 붙이기</h3><div class="chips"><span class="chip code">코드</span></div><p>통과한 문제는 그 자리에서 공부 화면에 붙는다. 학습자는 나머지를 기다리지 않고 읽고 푼다.</p></div>
-      <div class="step"><h3>같은 지식 문제 빼기</h3><div class="chips"><span class="chip code">코드</span></div><p>두 쪽이 같은 지식으로 문제를 만들었으면 뒤의 것을 뺀다.</p></div>
-      <div class="step para"><h3>자료 전체 정리</h3><div class="chips"><span class="chip ai">AI · 1번</span><span class="chip par">동시</span></div><p>카드 전체를 한 번에 보고 이름 다듬기, 같은 지식 묶기, 주제, 자료 전체 기준 중요도(핵심/보조), 다른 구역과의 연결. 카드·문제는 바꾸지 않고, 실패해도 생성은 끝까지 간다.</p><p class="num">44쪽: 핵심 31/87 · 연결 84개 · 99초 (줄이는 중)</p></div>
+      <div class="step"><h3>지식 카드 뽑기</h3><div class="chips"><span class="chip ai">AI · terra low</span></div><p>모든 쪽을 동시에(최대 64쪽). 쪽 원문 + 그림 + 목차 힌트를 받아 카드를 만들고, 답을 스트리밍으로 받아 카드 한 장이 다 써지는 순간 지도에 띄운다. 카드 9종류(용어·사실·목록·조건·절차·공식·비교·개념·패턴), 카드마다 근거 쪽·인용. 헷갈리기 쉬운 점은 오답 재료로만 쓰고 화면에 안 보인다.</p><p class="num">14쪽 약 10초 · 44쪽 약 15초</p></div>
+      <div class="step para"><h3>자료 성격·쪽 의도</h3><div class="chips"><span class="chip ai">AI · terra low · 1번</span><span class="chip par">동시</span></div><p>모든 쪽 썸네일을 한 번에 보고 자료 종류와 쪽마다 의도(표지·예고·안내·정의·공식·절차·비교·분류·개념·현황·예제·이어서·요약·연습문제)를 정한다. 표지·예고·안내 쪽 카드는 빼고, 현황 쪽 카드는 보조로, 예제는 "예제:" 카드 1장으로.</p><p class="num">약 5초</p></div>
+      <div class="step check"><h3>카드 검사</h3><div class="chips"><span class="chip code">코드</span><span class="chip chk">검증</span></div><p>인용이 실제 원문에 있는지 확인한다. 없으면 다시 쓰게 하고, 그래도 안 되면 뺀다.</p></div>
+      <div class="step"><h3>자료 전체 정리</h3><div class="chips"><span class="chip ai">AI · terra low · 1번</span></div><p>모든 쪽 카드가 모이면 바로 시작. 주제(흐름 순서 + 한 줄), 여러 주제에 되풀이되는 원리, 핵심(카드 수의 1/3, 쪽당 2개까지), 같은 지식 묶기, 이름 고치기, 연결. 바뀐 것만 답하게 해서 빠르다. 실패해도 카드는 그대로.</p><p class="num">44쪽 99초 → 약 20초 · 14쪽 약 12초</p></div>
+      <div class="step"><h3>자료 지도</h3><div class="chips"><span class="chip user">사용자</span></div><p>읽기 화면 대신 여기서 공부한다. 첫 화면은 목차만, 펼치면 지식 한 줄씩, 누르면 카드 내용과 원문 쪽(그 쪽만 창으로). 맨 위에 원리, ★ 핵심.</p></div>
+      <div class="step opt"><h3>문제 만들기 (누를 때만)</h3><div class="chips"><span class="chip user">사용자</span><span class="chip ai">AI · sol low</span><span class="chip code">모양 검사</span></div><p>지도의 버튼을 누르면 같은 실행을 이어 카드 1장에 문제 1개(객관식·OX·단답·빈칸·플래시카드). 카드와 정리는 다시 하지 않는다. 보기 위치를 섞고 화면에 낼 수 있는 모양인지 검사.</p><p class="num">14쪽 24문제 약 22초</p></div>
+      <div class="step check"><h3>따로 풀어서 검증</h3><div class="chips"><span class="chip ai">AI</span><span class="chip chk">검증</span></div><p>다른 호출이 원문만 보고 푼다. 답이 다르거나 원문이 답을 여럿 허용하면 한 번 고쳐 오게 하고, 그래도 안 되면 보류. 같은 지식으로 만든 문제는 뒤의 것을 뺀다.</p></div>
       <div class="step opt"><h3>심화 문제 (원할 때)</h3><div class="chips"><span class="chip ai">AI</span><span class="chip chk">검증</span></div><p>카드 여러 장을 묶는 문제. 묶음 정하기 → 문제 → 따로 풀기·풀이 확인.</p></div>
-      <div class="step"><h3>지식 저장소로</h3><div class="chips"><span class="chip code">코드</span></div><p>공부 화면이 자료를 열 때 카드를 지식으로 가져온다(만남). 문제를 풀면 그 문제의 학습 목표가 가리키는 카드 지식에 기록된다.</p></div>
+      <div class="step"><h3>연습 · 지식 저장소로</h3><div class="chips"><span class="chip code">코드</span></div><p>통과한 문제는 바로 연습에 붙는다. 지도에서 카드의 "문제 풀기"는 그 카드 문제를 바로 연다. 틀리면 고른 오답의 실수를 "이렇게 헷갈렸어요"로 보여 준다. 공부 화면이 자료를 열 때 카드를 지식으로 가져온다(만남).</p></div>
     </div>
-    <p class="note">끊기면: 일시 오류는 2·5·12초 간격으로 다시 묻고, 그래도 멈추면 10초 뒤 멈춘 곳부터 이어 간다(한 자료에 3번까지). 호출 상한은 쪽당 8번 + 40번. 자료 지도는 이 결과(카드·중요도·연결·내 상태)를 한 화면에 보여 준다.</p>
+    <p class="note">AI 호출 수(데드락 14쪽): 지식까지 16번(카드 14 · 의도 1 · 정리 1), 문제를 만들면 46번 더. 끊기면: 일시 오류는 2·5·12초 간격으로 다시 묻고, 그래도 멈추면 10초 뒤 멈춘 곳부터 이어 간다(한 자료에 3번까지). 호출 상한은 쪽당 8번 + 40번.</p>
   </section>
 
   <section class="pipe" id="web">
@@ -147,9 +147,10 @@ footer{color:var(--muted);font-size:12.5px}
       <thead><tr><th>단계</th><th>모델</th><th>잰 값</th></tr></thead>
       <tbody>
         <tr><td>PDF 지식 카드 뽑기</td><td>gpt-6.1-terra · low</td><td class="n">44쪽 14초 (전 47초)</td></tr>
-        <tr><td>PDF 문제 만들기·따로 풀기</td><td>gpt-6-sol · low</td><td class="n">첫 문제 약 20초</td></tr>
-        <tr><td>PDF 자료 전체 정리</td><td>gpt-6-sol</td><td class="n">44쪽 99초, 출력 5.6천 토큰</td></tr>
-        <tr><td>PDF 전체 (문제까지)</td><td>—</td><td class="n">44쪽 약 4분 30초</td></tr>
+        <tr><td>PDF 자료 성격·쪽 의도</td><td>gpt-6.1-terra · low</td><td class="n">약 5초, 카드 뽑기와 동시</td></tr>
+        <tr><td>PDF 문제 만들기·따로 풀기</td><td>gpt-6-sol · low</td><td class="n">누를 때만 · 14쪽 24문제 약 22초</td></tr>
+        <tr><td>PDF 자료 전체 정리</td><td>gpt-6.1-terra · low</td><td class="n">44쪽 약 20초 (전 99초) · 14쪽 약 12초</td></tr>
+        <tr><td>PDF 지식까지 (자료 지도 완성)</td><td>—</td><td class="n">14쪽 약 35초 · AI 16번</td></tr>
         <tr><td>웹 글 지도</td><td>gpt-6.1-terra · low</td><td class="n">호출 1번</td></tr>
         <tr><td>코드 문제 만들기</td><td>gpt-6.1-terra (독립 풀이는 다른 모델)</td><td class="n">15~23초, 열기 약 2초</td></tr>
       </tbody>
