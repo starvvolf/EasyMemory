@@ -1035,7 +1035,9 @@ function renderHome(){
   wrap.append(h("section", { class:"panel today" },
     h("div", null,
       h("p", { class:"eyebrow", text:"PDF 자료 연습" }),
-      h("h2", { text: due ? "복습할 문제가 기다리고 있어요" : fresh ? "새 문제로 시작해 볼까요" : pendings.length ? "문제를 만드는 동안 먼저 읽어 두세요" : decks.length ? "오늘 할 문제를 모두 마쳤어요" : "새 자료로 시작해 볼까요" }),
+      h("h2", { text: due ? "복습할 문제가 기다리고 있어요" : fresh ? "새 문제로 시작해 볼까요" : pendings.length ? "지식을 정리하는 동안 자료 지도가 채워져요" : decks.length ? "오늘 할 문제를 모두 마쳤어요" : "새 자료로 시작해 볼까요" }),
+      // 2026-10-30 (A): the flow is 자료 지도 first, questions when asked — say so where the counts are about questions.
+      h("p", { class:"small muted", style:"margin:4px 0 10px", text:"새 자료는 자료 지도부터 열려요. 문제는 지도에서 원할 때 만들어요." }),
       h("div", { class:"counts" },
         h("div", null, h("b", { class:"num", text:String(due) }), h("span", { text:"복습 차례" })),
         h("div", null, h("b", { class:"num", text:String(fresh) }), h("span", { text:"새 문제 (자료당 최대 10)" }))

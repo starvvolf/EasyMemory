@@ -43,6 +43,15 @@ export default function ProjectStudy() {
     finally { setBusy(null); }
   };
   const courseUrl = status?.url ?? "http://127.0.0.1:4100";
+  // 같은 코스를 여러 번 시작했으면 코스마다 하나만 크게(지금 하던 것, 없으면 가장 최근), 나머지는 접어 둔다 (2026-10-30 A: 같은 카드가 둘로 보여 헷갈림).
+  const runs = status?.runs ?? [];
+  const newest = (a: RunLite, b: RunLite) => Date.parse(b.createdAt) - Date.parse(a.createdAt);
+  const shown = [...new Set(runs.map((r) => r.courseTitle))].map((title) => {
+    const same = runs.filter((r) => r.courseTitle === title).sort(newest);
+    return same.find((r) => r.id === status?.active) ?? same[0];
+  });
+  const others = runs.filter((r) => !shown.includes(r)).sort(newest);
+  const started = (r: RunLite) => { const d = new Date(r.createdAt); return Number.isNaN(d.getTime()) ? "" : `${d.getMonth() + 1}/${d.getDate()} 시작`; };
 
   return (
     <div className="pj">
@@ -65,7 +74,7 @@ export default function ProjectStudy() {
       ) : (
         <>
           <div className="td-grid" style={{ marginTop: 16 }}>
-            {status.runs.map((r) => (
+            {shown.map((r) => (
               <section key={r.id} className="td-card">
                 <p className="eyebrow">{status.active === r.id ? "하던 프로젝트" : "프로젝트"}</p>
                 <h3 style={{ margin: "4px 0" }}>{r.courseTitle}</h3>
@@ -76,6 +85,18 @@ export default function ProjectStudy() {
                 </div>
               </section>
             ))}
+            {others.length ? (
+              <section className="td-card">
+                <p className="eyebrow">같은 코스의 다른 기록 {others.length}개</p>
+                <p className="small muted" style={{ margin: "6px 0 10px" }}>같은 프로젝트를 다시 시작한 기록이에요. 보통은 위 카드에서 이어 하면 돼요.</p>
+                <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>
+                  {others.map((r) => (
+                    <li key={r.id}>{r.courseTitle} · {r.current}단계{started(r) ? ` · ${started(r)}` : ""}{" "}
+                      <button className="btn ghost small" disabled={busy === r.id} onClick={() => void openEditor(r)}>{busy === r.id ? "여는 중…" : "이걸로 이어 하기"}</button></li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
             <section className="td-card">
               <p className="eyebrow">새로 시작</p>
               <p className="small" style={{ margin: "6px 0 12px" }}>무엇을 만들지, 어디서부터 할지 몇 가지 물어보고 계획을 짜 줘요.</p>
