@@ -3,8 +3,9 @@
 // Left: folders (drag items or folders onto a folder to move them). Middle: the folder's items. Right: one item —
 // its meaning, names, chains, where it came from and its record — with 확인 문제, 합치기 and the state buttons.
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
-import { call, errorText, folderPaths, go, handoff, later, KIND_LABEL, SOURCE_LABEL, STATE_LABEL, EVENT_LABEL, whenText, type Detail, type Folder, type ItemLite, type KKind, type KState,
-  type Material, type Question, type ReviewStatus, type Tree } from "./api";
+import { call, errorText, folderPaths, go, handoff, later, KIND_LABEL, STATE_LABEL, EVENT_LABEL, whenText, type Detail, type Folder, type ItemLite, type KKind, type KState,
+  type Question, type ReviewStatus, type Tree } from "./api";
+import { ArticleMap, type SourceView } from "./ArticleStudy";
 import { QuestionRun } from "./QuestionCard";
 import { Inline, Rich } from "./Rich";
 
@@ -42,16 +43,19 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const [draft, setDraft] = useState("");
   const [filling, setFilling] = useState(false);
   const [dupes, setDupes] = useState<Dup[]>([]);
-  // 왼쪽은 주제(폴더 트리) 또는 자료(출처 묶음); 목록은 거기서 고른 것을 따른다. 목표는 없앴다(2026-10-30 사용자 "목표 없애").
+  // 왼쪽 (2026-10-30 사용자 "자료가 먼저, 누르면 그 자료의 지도", "자료 폴더 정리"): 전체 → 자료(학습자 폴더 + PDF·웹 글) →
+  // 프로젝트 → 코드 문제 → 주제별로 보기(접힘). 목록은 거기서 고른 것을 따른다. 목표는 없앴다.
   const [view, setView] = useState<"topic" | "material">("topic");
-  const [materials, setMaterials] = useState<Material[]>([]);
+  const [materials, setMaterials] = useState<MaterialRow[]>([]);
+  const [matFolders, setMatFolders] = useState<MaterialFolder[]>([]);
   const [matSel, setMatSel] = useState<string | null>(null);
+  const [matMode, setMatMode] = useState<"map" | "list">("map");
   const [sorting, setSorting] = useState(false);
 
   const load = useCallback(async () => {
     try { setTree(await call<Tree>("/api/knowledge")); } catch (e) { setError(errorText(e)); }
     call<{ pairs: Dup[] }>("/api/knowledge/dupes").then((r) => setDupes(r.pairs)).catch(() => undefined);
-    call<{ materials: Material[] }>("/api/knowledge/materials").then((r) => setMaterials(r.materials)).catch(() => undefined);
+    call<{ materials: MaterialRow[]; folders: MaterialFolder[] }>("/api/knowledge/material-view").then((r) => { setMaterials(r.materials); setMatFolders(r.folders); }).catch(() => undefined);
   }, []);
   const loadDetail = useCallback(async (id: string) => { try { setDetail(await call<Detail>(`/api/knowledge/item/${id}`)); } catch (e) { setError(errorText(e)); setDetail(null); } }, []);
   useEffect(() => later(() => void load()), [load]);
@@ -83,21 +87,18 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const subtree = useCallback((id: string) => { const ids = new Set([id]); let grew = true; while (grew) { grew = false; for (const f of tree.folders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true; } } return ids; }, [tree.folders]);
   const countIn = useCallback((id: string) => { const ids = subtree(id); const list = tree.items.filter((i) => i.folderId && ids.has(i.folderId)); return { total: list.length, unknown: list.filter((i) => i.state === "unknown").length, known: list.filter((i) => i.state === "known").length }; }, [subtree, tree.items]);
 
-  // 자료 보기는 출처로 묶는다 (2026-10-30 사용자: "웹/PDF는 자료 출처로 묶고, 프로젝트는 프로젝트로 묶어"). 같은 프로젝트 코스를
-  // 여러 번 진행해도 프로젝트 하나로 보인다.
-  const navMaterials = useMemo(() => groupMaterials(materials), [materials]);
   const shown = useMemo(() => {
-    const inMaterial = view === "material" && matSel ? new Set(navMaterials.find((m) => m.key === matSel)?.itemIds ?? []) : null;
+    const inMaterial = view === "material" && matSel ? new Set(materials.find((m) => m.key === matSel)?.itemIds ?? []) : null;
     let list = hits ?? tree.items.filter((i) => inMaterial ? inMaterial.has(i.id)
       : view !== "topic" || folder === "all" ? true : folder === "none" ? !i.folderId : Boolean(i.folderId && subtree(folder).has(i.folderId)));
     if (filter === "graduated") list = list.filter((i) => i.graduated); else if (filter !== "all") list = list.filter((i) => i.state === filter && !i.graduated);
     if (!hits) list = [...list].sort((a, b) => sort === "weak" ? b.weak - a.weak || b.lastAt.localeCompare(a.lastAt) : sort === "name" ? a.title.localeCompare(b.title, "ko") : b.lastAt.localeCompare(a.lastAt));
     return list;
-  }, [hits, tree.items, folder, filter, sort, subtree, view, matSel, navMaterials]);
+  }, [hits, tree.items, folder, filter, sort, subtree, view, matSel, materials]);
 
   const dueNow = tree.items.filter((i) => !i.graduated && i.state !== "met" && (!i.dueAt || Date.parse(i.dueAt) <= Date.now())).length;
   const counts = { total: tree.items.length, unknown: tree.items.filter((i) => i.state === "unknown").length, known: tree.items.filter((i) => i.state === "known").length, met: tree.items.filter((i) => i.state === "met").length };
-  const material = navMaterials.find((m) => m.key === matSel) ?? null;
+  const material = materials.find((m) => m.key === matSel) ?? null;
   const folderName = view === "material" && material ? material.title
     : view !== "topic" || folder === "all" ? "전체" : folder === "none" ? "주제 없음" : folderPaths(tree.folders).find((f) => f.id === folder)?.path ?? "";
   const unsorted = tree.items.filter((i) => !i.kind).length;
@@ -108,13 +109,35 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const drop = (target: string | null) => (e: DragEvent) => {
     e.preventDefault(); (e.currentTarget as HTMLElement).classList.remove("drop");
     const kind = e.dataTransfer.getData("text/x-kind"), id = e.dataTransfer.getData("text/x-id");
-    if (!id) return;
+    if (!id || kind === "material") return;
     if (kind === "item") void act(() => call(`/api/knowledge/item/${id}`, { folderId: target }, "PATCH"));
     if (kind === "folder" && id !== target) void act(() => call(`/api/knowledge/folder/${id}`, { parentId: target }, "PATCH"));
   };
   const dropZone = (target: string | null) => ({ onDragOver: (e: DragEvent) => { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add("drop"); },
     onDragLeave: (e: DragEvent) => (e.currentTarget as HTMLElement).classList.remove("drop"), onDrop: drop(target) });
-  const dragOf = (kind: "item" | "folder", id: string) => ({ draggable: true, onDragStart: (e: DragEvent) => { e.dataTransfer.setData("text/x-kind", kind); e.dataTransfer.setData("text/x-id", id); e.dataTransfer.effectAllowed = "move"; } });
+  const dragOf = (kind: "item" | "folder" | "material", id: string) => ({ draggable: true, onDragStart: (e: DragEvent) => { e.dataTransfer.setData("text/x-kind", kind); e.dataTransfer.setData("text/x-id", id); e.dataTransfer.effectAllowed = "move"; } });
+
+  // 자료를 누르면 그 자료의 지도가 먼저: PDF는 자료 지도(공부 화면의 지도 창), 웹 글은 글 지도, 프로젝트는 단계별. 코드 문제는 목록.
+  const pickMaterial = (m: MaterialRow) => {
+    setView("material"); setMatSel(m.key); setQuery(""); setSel(null);
+    setMatMode(m.sourceId || m.group === "project" ? "map" : "list");
+    if (m.genId) window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: m.genId } }));
+  };
+  const placeMaterial = (key: string, folderId: string | null) => void act(() => call("/api/knowledge/material-place", { keys: [key], folderId }));
+  const matDrop = (folderId: string | null) => ({ onDragOver: (e: DragEvent) => { if (e.dataTransfer.types.includes("text/x-mat")) { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add("drop"); } },
+    onDragLeave: (e: DragEvent) => (e.currentTarget as HTMLElement).classList.remove("drop"),
+    onDrop: (e: DragEvent) => { e.preventDefault(); (e.currentTarget as HTMLElement).classList.remove("drop"); const key = e.dataTransfer.getData("text/x-mat"); if (key) placeMaterial(key, folderId); } });
+  const barOf = (ids: string[]) => { const mine = tree.items.filter((i) => ids.includes(i.id)); const n = mine.length || 1;
+    return { unknown: mine.filter((i) => i.state === "unknown").length / n * 100, known: mine.filter((i) => i.state === "known").length / n * 100 }; };
+  const MatRow = ({ m }: { m: MaterialRow }) => { const b = barOf(m.itemIds); return (
+    <li><div className={`kw-folder kw-mat${view === "material" && matSel === m.key ? " on" : ""}`} draggable
+      onDragStart={(e) => { e.dataTransfer.setData("text/x-mat", m.key); e.dataTransfer.effectAllowed = "move"; }} title={`${m.title} · 끌어다 자료 폴더에 넣을 수 있어요`}>
+      <span className="kw-mat-ic" aria-hidden>{MAT_ICON[m.group === "material" ? m.kind : m.group] ?? "•"}</span>
+      <button className="kw-fname" onClick={() => pickMaterial(m)}>{m.title}</button>
+      <span className="kw-count num">{m.items}</span>
+      <span className="kw-mbar" aria-label={`몰랐음 ${Math.round(b.unknown)}% · 앎 ${Math.round(b.known)}%`}><i className="bad" style={{ width: `${b.unknown}%` }} /><i className="good" style={{ width: `${b.known}%` }} /></span>
+    </div></li>); };
+  const unfiled = (g: MaterialRow["group"]) => materials.filter((m) => m.group === g && !m.folderId);
 
   const startQuiz = async () => {
     const q = view === "topic" && folder !== "all" && folder !== "none" ? `?folderId=${folder}&count=10` : "?count=10";
@@ -138,9 +161,9 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
     const isOpen = open.has(f.id);
     return (
       <li>
-        <div className={`kw-folder${folder === f.id ? " on" : ""}`} style={{ paddingLeft: 8 + depth * 14 }} {...dragOf("folder", f.id)} {...dropZone(f.id)}>
+        <div className={`kw-folder${view === "topic" && folder === f.id ? " on" : ""}`} style={{ paddingLeft: 8 + depth * 14 }} {...dragOf("folder", f.id)} {...dropZone(f.id)}>
           <button className="kw-twist" aria-label={isOpen ? "접기" : "펴기"} onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(f.id)) n.delete(f.id); else n.add(f.id); return n; })} style={{ visibility: kids.length ? "visible" : "hidden" }}>{isOpen ? "▾" : "▸"}</button>
-          <button className="kw-fname" onClick={() => { setFolder(f.id); setQuery(""); }}>{f.name}</button>
+          <button className="kw-fname" onClick={() => { setView("topic"); setFolder(f.id); setQuery(""); }}>{f.name}</button>
           <span className="kw-count num" title={`몰랐음 ${c.unknown} · 앎 ${c.known}`}>{c.unknown ? <i className="dot bad" /> : null}{c.total}</span>
         </div>
         {isOpen && kids.length ? <ul>{kids.map((k) => <FolderRow key={k.id} f={k} depth={depth + 1} />)}</ul> : null}
@@ -210,17 +233,20 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
 
       <div className="kw-grid">
         <nav className="kw-tree panel" aria-label="폴더" title="지식이나 폴더를 끌어다 폴더에 놓으면 옮겨져요. 손으로 옮긴 지식은 주제 정리가 다시 옮기지 않아요.">
-          <div className="ws-seg kw-view" role="tablist" aria-label="보기">
-            {([["topic", "주제"], ["material", "자료"]] as const).map(([k, label]) => <button key={k} role="tab" aria-selected={view === k} className={view === k ? "on" : ""}
-              onClick={() => { setView(k); setQuery(""); }}>{label}</button>)}
-          </div>
-          {view === "material" ? <MaterialNav materials={navMaterials} sel={matSel} onPick={(k) => { setMatSel(k); setQuery(""); }} /> : null}
-          {view === "topic" ? <>
-          <div className={`kw-folder root${folder === "all" ? " on" : ""}`} {...dropZone(null)}><button className="kw-fname" onClick={() => { setFolder("all"); setQuery(""); }}>전체</button><span className="kw-count num">{counts.total}</span></div>
-          <ul>{(children.get(null) ?? []).map((f) => <FolderRow key={f.id} f={f} depth={0} />)}</ul>
-          <div className={`kw-folder root${folder === "none" ? " on" : ""}`} {...dropZone(null)}><button className="kw-fname" onClick={() => { setFolder("none"); setQuery(""); }}>주제 없음</button><span className="kw-count num">{tree.items.filter((i) => !i.folderId).length}</span></div>
-          {folder !== "all" && folder !== "none" && tree.folders.some((f) => f.id === folder) ? <details className="ws-fold kw-ftools-fold"><summary>폴더 설정</summary><FolderTools key={folder} folder={tree.folders.find((f) => f.id === folder)!} onAct={act} onGone={() => setFolder("all")} /></details> : null}
-          </> : null}
+          <div className={`kw-folder root${view === "topic" && folder === "all" ? " on" : ""}`}><button className="kw-fname" onClick={() => { setView("topic"); setFolder("all"); setQuery(""); }}>전체</button><span className="kw-count num">{counts.total}</span></div>
+          <div className="kw-sec" {...matDrop(null)}><span>자료</span><MatFolderNew onAct={act} /></div>
+          {matFolders.map((f) => <MatFolderBox key={f.id} folder={f} rows={materials.filter((m) => m.folderId === f.id)} drop={matDrop(f.id)} onAct={act}>{(m) => <MatRow key={m.key} m={m} />}</MatFolderBox>)}
+          <ul>{unfiled("material").map((m) => <MatRow key={m.key} m={m} />)}</ul>
+          {!materials.some((m) => m.group === "material") ? <p className="small muted kw-empty-sec">PDF나 웹 글로 공부하면 여기에 생겨요.</p> : null}
+          {unfiled("project").length ? <><div className="kw-sec" {...matDrop(null)}><span>프로젝트</span></div><ul>{unfiled("project").map((m) => <MatRow key={m.key} m={m} />)}</ul></> : null}
+          {unfiled("code").length ? <details className="kw-mgroup" open={unfiled("code").some((m) => m.key === matSel)}><summary className="kw-sec"><span>코드 문제</span><span className="kw-count num">{unfiled("code").length}</span></summary>
+            <ul>{unfiled("code").map((m) => <MatRow key={m.key} m={m} />)}</ul></details> : null}
+          <details className="kw-mgroup" open={view === "topic" && folder !== "all"}>
+            <summary className="kw-sec"><span>주제별로 보기</span><span className="small muted kw-sec-hint">{(children.get(null) ?? []).slice(0, 3).map((f) => f.name).join(" · ")}</span></summary>
+            <ul>{(children.get(null) ?? []).map((f) => <FolderRow key={f.id} f={f} depth={0} />)}</ul>
+            <div className={`kw-folder root${view === "topic" && folder === "none" ? " on" : ""}`} {...dropZone(null)}><button className="kw-fname" onClick={() => { setView("topic"); setFolder("none"); setQuery(""); }}>주제 없음</button><span className="kw-count num">{tree.items.filter((i) => !i.folderId).length}</span></div>
+            {view === "topic" && folder !== "all" && folder !== "none" && tree.folders.some((f) => f.id === folder) ? <details className="ws-fold kw-ftools-fold"><summary>폴더 설정</summary><FolderTools key={folder} folder={tree.folders.find((f) => f.id === folder)!} onAct={act} onGone={() => setFolder("all")} /></details> : null}
+          </details>
         </nav>
 
         <section className="kw-list panel" aria-label="지식 목록">
@@ -228,6 +254,10 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
             <b>{hits ? `"${query}" 찾은 것 ${hits.length}` : `${folderName} · ${shown.length}`}</b>
             {!hits ? <select className="ws-select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="정렬"><option value="recent">최근 순</option><option value="weak">약한 순</option><option value="name">이름 순</option></select> : null}
           </div>
+          {view === "material" && material && !hits ? <MaterialHead m={material} folders={matFolders} mode={matMode} onMode={setMatMode} onPlace={(f) => placeMaterial(material.key, f)} /> : null}
+          {view === "material" && material && !hits && matMode === "map" && material.sourceId ? <MaterialArticle key={material.sourceId} id={material.sourceId} onChanged={() => void load()} />
+          : view === "material" && material && !hits && matMode === "map" && material.stages ? <ProjectStages stages={material.stages} items={tree.items} sel={sel} onPick={setSel} />
+          : <>
           <div className="kw-filters">{FILTERS.map(([key, label]) => <button key={key} className="chip-btn" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
           {!shown.length ? <p className="small muted">{tree.items.length ? "여기에 맞는 지식이 없어요." : "아직 지식이 없어요. 자료를 읽거나 문제를 풀면 저절로 쌓이고, + 지식으로 직접 넣을 수도 있어요."}</p> : null}
           <ul className="kw-items">
@@ -242,6 +272,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
               </li>
             ))}
           </ul>
+          </>}
         </section>
 
         <section className="kw-detail panel" aria-label="지식 자세히">
@@ -474,41 +505,76 @@ function Duplicates({ pairs, onOpen, onAct }: { pairs: Dup[]; onOpen: (id: strin
   );
 }
 
-/** A row of the 자료 view: one 자료, or one project course made of every run of it (keys: the sources underneath). */
-type NavMaterial = Material & { group: "material" | "project" | "code"; keys: string[] };
-const PROJECT_PREFIX = "프로젝트 코스: ";
-/** PDF·웹 글 = 자료, 프로젝트 코스(ref project:…) = 프로젝트 (같은 코스는 하나로), 나머지 코드 = 코드 문제. */
-function groupMaterials(materials: Material[]): NavMaterial[] {
-  const out: NavMaterial[] = [];
-  const projects = new Map<string, NavMaterial>();
-  for (const m of materials) {
-    if (m.kind === "code" && m.key.startsWith("code:project:")) {
-      const title = m.title.startsWith(PROJECT_PREFIX) ? m.title.slice(PROJECT_PREFIX.length) : m.title;
-      const p = projects.get(title);
-      if (!p) { const row: NavMaterial = { ...m, title, key: `project:${title}`, group: "project", keys: [m.key] }; projects.set(title, row); out.push(row); continue; }
-      p.keys.push(m.key);
-      p.itemIds = [...new Set([...p.itemIds, ...m.itemIds])]; p.items = p.itemIds.length;
-      if (m.lastAt > p.lastAt) p.lastAt = m.lastAt;
-      continue;
-    }
-    out.push({ ...m, group: m.kind === "pdf" || m.kind === "web" ? "material" : "code", keys: [m.key] });
-  }
-  return out;
+type MaterialRow = { key: string; group: "material" | "project" | "code"; kind: string; title: string; items: number; itemIds: string[]; lastAt: string; keys: string[];
+  folderId: string | null; genId?: string; sourceId?: string; stages?: Array<{ name: string; itemIds: string[] }> };
+type MaterialFolder = { id: string; name: string; order: number };
+const MAT_ICON: Record<string, string> = { pdf: "📄", web: "🌐", project: "🛠", code: "⌨" };
+type Act = (run: () => Promise<unknown>, after?: () => void) => Promise<void>;
+
+/** + 폴더 (자료): a name, and the folder is there to drag 자료 into. */
+function MatFolderNew({ onAct }: { onAct: Act }) {
+  const [on, setOn] = useState(false);
+  const [name, setName] = useState("");
+  if (!on) return <button className="kw-sec-add" onClick={() => { setOn(true); setName(""); }} title="자료 폴더 만들기 (수업·주제별로 자료 묶기)">+ 폴더</button>;
+  return <form className="row kw-sec-form" onSubmit={(e) => { e.preventDefault(); if (name.trim()) void onAct(() => call("/api/knowledge/material-folder", { name: name.trim() }), () => setOn(false)); }}>
+    <input className="ws-input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="폴더 이름 (예: 그래픽스 수업)" maxLength={60} onKeyDown={(e) => { if (e.key === "Escape") setOn(false); }} />
+    <button className="btn small" disabled={!name.trim()}>만들기</button></form>;
 }
-const MAT_GROUPS = [["material", "자료", "PDF · 웹 글"], ["project", "프로젝트", ""], ["code", "코드 문제", ""]] as const;
-/** 자료 보기: 출처 묶음(자료 · 프로젝트 · 코드 문제)마다 접히는 폴더; pick one to see its items. */
-function MaterialNav({ materials, sel, onPick }: { materials: NavMaterial[]; sel: string | null; onPick: (key: string | null) => void }) {
-  const row = (m: NavMaterial) => <li key={m.key}><div className={`kw-folder kw-mat${sel === m.key ? " on" : ""}`}>
-    <button className="kw-fname" onClick={() => onPick(m.key)} title={m.title}>{m.group === "material" ? <><span className="chip">{SOURCE_LABEL[m.kind] ?? m.kind}</span> </> : null}{m.title}</button><span className="kw-count num">{m.items}</span></div></li>;
-  if (!materials.length) return <ul><li className="small muted">아직 자료가 없어요.</li></ul>;
+/** A learner's 자료 folder: folds, takes dropped 자료, can be renamed or removed (its 자료 go back outside). */
+function MatFolderBox({ folder, rows, drop, onAct, children }: { folder: MaterialFolder; rows: MaterialRow[]; drop: Record<string, unknown>; onAct: Act; children: (m: MaterialRow) => React.ReactNode }) {
+  const [edit, setEdit] = useState(false);
+  const [name, setName] = useState(folder.name);
   return (
-    <div className="kw-mgroups">{MAT_GROUPS.map(([g, label, hint]) => {
-      const list = materials.filter((m) => m.group === g);
-      if (!list.length) return null;
-      return <details key={g} className="kw-mgroup" open={g !== "code" || list.some((m) => m.key === sel)}>
-        <summary><b>{label}</b>{hint ? <span className="small muted"> {hint}</span> : null}<span className="kw-count num">{list.length}</span></summary>
-        <ul>{list.map(row)}</ul>
-      </details>;
+    <details className="kw-mgroup kw-mfolder" open>
+      <summary className="kw-folder" {...drop}>
+        {edit ? <form className="row" onSubmit={(e) => { e.preventDefault(); void onAct(() => call(`/api/knowledge/material-folder/${folder.id}`, { name }, "PATCH"), () => setEdit(false)); }}>
+          <input className="ws-input" autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={60} onKeyDown={(e) => { if (e.key === "Escape") setEdit(false); }} /></form>
+          : <span className="kw-fname">📁 {folder.name}</span>}
+        <span className="kw-count num">{rows.length}</span>
+        <details className="ws-menu kw-mf-menu" onClick={(e) => e.stopPropagation()}><summary aria-label="폴더 설정">⋯</summary>
+          <div className="ws-menu-card">
+            <button className="mm-item" onClick={(e) => { (e.currentTarget.closest(".kw-mf-menu") as HTMLDetailsElement).open = false; setEdit(true); }}><span>이름 바꾸기</span></button>
+            <button className="mm-item" onClick={() => void onAct(() => call(`/api/knowledge/material-folder/${folder.id}`, undefined, "DELETE"))}><span>폴더 지우기</span><small>안의 자료는 폴더 밖으로 나와요</small></button>
+          </div></details>
+      </summary>
+      <ul>{rows.map(children)}{!rows.length ? <li className="small muted kw-empty-sec">자료를 끌어다 놓아요</li> : null}</ul>
+    </details>
+  );
+}
+/** Over a picked 자료: its map or its list, and which 자료 folder it is in. */
+function MaterialHead({ m, folders, mode, onMode, onPlace }: { m: MaterialRow; folders: MaterialFolder[]; mode: "map" | "list"; onMode: (x: "map" | "list") => void; onPlace: (folderId: string | null) => void }) {
+  const hasMap = Boolean(m.sourceId || m.stages);
+  return (
+    <div className="row kw-mhead">
+      {hasMap ? <div className="ws-seg" role="tablist" aria-label="보기">{([["map", m.stages ? "단계별" : "글 지도"], ["list", "지식 목록"]] as const).map(([k, label]) =>
+        <button key={k} role="tab" aria-selected={mode === k} className={mode === k ? "on" : ""} onClick={() => onMode(k)}>{label}</button>)}</div> : null}
+      {m.genId ? <button className="btn small primary" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: m.genId } }))}>자료 지도 열기</button> : null}
+      {m.group === "project" ? <button className="btn small" onClick={() => go("project")}>프로젝트 화면</button> : null}
+      {m.group === "code" && m.keys[0]?.startsWith("code:cp_") ? <button className="btn small" onClick={() => go("code", { id: m.keys[m.keys.length - 1].slice(5) })}>문제 열기</button> : null}
+      <label className="row small kw-mplace">폴더 <select className="ws-select" value={m.folderId ?? ""} onChange={(e) => onPlace(e.target.value || null)}>
+        <option value="">없음</option>{folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+    </div>
+  );
+}
+/** 웹 글 자료: its 글 지도 (질문·흐름·핵심·개념어), the same one the 웹 글 screen shows. */
+function MaterialArticle({ id, onChanged }: { id: string; onChanged: () => void }) {
+  const [source, setSource] = useState<SourceView | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => later(() => void call<{ source: SourceView }>(`/api/knowledge/source/${id}`).then((r) => setSource(r.source)).catch((e) => setError(errorText(e)))), [id]);
+  if (error) return <p className="ws-err">{error}</p>;
+  if (!source) return <p className="small muted">글 지도를 불러오는 중…</p>;
+  if (!source.map) return <div className="stack"><p className="small muted">이 글은 글 지도 전에 읽은 글이에요.</p><button className="btn small" onClick={() => go("web", { id })}>웹 글 화면에서 열기</button></div>;
+  return <div className="stack"><ArticleMap source={source} onChanged={(s) => { setSource(s); onChanged(); }} /><button className="linkish small" onClick={() => go("web", { id })}>웹 글 화면에서 열기 (확인 문제·원문)</button></div>;
+}
+/** 프로젝트 자료: the knowledge by the course stage it first came up in. */
+function ProjectStages({ stages, items, sel, onPick }: { stages: Array<{ name: string; itemIds: string[] }>; items: ItemLite[]; sel: string | null; onPick: (id: string) => void }) {
+  return (
+    <div className="stack kw-stages">{stages.map((st) => {
+      const mine = st.itemIds.map((id) => items.find((i) => i.id === id)).filter((i): i is ItemLite => Boolean(i));
+      return <section key={st.name}><p className="eyebrow">{st.name} · {mine.length}</p>
+        <ul className="kw-items">{mine.map((i) => <li key={i.id}><button className={`kw-item${sel === i.id ? " on" : ""}`} onClick={() => onPick(i.id)}>
+          <span className="kw-item-top"><StateChip state={i.state} graduated={i.graduated} /><span className="kw-title"><Inline text={i.title} /></span></span>
+          {i.line ? <span className="kw-line"><Inline text={i.line} /></span> : null}</button></li>)}</ul></section>;
     })}</div>
   );
 }

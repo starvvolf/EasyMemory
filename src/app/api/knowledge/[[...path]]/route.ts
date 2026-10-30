@@ -8,6 +8,7 @@ import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSour
 import { similarKnowledge } from "@/lib/knowledge/embed";
 import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
 import { nearOf, previewLinks, rejudgeLinks, openDuplicates, resolveDuplicate, runDuplicateCheck } from "@/lib/knowledge/dedupe";
+import { createMaterialFolder, deleteMaterialFolder, materialView, placeMaterials, renameMaterialFolder } from "@/lib/knowledge/materials";
 import { scheduleAfterSave } from "@/lib/knowledge/after-save";
 import { knowledgeReport } from "@/lib/knowledge/report";
 import { mapArticle } from "@/lib/assist/article-map";
@@ -108,6 +109,12 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "goals" && p[1] && p[2] === "item" && m === "POST") { const b = await body(z.object({ itemId: id, on: z.boolean() })); return json({ goal: await setGoalItem(goalId.parse(p[1]), b.itemId, b.on) }); }
     if (p[0] === "goals" && p[1] && p[2] === "items" && m === "GET") return json({ ids: await goalItemIds(goalId.parse(p[1])) });
     if (p[0] === "materials" && p.length === 1 && m === "GET") return json({ materials: await listMaterials() });
+    // 자료 보기 (지식 창 왼쪽): 출처 한 줄씩 + 지도 여는 데 필요한 것 + 학습자의 자료 폴더 (materials.ts).
+    if (p[0] === "material-view" && m === "GET") return json(await materialView());
+    if (p[0] === "material-folder" && p.length === 1 && m === "POST") return json({ folder: await createMaterialFolder((await body(z.object({ name: z.string().min(1).max(60) }))).name) });
+    if (p[0] === "material-folder" && p[1] && m === "PATCH") return json({ folder: await renameMaterialFolder(p[1], (await body(z.object({ name: z.string().min(1).max(60) }))).name) });
+    if (p[0] === "material-folder" && p[1] && m === "DELETE") return json(await deleteMaterialFolder(p[1]));
+    if (p[0] === "material-place" && m === "POST") { const b = await body(z.object({ keys: z.array(z.string().min(1).max(400)).min(1).max(200), folderId: z.string().max(40).nullable() })); return json(await placeMaterials(b.keys, b.folderId)); }
     if (p[0] === "materials" && p[1] === "accept" && m === "POST") { const b = await body(goalSource); return json({ goal: await acceptSuggestion(b.key, b.title, b.kind) }); }
     if (p[0] === "materials" && p[1] === "ignore" && m === "POST") { const b = await body(z.object({ key: z.string().min(1).max(300) })); return json(await ignoreMaterial(b.key)); }
     // 주제 정리 now (it also runs by itself after saves).

@@ -511,3 +511,32 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm3-dfoot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
 .dejipgi .mm3-item.open>.mm3-line{background:var(--surface-2)}
 @media (max-width:640px){ .dejipgi .mm3-detail{margin:2px 8px 10px} }
+
+/* 지식 창 왼쪽: 자료가 먼저 (2026-10-30) */
+.dejipgi .kw-sec{display:flex;align-items:center;gap:6px;margin:10px 0 2px;padding:2px 8px;font-size:12px;font-weight:700;color:var(--faint);letter-spacing:.02em;border-radius:8px;border:1px dashed transparent;list-style:none;cursor:default}
+.dejipgi .kw-sec.drop{border-color:var(--accent);background:var(--accent-soft)}
+.dejipgi summary.kw-sec{cursor:pointer}
+.dejipgi summary.kw-sec::-webkit-details-marker{display:none}
+.dejipgi .kw-mgroup>summary.kw-sec::before{content:"▸";font-size:10px;opacity:.6}
+.dejipgi .kw-mgroup[open]>summary.kw-sec::before{content:"▾"}
+.dejipgi .kw-sec .kw-count{margin-left:auto}
+.dejipgi .kw-sec-hint{font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.dejipgi .kw-sec-add{margin-left:auto;border:0;background:none;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;padding:2px 4px}
+.dejipgi .kw-sec-form{margin-left:auto;gap:4px}
+.dejipgi .kw-sec-form .ws-input{width:120px;padding:4px 6px;font-size:12px}
+.dejipgi .kw-mat{flex-wrap:wrap;row-gap:0}
+.dejipgi .kw-mat-ic{font-size:13px;width:18px;text-align:center;flex:none}
+.dejipgi .kw-mat .kw-fname{flex:1;min-width:0}
+.dejipgi .kw-mbar{flex-basis:100%;display:flex;height:3px;margin:0 2px 4px 22px;border-radius:2px;background:var(--surface-2);overflow:hidden}
+.dejipgi .kw-mbar i{display:block;height:100%}
+.dejipgi .kw-mbar i.bad{background:var(--bad,#e5484d)}
+.dejipgi .kw-mbar i.good{background:var(--good,#30a46c)}
+.dejipgi .kw-mfolder>summary{list-style:none;cursor:pointer}
+.dejipgi .kw-mfolder>summary::-webkit-details-marker{display:none}
+.dejipgi .kw-mfolder>ul{padding-left:12px}
+.dejipgi .kw-mf-menu>summary{list-style:none;padding:0 4px;opacity:.5;cursor:pointer}
+.dejipgi .kw-mf-menu>summary::-webkit-details-marker{display:none}
+.dejipgi .kw-empty-sec{padding:2px 10px;font-size:12px}
+.dejipgi .kw-mhead{gap:8px;flex-wrap:wrap;margin:4px 0 8px}
+.dejipgi .kw-mplace{margin-left:auto;gap:4px}
+.dejipgi .kw-stages section{margin-bottom:8px}

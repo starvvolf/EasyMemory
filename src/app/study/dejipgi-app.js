@@ -807,6 +807,12 @@ on(window, "recaller:go", (e) => {
   if (S.session && v !== "practice" && v !== "read") S.session = null;
   setView(v); window.scrollTo({ top:0 });
 });
+// [경계] 지식 창(B, 2026-10-30): 왼쪽에서 PDF 자료를 누르면 그 자료의 자료 지도를 연다 (같은 PDF를 여러 번 만들었으면 가장 최근 것).
+on(window, "recaller:map-open", (e) => {
+  const id = String((e.detail && e.detail.genId) || "");
+  const d = S.decks[id] || S.decks["pending:" + id];
+  if (d && genDeck(d.id)) MaterialMapView.open(d); else toast("이 자료의 지도를 아직 열 수 없어요. 공부 › PDF 자료에서 열어 주세요.");
+});
 /* 공부 안의 갈래: PDF 자료 · 웹 글 · 코드 · 프로젝트(2026-10-30, D), and "+ 새 공부" — the same bar on each, so the three feel like one place. */
 function studyNav(active){
   const seg = h("div", { class:"seg study-seg", role:"tablist", "aria-label":"공부 종류" },
