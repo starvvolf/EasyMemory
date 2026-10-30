@@ -142,7 +142,7 @@ const LEAN = "이번에는 빠른 첫 정리다: links·takes·gives는 빈 배�
 const OUTLINE_HINT = "outline은 자료 전체의 쪽 제목과 앞뒤 쪽 첫 줄이다(맥락용, 원문 근거 아님). 다른 쪽이 따로 다루는 지식은 이 쪽에서 카드로 만들지 않고, 이 쪽에서 처음 나오거나 이 쪽이 중심인 지식만 카드로 만든다. 카드 title은 쪽 제목을 반복하지 말고 그 카드가 담은 지식의 구체적인 이름으로 쓴다.";
 // 자료 전체 정리, written as changes only (10/29): the full form (every card's id, title, topic, weight and links) took
 // 99 s for 87 cards on 44쪽 because the reply is the time; cards are numbered n and only what differs is written.
-const MERGE = `${BASE}
+export const MERGE = `${BASE}
 한 자료의 지식 카드 전체를 한 번에 본다(sameNames: 이름이 같은 카드 묶음). 카드는 쪽마다 따로 만들어져 중요도가 모두 높게 매겨져 있고, 겹치거나 이름이 쪽 제목 그대로인 것이 있다. 이 결과는 학습자가 시험 전에 자료 전체를 한눈에 보는 지도에 쓰인다. 카드는 번호 n으로 가리키고, 바뀌는 것만 짧게 쓴다.
 - topics: 자료의 큰 주제를 자료의 흐름 순서로 {name, gist, cards}. name은 15자 안팎, gist는 이 주제가 말하려는 것 한 줄(40자 안팎, 앞 주제와 어떻게 이어지는지가 보이게: 예 "이동은 덧셈이라 곱으로 못 묶어 3×3 동차 좌표로 바꾼다"), cards는 그 주제에 속한 카드 n. 모든 카드가 정확히 한 주제에 들어간다. 카드는 쪽 순서라 한 주제는 대개 이어진 구간이다. 보통 6~12개이고, 한 주제가 15장을 넘으면 나눈다.
 - principles: 이 자료가 여러 주제에 걸쳐 되풀이해 쓰는 원리·패턴 0~3개 {title, line, cards}. 예: 임의 점 회전·고정점 크기 변환·임의 축 회전이 모두 "원점으로 옮기고 → 기본 변환 → 되돌리기"인 것. title은 15자 안팎, line은 원리 한 문장, cards는 그 원리가 쓰인 카드 n(2개 이상). 한 주제 안에서만 쓰이거나 억지로 만든 것은 쓰지 않는다.
@@ -153,7 +153,7 @@ const MERGE = `${BASE}
 const num = z.number().int();
 // Required throughout: with structured output an optional field is simply left out (44쪽 실측, 2026-10-29).
 // Topics as lists of cards (not one number per card in order: a 90-long list drifted by one at section boundaries).
-const mergeReplySchema = z.object({ topics: z.array(z.object({ name: text, gist: z.string(), cards: z.array(num) })), principles: z.array(z.object({ title: z.string(), line: z.string(), cards: z.array(num) })), core: z.array(num), same: z.array(z.object({ n: num, of: num })),
+export const mergeReplySchema = z.object({ topics: z.array(z.object({ name: text, gist: z.string(), cards: z.array(num) })), principles: z.array(z.object({ title: z.string(), line: z.string(), cards: z.array(num) })), core: z.array(num), same: z.array(z.object({ n: num, of: num })),
   rename: z.array(z.object({ n: num, title: text })), links: z.array(z.object({ a: num, b: num, why: text })) });
 const CALC = "계산기는 일반 수학만 안다: 행렬은 행 단위 ((a, b), (c, d)), 행렬×행렬·행렬×벡터는 *, transpose() det() inv() eye(n), row(M, i) col(M, j) at(v, i)(1부터), 이어 붙이기 join(v, x), 판정 lt le gt ge eq and or not pick(조건, 참일 때, 거짓일 때)(참 1, 거짓 0), sind cosd tand(도). 원문의 공식·행렬은 계산기가 모르므로 먼저 정의 단계를 둔다: name에 'T(tx, ty)'처럼 이름과 매개변수, expr에 원문 식을 매개변수로, value는 '정의'. 뒤 단계에서 T(2, 3)처럼 부른다.";
 const LINK = `${BASE}
@@ -1033,9 +1033,9 @@ export function unfoldMerge(reply: z.infer<typeof mergeReplySchema>, all: Array<
   return all.map((c, n) => ({ id: c.id, title: rename.get(n) ?? c.title, sameAs: sameAs.has(n) ? all[sameAs.get(n)!].id : null,
     topic: topic[n], weight: (core.has(n) ? "핵심" : "보조") as "핵심" | "보조", links: links.get(n) ?? [] }));
 }
-const coreMax = (cards: number) => Math.max(1, Math.round(cards / 3));
+export const coreMax = (cards: number) => Math.max(1, Math.round(cards / 3));
 /** Cards that carry the same name (n lists): the pass either joins them (same) or tells them apart (rename). */
-function sameNames(all: Array<{ title: string }>) {
+export function sameNames(all: Array<{ title: string }>) {
   const by = new Map<string, number[]>();
   all.forEach((c, n) => { const k = c.title.toLowerCase().replace(/[\s\p{P}]/gu, ""); if (k) by.set(k, [...(by.get(k) ?? []), n]); });
   return [...by.values()].filter((ns) => ns.length > 1);
