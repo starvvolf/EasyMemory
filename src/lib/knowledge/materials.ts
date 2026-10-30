@@ -86,7 +86,7 @@ export async function materialView() {
       if (id && await getSource(id)) r.sourceId = id;
     }
     if (r.group === "project") {
-      // The stage an item first came up in, from its record ("2단계 · …"); items with none go under "기타".
+      // The stage an item first came up in, from its record ("2단계 · …"); items with none go under "단계 모름".
       const refs = new Set(mine.flatMap((i) => i.sources).filter((s) => s.ref?.startsWith("project:")).map((s) => s.ref!));
       const stageOf = new Map<string, number>();
       for (const e of events) {
@@ -96,7 +96,7 @@ export async function materialView() {
       }
       const nums = [...new Set(stageOf.values())].sort((a, b) => a - b);
       const rest = r.itemIds.filter((id) => !stageOf.has(id));
-      r.stages = [...nums.map((n) => ({ name: `${n}단계`, itemIds: r.itemIds.filter((id) => stageOf.get(id) === n) })), ...(rest.length ? [{ name: "기타", itemIds: rest }] : [])];
+      r.stages = [...nums.map((n) => ({ name: `${n}단계`, itemIds: r.itemIds.filter((id) => stageOf.get(id) === n) })), ...(rest.length ? [{ name: "단계 모름", itemIds: rest }] : [])];
     }
     const f = folders.place[r.key];
     r.folderId = f && folders.folders.some((x) => x.id === f) ? f : null;

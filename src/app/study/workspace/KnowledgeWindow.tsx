@@ -120,7 +120,9 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   // 자료를 누르면 그 자료의 지도가 먼저: PDF는 자료 지도(공부 화면의 지도 창), 웹 글은 글 지도, 프로젝트는 단계별. 코드 문제는 목록.
   const pickMaterial = (m: MaterialRow) => {
     setView("material"); setMatSel(m.key); setQuery(""); setSel(null);
-    setMatMode(m.sourceId || m.group === "project" ? "map" : "list");
+    // 프로젝트는 단계를 아는 지식이 절반은 넘어야 단계별로 먼저 (단계는 물어봄·힌트·검사 기록에서만 알 수 있다).
+    const staged = (m.stages ?? []).filter((x) => x.name !== "단계 모름").reduce((n, x) => n + x.itemIds.length, 0);
+    setMatMode(m.sourceId || (m.stages && staged * 2 >= m.items) ? "map" : "list");
     if (m.genId) window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: m.genId } }));
   };
   const placeMaterial = (key: string, folderId: string | null) => void act(() => call("/api/knowledge/material-place", { keys: [key], folderId }));
@@ -252,7 +254,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
         <section className="kw-list panel" aria-label="지식 목록">
           <div className="row kw-list-head">
             <b>{hits ? `"${query}" 찾은 것 ${hits.length}` : `${folderName} · ${shown.length}`}</b>
-            {!hits ? <select className="ws-select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="정렬"><option value="recent">최근 순</option><option value="weak">약한 순</option><option value="name">이름 순</option></select> : null}
+            {!hits && !(view === "material" && material && matMode === "map" && (material.sourceId || material.stages)) ? <select className="ws-select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="정렬"><option value="recent">최근 순</option><option value="weak">약한 순</option><option value="name">이름 순</option></select> : null}
           </div>
           {view === "material" && material && !hits ? <MaterialHead m={material} folders={matFolders} mode={matMode} onMode={setMatMode} onPlace={(f) => placeMaterial(material.key, f)} /> : null}
           {view === "material" && material && !hits && matMode === "map" && material.sourceId ? <MaterialArticle key={material.sourceId} id={material.sourceId} onChanged={() => void load()} />
