@@ -331,7 +331,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
       <div className="mm2-head">
         <div><p className="eyebrow">자료 지도</p><b>{map.title.replace(/\.pdf$/i, "")}</b>
           <span className="small muted"> · {map.pages}쪽 · 지식 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater ? "" : ` · 문제 ${n.questions}`}</span>
-          {making ? <span className="small mm3-making"> · {map.questionsLater ? (n.cards ? "지식 정리 중" : "자료 읽는 중") : map.topics?.length ? "문제 만드는 중" : n.cards ? "지식 정리 중" : "자료 읽는 중"}…</span> : null}</div>
+          {making ? <span className="small mm3-making"> · {board !== "off" ? "카드 쓰는 중" : map.questionsLater ? (n.cards ? "지식 정리 중" : "자료 읽는 중") : map.topics?.length ? "문제 만드는 중" : n.cards ? "지식 정리 중" : "자료 읽는 중"}…</span> : null}</div>
         <span className="row small">
           {map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="지식마다 확인 문제를 만들어 연습·복습에 붙여요"
             onClick={() => { setAsking(true); void onMakeQuestions().then((ok) => { if (ok) setReload((k) => k + 1); }).finally(() => setAsking(false)); }}>{asking ? "시작하는 중…" : "문제 만들기"}</button> : null}
