@@ -122,8 +122,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
     setView("material"); setMatSel(m.key); setQuery(""); setSel(null);
     // 프로젝트는 단계를 아는 지식이 절반은 넘어야 단계별로 먼저 (단계는 물어봄·힌트·검사 기록에서만 알 수 있다).
     const staged = (m.stages ?? []).filter((x) => x.name !== "단계 모름").reduce((n, x) => n + x.itemIds.length, 0);
-    setMatMode(m.sourceId || (m.stages && staged * 2 >= m.items) ? "map" : "list");
-    if (m.genId) window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: m.genId } }));
+    setMatMode(m.genId || m.sourceId || (m.stages && staged * 2 >= m.items) ? "map" : "list");
   };
   const placeMaterial = (key: string, folderId: string | null) => void act(() => call("/api/knowledge/material-place", { keys: [key], folderId }));
   const matDrop = (folderId: string | null) => ({ onDragOver: (e: DragEvent) => { if (e.dataTransfer.types.includes("text/x-mat")) { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add("drop"); } },
@@ -254,10 +253,11 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
         <section className="kw-list panel" aria-label="지식 목록">
           <div className="row kw-list-head">
             <b>{hits ? `"${query}" 찾은 것 ${hits.length}` : `${folderName} · ${shown.length}`}</b>
-            {!hits && !(view === "material" && material && matMode === "map" && (material.sourceId || material.stages)) ? <select className="ws-select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="정렬"><option value="recent">최근 순</option><option value="weak">약한 순</option><option value="name">이름 순</option></select> : null}
+            {!hits && !(view === "material" && material && matMode === "map" && (material.genId || material.sourceId || material.stages)) ? <select className="ws-select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="정렬"><option value="recent">최근 순</option><option value="weak">약한 순</option><option value="name">이름 순</option></select> : null}
           </div>
           {view === "material" && material && !hits ? <MaterialHead m={material} folders={matFolders} mode={matMode} onMode={setMatMode} onPlace={(f) => placeMaterial(material.key, f)} /> : null}
-          {view === "material" && material && !hits && matMode === "map" && material.sourceId ? <MaterialArticle key={material.sourceId} id={material.sourceId} onChanged={() => void load()} />
+          {view === "material" && material && !hits && matMode === "map" && material.genId ? <MaterialOutline key={material.genId} genId={material.genId} items={tree.items} sel={sel} onPick={setSel} />
+          : view === "material" && material && !hits && matMode === "map" && material.sourceId ? <MaterialArticle key={material.sourceId} id={material.sourceId} onChanged={() => void load()} />
           : view === "material" && material && !hits && matMode === "map" && material.stages ? <ProjectStages stages={material.stages} items={tree.items} sel={sel} onPick={setSel} />
           : <>
           <div className="kw-filters">{FILTERS.map(([key, label]) => <button key={key} className="chip-btn" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
@@ -545,16 +545,59 @@ function MatFolderBox({ folder, rows, drop, onAct, children }: { folder: Materia
 }
 /** Over a picked 자료: its map or its list, and which 자료 folder it is in. */
 function MaterialHead({ m, folders, mode, onMode, onPlace }: { m: MaterialRow; folders: MaterialFolder[]; mode: "map" | "list"; onMode: (x: "map" | "list") => void; onPlace: (folderId: string | null) => void }) {
-  const hasMap = Boolean(m.sourceId || m.stages);
+  const hasMap = Boolean(m.genId || m.sourceId || m.stages);
   return (
     <div className="row kw-mhead">
-      {hasMap ? <div className="ws-seg" role="tablist" aria-label="보기">{([["map", m.stages ? "단계별" : "글 지도"], ["list", "지식 목록"]] as const).map(([k, label]) =>
+      {hasMap ? <div className="ws-seg" role="tablist" aria-label="보기">{([["map", m.genId ? "목차" : m.stages ? "단계별" : "글 지도"], ["list", "지식 목록"]] as const).map(([k, label]) =>
         <button key={k} role="tab" aria-selected={mode === k} className={mode === k ? "on" : ""} onClick={() => onMode(k)}>{label}</button>)}</div> : null}
-      {m.genId ? <button className="btn small primary" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: m.genId } }))}>자료 지도 열기</button> : null}
+      {m.genId ? <button className="btn small ghost" title="원문 쪽 보기·문제 풀기는 공부 화면의 자료 지도에서" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: m.genId } }))}>원문·문제</button> : null}
       {m.group === "project" ? <button className="btn small" onClick={() => go("project")}>프로젝트 화면</button> : null}
       {m.group === "code" && m.keys[0]?.startsWith("code:cp_") ? <button className="btn small" onClick={() => go("code", { id: m.keys[m.keys.length - 1].slice(5) })}>문제 열기</button> : null}
       <label className="row small kw-mplace">폴더 <select className="ws-select" value={m.folderId ?? ""} onChange={(e) => onPlace(e.target.value || null)}>
         <option value="">없음</option>{folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+    </div>
+  );
+}
+type OutlineCard = { id: string; title: string; core: boolean; pages: number[]; state: "new" | "met" | "unknown" | "known" | "graduated"; knowledgeId?: string; mistakes: string[] };
+type Outline = { title: string; pages: number; sections: Array<{ id: string; title: string; pages: number[]; cards: OutlineCard[] }>; counts: Record<string, number> };
+const OUT_STATE: Record<OutlineCard["state"], [string, string]> = { unknown: ["몰랐음", "bad"], met: ["만남", "read"], known: ["앎", "good"], graduated: ["졸업", "good"], new: ["아직", "none"] };
+const pageRange = (pages: number[]) => !pages.length ? "" : pages.length === 1 ? `p.${pages[0]}` : `p.${Math.min(...pages)}–${Math.max(...pages)}`;
+/**
+ * PDF 자료: 목차만 깔끔하게, 누르면 그 구역의 지식 (2026-10-30 사용자 "자료 지도로 넘어가는 게 아니라 목차만 딱 깔끔하게 보이고 누르면
+ * 세부 내역"). 자료 지도 서버(/api/study-map, 읽기만)의 목차·카드·내 상태를 그대로 쓴다. 지식을 누르면 오른쪽에 자세히.
+ */
+function MaterialOutline({ genId, items, sel, onPick }: { genId: string; items: ItemLite[]; sel: string | null; onPick: (id: string) => void }) {
+  const [map, setMap] = useState<Outline | null>(null);
+  const [error, setError] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => later(() => void call<{ map: Outline }>(`/api/study-map/${genId}`).then((r) => setMap(r.map)).catch((e) => setError(errorText(e)))), [genId]);
+  if (error) return <p className="ws-err">{error}</p>;
+  if (!map) return <p className="small muted">목차를 불러오는 중…</p>;
+  const line = (id?: string) => (id ? items.find((i) => i.id === id)?.line : "") ?? "";
+  const tally = (cards: OutlineCard[]) => (["unknown", "met", "known", "new"] as const).map((k) => [k, cards.filter((c) => (k === "known" ? c.state === "known" || c.state === "graduated" : c.state === k)).length] as const);
+  return (
+    <div className="ko">
+      <p className="small muted ko-legend"><span><i className="dot bad" />몰랐음 {map.counts.unknown}</span><span><i className="dot read" />만남 {map.counts.met}</span>
+        <span><i className="dot good" />앎 {map.counts.known + map.counts.graduated}</span>{map.counts.new ? <span><i className="dot none" />아직 {map.counts.new}</span> : null}<span>· {map.pages}쪽</span></p>
+      <ol className="ko-list">{map.sections.map((sec, n) => {
+        const on = open === sec.id, t = tally(sec.cards), total = sec.cards.length || 1;
+        return <li key={sec.id} className={on ? "on" : ""}>
+          <button className="ko-row" aria-expanded={on} onClick={() => setOpen(on ? null : sec.id)}>
+            <span className="ko-n num">{n + 1}</span>
+            <span className="ko-title">{sec.title}</span>
+            <span className="ko-pages small muted">{pageRange(sec.pages)}</span>
+            <span className="ko-bar" aria-label={t.map(([k, v]) => `${OUT_STATE[k][0]} ${v}`).join(" · ")}>{t.map(([k, v]) => v ? <i key={k} className={OUT_STATE[k][1]} style={{ width: `${(v / total) * 100}%` }} /> : null)}</span>
+            <span className="ko-count num small muted">{sec.cards.length}</span>
+          </button>
+          {on ? <ul className="ko-cards">{sec.cards.map((c) => <li key={c.id}>
+            <button className={`ko-card${c.knowledgeId && sel === c.knowledgeId ? " sel" : ""}`} disabled={!c.knowledgeId} onClick={() => c.knowledgeId && onPick(c.knowledgeId)}>
+              <span className={`ko-st ${OUT_STATE[c.state][1]}`}>{OUT_STATE[c.state][0]}</span>
+              <span className="ko-ctext"><b><Inline text={c.title} />{c.core ? <span className="ko-core" title="핵심">★</span> : null}</b>
+                {line(c.knowledgeId) ? <span className="ko-line"><Inline text={line(c.knowledgeId)} /></span> : null}</span>
+              <span className="small muted ko-cp">{pageRange(c.pages)}</span>
+            </button></li>)}</ul> : null}
+        </li>;
+      })}</ol>
     </div>
   );
 }
