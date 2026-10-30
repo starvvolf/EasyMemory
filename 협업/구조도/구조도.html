@@ -132,23 +132,23 @@ svg text{font-family:var(--sans);fill:var(--fg);pointer-events:none}
 
       <!-- Project -->
       <g class="hit" data-k="project" tabindex="0" role="button" aria-label="프로젝트 세부 구조">
-        <rect class="src dash" x="30" y="420" width="220" height="90" rx="12" style="stroke:var(--line)"/>
-        <text x="50" y="452" class="t-lg">프로젝트 · 실제 개발</text>
-        <text x="50" y="478" class="t-md">VS Code + OpenCode</text>
+        <rect class="src" x="30" y="420" width="220" height="90" rx="12"/>
+        <text x="50" y="452" class="t-lg">프로젝트 · 직접 만들기</text>
+        <text x="50" y="478" class="t-md">VS Code + 튜터 탭</text>
       </g>
-      <path class="arrow dash" d="M250,465 L292,465" marker-end="url(#ah)"/>
+      <path class="arrow" d="M250,465 L292,465" marker-end="url(#ah)"/>
       <g class="hit" data-k="project" tabindex="0" role="button" aria-label="프로젝트의 AI 세부 구조">
-        <rect class="ai dash" x="296" y="430" width="110" height="70" rx="10"/>
-        <text x="312" y="460" class="t-md">AI</text>
-        <text x="312" y="482" class="t-sm">코딩 에이전트</text>
+        <rect class="ai" x="296" y="430" width="110" height="70" rx="10"/>
+        <text x="312" y="460" class="t-md">AI 튜터</text>
+        <text x="312" y="482" class="t-sm">OpenCode</text>
       </g>
-      <path class="arrow dash" d="M406,465 L418,465" marker-end="url(#ah)"/>
+      <path class="arrow" d="M406,465 L418,465" marker-end="url(#ah)"/>
       <g class="hit" data-k="project" tabindex="0" role="button" aria-label="프로젝트 개발 세부 구조">
-        <rect class="box dash" x="422" y="430" width="110" height="70" rx="10"/>
+        <rect class="box" x="422" y="430" width="110" height="70" rx="10"/>
         <text x="438" y="460" class="t-md">사용자</text>
         <text x="438" y="482" class="t-sm">만들기·검사</text>
       </g>
-      <path class="arrow dash" d="M532,465 L596,420" marker-end="url(#ah)"/>
+      <path class="arrow" d="M532,465 L596,420" marker-end="url(#ah)"/>
 
       <!-- Knowledge -->
       <g class="hit" data-k="knowledge" tabindex="0" role="button" aria-label="지식 세부 구조">
@@ -190,7 +190,7 @@ svg text{font-family:var(--sans);fill:var(--fg);pointer-events:none}
     </svg>
   </div>
 
-  <div class="hint"><span><b>칸을 누르면</b> 아래에 세부 구조가 나와요.</span><span>점선 = 확장(구상)</span><span>빨간 선 = 복습 고리</span></div>
+  <div class="hint"><span><b>칸을 누르면</b> 아래에 세부 구조가 나와요.</span><span>빨간 선 = 복습 고리</span></div>
 
   <section class="detail" id="detail" aria-live="polite">
     <div class="detail-head"><h2 id="d-title"></h2><span id="d-sub"></span></div>
@@ -228,17 +228,44 @@ const D = {
       ["code","채점","시간·메모리 실측"],
       ["ai","힌트","3단계 · 반례"],
       ["code","지식에 기록","제출·힌트·질문"] ] } ] },
-  project: { title: "프로젝트 · 실제 개발", sub: "앱 밖 실험 · 확장 구상", lanes: [
-    { label: "한 단계", steps: [
-      ["user","결과 예측","처음 답이 기록"],
-      ["code","없애 보기","실제 요청으로 확인"],
-      ["user","VS Code에서 고치기","튜터 탭이 도움"],
-      ["chk","재검사","자동 HTTP 검사 33개"],
-      ["user","내 말로 설명",""],
-      ["code","기록 후보","아직 지식에 안 이어짐"] ] },
+  project: { title: "프로젝트 · 직접 만들기", sub: "VS Code에서 작은 서비스를 한 단계씩 만들고, 오른쪽 튜터 탭이 돕는다 · 앱 밖 실험 서버(4100), 공부 탭과 이어짐", lanes: [
+    { label: "시작", steps: [
+      ["user","공부 · 프로젝트","+ 새 공부에도 있음"],
+      ["ai","코스 정하기","대화 + 확인 문제 → 시작 단계"],
+      ["code","계획 확정","단계 · 빠르게 넘길 단계"],
+      ["code","작업 폴더 · VS Code","튜터 탭이 오른쪽에 열림"] ] },
     { label: "코스", steps: [
-      ["ai","코스 정하기","대화 · 확인 문제"],
-      ["code","게시판 API 7단계","+ 전이 과제"] ] } ] },
+      ["code","게시판 API 7단계","HTTP → CRUD·DB → 검증 → 로그인 → 권한 → 버그 → 전이"],
+      ["code","자동 검사 33개","단계마다 쌓임"],
+      ["code","수업 계획서","1~4단계 · 5~7은 아직"] ] },
+    { label: "한 단계", steps: [
+      ["user","부품 지도","이번에 볼 파일과 역할"],
+      ["user","결과 예측","처음 답이 기록"],
+      ["code","직접 해 보기","요청 보내기 · DB 들여다보기"],
+      ["code","없애 보기","고장 난 걸 실제로 봄"],
+      ["user","VS Code에서 고치기","빈칸 뼈대 · 힌트 3단계"],
+      ["chk","재검사","자동 HTTP 검사"],
+      ["user","내 말로 설명","통과"] ] },
+    { label: "튜터에게 묻기", steps: [
+      ["user","질문 · 단어 누르기","코드 위 💬 설명"],
+      ["code","상황 붙이기","단계 · 지난 검사 · 노트 · 파일"],
+      ["ai","OpenCode 엔진","앱과 같은 ChatGPT 로그인"],
+      ["code","답이 흘러나옴","코드 블록 · VS Code 색"],
+      ["chk","정답 노출 확인","보여 줬으면 “정답 보고 고침”"] ] },
+    { label: "튜터 방식", set: true, steps: [
+      ["ai","보통","파일 읽기 · 고치기 · 서버 켜기 · 요청 · 검사 · DB 보기"],
+      ["ai","설명만","도구 없음 · 파일+import 첨부 · 첫 글자 약 7초"],
+      ["ai","흐름 투어","“실제 동작 설명” → 파일 넘나들며 불 켜기 · 자동/확인했어요"] ] },
+    { label: "프로젝트 노트", set: true, steps: [
+      ["code","파일별 기록","server.ts · app.ts 밑에 물어본 것·고친 것"],
+      ["code","파일 사이 연결","import + 투어로 지나간 길"],
+      ["code","말 나누기","문법 · 도구 · 프로젝트 이름"],
+      ["code","튜터가 다시 읽음","같은 설명 반복 안 함"] ] },
+    { label: "지식으로", steps: [
+      ["code","프로젝트 화면 열 때 · 1분마다","안 보낸 것만"],
+      ["code","코스 개념 → 개념","물어봄·틀림·힌트·맞힘 같이"],
+      ["code","물어본 문법·도구 → 어휘","눌러 본 횟수만큼"],
+      ["chk","빼는 것","설명에 나오기만 한 말 · 프로젝트 이름"] ] } ] },
   knowledge: { title: "지식", sub: "모든 자료가 같이 쓰는 저장소", lanes: [
     { label: "지식 하나", set: true, steps: [
       ["code","뜻","자료에서"],
