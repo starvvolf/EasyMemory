@@ -98,12 +98,12 @@ footer{color:var(--muted);font-size:12.5px}
   </section>
 
   <section class="pipe" id="web">
-    <div class="pipe-head"><h2>웹 글 → 글 지도 → 지식</h2><span class="who">지식 저장소 · B 담당</span><span class="time">AI 호출 1번</span></div>
+    <div class="pipe-head"><h2>웹 글 → 글 지도 → 지식</h2><span class="who">지식 저장소 · B 담당</span><span class="time">AI 호출 1번 · 약 20초(글 길이와 거의 상관없음)</span></div>
     <div class="steps">
-      <div class="step"><h3>글 붙여 넣기</h3><div class="chips"><span class="chip user">사용자</span></div><p>본문을 붙여 넣는다(80자 이상). 주소로 가져오기는 일부러 만들지 않았다.</p></div>
-      <div class="step"><h3>글 지도 만들기</h3><div class="chips"><span class="chip ai">AI · terra low</span></div><p>글 종류, 이 글이 답하는 질문, 흐름 3~6단계, 요지와 근거, 핵심 아이디어 3~5개(인용 포함), 개념어 20개까지. 이미 아는 개념어는 표시한다.</p></div>
-      <div class="step"><h3>핵심만 지식으로</h3><div class="chips"><span class="chip code">코드</span></div><p>핵심 아이디어만 지식(만남)으로 저장한다. 개념어는 후보로 글에 남는다.</p></div>
-      <div class="step"><h3>모르는 개념어 고르기</h3><div class="chips"><span class="chip user">사용자</span></div><p>학습자가 모른다고 누른 개념어만 지식이 되고 '물어봄'으로 기록돼 복습에 들어간다(몰랐음).</p></div>
+      <div class="step"><h3>글 붙여 넣기</h3><div class="chips"><span class="chip user">사용자</span></div><p>본문을 붙여 넣거나 크롬 확장(Recaller 사이드바)에서 지금 읽는 글을 보낸다(80자 이상).</p></div>
+      <div class="step"><h3>글 지도 만들기</h3><div class="chips"><span class="chip ai">AI · terra low</span></div><p>글 종류, 이 글이 답하는 질문, 흐름 3~6단계, 요지와 근거, 핵심 아이디어 3~5개(인용 포함), 개념어 20개까지. 이미 아는 개념어는 표시하고, 핵심과 이름이 같은 개념어는 뺀다. 핵심은 글이 말한 것만, AI 생각은 "생각해 볼 점"으로 따로.</p><p class="num">위키백과 14,148자 18.9초</p></div>
+      <div class="step"><h3>핵심만 지식으로</h3><div class="chips"><span class="chip code">코드</span></div><p>핵심 아이디어만 지식(만남)으로 저장한다. 카드 앞면은 AI 이름이 아니라 질문("이 글에서 ~는?"). 개념어는 후보로 글에 남는다.</p></div>
+      <div class="step"><h3>모르는 개념어 고르기</h3><div class="chips"><span class="chip user">사용자</span></div><p>학습자가 모른다고 누른 개념어만 지식이 되고 '물어봄'으로 기록돼 복습에 들어간다(몰랐음). 다시 누르면 고른 것만 풀리고 지식은 남는다.</p><p class="num">AI 없이 0.4초</p></div>
       <div class="step"><h3>확인 목표로 공부</h3><div class="chips"><span class="chip user">사용자</span><span class="chip ai">AI 판정</span></div><p>용어를 안다 · 주장을 말할 수 있다(내 말로 쓰면 AI가 판정) · 고리를 설명할 수 있다 · 다른 글에서 알아본다.</p></div>
     </div>
     <p class="note">PDF와 달리 문제를 미리 만들지 않는다. 다른 글에서 같은 지식을 다시 만나면 알려 준다.</p>
@@ -122,11 +122,11 @@ footer{color:var(--muted);font-size:12.5px}
   </section>
 
   <section class="pipe" id="after">
-    <div class="pipe-head"><h2>지식 저장 뒤 자동 처리</h2><span class="who">지식 저장소 · B 담당</span><span class="time">저장 4초 뒤, 기다리게 하지 않음</span></div>
+    <div class="pipe-head"><h2>지식 저장 뒤 자동 처리</h2><span class="who">지식 저장소 · B 담당</span><span class="time">저장 4초 뒤, 기다리게 하지 않음 · 실패하면 15·30·60·120초 뒤 다시</span></div>
     <div class="steps">
-      <div class="step"><h3>주제 정리</h3><div class="chips"><span class="chip ai">AI · 30개씩</span></div><p>주제 나무("CS/알고리즘/탐색")에 자리를 정하고 종류(개념·절차·사실·공식·어휘)를 붙인다. 새 자료에 맞는 목표를 추천한다. 손으로 옮긴 것은 건드리지 않는다.</p></div>
-      <div class="step check"><h3>같은 지식 찾기 3단계</h3><div class="chips"><span class="chip code">이름</span><span class="chip code">임베딩</span><span class="chip ai">AI 판정</span></div><ul><li>이름·별칭이 같으면 저장할 때 바로 합침</li><li>뜻이 비슷한 후보 5개 (EmbeddingGemma)</li><li>AI가 같음 / 포함 / 씀 / 먼저 / 가까움 / 다름</li></ul><p>같음은 학습자에게 묻고, 포함·씀·먼저는 연결로 만든다.</p></div>
-      <div class="step"><h3>층 나누기</h3><div class="chips"><span class="chip ai">AI</span></div><p>뜻에 섞인 그 자료만의 사연을 '만난 곳의 예'로 옮겨, 뜻은 어디서나 통하게 남긴다.</p></div>
+      <div class="step"><h3>주제 정리</h3><div class="chips"><span class="chip ai">AI · 30개씩</span></div><p>주제 나무("CS/알고리즘/탐색")에 자리를 정하고 종류(개념·절차·사실·공식·어휘)를 붙인다. 이미 있는 주제 경로를 다시 쓰게 해 폴더가 늘지 않는다. 손으로 옮긴 것은 건드리지 않는다.</p></div>
+      <div class="step check"><h3>같은 지식 찾기 3단계</h3><div class="chips"><span class="chip code">이름</span><span class="chip code">임베딩</span><span class="chip ai">AI 판정</span></div><ul><li>이름·별칭이 같으면(띄어쓰기·기호 무시, 4글자 이상은 닮음 0.88 이상) 저장할 때 바로 합침</li><li>같은 주제 안에서 뜻이 비슷한 후보 5개 (EmbeddingGemma, 서버에서)</li><li>AI가 25개씩 판정: 같음 / 포함 / 씀 / 조건 / 먼저 / 가까움 / 다름 (이유는 같음에만)</li></ul><p>같음은 자동으로 합치지 않고 "정리할 것"에서 학습자가 확인한다. 포함·씀·조건·먼저는 방향을 맞춰 고리로, 가까움은 고리 없이 "가까운 지식"으로. 실제 247쌍: 가까움 131 · 씀 56 · 포함 30 · 먼저·조건 21 · 같음 9.</p></div>
+      <div class="step"><h3>층 나누기</h3><div class="chips"><span class="chip ai">AI</span></div><p>뜻에 섞인 그 자료만의 사연을 '만난 곳의 예'로 옮겨, 뜻은 어디서나 통하게 남긴다. 헷갈리기 쉬운 점은 "주의"로. 20개씩, 지식마다 한 번만.</p><p class="num">44쪽 PDF(새 지식 52): 같은 지식 찾기 약 1.5분 · 층 나누기 약 45초</p></div>
     </div>
   </section>
 
@@ -151,7 +151,11 @@ footer{color:var(--muted);font-size:12.5px}
         <tr><td>PDF 문제 만들기·따로 풀기</td><td>gpt-6-sol · low</td><td class="n">누를 때만 · 14쪽 24문제 약 22초</td></tr>
         <tr><td>PDF 자료 전체 정리</td><td>gpt-6.1-terra · low</td><td class="n">44쪽 약 20초 (전 99초) · 14쪽 약 12초</td></tr>
         <tr><td>PDF 지식까지 (자료 지도 완성)</td><td>—</td><td class="n">14쪽 약 35초 · AI 16번</td></tr>
-        <tr><td>웹 글 지도</td><td>gpt-6.1-terra · low</td><td class="n">호출 1번</td></tr>
+        <tr><td>웹 글 지도</td><td>gpt-6.1-terra · low</td><td class="n">호출 1번 · 14~20초 (14,148자 18.9초)</td></tr>
+        <tr><td>지식 주제 정리</td><td>gpt-6-sol · low</td><td class="n">30개당 1번 · 약 3초</td></tr>
+        <tr><td>같은 지식 판정</td><td>gpt-6-sol · low</td><td class="n">25개당 1번 · 8~13초</td></tr>
+        <tr><td>층 나누기</td><td>gpt-6-sol · low</td><td class="n">20개당 1번 · 11~15초</td></tr>
+        <tr><td>쉽게 풀어 보기</td><td>gpt-6-sol · low</td><td class="n">누를 때 1번, 저장해서 다시 안 부름</td></tr>
         <tr><td>코드 문제 만들기</td><td>gpt-6.1-terra (독립 풀이는 다른 모델)</td><td class="n">15~23초, 열기 약 2초</td></tr>
       </tbody>
     </table></div>
