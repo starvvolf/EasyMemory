@@ -101,6 +101,16 @@ svg text{font-family:var(--sans);fill:var(--fg);pointer-events:none}
 .chip2.use{border-color:var(--io);background:var(--io-soft)} .chip2.use code{color:var(--io)}
 .chip2.ours{border-color:var(--code);background:var(--code-soft)} .chip2.ours code{color:var(--code)}
 .chip2.no{border-style:dashed;color:var(--muted)}
+.iss-h{margin:6px 0 0;font-size:14px;font-weight:700}
+.iss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.iss{border:1px solid var(--soft);border-left:4px solid var(--code);border-radius:10px;padding:12px 14px;background:var(--panel);display:grid;gap:6px;align-content:start}
+.iss.open{border-left-color:var(--qa)}
+.iss b{font-size:14.5px}
+.iss p{margin:0;font-size:13.5px;color:var(--muted)}
+.iss p.iss-do{color:var(--fg)}
+.iss-do span{display:inline-block;font-size:11.5px;font-weight:700;border-radius:5px;padding:1px 6px;margin-right:6px;background:var(--code-soft);color:var(--code)}
+.iss.open .iss-do span{background:var(--qa-soft);color:var(--qa)}
+.iss small{font-size:12px;color:var(--muted);font-family:var(--mono)}
 @media (prefers-reduced-motion: reduce){.pk > rect{transition:none}}
 @media (max-width:560px){.lane{grid-template-columns:1fr}.lane-label{padding-top:0}}
 @media (prefers-reduced-motion: reduce){.hit > rect:first-child{transition:none}}
@@ -525,6 +535,35 @@ function lanesHtml(lanes) {
     lane.steps.map(([cls, t, s], i) => `${i ? '<span class="ar" aria-hidden="true">→</span>' : ""}<div class="st ${cls}"><b>${esc(t)}</b>${s ? `<small>${esc(s)}</small>` : ""}</div>`).join("") +
     `</div></div>`).join("");
 }
+/* ---------- 프로젝트 칸 ③: 고민한 문제·병목과 지금 고민 중인 것 (처음 보는 사람용, 2026-10-30 D) ---------- */
+// [제목, 왜 문제였나, 어떻게 했나(또는 지금 상태), 숫자·근거]
+const SOLVED = [
+  ["답이 너무 느렸어요", "질문 하나에 20초 넘게 걸려서, 초보는 기다리다 흐름을 놓쳐요.", "“설명만”일 때는 도구를 끄고 필요한 파일을 미리 붙여 보내요. 답은 글자처럼 바로 흘러나오고, 같은 덩어리 설명은 저장해 두고 다시 써요.", "첫 글자 약 7초 · 단어 뜻 5.5초"],
+  ["튜터가 정답을 다 말해 버렸어요", "답을 보고 따라 치면 배운 게 아닌데, 기록에는 “혼자 풀었음”으로 남았어요.", "지시문으로 정답을 숨기게 하고, 그래도 답에 정답 줄이 나오면 “정답 보고 고침”으로 기록해요.", ""],
+  ["아직 안 배운 걸 먼저 말했어요", "1단계에서 4단계 내용(비밀번호 암호화 등)을 꺼내 초보를 헷갈리게 했어요.", "질문할 때 코스 순서와 “다음에 배울 것”을 같이 보내서, 앞질러 가지 않게 했어요.", ""],
+  ["매번 처음 보는 사람처럼 설명했어요", "어제 물어본 걸 또 길게 설명해서, 공부가 쌓이는 느낌이 없었어요.", "프로젝트 노트에 파일마다 물어본 것·고친 것을 적고, 튜터가 다음 질문 때 다시 읽어요.", ""],
+  ["문법을 모르는 건지, 코드를 못 읽는 건지", "같은 “모르겠어요”라도 await(문법)와 router(이 프로젝트의 이름)는 성격이 달라요.", "문법·도구 말은 어디서나 같은 뜻이라 지식(어휘)으로, 프로젝트 이름은 그 파일 노트에만 남겨요.", ""],
+  ["지식에 쓸모없는 말이 쌓였어요", "튜터 설명에 나오기만 한 const, res.end 같은 말이 빈 카드로 들어갔어요.", "내가 직접 누르거나 물어본 말만 지식으로 보내요.", "실제 PC 데이터로 확인"],
+  ["튜터 엔진을 만들까, 가져올까", "직접 만들면 오래 걸리고, 가져오면 우리 수업 방식에 안 맞을 수 있어요.", "오픈소스 4개를 비교해 OpenCode를 골랐어요. 엔진은 안 고치고 규칙·도구만 끼워 넣어요.", "대신 Node 24가 따로 필요"],
+  ["AI가 내가 고치던 파일을 덮어쓸 뻔했어요", "저장 안 한 내 코드가 날아가면 초보는 크게 놀라요.", "VS Code에서 고치는 중(저장 안 함)인 파일은 튜터가 못 고치게 막았어요.", ""],
+  ["설치·실행에서 막혔어요", "Node 버전, 확장 설치, 서버 켜기를 초보가 혼자 하기 어려워요.", "파일 하나만 두 번 누르면 설치부터 VS Code 열기까지 해요. 확장도 알아서 새것으로 바꿔요.", ""],
+];
+const THINKING = [
+  ["튜터가 VS Code 화면을 얼마나 차지할까", "오른쪽 탭이 넓으면 코드가 좁아지고, 좁으면 설명이 답답해요. 코드 옆 여백에 설명을 띄우는 방법도 보고 있어요.", "아직 정하지 않음"],
+  ["흐름 투어가 “진짜 실행”이 아니에요", "지금은 AI가 코드를 읽고 “이렇게 지나갈 것”이라고 짚어요. 실제로 요청을 보내 지나간 줄을 따라가면 더 정확해요.", "다음 후보"],
+  ["힌트를 AI 말에만 맡겨요", "“처음엔 방향만, 그다음 위치, 마지막에 코드”를 지시문으로만 시켜서, 가끔 한 번에 많이 줘요.", "코드로 막을지 고민 중"],
+  ["답이 아직 느릴 때가 있어요", "파일을 고치거나 서버를 켜는 질문은 여러 번 왔다 갔다 해서 20초 안팎 걸려요.", "그동안 보여 줄 것을 고민 중"],
+  ["어휘를 어떤 단위로 묶을까", "async와 await은 늘 같이 다니는데 따로 카드가 돼요. 묶으면 복습이 자연스러워요.", "규칙 정리 중"],
+  ["지식이 화면을 열어야 들어가요", "앱의 프로젝트 화면을 안 열면 배운 게 지식으로 안 넘어가요.", "자동으로 넘길 길 고민 중"],
+  ["5~7단계 수업이 아직 없어요", "권한·버그 고치기·응용 단계는 검사만 있고, 튜터가 따라갈 수업 계획이 없어요.", "1~4단계까지 있음"],
+  ["앱 밖에서 따로 돌아요", "프로젝트 코스는 4100번 서버를 따로 켜야 해요. 앱 안으로 들일지 정해야 해요.", "실험 중"],
+];
+function issuesHtml() {
+  const card = ([t, why, did, num], kind) => `<div class="iss ${kind}"><b>${esc(t)}</b><p>${esc(why)}</p><p class="iss-do"><span>${kind === "done" ? "한 것" : "지금"}</span>${esc(did)}</p>${num ? `<small>${esc(num)}</small>` : ""}</div>`;
+  return `<section class="fig"><div class="fig-cap">③ 부딪힌 문제와 지금 고민<span>초보가 막히는 곳과 느린 곳(병목)을 하나씩 풀어 왔어요. 위는 풀어 본 것, 아래는 아직 고민 중인 것이에요.</span></div>` +
+    `<p class="iss-h">풀어 본 문제</p><div class="iss-grid">${SOLVED.map((x) => card(x, "done")).join("")}</div>` +
+    `<p class="iss-h">지금 고민 중</p><div class="iss-grid">${THINKING.map(([t, why, now]) => card([t, why, now, ""], "open")).join("")}</div></section>`;
+}
 function show(k) {
   if (!D[k]) k = "cs";
   const d = D[k];
@@ -534,6 +573,7 @@ function show(k) {
     const body = document.getElementById("d-body");
     body.innerHTML = FIGS[d.svgs].map((f) => `<figure class="fig" style="margin:0"><div class="fig-cap">${esc(f.cap)}<span>${esc(f.hint)}</span></div><div class="fig-box">${f.svg}</div><div class="info" aria-live="polite"></div></figure>`).join("");
     body.querySelectorAll(".fig").forEach((fig, i) => wireFig(fig, FIGS[d.svgs][i].start));
+    body.insertAdjacentHTML("beforeend", issuesHtml());
     // A part drawn as figures may still list a simpler flow under them (CS: 웹 글).
     if (d.lanes) body.insertAdjacentHTML("beforeend", lanesHtml(d.lanes));
     document.querySelectorAll(".hit").forEach((g) => g.classList.toggle("on", g.dataset.k === k));
