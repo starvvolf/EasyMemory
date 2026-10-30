@@ -73,6 +73,25 @@ svg text{font-family:var(--sans);fill:var(--fg);pointer-events:none}
 .keys .ai{border-color:var(--io);background:var(--io-soft)} .keys .code{border-color:var(--code);background:var(--code-soft)}
 .keys .user{border-color:var(--user);background:var(--user-soft)} .keys .chk{border-color:var(--kn);background:var(--kn-soft)}
 .keys .par{border-color:var(--line);border-style:dashed}
+/* drawn detail (프로젝트): boxes by role, chips for OpenCode tools */
+.fig{display:grid;gap:6px}
+.fig-cap{font-size:13.5px;font-weight:500}
+.fig-cap span{font-weight:400;color:var(--muted);margin-left:8px}
+.fig-box{overflow-x:auto;border:1px solid var(--soft);border-radius:10px;background:var(--bg)}
+.fig-box svg{display:block;min-width:900px;width:100%;height:auto}
+.b-ai{fill:var(--io-soft);stroke:var(--io);stroke-width:1.4}
+.b-code{fill:var(--code-soft);stroke:var(--code);stroke-width:1.4}
+.b-user{fill:var(--user-soft);stroke:var(--user);stroke-width:1.4}
+.b-chk{fill:var(--kn-soft);stroke:var(--kn);stroke-width:1.4}
+.b-ext{fill:var(--panel);stroke:var(--line);stroke-width:1.4;stroke-dasharray:6 5}
+.b-grp{fill:none;stroke:var(--line);stroke-width:1.2;stroke-opacity:.55}
+.b-oc{fill:none;stroke:var(--io);stroke-width:2}
+.gap{stroke:var(--bg);stroke-width:7;fill:none}
+.t-b{font-size:13px;font-weight:700}
+.chip rect{rx:6;stroke-width:1.3} .chip text{font-family:var(--mono);font-size:11.5px}
+.chip.use rect{fill:var(--io-soft);stroke:var(--io)} .chip.use text{fill:var(--io)}
+.chip.ours rect{fill:var(--code-soft);stroke:var(--code)} .chip.ours text{fill:var(--code)}
+.chip.no rect{fill:none;stroke:var(--line);stroke-dasharray:4 3} .chip.no text{fill:var(--muted)}
 @media (max-width:560px){.lane{grid-template-columns:1fr}.lane-label{padding-top:0}}
 @media (prefers-reduced-motion: reduce){.hit > rect:first-child{transition:none}}
 </style>
@@ -228,44 +247,7 @@ const D = {
       ["code","채점","시간·메모리 실측"],
       ["ai","힌트","3단계 · 반례"],
       ["code","지식에 기록","제출·힌트·질문"] ] } ] },
-  project: { title: "프로젝트 · 직접 만들기", sub: "VS Code에서 작은 서비스를 한 단계씩 만들고, 오른쪽 튜터 탭이 돕는다 · 앱 밖 실험 서버(4100), 공부 탭과 이어짐", lanes: [
-    { label: "시작", steps: [
-      ["user","공부 · 프로젝트","+ 새 공부에도 있음"],
-      ["ai","코스 정하기","대화 + 확인 문제 → 시작 단계"],
-      ["code","계획 확정","단계 · 빠르게 넘길 단계"],
-      ["code","작업 폴더 · VS Code","튜터 탭이 오른쪽에 열림"] ] },
-    { label: "코스", steps: [
-      ["code","게시판 API 7단계","HTTP → CRUD·DB → 검증 → 로그인 → 권한 → 버그 → 전이"],
-      ["code","자동 검사 33개","단계마다 쌓임"],
-      ["code","수업 계획서","1~4단계 · 5~7은 아직"] ] },
-    { label: "한 단계", steps: [
-      ["user","부품 지도","이번에 볼 파일과 역할"],
-      ["user","결과 예측","처음 답이 기록"],
-      ["code","직접 해 보기","요청 보내기 · DB 들여다보기"],
-      ["code","없애 보기","고장 난 걸 실제로 봄"],
-      ["user","VS Code에서 고치기","빈칸 뼈대 · 힌트 3단계"],
-      ["chk","재검사","자동 HTTP 검사"],
-      ["user","내 말로 설명","통과"] ] },
-    { label: "튜터에게 묻기", steps: [
-      ["user","질문 · 단어 누르기","코드 위 💬 설명"],
-      ["code","상황 붙이기","단계 · 지난 검사 · 노트 · 파일"],
-      ["ai","OpenCode 엔진","앱과 같은 ChatGPT 로그인"],
-      ["code","답이 흘러나옴","코드 블록 · VS Code 색"],
-      ["chk","정답 노출 확인","보여 줬으면 “정답 보고 고침”"] ] },
-    { label: "튜터 방식", set: true, steps: [
-      ["ai","보통","파일 읽기 · 고치기 · 서버 켜기 · 요청 · 검사 · DB 보기"],
-      ["ai","설명만","도구 없음 · 파일+import 첨부 · 첫 글자 약 7초"],
-      ["ai","흐름 투어","“실제 동작 설명” → 파일 넘나들며 불 켜기 · 자동/확인했어요"] ] },
-    { label: "프로젝트 노트", set: true, steps: [
-      ["code","파일별 기록","server.ts · app.ts 밑에 물어본 것·고친 것"],
-      ["code","파일 사이 연결","import + 투어로 지나간 길"],
-      ["code","말 나누기","문법 · 도구 · 프로젝트 이름"],
-      ["code","튜터가 다시 읽음","같은 설명 반복 안 함"] ] },
-    { label: "지식으로", steps: [
-      ["code","프로젝트 화면 열 때 · 1분마다","안 보낸 것만"],
-      ["code","코스 개념 → 개념","물어봄·틀림·힌트·맞힘 같이"],
-      ["code","물어본 문법·도구 → 어휘","눌러 본 횟수만큼"],
-      ["chk","빼는 것","설명에 나오기만 한 말 · 프로젝트 이름"] ] } ] },
+  project: { title: "프로젝트 · 직접 만들기", sub: "VS Code에서 작은 서비스를 한 단계씩 만들고, 오른쪽 튜터 탭이 돕는다 · 앱 밖 실험 서버(4100), 공부 탭과 이어짐", svgs: "project" },
   knowledge: { title: "지식", sub: "모든 자료가 같이 쓰는 저장소", lanes: [
     { label: "지식 하나", set: true, steps: [
       ["code","뜻","자료에서"],
@@ -300,11 +282,83 @@ const D = {
 };
 const keys = Object.keys(D);
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+/* ---------- 그림 도우미 (프로젝트 칸) ---------- */
+const B = (x, y, w, h, cls, title, lines = []) => `<rect class="b-${cls}" x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/>` +
+  `<text x="${x + 12}" y="${y + 22}" class="t-md">${esc(title)}</text>` + lines.map((l, i) => `<text x="${x + 12}" y="${y + 42 + i * 17}" class="t-sm">${esc(l)}</text>`).join("");
+const A = (d, o = {}) => (o.gap ? `<path class="gap" d="${d}"/>` : "") + `<path class="arrow" d="${d}" marker-end="url(#dah)"${o.both ? ' marker-start="url(#dah)"' : ""}/>` +
+  (o.label ? `<text x="${o.label[0]}" y="${o.label[1]}" class="t-sm"${o.mid ? ' text-anchor="middle"' : ""}>${esc(o.label[2])}</text>` : "");
+const G = (x, y, w, h, label) => `<rect class="b-grp" x="${x}" y="${y}" width="${w}" height="${h}" rx="14"/><text x="${x + 14}" y="${y + 22}" class="t-b">${esc(label)}</text>`;
+const chips = (x, y, names, cls) => { let cx = x; return names.map((n) => { const w = Math.round(n.length * 6.9 + 16); const out = `<g class="chip ${cls}"><rect x="${cx}" y="${y}" width="${w}" height="24"/><text x="${cx + 8}" y="${y + 16}">${esc(n)}</text></g>`; cx += w + 6; return out; }).join(""); };
+const DEFS = `<defs><marker id="dah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>`;
+const svg = (w, h, label, body) => `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(label)}">${DEFS}${body}</svg>`;
+
+const FIGS = { project: [
+  { cap: "① 프로젝트 전체", note: "앱 · 코스 서버 · VS Code가 어떻게 이어지나", svg: svg(1160, 670, "프로젝트 전체 구조", [
+    A("M130,166 V40 H1060 V166", { label: [150, 32, "VS Code에서 이어 하기"] }),
+    B(585, 58, 160, 52, "ext", "ChatGPT", ["앱과 같은 로그인"]),
+    G(20, 130, 220, 520, "Recaller 앱 · 3000"),
+    B(40, 170, 180, 80, "user", "공부 · 프로젝트", ["이어 하기 · 새로 시작", "지식 연결 상태"]),
+    B(40, 515, 180, 115, "chk", "지식 저장소", ["개념 · 어휘", "물어봄·틀림·힌트·맞힘", "→ 복습 문제로"]),
+    G(290, 130, 500, 520, "코스 서버 · 4100 (앱 밖 실험)"),
+    B(310, 170, 210, 70, "ai", "코스 정하기", ["대화 + 확인 문제 → 계획"]),
+    B(310, 280, 210, 100, "code", "수업 진행", ["게시판 API 7단계 · 검사 33개", "예측 → 없애 보기 → 고치기", "→ 재검사 → 내 말로 설명"]),
+    B(560, 280, 210, 100, "ai", "AI 튜터 · OpenCode", ["보통 · 설명만 · 흐름 투어", "정답 노출 · 힌트 단계 기록", "안쪽은 ② 그림"]),
+    B(310, 420, 210, 70, "code", "기록", ["예측 · 힌트 · 통과 · 설명"]),
+    B(560, 420, 210, 70, "code", "프로젝트 노트", ["파일별 기록 · 연결 · 말 나누기"]),
+    B(435, 540, 230, 70, "code", "지식 보내기", ["안 보낸 것만 · 개념/어휘 나눔"]),
+    G(880, 130, 260, 520, "VS Code · 작업 폴더"),
+    B(895, 170, 230, 70, "user", "튜터 탭 (오른쪽)", ["질문 · 단계 버튼 · 답"]),
+    B(895, 280, 230, 100, "user", "코드 파일", ["server.ts · app.ts · posts.ts …", "💬 설명 · 단어 누르기", "투어 불빛"]),
+    B(895, 420, 230, 70, "code", "실습 서버 4101", ["board.db (SQLite)"]),
+    B(895, 540, 230, 70, "chk", "자동 검사 4102", ["HTTP 요청으로 채점"]),
+    A("M220,205 H306", { label: [232, 197, "새로 시작"] }),
+    A("M665,110 V276", { both: true }),
+    A("M895,205 H835 V300 H774", { both: true, label: [837, 196, "질문 · 답", 1], mid: true }),
+    A("M774,340 H891", { label: [832, 333, "읽기 · 고치기"], mid: true }),
+    A("M774,365 H850 V455 H891", { label: [812, 418, "요청 · DB"], mid: true }),
+    A("M415,240 V276", { label: [424, 263, "계획"] }),
+    A("M415,380 V416", { label: [424, 403, "예측 · 힌트 · 통과"] }),
+    A("M665,380 V416", { both: true, label: [674, 403, "기록 · 다시 읽음"] }),
+    A("M415,490 V575 H431"),
+    A("M610,490 V536"),
+    A("M520,360 H540 V512 H862 V575 H891", { gap: true, label: [720, 506, "재검사"] }),
+    A("M435,595 H224", { label: [298, 614, "1분마다 앱이 가져감"] }),
+  ].join("")) },
+  { cap: "② OpenCode 안쪽", note: "파랑 = 그대로 씀 · 초록 = 우리가 더함 · 회색 점선 = 있지만 안 씀", svg: svg(1200, 640, "OpenCode 안쪽 구조와 쓴 것", [
+    B(20, 110, 205, 150, "code", "코스 서버가 보냄", ["학습자 질문", "단계 · 지난 검사", "프로젝트 노트 · 파일", "모드: 보통·설명만·투어", "지시문: 해요체·답 숨기기"]),
+    `<rect class="b-oc" x="250" y="40" width="650" height="565" rx="16"/>`,
+    `<text x="270" y="70" class="t-lg">OpenCode</text><text x="370" y="70" class="t-sm">@opencode/sdk 2.2.1 · 코스 서버 안에서 실행(Node 24) · 엔진 코드는 안 고침</text>`,
+    B(275, 105, 285, 95, "ai", "에이전트 루프 · tutor", ["생각 → 도구 → 다시 (최대 8걸음)", "우리 지시문으로 동작"]),
+    B(590, 105, 285, 95, "ai", "모델 연결", ["openai responses 방식", "토큰은 앱의 ChatGPT 로그인"]),
+    B(275, 225, 285, 80, "chk", "권한 (permission 훅)", ["읽기 · 우리 도구는 허용", "설명 중 · 학습자가 고치는 파일은 막음"]),
+    B(590, 225, 285, 80, "code", "플러그인 훅", ["http.request 토큰 · title 생략", "context 모드별 도구 · execute 기록"]),
+    `<rect class="b-ai" x="275" y="325" width="600" height="165" rx="10" style="fill:var(--panel)"/>`,
+    `<text x="290" y="347" class="t-sm">기본 도구 · 그대로 씀 (고치기는 기록하고 "직접 통과 아님")</text>`, chips(290, 354, ["read", "glob", "grep", "patch", "edit", "write"], "use"),
+    `<text x="290" y="398" class="t-sm">우리가 더한 도구 (tool.transform)</text>`, chips(290, 405, ["show_tour", "open_in_editor", "start_server", "send_request", "run_checks", "look_db"], "ours"),
+    `<text x="290" y="449" class="t-sm">있지만 안 씀</text>`, chips(290, 456, ["shell", "webfetch", "websearch", "question", "todo", "subagent", "skill", "mcp"], "no"),
+    B(275, 510, 285, 62, "code", "세션 저장", ["sessions.db · 대화 이어 감"]),
+    B(590, 510, 285, 62, "ai", "이벤트", ["글 조각 · 도구 시작 · 끝"]),
+    `<text x="275" y="594" class="t-sm">안 씀: 터미널 화면(TUI) · HTTP 서버/클라이언트 · codemode · 스냅샷/git</text>`,
+    B(930, 110, 240, 85, "ext", "ChatGPT", ["앱과 같은 계정"]),
+    B(930, 225, 240, 80, "code", "프로젝트 노트 · 기록", ["읽은 파일 · 고친 곳 · 투어"]),
+    B(930, 330, 240, 64, "user", "작업 폴더 파일", ["읽기 · 고치기"]),
+    B(930, 412, 240, 64, "code", "실습 서버 · DB", ["요청 보내기 · 검사 · DB 보기"]),
+    B(930, 510, 240, 62, "user", "VS Code 튜터 탭", ["글이 흘러나옴 · 도구 카드 · 투어"]),
+    A("M225,155 H271"),
+    A("M560,152 H586", { both: true }),
+    A("M417,200 V221", {}), A("M417,305 V321"), A("M732,305 V321"),
+    A("M875,152 H926"), A("M875,265 H926"), A("M875,362 H926"), A("M875,444 H926"), A("M875,541 H926"),
+  ].join("")) } ] };
 function show(k) {
   if (!D[k]) k = "cs";
   const d = D[k];
   document.getElementById("d-title").textContent = d.title;
   document.getElementById("d-sub").textContent = d.sub;
+  if (d.svgs) {
+    document.getElementById("d-body").innerHTML = FIGS[d.svgs].map((f) => `<figure class="fig" style="margin:0"><div class="fig-cap">${esc(f.cap)}<span>${esc(f.note)}</span></div><div class="fig-box">${f.svg}</div></figure>`).join("");
+    document.querySelectorAll(".hit").forEach((g) => g.classList.toggle("on", g.dataset.k === k));
+    return;
+  }
   document.getElementById("d-body").innerHTML = d.lanes.map((lane) =>
     `<div class="lane"><div class="lane-label">${esc(lane.label)}</div><div class="flow${lane.set ? " set" : ""}">` +
     lane.steps.map(([cls, t, s], i) => `${i ? '<span class="ar" aria-hidden="true">→</span>' : ""}<div class="st ${cls}"><b>${esc(t)}</b>${s ? `<small>${esc(s)}</small>` : ""}</div>`).join("") +
