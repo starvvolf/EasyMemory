@@ -14,8 +14,22 @@ async function local(request: Request) {
   if (!isLocalExperimentRequest(request)) throw new ExperimentRequestError(403, "로컬 실험 모드에서만 쓸 수 있습니다.");
   await requireLocalRequest(request);
 }
+// The bridge: a page the article's tab embeds and hands what it read to (postMessage), so it reaches this server from
+// this server's own origin. It only saves an article; running and reading results stay on the lab screen.
+const BRIDGE = `<!doctype html><meta charset="utf-8"><script>
+addEventListener("message", async (e) => {
+  if (!e.data || e.data.type !== "recaller-web-article") return;
+  try {
+    const r = await fetch("/api/lab/web-trial", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "article", article: e.data.article }) });
+    parent.postMessage({ type: "recaller-web-saved", status: r.status, body: await r.json() }, "*");
+  } catch (err) { parent.postMessage({ type: "recaller-web-saved", status: 0, body: String(err) }, "*"); }
+});
+parent.postMessage({ type: "recaller-web-bridge" }, "*");
+</script>`;
 export async function GET(request: Request) {
   try {
+    if (!isLocalExperimentRequest(request)) throw new ExperimentRequestError(403, "로컬 실험 모드에서만 쓸 수 있습니다.");
+    if (new URL(request.url).searchParams.get("bridge") === "1") return new NextResponse(BRIDGE, { headers: { "Content-Type": "text/html; charset=utf-8" } });
     await local(request);
     const id = new URL(request.url).searchParams.get("id") ?? "";
     assertTrialId(id);

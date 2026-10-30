@@ -16,6 +16,8 @@ export const webBlockSchema = z.object({
   text: z.string().max(20000).default(""),
   /** img: a data URL (browser-resized), its size before resizing, alt and caption */
   dataUrl: z.string().max(3_000_000).optional(), w: z.number().optional(), h: z.number().optional(), gif: z.boolean().optional(),
+  /** img: where the browser saw it; the server fetches it (the page's images are not readable from the page's script). */
+  src: z.string().max(4000).optional(),
 });
 export type WebBlock = z.infer<typeof webBlockSchema>;
 export const webArticleSchema = z.object({ title: z.string().max(300), url: z.string().max(2000), blocks: z.array(webBlockSchema).max(2000) });
@@ -38,8 +40,21 @@ export type WebTrial = { id: string; createdAt: string; title: string; url: stri
   calls: Call[] };
 
 const dir = () => path.join(dataRoot(), "web-trials");
+// A picture as the engine takes it: at most 1024px wide, PNG (a GIF gives its first frame).
+async function fetchPicture(src: string): Promise<string | undefined> {
+  try {
+    const response = await fetch(src, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) return undefined;
+    const { default: sharp } = await import("sharp");
+    const png = await sharp(Buffer.from(await response.arrayBuffer()), { animated: false }).resize({ width: 1024, withoutEnlargement: true }).png().toBuffer();
+    return `data:image/png;base64,${png.toString("base64")}`;
+  } catch { return undefined; }
+}
 export async function saveArticle(raw: unknown) {
   const article = webArticleSchema.parse(raw);
+  await Promise.all(article.blocks.map(async (b) => {
+    if (b.kind === "img" && !b.dataUrl && b.src && /^https:\/\//.test(b.src) && (b.w ?? 0) >= 200 && (b.h ?? 0) >= 120) b.dataUrl = await fetchPicture(b.src);
+  }));
   const id = `wt_${randomBytes(6).toString("hex")}`;
   await mkdir(dir(), { recursive: true });
   await writeFile(path.join(dir(), `${id}.article.json`), JSON.stringify(article));
