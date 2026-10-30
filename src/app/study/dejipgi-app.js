@@ -360,17 +360,17 @@ function renderToday(plan, pendings){
   const panel = h("section", { class:"panel today2" });
   panel.append(h("div", { class:"today2-head" },
     h("div", null,
-      S.view === "home" ? h("p", { class:"eyebrow", text:"PDF 자료 · 시험일 기준" }) : h("p", { class:"today2-date", text:`${d0.getMonth() + 1}월 ${d0.getDate()}일 ${weekday(d0)}요일` }),
+      S.view === "home" ? h("p", { class:"eyebrow", text:"PDF 자료" }) : h("p", { class:"today2-date", text:`${d0.getMonth() + 1}월 ${d0.getDate()}일 ${weekday(d0)}요일` }),
       h("h2", { text:title }),
       h("p", { class:"small muted num", text: left
         ? `${left}문제 · 약 ${minutesLeft}분 남음${plan.doneToday ? ` · 오늘 ${plan.doneToday}문제 풂` : ""} · 하루 ${plan.budgetMinutes}분 기준`
-        : plan.doneToday ? `오늘 ${plan.doneToday}문제를 풀었어요. 내일 할 것은 내일 아침에 다시 계산해요.` : "새 자료를 올리거나, 과목에 시험일을 넣어 보세요." })),
+        : plan.doneToday ? `오늘 ${plan.doneToday}문제를 풀었어요. 내일 할 것은 내일 아침에 다시 계산해요.` : S.view === "home" ? "새 자료를 올려 보세요." : "새 자료를 올리거나, 과목에 시험일을 넣어 보세요." })),
     h("div", { class:"row" },
       left ? h("button", { class:"btn primary big", "data-autofocus":"1", onclick:startToday }, plan.doneToday ? "이어서 하기" : "시작하기", h("span", { class:"btn-sub num", text:`${Math.min(left, chunkSize())}문제` })) : null,
       S.view === "home" ? null : h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부"))));
   if (total) panel.append(h("div", { class:"today2-bar", "aria-hidden":"true" }, h("i", { style:`width:${(plan.doneToday / total * 100).toFixed(1)}%` })));
   const rows = h("div", { class:"today2-rows" });
-  for (const sp of plan.subjects){
+  for (const sp of S.view === "home" ? [] : plan.subjects){
     const picked = Object.values(sp.picked).reduce((a, b) => a + b, 0);
     if (!picked && sp.phase === "learn" && !sp.doneToday) continue;
     const chips = Object.entries(sp.picked).filter(([, n]) => n).map(([k, n]) => h("span", { class:`chip ${REASON[k][1]}`, text:`${REASON[k][0]} ${n}` }));
@@ -389,13 +389,13 @@ function renderToday(plan, pendings){
         sp.phase === "final" && sp.name ? h("button", { class:"btn small", onclick: () => openSummary(sp.name) }, "한 장 정리") : null)));
   }
   if (rows.childNodes.length) panel.append(rows);
-  for (const note of plan.notes) panel.append(h("p", { class:"small muted", text:note }));
+  if (S.view !== "home") for (const note of plan.notes) panel.append(h("p", { class:"small muted", text:note }));
   const coach = coachPanel(plan, pendings);
   if (coach) panel.append(coach);
   const mine = myAdjustments();
   if (mine) panel.append(mine);
   if (S.rulesWarnings.length) panel.append(h("p", { class:"small help-text", text:`학습규칙 확인: ${S.rulesWarnings.join(" / ")}` }));
-  if (!S.plan.subjects.length) panel.append(h("p", { class:"small muted", text:"아래 ‘시험 과목’에 과목과 시험일을 넣으면 시험 날짜에 맞춰 하루 분량을 나눠요." }));
+  if (S.view !== "home" && !S.plan.subjects.length) panel.append(h("p", { class:"small muted", text:"아래 ‘시험 과목’에 과목과 시험일을 넣으면 시험 날짜에 맞춰 하루 분량을 나눠요." }));
   return panel;
 }
 
@@ -499,8 +499,8 @@ function coachPanel(plan, pendings){
   try{
     cards = env.coach({ plan, rules:S.rules || {}, prefs:S.plan.prefs || {}, counts:S.qualityCounts || {},
       waiting: pendings.filter(p => p.pending && p.pending.status === "confirm").length,
-      unassigned: S.plan.subjects.length ? realDecks().filter(d => !subjectOf(d)).length : 0,
-      subjectsWithoutDate: S.plan.subjects.filter(s => !s.exam && decksOf(s.name).length).map(s => s.name) });
+      // 과목 고르기·시험일 넣기 카드는 목표·시험일을 뺀 뒤(10/30) 띄우지 않는다.
+      unassigned: 0, subjectsWithoutDate: [] });
   }catch(e){ console.error(e); return null; }
   if (!cards.length) return null;
   const close = (id) => { (prefs().coachSeen || (prefs().coachSeen = {}))[id] = new Date().toISOString().slice(0, 10); savePrefs(); };
@@ -709,13 +709,13 @@ function renderRecallerHome(){
   wrap.append(h("section", { class:"panel hero" },
     h("p", { class:"eyebrow", text:today }),
     h("h2", { text:"무엇을 공부할까요?" }),
-    h("p", { class:"muted", text:"PDF·웹 글·코드 무엇이든 넣으면, 알아야 할 지식을 뽑고 문제로 확인해요. 잊을 때쯤 다시 물어보고, 시험이 있으면 날짜까지 나눠 드려요." }),
+    h("p", { class:"muted", text:"PDF·웹 글은 읽고, 코드는 풀고, 프로젝트는 만들어 보며 배운 것을 지식 하나로 쌓아요. 잊을 때쯤 다시 물어봐요." }),
     h("div", { class:"row" },
       h("button", { class:"btn primary", onclick: () => setView("start") }, "+ 새 공부 시작"),
       real.length ? h("button", { class:"btn", onclick: () => setView("practice") }, "내 공부 보기") : null)));
   if (env.mountView) wrap.append(viewHost("today", {}));
+  // 목표·시험일은 10/30에 뺐다(docs/DECISIONS.md): 오늘 화면에는 과목 칩·D-day를 두지 않는다.
   if (real.length){
-    if (liveSubjects().length) wrap.append(subjectChips());
     const plan = todayPlan();
     if (plan && plan.queue.length) wrap.append(renderToday(plan, pendings));
   }
