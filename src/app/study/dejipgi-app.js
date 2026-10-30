@@ -364,13 +364,13 @@ function renderToday(plan, pendings){
       h("h2", { text:title }),
       h("p", { class:"small muted num", text: left
         ? `${left}문제 · 약 ${minutesLeft}분 남음${plan.doneToday ? ` · 오늘 ${plan.doneToday}문제 풂` : ""} · 하루 ${plan.budgetMinutes}분 기준`
-        : plan.doneToday ? `오늘 ${plan.doneToday}문제를 풀었어요. 내일 할 것은 내일 아침에 다시 계산해요.` : S.view === "home" ? "새 자료를 올려 보세요." : "새 자료를 올리거나, 과목에 시험일을 넣어 보세요." })),
+        : plan.doneToday ? `오늘 ${plan.doneToday}문제를 풀었어요. 내일 할 것은 내일 아침에 다시 계산해요.` : "새 자료를 올려 보세요." })),
     h("div", { class:"row" },
       left ? h("button", { class:"btn primary big", "data-autofocus":"1", onclick:startToday }, plan.doneToday ? "이어서 하기" : "시작하기", h("span", { class:"btn-sub num", text:`${Math.min(left, chunkSize())}문제` })) : null,
       S.view === "home" ? null : h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부"))));
   if (total) panel.append(h("div", { class:"today2-bar", "aria-hidden":"true" }, h("i", { style:`width:${(plan.doneToday / total * 100).toFixed(1)}%` })));
   const rows = h("div", { class:"today2-rows" });
-  for (const sp of S.view === "home" ? [] : plan.subjects){
+  for (const sp of []){ // 과목별 D-day 줄: 10/30에 뺌 (plan.subjects)
     const picked = Object.values(sp.picked).reduce((a, b) => a + b, 0);
     if (!picked && sp.phase === "learn" && !sp.doneToday) continue;
     const chips = Object.entries(sp.picked).filter(([, n]) => n).map(([k, n]) => h("span", { class:`chip ${REASON[k][1]}`, text:`${REASON[k][0]} ${n}` }));
@@ -389,13 +389,13 @@ function renderToday(plan, pendings){
         sp.phase === "final" && sp.name ? h("button", { class:"btn small", onclick: () => openSummary(sp.name) }, "한 장 정리") : null)));
   }
   if (rows.childNodes.length) panel.append(rows);
-  if (S.view !== "home") for (const note of plan.notes) panel.append(h("p", { class:"small muted", text:note }));
+  if (false) for (const note of plan.notes) panel.append(h("p", { class:"small muted", text:note }));
   const coach = coachPanel(plan, pendings);
   if (coach) panel.append(coach);
   const mine = myAdjustments();
   if (mine) panel.append(mine);
   if (S.rulesWarnings.length) panel.append(h("p", { class:"small help-text", text:`학습규칙 확인: ${S.rulesWarnings.join(" / ")}` }));
-  if (S.view !== "home" && !S.plan.subjects.length) panel.append(h("p", { class:"small muted", text:"아래 ‘시험 과목’에 과목과 시험일을 넣으면 시험 날짜에 맞춰 하루 분량을 나눠요." }));
+  if (false && !S.plan.subjects.length) panel.append(h("p", { class:"small muted", text:"아래 ‘시험 과목’에 과목과 시험일을 넣으면 시험 날짜에 맞춰 하루 분량을 나눠요." }));
   return panel;
 }
 
@@ -1059,11 +1059,10 @@ function renderHome(){
       h("div", { style:"grid-column:1/-1" }, pendingNote(d))));
   }
   const realDecks = decks.filter(d => !d.example);
-  if (realDecks.length) wrap.append(subjectStrip());
-  // Materials grouped by subject, the nearest exam first; materials without a subject come last.
-  const groups = orderedSubjects().map(s => ({ name:s.name, list:decksOf(s.name) })).filter(g => g.list.length);
-  const loose = decks.filter(d => !subjectOf(d)).sort(byTitle);
-  if (loose.length) groups.push({ name:"", list:loose });
+  // 시험 과목은 10/30에 뺐다(목표·시험일 없앰, docs/DECISIONS.md): 과목 칸도 과목별 묶음도 없이 자료 목록 하나.
+  // subjectStrip·subjectHead와 저장된 과목 데이터는 남겨 두었다(되돌릴 때를 위해).
+  void realDecks;
+  const groups = [{ name:"", list:decks.slice().sort(byTitle) }];
   // Subjects are folders, closed until clicked; inside, a material's several decks (AI 문제·족보·다시 만든 문제) fold
   // under that material. Open state is a per-browser convenience.
   for (const g of groups){
@@ -1174,7 +1173,7 @@ function deckCard(d, growing){
   const c = deckCounts(d);
   const pct = (n) => (c.total ? (n / c.total * 100) : 0) + "%";
   let pick = null;
-  if (!d.example && S.plan.subjects.length){
+  if (false && !d.example && S.plan.subjects.length){ // 과목 고르기 칸: 10/30에 뺌
     pick = h("select", { class:"subj-pick", "aria-label":"과목", title:"과목" },
       h("option", { value:"", text:"과목 없음" }), orderedSubjects().map(s => h("option", { value:s.name, text:s.name })));
     pick.value = subjectOf(d);
