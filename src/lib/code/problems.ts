@@ -268,6 +268,16 @@ const statusOf = (subs: Submission[]): ProblemLite["status"] => {
   if (!submits.length) return "tried";
   return submits.at(-1)!.verdict === "AC" ? "solved" : "wrong";
 };
+/** The knowledge names already on saved problems (no seeding, no submissions): what a new problem should reuse. */
+export async function problemKnowledgeNames(): Promise<string[]> {
+  let names: string[] = [];
+  try { names = (await readdir(problemsDir())).filter((n) => /^cp_[a-z0-9_-]+\.json$/.test(n)); } catch { return []; }
+  const out = new Set<string>();
+  for (const name of names) {
+    try { for (const k of (await readMeta(name.replace(/\.json$/, ""))).knowledge ?? []) if (k.trim()) out.add(k.trim()); } catch { /* skipped */ }
+  }
+  return [...out];
+}
 export async function listProblems(): Promise<ProblemLite[]> {
   await ensureSeeds();
   let names: string[] = [];

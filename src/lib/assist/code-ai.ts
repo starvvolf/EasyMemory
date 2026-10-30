@@ -4,7 +4,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { askJson, askText, S } from "./model.ts";
 import { LANG_LABEL, judge, type Lang, type TestCase } from "../code/run.ts";
-import { CodeError, findCounterexample, listProblems, readProblem, readProblemMeta, saveProblem, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
+import { CodeError, findCounterexample, problemKnowledgeNames, readProblem, readProblemMeta, saveProblem, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
 import { runTestgen, runVerify } from "../code/testgen/index.ts";
 import { memoryEvents, searchKnowledge } from "../knowledge/api.ts";
 import { currentAttempt } from "../code/service.ts";
@@ -238,7 +238,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   // PS → 지식 (2026-10-30): an imported statement rarely names its idea ("동적 계획법"), so the search alone came back empty
   // and each problem got its own spelling ("다이나믹 프로그래밍"). The names already on earlier code problems go along too.
   const searched = (await searchKnowledge(input.topic || input.lesson?.slice(0, 200) || "", { limit: 12 })).map((h) => h.title);
-  const onProblems = (await listProblems().catch(() => [])).flatMap((p) => p.knowledge ?? []);
+  const onProblems = await problemKnowledgeNames().catch(() => [] as string[]);
   const names = [...new Set([...searched, ...onProblems].map((n) => n.trim()).filter(Boolean))].slice(0, 80);
   const user = [input.topic ? `[주제] ${input.topic}` : "", input.lesson ? `[강의 글 또는 붙여 넣은 문제]\n${input.lesson.slice(0, 30000)}` : "", names.length ? `[학습자 지식 목록] ${names.join(", ")}` : "",
     input.kind === "blank" ? `[빈칸 문제 언어] ${LANG_LABEL[input.lang ?? "python"]}` : "[빈칸 문제 아님]"].filter(Boolean).join("\n\n");
