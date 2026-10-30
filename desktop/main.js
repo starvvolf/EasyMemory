@@ -10,6 +10,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const ORIGIN = "http://127.0.0.1:3000";
 const START_URL = `${ORIGIN}/study`;
+const COURSE_ORIGIN = (process.env.PROJECT_COURSE_URL || "http://127.0.0.1:4100").replace(/\/$/, "");
 const isWin = process.platform === "win32";
 let main = null, splash = null, quitting = false;
 
@@ -66,8 +67,12 @@ function openMain() {
   if (b.maximized) main.maximize();
   // Pages of the local app stay in the window; anything else (ChatGPT sign-in, links) opens in the normal browser,
   // and the sign-in still lands on the local server, so the window just needs a reload afterwards.
-  const local = (url) => url.startsWith(ORIGIN + "/");
-  main.webContents.setWindowOpenHandler(({ url }) => { if (local(url)) return { action: "allow" }; shell.openExternal(url); return { action: "deny" }; });
+  // The project course server (127.0.0.1:4100: notes, new project) is local too, so it opens in a Recaller window.
+  const local = (url) => url.startsWith(ORIGIN + "/") || url.startsWith(COURSE_ORIGIN + "/") || url === COURSE_ORIGIN;
+  main.webContents.setWindowOpenHandler(({ url }) => {
+    if (local(url)) return { action: "allow", overrideBrowserWindowOptions: { width: 1180, height: 820, autoHideMenuBar: true, title: "Recaller", webPreferences: { contextIsolation: true, sandbox: true } } };
+    shell.openExternal(url); return { action: "deny" };
+  });
   main.webContents.on("will-navigate", (event, url) => { if (!local(url)) { event.preventDefault(); shell.openExternal(url); } });
   main.webContents.on("dom-ready", () => main.webContents.executeJavaScript('document.documentElement.dataset.shell = "desktop"').catch(() => {}));
   nativeTheme.on("updated", () => { if (main && !main.isDestroyed()) main.setTitleBarOverlay({ ...barColors(), height: BAR_HEIGHT }); });
