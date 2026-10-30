@@ -542,6 +542,7 @@ const INFO = {
   rules: ["규칙", "AI가 해도 되는 것과 안 되는 것을 정하고, 한 일을 적어요.", ["엔진을 고치지 않고 중간에 끼워 넣는 우리 코드(“훅”)로 해요.", "읽기는 언제나 OK. “설명만”일 때는 고치기 금지. 내가 고치는 중(저장 안 함)인 파일도 못 고침.", "도구를 쓸 때마다 튜터 탭에 카드로 보여 주고, 노트·기록에 남겨요."]],
   out: ["튜터 탭", "VS Code 오른쪽에 보이는 튜터 화면이에요.", ["답이 글자처럼 조금씩 흘러나와요.", "도구를 쓰면 “파일을 읽었어요” 같은 작은 카드가 떠요.", "흐름 투어면 코드 줄에 차례로 불이 켜져요."]],
 };
+
 function info(id) {
   const [t, what, lines, groups] = INFO[id];
   // "왜: …" style lines lead with their word in bold; a "ba" group is before → after (the first chip greyed).
@@ -589,11 +590,37 @@ const THINKING = [
   ["5~7단계 수업이 아직 없어요", "권한·버그 고치기·응용 단계는 검사만 있고, 튜터가 따라갈 수업 계획이 없어요.", "1~4단계까지 있음"],
   ["앱 밖에서 따로 돌아요", "프로젝트 코스는 4100번 서버를 따로 켜야 해요. 앱 안으로 들일지 정해야 해요.", "실험 중"],
 ];
-function issuesHtml() {
+/* ---------- 지식 칸 ③: 고민한 문제·병목과 지금 고민 중인 것 (처음 보는 사람용, 2026-10-30 B) ---------- */
+// [제목, 왜 문제였나, 어떻게 했나, 숫자·근거]
+const K_SOLVED = [
+  ["같은 지식이 여러 번 생겼어요", "‘이분 탐색’을 PDF·블로그·백준에서 만나면 지식이 세 개가 되고 복습도 세 번 나와요. 그렇다고 모든 쌍을 AI에 물으면 지식 200개에 2만 쌍이라 느리고 비싸요.", "3단계 깔때기: 이름이 같으면 바로 합침 → 뜻이 비슷한 후보 5개만 작은 임베딩 모델로 고름 → 그 후보만 AI가 판정. ‘같다’고 해도 자동으로 합치지 않고 학습자가 확인해요.", "실제 247쌍 판정 · 같음 9쌍"],
+  ["지식 사이 관계가 엉터리였어요", "‘포함·관련’ 둘로는 애매했고, ‘먼저 알기’를 느슨하게 주니 ‘정렬 → 이분 탐색’ 같은 엉터리 선수 관계가 붙었어요.", "관련 논문을 찾아보고 두 방식을 같은 데이터로 비교해, 고리는 포함·씀·조건·먼저 넷만. 그냥 비슷한 건 고리 없이 ‘가까운 지식’으로. AI가 방향을 거꾸로 쓰면 이름을 대조해 코드가 바로잡아요.", "가까움 131쌍은 고리 없이 따로"],
+  ["웹 글이 느리고 카드가 너무 많았어요", "긴 글 하나에 40초, 카드 20~30장. 다 외울 수 없고 글의 줄기는 오히려 안 보였어요. 시간 대부분이 AI가 답을 쓰는 시간이라 지식이 늘수록 그대로 느려져요.", "읽기 연구(SQ3R·KWL)를 참고해 ‘글 지도’로: 이 글이 답하는 질문 · 흐름 · 핵심 3~5개만 지식으로. 개념어는 내가 모른다고 누른 것만.", "14~20초 · 위키백과 14,148자 18.9초 · 개념어 고르기 0.4초"],
+  ["빠른 모델은 덜 중요한 걸 놓쳤어요", "luna는 싸고 빠르지만 ‘듀레이션·신용위험’ 같은 두 번째 줄 개념을 빠뜨렸고, sol은 느렸어요.", "실제 글로 셋을 비교해서 글 지도는 terra · low, 짧은 판정·정리는 sol · low로.", "17,563자: terra 42초 · sol 57초"],
+  ["뜻에 그 자료의 이야기가 섞였어요", "코드 문제에서 온 ‘해시’의 뜻이 “이름별 누적 포인트를 조회할 때 쓴다”였어요. 강의 PDF에서 다시 만나면 뜻이 이상해 보여요.", "‘층 나누기’로 뜻(어디서나 통하는 말) · 예(그 자료에서의 모습, 누르면 그 자리로) · 주의를 나눠요. 그래도 어려우면 누를 때만 ‘쉽게 풀어 보기’.", "지식 159개 모두 층 나눔 · 예 71개"],
+  ["본 것을 다 복습하면 폭발해요", "PDF 하나에 지식이 85개씩 들어와요. 다 물으면 너무 많고, 너무 쉽게 ‘앎’으로 치면 잊은 걸 못 잡아요.", "보기만 한 건 ‘만남’(복습에 안 나옴), 틀림·힌트·물어봄만 ‘몰랐음’. 졸업은 서로 다른 3일에 맞혀야. 지식 창에서 설명을 본 건 기록만 남겨요.", "오늘 복습 25개 — 막힌 것만"],
+  ["뒤에서 하는 정리가 멈춰 있었어요", "PDF가 만들어지는 순간 AI 호출이 한꺼번에 몰려서, 그때 정리 호출이 실패하면 그대로 멈췄어요. 새 지식 52개가 5분 넘게 정리되지 않았어요.", "저장 4초 뒤 묶어서 뒤에서 돌리고(화면은 안 기다림), 실패하면 15·30·60·120초 뒤에 다시 해요.", "44쪽: 같은 지식 찾기 약 1.5분 · 층 나누기 약 45초"],
+  ["지식이 많아지니 찾을 수가 없었어요", "사람은 ‘CS › 그래픽스 › 투영’보다 ‘그래픽스 3주차 PDF’로 기억해요. 목표(시험·코테)는 거의 쓰지 않았어요.", "목표를 없애고, 지식 창 왼쪽을 자료 먼저로(자료 폴더 → PDF·웹 글 → 프로젝트 → 코드 문제). PDF는 목차만, 누르면 그 구역의 지식.", "자료마다 몰랐음·앎 비율 막대"],
+];
+const K_THINKING = [
+  ["같은 PDF를 다시 만들면 지식이 늘어요", "엔진이 돌 때마다 이름을 다르게 붙여서(‘The coordinate transformation matrix’ → ‘M_{WC,VC}’) 한 자료의 지식이 44개에서 96개가 됐어요.", "같은 자료면 예전 생성에 이어 붙일지 정해야 함 (엔진 C와 같이)"],
+  ["‘같음’ 판정이 가끔 틀려요", "‘projection coordinates’와 ‘Orthogonal Projections’를 같다고 했어요. 자동으로 합치지 않아 해는 없지만 확인할 게 늘어요.", "판정 기준 다듬는 중"],
+  ["찍어서 맞힌 것도 ‘앎’이 돼요", "프로젝트에서 객관식 예측을 맞힌 것과 혼자 검사를 통과한 것이 똑같이 ‘맞힘’으로 들어와요.", "증거 종류를 같이 받는 방법 정리 중 (D와)"],
+  ["프로젝트 지식의 단계를 몰라요", "처음 만난 개념은 단계 정보 없이 들어와서, 16개 중 3개만 단계별로 보여요.", "코스 쪽에서 단계를 같이 보내 달라고 할 예정"],
+  ["예전 방식으로 생긴 고리가 남아 있어요", "글 지도 전의 방식이 ‘계산에 사용’, ‘고려해야 하므로’ 같은 자유 문구 고리 18개를 만들었어요.", "지울지 정해야 함"],
+];
+// 칸마다 ③ (프로젝트: D, 지식: B). 같은 모양: 풀어 본 문제 카드 + 지금 고민 중 카드.
+const ISSUE_SETS = {
+  project: { solved: SOLVED, thinking: THINKING, hint: "초보가 막히는 곳과 느린 곳(병목)을 하나씩 풀어 왔어요. 위는 풀어 본 것, 아래는 아직 고민 중인 것이에요." },
+  knowledge: { solved: K_SOLVED, thinking: K_THINKING, hint: "같은 지식을 하나로 모으고, 기다리지 않게 하고, 다시 볼 것만 골라내는 데서 막혔던 것들이에요. 위는 풀어 본 것, 아래는 아직 고민 중인 것이에요." },
+};
+function issuesHtml(key) {
+  const set = ISSUE_SETS[key];
+  if (!set) return "";
   const card = ([t, why, did, num], kind) => `<div class="iss ${kind}"><b>${esc(t)}</b><p>${esc(why)}</p><p class="iss-do"><span>${kind === "done" ? "한 것" : "지금"}</span>${esc(did)}</p>${num ? `<small>${esc(num)}</small>` : ""}</div>`;
-  return `<section class="fig"><div class="fig-cap">③ 부딪힌 문제와 지금 고민<span>초보가 막히는 곳과 느린 곳(병목)을 하나씩 풀어 왔어요. 위는 풀어 본 것, 아래는 아직 고민 중인 것이에요.</span></div>` +
-    `<p class="iss-h">풀어 본 문제</p><div class="iss-grid">${SOLVED.map((x) => card(x, "done")).join("")}</div>` +
-    `<p class="iss-h">지금 고민 중</p><div class="iss-grid">${THINKING.map(([t, why, now]) => card([t, why, now, ""], "open")).join("")}</div></section>`;
+  return `<section class="fig"><div class="fig-cap">③ 부딪힌 문제와 지금 고민<span>${esc(set.hint)}</span></div>` +
+    `<p class="iss-h">풀어 본 문제</p><div class="iss-grid">${set.solved.map((x) => card(x, "done")).join("")}</div>` +
+    `<p class="iss-h">지금 고민 중</p><div class="iss-grid">${set.thinking.map(([t, why, now]) => card([t, why, now, ""], "open")).join("")}</div></section>`;
 }
 function show(k) {
   if (!D[k]) k = "cs";
@@ -604,9 +631,9 @@ function show(k) {
     const body = document.getElementById("d-body");
     body.innerHTML = FIGS[d.svgs].map((f) => `<figure class="fig" style="margin:0"><div class="fig-cap">${esc(f.cap)}<span>${esc(f.hint)}</span></div><div class="fig-box">${f.svg}</div><div class="info" aria-live="polite"></div></figure>`).join("");
     body.querySelectorAll(".fig").forEach((fig, i) => wireFig(fig, FIGS[d.svgs][i].start));
-    body.insertAdjacentHTML("beforeend", issuesHtml());
     // A part drawn as figures may still list a simpler flow under them (CS: 웹 글).
     if (d.lanes) body.insertAdjacentHTML("beforeend", lanesHtml(d.lanes));
+    body.insertAdjacentHTML("beforeend", issuesHtml(k));
     document.querySelectorAll(".hit").forEach((g) => g.classList.toggle("on", g.dataset.k === k));
     return;
   }
