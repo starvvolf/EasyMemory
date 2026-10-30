@@ -35,17 +35,21 @@ test("the default engine's knowledge points go into the knowledge store, and a p
       assert.ok(p.folder.length <= IMPORT_LIMITS.folder && p.folder.startsWith("invented"), p.folder);
     }
 
-    // The store side: imported once (again is a no-op), found by ref, and a result on a question reaches its points.
+    // The store side (핵심 카드만 지식으로, B 10/30): core points become knowledge at once (again is a no-op), the others wait;
+    // a result on a question reaches its points, and a waiting point becomes knowledge right then.
+    assert.ok(payload.every((p) => p.importance === "core" || p.importance === "minor"), "a finished run has every importance settled");
+    const core = payload.filter((p) => p.importance === "core").length;
     const first = await importPoints(payload);
-    assert.ok(first.added + first.merged === payload.length, JSON.stringify(first));
+    assert.ok(first.added + first.merged === core && first.waiting === payload.length - core, JSON.stringify(first));
     assert.equal((await importPoints(payload)).added, 0, "importing again adds nothing");
     const objective = Object.keys(layer.byObjective)[0];
     assert.ok(objective, "questions point at knowledge through their objectives");
     const refs = practiceRefs(done.id, layer, objective);
     assert.ok(refs.length > 0);
+    const recorded = (await recordByRef(refs, "wrong", "계약 시험")).recorded;
     const hit = await itemsByRef(refs);
-    assert.equal(hit.length, new Set(refs).size, "every ref is a saved item");
-    assert.equal((await recordByRef(refs, "wrong", "계약 시험")).recorded, hit.length);
+    assert.equal(hit.length, new Set(refs).size, "every ref is a saved item once practised");
+    assert.equal(recorded, hit.length);
     assert.equal((await getKnowledge(hit[0].id)).item.state, "unknown");
   } finally {
     if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;

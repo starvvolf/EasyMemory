@@ -110,8 +110,8 @@ test("search finds by letters first and by look-alike names, without a model; me
 
 test("PDF knowledge points come in once as 만남; the learner can graduate or reset an item by hand", () => withData(async () => {
   const points = [{ ref: "deck1:p1", title: "TCP", essentials: ["신뢰성 있는 전송"], folder: "네트워크/전송 계층", material: "네트워크 3장", page: 12 }];
-  assert.deepEqual(await importPoints(points), { added: 1, merged: 0, linked: 0 });
-  assert.deepEqual(await importPoints(points), { added: 0, merged: 0, linked: 0 });
+  assert.deepEqual(await importPoints(points), { added: 1, merged: 0, linked: 0, waiting: 0 });
+  assert.deepEqual(await importPoints(points), { added: 0, merged: 0, linked: 0, waiting: 0 });
   const [{ id }] = (await tree()).items;
   assert.equal((await setKnowledgeState(id, { graduated: true })).state, "known");
   assert.equal((await setKnowledgeState(id, { state: "unknown" })).state, "unknown");

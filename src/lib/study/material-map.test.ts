@@ -31,12 +31,15 @@ test("the map shows the outline's cards and the learner's state on each", async 
     assert.ok(before.sections.every((s) => s.cards.every((c) => c.pages.length && c.ref.startsWith(`${done.id}:`))));
 
     const layer = knowledgeLayer(done);
-    await importPoints(importPayload({ id: done.id, sourceName: "invented.pdf" }, layer));
+    const payload = importPayload({ id: done.id, sourceName: "invented.pdf" }, layer);
+    await importPoints(payload);
     const objective = Object.keys(layer.byObjective)[0];
     await recordByRef(practiceRefs(done.id, layer, objective), "wrong", "지도 시험");
     const after = materialMap(done, await itemsForRefs(refsOf(done)))!;
     assert.ok(after.counts.unknown >= 1, JSON.stringify(after.counts));
-    assert.equal(after.counts.new, 0, "every card is in the knowledge store after the import");
+    // 핵심 카드만 지식으로 (B, 10/30): 핵심 카드는 가져오자마자 지식, 보조 카드는 풀거나 "모름"을 누르기 전까지 "아직".
+    const core = new Set(payload.filter((p) => p.importance === "core").map((p) => p.ref));
+    assert.ok(after.sections.flatMap((s) => s.cards).filter((c) => core.has(c.ref)).every((c) => c.knowledgeId), "every core card is in the knowledge store after the import");
     assert.ok(after.sections.flatMap((s) => s.cards).filter((c) => c.state === "unknown").every((c) => c.knowledgeId));
     assert.ok(after.counts.questions > 0);
   } finally {

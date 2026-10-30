@@ -15,6 +15,11 @@ export type KnowledgePoint = {
   section: string;
   pages: number[];
   spans: Span[];
+  /**
+   * [경계] B, 2026-10-30 (사용자 "핵심 카드만 지식으로"): recaller cards only. core = 핵심 카드(자료 전체 정리의 중요도, 없으면 쪽의
+   * 중요도), minor = 보조, pending = 자료 전체 정리가 아직이라 중요도가 정해지지 않음. Other engines leave it out (전부 지식으로).
+   */
+  importance?: "core" | "minor" | "pending";
 };
 export type KnowledgeLayer = { points: KnowledgePoint[]; byObjective: Record<string, string[]> };
 
@@ -28,9 +33,14 @@ export function knowledgeLayer(state: GenState): KnowledgeLayer {
   // recaller: the knowledge cards are the points (one card, one thing to know), with what learners confuse.
   if (state.recaller) {
     const units = state.recaller.units;
+    // 중요도는 자료 전체 정리가 정한다. 정리가 아직 돌고 있으면 쪽마다의 중요도(거의 다 핵심)로 넘기지 않고 기다린다.
+    const merged = new Map((state.recaller.consolidated?.cards ?? []).map((c) => [c.id, c.weight]));
+    const settled = Boolean(state.recaller.consolidated) || !["queued", "running", "awaiting-confirm"].includes(state.status);
+    const importance = (card: { id: string; weight: "핵심" | "보조" }): KnowledgePoint["importance"] =>
+      !settled ? "pending" : (merged.get(card.id) ?? card.weight) === "핵심" ? "core" : "minor";
     const points: KnowledgePoint[] = state.sections.flatMap((section) => (units[section.id]?.cards ?? []).map((card) => ({
       id: card.id, title: card.title, essentials: [cardLine(card).replace(/^\[[^\]]+\] [^:]+: /, ""), ...card.mistakes.slice(0, 2).map((m) => `헷갈림: ${m}`)], section: section.title,
-      pages: [...new Set(card.evidence.map((e) => e.page))].sort((a, b) => a - b), spans: card.evidence.map((e) => ({ page: e.page, kind: e.quote ? "text" : "figure", quote: e.quote })) })));
+      pages: [...new Set(card.evidence.map((e) => e.page))].sort((a, b) => a - b), spans: card.evidence.map((e) => ({ page: e.page, kind: e.quote ? "text" : "figure", quote: e.quote })), importance: importance(card) })));
     const byObjective: Record<string, string[]> = {};
     for (const unit of Object.values(units)) for (const q of unit.questions ?? []) byObjective[q.objectiveId] = q.cardIds;
     for (const slot of Object.values(state.recaller.deep)) for (const q of slot.parts ?? (slot.question ? [slot.question] : [])) byObjective[q.objectiveId] = q.cardIds;

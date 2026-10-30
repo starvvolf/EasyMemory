@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, itemsByRef, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
-  onKnowledgeCreated, recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
+  onKnowledgeCreated, pickWaiting, recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
 import { similarKnowledge } from "@/lib/knowledge/embed";
@@ -206,13 +206,15 @@ async function handle(request: Request, context: RouteContext) {
       return json(g);
     }
     if (p[0] === "related" && m === "GET") return json({ items: await itemsByRef(url.searchParams.getAll("ref").slice(0, 200), url.searchParams.get("prefix") === "1") });
+    // 핵심 카드만 지식으로 (10/30): 아직 지식이 아닌 보조 카드에서 "모름"을 누르면 그때 지식(몰랐음)이 된다.
+    if (p[0] === "ref-pick" && m === "POST") { const b = await body(z.object({ ref: z.string().min(1).max(200) })); return json(await pickWaiting(b.ref)); }
     if (p[0] === "ref-event" && m === "POST") {
       const b = await body(z.object({ refs: z.array(z.string().max(200)).min(1).max(20), kind: z.enum(["met", "asked", "wrong", "hint", "correct", "note"]), detail: z.string().max(600).optional(), material: z.string().max(200).optional(),
         takeBack: z.enum(["correct", "read"]).optional() }));
       return json(await recordByRef(b.refs, b.kind, b.detail ?? "", b.material ? { kind: "pdf", title: b.material } : undefined, b.takeBack));
     }
     if (p[0] === "import" && m === "POST") {
-      const b = await body(z.object({ points: z.array(z.object({ ref: z.string().max(200), title: z.string().min(1).max(120), essentials: z.array(z.string().max(600)).max(8), folder: z.string().max(200), material: z.string().max(200), page: z.number().int().optional() })).max(2000) }));
+      const b = await body(z.object({ points: z.array(z.object({ ref: z.string().max(200), title: z.string().min(1).max(120), essentials: z.array(z.string().max(600)).max(8), folder: z.string().max(200), material: z.string().max(200), page: z.number().int().optional(), importance: z.enum(["core", "minor", "pending"]).optional() })).max(2000) }));
       return json(await importPoints(b.points));
     }
 

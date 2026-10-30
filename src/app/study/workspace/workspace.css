@@ -556,6 +556,9 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .ko-bar i.bad{background:var(--bad)} .dejipgi .ko-bar i.read{background:var(--read)} .dejipgi .ko-bar i.good{background:var(--good)} .dejipgi .ko-bar i.none{background:var(--line-strong)}
 .dejipgi .ko-count{text-align:right}
 .dejipgi .ko-cards{list-style:none;margin:0;padding:0 8px 10px 38px;display:flex;flex-direction:column;gap:4px}
+.dejipgi .ko-cards>li{display:flex;gap:6px;align-items:flex-start}
+.dejipgi .ko-cards>li>.ko-card{flex:1;min-width:0}
+.dejipgi .ko-pick{flex:none;margin-top:4px}
 .dejipgi .ko-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:start;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;cursor:pointer;color:inherit}
 .dejipgi .ko-card:hover:not(:disabled){border-color:var(--accent)}
 .dejipgi .ko-card.sel{border-color:var(--accent);background:var(--accent-soft)}

@@ -718,10 +718,67 @@ function pointBody(title: string, essentials: string[]) {
  * runs on every load, so it also tidies points brought in before (wiring out of the text, the file-name folder renamed)
  * and turns each card's 냄 → 받음 into 고리 inside one material, without a model call.
  */
-export async function importPoints(points: Array<{ ref: string; title: string; essentials: string[]; folder: string; material: string; page?: number }>) {
+type ImportedPoint = { ref: string; title: string; essentials: string[]; folder: string; material: string; page?: number; importance?: "core" | "minor" | "pending" };
+/*
+ * 핵심 카드만 지식으로 (2026-10-30 사용자 "ㅇㅇ ㄱㄱ"): 엔진이 보조(minor)라고 했거나 아직 중요도가 안 정해진(pending) 카드는 바로
+ * 지식이 되지 않고 여기서 기다린다. 학습자가 그 카드 문제를 풀거나(recordByRef) 자료 지도에서 "모름"을 누르면(pickWaiting) 그때
+ * 지식이 된다. 나중에 핵심으로 정해지면 다음 가져오기 때 지식이 된다. File: knowledge/waiting-points.json (ref → 포인트).
+ */
+const waitingFile = () => path.join(dir(), "waiting-points.json");
+async function readWaiting(): Promise<Record<string, ImportedPoint>> {
+  try { return JSON.parse(await readFile(waitingFile(), "utf8")) as Record<string, ImportedPoint>; } catch { return {}; }
+}
+async function writeWaiting(all: Record<string, ImportedPoint>) {
+  await mkdir(dir(), { recursive: true });
+  const tmp = `${waitingFile()}.${randomBytes(4).toString("hex")}.tmp`;
+  await writeFile(tmp, JSON.stringify(all), "utf8");
+  await rename(tmp, waitingFile());
+}
+const pointInput = (p: ImportedPoint, state?: KState) => {
+  const [material, ...rest] = p.folder.split("/");
+  return { title: p.title, body: pointBody(p.title, p.essentials), topicHint: [folderName(material ?? ""), ...rest].join(" / "), ...(state ? { state } : {}),
+    source: { kind: "pdf" as const, title: p.material, ref: p.ref, ...(p.page ? { page: p.page } : {}) } };
+};
+/** Waiting points that become knowledge now (the learner touched them). Refs already knowledge or not waiting are left alone. */
+async function makeWaiting(refs: string[], state?: KState) {
+  const made = await serial(async () => {
+    const all = await readWaiting();
+    const take = refs.filter((r) => all[r]).map((r) => all[r]);
+    if (!take.length) return [];
+    for (const p of take) delete all[p.ref];
+    await writeWaiting(all);
+    return take;
+  });
+  if (!made.length) return [];
+  const store = await readStore();
+  const have = new Set(store.items.flatMap((i) => i.sources.map((x) => x.ref).filter(Boolean)));
+  const fresh = made.filter((p) => !have.has(p.ref));
+  return fresh.length ? saveMany(fresh.map((p) => pointInput(p, state))) : [];
+}
+/** "모름" on a card that is not knowledge yet (자료 지도 · 지식 창 목차): it becomes knowledge as 몰랐음. */
+export async function pickWaiting(ref: string) {
+  await makeWaiting([ref]);
+  const items = await itemsByRef([ref]);
+  for (const item of items) await recordEvent(item.id, "asked", "자료 지도에서 모른다고 고름");
+  return { items: items.length };
+}
+/** How many cards of a material wait (not knowledge yet), for the 지식 창. */
+export async function waitingCount() { return Object.keys(await readWaiting()).length; }
+
+export async function importPoints(input: ImportedPoint[]) {
+  // 핵심(또는 중요도가 없는 예전 엔진)만 바로 지식으로. 보조·미정은 기다린다(이미 지식이 된 것은 그대로 둔다).
+  const points = input.filter((p) => !p.importance || p.importance === "core");
+  const waiting = input.filter((p) => p.importance === "minor" || p.importance === "pending");
+  if (input.length) await serial(async () => {
+    const all = await readWaiting();
+    let dirty = false;
+    for (const p of waiting) if (JSON.stringify(all[p.ref]) !== JSON.stringify(p)) { all[p.ref] = p; dirty = true; }
+    for (const p of points) if (all[p.ref]) { delete all[p.ref]; dirty = true; }
+    if (dirty) await writeWaiting(all);
+  });
   // Folders named after the file before this tidy-up take the cleaned name first (unless it is taken), so new points
   // land in the same folder. Only the material folders these points name are touched, never one the learner made.
-  const raw = new Set(points.map((p) => p.folder.split("/")[0] ?? "").filter((name) => name.includes("_")));
+  const raw = new Set(input.map((p) => p.folder.split("/")[0] ?? "").filter((name) => name.includes("_")));
   if (raw.size) await changeIf((s) => {
     let dirty = false;
     for (const f of s.folders) if (!f.parentId && raw.has(f.name)) {
@@ -735,15 +792,11 @@ export async function importPoints(points: Array<{ ref: string; title: string; e
   const fresh = points.filter((p) => !have.has(p.ref)).slice(0, 400);
   // No folder named after the file (2026-10-28 "4개 축"): the material is the 출처, and 주제 정리 places the points in
   // the topic tree a few seconds later; "자료 / 구역" is its hint.
-  const results = fresh.length ? await saveMany(fresh.map((p) => {
-    const [material, ...rest] = p.folder.split("/");
-    return { title: p.title, body: pointBody(p.title, p.essentials), topicHint: [folderName(material ?? ""), ...rest].join(" / "),
-      source: { kind: "pdf" as const, title: p.material, ref: p.ref, ...(p.page ? { page: p.page } : {}) } };
-  })) : [];
+  const results = fresh.length ? await saveMany(fresh.map((p) => pointInput(p))) : [];
   const linked = await changeIf((s) => {
     let dirty = false;
     const byRef = new Map(s.items.flatMap((i) => i.sources.filter((x) => x.ref).map((x) => [x.ref!, i] as const)));
-    for (const p of points) {
+    for (const p of input) {
       const item = byRef.get(p.ref);
       if (!item) continue;
       const body = pointBody(item.title, item.body.split("\n"));
@@ -751,7 +804,7 @@ export async function importPoints(points: Array<{ ref: string; title: string; e
     }
     let added = 0;
     const groups = new Map<string, Array<{ item: Knowledge; takes: string[]; gives: string[] }>>();
-    for (const p of points) {
+    for (const p of input) {
       const item = byRef.get(p.ref);
       if (!item) continue;
       groups.set(p.material, [...(groups.get(p.material) ?? []), { item, ...parseWiring(p.essentials) }]);
@@ -789,7 +842,7 @@ export async function importPoints(points: Array<{ ref: string; title: string; e
     }
     return { dirty, out: added };
   });
-  return { added: results.filter((r) => r.created).length, merged: results.filter((r) => r.merged).length, linked };
+  return { added: results.filter((r) => r.created).length, merged: results.filter((r) => r.merged).length, linked, waiting: waiting.length };
 }
 
 /** Items that came from given places (a PDF material's points: "deckId:pointId"), by exact ref or ref prefix. */
@@ -807,6 +860,8 @@ export async function itemsForRefs(refs: string[]): Promise<Record<string, ItemL
 }
 /** A practice result on a PDF question, passed on to the knowledge its objective covers. */
 export async function recordByRef(refs: string[], kind: KEventKind, detail = "", source?: KEvent["source"], takeBack?: "correct" | "read") {
+  // A practice result on a card that is still waiting (보조 카드) makes it knowledge first.
+  if (!takeBack) await makeWaiting(refs);
   const items = await itemsByRef(refs);
   for (const item of items) {
     if (takeBack) await takeBackWrong(item.id, takeBack === "correct", source);

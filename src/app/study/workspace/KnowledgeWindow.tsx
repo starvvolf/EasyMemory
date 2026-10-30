@@ -256,7 +256,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
             {!hits && !(view === "material" && material && matMode === "map" && (material.genId || material.sourceId || material.stages)) ? <select className="ws-select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="정렬"><option value="recent">최근 순</option><option value="weak">약한 순</option><option value="name">이름 순</option></select> : null}
           </div>
           {view === "material" && material && !hits ? <MaterialHead m={material} folders={matFolders} mode={matMode} onMode={setMatMode} onPlace={(f) => placeMaterial(material.key, f)} /> : null}
-          {view === "material" && material && !hits && matMode === "map" && material.genId ? <MaterialOutline key={material.genId} genId={material.genId} items={tree.items} sel={sel} onPick={setSel} />
+          {view === "material" && material && !hits && matMode === "map" && material.genId ? <MaterialOutline key={material.genId} genId={material.genId} items={tree.items} sel={sel} onPick={setSel} onAct={act} />
           : view === "material" && material && !hits && matMode === "map" && material.sourceId ? <MaterialArticle key={material.sourceId} id={material.sourceId} onChanged={() => void load()} />
           : view === "material" && material && !hits && matMode === "map" && material.stages ? <ProjectStages stages={material.stages} items={tree.items} sel={sel} onPick={setSel} />
           : <>
@@ -558,7 +558,7 @@ function MaterialHead({ m, folders, mode, onMode, onPlace }: { m: MaterialRow; f
     </div>
   );
 }
-type OutlineCard = { id: string; title: string; core: boolean; pages: number[]; state: "new" | "met" | "unknown" | "known" | "graduated"; knowledgeId?: string; mistakes: string[] };
+type OutlineCard = { id: string; ref: string; title: string; core: boolean; pages: number[]; state: "new" | "met" | "unknown" | "known" | "graduated"; knowledgeId?: string; mistakes: string[] };
 type Outline = { title: string; pages: number; sections: Array<{ id: string; title: string; pages: number[]; cards: OutlineCard[] }>; counts: Record<string, number> };
 const OUT_STATE: Record<OutlineCard["state"], [string, string]> = { unknown: ["몰랐음", "bad"], met: ["만남", "read"], known: ["앎", "good"], graduated: ["졸업", "good"], new: ["아직", "none"] };
 const pageRange = (pages: number[]) => !pages.length ? "" : pages.length === 1 ? `p.${pages[0]}` : `p.${Math.min(...pages)}–${Math.max(...pages)}`;
@@ -566,11 +566,14 @@ const pageRange = (pages: number[]) => !pages.length ? "" : pages.length === 1 ?
  * PDF 자료: 목차만 깔끔하게, 누르면 그 구역의 지식 (2026-10-30 사용자 "자료 지도로 넘어가는 게 아니라 목차만 딱 깔끔하게 보이고 누르면
  * 세부 내역"). 자료 지도 서버(/api/study-map, 읽기만)의 목차·카드·내 상태를 그대로 쓴다. 지식을 누르면 오른쪽에 자세히.
  */
-function MaterialOutline({ genId, items, sel, onPick }: { genId: string; items: ItemLite[]; sel: string | null; onPick: (id: string) => void }) {
+function MaterialOutline({ genId, items, sel, onPick, onAct }: { genId: string; items: ItemLite[]; sel: string | null; onPick: (id: string) => void; onAct: Act }) {
   const [map, setMap] = useState<Outline | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  useEffect(() => later(() => void call<{ map: Outline }>(`/api/study-map/${genId}`).then((r) => setMap(r.map)).catch((e) => setError(errorText(e)))), [genId]);
+  const load = () => call<{ map: Outline }>(`/api/study-map/${genId}`).then((r) => setMap(r.map)).catch((e) => setError(errorText(e)));
+  useEffect(() => later(() => void load()), [genId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 핵심 카드만 지식으로 (10/30): 보조 카드는 "아직"으로 보이고, 모르면 눌러서 지식(몰랐음)으로 만든다.
+  const pick = (ref: string) => void onAct(async () => { await call("/api/knowledge/ref-pick", { ref }); await load(); });
   if (error) return <p className="ws-err">{error}</p>;
   if (!map) return <p className="small muted">목차를 불러오는 중…</p>;
   const line = (id?: string) => (id ? items.find((i) => i.id === id)?.line : "") ?? "";
@@ -578,7 +581,7 @@ function MaterialOutline({ genId, items, sel, onPick }: { genId: string; items: 
   return (
     <div className="ko">
       <p className="small muted ko-legend"><span><i className="dot bad" />몰랐음 {map.counts.unknown}</span><span><i className="dot read" />만남 {map.counts.met}</span>
-        <span><i className="dot good" />앎 {map.counts.known + map.counts.graduated}</span>{map.counts.new ? <span><i className="dot none" />아직 {map.counts.new}</span> : null}<span>· {map.pages}쪽</span></p>
+        <span><i className="dot good" />앎 {map.counts.known + map.counts.graduated}</span>{map.counts.new ? <span><i className="dot none" />아직 {map.counts.new}</span> : null}<span>· {map.pages}쪽</span>{map.counts.new ? <span>· ★ 핵심만 지식이 되고, 나머지는 모르면 “모름”</span> : null}</p>
       <ol className="ko-list">{map.sections.map((sec, n) => {
         const on = open === sec.id, t = tally(sec.cards), total = sec.cards.length || 1;
         return <li key={sec.id} className={on ? "on" : ""}>
@@ -595,7 +598,7 @@ function MaterialOutline({ genId, items, sel, onPick }: { genId: string; items: 
               <span className="ko-ctext"><b><Inline text={c.title} />{c.core ? <span className="ko-core" title="핵심">★</span> : null}</b>
                 {line(c.knowledgeId) ? <span className="ko-line"><Inline text={line(c.knowledgeId)} /></span> : null}</span>
               <span className="small muted ko-cp">{pageRange(c.pages)}</span>
-            </button></li>)}</ul> : null}
+            </button>{!c.knowledgeId ? <button className="btn ghost small ko-pick" title="이 카드를 지식(몰랐음)으로 넣고 복습에 올려요" onClick={() => pick(c.ref)}>모름</button> : null}</li>)}</ul> : null}
         </li>;
       })}</ol>
     </div>
