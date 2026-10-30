@@ -2,7 +2,7 @@
 // 자료 지도 (2026-10-29): one material on one screen — the outline, under each section its knowledge in its own shape,
 // and the learner's state on each. Page reading is for the first pass; this is for the second pass and the night before.
 // Data: GET /api/study-map/<material> (src/lib/study/material-map.ts). Opened from the PDF reader's bar.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { call, errorText } from "./api";
 import { RichInline as Rich } from "./Rich";
 
@@ -127,6 +127,113 @@ function keyLine(s: Shape): string {
   }
 }
 
+// ---------- 실시간 카드 (사용자 10/30): while the material is being made, the pages in their order (from 전처리) with each page's
+// cards written in as the engine streams them; pages run at once, the board keeps page order. Then the map takes over.
+type LiveCard = { title: string; kind: string; weight: string; shape: Record<string, unknown> };
+type LivePage = { page: number; done: boolean; cards: LiveCard[] };
+type LiveData = { now: number; status: string; live: boolean; outline: Array<{ page: number; title: string }>; pages: LivePage[] };
+
+// A shape the engine is still writing: every field the drawing reads, present (empty until it comes).
+function filled(raw: Record<string, unknown>): Shape | null {
+  const str = (k: string) => (typeof raw[k] === "string" ? (raw[k] as string) : "");
+  const arr = <T,>(k: string, f: (x: unknown) => T | null) => (Array.isArray(raw[k]) ? (raw[k] as unknown[]).map(f).filter((x): x is T => x !== null) : []);
+  const text = (x: unknown) => (typeof x === "string" ? x : null);
+  switch (raw.form) {
+    case "term": return { form: "term", name: str("name"), symbol: str("symbol"), definition: str("definition"), neighbors: arr("neighbors", text) };
+    case "fact": return { form: "fact", subject: str("subject"), value: str("value") };
+    case "list": return { form: "list", name: str("name"), items: arr("items", text), ordered: raw.ordered === true };
+    case "rule": return { form: "rule", premise: str("premise"), condition: str("condition"), result: str("result"), boundary: str("boundary") };
+    case "procedure": return { form: "procedure", steps: arr("steps", (x) => x && typeof x === "object" ? { action: String((x as Record<string, unknown>).action ?? ""), input: String((x as Record<string, unknown>).input ?? ""), output: String((x as Record<string, unknown>).output ?? "") } : null) };
+    case "formula": return { form: "formula", expr: str("expr"), when: str("when"), vars: arr("vars", (x) => x && typeof x === "object" ? { symbol: String((x as Record<string, unknown>).symbol ?? ""), meaning: String((x as Record<string, unknown>).meaning ?? "") } : null) };
+    case "compare": return { form: "compare", targets: arr("targets", text), criteria: arr("criteria", (x) => x && typeof x === "object" ? { name: String((x as Record<string, unknown>).name ?? ""), values: Array.isArray((x as Record<string, unknown>).values) ? ((x as Record<string, unknown>).values as unknown[]).map(String) : [] } : null) };
+    case "concept": return { form: "concept", claim: str("claim"), reason: str("reason"), limit: str("limit") };
+    case "pattern": return { form: "pattern", frame: str("frame"), slots: arr("slots", text), example: str("example") };
+    default: return null;
+  }
+}
+// The text a card being written shows, field by field in the order the engine writes them (no math drawing until it is done).
+function liveLines(s: Shape): Array<[string, string]> {
+  switch (s.form) {
+    case "term": return [["", s.definition], ["헷갈리는 말", s.neighbors.join(", ")]];
+    case "fact": return [["", s.value]];
+    case "list": return s.items.map((it, i) => [s.ordered ? String(i + 1) : "·", it]);
+    case "rule": return [["전제", s.premise], ["조건", s.condition], ["결과", s.result], ["경계", s.boundary]];
+    case "procedure": return s.steps.map((st, i) => [String(i + 1), st.output ? `${st.action} → ${st.output}` : st.action]);
+    case "formula": return [["식", s.expr], ["쓸 때", s.when], ...s.vars.map((v): [string, string] => [v.symbol, v.meaning])];
+    case "compare": return [["비교", s.targets.join(" · ")], ...s.criteria.map((c): [string, string] => [c.name, c.values.join(" · ")])];
+    case "concept": return [["", s.claim], ["왜", s.reason], ["한계", s.limit]];
+    case "pattern": return [["틀", s.frame], ["예", s.example]];
+  }
+}
+// Text typed out toward what has arrived: replies come in bursts every few hundred ms, the letters come one by one.
+function Typed({ text, caret }: { text: string; caret?: boolean }) {
+  const [n, setN] = useState(0);
+  const shown = useRef(0);
+  const target = useRef(text);
+  const reduce = useMemo(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches), []);
+  useEffect(() => {
+    target.current = text;
+    if (reduce) { shown.current = text.length; setN(text.length); return; }
+    let raf = 0, last = performance.now();
+    const step = (t: number) => {
+      const left = target.current.length - shown.current;
+      if (left <= 0) return;
+      // Catch up on what has arrived within about a quarter second, at least a letter a frame.
+      shown.current = Math.min(target.current.length, shown.current + Math.max(1, Math.round(left * Math.min(1, (t - last) / 240))));
+      last = t;
+      setN(shown.current);
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [text, reduce]);
+  return <>{text.slice(0, n).replace(/\$/g, "")}{caret ? <span className="mm4-caret" aria-hidden /> : null}</>;
+}
+function LiveCardView({ c, writing, index }: { c: LiveCard; writing: boolean; index: number }) {
+  const shape = filled(c.shape);
+  const lines = shape ? liveLines(shape).filter(([, v]) => v) : [];
+  // The field still being written is the last one with text: the caret sits there.
+  return (
+    <article className={`mm4-card${writing ? " writing" : " done"}${c.weight === "핵심" ? " core" : ""}`} style={{ animationDelay: `${Math.min(index, 3) * 60}ms` }}>
+      <header className="mm4-chead">
+        {c.kind ? <span className="mm3-kind">{c.kind}</span> : null}
+        {c.weight === "핵심" ? <span className="mm3-kind core">핵심</span> : null}
+        <b className="mm4-ctitle"><Typed text={c.title} caret={writing && !lines.length} /></b>
+      </header>
+      {!writing && shape ? <div className="mm4-settled"><Body s={shape} /></div>
+        : lines.length ? <div className="mm4-lines">{lines.map(([k, v], i) => <p key={i} className="mm4-line">{k ? <span className="mm3-tag">{k}</span> : null}<span><Typed text={v} caret={writing && i === lines.length - 1} /></span></p>)}</div> : null}
+    </article>
+  );
+}
+function LiveBoard({ data }: { data: LiveData }) {
+  const byPage = new Map(data.pages.map((p) => [p.page, p]));
+  const done = data.outline.filter((o) => byPage.get(o.page)?.done).length;
+  const writing = data.outline.filter((o) => byPage.has(o.page) && !byPage.get(o.page)!.done).length;
+  const cards = data.pages.reduce((n, p) => n + p.cards.length, 0);
+  return (
+    <section className="mm4" aria-label="지식 카드를 쓰는 중">
+      <div className="mm4-progress">
+        <div className="mm4-bar"><span style={{ width: `${data.outline.length ? (done / data.outline.length) * 100 : 0}%` }} /><i style={{ width: `${data.outline.length ? ((done + writing) / data.outline.length) * 100 : 0}%` }} /></div>
+        <span className="small"><b>{done}</b>/{data.outline.length}쪽 · 쓰는 중 {writing} · 카드 {cards}장</span>
+      </div>
+      <ol className="mm4-pages">
+        {data.outline.map((o) => {
+          const p = byPage.get(o.page);
+          const state = !p ? "wait" : p.done ? "done" : "writing";
+          return (
+            <li key={o.page} className={`mm4-page ${state}`}>
+              <div className="mm4-phead"><span className="mm4-pn">p.{o.page}</span><span className="mm4-ptitle">{o.title || " "}</span>
+                <span className="mm4-state">{state === "wait" ? "" : state === "writing" ? "쓰는 중" : p!.cards.length ? `${p!.cards.length}장` : "카드 없음"}</span></div>
+              {state === "wait" ? <div className="mm4-skel"><i /><i /></div>
+                : p!.cards.length ? <div className="mm4-cards">{p!.cards.map((c, i) => <LiveCardView key={i} c={c} index={i} writing={state === "writing" && i === p!.cards.length - 1} />)}</div> : null}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 // 사용자 10/30: the map is where a material is studied (no reading screen): 원문 opens one page over it, 문제 풀기 starts that
 // page's questions, and a material made without questions gets them here (문제 만들기).
 export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions, onClose }: { genId: string; onPage: (page: number) => void;
@@ -134,6 +241,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
   const [map, setMap] = useState<MatMap | null>(null);
   const [asking, setAsking] = useState(false);
   const [reload, setReload] = useState(0);
+  const [live, setLive] = useState<LiveData | null>(null);
+  const [board, setBoard] = useState<"live" | "leaving" | "off">("off");
   const [error, setError] = useState("");
   const [only, setOnly] = useState<"all" | "unknown" | "new">("all");
   // 개념별 (the whole-material pass's topics, each with what it is there to say) once it exists; 목차별 keeps the slides' own titles.
@@ -153,6 +262,28 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
     load();
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [genId, reload]);
+  // 실시간 카드: the board shows while pages are still being written; when the last page is in, it gives way to the map.
+  useEffect(() => {
+    let alive = true, timer: ReturnType<typeof setTimeout> | undefined, since = 0, misses = 0;
+    let acc: LiveData | null = null;
+    const poll = () => call<LiveData>(`/api/study-map/${genId}/live?since=${since}`).then((r) => {
+      if (!alive) return;
+      const pages = new Map((acc?.pages ?? []).map((p) => [p.page, p]));
+      for (const p of r.pages) pages.set(p.page, p);
+      acc = { ...r, outline: r.outline.length ? r.outline : acc?.outline ?? [], pages: [...pages.values()] };
+      since = r.now - 1500; // a little overlap: a page written between the read and the answer is not missed
+      // Every page in (or the run stopped, or pages it had made before a restart are not streamed again): the map takes over.
+      const all = (acc.outline.length > 0 && acc.outline.every((o) => pages.get(o.page)?.done)) || !["queued", "running"].includes(r.status);
+      setLive(acc);
+      // Nothing written yet: a run still reading its pages is waited for; a finished or stopped one has no board.
+      if (!r.live && !pages.size) { if (!["queued", "running"].includes(r.status) || ++misses > 120) { setBoard("off"); return; } timer = setTimeout(poll, 800); return; }
+      else if (all) { setBoard((b) => (b === "live" ? "leaving" : b)); setTimeout(() => { if (alive) setBoard("off"); }, 900); return; }
+      else setBoard("live");
+      timer = setTimeout(poll, 350);
+    }).catch(() => { if (alive) timer = setTimeout(poll, 1500); });
+    poll();
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+  }, [genId]);
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", esc); return () => document.removeEventListener("keydown", esc); }, [onClose]);
   const view = picked ?? (map?.topics?.length ? "topic" : "outline");
   const titles = useMemo(() => new Map(map?.sections.flatMap((s) => s.cards.map((c) => [c.id, c.title] as const)) ?? []), [map]);
@@ -186,7 +317,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
     setOpenCard(id);
     setTimeout(() => { const el = document.getElementById(`mm3-${id}`); if (!el) return; el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1200); }, 60);
   };
-  if (!map) return <div className="mm2"><div className="mm2-head"><b>자료 지도</b><button className="btn ghost small" onClick={onClose}>닫기</button></div><p className="small muted">{error || "지식을 정리하는 중… 첫 카드까지 10~15초쯤 걸려요."}</p></div>;
+  if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>지식을 정리하는 중…</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
+    {board !== "off" && live ? <LiveBoard data={live} /> : <p className="small muted">{error || "쪽을 읽고 있어요. 첫 카드까지 5~10초쯤 걸려요."}</p>}</div>;
   const shown = (c: Card) => (!coreOnly || c.core) && (only === "all" || (only === "unknown" ? c.state === "unknown" : c.state === "new" || c.state === "met"));
   const n = map.counts;
   const making = map.status !== "done";
@@ -215,6 +347,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
         <span className="cs-gap" />
         {visible.length ? <button className="linkish small" onClick={() => setOpenGroups(allOpen ? new Set() : new Set(visible.map((g) => g.key)))}>{allOpen ? "모두 접기" : "모두 펼치기"}</button> : null}
       </div>
+      {board !== "off" && live ? <div className={board === "leaving" ? "mm4-leaving" : undefined}><LiveBoard data={live} /></div> : <div className="mm4-arrive">
       {map.principles?.length ? <section className="mm3-principles" aria-label="이 자료를 꿰는 원리">
         <p className="mm3-label">이 자료를 꿰는 원리</p>
         {map.principles.map((p, i) => <div key={i} className="mm3-principle">
@@ -276,7 +409,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
           );
         })}
       </ol>
-      {!visible.length ? <p className="small muted">{making ? "지식을 정리하는 중… 첫 카드까지 10~15초쯤 걸려요." : "고른 조건에 맞는 지식이 없어요."}</p> : null}
+      {!visible.length ? <p className="small muted">{making ? "지식을 정리하는 중… 첫 카드까지 5~10초쯤 걸려요." : "고른 조건에 맞는 지식이 없어요."}</p> : null}
+      </div>}
     </div>
   );
 }

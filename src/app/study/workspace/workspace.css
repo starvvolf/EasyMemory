@@ -570,3 +570,49 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .ko-core{color:var(--help);margin-left:4px;font-size:12px}
 .dejipgi .ko-line{font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .dejipgi .ko-cp{white-space:nowrap}
+
+/* 실시간 카드 (10/30): pages in order, cards typed in as they stream, then the map takes over */
+.dejipgi .mm4{display:flex;flex-direction:column;gap:12px}
+.dejipgi .mm4-progress{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:2;padding:8px 0;background:var(--ground)}
+.dejipgi .mm4-bar{position:relative;flex:1;height:6px;border-radius:999px;background:color-mix(in srgb,var(--line) 70%,transparent);overflow:hidden}
+.dejipgi .mm4-bar span,.dejipgi .mm4-bar i{position:absolute;inset:0 auto 0 0;border-radius:inherit;transition:width .45s cubic-bezier(.2,.8,.2,1)}
+.dejipgi .mm4-bar i{background:color-mix(in srgb,var(--accent) 30%,transparent);background-image:linear-gradient(90deg,transparent 0,color-mix(in srgb,var(--accent) 45%,transparent) 50%,transparent 100%);background-size:200% 100%;animation:mm4-flow 1.4s linear infinite}
+.dejipgi .mm4-bar span{z-index:1;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 60%,var(--read)))}
+.dejipgi .mm4-pages{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dejipgi .mm4-page{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:8px;transition:border-color .3s,box-shadow .3s,opacity .3s}
+.dejipgi .mm4-page.wait{opacity:.55}
+.dejipgi .mm4-page.writing{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 25%,transparent),0 6px 22px -12px color-mix(in srgb,var(--accent) 60%,transparent)}
+.dejipgi .mm4-page.done{animation:mm4-settle .7s ease-out}
+.dejipgi .mm4-phead{display:flex;align-items:baseline;gap:10px;min-width:0}
+.dejipgi .mm4-pn{font-family:var(--mono);font-size:12px;color:var(--faint);min-width:38px}
+.dejipgi .mm4-ptitle{flex:1;min-width:0;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dejipgi .mm4-state{font-size:12px;color:var(--faint)}
+.dejipgi .mm4-page.writing .mm4-state{color:var(--accent)}
+.dejipgi .mm4-page.writing .mm4-state::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px;animation:mm4-pulse 1s ease-in-out infinite}
+.dejipgi .mm4-skel{display:flex;flex-direction:column;gap:6px;padding-left:48px}
+.dejipgi .mm4-skel i{display:block;height:9px;border-radius:6px;background:linear-gradient(90deg,var(--line) 0,color-mix(in srgb,var(--line) 40%,transparent) 50%,var(--line) 100%);background-size:200% 100%;animation:mm4-flow 1.6s linear infinite}
+.dejipgi .mm4-skel i:first-child{width:46%} .dejipgi .mm4-skel i:last-child{width:72%;opacity:.7}
+.dejipgi .mm4-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;padding-left:48px}
+.dejipgi .mm4-card{border:1px solid var(--line);border-radius:10px;background:var(--surface-2,var(--surface));padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13.5px;line-height:1.5;animation:mm4-in .42s cubic-bezier(.2,.8,.2,1) both;transition:border-color .4s,box-shadow .4s}
+.dejipgi .mm4-card.writing{border-color:color-mix(in srgb,var(--accent) 60%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+.dejipgi .mm4-card.done{animation:mm4-in .42s cubic-bezier(.2,.8,.2,1) both,mm4-glow .9s ease-out .1s}
+.dejipgi .mm4-card.core{border-left:3px solid var(--read)}
+.dejipgi .mm4-chead{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.dejipgi .mm4-ctitle{font-size:14.5px;flex-basis:100%}
+.dejipgi .mm4-lines{display:flex;flex-direction:column;gap:3px}
+.dejipgi .mm4-line{margin:0;display:flex;gap:8px;align-items:baseline}
+.dejipgi .mm4-line .mm3-tag{flex:none}
+.dejipgi .mm4-settled{animation:mm4-fade .35s ease-out}
+.dejipgi .mm4-caret{display:inline-block;width:2px;height:1.05em;margin-left:2px;vertical-align:-2px;background:var(--accent);animation:mm4-blink .9s steps(1) infinite}
+.dejipgi .mm4-leaving{animation:mm4-out .8s ease-in forwards}
+.dejipgi .mm4-arrive{display:flex;flex-direction:column;gap:12px;animation:mm4-fade .5s ease-out}
+@keyframes mm4-in{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes mm4-fade{from{opacity:0}to{opacity:1}}
+@keyframes mm4-out{to{opacity:0;transform:translateY(-6px)}}
+@keyframes mm4-blink{50%{opacity:0}}
+@keyframes mm4-pulse{50%{transform:scale(1.6);opacity:.5}}
+@keyframes mm4-flow{from{background-position:200% 0}to{background-position:-200% 0}}
+@keyframes mm4-glow{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--good) 45%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+@keyframes mm4-settle{0%{border-color:var(--good)}100%{border-color:var(--line)}}
+@media (max-width:640px){ .dejipgi .mm4-cards,.dejipgi .mm4-skel{padding-left:0} .dejipgi .mm4-cards{grid-template-columns:1fr} }
+@media (prefers-reduced-motion: reduce){ .dejipgi .mm4 *,.dejipgi .mm4-leaving,.dejipgi .mm4-arrive{animation:none!important;transition:none!important} }

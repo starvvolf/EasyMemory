@@ -119,6 +119,8 @@ export type RecallerContext = {
   priorityPage?: () => number | undefined;
   /** Parallel calls at most (sections organized and authored at once, pages read at once). */
   parallel?: number;
+  /** 실시간 카드: a page's 정리 reply so far (null once its cards are in), for the map to show them being written. */
+  live?: (pages: number[], text: string | null) => void;
   /** True once the run is stopping (call cap, usage limit, login): a page reading cut by the stop is not a failed reading. */
   halted?: () => boolean;
   /** 종합 문제 (input.combine): the earlier recaller runs whose cards are tied into one long problem. */
@@ -702,7 +704,7 @@ export async function runRecaller(ctx: RecallerContext) {
               ...(data.texts[prev] !== undefined ? { prevPage: { page: prev, text: (data.texts[prev] ?? "").slice(0, 1500) } } : {}) } : {}) });
           const extra = { guide: g, maxChars: 6000 * pages.length, ...(inlineImages.length ? { images: inlineImages } : {}) };
           const schema = (inCall && !given ? organizeIntentSchema : organizeSchema) as typeof organizeSchema;
-          const first = ctx.ask("rc-organize", section.id, attempt, system, user, schema, { ...extra, onPartial: (text) => { if (inCall) noteIntents(completeItems(text, "pages")); for (const raw of completeItems(text, "cards")) startCard(raw); } });
+          const first = ctx.ask("rc-organize", section.id, attempt, system, user, schema, { ...extra, onPartial: (text) => { ctx.live?.(pages, text); if (inCall) noteIntents(completeItems(text, "pages")); for (const raw of completeItems(text, "cards")) startCard(raw); } });
           // lab.hedgeMs (실험): a reply still out after this long gets a second, identical request; the first to finish is used.
           reply = lab.hedgeMs ? await new Promise<z.infer<typeof organizeSchema>>((resolve, reject) => {
             let settled = false, failures = 0, started = 1;
@@ -735,6 +737,7 @@ export async function runRecaller(ctx: RecallerContext) {
       chunk.cards = result.cards.map((c) => ({ ...c, id: ids.get(c.id)!, links: c.links.filter((l) => ids.has(l.to)).map((l) => ({ ...l, to: ids.get(l.to)! })) }));
       chunk.issues = result.issues;
       stamp("organizedAt", pages);
+      ctx.live?.(pages, null);
       collect(unit);
       await save();
       // intentParallel: the cards show at once (자료 지도); when the pages' intents come, cover/guide/preview cards go and 현황 cards

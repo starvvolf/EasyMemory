@@ -89,6 +89,53 @@ export function closeJson(text: string): unknown {
   try { return JSON.parse(t + open.reverse().join("")); } catch { return undefined; }
 }
 
+/** A JSON reply cut anywhere (mid-string, after a key): closed so it parses, for showing a reply as it is written.
+ *  An unfinished string is kept as far as it came; a key with no value yet is dropped. */
+export function partialJson(text: string): unknown {
+  let t = text.trimEnd(), inString = false, escaped = false;
+  const open: string[] = [];
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (inString) { if (escaped) escaped = false; else if (ch === "\\") escaped = true; else if (ch === '"') inString = false; continue; }
+    if (ch === '"') inString = true;
+    else if (ch === "{" || ch === "[") open.push(ch === "{" ? "}" : "]");
+    else if (ch === "}" || ch === "]") open.pop();
+  }
+  if (inString) t = (escaped ? t.slice(0, -1) : t) + '"';
+  const tries = [t, t.replace(/,?\s*"[^"]*"\s*:?\s*$/, ""), t.replace(/,?\s*"(?:[^"\\]|\\.)*"\s*:\s*"(?:[^"\\]|\\.)*"$/, "")];
+  for (const x of tries) {
+    const body = x.replace(/[,:]\s*$/, "");
+    try { return JSON.parse(body + [...open].reverse().join("")); } catch { /* try the next cut */ }
+  }
+  return undefined;
+}
+
+// 실시간 카드 (사용자 10/30): each page's 정리 reply as it streams in, kept in this server process for the map to show the
+// cards being written, in page order. Not saved: a page's real cards are in the run's state once its reply is in.
+type LivePage = { at: number; text: string; done: boolean };
+const liveRoot = globalThis as typeof globalThis & { __studyGenLive?: Map<string, Map<number, LivePage>> };
+export function setGenLive(id: string, pages: number[], text: string | null) {
+  const all = (liveRoot.__studyGenLive ??= new Map());
+  const mine = all.get(id) ?? new Map<number, LivePage>();
+  all.set(id, mine);
+  for (const page of pages) mine.set(page, { at: Date.now(), text: text ?? mine.get(page)?.text ?? "", done: text === null });
+}
+export function dropGenLive(id: string) { liveRoot.__studyGenLive?.delete(id); }
+type LiveCard = { title: string; kind: string; weight: string; shape: Record<string, unknown> };
+/** What the map draws while the material is being made: the pages in order (title from 전처리) and each page's cards so far. */
+export async function genLive(id: string, since = 0) {
+  const state = await loadGen(id);
+  const mine = liveRoot.__studyGenLive?.get(id);
+  const outline = (state?.recaller?.prep?.pages ?? []).map((p) => ({ page: p.page, title: p.title }));
+  const pages = mine ? [...mine].filter(([, v]) => v.at > since).map(([page, v]) => {
+    const reply = partialJson(v.text) as { cards?: Array<Partial<LiveCard>> } | undefined;
+    const cards = (Array.isArray(reply?.cards) ? reply.cards : []).filter((c) => c && typeof c === "object" && (c.title || c.shape))
+      .map((c) => ({ title: String(c.title ?? ""), kind: String(c.kind ?? ""), weight: String(c.weight ?? ""), shape: c.shape && typeof c.shape === "object" ? c.shape : {} }));
+    return { page, done: v.done, cards };
+  }) : [];
+  return { now: Date.now(), status: state?.status ?? "failed", live: Boolean(mine), outline, pages };
+}
+
 class Stop extends Error {
   readonly status: GenState["status"];
   /** A connection or server hiccup (not the call cap, a limit or a bad reply): the run picks itself up again. */
@@ -681,6 +728,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
       let fastEmphasis: Map<number, string[]> | undefined;
       await runRecaller({
         state, pdf,
+        live: (pages, text) => setGenLive(id, pages, text),
         ask: async (step, sectionId, attempt, system, user, parser, extra = {}) => {
           const schema = astraJsonSchema(parser);
           const more = { ...(extra.images ? { images: extra.images } : {}), ...(extra.maxChars ? { maxChars: extra.maxChars } : {}), ...(extra.onPartial ? { onPartial: extra.onPartial } : {}) };
@@ -791,6 +839,8 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           return documentPath;
         },
       });
+      // The map keeps the last written cards a little while (it switches to the saved ones), then they go.
+      setTimeout(() => dropGenLive(id), 120_000).unref?.();
       if (progressTimer) clearTimeout(progressTimer);
       if (astraFailure) throw astraFailure;
       // runAstra changes the status itself (TS still sees "running" here).

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { closeJson, createGen, questionsGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
+import { closeJson, createGen, partialJson, questionsGen, readGenCalls, readSectionDocument, runGen } from "./runner.ts";
 import { basicProblem, codeChains, completeItems, deepProblems, fillValues, recallerFakeReply, slotCards } from "./recaller.ts";
 import type { GenStep } from "./types.ts";
 
@@ -348,4 +348,13 @@ test("핵심 at most two from one page", async () => {
   const all = [1, 2, 3, 4, 5, 6].map((i) => ({ id: `c${i}`, title: `t${i}`, evidence: [{ page: i <= 3 ? 7 : i }] }));
   const out = unfoldMerge({ topics: [{ name: "t", gist: "", cards: [0, 1, 2, 3, 4, 5] }], principles: [], core: [0, 1, 2, 3], same: [], rename: [], links: [] }, all);
   assert.deepEqual(out.filter((c) => c.weight === "핵심").map((c) => c.id), ["c1", "c2"]);
+});
+
+test("partialJson (실시간 카드): every cut of a reply parses, an unfinished string is kept, a key with no value is dropped", () => {
+  const full = JSON.stringify({ pages: [{ page: 3, intent: "정의" }], cards: [{ id: "c1", kind: "용어", title: "Deadlock", shape: { form: "term", definition: "봉쇄된 \"프로세스\" 집합 \\ 끝", neighbors: ["a"] } }, { id: "c2", title: "두번째", shape: { form: "rule", condition: "x", result: "y" } }] });
+  for (let i = 1; i <= full.length; i++) assert.notEqual(partialJson(full.slice(0, i)), undefined, full.slice(0, i));
+  assert.deepEqual(partialJson(full), JSON.parse(full));
+  const cut = partialJson(full.slice(0, full.indexOf("집합") + 1)) as { cards: Array<{ shape: { definition: string } }> };
+  assert.equal(cut.cards[0].shape.definition, "봉쇄된 \"프로세스\" 집");
+  assert.deepEqual(partialJson('{"cards":[{"title":"A","sha'), { cards: [{ title: "A" }] });
 });
