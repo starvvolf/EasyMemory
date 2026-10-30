@@ -60,34 +60,95 @@ export async function saveArticle(raw: unknown) {
   await writeFile(path.join(dir(), `${id}.article.json`), JSON.stringify(article));
   return { id, blocks: article.blocks.length, images: article.blocks.filter((b) => b.kind === "img").length };
 }
+// 실험용: the page fetched by the server and read the way the browser script does (headings, paragraphs, lists, tables,
+// pictures in order; related-post cards and ads left out). The product reads the page in the learner's browser instead.
+type Node5 = { nodeName: string; tagName?: string; value?: string; attrs?: Array<{ name: string; value: string }>; childNodes?: Node5[] };
+export async function articleFromUrl(url: string) {
+  const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141 Safari/537.36" }, signal: AbortSignal.timeout(20000) });
+  if (!response.ok) throw new GenError(502, `글을 가져오지 못했습니다(${response.status}).`);
+  const html = await response.text();
+  // parse5 comes with the app's dependencies (no types of its own in this version); only this experiment uses it.
+  // @ts-expect-error untyped module
+  const { parse } = (await import("parse5")) as unknown as { parse: (html: string) => Node5 };
+  const doc = parse(html);
+  const attr = (n: Node5, name: string) => n.attrs?.find((a) => a.name === name)?.value ?? "";
+  const cls = (n: Node5) => attr(n, "class");
+  const find = (n: Node5, ok: (x: Node5) => boolean): Node5 | null => { if (ok(n)) return n; for (const c of n.childNodes ?? []) { const f = find(c, ok); if (f) return f; } return null; };
+  const root = find(doc, (n) => /\btt_article_useless_p_margin\b|\bcontents_style\b/.test(cls(n))) ?? find(doc, (n) => n.nodeName === "article");
+  if (!root) throw new GenError(422, "본문을 찾지 못했습니다.");
+  const title = (find(doc, (n) => n.nodeName === "title")?.childNodes?.[0]?.value ?? "").trim();
+  const textOf = (n: Node5): string => n.nodeName === "#text" ? (n.value ?? "") : n.nodeName === "br" ? "\n" : ["script", "style"].includes(n.nodeName) ? ""
+    : (n.childNodes ?? []).map(textOf).join("") + (["p", "div", "li", "tr", "h2", "h3", "h4"].includes(n.nodeName) ? "\n" : "");
+  const skip = (n: Node5) => n.nodeName === "ins" || ["script", "style", "noscript"].includes(n.nodeName) || /postcard|another_category|revenue|related|adsbygoogle/.test(cls(n));
+  const blocks: WebBlock[] = [];
+  const kinds: Record<string, WebBlock["kind"]> = { h2: "h2", h3: "h3", h4: "p", p: "p", li: "li", pre: "code", blockquote: "quote", table: "table" };
+  const walk = (n: Node5) => {
+    if (skip(n)) return;
+    if (n.nodeName === "img") {
+      const src = attr(n, "data-src") || attr(n, "src");
+      blocks.push({ kind: "img", text: attr(n, "alt").slice(0, 300), src, w: Number(attr(n, "data-origin-width") || attr(n, "width")) || 0,
+        h: Number(attr(n, "data-origin-height") || attr(n, "height")) || 0, gif: /\.gif(\?|$)/i.test(src) || attr(n, "data-filename").endsWith(".gif") });
+      return;
+    }
+    if (n.nodeName === "figcaption") { const last = [...blocks].reverse().find((b) => b.kind === "img"); if (last) last.text = [last.text, textOf(n).trim()].filter(Boolean).join(" · ").slice(0, 300); return; }
+    const kind = kinds[n.nodeName];
+    if (kind) {
+      // Pictures inside a paragraph still count, after its text.
+      const text = n.nodeName === "table" ? tableText(n) : textOf(n).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+      if (text) blocks.push({ kind, text: (n.nodeName === "h4" ? `#### ${text}` : text).slice(0, 20000) });
+      const pics: Node5[] = []; const collect = (x: Node5) => { if (x.nodeName === "img") pics.push(x); else (x.childNodes ?? []).forEach(collect); };
+      (n.childNodes ?? []).forEach(collect); pics.forEach(walk);
+      return;
+    }
+    (n.childNodes ?? []).forEach(walk);
+  };
+  const tableText = (t: Node5) => {
+    const rows: string[] = []; const rowsOf = (x: Node5) => { if (x.nodeName === "tr") rows.push((x.childNodes ?? []).filter((c) => c.nodeName === "td" || c.nodeName === "th").map((c) => textOf(c).replace(/\s+/g, " ").trim()).join(" | ")); else (x.childNodes ?? []).forEach(rowsOf); };
+    rowsOf(t); return rows.join("\n");
+  };
+  (root.childNodes ?? []).forEach(walk);
+  return saveArticle({ title, url, blocks });
+}
 export async function loadTrial(id: string): Promise<WebTrial | null> {
   if (!/^wt_[a-f0-9]{12}$/.test(id)) return null;
   try { return JSON.parse(await readFile(path.join(dir(), `${id}.json`), "utf8")) as WebTrial; } catch { return null; }
 }
 
-// Chunks = the article cut at its h2 headings (h3 stays inside); a picture is kept when it is big enough to carry content
-// (icons, emoji and thin dividers are not) and is not the cover above the first heading.
+// Chunks = the article cut at its headings (h2 and h3; deeper ones stay inside, a section's title is "h2 › h3"). A short
+// piece with no picture (a heading's one-line lead) goes with the next chunk. A picture is kept when it is big enough to
+// carry content (icons, emoji, dividers are not) and is not the cover above the first heading.
 export function chunksOf(article: Article) {
-  const chunks: Array<{ n: number; title: string; text: string; images: Array<{ label: string; dataUrl: string }>; skipped: number }> = [];
-  let cur = { n: 0, title: "들어가며", text: "", images: [] as Array<{ label: string; dataUrl: string }>, skipped: 0 };
-  let pic = 0;
+  type Chunk = { n: number; title: string; text: string; images: Array<{ label: string; dataUrl: string }>; skipped: number };
+  const raw: Chunk[] = [];
+  let h2 = "", cur: Chunk = { n: 0, title: "들어가며", text: "", images: [], skipped: 0 }, pic = 0, seenHeading = false;
+  const close = () => { if (cur.text.trim() || cur.images.length) raw.push(cur); };
   for (const b of article.blocks) {
-    if (b.kind === "h2") { if (cur.text.trim() || cur.images.length) chunks.push(cur); cur = { n: chunks.length, title: b.text.trim().slice(0, 120), text: "", images: [], skipped: 0 }; continue; }
+    if (b.kind === "h2" || b.kind === "h3") {
+      close(); seenHeading = true;
+      const t = b.text.trim().slice(0, 120);
+      if (b.kind === "h2") h2 = t;
+      cur = { n: 0, title: b.kind === "h2" ? t : h2 ? `${h2} › ${t}` : t, text: "", images: [], skipped: 0 };
+      continue;
+    }
     if (b.kind === "img") {
       pic += 1;
       const small = (b.w ?? 0) < 200 || (b.h ?? 0) < 120;
-      const cover = chunks.length === 0 && !cur.text.trim();
-      if (!b.dataUrl || small || cover) { cur.skipped += 1; continue; }
-      const label = `§${cur.n + 1} 그림 ${pic}${b.text ? ` (${b.text.slice(0, 80)})` : ""}${b.gif ? " · 움직이는 그림의 첫 장면" : ""}`;
-      cur.images.push({ label, dataUrl: b.dataUrl });
+      if (!b.dataUrl || small || (!seenHeading && !cur.text.trim())) { cur.skipped += 1; continue; }
+      cur.images.push({ label: `그림 ${pic}${b.text ? ` (${b.text.slice(0, 80)})` : ""}${b.gif ? " · 움직이는 그림의 첫 장면" : ""}`, dataUrl: b.dataUrl });
       cur.text += `\n[그림 ${pic}${b.text ? `: ${b.text.slice(0, 80)}` : ""}]\n`;
       continue;
     }
-    const lead = b.kind === "h3" ? "### " : b.kind === "li" ? "- " : b.kind === "quote" ? "> " : "";
+    const lead = b.kind === "li" ? "- " : b.kind === "quote" ? "> " : "";
     cur.text += `${b.kind === "code" ? `\n\`\`\`\n${b.text}\n\`\`\`` : `${lead}${b.text}`}\n`;
   }
-  if (cur.text.trim() || cur.images.length) chunks.push(cur);
-  return chunks.map((c, i) => ({ ...c, n: i + 1 }));
+  close();
+  const merged: Chunk[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (c.text.trim().length < 200 && !c.images.length && i + 1 < raw.length) { raw[i + 1] = { ...raw[i + 1], text: `${c.text}\n${raw[i + 1].text}`, skipped: raw[i + 1].skipped + c.skipped }; continue; }
+    merged.push(c);
+  }
+  return merged.map((c, i) => ({ ...c, n: i + 1, images: c.images.map((im) => ({ ...im, label: `§${i + 1} ${im.label}` })) }));
 }
 
 const WEB = "source는 블로그 글의 한 구역(§번호)이다. evidence.page에는 그 구역 번호를 쓴다. 글은 PDF 쪽보다 길고 이어진다: 이 구역이 중심인 지식만 카드로 만들고, 구역당 카드 수는 내용에 맞춘다(보통 2~6장). 광고·댓글·구독 안내·다른 글 홍보는 카드로 만들지 않는다.";

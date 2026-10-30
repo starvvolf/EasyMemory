@@ -6,7 +6,7 @@ import { z } from "zod";
 import { ExperimentRequestError } from "@/lib/mcp-experiment-requests";
 import { requireLocalRequest, responseError } from "../../mcp-experiment-requests/http";
 import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
-import { assertTrialId, loadTrial, runWebTrial, saveArticle, webMethods } from "@/lib/study/gen/webtrial";
+import { articleFromUrl, assertTrialId, loadTrial, runWebTrial, saveArticle, webMethods } from "@/lib/study/gen/webtrial";
 
 export const runtime = "nodejs";
 const caller = { uid: "local-experiment" };
@@ -16,15 +16,18 @@ async function local(request: Request) {
 }
 // The bridge: a page the article's tab embeds and hands what it read to (postMessage), so it reaches this server from
 // this server's own origin. It only saves an article; running and reading results stay on the lab screen.
-const BRIDGE = `<!doctype html><meta charset="utf-8"><script>
+const BRIDGE = `<!doctype html><meta charset="utf-8"><p>Recaller 실험: 글을 받는 중…</p><script>
+const home = window.opener || (parent !== window ? parent : null);
 addEventListener("message", async (e) => {
   if (!e.data || e.data.type !== "recaller-web-article") return;
   try {
     const r = await fetch("/api/lab/web-trial", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "article", article: e.data.article }) });
-    parent.postMessage({ type: "recaller-web-saved", status: r.status, body: await r.json() }, "*");
-  } catch (err) { parent.postMessage({ type: "recaller-web-saved", status: 0, body: String(err) }, "*"); }
+    const body = await r.json();
+    document.body.textContent = "받았어요: " + JSON.stringify(body);
+    home && home.postMessage({ type: "recaller-web-saved", status: r.status, body }, "*");
+  } catch (err) { home && home.postMessage({ type: "recaller-web-saved", status: 0, body: String(err) }, "*"); }
 });
-parent.postMessage({ type: "recaller-web-bridge" }, "*");
+home && home.postMessage({ type: "recaller-web-bridge" }, "*");
 </script>`;
 export async function GET(request: Request) {
   try {
@@ -43,9 +46,11 @@ export async function POST(request: Request) {
     if (Buffer.byteLength(text) > 60_000_000) throw new ExperimentRequestError(413, "너무 큽니다.");
     const body = z.discriminatedUnion("action", [
       z.object({ action: z.literal("article"), article: z.unknown() }),
+      z.object({ action: z.literal("url"), url: z.string().url().max(2000) }),
       z.object({ action: z.literal("run"), id: z.string(), confirmed: z.literal(true), methods: z.array(z.enum(webMethods)).optional() }),
     ]).parse(JSON.parse(text));
     if (body.action === "article") return NextResponse.json(await saveArticle(body.article));
+    if (body.action === "url") return NextResponse.json(await articleFromUrl(body.url));
     assertTrialId(body.id);
     void runWebTrial(body.id, caller, { methods: body.methods }).catch(() => undefined);
     return NextResponse.json({ started: true, id: body.id });
