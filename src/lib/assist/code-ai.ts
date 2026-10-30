@@ -4,7 +4,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { askJson, askText, S } from "./model.ts";
 import { LANG_LABEL, judge, type Lang, type TestCase } from "../code/run.ts";
-import { CodeError, findCounterexample, readProblem, readProblemMeta, saveProblem, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
+import { CodeError, findCounterexample, listProblems, readProblem, readProblemMeta, saveProblem, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
 import { runTestgen, runVerify } from "../code/testgen/index.ts";
 import { memoryEvents, searchKnowledge } from "../knowledge/api.ts";
 import { currentAttempt } from "../code/service.ts";
@@ -115,7 +115,7 @@ const MAKE_SYSTEM = `알고리즘 연습 문제를 하나 세팅한다. 입력�
   · check는 입력이 제약을 지키는지 끝까지 확인한다(개수, 범위, 형식). 원문 예제도 통과해야 한다.
   · gen(kind, size)는 tests에 쓴 조합뿐 아니라 smallKinds의 각 kind를 size "small"로 불러도 check를 통과해야 한다. 크기(N 등)를 먼저 정하고, 첫 줄의 개수와 실제 값의 개수가 그 크기와 같게 만든다. 문제 조건(중복 금지, 이미 있는 것만 삭제 등)도 gen이 지킨다.
 - mutants: 이 문제에서 학습자가 흔히 하는 실수가 들어간 "틀린 풀이" 3~5개. { flaw, code }. flaw는 실수 이름(정수 범위, 초기화, 경계값, off-by-one, 중복 처리, 잘못된 그리디, 시간 초과, 재귀 깊이 등 이 문제에 해당하는 것만). 정상 실행되지만 특정 입력에서 틀리거나 느린 코드여야 한다(문법 오류 금지). 32비트 정수 오버플로는 결과에 |0 을 써서 흉내 낸다.
-- knowledge: 이 문제가 확인하는 지식 이름 1~3개 (학습자 지식 목록에 같은 것이 있으면 그 이름 그대로).
+- knowledge: 이 문제가 확인하는 지식 이름 1~3개. 학습자 지식 목록에 뜻이 같은 것이 있으면(다른 표기·영어·줄임말 포함, 예: 다이나믹 프로그래밍 = 동적 계획법) 목록의 이름을 그대로 쓴다.
 - knowledgeBodies: knowledge와 같은 순서로, 그 지식의 뜻을 한 문장씩(이 문제 이야기가 아니라 일반적인 뜻. 예: "이분 탐색: 정렬된 범위를 절반씩 줄여 가며 답을 찾는 방법"에서 콜론 뒤만).
 - folder: "알고리즘/이분 탐색"처럼.
 - blank: 빈칸 문제를 요청받았을 때만. code는 요청한 언어의 완성된 풀이에서 핵심 줄 2~4곳을 ____ 로 바꾼 것, filled는 빈칸을 채운 완성 코드. 아니면 둘 다 빈 문자열.`;
@@ -235,7 +235,11 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   original?: { statement: string; inputText: string; outputText: string; examples: TestCase[] } }) {
   const makeModel = input.model || MAKE_MODEL();
   const makeLabel = input.effort ? `${makeModel} ${input.effort}` : makeModel;
-  const names = (await searchKnowledge(input.topic || input.lesson?.slice(0, 200) || "", { limit: 12 })).map((h) => h.title);
+  // PS → 지식 (2026-10-30): an imported statement rarely names its idea ("동적 계획법"), so the search alone came back empty
+  // and each problem got its own spelling ("다이나믹 프로그래밍"). The names already on earlier code problems go along too.
+  const searched = (await searchKnowledge(input.topic || input.lesson?.slice(0, 200) || "", { limit: 12 })).map((h) => h.title);
+  const onProblems = (await listProblems().catch(() => [])).flatMap((p) => p.knowledge ?? []);
+  const names = [...new Set([...searched, ...onProblems].map((n) => n.trim()).filter(Boolean))].slice(0, 80);
   const user = [input.topic ? `[주제] ${input.topic}` : "", input.lesson ? `[강의 글 또는 붙여 넣은 문제]\n${input.lesson.slice(0, 30000)}` : "", names.length ? `[학습자 지식 목록] ${names.join(", ")}` : "",
     input.kind === "blank" ? `[빈칸 문제 언어] ${LANG_LABEL[input.lang ?? "python"]}` : "[빈칸 문제 아님]"].filter(Boolean).join("\n\n");
   const lang = input.lang ?? "python";
