@@ -1,11 +1,11 @@
 "use client";
-// 오늘: 다가오는 기한, 오늘 할 일, 다시 볼 지식(바로 복습), 이어서 하기 — all in one look, nothing when there is nothing.
+// 오늘: 다가오는 기한, 다시 볼 지식(바로 복습), 이어서 하기 — all in one look, nothing when there is nothing.
+// "오늘 할 일" 카드는 뺐다(2026-10-30 사용자 "오늘 할 일 이것도 치워"). 할 일은 일정 탭에 그대로 있다.
 import { useCallback, useEffect, useState } from "react";
 import { call, go, later, type ItemLite, type Question } from "./api";
 import { QuestionRun } from "./QuestionCard";
 
-type Todo = { id: string; text: string; date: string | null; done: boolean };
-type Week = { today: string; days: Array<{ date: string; todos: Todo[] }>; upcoming: Array<{ id: string; title: string; date: string }> };
+type Week = { today: string; upcoming: Array<{ id: string; title: string; date: string }> };
 type ProblemLite = { id: string; title: string; status: "new" | "tried" | "wrong" | "solved"; lastAt: string };
 type SourceLite = { id: string; title: string; readAt: string; goals: Record<string, { done: boolean }> };
 const dleft = (date: string, today: string) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
@@ -25,17 +25,15 @@ export default function TodayBoard() {
     if (s.status === "fulfilled") setSources(s.value.sources);
   }, []);
   useEffect(() => later(() => void load()), [load]);
-  const toggle = async (t: Todo) => { await call(`/api/schedule/todos/${t.id}`, { done: !t.done }, "PATCH").catch(() => undefined); void load(); };
   const startReview = async () => { const { questions } = await call<{ questions: Question[] }>("/api/knowledge/quiz?count=10"); if (questions.length) setRun(questions); else void load(); };
 
   const today = week?.today ?? "";
-  const todos = week ? week.days.filter((d) => d.date <= today).flatMap((d) => d.todos).filter((t) => !t.done || t.date === today) : [];
   const soon = (week?.upcoming ?? []).filter((d) => dleft(d.date, today) <= 14).slice(0, 3);
   const unknown = review.filter((i) => i.state === "unknown").length;
   const wrong = problems.filter((p) => p.status === "wrong");
   const lastProblem = [...problems].filter((p) => p.lastAt).sort((a, b) => b.lastAt.localeCompare(a.lastAt))[0];
   const lastSource = sources.find((s) => Object.values(s.goals).some((g) => !g.done));
-  const nothing = !todos.length && !soon.length && !review.length && !wrong.length && !lastProblem && !lastSource;
+  const nothing = !soon.length && !review.length && !wrong.length && !lastProblem && !lastSource;
   if (run) return <QuestionRun title="오늘의 복습" questions={run} onClose={() => { setRun(null); void load(); }} />;
   if (!week || nothing) return null;
   return (
@@ -48,13 +46,6 @@ export default function TodayBoard() {
             <p className="td-big num">{review.length}<small>개</small></p>
             <p className="small muted">{unknown ? `몰랐던 것 ${unknown}개부터` : "오래 안 본 것부터"} 10문제씩</p>
             <button className="btn primary small" onClick={() => void startReview()}>바로 복습</button>
-          </section>
-        ) : null}
-        {todos.length ? (
-          <section className="td-card td-todos">
-            <p className="eyebrow">오늘 할 일</p>
-            <ul>{todos.slice(0, 6).map((t) => <li key={t.id}><label><input type="checkbox" checked={t.done} onChange={() => void toggle(t)} /> <span className={t.done ? "pl-done" : ""}>{t.text}</span>{t.date && t.date < today && !t.done ? <span className="chip bad">밀림</span> : null}</label></li>)}</ul>
-            <button className="btn ghost small" onClick={() => go("plan")}>일정 보기</button>
           </section>
         ) : null}
         {wrong.length || lastProblem || lastSource ? (
