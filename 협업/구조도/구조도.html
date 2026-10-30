@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recaller 구조도</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: the flow diagram on top; every box in it is a button, and the panel under it draws that box's own pipeline as lanes of small steps. */
+:root{
+  --bg:#f7f8fa; --panel:#ffffff; --fg:#1b2230; --muted:#5d6678; --line:#8a93a6; --soft:#e7eaf0;
+  --io:#2f63d6; --io-soft:#e6eefc; --kn:#c2334d; --kn-soft:#fbe8ec; --qa:#c8661a; --qa-soft:#fcefe2;
+  --code:#3d7a57; --code-soft:#e3f2e9; --user:#8a4fc4; --user-soft:#f1e8fb;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151c; --panel:#1a1f29; --fg:#e8ebf2; --muted:#9aa3b5; --line:#6f7890; --soft:#2a3140;
+  --io:#7fa6ff; --io-soft:#1d2a45; --kn:#ff7d93; --kn-soft:#3a1f27; --qa:#f0a060; --qa-soft:#3a2a1c;
+  --code:#7fcf9f; --code-soft:#1b3326; --user:#c9a2f0; --user-soft:#2e2240; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151c; --panel:#1a1f29; --fg:#e8ebf2; --muted:#9aa3b5; --line:#6f7890; --soft:#2a3140;
+  --io:#7fa6ff; --io-soft:#1d2a45; --kn:#ff7d93; --kn-soft:#3a1f27; --qa:#f0a060; --qa-soft:#3a2a1c;
+  --code:#7fcf9f; --code-soft:#1b3326; --user:#c9a2f0; --user-soft:#2e2240; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+header h1{margin:0;font-size:26px;letter-spacing:-.01em}
+header p{margin:4px 0 0;color:var(--muted)}
+.canvas{background:var(--panel);border:1px solid var(--soft);border-radius:14px;overflow-x:auto}
+.canvas svg{display:block;min-width:960px;width:100%;height:auto}
+svg text{font-family:var(--sans);fill:var(--fg);pointer-events:none}
+.box{fill:var(--panel);stroke:var(--line);stroke-width:1.4}
+.dash{stroke-dasharray:6 5}
+.src{fill:var(--soft);stroke:var(--soft);stroke-width:1.4}
+.ai{fill:var(--io-soft);stroke:var(--io);stroke-width:1.4}
+.kn{fill:var(--kn-soft);stroke:var(--kn);stroke-width:1.8}
+.layer{fill:var(--panel);stroke:var(--kn);stroke-width:1;stroke-opacity:.5}
+.arrow{stroke:var(--line);stroke-width:1.6;fill:none}
+.arrow.loop{stroke:var(--kn);stroke-width:1.8}
+.head{fill:var(--line)} .head.kn{fill:var(--kn)}
+.t-lg{font-size:17px;font-weight:700} .t-md{font-size:14px;font-weight:500} .t-sm{font-size:12.5px;fill:var(--muted)}
+.tag rect{rx:6} .tag text{font-family:var(--mono);font-size:12px;font-weight:500}
+.tag.io rect{fill:var(--io-soft);stroke:var(--io)} .tag.io text{fill:var(--io)}
+.tag.kn rect{fill:var(--kn-soft);stroke:var(--kn)} .tag.kn text{fill:var(--kn)}
+.tag.qa rect{fill:var(--qa-soft);stroke:var(--qa)} .tag.qa text{fill:var(--qa)}
+.hit{cursor:pointer;outline:none}
+.hit > rect:first-child{transition:stroke-width .12s}
+.hit:hover > rect:first-child,.hit:focus-visible > rect:first-child{stroke:var(--fg);stroke-width:2.4}
+.hit.on > rect:first-child{stroke:var(--fg);stroke-width:2.6}
+.hint{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 16px}
+.hint b{color:var(--fg);font-weight:500}
+
+/* detail panel */
+.detail{background:var(--panel);border:1px solid var(--soft);border-radius:14px;padding:20px 20px 22px;display:grid;gap:16px}
+.detail-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.detail-head h2{margin:0;font-size:19px}
+.detail-head span{color:var(--muted);font-size:13.5px}
+.lane{display:grid;grid-template-columns:120px 1fr;gap:10px 14px;align-items:start}
+.lane-label{font-size:13px;font-weight:500;color:var(--muted);padding-top:9px}
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px 4px;min-width:0}
+.st{border:1.5px solid var(--line);border-radius:9px;padding:7px 11px 8px;background:var(--bg);min-width:0;max-width:220px}
+.st b{display:block;font-size:13.5px;font-weight:500}
+.st small{display:block;font-size:12px;color:var(--muted);line-height:1.4}
+.st.ai{border-color:var(--io);background:var(--io-soft)}
+.st.code{border-color:var(--code);background:var(--code-soft)}
+.st.user{border-color:var(--user);background:var(--user-soft)}
+.st.chk{border-color:var(--kn);background:var(--kn-soft)}
+.st.par{border-style:dashed}
+.ar{align-self:center;color:var(--line);font-size:16px;padding:0 2px}
+.set .ar{display:none}
+.keys{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted)}
+.keys i{display:inline-block;width:12px;height:12px;border-radius:3px;border:1.5px solid;vertical-align:-2px;margin-right:5px}
+.keys .ai{border-color:var(--io);background:var(--io-soft)} .keys .code{border-color:var(--code);background:var(--code-soft)}
+.keys .user{border-color:var(--user);background:var(--user-soft)} .keys .chk{border-color:var(--kn);background:var(--kn-soft)}
+.keys .par{border-color:var(--line);border-style:dashed}
+@media (max-width:560px){.lane{grid-template-columns:1fr}.lane-label{padding-top:0}}
+@media (prefers-reduced-motion: reduce){.hit > rect:first-child{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Recaller 구조도</h1>
+    <p>어떤 자료로 공부하든 지식 하나로 모이고, 잊을 때쯤 다시 묻는다.</p>
+  </header>
+
+  <div class="canvas">
+    <svg viewBox="0 0 1120 590" xmlns="http://www.w3.org/2000/svg" aria-label="Recaller 전체 흐름. 각 칸을 누르면 세부 구조가 아래에 나온다.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="ahk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head kn" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <text x="40" y="44" class="t-sm">공부 영역</text>
+      <text x="300" y="44" class="t-sm">만들기 · 해 보기</text>
+      <text x="610" y="44" class="t-sm">쌓기</text>
+      <text x="900" y="44" class="t-sm">다시 묻기</text>
+
+      <!-- CS -->
+      <g class="hit" data-k="cs" tabindex="0" role="button" aria-label="CS 세부 구조">
+        <rect class="src" x="30" y="70" width="220" height="110" rx="12"/>
+        <text x="50" y="102" class="t-lg">CS · 이론</text>
+        <text x="50" y="128" class="t-md">PDF (+전처리)</text>
+        <text x="50" y="150" class="t-md">평문 글</text>
+      </g>
+      <path class="arrow" d="M250,125 L292,125" marker-end="url(#ah)"/>
+      <g class="hit" data-k="cs" tabindex="0" role="button" aria-label="CS의 AI 세부 구조">
+        <rect class="ai" x="296" y="90" width="236" height="70" rx="10"/>
+        <text x="314" y="120" class="t-md">AI</text>
+        <text x="314" y="142" class="t-sm">지식 카드 뽑기</text>
+      </g>
+      <g class="tag io"><rect x="296" y="168" width="196" height="26"/><text x="306" y="186">입출력 · 비용·품질·속도</text></g>
+      <path class="arrow" d="M532,125 L596,150" marker-end="url(#ah)"/>
+
+      <!-- PS -->
+      <g class="hit" data-k="ps" tabindex="0" role="button" aria-label="PS 세부 구조">
+        <rect class="src" x="30" y="260" width="220" height="90" rx="12"/>
+        <text x="50" y="292" class="t-lg">PS · 알고리즘</text>
+        <text x="50" y="318" class="t-md">백준 · 코딩 문제</text>
+      </g>
+      <path class="arrow" d="M250,305 L292,305" marker-end="url(#ah)"/>
+      <g class="hit" data-k="ps" tabindex="0" role="button" aria-label="PS의 AI 세부 구조">
+        <rect class="ai" x="296" y="270" width="110" height="70" rx="10"/>
+        <text x="312" y="300" class="t-md">AI</text>
+        <text x="312" y="322" class="t-sm">문제·테스트</text>
+      </g>
+      <path class="arrow" d="M406,305 L418,305" marker-end="url(#ah)"/>
+      <g class="hit" data-k="ps" tabindex="0" role="button" aria-label="PS 풀이 세부 구조">
+        <rect class="box" x="422" y="270" width="110" height="70" rx="10"/>
+        <text x="438" y="300" class="t-md">사용자</text>
+        <text x="438" y="322" class="t-sm">풀기·제출</text>
+      </g>
+      <path class="arrow" d="M532,305 L596,340" marker-end="url(#ah)"/>
+
+      <!-- Project -->
+      <g class="hit" data-k="project" tabindex="0" role="button" aria-label="프로젝트 세부 구조">
+        <rect class="src dash" x="30" y="420" width="220" height="90" rx="12" style="stroke:var(--line)"/>
+        <text x="50" y="452" class="t-lg">프로젝트 · 실제 개발</text>
+        <text x="50" y="478" class="t-md">VS Code + OpenCode</text>
+      </g>
+      <path class="arrow dash" d="M250,465 L292,465" marker-end="url(#ah)"/>
+      <g class="hit" data-k="project" tabindex="0" role="button" aria-label="프로젝트의 AI 세부 구조">
+        <rect class="ai dash" x="296" y="430" width="110" height="70" rx="10"/>
+        <text x="312" y="460" class="t-md">AI</text>
+        <text x="312" y="482" class="t-sm">코딩 에이전트</text>
+      </g>
+      <path class="arrow dash" d="M406,465 L418,465" marker-end="url(#ah)"/>
+      <g class="hit" data-k="project" tabindex="0" role="button" aria-label="프로젝트 개발 세부 구조">
+        <rect class="box dash" x="422" y="430" width="110" height="70" rx="10"/>
+        <text x="438" y="460" class="t-md">사용자</text>
+        <text x="438" y="482" class="t-sm">만들기·검사</text>
+      </g>
+      <path class="arrow dash" d="M532,465 L596,420" marker-end="url(#ah)"/>
+
+      <!-- Knowledge -->
+      <g class="hit" data-k="knowledge" tabindex="0" role="button" aria-label="지식 세부 구조">
+        <rect class="kn" x="600" y="70" width="240" height="440" rx="16"/>
+        <text x="620" y="104" class="t-lg">지식</text>
+        <text x="620" y="126" class="t-sm">같은 지식은 하나로 묶음</text>
+        <rect class="layer" x="616" y="142" width="208" height="120" rx="10"/>
+        <text x="632" y="172" class="t-md">뜻</text>
+        <text x="632" y="196" class="t-sm">자료에서 정리한 것</text>
+        <text x="632" y="216" class="t-sm">PDF · 글</text>
+        <rect class="layer" x="616" y="278" width="208" height="160" rx="10"/>
+        <text x="632" y="308" class="t-md">경험</text>
+        <text x="632" y="332" class="t-sm">직접 해 본 것</text>
+        <text x="632" y="352" class="t-sm">푼 문제 · 틀린 이유 · 힌트</text>
+        <text x="632" y="372" class="t-sm">PS · 프로젝트</text>
+        <text x="632" y="410" class="t-sm">내 상태: 몰랐음 · 앎 · 졸업</text>
+      </g>
+      <g class="tag kn"><rect x="616" y="456" width="140" height="26"/><text x="626" y="474">체계 · 묶기·연결</text></g>
+
+      <!-- Questions -->
+      <path class="arrow" d="M840,190 L886,190" marker-end="url(#ah)"/>
+      <g class="hit" data-k="question" tabindex="0" role="button" aria-label="문제 세부 구조">
+        <rect class="box" x="890" y="150" width="200" height="80" rx="12"/>
+        <text x="910" y="184" class="t-lg">문제</text>
+        <text x="910" y="208" class="t-sm">AI 출제 · 복습 문제</text>
+      </g>
+      <g class="tag qa"><rect x="890" y="110" width="118" height="26"/><text x="900" y="128">품질·속도</text></g>
+
+      <!-- User + loop -->
+      <path class="arrow" d="M990,230 L990,326" marker-end="url(#ah)"/>
+      <g class="hit" data-k="review" tabindex="0" role="button" aria-label="사용자와 복습 세부 구조">
+        <rect class="box" x="890" y="330" width="200" height="80" rx="12"/>
+        <text x="910" y="364" class="t-lg">사용자</text>
+        <text x="910" y="388" class="t-sm">풀기 · 맞힘 · 틀림</text>
+      </g>
+      <path class="arrow loop" d="M890,380 C866,380 862,392 846,392" marker-end="url(#ahk)"/>
+      <path class="arrow loop" d="M990,410 C990,560 720,560 720,514" marker-end="url(#ahk)"/>
+      <text x="842" y="552" class="t-sm" style="fill:var(--kn)">결과가 쌓이고 잊을 때쯤 복습으로</text>
+    </svg>
+  </div>
+
+  <div class="hint"><span><b>칸을 누르면</b> 아래에 세부 구조가 나와요.</span><span>점선 = 확장(구상)</span><span>빨간 선 = 복습 고리</span></div>
+
+  <section class="detail" id="detail" aria-live="polite">
+    <div class="detail-head"><h2 id="d-title"></h2><span id="d-sub"></span></div>
+    <div id="d-body" style="display:grid;gap:14px"></div>
+    <div class="keys"><span><i class="ai"></i>AI</span><span><i class="code"></i>코드</span><span><i class="user"></i>사용자</span><span><i class="chk"></i>검증</span><span><i class="par"></i>동시에 돎</span></div>
+  </section>
+</div>
+
+<script>
+const D = {
+  cs: { title: "CS · 이론", sub: "PDF와 글에서 지식을 뽑는다", lanes: [
+    { label: "PDF", steps: [
+      ["code","전처리","쪽마다 읽는 길 정하기 · 2초"],
+      ["ai","지식 카드 뽑기","모든 쪽 동시 · 14초"],
+      ["chk","인용 확인","원문에 있는 근거만"],
+      ["ai","문제 만들기","카드 1장에 1번"],
+      ["chk","따로 풀어 검증","다르면 고침·보류"],
+      ["code","화면에 붙음","첫 문제 약 20초"] ] },
+    { label: "PDF · 동시에", steps: [
+      ["ai par","자료 전체 정리","중요도 · 연결 · 같은 지식"] ] },
+    { label: "웹 글", steps: [
+      ["user","붙여 넣기",""],
+      ["ai","글 지도","AI 1번 · 흐름·핵심 3~5개"],
+      ["code","핵심만 지식으로","개념어는 후보"],
+      ["user","모르는 개념어 고르기","고른 것만 지식"] ] } ] },
+  ps: { title: "PS · 알고리즘", sub: "문제와 채점 테스트를 만들고, 푼 경험을 쌓는다", lanes: [
+    { label: "만들기", steps: [
+      ["code","원문 가져오기","백준·블로그·보관 사본"],
+      ["code","바로 열기","약 2초"],
+      ["ai par","4개 동시","설정·테스트·실수 풀이·독립 풀이"],
+      ["chk","테스트 검증","세 풀이 일치 · 실수 잡기"],
+      ["code","제출 열림",""] ] },
+    { label: "풀기", steps: [
+      ["user","작성·실행","4개 언어"],
+      ["code","채점","시간·메모리 실측"],
+      ["ai","힌트","3단계 · 반례"],
+      ["code","지식에 기록","제출·힌트·질문"] ] } ] },
+  project: { title: "프로젝트 · 실제 개발", sub: "앱 밖 실험 · 확장 구상", lanes: [
+    { label: "한 단계", steps: [
+      ["user","결과 예측","처음 답이 기록"],
+      ["code","없애 보기","실제 요청으로 확인"],
+      ["user","VS Code에서 고치기","튜터 탭이 도움"],
+      ["chk","재검사","자동 HTTP 검사 33개"],
+      ["user","내 말로 설명",""],
+      ["code","기록 후보","아직 지식에 안 이어짐"] ] },
+    { label: "코스", steps: [
+      ["ai","코스 정하기","대화 · 확인 문제"],
+      ["code","게시판 API 7단계","+ 전이 과제"] ] } ] },
+  knowledge: { title: "지식", sub: "모든 자료가 같이 쓰는 저장소", lanes: [
+    { label: "지식 하나", set: true, steps: [
+      ["code","뜻","자료에서"],
+      ["code","만난 곳의 예","경험에서"],
+      ["code","기록","물어봄·틀림·힌트·맞힘"],
+      ["code","연결","포함·씀·먼저"],
+      ["code","복습 일정","상자 단계"] ] },
+    { label: "저장 4초 뒤", steps: [
+      ["ai","주제 정리","주제·종류 · 목표 추천"],
+      ["code","이름·별칭 비교",""],
+      ["code","비슷한 뜻 후보","임베딩 5개"],
+      ["ai","AI 판정","같음은 학습자에게"],
+      ["ai","층 나누기","뜻 / 예 분리"] ] } ] },
+  question: { title: "문제", sub: "AI가 만든 문제와 AI 없이 만드는 복습 문제", lanes: [
+    { label: "AI 출제", steps: [
+      ["code","카드",""],
+      ["ai","문제 만들기","6가지 형식"],
+      ["code","모양 검사",""],
+      ["chk","따로 풀기","원문만 보고"],
+      ["code","통과 · 보류",""] ] },
+    { label: "복습 문제", set: true, steps: [
+      ["code","플래시카드",""],["code","객관식",""],["code","OX",""],["code","연결 빈칸",""],["code","주관식",""],["code","알아보기",""] ] } ] },
+  review: { title: "사용자 · 복습", sub: "푼 결과가 지식에 쌓이고 다시 나온다", lanes: [
+    { label: "결과", set: true, steps: [
+      ["user","틀림·힌트·물어봄","→ 몰랐음"],
+      ["user","맞힘","→ 앎"],
+      ["user","다른 날 3번 맞힘","→ 졸업"] ] },
+    { label: "간격", steps: [
+      ["code","10분",""],["code","1일",""],["code","3일",""],["code","7일",""],["code","16일",""],["code","35일",""] ] },
+    { label: "오늘 할 것", steps: [
+      ["code","약점",""],["code","물어본 것",""],["code","복습",""],["code","첫 훑기",""],["code","새 문제","20문제씩"] ] } ] }
+};
+const keys = Object.keys(D);
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function show(k) {
+  if (!D[k]) k = "cs";
+  const d = D[k];
+  document.getElementById("d-title").textContent = d.title;
+  document.getElementById("d-sub").textContent = d.sub;
+  document.getElementById("d-body").innerHTML = d.lanes.map((lane) =>
+    `<div class="lane"><div class="lane-label">${esc(lane.label)}</div><div class="flow${lane.set ? " set" : ""}">` +
+    lane.steps.map(([cls, t, s], i) => `${i ? '<span class="ar" aria-hidden="true">→</span>' : ""}<div class="st ${cls}"><b>${esc(t)}</b>${s ? `<small>${esc(s)}</small>` : ""}</div>`).join("") +
+    `</div></div>`).join("");
+  document.querySelectorAll(".hit").forEach((g) => g.classList.toggle("on", g.dataset.k === k));
+}
+document.querySelectorAll(".hit").forEach((g) => {
+  const go = () => { if (location.hash !== "#" + g.dataset.k) location.hash = g.dataset.k; else show(g.dataset.k); };
+  g.addEventListener("click", go);
+  g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+});
+window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+show(location.hash.slice(1));
+</script>
+
+</html>

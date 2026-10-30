@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recaller 세부 파이프라인</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one band per pipeline; inside, numbered steps flow left→right and wrap. Chips say who does the step (AI·코드·사용자). */
+:root{
+  --bg:#f7f8fa; --panel:#ffffff; --fg:#1b2230; --muted:#5d6678; --line:#c9cfdb; --soft:#eef0f4;
+  --ai:#2f63d6; --ai-soft:#e6eefc; --code:#3d7a57; --code-soft:#e3f2e9; --user:#8a4fc4; --user-soft:#f1e8fb;
+  --chk:#c2334d; --chk-soft:#fbe8ec; --par:#c8661a; --par-soft:#fcefe2;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151c; --panel:#1a1f29; --fg:#e8ebf2; --muted:#9aa3b5; --line:#38404f; --soft:#232a36;
+  --ai:#7fa6ff; --ai-soft:#1d2a45; --code:#7fcf9f; --code-soft:#1b3326; --user:#c9a2f0; --user-soft:#2e2240;
+  --chk:#ff7d93; --chk-soft:#3a1f27; --par:#f0a060; --par-soft:#3a2a1c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151c; --panel:#1a1f29; --fg:#e8ebf2; --muted:#9aa3b5; --line:#38404f; --soft:#232a36;
+  --ai:#7fa6ff; --ai-soft:#1d2a45; --code:#7fcf9f; --code-soft:#1b3326; --user:#c9a2f0; --user-soft:#2e2240;
+  --chk:#ff7d93; --chk-soft:#3a1f27; --par:#f0a060; --par-soft:#3a2a1c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-block:32px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:28px}
+header h1{margin:0;font-size:28px;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:6px 0 0;color:var(--muted);max-width:68ch}
+nav{display:flex;flex-wrap:wrap;gap:8px}
+nav a{color:var(--fg);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;background:var(--panel)}
+nav a:hover,nav a:focus-visible{border-color:var(--ai);outline:none}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--muted);align-items:center}
+.chip{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:11.5px;font-weight:500;border-radius:6px;padding:1px 7px;border:1px solid;white-space:nowrap}
+.chip.ai{color:var(--ai);background:var(--ai-soft);border-color:var(--ai)}
+.chip.code{color:var(--code);background:var(--code-soft);border-color:var(--code)}
+.chip.user{color:var(--user);background:var(--user-soft);border-color:var(--user)}
+.chip.chk{color:var(--chk);background:var(--chk-soft);border-color:var(--chk)}
+.chip.par{color:var(--par);background:var(--par-soft);border-color:var(--par)}
+section.pipe{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 22px 20px;display:grid;gap:16px;scroll-margin-top:16px}
+.pipe-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.pipe-head h2{margin:0;font-size:20px;text-wrap:balance}
+.pipe-head .who{color:var(--muted);font-size:13px}
+.pipe-head .time{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;counter-reset:s}
+.step{position:relative;border:1px solid var(--line);border-radius:10px;padding:12px 14px 13px;background:var(--bg);display:grid;gap:6px;align-content:start;min-width:0}
+.step::before{counter-increment:s;content:counter(s);position:absolute;top:10px;right:12px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.step h3{margin:0;font-size:15px;padding-right:22px;text-wrap:balance}
+.step p{margin:0;font-size:13.5px;color:var(--muted)}
+.step ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--muted)}
+.step .chips{display:flex;flex-wrap:wrap;gap:5px}
+.step.check{border-color:var(--chk)}
+.step.para{border-style:dashed;border-color:var(--par)}
+.step.opt{border-style:dashed}
+.step .num{font-family:var(--mono);font-size:12px;color:var(--fg)}
+.note{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px;margin:0}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:520px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:500;color:var(--muted)}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+footer{color:var(--muted);font-size:12.5px}
+@media (prefers-reduced-motion: no-preference){nav a{transition:border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Recaller 세부 파이프라인</h1>
+    <p>지금 코드(claude/recaller2, 10/30)가 실제로 도는 순서대로 적었다. 숫자는 직접 잰 것이고, 재지 않은 것은 적지 않았다.</p>
+  </header>
+
+  <nav aria-label="파이프라인">
+    <a href="#pdf">PDF</a><a href="#web">웹 글</a><a href="#code">코드 문제</a><a href="#after">지식 저장 뒤</a><a href="#review">기록과 복습</a><a href="#models">모델·시간 표</a>
+  </nav>
+
+  <div class="legend">
+    <span class="chip ai">AI</span>모델 호출
+    <span class="chip code">코드</span>AI 없이 프로그램이 처리
+    <span class="chip user">사용자</span>학습자가 함
+    <span class="chip chk">검증</span>통과 못 하면 고치거나 뺌
+    <span class="chip par">동시</span>앞 단계와 나란히 돎
+  </div>
+
+  <section class="pipe" id="pdf">
+    <div class="pipe-head"><h2>PDF → 지식 카드 → 문제</h2><span class="who">엔진 recaller · C 담당</span><span class="time">44쪽: 카드까지 14초 · 첫 문제 약 20초</span></div>
+    <div class="steps">
+      <div class="step"><h3>전처리</h3><div class="chips"><span class="chip code">코드</span></div><p>쪽마다 읽는 길을 정한다: 글자 층 그대로 / 그림만 잘라 붙임 / 쪽 전체 이미지. 작업자 프로세스 8개가 쪽을 1024px로 그리고, 쪽 제목으로 목차를 잡는다.</p><p class="num">44쪽 약 2초</p></div>
+      <div class="step"><h3>지식 카드 뽑기</h3><div class="chips"><span class="chip ai">AI · terra low</span></div><p>모든 쪽을 동시에. 쪽 원문 + 그림 + 목차 힌트를 받아 카드를 만들고, 답을 스트리밍으로 받는다. 카드 9종류(용어·사실·목록·조건·절차·공식·비교·개념·패턴), 카드마다 근거 쪽·인용.</p></div>
+      <div class="step check"><h3>카드 검사</h3><div class="chips"><span class="chip code">코드</span><span class="chip chk">검증</span></div><p>인용이 실제 원문에 있는지 확인하고, 문제로 낼 카드를 고른다. 카드 하나가 다 써지는 순간 다음 단계로 넘긴다.</p></div>
+      <div class="step"><h3>카드마다 문제 만들기</h3><div class="chips"><span class="chip ai">AI · sol low</span><span class="chip code">모양 검사</span></div><p>출제 기준을 붙여 카드 1장에 호출 1번. 객관식·OX·빈칸·단답·플래시카드·순서. 보기 위치를 섞고, 화면에 낼 수 있는 모양인지 코드로 검사한다.</p></div>
+      <div class="step check"><h3>따로 풀어서 검증</h3><div class="chips"><span class="chip ai">AI</span><span class="chip chk">검증</span></div><p>다른 호출이 원문만 보고 푼다. 답이 다르거나 원문이 답을 여럿 허용하면 한 번 고쳐 오게 하고, 그래도 안 되면 보류.</p></div>
+      <div class="step"><h3>화면에 바로 붙이기</h3><div class="chips"><span class="chip code">코드</span></div><p>통과한 문제는 그 자리에서 공부 화면에 붙는다. 학습자는 나머지를 기다리지 않고 읽고 푼다.</p></div>
+      <div class="step"><h3>같은 지식 문제 빼기</h3><div class="chips"><span class="chip code">코드</span></div><p>두 쪽이 같은 지식으로 문제를 만들었으면 뒤의 것을 뺀다.</p></div>
+      <div class="step para"><h3>자료 전체 정리</h3><div class="chips"><span class="chip ai">AI · 1번</span><span class="chip par">동시</span></div><p>카드 전체를 한 번에 보고 이름 다듬기, 같은 지식 묶기, 주제, 자료 전체 기준 중요도(핵심/보조), 다른 구역과의 연결. 카드·문제는 바꾸지 않고, 실패해도 생성은 끝까지 간다.</p><p class="num">44쪽: 핵심 31/87 · 연결 84개 · 99초 (줄이는 중)</p></div>
+      <div class="step opt"><h3>심화 문제 (원할 때)</h3><div class="chips"><span class="chip ai">AI</span><span class="chip chk">검증</span></div><p>카드 여러 장을 묶는 문제. 묶음 정하기 → 문제 → 따로 풀기·풀이 확인.</p></div>
+      <div class="step"><h3>지식 저장소로</h3><div class="chips"><span class="chip code">코드</span></div><p>공부 화면이 자료를 열 때 카드를 지식으로 가져온다(만남). 문제를 풀면 그 문제의 학습 목표가 가리키는 카드 지식에 기록된다.</p></div>
+    </div>
+    <p class="note">끊기면: 일시 오류는 2·5·12초 간격으로 다시 묻고, 그래도 멈추면 10초 뒤 멈춘 곳부터 이어 간다(한 자료에 3번까지). 호출 상한은 쪽당 8번 + 40번. 자료 지도는 이 결과(카드·중요도·연결·내 상태)를 한 화면에 보여 준다.</p>
+  </section>
+
+  <section class="pipe" id="web">
+    <div class="pipe-head"><h2>웹 글 → 글 지도 → 지식</h2><span class="who">지식 저장소 · B 담당</span><span class="time">AI 호출 1번</span></div>
+    <div class="steps">
+      <div class="step"><h3>글 붙여 넣기</h3><div class="chips"><span class="chip user">사용자</span></div><p>본문을 붙여 넣는다(80자 이상). 주소로 가져오기는 일부러 만들지 않았다.</p></div>
+      <div class="step"><h3>글 지도 만들기</h3><div class="chips"><span class="chip ai">AI · terra low</span></div><p>글 종류, 이 글이 답하는 질문, 흐름 3~6단계, 요지와 근거, 핵심 아이디어 3~5개(인용 포함), 개념어 20개까지. 이미 아는 개념어는 표시한다.</p></div>
+      <div class="step"><h3>핵심만 지식으로</h3><div class="chips"><span class="chip code">코드</span></div><p>핵심 아이디어만 지식(만남)으로 저장한다. 개념어는 후보로 글에 남는다.</p></div>
+      <div class="step"><h3>모르는 개념어 고르기</h3><div class="chips"><span class="chip user">사용자</span></div><p>학습자가 모른다고 누른 개념어만 지식이 되고 '물어봄'으로 기록돼 복습에 들어간다(몰랐음).</p></div>
+      <div class="step"><h3>확인 목표로 공부</h3><div class="chips"><span class="chip user">사용자</span><span class="chip ai">AI 판정</span></div><p>용어를 안다 · 주장을 말할 수 있다(내 말로 쓰면 AI가 판정) · 고리를 설명할 수 있다 · 다른 글에서 알아본다.</p></div>
+    </div>
+    <p class="note">PDF와 달리 문제를 미리 만들지 않는다. 다른 글에서 같은 지식을 다시 만나면 알려 준다.</p>
+  </section>
+
+  <section class="pipe" id="code">
+    <div class="pipe-head"><h2>코드 문제 → 채점 테스트 → 풀기</h2><span class="who">코드 · A 담당</span><span class="time">열기 약 2초 · 만들기 15~23초</span></div>
+    <div class="steps">
+      <div class="step"><h3>원문 가져오기</h3><div class="chips"><span class="chip code">코드</span></div><p>백준 번호, 백준 주소, 블로그 주소에서 원문을 받는다. 블로그가 백준 문제를 가리키면 원문이 먼저. 막히면 웹 보관 사본. 같은 주소로 만든 문제가 있으면 [열기]/[새로 만들기].</p></div>
+      <div class="step"><h3>바로 열기</h3><div class="chips"><span class="chip code">코드</span></div><p>원문의 문제 글·예제로 먼저 저장해 연다. 만드는 동안 예제 실행·힌트·질문은 되고 제출만 잠긴다.</p><p class="num">약 2초</p></div>
+      <div class="step para"><h3>네 작업 동시에</h3><div class="chips"><span class="chip ai">AI · 4번</span><span class="chip par">동시</span></div><ul><li>문제 설정: 모범 풀이, 단순 풀이, 쓰이는 지식과 뜻 (6.1 terra)</li><li>테스트 생성기</li><li>일부러 틀린 풀이들 (흔한 실수)</li><li>독립 풀이: 문제 글만 보고 따로 (다른 모델)</li></ul><p class="num">15~23초 · 비용 약 +22%</p></div>
+      <div class="step check"><h3>테스트 검증</h3><div class="chips"><span class="chip code">코드 실행</span><span class="chip chk">검증</span></div><p>테스트 20~40개(최대 크기 포함)에서 모범·단순·독립 풀이가 같은 답인지, 원문 예제와 맞는지, 틀린 풀이들을 잡아내는지. 어긋나면 새 독립 풀이로 다시.</p></div>
+      <div class="step"><h3>제출 열림 + 지식 저장</h3><div class="chips"><span class="chip code">코드</span></div><p>같은 문제 자리에 테스트를 채우고 제출을 연다. 쓰이는 지식은 이름·뜻과 함께 지식 저장소로.</p></div>
+      <div class="step"><h3>풀기와 채점</h3><div class="chips"><span class="chip user">사용자</span><span class="chip code">로컬 채점</span><span class="chip ai">힌트</span></div><p>Python·JS·C++·C#을 내 PC에서 채점. 시간·메모리를 실제로 재고 PC 속도에 맞춰 보정. 힌트 3단계, 에러 설명, 반례. 제출·힌트·질문은 그 지식의 기록이 된다.</p></div>
+    </div>
+  </section>
+
+  <section class="pipe" id="after">
+    <div class="pipe-head"><h2>지식 저장 뒤 자동 처리</h2><span class="who">지식 저장소 · B 담당</span><span class="time">저장 4초 뒤, 기다리게 하지 않음</span></div>
+    <div class="steps">
+      <div class="step"><h3>주제 정리</h3><div class="chips"><span class="chip ai">AI · 30개씩</span></div><p>주제 나무("CS/알고리즘/탐색")에 자리를 정하고 종류(개념·절차·사실·공식·어휘)를 붙인다. 새 자료에 맞는 목표를 추천한다. 손으로 옮긴 것은 건드리지 않는다.</p></div>
+      <div class="step check"><h3>같은 지식 찾기 3단계</h3><div class="chips"><span class="chip code">이름</span><span class="chip code">임베딩</span><span class="chip ai">AI 판정</span></div><ul><li>이름·별칭이 같으면 저장할 때 바로 합침</li><li>뜻이 비슷한 후보 5개 (EmbeddingGemma)</li><li>AI가 같음 / 포함 / 씀 / 먼저 / 가까움 / 다름</li></ul><p>같음은 학습자에게 묻고, 포함·씀·먼저는 연결로 만든다.</p></div>
+      <div class="step"><h3>층 나누기</h3><div class="chips"><span class="chip ai">AI</span></div><p>뜻에 섞인 그 자료만의 사연을 '만난 곳의 예'로 옮겨, 뜻은 어디서나 통하게 남긴다.</p></div>
+    </div>
+  </section>
+
+  <section class="pipe" id="review">
+    <div class="pipe-head"><h2>기록과 복습</h2><span class="who">지식 저장소 · B 담당</span><span class="time">AI 호출 없음</span></div>
+    <div class="steps">
+      <div class="step"><h3>결과가 상태로</h3><div class="chips"><span class="chip code">코드</span></div><p>틀림·힌트·물어봄 → 몰랐음. 맞힘 → 앎. 서로 다른 날 3번 맞히면 졸업. "내 답도 맞아요"는 6시간 안의 틀림을 되돌린다.</p></div>
+      <div class="step"><h3>복습 간격</h3><div class="chips"><span class="chip code">코드</span></div><p>맞히면 한 칸 위로, 틀리면 첫 칸으로 내일 다시. 10분 → 1일 → 3일 → 7일 → 16일 → 35일. PDF·웹 글·코드 모두 같은 간격.</p></div>
+      <div class="step"><h3>오늘 할 것</h3><div class="chips"><span class="chip code">코드</span></div><p>약점 → 물어본 것 → 복습 → 첫 훑기 → 새 문제 순, 시험이 가까운 목표부터, 20문제씩 끊어서.</p></div>
+      <div class="step"><h3>AI 없이 복습 문제</h3><div class="chips"><span class="chip code">코드</span></div><p>지식에서 바로 만든다: 플래시카드, 객관식, OX, 연결 빈칸, 주관식, 알아보기.</p></div>
+    </div>
+    <p class="note">아직 비어 있는 곳: 엔진의 중요도·연결이 복습 순서에 쓰이지 않고, 졸업이 빨라 7일 이상 상자까지 잘 가지 않는다.</p>
+  </section>
+
+  <section class="pipe" id="models">
+    <div class="pipe-head"><h2>모델과 잰 시간</h2></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>단계</th><th>모델</th><th>잰 값</th></tr></thead>
+      <tbody>
+        <tr><td>PDF 지식 카드 뽑기</td><td>gpt-6.1-terra · low</td><td class="n">44쪽 14초 (전 47초)</td></tr>
+        <tr><td>PDF 문제 만들기·따로 풀기</td><td>gpt-6-sol · low</td><td class="n">첫 문제 약 20초</td></tr>
+        <tr><td>PDF 자료 전체 정리</td><td>gpt-6-sol</td><td class="n">44쪽 99초, 출력 5.6천 토큰</td></tr>
+        <tr><td>PDF 전체 (문제까지)</td><td>—</td><td class="n">44쪽 약 4분 30초</td></tr>
+        <tr><td>웹 글 지도</td><td>gpt-6.1-terra · low</td><td class="n">호출 1번</td></tr>
+        <tr><td>코드 문제 만들기</td><td>gpt-6.1-terra (독립 풀이는 다른 모델)</td><td class="n">15~23초, 열기 약 2초</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <footer>모든 AI 호출은 ChatGPT 계정으로 한다(API 키 없이 구독 사용량). 기록은 이 PC에 두고, 끝낼 때 비공개 저장소로 동기화한다.</footer>
+</div>
+
+</html>
