@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./보관/**)",
+      "Read(./eval/runs/**)",
+      "Read(./eval/snapshots/**)",
+      "Read(./tools/problem-authoring-lab/runs/**)",
+      "Read(./.study-forge-data/**)",
+      "Read(./.env.local)",
+      "Read(./.env)"
+    ]
+  }
+}
