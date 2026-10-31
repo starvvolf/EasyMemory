@@ -91,7 +91,9 @@ for (const dir of dirs) {
       }
       run.end = Math.max(run.end, at + num(l.ms));
       const t = l.tokens;
-      push({ at: l.at, kind: "assist", run: run.id, purpose: l.purpose, model: l.model, effort: l.effort, ms: l.ms, firstTextMs: l.firstTextMs, ok: l.ok,
+      // 10/31 오전 판정 시험이 "decisions"를 모델 이름 그대로 ChatGPT에 보내 실패한 줄: Decisions API 호출이 아니다.
+      const model = /^decisions/.test(l.model ?? "") ? `${l.model} (옛 시험·Decisions 아님)` : l.model;
+      push({ at: l.at, kind: "assist", run: run.id, purpose: l.purpose, model, effort: l.effort, ms: l.ms, firstTextMs: l.firstTextMs, ok: l.ok,
         usage: t ? { inputTokens: t.in, cachedInputTokens: t.cached, outputTokens: t.out, reasoningTokens: t.reasoning } : undefined, src });
     }
   }

@@ -15,7 +15,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { askJson, logAssistCall, S } from "../assist/model.ts";
+import { askJson, S } from "../assist/model.ts";
 import { similarKnowledge } from "./embed.ts";
 import { getKnowledge, KIND_LABEL, linkKnowledge, mergeKnowledge, normalize, tree, unlinkKnowledge, type KKind } from "./store.ts";
 
@@ -123,29 +123,19 @@ const judgeModel = () => ({ model: process.env.RECALLER_DEDUPE_MODEL?.trim() || 
 async function judgeForSave(work: Array<{ item: JudgeItem; cands: JudgeItem[] }>, mode: LinkMode) {
   if (work.length && process.env.RECALLER_DEDUPE_ENGINE?.trim() !== "sol" && process.env.OPENAI_API_KEY?.trim()) {
     const sameMin = Number(process.env.RECALLER_DEDUPE_SAME_MIN) || 0.5;
-    const started = Date.now();
     try {
-      // dedupe-decisions.ts imports this file, so it is loaded only when used.
+      // dedupe-decisions.ts imports this file, so it is loaded only when used. It writes the assist-log line for each request it sends.
       const { judgeBatchDecisions } = await import("./dedupe-decisions.ts");
       const { verdicts, info } = await judgeBatchDecisions(work, { sameMin, mode, routes: ["api_key"], timeoutMs: 20_000, cache: false });
       if (!info || info.answered < info.asked) throw new Error(`답이 모자람 (${info?.answered ?? 0}/${info?.asked ?? 0})`);
-      logDecisions(started, true, info.usage);
       for (const [n, row] of verdicts.entries()) for (const [m, v] of row.entries())
         if (v.verdict === "same" && vocabPair(work[n].item, work[n].cands[m])) Object.assign(v, { verdict: "related", reason: `뜻이 같은 다른 단어(비슷한 말)라 합치지 않아요. ${v.reason}` });
       return verdicts;
     } catch (error) {
-      logDecisions(started, false);
       console.warn(`[knowledge:dedupe] Decisions 판정 실패, sol로 다시 판정: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
     }
   }
   return judgeBatch(work, { ...judgeModel(), mode });
-}
-/** assist-log.jsonl 한 줄(토큰 사용량 보기가 읽음): Decisions 호출은 model gpt-6-luna · effort "decisions". */
-function logDecisions(started: number, ok: boolean, usage?: Record<string, unknown>) {
-  const n = (v: unknown) => (typeof v === "number" ? v : undefined);
-  const sub = (k: string) => (usage?.[k] ?? {}) as Record<string, unknown>;
-  logAssistCall({ at: new Date(started).toISOString(), purpose: "knowledge:dedupe", model: "gpt-6-luna", effort: "decisions", engine: "decisions", ms: Date.now() - started, ok,
-    ...(usage ? { tokens: { in: n(usage.input_tokens), cached: n(sub("input_tokens_details").cached_tokens), out: n(usage.output_tokens), reasoning: n(sub("output_tokens_details").reasoning_tokens) } } : {}) });
 }
 /**
  * 3단계 AI 판정 for a batch: each new item with its candidates (closest first) → one verdict per candidate, in order.

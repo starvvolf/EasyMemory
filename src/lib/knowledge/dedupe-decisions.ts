@@ -5,7 +5,7 @@
 // 시험(dedupe-eval.ts)과 실제 저장 경로(dedupe.ts judgeBatch, API 키가 있을 때만)에서 쓴다. 연결 문장(note)은 만들지 않는다(Decisions는 글을 쓰지 않음).
 // 인증: 먼저 ChatGPT 로그인 토큰, 그 길이 막히면 OPENAI_API_KEY(.env.local, 사용자가 직접 넣음). 실제 경로는 routes로 API 키만 쓴다(ChatGPT 토큰은 401).
 import { chatGptAccessToken } from "../ai/chatgpt-auth.ts";
-import { LOCAL_CALLER } from "../assist/model.ts";
+import { LOCAL_CALLER, logAssistCall } from "../assist/model.ts";
 import { linkMode, type JudgeItem, type LinkMode, type Verdict } from "./dedupe.ts";
 
 const ENDPOINT = "https://api.openai.com/v1/decisions";
@@ -36,7 +36,7 @@ type Reply = { answers?: Answer[]; usage?: Record<string, unknown> };
 export type DecisionsInfo = { route: "chatgpt" | "api_key"; ms: number; usage?: Record<string, unknown>; /** questions asked / answered with a usable choice */ asked: number; answered: number };
 type Route = DecisionsInfo["route"];
 
-async function post(body: unknown, routes: Route[], timeoutMs?: number): Promise<{ reply: Reply; route: Route }> {
+async function post(body: { model: string }, routes: Route[], timeoutMs?: number): Promise<{ reply: Reply; route: Route }> {
   const all: Array<[Route, () => Promise<string | undefined>]> = [
     ["chatgpt", () => chatGptAccessToken(LOCAL_CALLER.uid).catch(() => undefined)],
     ["api_key", async () => process.env.OPENAI_API_KEY?.trim() || undefined],
@@ -46,13 +46,29 @@ async function post(body: unknown, routes: Route[], timeoutMs?: number): Promise
   for (const [route, token] of attempts) {
     const key = await token();
     if (!key) { refused.push(`${route}: 인증 없음`); continue; }
-    const res = await fetch(ENDPOINT, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify(body),
-      ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}) });
-    const text = await res.text();
-    if (res.ok) return { reply: JSON.parse(text) as Reply, route };
-    refused.push(`${route}: ${res.status} ${text.slice(0, 200)}`);
+    const started = Date.now();
+    let ok = false, usage: Record<string, unknown> | undefined, status = 0;
+    try {
+      const res = await fetch(ENDPOINT, { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify(body),
+        ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}) });
+      status = res.status;
+      const text = await res.text();
+      if (res.ok) { const reply = JSON.parse(text) as Reply; ok = true; usage = reply.usage; return { reply, route }; }
+      refused.push(`${route}: ${res.status} ${text.slice(0, 200)}`);
+    } finally { logDecisions(body.model, route, started, ok, status, usage); }
   }
   throw new Error(`Decisions API를 부르지 못했어요 — ${refused.join(" / ")}`);
+}
+/**
+ * assist-log.jsonl 한 줄(토큰 사용량 보기가 읽음), 실제로 보낸 요청마다: model gpt-6-luna · effort "decisions", tokens는 askJson 줄과 같은 칸.
+ * (2026-10-31) 예전에는 저장 경로(dedupe.ts)에서만 썼다: 시험의 Decisions 호출은 성공해도 남지 않았고, 키가 없어 보내지도 않은 판정도 실패 줄이 됐다.
+ */
+function logDecisions(model: string, route: Route, started: number, ok: boolean, status: number, usage?: Record<string, unknown>) {
+  const n = (v: unknown) => (typeof v === "number" ? v : undefined);
+  const sub = (k: string) => (usage?.[k] ?? {}) as Record<string, unknown>;
+  logAssistCall({ at: new Date(started).toISOString(), purpose: "knowledge:dedupe", model, effort: "decisions", engine: "decisions", route, ms: Date.now() - started, ok,
+    ...(ok ? {} : { status }),
+    ...(usage ? { tokens: { in: n(usage.input_tokens), cached: n(sub("input_tokens_details").cached_tokens), out: n(usage.output_tokens), reasoning: n(sub("output_tokens_details").reasoning_tokens) } } : {}) });
 }
 
 /** Same calls within one test run are answered once (several thresholds read the same probabilities). */
