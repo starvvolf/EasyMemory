@@ -65,6 +65,13 @@
   #tip { position: fixed; pointer-events: none; background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: none; z-index: 10; max-width: 320px; }
   #tip b { font-weight: 650; }
   .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+  .live { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .live[hidden] { display: none; }
+  .live .state::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: var(--s3); vertical-align: 1px; }
+  .live .state.off::before { background: var(--other); }
+  .live .state.down { color: var(--s8); }
+  .live .state.down::before { background: var(--s8); }
+  .live button { font: inherit; font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-1); color: var(--text-secondary); cursor: pointer; }
   @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } .two { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -74,6 +81,11 @@
   <div>
     <h1>Recaller 토큰 사용량</h1>
     <div class="sub" id="meta"></div>
+    <div class="live" id="live" hidden>
+      <span class="state" id="liveState">불러오는 중…</span>
+      <button id="liveToggle" type="button">자동 갱신 끄기</button>
+      <button id="liveNow" type="button">지금 새로고침</button>
+    </div>
   </div>
 
   <div class="card filters" id="filters">
@@ -137,7 +149,9 @@
 </div>
 
 <script>
-const DATA = /*__DATA__*/null;
+let DATA = /*__DATA__*/null;
+// 서버 모드(build.mjs --serve)로 열리면 데이터는 비어 오고 /data.json에서 받는다. 파일로 열면 지금처럼 정적.
+const LIVE = !DATA && /^https?:$/.test(location.protocol);
 
 // OpenAI 공식 가격표(developers.openai.com/api/docs/pricing), 2026-10-31 확인. 100만 토큰당 USD.
 // in = 새 입력, cached = 캐시로 읽은 입력, write = 캐시 쓰기(30분 보관), out = 출력(생각 토큰 포함).
@@ -198,7 +212,8 @@ function costOf(r) {
 
 // ---------- state ----------
 const S = { range: "all", from: "", to: "", area: "", model: "", kind: "", nofake: true, cur: "krw", fx: 1400, sort: { key: "t", dir: -1 }, open: new Set() };
-const rows = (DATA?.rows ?? []).map((r) => ({ ...r, day: localDay(r.t), area: areaOf(r), usd: costOf(r) }));
+let rows = [];
+function setRows() { rows = (DATA?.rows ?? []).map((r) => ({ ...r, day: localDay(r.t), area: areaOf(r), usd: costOf(r) })); }
 function localDay(iso) { const d = new Date(iso); if (isNaN(d)) return "날짜 없음"; return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
 
 function filtered() {
@@ -254,7 +269,7 @@ function render() {
 
 function renderWarns(list, s) {
   const w = [];
-  if (!DATA) w.push("기록이 들어 있지 않은 화면이에요. <code>node tools/usage-report/build.mjs</code>로 만든 파일을 여세요.");
+  if (!DATA && !LIVE) w.push("기록이 들어 있지 않은 화면이에요. <code>node tools/usage-report/build.mjs</code>로 만든 파일을 여세요.");
   if (s.nousage) w.push(`토큰 기록이 없는 호출 ${nf.format(s.nousage)}건은 호출 수와 시간에만 셉니다(예전 기록이거나 실패한 호출).`);
   if (s.unpriced) { const ms = [...new Set(list.filter((r) => r.u && r.usd == null).map((r) => r.m))]; w.push(`가격표에 없는 모델(${ms.map(esc).join(", ")}) ${nf.format(s.unpriced)}건은 가격에서 빠졌어요.`); }
   document.getElementById("warns").innerHTML = w.map((x) => `<div class="warn">${x}</div>`).join("");
@@ -418,10 +433,18 @@ function renderPrices() {
 }
 
 // ---------- controls ----------
-function fillSelect(id, label, values, fmt = (v) => v) { document.getElementById(id).innerHTML = `<option value="">${label}</option>` + values.map((v) => `<option value="${esc(v)}">${esc(fmt(v))}</option>`).join(""); }
-fillSelect("area", "전체", AREAS.filter((a) => rows.some((r) => r.area === a)));
-fillSelect("model", "전체", modelsIn(rows));
-fillSelect("kind", "전체", Object.keys(KINDS).filter((k) => rows.some((r) => r.k === k)), (k) => KINDS[k]);
+// 다시 채워도 고른 값은 남긴다(새 기록에 그 값이 없어도 목록에 둔다).
+function fillSelect(id, label, values, fmt = (v) => v) {
+  const el = document.getElementById(id), keep = S[id];
+  if (keep && !values.includes(keep)) values = [...values, keep];
+  el.innerHTML = `<option value="">${label}</option>` + values.map((v) => `<option value="${esc(v)}">${esc(fmt(v))}</option>`).join("");
+  el.value = keep;
+}
+function fillSelects() {
+  fillSelect("area", "전체", AREAS.filter((a) => rows.some((r) => r.area === a)));
+  fillSelect("model", "전체", modelsIn(rows));
+  fillSelect("kind", "전체", Object.keys(KINDS).filter((k) => rows.some((r) => r.k === k)), (k) => KINDS[k] ?? k);
+}
 const segs = (id, attr, keyName) => document.getElementById(id).addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   for (const x of e.currentTarget.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
@@ -441,12 +464,62 @@ document.getElementById("runTable").addEventListener("click", (e) => {
 });
 let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(render, 150); });
 
-if (DATA) {
+function renderMeta() {
+  if (!DATA) return;
   const d = new Date(DATA.builtAt);
-  document.getElementById("meta").innerHTML = `${d.toLocaleString("ko-KR")}에 만듦 · 호출 ${nf.format(rows.length)}건 · 읽은 폴더 ${DATA.dirs.length}개 <span class="muted" title="${esc(DATA.dirs.join("\n"))}">(올리면 경로)</span> · 새로 보려면 다시 만드세요`;
+  document.getElementById("meta").innerHTML = `${LIVE ? "" : `${d.toLocaleString("ko-KR")}에 만듦 · `}호출 ${nf.format(rows.length)}건 · 읽은 폴더 ${DATA.dirs.length}개 <span class="muted" title="${esc(DATA.dirs.join("\n"))}">(올리면 경로)</span>${LIVE ? "" : " · 새로 보려면 다시 만드세요"}`;
 }
+
+/** Swap in new data without reloading: filters, currency, open rows and scroll positions stay. */
+function applyData(d) {
+  const scrolls = [...document.querySelectorAll(".scroll")].map((el) => el.scrollTop), y = scrollY;
+  DATA = d; setRows(); fillSelects(); renderMeta(); render();
+  document.querySelectorAll(".scroll").forEach((el, i) => { el.scrollTop = scrolls[i] ?? 0; });
+  scrollTo(scrollX, y);
+}
+
+// ---------- auto refresh (serve mode) ----------
+const live = { on: true, version: "", last: null, down: false, busy: false };
+try { live.on = localStorage.getItem("usage-live") !== "off"; } catch { /* storage blocked */ }
+function renderLive() {
+  const st = document.getElementById("liveState");
+  st.className = `state${live.down ? " down" : live.on ? "" : " off"}`;
+  const when = live.last ? ` · 마지막 갱신 ${[live.last.getHours(), live.last.getMinutes(), live.last.getSeconds()].map((n) => String(n).padStart(2, "0")).join(":")}` : "";
+  st.textContent = live.down ? `연결 끊김 · 다시 시도 중${when}` : `자동 갱신 ${live.on ? "켜짐" : "꺼짐"}${when}`;
+  document.getElementById("liveToggle").textContent = live.on ? "자동 갱신 끄기" : "자동 갱신 켜기";
+}
+async function poll(force) {
+  if (live.busy) return;
+  live.busy = true;
+  try {
+    const v = await (await fetch("version", { cache: "no-store" })).json();
+    if (force || v.version !== live.version) {
+      const d = await (await fetch("data.json", { cache: "no-store" })).json();
+      live.version = d.version; applyData(d);
+    }
+    live.last = new Date(); live.down = false;
+  } catch {
+    live.down = true;
+  } finally {
+    live.busy = false; renderLive();
+  }
+}
+
 renderPrices();
-render();
+if (LIVE) {
+  document.getElementById("live").hidden = false;
+  document.getElementById("liveToggle").addEventListener("click", () => {
+    live.on = !live.on;
+    try { localStorage.setItem("usage-live", live.on ? "on" : "off"); } catch { /* storage blocked */ }
+    renderLive(); if (live.on) poll();
+  });
+  document.getElementById("liveNow").addEventListener("click", () => poll(true));
+  // 꺼 두었어도 연결이 끊긴 동안에는 계속 다시 시도한다.
+  setInterval(() => { if (live.on || live.down) poll(); }, 10_000);
+  renderLive(); poll(true);
+} else {
+  setRows(); fillSelects(); renderMeta(); render();
+}
 </script>
 </body>
 </html>
