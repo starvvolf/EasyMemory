@@ -3,6 +3,7 @@
 // The knowledge store keeps its writes in order only inside one server, so two servers must never share a data folder.
 //   node scripts/run-lab.mjs --name ps --port 3003 [--data tmp/lab-ps/data] [--dist .next-lab-ps] [--seed] [--env K=V ...]
 //   - its own build folder and tsconfig (tsconfig.lab-<name>.json, made here), its own data folder, the same ChatGPT sign-in
+//     (the sign-in lives in this folder's .study-forge-data/chatgpt-auth, not the data folder)
 //   - --seed: the first time only (the data folder does not exist yet), copy the main app's knowledge/ and code/ in, so the
 //     experiment starts from what the learner already has. The main data is only read.
 //   - Everything it prints goes to tmp/lab-<name>.log. Restarts after 3 seconds if it stops by itself (as the engine lab).
@@ -77,6 +78,8 @@ const env = {
   RECALLER_LAB: name,
   STUDY_FORGE_LOCAL_EXPERIMENT: "1",
   STUDY_FORGE_LOCAL_EXPERIMENT_BIND: "127.0.0.1",
+  // The model status the header's ChatGPT chip reads (/api/study-executor) is "off" without this, which looks like signed out.
+  STUDY_FORGE_AUTO_EXECUTOR: process.env.STUDY_FORGE_AUTO_EXECUTOR ?? "1",
   STUDY_FORGE_MODEL_PROVIDER: process.env.STUDY_FORGE_MODEL_PROVIDER ?? "chatgpt",
   STUDY_FORGE_CHATGPT_ENCRYPTION_KEY: chatGptTokenKey(),
   ...extra,
