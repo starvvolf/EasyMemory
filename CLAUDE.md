@@ -47,7 +47,8 @@
 
 - 브랜치 `claude/recaller2`. push 전에 항상 `git pull --rebase`.
 - 일 하나를 끝내면 `협업/현황.md`의 자기 칸을 고쳐 같이 커밋한다.
-- 데스크톱 작업 폴더(`recaller-integration`)는 git이 안 된다. 파일을 CRLF로 바꿔 복사한다(`협업/삽질방지_노트.md`). 함께 쓰는 파일은 최신을 받은 뒤 통째로 복사한다.
+- PC 작업 폴더는 `C:\Users\jkh01\coding\Recaller`(이 저장소의 `claude/recaller2`, 10/31부터). 앱(3000)도 여기서 켠다. 손으로 복사하지 않고 git으로 주고받는다.
+- 예전 작업 폴더 `CreatorTemp\recaller-integration`은 지우지 않는다: 테스트 데이터(`tmp\review-test-data`, `.env.local`이 가리킴)가 아직 그 안에 있다.
 
 ## 테스트
 
