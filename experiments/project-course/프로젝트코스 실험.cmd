@@ -26,7 +26,8 @@ rem netstat는 한국어 Windows에서 상태가 "수신 대기"로 나와서, �
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-NetTCPConnection -State Listen -LocalPort 4100,4101,4102 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Write-Host ('stop old course server, PID ' + $_); Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }"
 timeout /t 1 >nul
 rem 서버가 켜지면 VS Code를 연다(하던 코스가 있으면 그 폴더, 없으면 코스 정하기). VS Code가 없으면 브라우저로.
-set PC_OPEN=1
+rem 앱이 대신 켤 때(PC_NO_OPEN=1)는 VS Code를 열지 않는다
+if not defined PC_NO_OPEN set PC_OPEN=1
 set "RNODE=node"
 if exist ".node24\node_modules\.bin\node.cmd" if exist "node_modules\@opencode\sdk\package.json" set "RNODE=.node24\node_modules\.bin\node.cmd"
 call "%RNODE%" --experimental-strip-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON server\main.ts

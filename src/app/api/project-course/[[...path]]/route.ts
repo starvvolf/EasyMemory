@@ -1,8 +1,12 @@
 // 공부 · 프로젝트 (2026-10-30, D 스레드, 사용자: "공부 탭에 프로젝트 추가하고 연결해봐").
 // 프로젝트 코스 실험 서버(experiments/project-course, 127.0.0.1:4100)와 앱을 잇는 입구. 로컬 실험 모드에서만.
 // - status · runs/:id/editor · runs/:id/activate: 코스 서버로 그대로 넘긴다(화면이 다른 포트를 직접 부르지 않게).
+// - status에서 코스 서버가 꺼져 있으면 실험 파일을 대신 켠다(10/31 사용자 "필요할 때 켜기"). VS Code는 열지 않는다.
 // - sync: 코스 서버에서 "아직 안 보낸 것"을 받아 지식 저장소(knowledge/api.ts의 saveMany·recordEvent)에 넣고,
 //   넣은 것의 열쇠를 코스 서버에 돌려준다. 코스 서버는 앱 데이터에 직접 쓰지 않는다.
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
@@ -26,6 +30,28 @@ async function course<T>(pathname: string, init?: { method?: string; body?: unkn
   if (!res.ok) throw Object.assign(new Error((data as { error?: string; message?: string }).error ?? (data as { message?: string }).message ?? `프로젝트 코스 서버 오류 (${res.status})`), { status: 502 });
   return data as T;
 }
+// 꺼져 있으면 켜기: 같은 PC의 기본 주소일 때만, 1분에 한 번만(켜지는 데 몇 초 걸린다). PROJECT_COURSE_AUTOSTART=0이면 안 켠다.
+let startedAt = 0;
+function startCourse(): { starting: boolean; error?: string } {
+  if (process.env.PROJECT_COURSE_AUTOSTART === "0" || !/^http:\/\/(127\.0\.0\.1|localhost):4100$/.test(COURSE)) return { starting: false };
+  if (Date.now() - startedAt < 60_000) return { starting: true };
+  const dir = path.join(process.cwd(), "experiments", "project-course");
+  const cmd = path.join(dir, "프로젝트코스 실험.cmd");
+  try {
+    if (process.platform === "win32") {
+      if (!existsSync(cmd)) return { starting: false, error: "실험 파일을 찾지 못했어요." };
+      // 실험 파일의 "min" 길: 처음 받기(Node 24·엔진)는 건너뛰고, 작업 표시줄에 내려 둔 창에서 서버만 켠다
+      spawn("cmd.exe", ["/d", "/s", "/c", `start "" /min "${cmd}" min`], { cwd: dir, detached: true, stdio: "ignore", windowsHide: true, windowsVerbatimArguments: true, env: { ...process.env, PC_NO_OPEN: "1" } }).unref();
+    } else {
+      spawn(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "server/main.ts"], { cwd: dir, detached: true, stdio: "ignore" }).unref();
+    }
+    startedAt = Date.now();
+    return { starting: true };
+  } catch (error) {
+    return { starting: false, error: (error as Error).message.slice(0, 200) };
+  }
+}
+
 const offline = (error: unknown) => error instanceof Error && (error.name === "TimeoutError" || /fetch failed|ECONNREFUSED/i.test(`${error.message} ${(error as { cause?: Error }).cause?.message ?? ""}`));
 
 /** 한 프로젝트의 안 보낸 것을 지식 저장소에 넣는다. */
@@ -56,7 +82,7 @@ async function handle(request: Request, context: RouteContext) {
     const m = request.method;
     if (p[0] === "status" && p.length === 1 && m === "GET") {
       try { return NextResponse.json({ online: true, url: COURSE, ...await course<Status>("status") }); }
-      catch (error) { if (offline(error)) return NextResponse.json({ online: false, url: COURSE, runs: [] }); throw error; }
+      catch (error) { if (offline(error)) return NextResponse.json({ online: false, url: COURSE, runs: [], ...startCourse() }); throw error; }
     }
     if (p[0] === "runs" && p[1] && p.length === 3 && m === "POST" && (p[2] === "editor" || p[2] === "activate")) {
       return NextResponse.json(await course(`runs/${runId.parse(p[1])}/${p[2]}`, { method: "POST", body: {} }));

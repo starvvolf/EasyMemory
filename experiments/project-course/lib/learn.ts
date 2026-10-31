@@ -113,7 +113,8 @@ async function checkNow(runId: string, n: number, purpose: "observe" | "check") 
     if (stageOk && !sp.doneAt) {
       newlyDone = true;
       sp.doneAt = now();
-      sp.independent = !sp.hints.some((h) => h.level >= 3) && !sp.skipped;
+      // 정답 줄을 봤거나 튜터가 고쳤거나(level 3) 같이 고쳤으면(source pair) 직접 통과가 아니다
+      sp.independent = !sp.hints.some((h) => h.level >= 3 || h.source === "pair") && !sp.skipped;
       independent = sp.independent;
     }
   });
@@ -125,6 +126,12 @@ async function checkNow(runId: string, n: number, purpose: "observe" | "check") 
     if (independent) {
       await addCandidates(cands(saved, course, st, st.knowledge, "correct",
         `${what}: 직접 고쳐 검사 통과 (통과 전 검사 실패 ${fails}번, 힌트 ${hints}번)`, st.transfer ? "transfer" : "check", true));
+    } else if (sp.hints.some((h) => h.source === "auto")) {
+      await addCandidates(cands(saved, course, st, st.knowledge, "note",
+        `${what}: 튜터가 고친 코드로 통과 — 앎으로 치지 않음. 나중에 직접 써 보기`, "check", false));
+    } else if (!sp.hints.some((h) => h.level >= 3)) {
+      await addCandidates(cands(saved, course, st, st.knowledge, "hint",
+        `${what}: 튜터와 같이 고쳐 검사 통과 (조각 안내·빈칸)`, "check", false));
     } else {
       await addCandidates(cands(saved, course, st, st.knowledge, "note",
         `${what}: 정답 줄을 본 뒤 통과 — 앎으로 치지 않음. 다음 복습에서 코드 없이 다시 확인`, "check", false));
@@ -189,6 +196,15 @@ export async function explain(runId: string, n: number, text: string) {
   await saveRun(runId, (r) => { stageProgress(r, n).explain = { text: clean, at: now() }; });
   // 설명의 옳고 그름은 여기서 판정하지 않는다. 메모로 남겨 복습 때 다시 본다.
   await addCandidates(cands(run, course, st, st.explain.knowledge, "note", `내 설명: ${st.explain.q} → ${clean}`, "explain", true));
+  return { ok: true };
+}
+
+/** "아직 헷갈려요": 이해 여부로 진도를 막지 않고, 헷갈린다는 것만 남긴다(지식에서는 "물어봄" → 몰랐음) */
+export async function confused(runId: string, n: number) {
+  const run = await getRun(runId);
+  const course = await loadCourse(run.courseId);
+  const st = stageOf(course, n);
+  await addCandidates(cands(run, course, st, st.explain.knowledge, "asked", `${n}단계: "${st.explain.q}" 아직 헷갈린다고 표시`, "explain", true));
   return { ok: true };
 }
 

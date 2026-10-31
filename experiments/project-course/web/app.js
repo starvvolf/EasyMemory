@@ -755,6 +755,10 @@ function drawLesson() {
     if (a.do === "hint" && a.label.includes("정답") && !confirm("정답 줄을 볼까요? 이걸 본 뒤의 통과는 '직접 고침'으로 기록하지 않아요.")) return;
     send({ do: a.do })(e);
   } }, a.label)));
+  // 지금 할 일: 채팅이 길어져도 늘 아래에 보인다. 자유 질문을 했으면 [하던 거로 돌아가기]
+  const nowbar = lesson.now && lesson.waiting !== "done" ? h("div", { class: "nowbar" }, h("span", { class: "nowtag" }, "지금 할 일"), h("span", { class: "nowtext" }, lesson.now),
+    lesson.mode ? h("span", { class: "chip" }, { self: "직접", pair: "같이", auto: "튜터가 고침" }[lesson.mode]) : null,
+    lesson.resumable ? h("button", { class: "btn small primary", onclick: (e) => send({ do: "resume" })(e) }, "하던 거로 돌아가기") : null) : null;
   const savebar = lesson.waiting === "save" ? h("div", { class: "savebar" }, h("span", { class: "pulse" }), "VS Code에서 고친 뒤 ", h("kbd", {}, "Ctrl"), "+", h("kbd", {}, "S"), " (저장)를 누르면 제가 바로 확인해요") : null;
 
   const dev = lesson.dev || run.dev;
@@ -788,7 +792,7 @@ function drawLesson() {
       h("a", { href: `#/run/${run.id}/summary` }, "결과와 기록 후보")));
 
   const y = window.scrollY, atBottom = window.innerHeight + y >= document.body.scrollHeight - 80;
-  view.replaceChildren(h("div", { class: "lesson" }, side, h("main", { class: "lmain" }, chat, h("div", { class: "lfoot" }, savebar, quick, form))));
+  view.replaceChildren(h("div", { class: "lesson" }, side, h("main", { class: "lmain" }, chat, h("div", { class: "lfoot" }, nowbar, savebar, quick, form))));
   if (atBottom || !drawLesson.drawn) window.scrollTo({ top: document.body.scrollHeight });
   drawLesson.drawn = true;
 }
@@ -893,11 +897,12 @@ function lessonCard(card, run, lesson, send, ws) {
     } }, h("span", { class: "cl" }, c.label), h("span", { class: "cd" }, c.desc || ""), h("span", { class: "cn mono" }, `${c.line}줄`)))));
   if (card.type === "code") return h("div", { class: "lcard code" }, h("div", { class: "mut small" }, fileLink(ws, card.file, card.from), card.to > card.from ? `~${card.to}줄` : ""), h("pre", { class: "rbody" }, card.code));
   if (card.type === "check") return h("div", { class: "lcard" }, h("div", { class: "mut small" }, "확인 결과"), resultsList(card.result, { group: true }));
-  if (card.type === "hint") return h("div", { class: "lcard hint" }, h("div", { class: "mut small" }, `힌트 ${card.level}단계 · ${card.source.startsWith("ai") ? "AI 튜터" : card.source === "solution" ? "준비된 정답 줄" : "준비된 힌트"}`), card.level === 3 ? h("pre", { class: "sol" }, card.text) : rich(card.text, ws));
+  if (card.type === "hint") return h("div", { class: "lcard hint" }, h("div", { class: "mut small" }, `힌트 ${card.level}단계 · ${card.source.startsWith("ai") ? "AI 튜터" : card.source === "solution" ? "준비된 정답 줄" : card.source === "auto" ? "튜터가 고친 줄" : "준비된 힌트"}`), card.level === 3 ? h("pre", { class: "sol" }, card.text) : rich(card.text, ws));
   if (card.type === "explain") {
     if (card.done) return h("div", { class: "lcard" }, h("div", { class: "mut small" }, "내 설명"), card.done);
     const ta = h("textarea", { class: "explain", placeholder: "내 말로 짧게" });
-    return h("div", { class: "lcard" }, ta, h("div", { class: "row", style: "margin-top:8px" }, h("button", { class: "btn primary", onclick: (e) => { if (!ta.value.trim()) return toast("한 문장이라도 적어 주세요."); send({ do: "explain", text: ta.value })(e); } }, "적어 두기")));
+    return h("div", { class: "lcard" }, ta, h("div", { class: "row", style: "margin-top:8px" }, h("button", { class: "btn primary", onclick: (e) => { if (!ta.value.trim()) return toast("한 문장이라도 적어 주세요."); send({ do: "explain", text: ta.value })(e); } }, "적어 두기"),
+      h("button", { class: "btn", onclick: (e) => send({ do: "confused" })(e) }, "아직 헷갈려요"), h("button", { class: "btn ghost", onclick: (e) => send({ do: "explain_skip" })(e) }, "건너뛸게요")));
   }
   return null;
 }

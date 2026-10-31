@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, go, later } from "./api";
 
 type RunLite = { id: string; courseTitle: string; stageTitle: string; current: number; done: number; workspace: string | null; createdAt: string };
-type Status = { online: boolean; url: string; runs: RunLite[]; active?: string | null };
+type Status = { online: boolean; url: string; runs: RunLite[]; active?: string | null; starting?: boolean; error?: string };
 type Synced = { online: boolean; runs: Array<{ runId: string; items: number; created: number; events: number; error?: string }> };
 
 export default function ProjectStudy() {
@@ -35,6 +35,13 @@ export default function ProjectStudy() {
   }, []);
   useEffect(() => later(() => { void load().then(() => sync(true)); }), [load, sync]);
   useEffect(() => { const t = setInterval(() => { void load(); void sync(true); }, 60_000); return () => clearInterval(t); }, [load, sync]);
+  // 꺼져 있어서 앱이 코스 서버를 켜는 중이면, 켜질 때까지 2초마다 다시 본다
+  const starting = !!status && !status.online && !!status.starting;
+  useEffect(() => {
+    if (!starting) return;
+    const t = setInterval(() => { void load().then(() => sync(true)); }, 2_000);
+    return () => clearInterval(t);
+  }, [starting, load, sync]);
 
   const openEditor = async (r: RunLite) => {
     setBusy(r.id); setMsg(null);
@@ -65,10 +72,15 @@ export default function ProjectStudy() {
 
       {msg ? <p className="small" role="status" style={{ margin: "12px 0" }}>{msg}</p> : null}
 
-      {!status ? <p className="small muted">불러오는 중…</p> : !status.online ? (
+      {!status ? <p className="small muted">불러오는 중…</p> : starting ? (
+        <section className="td-card" style={{ marginTop: 16 }}>
+          <p className="eyebrow">프로젝트 코스를 켜는 중이에요</p>
+          <p className="small" style={{ margin: "6px 0 0" }}>몇 초면 돼요. 작업 표시줄에 내려 둔 <b>Recaller 코스</b> 창을 닫으면 다시 꺼져요.</p>
+        </section>
+      ) : !status.online ? (
         <section className="td-card" style={{ marginTop: 16 }}>
           <p className="eyebrow">프로젝트 코스가 꺼져 있어요</p>
-          <p className="small" style={{ margin: "6px 0 12px" }}><b>프로젝트코스 실험</b> 파일을 두 번 눌러 켠 다음, 아래 버튼을 눌러 주세요.</p>
+          <p className="small" style={{ margin: "6px 0 12px" }}>{status.error ? `저절로 켜지 못했어요(${status.error}). ` : ""}<b>프로젝트코스 실험</b> 파일을 두 번 눌러 켠 다음, 아래 버튼을 눌러 주세요.</p>
           <button className="btn primary small" onClick={() => { setMsg(null); void load().then(() => sync(true)); }}>다시 확인</button>
         </section>
       ) : (

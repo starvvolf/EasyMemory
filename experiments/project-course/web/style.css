@@ -442,7 +442,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 0 5px; border: 1px sol
 .lmsg.tutor .lcol { width: 100%; }
 .lmsg .bubble { overflow-wrap: anywhere; }
 .cbody, .lcard pre { max-width: 100%; overflow-x: auto; }
-.lmain, .lchat { min-width: 0; overflow-x: hidden; }
+.lmain, .lchat { min-width: 0; overflow-x: clip; } /* hidden이면 .lmain이 스크롤 상자가 돼 아래 칸(지금 할 일·버튼)이 붙어 있지 않는다 */
 
 /* ===== 글꼴: Pretendard(OFL-1.1, web/Pretendard-LICENSE.txt) — 한글이 깔끔하게 (10/30) ===== */
 @font-face { font-family: "Pretendard Variable"; font-weight: 45 920; font-style: normal; font-display: swap; src: url("PretendardVariable.woff2") format("woff2-variations"); }
@@ -524,3 +524,9 @@ button, input, select, textarea { font-family: inherit; }
 .lcard.snip .mut { display: flex; }
 .toolrow a.titem { color: inherit; text-decoration: none; }
 .toolrow a.titem:hover { text-decoration: underline; }
+
+/* 지금 할 일(10/31): 채팅 아래에 늘 보이는 한 줄 */
+.nowbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.nowbar .nowtag { font-weight: 600; color: var(--acc); white-space: nowrap; }
+.nowbar .nowtext { flex: 1; min-width: 0; }
+.embed .nowbar { font-size: 12px; padding: 6px 8px; background: var(--input); border-color: var(--input-line); }
