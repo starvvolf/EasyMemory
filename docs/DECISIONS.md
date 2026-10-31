@@ -629,3 +629,21 @@
 - 기록: 훈련 모드로 맞히면 "훈련 모드로 통과"(메모), 지켜보기 경고를 받고 맞히면 "지켜보기 조언 n번 받고 통과"(메모). 앎은 기본 모드에서 혼자 맞힐 때. 복기는 문제의 지식에 메모 "[복기] …"로.
 - 실험 격리: 두 기능은 서버 스위치(`RECALLER_PS_TRAIN=1`, `RECALLER_PS_WATCH=1`)가 켜진 곳에서만 보인다. `scripts/run-lab.mjs`(이름·포트·데이터·빌드 폴더를 받는 루트별 실험 서버, 처음에 본 데이터의 knowledge·code를 복사)로 PS 실험 서버 `Recaller PS실험 서버.cmd`(3003, `tmp/lab-ps/data`)를 띄운다. 지식 저장소는 서버 하나 안에서만 쓰기 순서를 지키므로 서버끼리 데이터 폴더를 같이 쓰지 않는다. 프로젝트(3004)·글·PDF(3005) 루트도 같은 스크립트를 인자만 바꿔 쓴다.
 - [경계] `next.config.ts`: 실험 서버가 자기 tsconfig를 고르는 `RECALLER_NEXT_TSCONFIG`(없으면 예전처럼 `tsconfig.engine.json`). `.gitignore`: `.next-lab-*`, `tsconfig.lab-*.json`. `workspace.css`: `cs-tr-*`·`cs-watch` 몇 줄.
+
+## 2026-10-31 AI 호출 기본 모델을 terra로, 같은 지식 판정만 sol (리서치 스레드)
+
+- 정한 사람: 사용자 ("다 수정해봐"). 근거·권고는 Claude 문서 "Recaller AI 호출 가이드"(호출 5,403건 재분석, OpenAI 가격표 10/31).
+- 근거: terra는 출력이 초당 약 117토큰, gpt-6-sol은 약 63토큰이다. API 가격은 terra가 절반($1/$5 대 $2/$10)이고, 우리 실측에서 품질은 같거나 나았다.
+- 바꾼 것:
+  - 도우미 기본(`src/lib/assist/model.ts`)을 gpt-6-sol에서 gpt-6.1-terra로. 지식 설명·질문·답 확인·뜻 채우기·주제 정리·지식 층, 코드 힌트·설명·오류·반례·리뷰, 프로젝트 코스 호출이 여기에 해당한다.
+  - 질문 창 답(`notes.ts`)과 프로젝트 튜터(`oc-engine.ts`)도 terra로.
+  - 대화 제목은 luna로.
+  - 코드 문제 세팅의 생각 강도를 medium에서 low로(10/29 실측에서 차이 없음).
+  - 코드 독립 풀이를 gpt-5.6-terra에서 gpt-6.1-sol로(출제와 다른 모델 원칙 유지, 비교 실측 전).
+- 그대로 둔 것:
+  - 같은 지식 판정은 gpt-6-sol · low로 고정했다(`dedupe.ts`; 잘못 합치기 0).
+  - (같은 날 덧붙임) 같은 지식 판정은 API 키(`OPENAI_API_KEY`)가 있으면 Decisions API(gpt-6-luna, 같음 문턱 0.5), 없거나 실패하면 sol · low(`dedupe.ts`; 시험 19/21·잘못 합침 0·2.9초 대 sol 17/21·90초). 끄기 `RECALLER_DEDUPE_ENGINE=sol`, 문턱 `RECALLER_DEDUPE_SAME_MIN`. 정한 사람: 사용자.
+  - 틀린 풀이는 시연 전까지 terra.
+  - 엔진(`DEFAULT_GEN_MODELS`)은 글·PDF 스레드가 정한다.
+- 되돌리기: `.env.local`의 `RECALLER_ASSIST_MODEL`, `STUDY_FORGE_NOTE_MODEL`, `RECALLER_CODE_SOLVE_MODEL`, `RECALLER_CODE_MAKE_EFFORT`.
+- 같은 날 화면: 머리말의 타이머 칩을 빼고, 그 자리에 ChatGPT 연결 칩을 넣었다(연결 상태 표시, 누르면 로그인). 코드 문제의 "타이머 켜고 풀기" 버튼도 뺐다. 일정의 타이머 API·기록은 그대로다. 로그인 정보는 지금처럼 앱을 켠 폴더의 `.study-forge-data/chatgpt-auth`에 저장된다.

@@ -13,9 +13,11 @@ export const S = {
   obj: (properties: Record<string, unknown>) => ({ type: "object", additionalProperties: false, required: Object.keys(properties), properties }),
   oneOf: (...values: string[]) => ({ type: "string", enum: values }),
 };
+// 기본 모델 gpt-6.1-terra (2026-10-31, 사용자 "다 수정해봐", 근거 "Recaller AI 호출 가이드"): 호출 5,403건 실측에서 출력 속도가
+// sol의 약 2배(초당 117 대 63)이고 API 가격은 절반, Recaller 실측 품질은 같거나 나았다. 같은 지식 판정은 따로 정한다(dedupe.ts: API 키가 있으면 Decisions, 없거나 실패하면 sol).
 export function assistSettings(heavy = false) {
   return {
-    model: process.env.RECALLER_ASSIST_MODEL?.trim() || process.env.STUDY_FORGE_NOTE_MODEL?.trim() || process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || "gpt-6-sol",
+    model: process.env.RECALLER_ASSIST_MODEL?.trim() || process.env.STUDY_FORGE_NOTE_MODEL?.trim() || process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || "gpt-6.1-terra",
     effort: heavy ? process.env.RECALLER_ASSIST_HEAVY_EFFORT?.trim() || "medium" : process.env.RECALLER_ASSIST_EFFORT?.trim() || "low",
   };
 }
@@ -33,9 +35,13 @@ async function timed<T extends { usage?: Usage }>(purpose: string, model: string
   finally {
     const line = { at: new Date(started).toISOString(), purpose, model, effort, ms: Date.now() - started, ...(first ? { firstTextMs: first - started } : {}), ok, inChars, outChars: out,
       ...(usage ? { tokens: { in: usage.inputTokens, cached: usage.cachedInputTokens, out: usage.outputTokens, reasoning: usage.reasoningTokens } } : {}) };
-    const file = path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "assist-log.jsonl");
-    void mkdir(path.dirname(file), { recursive: true }).then(() => appendFile(file, JSON.stringify(line) + "\n", "utf8")).catch(() => undefined);
+    logAssistCall(line);
   }
+}
+/** One line in assist-log.jsonl, for calls that do not go through askText/askJson (같은 지식 판정의 Decisions API). */
+export function logAssistCall(line: Record<string, unknown>) {
+  const file = path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "assist-log.jsonl");
+  void mkdir(path.dirname(file), { recursive: true }).then(() => appendFile(file, JSON.stringify(line) + "\n", "utf8")).catch(() => undefined);
 }
 export async function askText(purpose: string, system: string, user: string, options: AskOptions = {}) {
   const { model, effort } = settingsFor(options);

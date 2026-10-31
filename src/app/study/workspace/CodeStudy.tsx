@@ -257,7 +257,6 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     const q = question; setQuestion("");
     void assist("질문", q, () => call("/api/code/explain", { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q }));
   };
-  const startTimer = async () => { try { await call("/api/schedule/timer/start", { label: problem?.title ?? "코드" }); window.dispatchEvent(new Event("recaller:timer-changed")); } catch (e) { setError(errorText(e)); } };
   const openSubmission = async (sid: string) => {
     try { const { submission } = await call<{ submission: { code: string; lang: Lang } }>(`/api/code/problem/${id}/submission/${sid}`); setLang(submission.lang); setCode(submission.code); } catch (e) { setError(errorText(e)); }
   };
@@ -267,7 +266,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   return (
     <div className="cs-solve">
       <section className="cs-statement panel">
-        <div className="row" style={{ justifyContent: "space-between" }}><button className="btn ghost small" onClick={onBack}>← 문제 목록</button><button className="btn ghost small" onClick={() => void startTimer()}>⏱ 타이머 켜고 풀기</button></div>
+        <div className="row" style={{ justifyContent: "space-between" }}><button className="btn ghost small" onClick={onBack}>← 문제 목록</button></div>
         {lab.train ? <ModeSwitch mode={training ? "train" : "base"} onMode={(m) => void train.setMode(m)} /> : null}
         <div className="row"><span className="chip">{problem.kind === "blank" ? "빈칸" : "코드"}</span><span className="small muted">{problem.folder}</span></div>
         <h2>{problem.title}</h2>

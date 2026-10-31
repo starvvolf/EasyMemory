@@ -4,6 +4,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { judgeBatch, type JudgeItem, type Verdict } from "./dedupe.ts";
+import { judgeBatchDecisions, type DecisionsInfo } from "./dedupe-decisions.ts";
 import { BASE, INCOMING, type EvalItem } from "./dedupe-eval-set.ts";
 import { embedText, embedTexts } from "./embed.ts";
 import { sameName } from "./store.ts";
@@ -99,14 +100,20 @@ export async function runDedupeEval(models: EvalModel[]) {
     const started = Date.now();
     const verdicts: Array<Array<{ verdict: Verdict; reason: string }>> = [];
     let calls = 0, error = "";
+    // "decisions:gpt-6-luna@0.8" = Decisions API, 같음은 확률 0.8 이상만 (dedupe-decisions.ts, 2026-10-31 실험).
+    const decisions = /^decisions(?::([^@]+))?(?:@([\d.]+))?$/.exec(m.model);
+    const infos: DecisionsInfo[] = [];
     try {
       for (let i = 0; i < prep.work.length; i += BATCH) {
-        const chunk = prep.work.slice(i, i + BATCH);
-        verdicts.push(...await judgeBatch(chunk.map((w) => ({ item: asJudge(prep.byKey.get(w.key)!), cands: w.cands.map((c) => asJudge(prep.byKey.get(c.key)!)) })), { model: m.model, effort: m.effort ?? "low" }));
+        const chunk = prep.work.slice(i, i + BATCH).map((w) => ({ item: asJudge(prep.byKey.get(w.key)!), cands: w.cands.map((c) => asJudge(prep.byKey.get(c.key)!)) }));
+        if (decisions) {
+          const r = await judgeBatchDecisions(chunk, { model: decisions[1] || "gpt-6-luna", sameMin: decisions[2] ? Number(decisions[2]) : 0.5 });
+          verdicts.push(...r.verdicts); if (r.info) infos.push(r.info);
+        } else verdicts.push(...await judgeBatch(chunk, { model: m.model, effort: m.effort ?? "low" }));
         calls++;
       }
-    } catch (e) { error = e instanceof Error ? e.message.slice(0, 300) : String(e); }
-    results.push({ model: m.model, effort: m.effort ?? "low", calls, ms: Date.now() - started, error, ...(error ? {} : score(prep, verdicts)) });
+    } catch (e) { error = e instanceof Error ? e.message.slice(0, 500) : String(e); }
+    results.push({ model: m.model, effort: decisions ? "" : m.effort ?? "low", calls, ms: Date.now() - started, error, ...(infos.length ? { decisions: infos } : {}), ...(error ? {} : score(prep, verdicts)) });
   }
   const candidateRecall = (() => {
     const pairs = INCOMING.flatMap((n) => Object.entries(n.truth).filter(([, ok]) => ok.includes("same")).map(([o]) => [n.key, o] as const));

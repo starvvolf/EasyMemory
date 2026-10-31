@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recaller 토큰 사용량</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-0: #f4f3f0; --surface-1: #fcfcfb; --line: #e2e1dc; --grid: #ecebe7;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7974;
+    --accent: #2a78d6; --bar: #3987e5; --bar-soft: #cde2fb;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948; --other: #a3a29c;
+    --warn-bg: #fff4dc; --warn-ink: #6b4a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    .viz-root {
+      color-scheme: dark;
+      --surface-0: #121211; --surface-1: #1a1a19; --line: #2f2f2c; --grid: #262624;
+      --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+      --accent: #3987e5; --bar: #3987e5; --bar-soft: #1c3a5e;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; --other: #6b6a64;
+      --warn-bg: #3a2e10; --warn-ink: #f3d68e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .viz-root { background: var(--surface-0); color: var(--text-primary); font: 14px/1.5 "Pretendard", "Malgun Gothic", system-ui, sans-serif; min-height: 100vh; padding: 24px; }
+  .wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 16px; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); font-size: 13px; }
+  .muted { color: var(--text-muted); font-size: 12px; }
+  .card { background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+  .filters label { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-secondary); }
+  select, input[type=date], input[type=number] { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-1); color: var(--text-primary); }
+  input[type=number] { width: 80px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 13px; padding: 4px 10px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
+  .seg button[aria-pressed=true] { background: var(--accent); color: #fff; }
+  .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .tile .v { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; }
+  .tile .l { color: var(--text-secondary); font-size: 13px; }
+  .tile .d { color: var(--text-muted); font-size: 12px; }
+  .two { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-secondary); margin: 6px 0 2px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  svg text { fill: var(--text-secondary); font-size: 11px; }
+  svg .lbl { fill: var(--text-primary); font-size: 12px; }
+  svg .val { fill: var(--text-secondary); font-size: 11px; }
+  .hit { fill: transparent; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th { color: var(--text-secondary); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--surface-1); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  td.t { white-space: normal; min-width: 220px; }
+  tbody tr.run { cursor: pointer; }
+  tbody tr.run:hover { background: var(--surface-0); }
+  tr.detail td { background: var(--surface-0); white-space: normal; }
+  .scroll { max-height: 560px; overflow: auto; }
+  .chip { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--text-secondary); margin-right: 4px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  .warn { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+  #tip { position: fixed; pointer-events: none; background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: none; z-index: 10; max-width: 320px; }
+  #tip b { font-weight: 650; }
+  .empty { color: var(--text-muted); padding: 24px 0; text-align: center; }
+  @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="wrap">
+  <div>
+    <h1>Recaller 토큰 사용량</h1>
+    <div class="sub" id="meta"></div>
+  </div>
+
+  <div class="card filters" id="filters">
+    <label>기간
+      <span class="seg" id="range">
+        <button data-r="all" aria-pressed="true">전체</button><button data-r="1">오늘</button><button data-r="7">7일</button><button data-r="30">30일</button>
+      </span>
+    </label>
+    <label><input type="date" id="from"> ~ <input type="date" id="to"></label>
+    <label>갈래 <select id="area"></select></label>
+    <label>모델 <select id="model"></select></label>
+    <label>종류 <select id="kind"></select></label>
+    <label><input type="checkbox" id="nofake" checked> 가짜 모델 빼기</label>
+    <label>가격 <span class="seg" id="cur"><button data-c="krw" aria-pressed="true">원</button><button data-c="usd">달러</button></span></label>
+    <label>환율 <input type="number" id="fx" value="1400" step="10"> 원/$</label>
+  </div>
+
+  <div id="warns"></div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>날짜별 예상 가격</h2>
+    <div class="muted">막대 하나가 하루, 색은 모델. 막대에 올리면 그날의 모델별 가격과 토큰이 나옵니다.</div>
+    <div class="legend" id="dayLegend"></div>
+    <div id="dayChart"></div>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <h2>무엇에 썼나 (예상 가격 순)</h2>
+      <div class="muted">호출 목적별. 막대 = 가격, 오른쪽 = 호출 수 · 토큰(입력/출력), 왼쪽 점 = 주로 쓴 모델 색.</div>
+      <div id="purposeChart"></div>
+    </div>
+    <div class="card">
+      <h2>갈래별 토큰 구성</h2>
+      <div class="muted">입력은 새로 읽은 것 · 캐시로 읽은 것 · 캐시 쓰기, 그리고 출력. 가격의 대부분은 출력과 새 입력에서 나옵니다.</div>
+      <div class="legend" id="mixLegend"></div>
+      <div id="mixChart"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>모델별</h2>
+    <div class="scroll"><table id="modelTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>실행 기록</h2>
+    <div class="muted">줄을 누르면 그 실행에서 무엇을 몇 번, 어떤 모델로 불렀는지 펼쳐집니다. 머리글을 누르면 정렬. 도우미 호출은 실행 번호가 없어 같은 갈래가 3분 안에 이어진 것을 한 실행으로 묶었습니다.</div>
+    <div class="scroll"><table id="runTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>가격표 (100만 토큰당 달러, Standard)</h2>
+    <div class="muted" id="priceNote"></div>
+    <table id="priceTable"></table>
+  </div>
+</div>
+<div id="tip"></div>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+// OpenAI 공식 가격표(developers.openai.com/api/docs/pricing), 2026-10-31 확인. 100만 토큰당 USD.
+// in = 새 입력, cached = 캐시로 읽은 입력, write = 캐시 쓰기(30분 보관), out = 출력(생각 토큰 포함).
+const PRICES_AS_OF = "2026-10-31";
+const PRICES = {
+  "gpt-6.1-terra": { in: 1, cached: 0.05, write: 1.25, out: 5, long: true },
+  "gpt-6.1-sol": { in: 2, cached: 0.10, write: 2.5, out: 10, long: true },
+  "gpt-6-sol": { in: 2, cached: 0.10, write: 2.5, out: 10, long: true, note: "가격표에서 빠짐 · 6.1 Sol과 같은 값으로 셈" },
+  "gpt-6-luna": { in: 0.10, cached: 0.01, write: 0.125, out: 0.5 },
+  "gpt-6-astra": { in: 10, cached: 1, write: 12.5, out: 50 },
+  "gpt-5.6-sol": { in: 4, cached: 0.40, write: 5, out: 20, note: "할인가(11/21까지)" },
+  "gpt-5.6-terra": { in: 2.5, cached: 0.25, write: 0, out: 15, note: "가격표에서 빠짐 · 2026-08 값(src/lib/api-usage.ts)" },
+  "gpt-5.6-luna": { in: 1, cached: 0.10, write: 0, out: 6, note: "가격표에서 빠짐 · 2026-08 값" },
+};
+const MODEL_ORDER = ["gpt-6.1-terra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna"];
+const SLOT = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7", "--s8"];
+const css = (v) => getComputedStyle(document.querySelector(".viz-root")).getPropertyValue(v).trim();
+const colorOf = (m) => { const i = MODEL_ORDER.indexOf(m); return i >= 0 ? `var(${SLOT[i]})` : "var(--other)"; };
+
+const PURPOSE = {
+  "rc-intent": "쪽 의도 판정", "rc-organize": "쪽 카드 정리", "rc-merge": "자료 전체 정리", "transcribe": "그림 쪽 글로 옮기기",
+  "rc-author": "기본 문제 만들기", "rc-check": "따로 풀기(검사)", "rc-link": "카드 연결", "rc-deep": "심화 문제", "rc-solve": "심화 풀이",
+  "outline": "목차(옛 엔진)", "classify": "분류(옛 엔진)", "design": "설계(옛 엔진)", "author": "출제(옛 엔진)", "read": "통째 읽기(옛 엔진)", "plan": "계획(옛 엔진)", "gate": "검수(옛 엔진)",
+  "knowledge:map": "웹 글 지도", "knowledge:extract": "웹 글 지식 잡기", "knowledge:dedupe": "같은 지식 판정", "knowledge:classify": "주제 정리",
+  "knowledge:fill": "뜻·별칭 채우기", "knowledge:explain": "고른 글 설명", "knowledge:claim": "내 답 확인", "knowledge:ask": "지식에 질문",
+  "knowledge:layer": "지식 층 나누기", "knowledge:explain-item": "지식 설명",
+  "code:make": "코드 문제 세팅", "code:generator": "테스트 생성기", "code:mutants": "틀린 풀이", "code:solve": "독립 풀이", "code:hint": "힌트",
+  "code:explain": "코드 설명", "code:review": "코드 리뷰", "code:error": "오류 설명", "code:counter": "반례 찾기",
+  "note:title": "대화 제목",
+};
+function purposeLabel(p) {
+  if (PURPOSE[p]) return PURPOSE[p];
+  let m;
+  if ((m = /^web:([^:]+):(.+)$/.exec(p))) return `웹 글 실험 ${({ "text-chunks": "A 글만", "image-chunks": "B 글+그림", "image-chunks-context": "C +글 전체", whole: "D 통째" })[m[1]] || m[1]} · ${m[2] === "merge" ? "정리" : "카드"}`;
+  if ((m = /^project-course:(.+)$/.exec(p))) return `프로젝트 ${({ intake: "코스 정하기", tutor: "튜터" })[m[1]] || m[1].replace(/^agent/, "튜터 단계 ").replace(/^hint/, "힌트 ")}`;
+  if ((m = /^astra-(.+)$/.exec(p))) return `astra ${m[1]}`;
+  return p;
+}
+function areaOf(r) {
+  const p = r.p || "";
+  if (/^project-course:/.test(p)) return "프로젝트";
+  if (/^code:/.test(p)) return "코드 문제";
+  if (/^knowledge:(map|extract)$/.test(p) || /^web:/.test(p)) return "웹 글";
+  if (/^(knowledge|note):/.test(p)) return "지식 저장소";
+  return "PDF";
+}
+const AREAS = ["PDF", "웹 글", "지식 저장소", "코드 문제", "프로젝트"];
+const KINDS = { pdf: "PDF 엔진 실행", web: "웹 글 실험", assist: "도우미 호출" };
+
+/** USD for one call. Over 272K input tokens, terra·sol bill the whole request at 2× input and 1.5× output. */
+function costOf(r) {
+  const pr = PRICES[r.m];
+  if (!pr || !r.u) return null;
+  const write = Math.min(r.w, r.i), cached = Math.min(r.c, r.i - write), fresh = Math.max(0, r.i - cached - write);
+  const k = pr.long && r.i > 272000 ? [2, 1.5] : [1, 1];
+  return (fresh * pr.in * k[0] + cached * pr.cached * k[0] + write * pr.write * k[0] + r.o * pr.out * k[1]) / 1e6;
+}
+
+// ---------- state ----------
+const S = { range: "all", from: "", to: "", area: "", model: "", kind: "", nofake: true, cur: "krw", fx: 1400, sort: { key: "t", dir: -1 }, open: new Set() };
+const rows = (DATA?.rows ?? []).map((r) => ({ ...r, day: localDay(r.t), area: areaOf(r), usd: costOf(r) }));
+function localDay(iso) { const d = new Date(iso); if (isNaN(d)) return "날짜 없음"; return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+
+function filtered() {
+  let from = S.from, to = S.to;
+  if (S.range !== "all") { const d = new Date(); d.setDate(d.getDate() - (Number(S.range) - 1)); from = localDay(d.toISOString()); to = ""; }
+  return rows.filter((r) => (!S.nofake || !r.f) && (!S.area || r.area === S.area) && (!S.model || r.m === S.model) && (!S.kind || r.k === S.kind)
+    && (!from || r.day >= from) && (!to || r.day <= to));
+}
+
+// ---------- format ----------
+const nf = new Intl.NumberFormat("ko-KR");
+function tok(n) { if (n >= 1e8) return `${(n / 1e8).toFixed(n >= 1e9 ? 0 : 1)}억`; if (n >= 1e4) return `${(n / 1e4).toFixed(n >= 1e6 ? 0 : 1)}만`; return nf.format(Math.round(n)); }
+function money(usd, exact) {
+  if (usd == null) return "—";
+  if (S.cur === "usd") return usd < 0.01 && usd > 0 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(usd < 10 ? 2 : 0)}`;
+  const w = usd * S.fx;
+  return w < 10 && w > 0 ? `${w.toFixed(1)}원` : `${nf.format(Math.round(w))}원`;
+}
+const sec = (ms) => ms >= 60000 ? `${Math.floor(ms / 60000)}분 ${Math.round((ms % 60000) / 1000)}초` : `${(ms / 1000).toFixed(1)}초`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function sum(list) {
+  const s = { n: 0, i: 0, c: 0, w: 0, o: 0, rs: 0, ms: 0, usd: 0, unpriced: 0, notok: 0, nousage: 0, ftSum: 0, ftN: 0, genMs: 0, genOut: 0 };
+  for (const r of list) {
+    s.n++; s.i += r.i; s.c += r.c; s.w += r.w; s.o += r.o; s.rs += r.rs; s.ms += r.ms; if (!r.ok) s.notok++; if (!r.u) s.nousage++;
+    if (r.usd == null) { if (r.u) s.unpriced++; } else s.usd += r.usd;
+    if (r.ft) { s.ftSum += r.ft; s.ftN++; if (r.o >= 50 && r.ms - r.ft > 300) { s.genMs += r.ms - r.ft; s.genOut += r.o; } }
+  }
+  return s;
+}
+function group(list, key) { const m = new Map(); for (const r of list) { const k = key(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); } return m; }
+
+// ---------- tooltip ----------
+const tip = document.getElementById("tip");
+document.addEventListener("mousemove", (e) => {
+  const t = e.target.closest?.("[data-tip]");
+  if (!t) { tip.style.display = "none"; return; }
+  tip.innerHTML = t.getAttribute("data-tip"); tip.style.display = "block";
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+  tip.style.left = `${x}px`; tip.style.top = `${y}px`;
+});
+
+// ---------- render ----------
+function render() {
+  const list = filtered(), all = sum(list);
+  renderWarns(list, all);
+  renderTiles(list, all);
+  renderDays(list);
+  renderPurposes(list);
+  renderMix(list);
+  renderModels(list);
+  renderRuns(list);
+}
+
+function renderWarns(list, s) {
+  const w = [];
+  if (!DATA) w.push("기록이 들어 있지 않은 화면이에요. <code>node tools/usage-report/build.mjs</code>로 만든 파일을 여세요.");
+  if (s.nousage) w.push(`토큰 기록이 없는 호출 ${nf.format(s.nousage)}건은 호출 수와 시간에만 셉니다(예전 기록이거나 실패한 호출).`);
+  if (s.unpriced) { const ms = [...new Set(list.filter((r) => r.u && r.usd == null).map((r) => r.m))]; w.push(`가격표에 없는 모델(${ms.map(esc).join(", ")}) ${nf.format(s.unpriced)}건은 가격에서 빠졌어요.`); }
+  document.getElementById("warns").innerHTML = w.map((x) => `<div class="warn">${x}</div>`).join("");
+}
+
+function renderTiles(list, s) {
+  const cacheRate = s.i ? s.c / s.i : 0, speed = s.genMs ? s.genOut / (s.genMs / 1000) : 0;
+  const days = new Set(list.map((r) => r.day)).size || 1;
+  const tiles = [
+    ["예상 가격", money(s.usd), `API로 불렀다면 · 하루 평균 ${money(s.usd / days)}`],
+    ["호출", nf.format(s.n), `실패 ${nf.format(s.notok)} · 실행 ${nf.format(new Set(list.map((r) => r.run)).size)}개`],
+    ["입력 토큰", tok(s.i), `캐시로 읽음 ${(cacheRate * 100).toFixed(0)}%`],
+    ["출력 토큰", tok(s.o), `생각 토큰 ${tok(s.rs)} 포함`],
+    ["호출 하나", s.n ? sec(s.ms / s.n) : "—", `첫 글자 ${s.ftN ? sec(s.ftSum / s.ftN) : "—"} · 출력 초당 ${speed ? Math.round(speed) : "—"}토큰`],
+  ];
+  document.getElementById("tiles").innerHTML = tiles.map(([l, v, d]) => `<div class="card tile"><div class="l">${l}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join("");
+}
+
+function modelsIn(list) {
+  const seen = new Set(list.map((r) => r.m));
+  return [...MODEL_ORDER.filter((m) => seen.has(m)), ...[...seen].filter((m) => !MODEL_ORDER.includes(m)).sort()];
+}
+function legend(el, items) { document.getElementById(el).innerHTML = items.map(([name, color]) => `<span><i style="background:${color}"></i>${esc(name)}</span>`).join(""); }
+
+function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+
+function renderDays(list) {
+  const el = document.getElementById("dayChart");
+  const valueOf = (usd) => S.cur === "usd" ? usd : usd * S.fx;
+  const byDay = group(list.filter((r) => r.usd != null), (r) => r.day);
+  const days = [...byDay.keys()].filter((d) => d !== "날짜 없음").sort();
+  const models = modelsIn(list.filter((r) => r.usd != null));
+  legend("dayLegend", models.map((m) => [m, colorOf(m)]));
+  if (!days.length) { el.innerHTML = `<div class="empty">이 조건에 가격을 셀 수 있는 호출이 없어요.</div>`; return; }
+  // Fill the days between so gaps show as gaps.
+  const full = []; for (let d = new Date(days[0] + "T00:00"); localDay(d.toISOString()) <= days[days.length - 1]; d.setDate(d.getDate() + 1)) full.push(localDay(d.toISOString()));
+  const W = Math.max(el.clientWidth || 1100, 600), H = 260, L = 64, R = 12, T = 12, B = 34;
+  const totals = full.map((d) => valueOf(sum(byDay.get(d) ?? []).usd));
+  const max = niceMax(Math.max(...totals));
+  const bw = (W - L - R) / full.length, barW = Math.max(3, Math.min(36, bw - 4));
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  let svg = `<svg width="${W}" height="${H}" role="img" aria-label="날짜별 예상 가격">`;
+  for (let k = 0; k <= 4; k++) { const v = (max * k) / 4; svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${esc(axisMoney(v))}</text>`; }
+  const every = Math.ceil(full.length / Math.floor((W - L - R) / 56));
+  full.forEach((d, i) => {
+    const x = L + i * bw + (bw - barW) / 2, dayRows = byDay.get(d) ?? [];
+    const per = models.map((m) => [m, sum(dayRows.filter((r) => r.m === m))]).filter(([, s]) => s.usd > 0);
+    let base = 0;
+    per.forEach(([m, s], j) => {
+      const v = valueOf(s.usd), y0 = y(base), y1 = y(base + v), h = Math.max(0, y0 - y1 - (j ? 2 : 0));
+      const top = j === per.length - 1;
+      svg += top ? `<path d="${roundTop(x, y1, barW, h)}" fill="${colorOf(m)}"/>` : `<rect x="${x}" y="${y1}" width="${barW}" height="${h}" fill="${colorOf(m)}"/>`;
+      base += v;
+    });
+    const s = sum(dayRows);
+    const tipHtml = `<b>${d}</b> · ${money(s.usd)}<br>호출 ${nf.format(s.n)} · 입력 ${tok(s.i)} · 출력 ${tok(s.o)}<br>` + per.map(([m, ms]) => `<span class="dot" style="background:${colorOf(m)}"></span>${esc(m)} ${money(ms.usd)} (${nf.format(ms.n)}회)`).join("<br>");
+    svg += `<rect class="hit" x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - B}" data-tip="${esc(tipHtml)}"/>`;
+    if (i % every === 0) svg += `<text x="${x + barW / 2}" y="${H - B + 16}" text-anchor="middle">${d.slice(5).replace("-", "/")}</text>`;
+  });
+  svg += `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/></svg>`;
+  el.innerHTML = svg;
+}
+function axisMoney(v) { if (S.cur === "usd") return `$${v < 1 ? v.toFixed(2) : nf.format(Math.round(v))}`; return v >= 1e4 ? `${(v / 1e4).toFixed(v >= 1e5 ? 0 : 1)}만원` : `${nf.format(Math.round(v))}원`; }
+function roundTop(x, y, w, h) { const r = Math.min(4, w / 2, h); return `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} Z`; }
+function roundRight(x, y, w, h) { const r = Math.min(4, h / 2, w); return `M${x},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h - r} Q${x + w},${y + h} ${x + w - r},${y + h} H${x} Z`; }
+
+function renderPurposes(list) {
+  const el = document.getElementById("purposeChart");
+  const g = [...group(list, (r) => r.p)].map(([p, rs]) => ({ p, s: sum(rs), models: [...group(rs, (r) => r.m)].sort((a, b) => b[1].length - a[1].length) }))
+    .sort((a, b) => b.s.usd - a.s.usd || b.s.n - a.s.n);
+  if (!g.length) { el.innerHTML = `<div class="empty">호출이 없어요.</div>`; return; }
+  const top = g.slice(0, 15), rest = g.slice(15);
+  if (rest.length) top.push({ p: `그 밖 ${rest.length}가지`, other: true, s: sum(rest.flatMap((x) => list.filter((r) => r.p === x.p))), models: [] });
+  const W = Math.max(el.clientWidth || 640, 420), rowH = 26, L = 150, R = 190, H = top.length * rowH + 8;
+  const max = Math.max(...top.map((x) => x.s.usd)) || 1;
+  let svg = `<svg width="${W}" height="${H}" role="img" aria-label="목적별 예상 가격">`;
+  top.forEach((x, i) => {
+    const yy = 4 + i * rowH, w = Math.max(x.s.usd > 0 ? 2 : 0, ((W - L - R) * x.s.usd) / max);
+    const name = x.other ? x.p : purposeLabel(x.p);
+    const main = x.models[0]?.[0];
+    svg += `<text class="lbl" x="${L - 8}" y="${yy + 16}" text-anchor="end">${esc(name.length > 14 ? name.slice(0, 13) + "…" : name)}</text>`;
+    svg += `<path d="${roundRight(L, yy + 5, w, 15)}" fill="var(--bar)"/>`;
+    svg += `<text class="val" x="${L + w + 6}" y="${yy + 16}">${esc(money(x.s.usd))}</text>`;
+    svg += `<text class="val" x="${W - 4}" y="${yy + 16}" text-anchor="end">${nf.format(x.s.n)}회 · ${tok(x.s.i)}/${tok(x.s.o)}</text>`;
+    const tipHtml = `<b>${esc(name)}</b>${x.other ? "" : ` <span class="muted">${esc(x.p)}</span>`}<br>${money(x.s.usd)} · 호출 ${nf.format(x.s.n)}<br>입력 ${tok(x.s.i)} (캐시 ${x.s.i ? Math.round((x.s.c / x.s.i) * 100) : 0}%) · 출력 ${tok(x.s.o)}<br>호출당 출력 ${x.s.n ? tok(x.s.o / x.s.n) : 0} · 평균 ${x.s.n ? sec(x.s.ms / x.s.n) : "—"}`
+      + (x.models.length ? "<br>" + x.models.map(([m, rs]) => `<span class="dot" style="background:${colorOf(m)}"></span>${esc(m)} ${esc([...new Set(rs.map((r) => r.e))].filter(Boolean).join("/"))} ${nf.format(rs.length)}회`).join("<br>") : "");
+    svg += `<rect class="hit" x="0" y="${yy}" width="${W}" height="${rowH}" data-tip="${esc(tipHtml)}"/>`;
+    if (main) svg += `<circle cx="8" cy="${yy + 13}" r="4" fill="${colorOf(main)}"/>`;
+  });
+  el.innerHTML = svg + "</svg>";
+}
+
+function renderMix(list) {
+  const el = document.getElementById("mixChart");
+  const parts = [["새 입력", "var(--s1)", (s) => Math.max(0, s.i - s.c - s.w)], ["캐시로 읽은 입력", "var(--s3)", (s) => s.c], ["캐시 쓰기", "var(--s4)", (s) => s.w], ["출력", "var(--s2)", (s) => s.o]];
+  legend("mixLegend", parts.map(([n, c]) => [n, c]));
+  const g = AREAS.map((a) => [a, sum(list.filter((r) => r.area === a))]).filter(([, s]) => s.n);
+  if (!g.length) { el.innerHTML = `<div class="empty">호출이 없어요.</div>`; return; }
+  const W = Math.max(el.clientWidth || 520, 380), rowH = 44, L = 84, R = 8, H = g.length * rowH + 4;
+  const max = Math.max(...g.map(([, s]) => s.i + s.o)) || 1;
+  let svg = `<svg width="${W}" height="${H}" role="img" aria-label="갈래별 토큰 구성">`;
+  g.forEach(([a, s], i) => {
+    const yy = 4 + i * rowH; let x = L;
+    svg += `<text class="lbl" x="${L - 8}" y="${yy + 16}" text-anchor="end">${esc(a)}</text><text class="val" x="${L - 8}" y="${yy + 31}" text-anchor="end">${money(s.usd)}</text>`;
+    const vals = parts.map(([n, c, f]) => [n, c, f(s)]).filter(([, , v]) => v > 0);
+    vals.forEach(([n, c, v], j) => {
+      const w = ((W - L - R) * v) / max - (j < vals.length - 1 ? 2 : 0);
+      svg += j === vals.length - 1 ? `<path d="${roundRight(x, yy + 6, Math.max(1, w), 20)}" fill="${c}"/>` : `<rect x="${x}" y="${yy + 6}" width="${Math.max(1, w)}" height="20" fill="${c}"/>`;
+      x += w + 2;
+    });
+    const tipHtml = `<b>${esc(a)}</b> · ${money(s.usd)} · 호출 ${nf.format(s.n)}<br>` + parts.map(([n, c, f]) => `<span class="dot" style="background:${c}"></span>${n} ${tok(f(s))}`).join("<br>");
+    svg += `<rect class="hit" x="0" y="${yy}" width="${W}" height="${rowH}" data-tip="${esc(tipHtml)}"/>`;
+  });
+  el.innerHTML = svg + "</svg>";
+}
+
+function renderModels(list) {
+  const g = modelsIn(list).map((m) => [m, list.filter((r) => r.m === m)]);
+  const head = `<thead><tr><th>모델</th><th>강도</th><th class="n">호출</th><th class="n">입력</th><th class="n">캐시</th><th class="n">출력</th><th class="n">호출당 출력</th><th class="n">출력 속도</th><th class="n">호출 하나</th><th class="n">예상 가격</th></tr></thead>`;
+  const body = g.map(([m, rs]) => {
+    const s = sum(rs), speed = s.genMs ? Math.round(s.genOut / (s.genMs / 1000)) : null;
+    const efforts = [...group(rs, (r) => r.e || "기본")].map(([e, x]) => `${e} ${nf.format(x.length)}`).join(" · ");
+    return `<tr><td><span class="dot" style="background:${colorOf(m)}"></span>${esc(m)}</td><td class="muted">${esc(efforts)}</td><td class="n">${nf.format(s.n)}</td><td class="n">${tok(s.i)}</td><td class="n">${s.i ? Math.round((s.c / s.i) * 100) : 0}%</td><td class="n">${tok(s.o)}</td><td class="n">${s.n ? tok(s.o / s.n) : "—"}</td><td class="n">${speed ? `초당 ${speed}` : "—"}</td><td class="n">${s.n ? sec(s.ms / s.n) : "—"}</td><td class="n"><b>${money(s.usd)}</b></td></tr>`;
+  }).join("");
+  document.getElementById("modelTable").innerHTML = head + `<tbody>${body || `<tr><td colspan="10" class="empty">호출이 없어요.</td></tr>`}</tbody>`;
+}
+
+const RUN_COLS = [["t", "언제"], ["title", "무엇"], ["kind", "종류"], ["n", "호출", 1], ["models", "모델"], ["i", "입력", 1], ["o", "출력", 1], ["dur", "걸린 시간", 1], ["usd", "예상 가격", 1]];
+function renderRuns(list) {
+  const runs = [...group(list, (r) => r.run)].map(([id, rs]) => {
+    const info = DATA.runs[id] ?? { title: id, kind: "" };
+    const s = sum(rs), ts = rs.map((r) => Date.parse(r.t)).filter((x) => !isNaN(x));
+    const start = Math.min(...ts), end = Math.max(...rs.map((r) => Date.parse(r.t) + r.ms).filter((x) => !isNaN(x)));
+    return { id, rs, s, t: isFinite(start) ? start : 0, title: info.title, kind: info.kind + (info.origin ? ` · ${info.origin}` : ""), n: s.n, i: s.i, o: s.o, usd: s.usd,
+      dur: info.kind === "웹 글 실험" ? s.ms : (isFinite(end - start) ? end - start : s.ms), models: modelsIn(rs) };
+  });
+  const { key, dir } = S.sort;
+  runs.sort((a, b) => { const x = a[key], y = b[key]; return (typeof x === "string" ? x.localeCompare(y) : (x ?? 0) - (y ?? 0)) * dir; });
+  const head = `<thead><tr>${RUN_COLS.map(([k, l, n]) => `<th data-k="${k}" class="${n ? "n" : ""}">${l}${S.sort.key === k ? (S.sort.dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr></thead>`;
+  const shown = runs.slice(0, 400);
+  const body = shown.map((r) => {
+    const when = r.t ? new Date(r.t).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+    const row = `<tr class="run" data-id="${esc(r.id)}"><td>${when}</td><td class="t">${S.open.has(r.id) ? "▾" : "▸"} ${esc(r.title)}</td><td class="muted">${esc(r.kind)}</td><td class="n">${nf.format(r.n)}</td><td>${r.models.map((m) => `<span class="chip"><span class="dot" style="background:${colorOf(m)}"></span>${esc(m.replace(/^gpt-/, ""))}</span>`).join("")}</td><td class="n">${tok(r.i)}</td><td class="n">${tok(r.o)}</td><td class="n">${sec(r.dur)}</td><td class="n"><b>${money(r.usd)}</b></td></tr>`;
+    return row + (S.open.has(r.id) ? `<tr class="detail"><td colspan="9">${runDetail(r)}</td></tr>` : "");
+  }).join("");
+  const more = runs.length > shown.length ? `<tr><td colspan="9" class="muted">그 밖 ${nf.format(runs.length - shown.length)}개 실행은 기간·갈래를 좁히면 보여요.</td></tr>` : "";
+  const t = document.getElementById("runTable");
+  t.innerHTML = head + `<tbody>${body || `<tr><td colspan="9" class="empty">실행이 없어요.</td></tr>`}${more}</tbody>`;
+}
+function runDetail(r) {
+  const g = [...group(r.rs, (x) => `${x.p}|${x.m}|${x.e}`)].map(([k, rs]) => { const [p, m, e] = k.split("|"); return { p, m, e, s: sum(rs) }; }).sort((a, b) => b.s.usd - a.s.usd || b.s.n - a.s.n);
+  const max = Math.max(...g.map((x) => x.s.usd)) || 1;
+  return `<table><thead><tr><th>단계</th><th>모델 · 강도</th><th class="n">호출</th><th class="n">입력(캐시)</th><th class="n">출력</th><th class="n">호출 하나</th><th>가격</th></tr></thead><tbody>` + g.map((x) =>
+    `<tr><td>${esc(purposeLabel(x.p))} <span class="muted">${esc(x.p)}</span></td><td><span class="dot" style="background:${colorOf(x.m)}"></span>${esc(x.m)} · ${esc(x.e || "기본")}</td><td class="n">${nf.format(x.s.n)}${x.s.notok ? ` <span class="muted">(실패 ${x.s.notok})</span>` : ""}</td><td class="n">${tok(x.s.i)} (${x.s.i ? Math.round((x.s.c / x.s.i) * 100) : 0}%)</td><td class="n">${tok(x.s.o)}</td><td class="n">${sec(x.s.ms / x.s.n)}</td><td><svg width="120" height="10"><rect x="0" y="1" width="${Math.max(1, (x.s.usd / max) * 120)}" height="8" rx="3" fill="var(--bar)"/></svg> ${money(x.s.usd)}</td></tr>`).join("") + `</tbody></table>`;
+}
+
+function renderPrices() {
+  document.getElementById("priceNote").textContent = `${PRICES_AS_OF} OpenAI 공식 가격표 기준. 앱은 ChatGPT 계정으로 부르므로 실제로는 돈이 아니라 계정 사용량이 줄어듭니다. 이 가격은 "API 키로 불렀다면"의 추정이고, 모델끼리 무게를 비교하는 잣대로 보세요. 27.2만 입력 토큰을 넘는 요청은 terra·sol에서 입력 2배·출력 1.5배로 셉니다.`;
+  document.getElementById("priceTable").innerHTML = `<thead><tr><th>모델</th><th class="n">새 입력</th><th class="n">캐시 읽기</th><th class="n">캐시 쓰기</th><th class="n">출력</th><th>메모</th></tr></thead><tbody>` +
+    MODEL_ORDER.map((m) => { const p = PRICES[m]; return `<tr><td><span class="dot" style="background:${colorOf(m)}"></span>${m}</td><td class="n">${p.in}</td><td class="n">${p.cached}</td><td class="n">${p.write || "—"}</td><td class="n">${p.out}</td><td class="muted">${p.note ?? ""}</td></tr>`; }).join("") + `</tbody>`;
+}
+
+// ---------- controls ----------
+function fillSelect(id, label, values, fmt = (v) => v) { document.getElementById(id).innerHTML = `<option value="">${label}</option>` + values.map((v) => `<option value="${esc(v)}">${esc(fmt(v))}</option>`).join(""); }
+fillSelect("area", "전체", AREAS.filter((a) => rows.some((r) => r.area === a)));
+fillSelect("model", "전체", modelsIn(rows));
+fillSelect("kind", "전체", Object.keys(KINDS).filter((k) => rows.some((r) => r.k === k)), (k) => KINDS[k]);
+const segs = (id, attr, keyName) => document.getElementById(id).addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  for (const x of e.currentTarget.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
+  S[keyName] = b.dataset[attr]; if (keyName === "range") { S.from = S.to = ""; from.value = to.value = ""; } render();
+});
+segs("range", "r", "range"); segs("cur", "c", "cur");
+const from = document.getElementById("from"), to = document.getElementById("to");
+for (const [el, k] of [[from, "from"], [to, "to"]]) el.addEventListener("change", () => { S[k] = el.value; S.range = "all"; for (const x of document.querySelectorAll("#range button")) x.setAttribute("aria-pressed", String(x.dataset.r === "all")); render(); });
+for (const k of ["area", "model", "kind"]) document.getElementById(k).addEventListener("change", (e) => { S[k] = e.target.value; render(); });
+document.getElementById("nofake").addEventListener("change", (e) => { S.nofake = e.target.checked; render(); });
+document.getElementById("fx").addEventListener("input", (e) => { S.fx = Number(e.target.value) || 0; render(); });
+document.getElementById("runTable").addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-k]");
+  if (th) { const k = th.dataset.k; S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : (k === "title" || k === "kind" ? 1 : -1) }; renderRuns(filtered()); return; }
+  const tr = e.target.closest("tr.run"); if (!tr) return;
+  const id = tr.dataset.id; S.open.has(id) ? S.open.delete(id) : S.open.add(id); renderRuns(filtered());
+});
+let resizeT; addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(render, 150); });
+
+if (DATA) {
+  const d = new Date(DATA.builtAt);
+  document.getElementById("meta").innerHTML = `${d.toLocaleString("ko-KR")}에 만듦 · 호출 ${nf.format(rows.length)}건 · 읽은 폴더 ${DATA.dirs.length}개 <span class="muted" title="${esc(DATA.dirs.join("\n"))}">(올리면 경로)</span> · 새로 보려면 다시 만드세요`;
+}
+renderPrices();
+render();
+</script>
+</body>
+</html>

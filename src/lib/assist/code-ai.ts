@@ -142,8 +142,12 @@ const GEN_SCHEMA = S.obj({ generator: S.str });
 /** 2026-10-28 (사용자, docs/DECISIONS.md): drafts by GPT-6.1 Terra (모델 비교: 5개 모두 첫 시도 통과, 약 60초). The
  * independent solution stays on another model on purpose, so the two don't share a mistake. */
 const MAKE_MODEL = () => process.env.RECALLER_CODE_MAKE_MODEL?.trim() || "gpt-6.1-terra";
+/** 2026-10-31: low (10/29 실측에서 medium·low 시간·품질 차이 없음). RECALLER_CODE_MAKE_EFFORT로 바꿈. */
+const MAKE_EFFORT = () => process.env.RECALLER_CODE_MAKE_EFFORT?.trim() || "low";
 /** The second, independent solution (안전장치 ⑤): its model is chosen by comparing several (docs/DECISIONS.md). */
-export const SOLVE_MODEL = () => process.env.RECALLER_CODE_SOLVE_MODEL?.trim() || "gpt-5.6-terra";
+// 2026-10-31 (사용자 "다 수정해봐"): gpt-5.6-terra → gpt-6.1-sol. 출제(terra)와 다른 모델이라는 원칙은 지키고, 5.6 세대는
+// 가격표에서 빠졌고 가장 느렸다(초안 70~120초). 5문제 비교 실측은 아직 — 첫 시도 통과·독립 풀이 일치가 떨어지면 되돌린다.
+export const SOLVE_MODEL = () => process.env.RECALLER_CODE_SOLVE_MODEL?.trim() || "gpt-6.1-sol";
 
 const SOLVE_SYSTEM = `알고리즘 문제를 JavaScript(Node.js)로 푼다. 문제 글과 예제만 보고 처음부터 직접 푼다.
 - 입력은 require("fs").readFileSync(0, "utf8")로 통째로 읽고, 출력은 모아서 console.log로. 동기 코드만.
@@ -229,7 +233,7 @@ async function logTry(what: string, tries: number, times: TryTimes, reason: stri
 /** A new problem from a topic, a lesson or a pasted problem. Saved only after the check passes; otherwise refused with the reason. */
 export async function makeProblem(input: { topic?: string; lesson?: string; kind: "full" | "blank"; lang?: Lang; sourceTitle?: string; sourceUrl?: string; human?: Human; folder?: string; id?: string;
   /** 실험: this request only, a model other than MAKE_MODEL for the draft (the independent solution keeps its own). */ model?: string;
-  /** 실험: this request only, the draft's thinking effort (default: the heavy assist effort, medium). */ effort?: "low" | "medium" | "high";
+  /** 실험: this request only, the draft's thinking effort (default: MAKE_EFFORT, low). */ effort?: "low" | "medium" | "high";
   /** 실험: this request only, the faulty solutions' model (imported problems). */ mutantsModel?: string;
   /** An imported original (statement and examples as published): the independent solution starts from it with the draft. */
   original?: { statement: string; inputText: string; outputText: string; examples: TestCase[] } }) {
@@ -260,7 +264,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
     let d: Drafted;
     // Asked for again on every try (a failed check is often the generator's), with the same reasons as the draft.
     const generatorOf = original ? askJson<{ generator: string }>("code:generator", GEN_SYSTEM, originalText + retry, GEN_SCHEMA, { model: makeModel }).then((g) => g.generator) : undefined;
-    try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + (original ? `\n\n${ORIGINAL_NOTE}` : "") + retry, MAKE_SCHEMA, { heavy: true, model: makeModel, ...(input.effort ? { effort: input.effort } : {}) }); }
+    try { d = await askJson<Drafted>("code:make", MAKE_SYSTEM, user + (original ? `\n\n${ORIGINAL_NOTE}` : "") + retry, MAKE_SCHEMA, { heavy: true, model: makeModel, effort: input.effort || MAKE_EFFORT() }); }
     catch (error) { await logTry(what, tries, { ...times, draftMs: Date.now() - started }, `모델 호출 실패: ${(error as Error).message}`, makeLabel); throw error; }
     if (original) d = { ...d, title: input.sourceTitle?.replace(/^BOJ (\d+) /, "BOJ $1번: ") || d.title, statement: original.statement, inputText: original.inputText, outputText: original.outputText, sourceExamples: original.examples, mutants: await mutantsOf!,
       generator: await generatorOf!.catch((e: unknown) => { throw new Error(`테스트 생성기 호출 실패: ${(e as Error).message}`); }) };

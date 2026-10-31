@@ -87,7 +87,8 @@ function addUsage(note: StudyNote, usage?: { inputTokens?: number; outputTokens?
 }
 function modelSettings() {
   return {
-    model: process.env.STUDY_FORGE_NOTE_MODEL?.trim() || process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || "gpt-6-sol",
+    // 2026-10-31: terra (질문 창 답은 학습자가 기다리는 글이라 출력 속도가 그대로 체감됨; Recaller AI 호출 가이드).
+    model: process.env.STUDY_FORGE_NOTE_MODEL?.trim() || process.env.STUDY_FORGE_EXECUTOR_MODEL?.trim() || "gpt-6.1-terra",
     effort: process.env.STUDY_FORGE_NOTE_EFFORT?.trim() || "low",
   };
 }
@@ -333,10 +334,10 @@ export async function saveTalk(caller: ModelCaller, input: { sourceId: string; p
   let title: string | null = null;
   let titleUsage: { inputTokens?: number; outputTokens?: number } | undefined;
   if (!existing) {
-    const { model } = modelSettings();
     const talk = turns.slice(0, 6).map((turn) => `${turn.role === "user" ? "학습자" : "튜터"}: ${turn.quote ? `“${turn.quote}” ` : ""}${clip(turn.text, 600)}`).join("\n");
     try {
-      const reply = await callModel({ purpose: "note:title", system: TITLE_SYSTEM, user: talk, model, effort: "low", caller });
+      // 제목 한 줄은 틀려도 해가 없어 가장 싼 luna로 (2026-10-31). STUDY_FORGE_NOTE_TITLE_MODEL로 바꿈.
+      const reply = await callModel({ purpose: "note:title", system: TITLE_SYSTEM, user: talk, model: process.env.STUDY_FORGE_NOTE_TITLE_MODEL?.trim() || "gpt-6-luna", effort: "low", caller });
       title = reply.text.replace(/["“”'.\n]/g, " ").replace(/\s+/g, " ").trim().slice(0, 40) || null;
       titleUsage = reply.usage;
     } catch (error) {

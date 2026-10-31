@@ -15,7 +15,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { askJson, S } from "../assist/model.ts";
+import { askJson, logAssistCall, S } from "../assist/model.ts";
 import { similarKnowledge } from "./embed.ts";
 import { getKnowledge, KIND_LABEL, linkKnowledge, mergeKnowledge, normalize, tree, unlinkKnowledge, type KKind } from "./store.ts";
 
@@ -109,8 +109,44 @@ const asJudgeItem = (d: Awaited<ReturnType<typeof getKnowledge>>): JudgeItem => 
 /** 어휘: two words with the same meaning are two things to learn (big, large) — never 같음, at most 비슷한 말 (관련). */
 const vocabPair = (a: JudgeItem, b: JudgeItem) => (a.kind === "vocab" || b.kind === "vocab") && ![a.title, ...a.aliases].some((x) => [b.title, ...b.aliases].some((y) => normalize(x) === normalize(y)));
 
-/** The model this check uses: RECALLER_DEDUPE_MODEL / _EFFORT, else the assist defaults (src/lib/assist/model.ts). */
-const judgeModel = () => ({ model: process.env.RECALLER_DEDUPE_MODEL?.trim() || undefined, effort: process.env.RECALLER_DEDUPE_EFFORT?.trim() || undefined });
+/**
+ * The model this check uses: RECALLER_DEDUPE_MODEL / _EFFORT, else gpt-6-sol · low. Pinned here (2026-10-31) when the assist
+ * default moved to terra: in the 10/28 comparison sol made no wrong merge and found 19/21 같음, terra missed 2 more.
+ */
+const judgeModel = () => ({ model: process.env.RECALLER_DEDUPE_MODEL?.trim() || "gpt-6-sol", effort: process.env.RECALLER_DEDUPE_EFFORT?.trim() || "low" });
+/**
+ * 저장 경로의 판정 (2026-10-31, 사용자 승인): OPENAI_API_KEY가 있으면 먼저 Decisions API(gpt-6-luna, 같음은 확률 0.5 이상),
+ * 실패하면 같은 work를 sol low로 다시. 그날 시험: Decisions 같음 19/21·잘못 합침 0·2.9초, sol low 17/21·90초.
+ * Decisions는 ChatGPT 토큰으로는 401이라 키가 없으면 바로 sol로 간다. RECALLER_DEDUPE_ENGINE=sol이면 Decisions를 끄고,
+ * RECALLER_DEDUPE_SAME_MIN으로 문턱을 바꾼다. Decisions는 연결 문장(note)·방향 이름을 주지 않아 방향 검사는 못 하고 어휘 규칙만 건다.
+ */
+async function judgeForSave(work: Array<{ item: JudgeItem; cands: JudgeItem[] }>, mode: LinkMode) {
+  if (work.length && process.env.RECALLER_DEDUPE_ENGINE?.trim() !== "sol" && process.env.OPENAI_API_KEY?.trim()) {
+    const sameMin = Number(process.env.RECALLER_DEDUPE_SAME_MIN) || 0.5;
+    const started = Date.now();
+    try {
+      // dedupe-decisions.ts imports this file, so it is loaded only when used.
+      const { judgeBatchDecisions } = await import("./dedupe-decisions.ts");
+      const { verdicts, info } = await judgeBatchDecisions(work, { sameMin, mode, routes: ["api_key"], timeoutMs: 20_000, cache: false });
+      if (!info || info.answered < info.asked) throw new Error(`답이 모자람 (${info?.answered ?? 0}/${info?.asked ?? 0})`);
+      logDecisions(started, true, info.usage);
+      for (const [n, row] of verdicts.entries()) for (const [m, v] of row.entries())
+        if (v.verdict === "same" && vocabPair(work[n].item, work[n].cands[m])) Object.assign(v, { verdict: "related", reason: `뜻이 같은 다른 단어(비슷한 말)라 합치지 않아요. ${v.reason}` });
+      return verdicts;
+    } catch (error) {
+      logDecisions(started, false);
+      console.warn(`[knowledge:dedupe] Decisions 판정 실패, sol로 다시 판정: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
+    }
+  }
+  return judgeBatch(work, { ...judgeModel(), mode });
+}
+/** assist-log.jsonl 한 줄(토큰 사용량 보기가 읽음): Decisions 호출은 model gpt-6-luna · effort "decisions". */
+function logDecisions(started: number, ok: boolean, usage?: Record<string, unknown>) {
+  const n = (v: unknown) => (typeof v === "number" ? v : undefined);
+  const sub = (k: string) => (usage?.[k] ?? {}) as Record<string, unknown>;
+  logAssistCall({ at: new Date(started).toISOString(), purpose: "knowledge:dedupe", model: "gpt-6-luna", effort: "decisions", engine: "decisions", ms: Date.now() - started, ok,
+    ...(usage ? { tokens: { in: n(usage.input_tokens), cached: n(sub("input_tokens_details").cached_tokens), out: n(usage.output_tokens), reasoning: n(sub("output_tokens_details").reasoning_tokens) } } : {}) });
+}
 /**
  * 3단계 AI 판정 for a batch: each new item with its candidates (closest first) → one verdict per candidate, in order.
  * A candidate the model left out counts as "different"; past two 관련 per item, the rest are "different" too.
@@ -210,7 +246,7 @@ async function checkBatch(ids: string[], data: DupFile): Promise<DupPair[]> {
   const work = await gather(ids, known);
   if (!work.length) return [];
   const mode = linkMode();
-  const planned = plan(work, await judgeBatch(work.map((w) => ({ item: asJudgeItem(w.d), cands: w.cands.map((c) => asJudgeItem(c.d)) })), { ...judgeModel(), mode }), known, mode);
+  const planned = plan(work, await judgeForSave(work.map((w) => ({ item: asJudgeItem(w.d), cands: w.cands.map((c) => asJudgeItem(c.d)) })), mode), known, mode);
   for (const p of planned) if (p.link) await linkKnowledge(p.link.from, p.link.to, p.link.relation, p.link.note).catch(() => undefined);
   return planned.map((p) => p.pair);
 }

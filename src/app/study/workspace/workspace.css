@@ -213,6 +213,11 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .tabs{width:100%;max-width:520px;display:grid;grid-template-columns:repeat(4,1fr);overflow:visible}
 .dejipgi .tabs button{padding:8px 10px;font-size:15px}
 .dejipgi .wtm-chip{margin:0}
+/* ChatGPT 연결 칩 (2026-10-31, 타이머 자리) */
+.dejipgi .wtm-chip{display:inline-flex;align-items:center;gap:6px}
+.dejipgi .wtm-chip.acc-off{color:var(--accent);border-color:var(--accent)}
+.dejipgi .acc-dot{width:8px;height:8px;border-radius:50%;background:var(--muted, #999)}
+.dejipgi .acc-dot[data-on=true]{background:var(--good, #0ca30c)}
 /* ⋯ menus */
 .dejipgi .mm,.dejipgi .ws-menu{position:relative}
 .dejipgi .mm-btn,.dejipgi .ws-menu>summary{list-style:none;border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;min-width:34px;height:30px;padding:0 10px;font-size:17px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}

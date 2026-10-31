@@ -20,7 +20,7 @@ import { askedObjectives, diagnoseBox, planDeckFrom, planSettingsFrom, planToday
 import "katex/dist/katex.min.css";
 import "./dejipgi.css";
 import "./workspace/workspace.css";
-import TimerChip from "./workspace/TimerChip";
+import AccountChip from "./workspace/AccountChip";
 import KnowledgeSidebar from "./workspace/KnowledgeSidebar";
 import AgentScreen from "./workspace/AgentScreen";
 import MoreMenu from "./workspace/MoreMenu";
@@ -507,7 +507,7 @@ export default function DejipgiStudy() {
               <p>공부한 것이 지식으로 쌓이고, 잊을 때쯤 다시 물어봐요</p>
             </div>
             {session.mode === "local-experiment" ? <div className="ws-tools">
-              <TimerChip />
+              <AccountChip />
               <MoreMenu />
             </div> : null}
             <span className="store" id="store" data-mode="memory"><i></i><span id="storeText">저장 준비 중</span></span>

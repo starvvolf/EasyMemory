@@ -16,7 +16,8 @@ import { DATA, saveRun, stageProgress } from "./store.ts";
 import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
 
 export const OC_VERSION = "2.2.1";
-const MODEL = process.env.RECALLER_ASSIST_MODEL?.trim() || "gpt-6-sol";
+// 2026-10-31: terra (답이 20초 안팎으로 느렸음; 출력 속도가 sol의 약 2배, Recaller AI 호출 가이드).
+const MODEL = process.env.RECALLER_ASSIST_MODEL?.trim() || "gpt-6.1-terra";
 const MAX_STEPS = 8;
 const READ = new Set(["read", "glob", "grep"]);
 const OURS = ["open_in_editor", "start_server", "send_request", "run_checks", "look_db"] as const;

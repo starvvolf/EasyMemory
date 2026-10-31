@@ -25,7 +25,7 @@ export default function MoreMenu() {
       <button className="mm-btn" aria-haspopup="menu" aria-expanded={open} aria-label="더보기" onClick={() => setOpen(!open)}>⋯</button>
       {open ? (
         <div className="mm-card" role="menu">
-          {item("학습 기록 · 계정", "문제별 기록, ChatGPT 연결", () => go("records"))}
+          {item("학습 기록", "문제별 기록 (ChatGPT 연결은 위의 버튼)", () => go("records"))}
           {item("한 장 정리", "과목별로 떠올릴 것 모아 보기", () => go("summary"))}
           {item("자료별 지식 포인트", "예전 지식 화면", () => go("knowledge-legacy"))}
           {item("보관함", "치워 둔 문제 세트", () => go("archive"))}
