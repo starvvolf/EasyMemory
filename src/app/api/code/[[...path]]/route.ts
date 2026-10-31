@@ -4,8 +4,9 @@ import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
 import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
-import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, submitAndRecord } from "@/lib/code/service";
-import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck } from "@/lib/assist/code-ai";
+import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
+import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
+import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
 import { resolveSource, type Resolved } from "@/lib/code/source";
 
@@ -38,6 +39,7 @@ async function handle(request: Request, context: RouteContext) {
     const body = async <T extends z.ZodType>(schema: T): Promise<z.infer<T>> => schema.parse(await boundedJson(request));
     const json = (value: unknown) => NextResponse.json(value);
 
+    if (p[0] === "lab" && m === "GET") return json(psLab());
     if (p[0] === "langs" && m === "GET") { void calibration(); return json({ langs: await languages() }); } // measure in the background while the tab opens
     if (p[0] === "calibration" && m === "GET") return json({ calibration: await calibration() });
     if (p[0] === "calibration" && m === "POST") return json({ calibration: await calibration(true) });
@@ -97,8 +99,8 @@ async function handle(request: Request, context: RouteContext) {
       if (p[2] === "draft" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await saveDraft(id, b.lang, b.code)); }
       if (p[2] === "submission" && p[3] && m === "GET") { const s = (await readSubmissions(id)).find((x) => x.id === p[3]); return s ? json({ submission: s }) : NextResponse.json({ message: "제출을 찾을 수 없어요." }, { status: 404 }); }
       if (p[2] === "submit" && m === "POST") {
-        const b = await body(z.object({ lang, code, mode: z.enum(["example", "submit"]), hints: z.number().int().min(0).max(10).optional() }));
-        return json(await submitAndRecord(id, b.lang, b.code, b.mode, b.hints ?? 0));
+        const b = await body(z.object({ lang, code, mode: z.enum(["example", "submit"]), hints: z.number().int().min(0).max(10).optional(), advice: z.number().int().min(0).max(20).optional() }));
+        return json(await submitAndRecord(id, b.lang, b.code, b.mode, b.hints ?? 0, b.advice ?? 0));
       }
       if (p[2] === "hint" && m === "POST") {
         const b = await body(z.object({ lang, code, level: z.union([z.literal(1), z.literal(2), z.literal(3)]), last }));
@@ -119,6 +121,58 @@ async function handle(request: Request, context: RouteContext) {
         await setPreparing(id, { from: meta.preparing.from, since: new Date().toISOString() });
         void prepare(id, got, { kind: "full" });
         return json({ ok: true });
+      }
+      // 훈련 모드 · 지켜보기 (2026-10-31, PS 루트 실험): only on a server that switched them on (scripts/run-lab.mjs ps).
+      if (p[2] === "train" || p[2] === "watch") {
+        const lab = psLab();
+        if (p[2] === "watch" ? !lab.watch : !lab.train) return NextResponse.json({ message: "이 서버에서는 꺼져 있어요." }, { status: 404 });
+        if (p[2] === "watch" && p[3] === "check" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await quickCheck(id, b.lang, b.code)); }
+        if (p[2] === "watch" && p[3] === "advice" && m === "POST") {
+          const b = await body(z.object({ lang, code, facts: z.record(z.string(), z.string().max(40).optional()).optional() }));
+          return json(await watchAdvice({ problemId: id, ...b }));
+        }
+        if (p.length === 3 && m === "GET") return json({ train: await readTrain(id), size: await sizeOf(id), complexities: Object.keys(COMPLEXITIES) });
+        if (p[3] === "mode" && m === "POST") { const b = await body(z.object({ mode: z.enum(["base", "train"]) })); return json({ train: await setMode(id, b.mode) }); }
+        if (p[3] === "understand" && m === "POST") {
+          const b = await body(z.object({ maxN: z.number().nonnegative().max(1e19).optional(), timeSec: z.number().min(0).max(100).optional(), output: z.string().max(500).optional(),
+            input: z.string().max(5000).optional(), myAnswer: z.string().max(2000).optional() }));
+          const result = await checkUnderstand(id, b);
+          await saveStep(id, "understand", { answer: b, result });
+          return json({ result, size: await sizeOf(id) });
+        }
+        if (p[3] === "complexity" && m === "POST") {
+          const b = await body(z.object({ time: z.string().max(20), space: z.string().max(20).optional(), n: z.number().int().positive().max(1e9).optional(), save: z.boolean().optional() }));
+          const meta = await readProblemMeta(id);
+          const n = b.n ?? await sizeOf(id);
+          if (!n) return NextResponse.json({ message: "N의 최대를 알 수 없어요. 1단계에서 먼저 적어 주세요." }, { status: 400 });
+          const result = complexityVerdict(b.time, n, meta.timeLimitMs);
+          if (b.save !== false) await saveStep(id, "complexity", { answer: { time: b.time, space: b.space }, result });
+          return json({ result });
+        }
+        if (p[3] === "inputs" && m === "POST") {
+          const b = await body(z.object({ inputs: z.array(z.string().max(5000)).max(8), lang: lang.optional(), code: code.optional(), step: z.enum(["correct", "implement"]).optional() }));
+          return json(await tryInputs(id, b.inputs, b.lang && b.code ? { lang: b.lang, code: b.code } : undefined));
+        }
+        if (p[3] === "check" && m === "POST") {
+          const b = await body(z.object({ step: z.enum(["model", "approach", "correct"]), answer: z.record(z.string(), z.string().max(1000)) }));
+          const result = await trainCheck({ problemId: id, step: b.step, answer: b.answer });
+          await saveStep(id, b.step, { answer: b.answer, result });
+          return json({ result });
+        }
+        if (p[3] === "step" && m === "POST") {
+          const b = await body(z.object({ step: z.enum(STEPS), answer: z.record(z.string(), z.unknown()).optional(), skipped: z.boolean().optional() }));
+          return json({ train: await saveStep(id, b.step, { answer: b.answer ?? {}, ...(b.skipped ? { skipped: true } : {}) }) });
+        }
+        if (p[3] === "review-draft" && m === "POST") {
+          const subs = (await readSubmissions(id)).filter((s) => s.mode === "submit");
+          const firstWrong = subs.find((s) => s.verdict !== "AC")?.code, passed = [...subs].reverse().find((s) => s.verdict === "AC")?.code;
+          const steps = Object.fromEntries(Object.entries((await readTrain(id)).steps).map(([k, v]) => [k, v?.answer]));
+          return json({ draft: await trainReview({ problemId: id, steps, firstWrong, passed }) });
+        }
+        if (p[3] === "review" && m === "POST") {
+          const b = await body(z.object({ idea: z.string().max(400).optional(), stuck: z.string().max(400).optional(), transfer: z.string().max(400).optional() }));
+          return json(await saveReview(id, b));
+        }
       }
       if (p[2] === "review" && m === "POST") { const b = await body(z.object({ lang, code, note: z.string().max(1000).optional() })); return json(await reviewApproach({ problemId: id, ...b })); }
       if (p[2] === "counter" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await counterexample({ problemId: id, ...b })); }

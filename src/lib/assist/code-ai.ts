@@ -296,3 +296,51 @@ export async function solveCheck(problemId: string, model: string, effort?: stri
   return { problemId, title: p.title, model, effort: effort ?? "", aiMs: alone.ms, verdict: judged.verdict, passed: judged.passed, total: judged.total,
     ...(miss ? { fail: { verdict: miss.verdict, input: miss.input.slice(0, 200), expected: miss.expected.slice(0, 100), got: miss.got.slice(0, 100) } } : {}), ...(judged.compile ? { compile: judged.compile.slice(0, 300) } : {}) };
 }
+
+/* ---------- 훈련 모드 · 지켜보기 (2026-10-31, PS 루트 실험, src/lib/code/train.ts) ---------- */
+// Unlike the tutor above, these calls see the reference solution: to tell whether the learner is on the same road, the
+// model has to know the road. They must not hand it over, so an answer that repeats a line of the reference is replaced.
+const COACH = `너는 알고리즘 문제 풀이 코치다. 학습자가 스스로 생각하게 돕는다. 한국어로 아주 짧게.
+- [모범 풀이]는 판단에만 쓰고 학습자에게 보이지 않는다. 코드·식을 옮기지 않는다. 기법 이름(DP, 이분 탐색 등)을 먼저 말하지 않는다.
+- 다른 길이어도 맞을 수 있다. 모범 풀이와 다르다는 이유만으로 틀렸다고 하지 않는다.
+- say는 한 문장. 고칠 점이 있으면 질문 모양으로 ("n이 10만이면 이 반복은 몇 번 돌까요?").`;
+function leaks(text: string, reference: string) {
+  const lines = reference.split("\n").map((l) => l.trim()).filter((l) => l.length >= 18);
+  return lines.some((l) => text.includes(l));
+}
+const STATE_SCHEMA = S.obj({ state: S.oneOf("맞는 길", "다른 길", "더 생각", "아직 모름"), say: S.str });
+const STEP_ASK: Record<"model" | "approach" | "correct", string> = {
+  model: "[단계] 추상화: 학습자가 이 문제를 어떤 구조로 보는지 한 줄로 썼다. 모범 풀이가 문제를 보는 구조(무엇을 상태·정점·구간 등으로 보는가)와 같은지 판단한다. 빠진 것이 있으면 그것을 묻는 질문 하나.",
+  approach: "[단계] 풀이 탐색: 학습자가 ① 완전탐색 ② 느린 이유 ③ 줄이는 방법을 썼다. ②가 진짜 병목을 짚었는지, ③이 제한 안에 드는 맞는 개선인지 판단한다.",
+  correct: "[단계] 정당성: 학습자가 '왜 항상 맞는지' 한 줄을 썼다. 그 이유가 성립하는지, 빠진 경우(경계·같은 값·음수 등)가 있으면 그 종류만 묻는다.",
+};
+export async function trainCheck(input: { problemId: string; step: "model" | "approach" | "correct"; answer: Record<string, unknown> }) {
+  const p = await readProblemMeta(input.problemId);
+  const ref = p.reference?.code ?? "";
+  const user = [problemBlock(p), p.constraints ? `[제약] ${p.constraints}` : "", ref ? `[모범 풀이 — 학습자에게 보이지 않음]\n${ref.slice(0, 12000)}` : "",
+    `[학습자 답]\n${Object.entries(input.answer).map(([k, v]) => `${k}: ${String(v).slice(0, 600)}`).join("\n")}`, STEP_ASK[input.step]].filter(Boolean).join("\n\n");
+  const out = await askJson<{ state: string; say: string }>(`code:train-${input.step}`, COACH, user, STATE_SCHEMA, { model: process.env.RECALLER_PS_COACH_MODEL?.trim() || undefined });
+  return leaks(out.say, ref) ? { state: out.state, say: "이 단계의 생각을 한 번 더 정리해 볼까요?" } : out;
+}
+/** 지켜보기 W3: the code so far against the reference's road, when running it found nothing wrong. */
+export async function watchAdvice(input: { problemId: string; lang: Lang; code: string; facts?: Record<string, string | undefined> }) {
+  const p = await readProblemMeta(input.problemId);
+  const ref = p.reference?.code ?? "";
+  const user = [problemBlock(p), p.constraints ? `[제약] ${p.constraints}` : "", `[시간 제한] ${p.timeLimitMs / 1000}초`, ref ? `[모범 풀이 — 학습자에게 보이지 않음]\n${ref.slice(0, 12000)}` : "",
+    `[학습자 코드 (쓰는 중, ${LANG_LABEL[input.lang]})]\n${input.code.slice(0, 15000)}`,
+    input.facts ? `[실행해 본 결과] ${Object.entries(input.facts).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(", ")}` : "", await thisAttempt(p), await pastMisses(p),
+    "학습자가 쓰는 중인 코드를 잠깐 들여다본다. 쓰다 만 부분은 틀린 것이 아니다. 방향이 맞으면 state를 '맞는 길'이나 '다른 길'로, 제한을 넘기거나 틀릴 위험이 보이면 '더 생각'으로, 코드가 너무 짧아 모르겠으면 '아직 모름'으로. what은 복잡도·경계·자료형 범위·초기화·접근·입출력 중 하나 또는 없음."].filter(Boolean).join("\n\n");
+  const out = await askJson<{ state: string; what: string; say: string; line: number }>("code:watch", COACH, user,
+    S.obj({ state: S.oneOf("맞는 길", "다른 길", "더 생각", "아직 모름"), what: S.oneOf("복잡도", "경계", "자료형 범위", "초기화", "접근", "입출력", "없음"), say: S.str, line: S.int }),
+    { model: process.env.RECALLER_PS_COACH_MODEL?.trim() || undefined });
+  return leaks(out.say, ref) ? { ...out, say: "지금 방향을 한 번 더 점검해 볼까요?" } : out;
+}
+/** 복기 초안: from the steps' answers, this attempt and the first wrong code against the code that passed. */
+export async function trainReview(input: { problemId: string; steps?: Record<string, unknown>; firstWrong?: string; passed?: string }) {
+  const p = await readProblemMeta(input.problemId);
+  const user = [problemBlock(p), input.steps ? `[훈련 단계 답]\n${JSON.stringify(input.steps).slice(0, 4000)}` : "", await thisAttempt(p),
+    input.firstWrong ? `[처음 틀린 코드]\n${input.firstWrong.slice(0, 6000)}` : "", input.passed ? `[통과한 코드]\n${input.passed.slice(0, 6000)}` : "",
+    "학습자의 복기 초안을 쓴다. idea: 핵심 발상 한 줄(이 문제 이야기로). stuck: 막혔던 이유 한 줄(없었으면 빈 문자열). transfer: 이 발상이 통하는 다른 문제의 모양 한 줄(문제 이름이 아니라 모양)."].filter(Boolean).join("\n\n");
+  return askJson<{ idea: string; stuck: string; transfer: string }>("code:train-review", "알고리즘 풀이 복기를 학습자 말투로 짧게 쓴다. 한국어.", user,
+    S.obj({ idea: S.str, stuck: S.str, transfer: S.str }), { model: process.env.RECALLER_PS_COACH_MODEL?.trim() || undefined });
+}

@@ -60,3 +60,6 @@ tools/problem-authoring-lab/runs/chatgpt-request-*/
 # Claude Code: 세션이 만드는 작업 폴더 (에이전트·설정은 올린다)
 .claude/worktrees/
 .claude/settings.local.json
+# 루트별 실험 서버 (scripts/run-lab.mjs): 빌드 폴더와 서버가 만드는 tsconfig
+/.next-lab-*/
+/tsconfig.lab-*.json

@@ -616,3 +616,24 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 @keyframes mm4-settle{0%{border-color:var(--good)}100%{border-color:var(--line)}}
 @media (max-width:640px){ .dejipgi .mm4-cards,.dejipgi .mm4-skel{padding-left:0} .dejipgi .mm4-cards{grid-template-columns:1fr} }
 @media (prefers-reduced-motion: reduce){ .dejipgi .mm4 *,.dejipgi .mm4-leaving,.dejipgi .mm4-arrive{animation:none!important;transition:none!important} }
+/* 훈련 모드 · 지켜보기 (CodeTrain.tsx, 2026-10-31 PS 루트 실험) */
+.dejipgi .cs-train{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:8px}
+.dejipgi .cs-tr-steps{display:flex;gap:4px;flex-wrap:wrap}
+.dejipgi .cs-tr-step{font-size:12px;padding:2px 8px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.dejipgi .cs-tr-step.done{background:var(--good-soft);color:var(--good);border-color:transparent}
+.dejipgi .cs-tr-step.skip{text-decoration:line-through}
+.dejipgi .cs-tr-step.cur{background:var(--ink,#222);color:var(--surface);border-color:transparent}
+.dejipgi .cs-tr-body{display:flex;flex-direction:column;gap:6px}
+.dejipgi .cs-tr-num{width:110px;display:inline-block;margin-left:4px}
+.dejipgi .cs-tr-note{padding:4px 8px;border-radius:8px;background:var(--surface-2)}
+.dejipgi .cs-tr-note.good{background:var(--good-soft);color:var(--good)}
+.dejipgi .cs-tr-note.bad{background:var(--bad-soft);color:var(--bad)}
+.dejipgi .cs-tr-note.help{background:color-mix(in srgb,var(--help) 14%,transparent);color:var(--help)}
+.dejipgi .cs-tr-inputs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.dejipgi .cs-tr-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.dejipgi .cs-tr-edge{display:flex;flex-direction:column;gap:2px}
+.dejipgi .cs-watch{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.dejipgi .cs-watch-dot{width:8px;height:8px;border-radius:4px;background:var(--line)}
+.dejipgi .cs-watch.good .cs-watch-dot{background:var(--good)}
+.dejipgi .cs-watch.help{border-color:color-mix(in srgb,var(--help) 50%,transparent);background:color-mix(in srgb,var(--help) 10%,transparent)} .dejipgi .cs-watch.help .cs-watch-dot{background:var(--help)}
+.dejipgi .cs-watch.bad{border-color:color-mix(in srgb,var(--bad) 50%,transparent);background:var(--bad-soft)} .dejipgi .cs-watch.bad .cs-watch-dot{background:var(--bad)}

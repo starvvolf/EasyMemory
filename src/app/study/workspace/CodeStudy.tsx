@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, handoff, later, shareContext } from "./api";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
+import { ModeSwitch, TrainPanel, useLab, useTrain, useWatch, WatchStrip } from "./CodeTrain";
 
 type Lang = "python" | "javascript" | "cpp" | "csharp";
 type LangInfo = { lang: Lang; label: string; ready: boolean; version: string; help: string };
@@ -161,6 +162,11 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const editor = useRef<EditorHandle | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
+  // 훈련 모드 · 지켜보기: only where the server switched them on (PS 실험 서버, CodeTrain.tsx).
+  const lab = useLab();
+  const train = useTrain(id, lab.train);
+  const training = lab.train && train.state?.mode === "train";
+  const watch = useWatch({ id, lang, code, enabled: lab.watch && Boolean(problem), examples: problem?.examples ?? [] });
 
   useEffect(() => {
     call<{ problem: Problem; drafts: Partial<Record<Lang, string>>; submissions: SubLite[] }>(`/api/code/problem/${id}`).then((r) => {
@@ -207,11 +213,13 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const judge = async (mode: "example" | "submit") => {
     setRunning(mode); setError("");
     try {
-      const r = await call<Judged>(`/api/code/problem/${id}/submit`, { lang, code: now(), mode, hints });
+      const r = await call<Judged>(`/api/code/problem/${id}/submit`, { lang, code: now(), mode, hints, ...(watch.advice ? { advice: watch.advice } : {}) });
       setResult({ ...r, mode });
+      watch.noteRun(mode, r.verdict);
       if (mode === "submit") {
         setSubs((await call<{ submissions: SubLite[] }>(`/api/code/problem/${id}`)).submissions);
-        if (r.verdict === "AC") { setMsgs((m) => [...m, { who: "ai", tag: "채점", text: hints ? `맞았습니다! 힌트 ${hints}번을 받고 풀었어요. 며칠 뒤 힌트 없이 다시 풀어 보면 지식이 '앎'이 돼요.` : "맞았습니다! 힌트 없이 풀어서 이 문제의 지식이 '앎'이 됐어요." }]); setHints(0); }
+        if (r.verdict === "AC" && (training || watch.advice)) { setMsgs((m) => [...m, { who: "ai", tag: "채점", text: training ? "맞았습니다! 훈련 모드로 푼 문제는 기록에 '훈련 모드로 통과'로 남아요. 왼쪽 7단계 복기에서 배운 것을 남기고, 며칠 뒤 기본 모드로 혼자 풀면 '앎'이 돼요." : `맞았습니다! 지켜보기 조언을 ${watch.advice}번 받고 풀었어요. 며칠 뒤 혼자 다시 풀면 '앎'이 돼요.` }]); setHints(0); watch.resetAdvice(); }
+        else if (r.verdict === "AC") { setMsgs((m) => [...m, { who: "ai", tag: "채점", text: hints ? `맞았습니다! 힌트 ${hints}번을 받고 풀었어요. 며칠 뒤 힌트 없이 다시 풀어 보면 지식이 '앎'이 돼요.` : "맞았습니다! 힌트 없이 풀어서 이 문제의 지식이 '앎'이 됐어요." }]); setHints(0); }
         window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar"));
       }
     } catch (e) { setError(errorText(e)); } finally { setRunning(""); }
@@ -260,6 +268,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     <div className="cs-solve">
       <section className="cs-statement panel">
         <div className="row" style={{ justifyContent: "space-between" }}><button className="btn ghost small" onClick={onBack}>← 문제 목록</button><button className="btn ghost small" onClick={() => void startTimer()}>⏱ 타이머 켜고 풀기</button></div>
+        {lab.train ? <ModeSwitch mode={training ? "train" : "base"} onMode={(m) => void train.setMode(m)} /> : null}
         <div className="row"><span className="chip">{problem.kind === "blank" ? "빈칸" : "코드"}</span><span className="small muted">{problem.folder}</span></div>
         <h2>{problem.title}</h2>
         {problem.preparing ? (problem.preparing.error
@@ -277,6 +286,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}
           {problem.check?.second && problem.check.second.status !== "skipped" ? ` · ${problem.check.second.status === "agreed" ? `다른 호출의 독립 풀이(${problem.check.second.model})와 테스트 ${problem.check.second.agreed}/${problem.check.second.total}개 일치` : problem.check.second.status === "second-wrong" ? "독립 풀이가 틀려서 큰 입력 대조는 못 함" : "독립 풀이로 대조하지 못함"}` : ""}</p>}
         {problem.knowledge.length ? <div className="row small"><span className="muted">확인하는 지식</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
+        {training ? <TrainPanel id={id} train={train} timeLimitMs={problem.timeLimitMs} lang={lang} code={now} solved={subs.some((s) => s.mode === "submit" && s.verdict === "AC")} /> : null}
         {subs.length ? <><p className="eyebrow">내 제출</p><ul className="cs-subs">{subs.filter((s) => s.mode === "submit").slice(0, 8).map((s) => <li key={s.id}><button className="linkish small" onClick={() => void openSubmission(s.id)}>
           <span className={`chip ${VERDICT[s.verdict]?.[1] ?? ""}`}>{VERDICT[s.verdict]?.[0] ?? s.verdict}</span> {s.lang} · {new Date(s.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{s.hints ? ` · 힌트 ${s.hints}` : ""}</button></li>)}</ul></> : null}
       </section>
@@ -293,6 +303,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           <button className="btn primary small" disabled={Boolean(running) || !info?.ready || Boolean(problem.preparing)} title={problem.preparing ? "숨은 테스트를 만드는 중이에요" : undefined} onClick={() => void judge("submit")}>{running === "submit" ? "채점 중…" : problem.preparing && !problem.preparing.error ? "테스트 준비 중…" : "제출"}</button>
         </div>
         {info && !info.ready ? <p className="ws-err">{info.label} 실행기가 없어요. {info.help}</p> : null}
+        {lab.watch ? <WatchStrip watch={watch} onHint={() => hint(1)} /> : null}
         <CodeEditor value={code} lang={lang} onChange={onCode} handle={(h) => { editor.current = h; }} />
         {custom.open ? (
           <div className="cs-custom"><div><p className="eyebrow">입력</p><textarea className="ws-input mono" rows={4} value={custom.input} onChange={(e) => setCustom((c) => ({ ...c, input: e.target.value }))} /></div>

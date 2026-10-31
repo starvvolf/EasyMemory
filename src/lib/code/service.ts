@@ -11,6 +11,7 @@ import { recordEvent, saveMany, type KEventKind } from "../knowledge/api.ts";
 import { listProblems, readProblemMeta, setProblemKnowledge, submit, type Problem, type ProblemMeta } from "./problems.ts";
 import { VERDICT_LABEL, type Lang } from "./run.ts";
 import { SEED_KNOWLEDGE } from "./seeds.ts";
+import { readTrain, saveStep } from "./train.ts";
 
 const filled = new Set<string>();
 
@@ -101,11 +102,15 @@ export async function endIdleAttempts(now = Date.now()) {
  * noted, since the hints already mark 몰랐음. 틀림·시간 초과·런타임 에러 wait in the attempt as 틀림. Compile errors and
  * "예제 실행" leave the knowledge alone.
  */
-export async function submitAndRecord(problemId: string, lang: Lang, code: string, mode: "example" | "submit", hints: number) {
+export async function submitAndRecord(problemId: string, lang: Lang, code: string, mode: "example" | "submit", hints: number, advice = 0) {
   await ensureProblemKnowledge(await readProblemMeta(problemId));
   const result = await submit(problemId, lang, code, mode, hints);
   if (mode === "submit" && result.verdict !== "CE" && result.verdict !== "MISSING") {
-    if (result.verdict === "AC") await endAttempt(problemId, hints ? { kind: "note", detail: `힌트 ${hints}번 받고 통과` } : { kind: "correct", detail: "힌트 없이 통과" });
+    // 훈련 모드 · 지켜보기 (2026-10-31): passing with the steps checked one by one, or after the watcher's warnings, is not
+    // 앎 yet (a note); 앎 comes from solving it alone later, as after hints.
+    const training = (await readTrain(problemId)).mode === "train";
+    if (result.verdict === "AC") await endAttempt(problemId, training ? { kind: "note", detail: "훈련 모드로 통과" } : hints ? { kind: "note", detail: `힌트 ${hints}번 받고 통과` }
+      : advice ? { kind: "note", detail: `지켜보기 조언 ${advice}번 받고 통과` } : { kind: "correct", detail: "힌트 없이 통과" });
     else {
       const failed = result.shown[0];
       await hold(problemId, "wrong", `${VERDICT_LABEL[result.verdict]}${failed ? ` (입력 ${failed.input.split("\n")[0].slice(0, 40)}…)` : ""}`);
@@ -121,4 +126,18 @@ export async function recordAsked(problemId: string | undefined, detail: string)
   if (!problemId) return;
   await readProblemMeta(problemId);
   await hold(problemId, "asked", detail.slice(0, 200));
+}
+
+/**
+ * 복기 (훈련 모드 7단계, 2026-10-31): what the learner kept of the review goes onto the problem's knowledge as a note, so the
+ * knowledge window shows it under 겪은 일 and the tutor reads it next time. Empty lines are not saved.
+ */
+export async function saveReview(problemId: string, review: { idea?: string; stuck?: string; transfer?: string }) {
+  const lines = [review.idea?.trim() && `핵심 발상: ${review.idea.trim()}`, review.stuck?.trim() && `막힌 이유: ${review.stuck.trim()}`, review.transfer?.trim() && `다른 문제에도: ${review.transfer.trim()}`].filter(Boolean) as string[];
+  await saveStep(problemId, "review", { answer: review });
+  if (!lines.length) return { recorded: 0 };
+  const problem = await ensureProblemKnowledge(await readProblemMeta(problemId));
+  const source = { kind: "code" as const, title: problem.title, ref: `code:${problem.id}` };
+  for (const id of problem.knowledgeIds) await recordEvent(id, "note", `[복기] ${lines.join(" · ")}`.slice(0, 600), source).catch(() => undefined);
+  return { recorded: problem.knowledgeIds.length };
 }
