@@ -60,7 +60,10 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 
 type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void>; reason: string; lastThink: number; asked: number; stopped: boolean };
 const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문
-const sessions = new Map<string, string>(); // runId:n → sessionID (대화를 이어 간다)
+// runId:n → 이어 쓰는 대화. 같은 단계 안에서는 대화를 이어 써서 앞부분이 그대로 남게 한다(캐시가 맞는다).
+// files: 이 대화에 마지막으로 붙인 파일 내용 — 그대로면 다시 붙이지 않는다. 너무 길어지면 새 대화로(규칙을 덜 지키게 되므로).
+const sessions = new Map<string, { sid: string; turns: number; files: Map<string, string> }>();
+const MAX_TURNS = 20;
 
 type Host = { oc: any; events: any[]; waiters: Set<() => void>; mockUrl?: string };
 let host: Promise<Host | null> | null = null;
@@ -320,7 +323,7 @@ export function thinkLine(text: string) {
 
 /** 학습자가 [멈추기]를 누르면: 지금 답하는 질문을 멈춘다 */
 export async function stopRun(runId: string, n: number) {
-  const sid = sessions.get(`${runId}:${n}`);
+  const sid = sessions.get(`${runId}:${n}`)?.sid;
   if (!sid || !host) return false;
   const h = await host; if (!h) return false;
   const l = live.get(sid);
@@ -343,12 +346,14 @@ function emit(l: Live, key: string, text: string, final: boolean) {
 async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   await aiBudget("agent"); // 한도를 넘었으면 여기서 멈춘다
   const key = `${io.runId}:${io.n}`;
-  let sid = sessions.get(key);
-  if (!sid) { sid = (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string; sessions.set(key, sid); }
+  let ss = sessions.get(key);
+  if (!ss || ss.turns >= MAX_TURNS) { ss = { sid: (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string, turns: 0, files: new Map() }; sessions.set(key, ss); }
+  const sid = ss.sid;
   const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve(), reason: "", lastThink: 0, asked: 0, stopped: false };
   live.set(sid, l);
   const from = h.events.length;
-  const text = [io.context, bridgeContext(io.runId), `[학습자 질문] ${question}`].filter(Boolean).join("\n\n");
+  const text = [...promptParts(io, ss), bridgeContext(io.runId), `[학습자 질문] ${question}`].filter(Boolean).join("\n\n");
+  ss.turns++;
   if (process.env.OC_DEBUG) console.log("[oc prompt]\n" + text);
   try {
     await h.oc.sessions.prompt({ sessionID: sid, text });
@@ -375,6 +380,19 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
     }
     return l.texts.join("\n\n") || "확인한 내용은 위에 있어요.";
   } finally { live.delete(sid); }
+}
+
+/** 이번 메시지에 붙일 맥락: 새 대화면 전부, 이어 쓰면 바뀐 것만(안 변하는 계획서·같은 파일은 위 대화에 이미 있다) */
+export function promptParts(io: AgentIO, ss: { turns: number; files: Map<string, string> }): string[] {
+  const p = io.parts;
+  if (!p) return [io.context];
+  const fresh = ss.turns === 0;
+  const files = p.files.map((f) => {
+    if (!fresh && ss.files.get(f.key) === f.text) return `[파일 ${f.key} — 위 대화에 붙인 것과 같음, 다시 읽지 않아도 된다]`;
+    ss.files.set(f.key, f.text);
+    return f.text;
+  });
+  return fresh ? [p.fixed, p.turn, p.recent, ...files] : [p.since, p.turn, ...files];
 }
 
 /* ---------- 가짜 AI (시험용: 지금 보는 파일을 읽고 짧게 답한다) ---------- */

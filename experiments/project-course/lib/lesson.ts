@@ -15,7 +15,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
 import { addEntry, addTour, codeTerms, firstLine, notesContext } from "./notes.ts";
-import { runAgent, undoEdit, type AskCard, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
+import { runAgent, undoEdit, type AskCard, type CtxFile, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
@@ -399,8 +399,8 @@ const TOUR_Q = `[흐름 투어로 답하기] show_tour 도구로 답한다. 이 
 - 파일들은 위에 붙어 있으니 다시 읽지 않는다. 아직 없는 파일(뒤 단계)은 넣지 않는다. 앞으로 할 예측 문제의 답은 말하지 않는다.
 - 도구를 부른 뒤에는 한두 문장으로만 마무리한다.`;
 /** 투어용: 작업 폴더의 코드 파일 전부(작은 프로젝트라 한 번에 붙인다) */
-async function allFiles(ws: string) {
-  const out: string[] = [];
+async function allFiles(ws: string): Promise<CtxFile[]> {
+  const out: CtxFile[] = [];
   let total = 0;
   async function walk(dir: string, rel: string) {
     for (const e of await readdir(path.join(ws, dir), { withFileTypes: true }).catch(() => [])) {
@@ -410,12 +410,12 @@ async function allFiles(ws: string) {
       else if (/\.(ts|js|mjs)$/.test(e.name) && total < 1500) {
         const t = await readFile(path.join(ws, dir, e.name), "utf8").catch(() => "");
         const lines = t.split(/\r?\n/); total += lines.length;
-        out.push(`[파일 ${r}]\n${lines.map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}`);
+        out.push({ key: r, text: `[파일 ${r}]\n${lines.map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}` });
       }
     }
   }
   await walk("", "");
-  return out.join("\n\n");
+  return out;
 }
 
 /** 튜터가 답에 이 단계 정답 줄을 보여 줬으면 "정답 줄을 봤다"(힌트 3단계)로 친다.
@@ -455,21 +455,21 @@ async function remember(runId: string, n: number, ws: string, s0: State, x: { q:
 /** 최근에 물어본 코드의 파일(설명 속 단어를 눌러 이어 물을 때 같은 파일을 붙이려고) */
 function lastQuoteFile(s: State) { return [...s.messages].reverse().find((m) => m.card?.type === "code")?.card?.file as string | undefined; }
 /** 파일 내용을 줄 번호와 함께. withImports면 그 파일이 가져오는 이 프로젝트 파일(./x.ts)도 */
-async function filesFor(ws: string, file: string | null, withImports: boolean) {
-  if (!file || file.includes("..")) return "";
+async function filesFor(ws: string, file: string | null, withImports: boolean): Promise<CtxFile[]> {
+  if (!file || file.includes("..")) return [];
   const num = (t: string, max: number) => t.split(/\r?\n/).slice(0, max).map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n");
   const main = await readFile(path.join(ws, file), "utf8").catch(() => null);
-  if (main === null) return "";
-  const out = [`[파일 ${file} — 이미 붙여 두었으니 다시 읽지 않아도 된다]\n${num(main, 300)}`];
+  if (main === null) return [];
+  const out: CtxFile[] = [{ key: file, text: `[파일 ${file} — 이미 붙여 두었으니 다시 읽지 않아도 된다]\n${num(main, 300)}` }];
   if (withImports) {
     const dir = path.posix.dirname(file);
     const deps = [...main.matchAll(/from\s+["'](\.\.?\/[^"']+)["']/g)].map((m) => path.posix.normalize(path.posix.join(dir, m[1]))).slice(0, 4);
     for (const d of deps) {
       const t = await readFile(path.join(ws, d), "utf8").catch(() => null);
-      if (t !== null) out.push(`[이 파일이 가져오는 ${d}]\n${num(t, 150)}`);
+      if (t !== null) out.push({ key: d, text: `[이 파일이 가져오는 ${d}]\n${num(t, 150)}` });
     }
   }
-  return out.join("\n\n");
+  return out;
 }
 
 /** 아직 안 한 순서: 튜터가 학습자가 직접 맞히거나 고칠 것을 미리 말하지 않게 */
@@ -503,28 +503,38 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   // 수업 맥락(계획서·지금 순서·최근 대화·마지막 확인): 에이전트와 단순 답 모두 쓴다
   // 최근 대화는 짧게(긴 설명을 통째로 다시 보내면 매번 수천 토큰) — 10/30 사용자 "컨텍스트 조정"
   const clip = (t: string, k = 300) => (t.length > k ? `${t.slice(0, k)}…` : t);
-  const recentText = s0.messages.slice(-8).map((m) => m.role === "me" ? `학습자: ${clip(m.text ?? "", 200)}` : m.text ? `강사: ${clip(m.text)}` : m.card?.type === "reply" ? `(요청 결과: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : m.card.status})` : m.card?.type === "check" ? `(확인 결과: ${m.card.result.passed}개 통과, ${m.card.result.failed}개 실패)` : m.card?.type === "tool" ? `(튜터가 ${m.card.label})` : "").filter(Boolean).join("\n");
-  const context = [
+  const lineOf = (m: LMsg) => m.role === "me" ? `학습자: ${clip(m.text ?? "", 200)}` : m.text ? `강사: ${clip(m.text)}` : m.card?.type === "reply" ? `(요청 결과: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : m.card.status})` : m.card?.type === "check" ? `(확인 결과: ${m.card.result.passed}개 통과, ${m.card.result.failed}개 실패)` : m.card?.type === "tool" ? `(튜터가 ${m.card.label})` : "";
+  const recentText = s0.messages.slice(-8).map(lineOf).filter(Boolean).join("\n");
+  // 캐시가 맞게 나눈다(10/31 건희 "그렇게 해보자"): 안 변하는 것(fixed)은 대화 첫 메시지에 한 번만,
+  // 매번 바뀌는 것(turn·파일)은 질문마다 뒤에 붙인다. 같은 단계 안에서는 OpenCode 대화를 이어 쓴다.
+  const fixed = [
     `[수업 계획서] ${plan.stage}단계 ${plan.title}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}\n고칠 곳(학습자가 직접 쓸 핵심): ${stageOf(course, n).fix.text}`,
-    `[지금 하는 순서] ${s0.beat + 1}/${plan.beats.length}: ${b?.text ?? "끝"}`,
     // 실사용 확인(10/30): "로그인은 언제?"에 "나중 단계"라고만 답함 → 코스 전체 순서와 학습자 목표를 준다
     `[코스 전체 순서] ${course.stages.map((x) => `${x.transfer ? "전이 과제" : `${x.n}단계`} ${x.title}${x.n === n ? "(지금)" : run.plan.stages.includes(x.n) || x.transfer ? "" : "(건너뜀)"}`).join(" / ")}`,
     (run.profile as { goal?: string } | undefined)?.goal ? `[학습자 목표] ${(run.profile as { goal?: string }).goal}` : "",
+  ].filter(Boolean).join("\n\n");
+  // 지난 질문 뒤로 화면에 있었던 일(대화를 이어 쓸 때는 이것만): 방금 넣은 내 질문은 빼고
+  const prevAsk = s0.messages.slice(0, -1).map((m) => m.role).lastIndexOf("me");
+  const sinceText = s0.messages.slice(prevAsk + 1, -1).slice(-8).map(lineOf).filter(Boolean).join("\n");
+  const turn = [
+    `[지금 하는 순서] ${s0.beat + 1}/${plan.beats.length}: ${b?.text ?? "끝"}`,
     // 실사용 확인(10/30): 막혔다는 말에 뒤에 나올 예측 문제의 답(405)을 먼저 말해 버림 → 앞으로 할 순서를 알리고 미리 말하지 않게
     upcoming(plan, s0.beat),
     s0.lastCheck ? `[마지막 확인] ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}: 기대 ${r.failure?.expected} / 실제 ${r.failure?.actual}`).join("; ") || "모두 통과"}` : "",
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
-    `[최근 대화]\n${recentText}`,
     // 학습자 기억(프로젝트 노트): 이 프로젝트에서 이미 본 것
     await notesContext(runId, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null).catch(() => ""),
-    // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
-    opts.mode === "tour" ? await allFiles(ws) : await filesFor(ws, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, opts.mode === "explain"),
   ].filter(Boolean).join("\n\n");
+  // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
+  const files = opts.mode === "tour" ? await allFiles(ws) : await filesFor(ws, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, opts.mode === "explain");
+  const parts = { fixed, turn, recent: recentText ? `[최근 대화]\n${recentText}` : "", since: sinceText ? `[지난 질문 뒤 화면에 있었던 일]\n${sinceText}` : "", files };
+  // 기본 엔진(대화를 잇지 않음)은 지금처럼 전부 한 번에
+  const context = [fixed, turn, parts.recent, ...files.map((f) => f.text)].filter(Boolean).join("\n\n");
   if (aiMode() !== "off") {
     // 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선을 고친다)
     const bubbles = new Map<string, number>();
     const io = {
-        runId, n, ws, context, mode: opts.mode,
+        runId, n, ws, context, parts, mode: opts.mode,
         stream: async (key: string, text: string) => {
           await change(runId, n, (s, push) => {
             const id = bubbles.get(key);

@@ -21,10 +21,14 @@ export type AskCard = { type: "ask"; id: string; question: string; options: stri
 export type TourStep = { file: string; from: number; to: number; title: string; text: string; code: string };
 export type TourCard = { type: "tour"; id: string; title: string; steps: TourStep[] };
 export type DiffCard = { type: "diff"; id: string; file: string; why: string; diff: string; undone?: boolean };
+export type CtxFile = { key: string; text: string };
 export type AgentIO = {
   runId: string; n: number; ws: string;
-  /** 지금까지의 수업 맥락(계획서·지금 순서·최근 대화·마지막 확인) */
+  /** 지금까지의 수업 맥락(계획서·지금 순서·최근 대화·마지막 확인) — 기본 엔진은 이것만 쓴다 */
   context: string;
+  /** 같은 맥락을 캐시가 맞게 나눈 것(OpenCode 엔진이 대화를 이어 쓸 때). fixed는 대화 첫 메시지에만,
+   *  recent는 새 대화일 때, since는 이어 쓸 때, files는 지난번과 달라졌을 때만 다시 붙인다 */
+  parts?: { fixed: string; turn: string; recent: string; since: string; files: CtxFile[] };
   /** 채팅에 바로 보이게 */
   show: (card: ToolCard | DiffCard | TourCard | SnippetCard) => Promise<void>;
   /** 도구를 쓰기 전 튜터의 한마디 */
