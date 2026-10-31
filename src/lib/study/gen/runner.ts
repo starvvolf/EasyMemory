@@ -1020,7 +1020,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     return state;
   }
 
-  // -- v3: ① 전체 읽기 + ② 출제 계획 (협업/설계_생성엔진v3_Claude_20261019.md). Returns true when the run ends here.
+  // -- v3: ① 전체 읽기 + ② 출제 계획 (보관/협업/설계와논의/설계_생성엔진v3_Claude_20261019.md). Returns true when the run ends here.
   async function runV3Prefix(): Promise<boolean> {
     const v3 = (state.v3 ??= { gate: [] });
     if (!v3.map) {

@@ -1,4 +1,4 @@
-// Generation engine v3 (Claude 안, 협업/설계_생성엔진v3_Claude_20261019.md). Lab-only engine choice; v2 stays the default.
+// Generation engine v3 (Claude 안, 보관/협업/설계와논의/설계_생성엔진v3_Claude_20261019.md). Lab-only engine choice; v2 stays the default.
 // ① 전체 읽기: the whole PDF (plus its text layer) → outline + knowledge map (concepts with their conditions, relations
 //    across units, materials, skips, notes for picture pages). ② 출제 계획: the map → planned questions with what the
 //    question gives, what the learner must bring back, and the conditions it must keep. ③ 출제 per unit with the unit's

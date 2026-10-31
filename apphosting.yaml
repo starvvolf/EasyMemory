@@ -4,4 +4,4 @@ runConfig:
   concurrency: 20
 
 # Runtime values are intentionally configured in the Firebase App Hosting console.
-# See FIREBASE_SETUP.md for the required variables and deployment checklist.
+# See 보관/FIREBASE_SETUP.md for the required variables and deployment checklist.

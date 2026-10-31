@@ -1,4 +1,4 @@
-// 지식 저장소 (2026-10-26, 기획: 협업/기획결정_20261026_Claude.md): what the learner has met, did not know, and knows,
+// 지식 저장소 (2026-10-26, 기획: 보관/협업/기획결정_20261026_Claude.md): what the learner has met, did not know, and knows,
 // kept across every material (PDF, web article, code). One knowledge item is one thing to know. Folders hold items
 // like a file tree; links between items are the "고리" (금리 → 대출 → 성장주). Events are the third memory level:
 // every question asked, every wrong answer, every hint and every correct answer, newest last.

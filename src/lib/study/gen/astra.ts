@@ -31,7 +31,7 @@ function v4ToPlan(v: V4Plan): Plan {
   return { outline: v.outline, concepts: v.units.flatMap(u => u.concepts), practice: v.units.flatMap(u => u.practice), uncertain: v.uncertain, pageNotes: v.units.flatMap(u => u.pageNotes) };
 }
 /*
- * v5 plan (협업/설계_생성엔진v5_Claude_20261019.md): the same unit-by-unit stream, plus what the material is (diagnosis),
+ * v5 plan (보관/협업/설계와논의/설계_생성엔진v5_Claude_20261019.md): the same unit-by-unit stream, plus what the material is (diagnosis),
  * for each goal what the learner must do (level) and the format chosen for it, and per unit the points learners
  * confuse (misconceptions) that distractors and OX statements are built from.
  */

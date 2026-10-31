@@ -34,7 +34,7 @@ npm.cmd run eval:import:test
 - `observations.json`에는 개수와 ID 대응처럼 기계적으로 계산 가능한 값만 둔다.
 - API key, 인증 정보, 전체 환경 변수와 provider 내부 trace를 저장하지 않는다.
 
-세부 규약은 `docs/보관/EVAL_ARTIFACT_STRUCTURE.md`를 따른다.
+세부 규약은 `보관/docs/보관/EVAL_ARTIFACT_STRUCTURE.md`를 따른다.
 
 ## 기존 run 기반 headless 재실행
 

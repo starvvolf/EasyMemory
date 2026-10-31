@@ -1,4 +1,4 @@
-// 엔진 실험 서버 (2026-10-28, 협업/스레드분담_20261028.md): a second local server for the engine thread (C), so engine
+// 엔진 실험 서버 (2026-10-28, 보관/협업/스레드분담_20261028.md): a second local server for the engine thread (C), so engine
 // experiments never stop or mix with the main app (127.0.0.1:3000) the other threads use.
 //   - http://127.0.0.1:3002 (3001 is the tablet gate), its own build folder .next-engine, its own tsconfig
 //     (tsconfig.engine.json), its own data folder tmp/engine-data (PDFs to try: tmp/engine-data/mcp-sources).

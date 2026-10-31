@@ -20,7 +20,7 @@ export type Engine = (typeof engines)[number];
 export const astraFamily = (engine: Engine | undefined) => engine === "astra" || engine === "v4" || engine === "v5" || engine === "alpha";
 /** v5 and its successor alpha (GPT의 v5 개선안: 계획이 문항 설계 assessment까지 정하고 출제가 그대로 구현) share the v5 pipeline. */
 export const v5Family = (engine: Engine | undefined) => engine === "v5" || engine === "alpha";
-/** v5 learning formats (협업/설계_생성엔진v5_Claude_20261019.md); each maps to one of the study screen's response kinds. */
+/** v5 learning formats (보관/협업/설계와논의/설계_생성엔진v5_Claude_20261019.md); each maps to one of the study screen's response kinds. */
 export const studyFormats = ["choice", "ox", "short", "cloze", "flashcard"] as const;
 export type StudyFormat = (typeof studyFormats)[number];
 /** v5: a short survey before generation (설문). Absent and no note: the engine decides (알잘딱). */
@@ -75,7 +75,7 @@ export type GenInput = {
   pastExamSourceIds?: string[];
   /** A remake of reported questions: the earlier question per objective, so authoring writes a different one. */
   remake?: { genId: string; previous: Record<string, string>; reasons?: Record<string, string> };
-  /** Engine: v2 (default, outline → classify → design → author) or v3 (협업/설계_생성엔진v3_Claude_20261019.md). */
+  /** Engine: v2 (default, outline → classify → design → author) or v3 (보관/협업/설계와논의/설계_생성엔진v3_Claude_20261019.md). */
   engine?: Engine;
   /** v5: survey answers (설문 mode). */
   survey?: GenSurvey;

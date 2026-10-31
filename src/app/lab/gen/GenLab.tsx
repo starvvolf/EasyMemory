@@ -16,7 +16,7 @@ type CallSummary = Omit<GenCall, "system" | "user" | "reply">;
 type Detail = { gen: GenState; label: string; calls: CallSummary[] };
 
 const STEPS: GenStep[] = ["transcribe", "outline", "classify", "design", "author"];
-/** v3 (협업/설계_생성엔진v3_Claude_20261019.md): whole-PDF read → plan → author per unit → gate. */
+/** v3 (보관/협업/설계와논의/설계_생성엔진v3_Claude_20261019.md): whole-PDF read → plan → author per unit → gate. */
 const STEPS_V3: GenStep[] = ["read", "plan", "author", "gate"];
 const STEPS_ASTRA: GenStep[] = ["astra-plan", "astra-author", "astra-solve", "astra-review"];
 const MODELS = ["gpt-6-sol", "gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-astra", "gpt-6-luna"];

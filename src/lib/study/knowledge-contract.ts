@@ -1,4 +1,4 @@
-// 엔진 → 지식 저장소 약속 (2026-10-28, 협업/스레드분담_20261028.md): the one place where what the PDF engine makes
+// 엔진 → 지식 저장소 약속 (2026-10-28, 보관/협업/스레드분담_20261028.md): the one place where what the PDF engine makes
 // meets what the knowledge store keeps. The engine (src/lib/study/gen, thread C) may change anything inside as long as
 // `knowledgeLayer(state)` (src/lib/study/knowledge.ts) still gives a KnowledgeLayer these functions accept; the knowledge
 // store (thread B) keeps accepting what they produce. knowledge-contract.test.ts runs a real (fake-model) engine run
