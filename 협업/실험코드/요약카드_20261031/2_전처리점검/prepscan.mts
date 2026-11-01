@@ -1,0 +1,13 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path"; import { pathToFileURL } from "node:url";
+const mod = (p: string) => import(pathToFileURL(path.join(process.cwd(), p)).href);
+const { preparePdf } = await mod("src/lib/study/gen/prep.ts");
+const pdfjs = await import(pathToFileURL(path.join(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.mjs")).href);
+const [pdfPath, out] = process.argv.slice(2);
+const bytes = new Uint8Array(readFileSync(pdfPath));
+const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise; const n = doc.numPages; await doc.cleanup();
+const t0 = performance.now();
+const prep = await preparePdf(bytes.slice(), Array.from({ length: n }, (_, i) => i + 1), "prep-2");
+const rows = prep.pages.map((p: any) => ({ page: p.page, title: p.title, route: p.route, reasons: p.reasons, ...p.stats }));
+writeFileSync(out, JSON.stringify({ file: path.basename(pdfPath), pages: n, sec: +((performance.now() - t0) / 1000).toFixed(1), rows }, null, 1));
+for (const r of rows) console.log([r.page, r.route, r.chars, r.pathOps, r.pictureCover.toFixed(3), r.mathChars, r.garbledChars, r.reasons.join("/"), r.title.slice(0, 40)].join("\t"));
