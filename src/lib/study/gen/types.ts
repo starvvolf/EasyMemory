@@ -8,11 +8,11 @@ export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", un
 /** Model calls, in order. classify and design run per section. */
 /** v3 (lab engine choice) adds read (whole PDF → outline + knowledge map), plan and gate; it does not use classify/design. */
 export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review",
-  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check", "rc-merge", "rc-intent"] as const;
+  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check", "rc-merge", "rc-intent", "rc-summary", "rc-skeleton", "rc-topic", "rc-digest-card", "rc-wrap"] as const;
 export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
   read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)",
-  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토", "rc-merge": "자료 전체 정리", "rc-intent": "쪽 의도" };
+  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토", "rc-merge": "자료 전체 정리", "rc-intent": "쪽 의도", "rc-summary": "정리 글", "rc-skeleton": "정리 뼈대", "rc-topic": "주제 정리 글", "rc-digest-card": "줄 카드", "rc-wrap": "개요·핵심 정리" };
 
 export const engines = ["v2", "v3", "astra", "v4", "v5", "alpha", "recaller"] as const;
 export type Engine = (typeof engines)[number];
@@ -121,6 +121,11 @@ export type RecallerLab = {
   intentPass?: boolean;
   /** with intentPass: intents only, no one-line gist (shorter reply, sooner cards). */
   intentLean?: boolean;
+  /** 정리 글 (10/31): true writes a streamed summary of the whole material beside the cards (off until 요약→카드 실험이 정해지면). */
+  summary?: boolean;
+  /** 요약 → 카드 (10/31, 사용자 "일단 1번"): the material is written as a summary first (뼈대 → 주제별 정리 글), and the cards
+   * are made from its lines; topics become the sections. src/lib/study/gen/digest.ts. */
+  digest?: boolean;
   /** with intentPass: 정리 starts at once (deciding intents itself) and the pass runs beside it; preview pages' cards are dropped when it ends. */
   intentParallel?: boolean;
   /** each page's 정리 also reads its outline section's other pages (text) and makes only the cards its page owns (10/29 실험). */
@@ -277,16 +282,28 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   // the first question came 4 s sooner.
   "rc-organize": { model: "gpt-6.1-terra", effort: "low" },
   "rc-link": { model: "gpt-6-sol", effort: "low" },
-  "rc-author": { model: "gpt-6-sol", effort: "low" },
+  // 10/31 (사용자 "다 수정해봐", Claude 문서 "Recaller AI 호출 가이드" 4절): basic questions and their bundle check on terra, which
+  // writes about twice as fast at half the price; the blind solve stays on sol so the solver is not the author's model.
+  "rc-author": { model: "gpt-6.1-terra", effort: "low" },
   "rc-deep": { model: "gpt-6-sol", effort: "low" },
   "rc-solve": { model: "gpt-6-sol", effort: "high" },
-  "rc-check": { model: "gpt-6-sol", effort: "low" },
+  "rc-check": { model: "gpt-6.1-terra", effort: "low" },
   // 연구 1 3번 (실험): one text-only pass over every card of the material.
   // 자료 지도의 자료 전체 정리 (10/29 C, 44쪽 같은 카드로 비교): terra·low 19–22초·주제 8–9개·핵심 고르기가 기준표와 가장 가까움,
   // sol·low 28–38초·주제가 5–7개로 뭉치고 이름 충돌을 덜 고침, medium은 생각만 40초.
   "rc-merge": { model: "gpt-6.1-terra", effort: "low" },
   // 쪽 의도 먼저 (실험, 10/29): one short pass over every page's title and text before 정리.
   "rc-intent": { model: "gpt-6.1-terra", effort: "low" },
+  // 정리 글 (10/31, 사용자 "가장 합리적인 걸로"): one streamed summary of the whole material from 전처리 (데드락 14쪽: 첫 글자 2.7초,
+  // 완성 94초, 입력 5,070·출력 3,026 토큰). sol wrote 13 of 14 pages and analogies; terra was twice as fast but retold the text
+  // (협업/결과보고/실측_PDF통째요약_terra_20261031.md).
+  "rc-summary": { model: "gpt-6.1-sol", effort: "low" },
+  // 요약 → 카드 (10/31, 협업/결과보고/실험_요약에서카드_20261031.md 3·4차): the skeleton, the cards from summary lines and the
+  // wrap-up on terra·low (뼈대 7.4초, 2~3줄 카드 묶음 9~18초); the topic texts on sol·low (그림 쪽 풀이 4/4, 비유가 안 맞는 점 6/6).
+  "rc-skeleton": { model: "gpt-6.1-terra", effort: "low" },
+  "rc-topic": { model: "gpt-6.1-sol", effort: "low" },
+  "rc-digest-card": { model: "gpt-6.1-terra", effort: "low" },
+  "rc-wrap": { model: "gpt-6.1-terra", effort: "low" },
 };
 
 /**

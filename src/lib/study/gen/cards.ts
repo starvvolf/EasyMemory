@@ -157,7 +157,9 @@ export function checkCards(o: Organized, section: { pages: number[] }, pageTexts
 /** A card as one compact line for later prompts and screens. */
 export function cardLine(c: Card) {
   const s = c.shape;
-  const body = s.form === "term" ? `${s.name}${s.symbol ? ` (${s.symbol})` : ""}: ${s.definition}` : s.form === "fact" ? `${s.subject} — ${s.value}` : s.form === "list" ? `${s.name}: ${s.items.join(s.ordered ? " → " : ", ")}`
+  // A name the title already says is not said again (요약 → 카드 4차: "System modeling: System modeling:").
+  const named = (name: string, rest: string) => squash(name) === squash(c.title) ? rest : `${name}: ${rest}`;
+  const body = s.form === "term" ? (squash(s.name) === squash(c.title) ? `${s.symbol ? `(${s.symbol}) ` : ""}${s.definition}` : `${s.name}${s.symbol ? ` (${s.symbol})` : ""}: ${s.definition}`) : s.form === "fact" ? `${s.subject} — ${s.value}` : s.form === "list" ? named(s.name, s.items.join(s.ordered ? " → " : ", "))
     : s.form === "rule" ? `${s.premise ? `[${s.premise}] ` : ""}${s.condition} ⇒ ${s.result}${s.boundary ? ` (경계: ${s.boundary})` : ""}`
     : s.form === "procedure" ? s.steps.map((x, i) => `${i + 1}) ${x.action}`).join(" ") : s.form === "formula" ? `${s.expr}${s.when ? ` (${s.when})` : ""}`
     : s.form === "compare" ? `${s.targets.join(" vs ")}: ${s.criteria.map((k) => `${k.name}=${k.values.join("/")}`).join("; ")}`

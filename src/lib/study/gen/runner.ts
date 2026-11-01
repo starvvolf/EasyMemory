@@ -16,6 +16,7 @@ import { cropFigures, needsImage, pageEmphasis, renderPageFigures, renderPageIma
 import { DEFAULT_GUIDE_DIR, guideDirPattern, loadGuide, loadRecallerGuide, type LoadedGuide } from "./guide.ts";
 import { preparePdf, preparePdfFast, prepFromTexts, prepRouters, type PrepResult } from "./prep.ts";
 import { recallerFakeReply, runRecaller } from "./recaller.ts";
+import { pagesOutside, SUMMARY_SYSTEM, summaryFakeReply, type SummaryState } from "./summary.ts";
 import { authorPrompt, classifyPrompt, designPrompt, outlinePrompt, retryUser } from "./prompts.ts";
 import { authoredQuestion, authorReply, authorSchema, classifyReply, classifySchema, designReply, designSchema, outlineReply, outlineSchema } from "./schemas.ts";
 import { DEFAULT_GEN_MODELS, astraFamily, v5Family, defaultChosen, engines, forkFroms, genStepLabel, genSteps, mapDigest, purposes, type GenCall, type GenInput, type GenMark, type GenState, type GenStep, type Issue, type Objective, type Section, type SectionState } from "./types.ts";
@@ -133,7 +134,13 @@ export async function genLive(id: string, since = 0) {
       .map((c) => ({ title: String(c.title ?? ""), kind: String(c.kind ?? ""), weight: String(c.weight ?? ""), shape: c.shape && typeof c.shape === "object" ? c.shape : {} }));
     return { page, done: v.done, cards };
   }) : [];
-  return { now: Date.now(), status: state?.status ?? "failed", live: Boolean(mine), outline, pages };
+  return { now: Date.now(), status: state?.status ?? "failed", live: Boolean(mine), outline, pages, summary: await loadSummary(id), digest: state?.recaller?.digest ?? null };
+}
+
+// 정리 글 (10/31): kept beside the run (summary.json), not in its state, since it may still be writing when the run is done.
+const summaryRoot = globalThis as typeof globalThis & { __studyGenSummary?: Set<string> };
+export async function loadSummary(id: string): Promise<SummaryState | null> {
+  try { return JSON.parse(await readFile(path.join(dirOf(id), "summary.json"), "utf8")) as SummaryState; } catch { return null; }
 }
 
 class Stop extends Error {
@@ -256,7 +263,7 @@ export const genInputSchema = z.strictObject({
     readParallel: z.number().int().min(1).max(64).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
     outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional(),
     chunk: z.number().int().min(1).max(4).optional(), hedgeMs: z.number().int().min(1000).max(120000).optional(),
-    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
+    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), summary: z.boolean().optional(), digest: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -282,6 +289,8 @@ export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
   // kind and each page's intent; cover/guide/preview pages make no card, 현황 pages' cards are 보조, a worked example is a card.
   return { router: "prep-2", inlineRead: true, outline: true, pageParallel: Math.min(64, Math.max(1, pages)), fastPrep: 8, imageWidth: 1024, lenientQuotes: true,
     intentPass: true, intentLean: true, intentParallel: true,
+    // 정리 hedge (10/31, 사용자 "다 수정해봐"): a page's 정리 still out after 8 s gets a second identical request; the first wins.
+    hedgeMs: 8000,
     // 그림 쪽 읽기 (blind checks wait for it): drawing is done in the workers already, so this is only model calls in flight
     // (4 at a time made a first-time 32쪽 wait about 70 s for its 25 picture pages, 10/29).
     readParallel: Math.min(32, Math.max(4, pages)) };
@@ -741,7 +750,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           return result.value;
         },
         halted: () => Boolean(astraFailure),
-        askText: async (step, page, attempt, system, user, images) => String(await ask(step, null, attempt, system, user, null, undefined, { images, page })),
+        askText: async (step, page, attempt, system, user, images, onPartial) => String(await ask(step, null, attempt, system, user, null, undefined, { images, ...(page ? { page } : {}), ...(onPartial ? { onPartial } : {}) })),
         prepare: options.prep ?? (async (bytes, pages) => {
           if (!bytes) return prepFromTexts(await (options.pages ?? registeredPages)(input), pages);
           if (!input.lab?.fastPrep) return preparePdf(bytes, pages, input.lab?.router);
@@ -785,6 +794,44 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           return documentPath;
         },
         priorityPage: () => readingFocus(),
+        // 정리 글: once per run (a later start of the same run, 문제 만들기, keeps the one written), beside the cards and not
+        // counted toward the call cap. A summary still writing in this process is left alone; one cut by a server stop is redone.
+        summary: async (build) => {
+          const inFlight = (summaryRoot.__studyGenSummary ??= new Set());
+          if (inFlight.has(id) || (await loadSummary(id))?.status === "done") return;
+          inFlight.add(id);
+          const file = path.join(dirOf(id), "summary.json");
+          try {
+            const { user, images, pages } = await build();
+            const choice = input.models["rc-summary"] ?? DEFAULT_GEN_MODELS["rc-summary"];
+            const t0 = Date.now();
+            const summary: SummaryState = { status: "writing", text: "", startedAt: new Date(t0).toISOString(), model: choice?.model, effort: choice?.effort };
+            await saveJson(file, summary);
+            let saved = 0;
+            const request: ModelRequest = { purpose: "gen:rc-summary", system: SUMMARY_SYSTEM, user, model: choice?.model, effort: choice?.effort, caller, provider: input.provider,
+              ...(images.length ? { images } : {}),
+              onText: (text) => {
+                summary.firstMs ??= Date.now() - t0;
+                summary.text = text;
+                if (Date.now() - saved < 1000) return;
+                saved = Date.now();
+                void saveJson(file, summary).catch(() => undefined);
+              } };
+            if (input.provider === "fake") request.fakeReply = summaryFakeReply(user);
+            try {
+              let reply: Awaited<ReturnType<typeof callModel>>;
+              for (let retry = 0; ; retry++) {
+                try { reply = await callModel(request); break; }
+                catch (error) { if (retry >= 1 || !(error instanceof ModelError) || error.code !== "transient") throw error; summary.text = ""; await new Promise((r) => setTimeout(r, 3000)); }
+              }
+              Object.assign(summary, { status: "done", text: reply.text, ms: Date.now() - t0, model: reply.model, usage: reply.usage, outside: pagesOutside(reply.text, pages) });
+              summary.firstMs ??= summary.ms;
+            } catch (error) {
+              Object.assign(summary, { status: "failed", ms: Date.now() - t0, error: error instanceof Error ? error.message : String(error) });
+            }
+            await saveJson(file, summary);
+          } finally { inFlight.delete(id); }
+        },
       }).catch((error) => { throw error instanceof Stop ? error : failAstra(error); });
       if (progressTimer) clearTimeout(progressTimer);
       if (astraFailure) throw astraFailure;

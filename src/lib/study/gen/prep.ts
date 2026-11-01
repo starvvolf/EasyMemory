@@ -151,6 +151,12 @@ function routePage2(stats: PageStats): { route: PrepRoute; score: number; reason
   // Little text beside small pictures: the pictures are the content (10/30: Geometric p.7 "Translation Matrix T" with the 3×3
   // matrices as pictures went text-only, and its page made no card).
   if (stats.pictureCover > 0 && stats.chars < 300) return { route: "figures", score, reasons: [...reasons, "글이 짧고 그림(식)이 있음"] };
+  // 10/31 (사용자 "가장 합리적인 걸로", 협업/결과보고/점검_prep2_벡터도식_20261031.md): pages that went text-only and lost a drawing.
+  // Few letters with many drawn lines is a line diagram (deadlocks p.12: 127자, 선 42; text pages draw 4–17 lines). A small
+  // picture beside ordinary text is often an equation or a figure (deadlocks p.10, graphics03 p.37, Geometric p.27·28·32: 2–7%).
+  // On 4 PDFs this moved 6 of the 7 pages that lost something, and no page that lost nothing.
+  if (stats.chars < 300 && stats.pathOps >= 20) return { route: "page", score, reasons: [...reasons, "글이 짧고 선으로 그린 도식"] };
+  if (stats.pictureCover >= 0.02) return { route: "figures", score, reasons: [...reasons, `작은 그림 ${Math.round(stats.pictureCover * 100)}%`] };
   return { route: "layer", score, reasons };
 }
 

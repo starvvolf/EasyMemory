@@ -51,6 +51,20 @@ test("prep-2 (실험): math letters stay on the text layer; garbled math fonts a
   assert.equal(routePage({ ...base, mathChars: 12 }).route, "page");
 });
 
+test("prep-2: a line diagram with few letters, or a small picture beside text, is not read from the text layer alone (10/31)", () => {
+  const base: PageStats = { chars: 400, mathChars: 0, brokenChars: 0, lines: 10, orphanLines: 0, pictureCover: 0, pathOps: 5 };
+  // deadlocks p.12: 127 letters, 42 drawn paths, no picture.
+  assert.equal(routePage({ ...base, chars: 127, pathOps: 42 }, "prep-2").route, "page");
+  // graphics03 p.37: 665 letters, an equation picture on 5% of the page.
+  assert.equal(routePage({ ...base, chars: 665, pictureCover: 0.05, pathOps: 6 }, "prep-2").route, "figures");
+  // Text pages with bullets and rules (4–17 paths, no picture) stay on the text layer.
+  assert.equal(routePage({ ...base, chars: 291, pathOps: 17 }, "prep-2").route, "layer");
+  assert.equal(routePage({ ...base, chars: 900, pathOps: 40 }, "prep-2").route, "layer");
+  assert.equal(routePage({ ...base, pictureCover: 0.01 }, "prep-2").route, "layer");
+  // prep-1 is unchanged.
+  assert.equal(routePage({ ...base, chars: 665, pictureCover: 0.05 }).route, "layer");
+});
+
 test("pictures hanging off the page and overlapping count once", () => {
   assert.equal(coverage([[0, 0, 480, 540], [240, 0, 960, 540]], 960, 540), 1);
   assert.equal(coverage([[0, 0, 480, 540]], 960, 540), 0.5);
