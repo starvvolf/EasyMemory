@@ -42,7 +42,7 @@ type Card =
 export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[] };
 // mode: 고치기 방식(직접 / 같이 / 튜터가 만듦) · asked: 지금 순서에 들어온 뒤 자유 질문을 했는지(했으면 [하던 거로 돌아가기])
 type Mode = "self" | "pair" | "auto";
-type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null; mode?: Mode; pairStep?: number; asked?: boolean };
+type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null; mode?: Mode; pairStep?: number; asked?: boolean; tutorEdit?: boolean };
 type Todo = { open?: Open; focus?: Focus; clear?: boolean };
 
 const now = () => new Date().toISOString();
@@ -352,9 +352,11 @@ async function runCheck(runId: string, n: number, plan: Plan, course: Awaited<Re
     s.lastCheck = result;
     push({ role: "tutor", card: { type: "check", result } });
     if (result.stageOk) {
-      const how = s.mode === "auto" ? "튜터가 고침" : s.hints >= 3 ? "정답 줄 보고 고침" : s.mode === "pair" ? "같이 고침" : "직접 고침";
+      // 채팅에서 "고쳐 줘"로 튜터가 고친 것도 "만들어 주세요"와 같게 친다(11/2: 전에는 화면 상태가 안 바뀌어 "직접 고침"으로 찍혔다)
+      const byTutor = s.mode === "auto" || !!s.tutorEdit;
+      const how = byTutor ? "튜터가 고침" : s.hints >= 3 ? "정답 줄 보고 고침" : s.mode === "pair" ? "같이 고침" : "직접 고침";
       for (const f of stageOf(course, n).fix.files) void addEntry(runId, wsDir, f, { stage: n, kind: "fixed", title: how, summary: `${plan.title}: ${stageOf(course, n).fix.text}`.slice(0, 120) }).catch(() => {});
-      push({ role: "tutor", text: (s.mode === "auto" ? `제가 고친 코드로 모든 확인을 통과했어요. ${plan.passText ?? ""} 이 부분은 나중에 복습에서 직접 써 볼 기회를 드릴게요.`
+      push({ role: "tutor", text: (byTutor ? `제가 고친 코드로 모든 확인을 통과했어요. ${plan.passText ?? ""} 이 부분은 나중에 복습에서 직접 써 볼 기회를 드릴게요.`
         : s.hints >= 3 ? "통과했어요. 정답 줄을 보고 고친 거라, 이 부분은 다음 복습에서 코드 없이 한 번 더 확인할게요."
         : s.mode === "pair" ? `**통과!** 같이 고쳐서 모든 확인을 통과했어요. ${plan.passText ?? ""}`
         : `**통과!** 직접 고쳐서 모든 확인을 통과했어요. ${plan.passText ?? ""}`).trim() });
@@ -545,7 +547,11 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
         },
         // 채팅 기록 저장이 실패해도 도구 결과는 그대로 쓴다(저장 실패를 도구 실패로 착각하지 않게)
         show: async (card) => {
-          await change(runId, n, (_s, push) => push({ role: "tutor", card })).catch((e) => console.error("[lesson] 기록 저장 실패", e));
+          await change(runId, n, (st, push) => {
+            push({ role: "tutor", card });
+            // 튜터가 이번 단계의 고칠 파일을 고쳤으면 화면 상태도 "튜터가 고침"으로(진도 기록은 recordEdit가 힌트 3단계로 남긴다)
+            if (card.type === "diff" && stageOf(course, n).fix.files.includes(card.file)) { st.tutorEdit = true; st.hints = Math.max(st.hints, 3); }
+          }).catch((e) => console.error("[lesson] 기록 저장 실패", e));
           // 프로젝트 노트: 투어 걸음은 파일별로, 파일 사이 넘어간 길은 연결로 / 튜터가 고친 것은 그 파일에
           if (card.type === "tour") await addTour(runId, ws, n, card.title, card.steps).catch(() => {});
           if (card.type === "diff") await addEntry(runId, ws, card.file, { stage: n, kind: "edited", title: "튜터가 고침", summary: card.why || "튜터가 코드를 고쳤어요(직접 통과 아님)" }).catch(() => {});
