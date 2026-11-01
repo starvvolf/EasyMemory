@@ -35,7 +35,8 @@ export function send(port: number, method: string, url: string, opts: { body?: u
   return new Promise((resolve) => {
     let settled = false;
     const done = (r: Reply) => { if (!settled) { settled = true; clearTimeout(timer); resolve(r); } };
-    const req = http.request({ host: "127.0.0.1", port, method, path: url, headers, agent: false }, (res) => {
+    // 한글 같은 글자는 주소에 그대로 못 넣는다(Node가 거절): 그 글자만 %로 바꾼다 (/hello?name=건희)
+    const req = http.request({ host: "127.0.0.1", port, method, path: url.replace(/[^\x21-\x7e]+/g, encodeURIComponent), headers, agent: false }, (res) => {
       const chunks: Buffer[] = [];
       res.on("data", (c: Buffer) => chunks.push(c));
       res.on("end", () => {

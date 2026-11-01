@@ -6,12 +6,13 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { loadCourse, solutionDiff, stageFiles } from "../lib/course.ts";
+import { listCourses, loadCourse, solutionDiff, stageFiles } from "../lib/course.ts";
 import { renderSource } from "../lib/stagegen.ts";
 import { writeWorkspace } from "../lib/stagegen.ts";
 import { runChecks } from "../lib/checker.ts";
 
 const PORT = 4190;
+const COURSE_IDS = (await listCourses()).map((c) => c.id);
 
 test("표식: from/until/swap", () => {
   const src = ["a", "// <from 2>", "b", "// </from>", "// <until 1>", "c", "// </until>", "// <swap 2>", "fin", "// <start>", "beg", "// </swap>"].join("\n");
@@ -23,8 +24,8 @@ test("표식: from/until/swap", () => {
   assert.throws(() => renderSource("// <from 2>\nx", { stage: 1 }));
 });
 
-test("코스 데이터: 단계의 검사·지식·부품 이름이 모두 있다", async () => {
-  const c = await loadCourse("board-api");
+for (const id of COURSE_IDS) test(`코스 데이터(${id}): 단계의 검사·지식·부품 이름이 모두 있다`, async () => {
+  const c = await loadCourse(id);
   const kids = new Set(c.knowledge.map((k) => k.id));
   const checkIds = new Set(c.checks.map((x) => x.id));
   for (const s of c.stages) {
@@ -37,9 +38,10 @@ test("코스 데이터: 단계의 검사·지식·부품 이름이 모두 있다
   for (const d of c.intake.diagnose) assert.ok(d.answer < d.options.length);
 });
 
-const course = await loadCourse("board-api");
+for (const id of COURSE_IDS) {
+const course = await loadCourse(id);
 for (const stage of course.stages) {
-  test(`${stage.n}단계: 시작 상태는 없애 보기 검사에서 실패, 이전 단계는 통과 / 푼 상태는 모두 통과`, async () => {
+  test(`${id} ${stage.n}단계: 시작 상태는 없애 보기 검사에서 실패, 이전 단계는 통과 / 푼 상태는 모두 통과`, async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), `pc-${stage.n}-`));
     try {
       await writeWorkspace(dir, await stageFiles(course, stage.n));
@@ -59,4 +61,5 @@ for (const stage of course.stages) {
       await rm(dir, { recursive: true, force: true });
     }
   });
+}
 }

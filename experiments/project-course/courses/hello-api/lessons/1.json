@@ -1,0 +1,86 @@
+{
+  "stage": 1,
+  "title": "이름 불러 인사하기",
+  "passText": "이제 서버가 이름을 불러 인사하고, 이름이 없으면 400으로 알려 줘요.",
+  "teach": [
+    "요청의 생김새: 메서드(GET) · 주소(/hello) · 쿼리(?name=건희)",
+    "상태 코드: 200 잘 됐음, 400 보낸 쪽이 잘못함",
+    "서버는 JSON으로 답장한다"
+  ],
+  "tutorNotes": "처음 웹 서버를 보는 사람이다. 서버는 '편지를 받고 꼭 답장하는 우체국 창구', 요청은 편지, 쿼리는 '편지 봉투에 적은 메모'로 비유한다. 라우터·HTTP 내부는 깊게 들어가지 않는다. 정답 줄(if (!name) … / 안녕, ${name})을 먼저 주지 않는다. 짧게 말한다.",
+  "beats": [
+    {
+      "id": "intro",
+      "kind": "say",
+      "text": "**서버**는 편지(요청)를 받으면 꼭 답장(응답)을 보내는 창구예요.\n\n편지에는 두 가지가 꼭 적혀 있어요.\n- 무엇을 할지: **메서드** (`GET`은 \"보여 줘\")\n- 어디에: **주소** (`/hello`)\n\n[[src/app.ts#router.add(\"GET\", \"/hello\"]] 이 한 줄이 \"`GET /hello` 편지는 `greet`가 맡는다\"는 뜻이에요.",
+      "open": { "file": "src/app.ts", "anchor": "router.add(\"GET\", \"/hello\"", "note": "GET /hello는 greet가 맡아요" },
+      "actions": [ { "label": "알겠어요, 다음", "do": "next" } ],
+      "now": "서버와 요청이 뭔지 읽기"
+    },
+    {
+      "id": "map",
+      "kind": "map",
+      "text": "인사를 맡은 `hello.ts`를 덩어리로 볼게요. 오늘 볼 곳은 **② greet** 하나예요.\n\n모르는 줄은 드래그하고 우클릭 → \"이건 뭐예요?\", 덩어리가 궁금하면 코드 위 `💬 설명`을 눌러 보세요.",
+      "focus": {
+        "file": "src/routes/hello.ts",
+        "chunks": [
+          { "anchor": "// 부품: 인사", "label": "① 도구 빌려 오기", "desc": "답장 보내는 도우미(sendJson)를 가져와요", "focus": false },
+          { "anchor": "export function greet", "label": "② greet", "desc": "GET /hello 처리 — 오늘 고칠 곳", "focus": true }
+        ]
+      },
+      "open": { "file": "src/routes/hello.ts", "anchor": "export function greet", "note": "② greet" },
+      "actions": [ { "label": "봤어요", "do": "next" } ],
+      "now": "hello.ts를 덩어리로 훑어보기"
+    },
+    {
+      "id": "predict",
+      "kind": "predict",
+      "predict": "p1",
+      "text": "주소 뒤에 `?name=건희`를 붙이면 편지에 이름을 적어 보낼 수 있어요. 이걸 **쿼리**라고 해요.\n\n지금 서버에 `GET /hello?name=건희`를 보내면 답장이 어떻게 올까요?",
+      "after": [
+        { "label": "직접 보내 보기", "do": "start_dev,try", "tries": [ { "method": "GET", "path": "/hello?name=건희" }, { "method": "GET", "path": "/hello" } ] }
+      ],
+      "now": "답장을 예측해 본 뒤, 직접 보내 보기"
+    },
+    {
+      "id": "why",
+      "kind": "say",
+      "text": "이름을 적어 보냈는데 그냥 **\"안녕\"**이에요. 이름 없이 보내도 똑같이 200(잘 됐음)이고요.\n\n[[src/routes/hello.ts#const name = query.get(\"name\")]] 에서 이름을 **꺼내기는** 하는데, 아래 [[src/routes/hello.ts#TODO(1단계)]] 를 보면 답장에는 쓰지 않아요.\n\n이름이 없는 편지는 보낸 쪽이 잘못 보낸 거라서 **400**(요청이 잘못됐어요)으로 알려 주는 게 맞아요.",
+      "open": { "file": "src/routes/hello.ts", "anchor": "const name = query.get", "toAnchor": "sendJson(res, 200, { message: \"안녕\" })", "note": "꺼내고 안 써요" },
+      "actions": [ { "label": "알겠어요, 다음", "do": "next" } ],
+      "now": "왜 이름을 안 부르는지 읽기"
+    },
+    {
+      "id": "fix",
+      "kind": "fix",
+      "text": "이제 고칠 차례예요. [[src/routes/hello.ts#TODO(1단계)]] 자리에서\n\n1. 이름이 없으면(`!name`) **400**으로 답하고 멈추고(`return`)\n2. 있으면 **\"안녕, 이름\"**으로 답하게 해 주세요.\n\n어떻게 할지 골라 주세요. 저장하면 바로 확인해요.",
+      "open": { "file": "src/routes/hello.ts", "anchor": "TODO(1단계)", "note": "여기를 채워요" },
+      "scaffold": {
+        "file": "src/routes/hello.ts",
+        "from": "// TODO(1단계)",
+        "to": "sendJson(res, 200, { message: \"안녕\" });",
+        "note": "①② 빈칸을 채우고 저장하세요",
+        "text": "if (!name) {\n  sendJson(res, /* ① 보낸 쪽이 잘못했을 때의 상태 코드 */, { error: \"name을 붙여서 보내 주세요\" });\n  return;\n}\nsendJson(res, 200, { message: /* ② 이름을 넣은 인사: `안녕, ${…}` */ });"
+      },
+      "pair": [
+        "**이름이 없을 때.** 빈칸 ①에 \"보낸 쪽이 잘못 보냈어요\"를 뜻하는 상태 코드를 넣어요. 4로 시작해요.",
+        "**이름 넣어 인사.** 빈칸 ②에 글자 사이에 값을 끼우는 모양 `` `안녕, ${name}` ``을 써요. 백틱(`)으로 감싸야 `${}` 안의 값이 들어가요."
+      ],
+      "now": "이름이 없으면 400, 있으면 이름으로 인사하게 고치고 저장하기"
+    },
+    {
+      "id": "explain",
+      "kind": "explain",
+      "text": "**내 말로** 한 문장만 적어 볼까요?\n\n**이름이 없을 때 200이 아니라 400으로 답하는 이유는?** 채점하지 않아요.",
+      "now": "내 말로 한 문장 (안 해도 돼요)"
+    },
+    {
+      "id": "wrap",
+      "kind": "say",
+      "text": "1단계 끝! 정리하면\n\n- 요청 = **메서드** + **주소** (+ `?` 뒤 **쿼리**)\n- 상태 코드: **200** 잘 됐음 · **400** 보낸 쪽이 잘못함 · **404** 없는 주소\n- 답장은 `{ \"message\": … }` 같은 **JSON**\n\n다음은 방명록이에요. 남긴 글이 어디에 저장되는지, 서버를 끄면 어떻게 되는지 볼게요.",
+      "clearFocus": true,
+      "actions": [ { "label": "2단계로", "do": "next_stage" } ],
+      "now": "정리를 보고 2단계로"
+    }
+  ]
+}

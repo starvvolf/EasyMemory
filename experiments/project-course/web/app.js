@@ -133,7 +133,15 @@ function renderHome() {
     h("p", {}, "몇 가지 묻고 짧은 확인 문제를 푼 뒤, 준비된 코스에서 어디부터 어떻게 할지 계획을 세워요."),
     h("div", { class: "row", style: "justify-content:center;margin-top:16px" },
       h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => { const it = await api("POST", "/api/intake", { mode: "script" }); go(`#/intake/${it.id}`); }) }, "코스 정하기 시작")),
-    h("p", { class: "small", style: "margin-top:14px" }, h("a", { href: "#", onclick: (e) => { e.preventDefault(); busy(null, async () => { const it = await api("POST", "/api/intake", { mode: "ai" }); go(`#/intake/${it.id}`); }); } }, "AI와 이야기하면서 정하기"), " (조금 느려요)")));
+    h("p", { class: "small", style: "margin-top:14px" }, h("a", { href: "#", onclick: (e) => { e.preventDefault(); busy(null, async () => { const it = await api("POST", "/api/intake", { mode: "ai" }); go(`#/intake/${it.id}`); }); } }, "AI와 이야기하면서 정하기"), " (조금 느려요)"),
+    h("p", { class: "small mut", style: "margin-top:22px" }, "처음이라 짧게 겪어 보고 싶다면 ",
+      h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { const out = await api("POST", "/api/quickstart", { courseId: "hello-api" }); await afterStart(out); }) }, "인사 서버 맛보기 (10분)"))));
+}
+
+/** 코스를 시작한 뒤: 튜터 탭 안이면 작업 폴더로, 밖이면 VS Code 열기 안내로 */
+function afterStart(out) {
+  if (EMBED) { if (inThisFolder(out.workspace)) return go(`#/run/${out.runId}`); switchingNote("작업 폴더를 여는 중이에요"); openFolder(out.workspace); return; }
+  go(`#/run/${out.runId}/vscode`);
 }
 
 /* =================== 코스 정하기 =================== */
@@ -228,9 +236,7 @@ function planCard(it, ask) {
       ask.plan.notes.length ? h("ul", { class: "mut small" }, ask.plan.notes.map((r) => h("li", {}, r))) : null,
       h("div", { class: "mut small" }, "직접 하기: 튜터와 코드를 읽고 직접 고쳐요. · 빠르게: 설명만 보고 정답 코드로 넘어가요. · 건너뛰기: 그 단계 코드는 완성된 채로 받아요. 단계마다 아래 칸에서 바꿀 수 있어요."),
       h("div", { class: "row" }, h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => {
-        const out = await api("POST", `/api/intake/${it.id}/confirm`, { plan });
-        if (EMBED) { if (inThisFolder(out.workspace)) return go(`#/run/${out.runId}`); switchingNote("작업 폴더를 여는 중이에요"); openFolder(out.workspace); return; }
-        go(`#/run/${out.runId}/vscode`);
+        await afterStart(await api("POST", `/api/intake/${it.id}/confirm`, { plan }));
       }) }, "이 계획으로 시작")));
   };
   draw();

@@ -3,18 +3,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { COURSES, loadCourse, stageOf } from "../lib/course.ts";
+import { COURSES, listCourses, loadCourse, stageOf, templateSpec } from "../lib/course.ts";
 import { buildFiles } from "../lib/stagegen.ts";
 
 const DOS = new Set(["next", "try", "start_dev,try", "observe", "db", "next_stage", "scaffold", "check", "hint"]);
 
-test("수업 계획서: 앵커·예측·동작이 그 단계 시작 코드와 맞는다", async () => {
-  const course = await loadCourse("board-api");
-  const dir = path.join(COURSES, "board-api", "lessons");
-  for (const f of (await readdir(dir)).filter((x) => x.endsWith(".json"))) {
+for (const id of (await listCourses()).map((c) => c.id)) test(`수업 계획서(${id}): 앵커·예측·동작이 그 단계 시작 코드와 맞는다`, async () => {
+  const course = await loadCourse(id);
+  const dir = path.join(COURSES, id, "lessons");
+  for (const f of (await readdir(dir).catch(() => [] as string[])).filter((x) => x.endsWith(".json"))) {
     const plan = JSON.parse(await readFile(path.join(dir, f), "utf8"));
     const st = stageOf(course, plan.stage);
-    const files = await buildFiles({ dir: path.join(COURSES, "board-api", st.template === "board" ? "template" : st.template) }, { stage: plan.stage });
+    const files = await buildFiles(templateSpec(course, st.template), { stage: plan.stage });
     const has = (file: string, anchor: string) => {
       const t = files.get(file);
       assert.ok(t !== undefined, `${f}: 파일 없음 ${file}`);

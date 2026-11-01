@@ -127,6 +127,17 @@ const routes: [string, RegExp, Handler][] = [
     return { runId: run.id, workspace: out.workspace };
   }],
 
+  // 바로 시작(11/2, 시험용 맛보기 코스): 묻기·확인 문제 없이 1단계부터 모든 단계를 직접
+  ["POST", /^\/api\/quickstart$/, async (req) => {
+    const b = await body(req);
+    const course = await loadCourse(String(b.courseId ?? ""));
+    const main = course.stages.filter((s) => !s.transfer).map((s) => s.n);
+    const plan = { start: main[0], stages: main, quick: [], transfer: false, reasons: ["묻는 것 없이 처음부터 차례로 가요."], notes: [], minutes: main.length * 5 };
+    const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), plan, current: plan.start, workspaces: {}, stages: {} };
+    await addRun(run);
+    const out = await startStage(run.id, plan.start);
+    return { runId: run.id, workspace: out.workspace };
+  }],
   ["GET", /^\/api\/runs\/(\w+)$/, async (_q, m) => runView(await getRun(m[1]))],
   ["POST", /^\/api\/runs\/(\w+)\/activate$/, async (_q, m) => { await getRun(m[1]); await setActive(m[1]); return { ok: true }; }],
   ["GET", /^\/api\/runs\/(\w+)\/summary$/, async (_q, m) => summary(await getRun(m[1]))],
