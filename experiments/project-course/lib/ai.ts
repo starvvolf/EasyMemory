@@ -7,6 +7,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { ROOT } from "./course.ts";
 import { DATA, read, update } from "./store.ts";
+import { logAnswer, logPrompt } from "./promptlog.ts";
 
 const APP_ROOT = path.resolve(ROOT, "..", "..");
 // 사용자 결정 10/30: 한도 없음(호출 수는 계속 센다). 필요하면 PC_AI_LIMIT으로만 제한
@@ -90,7 +91,9 @@ export async function aiJson<T>(purpose: string, system: string, user: string, s
   if (mode === "fake") { if (!fakeReply) throw new AiUnavailable("off", "가짜 AI 답이 없어요."); return fakeReply(purpose, user) as T; }
   await budget(purpose);
   try {
+    const log = await logPrompt(purpose, { purpose, heavy, system, user, schema });
     const out = await (await loadAssist()).askJson<T>(`project-course:${purpose}`, system, user, schema, { heavy });
+    await logAnswer(log, out);
     await count(purpose, true);
     return out;
   } catch (error) {
@@ -107,7 +110,9 @@ export async function aiText(purpose: string, system: string, user: string, heav
   if (mode === "fake") { if (!fakeReply) throw new AiUnavailable("off", "가짜 AI 답이 없어요."); return String(fakeReply(purpose, user)); }
   await budget(purpose);
   try {
+    const log = await logPrompt(purpose, { purpose, heavy, system, user });
     const out = await (await loadAssist()).askText(`project-course:${purpose}`, system, user, { heavy });
+    await logAnswer(log, out);
     await count(purpose, true);
     return out;
   } catch (error) {

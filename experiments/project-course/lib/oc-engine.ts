@@ -14,6 +14,7 @@ import { bridgeContext, bridgeState, send as bridgeSend } from "./bridge.ts";
 import { editsDir, runTool, safePath, type AgentIO, type EditRecord, type ToolName } from "./agent.ts";
 import { DATA, saveRun, stageProgress } from "./store.ts";
 import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
+import { logAnswer, logPrompt } from "./promptlog.ts";
 
 export const OC_VERSION = "2.2.1";
 // 2026-10-31: terra (답이 20초 안팎으로 느렸음; 출력 속도가 sol의 약 2배, Recaller AI 호출 가이드).
@@ -117,6 +118,8 @@ function policyPlugin(fake: boolean) {
         const token = await chatGptBearer();
         const hd = new Headers(ev.request.headers); hd.set("authorization", `Bearer ${token}`);
         let body: string | undefined;
+        // 모델에 실제로 가는 본문(OpenCode 지시문 · 대화 전체 · 도구 · 강도)을 기록
+        if (ev.request.method === "POST" && /\/responses$/.test(new URL(ev.request.url).pathname)) void ev.request.clone().text().then((t: string) => { try { return logPrompt("tutor-request", JSON.parse(t)); } catch { return null; } });
         // 생각 요약을 함께 받는다(화면에 "라우터 쪽 보는 중" 한 줄로). 모델 응답(/responses) 요청에만
         if (reasoningSummary && ev.request.method === "POST" && /\/responses$/.test(new URL(ev.request.url).pathname)) {
           try {
@@ -358,6 +361,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   const text = [...promptParts(io, ss), bridgeContext(io.runId), `[학습자 질문] ${question}`].filter(Boolean).join("\n\n");
   ss.turns++;
   if (process.env.OC_DEBUG) console.log("[oc prompt]\n" + text);
+  const plog = await logPrompt("tutor-turn", { runId: io.runId, stage: io.n, mode: io.mode ?? "normal", turn: ss.turns, text });
   try {
     await h.oc.sessions.prompt({ sessionID: sid, text });
     const end = await new Promise<any>((resolve) => {
@@ -370,6 +374,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
     });
     await l.chain; // 흘려 보내던 글을 다 쓴 뒤에 끝낸다
     io.think?.(null);
+    await logAnswer(plog, l.texts.join("\n\n"));
     if (l.stopped) return l.texts.join("\n\n"); // 멈춘 건 화면에 이미 "멈췄어요"가 있다
     await countCalls(io.mode === "explain" ? "explain" : "agent", l.steps, end.type === "session.execution.succeeded");
     if (end.type === "timeout") { await h.oc.sessions.interrupt?.({ sessionID: sid }).catch(() => {}); return "생각이 너무 길어져서 멈췄어요. 질문을 조금 나눠서 다시 물어봐 주세요."; }
