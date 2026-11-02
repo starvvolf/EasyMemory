@@ -17,6 +17,7 @@ import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
 import { addEntry, addTour, codeTerms, firstLine, notesContext } from "./notes.ts";
 import { runAgent, undoEdit, type AskCard, type CtxFile, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
+import { recallLine } from "./recall.ts";
 import { actionOfBeat, closeDetours, enterBeat, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
@@ -612,6 +613,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
     // 학습자 기억(프로젝트 노트): 이 프로젝트에서 이미 본 것
     await notesContext(runId, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null).catch(() => ""),
+    await recallLine(shown && !/^이건 뭐예요|^이 덩어리/.test(shown) ? shown : quote ? quote.code.trim().split("\n")[0] : q).catch(() => ""),
   ].filter(Boolean).join("\n\n");
   // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
   const files = opts.mode === "tour" ? await allFiles(ws) : await filesFor(ws, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, opts.mode === "explain");
