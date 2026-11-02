@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
-const git = (root, args, timeout = 8000) => new Promise((resolve) => {
+const git = (root, args, timeout = 30000) => new Promise((resolve) => {
   execFile("git", ["-c", "core.quotepath=false", ...args], { cwd: root, timeout, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout) => resolve(err ? null : String(stdout)));
 });
 

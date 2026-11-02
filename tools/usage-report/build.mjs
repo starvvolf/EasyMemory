@@ -195,7 +195,7 @@ async function isOurs(port) {
   } catch { return false; }
 }
 // 작업 현황: 몇 초 안에 다시 부르면 전에 모은 값(여러 탭·구조도가 함께 5초마다 불러도 git은 한 번)
-let workCache = { at: 0, body: "" , pending: null };
+let workCache = { at: 0, body: "", pending: null };
 async function workJson() {
   if (Date.now() - workCache.at < 3000 && workCache.body) return workCache.body;
   workCache.pending ??= scanWork(root, { fetch: true }).then((w) => { workCache = { at: Date.now(), body: JSON.stringify(w), pending: null }; return workCache.body; }, (e) => { workCache.pending = null; throw e; });
