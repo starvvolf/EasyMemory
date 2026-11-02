@@ -887,7 +887,9 @@ function drawFloat() {
   // 걸음 표시가 없는 옛 대화(11/2 전)는 끝의 몇 개만
   const here = msgs.some((m) => m.beat !== undefined) ? msgs.filter((m) => m.beat === lesson.beat) : msgs.slice(-4);
   const card = here.filter((m) => !m.t);
-  const thread = here.filter((m) => m.t);
+  // 질문 칸은 "하던 거로 돌아가기" 뒤의 질문만(11/3: 돌아간 뒤에도 옛 질문이 남아 버튼을 가리던 문제)
+  const lastMain = here.map((m) => !m.t).lastIndexOf(true);
+  const thread = here.filter((m, i) => m.t && i > lastMain);
   const lastActIdx = msgs.map((m) => !!m.actions).lastIndexOf(true);
   const pending = lastActIdx >= 0 && !lesson.busy && (lesson.waiting === "action" || lesson.waiting === "save") ? msgs[lastActIdx].actions : [];
   const setSize = (size) => { floatUi.size = size; floatPost({ size }); drawLesson(); };
