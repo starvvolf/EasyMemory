@@ -18,7 +18,7 @@ const WIDTH = 440, PILL = 60, TOP = 64, BOTTOM = 40, EDGE = 14, FADED = 0.22;
 app.setName("Recaller 튜터 창");
 if (!app.requestSingleInstanceLock()) app.quit();
 
-let win = null, shownUrl = "", state = null, fails = 0, faded = false, vs = { fg: 0, wins: [] };
+let onTop = true, win = null, shownUrl = "", state = null, fails = 0, faded = false, vs = { fg: 0, wins: [] };
 
 /* ---------- VS Code 창 위치 (Windows) ---------- */
 const PS = String.raw`
@@ -109,8 +109,10 @@ function place() {
   }
   if (!target) { if (!win.isVisible() && shownUrl) { const a = screen.getPrimaryDisplay().workArea; win.setBounds({ x: a.x + a.width - WIDTH - EDGE, y: a.y + TOP, width: WIDTH, height: a.height - TOP - BOTTOM }); win.showInactive(); } return; }
   if (target.m) { if (win.isVisible()) win.hide(); return; }
+  // 다른 데(다른 모니터 등)를 눌러도 사라지지 않는다(11/2 사용자). 대신 VS Code나 이 창이 앞에 있을 때만 "항상 위",
+  // 그 밖에는 보통 창이 되어 다른 프로그램이 위로 오면 그 밑으로 간다.
   const front = vs.fg === target.h || win.isFocused();
-  if (!front) { if (win.isVisible()) win.hide(); return; }
+  if (front !== onTop) { onTop = front; win.setAlwaysOnTop(front, "floating"); }
   const r = process.platform === "win32" ? screen.screenToDipRect(null, { x: target.x, y: target.y, width: target.w, height: target.hh }) : { x: target.x, y: target.y, width: target.w, height: target.hh };
   // 크기 셋(11/2): 기본(오른쪽 세로) · 펼침(VS Code의 3분의 2, 코드 설명) · 띠(타이핑하는 동안 한 줄)
   const size = state.size || "normal";
