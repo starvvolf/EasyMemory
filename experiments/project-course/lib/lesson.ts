@@ -283,7 +283,8 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   }
   if (input.do === "check") return runCheck(runId, n, plan, course, "버튼");
   if (input.do === "mode_pair") return pairMode(runId, n, plan);
-  if (input.do === "mode_auto") return autoFix(runId, n, plan, course);
+  // 만들어 주세요: 준비된 정답이 있는 코스는 그 파일로(늘 같음), 생성 코스는 튜터(OpenCode)에게 작업 지시(설계안 5.3)
+  if (input.do === "mode_auto") return (course as { generated?: unknown }).generated ? workOrder(runId, n, plan, course) : autoFix(runId, n, plan, course);
   // 끼어들기(설계안 4.2·7.3): 같은 확인이 반복해서 다르면 원인부터 — 정답 대신 다른 가설과 확인 방법
   if (input.do === "diagnose") {
     void record({ runId, stage: n, type: "confusion", actor: "user", detail: "원인부터 같이 찾기" });
@@ -563,7 +564,7 @@ function upcoming(plan: Plan, beat: number) {
   return `[앞으로 할 순서 — 학습자가 직접 맞히고 고칠 것이라 답을 미리 말하지 않는다]\n${lines.join("\n")}\n이것과 관련된 질문에는 어디를 보면 되는지까지만 말하고, 상태 코드 숫자나 고칠 코드는 "곧 같이 해 볼 거예요"라며 미룬다.`;
 }
 
-export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void> } = {}) {
+export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void>; scope?: string[] } = {}) {
   const q = text.trim().slice(0, 1000) || (quote ? "이 코드가 뭐 하는 거예요?" : "");
   if (!q) throw err(400, "질문을 적어 주세요.");
   // 한 번에 하나만: 답하는 중에 또 물으면 대화가 엉킨다(10/30 시험에서 되묻기 카드가 섞임)
@@ -571,7 +572,7 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
   inflight.add(lk(runId, n));
   try { return await askInner(runId, n, plan, q, text, quote, shown, opts); } finally { inflight.delete(lk(runId, n)); }
 }
-async function askInner(runId: string, n: number, plan: Plan, q: string, text: string, quote: { file: string; from: number; to: number; code: string } | undefined, shown: string | undefined, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void> }) {
+async function askInner(runId: string, n: number, plan: Plan, q: string, text: string, quote: { file: string; from: number; to: number; code: string } | undefined, shown: string | undefined, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void>; scope?: string[] }) {
   void text;
   const s0 = await change(runId, n, (s, push) => {
     s.asked = true;
@@ -624,7 +625,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     // 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선을 고친다)
     const bubbles = new Map<string, number>();
     const io = {
-        runId, n, ws, context, parts, mode: opts.mode,
+        runId, n, ws, context, parts, mode: opts.mode, scope: opts.scope,
         stream: async (key: string, text: string) => {
           await change(runId, n, (s, push) => {
             const id = bubbles.get(key);
@@ -810,6 +811,35 @@ async function pairMode(runId: string, n: number, plan: Plan) {
 }
 
 /** "만들어 주세요": 고칠 파일을 이 단계 정답으로 바꾸고(지금 파일은 .data/backups에 보관), 바뀐 줄을 보여 준 뒤 바로 확인한다. */
+/**
+ * 작업 지시(설계안 5.3): 목표 · 범위 · 제외 · 검증 · 반환을 정해 튜터에게 구현을 맡긴다.
+ * 범위 밖 파일은 권한 훅이 막고(oc-engine · agent), 끝나면 검사기가 판정한다. 기록은 "튜터가 고침".
+ */
+export function workOrderText(course: Awaited<ReturnType<typeof loadCourse>>, n: number) {
+  const st = stageOf(course, n);
+  const later = course.stages.filter((x) => x.n > n).map((x) => x.title);
+  return [
+    "[작업 지시] 학습자가 이번 단계를 맡겼어요. 아래 범위 안에서만 직접 구현하세요.",
+    `목표: ${st.fix.text}`,
+    `범위: ${st.fix.files.join(", ")} 만 고친다. 다른 파일은 읽기만.`,
+    `제외: ${later.length ? `다음 단계(${later.join(" / ")})의 기능은 만들지 않는다.` : "이번 목표 밖의 기능은 만들지 않는다."} 설치·명령 실행은 하지 않는다.`,
+    "검증: 고친 뒤 run_checks로 이번 단계 검사를 돌린다. 실패하면 한 번 더 고치고, 그래도 실패하면 솔직히 말한다.",
+    "반환: 바뀐 줄을 짧게 보여 주고, 학습자가 이해해야 할 핵심 한두 가지를 쉬운 말로. 직접 쓴 게 아니라 이번 단계는 '튜터가 고침'으로 남는다는 것도 한 줄.",
+  ].join("\n");
+}
+async function workOrder(runId: string, n: number, plan: Plan, course: Awaited<ReturnType<typeof loadCourse>>) {
+  const s = await read<State>(file(runId, n), { beat: 0, waiting: "action", messages: [], hints: 0 });
+  const b = plan.beats[s.beat];
+  if (s.waiting !== "save" || b?.kind !== "fix" || s.busy) throw err(409, "지금은 고칠 때가 아니에요.");
+  await change(runId, n, (st) => { st.mode = "auto"; st.tutorEdit = true; });
+  void record({ runId, stage: n, beat: s.beat, type: "code_edit", actor: "agent", detail: "만들어 주세요: 튜터에게 작업 지시", evidence: stageOf(course, n).fix.files });
+  await ask(runId, n, plan, workOrderText(course, n), undefined, "만들어 주세요", { scope: stageOf(course, n).fix.files });
+  // 튜터가 검사를 안 돌렸거나 통과 처리가 안 됐으면 여기서 확인한다
+  const after = await read<State>(file(runId, n), { beat: 0, waiting: "action", messages: [], hints: 0 });
+  if (after.waiting === "save") return runCheck(runId, n, plan, course, "튜터");
+  return after;
+}
+
 async function autoFix(runId: string, n: number, plan: Plan, course: Awaited<ReturnType<typeof loadCourse>>) {
   const s = await read<State>(file(runId, n), { beat: 0, waiting: "action", messages: [], hints: 0 });
   const b = plan.beats[s.beat];

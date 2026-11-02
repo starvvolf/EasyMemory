@@ -141,6 +141,9 @@ function policyPlugin(fake: boolean) {
           if (l?.io.mode === "explain") { ev.effect = "deny"; ev.message = "지금은 설명만 하는 시간이에요."; return; }
           const files: string[] = (ev.resources ?? []).map((r: string) => String(r).replace(/\\/g, "/"));
           if (files.some((f) => /(^|\/)(\.recaller|node_modules)(\/|$)/.test(f))) { ev.effect = "deny"; ev.message = "이 파일은 고칠 수 없어요."; return; }
+          // 작업 지시(설계안 5.3·5.4): 지정한 파일 밖은 고치지 않는다
+          const scope = l?.io.scope;
+          if (scope && files.some((f) => f !== "*" && !scope.some((sc) => f === sc || f.endsWith(`/${sc}`)))) { ev.effect = "deny"; ev.message = `작업 지시 범위 밖이에요. 고칠 수 있는 파일: ${scope.join(", ")}`; return; }
           const st = l ? bridgeState(l.io.runId) : null;
           if (st?.dirty && st.file && files.some((f) => f === "*" || f.endsWith(st.file!))) { ev.effect = "deny"; ev.message = `${st.file}은 학습자가 VS Code에서 고치는 중(저장 안 함)이라 고치지 않아요. 먼저 저장해 달라고 말하세요.`; return; }
           ev.effect = "allow"; return;

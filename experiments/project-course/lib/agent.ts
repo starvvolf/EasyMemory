@@ -35,6 +35,8 @@ export type AgentIO = {
   say: (text: string) => Promise<void>;
   /** 튜터가 고친 파일 때문에 저장 감지가 다시 확인하지 않게 */
   quiet: (ms: number) => void;
+  /** 작업 지시(설계안 5.3)로 부를 때 고쳐도 되는 파일. 그 밖은 읽기만 */
+  scope?: string[];
   /** explain: 설명만(고치기 도구를 주지 않음) */
   mode?: "normal" | "explain" | "tour";
   /** 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선). 엔진이 썼으면 streamed=true */
@@ -121,6 +123,10 @@ export async function runTool(io: AgentIO, tool: ToolName, args: Record<string, 
   }
   if (tool === "read_file") {
     const { rel, abs } = safePath(ws, String(args.path));
+    if (io.scope && !io.scope.includes(rel)) {
+      await io.show({ type: "tool", icon: "✋", label: `작업 범위 밖이라 고치지 않았어요: ${rel}`, ok: false });
+      return `작업 지시 범위 밖. 고칠 수 있는 파일: ${io.scope.join(", ")}`;
+    }
     const live = bridgeState(runId);
     const unsaved = live?.file === rel && live.dirty && live.text ? live.text : null;
     const lines = (unsaved ?? (await readFile(abs, "utf8"))).split(/\r?\n/);
