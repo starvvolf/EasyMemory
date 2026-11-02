@@ -17,7 +17,7 @@ import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
 import { addEntry, addTour, codeTerms, firstLine, notesContext } from "./notes.ts";
 import { runAgent, undoEdit, type AskCard, type CtxFile, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
-import { actionOfBeat, closeDetours, enterBeat, pushDetour, record, sessionView, type Action } from "./session.ts";
+import { actionOfBeat, closeDetours, enterBeat, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
 /** do: next | try | start_dev,try | observe(검사로 지금 상태 보기) | db(DB 들여다보기) | next_stage …  tries: 요청 여러 개를 차례로 */
@@ -44,7 +44,7 @@ type Card =
 export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[]; beat?: number; t?: boolean };
 // mode: 고치기 방식(직접 / 같이 / 튜터가 만듦) · asked: 지금 순서에 들어온 뒤 자유 질문을 했는지(했으면 [하던 거로 돌아가기])
 type Mode = "self" | "pair" | "auto";
-type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null; mode?: Mode; pairStep?: number; asked?: boolean; tutorEdit?: boolean; act?: Action; actTarget?: string };
+type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null; mode?: Mode; pairStep?: number; asked?: boolean; tutorEdit?: boolean; act?: SessAction; actTarget?: string; failStreak?: number; level?: number };
 type Todo = { open?: Open; focus?: Focus; clear?: boolean };
 
 const now = () => new Date().toISOString();
@@ -165,7 +165,10 @@ function enter(plan: Plan, s: State, idx: number, push: (m: Omit<LMsg, "id" | "a
 
 /** 고치기 순서의 버튼: 방식을 아직 안 골랐으면 셋, 골랐으면 그 방식에서 할 수 있는 것 */
 function modeActions(b: Beat, s: State): Action[] {
-  if (!s.mode) return [{ label: "제가 해 볼게요", do: "mode_self" }, { label: "같이 해요", do: "mode_pair" }, { label: "만들어 주세요", do: "mode_auto" }];
+  // 처음(L0)·줄 읽기(L1)면 "같이 해요"를 먼저 권하고, 그 위면 "제가 해 볼게요"를 먼저(레벨은 내부 설정, DECISIONS 11/3)
+  if (!s.mode) return (s.level ?? 0) <= 1 && b.pair?.length
+    ? [{ label: "같이 해요", do: "mode_pair" }, { label: "제가 해 볼게요", do: "mode_self" }, { label: "만들어 주세요", do: "mode_auto" }]
+    : [{ label: "제가 해 볼게요", do: "mode_self" }, { label: "같이 해요", do: "mode_pair" }, { label: "만들어 주세요", do: "mode_auto" }];
   const more = s.mode === "pair" && b.pair && (s.pairStep ?? 0) < b.pair.length - 1 ? [{ label: "다 했어요, 다음 조각", do: "pair_next" }] : [];
   return [...more, { label: "지금 확인해 줘", do: "check" }, ...(s.mode === "self" ? [{ label: "힌트 줘", do: "hint" }, { label: "같이 해요", do: "mode_pair" }] : []), ...(s.mode !== "auto" ? [{ label: "만들어 주세요", do: "mode_auto" }] : [])];
 }
@@ -188,6 +191,9 @@ export async function lessonView(runId: string, n: number) {
   }
   const ws = workspaceOf(run, stageOf(course, n).template);
   watchFor(runId, n, ws);
+  // 레벨(내부)을 수업 상태에 맞춰 둔다: 고칠 방식 버튼 순서에 쓴다
+  const sess = await getSession(runId);
+  if ((s.level ?? 0) !== sess.level) s = await change(runId, n, (st) => { st.level = sess.level; });
   // [[파일#찾을 글]] → [[파일:줄]] (코드가 바뀌어도 줄을 다시 찾는다)
   const lines = new Map<string, string>();
   for (const m of s.messages) for (const hit of (m.text ?? "").matchAll(/\[\[([^\]#]+)#([^\]]+)\]\]/g)) {
@@ -209,6 +215,7 @@ export async function lessonView(runId: string, n: number) {
   const steps = plan.beats.map((b, i) => ({ kind: b.kind, label: stepLabel(b, i === plan.beats.length - 1), now: b.now ?? firstLine(b.text) }));
   return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, steps, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge, pocket,
     session: await sessionView(runId),
+    recap: await recap(runId, { stageTitle: (k) => course.stages.find((x) => x.n === k)?.title ?? "", nowLabel: `${n}단계 · ${now ?? plan.title}` }).catch(() => null),
     now, mode: s.mode ?? null, resumable: !!s.asked && !s.busy && (s.waiting === "action" || s.waiting === "save"),
     thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null };
 }
@@ -219,7 +226,7 @@ async function sessionLine(runId: string) {
   if (!v) return "";
   const names: Record<string, string> = { explain: "설명", demo: "작동 예제", guide: "직접 할 일 안내", diagnose: "원인 찾기", verify: "확인", navigate: "이동", summarize: "정리" };
   const dt = v.detours.length ? ` · 임시 학습 ${v.detours.length}겹: ${v.detours.map((d) => `"${d.topic}"`).join(" → ")} (끝나면 "${v.detours[0].returnLabel}"(으)로 돌아감, 답은 짧게 하고 원래 할 일로 이어 줄 것)` : "";
-  return `[학습 진행] 지금 활동: ${names[v.activity.type] ?? v.activity.type}${v.activity.target ? ` — ${v.activity.target}` : ""}${dt}`;
+  return `[학습 진행] 지금 활동: ${names[v.activity.type] ?? v.activity.type}${v.activity.target ? ` — ${v.activity.target}` : ""}${dt}\n[학습자 수준(내부, 학습자에게 말하지 말 것)] ${LEVELS[v.level] ?? LEVELS[0]} — 이 단위로 설명하고, 처음 나온 개념만 더 작게 풀어 줄 것`;
 }
 
 function stepLabel(b: Beat, last: boolean) {
@@ -276,13 +283,26 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   if (input.do === "check") return runCheck(runId, n, plan, course, "버튼");
   if (input.do === "mode_pair") return pairMode(runId, n, plan);
   if (input.do === "mode_auto") return autoFix(runId, n, plan, course);
+  // 끼어들기(설계안 4.2·7.3): 같은 확인이 반복해서 다르면 원인부터 — 정답 대신 다른 가설과 확인 방법
+  if (input.do === "diagnose") {
+    void record({ runId, stage: n, type: "confusion", actor: "user", detail: "원인부터 같이 찾기" });
+    return ask(runId, n, plan, "같은 확인이 여러 번 연속으로 기대와 달랐어요. [마지막 확인]과 지금 코드를 보고, 정답 코드는 주지 말고 세 가지만 짧게 알려 주세요: 1) 지금 코드가 실제로 하는 일 한 줄 2) 지금까지와 다른 원인 가설 하나 3) 그 가설을 확인하는 방법 하나(요청 보내 보기, 값 하나 출력해 보기 등). 필요하면 도구로 직접 확인해도 돼요.", undefined, "원인부터 같이 찾기");
+  }
+  if (input.do === "recap_ok") { await recapSeen(runId); void record({ runId, stage: n, type: "navigate", actor: "user", detail: "지난번 요약 보고 이어 하기" }); return null; }
   if (input.do === "hint") return giveHint(runId, n, input.level);
 
   return change(runId, n, async (s, push) => {
     const b = plan.beats[s.beat];
     const lastActions = [...s.messages].reverse().find((m) => m.actions)?.actions ?? [];
-    if (["next", "start_dev,try", "try", "next_stage", "observe", "db"].includes(input.do) && s.waiting !== "action") throw err(409, "지금 하던 것을 먼저 마쳐 주세요.");
+    if (["next", "known", "start_dev,try", "try", "next_stage", "observe", "db"].includes(input.do) && s.waiting !== "action") throw err(409, "지금 하던 것을 먼저 마쳐 주세요.");
     if (input.do === "next") {
+      enter(plan, s, s.beat + 1, push, course);
+    } else if (input.do === "known") {
+      // "알아요, 넘길게요"(설계안 8.1: 강제하지 않음) — 자기평가로만 남기고 넘어간다
+      if (!b || (b.kind !== "say" && b.kind !== "map")) throw err(409, "지금은 넘길 설명이 없어요.");
+      void record({ runId, stage: n, beat: s.beat, type: "self_report", actor: "user", detail: `알아요, 넘길게요: ${b.now ?? firstLine(b.text)}` });
+      if (await knownSkip(runId)) s.level = Math.max(s.level ?? 0, 1);
+      push({ role: "me", text: "알아요, 넘길게요" });
       enter(plan, s, s.beat + 1, push, course);
     } else if (input.do === "mode_self") {
       if (s.waiting !== "save" || b?.kind !== "fix") throw err(409, "지금은 고칠 때가 아니에요.");
@@ -399,6 +419,8 @@ async function runCheck(runId: string, n: number, plan: Plan, course: Awaited<Re
     if (result.stageOk) {
       // 채팅에서 "고쳐 줘"로 튜터가 고친 것도 "만들어 주세요"와 같게 친다(11/2: 전에는 화면 상태가 안 바뀌어 "직접 고침"으로 찍혔다)
       const byTutor = s.mode === "auto" || !!s.tutorEdit;
+      s.failStreak = 0;
+      void stageOutcome(runId, { mode: s.mode, hints: s.hints, byTutor }).then((o) => { if (o.to !== o.from) void change(runId, n, (st) => { st.level = o.to; }); });
       // 개발 완료와 학습은 따로(설계안 8장): 통과는 "적용 근거"로만, 누가 고쳤는지 그대로
       void record({ runId, stage: n, beat: s.beat, type: "application", actor: byTutor ? "agent" : "user", concepts: stageOf(course, n).knowledge, detail: `단계 검사 통과 · ${byTutor ? "튜터가 고침" : s.hints >= 3 ? "정답 줄 보고 고침" : s.mode === "pair" ? "같이 고침" : "직접 고침"}` });
       const how = byTutor ? "튜터가 고침" : s.hints >= 3 ? "정답 줄 보고 고침" : s.mode === "pair" ? "같이 고침" : "직접 고침";
@@ -412,11 +434,21 @@ async function runCheck(runId: string, n: number, plan: Plan, course: Awaited<Re
     } else {
       const bad = result.results.filter((r) => !r.ok);
       const first = bad[0];
+      s.failStreak = (s.failStreak ?? 0) + 1;
       const where = first?.where ? ` [[${first.where.file}:${first.where.line ?? 1}]]` : "";
       push({ role: "tutor", text: !result.started
         ? (left.size ? `아직 빈칸 ${[...left].join("")}이(가) 남아 있어서 서버가 켜지지 않아요. 빈칸을 모두 채우고 저장해 주세요. 하나씩 막히면 그 줄을 드래그해서 물어보세요.` : "서버가 아예 켜지지 않았어요. 고치다가 문법이 깨진 것 같아요. 위 카드의 오류 위치를 열어 보세요.")
         : `아직 ${bad.length}개가 기대와 달라요. 먼저 "${first.title}"을 보세요. 기대는 **${first.failure?.expected}** 인데 실제는 **${first.failure?.actual}** 이에요.${where}\n\n다시 고치고 저장하면 또 확인할게요. 막히면 물어보거나 힌트를 눌러 주세요.`,
         actions: [{ label: "힌트 줘", do: "hint" }] });
+      if (s.failStreak === 3) {
+        // 끼어들기: 같은 방식으로 계속 두드리지 않게 방법을 바꾸자고 먼저 말한다(한 번만)
+        void record({ runId, stage: n, beat: s.beat, type: "confusion", actor: "system", detail: "확인이 3번 연속 기대와 다름" });
+        const b = plan.beats[s.beat];
+        push({ role: "tutor", text: "같은 확인이 세 번 연속 기대와 달랐어요. 같은 방법으로 계속 고치기보다 방법을 바꿔 볼까요?", actions: [
+          { label: "원인부터 같이 찾기", do: "diagnose" },
+          ...(s.mode !== "pair" && b?.pair?.length ? [{ label: "같이 해요 (빈칸으로)", do: "mode_pair" }] : []),
+          { label: "만들어 주세요", do: "mode_auto" }] });
+      }
     }
   });
 }

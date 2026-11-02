@@ -636,3 +636,8 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .float .fw.wide .fcard .rich, .float .fw.wide .fa .rich { font-size: 14.5px; }
 .float .fw.wide .fscroll { padding: 12px 20px 16px; }
 @media (prefers-reduced-motion: reduce) { .float .fthink .dots i { animation: none; } }
+
+.float .fbtn.ghost { background: transparent; border-style: dashed; align-items: center; min-height: 40px; }
+.float .fbtn.ghost b { font-size: 13px; color: var(--f-mut); font-weight: 500; }
+.float .frecap { background: var(--f-acc-s); border: 1px solid #33456b; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.float .frecap-t { margin: 0; white-space: pre-line; font-size: 13.5px; line-height: 1.7; color: var(--f-ink2); }

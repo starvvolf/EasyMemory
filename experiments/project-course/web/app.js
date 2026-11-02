@@ -826,7 +826,7 @@ const ICON = {
   send: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg>',
 };
 const icon = (name) => { const s = h("span", { class: "ico" }); s.innerHTML = ICON[name]; return s; };
-const MODE_SUB = { mode_self: "저장하면 바로 확인해요", mode_pair: "빈칸으로 나눠 하나씩 같이", mode_auto: "바뀐 줄을 보여 드려요 · 기록에 그대로 남아요", hint: "한 칸씩만 더 알려 드려요", check: "지금 코드로 바로 확인" };
+const MODE_SUB = { diagnose: "정답 대신 다른 원인 하나와 확인 방법", mode_self: "저장하면 바로 확인해요", mode_pair: "빈칸으로 나눠 하나씩 같이", mode_auto: "바뀐 줄을 보여 드려요 · 기록에 그대로 남아요", hint: "한 칸씩만 더 알려 드려요", check: "지금 코드로 바로 확인" };
 
 function drawFloat() {
   const { run, lesson } = lessonCtx;
@@ -869,6 +869,9 @@ function drawFloat() {
     pastAll.length > pastShown.length ? h("button", { class: "fmore", onclick: () => { floatUi.pastOpen = true; drawLesson(); } }, `앞 걸음 ${pastAll.length - pastShown.length}개 더 보기`) : null,
     pastShown.map((st) => h("p", {}, icon("check"), h("span", {}, st.now)))) : null;
 
+  // 오랜만에 열면: 지난번 요약(사건에서 코드가 고른 사실)
+  const recapCard = lesson.recap ? h("div", { class: "frecap" }, h("div", { class: "fey" }, "지난번에는"), h("p", { class: "frecap-t" }, lesson.recap.text),
+    h("button", { class: "fbtn pri", onclick: (e) => send({ do: "recap_ok" })(e) }, h("b", {}, "이어서 하기"))) : null;
   // 지금 걸음 카드
   const body = h("div", { class: "fcard" }, step ? h("div", { class: "fey" }, step.label) : null);
   for (const m of card) {
@@ -880,10 +883,13 @@ function drawFloat() {
   }
   if (lesson.waiting === "save" && lesson.mode && lesson.mode !== "auto") body.append(h("p", { class: "fsave" }, h("span", { class: "pulse" }), "고친 뒤 ", h("kbd", {}, "Ctrl"), "+", h("kbd", {}, "S"), "를 누르면 바로 확인해요"));
   if (lesson.busy && !thread.length) body.append(thinkLine(run, lesson));
-  const acts = pending.length && !thread.length ? h("div", { class: "facts" }, pending.map((a, i) => {
+  // 설명 걸음이면 "알아요, 넘길게요"(강제하지 않음)
+  const known = step && (step.kind === "say" || step.kind === "map") && lesson.waiting === "action" && pending.some((a) => a.do === "next") && cur < steps.length - 1
+    ? h("button", { class: "fbtn ghost", onclick: (e) => send({ do: "known" })(e) }, h("b", {}, "알아요, 넘길게요")) : null;
+  const acts = pending.length && !thread.length ? h("div", { class: "facts" }, ...pending.map((a, i) => {
     if (a.do === "hint" && a.label.includes("정답")) return h("button", { class: "fbtn", onclick: (e) => { if (confirm("정답 줄을 볼까요? 이걸 본 뒤의 통과는 '직접 고침'으로 기록하지 않아요.")) send({ do: a.do })(e); } }, h("b", {}, a.label));
     return h("button", { class: `fbtn ${i === 0 ? "pri" : ""}`, onclick: (e) => send({ do: a.do })(e) }, h("b", {}, a.label), MODE_SUB[a.do] ? h("span", {}, MODE_SUB[a.do]) : null);
-  })) : null;
+  }), known) : null;
   if (acts) body.append(acts);
 
   // 따로 물어본 대화: 걸음 위로 올라오는 칸
@@ -923,7 +929,7 @@ function drawFloat() {
     h("span", { class: "fpill-t" }, h("b", {}, lesson.now || step?.now || ""), h("span", {}, lesson.waiting === "save" ? "저장하면 바로 확인해요" : "누르면 펼쳐요")));
 
   view.replaceChildren(h("div", { class: `fw ${floatUi.size}` }, pill, head, h("div", { class: "frailbox" }, rail, railText),
-    h("div", { class: "fscroll" }, past, body), sheet, foot));
+    h("div", { class: "fscroll" }, recapCard, past, body), sheet, foot));
   const sc = view.querySelector(".fscroll"); if (sc) sc.scrollTop = sc.scrollHeight;
   const ms = view.querySelector(".fmsgs"); if (ms) ms.scrollTop = ms.scrollHeight;
 }

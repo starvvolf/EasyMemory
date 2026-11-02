@@ -40,3 +40,35 @@ test("학습 사건: 덧붙이고 누가 했는지 남긴다", async () => {
   assert.deepEqual(ev.map((e) => [e.type, e.actor]), [["code_edit", "agent"], ["application", "user"]]);
   assert.ok(ev.every((e) => e.id && e.at));
 });
+
+test("레벨(내부): 해냄 2번이면 오르고, 버거움 2번이면 내림", async () => {
+  const { stageOutcome, getSession, knownSkip } = await import("../lib/session.ts");
+  const id = "lv";
+  await stageOutcome(id, { mode: "self", hints: 0, byTutor: false });
+  assert.equal((await getSession(id)).level, 0);
+  await stageOutcome(id, { mode: "self", hints: 1, byTutor: false });
+  assert.equal((await getSession(id)).level, 1);
+  await stageOutcome(id, { mode: "auto", hints: 0, byTutor: true });
+  await stageOutcome(id, { mode: "self", hints: 3, byTutor: false });
+  assert.equal((await getSession(id)).level, 0);
+  // 처음(L0)에서 "알아요" 세 번이면 줄 읽기(L1)
+  assert.equal(await knownSkip(id), false); assert.equal(await knownSkip(id), false); assert.equal(await knownSkip(id), true);
+});
+
+test("재개 요약: 20분 넘게 쉬었을 때만, 사실만 골라서, 본 뒤에는 안 보임", async () => {
+  const { record, recap, recapSeen } = await import("../lib/session.ts");
+  const id = "rc";
+  await record({ runId: id, stage: 1, type: "question", actor: "user", detail: "query가 뭐예요?" });
+  await record({ runId: id, stage: 1, type: "execution", actor: "system", detail: "검사(저장): 1/2 통과" });
+  await record({ runId: id, stage: 1, type: "application", actor: "user", detail: "단계 검사 통과 · 직접 고침" });
+  const names = { stageTitle: () => "이름 불러 인사하기", nowLabel: "2단계 · 방명록" };
+  assert.equal(await recap(id, names), null);
+  const r = await recap(id, names, Date.now() + 21 * 60 * 1000);
+  assert.ok(r);
+  assert.match(r.text, /1단계 "이름 불러 인사하기"/);
+  assert.match(r.text, /query가 뭐예요/);
+  assert.match(r.text, /기대와 달랐던 적: 1번/);
+  assert.match(r.text, /2단계 · 방명록/);
+  await recapSeen(id);
+  assert.equal(await recap(id, names, Date.now() + 21 * 60 * 1000), null);
+});
