@@ -5,12 +5,14 @@
 // 사용: node tools/usage-report/build.mjs [데이터 폴더 ...] [--out 파일] [--open]
 //       node tools/usage-report/build.mjs --serve [--open] [데이터 폴더 ...]
 //   --serve: 127.0.0.1:3091(RECALLER_USAGE_PORT)에 작은 서버를 띄워, 화면이 10초마다 바뀐 기록만 다시 받아 그린다.
+//   --tab work: [작업 현황] 탭으로 연다(2026-11-02: 누가 어느 파일을 고치는 중인지 구조도 위에, work.mjs).
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
+import { scanWork } from "./work.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..", "..");
@@ -18,6 +20,7 @@ const args = process.argv.slice(2);
 const flag = (name) => { const i = args.indexOf(name); if (i < 0) return undefined; const v = args[i + 1]; args.splice(i, 2); return v; };
 const bool = (name) => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
 const open = bool("--open");
+const tab = flag("--tab");
 const serve = bool("--serve");
 const out = path.resolve(flag("--out") || path.join(root, "tmp", "usage-report.html"));
 const TOOL = "recaller-usage-report";
@@ -166,7 +169,7 @@ function startServer() {
     if (RESERVED.has(port)) return tryPort(port + 1, left);
     if (await isOurs(port)) {
       console.log(`토큰 사용량 보기가 이미 http://127.0.0.1:${port}/ 에 떠 있어요. 브라우저만 엽니다.`);
-      if (open) openUrl(`http://127.0.0.1:${port}/`);
+      if (open) openUrl(`http://127.0.0.1:${port}/${tab ? `#${tab}` : ""}`);
       return;
     }
     const server = http.createServer((req, res) => handle(req, res, port, current));
@@ -176,7 +179,7 @@ function startServer() {
     });
     server.listen(port, "127.0.0.1", () => {
       const s = current();
-      const url = `http://127.0.0.1:${port}/`;
+      const url = `http://127.0.0.1:${port}/${tab ? `#${tab}` : ""}`;
       console.log(`토큰 사용량 보기: ${url}  (읽는 폴더 ${s.data.dirs.length}개, 호출 ${s.data.rows.length}건)`);
       console.log("화면이 10초마다 새 기록을 확인합니다. 이 창을 닫으면 자동 갱신이 멈춥니다.");
       if (!s.data.dirs.length) console.log("기록 폴더를 못 찾았어요. 폴더를 인자로 주세요.");
@@ -191,6 +194,19 @@ async function isOurs(port) {
     return (await r.json()).tool === TOOL;
   } catch { return false; }
 }
+// 작업 현황: 몇 초 안에 다시 부르면 전에 모은 값(여러 탭·구조도가 함께 5초마다 불러도 git은 한 번)
+let workCache = { at: 0, body: "" , pending: null };
+async function workJson() {
+  if (Date.now() - workCache.at < 3000 && workCache.body) return workCache.body;
+  workCache.pending ??= scanWork(root, { fetch: true }).then((w) => { workCache = { at: Date.now(), body: JSON.stringify(w), pending: null }; return workCache.body; }, (e) => { workCache.pending = null; throw e; });
+  return workCache.pending;
+}
+function structureHtml() {
+  const html = readFileSync(path.join(root, "협업", "구조도", "구조도.html"), "utf8");
+  // 구조도.html은 </body> 없이 </html>로 끝난다: 있으면 그 앞, 없으면 맨 끝에 붙인다.
+  const tag = '<script src="/structure-overlay.js"></script>';
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${tag}</body>`) : /<\/html>/i.test(html) ? html.replace(/<\/html>\s*$/i, `${tag}</html>`) : html + tag;
+}
 function handle(req, res, port, current) {
   // 다른 사이트가 이 주소를 부르지 못하게, 127.0.0.1/localhost로 온 요청만 받는다.
   const host = String(req.headers.host || "");
@@ -201,6 +217,9 @@ function handle(req, res, port, current) {
     if (pathname === "/") return send(200, "text/html; charset=utf-8", viewHtml());
     if (pathname === "/version") return send(200, "application/json", JSON.stringify({ tool: TOOL, version: current().version }));
     if (pathname === "/data.json") return send(200, "application/json; charset=utf-8", current().body);
+    if (pathname === "/work.json") { workJson().then((b) => send(200, "application/json; charset=utf-8", b), (e) => send(500, "text/plain; charset=utf-8", String(e?.message || e))); return; }
+    if (pathname === "/structure") return send(200, "text/html; charset=utf-8", structureHtml());
+    if (pathname === "/structure-overlay.js") return send(200, "text/javascript; charset=utf-8", readFileSync(path.join(here, "structure-overlay.js"), "utf8"));
     send(404, "text/plain", "not found");
   } catch (err) {
     send(500, "text/plain; charset=utf-8", String(err?.message || err));

@@ -9,5 +9,19 @@
       "Read(./.env.local)",
       "Read(./.env)"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/work/claim-hook.mjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

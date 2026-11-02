@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recaller 토큰 사용량</title>
+<title>Recaller 개발 현황</title>
 <style>
   .viz-root {
     color-scheme: light;
@@ -75,12 +75,34 @@
   .tmbar { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin: 8px 0 2px; }
   .tmbar .legend { margin: 0; }
   .gantt { margin: 2px 0 10px; }
+  /* 탭: 토큰 사용량 · 작업 현황 (2026-11-02 A) */
+  .toptabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+  .toptabs button { font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-secondary); cursor: pointer; }
+  .toptabs button[aria-selected=true] { color: var(--text-primary); border-bottom-color: var(--accent); }
+  .toptabs .n { font-size: 11px; margin-left: 6px; padding: 1px 7px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-ink); }
+  .wrap[data-tab=work] > :not(.toptabs):not(#workTab) { display: none; }
+  .wrap:not([data-tab=work]) > #workTab { display: none; }
+  #workTab { display: grid; gap: 16px; }
+  .wk-warn { display: grid; gap: 6px; }
+  .wk-warn div { border-radius: 8px; padding: 7px 11px; font-size: 13px; }
+  .wk-warn .bad { background: color-mix(in srgb, var(--s8) 16%, transparent); color: var(--text-primary); border-left: 3px solid var(--s8); }
+  .wk-warn .warn { background: var(--warn-bg); color: var(--warn-ink); }
+  .wk-warn .info { background: var(--surface-0); color: var(--text-secondary); }
+  .wk-frame { width: 100%; height: 1050px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-0); }
+  .wk-ses { display: flex; flex-wrap: wrap; gap: 8px; }
+  .wk-ses span { border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font-size: 13px; }
+  .f-bad { color: var(--s8); font-weight: 600; } .f-warn { color: var(--warn-ink); } .f-info { color: var(--text-muted); }
+  td.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: normal; word-break: break-all; }
   @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } .two { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <div class="viz-root">
 <div class="wrap">
+  <nav class="toptabs" role="tablist" aria-label="보기">
+    <button role="tab" id="tabUsage" aria-selected="true">토큰 사용량</button>
+    <button role="tab" id="tabWork" aria-selected="false">작업 현황<span class="n" id="workBadge" hidden></span></button>
+  </nav>
   <div>
     <h1>Recaller 토큰 사용량</h1>
     <div class="sub" id="meta"></div>
@@ -154,6 +176,20 @@
     <div class="muted" id="priceNote"></div>
     <table id="priceTable"></table>
   </div>
+
+  <section id="workTab" aria-label="작업 현황">
+    <div>
+      <h1>Recaller 작업 현황</h1>
+      <div class="sub" id="wkMeta">불러오는 중…</div>
+      <div class="muted">같은 PC 폴더에서 여러 세션이 고칠 때 겹치지 않게: 커밋 안 된 파일, 누가 잡았는지, 약속 파일, 남은 git 잠금. 5초마다 다시 봅니다. Claude Code 세션은 파일을 고칠 때 저절로 남고, 그 밖에는 <code>node tools/work/claim.mjs A 파일…</code>.</div>
+    </div>
+    <div class="wk-warn" id="wkWarn"></div>
+    <div class="card"><h2>지금 고치는 세션</h2><div class="wk-ses" id="wkSes"></div></div>
+    <div class="card"><h2>구조도 위에서 보기</h2><div class="muted">칸 테두리 파랑 = 고치는 중, 노랑 점선 = 누가인지 모름, 빨강 = 겹침. 칸을 누르면 그 칸의 파일과 원래 세부 구조가 나옵니다.</div>
+      <iframe class="wk-frame" id="wkFrame" title="구조도"></iframe></div>
+    <div class="card"><h2>커밋 안 된 파일</h2><div class="scroll"><table id="wkFiles"></table></div></div>
+    <div class="card"><h2>최근 GitHub에 올라온 것</h2><div class="scroll"><table id="wkRecent"></table></div></div>
+  </section>
 </div>
 <div id="tip"></div>
 </div>
@@ -596,6 +632,42 @@ async function poll(force) {
     live.busy = false; renderLive();
   }
 }
+
+// ---------- 작업 현황 탭 (2026-11-02 A) ----------
+const W = { data: null, timer: null };
+const minsAgo = (m) => m == null ? "—" : m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`;
+function setTab(t) {
+  const work = t === "work";
+  document.querySelector(".wrap").dataset.tab = work ? "work" : "usage";
+  document.getElementById("tabUsage").setAttribute("aria-selected", String(!work));
+  document.getElementById("tabWork").setAttribute("aria-selected", String(work));
+  if (location.hash !== (work ? "#work" : "")) history.replaceState(null, "", work ? "#work" : location.pathname);
+  if (work) { const f = document.getElementById("wkFrame"); if (!f.src) f.src = "structure"; pollWork(); }
+}
+document.getElementById("tabUsage").addEventListener("click", () => setTab("usage"));
+document.getElementById("tabWork").addEventListener("click", () => setTab("work"));
+async function pollWork() {
+  if (!LIVE) { document.getElementById("wkMeta").textContent = "작업 현황은 서버 모드(토큰 사용량 보기.cmd)에서만 보여요."; return; }
+  try { W.data = await (await fetch("work.json", { cache: "no-store" })).json(); renderWork(); }
+  catch { document.getElementById("wkMeta").textContent = "작업 현황을 읽지 못했어요(서버가 꺼졌거나 git이 없음)."; }
+}
+function renderWork() {
+  const d = W.data; if (!d) return;
+  const r = d.repo;
+  document.getElementById("wkMeta").innerHTML = `${esc(r.branch)} · <b>${esc(r.head)}</b> ${esc(r.subject)} · GitHub보다 ${r.ahead ? `<b>${r.ahead}개 앞섬(안 올림)</b>` : "앞선 것 없음"} · ${r.behind ? `<b>${r.behind}개 뒤처짐(받을 것 있음)</b>` : "뒤처진 것 없음"}${r.fetchError ? ` · ${esc(r.fetchError)}` : r.fetchedAt ? ` · GitHub 확인 ${esc(new Date(r.fetchedAt).toLocaleTimeString("ko-KR"))}` : ""} · ${esc(new Date(d.at).toLocaleTimeString("ko-KR"))} 기준`;
+  const bad = d.warnings.filter((w) => w.level === "bad").length;
+  const badge = document.getElementById("workBadge"); badge.hidden = !bad; badge.textContent = String(bad);
+  document.getElementById("wkWarn").innerHTML = d.warnings.length ? d.warnings.map((w) => `<div class="${w.level}">${esc(w.text)}</div>`).join("") : `<div class="info">주의할 것이 없어요.</div>`;
+  document.getElementById("wkSes").innerHTML = d.sessions.length ? d.sessions.map((s) => `<span><b>${esc(s.label)}</b>${s.session ? ` <span class="muted">${esc(s.session)}</span>` : ""} · 파일 ${s.files.length} · ${minsAgo(s.lastMin)}</span>`).join("") : `<span class="muted">남은 표시가 없어요. (12시간 지난 표시와 "다 고침"으로 놓은 것은 빼요)</span>`;
+  const NODE = Object.fromEntries(Object.entries(d.nodes).map(([k, v]) => [k, v.name]));
+  document.getElementById("wkFiles").innerHTML = `<thead><tr><th>파일</th><th>영역</th><th>구조도 칸</th><th>상태</th><th class="n">+/−</th><th>마지막 수정</th><th>누가</th><th>주의</th></tr></thead><tbody>` +
+    (d.files.length ? d.files.map((f) => `<tr><td class="mono">${esc(f.path)}</td><td>${esc(f.area)}</td><td class="muted">${esc(f.nodes.map((n) => NODE[n] || n).join(", "))}</td><td>${esc(f.status)}</td><td class="n">+${f.plus} −${f.minus}</td><td>${minsAgo(f.ageMin)}</td>` +
+      `<td>${f.claims.length ? esc(f.claims.map((c) => `${c.label} (${minsAgo(c.sinceMin)})`).join(", ")) : '<span class="f-warn">모름</span>'}</td><td>${f.flags.filter((x) => x.text !== "누가 고치는지 모름").map((x) => `<span class="f-${x.level}">${esc(x.text)}</span>`).join("<br>")}</td></tr>`).join("")
+      : `<tr><td colspan="8" class="empty">커밋 안 된 파일이 없어요.</td></tr>`) + "</tbody>";
+  document.getElementById("wkRecent").innerHTML = `<thead><tr><th>언제</th><th>영역</th><th>커밋</th></tr></thead><tbody>` + d.recent.map((c) => `<tr><td>${minsAgo(c.ageMin)}</td><td>${esc(c.area || "")}</td><td class="t"><span class="mono">${esc(c.hash)}</span> ${esc(c.subject)}</td></tr>`).join("") + "</tbody>";
+}
+setInterval(() => { if (document.querySelector(".wrap").dataset.tab === "work") pollWork(); else if (LIVE) pollWork(); }, 5000);
+setTab(location.hash === "#work" ? "work" : "usage");
 
 renderPrices();
 if (LIVE) {

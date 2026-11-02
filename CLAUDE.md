@@ -57,6 +57,7 @@
 
 - 브랜치 `claude/recaller2`. push 전에 항상 `git pull --rebase`.
 - 일 하나를 끝내면 `협업/현황.md`의 자기 칸을 고쳐 같이 커밋한다.
+- 지금 누가 어느 파일을 고치는지는 `작업 현황 보기.cmd`(127.0.0.1:3091 [작업 현황] 탭, 구조도 위)에서 본다. Claude Code 세션은 고친 파일이 저절로 남는다. Codex·다른 도구는 고치기 전에 `node tools/work/claim.mjs <영역> <파일…>`, 끝나면 `node tools/work/claim.mjs <영역> --done`. 겹침(빨강)이 보이면 그 파일은 먼저 고치던 쪽과 정하고 고친다.
 - PC 작업 폴더는 `C:\Users\jkh01\coding\Recaller`(이 저장소의 `claude/recaller2`, 10/31부터). 앱(3000)도 여기서 켠다. 손으로 복사하지 않고 git으로 주고받는다.
 - 예전 작업 폴더 `CreatorTemp\recaller-integration`은 지우지 않는다: 테스트 데이터(`tmp\review-test-data`, `.env.local`이 가리킴)가 아직 그 안에 있다.
 

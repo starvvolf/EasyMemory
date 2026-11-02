@@ -49,6 +49,8 @@ eval/**/*.secret.*
 /next-*.log
 /output/
 /tmp/
+# 작업 현황: 세션이 남기는 "고치는 중" 표시 (tools/work, 2026-11-02 A)
+/.recaller-work/
 /*.traineddata
 
 # Authoring output of local generation runs (/study and /lab): personal run data, like .study-forge-data/
