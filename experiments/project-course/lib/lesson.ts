@@ -17,6 +17,7 @@ import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
 import { addEntry, addTour, codeTerms, firstLine, notesContext } from "./notes.ts";
 import { runAgent, undoEdit, type AskCard, type CtxFile, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
+import { actionOfBeat, closeDetours, enterBeat, pushDetour, record, sessionView, type Action } from "./session.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
 /** do: next | try | start_dev,try | observe(검사로 지금 상태 보기) | db(DB 들여다보기) | next_stage …  tries: 요청 여러 개를 차례로 */
@@ -43,7 +44,7 @@ type Card =
 export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[]; beat?: number; t?: boolean };
 // mode: 고치기 방식(직접 / 같이 / 튜터가 만듦) · asked: 지금 순서에 들어온 뒤 자유 질문을 했는지(했으면 [하던 거로 돌아가기])
 type Mode = "self" | "pair" | "auto";
-type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null; mode?: Mode; pairStep?: number; asked?: boolean; tutorEdit?: boolean };
+type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null; mode?: Mode; pairStep?: number; asked?: boolean; tutorEdit?: boolean; act?: Action; actTarget?: string };
 type Todo = { open?: Open; focus?: Focus; clear?: boolean };
 
 const now = () => new Date().toISOString();
@@ -116,7 +117,10 @@ async function changeNow(runId: string, n: number, fn: (s: State, push: (m: Omit
   // update()는 동기 함수만 받으므로, 읽고 → 비동기 작업 → 저장을 직접 차례로 한다.
   const s = await read<State>(file(runId, n), { beat: -1, waiting: "action", messages: [], hints: 0 });
   const push = (m: Omit<LMsg, "id" | "at">) => s.messages.push({ id: (s.messages.at(-1)?.id ?? 0) + 1, at: now(), beat: s.beat, ...(s.asked ? { t: true } : {}), ...m });
+  const beforeBeat = s.beat;
   await fn(s, push);
+  // 걸음이 바뀌면 세션의 지금 활동도 바꾼다(학습 진행 엔진, 11/3)
+  if (s.beat !== beforeBeat && s.act) void enterBeat(runId, n, s.beat, s.act, s.actTarget ?? "");
   const todo = s.todo ?? [];
   s.todo = [];
   await update<State>(file(runId, n), s, () => { out = s; return s; });
@@ -131,6 +135,8 @@ async function changeNow(runId: string, n: number, fn: (s: State, push: (m: Omit
 
 function enter(plan: Plan, s: State, idx: number, push: (m: Omit<LMsg, "id" | "at">) => void, course: Awaited<ReturnType<typeof loadCourse>>) {
   s.beat = idx;
+  s.act = actionOfBeat(plan.beats[idx], idx === plan.beats.length - 1);
+  s.actTarget = plan.beats[idx] ? plan.beats[idx].now ?? firstLine(plan.beats[idx].text) : "";
   s.asked = false;
   const b = plan.beats[idx];
   if (!b) { s.waiting = "done"; return; }
@@ -202,8 +208,18 @@ export async function lessonView(runId: string, n: number) {
   // 걸음 목록(튜터 창의 걸음 줄): 이름은 걸음 종류로 코드가 정한다
   const steps = plan.beats.map((b, i) => ({ kind: b.kind, label: stepLabel(b, i === plan.beats.length - 1), now: b.now ?? firstLine(b.text) }));
   return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, steps, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge, pocket,
+    session: await sessionView(runId),
     now, mode: s.mode ?? null, resumable: !!s.asked && !s.busy && (s.waiting === "action" || s.waiting === "save"),
     thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null };
+}
+
+/** 튜터 맥락 한 줄: 지금 학습 진행(설계안 11.1 "학습 진행" 맥락). 임시 학습 중이면 답한 뒤 돌아갈 곳을 알려 준다 */
+async function sessionLine(runId: string) {
+  const v = await sessionView(runId).catch(() => null);
+  if (!v) return "";
+  const names: Record<string, string> = { explain: "설명", demo: "작동 예제", guide: "직접 할 일 안내", diagnose: "원인 찾기", verify: "확인", navigate: "이동", summarize: "정리" };
+  const dt = v.detours.length ? ` · 임시 학습 ${v.detours.length}겹: ${v.detours.map((d) => `"${d.topic}"`).join(" → ")} (끝나면 "${v.detours[0].returnLabel}"(으)로 돌아감, 답은 짧게 하고 원래 할 일로 이어 줄 것)` : "";
+  return `[학습 진행] 지금 활동: ${names[v.activity.type] ?? v.activity.type}${v.activity.target ? ` — ${v.activity.target}` : ""}${dt}`;
 }
 
 function stepLabel(b: Beat, last: boolean) {
@@ -281,6 +297,8 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     } else if (input.do === "resume") {
       // 자유 질문을 하다가 하던 순서로: 그 순서의 안내와 버튼을 다시 놓는다
       s.asked = false;
+      void closeDetours(runId, s.act ? { type: s.act, target: s.actTarget ?? "" } : undefined);
+      void record({ runId, stage: n, beat: s.beat, type: "navigate", actor: "user", detail: "하던 거로 돌아가기" });
       const acts = s.waiting === "save" && b?.kind === "fix" ? modeActions(b, s) : lastBeatActions(s) ?? b?.actions ?? [{ label: "다음", do: "next" }];
       push({ role: "me", text: "하던 거로 돌아가기" });
       push({ role: "tutor", text: `아까 하던 데로 돌아갈게요. **지금 할 일:** ${b?.now ?? firstLine(b?.text ?? "")}`, actions: acts });
@@ -289,6 +307,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
       const card = [...s.messages].reverse().find((m) => m.card?.type === "explain")!.card as Extract<Card, { type: "explain" }>;
       if (input.do === "confused") {
         await confused(runId, n);
+        void record({ runId, stage: n, beat: s.beat, type: "confusion", actor: "user", detail: "내 말로 설명: 아직 헷갈려요" });
         card.done = "아직 헷갈려요";
         push({ role: "tutor", text: "괜찮아요. 헷갈린다고 적어 둘게요. 복습할 때 오늘 직접 본 결과와 같이 다시 볼게요." });
       } else card.done = "(건너뜀)";
@@ -336,6 +355,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
       if (s.waiting !== "choice" || b?.kind !== "predict") throw err(409, "지금은 고를 때가 아니에요.");
       const card = [...s.messages].reverse().find((m) => m.card?.type === "choice")!.card as Extract<Card, { type: "choice" }>;
       const out = await predict(runId, n, b.predict!, Number(input.choice));
+      void record({ runId, stage: n, beat: s.beat, type: "verify", actor: "user", concepts: stageOf(course, n).predict.find((p) => p.id === b.predict)?.knowledge, detail: `예측 ${out.correct ? "맞힘" : "틀림"}: ${b.predict}` });
       card.picked = Number(input.choice); card.answer = out.answer;
       push({ role: "me", text: card.options[card.picked] });
       push({ role: "tutor", text: `${out.correct ? "맞아요! " : `아쉬워요. 답은 **${card.options[out.answer]}** 예요. `}${out.why}`, actions: b.after ?? [{ label: "다음", do: "next" }] });
@@ -344,6 +364,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
       if (s.waiting !== "explain") throw err(409, "지금은 설명을 적을 때가 아니에요.");
       const text = String(input.text ?? "").trim();
       await explain(runId, n, text);
+      if (text) void record({ runId, stage: n, beat: s.beat, type: "self_report", actor: "user", concepts: stageOf(course, n).explain.knowledge, detail: `내 말로: ${text}` });
       const card = [...s.messages].reverse().find((m) => m.card?.type === "explain")!.card as Extract<Card, { type: "explain" }>;
       card.done = text;
       push({ role: "tutor", text: "고마워요. 그대로 적어 둘게요. 복습할 때 오늘 쓴 이 문장을 다시 보여 드릴게요." });
@@ -364,6 +385,7 @@ async function runCheck(runId: string, n: number, plan: Plan, course: Awaited<Re
     const t = await readFile(path.join(wsDir, f), "utf8").catch(() => "");
     for (const m of t.matchAll(/\/\* ([①②③④⑤⑥⑦⑧⑨]) /g)) left.add(m[1]);
   }
+  if (why === "저장") void record({ runId, stage: n, type: "code_edit", actor: "user", detail: `학습자가 저장함: ${stageOf(course, n).fix.files.join(", ")}`, evidence: stageOf(course, n).fix.files });
   await change(runId, n, (s, push) => { s.busy = true; if (why === "저장") push({ role: "note", text: "저장한 걸 봤어요. 바로 확인해 볼게요…" }); else if (why === "튜터") push({ role: "note", text: "고친 코드로 확인해 볼게요…" }); else push({ role: "me", text: "지금 확인해 줘" }); });
   let result: Awaited<ReturnType<typeof check>> | null = null;
   let failed = "";
@@ -372,10 +394,13 @@ async function runCheck(runId: string, n: number, plan: Plan, course: Awaited<Re
     s.busy = false;
     if (!result) { push({ role: "tutor", text: `확인하지 못했어요: ${failed}` }); return; }
     s.lastCheck = result;
+    void record({ runId, stage: n, beat: s.beat, type: "execution", actor: "system", detail: `검사(${why}): ${result.results.filter((r) => r.ok).length}/${result.results.length} 통과${result.started ? "" : " · 서버가 안 켜짐"}` });
     push({ role: "tutor", card: { type: "check", result } });
     if (result.stageOk) {
       // 채팅에서 "고쳐 줘"로 튜터가 고친 것도 "만들어 주세요"와 같게 친다(11/2: 전에는 화면 상태가 안 바뀌어 "직접 고침"으로 찍혔다)
       const byTutor = s.mode === "auto" || !!s.tutorEdit;
+      // 개발 완료와 학습은 따로(설계안 8장): 통과는 "적용 근거"로만, 누가 고쳤는지 그대로
+      void record({ runId, stage: n, beat: s.beat, type: "application", actor: byTutor ? "agent" : "user", concepts: stageOf(course, n).knowledge, detail: `단계 검사 통과 · ${byTutor ? "튜터가 고침" : s.hints >= 3 ? "정답 줄 보고 고침" : s.mode === "pair" ? "같이 고침" : "직접 고침"}` });
       const how = byTutor ? "튜터가 고침" : s.hints >= 3 ? "정답 줄 보고 고침" : s.mode === "pair" ? "같이 고침" : "직접 고침";
       for (const f of stageOf(course, n).fix.files) void addEntry(runId, wsDir, f, { stage: n, kind: "fixed", title: how, summary: `${plan.title}: ${stageOf(course, n).fix.text}`.slice(0, 120) }).catch(() => {});
       push({ role: "tutor", text: (byTutor ? `제가 고친 코드로 모든 확인을 통과했어요. ${plan.passText ?? ""} 이 부분은 나중에 복습에서 직접 써 볼 기회를 드릴게요.`
@@ -402,6 +427,7 @@ async function giveHint(runId: string, n: number, level?: number) {
   const r = await hint(runId, n, next, s.lastCheck);
   return change(runId, n, (st, push) => {
     st.hints = Math.max(st.hints, next);
+    void record({ runId, stage: n, beat: st.beat, type: "confusion", actor: "user", detail: `힌트 ${next}단계 요청` });
     push({ role: "me", text: next === 3 ? "정답 줄 보여 줘" : "힌트 줘" });
     push({ role: "tutor", card: { type: "hint", level: next, text: r.text, source: r.source },
       actions: next < 3 ? [{ label: next === 1 ? "조금 더 구체적으로" : "정답 줄 보여 줘", do: "hint" }] : undefined });
@@ -523,6 +549,11 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const course = await loadCourse(run.courseId);
   const ws = workspaceOf(run, stageOf(course, n).template);
   const b = plan.beats[s0.beat];
+  // 임시 학습(설계안 3.3): 돌아갈 걸음을 세션에 쌓고, 질문을 학습 사건으로 남긴다
+  const where = quote ? `${quote.file}:${quote.from}${quote.to > quote.from ? `-${quote.to}` : ""}` : undefined;
+  void record({ runId, stage: n, beat: s0.beat, type: "question", actor: "user", detail: (shown ?? q).slice(0, 300), evidence: where ? [where] : undefined });
+  const dt = await pushDetour(runId, { topic: shown ?? q, reason: quote ? "코드 질문" : "질문", returnBeat: s0.beat, returnLabel: b?.now ?? firstLine(b?.text ?? "") });
+  if (dt.deep) await change(runId, n, (_s, push) => push({ role: "note", text: `질문이 ${dt.depth}번째로 이어지고 있어요. 답을 본 뒤 [하던 거로 돌아가기]로 원래 할 일로 가거나, 목표를 더 작게 나눠 볼 수도 있어요.` }));
   let answer = "";
   // 수업 맥락(계획서·지금 순서·최근 대화·마지막 확인): 에이전트와 단순 답 모두 쓴다
   // 최근 대화는 짧게(긴 설명을 통째로 다시 보내면 매번 수천 토큰) — 10/30 사용자 "컨텍스트 조정"
@@ -545,6 +576,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     // 실사용 확인(10/30): 막혔다는 말에 뒤에 나올 예측 문제의 답(405)을 먼저 말해 버림 → 앞으로 할 순서를 알리고 미리 말하지 않게
     upcoming(plan, s0.beat),
     s0.lastCheck ? `[마지막 확인] ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}: 기대 ${r.failure?.expected} / 실제 ${r.failure?.actual}`).join("; ") || "모두 통과"}` : "",
+    await sessionLine(runId),
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
     // 학습자 기억(프로젝트 노트): 이 프로젝트에서 이미 본 것
     await notesContext(runId, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null).catch(() => ""),
@@ -573,6 +605,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
             push({ role: "tutor", card });
             // 튜터가 이번 단계의 고칠 파일을 고쳤으면 화면 상태도 "튜터가 고침"으로(진도 기록은 recordEdit가 힌트 3단계로 남긴다)
             if (card.type === "diff" && stageOf(course, n).fix.files.includes(card.file)) { st.tutorEdit = true; st.hints = Math.max(st.hints, 3); }
+            if (card.type === "diff") void record({ runId, stage: n, beat: st.beat, type: "code_edit", actor: "agent", detail: `튜터가 ${card.file}을(를) 고침`, evidence: [card.file] });
           }).catch((e) => console.error("[lesson] 기록 저장 실패", e));
           // 프로젝트 노트: 투어 걸음은 파일별로, 파일 사이 넘어간 길은 연결로 / 튜터가 고친 것은 그 파일에
           if (card.type === "tour") await addTour(runId, ws, n, card.title, card.steps).catch(() => {});
@@ -747,6 +780,7 @@ async function autoFix(runId: string, n: number, plan: Plan, course: Awaited<Ret
   const s = await read<State>(file(runId, n), { beat: 0, waiting: "action", messages: [], hints: 0 });
   const b = plan.beats[s.beat];
   if (s.waiting !== "save" || b?.kind !== "fix" || s.busy) throw err(409, "지금은 고칠 때가 아니에요.");
+  void record({ runId, stage: n, beat: s.beat, type: "code_edit", actor: "agent", detail: "만들어 주세요: 준비된 정답으로 바꿈", evidence: stageOf(course, n).fix.files });
   const st = stageOf(course, n);
   const bs = bridgeState(runId);
   if (bs?.dirty && st.fix.files.some((f) => bs.file === f)) throw err(409, "VS Code에 저장하지 않은 내용이 있어요. 먼저 저장하거나 되돌린 뒤 눌러 주세요.");
@@ -785,6 +819,8 @@ export async function what(runId: string, n: number, plan: Plan, quote: { file: 
     await addEntry(runId, await wsOf(runId, n), quote.file, { stage: n, kind: "what", from: quote.from, to: quote.to, title: names.join(", ") || quote.code.trim().slice(0, 30), summary: firstLine(out.text), terms: names.length ? names : [quote.code.trim().slice(0, 30)] }).catch(() => {});
     return change(runId, n, (s2, push) => {
       s2.asked = true;
+      void record({ runId, stage: n, beat: s2.beat, type: "question", actor: "user", detail: `이건 뭐예요? ${quote.code.trim().slice(0, 80)}`, evidence: [`${quote.file}:${quote.from}`] });
+      void pushDetour(runId, { topic: quote.code.trim().slice(0, 60), reason: "이건 뭐예요", returnBeat: s2.beat, returnLabel: "" });
       push({ role: "me", text: "이건 뭐예요?", card: { type: "code", ...quote } });
       push({ role: "tutor", text: out.text! + (out.item?.later.length ? "" : "\n\n그럼 하던 것으로 돌아가 볼게요.") });
     });
@@ -827,6 +863,8 @@ export async function explainBlock(runId: string, n: number, plan: Plan, quote: 
     await note(cached.text);
     return change(runId, n, (s2, push) => {
       s2.asked = true;
+      void record({ runId, stage: n, beat: s2.beat, type: "question", actor: "user", detail: `덩어리 설명 ${quote.file} ${quote.from}~${quote.to}줄`, evidence: [`${quote.file}:${quote.from}-${quote.to}`] });
+      void pushDetour(runId, { topic: `${quote.file} ${quote.from}~${quote.to}줄`, reason: "덩어리 설명", returnBeat: s2.beat, returnLabel: "" });
       push({ role: "me", text: "이 덩어리 설명해 주세요", card: { type: "code", ...quote } });
       push({ role: "tutor", text: cached.text });
     });

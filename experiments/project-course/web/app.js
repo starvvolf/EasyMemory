@@ -899,7 +899,7 @@ function drawFloat() {
     if (lesson.busy) list.append(thinkLine(run, lesson));
     const more = (text, shown) => send({ do: "ask", text, shown, mode: "explain" });
     sheet = h("section", { class: "fsheet", "aria-label": "질문" },
-      h("div", { class: "fsh" }, h("span", {}, "질문 · ", h("b", {}, step?.label ?? "")), h("button", { class: "fib", "aria-label": "닫고 돌아가기", onclick: (e) => lesson.resumable ? send({ do: "resume" })(e) : (floatUi.sheetHidden = thread.at(-1).id, drawLesson()) }, icon("close"))),
+      h("div", { class: "fsh" }, h("span", {}, "질문 · ", h("b", {}, step?.label ?? ""), lesson.session?.detours?.length > 1 ? ` · ${lesson.session.detours.length}번째 질문` : "", "에서"), h("button", { class: "fib", "aria-label": "닫고 돌아가기", onclick: (e) => lesson.resumable ? send({ do: "resume" })(e) : (floatUi.sheetHidden = thread.at(-1).id, drawLesson()) }, icon("close"))),
       list,
       lesson.busy ? null : h("div", { class: "fchips" },
         h("button", { class: "fchip", onclick: more("방금 설명을 다른 예시 하나로 다시 보여 주세요. 짧게.", "예시 하나 더") }, "예시 하나 더"),
