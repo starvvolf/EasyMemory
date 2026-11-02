@@ -39,7 +39,8 @@ type Card =
   | { type: "map"; file: string; chunks: Chunk[] }
   | { type: "table"; sql: string; columns: string[]; rows: unknown[][]; note?: string }
   | ToolCard | DiffCard | AskCard | SnippetCard;
-export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[] };
+// beat: 어느 걸음에서 나온 말인지 · t: 걸음 중에 따로 물어본 대화(튜터 창이 걸음 카드와 나눠 보여 준다, 11/2)
+export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[]; beat?: number; t?: boolean };
 // mode: 고치기 방식(직접 / 같이 / 튜터가 만듦) · asked: 지금 순서에 들어온 뒤 자유 질문을 했는지(했으면 [하던 거로 돌아가기])
 type Mode = "self" | "pair" | "auto";
 type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null; mode?: Mode; pairStep?: number; asked?: boolean; tutorEdit?: boolean };
@@ -114,7 +115,7 @@ async function changeNow(runId: string, n: number, fn: (s: State, push: (m: Omit
   let out!: State;
   // update()는 동기 함수만 받으므로, 읽고 → 비동기 작업 → 저장을 직접 차례로 한다.
   const s = await read<State>(file(runId, n), { beat: -1, waiting: "action", messages: [], hints: 0 });
-  const push = (m: Omit<LMsg, "id" | "at">) => s.messages.push({ id: (s.messages.at(-1)?.id ?? 0) + 1, at: now(), ...m });
+  const push = (m: Omit<LMsg, "id" | "at">) => s.messages.push({ id: (s.messages.at(-1)?.id ?? 0) + 1, at: now(), beat: s.beat, ...(s.asked ? { t: true } : {}), ...m });
   await fn(s, push);
   const todo = s.todo ?? [];
   s.todo = [];
@@ -198,9 +199,22 @@ export async function lessonView(runId: string, n: number) {
   const pocket = (await pocketItems(runId)).slice(-12).reverse().map((p) => ({ id: p.id, stage: p.stage, file: p.file, from: p.from, code: p.code.trim().slice(0, 60), terms: p.terms.map((t) => t.name), later: p.later, ai: !!p.ai }));
   const cur = plan.beats[s.beat];
   const now = cur ? cur.now ?? firstLine(cur.text) : null;
-  return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge, pocket,
+  // 걸음 목록(튜터 창의 걸음 줄): 이름은 걸음 종류로 코드가 정한다
+  const steps = plan.beats.map((b, i) => ({ kind: b.kind, label: stepLabel(b, i === plan.beats.length - 1), now: b.now ?? firstLine(b.text) }));
+  return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, steps, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge, pocket,
     now, mode: s.mode ?? null, resumable: !!s.asked && !s.busy && (s.waiting === "action" || s.waiting === "save"),
     thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null };
+}
+
+function stepLabel(b: Beat, last: boolean) {
+  if (b.kind === "predict") return "예측";
+  if (b.kind === "fix") return "고치기";
+  if (b.kind === "explain") return "내 말로";
+  if (b.kind === "map") return "훑어보기";
+  if (last) return "정리";
+  const acts = [...(b.actions ?? []), ...(b.after ?? [])];
+  if (acts.some((a) => a.do.includes("try") || a.do === "db" || a.do === "observe")) return "해 보기";
+  return "읽기";
 }
 
 /* ---------- 학습자가 한 것 ---------- */
@@ -501,9 +515,9 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
 async function askInner(runId: string, n: number, plan: Plan, q: string, text: string, quote: { file: string; from: number; to: number; code: string } | undefined, shown: string | undefined, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void> }) {
   void text;
   const s0 = await change(runId, n, (s, push) => {
+    s.asked = true;
     push({ role: "me", text: shown ?? q, card: quote ? { type: "code", ...quote } : undefined });
     s.busy = true;
-    s.asked = true;
   });
   const run = await getRun(runId);
   const course = await loadCourse(run.courseId);
@@ -769,7 +783,8 @@ export async function what(runId: string, n: number, plan: Plan, quote: { file: 
   if (out.text) {
     const names = (out.item?.terms ?? []).map((t: { name: string }) => t.name.replace(/^\/\/ /, ""));
     await addEntry(runId, await wsOf(runId, n), quote.file, { stage: n, kind: "what", from: quote.from, to: quote.to, title: names.join(", ") || quote.code.trim().slice(0, 30), summary: firstLine(out.text), terms: names.length ? names : [quote.code.trim().slice(0, 30)] }).catch(() => {});
-    return change(runId, n, (_s, push) => {
+    return change(runId, n, (s2, push) => {
+      s2.asked = true;
       push({ role: "me", text: "이건 뭐예요?", card: { type: "code", ...quote } });
       push({ role: "tutor", text: out.text! + (out.item?.later.length ? "" : "\n\n그럼 하던 것으로 돌아가 볼게요.") });
     });
@@ -810,7 +825,8 @@ export async function explainBlock(runId: string, n: number, plan: Plan, quote: 
   const note = (text: string) => addEntry(runId, wsNow, quote.file, { stage: n, kind: "block", from: quote.from, to: quote.to, title: `${quote.from}~${quote.to}줄 덩어리`, summary: firstLine(text), terms: codeTerms(text) }).catch(() => {});
   if (cached?.text) {
     await note(cached.text);
-    return change(runId, n, (_s, push) => {
+    return change(runId, n, (s2, push) => {
+      s2.asked = true;
       push({ role: "me", text: "이 덩어리 설명해 주세요", card: { type: "code", ...quote } });
       push({ role: "tutor", text: cached.text });
     });

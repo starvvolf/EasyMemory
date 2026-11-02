@@ -14,8 +14,10 @@ import { DATA } from "./store.ts";
 const LOG = () => path.join(DATA, "float.log");
 const log = (t: string) => { try { appendFileSync(LOG(), `${new Date().toISOString()} [서버] ${t}\n`); } catch { /* */ } };
 
-type Float = { open: boolean; runId: string | null; pinned: boolean; editingAt: number; lastPoll: number; spawnedAt: number };
-const f: Float = { open: false, runId: null, pinned: false, editingAt: 0, lastPoll: 0, spawnedAt: 0 };
+// size: 학습자가 고른 크기(기본 / 펼침). 타이핑하는 동안은 고정이 아니면 한 줄 띠(pill)로 접힌다(11/2: 흐리게 대신 접기)
+type Size = "normal" | "wide";
+type Float = { open: boolean; runId: string | null; pinned: boolean; editingAt: number; lastPoll: number; spawnedAt: number; size: Size };
+const f: Float = { open: false, runId: null, pinned: false, editingAt: 0, lastPoll: 0, spawnedAt: 0, size: "normal" };
 const FADE_MS = 2000;
 
 export function electronPath(): string | null {
@@ -58,10 +60,13 @@ export const floatInUse = () => floatOn() && f.open;
 /** 튜터 창이 물으면(fromWindow) 살아 있다고 적는다. 화면·점검에서 물을 때는 그대로 */
 export function poll(fromWindow = false) {
   if (fromWindow) f.lastPoll = Date.now();
-  return { open: f.open, runId: f.runId, pinned: f.pinned, editing: !f.pinned && Date.now() - f.editingAt < FADE_MS, alive: floatAlive(), available: floatOn() };
+  const editing = !f.pinned && Date.now() - f.editingAt < FADE_MS;
+  return { open: f.open, runId: f.runId, pinned: f.pinned, editing, size: editing ? "pill" : f.size, alive: floatAlive(), available: floatOn() };
 }
-export function setFloat(b: { open?: unknown; pinned?: unknown; runId?: unknown }, port: number) {
+export function setFloat(b: { open?: unknown; pinned?: unknown; runId?: unknown; size?: unknown; wake?: unknown }, port: number) {
   if (typeof b.pinned === "boolean") f.pinned = b.pinned;
+  if (b.size === "normal" || b.size === "wide") { f.size = b.size; f.editingAt = 0; }
+  if (b.wake === true) f.editingAt = 0;
   if (typeof b.runId === "string" && /^\w{4,40}$/.test(b.runId)) f.runId = b.runId;
   if (b.open === true && f.runId) return { ...poll(), started: openFloat(f.runId, port) };
   if (b.open === false) f.open = false;

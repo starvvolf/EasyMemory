@@ -546,3 +546,93 @@ button, input, select, textarea { font-family: inherit; }
 .float .floatbar button:hover { background: var(--soft); color: var(--ink); }
 .float .floatbar button.on { color: var(--acc); border-color: var(--acc); }
 .float body { padding-top: 28px; border-left: 1px solid var(--line); }
+
+/* ===== 튜터 창 (11/2 시안 반영): 지금 걸음 카드 하나 + 질문 칸 + 띠 =====
+   글꼴: Pretendard(한글 UI에 맞춘 모던 산세리프, 앱과 같음) · 코드: Cascadia Code/D2Coding/Consolas
+   크기: 11.5 메타 · 12.5 작은 글 · 14 본문(줄 간격 1.7) · 17 걸음 제목 · 코드 12.5. 한글은 자간을 살짝 좁힘 */
+.float body { padding-top: 0 !important; border: 0; background: #131418; }
+.float {
+  --f-bg: #131418; --f-s1: #1a1c21; --f-s2: #21242b; --f-s3: #2a2e37; --f-line: #2c3039; --f-line2: #3a3f4b;
+  --f-ink: #eceef2; --f-ink2: #c4c9d2; --f-mut: #8d94a1; --f-acc: #6b9bff; --f-acc2: #3d6fe0; --f-acc-s: #1e2a44; --f-ok: #4fc08d;
+  --ui: "Pretendard Variable", Pretendard, "Segoe UI", "Malgun Gothic", sans-serif;
+  --mono: "Cascadia Code", "D2Coding", Consolas, ui-monospace, monospace;
+}
+.float .fw { height: 100vh; display: flex; flex-direction: column; background: var(--f-bg); color: var(--f-ink); font: 400 14px/1.7 var(--ui); letter-spacing: -0.01em; font-feature-settings: "tnum"; overflow: hidden; }
+.float .fw .ico { display: inline-grid; place-items: center; }
+.float .fh { display: flex; align-items: center; gap: 4px; padding: 12px 10px 6px 16px; }
+.float .fh-t { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.float .fh-st { font-size: 11.5px; font-weight: 600; color: var(--f-acc); }
+.float .fh-ti { font-size: 13px; font-weight: 600; color: var(--f-ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.float .fib { width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--f-mut); display: grid; place-items: center; cursor: pointer; }
+.float .fib:hover { background: var(--f-s2); color: var(--f-ink); }
+.float .fib.on { color: var(--f-acc); background: var(--f-acc-s); }
+.float .frailbox { padding: 2px 16px 0; display: grid; gap: 6px; }
+.float .frail { display: flex; gap: 4px; }
+.float .frail i { flex: 1; height: 4px; border-radius: 2px; background: var(--f-s3); }
+.float .frail i.d { background: var(--f-ok); }
+.float .frail i.n { background: var(--f-acc); }
+.float .frail-t { font-size: 11.5px; color: var(--f-mut); }
+.float .frail-t b { color: var(--f-ink); font-weight: 600; }
+.float .fscroll { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.float .fpast { display: flex; flex-direction: column; gap: 2px; padding: 0 4px; }
+.float .fpast p { margin: 0; display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.55; color: var(--f-mut); padding: 3px 0; }
+.float .fpast p .ico { color: var(--f-ok); margin-top: 2px; }
+.float .fmore { align-self: flex-start; border: 0; background: transparent; color: var(--f-mut); font: inherit; font-size: 12px; padding: 2px 0; cursor: pointer; text-decoration: underline dotted; }
+.float .fcard { background: var(--f-s1); border: 1px solid var(--f-line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.float .fey { font-size: 11.5px; font-weight: 600; color: var(--f-acc); letter-spacing: 0; }
+.float .fcard .rich { font-size: 14px; line-height: 1.75; color: var(--f-ink2); }
+.float .fcard .rich strong { color: var(--f-ink); font-weight: 650; }
+.float .fcard .rich > p:first-child { font-size: 15px; color: var(--f-ink); }
+.float .rich code.ic, .float .ic { font-family: var(--mono); font-size: 12.5px; background: var(--f-s3); border: 0; color: #f0c674; border-radius: 5px; padding: 1px 5px; }
+.float .flink { font-family: var(--mono); font-size: 12px; color: #9fc0ff; background: var(--f-acc-s); border-radius: 6px; padding: 2px 7px; }
+.float .fme { margin: 0; font-size: 12.5px; color: var(--f-mut); }
+.float .fnote, .float .ftool { margin: 0; font-size: 12px; color: var(--f-mut); }
+.float .fsave { margin: 0; font-size: 12.5px; color: var(--f-ink2); display: flex; align-items: center; gap: 4px; }
+.float .fsave kbd { font-family: var(--mono); font-size: 11px; background: var(--f-s3); border-radius: 4px; padding: 0 5px; }
+.float .facts { display: flex; flex-direction: column; gap: 8px; }
+.float .fbtn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; min-height: 46px; padding: 10px 14px; border-radius: 11px; border: 1px solid var(--f-line2); background: var(--f-s2); color: var(--f-ink); font: inherit; cursor: pointer; transition: background .12s, border-color .12s; }
+.float .fbtn:hover { background: var(--f-s3); }
+.float .fbtn b { font-size: 14px; font-weight: 600; }
+.float .fbtn span { font-size: 12px; color: var(--f-mut); }
+.float .fbtn.pri { background: var(--f-acc2); border-color: var(--f-acc); }
+.float .fbtn.pri span { color: #d4e1ff; }
+.float .fbtn.pri:hover { background: #4a7cec; }
+.float .fbtn.back { align-items: center; margin: 0 12px 10px; }
+.float .fsheet { position: absolute; left: 0; right: 0; bottom: 0; top: 96px; background: #1b1d23; border-top: 1px solid var(--f-line2); border-radius: 18px 18px 0 0; box-shadow: 0 -16px 40px rgba(0,0,0,.45); display: flex; flex-direction: column; z-index: 5; }
+.float .fw { position: relative; }
+.float .fsh { display: flex; align-items: center; padding: 10px 10px 8px 16px; border-bottom: 1px solid var(--f-line); font-size: 12px; color: var(--f-mut); }
+.float .fsh > span { flex: 1; }
+.float .fsh b { color: var(--f-ink2); font-weight: 600; }
+.float .fmsgs { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.float .fq { align-self: flex-end; max-width: 85%; background: var(--f-acc2); color: #fff; border-radius: 16px 4px 16px 16px; padding: 9px 13px; font-size: 13.5px; line-height: 1.6; display: flex; flex-direction: column; gap: 5px; }
+.float .fref { align-self: flex-start; font-family: var(--mono); font-size: 11.5px; background: rgba(255,255,255,.16); border-radius: 5px; padding: 1px 6px; }
+.float .fa { align-self: flex-start; max-width: 100%; background: var(--f-s2); border: 1px solid var(--f-line); border-radius: 4px 16px 16px 16px; padding: 11px 14px; display: flex; flex-direction: column; gap: 8px; }
+.float .fa .rich { font-size: 13.5px; line-height: 1.7; color: var(--f-ink2); }
+.float .fchips, .float .fquick { display: flex; gap: 6px; flex-wrap: wrap; }
+.float .fchips { padding: 0 14px 10px; }
+.float .fchip { border: 1px solid var(--f-line2); background: transparent; color: var(--f-ink2); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.float .fchip:hover { background: var(--f-s2); color: var(--f-ink); }
+.float .ff { padding: 10px 12px 12px; border-top: 1px solid var(--f-line); display: flex; flex-direction: column; gap: 8px; background: var(--f-bg); }
+.float .fask { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 5px 0 14px; background: var(--f-s2); border: 1px solid var(--f-line2); border-radius: 12px; }
+.float .fask:focus-within { border-color: var(--f-acc); }
+.float .fask input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--f-ink); font: inherit; font-size: 13.5px; outline: none; }
+.float .fask input::placeholder { color: var(--f-mut); }
+.float .fsend { width: 34px; height: 34px; border-radius: 9px; border: 0; background: var(--f-s3); color: var(--f-ink); display: grid; place-items: center; cursor: pointer; }
+.float .fthink { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--f-mut); }
+.float .fthink .grow { flex: 1; font-style: italic; }
+.float .fthink .dots { display: flex; gap: 3px; }
+.float .fthink .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--f-acc); animation: fdot 1s infinite ease-in-out; }
+.float .fthink .dots i:nth-child(2) { animation-delay: .15s; } .float .fthink .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes fdot { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+/* 띠: 창 높이가 띠만 할 때 */
+.float .fpill { display: none; }
+html.float.pill .fw > :not(.fpill) { display: none; }
+html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 100%; height: 100vh; padding: 0 16px; border: 0; background: var(--f-s1); color: var(--f-ink); font: inherit; text-align: left; cursor: pointer; }
+.float .frail.mini { flex: none; width: 84px; }
+.float .fpill-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.float .fpill-t b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.float .fpill-t span { font-size: 11.5px; color: var(--f-mut); }
+/* 펼침: 글을 조금 키우고 카드 폭을 넓게 */
+.float .fw.wide .fcard .rich, .float .fw.wide .fa .rich { font-size: 14.5px; }
+.float .fw.wide .fscroll { padding: 12px 20px 16px; }
+@media (prefers-reduced-motion: reduce) { .float .fthink .dots i { animation: none; } }

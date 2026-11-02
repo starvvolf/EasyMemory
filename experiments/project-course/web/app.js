@@ -27,22 +27,15 @@ if (EMBED) {
 }
 // 튜터 창(?float=1, 11/2): VS Code 위에 떠서 따라다니는 창. 위에 얇은 줄(📌 고정 · 닫기)만 더한다.
 const FLOAT = new URLSearchParams(location.search).has("float");
+// 튜터 창 크기·고정·닫기는 코스 서버에 알리면 창(float/main.cjs)이 0.25초 안에 따른다
+const floatPost = (b) => fetch("/api/float", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.json()).catch(() => null);
+const floatUi = { pinned: false, size: "normal", pastOpen: false, sheetHidden: 0 };
 if (FLOAT) {
   document.documentElement.classList.add("float");
-  const post = (b) => fetch("/api/float", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.json()).catch(() => null);
-  const pin = document.createElement("button");
-  const draw = (on) => { pin.textContent = on ? "📌 고정됨" : "📌 고정"; pin.title = on ? "코드를 쳐도 흐려지지 않아요. 누르면 풀어요." : "코드를 칠 때 흐려지지 않게 고정해요."; pin.classList.toggle("on", on); };
-  let pinned = false; draw(false);
-  pin.onclick = async () => { const out = await post({ pinned: !pinned }); if (out) { pinned = !!out.pinned; draw(pinned); } };
-  const close = document.createElement("button");
-  close.textContent = "✕"; close.title = "튜터 창 닫기 (VS Code 아래 상태 줄의 Recaller를 누르면 탭으로 열 수 있어요)";
-  close.onclick = () => post({ open: false });
-  const bar = document.createElement("div");
-  bar.className = "floatbar";
-  const t = document.createElement("span"); t.textContent = "Recaller 튜터";
-  bar.append(t, pin, close);
-  document.body.prepend(bar);
-  fetch("/api/float").then((r) => r.json()).then((s) => { pinned = !!s.pinned; draw(pinned); }).catch(() => {});
+  fetch("/api/float").then((r) => r.json()).then((st) => { floatUi.pinned = !!st.pinned; floatUi.size = st.size === "wide" ? "wide" : "normal"; if (lessonCtx) drawLesson(); }).catch(() => {});
+  // 창 높이가 띠만 하면(타이핑 중) 띠 화면으로
+  const pillCheck = () => document.documentElement.classList.toggle("pill", window.innerHeight < 110);
+  window.addEventListener("resize", pillCheck); pillCheck();
 }
 // VS Code 탭 안이면 확장이 지금 열린 폴더를 알려 준다(root). 다른 폴더가 필요하면 확장에 "그 폴더 열어 줘"를 보낸다.
 const VS_ROOT = EMBED ? new URLSearchParams(location.search).get("root") : null;
@@ -720,6 +713,7 @@ function flashSaved() {
 }
 
 function drawLesson() {
+  if (FLOAT) return drawFloat();
   const { run, lesson } = lessonCtx;
   const ws = lesson.workspace;
   const msgs = lesson.messages;
@@ -820,6 +814,125 @@ function drawLesson() {
   view.replaceChildren(h("div", { class: "lesson" }, side, h("main", { class: "lmain" }, chat, h("div", { class: "lfoot" }, nowbar, savebar, quick, form))));
   if (atBottom || !drawLesson.drawn) window.scrollTo({ top: document.body.scrollHeight });
   drawLesson.drawn = true;
+}
+
+/* ---------- 튜터 창(?float=1, 11/2 시안): 지금 걸음 카드 하나 + 따로 여는 질문 칸 ---------- */
+const ICON = {
+  check: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>',
+  wide: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 3h4v4M7 13H3V9M13 3L9 7M3 13l4-4"/></svg>',
+  narrow: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M13 3L9 7M9 3v4h4M3 13l4-4M7 13V9H3"/></svg>',
+  pin: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 2h4l-.5 4 2.5 2.5H4L6.5 6zM8 8.5V14"/></svg>',
+  close: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+  send: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg>',
+};
+const icon = (name) => { const s = h("span", { class: "ico" }); s.innerHTML = ICON[name]; return s; };
+const MODE_SUB = { mode_self: "저장하면 바로 확인해요", mode_pair: "빈칸으로 나눠 하나씩 같이", mode_auto: "바뀐 줄을 보여 드려요 · 기록에 그대로 남아요", hint: "한 칸씩만 더 알려 드려요", check: "지금 코드로 바로 확인" };
+
+function drawFloat() {
+  const { run, lesson } = lessonCtx;
+  const ws = lesson.workspace;
+  const steps = lesson.steps || [];
+  const cur = Math.max(0, lesson.beat);
+  const step = steps[cur];
+  const send = (body) => (e) => busy(e?.target, async () => {
+    lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, body);
+    if (lessonCtx.lesson.waiting === "done") {
+      const next = run.stages.find((s) => s.inPlan && s.n > run.current);
+      if (next) { await api("POST", `/api/runs/${run.id}/stage/${next.n}/start`, {}); return go(`#/run/${run.id}`); }
+    }
+    drawLesson();
+  });
+  const msgs = lesson.messages;
+  // 걸음 표시가 없는 옛 대화(11/2 전)는 끝의 몇 개만
+  const here = msgs.some((m) => m.beat !== undefined) ? msgs.filter((m) => m.beat === lesson.beat) : msgs.slice(-4);
+  const card = here.filter((m) => !m.t);
+  const thread = here.filter((m) => m.t);
+  const lastActIdx = msgs.map((m) => !!m.actions).lastIndexOf(true);
+  const pending = lastActIdx >= 0 && !lesson.busy && (lesson.waiting === "action" || lesson.waiting === "save") ? msgs[lastActIdx].actions : [];
+  const setSize = (size) => { floatUi.size = size; floatPost({ size }); drawLesson(); };
+
+  // 맨 위: 단계 이름 + 크기·고정·닫기
+  const head = h("header", { class: "fh" },
+    h("div", { class: "fh-t" }, h("span", { class: "fh-st" }, `${lesson.stage}단계`), h("span", { class: "fh-ti" }, lesson.title)),
+    h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게 펼치기", "aria-label": floatUi.size === "wide" ? "작게" : "넓게 펼치기", onclick: () => setSize(floatUi.size === "wide" ? "normal" : "wide") }, icon(floatUi.size === "wide" ? "narrow" : "wide")),
+    h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: floatUi.pinned ? "고정됨: 코드를 쳐도 안 접혀요" : "고정: 코드를 칠 때 접지 않기", "aria-label": "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")),
+    h("button", { class: "fib", title: "튜터 창 닫기", "aria-label": "닫기", onclick: () => floatPost({ open: false }) }, icon("close")));
+
+  // 걸음 줄
+  const rail = h("div", { class: "frail", "aria-label": "이번 단계 걸음" }, steps.map((st, i) => h("i", { class: i < cur ? "d" : i === cur ? "n" : "", title: st.label })));
+  const railText = step ? h("div", { class: "frail-t" }, h("b", {}, `${cur + 1} / ${steps.length}`), ` · ${step.label}`) : null;
+
+  // 지난 걸음: 한 줄씩, 3개 넘으면 접기
+  const pastAll = steps.slice(0, cur);
+  const pastShown = floatUi.pastOpen ? pastAll : pastAll.slice(-2);
+  const past = pastAll.length ? h("div", { class: "fpast" },
+    pastAll.length > pastShown.length ? h("button", { class: "fmore", onclick: () => { floatUi.pastOpen = true; drawLesson(); } }, `앞 걸음 ${pastAll.length - pastShown.length}개 더 보기`) : null,
+    pastShown.map((st) => h("p", {}, icon("check"), h("span", {}, st.now)))) : null;
+
+  // 지금 걸음 카드
+  const body = h("div", { class: "fcard" }, step ? h("div", { class: "fey" }, step.label) : null);
+  for (const m of card) {
+    if (m.role === "note") { body.append(h("p", { class: "fnote" }, m.text)); continue; }
+    if (m.role === "me") { if (m.text) body.append(h("p", { class: "fme" }, "↳ ", m.text)); if (m.card) body.append(lessonCard(m.card, run, lesson, send, ws)); continue; }
+    if (m.card?.type === "tool" && !m.text) { body.append(h("p", { class: "ftool" }, m.card.icon, " ", shortTool(m.card.label))); continue; }
+    if (m.text) body.append(rich(m.text, ws));
+    if (m.card) body.append(lessonCard(m.card, run, lesson, send, ws));
+  }
+  if (lesson.waiting === "save" && lesson.mode && lesson.mode !== "auto") body.append(h("p", { class: "fsave" }, h("span", { class: "pulse" }), "고친 뒤 ", h("kbd", {}, "Ctrl"), "+", h("kbd", {}, "S"), "를 누르면 바로 확인해요"));
+  if (lesson.busy && !thread.length) body.append(thinkLine(run, lesson));
+  const acts = pending.length && !thread.length ? h("div", { class: "facts" }, pending.map((a, i) => {
+    if (a.do === "hint" && a.label.includes("정답")) return h("button", { class: "fbtn", onclick: (e) => { if (confirm("정답 줄을 볼까요? 이걸 본 뒤의 통과는 '직접 고침'으로 기록하지 않아요.")) send({ do: a.do })(e); } }, h("b", {}, a.label));
+    return h("button", { class: `fbtn ${i === 0 ? "pri" : ""}`, onclick: (e) => send({ do: a.do })(e) }, h("b", {}, a.label), MODE_SUB[a.do] ? h("span", {}, MODE_SUB[a.do]) : null);
+  })) : null;
+  if (acts) body.append(acts);
+
+  // 따로 물어본 대화: 걸음 위로 올라오는 칸
+  let sheet = null;
+  if (thread.length && floatUi.sheetHidden !== thread.at(-1).id) {
+    const list = h("div", { class: "fmsgs" });
+    for (const m of thread) {
+      if (m.role === "note") { list.append(h("p", { class: "fnote" }, m.text)); continue; }
+      if (m.card?.type === "tool" && !m.text) { list.append(h("p", { class: "ftool" }, m.card.icon, " ", shortTool(m.card.label))); continue; }
+      if (m.role === "me") { list.append(h("div", { class: "fq" }, m.card?.type === "code" ? h("span", { class: "fref" }, `${m.card.file} ${m.card.from}${m.card.to > m.card.from ? `~${m.card.to}` : ""}줄`) : null, m.text)); continue; }
+      list.append(h("div", { class: "fa" }, m.text ? rich(m.text, ws) : null, m.card ? lessonCard(m.card, run, lesson, send, ws) : null));
+    }
+    if (lesson.busy) list.append(thinkLine(run, lesson));
+    const more = (text, shown) => send({ do: "ask", text, shown, mode: "explain" });
+    sheet = h("section", { class: "fsheet", "aria-label": "질문" },
+      h("div", { class: "fsh" }, h("span", {}, "질문 · ", h("b", {}, step?.label ?? "")), h("button", { class: "fib", "aria-label": "닫고 돌아가기", onclick: (e) => lesson.resumable ? send({ do: "resume" })(e) : (floatUi.sheetHidden = thread.at(-1).id, drawLesson()) }, icon("close"))),
+      list,
+      lesson.busy ? null : h("div", { class: "fchips" },
+        h("button", { class: "fchip", onclick: more("방금 설명을 다른 예시 하나로 다시 보여 주세요. 짧게.", "예시 하나 더") }, "예시 하나 더"),
+        h("button", { class: "fchip", onclick: more("방금 설명을 다른 말로, 더 쉽게 3문장으로 다시 설명해 주세요.", "다르게 설명해 줘") }, "다르게 설명해 줘"),
+        floatUi.size === "wide" ? null : h("button", { class: "fchip", onclick: () => setSize("wide") }, "넓게 보기")),
+      lesson.busy ? null : h("button", { class: "fbtn pri back", onclick: (e) => lesson.resumable ? send({ do: "resume" })(e) : (floatUi.sheetHidden = thread.at(-1).id, drawLesson()) }, h("b", {}, `알겠어요, ${ro(step?.label ?? "하던 것")} 돌아가기`)));
+  }
+
+  // 아래: 빠른 질문 + 입력
+  const input = h("input", { placeholder: "막히면 물어보세요", "aria-label": "튜터에게 물어보기" });
+  const form = h("form", { class: "fask", onsubmit: (e) => { e.preventDefault(); const t = input.value.trim(); if (!t) return; input.value = ""; floatUi.sheetHidden = 0; send({ do: "ask", text: t })({ target: form }); } },
+    input, h("button", { class: "fsend", type: "submit", "aria-label": "보내기" }, icon("send")));
+  const quick = h("div", { class: "fquick" },
+    h("button", { class: "fchip", onclick: (e) => { floatUi.sheetHidden = 0; send({ do: "ask", text: "지금 걸음에서 보고 있는 코드가 실제로 어떻게 동작하는지 흐름으로 보여 주세요.", mode: "tour" })(e); } }, "흐름 보기"),
+    h("button", { class: "fchip", onclick: (e) => { floatUi.sheetHidden = 0; send({ do: "ask", text: "지금 걸음을 하려면 무엇부터 보면 되는지, 답은 말하지 말고 방향만 한 줄로 알려 주세요.", shown: "어디부터 보면 돼요?" })(e); } }, "어디부터 봐요?"));
+  const foot = h("footer", { class: "ff" }, quick, form);
+
+  // 띠(타이핑하는 동안): 걸음 점 + 지금 할 일
+  const pill = h("button", { class: "fpill", onclick: () => floatPost({ wake: true }) },
+    h("span", { class: "frail mini" }, steps.map((st, i) => h("i", { class: i < cur ? "d" : i === cur ? "n" : "" }))),
+    h("span", { class: "fpill-t" }, h("b", {}, lesson.now || step?.now || ""), h("span", {}, lesson.waiting === "save" ? "저장하면 바로 확인해요" : "누르면 펼쳐요")));
+
+  view.replaceChildren(h("div", { class: `fw ${floatUi.size}` }, pill, head, h("div", { class: "frailbox" }, rail, railText),
+    h("div", { class: "fscroll" }, past, body), sheet, foot));
+  const sc = view.querySelector(".fscroll"); if (sc) sc.scrollTop = sc.scrollHeight;
+  const ms = view.querySelector(".fmsgs"); if (ms) ms.scrollTop = ms.scrollHeight;
+}
+/** "예측" → "예측으로", "고치기" → "고치기로" (받침 있으면 으로) */
+function ro(word) { const c = word.charCodeAt(word.length - 1); const jong = c >= 0xac00 && c <= 0xd7a3 ? (c - 0xac00) % 28 : 0; return word + (jong && jong !== 8 ? "으로" : "로"); }
+function thinkLine(run, lesson) {
+  return h("div", { class: "fthink" }, h("span", { class: "dots" }, h("i"), h("i"), h("i")),
+    h("span", { class: "grow" }, lesson.asking ? "위 질문에 골라 주세요" : lesson.thinking ? lesson.thinking : "튜터가 확인하는 중이에요"),
+    h("button", { class: "fchip", onclick: (e) => busy(e.target, async () => { lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/lesson/${run.current}/stop`); drawLesson(); }) }, "멈추기"));
 }
 
 /* ---------- 흐름 투어 카드: 걸음마다 VS Code에서 그 덩어리에 불이 켜진다 ---------- */

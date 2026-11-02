@@ -13,7 +13,7 @@ const LOGF = process.env.PC_FLOAT_LOG || path.join(os.tmpdir(), "recaller-float.
 const log = (t) => { try { fs.appendFileSync(LOGF, `${new Date().toISOString()} [창] ${t}\n`); } catch { /* */ } };
 process.on("uncaughtException", (e) => log(`오류: ${e && e.stack || e}`));
 const COURSE = (process.env.PC_COURSE || "http://127.0.0.1:4100").replace(/\/$/, "");
-const WIDTH = 440, TOP = 64, BOTTOM = 40, EDGE = 14, FADED = 0.22;
+const WIDTH = 440, PILL = 60, TOP = 64, BOTTOM = 40, EDGE = 14, FADED = 0.22;
 
 app.setName("Recaller 튜터 창");
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -112,9 +112,13 @@ function place() {
   const front = vs.fg === target.h || win.isFocused();
   if (!front) { if (win.isVisible()) win.hide(); return; }
   const r = process.platform === "win32" ? screen.screenToDipRect(null, { x: target.x, y: target.y, width: target.w, height: target.hh }) : { x: target.x, y: target.y, width: target.w, height: target.hh };
-  const b = { x: Math.round(r.x + r.width - WIDTH - EDGE), y: Math.round(r.y + TOP), width: WIDTH, height: Math.max(320, Math.round(r.height - TOP - BOTTOM)) };
+  // 크기 셋(11/2): 기본(오른쪽 세로) · 펼침(VS Code의 3분의 2, 코드 설명) · 띠(타이핑하는 동안 한 줄)
+  const size = state.size || "normal";
+  const w = size === "wide" ? Math.round(Math.min(920, Math.max(WIDTH, r.width * 0.68))) : WIDTH;
+  const hgt = size === "pill" ? PILL : Math.max(320, Math.round(r.height - TOP - BOTTOM));
+  const b = { x: Math.round(r.x + r.width - w - EDGE), y: Math.round(r.y + TOP), width: w, height: hgt };
   const now = win.getBounds();
-  if (Math.abs(now.x - b.x) + Math.abs(now.y - b.y) + Math.abs(now.height - b.height) > 2 || now.width !== WIDTH) win.setBounds(b);
+  if (Math.abs(now.x - b.x) + Math.abs(now.y - b.y) + Math.abs(now.height - b.height) + Math.abs(now.width - b.width) > 2) win.setBounds(b);
   if (!win.isVisible()) win.showInactive();
 }
 
@@ -138,7 +142,7 @@ async function poll() {
   if (!win) create();
   // VS Code 작업 폴더 창을 아직 못 찾았으면 서버가 말한 기록으로
   if (!shownUrl) { shownUrl = pageUrl(state.runId); win.loadURL(shownUrl); }
-  fade(!!state.editing);
+  fade(false); // 흐리게 하던 것(19:47 안)은 접기로 바꿈
   place();
 }
 
