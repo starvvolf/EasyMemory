@@ -87,6 +87,7 @@ async function connect() {
     setStatus("$(mortar-board) Recaller 연결됨", `튜터와 이어졌어요 (${hello.stage}단계). 누르면 오른쪽에 튜터가 열려요. 코드를 드래그하고 우클릭 → "이건 뭐예요?"`, true);
     // 튜터 창(VS Code 위에 떠서 따라다니는 창, 11/2)을 쓰면 VS Code 탭은 저절로 열지 않는다. 상태 줄을 누르면 탭도 열 수 있다.
     floatInUse = !!hello.float;
+    if (floatInUse && panel) panel.dispose(); // 튜터 창으로 옮겨 갔으니 VS Code 탭은 닫는다
     if (!autoOpened && !floatInUse && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
     listen();
     scheduleReport(0);

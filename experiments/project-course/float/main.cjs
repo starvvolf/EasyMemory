@@ -9,6 +9,9 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
+const LOGF = process.env.PC_FLOAT_LOG || path.join(os.tmpdir(), "recaller-float.log");
+const log = (t) => { try { fs.appendFileSync(LOGF, `${new Date().toISOString()} [창] ${t}\n`); } catch { /* */ } };
+process.on("uncaughtException", (e) => log(`오류: ${e && e.stack || e}`));
 const COURSE = (process.env.PC_COURSE || "http://127.0.0.1:4100").replace(/\/$/, "");
 const WIDTH = 440, TOP = 64, BOTTOM = 40, EDGE = 14, FADED = 0.22;
 
@@ -63,14 +66,16 @@ function watchVsCode() {
   const file = path.join(os.tmpdir(), "recaller-float-watch.ps1");
   fs.writeFileSync(file, "﻿" + PS);
   const ps = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file], { windowsHide: true });
-  let buf = "";
+  let buf = "", errs = 0, first = true;
+  ps.stderr.setEncoding("utf8");
+  ps.stderr.on("data", (d) => { if (errs++ < 20) log(`PowerShell: ${String(d).slice(0, 400)}`); });
   ps.stdout.setEncoding("utf8");
   ps.stdout.on("data", (d) => {
     buf += d;
     let i;
     while ((i = buf.indexOf("\n")) >= 0) {
       const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-      if (line.startsWith("{")) { try { vs = JSON.parse(line); vs.wins = [].concat(vs.wins || []); place(); } catch { /* 다음 줄 */ } }
+      if (line.startsWith("{")) { try { vs = JSON.parse(line); vs.wins = [].concat(vs.wins || []); if (first) { first = false; log(`VS Code 창 ${vs.wins.length}개: ${vs.wins.map((w) => w.t).join(" | ")}`); } place(); } catch (e) { log(`읽기 실패: ${e.message}`); } }
     }
   });
   ps.on("exit", () => { if (!app.isQuitting) setTimeout(watchVsCode, 2000); });
@@ -78,8 +83,10 @@ function watchVsCode() {
 }
 
 /* ---------- 창 ---------- */
-const folderOf = (ws) => (ws ? path.basename(String(ws).replace(/\\/g, "/").replace(/\/$/, "")) : "");
-const pageUrl = (s) => `${COURSE}/?embed=1&float=1&theme=dark&root=${encodeURIComponent(s.workspace || "")}#/run/${s.runId}`;
+// 작업 폴더 이름은 "<진행 기록 id>-<템플릿>"(예: 58d01294b7-hello)이고 VS Code 제목에 들어 있다 → 앞에 있는 VS Code가 어느 기록인지 안다
+const runOfTitle = (t) => (/\b([0-9a-f]{10})-[a-z]+\b/.exec(t || "") || [])[1] || null;
+const pageUrl = (runId) => `${COURSE}/?embed=1&float=1&theme=dark#/run/${runId}`;
+let followed = 0; // 따라다니는 VS Code 창
 
 function create() {
   win = new BrowserWindow({ width: WIDTH, height: 720, frame: false, alwaysOnTop: true, show: false, resizable: true, minimizable: false, maximizable: false,
@@ -92,8 +99,14 @@ function create() {
 /** VS Code 창(이 진행 기록의 작업 폴더가 제목에 든 것)을 찾아 그 오른쪽 안쪽에 붙인다 */
 function place() {
   if (!win || !state) return;
-  const name = folderOf(state.workspace);
-  const target = vs.wins.find((w) => name && w.t.includes(name)) || vs.wins.find((w) => w.h === vs.fg);
+  // 앞에 있는 VS Code(작업 폴더 창)를 따라간다. 다른 프로그램이 앞이면 마지막에 따라가던 창
+  const ours = vs.wins.filter((w) => runOfTitle(w.t));
+  const target = ours.find((w) => w.h === vs.fg) || ours.find((w) => w.h === followed) || null;
+  if (target) {
+    followed = target.h;
+    const url = pageUrl(runOfTitle(target.t));
+    if (url !== shownUrl) { shownUrl = url; win.loadURL(url); }
+  }
   if (!target) { if (!win.isVisible() && shownUrl) { const a = screen.getPrimaryDisplay().workArea; win.setBounds({ x: a.x + a.width - WIDTH - EDGE, y: a.y + TOP, width: WIDTH, height: a.height - TOP - BOTTOM }); win.showInactive(); } return; }
   if (target.m) { if (win.isVisible()) win.hide(); return; }
   const front = vs.fg === target.h || win.isFocused();
@@ -114,7 +127,7 @@ function fade(on) {
 
 async function poll() {
   try {
-    const r = await fetch(`${COURSE}/api/float`, { signal: AbortSignal.timeout(2000) });
+    const r = await fetch(`${COURSE}/api/float?w=1`, { signal: AbortSignal.timeout(2000) });
     state = await r.json();
     fails = 0;
   } catch {
@@ -123,13 +136,14 @@ async function poll() {
   }
   if (!state.open || !state.runId) { app.quit(); return; }
   if (!win) create();
-  const url = pageUrl(state);
-  if (url !== shownUrl) { shownUrl = url; win.loadURL(url); }
+  // VS Code 작업 폴더 창을 아직 못 찾았으면 서버가 말한 기록으로
+  if (!shownUrl) { shownUrl = pageUrl(state.runId); win.loadURL(shownUrl); }
   fade(!!state.editing);
   place();
 }
 
 app.whenReady().then(() => {
+  log(`켜짐 (${COURSE})`);
   watchVsCode();
   poll();
   setInterval(poll, 250);

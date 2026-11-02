@@ -7,7 +7,12 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { appendFileSync } from "node:fs";
 import { APP_ROOT, ROOT } from "./course.ts";
+import { DATA } from "./store.ts";
+
+const LOG = () => path.join(DATA, "float.log");
+const log = (t: string) => { try { appendFileSync(LOG(), `${new Date().toISOString()} [서버] ${t}\n`); } catch { /* */ } };
 
 type Float = { open: boolean; runId: string | null; pinned: boolean; editingAt: number; lastPoll: number; spawnedAt: number };
 const f: Float = { open: false, runId: null, pinned: false, editingAt: 0, lastPoll: 0, spawnedAt: 0 };
@@ -29,9 +34,15 @@ function ensureWindow(port: number) {
   const exe = electronPath();
   if (!exe) return;
   f.spawnedAt = Date.now();
-  const env: Record<string, string | undefined> = { ...process.env, PC_COURSE: `http://127.0.0.1:${port}` };
+  const env: Record<string, string | undefined> = { ...process.env, PC_COURSE: `http://127.0.0.1:${port}`, PC_FLOAT_LOG: LOG() };
   delete env.ELECTRON_RUN_AS_NODE;
-  spawn(exe, [path.join(ROOT, "float", "main.cjs")], { detached: true, stdio: "ignore", windowsHide: false, env }).unref();
+  log(`튜터 창 띄움: ${exe}`);
+  try {
+    const child = spawn(exe, [path.join(ROOT, "float", "main.cjs")], { detached: true, stdio: "ignore", windowsHide: false, env });
+    child.on("error", (e) => log(`띄우기 실패: ${e.message}`));
+    child.on("exit", (code) => log(`튜터 창 꺼짐 (${code})`));
+    child.unref();
+  } catch (e) { log(`띄우기 실패: ${(e as Error).message}`); }
 }
 
 /** 이 진행 기록으로 튜터 창을 연다. 쓸 수 없으면 false(그러면 VS Code 탭을 쓴다). */
@@ -44,9 +55,10 @@ export function openFloat(runId: string, port: number) {
 /** 확장에게: 튜터 창을 쓰는 중이면 VS Code 탭을 저절로 열지 않는다 */
 export const floatInUse = () => floatOn() && f.open;
 
-export function poll() {
-  f.lastPoll = Date.now();
-  return { open: f.open, runId: f.runId, pinned: f.pinned, editing: !f.pinned && Date.now() - f.editingAt < FADE_MS };
+/** 튜터 창이 물으면(fromWindow) 살아 있다고 적는다. 화면·점검에서 물을 때는 그대로 */
+export function poll(fromWindow = false) {
+  if (fromWindow) f.lastPoll = Date.now();
+  return { open: f.open, runId: f.runId, pinned: f.pinned, editing: !f.pinned && Date.now() - f.editingAt < FADE_MS, alive: floatAlive(), available: floatOn() };
 }
 export function setFloat(b: { open?: unknown; pinned?: unknown; runId?: unknown }, port: number) {
   if (typeof b.pinned === "boolean") f.pinned = b.pinned;

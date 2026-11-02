@@ -191,7 +191,7 @@ const routes: [string, RegExp, Handler][] = [
   }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => { const out = await openEditor(m[1]); openFloat(m[1], PORT); return out; }],
   // 튜터 창(lib/float.ts): 창이 0.25초마다 묻는다
-  ["GET", /^\/api\/float$/, async () => { const p = floatPoll(); let workspace: string | null = null;
+  ["GET", /^\/api\/float$/, async (_q, _m, url) => { const p = floatPoll(url.searchParams.has("w")); let workspace: string | null = null;
     if (p.runId) { try { const r = await getRun(p.runId); const c = await loadCourse(r.courseId); workspace = workspaceOf(r, c.stages.find((s) => s.n === r.current)!.template); } catch { /* 지운 기록 */ } }
     return { ...p, workspace }; }],
   ["POST", /^\/api\/float$/, async (req) => setFloat(await body(req), PORT)],

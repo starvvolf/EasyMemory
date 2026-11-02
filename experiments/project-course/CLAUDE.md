@@ -4,7 +4,7 @@ VS Code에서 작은 서비스를 한 단계씩 만들고, 오른쪽 Recaller �
 
 ## 구조
 
-- 코스 서버 `server/main.ts`, 화면 `web/`(튜터 탭에 그대로 뜬다), VS Code 확장 `vscode-bridge/`(0.7.2, `recaller-bridge.vsix`. 옛 확장이 붙으면 서버가 새것을 깔고 "다시 불러오기"를 띄운다)
+- 코스 서버 `server/main.ts`, 화면 `web/`(튜터 탭에 그대로 뜬다), VS Code 확장 `vscode-bridge/`(0.7.3, `recaller-bridge.vsix`. 옛 확장이 붙으면 서버가 새것을 깔고 "다시 불러오기"를 띄운다)
 - 튜터 창 `lib/float.ts` + `float/main.cjs`(11/2 사용자 "앱 쪽 화면, VS Code와 같이 움직이고 항상 위, 코드 만질 땐 반투명"): 코스 서버가 앱의 `desktop/node_modules/electron`을 빌려 작은 창을 띄운다. VS Code 창 오른쪽 안쪽에 붙어 따라다니고(PowerShell이 0.2초마다 창 위치), VS Code나 이 창이 앞에 있을 때만 보인다. 타이핑하면(확장 → `/api/bridge/typing`) 2초 동안 흐려지고 클릭이 통과, 📌 고정이면 안 흐려짐. 튜터 창을 쓰면 확장은 VS Code 탭을 저절로 열지 않는다. Windows 전용, 끄기 `PC_FLOAT=0`
 - 포트: 코스 서버 4100, 실습 서버 4101, 검사용 서버 4102. D는 이 셋만 쓴다
 - 코스 데이터 `courses/board-api/`(지식 17 · 부품 카드 10 · 단계 7 + 전이 과제 · 검사 33), 단계별 대화형 수업 `lessons/1~4.json`(5~7은 없음). 2단계만 새 형식(화면 아래 "지금 할 일" 줄, 고칠 때 제가 해 볼게요 / 같이 해요(빈칸 + 조각) / 만들어 주세요(백업 뒤 준비된 정답 파일, AI 아님), 껐다 켜기 확인, 질문 뒤 "하던 거로 돌아가기"). 단계 완료는 체험 기준 + 정직한 기록(10/31 사용자). 템플릿의 `<from N>`·`<until N>`·`<swap N>` 표시로 단계마다 시작 코드와 정답이 나온다
