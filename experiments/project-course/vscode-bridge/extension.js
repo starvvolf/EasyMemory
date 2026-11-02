@@ -187,18 +187,26 @@ function applyFocus() {
     }
     const doc = ed.document;
     const starts = focus.chunks.map((c) => ({ c, line: findLine(doc, c.anchor) })).filter((x) => x.line >= 0).sort((a, b) => a.line - b.line);
-    const dims = [], labels = [], labelsOn = [];
+    const dims = [];
     starts.forEach((x, i) => {
       const end = i + 1 < starts.length ? starts[i + 1].line - 1 : doc.lineCount - 1;
       if (!x.c.focus && end >= x.line) dims.push(new vscode.Range(x.line, 0, end, doc.lineAt(end).text.length));
-      const text = `   ◀ ${x.c.label}${x.c.desc ? ` · ${x.c.desc}` : ""}`;
-      const item = { range: new vscode.Range(x.line, 0, x.line, doc.lineAt(x.line).text.length), renderOptions: { after: { contentText: text } } };
-      (x.c.focus ? labelsOn : labels).push(item);
     });
     ed.setDecorations(dimDeco, dims);
-    ed.setDecorations(labelDeco, labels);
-    ed.setDecorations(labelFocusDeco, labelsOn);
+    // 덩어리 이름은 줄 끝이 아니라 위의 "💬 설명" 줄에 (줄 끝에 붙이면 화면 밖으로 잘림, 11/2)
+    ed.setDecorations(labelDeco, []);
+    ed.setDecorations(labelFocusDeco, []);
   }
+  lensChanged.fire();
+}
+/** 이 덩어리(from~to)에 맞는 지도 이름: 이름의 첫 줄이 덩어리 첫 줄이거나 바로 위 두 줄 안(주석) */
+function chunkLabel(doc, from, to) {
+  if (!focus || rel(doc.uri.fsPath) !== focus.file) return null;
+  for (const c of focus.chunks) {
+    const line = findLine(doc, c.anchor);
+    if (line >= 0 && line >= from - 2 && line <= Math.min(to, from)) return c;
+  }
+  return null;
 }
 
 async function handle(cmd) {
@@ -325,9 +333,13 @@ const lensProvider = {
   onDidChangeCodeLenses: lensChanged.event,
   provideCodeLenses(doc) {
     if (!runId || !inRoot(doc) || !/\.(ts|js|mjs)$/.test(doc.uri.fsPath)) return [];
-    return findBlocks(doc).map((b) => new vscode.CodeLens(new vscode.Range(b.from, 0, b.from, 0), {
-      title: `💬 설명 (${b.from + 1}~${b.to + 1}줄)`, tooltip: "이 덩어리가 뭘 하는지 튜터가 줄마다 쉽게 설명해요",
-      command: "recaller.explainBlock", arguments: [doc.uri, b.from, b.to] }));
+    return findBlocks(doc).map((b) => {
+      const c = chunkLabel(doc, b.from, b.to);
+      const name = c ? `${c.label}${c.today ?? c.focus ? " · 오늘 고칠 곳" : ""} — ` : "";
+      return new vscode.CodeLens(new vscode.Range(b.from, 0, b.from, 0), {
+        title: `${name}💬 설명 (${b.from + 1}~${b.to + 1}줄)`, tooltip: `${c?.desc ? `${c.desc}\n` : ""}이 덩어리가 뭘 하는지 튜터가 줄마다 쉽게 설명해요`,
+        command: "recaller.explainBlock", arguments: [doc.uri, b.from, b.to] });
+    });
   },
 };
 async function explainBlock(uri, from, to) {

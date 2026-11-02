@@ -530,3 +530,11 @@ button, input, select, textarea { font-family: inherit; }
 .nowbar .nowtag { font-weight: 600; color: var(--acc); white-space: nowrap; }
 .nowbar .nowtext { flex: 1; min-width: 0; }
 .embed .nowbar { font-size: 12px; padding: 6px 8px; background: var(--input); border-color: var(--input-line); }
+
+/* ===== 11/2 사용자: 말풍선으로 끊어 보이게 · 지도 "오늘 고칠 곳" ===== */
+.lmsg.tutor .bubble, .embed .lmsg.tutor .bubble { background: var(--soft); border: 1px solid var(--line); border-radius: 4px 14px 14px 14px; padding: 10px 14px; width: fit-content; max-width: 100%; }
+.lmsg.tutor.cont .bubble { border-top-left-radius: 14px; }
+.lchat .lmsg.cont, .embed .lchat .lmsg.cont { margin-top: -10px; }
+.lmsg.me .bubble, .embed .lmsg.me .bubble { background: var(--acc); color: var(--acc-ink); border-color: transparent; border-radius: 14px 4px 14px 14px; }
+.lmsg.tutor .lcol > .lcard { margin-top: 2px; }
+.chunk .cl .today { margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--acc); border: 1px solid var(--acc); border-radius: 999px; padding: 0 7px; vertical-align: 1px; }

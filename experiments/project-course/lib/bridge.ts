@@ -15,7 +15,7 @@ export type BridgeCommand =
   | { type: "note"; file: string; line: number; note: string }
   | { type: "blank"; file: string; from: string; to?: string; text: string; note?: string }
   | { type: "clear" }
-  | { type: "focus"; file: string; chunks: { anchor: string; label: string; desc?: string; focus?: boolean }[] }
+  | { type: "focus"; file: string; chunks: { anchor: string; label: string; desc?: string; focus?: boolean; today?: boolean }[] }
   | { type: "clearFocus" }
   | { type: "toast"; text: string }
   | { type: "tour"; file: string; from: number; to: number; label?: string }

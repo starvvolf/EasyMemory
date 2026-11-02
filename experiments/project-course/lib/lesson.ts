@@ -204,7 +204,7 @@ export async function lessonView(runId: string, n: number) {
 }
 
 /* ---------- 학습자가 한 것 ---------- */
-export async function act(runId: string, n: number, input: { do: string; choice?: number; text?: string; level?: number; file?: string; line?: number }) {
+export async function act(runId: string, n: number, input: { do: string; choice?: number; text?: string; level?: number; file?: string; line?: number; index?: number }) {
   const run = await getRun(runId);
   const course = await loadCourse(run.courseId);
   const plan = await loadPlan(course.id, n);
@@ -216,6 +216,14 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     return ask(runId, n, plan, mode === "tour" ? `${t}\n\n${TOUR_Q}` : t, undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : mode === "tour" ? t : undefined, mode ? { mode } : {});
   }
   if (input.do === "open") { await openLine(runId, String(input.file ?? ""), Number(input.line) || 1); return null; }
+  // 지도에서 덩어리를 누르면 불을 그 덩어리로 옮긴다(11/2 사용자: 누른 곳이 밝아져야). "오늘 고칠 곳"(계획서의 focus)은 화면에 따로 표시
+  if (input.do === "peek") {
+    const s = await read<State>(file(runId, n), { beat: 0, waiting: "action", messages: [], hints: 0 });
+    const i = Number(input.index);
+    if (s.focus && s.focus.file === input.file && s.focus.chunks[i]) bridgeSend(runId, { type: "focus", file: s.focus.file, chunks: s.focus.chunks.map((c, k) => ({ ...c, focus: k === i, today: !!c.focus })) });
+    await openLine(runId, String(input.file ?? ""), Number(input.line) || 1);
+    return null;
+  }
   if (input.do === "scaffold") return scaffold(runId, n, plan, course);
   if (input.do === "tour") {
     // 흐름 투어 걸음: VS Code에서 그 덩어리에 불 켜기(AI 호출 없음)

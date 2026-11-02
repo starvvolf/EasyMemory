@@ -897,10 +897,13 @@ function lessonCard(card, run, lesson, send, ws) {
     h("pre", { class: "rbody dl" }, card.diff.split("\n").map((l) => h("div", { class: l.startsWith("+ ") ? "add" : l.startsWith("- ") ? "del" : "" }, l))));
   if (card.type === "map") return h("div", { class: "lcard map" },
     h("div", { class: "mut small" }, `${card.file} 지도 · 누르면 VS Code에서 그 덩어리가 열려요`),
-    h("div", { class: "chunks" }, card.chunks.map((c) => h("button", { class: `chunk ${c.focus ? "on" : ""} ${/-/.test(c.label) ? "sub" : ""}`, onclick: () => {
-      if (lessonCtx?.lesson?.bridge?.connected) api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "open", file: card.file, line: c.line }).catch(() => {});
+    h("div", { class: "chunks" }, card.chunks.map((c, i) => h("button", { class: `chunk ${c.focus ? "on" : ""} ${/-/.test(c.label) ? "sub" : ""}`, onclick: (e) => {
+      // 누른 덩어리로 불을 옮긴다(카드와 코드 둘 다) — 11/2
+      const box = e.currentTarget.parentElement;
+      for (const b of box.children) b.classList.toggle("on", b === e.currentTarget);
+      if (lessonCtx?.lesson?.bridge?.connected) api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "peek", index: i, file: card.file, line: c.line }).catch(() => {});
       else location.href = `vscode://file/${ws.replace(/\\/g, "/")}/${card.file}:${c.line}`;
-    } }, h("span", { class: "cl" }, c.label), h("span", { class: "cd" }, c.desc || ""), h("span", { class: "cn mono" }, `${c.line}줄`)))));
+    } }, h("span", { class: "cl" }, c.label, c.focus ? h("span", { class: "today" }, "오늘 고칠 곳") : null), h("span", { class: "cd" }, c.desc || ""), h("span", { class: "cn mono" }, `${c.line}줄`)))));
   if (card.type === "code") return h("div", { class: "lcard code" }, h("div", { class: "mut small" }, fileLink(ws, card.file, card.from), card.to > card.from ? `~${card.to}줄` : ""), h("pre", { class: "rbody" }, card.code));
   if (card.type === "check") return h("div", { class: "lcard" }, h("div", { class: "mut small" }, "확인 결과"), resultsList(card.result, { group: true }));
   if (card.type === "hint") return h("div", { class: "lcard hint" }, h("div", { class: "mut small" }, `힌트 ${card.level}단계 · ${card.source.startsWith("ai") ? "AI 튜터" : card.source === "solution" ? "준비된 정답 줄" : card.source === "auto" ? "튜터가 고친 줄" : "준비된 힌트"}`), card.level === 3 ? h("pre", { class: "sol" }, card.text) : rich(card.text, ws));

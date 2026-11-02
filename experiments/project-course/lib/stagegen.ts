@@ -126,5 +126,11 @@ export async function writeWorkspace(dir: string, files: Map<string, string>, ex
       if ((await exists(from)) && !(await exists(to))) await cp(from, to, { recursive: true });
     }
   }
+  // VS Code "제한 모드"에서는 한글 같은 글자마다 점선 상자를 친다(11/2 사용자 화면) → 이 폴더에서는 끈다. 학습자가 바꾼 설정은 덮지 않는다.
+  const vs = path.join(dir, ".vscode", "settings.json");
+  if (!(await exists(vs))) {
+    await mkdir(path.dirname(vs), { recursive: true });
+    await writeFile(vs, JSON.stringify({ "editor.unicodeHighlight.nonBasicASCII": false, "editor.unicodeHighlight.ambiguousCharacters": false, "editor.unicodeHighlight.invisibleCharacters": false }, null, 2) + "\n");
+  }
   return { backup: backedUp ? backup : null };
 }
