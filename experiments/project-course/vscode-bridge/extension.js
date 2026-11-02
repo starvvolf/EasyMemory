@@ -85,7 +85,9 @@ async function connect() {
       return;
     }
     setStatus("$(mortar-board) Recaller 연결됨", `튜터와 이어졌어요 (${hello.stage}단계). 누르면 오른쪽에 튜터가 열려요. 코드를 드래그하고 우클릭 → "이건 뭐예요?"`, true);
-    if (!autoOpened && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
+    // 튜터 창(VS Code 위에 떠서 따라다니는 창, 11/2)을 쓰면 VS Code 탭은 저절로 열지 않는다. 상태 줄을 누르면 탭도 열 수 있다.
+    floatInUse = !!hello.float;
+    if (!autoOpened && !floatInUse && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
     listen();
     scheduleReport(0);
     lensChanged.fire();
@@ -114,6 +116,14 @@ function listen() {
     res.on("end", () => { setStatus("$(debug-disconnect) Recaller", "연결이 끊겼어요. 다시 잇는 중…", false); goOfflineSoon(); retryTimer = setTimeout(connect, 3000); });
   });
   req.on("error", () => { setStatus("$(debug-disconnect) Recaller", "연결이 끊겼어요. 다시 잇는 중…", false); goOfflineSoon(); retryTimer = setTimeout(connect, 3000); });
+}
+
+/* ---------- 타이핑 중이라고 알리기: 튜터 창이 그동안 흐려진다 (0.6초에 한 번까지) ---------- */
+let floatInUse = false, lastTyping = 0;
+function typingPing() {
+  if (!floatInUse || !runId || Date.now() - lastTyping < 600) return;
+  lastTyping = Date.now();
+  request("POST", "/api/bridge/typing", {}).catch(() => {});
 }
 
 /* ---------- VS Code → 튜터: 지금 상황 ---------- */
@@ -529,7 +539,7 @@ function activate(context) {
     vscode.commands.registerCommand("recaller.openTutor", () => { if (runId || lobby) openTutor(); else connect(); }),
     vscode.window.onDidChangeActiveTextEditor((ed) => { if (ed && inRoot(ed.document)) lastEditor = ed; scheduleReport(); }),
     vscode.window.onDidChangeTextEditorSelection(() => scheduleReport(700)),
-    vscode.workspace.onDidChangeTextDocument((e) => { if (inRoot(e.document)) { scheduleReport(1200); applyFocus(); } }),
+    vscode.workspace.onDidChangeTextDocument((e) => { if (inRoot(e.document)) { scheduleReport(1200); applyFocus(); if (e.contentChanges.length) typingPing(); } }),
     vscode.workspace.onDidSaveTextDocument(() => scheduleReport(100)),
     vscode.languages.onDidChangeDiagnostics(() => scheduleReport(800)),
     { dispose: () => { clearTimeout(retryTimer); clearTimeout(reportTimer); if (stream) stream.destroy(); if (panel) panel.dispose(); } },

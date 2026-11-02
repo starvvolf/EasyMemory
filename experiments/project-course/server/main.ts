@@ -17,6 +17,7 @@ import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
 import { answerAsk, stopAsk } from "../lib/lesson.ts";
 import { runSnippet } from "../lib/tutor-tools.ts";
+import { floatInUse, openFloat, poll as floatPoll, setFloat, typing as floatTyping } from "../lib/float.ts";
 import { act, ask as lessonAsk, explainBlock as lessonBlock, closeWatchers, lessonView, loadPlan, notifyLesson, refocus, subscribe, what as lessonWhat } from "../lib/lesson.ts";
 import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeConnect, setState as bridgeSetState } from "../lib/bridge.ts";
 
@@ -172,7 +173,9 @@ const routes: [string, RegExp, Handler][] = [
     const out = await bridgeHello(String(b.root ?? ""));
     // 옛 확장이 붙으면 새 것을 깔아 두고 "다시 불러오기"를 띄우게 한다(초보가 Reload Window를 몰라도 되게)
     const update = typeof b.version === "string" ? await updateBridgeIfOld(b.version).catch(() => false) : false;
-    return { ...out, update };
+    // 튜터 창을 쓸 수 있으면 그쪽으로 열고, 확장은 VS Code 탭을 저절로 열지 않는다
+    if (out.runId) openFloat(out.runId, PORT);
+    return { ...out, update, float: floatInUse() };
   }],
   ["POST", /^\/api\/bridge\/state$/, async (req) => { const b = await body(req) as Record<string, never>; await getRun(String(b.runId)); const { runId, ...state } = b; bridgeSetState(runId, state); return { ok: true }; }],
   ["POST", /^\/api\/bridge\/ask$/, async (req) => {
@@ -186,7 +189,13 @@ const routes: [string, RegExp, Handler][] = [
     else void lessonAsk(run.id, run.current, plan, String(b.question ?? ""), quote).catch((e) => console.error(e));
     return { ok: true };
   }],
-  ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => openEditor(m[1])],
+  ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => { const out = await openEditor(m[1]); openFloat(m[1], PORT); return out; }],
+  // 튜터 창(lib/float.ts): 창이 0.25초마다 묻는다
+  ["GET", /^\/api\/float$/, async () => { const p = floatPoll(); let workspace: string | null = null;
+    if (p.runId) { try { const r = await getRun(p.runId); const c = await loadCourse(r.courseId); workspace = workspaceOf(r, c.stages.find((s) => s.n === r.current)!.template); } catch { /* 지운 기록 */ } }
+    return { ...p, workspace }; }],
+  ["POST", /^\/api\/float$/, async (req) => setFloat(await body(req), PORT)],
+  ["POST", /^\/api\/bridge\/typing$/, async () => { floatTyping(); return { ok: true }; }],
   ["GET", /^\/api\/runs\/(\w+)\/knowledge-export$/, async (_q, m) => { const run = await getRun(m[1]); const course = await loadCourse(run.courseId); return knowledgeExport(run.id, course.title); }],
   // 앱 지식 저장소 잇기: 앱(3000)이 안 보낸 것을 받아 넣고, 넣은 열쇠를 돌려준다(lib/sync.ts)
   ["GET", /^\/api\/runs\/(\w+)\/sync$/, async (_q, m) => { const run = await getRun(m[1]); return pending(run.id, await loadCourse(run.courseId)); }],

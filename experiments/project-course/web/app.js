@@ -25,6 +25,25 @@ if (EMBED) {
   });
   try { window.parent.postMessage({ recallerReady: true }, "*"); } catch { /* */ }
 }
+// 튜터 창(?float=1, 11/2): VS Code 위에 떠서 따라다니는 창. 위에 얇은 줄(📌 고정 · 닫기)만 더한다.
+const FLOAT = new URLSearchParams(location.search).has("float");
+if (FLOAT) {
+  document.documentElement.classList.add("float");
+  const post = (b) => fetch("/api/float", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.json()).catch(() => null);
+  const pin = document.createElement("button");
+  const draw = (on) => { pin.textContent = on ? "📌 고정됨" : "📌 고정"; pin.title = on ? "코드를 쳐도 흐려지지 않아요. 누르면 풀어요." : "코드를 칠 때 흐려지지 않게 고정해요."; pin.classList.toggle("on", on); };
+  let pinned = false; draw(false);
+  pin.onclick = async () => { const out = await post({ pinned: !pinned }); if (out) { pinned = !!out.pinned; draw(pinned); } };
+  const close = document.createElement("button");
+  close.textContent = "✕"; close.title = "튜터 창 닫기 (VS Code 아래 상태 줄의 Recaller를 누르면 탭으로 열 수 있어요)";
+  close.onclick = () => post({ open: false });
+  const bar = document.createElement("div");
+  bar.className = "floatbar";
+  const t = document.createElement("span"); t.textContent = "Recaller 튜터";
+  bar.append(t, pin, close);
+  document.body.prepend(bar);
+  fetch("/api/float").then((r) => r.json()).then((s) => { pinned = !!s.pinned; draw(pinned); }).catch(() => {});
+}
 // VS Code 탭 안이면 확장이 지금 열린 폴더를 알려 준다(root). 다른 폴더가 필요하면 확장에 "그 폴더 열어 줘"를 보낸다.
 const VS_ROOT = EMBED ? new URLSearchParams(location.search).get("root") : null;
 const normPath = (p) => String(p || "").replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();

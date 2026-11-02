@@ -538,3 +538,11 @@ button, input, select, textarea { font-family: inherit; }
 .lmsg.me .bubble, .embed .lmsg.me .bubble { background: var(--acc); color: var(--acc-ink); border-color: transparent; border-radius: 14px 4px 14px 14px; }
 .lmsg.tutor .lcol > .lcard { margin-top: 2px; }
 .chunk .cl .today { margin-left: 8px; font-size: 11px; font-weight: 600; color: var(--acc); border: 1px solid var(--acc); border-radius: 999px; padding: 0 7px; vertical-align: 1px; }
+
+/* ===== 튜터 창(?float=1): 위에 얇은 줄 ===== */
+.float .floatbar { position: fixed; top: 0; left: 0; right: 0; height: 28px; z-index: 50; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--mut); }
+.float .floatbar span { flex: 1; font-weight: 600; }
+.float .floatbar button { border: 1px solid transparent; background: transparent; color: var(--mut); border-radius: 6px; padding: 2px 8px; font: inherit; cursor: pointer; }
+.float .floatbar button:hover { background: var(--soft); color: var(--ink); }
+.float .floatbar button.on { color: var(--acc); border-color: var(--acc); }
+.float body { padding-top: 28px; border-left: 1px solid var(--line); }
