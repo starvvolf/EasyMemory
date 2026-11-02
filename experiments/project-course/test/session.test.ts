@@ -91,3 +91,11 @@ test("배경: TS → JS → Python으로 좁혀 묻고, 써 봤으면 거기서 
   assert.match(backgroundLine(py), /Python/);
   assert.equal(backgroundLine(applyBackground(undefined, "bg:skip").bg), "");
 });
+
+test("모델 본문 다듬기: OpenCode 덧붙임 떼고 작업 폴더만, 답 길이 medium", async () => {
+  const { shapeRequest } = await import("../lib/oc-engine.ts");
+  const j = shapeRequest({ instructions: "우리 지시문\n# Your Model\n- Name: x\n# Code Mode\n...긴 것...\n<env>\n  Working directory: C:\\ws\\run-gen\n</env>", text: { verbosity: "low" } }, true);
+  assert.equal(j.instructions, "우리 지시문\n\n작업 폴더: C:\\ws\\run-gen");
+  assert.equal(j.text.verbosity, "medium");
+  assert.equal(j.reasoning.summary, "auto");
+});

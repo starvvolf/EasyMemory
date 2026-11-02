@@ -239,7 +239,7 @@ async function sessionLine(runId: string) {
   const v = await sessionView(runId).catch(() => null);
   if (!v) return "";
   const names: Record<string, string> = { explain: "설명", demo: "작동 예제", guide: "직접 할 일 안내", diagnose: "원인 찾기", verify: "확인", navigate: "이동", summarize: "정리" };
-  const dt = v.detours.length ? ` · 임시 학습 ${v.detours.length}겹: ${v.detours.map((d) => `"${d.topic}"`).join(" → ")} (끝나면 "${v.detours[0].returnLabel}"(으)로 돌아감, 답은 짧게 하고 원래 할 일로 이어 줄 것)` : "";
+  const dt = v.detours.length ? ` · 임시 학습 ${v.detours.length}겹: ${v.detours.map((d) => `"${d.topic}"`).join(" → ")} (끝나면 "${v.detours[0].returnLabel}"(으)로 돌아감 — 돌아가기는 화면 버튼이 하니 답에 안내하지 않아도 된다)` : "";
   return `[학습 진행] 지금 활동: ${names[v.activity.type] ?? v.activity.type}${v.activity.target ? ` — ${v.activity.target}` : ""}${dt}\n[학습자 수준(내부, 학습자에게 말하지 말 것)] ${LEVELS[v.level] ?? LEVELS[0]} — 이 단위로 설명하고, 처음 나온 개념만 더 작게 풀어 줄 것${v.background ? `\n${backgroundLine(v.background)}` : ""}`.replace(/\n$/, "");
 }
 
@@ -580,12 +580,56 @@ async function filesFor(ws: string, file: string | null, withImports: boolean): 
   return out;
 }
 
+/** 단계 이름 앞의 "1단계:"를 뗀다(생성 코스는 AI가 붙여 오기도 한다 — 맥락에 "1단계 1단계:"가 되던 것, 11/3) */
+const bareTitle = (t: string) => String(t ?? "").replace(/^\s*\d+\s*단계\s*[:.·-]?\s*/, "");
+/** 튜터 맥락: 코스 전체 순서. 생성 코스는 아직 안 만든 단계까지 목차로(11/3: 만든 1단계만 보이던 것) */
+function courseOrder(course: Awaited<ReturnType<typeof loadCourse>>, run: Awaited<ReturnType<typeof getRun>>, n: number) {
+  const outline = (course as { generated?: { outline: { n: number; title: string; goal: string }[] } }).generated?.outline;
+  if (outline?.length) return `[코스 전체 순서] ${outline.map((o) => `${o.n}단계 ${bareTitle(o.title)}${o.n === n ? "(지금)" : ""} — ${o.goal}`).join(" / ")}`;
+  return `[코스 전체 순서] ${course.stages.map((x) => `${x.transfer ? "전이 과제" : `${x.n}단계`} ${bareTitle(x.title)}${x.n === n ? "(지금)" : run.plan.stages.includes(x.n) || x.transfer ? "" : "(건너뜀)"}`).join(" / ")}`;
+}
+/** 튜터 맥락: 학습자 목표(코스 정하기에서 받은 것, 없으면 생성 코스를 만들 때 적은 것) */
+function learnerGoal(course: Awaited<ReturnType<typeof loadCourse>>, run: Awaited<ReturnType<typeof getRun>>) {
+  const g = (run.profile as { goal?: string } | undefined)?.goal || (course as { generated?: { goal: string } }).generated?.goal;
+  return g ? `[학습자 목표] ${g}` : "";
+}
+
+/**
+ * 질문에 붙일 파일(11/3 비교: 검색 1번 + 읽기 2번 하느라 느렸다 → 코드가 미리 찾아 붙인다).
+ * 지금 보는 파일 + 질문에 나온 이름이 정의된 파일 + (보는 파일이 없으면) 이번 단계 고칠 파일과 app.ts. 4개까지
+ */
+async function questionFiles(ws: string, q: string, file: string | null, fixFiles: string[], withImports: boolean): Promise<CtxFile[]> {
+  const names = [...new Set([...q.matchAll(/[A-Za-z_$][\w$]*/g)].map((m) => m[0]).filter((w) => w.length >= 3))].slice(0, 12);
+  const defined: string[] = [];
+  if (names.length) for (const f of await listSrc(ws)) {
+    const t = await readFile(path.join(ws, f), "utf8").catch(() => "");
+    if (names.some((nm) => new RegExp(`(function|class|const|let|var|type|interface)\\s+${nm.replace(/\$/g, "\\$")}\\b|^\\s+${nm.replace(/\$/g, "\\$")}\\s*\\(`, "m").test(t))) defined.push(f);
+  }
+  const want = [...new Set([...(file ? [file] : []), ...defined, ...(file ? [] : [...fixFiles, "src/app.ts"])])].filter((f) => !f.includes("..")).slice(0, 4);
+  const out: CtxFile[] = [];
+  for (const [i, f] of want.entries()) for (const c of await filesFor(ws, f, withImports && i === 0)) if (!out.some((o) => o.key === c.key)) out.push(c);
+  return out;
+}
+async function listSrc(ws: string): Promise<string[]> {
+  const out: string[] = [];
+  const walk = async (rel: string) => {
+    for (const e of await readdir(path.join(ws, rel), { withFileTypes: true }).catch(() => [])) {
+      const r = path.posix.join(rel, e.name);
+      if (e.isDirectory() && !/node_modules|^\./.test(e.name)) await walk(r);
+      else if (/\.(ts|js)$/.test(e.name)) out.push(r);
+    }
+  };
+  await walk("src");
+  return out.slice(0, 40);
+}
+
 /** 아직 안 한 순서: 튜터가 학습자가 직접 맞히거나 고칠 것을 미리 말하지 않게 */
 function upcoming(plan: Plan, beat: number) {
   const rest = plan.beats.slice(beat + 1).filter((x) => x.kind === "predict" || x.kind === "fix");
   if (!rest.length) return "";
   const lines = rest.map((x) => x.kind === "predict" ? `- 예측 문제: ${x.text.split("\n")[0].slice(0, 120)}` : `- 학습자가 직접 고치는 차례: ${x.text.split("\n")[0].slice(0, 120)}`);
-  return `[앞으로 할 순서 — 학습자가 직접 맞히고 고칠 것이라 답을 미리 말하지 않는다]\n${lines.join("\n")}\n이것과 관련된 질문에는 어디를 보면 되는지까지만 말하고, 상태 코드 숫자나 고칠 코드는 "곧 같이 해 볼 거예요"라며 미룬다.`;
+  // 11/3 비교(ChatGPT와 같은 맥락): "어디를 보면 되는지까지만"이 원리·원인 설명까지 막았다 → 숨길 것을 좁힌다
+  return `[앞으로 할 순서 — 학습자가 직접 맞히고 고칠 차례]\n${lines.join("\n")}\n미리 말하지 않는 것은 두 가지뿐이다: 예측 문제의 정답, 고칠 줄의 완성 코드(바꿔 넣을 값 포함). 왜 그렇게 되는지(원인·원리), 어디를 보면 되는지는 질문에 맞게 충분히 설명한다.`;
 }
 
 export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void>; scope?: string[] } = {}) {
@@ -621,10 +665,10 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   // 캐시가 맞게 나눈다(10/31 건희 "그렇게 해보자"): 안 변하는 것(fixed)은 대화 첫 메시지에 한 번만,
   // 매번 바뀌는 것(turn·파일)은 질문마다 뒤에 붙인다. 같은 단계 안에서는 OpenCode 대화를 이어 쓴다.
   const fixed = [
-    `[수업 계획서] ${plan.stage}단계 ${plan.title}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}\n고칠 곳(학습자가 직접 쓸 핵심): ${stageOf(course, n).fix.text}`,
+    `[수업 계획서] ${plan.stage}단계 ${bareTitle(plan.title)}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}\n고칠 곳(학습자가 직접 쓸 핵심): ${stageOf(course, n).fix.text}`,
     // 실사용 확인(10/30): "로그인은 언제?"에 "나중 단계"라고만 답함 → 코스 전체 순서와 학습자 목표를 준다
-    `[코스 전체 순서] ${course.stages.map((x) => `${x.transfer ? "전이 과제" : `${x.n}단계`} ${x.title}${x.n === n ? "(지금)" : run.plan.stages.includes(x.n) || x.transfer ? "" : "(건너뜀)"}`).join(" / ")}`,
-    (run.profile as { goal?: string } | undefined)?.goal ? `[학습자 목표] ${(run.profile as { goal?: string }).goal}` : "",
+    courseOrder(course, run, n),
+    learnerGoal(course, run),
   ].filter(Boolean).join("\n\n");
   // 지난 질문 뒤로 화면에 있었던 일(대화를 이어 쓸 때는 이것만): 방금 넣은 내 질문은 빼고
   const prevAsk = s0.messages.slice(0, -1).map((m) => m.role).lastIndexOf("me");
@@ -641,7 +685,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     await recallLine(shown && !/^이건 뭐예요|^이 덩어리/.test(shown) ? shown : quote ? quote.code.trim().split("\n")[0] : q).catch(() => ""),
   ].filter(Boolean).join("\n\n");
   // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
-  const files = opts.mode === "tour" ? await allFiles(ws) : await filesFor(ws, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, opts.mode === "explain");
+  const files = opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stageOf(course, n).fix.files, opts.mode === "explain");
   const parts = { fixed, turn, recent: recentText ? `[최근 대화]\n${recentText}` : "", since: sinceText ? `[지난 질문 뒤 화면에 있었던 일]\n${sinceText}` : "", files };
   // 기본 엔진(대화를 잇지 않음)은 지금처럼 전부 한 번에
   const context = [fixed, turn, parts.recent, ...files.map((f) => f.text)].filter(Boolean).join("\n\n");
@@ -710,11 +754,11 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     }));
     const recent = s0.messages.slice(-14).map((m) => m.role === "me" ? `학습자: ${m.text}` : m.text ? `강사: ${m.text}` : m.card?.type === "reply" ? `(요청 결과: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : m.card.status})` : m.card?.type === "check" ? `(확인 결과: ${m.card.result.passed}개 통과, ${m.card.result.failed}개 실패)` : "").filter(Boolean).join("\n");
     const user = [
-      `[수업 계획서] ${plan.stage}단계 ${plan.title}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}`,
+      `[수업 계획서] ${plan.stage}단계 ${bareTitle(plan.title)}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}`,
       `[지금 하는 순서] ${s0.beat + 1}/${plan.beats.length}: ${b?.text ?? "끝"}`,
     // 실사용 확인(10/30): "로그인은 언제?"에 "나중 단계"라고만 답함 → 코스 전체 순서와 학습자 목표를 준다
-    `[코스 전체 순서] ${course.stages.map((x) => `${x.transfer ? "전이 과제" : `${x.n}단계`} ${x.title}${x.n === n ? "(지금)" : run.plan.stages.includes(x.n) || x.transfer ? "" : "(건너뜀)"}`).join(" / ")}`,
-    (run.profile as { goal?: string } | undefined)?.goal ? `[학습자 목표] ${(run.profile as { goal?: string }).goal}` : "",
+    courseOrder(course, run, n),
+    learnerGoal(course, run),
     // 실사용 확인(10/30): 막혔다는 말에 뒤에 나올 예측 문제의 답(405)을 먼저 말해 버림 → 앞으로 할 순서를 알리고 미리 말하지 않게
     upcoming(plan, s0.beat),
       ...code,

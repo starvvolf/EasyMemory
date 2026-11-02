@@ -37,14 +37,15 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 목표는 대신 개발해 주는 게 아니라, 개발자가 어떻게 확인하고 고치는지 보여 주며 가르치는 것이다.
 
 말투
-- 한국어 해요체로만 쓴다("~합니다" 금지). 보통은 짧게(5~8문장). 학습자가 덩어리 설명을 부탁하면 넉넉하게. 어려운 말은 일상 비유로 풀고, 줄 번호를 짚는다.
+- 한국어 해요체로만 쓴다("~합니다" 금지). 첫 문장이 곧 답이다(한 줄 요약).
+- 길이는 질문에 맞춘다: 단어 하나·짧은 확인은 2~4문장. "뭐예요/왜요/어떻게" 같은 이해 질문은 넉넉하게 — 조각마다 풀기 → 일상 비유 하나 → 헷갈리기 쉬운 차이(예: \`home\`과 \`home()\`) → 짧은 확인 질문 하나로 끝낸다. 줄 번호를 짚는다.
 - 코드에 나오는 이름·기호는 꼭 \`백틱\`으로 감싼다(학습자가 눌러서 다시 물어볼 수 있다). 파일·줄은 [[src/router.ts:21]]처럼 쓰면 눌러서 VS Code에서 열린다.
 - 도구를 쓰기 전에 무엇을 왜 보는지 한 문장으로 말한다("직접 보내서 확인해 볼게요").
 
 도구
-- 질문에 [파일 …]이 붙어 있으면 다시 읽지 말고 바로 쓴다. 다른 파일이 꼭 필요할 때만 read/glob/grep으로 본다. 추측으로 단정하지 않는다.
+- 질문에 [파일 …]이 붙어 있으면 다시 읽거나 검색하지 말고 바로 쓴다(질문에 나온 이름이 정의된 파일도 이미 붙여 둔다). 붙은 것에 없을 때만 read/glob/grep으로 본다. 추측으로 단정하지 않는다.
 - 답은 마크다운으로 보기 좋게: 필요하면 짧은 소제목(###), 목록, 코드를 보여 줄 때는 \`\`\`ts 파일경로:시작줄 로 여는 코드 블록. 짧은 답에는 소제목을 쓰지 않는다.
-- 학습자에게 보여 줄 곳은 open_in_editor로 VS Code에서 연다.
+- 줄은 [[파일:줄]] 링크로 짚으면 학습자가 눌러서 연다. open_in_editor는 고칠 곳을 바로 눈앞에 띄워야 할 때만 쓴다.
 - 동작을 확인할 때는 send_request(실제 요청)나 run_checks(자동 검사)를 쓴다. 명령 실행은 못 한다.
 - 학습자가 "이건 뭐가 나와요?"처럼 작은 코드의 결과를 궁금해하면 → 설명하기 전에 run_snippet으로 직접 돌려 보여 준다(학습자 파일은 못 읽는 따로 떨어진 곳에서 돈다).
 - 문법·내장 함수의 정확한 규칙(인자 순서, 돌려주는 값, 예외)을 말해야 하면 → 기억으로 단정하지 말고 look_docs로 공식 문서를 찾아보고, 답 끝에 "(출처: MDN JSON.parse)"처럼 짧게 적는다.
@@ -57,7 +58,8 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 학습자가 "정답", "고쳐 줘"처럼 분명히 부탁하기 전에는 3단계(완성 코드)를 먼저 주지 않는다. 한 질문에 한 단계 위로만 올린다.
 - 이번 단계에서 학습자가 직접 써야 할 핵심 줄([수업 계획서]의 고칠 곳)은 학습자가 분명히 부탁할 때만 edit로 고친다. 핵심이 아닌 곳(오타, 학습자가 망가뜨린 다른 줄)은 고쳐도 된다. 고친 뒤에는 run_checks나 send_request로 확인한다.
 - 수업 계획서의 순서와 정답을 바꾸지 않는다. 예측 문제의 답을 미리 말하지 않는다.
-- 질문에 답할 때는 마지막에 학습자가 지금 할 일을 한 줄로 말한다. 코드 덩어리·단어 설명에는 "배운 점"이나 할 일 같은 마무리를 붙이지 않는다.`;
+- 숨기는 것은 완성 코드와 예측 답뿐이다. 왜 그렇게 되는지(원인·원리)는 언제든 설명한다 — "곧 같이 해 볼 거예요"로 원리 설명까지 미루지 않는다.
+- 하던 걸음으로 돌아가는 안내("이제 ~ 살펴봐요", "지금 할 일:")는 붙이지 않는다(화면에 [하던 거로 돌아가기] 버튼이 있다). 학습자가 "이제 뭐 해요?"처럼 물을 때만 할 일을 말한다.`;
 
 type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void>; reason: string; lastThink: number; asked: number; stopped: boolean };
 const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문
@@ -108,6 +110,25 @@ async function start(): Promise<Host> {
   return h;
 }
 
+/**
+ * 모델에 가는 본문 다듬기(11/3 기록으로 확인):
+ * - OpenCode가 우리 지시문 뒤에 붙이는 약 17,600자(OpenCode 자체 도구 · 스킬 목록 · 작업 트리 안내)를 떼고 작업 폴더 한 줄만 남긴다
+ * - 답 길이(verbosity)가 low로 가서 이해 질문 답도 짧아졌다 → medium(ChatGPT 기본과 같게). 길이는 지시문이 질문에 맞게 정한다
+ */
+export function shapeRequest(j: any, summary: boolean) {
+  if (!j || typeof j !== "object") return j;
+  if (typeof j.instructions === "string") {
+    const cut = j.instructions.indexOf("\n# Your Model");
+    if (cut > 0) {
+      const wd = /Working directory:\s*(.+)/.exec(j.instructions)?.[1]?.trim();
+      j.instructions = j.instructions.slice(0, cut).trimEnd() + (wd ? `\n\n작업 폴더: ${wd}` : "");
+    }
+  }
+  j.text = { ...(j.text ?? {}), verbosity: "medium" };
+  if (summary && !j.reasoning?.summary) j.reasoning = { ...(j.reasoning ?? {}), summary: "auto" };
+  return j;
+}
+
 /* ---------- 교육 정책·기록 플러그인 ---------- */
 function policyPlugin(fake: boolean) {
   return {
@@ -118,13 +139,12 @@ function policyPlugin(fake: boolean) {
         const token = await chatGptBearer();
         const hd = new Headers(ev.request.headers); hd.set("authorization", `Bearer ${token}`);
         let body: string | undefined;
-        // 모델에 실제로 가는 본문(OpenCode 지시문 · 대화 전체 · 도구 · 강도)을 기록
-        if (ev.request.method === "POST" && /\/responses$/.test(new URL(ev.request.url).pathname)) void ev.request.clone().text().then((t: string) => { try { return logPrompt("tutor-request", JSON.parse(t)); } catch { return null; } });
-        // 생각 요약을 함께 받는다(화면에 "라우터 쪽 보는 중" 한 줄로). 모델 응답(/responses) 요청에만
-        if (reasoningSummary && ev.request.method === "POST" && /\/responses$/.test(new URL(ev.request.url).pathname)) {
+        // 모델 응답(/responses) 요청: 지시문 다듬기 · 답 길이 · 생각 요약을 정하고, 실제로 가는 본문을 기록한다
+        if (ev.request.method === "POST" && /\/responses$/.test(new URL(ev.request.url).pathname)) {
           try {
-            const j = JSON.parse(await ev.request.clone().text());
-            if (j && typeof j === "object" && !j.reasoning?.summary) { j.reasoning = { ...(j.reasoning ?? {}), summary: "auto" }; body = JSON.stringify(j); hd.delete("content-length"); }
+            const j = shapeRequest(JSON.parse(await ev.request.clone().text()), reasoningSummary);
+            body = JSON.stringify(j); hd.delete("content-length");
+            void logPrompt("tutor-request", j);
           } catch { /* 본문이 JSON이 아니면 그대로 */ }
         }
         ev.request = body === undefined ? new Request(ev.request, { headers: hd }) : new Request(ev.request.url, { method: "POST", headers: hd, body, signal: ev.request.signal });

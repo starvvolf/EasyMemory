@@ -88,7 +88,7 @@ function explain(error: unknown) {
 export async function aiJson<T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, heavy = false): Promise<T> {
   const mode = aiMode();
   if (mode === "off") throw new AiUnavailable("off", "AI를 끈 상태예요.");
-  if (mode === "fake") { if (!fakeReply) throw new AiUnavailable("off", "가짜 AI 답이 없어요."); return fakeReply(purpose, user) as T; }
+  if (mode === "fake") { if (!fakeReply) throw new AiUnavailable("off", "가짜 AI 답이 없어요."); void logPrompt(`fake-${purpose}`, { purpose, system, user }); return fakeReply(purpose, user) as T; }
   await budget(purpose);
   try {
     const log = await logPrompt(purpose, { purpose, heavy, system, user, schema });

@@ -85,6 +85,9 @@ const SYSTEM_STAGE = `너는 코딩 초보를 위한 프로젝트 코스의 한 
 
 /* ---------- 단계 → 코스 데이터 ---------- */
 const parseJson = (t: string) => { if (!t.trim()) return undefined; try { return JSON.parse(t); } catch { return undefined; } };
+/** AI가 단계 이름 앞에 "1단계:"를 붙여 오면 뗀다(맥락에 "1단계 1단계:"가 되던 것, 11/3) */
+const bare = (t: string) => String(t ?? "").replace(/^\s*\d+\s*단계\s*[:.·-]?\s*/, "");
+
 export function toChecks(n: number, g: GenStage): Check[] {
   return g.checks.map((c, i) => ({
     id: `s${n}-${i + 1}`, stage: n, template: "gen", kind: "normal", target: true, title: c.title, knowledge: c.concepts.filter((k) => g.concepts.some((x) => x.id === k)),
@@ -100,7 +103,7 @@ export function toChecks(n: number, g: GenStage): Check[] {
 }
 export function toStage(n: number, g: GenStage): Stage {
   return {
-    n, template: "gen", title: g.title, goal: g.goal, parts: [], knowledge: g.concepts.map((c) => c.id), intro: g.intro,
+    n, template: "gen", title: bare(g.title), goal: g.goal, parts: [], knowledge: g.concepts.map((c) => c.id), intro: g.intro,
     predict: [{ id: "p1", q: g.predict.q, options: g.predict.options, answer: Math.max(0, Math.min(g.predict.options.length - 1, Math.round(g.predict.answer))), why: g.predict.why, knowledge: g.concepts.map((c) => c.id).slice(0, 2) }],
     observe: { text: g.intro, checks: g.checks.map((_, i) => `s${n}-${i + 1}`) },
     fix: { text: g.fix.text, files: [g.fix.file] },
@@ -128,7 +131,7 @@ export function toLesson(n: number, g: GenStage) {
     { id: "explain", kind: "explain", text: `**내 말로** 한 문장만 적어 볼까요?\n\n**${g.explainQ}** 채점하지 않아요.`, now: "내 말로 한 문장 (안 해도 돼요)" },
     { id: "wrap", kind: "say", text: `${n}단계 끝! 오늘 꺼낸 것:\n\n${g.needs.map((x, i) => `${i + 1}. ${x.q.replace(/\?$/, "")} → ${x.concept}`).join("\n")}`, clearFocus: true, actions: [{ label: "다음 단계로", do: "next_stage" }], now: "정리를 보고 다음 단계로" },
   ];
-  return { stage: n, title: g.title, passText: `${g.goal} 이제 돼요.`, teach: g.concepts.map((c) => `${c.name}: ${c.essentials}`).slice(0, 4),
+  return { stage: n, title: bare(g.title), passText: `${g.goal} 이제 돼요.`, teach: g.concepts.map((c) => `${c.name}: ${c.essentials}`).slice(0, 4),
     tutorNotes: "코딩을 처음 하는 사람이다. '이걸 하려면 뭐가 필요할까요?'로 묻고, 필요한 것 → 이 언어의 함수 → 우리 코드의 그 줄 순서로 짧게 답한다. 코드 한 줄을 보여 줄 때는 조각마다 무엇인지, 어디 있는지 [[파일#찾을 글]]로 짚는다. 정답 줄을 먼저 주지 않는다.", beats };
 }
 
