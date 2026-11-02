@@ -129,6 +129,7 @@ async function route() {
 window.addEventListener("hashchange", route);
 
 function resumeRun(r) {
+  if (FLOAT) return busy(null, async () => { await api("POST", `/api/runs/${r.id}/editor`).catch(() => null); go(`#/run/${r.id}`); });
   if (EMBED && r.workspace && !inThisFolder(r.workspace)) { switchingNote("하던 곳으로 가는 중이에요"); openFolder(r.workspace); return; }
   go(`#/run/${r.id}`);
 }
@@ -153,6 +154,8 @@ function renderHome() {
 
 /** 코스를 시작한 뒤: 튜터 탭 안이면 작업 폴더로, 밖이면 VS Code 열기 안내로 */
 function afterStart(out) {
+  // 튜터 창(VS Code 위)에서 시작하면: 새 작업 폴더를 VS Code로 열고, 창은 바로 새 진행으로
+  if (FLOAT) return api("POST", `/api/runs/${out.runId}/editor`).catch(() => null).then(() => go(`#/run/${out.runId}`));
   if (EMBED) { if (inThisFolder(out.workspace)) return go(`#/run/${out.runId}`); switchingNote("작업 폴더를 여는 중이에요"); openFolder(out.workspace); return; }
   go(`#/run/${out.runId}/vscode`);
 }
@@ -858,6 +861,7 @@ const ICON = {
   wide: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 3h4v4M7 13H3V9M13 3L9 7M3 13l4-4"/></svg>',
   narrow: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M13 3L9 7M9 3v4h4M3 13l4-4M7 13V9H3"/></svg>',
   pin: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 2h4l-.5 4 2.5 2.5H4L6.5 6zM8 8.5V14"/></svg>',
+  home: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2.5 7.5L8 3l5.5 4.5M4 6.5V13h8V6.5"/></svg>',
   close: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
   send: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg>',
 };
@@ -891,6 +895,7 @@ function drawFloat() {
   // 맨 위: 단계 이름 + 크기·고정·닫기
   const head = h("header", { class: "fh" },
     h("div", { class: "fh-t" }, h("span", { class: "fh-st" }, `${lesson.stage}단계`), h("span", { class: "fh-ti" }, lesson.title)),
+    h("button", { class: "fib", title: "처음 화면(새 코스 · 다른 진행)", "aria-label": "처음 화면", onclick: () => go("#/home") }, icon("home")),
     h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게 펼치기", "aria-label": floatUi.size === "wide" ? "작게" : "넓게 펼치기", onclick: () => setSize(floatUi.size === "wide" ? "normal" : "wide") }, icon(floatUi.size === "wide" ? "narrow" : "wide")),
     h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: floatUi.pinned ? "고정됨: 코드를 쳐도 안 접혀요" : "고정: 코드를 칠 때 접지 않기", "aria-label": "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")),
     h("button", { class: "fib", title: "튜터 창 닫기", "aria-label": "닫기", onclick: () => floatPost({ open: false }) }, icon("close")));
