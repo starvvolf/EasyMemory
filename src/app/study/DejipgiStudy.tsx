@@ -151,7 +151,8 @@ export default function DejipgiStudy() {
     const loadGenDecks = async (archived: Set<string>) => {
       const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number; pastExam?: boolean; createdAt?: string }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
       // Finished runs, and runs still being made whose first sections are authored.
-      return Promise.all(runs.filter((run) => !archived.has(run.id) && (run.status === "done" || (run.status !== "failed" && run.sectionsDone > 0))).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; points?: KnowledgeLayer }>(
+      // 2026-11-02 A (점검_UIUX화면연결 8번): 지식만 정리한 실행(문제 0구역)은 문제 세트가 없어 /study가 404 — 부르지 않는다.
+      return Promise.all(runs.filter((run) => !archived.has(run.id) && run.status !== "failed" && run.sectionsDone > 0).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; points?: KnowledgeLayer }>(
         await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").then((deck) => ({ ...deck, pastExam: run.pastExam === true, madeAt: run.createdAt })).catch(() => null)));
     };
     const loadQuality = async () => readJson<{ patches: PatchMap; counts: Record<string, number> }>(await fetchExperiment("/api/study-quality"), "고친 문제 목록을 읽지 못했어요.");

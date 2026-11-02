@@ -1016,3 +1016,20 @@ body:has(.dejipgi){background:#F2F3F6}
 .dejipgi .fb-form .fb-cmp{flex-direction:row;align-items:center;gap:4px;margin-left:auto;font-weight:500}
 .dejipgi .fb-form .fb-cmp input{width:auto}
 .dejipgi .fb-out pre.fb-prev{opacity:.7}
+
+/* 2026-11-02 A (협업/결과보고/점검_UIUX화면연결_A_20261102.md 18·19번):
+   한 틀 폭 — 머리글·탭 줄은 어느 탭에서나 같은 자리에, 읽는 화면(오늘·PDF·웹 글·프로젝트·새 공부)은 그 안 가운데 좁게.
+   읽기(read)·작업대(bench)만 예외. */
+html .dejipgi[data-view] .wrap{max-width:1240px}
+html .dejipgi[data-view="read"] .wrap{max-width:1480px}
+html .dejipgi[data-view="bench"] .wrap{max-width:none}
+.dejipgi:is([data-view="home"],[data-view="practice"],[data-view="web"],[data-view="project"],[data-view="start"],[data-view="create"],[data-view="summary"],[data-view="records"],[data-view="archive"]) #app{max-width:860px;margin-inline:auto}
+/* 지식 손잡이: 화면 가운데가 아니라 오른쪽 아래, 내용(코드 AI 칸·카드 오른쪽)을 덜 가리게 */
+html .dejipgi .sb-handle{top:auto;bottom:88px;transform:none;padding:9px 6px 9px 7px;font-size:12px;opacity:.85}
+html .dejipgi .sb-handle:hover{opacity:1}
+/* 오늘 복습 카드의 두 줄 (지식 · PDF 문제) */
+.dejipgi .td-rev{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;width:100%}
+.dejipgi .td-rev li{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:14px}
+.dejipgi .mm-dev>summary{cursor:pointer;font-size:12px;color:var(--muted);padding:6px 12px;list-style:none}
+.dejipgi .mm-dev>summary::before{content:"▸ "}
+.dejipgi .mm-dev[open]>summary::before{content:"▾ "}

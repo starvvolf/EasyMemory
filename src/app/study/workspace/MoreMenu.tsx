@@ -26,15 +26,18 @@ export default function MoreMenu() {
       {open ? (
         <div className="mm-card" role="menu">
           {item("학습 기록", "문제별 기록 (ChatGPT 연결은 위의 버튼)", () => go("records"))}
-          {item("한 장 정리", "과목별로 떠올릴 것 모아 보기", () => go("summary"))}
-          {item("자료별 지식 포인트", "예전 지식 화면", () => go("knowledge-legacy"))}
+          {item("한 장 정리", "자료별로 떠올릴 것 모아 보기 · 인쇄", () => go("summary"))}
           {item("보관함", "치워 둔 문제 세트", () => go("archive"))}
           <hr />
           {has("promptBtn") ? item("프롬프트 설정", "설명·답변을 어떻게 해 줄지", () => clickById("promptBtn")) : null}
           {has("tabletBtn") ? item("태블릿에서 열기", "같은 와이파이의 태블릿", () => clickById("tabletBtn")) : null}
           {has("fsBtn") ? item("전체화면", "주소창 숨기기", () => clickById("fsBtn")) : null}
-          {item("작업대", "모델 흐름 실험", () => go("bench"))}
-          {item("토론방", "Claude·Codex와 기획 토론 ↗", () => window.open("/room", "_blank"))}
+          {/* 2026-11-02 A (점검_UIUX화면연결 17번): 만드는 사람용 화면은 접어 둔다 */}
+          <details className="mm-dev"><summary>개발용 화면</summary>
+            {item("작업대", "모델 흐름 실험", () => go("bench"))}
+            {item("토론방", "Claude·Codex와 기획 토론 ↗", () => window.open("/room", "_blank"))}
+            {item("자료별 지식 포인트", "예전 지식 화면", () => go("knowledge-legacy"))}
+          </details>
           <p className="mm-note">이 컴퓨터에서만 돌아가요 (로컬 실험 모드). 기록은 RecallerData에 저장돼요.</p>
         </div>
       ) : null}

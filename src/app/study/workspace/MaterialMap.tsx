@@ -3,7 +3,7 @@
 // and the learner's state on each. Page reading is for the first pass; this is for the second pass and the night before.
 // Data: GET /api/study-map/<material> (src/lib/study/material-map.ts). Opened from the PDF reader's bar.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { call, errorText } from "./api";
+import { call, errorText, go } from "./api";
 import { RichInline as Rich } from "./Rich";
 
 type Shape =
@@ -387,7 +387,10 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
                         <div className="mm3-dhead">
                           <span className="mm3-kind">{c.kind}</span>
                           {c.core ? <span className="mm3-kind core">핵심</span> : null}
+                          {/* [경계] 2026-11-02 A (점검_UIUX화면연결 4번): 지도에서 이 지식의 내 상태와 지식창으로 가는 길 */}
+                          {c.state !== "new" ? <span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span> : null}
                           <span className="cs-gap" />
+                          {c.knowledgeId ? <button className="btn ghost small" onClick={() => { const id = c.knowledgeId!; onClose(); go("knowledge", { id }); }} title="지식창에서 이 지식의 뜻·기록·이어진 지식 보기">지식창에서 보기</button> : null}
                           {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
                         </div>
                         <Body s={c.shape} />

@@ -4,7 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { reviewQueue, tree, dayOf, listGoals, goalItemIds, updateGoal } from "../knowledge/api.ts";
+import { reviewQueue, tree, dayOf, listGoals, goalItemIds, updateGoal, memoryEvents } from "../knowledge/api.ts";
 
 export class ScheduleError extends Error {
   status: number;
@@ -195,11 +195,18 @@ export async function week(startDay?: string, now = new Date()) {
   const base = startDay ?? (() => { const t = today(now); const dow = new Date(`${t}T00:00:00Z`).getUTCDay(); return addDays(t, -((dow + 6) % 7)); })();
   const days = Array.from({ length: 7 }, (_, i) => addDays(base, i));
   const [sessions, todos, deadlines] = await Promise.all([readSessions(), listTodos(), listDeadlines()]);
+  // 공부한 시간 저절로 (2026-11-02 A, 협업/결과보고/점검_UIUX화면연결_A_20261102.md 9번): 지식 기록(복습·코드 문제·웹 글·프로젝트)이
+  // 생긴 5분 칸을 센다. 타이머나 직접 넣은 시간이 있는 날은 그 시간과 겹칠 수 있으니 화면은 둘 중 큰 쪽을 쓴다.
+  const busy = new Map<string, Set<number>>();
+  try {
+    const { events } = await memoryEvents({ limit: 20000 });
+    for (const e of events) { const d = dayOf(e.at); if (d < base || d > days[6]) continue; const t = Date.parse(e.at); if (!Number.isFinite(t)) continue; if (!busy.has(d)) busy.set(d, new Set()); busy.get(d)!.add(Math.floor(t / 300_000)); }
+  } catch { /* 기록을 못 읽어도 일정은 보인다 */ }
   return {
     start: base, today: today(now),
     days: days.map((date) => {
       const mine = sessions.filter((s) => dayOf(s.start) === date);
-      return { date, minutes: mine.reduce((sum, s) => sum + s.minutes, 0), sessions: mine, todos: todos.filter((t) => t.date === date), deadlines: deadlines.filter((d) => d.date === date) };
+      return { date, minutes: mine.reduce((sum, s) => sum + s.minutes, 0), auto: (busy.get(date)?.size ?? 0) * 5, sessions: mine, todos: todos.filter((t) => t.date === date), deadlines: deadlines.filter((d) => d.date === date) };
     }),
     undated: todos.filter((t) => !t.date && !t.done),
     upcoming: deadlines.filter((d) => d.date >= today(now)),

@@ -348,7 +348,7 @@ function startToday(){
   if (!plan || !plan.queue.length){ toast("오늘 할 문제가 없어요."); return; }
   const queue = plan.queue.slice(0, chunkSize()).map(r => ({ deck:r.deckId, item:r.itemId, reason:r.reason }));
   S.session = { queue, i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"today", viewed:new Set() };
-  prepCurrent(); setView("practice");
+  S.session.from = S.view; prepCurrent(); setView("practice");
 }
 function weekday(t){ return ["일","월","화","수","목","금","토"][new Date(t).getDay()]; }
 function renderToday(plan, pendings){
@@ -634,7 +634,7 @@ function kpCounts(list){
 function startPoint(k){
   if (!k.items.length){ toast("이 지식 포인트에 묶인 문제가 아직 없어요."); return; }
   S.session = { queue: shuffle(k.items).map(({ d, it }) => ({ deck:d.id, item:it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"point", viewed:new Set() };
-  prepCurrent(); setView("practice");
+  S.session.from = S.view; prepCurrent(); setView("practice");
 }
 /* Subjects that still have materials (a subject whose materials all went to 보관함 drops out of home and 지식). */
 function liveSubjects(){ return orderedSubjects().filter(sub => decksOf(sub.name).length); }
@@ -673,14 +673,13 @@ function renderCoachBox(){
     "aria-label":"코치에게 질문", style:"flex:1;min-width:0;font-size:15px;padding:12px 14px" });
   const send = () => { const v = input.value; input.value = ""; askCoach(v); };
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing){ e.preventDefault(); send(); } });
-  const plan = todayPlan(), subject = currentSubject();
+  const subject = currentSubject();
   const weakN = weakList(subject ? decksOf(subject) : realDecks()).length;
   const box = h("section", { class:"panel coach-home" },
     h("p", { class:"eyebrow", text:"코치에게 묻기" }),
     h("div", { class:"row", style:"gap:8px;flex-wrap:nowrap" }, input, h("button", { class:"btn primary", disabled:Coach.busy || !ask ? true : null, onclick:send }, Coach.busy ? "답하는 중…" : "묻기")),
     h("div", { class:"chat-sugs", style:"margin-top:10px" },
-      h("button", { class:"chip-btn", disabled: plan && plan.queue.length ? null : true, onclick:startToday }, `오늘 할 것 시작${plan && plan.queue.length ? ` · ${Math.min(plan.queue.length, chunkSize())}` : ""}`),
-      h("button", { class:"chip-btn", disabled: weakN && subject ? null : true, onclick: () => startWeak(subject) }, `약점 다시 풀기${weakN ? ` · ${Math.min(weakN, WEAK_MAX)}` : ""}`),
+      weakN ? h("button", { class:"chip-btn", onclick: () => startWeak(subject || "") }, `PDF 약점 다시 풀기 · ${Math.min(weakN, WEAK_MAX)}`) : null,
       h("button", { class:"chip-btn", onclick: () => setView("knowledge") }, "지식 보기")));
   if (Coach.q && (Coach.text || Coach.busy || Coach.err)){
     box.append(h("div", { class:"coach-answer" },
@@ -701,6 +700,13 @@ function renderKpMeter(c, total){
 }
 /* 오늘 (2026-10-26): what to do today, in the order a learner wants it — start something, the day's review and
    to-dos, then the PDF plan and the coach. The knowledge cloud moved to 지식, the material list to 공부. */
+function publishPdfToday(plan){
+  const left = plan ? plan.queue.length : 0;
+  const minutes = plan ? Math.round(plan.queue.reduce((sum, r) => { const d = S.decks[r.deckId]; const it = d && (d.allItems || d.items).find(x => x.id === r.itemId); return sum + ((S.rules && S.rules.seconds && it && S.rules.seconds[it.format]) || 40); }, 0) / 60) : 0;
+  const info = { left, chunk:Math.min(left, chunkSize()), minutes, doneToday: plan ? plan.doneToday : 0, start: startToday };
+  window.__recallerPdfToday = info;
+  try{ window.dispatchEvent(new CustomEvent("recaller:pdf-today", { detail: info })); }catch(e){}
+}
 function renderRecallerHome(){
   const all = Object.values(S.decks), pendings = all.filter(d => d.pending);
   const wrap = h("div", { class:"stack" });
@@ -715,10 +721,9 @@ function renderRecallerHome(){
       real.length ? h("button", { class:"btn", onclick: () => setView("practice") }, "내 공부 보기") : null)));
   if (env.mountView) wrap.append(viewHost("today", {}));
   // 목표·시험일은 10/30에 뺐다(docs/DECISIONS.md): 오늘 화면에는 과목 칩·D-day를 두지 않는다.
-  if (real.length){
-    const plan = todayPlan();
-    if (plan && plan.queue.length) wrap.append(renderToday(plan, pendings));
-  }
+  // 복습 입구 하나 (2026-11-02 A, 점검_UIUX화면연결 1번): PDF 문제도 오늘 카드(TodayBoard) 안의 한 줄로 보낸다.
+  publishPdfToday(real.length ? todayPlan() : null);
+  void pendings;
   wrap.append(renderCoachBox());
   return wrap;
 }
@@ -811,7 +816,8 @@ on(window, "recaller:go", (e) => {
 on(window, "recaller:map-open", (e) => {
   const id = String((e.detail && e.detail.genId) || "");
   const d = S.decks[id] || S.decks["pending:" + id];
-  if (d && genDeck(d.id)) MaterialMapView.open(d); else toast("이 자료의 지도를 아직 열 수 없어요. 공부 › PDF 자료에서 열어 주세요.");
+  const page = Number(e.detail && e.detail.page) || 0;
+  if (d && genDeck(d.id)){ MaterialMapView.open(d); if (page) SourcePeek.open(d, page); } else toast("이 자료의 지도를 아직 열 수 없어요. 공부 › PDF 자료에서 열어 주세요.");
 });
 /* 공부 안의 갈래: PDF 자료 · 웹 글 · 코드 · 프로젝트(2026-10-30, D), and "+ 새 공부" — the same bar on each, so the three feel like one place. */
 function studyNav(active){
@@ -1030,6 +1036,7 @@ function renderHome(){
   const decks = all.filter(d => !d.pending);
   let due = 0, fresh = 0;
   decks.forEach(d => { const c = deckCounts(d); due += c.due; fresh += Math.min(c.fresh, 10); });
+  const plan = decks.some(d => !d.example) ? todayPlan() : null, todayLeft = plan ? plan.queue.length : 0;
   const wrap = h("div", { class:"stack" });
   // 공부 → PDF 자료: the day's plan lives on 오늘; here, the counts and one button, then the materials.
   wrap.append(h("section", { class:"panel today" },
@@ -1039,18 +1046,24 @@ function renderHome(){
       // 2026-10-30 (A): the flow is 자료 지도 first, questions when asked — say so where the counts are about questions.
       h("p", { class:"small muted", style:"margin:4px 0 10px", text:"새 자료는 자료 지도부터 열려요. 문제는 지도에서 원할 때 만들어요." }),
       h("div", { class:"counts" },
+        h("div", null, h("b", { class:"num", text:String(todayLeft) }), h("span", { text:"오늘 할 것 (오늘 화면과 같음)" })),
         h("div", null, h("b", { class:"num", text:String(due) }), h("span", { text:"복습 차례" })),
         h("div", null, h("b", { class:"num", text:String(fresh) }), h("span", { text:"새 문제 (자료당 최대 10)" }))
       )
     ),
     h("div", { class:"row" },
-      h("button", { class:"btn primary", disabled: !(due || fresh), onclick: () => startSession(null) }, "전체 연습 시작")
+      todayLeft ? h("button", { class:"btn primary", onclick:startToday }, "오늘 할 것", h("span", { class:"btn-sub num", text:`${Math.min(todayLeft, chunkSize())}문제` })) : null,
+      h("button", { class: todayLeft ? "btn" : "btn primary", disabled: !(due || fresh), onclick: () => startSession(null) }, "전체 연습")
     )
   ));
   // A material still being made whose first sections are ready shows as its real deck with the progress note.
   const growing = new Map(pendings.filter(p => p.pending.artifactId && S.decks[p.pending.artifactId]).map(p => [p.pending.artifactId, p]));
+  const matKey = (x) => looseText(String(x.sourceName || x.title || "").replace(/\.pdf$/i, "").replace(/\s*\(\d+\)$/, "").replace(/\s*·\s*p\.[\d–-]+.*$/, ""));
+  const realNames = new Set(decks.map(matKey));
+  const joined = new Map();
   for (const d of pendings){
     if (d.pending.artifactId && growing.has(d.pending.artifactId)) continue;
+    if (d.pending.status === "cards" && realNames.has(matKey(d))){ const k = matKey(d); if (!joined.has(k)) joined.set(k, []); joined.get(k).push(d); continue; }
     wrap.append(h("article", { class:"deck" },
       h("div", null, h("h3", { text:d.title }), h("div", { class:"meta" }, h("span", { text:d.sourceName }), h("span", { class:`chip ${d.pending.status === "failed" ? "bad" : "acc"}`, text:PENDING_LABEL[d.pending.status] || "준비 중" }))),
       h("div", { class:"row" }, genDeck(d.id)
@@ -1067,7 +1080,7 @@ function renderHome(){
   // under that material. Open state is a per-browser convenience.
   for (const g of groups){
     if (!g.name && groups.length === 1){
-      wrap.append(h("section", { class:"subj-group" }, materialList(g.list, growing))); continue;
+      wrap.append(h("section", { class:"subj-group" }, materialList(g.list, growing, joined, matKey))); continue;
     }
     const key = "s:" + (g.name || "-");
     const open = Fold.is(key);
@@ -1078,8 +1091,7 @@ function renderHome(){
   wrap.append(h("div", { class:"legend" },
     h("span", { style:"--c:var(--good)", text:"혼자 맞힘" }),
     h("span", { style:"--c:var(--bad)", text:"복습 필요" }),
-    h("span", { style:"--c:var(--help)", text:"정답 보고 풂" }),
-    h("span", { style:"--c:var(--read)", text:"읽은 직후만 풂" }),
+    h("span", { style:"--c:var(--help)", text:"도움 받고 풂 (정답·원문을 보고)" }),
     h("span", { style:"--c:var(--line)", text:"안 풀어봄" })
   ));
   if (S.lib.status === "loading") wrap.append(h("p", { class:"small muted", text:"Recaller 문제를 불러오는 중…" }));
@@ -1131,20 +1143,27 @@ function materialName(list){
   return String(plain.sourceName || plain.title || "").replace(/^족보[^·]*·\s*/, "").replace(/\.pdf$/i, "").replace(/\s*·\s*\d+쪽$/, "");
 }
 /* Decks of one subject grouped by their material (PDF). A material with one deck shows that card directly. */
-function materialList(decks, growing){
+function pendingCard(d){
+  return h("article", { class:"deck" },
+    h("div", null, h("h3", { text:d.title }), h("div", { class:"meta" }, h("span", { text:"지식만 정리한 것 · 문제 없음" }), h("span", { class:"chip acc", text:PENDING_LABEL[d.pending.status] || "준비 중" }))),
+    h("div", { class:"row" }, genDeck(d.id) ? h("button", { class:"btn small primary", onclick: () => MaterialMapView.open(d) }, "자료 지도") : null),
+    h("div", { style:"grid-column:1/-1" }, pendingNote(d)));
+}
+function materialList(decks, growing, joined = new Map(), matKey = null){
   const byMat = new Map();
   for (const d of decks){ const k = planKey(d); if (!byMat.has(k)) byMat.set(k, []); byMat.get(k).push(d); }
   const mats = [...byMat.entries()].map(([k, list]) => ({ k, list, name:materialName(list) })).sort((a, b) => a.name.localeCompare(b.name, "ko", { numeric:true }));
   const wrap = h("div", { class:"decks" });
   for (const m of mats){
-    if (m.list.length === 1){ wrap.append(deckCard(m.list[0], growing)); continue; }
+    const extra = matKey ? (joined.get(matKey(m.list[0])) || []) : [];
+    if (m.list.length === 1 && !extra.length){ wrap.append(deckCard(m.list[0], growing)); continue; }
     const key = "m:" + m.k;
     const open = Fold.is(key);
     const due = m.list.reduce((n, d) => n + deckCounts(d).due, 0), fresh = m.list.reduce((n, d) => n + deckCounts(d).fresh, 0);
     wrap.append(h("div", { class:"mat-head" }, foldBtn(key, h("span", { class:"mat-name", text:m.name })),
-      h("span", { class:"meta" }, h("span", { class:"num muted", text:`문제 세트 ${m.list.length}` }),
+      h("span", { class:"meta" }, h("span", { class:"num muted", text:`같은 자료로 ${m.list.length + extra.length}번 만듦` }),
         due ? h("span", { class:"chip bad num", text:`복습 ${due}` }) : null, fresh ? h("span", { class:"chip num", text:`새 문제 ${fresh}` }) : null)));
-    if (open){ const inner = h("div", { class:"decks mat-body" }); for (const d of m.list) inner.append(deckCard(d, growing)); wrap.append(inner); }
+    if (open){ const inner = h("div", { class:"decks mat-body" }); for (const d of extra) inner.append(pendingCard(d)); for (const d of m.list) inner.append(deckCard(d, growing)); wrap.append(inner); }
   }
   return wrap;
 }
@@ -1184,7 +1203,7 @@ function deckCard(d, growing){
       h("h3", null, d.pastExam ? h("span", { class:"chip exam", style:"margin-right:6px;vertical-align:2px", text:"기출형" }) : null, displayTitle(d).replace(/ · 기출형/, "")),
       h("div", { class:"meta" },
         pick,
-        h("span", { class:"num", text:`목표 ${d.objectives.length} · 문제 ${d.items.length}` }),
+        h("span", { class:"num", text:`지식 ${d.objectives.length} · 문제 ${d.items.length}` }),
         c.due ? h("span", { class:"chip bad num", text:`복습 ${c.due}` }) : null,
         c.fresh ? h("span", { class:"chip num", text:`새 문제 ${c.fresh}` }) : null,
         d.skipped && d.skipped.length ? h("span", { class:"chip help num", title:d.skipped.map(x => `${x.questionId}: ${x.reason}`).join("\n"), text:`빠진 문항 ${d.skipped.length}` }) : null
@@ -1197,7 +1216,7 @@ function deckCard(d, growing){
       h("button", { class:"btn small primary", onclick: () => startSession(d.id, true) }, c.due || c.fresh ? "연습" : "더 풀기")
     ),
     h("div", { class:"bar", "aria-hidden":"true" },
-      h("i", { class:"g", style:`width:${pct(c.good)}` }), h("i", { class:"r", style:`width:${pct(c.review)}` }), h("i", { class:"h", style:`width:${pct(c.help)}` }), h("i", { class:"c", style:`width:${pct(c.read)}` })
+      h("i", { class:"g", style:`width:${pct(c.good)}` }), h("i", { class:"r", style:`width:${pct(c.review)}` }), h("i", { class:"h", style:`width:${pct(c.help + c.read)}` })
     ),
     growing.has(d.id) ? h("div", { style:"grid-column:1/-1" }, pendingNote(growing.get(d.id))) : null
   );
@@ -1220,16 +1239,16 @@ function startSession(deckId, allowEarly){
   if (!queue.length){ toast("지금 풀 문제가 없어요."); return; }
   queue = queue.slice(0, 25);
   S.session = { queue, i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"review", viewed:new Set() };
-  prepCurrent(); setView("practice");
+  S.session.from = S.view; prepCurrent(); setView("practice");
 }
 /* 약점 다시 풀기: a subject's weak questions across its materials, most-missed first, regardless of the review day.
    Results count like review; a question solved alone leaves the weak list. */
 const WEAK_MAX = 30;
 function startWeak(subject){
-  const list = weakList(decksOf(subject)).sort((a, b) => b.miss - a.miss).slice(0, WEAK_MAX);
+  const list = weakList(subject ? decksOf(subject) : realDecks()).sort((a, b) => b.miss - a.miss).slice(0, WEAK_MAX);
   if (!list.length){ toast("약점으로 표시된 문제가 없어요."); return; }
   S.session = { queue: shuffle(list).map(w => ({ deck:w.d.id, item:w.it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"weak", subject, viewed:new Set() };
-  prepCurrent(); setView("practice");
+  S.session.from = S.view; prepCurrent(); setView("practice");
 }
 function itemsOnPage(d, page){
   return d.items.filter(it => it.page === page || (d.objectives.find(o => o.id === it.objectiveId)?.pages || []).includes(page));
@@ -1443,7 +1462,7 @@ function renderSession(){
   const total = s.queue.length;
   const top = h("div", { class:"session-top" },
     s.overlay ? h("button", { class:"btn ghost small", title:"닫고 이 쪽으로 (Esc) · 푼 것까지는 기록돼요", onclick: closeCheck }, `✕ p.${s.page}로`)
-      : h("button", { class:"btn ghost small", onclick: () => { S.session = null; render(); } }, "그만하기"),
+      : h("button", { class:"btn ghost small", onclick: leaveSession }, "그만하기"),
     h("div", { class:"progress", "aria-hidden":"true" }, h("i", { style:`width:${(s.i / total * 100).toFixed(1)}%` })),
     h("span", { class:"mono num muted", text:`${s.i + 1} / ${total}` })
   );
@@ -1477,7 +1496,9 @@ function renderSession(){
     inp.value = c.text;
     inp.addEventListener("input", () => { c.text = inp.value; const b = document.getElementById("submitBtn"); if (b) b.disabled = !c.text.trim(); });
     inp.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing){ e.preventDefault(); submitAnswer(); } });
-    card.append(h("div", { class:"field" }, h("label", { for:"ans", class:"muted small", style:"font-weight:400", text:"예: (1,2), 3/4, 75°  · 띄어쓰기와 ·, °, 따옴표 차이는 채점에서 무시해요" }), inp));
+    // 2026-11-02 A (점검_UIUX화면연결 16번): 숫자·좌표 예시는 답이 수일 때만. 글자 답에는 채점 안내만.
+    const numeric = /^[\s\d().,+\-−*/×÷^°√πθ=<>≤≥]+$|^\$/.test(String((item.accepted && item.accepted[0]) || item.answerText || item.answer || ""));
+    card.append(h("div", { class:"field" }, h("label", { for:"ans", class:"muted small", style:"font-weight:400", text: numeric ? "예: (1,2), 3/4, 75°  · 띄어쓰기와 ·, °, 따옴표 차이는 채점에서 무시해요" : "띄어쓰기·대소문자·따옴표 차이는 채점에서 무시해요" }), inp));
   } else if (item.format === "order"){
     const picked = h("div", { class:"order-picked", "aria-label":"고른 순서" });
     if (!c.order.length) picked.append(h("span", { class:"small muted", text:"아래 단계를 먼저 오는 것부터 누르세요." }));
@@ -1574,6 +1595,12 @@ function renderSession(){
   card.append(act);
   return h("div", null, top, card);
 }
+/* 그만하기·처음으로 (2026-11-02 A, 점검_UIUX화면연결 2번): back to the screen the practice was started from (오늘 → 오늘). */
+function leaveSession(){
+  const back = S.session && S.session.from;
+  S.session = null;
+  if (back && back !== "practice" && back !== S.view) setView(back); else render();
+}
 function renderSessionEnd(){
   const r = S.session.results;
   const good = r.filter(x => x.outcome === "correct").length, bad = r.filter(x => x.outcome === "wrong").length, help = r.filter(x => x.outcome === "assisted").length, mid = r.filter(x => x.outcome === "unsure").length;
@@ -1595,8 +1622,8 @@ function renderSessionEnd(){
         return h("p", { class:"small", text: left ? `오늘 할 것이 ${left}문제 남았어요.` : "오늘 할 것을 모두 마쳤어요." });
       })() : null,
       S.session.mode === "weak" ? (() => {
-        const left = weakList(decksOf(S.session.subject)).length;
-        return h("p", { class:"small", text: left ? `${S.session.subject} 약점이 ${left}문제 남았어요. 혼자 맞히면 약점에서 빠져요.` : `${S.session.subject} 약점을 모두 풀었어요.` });
+        const left = weakList(S.session.subject ? decksOf(S.session.subject) : realDecks()).length, who = S.session.subject ? `${S.session.subject} ` : "";
+        return h("p", { class:"small", text: left ? `${who}약점이 ${left}문제 남았어요. 혼자 맞히면 약점에서 빠져요.` : `${who}약점을 모두 풀었어요.` });
       })() : null,
       S.session.mode !== "check" && S.session.results.length ? sessionFeedback() : null,
       S.session.mode === "check" && genDeck(S.session.queue[0].deck)
@@ -1609,7 +1636,7 @@ function renderSessionEnd(){
             h("button", { class:"btn", onclick: () => { const d = S.session.queue[0].deck, pg = S.session.page; S.session = null; openReader(d, pg); } }, `p.${S.session.page}로 돌아가기`))
         : h("div", { class:"row" },
             S.session.mode === "today" && (todayPlan() || { queue:[] }).queue.length ? h("button", { class:"btn primary", onclick:startToday }, "이어서 하기") : null,
-            h("button", { class: S.session.mode === "today" && (todayPlan() || { queue:[] }).queue.length ? "btn" : "btn primary", onclick: () => { S.session = null; render(); } }, "처음으로"),
+            h("button", { class: S.session.mode === "today" && (todayPlan() || { queue:[] }).queue.length ? "btn" : "btn primary", onclick: leaveSession }, S.session.from === "home" ? "오늘로" : "처음으로"),
             h("button", { class:"btn", onclick: () => { S.session = null; setView("records"); } }, "기록 보기"))
     )
   );
@@ -3695,18 +3722,17 @@ function summarySections(d){
 function renderSummary(){
   const all = Object.values(S.decks).filter(d => !d.pending);
   if (!all.length) return h("div", { class:"panel", text:"아직 자료가 없어요." });
-  const subs = orderedSubjects().filter(s => decksOf(s.name).length);
-  const hasLoose = all.some(d => !subjectOf(d));
-  if (S.sum.subject == null || (S.sum.subject && !subs.some(s => s.name === S.sum.subject)) || (S.sum.subject === "" && !hasLoose)) S.sum.subject = subs.length ? subs[0].name : "";
-  const subject = S.sum.subject;
-  const decks = decksOf(subject);
+  // 과목·시험일은 10/30에 뺐다: 자료별로 고른다 (2026-11-02 A, 점검_UIUX화면연결 11번).
+  const mats = all.filter(d => !d.example).sort(byTitle);
+  if (S.sum.deckId && !S.decks[S.sum.deckId]) S.sum.deckId = "";
+  const subject = "";
+  const decks = S.sum.deckId ? [S.decks[S.sum.deckId]] : mats;
   const wrap = h("div", { class:"stack summary" });
 
   const sel = h("select", { class:"btn", id:"sumSel", style:"font-weight:600" },
-    subs.map(s => h("option", { value:s.name, text:`${s.name}${s.exam ? ` · ${ddayLabel(daysLeft(s.exam))}` : ""}` })),
-    hasLoose ? h("option", { value:"", text:"과목 미지정" }) : null);
-  sel.value = subject;
-  sel.addEventListener("change", () => { S.sum.subject = sel.value; S.sum.shown = new Set(); render(); });
+    h("option", { value:"", text:`모든 자료 · ${mats.length}` }), mats.map(d => h("option", { value:d.id, text:displayTitle(d) })));
+  sel.value = S.sum.deckId || "";
+  sel.addEventListener("change", () => { S.sum.deckId = sel.value; S.sum.shown = new Set(); render(); });
   const toggle = (key, label) => h("button", { class:"chip-btn", "aria-pressed": S.sum[key] ? "true" : "false", onclick: () => { S.sum[key] = !S.sum[key]; S.sum.shown = new Set(); render(); } }, label);
 
   // Counts over every objective shown below.
@@ -3722,13 +3748,13 @@ function renderSummary(){
   const weakQs = weakList(decks).length;
   wrap.append(h("section", { class:"panel sum-tools stack" },
     h("div", { class:"row", style:"justify-content:space-between" },
-      h("div", { class:"row" }, h("label", { for:"sumSel", class:"small muted", text:"과목" }), sel),
+      h("div", { class:"row" }, h("label", { for:"sumSel", class:"small muted", text:"자료" }), sel),
       h("div", { class:"row" },
-        subject ? h("button", { class:"btn small primary", disabled: weakQs ? null : true, onclick: () => startWeak(subject) }, `약점 다시 풀기${weakQs ? ` ${Math.min(weakQs, WEAK_MAX)}` : ""}`) : null,
+        weakQs ? h("button", { class:"btn small primary", onclick: () => startWeak(subject) }, `약점 다시 풀기${weakQs ? ` ${Math.min(weakQs, WEAK_MAX)}` : ""}`) : null,
         h("button", { class:"btn small ghost", onclick: () => window.print() }, "인쇄"))),
     h("div", { class:"row" }, toggle("weakOnly", "약점·물어본 것만"), toggle("hide", "떠올릴 것 가리기"),
-      h("span", { class:"small muted num", text:`목표 ${total} · 약점 ${weak} · 안 풀어봄 ${fresh}` })),
-    S.sum.hide ? h("p", { class:"small muted", text:"목표만 보고 떠올린 뒤 눌러서 확인하세요. 여기서 확인한 것은 풀이 기록에 들어가지 않아요." }) : null));
+      h("span", { class:"small muted num", text:`지식 ${total} · 약점 ${weak} · 안 풀어봄 ${fresh}` })),
+    S.sum.hide ? h("p", { class:"small muted", text:"지식 이름만 보고 떠올린 뒤 눌러서 확인하세요. 여기서 확인한 것은 풀이 기록에 들어가지 않아요." }) : null));
 
   if (!decks.length) wrap.append(h("div", { class:"panel small muted", text:"이 과목에 묶인 자료가 없어요. 연습 탭의 자료 카드에서 과목을 골라 주세요." }));
   for (const { d, secs, st, asked } of perDeck){
@@ -3737,7 +3763,7 @@ function renderSummary(){
     const supportN = (d.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").length;
     const coreOnly = !!(S.plan.prefs && S.plan.prefs.detail && S.plan.prefs.detail[planKey(d)] === "core");
     box.append(h("header", { class:"row", style:"justify-content:space-between" },
-      h("div", null, h("h3", { text:displayTitle(d) }), h("p", { class:"small muted num", text:`목표 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}${coreOnly ? ` · 핵심만 (보조 ${supportN}개 뺌)` : ""}` })),
+      h("div", null, h("h3", { text:displayTitle(d) }), h("p", { class:"small muted num", text:`지식 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}${coreOnly ? ` · 핵심만 (보조 ${supportN}개 뺌)` : ""}` })),
       h("div", { class:"row" },
         supportN ? h("button", { class:"chip-btn", "aria-pressed": coreOnly ? "true" : "false", title:"보조 목표를 연습·오늘 할 것에서 빼거나 다시 넣어요",
           onclick: () => { const det = prefs().detail || (prefs().detail = {}); if (coreOnly) delete det[planKey(d)]; else det[planKey(d)] = "core";
@@ -4188,12 +4214,14 @@ function pendingNote(d){
   const p = d.pending;
   if (p.status === "confirm" && p.objectives && p.objectives.length) return h("div", { class:"note row", role:"status" },
     h("div", { style:"flex:1;min-width:0" }, h("strong", { text:`문제 준비 중 · ${p.message || PENDING_LABEL.confirm}` }), goalPanel(d)));
-  const text = p.message || PENDING_LABEL[p.status] || "";
+  let text = p.message || PENDING_LABEL[p.status] || "";
+  // 2026-11-02 A (점검_UIUX화면연결 6번): the engine's stop message is about its call cap; say it in the learner's words.
+  if (p.status === "paused" && /호출 수\((\d+)\)/.test(text)) text = `만들다 멈췄어요. 한 번에 AI를 부를 수 있는 횟수(${text.match(/호출 수\((\d+)\)/)[1]}번)를 다 썼어요. ‘이어 만들기’를 누르면 멈춘 곳부터 다시 만들어요 (AI 사용량이 들어요).`;
   return h("div", { class:`note row${p.status === "failed" ? " err" : ""}`, role:"status" },
-    h("span", { style:"flex:1;min-width:0", text: p.status === "failed" ? `문제 만들기 실패 · ${text}` : p.status === "cards" ? text : p.status === "authoring" ? `문제 준비 중 · ${text}` : `준비 중 · ${text}` }),
+    h("span", { style:"flex:1;min-width:0", text: p.status === "failed" ? `문제 만들기 실패 · ${text}` : p.status === "cards" ? text : p.status === "authoring" ? `문제 준비 중 · ${text}` : p.status === "paused" ? text : `준비 중 · ${text}` }),
     p.status === "cards" && engine && engine.questions ? h("button", { class:"btn small", disabled:p.making ? true : null, onclick: () => makeQuestions(d) }, p.making ? "시작하는 중…" : "문제 만들기") : null,
     p.status === "paused" && account && S.account && S.account.show && !S.account.ready ? h("button", { class:"btn small", onclick:connectAccount }, "ChatGPT 연결") : null,
-    p.status === "paused" && engine && engine.resume ? h("button", { class:"btn small", onclick: () => resumeMaterial(d) }, "다시 시작") : null,
+    p.status === "paused" && engine && engine.resume ? h("button", { class:"btn small", onclick: () => resumeMaterial(d) }, "이어 만들기") : null,
     p.status === "failed" ? h("button", { class:"btn small", onclick: () => restartMaterial(d) }, "다시 요청") : null,
     p.status === "failed" || p.status === "paused" ? h("button", { class:"btn small ghost", onclick: () => removePending(d) }, "지우기") : null);
 }
@@ -4215,7 +4243,7 @@ function renderBuilder(){
 
   const drop = h("div", { class:"drop", id:"drop" },
     h("strong", { text: b.pages.length ? `${b.sourceName} · ${b.pages.length}쪽` : "PDF를 끌어다 놓거나 골라 주세요" }),
-    h("span", { class:"small muted", text:"올리자마자 읽을 수 있어요. 문제는 AI가 뒤에서 만들어 붙여요." }),
+    h("span", { class:"small muted", text:"알아야 할 지식을 뽑아 자료 지도로 보여 줘요. 문제는 지도에서 원할 때 만들어요." }),
     h("label", { class:"btn", for:"pdf" }, b.pages.length ? "다른 PDF 고르기" : "PDF 고르기"),
     h("input", { id:"pdf", type:"file", accept:"application/pdf", class:"hidden", disabled:b.busy, onchange:(e) => { const f = e.target.files[0]; if (f) readPdf(f); } }));
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.dataset.over = "true"; });

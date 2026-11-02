@@ -7,7 +7,7 @@ import { call, errorText, folderPaths, later, type Tree } from "./api";
 type Session = { id: string; start: string; end: string; minutes: number; label: string };
 type Todo = { id: string; text: string; date: string | null; done: boolean; origin: "user" | "schedule" | "agent"; deadlineId: string | null };
 type Deadline = { id: string; title: string; date: string; folderId: string | null; goalId?: string | null; amount: number; unit: string };
-type Week = { start: string; today: string; days: Array<{ date: string; minutes: number; sessions: Session[]; todos: Todo[]; deadlines: Deadline[] }>; undated: Todo[]; upcoming: Deadline[] };
+type Week = { start: string; today: string; days: Array<{ date: string; minutes: number; auto?: number; sessions: Session[]; todos: Todo[]; deadlines: Deadline[] }>; undated: Todo[]; upcoming: Deadline[] };
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const addDays = (day: string, n: number) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const hm = (iso: string) => new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -31,12 +31,14 @@ export default function PlanView() {
   }, [load]);
   const act = async (run: () => Promise<unknown>) => { setError(""); try { await run(); await load(); } catch (e) { setError(errorText(e)); } };
   if (!week) return <div className="panel small muted">{error || "일정을 읽는 중…"}</div>;
-  const max = Math.max(60, ...week.days.map((d) => d.minutes));
-  const total = week.days.reduce((s, d) => s + d.minutes, 0);
+  // 2026-11-02 A: 직접 넣은·타이머 시간과 기록으로 센 시간 중 큰 쪽 (겹칠 수 있어서 더하지 않는다)
+  const shownOf = (d: { minutes: number; auto?: number }) => Math.max(d.minutes, d.auto ?? 0);
+  const max = Math.max(60, ...week.days.map(shownOf));
+  const total = week.days.reduce((s, d) => s + shownOf(d), 0);
   return (
     <div className="pl stack">
       <header className="row" style={{ justifyContent: "space-between" }}>
-        <div><h2>일정</h2><p className="small muted num">이번 주 공부 {minutes(total)}</p></div>
+        <div><h2>일정</h2><p className="small muted num" title="복습·문제 풀기·웹 글·프로젝트 기록이 생긴 시간을 5분 단위로 센 것과, 타이머·직접 넣은 시간 중 큰 쪽">이번 주 공부 {minutes(total)}</p></div>
         <div className="row"><button className="btn ghost small" onClick={() => setStart(addDays(week.start, -7))}>← 지난주</button><button className="btn ghost small" onClick={() => setStart(undefined)}>이번 주</button><button className="btn ghost small" onClick={() => setStart(addDays(week.start, 7))}>다음 주 →</button></div>
       </header>
       {error ? <p className="ws-err" onClick={() => setError("")}>{error}</p> : null}
@@ -46,8 +48,8 @@ export default function PlanView() {
         {week.days.map((d, i) => (
           <div key={d.date} className={`pl-day${d.date === week.today ? " today" : ""}`}>
             <div className="pl-day-head"><b>{DOW[i]}</b><span className="small muted num">{Number(d.date.slice(5, 7))}/{Number(d.date.slice(8))}</span></div>
-            <div className="pl-bar" title={`${d.minutes}분`}><i style={{ height: `${Math.round((d.minutes / max) * 100)}%` }} /></div>
-            <span className="small num pl-min">{d.minutes ? minutes(d.minutes) : "–"}</span>
+            <div className="pl-bar" title={`기록으로 센 시간 ${d.auto ?? 0}분 · 타이머·직접 넣은 시간 ${d.minutes}분`}><i style={{ height: `${Math.round((shownOf(d) / max) * 100)}%` }} /></div>
+            <span className="small num pl-min">{shownOf(d) ? minutes(shownOf(d)) : "–"}</span>
             {d.deadlines.map((x) => <span key={x.id} className="chip bad pl-dl">{x.title}</span>)}
             <ul className="pl-sessions">{d.sessions.map((s) => <li key={s.id} className="small">{hm(s.start)}–{hm(s.end)} {s.label}</li>)}</ul>
             <ul className="pl-todos">{d.todos.map((t) => <li key={t.id}><label className="small"><input type="checkbox" checked={t.done} onChange={() => void act(() => call(`/api/schedule/todos/${t.id}`, { done: !t.done }, "PATCH"))} /> <span className={t.done ? "pl-done" : ""}>{t.text}</span></label></li>)}</ul>

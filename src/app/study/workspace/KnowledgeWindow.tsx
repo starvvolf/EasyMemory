@@ -24,6 +24,32 @@ export function StateChip({ state, graduated }: { state: KState; graduated?: boo
   return <span className={`chip ws-st ${stateClass[state]}`}>{graduated ? "졸업" : STATE_LABEL[state]}</span>;
 }
 
+// [경계] 2026-11-02 A (점검_UIUX화면연결 12번): PDF 카드 모양이 그대로 들어온 뜻("A vs B: 기준=a/b; …", "기준=a/b")을
+// 읽는 꼴로, 줄 끝에서 잘린 수식($가 홀수)은 잘린 수식째 뺀다. 저장된 글은 그대로 두고 보여 줄 때만.
+const SHAPE_KV = /^[^=\n$]{0,23}[^\s=]=[^\s=]/;
+/** Split on "/" outside $…$ (a formula's own slash stays). */
+function slashSplit(v: string) { const out: string[] = []; let cur = "", math = false; for (const ch of v) { if (ch === "$") math = !math; if (ch === "/" && !math) { out.push(cur.trim()); cur = ""; } else cur += ch; } out.push(cur.trim()); return out; }
+function kvLines(rest: string, a?: string, b?: string) {
+  return rest.split(/;\s*(?=[^=;]{1,24}=)/).map((seg) => {
+    const i = seg.indexOf("="); if (i < 0) return seg.trim();
+    const k = seg.slice(0, i).trim(), v = seg.slice(i + 1).trim(), parts = slashSplit(v);
+    if (a && b && parts.length === 2) return `- **${k}** · ${a}: ${parts[0]} / ${b}: ${parts[1]}`;
+    return `- **${k}**: ${parts.join(" / ")}`;
+  }).join("\n");
+}
+function tidyMeaning(text: string) {
+  const t = text.trim();
+  const vs = /^([^\n]{1,60}?) vs ([^\n]{1,60}?):\s*([\s\S]+)$/.exec(t);
+  if (vs && SHAPE_KV.test(vs[3])) return `${vs[1]}와(과) ${vs[2]}\n${kvLines(vs[3], vs[1], vs[2])}`;
+  if (SHAPE_KV.test(t) && !/[.다]\s/.test(t.split("=")[0])) return kvLines(t);
+  return t;
+}
+function tidyLine(text: string) {
+  let t = tidyMeaning(text).replace(/^- /gm, "").replace(/\*\*/g, "").replace(/\n+/g, " · ");
+  if ((t.match(/\$/g) ?? []).length % 2) t = t.slice(0, t.lastIndexOf("$")).trimEnd() + " …";
+  return t;
+}
+
 export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () => void; focusId?: string }) {
   const [tree, setTree] = useState<Tree>({ folders: [], items: [] });
   const [folder, setFolder] = useState<string | "all" | "none">("all");
@@ -268,7 +294,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
                 <button className={`kw-item${sel === i.id ? " on" : ""}`} onClick={() => setSel(i.id)} {...dragOf("item", i.id)}>
                   <span className="kw-item-top"><StateChip state={i.state} graduated={i.graduated} /><span className="kw-title"><Inline text={i.title} /></span>
                     <span className="kw-item-side">{i.weak ? <span className="kw-weak" title="틀림·힌트·물어봄을 합친 수">막힘 {i.weak}회</span> : null}{i.links ? <span title="이어진 지식">고리 {i.links}</span> : null}</span></span>
-                  {i.line ? <span className="kw-line"><Inline text={i.line} /></span> : <span className="kw-line kw-empty">뜻이 아직 없어요</span>}
+                  {i.line ? <span className="kw-line"><Inline text={tidyLine(i.line)} /></span> : <span className="kw-line kw-empty">뜻이 아직 없어요</span>}
                   <span className="kw-meta">{hits && i.folderId ? `${folderPaths(tree.folders).find((f) => f.id === i.folderId)?.path ?? ""} · ` : ""}{i.kind ? `${KIND_LABEL[i.kind]} · ` : ""}{ago(i.lastAt)}</span>
                 </button>
               </li>
@@ -330,7 +356,7 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
   const extra = ex?.extras ?? [];
   const see = item.explainSee ?? [];
   // 뜻 박스: 뜻 줄과 "헷갈림:" 줄을 나눠, 헷갈림은 머리말 대신 "주의" 칸으로.
-  const meaningText = item.body.split("\n").filter((l) => !/^\s*헷갈림\s*:/.test(l)).join("\n").trim();
+  const meaningText = tidyMeaning(item.body.split("\n").filter((l) => !/^\s*헷갈림\s*:/.test(l)).join("\n").trim());
   const traps = item.body.split("\n").filter((l) => /^\s*헷갈림\s*:/.test(l)).map((l) => l.replace(/^\s*헷갈림\s*:\s*/, "").trim()).filter(Boolean);
   // 예와 만난 곳을 한 줄로: "코드 문제 「이름별 누적 포인트 조회」에서 이름을 키로 … 문제 보기 →"
   const srcs = [...new Map(item.sources.map((src) => [src.title, src])).values()];
@@ -339,8 +365,13 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
   const where = main && main.kind !== "manual" ? `${KIND_NAME[main.kind] ?? main.kind} 「${main.title}」${main.page ? ` ${main.page}쪽` : ""}` : "";
   const exampleText = (item.example ?? "").replace(/^(이|그|해당)\s*(문제|글|자료|강의|코드)\s*(에서는|에선|에서)\s*/, "").replace(/^「[^」]{1,80}」\s*(에서는|에선|에서)\s*/, "");
   const codeId = main?.kind === "code" && main.ref?.startsWith("code:") ? main.ref.slice(5) : null;
+  // [경계] 2026-11-02 A (점검_UIUX화면연결 3번): PDF에서 만난 지식은 그 자료의 지도와 그 쪽 원문으로 (ref = "gen_…:카드 id").
+  const genOf = (src?: { kind: string; ref?: string }) => (src?.kind === "pdf" && src.ref && /^gen_[0-9a-f]+:/.test(src.ref) ? src.ref.split(":")[0] : null);
+  const openMap = (src: { kind: string; ref?: string; page?: number }) => { const genId = genOf(src); if (genId) window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId, page: src.page } })); };
+  const pdfMain = main && genOf(main) ? main : null;
   const openSource = main?.url ? <a className="kw-ex-go" href={main.url} target="_blank" rel="noreferrer">원문 ↗</a>
-    : codeId ? <button className="linkish kw-ex-go" onClick={() => go("code", { id: codeId })}>문제 보기 →</button> : null;
+    : codeId ? <button className="linkish kw-ex-go" onClick={() => go("code", { id: codeId })}>문제 보기 →</button>
+    : pdfMain ? <button className="linkish kw-ex-go" onClick={() => openMap(pdfMain)}>{pdfMain.page ? `원문 ${pdfMain.page}쪽 →` : "자료 지도 →"}</button> : null;
   useEffect(() => {
     return later(() => { if (!linkQuery.trim()) { setLinkHits([]); return; } call<{ hits: ItemLite[] }>(`/api/knowledge/search?q=${encodeURIComponent(linkQuery)}&limit=8`).then((r) => setLinkHits(r.hits.filter((h) => h.id !== item.id))).catch(() => setLinkHits([])); }, linkQuery.trim() ? 160 : 0);
   }, [linkQuery, item.id]);
@@ -416,7 +447,7 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
           {detail.events.length ? <ol className="kw-events">{detail.events.slice(0, 20).map((e) => <li key={e.id}><span className={`chip ev-${e.kind}`}>{EVENT_LABEL[e.kind]}</span> <span className="small">{e.detail}</span> <span className="small muted">{e.source ? `${e.source.title} · ` : ""}{ago(e.at)}</span></li>)}</ol> : <p className="small muted">아직 기록이 없어요.</p>}</details>
         <details className="ws-fold"><summary>어디서 만났나 <span className="muted num">{item.sources.length}</span></summary>
           <ul className="kw-sources">{item.sources.slice().reverse().slice(0, 12).map((src, i) => <li key={i} className="small"><span className="chip">{{ pdf: "PDF", web: "웹 글", code: "코드", chat: "대화", manual: "직접" }[src.kind] ?? src.kind}</span>{" "}
-            {src.url ? <a href={src.url} target="_blank" rel="noreferrer">{src.title}</a> : src.title}{src.page ? ` p.${src.page}` : ""}{src.quote ? <span className="muted"> · “{src.quote.slice(0, 80)}”</span> : null}</li>)}</ul></details>
+            {src.url ? <a href={src.url} target="_blank" rel="noreferrer">{src.title}</a> : genOf(src) ? <button className="linkish" onClick={() => openMap(src)}>{src.title}{src.page ? ` p.${src.page}` : ""}</button> : src.title}{src.page && !genOf(src) ? ` p.${src.page}` : ""}{src.quote ? <span className="muted"> · “{src.quote.slice(0, 80)}”</span> : null}</li>)}</ul></details>
         <details className="ws-fold kw-manage"><summary>고치기·정리</summary>
           <div className="stack">
             <div><p className="eyebrow">상태 직접 바꾸기</p>
@@ -622,7 +653,7 @@ function ProjectStages({ stages, items, sel, onPick }: { stages: Array<{ name: s
       return <section key={st.name}><p className="eyebrow">{st.name} · {mine.length}</p>
         <ul className="kw-items">{mine.map((i) => <li key={i.id}><button className={`kw-item${sel === i.id ? " on" : ""}`} onClick={() => onPick(i.id)}>
           <span className="kw-item-top"><StateChip state={i.state} graduated={i.graduated} /><span className="kw-title"><Inline text={i.title} /></span></span>
-          {i.line ? <span className="kw-line"><Inline text={i.line} /></span> : null}</button></li>)}</ul></section>;
+          {i.line ? <span className="kw-line"><Inline text={tidyLine(i.line)} /></span> : null}</button></li>)}</ul></section>;
     })}</div>
   );
 }
