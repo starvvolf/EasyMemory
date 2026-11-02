@@ -72,6 +72,9 @@
   .live .state.down { color: var(--s8); }
   .live .state.down::before { background: var(--s8); }
   .live button { font: inherit; font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-1); color: var(--text-secondary); cursor: pointer; }
+  .tmbar { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin: 8px 0 2px; }
+  .tmbar .legend { margin: 0; }
+  .gantt { margin: 2px 0 10px; }
   @media (max-width: 900px) { .tiles { grid-template-columns: repeat(2, 1fr); } .two { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -131,6 +134,13 @@
   <div class="card">
     <h2>모델별</h2>
     <div class="scroll"><table id="modelTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>실행 기록 시간순</h2>
+    <div class="muted">막대 하나가 실행 하나, 왼쪽이 오래된 것(시간 간격은 줄여서 붙임). 점선은 날짜가 바뀌는 곳. 막대를 누르면 아래 표에서 그 실행이 펼쳐지고 호출 타임라인이 보입니다.</div>
+    <div class="tmbar"><span class="seg" id="tm"><button data-m="usd" aria-pressed="true">예상 가격</button><button data-m="tok" aria-pressed="false">토큰(입력+출력)</button><button data-m="dur" aria-pressed="false">걸린 시간</button></span><span class="legend" id="timeLegend"></span></div>
+    <div id="timeChart"></div>
   </div>
 
   <div class="card">
@@ -211,7 +221,7 @@ function costOf(r) {
 }
 
 // ---------- state ----------
-const S = { range: "all", from: "", to: "", area: "", model: "", kind: "", nofake: true, cur: "krw", fx: 1400, sort: { key: "t", dir: -1 }, open: new Set() };
+const S = { tm: "usd", range: "all", from: "", to: "", area: "", model: "", kind: "", nofake: true, cur: "krw", fx: 1400, sort: { key: "t", dir: -1 }, open: new Set() };
 let rows = [];
 function setRows() { rows = (DATA?.rows ?? []).map((r) => ({ ...r, day: localDay(r.t), area: areaOf(r), usd: costOf(r) })); }
 function localDay(iso) { const d = new Date(iso); if (isNaN(d)) return "날짜 없음"; return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -264,6 +274,7 @@ function render() {
   renderPurposes(list);
   renderMix(list);
   renderModels(list);
+  renderTimeline(list);
   renderRuns(list);
 }
 
@@ -398,14 +409,17 @@ function renderModels(list) {
 }
 
 const RUN_COLS = [["t", "언제"], ["title", "무엇"], ["kind", "종류"], ["n", "호출", 1], ["models", "모델"], ["i", "입력", 1], ["o", "출력", 1], ["dur", "걸린 시간", 1], ["usd", "예상 가격", 1]];
-function renderRuns(list) {
-  const runs = [...group(list, (r) => r.run)].map(([id, rs]) => {
+function runsOf(list) {
+  return [...group(list, (r) => r.run)].map(([id, rs]) => {
     const info = DATA.runs[id] ?? { title: id, kind: "" };
     const s = sum(rs), ts = rs.map((r) => Date.parse(r.t)).filter((x) => !isNaN(x));
     const start = Math.min(...ts), end = Math.max(...rs.map((r) => Date.parse(r.t) + r.ms).filter((x) => !isNaN(x)));
     return { id, rs, s, t: isFinite(start) ? start : 0, title: info.title, kind: info.kind + (info.origin ? ` · ${info.origin}` : ""), n: s.n, i: s.i, o: s.o, usd: s.usd,
       dur: info.kind === "웹 글 실험" ? s.ms : (isFinite(end - start) ? end - start : s.ms), models: modelsIn(rs) };
   });
+}
+function renderRuns(list) {
+  const runs = runsOf(list);
   const { key, dir } = S.sort;
   runs.sort((a, b) => { const x = a[key], y = b[key]; return (typeof x === "string" ? x.localeCompare(y) : (x ?? 0) - (y ?? 0)) * dir; });
   const head = `<thead><tr>${RUN_COLS.map(([k, l, n]) => `<th data-k="${k}" class="${n ? "n" : ""}">${l}${S.sort.key === k ? (S.sort.dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr></thead>`;
@@ -422,8 +436,86 @@ function renderRuns(list) {
 function runDetail(r) {
   const g = [...group(r.rs, (x) => `${x.p}|${x.m}|${x.e}`)].map(([k, rs]) => { const [p, m, e] = k.split("|"); return { p, m, e, s: sum(rs) }; }).sort((a, b) => b.s.usd - a.s.usd || b.s.n - a.s.n);
   const max = Math.max(...g.map((x) => x.s.usd)) || 1;
-  return `<table><thead><tr><th>단계</th><th>모델 · 강도</th><th class="n">호출</th><th class="n">입력(캐시)</th><th class="n">출력</th><th class="n">호출 하나</th><th>가격</th></tr></thead><tbody>` + g.map((x) =>
+  return runGantt(r) + `<table><thead><tr><th>단계</th><th>모델 · 강도</th><th class="n">호출</th><th class="n">입력(캐시)</th><th class="n">출력</th><th class="n">호출 하나</th><th>가격</th></tr></thead><tbody>` + g.map((x) =>
     `<tr><td>${esc(purposeLabel(x.p))} <span class="muted">${esc(x.p)}</span></td><td><span class="dot" style="background:${colorOf(x.m)}"></span>${esc(x.m)} · ${esc(x.e || "기본")}</td><td class="n">${nf.format(x.s.n)}${x.s.notok ? ` <span class="muted">(실패 ${x.s.notok})</span>` : ""}</td><td class="n">${tok(x.s.i)} (${x.s.i ? Math.round((x.s.c / x.s.i) * 100) : 0}%)</td><td class="n">${tok(x.s.o)}</td><td class="n">${sec(x.s.ms / x.s.n)}</td><td><svg width="120" height="10"><rect x="0" y="1" width="${Math.max(1, (x.s.usd / max) * 120)}" height="8" rx="3" fill="var(--bar)"/></svg> ${money(x.s.usd)}</td></tr>`).join("") + `</tbody></table>`;
+}
+
+// ---------- 실행 기록 시간순 ----------
+const shortSec = (ms) => { const t = Math.round(ms / 1000); return t >= 3600 ? `${Math.floor(t / 3600)}시간${t % 3600 ? ` ${Math.round((t % 3600) / 60)}분` : ""}` : t >= 60 ? `${Math.floor(t / 60)}분${t % 60 ? ` ${t % 60}초` : ""}` : `${t}초`; };
+const hhmm = (ms) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+const TIME_MAX = 300;
+function renderTimeline(list) {
+  const el = document.getElementById("timeChart");
+  const all = runsOf(list).filter((r) => r.t).sort((a, b) => a.t - b.t);
+  const runs = all.slice(-TIME_MAX);
+  legend("timeLegend", S.tm === "dur" ? [] : modelsIn(list).map((m) => [m, colorOf(m)]));
+  if (!runs.length) { el.innerHTML = `<div class="empty">이 조건에 실행이 없어요.</div>`; return; }
+  // 값: usd는 달러로 두고 그릴 때만 원으로 바꾼다.
+  const shown = (v) => S.tm === "usd" && S.cur !== "usd" ? v * S.fx : v;
+  const data = runs.map((r) => {
+    const segs = S.tm === "dur" ? [[null, r.dur]] : r.models.map((m) => { const s = sum(r.rs.filter((x) => x.m === m)); return [m, S.tm === "usd" ? s.usd : s.i + s.o]; }).filter(([, v]) => v > 0);
+    return { r, segs, total: segs.reduce((a, [, v]) => a + v, 0) };
+  });
+  const W = Math.max(el.clientWidth || 1100, 600), H = 260, L = 64, R = 12, T = 12, B = 44;
+  const max = niceMax(Math.max(...data.map((d) => shown(d.total))));
+  const y = (v) => T + (H - T - B) * (1 - shown(v) / max);
+  const axis = S.tm === "usd" ? axisMoney : S.tm === "tok" ? tok : shortSec;
+  const bw = (W - L - R) / data.length, barW = Math.max(1.5, Math.min(28, bw - (bw > 6 ? 3 : 1)));
+  let svg = `<svg width="${W}" height="${H}" role="img" aria-label="실행 기록 시간순">`;
+  for (let k = 0; k <= 4; k++) { const v = (max * k) / 4, yy = T + (H - T - B) * (1 - k / 4); svg += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--grid)"/><text x="${L - 8}" y="${yy + 4}" text-anchor="end">${esc(axis(v))}</text>`; }
+  let prevDay = "", lastTime = -1e9, lastDay = -1e9;
+  data.forEach((d, i) => {
+    const x0 = L + i * bw, x = x0 + (bw - barW) / 2, day = localDay(new Date(d.r.t).toISOString());
+    if (day !== prevDay) {
+      if (i > 0) svg += `<line x1="${x0}" x2="${x0}" y1="${T}" y2="${H - B + 22}" stroke="var(--text-muted)" stroke-dasharray="3 3" opacity="0.6"/>`;
+      if (x0 - lastDay >= 40) { svg += `<text class="lbl" x="${x0 + 3}" y="${H - B + 34}">${day.slice(5).replace("-", "/")}</text>`; lastDay = x0; }
+      prevDay = day;
+    }
+    let acc = 0;
+    d.segs.forEach(([m, v], j) => {
+      const y1 = y(acc + v), h = y(acc) - y1; acc += v;
+      const fill = m ? colorOf(m) : "var(--bar)";
+      svg += j === d.segs.length - 1 && h > 2 && barW > 4 ? `<path d="${roundTop(x, y1, barW, h)}" fill="${fill}"/>` : `<rect x="${x}" y="${y1}" width="${barW}" height="${Math.max(h, 0.5)}" fill="${fill}"/>`;
+    });
+    if (x0 - lastTime >= 44) { svg += `<text x="${x + barW / 2}" y="${H - B + 16}" text-anchor="middle">${hhmm(d.r.t)}</text>`; lastTime = x0; }
+    const when = new Date(d.r.t).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const parts = S.tm === "dur" ? "" : "<br>" + d.segs.map(([m, v]) => `<span class="dot" style="background:${colorOf(m)}"></span>${esc(m)} ${S.tm === "usd" ? money(v) : tok(v)}`).join("<br>");
+    const tipHtml = `<b>${esc(d.r.title)}</b><br>${esc(when)} · ${esc(d.r.kind)}<br>호출 ${nf.format(d.r.n)} · 걸린 시간 ${sec(d.r.dur)} · ${money(d.r.usd)}<br>입력 ${tok(d.r.i)} · 출력 ${tok(d.r.o)}${parts}`;
+    svg += `<rect class="hit" data-run="${esc(d.r.id)}" x="${x0}" y="${T}" width="${bw}" height="${H - T - B}" data-tip="${esc(tipHtml)}"/>`;
+  });
+  svg += `<line x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}" stroke="var(--line)"/></svg>`;
+  el.innerHTML = svg + (all.length > runs.length ? `<div class="muted">최근 ${TIME_MAX}개 실행만 그렸어요(전체 ${nf.format(all.length)}개). 기간을 좁히면 앞의 것도 보여요.</div>` : "");
+}
+document.getElementById("timeChart").addEventListener("click", (e) => {
+  const h = e.target.closest("[data-run]"); if (!h) return;
+  const id = h.dataset.run; S.open.add(id); renderRuns(filtered());
+  const tr = [...document.querySelectorAll("#runTable tr.run")].find((x) => x.dataset.id === id);
+  tr?.scrollIntoView({ block: "center", behavior: "smooth" });
+});
+
+/** 한 실행 안의 호출을 시작 순으로 한 줄씩. 옅은 부분 = 첫 글자 기다림, 진한 부분 = 글 받기. */
+const GANTT_MAX = 240;
+function runGantt(r) {
+  const calls = r.rs.map((x) => ({ x, s: Date.parse(x.t) })).filter((c) => !isNaN(c.s)).sort((a, b) => a.s - b.s);
+  if (calls.length < 2) return "";
+  const list = calls.slice(0, GANTT_MAX), t0 = list[0].s;
+  const span = Math.max(1000, Math.max(...list.map((c) => c.s + c.x.ms)) - t0);
+  const W = Math.max(600, (document.getElementById("runTable").clientWidth || 1000) - 40), L = 4, R = 40, T = 4, B = 20;
+  const rowH = Math.max(3, Math.min(12, 300 / list.length)), H = T + rowH * list.length + B, inner = W - L - R;
+  const X = (ms) => L + (ms / span) * inner;
+  const step = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600].map((v) => v * 1000).find((v) => span / v <= 8) ?? 7200000;
+  let svg = `<svg width="${W}" height="${H}" role="img" aria-label="호출 타임라인">`;
+  for (let v = 0; v <= span; v += step) svg += `<line x1="${X(v)}" x2="${X(v)}" y1="${T}" y2="${H - B}" stroke="var(--grid)"/><text x="${X(v)}" y="${H - 6}" text-anchor="${v ? "middle" : "start"}">${v ? `+${shortSec(v)}` : "시작"}</text>`;
+  list.forEach((c, i) => {
+    const yy = T + i * rowH, h = Math.max(2, rowH - 1), x1 = X(c.s - t0), w = Math.max(1.5, (c.x.ms / span) * inner), col = colorOf(c.x.m);
+    const ftw = c.x.ft ? Math.min(w, (c.x.ft / span) * inner) : 0;
+    svg += `<rect x="${x1}" y="${yy}" width="${w}" height="${h}" fill="${col}" opacity="0.35"${c.x.ok ? "" : ` stroke="var(--s8)" stroke-width="1"`}/>`;
+    if (w - ftw > 0) svg += `<rect x="${x1 + ftw}" y="${yy}" width="${w - ftw}" height="${h}" fill="${col}"/>`;
+    const tipHtml = `<b>${esc(purposeLabel(c.x.p))}</b> <span class="muted">${esc(c.x.p)}</span><br>${esc(c.x.m)} · ${esc(c.x.e || "기본")}${c.x.ok ? "" : " · <b>실패</b>"}<br>시작 +${(Math.max(0, c.s - t0) / 1000).toFixed(1)}초 · 걸림 ${sec(c.x.ms)}${c.x.ft ? ` · 첫 글자 ${sec(c.x.ft)}` : ""}<br>입력 ${tok(c.x.i)} · 출력 ${tok(c.x.o)}${c.x.usd != null ? ` · ${money(c.x.usd)}` : ""}`;
+    svg += `<rect class="hit" x="${Math.min(x1, W - R - 6)}" y="${yy}" width="${Math.max(6, w)}" height="${rowH}" data-tip="${esc(tipHtml)}"/>`;
+  });
+  svg += "</svg>";
+  return `<div class="gantt"><div class="muted">호출 타임라인 · 한 줄이 호출 하나(시작 순${calls.length > list.length ? `, 앞 ${GANTT_MAX}개만` : ""}). 옅은 부분 = 첫 글자 기다림, 진한 부분 = 글 받기, 색 = 모델, 빨간 테두리 = 실패.</div>${svg}</div>`;
 }
 
 function renderPrices() {
@@ -450,7 +542,7 @@ const segs = (id, attr, keyName) => document.getElementById(id).addEventListener
   for (const x of e.currentTarget.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
   S[keyName] = b.dataset[attr]; if (keyName === "range") { S.from = S.to = ""; from.value = to.value = ""; } render();
 });
-segs("range", "r", "range"); segs("cur", "c", "cur");
+segs("range", "r", "range"); segs("cur", "c", "cur"); segs("tm", "m", "tm");
 const from = document.getElementById("from"), to = document.getElementById("to");
 for (const [el, k] of [[from, "from"], [to, "to"]]) el.addEventListener("change", () => { S[k] = el.value; S.range = "all"; for (const x of document.querySelectorAll("#range button")) x.setAttribute("aria-pressed", String(x.dataset.r === "all")); render(); });
 for (const k of ["area", "model", "kind"]) document.getElementById(k).addEventListener("change", (e) => { S[k] = e.target.value; render(); });
