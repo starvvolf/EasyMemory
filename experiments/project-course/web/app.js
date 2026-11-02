@@ -894,7 +894,9 @@ function drawFloat() {
 
   // 맨 위: 단계 이름 + 크기·고정·닫기
   const head = h("header", { class: "fh" },
-    h("div", { class: "fh-t" }, h("span", { class: "fh-st" }, `${lesson.stage}단계`), h("span", { class: "fh-ti" }, lesson.title)),
+    h("div", { class: "fh-t" },
+      h("div", { class: "fh-co", title: run.course?.title ?? "" }, run.course?.title ?? ""),
+      h("div", { class: "fh-row" }, h("span", { class: "fh-st" }, `${lesson.stage}단계`), h("span", { class: "fh-ti" }, String(lesson.title ?? "").replace(/^\d+\s*단계\s*[:·.\-]?\s*/, "")))),
     h("button", { class: "fib", title: "처음 화면(새 코스 · 다른 진행)", "aria-label": "처음 화면", onclick: () => go("#/home") }, icon("home")),
     h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게 펼치기", "aria-label": floatUi.size === "wide" ? "작게" : "넓게 펼치기", onclick: () => setSize(floatUi.size === "wide" ? "normal" : "wide") }, icon(floatUi.size === "wide" ? "narrow" : "wide")),
     h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: floatUi.pinned ? "고정됨: 코드를 쳐도 안 접혀요" : "고정: 코드를 칠 때 접지 않기", "aria-label": "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")),
