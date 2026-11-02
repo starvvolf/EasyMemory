@@ -18,7 +18,7 @@ import { addEntry, addTour, codeTerms, firstLine, notesContext } from "./notes.t
 import { runAgent, undoEdit, type AskCard, type CtxFile, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
 import { recallLine } from "./recall.ts";
-import { actionOfBeat, closeDetours, enterBeat, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
+import { actionOfBeat, answerBackground, backgroundLine, bgQuestion, closeDetours, enterBeat, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
 /** do: next | try | start_dev,try | observe(검사로 지금 상태 보기) | db(DB 들여다보기) | next_stage …  tries: 요청 여러 개를 차례로 */
@@ -184,9 +184,12 @@ export async function lessonView(runId: string, n: number) {
   if (!s) {
     const due = await takeDue(runId, n);
     const first = n === run.plan.start;
+    const bgQ = first ? bgQuestion((await getSession(runId)).background) : null;
     s = await change(runId, n, (st, push) => {
       if (first) push({ role: "tutor", text: "반가워요! 저는 이 코스를 같이 할 튜터예요. 먼저 쓰는 법 세 가지만 알려 드릴게요.\n\n- **왼쪽은 코드, 오른쪽(여기)은 저예요.** 제가 설명하면서 왼쪽에 필요한 줄을 열어 드려요.\n- **모르는 코드**는 드래그한 뒤 **우클릭 → \"이건 뭐예요?\"**를 누르세요. 바로 알려 드려요.\n- **궁금한 건** 아래 칸에 그냥 적으세요. 제가 직접 코드를 열어 보고, 돌려 보고 알려 드려요.\n\n코드를 고친 뒤에는 **Ctrl+S**(저장)를 누르면 제가 바로 확인해요. 그럼 시작해 볼게요." });
       if (due.length) push({ role: "tutor", text: `시작하기 전에, 주머니에 넣어 뒀던 것부터 꺼낼게요. 전에 물어본 ${[...new Set(due.flatMap((d) => d.terms.filter((t) => t.stage === n).map((t) => `**${t.name}**`)))].join(", ")}이(가) 이번 단계에서 나와요. 나올 때 자세히 짚어 드릴게요.` });
+      // 처음 단계면 먼저 배경(TS → JS → Python)을 묻고, 다 답하면 첫 걸음으로(act "bg:…")
+      if (bgQ) { push({ role: "tutor", ...bgQ }); st.waiting = "action"; return; }
       enter(plan, st, 0, push, course);
     });
   }
@@ -237,7 +240,7 @@ async function sessionLine(runId: string) {
   if (!v) return "";
   const names: Record<string, string> = { explain: "설명", demo: "작동 예제", guide: "직접 할 일 안내", diagnose: "원인 찾기", verify: "확인", navigate: "이동", summarize: "정리" };
   const dt = v.detours.length ? ` · 임시 학습 ${v.detours.length}겹: ${v.detours.map((d) => `"${d.topic}"`).join(" → ")} (끝나면 "${v.detours[0].returnLabel}"(으)로 돌아감, 답은 짧게 하고 원래 할 일로 이어 줄 것)` : "";
-  return `[학습 진행] 지금 활동: ${names[v.activity.type] ?? v.activity.type}${v.activity.target ? ` — ${v.activity.target}` : ""}${dt}\n[학습자 수준(내부, 학습자에게 말하지 말 것)] ${LEVELS[v.level] ?? LEVELS[0]} — 이 단위로 설명하고, 처음 나온 개념만 더 작게 풀어 줄 것`;
+  return `[학습 진행] 지금 활동: ${names[v.activity.type] ?? v.activity.type}${v.activity.target ? ` — ${v.activity.target}` : ""}${dt}\n[학습자 수준(내부, 학습자에게 말하지 말 것)] ${LEVELS[v.level] ?? LEVELS[0]} — 이 단위로 설명하고, 처음 나온 개념만 더 작게 풀어 줄 것${v.background ? `\n${backgroundLine(v.background)}` : ""}`.replace(/\n$/, "");
 }
 
 function stepLabel(b: Beat, last: boolean) {
@@ -262,6 +265,17 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     const t = String(input.text ?? "");
     const mode = input.mode === "explain" ? "explain" : input.mode === "tour" || TOUR_INTENT.test(t) ? "tour" : undefined;
     return ask(runId, n, plan, mode === "tour" ? `${t}\n\n${TOUR_Q}` : t, undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : mode === "tour" ? t : undefined, mode ? { mode } : {});
+  }
+  if (input.do.startsWith("bg:")) {
+    const out = await answerBackground(runId, input.do);
+    const q = bgQuestion(out.bg);
+    return change(runId, n, (st, push) => {
+      if (st.beat !== -1) return;
+      if (out.said) push({ role: "me", text: out.said });
+      if (q) { push({ role: "tutor", ...q }); st.waiting = "action"; return; }
+      if (!out.bg.skipped) push({ role: "note", text: "알려 주신 걸로 설명 눈높이를 맞출게요." });
+      enter(plan, st, 0, push, course);
+    });
   }
   if (input.do === "open") { await openLine(runId, String(input.file ?? ""), Number(input.line) || 1); return null; }
   // 지도에서 덩어리를 누르면 불을 그 덩어리로 옮긴다(11/2 사용자: 누른 곳이 밝아져야). "오늘 고칠 곳"(계획서의 focus)은 화면에 따로 표시

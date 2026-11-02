@@ -72,3 +72,22 @@ test("재개 요약: 20분 넘게 쉬었을 때만, 사실만 골라서, 본 뒤
   await recapSeen(id);
   assert.equal(await recap(id, names, Date.now() + 21 * 60 * 1000), null);
 });
+
+test("배경: TS → JS → Python으로 좁혀 묻고, 써 봤으면 거기서 멈춤", async () => {
+  const { bgQuestion, applyBackground, levelFromBackground, backgroundLine } = await import("../lib/session.ts");
+  assert.match(bgQuestion(undefined)!.text, /TypeScript/);
+  let b = applyBackground(undefined, "bg:ts:yes").bg;
+  assert.equal(bgQuestion(b), null);
+  assert.equal(levelFromBackground(b), 2);
+  b = applyBackground(undefined, "bg:ts:no").bg;
+  assert.match(bgQuestion(b)!.text, /JavaScript/);
+  b = applyBackground(b, "bg:js:no").bg;
+  assert.match(bgQuestion(b)!.text, /Python/);
+  const none = applyBackground(b, "bg:none").bg;
+  assert.equal(levelFromBackground(none), 0);
+  assert.match(backgroundLine(none), /코딩 자체가 처음/);
+  const py = applyBackground(b, "bg:py:some").bg;
+  assert.equal(levelFromBackground(py), 1);
+  assert.match(backgroundLine(py), /Python/);
+  assert.equal(backgroundLine(applyBackground(undefined, "bg:skip").bg), "");
+});

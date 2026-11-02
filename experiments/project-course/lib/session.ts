@@ -22,6 +22,8 @@ export type Session = {
   knownSkips?: number;
   /** 재개 요약을 본 시각(이 뒤에 쌓인 사건이 없으면 다시 안 보여 준다) */
   recapSeenAt?: string;
+  /** 학습자 배경(11/3 사용자 "TS 알아요? → JS는? → Python은?"): 스스로 답한 것. 처음 레벨과 튜터 맥락에 쓴다 */
+  background?: Background;
   status: "active" | "paused" | "completed";
   updatedAt: string;
 };
@@ -157,5 +159,67 @@ export function recapSeen(runId: string) { return changeSession(runId, (s) => { 
 /** 화면·튜터 맥락에 줄 세션 요약 */
 export async function sessionView(runId: string) {
   const s = await getSession(runId);
-  return { activity: s.activity, detours: s.detours.map((d) => ({ topic: d.topic, reason: d.reason, returnLabel: d.returnLabel })), deep: s.detours.length > MAX_DETOUR, level: s.level };
+  return { background: s.background ?? null, activity: s.activity, detours: s.detours.map((d) => ({ topic: d.topic, reason: d.reason, returnLabel: d.returnLabel })), deep: s.detours.length > MAX_DETOUR, level: s.level };
+}
+
+/* ---------- 학습자 배경(11/3 사용자): TS → JS → Python 순서로 좁혀 묻기 ---------- */
+export type Familiar = "yes" | "some" | "no";
+export type Background = { ts?: Familiar; js?: Familiar; py?: Familiar; other?: boolean; none?: boolean; skipped?: boolean; done?: boolean };
+const BG_NAME = { ts: "TypeScript", js: "JavaScript", py: "Python" } as const;
+const FAM_LABEL: Record<Familiar, string> = { yes: "써 봤어요", some: "조금 봤어요", no: "처음이에요" };
+
+/** 다음에 물을 것. 다 물었으면 null. 하나라도 "써 봤어요"면 거기서 멈춘다 */
+export function bgQuestion(bg: Background | undefined): { text: string; actions: { label: string; do: string }[] } | null {
+  const b = bg ?? {};
+  if (b.done) return null;
+  const opts = (k: "ts" | "js" | "py") => (["yes", "some", "no"] as Familiar[]).map((v) => ({ label: FAM_LABEL[v], do: `bg:${k}:${v}` }));
+  if (!b.ts) return { text: "시작 전에 하나만 여쭤볼게요. 설명 눈높이를 맞추려고요.\n\n**TypeScript**를 써 본 적 있어요?", actions: [...opts("ts"), { label: "넘길게요", do: "bg:skip" }] };
+  if (!b.js) return { text: "그럼 **JavaScript**는요?", actions: opts("js") };
+  if (!b.py) return { text: "**Python**은요? 아니면 다른 언어는요?", actions: [{ label: "Python 써 봤어요", do: "bg:py:yes" }, { label: "Python 조금", do: "bg:py:some" }, { label: "다른 언어만 써 봤어요", do: "bg:other" }, { label: "코딩 자체가 처음이에요", do: "bg:none" }] };
+  return null;
+}
+/** 답 하나를 반영. 돌려주는 것: 학습자 쪽에 찍을 말 */
+export function applyBackground(bg: Background | undefined, ans: string): { bg: Background; said: string } {
+  const b: Background = { ...(bg ?? {}) };
+  const [, k, v] = ans.split(":");
+  let said = "";
+  if (k === "skip") { b.skipped = true; b.done = true; said = "넘길게요"; }
+  else if (k === "other") { b.py = "no"; b.other = true; b.done = true; said = "다른 언어만 써 봤어요"; }
+  else if (k === "none") { b.py = "no"; b.none = true; b.done = true; said = "코딩 자체가 처음이에요"; }
+  else if ((k === "ts" || k === "js" || k === "py") && (v === "yes" || v === "some" || v === "no")) {
+    b[k] = v as Familiar; said = `${BG_NAME[k]} ${FAM_LABEL[v as Familiar]}`;
+    if (v === "yes" || k === "py") b.done = true;
+    if (k === "ts" && v === "yes") b.js = "yes";
+  }
+  return { bg: b, said };
+}
+/** 배경으로 정하는 처음 레벨(내부). TS 써 봄 → L2, JS 써 봄·다른 언어 경험 → L1, 그 밖 L0 */
+export function levelFromBackground(b: Background) {
+  if (b.ts === "yes") return 2;
+  if (b.js === "yes" || b.js === "some" || b.ts === "some" || b.py === "yes" || b.py === "some" || b.other) return 1;
+  return 0;
+}
+export async function answerBackground(runId: string, ans: string) {
+  let out = { bg: {} as Background, said: "" };
+  await changeSession(runId, (s) => {
+    out = applyBackground(s.background, ans);
+    s.background = out.bg;
+    if (out.bg.done) s.level = Math.max(s.level, levelFromBackground(out.bg));
+  });
+  if (out.said) await record({ runId, stage: 0, type: "self_report", actor: "user", detail: `배경: ${out.said}` });
+  return out;
+}
+/** 튜터 맥락 한 줄: 스스로 답한 배경과 설명 방법 */
+export function backgroundLine(b: Background | undefined) {
+  if (!b?.done || b.skipped) return "";
+  const known = (["ts", "js", "py"] as const).filter((k) => b[k]).map((k) => `${BG_NAME[k]} ${FAM_LABEL[b[k]!]}`);
+  if (b.other) known.push("다른 언어 써 봄");
+  if (b.none) known.push("코딩 자체가 처음");
+  const how = b.ts === "yes" ? "TS 문법 설명은 빼고 HTTP·프로젝트 구조 위주로"
+    : b.js === "yes" ? "JS는 안다고 보고, TS 타입 표기(: string 같은 것)만 처음 나올 때 짚기"
+    : b.py === "yes" || b.py === "some" ? "JS·TS 문법은 처음 나올 때 짧게 짚고, 필요하면 Python의 같은 개념에 빗대어 설명(객체 ↔ dict, 배열 ↔ list, 화살표 함수 ↔ lambda, import ↔ import)"
+    : b.other ? "변수·함수·조건문은 안다고 보고 JS·TS 문법 차이만 짚기"
+    : b.js === "some" || b.ts === "some" ? "JS 문법은 본 적만 있다고 보고, 줄마다 뜻을 짧게 붙이기"
+    : "코딩 자체가 처음: 변수·함수·문자열 같은 기본 말도 처음 나올 때 풀어 주기";
+  return `[학습자 배경(스스로 답함)] ${known.join(" · ")} → ${how}`;
 }

@@ -35,6 +35,17 @@ test("초보 시나리오: 생성 → 질문 → 막힘 → 원인 찾기 → �
     const L = `/api/runs/${runId}/lesson/1`;
     const wait = async () => { let v; for (let i = 0; i < 100 && (v = await api("GET", L)).busy; i++) await sleep(200); return v; };
     let v = await api("GET", L);
+    // 코드 보기 전에 배경부터: TS → JS → Python 순서로 좁혀 묻기
+    assert.equal(v.beat, -1);
+    assert.match(v.messages.at(-1).text, /TypeScript/);
+    await api("POST", L + "/act", { do: "bg:ts:no" });
+    v = await api("POST", L + "/act", { do: "bg:js:no" });
+    assert.match(v.messages.at(-1).text, /Python/);
+    await api("POST", L + "/act", { do: "bg:py:yes" });
+    v = await api("GET", L);
+    assert.equal(v.beat, 0);
+    assert.equal(v.session.background.py, "yes");
+    assert.equal(v.session.level, 1, "Python 경험이면 줄 읽기(L1)부터");
     assert.equal(v.steps[0].label, "읽기");
     assert.match(v.messages.at(-1).text, /이걸 하려면 뭐가 필요할까요/);
 
