@@ -641,3 +641,6 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .float .fbtn.ghost b { font-size: 13px; color: var(--f-mut); font-weight: 500; }
 .float .frecap { background: var(--f-acc-s); border: 1px solid #33456b; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .float .frecap-t { margin: 0; white-space: pre-line; font-size: 13.5px; line-height: 1.7; color: var(--f-ink2); }
+
+.genform { max-width: 520px; margin: 22px auto 0; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.genform textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); resize: vertical; }

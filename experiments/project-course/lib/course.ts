@@ -7,6 +7,10 @@ import { buildFiles, type Build, type TemplateSpec } from "./stagegen.ts";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const COURSES = path.join(ROOT, "courses");
+/** 학습자 목표로 만든 코스(lib/generate.ts, 11/3). id가 gen-로 시작하고 .data/courses 아래에 산다(깃에 안 올라감) */
+export const GEN_COURSES = path.join(process.env.PC_DATA_DIR ? path.resolve(process.env.PC_DATA_DIR) : path.join(ROOT, ".data"), "courses");
+export const isGenerated = (id: string) => id.startsWith("gen-");
+export const courseDir = (id: string) => path.join(isGenerated(id) ? GEN_COURSES : COURSES, id);
 /** 저장소 맨 위(앱). 앱 코드는 읽기만 한다. */
 export const APP_ROOT = path.resolve(ROOT, "..", "..");
 
@@ -35,12 +39,15 @@ export type Course = {
   templates: Record<string, { dir: string; base?: { template: string; stage: number; drop: string[] } }>;
   auth: Record<string, number>;
   knowledge: Knowledge[]; parts: Part[]; stages: Stage[]; checks: Check[]; intake: { diagnose: Diagnose[] };
+  /** 생성 코스: 학습자 목표와 큰 목차(단계는 만들어지는 대로 stages에 붙는다) */
+  generated?: { goal: string; outline: { n: number; title: string; goal: string }[] };
 };
 
 const cache = new Map<string, Course>();
 export async function loadCourse(id: string): Promise<Course> {
   if (!/^[a-z0-9-]+$/.test(id)) throw new Error("코스 이름이 이상해요.");
-  if (!cache.has(id) || process.env.PC_DEV) cache.set(id, JSON.parse(await readFile(path.join(COURSES, id, "course.json"), "utf8")));
+  // 생성 코스는 뒤에서 단계가 붙으므로 매번 읽는다
+  if (!cache.has(id) || process.env.PC_DEV || isGenerated(id)) cache.set(id, JSON.parse(await readFile(path.join(courseDir(id), "course.json"), "utf8")));
   return cache.get(id)!;
 }
 export async function listCourses() {
@@ -67,6 +74,7 @@ export function stageOf(course: Course, n: number) {
 }
 
 export async function stageFiles(course: Course, n: number, build: Partial<Build> = {}) {
+  if (course.generated) return genStageFiles(course, n, !!build.solved);
   const st = stageOf(course, n);
   return buildFiles(templateSpec(course, st.template), { stage: n, ...build });
 }
@@ -105,4 +113,10 @@ export function lineDiff(a: string[], b: string[], context = 2) {
     out.push(`${o.t} ${o.text}`);
   });
   return out.join("\n");
+}
+
+/** 생성 코스의 단계 파일: stages/<n>.json에 시작·완성 상태 전체가 들어 있다 */
+export async function genStageFiles(course: Course, n: number, solved: boolean): Promise<Map<string, string>> {
+  const raw = JSON.parse(await readFile(path.join(courseDir(course.id), "stages", `${n}.json`), "utf8")) as { start: Record<string, string>; solved: Record<string, string> };
+  return new Map(Object.entries(solved ? raw.solved : raw.start));
 }

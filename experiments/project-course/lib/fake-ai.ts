@@ -1,8 +1,10 @@
 // 시험용 가짜 AI (PC_FAKE_AI=1). 호출 없이 AI 경로(대화·힌트)가 화면까지 도는지 본다. 횟수에 세지 않는다.
 import { setFakeAi } from "./ai.ts";
+import { fakeGen } from "./fake-gen.ts";
 
 export function installFakeAi() {
   setFakeAi((purpose, user) => {
+    if (purpose === "gen-plan" || purpose === "gen-stage") return fakeGen(purpose, user);
     if (purpose === "intake") {
       const known = JSON.parse(/\[지금까지 안 것\]\n(.*)/.exec(user)?.[1] ?? "{}");
       const turn = Number(/\[턴\] (\d+)/.exec(user)?.[1] ?? 0);

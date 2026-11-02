@@ -146,6 +146,7 @@ function renderHome() {
     h("div", { class: "row", style: "justify-content:center;margin-top:16px" },
       h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => { const it = await api("POST", "/api/intake", { mode: "script" }); go(`#/intake/${it.id}`); }) }, "코스 정하기 시작")),
     h("p", { class: "small", style: "margin-top:14px" }, h("a", { href: "#", onclick: (e) => { e.preventDefault(); busy(null, async () => { const it = await api("POST", "/api/intake", { mode: "ai" }); go(`#/intake/${it.id}`); }); } }, "AI와 이야기하면서 정하기"), " (조금 느려요)"),
+    genForm(),
     h("p", { class: "small mut", style: "margin-top:22px" }, "처음이라 짧게 겪어 보고 싶다면 ",
       h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { const out = await api("POST", "/api/quickstart", { courseId: "hello-api" }); await afterStart(out); }) }, "인사 서버 맛보기 (10분)"))));
 }
@@ -724,6 +725,7 @@ function drawLesson() {
     if (lessonCtx.lesson.waiting === "done") {
       const next = run.stages.find((s) => s.inPlan && s.n > run.current);
       if (next) { await api("POST", `/api/runs/${run.id}/stage/${next.n}/start`, {}); return go(`#/run/${run.id}`); }
+      if (lessonCtx.lesson.next) return waitNextStage(run, lessonCtx.lesson.next);
     }
     drawLesson();
   });
@@ -816,6 +818,40 @@ function drawLesson() {
   drawLesson.drawn = true;
 }
 
+/* ---------- 생성 코스: 다음 단계가 뒤에서 만들어지는 중이면 기다렸다가 시작 ---------- */
+async function waitNextStage(run, next) {
+  const box = h("div", { class: "empty", style: "margin:32px auto;text-align:left" }, h("div", { class: "chip acc" }, `${next.n}단계`), h("h1", { style: "margin-top:8px" }, next.title),
+    h("p", { class: "gen-msg" }, next.failed || "다음 단계를 만드는 중이에요. 준비되면 바로 시작해요."));
+  view.replaceChildren(box);
+  if (next.failed) return;
+  for (let i = 0; i < 90; i++) {
+    const r = await fetch(`/api/runs/${run.id}/stage/${next.n}/start`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    if (r.ok) return go(`#/run/${run.id}`);
+    const j = await r.json().catch(() => ({}));
+    box.querySelector(".gen-msg").textContent = j.error || "다음 단계를 만드는 중이에요.";
+    if (r.status !== 409 || /넘지 못했어요|못했어요/.test(j.error || "")) return;
+    await new Promise((res) => setTimeout(res, 4000));
+  }
+}
+
+/* ---------- 홈: 만들고 싶은 걸 적으면 코스를 만든다(AI) ---------- */
+function genForm() {
+  const ta = h("textarea", { rows: 2, placeholder: "예: 할 일을 추가하고 지우는 서버를 만들고 싶어요", "aria-label": "만들고 싶은 것" });
+  const msg = h("p", { class: "small mut", style: "margin:6px 0 0" }, "AI가 목차를 짜고 첫 단계를 만들어 자동으로 검사해요. 1~3분 걸리고 AI 사용량이 들어요.");
+  const btn = h("button", { class: "btn primary", type: "submit" }, "코스 만들기");
+  const form = h("form", { class: "genform", onsubmit: (e) => { e.preventDefault(); const goal = ta.value.trim(); if (!goal) return; busy(btn, async () => {
+    const { id } = await api("POST", "/api/generate", { goal });
+    for (let i = 0; i < 120; i++) {
+      const st = await api("GET", `/api/generate/${id}`);
+      msg.textContent = st.message || "만드는 중이에요";
+      if (st.phase === "failed") return;
+      if (st.ready?.includes(1)) { msg.textContent = "1단계 준비 완료! 시작할게요."; return afterStart(await api("POST", "/api/quickstart", { courseId: id })); }
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+  }); } }, h("div", { class: "mut small", style: "margin-bottom:6px" }, "만들고 싶은 걸 적어 주세요"), ta, h("div", { class: "row", style: "margin-top:8px" }, btn), msg);
+  return form;
+}
+
 /* ---------- 튜터 창(?float=1, 11/2 시안): 지금 걸음 카드 하나 + 따로 여는 질문 칸 ---------- */
 const ICON = {
   check: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>',
@@ -839,6 +875,7 @@ function drawFloat() {
     if (lessonCtx.lesson.waiting === "done") {
       const next = run.stages.find((s) => s.inPlan && s.n > run.current);
       if (next) { await api("POST", `/api/runs/${run.id}/stage/${next.n}/start`, {}); return go(`#/run/${run.id}`); }
+      if (lessonCtx.lesson.next) return waitNextStage(run, lessonCtx.lesson.next);
     }
     drawLesson();
   });

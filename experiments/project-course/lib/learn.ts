@@ -39,6 +39,16 @@ async function markStage(ws: string, n: number, solved = false) {
 export async function startStage(runId: string, n: number, reset = false) {
   const run = await getRun(runId);
   const course = await loadCourse(run.courseId);
+  // 생성 코스: 아직 안 만든 단계면 뒤에서 만들고 기다려 달라고 한다. 시작하면 다음 단계를 뒤에서 미리 만든다
+  if (course.generated) {
+    const { prepareNext, genStatus } = await import("./generate.ts");
+    if (!course.stages.some((s) => s.n === n)) {
+      prepareNext(course.id, n - 1);
+      const g = await genStatus(course.id);
+      throw err(409, g?.phase === "failed" ? g.message : `${n}단계를 만드는 중이에요. 잠시 뒤 다시 눌러 주세요.`);
+    }
+    prepareNext(course.id, n);
+  }
   const st = stageOf(course, n);
   const ws = workspaceOf(run, st.template);
   let backup: string | null = null;

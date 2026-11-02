@@ -4,7 +4,7 @@
 // 3) 용어집에 없으면 AI 튜터에게 넘긴다(호출 1회)
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { COURSES } from "./course.ts";
+import { COURSES, courseDir } from "./course.ts";
 import { DATA, addCandidates, read, update } from "./store.ts";
 
 type Term = { id: string; name: string; match: string; stage: number | null; short: string; kind?: "concept" | "vocab"; topic?: string };
@@ -19,7 +19,7 @@ const file = (runId: string) => path.join(DATA, "pocket", `${runId}.json`);
 const glossaries = new Map<string, Term[]>();
 async function glossary(courseId: string) {
   if (!glossaries.has(courseId) || process.env.PC_DEV) {
-    try { glossaries.set(courseId, JSON.parse(await readFile(path.join(COURSES, courseId, "glossary.json"), "utf8")).terms); }
+    try { glossaries.set(courseId, JSON.parse(await readFile(path.join(courseDir(courseId), "glossary.json"), "utf8")).terms); }
     catch { glossaries.set(courseId, []); }
   }
   return glossaries.get(courseId)!;

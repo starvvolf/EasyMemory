@@ -17,6 +17,7 @@ import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
 import { answerAsk, stopAsk } from "../lib/lesson.ts";
 import { runSnippet } from "../lib/tutor-tools.ts";
+import { genStatus, startGeneration } from "../lib/generate.ts";
 import { floatInUse, openFloat, poll as floatPoll, setFloat, typing as floatTyping } from "../lib/float.ts";
 import { act, ask as lessonAsk, explainBlock as lessonBlock, closeWatchers, lessonView, loadPlan, notifyLesson, refocus, subscribe, what as lessonWhat } from "../lib/lesson.ts";
 import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeConnect, setState as bridgeSetState } from "../lib/bridge.ts";
@@ -132,7 +133,7 @@ const routes: [string, RegExp, Handler][] = [
   ["POST", /^\/api\/quickstart$/, async (req) => {
     const b = await body(req);
     const course = await loadCourse(String(b.courseId ?? ""));
-    const main = course.stages.filter((s) => !s.transfer).map((s) => s.n);
+    const main = course.generated ? course.generated.outline.map((o) => o.n) : course.stages.filter((s) => !s.transfer).map((s) => s.n);
     const plan = { start: main[0], stages: main, quick: [], transfer: false, reasons: ["묻는 것 없이 처음부터 차례로 가요."], notes: [], minutes: main.length * 5 };
     const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), plan, current: plan.start, workspaces: {}, stages: {} };
     await addRun(run);
@@ -191,6 +192,9 @@ const routes: [string, RegExp, Handler][] = [
   }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => { const out = await openEditor(m[1]); openFloat(m[1], PORT); return out; }],
   // 튜터 창(lib/float.ts): 창이 0.25초마다 묻는다
+  // 코스 생성(lib/generate.ts): 목표 → 목차 → 1단계(관문) — AI 사용량이 든다
+  ["POST", /^\/api\/generate$/, async (req) => { const b = await body(req); const goal = String(b.goal ?? "").trim(); if (goal.length < 4) throw Object.assign(new Error("만들고 싶은 걸 조금 더 적어 주세요."), { status: 400 }); return { id: await startGeneration(goal) }; }],
+  ["GET", /^\/api\/generate\/(gen-[a-f0-9]+)$/, async (_q, m) => (await genStatus(m[1])) ?? { phase: "failed", message: "없는 코스예요." }],
   ["GET", /^\/api\/float$/, async (_q, _m, url) => { const p = floatPoll(url.searchParams.has("w")); let workspace: string | null = null;
     if (p.runId) { try { const r = await getRun(p.runId); const c = await loadCourse(r.courseId); workspace = workspaceOf(r, c.stages.find((s) => s.n === r.current)!.template); } catch { /* 지운 기록 */ } }
     return { ...p, workspace }; }],

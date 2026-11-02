@@ -5,7 +5,7 @@ import { watch, type FSWatcher } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ServerResponse } from "node:http";
-import { COURSES, loadCourse, solutionDiff, stageFiles, stageOf } from "./course.ts";
+import { COURSES, courseDir, loadCourse, solutionDiff, stageFiles, stageOf } from "./course.ts";
 import { locate, type RunResult } from "./checker.ts";
 import { check, confused, devStatus, explain, hint, peekDb, predict, startDev, stopDev, tryRequest, workspaceOf } from "./learn.ts";
 import { AiUnavailable, aiText } from "./ai.ts";
@@ -53,7 +53,7 @@ const file = (runId: string, n: number) => path.join(DATA, "lessons", `${runId}-
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
 
 export async function loadPlan(courseId: string, n: number): Promise<Plan | null> {
-  try { return JSON.parse(await readFile(path.join(COURSES, courseId, "lessons", `${n}.json`), "utf8")); } catch { return null; }
+  try { return JSON.parse(await readFile(path.join(courseDir(courseId), "lessons", `${n}.json`), "utf8")); } catch { return null; }
 }
 
 /* ---------- 바뀐 것을 화면에 알리기 (SSE) ---------- */
@@ -216,9 +216,19 @@ export async function lessonView(runId: string, n: number) {
   const steps = plan.beats.map((b, i) => ({ kind: b.kind, label: stepLabel(b, i === plan.beats.length - 1), now: b.now ?? firstLine(b.text) }));
   return { stage: n, title: plan.title, teach: plan.teach, beat: s.beat, beats: plan.beats.length, steps, waiting: s.waiting, busy: !!s.busy, messages, workspace: ws, dev: devStatus(runId), bridge, pocket,
     session: await sessionView(runId),
+    next: course.generated ? await nextInfo(course, n) : null,
     recap: await recap(runId, { stageTitle: (k) => course.stages.find((x) => x.n === k)?.title ?? "", nowLabel: `${n}단계 · ${now ?? plan.title}` }).catch(() => null),
     now, mode: s.mode ?? null, resumable: !!s.asked && !s.busy && (s.waiting === "action" || s.waiting === "save"),
     thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null };
+}
+
+/** 생성 코스: 다음 단계가 준비됐는지(뒤에서 만드는 중이면 화면이 기다린다) */
+async function nextInfo(course: Awaited<ReturnType<typeof loadCourse>>, n: number) {
+  const o = course.generated?.outline.find((x) => x.n === n + 1);
+  if (!o) return null;
+  const { genStatus } = await import("./generate.ts");
+  const g = await genStatus(course.id);
+  return { n: o.n, title: o.title, ready: course.stages.some((s) => s.n === o.n), failed: g?.phase === "failed" && g.stage === o.n ? g.message : null };
 }
 
 /** 튜터 맥락 한 줄: 지금 학습 진행(설계안 11.1 "학습 진행" 맥락). 임시 학습 중이면 답한 뒤 돌아갈 곳을 알려 준다 */
