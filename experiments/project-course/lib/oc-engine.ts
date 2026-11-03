@@ -149,7 +149,8 @@ function policyPlugin(fake: boolean) {
             const run = live.get(ev.sessionID)?.io.runId;
             if (run) j.prompt_cache_key = `rc-${run}`; // 질문마다 새 대화라도 같은 진행 기록이면 앞부분 캐시가 맞게
             body = JSON.stringify(j); hd.delete("content-length");
-            void logPrompt("tutor-request", j);
+            // 캐시 원인 확인(11/3): OpenCode가 붙이는 헤더도 남긴다(로그인 토큰은 빼고)
+            void logPrompt("tutor-request", { ...j, _headers: Object.fromEntries([...hd.entries()].filter(([k]) => !/authorization|cookie/i.test(k))), _url: ev.request.url });
           } catch { /* 본문이 JSON이 아니면 그대로 */ }
         }
         ev.request = body === undefined ? new Request(ev.request, { headers: hd }) : new Request(ev.request.url, { method: "POST", headers: hd, body, signal: ev.request.signal });
