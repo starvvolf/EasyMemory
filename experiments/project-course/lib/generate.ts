@@ -129,7 +129,7 @@ export function toLesson(n: number, g: GenStage) {
     { id: "why", kind: "say", text: `${g.intro}${link(g.fix.file, g.fix.anchor)}`, open: { file: g.fix.file, anchor: g.fix.anchor, note: "여기를 고쳐요" }, actions: [{ label: "알겠어요, 고치러 가요", do: "next" }], now: "고칠 곳 보기" },
     { id: "fix", kind: "fix", text: `${g.fix.text}${link(g.fix.file, g.fix.anchor)}\n\n어떻게 할지 골라 주세요.`, open: { file: g.fix.file, anchor: g.fix.anchor, note: "여기를 채워요" }, pair: g.pair.slice(0, 3), now: g.fix.text.slice(0, 60) },
     { id: "explain", kind: "explain", text: `**내 말로** 한 문장만 적어 볼까요?\n\n**${g.explainQ}** 채점하지 않아요.`, now: "내 말로 한 문장 (안 해도 돼요)" },
-    { id: "wrap", kind: "say", text: `${n}단계 끝! 오늘 꺼낸 것:\n\n${g.needs.map((x, i) => `${i + 1}. ${x.q.replace(/\?$/, "")} → ${x.concept}`).join("\n")}`, clearFocus: true, actions: [{ label: "다음 단계로", do: "next_stage" }], now: "정리를 보고 다음 단계로" },
+    { id: "wrap", kind: "say", text: `${n}단계 끝! 오늘 꺼낸 것:\n\n${g.needs.map((x, i) => `${i + 1}. ${x.q.replace(/\?$/, "")} → ${g.concepts.find((c) => c.id === x.concept)?.name ?? x.concept}`).join("\n")}`, clearFocus: true, actions: [{ label: "다음 단계로", do: "next_stage" }], now: "정리를 보고 다음 단계로" },
   ];
   return { stage: n, title: bare(g.title), passText: `${g.goal} 이제 돼요.`, teach: g.concepts.map((c) => `${c.name}: ${c.essentials}`).slice(0, 4),
     tutorNotes: "코딩을 처음 하는 사람이다. '이걸 하려면 뭐가 필요할까요?'로 묻고, 필요한 것 → 이 언어의 함수 → 우리 코드의 그 줄 순서로 짧게 답한다. 코드 한 줄을 보여 줄 때는 조각마다 무엇인지, 어디 있는지 [[파일#찾을 글]]로 짚는다. 정답 줄을 먼저 주지 않는다.", beats };

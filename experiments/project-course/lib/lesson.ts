@@ -622,6 +622,14 @@ async function filesFor(ws: string, file: string | null, withImports: boolean): 
   return out;
 }
 
+/** 튜터 맥락: 지금 화면에서 학습자가 할 수 있는 것(버튼 이름 그대로 · 같이 해요 조각 · 기다리는 입력). 없는 칸을 지어내지 않게 */
+function screenLine(s: State, b: Beat | undefined) {
+  const acts = [...s.messages].reverse().find((m) => m.actions?.length)?.actions ?? [];
+  const wait = s.waiting === "save" ? "VS Code에서 고치고 Ctrl+S로 저장하면 자동으로 확인됨" : s.waiting === "choice" ? "보기 중 하나를 누르기" : s.waiting === "explain" ? "\"내 말로\" 칸에 한 문장 쓰기" : "";
+  const pair = s.mode === "pair" && b?.pair?.length ? ` · 같이 해요 조각 ${(s.pairStep ?? 0) + 1}/${b.pair.length}: ${b.pair[s.pairStep ?? 0]}(찾기만 하는 조각이면 쓸 칸은 없다, 찾았으면 [다 했어요, 다음 조각])` : "";
+  return `[지금 화면] 버튼: ${acts.length ? acts.map((a) => `[${a.label}]`).join(" ") : "없음"}${wait ? ` · ${wait}` : ""}${pair} · 그 밖의 입력 칸은 아래 질문 칸뿐`;
+}
+
 /** 단계 이름 앞의 "1단계:"를 뗀다(생성 코스는 AI가 붙여 오기도 한다 — 맥락에 "1단계 1단계:"가 되던 것, 11/3) */
 const bareTitle = (t: string) => String(t ?? "").replace(/^\s*\d+\s*단계\s*[:.·-]?\s*/, "");
 /** 튜터 맥락: 코스 전체 순서. 생성 코스는 아직 안 만든 단계까지 목차로(11/3: 만든 1단계만 보이던 것) */
@@ -777,6 +785,8 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const state = [
     `[학습자 상태] ${sv ? `${LEVELS[sv.level] ?? LEVELS[0]}(내부, 학습자에게 말하지 않음)` : ""}${sv?.background ? ` · ${backgroundLine(sv.background).replace(/^\[학습자 배경\(스스로 답함\)\]\s*/, "배경: ")}` : ""}${stuck ? ` · ${stuck}` : ""}`,
     `[지금 위치] ${n}단계 · 걸음 ${s0.beat + 1}/${plan.beats.length}(${b ? stepLabel(b, s0.beat === plan.beats.length - 1) : "끝"}) ${b ? `— ${b.now ?? firstLine(b.text)}` : ""}${plan.beats[s0.beat + 1] ? ` · 다음: ${stepLabel(plan.beats[s0.beat + 1], s0.beat + 1 === plan.beats.length - 1)}` : ""}`,
+    // 11/3 초보 흉내 시험: 튜터가 화면에 없는 "답 쓰는 곳"을 지어내거나 버튼 이름을 틀리게 말했다 → 지금 화면에 있는 것을 그대로 알려 준다
+    screenLine(s0, b),
     learnerLine(await learnerView(runId, course).catch(() => ({ concepts: [], misconceptions: [], observations: [] }))),
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
   ].filter(Boolean).join("\n");
