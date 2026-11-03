@@ -32,7 +32,8 @@ type Scaffold = { file: string; from: string; to?: string; text: string; note?: 
 type Chunk = { anchor: string; label: string; desc?: string; focus?: boolean };
 type Focus = { file: string; chunks: Chunk[] };
 // now: 채팅 아래에 늘 보이는 "지금 할 일" 한 줄 · pair: "같이 해요"로 고칠 때 한 조각씩 보여 줄 안내
-type Beat = { id: string; kind: "say" | "predict" | "fix" | "explain" | "map"; text: string; now?: string; actions?: Action[]; after?: Action[]; predict?: string; open?: Open; scaffold?: Scaffold; focus?: Focus; clearFocus?: boolean; pair?: string[] };
+// talk: 이 걸음은 대본 글 대신 튜터가 이 메모를 보고 대화로 이끈다(생성 코스, 11/3)
+type Beat = { id: string; kind: "say" | "predict" | "fix" | "explain" | "map"; text: string; talk?: string; now?: string; actions?: Action[]; after?: Action[]; predict?: string; open?: Open; scaffold?: Scaffold; focus?: Focus; clearFocus?: boolean; pair?: string[] };
 export type Plan = { stage: number; title: string; teach: string[]; tutorNotes: string; beats: Beat[]; passText?: string };
 
 type Card =
@@ -51,7 +52,7 @@ export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text
 // mode: 고치기 방식(직접 / 같이 / 튜터가 만듦) · asked: 지금 순서에 들어온 뒤 자유 질문을 했는지(했으면 [하던 거로 돌아가기])
 type Mode = "self" | "pair" | "auto";
 type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null; mode?: Mode; pairStep?: number; asked?: boolean; tutorEdit?: boolean; act?: SessAction; actTarget?: string; failStreak?: number; level?: number; summary?: { upTo: number; text: string } };
-type Todo = { open?: Open; focus?: Focus; clear?: boolean };
+type Todo = { open?: Open; focus?: Focus; clear?: boolean; talk?: string };
 
 const now = () => new Date().toISOString();
 /** 이어 쓰는 대화에 이미 들어간 화면 메시지(단계별 마지막 id) */
@@ -140,6 +141,16 @@ async function changeNow(runId: string, n: number, fn: (s: State, push: (m: Omit
   await update<State>(file(runId, n), s, () => { out = s; return s; });
   notify(runId, "lesson");
   for (const t of todo) {
+    if (t.talk) {
+      const talk = t.talk, beat = out.beat;
+      void (async () => {
+        const run = await getRun(runId); const plan = await loadPlan(run.courseId, n); if (!plan) return;
+        await ask(runId, n, plan, talk, undefined, undefined, { silent: true, main: true });
+        const b = plan.beats[beat];
+        await change(runId, n, (st) => { const last = [...st.messages].reverse().find((m) => m.role === "tutor" && m.text && !m.card); if (last && st.beat === beat && !last.actions) last.actions = b?.actions ?? [{ label: "다음", do: "next" }]; });
+      })().catch((e) => console.error("[talk]", e));
+      continue;
+    }
     if (t.open) await openInEditor(runId, n, t.open).catch(() => {});
     if (t.focus) bridgeSend(runId, { type: "focus", file: t.focus.file, chunks: t.focus.chunks });
     if (t.clear) bridgeSend(runId, { type: "clearFocus" });
@@ -160,6 +171,10 @@ function enter(plan: Plan, s: State, idx: number, push: (m: Omit<LMsg, "id" | "a
   if (b.kind === "map") {
     push({ role: "tutor", text: b.text, card: { type: "map", file: b.focus!.file, chunks: b.focus!.chunks }, actions: b.actions ?? [{ label: "다음", do: "next" }] });
     s.waiting = "action";
+  } else if (b.kind === "say" && b.talk) {
+    // 튜터가 대화로 시작한다(저장 뒤 todo에서 부름). 버튼은 튜터 첫 말 뒤에
+    s.waiting = "action";
+    (s.todo ??= []).push({ talk: b.talk });
   } else if (b.kind === "say") {
     push({ role: "tutor", text: b.text, actions: b.actions ?? [{ label: "다음", do: "next" }] });
     s.waiting = "action";
@@ -279,8 +294,14 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     const t = String(input.text ?? "");
     // [막혔어요] 칸 안에서는 말투로 투어·설명 모드로 바꾸지 않는다(11/3 재현: "구조"라는 말에 투어 모드가 돼 막힘 도구가 빠짐)
     const inStuck = !!(await stuckView(runId));
+    // talk 걸음에서 학습자가 하는 말은 걸음 대화(따로 물어본 질문이 아님)
+    const st0 = await read<State>(file(runId, n), { beat: -1, waiting: "action", messages: [], hints: 0 });
+    const onTalk = !inStuck && !!plan.beats[st0.beat]?.talk && !st0.asked;
     const mode = inStuck ? undefined : input.mode === "explain" ? "explain" : input.mode === "tour" || TOUR_INTENT.test(t) ? "tour" : undefined;
-    return ask(runId, n, plan, mode === "tour" ? `${t}\n\n${TOUR_Q}` : t, undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : mode === "tour" ? t : undefined, mode ? { mode } : {});
+    const out = await ask(runId, n, plan, mode === "tour" ? `${t}\n\n${TOUR_Q}` : t, undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : mode === "tour" ? t : undefined, { ...(mode ? { mode } : {}), ...(onTalk ? { main: true } : {}) });
+    // talk 걸음: 튜터 말 끝에 [다음] 버튼을 다시 붙인다
+    if (onTalk) await change(runId, n, (st) => { const b = plan.beats[st.beat]; const last = [...st.messages].reverse().find((m) => m.role === "tutor" && m.text && !m.card); if (last && b?.talk && !last.actions) last.actions = b.actions ?? [{ label: "다음", do: "next" }]; });
+    return out;
   }
   // [막혔어요](11/3): 고른 종류(+단어)로 칸을 열고 튜터가 그 칸 대화를 시작한다
   if (input.do === "stuck") {
@@ -762,7 +783,8 @@ function upcoming(plan: Plan, beat: number) {
   return `[앞으로 할 순서 — 학습자가 직접 맞히고 고칠 차례]\n${lines.join("\n")}\n미리 말하지 않는 것은 두 가지뿐이다: 예측 문제의 정답, 고칠 줄의 완성 코드(바꿔 넣을 값 포함). 왜 그렇게 되는지(원인·원리), 어디를 보면 되는지는 질문에 맞게 충분히 설명한다.`;
 }
 
-type AskOpts = { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void>; scope?: string[]; silent?: boolean };
+// main: 걸음 대화(talk 걸음)라 따로 물어본 대화로 치지 않는다
+type AskOpts = { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void>; scope?: string[]; silent?: boolean; main?: boolean };
 export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: AskOpts = {}) {
   const q = text.trim().slice(0, 1000) || (quote ? "이 코드가 뭐 하는 거예요?" : "");
   if (!q) throw err(400, "질문을 적어 주세요.");
@@ -858,7 +880,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   if (frame) opts = { ...opts, mode: undefined };
   if (frame && !opts.silent) await countReply(runId);
   const s0 = await change(runId, n, (s, push) => {
-    s.asked = true;
+    if (!opts.main) s.asked = true;
     if (!opts.silent) push({ role: "me", text: shown ?? q, card: quote ? { type: "code", ...quote } : undefined });
     s.busy = true;
   });

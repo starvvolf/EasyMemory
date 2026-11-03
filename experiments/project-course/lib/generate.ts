@@ -113,18 +113,19 @@ export function toStage(n: number, g: GenStage): Stage {
   };
 }
 const NUM = ["①", "②", "③", "④", "⑤"];
+/** 튜터의 수업 메모: 이 단계에서 꺼낼 것(질문 · 알려 줄 것 · 우리 코드 위치). 화면에 그대로 나가지 않는다 */
+export function talkMemo(g: GenStage) {
+  const items = g.needs.map((x, i) => `${i + 1}. ${x.q}\n   알려 줄 것: ${x.answer}${x.file && x.anchor ? `\n   우리 코드: [[${x.file}#${x.anchor}]]` : ""}`).join("\n");
+  return `[수업 메모 — 이 단계에서 대화로 꺼낼 것] 목표: ${g.goal}\n${items}\n\n이 메모를 보고 ChatGPT에서 가르치듯 자연스럽게 이끈다: 한 번에 하나씩, 먼저 짧게 묻거나 보여 주고 학습자 반응을 본 뒤 다음으로. 학습자가 이미 알면 넘어가고, 모르면 쉬운 말과 작은 예로. 우리 코드의 그 줄은 [[파일#찾을 글]]로 짚는다. 예측 문제의 답과 고칠 줄의 완성 코드는 말하지 않는다. 지금은 1번부터 시작한다(인사·목표 다시 말하기 없이). 다 꺼냈으면 "[다 봤어요, 다음]을 누르면 결과를 예측해 봐요"라고 한 줄 붙인다.`;
+}
 /** 대본(수업 계획서): "이걸 하려면 뭐가 필요할까요?" → 필요한 것 하나씩 → 예측 → 보내 보기 → 고치기 → 내 말로 → 정리 */
 export function toLesson(n: number, g: GenStage) {
   const tries = g.tries.map((t) => ({ method: t.method.toUpperCase(), path: t.path, ...(parseJson(t.body) !== undefined ? { body: parseJson(t.body) } : {}) }));
   const link = (f: string, a: string) => (f && a ? `\n\n[[${f}#${a}]]` : "");
   const beats: Record<string, unknown>[] = [
     { id: "goal", kind: "say", text: `오늘 만들 건 이거예요.\n\n**${g.goal}**\n\n이걸 하려면 뭐가 필요할까요? 하나씩 같이 꺼내 볼게요.`, actions: [{ label: "좋아요, 하나씩 봐요", do: "next" }], now: "오늘 만들 것 보기" },
-    ...g.needs.map((x, i) => ({
-      id: `need-${i + 1}`, kind: "say",
-      text: `**${NUM[i] ?? `${i + 1}.`} ${x.q}**\n\n${x.answer}${x.snippet.trim() ? `\n\n\`\`\`js\n${x.snippet.trim()}\n\`\`\`` : ""}${link(x.file, x.anchor)}`,
-      ...(x.file && x.anchor ? { open: { file: x.file, anchor: x.anchor, note: x.q.slice(0, 30) } } : {}),
-      actions: [{ label: "알겠어요, 다음", do: "next" }], now: `${NUM[i] ?? ""} ${x.q}`.trim().slice(0, 60),
-    })),
+    // 11/3 사용자 "자연스럽게 gpt chat이랑 얘기하는 것처럼": 필요한 것들은 대본 칸이 아니라 튜터의 수업 메모로 — 튜터가 대화로 하나씩 꺼낸다
+    { id: "talk", kind: "say", text: "", talk: talkMemo(g), actions: [{ label: "다 봤어요, 다음", do: "next" }], now: "튜터와 하나씩 꺼내 보기" },
     { id: "predict", kind: "predict", predict: "p1", text: g.predict.q, after: [{ label: "직접 보내 보기", do: "start_dev,try", tries }], now: "결과를 예측해 본 뒤, 직접 보내 보기" },
     { id: "why", kind: "say", text: `${g.intro}${link(g.fix.file, g.fix.anchor)}`, open: { file: g.fix.file, anchor: g.fix.anchor, note: "여기를 고쳐요" }, actions: [{ label: "알겠어요, 고치러 가요", do: "next" }], now: "고칠 곳 보기" },
     { id: "fix", kind: "fix", text: `${g.fix.text}${link(g.fix.file, g.fix.anchor)}\n\n어떻게 할지 골라 주세요.`, open: { file: g.fix.file, anchor: g.fix.anchor, note: "여기를 채워요" }, pair: g.pair.slice(0, 3), now: g.fix.text.slice(0, 60) },

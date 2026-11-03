@@ -55,6 +55,7 @@ test("초보 시나리오: 생성 → 질문 → 막힘 → 원인 찾기 → �
     v = await api("GET", L);
     assert.equal(v.steps[v.beat].label, "예측");
     await api("POST", L + "/act", { do: "choice", choice: 1 });
+    await wait(); // 생성 코스의 talk 걸음은 튜터가 뒤에서 말을 거니 끝나길 기다린다(11/3)
 
     // 3) 질문 → 임시 학습 → 돌아가기
     await api("POST", L + "/act", { do: "ask", text: "query가 뭐예요?" });
