@@ -4,6 +4,7 @@
 // - 관문(코드): ① 시작 코드는 이번 단계 검사에 실패하고 앞 단계 검사는 통과 ② 완성 코드는 모두 통과 ③ 일부러 틀린 완성(뮤턴트)은 검사가 떨어뜨림
 //   ④ 대본이 가리키는 줄(앵커)이 시작 코드에 실제로 있음 ⑤ 돌려 보기 예시가 실제로 돈다. 못 넘으면 오류를 붙여 다시(최대 2번), 그래도 안 되면 솔직히 알린다.
 // - 생성 코스의 "만들어 주세요"는 OpenCode 작업 지시(lesson.ts workOrder), 정답 파일은 관문에만 쓴다.
+import { promptOf } from "./prompts.ts";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -61,12 +62,12 @@ export async function scaffold() {
 }
 const OWN = (p: string) => p === "src/app.ts" || /^src\/routes\/[\w-]+\.ts$/.test(p);
 
-const SYSTEM_PLAN = `너는 코딩 초보를 위한 프로젝트 코스 설계자다. 학습자 목표를 "Node.js 내장 http로 만드는 작은 웹 API"로 만들 수 있는 3~5단계 목차로 바꾼다.
+export const SYSTEM_PLAN = `너는 코딩 초보를 위한 프로젝트 코스 설계자다. 학습자 목표를 "Node.js 내장 http로 만드는 작은 웹 API"로 만들 수 있는 3~5단계 목차로 바꾼다.
 - 단계는 개념이 아니라 구현 목표(예: "할 일 목록 보여 주기", "할 일 추가하기"). 앞 단계 결과 위에 쌓인다.
 - 설치가 필요한 기술(DB 서버, 프레임워크, 화면)은 쓰지 않는다. 데이터는 메모리 배열. 범위를 줄였으면 scopeNote에 한 문장으로 솔직히(아니면 빈 글).
 - 모든 글은 한국어 해요체(~해요)로, 짧게.`;
 
-const SYSTEM_STAGE = `너는 코딩 초보를 위한 프로젝트 코스의 한 단계를 만든다. 결과는 코드가 자동 관문으로 검사한다.
+export const SYSTEM_STAGE = `너는 코딩 초보를 위한 프로젝트 코스의 한 단계를 만든다. 결과는 코드가 자동 관문으로 검사한다.
 [프로젝트 규칙]
 - Node.js 내장 http 서버. 뼈대 파일(src/server.ts · src/router.ts · src/http.ts · package.json · tsconfig.json)은 주어진 그대로이고 고치지 않는다.
 - 네가 쓰는 파일은 src/app.ts(경로 목록: router.add("GET", "/주소", 처리함수))와 src/routes/*.ts(처리 함수)뿐. import는 상대 경로에 .ts를 붙인다(예: "./routes/todos.ts", "../http.ts", "../router.ts"). 처리 함수 모양: export function 이름({ req, res, params, query }: Ctx) — 답장은 sendJson(res, 상태코드, 값), 본문 읽기는 await readJson(req).
@@ -199,7 +200,7 @@ export async function startGeneration(goal: string) {
   await setStatus(id, (s) => { s.goal = goal.slice(0, 300); s.phase = "plan"; s.message = "목차를 짜는 중이에요"; });
   const job = (async () => {
     try {
-      const plan = await aiJson<GenPlan>("gen-plan", SYSTEM_PLAN, `[학습자 목표] ${goal}`, PLAN_SCHEMA, true);
+      const plan = await aiJson<GenPlan>("gen-plan", promptOf("genPlan", SYSTEM_PLAN), `[학습자 목표] ${goal}`, PLAN_SCHEMA, true);
       if (!plan.stages?.length) throw new Error("목차가 비었어요.");
       await saveCourse(newCourse(id, goal, plan));
       await setStatus(id, (s) => { s.message = plan.scopeNote ? `목차 완성 · ${plan.scopeNote}` : "목차 완성"; });
@@ -233,7 +234,7 @@ export async function generateStage(id: string, n: number): Promise<void> {
       feedback ? `[지난번 관문에서 걸린 것 — 꼭 고칠 것]\n${feedback}` : "",
     ].filter(Boolean).join("\n\n");
     let g: GenStage;
-    try { g = await aiJson<GenStage>("gen-stage", SYSTEM_STAGE, user, STAGE_SCHEMA, true); }
+    try { g = await aiJson<GenStage>("gen-stage", promptOf("genStage", SYSTEM_STAGE), user, STAGE_SCHEMA, true); }
     catch (e) { await setStatus(id, (s) => { s.phase = "failed"; s.message = e instanceof AiUnavailable ? e.message : `만들지 못했어요: ${(e as Error).message}`; }); return; }
     const start = { ...prevSolved, ...Object.fromEntries(g.startFiles.map((f) => [f.path, f.content])) };
     const solved = { ...start, ...Object.fromEntries(g.solvedFiles.map((f) => [f.path, f.content])) };

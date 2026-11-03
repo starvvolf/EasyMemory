@@ -17,6 +17,7 @@ import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
 import { logAnswer, logPrompt, logUsage } from "./promptlog.ts";
 import { getCourse, getLearningHistory, getProgress, getStep, recordObservation } from "./learning-tools.ts";
 import { goDeeper, nameGap, resolveTop } from "./stuck.ts";
+import { promptOf } from "./prompts.ts";
 
 export const OC_VERSION = "2.2.1";
 // 2026-10-31: terra (답이 20초 안팎으로 느렸음; 출력 속도가 sol의 약 2배, Recaller AI 호출 가이드).
@@ -142,6 +143,8 @@ export function shapeRequest(j: any, summary: boolean) {
       j.instructions = j.instructions.slice(0, cut).trimEnd() + (wd ? `\n\n작업 폴더: ${wd}` : "");
     }
   }
+  // 실험방에서 고친 고정 지시문(11/4): 지시문 앞의 SYSTEM을 바꿔 끼운다(튜터를 다시 켜지 않아도 다음 답부터)
+  if (typeof j.instructions === "string" && j.instructions.startsWith(SYSTEM)) { const sys = promptOf("system", SYSTEM); if (sys !== SYSTEM) j.instructions = sys + j.instructions.slice(SYSTEM.length); }
   j.text = { ...(j.text ?? {}), verbosity: "medium" };
   if (summary && !j.reasoning?.summary) j.reasoning = { ...(j.reasoning ?? {}), summary: "auto" };
   return j;

@@ -1201,7 +1201,7 @@ route();
 /* ---------- AI 채팅 실험방(11/3 사용자 "말투부터 하는 짓까지 맘에 안 들어서 직접 실험") ----------
  * 왼쪽: 실험용 진행 기록으로 튜터와 대화. 오른쪽: 추가 지시(모든 튜터 차례 끝에 붙음) · 프롬프트 처리 방식 · 마지막으로 모델에 간 것 */
 let labEvents = null;
-const labUi = { tab: "extra" };
+const labUi = { tab: "edit", key: null };
 async function renderLab() {
   const info = await api("GET", "/api/lab");
   const box = h("div", { class: "lab" });
@@ -1248,10 +1248,28 @@ async function renderLab() {
   };
 }
 function drawLabSide(side, info) {
-  const tabs = [["extra", "추가 지시"], ["pipe", "처리 방식"], ["last", "마지막으로 간 것"]];
+  const tabs = [["edit", "맥락 고치기"], ["extra", "추가 지시"], ["pipe", "처리 방식"], ["last", "마지막으로 간 것"]];
   const bar = h("div", { class: "labtabs" }, tabs.map(([k, label]) => h("button", { class: `btn small ${labUi.tab === k ? "primary" : ""}`, onclick: () => { labUi.tab = k; drawLabSide(side, info); } }, label)));
   let body;
-  if (labUi.tab === "extra") {
+  if (labUi.tab === "edit") {
+    // 11/4 사용자 "대화 내역만 고정으로 붙게 하고 다른 건 다 수정 가능하게"
+    const items = info.prompts || [];
+    labUi.key = labUi.key && items.some((p) => p.key === labUi.key) ? labUi.key : items[0]?.key;
+    const it = items.find((p) => p.key === labUi.key);
+    const pick = h("select", { onchange: (e) => { labUi.key = e.target.value; drawLabSide(side, info); } }, items.map((p) => h("option", { value: p.key, selected: p.key === labUi.key }, `${p.label}${p.changed ? " · 바꿈" : ""}`)));
+    const ta = h("textarea", { class: "labextra", rows: 18, spellcheck: "false" }, it?.current ?? "");
+    const msg = h("span", { class: "mut small" }, it?.changed ? "바꾼 글을 쓰는 중이에요." : "기본값이에요.");
+    const save = (text) => busy(null, async () => { await api("POST", "/api/lab/prompt", { key: it.key, text }); const fresh = await api("GET", "/api/lab"); Object.assign(info, fresh); drawLabSide(side, info); });
+    body = h("div", { class: "labpane" },
+      h("p", { class: "small" }, h("b", {}, "앞서 한 대화 내역"), "(앞부분 요약 · 최근 대화 · 지난 질문 뒤 화면)만 코드가 그대로 붙이고, 나머지는 여기서 고쳐요. 저장하면 다음 답부터 쓰여요. 실제 코스 튜터에도 똑같이 적용돼요."),
+      pick,
+      it ? h("p", { class: "small mut" }, it.where) : null,
+      it?.vars?.length ? h("div", { class: "small" }, "넣을 수 있는 자리표시(값이 빈 줄은 저절로 빠져요): ", it.vars.map((v) => h("code", { class: "labvar", title: "누르면 커서 자리에 넣어요", onclick: () => { const p0 = ta.selectionStart ?? ta.value.length; ta.value = ta.value.slice(0, p0) + `{${v}}` + ta.value.slice(p0); ta.focus(); } }, `{${v}}`))) : null,
+      ta,
+      h("div", { class: "row" }, h("button", { class: "btn primary", onclick: () => save(ta.value) }, "저장"),
+        h("button", { class: "btn", onclick: () => { if (confirm("기본값으로 되돌릴까요?")) save(""); } }, "기본값으로"),
+        h("button", { class: "btn ghost", onclick: () => { ta.value = it.def; } }, "기본값 불러와 보기"), msg));
+  } else if (labUi.tab === "extra") {
     const ta = h("textarea", { class: "labextra", rows: 14, placeholder: "예) 반말 섞지 말고 짧게. 질문엔 첫 문장에 답부터. 비유는 한 번만. 목록·소제목 쓰지 마." }, info.extra || "");
     const msg = h("span", { class: "mut small" }, info.extra ? "지금 적용 중이에요." : "비어 있어요.");
     body = h("div", { class: "labpane" },

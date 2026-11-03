@@ -685,3 +685,5 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .labpipe { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 .labpre { white-space: pre-wrap; word-break: break-word; max-height: 50vh; overflow: auto; background: var(--soft); border-radius: 8px; padding: 10px; font-size: 12px; margin: 6px 0 0; }
 .row.wrap { flex-wrap: wrap; }
+.labvar { cursor: pointer; margin: 0 4px 4px 0; display: inline-block; background: var(--soft); border-radius: 6px; padding: 1px 6px; }
+.labpane select { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); max-width: 100%; }

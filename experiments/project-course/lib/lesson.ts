@@ -23,6 +23,7 @@ import { aiMode } from "./ai.ts";
 import { onStuckChange, CHOICES, countReply, leaveAll, openRoot, openStack, resolveTop, stuckOf, stuckView, labelOf, type Choice, type Frame } from "./stuck.ts";
 import { basicsLine, catalogText, langOf } from "./basics.ts";
 import { extraBlock } from "./lab.ts";
+import { DEFAULT_FIXED, DEFAULT_TURN, promptOf, render } from "./prompts.ts";
 import { actionOfBeat, answerBackground, backgroundLine, bgQuestion, closeDetours, enterBeat, events, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
@@ -802,14 +803,14 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
 
 /* ---------- [막혔어요] 칸 이어 주기(11/3) ---------- */
 const DIAG = `짧은 질문으로 층을 짚는다: 1~2초면 답할, 답을 보면 무엇이 비었는지 드러나는 질문 하나(예: "괄호 안에 들어간 게 몇 덩어리예요?", "이 함수는 이 줄을 지날 때 바로 실행돼요, 나중이에요?", "res에는 누가 무엇을 넣어 줘요?", "따옴표 안의 /todos랑 그냥 todos는 같은 거예요?"). "어느 쪽이 낯설어요?", "어디가 모르겠어요?"처럼 학습자가 스스로 진단하게 묻지 않는다. 처음 하는 학습자는 대개 여러 층(남이 만든 이름 · 모양(기호) · 실행 시점 · 값이 오는 곳)이 함께 비어 있다 — 가장 아래 것부터.`;
-const ROOT_RULES = `이 칸은 처음 막힌 줄 자체다(이름을 바꾸지 않는다).
+export const ROOT_RULES = `이 칸은 처음 막힌 줄 자체다(이름을 바꾸지 않는다).
 1. ${DIAG}
 2. 빈 칸을 찾으면 stuck_name_gap(목록 id 또는 other, 라이브러리·프레임워크 단어는 library-api, why=학습자가 막힌 말) — 그 칸이 아래에 열린다. 도구 결과를 받으면 같은 답에서 바로 그 칸을 [아래 칸 규칙]대로 설명한다.
 3. 아래 칸에서 돌아오면 화면이 학습자에게 처음 줄을 한국어로 읽어 보게 한다(코드가 띄움). 학습자가 읽은 말에서 아직 막히는 데가 보이면 그다음 빈 칸을 짚어 또 연다.
 4. 학습자가 줄을 자기 말로 맞게 읽으면 stuck_resolved(evidence=학습자가 읽은 말).
 막힘 도구(stuck_…)는 부르기 전에 "기록할게요", "짚어 둘게요" 같은 말을 하지 않는다(화면에 따로 보인다).
 코스의 다음 걸음·정답 코드는 말하지 않는다.`;
-const CHILD_RULES = `할 일(이 칸 하나만):
+export const CHILD_RULES = `할 일(이 칸 하나만):
 1. [위 칸에서 내려온 이유]의 그 막힘에 바로 닿는 아주 작은 예(새로 만든 짧은 코드)로 3~6문장 설명한다(칸 이름의 일반론이 아니라 그 질문의 답 쪽으로, 예: "안쪽 함수가 바깥 이름을 어떻게 쓰나"면 그 방향의 예). 한 번에 하나. 예시는 처음 막힌 코드와 같은 모양으로(막힌 줄이 (req, res) => { … }면 { } 블록 모양) 쓰고, 학습자 배경에 없는 문법(타입 표시 : number 같은 것)은 넣지 않는다.
 2. 학습자가 직접 답하거나 한 줄 써 볼 작은 확인 하나로 끝낸다. 확인은 이 칸의 핵심을 써야 풀리는 것으로(이름 짐작처럼 안 배워도 맞히는 것은 안 된다).
 3. 답이 맞으면 stuck_resolved(evidence=학습자가 한 것). 틀리면 다르게 한 번 더. 이 칸은 이미 이름이 있으니 stuck_name_gap은 부르지 않는다. 풀림 뒤에는 이 칸과 상관없는 말을 덧붙이지 않는다.
@@ -915,10 +916,14 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const olderPart = await olderContext(runId, n, s0, older, talk);
   const stage = stageOf(course, n);
   const predicts = plan.beats.filter((x) => x.kind === "predict").map((x) => x.text.split("\n")[0].slice(0, 120));
-  const fixed = [
-    `[코스] ${course.title}${learnerGoal(course, run) ? `\n${learnerGoal(course, run)}` : ""}\n${courseOrder(course, run, n)}`,
-    `[이번 단계] ${n}단계 ${bareTitle(plan.title)} — ${stage.goal}\n가르칠 것: ${plan.teach.join(" / ")}\n학습자가 직접 고칠 곳: ${stage.fix.text}${plan.tutorNotes ? `\n강사 메모: ${plan.tutorNotes}` : ""}\n미리 말하지 않을 것: ${[...predicts.map((t) => `예측 문제("${t}")의 정답`), "고칠 곳의 완성 코드(바꿔 넣을 값 포함)"].join(", ")}. 그 밖에 왜 그런지는 물으면 설명한다.`,
-  ].join("\n\n");
+  // 첫 차례 맥락(11/4 사용자 "대화 내역만 고정, 나머지는 다 수정 가능"): 값은 코드가 만들고, 틀은 실험방에서 고친다(lib/prompts.ts)
+  const order = courseOrder(course, run, n);
+  const V: Record<string, string> = {
+    코스이름: course.title, 학습자목표: learnerGoal(course, run) ?? "", 코스순서: order,
+    단계번호: String(n), 단계이름: bareTitle(plan.title), 단계목표: stage.goal, 가르칠것: plan.teach.join(" / "), 고칠곳: stage.fix.text, 강사메모: plan.tutorNotes ?? "",
+    숨길것: [...predicts.map((t) => `예측 문제("${t}")의 정답`), "고칠 곳의 완성 코드(바꿔 넣을 값 포함)"].join(", "),
+  };
+  const fixed = render(promptOf("fixedTpl", DEFAULT_FIXED), V);
   // 작업 상태: 코드가 확실한 사실만(배경 · 레벨 · 막힘 · 고친 파일 · 편집기 오류). 의미 판단은 모델이 답할 때
   const sv = await sessionView(runId).catch(() => null);
   const evs = (await events(runId).catch(() => [])).filter((e) => e.stage === n && e.type === "code_edit");
@@ -933,19 +938,20 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     // 학습자가 이번 단계에 "내 말로" 쓴 문장(코드가 아는 사실): 대화가 요약돼도 그대로 남게
     ...s0.messages.filter((m) => m.card?.type === "explain" && m.card.done).slice(-1).map((m) => `"내 말로"에 쓴 답: "${(m.card as { done: string }).done.slice(0, 300)}"`),
   ].filter(Boolean).join(" · ");
-  const state = [
-    `[학습자 상태] ${sv ? `${LEVELS[sv.level] ?? LEVELS[0]}(내부, 학습자에게 말하지 않음)` : ""}${sv?.background ? ` · ${backgroundLine(sv.background).replace(/^\[학습자 배경\(스스로 답함\)\]\s*/, "배경: ")}` : ""}${stuck ? ` · ${stuck}` : ""}`,
-    `[지금 위치] ${n}단계 · 걸음 ${s0.beat + 1}/${plan.beats.length}(${b ? stepLabel(b, s0.beat === plan.beats.length - 1) : "끝"}) ${b ? `— ${b.now ?? firstLine(b.text)}` : ""}${plan.beats[s0.beat + 1] ? ` · 다음: ${stepLabel(plan.beats[s0.beat + 1], s0.beat + 1 === plan.beats.length - 1)}` : ""}`,
-    // 11/3 초보 흉내 시험: 튜터가 화면에 없는 "답 쓰는 곳"을 지어내거나 버튼 이름을 틀리게 말했다 → 지금 화면에 있는 것을 그대로 알려 준다
-    screenLine(s0, b),
-    learnerLine(await learnerView(runId, course).catch(() => ({ concepts: [], misconceptions: [], observations: [] }))),
-    await basicsLine(langOf(course as { language?: string; stack?: string })).catch(() => ""),
-    quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
-    // 실험방에서 사용자가 직접 적은 추가 지시(11/3): 매 차례 맥락 맨 끝
-    await extraBlock().catch(() => ""),
-  ].filter(Boolean).join("\n");
+  // 매 차례 맥락: 줄마다 자리표시로(틀은 실험방에서 고친다). {막혔어요}는 아래에서 채운다
+  V.학습자상태 = `[학습자 상태] ${sv ? `${LEVELS[sv.level] ?? LEVELS[0]}(내부, 학습자에게 말하지 않음)` : ""}${sv?.background ? ` · ${backgroundLine(sv.background).replace(/^\[학습자 배경\(스스로 답함\)\]\s*/, "배경: ")}` : ""}${stuck ? ` · ${stuck}` : ""}`;
+  V.지금위치 = `[지금 위치] ${n}단계 · 걸음 ${s0.beat + 1}/${plan.beats.length}(${b ? stepLabel(b, s0.beat === plan.beats.length - 1) : "끝"}) ${b ? `— ${b.now ?? firstLine(b.text)}` : ""}${plan.beats[s0.beat + 1] ? ` · 다음: ${stepLabel(plan.beats[s0.beat + 1], s0.beat + 1 === plan.beats.length - 1)}` : ""}`;
+  // 11/3 초보 흉내 시험: 튜터가 화면에 없는 "답 쓰는 곳"을 지어내거나 버튼 이름을 틀리게 말했다 → 지금 화면에 있는 것을 그대로 알려 준다
+  V.지금화면 = screenLine(s0, b);
+  V.개념 = learnerLine(await learnerView(runId, course).catch(() => ({ concepts: [], misconceptions: [], observations: [] })));
+  V.기초 = await basicsLine(langOf(course as { language?: string; stack?: string })).catch(() => "");
+  V.고른코드 = quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "";
+  // 실험방에서 사용자가 직접 적은 추가 지시(11/3)
+  V.추가지시 = await extraBlock().catch(() => "");
+  V.막혔어요 = "";
+  const state = render(promptOf("turnTpl", DEFAULT_TURN), V);
   // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
-  const files = opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stage.fix.files, opts.mode === "explain");
+  const files = promptOf("files", "on").trim() === "off" && opts.mode !== "tour" ? [] : opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stage.fix.files, opts.mode === "explain");
   const recentText = talk(recent);
   const history = [olderPart, recentText ? `[최근 대화]\n${recentText}` : ""].filter(Boolean).join("\n\n");
   // 이어 쓰는 대화에 덧붙일 것: 지난 질문 답 뒤로 화면에 나온 것만(그 앞은 대화에 이미 있다)
@@ -967,9 +973,10 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
       root.choice ? `학습자가 고른 막힘: ${CHOICES[root.choice].label}${root.word ? ` — 단어 \`${root.word}\`` : ""}` : "",
       frame.why ? `이 칸으로 내려온 이유: ${frame.why}` : "",
       `언어: ${lang}. 기초 칸 목록(id=이름):\n${catalogText(lang)}`,
-      frame.depth === 0 && root.quote ? `[지금 칸 규칙 — 처음 막힌 줄]\n${ROOT_RULES}` : `[지금 칸 규칙 — 아래 칸]\n${CHILD_RULES}`,
+      frame.depth === 0 && root.quote ? `[지금 칸 규칙 — 처음 막힌 줄]\n${promptOf("stuckRoot", ROOT_RULES)}` : `[지금 칸 규칙 — 아래 칸]\n${promptOf("stuckChild", CHILD_RULES)}`,
     ].filter(Boolean).join("\n");
-    parts = { ...parts, turn: [state, await basicsLine(lang), block].filter(Boolean).join("\n") };
+    V.막혔어요 = block;
+    parts = { ...parts, turn: render(promptOf("turnTpl", DEFAULT_TURN), V) };
     context = [fixed, history, parts.turn].filter(Boolean).join("\n\n");
   }
   if (aiMode() !== "off") {
