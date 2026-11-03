@@ -24,12 +24,12 @@ async function send(token: string, body: Body, extra: Record<string, string> = {
   const t0 = Date.now();
   const r = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { ...extra, authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ ...body, max_output_tokens: 16 }) });
   const text = await r.text();
-  let usage: any = null;
+  let usage: any = null, id: string | null = null, diag: unknown = null;
   for (const line of text.split("\n")) {
     if (!line.startsWith("data:")) continue;
-    try { const j = JSON.parse(line.slice(5)); if (j?.response?.usage) usage = j.response.usage; } catch { /* */ }
+    try { const j = JSON.parse(line.slice(5)); if (j?.response?.usage) usage = j.response.usage; if (j?.response?.id) id = j.response.id; if (j?.response?.prompt_cache_diagnostics) diag = j.response.prompt_cache_diagnostics; } catch { /* */ }
   }
-  return { status: r.status, ms: Date.now() - t0, input: usage?.input_tokens ?? null, cached: usage?.input_tokens_details?.cached_tokens ?? null, error: r.ok ? undefined : text.slice(0, 300) };
+  return { status: r.status, ms: Date.now() - t0, id, diag, input: usage?.input_tokens ?? null, cached: usage?.input_tokens_details?.cached_tokens ?? null, error: r.ok ? undefined : text.slice(0, 300) };
 }
 
 export async function cacheProbe(only?: string[], waitMs = 0) {
@@ -63,7 +63,7 @@ export async function cacheProbe(only?: string[], waitMs = 0) {
     const tag = (b0: Body) => { const c = structuredClone(b0) as any; const first = c.input[0]; if (Array.isArray(first.content)) first.content[0].text = mark + first.content[0].text; else first.content = mark + first.content; return c; };
     const a = await send(token, tag(prevRaw));
     await new Promise((r) => setTimeout(r, waitMs));
-    const b = await send(token, tag(base));
+    const b = await send(token, a.id ? { ...tag(base), prompt_cache_options: { comparison_response_id: a.id } } : tag(base));
     const ta = JSON.stringify(prevRaw.input), tb = JSON.stringify(base.input);
     let k = 0; while (k < ta.length && ta[k] === tb[k]) k++;
     out["앞 질문 → 다음 질문"] = { waitMs, first: a, second: b, sameInstr: prevRaw.instructions === base.instructions, sameTools: JSON.stringify(prevRaw.tools) === JSON.stringify(base.tools), inputCommonChars: k, inputDiffAt: tb.slice(Math.max(0, k - 60), k + 60) };
@@ -75,7 +75,7 @@ export async function cacheProbe(only?: string[], waitMs = 0) {
     const a = await send(token, a0);
     await new Promise((r) => setTimeout(r, waitMs));
     const b0 = structuredClone(a0); b0.input = [...b0.input, { role: "assistant", content: "네, 200은 성공이라는 뜻이에요." }, { role: "user", content: [{ type: "input_text", text: "[학습자 상태] 같음\n\n[학습자 질문] 그럼 404는요?" }] }];
-    const b = await send(token, b0);
+    const b = await send(token, a.id ? { ...b0, prompt_cache_options: { comparison_response_id: a.id } } : b0);
     out["이어 쓰기"] = { waitMs, first: a, second: b };
   }
   return out;
