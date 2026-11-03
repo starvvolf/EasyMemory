@@ -11,7 +11,7 @@ import { locate, type RunResult } from "./checker.ts";
 import { check, confused, devStatus, explain, hint, peekDb, predict, startDev, stopDev, tryRequest, workspaceOf } from "./learn.ts";
 import { AiUnavailable, aiText } from "./ai.ts";
 import { learnerLine, learnerView } from "./learner.ts";
-import { kindLabel, pathOf, planAfterStage, setStatus, taskPrompt } from "./planner.ts";
+import { judgeExplain, kindLabel, pathOf, planAfterStage, setStatus, taskPrompt } from "./planner.ts";
 import { DATA, getRun, read, saveRun, stageProgress, update } from "./store.ts";
 import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridgeSend } from "./bridge.ts";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -53,6 +53,8 @@ type Todo = { open?: Open; focus?: Focus; clear?: boolean };
 const now = () => new Date().toISOString();
 /** 이어 쓰는 대화에 이미 들어간 화면 메시지(단계별 마지막 id) */
 const sentUpTo = new Map<string, number>();
+/** "내 말로" 답을 보는 중(계획 제안이 기다린다) */
+const judging = new Map<string, Promise<unknown>>();
 const file = (runId: string, n: number) => path.join(DATA, "lessons", `${runId}-${n}.json`);
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
 
@@ -425,12 +427,15 @@ export async function act(runId: string, n: number, input: { do: string; choice?
       const text = String(input.text ?? "").trim();
       await explain(runId, n, text);
       if (text) void record({ runId, stage: n, beat: s.beat, type: "self_report", actor: "user", concepts: stageOf(course, n).explain.knowledge, detail: `내 말로: ${text}` });
+      // 개념 검증(11/3, 구조도 "평가"): AI가 "내 말로" 답을 보고 관찰로만 남긴다(검증 안 됨 · 진도는 그대로). 계획 제안 전에 끝나게 기다리지 않는다
+      if (text) judging.set(lk(runId, n), judgeExplain(runId, n, text).catch(() => null));
       const card = [...s.messages].reverse().find((m) => m.card?.type === "explain")!.card as Extract<Card, { type: "explain" }>;
       card.done = text;
       push({ role: "tutor", text: "고마워요. 그대로 적어 둘게요. 복습할 때 오늘 쓴 이 문장을 다시 보여 드릴게요." });
       enter(plan, s, s.beat + 1, push, course);
     } else if (input.do === "next_stage") {
       s.waiting = "done";
+      void pathOf(runId).then((f) => { const i = f.items.find((x) => x.afterStage === n); if (i?.status === "doing") return setStatus(runId, n, "done"); if (i?.status === "proposed") return setStatus(runId, n, "skipped"); }).catch(() => {});
     } else throw err(400, "모르는 동작이에요.");
   });
   // 마지막 걸음(정리)에 들어서면 course-planner가 다음 경로를 제안한다(뒤에서, 한 단계에 한 번)
@@ -439,6 +444,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
 }
 /** course-planner 제안을 받아 화면에 한 번 띄운다: 다음 단계면 이유만, 보충·연습·심화면 [해 볼게요] / [건너뛰고 다음 단계] */
 async function proposePath(runId: string, n: number) {
+  await Promise.race([judging.get(lk(runId, n)), new Promise((r) => setTimeout(r, 20000))]); // "내 말로" 판단이 먼저 기록되게
   const item = await planAfterStage(runId, n).catch(() => null);
   if (!item || !item.reason) return;
   await change(runId, n, (s, push) => {

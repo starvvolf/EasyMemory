@@ -39,6 +39,7 @@ export function installFakeAi() {
         { say: "정리하면, 라우터가 맡은 함수를 못 찾으면 서버가 답장을 안 쓰고 끝나요. 열어 드린 줄 아래에 404 답장을 보내는 한 줄을 직접 써 보세요.", tool: "none", args: "{}" },
       ][step];
     }
+    if (purpose === "explain-judge") return /상관없|아무 데/.test(user) ? { verdict: "misconception", concept: "", note: "성공 코드는 아무거나 써도 된다고 설명함" } : { verdict: "understood", concept: "", note: "흐름을 맞게 설명함" };
     if (purpose === "course-planner") return /: weak/.test(user)
       ? { decision: "remedial", concept: (/(\S+): weak/.exec(user)?.[1] ?? ""), reason: "예측에서 상태 코드를 헷갈렸어요.", task: "상태 코드 200 · 400 · 404를 언제 쓰는지 짝지어 보기" }
       : { decision: "next", concept: "", reason: "이번 단계는 직접 통과했어요. 다음 단계로 가요.", task: "" };

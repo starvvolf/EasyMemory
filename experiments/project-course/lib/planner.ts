@@ -5,7 +5,7 @@ import path from "node:path";
 import { aiJson, S } from "./ai.ts";
 import { loadCourse, stageOf, knowledgeName } from "./course.ts";
 import { DATA, getRun, read, update } from "./store.ts";
-import { learnerView } from "./learner.ts";
+import { addObservation, learnerView } from "./learner.ts";
 import { events } from "./session.ts";
 
 export type Decision = "next" | "remedial" | "practice" | "extend";
@@ -75,3 +75,20 @@ export async function taskPrompt(runId: string, item: PathItem) {
   return `[${kind} 과제 — course-planner 제안] ${item.task}${name ? ` (개념: ${name})` : ""}\n필요하면 한두 문장으로 짚고, 학습자가 직접 해 볼 아주 작은 과제 하나를 내 주세요. 정답은 바로 주지 말고, 학습자가 답하면 run_snippet이나 send_request로 같이 확인해요. 끝나면 학습자가 [다음 단계]를 누르면 된다고 알려 주세요.`;
 }
 export const kindLabel = (d: Decision) => (d === "next" ? "다음 단계" : KIND[d]);
+
+/* ---------- 개념 검증: "내 말로" 답 보기(11/3) ---------- */
+const JUDGE = `학습자가 코딩 개념을 자기 말로 설명했다. 맞는지 본다. 채점하지 않고 관찰만 한다.
+- verdict: understood(핵심이 맞음) · confused(빠지거나 흐림) · misconception(틀린 생각이 들어 있음)
+- concept: [이 단계 개념] id 중 가장 관련된 하나
+- note: 무엇을 봤는지 한 문장(해요체 말고 관찰문, 예: "라우터가 메서드와 주소로 함수를 찾는다고 정확히 설명함")`;
+const JUDGE_SCHEMA = S.obj({ verdict: S.oneOf("understood", "confused", "misconception"), concept: S.str, note: S.str });
+export async function judgeExplain(runId: string, n: number, text: string) {
+  const run = await getRun(runId);
+  const course = await loadCourse(run.courseId);
+  const st = stageOf(course, n);
+  const out = await aiJson<{ verdict: "understood" | "confused" | "misconception"; concept: string; note: string }>("explain-judge", JUDGE,
+    [`[질문] ${st.explain.q}`, `[이 단계 개념] ${st.knowledge.map((k) => `${k}=${knowledgeName(course, k)}`).join(", ")}`, `[학습자 답] ${text.slice(0, 600)}`].join("\n"), JUDGE_SCHEMA);
+  const concept = course.knowledge.find((k) => k.id === out.concept)?.id;
+  if (!out.note?.trim()) return null;
+  return addObservation(runId, { concept, kind: out.verdict, note: `내 말로: ${out.note.trim().slice(0, 200)}`, stage: n });
+}
