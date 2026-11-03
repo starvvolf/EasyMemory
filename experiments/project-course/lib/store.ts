@@ -63,6 +63,8 @@ export type Run = {
   plan: Plan; current: number; workspaces: Record<string, string>; stages: Record<string, StageProgress>;
   /** 프리스타일(11/4 사용자 "실험판 느낌 그대로 제품에 연결"): 걸음 없이 대화만, 짧은 지시문 · effort low */
   free?: boolean;
+  /** 11/4 사용자 "이번에 GPT가 만든 것까지 그대로 붙여 봐": 프리스타일 대화를 GPT 실험판 엔진(agent-chat)이 그대로 맡는다. 그 대화 id */
+  chatId?: string;
 };
 type RunsFile = { runs: Run[]; active?: string };
 const RUNS = () => path.join(DATA, "runs.json");

@@ -1318,11 +1318,11 @@ function drawFree() {
   const go = (e) => { const t = input.value.trim(); if (!t || lesson.busy) return; input.value = ""; send({ do: "ask", text: t })(e); };
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go(e); } });
   const foot = h("footer", { class: "freefoot" },
-    stuckBar(lesson, send), stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
-    h("div", { class: "freein" }, input, h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
-    lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
+    lesson.chat ? null : stuckBar(lesson, send), lesson.chat ? null : stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
+    h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
+    lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
-    h("div", { class: "grow" }, h("b", {}, run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, " · 프리스타일")),
+    h("div", { class: "grow" }, h("b", {}, run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · 실험판 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
     FLOAT ? h("button", { class: "fib", title: "처음 화면", onclick: () => go_("#/home") }, icon("home")) : null,
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,

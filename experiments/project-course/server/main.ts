@@ -144,6 +144,12 @@ const routes: [string, RegExp, Handler][] = [
     const main = course.generated ? course.generated.outline.map((o) => o.n) : course.stages.filter((s) => !s.transfer).map((s) => s.n);
     const plan = { start: main[0], stages: main, quick: [], transfer: false, reasons: ["프리스타일"], notes: [], minutes: main.length * 5 };
     const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), plan, current: plan.start, workspaces: {}, stages: {}, free: true };
+    // 11/4 사용자 "GPT가 만든 것까지 그대로 붙여 봐": 대화는 실험판(agent-chat) 엔진 그대로, 작업 폴더도 그 대화의 폴더(VS Code가 이 폴더를 연다)
+    if (b.engine !== "lesson" && course.id === "hello-api") {
+      const chat = await (await import("../lib/agent-chat.ts")).newChat();
+      run.chatId = chat.id;
+      run.workspaces[course.stages.find((s) => s.n === plan.start)!.template] = chat.workspace;
+    }
     await addRun(run);
     const out = await startStage(run.id, plan.start);
     await setActive(run.id);
