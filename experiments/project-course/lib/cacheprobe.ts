@@ -32,7 +32,7 @@ async function send(token: string, body: Body, extra: Record<string, string> = {
   return { status: r.status, ms: Date.now() - t0, input: usage?.input_tokens ?? null, cached: usage?.input_tokens_details?.cached_tokens ?? null, error: r.ok ? undefined : text.slice(0, 300) };
 }
 
-export async function cacheProbe(only?: string[]) {
+export async function cacheProbe(only?: string[], waitMs = 0) {
   const dir = path.join(DATA, "prompts");
   const last = (await readdir(dir)).filter((f) => f.endsWith("tutor-request.json")).sort().at(-1);
   if (!last) throw Object.assign(new Error("튜터 요청 기록이 없어요."), { status: 404 });
@@ -58,11 +58,15 @@ export async function cacheProbe(only?: string[]) {
     const files = (await readdir(dir)).filter((f) => f.endsWith("tutor-request.json")).sort();
     const prevRaw = JSON.parse(await readFile(path.join(dir, files.at(-2)!), "utf8")) as Body;
     delete prevRaw._headers; delete prevRaw._url;
-    const a = await send(token, prevRaw);
-    const b = await send(token, base);
+    // 처음 보는 앞부분이 되게 맨 앞 입력에 표시를 붙인다(이미 캐시된 본문을 다시 쓰지 않게). waitMs만큼 쉬었다가 B
+    const mark = `[시험 ${Date.now()}]\n`;
+    const tag = (b0: Body) => { const c = structuredClone(b0) as any; const first = c.input[0]; if (Array.isArray(first.content)) first.content[0].text = mark + first.content[0].text; else first.content = mark + first.content; return c; };
+    const a = await send(token, tag(prevRaw));
+    await new Promise((r) => setTimeout(r, waitMs));
+    const b = await send(token, tag(base));
     const ta = JSON.stringify(prevRaw.input), tb = JSON.stringify(base.input);
     let k = 0; while (k < ta.length && ta[k] === tb[k]) k++;
-    out["앞 질문 → 다음 질문"] = { first: a, second: b, sameInstr: prevRaw.instructions === base.instructions, sameTools: JSON.stringify(prevRaw.tools) === JSON.stringify(base.tools), inputCommonChars: k, inputDiffAt: tb.slice(Math.max(0, k - 60), k + 60) };
+    out["앞 질문 → 다음 질문"] = { waitMs, first: a, second: b, sameInstr: prevRaw.instructions === base.instructions, sameTools: JSON.stringify(prevRaw.tools) === JSON.stringify(base.tools), inputCommonChars: k, inputDiffAt: tb.slice(Math.max(0, k - 60), k + 60) };
   }
   return out;
 }
