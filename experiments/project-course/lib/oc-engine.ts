@@ -63,7 +63,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 - 숨기는 것은 완성 코드와 예측 답뿐이다. 왜 그렇게 되는지(원인·원리)는 언제든 설명한다 — "곧 같이 해 볼 거예요"로 원리 설명까지 미루지 않는다.
 - 하던 걸음으로 돌아가는 안내("이제 ~ 살펴봐요", "지금 할 일:")는 붙이지 않는다(화면에 [하던 거로 돌아가기] 버튼이 있다). 학습자가 "이제 뭐 해요?"처럼 물을 때만 할 일을 말한다.`;
 
-type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void>; reason: string; lastThink: number; asked: number; stopped: boolean; usage: unknown[]; t0: number };
+type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void>; reason: string; lastThink: number; asked: number; stopped: boolean; usage: unknown[]; raw: { input: number; cached: number; output: number }[]; t0: number };
 const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문
 // runId:n → 이어 쓰는 대화. 같은 단계 안에서는 대화를 이어 써서 앞부분이 그대로 남게 한다(캐시가 맞는다).
 // files: 이 대화에 마지막으로 붙인 파일 내용 — 그대로면 다시 붙이지 않는다. 너무 길어지면 새 대화로(규칙을 덜 지키게 되므로).
@@ -158,6 +158,19 @@ function policyPlugin(fake: boolean) {
           } catch { /* 본문이 JSON이 아니면 그대로 */ }
         }
         ev.request = body === undefined ? new Request(ev.request, { headers: hd }) : new Request(ev.request.url, { method: "POST", headers: hd, body, signal: ev.request.signal });
+      });
+      // 실제 응답의 사용량(11/3 캐시 원인: OpenCode가 보고하는 캐시 읽기가 늘 0이라 원본 usage를 직접 본다)
+      if (!fake) await ctx.session.hook("http.response", async (ev: any) => {
+        const l = live.get(ev.sessionID);
+        if (!l || !ev.response?.body || !/\/responses$/.test(new URL(ev.request.url).pathname)) return;
+        const [a, b] = ev.response.body.tee();
+        ev.response = new Response(a, { status: ev.response.status, headers: ev.response.headers });
+        void new Response(b).text().then((t) => {
+          for (const line of t.split("\n")) {
+            if (!line.startsWith("data:")) continue;
+            try { const j = JSON.parse(line.slice(5)); if (j?.response?.usage) l.raw.push({ input: j.response.usage.input_tokens, cached: j.response.usage.input_tokens_details?.cached_tokens ?? 0, output: j.response.usage.output_tokens }); } catch { /* */ }
+          }
+        }).catch(() => {});
       });
       await ctx.session.hook("title", (ev: any) => { ev.result = "튜터 대화"; }); // 제목 만들기 호출 생략
       await ctx.session.hook("context", (ev: any) => {
@@ -391,7 +404,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   let ss = sessions.get(key);
   if (!ss || io.parts || ss.turns >= MAX_TURNS) { ss = { sid: (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string, turns: 0, files: new Map() }; sessions.set(key, ss); }
   const sid = ss.sid;
-  const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve(), reason: "", lastThink: 0, asked: 0, stopped: false, usage: [], t0: Date.now() };
+  const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve(), reason: "", lastThink: 0, asked: 0, stopped: false, usage: [], raw: [], t0: Date.now() };
   live.set(sid, l);
   const from = h.events.length;
   const text = [...promptParts(io, ss), bridgeContext(io.runId), `[학습자 질문] ${question}`].filter(Boolean).join("\n\n");
@@ -411,7 +424,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
     await l.chain; // 흘려 보내던 글을 다 쓴 뒤에 끝낸다
     io.think?.(null);
     await logAnswer(plog, l.texts.join("\n\n"));
-    void logUsage({ kind: "tutor", runId: io.runId, stage: io.n, mode: io.mode ?? "normal", ms: Date.now() - l.t0, calls: l.steps, tokens: l.usage, prompt: plog, chars: text.length });
+    void logUsage({ kind: "tutor", runId: io.runId, stage: io.n, mode: io.mode ?? "normal", ms: Date.now() - l.t0, calls: l.steps, tokens: l.usage, raw: l.raw, prompt: plog, chars: text.length });
     if (l.stopped) return l.texts.join("\n\n"); // 멈춘 건 화면에 이미 "멈췄어요"가 있다
     await countCalls(io.mode === "explain" ? "explain" : "agent", l.steps, end.type === "session.execution.succeeded");
     if (end.type === "timeout") { await h.oc.sessions.interrupt?.({ sessionID: sid }).catch(() => {}); return "생각이 너무 길어져서 멈췄어요. 질문을 조금 나눠서 다시 물어봐 주세요."; }
