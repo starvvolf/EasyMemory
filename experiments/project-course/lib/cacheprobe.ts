@@ -14,6 +14,7 @@ const VARIANTS: Record<string, (b: Body) => Body> = {
   "생각 요약·암호 생각 없음": (b) => { const c = { ...b }; delete c.include; delete c.reasoning; return c; },
   "그대로 + OpenCode 헤더": (b) => b,
   "그대로 + OpenCode 헤더(세션 헤더 빼고)": (b) => b,
+  "끝만 다르게(앞부분 캐시 되나)": (b) => { const c = structuredClone(b) as any; const last = c.input.at(-1); const part = Array.isArray(last.content) ? last.content.at(-1) : null; if (part?.text) part.text += `\n(변형 ${Date.now()})`; else if (typeof last.content === "string") last.content += `\n(변형 ${Date.now()})`; return c; },
   "앱과 같은 최소 모양": (b) => ({ model: b.model, instructions: b.instructions, input: b.input, store: false, stream: true }),
 };
 
@@ -44,7 +45,7 @@ export async function cacheProbe(only?: string[]) {
     const body = fn(structuredClone(base));
     const hdr = name.includes("OpenCode 헤더") ? (name.includes("세션 헤더 빼고") ? Object.fromEntries(Object.entries(ocHeaders).filter(([k]) => !/session/i.test(k))) : ocHeaders) : {};
     const first = await send(token, body, hdr);
-    const second = await send(token, body, hdr);
+    const second = await send(token, name.startsWith("끝만") ? fn(structuredClone(base)) : body, hdr);
     out[name] = { first, second };
     void logUsage({ kind: "cache-probe", variant: name, first, second });
   }
