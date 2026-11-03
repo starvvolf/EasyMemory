@@ -23,7 +23,7 @@ import { aiMode } from "./ai.ts";
 import { onStuckChange, CHOICES, countReply, leaveAll, openRoot, openStack, resolveTop, stuckOf, stuckView, labelOf, type Choice, type Frame } from "./stuck.ts";
 import { basicsLine, catalogText, langOf } from "./basics.ts";
 import { extraBlock } from "./lab.ts";
-import { DEFAULT_FIXED, DEFAULT_TURN, promptOf, render } from "./prompts.ts";
+import { DEFAULT_FIXED, DEFAULT_FREE_FIXED, DEFAULT_FREE_TURN, DEFAULT_TURN, FREE_SYSTEM, promptOf, render } from "./prompts.ts";
 import { actionOfBeat, answerBackground, backgroundLine, bgQuestion, closeDetours, enterBeat, events, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
@@ -211,6 +211,7 @@ export async function lessonView(runId: string, n: number) {
   const plan = await loadPlan(course.id, n);
   if (!plan) return null;
   let s = await read<State | null>(file(runId, n), null);
+  if (!s && run.free) s = await change(runId, n, (st) => { st.beat = 0; st.waiting = "action"; });
   if (!s) {
     const due = await takeDue(runId, n);
     const first = n === run.plan.start;
@@ -253,7 +254,7 @@ export async function lessonView(runId: string, n: number) {
     recap: await recap(runId, { stageTitle: (k) => course.stages.find((x) => x.n === k)?.title ?? "", nowLabel: `${n}단계 · ${now ?? plan.title}` }).catch(() => null),
     now, mode: s.mode ?? null, resumable: !!s.asked && !s.busy && (s.waiting === "action" || s.waiting === "save"),
     thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null,
-    stuck: await stuckView(runId), stuckChoices: Object.values(CHOICES).map((c) => c.label) };
+    stuck: await stuckView(runId), stuckChoices: Object.values(CHOICES).map((c) => c.label), free: !!run.free };
 }
 
 /** 생성 코스: 다음 단계가 준비됐는지(뒤에서 만드는 중이면 화면이 기다린다) */
@@ -847,12 +848,13 @@ async function stuckReturned(runId: string, n: number, plan: Plan, done: Frame) 
     });
     return;
   }
-  // 맨 위 칸이 풀림: 코스로(코스 대화에는 이 한 줄만 들어간다)
+  // 맨 위 칸이 풀림: 코스로(코스 대화에는 이 한 줄만 들어간다). 프리스타일이면 걸음 안내 없이
+  const freeRun = !!(await getRun(runId)).free;
   await change(runId, n, (s, push) => {
     const b = plan.beats[s.beat];
     const acts = s.waiting === "save" && b?.kind === "fix" ? modeActions(b, s) : lastBeatActions(s) ?? b?.actions ?? [{ label: "다음", do: "next" }];
     push({ role: "note", text: `✔ 막혔던 것 풀렸어요: ${labelOf(done)}${done.result ? ` (${done.result})` : ""}` });
-    if (b) push({ role: "tutor", text: `원래 하던 데로 돌아갈게요. **지금 할 일:** ${b.now ?? firstLine(b.text)}`, actions: acts });
+    if (b && !freeRun) push({ role: "tutor", text: `원래 하던 데로 돌아갈게요. **지금 할 일:** ${b.now ?? firstLine(b.text)}`, actions: acts });
     s.asked = false;
   });
 }
@@ -923,7 +925,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     단계번호: String(n), 단계이름: bareTitle(plan.title), 단계목표: stage.goal, 가르칠것: plan.teach.join(" / "), 고칠곳: stage.fix.text, 강사메모: plan.tutorNotes ?? "",
     숨길것: [...predicts.map((t) => `예측 문제("${t}")의 정답`), "고칠 곳의 완성 코드(바꿔 넣을 값 포함)"].join(", "),
   };
-  const fixed = render(promptOf("fixedTpl", DEFAULT_FIXED), V);
+  const fixed = run.free ? render(promptOf("freeFixed", DEFAULT_FREE_FIXED), V) : render(promptOf("fixedTpl", DEFAULT_FIXED), V);
   // 작업 상태: 코드가 확실한 사실만(배경 · 레벨 · 막힘 · 고친 파일 · 편집기 오류). 의미 판단은 모델이 답할 때
   const sv = await sessionView(runId).catch(() => null);
   const evs = (await events(runId).catch(() => [])).filter((e) => e.stage === n && e.type === "code_edit");
@@ -949,7 +951,8 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   // 실험방에서 사용자가 직접 적은 추가 지시(11/3)
   V.추가지시 = await extraBlock().catch(() => "");
   V.막혔어요 = "";
-  const state = render(promptOf("turnTpl", DEFAULT_TURN), V);
+  const turnTpl = () => (run.free ? promptOf("freeTurn", DEFAULT_FREE_TURN) : promptOf("turnTpl", DEFAULT_TURN));
+  const state = render(turnTpl(), V);
   // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
   const files = promptOf("files", "on").trim() === "off" && opts.mode !== "tour" ? [] : opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stage.fix.files, opts.mode === "explain");
   const recentText = talk(recent);
@@ -976,7 +979,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
       frame.depth === 0 && root.quote ? `[지금 칸 규칙 — 처음 막힌 줄]\n${promptOf("stuckRoot", ROOT_RULES)}` : `[지금 칸 규칙 — 아래 칸]\n${promptOf("stuckChild", CHILD_RULES)}`,
     ].filter(Boolean).join("\n");
     V.막혔어요 = block;
-    parts = { ...parts, turn: render(promptOf("turnTpl", DEFAULT_TURN), V) };
+    parts = { ...parts, turn: render(turnTpl(), V) };
     context = [fixed, history, parts.turn].filter(Boolean).join("\n\n");
   }
   if (aiMode() !== "off") {
@@ -985,6 +988,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     const io = {
         runId, n, ws, context, parts, mode: opts.mode, scope: opts.scope,
         ...(frame ? { sessKey, stuck: { frameId: frame.id, lang } } : {}),
+        ...(run.free ? { freeSystem: promptOf("freeSystem", FREE_SYSTEM) } : {}),
         stream: async (key: string, text: string) => {
           await change(runId, n, (s, push) => {
             const id = bubbles.get(key);

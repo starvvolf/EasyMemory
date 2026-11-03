@@ -137,6 +137,20 @@ const routes: [string, RegExp, Handler][] = [
   }],
 
   // 바로 시작(11/2, 시험용 맛보기 코스): 묻기·확인 문제 없이 1단계부터 모든 단계를 직접
+  // 프리스타일(11/4 사용자 "실험판 느낌 그대로 제품에 연결"): 걸음 없이 대화만 하는 진행 기록을 만들고 VS Code + 튜터 창을 연다
+  ["POST", /^\/api\/free$/, async (req) => {
+    const b = await body(req);
+    const course = await loadCourse(String(b.courseId || "hello-api"));
+    const main = course.generated ? course.generated.outline.map((o) => o.n) : course.stages.filter((s) => !s.transfer).map((s) => s.n);
+    const plan = { start: main[0], stages: main, quick: [], transfer: false, reasons: ["프리스타일"], notes: [], minutes: main.length * 5 };
+    const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), plan, current: plan.start, workspaces: {}, stages: {}, free: true };
+    await addRun(run);
+    const out = await startStage(run.id, plan.start);
+    await setActive(run.id);
+    let editor: unknown = null;
+    if (b.open !== false) { editor = await openEditor(run.id).catch((e) => ({ ok: false, message: (e as Error).message })); openFloat(run.id, PORT); }
+    return { runId: run.id, workspace: out.workspace, editor };
+  }],
   ["POST", /^\/api\/quickstart$/, async (req) => {
     const b = await body(req);
     const course = await loadCourse(String(b.courseId ?? ""));
@@ -176,7 +190,7 @@ const routes: [string, RegExp, Handler][] = [
     const lab = await import("../lib/lab.ts"); const { SYSTEM } = await import("../lib/oc-engine.ts");
     const runId = await lab.labRun();
     const pr = await import("../lib/prompts.ts"); const { ROOT_RULES, CHILD_RULES } = await import("../lib/lesson.ts"); const gen = await import("../lib/generate.ts");
-    const defs: Record<string, string> = { system: SYSTEM, fixedTpl: pr.DEFAULT_FIXED, turnTpl: pr.DEFAULT_TURN, stuckRoot: ROOT_RULES, stuckChild: CHILD_RULES, files: "on", genPlan: gen.SYSTEM_PLAN, genStage: gen.SYSTEM_STAGE };
+    const defs: Record<string, string> = { system: SYSTEM, fixedTpl: pr.DEFAULT_FIXED, turnTpl: pr.DEFAULT_TURN, freeSystem: pr.FREE_SYSTEM, freeFixed: pr.DEFAULT_FREE_FIXED, freeTurn: pr.DEFAULT_FREE_TURN, stuckRoot: ROOT_RULES, stuckChild: CHILD_RULES, files: "on", genPlan: gen.SYSTEM_PLAN, genStage: gen.SYSTEM_STAGE };
     const prompts = pr.EDITABLE.map((e) => ({ ...e, def: defs[e.key] ?? "", current: pr.promptOf(e.key, defs[e.key] ?? ""), changed: pr.changed(e.key) }));
     return { runId, extra: await lab.getExtra(), pipeline: lab.PIPELINE, system: SYSTEM, prompts, last: await lab.lastPrompt(runId) };
   }],

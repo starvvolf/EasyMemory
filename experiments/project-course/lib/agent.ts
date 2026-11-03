@@ -50,6 +50,8 @@ export type AgentIO = {
   sessKey?: string;
   stuck?: { frameId: string; lang: import("./basics.ts").Lang };
   /** 별도 자유 대화 실험판. 기존 수업의 지시문·진도 도구와 섞지 않는다. */
+  /** 프리스타일 진행: 이 지시문으로 바꿔 끼우고 effort low(도구는 보통 질문과 같음) */
+  freeSystem?: string;
   learningChat?: {
     system?: string;
     capture?: (body: Record<string, unknown>) => Promise<void>;

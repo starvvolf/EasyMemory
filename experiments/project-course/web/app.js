@@ -784,6 +784,7 @@ function flashSaved() {
 }
 
 function drawLesson() {
+  if (lessonCtx?.lesson?.free) return drawFree();
   if (FLOAT) return drawFloat();
   const { run, lesson } = lessonCtx;
   const ws = lesson.workspace;
@@ -1295,3 +1296,39 @@ function drawLabSide(side, info) {
   }
   side.replaceChildren(bar, body);
 }
+
+
+/* ---------- 프리스타일(11/4 사용자 "실험판 느낌 그대로 제품에 연결"): 걸음 없이 대화만 ----------
+ * 튜터 창(FLOAT)과 튜터 탭 둘 다. VS Code에서 고른 줄 · [막혔어요] · 실습 서버 · 검사는 그대로 쓴다 */
+function drawFree() {
+  const { run, lesson } = lessonCtx;
+  const ws = lesson.workspace;
+  const send = (body) => (e) => busy(e?.target, async () => { lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, body); drawLesson(); });
+  const list = h("div", { class: "freelist" });
+  for (const m of lesson.messages) {
+    if (m.role === "note") { list.append(h("p", { class: "fnote" }, m.text)); continue; }
+    if (m.card?.type === "tool" && !m.text) { list.append(h("p", { class: "ftool" }, m.card.icon, " ", shortTool(m.card.label))); continue; }
+    if (m.role === "me") { list.append(h("div", { class: "freeme" }, m.card?.type === "code" ? h("span", { class: "fref" }, `${m.card.file} ${m.card.from}${m.card.to > m.card.from ? `~${m.card.to}` : ""}줄`) : null, m.text || "")); continue; }
+    list.append(h("div", { class: "freeai" }, m.text ? tyText(m, ws, run.id) : null, m.card && m.card.type !== "tool" ? lessonCard(m.card, run, lesson, send, ws) : null));
+  }
+  if (!lesson.messages.length) list.append(h("p", { class: "mut small freeempty" }, "아무거나 물어보세요. VS Code에서 줄을 고르고 물어보면 그 줄을 같이 봐요."));
+  if (lesson.busy) list.append(thinkLine(run, lesson));
+  const input = h("textarea", { rows: 2, placeholder: "물어보기 (Enter 보내기, Shift+Enter 줄바꿈)", "aria-label": "튜터에게 물어보기" });
+  const go = (e) => { const t = input.value.trim(); if (!t || lesson.busy) return; input.value = ""; send({ do: "ask", text: t })(e); };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go(e); } });
+  const foot = h("footer", { class: "freefoot" },
+    stuckBar(lesson, send), stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
+    h("div", { class: "freein" }, input, h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
+    lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
+  const head = h("header", { class: "freehead" },
+    h("div", { class: "grow" }, h("b", {}, run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, " · 프리스타일")),
+    FLOAT ? h("button", { class: "fib", title: "처음 화면", onclick: () => go_("#/home") }, icon("home")) : null,
+    FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
+    FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
+    FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);
+  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, list, foot));
+  list.scrollTop = list.scrollHeight;
+  if (!FLOAT) window.scrollTo({ top: document.body.scrollHeight });
+  tyAfterDraw();
+}
+const go_ = (hash) => go(hash);

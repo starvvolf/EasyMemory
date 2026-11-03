@@ -154,7 +154,8 @@ function policyPlugin(fake: boolean) {
         // 모델 응답(/responses) 요청: 지시문 다듬기 · 답 길이 · 생각 요약을 정하고, 실제로 가는 본문을 기록한다
         if (ev.request.method === "POST" && /\/responses$/.test(new URL(ev.request.url).pathname)) {
           try {
-            const j = shapeRequest(JSON.parse(await ev.request.clone().text()), reasoningSummary, experiment ? experiment.system ?? CHAT_SYSTEM : false);
+            const freeSys = live.get(ev.sessionID)?.io.freeSystem;
+            const j = shapeRequest(JSON.parse(await ev.request.clone().text()), reasoningSummary, experiment ? experiment.system ?? CHAT_SYSTEM : freeSys ? freeSys : false);
             const run = live.get(ev.sessionID)?.io.runId;
             if (run) {
               j.prompt_cache_key = `rc-${run}`; // 질문마다 새 대화라도 같은 진행 기록이면 앞부분 캐시가 맞게

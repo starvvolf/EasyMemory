@@ -61,6 +61,8 @@ export type Plan = { start: number; stages: number[]; quick: number[]; transfer:
 export type Run = {
   id: string; courseId: string; createdAt: string; intakeId?: string; profile?: Record<string, unknown>;
   plan: Plan; current: number; workspaces: Record<string, string>; stages: Record<string, StageProgress>;
+  /** 프리스타일(11/4 사용자 "실험판 느낌 그대로 제품에 연결"): 걸음 없이 대화만, 짧은 지시문 · effort low */
+  free?: boolean;
 };
 type RunsFile = { runs: Run[]; active?: string };
 const RUNS = () => path.join(DATA, "runs.json");
