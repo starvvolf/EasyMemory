@@ -326,8 +326,8 @@ function policyPlugin(fake: boolean) {
         // [막혔어요] 칸 도구(11/3): 칸을 열고 닫는 건 코드(lib/stuck.ts)가 하고, 튜터는 무엇이 비었는지와 풀렸는지만 알린다
         const stuckTools: [string, string, Record<string, unknown>, string[], (l: Live, input: any) => Promise<string>][] = [
           ["stuck_name_gap", "지금 칸에서 무엇이 비었는지 정한다. [기초 칸 목록]의 id를 concept로, 목록에 맞는 게 없으면 other에 짧은 이름. 짧은 질문으로 층을 짚은 뒤, 설명하기 전에 한 번.",
-            { concept: { type: "string" }, other: { type: "string" } }, [],
-            async (l, input) => (await nameGap(l.io.runId, l.io.stuck!.lang, { concept: input?.concept, other: input?.other })).text],
+            { concept: { type: "string" }, other: { type: "string" }, why: { type: "string", description: "학습자가 실제로 막힌 것을 학습자 말에 가깝게 한 문장(예: \"() 안에 아무것도 안 받는데 key는 어디서 오는지 모름\")" } }, ["why"],
+            async (l, input) => (await nameGap(l.io.runId, l.io.stuck!.lang, { concept: input?.concept, other: input?.other, why: input?.why })).text],
           ["stuck_go_deeper", "설명하다 보니 그보다 아래(더 기초)가 비어 있을 때 한 칸 아래를 연다. 열면 이번 답은 '그럼 그것부터 잠깐 볼게요' 한두 문장으로 끝낸다(아래 칸 설명은 다음 차례에 저절로 이어진다).",
             { concept: { type: "string" }, other: { type: "string" }, why: { type: "string", description: "왜 내려가는지 한 문장" } }, ["why"],
             async (l, input) => (await goDeeper(l.io.runId, l.io.stuck!.lang, { concept: input?.concept, other: input?.other, why: String(input?.why ?? "") })).text],

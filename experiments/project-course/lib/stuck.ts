@@ -62,11 +62,12 @@ export async function openRoot(runId: string, x: { choice: Choice; word?: string
 }
 
 /** 지금 칸에 무엇이 비었는지 이름 붙이기(튜터). 목록에 있으면 concept, 없으면 other. 위 칸들과 같으면 거절 */
-export async function nameGap(runId: string, lang: Lang, x: { concept?: string; other?: string }) {
+export async function nameGap(runId: string, lang: Lang, x: { concept?: string; other?: string; why?: string }) {
   // 처음 칸(막힌 줄 자체)은 이름을 바꾸지 않고, 짚은 빈 칸을 아래 칸으로 연다(11/3 재현: 이름 짐작 하나로 처음 칸까지 닫혀 원래 줄로 안 돌아옴)
   const top0 = openStack(await stuckOf(runId)).at(-1);
   if (top0 && top0.depth === 0 && top0.quote) {
-    const r = await goDeeper(runId, lang, { ...x, why: "처음 줄에서 짚은 빈 칸" });
+    // why: 학습자가 실제로 막힌 말(11/3 두 번째 재현: "key는 어디서 와?"가 넘어가지 않아 아래 칸이 엉뚱한 방향으로 설명함)
+    const r = await goDeeper(runId, lang, { ...x, why: x.why?.trim() || "처음 줄에서 짚은 빈 칸" });
     return r.ok ? { ok: true, text: `${r.text}. 처음 줄은 이 칸이 풀린 뒤 다시 읽어요. 이번 답은 한 문장으로 끝내세요.` } : r;
   }
   const b = x.concept ? findBasic(lang, x.concept) : null;
