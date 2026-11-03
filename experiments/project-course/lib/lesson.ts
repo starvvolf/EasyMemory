@@ -276,7 +276,9 @@ export async function act(runId: string, n: number, input: { do: string; choice?
 
   if (input.do === "ask") {
     const t = String(input.text ?? "");
-    const mode = input.mode === "explain" ? "explain" : input.mode === "tour" || TOUR_INTENT.test(t) ? "tour" : undefined;
+    // [막혔어요] 칸 안에서는 말투로 투어·설명 모드로 바꾸지 않는다(11/3 재현: "구조"라는 말에 투어 모드가 돼 막힘 도구가 빠짐)
+    const inStuck = !!(await stuckView(runId));
+    const mode = inStuck ? undefined : input.mode === "explain" ? "explain" : input.mode === "tour" || TOUR_INTENT.test(t) ? "tour" : undefined;
     return ask(runId, n, plan, mode === "tour" ? `${t}\n\n${TOUR_Q}` : t, undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : mode === "tour" ? t : undefined, mode ? { mode } : {});
   }
   // [막혔어요](11/3): 고른 종류(+단어)로 칸을 열고 튜터가 그 칸 대화를 시작한다
@@ -842,6 +844,7 @@ export async function stuckWords(runId: string, n: number) {
 async function askInner(runId: string, n: number, plan: Plan, q: string, text: string, quote: { file: string; from: number; to: number; code: string } | undefined, shown: string | undefined, opts: AskOpts) {
   void text;
   const frame = (await stuckView(runId)) ? openStack(await stuckOf(runId)).at(-1) : undefined;
+  if (frame) opts = { ...opts, mode: undefined };
   if (frame && !opts.silent) await countReply(runId);
   const s0 = await change(runId, n, (s, push) => {
     s.asked = true;
