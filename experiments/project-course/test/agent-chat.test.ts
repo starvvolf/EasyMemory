@@ -29,7 +29,8 @@ test("보충 복귀는 새 학습자 답과 실제 인용을 요구하고 같은
   await adjustLearning(s.id, { action: "support", text: "매개변수" });
   await assert.rejects(adjustLearning(s.id, { action: "support", text: "함 수" }), /이미 보는/);
   const top = (await chatOf(s.id)).support.at(-1)!;
-  await assert.rejects(adjustLearning(s.id, { action: "return", text: "알았음", supportId: top.id, evidenceMessageId: 2, evidence: "화살표 함수를 모르겠어요" }), /연 뒤/);
+  const firstUser = (await chatOf(s.id)).messages.find((m) => m.role === "user")!.id; // 11/4: 첫 인사 없이 시작하므로 id를 직접 찾는다
+  await assert.rejects(adjustLearning(s.id, { action: "return", text: "알았음", supportId: top.id, evidenceMessageId: firstUser, evidence: "화살표 함수를 모르겠어요" }), /연 뒤/);
   await askChat(s.id, "매개변수는 함수가 받는 값의 이름이에요", run);
   const message = (await chatOf(s.id)).messages.filter((m) => m.role === "user").at(-1)!;
   await assert.rejects(adjustLearning(s.id, { action: "observe", text: "이해", kind: "understood", evidenceMessageId: message.id, evidence: "지어낸 답" }), /인용/);

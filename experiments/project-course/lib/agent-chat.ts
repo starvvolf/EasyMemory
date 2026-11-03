@@ -86,8 +86,8 @@ export async function newChat() {
   const id = randomBytes(8).toString("hex");
   const course = await loadCourse("hello-api");
   await writeWorkspace(ws(id), await stageFiles(course, 1));
-  const s: Chat = { id, courseId: course.id, goal: "작은 인사 서버를 만들며 코드가 어떻게 동작하는지 이해하기", focus: "어떤 것부터 배울지 이야기하기", support: [], observations: [], messages: [], at: now() };
-  push(s, "assistant", "무엇부터 해 볼까요? 인사 서버 코드를 같이 봐도 되고, 지금 궁금하거나 막힌 걸 바로 물어봐도 돼요.");
+  // 11/4 사용자 "프리스타일로, 뭐 여쭤보는 거 없이": 첫 인사·질문 없이 빈 대화로 시작, 목표·초점도 대화에서 정해진다
+  const s: Chat = { id, courseId: course.id, goal: "", focus: "", support: [], observations: [], messages: [], at: now() };
   await update<Chat>(file(id), s, () => s);
   return chatView(id);
 }
