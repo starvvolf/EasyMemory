@@ -142,6 +142,7 @@ async function route() {
   const hash = location.hash;
   let m;
   try {
+    if (hash === "#/lab") return await renderLab();
     if ((m = /^#\/intake\/(\w+)/.exec(hash))) return await renderIntake(m[1]);
     if ((m = /^#\/run\/(\w+)\/summary/.exec(hash))) return await renderSummary(m[1]);
     if ((m = /^#\/run\/(\w+)\/cards/.exec(hash))) return await renderRun(m[1]);
@@ -634,6 +635,43 @@ async function renderRunOrLesson(id) {
   };
 }
 
+/* ---------- 글자 흘리기(11/3 사용자 "gpt챗·클로드처럼 일정한 속도로") ----------
+ * 서버는 0.45초마다 덩어리로 보내 오지만, 화면은 받은 글을 일정한 속도로 한 글자씩 보여 준다.
+ * 밀린 글이 많으면 조금 빨라진다(1.5초 안에 따라잡게). 처음 열 때 이미 있던 말은 그대로 다 보인다. */
+const TY = { shown: new Map(), full: new Map(), ws: "", raf: 0, last: 0, key: null, init: true };
+function tyText(m, ws, key) {
+  if (TY.key !== key) { TY.key = key; TY.shown.clear(); TY.full.clear(); TY.init = true; }
+  const full = m.text || "";
+  TY.full.set(m.id, full); TY.ws = ws;
+  if (!TY.shown.has(m.id)) TY.shown.set(m.id, TY.init ? full.length : 0);
+  const n = Math.floor(TY.shown.get(m.id));
+  return h("div", { class: "ty", "data-mid": String(m.id) }, rich(full.slice(0, n), ws));
+}
+function tyAfterDraw() {
+  TY.init = false;
+  if (!TY.raf) { TY.last = performance.now(); TY.raf = requestAnimationFrame(tyTick); }
+}
+function tyTick(t) {
+  const dt = Math.min(0.1, (t - TY.last) / 1000); TY.last = t;
+  let pending = false;
+  for (const el of document.querySelectorAll(".ty[data-mid]")) {
+    const id = Number(el.dataset.mid); const full = TY.full.get(id) ?? "";
+    const n0 = TY.shown.get(id) ?? full.length;
+    if (n0 >= full.length) continue;
+    const rate = Math.max(55, (full.length - n0) / 1.5); // 글자/초
+    const n = Math.min(full.length, n0 + rate * dt);
+    TY.shown.set(id, n);
+    if (Math.floor(n) !== Math.floor(n0)) {
+      const sc = el.closest(".fscroll, .fmsgs, .labchat");
+      const near = sc ? sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80 : window.innerHeight + window.scrollY >= document.body.scrollHeight - 80;
+      el.replaceChildren(rich(full.slice(0, Math.floor(n)), TY.ws));
+      if (near) { if (sc) sc.scrollTop = sc.scrollHeight; else window.scrollTo({ top: document.body.scrollHeight }); }
+    }
+    if (n < full.length) pending = true;
+  }
+  TY.raf = pending ? requestAnimationFrame(tyTick) : 0;
+}
+
 /** 튜터 글(마크다운): 제목, 목록, 인용, ```코드 블록```(색칠·복사·줄 링크), **굵게**, *기울임*, `코드`, [[파일:줄]] */
 function rich(text, ws) {
   const box = h("div", { class: "rich" });
@@ -790,7 +828,7 @@ function drawLesson() {
     const row = h("div", { class: `lmsg ${m.role} ${cont ? "cont" : ""}` });
     if (m.role === "tutor") row.append(h("div", { class: `avatar ${cont ? "ghost" : ""}` }, cont ? "" : "R"));
     const col = h("div", { class: "lcol" });
-    if (m.text) col.append(m.role === "me" ? h("div", { class: "bubble" }, m.text) : h("div", { class: "bubble" }, rich(m.text, ws)));
+    if (m.text) col.append(m.role === "me" ? h("div", { class: "bubble" }, m.text) : h("div", { class: "bubble" }, tyText(m, ws, run.id)));
     if (m.card) col.append(lessonCard(m.card, run, lesson, send, ws));
     row.append(col);
     chat.append(row);
@@ -849,6 +887,7 @@ function drawLesson() {
   view.replaceChildren(h("div", { class: "lesson" }, side, h("main", { class: "lmain" }, chat, h("div", { class: "lfoot" }, stuckBar(lesson, send), stuckPicker(run, lesson, send), nowbar, savebar, quick, h("div", { class: "row" }, form, stuckBtn)))));
   if (atBottom || !drawLesson.drawn) window.scrollTo({ top: document.body.scrollHeight });
   drawLesson.drawn = true;
+  tyAfterDraw();
 }
 
 /* ---------- 생성 코스: 다음 단계가 뒤에서 만들어지는 중이면 기다렸다가 시작 ---------- */
@@ -954,7 +993,7 @@ function drawFloat() {
     if (m.role === "note") { body.append(h("p", { class: "fnote" }, m.text)); continue; }
     if (m.role === "me") { if (m.text) body.append(h("p", { class: "fme" }, "↳ ", m.text)); if (m.card) body.append(lessonCard(m.card, run, lesson, send, ws)); continue; }
     if (m.card?.type === "tool" && !m.text) { body.append(h("p", { class: "ftool" }, m.card.icon, " ", shortTool(m.card.label))); continue; }
-    if (m.text) body.append(rich(m.text, ws));
+    if (m.text) body.append(tyText(m, ws, run.id));
     if (m.card) body.append(lessonCard(m.card, run, lesson, send, ws));
   }
   if (lesson.waiting === "save" && lesson.mode && lesson.mode !== "auto") body.append(h("p", { class: "fsave" }, h("span", { class: "pulse" }), "고친 뒤 ", h("kbd", {}, "Ctrl"), "+", h("kbd", {}, "S"), "를 누르면 바로 확인해요"));
@@ -976,7 +1015,7 @@ function drawFloat() {
       if (m.role === "note") { list.append(h("p", { class: "fnote" }, m.text)); continue; }
       if (m.card?.type === "tool" && !m.text) { list.append(h("p", { class: "ftool" }, m.card.icon, " ", shortTool(m.card.label))); continue; }
       if (m.role === "me") { list.append(h("div", { class: "fq" }, m.card?.type === "code" ? h("span", { class: "fref" }, `${m.card.file} ${m.card.from}${m.card.to > m.card.from ? `~${m.card.to}` : ""}줄`) : null, m.text)); continue; }
-      list.append(h("div", { class: "fa" }, m.text ? rich(m.text, ws) : null, m.card ? lessonCard(m.card, run, lesson, send, ws) : null));
+      list.append(h("div", { class: "fa" }, m.text ? tyText(m, ws, run.id) : null, m.card ? lessonCard(m.card, run, lesson, send, ws) : null));
     }
     if (lesson.busy) list.append(thinkLine(run, lesson));
     const more = (text, shown) => send({ do: "ask", text, shown, mode: "explain" });
@@ -1010,6 +1049,7 @@ function drawFloat() {
     h("div", { class: "fscroll" }, recapCard, past, body), sheet, foot));
   const sc = view.querySelector(".fscroll"); if (sc) sc.scrollTop = sc.scrollHeight;
   const ms = view.querySelector(".fmsgs"); if (ms) ms.scrollTop = ms.scrollHeight;
+  tyAfterDraw();
 }
 /** "예측" → "예측으로", "고치기" → "고치기로" (받침 있으면 으로) */
 function ro(word) { const c = word.charCodeAt(word.length - 1); const jong = c >= 0xac00 && c <= 0xd7a3 ? (c - 0xac00) % 28 : 0; return word + (jong && jong !== 8 ? "으로" : "로"); }
@@ -1157,3 +1197,83 @@ async function renderSummary(id) {
 }
 
 route();
+
+/* ---------- AI 채팅 실험방(11/3 사용자 "말투부터 하는 짓까지 맘에 안 들어서 직접 실험") ----------
+ * 왼쪽: 실험용 진행 기록으로 튜터와 대화. 오른쪽: 추가 지시(모든 튜터 차례 끝에 붙음) · 프롬프트 처리 방식 · 마지막으로 모델에 간 것 */
+let labEvents = null;
+const labUi = { tab: "extra" };
+async function renderLab() {
+  const info = await api("GET", "/api/lab");
+  const box = h("div", { class: "lab" });
+  view.replaceChildren(box);
+  const newBtn = h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", "/api/lab/new", { courseId: "hello-api" }); renderLab(); }) }, info.runId ? "새 대화로" : "실험 시작");
+  const head = h("div", { class: "labhead" }, h("h2", {}, "AI 채팅 실험방"), h("span", { class: "mut small grow" }, "튜터와 직접 대화해 보고, 오른쪽에서 프롬프트를 고쳐 가며 비교해요. 대화는 맛보기 코스(인사 서버) 위에서 해요."), newBtn);
+  const chatCol = h("section", { class: "labchatcol" });
+  const side = h("aside", { class: "labside" });
+  box.append(head, h("div", { class: "labgrid" }, chatCol, side));
+  drawLabSide(side, info);
+  if (!info.runId) { chatCol.append(h("div", { class: "empty" }, h("p", {}, "[실험 시작]을 누르면 실험용 진행 기록을 만들어요."))); return; }
+  const run = await api("GET", `/api/runs/${info.runId}`);
+  const L = `/api/runs/${info.runId}/lesson/${run.current}`;
+  let lesson = await api("GET", L);
+  const draw = () => {
+    const list = h("div", { class: "labchat" });
+    for (const m of lesson.messages) {
+      if (m.role === "note") { list.append(h("p", { class: "lnote" }, m.text)); continue; }
+      if (m.card?.type === "tool" && !m.text) { list.append(h("p", { class: "ftool" }, m.card.icon, " ", shortTool(m.card.label))); continue; }
+      if (m.role === "me") { if (m.text) list.append(h("div", { class: "labme" }, m.text)); continue; }
+      list.append(h("div", { class: "labai" }, m.text ? tyText(m, lesson.workspace, "lab-" + info.runId) : null, m.card && m.card.type !== "tool" ? h("span", { class: "chip" }, `카드: ${m.card.type}`) : null));
+    }
+    const last = [...lesson.messages].reverse().find((m) => m.actions?.length);
+    const acts = !lesson.busy && last ? h("div", { class: "row wrap" }, last.actions.map((a) => h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { lesson = await api("POST", L + "/act", { do: a.do }); draw(); }) }, a.label))) : null;
+    if (lesson.busy) list.append(h("p", { class: "mut small" }, lesson.thinking ? `💭 ${lesson.thinking}` : "튜터가 답하는 중…"));
+    const input = h("textarea", { rows: 2, placeholder: "튜터에게 말하기 (Enter 보내기, Shift+Enter 줄바꿈)" });
+    const sendIt = () => { const t = input.value.trim(); if (!t || lesson.busy) return; input.value = ""; api("POST", L + "/act", { do: "ask", text: t }).catch((e) => alert(e.message)); };
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendIt(); } });
+    const stop = lesson.busy ? h("button", { class: "btn small", onclick: () => api("POST", L + "/stop") }, "■ 멈추기") : null;
+    chatCol.replaceChildren(list, acts, h("div", { class: "labin" }, input, h("button", { class: "btn primary", onclick: sendIt }, "보내기"), stop));
+    list.scrollTop = list.scrollHeight;
+    tyAfterDraw();
+  };
+  draw();
+  if (labEvents) labEvents.close();
+  labEvents = new EventSource(`/api/runs/${info.runId}/events`);
+  let wasBusy = lesson.busy;
+  labEvents.onmessage = async (e) => {
+    if (location.hash !== "#/lab") { labEvents.close(); return; }
+    if (e.data !== "lesson") return;
+    lesson = await api("GET", L); draw();
+    if (wasBusy && !lesson.busy) drawLabSide(side, await api("GET", "/api/lab"));
+    wasBusy = lesson.busy;
+  };
+}
+function drawLabSide(side, info) {
+  const tabs = [["extra", "추가 지시"], ["pipe", "처리 방식"], ["last", "마지막으로 간 것"]];
+  const bar = h("div", { class: "labtabs" }, tabs.map(([k, label]) => h("button", { class: `btn small ${labUi.tab === k ? "primary" : ""}`, onclick: () => { labUi.tab = k; drawLabSide(side, info); } }, label)));
+  let body;
+  if (labUi.tab === "extra") {
+    const ta = h("textarea", { class: "labextra", rows: 14, placeholder: "예) 반말 섞지 말고 짧게. 질문엔 첫 문장에 답부터. 비유는 한 번만. 목록·소제목 쓰지 마." }, info.extra || "");
+    const msg = h("span", { class: "mut small" }, info.extra ? "지금 적용 중이에요." : "비어 있어요.");
+    body = h("div", { class: "labpane" },
+      h("p", { class: "small" }, "여기 적은 글은 ", h("b", {}, "모든 튜터 차례의 맥락 맨 끝"), "에 '[추가 지시]'로 붙어요. 실험방뿐 아니라 실제 코스의 튜터에도 똑같이 적용돼요. 저장하면 다음 답부터 바로 반영돼요."),
+      ta,
+      h("div", { class: "row" }, h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => { const out = await api("POST", "/api/lab/extra", { extra: ta.value }); info.extra = out.extra; msg.textContent = out.extra ? "저장했어요. 다음 답부터 적용돼요." : "비웠어요."; }) }, "저장"),
+        h("button", { class: "btn", onclick: () => { ta.value = ""; } }, "지우기"), msg));
+  } else if (labUi.tab === "pipe") {
+    body = h("div", { class: "labpane" },
+      h("p", { class: "small mut" }, "튜터에게 질문 하나가 갈 때 코드가 맥락을 이렇게 조립해요. 위에서 아래 순서로 모델에 들어가요."),
+      h("ol", { class: "labpipe" }, info.pipeline.map((p) => h("li", {}, h("b", {}, p.step), h("div", { class: "small" }, p.what)))),
+      h("details", {}, h("summary", {}, "고정 지시문(SYSTEM) 전체 보기"), h("pre", { class: "labpre" }, info.system)));
+  } else {
+    const l = info.last;
+    body = h("div", { class: "labpane" },
+      !l?.turn ? h("p", { class: "mut" }, "아직 기록이 없어요. 왼쪽에서 한 번 물어보면 여기 실제로 간 것이 나와요.") : [
+        h("p", { class: "small mut" }, `${l.at} · 이 대화의 ${l.turnNo ?? "?"}번째 차례 · 대화 메시지 ${l.messages}개 · 모델 ${l.settings?.model ?? "?"} · 생각 ${JSON.stringify(l.settings?.reasoning)} · 글 ${JSON.stringify(l.settings?.text)}`),
+        h("p", { class: "small" }, "도구: ", l.tools.join(", ")),
+        h("details", { open: true }, h("summary", {}, "이번 차례에 덧붙인 글 (맥락 · 학습자 말)"), h("pre", { class: "labpre" }, l.turn)),
+        h("details", {}, h("summary", {}, "지시문 (실제로 간 것, OpenCode 덧붙임 뗀 뒤)"), h("pre", { class: "labpre" }, l.instructions)),
+        h("details", { open: true }, h("summary", {}, "받은 답"), h("pre", { class: "labpre" }, l.answer || "(없음)")),
+        h("button", { class: "btn small", onclick: async () => drawLabSide(side, await api("GET", "/api/lab")) }, "새로 고침")]);
+  }
+  side.replaceChildren(bar, body);
+}

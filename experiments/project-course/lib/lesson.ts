@@ -22,6 +22,7 @@ import { runAgent, undoEdit, type AskCard, type CtxFile, type DiffCard, type Sni
 import { aiMode } from "./ai.ts";
 import { onStuckChange, CHOICES, countReply, leaveAll, openRoot, openStack, resolveTop, stuckOf, stuckView, labelOf, type Choice, type Frame } from "./stuck.ts";
 import { basicsLine, catalogText, langOf } from "./basics.ts";
+import { extraBlock } from "./lab.ts";
 import { actionOfBeat, answerBackground, backgroundLine, bgQuestion, closeDetours, enterBeat, events, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
@@ -940,6 +941,8 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     learnerLine(await learnerView(runId, course).catch(() => ({ concepts: [], misconceptions: [], observations: [] }))),
     await basicsLine(langOf(course as { language?: string; stack?: string })).catch(() => ""),
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
+    // 실험방에서 사용자가 직접 적은 추가 지시(11/3): 매 차례 맥락 맨 끝
+    await extraBlock().catch(() => ""),
   ].filter(Boolean).join("\n");
   // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
   const files = opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stage.fix.files, opts.mode === "explain");

@@ -665,3 +665,23 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .stuckbar .sb-a { display: flex; flex-wrap: wrap; gap: 6px; }
 .stuckbar .fchip, .stuckpick .fchip { border: 1px solid var(--f-line2, var(--line)); background: transparent; color: var(--f-ink2, var(--ink)); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
 .float .fchip.warm { border-color: var(--f-acc, var(--acc)); }
+
+/* AI 채팅 실험방(11/3) */
+.lab { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+.labhead { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.labhead h2 { margin: 0; }
+.labgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 520px); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .labgrid { grid-template-columns: minmax(0, 1fr); } }
+.labchatcol { display: grid; gap: 8px; min-width: 0; }
+.labchat { height: 64vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 12px; display: grid; gap: 10px; align-content: start; }
+.labme { justify-self: end; max-width: 80%; background: var(--acc-soft); border-radius: 12px; padding: 8px 12px; white-space: pre-wrap; }
+.labai { max-width: 92%; min-width: 0; }
+.labin { display: flex; gap: 8px; align-items: flex-end; }
+.labin textarea { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit; background: var(--panel); color: var(--ink); }
+.labside { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 12px; display: grid; gap: 10px; min-width: 0; }
+.labtabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.labpane { display: grid; gap: 10px; min-width: 0; }
+.labextra { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px; font: inherit; background: var(--bg); color: var(--ink); }
+.labpipe { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+.labpre { white-space: pre-wrap; word-break: break-word; max-height: 50vh; overflow: auto; background: var(--soft); border-radius: 8px; padding: 10px; font-size: 12px; margin: 6px 0 0; }
+.row.wrap { flex-wrap: wrap; }

@@ -40,7 +40,7 @@ const editPaths = (tool: string, input: any): string[] => tool === "patch"
   ? [...String(input?.patchText ?? "").matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)].map((m) => m[1].trim())
   : [String(input?.path ?? input?.filePath ?? "")].filter(Boolean);
 
-const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친절한 강사이자, 학습자의 프로젝트 폴더를 직접 다룰 수 있는 개발자다.
+export const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 친절한 강사이자, 학습자의 프로젝트 폴더를 직접 다룰 수 있는 개발자다.
 목표는 대신 개발해 주는 게 아니라, 개발자가 어떻게 확인하고 고치는지 보여 주며 가르치는 것이다.
 
 말투
@@ -171,7 +171,7 @@ function policyPlugin(fake: boolean) {
             }
             body = JSON.stringify(j); hd.delete("content-length");
             // 캐시 원인 확인(11/3): OpenCode가 붙이는 헤더도 남긴다(로그인 토큰은 빼고)
-            void logPrompt("tutor-request", { ...j, _headers: Object.fromEntries([...hd.entries()].filter(([k]) => !/authorization|cookie/i.test(k))), _url: ev.request.url });
+            void logPrompt("tutor-request", { ...j, _run: run, _headers: Object.fromEntries([...hd.entries()].filter(([k]) => !/authorization|cookie/i.test(k))), _url: ev.request.url });
           } catch { /* 본문이 JSON이 아니면 그대로 */ }
         }
         ev.request = body === undefined ? new Request(ev.request, { headers: hd }) : new Request(ev.request.url, { method: "POST", headers: hd, body, signal: ev.request.signal });

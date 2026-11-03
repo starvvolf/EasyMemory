@@ -164,6 +164,25 @@ const routes: [string, RegExp, Handler][] = [
     return v;
   }],
   ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/act$/, async (req, m) => { await act(m[1], Number(m[2]), (await body(req)) as never); return lessonView(m[1], Number(m[2])); }],
+  // AI 채팅 실험방(11/3): 추가 지시 · 실험용 진행 기록 · 프롬프트 처리 방식과 마지막으로 간 것
+  ["GET", /^\/api\/lab$/, async () => {
+    const lab = await import("../lib/lab.ts"); const { SYSTEM } = await import("../lib/oc-engine.ts");
+    const runId = await lab.labRun();
+    return { runId, extra: await lab.getExtra(), pipeline: lab.PIPELINE, system: SYSTEM, last: await lab.lastPrompt(runId) };
+  }],
+  ["POST", /^\/api\/lab\/extra$/, async (req) => { const lab = await import("../lib/lab.ts"); const b = await body(req); return { extra: await lab.setExtra(String(b.extra ?? "")) }; }],
+  ["POST", /^\/api\/lab\/new$/, async (req) => {
+    const b = await body(req);
+    const lab = await import("../lib/lab.ts");
+    const course = await loadCourse(String(b.courseId || "hello-api"));
+    const main = course.generated ? course.generated.outline.map((o) => o.n) : course.stages.filter((s) => !s.transfer).map((s) => s.n);
+    const plan = { start: main[0], stages: main, quick: [], transfer: false, reasons: ["실험방"], notes: [], minutes: main.length * 5 };
+    const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), plan, current: plan.start, workspaces: {}, stages: {} };
+    await addRun(run);
+    await startStage(run.id, plan.start);
+    await lab.setLabRun(run.id);
+    return { runId: run.id };
+  }],
   // [막혔어요](11/3): 고른 코드에서 단어 고르기
   ["GET", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/stuck-words$/, async (_q, m) => { await getRun(m[1]); return stuckWords(m[1], Number(m[2])); }],
   ["GET", /^\/api\/basics$/, async () => { const { basicsStore, promotable } = await import("../lib/basics.ts"); return { ...(await basicsStore()), promotable: await promotable() }; }],
