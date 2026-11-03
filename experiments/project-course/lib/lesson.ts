@@ -866,7 +866,9 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   // 컨텍스트 관리자(11/3 사용자: "대화 기록 저장과 LLM에 주는 컨텍스트를 분리"). AI가 아니라 코드가 매번 조립한다:
   // 지시문(고정) + [코스]·[이번 단계] + 앞부분(길면 요약, 넘쳤을 때만 만든다) + 최근 대화(지금 걸음은 자르지 않음) + [학습자 상태]·[지금 위치] + 필요한 파일(매번 디스크에서).
   // 기록(화면 메시지 · 학습 사건 · 모델 본문)은 따로 다 남고 지우지 않는다. 모델 대화는 질문마다 새로 연다.
-  const lineOf = (m: LMsg) => m.role === "me" ? (m.text ? `학습자: ${m.text}` : "") : m.role === "note" ? (m.text ? `(화면 알림: ${m.text})` : "")
+  // 11/3 사용자 "채팅은 다 컨텍스트에 넣어 봐, 세션이랑 별개로": [막혔어요] 칸 안의 말도 코스 대화에 그대로 넣고, 칸 표시만 붙인다
+  const lineOf = (m: LMsg) => { const t = lineOf0(m); return t && m.sf ? `[막혔어요 칸] ${t}` : t; };
+  const lineOf0 = (m: LMsg) => m.role === "me" ? (m.text ? `학습자: ${m.text}` : "") : m.role === "note" ? (m.text ? `(화면 알림: ${m.text})` : "")
     : m.card?.type === "explain" && m.card.done ? `${m.text ? `튜터: ${m.text}\n\n` : ""}학습자(내 말로): ${m.card.done}`
     : m.text ? `튜터: ${m.text}`
     : m.card?.type === "choice" && m.card.picked !== undefined ? `(학습자가 고른 답: ${m.card.options[m.card.picked]})`
@@ -876,7 +878,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const talk = (ms: LMsg[]) => ms.map(lineOf).filter(Boolean).join("\n\n");
   // 방금 넣은 질문은 빼고, 시작 인사·배경 질문(걸음 -1)도 뺀다(배경은 [학습자 상태]에 있다)
   // [막혔어요] 칸 대화는 코스 대화 맥락에 넣지 않는다(칸이 풀린 한 줄만 들어간다)
-  const before = (opts.silent ? s0.messages : s0.messages.slice(0, -1)).filter((m) => (m.beat ?? 0) >= 0 && !m.sf);
+  const before = (opts.silent ? s0.messages : s0.messages.slice(0, -1)).filter((m) => (m.beat ?? 0) >= 0);
   const { older, recent } = splitRecent(before, s0.beat);
   const olderPart = await olderContext(runId, n, s0, older, talk);
   const stage = stageOf(course, n);
@@ -924,7 +926,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     const stack = openStack(await stuckOf(runId));
     const root = stack[0];
     sessKey = `${runId}#${frame.id}`;
-    const courseTalk = talk(before.slice(-8));
+    // 칸 대화도 새 대화로 열지만, 맥락은 채팅 전체(코스 + 모든 칸)를 코스 대화와 같은 방식(앞부분 요약 + 최근)으로 준다
     const frameMsgs = (opts.silent ? s0.messages : s0.messages.slice(0, -1)).filter((m) => m.sf === frame.id);
     const fsent = sentUpTo.get(sessKey) ?? -1;
     const ffixed = [
@@ -934,14 +936,13 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
       root.choice ? `[학습자가 고른 막힘] ${CHOICES[root.choice].label}${root.word ? ` — 단어 \`${root.word}\`` : ""} (${CHOICES[root.choice].why})` : "",
       frame.why ? `[위 칸에서 내려온 이유] ${frame.why}` : "",
       `[언어] ${lang} — 설명과 예시는 이 언어 모양으로.`,
-      courseTalk ? `[코스에서 지금까지 한 대화(쓴 비유·말을 그대로 이어 쓴다)]\n${courseTalk}` : "",
       `[기초 칸 목록 — 이 언어]\n${catalogText(lang)}`,
       frame.depth === 0 && root.quote ? ROOT_RULES : CHILD_RULES,
     ].filter(Boolean).join("\n\n");
     const fturn = [state.split("\n")[0], await basicsLine(lang)].filter(Boolean).join("\n");
-    const ftalk = talk(frameMsgs);
-    const fsince = talk(frameMsgs.filter((m) => m.id > fsent));
-    parts = { fixed: ffixed, turn: fturn, recent: ftalk ? `[이 칸 대화]\n${ftalk}` : "", since: fsince ? `[지난번 뒤 화면]\n${fsince}` : "", files: [] };
+    void frameMsgs;
+    const fsince = talk(before.filter((m) => m.id > fsent));
+    parts = { fixed: ffixed, turn: fturn, recent: history ? `${history}\n\n(위 대화의 쓴 비유·말을 그대로 이어 쓴다. 바로 위 칸에서 학습자가 한 말이 이 칸의 출발점이다)` : "", since: fsince ? `[지난번 뒤 화면]\n${fsince}` : "", files: [] };
     context = [ffixed, parts.recent, fturn].filter(Boolean).join("\n\n");
   }
   if (aiMode() !== "off") {
