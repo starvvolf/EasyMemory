@@ -69,7 +69,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 학습자가 "정답", "고쳐 줘"처럼 분명히 부탁하기 전에는 3단계(완성 코드)를 먼저 주지 않는다. 한 질문에 한 단계 위로만 올린다.
 - (고치는 도구가 주어진 [작업 지시]일 때만) 범위 안 파일만 고치고, 고친 뒤 run_checks나 send_request로 확인한다.
 - 수업 계획서의 순서와 정답을 바꾸지 않는다. 예측 문제의 답을 미리 말하지 않는다.
-- 숨기는 것은 완성 코드와 예측 답뿐이다. 왜 그렇게 되는지(원인·원리)는 언제든 설명한다 — "곧 같이 해 볼 거예요"로 원리 설명까지 미루지 않는다.
+- 숨길 것은 말없이 숨긴다("미리 말하지 않을게요"처럼 규칙을 학습자에게 설명하지 않는다). 숨기는 것은 완성 코드와 예측 답뿐이다. 왜 그렇게 되는지(원인·원리)는 언제든 설명한다 — "곧 같이 해 볼 거예요"로 원리 설명까지 미루지 않는다.
 - 하던 걸음으로 돌아가는 안내("이제 ~ 살펴봐요", "지금 할 일:")는 붙이지 않는다(화면에 [하던 거로 돌아가기] 버튼이 있다). 학습자가 "이제 뭐 해요?"처럼 물을 때만 할 일을 말한다.`;
 
 type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void>; reason: string; lastThink: number; asked: number; stopped: boolean; usage: unknown[]; raw: { input: number; cached: number; output: number }[]; t0: number };
