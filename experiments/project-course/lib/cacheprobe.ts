@@ -17,6 +17,7 @@ const VARIANTS: Record<string, (b: Body) => Body> = {
   "그대로 + OpenCode 헤더(세션 헤더 빼고)": (b) => b,
   "끝만 다르게(앞부분 캐시 되나)": (b) => { const c = structuredClone(b) as any; const last = c.input.at(-1); const part = Array.isArray(last.content) ? last.content.at(-1) : null; if (part?.text) part.text += `\n(변형 ${Date.now()})`; else if (typeof last.content === "string") last.content += `\n(변형 ${Date.now()})`; return c; },
   "끝만 다르게 · 매번 새 토큰": (b) => VARIANTS["끝만 다르게(앞부분 캐시 되나)"](b),
+  "고정 앞부분만(길이 재기)": (b) => { const c = structuredClone(b) as any; const f = c.input[0]; const cut = (t: string) => t.split(/\n\n\[(앞부분|최근 대화|학습자 상태)/)[0]; if (Array.isArray(f.content)) f.content = [{ type: "input_text", text: cut(f.content[0].text) }]; else f.content = cut(f.content); c.input = [f]; return c; },
   "앱과 같은 최소 모양": (b) => ({ model: b.model, instructions: b.instructions, input: b.input, store: false, stream: true }),
 };
 
