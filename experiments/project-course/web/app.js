@@ -637,7 +637,7 @@ async function renderRunOrLesson(id) {
 
 /* ---------- 글자 흘리기(11/3 사용자 "gpt챗·클로드처럼 일정한 속도로") ----------
  * 서버는 0.45초마다 덩어리로 보내 오지만, 화면은 받은 글을 일정한 속도로 한 글자씩 보여 준다.
- * 밀린 글이 많으면 조금 빨라진다(1.5초 안에 따라잡게). 처음 열 때 이미 있던 말은 그대로 다 보인다. */
+ * 밀린 글이 많으면 빨라진다(0.6초 안에 따라잡게). 처음 열 때 이미 있던 말은 그대로 다 보인다. */
 const TY = { shown: new Map(), full: new Map(), ws: "", raf: 0, last: 0, key: null, init: true };
 function tyText(m, ws, key) {
   if (TY.key !== key) { TY.key = key; TY.shown.clear(); TY.full.clear(); TY.init = true; }
@@ -658,7 +658,8 @@ function tyTick(t) {
     const id = Number(el.dataset.mid); const full = TY.full.get(id) ?? "";
     const n0 = TY.shown.get(id) ?? full.length;
     if (n0 >= full.length) continue;
-    const rate = Math.max(55, (full.length - n0) / 1.5); // 글자/초
+    // 11/4 사용자 "실험창이 더 빨라 보임": 밀림이 0.6초를 넘지 않게(실험창은 받은 대로 바로 보여 줌)
+    const rate = Math.max(90, (full.length - n0) / 0.6); // 글자/초
     const n = Math.min(full.length, n0 + rate * dt);
     TY.shown.set(id, n);
     if (Math.floor(n) !== Math.floor(n0)) {
