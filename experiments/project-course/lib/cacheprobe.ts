@@ -78,5 +78,17 @@ export async function cacheProbe(only?: string[], waitMs = 0) {
     const b = await send(token, a.id ? { ...b0, prompt_cache_options: { comparison_response_id: a.id } } : b0);
     out["이어 쓰기"] = { waitMs, first: a, second: b };
   }
+  // 처음 보는 앞부분 + 끝만 다르게: 도구 있음/없음 비교(같은 앞부분이 다른 질문 사이에서 재사용되는지)
+  for (const withTools of [true, false]) {
+    const name = `새 앞부분 끝만 다르게(${withTools ? "도구 있음" : "도구 없음"})`;
+    if (!only?.includes(name)) continue;
+    const mark = `[시험 ${Date.now()}]\n`;
+    const mk = (q: string) => { const c = structuredClone(base) as any; if (!withTools) delete c.tools; const f = c.input[0]; if (Array.isArray(f.content)) f.content[0].text = mark + f.content[0].text + `\n\n[학습자 질문] ${q}`; else f.content = mark + f.content + `\n\n[학습자 질문] ${q}`; return c; };
+    const a = await send(token, mk("첫 질문"));
+    await new Promise((r) => setTimeout(r, waitMs));
+    const b = await send(token, mk("두 번째 질문"));
+    const c = await send(token, mk("세 번째 질문"));
+    out[name] = { a: a.cached, b: b.cached, c: c.cached, input: a.input };
+  }
   return out;
 }
