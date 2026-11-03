@@ -781,7 +781,7 @@ const DIAG = `짧은 질문으로 층을 짚는다: 1~2초면 답할, 답을 보
 const ROOT_RULES = `이 칸은 처음 막힌 줄 자체다(이름을 바꾸지 않는다).
 1. ${DIAG}
 2. 빈 칸을 찾으면 stuck_name_gap(목록 id 또는 other, 라이브러리·프레임워크 단어는 library-api) — 그 칸이 아래에 열리고 설명은 거기서 한다. 이 칸에서는 길게 설명하지 않는다.
-3. 아래 칸에서 돌아오면 학습자에게 처음 줄을 아는 만큼 한국어로 읽어 보게 한다. 아직 막히는 데가 보이면 그다음 빈 칸을 짚어 또 연다.
+3. 아래 칸에서 돌아오면 화면이 학습자에게 처음 줄을 한국어로 읽어 보게 한다(코드가 띄움). 학습자가 읽은 말에서 아직 막히는 데가 보이면 그다음 빈 칸을 짚어 또 연다.
 4. 학습자가 줄을 자기 말로 맞게 읽으면 stuck_resolved(evidence=학습자가 읽은 말).
 막힘 도구(stuck_…)는 부르기 전에 "기록할게요", "짚어 둘게요" 같은 말을 하지 않는다(화면에 따로 보인다).
 코스의 다음 걸음·정답 코드는 말하지 않는다.`;
@@ -811,8 +811,19 @@ async function stuckReturned(runId: string, n: number, plan: Plan, done: Frame) 
   const parent = await syncTop(runId);
   void record({ runId, stage: n, beat: -1, type: "self_report", actor: done.by === "learner" ? "user" : "agent", detail: `막혔어요 풀림: ${labelOf(done)} — ${done.result ?? ""}`.slice(0, 300) });
   if (parent) {
-    await change(runId, n, (_s, push) => push({ role: "note", text: `✔ ${labelOf(done)} — 풀렸어요. 한 칸 위(${labelOf(parent)})로 돌아가요.` }));
-    return void ask(runId, n, plan, `[아래 칸에서 돌아옴] "${labelOf(done)}" 풀림(학습자가 한 것: ${done.result}). 이 칸(${labelOf(parent)})으로 돌아왔어요. 아래 칸에서 쓴 예를 한 문장으로 이어 주고, 학습자에게 이 칸에서 막혔던 것을 다시 해 보게 하세요${parent.quote ? `(처음 막힌 코드 줄을 한국어로 읽어 보게)` : ""}. 맞게 하면 stuck_resolved.`, undefined, undefined, { silent: true }).catch((e) => console.error("[stuck]", e));
+    // B가 풀리면 그냥 A로(11/3 사용자 "B를 해결하면 그냥 A로 돌아오면 되는 거 아님?"): 튜터를 다시 부르지 않고 코드가 A를 다시 놓는다.
+    // A에서 한 대화는 맥락에 그대로 있으니, 학습자가 A에서 다음 말을 하면 튜터가 이어서 본다
+    await change(runId, n, (s, push) => {
+      push({ role: "note", text: `✔ ${labelOf(done)} — 풀렸어요. ${labelOf(parent)}(으)로 돌아왔어요.` });
+      if (parent.depth === 0 && parent.quote) {
+        push({ role: "tutor", text: `처음 막힌 줄이에요. 이제 이 줄을 아는 만큼 한국어로 읽어 볼래요? 아직 막히는 데가 있으면 그것도 말해 주세요.\n\n\`\`\`ts ${parent.quote.file}:${parent.quote.from}\n${parent.quote.code.trim()}\n\`\`\`` });
+      } else {
+        // A에서 튜터가 마지막으로 한 말(대개 A의 확인 질문)을 다시 보여 준다
+        const last = [...s.messages].reverse().find((m) => m.sf === parent.id && m.role === "tutor" && m.text && m.text.length > 20);
+        push({ role: "tutor", text: last ? `아까 하던 데로 돌아왔어요.\n\n> ${last.text!.split("\n").filter(Boolean).slice(-2).join("\n> ")}` : `"${labelOf(parent)}"로 돌아왔어요. 이어서 해 볼게요.` });
+      }
+    });
+    return;
   }
   // 맨 위 칸이 풀림: 코스로(코스 대화에는 이 한 줄만 들어간다)
   await change(runId, n, (s, push) => {
