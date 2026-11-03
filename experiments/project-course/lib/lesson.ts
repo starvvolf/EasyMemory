@@ -3,6 +3,7 @@
 // - VS Code와는 "이어진 것처럼": 파일 줄 링크(vscode://), 저장하면 튜터가 알아채고 바로 확인한다.
 import { watch, type FSWatcher } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { ServerResponse } from "node:http";
 import { COURSES, courseDir, loadCourse, solutionDiff, stageFiles, stageOf } from "./course.ts";
@@ -527,6 +528,7 @@ async function allFiles(ws: string): Promise<CtxFile[]> {
 
 /** 튜터가 답에 이 단계 정답 줄을 보여 줬으면 "정답 줄을 봤다"(힌트 3단계)로 친다.
  *  실사용 확인(10/30): "그냥 코드 알려 주세요"에 정답 두 줄을 줬는데, 그걸 붙여 넣고 통과하면 "직접 통과"로 기록되던 것. */
+const solutionTokens = new Map<string, string[]>();
 const solutionLines = new Map<string, string[]>();
 async function revealedSolution(runId: string, n: number, answer: string) {
   const run = await getRun(runId);
@@ -539,7 +541,14 @@ async function revealedSolution(runId: string, n: number, answer: string) {
   }
   const flat = answer.replace(/\s+/g, "");
   const hit = solutionLines.get(key)!.filter((l) => flat.includes(l));
-  if (!hit.length) return;
+  // 한 줄 안에서 값 하나만 바꾸는 정답(예: 400 → 200)은 줄째로 안 나온다 → "200으로 바꾸면" 같은 말도 정답 공개로(11/3 품질 확인)
+  if (!solutionTokens.has(key)) solutionTokens.set(key, (await solutionDiff(course, n)).flatMap((d) => {
+    const minus = d.diff.split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2));
+    const plus = d.diff.split("\n").filter((l) => l.startsWith("+ ")).map((l) => l.slice(2));
+    return plus.flatMap((pl, i) => { const old = new Set((minus[i] ?? "").match(/[\w가-힣]+/g) ?? []); return (pl.match(/[\w가-힣]+/g) ?? []).filter((t) => !old.has(t)); });
+  }));
+  const said = solutionTokens.get(key)!.some((t) => new RegExp(`\`?${t.replace(/[$]/g, "\\$")}\`?\\s*(으로|로)\\s*(바꾸|바꿔|고치|고쳐|넣|써|쓰)`).test(answer));
+  if (!hit.length && !said) return;
   await saveRun(runId, (r) => { stageProgress(r, n).hints.push({ level: 3, at: new Date().toISOString(), source: "tutor-answer" }); });
   await change(runId, n, (s, push) => {
     if (s.hints < 3) { s.hints = 3; push({ role: "note", text: "튜터가 정답 줄을 보여 줬어요. 이번 단계는 \"정답 보고 고침\"으로 기록하고, 나중 복습에서 코드 없이 한 번 더 확인할게요." }); }
@@ -626,6 +635,11 @@ async function listSrc(ws: string): Promise<string[]> {
 export const RECENT_MIN = 12;      // 최근 대화는 적어도 이만큼(지금 걸음은 통째로)
 export const RECENT_MAX = 30;
 export const OLDER_LIMIT = Number(process.env.PC_OLDER_LIMIT) || 6000; // 앞부분이 이 글자 수를 넘을 때만 요약한다(매번 하지 않는다)
+/** 원격 실험용: .data/control/env.json의 PC_OLDER_LIMIT가 있으면 그걸(서버를 다시 켜지 않고 바꿀 수 있게) */
+function olderLimit() {
+  try { const v = Number(JSON.parse(readFileSync(path.join(DATA, "control", "env.json"), "utf8")).PC_OLDER_LIMIT); if (v > 0) return v; } catch { /* */ }
+  return OLDER_LIMIT;
+}
 /** 최근 대화 자르기: 마지막 12개, 단 지금 걸음의 메시지는 자르지 않는다(30개까지) */
 export function splitRecent<T extends { beat?: number }>(ms: T[], beat: number) {
   let cut = Math.max(0, ms.length - RECENT_MIN);
@@ -638,17 +652,18 @@ export function splitRecent<T extends { beat?: number }>(ms: T[], beat: number) 
 async function olderContext(runId: string, n: number, s0: State, older: LMsg[], talk: (ms: LMsg[]) => string) {
   if (!older.length) return "";
   const all = talk(older);
-  if (all.length <= OLDER_LIMIT) return `[앞부분 대화]\n${all}`;
+  const limit = olderLimit();
+  if (all.length <= limit) return `[앞부분 대화]\n${all}`;
   const sum = s0.summary;
   const rest = sum ? older.filter((m) => m.id > sum.upTo) : older;
   const restText = talk(rest);
-  if (sum && restText.length <= OLDER_LIMIT / 2) return `[앞부분 대화 요약]\n${sum.text}${restText ? `\n\n[그 뒤 대화]\n${restText}` : ""}`;
+  if (sum && restText.length <= limit / 2) return `[앞부분 대화 요약]\n${sum.text}${restText ? `\n\n[그 뒤 대화]\n${restText}` : ""}`;
   try {
     const text = (await aiText("context-summary", SUMMARY_SYSTEM, [sum ? `[지난 요약]\n${sum.text}` : "", `[대화]\n${restText}`].filter(Boolean).join("\n\n"))).trim().slice(0, 1500);
     await change(runId, n, (st) => { st.summary = { upTo: older.at(-1)!.id, text }; });
     return `[앞부분 대화 요약]\n${text}`;
   } catch {
-    return `[앞부분 대화(뒤쪽만)]\n…${all.slice(-OLDER_LIMIT)}`;
+    return `[앞부분 대화(뒤쪽만)]\n…${all.slice(-limit)}`;
   }
 }
 const SUMMARY_SYSTEM = `코딩 학습 튜터와 학습자의 지난 대화를 다음 대화에 쓸 메모로 줄인다. 한국어, 600자 이내, 목록으로.
@@ -693,6 +708,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   // 지시문(고정) + [코스]·[이번 단계] + 앞부분(길면 요약, 넘쳤을 때만 만든다) + 최근 대화(지금 걸음은 자르지 않음) + [학습자 상태]·[지금 위치] + 필요한 파일(매번 디스크에서).
   // 기록(화면 메시지 · 학습 사건 · 모델 본문)은 따로 다 남고 지우지 않는다. 모델 대화는 질문마다 새로 연다.
   const lineOf = (m: LMsg) => m.role === "me" ? (m.text ? `학습자: ${m.text}` : "") : m.role === "note" ? (m.text ? `(화면 알림: ${m.text})` : "")
+    : m.card?.type === "explain" && m.card.done ? `${m.text ? `튜터: ${m.text}\n\n` : ""}학습자(내 말로): ${m.card.done}`
     : m.text ? `튜터: ${m.text}`
     : m.card?.type === "choice" && m.card.picked !== undefined ? `(학습자가 고른 답: ${m.card.options[m.card.picked]})`
     : m.card?.type === "reply" ? `(직접 보낸 요청: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : `${m.card.status} ${m.card.body.slice(0, 200)}`})`
