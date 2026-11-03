@@ -16,6 +16,7 @@ import { DATA, saveRun, stageProgress } from "./store.ts";
 import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
 import { logAnswer, logPrompt, logUsage } from "./promptlog.ts";
 import { getCourse, getLearningHistory, getProgress, getStep, recordObservation } from "./learning-tools.ts";
+import { goDeeper, nameGap, resolveTop } from "./stuck.ts";
 
 export const OC_VERSION = "2.2.1";
 // 2026-10-31: terra (답이 20초 안팎으로 느렸음; 출력 속도가 sol의 약 2배, Recaller AI 호출 가이드).
@@ -28,7 +29,9 @@ const EDITS = new Set(["edit", "write", "patch"]); // GPT 모델에서는 patch(
 const EXTRA = ["ask_learner", "run_snippet", "look_docs"] as const;
 // 학습 도구(11/3 구조도): 읽기 넷 + 관찰 남기기. 진도를 바꾸는 도구는 없다
 const LEARN = ["get_course", "get_progress", "get_step", "get_learning_history", "record_observation"] as const;
-const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour", ...EXTRA, ...LEARN]);
+// [막혔어요] 칸 안에서만(11/3): 칸 이름 붙이기 · 한 칸 더 아래로 · 풀림
+const STUCK = ["stuck_name_gap", "stuck_go_deeper", "stuck_resolved"] as const;
+const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour", ...EXTRA, ...LEARN, ...STUCK]);
 const BASIC = ["read", "send_request", "run_snippet", "run_checks", ...LEARN];
 /** 생각 요약(reasoning summary)을 받는다. 계정이 안 받아 주면 한 번 실패한 뒤 끈다 */
 let reasoningSummary = process.env.PC_REASONING_SUMMARY !== "0";
@@ -78,6 +81,8 @@ const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문
 // lastInput: 마지막 요청의 입력 토큰. 넘치면(COMPACT_TOKENS) 다음 질문에서 요약을 들고 새 대화로(그 한 번만 캐시 미스)
 type Sess = { sid: string; turns: number; files: Map<string, string>; stage?: number; lastInput?: number };
 const sessions = new Map<string, Sess>();
+/** 진행 기록마다 지금 답하는 대화(멈추기용) — [막혔어요] 칸은 칸마다 대화가 따로라서 */
+const activeSid = new Map<string, string>();
 const MAX_TURNS = 60;
 const COMPACT_TOKENS = Number(process.env.PC_COMPACT_TOKENS) || 24000;
 
@@ -191,13 +196,14 @@ function policyPlugin(fake: boolean) {
         // 흐름 투어: 파일은 붙여 보냈으니 show_tour 하나만
         // 도구(11/3 사용자 "기본 4개"): 보통 질문은 읽기 · 요청 보내기 · 조각 돌리기 · 자동 확인만. 고치기는 작업 지시(범위가 있을 때)만
         const allow = l?.io.mode === "explain" ? new Set<string>() : l?.io.mode === "tour" ? new Set(["show_tour"])
+          : l?.io.stuck ? new Set([...BASIC, ...STUCK])
           : l?.io.scope?.length ? new Set([...BASIC, ...EDITS]) : new Set(BASIC);
         for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k) || !allow.has(k)) delete ev.tools[k];
       });
       await ctx.permission.hook("evaluate", (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);
         const l = live.get(ev.sessionID);
-        if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action) || ev.action === "show_tour" || (EXTRA as readonly string[]).includes(ev.action) || (LEARN as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
+        if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action) || ev.action === "show_tour" || (EXTRA as readonly string[]).includes(ev.action) || (LEARN as readonly string[]).includes(ev.action) || (STUCK as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
         if (EDITS.has(ev.action)) {
           if (l?.io.mode === "explain") { ev.effect = "deny"; ev.message = "지금은 설명만 하는 시간이에요."; return; }
           const files: string[] = (ev.resources ?? []).map((r: string) => String(r).replace(/\\/g, "/"));
@@ -317,6 +323,27 @@ function policyPlugin(fake: boolean) {
               try { return { content: (await run(l, input)).slice(0, 4000) }; } catch (e) { return { content: `실패: ${(e as Error).message}` }; }
             } });
         }
+        // [막혔어요] 칸 도구(11/3): 칸을 열고 닫는 건 코드(lib/stuck.ts)가 하고, 튜터는 무엇이 비었는지와 풀렸는지만 알린다
+        const stuckTools: [string, string, Record<string, unknown>, string[], (l: Live, input: any) => Promise<string>][] = [
+          ["stuck_name_gap", "지금 칸에서 무엇이 비었는지 정한다. [기초 칸 목록]의 id를 concept로, 목록에 맞는 게 없으면 other에 짧은 이름. 짧은 질문으로 층을 짚은 뒤, 설명하기 전에 한 번.",
+            { concept: { type: "string" }, other: { type: "string" } }, [],
+            async (l, input) => (await nameGap(l.io.runId, l.io.stuck!.lang, { concept: input?.concept, other: input?.other })).text],
+          ["stuck_go_deeper", "설명하다 보니 그보다 아래(더 기초)가 비어 있을 때 한 칸 아래를 연다. 열면 이번 답은 '그럼 그것부터 잠깐 볼게요' 한두 문장으로 끝낸다(아래 칸 설명은 다음 차례에 저절로 이어진다).",
+            { concept: { type: "string" }, other: { type: "string" }, why: { type: "string", description: "왜 내려가는지 한 문장" } }, ["why"],
+            async (l, input) => (await goDeeper(l.io.runId, l.io.stuck!.lang, { concept: input?.concept, other: input?.other, why: String(input?.why ?? "") })).text],
+          ["stuck_resolved", "이 칸이 풀렸다고 알린다. 학습자가 이 칸의 작은 확인에 맞게 답했거나 직접 써 봤을 때만. evidence: 학습자가 실제로 한 것 한 문장. 부른 뒤에는 짧게 칭찬 없이 한 문장으로 마무리한다(위 칸으로는 저절로 돌아간다).",
+            { evidence: { type: "string" } }, ["evidence"],
+            async (l, input) => (await resolveTop(l.io.runId, l.io.stuck!.lang, "tutor", String(input?.evidence ?? ""))).text],
+        ];
+        for (const [name, description, properties, required, run] of stuckTools) {
+          ed.add({ name, description, options: { codemode: false }, input: { type: "object", properties, required },
+            execute: async (input: any, c: any) => {
+              const l = live.get(c.sessionID);
+              if (!l?.io.stuck) return { content: "지금은 [막혔어요] 칸이 아니에요." };
+              try { const out = await run(l, input); await l.io.show({ type: "tool", icon: "🧩", label: out.slice(0, 80), ok: true }); return { content: out }; }
+              catch (e) { return { content: `실패: ${(e as Error).message}` }; }
+            } });
+        }
         for (const name of OURS) {
           const [description, properties, required] = desc[name];
           ed.add({ name, description, options: { codemode: false }, input: { type: "object", properties, required },
@@ -407,7 +434,7 @@ export function thinkLine(text: string) {
 /** 학습자가 [멈추기]를 누르면: 지금 답하는 질문을 멈춘다 */
 export async function stopRun(runId: string, n: number) {
   void n;
-  const sid = sessions.get(runId)?.sid;
+  const sid = activeSid.get(runId) ?? sessions.get(runId)?.sid;
   if (!sid || !host) return false;
   const h = await host; if (!h) return false;
   const l = live.get(sid);
@@ -430,10 +457,11 @@ function emit(l: Live, key: string, text: string, final: boolean) {
 async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   await aiBudget("agent"); // 한도를 넘었으면 여기서 멈춘다
   // 컨텍스트 관리자가 매번 맥락을 다 조립하니 모델 대화는 질문마다 새로 연다(11/3: 기록과 컨텍스트 분리). 앞부분은 캐시 키를 진행 기록마다 같게 해서 캐시가 맞는다
-  const key = io.runId;
+  const key = io.sessKey ?? io.runId;
   let ss = sessions.get(key);
   if (!ss || ss.turns >= MAX_TURNS || (ss.lastInput ?? 0) > COMPACT_TOKENS) { ss = { sid: (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string, turns: 0, files: new Map() }; sessions.set(key, ss); }
   const sid = ss.sid;
+  activeSid.set(io.runId, sid);
   const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve(), reason: "", lastThink: 0, asked: 0, stopped: false, usage: [], raw: [], t0: Date.now() };
   live.set(sid, l);
   const from = h.events.length;

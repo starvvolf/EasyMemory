@@ -46,6 +46,9 @@ export type AgentIO = {
   think?: (text: string | null) => void;
   /** 학습자에게 고르게 묻고 답을 기다린다(답이 없으면 빈 글) */
   choose?: (q: { question: string; options: string[] }) => Promise<string>;
+  /** [막혔어요] 칸 안에서 부를 때(11/3): 칸마다 따로 이어 쓰는 대화(sessKey)와 막힘 도구 */
+  sessKey?: string;
+  stuck?: { frameId: string; lang: import("./basics.ts").Lang };
 };
 
 export const TOOLS = ["list_files", "read_file", "open_in_editor", "start_server", "send_request", "run_checks", "edit_file", "look_db", "none"] as const;

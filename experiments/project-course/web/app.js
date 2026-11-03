@@ -30,6 +30,35 @@ const FLOAT = new URLSearchParams(location.search).has("float");
 // 튜터 창 크기·고정·닫기는 코스 서버에 알리면 창(float/main.cjs)이 0.25초 안에 따른다
 const floatPost = (b) => fetch("/api/float", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }).then((r) => r.json()).catch(() => null);
 const floatUi = { pinned: false, size: "normal", pastOpen: false, sheetHidden: 0 };
+/* [막혔어요](11/3): 무엇이 막혔는지 고르기 → 그 칸 대화. words: "모르는 단어"를 골랐을 때 고른 코드의 단어들 */
+const stuckUi = { open: false, words: null, quote: null };
+/** 고르기 판: 6가지 → (단어면) 그 줄의 단어 버튼 */
+function stuckPicker(run, lesson, send, cls = "") {
+  if (!stuckUi.open || lesson.busy) return null;
+  const close = () => { stuckUi.open = false; stuckUi.words = null; drawLesson(); };
+  const go = (body) => (e) => { stuckUi.open = false; stuckUi.words = null; floatUi.sheetHidden = 0; send({ do: "stuck", ...body })(e); };
+  if (stuckUi.words) return h("div", { class: `stuckpick ${cls}` },
+    h("div", { class: "sp-h" }, h("span", {}, "어떤 단어예요?"), h("button", { class: "fib", "aria-label": "닫기", onclick: close }, "✕")),
+    stuckUi.quote ? h("code", { class: "sp-q" }, `${stuckUi.quote.file} ${stuckUi.quote.from}줄 · ${stuckUi.quote.code.trim().slice(0, 80)}`) : h("p", { class: "mut small" }, "VS Code에서 막힌 줄에 커서를 두거나 드래그하면 그 줄의 단어가 나와요."),
+    h("div", { class: "sp-w" }, stuckUi.words.map((w) => h("button", { class: "fchip", onclick: go({ choice: 0, word: w }) }, w)),
+      h("button", { class: "fchip", onclick: go({ choice: 0 }) }, "여기 없어요")));
+  return h("div", { class: `stuckpick ${cls}` },
+    h("div", { class: "sp-h" }, h("span", {}, lesson.stuck ? "이 설명에서 또 막혔나요?" : "어디가 막혔어요?"), h("button", { class: "fib", "aria-label": "닫기", onclick: close }, "✕")),
+    h("div", { class: "sp-c" }, (lesson.stuckChoices || []).map((label, i) => h("button", { class: "fbtn", onclick: i === 0 ? () => busy(null, async () => {
+      const out = await api("GET", `/api/runs/${run.id}/lesson/${run.current}/stuck-words`);
+      stuckUi.words = out.words; stuckUi.quote = out.quote; drawLesson();
+    }) : go({ choice: i }) }, h("b", {}, label)))));
+}
+/** 지금 위치 한 줄 + [이제 알겠어요] [그만하고 돌아가기] */
+function stuckBar(lesson, send) {
+  if (!lesson.stuck) return null;
+  return h("div", { class: "stuckbar" },
+    h("div", { class: "sb-p" }, h("span", { class: "sb-t" }, "막혔어요"), lesson.stuck.path.map((p, i) => [i ? h("span", { class: "sb-s" }, "›") : null, h("span", { class: i === lesson.stuck.path.length - 1 ? "sb-cur" : "" }, p.label)])),
+    lesson.busy ? null : h("div", { class: "sb-a" },
+      h("button", { class: "fchip", onclick: (e) => send({ do: "stuck_ok" })(e) }, "이제 알겠어요"),
+      h("button", { class: "fchip", onclick: () => { stuckUi.open = true; drawLesson(); } }, "또 막혔어요"),
+      h("button", { class: "fchip", onclick: (e) => send({ do: "stuck_leave" })(e) }, "그만하고 돌아가기")));
+}
 if (FLOAT) {
   document.documentElement.classList.add("float");
   fetch("/api/float").then((r) => r.json()).then((st) => { floatUi.pinned = !!st.pinned; floatUi.size = st.size === "wide" ? "wide" : "normal"; if (lessonCtx) drawLesson(); }).catch(() => {});
@@ -816,7 +845,8 @@ function drawLesson() {
       h("a", { href: `#/run/${run.id}/summary` }, "결과와 기록 후보")));
 
   const y = window.scrollY, atBottom = window.innerHeight + y >= document.body.scrollHeight - 80;
-  view.replaceChildren(h("div", { class: "lesson" }, side, h("main", { class: "lmain" }, chat, h("div", { class: "lfoot" }, nowbar, savebar, quick, form))));
+  const stuckBtn = lesson.busy || lesson.stuck ? null : h("button", { class: "btn small", type: "button", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요");
+  view.replaceChildren(h("div", { class: "lesson" }, side, h("main", { class: "lmain" }, chat, h("div", { class: "lfoot" }, stuckBar(lesson, send), stuckPicker(run, lesson, send), nowbar, savebar, quick, h("div", { class: "row" }, form, stuckBtn)))));
   if (atBottom || !drawLesson.drawn) window.scrollTo({ top: document.body.scrollHeight });
   drawLesson.drawn = true;
 }
@@ -952,12 +982,13 @@ function drawFloat() {
     const more = (text, shown) => send({ do: "ask", text, shown, mode: "explain" });
     sheet = h("section", { class: "fsheet", "aria-label": "질문" },
       h("div", { class: "fsh" }, h("span", {}, "질문 · ", h("b", {}, step?.label ?? ""), lesson.session?.detours?.length > 1 ? ` · ${lesson.session.detours.length}번째 질문` : "", "에서"), h("button", { class: "fib", "aria-label": "닫고 돌아가기", onclick: (e) => lesson.resumable ? send({ do: "resume" })(e) : (floatUi.sheetHidden = thread.at(-1).id, drawLesson()) }, icon("close"))),
+      stuckBar(lesson, send),
       list,
-      lesson.busy ? null : h("div", { class: "fchips" },
+      lesson.busy || lesson.stuck ? null : h("div", { class: "fchips" },
         h("button", { class: "fchip", onclick: more("방금 설명을 다른 예시 하나로 다시 보여 주세요. 짧게.", "예시 하나 더") }, "예시 하나 더"),
         h("button", { class: "fchip", onclick: more("방금 설명을 다른 말로, 더 쉽게 3문장으로 다시 설명해 주세요.", "다르게 설명해 줘") }, "다르게 설명해 줘"),
         floatUi.size === "wide" ? null : h("button", { class: "fchip", onclick: () => setSize("wide") }, "넓게 보기")),
-      lesson.busy ? null : h("button", { class: "fbtn pri back", onclick: (e) => lesson.resumable ? send({ do: "resume" })(e) : (floatUi.sheetHidden = thread.at(-1).id, drawLesson()) }, h("b", {}, `알겠어요, ${ro(step?.label ?? "하던 것")} 돌아가기`)));
+      lesson.busy || lesson.stuck ? null : h("button", { class: "fbtn pri back", onclick: (e) => lesson.resumable ? send({ do: "resume" })(e) : (floatUi.sheetHidden = thread.at(-1).id, drawLesson()) }, h("b", {}, `알겠어요, ${ro(step?.label ?? "하던 것")} 돌아가기`)));
   }
 
   // 아래: 빠른 질문 + 입력
@@ -966,8 +997,9 @@ function drawFloat() {
     input, h("button", { class: "fsend", type: "submit", "aria-label": "보내기" }, icon("send")));
   const quick = h("div", { class: "fquick" },
     h("button", { class: "fchip", onclick: (e) => { floatUi.sheetHidden = 0; send({ do: "ask", text: "지금 걸음에서 보고 있는 코드가 실제로 어떻게 동작하는지 흐름으로 보여 주세요.", mode: "tour" })(e); } }, "흐름 보기"),
-    h("button", { class: "fchip", onclick: (e) => { floatUi.sheetHidden = 0; send({ do: "ask", text: "지금 걸음을 하려면 무엇부터 보면 되는지, 답은 말하지 말고 방향만 한 줄로 알려 주세요.", shown: "어디부터 보면 돼요?" })(e); } }, "어디부터 봐요?"));
-  const foot = h("footer", { class: "ff" }, quick, form);
+    h("button", { class: "fchip", onclick: (e) => { floatUi.sheetHidden = 0; send({ do: "ask", text: "지금 걸음을 하려면 무엇부터 보면 되는지, 답은 말하지 말고 방향만 한 줄로 알려 주세요.", shown: "어디부터 봐요?" })(e); } }, "어디부터 봐요?"),
+    lesson.stuck ? null : h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요"));
+  const foot = h("footer", { class: "ff" }, stuckPicker(run, lesson, send, "in-float"), quick, form);
 
   // 띠(타이핑하는 동안): 걸음 점 + 지금 할 일
   const pill = h("button", { class: "fpill", onclick: () => floatPost({ wake: true }) },

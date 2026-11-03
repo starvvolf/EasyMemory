@@ -646,3 +646,22 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 
 .genform { max-width: 520px; margin: 22px auto 0; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
 .genform textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); resize: vertical; }
+
+/* [막혔어요](11/3): 고르기 판 · 지금 위치 줄. 튜터 탭과 튜터 창 둘 다 */
+.stuckpick { border: 1px solid var(--f-line2, var(--line)); background: var(--f-s1, var(--panel)); border-radius: 12px; padding: 10px 12px; margin: 0 0 8px; display: grid; gap: 8px; }
+.stuckpick.in-float { margin: 0 0 8px; }
+.stuckpick .sp-h { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--f-ink, var(--ink)); }
+.stuckpick .sp-c { display: grid; gap: 6px; }
+.stuckpick .sp-c .fbtn { text-align: left; border: 1px solid var(--f-line2, var(--line)); background: transparent; color: var(--f-ink, var(--ink)); border-radius: 9px; padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.stuckpick .sp-c .fbtn:hover { background: var(--f-s2, var(--soft)); }
+.stuckpick .sp-q { font-size: 12px; color: var(--f-mut, var(--mut)); overflow-wrap: anywhere; }
+.stuckpick .sp-w { display: flex; flex-wrap: wrap; gap: 6px; }
+.stuckpick .fib { border: none; background: transparent; color: var(--f-mut, var(--mut)); cursor: pointer; }
+.stuckbar { display: grid; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--f-line, var(--line)); font-size: 12.5px; }
+.stuckbar .sb-p { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; color: var(--f-mut, var(--mut)); }
+.stuckbar .sb-t { font-weight: 700; color: var(--f-ink, var(--ink)); margin-right: 4px; }
+.stuckbar .sb-s { opacity: .6; }
+.stuckbar .sb-cur { color: var(--f-ink, var(--ink)); font-weight: 600; }
+.stuckbar .sb-a { display: flex; flex-wrap: wrap; gap: 6px; }
+.stuckbar .fchip, .stuckpick .fchip { border: 1px solid var(--f-line2, var(--line)); background: transparent; color: var(--f-ink2, var(--ink)); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.float .fchip.warm { border-color: var(--f-acc, var(--acc)); }

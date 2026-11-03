@@ -20,6 +20,8 @@ import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
 import { addEntry, addTour, codeTerms, firstLine } from "./notes.ts";
 import { runAgent, undoEdit, type AskCard, type CtxFile, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
+import { CHOICES, countReply, leaveAll, openRoot, openStack, resolveTop, stuckOf, stuckView, labelOf, type Choice, type Frame } from "./stuck.ts";
+import { basicsLine, catalogText, langOf } from "./basics.ts";
 import { actionOfBeat, answerBackground, backgroundLine, bgQuestion, closeDetours, enterBeat, events, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
@@ -44,7 +46,8 @@ type Card =
   | { type: "table"; sql: string; columns: string[]; rows: unknown[][]; note?: string }
   | ToolCard | DiffCard | AskCard | SnippetCard;
 // beat: 어느 걸음에서 나온 말인지 · t: 걸음 중에 따로 물어본 대화(튜터 창이 걸음 카드와 나눠 보여 준다, 11/2)
-export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[]; beat?: number; t?: boolean };
+// sf: [막혔어요] 칸 안에서 나온 말(그 칸 id, 11/3) — 코스 대화 맥락에는 넣지 않고 칸 대화에만
+export type LMsg = { id: number; at: string; role: "tutor" | "me" | "note"; text?: string; card?: Card; actions?: Action[]; beat?: number; t?: boolean; sf?: string };
 // mode: 고치기 방식(직접 / 같이 / 튜터가 만듦) · asked: 지금 순서에 들어온 뒤 자유 질문을 했는지(했으면 [하던 거로 돌아가기])
 type Mode = "self" | "pair" | "auto";
 type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" | "done"; messages: LMsg[]; hints: number; lastCheck?: RunResult; busy?: boolean; todo?: Todo[]; scaffolded?: boolean; focus?: Focus | null; mode?: Mode; pairStep?: number; asked?: boolean; tutorEdit?: boolean; act?: SessAction; actTarget?: string; failStreak?: number; level?: number; summary?: { upTo: number; text: string } };
@@ -55,6 +58,9 @@ const now = () => new Date().toISOString();
 const sentUpTo = new Map<string, number>();
 /** "내 말로" 답을 보는 중(계획 제안이 기다린다) */
 const judging = new Map<string, Promise<unknown>>();
+/** 진행 기록마다 지금 열린 [막혔어요] 칸(맨 아래). 이 동안 나온 말에 sf 표시를 붙인다 */
+const stuckTop = new Map<string, string>();
+async function syncTop(runId: string) { const top = openStack(await stuckOf(runId)).at(-1); if (top) stuckTop.set(runId, top.id); else stuckTop.delete(runId); return top; }
 const file = (runId: string, n: number) => path.join(DATA, "lessons", `${runId}-${n}.json`);
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
 
@@ -123,7 +129,7 @@ async function changeNow(runId: string, n: number, fn: (s: State, push: (m: Omit
   let out!: State;
   // update()는 동기 함수만 받으므로, 읽고 → 비동기 작업 → 저장을 직접 차례로 한다.
   const s = await read<State>(file(runId, n), { beat: -1, waiting: "action", messages: [], hints: 0 });
-  const push = (m: Omit<LMsg, "id" | "at">) => s.messages.push({ id: (s.messages.at(-1)?.id ?? 0) + 1, at: now(), beat: s.beat, ...(s.asked ? { t: true } : {}), ...m });
+  const push = (m: Omit<LMsg, "id" | "at">) => { const sf = stuckTop.get(runId); s.messages.push({ id: (s.messages.at(-1)?.id ?? 0) + 1, at: now(), beat: s.beat, ...(s.asked ? { t: true } : {}), ...(sf ? { sf } : {}), ...m }); };
   const beforeBeat = s.beat;
   await fn(s, push);
   // 걸음이 바뀌면 세션의 지금 활동도 바꾼다(학습 진행 엔진, 11/3)
@@ -228,7 +234,8 @@ export async function lessonView(runId: string, n: number) {
     next: course.generated ? await nextInfo(course, n) : null,
     recap: await recap(runId, { stageTitle: (k) => course.stages.find((x) => x.n === k)?.title ?? "", nowLabel: `${n}단계 · ${now ?? plan.title}` }).catch(() => null),
     now, mode: s.mode ?? null, resumable: !!s.asked && !s.busy && (s.waiting === "action" || s.waiting === "save"),
-    thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null };
+    thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null,
+    stuck: await stuckView(runId), stuckChoices: Object.values(CHOICES).map((c) => c.label) };
 }
 
 /** 생성 코스: 다음 단계가 준비됐는지(뒤에서 만드는 중이면 화면이 기다린다) */
@@ -261,7 +268,7 @@ function stepLabel(b: Beat, last: boolean) {
 }
 
 /* ---------- 학습자가 한 것 ---------- */
-export async function act(runId: string, n: number, input: { do: string; choice?: number; text?: string; level?: number; file?: string; line?: number; index?: number }) {
+export async function act(runId: string, n: number, input: { do: string; choice?: number; text?: string; level?: number; file?: string; line?: number; index?: number; word?: string; mode?: string; shown?: string }) {
   const run = await getRun(runId);
   const course = await loadCourse(run.courseId);
   const plan = await loadPlan(course.id, n);
@@ -271,6 +278,35 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     const t = String(input.text ?? "");
     const mode = input.mode === "explain" ? "explain" : input.mode === "tour" || TOUR_INTENT.test(t) ? "tour" : undefined;
     return ask(runId, n, plan, mode === "tour" ? `${t}\n\n${TOUR_Q}` : t, undefined, typeof input.shown === "string" ? input.shown.slice(0, 200) : mode === "tour" ? t : undefined, mode ? { mode } : {});
+  }
+  // [막혔어요](11/3): 고른 종류(+단어)로 칸을 열고 튜터가 그 칸 대화를 시작한다
+  if (input.do === "stuck") {
+    const keys = Object.keys(CHOICES) as Choice[];
+    const choice = keys[Number(input.choice)] ?? (keys.includes(input.text as Choice) ? input.text as Choice : null);
+    if (!choice) throw err(400, "막힌 종류를 골라 주세요.");
+    const word = choice === "word" && typeof input.word === "string" ? input.word.trim().slice(0, 60) : undefined;
+    const quote = await stuckQuote(runId, n);
+    if (inflight.has(lk(runId, n))) throw err(409, "아직 답하는 중이에요. 기다리거나 [멈추기]를 누른 뒤 눌러 주세요.");
+    const deeper = !!(await stuckView(runId));
+    await openRoot(runId, { choice, word, quote: deeper ? undefined : quote });
+    await syncTop(runId);
+    const q = `[막혔어요] ${CHOICES[choice].label}${word ? `: \`${word}\`` : ""}${deeper ? " (이 칸 설명을 듣다가 또 막힘)" : quote ? "" : " (고른 코드 없음 — 어느 코드인지 먼저 물어보세요)"}`;
+    return ask(runId, n, plan, q, deeper ? undefined : quote, `막혔어요 — ${CHOICES[choice].label}${word ? ` (${word})` : ""}`);
+  }
+  if (input.do === "stuck_ok") {
+    // 학습자가 [이제 알겠어요]: 지금 칸을 풀림으로(학습자 자기 보고)
+    const lang = langOf(course as { language?: string; stack?: string });
+    const r = await resolveTop(runId, lang, "learner", "학습자가 [이제 알겠어요]를 누름");
+    if (!r.ok || !r.frame) throw err(409, r.text);
+    await change(runId, n, (_s, push) => push({ role: "me", text: "이제 알겠어요" }));
+    await stuckReturned(runId, n, plan, r.frame);
+    return null;
+  }
+  if (input.do === "stuck_leave") {
+    const k = await leaveAll(runId);
+    await syncTop(runId);
+    void record({ runId, stage: n, beat: -1, type: "navigate", actor: "user", detail: `막혔어요 그만하기(${k}칸 닫음)` });
+    return act(runId, n, { do: "resume" });
   }
   if (input.do.startsWith("bg:")) {
     const out = await answerBackground(runId, input.do);
@@ -359,6 +395,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     } else if (input.do === "resume") {
       // 자유 질문을 하다가 하던 순서로: 그 순서의 안내와 버튼을 다시 놓는다
       s.asked = false;
+      if (stuckTop.has(runId)) { void leaveAll(runId); stuckTop.delete(runId); }
       void closeDetours(runId, s.act ? { type: s.act, target: s.actTarget ?? "" } : undefined);
       void record({ runId, stage: n, beat: s.beat, type: "navigate", actor: "user", detail: "하던 거로 돌아가기" });
       const acts = s.waiting === "save" && b?.kind === "fix" ? modeActions(b, s) : lastBeatActions(s) ?? b?.actions ?? [{ label: "다음", do: "next" }];
@@ -722,19 +759,80 @@ function upcoming(plan: Plan, beat: number) {
   return `[앞으로 할 순서 — 학습자가 직접 맞히고 고칠 차례]\n${lines.join("\n")}\n미리 말하지 않는 것은 두 가지뿐이다: 예측 문제의 정답, 고칠 줄의 완성 코드(바꿔 넣을 값 포함). 왜 그렇게 되는지(원인·원리), 어디를 보면 되는지는 질문에 맞게 충분히 설명한다.`;
 }
 
-export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void>; scope?: string[] } = {}) {
+type AskOpts = { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void>; scope?: string[]; silent?: boolean };
+export async function ask(runId: string, n: number, plan: Plan, text: string, quote?: { file: string; from: number; to: number; code: string }, shown?: string, opts: AskOpts = {}) {
   const q = text.trim().slice(0, 1000) || (quote ? "이 코드가 뭐 하는 거예요?" : "");
   if (!q) throw err(400, "질문을 적어 주세요.");
   // 한 번에 하나만: 답하는 중에 또 물으면 대화가 엉킨다(10/30 시험에서 되묻기 카드가 섞임)
   if (inflight.has(lk(runId, n))) throw err(409, "아직 답하는 중이에요. 기다리거나 [멈추기]를 누른 뒤 물어봐 주세요.");
   inflight.add(lk(runId, n));
-  try { return await askInner(runId, n, plan, q, text, quote, shown, opts); } finally { inflight.delete(lk(runId, n)); }
+  const before = (await syncTop(runId))?.id;
+  let out: State;
+  try { out = await askInner(runId, n, plan, q, text, quote, shown, opts); } finally { inflight.delete(lk(runId, n)); }
+  // [막혔어요] 칸이 이번 답에서 바뀌었으면(튜터가 한 칸 내려가거나 풀림) 다음 차례를 이어 준다
+  if (before) await afterStuckChange(runId, n, plan, before).catch((e) => console.error("[stuck]", e));
+  return out;
 }
-async function askInner(runId: string, n: number, plan: Plan, q: string, text: string, quote: { file: string; from: number; to: number; code: string } | undefined, shown: string | undefined, opts: { mode?: "explain" | "tour"; onAnswer?: (text: string) => Promise<void>; scope?: string[] }) {
+
+/* ---------- [막혔어요] 칸 이어 주기(11/3) ---------- */
+/** 칸이 바뀐 뒤: 아래 칸이 열렸으면 그 칸 설명을, 풀렸으면 위 칸으로 돌아가 원래 막힌 것을 다시 해 보게. 맨 위가 풀렸으면 코스로 */
+async function afterStuckChange(runId: string, n: number, plan: Plan, beforeId: string) {
+  const st = await stuckOf(runId);
+  const stack = openStack(st);
+  const top = stack.at(-1);
+  if (top?.id === beforeId) return;
+  const old = st.frames.find((f) => f.id === beforeId);
+  if (top && top.parent === beforeId) {
+    // 한 칸 아래가 열림
+    await syncTop(runId);
+    return void ask(runId, n, plan, `[새 칸: ${labelOf(top)}] 위 칸에서 내려왔어요(이유: ${top.why ?? ""}). 이 칸 하나만: 원래 코드·코스 얘기는 하지 말고, 아주 작은 예(새로 만든 짧은 코드)로 3~6문장 설명한 뒤, 학습자가 직접 답하거나 한 줄 써 볼 작은 확인 하나로 끝내세요.`, undefined, undefined, { silent: true }).catch((e) => console.error("[stuck]", e));
+  }
+  if (old?.status === "resolved") await stuckReturned(runId, n, plan, old);
+}
+/** 칸 하나가 풀린 뒤 */
+async function stuckReturned(runId: string, n: number, plan: Plan, done: Frame) {
+  const parent = await syncTop(runId);
+  void record({ runId, stage: n, beat: -1, type: "self_report", actor: done.by === "learner" ? "user" : "agent", detail: `막혔어요 풀림: ${labelOf(done)} — ${done.result ?? ""}`.slice(0, 300) });
+  if (parent) {
+    await change(runId, n, (_s, push) => push({ role: "note", text: `✔ ${labelOf(done)} — 풀렸어요. 한 칸 위(${labelOf(parent)})로 돌아가요.` }));
+    return void ask(runId, n, plan, `[아래 칸에서 돌아옴] "${labelOf(done)}" 풀림(학습자가 한 것: ${done.result}). 이 칸(${labelOf(parent)})으로 돌아왔어요. 아래 칸에서 쓴 예를 한 문장으로 이어 주고, 학습자에게 이 칸에서 막혔던 것을 다시 해 보게 하세요${parent.quote ? `(처음 막힌 코드 줄을 한국어로 읽어 보게)` : ""}. 맞게 하면 stuck_resolved.`, undefined, undefined, { silent: true }).catch((e) => console.error("[stuck]", e));
+  }
+  // 맨 위 칸이 풀림: 코스로(코스 대화에는 이 한 줄만 들어간다)
+  await change(runId, n, (s, push) => {
+    const b = plan.beats[s.beat];
+    const acts = s.waiting === "save" && b?.kind === "fix" ? modeActions(b, s) : lastBeatActions(s) ?? b?.actions ?? [{ label: "다음", do: "next" }];
+    push({ role: "note", text: `✔ 막혔던 것 풀렸어요: ${labelOf(done)}${done.result ? ` (${done.result})` : ""}` });
+    if (b) push({ role: "tutor", text: `원래 하던 데로 돌아갈게요. **지금 할 일:** ${b.now ?? firstLine(b.text)}`, actions: acts });
+    s.asked = false;
+  });
+}
+
+/** [막혔어요]에서 고를 단어: 고른 코드(드래그 → 보는 줄 → 마지막으로 물은 코드)의 이름들 */
+async function stuckQuote(runId: string, n: number): Promise<{ file: string; from: number; to: number; code: string } | undefined> {
+  const bs = bridgeState(runId);
+  if (bs?.file && bs.selection?.text?.trim()) return { file: bs.file, from: bs.selection.from, to: bs.selection.to, code: bs.selection.text.slice(0, 1500) };
+  if (bs?.file && bs.line) {
+    const text = (bs.dirty && bs.text) ? bs.text : await readFile(path.join(await wsOf(runId, n), bs.file), "utf8").catch(() => "");
+    const line = text.split(/\r?\n/)[bs.line - 1];
+    if (line?.trim()) return { file: bs.file, from: bs.line, to: bs.line, code: line };
+  }
+  const s = await read<State>(file(runId, n), { beat: -1, waiting: "action", messages: [], hints: 0 });
+  const c = [...s.messages].reverse().find((m) => m.card?.type === "code")?.card as { file: string; from: number; to: number; code: string } | undefined;
+  return c ? { file: c.file, from: c.from, to: c.to, code: c.code } : undefined;
+}
+const KEYWORDS = new Set(["the", "a"]);
+export async function stuckWords(runId: string, n: number) {
+  const quote = await stuckQuote(runId, n);
+  const words = quote ? [...new Set([...quote.code.replace(/(["'`])(?:\\.|(?!\1).)*\1/g, " ").matchAll(/[A-Za-z_$][\w$]*/g)].map((m) => m[0]))].filter((w) => !KEYWORDS.has(w)).slice(0, 14) : [];
+  return { quote: quote ? { file: quote.file, from: quote.from, to: quote.to, code: quote.code.slice(0, 300) } : null, words };
+}
+async function askInner(runId: string, n: number, plan: Plan, q: string, text: string, quote: { file: string; from: number; to: number; code: string } | undefined, shown: string | undefined, opts: AskOpts) {
   void text;
+  const frame = (await stuckView(runId)) ? openStack(await stuckOf(runId)).at(-1) : undefined;
+  if (frame && !opts.silent) await countReply(runId);
   const s0 = await change(runId, n, (s, push) => {
     s.asked = true;
-    push({ role: "me", text: shown ?? q, card: quote ? { type: "code", ...quote } : undefined });
+    if (!opts.silent) push({ role: "me", text: shown ?? q, card: quote ? { type: "code", ...quote } : undefined });
     s.busy = true;
   });
   const run = await getRun(runId);
@@ -743,8 +841,8 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const b = plan.beats[s0.beat];
   // 임시 학습(설계안 3.3): 돌아갈 걸음을 세션에 쌓고, 질문을 학습 사건으로 남긴다
   const where = quote ? `${quote.file}:${quote.from}${quote.to > quote.from ? `-${quote.to}` : ""}` : undefined;
-  void record({ runId, stage: n, beat: s0.beat, type: "question", actor: "user", detail: (shown ?? q).slice(0, 300), evidence: where ? [where] : undefined });
-  const dt = await pushDetour(runId, { topic: shown ?? q, reason: quote ? "코드 질문" : "질문", returnBeat: s0.beat, returnLabel: b?.now ?? firstLine(b?.text ?? "") });
+  if (!opts.silent) void record({ runId, stage: n, beat: s0.beat, type: "question", actor: "user", detail: (shown ?? q).slice(0, 300), evidence: where ? [where] : undefined });
+  const dt = frame ? null : await pushDetour(runId, { topic: shown ?? q, reason: quote ? "코드 질문" : "질문", returnBeat: s0.beat, returnLabel: b?.now ?? firstLine(b?.text ?? "") });
   void dt; // 질문이 이어진다는 알림은 뺐다(11/3: 대화가 자연스러워진 뒤 잔소리처럼 보임). 깊이는 세션에만 남는다
   let answer = "";
   // 컨텍스트 관리자(11/3 사용자: "대화 기록 저장과 LLM에 주는 컨텍스트를 분리"). AI가 아니라 코드가 매번 조립한다:
@@ -759,7 +857,8 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     : m.card?.type === "explain" && m.card.done ? `학습자(내 말로): ${m.card.done}` : "";
   const talk = (ms: LMsg[]) => ms.map(lineOf).filter(Boolean).join("\n\n");
   // 방금 넣은 질문은 빼고, 시작 인사·배경 질문(걸음 -1)도 뺀다(배경은 [학습자 상태]에 있다)
-  const before = s0.messages.slice(0, -1).filter((m) => (m.beat ?? 0) >= 0);
+  // [막혔어요] 칸 대화는 코스 대화 맥락에 넣지 않는다(칸이 풀린 한 줄만 들어간다)
+  const before = (opts.silent ? s0.messages : s0.messages.slice(0, -1)).filter((m) => (m.beat ?? 0) >= 0 && !m.sf);
   const { older, recent } = splitRecent(before, s0.beat);
   const olderPart = await olderContext(runId, n, s0, older, talk);
   const stage = stageOf(course, n);
@@ -788,6 +887,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     // 11/3 초보 흉내 시험: 튜터가 화면에 없는 "답 쓰는 곳"을 지어내거나 버튼 이름을 틀리게 말했다 → 지금 화면에 있는 것을 그대로 알려 준다
     screenLine(s0, b),
     learnerLine(await learnerView(runId, course).catch(() => ({ concepts: [], misconceptions: [], observations: [] }))),
+    await basicsLine(langOf(course as { language?: string; stack?: string })).catch(() => ""),
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
   ].filter(Boolean).join("\n");
   // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
@@ -797,13 +897,41 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   // 이어 쓰는 대화에 덧붙일 것: 지난 질문 답 뒤로 화면에 나온 것만(그 앞은 대화에 이미 있다)
   const sent = sentUpTo.get(lk(runId, n)) ?? -1;
   const sinceText = talk(before.filter((m) => m.id > sent));
-  const parts = { fixed, turn: state, recent: history, since: sinceText ? `[지난 질문 뒤 화면]\n${sinceText}` : "", files };
-  const context = [fixed, history, state, ...files.map((f) => f.text)].filter(Boolean).join("\n\n");
+  let parts = { fixed, turn: state, recent: history, since: sinceText ? `[지난 질문 뒤 화면]\n${sinceText}` : "", files };
+  let context = [fixed, history, state, ...files.map((f) => f.text)].filter(Boolean).join("\n\n");
+  const lang = langOf(course as { language?: string; stack?: string });
+  // [막혔어요] 칸 안: 칸마다 따로 이어 쓰는 대화. 넘겨줄 것(원래 줄 · 막힌 이유 · 수준 · 지금까지 쓴 말)은 칸의 첫 메시지에
+  let sessKey: string | undefined;
+  if (frame) {
+    const stack = openStack(await stuckOf(runId));
+    const root = stack[0];
+    sessKey = `${runId}#${frame.id}`;
+    const courseTalk = talk(before.slice(-8));
+    const frameMsgs = (opts.silent ? s0.messages : s0.messages.slice(0, -1)).filter((m) => m.sf === frame.id);
+    const fsent = sentUpTo.get(sessKey) ?? -1;
+    const ffixed = [
+      `[막혔어요 — 칸 하나만 메우는 대화] 학습자가 코스를 하다 막혀서 기초 쪽으로 내려왔다. 이 대화는 이 칸 하나만 다룬다.`,
+      `[지금 위치] ${course.title} › ${stack.map(labelOf).join(" › ")} (이 칸: ${labelOf(frame)}, 깊이 ${frame.depth + 1})`,
+      root.quote ? `[처음 막힌 코드] ${root.quote.file} ${root.quote.from}${root.quote.to > root.quote.from ? `~${root.quote.to}` : ""}줄:\n${root.quote.code}` : "",
+      root.choice ? `[학습자가 고른 막힘] ${CHOICES[root.choice].label}${root.word ? ` — 단어 \`${root.word}\`` : ""} (${CHOICES[root.choice].why})` : "",
+      frame.why ? `[위 칸에서 내려온 이유] ${frame.why}` : "",
+      `[언어] ${lang} — 설명과 예시는 이 언어 모양으로.`,
+      courseTalk ? `[코스에서 지금까지 한 대화(쓴 비유·말을 그대로 이어 쓴다)]\n${courseTalk}` : "",
+      `[기초 칸 목록 — 이 언어]\n${catalogText(lang)}`,
+      `할 일:\n1. 이 칸이 무엇인지 아직 정하지 않았으면 먼저 정한다. 학습자가 무엇이 막혔는지 모르면("어디가 막혔는지도 모르겠어요") 1~2초면 답할 짧은 질문 하나로 층을 짚는다(예: "괄호 안에 몇 덩어리예요?", "이 함수는 바로 실행돼요, 나중이에요?"). 정해지면 stuck_name_gap(목록에 있으면 concept=id, 없으면 other). 라이브러리·프레임워크 단어(get, listen, @GetMapping 같은 것)는 library-api.\n2. 그 칸 하나만, 원래 코드 밖의 아주 작은 예로 3~6문장 설명한다. 한 번에 하나.\n3. 학습자가 직접 답하거나 한 줄 써 볼 작은 확인 하나로 끝낸다.\n4. 학습자 답이 맞으면 stuck_resolved(evidence=학습자가 한 것). 틀리면 다르게 한 번 더.\n5. 설명하다 그보다 아래가 비어 보이면 stuck_go_deeper(그 칸, why). 이미 위에 있는 칸으로는 내려가지 않는다.\n코스의 다음 걸음·정답 코드는 말하지 않는다.`,
+    ].filter(Boolean).join("\n\n");
+    const fturn = [state.split("\n")[0], await basicsLine(lang)].filter(Boolean).join("\n");
+    const ftalk = talk(frameMsgs);
+    const fsince = talk(frameMsgs.filter((m) => m.id > fsent));
+    parts = { fixed: ffixed, turn: fturn, recent: ftalk ? `[이 칸 대화]\n${ftalk}` : "", since: fsince ? `[지난번 뒤 화면]\n${fsince}` : "", files: [] };
+    context = [ffixed, parts.recent, fturn].filter(Boolean).join("\n\n");
+  }
   if (aiMode() !== "off") {
     // 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선을 고친다)
     const bubbles = new Map<string, number>();
     const io = {
         runId, n, ws, context, parts, mode: opts.mode, scope: opts.scope,
+        ...(frame ? { sessKey, stuck: { frameId: frame.id, lang } } : {}),
         stream: async (key: string, text: string) => {
           await change(runId, n, (s, push) => {
             const id = bubbles.get(key);
@@ -841,7 +969,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
       };
     try {
       answer = await runAgent(io as Parameters<typeof runAgent>[0], q);
-      sentUpTo.set(lk(runId, n), (await read<State>(file(runId, n), s0)).messages.at(-1)?.id ?? 0);
+      sentUpTo.set(sessKey ?? lk(runId, n), (await read<State>(file(runId, n), s0)).messages.at(-1)?.id ?? 0);
       await remember(runId, n, ws, s0, { q, shown, quote, mode: opts.mode, answer }).catch((e) => console.error("[notes]", e));
       await revealedSolution(runId, n, answer).catch((e) => console.error("[reveal]", e));
       if (opts.onAnswer) await opts.onAnswer(answer).catch(() => {});

@@ -15,7 +15,7 @@ import { markSent, pending } from "../lib/sync.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
 import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
-import { answerAsk, stopAsk } from "../lib/lesson.ts";
+import { answerAsk, stopAsk, stuckWords } from "../lib/lesson.ts";
 import { runSnippet } from "../lib/tutor-tools.ts";
 import { genStatus, startGeneration } from "../lib/generate.ts";
 import { floatInUse, openFloat, poll as floatPoll, setFloat, typing as floatTyping } from "../lib/float.ts";
@@ -164,6 +164,9 @@ const routes: [string, RegExp, Handler][] = [
     return v;
   }],
   ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/act$/, async (req, m) => { await act(m[1], Number(m[2]), (await body(req)) as never); return lessonView(m[1], Number(m[2])); }],
+  // [막혔어요](11/3): 고른 코드에서 단어 고르기
+  ["GET", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/stuck-words$/, async (_q, m) => { await getRun(m[1]); return stuckWords(m[1], Number(m[2])); }],
+  ["GET", /^\/api\/basics$/, async () => { const { basicsStore, promotable } = await import("../lib/basics.ts"); return { ...(await basicsStore()), promotable: await promotable() }; }],
   // 답하는 중에: 멈추기 · 튜터가 고르게 물은 것에 답하기 (10/30)
   ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/stop$/, async (_q, m) => { await getRun(m[1]); return stopAsk(m[1], Number(m[2])); }],
   ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/answer$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return answerAsk(m[1], Number(m[2]), { id: String(b.id ?? ""), choice: typeof b.choice === "number" ? b.choice : undefined, text: typeof b.text === "string" ? b.text : undefined }); }],
