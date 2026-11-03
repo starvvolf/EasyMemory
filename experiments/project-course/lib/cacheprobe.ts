@@ -53,5 +53,16 @@ export async function cacheProbe(only?: string[]) {
     out[name] = { first, second };
     void logUsage({ kind: "cache-probe", variant: name, first, second });
   }
+  // 실제 튜터 순서 흉내: 앞 질문 본문(A) 다음 마지막 본문(B) — B가 A의 앞부분을 캐시로 쓰는지
+  if (!only?.length || only.includes("앞 질문 → 다음 질문")) {
+    const files = (await readdir(dir)).filter((f) => f.endsWith("tutor-request.json")).sort();
+    const prevRaw = JSON.parse(await readFile(path.join(dir, files.at(-2)!), "utf8")) as Body;
+    delete prevRaw._headers; delete prevRaw._url;
+    const a = await send(token, prevRaw);
+    const b = await send(token, base);
+    const ta = JSON.stringify(prevRaw.input), tb = JSON.stringify(base.input);
+    let k = 0; while (k < ta.length && ta[k] === tb[k]) k++;
+    out["앞 질문 → 다음 질문"] = { first: a, second: b, sameInstr: prevRaw.instructions === base.instructions, sameTools: JSON.stringify(prevRaw.tools) === JSON.stringify(base.tools), inputCommonChars: k, inputDiffAt: tb.slice(Math.max(0, k - 60), k + 60) };
+  }
   return out;
 }
