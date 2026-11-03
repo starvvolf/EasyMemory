@@ -254,7 +254,33 @@ export async function lessonView(runId: string, n: number) {
     recap: await recap(runId, { stageTitle: (k) => course.stages.find((x) => x.n === k)?.title ?? "", nowLabel: `${n}단계 · ${now ?? plan.title}` }).catch(() => null),
     now, mode: s.mode ?? null, resumable: !!s.asked && !s.busy && (s.waiting === "action" || s.waiting === "save"),
     thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null,
-    stuck: await stuckView(runId), stuckChoices: Object.values(CHOICES).map((c) => c.label), free: !!run.free };
+    stuck: await stuckView(runId), stuckChoices: Object.values(CHOICES).map((c) => c.label), free: !!run.free,
+    ...(run.chatId ? await chatPart(run.chatId) : {}) };
+}
+
+/* ---------- 11/4 사용자 "GPT가 만든 것까지 그대로 붙여 봐": 프리스타일 대화를 실험판(agent-chat) 엔진이 그대로 맡는다 ----------
+ * 지시문 · 도구 · 학습 상태(목표 · 초점 · 보충 · 관찰)는 실험판 것 그대로. 여기서는 그 대화를 제품 화면 모양으로 옮기고, 질문을 넘기기만 한다 */
+async function chatPart(chatId: string) {
+  const v = await (await import("./agent-chat.ts")).chatView(chatId);
+  const messages = v.messages.map((m) => {
+    const id = `c${m.id}`;
+    if (m.role === "user") return { id, role: "me", text: m.text };
+    if (m.role === "assistant") return { id, role: "tutor", text: m.text };
+    if (m.role === "tool") return { id, role: "tutor", card: { type: "tool", icon: "🔧", label: m.text.split("\n")[0], ok: !/실패|중단/.test(m.text.split("\n")[0]) } };
+    return { id, role: "note", text: m.text };
+  });
+  return { messages, busy: v.busy, chat: { id: v.id, goal: v.goal, focus: v.focus, support: v.support.map((x) => x.topic), observations: v.observations.length } };
+}
+const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
+async function chatAsk(runId: string, chatId: string, text: string) {
+  const ac = await import("./agent-chat.ts");
+  const job = ac.askChat(chatId, text).catch(() => {}).finally(() => { clearInterval(chatPolls.get(runId)); chatPolls.delete(runId); notifyLesson(runId); });
+  // 실험판은 대화 파일에 바로 쓴다 → 답하는 동안 화면에 0.45초마다 알린다(SSE)
+  clearInterval(chatPolls.get(runId));
+  chatPolls.set(runId, setInterval(() => notifyLesson(runId), 450));
+  // askChat이 사용자 말을 저장하고 busy가 될 때까지만 기다린다(답 전체는 기다리지 않는다)
+  for (let i = 0; i < 20 && !(await ac.chatView(chatId)).busy; i++) await new Promise((r) => setTimeout(r, 50));
+  void job;
 }
 
 /** 생성 코스: 다음 단계가 준비됐는지(뒤에서 만드는 중이면 화면이 기다린다) */
@@ -293,6 +319,14 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   const plan = await loadPlan(course.id, n);
   if (!plan) throw err(404, "이 단계의 수업 계획서가 없어요.");
 
+  if (run.chatId && (input.do === "ask" || input.do === "stop_chat")) {
+    if (input.do === "stop_chat") { await (await import("./agent-chat.ts")).stopChat(run.chatId); return; }
+    // VS Code에서 고른 줄이 있으면 질문 앞에 붙인다(실험판 엔진에는 고른 줄 칸이 없다)
+    const sel = bridgeState(runId)?.selection;
+    const pre = sel?.text ? `[VS Code에서 고른 코드 ${bridgeState(runId)?.file ?? ""} ${sel.from}~${sel.to}줄]\n${sel.text}\n\n` : "";
+    await chatAsk(runId, run.chatId, pre + String(input.text ?? ""));
+    return;
+  }
   if (input.do === "ask") {
     const t = String(input.text ?? "");
     // [막혔어요] 칸 안에서는 말투로 투어·설명 모드로 바꾸지 않는다(11/3 재현: "구조"라는 말에 투어 모드가 돼 막힘 도구가 빠짐)
