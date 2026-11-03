@@ -194,7 +194,7 @@ const routes: [string, RegExp, Handler][] = [
   // 튜터 창(lib/float.ts): 창이 0.25초마다 묻는다
   // 코스 생성(lib/generate.ts): 목표 → 목차 → 1단계(관문) — AI 사용량이 든다
   // 캐시 원인 확인(11/3): 마지막 튜터 요청을 변형해 두 번씩 보내 캐시 읽기를 본다(AI 사용량 듦, 사람이 부를 때만)
-  ["POST", /^\/api\/debug\/cache-probe$/, async (req) => { const b = await body(req); const { cacheProbe } = await import("../lib/cacheprobe.ts"); return cacheProbe(Array.isArray(b.only) ? b.only.map(String) : undefined, Math.min(120000, Number(b.waitMs) || 0), b.apiKey === true); }],
+  ["POST", /^\/api\/debug\/cache-probe$/, async (req) => { const b = await body(req); const { cacheProbe } = await import("../lib/cacheprobe.ts"); return cacheProbe(Array.isArray(b.only) ? b.only.map(String) : undefined, Math.min(120000, Number(b.waitMs) || 0), b.apiKey === true, (b.headers && typeof b.headers === "object" ? b.headers : {}) as Record<string, string>); }],
   ["POST", /^\/api\/generate$/, async (req) => { const b = await body(req); const goal = String(b.goal ?? "").trim(); if (goal.length < 4) throw Object.assign(new Error("만들고 싶은 걸 조금 더 적어 주세요."), { status: 400 }); return { id: await startGeneration(goal) }; }],
   ["GET", /^\/api\/generate\/(gen-[a-f0-9]+)$/, async (_q, m) => (await genStatus(m[1])) ?? { phase: "failed", message: "없는 코스예요." }],
   ["GET", /^\/api\/float$/, async (_q, _m, url) => { const p = floatPoll(url.searchParams.has("w")); let workspace: string | null = null;

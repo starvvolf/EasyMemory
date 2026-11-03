@@ -23,7 +23,9 @@ const VARIANTS: Record<string, (b: Body) => Body> = {
   "앱과 같은 최소 모양": (b) => ({ model: b.model, instructions: b.instructions, input: b.input, store: false, stream: true }),
 };
 
+let probeHeaders: Record<string, string> = {};
 async function send(token: string, body: Body, extra: Record<string, string> = {}) {
+  extra = { ...probeHeaders, ...extra };
   const t0 = Date.now();
   const r = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { ...extra, authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ ...body, max_output_tokens: 16 }) });
   const text = await r.text();
@@ -45,7 +47,9 @@ function apiKey(): string {
   return m[1].trim().replace(/^["']|["']$/g, "");
 }
 
-export async function cacheProbe(only?: string[], waitMs = 0, useApiKey = false) {
+export async function cacheProbe(only?: string[], waitMs = 0, useApiKey = false, headers: Record<string, string> = {}) {
+  // 11/3 조사 글: Codex 백엔드는 session-id 헤더로 캐시 서버를 고른다(openai/codex #44716, openai-oauth #46) → 헤더를 바꿔 가며 비교
+  probeHeaders = Object.fromEntries(Object.entries(headers).filter(([k]) => /^(session[-_]id|x-session-affinity|x-session-id|conversation[-_]id)$/i.test(k)).map(([k, v]) => [k, String(v).slice(0, 80)]));
   const dir = path.join(DATA, "prompts");
   const last = (await readdir(dir)).filter((f) => f.endsWith("tutor-request.json")).sort().at(-1);
   if (!last) throw Object.assign(new Error("튜터 요청 기록이 없어요."), { status: 404 });
@@ -55,7 +59,7 @@ export async function cacheProbe(only?: string[], waitMs = 0, useApiKey = false)
   const base = raw;
   const token = useApiKey ? apiKey() : await chatGptBearer();
   const h = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 8); // 토큰은 남기지 않고 같은지만
-  const out: Record<string, unknown> = { from: last, via: useApiKey ? "API 키" : "ChatGPT 로그인" };
+  const out: Record<string, unknown> = { from: last, via: useApiKey ? "API 키" : "ChatGPT 로그인", headers: probeHeaders };
   for (const [name, fn] of Object.entries(VARIANTS)) {
     if (only?.length && !only.includes(name)) continue;
     const body = fn(structuredClone(base));
