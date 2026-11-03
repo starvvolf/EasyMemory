@@ -98,6 +98,13 @@ async function summary(run: Run) {
 
 type Handler = (req: IncomingMessage, m: RegExpExecArray, url: URL) => Promise<unknown>;
 const routes: [string, RegExp, Handler][] = [
+  ["POST", /^\/api\/agent-chat$/, async () => (await import("../lib/agent-chat.ts")).newChat()],
+  ["POST", /^\/api\/agent-chat\/prompts$/, async (req) => (await import("../lib/agent-chat.ts")).saveChatPrompts(await body(req))],
+  ["GET", /^\/api\/agent-chat\/([a-f0-9]{16})\/debug$/, async (_q, m) => (await import("../lib/agent-chat.ts")).chatDebug(m[1])],
+  ["POST", /^\/api\/agent-chat\/([a-f0-9]{16})\/restart$/, async (_q, m) => (await import("../lib/agent-chat.ts")).restartChat(m[1])],
+  ["GET", /^\/api\/agent-chat\/([a-f0-9]{16})$/, async (_q, m) => (await import("../lib/agent-chat.ts")).chatView(m[1])],
+  ["POST", /^\/api\/agent-chat\/([a-f0-9]{16})\/ask$/, async (req, m) => { const b = await body(req); return (await import("../lib/agent-chat.ts")).askChat(m[1], String(b.text ?? "")); }],
+  ["POST", /^\/api\/agent-chat\/([a-f0-9]{16})\/stop$/, async (_q, m) => (await import("../lib/agent-chat.ts")).stopChat(m[1])],
   ["GET", /^\/api\/status$/, async () => {
     const f = await runs();
     return { node: nodeSupport(), ai: await aiStatus(), engine: await import("../lib/oc-engine.ts").then((m) => m.engineName()).catch((e) => `기본 (엔진 파일 오류: ${(e as Error).message.slice(0, 120)})`), active: f.active ?? null, ports: PORTS,

@@ -17,6 +17,7 @@ import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
 import { logAnswer, logPrompt, logUsage } from "./promptlog.ts";
 import { getCourse, getLearningHistory, getProgress, getStep, recordObservation } from "./learning-tools.ts";
 import { goDeeper, nameGap, resolveTop } from "./stuck.ts";
+import { CHAT_SYSTEM, CHAT_TOOLS } from "./agent-chat-policy.ts";
 import { promptOf } from "./prompts.ts";
 
 export const OC_VERSION = "2.2.1";
@@ -134,7 +135,7 @@ async function start(): Promise<Host> {
  * - OpenCode가 우리 지시문 뒤에 붙이는 약 17,600자(OpenCode 자체 도구 · 스킬 목록 · 작업 트리 안내)를 떼고 작업 폴더 한 줄만 남긴다
  * - 답 길이(verbosity)가 low로 가서 이해 질문 답도 짧아졌다 → medium(ChatGPT 기본과 같게). 길이는 지시문이 질문에 맞게 정한다
  */
-export function shapeRequest(j: any, summary: boolean) {
+export function shapeRequest(j: any, summary: boolean, learningChat: boolean | string = false) {
   if (!j || typeof j !== "object") return j;
   if (typeof j.instructions === "string") {
     const cut = j.instructions.indexOf("\n# Your Model");
@@ -145,6 +146,10 @@ export function shapeRequest(j: any, summary: boolean) {
   }
   // 실험방에서 고친 고정 지시문(11/4): 지시문 앞의 SYSTEM을 바꿔 끼운다(튜터를 다시 켜지 않아도 다음 답부터)
   if (typeof j.instructions === "string" && j.instructions.startsWith(SYSTEM)) { const sys = promptOf("system", SYSTEM); if (sys !== SYSTEM) j.instructions = sys + j.instructions.slice(SYSTEM.length); }
+  if (learningChat !== false) {
+    j.instructions = typeof learningChat === "string" ? learningChat : CHAT_SYSTEM;
+    j.reasoning = { ...(j.reasoning ?? {}), effort: "low" };
+  }
   j.text = { ...(j.text ?? {}), verbosity: "medium" };
   if (summary && !j.reasoning?.summary) j.reasoning = { ...(j.reasoning ?? {}), summary: "auto" };
   return j;
@@ -156,14 +161,15 @@ function policyPlugin(fake: boolean) {
     id: "recaller-tutor",
     setup: async (ctx: any) => {
       // 요청마다 지금 유효한 ChatGPT 토큰을 붙인다(한 시간마다 바뀜)
-      if (!fake) await ctx.session.hook("http.request", async (ev: any) => {
-        const token = await chatGptBearer();
-        const hd = new Headers(ev.request.headers); hd.set("authorization", `Bearer ${token}`);
+      await ctx.session.hook("http.request", async (ev: any) => {
+        const hd = new Headers(ev.request.headers);
+        if (!fake) hd.set("authorization", `Bearer ${await chatGptBearer()}`);
+        const experiment = live.get(ev.sessionID)?.io.learningChat;
         let body: string | undefined;
         // 모델 응답(/responses) 요청: 지시문 다듬기 · 답 길이 · 생각 요약을 정하고, 실제로 가는 본문을 기록한다
         if (ev.request.method === "POST" && /\/responses$/.test(new URL(ev.request.url).pathname)) {
           try {
-            const j = shapeRequest(JSON.parse(await ev.request.clone().text()), reasoningSummary);
+            const j = shapeRequest(JSON.parse(await ev.request.clone().text()), reasoningSummary, experiment ? experiment.system ?? CHAT_SYSTEM : false);
             const run = live.get(ev.sessionID)?.io.runId;
             if (run) {
               j.prompt_cache_key = `rc-${run}`; // 질문마다 새 대화라도 같은 진행 기록이면 앞부분 캐시가 맞게
@@ -173,9 +179,17 @@ function policyPlugin(fake: boolean) {
               hd.set("session-id", `rc-${run}`); hd.set("session_id", `rc-${run}`);
             }
             body = JSON.stringify(j); hd.delete("content-length");
+            await experiment?.capture?.(j).catch((e: Error) => console.error("[chat input]", e.message));
             // 캐시 원인 확인(11/3): OpenCode가 붙이는 헤더도 남긴다(로그인 토큰은 빼고)
             void logPrompt("tutor-request", { ...j, _run: run, _headers: Object.fromEntries([...hd.entries()].filter(([k]) => !/authorization|cookie/i.test(k))), _url: ev.request.url });
           } catch { /* 본문이 JSON이 아니면 그대로 */ }
+        }
+        // 가짜 모델도 같은 최종 본문을 관찰한다. 인증 헤더는 입력 보기에 저장하지 않는다.
+        if (fake && experiment && ev.request.method === "POST" && /\/chat\/completions$/.test(new URL(ev.request.url).pathname)) {
+          const j = JSON.parse(await ev.request.clone().text());
+          j.messages = [{ role: "system", content: experiment.system ?? CHAT_SYSTEM }, ...(j.messages ?? []).filter((m: { role?: string }) => m.role !== "system")];
+          body = JSON.stringify(j); hd.delete("content-length");
+          await experiment.capture?.(j);
         }
         ev.request = body === undefined ? new Request(ev.request, { headers: hd }) : new Request(ev.request.url, { method: "POST", headers: hd, body, signal: ev.request.signal });
       });
@@ -198,14 +212,20 @@ function policyPlugin(fake: boolean) {
         // 덩어리 설명: 필요한 파일은 이미 붙여 보냈으니 도구 없이 한 번에 답한다(호출 1번)
         // 흐름 투어: 파일은 붙여 보냈으니 show_tour 하나만
         // 도구(11/3 사용자 "기본 4개"): 보통 질문은 읽기 · 요청 보내기 · 조각 돌리기 · 자동 확인만. 고치기는 작업 지시(범위가 있을 때)만
-        const allow = l?.io.mode === "explain" ? new Set<string>() : l?.io.mode === "tour" ? new Set(["show_tour"])
+        const custom = new Set<string>(l?.io.learningChat ? CHAT_TOOLS.map((t) => t.name) : []);
+        const allow = l?.io.learningChat ? new Set([...READ, "run_snippet", ...custom])
+          : l?.io.mode === "explain" ? new Set<string>() : l?.io.mode === "tour" ? new Set(["show_tour"])
           : l?.io.stuck ? new Set([...BASIC, ...STUCK])
           : l?.io.scope?.length ? new Set([...BASIC, ...EDITS]) : new Set(BASIC);
-        for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k) || !allow.has(k)) delete ev.tools[k];
+        for (const k of Object.keys(ev.tools)) if ((!SHOWN.has(k) && !custom.has(k)) || !allow.has(k)) delete ev.tools[k];
       });
       await ctx.permission.hook("evaluate", (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);
         const l = live.get(ev.sessionID);
+        if (l?.io.learningChat) {
+          ev.effect = READ.has(ev.action) || ev.action === "run_snippet" || CHAT_TOOLS.some((t) => t.name === ev.action) ? "allow" : "deny";
+          return;
+        }
         if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action) || ev.action === "show_tour" || (EXTRA as readonly string[]).includes(ev.action) || (LEARN as readonly string[]).includes(ev.action) || (STUCK as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
         if (EDITS.has(ev.action)) {
           if (l?.io.mode === "explain") { ev.effect = "deny"; ev.message = "지금은 설명만 하는 시간이에요."; return; }
@@ -249,6 +269,15 @@ function policyPlugin(fake: boolean) {
         look_db: ["실습 서버가 쓰는 DB(SQLite)를 읽기만 한다. 응답이 아니라 실제로 저장된 값을 보여 줄 때 쓴다. SELECT만, 20줄까지.", { sql: { type: "string" } }, ["sql"]],
       };
       await ctx.tool.transform((ed: any) => {
+        for (const tool of CHAT_TOOLS) {
+          ed.add({ name: tool.name, description: tool.description, options: { codemode: false }, input: { type: "object", additionalProperties: false, properties: tool.properties, required: [...tool.required] },
+            execute: async (input: Record<string, unknown>, c: any) => {
+              const l = live.get(c.sessionID);
+              if (!l?.io.learningChat) return { content: "지금은 자유 대화 실험이 아니에요." };
+              try { return { content: await l.io.learningChat.execute(tool.name, input ?? {}) }; }
+              catch (e) { return { content: `학습 조정 실패: ${(e as Error).message}` }; }
+            } });
+        }
         ed.add({ name: "show_tour", options: { codemode: false },
           description: "실행 흐름 투어를 보여 준다: 요청 하나가 들어와 답장이 나갈 때까지 지나가는 코드 덩어리를 실행 순서대로. 학습자 VS Code에서 걸음마다 그 덩어리에 불이 켜지고 튜터 화면에 설명이 나온다. 구조·실제 동작·흐름을 물으면 쓴다.",
           input: { type: "object", required: ["title", "steps"], properties: {
@@ -544,7 +573,11 @@ async function startMock(): Promise<string> {
     send({ choices: [{ index: 0, delta: { role: "assistant", reasoning_content: "**Checking the server file** I should look at how requests are routed. " }, finish_reason: null }] });
     await new Promise((r) => setTimeout(r, 700));
     let call: { name: string; args: unknown; say: string } | null = null;
-    if (tools.includes("show_tour") && tools.length === 1) {
+    if (tools.includes("get_learning_state")) {
+      call = sinceUser === 0 ? /학습 도구 연결 시험/.test(asked)
+        ? { name: "adjust_learning", args: { action: "focus", text: "학습 도구 연결 확인" }, say: "" }
+        : { name: "get_learning_state", args: {}, say: "" } : null;
+    } else if (tools.includes("show_tour") && tools.length === 1) {
       call = sinceUser === 0 ? { name: "show_tour", say: "GET /health 요청을 따라가 볼게요.", args: { title: "GET /health 요청이 지나가는 길", steps: [
         { file: "src/server.ts", from: 9, to: 11, anchor: "const server = createServer", title: "편지 도착", text: "브라우저가 보낸 편지(`req`)가 여기로 와요. 주소와 방식을 꺼내 두고 **다음 줄들**로 넘어가요." },
         { file: "src/server.ts", from: 18, to: 22, anchor: "const found = router.match", title: "담당자 찾기", text: "`router.match`에게 담당자를 물어봐요. 이제 [[src/router.ts:22]]로 넘어가요." },

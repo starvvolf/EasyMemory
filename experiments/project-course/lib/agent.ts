@@ -49,6 +49,12 @@ export type AgentIO = {
   /** [막혔어요] 칸 안에서 부를 때(11/3): 칸마다 따로 이어 쓰는 대화(sessKey)와 막힘 도구 */
   sessKey?: string;
   stuck?: { frameId: string; lang: import("./basics.ts").Lang };
+  /** 별도 자유 대화 실험판. 기존 수업의 지시문·진도 도구와 섞지 않는다. */
+  learningChat?: {
+    system?: string;
+    capture?: (body: Record<string, unknown>) => Promise<void>;
+    execute: (name: string, input: Record<string, unknown>) => Promise<string>;
+  };
 };
 
 export const TOOLS = ["list_files", "read_file", "open_in_editor", "start_server", "send_request", "run_checks", "edit_file", "look_db", "none"] as const;
