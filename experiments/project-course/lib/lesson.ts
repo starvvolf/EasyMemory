@@ -954,8 +954,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const turnTpl = () => (run.free ? promptOf("freeTurn", DEFAULT_FREE_TURN) : promptOf("turnTpl", DEFAULT_TURN));
   const state = render(turnTpl(), V);
   // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
-  // 프리스타일은 고른 코드가 없으면 파일을 미리 붙이지 않는다(11/4: 붙여 둔 과제 파일을 보고 인사에 과제부터 시작함)
-  const files = (run.free && !quote) || (promptOf("files", "on").trim() === "off" && opts.mode !== "tour") ? [] : opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stage.fix.files, opts.mode === "explain");
+  const files = promptOf("files", "on").trim() === "off" && opts.mode !== "tour" ? [] : opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stage.fix.files, opts.mode === "explain");
   const recentText = talk(recent);
   const history = [olderPart, recentText ? `[최근 대화]\n${recentText}` : ""].filter(Boolean).join("\n\n");
   // 이어 쓰는 대화에 덧붙일 것: 지난 질문 답 뒤로 화면에 나온 것만(그 앞은 대화에 이미 있다)
