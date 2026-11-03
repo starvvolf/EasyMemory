@@ -49,6 +49,8 @@ type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" |
 type Todo = { open?: Open; focus?: Focus; clear?: boolean };
 
 const now = () => new Date().toISOString();
+/** 이어 쓰는 대화에 이미 들어간 화면 메시지(단계별 마지막 id) */
+const sentUpTo = new Map<string, number>();
 const file = (runId: string, n: number) => path.join(DATA, "lessons", `${runId}-${n}.json`);
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
 
@@ -749,7 +751,10 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const files = opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stage.fix.files, opts.mode === "explain");
   const recentText = talk(recent);
   const history = [olderPart, recentText ? `[최근 대화]\n${recentText}` : ""].filter(Boolean).join("\n\n");
-  const parts = { fixed, turn: state, recent: history, since: "", files };
+  // 이어 쓰는 대화에 덧붙일 것: 지난 질문 답 뒤로 화면에 나온 것만(그 앞은 대화에 이미 있다)
+  const sent = sentUpTo.get(lk(runId, n)) ?? -1;
+  const sinceText = talk(before.filter((m) => m.id > sent));
+  const parts = { fixed, turn: state, recent: history, since: sinceText ? `[지난 질문 뒤 화면]\n${sinceText}` : "", files };
   const context = [fixed, history, state, ...files.map((f) => f.text)].filter(Boolean).join("\n\n");
   if (aiMode() !== "off") {
     // 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선을 고친다)
@@ -793,6 +798,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
       };
     try {
       answer = await runAgent(io as Parameters<typeof runAgent>[0], q);
+      sentUpTo.set(lk(runId, n), (await read<State>(file(runId, n), s0)).messages.at(-1)?.id ?? 0);
       await remember(runId, n, ws, s0, { q, shown, quote, mode: opts.mode, answer }).catch((e) => console.error("[notes]", e));
       await revealedSolution(runId, n, answer).catch((e) => console.error("[reveal]", e));
       if (opts.onAnswer) await opts.onAnswer(answer).catch(() => {});

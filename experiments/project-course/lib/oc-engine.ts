@@ -68,8 +68,12 @@ const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문
 // runId:n → 이어 쓰는 대화. 같은 단계 안에서는 대화를 이어 써서 앞부분이 그대로 남게 한다(캐시가 맞는다).
 // files: 이 대화에 마지막으로 붙인 파일 내용 — 그대로면 다시 붙이지 않는다. 너무 길어지면 새 대화로(규칙을 덜 지키게 되므로).
 // 11/3 사용자 "gpt 챗처럼 앞 대화 보고 가기": 대화는 코스(진행 기록) 하나에 하나. stage: 마지막으로 이번 단계 설명을 넣은 단계
-const sessions = new Map<string, { sid: string; turns: number; files: Map<string, string>; stage?: number }>();
+// 11/3 캐시 실험 뒤: 대화는 진행 기록(코스) 하나에 하나로 이어 쓴다 — 캐시는 메시지 끝에서 끊기므로 앞 요청의 메시지가 그대로 남아야 재사용된다.
+// lastInput: 마지막 요청의 입력 토큰. 넘치면(COMPACT_TOKENS) 다음 질문에서 요약을 들고 새 대화로(그 한 번만 캐시 미스)
+type Sess = { sid: string; turns: number; files: Map<string, string>; stage?: number; lastInput?: number };
+const sessions = new Map<string, Sess>();
 const MAX_TURNS = 60;
+const COMPACT_TOKENS = Number(process.env.PC_COMPACT_TOKENS) || 24000;
 
 type Host = { oc: any; events: any[]; waiters: Set<() => void>; mockUrl?: string };
 let host: Promise<Host | null> | null = null;
@@ -151,6 +155,8 @@ function policyPlugin(fake: boolean) {
               j.prompt_cache_key = `rc-${run}`; // 질문마다 새 대화라도 같은 진행 기록이면 앞부분 캐시가 맞게
               // 11/3 캐시 원인: OpenCode가 대화마다 다른 x-session-affinity/x-session-id를 붙여 요청이 다른 곳으로 가 캐시를 못 씀 → 진행 기록마다 같게
               for (const k of ["x-session-affinity", "x-session-id"]) if (hd.has(k)) hd.set(k, `rc-${run}`);
+              // ChatGPT 로그인(Codex 백엔드)은 session-id 헤더로 캐시가 있는 서버를 고른다(11/3 실험: 없으면 0, 있으면 97%) — 협업/결과보고/캐시
+              hd.set("session-id", `rc-${run}`); hd.set("session_id", `rc-${run}`);
             }
             body = JSON.stringify(j); hd.delete("content-length");
             // 캐시 원인 확인(11/3): OpenCode가 붙이는 헤더도 남긴다(로그인 토큰은 빼고)
@@ -402,7 +408,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   // 컨텍스트 관리자가 매번 맥락을 다 조립하니 모델 대화는 질문마다 새로 연다(11/3: 기록과 컨텍스트 분리). 앞부분은 캐시 키를 진행 기록마다 같게 해서 캐시가 맞는다
   const key = io.runId;
   let ss = sessions.get(key);
-  if (!ss || io.parts || ss.turns >= MAX_TURNS) { ss = { sid: (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string, turns: 0, files: new Map() }; sessions.set(key, ss); }
+  if (!ss || ss.turns >= MAX_TURNS || (ss.lastInput ?? 0) > COMPACT_TOKENS) { ss = { sid: (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string, turns: 0, files: new Map() }; sessions.set(key, ss); }
   const sid = ss.sid;
   const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve(), reason: "", lastThink: 0, asked: 0, stopped: false, usage: [], raw: [], t0: Date.now() };
   live.set(sid, l);
@@ -424,6 +430,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
     await l.chain; // 흘려 보내던 글을 다 쓴 뒤에 끝낸다
     io.think?.(null);
     await logAnswer(plog, l.texts.join("\n\n"));
+    const lastRaw = l.raw.at(-1); if (lastRaw) ss.lastInput = lastRaw.input;
     void logUsage({ kind: "tutor", runId: io.runId, stage: io.n, mode: io.mode ?? "normal", ms: Date.now() - l.t0, calls: l.steps, tokens: l.usage, raw: l.raw, prompt: plog, chars: text.length });
     if (l.stopped) return l.texts.join("\n\n"); // 멈춘 건 화면에 이미 "멈췄어요"가 있다
     await countCalls(io.mode === "explain" ? "explain" : "agent", l.steps, end.type === "session.execution.succeeded");
@@ -440,11 +447,24 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   } finally { live.delete(sid); }
 }
 
-/** 이번 메시지에 붙일 맥락: 컨텍스트 관리자(lesson.ts)가 조립한 것을 그대로 — 고정 → 앞부분·최근 대화 → 상태·위치 → 파일 */
-export function promptParts(io: AgentIO, _ss?: unknown): string[] {
+/**
+ * 이번 메시지에 붙일 맥락(11/3 캐시 실험 뒤 — 대화 이어 쓰기 + 컨텍스트 관리자):
+ * 새 대화면 [코스·단계] → 앞부분(요약)·최근 대화 → 상태·위치 → 파일. 이어 쓰면 지난번 뒤 화면 대화 → 상태·위치 → 바뀐 파일만.
+ * 단계가 바뀌었으면 단계 설명을 다시. 앞 메시지는 건드리지 않고 뒤에 덧붙이기만 한다(캐시가 메시지 끝에서 끊기므로).
+ */
+export function promptParts(io: AgentIO, ss: { turns: number; files: Map<string, string>; stage?: number } = { turns: 0, files: new Map() }): string[] {
   const p = io.parts;
   if (!p) return [io.context];
-  return [p.fixed, p.recent, p.turn, ...p.files.map((f) => f.text)];
+  const fresh = ss.turns === 0;
+  const newStage = !fresh && ss.stage !== io.n;
+  ss.stage = io.n;
+  const files = p.files.map((f) => {
+    if (!fresh && ss.files.get(f.key) === f.text) return "";
+    ss.files.set(f.key, f.text);
+    return f.text;
+  });
+  if (fresh) return [p.fixed, p.recent, p.turn, ...files];
+  return [newStage ? p.fixed : "", p.since, p.turn, ...files];
 }
 
 /* ---------- 가짜 AI (시험용: 지금 보는 파일을 읽고 짧게 답한다) ---------- */
