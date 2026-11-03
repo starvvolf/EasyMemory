@@ -146,6 +146,8 @@ function policyPlugin(fake: boolean) {
         if (ev.request.method === "POST" && /\/responses$/.test(new URL(ev.request.url).pathname)) {
           try {
             const j = shapeRequest(JSON.parse(await ev.request.clone().text()), reasoningSummary);
+            const run = live.get(ev.sessionID)?.io.runId;
+            if (run) j.prompt_cache_key = `rc-${run}`; // 질문마다 새 대화라도 같은 진행 기록이면 앞부분 캐시가 맞게
             body = JSON.stringify(j); hd.delete("content-length");
             void logPrompt("tutor-request", j);
           } catch { /* 본문이 JSON이 아니면 그대로 */ }
@@ -378,9 +380,10 @@ function emit(l: Live, key: string, text: string, final: boolean) {
 /* ---------- 질문 하나 ---------- */
 async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   await aiBudget("agent"); // 한도를 넘었으면 여기서 멈춘다
+  // 컨텍스트 관리자가 매번 맥락을 다 조립하니 모델 대화는 질문마다 새로 연다(11/3: 기록과 컨텍스트 분리). 앞부분은 캐시 키를 진행 기록마다 같게 해서 캐시가 맞는다
   const key = io.runId;
   let ss = sessions.get(key);
-  if (!ss || ss.turns >= MAX_TURNS) { ss = { sid: (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string, turns: 0, files: new Map() }; sessions.set(key, ss); }
+  if (!ss || io.parts || ss.turns >= MAX_TURNS) { ss = { sid: (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string, turns: 0, files: new Map() }; sessions.set(key, ss); }
   const sid = ss.sid;
   const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve(), reason: "", lastThink: 0, asked: 0, stopped: false };
   live.set(sid, l);
@@ -417,23 +420,11 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   } finally { live.delete(sid); }
 }
 
-/**
- * 이번 메시지에 붙일 맥락(11/3 "gpt 챗처럼"): 새 대화면 코스·단계 + 지금까지 화면의 대화, 이어 쓰면 지난번 뒤 화면의 대화만.
- * 단계가 바뀌었으면 그 단계 설명을 다시. 질문마다 [학습자 상태]·[지금 위치]. 파일은 바뀌었을 때만.
- */
-export function promptParts(io: AgentIO, ss: { turns: number; files: Map<string, string>; stage?: number }): string[] {
+/** 이번 메시지에 붙일 맥락: 컨텍스트 관리자(lesson.ts)가 조립한 것을 그대로 — 고정 → 앞부분·최근 대화 → 상태·위치 → 파일 */
+export function promptParts(io: AgentIO, _ss?: unknown): string[] {
   const p = io.parts;
   if (!p) return [io.context];
-  const fresh = ss.turns === 0;
-  const newStage = !fresh && ss.stage !== io.n;
-  ss.stage = io.n;
-  const files = p.files.map((f) => {
-    if (!fresh && ss.files.get(f.key) === f.text) return `[파일 ${f.key} — 위 대화에 붙인 것과 같음, 다시 읽지 않아도 된다]`;
-    ss.files.set(f.key, f.text);
-    return f.text;
-  });
-  if (fresh) return [p.fixed, p.recent, p.turn, ...files];
-  return [newStage ? p.fixed : "", p.since, p.turn, ...files];
+  return [p.fixed, p.recent, p.turn, ...p.files.map((f) => f.text)];
 }
 
 /* ---------- 가짜 AI (시험용: 지금 보는 파일을 읽고 짧게 답한다) ---------- */
