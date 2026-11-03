@@ -23,3 +23,9 @@ export async function logAnswer(name: string | null, answer: unknown) {
   if (!name) return;
   try { await appendFile(path.join(dir(), `${name}.answer.txt`), typeof answer === "string" ? answer : JSON.stringify(answer, null, 1)); } catch { /* 기록 실패는 무시 */ }
 }
+
+/** 사용량 한 줄(11/3): 호출마다 시간 · 모델 호출 수 · 토큰(입력 · 캐시 · 출력). .data/prompts/usage.jsonl */
+export async function logUsage(row: Record<string, unknown>) {
+  if (!on()) return;
+  try { await mkdir(dir(), { recursive: true }); await appendFile(path.join(dir(), "usage.jsonl"), JSON.stringify({ at: new Date().toISOString(), ...row }) + "\n"); } catch { /* */ }
+}

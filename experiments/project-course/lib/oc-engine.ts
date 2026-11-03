@@ -14,7 +14,7 @@ import { bridgeContext, bridgeState, send as bridgeSend } from "./bridge.ts";
 import { editsDir, runTool, safePath, type AgentIO, type EditRecord, type ToolName } from "./agent.ts";
 import { DATA, saveRun, stageProgress } from "./store.ts";
 import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
-import { logAnswer, logPrompt } from "./promptlog.ts";
+import { logAnswer, logPrompt, logUsage } from "./promptlog.ts";
 
 export const OC_VERSION = "2.2.1";
 // 2026-10-31: terra (답이 20초 안팎으로 느렸음; 출력 속도가 sol의 약 2배, Recaller AI 호출 가이드).
@@ -63,7 +63,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 - 숨기는 것은 완성 코드와 예측 답뿐이다. 왜 그렇게 되는지(원인·원리)는 언제든 설명한다 — "곧 같이 해 볼 거예요"로 원리 설명까지 미루지 않는다.
 - 하던 걸음으로 돌아가는 안내("이제 ~ 살펴봐요", "지금 할 일:")는 붙이지 않는다(화면에 [하던 거로 돌아가기] 버튼이 있다). 학습자가 "이제 뭐 해요?"처럼 물을 때만 할 일을 말한다.`;
 
-type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void>; reason: string; lastThink: number; asked: number; stopped: boolean };
+type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: string[]; cur: string; sid: string; lastFlush: number; chain: Promise<void>; reason: string; lastThink: number; asked: number; stopped: boolean; usage: unknown[]; t0: number };
 const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문
 // runId:n → 이어 쓰는 대화. 같은 단계 안에서는 대화를 이어 써서 앞부분이 그대로 남게 한다(캐시가 맞는다).
 // files: 이 대화에 마지막으로 붙인 파일 내용 — 그대로면 다시 붙이지 않는다. 너무 길어지면 새 대화로(규칙을 덜 지키게 되므로).
@@ -331,6 +331,7 @@ function onEvent(e: any) {
   if (process.env.OC_DEBUG && /tool\.failed|execution\.failed/.test(e?.type)) console.log("[oc ev]", e.type, JSON.stringify(e.data).slice(0, 300));
   const l = live.get(e?.data?.sessionID); if (!l) return;
   const key = () => `${l.sid}:${l.steps}`;
+  if (e.type === "session.step.ended" && e.data?.tokens) l.usage.push(e.data.tokens); // 토큰 사용량(입력 · 캐시 · 출력)
   if (e.type === "session.step.started") { l.steps++; l.cur = ""; }
   else if (e.type === "session.reasoning.started") { l.reason = ""; }
   else if (e.type === "session.reasoning.delta") {
@@ -385,7 +386,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   let ss = sessions.get(key);
   if (!ss || io.parts || ss.turns >= MAX_TURNS) { ss = { sid: (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string, turns: 0, files: new Map() }; sessions.set(key, ss); }
   const sid = ss.sid;
-  const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve(), reason: "", lastThink: 0, asked: 0, stopped: false };
+  const l: Live = { io, before: new Map(), steps: 0, texts: [], cur: "", sid, lastFlush: 0, chain: Promise.resolve(), reason: "", lastThink: 0, asked: 0, stopped: false, usage: [], t0: Date.now() };
   live.set(sid, l);
   const from = h.events.length;
   const text = [...promptParts(io, ss), bridgeContext(io.runId), `[학습자 질문] ${question}`].filter(Boolean).join("\n\n");
@@ -405,6 +406,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
     await l.chain; // 흘려 보내던 글을 다 쓴 뒤에 끝낸다
     io.think?.(null);
     await logAnswer(plog, l.texts.join("\n\n"));
+    void logUsage({ kind: "tutor", runId: io.runId, stage: io.n, mode: io.mode ?? "normal", ms: Date.now() - l.t0, calls: l.steps, tokens: l.usage, prompt: plog, chars: text.length });
     if (l.stopped) return l.texts.join("\n\n"); // 멈춘 건 화면에 이미 "멈췄어요"가 있다
     await countCalls(io.mode === "explain" ? "explain" : "agent", l.steps, end.type === "session.execution.succeeded");
     if (end.type === "timeout") { await h.oc.sessions.interrupt?.({ sessionID: sid }).catch(() => {}); return "생각이 너무 길어져서 멈췄어요. 질문을 조금 나눠서 다시 물어봐 주세요."; }

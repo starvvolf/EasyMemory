@@ -39,7 +39,11 @@ function start(reason) {
   try { if (statSync(LOG).size > 2_000_000) writeFileSync(LOG, ""); } catch { /* */ }
   log(`서버 켬 (${reason})`);
   const args = ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "server/main.ts"];
-  child = spawn(useOc ? node24 : process.execPath, args, { cwd: ROOT, env: { ...process.env, PC_NO_OPEN: "1", PC_OPEN: "" }, shell: useOc && win, windowsHide: true });
+  // .data/control/env.json: 원격 실험용 환경 값(예: {"PC_OLDER_LIMIT": "2500"}). 다시 켤 때마다 읽는다
+  let extra = {};
+  try { extra = JSON.parse(readFileSync(path.join(CTL, "env.json"), "utf8")); } catch { /* 없으면 그대로 */ }
+  child = spawn(useOc ? node24 : process.execPath, args, { cwd: ROOT, env: { ...process.env, ...extra, PC_NO_OPEN: "1", PC_OPEN: "" }, shell: useOc && win, windowsHide: true });
+  if (Object.keys(extra).length) log(`환경 값: ${JSON.stringify(extra)}`);
   child.stdout.on("data", (d) => appendFileSync(LOG, d));
   child.stderr.on("data", (d) => appendFileSync(LOG, d));
   st.server = { pid: child.pid, startedAt: new Date().toISOString(), engine: useOc ? "node24+OpenCode" : `node ${process.version}` };

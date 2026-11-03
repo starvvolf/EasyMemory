@@ -687,7 +687,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const where = quote ? `${quote.file}:${quote.from}${quote.to > quote.from ? `-${quote.to}` : ""}` : undefined;
   void record({ runId, stage: n, beat: s0.beat, type: "question", actor: "user", detail: (shown ?? q).slice(0, 300), evidence: where ? [where] : undefined });
   const dt = await pushDetour(runId, { topic: shown ?? q, reason: quote ? "코드 질문" : "질문", returnBeat: s0.beat, returnLabel: b?.now ?? firstLine(b?.text ?? "") });
-  if (dt.deep) await change(runId, n, (_s, push) => push({ role: "note", text: `질문이 ${dt.depth}번째로 이어지고 있어요. 답을 본 뒤 [하던 거로 돌아가기]로 원래 할 일로 가거나, 목표를 더 작게 나눠 볼 수도 있어요.` }));
+  void dt; // 질문이 이어진다는 알림은 뺐다(11/3: 대화가 자연스러워진 뒤 잔소리처럼 보임). 깊이는 세션에만 남는다
   let answer = "";
   // 컨텍스트 관리자(11/3 사용자: "대화 기록 저장과 LLM에 주는 컨텍스트를 분리"). AI가 아니라 코드가 매번 조립한다:
   // 지시문(고정) + [코스]·[이번 단계] + 앞부분(길면 요약, 넘쳤을 때만 만든다) + 최근 대화(지금 걸음은 자르지 않음) + [학습자 상태]·[지금 위치] + 필요한 파일(매번 디스크에서).
