@@ -147,7 +147,11 @@ function policyPlugin(fake: boolean) {
           try {
             const j = shapeRequest(JSON.parse(await ev.request.clone().text()), reasoningSummary);
             const run = live.get(ev.sessionID)?.io.runId;
-            if (run) j.prompt_cache_key = `rc-${run}`; // 질문마다 새 대화라도 같은 진행 기록이면 앞부분 캐시가 맞게
+            if (run) {
+              j.prompt_cache_key = `rc-${run}`; // 질문마다 새 대화라도 같은 진행 기록이면 앞부분 캐시가 맞게
+              // 11/3 캐시 원인: OpenCode가 대화마다 다른 x-session-affinity/x-session-id를 붙여 요청이 다른 곳으로 가 캐시를 못 씀 → 진행 기록마다 같게
+              for (const k of ["x-session-affinity", "x-session-id"]) if (hd.has(k)) hd.set(k, `rc-${run}`);
+            }
             body = JSON.stringify(j); hd.delete("content-length");
             // 캐시 원인 확인(11/3): OpenCode가 붙이는 헤더도 남긴다(로그인 토큰은 빼고)
             void logPrompt("tutor-request", { ...j, _headers: Object.fromEntries([...hd.entries()].filter(([k]) => !/authorization|cookie/i.test(k))), _url: ev.request.url });
