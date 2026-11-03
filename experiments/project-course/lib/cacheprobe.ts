@@ -4,6 +4,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { chatGptBearer } from "./ai.ts";
+import { existsSync, readFileSync } from "node:fs";
+import { ROOT } from "./course.ts";
 import { DATA } from "./store.ts";
 import { logUsage } from "./promptlog.ts";
 
@@ -33,7 +35,17 @@ async function send(token: string, body: Body, extra: Record<string, string> = {
   return { status: r.status, ms: Date.now() - t0, id, diag, input: usage?.input_tokens ?? null, cached: usage?.input_tokens_details?.cached_tokens ?? null, error: r.ok ? undefined : text.slice(0, 300) };
 }
 
-export async function cacheProbe(only?: string[], waitMs = 0) {
+/** 사용자 허락(11/3 "api키로 해봐 내가 허락할게")으로만: 앱 .env.local의 OPENAI_API_KEY를 읽어 쓴다. 값은 어디에도 남기지 않는다 */
+function apiKey(): string {
+  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+  const f = path.resolve(ROOT, "..", "..", ".env.local");
+  if (!existsSync(f)) throw Object.assign(new Error("API 키가 없어요."), { status: 400 });
+  const m = /^OPENAI_API_KEY=(.+)$/m.exec(readFileSync(f, "utf8"));
+  if (!m) throw Object.assign(new Error("API 키가 없어요."), { status: 400 });
+  return m[1].trim().replace(/^["']|["']$/g, "");
+}
+
+export async function cacheProbe(only?: string[], waitMs = 0, useApiKey = false) {
   const dir = path.join(DATA, "prompts");
   const last = (await readdir(dir)).filter((f) => f.endsWith("tutor-request.json")).sort().at(-1);
   if (!last) throw Object.assign(new Error("튜터 요청 기록이 없어요."), { status: 404 });
@@ -41,18 +53,18 @@ export async function cacheProbe(only?: string[], waitMs = 0) {
   const ocHeaders = (raw._headers ?? {}) as Record<string, string>;
   delete raw._headers; delete raw._url;
   const base = raw;
-  const token = await chatGptBearer();
+  const token = useApiKey ? apiKey() : await chatGptBearer();
   const h = (t: string) => createHash("sha256").update(t).digest("hex").slice(0, 8); // 토큰은 남기지 않고 같은지만
-  const out: Record<string, unknown> = { from: last, tokens: [h(token), h(await chatGptBearer()), h(await chatGptBearer())] };
+  const out: Record<string, unknown> = { from: last, via: useApiKey ? "API 키" : "ChatGPT 로그인" };
   for (const [name, fn] of Object.entries(VARIANTS)) {
     if (only?.length && !only.includes(name)) continue;
     const body = fn(structuredClone(base));
     const hdr = name.includes("OpenCode 헤더") ? (name.includes("세션 헤더 빼고") ? Object.fromEntries(Object.entries(ocHeaders).filter(([k]) => !/session/i.test(k))) : ocHeaders) : {};
     const fresh = name.includes("새 토큰");
-    const first = await send(fresh ? await chatGptBearer() : token, body, hdr);
-    const second = await send(fresh ? await chatGptBearer() : token, name.startsWith("끝만") ? fn(structuredClone(base)) : body, hdr);
+    const first = await send(fresh && !useApiKey ? await chatGptBearer() : token, body, hdr);
+    const second = await send(fresh && !useApiKey ? await chatGptBearer() : token, name.startsWith("끝만") ? fn(structuredClone(base)) : body, hdr);
     out[name] = { first, second };
-    void logUsage({ kind: "cache-probe", variant: name, first, second });
+    void logUsage({ kind: "cache-probe", via: useApiKey ? "api-key" : "chatgpt", variant: name, first, second });
   }
   // 실제 튜터 순서 흉내: 앞 질문 본문(A) 다음 마지막 본문(B) — B가 A의 앞부분을 캐시로 쓰는지
   if (!only?.length || only.includes("앞 질문 → 다음 질문")) {
