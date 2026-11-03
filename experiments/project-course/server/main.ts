@@ -168,8 +168,12 @@ const routes: [string, RegExp, Handler][] = [
   ["GET", /^\/api\/lab$/, async () => {
     const lab = await import("../lib/lab.ts"); const { SYSTEM } = await import("../lib/oc-engine.ts");
     const runId = await lab.labRun();
-    return { runId, extra: await lab.getExtra(), pipeline: lab.PIPELINE, system: SYSTEM, last: await lab.lastPrompt(runId) };
+    const pr = await import("../lib/prompts.ts"); const { ROOT_RULES, CHILD_RULES } = await import("../lib/lesson.ts"); const gen = await import("../lib/generate.ts");
+    const defs: Record<string, string> = { system: SYSTEM, fixedTpl: pr.DEFAULT_FIXED, turnTpl: pr.DEFAULT_TURN, stuckRoot: ROOT_RULES, stuckChild: CHILD_RULES, files: "on", genPlan: gen.SYSTEM_PLAN, genStage: gen.SYSTEM_STAGE };
+    const prompts = pr.EDITABLE.map((e) => ({ ...e, def: defs[e.key] ?? "", current: pr.promptOf(e.key, defs[e.key] ?? ""), changed: pr.changed(e.key) }));
+    return { runId, extra: await lab.getExtra(), pipeline: lab.PIPELINE, system: SYSTEM, prompts, last: await lab.lastPrompt(runId) };
   }],
+  ["POST", /^\/api\/lab\/prompt$/, async (req) => { const pr = await import("../lib/prompts.ts"); const b = await body(req); const key = String(b.key ?? ""); if (!pr.EDITABLE.some((e) => e.key === key)) throw Object.assign(new Error("고칠 수 없는 항목이에요."), { status: 400 }); await pr.setPrompt(key, String(b.text ?? "")); return { ok: true }; }],
   ["POST", /^\/api\/lab\/extra$/, async (req) => { const lab = await import("../lib/lab.ts"); const b = await body(req); return { extra: await lab.setExtra(String(b.extra ?? "")) }; }],
   ["POST", /^\/api\/lab\/new$/, async (req) => {
     const b = await body(req);
