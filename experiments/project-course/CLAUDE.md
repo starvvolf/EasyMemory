@@ -49,6 +49,8 @@ VS Code에서 작은 서비스를 한 단계씩 만들고, 오른쪽 Recaller �
 
 ## 켜기·테스트
 
+- `코스 서버 지킴이.cmd`(11/3, 사용자가 자리에 없을 때 원격 실험용): `tools/keeper.mjs`가 코스 서버를 켜 두고, 꺼지면 다시 켜고, `.data/control/restart` 파일이 바뀌면(원격 세션이 git pull 뒤 글을 써 넣음) 새 코드로 다시 켠다. VS Code는 안 연다. 상태 `.data/control/status.json`, 서버 출력 `.data/control/server.log`
+
 - `프로젝트코스 실험.cmd`: Node 22.13 이상, 처음 한 번 이 폴더에 Node 24와 OpenCode를 받고(창이 보임) 그다음부터는 최소화로 켜진다. 코스 서버만 껐다 켜면 되고 3000번 앱은 건드리지 않는다
 - `npm test`(이 폴더). OpenCode까지 보려면 Node 24로: `.node24\node_modules\.bin\node.cmd --test test\*.test.ts`
 - 공용 테스트(루트 `CLAUDE.md`)는 앱 쪽 파일(`ProjectStudy.tsx`, `src/app/api/project-course/`)을 고쳤을 때
