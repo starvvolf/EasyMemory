@@ -668,6 +668,7 @@ async function olderContext(runId: string, n: number, s0: State, older: LMsg[], 
 }
 const SUMMARY_SYSTEM = `코딩 학습 튜터와 학습자의 지난 대화를 다음 대화에 쓸 메모로 줄인다. 한국어, 600자 이내, 목록으로.
 - 학습자가 이미 이해한 것 / 헷갈려한 것 / 물어본 것과 받은 답의 요점 / 튜터가 쓴 비유
+- 학습자가 직접 쓴 문장("내 말로" 답, 예측에서 고른 답)은 따옴표로 그대로 옮긴다.
 - 사실만. 새로 판단하거나 칭찬하지 않는다.`;
 
 /** 아직 안 한 순서: 튜터가 학습자가 직접 맞히거나 고칠 것을 미리 말하지 않게 */
@@ -736,6 +737,8 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
     s0.lastCheck && s0.lastCheck.failed ? `마지막 확인 실패: ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}(기대 ${r.failure?.expected} / 실제 ${r.failure?.actual})`).join("; ").slice(0, 300)}` : "",
     edited.length ? `이번 단계에서 고친 파일: ${edited.join(", ")}` : "",
     vsErr.length ? `편집기 빨간 줄: ${vsErr.join("; ")}` : "",
+    // 학습자가 이번 단계에 "내 말로" 쓴 문장(코드가 아는 사실): 대화가 요약돼도 그대로 남게
+    ...s0.messages.filter((m) => m.card?.type === "explain" && m.card.done).slice(-1).map((m) => `"내 말로"에 쓴 답: "${(m.card as { done: string }).done.slice(0, 300)}"`),
   ].filter(Boolean).join(" · ");
   const state = [
     `[학습자 상태] ${sv ? `${LEVELS[sv.level] ?? LEVELS[0]}(내부, 학습자에게 말하지 않음)` : ""}${sv?.background ? ` · ${backgroundLine(sv.background).replace(/^\[학습자 배경\(스스로 답함\)\]\s*/, "배경: ")}` : ""}${stuck ? ` · ${stuck}` : ""}`,
