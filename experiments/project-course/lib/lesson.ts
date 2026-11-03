@@ -14,10 +14,9 @@ import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridg
 import { mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
-import { addEntry, addTour, codeTerms, firstLine, notesContext } from "./notes.ts";
+import { addEntry, addTour, codeTerms, firstLine } from "./notes.ts";
 import { runAgent, undoEdit, type AskCard, type CtxFile, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
-import { recallLine } from "./recall.ts";
 import { actionOfBeat, answerBackground, backgroundLine, bgQuestion, closeDetours, enterBeat, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
 
 type Try = { method: string; path: string; body?: unknown; raw?: string; as?: string; restart?: boolean }; // restart: 실습 서버를 껐다 켠다(요청 아님)
@@ -49,6 +48,8 @@ type State = { beat: number; waiting: "action" | "choice" | "save" | "explain" |
 type Todo = { open?: Open; focus?: Focus; clear?: boolean };
 
 const now = () => new Date().toISOString();
+/** 대화에 이미 넣은 화면 메시지(단계별 마지막 id). 다음 질문 때는 그 뒤 것만 넣는다 */
+const sentUpTo = new Map<string, number>();
 const file = (runId: string, n: number) => path.join(DATA, "lessons", `${runId}-${n}.json`);
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
 
@@ -657,38 +658,45 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const dt = await pushDetour(runId, { topic: shown ?? q, reason: quote ? "코드 질문" : "질문", returnBeat: s0.beat, returnLabel: b?.now ?? firstLine(b?.text ?? "") });
   if (dt.deep) await change(runId, n, (_s, push) => push({ role: "note", text: `질문이 ${dt.depth}번째로 이어지고 있어요. 답을 본 뒤 [하던 거로 돌아가기]로 원래 할 일로 가거나, 목표를 더 작게 나눠 볼 수도 있어요.` }));
   let answer = "";
-  // 수업 맥락(계획서·지금 순서·최근 대화·마지막 확인): 에이전트와 단순 답 모두 쓴다
-  // 최근 대화는 짧게(긴 설명을 통째로 다시 보내면 매번 수천 토큰) — 10/30 사용자 "컨텍스트 조정"
-  const clip = (t: string, k = 300) => (t.length > k ? `${t.slice(0, k)}…` : t);
-  const lineOf = (m: LMsg) => m.role === "me" ? `학습자: ${clip(m.text ?? "", 200)}` : m.text ? `강사: ${clip(m.text)}` : m.card?.type === "reply" ? `(요청 결과: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : m.card.status})` : m.card?.type === "check" ? `(확인 결과: ${m.card.result.passed}개 통과, ${m.card.result.failed}개 실패)` : m.card?.type === "tool" ? `(튜터가 ${m.card.label})` : "";
-  const recentText = s0.messages.slice(-8).map(lineOf).filter(Boolean).join("\n");
-  // 캐시가 맞게 나눈다(10/31 건희 "그렇게 해보자"): 안 변하는 것(fixed)은 대화 첫 메시지에 한 번만,
-  // 매번 바뀌는 것(turn·파일)은 질문마다 뒤에 붙인다. 같은 단계 안에서는 OpenCode 대화를 이어 쓴다.
+  // 맥락(11/3 사용자 "gpt 챗처럼 앞 대화 보고 가고, 유저 상태랑 코스 정하고 지금 어딘지만 쥐어 주기"):
+  // 대화는 코스 하나에 하나로 이어 쓰고(OpenCode 대화), 화면에 나온 말·버튼은 자르지 않고 대화로 넣는다.
+  // 처음(과 단계가 바뀔 때)만 코스·이번 단계, 질문마다는 [학습자 상태]·[지금 위치] 두 줄. 파일은 바뀌었을 때만.
+  const lineOf = (m: LMsg) => m.role === "me" ? (m.text ? `학습자: ${m.text}` : "") : m.role === "note" ? (m.text ? `(화면 알림: ${m.text})` : "")
+    : m.text ? `튜터: ${m.text}`
+    : m.card?.type === "choice" && m.card.picked !== undefined ? `(학습자가 고른 답: ${m.card.options[m.card.picked]})`
+    : m.card?.type === "reply" ? `(직접 보낸 요청: ${m.card.request} → ${m.card.timedOut ? "응답 없음" : `${m.card.status} ${m.card.body.slice(0, 200)}`})`
+    : m.card?.type === "check" ? `(자동 확인: ${m.card.result.passed}개 통과, ${m.card.result.failed}개 실패)`
+    : m.card?.type === "explain" && m.card.done ? `학습자(내 말로): ${m.card.done}` : "";
+  // 방금 넣은 질문은 빼고, 시작 인사·배경 질문(걸음 -1)도 뺀다(배경은 [학습자 상태]에 있다)
+  const before = s0.messages.slice(0, -1).filter((m) => (m.beat ?? 0) >= 0);
+  const sentKey = lk(runId, n);
+  const sent = sentUpTo.get(sentKey) ?? -1;
+  const talk = (ms: LMsg[]) => ms.map(lineOf).filter(Boolean).join("\n\n");
+  const stage = stageOf(course, n);
+  const predicts = plan.beats.filter((x) => x.kind === "predict").map((x) => x.text.split("\n")[0].slice(0, 120));
   const fixed = [
-    `[수업 계획서] ${plan.stage}단계 ${bareTitle(plan.title)}\n가르칠 것: ${plan.teach.join(" / ")}\n강사 메모: ${plan.tutorNotes}\n고칠 곳(학습자가 직접 쓸 핵심): ${stageOf(course, n).fix.text}`,
-    // 실사용 확인(10/30): "로그인은 언제?"에 "나중 단계"라고만 답함 → 코스 전체 순서와 학습자 목표를 준다
-    courseOrder(course, run, n),
-    learnerGoal(course, run),
-  ].filter(Boolean).join("\n\n");
-  // 지난 질문 뒤로 화면에 있었던 일(대화를 이어 쓸 때는 이것만): 방금 넣은 내 질문은 빼고
-  const prevAsk = s0.messages.slice(0, -1).map((m) => m.role).lastIndexOf("me");
-  const sinceText = s0.messages.slice(prevAsk + 1, -1).slice(-8).map(lineOf).filter(Boolean).join("\n");
-  const turn = [
-    `[지금 하는 순서] ${s0.beat + 1}/${plan.beats.length}: ${b?.text ?? "끝"}`,
-    // 실사용 확인(10/30): 막혔다는 말에 뒤에 나올 예측 문제의 답(405)을 먼저 말해 버림 → 앞으로 할 순서를 알리고 미리 말하지 않게
-    upcoming(plan, s0.beat),
-    s0.lastCheck ? `[마지막 확인] ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}: 기대 ${r.failure?.expected} / 실제 ${r.failure?.actual}`).join("; ") || "모두 통과"}` : "",
-    await sessionLine(runId),
+    `[코스] ${course.title}${learnerGoal(course, run) ? `\n${learnerGoal(course, run)}` : ""}\n${courseOrder(course, run, n)}`,
+    `[이번 단계] ${n}단계 ${bareTitle(plan.title)} — ${stage.goal}\n가르칠 것: ${plan.teach.join(" / ")}\n학습자가 직접 고칠 곳: ${stage.fix.text}${plan.tutorNotes ? `\n강사 메모: ${plan.tutorNotes}` : ""}\n미리 말하지 않을 것: ${[...predicts.map((t) => `예측 문제("${t}")의 정답`), "고칠 곳의 완성 코드(바꿔 넣을 값 포함)"].join(", ")}. 그 밖에 왜 그런지는 물으면 설명한다.`,
+  ].join("\n\n");
+  // 학습자 상태: 배경 · 레벨(내부) · 지금 막힘
+  const sv = await sessionView(runId).catch(() => null);
+  const stuck = [
+    (s0.failStreak ?? 0) >= 2 ? `확인 ${s0.failStreak}번 연속 실패` : "",
+    s0.hints ? `힌트 ${s0.hints}단계까지 봄` : "",
+    s0.lastCheck && s0.lastCheck.failed ? `마지막 확인 실패: ${s0.lastCheck.results.filter((r) => !r.ok).map((r) => `${r.title}(기대 ${r.failure?.expected} / 실제 ${r.failure?.actual})`).join("; ").slice(0, 300)}` : "",
+  ].filter(Boolean).join(" · ");
+  const state = [
+    `[학습자 상태] ${sv ? `${LEVELS[sv.level] ?? LEVELS[0]}(내부, 학습자에게 말하지 않음)` : ""}${sv?.background ? ` · ${backgroundLine(sv.background).replace(/^\[학습자 배경\(스스로 답함\)\]\s*/, "배경: ")}` : ""}${stuck ? ` · ${stuck}` : ""}`,
+    `[지금 위치] ${n}단계 · 걸음 ${s0.beat + 1}/${plan.beats.length}(${b ? stepLabel(b, s0.beat === plan.beats.length - 1) : "끝"}) ${b ? `— ${b.now ?? firstLine(b.text)}` : ""}${plan.beats[s0.beat + 1] ? ` · 다음: ${stepLabel(plan.beats[s0.beat + 1], s0.beat + 1 === plan.beats.length - 1)}` : ""}`,
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
-    // 학습자 기억(프로젝트 노트): 이 프로젝트에서 이미 본 것
-    await notesContext(runId, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null).catch(() => ""),
-    await recallLine(shown && !/^이건 뭐예요|^이 덩어리/.test(shown) ? shown : quote ? quote.code.trim().split("\n")[0] : q).catch(() => ""),
-  ].filter(Boolean).join("\n\n");
+  ].filter(Boolean).join("\n");
   // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다
-  const files = opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stageOf(course, n).fix.files, opts.mode === "explain");
-  const parts = { fixed, turn, recent: recentText ? `[최근 대화]\n${recentText}` : "", since: sinceText ? `[지난 질문 뒤 화면에 있었던 일]\n${sinceText}` : "", files };
-  // 기본 엔진(대화를 잇지 않음)은 지금처럼 전부 한 번에
-  const context = [fixed, turn, parts.recent, ...files.map((f) => f.text)].filter(Boolean).join("\n\n");
+  const files = opts.mode === "tour" ? await allFiles(ws) : await questionFiles(ws, q, quote?.file ?? bridgeState(runId)?.file ?? lastQuoteFile(s0) ?? null, stage.fix.files, opts.mode === "explain");
+  const history = talk(before.slice(-40));
+  const since = talk(before.filter((m) => m.id > sent));
+  const parts = { fixed, turn: state, recent: history ? `[지금까지 화면의 대화]\n${history}` : "", since: since ? `[지난번 뒤 화면의 대화]\n${since}` : "", files };
+  // 기본 엔진(대화를 잇지 않음)은 전부 한 번에
+  const context = [fixed, parts.recent, state, ...files.map((f) => f.text)].filter(Boolean).join("\n\n");
   if (aiMode() !== "off") {
     // 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선을 고친다)
     const bubbles = new Map<string, number>();
@@ -731,6 +739,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
       };
     try {
       answer = await runAgent(io as Parameters<typeof runAgent>[0], q);
+      sentUpTo.set(sentKey, ((await read<State>(file(runId, n), s0)).messages.at(-1)?.id) ?? 0); // 이 답까지는 대화에 들어감
       await remember(runId, n, ws, s0, { q, shown, quote, mode: opts.mode, answer }).catch((e) => console.error("[notes]", e));
       await revealedSolution(runId, n, answer).catch((e) => console.error("[reveal]", e));
       if (opts.onAnswer) await opts.onAnswer(answer).catch(() => {});

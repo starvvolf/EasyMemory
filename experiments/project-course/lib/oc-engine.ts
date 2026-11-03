@@ -37,8 +37,11 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 목표는 대신 개발해 주는 게 아니라, 개발자가 어떻게 확인하고 고치는지 보여 주며 가르치는 것이다.
 
 말투
-- 한국어 해요체로만 쓴다("~합니다" 금지). 첫 문장이 곧 답이다(한 줄 요약).
-- 길이는 질문에 맞춘다: 단어 하나·짧은 확인은 2~4문장. "뭐예요/왜요/어떻게" 같은 이해 질문은 넉넉하게 — 조각마다 풀기 → 일상 비유 하나 → 헷갈리기 쉬운 차이(예: \`home\`과 \`home()\`) → 짧은 확인 질문 하나로 끝낸다. 줄 번호를 짚는다.
+- 한국어 해요체로만 쓴다("~합니다" 금지). 첫 문장이 곧 답이다.
+- 설명은 ChatGPT에 그냥 물었을 때처럼 자연스럽게: 질문에 바로 답하고, 도움이 되면 비유·작은 예시·헷갈리기 쉬운 점을 곁들인다. 매번 같은 틀(소제목·목록·확인 질문)을 따르지 않는다.
+- 길이는 필요한 만큼만: 대개 3~8문장, 길어도 한 화면(약 700자) 안. 소제목·목록은 정말 읽기 쉬워질 때만.
+- 앞 대화를 이어서 말한다: 이미 한 설명·비유는 되풀이하지 않고 "아까 본 ~"으로 잇는다. 확인 질문은 꼭 필요할 때만, 앞에서 한 것과 겹치지 않게.
+- [학습자 상태]의 배경·수준에 맞춰 처음 나오는 말을 풀어 준다. 줄은 [[파일:줄]]로 짚는다.
 - 코드에 나오는 이름·기호는 꼭 \`백틱\`으로 감싼다(학습자가 눌러서 다시 물어볼 수 있다). 파일·줄은 [[src/router.ts:21]]처럼 쓰면 눌러서 VS Code에서 열린다.
 - 도구를 쓰기 전에 무엇을 왜 보는지 한 문장으로 말한다("직접 보내서 확인해 볼게요").
 
@@ -65,8 +68,9 @@ type Live = { io: AgentIO; before: Map<string, string>; steps: number; texts: st
 const live = new Map<string, Live>(); // sessionID → 지금 답하는 질문
 // runId:n → 이어 쓰는 대화. 같은 단계 안에서는 대화를 이어 써서 앞부분이 그대로 남게 한다(캐시가 맞는다).
 // files: 이 대화에 마지막으로 붙인 파일 내용 — 그대로면 다시 붙이지 않는다. 너무 길어지면 새 대화로(규칙을 덜 지키게 되므로).
-const sessions = new Map<string, { sid: string; turns: number; files: Map<string, string> }>();
-const MAX_TURNS = 20;
+// 11/3 사용자 "gpt 챗처럼 앞 대화 보고 가기": 대화는 코스(진행 기록) 하나에 하나. stage: 마지막으로 이번 단계 설명을 넣은 단계
+const sessions = new Map<string, { sid: string; turns: number; files: Map<string, string>; stage?: number }>();
+const MAX_TURNS = 60;
 
 type Host = { oc: any; events: any[]; waiters: Set<() => void>; mockUrl?: string };
 let host: Promise<Host | null> | null = null;
@@ -349,7 +353,8 @@ export function thinkLine(text: string) {
 
 /** 학습자가 [멈추기]를 누르면: 지금 답하는 질문을 멈춘다 */
 export async function stopRun(runId: string, n: number) {
-  const sid = sessions.get(`${runId}:${n}`)?.sid;
+  void n;
+  const sid = sessions.get(runId)?.sid;
   if (!sid || !host) return false;
   const h = await host; if (!h) return false;
   const l = live.get(sid);
@@ -371,7 +376,7 @@ function emit(l: Live, key: string, text: string, final: boolean) {
 /* ---------- 질문 하나 ---------- */
 async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   await aiBudget("agent"); // 한도를 넘었으면 여기서 멈춘다
-  const key = `${io.runId}:${io.n}`;
+  const key = io.runId;
   let ss = sessions.get(key);
   if (!ss || ss.turns >= MAX_TURNS) { ss = { sid: (await h.oc.sessions.create({ location: { directory: io.ws } })).id as string, turns: 0, files: new Map() }; sessions.set(key, ss); }
   const sid = ss.sid;
@@ -410,17 +415,23 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
   } finally { live.delete(sid); }
 }
 
-/** 이번 메시지에 붙일 맥락: 새 대화면 전부, 이어 쓰면 바뀐 것만(안 변하는 계획서·같은 파일은 위 대화에 이미 있다) */
-export function promptParts(io: AgentIO, ss: { turns: number; files: Map<string, string> }): string[] {
+/**
+ * 이번 메시지에 붙일 맥락(11/3 "gpt 챗처럼"): 새 대화면 코스·단계 + 지금까지 화면의 대화, 이어 쓰면 지난번 뒤 화면의 대화만.
+ * 단계가 바뀌었으면 그 단계 설명을 다시. 질문마다 [학습자 상태]·[지금 위치]. 파일은 바뀌었을 때만.
+ */
+export function promptParts(io: AgentIO, ss: { turns: number; files: Map<string, string>; stage?: number }): string[] {
   const p = io.parts;
   if (!p) return [io.context];
   const fresh = ss.turns === 0;
+  const newStage = !fresh && ss.stage !== io.n;
+  ss.stage = io.n;
   const files = p.files.map((f) => {
     if (!fresh && ss.files.get(f.key) === f.text) return `[파일 ${f.key} — 위 대화에 붙인 것과 같음, 다시 읽지 않아도 된다]`;
     ss.files.set(f.key, f.text);
     return f.text;
   });
-  return fresh ? [p.fixed, p.turn, p.recent, ...files] : [p.since, p.turn, ...files];
+  if (fresh) return [p.fixed, p.recent, p.turn, ...files];
+  return [newStage ? p.fixed : "", p.since, p.turn, ...files];
 }
 
 /* ---------- 가짜 AI (시험용: 지금 보는 파일을 읽고 짧게 답한다) ---------- */
