@@ -11,6 +11,7 @@ import { locate, type RunResult } from "./checker.ts";
 import { check, confused, devStatus, explain, hint, peekDb, predict, startDev, stopDev, tryRequest, workspaceOf } from "./learn.ts";
 import { AiUnavailable, aiText } from "./ai.ts";
 import { learnerLine, learnerView } from "./learner.ts";
+import { kindLabel, pathOf, planAfterStage, setStatus, taskPrompt } from "./planner.ts";
 import { DATA, getRun, read, saveRun, stageProgress, update } from "./store.ts";
 import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridgeSend } from "./bridge.ts";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -320,7 +321,17 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   if (input.do === "recap_ok") { await recapSeen(runId); void record({ runId, stage: n, type: "navigate", actor: "user", detail: "지난번 요약 보고 이어 하기" }); return null; }
   if (input.do === "hint") return giveHint(runId, n, input.level);
 
-  return change(runId, n, async (s, push) => {
+  // course-planner(11/3): 제안된 보충·연습·심화를 해 보기 / 건너뛰기
+  if (input.do === "plan_go" || input.do === "plan_skip") {
+    const item = (await pathOf(runId)).items.find((i) => i.afterStage === n);
+    if (!item || item.decision === "next") throw err(409, "제안된 과제가 없어요.");
+    if (input.do === "plan_skip") { await setStatus(runId, n, "skipped"); void record({ runId, stage: n, type: "navigate", actor: "user", detail: `${kindLabel(item.decision)} 건너뜀: ${item.task}` }); return change(runId, n, (_s, push) => push({ role: "me", text: "건너뛸게요" })); }
+    await setStatus(runId, n, "doing");
+    void record({ runId, stage: n, type: "navigate", actor: "user", detail: `${kindLabel(item.decision)} 해 봄: ${item.task}` });
+    return ask(runId, n, plan, await taskPrompt(runId, item), undefined, `${kindLabel(item.decision)} 해 볼게요: ${item.task}`);
+  }
+
+  const after = await change(runId, n, async (s, push) => {
     const b = plan.beats[s.beat];
     const lastActions = [...s.messages].reverse().find((m) => m.actions)?.actions ?? [];
     if (["next", "known", "start_dev,try", "try", "next_stage", "observe", "db"].includes(input.do) && s.waiting !== "action") throw err(409, "지금 하던 것을 먼저 마쳐 주세요.");
@@ -422,6 +433,20 @@ export async function act(runId: string, n: number, input: { do: string; choice?
       s.waiting = "done";
     } else throw err(400, "모르는 동작이에요.");
   });
+  // 마지막 걸음(정리)에 들어서면 course-planner가 다음 경로를 제안한다(뒤에서, 한 단계에 한 번)
+  if (after.beat === plan.beats.length - 1 && ["explain", "explain_skip", "confused", "next", "known"].includes(input.do)) void proposePath(runId, n);
+  return after;
+}
+/** course-planner 제안을 받아 화면에 한 번 띄운다: 다음 단계면 이유만, 보충·연습·심화면 [해 볼게요] / [건너뛰고 다음 단계] */
+async function proposePath(runId: string, n: number) {
+  const item = await planAfterStage(runId, n).catch(() => null);
+  if (!item || !item.reason) return;
+  await change(runId, n, (s, push) => {
+    if (s.messages.some((m) => m.actions?.some((a) => a.do === "plan_go"))) return;
+    if (item.decision === "next") { push({ role: "tutor", text: item.reason }); return; }
+    push({ role: "tutor", text: `${item.reason}\n\n**${kindLabel(item.decision)} 하나 해 볼까요?** ${item.task}`, actions: [{ label: "해 볼게요", do: "plan_go" }, { label: "건너뛰고 다음 단계", do: "next_stage" }] });
+    s.waiting = "action";
+  }).catch(() => {});
 }
 const pick = (h: Record<string, string>) => Object.fromEntries(Object.entries(h).filter(([k]) => ["content-type", "allow", "location", "set-cookie"].includes(k)));
 

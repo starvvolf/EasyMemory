@@ -39,6 +39,9 @@ export function installFakeAi() {
         { say: "정리하면, 라우터가 맡은 함수를 못 찾으면 서버가 답장을 안 쓰고 끝나요. 열어 드린 줄 아래에 404 답장을 보내는 한 줄을 직접 써 보세요.", tool: "none", args: "{}" },
       ][step];
     }
+    if (purpose === "course-planner") return /: weak/.test(user)
+      ? { decision: "remedial", concept: (/(\S+): weak/.exec(user)?.[1] ?? ""), reason: "예측에서 상태 코드를 헷갈렸어요.", task: "상태 코드 200 · 400 · 404를 언제 쓰는지 짝지어 보기" }
+      : { decision: "next", concept: "", reason: "이번 단계는 직접 통과했어요. 다음 단계로 가요.", task: "" };
     if (purpose === "context-summary") return "- (가짜 요약) 학습자는 라우터와 상태 코드를 물어봤다.";
     if (purpose === "tutor") return "좋은 질문이에요! 라우터는 우체국의 분류 담당 같은 거예요. 편지에 적힌 주소와 방식(GET, DELETE…)을 보고 어느 처리 함수에게 넘길지 정해요. 우리 코드에서는 [[src/router.ts:20]] 의 match가 그 일을 해요.\n\n그럼 아까 하던 것으로 돌아가 볼게요.";
     if (purpose.startsWith("hint")) return `(가짜 AI 힌트 ${purpose.slice(4)}단계) 검사 결과의 기대와 실제를 비교해 보세요.`;

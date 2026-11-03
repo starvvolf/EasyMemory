@@ -51,3 +51,13 @@ test("학습 도구: 관찰 남기기는 검증 안 됨으로, 진도 도구는 
   await assert.rejects(() => getStep("없는-기록", 1), /진행 기록을 찾지 못했어요/);
   await assert.rejects(() => recordObservation("없는-기록", 1, { kind: "understood", note: "잘 설명함" }), /진행 기록을 찾지 못했어요/);
 });
+
+test("course-planner: 코드가 지킨다 — 이 코스 개념만, 과제가 비면 다음 단계로", async () => {
+  const { validate } = await import("../lib/planner.ts");
+  const c = { knowledge: [{ id: "status", name: "상태 코드" }] };
+  assert.equal(validate(c, 1, { decision: "remedial", concept: "status", reason: "r", task: "200과 400 짝짓기" }).decision, "remedial");
+  assert.equal(validate(c, 1, { decision: "remedial", concept: "jwt", reason: "r", task: "JWT 만들기" }).decision, "next", "코스 밖 개념은 막음");
+  assert.equal(validate(c, 1, { decision: "practice", concept: "status", reason: "r", task: "" }).decision, "next", "과제 없으면 다음");
+  assert.equal(validate(c, 1, { decision: "extend", concept: "", reason: "r", task: "404도 돌려주게 넓혀 보기" }).decision, "extend");
+  assert.equal(validate(c, 1, { decision: "teleport", reason: "r", task: "x" }).decision, "next");
+});
