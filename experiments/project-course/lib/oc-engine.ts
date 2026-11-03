@@ -26,6 +26,7 @@ const EDITS = new Set(["edit", "write", "patch"]); // GPT 모델에서는 patch(
 // GPT 앱처럼 넓히기(10/30 사용자 "45까지 해봐"): 되묻기 · 코드 조각 돌려 보기 · 공식 문서 찾기
 const EXTRA = ["ask_learner", "run_snippet", "look_docs"] as const;
 const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour", ...EXTRA]);
+const BASIC = ["read", "send_request", "run_snippet", "run_checks"];
 /** 생각 요약(reasoning summary)을 받는다. 계정이 안 받아 주면 한 번 실패한 뒤 끈다 */
 let reasoningSummary = process.env.PC_REASONING_SUMMARY !== "0";
 /** 고치기 도구 입력에서 파일 경로들 */
@@ -45,21 +46,19 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 - 코드에 나오는 이름·기호는 꼭 \`백틱\`으로 감싼다(학습자가 눌러서 다시 물어볼 수 있다). 파일·줄은 [[src/router.ts:21]]처럼 쓰면 눌러서 VS Code에서 열린다.
 - 도구를 쓰기 전에 무엇을 왜 보는지 한 문장으로 말한다("직접 보내서 확인해 볼게요").
 
-도구
-- 질문에 [파일 …]이 붙어 있으면 다시 읽거나 검색하지 말고 바로 쓴다(질문에 나온 이름이 정의된 파일도 이미 붙여 둔다). 붙은 것에 없을 때만 read/glob/grep으로 본다. 추측으로 단정하지 않는다.
-- 답은 마크다운으로 보기 좋게: 필요하면 짧은 소제목(###), 목록, 코드를 보여 줄 때는 \`\`\`ts 파일경로:시작줄 로 여는 코드 블록. 짧은 답에는 소제목을 쓰지 않는다.
-- 줄은 [[파일:줄]] 링크로 짚으면 학습자가 눌러서 연다. open_in_editor는 고칠 곳을 바로 눈앞에 띄워야 할 때만 쓴다.
-- 동작을 확인할 때는 send_request(실제 요청)나 run_checks(자동 검사)를 쓴다. 명령 실행은 못 한다.
-- 학습자가 "이건 뭐가 나와요?"처럼 작은 코드의 결과를 궁금해하면 → 설명하기 전에 run_snippet으로 직접 돌려 보여 준다(학습자 파일은 못 읽는 따로 떨어진 곳에서 돈다).
-- 문법·내장 함수의 정확한 규칙(인자 순서, 돌려주는 값, 예외)을 말해야 하면 → 기억으로 단정하지 말고 look_docs로 공식 문서를 찾아보고, 답 끝에 "(출처: MDN JSON.parse)"처럼 짧게 적는다.
-- 학습자가 무엇을 원하는지 갈래가 둘 이상이거나, 고치기 전에 학습자 생각을 먼저 들어야 하면 → ask_learner로 보기 2~4개를 주고 고르게 한다. 한 질문에 한 번만, 답하기 쉬운 짧은 보기로.
+도구(11/3 사용자: 기본 4개만)
+- 질문에 [파일 …]이 붙어 있으면 다시 읽지 말고 바로 쓴다(질문에 나온 이름이 정의된 파일도 이미 붙여 둔다). 붙은 것에 없을 때만 read로 본다. 추측으로 단정하지 않는다.
+- 동작이 궁금하면 send_request로 실습 서버에 실제 요청을 보내 보여 준다. 이번 단계 통과 여부는 run_checks로 본다. 명령 실행은 못 한다.
+- 작은 문법·내장 함수의 결과("이건 뭐가 나와요?")는 run_snippet으로 직접 돌려 보여 준다(학습자 파일과 떨어진 곳에서 돈다).
+- 코드를 고치는 도구는 없다. 학습자가 고쳐 달라고 하면 화면의 [만들어 주세요]를 누르면 된다고 알려 준다.
+- 코드를 보여 줄 때는 \`\`\`ts 파일경로:시작줄 로 여는 코드 블록.
 
 가르치는 순서(힌트는 한 번에 한 단계씩)
 1. 어디를 보면 되는지(파일·줄)와 무엇을 확인할지
 2. 무엇이 빠졌거나 틀렸는지
 3. 어떻게 쓰면 되는지(코드 모양)
 학습자가 "정답", "고쳐 줘"처럼 분명히 부탁하기 전에는 3단계(완성 코드)를 먼저 주지 않는다. 한 질문에 한 단계 위로만 올린다.
-- 이번 단계에서 학습자가 직접 써야 할 핵심 줄([수업 계획서]의 고칠 곳)은 학습자가 분명히 부탁할 때만 edit로 고친다. 핵심이 아닌 곳(오타, 학습자가 망가뜨린 다른 줄)은 고쳐도 된다. 고친 뒤에는 run_checks나 send_request로 확인한다.
+- (고치는 도구가 주어진 [작업 지시]일 때만) 범위 안 파일만 고치고, 고친 뒤 run_checks나 send_request로 확인한다.
 - 수업 계획서의 순서와 정답을 바꾸지 않는다. 예측 문제의 답을 미리 말하지 않는다.
 - 숨기는 것은 완성 코드와 예측 답뿐이다. 왜 그렇게 되는지(원인·원리)는 언제든 설명한다 — "곧 같이 해 볼 거예요"로 원리 설명까지 미루지 않는다.
 - 하던 걸음으로 돌아가는 안내("이제 ~ 살펴봐요", "지금 할 일:")는 붙이지 않는다(화면에 [하던 거로 돌아가기] 버튼이 있다). 학습자가 "이제 뭐 해요?"처럼 물을 때만 할 일을 말한다.`;
@@ -158,7 +157,10 @@ function policyPlugin(fake: boolean) {
         const l = live.get(ev.sessionID);
         // 덩어리 설명: 필요한 파일은 이미 붙여 보냈으니 도구 없이 한 번에 답한다(호출 1번)
         // 흐름 투어: 파일은 붙여 보냈으니 show_tour 하나만
-        for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k) || l?.io.mode === "explain" || (l?.io.mode === "tour" && k !== "show_tour")) delete ev.tools[k];
+        // 도구(11/3 사용자 "기본 4개"): 보통 질문은 읽기 · 요청 보내기 · 조각 돌리기 · 자동 확인만. 고치기는 작업 지시(범위가 있을 때)만
+        const allow = l?.io.mode === "explain" ? new Set<string>() : l?.io.mode === "tour" ? new Set(["show_tour"])
+          : l?.io.scope?.length ? new Set([...BASIC, ...EDITS]) : new Set(BASIC);
+        for (const k of Object.keys(ev.tools)) if (!SHOWN.has(k) || !allow.has(k)) delete ev.tools[k];
       });
       await ctx.permission.hook("evaluate", (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);
