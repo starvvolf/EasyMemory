@@ -30,6 +30,8 @@ export type Frame = {
   status: "open" | "resolved" | "left"; closedAt?: string; result?: string; by?: "tutor" | "learner";
   /** 이 칸에서 학습자가 답한 수(풀림 판단의 최소 조건) */
   replies: number;
+  /** 아래 칸이 하나라도 풀려서 돌아왔는지(처음 칸은 이게 있어야 튜터가 닫을 수 있다) */
+  childDone?: boolean;
 };
 type Store = { frames: Frame[] };
 const file = (runId: string) => path.join(DATA, "stuck", `${runId}.json`);
@@ -61,6 +63,12 @@ export async function openRoot(runId: string, x: { choice: Choice; word?: string
 
 /** 지금 칸에 무엇이 비었는지 이름 붙이기(튜터). 목록에 있으면 concept, 없으면 other. 위 칸들과 같으면 거절 */
 export async function nameGap(runId: string, lang: Lang, x: { concept?: string; other?: string }) {
+  // 처음 칸(막힌 줄 자체)은 이름을 바꾸지 않고, 짚은 빈 칸을 아래 칸으로 연다(11/3 재현: 이름 짐작 하나로 처음 칸까지 닫혀 원래 줄로 안 돌아옴)
+  const top0 = openStack(await stuckOf(runId)).at(-1);
+  if (top0 && top0.depth === 0 && top0.quote) {
+    const r = await goDeeper(runId, lang, { ...x, why: "처음 줄에서 짚은 빈 칸" });
+    return r.ok ? { ok: true, text: `${r.text}. 처음 줄은 이 칸이 풀린 뒤 다시 읽어요. 이번 답은 한 문장으로 끝내세요.` } : r;
+  }
   const b = x.concept ? findBasic(lang, x.concept) : null;
   const gap = b ? { concept: b.id } : x.other?.trim() || x.concept?.trim() ? { other: (x.other?.trim() || x.concept!.trim()).slice(0, 60) } : null;
   if (!gap) return { ok: false as const, text: "concept(기초 칸 id) 또는 other(목록에 없을 때 짧은 이름)를 주세요." };
@@ -108,11 +116,13 @@ export async function resolveTop(runId: string, lang: Lang, by: "tutor" | "learn
   await update<Store>(file(runId), { frames: [] }, (s) => {
     const st = openStack(s); const top = st.at(-1); if (!top) return;
     if (by === "tutor") {
-      if (!top.concept && !top.other) { res = { ok: false, text: "먼저 stuck_name_gap으로 이 칸이 무엇인지 정하세요." }; return; }
+      if (!top.concept && !top.other && !(top.depth === 0 && top.quote)) { res = { ok: false, text: "먼저 stuck_name_gap으로 이 칸이 무엇인지 정하세요." }; return; }
       if (top.replies < 1) { res = { ok: false, text: "학습자가 이 칸에서 아직 답하지 않았어요. 작은 확인 질문을 하고 답을 기다리세요." }; return; }
+      if (top.depth === 0 && top.quote && !top.childDone) { res = { ok: false, text: "처음 줄은 아직 닫지 않아요. 비어 있는 칸을 짧은 질문으로 짚어 stuck_name_gap으로 아래 칸을 열고, 풀려서 돌아온 뒤 학습자가 이 줄을 자기 말로 읽으면 닫으세요." }; return; }
       if (evidence.trim().length < 6) { res = { ok: false, text: "evidence에 학습자가 실제로 한 것(답·쓴 코드)을 한 문장으로 적어 주세요." }; return; }
     }
     top.status = "resolved"; top.closedAt = now(); top.by = by; top.result = evidence.trim().slice(0, 200) || "학습자가 이제 알겠다고 함";
+    const up = st.at(-2); if (up) up.childDone = true;
     res = { ok: true, text: `풀림: ${labelOf(top)}`, frame: top, parent: st.at(-2) };
   });
   if (res.ok && res.frame && (res.frame.concept || res.frame.other)) await markResolved({ concept: res.frame.concept, other: res.frame.other }, lang, `${by === "tutor" ? "튜터 판단" : "학습자"}: ${res.frame.result}`);

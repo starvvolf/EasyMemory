@@ -775,6 +775,19 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
 }
 
 /* ---------- [막혔어요] 칸 이어 주기(11/3) ---------- */
+const DIAG = `짧은 질문으로 층을 짚는다: 1~2초면 답할, 답을 보면 무엇이 비었는지 드러나는 질문 하나(예: "괄호 안에 들어간 게 몇 덩어리예요?", "이 함수는 이 줄을 지날 때 바로 실행돼요, 나중이에요?", "res에는 누가 무엇을 넣어 줘요?", "따옴표 안의 /todos랑 그냥 todos는 같은 거예요?"). "어느 쪽이 낯설어요?", "어디가 모르겠어요?"처럼 학습자가 스스로 진단하게 묻지 않는다. 처음 하는 학습자는 대개 여러 층(남이 만든 이름 · 모양(기호) · 실행 시점 · 값이 오는 곳)이 함께 비어 있다 — 가장 아래 것부터.`;
+const ROOT_RULES = `이 칸은 처음 막힌 줄 자체다(이름을 바꾸지 않는다).
+1. ${DIAG}
+2. 빈 칸을 찾으면 stuck_name_gap(목록 id 또는 other, 라이브러리·프레임워크 단어는 library-api) — 그 칸이 아래에 열리고 설명은 거기서 한다. 이 칸에서는 길게 설명하지 않는다.
+3. 아래 칸에서 돌아오면 학습자에게 처음 줄을 아는 만큼 한국어로 읽어 보게 한다. 아직 막히는 데가 보이면 그다음 빈 칸을 짚어 또 연다.
+4. 학습자가 줄을 자기 말로 맞게 읽으면 stuck_resolved(evidence=학습자가 읽은 말).
+코스의 다음 걸음·정답 코드는 말하지 않는다.`;
+const CHILD_RULES = `할 일(이 칸 하나만):
+1. 원래 코드 밖의 아주 작은 예(새로 만든 짧은 코드)로 3~6문장 설명한다. 한 번에 하나.
+2. 학습자가 직접 답하거나 한 줄 써 볼 작은 확인 하나로 끝낸다. 확인은 이 칸의 핵심을 써야 풀리는 것으로(이름 짐작처럼 안 배워도 맞히는 것은 안 된다).
+3. 답이 맞으면 stuck_resolved(evidence=학습자가 한 것). 틀리면 다르게 한 번 더.
+4. 설명하다 그보다 아래가 비어 보이면(짧은 질문으로 확인한 뒤) stuck_go_deeper(그 칸, why). 이미 위에 있는 칸으로는 내려가지 않는다.
+코스의 다음 걸음·정답 코드는 말하지 않는다.`;
 /** 칸이 바뀐 뒤: 아래 칸이 열렸으면 그 칸 설명을, 풀렸으면 위 칸으로 돌아가 원래 막힌 것을 다시 해 보게. 맨 위가 풀렸으면 코스로 */
 async function afterStuckChange(runId: string, n: number, plan: Plan, beforeId: string) {
   const st = await stuckOf(runId);
@@ -918,7 +931,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
       `[언어] ${lang} — 설명과 예시는 이 언어 모양으로.`,
       courseTalk ? `[코스에서 지금까지 한 대화(쓴 비유·말을 그대로 이어 쓴다)]\n${courseTalk}` : "",
       `[기초 칸 목록 — 이 언어]\n${catalogText(lang)}`,
-      `할 일:\n1. 이 칸이 무엇인지 아직 정하지 않았으면 먼저 정한다. 학습자가 무엇이 막혔는지 모르면("어디가 막혔는지도 모르겠어요") 1~2초면 답할 짧은 질문 하나로 층을 짚는다(예: "괄호 안에 몇 덩어리예요?", "이 함수는 바로 실행돼요, 나중이에요?"). 정해지면 stuck_name_gap(목록에 있으면 concept=id, 없으면 other). 라이브러리·프레임워크 단어(get, listen, @GetMapping 같은 것)는 library-api.\n2. 그 칸 하나만, 원래 코드 밖의 아주 작은 예로 3~6문장 설명한다. 한 번에 하나.\n3. 학습자가 직접 답하거나 한 줄 써 볼 작은 확인 하나로 끝낸다.\n4. 학습자 답이 맞으면 stuck_resolved(evidence=학습자가 한 것). 틀리면 다르게 한 번 더.\n5. 설명하다 그보다 아래가 비어 보이면 stuck_go_deeper(그 칸, why). 이미 위에 있는 칸으로는 내려가지 않는다.\n코스의 다음 걸음·정답 코드는 말하지 않는다.`,
+      frame.depth === 0 && root.quote ? ROOT_RULES : CHILD_RULES,
     ].filter(Boolean).join("\n\n");
     const fturn = [state.split("\n")[0], await basicsLine(lang)].filter(Boolean).join("\n");
     const ftalk = talk(frameMsgs);
