@@ -68,5 +68,15 @@ export async function cacheProbe(only?: string[], waitMs = 0) {
     let k = 0; while (k < ta.length && ta[k] === tb[k]) k++;
     out["앞 질문 → 다음 질문"] = { waitMs, first: a, second: b, sameInstr: prevRaw.instructions === base.instructions, sameTools: JSON.stringify(prevRaw.tools) === JSON.stringify(base.tools), inputCommonChars: k, inputDiffAt: tb.slice(Math.max(0, k - 60), k + 60) };
   }
+  // 이어 쓰기 흉내: B = A 전체 + 튜터 답 + 새 질문(대화를 이어 쓰면 앞 요청 전체가 B의 앞부분이 된다)
+  if (only?.includes("이어 쓰기")) {
+    const mark = `[시험 ${Date.now()}]\n`;
+    const a0 = structuredClone(base) as any; const f = a0.input[0]; if (Array.isArray(f.content)) f.content[0].text = mark + f.content[0].text; else f.content = mark + f.content;
+    const a = await send(token, a0);
+    await new Promise((r) => setTimeout(r, waitMs));
+    const b0 = structuredClone(a0); b0.input = [...b0.input, { role: "assistant", content: "네, 200은 성공이라는 뜻이에요." }, { role: "user", content: [{ type: "input_text", text: "[학습자 상태] 같음\n\n[학습자 질문] 그럼 404는요?" }] }];
+    const b = await send(token, b0);
+    out["이어 쓰기"] = { waitMs, first: a, second: b };
+  }
   return out;
 }
