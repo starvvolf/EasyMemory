@@ -10,6 +10,7 @@ import { COURSES, courseDir, loadCourse, solutionDiff, stageFiles, stageOf } fro
 import { locate, type RunResult } from "./checker.ts";
 import { check, confused, devStatus, explain, hint, peekDb, predict, startDev, stopDev, tryRequest, workspaceOf } from "./learn.ts";
 import { AiUnavailable, aiText } from "./ai.ts";
+import { learnerLine, learnerView } from "./learner.ts";
 import { DATA, getRun, read, saveRun, stageProgress, update } from "./store.ts";
 import { bridgeContext, bridgeState, connected as bridgeConnected, send as bridgeSend } from "./bridge.ts";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -745,6 +746,7 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   const state = [
     `[학습자 상태] ${sv ? `${LEVELS[sv.level] ?? LEVELS[0]}(내부, 학습자에게 말하지 않음)` : ""}${sv?.background ? ` · ${backgroundLine(sv.background).replace(/^\[학습자 배경\(스스로 답함\)\]\s*/, "배경: ")}` : ""}${stuck ? ` · ${stuck}` : ""}`,
     `[지금 위치] ${n}단계 · 걸음 ${s0.beat + 1}/${plan.beats.length}(${b ? stepLabel(b, s0.beat === plan.beats.length - 1) : "끝"}) ${b ? `— ${b.now ?? firstLine(b.text)}` : ""}${plan.beats[s0.beat + 1] ? ` · 다음: ${stepLabel(plan.beats[s0.beat + 1], s0.beat + 1 === plan.beats.length - 1)}` : ""}`,
+    learnerLine(await learnerView(runId, course).catch(() => ({ concepts: [], misconceptions: [], observations: [] }))),
     quote ? `[학습자가 VS Code에서 골라 물은 코드] ${quote.file} ${quote.from}~${quote.to}줄:\n${quote.code}` : "",
   ].filter(Boolean).join("\n");
   // 튜터가 도구로 다시 읽지 않고 바로 답할 수 있게 지금 보는 파일(설명 때는 그 파일과 가져오는 파일)을 줄 번호와 함께 붙인다

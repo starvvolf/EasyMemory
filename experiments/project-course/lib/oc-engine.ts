@@ -15,6 +15,7 @@ import { editsDir, runTool, safePath, type AgentIO, type EditRecord, type ToolNa
 import { DATA, saveRun, stageProgress } from "./store.ts";
 import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
 import { logAnswer, logPrompt, logUsage } from "./promptlog.ts";
+import { getCourse, getLearningHistory, getProgress, getStep, recordObservation } from "./learning-tools.ts";
 
 export const OC_VERSION = "2.2.1";
 // 2026-10-31: terra (답이 20초 안팎으로 느렸음; 출력 속도가 sol의 약 2배, Recaller AI 호출 가이드).
@@ -25,8 +26,10 @@ const OURS = ["open_in_editor", "start_server", "send_request", "run_checks", "l
 const EDITS = new Set(["edit", "write", "patch"]); // GPT 모델에서는 patch(apply_patch)로 고친다
 // GPT 앱처럼 넓히기(10/30 사용자 "45까지 해봐"): 되묻기 · 코드 조각 돌려 보기 · 공식 문서 찾기
 const EXTRA = ["ask_learner", "run_snippet", "look_docs"] as const;
-const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour", ...EXTRA]);
-const BASIC = ["read", "send_request", "run_snippet", "run_checks"];
+// 학습 도구(11/3 구조도): 읽기 넷 + 관찰 남기기. 진도를 바꾸는 도구는 없다
+const LEARN = ["get_course", "get_progress", "get_step", "get_learning_history", "record_observation"] as const;
+const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour", ...EXTRA, ...LEARN]);
+const BASIC = ["read", "send_request", "run_snippet", "run_checks", ...LEARN];
 /** 생각 요약(reasoning summary)을 받는다. 계정이 안 받아 주면 한 번 실패한 뒤 끈다 */
 let reasoningSummary = process.env.PC_REASONING_SUMMARY !== "0";
 /** 고치기 도구 입력에서 파일 경로들 */
@@ -51,6 +54,7 @@ const SYSTEM = `너는 웹 서버를 처음 배우는 학습자 옆에 앉은 �
 - 동작이 궁금하면 send_request로 실습 서버에 실제 요청을 보내 보여 준다. 이번 단계 통과 여부는 run_checks로 본다. 명령 실행은 못 한다.
 - 작은 문법·내장 함수의 결과("이건 뭐가 나와요?")는 run_snippet으로 직접 돌려 보여 준다(학습자 파일과 떨어진 곳에서 돈다).
 - 코드를 고치는 도구는 없다. 학습자가 고쳐 달라고 하면 화면의 [만들어 주세요]를 누르면 된다고 알려 준다.
+- 학습 도구: 코스·진도·과제·기록이 더 필요하면 get_course · get_progress · get_step · get_learning_history로 본다([학습자 상태]에 이미 있으면 부르지 않는다). 대화에서 학습자의 이해·헷갈림·오개념이 분명히 드러나면 record_observation으로 한 문장 남긴다(진도는 바뀌지 않는다).
 - 코드를 보여 줄 때는 \`\`\`ts 파일경로:시작줄 로 여는 코드 블록.
 
 가르치는 순서(힌트는 한 번에 한 단계씩)
@@ -191,7 +195,7 @@ function policyPlugin(fake: boolean) {
       await ctx.permission.hook("evaluate", (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);
         const l = live.get(ev.sessionID);
-        if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action) || ev.action === "show_tour" || (EXTRA as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
+        if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action) || ev.action === "show_tour" || (EXTRA as readonly string[]).includes(ev.action) || (LEARN as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
         if (EDITS.has(ev.action)) {
           if (l?.io.mode === "explain") { ev.effect = "deny"; ev.message = "지금은 설명만 하는 시간이에요."; return; }
           const files: string[] = (ev.resources ?? []).map((r: string) => String(r).replace(/\\/g, "/"));
@@ -293,6 +297,24 @@ function policyPlugin(fake: boolean) {
               return { content: `문서를 열지 못했어요: ${(e as Error).message}. 아는 범위에서 답하되 확실하지 않은 건 그렇다고 말하세요.` };
             }
           } });
+        // 학습 도구(11/3): 코스·진도·과제·기록 읽기와 관찰 남기기
+        const learnTools: [string, string, Record<string, unknown>, string[], (l: Live, input: any) => Promise<string>][] = [
+          ["get_course", "코스 목표와 전체 단계(목차), 지금 단계를 본다.", {}, [], (l) => getCourse(l.io.runId)],
+          ["get_progress", "학습자의 진도와 개념별 상태(이해 · 배우는 중 · 약함, 검사로 확인했는지, 오개념 관찰)를 본다. 학습자 수준을 판단하기 전에 쓴다.", {}, [], (l) => getProgress(l.io.runId)],
+          ["get_step", "지금 단계의 목표 · 학습자가 고칠 곳 · 통과 기준(검사 목록) · 마지막 검사 결과를 본다.", {}, [], (l) => getStep(l.io.runId, l.io.n)],
+          ["get_learning_history", "최근 학습 기록(질문 · 예측 · 검사 · 힌트 · 누가 고쳤나)을 본다. 전에 막혔던 곳을 확인할 때 쓴다.", {}, [], (l) => getLearningHistory(l.io.runId)],
+          ["record_observation", "대화에서 본 학습자의 이해 · 헷갈림 · 오개념을 한 문장으로 남긴다. 검증 안 됨으로 남고 진도는 바꾸지 않는다. 분명히 드러났을 때만.",
+            { kind: { type: "string", enum: ["understood", "confused", "misconception"] }, concept: { type: "string", description: "개념 id 또는 이름(모르면 비움)" }, note: { type: "string", description: "무엇을 봤는지 한 문장" } }, ["kind", "note"],
+            async (l, input) => { const r = await recordObservation(l.io.runId, l.io.n, input ?? {}); if (r.ok) await l.io.show({ type: "tool", icon: "📝", label: `학습 메모: ${String(input?.note ?? "").slice(0, 60)}`, ok: true }); return r.text; }],
+        ];
+        for (const [name, description, properties, required, run] of learnTools) {
+          ed.add({ name, description, options: { codemode: false }, input: { type: "object", properties, required },
+            execute: async (input: any, c: any) => {
+              const l = live.get(c.sessionID);
+              if (!l) return { content: "지금은 쓸 수 없어요." };
+              try { return { content: (await run(l, input)).slice(0, 4000) }; } catch (e) { return { content: `실패: ${(e as Error).message}` }; }
+            } });
+        }
         for (const name of OURS) {
           const [description, properties, required] = desc[name];
           ed.add({ name, description, options: { codemode: false }, input: { type: "object", properties, required },
