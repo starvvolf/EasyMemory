@@ -6,6 +6,9 @@ import path from "node:path";
 import { DATA, read, update } from "./store.ts";
 import { basicName, findBasic, markResolved, markStuck, normOther, type Lang } from "./basics.ts";
 
+/** 칸이 바뀌면 알림(수업이 지금 칸 표시를 맞춘다) */
+let onChange: (runId: string) => void | Promise<void> = () => {};
+export function onStuckChange(fn: (runId: string) => void | Promise<void>) { onChange = fn; }
 export const MAX_DEPTH = Number(process.env.PC_STUCK_MAX) || 10;
 /** 학습자가 고르는 막힘 종류(화면 문구는 web/app.js, 튜터에게는 why) */
 export const CHOICES = {
@@ -68,7 +71,7 @@ export async function nameGap(runId: string, lang: Lang, x: { concept?: string; 
   if (top0 && top0.depth === 0 && top0.quote) {
     // why: 학습자가 실제로 막힌 말(11/3 두 번째 재현: "key는 어디서 와?"가 넘어가지 않아 아래 칸이 엉뚱한 방향으로 설명함)
     const r = await goDeeper(runId, lang, { ...x, why: x.why?.trim() || "처음 줄에서 짚은 빈 칸" });
-    return r.ok ? { ok: true, text: `${r.text}. 처음 줄은 이 칸이 풀린 뒤 다시 읽어요. 이번 답은 한 문장으로 끝내세요.` } : r;
+    return r.ok ? { ok: true, text: `${r.text}. 이제 같은 답에서 바로 이 칸을 설명하세요: 학습자가 막힌 말에 닿는 아주 작은 예로 3~6문장, 끝에 직접 답하거나 한 줄 써 볼 작은 확인 하나. "잠깐 볼게요" 같은 예고는 쓰지 않는다. 처음 줄은 이 칸이 풀린 뒤 다시 읽어요.` } : r;
   }
   const b = x.concept ? findBasic(lang, x.concept) : null;
   const gap = b ? { concept: b.id } : x.other?.trim() || x.concept?.trim() ? { other: (x.other?.trim() || x.concept!.trim()).slice(0, 60) } : null;
@@ -100,9 +103,9 @@ export async function goDeeper(runId: string, lang: Lang, x: { concept?: string;
     if (dup) { res = { ok: false, text: `"${labelOf(dup)}"은(는) 이미 열린 칸이에요(돌고 돌지 않게). 지금 칸에서 이어서 설명하세요.` }; return; }
     const f: Frame = { id: `f${Date.now().toString(36)}${s.frames.length}`, parent: top.id, depth: st.length, at: now(), why: x.why.slice(0, 200), ...gap, status: "open", replies: 0 };
     s.frames.push(f);
-    res = { ok: true, text: `아래 칸을 열었어요: ${labelOf(f)}`, frame: f };
+    res = { ok: true, text: `아래 칸을 열었어요: ${labelOf(f)}. 이제 같은 답에서 바로 이 칸을 설명하세요(아주 작은 예 3~6문장 + 작은 확인 하나, 예고 없이).`, frame: f };
   });
-  if (res.ok) await markStuck(gap, lang);
+  if (res.ok) { await markStuck(gap, lang); await onChange(runId); }
   return res;
 }
 

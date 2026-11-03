@@ -20,7 +20,7 @@ import { explainWhat, pocketItems, rememberAi, takeDue } from "./pocket.ts";
 import { addEntry, addTour, codeTerms, firstLine } from "./notes.ts";
 import { runAgent, undoEdit, type AskCard, type CtxFile, type DiffCard, type SnippetCard, type ToolCard } from "./agent.ts";
 import { aiMode } from "./ai.ts";
-import { CHOICES, countReply, leaveAll, openRoot, openStack, resolveTop, stuckOf, stuckView, labelOf, type Choice, type Frame } from "./stuck.ts";
+import { onStuckChange, CHOICES, countReply, leaveAll, openRoot, openStack, resolveTop, stuckOf, stuckView, labelOf, type Choice, type Frame } from "./stuck.ts";
 import { basicsLine, catalogText, langOf } from "./basics.ts";
 import { actionOfBeat, answerBackground, backgroundLine, bgQuestion, closeDetours, enterBeat, events, getSession, knownSkip, pushDetour, recap, recapSeen, record, sessionView, stageOutcome, LEVELS, type Action as SessAction } from "./session.ts";
 
@@ -60,6 +60,7 @@ const sentUpTo = new Map<string, number>();
 const judging = new Map<string, Promise<unknown>>();
 /** 진행 기록마다 지금 열린 [막혔어요] 칸(맨 아래). 이 동안 나온 말에 sf 표시를 붙인다 */
 const stuckTop = new Map<string, string>();
+onStuckChange(async (runId) => { await syncTop(runId); });
 async function syncTop(runId: string) { const top = openStack(await stuckOf(runId)).at(-1); if (top) stuckTop.set(runId, top.id); else stuckTop.delete(runId); return top; }
 const file = (runId: string, n: number) => path.join(DATA, "lessons", `${runId}-${n}.json`);
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
@@ -780,7 +781,7 @@ export async function ask(runId: string, n: number, plan: Plan, text: string, qu
 const DIAG = `짧은 질문으로 층을 짚는다: 1~2초면 답할, 답을 보면 무엇이 비었는지 드러나는 질문 하나(예: "괄호 안에 들어간 게 몇 덩어리예요?", "이 함수는 이 줄을 지날 때 바로 실행돼요, 나중이에요?", "res에는 누가 무엇을 넣어 줘요?", "따옴표 안의 /todos랑 그냥 todos는 같은 거예요?"). "어느 쪽이 낯설어요?", "어디가 모르겠어요?"처럼 학습자가 스스로 진단하게 묻지 않는다. 처음 하는 학습자는 대개 여러 층(남이 만든 이름 · 모양(기호) · 실행 시점 · 값이 오는 곳)이 함께 비어 있다 — 가장 아래 것부터.`;
 const ROOT_RULES = `이 칸은 처음 막힌 줄 자체다(이름을 바꾸지 않는다).
 1. ${DIAG}
-2. 빈 칸을 찾으면 stuck_name_gap(목록 id 또는 other, 라이브러리·프레임워크 단어는 library-api) — 그 칸이 아래에 열리고 설명은 거기서 한다. 이 칸에서는 길게 설명하지 않는다.
+2. 빈 칸을 찾으면 stuck_name_gap(목록 id 또는 other, 라이브러리·프레임워크 단어는 library-api, why=학습자가 막힌 말) — 그 칸이 아래에 열린다. 도구 결과를 받으면 같은 답에서 바로 그 칸을 [아래 칸 규칙]대로 설명한다.
 3. 아래 칸에서 돌아오면 화면이 학습자에게 처음 줄을 한국어로 읽어 보게 한다(코드가 띄움). 학습자가 읽은 말에서 아직 막히는 데가 보이면 그다음 빈 칸을 짚어 또 연다.
 4. 학습자가 줄을 자기 말로 맞게 읽으면 stuck_resolved(evidence=학습자가 읽은 말).
 막힘 도구(stuck_…)는 부르기 전에 "기록할게요", "짚어 둘게요" 같은 말을 하지 않는다(화면에 따로 보인다).
@@ -789,7 +790,7 @@ const CHILD_RULES = `할 일(이 칸 하나만):
 1. [위 칸에서 내려온 이유]의 그 막힘에 바로 닿는 아주 작은 예(새로 만든 짧은 코드)로 3~6문장 설명한다(칸 이름의 일반론이 아니라 그 질문의 답 쪽으로, 예: "안쪽 함수가 바깥 이름을 어떻게 쓰나"면 그 방향의 예). 한 번에 하나. 예시는 처음 막힌 코드와 같은 모양으로(막힌 줄이 (req, res) => { … }면 { } 블록 모양) 쓰고, 학습자 배경에 없는 문법(타입 표시 : number 같은 것)은 넣지 않는다.
 2. 학습자가 직접 답하거나 한 줄 써 볼 작은 확인 하나로 끝낸다. 확인은 이 칸의 핵심을 써야 풀리는 것으로(이름 짐작처럼 안 배워도 맞히는 것은 안 된다).
 3. 답이 맞으면 stuck_resolved(evidence=학습자가 한 것). 틀리면 다르게 한 번 더. 이 칸은 이미 이름이 있으니 stuck_name_gap은 부르지 않는다. 풀림 뒤에는 이 칸과 상관없는 말을 덧붙이지 않는다.
-4. 설명하다 그보다 아래가 비어 보이면(짧은 질문으로 확인한 뒤) stuck_go_deeper(그 칸, why). 이미 위에 있는 칸으로는 내려가지 않는다.
+4. 설명하다 그보다 아래가 비어 보이면(짧은 질문으로 확인한 뒤) stuck_go_deeper(그 칸, why) — 열리면 같은 답에서 바로 그 칸을 설명한다. 이미 위에 있는 칸으로는 내려가지 않는다.
 막힘 도구(stuck_…)는 부르기 전에 "기록할게요" 같은 말을 하지 않는다(화면에 따로 보인다).
 코스의 다음 걸음·정답 코드는 말하지 않는다.`;
 /** 칸이 바뀐 뒤: 아래 칸이 열렸으면 그 칸 설명을, 풀렸으면 위 칸으로 돌아가 원래 막힌 것을 다시 해 보게. 맨 위가 풀렸으면 코스로 */
@@ -799,11 +800,8 @@ async function afterStuckChange(runId: string, n: number, plan: Plan, beforeId: 
   const top = stack.at(-1);
   if (top?.id === beforeId) return;
   const old = st.frames.find((f) => f.id === beforeId);
-  if (top && top.parent === beforeId) {
-    // 한 칸 아래가 열림
-    await syncTop(runId);
-    return void ask(runId, n, plan, `[새 칸: ${labelOf(top)}] 위 칸에서 내려왔어요(이유: ${top.why ?? ""}). 이 칸 하나만: 원래 코드·코스 얘기는 하지 말고, 아주 작은 예(새로 만든 짧은 코드)로 3~6문장 설명한 뒤, 학습자가 직접 답하거나 한 줄 써 볼 작은 확인 하나로 끝내세요.`, undefined, undefined, { silent: true }).catch((e) => console.error("[stuck]", e));
-  }
+  // 한 칸 아래가 열림: 같은 답에서 이미 설명했다(대화 하나, 11/3) — 위치만 맞춘다
+  if (top && top.parent === beforeId) { await syncTop(runId); return; }
   if (old?.status === "resolved") await stuckReturned(runId, n, plan, old);
 }
 /** 칸 하나가 풀린 뒤 */
@@ -932,29 +930,22 @@ async function askInner(runId: string, n: number, plan: Plan, q: string, text: s
   let context = [fixed, history, state, ...files.map((f) => f.text)].filter(Boolean).join("\n\n");
   const lang = langOf(course as { language?: string; stack?: string });
   // [막혔어요] 칸 안: 칸마다 따로 이어 쓰는 대화. 넘겨줄 것(원래 줄 · 막힌 이유 · 수준 · 지금까지 쓴 말)은 칸의 첫 메시지에
-  let sessKey: string | undefined;
+  // [막혔어요](11/3 사용자 "세션을 새로 여는 게 아니라 학습자 상태에 따라 학습 코스가 변한다고 보면"): 대화는 코스 하나로 계속 이어 쓰고,
+  // 막힘 칸 스택은 [지금 위치]의 일부다. 칸마다 다른 역할(처음 줄: 짚기 / 아래 칸: 작은 예로 설명)은 이번 차례 맥락 끝에 붙인다
+  const sessKey: string | undefined = undefined;
   if (frame) {
     const stack = openStack(await stuckOf(runId));
     const root = stack[0];
-    sessKey = `${runId}#${frame.id}`;
-    // 칸 대화도 새 대화로 열지만, 맥락은 채팅 전체(코스 + 모든 칸)를 코스 대화와 같은 방식(앞부분 요약 + 최근)으로 준다
-    const frameMsgs = (opts.silent ? s0.messages : s0.messages.slice(0, -1)).filter((m) => m.sf === frame.id);
-    const fsent = sentUpTo.get(sessKey) ?? -1;
-    const ffixed = [
-      `[막혔어요 — 칸 하나만 메우는 대화] 학습자가 코스를 하다 막혀서 기초 쪽으로 내려왔다. 이 대화는 이 칸 하나만 다룬다.`,
-      `[지금 위치] ${course.title} › ${stack.map(labelOf).join(" › ")} (이 칸: ${labelOf(frame)}, 깊이 ${frame.depth + 1})`,
-      root.quote ? `[처음 막힌 코드] ${root.quote.file} ${root.quote.from}${root.quote.to > root.quote.from ? `~${root.quote.to}` : ""}줄:\n${root.quote.code}` : "",
-      root.choice ? `[학습자가 고른 막힘] ${CHOICES[root.choice].label}${root.word ? ` — 단어 \`${root.word}\`` : ""} (${CHOICES[root.choice].why})` : "",
-      frame.why ? `[위 칸에서 내려온 이유] ${frame.why}` : "",
-      `[언어] ${lang} — 설명과 예시는 이 언어 모양으로.`,
-      `[기초 칸 목록 — 이 언어]\n${catalogText(lang)}`,
-      frame.depth === 0 && root.quote ? ROOT_RULES : CHILD_RULES,
-    ].filter(Boolean).join("\n\n");
-    const fturn = [state.split("\n")[0], await basicsLine(lang)].filter(Boolean).join("\n");
-    void frameMsgs;
-    const fsince = talk(before.filter((m) => m.id > fsent));
-    parts = { fixed: ffixed, turn: fturn, recent: history ? `${history}\n\n(위 대화의 쓴 비유·말을 그대로 이어 쓴다. 바로 위 칸에서 학습자가 한 말이 이 칸의 출발점이다)` : "", since: fsince ? `[지난번 뒤 화면]\n${fsince}` : "", files: [] };
-    context = [ffixed, parts.recent, fturn].filter(Boolean).join("\n\n");
+    const block = [
+      `[지금 위치 — 막혔어요] ${n}단계 걸음 중 막혀서 기초 쪽으로 내려와 있다: ${stack.map(labelOf).join(" › ")} (지금 칸: ${labelOf(frame)}, 깊이 ${frame.depth + 1})`,
+      root.quote ? `처음 막힌 코드 ${root.quote.file} ${root.quote.from}${root.quote.to > root.quote.from ? `~${root.quote.to}` : ""}줄: ${root.quote.code.trim()}` : "",
+      root.choice ? `학습자가 고른 막힘: ${CHOICES[root.choice].label}${root.word ? ` — 단어 \`${root.word}\`` : ""}` : "",
+      frame.why ? `이 칸으로 내려온 이유: ${frame.why}` : "",
+      `언어: ${lang}. 기초 칸 목록(id=이름):\n${catalogText(lang)}`,
+      frame.depth === 0 && root.quote ? `[지금 칸 규칙 — 처음 막힌 줄]\n${ROOT_RULES}` : `[지금 칸 규칙 — 아래 칸]\n${CHILD_RULES}`,
+    ].filter(Boolean).join("\n");
+    parts = { ...parts, turn: [state, await basicsLine(lang), block].filter(Boolean).join("\n") };
+    context = [fixed, history, parts.turn].filter(Boolean).join("\n\n");
   }
   if (aiMode() !== "off") {
     // 답을 쓰는 대로 채팅에 흘려 보낸다(같은 key는 같은 말풍선을 고친다)
