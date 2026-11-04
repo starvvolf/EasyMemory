@@ -1,9 +1,9 @@
 {
   "_": "작업 현황(tools/usage-report, [작업 현황] 탭)이 쓰는 표. 구조도 칸(data-k)과 영역(A·B·C·D·공통)마다 어떤 파일이 속하는지. 구조도·영역이 바뀌면 각자 작업 끝나고 같이 고친다(2026-11-02 A). 위에서부터 처음 맞는 영역이 그 파일의 영역이다.",
   "areas": [
-    { "id": "A", "name": "알고리즘", "globs": ["src/lib/code/**", "src/lib/assist/code-ai.ts", "src/app/api/code/**", "src/app/study/workspace/Code*.tsx", "scripts/recaller-*.mjs", "scripts/run-lab.mjs", "desktop/**", "tools/usage-report/**", "tools/work/**", "experiments/question-gen/**"] },
+    { "id": "A", "name": "알고리즘", "globs": ["src/lib/code/**", "src/lib/assist/code-ai.ts", "src/app/api/code/**", "src/app/study/workspace/Code*.tsx", "scripts/recaller-*.mjs", "lab/run-lab.mjs", "desktop/**", "tools/usage-report/**", "tools/work/**", "lab/question-gen/**"] },
     { "id": "B", "name": "지식 저장소", "globs": ["src/lib/knowledge/**", "src/lib/assist/knowledge-ai.ts", "src/lib/assist/article-map.ts", "src/app/api/knowledge/**", "src/app/study/workspace/Knowledge*.tsx", "src/app/study/workspace/ArticleStudy.tsx", "src/app/study/workspace/WebStudy.tsx", "extension/**"] },
-    { "id": "C", "name": "생성 엔진", "globs": ["src/lib/study/gen/**", "src/lib/study/knowledge.ts", "src/lib/study/material-map.ts", "src/app/lab/**", "src/app/api/lab/**", "src/app/api/study-map/**", "src/app/study/workspace/MaterialMap.tsx", "출제기준/**", "scripts/run-engine-lab.mjs"] },
+    { "id": "C", "name": "생성 엔진", "globs": ["src/lib/study/gen/**", "src/lib/study/knowledge.ts", "src/lib/study/material-map.ts", "src/app/lab/**", "src/app/api/lab/**", "src/app/api/study-map/**", "src/app/study/workspace/MaterialMap.tsx", "출제기준/**", "lab/run-engine-lab.mjs"] },
     { "id": "D", "name": "실습", "globs": ["experiments/project-course/**", "src/app/study/workspace/ProjectStudy.tsx", "src/app/api/project-course/**"] },
     { "id": "공통", "name": "함께 쓰는 곳", "globs": ["src/app/study/**", "src/lib/study/knowledge-contract.ts", "src/lib/assist/model.ts", "src/lib/ai/**", "src/lib/schedule/**", "src/app/api/schedule/**", "docs/DECISIONS.md", "협업/현황.md", "CLAUDE.md", "AGENTS.md", ".claude/**", "next.config.ts", "package.json"] },
     { "id": "문서", "name": "문서", "globs": ["협업/**", "docs/**", "**/*.md"] }
@@ -13,7 +13,7 @@
     "ps": { "name": "PS · 알고리즘", "globs": ["src/lib/code/**", "src/lib/assist/code-ai.ts", "src/app/api/code/**", "src/app/study/workspace/Code*.tsx", "scripts/recaller-*.mjs", "src/lib/ai/**", "src/lib/assist/model.ts"] },
     "project": { "name": "프로젝트", "globs": ["experiments/project-course/**", "src/app/study/workspace/ProjectStudy.tsx", "src/app/api/project-course/**", "src/lib/ai/**", "src/lib/assist/model.ts"] },
     "knowledge": { "name": "지식", "globs": ["src/lib/knowledge/**", "src/app/api/knowledge/**", "src/app/study/workspace/Knowledge*.tsx", "src/lib/study/knowledge-contract.ts"] },
-    "question": { "name": "문제", "globs": ["src/lib/knowledge/questions.ts", "src/app/study/workspace/QuestionCard.tsx", "src/lib/study/gen/quiz.ts", "src/lib/study/gen/recaller.ts", "src/lib/study/gen/checks.ts", "experiments/question-gen/**"] },
+    "question": { "name": "문제", "globs": ["src/lib/knowledge/questions.ts", "src/app/study/workspace/QuestionCard.tsx", "src/lib/study/gen/quiz.ts", "src/lib/study/gen/recaller.ts", "src/lib/study/gen/checks.ts", "lab/question-gen/**"] },
     "review": { "name": "사용자 · 복습", "globs": ["src/lib/schedule/**", "src/app/api/schedule/**", "src/app/study/workspace/TodayBoard.tsx", "src/app/study/workspace/PlanView.tsx", "src/app/study/workspace/TimerChip.tsx", "src/lib/knowledge/store.ts", "src/app/study/dejipgi-app.js", "src/app/study/DejipgiStudy.tsx", "src/app/study/dejipgi.css"] }
   },
   "contracts": [

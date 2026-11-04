@@ -8,7 +8,7 @@
 1. **설계**: PS ↔ 지식 저장소 양방향 루트. 지금 기능으로 되는 것과 새로 필요한 것을 나눴고, 루트별 실험 서버(`공통.md`)를 설계·구현했다.
 2. **지켜보기**: 학습자가 멈추거나 막히거나 같은 곳을 계속 고치면 지금 코드를 예제와 가장 큰 숨은 테스트로 돌린다. 실행 결과에 문제가 없으면 모델에게 방향을 묻고, 문제가 있을 때만 편집기 위에 한 줄로 알린다. 문제당 최대 6번, 최소 3분 간격.
 3. **모드 두 개**: 기본(그대로) / 훈련(7단계: 이해 → 추상화 → 탐색 → 정당성 → 복잡도 → 구현 → 복기).
-4. **실험 서버** `scripts/run-lab.mjs`, `Recaller PS실험 서버.cmd`(3003). 3003 로그인 칩 문제는 `STUDY_FORGE_AUTO_EXECUTOR=1`이 없어서였다(로그인 자체는 정상 저장).
+4. **실험 서버** `lab/run-lab.mjs`, `lab/PS 실험 서버.cmd`(3003). 3003 로그인 칩 문제는 `STUDY_FORGE_AUTO_EXECUTOR=1`이 없어서였다(로그인 자체는 정상 저장).
 5. **사용자 피드백 반영 (10/31 오후, 커밋 안 함)**
    - 훈련 단계는 오른쪽 칸 위, AI는 그 아래. 문제는 왼쪽 그대로.
    - 칸에서 다른 곳을 누르면 그 칸만 채점(✓ / "✗ 틀렸어요").
@@ -37,7 +37,7 @@
 | `src/app/api/code/[[...path]]/route.ts` | `GET lab`, `problem/:id/watch/*`, `problem/:id/train/*`(mode·understand·complexity·inputs·check·ask·step·review-draft·review) |
 | `src/app/study/workspace/CodeTrain.tsx` (새) | ModeSwitch, TrainPanel, useFieldCheck·useOneInput, useWatch·WatchStrip, STEP_LABEL·COACH_ASKS |
 | `CodeStudy.tsx`, `workspace.css` | 연결·배치·코치 모드·단계별 채팅, cs-train·cs-tr-*·cs-watch·cs-ai.training |
-| `scripts/run-lab.mjs`, `Recaller PS실험 서버.cmd`(CRLF) (새) | 실험 서버 |
+| `lab/run-lab.mjs`, `lab/PS 실험 서버.cmd`(CRLF) (새) | 실험 서버 |
 | `next.config.ts` [경계], `.gitignore` | `tsconfigPath: RECALLER_NEXT_TSCONFIG` 우선, `/.next-lab-*/`·`/tsconfig.lab-*.json` |
 
 커밋(push됨): `8aa4734` 훈련 모드·지켜보기·루트별 실험 서버 [경계], `b4567d3` 실험 서버 STUDY_FORGE_AUTO_EXECUTOR=1. 모델 기본값은 공통 커밋 `f85a1c2`.

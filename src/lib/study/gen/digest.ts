@@ -110,7 +110,7 @@ export const WRAP_SYSTEM = `${BASE}
 자료 끝의 요약 쪽이 있으면 그 내용이 들어간 줄에 그 쪽도 함께 단다. 입력의 쪽 번호만 쓴다.`;
 
 // sol 한 번 (lab.digestOne, 11/2 사용자 "sol low한테 목차-각 부분 요약(단 흐름 빼먹지 말것) → terra low가 요약 스트리밍 실시간으로 받아서
-// 카드"; 4차 s2c-v4.mts 구조, 협업/실험코드/요약카드_20261031): one sol call writes the outline, the overview, every topic's body
+// 카드"; 4차 s2c-v4.mts 구조, lab/실험코드/요약카드_20261031): one sol call writes the outline, the overview, every topic's body
 // (each closed by <<<BODY_END tN>>> so its cards start at once), then the easy explanations, extras and 핵심 정리.
 export const ONE_OUTLINE_END = "<<<OUTLINE_END>>>";
 export const ONE_SYSTEM = `${BASE}

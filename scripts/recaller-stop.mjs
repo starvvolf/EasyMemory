@@ -1,4 +1,4 @@
-// One click to finish: stop the local server (only ours, on port 3000) and send this computer's data to RecallerData.
+// End steps of the Recaller app (desktop/main.js runs this after asking): stop the local server (only ours, on port 3000) and send this computer's data to RecallerData.
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,7 @@ async function ours() {
   catch { return false; }
 }
 
-console.log("① 앱 끄기");
+console.log("② 앱 서버 끄기");
 if (await ours()) {
   if (process.platform === "win32") {
     const lines = (spawnSync("netstat", ["-ano"], { encoding: "utf8" }).stdout ?? "").split(/\r?\n/);
@@ -23,6 +23,6 @@ if (await ours()) {
   console.log(await ours() ? "   앱이 아직 켜져 있어요. 창을 직접 닫아 주세요." : "   껐어요.");
 } else console.log("   켜진 앱이 없어요.");
 
-console.log("② 데이터 올리기");
+console.log("③ 데이터 올리기");
 const result = spawnSync(process.execPath, [path.join(root, "scripts", "recaller-sync.mjs"), "push"], { stdio: "inherit" });
 process.exit(result.status ?? 1);

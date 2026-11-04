@@ -36,7 +36,7 @@ PDF를 지식 카드 → 자료 전체 정리 → 자료 지도로 만들고, �
 ## 지켜야 하는 것
 
 - `KnowledgeLayer` 모양(포인트 id·이름·essentials·구역·쪽, `byObjective`)과 id 규칙(`자료id:포인트id`)을 유지한다. 엔진을 고치면 푸시 전에 약속 테스트를 돌린다.
-- 실험은 엔진 실험 서버(3002, `Recaller 엔진실험 서버.cmd`, 빌드 `.next-engine`, 데이터 `tmp/engine-data`)에서. 3000번은 건드리지 않는다. 주소는 `http://127.0.0.1:3002`(localhost로 열면 로컬 실험 모드가 꺼져 로그인 화면이 뜬다).
+- 실험은 엔진 실험 서버(3002, `lab/엔진 실험 서버.cmd`, 빌드 `.next-engine`, 데이터 `tmp/engine-data`)에서. 3000번은 건드리지 않는다. 주소는 `http://127.0.0.1:3002`(localhost로 열면 로컬 실험 모드가 꺼져 로그인 화면이 뜬다).
 - 3002의 데이터(시험용 PDF `tmp/engine-data/mcp-sources`, 그림 쪽 읽기 캐시 `study-gen/readings`, 지난 실행)는 예전 폴더 `CreatorTemp\recaller-integration\tmp\engine-data`에 있다. 새 폴더(`coding\Recaller`)에서 켜면 비어 있으니, 그 폴더를 복사하거나 `RECALLER_ENGINE_DATA_DIR`로 가리킨다.
 - 시험용 PDF는 `mcp-sources`에 `src_<sha256>.pdf`와 같은 이름의 `.json`(id·fileName·pageCount·sha256)을 두면 등록된다.
 - 가짜 모델(fake) 실행은 3002 데이터에서 돌리지 않는다: 그림 쪽 읽기 캐시(`readings`)를 가짜 글로 덮는다. 테스트는 임시 폴더를 쓴다.

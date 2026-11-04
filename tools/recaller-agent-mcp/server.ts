@@ -15,7 +15,7 @@ const headers = { "Content-Type": "application/json", Origin: base };
 async function api(path: string, init: RequestInit = {}) {
   let response: Response;
   try { response = await fetch(`${base}${path}`, { ...init, headers: { ...headers, ...(init.headers ?? {}) } }); }
-  catch { throw new Error(`Recaller(${base})에 연결하지 못했어요. 'Recaller 시작.cmd'로 앱을 먼저 켜 주세요.`); }
+  catch { throw new Error(`Recaller(${base})에 연결하지 못했어요. Recaller 앱으로 앱을 먼저 켜 주세요.`); }
   const data = await response.json().catch(() => ({})) as { message?: string };
   if (!response.ok) throw new Error(data.message ?? `Recaller가 ${response.status}로 답했어요.`);
   return data;

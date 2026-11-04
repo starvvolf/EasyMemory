@@ -1,6 +1,6 @@
 "use client";
 // 훈련 모드 · 지켜보기 (2026-10-31, PS 루트 실험; 서버 src/lib/code/train.ts). Shown only on a server that switched them on
-// (scripts/run-lab.mjs ps → RECALLER_PS_TRAIN / RECALLER_PS_WATCH); the main app's code screen stays as it is.
+// (lab/run-lab.mjs ps → RECALLER_PS_TRAIN / RECALLER_PS_WATCH); the main app's code screen stays as it is.
 // 훈련 모드: seven steps under the problem, each a short answer the app checks (most by code, a few by the model).
 // 지켜보기: when the learner stops typing, gets stuck or keeps tinkering, the code so far is run on the examples and the
 // largest hidden test, then looked at by the model; only a problem is said, in one line above the editor.

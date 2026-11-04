@@ -8,7 +8,7 @@
 
 ## 설치
 
-1. 컴퓨터에서 `Recaller 시작.cmd`로 Recaller를 켜요 (http://127.0.0.1:3000).
+1. 컴퓨터에서 Recaller 앱으로 Recaller를 켜요 (http://127.0.0.1:3000).
 2. 크롬 주소창에 `chrome://extensions`를 열고 오른쪽 위 **개발자 모드**를 켜요.
 3. **압축해제된 확장 프로그램을 로드합니다**를 누르고 이 폴더(`extension/recaller-sidepanel`)를 골라요.
 4. 칼럼이 열린 탭에서 툴바의 Recaller 아이콘을 누르면 사이드 패널이 열려요.

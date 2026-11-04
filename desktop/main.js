@@ -1,8 +1,10 @@
-// Recaller desktop: a thin window around the local study app. The app itself is still the web app served by the
-// local server (127.0.0.1:3000), so code changes show on reload (Ctrl+R) without rebuilding this shell.
-// Start: the same steps as 'Recaller 시작' (code, packages, data, server). Close: the same as 'Recaller 끝내기'
-// (stop the server, send this computer's data). See desktop/README.md.
-const { app, BrowserWindow, Menu, shell, dialog, nativeTheme } = require("electron");
+// Recaller desktop: the one way to run Recaller (2026-11-05, 사용자 "electron recaller앱만 실행하면 전부 되게").
+// The app itself is the web app served by the local server (127.0.0.1:3000), so code changes show on reload (Ctrl+R).
+// Start (loading window): code, packages, data, app server (scripts/recaller-start.mjs), then the 실습 course server
+// (127.0.0.1:4100, experiments/project-course/tools/keeper.mjs, kept as this app's child). Close (X or Ctrl+Q): asks
+// first, then stops the course server and the app server and sends this computer's data (scripts/recaller-stop.mjs).
+// Experiment servers (lab/) are not part of this. See desktop/README.md.
+const { app, BrowserWindow, Menu, shell, dialog, nativeTheme, session } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -12,7 +14,7 @@ const ORIGIN = "http://127.0.0.1:3000";
 const START_URL = `${ORIGIN}/study`;
 const COURSE_ORIGIN = (process.env.PROJECT_COURSE_URL || "http://127.0.0.1:4100").replace(/\/$/, "");
 const isWin = process.platform === "win32";
-let main = null, splash = null, quitting = false;
+let main = null, splash = null, quitting = false, confirmed = false, course = null;
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => { const w = main || splash; if (w) { if (w.isMinimized()) w.restore(); w.focus(); } });
@@ -49,6 +51,33 @@ function runScript(script, args = []) {
   });
 }
 
+/* ---------- 실습 course server: started with the app, stopped with it ---------- */
+async function up(url) { try { return (await fetch(url, { signal: AbortSignal.timeout(1500) })).status < 500; } catch { return false; } }
+async function startCourse() {
+  if (process.env.PROJECT_COURSE_AUTOSTART === "0" || await up(`${COURSE_ORIGIN}/api/status`)) return;
+  const dir = path.join(root, "experiments", "project-course");
+  if (!fs.existsSync(path.join(dir, "tools", "keeper.mjs"))) return;
+  splashLine("⑤ 실습 코스 서버 켜기\n");
+  course = spawn("node", [isWin ? `"${path.join(dir, "tools", "keeper.mjs")}"` : path.join(dir, "tools", "keeper.mjs")], { cwd: dir, shell: isWin, windowsHide: true, stdio: "ignore", env: { ...process.env, PC_NO_OPEN: "1" } });
+  course.on("error", () => { course = null; });
+  for (let i = 0; i < 20 && !(await up(`${COURSE_ORIGIN}/api/status`)); i++) await new Promise((r) => setTimeout(r, 500));
+  splashLine((await up(`${COURSE_ORIGIN}/api/status`)) ? "   켰어요.\n" : "   아직 켜는 중이에요(실습 탭을 열 때 다시 확인해요).\n");
+}
+function stopCourse() {
+  if (!course || course.exitCode !== null) return;
+  try { if (isWin) require("node:child_process").execFileSync("taskkill", ["/PID", String(course.pid), "/T", "/F"], { stdio: "ignore" }); else course.kill(); } catch { /* already gone */ }
+  course = null;
+}
+
+/* ---------- closing asks first (X, Ctrl+Q, menu) ---------- */
+async function askQuit(win) {
+  if (confirmed) return true;
+  const { response } = await dialog.showMessageBox(win, { type: "question", buttons: ["끝내기", "취소"], defaultId: 0, cancelId: 1, noLink: true,
+    title: "Recaller", message: "Recaller를 끝낼까요?", detail: "공부 기록을 저장하고, 서버를 끄고, 이 컴퓨터의 데이터를 올려요." });
+  confirmed = response === 0;
+  return confirmed;
+}
+
 /* ---------- window size and position are remembered between runs ---------- */
 const boundsFile = () => path.join(app.getPath("userData"), "window.json");
 function savedBounds() { try { return JSON.parse(fs.readFileSync(boundsFile(), "utf8")); } catch { return null; } }
@@ -77,7 +106,11 @@ function openMain() {
   main.webContents.on("dom-ready", () => main.webContents.executeJavaScript('document.documentElement.dataset.shell = "desktop"').catch(() => {}));
   nativeTheme.on("updated", () => { if (main && !main.isDestroyed()) main.setTitleBarOverlay({ ...barColors(), height: BAR_HEIGHT }); });
   main.once("ready-to-show", () => { main.show(); if (splash && !splash.isDestroyed()) splash.close(); splash = null; });
-  main.on("close", () => saveBounds(main));
+  main.on("close", (event) => {
+    if (confirmed || quitting) { saveBounds(main); return; }
+    event.preventDefault();
+    void askQuit(main).then((ok) => { if (ok) app.quit(); });
+  });
   main.on("closed", () => { main = null; });
   main.loadURL(START_URL);
 }
@@ -90,7 +123,7 @@ const menu = Menu.buildFromTemplate([
     { label: "브라우저로 열기", click: () => shell.openExternal(main ? main.webContents.getURL() : START_URL) },
     { label: "데이터 폴더 열기", click: () => shell.openPath(path.resolve(root, "..", "RecallerData")) },
     { type: "separator" },
-    { label: "끝내기", accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
+    { label: "끝내기", accelerator: "CmdOrCtrl+Q", click: () => { if (main) main.close(); else app.quit(); } },
   ] },
   { label: "보기", submenu: [
     { role: "zoomIn", label: "크게" }, { role: "zoomOut", label: "작게" }, { role: "resetZoom", label: "원래 크기" },
@@ -107,6 +140,14 @@ app.whenReady().then(async () => {
     splashTitle("켜지 못했어요. 아래 기록을 확인해 주세요.");
     return;
   }
+  await startCourse();
+  // After 'scripts/recaller-data.mjs archive' (데이터 보관하고 새로 시작): the window's own storage held old records too.
+  const fresh = path.join(root, "tmp", "fresh-start");
+  if (fs.existsSync(fresh)) {
+    splashLine("⑥ 새로 시작: 창에 남은 예전 기록 비우기\n");
+    await session.defaultSession.clearStorageData({ storages: ["localstorage", "indexdb", "serviceworkers", "cachestorage"] }).catch(() => {});
+    try { fs.unlinkSync(fresh); } catch { /* next start clears again */ }
+  }
   openMain();
 });
 
@@ -117,6 +158,8 @@ app.on("before-quit", (event) => {
   quitting = true;
   if (main && !main.isDestroyed()) { saveBounds(main); main.destroy(); }
   openSplash("끝내는 중이에요 · 서버를 끄고 데이터를 올려요");
+  splashLine("① 실습 코스 서버 끄기\n");
+  stopCourse();
   runScript("recaller-stop.mjs").then(async (stopped) => {
     if (stopped !== 0) {
       splashTitle("데이터를 올리지 못했어요. 다음에 켤 때 다시 시도해요.");
@@ -126,4 +169,6 @@ app.on("before-quit", (event) => {
   });
 });
 app.on("window-all-closed", () => { if (!quitting) app.quit(); });
+// The loading window closed before the app opened (it failed): nothing to save, just stop what was started.
+app.on("will-quit", () => stopCourse());
 process.on("uncaughtException", (error) => { dialog.showErrorBox("Recaller", String(error && error.stack || error)); });

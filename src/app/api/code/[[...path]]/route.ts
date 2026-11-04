@@ -122,7 +122,7 @@ async function handle(request: Request, context: RouteContext) {
         void prepare(id, got, { kind: "full" });
         return json({ ok: true });
       }
-      // 훈련 모드 · 지켜보기 (2026-10-31, PS 루트 실험): only on a server that switched them on (scripts/run-lab.mjs ps).
+      // 훈련 모드 · 지켜보기 (2026-10-31, PS 루트 실험): only on a server that switched them on (lab/run-lab.mjs ps).
       if (p[2] === "train" || p[2] === "watch") {
         const lab = psLab();
         if (p[2] === "watch" ? !lab.watch : !lab.train) return NextResponse.json({ message: "이 서버에서는 꺼져 있어요." }, { status: 404 });

@@ -1,6 +1,6 @@
 "use client";
 // ⋯ 더보기: what most study days do not need, out of the way — records and account, the one-page summary, the older
-// per-material view, the archive, the workbench, prompt settings, the tablet, and the debate room.
+// archive, prompt settings, the tablet, and (folded) the developer screens.
 import { useEffect, useRef, useState } from "react";
 import { go } from "./api";
 
@@ -34,11 +34,12 @@ export default function MoreMenu() {
           {has("fsBtn") ? item("전체화면", "주소창 숨기기", () => clickById("fsBtn")) : null}
           {/* 2026-11-02 A (점검_UIUX화면연결 17번): 만드는 사람용 화면은 접어 둔다 */}
           <details className="mm-dev"><summary>개발용 화면</summary>
+            {/* 2026-11-05 정리: 실험 서버·도구는 lab/·tools/에서 켠다. 여기는 같은 서버 안의 실험 화면만. */}
+            {item("엔진 실험실", "PDF 생성 단계별로 보기 ↗", () => window.open("/lab", "_blank"))}
             {item("작업대", "모델 흐름 실험", () => go("bench"))}
             {item("토론방", "Claude·Codex와 기획 토론 ↗", () => window.open("/room", "_blank"))}
-            {item("자료별 지식 포인트", "예전 지식 화면", () => go("knowledge-legacy"))}
           </details>
-          <p className="mm-note">이 컴퓨터에서만 돌아가요 (로컬 실험 모드). 기록은 RecallerData에 저장돼요.</p>
+          <p className="mm-note">이 컴퓨터에서 돌아가요. 기록은 RecallerData에 저장되고, 앱을 끌 때 올라가요.</p>
         </div>
       ) : null}
     </div>

@@ -9,7 +9,7 @@
 ### 1-1. 루트 설계 (문서만, 코드 없음)
 - 글·PDF → 지식쌓기 루트 설계를 Claude 문서로 썼다(단계별 의사코드, "지금 되는 것 / 새로 할 것" 구분, 같은 PDF를 다시 만들면 44→96으로 늘어나는 중복 문제, 루트별 독립 실험).
 - 프로젝트 스레드와 합의한 계약: `materialKey`, `attachSameMaterial`, `attachQuestions(지식id, {materialKey, title}, 문제[])`. 코드는 아직 없다.
-- 실험 격리: 지식 저장소의 쓰기 순서(serial)는 서버 하나 안에서만 지켜지므로 루트마다 서버·데이터를 따로 쓴다. 이 루트는 포트 3005, 데이터 `tmp/lab-text`, 빌드 `.next-lab-text`. 공용 스크립트는 PS 스레드가 만든 `scripts/run-lab.mjs --name text --port 3005 --seed`.
+- 실험 격리: 지식 저장소의 쓰기 순서(serial)는 서버 하나 안에서만 지켜지므로 루트마다 서버·데이터를 따로 쓴다. 이 루트는 포트 3005, 데이터 `tmp/lab-text`, 빌드 `.next-lab-text`. 공용 스크립트는 PS 스레드가 만든 `lab/run-lab.mjs --name text --port 3005 --seed`.
 - **E1 실험**(기존 44→96 데이터에 "같은 자료면 이어 붙이기" 적용해 보기)은 설계만 하고 사용자 "ㄱㄱ"를 기다리는 중이다.
 
 ### 1-2. prep-2 규칙 보강 (`src/lib/study/gen/prep.ts`, `prep.test.ts`)

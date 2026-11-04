@@ -1,4 +1,4 @@
-// One click to start on either computer: get the latest code, install packages only when they changed,
+// Start steps of the Recaller app (desktop/main.js runs this with --no-open): get the latest code, install packages only when they changed,
 // take the other computer's data, start the local server and open the study screen.
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -25,12 +25,12 @@ console.log("③ 데이터 받기");
 const sync = path.join(root, "scripts", "recaller-sync.mjs");
 if (node(sync, ["setup"]).status !== 0 || node(sync, ["pull"]).status !== 0) process.exit(1);
 
-console.log("④ 앱 켜기");
-if (node(path.join(root, "scripts", "open-study-forge-local.mjs")).status !== 0) process.exit(1);
+console.log("④ 앱 서버 켜기");
+if (node(path.join(root, "scripts", "start-server.mjs")).status !== 0) process.exit(1);
 const url = "http://127.0.0.1:3000/study";
 // The desktop app (desktop/main.js) runs this with --no-open and shows the page in its own window.
 if (process.argv.includes("--no-open")) console.log("   준비됐어요.");
 else {
   if (process.platform === "win32") spawnSync("cmd", ["/c", "start", "", url], { stdio: "ignore" });
-  console.log(`   ${url} 을 열었어요. 다 쓰면 'Recaller 끝내기'를 눌러 주세요.`);
+  console.log(`   ${url} 을 열었어요. 이 방법은 개발용이에요. 보통은 Recaller 앱으로 켜고 끕니다.`);
 }
