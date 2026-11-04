@@ -255,7 +255,7 @@ export async function lessonView(runId: string, n: number) {
     now, mode: s.mode ?? null, resumable: !!s.asked && !s.busy && (s.waiting === "action" || s.waiting === "save"),
     thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null,
     stuck: await stuckView(runId), stuckChoices: Object.values(CHOICES).map((c) => c.label), free: !!run.free,
-    ...(run.chatId ? await chatPart(run.chatId) : {}) };
+    ...(run.codexId ? await codexPart(run.codexId) : run.chatId ? await chatPart(run.chatId) : {}) };
 }
 
 /* ---------- 11/4 사용자 "GPT가 만든 것까지 그대로 붙여 봐": 프리스타일 대화를 실험판(agent-chat) 엔진이 그대로 맡는다 ----------
@@ -274,6 +274,29 @@ async function chatPart(chatId: string) {
   const learned = lr.items.map((x) => ({ concept: x.concept, kind: x.kind, meaning: x.meaning, quote: x.quote, messageId: x.messageId }));
   return { messages, busy: v.busy, workspace: v.workspace, learned, chat: { id: v.id, goal: v.goal, focus: v.focus, support: v.support.map((x) => x.topic), observations: v.observations.length, noCourse: v.noCourse,
     model: v.model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, edit: v.edit ?? null } };
+}
+/* 11/4 사용자 "기존 UI에 붙여 봐(Codex 버전)": Codex 엔진 대화를 제품 화면 모양으로 옮긴다 */
+async function codexPart(codexId: string) {
+  const v = await (await import("./codex-chat.ts")).view(codexId);
+  const messages = v.messages.map((m) => {
+    const id = `x${m.id}`;
+    if (m.role === "user") return { id, role: "me", text: m.text };
+    if (m.role === "assistant") return { id, role: "tutor", text: m.text };
+    if (m.role === "tool") { const first = m.text.split("\n")[0]; return { id, role: "tutor", card: { type: "tool", icon: m.item === "file_change" ? "✏️" : m.item === "command_execution" ? "▶" : m.item === "mcp_tool_call" ? "🧠" : "🔧", label: m.text.split("\n").slice(0, 2).join(" · ").slice(0, 160), ok: !/실패|중단/.test(first) } }; }
+    return { id, role: "note", text: m.text };
+  });
+  return { messages, busy: v.busy, workspace: v.workspace, learned: v.learned,
+    chat: { id: v.id, engine: "codex", goal: "", focus: "", support: [], observations: 0, noCourse: true, model: v.model, models: v.models, edit: v.edit } };
+}
+async function codexAsk(runId: string, codexId: string, text: string) {
+  const cx = await import("./codex-chat.ts");
+  await cx.ask(codexId, text);
+  // Codex 대화는 파일에 바로 쓴다 → 답하는 동안 0.45초마다 화면에 알리고, 끝나면 한 번 더(배운 것 뽑기 뒤에도 한 번)
+  clearInterval(chatPolls.get(runId));
+  chatPolls.set(runId, setInterval(async () => {
+    notifyLesson(runId);
+    if (!(await cx.view(codexId)).busy) { clearInterval(chatPolls.get(runId)); chatPolls.delete(runId); setTimeout(() => notifyLesson(runId), 15000); }
+  }, 450));
 }
 const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
 async function chatAsk(runId: string, chatId: string, text: string) {
@@ -329,6 +352,13 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   const plan = await loadPlan(course.id, n);
   if (!plan) throw err(404, "이 단계의 수업 계획서가 없어요.");
 
+  if (run.codexId && (input.do === "ask" || input.do === "stop_chat")) {
+    if (input.do === "stop_chat") { await (await import("./codex-chat.ts")).stop(run.codexId); notifyLesson(runId); return; }
+    const sel = bridgeState(runId)?.selection;
+    const pre = sel?.text ? `[VS Code에서 고른 코드 ${bridgeState(runId)?.file ?? ""} ${sel.from}~${sel.to}줄]\n${sel.text}\n\n` : "";
+    await codexAsk(runId, run.codexId, pre + String(input.text ?? ""));
+    return;
+  }
   if (run.chatId && (input.do === "ask" || input.do === "stop_chat")) {
     if (input.do === "stop_chat") { await (await import("./agent-chat.ts")).stopChat(run.chatId); return; }
     // VS Code에서 고른 줄이 있으면 질문 앞에 붙인다(실험판 엔진에는 고른 줄 칸이 없다)

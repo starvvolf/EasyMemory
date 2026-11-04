@@ -736,3 +736,10 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
   --warn-soft: #3a2e14; --bad-soft: #3a1d1a; --bad: #ff8a80; --ok-soft: #17301f; --ok: var(--f-ok);
   color: var(--ink);
 }
+
+/* 엔진 고르기(11/4): Codex 버전 · 기존 버전 */
+.home2 .heng { display: flex; justify-content: center; gap: 6px; margin: -6px 0 14px; }
+.home2 .hchip { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 99px; padding: 4px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+.home2 .hchip.on { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); font-weight: 600; }
+.home2 .heb { font-size: 11px; padding: 0 7px; border-radius: 8px; background: var(--soft); color: var(--mut); flex: none; }
+.home2 .heb.codex { background: var(--acc-soft); color: var(--acc); }
