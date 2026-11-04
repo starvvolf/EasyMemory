@@ -263,6 +263,7 @@ export async function lessonView(runId: string, n: number) {
  * 지시문 · 도구 · 학습 상태(목표 · 초점 · 보충 · 관찰)는 실험판 것 그대로. 여기서는 그 대화를 제품 화면 모양으로 옮기고, 질문을 넘기기만 한다 */
 async function chatPart(chatId: string) {
   const v = await (await import("./agent-chat.ts")).chatView(chatId);
+  await markOnce(v.workspace);
   const messages = v.messages.map((m) => {
     const id = `c${m.id}`;
     if (m.role === "user") return { id, role: "me", text: shownUser(m.text) };
@@ -277,6 +278,9 @@ async function chatPart(chatId: string) {
     model: v.model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, edit: v.edit ?? null } };
 }
 /* 11/4 사용자 "기존 UI에 붙여 봐(Codex 버전)": Codex 엔진 대화를 제품 화면 모양으로 옮긴다 */
+/** 예전에 만든 대화 폴더에도 VS Code 연결 표시를 둔다(한 번만, 11/5) */
+const marked = new Set<string>();
+async function markOnce(ws: string) { if (marked.has(ws)) return; marked.add(ws); await (await import("./learn.ts")).markChatFolder(ws); }
 /** 버튼이 튜터에게 보낸 말(지시가 섞인 것)은 화면에선 짧게(11/4) */
 function shownUser(t: string) {
   const m = /^\[(확정|다음으로|막혔어요|진행 방식 변경|계획 다시 얘기하기)\]/.exec(t);
@@ -286,6 +290,7 @@ function shownUser(t: string) {
 }
 async function codexPart(codexId: string) {
   const v = await (await import("./codex-chat.ts")).view(codexId);
+  await markOnce(v.workspace);
   const messages = v.messages.map((m) => {
     const id = `x${m.id}`;
     if (m.role === "user") return { id, role: "me", text: shownUser(m.text) };

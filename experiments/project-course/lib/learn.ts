@@ -30,6 +30,11 @@ function cands(run: Run, course: Course, st: Stage, ids: string[], kind: Candida
 export async function workspaceStage(ws: string): Promise<number | null> {
   try { return JSON.parse(await readFile(path.join(ws, ".recaller", "stage.json"), "utf8")).stage ?? null; } catch { return null; }
 }
+/** 대화(실험판 · Codex) 작업 폴더에도 표시를 둔다 — VS Code 연결 확장은 .recaller/stage.json이 있는 폴더에서만 켜지고 열어 준다(11/5 노트북 "열 수 없는 폴더예요"로 무한 로딩) */
+export async function markChatFolder(ws: string) {
+  if (await workspaceStage(ws) !== null) return;
+  try { await markStage(ws, 1); } catch { /* 쓸 수 없는 폴더면 넘어감(연결 확장만 안 켜짐) */ }
+}
 async function markStage(ws: string, n: number, solved = false) {
   const { mkdir, writeFile } = await import("node:fs/promises");
   await mkdir(path.join(ws, ".recaller"), { recursive: true });

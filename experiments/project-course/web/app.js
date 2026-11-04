@@ -192,7 +192,12 @@ async function renderHome() {
 /** 대화 열기: 튜터 창이면 VS Code 폴더도 그 대화로, VS Code 탭이면 폴더가 다를 때 폴더부터 */
 function openChat(c) {
   if (FLOAT) return busy(null, async () => { await api("POST", `/api/runs/${c.runId}/editor`).catch(() => null); go(`#/run/${c.runId}`); });
-  if (EMBED && c.workspace && !inThisFolder(c.workspace)) { switchingNote("그 대화의 작업 폴더로 가는 중이에요"); openFolder(c.workspace); return; }
+  if (EMBED && c.workspace && !inThisFolder(c.workspace)) {
+    switchingNote("그 대화의 작업 폴더로 가는 중이에요"); openFolder(c.workspace);
+    // 11/5: VS Code가 폴더를 못 열면(확장이 거절 등) 끝없이 기다리지 않고 이 탭에서 바로 대화를 연다
+    setTimeout(() => { if (location.hash !== `#/run/${c.runId}`) go(`#/run/${c.runId}`); }, 6000);
+    return;
+  }
   go(`#/run/${c.runId}`);
 }
 

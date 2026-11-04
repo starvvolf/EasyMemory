@@ -197,6 +197,7 @@ const routes: [string, RegExp, Handler][] = [
     }
     await addRun(run);
     // 실험판 엔진 대화는 폴더를 대화가 이미 만들었다 → 코스 단계 시작(시작 코드 덮어쓰기 · 지식 후보)은 하지 않는다
+    if (chatWs) await (await import("../lib/learn.ts")).markChatFolder(chatWs);
     const out = chatWs ? { workspace: chatWs } : await startStage(run.id, plan.start);
     await setActive(run.id);
     let editor: unknown = null;
@@ -319,6 +320,7 @@ const routes: [string, RegExp, Handler][] = [
     const v = run.codexId ? await (await import("../lib/codex-chat.ts")).setOptions(run.codexId, { workspace: String(b.path ?? "") }) : await (await import("../lib/agent-chat.ts")).setChatWorkspace(run.chatId!, String(b.path ?? ""));
     const course = await loadCourse(run.courseId);
     await saveRun(run.id, (r) => { r.workspaces[course.stages.find((s) => s.n === r.current)!.template] = v.workspace; });
+    await (await import("../lib/learn.ts")).markChatFolder(v.workspace);
     notifyLesson(run.id);
     return { workspace: v.workspace };
   }],
