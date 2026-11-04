@@ -11,9 +11,10 @@
   <div class="brand"><span class="mark">R</span><span>프로젝트 코스</span><span class="tag">실험</span></div>
   <div class="top-right">
     <span id="aiChip" class="chip"></span>
-    <select id="runPick" aria-label="진행 중인 코스"></select>
-    <a class="btn ghost" href="#/lab">AI 실험방</a>
-    <button id="newIntake" class="btn ghost">새 코스 정하기</button>
+    <!-- 11/4 사용자 "예전식은 다 숨겨": 코스 고르기 · 새 코스 정하기 · 실험방 링크는 숨김(주소로는 그대로 열림) -->
+    <select id="runPick" aria-label="진행 중인 코스" hidden></select>
+    <a class="btn ghost" href="#/lab" hidden>AI 실험방</a>
+    <button id="newIntake" class="btn ghost" hidden>새 코스 정하기</button>
   </div>
 </header>
 <div id="nodeWarn" class="banner bad" hidden></div>
