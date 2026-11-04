@@ -1,5 +1,6 @@
 // 코스 진행: 단계 시작(작업 폴더), 예측, 없애 보기, 검사, 힌트, 설명, 빠르게 넘기기, 실습 서버, 요청 보내기.
 // 학습 기록 후보는 학습자가 직접 한 활동에서만 나온다. AI가 정답 줄을 보여 준 뒤의 통과는 "앎"으로 치지 않는다.
+import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -286,8 +287,14 @@ export async function tryRequest(runId: string, input: { method: string; path: s
 function codeCli(args: string[], timeoutMs = 60000) {
   return new Promise<{ ok: boolean; out: string; missing?: boolean }>((resolve) => {
     const quoted = args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(" ");
+    // 11/5 노트북: PATH에 code가 없으면 VS Code 기본 설치 위치의 code.cmd를 쓴다
+    const winCode = () => {
+      const cands = [process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs", "Microsoft VS Code", "bin", "code.cmd"), process.env.ProgramFiles && path.join(process.env.ProgramFiles, "Microsoft VS Code", "bin", "code.cmd")].filter(Boolean) as string[];
+      const hit = cands.find((c) => existsSync(c));
+      return hit ? `"${hit}"` : "code";
+    };
     const child = process.platform === "win32"
-      ? spawn(`code ${quoted}`, { shell: true, windowsHide: true })
+      ? spawn(`${winCode()} ${quoted}`, { shell: true, windowsHide: true })
       : spawn("code", args);
     let out = "";
     child.stdout?.on("data", (c) => { out += c; });
