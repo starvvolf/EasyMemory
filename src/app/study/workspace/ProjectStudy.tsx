@@ -75,12 +75,12 @@ export default function ProjectStudy() {
       {!status ? <p className="small muted">불러오는 중…</p> : starting ? (
         <section className="td-card" style={{ marginTop: 16 }}>
           <p className="eyebrow">실습 서버를 켜는 중이에요</p>
-          <p className="small" style={{ margin: "6px 0 0" }}>몇 초면 돼요. 작업 표시줄에 내려 둔 <b>Recaller 코스</b> 창을 닫으면 다시 꺼져요.</p>
+          <p className="small" style={{ margin: "6px 0 0" }}>몇 초면 돼요.</p>
         </section>
       ) : !status.online ? (
         <section className="td-card" style={{ marginTop: 16 }}>
           <p className="eyebrow">실습 서버가 꺼져 있어요</p>
-          <p className="small" style={{ margin: "6px 0 12px" }}>{status.error ? `저절로 켜지 못했어요(${status.error}). ` : ""}<b>프로젝트코스 실험</b> 파일을 두 번 눌러 켠 다음, 아래 버튼을 눌러 주세요.</p>
+          <p className="small" style={{ margin: "6px 0 12px" }}>{status.error ? `저절로 켜지 못했어요(${status.error}). ` : ""}실습 서버는 Recaller 앱을 켤 때 같이 켜져요. 잠시 뒤 아래 버튼을 누르거나, 앱을 껐다 켜 주세요.</p>
           <button className="btn primary small" onClick={() => { setMsg(null); void load().then(() => sync(true)); }}>다시 확인</button>
         </section>
       ) : (
