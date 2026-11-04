@@ -8,7 +8,7 @@ import path from "node:path";
 import { ROOT, listCourses, loadCourse, knowledgeName, type Course } from "../lib/course.ts";
 import { answer, diagnose, getIntake, markConfirmed, normalizePlan, startIntake } from "../lib/intake.ts";
 import { PORTS, openAtStartup, updateBridgeIfOld, check, devStatus, explain, hint, openEditor, predict, skip, startDev, startStage, stopDev, tryRequest, workspaceOf, workspaceStage } from "../lib/learn.ts";
-import { addRun, candidates, getRun, recordsFile, runs, setActive, type Run } from "../lib/store.ts";
+import { addRun, candidates, getRun, recordsFile, runs, saveRun, setActive, type Run } from "../lib/store.ts";
 import { aiStatus } from "../lib/ai.ts";
 import { knowledgeExport, notesView } from "../lib/notes.ts";
 import { markSent, pending } from "../lib/sync.ts";
@@ -158,13 +158,16 @@ const routes: [string, RegExp, Handler][] = [
     const plan = { start: main[0], stages: main, quick: [], transfer: false, reasons: ["프리스타일"], notes: [], minutes: main.length * 5 };
     const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), plan, current: plan.start, workspaces: {}, stages: {}, free: true };
     // 11/4 사용자 "GPT가 만든 것까지 그대로 붙여 봐": 대화는 실험판(agent-chat) 엔진 그대로, 작업 폴더도 그 대화의 폴더(VS Code가 이 폴더를 연다)
+    // 11/4 사용자 A안: course "none"이면 코스 없이 빈 폴더로 시작(인사 서버로 흘러가지 않게)
+    let chatWs: string | null = null;
     if (b.engine !== "lesson" && course.id === "hello-api") {
-      const chat = await (await import("../lib/agent-chat.ts")).newChat();
-      run.chatId = chat.id;
+      const chat = await (await import("../lib/agent-chat.ts")).newChat({ course: b.course === "none" ? null : "hello-api" });
+      run.chatId = chat.id; chatWs = chat.workspace;
       run.workspaces[course.stages.find((s) => s.n === plan.start)!.template] = chat.workspace;
     }
     await addRun(run);
-    const out = await startStage(run.id, plan.start);
+    // 실험판 엔진 대화는 폴더를 대화가 이미 만들었다 → 코스 단계 시작(시작 코드 덮어쓰기 · 지식 후보)은 하지 않는다
+    const out = chatWs ? { workspace: chatWs } : await startStage(run.id, plan.start);
     await setActive(run.id);
     let editor: unknown = null;
     // 11/4 사용자 "홈에서 시작하면 대화창으로": 웹 화면에서 시작하면 VS Code만 열고 튜터 창은 띄우지 않는다(float: false)
@@ -257,7 +260,18 @@ const routes: [string, RegExp, Handler][] = [
     else void lessonAsk(run.id, run.current, plan, String(b.question ?? ""), quote).catch((e) => console.error(e));
     return { ok: true };
   }],
-  ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (_q, m) => { const out = await openEditor(m[1]); openFloat(m[1], PORT); return out; }],
+  ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (req, m) => { const b = await body(req).catch(() => ({} as Record<string, unknown>)); const out = await openEditor(m[1]); if (b.float !== false) openFloat(m[1], PORT); return out; }],
+  // 11/4 사용자 "현재 작업 폴더 위치도 사람이 보고 수정 가능하게": 대화(실험판 엔진)의 작업 폴더를 바꾼다. VS Code도 그 폴더를 연다
+  ["POST", /^\/api\/runs\/(\w+)\/workspace$/, async (req, m) => {
+    const b = await body(req);
+    const run = await getRun(m[1]);
+    if (!run.chatId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
+    const v = await (await import("../lib/agent-chat.ts")).setChatWorkspace(run.chatId, String(b.path ?? ""));
+    const course = await loadCourse(run.courseId);
+    await saveRun(run.id, (r) => { r.workspaces[course.stages.find((s) => s.n === r.current)!.template] = v.workspace; });
+    notifyLesson(run.id);
+    return { workspace: v.workspace };
+  }],
   // 튜터 창(lib/float.ts): 창이 0.25초마다 묻는다
   // 코스 생성(lib/generate.ts): 목표 → 목차 → 1단계(관문) — AI 사용량이 든다
   // 캐시 원인 확인(11/3): 마지막 튜터 요청을 변형해 두 번씩 보내 캐시 읽기를 본다(AI 사용량 듦, 사람이 부를 때만)

@@ -206,6 +206,7 @@ function policyPlugin(fake: boolean) {
           : l?.io.stuck ? new Set([...BASIC, ...STUCK])
           : l?.io.scope?.length ? new Set([...BASIC, ...EDITS]) : new Set(BASIC);
         for (const k of Object.keys(ev.tools)) if ((!SHOWN.has(k) && !custom.has(k)) || !allow.has(k)) delete ev.tools[k];
+        for (const k of l?.io.learningChat?.hide ?? []) delete ev.tools[k];
       });
       await ctx.permission.hook("evaluate", (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);

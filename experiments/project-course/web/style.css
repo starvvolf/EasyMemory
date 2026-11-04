@@ -711,3 +711,8 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .home2 .hitem { display: flex; gap: 12px; align-items: center; text-align: left; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .home2 .hitem:hover { background: var(--hover, rgba(0,0,0,.05)); }
 .home2 .hitem .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 작업 폴더 줄(11/4) */
+.wsbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line, #e5e5e5); font-size: 13px; }
+.wsbar .wsp { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsbar.edit .wsin { flex: 1; min-width: 0; font: 13px ui-monospace, Consolas, monospace; padding: 4px 6px; }
