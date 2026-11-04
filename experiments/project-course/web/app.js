@@ -1427,6 +1427,7 @@ function goalStuckCard(g, send) {
 const KIND_KO = { asked: "물어봄", confused: "헷갈림", misconception: "틀리게 앎", explained: "자기 말로 설명", applied: "직접 써 봄" };
 const learnedUi = { open: false };
 function learnedBar(lesson) {
+  if (lesson.records) return recordsBar(lesson);
   const items = lesson.learned || [];
   if (!items.length) return null;
   const byConcept = new Map();
@@ -1436,6 +1437,19 @@ function learnedBar(lesson) {
   return h("div", { class: "learned" }, head, h("ul", {}, [...byConcept].map(([c, xs]) => h("li", {},
     h("b", {}, c), " ", xs.map((x) => h("span", { class: `lk ${x.kind}`, title: `"${x.quote}"` }, KIND_KO[x.kind] ?? x.kind)),
     xs[0].meaning ? h("div", { class: "mut small" }, xs[0].meaning) : null))));
+}
+
+/* 목표 정리(11/5 사용자 "목표가 끝나면 쭉 대화 기록 받아서 정리, 학습자가 어떤 절차를 거쳐서 뭘 배웠는지") */
+function recordsBar(lesson) {
+  const rs = lesson.records || [];
+  if (!rs.length) return null;
+  const head = h("button", { class: "lhead", onclick: () => { learnedUi.open = !learnedUi.open; drawLesson(); } }, `끝낸 목표 정리 ${rs.length}개`, h("span", { class: "mut small" }, learnedUi.open ? " 접기" : " 펼치기"));
+  if (!learnedUi.open) return h("div", { class: "learned" }, head);
+  return h("div", { class: "learned" }, head, h("ul", {}, [...rs].reverse().map((r) => h("li", {},
+    h("b", {}, r.goal), h("span", { class: `lk ${r.status === "마침" ? "applied" : ""}` }, r.status),
+    r.summary ? h("div", { class: "small" }, r.summary) : null,
+    r.steps?.length ? h("div", { class: "mut small" }, "과정: ", r.steps.join(" → ")) : null,
+    r.learned?.length ? h("div", { class: "small" }, "배운 것: ", r.learned.map((x) => h("span", { class: "lk", title: [x.meaning, x.quote ? `"${x.quote}"` : ""].filter(Boolean).join("\n") }, `${x.concept} · ${x.how}`))) : null))));
 }
 
 /* 대화 설정(11/4 사용자): 모델 고르기 · 파일 고치기 허락(처음에 묻고, 작업 폴더 줄에서 바꿈) */

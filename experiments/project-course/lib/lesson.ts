@@ -256,6 +256,7 @@ export async function lessonView(runId: string, n: number) {
     thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null,
     stuck: await stuckView(runId), stuckChoices: Object.values(CHOICES).map((c) => c.label), free: !!run.free,
     ...(run.codexId ? await codexPart(run.codexId) : run.chatId ? await chatPart(run.chatId) : {}),
+    ...(run.codexId || run.chatId ? { records: await (await import("./goal-record.ts")).recordsOf(runId) } : {}),
     ...(run.codexId || run.chatId ? { goals: await (await import("./goals.ts")).goalsView(runId) } : {}) };
 }
 
@@ -305,7 +306,7 @@ async function codexPart(codexId: string) {
 }
 async function codexAsk(runId: string, codexId: string, text: string) {
   const cx = await import("./codex-chat.ts");
-  await cx.ask(codexId, text, { context: async () => (await import("./goals.ts")).goalContext(runId) });
+  await cx.ask(codexId, text, { context: async () => (await import("./goals.ts")).goalContext(runId), noLearned: true });
   // Codex 대화는 파일에 바로 쓴다 → 답하는 동안 0.45초마다 화면에 알리고, 끝나면 한 번 더(배운 것 뽑기 뒤에도 한 번)
   clearInterval(chatPolls.get(runId));
   chatPolls.set(runId, setInterval(async () => {
@@ -314,6 +315,15 @@ async function codexAsk(runId: string, codexId: string, text: string) {
   }, 450));
 }
 const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
+/** 끝난 목표를 정리한다(그 목표가 시작된 뒤의 대화 전체, 버튼 말은 짧게, 도구는 한 줄) */
+async function recordFinished(runId: string, run: { codexId?: string; chatId?: string }, goal: { title: string; done: string; understood: boolean; applied: boolean; at: string }, mode: string | null) {
+  const msgs: { role: string; text: string; at: string }[] = run.codexId
+    ? (await (await import("./codex-chat.ts")).chatOf(run.codexId)).messages
+    : (await (await import("./agent-chat.ts")).chatOf(run.chatId!)).messages;
+  const show = (m: { role: string; text: string }) => m.role === "user" ? `[학습자] ${shownUser(m.text)}` : m.role === "assistant" ? `[튜터] ${m.text.slice(0, 2500)}` : m.role === "tool" ? `[도구] ${m.text.split("\n")[0].slice(0, 120)}` : "";
+  const rec = await (await import("./goal-record.ts")).recordGoal(runId, goal, mode, msgs, show).catch(() => null);
+  if (rec) notifyLesson(runId);
+}
 async function chatAsk(runId: string, chatId: string, text: string) {
   const ac = await import("./agent-chat.ts");
   const G = await import("./goals.ts");
@@ -321,10 +331,7 @@ async function chatAsk(runId: string, chatId: string, text: string) {
   const ext = { context: () => G.goalContext(runId), hide: ["adjust_learning", "get_learning_state", "get_course_material"], tool: (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner), onTool: () => notifyLesson(runId) };
   const job = ac.askChat(chatId, text, undefined, ext).catch(() => {}).finally(async () => {
     clearInterval(chatPolls.get(runId)); chatPolls.delete(runId); notifyLesson(runId);
-    // 11/4 사용자 "배운 것 갱신": 답이 끝난 뒤 뒤에서 새 대화만 한 번(답 속도에는 영향 없음). 끄기 PC_CHAT_LEARNED=0
-    if (process.env.PC_CHAT_LEARNED === "0") return;
-    const got = await (await import("./chat-learned.ts")).extractLearned(chatId, (await ac.chatOf(chatId)).messages).catch(() => null);
-    if (got?.ok.length) notifyLesson(runId);
+    // 11/5 사용자 "질문 단위가 아니라 목표가 끝나면 정리": 질문마다 뽑던 것(chat-learned)은 제품 대화에서 끔 → 목표 정리(goal-record)
   });
   // 실험판은 대화 파일에 바로 쓴다 → 답하는 동안 화면에 0.45초마다 알린다(SSE)
   clearInterval(chatPolls.get(runId));
@@ -372,7 +379,11 @@ export async function act(runId: string, n: number, input: { do: string; choice?
 
   // 학습 목표 버튼(11/4): 이해 · 적용 · 보충 끝은 AI 안 부름. 다음으로 · 확정 · 막혔어요 · 설문 답은 튜터에게 한 번
   if ((run.codexId || run.chatId) && input.do === "goal") {
-    const say = await (await import("./goals.ts")).goalAction(runId, String((input as { op?: string }).op ?? ""), input as Record<string, unknown>);
+    const op = String((input as { op?: string }).op ?? "");
+    const before = op === "next" ? await (await import("./goals.ts")).goalsOf(runId) : null;
+    const say = await (await import("./goals.ts")).goalAction(runId, op, input as Record<string, unknown>);
+    // 11/5 사용자 "각 목표가 끝나면 쭉 대화 기록 받아서 정리(학습자가 어떤 절차를 거쳐서 뭘 배웠는지)": 뒤에서 한 번
+    if (before?.current) void recordFinished(runId, run, before.current, before.mode);
     notifyLesson(runId);
     if (say) { if (run.codexId) await codexAsk(runId, run.codexId, say); else await chatAsk(runId, run.chatId!, say); }
     return;

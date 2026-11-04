@@ -171,7 +171,7 @@ function label(item: any): string {
 }
 
 /** ext.context: 제품 대화(11/4)가 매 차례 붙이는 학습 목표 맥락 */
-export async function ask(id: string, text: string, ext?: { context?: () => Promise<string> }) {
+export async function ask(id: string, text: string, ext?: { context?: () => Promise<string>; noLearned?: boolean }) {
   const q = String(text ?? "").trim();
   if (!q || q.length > 12000) throw err(400, "질문은 1~12,000자로 적어 주세요.");
   if (active.has(id)) throw err(409, "아직 답하는 중이에요.");
@@ -186,7 +186,7 @@ export async function ask(id: string, text: string, ext?: { context?: () => Prom
   return view(id);
 }
 
-async function run(id: string, q: string, exe: string, Codex: any, ac: AbortController, ext?: { context?: () => Promise<string> }) {
+async function run(id: string, q: string, exe: string, Codex: any, ac: AbortController, ext?: { context?: () => Promise<string>; noLearned?: boolean }) {
   const t0 = Date.now();
   const log: Record<string, unknown> = { at: now(), chatId: id };
   try {
@@ -246,7 +246,8 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     await mkdir(dir(), { recursive: true }).catch(() => {});
     await appendFile(logFile(), JSON.stringify(log) + "\n").catch(() => {});
     // 배운 것 뽑기(답이 끝난 뒤, 새 대화만). 끄기 PC_CHAT_LEARNED=0
-    if (process.env.PC_CHAT_LEARNED !== "0") {
+    // 제품 대화는 질문마다 뽑지 않고 목표가 끝날 때 정리한다(11/5, noLearned)
+    if (process.env.PC_CHAT_LEARNED !== "0" && !ext?.noLearned) {
       const c = await chatOf(id).catch(() => null);
       if (c) await (await import("./chat-learned.ts")).extractLearned(learnKey(id), c.messages.filter((m) => m.role === "user" || m.role === "assistant")).catch(() => null);
     }
