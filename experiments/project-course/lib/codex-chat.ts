@@ -213,6 +213,8 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     }
   }
 }
+/** 이 대화의 작업 폴더를 VS Code로 연다(11/4 사용자 "맞는 작업 폴더가 안 열리는 것 같은데") */
+export async function openInCode(id: string) { const c = await chatOf(id); return (await import("./learn.ts")).openFolderInCode(wsOf(c)); }
 export function stop(id: string) { active.get(id)?.abort(); return view(id); }
 
 /* ---------- MCP 도구가 부르는 것(튜터로서 필요한 것만) ---------- */

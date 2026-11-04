@@ -103,6 +103,7 @@ const routes: [string, RegExp, Handler][] = [
   ["POST", /^\/api\/codex-chat$/, async () => (await import("../lib/codex-chat.ts")).create()],
   ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})$/, async (_q, m) => (await import("../lib/codex-chat.ts")).view(m[1])],
   ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/ask$/, async (req, m) => (await import("../lib/codex-chat.ts")).ask(m[1], String((await body(req)).text ?? ""))],
+  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/open$/, async (_q, m) => (await import("../lib/codex-chat.ts")).openInCode(m[1])],
   ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/stop$/, async (_q, m) => (await import("../lib/codex-chat.ts")).stop(m[1])],
   ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/options$/, async (req, m) => (await import("../lib/codex-chat.ts")).setOptions(m[1], await body(req))],
   ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})\/learner$/, async (_q, m) => ({ text: await (await import("../lib/codex-chat.ts")).learnerProfile(m[1]) })],

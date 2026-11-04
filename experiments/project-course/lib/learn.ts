@@ -342,6 +342,13 @@ export async function openEditor(runId: string) {
   };
 }
 
+/** 폴더 하나를 VS Code로 연다(11/4 Codex 실험판: 그 대화의 작업 폴더) */
+export async function openFolderInCode(folder: string) {
+  if (!(await exists(folder))) throw err(409, "작업 폴더가 없어요.");
+  const opened = await codeCli([folder], 20000);
+  return { ok: opened.ok, path: folder, message: opened.ok ? "" : `VS Code를 열지 못했어요(code 명령). VS Code에서 [파일 → 폴더 열기]로 이 경로를 열어 주세요: ${opened.out.slice(0, 160)}` };
+}
+
 /* ---------- 시작 폴더(로비) ---------- */
 // 진행 중인 코스가 없을 때 VS Code가 여는 빈 폴더. 확장은 여기서도 켜져서 오른쪽 탭에 "코스 정하기"를 띄운다.
 export const LOBBY = path.join(DATA, "lobby");
