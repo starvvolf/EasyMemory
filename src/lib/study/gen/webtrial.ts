@@ -9,6 +9,7 @@ import { callModel, type ModelCaller, type ModelRequest } from "../../ai/model.t
 import { astraJsonSchema } from "./astra.ts";
 import { cardLine, checkCards, ORGANIZE, organizeSchema, type Card } from "./cards.ts";
 import { MERGE, mergeReplySchema, coreMax, sameNames, unfoldMerge } from "./recaller.ts";
+import { SOURCE_EN, sourceLanguage } from "./digest.ts";
 import { dataRoot, GenError, partialJson } from "./runner.ts";
 
 export const webBlockSchema = z.object({
@@ -170,7 +171,10 @@ export async function runWebTrial(id: string, caller: ModelCaller, options: { me
   const full = chunks.map((c) => `§${c.n} ${c.title}\n${c.text}`).join("\n\n");
   const schema = astraJsonSchema(organizeSchema);
 
+  // 영어 글 (11/5): the same "영어(한국어)" rule as the PDF path, on the instructions and on the cached prefix.
+  const english = sourceLanguage(chunks.map((c) => c.text)) === "en";
   const ask = async (method: Method, step: Call["step"], chunk: number | null, request: Omit<ModelRequest, "caller" | "model" | "effort" | "purpose">) => {
+    if (english) request = { ...request, system: `${request.system ?? ""}\n${SOURCE_EN}`, ...(request.cachePrefix ? { cachePrefix: `${request.cachePrefix}\n${SOURCE_EN}` } : {}) };
     const t0 = Date.now(); let ttft: number | null = null;
     const call: Call = { method, step, chunk, ms: 0, ttft: null, ok: false, images: request.images?.length ?? 0, replyChars: 0 };
     trial.calls.push(call);

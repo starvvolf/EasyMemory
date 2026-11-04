@@ -20,7 +20,7 @@ import { citedPages, pagesOutside, summaryUser } from "./summary.ts";
 import { quizRank, cleanText, oxNotesOf, writeDrafts, Q_WRITE, qWriteSchema, QUIZ_MIX_SHORT, Q_PICK, Q_PICK_GOALS, qPickSchema, mixCounts, sameAsk, answerInStem, buildChoice, choicePool, clozeDrafts, focusOf, nextFormat, oxDrafts, sameQuestion, quizFakeReply, Q_CHOICE, Q_CLOZE, Q_EXPLAIN, Q_MATERIAL, Q_SCORE,
   blankMatches, qChoiceSchema, qClozeSchema, qExplainSchema, qMaterialSchema, qScoreSchema, type QuizDraft, type QuizFormat } from "./quiz.ts";
 import { parseObjectives, PLAN_TASK_GOALS, PLAN_TASK_CONCEPTS, planTaskGiven, parseConcepts, sourceGroups, OBJECTIVES_SYSTEM, objectivesUser, batchLines, DIGEST_CARD, ONE_OUTLINE_END, ONE_SYSTEM, ONE_UNIV_SYSTEM, PLAN_COMMON, PLAN_TASK, assembleTask, planKinds, topicPlanSystem, oneDomains, oneTopicText, oneUser, splitOne, digestFakeReply, digestOverlaps, fallbackTopics, parseSkeleton, parseTopic, settleSkeleton, SKELETON_SYSTEM, skeletonLines, skeletonUser, TOPIC_SYSTEM, topicPages, topicUser, WRAP_SYSTEM,
-  type DigestLine, type DigestState, type DigestTopic } from "./digest.ts";
+  SOURCE_EN, sourceLanguage, type DigestLine, type DigestState, type DigestTopic } from "./digest.ts";
 
 const text = z.string().trim().min(1);
 export const formats = ["choice", "ox", "short", "cloze", "flashcard"] as const;
@@ -88,6 +88,8 @@ export type RecallerState = {
   prep?: { version: string; pages: Array<{ page: number; title: string; route: PrepRoute; score: number; reasons: string[] }> };
   /** Final page text every step reads: the cleaned text layer, the model's reading for picture pages. */
   texts: Record<string, string>;
+  /** The material's language (sourceLanguage), decided once its page texts are known. */
+  lang?: "en" | "ko";
   read: { pages: number[]; done: number[]; failed: number[] };
   units: Record<string, Unit>;
   groups?: Array<{ id: string; cardIds: string[]; idea: string }>;
@@ -442,6 +444,14 @@ export async function runRecaller(ctx: RecallerContext) {
   const data = (state.recaller ??= { version: 1, texts: {}, read: { pages: [], done: [], failed: [] }, units: {}, deep: {}, warnings: [], timing: { startedAt: new Date().toISOString() } });
   const hash = ctx.pdf?.length ? createHash("sha256").update(ctx.pdf).digest("hex") : `pages:${input.sourceId}`;
   data.pdfHash ??= hash;
+  // 영어 자료 (11/5): every call that writes for the learner gets SOURCE_EN once the page texts are known (a transcription
+  // of a picture page stays in the page's own language).
+  const langOf = () => data.lang ?? (Object.keys(data.texts).length ? (data.lang = sourceLanguage(Object.values(data.texts))) : undefined);
+  const withLang = (step: GenStep | "transcribe", system: string) => step !== "transcribe" && langOf() === "en" ? `${system}\n${SOURCE_EN}` : system;
+  const baseAsk = ctx.ask, baseAskText = ctx.askText;
+  ctx = { ...ctx,
+    ask: ((step, sectionId, attempt, system, ...rest) => baseAsk(step, sectionId, attempt, withLang(step, system), ...rest)) as RecallerAsk,
+    askText: (step, page, attempt, system, ...rest) => baseAskText(step, page, attempt, withLang(step, system), ...rest) };
 
   // ① 종합 문제: no new pages. Each earlier run becomes one section holding its cards (ids m1.…) and its page texts.
   const combine = Boolean(input.combine?.length);
@@ -1265,6 +1275,9 @@ export async function runRecaller(ctx: RecallerContext) {
     return authorCard(section, k, card);
   };
   const authorCard = async (section: SectionState, k: number, card: Card) => {
+    // 요약 → 카드 (lab.digest) makes questions only with the luna quiz; without it the run stops at the cards
+    // (11/5 사용자: 주제 요약만 비교하려고 퀴즈를 껐는데 예전 문제 만들기가 돌아 $0.25가 더 들었다).
+    if (lab.digest && lab.quiz !== "luna") return;
     const unit = data.units[section.id];
     const chunk = unit.chunks![k];
     if (chunk.questions?.some((q) => q.cardIds.includes(card.id)) || chunk.held?.some((h) => h.cardId === card.id)) return;

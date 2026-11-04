@@ -315,3 +315,33 @@ test("프롬프트 점검 (GPT 11/4): 빈칸 호출도 고른 지점(ask)을 받
   assert.ok(cloze.length >= 1, "빈칸 호출이 있다(가짜 고르기는 4문항이면 빈칸부터)");
   assert.ok(cloze.every((c) => (JSON.parse(c.user ?? "{}") as { ask?: string }).ask?.startsWith("가짜 지점")), "빈칸 호출에 ask");
 }));
+
+test("lab.digest without the luna quiz stops at the cards: no 예전 문제 만들기 (11/5)", () => withData(async () => {
+  const io = { pdf: async () => null, pages: async () => pages };
+  const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake", lab: { digest: true, digestStyle: "plan", digestTopicCards: true } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, io);
+  assert.equal(done.status, "done", done.message);
+  const steps = (await readGenCalls(done.id)).map((c) => c.step);
+  assert.ok(steps.includes("rc-digest-card"), "카드는 만든다");
+  assert.ok(!steps.some((s) => s === "rc-author" || s === "rc-check" || s.startsWith("rc-q-")), steps.join(","));
+}));
+
+test("영어 자료 (11/5): 영어면 글을 쓰는 호출마다 \"영어(한국어)\" 규칙이 붙고, 한국어 자료에는 붙지 않는다", async () => {
+  const { sourceLanguage, SOURCE_EN } = await import("./digest.ts");
+  assert.equal(sourceLanguage([...pages.values()]), "en");
+  assert.equal(sourceLanguage(["# 교착 상태\n- 프로세스 집합이 서로의 자원을 기다리는 상태 (Deadlock)"]), "ko");
+  assert.equal(sourceLanguage(["# 표지", "1 2 3"]), "ko");
+  for (const [label, src] of [["en", pages], ["ko", new Map([[1, "# 후면 제거\n- 법선이 보는 사람 반대쪽을 향하면 후면이다. 이런 다각형은 그리지 않는다."], [2, "# 깊이 버퍼\n- 저장된 깊이보다 가까울 때만 그린다."], [3, "# 주사선 방법\n- 주사선마다 만나는 변의 목록을 둔다."]])]] as const) {
+    await withData(async () => {
+      const io = { pdf: async () => null, pages: async () => src };
+      const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake", lab: { digest: true, digestStyle: "plan", digestTopicCards: true, quiz: "luna", quizCount: 2 } });
+      const done = await runGen(start.id, { uid: "local-experiment" }, io);
+      assert.equal(done.status, "done", done.message);
+      const calls = await readGenCalls(done.id);
+      const written = calls.filter((c) => ["rc-digest-plan", "rc-topic", "rc-digest-card", "rc-q-material", "rc-q-explain"].includes(c.step));
+      assert.ok(written.length >= 4, label);
+      assert.ok(written.every((c) => (c.system ?? "").includes(SOURCE_EN) === (label === "en")), `${label}: ${written.map((c) => c.step).join(",")}`);
+      assert.equal(done.recaller!.lang, label);
+    });
+  }
+});
