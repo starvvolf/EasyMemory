@@ -5,6 +5,8 @@
 import { askJson, S } from "../assist/model.ts";
 import { KIND_LABEL, pathOf, readAll, sortItems, type KKind, type Knowledge } from "./store.ts";
 
+// 모델은 기본값 terra·low (2026-11-05 luna 비교, 30개씩 PS·웹 글·PDF): luna는 주제를 "CS/알고리즘" 하나에 몰거나(PS) ETF를 가치평가,
+// 캐시를 해시에 넣었다(웹 글). luna용 단계 규칙 프롬프트로 바꾸자 반대로 지식마다 폴더를 쪼갰다. 속도도 terra와 비슷해 terra 유지(사용자).
 const BATCH = 30, BATCHES_PER_RUN = 4;
 const KINDS = Object.keys(KIND_LABEL) as KKind[];
 
