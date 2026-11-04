@@ -1350,7 +1350,10 @@ function drawFree() {
   const foot = h("footer", { class: "freefoot" },
     lesson.chat ? null : stuckBar(lesson, send), lesson.chat ? null : stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
     h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
-    lesson.chat && lesson.goals && !lesson.busy ? h("div", { class: "fquick" }, h("button", { class: `fchip warm ${goalUi.stuck ? "on" : ""}`, onclick: () => { goalUi.stuck = !goalUi.stuck; drawLesson(); } }, "막혔어요")) : null,
+    // 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
+    lesson.chat && lesson.goals && !lesson.busy ? h("div", { class: "fquick" },
+      h("button", { class: "fchip", onclick: send({ do: "goal", op: "easy" }) }, "너무 쉬워요"),
+      h("button", { class: `fchip warm ${goalUi.stuck ? "on" : ""}`, onclick: () => { goalUi.stuck = !goalUi.stuck; drawLesson(); } }, "너무 어려워요")) : null,
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
     h("div", { class: "grow" }, h("b", {}, lesson.chat ? (lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · ${lesson.chat.engine === "codex" ? "Codex" : "기존"} 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
@@ -1360,7 +1363,7 @@ function drawFree() {
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
     FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);
-  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat ? wsBar(run, lesson) : null, lesson.goals ? goalBar(lesson, send) : null, lesson.chat ? learnedBar(lesson) : null, list, lesson.chat && !lesson.chat.edit ? editAsk(run) : null, foot));
+  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat?.engine === "codex" && lesson.chat.codexLogin === false ? h("div", { class: "editask" }, h("span", { class: "grow" }, "Codex 버전은 Recaller 전용 Codex 로그인이 한 번 필요해요(평소 Codex 앱 설정 · 기억과 섞이지 않게)."), h("button", { class: "btn small primary", onclick: (e) => busy(e.target, async () => { const r = await api("POST", "/api/codex-chat/login"); toast(r.already ? "이미 로그인돼 있어요." : "브라우저에서 ChatGPT로 로그인해 주세요. 끝나면 이 화면을 새로고침해요."); }) }, "Codex 로그인")) : null, lesson.chat ? wsBar(run, lesson) : null, lesson.goals ? goalBar(lesson, send) : null, lesson.chat ? learnedBar(lesson) : null, list, lesson.chat && !lesson.chat.edit ? editAsk(run) : null, foot));
   list.scrollTop = list.scrollHeight;
   if (!FLOAT) window.scrollTo({ top: document.body.scrollHeight });
   tyAfterDraw();
@@ -1408,10 +1411,10 @@ function goalPlanCard(p, send) {
     h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: send({ do: "goal", op: "confirm" }) }, "확정"), h("button", { class: "btn small", onclick: send({ do: "goal", op: "dismiss_plan" }) }, "다시 얘기하기")));
 }
 function goalStuckCard(g, send) {
-  return h("div", { class: "gcard" }, h("div", { class: "gqq" }, "어디서 막혔어요? 해당하는 걸 골라 주세요"),
+  return h("div", { class: "gcard" }, h("div", { class: "gqq" }, "어디가 어려워요? 아는 만큼만 골라 주세요(안 골라도 돼요)"),
     h("div", { class: "gopts col" }, g.stuckReasons.map((r) => h("button", { class: `gopt ${goalUi.reasons.has(r) ? "on" : ""}`, onclick: () => { goalUi.reasons.has(r) ? goalUi.reasons.delete(r) : goalUi.reasons.add(r); drawLesson(); } }, r))),
-    h("input", { class: "gin", placeholder: "구체적으로 적어도 돼요(예: cache(1)이 왜 안 되는지)", value: goalUi.stuckText, oninput: (e) => { goalUi.stuckText = e.target.value; } }),
-    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: (e) => { const reasons = [...goalUi.reasons], text = goalUi.stuckText; goalUi.stuck = false; goalUi.reasons = new Set(); goalUi.stuckText = ""; send({ do: "goal", op: "stuck", reasons, text })(e); } }, "보충 열기"),
+    h("input", { class: "gin", placeholder: "적어도 되고 안 적어도 돼요(예: cache(1)이 왜 안 되는지)", value: goalUi.stuckText, oninput: (e) => { goalUi.stuckText = e.target.value; } }),
+    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: (e) => { const reasons = [...goalUi.reasons], text = goalUi.stuckText; goalUi.stuck = false; goalUi.reasons = new Set(); goalUi.stuckText = ""; send({ do: "goal", op: "hard", reasons, text })(e); } }, "한 단계 내려가기"),
       h("button", { class: "btn small", onclick: () => { goalUi.stuck = false; drawLesson(); } }, "취소")));
 }
 

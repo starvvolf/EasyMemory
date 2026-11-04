@@ -79,7 +79,7 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       if (!g.long) throw err("아직 장기 목표가 없어요. 먼저 propose_plan으로 제안하세요.");
       // 바꿀 수 있는 때: 현재 목표가 없을 때 · 학습자가 [다음으로]를 누른 직후 · [확정] 직후(첫 목표를 다듬기). 그 밖엔 학습자 버튼으로만
       const last = [...g.log].reverse().find((l) => !["survey", "answer", "map"].includes(l.kind))?.kind;
-      if (g.current && last !== "next" && last !== "confirm") throw err("현재 목표가 진행 중이에요. 학습자가 [다음으로]를 누르면 바꿀 수 있어요.");
+      if (g.current && last !== "next" && last !== "confirm" && last !== "easy") throw err("현재 목표가 진행 중이에요. 학습자가 [다음으로]를 누르면 바꿀 수 있어요.");
       const item = g.map.find((m) => m.status === "doing") ?? g.map.find((m) => m.status === "todo");
       if (item) item.status = "doing";
       g.current = { id: nid(), title: s(input.title, 120), done: s(input.done, 200), understood: false, applied: false, mapId: item?.id, at: now() };
@@ -110,6 +110,7 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
 
 /* ---------- 학습자 버튼(코드) ---------- */
 export const STUCK_REASONS = Object.values(CHOICES).map((c) => c.label);
+// 너무 어려워요(11/5)는 이유를 안 골라도 된다
 /** 버튼 하나를 처리하고, 튜터에게 보낼 말이 있으면 돌려준다(없으면 null = AI 안 부름) */
 export async function goalAction(runId: string, op: string, b: Record<string, unknown>): Promise<string | null> {
   let say: string | null = null;
@@ -150,14 +151,20 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
         ? nextItem ? `[다음으로] "${c.title}"을(를) ${full ? "마쳤어요" : "여기까지 하고 넘어갈게요"}. 지도의 다음 단계는 "${nextItem.title}"이에요. set_current_goal로 지금 할 만큼 구체적인 현재 목표와 완료 조건을 정하고 바로 시작해 주세요.`
           : `[다음으로] "${c.title}"을(를) ${full ? "마쳤어요" : "여기까지 하고 넘어갈게요"}. 지도의 단계를 다 지났어요. 장기 목표가 다 됐는지 같이 보고, 더 할 게 있으면 update_map으로 단계를 더한 뒤 set_current_goal로 정해 주세요.`
         : `[다음으로] "${c.title}"을(를) ${full ? "마쳤어요" : "여기까지 하고 넘어갈게요"}. 여기서 넓혀 볼 다음 작은 것을 하나 정해 set_current_goal로 정하고 바로 시작해 주세요.`;
-    } else if (op === "stuck") {
+    } else if (op === "easy") {
+      // 11/5 사용자 "너무 쉬워 / 너무 어려워 두 개가 막혔어요보다 낫다": 쉬우면 수준을 올리고, 필요하면 현재 목표를 더 어렵게 다듬게 한다
+      logIt(g, "easy", g.stack.at(-1)?.title ?? g.current?.title ?? "");
+      const at = g.stack.at(-1)?.title ?? g.current?.title ?? "지금 하던 것";
+      say = `[너무 쉬워요] 지금 "${at}"이(가) 너무 쉬워요. 이미 아는 부분은 건너뛰고 수준을 올려 주세요.${g.current && !g.stack.length ? " 현재 목표가 너무 쉬우면 set_current_goal로 더 어려운 목표와 완료 조건으로 다듬어도 돼요." : ""}`;
+    } else if (op === "stuck" || op === "hard") {
       const reasons = (Array.isArray(b.reasons) ? b.reasons : []).map((r) => String(r)).filter((r) => STUCK_REASONS.includes(r));
       const text = String(b.text ?? "").trim().slice(0, 500);
-      if (!reasons.length && !text) throw err("막힌 이유를 하나 이상 고르거나 적어 주세요.");
+      if (op === "stuck" && !reasons.length && !text) throw err("막힌 이유를 하나 이상 고르거나 적어 주세요.");
+      if (!reasons.length && !text) reasons.push("너무 어려워요(어디가 어려운지는 모르겠어요)");
       g.stuck = { reasons, text, at: now() };
       logIt(g, "stuck", [...reasons, text].join(" · "));
       const at = g.stack.at(-1)?.title ?? g.current?.title ?? "지금 하던 것";
-      say = `[막혔어요] 지금: "${at}". 막힌 이유(학습자가 고름): ${[...reasons, text ? `덧붙임: ${text}` : ""].filter(Boolean).join(" · ")}\n학습자는 뭘 모르는지 정확히 모를 수 있어요. 이유를 보고 먼저 알아야 할 것을 open_support로 작은 보충 목표로 열고, 바로 설명을 시작해 주세요.`;
+      say = `[너무 어려워요] 지금: "${at}". 어려운 이유(학습자가 고름): ${[...reasons, text ? `덧붙임: ${text}` : ""].filter(Boolean).join(" · ")}\n학습자는 뭘 모르는지 정확히 모를 수 있어요. 이유를 보고 먼저 알아야 할 것을 open_support로 작은 보충 목표로 열고, 바로 설명을 시작해 주세요.`;
     } else if (op === "mode") {
       if (b.mode !== "topdown" && b.mode !== "bottomup") throw err("mode는 topdown 또는 bottomup이에요.");
       g.mode = b.mode; logIt(g, "mode", b.mode);
@@ -185,6 +192,7 @@ export async function goalContext(runId: string) {
     c ? `현재 목표: ${c.title} — 완료 조건: ${c.done} (이해 ${c.understood ? "✓" : "–"} · 적용 ${c.applied ? "✓" : "–"})` : "현재 목표: 없음 — set_current_goal로 정한다",
     top ? `보충 중(${g.stack.length}겹): ${top.title} — ${top.done} (막힌 이유: ${top.why}). 학습자가 이해했다고 누르면 '${top.from}'로 돌아간다. 지금은 보충에 집중한다.` : "",
     g.survey ? "지금 화면에 질문을 띄워 두었다 — 학습자 답을 기다린다." : "",
+    (() => { const r = g.log.slice(-12); const e = r.filter((l) => l.kind === "easy").length, h = r.filter((l) => l.kind === "stuck").length; return e || h ? `최근 학습자 표시: 너무 쉬움 ${e}번 · 너무 어려움 ${h}번 — 설명 수준을 여기에 맞춘다.` : ""; })(),
     "이해 · 적용 · 다음으로는 학습자가 화면 버튼으로 정한다. 적용은 실행해서 확인할 수 있으면 확인을 도와준다.",
   ].filter(Boolean).join("\n");
 }

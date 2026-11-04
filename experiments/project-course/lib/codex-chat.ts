@@ -9,6 +9,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, appendFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { spawn } from "node:child_process";
 import { DATA, read, update } from "./store.ts";
 import { ROOT } from "./course.ts";
 import { CHAT_MODELS } from "./agent-chat.ts";
@@ -72,17 +73,40 @@ async function sdk() {
 }
 type CodexThread = { id: string | null; runStreamed(input: string, o?: { signal?: AbortSignal }): Promise<{ events: AsyncGenerator<any> }> };
 
-/** 사용자 Codex 설정에 있는 다른 MCP 서버는 이 대화에서 끈다(토론방과 같은 방식) */
+/* Recaller 전용 Codex 설정 폴더(11/5 사용자 "CLAUDE.md 같은 건 안 봐도 되잖아" → 전용 폴더로).
+ * 평소 Codex 설정(.codex)의 기억 · 플러그인 · 다른 MCP가 따라오면 학습 대화 중에 개발용 문서를 찾고 입력도 커진다.
+ * 로그인은 따로 한 번(로그인 파일을 복사하지 않는다: 한쪽이 갱신되면 다른 쪽이 풀릴 수 있음). 깃 · RecallerData에 안 올라가는 사용자 폴더 아래 */
+export const CODEX_HOME = process.env.PC_CODEX_HOME?.trim() || path.join(os.homedir(), ".recaller-codex");
+const loggedIn = () => existsSync(path.join(CODEX_HOME, "auth.json"));
+let loginChild: ReturnType<typeof spawn> | null = null;
+/** 전용 폴더로 codex login을 띄운다(브라우저가 열리고 학습자가 직접 로그인) */
+export async function login() {
+  const exe = findCodex();
+  if (!exe) throw err(503, "이 PC에서 Codex(codex.exe)를 찾지 못했어요.");
+  if (loggedIn()) return { ok: true, already: true, out: "" };
+  await mkdir(CODEX_HOME, { recursive: true });
+  if (!loginChild) {
+    loginChild = spawn(exe, ["login"], { env: { ...process.env, CODEX_HOME }, windowsHide: true });
+    let out = "";
+    loginChild.stdout?.on("data", (c) => { out += c; }); loginChild.stderr?.on("data", (c) => { out += c; });
+    loginChild.on("exit", () => { loginChild = null; });
+    await new Promise((r) => setTimeout(r, 2500));
+    const url = /(https:\/\/\S+)/.exec(out)?.[1] ?? null;
+    return { ok: true, started: true, url, out: out.slice(0, 600) };
+  }
+  return { ok: true, started: true, url: null, out: "로그인 창이 이미 열려 있어요." };
+}
+/** 전용 설정에 다른 MCP 서버가 생겼으면 이 대화에서는 끈다 */
 function otherMcpServers() {
   try {
-    const t = readFileSync(path.join(os.homedir(), ".codex", "config.toml"), "utf8");
+    const t = readFileSync(path.join(CODEX_HOME, "config.toml"), "utf8");
     return [...new Set([...t.matchAll(/^\s*\[mcp_servers\.("?)([^\]".]+)\1\]/gm)].map((m) => m[2]))].filter((n) => n !== "recaller");
   } catch { return []; }
 }
 
 export function codexStatus() {
   const exe = findCodex();
-  return { codex: exe, sdk: existsSync(path.join(ROOT, ".codex-sdk", "node_modules", "@openai", "codex-sdk")), mcp: existsSync(MCP_SCRIPT), node: process.execPath };
+  return { codex: exe, home: CODEX_HOME, loggedIn: loggedIn(), sdk: existsSync(path.join(ROOT, ".codex-sdk", "node_modules", "@openai", "codex-sdk")), mcp: existsSync(MCP_SCRIPT), node: process.execPath };
 }
 
 /* ---------- 대화 저장 ---------- */
@@ -154,6 +178,7 @@ export async function ask(id: string, text: string, ext?: { context?: () => Prom
   const c0 = await chatOf(id);
   const exe = findCodex();
   if (!exe) throw err(503, "이 PC에서 Codex(codex.exe)를 찾지 못했어요. npm 전역에 @openai/codex가 있는지, 또는 PC_CODEX_PATH를 확인해 주세요.");
+  if (!loggedIn()) throw err(401, "Recaller 전용 Codex 로그인이 필요해요. 대화창 위 [Codex 로그인]을 눌러 주세요(처음 한 번).");
   const { Codex } = await sdk();
   const ac = new AbortController(); active.set(id, ac);
   await update<CodexChat>(file(id), c0, (c) => { push(c, "user", q); });
@@ -172,7 +197,7 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     const codex = new Codex({
       codexPathOverride: exe,
       // rg 같은 Codex 도구가 PATH에서 보이게(SDK가 원래 하는 일. 경로를 직접 줘서 우리가 붙인다)
-      env: { ...process.env, PATH: `${path.join(path.dirname(exe), "..", "path")}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}` },
+      env: { ...process.env, CODEX_HOME, PATH: `${path.join(path.dirname(exe), "..", "path")}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}` },
       // Recaller 도구는 승인 없이(approval never에서 MCP 호출이 거절되던 것, 11/4 첫 시험). 키: mcp_servers.<id>.default_tools_approval_mode
       config: { mcp_servers: { ...off, recaller: { command: process.execPath, args: [MCP_SCRIPT], default_tools_approval_mode: "approve", env: { RECALLER_URL: `http://127.0.0.1:${process.env.PC_PORT ?? 4100}`, RECALLER_CHAT: id } } } },
     });

@@ -100,6 +100,7 @@ type Handler = (req: IncomingMessage, m: RegExpExecArray, url: URL) => Promise<u
 const routes: [string, RegExp, Handler][] = [
   // Codex 실험판(11/4 사용자 "SDK로 엔진 교체, MCP 추가한 코덱스 실험판"): /codex-chat.html
   ["GET", /^\/api\/codex-chat$/, async () => ({ chats: await (await import("../lib/codex-chat.ts")).list(), status: (await import("../lib/codex-chat.ts")).codexStatus() })],
+  ["POST", /^\/api\/codex-chat\/login$/, async () => (await import("../lib/codex-chat.ts")).login()],
   ["POST", /^\/api\/codex-chat$/, async () => (await import("../lib/codex-chat.ts")).create()],
   ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})$/, async (_q, m) => (await import("../lib/codex-chat.ts")).view(m[1])],
   ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/ask$/, async (req, m) => (await import("../lib/codex-chat.ts")).ask(m[1], String((await body(req)).text ?? ""))],

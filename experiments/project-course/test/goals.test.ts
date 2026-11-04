@@ -50,3 +50,20 @@ test("보충: [막혔어요] 이유 뒤에만(또는 학습자 말 그대로) �
   await G.runGoalTool(r, "open_support", { title: "키", done: "x", why_quote: "키가 뭔지 모르겠어" }, ["음 키가 뭔지 모르겠어요"]);
   assert.equal((await G.goalsOf(r)).stack.length, 1);
 });
+
+test("너무 쉬워요 · 너무 어려워요(11/5): 쉬우면 수준 올리기(현재 목표 다듬기 허용), 어려우면 이유 없이도 보충", async () => {
+  const r = "run3";
+  await G.runGoalTool(r, "propose_plan", { long: "스택", spec: "", mode: "bottomup", map: [], first: { title: "리스트 인덱스", done: "x" } }, []);
+  await G.goalAction(r, "confirm", {});
+  await G.runGoalTool(r, "set_current_goal", { title: "리스트 인덱스", done: "x" }, []); // 확정 직후 다듬기
+  await G.goalAction(r, "understood", {});
+  await assert.rejects(G.runGoalTool(r, "set_current_goal", { title: "괄호 검사", done: "y" }, []), /진행 중/);
+  assert.match((await G.goalAction(r, "easy", {}))!, /너무 쉬워요/);
+  await G.runGoalTool(r, "set_current_goal", { title: "괄호 검사", done: "y" }, []); // 쉬움 뒤에는 올려도 됨
+  assert.equal((await G.goalsOf(r)).current!.title, "괄호 검사");
+  const say = await G.goalAction(r, "hard", {});
+  assert.match(say!, /너무 어려워요\(어디가 어려운지는 모르겠어요\)/);
+  await G.runGoalTool(r, "open_support", { title: "스택이 뭔지", done: "z", why_quote: "" }, []);
+  assert.equal((await G.goalsOf(r)).stack.length, 1);
+  assert.match(await G.goalContext(r), /너무 쉬움 1번 · 너무 어려움 1번/);
+});
