@@ -1340,17 +1340,32 @@ function drawFree() {
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
     h("div", { class: "grow" }, h("b", {}, run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · 실험판 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
+    lesson.chat ? modelPick(run, lesson) : null,
     h("button", { class: "fib", title: "대화 목록", "aria-label": "대화 목록", onclick: () => go_("#/home") }, icon("home")),
     h("button", { class: "btn small", title: "새 대화", onclick: () => go_("#/home") }, "+ 새 대화"),
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
     FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);
-  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat ? wsBar(run, lesson) : null, list, foot));
+  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat ? wsBar(run, lesson) : null, list, lesson.chat && !lesson.chat.edit ? editAsk(run) : null, foot));
   list.scrollTop = list.scrollHeight;
   if (!FLOAT) window.scrollTo({ top: document.body.scrollHeight });
   tyAfterDraw();
 }
 const go_ = (hash) => go(hash);
+
+/* 대화 설정(11/4 사용자): 모델 고르기 · 파일 고치기 허락(처음에 묻고, 작업 폴더 줄에서 바꿈) */
+const chatOpt = (run, body) => busy(null, async () => { try { lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/chat-options`, body); drawLesson(); } catch (e) { toast(e.message); } });
+function modelPick(run, lesson) {
+  const sel = h("select", { class: "mpick", title: "이 대화의 모델(다음 질문부터)", "aria-label": "모델", disabled: lesson.busy, onchange: (e) => chatOpt(run, { model: e.target.value }) },
+    lesson.chat.models.map((m) => h("option", { value: m.id }, m.label)));
+  sel.value = lesson.chat.model;
+  return sel;
+}
+function editAsk(run) {
+  return h("div", { class: "editask" }, h("span", { class: "grow" }, "튜터가 작업 폴더의 파일을 직접 만들고 고쳐도 될까요? 나중에 작업 폴더 줄에서 바꿀 수 있어요."),
+    h("button", { class: "btn small primary", onclick: () => chatOpt(run, { edit: "allow" }) }, "허용"),
+    h("button", { class: "btn small", onclick: () => chatOpt(run, { edit: "deny" }) }, "허용 안 함"));
+}
 
 /* 작업 폴더 줄(11/4 사용자 "현재 작업 폴더 위치도 사람이 보고 수정 가능하게"): 보기 · 바꾸기 · VS Code로 열기 */
 const wsUi = { edit: false };
@@ -1368,5 +1383,6 @@ function wsBar(run, lesson) {
   }
   return h("div", { class: "wsbar" }, h("span", { class: "mut small" }, "작업 폴더"), h("code", { class: "wsp", title: path }, path),
     h("button", { class: "btn small", disabled: lesson.busy, title: lesson.busy ? "답하는 중에는 못 바꿔요" : "다른 폴더로 바꾸기", onclick: () => { wsUi.edit = true; drawLesson(); } }, "바꾸기"),
-    h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/editor`, { float: false }); toast("VS Code에서 열었어요."); }) }, "VS Code로 열기"));
+    h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/editor`, { float: false }); toast("VS Code에서 열었어요."); }) }, "VS Code로 열기"),
+    lesson.chat.edit ? h("label", { class: "small edittog", title: "튜터가 이 폴더의 파일을 고칠 수 있는지" }, h("input", { type: "checkbox", checked: lesson.chat.edit === "allow", disabled: lesson.busy, onchange: (e) => chatOpt(run, { edit: e.target.checked ? "allow" : "deny" }) }), " 튜터가 고치기") : null);
 }

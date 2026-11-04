@@ -716,3 +716,8 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .wsbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line, #e5e5e5); font-size: 13px; }
 .wsbar .wsp { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wsbar.edit .wsin { flex: 1; min-width: 0; font: 13px ui-monospace, Consolas, monospace; padding: 4px 6px; }
+
+/* 대화 설정(11/4): 모델 고르기 · 파일 고치기 허락 */
+.mpick { font: inherit; font-size: 12px; padding: 2px 4px; border-radius: 6px; max-width: 150px; }
+.editask { display: flex; gap: 8px; align-items: center; margin: 6px 12px; padding: 8px 10px; border-radius: 10px; background: var(--warm-bg, #fff7e6); font-size: 13px; }
+.edittog { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }

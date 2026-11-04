@@ -261,6 +261,14 @@ const routes: [string, RegExp, Handler][] = [
     return { ok: true };
   }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (req, m) => { const b = await body(req).catch(() => ({} as Record<string, unknown>)); const out = await openEditor(m[1]); if (b.float !== false) openFloat(m[1], PORT); return out; }],
+  // 11/4 사용자 "직접 고치는 권한(처음에 확인 요청)" · "채팅창에서 모델 변경": 대화 설정
+  ["POST", /^\/api\/runs\/(\w+)\/chat-options$/, async (req, m) => {
+    const run = await getRun(m[1]);
+    if (!run.chatId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
+    await (await import("../lib/agent-chat.ts")).setChatOptions(run.chatId, await body(req));
+    notifyLesson(run.id);
+    return lessonView(run.id, run.current);
+  }],
   // 11/4 사용자 "현재 작업 폴더 위치도 사람이 보고 수정 가능하게": 대화(실험판 엔진)의 작업 폴더를 바꾼다. VS Code도 그 폴더를 연다
   ["POST", /^\/api\/runs\/(\w+)\/workspace$/, async (req, m) => {
     const b = await body(req);

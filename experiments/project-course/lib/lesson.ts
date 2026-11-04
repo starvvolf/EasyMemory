@@ -269,7 +269,9 @@ async function chatPart(chatId: string) {
     if (m.role === "tool") return { id, role: "tutor", card: { type: "tool", icon: "🔧", label: m.text.split("\n")[0], ok: !/실패|중단/.test(m.text.split("\n")[0]) } };
     return { id, role: "note", text: m.text };
   });
-  return { messages, busy: v.busy, workspace: v.workspace, chat: { id: v.id, goal: v.goal, focus: v.focus, support: v.support.map((x) => x.topic), observations: v.observations.length, noCourse: v.noCourse } };
+  const ac = await import("./agent-chat.ts");
+  return { messages, busy: v.busy, workspace: v.workspace, chat: { id: v.id, goal: v.goal, focus: v.focus, support: v.support.map((x) => x.topic), observations: v.observations.length, noCourse: v.noCourse,
+    model: v.model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, edit: v.edit ?? null } };
 }
 const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
 async function chatAsk(runId: string, chatId: string, text: string) {

@@ -60,6 +60,10 @@ export type AgentIO = {
     execute: (name: string, input: Record<string, unknown>) => Promise<string>;
     /** 이 대화에서 빼는 도구(11/4 A안: 코스 없는 대화는 get_course_material을 뺀다) */
     hide?: string[];
+    /** 11/4 사용자 "채팅창에서 모델 변경": 이 대화의 모델(없으면 엔진 기본) */
+    model?: string;
+    /** 11/4 사용자 "직접 고치는 권한 주기(처음에 권한 확인 요청)": 학습자가 허락하면 작업 폴더 파일을 고칠 수 있다 */
+    edit?: boolean;
   };
 };
 
