@@ -98,6 +98,15 @@ async function summary(run: Run) {
 
 type Handler = (req: IncomingMessage, m: RegExpExecArray, url: URL) => Promise<unknown>;
 const routes: [string, RegExp, Handler][] = [
+  // Codex 실험판(11/4 사용자 "SDK로 엔진 교체, MCP 추가한 코덱스 실험판"): /codex-chat.html
+  ["GET", /^\/api\/codex-chat$/, async () => ({ chats: await (await import("../lib/codex-chat.ts")).list(), status: (await import("../lib/codex-chat.ts")).codexStatus() })],
+  ["POST", /^\/api\/codex-chat$/, async () => (await import("../lib/codex-chat.ts")).create()],
+  ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})$/, async (_q, m) => (await import("../lib/codex-chat.ts")).view(m[1])],
+  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/ask$/, async (req, m) => (await import("../lib/codex-chat.ts")).ask(m[1], String((await body(req)).text ?? ""))],
+  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/stop$/, async (_q, m) => (await import("../lib/codex-chat.ts")).stop(m[1])],
+  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/options$/, async (req, m) => (await import("../lib/codex-chat.ts")).setOptions(m[1], await body(req))],
+  ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})\/learner$/, async (_q, m) => ({ text: await (await import("../lib/codex-chat.ts")).learnerProfile(m[1]) })],
+  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/preference$/, async (req, m) => ({ text: await (await import("../lib/codex-chat.ts")).rememberPreference(m[1], await body(req)) })],
   ["POST", /^\/api\/agent-chat$/, async () => (await import("../lib/agent-chat.ts")).newChat()],
   ["POST", /^\/api\/agent-chat\/prompts$/, async (req) => (await import("../lib/agent-chat.ts")).saveChatPrompts(await body(req))],
   ["GET", /^\/api\/agent-chat\/([a-f0-9]{16})\/debug$/, async (_q, m) => (await import("../lib/agent-chat.ts")).chatDebug(m[1])],
