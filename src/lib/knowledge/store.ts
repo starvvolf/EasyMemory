@@ -567,9 +567,38 @@ const lite = (item: Knowledge): ItemLite => ({ id: item.id, title: item.title, s
   updatedAt: item.updatedAt, lastAt: item.lastAt, line: firstLine(item.body), links: item.links.length, weak: weakness(item), ...(item.review ? { dueAt: item.review.dueAt } : {}),
   ...(item.kind ? { kind: item.kind } : {}) });
 
+/**
+ * 태그 (2026-11-05, 사용자 "제목에 개념어가 있는 경우에만 붙여"): 지식 제목 안에 개념 지식의 이름(또는 다른 이름)이 들어 있으면
+ * 그 개념이 태그가 된다(#해시테이블). AI 없이 읽을 때 계산하고 따로 저장하지 않는다.
+ *   - 한글 등은 띄어쓰기·기호를 뺀 글자로 찾고, 영어·숫자 이름은 단어 경계가 맞아야 한다(JS ≠ JSON).
+ *   - 두 글자 미만 이름은 쓰지 않는다. 더 긴 태그 안에 들어 있는 짧은 태그는 뺀다(해시 테이블이 있으면 해시는 안 붙음).
+ *   - 자기 자신은 태그가 아니다. 많아야 5개.
+ */
+export type KTag = { id: string; title: string };
+const asciiName = (s: string) => /^[a-z0-9]+$/.test(normalize(s));
+const spacedWords = (s: string) => ` ${s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+export function tagsOf(items: Knowledge[]): Map<string, KTag[]> {
+  const concepts = items.filter((c) => c.kind === "concept").map((c) => ({ c, names: namesOf(c).filter((n) => normalize(n).length >= 2) }));
+  const out = new Map<string, KTag[]>();
+  for (const item of items) {
+    const flat = normalize(item.title), spaced = spacedWords(item.title);
+    const hits: Array<{ c: Knowledge; key: string }> = [];
+    for (const { c, names } of concepts) {
+      if (c.id === item.id) continue;
+      const name = names.find((n) => (asciiName(n) ? spaced.includes(spacedWords(n)) : flat.includes(normalize(n))));
+      if (name) hits.push({ c, key: normalize(name) });
+    }
+    const kept = hits.filter((h) => !hits.some((o) => o !== h && o.key.length > h.key.length && o.key.includes(h.key)))
+      .sort((a, b) => b.key.length - a.key.length).slice(0, 5);
+    if (kept.length) out.set(item.id, kept.map((h) => ({ id: h.c.id, title: h.c.title })));
+  }
+  return out;
+}
+
 export async function tree() {
   const store = await readStore();
-  return { folders: [...store.folders].sort((a, b) => a.order - b.order), items: store.items.map(lite) };
+  const tags = tagsOf(store.items);
+  return { folders: [...store.folders].sort((a, b) => a.order - b.order), items: store.items.map((i) => ({ ...lite(i), ...(tags.has(i.id) ? { tags: tags.get(i.id)! } : {}) })) };
 }
 export async function getKnowledge(id: string) {
   const store = await readStore();
@@ -579,7 +608,10 @@ export async function getKnowledge(id: string) {
   const links = item.links.flatMap((l) => byId.has(l.to) ? [{ ...l, item: lite(byId.get(l.to)!) }] : []);
   const backlinks = store.items.flatMap((x) => x.links.filter((l) => l.to === id).map((l) => ({ relation: l.relation, ...(l.note ? { note: l.note } : {}), item: lite(x) })));
   const events = (await readEvents()).filter((e) => e.knowledgeId === id).slice(-40).reverse();
-  return { item, path: pathOf(store, item.folderId), links, backlinks, events };
+  // 태그: 이 지식에 붙은 개념, 이 지식이 개념이면 이 태그가 붙은 지식들.
+  const all = tagsOf(store.items);
+  const tagged = item.kind === "concept" ? store.items.filter((x) => all.get(x.id)?.some((t) => t.id === id)).map(lite) : [];
+  return { item, path: pathOf(store, item.folderId), links, backlinks, events, tags: all.get(id) ?? [], tagged };
 }
 
 export type SearchHit = ItemLite & { score: number; by: "글자" | "비슷한 말" };

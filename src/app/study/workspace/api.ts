@@ -16,7 +16,7 @@ export type Folder = { id: string; name: string; parentId: string | null; order:
 // 유형 6가지 (2026-11-05). 어휘는 개념 아래 `vocab` 표시(저장소 store.ts와 같음).
 export type KKind = "concept" | "principle" | "procedure" | "rule" | "method" | "compare";
 export const KIND_LABEL: Record<KKind, string> = { concept: "개념", principle: "원리", procedure: "절차", rule: "규칙", method: "방법", compare: "비교" };
-export type ItemLite = { id: string; title: string; state: KState; graduated: boolean; folderId: string | null; updatedAt: string; lastAt: string; line: string; links: number; weak: number; dueAt?: string; kind?: KKind };
+export type ItemLite = { id: string; title: string; state: KState; graduated: boolean; folderId: string | null; updatedAt: string; lastAt: string; line: string; links: number; weak: number; dueAt?: string; kind?: KKind; tags?: Array<{ id: string; title: string }> };
 /** 목표 (2026-10-28 "4개 축"): why and until when; its 자료 bring their items. */
 export type SourceKindName = "pdf" | "web" | "code" | "chat" | "manual";
 export type GoalSource = { key: string; kind: SourceKindName; title: string };
@@ -52,7 +52,7 @@ export type Knowledge = { id: string; title: string; body: string; folderId: str
   links: Array<{ to: string; relation: string; note?: string }>; sources: Array<{ kind: string; title: string; ref?: string; url?: string; page?: number; quote?: string; at: string }>;
   stats: { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] }; createdAt: string; updatedAt: string; lastAt: string;
   review?: { algorithm: "leitner"; box: number; dueAt: string; repetitions: number; lapses: number } };
-export type Detail = { item: Knowledge; path: string; links: Array<{ to: string; relation: string; note?: string; item: ItemLite }>; backlinks: Array<{ relation: string; note?: string; item: ItemLite }>; events: KEvent[];
+export type Detail = { item: Knowledge; path: string; /** 제목에 들어 있는 개념(태그), 이 지식이 개념이면 이 태그가 붙은 지식 (11/5) */ tags?: Array<{ id: string; title: string }>; tagged?: ItemLite[]; links: Array<{ to: string; relation: string; note?: string; item: ItemLite }>; backlinks: Array<{ relation: string; note?: string; item: ItemLite }>; events: KEvent[];
   /** 가까운 지식: close, but no clear link (AI 판정 "가까움"). */
   near?: Array<{ id: string; title: string; line: string }> };
 export type Question = { id: string; kind: "flashcard" | "choice" | "ox" | "blank" | "short" | "recognize"; label: string; knowledgeId: string; prompt: string; context?: string;

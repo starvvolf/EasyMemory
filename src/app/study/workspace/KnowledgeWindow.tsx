@@ -390,7 +390,8 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
         <p className="kw-crumb">{detail.path ? detail.path.split(" / ").join(" › ") : "주제 없음"}</p>
         {editing ? <input className="ws-input kw-d-title" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="지식 이름" /> : <h3 className="kw-d-title" onDoubleClick={() => setEditing(true)}><Inline text={item.title} /></h3>}
         <div className="kw-d-meta"><StateChip state={item.state} graduated={item.graduated} />{item.kind ? <span>{KIND_LABEL[item.kind]}{item.vocab ? " · 어휘" : ""}</span> : null}
-          {item.aliases.length ? <span className="kw-aka" title="다른 이름">{item.aliases.slice(0, 4).join(" · ")}{item.aliases.length > 4 ? " …" : ""}</span> : null}</div>
+          {item.aliases.length ? <span className="kw-aka" title="다른 이름">{item.aliases.slice(0, 4).join(" · ")}{item.aliases.length > 4 ? " …" : ""}</span> : null}
+          {detail.tags?.map((t) => <button key={t.id} className="kw-tag" title="제목에 들어 있는 개념" onClick={() => onOpen(t.id)}>#{t.title.replace(/\s+/g, "")}</button>)}</div>
       </header>
       {editing ? (
         <><label className="stack small"><span className="eyebrow">뜻 (복습 때 떠올릴 답)</span>
@@ -437,6 +438,9 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
             {l.out ? <button className="kw-x" aria-label="고리 지우기" onClick={() => void onAct(() => call("/api/knowledge/link", { from: item.id, to: l.item.id }, "DELETE"))}>×</button> : null}</span>
           {l.note ? <span className="kw-note">{l.note}</span> : null}</li>)}</ul></section> : null}
 
+
+      {detail.tagged?.length ? <section><p className="eyebrow">#{item.title.replace(/\s+/g, "")} · {detail.tagged.length}</p>
+        <p className="kw-near small">{detail.tagged.map((t) => <button key={t.id} className="linkish" onClick={() => onOpen(t.id)}><Inline text={t.title} />{t.kind ? <span className="muted"> {KIND_LABEL[t.kind]}</span> : null}</button>)}</p></section> : null}
 
       {detail.near?.length ? <p className="kw-near small"><span className="muted" title="뜻이 겹치거나 같이 나오지만, 어느 쪽이 먼저인지·무엇을 쓰는지 분명하지 않아 고리로 잇지 않았어요.">가까운 지식</span>
         {detail.near.map((n) => <button key={n.id} className="linkish" onClick={() => onOpen(n.id)}>{n.title}</button>)}</p> : null}

@@ -80,3 +80,20 @@ test("유형 6가지: 예전 종류는 읽을 때 바뀌고, 실습이 보내는
   await writeFile(file, JSON.stringify(store));
   assert.equal((await getKnowledge(w.item.id)).item.kind, "rule");
 }));
+
+test("태그: 제목에 개념 이름이 있을 때만, 긴 이름이 짧은 이름을 이기고, 영어는 단어 경계", () => withData(async () => {
+  const { tagsOf } = await import("./store.ts");
+  const mk = (id: string, title: string, kind: string, aliases: string[] = []) => ({ id, title, kind, aliases, body: "", sources: [], links: [] }) as unknown as Parameters<typeof tagsOf>[0][number];
+  const items = [mk("h", "해시 테이블", "concept", ["Hash Table"]), mk("s", "해시", "concept"), mk("b", "이진 탐색 트리", "concept", ["BST"]), mk("j", "JS", "concept"),
+    mk("1", "해시테이블이 평균 O(1)인 이유", "principle"), mk("2", "해시 테이블과 이진 탐색 트리의 차이", "compare"), mk("3", "JSON 파싱 순서", "procedure"),
+    mk("4", "Node.js에서 JS 모듈 불러오기", "method"), mk("5", "해시 충돌을 해결하는 방법", "method"), mk("6", "충돌 없는 문장", "principle")];
+  const t = tagsOf(items);
+  const names = (id: string) => (t.get(id) ?? []).map((x) => x.title);
+  assert.deepEqual(names("1"), ["해시 테이블"], "spacing does not matter; 해시 inside 해시 테이블 is dropped");
+  assert.deepEqual(names("2").sort(), ["이진 탐색 트리", "해시 테이블"]);
+  assert.deepEqual(names("3"), [], "JS is not inside JSON");
+  assert.deepEqual(names("4"), ["JS"]);
+  assert.deepEqual(names("5"), ["해시"], "only the title counts");
+  assert.deepEqual(names("h"), ["해시"], "a concept never tags itself, but another concept in its name does");
+  assert.deepEqual(names("6"), []);
+}));
