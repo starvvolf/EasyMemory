@@ -1335,6 +1335,9 @@ function drawFree() {
     list.append(h("div", { class: "freeai" }, m.text ? tyText(m, ws, run.id) : null, m.card && m.card.type !== "tool" ? lessonCard(m.card, run, lesson, send, ws) : null));
   }
   if (!lesson.messages.length) list.append(h("p", { class: "mut small freeempty" }, "아무거나 물어보세요. VS Code에서 줄을 고르고 물어보면 그 줄을 같이 봐요."));
+  if (lesson.goals?.survey && !lesson.busy) list.append(surveyCard(lesson.goals.survey, send));
+  if (lesson.goals?.plan && !lesson.busy) list.append(goalPlanCard(lesson.goals.plan, send));
+  if (lesson.goals && goalUi.stuck && !lesson.busy) list.append(goalStuckCard(lesson.goals, send));
   if (lesson.busy) list.append(thinkLine(run, lesson));
   const input = h("textarea", { rows: 2, placeholder: "물어보기 (Enter 보내기, Shift+Enter 줄바꿈)", "aria-label": "튜터에게 물어보기" });
   const go = (e) => { const t = input.value.trim(); if (!t || lesson.busy) return; input.value = ""; send({ do: "ask", text: t })(e); };
@@ -1342,6 +1345,7 @@ function drawFree() {
   const foot = h("footer", { class: "freefoot" },
     lesson.chat ? null : stuckBar(lesson, send), lesson.chat ? null : stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
     h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
+    lesson.chat && lesson.goals && !lesson.busy ? h("div", { class: "fquick" }, h("button", { class: `fchip warm ${goalUi.stuck ? "on" : ""}`, onclick: () => { goalUi.stuck = !goalUi.stuck; drawLesson(); } }, "막혔어요")) : null,
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
     h("div", { class: "grow" }, h("b", {}, run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · ${lesson.chat.engine === "codex" ? "Codex" : "기존"} 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
@@ -1351,12 +1355,60 @@ function drawFree() {
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
     FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);
-  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat ? wsBar(run, lesson) : null, lesson.chat ? learnedBar(lesson) : null, list, lesson.chat && !lesson.chat.edit ? editAsk(run) : null, foot));
+  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat ? wsBar(run, lesson) : null, lesson.goals ? goalBar(lesson, send) : null, lesson.chat ? learnedBar(lesson) : null, list, lesson.chat && !lesson.chat.edit ? editAsk(run) : null, foot));
   list.scrollTop = list.scrollHeight;
   if (!FLOAT) window.scrollTo({ top: document.body.scrollHeight });
   tyAfterDraw();
 }
 const go_ = (hash) => go(hash);
+
+/* 학습 목표(11/4 사용자 설계 "장기 목표 / 현재 목표"): 장기 · 지도 · 현재 목표(이해 · 적용 · 다음으로) · 보충, 설문 · 계획 확정 · 막혔어요 */
+const goalUi = { stuck: false, picks: {}, texts: {}, reasons: new Set(), stuckText: "" };
+function goalBar(lesson, send) {
+  const g = lesson.goals;
+  if (!g.long) return g.survey || g.plan ? null : h("div", { class: "gbar mut small" }, "만들고 싶은 걸 말하면 튜터가 몇 가지 물어보고 장기 목표를 같이 정해요.");
+  const op = (o, extra = {}) => send({ do: "goal", op: o, ...extra });
+  const mark = { done: "✓", skipped: "↷", doing: "▶", todo: "" };
+  const c = g.current, top = g.stack.at(-1);
+  return h("div", { class: "gbar" },
+    h("div", { class: "glong" }, h("span", { class: "gk" }, "장기"), h("b", { title: g.long.spec || "" }, g.long.text),
+      h("button", { class: "gmode", disabled: lesson.busy, title: "진행 방식 바꾸기", onclick: op("mode", { mode: g.mode === "topdown" ? "bottomup" : "topdown" }) }, g.mode === "topdown" ? "탑다운" : "바텀업"),
+      g.progress.total ? h("span", { class: "mut small" }, `${g.progress.done}/${g.progress.total}`) : h("span", { class: "mut small" }, `해 본 것 ${g.progress.done}개`)),
+    g.map.length ? h("div", { class: "gmap" }, g.map.map((m, i) => h("span", { class: `gstep ${m.status}` }, `${i + 1}${mark[m.status] ? " " + mark[m.status] : ""} ${m.title}`))) : null,
+    top ? h("div", { class: "gcur sup" }, h("div", {}, h("span", { class: "gk warm" }, `보충${g.stack.length > 1 ? ` ${g.stack.length}겹` : ""}`), h("b", {}, top.title), h("span", { class: "mut small" }, ` — ${top.done}`)),
+      h("div", { class: "mut small" }, `막힌 이유: ${top.why} · 끝나면 "${top.from}"로 돌아가요`),
+      h("div", { class: "grow2" }, h("button", { class: "btn small primary", disabled: lesson.busy, onclick: op("understood") }, "이해했어요, 돌아가기"))) : null,
+    c ? h("div", { class: `gcur ${top ? "paused" : ""}` }, h("div", {}, h("span", { class: "gk" }, top ? "미뤄 둔 목표" : "지금"), h("b", {}, c.title)),
+      h("div", { class: "mut small" }, `완료 조건: ${c.done}`),
+      top ? null : h("div", { class: "grow2" },
+        h("button", { class: `btn small ${c.understood ? "on" : ""}`, disabled: lesson.busy, onclick: op("understood") }, c.understood ? "✓ 이해했어요" : "이해했어요"),
+        h("button", { class: `btn small ${c.applied ? "on" : ""}`, disabled: lesson.busy, onclick: op("applied") }, c.applied ? "✓ 적용했어요" : "적용했어요"),
+        h("button", { class: "btn small primary", disabled: lesson.busy, title: c.understood && c.applied ? "" : "이해·적용을 다 안 해도 넘어갈 수 있어요(건너뜀으로 남아요)", onclick: op("next") }, "다음으로 →"))) : null);
+}
+function surveyCard(sv, send) {
+  const picks = (goalUi.picks[sv.id] ??= sv.questions.map(() => new Set()));
+  const texts = (goalUi.texts[sv.id] ??= sv.questions.map(() => ""));
+  return h("div", { class: "gcard" }, sv.intro ? h("p", {}, sv.intro) : null,
+    sv.questions.map((q, i) => h("div", { class: "gq" }, h("div", { class: "gqq" }, `${i + 1}. ${q.q}`, q.multi ? h("span", { class: "mut small" }, " (여러 개)") : null),
+      h("div", { class: "gopts" }, q.options.map((o) => h("button", { class: `gopt ${picks[i].has(o) ? "on" : ""}`, onclick: () => { if (!q.multi) picks[i].clear(); picks[i].has(o) ? picks[i].delete(o) : picks[i].add(o); drawLesson(); } }, o))),
+      h("input", { class: "gin", placeholder: "덧붙일 말(없으면 비워 둬요)", value: texts[i], oninput: (e) => { texts[i] = e.target.value; } }))),
+    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: (e) => send({ do: "goal", op: "answer", answers: sv.questions.map((_, i) => ({ picks: [...picks[i]], text: texts[i] })) })(e) }, "보내기"),
+      h("span", { class: "mut small" }, "고르지 않은 질문은 \"알아서\"로 보내요")));
+}
+function goalPlanCard(p, send) {
+  return h("div", { class: "gcard plan" }, h("div", { class: "gk" }, "장기 목표 제안"), h("h3", {}, p.long), p.spec ? h("p", { class: "small" }, p.spec) : null,
+    h("div", { class: "small" }, h("b", {}, "진행 방식: "), p.mode === "topdown" ? "탑다운 — 구조부터 보고, 지도를 따라" : "바텀업 — 작은 것 하나부터 넓혀 가기"),
+    p.map.length ? h("ol", { class: "small" }, p.map.map((t) => h("li", {}, t))) : null,
+    h("div", { class: "small" }, h("b", {}, "첫 목표: "), p.first.title, h("span", { class: "mut" }, ` — 완료 조건: ${p.first.done}`)),
+    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: send({ do: "goal", op: "confirm" }) }, "확정"), h("button", { class: "btn small", onclick: send({ do: "goal", op: "dismiss_plan" }) }, "다시 얘기하기")));
+}
+function goalStuckCard(g, send) {
+  return h("div", { class: "gcard" }, h("div", { class: "gqq" }, "어디서 막혔어요? 해당하는 걸 골라 주세요"),
+    h("div", { class: "gopts col" }, g.stuckReasons.map((r) => h("button", { class: `gopt ${goalUi.reasons.has(r) ? "on" : ""}`, onclick: () => { goalUi.reasons.has(r) ? goalUi.reasons.delete(r) : goalUi.reasons.add(r); drawLesson(); } }, r))),
+    h("input", { class: "gin", placeholder: "구체적으로 적어도 돼요(예: cache(1)이 왜 안 되는지)", value: goalUi.stuckText, oninput: (e) => { goalUi.stuckText = e.target.value; } }),
+    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: (e) => { const reasons = [...goalUi.reasons], text = goalUi.stuckText; goalUi.stuck = false; goalUi.reasons = new Set(); goalUi.stuckText = ""; send({ do: "goal", op: "stuck", reasons, text })(e); } }, "보충 열기"),
+      h("button", { class: "btn small", onclick: () => { goalUi.stuck = false; drawLesson(); } }, "취소")));
+}
 
 /* 배운 것(11/4 사용자 "배운 거 갱신"): 질문이 끝날 때마다 대화에서 뽑은 사건. 근거는 학습자 말 그대로 */
 const KIND_KO = { asked: "물어봄", confused: "헷갈림", misconception: "틀리게 앎", explained: "자기 말로 설명", applied: "직접 써 봄" };

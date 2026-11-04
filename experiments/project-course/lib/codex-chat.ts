@@ -134,7 +134,8 @@ function label(item: any): string {
   }
 }
 
-export async function ask(id: string, text: string) {
+/** ext.context: 제품 대화(11/4)가 매 차례 붙이는 학습 목표 맥락 */
+export async function ask(id: string, text: string, ext?: { context?: () => Promise<string> }) {
   const q = String(text ?? "").trim();
   if (!q || q.length > 12000) throw err(400, "질문은 1~12,000자로 적어 주세요.");
   if (active.has(id)) throw err(409, "아직 답하는 중이에요.");
@@ -144,11 +145,11 @@ export async function ask(id: string, text: string) {
   const { Codex } = await sdk();
   const ac = new AbortController(); active.set(id, ac);
   await update<CodexChat>(file(id), c0, (c) => { push(c, "user", q); });
-  void run(id, q, exe, Codex, ac);
+  void run(id, q, exe, Codex, ac, ext);
   return view(id);
 }
 
-async function run(id: string, q: string, exe: string, Codex: any, ac: AbortController) {
+async function run(id: string, q: string, exe: string, Codex: any, ac: AbortController, ext?: { context?: () => Promise<string> }) {
   const t0 = Date.now();
   const log: Record<string, unknown> = { at: now(), chatId: id };
   try {
@@ -171,7 +172,8 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     const prior = c.messages.slice(0, -1).filter((m) => m.role === "user" || m.role === "assistant").slice(-30).map((m) => `[${m.role === "user" ? "학습자" : "튜터"}] ${m.text.slice(0, 2000)}`).join("\n\n");
     const pref = prefs.length ? `[학습자가 정해 둔 진행 방식]\n${prefs.map((p) => `- ${p.text}`).join("\n")}\n\n` : "";
     const editLine = c.edit === "allow" ? "" : "[파일 고치기] 학습자가 아직 허락하지 않았다. 고칠 곳과 코드를 알려 주고 학습자가 직접 고치게 한다.\n\n";
-    const input = `${fresh ? `${TUTOR_FIRST}\n\n${prior ? `[앞 대화]\n${prior}\n\n` : ""}` : ""}${pref}${editLine}[학습자] ${q}`;
+    const goal = ext?.context ? `${await ext.context()}\n\n` : "";
+    const input = `${fresh ? `${TUTOR_FIRST}\n\n${prior ? `[앞 대화]\n${prior}\n\n` : ""}` : ""}${pref}${goal}${editLine}[학습자] ${q}`;
     log.fresh = fresh; log.model = opts.model; log.sandbox = opts.sandboxMode; log.inputChars = input.length;
     const { events } = await thread.runStreamed(input, { signal: ac.signal });
     const rows = new Map<string, number>(); // Codex item id → 우리 메시지 id

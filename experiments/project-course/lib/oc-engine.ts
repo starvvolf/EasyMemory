@@ -17,7 +17,10 @@ import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
 import { logAnswer, logPrompt, logUsage } from "./promptlog.ts";
 import { getCourse, getLearningHistory, getProgress, getStep, recordObservation } from "./learning-tools.ts";
 import { goDeeper, nameGap, resolveTop } from "./stuck.ts";
-import { CHAT_SYSTEM, CHAT_TOOLS } from "./agent-chat-policy.ts";
+import { CHAT_SYSTEM, CHAT_TOOLS as CHAT_TOOLS_BASE } from "./agent-chat-policy.ts";
+import { GOAL_TOOLS } from "./goals.ts";
+// 자유 대화 도구 + 학습 목표 도구(11/4 사용자 설계 "장기 목표 / 현재 목표"). 목표 도구는 제품 대화에서만 보이고(그 밖엔 hide) 처리는 io.learningChat.execute가 한다
+const CHAT_TOOLS = [...CHAT_TOOLS_BASE, ...GOAL_TOOLS];
 import { toolProgress } from "./tool-progress.ts";
 import { fixtureCalls } from "./agent-chat-testcases.ts";
 import { promptOf } from "./prompts.ts";

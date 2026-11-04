@@ -106,6 +106,20 @@ const routes: [string, RegExp, Handler][] = [
   ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/open$/, async (_q, m) => (await import("../lib/codex-chat.ts")).openInCode(m[1])],
   ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/stop$/, async (_q, m) => (await import("../lib/codex-chat.ts")).stop(m[1])],
   ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/options$/, async (req, m) => (await import("../lib/codex-chat.ts")).setOptions(m[1], await body(req))],
+  // MCP 도구 목록: 기본 둘 + 제품 대화(진행 기록이 있는 것)면 학습 목표 도구(11/4)
+  ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})\/tools$/, async (_q, m) => {
+    const run = (await runs()).runs.find((r) => r.codexId === m[1]);
+    return { goals: run ? (await import("../lib/goals.ts")).goalToolsMcp() : [] };
+  }],
+  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/goal-tool$/, async (req, m) => {
+    const b = await body(req);
+    const run = (await runs()).runs.find((r) => r.codexId === m[1]);
+    if (!run) throw Object.assign(new Error("이 대화에는 학습 목표 기능이 없어요."), { status: 400 });
+    const learner = (await (await import("../lib/codex-chat.ts")).chatOf(m[1])).messages.filter((x) => x.role === "user").map((x) => x.text);
+    const text = await (await import("../lib/goals.ts")).runGoalTool(run.id, String(b.name ?? ""), (b.args ?? {}) as Record<string, unknown>, learner);
+    notifyLesson(run.id);
+    return { text };
+  }],
   ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})\/learner$/, async (_q, m) => ({ text: await (await import("../lib/codex-chat.ts")).learnerProfile(m[1]) })],
   ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/preference$/, async (req, m) => ({ text: await (await import("../lib/codex-chat.ts")).rememberPreference(m[1], await body(req)) })],
   ["POST", /^\/api\/agent-chat$/, async () => (await import("../lib/agent-chat.ts")).newChat()],
