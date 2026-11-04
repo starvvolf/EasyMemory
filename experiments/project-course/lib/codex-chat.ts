@@ -54,7 +54,11 @@ function findCodex() {
   // 11/4 노트북: npm 전역 대신 VS Code의 Codex 확장(openai.chatgpt-*)에 든 codex.exe를 쓴다(가장 새 버전)
   try {
     const ext = path.join(os.homedir(), ".vscode", "extensions");
-    const dirs = readdirSync(ext).filter((n) => /^openai\.chatgpt-/.test(n)).sort().reverse();
+    // 버전은 숫자로 비교한다(글자 순서면 26.602가 26.1021보다 커 보임 — 11/5 노트북에서 옛 버전을 고름). 지운 표시(.obsolete)된 것은 뺀다
+    let obsolete: Record<string, boolean> = {}; try { obsolete = JSON.parse(readFileSync(path.join(ext, ".obsolete"), "utf8")); } catch { /* 없음 */ }
+    const ver = (n: string) => (/^openai\.chatgpt-([\d.]+)/.exec(n)?.[1] ?? "0").split(".").map(Number);
+    const cmp = (a: number[], b: number[]) => { for (let i = 0; i < Math.max(a.length, b.length); i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (b[i] ?? 0) - (a[i] ?? 0); return 0; };
+    const dirs = readdirSync(ext).filter((n) => /^openai\.chatgpt-/.test(n) && !obsolete[n]).sort((a, b) => cmp(ver(a), ver(b)));
     for (const d of dirs) for (const plat of ["windows-x86_64", "windows-aarch64", "linux-x86_64", "macos-aarch64", "macos-x86_64"]) {
       const p = path.join(ext, d, "bin", plat, exe); if (existsSync(p)) return (codexPath = p);
     }
