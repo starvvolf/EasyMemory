@@ -44,6 +44,8 @@ export type AgentIO = {
   streamed?: boolean;
   /** 생각 요약 한 줄("라우터 쪽 보는 중"). null이면 지운다 */
   think?: (text: string | null) => void;
+  /** 도구의 실제 실행 수명. 모델의 설명·생각과 구분해서 표시한다. */
+  progress?: (event: import("./tool-progress.ts").ToolProgress) => Promise<void>;
   /** 학습자에게 고르게 묻고 답을 기다린다(답이 없으면 빈 글) */
   choose?: (q: { question: string; options: string[] }) => Promise<string>;
   /** [막혔어요] 칸 안에서 부를 때(11/3): 칸마다 따로 이어 쓰는 대화(sessKey)와 막힘 도구 */

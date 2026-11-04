@@ -7,12 +7,15 @@ import { writeWorkspace } from "./stagegen.ts";
 import { ready, stopRun } from "./oc-engine.ts";
 import { CHAT_SYSTEM, CHAT_TOOLS } from "./agent-chat-policy.ts";
 import type { AgentIO } from "./agent.ts";
+import type { ToolProgress } from "./tool-progress.ts";
 
-type Message = { id: number; role: "user" | "assistant" | "tool" | "error"; text: string; at: string; key?: string };
+type Message = { id: number; role: "user" | "assistant" | "tool" | "error"; text: string; at: string; key?: string; progress?: ToolProgress };
 type Support = { id: string; topic: string; returnTo: string; openedAfter: number };
 type Observation = { kind: "understood" | "confused" | "misconception"; note: string; evidenceMessageId: number; evidence: string; verified: false; at: string };
 export type Chat = { id: string; courseId: string; goal: string; focus: string; support: Support[]; observations: Observation[]; messages: Message[]; at: string };
 const active = new Set<string>();
+const stopping = new Set<string>();
+const owners = new Map<string, symbol>();
 const sent = new Map<string, number>();
 const now = () => new Date().toISOString();
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
@@ -25,7 +28,7 @@ export const CHAT_PROMPTS = {
   turn: "[현재 학습 상태]\n{state}\n이번 학습자 메시지 id: {messageId}",
 };
 type Prompts = typeof CHAT_PROMPTS;
-type Trace = { at: string; userMessageId: number; question: string; prompts: Prompts; parts: AgentIO["parts"]; requests: { at: string; body: Record<string, unknown> }[] };
+type Trace = { at: string; userMessageId: number; question: string; prompts: Prompts; parts: AgentIO["parts"]; requests: { at: string; body: Record<string, unknown> }[]; toolEvents?: ToolProgress[] };
 const promptFile = path.join(DATA, "agent-chat", "prompts.json");
 const traceFile = (id: string) => path.join(DATA, "agent-chat", "inputs", `${valid(id)}.json`);
 export async function chatPrompts(): Promise<Prompts> { return { ...CHAT_PROMPTS, ...await read<Partial<Prompts>>(promptFile, {}) }; }
@@ -151,8 +154,12 @@ export async function askChat(id: string, text: string, runner?: Runner) {
   if (!q || q.length > 12000) throw err(400, "질문은 1~12,000자로 적어 주세요.");
   if (active.has(id)) throw err(409, "아직 답하는 중이에요.");
   active.add(id);
+  stopping.delete(id);
+  const owner = Symbol(id); owners.set(id, owner);
+  let loaded: Chat | undefined;
   try {
     const s = await chatOf(id);
+    loaded = s;
     const prompts = await chatPrompts();
     const sessionKey = `chat-${id}:${promptRevision(prompts)}`;
     // 엔진이 없으면 사용자의 말을 저장하기 전에 명확하게 알린다. 다른 튜터로 조용히 바꾸지 않는다.
@@ -161,7 +168,7 @@ export async function askChat(id: string, text: string, runner?: Runner) {
     const prior = s.messages;
     let userId = 0;
     await update<Chat>(file(id), s, (st) => { userId = push(st, "user", q).id; });
-    const history = (ms: Message[]) => ms.map((m) => `[${m.role} #${m.id}] ${m.text}`).join("\n\n");
+    const history = (ms: Message[]) => ms.filter((m) => !m.progress).map((m) => `[${m.role} #${m.id}] ${m.text}`).join("\n\n");
     const recent = history(prior.slice(-80)).slice(-50000);
     const since = history(prior.filter((m) => m.id > (sent.get(sessionKey) ?? 0)));
     const io: AgentIO = {
@@ -171,9 +178,19 @@ export async function askChat(id: string, text: string, runner?: Runner) {
       learningChat: { system: prompts.system, execute: (name, input) => chatTool(id, name, input),
         capture: async (body) => { await update<Trace>(traceFile(id), initialTrace, (t) => { t.requests.push({ at: now(), body }); }); } },
       quiet: () => {},
-      show: async (card) => { await update<Chat>(file(id), s, (st) => { push(st, "tool", card.type === "snippet" ? `코드 실행\n${card.code}\n→ ${card.output}` : card.type === "tool" ? card.label : JSON.stringify(card)); }); },
-      say: async (value) => { await update<Chat>(file(id), s, (st) => { push(st, "assistant", value); }); },
-      stream: async (key, value) => { await update<Chat>(file(id), s, (st) => { const m = st.messages.find((m) => m.key === `${userId}:${key}`); if (m) m.text = value; else push(st, "assistant", value, `${userId}:${key}`); }); },
+      progress: async (event) => {
+        if (owners.get(id) !== owner) return;
+        const p = stopping.has(id) && event.status !== "running" ? { ...event, status: "cancelled" as const, label: event.label.replace(/완료|실패/, "중단") } : event;
+        await update<Chat>(file(id), s, (st) => {
+          let m = st.messages.find((m) => m.progress?.id === p.id);
+          if (!m) m = push(st, "tool", p.label);
+          m.progress = p; m.text = `${p.label}${p.detail ? `\n${p.detail}` : ""}`;
+        });
+        await update<Trace>(traceFile(id), initialTrace, (t) => { (t.toolEvents ??= []).push(p); });
+      },
+      show: async (card) => { if (owners.get(id) !== owner) return; await update<Chat>(file(id), s, (st) => { push(st, "tool", card.type === "snippet" ? `코드 실행\n${card.code}\n→ ${card.output}` : card.type === "tool" ? card.label : JSON.stringify(card)); }); },
+      say: async (value) => { if (owners.get(id) !== owner) return; await update<Chat>(file(id), s, (st) => { push(st, "assistant", value); }); },
+      stream: async (key, value) => { if (owners.get(id) !== owner) return; await update<Chat>(file(id), s, (st) => { const m = st.messages.find((m) => m.key === `${userId}:${key}`); if (m) m.text = value; else push(st, "assistant", value, `${userId}:${key}`); }); },
     };
     const initialTrace: Trace = { at: now(), userMessageId: userId, question: q, prompts, parts: io.parts, requests: [] };
     await update<Trace>(traceFile(id), initialTrace, () => initialTrace);
@@ -184,8 +201,17 @@ export async function askChat(id: string, text: string, runner?: Runner) {
       await update<Chat>(file(id), s, (st) => { push(st, "error", (error as Error).message); });
     }
     sent.set(sessionKey, (await chatOf(id)).messages.at(-1)?.id ?? 0);
-  } finally { active.delete(id); }
+  } finally {
+    try {
+      if (loaded) await update<Chat>(file(id), loaded, (st) => {
+        for (const m of st.messages) if (m.progress?.status === "running") {
+          m.progress = { ...m.progress, status: stopping.has(id) ? "cancelled" : "failed", label: m.progress.label.replace("진행 중", stopping.has(id) ? "중단" : "종료 상태 확인 실패") };
+          m.text = m.progress.label;
+        }
+      });
+    } finally { active.delete(id); stopping.delete(id); owners.delete(id); }
+  }
   return chatView(id);
 }
-export async function stopChat(id: string) { await chatOf(id); await stopRun(`chat-${id}`, 1); return chatView(id); }
+export async function stopChat(id: string) { await chatOf(id); if (active.has(id)) stopping.add(id); await stopRun(`chat-${id}`, 1); return chatView(id); }
 export { CHAT_SYSTEM };

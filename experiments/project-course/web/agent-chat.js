@@ -35,14 +35,19 @@ function draw() {
   $("new").disabled = isBusy;
   $("restart").disabled = isBusy || !chat;
   $("inspect").disabled = !chat || switching;
-  $("status").textContent = errorText || (isBusy ? "튜터가 생각하고 있어요…" : "");
+  const running = chat?.messages.filter((m) => m.progress?.status === "running") ?? [];
+  $("status").textContent = errorText || (isBusy ? running.length ? running.map((m) => m.progress.label).join(" · ") : "튜터가 답변을 이어 가고 있어요…" : "");
   if (!chat) return;
   const signature = JSON.stringify(chat.messages);
   if (signature !== rendered) {
     const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 180;
     const nodes = chat.messages.map((m) => {
       const el = document.createElement(m.role === "tool" ? "details" : "div"); el.className = `agent-message ${m.role}`;
-      if (m.role === "tool") { const title = document.createElement("summary"); title.textContent = m.text.split("\n")[0]; el.append(title); if (m.text.includes("\n")) content(m.text, el); }
+      if (m.role === "tool") {
+        if (m.progress) el.classList.add("tool-progress", `tool-${m.progress.status}`);
+        const title = document.createElement("summary"); title.textContent = `${m.progress ? ({ running: "◌", completed: "✓", failed: "!", cancelled: "■" })[m.progress.status] + " " : ""}${m.text.split("\n")[0]}`;
+        el.append(title); if (m.text.includes("\n")) content(m.text, el);
+      }
       else if (m.role === "user" || m.role === "error") el.textContent = m.text;
       else content(m.text, el);
       return el;
@@ -101,7 +106,7 @@ function showDebug(data, fillEditors) {
   $("request-pick").replaceChildren(...requests.map((request, index) => Object.assign(document.createElement("option"), { value: String(index), textContent: `${index + 1}번째 호출 · ${new Date(request.at).toLocaleTimeString("ko-KR")}` })));
   $("request-pick").disabled = !requests.length;
   $("request-info").textContent = data.trace ? `이번 질문: ${data.trace.question}\n실제 모델 호출 ${requests.length}개 · 도구 호출 뒤 요청도 각각 볼 수 있어요.` : data.previousRequest ? "이 기능을 추가하기 전 마지막 호출 기록이에요." : "아직 실제 호출 기록이 없어요. [프롬프트 배치]에서 다음 차례 조립 재료를 볼 수 있어요.";
-  $("assembled-input").textContent = data.trace ? pretty({ at: data.trace.at, instructions: data.trace.prompts.system, parts: data.trace.parts, question: data.trace.question }) : "이 기능을 추가한 뒤 질문부터 저장돼요.";
+  $("assembled-input").textContent = data.trace ? pretty({ at: data.trace.at, instructions: data.trace.prompts.system, parts: data.trace.parts, question: data.trace.question, toolEvents: data.trace.toolEvents ?? [] }) : "이 기능을 추가한 뒤 질문부터 저장돼요.";
   showRequest();
   if (fillEditors) for (const key of ["system", "fixed", "turn"]) $("prompt-" + key).value = data.prompts[key];
 }

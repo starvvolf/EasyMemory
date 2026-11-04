@@ -18,6 +18,8 @@ import { logAnswer, logPrompt, logUsage } from "./promptlog.ts";
 import { getCourse, getLearningHistory, getProgress, getStep, recordObservation } from "./learning-tools.ts";
 import { goDeeper, nameGap, resolveTop } from "./stuck.ts";
 import { CHAT_SYSTEM, CHAT_TOOLS } from "./agent-chat-policy.ts";
+import { toolProgress } from "./tool-progress.ts";
+import { fixtureCalls } from "./agent-chat-testcases.ts";
 import { promptOf } from "./prompts.ts";
 
 export const OC_VERSION = "2.2.1";
@@ -228,6 +230,9 @@ function policyPlugin(fake: boolean) {
       });
       await ctx.tool.hook("execute.before", async (ev: any) => {
         const l = live.get(ev.sessionID); if (!l) return;
+        // 앞서 흘려 보내던 안내문을 저장한 뒤 도구 진행 행을 붙인다.
+        await l.chain;
+        await l.io.progress?.(toolProgress(String(ev.id), ev.tool, ev.input ?? {}, "running"));
         if (EDITS.has(ev.tool)) {
           for (const p of editPaths(ev.tool, ev.input)) {
             try { const { rel, abs } = safePath(l.io.ws, p.startsWith(l.io.ws) ? path.relative(l.io.ws, p) : p); l.before.set(rel, await readFile(abs, "utf8").catch(() => "")); } catch { /* */ }
@@ -238,6 +243,10 @@ function policyPlugin(fake: boolean) {
       await ctx.tool.hook("execute.after", async (ev: any) => {
         if (process.env.OC_DEBUG) console.log("[oc after]", ev.tool, ev.status, JSON.stringify(ev.input).slice(0, 200), ev.status === "error" ? String(ev.error?.message) : "");
         const l = live.get(ev.sessionID); if (!l) return;
+        await l.chain;
+        const resultText = typeof ev.result?.content === "string" ? ev.result.content : Array.isArray(ev.result?.content) ? ev.result.content.map((c: { text?: string }) => c.text ?? "").join("\n") : "";
+        const failed = ev.status === "error" || (ev.tool === "run_snippet" && /^오류/.test(resultText)) || /^학습 조정 실패:/.test(resultText);
+        await l.io.progress?.(toolProgress(String(ev.id), ev.tool, ev.input ?? {}, l.stopped ? "cancelled" : failed ? "failed" : "completed", failed ? String(ev.error?.message ?? resultText).slice(0, 300) : undefined));
         const ok = ev.status === "completed";
         const p = String(ev.input?.path ?? ev.input?.filePath ?? ev.input?.pattern ?? "");
         const relOf = (x: string) => (x.startsWith(l.io.ws) ? path.relative(l.io.ws, x) : x).replace(/\\/g, "/");
@@ -559,7 +568,11 @@ async function startMock(): Promise<string> {
     send({ choices: [{ index: 0, delta: { role: "assistant", reasoning_content: "**Checking the server file** I should look at how requests are routed. " }, finish_reason: null }] });
     await new Promise((r) => setTimeout(r, 700));
     let call: { name: string; args: unknown; say: string } | null = null;
-    if (tools.includes("get_learning_state")) {
+    const fixture = tools.includes("get_learning_state") ? /\[도구시험:([TN]\d+)\]/.exec(asked)?.[1] : undefined;
+    if (fixture) {
+      const next = fixtureCalls(fixture, userText)[sinceUser];
+      call = next ? { ...next, say: `${sinceUser + 1}번째 작업에서 ${next.name} 결과를 확인할게요.` } : null;
+    } else if (tools.includes("get_learning_state")) {
       call = sinceUser === 0 ? /학습 도구 연결 시험/.test(asked)
         ? { name: "adjust_learning", args: { action: "focus", text: "학습 도구 연결 확인" }, say: "" }
         : { name: "get_learning_state", args: {}, say: "" } : null;

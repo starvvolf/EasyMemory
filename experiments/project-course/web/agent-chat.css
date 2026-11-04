@@ -9,6 +9,12 @@ body { background: #f7f8fa; }
 .agent-message.assistant { padding: 0 4px; }
 .agent-message.error { color: #a32b2b; background: #fff0f0; padding: 12px; border-radius: 8px; }
 .agent-message.tool { font-size: 12px; color: #697386; }
+.tool-progress { padding: 10px 14px; border-left: 3px solid #a3afc0; border-radius: 5px; background: #eef1f6; }
+.tool-progress summary { cursor: pointer; }
+.tool-running { border-left-color: #3554d1; color: #3554d1 !important; }
+.tool-completed { border-left-color: #2f825b; }
+.tool-failed { border-left-color: #b3261e; color: #a32b2b !important; }
+.tool-cancelled { border-left-color: #9c7941; }
 .agent-message p { white-space: pre-wrap; margin: 0 0 12px; }
 .agent-message pre { white-space: pre; overflow-x: auto; border-radius: 10px; padding: 16px; background: #192330; color: #e5edf6; font-size: 13px; line-height: 1.65; }
 .agent-message code { font-family: Consolas, monospace; }
