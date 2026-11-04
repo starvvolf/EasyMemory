@@ -27,6 +27,8 @@ async function refresh() {
 }
 const opt = (b) => api("POST", `/api/codex-chat/${cur.id}/options`, b).then((v) => { cur = v; sig = ""; draw(); }).catch((e) => alertLine(e.message));
 const alertLine = (t) => { $("status").textContent = t; };
+// 그 대화의 작업 폴더를 VS Code로(새 대화 · 폴더 바꾸기 때는 저절로, 그 밖엔 버튼)
+const openCode = (id) => api("POST", `/api/codex-chat/${id}/open`).then((r) => alertLine(r.ok ? "VS Code에서 이 대화의 작업 폴더를 열었어요." : r.message)).catch((e) => alertLine(e.message));
 function draw() {
   const c = cur; if (!c) return;
   $("title").textContent = c.messages.find((m) => m.role === "user")?.text.slice(0, 50) || "새 대화";
@@ -34,13 +36,14 @@ function draw() {
   // 작업 폴더 줄
   if (editingWs) {
     const inp = h("input", { class: "path", value: c.workspace, spellcheck: "false" });
-    const save = () => opt({ workspace: inp.value }).then(() => { editingWs = false; draw(); });
+    const save = () => opt({ workspace: inp.value }).then(() => { editingWs = false; draw(); openCode(cur.id); });
     inp.addEventListener("keydown", (e) => { if (e.key === "Enter") save(); if (e.key === "Escape") { editingWs = false; draw(); } });
     $("wsbar").replaceChildren(h("span", { class: "mut" }, "작업 폴더"), inp, h("button", { class: "btn small primary", onclick: save }, "저장"), h("button", { class: "btn small", onclick: () => { editingWs = false; draw(); } }, "취소"));
     setTimeout(() => inp.focus(), 0);
   } else {
     $("wsbar").replaceChildren(h("span", { class: "mut" }, "작업 폴더"), h("code", { title: c.workspace }, c.workspace),
       h("button", { class: "btn small", disabled: c.busy, onclick: () => { editingWs = true; draw(); } }, "바꾸기"),
+      h("button", { class: "btn small", onclick: () => openCode(c.id) }, "VS Code로 열기"),
       c.edit ? h("label", { class: "small" }, h("input", { type: "checkbox", checked: c.edit === "allow", disabled: c.busy, onchange: (e) => opt({ edit: e.target.checked ? "allow" : "deny" }) }), " 튜터가 고치기") : null);
   }
   $("editask").replaceChildren(c.edit ? "" : h("div", { class: "ask" }, h("span", { style: "flex:1" }, "튜터(Codex)가 작업 폴더의 파일을 직접 만들고 고치고 명령을 실행해도 될까요?"),
@@ -72,7 +75,7 @@ async function send() {
 $("send").onclick = send;
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 $("model").onchange = (e) => opt({ model: e.target.value });
-$("new").onclick = async () => { const c = await api("POST", "/api/codex-chat"); await open(c.id); $("q").focus(); };
+$("new").onclick = async () => { const c = await api("POST", "/api/codex-chat"); await open(c.id); openCode(c.id); $("q").focus(); };
 (async () => {
   await loadList();
   if (sel) await refresh(); if (!cur) { const c = await api("POST", "/api/codex-chat"); await open(c.id); }
