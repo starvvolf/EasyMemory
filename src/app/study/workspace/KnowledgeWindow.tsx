@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react
 import { call, errorText, folderPaths, go, handoff, later, KIND_LABEL, STATE_LABEL, EVENT_LABEL, whenText, type Detail, type Folder, type ItemLite, type KKind, type KState,
   type Question, type ReviewStatus, type Tree } from "./api";
 import { ArticleMap, type SourceView } from "./ArticleStudy";
-import { QuestionRun } from "./QuestionCard";
+import { QuestionList, QuestionRun } from "./QuestionCard";
 import { Inline, Rich } from "./Rich";
 
 type Filter = "all" | KState | "graduated";
@@ -61,6 +61,8 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const [sel, setSel] = useState<string | null>(() => { const id = focusId ?? handoff.knowledgeId ?? null; handoff.knowledgeId = undefined; return id; });
   const [detail, setDetail] = useState<Detail | null>(null);
   const [run, setRun] = useState<{ title: string; questions: Question[] } | null>(null);
+  // 문제 풀어보기 (2026-11-05): the questions as a list first; [처음부터 차례로 풀기] turns it into the one-at-a-time run.
+  const [list, setList] = useState<{ title: string; note?: string; questions: Question[] } | null>(null);
   const [overview, setOverview] = useState("");
   const [showOverview, setShowOverview] = useState(false);
   const [error, setError] = useState("");
@@ -166,14 +168,20 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
     </div></li>); };
   const unfiled = (g: MaterialRow["group"]) => materials.filter((m) => m.group === g && !m.folderId);
 
+  // 문제 풀어보기 (2026-11-05): due ones first; when none is due, the rest of the queue as practice, so the button always answers.
+  const [quizBusy, setQuizBusy] = useState(false);
   const startQuiz = async () => {
-    const q = view === "topic" && folder !== "all" && folder !== "none" ? `?folderId=${folder}&count=10` : "?count=10";
-    setNotice("");
+    if (quizBusy) return;
+    const q = view === "topic" && folder !== "all" && folder !== "none" ? `?folderId=${folder}&count=20` : "?count=20";
+    setNotice(""); setError(""); setQuizBusy(true);
     try {
-      const { questions, next } = await call<{ questions: Question[] } & ReviewStatus>(`/api/knowledge/quiz${q}`);
-      if (questions.length) setRun({ title: `복습 · ${folderName}`, questions });
-      else setNotice(next ? `지금 복습할 지식이 없어요. 다음 복습은 ${whenText(next)}이에요.` : "복습할 지식이 아직 없어요. 문제를 풀다 틀리거나 물어본 지식이 여기로 와요.");
+      const due = await call<{ questions: Question[] } & ReviewStatus>(`/api/knowledge/quiz${q}`);
+      if (due.questions.length) { setRun(null); setList({ title: `문제 풀어보기 · ${folderName}`, questions: due.questions }); return; }
+      const more = await call<{ questions: Question[] }>(`/api/knowledge/quiz${q}&all=1`);
+      if (more.questions.length) { setRun(null); setList({ title: `문제 풀어보기 · ${folderName}`, note: due.next ? `지금 복습할 지식은 없어요(다음 복습 ${whenText(due.next)}). 미리 연습할 문제예요.` : "지금 복습할 지식은 없어요. 미리 연습할 문제예요.", questions: more.questions }); }
+      else setNotice("풀 문제가 아직 없어요. 공부하다 만난 지식에 뜻이 생기면 문제가 만들어져요.");
     } catch (e) { setError(errorText(e)); }
+    finally { setQuizBusy(false); }
   };
   const create = async () => {
     const name = draft.trim(); if (!name) return;
@@ -207,7 +215,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
         </div>
         <div className="row kw-actions">
           <input className="ws-input kw-search" type="search" placeholder="지식 찾기" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="지식 찾기 (이름·설명)" />
-          <button className="btn primary small kw-review" onClick={startQuiz}>복습하기{dueNow ? <span className="kw-badge">{dueNow}</span> : null}</button>
+          <button className="btn primary small kw-review" onClick={() => void startQuiz()} disabled={quizBusy} title="복습할 지식의 문제를 목록으로 보여 줘요">{quizBusy ? "불러오는 중…" : "문제 풀어보기"}{dueNow ? <span className="kw-badge">{dueNow}</span> : null}</button>
           <details className="ws-menu">
             <summary aria-label="만들기" title="새 지식 · 새 폴더">＋</summary>
             <div className="ws-menu-card">
@@ -257,6 +265,8 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
       {notice ? <p className="small muted" onClick={() => setNotice("")}>{notice}</p> : null}
       {showOverview ? <section className="panel"><div className="row" style={{ justifyContent: "space-between" }}><b className="small">AI가 보는 요약 (메모리 1단계)</b><button className="btn ghost small" onClick={() => setShowOverview(false)}>닫기</button></div><pre className="kw-overview">{overview}</pre></section> : null}
       {run ? <QuestionRun title={run.title} questions={run.questions} onClose={() => { setRun(null); void load(); if (sel) void loadDetail(sel); }} /> : null}
+      {list && !run ? <QuestionList title={list.title} note={list.note} questions={list.questions} nameOf={(id) => tree.items.find((i) => i.id === id)?.title ?? ""}
+        onRunAll={() => setRun({ title: list.title, questions: list.questions })} onClose={() => { setList(null); void load(); if (sel) void loadDetail(sel); }} /> : null}
 
       <div className="kw-grid">
         <nav className="kw-tree panel" aria-label="폴더" title="지식이나 폴더를 끌어다 폴더에 놓으면 옮겨져요. 손으로 옮긴 지식은 주제 정리가 다시 옮기지 않아요.">

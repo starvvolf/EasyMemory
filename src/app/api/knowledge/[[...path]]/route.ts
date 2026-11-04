@@ -184,7 +184,8 @@ async function handle(request: Request, context: RouteContext) {
       const folderId = url.searchParams.get("folderId") ?? undefined;
       const ids = url.searchParams.get("goalId") ? await goalItemIds(goalId.parse(url.searchParams.get("goalId"))) : undefined;
       const count = Math.min(30, Number(url.searchParams.get("count") ?? 10));
-      const picked = await reviewQueue({ folderId, ids, limit: count, dueOnly: true });
+      // all=1 (2026-11-05, 지식 탭 [문제 풀어보기]): nothing is due, so practice on the rest of the queue instead of an empty answer.
+      const picked = await reviewQueue({ folderId, ids, limit: count, dueOnly: url.searchParams.get("all") !== "1" });
       const status = await reviewStatus({ folderId, ids });
       const seed = String(Date.now());
       const questions = picked.flatMap((lite, n) => {

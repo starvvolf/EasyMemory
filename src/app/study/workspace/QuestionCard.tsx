@@ -82,3 +82,51 @@ export function QuestionRun({ questions, sourceId, onClose, title }: { questions
     </section>
   );
 }
+
+/**
+ * 문제 목록 (2026-11-05, 사용자 "지식탭에서 문제 풀어보기 누르면 문제 목록 나오게"): the questions laid out first, so the
+ * learner picks which to solve. A row opens its question in place; the mark (맞음/틀림) stays on the row. Grading and the
+ * record are the same as one at a time (QuestionCard).
+ */
+const KIND_ORDER: Question["kind"][] = ["choice", "ox", "blank", "short", "flashcard", "recognize"];
+export function QuestionList({ questions, title, note, nameOf, onClose, onRunAll }: { questions: Question[]; title: string; note?: string; nameOf: (knowledgeId: string) => string; onClose: () => void; onRunAll: () => void }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const [marks, setMarks] = useState<Record<string, boolean>>({});
+  const [kind, setKind] = useState<Question["kind"] | "all">("all");
+  const kinds = KIND_ORDER.filter((k) => questions.some((q) => q.kind === k));
+  const labelOf = (k: Question["kind"]) => questions.find((q) => q.kind === k)?.label ?? k;
+  const shown = kind === "all" ? questions : questions.filter((q) => q.kind === kind);
+  const done = Object.keys(marks).length, right = Object.values(marks).filter(Boolean).length;
+  return (
+    <section className="panel ql">
+      <header className="ql-top">
+        <div><b>{title}</b><p className="small muted num">{questions.length}문제{done ? ` · ${done}개 풂 · ${right}개 맞힘` : " · 풀고 싶은 문제를 눌러요"}</p></div>
+        <div className="row"><button className="btn primary small" onClick={onRunAll}>처음부터 차례로 풀기</button><button className="btn ghost small" onClick={onClose}>닫기</button></div>
+      </header>
+      {note ? <p className="small muted ql-note">{note}</p> : null}
+      {kinds.length > 1 ? (
+        <div className="ws-seg ql-kinds" role="group" aria-label="문제 형식">
+          <button aria-pressed={kind === "all"} onClick={() => setKind("all")}>전체 {questions.length}</button>
+          {kinds.map((k) => <button key={k} aria-pressed={kind === k} onClick={() => setKind(k)}>{labelOf(k)} {questions.filter((q) => q.kind === k).length}</button>)}
+        </div>
+      ) : null}
+      <ol className="ql-list">
+        {shown.map((q) => {
+          const n = questions.indexOf(q) + 1, mark = marks[q.id], isOpen = open === q.id;
+          return (
+            <li key={q.id} className={`ql-row${isOpen ? " open" : ""}${mark === true ? " good" : mark === false ? " bad" : ""}`}>
+              <button className="ql-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : q.id)}>
+                <span className="ql-n num">{n}</span>
+                <span className="chip">{q.label}</span>
+                <span className="ql-text"><span className="ql-name">{nameOf(q.knowledgeId)}</span><span className="ql-prompt"><Inline text={q.prompt} /></span></span>
+                <span className="ql-mark">{mark === true ? "맞음" : mark === false ? "틀림" : isOpen ? "닫기" : "풀기"}</span>
+              </button>
+              {isOpen ? <div className="ql-body"><QuestionCard question={q} compact onDone={(g) => setMarks((m) => ({ ...m, [q.id]: g.correct }))} /></div> : null}
+            </li>
+          );
+        })}
+      </ol>
+      {done ? <p className="small muted">결과는 각 지식의 기록에 남았어요. 틀린 것은 몰랐음이 되어 복습에 먼저 나와요.</p> : null}
+    </section>
+  );
+}
