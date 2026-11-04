@@ -265,7 +265,7 @@ async function chatPart(chatId: string) {
   const v = await (await import("./agent-chat.ts")).chatView(chatId);
   const messages = v.messages.map((m) => {
     const id = `c${m.id}`;
-    if (m.role === "user") return { id, role: "me", text: m.text };
+    if (m.role === "user") return { id, role: "me", text: shownUser(m.text) };
     if (m.role === "assistant") return { id, role: "tutor", text: m.text };
     if (m.role === "tool") return { id, role: "tutor", card: { type: "tool", icon: "🔧", label: m.text.split("\n")[0], ok: !/실패|중단/.test(m.text.split("\n")[0]) } };
     return { id, role: "note", text: m.text };
@@ -277,11 +277,18 @@ async function chatPart(chatId: string) {
     model: v.model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, edit: v.edit ?? null } };
 }
 /* 11/4 사용자 "기존 UI에 붙여 봐(Codex 버전)": Codex 엔진 대화를 제품 화면 모양으로 옮긴다 */
+/** 버튼이 튜터에게 보낸 말(지시가 섞인 것)은 화면에선 짧게(11/4) */
+function shownUser(t: string) {
+  const m = /^\[(확정|다음으로|막혔어요|진행 방식 변경|계획 다시 얘기하기)\]/.exec(t);
+  if (!m) return t;
+  if (m[1] === "막혔어요") { const why = /막힌 이유\(학습자가 고름\): ([^\n]*)/.exec(t)?.[1]; return `막혔어요${why ? ` — ${why}` : ""}`; }
+  return ({ 확정: "✓ 계획 확정", 다음으로: "다음으로 →", "진행 방식 변경": `진행 방식 바꾸기 — ${/이제부터 ([^(]+)/.exec(t)?.[1]?.trim() ?? ""}`, "계획 다시 얘기하기": "계획 다시 얘기하기" } as Record<string, string>)[m[1]];
+}
 async function codexPart(codexId: string) {
   const v = await (await import("./codex-chat.ts")).view(codexId);
   const messages = v.messages.map((m) => {
     const id = `x${m.id}`;
-    if (m.role === "user") return { id, role: "me", text: m.text };
+    if (m.role === "user") return { id, role: "me", text: shownUser(m.text) };
     if (m.role === "assistant") return { id, role: "tutor", text: m.text };
     if (m.role === "tool") { const first = m.text.split("\n")[0]; return { id, role: "tutor", card: { type: "tool", icon: m.item === "file_change" ? "✏️" : m.item === "command_execution" ? "▶" : m.item === "mcp_tool_call" ? "🧠" : "🔧", label: m.text.split("\n").slice(0, 2).join(" · ").slice(0, 160), ok: !/실패|중단/.test(first) } }; }
     return { id, role: "note", text: m.text };
