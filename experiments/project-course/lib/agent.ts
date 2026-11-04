@@ -58,6 +58,8 @@ export type AgentIO = {
     system?: string;
     capture?: (body: Record<string, unknown>) => Promise<void>;
     execute: (name: string, input: Record<string, unknown>) => Promise<string>;
+    /** 이 대화에서 빼는 도구(11/4 A안: 코스 없는 대화는 get_course_material을 뺀다) */
+    hide?: string[];
   };
 };
 

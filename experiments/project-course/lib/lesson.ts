@@ -269,7 +269,7 @@ async function chatPart(chatId: string) {
     if (m.role === "tool") return { id, role: "tutor", card: { type: "tool", icon: "🔧", label: m.text.split("\n")[0], ok: !/실패|중단/.test(m.text.split("\n")[0]) } };
     return { id, role: "note", text: m.text };
   });
-  return { messages, busy: v.busy, chat: { id: v.id, goal: v.goal, focus: v.focus, support: v.support.map((x) => x.topic), observations: v.observations.length } };
+  return { messages, busy: v.busy, workspace: v.workspace, chat: { id: v.id, goal: v.goal, focus: v.focus, support: v.support.map((x) => x.topic), observations: v.observations.length, noCourse: v.noCourse } };
 }
 const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
 async function chatAsk(runId: string, chatId: string, text: string) {

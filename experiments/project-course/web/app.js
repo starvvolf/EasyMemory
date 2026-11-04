@@ -171,7 +171,7 @@ async function renderHome() {
     const text = input.value.trim(); if (!text) return input.focus();
     busy(btn, async () => {
       // 웹 화면에서 시작하면 VS Code만 열고 튜터 창은 띄우지 않는다(이 화면이 대화창). 튜터 창·VS Code 탭 안에서는 여는 것 없이
-      const out = await api("POST", "/api/free", { courseId: "hello-api", open: !FLOAT && !EMBED, float: false });
+      const out = await api("POST", "/api/free", { courseId: "hello-api", course: "none", open: !FLOAT && !EMBED, float: false });
       await api("POST", `/api/runs/${out.runId}/lesson/1/act`, { do: "ask", text });
       openChat({ runId: out.runId, workspace: out.workspace });
     });
@@ -1345,9 +1345,28 @@ function drawFree() {
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
     FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);
-  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, list, foot));
+  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat ? wsBar(run, lesson) : null, list, foot));
   list.scrollTop = list.scrollHeight;
   if (!FLOAT) window.scrollTo({ top: document.body.scrollHeight });
   tyAfterDraw();
 }
 const go_ = (hash) => go(hash);
+
+/* 작업 폴더 줄(11/4 사용자 "현재 작업 폴더 위치도 사람이 보고 수정 가능하게"): 보기 · 바꾸기 · VS Code로 열기 */
+const wsUi = { edit: false };
+function wsBar(run, lesson) {
+  const path = lesson.workspace || "";
+  if (wsUi.edit) {
+    const input = h("input", { class: "wsin", value: path, "aria-label": "작업 폴더 경로", spellcheck: "false" });
+    const save = (e) => busy(e?.target, async () => {
+      try { await api("POST", `/api/runs/${run.id}/workspace`, { path: input.value }); wsUi.edit = false; lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`); drawLesson(); toast("작업 폴더를 바꿨어요. 다음 질문부터 이 폴더를 봐요."); }
+      catch (err) { toast(err.message); }
+    });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(e); } if (e.key === "Escape") { wsUi.edit = false; drawLesson(); } });
+    setTimeout(() => { input.focus(); input.select(); }, 0);
+    return h("div", { class: "wsbar edit" }, input, h("button", { class: "btn small primary", onclick: save }, "저장"), h("button", { class: "btn small", onclick: () => { wsUi.edit = false; drawLesson(); } }, "취소"));
+  }
+  return h("div", { class: "wsbar" }, h("span", { class: "mut small" }, "작업 폴더"), h("code", { class: "wsp", title: path }, path),
+    h("button", { class: "btn small", disabled: lesson.busy, title: lesson.busy ? "답하는 중에는 못 바꿔요" : "다른 폴더로 바꾸기", onclick: () => { wsUi.edit = true; drawLesson(); } }, "바꾸기"),
+    h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/editor`, { float: false }); toast("VS Code에서 열었어요."); }) }, "VS Code로 열기"));
+}

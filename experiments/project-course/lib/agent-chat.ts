@@ -1,6 +1,6 @@
 import path from "node:path";
 import { randomBytes, createHash } from "node:crypto";
-import { readdir } from "node:fs/promises";
+import { mkdir, readdir, stat } from "node:fs/promises";
 import { DATA, read, update } from "./store.ts";
 import { loadCourse, stageFiles } from "./course.ts";
 import { writeWorkspace } from "./stagegen.ts";
@@ -12,7 +12,8 @@ import type { ToolProgress } from "./tool-progress.ts";
 type Message = { id: number; role: "user" | "assistant" | "tool" | "error"; text: string; at: string; key?: string; progress?: ToolProgress };
 type Support = { id: string; topic: string; returnTo: string; openedAfter: number };
 type Observation = { kind: "understood" | "confused" | "misconception"; note: string; evidenceMessageId: number; evidence: string; verified: false; at: string };
-export type Chat = { id: string; courseId: string; goal: string; focus: string; support: Support[]; observations: Observation[]; messages: Message[]; at: string };
+/** courseId ""는 코스 없는 대화(11/4 사용자 A안). workspace는 사람이 고른 작업 폴더(없으면 대화마다 만든 폴더) */
+export type Chat = { id: string; courseId: string; workspace?: string; goal: string; focus: string; support: Support[]; observations: Observation[]; messages: Message[]; at: string };
 const active = new Set<string>();
 const stopping = new Set<string>();
 const owners = new Map<string, symbol>();
@@ -22,6 +23,9 @@ const err = (status: number, message: string) => Object.assign(new Error(message
 const valid = (id: string) => { if (!/^[a-f0-9]{16}$/.test(id)) throw err(400, "대화 주소가 올바르지 않아요."); return id; };
 const file = (id: string) => path.join(DATA, "agent-chat", `${valid(id)}.json`);
 const ws = (id: string) => path.join(DATA, "agent-chat", "workspaces", valid(id));
+const wsOf = (s: Chat) => s.workspace || ws(s.id);
+/** 코스 없는 대화의 첫 맥락(11/4 사용자 A안: 인사 서버로 흘러가지 않게) */
+export const NO_COURSE_FIXED = "[자유 대화]\n정해진 코스 없음. 무엇을 배우고 만들지는 학습자와 대화로 정한다.\n작업 폴더: {workspace}";
 export const CHAT_PROMPTS = {
   system: CHAT_SYSTEM,
   fixed: "[자유 대화 학습 실험]\n학습 재료: 인사 서버 코스. 순서 강제 없음.",
@@ -84,13 +88,15 @@ export async function chatOf(id: string): Promise<Chat> {
   if (!s) throw err(404, "대화를 찾지 못했어요. 새 대화를 시작해 주세요.");
   return s;
 }
-export async function chatView(id: string) { return { ...await chatOf(id), busy: active.has(id), workspace: ws(id) }; }
-export async function newChat() {
+export async function chatView(id: string) { const s = await chatOf(id); return { ...s, busy: active.has(id), workspace: wsOf(s), noCourse: !s.courseId }; }
+export async function newChat(opts: { course?: string | null } = {}) {
   const id = randomBytes(8).toString("hex");
-  const course = await loadCourse("hello-api");
-  await writeWorkspace(ws(id), await stageFiles(course, 1));
+  // 11/4 사용자 A안: course가 null이면 코스 없이 빈 폴더로 시작한다(실험 페이지는 예전처럼 인사 서버)
+  let courseId = "";
+  if (opts.course === null) await mkdir(ws(id), { recursive: true });
+  else { const course = await loadCourse(opts.course ?? "hello-api"); courseId = course.id; await writeWorkspace(ws(id), await stageFiles(course, 1)); }
   // 11/4 사용자 "프리스타일로, 뭐 여쭤보는 거 없이": 첫 인사·질문 없이 빈 대화로 시작, 목표·초점도 대화에서 정해진다
-  const s: Chat = { id, courseId: course.id, goal: "", focus: "", support: [], observations: [], messages: [], at: now() };
+  const s: Chat = { id, courseId, goal: "", focus: "", support: [], observations: [], messages: [], at: now() };
   await update<Chat>(file(id), s, () => s);
   return chatView(id);
 }
@@ -98,7 +104,7 @@ export async function restartChat(id: string) {
   valid(id);
   if (active.has(id)) throw err(409, "답하는 중에는 재시작할 수 없어요. 멈춘 뒤 다시 눌러 주세요.");
   active.add(id);
-  try { await chatOf(id); return await newChat(); }
+  try { const old = await chatOf(id); return await newChat({ course: old.courseId || null }); }
   finally { active.delete(id); }
 }
 export async function adjustLearning(id: string, input: Record<string, unknown>) {
@@ -141,6 +147,7 @@ export async function chatTool(id: string, name: string, input: Record<string, u
   }
   const s = await chatOf(id);
   if (name === "get_learning_state") return JSON.stringify({ goal: s.goal, focus: s.focus, support: s.support, observations: s.observations.slice(-15), learnerMessages: s.messages.filter((m) => m.role === "user").slice(-12).map((m) => ({ id: m.id, text: m.text })) });
+  if (name === "get_course_material" && !s.courseId) return "이 대화에는 정해진 코스가 없어요. 무엇을 할지는 학습자와 대화로 정하세요.";
   if (name === "get_course_material") {
     const course = await loadCourse(s.courseId);
     return JSON.stringify({ title: course.title, stages: course.stages.map((st) => ({ title: st.title, goal: st.goal })), concepts: course.knowledge, startFiles: Object.fromEntries(await stageFiles(course, 1)) });
@@ -161,7 +168,8 @@ export async function askChat(id: string, text: string, runner?: Runner) {
     const s = await chatOf(id);
     loaded = s;
     const prompts = await chatPrompts();
-    const sessionKey = `chat-${id}:${promptRevision(prompts)}`;
+    // 작업 폴더가 바뀌면 OpenCode 대화도 그 폴더로 새로 연다(키에 폴더를 넣음)
+    const sessionKey = `chat-${id}:${promptRevision(prompts)}:${createHash("sha256").update(wsOf(s)).digest("hex").slice(0, 8)}`;
     // 엔진이 없으면 사용자의 말을 저장하기 전에 명확하게 알린다. 다른 튜터로 조용히 바꾸지 않는다.
     const engine = runner ? { run: runner } : await ready();
     if (!engine) throw err(503, "이 실험은 OpenCode가 필요해요. Node 24와 프로젝트 코스 의존성을 확인해 주세요.");
@@ -172,10 +180,10 @@ export async function askChat(id: string, text: string, runner?: Runner) {
     const recent = history(prior.slice(-80)).slice(-50000);
     const since = history(prior.filter((m) => m.id > (sent.get(sessionKey) ?? 0)));
     const io: AgentIO = {
-      runId: `chat-${id}`, sessKey: sessionKey, n: 1, ws: ws(id), context: recent,
-      parts: { fixed: prompts.fixed, recent, since,
+      runId: `chat-${id}`, sessKey: sessionKey, n: 1, ws: wsOf(s), context: recent,
+      parts: { fixed: s.courseId ? prompts.fixed : NO_COURSE_FIXED.replace("{workspace}", wsOf(s)), recent, since,
         turn: renderTurn(prompts, await chatTool(id, "get_learning_state", {}), userId), files: [] },
-      learningChat: { system: prompts.system, execute: (name, input) => chatTool(id, name, input),
+      learningChat: { system: prompts.system, hide: s.courseId ? [] : ["get_course_material"], execute: (name, input) => chatTool(id, name, input),
         capture: async (body) => { await update<Trace>(traceFile(id), initialTrace, (t) => { t.requests.push({ at: now(), body }); }); } },
       quiet: () => {},
       progress: async (event) => {
@@ -211,6 +219,18 @@ export async function askChat(id: string, text: string, runner?: Runner) {
       });
     } finally { active.delete(id); stopping.delete(id); owners.delete(id); }
   }
+  return chatView(id);
+}
+/** 작업 폴더 바꾸기(11/4 사용자 "작업 폴더 위치를 사람이 보고 수정 가능하게"): 있는 폴더만, 답하는 중에는 못 바꾼다 */
+export async function setChatWorkspace(id: string, dir: string) {
+  const s = await chatOf(id);
+  if (active.has(id)) throw err(409, "답하는 중에는 작업 폴더를 바꿀 수 없어요.");
+  const p = String(dir ?? "").trim().replace(/^"(.*)"$/, "$1");
+  if (!p || !path.isAbsolute(p)) throw err(400, "폴더의 전체 경로를 적어 주세요. 예: C:\\Users\\나\\coding\\my-app");
+  const st = await stat(p).catch(() => null);
+  if (!st?.isDirectory()) throw err(400, "그 폴더를 찾지 못했어요.");
+  const abs = path.resolve(p);
+  await update<Chat>(file(id), s, (x) => { if (abs === ws(id)) delete x.workspace; else x.workspace = abs; });
   return chatView(id);
 }
 export async function stopChat(id: string) { await chatOf(id); if (active.has(id)) stopping.add(id); await stopRun(`chat-${id}`, 1); return chatView(id); }
