@@ -66,6 +66,8 @@ export type Knowledge = {
   explainSee?: Array<{ title: string; id: string | null; sure: boolean }>;
   layered?: boolean;
   bodyBefore?: string;
+  /** 학습자가 직접 쓴 뜻 (2026-11-04, GPT 프롬프트 점검 P2): 층 나누기가 이 뜻을 바꾸지 않는다. 지식 창에서 뜻을 고치거나 직접 추가하며 쓰면 붙는다. */
+  bodyByHand?: boolean;
 };
 /** `hand`: made by the learner (+ 폴더), kept even when empty; folders made on the way by saving or sorting are not. */
 export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string; createdAt: string; hand?: boolean };
@@ -289,7 +291,7 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   // Saving what is already there (a code problem opened again, a page reloaded) is not "seeing it again": the item keeps
   // its place in "최근 순" unless something about it actually changed.
   const before = existing ? JSON.stringify([item.body, item.aliases, item.sources.length, item.folderId, item.state, item.graduated, item.links]) : "";
-  if (input.body && (!item.body || (!existing && input.body))) item.body = input.body.trim().slice(0, 4000);
+  if (input.body && (!item.body || (!existing && input.body))) { item.body = input.body.trim().slice(0, 4000); if (input.source?.kind === "manual") item.bodyByHand = true; }
   for (const alias of [...(input.aliases ?? []), ...(existing && normalize(title) !== normalize(item.title) ? [title] : [])]) {
     const a = alias.trim().slice(0, 120);
     if (a && !namesOf(item).some((n) => normalize(n) === normalize(a))) item.aliases.push(a);
@@ -365,7 +367,8 @@ export const layerKnowledge = (entries: Array<{ id: string; body?: string; examp
     if (!item) continue;
     const old = item.body.split("\n");
     const confusions = old.filter((l) => /^헷갈림:/.test(l.trim()));
-    const meaning = entry.body?.trim();
+    // 학습자가 직접 쓴 뜻은 그대로 둔다(예·헷갈림만 더함).
+    const meaning = item.bodyByHand ? undefined : entry.body?.trim();
     let touched = false;
     if (meaning && meaning !== old.filter((l) => !/^헷갈림:/.test(l.trim())).join("\n").trim()) {
       if (item.body.trim()) item.bodyBefore = item.body;
@@ -401,7 +404,8 @@ export const updateKnowledge = (id: string, patch: { title?: string; body?: stri
   const item = store.items.find((x) => x.id === id);
   if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
   if (patch.title !== undefined) { if (!patch.title.trim()) throw new KnowledgeError(400, "지식 이름이 비어 있어요."); item.title = patch.title.trim().slice(0, 120); }
-  if (patch.body !== undefined) item.body = patch.body.slice(0, 4000);
+  // 이 함수로 뜻을 바꾸는 것은 지식 창의 학습자뿐이다(AI 쪽은 layerKnowledge·enrichKnowledge를 쓴다).
+  if (patch.body !== undefined) { item.body = patch.body.slice(0, 4000); item.bodyByHand = true; }
   if (patch.aliases !== undefined) item.aliases = [...new Set(patch.aliases.map((a) => a.trim()).filter(Boolean))].slice(0, 20);
   if (patch.folderId !== undefined) {
     if (patch.folderId && !store.folders.some((f) => f.id === patch.folderId)) throw new KnowledgeError(404, "폴더를 찾을 수 없어요.");

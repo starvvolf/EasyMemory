@@ -8,6 +8,8 @@ import { askJson, S } from "../assist/model.ts";
 import { getKnowledge, layerKnowledge, pathOf, readAll, recordEvent, sameName, updateKnowledge, KIND_LABEL, type ExplainParts, type Knowledge } from "./store.ts";
 
 const BATCH = 20;
+/** 층 나누기에 보내는 뜻의 길이. 이보다 긴 뜻은 모델이 뒤쪽(조건·식)을 못 보므로 뜻을 바꾸지 않는다(2026-11-04, GPT 프롬프트 점검 P2). */
+const BODY_MAX = 400;
 const LAYER_SYSTEM = `학습자의 지식 카드를 정리한다. 카드마다 이름, 종류, 주제, 지금의 뜻, 만난 곳(자료 이름과 그 자료의 문장)이 주어진다.
 - meaning: 복습할 때 떠올릴 일반적인 뜻, 한국어 1~2문장. 그 주제의 교과서에서 쓰는 뜻으로.
   - 지금의 뜻에 만난 문제·글의 사연(누구의 점수, 어떤 회사, 문제 속 이름·숫자)이 섞여 있으면 빼고 일반적인 말로.
@@ -32,10 +34,12 @@ export async function runLayer(options: { ids?: string[]; batches?: number } = {
       .sort((x, y) => y.updatedAt.localeCompare(x.updatedAt)).slice(0, BATCH);
     if (!todo.length) break;
     const user = todo.map((i, n) => `${n}. ${i.title}${i.aliases.length ? ` (다른 이름: ${i.aliases.slice(0, 4).join(", ")})` : ""} | 종류: ${i.kind ? KIND_LABEL[i.kind] : "?"}`
-      + ` | 주제: ${pathOf({ folders }, i.folderId) || "없음"}\n   지금의 뜻: ${i.body.trim().replace(/\n/g, " / ").slice(0, 400) || "(비어 있음)"}\n   만난 곳: ${sourceLines(i)}`).join("\n");
+      + ` | 주제: ${pathOf({ folders }, i.folderId) || "없음"}\n   지금의 뜻: ${i.body.trim().replace(/\n/g, " / ").slice(0, BODY_MAX) || "(비어 있음)"}\n   만난 곳: ${sourceLines(i)}`).join("\n");
     const data = await askJson<Layered>("knowledge:layer", LAYER_SYSTEM, user, LAYER_SCHEMA);
     calls++;
-    const entries = todo.map((i, n) => { const x = (data.items ?? []).find((y) => y.n === n); return { id: i.id, body: x?.meaning, example: x?.example, confusion: x?.confusion }; });
+    const entries = todo.map((i, n) => { const x = (data.items ?? []).find((y) => y.n === n); 
+      const whole = i.body.trim().replace(/\n/g, " / ").length <= BODY_MAX;
+      return { id: i.id, body: whole ? x?.meaning : undefined, example: x?.example, confusion: x?.confusion }; });
     const r = await layerKnowledge(entries);
     changed.push(...r.changed); done += todo.length;
   }
@@ -46,7 +50,7 @@ export async function runLayer(options: { ids?: string[]; batches?: number } = {
 // 쉽게 풀어 보기 = 모든 지식에 공통인 "쉬운 말" + 그 지식에 도움이 되는 칸 1~3개 (2026-10-28 사용자: "보편적으로 접근하면서도
 // 비유나 예, 다른 데서를 넣을 수 있게"). 칸 이름은 정해진 목록에서만 골라 화면이 늘 같은 모양이다.
 export const EXPLAIN_LABELS = ["비유", "작은 예", "따라가 보기", "기호 뜻", "숫자 넣어 보기", "헷갈리는 짝", "외우는 요령", "예문", "비슷한 말과 차이", "이유 단계", "조건·예외", "사례", "다른 데서"] as const;
-const EXPLAIN_SYSTEM = `학습자가 지식 카드의 뜻만 보고는 이해가 안 된다고 했다. 처음 배우는 사람에게 쉽게 풀어 준다.
+export const EXPLAIN_SYSTEM = `학습자가 지식 카드의 뜻만 보고는 이해가 안 된다고 했다. 처음 배우는 사람에게 쉽게 풀어 준다.
 - 카드의 뜻은 학습자가 배운 자료(강의·교재·글) 기준이다. 시험도 그 기준으로 나온다. 설명은 그 기준을 먼저 풀어 주고, 자료의 전제가 있으면 밝힌다
   ("강의는 월드 좌표계를 오른손 좌표계로 둔다"). 자료의 말을 고치거나 부정하지 않는다.
 - plain: 쉬운 말 2~3문장. 카드의 뜻을 그대로 되풀이하지 말고, 어려운 말을 풀어서 무엇이고 왜 필요한지(또는 왜 그런지)를 말한다.
@@ -84,7 +88,9 @@ export async function explainKnowledge(id: string, question = "", from: "detail"
     ...d.links.filter((l) => l.relation === "씀").map((l) => l.item.id)]);
   const before = items.filter((i) => sureIds.has(i.id)).map((i) => i.title);
   const SOURCE_NAME: Record<string, string> = { pdf: "강의·교재 PDF", web: "웹 글", code: "코드 문제", chat: "대화", manual: "직접 적음" };
-  const source = [...new Map(d.item.sources.map((x) => [x.title, x])).values()].slice(0, 2).map((x) => `${SOURCE_NAME[x.kind] ?? x.kind} 「${x.title}」`).join(", ");
+  // 자료의 전제를 말할 근거로 저장해 둔 원문 문장을 함께 준다 (2026-11-04, GPT 프롬프트 점검 P2: 제목만으로는 강의 관례를 알 수 없다).
+  const source = [...new Map(d.item.sources.map((x) => [x.title, x])).values()].slice(0, 2)
+    .map((x) => `${SOURCE_NAME[x.kind] ?? x.kind} 「${x.title}」${x.quote?.trim() ? ` 원문: "${x.quote.trim().slice(0, 80)}"` : ""}`).join(", ");
   const made = await makeExplanation({ title: d.item.title, aliases: d.item.aliases, body: d.item.body, kind: d.item.kind, path: d.path, example: d.item.example, source, before, question, names: items.map((i) => i.title) });
   const parts = made.parts;
   const see = made.see.map((name) => { const hit = sameName(items, name); return { title: hit?.title ?? name, id: hit?.id ?? null, sure: Boolean(hit && sureIds.has(hit.id)) }; })

@@ -7,6 +7,7 @@
 import { askJson, S } from "./model.ts";
 import { readAll, sameName } from "../knowledge/store.ts";
 
+const squash = (s: string) => s.normalize("NFKC").toLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
 const GENRES = ["concept", "case", "opinion", "news", "other"] as const;
 export const GENRE_LABEL: Record<(typeof GENRES)[number], string> = { concept: "개념 설명", case: "사례·설계", opinion: "주장·칼럼", news: "소식", other: "기타" };
 const MAP_SYSTEM = `학습자가 글을 읽기 전에 볼 "글 지도"를 만든다. 무엇을 외울지는 학습자가 나중에 정하니, 여기서는 지도와 후보만 준비한다.
@@ -40,7 +41,9 @@ export async function mapArticle(input: { title: string; text: string }, options
   const data = await askJson<Mapped>("knowledge:map", MAP_SYSTEM, user, MAP_SCHEMA,
     { model: options.model || process.env.RECALLER_EXTRACT_MODEL?.trim() || "gpt-6.1-terra", effort: options.effort || process.env.RECALLER_EXTRACT_EFFORT?.trim() || "low" });
   // 핵심 아이디어로 이미 저장되는 이름은 개념어 목록에 다시 두지 않는다 (차익거래가 두 군데 뜨던 것, 10/30 동작 점검).
-  const ideas = (data.ideas ?? []).slice(0, 5);
+  // 인용 검사 (2026-11-04, GPT 프롬프트 점검 P1): quote는 "글의 문장 그대로"여야 한다. 공백·기호를 빼고 본문에 없으면 비운다(엔진 cards.ts와 같은 방식).
+  const flat = squash(input.text);
+  const ideas = (data.ideas ?? []).slice(0, 5).map((k) => (k.quote?.trim() && !flat.includes(squash(k.quote)) ? { ...k, quote: "" } : k));
   const terms = (data.terms ?? []).filter((t) => !sameName(ideas.map((k) => ({ title: k.title, aliases: [] as string[] })), t.name)).slice(0, 20).map((t) => {
     const hit = sameName(items, t.name);
     const have = !hit ? "new" : hit.graduated || hit.state === "known" ? "known" : "met";
