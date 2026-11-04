@@ -704,22 +704,22 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .home2 { max-width: 720px; margin: 12vh auto 40px; padding: 0 16px; }
 .home2.fw { margin: 24px auto; }
 .home2 h1 { text-align: center; font-size: 26px; margin-bottom: 18px; }
-.home2 .hbox { display: flex; gap: 8px; align-items: flex-end; border: 1px solid var(--line, #ddd); border-radius: 14px; padding: 10px; background: var(--card, #fff); }
+.home2 .hbox { display: flex; gap: 8px; align-items: flex-end; border: 1px solid var(--line, #ddd); border-radius: 14px; padding: 10px; background: var(--panel); color: var(--ink); }
 .home2 .hin { flex: 1; border: 0; outline: 0; resize: none; font: inherit; background: transparent; color: inherit; }
 .home2 .hlist { margin-top: 28px; display: flex; flex-direction: column; gap: 2px; }
 .home2 .hlist > .mut { margin: 0 0 6px 4px; }
 .home2 .hitem { display: flex; gap: 12px; align-items: center; text-align: left; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.home2 .hitem:hover { background: var(--hover, rgba(0,0,0,.05)); }
+.home2 .hitem:hover { background: var(--soft); }
 .home2 .hitem .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 작업 폴더 줄(11/4) */
 .wsbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line, #e5e5e5); font-size: 13px; }
 .wsbar .wsp { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wsbar.edit .wsin { flex: 1; min-width: 0; font: 13px ui-monospace, Consolas, monospace; padding: 4px 6px; }
+.wsbar.edit .wsin { flex: 1; min-width: 0; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font: 13px ui-monospace, Consolas, monospace; padding: 4px 6px; }
 
 /* 대화 설정(11/4): 모델 고르기 · 파일 고치기 허락 */
-.mpick { font: inherit; font-size: 12px; padding: 2px 4px; border-radius: 6px; max-width: 150px; }
-.editask { display: flex; gap: 8px; align-items: center; margin: 6px 12px; padding: 8px 10px; border-radius: 10px; background: var(--warm-bg, #fff7e6); font-size: 13px; }
+.mpick { font: inherit; font-size: 12px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); padding: 2px 4px; border-radius: 6px; max-width: 150px; }
+.editask { display: flex; gap: 8px; align-items: center; margin: 6px 12px; padding: 8px 10px; border-radius: 10px; background: var(--warn-soft); color: var(--ink); border: 1px solid var(--line); font-size: 13px; }
 .edittog { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 
 /* 배운 것(11/4) */
@@ -727,6 +727,12 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .learned .lhead { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; padding: 6px 0; cursor: pointer; }
 .learned ul { margin: 0 0 8px; padding-left: 18px; max-height: 30vh; overflow: auto; }
 .learned li { margin: 4px 0; }
-.learned .lk { display: inline-block; font-size: 11px; padding: 0 6px; margin-right: 4px; border-radius: 8px; background: rgba(0,0,0,.06); }
-.learned .lk.confused, .learned .lk.misconception { background: #fde8e8; }
-.learned .lk.explained, .learned .lk.applied { background: #e6f6ea; }
+.learned .lk { display: inline-block; font-size: 11px; padding: 0 6px; margin-right: 4px; border-radius: 8px; background: var(--soft); color: var(--ink); }
+.learned .lk.confused, .learned .lk.misconception { background: var(--bad-soft); color: var(--bad); }
+.learned .lk.explained, .learned .lk.applied { background: var(--ok-soft); color: var(--ok); }
+/* 튜터 창(늘 어두운 화면)에서는 새 줄들도 튜터 창 색을 쓴다(11/4 사용자 "글자색이 겹쳐서 안 보임") */
+.float .wsbar, .float .editask, .float .learned, .float .mpick, .float .home2 {
+  --ink: var(--f-ink); --mut: var(--f-mut); --panel: var(--f-s2); --soft: var(--f-s3); --line: var(--f-line2);
+  --warn-soft: #3a2e14; --bad-soft: #3a1d1a; --bad: #ff8a80; --ok-soft: #17301f; --ok: var(--f-ok);
+  color: var(--ink);
+}
