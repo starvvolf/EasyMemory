@@ -841,3 +841,12 @@
 
 - 정한 사람: 사용자("걍 이전거 써")
 - 바로 위 항목의 한 문장 교체는 되돌린다(12회 비교에서 1개 사례만 나아져 근거가 작음). 코드 보호(인용 검사·잘린 뜻·직접 쓴 뜻·원문 문장 근거)는 그대로 둔다.
+
+## 2026-11-04 Codex 실험판 — Codex SDK 엔진 + Recaller 튜터 MCP (D)
+
+- 정한 사람: 사용자("SDK로 엔진 교체, MCP 추가한 코덱스 실험판 하나 만들어 봐. MCP에는 튜터로서 필요한 기능만")
+- 화면 `/codex-chat.html`(대화 목록 · 작업 폴더 · 파일 고치기 허락 · 모델 · 배운 것). 엔진은 PC에 로그인된 Codex CLI(npm 전역 codex.exe)를 `@openai/codex-sdk` 0.166.0으로(ChatGPT 로그인, API 키 아님). SDK는 깃에 없고 `.codex-sdk/`에 풀어 둠.
+- 허락하면 sandbox workspace-write, 아니면 read-only. approval never, 웹 검색 · 네트워크 끔. 사용자 Codex 설정의 다른 MCP 서버는 이 대화에서 끔.
+- MCP `mcp/recaller-tutor.mjs`(의존성 없음) 도구 둘: learner_profile(정해 둔 진행 방식 + 지난 대화에서 뽑은 배운 것) · remember_preference(근거 구절을 코드가 학습자 말과 대조). `default_tools_approval_mode = "approve"`가 없으면 approval never에서 MCP 호출이 거절됨(첫 시험).
+- 답이 끝나면 배운 것 뽑기(chat-learned). 기록 `.data/codex-chat/log.jsonl`(모델 · 입력 길이 · 토큰 · 시간 · 오류).
+- 첫 시험(terra): 파일 만들기 + 도구 호출 24.8초(입력 74.9K 중 캐시 59.1K, 출력 463), 기록 보기 + 선호 저장 15.2초. Codex 기본 지시문·도구가 커서 입력 토큰이 크다. 사용자 전역 Codex 지시(AGENTS.md)도 따라와 작업 폴더에서 CLAUDE.md를 찾으려 함.
