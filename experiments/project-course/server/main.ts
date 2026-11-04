@@ -70,7 +70,7 @@ async function runView(run: Run) {
     stages: course.stages.map((s) => ({ n: s.n, title: s.title, transfer: !!s.transfer, inPlan: shown.includes(s.n), before: s.n < run.plan.start && !s.transfer,
       quick: run.plan.quick.includes(s.n), status: run.stages[String(s.n)] ? { started: !!run.stages[String(s.n)].startedAt, done: !!run.stages[String(s.n)].doneAt, independent: run.stages[String(s.n)].independent, skipped: !!run.stages[String(s.n)].skipped } : null })),
     stage: stageView(course, run, run.current),
-    lesson: !!(await loadPlan(course.id, run.current)),
+    lesson: !!(await loadPlan(course.id, run.current)), chat: !!run.chatId,
     dev: devStatus(run.id),
     lastCheck: lastCheck.get(`${run.id}:${run.current}`) ?? null,
     records: { file: recordsFile(run.id), count: recs.length, items: recs.filter((r) => r.stage === run.current).slice(-40) },
@@ -138,6 +138,19 @@ const routes: [string, RegExp, Handler][] = [
 
   // 바로 시작(11/2, 시험용 맛보기 코스): 묻기·확인 문제 없이 1단계부터 모든 단계를 직접
   // 프리스타일(11/4 사용자 "실험판 느낌 그대로 제품에 연결"): 걸음 없이 대화만 하는 진행 기록을 만들고 VS Code + 튜터 창을 연다
+  // 11/4 사용자 "홈 누르면 세션 목록(클로드 앱·GPT 앱처럼 대화 목록)": 실험판 엔진 대화만, 최근 것부터
+  ["GET", /^\/api\/chats$/, async () => {
+    const ac = await import("../lib/agent-chat.ts");
+    const list = (await runs()).runs.filter((r) => r.chatId);
+    const out = await Promise.all(list.map(async (r) => {
+      try {
+        const c = await ac.chatView(r.chatId!);
+        const first = c.messages.find((m) => m.role === "user")?.text ?? "";
+        return { runId: r.id, title: first.replace(/\s+/g, " ").slice(0, 60) || "새 대화", at: c.messages.at(-1)?.at ?? r.createdAt, count: c.messages.filter((m) => m.role === "user").length, busy: c.busy, workspace: c.workspace };
+      } catch { return null; }
+    }));
+    return out.filter((x) => x && x.count > 0).sort((a, b) => String(b!.at).localeCompare(String(a!.at)));
+  }],
   ["POST", /^\/api\/free$/, async (req) => {
     const b = await body(req);
     const course = await loadCourse(String(b.courseId || "hello-api"));
@@ -154,7 +167,8 @@ const routes: [string, RegExp, Handler][] = [
     const out = await startStage(run.id, plan.start);
     await setActive(run.id);
     let editor: unknown = null;
-    if (b.open !== false) { editor = await openEditor(run.id).catch((e) => ({ ok: false, message: (e as Error).message })); openFloat(run.id, PORT); }
+    // 11/4 사용자 "홈에서 시작하면 대화창으로": 웹 화면에서 시작하면 VS Code만 열고 튜터 창은 띄우지 않는다(float: false)
+    if (b.open !== false) { editor = await openEditor(run.id).catch((e) => ({ ok: false, message: (e as Error).message })); if (b.float !== false) openFloat(run.id, PORT); }
     return { runId: run.id, workspace: out.workspace, editor };
   }],
   ["POST", /^\/api\/quickstart$/, async (req) => {

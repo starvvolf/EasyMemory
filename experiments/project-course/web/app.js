@@ -149,9 +149,8 @@ async function route() {
     if ((m = /^#\/run\/(\w+)\/vscode/.exec(hash))) return await renderHandoff(m[1]);
     if ((m = /^#\/run\/(\w+)\/notes/.exec(hash))) return await renderNotes(m[1]);
     if ((m = /^#\/run\/(\w+)/.exec(hash))) return await renderRunOrLesson(m[1]);
-    if (hash === "#/home" || EMBED) return renderHome();
-    if (status?.active) return go(`#/run/${status.active}`);
-    renderHome();
+    // 11/4 사용자 "홈은 대화 첫 시작만, 예전식은 다 숨겨": 들어오면 늘 홈(대화 시작 + 대화 목록)
+    return await renderHome();
   } catch (e) {
     view.replaceChildren(h("div", { class: "empty" }, h("h1", {}, "열지 못했어요"), h("p", {}, e.message), h("button", { class: "btn", onclick: () => go("#/") }, "처음으로")));
   }
@@ -163,23 +162,33 @@ function resumeRun(r) {
   if (EMBED && r.workspace && !inThisFolder(r.workspace)) { switchingNote("하던 곳으로 가는 중이에요"); openFolder(r.workspace); return; }
   go(`#/run/${r.id}`);
 }
-function renderHome() {
-  const list = status?.runs ?? [];
-  const resume = list.length ? h("div", { class: "resume" },
-    h("div", { class: "mut small" }, "이어서 하기"),
-    list.slice(0, 3).map((r, i) => h("button", { class: `rcard ${i === 0 ? "first" : ""}`, onclick: () => resumeRun(r) },
-      h("div", { class: "grow" }, h("div", { class: "rt" }, r.courseTitle ?? r.course), h("div", { class: "mut small" }, `${r.current}단계 · ${r.stageTitle ?? ""}`)),
-      h("span", { class: "btn small primary" }, "이어 하기")))) : null;
-  view.replaceChildren(h("div", { class: "empty home" },
-    resume,
-    h("h1", {}, list.length ? "새 코스를 정할까요?" : "무엇을 만들면서 배울지 정해 볼까요?"),
-    h("p", {}, "몇 가지 묻고 짧은 확인 문제를 푼 뒤, 준비된 코스에서 어디부터 어떻게 할지 계획을 세워요."),
-    h("div", { class: "row", style: "justify-content:center;margin-top:16px" },
-      h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => { const it = await api("POST", "/api/intake", { mode: "script" }); go(`#/intake/${it.id}`); }) }, "코스 정하기 시작")),
-    h("p", { class: "small", style: "margin-top:14px" }, h("a", { href: "#", onclick: (e) => { e.preventDefault(); busy(null, async () => { const it = await api("POST", "/api/intake", { mode: "ai" }); go(`#/intake/${it.id}`); }); } }, "AI와 이야기하면서 정하기"), " (조금 느려요)"),
-    genForm(),
-    h("p", { class: "small mut", style: "margin-top:22px" }, "처음이라 짧게 겪어 보고 싶다면 ",
-      h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { const out = await api("POST", "/api/quickstart", { courseId: "hello-api" }); await afterStart(out); }) }, "인사 서버 맛보기 (10분)"))));
+/* ---------- 홈(11/4 사용자 "최소한만: 대화 첫 시작 → 대화창, 홈 누르면 대화 목록, 새 대화") ---------- */
+async function renderHome() {
+  const chats = await api("GET", "/api/chats").catch(() => []);
+  const input = h("textarea", { rows: 3, class: "hin", placeholder: "무엇을 배워 볼까요? (Enter 시작, Shift+Enter 줄바꿈)", "aria-label": "첫 질문" });
+  const btn = h("button", { class: "btn primary" }, "시작");
+  const start = (e) => {
+    const text = input.value.trim(); if (!text) return input.focus();
+    busy(btn, async () => {
+      // 웹 화면에서 시작하면 VS Code만 열고 튜터 창은 띄우지 않는다(이 화면이 대화창). 튜터 창·VS Code 탭 안에서는 여는 것 없이
+      const out = await api("POST", "/api/free", { courseId: "hello-api", open: !FLOAT && !EMBED, float: false });
+      await api("POST", `/api/runs/${out.runId}/lesson/1/act`, { do: "ask", text });
+      openChat({ runId: out.runId, workspace: out.workspace });
+    });
+  };
+  btn.onclick = start;
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); start(e); } });
+  const when = (at) => { const d = new Date(at); const t = Date.now() - d; return t < 864e5 ? d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" }); };
+  const list = chats.length ? h("div", { class: "hlist" }, h("div", { class: "mut small" }, "이전 대화"),
+    chats.map((c) => h("button", { class: "hitem", onclick: () => openChat(c) }, h("span", { class: "grow" }, c.title), h("span", { class: "mut small" }, c.busy ? "답하는 중" : when(c.at))))) : null;
+  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), h("div", { class: "hbox" }, input, btn), list));
+  input.focus();
+}
+/** 대화 열기: 튜터 창이면 VS Code 폴더도 그 대화로, VS Code 탭이면 폴더가 다를 때 폴더부터 */
+function openChat(c) {
+  if (FLOAT) return busy(null, async () => { await api("POST", `/api/runs/${c.runId}/editor`).catch(() => null); go(`#/run/${c.runId}`); });
+  if (EMBED && c.workspace && !inThisFolder(c.workspace)) { switchingNote("그 대화의 작업 폴더로 가는 중이에요"); openFolder(c.workspace); return; }
+  go(`#/run/${c.runId}`);
 }
 
 /** 코스를 시작한 뒤: 튜터 탭 안이면 작업 폴더로, 밖이면 VS Code 열기 안내로 */
@@ -598,6 +607,12 @@ let lessonCtx = null;
 let events = null;
 async function renderRunOrLesson(id) {
   const run = await api("GET", `/api/runs/${id}`);
+  // 11/4 사용자 "예전식은 다 숨겨": 대화(실험판 엔진)가 아닌 예전 진행은 열지 않는다
+  if (!run.chat) {
+    view.replaceChildren(h("div", { class: "empty", style: "margin:40px auto" }, h("h1", {}, "예전 방식 진행이에요"), h("p", {}, "지금은 대화로만 공부해요. 홈에서 새 대화를 시작하거나 이전 대화를 고르세요."),
+      h("div", { class: "row", style: "justify-content:center;margin-top:12px" }, h("button", { class: "btn primary", onclick: () => go("#/home") }, "홈으로"))));
+    return;
+  }
   if (EMBED && run.workspace && !inThisFolder(run.workspace)) {
     const st = run.stages.find((x) => x.n === run.current);
     view.replaceChildren(h("div", { class: "empty", style: "margin:40px auto" },
@@ -1325,7 +1340,8 @@ function drawFree() {
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
     h("div", { class: "grow" }, h("b", {}, run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · 실험판 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
-    FLOAT ? h("button", { class: "fib", title: "처음 화면", onclick: () => go_("#/home") }, icon("home")) : null,
+    h("button", { class: "fib", title: "대화 목록", "aria-label": "대화 목록", onclick: () => go_("#/home") }, icon("home")),
+    h("button", { class: "btn small", title: "새 대화", onclick: () => go_("#/home") }, "+ 새 대화"),
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
     FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);

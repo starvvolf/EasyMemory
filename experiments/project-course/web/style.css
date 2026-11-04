@@ -699,3 +699,15 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .freefoot { border-top: 1px solid var(--f-line, var(--line)); padding: 10px 14px; display: grid; gap: 8px; }
 .freein { display: flex; gap: 8px; align-items: flex-end; }
 .freein textarea { flex: 1; min-width: 0; border: 1px solid var(--f-line2, var(--line)); border-radius: 10px; padding: 8px 10px; font: inherit; background: var(--f-s1, var(--panel)); color: var(--f-ink, var(--ink)); resize: none; }
+
+/* 홈(11/4): 대화 시작 칸 + 대화 목록만 */
+.home2 { max-width: 720px; margin: 12vh auto 40px; padding: 0 16px; }
+.home2.fw { margin: 24px auto; }
+.home2 h1 { text-align: center; font-size: 26px; margin-bottom: 18px; }
+.home2 .hbox { display: flex; gap: 8px; align-items: flex-end; border: 1px solid var(--line, #ddd); border-radius: 14px; padding: 10px; background: var(--card, #fff); }
+.home2 .hin { flex: 1; border: 0; outline: 0; resize: none; font: inherit; background: transparent; color: inherit; }
+.home2 .hlist { margin-top: 28px; display: flex; flex-direction: column; gap: 2px; }
+.home2 .hlist > .mut { margin: 0 0 6px 4px; }
+.home2 .hitem { display: flex; gap: 12px; align-items: center; text-align: left; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.home2 .hitem:hover { background: var(--hover, rgba(0,0,0,.05)); }
+.home2 .hitem .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
