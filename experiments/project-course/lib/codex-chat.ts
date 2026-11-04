@@ -51,6 +51,14 @@ function findCodex() {
     return null;
   };
   for (const r of roots) { const hit = walk(r, 0); if (hit) return (codexPath = hit); }
+  // 11/4 노트북: npm 전역 대신 VS Code의 Codex 확장(openai.chatgpt-*)에 든 codex.exe를 쓴다(가장 새 버전)
+  try {
+    const ext = path.join(os.homedir(), ".vscode", "extensions");
+    const dirs = readdirSync(ext).filter((n) => /^openai\.chatgpt-/.test(n)).sort().reverse();
+    for (const d of dirs) for (const plat of ["windows-x86_64", "windows-aarch64", "linux-x86_64", "macos-aarch64", "macos-x86_64"]) {
+      const p = path.join(ext, d, "bin", plat, exe); if (existsSync(p)) return (codexPath = p);
+    }
+  } catch { /* VS Code 확장 없음 */ }
   return (codexPath = null);
 }
 async function sdk() {
