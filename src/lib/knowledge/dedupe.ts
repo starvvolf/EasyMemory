@@ -102,12 +102,12 @@ const FLIP: Partial<Record<Verdict, Verdict>> = { broader: "narrower", narrower:
 const AUTO_RELATIONS = new Set(["포함", "관련", "씀", "먼저", "먼저 알기", "조건", "비슷한 말"]);
 const LINKS = new Set<Verdict>(["narrower", "broader", "uses", "used_by", "requires", "required_by", "needs", "needed_by"]);
 
-export type JudgeItem = { title: string; aliases: string[]; body: string; path: string; kind?: KKind };
+export type JudgeItem = { title: string; aliases: string[]; body: string; path: string; kind?: KKind; vocab?: boolean };
 const line = (d: JudgeItem) =>
   `${d.title}${d.aliases.length ? ` (다른 이름: ${d.aliases.slice(0, 5).join(", ")})` : ""} [${d.path || "폴더 없음"}${d.kind ? ` · ${KIND_LABEL[d.kind]}` : ""}] ${d.body.split("\n").find((l) => l.trim() && !l.startsWith("헷갈림:"))?.slice(0, 160) ?? "(뜻 없음)"}`;
-const asJudgeItem = (d: Awaited<ReturnType<typeof getKnowledge>>): JudgeItem => ({ title: d.item.title, aliases: d.item.aliases, body: d.item.body, path: d.path, ...(d.item.kind ? { kind: d.item.kind } : {}) });
+const asJudgeItem = (d: Awaited<ReturnType<typeof getKnowledge>>): JudgeItem => ({ title: d.item.title, aliases: d.item.aliases, body: d.item.body, path: d.path, ...(d.item.kind ? { kind: d.item.kind } : {}), ...(d.item.vocab ? { vocab: true } : {}) });
 /** 어휘: two words with the same meaning are two things to learn (big, large) — never 같음, at most 비슷한 말 (관련). */
-const vocabPair = (a: JudgeItem, b: JudgeItem) => (a.kind === "vocab" || b.kind === "vocab") && ![a.title, ...a.aliases].some((x) => [b.title, ...b.aliases].some((y) => normalize(x) === normalize(y)));
+const vocabPair = (a: JudgeItem, b: JudgeItem) => (a.vocab || b.vocab) && ![a.title, ...a.aliases].some((x) => [b.title, ...b.aliases].some((y) => normalize(x) === normalize(y)));
 
 /**
  * The model this check uses: RECALLER_DEDUPE_MODEL / _EFFORT, else gpt-6-sol · low. Pinned here (2026-10-31) when the assist

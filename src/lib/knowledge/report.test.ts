@@ -19,7 +19,7 @@ test("점검 보고서: summary, checks, items by 주제 and 자료 (목표 없�
     const ok = await knowledgeReport(new Date("2026-10-28T10:00:00Z"));
     assert.equal(ok.fails, 0, ok.markdown);
     assert.match(ok.markdown, /### CS \/ 그래픽스 \/ 투영 \(2\)/);
-    assert.match(ok.markdown, /\*\*원근 투영\*\* · 개념·용어 · 만남 — 멀수록 작게 \| 고리: →투영 행렬\(포함\) \| 출처: PDF 그래픽스 03$/m);
+    assert.match(ok.markdown, /\*\*원근 투영\*\* · 개념 · 만남 — 멀수록 작게 \| 고리: →투영 행렬\(포함\) \| 출처: PDF 그래픽스 03$/m);
     assert.ok(!ok.markdown.includes("목표"), "no goals in the report");
     assert.match(ok.markdown, /PDF \*\*그래픽스 03\*\* · 지식 2/);
 

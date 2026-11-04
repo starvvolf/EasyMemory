@@ -389,7 +389,7 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
       <header className="kw-d-head">
         <p className="kw-crumb">{detail.path ? detail.path.split(" / ").join(" › ") : "주제 없음"}</p>
         {editing ? <input className="ws-input kw-d-title" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="지식 이름" /> : <h3 className="kw-d-title" onDoubleClick={() => setEditing(true)}><Inline text={item.title} /></h3>}
-        <div className="kw-d-meta"><StateChip state={item.state} graduated={item.graduated} />{item.kind ? <span>{KIND_LABEL[item.kind]}</span> : null}
+        <div className="kw-d-meta"><StateChip state={item.state} graduated={item.graduated} />{item.kind ? <span>{KIND_LABEL[item.kind]}{item.vocab ? " · 어휘" : ""}</span> : null}
           {item.aliases.length ? <span className="kw-aka" title="다른 이름">{item.aliases.slice(0, 4).join(" · ")}{item.aliases.length > 4 ? " …" : ""}</span> : null}</div>
       </header>
       {editing ? (
@@ -460,8 +460,8 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
                 <select className="ws-select" value={item.folderId ?? ""} onChange={(e) => void onAct(() => call(`/api/knowledge/item/${item.id}`, { folderId: e.target.value || null }, "PATCH"))} aria-label="주제 옮기기">
                   <option value="">주제 없음</option>{folderPaths(folders).map((f) => <option key={f.id} value={f.id}>{f.path}</option>)}
                 </select>
-                <select className="ws-select" value={item.kind ?? ""} onChange={(e) => void onAct(() => call(`/api/knowledge/item/${item.id}`, { kind: e.target.value }, "PATCH"))} aria-label="종류">
-                  {!item.kind ? <option value="">종류 정리 중</option> : null}{(Object.keys(KIND_LABEL) as KKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+                <select className="ws-select" value={item.vocab ? "vocab" : item.kind ?? ""} onChange={(e) => void onAct(() => call(`/api/knowledge/item/${item.id}`, { kind: e.target.value }, "PATCH"))} aria-label="종류">
+                  {!item.kind ? <option value="">종류 정리 중</option> : null}{(Object.keys(KIND_LABEL) as KKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}<option value="vocab">개념 · 어휘</option>
                 </select></div></div>
             <div><p className="eyebrow">다른 이름</p>
               <div className="row">{item.aliases.map((a) => <span key={a} className="chip">{a}<button className="kw-x" aria-label={`${a} 지우기`} onClick={() => void onAct(() => call(`/api/knowledge/item/${item.id}`, { aliases: item.aliases.filter((x) => x !== a) }, "PATCH"))}>×</button></span>)}

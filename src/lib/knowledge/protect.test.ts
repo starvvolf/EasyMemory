@@ -60,3 +60,23 @@ test("쉽게 풀어 보기: 저장된 원문 문장을 자료 근거로 보낸�
   await explainKnowledge(k.item.id);
   assert.match(calls.at(-1)!.user, /\[배운 자료\] 강의·교재 PDF 「그래픽스 3장」 원문: "We use a right-handed world coordinate system"/);
 }));
+
+test("유형 6가지: 예전 종류는 읽을 때 바뀌고, 실습이 보내는 vocab은 개념 · 어휘가 된다", () => withData(async () => {
+  const { asKind } = await import("./store.ts");
+  assert.deepEqual(asKind("fact"), { kind: "concept" });
+  assert.deepEqual(asKind("formula"), { kind: "rule" });
+  assert.deepEqual(asKind("vocab"), { kind: "concept", vocab: true });
+  assert.deepEqual(asKind("compare"), { kind: "compare" });
+  const [w] = await saveMany([{ title: "const", body: "다시 대입할 수 없는 변수", kind: "vocab", source: { kind: "code", title: "프로젝트 코스: 게시판", ref: "project:x" } }]);
+  const got = (await getKnowledge(w.item.id)).item;
+  assert.equal(got.kind, "concept"); assert.equal(got.vocab, true);
+  await updateKnowledge(w.item.id, { kind: "method" });
+  assert.equal((await getKnowledge(w.item.id)).item.vocab, undefined, "choosing another 유형 by hand drops 어휘");
+  // An old file with old kinds.
+  const { readFile, writeFile } = await import("node:fs/promises");
+  const file = path.join(process.env.STUDY_FORGE_DATA_DIR!, "knowledge", "store.json");
+  const store = JSON.parse(await readFile(file, "utf8"));
+  store.items[0].kind = "formula";
+  await writeFile(file, JSON.stringify(store));
+  assert.equal((await getKnowledge(w.item.id)).item.kind, "rule");
+}));

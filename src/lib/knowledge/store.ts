@@ -35,8 +35,24 @@ export type KLink = { to: string; relation: string; note?: string };
  * with the same meaning are the same knowledge (어휘: never; big and large are two words to learn).
  */
 export type ExplainParts = { plain: string; extras: Array<{ label: string; text: string }>; differs?: string };
-export type KKind = "concept" | "procedure" | "fact" | "formula" | "vocab";
-export const KIND_LABEL: Record<KKind, string> = { concept: "개념·용어", procedure: "절차·방법", fact: "사실·수치", formula: "공식", vocab: "어휘" };
+/**
+ * 유형 6가지 (2026-11-05, 사용자 "개념원리절차규칙방법비교 이거로 바꿔봐", 지식의 다섯 차원 중 "유형"):
+ * 개념(무엇인가) · 원리(왜 그런가) · 절차(순서) · 규칙(언제 성립하나) · 방법(어떻게 해결하나) · 비교(무엇이 다른가).
+ * 어휘는 개념 아래에 둔다(`vocab: true`, 단어 쓰기 문제 · 같은 지식 판정에서 비슷한 말은 안 합침).
+ * 예전 종류는 읽을 때 바꾼다: 사실·수치 → 개념, 공식 → 규칙, 어휘 → 개념 + vocab. 실습 등이 보내는 "vocab"도 그대로 받는다.
+ */
+export type KKind = "concept" | "principle" | "procedure" | "rule" | "method" | "compare";
+export const KIND_LABEL: Record<KKind, string> = { concept: "개념", principle: "원리", procedure: "절차", rule: "규칙", method: "방법", compare: "비교" };
+export type LegacyKind = "fact" | "formula" | "vocab";
+/** Any kind a caller or an old file may carry → the 유형 and whether it is a word to learn (어휘). */
+export function asKind(kind: string | undefined): { kind?: KKind; vocab?: boolean } {
+  if (!kind) return {};
+  if (kind in KIND_LABEL) return { kind: kind as KKind };
+  if (kind === "vocab") return { kind: "concept", vocab: true };
+  if (kind === "formula") return { kind: "rule" };
+  if (kind === "fact") return { kind: "concept" };
+  return {};
+}
 export type KStats = { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] };
 export type Knowledge = {
   id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean;
@@ -66,6 +82,8 @@ export type Knowledge = {
   explainSee?: Array<{ title: string; id: string | null; sure: boolean }>;
   layered?: boolean;
   bodyBefore?: string;
+  /** 어휘: 개념 중 외우는 단어·표현(외국어 단어, 코드의 키워드). 단어 쓰기 문제를 만들고, 뜻이 같아도 다른 단어와 합치지 않는다. */
+  vocab?: boolean;
   /** 학습자가 직접 쓴 뜻 (2026-11-04, GPT 프롬프트 점검 P2): 층 나누기가 이 뜻을 바꾸지 않는다. 지식 창에서 뜻을 고치거나 직접 추가하며 쓰면 붙는다. */
   bodyByHand?: boolean;
 };
@@ -117,6 +135,7 @@ const fill = (item: Knowledge): Knowledge => {
     stats: { ...{ asked: 0, wrong: 0, hint: 0, correct: 0, correctDays: [] as string[] }, ...(item.stats as Partial<KStats> | undefined) }, graduated: item.graduated === true, body: item.body ?? "" };
   if (item.review !== undefined) { const r = asLeitner(item.review); if (r) out.review = r; else delete out.review; }
   if (item.reviewBefore) out.reviewBefore = asLeitner(item.reviewBefore) ?? null;
+  if (item.kind && !(item.kind in KIND_LABEL)) { const k = asKind(item.kind); if (k.kind) out.kind = k.kind; else delete out.kind; if (k.vocab) out.vocab = true; }
   return out;
 };
 async function writeStore(store: Store) {
@@ -264,8 +283,8 @@ export const deleteFolder = (id: string) => change((store) => {
 export type SaveInput = {
   title: string; body?: string; state?: KState; folderId?: string | null; folder?: string; aliases?: string[];
   source?: Omit<KSource, "at"> & { at?: string }; links?: Array<{ to?: string; title?: string; relation: string }>;
-  /** 종류 when the caller knows it; otherwise sorting decides. */
-  kind?: KKind;
+  /** 종류 when the caller knows it; otherwise sorting decides. 예전 이름(fact·formula·vocab)도 받는다. */
+  kind?: KKind | LegacyKind;
   /** No 주제 folder yet; where it came in, for sorting (classify.ts). */
   topicHint?: string;
   /** 확인 질문 (카드 앞면). */
@@ -303,7 +322,7 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   // A new item takes the state it was saved with; an existing one only moves down to "몰랐음" (asked about) or up to
   // "앎" (checked) — meeting it again never erases what is known about it.
   if (!existing) item.state = input.state ?? "met";
-  if (input.kind && !item.kind) item.kind = input.kind;
+  if (input.kind && !item.kind) { const k = asKind(input.kind); if (k.kind) item.kind = k.kind; if (k.vocab) item.vocab = true; }
   if (input.ask?.trim() && !item.ask) item.ask = input.ask.trim().slice(0, 300);
   if (!existing && input.topicHint && item.folderId === null) item.topicHint = input.topicHint.slice(0, 200);
   else if (input.state === "unknown" || input.state === "known") item.state = input.state;
@@ -399,7 +418,7 @@ export const enrichKnowledge = (entries: Array<{ id: string; body?: string; alia
   }
   return { changed };
 });
-export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null; kind?: KKind; example?: string; explain?: string;
+export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null; kind?: KKind | LegacyKind; example?: string; explain?: string;
   explainParts?: ExplainParts; explainSee?: Knowledge["explainSee"] }) => change((store) => {
   const item = store.items.find((x) => x.id === id);
   if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
@@ -413,7 +432,7 @@ export const updateKnowledge = (id: string, patch: { title?: string; body?: stri
     item.topicHint = undefined;
     item.placedByHand = true;
   }
-  if (patch.kind !== undefined) item.kind = patch.kind;
+  if (patch.kind !== undefined) { const k = asKind(patch.kind); if (k.kind) { item.kind = k.kind; if (k.vocab) item.vocab = true; else delete item.vocab; } }
   if (patch.example !== undefined) item.example = patch.example.trim().slice(0, 600) || undefined;
   if (patch.explain !== undefined) item.explain = patch.explain.trim().slice(0, 3000) || undefined;
   if (patch.explainParts !== undefined) item.explainParts = patch.explainParts;
@@ -678,7 +697,7 @@ export async function readAll() { const store = await readStore(); return { fold
  * 주제 정리: put items into topic paths ("CS/알고리즘/탐색", made on the way) and set their 종류; then remove folders
  * this emptied (never a folder that still holds items or folders). One write.
  */
-export const sortItems = (entries: Array<{ id: string; topic?: string; kind?: KKind }>) => change((store) => {
+export const sortItems = (entries: Array<{ id: string; topic?: string; kind?: KKind | LegacyKind }>) => change((store) => {
   const moved: string[] = [], before = new Set<string>();
   for (const e of entries) {
     const item = store.items.find((x) => x.id === e.id);
@@ -688,7 +707,7 @@ export const sortItems = (entries: Array<{ id: string; topic?: string; kind?: KK
       if (folderId && folderId !== item.folderId) { if (item.folderId) before.add(item.folderId); item.folderId = folderId; moved.push(item.id); }
       item.topicHint = undefined;
     }
-    if (e.kind) item.kind = e.kind;
+    if (e.kind) { const k = asKind(e.kind); if (k.kind) item.kind = k.kind; if (k.vocab) item.vocab = true; }
     item.updatedAt = nowIso();
   }
   // Folders left empty go, and their parents if those are empty too: the ones this move emptied, and any folder made

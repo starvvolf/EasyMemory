@@ -15,10 +15,14 @@ items: 지식마다 topic(주제 경로)과 kind(종류)를 정한다.
 - 학습자 주제 목록에 맞는 경로가 있으면 글자 그대로 그 경로를 쓴다. 비슷한 경로를 새로 만들지 않는다.
 - 자료 이름, 파일 이름, 주차·회차·장 번호, 출처 이름(바킹독, 블로그 이름)은 주제가 아니다. 그런 것은 "만난 곳"일 뿐이니 경로에 넣지 않는다. "지금 위치"나 "힌트"가 그런 이름이면 무시하고 내용으로 정한다.
 - 같은 묶음 안에서 같은 분야는 같은 경로를 쓴다. 지식 하나마다 폴더를 만들지 않는다(한 폴더에 여러 지식이 모이게).
-- kind: concept(개념·용어: 뜻을 아는 것), procedure(절차·방법: 순서·알고리즘·푸는 법), fact(사실·수치: 날짜·값·규정·사례), formula(공식: 식·행렬·계산 규칙), vocab(어휘: 외국어 단어·표현을 외우는 것. 전문 용어는 vocab이 아니라 concept).
+- kind: 이 지식이 무엇을 아는 것인지로 하나만 고른다(2026-11-05 유형 6가지).
+  concept(개념: 무엇인가. 용어·정의·사실·값도 여기), principle(원리: 왜 그런가·어떻게 작동하나. 예 "금리가 오르면 채권 가격이 내리는 이유"),
+  procedure(절차: 정해진 순서대로 하는 일. 예 "임의의 점을 중심으로 회전하는 순서", 알고리즘의 단계), rule(규칙: 언제 성립하는 규정·조건·공식. 예 "정렬된 배열이어야 이분 탐색을 쓸 수 있다", 계산 공식),
+  method(방법: 문제를 해결하는 방법·기법들. 예 "교착 상태를 막는 방법"), compare(비교: 둘 이상의 차이. 예 "TCP와 UDP의 차이"),
+  vocab(어휘: 개념 중 외국어 단어·표현처럼 단어 자체를 외우는 것. 전문 용어는 vocab이 아니라 concept).
 - n은 받은 번호 그대로.`;
 type Sorted = { items: Array<{ n: number; topic: string; kind: string }> };
-const SCHEMA = S.obj({ items: S.arr(S.obj({ n: S.int, topic: S.str, kind: S.oneOf(...KINDS) })) });
+const SCHEMA = S.obj({ items: S.arr(S.obj({ n: S.int, topic: S.str, kind: S.oneOf(...KINDS, "vocab") })) });
 
 /** Items still to sort: no 종류 yet. */
 const pending = (items: Knowledge[]) => items.filter((i) => !i.kind);
@@ -51,11 +55,11 @@ export async function runClassify(options: { batches?: number; model?: string; e
       const data = await askJson<Sorted>("knowledge:classify", SYSTEM, user, SCHEMA, { model: options.model, effort: options.effort });
       calls++;
       // Items the learner placed by hand keep their folder; they only get a 종류.
-      const entries = (data.items ?? []).flatMap((x) => {
+      const entries: Array<{ id: string; kind: KKind | "vocab"; topic?: string }> = (data.items ?? []).flatMap((x) => {
         const item = todo[x.n];
-        if (!item || !KINDS.includes(x.kind as KKind)) return [];
+        if (!item || !(KINDS.includes(x.kind as KKind) || x.kind === "vocab")) return [];
         const topic = x.topic.split("/").map((p) => p.trim()).filter(Boolean).slice(0, 5).join("/");
-        return [{ id: item.id, kind: x.kind as KKind, ...(item.placedByHand || !topic ? {} : { topic }) }];
+        return [{ id: item.id, kind: x.kind as KKind | "vocab", ...(item.placedByHand || !topic ? {} : { topic }) }];
       });
       // An item the model left out still gets a 종류, so one bad answer does not ask about it forever.
       for (const item of todo) if (!entries.some((e) => e.id === item.id)) entries.push({ id: item.id, kind: "concept" });

@@ -13,8 +13,9 @@ export const errorText = (e: unknown) => e instanceof Error ? e.message : String
 export type KState = "met" | "unknown" | "known";
 export const STATE_LABEL: Record<KState, string> = { met: "만남", unknown: "몰랐음", known: "앎" };
 export type Folder = { id: string; name: string; parentId: string | null; order: number; note: string };
-export type KKind = "concept" | "procedure" | "fact" | "formula" | "vocab";
-export const KIND_LABEL: Record<KKind, string> = { concept: "개념·용어", procedure: "절차·방법", fact: "사실·수치", formula: "공식", vocab: "어휘" };
+// 유형 6가지 (2026-11-05). 어휘는 개념 아래 `vocab` 표시(저장소 store.ts와 같음).
+export type KKind = "concept" | "principle" | "procedure" | "rule" | "method" | "compare";
+export const KIND_LABEL: Record<KKind, string> = { concept: "개념", principle: "원리", procedure: "절차", rule: "규칙", method: "방법", compare: "비교" };
 export type ItemLite = { id: string; title: string; state: KState; graduated: boolean; folderId: string | null; updatedAt: string; lastAt: string; line: string; links: number; weak: number; dueAt?: string; kind?: KKind };
 /** 목표 (2026-10-28 "4개 축"): why and until when; its 자료 bring their items. */
 export type SourceKindName = "pdf" | "web" | "code" | "chat" | "manual";
@@ -44,7 +45,7 @@ export function whenText(iso: string, now = Date.now()) {
 export type Tree = { folders: Folder[]; items: ItemLite[] };
 export type KEvent = { id: string; at: string; knowledgeId: string; kind: "met" | "asked" | "wrong" | "hint" | "correct" | "note"; detail: string; source?: { kind: string; title: string } };
 export const EVENT_LABEL: Record<KEvent["kind"], string> = { met: "만남", asked: "물어봄", wrong: "틀림", hint: "힌트 받음", correct: "맞힘", note: "메모" };
-export type Knowledge = { id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean; aliases: string[]; kind?: KKind;
+export type Knowledge = { id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean; aliases: string[]; kind?: KKind; vocab?: boolean;
   example?: string; explain?: string;
   explainParts?: { plain?: string; extras?: Array<{ label: string; text: string }>; differs?: string };
   explainSee?: Array<{ title: string; id: string | null; sure: boolean }>;

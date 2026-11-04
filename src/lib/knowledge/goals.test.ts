@@ -92,7 +92,8 @@ test("주제 정리: one call sorts new items into one topic tree with a 종류,
   const pathOfItem = async (id: string) => (await getKnowledge(id)).path;
   assert.equal(await pathOfItem(a.item.id), "CS / 알고리즘 / 탐색");
   assert.equal(await pathOfItem(b.item.id), "CS / 그래픽스 / 투영");
-  assert.equal((await getKnowledge(c.item.id)).item.kind, "vocab");
+  assert.equal((await getKnowledge(c.item.id)).item.kind, "concept");
+  assert.equal((await getKnowledge(c.item.id)).item.vocab, true, "어휘 is a 개념 marked as a word");
   assert.equal(await pathOfItem(mine.item.id), "바킹독", "moved by hand: stays");
   assert.equal((await getKnowledge(mine.item.id)).item.kind, "concept", "left out by the model: still gets a 종류");
   assert.equal((await getKnowledge(b.item.id)).item.topicHint, undefined);
@@ -106,7 +107,7 @@ test("주제 정리: one call sorts new items into one topic tree with a 종류,
 
 test("어휘: words with the same meaning are asked both ways and never offered as the same knowledge", async () => {
   const { questionsFor } = await import("./questions.ts");
-  const base = { aliases: [], folderId: "f", links: [] as Array<{ to: string; relation: string }>, kind: "vocab" as const };
+  const base = { aliases: [], folderId: "f", links: [] as Array<{ to: string; relation: string }>, kind: "concept" as const, vocab: true };
   const pool = [{ ...base, id: "a", title: "abandon", body: "버리다" }, { ...base, id: "b", title: "acquire", body: "얻다" }, { ...base, id: "c", title: "adapt", body: "적응하다" }];
   const qs = questionsFor(pool[0], pool, "s");
   assert.deepEqual(qs.map((q) => q.kind), ["flashcard", "short", "choice"]);

@@ -25,7 +25,7 @@ onKnowledgeCreated(() => scheduleAfterSave());
 const state = z.enum(["met", "unknown", "known"]);
 const id = z.string().regex(/^(k|fld)_[a-f0-9]{12}$/);
 const goalId = z.string().regex(/^goal_[a-f0-9]{12}$/);
-const kind = z.enum(["concept", "procedure", "fact", "formula", "vocab"]);
+const kind = z.enum(["concept", "principle", "procedure", "rule", "method", "compare", "fact", "formula", "vocab"]);
 const goalSource = z.object({ key: z.string().min(1).max(300), kind: z.enum(["pdf", "web", "code", "chat", "manual"]), title: z.string().max(200) });
 const sourceRef = z.object({ kind: z.enum(["pdf", "web", "code", "chat", "manual"]), title: z.string().max(200), ref: z.string().max(200).optional(), url: z.string().max(2000).optional(),
   page: z.number().int().optional(), quote: z.string().max(400).optional() });
