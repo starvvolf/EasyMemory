@@ -12,11 +12,13 @@ const TOOLS = [
     name: "learner_profile",
     description: "학습자가 정해 둔 진행 방식(예: 완성 코드를 한 번에 주지 않기)과, 지난 대화들에서 배운 것 · 헷갈린 것을 본다. 대화를 시작할 때나 설명 수준을 정할 때 쓴다.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { title: "학습자 기록 보기", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
     name: "remember_preference",
     description: "학습자가 앞으로의 진행 방식을 말하면 기억한다(다음 대화에도 이어짐). quote는 학습자가 한 말에서 글자 그대로 옮긴 구절.",
     inputSchema: { type: "object", properties: { text: { type: "string", description: "기억할 진행 방식 한 문장" }, quote: { type: "string", description: "근거가 된 학습자 말 그대로" } }, required: ["text", "quote"], additionalProperties: false },
+    annotations: { title: "진행 방식 기억", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
 ];
 

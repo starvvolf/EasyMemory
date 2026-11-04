@@ -160,7 +160,8 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
       codexPathOverride: exe,
       // rg 같은 Codex 도구가 PATH에서 보이게(SDK가 원래 하는 일. 경로를 직접 줘서 우리가 붙인다)
       env: { ...process.env, PATH: `${path.join(path.dirname(exe), "..", "path")}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}` },
-      config: { mcp_servers: { ...off, recaller: { command: process.execPath, args: [MCP_SCRIPT], env: { RECALLER_URL: `http://127.0.0.1:${process.env.PC_PORT ?? 4100}`, RECALLER_CHAT: id } } } },
+      // Recaller 도구는 승인 없이(approval never에서 MCP 호출이 거절되던 것, 11/4 첫 시험). 키: mcp_servers.<id>.default_tools_approval_mode
+      config: { mcp_servers: { ...off, recaller: { command: process.execPath, args: [MCP_SCRIPT], default_tools_approval_mode: "approve", env: { RECALLER_URL: `http://127.0.0.1:${process.env.PC_PORT ?? 4100}`, RECALLER_CHAT: id } } } },
     });
     const opts = { workingDirectory: ws, skipGitRepoCheck: true, model: c.model ?? CHAT_MODELS[0].id, modelReasoningEffort: "low",
       sandboxMode: c.edit === "allow" ? "workspace-write" : "read-only", approvalPolicy: "never", networkAccessEnabled: false, webSearchMode: "disabled" };
