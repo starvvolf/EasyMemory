@@ -8,6 +8,7 @@ import path from "node:path";
 import { calibration } from "./calibrate.ts";
 import { judge, LANGS, normalizeOutput, runOnce, type CompareHow, type Judgement, type Lang, type TestCase } from "./run.ts";
 import { SEEDS } from "./seeds.ts";
+import { runCheckInputs } from "./testgen/index.ts";
 
 export type Problem = {
   id: string; title: string; statement: string; inputText: string; outputText: string;
@@ -331,9 +332,16 @@ export async function runCustom(lang: Lang, code: string, input: string) { retur
 export async function findCounterexample(problemId: string, lang: Lang, code: string, inputs: string[]) {
   const problem = await readProblem(problemId);
   if (!problem.reference) throw new CodeError(400, "이 문제에는 모범 풀이가 없어서 반례를 찾을 수 없어요.");
-  const { tests } = await answerWithReference(problem.reference.code, inputs.slice(0, 30));
-  if (!tests.length) return { found: false as const, tried: 0 };
+  // 2026-11-04 (GPT 프롬프트 점검 A P2): an input outside the constraints is no counterexample. The saved generator's
+  // check() decides; problems from before the generator (seeds) keep every input as before.
+  let candidates = inputs.slice(0, 30), refused = 0;
+  if (problem.testgen?.generator) {
+    const checked = await runCheckInputs(problem.testgen.generator, candidates);
+    if (checked.ok) { refused = checked.refused.length; candidates = checked.kept.map((i) => candidates[i]); }
+  }
+  const { tests } = await answerWithReference(problem.reference.code, candidates);
+  if (!tests.length) return { found: false as const, tried: 0, refused };
   const result = await judge(lang, code, tests, { timeLimitMs: problem.timeLimitMs, memoryLimitMb: problem.memoryLimitMb, stopAtFirstFail: true, compare: problem.compare, calibration: (await calibration()) ?? undefined });
   const bad = result.results.find((r) => r.verdict !== "AC");
-  return bad ? { found: true as const, tried: result.results.length, case: bad, compile: result.compile } : { found: false as const, tried: tests.length, compile: result.compile };
+  return bad ? { found: true as const, tried: result.results.length, refused, case: bad, compile: result.compile } : { found: false as const, tried: tests.length, refused, compile: result.compile };
 }

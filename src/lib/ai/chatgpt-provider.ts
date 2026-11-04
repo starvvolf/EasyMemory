@@ -19,7 +19,7 @@ export function responseFailure(status: number, body: ApiError): ModelError {
 
 /** Structured output asks for a JSON Schema; `fallback` is the plain JSON mode used when the plan route refuses it. */
 type ResponseBody = {
-  model: string; instructions: string; store: boolean; stream: boolean;
+  model: string; instructions: string; store: boolean; stream: boolean; prompt_cache_key?: string;
   input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail: "high" | "low" } | { type: "input_file"; filename: string; file_data: string }> }>;
   reasoning?: { effort: string }; text?: { format: { type: string } & Record<string, unknown> };
 };
@@ -55,10 +55,13 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
       ? [...(request.files ?? []).map((file) => ({ type: "input_file" as const, filename: file.filename, file_data: file.dataUrl })),
           { type: "input_text" as const, text: userText },
           ...(request.images ?? []).flatMap((image) => [
-            { type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: image.detail ?? "high" as const }])]
-      : userText }],
+            { type: "input_text" as const, text: `[이미지] ${image.label}` }, { type: "input_image" as const, image_url: image.dataUrl, detail: image.detail ?? "high" as const }]),
+          // tail last: everything before it (instructions, the material, its images) stays a cacheable shared prefix.
+          ...(request.tail ? [{ type: "input_text" as const, text: request.tail }] : [])]
+      : request.tail ? `${userText}\n\n${request.tail}` : userText }],
     store: false,
     stream: true,
+    ...(request.cacheKey ? { prompt_cache_key: request.cacheKey } : {}),
     ...(request.effort ? { reasoning: { effort: request.effort } } : {}),
     ...(useSchema
       ? { text: { format: { type: "json_schema", name: request.schemaName ?? "response", schema: request.schema, strict: true } } }

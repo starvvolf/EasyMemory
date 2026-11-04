@@ -6,7 +6,7 @@ import { calibration } from "@/lib/code/calibrate";
 import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
-import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
+import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
 import { resolveSource, type Resolved } from "@/lib/code/source";
 
@@ -137,7 +137,8 @@ async function handle(request: Request, context: RouteContext) {
           const b = await body(z.object({ maxN: z.number().nonnegative().max(1e19).optional(), timeSec: z.number().min(0).max(100).optional(), output: z.string().max(500).optional(),
             input: z.string().max(5000).optional(), myAnswer: z.string().max(2000).optional() }));
           const result = await checkUnderstand(id, b);
-          await saveStep(id, "understand", { answer: b, result });
+          const before = (await readTrain(id)).steps.understand;
+          await saveStep(id, "understand", { answer: { ...(before?.answer ?? {}), ...b }, result: { ...result, fields: (before?.result as { fields?: unknown } | undefined)?.fields } });
           return json({ result, size: await sizeOf(id) });
         }
         if (p[3] === "complexity" && m === "POST") {
@@ -154,10 +155,21 @@ async function handle(request: Request, context: RouteContext) {
           return json(await tryInputs(id, b.inputs, b.lang && b.code ? { lang: b.lang, code: b.code } : undefined));
         }
         if (p[3] === "check" && m === "POST") {
-          const b = await body(z.object({ step: z.enum(["model", "approach", "correct"]), answer: z.record(z.string(), z.string().max(1000)) }));
-          const result = await trainCheck({ problemId: id, step: b.step, answer: b.answer });
-          await saveStep(id, b.step, { answer: b.answer, result });
+          const b = await body(z.object({ step: z.enum(["understand", "model", "approach", "correct"]), answer: z.record(z.string(), z.string().max(1000)), field: z.string().max(20).optional() }));
+          const result = await trainCheck({ problemId: id, step: b.step, answer: b.answer, ...(b.field ? { field: b.field } : {}) });
+          // A box check keeps the step's own result and adds the box's under fields; a whole-step check keeps the boxes'.
+          const before = (await readTrain(id)).steps[b.step];
+          const prior = (before?.result ?? {}) as { fields?: Record<string, unknown> };
+          await saveStep(id, b.step, b.field
+            ? { answer: { ...(before?.answer ?? {}), ...b.answer }, result: { ...prior, fields: { ...(prior.fields ?? {}), [b.field]: result } } }
+            : { answer: b.answer, result: { ...result, ...(prior.fields ? { fields: prior.fields } : {}) } });
           return json({ result });
+        }
+        if (p[3] === "ask" && m === "POST") {
+          const b = await body(z.object({ step: z.enum(["understand", "model", "approach", "correct", "complexity"]), question: z.string().min(1).max(2000) }));
+          await recordAsked(id, `[훈련] ${b.question}`);
+          const answers = Object.fromEntries(Object.entries((await readTrain(id)).steps).map(([k, v]) => [k, v?.answer]));
+          return json(await trainAsk({ problemId: id, step: b.step, answers, question: b.question }));
         }
         if (p[3] === "step" && m === "POST") {
           const b = await body(z.object({ step: z.enum(STEPS), answer: z.record(z.string(), z.unknown()).optional(), skipped: z.boolean().optional() }));
