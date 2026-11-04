@@ -13,7 +13,8 @@ type Message = { id: number; role: "user" | "assistant" | "tool" | "error"; text
 type Support = { id: string; topic: string; returnTo: string; openedAfter: number };
 type Observation = { kind: "understood" | "confused" | "misconception"; note: string; evidenceMessageId: number; evidence: string; verified: false; at: string };
 /** courseId ""는 코스 없는 대화(11/4 사용자 A안). workspace는 사람이 고른 작업 폴더(없으면 대화마다 만든 폴더) */
-export type Chat = { id: string; courseId: string; workspace?: string; goal: string; focus: string; support: Support[]; observations: Observation[]; messages: Message[]; at: string };
+/** model: 이 대화의 모델(없으면 기본 terra). edit: 학습자가 파일 고치기를 허락했는지(없으면 아직 안 물음) — 11/4 사용자 */
+export type Chat = { id: string; courseId: string; workspace?: string; model?: string; edit?: "allow" | "deny"; goal: string; focus: string; support: Support[]; observations: Observation[]; messages: Message[]; at: string };
 const active = new Set<string>();
 const stopping = new Set<string>();
 const owners = new Map<string, symbol>();
@@ -182,8 +183,8 @@ export async function askChat(id: string, text: string, runner?: Runner) {
     const io: AgentIO = {
       runId: `chat-${id}`, sessKey: sessionKey, n: 1, ws: wsOf(s), context: recent,
       parts: { fixed: s.courseId ? prompts.fixed : NO_COURSE_FIXED.replace("{workspace}", wsOf(s)), recent, since,
-        turn: renderTurn(prompts, await chatTool(id, "get_learning_state", {}), userId), files: [] },
-      learningChat: { system: prompts.system, hide: s.courseId ? [] : ["get_course_material"], execute: (name, input) => chatTool(id, name, input),
+        turn: renderTurn(prompts, await chatTool(id, "get_learning_state", {}), userId) + (s.edit === "allow" ? `\n${EDIT_ALLOWED}` : ""), files: [] },
+      learningChat: { system: prompts.system, hide: s.courseId ? [] : ["get_course_material"], model: s.model, edit: s.edit === "allow", execute: (name, input) => chatTool(id, name, input),
         capture: async (body) => { await update<Trace>(traceFile(id), initialTrace, (t) => { t.requests.push({ at: now(), body }); }); } },
       quiet: () => {},
       progress: async (event) => {
@@ -231,6 +232,28 @@ export async function setChatWorkspace(id: string, dir: string) {
   if (!st?.isDirectory()) throw err(400, "그 폴더를 찾지 못했어요.");
   const abs = path.resolve(p);
   await update<Chat>(file(id), s, (x) => { if (abs === ws(id)) delete x.workspace; else x.workspace = abs; });
+  return chatView(id);
+}
+/** 고를 수 있는 모델(11/4 사용자 "채팅창에서 모델 변경"). 첫 것이 기본 */
+export const CHAT_MODELS = [
+  { id: "gpt-6.1-terra", label: "terra (기본 · 빠름)" },
+  { id: "gpt-6.1-sol", label: "sol (더 똑똑 · 느림)" },
+  { id: "gpt-6-luna", label: "luna (싸고 가벼움)" },
+];
+/** 파일 고치기를 허락한 대화의 매 차례 맥락 끝에 붙는 한 줄(고정 지시문은 그대로) */
+export const EDIT_ALLOWED = "[파일 고치기 허용] 학습자가 허락해서 이 대화에서는 edit·write로 작업 폴더의 파일을 만들고 고칠 수 있다. 고친 뒤에는 무엇을 왜 바꿨는지 짧게 말한다.";
+/** 대화 설정 바꾸기: 모델 · 파일 고치기 허락 */
+export async function setChatOptions(id: string, input: Record<string, unknown>) {
+  const s = await chatOf(id);
+  if (active.has(id)) throw err(409, "답하는 중에는 바꿀 수 없어요.");
+  const model = input.model === undefined ? undefined : String(input.model);
+  if (model !== undefined && !CHAT_MODELS.some((m) => m.id === model)) throw err(400, "고를 수 없는 모델이에요.");
+  const edit = input.edit === undefined ? undefined : input.edit === "allow" ? "allow" : input.edit === "deny" ? "deny" : null;
+  if (edit === null) throw err(400, "edit는 allow 또는 deny예요.");
+  await update<Chat>(file(id), s, (x) => {
+    if (model !== undefined) { if (model === CHAT_MODELS[0].id) delete x.model; else x.model = model; }
+    if (edit !== undefined) x.edit = edit;
+  });
   return chatView(id);
 }
 export async function stopChat(id: string) { await chatOf(id); if (active.has(id)) stopping.add(id); await stopRun(`chat-${id}`, 1); return chatView(id); }

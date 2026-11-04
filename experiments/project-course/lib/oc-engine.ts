@@ -158,6 +158,7 @@ function policyPlugin(fake: boolean) {
           try {
             const freeSys = live.get(ev.sessionID)?.io.freeSystem;
             const j = shapeRequest(JSON.parse(await ev.request.clone().text()), reasoningSummary, experiment ? experiment.system ?? CHAT_SYSTEM : freeSys ? freeSys : false);
+            if (experiment?.model) j.model = experiment.model; // 대화마다 고른 모델(11/4)
             const run = live.get(ev.sessionID)?.io.runId;
             if (run) {
               j.prompt_cache_key = `rc-${run}`; // 질문마다 새 대화라도 같은 진행 기록이면 앞부분 캐시가 맞게
@@ -201,7 +202,7 @@ function policyPlugin(fake: boolean) {
         // 흐름 투어: 파일은 붙여 보냈으니 show_tour 하나만
         // 도구(11/3 사용자 "기본 4개"): 보통 질문은 읽기 · 요청 보내기 · 조각 돌리기 · 자동 확인만. 고치기는 작업 지시(범위가 있을 때)만
         const custom = new Set<string>(l?.io.learningChat ? CHAT_TOOLS.map((t) => t.name) : []);
-        const allow = l?.io.learningChat ? new Set([...READ, "run_snippet", ...custom])
+        const allow = l?.io.learningChat ? new Set([...READ, "run_snippet", ...custom, ...(l.io.learningChat.edit ? EDITS : [])])
           : l?.io.mode === "explain" ? new Set<string>() : l?.io.mode === "tour" ? new Set(["show_tour"])
           : l?.io.stuck ? new Set([...BASIC, ...STUCK])
           : l?.io.scope?.length ? new Set([...BASIC, ...EDITS]) : new Set(BASIC);
@@ -212,6 +213,15 @@ function policyPlugin(fake: boolean) {
         if (process.env.OC_DEBUG) console.log("[oc perm]", ev.action, JSON.stringify(ev.resources), ev.effect);
         const l = live.get(ev.sessionID);
         if (l?.io.learningChat) {
+          // 학습자가 허락한 대화만 고치기를 허용한다. 작업 폴더 밖 · node_modules는 막는다(11/4)
+          if (EDITS.has(ev.action)) {
+            const files: string[] = (ev.resources ?? []).map((r: string) => String(r).replace(/\\/g, "/"));
+            const root = l.io.ws.replace(/\\/g, "/").replace(/\/$/, "");
+            const inside = (f: string) => f === "*" || !path.isAbsolute(f) && !f.split("/").includes("..") || f.toLowerCase().startsWith(root.toLowerCase() + "/");
+            if (!l.io.learningChat.edit) { ev.effect = "deny"; ev.message = "학습자가 파일 고치기를 허락하지 않았어요. 고칠 곳과 코드를 알려 주세요."; return; }
+            if (files.some((f) => /(^|\/)(node_modules|\.git)(\/|$)/.test(f) || !inside(f))) { ev.effect = "deny"; ev.message = "작업 폴더 밖이나 node_modules·.git은 고칠 수 없어요."; return; }
+            ev.effect = "allow"; return;
+          }
           ev.effect = READ.has(ev.action) || ev.action === "run_snippet" || CHAT_TOOLS.some((t) => t.name === ev.action) ? "allow" : "deny";
           return;
         }
@@ -253,6 +263,7 @@ function policyPlugin(fake: boolean) {
         const relOf = (x: string) => (x.startsWith(l.io.ws) ? path.relative(l.io.ws, x) : x).replace(/\\/g, "/");
         if (ev.tool === "read") await l.io.show({ type: "tool", icon: "📄", label: ok ? `파일을 읽었어요: ${relOf(p)}` : `파일을 읽지 못했어요: ${relOf(p)}`, ok });
         else if (ev.tool === "glob" || ev.tool === "grep") await l.io.show({ type: "tool", icon: "🔎", label: `${ev.tool === "grep" ? "코드에서" : "파일을"} 찾아봤어요: ${String(ev.input?.pattern ?? "")}`, ok });
+        else if (EDITS.has(ev.tool) && ok && l.io.learningChat) { for (const f of editPaths(ev.tool, ev.input)) await l.io.show({ type: "tool", icon: "✏️", label: `파일을 고쳤어요: ${relOf(f)}`, ok: true }); }
         else if (EDITS.has(ev.tool) && ok) { for (const f of editPaths(ev.tool, ev.input)) await recordEdit(l, relOf(f)); }
         else if (EDITS.has(ev.tool) && !ok) await l.io.show({ type: "tool", icon: "✋", label: `고치지 않았어요: ${String(ev.error?.message ?? "").slice(0, 120)}`, ok: false });
       });
