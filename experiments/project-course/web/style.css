@@ -721,3 +721,12 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .mpick { font: inherit; font-size: 12px; padding: 2px 4px; border-radius: 6px; max-width: 150px; }
 .editask { display: flex; gap: 8px; align-items: center; margin: 6px 12px; padding: 8px 10px; border-radius: 10px; background: var(--warm-bg, #fff7e6); font-size: 13px; }
 .edittog { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+
+/* 배운 것(11/4) */
+.learned { margin: 0 12px; border-bottom: 1px solid var(--line, #e5e5e5); font-size: 13px; }
+.learned .lhead { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; padding: 6px 0; cursor: pointer; }
+.learned ul { margin: 0 0 8px; padding-left: 18px; max-height: 30vh; overflow: auto; }
+.learned li { margin: 4px 0; }
+.learned .lk { display: inline-block; font-size: 11px; padding: 0 6px; margin-right: 4px; border-radius: 8px; background: rgba(0,0,0,.06); }
+.learned .lk.confused, .learned .lk.misconception { background: #fde8e8; }
+.learned .lk.explained, .learned .lk.applied { background: #e6f6ea; }

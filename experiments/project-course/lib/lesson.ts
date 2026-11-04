@@ -270,13 +270,21 @@ async function chatPart(chatId: string) {
     return { id, role: "note", text: m.text };
   });
   const ac = await import("./agent-chat.ts");
-  return { messages, busy: v.busy, workspace: v.workspace, chat: { id: v.id, goal: v.goal, focus: v.focus, support: v.support.map((x) => x.topic), observations: v.observations.length, noCourse: v.noCourse,
+  const lr = await (await import("./chat-learned.ts")).learnedOf(chatId);
+  const learned = lr.items.map((x) => ({ concept: x.concept, kind: x.kind, meaning: x.meaning, quote: x.quote, messageId: x.messageId }));
+  return { messages, busy: v.busy, workspace: v.workspace, learned, chat: { id: v.id, goal: v.goal, focus: v.focus, support: v.support.map((x) => x.topic), observations: v.observations.length, noCourse: v.noCourse,
     model: v.model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, edit: v.edit ?? null } };
 }
 const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
 async function chatAsk(runId: string, chatId: string, text: string) {
   const ac = await import("./agent-chat.ts");
-  const job = ac.askChat(chatId, text).catch(() => {}).finally(() => { clearInterval(chatPolls.get(runId)); chatPolls.delete(runId); notifyLesson(runId); });
+  const job = ac.askChat(chatId, text).catch(() => {}).finally(async () => {
+    clearInterval(chatPolls.get(runId)); chatPolls.delete(runId); notifyLesson(runId);
+    // 11/4 사용자 "배운 것 갱신": 답이 끝난 뒤 뒤에서 새 대화만 한 번(답 속도에는 영향 없음). 끄기 PC_CHAT_LEARNED=0
+    if (process.env.PC_CHAT_LEARNED === "0") return;
+    const got = await (await import("./chat-learned.ts")).extractLearned(chatId, (await ac.chatOf(chatId)).messages).catch(() => null);
+    if (got?.ok.length) notifyLesson(runId);
+  });
   // 실험판은 대화 파일에 바로 쓴다 → 답하는 동안 화면에 0.45초마다 알린다(SSE)
   clearInterval(chatPolls.get(runId));
   chatPolls.set(runId, setInterval(() => notifyLesson(runId), 450));
