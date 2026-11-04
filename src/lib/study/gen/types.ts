@@ -8,11 +8,11 @@ export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", un
 /** Model calls, in order. classify and design run per section. */
 /** v3 (lab engine choice) adds read (whole PDF → outline + knowledge map), plan and gate; it does not use classify/design. */
 export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review",
-  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check", "rc-merge", "rc-intent", "rc-summary", "rc-skeleton", "rc-topic", "rc-digest-card", "rc-wrap"] as const;
+  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check", "rc-merge", "rc-intent", "rc-summary", "rc-skeleton", "rc-topic", "rc-digest-card", "rc-wrap", "rc-digest-one", "rc-digest-plan", "rc-q-material", "rc-q-choice", "rc-q-cloze", "rc-q-score", "rc-q-explain", "rc-q-write", "rc-q-pick", "rc-q-goals"] as const;
 export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
   read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)",
-  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토", "rc-merge": "자료 전체 정리", "rc-intent": "쪽 의도", "rc-summary": "정리 글", "rc-skeleton": "정리 뼈대", "rc-topic": "주제 정리 글", "rc-digest-card": "줄 카드", "rc-wrap": "개요·핵심 정리" };
+  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토", "rc-merge": "자료 전체 정리", "rc-intent": "쪽 의도", "rc-summary": "정리 글", "rc-skeleton": "정리 뼈대", "rc-topic": "주제 정리 글", "rc-digest-card": "줄 카드", "rc-wrap": "개요·핵심 정리", "rc-digest-one": "정리 글 한 번", "rc-digest-plan": "목차·성격", "rc-q-material": "문제 재료", "rc-q-choice": "객관식 재료", "rc-q-cloze": "빈칸 재료", "rc-q-score": "오답 점수", "rc-q-explain": "힌트·해설", "rc-q-write": "서술 문제", "rc-q-pick": "퀴즈 고르기", "rc-q-goals": "학습 목표" };
 
 export const engines = ["v2", "v3", "astra", "v4", "v5", "alpha", "recaller"] as const;
 export type Engine = (typeof engines)[number];
@@ -126,6 +126,25 @@ export type RecallerLab = {
   /** 요약 → 카드 (10/31, 사용자 "일단 1번"): the material is written as a summary first (뼈대 → 주제별 정리 글), and the cards
    * are made from its lines; topics become the sections. src/lib/study/gen/digest.ts. */
   digest?: boolean;
+  /** with digest: one card call per topic when its body closes, as in 3차 (7 calls, 27 cards), instead of 2–3 lines a call. */
+  digestTopicCards?: boolean;
+  /** with digest: one sol call writes outline → overview → every topic body → easy → extra → 핵심 정리 (4차 구조, 11/2 사용자);
+   * each topic's cards (one call, terra) start when its body closes. No 뼈대·주제별·마무리 calls. */
+  digestOne?: boolean;
+  /** with digestOne: "univ" writes the 유니브 structure (ONE_UNIV_SYSTEM: no 안 맞는 점·extras, analogies only where they hold, about 5천 자). */
+  digestStyle?: "univ" | "plan";
+  /** 문제 만들기를 luna 여러 겹으로 (quiz.ts, A의 P3). 따로 풀기(rc-check)는 시작할 때 고른 모델. */
+  quiz?: "luna";
+  /** with quiz "luna": questions for the whole material (유니브 10문항); core cards first, a share per topic. */
+  quizCount?: number;
+  /** 학습 목표 written by the plan call after its outline (terra) instead of a separate luna call. */
+  goalsInPlan?: boolean;
+  /** B 설계 11/3: knowledge = concept lines of a detailed outline (source outline when found, else the plan call). */
+  conceptLines?: boolean;
+  /** Stop after the plan call (outline tests). */
+  outlineOnly?: boolean;
+  /** With conceptLines: ignore the source outline (compare with the AI-made upper layer). */
+  noSourceOutline?: boolean;
   /** with intentPass: 정리 starts at once (deciding intents itself) and the pass runs beside it; preview pages' cards are dropped when it ends. */
   intentParallel?: boolean;
   /** each page's 정리 also reads its outline section's other pages (text) and makes only the cards its page owns (10/29 실험). */
@@ -298,6 +317,20 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   // 완성 94초, 입력 5,070·출력 3,026 토큰). sol wrote 13 of 14 pages and analogies; terra was twice as fast but retold the text
   // (협업/결과보고/실측_PDF통째요약_terra_20261031.md).
   "rc-summary": { model: "gpt-6.1-sol", effort: "low" },
+  // sol 한 번 (lab.digestOne, 11/2 사용자): the whole outline + summary in one sol call, cards from it as it streams.
+  "rc-digest-one": { model: "gpt-6.1-sol", effort: "low" },
+  // 목차·성격 (lab.digestStyle "plan", 11/2 사용자): short outline reply, terra.
+  "rc-digest-plan": { model: "gpt-6.1-terra", effort: "low" },
+  // luna 출제 (lab.quiz "luna", 11/2 사용자 "출제 모델은 luna로"): A 실험 9절 — 재료·객관식 재료는 medium이 낫고(쓸 만함 +1~2, 다시 받기 9→5),
+  // 빈칸·점수·해설은 low로 충분.
+  "rc-q-material": { model: "gpt-6-luna", effort: "medium" },
+  "rc-q-choice": { model: "gpt-6-luna", effort: "medium" },
+  "rc-q-cloze": { model: "gpt-6-luna", effort: "medium" },
+  "rc-q-score": { model: "gpt-6-luna", effort: "medium" },
+  "rc-q-explain": { model: "gpt-6-luna", effort: "low" },
+  "rc-q-write": { model: "gpt-6-luna", effort: "medium" },
+  "rc-q-pick": { model: "gpt-6-luna", effort: "medium" },
+  "rc-q-goals": { model: "gpt-6-luna", effort: "medium" },
   // 요약 → 카드 (10/31, 협업/결과보고/실험_요약에서카드_20261031.md 3·4차): the skeleton, the cards from summary lines and the
   // wrap-up on terra·low (뼈대 7.4초, 2~3줄 카드 묶음 9~18초); the topic texts on sol·low (그림 쪽 풀이 4/4, 비유가 안 맞는 점 6/6).
   "rc-skeleton": { model: "gpt-6.1-terra", effort: "low" },

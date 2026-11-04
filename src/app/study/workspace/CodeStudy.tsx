@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, handoff, later, shareContext } from "./api";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
-import { ModeSwitch, TrainPanel, useLab, useTrain, useWatch, WatchStrip } from "./CodeTrain";
+import { COACH_ASKS, ModeSwitch, STEP_LABEL, TrainPanel, useLab, useTrain, useWatch, WatchStrip } from "./CodeTrain";
 
 type Lang = "python" | "javascript" | "cpp" | "csharp";
 type LangInfo = { lang: Lang; label: string; ready: boolean; version: string; help: string };
@@ -22,7 +22,7 @@ type Problem = { id: string; title: string; statement: string; inputText: string
 type Result = { index: number; verdict: string; ms: number; input: string; expected: string; got: string; stderr: string; diff?: string; cpuMs?: number; peakKb?: number; near?: "time" | "memory" };
 type Judged = { verdict: string; passed: number; total: number; shown: Result[]; compile: string; ms: number };
 type SubLite = { id: string; at: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; lines: number };
-type Msg = { who: "me" | "ai"; text: string; tag?: string };
+type Msg = { who: "me" | "ai"; text: string; tag?: string; step?: string };
 
 const VERDICT: Record<string, [string, string]> = { AC: ["맞았습니다", "good"], WA: ["틀렸습니다", "bad"], TLE: ["시간 초과", "help"], MLE: ["메모리 초과", "help"], RE: ["런타임 에러", "bad"], CE: ["컴파일 에러", "bad"], MISSING: ["실행기 없음", "help"] };
 const STATUS: Record<ProblemLite["status"], [string, string]> = { new: ["새 문제", ""], tried: ["풀어 봄", "help"], wrong: ["틀림", "bad"], solved: ["맞음", "good"] };
@@ -166,6 +166,11 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const lab = useLab();
   const train = useTrain(id, lab.train);
   const training = lab.train && train.state?.mode === "train";
+  // 훈련 모드에서 구현 단계 전에는 AI 칸이 코드 힌트 대신 지금 단계를 돕는 코치가 돼요 (답·코드는 주지 않음).
+  const [trainStep, setTrainStep] = useState("");
+  const coaching = training && ["understand", "model", "approach", "correct", "complexity"].includes(trainStep);
+  // 훈련 모드에서는 단계마다 채팅이 따로예요: 다음 단계로 가면 빈 채팅, 앞 단계로 돌아가면 그 단계 대화가 다시 보여요.
+  const stepNow = training ? trainStep : "";
   const watch = useWatch({ id, lang, code, enabled: lab.watch && Boolean(problem), examples: problem?.examples ?? [] });
 
   useEffect(() => {
@@ -218,8 +223,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
       watch.noteRun(mode, r.verdict);
       if (mode === "submit") {
         setSubs((await call<{ submissions: SubLite[] }>(`/api/code/problem/${id}`)).submissions);
-        if (r.verdict === "AC" && (training || watch.advice)) { setMsgs((m) => [...m, { who: "ai", tag: "채점", text: training ? "맞았습니다! 훈련 모드로 푼 문제는 기록에 '훈련 모드로 통과'로 남아요. 왼쪽 7단계 복기에서 배운 것을 남기고, 며칠 뒤 기본 모드로 혼자 풀면 '앎'이 돼요." : `맞았습니다! 지켜보기 조언을 ${watch.advice}번 받고 풀었어요. 며칠 뒤 혼자 다시 풀면 '앎'이 돼요.` }]); setHints(0); watch.resetAdvice(); }
-        else if (r.verdict === "AC") { setMsgs((m) => [...m, { who: "ai", tag: "채점", text: hints ? `맞았습니다! 힌트 ${hints}번을 받고 풀었어요. 며칠 뒤 힌트 없이 다시 풀어 보면 지식이 '앎'이 돼요.` : "맞았습니다! 힌트 없이 풀어서 이 문제의 지식이 '앎'이 됐어요." }]); setHints(0); }
+        if (r.verdict === "AC" && (training || watch.advice)) { setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: "채점", text: training ? "맞았습니다! 훈련 모드로 푼 문제는 기록에 '훈련 모드로 통과'로 남아요. 왼쪽 7단계 복기에서 배운 것을 남기고, 며칠 뒤 기본 모드로 혼자 풀면 '앎'이 돼요." : `맞았습니다! 지켜보기 조언을 ${watch.advice}번 받고 풀었어요. 며칠 뒤 혼자 다시 풀면 '앎'이 돼요.` }]); setHints(0); watch.resetAdvice(); }
+        else if (r.verdict === "AC") { setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: "채점", text: hints ? `맞았습니다! 힌트 ${hints}번을 받고 풀었어요. 며칠 뒤 힌트 없이 다시 풀어 보면 지식이 '앎'이 돼요.` : "맞았습니다! 힌트 없이 풀어서 이 문제의 지식이 '앎'이 됐어요." }]); setHints(0); }
         window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar"));
       }
     } catch (e) { setError(errorText(e)); } finally { setRunning(""); }
@@ -236,23 +241,25 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const last = result ? (result.compile ? { verdict: result.verdict, compile: clip(result.compile) } : failed ? { verdict: failed.verdict, input: clip(failed.input), expected: clip(failed.expected), got: clip(failed.got), stderr: clip(failed.stderr) } : { verdict: result.verdict }) : undefined;
   const assist = async (tag: string, me: string, run: () => Promise<{ text?: string; found?: boolean; case?: Result; tried?: number; compile?: string }>) => {
     if (asking) return;
-    setAsking(true); setMsgs((m) => [...m, { who: "me", text: me, tag }]);
+    setAsking(true); setMsgs((m) => [...m, { step: stepNow, who: "me", text: me, tag }]);
     try {
       const r = await run();
       const text = r.text ?? (r.found && r.case ? `반례를 찾았어요 (${r.tried}개 입력 중).\n\n입력:\n\`\`\`\n${r.case.input}\n\`\`\`\n기대 출력:\n\`\`\`\n${r.case.expected}\n\`\`\`\n내 출력:\n\`\`\`\n${r.case.got || "(없음)"}\n\`\`\`${r.case.stderr ? `\n에러: ${r.case.stderr.slice(0, 300)}` : ""}`
         : r.compile ? "컴파일이 안 돼서 반례를 돌려 보지 못했어요." : `작은 입력 ${r.tried ?? 0}개로는 틀리는 경우를 못 찾았어요. 큰 입력에서 시간이나 자료형 범위를 확인해 보세요.`);
-      setMsgs((m) => [...m, { who: "ai", text, tag }]);
-    } catch (e) { setMsgs((m) => [...m, { who: "ai", text: `답을 받지 못했어요: ${errorText(e)}`, tag }]); }
+      setMsgs((m) => [...m, { step: stepNow, who: "ai", text, tag }]);
+    } catch (e) { setMsgs((m) => [...m, { step: stepNow, who: "ai", text: `답을 받지 못했어요: ${errorText(e)}`, tag }]); }
     finally { setAsking(false); }
   };
   const hint = (level: 1 | 2 | 3) => { setHints((h) => h + 1); void assist(`힌트 ${level}`, ["", "방향만 알려 줘", "어느 줄이 문제인지 짚어 줘", "고친 코드를 보여 줘"][level], () => call(`/api/code/problem/${id}/hint`, { lang, code: now(), level, last })); };
   const explainSel = () => {
     const sel = editor.current?.selection() ?? "";
-    if (!sel.trim()) { setMsgs((m) => [...m, { who: "ai", text: "편집기에서 설명을 듣고 싶은 부분을 드래그한 다음 눌러 주세요." }]); return; }
+    if (!sel.trim()) { setMsgs((m) => [...m, { step: stepNow, who: "ai", text: "편집기에서 설명을 듣고 싶은 부분을 드래그한 다음 눌러 주세요." }]); return; }
     void assist("설명", `이 부분 설명해 줘:\n\`\`\`\n${sel.slice(0, 600)}\n\`\`\``, () => call("/api/code/explain", { problemId: id, lang, code: now(), selection: sel }));
   };
+  const coach = (q: string) => void assist("훈련", q, () => call(`/api/code/problem/${id}/train/ask`, { step: trainStep, question: q }));
   const ask = () => {
     if (!question.trim()) return;
+    if (coaching) { const q = question; setQuestion(""); coach(q); return; }
     const sel = editor.current?.selection() ?? "";
     const q = question; setQuestion("");
     void assist("질문", q, () => call("/api/code/explain", { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q }));
@@ -263,6 +270,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
 
   if (!problem) return <div className="panel small muted">{error || "문제를 여는 중…"} <button className="btn ghost small" onClick={onBack}>목록</button></div>;
   const info = langs.find((l) => l.lang === lang);
+  const shownMsgs = training ? msgs.filter((m) => m.step === trainStep) : msgs;
   return (
     <div className="cs-solve">
       <section className="cs-statement panel">
@@ -285,7 +293,6 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}
           {problem.check?.second && problem.check.second.status !== "skipped" ? ` · ${problem.check.second.status === "agreed" ? `다른 호출의 독립 풀이(${problem.check.second.model})와 테스트 ${problem.check.second.agreed}/${problem.check.second.total}개 일치` : problem.check.second.status === "second-wrong" ? "독립 풀이가 틀려서 큰 입력 대조는 못 함" : "독립 풀이로 대조하지 못함"}` : ""}</p>}
         {problem.knowledge.length ? <div className="row small"><span className="muted">확인하는 지식</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
-        {training ? <TrainPanel id={id} train={train} timeLimitMs={problem.timeLimitMs} lang={lang} code={now} solved={subs.some((s) => s.mode === "submit" && s.verdict === "AC")} /> : null}
         {subs.length ? <><p className="eyebrow">내 제출</p><ul className="cs-subs">{subs.filter((s) => s.mode === "submit").slice(0, 8).map((s) => <li key={s.id}><button className="linkish small" onClick={() => void openSubmission(s.id)}>
           <span className={`chip ${VERDICT[s.verdict]?.[1] ?? ""}`}>{VERDICT[s.verdict]?.[0] ?? s.verdict}</span> {s.lang} · {new Date(s.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{s.hints ? ` · 힌트 ${s.hints}` : ""}</button></li>)}</ul></> : null}
       </section>
@@ -327,8 +334,12 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         ) : null}
       </section>
 
-      <aside className="cs-ai panel" aria-label="코드 옆 AI">
-        <b>AI</b>
+      <aside className={`cs-ai panel${training ? " training" : ""}`} aria-label="코드 옆 AI">
+        {training ? <div className="cs-ai-train"><b>훈련</b><TrainPanel id={id} train={train} onStep={setTrainStep} timeLimitMs={problem.timeLimitMs} lang={lang} code={now} solved={subs.some((s) => s.mode === "submit" && s.verdict === "AC")} /></div> : null}
+        <b>AI</b>{coaching ? <span className="small muted"> · 훈련 코치 ({STEP_LABEL[trainStep]} 단계)</span> : null}
+        {coaching ? <>
+        <p className="small muted">코드를 쓰기 전이라 AI는 답이나 코드를 주지 않고, 지금 단계를 스스로 생각하도록 도와요. 구현 단계부터는 힌트·반례 버튼이 다시 나와요.</p>
+        </> : <>
         <p className="small muted">통과 여부는 채점기가 정해요. AI는 설명과 힌트만 줘요. 힌트·틀린 제출은 이번 풀이에 모아 두었다가, 맞히거나 문제를 나가면 지식 기록에 남아요.</p>
         <div className="cs-hints">
           <button className="btn small" disabled={asking} onClick={() => hint(1)}>힌트 1 · 방향</button>
@@ -340,14 +351,18 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           <button className="btn ghost small" disabled={asking} onClick={explainSel}>드래그한 부분 설명</button>
           {problem.hasReference ? <button className="btn ghost small" disabled={asking} onClick={() => void assist("반례", "내 코드가 틀리는 입력 찾아 줘", () => call(`/api/code/problem/${id}/counter`, { lang, code: now() }))}>반례 찾기</button> : null}
         </div>
+        </>}
         <div className="cs-chat">
-          {!msgs.length ? <p className="small muted">막히면 힌트 1부터 받아 보세요. 편집기에서 코드를 드래그하고 질문하면 그 부분을 설명해요.</p> : null}
-          {msgs.map((m, i) => <div key={i} className={`cs-msg ${m.who}`}>{m.tag ? <span className="chip">{m.tag}</span> : null}<Rich text={m.text} className="small" /></div>)}
+          {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">막히면 힌트 1부터 받아 보세요. 편집기에서 코드를 드래그하고 질문하면 그 부분을 설명해요.</p> : null}
+          {shownMsgs.map((m, i) => <div key={i} className={`cs-msg ${m.who}`}>{m.tag ? <span className="chip">{m.tag}</span> : null}<Rich text={m.text} className="small" /></div>)}
           {asking ? <div className="cs-msg ai"><span className="small muted">생각하는 중…</span></div> : null}
           <div ref={chatEnd} />
         </div>
+        {coaching ? <div className="cs-hints">
+          {COACH_ASKS.map((q) => <button key={q} className="btn ghost small" disabled={asking} onClick={() => coach(q)}>{q}</button>)}
+        </div> : null}
         <form className="cs-ask" onSubmit={(e) => { e.preventDefault(); ask(); }}>
-          <textarea className="ws-input" rows={2} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="질문 (드래그한 코드가 있으면 그 부분에 대해)"
+          <textarea className="ws-input" rows={2} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={coaching ? "지금 단계에 대해 질문" : "질문 (드래그한 코드가 있으면 그 부분에 대해)"}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }} />
           <button className="btn primary small" disabled={asking || !question.trim()}>묻기</button>
         </form>

@@ -118,3 +118,60 @@ test("the coach sees the reference but a reply that copies a line of it is not p
     assert.notEqual((await watchAdvice({ problemId: p.id, lang: "javascript", code: "let s=0" })).say, reply.say);
   } finally { setFakeModelResponder(null); if (prior === undefined) delete process.env.STUDY_FORGE_MODEL_PROVIDER; else process.env.STUDY_FORGE_MODEL_PROVIDER = prior; }
 }));
+
+// 2026-11-04 (GPT 프롬프트 점검 A): a flaw the coach names is never shown as ✓; a piece of the reference is not passed on.
+test("a reply that names an issue can't be 다른 길 or 맞는 길; with no issue a different road stays", () => withData(async () => {
+  const { setFakeModelResponder } = await import("../ai/model.ts");
+  const { trainCheck, watchAdvice } = await import("../assist/code-ai.ts");
+  const prior = process.env.STUDY_FORGE_MODEL_PROVIDER;
+  process.env.STUDY_FORGE_MODEL_PROVIDER = "fake";
+  let reply: Record<string, unknown> = { issue: "임의로 이은 간선의 경로는 x의 존재와 관계가 없다", state: "다른 길", say: "그 경로가 x가 있는지 어떻게 알려 줄까요?", what: "접근", line: 0 };
+  setFakeModelResponder(() => JSON.stringify(reply));
+  try {
+    const p = await sumProblem();
+    const flawed = await trainCheck({ problemId: p.id, step: "model", answer: { line: "그래프" } });
+    assert.equal(flawed.state, "더 생각");
+    assert.ok(!("issue" in flawed), "the issue line stays on the server");
+    assert.equal((await watchAdvice({ problemId: p.id, lang: "javascript", code: "let s=0" })).state, "더 생각");
+    reply = { ...reply, issue: "", state: "다른 길", say: "구간을 절반씩 줄여 찾는 구조도 맞아요." };
+    assert.equal((await trainCheck({ problemId: p.id, step: "model", answer: { line: "이분 탐색" } })).state, "다른 길");
+    reply = { ...reply, issue: "", state: "아직 모름", say: "어떤 구조로 볼지 한 줄 더 써 줄래요?" };
+    assert.equal((await trainCheck({ problemId: p.id, step: "model", answer: { line: "" } })).state, "아직 모름");
+  } finally { setFakeModelResponder(null); if (prior === undefined) delete process.env.STUDY_FORGE_MODEL_PROVIDER; else process.env.STUDY_FORGE_MODEL_PROVIDER = prior; }
+}));
+
+test("a few tokens of the reference in a row are caught; plain Korean sentences are not", () => withData(async () => {
+  const { setFakeModelResponder } = await import("../ai/model.ts");
+  const { trainCheck } = await import("../assist/code-ai.ts");
+  const prior = process.env.STUDY_FORGE_MODEL_PROVIDER;
+  process.env.STUDY_FORGE_MODEL_PROVIDER = "fake";
+  let reply = { issue: "", state: "맞는 길", say: "t[0]개를 다 더하면 돼요: s+=t[i] 처럼요." };
+  setFakeModelResponder(() => JSON.stringify(reply));
+  try {
+    const p = await sumProblem();
+    assert.notEqual((await trainCheck({ problemId: p.id, step: "approach", answer: { brute: "다 더한다" } })).say, reply.say, "s+=t[i] is a piece of the reference");
+    for (const say of ["n이 10만이면 이 반복은 몇 번 돌까요?", "합을 구하는 구조가 맞아요. (입력 크기도 괜찮아요.)", "\"수를 모두 더한다\"는 목표를 잘 담았어요."]) {
+      reply = { ...reply, say };
+      assert.equal((await trainCheck({ problemId: p.id, step: "model", answer: { line: "합" } })).say, say);
+    }
+  } finally { setFakeModelResponder(null); if (prior === undefined) delete process.env.STUDY_FORGE_MODEL_PROVIDER; else process.env.STUDY_FORGE_MODEL_PROVIDER = prior; }
+}));
+
+test("counterexample inputs outside the constraints are dropped by the problem's own checker", () => withData(async () => {
+  const { setFakeModelResponder } = await import("../ai/model.ts");
+  const { counterexample } = await import("../assist/code-ai.ts");
+  const prior = process.env.STUDY_FORGE_MODEL_PROVIDER;
+  process.env.STUDY_FORGE_MODEL_PROVIDER = "fake";
+  // Sums only the first five numbers: wrong only when N > 5, which the constraints (N ≤ 5) never allow.
+  const FIRST5 = `const t=require("fs").readFileSync(0,"utf8").trim().split(/\\s+/).map(Number);let s=0;for(let i=1;i<=Math.min(t[0],5);i++)s+=t[i];console.log(s);`;
+  const generator = `module.exports={tests:[{kind:"random",size:"small",count:1}],smallKinds:["random"],gen(k,s,r){const n=r.int(1,5);return n+"\\n"+Array.from({length:n},()=>r.int(1,9)).join(" ")+"\\n";},check(input){const t=input.trim().split(/\\s+/).map(Number);if(!(t[0]>=1&&t[0]<=5))return "N 범위";if(t.length!==t[0]+1)return "개수";return true;}};`;
+  setFakeModelResponder(() => JSON.stringify({ inputs: ["8\n1 1 1 1 1 1 1 1\n", "3\n1 2 3\n"] }));
+  try {
+    const p = await ensureProblemKnowledge(await saveProblem({ title: "작은 합", statement: "N개의 수를 더한다.", inputText: "N, 수들", outputText: "합",
+      examples: [{ input: "3\n1 2 3\n", output: "6" }], tests: [{ input: "2\n4 4\n", output: "8" }], timeLimitMs: 1000, kind: "full", templates: {},
+      reference: { lang: "javascript", code: SUM }, testgen: { generator, seed: 1 }, knowledge: ["누적 합"], folder: "알고리즘", source: { kind: "manual", title: "test" }, constraints: "1 ≤ N ≤ 5" }));
+    const r = await counterexample({ problemId: p.id, lang: "javascript", code: FIRST5 });
+    assert.equal(r.found, false, "the only difference is on an input the problem never gives");
+    assert.equal(r.refused, 1);
+  } finally { setFakeModelResponder(null); if (prior === undefined) delete process.env.STUDY_FORGE_MODEL_PROVIDER; else process.env.STUDY_FORGE_MODEL_PROVIDER = prior; }
+}));

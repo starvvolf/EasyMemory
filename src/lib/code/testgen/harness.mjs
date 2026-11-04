@@ -237,11 +237,24 @@ function verify(job) {
   return { ok: true, status, agreed, total: v.tests.length, unchecked, secondWrong };
 }
 
+/** 반례 찾기 (2026-11-04, GPT 프롬프트 점검 A P2): which of the AI's candidate inputs keep the problem's constraints. */
+function checkInputs(job) {
+  const loaded = loadGenerator(job.generator);
+  if (loaded.error) return { ok: false, reason: loaded.error };
+  const kept = []; const refused = [];
+  job.inputs.forEach((input, i) => {
+    let verdict;
+    try { verdict = loaded.g.check(input); } catch (e) { verdict = `검사기 에러: ${String(e && e.message || e).slice(0, 100)}`; }
+    if (verdict === true) kept.push(i); else refused.push({ i, why: String(verdict).slice(0, 120) });
+  });
+  return { ok: true, kept, refused };
+}
+
 let raw = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (c) => { raw += c; });
 process.stdin.on("end", () => {
   let result;
-  try { const job = JSON.parse(raw); result = job.verify ? verify(job) : main(job); } catch (e) { result = { ok: false, reason: `테스트 만들기 실행기 에러: ${String(e && e.message || e).slice(0, 300)}` }; }
+  try { const job = JSON.parse(raw); result = job.verify ? verify(job) : job.checkInputs ? checkInputs(job.checkInputs) : main(job); } catch (e) { result = { ok: false, reason: `테스트 만들기 실행기 에러: ${String(e && e.message || e).slice(0, 300)}` }; }
   process.stdout.write(JSON.stringify(result));
 });

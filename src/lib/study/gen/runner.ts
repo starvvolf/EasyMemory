@@ -218,7 +218,8 @@ export async function readGenCalls(id: string): Promise<GenCall[]> {
     .map(async (file) => JSON.parse(await readFile(path.join(dirOf(id), "calls", file), "utf8")) as GenCall));
 }
 export async function readSectionDocument(id: string, sectionId: string) {
-  if (!/^s\d+$/.test(sectionId)) throw new GenError(400, "목차 ID가 올바르지 않습니다.");
+  // s1… for page sections, t1… for 요약 → 카드 (lab.digest) topics.
+  if (!/^[st]\d+$/.test(sectionId)) throw new GenError(400, "목차 ID가 올바르지 않습니다.");
   try { return JSON.parse(await readFile(path.join(dirOf(id), "sections", sectionId, "document.json"), "utf8")) as unknown; }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; }
 }
@@ -263,7 +264,7 @@ export const genInputSchema = z.strictObject({
     readParallel: z.number().int().min(1).max(64).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
     outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional(),
     chunk: z.number().int().min(1).max(4).optional(), hedgeMs: z.number().int().min(1000).max(120000).optional(),
-    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), summary: z.boolean().optional(), digest: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
+    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), summary: z.boolean().optional(), digest: z.boolean().optional(), digestTopicCards: z.boolean().optional(), digestOne: z.boolean().optional(), digestStyle: z.enum(["univ", "plan"]).optional(), quiz: z.enum(["luna"]).optional(), quizCount: z.number().int().min(1).max(60).optional(), goalsInPlan: z.boolean().optional(), conceptLines: z.boolean().optional(), outlineOnly: z.boolean().optional(), noSourceOutline: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -559,13 +560,14 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   const block = (pages: number[]) => pageBlock(new Map(pages.map((page) => [page, loaded.get(page) ?? ""]))).text;
 
   const ask = async (step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown> | null, guide?: LoadedGuide,
-    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string; onPartial?: (text: string) => void; maxChars?: number; sharedContext?: string } = {}) => {
+    extra: { images?: ModelRequest["images"]; files?: ModelRequest["files"]; page?: number; cachePrefix?: string; onPartial?: (text: string) => void; maxChars?: number; sharedContext?: string; tail?: string; cacheKey?: string } = {}) => {
     if (astraFailure) throw astraFailure;
     // Reading pages is bounded by the page count itself, so only the other steps count toward the per-start cap.
     // The cap grows with the material: about 4 calls per section (classify, design, author, a retry) plus the outline.
     // Recaller: about 2 cards a page, each a question and its blind check (≈ 5.5 calls a page measured), plus deep questions;
     // 8 a page + 40 lets a 44-page material finish in one start and still stops a run that loops.
-    const cap = input.lab?.callCap ?? Math.max(MAX_CALLS_PER_START, input.engine === "recaller" ? input.pageNumbers.length * 8 + 40 : state.sections.length * 4 + 10);
+    // lab.quiz "luna": about 6 cheap calls a card (≈ 3 cards a page) on top.
+    const cap = input.lab?.callCap ?? Math.max(MAX_CALLS_PER_START, input.engine === "recaller" ? input.pageNumbers.length * (input.lab?.quiz === "luna" ? 26 : 8) + 40 : state.sections.length * 4 + 10);
     if (step !== "transcribe" && callsThisStart >= cap) {
       const stop = new Stop("paused-invalid", `한 번에 쓸 수 있는 호출 수(${cap})를 다 썼어요. 다시 시작하면 멈춘 곳부터 이어가요.`);
       throw astraAbort ? failAstra(stop) : stop;
@@ -588,7 +590,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     const record: GenCall = { n, step, sectionId, attempt, model, effort, format: null, startedAt: new Date(started).toISOString(), ms: 0, ok: false,
       ...(extra.files?.length ? { withPdf: true } : {}),
       ...(extra.sharedContext ? { sharedChars: extra.sharedContext.length } : {}),
-      system: redactCallText(system), user: redactCallText(user), reply: null, error: null,
+      system: redactCallText(system), user: redactCallText(extra.tail ? `${user}\n\n${extra.tail}` : user), reply: null, error: null,
       ...(guide ? { guide: { dir: guide.dir, version: guide.version, files: guide.files } } : {}) };
     const callFile = path.join(dirOf(id), "calls", `${n}.json`);
     // Progress while the reply streams in: the screen shows how far the current call has got (체감 시간).
@@ -615,7 +617,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     };
     const request: ModelRequest = { purpose: `gen:${step}`, system, user, json: Boolean(schema), ...(cut || baseText ? { onText: guardText } : {}), ...(schema ? { schema, schemaName: `recaller_${step.replace(/-/g, "_")}` } : {}),
       model, effort, caller, provider: input.provider, ...(extra.images ? { images: extra.images } : {}), ...(extra.files ? { files: extra.files } : {}),
-      ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}), ...(extra.sharedContext ? { sharedContext: extra.sharedContext } : {}) };
+      ...(extra.cachePrefix ? { cachePrefix: extra.cachePrefix, schemaName: "recaller_astra" } : {}), ...(extra.sharedContext ? { sharedContext: extra.sharedContext } : {}), ...(extra.tail ? { tail: extra.tail } : {}), ...(extra.cacheKey ? { cacheKey: extra.cacheKey } : {}) };
     if (astraAbort) {
       request.signal = astraAbort.signal;
       request.onProgress = receivedChars => {
@@ -639,7 +641,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
     }
     try {
       if (astraFailure) throw astraFailure;
-      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("rc-") ? recallerFakeReply(s, u) : s.startsWith("astra-") ? astraFakeReply(s, u) : genFakeReply(s, u)))(step, user, attempt);
+      if (input.provider === "fake") request.fakeReply = (options.fakeReply ?? ((s: GenStep, u: string) => s.startsWith("rc-") ? recallerFakeReply(s, u) : s.startsWith("astra-") ? astraFakeReply(s, u) : genFakeReply(s, u)))(step, extra.tail ? `${user}\n\n${extra.tail}` : user, attempt);
       if (extra.cachePrefix && request.fakeReply !== undefined) request.fakeReply = JSON.stringify({ result: JSON.parse(request.fakeReply) });
       // The fake model has no stream; hand the reply over in pieces so streaming consumers behave as with a real one.
       if (request.fakeReply !== undefined && (extra.onPartial || cut)) for (let at = 200; at < request.fakeReply.length + 200 && !runaway; at += 200) guardText(request.fakeReply.slice(0, at));
@@ -750,7 +752,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
           return result.value;
         },
         halted: () => Boolean(astraFailure),
-        askText: async (step, page, attempt, system, user, images, onPartial) => String(await ask(step, null, attempt, system, user, null, undefined, { images, ...(page ? { page } : {}), ...(onPartial ? { onPartial } : {}) })),
+        askText: async (step, page, attempt, system, user, images, onPartial, tail, cacheKey) => String(await ask(step, null, attempt, system, user, null, undefined, { images, ...(page ? { page } : {}), ...(onPartial ? { onPartial } : {}), ...(tail ? { tail } : {}), ...(cacheKey ? { cacheKey } : {}) })),
         prepare: options.prep ?? (async (bytes, pages) => {
           if (!bytes) return prepFromTexts(await (options.pages ?? registeredPages)(input), pages);
           if (!input.lab?.fastPrep) return preparePdf(bytes, pages, input.lab?.router);

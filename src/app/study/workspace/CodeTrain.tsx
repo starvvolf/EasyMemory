@@ -20,6 +20,9 @@ type Step = "understand" | "model" | "approach" | "correct" | "complexity" | "im
 type StepRecord = { answer: Record<string, unknown>; result?: unknown; skipped?: boolean; at: string };
 type TrainState = { mode: "base" | "train"; steps: Partial<Record<Step, StepRecord>> };
 const STEPS: Array<[Step, string]> = [["understand", "이해"], ["model", "추상화"], ["approach", "탐색"], ["correct", "정당성"], ["complexity", "복잡도"], ["implement", "구현"], ["review", "복기"]];
+export const STEP_LABEL: Record<string, string> = Object.fromEntries(STEPS.map(([s, l], i) => [s, `${i + 1} ${l}`]));
+/** 구현 단계 전, AI 칸의 빠른 질문. */
+export const COACH_ASKS = ["이 단계에서 뭘 봐야 해?", "내 답 어디가 이상해?", "작은 예로 같이 따라가 줘"];
 export function useTrain(id: string, on: boolean) {
   const [state, setState] = useState<TrainState | null>(null);
   const [size, setSize] = useState<number | null>(null);
@@ -44,14 +47,38 @@ export function ModeSwitch({ mode, onMode }: { mode: "base" | "train"; onMode: (
 
 type Verdictish = { ok?: boolean | null; note?: string };
 const Mark = ({ v }: { v?: Verdictish | null }) => !v ? null : <p className={`small cs-tr-note ${v.ok === true ? "good" : v.ok === false ? "bad" : ""}`}>{v.ok === true ? "✓ " : v.ok === false ? "✗ " : ""}{v.note}</p>;
-const Coach = ({ r }: { r?: { state: string; say: string } | null }) => !r ? null
+const Coach = ({ r }: { r?: { state?: string; say?: string } | null }) => !r?.state ? null
   : <p className={`small cs-tr-note ${r.state === "맞는 길" || r.state === "다른 길" ? "good" : r.state === "더 생각" ? "help" : ""}`}><b>{r.state}</b> · {r.say}</p>;
 
+/* Box by box: each box is checked when the learner leaves it (blur), so a wrong box says so at once. Boxes the app can
+   check itself (N, 시간, 손으로 구한 답, 복잡도, 경계 입력) cost nothing; the others are one model call per changed box. */
+type FieldR = { state: string; say: string };
+const okState = (st: string) => st === "맞는 길" || st === "다른 길";
+const FieldMark = ({ r, busy }: { r?: FieldR; busy?: boolean }) => busy ? <p className="small cs-tr-busy">보는 중…</p> : !r ? null
+  : <p className={`small cs-tr-note ${okState(r.state) ? "good" : r.state === "더 생각" || r.state === "오류" ? "bad" : ""}`}>{okState(r.state) ? "✓ " : r.state === "더 생각" ? "✗ 틀렸어요 · " : ""}{r.say}</p>;
+function useFieldCheck(id: string, step: "understand" | "model" | "approach" | "correct", saved: Record<string, FieldR> | undefined, answered: (k: string) => string, onSaved: () => void) {
+  const [marks, setMarks] = useState<Record<string, FieldR>>(saved ?? {});
+  const [busy, setBusy] = useState("");
+  const last = useRef<Record<string, string> | null>(null);
+  const check = async (field: string, all: Record<string, string>) => {
+    if (!last.current) last.current = Object.fromEntries(Object.keys(saved ?? {}).map((k) => [k, answered(k).trim()]));
+    const v = (all[field] ?? "").trim();
+    if (v.length < 2 || last.current[field] === v) return;
+    last.current[field] = v; setBusy(field);
+    try { const r = await call<{ result: FieldR }>(`/api/code/problem/${id}/train/check`, { step, answer: all, field }); setMarks((m) => ({ ...m, [field]: r.result })); onSaved(); }
+    catch (e) { setMarks((m) => ({ ...m, [field]: { state: "오류", say: errorText(e) } })); delete last.current[field]; }
+    finally { setBusy(""); }
+  };
+  return { marks, busy, check };
+}
+const fieldsOf = (r: unknown) => (r as { fields?: Record<string, FieldR> } | undefined)?.fields;
+
 /** The seven steps under the problem. `code`/`lang` are the editor's, for step 6's own inputs. */
-export function TrainPanel({ id, train, timeLimitMs, lang, code, solved }: { id: string; train: ReturnType<typeof useTrain>; timeLimitMs: number; lang: Lang; code: () => string; solved: boolean }) {
+export function TrainPanel({ id, train, timeLimitMs, lang, code, solved, onStep }: { id: string; train: ReturnType<typeof useTrain>; timeLimitMs: number; lang: Lang; code: () => string; solved: boolean; onStep?: (s: Step) => void }) {
   const steps = train.state?.steps ?? {};
   const firstOpen = STEPS.find(([s]) => !steps[s])?.[0] ?? "review";
   const [open, setOpen] = useState<Step>(firstOpen);
+  useEffect(() => { onStep?.(open); }, [open, onStep]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const run = async (f: () => Promise<void>) => { setBusy(true); setError(""); try { await f(); await train.reload(); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } };
@@ -64,12 +91,12 @@ export function TrainPanel({ id, train, timeLimitMs, lang, code, solved }: { id:
       <div className="cs-tr-steps">{STEPS.map(([s, label], i) => (
         <button key={s} className={`cs-tr-step ${open === s ? "cur" : done(s) ? (steps[s]!.skipped ? "skip" : "done") : ""}`} onClick={() => setOpen(s)}>{i + 1} {label}</button>
       ))}</div>
-      {open === "understand" ? <Understand key="u" id={id} busy={busy} run={run} prev={(k, d) => prev("understand", k, d)} result={steps.understand?.result as UResult | undefined} timeLimitMs={timeLimitMs} onNext={() => next("understand")} onSkip={() => skip("understand")} onSize={train.setSize} /> : null}
-      {open === "model" ? <Coached key="m" id={id} step="model" busy={busy} run={run} result={steps.model?.result as CoachR} onNext={() => next("model")} onSkip={() => skip("model")}
+      {open === "understand" ? <Understand key="u" id={id} busy={busy} run={run} sync={train.reload} prev={(k, d) => prev("understand", k, d)} result={steps.understand?.result as UResult | undefined} timeLimitMs={timeLimitMs} onNext={() => next("understand")} onSkip={() => skip("understand")} onSize={train.setSize} /> : null}
+      {open === "model" ? <Coached key="m" id={id} step="model" busy={busy} run={run} sync={train.reload} result={steps.model?.result as CoachR} onNext={() => next("model")} onSkip={() => skip("model")}
         fields={[["line", "이 문제를 무엇으로 볼까요? 한 줄로 (예: 건물 = 정점, 먼저 지어야 함 = 간선)", prev("model", "line", "")]]} /> : null}
-      {open === "approach" ? <Approach key="a" id={id} busy={busy} run={run} complexities={train.complexities} size={train.size} result={steps.approach?.result as CoachR}
+      {open === "approach" ? <Approach key="a" id={id} busy={busy} run={run} sync={train.reload} complexities={train.complexities} size={train.size} result={steps.approach?.result as CoachR}
         prev={(k, d) => prev("approach", k, d)} onNext={() => next("approach")} onSkip={() => skip("approach")} /> : null}
-      {open === "correct" ? <Correct key="c" id={id} busy={busy} run={run} result={steps.correct?.result as CoachR} prev={(k, d) => prev("correct", k, d)} onNext={() => next("correct")} onSkip={() => skip("correct")} /> : null}
+      {open === "correct" ? <Correct key="c" id={id} busy={busy} run={run} sync={train.reload} result={steps.correct?.result as CoachR} prev={(k, d) => prev("correct", k, d)} onNext={() => next("correct")} onSkip={() => skip("correct")} /> : null}
       {open === "complexity" ? <Complexity key="x" id={id} busy={busy} run={run} complexities={train.complexities} size={train.size} result={steps.complexity?.result as XResult | undefined}
         prev={(k, d) => prev("complexity", k, d)} onNext={() => next("complexity")} onSkip={() => skip("complexity")} /> : null}
       {open === "implement" ? <Implement key="i" id={id} lang={lang} code={code} mine={[prev<string>("understand", "input", ""), ...prev<string[]>("correct", "inputs", [])].filter((x) => x.trim())}
@@ -81,20 +108,24 @@ export function TrainPanel({ id, train, timeLimitMs, lang, code, solved }: { id:
 }
 type Run = (f: () => Promise<void>) => Promise<void>;
 type Prev = <T>(k: string, d: T) => T;
-type CoachR = { state: string; say: string } | undefined;
+type CoachR = { state?: string; say?: string; fields?: Record<string, FieldR> } | undefined;
 const Buttons = ({ busy, onCheck, onNext, onSkip, checkLabel = "확인", canNext }: { busy: boolean; onCheck?: () => void; onNext: () => void; onSkip: () => void; checkLabel?: string; canNext: boolean }) => (
   <div className="row">{onCheck ? <button className="btn primary small" disabled={busy} onClick={onCheck}>{busy ? "보는 중…" : checkLabel}</button> : null}
     <button className="btn small" disabled={!canNext} onClick={onNext}>다음 단계</button><button className="btn ghost small" onClick={onSkip}>건너뛰기</button></div>
 );
 
 type UResult = { n: Verdictish | null; time: Verdictish | null; mine: (Verdictish & { expected?: string }) | null };
-function Understand({ id, busy, run, prev, result, timeLimitMs, onNext, onSkip, onSize }: { id: string; busy: boolean; run: Run; prev: Prev; result?: UResult; timeLimitMs: number; onNext: () => void; onSkip: () => void; onSize: (n: number | null) => void }) {
+function Understand({ id, busy, run, sync, prev, result, timeLimitMs, onNext, onSkip, onSize }: { id: string; busy: boolean; run: Run; sync: () => void; prev: Prev; result?: UResult; timeLimitMs: number; onNext: () => void; onSkip: () => void; onSize: (n: number | null) => void }) {
   const [maxN, setMaxN] = useState(String(prev("maxN", "")));
   const [timeSec, setTimeSec] = useState(String(prev("timeSec", "")));
   const [output, setOutput] = useState(prev("output", ""));
   const [input, setInput] = useState(prev("input", ""));
   const [mine, setMine] = useState(prev("myAnswer", ""));
   const num = (s: string) => { const t = s.replace(/,/g, "").trim(); if (!t) return undefined; const m = /^(\d+(?:\.\d+)?)\s*(?:\*|×|x)?\s*(?:10\^(\d+)|e(\d+))?$/i.exec(t); return m ? Number(m[1]) * 10 ** Number(m[2] ?? m[3] ?? 0) : Number(t); };
+  const fc = useFieldCheck(id, "understand", fieldsOf(result), (k) => String(prev(k, "")), sync);
+  const lastAuto = useRef("");
+  // Leaving a box the app checks by itself (N, 시간, 손으로 구한 답) checks it at once; nothing changed → nothing sent.
+  const auto = () => { const k = JSON.stringify([maxN.trim(), timeSec.trim(), input.trim(), mine.trim()]); if (k === lastAuto.current || (!maxN.trim() && !timeSec.trim() && !input.trim())) return; lastAuto.current = k; check(); };
   const check = () => void run(async () => {
     const r = await call<{ result: UResult; size: number | null }>(`/api/code/problem/${id}/train/understand`, { ...(num(maxN) !== undefined ? { maxN: num(maxN) } : {}), ...(num(timeSec) !== undefined ? { timeSec: num(timeSec) } : {}),
       ...(output.trim() ? { output } : {}), ...(input.trim() ? { input } : {}), ...(mine.trim() ? { myAnswer: mine } : {}) });
@@ -104,31 +135,34 @@ function Understand({ id, busy, run, prev, result, timeLimitMs, onNext, onSkip, 
   return (
     <div className="cs-tr-body">
       <p className="small muted">입력·출력·조건을 내 말로 적어요. 특히 입력 크기와 시간 제한.</p>
-      <div className="row small"><label>N의 최대 <input className="ws-input cs-tr-num" value={maxN} onChange={(e) => setMaxN(e.target.value)} placeholder="예: 100000" /></label>
-        <label>시간 제한 <input className="ws-input cs-tr-num" value={timeSec} onChange={(e) => setTimeSec(e.target.value)} placeholder="초" />초</label></div>
+      <div className="row small"><label>N의 최대 <input className="ws-input cs-tr-num" value={maxN} onChange={(e) => setMaxN(e.target.value)} onBlur={auto} placeholder="예: 100000" /></label>
+        <label>시간 제한 <input className="ws-input cs-tr-num" value={timeSec} onChange={(e) => setTimeSec(e.target.value)} onBlur={auto} placeholder="초" />초</label></div>
       <Mark v={result?.n} /><Mark v={result?.time} />
-      <input className="ws-input" value={output} onChange={(e) => setOutput(e.target.value)} placeholder="무엇을 출력하나요? 한 줄로" />
+      <input className="ws-input" value={output} onChange={(e) => setOutput(e.target.value)} onBlur={() => void fc.check("output", { output })} placeholder="무엇을 출력하나요? 한 줄로" />
+      <FieldMark r={fc.marks.output} busy={fc.busy === "output"} />
       <p className="small muted">작은 입력을 하나 만들고, 답을 손으로 구해 보세요. 앱이 모범 풀이로 정답을 알려 줘요.</p>
-      <div className="cs-io"><textarea className="ws-input mono" rows={4} value={input} onChange={(e) => setInput(e.target.value)} placeholder="내가 만든 입력" />
-        <textarea className="ws-input mono" rows={4} value={mine} onChange={(e) => setMine(e.target.value)} placeholder="내가 구한 답" /></div>
+      <div className="cs-io"><textarea className="ws-input mono" rows={4} value={input} onChange={(e) => setInput(e.target.value)} onBlur={() => { if (mine.trim()) auto(); }} placeholder="내가 만든 입력" />
+        <textarea className="ws-input mono" rows={4} value={mine} onChange={(e) => setMine(e.target.value)} onBlur={auto} placeholder="내가 구한 답" /></div>
       {result?.mine ? <><Mark v={result.mine} />{result.mine.expected !== undefined && result.mine.ok === false ? <pre className="cs-out">정답: {result.mine.expected}</pre> : null}</> : null}
       <Buttons busy={busy} onCheck={check} onNext={onNext} onSkip={onSkip} canNext={Boolean(result)} />
     </div>
   );
 }
-function Coached({ id, step, busy, run, result, fields, onNext, onSkip }: { id: string; step: "model" | "approach" | "correct"; busy: boolean; run: Run; result: CoachR; fields: Array<[string, string, string]>; onNext: () => void; onSkip: () => void }) {
+function Coached({ id, step, busy, run, sync, result, fields, onNext, onSkip }: { id: string; step: "model" | "approach" | "correct"; busy: boolean; run: Run; sync: () => void; result: CoachR; fields: Array<[string, string, string]>; onNext: () => void; onSkip: () => void }) {
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(fields.map(([k, , v]) => [k, v])));
+  const fc = useFieldCheck(id, step, result?.fields, (k) => fields.find(([f]) => f === k)?.[2] ?? "", sync);
   const check = () => void run(async () => { await call(`/api/code/problem/${id}/train/check`, { step, answer: values }); });
   return (
     <div className="cs-tr-body">
-      {fields.map(([k, label]) => <textarea key={k} className="ws-input" rows={2} value={values[k] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [k]: e.target.value }))} placeholder={label} />)}
+      {fields.map(([k, label]) => <div key={k} className="cs-tr-edge"><textarea className="ws-input" rows={2} value={values[k] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [k]: e.target.value }))} onBlur={() => void fc.check(k, values)} placeholder={label} />
+        <FieldMark r={fc.marks[k]} busy={fc.busy === k} /></div>)}
       <Coach r={result} />
       <Buttons busy={busy} onCheck={Object.values(values).some((v) => v.trim()) ? check : undefined} onNext={onNext} onSkip={onSkip} canNext={Boolean(result)} checkLabel="AI에게 확인받기" />
     </div>
   );
 }
 type XResult = { expr: string; n: number; level: string; note: string };
-function Approach({ id, busy, run, complexities, size, result, prev, onNext, onSkip }: { id: string; busy: boolean; run: Run; complexities: string[]; size: number | null; result: CoachR; prev: Prev; onNext: () => void; onSkip: () => void }) {
+function Approach({ id, busy, run, sync, complexities, size, result, prev, onNext, onSkip }: { id: string; busy: boolean; run: Run; sync: () => void; complexities: string[]; size: number | null; result: CoachR; prev: Prev; onNext: () => void; onSkip: () => void }) {
   const [brute, setBrute] = useState(prev("brute", ""));
   const [count, setCount] = useState(prev("count", "2ⁿ"));
   const [slow, setSlow] = useState(prev("slow", ""));
@@ -137,25 +171,32 @@ function Approach({ id, busy, run, complexities, size, result, prev, onNext, onS
   const [opsErr, setOpsErr] = useState("");
   const countOps = async (expr: string) => { setCount(expr); setOpsErr(""); try { setOps((await call<{ result: XResult }>(`/api/code/problem/${id}/train/complexity`, { time: expr, save: false })).result); } catch (e) { setOps(null); setOpsErr(errorText(e)); } };
   const check = () => void run(async () => { await call(`/api/code/problem/${id}/train/check`, { step: "approach", answer: { brute, count, slow, better } }); });
+  const fc = useFieldCheck(id, "approach", result?.fields, (k) => String(prev(k, "")), sync);
+  const box = (k: "brute" | "slow" | "better") => ({ onBlur: () => void fc.check(k, { brute, count, slow, better }) });
   return (
     <div className="cs-tr-body">
       <p className="small muted">완전탐색부터 생각하고, 왜 느린지 찾아서 줄여요.</p>
-      <textarea className="ws-input" rows={2} value={brute} onChange={(e) => setBrute(e.target.value)} placeholder="① 다 해 보면? (예: 모든 경로를 따라간다)" />
+      <textarea className="ws-input" rows={2} value={brute} onChange={(e) => setBrute(e.target.value)} {...box("brute")} placeholder="① 다 해 보면? (예: 모든 경로를 따라간다)" />
+      <FieldMark r={fc.marks.brute} busy={fc.busy === "brute"} />
       <div className="row small"><span className="muted">그러면 몇 번?</span><select className="ws-select" value={count} onChange={(e) => void countOps(e.target.value)}>{complexities.map((c) => <option key={c} value={c}>O({c})</option>)}</select>
         {size ? null : <span className="muted">(1단계에서 N을 적으면 계산해 줘요)</span>}</div>
       {ops ? <p className={`small cs-tr-note ${ops.level === "안 됨" ? "bad" : ops.level === "아슬" ? "help" : "good"}`}>{ops.note}</p> : opsErr ? <p className="small muted">{opsErr}</p> : null}
-      <textarea className="ws-input" rows={2} value={slow} onChange={(e) => setSlow(e.target.value)} placeholder="② 왜 느린가? (예: 같은 칸을 여러 번 계산)" />
-      <textarea className="ws-input" rows={2} value={better} onChange={(e) => setBetter(e.target.value)} placeholder="③ 어떻게 줄이나?" />
+      <textarea className="ws-input" rows={2} value={slow} onChange={(e) => setSlow(e.target.value)} {...box("slow")} placeholder="② 왜 느린가? (예: 같은 칸을 여러 번 계산)" />
+      <FieldMark r={fc.marks.slow} busy={fc.busy === "slow"} />
+      <textarea className="ws-input" rows={2} value={better} onChange={(e) => setBetter(e.target.value)} {...box("better")} placeholder="③ 어떻게 줄이나?" />
+      <FieldMark r={fc.marks.better} busy={fc.busy === "better"} />
       <Coach r={result} />
       <Buttons busy={busy} onCheck={brute.trim() || better.trim() ? check : undefined} onNext={onNext} onSkip={onSkip} canNext={Boolean(result)} checkLabel="AI에게 확인받기" />
     </div>
   );
 }
 type Row = { input: string; expected?: string; got?: string; verdict?: string; note?: string };
-function Correct({ id, busy, run, result, prev, onNext, onSkip }: { id: string; busy: boolean; run: Run; result: CoachR; prev: Prev; onNext: () => void; onSkip: () => void }) {
+function Correct({ id, busy, run, sync, result, prev, onNext, onSkip }: { id: string; busy: boolean; run: Run; sync: () => void; result: CoachR; prev: Prev; onNext: () => void; onSkip: () => void }) {
   const [why, setWhy] = useState(prev("why", ""));
   const [inputs, setInputs] = useState<string[]>(() => { const p = prev<string[]>("inputs", []); return [...p, "", "", ""].slice(0, 3); });
   const [rows, setRows] = useState<Row[]>([]);
+  const fc = useFieldCheck(id, "correct", result?.fields, (k) => String(prev(k, "")), sync);
+  const one = useOneInput(id);
   const answers = async () => { setRows((await call<{ rows: Row[] }>(`/api/code/problem/${id}/train/inputs`, { inputs: inputs.filter((x) => x.trim()) })).rows); };
   const check = () => void run(async () => {
     if (inputs.some((x) => x.trim())) await answers();
@@ -164,10 +205,12 @@ function Correct({ id, busy, run, result, prev, onNext, onSkip }: { id: string; 
   });
   return (
     <div className="cs-tr-body">
-      <textarea className="ws-input" rows={2} value={why} onChange={(e) => setWhy(e.target.value)} placeholder="왜 항상 맞을까요? 한 줄로" />
+      <textarea className="ws-input" rows={2} value={why} onChange={(e) => setWhy(e.target.value)} onBlur={() => void fc.check("why", { why })} placeholder="왜 항상 맞을까요? 한 줄로" />
+      <FieldMark r={fc.marks.why} busy={fc.busy === "why"} />
       <p className="small muted">이 방법이 틀릴 것 같은 입력을 넣어 보세요. 정답은 모범 풀이로 보여 줘요. 내 방법이면 뭐가 나올지 먼저 생각해 보고 비교해요.</p>
-      <div className="cs-tr-inputs">{inputs.map((v, i) => <textarea key={i} className="ws-input mono" rows={3} value={v} onChange={(e) => setInputs((xs) => xs.map((x, j) => j === i ? e.target.value : x))} placeholder={`입력 ${i + 1}`} />)}</div>
-      {rows.length ? <ul className="cs-tr-rows">{rows.map((r, i) => <li key={i} className="small"><span className="muted">입력 {i + 1}</span> {r.note ? r.note : <>정답 <code>{r.expected}</code></>}</li>)}</ul> : null}
+      <div className="cs-tr-inputs">{inputs.map((v, i) => <div key={i} className="cs-tr-edge"><textarea className="ws-input mono" rows={3} value={v} onChange={(e) => setInputs((xs) => xs.map((x, j) => j === i ? e.target.value : x))} onBlur={() => void one.run(i, v)} placeholder={`입력 ${i + 1}`} />
+        <OneRow r={one.rows[i]} busy={one.busy === i} /></div>)}</div>
+      {rows.length && !Object.keys(one.rows).length ? <ul className="cs-tr-rows">{rows.map((r, i) => <li key={i} className="small"><span className="muted">입력 {i + 1}</span> {r.note ? r.note : <>정답 <code>{r.expected}</code></>}</li>)}</ul> : null}
       <Coach r={result} />
       <Buttons busy={busy} onCheck={why.trim() || inputs.some((x) => x.trim()) ? check : undefined} onNext={onNext} onSkip={onSkip} canNext={Boolean(result) || rows.length > 0} />
     </div>
@@ -176,17 +219,37 @@ function Correct({ id, busy, run, result, prev, onNext, onSkip }: { id: string; 
 function Complexity({ id, busy, run, complexities, size, result, prev, onNext, onSkip }: { id: string; busy: boolean; run: Run; complexities: string[]; size: number | null; result?: XResult; prev: Prev; onNext: () => void; onSkip: () => void }) {
   const [time, setTime] = useState(prev("time", "n log n"));
   const [space, setSpace] = useState(prev("space", "n"));
-  const check = () => void run(async () => { await call(`/api/code/problem/${id}/train/complexity`, { time, space }); });
+  const calc = (t: string, sp: string) => void run(async () => { await call(`/api/code/problem/${id}/train/complexity`, { time: t, space: sp }); });
+  const check = () => calc(time, space);
   return (
     <div className="cs-tr-body">
       <p className="small muted">생각한 방법의 시간·공간 복잡도를 골라요. 앱이 N{size ? ` = ${size.toLocaleString()}` : ""}을 넣어 제한 안에 드는지 계산해요.</p>
-      <div className="row small"><label>시간 O(<select className="ws-select" value={time} onChange={(e) => setTime(e.target.value)}>{complexities.map((c) => <option key={c}>{c}</option>)}</select>)</label>
-        <label>공간 O(<select className="ws-select" value={space} onChange={(e) => setSpace(e.target.value)}>{complexities.slice(0, 7).map((c) => <option key={c}>{c}</option>)}</select>)</label></div>
+      <div className="row small"><label>시간 O(<select className="ws-select" value={time} onChange={(e) => { setTime(e.target.value); calc(e.target.value, space); }}>{complexities.map((c) => <option key={c}>{c}</option>)}</select>)</label>
+        <label>공간 O(<select className="ws-select" value={space} onChange={(e) => { setSpace(e.target.value); calc(time, e.target.value); }}>{complexities.slice(0, 7).map((c) => <option key={c}>{c}</option>)}</select>)</label></div>
       {result ? <p className={`small cs-tr-note ${result.level === "안 됨" ? "bad" : result.level === "아슬" ? "help" : "good"}`}>{result.note}</p> : null}
       <Buttons busy={busy} onCheck={check} onNext={onNext} onSkip={onSkip} canNext={Boolean(result)} checkLabel="계산" />
     </div>
   );
 }
+/** One input box against the reference (and, with `withCode`, the learner's code), run when the box is left. */
+function useOneInput(id: string, withCode?: () => { lang: Lang; code: string }) {
+  const [rows, setRows] = useState<Record<number, Row & { error?: string }>>({});
+  const [busy, setBusy] = useState<number | null>(null);
+  const last = useRef<Record<number, string>>({});
+  const run = async (i: number, v: string) => {
+    const key = v.trim() + (withCode ? `\u0000${withCode().code}` : "");
+    if (!v.trim() || last.current[i] === key) return;
+    last.current[i] = key; setBusy(i);
+    try { const r = await call<{ rows: Row[]; compile?: string }>(`/api/code/problem/${id}/train/inputs`, { inputs: [v], ...(withCode ? withCode() : {}) }); setRows((x) => ({ ...x, [i]: r.compile ? { input: v, verdict: "CE", note: "컴파일 에러: 편집기 아래 결과를 보세요." } : r.rows[0] })); }
+    catch (e) { setRows((x) => ({ ...x, [i]: { input: v, error: errorText(e) } })); delete last.current[i]; }
+    finally { setBusy(null); }
+  };
+  return { rows, busy, run };
+}
+const OneRow = ({ r, busy }: { r?: Row & { error?: string }; busy?: boolean }) => busy ? <p className="small cs-tr-busy">도는 중…</p> : !r ? null
+  : r.error ? <p className="small cs-tr-note bad">{r.error}</p>
+  : r.verdict ? <p className={`small cs-tr-note ${r.verdict === "AC" ? "good" : "bad"}`}>{r.verdict === "AC" ? "✓ 내 코드와 정답이 같아요" : <>✗ 틀렸어요 · {r.note ?? <>정답 <code>{r.expected}</code> · 내 출력 <code>{r.got || "(없음)"}</code></>}</>}</p>
+  : <p className="small cs-tr-note">{r.note ?? <>정답 <code>{r.expected}</code></>}</p>;
 const EDGES = ["가장 작은 입력 (N = 1 등)", "가장 큰 값 (값의 최대·최소)", "모두 같은 값", "0이나 음수가 들어갈 수 있으면"];
 function Implement({ id, lang, code, mine, onNext }: { id: string; lang: Lang; code: () => string; mine: string[]; onNext: () => void }) {
   const [edges, setEdges] = useState<string[]>(EDGES.map(() => ""));
@@ -195,6 +258,7 @@ function Implement({ id, lang, code, mine, onNext }: { id: string; lang: Lang; c
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const all = [...mine, ...edges.filter((x) => x.trim())];
+  const one = useOneInput(id, () => ({ lang, code: code() }));
   const go = async () => {
     setBusy(true); setError(""); setCompile("");
     try { const r = await call<{ rows: Row[]; compile?: string }>(`/api/code/problem/${id}/train/inputs`, { inputs: all, lang, code: code(), step: "implement" }); setRows(r.rows); setCompile(r.compile ?? ""); }
@@ -203,7 +267,8 @@ function Implement({ id, lang, code, mine, onNext }: { id: string; lang: Lang; c
   return (
     <div className="cs-tr-body">
       <p className="small muted">코드는 가운데 편집기에 써요. 아래 경계 입력을 채워 내 코드와 모범 풀이를 비교해요. 숨은 테스트는 보여 주지 않아요.{mine.length ? ` 앞 단계에서 만든 입력 ${mine.length}개도 같이 돌려요.` : ""}</p>
-      {EDGES.map((label, i) => <label key={label} className="small cs-tr-edge"><span>{label}</span><textarea className="ws-input mono" rows={2} value={edges[i]} onChange={(e) => setEdges((xs) => xs.map((x, j) => j === i ? e.target.value : x))} /></label>)}
+      {EDGES.map((label, i) => <label key={label} className="small cs-tr-edge"><span>{label}</span><textarea className="ws-input mono" rows={2} value={edges[i]} onChange={(e) => setEdges((xs) => xs.map((x, j) => j === i ? e.target.value : x))} onBlur={() => void one.run(i, edges[i])} />
+        <OneRow r={one.rows[i]} busy={one.busy === i} /></label>)}
       <div className="row"><button className="btn primary small" disabled={busy || !all.length} onClick={() => void go()}>{busy ? "도는 중…" : `내 코드로 돌려 보기 (${all.length}개)`}</button>
         <button className="btn small" onClick={onNext}>다음 단계</button></div>
       {compile ? <pre className="cs-out bad">{compile}</pre> : null}

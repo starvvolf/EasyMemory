@@ -398,3 +398,21 @@ export function prepFromTexts(texts: Map<number, string>, pageNumbers: readonly 
   });
   return { version: PREP_VERSION, pages, sections: splitSections(pages) };
 }
+
+/** The PDF's own bookmarks (top level) as {title, page}, for the pages chosen. None when the PDF has none (3절 1, B 11/3). */
+export async function pdfBookmarks(bytes: Uint8Array, pageNumbers: readonly number[]): Promise<Array<{ title: string; page: number }>> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const doc = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
+  try {
+    const outline = await doc.getOutline();
+    const out: Array<{ title: string; page: number }> = [];
+    for (const item of outline ?? []) {
+      let dest: unknown = item.dest;
+      if (typeof dest === "string") dest = await doc.getDestination(dest);
+      if (!Array.isArray(dest) || !dest[0]) continue;
+      const page = (await doc.getPageIndex(dest[0] as never)) + 1;
+      if (item.title?.trim() && pageNumbers.includes(page)) out.push({ title: item.title.trim(), page });
+    }
+    return out.sort((a, b) => a.page - b.page);
+  } finally { await doc.cleanup().catch(() => undefined); }
+}

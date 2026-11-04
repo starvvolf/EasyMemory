@@ -33,10 +33,16 @@ export type VerifyResult =
 /** 안전장치 ⑤: a second solution from another model call, run on every test (see verify() in harness.mjs). */
 export function runVerify(job: VerifyJob): Promise<VerifyResult> { return runHarness(job) as Promise<VerifyResult>; }
 
+export type CheckInputsResult = { ok: true; kept: number[]; refused: Array<{ i: number; why: string }> } | { ok: false; reason: string };
+/** 반례 찾기: the saved generator's check() on each candidate input (checkInputs() in harness.mjs). */
+export function runCheckInputs(generator: string, inputs: string[]): Promise<CheckInputsResult> {
+  return runHarness({ checkInputs: { generator, inputs } }) as unknown as Promise<CheckInputsResult>;
+}
+
 /** Runs one job in its own process. Only what Node needs to start is passed on: no keys, no tokens, no app settings. */
 export function runTestgen(job: TestgenJob): Promise<TestgenResult> { return runHarness(job) as Promise<TestgenResult>; }
 
-function runHarness(job: TestgenJob | VerifyJob): Promise<TestgenResult | VerifyResult> {
+function runHarness(job: TestgenJob | VerifyJob | { checkInputs: { generator: string; inputs: string[] } }): Promise<TestgenResult | VerifyResult> {
   return new Promise((resolve) => {
     const env = {} as NodeJS.ProcessEnv;
     for (const key of ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR"]) if (process.env[key]) env[key] = process.env[key];

@@ -642,3 +642,10 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .cs-watch.good .cs-watch-dot{background:var(--good)}
 .dejipgi .cs-watch.help{border-color:color-mix(in srgb,var(--help) 50%,transparent);background:color-mix(in srgb,var(--help) 10%,transparent)} .dejipgi .cs-watch.help .cs-watch-dot{background:var(--help)}
 .dejipgi .cs-watch.bad{border-color:color-mix(in srgb,var(--bad) 50%,transparent);background:var(--bad-soft)} .dejipgi .cs-watch.bad .cs-watch-dot{background:var(--bad)}
+/* 훈련 모드: 훈련 단계는 오른쪽 칸 위, AI는 그 아래, 문제는 왼쪽에 그대로 */
+.dejipgi .cs-ai.training{overflow:auto}
+.dejipgi .cs-ai.training .cs-chat{flex:none;min-height:120px;max-height:32vh}
+.dejipgi .cs-ai-train{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--line);padding-bottom:10px}
+.dejipgi .cs-ai-train>.cs-train{border-top:0;padding-top:0}
+.dejipgi .cs-tr-busy{color:var(--muted)}
+.dejipgi .cs-ai.training .cs-tr-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}

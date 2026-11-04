@@ -25,6 +25,11 @@ export type ModelRequest = {
   files?: Array<{ filename: string; dataUrl: string }>;
   /** Called with the text so far while the reply streams in (progress on screen); the final text is still returned whole. */
   onText?: (text: string) => void;
+  /** Text sent last, after the images (the step's own task). Calls that share system + user + images then share that
+   *  whole prefix in the prompt cache and differ only here (생성 엔진 sol·terra 한 번, 11/2). */
+  tail?: string;
+  /** Sent as prompt_cache_key: calls with the same key and the same prefix are routed to the same cache (ChatGPT route). */
+  cacheKey?: string;
   /** Opt-in stable instructions + files prefix; stage-specific system/user follow it. */
   cachePrefix?: string;
   /** With cachePrefix: a block sent as the first user message, identical across calls (shared source for the cache). */
@@ -86,7 +91,7 @@ const codexBackend: ModelBackend = {
     try {
       // A fresh thread per call: no implicit memory between stages.
       const result = await callCodexTextWithThread({
-        message: `${request.system}\n\n${request.user}`,
+        message: `${request.system}\n\n${request.user}${request.tail ? `\n\n${request.tail}` : ""}`,
         model: request.model,
         reasoningEffort: request.effort,
       });
