@@ -63,7 +63,7 @@ export default function TodayBoard() {
             <p className="eyebrow">이어서 하기</p>
             <ul className="td-next">
               {wrong.slice(0, 2).map((p) => <li key={p.id}><button className="linkish" onClick={() => go("code", { id: p.id })}>{p.title}</button> <span className="chip bad">틀린 문제</span></li>)}
-              {lastProblem && !wrong.some((p) => p.id === lastProblem.id) ? <li><button className="linkish" onClick={() => go("code", { id: lastProblem.id })}>{lastProblem.title}</button> <span className="small muted">코드</span></li> : null}
+              {lastProblem && !wrong.some((p) => p.id === lastProblem.id) ? <li><button className="linkish" onClick={() => go("code", { id: lastProblem.id })}>{lastProblem.title}</button> <span className="small muted">알고리즘</span></li> : null}
               {lastSource ? <li><button className="linkish" onClick={() => go("web", { id: lastSource.id })}>{lastSource.title}</button> <span className="small muted">웹 글 · 확인 {Object.values(lastSource.goals).filter((g) => g.done).length}/4</span></li> : null}
             </ul>
           </section>

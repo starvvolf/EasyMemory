@@ -49,7 +49,7 @@ export default function CodeStudy({ openId }: { openId?: string }) {
   return (
     <div className="cs stack">
       <header className="row" style={{ justifyContent: "space-between" }}>
-        <div><h2>코드 문제</h2><p className="small muted">직접 짜서 실행하고 채점해요. 결과는 그 문제의 지식 기록에 남아요.</p></div>
+        <div><h2>알고리즘 문제</h2><p className="small muted">직접 짜서 실행하고 채점해요. 결과는 그 문제의 지식 기록에 남아요.</p></div>
         {langs.some((l) => !l.ready) ? <div className="row small">{langs.filter((l) => !l.ready).map((l) => <span key={l.lang} className="chip help" title={l.help}>{l.label} 설치 안 됨</span>)}</div> : null}
       </header>
       <Calibrated />

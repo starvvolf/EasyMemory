@@ -10,8 +10,8 @@ type Kind = "pdf" | "web" | "code" | "project";
 const KINDS: Array<{ kind: Kind; title: string; text: string; eg: string }> = [
   { kind: "pdf", title: "PDF · 강의 자료", text: "알아야 할 지식을 뽑아 자료 지도로 보여 주고, 원하면 문제로 확인해요.", eg: "전공 PPT, 암기 과목, 교재 PDF" },
   { kind: "web", title: "웹 글 · 칼럼", text: "글에서 알아야 할 지식과 고리를 잡고, 다음 글에서 다시 만나면 알려 줘요.", eg: "주식 칼럼, 기술 블로그, 뉴스 해설" },
-  { kind: "code", title: "코드 · 알고리즘", text: "배운 개념으로 문제를 만들고, 직접 짜서 실행·채점해요.", eg: "바킹독 강의, 백준 대비, 언어 문법" },
-  { kind: "project", title: "프로젝트 · 직접 만들기", text: "VS Code에서 작은 서비스를 한 단계씩 만들고, 옆의 튜터가 알려 줘요.", eg: "게시판 API, 로그인, DB 저장" },
+  { kind: "code", title: "알고리즘 · 문제 풀이", text: "배운 개념으로 문제를 만들고, 직접 짜서 실행·채점해요.", eg: "바킹독 강의, 백준 대비, 언어 문법" },
+  { kind: "project", title: "실습 · 직접 만들기", text: "VS Code에서 작은 서비스를 한 단계씩 만들고, 옆의 튜터가 알려 줘요.", eg: "게시판 API, 로그인, DB 저장" },
 ];
 
 export default function NewStudy() {

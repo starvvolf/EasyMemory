@@ -265,8 +265,8 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
           {matFolders.map((f) => <MatFolderBox key={f.id} folder={f} rows={materials.filter((m) => m.folderId === f.id)} drop={matDrop(f.id)} onAct={act}>{(m) => <MatRow key={m.key} m={m} />}</MatFolderBox>)}
           <ul>{unfiled("material").map((m) => <MatRow key={m.key} m={m} />)}</ul>
           {!materials.some((m) => m.group === "material") ? <p className="small muted kw-empty-sec">PDF나 웹 글로 공부하면 여기에 생겨요.</p> : null}
-          {unfiled("project").length ? <><div className="kw-sec" {...matDrop(null)}><span>프로젝트</span></div><ul>{unfiled("project").map((m) => <MatRow key={m.key} m={m} />)}</ul></> : null}
-          {unfiled("code").length ? <details className="kw-mgroup" open={unfiled("code").some((m) => m.key === matSel)}><summary className="kw-sec"><span>코드 문제</span><span className="kw-count num">{unfiled("code").length}</span></summary>
+          {unfiled("project").length ? <><div className="kw-sec" {...matDrop(null)}><span>실습</span></div><ul>{unfiled("project").map((m) => <MatRow key={m.key} m={m} />)}</ul></> : null}
+          {unfiled("code").length ? <details className="kw-mgroup" open={unfiled("code").some((m) => m.key === matSel)}><summary className="kw-sec"><span>알고리즘 문제</span><span className="kw-count num">{unfiled("code").length}</span></summary>
             <ul>{unfiled("code").map((m) => <MatRow key={m.key} m={m} />)}</ul></details> : null}
           <details className="kw-mgroup" open={view === "topic" && folder !== "all"}>
             <summary className="kw-sec"><span>주제별로 보기</span><span className="small muted kw-sec-hint">{(children.get(null) ?? []).slice(0, 3).map((f) => f.name).join(" · ")}</span></summary>
@@ -361,7 +361,7 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
   // 예와 만난 곳을 한 줄로: "코드 문제 「이름별 누적 포인트 조회」에서 이름을 키로 … 문제 보기 →"
   const srcs = [...new Map(item.sources.map((src) => [src.title, src])).values()];
   const main = srcs[0];
-  const KIND_NAME: Record<string, string> = { pdf: "PDF", web: "웹 글", code: "코드 문제", chat: "대화", manual: "직접 적은 것" };
+  const KIND_NAME: Record<string, string> = { pdf: "PDF", web: "웹 글", code: "알고리즘 문제", chat: "대화", manual: "직접 적은 것" };
   const where = main && main.kind !== "manual" ? `${KIND_NAME[main.kind] ?? main.kind} 「${main.title}」${main.page ? ` ${main.page}쪽` : ""}` : "";
   const exampleText = (item.example ?? "").replace(/^(이|그|해당)\s*(문제|글|자료|강의|코드)\s*(에서는|에선|에서)\s*/, "").replace(/^「[^」]{1,80}」\s*(에서는|에선|에서)\s*/, "");
   const codeId = main?.kind === "code" && main.ref?.startsWith("code:") ? main.ref.slice(5) : null;
@@ -446,7 +446,7 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
           {s.correctDays.length ? <p className="small muted">서로 다른 날 맞힘 {s.correctDays.length}/3 (3이면 졸업)</p> : null}
           {detail.events.length ? <ol className="kw-events">{detail.events.slice(0, 20).map((e) => <li key={e.id}><span className={`chip ev-${e.kind}`}>{EVENT_LABEL[e.kind]}</span> <span className="small">{e.detail}</span> <span className="small muted">{e.source ? `${e.source.title} · ` : ""}{ago(e.at)}</span></li>)}</ol> : <p className="small muted">아직 기록이 없어요.</p>}</details>
         <details className="ws-fold"><summary>어디서 만났나 <span className="muted num">{item.sources.length}</span></summary>
-          <ul className="kw-sources">{item.sources.slice().reverse().slice(0, 12).map((src, i) => <li key={i} className="small"><span className="chip">{{ pdf: "PDF", web: "웹 글", code: "코드", chat: "대화", manual: "직접" }[src.kind] ?? src.kind}</span>{" "}
+          <ul className="kw-sources">{item.sources.slice().reverse().slice(0, 12).map((src, i) => <li key={i} className="small"><span className="chip">{{ pdf: "PDF", web: "웹 글", code: "알고리즘", chat: "대화", manual: "직접" }[src.kind] ?? src.kind}</span>{" "}
             {src.url ? <a href={src.url} target="_blank" rel="noreferrer">{src.title}</a> : genOf(src) ? <button className="linkish" onClick={() => openMap(src)}>{src.title}{src.page ? ` p.${src.page}` : ""}</button> : src.title}{src.page && !genOf(src) ? ` p.${src.page}` : ""}{src.quote ? <span className="muted"> · “{src.quote.slice(0, 80)}”</span> : null}</li>)}</ul></details>
         <details className="ws-fold kw-manage"><summary>고치기·정리</summary>
           <div className="stack">
@@ -582,7 +582,7 @@ function MaterialHead({ m, folders, mode, onMode, onPlace }: { m: MaterialRow; f
       {hasMap ? <div className="ws-seg" role="tablist" aria-label="보기">{([["map", m.genId ? "목차" : m.stages ? "단계별" : "글 지도"], ["list", "지식 목록"]] as const).map(([k, label]) =>
         <button key={k} role="tab" aria-selected={mode === k} className={mode === k ? "on" : ""} onClick={() => onMode(k)}>{label}</button>)}</div> : null}
       {m.genId ? <button className="btn small ghost" title="원문 쪽 보기·문제 풀기는 공부 화면의 자료 지도에서" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: m.genId } }))}>원문·문제</button> : null}
-      {m.group === "project" ? <button className="btn small" onClick={() => go("project")}>프로젝트 화면</button> : null}
+      {m.group === "project" ? <button className="btn small" onClick={() => go("project")}>실습 화면</button> : null}
       {m.group === "code" && m.keys[0]?.startsWith("code:cp_") ? <button className="btn small" onClick={() => go("code", { id: m.keys[m.keys.length - 1].slice(5) })}>문제 열기</button> : null}
       <label className="row small kw-mplace">폴더 <select className="ws-select" value={m.folderId ?? ""} onChange={(e) => onPlace(e.target.value || null)}>
         <option value="">없음</option>{folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>

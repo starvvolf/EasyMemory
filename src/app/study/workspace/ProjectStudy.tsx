@@ -64,7 +64,7 @@ export default function ProjectStudy() {
     <div className="pj">
       <div className="pj-head">
         <div>
-          <p className="eyebrow">프로젝트 · 직접 만들기</p>
+          <p className="eyebrow">실습 · 직접 만들기</p>
           <h2 style={{ margin: "4px 0 6px" }}>만들면서 배워요</h2>
           <p className="small muted" style={{ margin: 0 }}>코드는 VS Code에서 직접 고치고, 오른쪽 튜터 탭이 한 걸음씩 알려 줘요. 물어본 말·배운 개념은 지식에 저절로 들어가요.</p>
         </div>

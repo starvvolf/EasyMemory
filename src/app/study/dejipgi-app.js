@@ -715,7 +715,7 @@ function renderRecallerHome(){
   wrap.append(h("section", { class:"panel hero" },
     h("p", { class:"eyebrow", text:today }),
     h("h2", { text:"무엇을 공부할까요?" }),
-    h("p", { class:"muted", text:"PDF·웹 글은 읽고, 코드는 풀고, 프로젝트는 만들어 보며 배운 것을 지식 하나로 쌓아요. 잊을 때쯤 다시 물어봐요." }),
+    h("p", { class:"muted", text:"PDF·웹 글은 읽고, 알고리즘은 풀고, 실습에서는 직접 만들어 보며 배운 것을 지식 하나로 쌓아요. 잊을 때쯤 다시 물어봐요." }),
     h("div", { class:"row" },
       h("button", { class:"btn primary", onclick: () => setView("start") }, "+ 새 공부 시작"),
       real.length ? h("button", { class:"btn", onclick: () => setView("practice") }, "내 공부 보기") : null)));
@@ -792,7 +792,7 @@ function viewHost(name, props){
 let lastContextKey = "";
 function emitContext(){
   if (S.view === "code" || S.view === "web") return;
-  let ctx = { view:S.view, title:{ home:"오늘", knowledge:"지식", practice:"공부 · PDF 자료", create:"자료 넣기", records:"학습 기록", bench:"작업대", plan:"일정", summary:"한 장 정리", archive:"보관함", web:"공부 · 웹 글", project:"공부 · 프로젝트", start:"새 공부" }[S.view] || S.view, refs:[], knowledgeIds:[] };
+  let ctx = { view:S.view, title:{ home:"오늘", knowledge:"지식", practice:"공부 · PDF 자료", create:"자료 넣기", records:"학습 기록", bench:"작업대", plan:"일정", summary:"한 장 정리", archive:"보관함", web:"공부 · 웹 글", project:"공부 · 실습", start:"새 공부" }[S.view] || S.view, refs:[], knowledgeIds:[] };
   if (S.view === "read" && S.reader && S.reader.deckId && S.decks[S.reader.deckId]){
     const d = S.decks[S.reader.deckId];
     ctx = { ...ctx, title:`${displayTitle(d)} p.${S.reader.page}`, refs:[d.id + ":"] };
@@ -822,7 +822,7 @@ on(window, "recaller:map-open", (e) => {
 /* 공부 안의 갈래: PDF 자료 · 웹 글 · 코드 · 프로젝트(2026-10-30, D), and "+ 새 공부" — the same bar on each, so the three feel like one place. */
 function studyNav(active){
   const seg = h("div", { class:"seg study-seg", role:"tablist", "aria-label":"공부 종류" },
-    [["practice", "PDF 자료"], ["web", "웹 글"], ["code", "코드"], ["project", "프로젝트"]].map(([v, label]) =>
+    [["practice", "PDF 자료"], ["web", "웹 글"], ["code", "알고리즘"], ["project", "실습"]].map(([v, label]) =>
       h("button", { role:"tab", "aria-selected": active === v ? "true" : "false", class: active === v ? "on" : "", onclick: () => { S.session = null; setView(v); } }, label)));
   return h("div", { class:"study-nav" }, seg, h("button", { class:"btn primary small", onclick: () => setView("start") }, "+ 새 공부"));
 }
@@ -919,8 +919,8 @@ function render(){
   if (bar) app.append(bar);
   if (S.view === "home") app.append(renderRecallerHome());
   else if (S.view === "knowledge") app.append(S.kp.legacy || !env.mountView ? renderKnowledgeLegacy() : viewHost("knowledge", { onLegacy: () => { S.kp.legacy = true; render(); } }));
-  else if (S.view === "code") app.append(studyNav("code"), env.mountView ? viewHost("code", {}) : h("div", { class:"panel small muted", text:"코드 학습은 로컬 실험 모드에서 쓸 수 있어요." }));
-  else if (S.view === "project") app.append(studyNav("project"), env.mountView ? viewHost("project", {}) : h("div", { class:"panel small muted", text:"프로젝트 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
+  else if (S.view === "code") app.append(studyNav("code"), env.mountView ? viewHost("code", {}) : h("div", { class:"panel small muted", text:"알고리즘 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
+  else if (S.view === "project") app.append(studyNav("project"), env.mountView ? viewHost("project", {}) : h("div", { class:"panel small muted", text:"실습은 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "web") app.append(studyNav("web"), env.mountView ? viewHost("web", {}) : h("div", { class:"panel small muted", text:"웹 글 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "start") app.append(env.mountView ? viewHost("start", {}) : renderBuilder());
   else if (S.view === "plan") app.append(env.mountView ? viewHost("plan", {}) : h("div", { class:"panel small muted", text:"일정은 로컬 실험 모드에서 쓸 수 있어요." }));

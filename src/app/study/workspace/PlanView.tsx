@@ -38,7 +38,7 @@ export default function PlanView() {
   return (
     <div className="pl stack">
       <header className="row" style={{ justifyContent: "space-between" }}>
-        <div><h2>일정</h2><p className="small muted num" title="복습·문제 풀기·웹 글·프로젝트 기록이 생긴 시간을 5분 단위로 센 것과, 타이머·직접 넣은 시간 중 큰 쪽">이번 주 공부 {minutes(total)}</p></div>
+        <div><h2>일정</h2><p className="small muted num" title="복습·문제 풀기·웹 글·실습 기록이 생긴 시간을 5분 단위로 센 것과, 타이머·직접 넣은 시간 중 큰 쪽">이번 주 공부 {minutes(total)}</p></div>
         <div className="row"><button className="btn ghost small" onClick={() => setStart(addDays(week.start, -7))}>← 지난주</button><button className="btn ghost small" onClick={() => setStart(undefined)}>이번 주</button><button className="btn ghost small" onClick={() => setStart(addDays(week.start, 7))}>다음 주 →</button></div>
       </header>
       {error ? <p className="ws-err" onClick={() => setError("")}>{error}</p> : null}

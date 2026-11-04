@@ -23,7 +23,7 @@ export type GoalView = { id: string; name: string; date: string | null; closed: 
   counts: { total: number; unknown: number; known: number; met: number; graduated: number; due: number } };
 export type Material = { key: string; kind: SourceKindName; title: string; items: number; itemIds: string[]; lastAt: string; goals: string[]; ignored: boolean;
   suggestion: { goalId: string; name: string; reason: string } | null };
-export const SOURCE_LABEL: Record<SourceKindName, string> = { pdf: "PDF", web: "웹 글", code: "코드", chat: "대화", manual: "직접" };
+export const SOURCE_LABEL: Record<SourceKindName, string> = { pdf: "PDF", web: "웹 글", code: "알고리즘", chat: "대화", manual: "직접" };
 export const dday = (n: number | null) => n === null ? "" : n === 0 ? "D-day" : n > 0 ? `D-${n}` : `D+${-n}`;
 /** What the review session says when nothing is due: how many are due now and when the next one comes. */
 export type ReviewStatus = { due: number; next: string | null };

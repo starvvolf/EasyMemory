@@ -6,7 +6,7 @@ import { vectorStatus } from "./embed.ts";
 import { listMaterials } from "./goals.ts";
 import { KIND_LABEL, REVIEW_BOXES, STATE_LABEL, normalize, pathOf, readAll, readEvents, dayOf, type Knowledge } from "./store.ts";
 
-const SOURCE = { pdf: "PDF", web: "웹 글", code: "코드 문제", chat: "대화", manual: "직접" } as const;
+const SOURCE = { pdf: "PDF", web: "웹 글", code: "알고리즘 문제", chat: "대화", manual: "직접" } as const;
 const one = (text: string, n = 80) => { const t = text.replace(/\s+/g, " ").trim(); return t.length > n ? `${t.slice(0, n)}…` : t; };
 const meaningOf = (i: Knowledge) => i.body.split("\n").map((l) => l.trim()).find((l) => l && !l.startsWith("헷갈림:")) ?? "";
 
