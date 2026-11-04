@@ -773,3 +773,9 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .fchip.on { outline: 2px solid var(--warn); }
 .float .gbar, .float .gcard { --ink: var(--f-ink); --mut: var(--f-mut); --panel: var(--f-s2); --soft: var(--f-s3); --line: var(--f-line2); --bg: var(--f-bg);
   --acc: var(--f-acc); --acc-ink: #10131f; --acc-soft: var(--f-acc-s); --warn: #f2c066; --warn-soft: #3a2e14; --ok: var(--f-ok); --ok-soft: #17301f; color: var(--ink); }
+
+/* 목표 단계(11/5): ① 이해 → ② 적용 */
+.gsteps { display: flex; gap: 6px; align-items: center; margin-top: 6px; font-size: 12px; }
+.gph { padding: 1px 8px; border-radius: 99px; background: var(--soft); color: var(--mut); }
+.gph.now { background: var(--acc-soft); color: var(--acc); font-weight: 600; }
+.gph.done { background: var(--ok-soft); color: var(--ok); }

@@ -138,7 +138,14 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
       if (top && op === "understood") { // 보충은 이해만 하면 돌아간다
         g.stack.pop(); logIt(g, "support-done", top.title);
         say = null;
-      } else if (g.current) { g.current[op] = !g.current[op]; logIt(g, op, `${g.current.title}: ${g.current[op]}`); }
+      } else if (g.current && op === "understood" && !g.current.understood) {
+        // 11/5 사용자 "목표마다 이해 → 적용 흐름이 있으면 좋겠다": 이해했어요 → 적용 단계로, 튜터가 직접 해 볼 과제를 낸다
+        g.current.understood = true; logIt(g, "understood", g.current.title);
+        say = `[이해했어요] "${g.current.title}"을(를) 이해했어요. 이제 적용 단계예요. 완료 조건("${g.current.done}")을 학습자가 직접 해 볼 수 있는 작은 과제 하나를 내 주세요. 완성 코드는 주지 말고, 막히면 힌트만 주세요.`;
+      } else if (g.current && op === "applied" && !g.current.applied) {
+        g.current.applied = true; if (!g.current.understood) g.current.understood = true; logIt(g, "applied", g.current.title);
+        say = `[해 봤어요] 학습자가 "${g.current.title}" 적용 과제를 해 봤어요. 작업 폴더의 파일을 읽거나 실행해서 확인할 수 있으면 확인하고, 됐으면 짧게 알려 주세요. 안 됐으면 어디가 문제인지 짚어 주세요.`;
+      }
     } else if (op === "next") {
       if (!g.current) throw err("현재 목표가 없어요.");
       const c = g.current; const full = c.understood && c.applied;
@@ -189,11 +196,11 @@ export async function goalContext(runId: string) {
     `장기 목표: ${g.long.text} (${g.mode === "topdown" ? "탑다운" : "바텀업"})`,
     g.long.spec ? `범위: ${g.long.spec}` : "",
     g.map.length ? `지도: ${g.map.map((m, i) => `${i + 1}.${mark(m)} ${m.title}`).join(" · ")}` : "",
-    c ? `현재 목표: ${c.title} — 완료 조건: ${c.done} (이해 ${c.understood ? "✓" : "–"} · 적용 ${c.applied ? "✓" : "–"})` : "현재 목표: 없음 — set_current_goal로 정한다",
+    c ? `현재 목표: ${c.title} — 완료 조건: ${c.done} · 단계: ${!c.understood ? "① 이해 중" : !c.applied ? "② 적용 중(학습자가 직접 해 보는 중)" : "적용까지 끝(학습자가 다음으로 넘어갈 수 있음)"}` : "현재 목표: 없음 — set_current_goal로 정한다",
     top ? `보충 중(${g.stack.length}겹): ${top.title} — ${top.done} (막힌 이유: ${top.why}). 학습자가 이해했다고 누르면 '${top.from}'로 돌아간다. 지금은 보충에 집중한다.` : "",
     g.survey ? "지금 화면에 질문을 띄워 두었다 — 학습자 답을 기다린다." : "",
     (() => { const r = g.log.slice(-12); const e = r.filter((l) => l.kind === "easy").length, h = r.filter((l) => l.kind === "stuck").length; return e || h ? `최근 학습자 표시: 너무 쉬움 ${e}번 · 너무 어려움 ${h}번 — 설명 수준을 여기에 맞춘다.` : ""; })(),
-    "이해 · 적용 · 다음으로는 학습자가 화면 버튼으로 정한다. 적용은 실행해서 확인할 수 있으면 확인을 도와준다.",
+    "목표마다 ① 이해 → ② 적용 순서로 간다. 이해 단계에서는 설명과 예시로 이해를 돕고, 학습자가 [이해했어요]를 누르면 적용 과제를 낸다. [해 봤어요]가 오면 실행 · 파일로 확인을 돕는다. 단계를 넘기는 건 학습자가 화면 버튼으로 하므로, 버튼 안내는 그 단계가 끝날 무렵 한 번이면 충분하다.",
   ].filter(Boolean).join("\n");
 }
 

@@ -1388,10 +1388,15 @@ function goalBar(lesson, send) {
       h("div", { class: "grow2" }, h("button", { class: "btn small primary", disabled: lesson.busy, onclick: op("understood") }, "이해했어요, 돌아가기"))) : null,
     c ? h("div", { class: `gcur ${top ? "paused" : ""}` }, h("div", {}, h("span", { class: "gk" }, top ? "미뤄 둔 목표" : "지금"), h("b", {}, c.title)),
       h("div", { class: "mut small" }, `완료 조건: ${c.done}`),
+      // 11/5 사용자 "목표마다 이해 → 적용 흐름": 지금 단계 표시 + 그 단계 버튼 하나 + 다음으로(언제든)
+      top ? null : h("div", { class: "gsteps" },
+        h("span", { class: `gph ${c.understood ? "done" : "now"}` }, c.understood ? "① 이해 ✓" : "① 이해"),
+        h("span", { class: "mut" }, "→"),
+        h("span", { class: `gph ${c.applied ? "done" : c.understood ? "now" : ""}` }, c.applied ? "② 적용 ✓" : "② 적용")),
       top ? null : h("div", { class: "grow2" },
-        h("button", { class: `btn small ${c.understood ? "on" : ""}`, disabled: lesson.busy, onclick: op("understood") }, c.understood ? "✓ 이해했어요" : "이해했어요"),
-        h("button", { class: `btn small ${c.applied ? "on" : ""}`, disabled: lesson.busy, onclick: op("applied") }, c.applied ? "✓ 적용했어요" : "적용했어요"),
-        h("button", { class: "btn small primary", disabled: lesson.busy, title: c.understood && c.applied ? "" : "이해·적용을 다 안 해도 넘어갈 수 있어요(건너뜀으로 남아요)", onclick: op("next") }, "다음으로 →"))) : null);
+        !c.understood ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 직접 해 볼 과제를 내요", onclick: op("understood") }, "이해했어요 → 적용하기") : null,
+        c.understood && !c.applied ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 파일 · 실행으로 확인해 줘요", onclick: op("applied") }, "해 봤어요") : null,
+        h("button", { class: `btn small ${c.understood && c.applied ? "primary" : ""}`, disabled: lesson.busy, title: c.understood && c.applied ? "" : "이해 · 적용을 다 안 해도 넘어갈 수 있어요(건너뜀으로 남아요)", onclick: op("next") }, "다음으로 →"))) : null);
 }
 function surveyCard(sv, send) {
   const picks = (goalUi.picks[sv.id] ??= sv.questions.map(() => new Set()));

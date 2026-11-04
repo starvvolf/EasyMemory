@@ -283,9 +283,10 @@ const marked = new Set<string>();
 async function markOnce(ws: string) { if (marked.has(ws)) return; marked.add(ws); await (await import("./learn.ts")).markChatFolder(ws); }
 /** 버튼이 튜터에게 보낸 말(지시가 섞인 것)은 화면에선 짧게(11/4) */
 function shownUser(t: string) {
-  const m = /^\[(확정|다음으로|막혔어요|너무 어려워요|너무 쉬워요|진행 방식 변경|계획 다시 얘기하기)\]/.exec(t);
+  const m = /^\[(확정|다음으로|막혔어요|너무 어려워요|너무 쉬워요|이해했어요|해 봤어요|진행 방식 변경|계획 다시 얘기하기)\]/.exec(t);
   if (!m) return t;
-  if (m[1] === "너무 쉬워요") return "너무 쉬워요";
+  if (m[1] === "너무 쉬워요" || m[1] === "해 봤어요") return m[1];
+  if (m[1] === "이해했어요") return "이해했어요 → 적용하기";
   if (m[1] === "막혔어요" || m[1] === "너무 어려워요") { const why = /(?:막힌|어려운) 이유\(학습자가 고름\): ([^\n]*)/.exec(t)?.[1]; return `너무 어려워요${why ? ` — ${why}` : ""}`; }
   return ({ 확정: "✓ 계획 확정", 다음으로: "다음으로 →", "진행 방식 변경": `진행 방식 바꾸기 — ${/이제부터 ([^(]+)/.exec(t)?.[1]?.trim() ?? ""}`, "계획 다시 얘기하기": "계획 다시 얘기하기" } as Record<string, string>)[m[1]];
 }

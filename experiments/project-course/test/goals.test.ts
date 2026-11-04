@@ -67,3 +67,17 @@ test("너무 쉬워요 · 너무 어려워요(11/5): 쉬우면 수준 올리기(
   assert.equal((await G.goalsOf(r)).stack.length, 1);
   assert.match(await G.goalContext(r), /너무 쉬움 1번 · 너무 어려움 1번/);
 });
+
+test("목표 단계(11/5): ① 이해 → [이해했어요] 적용 과제 → [해 봤어요] 확인 → 다음으로는 마침", async () => {
+  const r = "run4";
+  await G.runGoalTool(r, "propose_plan", { long: "스택", spec: "", mode: "bottomup", map: [], first: { title: "push · pop", done: "append와 pop으로 넣고 꺼낸다" } }, []);
+  await G.goalAction(r, "confirm", {});
+  assert.match(await G.goalContext(r), /단계: ① 이해 중/);
+  assert.match((await G.goalAction(r, "understood", {}))!, /적용 단계.*작은 과제/);
+  assert.match(await G.goalContext(r), /단계: ② 적용 중/);
+  assert.equal(await G.goalAction(r, "understood", {}), null); // 두 번 눌러도 다시 부르지 않음
+  assert.match((await G.goalAction(r, "applied", {}))!, /확인/);
+  assert.match(await G.goalContext(r), /적용까지 끝/);
+  await G.goalAction(r, "next", {});
+  assert.match((await G.goalsOf(r)).log.at(-1)!.text, /마침/);
+});
