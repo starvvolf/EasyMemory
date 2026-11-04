@@ -335,7 +335,8 @@ export async function openEditor(runId: string) {
   const bridge = await ensureBridge();
   if ((bridge as { missing?: boolean }).missing) return { ok: false, path: ws, message: "VS Code 명령(code)을 찾지 못했어요. VS Code에서 [파일 → 폴더 열기]로 이 경로를 열어 주세요. (VS Code 설치 때 'PATH에 추가'를 켜면 자동으로 열려요)" };
   const first = path.join(ws, st.fix.files[0] ?? "src/server.ts");
-  const opened = await codeCli([ws, "--goto", `${first}:1`], 20000);
+  // 코스 없는 대화(빈 폴더)는 열 파일이 없다 → 폴더만 연다(없는 파일을 --goto로 열면 빈 탭이 생김)
+  const opened = await codeCli((await exists(first)) ? [ws, "--goto", `${first}:1`] : [ws], 20000);
   return {
     ok: opened.ok, path: ws, bridgeInstalled: bridge.installed,
     message: opened.ok ? (bridge.installed ? "VS Code에 Recaller 연결 확장을 깔고 열었어요." : "") : `VS Code를 열지 못했어요: ${opened.out.slice(0, 200)}`,

@@ -162,6 +162,8 @@ function resumeRun(r) {
   if (EMBED && r.workspace && !inThisFolder(r.workspace)) { switchingNote("하던 곳으로 가는 중이에요"); openFolder(r.workspace); return; }
   go(`#/run/${r.id}`);
 }
+const homeEngine = () => { try { return localStorage.getItem("recaller-engine") || "codex"; } catch { return "codex"; } };
+const setHomeEngine = (k) => { try { localStorage.setItem("recaller-engine", k); } catch { /* */ } };
 /* ---------- 홈(11/4 사용자 "최소한만: 대화 첫 시작 → 대화창, 홈 누르면 대화 목록, 새 대화") ---------- */
 async function renderHome() {
   const chats = await api("GET", "/api/chats").catch(() => []);
@@ -171,7 +173,7 @@ async function renderHome() {
     const text = input.value.trim(); if (!text) return input.focus();
     busy(btn, async () => {
       // 웹 화면에서 시작하면 VS Code만 열고 튜터 창은 띄우지 않는다(이 화면이 대화창). 튜터 창·VS Code 탭 안에서는 여는 것 없이
-      const out = await api("POST", "/api/free", { courseId: "hello-api", course: "none", open: !FLOAT && !EMBED, float: false });
+      const out = await api("POST", "/api/free", { courseId: "hello-api", course: "none", engine: homeEngine() === "codex" ? "codex" : undefined, open: !FLOAT && !EMBED, float: false });
       await api("POST", `/api/runs/${out.runId}/lesson/1/act`, { do: "ask", text });
       openChat({ runId: out.runId, workspace: out.workspace });
     });
@@ -180,8 +182,11 @@ async function renderHome() {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); start(e); } });
   const when = (at) => { const d = new Date(at); const t = Date.now() - d; return t < 864e5 ? d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" }); };
   const list = chats.length ? h("div", { class: "hlist" }, h("div", { class: "mut small" }, "이전 대화"),
-    chats.map((c) => h("button", { class: "hitem", onclick: () => openChat(c) }, h("span", { class: "grow" }, c.title), h("span", { class: "mut small" }, c.busy ? "답하는 중" : when(c.at))))) : null;
-  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), h("div", { class: "hbox" }, input, btn), list));
+    chats.map((c) => h("button", { class: "hitem", onclick: () => openChat(c) }, h("span", { class: `heb ${c.engine}` }, c.engine === "codex" ? "Codex" : "기존"), h("span", { class: "grow" }, c.title), h("span", { class: "mut small" }, c.busy ? "답하는 중" : when(c.at))))) : null;
+  // 11/4 사용자 "첫 화면에서 Codex 버전 · 기존 버전 나눠서 체크": 고른 것은 이 브라우저에 기억
+  const eng = h("div", { class: "heng", role: "radiogroup", "aria-label": "엔진" }, [["codex", "Codex 버전"], ["basic", "기존 버전"]].map(([k, t]) =>
+    h("button", { class: `hchip ${homeEngine() === k ? "on" : ""}`, role: "radio", "aria-checked": String(homeEngine() === k), onclick: () => { setHomeEngine(k); renderHome(); } }, t)));
+  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), list));
   input.focus();
 }
 /** 대화 열기: 튜터 창이면 VS Code 폴더도 그 대화로, VS Code 탭이면 폴더가 다를 때 폴더부터 */
@@ -1339,7 +1344,7 @@ function drawFree() {
     h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
-    h("div", { class: "grow" }, h("b", {}, run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · 실험판 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
+    h("div", { class: "grow" }, h("b", {}, run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · ${lesson.chat.engine === "codex" ? "Codex" : "기존"} 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
     lesson.chat ? modelPick(run, lesson) : null,
     h("button", { class: "fib", title: "대화 목록", "aria-label": "대화 목록", onclick: () => go_("#/home") }, icon("home")),
     h("button", { class: "btn small", title: "새 대화", onclick: () => go_("#/home") }, "+ 새 대화"),

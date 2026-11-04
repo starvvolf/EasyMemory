@@ -65,6 +65,8 @@ export type Run = {
   free?: boolean;
   /** 11/4 사용자 "이번에 GPT가 만든 것까지 그대로 붙여 봐": 프리스타일 대화를 GPT 실험판 엔진(agent-chat)이 그대로 맡는다. 그 대화 id */
   chatId?: string;
+  /** 11/4 사용자 "기존 UI에 붙여 봐, 첫 화면에서 Codex 버전 · 기존 버전": Codex 엔진 대화 id(lib/codex-chat) */
+  codexId?: string;
 };
 type RunsFile = { runs: Run[]; active?: string };
 const RUNS = () => path.join(DATA, "runs.json");

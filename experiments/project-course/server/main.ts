@@ -70,7 +70,7 @@ async function runView(run: Run) {
     stages: course.stages.map((s) => ({ n: s.n, title: s.title, transfer: !!s.transfer, inPlan: shown.includes(s.n), before: s.n < run.plan.start && !s.transfer,
       quick: run.plan.quick.includes(s.n), status: run.stages[String(s.n)] ? { started: !!run.stages[String(s.n)].startedAt, done: !!run.stages[String(s.n)].doneAt, independent: run.stages[String(s.n)].independent, skipped: !!run.stages[String(s.n)].skipped } : null })),
     stage: stageView(course, run, run.current),
-    lesson: !!(await loadPlan(course.id, run.current)), chat: !!run.chatId,
+    lesson: !!(await loadPlan(course.id, run.current)), chat: !!(run.chatId || run.codexId),
     dev: devStatus(run.id),
     lastCheck: lastCheck.get(`${run.id}:${run.current}`) ?? null,
     records: { file: recordsFile(run.id), count: recs.length, items: recs.filter((r) => r.stage === run.current).slice(-40) },
@@ -151,12 +151,13 @@ const routes: [string, RegExp, Handler][] = [
   // 11/4 사용자 "홈 누르면 세션 목록(클로드 앱·GPT 앱처럼 대화 목록)": 실험판 엔진 대화만, 최근 것부터
   ["GET", /^\/api\/chats$/, async () => {
     const ac = await import("../lib/agent-chat.ts");
-    const list = (await runs()).runs.filter((r) => r.chatId);
+    const cx = await import("../lib/codex-chat.ts");
+    const list = (await runs()).runs.filter((r) => r.chatId || r.codexId);
     const out = await Promise.all(list.map(async (r) => {
       try {
-        const c = await ac.chatView(r.chatId!);
+        const c = r.codexId ? await cx.view(r.codexId) : await ac.chatView(r.chatId!);
         const first = c.messages.find((m) => m.role === "user")?.text ?? "";
-        return { runId: r.id, title: first.replace(/\s+/g, " ").slice(0, 60) || "새 대화", at: c.messages.at(-1)?.at ?? r.createdAt, count: c.messages.filter((m) => m.role === "user").length, busy: c.busy, workspace: c.workspace };
+        return { runId: r.id, engine: r.codexId ? "codex" : "basic", title: first.replace(/\s+/g, " ").slice(0, 60) || "새 대화", at: c.messages.at(-1)?.at ?? r.createdAt, count: c.messages.filter((m) => m.role === "user").length, busy: c.busy, workspace: c.workspace };
       } catch { return null; }
     }));
     return out.filter((x) => x && x.count > 0).sort((a, b) => String(b!.at).localeCompare(String(a!.at)));
@@ -170,7 +171,12 @@ const routes: [string, RegExp, Handler][] = [
     // 11/4 사용자 "GPT가 만든 것까지 그대로 붙여 봐": 대화는 실험판(agent-chat) 엔진 그대로, 작업 폴더도 그 대화의 폴더(VS Code가 이 폴더를 연다)
     // 11/4 사용자 A안: course "none"이면 코스 없이 빈 폴더로 시작(인사 서버로 흘러가지 않게)
     let chatWs: string | null = null;
-    if (b.engine !== "lesson" && course.id === "hello-api") {
+    if (b.engine === "codex") {
+      // 11/4 사용자 "첫 화면에서 Codex 버전 · 기존 버전 골라 시작": Codex 엔진(lib/codex-chat), 코스 없이 빈 폴더
+      const cx = await (await import("../lib/codex-chat.ts")).create();
+      run.codexId = cx.id; chatWs = cx.workspace;
+      run.workspaces[course.stages.find((s) => s.n === plan.start)!.template] = cx.workspace;
+    } else if (b.engine !== "lesson" && course.id === "hello-api") {
       const chat = await (await import("../lib/agent-chat.ts")).newChat({ course: b.course === "none" ? null : "hello-api" });
       run.chatId = chat.id; chatWs = chat.workspace;
       run.workspaces[course.stages.find((s) => s.n === plan.start)!.template] = chat.workspace;
@@ -274,26 +280,29 @@ const routes: [string, RegExp, Handler][] = [
   // 11/4 사용자 "직접 고치는 권한(처음에 확인 요청)" · "채팅창에서 모델 변경": 대화 설정
   ["POST", /^\/api\/runs\/(\w+)\/chat-options$/, async (req, m) => {
     const run = await getRun(m[1]);
-    if (!run.chatId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
-    await (await import("../lib/agent-chat.ts")).setChatOptions(run.chatId, await body(req));
+    if (!run.chatId && !run.codexId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
+    if (run.codexId) { const b = await body(req); await (await import("../lib/codex-chat.ts")).setOptions(run.codexId, { ...(b.model !== undefined ? { model: b.model } : {}), ...(b.edit !== undefined ? { edit: b.edit } : {}) }); }
+    else await (await import("../lib/agent-chat.ts")).setChatOptions(run.chatId!, await body(req));
     notifyLesson(run.id);
     return lessonView(run.id, run.current);
   }],
   // 배운 것 지금 뽑기(11/4): 질문이 끝날 때 저절로 돌지만, 예전 대화나 실패했던 것을 다시 볼 때
   ["POST", /^\/api\/runs\/(\w+)\/learned$/, async (_q, m) => {
     const run = await getRun(m[1]);
-    if (!run.chatId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
+    if (!run.chatId && !run.codexId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
     const cl = await import("../lib/chat-learned.ts");
-    const got = await cl.extractLearned(run.chatId, (await (await import("../lib/agent-chat.ts")).chatOf(run.chatId)).messages);
+    const key = run.codexId ? `codex-${run.codexId}` : run.chatId!;
+    const msgs = run.codexId ? (await (await import("../lib/codex-chat.ts")).chatOf(run.codexId)).messages.filter((x) => x.role === "user" || x.role === "assistant") : (await (await import("../lib/agent-chat.ts")).chatOf(run.chatId!)).messages;
+    const got = await cl.extractLearned(key, msgs);
     notifyLesson(run.id);
-    return { accepted: got?.ok.length ?? 0, rejected: got?.bad ?? [], ...(await cl.learnedOf(run.chatId)) };
+    return { accepted: got?.ok.length ?? 0, rejected: got?.bad ?? [], ...(await cl.learnedOf(key)) };
   }],
   // 11/4 사용자 "현재 작업 폴더 위치도 사람이 보고 수정 가능하게": 대화(실험판 엔진)의 작업 폴더를 바꾼다. VS Code도 그 폴더를 연다
   ["POST", /^\/api\/runs\/(\w+)\/workspace$/, async (req, m) => {
     const b = await body(req);
     const run = await getRun(m[1]);
-    if (!run.chatId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
-    const v = await (await import("../lib/agent-chat.ts")).setChatWorkspace(run.chatId, String(b.path ?? ""));
+    if (!run.chatId && !run.codexId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
+    const v = run.codexId ? await (await import("../lib/codex-chat.ts")).setOptions(run.codexId, { workspace: String(b.path ?? "") }) : await (await import("../lib/agent-chat.ts")).setChatWorkspace(run.chatId!, String(b.path ?? ""));
     const course = await loadCourse(run.courseId);
     await saveRun(run.id, (r) => { r.workspaces[course.stages.find((s) => s.n === r.current)!.template] = v.workspace; });
     notifyLesson(run.id);
