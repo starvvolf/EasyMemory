@@ -269,6 +269,15 @@ const routes: [string, RegExp, Handler][] = [
     notifyLesson(run.id);
     return lessonView(run.id, run.current);
   }],
+  // 배운 것 지금 뽑기(11/4): 질문이 끝날 때 저절로 돌지만, 예전 대화나 실패했던 것을 다시 볼 때
+  ["POST", /^\/api\/runs\/(\w+)\/learned$/, async (_q, m) => {
+    const run = await getRun(m[1]);
+    if (!run.chatId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
+    const cl = await import("../lib/chat-learned.ts");
+    const got = await cl.extractLearned(run.chatId, (await (await import("../lib/agent-chat.ts")).chatOf(run.chatId)).messages);
+    notifyLesson(run.id);
+    return { accepted: got?.ok.length ?? 0, rejected: got?.bad ?? [], ...(await cl.learnedOf(run.chatId)) };
+  }],
   // 11/4 사용자 "현재 작업 폴더 위치도 사람이 보고 수정 가능하게": 대화(실험판 엔진)의 작업 폴더를 바꾼다. VS Code도 그 폴더를 연다
   ["POST", /^\/api\/runs\/(\w+)\/workspace$/, async (req, m) => {
     const b = await body(req);
