@@ -8,9 +8,12 @@ import { aiJson, S } from "./ai.ts";
 
 export type GoalRecord = {
   goal: string; done: string; status: "마침" | "건너뜀"; mode: string | null; from: string; to: string;
-  summary: string; steps: string[]; learned: { concept: string; meaning: string; how: string; quote: string; verified: boolean }[]; at: string;
+  summary: string; steps: string[]; learned: { type: Tab; concept: string; meaning: string; how: string; quote: string; verified: boolean }[]; at: string;
 };
 type Msg = { role: string; text: string; at: string };
+/** 11/5 사용자 "그 목표랑 목표 수행하는 동안의 대화 내역 보고 개념/원리/절차/규칙/방법/비교 탭에 넣으라고 시키면 될 것 같다" */
+export const TABS = ["개념", "원리", "절차", "규칙", "방법", "비교"] as const;
+export type Tab = (typeof TABS)[number];
 const file = (runId: string) => path.join(DATA, "goals", `${runId}.records.json`);
 const logFile = () => path.join(DATA, "goals", "records.log.jsonl");
 export const recordsOf = async (runId: string) => (await read<{ items: GoalRecord[] }>(file(runId), { items: [] })).items;
@@ -18,9 +21,16 @@ export const recordsOf = async (runId: string) => (await read<{ items: GoalRecor
 export const SYSTEM_RECORD = `학습 목표 하나 동안 나눈 대화를 읽고, 학습자가 어떤 과정을 거쳐 무엇을 배웠는지 정리한다.
 summary: 이 목표에서 학습자가 한 일과 도달한 곳을 2~3문장으로.
 steps: 학습자가 거친 과정을 일어난 순서대로 3~8개. 각각 짧은 한 구절(예: "리스트 인덱스 예측 질문에 답함", "빈 리스트 pop이 오류인지 예측해 맞힘", "튜터가 만든 파일을 실행해 봄", "너무 쉽다고 해서 괄호 검사로 넘어감").
-learned: 이 목표에서 학습자가 만난 개념마다 concept(다른 곳에서도 통하는 일반 이름), meaning(대화에서 설명된 뜻 한 문장), how(학습자가 그 개념을 어떻게 만났는지 한 구절: 설명을 들음 · 예측해 맞힘/틀림 · 직접 써 봄 · 헷갈려 물어봄 등), quote(그게 드러난 학습자 말을 글자 그대로, 없으면 빈 글).
+learned: 이 목표에서 학습자가 배운 것을 여섯 칸 중 하나(type)에 넣는다.
+- 개념: 무엇인지(정의). 예: 해시 테이블, 스택
+- 원리: 왜 · 어떻게 그렇게 동작하는지. 예: 같은 키는 늘 같은 칸으로 가서 다시 찾을 수 있다
+- 절차: 순서대로 하는 단계. 예: 충돌이 나는 해시 테이블에 넣고 찾는 순서
+- 규칙: 지켜야 하는 문법 · 약속. 예: 딕셔너리 값은 대괄호에 키를 넣어 꺼낸다
+- 방법: 문제를 푸는 기법 · 요령. 예: 같은 칸의 항목을 리스트로 묶는 체이닝, 스택으로 괄호 검사
+- 비교: 둘 이상의 차이. 예: 리스트와 딕셔너리, 스택과 큐
+각 항목은 concept(다른 곳에서도 통하는 이름), meaning(그 칸에 맞는 한두 문장: 개념은 정의, 원리는 이유, 절차는 단계, 규칙은 약속, 방법은 언제 · 어떻게, 비교는 차이), how(학습자가 그걸 어떻게 만났는지 한 구절: 설명을 들음 · 예측해 맞힘/틀림 · 직접 써 봄 · 헷갈려 물어봄 등), quote(그게 드러난 학습자 말을 글자 그대로, 없으면 빈 글).
 학습자의 말과 행동에서 드러난 것을 기준으로 쓰고, 튜터가 말만 하고 지나간 것은 뺀다.`;
-const SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str), learned: S.arr(S.obj({ concept: S.str, meaning: S.str, how: S.str, quote: S.str })) });
+const SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str), learned: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, meaning: S.str, how: S.str, quote: S.str })) });
 const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
 
 /** 목표 하나를 정리한다. messages: 그 대화 전체(at 포함), since: 목표가 시작된 시각 */
@@ -32,7 +42,7 @@ export async function recordGoal(runId: string, goal: { title: string; done: str
     if (!seg.some((m) => m.role === "user")) { log.skipped = "학습자 말 없음"; return null; }
     const text = seg.map(show).filter(Boolean).join("\n\n").slice(-60000);
     const user = `[목표] ${goal.title}\n[완료 조건] ${goal.done}\n[결과] ${goal.understood && goal.applied ? "이해 · 적용까지 하고 마침" : `건너뜀(이해 ${goal.understood ? "✓" : "–"}, 적용 ${goal.applied ? "✓" : "–"})`}\n\n[이 목표 동안의 대화]\n${text}`;
-    const out = await aiJson<{ summary: string; steps: string[]; learned: { concept: string; meaning: string; how: string; quote: string }[] }>("goal-record", SYSTEM_RECORD, user, SCHEMA);
+    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[] }>("goal-record", SYSTEM_RECORD, user, SCHEMA);
     const learnerText = seg.filter((m) => m.role === "user").map((m) => norm(m.text));
     const unverified: string[] = [];
     const learned = (out.learned ?? []).filter((x) => String(x.concept ?? "").trim()).slice(0, 12).map((x) => {
@@ -40,7 +50,7 @@ export async function recordGoal(runId: string, goal: { title: string; done: str
       // 한 글자 답("3")은 그 말 전체와 같을 때만, 두 글자 이상은 그 말 안에 있으면 근거로 인정
       const ok = q.length >= 1 && learnerText.some((t) => (q.length >= 2 ? t.includes(norm(q)) : t === norm(q)));
       if (q && !ok) unverified.push(`${x.concept}: "${q}"`);
-      return { concept: String(x.concept).trim().slice(0, 80), meaning: String(x.meaning ?? "").trim().slice(0, 300), how: String(x.how ?? "").trim().slice(0, 120), quote: ok ? q.slice(0, 200) : "", verified: ok };
+      return { type: ((TABS as readonly string[]).includes(x.type) ? x.type : "개념") as Tab, concept: String(x.concept).trim().slice(0, 80), meaning: String(x.meaning ?? "").trim().slice(0, 300), how: String(x.how ?? "").trim().slice(0, 120), quote: ok ? q.slice(0, 200) : "", verified: ok };
     });
     const rec: GoalRecord = { goal: goal.title, done: goal.done, status: goal.understood && goal.applied ? "마침" : "건너뜀", mode, from: goal.at, to: new Date().toISOString(),
       summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), learned, at: new Date().toISOString() };

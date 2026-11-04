@@ -779,3 +779,8 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .gph { padding: 1px 8px; border-radius: 99px; background: var(--soft); color: var(--mut); }
 .gph.now { background: var(--acc-soft); color: var(--acc); font-weight: 600; }
 .gph.done { background: var(--ok-soft); color: var(--ok); }
+
+/* 배운 것 칸(11/5): 개념 · 원리 · 절차 · 규칙 · 방법 · 비교 */
+.rtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px; }
+.rtab { font: inherit; font-size: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 99px; padding: 1px 10px; cursor: pointer; }
+.rtab.on { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); }

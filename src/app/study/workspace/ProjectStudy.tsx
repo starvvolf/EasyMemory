@@ -74,12 +74,12 @@ export default function ProjectStudy() {
 
       {!status ? <p className="small muted">불러오는 중…</p> : starting ? (
         <section className="td-card" style={{ marginTop: 16 }}>
-          <p className="eyebrow">프로젝트 코스를 켜는 중이에요</p>
+          <p className="eyebrow">실습 서버를 켜는 중이에요</p>
           <p className="small" style={{ margin: "6px 0 0" }}>몇 초면 돼요. 작업 표시줄에 내려 둔 <b>Recaller 코스</b> 창을 닫으면 다시 꺼져요.</p>
         </section>
       ) : !status.online ? (
         <section className="td-card" style={{ marginTop: 16 }}>
-          <p className="eyebrow">프로젝트 코스가 꺼져 있어요</p>
+          <p className="eyebrow">실습 서버가 꺼져 있어요</p>
           <p className="small" style={{ margin: "6px 0 12px" }}>{status.error ? `저절로 켜지 못했어요(${status.error}). ` : ""}<b>프로젝트코스 실험</b> 파일을 두 번 눌러 켠 다음, 아래 버튼을 눌러 주세요.</p>
           <button className="btn primary small" onClick={() => { setMsg(null); void load().then(() => sync(true)); }}>다시 확인</button>
         </section>
@@ -88,7 +88,7 @@ export default function ProjectStudy() {
           <div className="td-grid" style={{ marginTop: 16 }}>
             {shown.map((r) => (
               <section key={r.id} className="td-card">
-                <p className="eyebrow">{status.active === r.id ? "하던 프로젝트" : "프로젝트"}</p>
+                <p className="eyebrow">{status.active === r.id ? "하던 실습" : "실습"}</p>
                 <h3 style={{ margin: "4px 0" }}>{r.courseTitle}</h3>
                 <p className="small muted" style={{ margin: "0 0 10px" }}>{r.current}단계 · {r.stageTitle}{r.done ? ` · ${r.done}단계 끝냄` : ""}</p>
                 <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -100,7 +100,7 @@ export default function ProjectStudy() {
             {others.length ? (
               <section className="td-card">
                 <p className="eyebrow">같은 코스의 다른 기록 {others.length}개</p>
-                <p className="small muted" style={{ margin: "6px 0 10px" }}>같은 프로젝트를 다시 시작한 기록이에요. 보통은 위 카드에서 이어 하면 돼요.</p>
+                <p className="small muted" style={{ margin: "6px 0 10px" }}>같은 실습을 다시 시작한 기록이에요. 보통은 위 카드에서 이어 하면 돼요.</p>
                 <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>
                   {others.map((r) => (
                     <li key={r.id}>{r.courseTitle} · {r.current}단계{started(r) ? ` · ${started(r)}` : ""}{" "}
@@ -112,16 +112,16 @@ export default function ProjectStudy() {
             <section className="td-card">
               <p className="eyebrow">새로 시작</p>
               <p className="small" style={{ margin: "6px 0 12px" }}>무엇을 만들지, 어디서부터 할지 몇 가지 물어보고 계획을 짜 줘요.</p>
-              <a className="btn ghost small" href={courseUrl} target="_blank" rel="noreferrer">새 프로젝트 시작</a>
+              <a className="btn ghost small" href={courseUrl} target="_blank" rel="noreferrer">새 실습 시작</a>
             </section>
           </div>
 
           <section className="td-card" style={{ marginTop: 16 }}>
             <p className="eyebrow">지식과 연결</p>
             <p className="small" style={{ margin: "6px 0 10px" }}>
-              {synced ? (synced.items ? `${synced.at.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}에 ${synced.items}개를 지식에 넣었어요${synced.created ? ` (새 지식 ${synced.created}개)` : ""}.` : "새로 넣을 것은 없어요. 프로젝트에서 물어보거나 단계를 통과하면 여기로 들어와요.") : msg ? "아직 못 넣었어요(위 안내를 봐 주세요)." : "확인하는 중…"}
+              {synced ? (synced.items ? `${synced.at.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}에 ${synced.items}개를 지식에 넣었어요${synced.created ? ` (새 지식 ${synced.created}개)` : ""}.` : "새로 넣을 것은 없어요. 실습에서 물어보거나 단계를 통과하면 여기로 들어와요.") : msg ? "아직 못 넣었어요(위 안내를 봐 주세요)." : "확인하는 중…"}
             </p>
-            <p className="small muted" style={{ margin: "0 0 10px" }}>코스 개념(상태 코드, 라우팅…)은 <b>개념</b>으로, 물어본 문법·도구(await, JSON.parse…)는 <b>어휘</b>로 들어가요. 이 프로젝트에서만 쓰는 이름은 넣지 않아요.</p>
+            <p className="small muted" style={{ margin: "0 0 10px" }}>코스 개념(상태 코드, 라우팅…)은 <b>개념</b>으로, 물어본 문법·도구(await, JSON.parse…)는 <b>어휘</b>로 들어가요. 이 실습에서만 쓰는 이름은 넣지 않아요.</p>
             <div className="row" style={{ gap: 8 }}>
               <button className="btn ghost small" onClick={() => { setMsg(null); void sync(false); }}>지금 넣기</button>
               <button className="btn ghost small" onClick={() => go("knowledge")}>지식 보기</button>

@@ -11,8 +11,8 @@ const R = await import("../lib/goal-record.ts");
 test("목표 정리(11/5): 그 목표 시작 뒤의 대화만 보내고, 근거 구절은 학습자 말과 대조", async () => {
   let sent = "";
   ai.setFakeAi((purpose: string, user: string) => { sent = user; return { summary: "스택을 리스트로 써 봄", steps: ["설명을 들음", "pop 결과를 예측해 맞힘"], learned: [
-    { concept: "스택", meaning: "나중에 넣은 것을 먼저 꺼냄", how: "예측해 맞힘", quote: "3" },
-    { concept: "IndexError", meaning: "빈 리스트 pop은 오류", how: "예측해 맞힘", quote: "오류가 난다고 했잖아" }] }; });
+    { type: "개념", concept: "스택", meaning: "나중에 넣은 것을 먼저 꺼냄", how: "예측해 맞힘", quote: "3" },
+    { type: "규칙", concept: "IndexError", meaning: "빈 리스트 pop은 오류", how: "예측해 맞힘", quote: "오류가 난다고 했잖아" }] }; });
   const msgs = [
     { role: "user", text: "예전 말", at: "2026-11-05T00:00:00Z" },
     { role: "user", text: "3", at: "2026-11-05T01:00:01Z" },
