@@ -642,9 +642,11 @@ const TY = { shown: new Map(), full: new Map(), ws: "", raf: 0, last: 0, key: nu
 function tyText(m, ws, key) {
   if (TY.key !== key) { TY.key = key; TY.shown.clear(); TY.full.clear(); TY.init = true; }
   const full = m.text || "";
-  TY.full.set(m.id, full); TY.ws = ws;
-  if (!TY.shown.has(m.id)) TY.shown.set(m.id, TY.init ? full.length : 0);
-  const n = Math.floor(TY.shown.get(m.id));
+  // 글 id는 숫자(수업) 또는 "c7"(실험판 엔진 대화) — 화면 속성과 같게 글자로 맞춘다(11/4: 숫자로 바꾸다 "c7"이 NaN이 돼 흘리기가 멈춤)
+  const mid = String(m.id);
+  TY.full.set(mid, full); TY.ws = ws;
+  if (!TY.shown.has(mid)) TY.shown.set(mid, TY.init ? full.length : 0);
+  const n = Math.floor(TY.shown.get(mid));
   return h("div", { class: "ty", "data-mid": String(m.id) }, rich(full.slice(0, n), ws));
 }
 function tyAfterDraw() {
@@ -655,7 +657,7 @@ function tyTick(t) {
   const dt = Math.min(0.1, (t - TY.last) / 1000); TY.last = t;
   let pending = false;
   for (const el of document.querySelectorAll(".ty[data-mid]")) {
-    const id = Number(el.dataset.mid); const full = TY.full.get(id) ?? "";
+    const id = el.dataset.mid; const full = TY.full.get(id) ?? "";
     const n0 = TY.shown.get(id) ?? full.length;
     if (n0 >= full.length) continue;
     // 11/4 사용자 "실험창이 더 빨라 보임": 밀림이 0.6초를 넘지 않게(실험창은 받은 대로 바로 보여 줌)
