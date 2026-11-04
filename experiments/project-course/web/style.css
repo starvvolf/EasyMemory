@@ -743,3 +743,33 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .home2 .hchip.on { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); font-weight: 600; }
 .home2 .heb { font-size: 11px; padding: 0 7px; border-radius: 8px; background: var(--soft); color: var(--mut); flex: none; }
 .home2 .heb.codex { background: var(--acc-soft); color: var(--acc); }
+
+/* 학습 목표(11/4) */
+.gbar { padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; display: flex; flex-direction: column; gap: 6px; color: var(--ink); }
+.gbar .glong { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gk { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 8px; background: var(--acc-soft); color: var(--acc); margin-right: 6px; }
+.gk.warm { background: var(--warn-soft); color: var(--warn); }
+.gmode { font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 99px; padding: 0 8px; cursor: pointer; }
+.gmap { display: flex; flex-wrap: wrap; gap: 4px; }
+.gstep { font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--soft); color: var(--mut); }
+.gstep.doing { background: var(--acc-soft); color: var(--acc); font-weight: 600; }
+.gstep.done { background: var(--ok-soft); color: var(--ok); }
+.gstep.skipped { background: var(--soft); color: var(--mut); text-decoration: line-through; }
+.gcur { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel); }
+.gcur.sup { border-color: var(--warn); background: var(--warn-soft); }
+.gcur.paused { opacity: .7; }
+.grow2 { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.btn.on { border-color: var(--ok); color: var(--ok); }
+.gcard { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 8px 0; background: var(--panel); color: var(--ink); font-size: 14px; }
+.gcard.plan { border-color: var(--acc); }
+.gcard h3 { margin: 4px 0; font-size: 16px; }
+.gq { margin: 8px 0; }
+.gqq { font-weight: 600; margin-bottom: 4px; }
+.gopts { display: flex; flex-wrap: wrap; gap: 6px; }
+.gopts.col { flex-direction: column; align-items: flex-start; }
+.gopt { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 99px; padding: 3px 12px; cursor: pointer; text-align: left; }
+.gopt.on { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); }
+.gin { width: 100%; margin-top: 6px; font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.fchip.on { outline: 2px solid var(--warn); }
+.float .gbar, .float .gcard { --ink: var(--f-ink); --mut: var(--f-mut); --panel: var(--f-s2); --soft: var(--f-s3); --line: var(--f-line2); --bg: var(--f-bg);
+  --acc: var(--f-acc); --acc-ink: #10131f; --acc-soft: var(--f-acc-s); --warn: #f2c066; --warn-soft: #3a2e14; --ok: var(--f-ok); --ok-soft: #17301f; color: var(--ink); }

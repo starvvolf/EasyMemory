@@ -22,7 +22,18 @@ const TOOLS = [
   },
 ];
 
+// 학습 목표 도구(11/4)는 코스 서버가 알려 준다(정의는 lib/goals.ts 한 곳). 제품 대화가 아니면 빈 목록
+let goalTools = [];
+async function listTools() {
+  try { const r = await fetch(`${BASE}/api/codex-chat/${CHAT}/tools`); const j = await r.json(); goalTools = Array.isArray(j.goals) ? j.goals : []; } catch { goalTools = []; }
+  return [...TOOLS, ...goalTools];
+}
 async function call(name, args) {
+  if (goalTools.some((t) => t.name === name)) {
+    const r = await fetch(`${BASE}/api/codex-chat/${CHAT}/goal-tool`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, args: args ?? {} }) });
+    const j = await r.json().catch(() => ({}));
+    return r.ok ? { content: [{ type: "text", text: String(j.text ?? "") }] } : { content: [{ type: "text", text: `학습 조정 실패: ${j.error || r.status}` }], isError: true };
+  }
   const url = name === "learner_profile" ? `${BASE}/api/codex-chat/${CHAT}/learner` : `${BASE}/api/codex-chat/${CHAT}/preference`;
   const r = await fetch(url, name === "learner_profile" ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(args ?? {}) });
   const j = await r.json().catch(() => ({}));
@@ -37,10 +48,10 @@ rl.on("line", async (line) => {
   if (m.id === undefined) return; // 알림(notifications/*)은 답하지 않는다
   try {
     if (m.method === "initialize") send({ jsonrpc: "2.0", id: m.id, result: { protocolVersion: m.params?.protocolVersion || "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "recaller", version: "0.1.0" } } });
-    else if (m.method === "tools/list") send({ jsonrpc: "2.0", id: m.id, result: { tools: TOOLS } });
+    else if (m.method === "tools/list") send({ jsonrpc: "2.0", id: m.id, result: { tools: await listTools() } });
     else if (m.method === "tools/call") {
       const name = m.params?.name;
-      if (!TOOLS.some((t) => t.name === name)) send({ jsonrpc: "2.0", id: m.id, result: { content: [{ type: "text", text: "없는 도구예요." }], isError: true } });
+      if (!TOOLS.some((t) => t.name === name) && !goalTools.some((t) => t.name === name)) send({ jsonrpc: "2.0", id: m.id, result: { content: [{ type: "text", text: "없는 도구예요." }], isError: true } });
       else send({ jsonrpc: "2.0", id: m.id, result: await call(name, m.params?.arguments) });
     } else if (m.method === "ping") send({ jsonrpc: "2.0", id: m.id, result: {} });
     else send({ jsonrpc: "2.0", id: m.id, error: { code: -32601, message: `모르는 요청: ${m.method}` } });

@@ -8,6 +8,7 @@ import { ready, stopRun } from "./oc-engine.ts";
 import { CHAT_SYSTEM, CHAT_TOOLS } from "./agent-chat-policy.ts";
 import type { AgentIO } from "./agent.ts";
 import type { ToolProgress } from "./tool-progress.ts";
+import { GOAL_NAMES } from "./goals.ts";
 
 type Message = { id: number; role: "user" | "assistant" | "tool" | "error"; text: string; at: string; key?: string; progress?: ToolProgress };
 type Support = { id: string; topic: string; returnTo: string; openedAfter: number };
@@ -156,7 +157,9 @@ export async function chatTool(id: string, name: string, input: Record<string, u
   throw err(400, "없는 도구예요.");
 }
 type Runner = (io: AgentIO, question: string) => Promise<string>;
-export async function askChat(id: string, text: string, runner?: Runner) {
+/** 제품 대화(11/4)가 덧붙이는 것: 매 차례 맥락 · 숨길 도구 · 먼저 처리할 도구(목표 도구). 실험 페이지는 없음 */
+export type ChatExt = { context?: () => Promise<string>; hide?: string[]; tool?: (name: string, input: Record<string, unknown>, learner: string[]) => Promise<string | null>; onTool?: () => void };
+export async function askChat(id: string, text: string, runner?: Runner, ext?: ChatExt) {
   valid(id);
   const q = String(text ?? "").trim();
   if (!q || q.length > 12000) throw err(400, "질문은 1~12,000자로 적어 주세요.");
@@ -183,8 +186,13 @@ export async function askChat(id: string, text: string, runner?: Runner) {
     const io: AgentIO = {
       runId: `chat-${id}`, sessKey: sessionKey, n: 1, ws: wsOf(s), context: recent,
       parts: { fixed: s.courseId ? prompts.fixed : NO_COURSE_FIXED.replace("{workspace}", wsOf(s)), recent, since,
-        turn: renderTurn(prompts, await chatTool(id, "get_learning_state", {}), userId) + (s.edit === "allow" ? `\n${EDIT_ALLOWED}` : ""), files: [] },
-      learningChat: { system: prompts.system, hide: s.courseId ? [] : ["get_course_material"], model: s.model, edit: s.edit === "allow", execute: (name, input) => chatTool(id, name, input),
+        // 제품 대화는 실험판의 목표 · 초점 상태 대신 Recaller 학습 목표(goals)를 붙인다(두 목표 체계가 섞이지 않게)
+        turn: (ext?.context ? await ext.context() : renderTurn(prompts, await chatTool(id, "get_learning_state", {}), userId)) + (s.edit === "allow" ? `\n${EDIT_ALLOWED}` : ""), files: [] },
+      learningChat: { system: prompts.system, hide: [...(s.courseId ? [] : ["get_course_material"]), ...(ext?.tool ? ext.hide ?? [] : [...GOAL_NAMES])], model: s.model, edit: s.edit === "allow",
+        execute: async (name, input) => {
+          if (ext?.tool && GOAL_NAMES.has(name)) { const learner = (await chatOf(id)).messages.filter((m) => m.role === "user").map((m) => m.text); try { const r = await ext.tool(name, input, learner); ext.onTool?.(); if (r !== null) return r; } catch (e) { return `학습 조정 실패: ${(e as Error).message}`; } }
+          return chatTool(id, name, input);
+        },
         capture: async (body) => { await update<Trace>(traceFile(id), initialTrace, (t) => { t.requests.push({ at: now(), body }); }); } },
       quiet: () => {},
       progress: async (event) => {
