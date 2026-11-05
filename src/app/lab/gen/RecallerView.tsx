@@ -1,7 +1,7 @@
 "use client";
 // 실험실 보기 (11/5 사용자 "품질 체크하기 편하게: 어떤 방법 → 출력 품질, 시간·비용은 따로"): the recaller engine's run as
 // four tabs — 결과(요약 줄 아래 카드, 주제별 문항), 방법, 시간·비용, 호출. Reads only what the run already saved.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { GenCall, GenState } from "@/lib/study/gen/types";
 import { genStepLabel } from "@/lib/study/gen/types";
 import { Inline } from "@/app/study/workspace/Rich";
@@ -73,6 +73,8 @@ function QuestionBox({ q }: { q: Question }) {
 }
 
 function Result({ gen, rc }: { gen: GenState; rc: Rc }) {
+  // 목차만 (11/5 사용자 "처음에 유저한테 목차 요약된 걸 보여 주는 게"): the outline as the learner would first see it.
+  const [view, setView] = useState<"outline" | "cards" | "all">("all");
   const d = rc.digest ?? {};
   const topics: Array<{ id: string; title: string; pages: number[]; kind?: string }> = d.skeleton?.topics ?? gen.sections.map((s) => ({ id: s.id, title: s.title, pages: s.pages }));
   const chunksOf = (id: string) => Object.values(rc.units[id]?.chunks ?? {});
@@ -80,6 +82,24 @@ function Result({ gen, rc }: { gen: GenState; rc: Rc }) {
   const cardCount = all.reduce((n, c) => n + (c.cards?.length ?? 0), 0), qCount = all.reduce((n, c) => n + (c.questions?.length ?? 0), 0), heldCount = all.reduce((n, c) => n + (c.held?.length ?? 0), 0);
   return (
     <div className="rv-result">
+      <div className="rv-view">{([["outline", "목차만"], ["cards", "카드까지"], ["all", "문제까지"]] as const).map(([k, label]) => (
+        <button key={k} className={view === k ? "on" : ""} onClick={() => setView(k)}>{label}</button>))}</div>
+      {view === "outline" && (
+        <div className="rv-outline">
+          <h3>{gen.input.fileName} <small>{gen.input.pageNumbers.length}쪽 · 주제 {topics.length}개</small></h3>
+          <ol>{topics.map((t) => {
+            const s = d.topics?.[t.id];
+            const items = s?.body ?? [];
+            return (
+              <li key={t.id}>
+                <div><b>{t.title}</b> <small>p.{t.pages[0]}{t.pages.length > 1 ? `–${t.pages.at(-1)}` : ""}{t.kind ? ` · ${t.kind}` : ""}</small></div>
+                <div className="rv-items">{items.map((l) => <span key={l.id}>{l.name}</span>)}</div>
+              </li>
+            );
+          })}</ol>
+        </div>
+      )}
+      {view !== "outline" && <>
       <div className="rv-stats"><span>주제 <b>{topics.length}</b></span><span>카드 <b>{cardCount}</b></span><span>문항 <b>{qCount}</b></span><span>보류 <b>{heldCount}</b></span></div>
       {d.objectives?.length ? (
         <details className="rv-box"><summary>학습 목표 {d.objectives.length}개</summary>
@@ -106,7 +126,7 @@ function Result({ gen, rc }: { gen: GenState; rc: Rc }) {
             ))}</ul>
             {loose.length ? <div className="rv-cards"><span className="rv-sub">줄에 안 붙은 카드</span>{loose.map((c) => <CardBox key={c.id} card={c} />)}</div> : null}
             {s?.easy?.mistake && <p className="rv-sub">흔한 오해: {s.easy.mistake}</p>}
-            {questions.length || held.length ? (
+            {view === "all" && (questions.length || held.length) ? (
               <div className="rv-qs">
                 <h4>문항 {questions.length}{held.length ? ` · 보류 ${held.length}` : ""}</h4>
                 {questions.map((q, i) => <QuestionBox key={i} q={q} />)}
@@ -115,6 +135,7 @@ function Result({ gen, rc }: { gen: GenState; rc: Rc }) {
           </section>
         );
       })}
+      </>}
     </div>
   );
 }
@@ -128,6 +149,7 @@ function Method({ gen, calls, rc }: { gen: GenState; calls: CallSummary[]; rc: R
       : lab.conceptLines ? "목차·개념 줄 → 주제 요약 → 카드" : lab.digest ? (lab.digestStyle === "plan" ? "목차 → 주제 요약 → 카드" : "뼈대 → 주제 요약 → 카드") : "쪽 단위 정리"],
     ["원문 목차", lab.mapCards || lab.conceptLines ? (lab.mapUnit === "page" ? "쪽마다 한 항목" : lab.noSourceOutline ? "AI가 짬" : "책갈피·쪽 제목이 있으면 그대로") : "AI가 짬"],
     ["퀴즈", lab.quiz === "luna" ? `luna ${lab.quizCount ? `${lab.quizCount}문항` : "카드마다"}` : "없음"],
+    ["고친 프롬프트", Object.keys((lab.prompts as Record<string, string> | undefined) ?? {}).join(", ") || "없음 (코드 기본값)"],
   ];
   return (
     <div className="rv-method">
@@ -171,16 +193,104 @@ function TimeCost({ gen, calls, rc }: { gen: GenState; calls: CallSummary[]; rc:
   );
 }
 
-export function RecallerView({ gen, calls, onOpenCall }: { gen: GenState; calls: CallSummary[]; onOpenCall: (n: number) => void }) {
-  const [tab, setTab] = useState<"result" | "method" | "time" | "calls">("result");
+type EditablePrompt = { name: string; step: string; label: string; text: string; when?: string; fromCall?: { after: string; before?: string } };
+
+/** 실험실 프롬프트 고치기 (11/5): the run's prompts, editable, and each step's whole instructions as they were sent; a new run
+ *  with the same input and the edited ones. */
+function Prompts({ gen, calls, onOpen }: { gen: GenState; calls: CallSummary[]; onOpen: (id: string) => void }) {
+  const [list, setList] = useState<EditablePrompt[] | null>(null);
+  const [sent, setSent] = useState<Record<string, string>>({});
+  const [edits, setEdits] = useState<Record<string, string>>(() => ({ ...((gen.input.lab as { prompts?: Record<string, string> } | undefined)?.prompts ?? {}) }));
+  const [all, setAll] = useState(false);
+  const [real, setReal] = useState(false);
+  const [busy, setBusy] = useState("");
+  const firstOf = useMemo(() => { const m = new Map<string, number>(); for (const c of calls) if (!m.has(c.step)) m.set(c.step, c.n); return m; }, [calls]);
+  useEffect(() => {
+    let live = true;
+    void fetch("/api/lab/gen/prompts", { cache: "no-store" }).then((r) => r.json()).then((d: { prompts: EditablePrompt[] }) => { if (live) setList(d.prompts); }).catch(() => { if (live) setBusy("프롬프트 목록을 불러오지 못했어요."); });
+    // Each step's first call as it was sent: its whole instructions (what the code put together, file parts included).
+    void Promise.all([...firstOf.entries()].map(async ([step, n]) => {
+      const c = await fetch(`/api/lab/gen/${gen.id}/calls/${n}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null) as { system?: string } | null;
+      return [step, c?.system ?? ""] as const;
+    })).then((pairs) => { if (live) setSent(Object.fromEntries(pairs)); });
+    return () => { live = false; };
+  }, [gen.id, firstOf]);
+  if (!list) return <p className="rv-sub">{busy || "불러오는 중…"}</p>;
+  const lab = (gen.input.lab ?? {}) as Obj;
+  const lang = (gen.recaller as { lang?: string } | undefined)?.lang;
+  const task = lab.mapCards || lab.conceptLines ? "PLAN_TASK_CONCEPTS" : lab.goalsInPlan ? "PLAN_TASK_GOALS" : "PLAN_TASK";
+  const card = lab.mapCards ? "MAP_CARD" : "DIGEST_CARD";
+  const picked = (p: EditablePrompt) => (!p.name.startsWith("PLAN_TASK") || p.name === task) && (!/^(MAP|DIGEST)_CARD$/.test(p.name) || p.name === card);
+  // A prompt read from a file (정리 기준) takes its text from the run's own call.
+  const base = (p: EditablePrompt) => {
+    if (!p.fromCall) return p.text;
+    const whole = sent[p.step] ?? "";
+    const i = whole.indexOf(p.fromCall.after);
+    if (i < 0) return "";
+    const rest = whole.slice(i + p.fromCall.after.length);
+    const j = p.fromCall.before ? rest.indexOf(p.fromCall.before) : -1;
+    return j >= 0 ? rest.slice(0, j) : rest;
+  };
+  const shown = list.filter((p) => all || ((firstOf.has(p.step) || (p.name === "SOURCE_EN" && lang === "en")) && picked(p)));
+  const steps = [...new Set(shown.map((p) => p.step))];
+  const changed = Object.fromEntries(Object.entries(edits).filter(([name, text]) => { const d = list.find((p) => p.name === name); return d && text.trim() && text !== base(d); }));
+  const rerun = async () => {
+    setBusy("새 실행을 만드는 중…");
+    try {
+      const { questionsLater: _later, ...input } = gen.input as typeof gen.input & { questionsLater?: boolean };
+      void _later;
+      const body = { ...input, origin: "lab", lab: { ...(gen.input.lab ?? {}), prompts: changed }, confirmed: real };
+      const r = await fetch("/api/lab/gen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || "새 실행을 만들지 못했어요.");
+      setBusy(""); onOpen(d.gen.id);
+    } catch (e) { setBusy(e instanceof Error ? e.message : String(e)); }
+  };
+  return (
+    <div className="rv-prompts">
+      <p className="rv-sub">단계마다 실제로 들어간 전체 지시문과, 그중 고칠 수 있는 조각이에요. 고친 내용은 새 실행에만 쓰이고 코드·앱 기본값은 그대로예요.</p>
+      <label className="check"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />이 실행에 안 쓰인 프롬프트도 보기</label>
+      {steps.map((step) => (
+        <section key={step} className="rv-step">
+          <h4>{genStepLabel[step as keyof typeof genStepLabel] ?? step} <code>{step}</code></h4>
+          {sent[step] ? <details className="rv-sent"><summary>실제로 들어간 전체 지시문 ({sent[step].length.toLocaleString()}자)</summary><pre>{sent[step]}</pre></details> : null}
+          {shown.filter((p) => p.step === step).map((p) => {
+            const d = base(p);
+            const value = edits[p.name] ?? d;
+            const dirty = value !== d;
+            return (
+              <details key={p.name} className={`rv-prompt${dirty ? " dirty" : ""}`} open={dirty}>
+                <summary><b>{p.label}</b> <code>{p.name}</code>{p.when ? <small>{p.when}</small> : null}{dirty && <span className="rv-badge">고침</span>}</summary>
+                {p.fromCall && !d ? <p className="rv-sub">이 실행의 호출에서 찾지 못했어요.</p> : (
+                  <textarea value={value} rows={Math.min(24, Math.max(6, value.split("\n").length + 1))} onChange={(e) => setEdits({ ...edits, [p.name]: e.target.value })} spellCheck={false} />)}
+                {dirty && <button onClick={() => { const next = { ...edits }; delete next[p.name]; setEdits(next); }}>기본으로</button>}
+              </details>
+            );
+          })}
+        </section>
+      ))}
+      <div className="rv-rerun">
+        <span>고친 프롬프트 {Object.keys(changed).length}개</span>
+        <label className="check warn"><input type="checkbox" checked={real} onChange={(e) => setReal(e.target.checked)} />실제 모델을 호출합니다(비용 듦)</label>
+        <button className="primary" disabled={!Object.keys(changed).length || (gen.input.provider !== "fake" && !real) || busy === "새 실행을 만드는 중…"} onClick={() => void rerun()}>고친 프롬프트로 다시 돌리기</button>
+        {busy && <span className="rv-warn">{busy}</span>}
+      </div>
+    </div>
+  );
+}
+
+export function RecallerView({ gen, calls, onOpenCall, onOpen }: { gen: GenState; calls: CallSummary[]; onOpenCall: (n: number) => void; onOpen: (id: string) => void }) {
+  const [tab, setTab] = useState<"result" | "method" | "time" | "prompts" | "calls">("result");
   const rc = useMemo(() => (gen.recaller ?? { units: {} }) as unknown as Rc, [gen.recaller]);
-  const tabs = [["result", "결과 품질"], ["method", "방법"], ["time", "시간·비용"], ["calls", `호출 ${calls.length}`]] as const;
+  const edited = Object.keys((gen.input.lab as { prompts?: Record<string, string> } | undefined)?.prompts ?? {}).length;
+  const tabs = [["result", "결과 품질"], ["method", "방법"], ["time", "시간·비용"], ["prompts", edited ? `프롬프트 (고침 ${edited})` : "프롬프트"], ["calls", `호출 ${calls.length}`]] as const;
   return (
     <div className="rv">
       <nav className="rv-tabs">{tabs.map(([k, label]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{label}</button>)}</nav>
       {tab === "result" && <Result gen={gen} rc={rc} />}
       {tab === "method" && <Method gen={gen} calls={calls} rc={rc} />}
       {tab === "time" && <TimeCost gen={gen} calls={calls} rc={rc} />}
+      {tab === "prompts" && <Prompts gen={gen} calls={calls} onOpen={onOpen} />}
       {tab === "calls" && (
         <table className="rv-table click"><thead><tr><th>#</th><th>단계</th><th>주제</th><th>모델</th><th>시간</th><th>입력/출력</th><th>비용</th></tr></thead>
           <tbody>{calls.map((c) => (

@@ -264,7 +264,7 @@ export const genInputSchema = z.strictObject({
     readParallel: z.number().int().min(1).max(64).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
     outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional(),
     chunk: z.number().int().min(1).max(4).optional(), hedgeMs: z.number().int().min(1000).max(120000).optional(),
-    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), summary: z.boolean().optional(), digest: z.boolean().optional(), digestTopicCards: z.boolean().optional(), digestOne: z.boolean().optional(), digestStyle: z.enum(["univ", "plan"]).optional(), quiz: z.enum(["luna"]).optional(), quizCount: z.number().int().min(1).max(60).optional(), goalsInPlan: z.boolean().optional(), conceptLines: z.boolean().optional(), mapCards: z.boolean().optional(), mapUnit: z.enum(["topic", "page"]).optional(), outlineOnly: z.boolean().optional(), noSourceOutline: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
+    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), summary: z.boolean().optional(), digest: z.boolean().optional(), digestTopicCards: z.boolean().optional(), digestOne: z.boolean().optional(), digestStyle: z.enum(["univ", "plan"]).optional(), quiz: z.enum(["luna"]).optional(), quizCount: z.number().int().min(1).max(60).optional(), goalsInPlan: z.boolean().optional(), conceptLines: z.boolean().optional(), mapCards: z.boolean().optional(), prompts: z.record(z.string().max(40), z.string().max(30000)).optional(), mapUnit: z.enum(["topic", "page"]).optional(), flowCard: z.enum(["with", "after"]).optional(), outlineOnly: z.boolean().optional(), noSourceOutline: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -294,7 +294,13 @@ export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
     hedgeMs: 8000,
     // 그림 쪽 읽기 (blind checks wait for it): drawing is done in the workers already, so this is only model calls in flight
     // (4 at a time made a first-time 32쪽 wait about 70 s for its 25 picture pages, 10/29).
-    readParallel: Math.min(32, Math.max(4, pages)) };
+    readParallel: Math.min(32, Math.max(4, pages)),
+    // 목차 → 바로 카드 + luna 퀴즈 (11/5 사용자 "오늘 의논한 변경사항 전부 앱에 정식으로"; 협업/결과보고/실험_목차에서바로카드_C_20261105.md):
+    // one terra call lists what each topic teaches, cards come straight from those items and the pages (no topic summary call),
+    // and the quiz is 10 luna questions picked by learning objective. 데드락 14쪽 카드까지 $0.09 (전 $0.12~0.19).
+    // 흐름 카드 (11/6 사용자 "1번으로 그냥 앱에 박아"): after a topic's cards, one short terra call writes its one story card
+    // (in what order the pieces come and why), first in the topic and not quizzed. 그래픽스 04: 카드 단계 +$0.09, +20초.
+    digest: true, digestTopicCards: true, digestStyle: "plan", mapCards: true, mapUnit: "topic", flowCard: "after", noSourceOutline: true, quiz: "luna", quizCount: 10 };
 }
 
 export const forkInputSchema = z.strictObject({

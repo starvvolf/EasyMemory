@@ -5,6 +5,7 @@ import { ExperimentRequestError } from "@/lib/mcp-experiment-requests";
 import { boundedJson, requireLocalRequest, responseError } from "../../../mcp-experiment-requests/http";
 import { astraReadingView, setAstraReadingPage, confirmObjectives, createGen, remergeGen, questionsGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, setGenFocus, stepLabel, studyDocument } from "@/lib/study/gen/runner";
 import { scorecard } from "@/lib/study/gen/scorecard";
+import { EDITABLE_PROMPTS } from "@/lib/study/gen/prompt-registry";
 import { listJudges, loadJudge, readJudgeCalls, startJudge } from "@/lib/study/gen/judge";
 import { listVisionProbes, readVisionImage, runVisionProbe } from "@/lib/study/gen/vision";
 import { renderInteractiveDocument } from "../../../../../../tools/problem-authoring-lab/renderer";
@@ -28,6 +29,9 @@ async function handle(request: Request, context: Context) {
       result = { runs: (await listGens()).filter((gen) => !origin || (gen.input.origin ?? "lab") === origin).map((gen) => ({ id: gen.id, createdAt: gen.createdAt, status: gen.status, phase: gen.phase, fileName: gen.input.fileName,
         pages: gen.input.pageNumbers, purpose: gen.input.purpose, provider: gen.input.provider, calls: gen.calls, forkOf: gen.forkOf ?? null, origin: gen.input.origin ?? "lab",
         method: methodOf(gen), pastExam: Boolean(gen.pastExam), sectionsDone: gen.sections.filter((section) => section.author).length, sectionCount: gen.sections.length })) };
+    } else if (p.length === 1 && p[0] === "prompts" && method === "GET") {
+      // 실험실 프롬프트 고치기: the prompts a run may replace, with the code's text.
+      result = { prompts: EDITABLE_PROMPTS };
     } else if (p[0] === "vision") {
       // Image reading probe: render one page, ask the model to read it, compare with the text layer.
       if (p.length === 1 && method === "GET") result = { probes: await listVisionProbes() };
@@ -142,6 +146,6 @@ export const POST = handle;
 function methodOf(gen: { input: { engine?: string; lab?: Record<string, unknown> } }) {
   const lab = gen.input.lab ?? {};
   if (gen.input.engine !== "recaller") return "";
-  const how = lab.mapCards ? `목차→카드(${lab.mapUnit === "page" ? "쪽" : "주제"})` : lab.conceptLines ? "개념 줄" : lab.digest ? "목차→요약→카드" : "쪽 정리";
+  const how = lab.mapCards ? `목차→카드(${lab.mapUnit === "page" ? "쪽" : "주제"})${lab.flowCard === "with" ? "+흐름(같이)" : lab.flowCard === "after" ? "+흐름(다음에)" : ""}` : lab.conceptLines ? "개념 줄" : lab.digest ? "목차→요약→카드" : "쪽 정리";
   return `${how}${lab.quiz === "luna" ? ` · 퀴즈${lab.quizCount ?? ""}` : ""}`;
 }

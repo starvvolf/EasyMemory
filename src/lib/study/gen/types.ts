@@ -8,11 +8,11 @@ export const purposeLabel: Record<Purpose, string> = { read: "그냥 읽기", un
 /** Model calls, in order. classify and design run per section. */
 /** v3 (lab engine choice) adds read (whole PDF → outline + knowledge map), plan and gate; it does not use classify/design. */
 export const genSteps = ["transcribe", "outline", "classify", "design", "author", "read", "plan", "gate", "astra-plan", "astra-author", "astra-solve", "astra-review",
-  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check", "rc-merge", "rc-intent", "rc-summary", "rc-skeleton", "rc-topic", "rc-digest-card", "rc-wrap", "rc-digest-one", "rc-digest-plan", "rc-q-material", "rc-q-choice", "rc-q-cloze", "rc-q-score", "rc-q-explain", "rc-q-write", "rc-q-pick", "rc-q-goals"] as const;
+  "rc-organize", "rc-link", "rc-author", "rc-deep", "rc-solve", "rc-check", "rc-merge", "rc-intent", "rc-summary", "rc-skeleton", "rc-topic", "rc-digest-card", "rc-wrap", "rc-digest-one", "rc-digest-plan", "rc-q-material", "rc-q-choice", "rc-q-cloze", "rc-q-score", "rc-q-explain", "rc-q-write", "rc-q-pick", "rc-q-goals", "rc-flow"] as const;
 export type GenStep = (typeof genSteps)[number];
 export const genStepLabel: Record<GenStep, string> = { transcribe: "그림 쪽 읽기", outline: "목차", classify: "내용 분류", design: "학습 설계", author: "출제",
   read: "전체 읽기(v3)", plan: "출제 계획(v3)", gate: "관문 검사(v3)", "astra-plan": "전체 학습 계획(astra·v4)", "astra-author": "묶음 출제(astra·v4)", "astra-solve": "정답 없는 풀이(astra·v4)", "astra-review": "검수(astra·v4)",
-  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토", "rc-merge": "자료 전체 정리", "rc-intent": "쪽 의도", "rc-summary": "정리 글", "rc-skeleton": "정리 뼈대", "rc-topic": "주제 정리 글", "rc-digest-card": "줄 카드", "rc-wrap": "개요·핵심 정리", "rc-digest-one": "정리 글 한 번", "rc-digest-plan": "목차·성격", "rc-q-material": "문제 재료", "rc-q-choice": "객관식 재료", "rc-q-cloze": "빈칸 재료", "rc-q-score": "오답 점수", "rc-q-explain": "힌트·해설", "rc-q-write": "서술 문제", "rc-q-pick": "퀴즈 고르기", "rc-q-goals": "학습 목표" };
+  "rc-organize": "정리", "rc-link": "연결 묶기", "rc-author": "기본 문제", "rc-deep": "심화 문제", "rc-solve": "따로 풀기", "rc-check": "묶음 검토", "rc-merge": "자료 전체 정리", "rc-intent": "쪽 의도", "rc-summary": "정리 글", "rc-skeleton": "정리 뼈대", "rc-topic": "주제 정리 글", "rc-digest-card": "줄 카드", "rc-wrap": "개요·핵심 정리", "rc-digest-one": "정리 글 한 번", "rc-digest-plan": "목차·성격", "rc-q-material": "문제 재료", "rc-q-choice": "객관식 재료", "rc-q-cloze": "빈칸 재료", "rc-q-score": "오답 점수", "rc-q-explain": "힌트·해설", "rc-q-write": "서술 문제", "rc-q-pick": "퀴즈 고르기", "rc-q-goals": "학습 목표", "rc-flow": "흐름 카드" };
 
 export const engines = ["v2", "v3", "astra", "v4", "v5", "alpha", "recaller"] as const;
 export type Engine = (typeof engines)[number];
@@ -144,8 +144,12 @@ export type RecallerLab = {
   /** 목차 → 카드 (11/5 사용자): the plan call lists what each topic teaches (its concept lines); no topic summary call,
    *  cards are made straight from those items and the source pages, and shown under "A, B, C를 배운다". Implies conceptLines. */
   mapCards?: boolean;
+  /** 실험실 프롬프트 고치기: a prompt's own text for this run, by its name in prompt-registry.ts. */
+  prompts?: Record<string, string>;
   /** With mapCards: "page" makes every page its own item group (default "topic": the plan call groups 1–3 pages). */
   mapUnit?: "topic" | "page";
+  /** 흐름 카드 (11/6): 주제마다 흐름 카드 한 장 — "with"는 그 주제의 카드 호출에서 같이, "after"는 카드가 나온 뒤 짧은 호출(rc-flow) 하나로. 퀴즈에는 쓰지 않는다. */
+  flowCard?: "with" | "after";
   /** Stop after the plan call (outline tests). */
   outlineOnly?: boolean;
   /** With conceptLines: ignore the source outline (compare with the AI-made upper layer). */
@@ -341,6 +345,7 @@ export const DEFAULT_GEN_MODELS: Record<GenStep, ModelChoice> = {
   "rc-skeleton": { model: "gpt-6.1-terra", effort: "low" },
   "rc-topic": { model: "gpt-6.1-sol", effort: "low" },
   "rc-digest-card": { model: "gpt-6.1-terra", effort: "low" },
+  "rc-flow": { model: "gpt-6.1-terra", effort: "low" },
   "rc-wrap": { model: "gpt-6.1-terra", effort: "low" },
 };
 

@@ -382,4 +382,58 @@ test("목차 → 카드 + 퀴즈 (11/5): 출제 재료의 topic은 주제 카드
     const d = (JSON.parse(c.user ?? "{}") as { draft: { format: string; options?: string[]; correct?: number } }).draft;
     if (d.format === "choice") { assert.equal(d.correct, 0); assert.ok(d.options![0].startsWith("[정답]")); }
   }
+  // 자료 전체 정리 (11/5): every topic's cards reach rc-merge; the topic whose cards came in last used to be missing.
+  const merge = calls.find((c) => c.step === "rc-merge");
+  const made = Object.values(done.recaller!.units).reduce((n, u) => n + (u.cards?.length ?? 0), 0);
+  if (merge) assert.equal((JSON.parse(merge.user ?? "{}") as { count: number }).count, made, "모든 주제의 카드가 자료 전체 정리에 들어간다");
+}));
+
+test("앱(공부 화면) 기본 (11/5): 목차 → 바로 카드로 카드 먼저, 문제는 누른 뒤 luna 퀴즈로, 카드를 다시 만들지 않는다", () => withData(async () => {
+  const io = { pdf: async () => null, pages: async () => pages };
+  const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "core", engine: "recaller", provider: "fake", origin: "study", questionsLater: true });
+  assert.equal(start.input.lab?.mapCards, true);
+  assert.equal(start.input.lab?.flowCard, "after", "앱은 카드 다음에 흐름 카드 한 장 (11/6)");
+  const first = await runGen(start.id, { uid: "local-experiment" }, io);
+  assert.equal(first.status, "done", first.message);
+  const before = await readGenCalls(first.id);
+  assert.ok(before.some((c) => c.step === "rc-digest-card") && !before.some((c) => (c.step.startsWith("rc-q-") && c.step !== "rc-q-goals") || c.step === "rc-topic"), before.map((c) => c.step).join(","));
+  await questionsGen(first.id);
+  const done = await runGen(first.id, { uid: "local-experiment" }, io);
+  assert.equal(done.status, "done", done.message);
+  const after = (await readGenCalls(done.id)).slice(before.length).map((c) => c.step);
+  assert.ok(after.includes("rc-q-pick") && after.includes("rc-q-material"), after.join(","));
+  assert.ok(!after.includes("rc-digest-card") && !after.includes("rc-digest-plan"), `카드를 다시 만들지 않는다: ${after.join(",")}`);
+  const qs = done.sections.flatMap((s) => Object.values(done.recaller!.units[s.id].chunks ?? {}).flatMap((c) => c.questions ?? []));
+  assert.ok(qs.length >= 1, "문제가 나온다");
+}));
+
+test("실험실 프롬프트 고치기 (11/5): 실행에 넣은 프롬프트가 그 단계 호출에 쓰이고, 목록은 코드의 기본값을 준다", async () => {
+  const { EDITABLE_PROMPTS } = await import("./prompt-registry.ts");
+  const { MAP_CARD } = await import("./digest.ts");
+  assert.equal(EDITABLE_PROMPTS.find((p) => p.name === "MAP_CARD")?.text, MAP_CARD);
+  await withData(async () => {
+    const io = { pdf: async () => null, pages: async () => pages };
+    const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake",
+      lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, prompts: { MAP_CARD: "고친 카드 지시: 항목마다 카드 하나.", PLAN_COMMON: "" } } });
+    const done = await runGen(start.id, { uid: "local-experiment" }, io);
+    assert.equal(done.status, "done", done.message);
+    const calls = await readGenCalls(done.id);
+    assert.ok(calls.filter((c) => c.step === "rc-digest-card").every((c) => (c.system ?? "").includes("고친 카드 지시") && !(c.system ?? "").includes("목차가 고른 항목")));
+    assert.ok((calls.find((c) => c.step === "rc-digest-plan")?.system ?? "").includes("자료 뒤에 오는 [작업]만"), "빈 값은 기본값");
+  });
+});
+
+test("흐름 카드 (11/6): 주제마다 흐름 카드 한 장이 맨 앞에 — 같이 만들기는 카드 호출에, 다음에 만들기는 rc-flow 호출로, 퀴즈에는 안 쓴다", () => withData(async () => {
+  const io = { pdf: async () => null, pages: async () => pages };
+  for (const flowCard of ["with", "after"] as const) {
+    const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake", lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, flowCard, quiz: "luna", quizCount: 2 } });
+    const done = await runGen(start.id, { uid: "local-experiment" }, io);
+    assert.equal(done.status, "done", done.message);
+    const calls = await readGenCalls(done.id);
+    const card = calls.filter((c) => c.step === "rc-digest-card");
+    assert.equal(card.some((c) => c.system?.includes("[흐름 카드]")), flowCard === "with", "같이 만들기만 카드 호출에 흐름 지시가 붙는다");
+    // The fixture's topics hold one card each: a one-card topic gets no story card (and no rc-flow call).
+    if (flowCard === "after") assert.equal(calls.filter((c) => c.step === "rc-flow").length, 0, "카드 한 장짜리 주제에는 흐름 카드를 만들지 않는다");
+    for (const c of calls.filter((c) => c.step === "rc-q-material")) assert.ok(!/"title":"흐름: /.test(c.user ?? ""), "흐름 카드는 출제하지 않는다");
+  }
 }));

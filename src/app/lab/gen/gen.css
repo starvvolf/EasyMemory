@@ -113,3 +113,23 @@
 .rv-bar { top: 2px; } .rv-barcell small { display: block; padding-top: 10px; }
 .rv-tabs { background: #fff; }
 @media (prefers-color-scheme: dark) { .rv-tabs { background: #14171d; } }
+.rv-view { display: flex; gap: 4px; }
+.gen .rv-view button.on { background: var(--ask); color: #fff; border-color: var(--ask); }
+.rv-outline { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+.rv-outline ol { margin: 8px 0 0; padding-left: 22px; display: grid; gap: 10px; }
+.rv-outline small { color: var(--muted); font-weight: 400; }
+.rv-items { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.rv-items span { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.rv-prompts { display: grid; gap: 8px; }
+.rv-prompt { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.rv-prompt.dirty { border-color: var(--warn); }
+.rv-prompt summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.rv-prompt summary small { color: var(--muted); }
+.gen .rv-prompt textarea { width: 100%; margin: 6px 0; font: 12px/1.5 ui-monospace, "Cascadia Mono", monospace; resize: vertical; box-sizing: border-box; }
+.rv-rerun { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--ask); border-radius: 8px; background: #fff; }
+@media (prefers-color-scheme: dark) { .rv-rerun { background: #14171d; } }
+.rv-step { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: grid; gap: 6px; }
+.rv-step h4 { margin: 0; font-size: 14px; }
+.rv-sent pre { white-space: pre-wrap; word-break: break-word; max-height: 420px; overflow: auto; font-size: 12px; border: 1px dashed var(--line); border-radius: 6px; padding: 6px 8px; }
+.rv-sent summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+

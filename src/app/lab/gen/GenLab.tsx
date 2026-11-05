@@ -40,7 +40,9 @@ async function api<T>(url: string, method = "GET", body?: unknown): Promise<T> {
 export default function GenLab() {
   const [sources, setSources] = useState<Source[]>([]);
   const [runs, setRuns] = useState<RunSummary[]>([]);
+  // ?run=gen_… opens that run (a link to one result).
   const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => { const run = new URLSearchParams(window.location.search).get("run"); if (run) setTimeout(() => setOpenId(run), 0); }, []);
   const [error, setError] = useState("");
 
   const loadLists = useCallback(async () => {
@@ -340,7 +342,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
         {canResume && <button className="primary" disabled={real && !confirmed} onClick={resume}>멈춘 곳부터 다시 시작</button>}
       </div>
 
-      {gen.input.engine === "recaller" ? <RecallerView gen={gen} calls={calls} onOpenCall={(n) => void openCall(n)} /> : <>
+      {gen.input.engine === "recaller" ? <RecallerView gen={gen} calls={calls} onOpenCall={(n) => void openCall(n)} onOpen={onOpen} /> : <>
       <FlowPanel gen={gen} onChange={onChange} onError={onError} />
       {gen.outlineWarnings?.map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
       {astraFamily(gen.input.engine) && <AstraReader gen={gen} onOpenDoc={openDoc} />}
