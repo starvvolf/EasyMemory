@@ -98,8 +98,9 @@ export default function ProjectStudy() {
               </section>
             ))}
             {others.length ? (
-              <section className="td-card">
-                <p className="eyebrow">같은 코스의 다른 기록 {others.length}개</p>
+              // 접어 두기 (2026-11-05 A 앱 한 바퀴 점검): 같은 코스를 여러 번 시작하면 기록이 줄줄이 펼쳐져 화면을 덮었다.
+              <details className="td-card">
+                <summary className="eyebrow" style={{ cursor: "pointer" }}>같은 코스의 다른 기록 {others.length}개</summary>
                 <p className="small muted" style={{ margin: "6px 0 10px" }}>같은 실습을 다시 시작한 기록이에요. 보통은 위 카드에서 이어 하면 돼요.</p>
                 <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>
                   {others.map((r) => (
@@ -107,7 +108,7 @@ export default function ProjectStudy() {
                       <button className="btn ghost small" disabled={busy === r.id} onClick={() => void openEditor(r)}>{busy === r.id ? "여는 중…" : "이걸로 이어 하기"}</button></li>
                   ))}
                 </ul>
-              </section>
+              </details>
             ) : null}
             <section className="td-card">
               <p className="eyebrow">새로 시작</p>
