@@ -1,5 +1,6 @@
 // End steps of the Recaller app (desktop/main.js runs this after asking): stop the local server (only ours, on port 3000) and send this computer's data to RecallerData.
 import { spawnSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +13,8 @@ async function ours() {
 
 console.log("② 앱 서버 끄기");
 if (await ours()) {
+  // 서버 지킴이(run-local-experiment.mjs)는 혼자 꺼진 서버를 다시 켠다. 끄는 것임을 먼저 적어 둔다.
+  try { mkdirSync(path.join(root, "tmp"), { recursive: true }); writeFileSync(path.join(root, "tmp", "server-stopping"), new Date().toISOString()); } catch { /* best effort */ }
   if (process.platform === "win32") {
     const lines = (spawnSync("netstat", ["-ano"], { encoding: "utf8" }).stdout ?? "").split(/\r?\n/);
     const pids = [...new Set(lines.filter((line) => /[:.]3000\s/.test(line) && /LISTENING/i.test(line)).map((line) => line.trim().split(/\s+/).at(-1)).filter(Boolean))];
