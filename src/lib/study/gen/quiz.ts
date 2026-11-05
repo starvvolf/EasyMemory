@@ -321,9 +321,12 @@ export function buildChoice(stem: string, correct: string, ds: Array<{ text: str
   // "판단: 서로를 기다릴 수 있다" — the label of the pattern copied into every option (11/2).
   const lead = /^\s*(판단|이유|결과|답)\s*[:：]\s*/;
   if (lead.test(correct)) { correct = correct.replace(lead, ""); ds = ds.map((d) => ({ ...d, text: d.text.replace(lead, "") })); }
+  // The answer stays first while the model writes the explanation (one note per option, in this fixed order: 11/5 a
+  // shuffled order made luna write the notes one place off). The blind solve gets its own shuffled copy, and the
+  // published question is shuffled with its notes attached (recaller shuffle()).
+  void seed;
   const raw = [{ text: correct, from: "" }, ...ds.slice(0, 3)];
-  const order = shuffleOrder(4, seed);
-  return { format: "choice", stem, options: order.map((i) => raw[i].text), correct: order.indexOf(0), froms: order.map((i) => raw[i].from) };
+  return { format: "choice", stem, options: raw.map((x) => x.text), correct: 0, froms: raw.map((x) => x.from) };
 }
 
 const BLANK_FROM: Record<string, string[]> = { term: ["name", "symbol"], fact: ["value"], procedure: ["steps"], rule: ["result", "boundary", "condition"], compare: ["criteria"], formula: ["expr", "when"], concept: ["reason", "limit", "claim"], list: ["items"], pattern: ["slots"] };

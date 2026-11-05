@@ -8,10 +8,11 @@ import type { JudgeRun } from "@/lib/study/gen/judge";
 import type { VisionProbe } from "@/lib/study/gen/vision";
 import type { getAstraReadingView } from "@/lib/study/gen/astra";
 import { DEFAULT_GEN_MODELS, astraFamily, defaultChosen, genStepLabel, purposeLabel } from "@/lib/study/gen/types";
+import { RecallerView } from "./RecallerView";
 import "./gen.css";
 
 type Source = { id: string; fileName: string; pageCount: number; available: boolean };
-type RunSummary = { id: string; createdAt: string; status: string; phase: string; fileName: string; pages: number[]; purpose: Purpose; provider: string; calls: number; forkOf: GenState["forkOf"] | null };
+type RunSummary = { method?: string; id: string; createdAt: string; status: string; phase: string; fileName: string; pages: number[]; purpose: Purpose; provider: string; calls: number; forkOf: GenState["forkOf"] | null };
 type CallSummary = Omit<GenCall, "system" | "user" | "reply">;
 type Detail = { gen: GenState; label: string; calls: CallSummary[] };
 
@@ -62,20 +63,23 @@ export default function GenLab() {
     <main className="gen">
       <header className="gen-head">
         <h1>생성 실험실 · 새 엔진</h1>
-        <p>목차 → 내용 분류·학습 설계(목차별) → 목표 확인 → 출제(목차별). <a href="/lab">옛 실험실</a></p>
+        <p>실행을 고르면 결과 품질 · 방법 · 시간·비용 · 호출을 탭으로 봐요. <a href="/lab">옛 실험실</a></p>
       </header>
       {error && <p className="gen-error" role="alert">{error}</p>}
       <div className="gen-layout">
         <aside>
-          <NewRun sources={sources} onSources={loadLists} onStarted={(id) => { setOpenId(id); void loadLists(); }} onError={setError} />
-          <VisionPanel sources={sources} onError={setError} />
+          <details className="gen-fold" open={!openId}>
+            <summary>새 실행</summary>
+            <NewRun sources={sources} onSources={loadLists} onStarted={(id) => { setOpenId(id); void loadLists(); }} onError={setError} />
+            <VisionPanel sources={sources} onError={setError} />
+          </details>
           <h2>실행</h2>
           <ul className="gen-runs">
             {runs.map((run) => (
               <li key={run.id}>
                 <button className={openId === run.id ? "on" : ""} onClick={() => setOpenId(run.id)}>
                   <span className={`tag ${tone(run.status)}`}>{STATUS[run.status] ?? run.status}</span>
-                  <b>{run.fileName}</b>
+                  <b>{run.fileName}</b>{run.method ? <small className="gen-method">{run.method} · {new Date(run.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small> : null}
                   <small>p.{run.pages[0]}–{run.pages.at(-1)} · {purposeLabel[run.purpose]} · {run.provider === "fake" ? "가짜" : "실제"} · 호출 {run.calls}{run.forkOf ? ` · 고정 재실행(${FORK_LABEL[run.forkOf.from]})` : ""}</small>
                 </button>
               </li>
@@ -336,6 +340,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
         {canResume && <button className="primary" disabled={real && !confirmed} onClick={resume}>멈춘 곳부터 다시 시작</button>}
       </div>
 
+      {gen.input.engine === "recaller" ? <RecallerView gen={gen} calls={calls} onOpenCall={(n) => void openCall(n)} /> : <>
       <FlowPanel gen={gen} onChange={onChange} onError={onError} />
       {gen.outlineWarnings?.map((warning, index) => <p key={index} className="warnline">{warning.message}</p>)}
       {astraFamily(gen.input.engine) && <AstraReader gen={gen} onOpenDoc={openDoc} />}
@@ -412,6 +417,7 @@ function RunView({ id, runs, onChange, onOpen, onError }: { id: string; runs: Ru
           </tr>
         ))}</tbody>
       </table>
+      </>}
       {call && (
         <div className="calldetail">
           <h4>호출 {call.n} · {genStepLabel[call.step]} {call.sectionId ?? ""} <button onClick={() => setCall(null)}>닫기</button></h4>

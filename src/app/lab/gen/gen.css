@@ -58,3 +58,58 @@
 .vision-result { display: grid; gap: 6px; }
 .vision-result img { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .vision-result pre { white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; padding: 6px; margin: 0; }
+/* 실험실 보기 (RecallerView, 11/5) */
+.rv { display: grid; gap: 12px; }
+.rv-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: inherit; z-index: 2; padding-top: 4px; }
+.gen .rv-tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 12px; }
+.gen .rv-tabs button.on { border-bottom-color: var(--ask); color: var(--ask); font-weight: 600; }
+.rv-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.rv-stats span { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--muted); }
+.rv-stats b { color: var(--fg, inherit); margin-left: 4px; }
+.rv-sub { color: var(--muted); font-size: 13px; margin: 2px 0; }
+.rv-warn { color: var(--warn); font-size: 12px; }
+.rv-box, .rv-topic { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.rv-topic h3 small { color: var(--muted); font-weight: 400; }
+.rv-map { margin: 4px 0 8px; padding: 6px 10px; border-left: 3px solid var(--ask); background: color-mix(in srgb, var(--ask) 6%, transparent); }
+.rv-lines { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.rv-lines > li { display: grid; grid-template-columns: minmax(180px, 34%) 1fr; gap: 10px; padding: 6px 0; border-top: 1px dashed var(--line); }
+@media (max-width: 860px) { .rv-lines > li { grid-template-columns: 1fr; } }
+.rv-line { font-size: 13px; }
+.rv-cards { display: grid; gap: 4px; align-content: start; }
+.rv-card { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 13px; }
+.rv-card summary { cursor: pointer; }
+.rv-card dl { margin: 6px 0 2px; display: grid; gap: 2px; }
+.rv-card dl div, .rv-kv div { display: grid; grid-template-columns: 70px 1fr; gap: 8px; }
+.rv-card dt, .rv-kv dt { color: var(--muted); }
+.rv-card dd, .rv-kv dd { margin: 0; }
+.rv-quote { display: block; color: var(--muted); font-size: 12px; }
+.rv-form { font-size: 11px; border-radius: 4px; padding: 0 5px; border: 1px solid var(--line); color: var(--muted); }
+.rv-form.f-rule { color: var(--ask); border-color: var(--ask); } .rv-form.f-term { color: var(--ok); border-color: var(--ok); } .rv-form.f-procedure, .rv-form.f-formula { color: var(--warn); border-color: var(--warn); }
+.rv-qs { margin-top: 10px; display: grid; gap: 8px; }
+.rv-qs h4 { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.rv-q { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, var(--line) 18%, transparent); }
+.rv-qhead small { color: var(--muted); }
+.rv-badge { font-size: 11px; border-radius: 4px; padding: 1px 6px; background: var(--ask); color: #fff; }
+.rv-blank { border-bottom: 2px solid var(--ok); color: var(--ok); padding: 0 4px; font-weight: 600; }
+.rv-opts { margin: 6px 0; padding-left: 22px; display: grid; gap: 3px; }
+.rv-opts li small { display: block; color: var(--muted); font-size: 12px; }
+.rv-opts li.right > span { color: var(--ok); font-weight: 600; }
+.rv-held { color: var(--warn); font-size: 13px; margin: 0; }
+.rv-kv { display: grid; gap: 4px; margin: 0; }
+.rv-kv div { grid-template-columns: 100px 1fr; }
+.rv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rv-table th, .rv-table td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+.rv-table.click tr { cursor: pointer; } .rv-table tr.bad td { color: var(--bad); }
+.rv-barcell { position: relative; min-width: 220px; }
+.rv-bar { position: absolute; top: 6px; height: 8px; border-radius: 4px; background: var(--ask); opacity: .5; }
+.rv-barcell small { position: relative; color: var(--muted); }
+.rv-method pre { font-size: 12px; white-space: pre-wrap; }
+.gen-layout { grid-template-columns: 280px 1fr; }
+.gen-fold { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.gen-fold > summary { cursor: pointer; font-weight: 600; }
+.gen-fold[open] > summary { margin-bottom: 8px; }
+.gen-runs button small { font-size: 12px; color: var(--muted); }
+.gen-runs .gen-method { color: var(--ask) !important; }
+.rv-bar { top: 2px; } .rv-barcell small { display: block; padding-top: 10px; }
+.rv-tabs { background: #fff; }
+@media (prefers-color-scheme: dark) { .rv-tabs { background: #14171d; } }

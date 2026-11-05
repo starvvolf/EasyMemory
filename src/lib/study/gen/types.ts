@@ -141,6 +141,11 @@ export type RecallerLab = {
   goalsInPlan?: boolean;
   /** B 설계 11/3: knowledge = concept lines of a detailed outline (source outline when found, else the plan call). */
   conceptLines?: boolean;
+  /** 목차 → 카드 (11/5 사용자): the plan call lists what each topic teaches (its concept lines); no topic summary call,
+   *  cards are made straight from those items and the source pages, and shown under "A, B, C를 배운다". Implies conceptLines. */
+  mapCards?: boolean;
+  /** With mapCards: "page" makes every page its own item group (default "topic": the plan call groups 1–3 pages). */
+  mapUnit?: "topic" | "page";
   /** Stop after the plan call (outline tests). */
   outlineOnly?: boolean;
   /** With conceptLines: ignore the source outline (compare with the AI-made upper layer). */

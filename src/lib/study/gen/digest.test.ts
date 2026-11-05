@@ -345,3 +345,41 @@ test("영어 자료 (11/5): 영어면 글을 쓰는 호출마다 \"영어(한국
     });
   }
 });
+
+test("목차 → 카드 (lab.mapCards, 11/5): 주제 요약 호출 없이 항목 줄에서 바로 카드, 쪽 단위도", async () => {
+  for (const mapUnit of ["topic", "page"] as const) {
+    await withData(async () => {
+      const io = { pdf: async () => null, pages: async () => pages };
+      const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake", lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, mapUnit } });
+      const done = await runGen(start.id, { uid: "local-experiment" }, io);
+      assert.equal(done.status, "done", done.message);
+      const calls = await readGenCalls(done.id);
+      assert.ok(!calls.some((c) => c.step === "rc-topic"), mapUnit);
+      const card = calls.find((c) => c.step === "rc-digest-card")!;
+      assert.ok(card.system?.includes("목차가 고른 항목"), mapUnit);
+      const d = done.recaller!.digest!;
+      if (mapUnit === "page") assert.equal(d.skeleton.topics.length, 3);
+      for (const t of d.skeleton.topics) assert.match(d.topics[t.id].text, /(을|를|을\(를\)) 배운다\.$/);
+      const cards = done.sections.flatMap((s) => Object.values(done.recaller!.units[s.id].chunks ?? {}).flatMap((c) => c.cards ?? []));
+      assert.ok(cards.length >= 1 && cards.every((c) => (d.notes[c.id]?.covers ?? []).length >= 1), mapUnit);
+    });
+  }
+});
+
+test("목차 → 카드 + 퀴즈 (11/5): 출제 재료의 topic은 주제 카드 줄과 카드 오답 메모", () => withData(async () => {
+  const io = { pdf: async () => null, pages: async () => pages };
+  const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake", lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, quiz: "luna", quizCount: 2 } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, io);
+  assert.equal(done.status, "done", done.message);
+  const m = (await readGenCalls(done.id)).find((c) => c.step === "rc-q-material");
+  assert.ok(m, "재료 호출이 있다");
+  const topic = (JSON.parse(m!.user ?? "{}") as { topic: { lines: string[]; mistake: string } }).topic;
+  assert.ok(topic.lines.length >= 1 && topic.lines.every((l) => /^\[[^\]]+\] /.test(l)), JSON.stringify(topic)); // card lines ([종류] 제목: …), not the "…를 배운다" line
+  assert.ok(topic.mistake.length > 0, "카드 오답 메모가 흔한 오해 자리에");
+  // 보기 순서 (11/5): the explanation gets the answer first, in a fixed order; the published question is shuffled with its notes.
+  const calls = await readGenCalls(done.id);
+  for (const c of calls.filter((c) => c.step === "rc-q-explain")) {
+    const d = (JSON.parse(c.user ?? "{}") as { draft: { format: string; options?: string[]; correct?: number } }).draft;
+    if (d.format === "choice") { assert.equal(d.correct, 0); assert.ok(d.options![0].startsWith("[정답]")); }
+  }
+}));

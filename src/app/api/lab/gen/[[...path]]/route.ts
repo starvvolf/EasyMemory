@@ -27,7 +27,7 @@ async function handle(request: Request, context: Context) {
       const origin = new URL(request.url).searchParams.get("origin");
       result = { runs: (await listGens()).filter((gen) => !origin || (gen.input.origin ?? "lab") === origin).map((gen) => ({ id: gen.id, createdAt: gen.createdAt, status: gen.status, phase: gen.phase, fileName: gen.input.fileName,
         pages: gen.input.pageNumbers, purpose: gen.input.purpose, provider: gen.input.provider, calls: gen.calls, forkOf: gen.forkOf ?? null, origin: gen.input.origin ?? "lab",
-        pastExam: Boolean(gen.pastExam), sectionsDone: gen.sections.filter((section) => section.author).length, sectionCount: gen.sections.length })) };
+        method: methodOf(gen), pastExam: Boolean(gen.pastExam), sectionsDone: gen.sections.filter((section) => section.author).length, sectionCount: gen.sections.length })) };
     } else if (p[0] === "vision") {
       // Image reading probe: render one page, ask the model to read it, compare with the text layer.
       if (p.length === 1 && method === "GET") result = { probes: await listVisionProbes() };
@@ -137,3 +137,11 @@ async function handle(request: Request, context: Context) {
 }
 export const GET = handle;
 export const POST = handle;
+
+/** 실험실 목록에 보일 방법 한 줄 (recaller 엔진, 11/5). */
+function methodOf(gen: { input: { engine?: string; lab?: Record<string, unknown> } }) {
+  const lab = gen.input.lab ?? {};
+  if (gen.input.engine !== "recaller") return "";
+  const how = lab.mapCards ? `목차→카드(${lab.mapUnit === "page" ? "쪽" : "주제"})` : lab.conceptLines ? "개념 줄" : lab.digest ? "목차→요약→카드" : "쪽 정리";
+  return `${how}${lab.quiz === "luna" ? ` · 퀴즈${lab.quizCount ?? ""}` : ""}`;
+}
