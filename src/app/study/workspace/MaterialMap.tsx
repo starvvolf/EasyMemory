@@ -173,8 +173,8 @@ function Typed({ text, caret }: { text: string; caret?: boolean }) {
   const reduce = useMemo(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches), []);
   useEffect(() => {
     target.current = text;
-    if (reduce) { shown.current = text.length; setN(text.length); return; }
     let raf = 0, last = performance.now();
+    if (reduce) { shown.current = text.length; raf = requestAnimationFrame(() => setN(text.length)); return () => cancelAnimationFrame(raf); }
     const step = (t: number) => {
       const left = target.current.length - shown.current;
       if (left <= 0) return;
@@ -257,7 +257,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
     // Right after the start there are no cards yet (the server answers 422/404 until the first page is organized): keep
     // trying quietly for about two minutes before showing why.
     const load = () => call<{ map: MatMap }>(`/api/study-map/${genId}`)
-      .then((r) => { if (!alive) return; setMap(r.map); setError(""); if (r.map.status !== "done" && r.map.status !== "failed") timer = setTimeout(load, 3000); })
+      .then((r) => { if (!alive) return; setMap(r.map); setError(""); if (["queued", "running"].includes(r.map.status)) timer = setTimeout(load, 3000); }) // 11/5: 멈춘(이어 만들기) 실행은 다시 묻지 않음
       .catch((e) => { if (!alive) return; if (++misses > 40) setError(errorText(e)); else timer = setTimeout(load, 3000); });
     load();
     return () => { alive = false; if (timer) clearTimeout(timer); };
