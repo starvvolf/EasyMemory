@@ -22,14 +22,16 @@ test('C/B/A requests reuse live assembly without changing product data or making
     if(old.provider===undefined)delete process.env.STUDY_FORGE_MODEL_PROVIDER;else process.env.STUDY_FORGE_MODEL_PROVIDER=old.provider;
   }
 });
-test('documented C failures remain reproducible against product helpers',()=>{
+// 11/5: C가 정답 위치 고정과 점수 없는 보기 통과를 고쳤다 → 고친 것은 고친 채로, 남은 것(점검 안 한 보기 3, 빈칸 부분 일치)은 그대로 기록
+test('C: fixed failures stay fixed, the remaining ones are still reproducible',()=>{
   const p=offlineProbes();
-  assert.deepEqual(p.shuffle.correctPositions,[1000,0,0,0]);
+  assert.ok(p.shuffle.correctPositions.every(n=>n>150),`정답 위치가 고르게: ${p.shuffle.correctPositions}`);
   assert.equal(p.uncheckedPool,3);
-  assert.equal(p.missingScorePool,3);
+  assert.equal(p.missingScorePool,0);
   assert.ok(p.substringAccepted.every(x=>x.substringPass));
 });
-test('B map currently accepts an invented quote, and A short reference fragments bypass exact-line guard',async()=>{
+// 11/5: A의 짧은 조각 유출은 토큰 창 검사로 막힘(code-ai.ts leaks). B 인용 검사는 아직 그대로.
+test('B map still accepts an invented quote; A short reference fragments are now caught',async()=>{
   const old={data:process.env.STUDY_FORGE_DATA_DIR,provider:process.env.STUDY_FORGE_MODEL_PROVIDER};
   const out=await mkdtemp(path.resolve('tmp/prompt-review-boundary-'));
   try {
@@ -42,7 +44,7 @@ test('B map currently accepts an invented quote, and A short reference fragments
     assert.equal(mapped.ideas[0].quote,'원문에 없는 인용문');
     const {trainCheck}=await import('../../src/lib/assist/code-ai.ts');
     const advice=await trainCheck({problemId:'cp_promptreview',step:'model',answer:{구조:'모르겠어요'}});
-    assert.equal(advice.say,'target = a[1]');
+    assert.notEqual(advice.say,'target = a[1]');
   } finally {
     setFakeModelResponder(null);
     if(old.data===undefined)delete process.env.STUDY_FORGE_DATA_DIR;else process.env.STUDY_FORGE_DATA_DIR=old.data;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
-import { createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, itemsByRef, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
+import { readAll, createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, itemsByRef, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
   onKnowledgeCreated, pickWaiting, recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
@@ -30,9 +30,10 @@ const goalSource = z.object({ key: z.string().min(1).max(300), kind: z.enum(["pd
 const sourceRef = z.object({ kind: z.enum(["pdf", "web", "code", "chat", "manual"]), title: z.string().max(200), ref: z.string().max(200).optional(), url: z.string().max(2000).optional(),
   page: z.number().int().optional(), quote: z.string().max(400).optional() });
 
+// 11/5 종합 테스트: 지식마다 getKnowledge(저장소 읽기 + 기록 전체 읽기 + 태그 계산)를 불러 279개에서 [문제 풀어보기]가 17초 걸렸다.
+// 같은 지식 전부를 저장소에서 한 번에 읽는다(getKnowledge의 item과 같은 것).
 async function allItems() {
-  const { items } = await tree();
-  return Promise.all(items.map(async (i) => (await getKnowledge(i.id)).item));
+  return (await readAll()).items;
 }
 /** Goals of a read article, checked against the knowledge they cover. */
 async function withGoals(source: ReadSource) {
