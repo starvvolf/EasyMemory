@@ -310,7 +310,8 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   // Saving what is already there (a code problem opened again, a page reloaded) is not "seeing it again": the item keeps
   // its place in "최근 순" unless something about it actually changed.
   const before = existing ? JSON.stringify([item.body, item.aliases, item.sources.length, item.folderId, item.state, item.graduated, item.links]) : "";
-  if (input.body && (!item.body || (!existing && input.body))) { item.body = input.body.trim().slice(0, 4000); if (input.source?.kind === "manual") item.bodyByHand = true; }
+  const tookBody = Boolean(input.body && (!item.body || !existing));
+  if (tookBody) { item.body = input.body!.trim().slice(0, 4000); if (input.source?.kind === "manual") item.bodyByHand = true; }
   for (const alias of [...(input.aliases ?? []), ...(existing && normalize(title) !== normalize(item.title) ? [title] : [])]) {
     const a = alias.trim().slice(0, 120);
     if (a && !namesOf(item).some((n) => normalize(n) === normalize(a))) item.aliases.push(a);
@@ -323,7 +324,9 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   // "앎" (checked) — meeting it again never erases what is known about it.
   if (!existing) item.state = input.state ?? "met";
   if (input.kind && !item.kind) { const k = asKind(input.kind); if (k.kind) item.kind = k.kind; if (k.vocab) item.vocab = true; }
-  if (input.ask?.trim() && !item.ask) item.ask = input.ask.trim().slice(0, 300);
+  // The ask goes with the body it was written for (2026-11-05 A 품질 점검): an article's "BFS의 시간 복잡도는?" landed on an
+  // existing "시간 복잡도" whose body is the general definition, and the flashcard showed that definition as the answer.
+  if (input.ask?.trim() && !item.ask && (tookBody || !existing)) item.ask = input.ask.trim().slice(0, 300);
   if (!existing && input.topicHint && item.folderId === null) item.topicHint = input.topicHint.slice(0, 200);
   else if (input.state === "unknown" || input.state === "known") item.state = input.state;
   if (item.state === "unknown") item.graduated = false;

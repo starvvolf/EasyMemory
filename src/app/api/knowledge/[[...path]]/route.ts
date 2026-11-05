@@ -187,11 +187,15 @@ async function handle(request: Request, context: RouteContext) {
       const count = Math.min(30, Number(url.searchParams.get("count") ?? 10));
       // all=1 (2026-11-05, 지식 탭 [문제 풀어보기]): nothing is due, so practice on the rest of the queue instead of an empty answer.
       const practice = url.searchParams.get("all") === "1";
-      const picked = await reviewQueue({ folderId, ids, limit: count, dueOnly: !practice });
       // 미리 연습에는 아직 한 번도 묻지 않은 지식(만남)도 넣는다: 새로 시작한 데이터에서도 목록이 빈 채로 나오지 않게.
+      // 절반은 복습 차례 앞쪽, 나머지는 방금 읽은 것부터(2026-11-05 품질 점검: 지식이 많으면 새 글의 지식이 목록에 안 나왔다).
+      const picked = await reviewQueue({ folderId, ids, limit: practice ? Math.ceil(count / 2) : count, dueOnly: !practice });
       if (practice && picked.length < count) {
         const have = new Set(picked.map((x) => x.id));
-        for (const i of pool) if (picked.length < count && !have.has(i.id) && !i.graduated && (!folderId || i.folderId === folderId) && (!ids || ids.includes(i.id))) picked.push({ id: i.id } as (typeof picked)[number]);
+        const fresh = pool.filter((i) => !have.has(i.id) && !i.graduated && !i.review && (!folderId || i.folderId === folderId) && (!ids || ids.includes(i.id)))
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        for (const i of fresh) if (picked.length < count) picked.push({ id: i.id } as (typeof picked)[number]);
+        if (picked.length < count) for (const x of await reviewQueue({ folderId, ids, limit: count, dueOnly: false })) if (picked.length < count && !picked.some((y) => y.id === x.id)) picked.push(x);
       }
       const status = await reviewStatus({ folderId, ids });
       const seed = String(Date.now());

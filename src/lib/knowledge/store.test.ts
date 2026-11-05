@@ -265,3 +265,12 @@ test("review options give nothing away: no [맥락] in front, no procedure among
   assert.ok(!choice.options!.some((o) => o.startsWith("1)")), "the procedure is not an option");
   assert.equal(questionsFor(pool[1], pool, "s").some((q) => q.kind === "choice"), false, "a procedure is asked as a card, not 객관식");
 });
+
+test("an article's ask lands on an existing item only with its body (2026-11-05 품질 점검)", () => withData(async () => {
+  const general = await saveKnowledge({ title: "시간 복잡도", body: "입력 크기에 따라 연산 횟수가 느는 정도." });
+  const again = await saveKnowledge({ title: "시간 복잡도", body: "인접 리스트 BFS는 O(V+E)다.", ask: "인접 리스트로 구현한 BFS의 시간 복잡도는?" });
+  assert.equal(again.item.id, general.item.id);
+  assert.equal(again.item.ask, undefined, "the ask was for another body; the card would show the general definition as its answer");
+  const fresh = await saveKnowledge({ title: "방문 표시", body: "큐에 넣을 때 표시한다.", ask: "방문 표시는 언제 하는가?" });
+  assert.equal(fresh.item.ask, "방문 표시는 언제 하는가?");
+}));
