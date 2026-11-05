@@ -11,10 +11,21 @@ const run = (command, args, options = {}) => spawnSync(command, args, { cwd: roo
 const node = (script, args = []) => spawnSync(process.execPath, [script, ...args], { cwd: root, stdio: "inherit" });
 const quiet = (command, args) => (spawnSync(command, args, { cwd: root, encoding: "utf8", shell: process.platform === "win32" }).stdout ?? "").trim();
 
-console.log("① 코드 받기");
-const before = quiet("git", ["rev-parse", "HEAD"]);
-if (run("git", ["pull", "--ff-only"]).status !== 0) console.warn("   코드를 받지 못했어요(인터넷·충돌). 지금 코드로 계속해요.");
-const after = quiet("git", ["rev-parse", "HEAD"]);
+// --pulled (2026-11-05, 노트북에서 "켜지 못했어요"): 받은 코드가 이 파일 자체를 바꿨으면, 이미 읽혀 있는 옛 내용으로
+// 계속하지 않고 새 파일로 다시 시작한다. 옛 파일은 지워진 scripts/open-study-forge-local.mjs를 켜려다 멈췄다.
+const pulled = process.argv.find((a) => a.startsWith("--pulled="));
+let before, after;
+if (pulled) [before, after] = pulled.slice("--pulled=".length).split("..");
+else {
+  console.log("① 코드 받기");
+  before = quiet("git", ["rev-parse", "HEAD"]);
+  if (run("git", ["pull", "--ff-only"]).status !== 0) console.warn("   코드를 받지 못했어요(인터넷·충돌). 지금 코드로 계속해요.");
+  after = quiet("git", ["rev-parse", "HEAD"]);
+  if (before && after && before !== after && quiet("git", ["diff", "--name-only", before, after]).split(/\r?\n/).includes("scripts/recaller-start.mjs")) {
+    console.log("   켜는 순서가 바뀌어서 새 순서로 다시 시작해요.");
+    process.exit(node(fileURLToPath(import.meta.url), [...process.argv.slice(2), `--pulled=${before}..${after}`]).status ?? 1);
+  }
+}
 
 if (!existsSync(path.join(root, "node_modules")) || (before !== after && quiet("git", ["diff", "--name-only", before, after]).split(/\r?\n/).includes("package-lock.json"))) {
   console.log("② 패키지 설치(바뀐 것이 있어요)");
