@@ -77,6 +77,16 @@ type CodexThread = { id: string | null; runStreamed(input: string, o?: { signal?
  * 평소 Codex 설정(.codex)의 기억 · 플러그인 · 다른 MCP가 따라오면 학습 대화 중에 개발용 문서를 찾고 입력도 커진다.
  * 로그인은 따로 한 번(로그인 파일을 복사하지 않는다: 한쪽이 갱신되면 다른 쪽이 풀릴 수 있음). 깃 · RecallerData에 안 올라가는 사용자 폴더 아래 */
 export const CODEX_HOME = process.env.PC_CODEX_HOME?.trim() || path.join(os.homedir(), ".recaller-codex");
+/** Codex keeps each thread as sessions/<yyyy>/<mm>/<dd>/rollout-…-<threadId>.jsonl under CODEX_HOME. */
+function hasRollout(threadId: string, dir = path.join(CODEX_HOME, "sessions"), depth = 0): boolean {
+  let names: string[] = [];
+  try { names = readdirSync(dir); } catch { return false; }
+  for (const n of names) {
+    if (n.includes(threadId) && n.endsWith(".jsonl")) return true;
+    if (depth < 3 && !n.includes(".") && hasRollout(threadId, path.join(dir, n), depth + 1)) return true;
+  }
+  return false;
+}
 const loggedIn = () => existsSync(path.join(CODEX_HOME, "auth.json"));
 let loginChild: ReturnType<typeof spawn> | null = null;
 /** 전용 폴더로 codex login을 띄운다(브라우저가 열리고 학습자가 직접 로그인) */
@@ -203,8 +213,12 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     });
     const opts = { workingDirectory: ws, skipGitRepoCheck: true, model: c.model ?? CHAT_MODELS[0].id, modelReasoningEffort: "low",
       sandboxMode: c.edit === "allow" ? "workspace-write" : "read-only", approvalPolicy: "never", networkAccessEnabled: false, webSearchMode: "disabled" };
+    // 11/5: 이어 갈 Codex 대화 기록(rollout)이 지금 CODEX_HOME에 없으면 새 대화로 연다. 11/5 전용 설정 폴더(~/.recaller-codex)로
+    // 옮기기 전 대화나 다른 PC에서 시작한 대화는 threadId만 남아 "thread/resume failed: no rollout found"로 끝나던 것.
+    // 새로 열 때는 아래에서 앞 대화를 붙이므로 맥락은 이어진다.
+    if (c.threadId && !hasRollout(c.threadId)) { log.resumeLost = c.threadId; await update<CodexChat>(file(id), c, (x) => { delete x.threadId; }); delete c.threadId; }
     const fresh = !c.threadId;
-    const thread = fresh ? codex.startThread(opts) : codex.resumeThread(c.threadId, opts);
+    const thread = fresh ? codex.startThread(opts) : codex.resumeThread(c.threadId!, opts);
     // 새 Codex 대화면 튜터 안내 + (폴더를 바꿔 새로 열었으면) 앞 대화를 붙인다. 정해 둔 진행 방식은 매번 맨 앞에
     const prior = c.messages.slice(0, -1).filter((m) => m.role === "user" || m.role === "assistant").slice(-30).map((m) => `[${m.role === "user" ? "학습자" : "튜터"}] ${m.text.slice(0, 2000)}`).join("\n\n");
     const pref = prefs.length ? `[학습자가 정해 둔 진행 방식]\n${prefs.map((p) => `- ${p.text}`).join("\n")}\n\n` : "";
