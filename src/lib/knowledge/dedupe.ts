@@ -17,7 +17,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { askJson, S } from "../assist/model.ts";
 import { similarKnowledge } from "./embed.ts";
-import { getKnowledge, KIND_LABEL, linkKnowledge, mergeKnowledge, normalize, tree, unlinkKnowledge, type KKind } from "./store.ts";
+import { getKnowledge, KIND_LABEL, linkKnowledge, mergeKnowledge, normalize, readAll, tree, unlinkKnowledge, type KKind } from "./store.ts";
 
 // "related" is the old 관련 (before 2026-10-28 evening) and now only 어휘 비슷한 말.
 export type Verdict = "same" | "narrower" | "broader" | "uses" | "used_by" | "requires" | "required_by" | "needs" | "needed_by" | "near" | "related" | "different";
@@ -255,8 +255,7 @@ export function impliedLinks(links: Array<{ from: string; to: string; relation: 
     || (l.relation === "씀" && links.some((z) => z.from === l.from && z.relation === "씀" && z.to !== l.to && has(l.to, z.to, (r) => r === "포함"))));
 }
 async function pruneImplied() {
-  const { items } = await tree();
-  const full = await Promise.all(items.map((i) => getKnowledge(i.id).then((d) => d.item)));
+  const { items: full } = await readAll(); // one read, not one per item (the same freeze as embed.ts allVectors)
   const links = full.flatMap((i) => i.links.map((l) => ({ from: i.id, to: l.to, relation: l.relation })));
   for (const l of impliedLinks(links)) await unlinkKnowledge(l.from, l.to).catch(() => undefined);
 }

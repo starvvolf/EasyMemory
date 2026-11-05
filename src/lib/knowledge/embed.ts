@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getKnowledge, tree, type ItemLite, type Knowledge } from "./store.ts";
+import { getKnowledge, readAll, tree, type ItemLite, type Knowledge } from "./store.ts";
 
 export const EMBED_MODEL = "onnx-community/embeddinggemma-300m-ONNX";
 const EMBED_DTYPE = "q8";
@@ -96,8 +96,9 @@ export async function vectorStatus(items: Array<Pick<Knowledge, "id" | "title" |
 
 /** Vectors for every item, made only for items that are new or whose name, other names or meaning changed. */
 async function allVectors() {
-  const { items } = await tree();
-  const full = await Promise.all(items.map(async (i) => (await getKnowledge(i.id)).item));
+  // One read of the store (2026-11-05 A 품질 점검): getKnowledge per item read the store and the event log once per item,
+  // and the JSON parsing of ~280 items × that froze the whole app server for ~18 s after every save.
+  const [{ items }, { items: full }] = await Promise.all([tree(), readAll()]);
   const data = await readVectors();
   const texts = new Map(full.map((i) => [i.id, embedText(i)]));
   const stale = full.filter((i) => data.items[i.id]?.hash !== hashOf(texts.get(i.id)!));
@@ -109,7 +110,7 @@ async function allVectors() {
   let dropped = false;
   for (const id of Object.keys(data.items)) if (!live.has(id)) { delete data.items[id]; dropped = true; }
   if (stale.length || dropped) await writeVectors(data);
-  return { items, vectors: new Map(full.map((i) => [i.id, unpack(data.items[i.id].v)])), made: stale.length };
+  return { items: items.filter((i) => live.has(i.id)), vectors: new Map(full.map((i) => [i.id, unpack(data.items[i.id].v)])), made: stale.length };
 }
 
 export type SimilarHit = ItemLite & { score: number; linked: boolean };
