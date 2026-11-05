@@ -274,3 +274,13 @@ test("an article's ask lands on an existing item only with its body (2026-11-05 
   const fresh = await saveKnowledge({ title: "방문 표시", body: "큐에 넣을 때 표시한다.", ask: "방문 표시는 언제 하는가?" });
   assert.equal(fresh.item.ask, "방문 표시는 언제 하는가?");
 }));
+
+test("a close name with a swapped part is another item; one that only adds is the same (2026-11-05)", () => withData(async () => {
+  const deque = await saveKnowledge({ title: "[점검] 지연 측정용 덱", body: "양쪽 끝에서 넣고 뺀다." });
+  const heap = await saveKnowledge({ title: "[점검] 지연 측정용 힙", body: "부모가 자식보다 작거나 같다." });
+  assert.notEqual(heap.item.id, deque.item.id);
+  const tcp3 = await saveKnowledge({ title: "TCP 3-way handshake" });
+  assert.notEqual((await saveKnowledge({ title: "TCP 4-way handshake" })).item.id, tcp3.item.id);
+  const dfs = await saveKnowledge({ title: "깊이 우선 탐색 알고리즘" });
+  assert.equal((await saveKnowledge({ title: "깊이 우선 탐색 알고리즘들" })).item.id, dfs.item.id);
+}));

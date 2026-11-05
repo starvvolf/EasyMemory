@@ -214,9 +214,19 @@ function sameAs<T extends Pick<Knowledge, "title" | "aliases">>(items: T[], titl
   for (const item of items) for (const name of namesOf(item)) {
     if (normalize(name).length < 4) continue;
     const s = similarity(title, name);
-    if (s > score) { score = s; best = item; }
+    if (s > score && onlyAdds(title, name)) { score = s; best = item; }
   }
   return score >= 0.88 ? best : undefined;
+}
+/**
+ * A close name is the same only when one name adds to the other ("깊이 우선 탐색" · "깊이 우선 탐색(DFS)"), never when a
+ * part is swapped (2026-11-05 A 품질 점검, 사용자 "고쳐": "…측정용 덱" took "…측정용 힙"; "TCP 3-way" would take "4-way").
+ */
+function onlyAdds(a: string, b: string) {
+  const x = normalize(a), y = normalize(b);
+  let p = 0; while (p < x.length && p < y.length && x[p] === y[p]) p++;
+  let q = 0; while (q < x.length - p && q < y.length - p && x[x.length - 1 - q] === y[y.length - 1 - q]) q++;
+  return x.length - p - q === 0 || y.length - p - q === 0;
 }
 
 /* ---------- folders ---------- */
