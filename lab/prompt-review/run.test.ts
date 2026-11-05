@@ -30,8 +30,8 @@ test('C: fixed failures stay fixed, the remaining ones are still reproducible',(
   assert.equal(p.missingScorePool,0);
   assert.ok(p.substringAccepted.every(x=>x.substringPass));
 });
-// 11/5: A의 짧은 조각 유출은 토큰 창 검사로 막힘(code-ai.ts leaks). B 인용 검사는 아직 그대로.
-test('B map still accepts an invented quote; A short reference fragments are now caught',async()=>{
+// 11/5: A의 짧은 조각 유출은 토큰 창 검사로, B의 원문에 없는 인용은 글 지도 검사로 막힘. 둘 다 막힌 채로 남는지 본다.
+test('B map drops an invented quote; A short reference fragments are caught',async()=>{
   const old={data:process.env.STUDY_FORGE_DATA_DIR,provider:process.env.STUDY_FORGE_MODEL_PROVIDER};
   const out=await mkdtemp(path.resolve('tmp/prompt-review-boundary-'));
   try {
@@ -41,7 +41,7 @@ test('B map still accepts an invented quote; A short reference fragments are now
       : JSON.stringify({state:'맞는 길',say:'target = a[1]'}));
     const {mapArticle}=await import('../../src/lib/assist/article-map.ts');
     const mapped=await mapArticle({title:'합성 자료',text:'해시는 키를 해시 값에 대응시킨다.'});
-    assert.equal(mapped.ideas[0].quote,'원문에 없는 인용문');
+    assert.notEqual(mapped.ideas[0].quote,'원문에 없는 인용문');
     const {trainCheck}=await import('../../src/lib/assist/code-ai.ts');
     const advice=await trainCheck({problemId:'cp_promptreview',step:'model',answer:{구조:'모르겠어요'}});
     assert.notEqual(advice.say,'target = a[1]');
