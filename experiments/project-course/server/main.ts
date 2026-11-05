@@ -8,7 +8,7 @@ import path from "node:path";
 import { ROOT, listCourses, loadCourse, knowledgeName, type Course } from "../lib/course.ts";
 import { answer, diagnose, getIntake, markConfirmed, normalizePlan, startIntake } from "../lib/intake.ts";
 import { PORTS, openAtStartup, updateBridgeIfOld, check, devStatus, explain, hint, openEditor, predict, skip, startDev, startStage, stopDev, tryRequest, workspaceOf, workspaceStage } from "../lib/learn.ts";
-import { addRun, candidates, getRun, recordsFile, runs, saveRun, setActive, type Run } from "../lib/store.ts";
+import { DATA, addRun, candidates, getRun, recordsFile, runs, saveRun, setActive, type Run } from "../lib/store.ts";
 import { aiStatus } from "../lib/ai.ts";
 import { knowledgeExport, notesView } from "../lib/notes.ts";
 import { markSent, pending } from "../lib/sync.ts";
@@ -22,6 +22,16 @@ import { floatInUse, openFloat, poll as floatPoll, setFloat, typing as floatTypi
 import { act, ask as lessonAsk, explainBlock as lessonBlock, closeWatchers, lessonView, loadPlan, notifyLesson, refocus, subscribe, what as lessonWhat } from "../lib/lesson.ts";
 import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeConnect, setState as bridgeSetState } from "../lib/bridge.ts";
 
+/** 대화 실습의 이름: Codex 대화(codex-chat) 또는 실험판 대화(agent-chat)의 학습자 첫 말, 60자. 못 읽으면 null. */
+async function chatTitle(r: Run): Promise<string | null> {
+  const id = r.codexId ?? r.chatId; if (!id || !/^[a-f0-9]{16}$/.test(id)) return null;
+  const file = path.join(DATA, r.codexId ? "codex-chat" : "agent-chat", `${id}.json`);
+  try {
+    const c = JSON.parse(await readFile(file, "utf8")) as { messages?: Array<{ role?: string; text?: string }> };
+    const first = c.messages?.find((m) => m.role === "user")?.text?.replace(/\s+/g, " ").trim();
+    return first ? first.slice(0, 60) : null;
+  } catch { return null; }
+}
 if (process.env.PC_FAKE_AI === "1") installFakeAi();
 
 const PORT = Number(process.env.PC_PORT || PORTS.app);
@@ -136,6 +146,11 @@ const routes: [string, RegExp, Handler][] = [
       runs: await Promise.all(f.runs.slice(-10).reverse().map(async (r) => {
         const course = await loadCourse(r.courseId).catch(() => null);
         const st = course?.stages.find((s) => s.n === r.current);
+        // 대화로 시작한 실습(프리스타일·Codex)은 코스가 "hello-api"로만 붙어 있어 앱 실습 탭에 "인사 서버"로 보였다
+        // (2026-11-05 A 앱 한 바퀴 점검, [경계]). 그런 실습은 학습자의 첫 말을 이름으로 쓴다.
+        const chat = r.free ? await chatTitle(r) : null;
+        if (chat) return { id: r.id, course: r.courseId, courseTitle: chat, stageTitle: "대화로 배우기", createdAt: r.createdAt, current: r.current, start: r.plan.start,
+          done: Object.values(r.stages).filter((s) => s.doneAt).length, workspace: st ? workspaceOf(r, st.template) : null, chat: true };
         return { id: r.id, course: r.courseId, courseTitle: course?.title ?? r.courseId, stageTitle: st?.title ?? "", createdAt: r.createdAt, current: r.current, start: r.plan.start,
           done: Object.values(r.stages).filter((s) => s.doneAt).length, workspace: st ? workspaceOf(r, st.template) : null };
       })) };
