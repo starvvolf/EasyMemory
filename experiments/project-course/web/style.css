@@ -784,3 +784,6 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .rtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px; }
 .rtab { font: inherit; font-size: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 99px; padding: 1px 10px; cursor: pointer; }
 .rtab.on { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); }
+/* 튜터 창의 걸음 카드 바깥 화면(홈 등) 맨 위 줄 (11/5) */
+.float.float-bar body { padding-top: 28px !important; }
+.float .floatbar[hidden] { display: none; }

@@ -156,6 +156,30 @@ async function route() {
   }
 }
 window.addEventListener("hashchange", route);
+// 튜터 창 바깥 화면의 맨 위 줄(11/5 사용자 "VS Code 붙는 창에서 홈 화면에선 X·창 확대 같은 기본 기능이 안 됨"):
+// 창(float/main.cjs)은 테두리가 없어 OS 단추가 없다. 걸음 카드 화면(.fw)은 자기 머리줄에 닫기·넓게가 있지만, 홈·코스 고르기 같은
+// 다른 화면에는 없어서 갇혔다. 그런 화면에서는 이 줄을 보인다: [← 하던 걸음] [넓게/작게] [닫기].
+let floatBar = null;
+function syncFloatBar() {
+  if (!FLOAT) return;
+  if (!floatBar) {
+    floatBar = h("div", { class: "floatbar", role: "toolbar", "aria-label": "튜터 창" },
+      h("button", { onclick: () => fetch("/api/float").then((r) => r.json()).then((st) => go(st.runId ? `#/run/${st.runId}` : "#/")).catch(() => go("#/")) }, "← 하던 걸음으로"),
+      h("span", {}, "Recaller 튜터"),
+      h("button", { onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); syncFloatBar(); } }, ""),
+      h("button", { title: "튜터 창 닫기", onclick: () => floatPost({ open: false }) }, "닫기 ✕"));
+    document.body.prepend(floatBar);
+  }
+  floatBar.children[2].textContent = floatUi.size === "wide" ? "작게" : "넓게";
+  const lessonView = Boolean(document.querySelector(".fw"));
+  floatBar.hidden = lessonView;
+  document.documentElement.classList.toggle("float-bar", !lessonView);
+}
+if (FLOAT) {
+  window.addEventListener("hashchange", () => setTimeout(syncFloatBar, 0));
+  new MutationObserver(() => syncFloatBar()).observe(document.getElementById("view") ?? document.body, { childList: true });
+  setTimeout(syncFloatBar, 0);
+}
 
 function resumeRun(r) {
   if (FLOAT) return busy(null, async () => { await api("POST", `/api/runs/${r.id}/editor`).catch(() => null); go(`#/run/${r.id}`); });
