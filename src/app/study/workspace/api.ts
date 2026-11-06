@@ -16,7 +16,10 @@ export type Folder = { id: string; name: string; parentId: string | null; order:
 // 유형 6가지 (2026-11-05). 어휘는 개념 아래 `vocab` 표시(저장소 store.ts와 같음).
 export type KKind = "concept" | "principle" | "procedure" | "rule" | "method" | "compare";
 export const KIND_LABEL: Record<KKind, string> = { concept: "개념", principle: "원리", procedure: "절차", rule: "규칙", method: "방법", compare: "비교" };
-export type ItemLite = { id: string; title: string; state: KState; graduated: boolean; folderId: string | null; updatedAt: string; lastAt: string; line: string; links: number; weak: number; dueAt?: string; kind?: KKind; tags?: Array<{ id: string; title: string }> };
+export type ItemLite = { id: string; title: string; state: KState; graduated: boolean; folderId: string | null; updatedAt: string; lastAt: string; line: string; links: number; weak: number; dueAt?: string; kind?: KKind; tags?: Array<{ id: string; title: string }>; origins?: Origin[] };
+/** 출처 3분류 (11/6): PDF·글 / 알고리즘 / 실습 */
+export type Origin = "theory" | "algo" | "lab";
+export const ORIGIN_LABEL: Record<Origin, string> = { theory: "PDF·글", algo: "알고리즘", lab: "실습" };
 /** 목표 (2026-10-28 "4개 축"): why and until when; its 자료 bring their items. */
 export type SourceKindName = "pdf" | "web" | "code" | "chat" | "manual";
 export type GoalSource = { key: string; kind: SourceKindName; title: string };

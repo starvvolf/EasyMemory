@@ -4,7 +4,7 @@
 // its meaning, names, chains, where it came from and its record — with 확인 문제, 합치기 and the state buttons.
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import { call, errorText, folderPaths, go, handoff, later, KIND_LABEL, STATE_LABEL, EVENT_LABEL, whenText, type Detail, type Folder, type ItemLite, type KKind, type KState,
-  type Question, type ReviewStatus, type Tree } from "./api";
+  type Question, type ReviewStatus, type Tree, type Origin, ORIGIN_LABEL } from "./api";
 import { ArticleMap, type SourceView } from "./ArticleStudy";
 import { QuestionList, QuestionRun } from "./QuestionCard";
 import { Inline, Rich } from "./Rich";
@@ -55,6 +55,16 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
   const [folder, setFolder] = useState<string | "all" | "none">("all");
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>("all");
+  // 출처 3분류 체크(11/6): 고른 출처의 지식만 보인다. 직접 추가만 한 지식(출처 없음)은 늘 보인다. 고른 것은 이 브라우저에만 기억.
+  const [origins, setOrigins] = useState<Set<Origin>>(() => new Set<Origin>(["theory", "algo", "lab"]));
+  useEffect(() => {
+    try { const saved = JSON.parse(localStorage.getItem("recaller:kw-origins") ?? "null") as Origin[] | null; if (Array.isArray(saved) && saved.length) setOrigins(new Set(saved.filter((o) => o in ORIGIN_LABEL))); } catch { /* 기억 없음 */ }
+  }, []);
+  const toggleOrigin = (o: Origin) => setOrigins((cur) => {
+    const next = new Set(cur); if (next.has(o)) { if (next.size > 1) next.delete(o); } else next.add(o);
+    try { localStorage.setItem("recaller:kw-origins", JSON.stringify([...next])); } catch { /* 저장 못 함 */ }
+    return next;
+  });
   const [sort, setSort] = useState<"recent" | "weak" | "name">("recent");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<ItemLite[] | null>(null);
@@ -113,19 +123,23 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
     return map;
   }, [tree.folders]);
   const subtree = useCallback((id: string) => { const ids = new Set([id]); let grew = true; while (grew) { grew = false; for (const f of tree.folders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true; } } return ids; }, [tree.folders]);
-  const countIn = useCallback((id: string) => { const ids = subtree(id); const list = tree.items.filter((i) => i.folderId && ids.has(i.folderId)); return { total: list.length, unknown: list.filter((i) => i.state === "unknown").length, known: list.filter((i) => i.state === "known").length }; }, [subtree, tree.items]);
+  const allOrigins = origins.size === 3;
+  const base = useMemo(() => allOrigins ? tree.items : tree.items.filter((i) => !i.origins?.length || i.origins.some((o) => origins.has(o))), [tree.items, origins, allOrigins]);
+  const originCount = useMemo(() => Object.fromEntries((Object.keys(ORIGIN_LABEL) as Origin[]).map((o) => [o, tree.items.filter((i) => i.origins?.includes(o)).length])) as Record<Origin, number>, [tree.items]);
+  const countIn = useCallback((id: string) => { const ids = subtree(id); const list = base.filter((i) => i.folderId && ids.has(i.folderId)); return { total: list.length, unknown: list.filter((i) => i.state === "unknown").length, known: list.filter((i) => i.state === "known").length }; }, [subtree, base]);
 
   const shown = useMemo(() => {
     const inMaterial = view === "material" && matSel ? new Set(materials.find((m) => m.key === matSel)?.itemIds ?? []) : null;
-    let list = hits ?? tree.items.filter((i) => inMaterial ? inMaterial.has(i.id)
+    const inOrigin = (i: ItemLite) => allOrigins || !i.origins?.length || i.origins.some((o) => origins.has(o));
+    let list = hits ? hits.filter(inOrigin) : base.filter((i) => inMaterial ? inMaterial.has(i.id)
       : view !== "topic" || folder === "all" ? true : folder === "none" ? !i.folderId : Boolean(i.folderId && subtree(folder).has(i.folderId)));
     if (filter === "graduated") list = list.filter((i) => i.graduated); else if (filter !== "all") list = list.filter((i) => i.state === filter && !i.graduated);
     if (!hits) list = [...list].sort((a, b) => sort === "weak" ? b.weak - a.weak || b.lastAt.localeCompare(a.lastAt) : sort === "name" ? a.title.localeCompare(b.title, "ko") : b.lastAt.localeCompare(a.lastAt));
     return list;
-  }, [hits, tree.items, folder, filter, sort, subtree, view, matSel, materials]);
+  }, [hits, base, folder, filter, sort, subtree, view, matSel, materials, origins, allOrigins]);
 
   const dueNow = tree.items.filter((i) => !i.graduated && i.state !== "met" && (!i.dueAt || Date.parse(i.dueAt) <= Date.now())).length;
-  const counts = { total: tree.items.length, unknown: tree.items.filter((i) => i.state === "unknown").length, known: tree.items.filter((i) => i.state === "known").length, met: tree.items.filter((i) => i.state === "met").length };
+  const counts = { total: base.length, unknown: base.filter((i) => i.state === "unknown").length, known: base.filter((i) => i.state === "known").length, met: base.filter((i) => i.state === "met").length };
   const material = materials.find((m) => m.key === matSel) ?? null;
   const folderName = view === "material" && material ? material.title
     : view !== "topic" || folder === "all" ? "전체" : folder === "none" ? "주제 없음" : folderPaths(tree.folders).find((f) => f.id === folder)?.path ?? "";
@@ -212,6 +226,8 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
         <div>
           <h2>지식</h2>
           <p className="small muted num kw-sum"><span>{counts.total}개</span><span><i className="dot bad" />몰랐음 {counts.unknown}</span><span><i className="dot good" />앎 {counts.known}</span><span>만남 {counts.met}</span></p>
+          <div className="kw-origins small" role="group" aria-label="출처로 거르기">{(Object.keys(ORIGIN_LABEL) as Origin[]).map((o) => (
+            <label key={o} className={`kw-origin${origins.has(o) ? " on" : ""}`}><input type="checkbox" checked={origins.has(o)} onChange={() => toggleOrigin(o)} />{ORIGIN_LABEL[o]} <span className="num muted">{originCount[o]}</span></label>))}</div>
         </div>
         <div className="row kw-actions">
           <input className="ws-input kw-search" type="search" placeholder="지식 찾기" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="지식 찾기 (이름·설명)" />
@@ -271,12 +287,14 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
       <div className="kw-grid">
         <nav className="kw-tree panel" aria-label="폴더" title="지식이나 폴더를 끌어다 폴더에 놓으면 옮겨져요. 손으로 옮긴 지식은 주제 정리가 다시 옮기지 않아요.">
           <div className={`kw-folder root${view === "topic" && folder === "all" ? " on" : ""}`}><button className="kw-fname" onClick={() => { setView("topic"); setFolder("all"); setQuery(""); }}>전체</button><span className="kw-count num">{counts.total}</span></div>
+          {origins.has("theory") ? <>
           <div className="kw-sec" {...matDrop(null)}><span>자료</span><MatFolderNew onAct={act} /></div>
           {matFolders.map((f) => <MatFolderBox key={f.id} folder={f} rows={materials.filter((m) => m.folderId === f.id)} drop={matDrop(f.id)} onAct={act}>{(m) => <MatRow key={m.key} m={m} />}</MatFolderBox>)}
           <ul>{unfiled("material").map((m) => <MatRow key={m.key} m={m} />)}</ul>
           {!materials.some((m) => m.group === "material") ? <p className="small muted kw-empty-sec">PDF나 웹 글로 공부하면 여기에 생겨요.</p> : null}
-          {unfiled("project").length ? <><div className="kw-sec" {...matDrop(null)}><span>실습</span></div><ul>{unfiled("project").map((m) => <MatRow key={m.key} m={m} />)}</ul></> : null}
-          {unfiled("code").length ? <details className="kw-mgroup" open={unfiled("code").some((m) => m.key === matSel)}><summary className="kw-sec"><span>알고리즘 문제</span><span className="kw-count num">{unfiled("code").length}</span></summary>
+          </> : null}
+          {origins.has("lab") && unfiled("project").length ? <><div className="kw-sec" {...matDrop(null)}><span>실습</span></div><ul>{unfiled("project").map((m) => <MatRow key={m.key} m={m} />)}</ul></> : null}
+          {origins.has("algo") && unfiled("code").length ? <details className="kw-mgroup" open={unfiled("code").some((m) => m.key === matSel)}><summary className="kw-sec"><span>알고리즘 문제</span><span className="kw-count num">{unfiled("code").length}</span></summary>
             <ul>{unfiled("code").map((m) => <MatRow key={m.key} m={m} />)}</ul></details> : null}
           <details className="kw-mgroup" open={view === "topic" && folder !== "all"}>
             <summary className="kw-sec"><span>주제별로 보기</span><span className="small muted kw-sec-hint">{(children.get(null) ?? []).slice(0, 3).map((f) => f.name).join(" · ")}</span></summary>

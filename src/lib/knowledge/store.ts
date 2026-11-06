@@ -574,6 +574,19 @@ export async function takeBackWrong(knowledgeId: string, asCorrect: boolean, sou
 
 /* ---------- reading ---------- */
 export type ItemLite = Pick<Knowledge, "id" | "title" | "state" | "graduated" | "folderId" | "updatedAt" | "lastAt" | "kind"> & { line: string; links: number; weak: number; dueAt?: string };
+/**
+ * 출처 3분류 (2026-11-06, 사용자 "PDF·글 / 알고리즘 / 실습으로 묶고 지식 창에서 체크해서 보고 싶은 것만"):
+ * theory = PDF·웹 글, algo = 알고리즘(코드 문제), lab = 실습(프로젝트 코스, ref "project:"). 직접 추가만 한 지식은 비어 있다.
+ */
+export type Origin = "theory" | "algo" | "lab";
+export function originsOf(item: Pick<Knowledge, "sources">): Origin[] {
+  const out = new Set<Origin>();
+  for (const s of item.sources) {
+    if (s.kind === "pdf" || s.kind === "web") out.add("theory");
+    else if (s.kind === "code") out.add(s.ref?.startsWith("project:") || s.title.startsWith("프로젝트 코스") ? "lab" : "algo");
+  }
+  return (["theory", "algo", "lab"] as const).filter((o) => out.has(o));
+}
 const firstLine = (body: string) => body.split("\n").map((l) => stripWiring(l)).find(Boolean)?.slice(0, 120) ?? "";
 const weakness = (item: Knowledge) => item.stats.wrong * 2 + item.stats.hint + item.stats.asked;
 const lite = (item: Knowledge): ItemLite => ({ id: item.id, title: item.title, state: item.state, graduated: item.graduated, folderId: item.folderId,
@@ -611,7 +624,8 @@ export function tagsOf(items: Knowledge[]): Map<string, KTag[]> {
 export async function tree() {
   const store = await readStore();
   const tags = tagsOf(store.items);
-  return { folders: [...store.folders].sort((a, b) => a.order - b.order), items: store.items.map((i) => ({ ...lite(i), ...(tags.has(i.id) ? { tags: tags.get(i.id)! } : {}) })) };
+  return { folders: [...store.folders].sort((a, b) => a.order - b.order), items: store.items.map((i) => { const origins = originsOf(i);
+    return { ...lite(i), ...(tags.has(i.id) ? { tags: tags.get(i.id)! } : {}), ...(origins.length ? { origins } : {}) }; }) };
 }
 export async function getKnowledge(id: string) {
   const store = await readStore();

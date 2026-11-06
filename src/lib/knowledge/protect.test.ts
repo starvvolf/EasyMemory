@@ -97,3 +97,12 @@ test("태그: 제목에 개념 이름이 있을 때만, 긴 이름이 짧은 이
   assert.deepEqual(names("h"), ["해시"], "a concept never tags itself, but another concept in its name does");
   assert.deepEqual(names("6"), []);
 }));
+
+test("출처 3분류: PDF·글 / 알고리즘 / 실습", () => withData(async () => {
+  const { originsOf, tree } = await import("./store.ts");
+  assert.deepEqual(originsOf({ sources: [{ kind: "pdf", title: "그래픽스", at: "" }, { kind: "web", title: "글", at: "" }] } as never), ["theory"]);
+  assert.deepEqual(originsOf({ sources: [{ kind: "code", title: "BOJ 1003번", ref: "code:cp_a", at: "" }, { kind: "code", title: "프로젝트 코스: 게시판 API", ref: "project:board", at: "" }] } as never), ["algo", "lab"]);
+  assert.deepEqual(originsOf({ sources: [{ kind: "manual", title: "직접 추가", at: "" }] } as never), []);
+  await saveMany([{ title: "라우팅", source: { kind: "code", title: "프로젝트 코스: 게시판 API", ref: "project:board" } }]);
+  assert.deepEqual((await tree()).items.find((i) => i.title === "라우팅")?.origins, ["lab"]);
+}));

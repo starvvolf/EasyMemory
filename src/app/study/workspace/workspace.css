@@ -721,3 +721,9 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .td-pick button:hover{border-color:var(--accent)}
 .dejipgi .td-pick small{color:var(--muted)}
 .dejipgi .td-last{font-size:17px;font-weight:650;line-height:1.35}
+/* 출처 3분류 체크 (11/6) */
+.dejipgi .kw-origins{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.dejipgi .kw-origin{display:inline-flex;align-items:center;gap:5px;padding:2px 9px 2px 6px;border:1px solid var(--line-strong);border-radius:999px;cursor:pointer;color:var(--muted);user-select:none}
+.dejipgi .kw-origin input{margin:0;accent-color:var(--accent)}
+.dejipgi .kw-origin.on{color:var(--ink);border-color:color-mix(in srgb,var(--accent) 45%,var(--line-strong))}
+.dejipgi .kw-origin:focus-within{outline:2px solid color-mix(in srgb,var(--accent) 40%,transparent);outline-offset:1px}
