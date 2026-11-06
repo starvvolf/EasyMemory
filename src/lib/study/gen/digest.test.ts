@@ -483,3 +483,14 @@ test("문제만 다시 (11/6, 실험): 같은 카드·학습 목표로 문제 �
   assert.equal(done.input.models?.["rc-q-case"]?.model, "gpt-6.1-terra");
   assert.ok(Object.values(done.recaller!.units).some((u) => (u.questions ?? []).length));
 }));
+
+test("앱 문제도 바로 만들기 (11/6): 공부 화면에서 questionsLater 없이 시작하면 한 실행에서 카드 다음 문제까지", () => withData(async () => {
+  const io = { pdf: async () => null, pages: async () => pages };
+  const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "core", engine: "recaller", provider: "fake", origin: "study" });
+  assert.equal(start.input.questionsLater, undefined);
+  const done = await runGen(start.id, { uid: "local-experiment" }, io);
+  assert.equal(done.status, "done", done.message);
+  const steps = (await readGenCalls(done.id)).map((c) => c.step);
+  assert.ok(steps.includes("rc-digest-card") && steps.includes("rc-q-pick"), steps.join(","));
+  assert.ok(Object.values(done.recaller!.units).some((u) => (u.questions ?? []).length), "문제가 나온다");
+}));

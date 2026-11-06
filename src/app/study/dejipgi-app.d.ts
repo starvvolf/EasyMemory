@@ -19,6 +19,8 @@ export type DejipgiMaterialStatus = {
 export type DejipgiBuilderEngine = {
   /** `purpose`: core | understand | all (engine v2 purposes); `note`: the learner's free memo. */
   start(input: { file: File; from: number; to: number; purpose: string; note: string; readImages: boolean; pastExamSourceIds?: string[]; engine?: "v2" | "v3" | "v5" | "alpha" | "recaller"; deep?: boolean; deepDrafts?: 1 | 2;
+    /** recaller: questions right after the cards in the same run (default); false = cards only, questions from the map's button. */
+    autoQuestions?: boolean;
     survey?: { style?: "recall" | "understand"; difficulty?: "easy" | "normal" | "hard"; exam?: "choice" | "mixed" | "written"; depth?: "core" | "all"; time?: "short" | "normal" | "long"; known?: string } }): Promise<{ requestId: string; sourceId: string }>;
   /** Where the learner is reading while the material is made: that unit is authored next. */
   focus?(requestId: string, page: number): Promise<void>;

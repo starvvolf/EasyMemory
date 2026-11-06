@@ -4002,7 +4002,10 @@ function examField(b){
     finder,
     picked.length ? h("p", { class:"small", style:"color:var(--ask)", text:`기출 ${picked.length}개 반영 · 처음 한 번 기출을 분석하고 문제마다 베끼기 검사를 해서 조금 더 걸려요.` }) : null);
 }
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, deep:false, deepFast:false, engine:"recaller", survey:{}, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
+// 문제도 바로 만들기 (11/6 사용자 "문제 만들기 자동으로 바로 만들기 걸고 수동 체크 가능하게"): on by default, the last choice remembered.
+function autoQuestionsPref(){ try{ return localStorage.getItem("dejipgi.autoQuestions") !== "0"; }catch(e){ return true; } }
+function setAutoQuestionsPref(on){ try{ localStorage.setItem("dejipgi.autoQuestions", on ? "1" : "0"); }catch(e){} }
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, deep:false, deepFast:false, autoQuestions:autoQuestionsPref(), engine:"recaller", survey:{}, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
   const flat = [];
@@ -4092,7 +4095,7 @@ async function startMaterial(){
   const b = S.builder; if (b.busy || !engine || !b.file) return;
   b.busy = true; b.error = ""; b.status = "PDF를 등록하고 문제 만들기를 시작하는 중…"; render();
   try{
-    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.engine !== "v2" ? { engine:b.engine } : {}), ...(b.engine === "recaller" && b.deep ? { deep:true, ...(b.deepFast ? { deepDrafts:2 } : {}) } : {}), ...((b.engine === "v5" || b.engine === "alpha") && Object.values(b.survey).some(Boolean) ? { survey:b.survey } : {}), ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
+    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.engine !== "v2" ? { engine:b.engine } : {}), ...(b.engine === "recaller" ? { autoQuestions:b.autoQuestions !== false } : {}), ...(b.engine === "recaller" && b.deep ? { deep:true, ...(b.deepFast ? { deepDrafts:2 } : {}) } : {}), ...((b.engine === "v5" || b.engine === "alpha") && Object.values(b.survey).some(Boolean) ? { survey:b.survey } : {}), ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
     const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:b.sourceName.replace(/\.pdf$/i, ""), sourceName:b.sourceName,
       pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), createdAt:now(), status:"waiting", message:"" };
     const deck = pendingDeck(rec);
@@ -4291,6 +4294,9 @@ function renderBuilder(){
     thin ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
       h("input", { type:"checkbox", checked:b.readImages ? true : null, disabled:b.busy, onchange:(e) => { b.readImages = e.target.checked; render(); } }),
       h("span", null, h("b", { text:"그림·수식도 읽기" }), h("span", { class:"muted", text:` · 글자가 적은 ${thin}쪽을 그림으로 읽어요 (약 ${Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 문제에 들어가요.` }))) : null,
+    b.engine === "recaller" && b.purpose !== "read" ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
+      h("input", { type:"checkbox", checked:b.autoQuestions !== false ? true : null, disabled:b.busy, onchange:(e) => { b.autoQuestions = e.target.checked; setAutoQuestionsPref(b.autoQuestions); render(); } }),
+      h("span", null, h("b", { text:"문제도 바로 만들기" }), h("span", { class:"muted", text: b.autoQuestions !== false ? " · 지식 정리가 끝나면 이어서 학습 목표에 맞는 확인 문제를 만들어요 (약 1분 더)." : " · 꺼 두면 지식만 정리하고, 문제는 자료 지도의 [문제 만들기]로 원할 때 만들어요." }))) : null,
     b.engine === "recaller" && b.purpose !== "read" ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
       h("input", { type:"checkbox", checked:b.deep ? true : null, disabled:b.busy, onchange:(e) => { b.deep = e.target.checked; render(); } }),
       h("span", null, h("b", { text:"심화 문제도 만들기" }), h("span", { class:"muted", text:" · 개념 여러 개를 엮은 응용 문제와 단계별 풀이 (1~2분 더). 계산·절차가 있는 과목에 맞아요." }))) : null,

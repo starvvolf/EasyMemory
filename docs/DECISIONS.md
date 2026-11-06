@@ -991,3 +991,9 @@
 - 함께: 실험실 "문제만 다시"(`POST /api/lab/gen/<id>/requiz`, 같은 카드·목표로 문제 단계만), 흐름 카드는 출제하지 않음, 같은 목표끼리만 중복 판정.
 - 남은 것: 자료 밖 계산 목표(최대 요구량으로 안전 상태 판정)가 sol에서도 나옴, 그래프 상황의 정답을 코드로 검산하기, 원문 그림을 문제에 쓰기(답 글자 가리기·다시 그리기), 공부 화면에 학습 목표 목록 보이기(A).
 - 되돌리기: `studyRecallerLab`의 `goalQuiz: true`를 빼고 `DEFAULT_GEN_MODELS`의 네 단계를 luna medium으로.
+
+## 2026-11-06 새 자료: [문제도 바로 만들기] 기본 켬, 끄면 지금처럼 수동 (C, [경계] A 화면)
+
+- 정한 사람: 사용자 ("문제 만들기 자동으로 바로 만들기 걸고 수동 체크 가능하게 설정해줘")
+- 새 PDF 자료 화면에 체크 상자 하나([문제도 바로 만들기], 기본 켬, 마지막 선택을 기억 `localStorage dejipgi.autoQuestions`). 켜면 지식 정리가 끝난 같은 실행에서 이어서 목표형 문제를 만든다(`questionsLater` 없음). 끄면 지금처럼 지식만 만들고 자료 지도의 [문제 만들기]로 만든다. 다시 만들기(restart)는 이전 실행의 선택을 따른다.
+- 바꾼 곳: `src/app/study/dejipgi-app.js`(체크 상자·전달), `dejipgi-app.d.ts`, `DejipgiStudy.tsx`(`startGen`의 `questionsLater`). A 화면 파일이라 [경계].
