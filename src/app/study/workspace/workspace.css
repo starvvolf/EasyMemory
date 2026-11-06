@@ -770,3 +770,24 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .spd-table td{padding:6px;border-bottom:1px solid var(--line);vertical-align:middle}
 .dejipgi .spd-table .chip{margin-left:6px}
 .dejipgi .spd-table .btn{margin-left:6px}
+
+/* 자료 지도 [목차] (11/6): 엔진 목차에 기억이 붙는 화면 */
+.dejipgi .mm6{display:flex;flex-direction:column;gap:10px}
+.dejipgi .mm6-wait{padding:12px 0}
+.dejipgi .mm6-goals{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.dejipgi .mm6-goals ol{margin:4px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px;font-size:13px}
+.dejipgi .mm6-verb{display:inline-block;font-size:11px;padding:0 6px;border-radius:999px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);margin-right:2px}
+.dejipgi .mm6-topics{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dejipgi .mm6-topic{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.dejipgi .mm6-thead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dejipgi .mm6-learn{margin:0}
+.dejipgi .mm6-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.dejipgi .mm6-item{display:grid;grid-template-columns:minmax(120px,32%) 1fr;gap:8px;align-items:start;font-size:13px}
+.dejipgi .mm6-iname{padding-top:3px}
+.dejipgi .mm6-chips{display:flex;flex-wrap:wrap;gap:4px}
+.dejipgi .mm6-chip{cursor:pointer;font-size:12px;animation:mm6-in .35s ease-out}
+.dejipgi .mm6-chip.on{outline:2px solid var(--accent)}
+.dejipgi .mm6-chip.core{font-weight:600}
+.dejipgi .mm6-card{border-top:1px dashed var(--line);padding-top:8px;display:flex;flex-direction:column;gap:6px}
+@keyframes mm6-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+@media (max-width:560px){.dejipgi .mm6-item{grid-template-columns:1fr}}

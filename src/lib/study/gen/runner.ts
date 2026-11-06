@@ -301,9 +301,8 @@ export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
     // 흐름 카드 (11/6 사용자 "1번으로 그냥 앱에 박아"): after a topic's cards, one short terra call writes its one story card
     // (in what order the pieces come and why), first in the topic and not quizzed. 그래픽스 04: 카드 단계 +$0.09, +20초.
     digest: true, digestTopicCards: true, digestStyle: "plan", mapCards: true, mapUnit: "topic", flowCard: "after", noSourceOutline: true, quiz: "luna", quizCount: 10,
-    // 정리 글 스트리밍 (11/6 사용자 "처음에 요약을 스트리밍으로 띄우고 지식은 천천히"): summary.ts의 정리 글을 카드와 함께 켠다.
-    // 자료 지도 [요약] 탭이 /live의 summary를 받아 바로 보여 준다(데드락 14쪽 첫 글자 2.7초, 끝까지 94초, sol·low, 10/31 실측).
-    summary: true,
+    // 정리 글(summary.ts, sol)은 끈다 (11/6 사용자 "1의 목차로 바꾸고, 목차가 나오면서 지식이 하나씩 붙게"): 자료 지도의 첫 탭은
+    // 엔진 목차(위의 목차 호출, 쓰는 대로 흘러나옴)에 카드가 항목마다 붙는 화면이다. 켜려면 summary: true (그 전 결정 11/6 B).
     // 목표형 문제 (11/6 사용자 "데드락 시연: 학습 목표부터, 그 목표에 맞는 문제" → "sol로 가고 본 앱에 연결"): 목표마다 주는 것·내는 것,
     // 판정·구별은 상황 객관식(보기는 가능한 판정 전부), 설명은 상황만 주는 서술, OX 없음, 다시 만들기 없음(예비 문제가 빈 목표를 채움).
     // 모델은 DEFAULT_GEN_MODELS(학습 목표·출제 고르기·상황 판정·서술 sol low).

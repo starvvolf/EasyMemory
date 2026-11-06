@@ -132,9 +132,79 @@ function keyLine(s: Shape): string {
 type LiveCard = { title: string; kind: string; weight: string; shape: Record<string, unknown> };
 type LivePage = { page: number; done: boolean; cards: LiveCard[] };
 type Summary = { status: "writing" | "done" | "failed"; text: string; firstMs?: number; ms?: number; error?: string };
-type LiveData = { now: number; status: string; live: boolean; outline: Array<{ page: number; title: string }>; pages: LivePage[]; summary?: Summary | null };
+type LiveData = { now: number; status: string; live: boolean; outline: Array<{ page: number; title: string }>; pages: LivePage[]; summary?: Summary | null; digest?: DigestLite | null };
 
 // [요약] 탭 (11/6 사용자 "요약을 스트리밍으로, 넓은 채팅창처럼"): 엔진이 쓰는 정리 글(summary.json)을 쓰는 대로 보여 준다.
+// 목차 (11/6 사용자 "1의 목차로 바꾸고, 목차가 나오면서 그 목차에 지식이 하나씩 붙고 누르면 확인 가능하게"): the engine's own
+// outline (rc-digest-plan, streamed: topics and what each teaches), with each topic's cards attached to the item they cover
+// as they are made. Replaces the separate 정리 글 (summary.ts) for new runs.
+type DigestLite = {
+  skeleton?: { status: string; text: string; topics: Array<{ id: string; title: string; pages: number[] }> };
+  topics?: Record<string, { body?: Array<{ id: string; name: string; pages: number[] }> }>;
+  notes?: Record<string, { covers?: string[] }>;
+  objectives?: Array<{ id: string; verb: string; text: string; core: boolean }>;
+};
+type OutlineItem = { key: string; name: string; pages: number[] };
+/** Items as the plan call writes them ("t3-c1|이름|쪽"), so they show while the outline is still streaming. */
+function streamedItems(text: string): Map<string, OutlineItem[]> {
+  const out = new Map<string, OutlineItem[]>();
+  for (const m of text.matchAll(/^(t\d+)-c(\d+)\s*\|\s*([^|\n]+?)\s*\|\s*([^|\n]*)/gm)) {
+    const pages = [...m[4].matchAll(/\d+/g)].map((x) => Number(x[0]));
+    out.set(m[1], [...(out.get(m[1]) ?? []), { key: `${m[1]}-c${m[2]}`, name: m[3].trim(), pages }]);
+  }
+  return out;
+}
+const isFlowCard = (c: Card) => c.title.startsWith("흐름: ");
+function OutlinePane({ digest, cards, making, onPage, onPractice }: { digest: DigestLite | null | undefined; cards: Card[]; making: boolean;
+  onPage: (page: number) => void; onPractice?: (page: number, cardId: string) => void }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const sk = digest?.skeleton;
+  if (!sk || (!sk.topics.length && !sk.text)) return <p className="small muted mm6-wait">{making ? "목차를 만드는 중이에요. 몇 초 뒤부터 주제가 하나씩 보여요." : "이 자료에는 목차가 없어요. [기억] 탭에서 보세요."}</p>;
+  const streamed = streamedItems(sk.text ?? "");
+  const byTopic = new Map<string, Card[]>();
+  for (const c of cards) { const t = c.id.split(".")[0]; byTopic.set(t, [...(byTopic.get(t) ?? []), c]); }
+  const detail = (c: Card) => (
+    <div className="mm6-card">
+      <div className="mm3-dhead"><b><Rich text={c.title} /></b><span className="mm3-kind">{c.kind}</span>{c.core ? <span className="mm3-kind core">핵심</span> : null}<span className="cs-gap" />
+        {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
+      <Body s={c.shape} />
+      {c.questions && onPractice ? <div className="mm3-dfoot"><span className="cs-gap" /><button className="btn small primary" onClick={() => onPractice(c.pages[0], c.id)}>이 기억 문제 풀기 ({c.questions})</button></div> : null}
+    </div>);
+  const chip = (c: Card) => <button key={c.id} className={`chip mm6-chip${open === c.id ? " on" : ""}${c.core ? " core" : ""}`} aria-expanded={open === c.id}
+    onClick={() => setOpen(open === c.id ? null : c.id)}><Rich text={isFlowCard(c) ? "흐름 보기" : c.title} /></button>;
+  return (
+    <div className="mm6">
+      {digest?.objectives?.length ? <section className="mm6-goals"><p className="mm3-label">학습 목표</p>
+        <ol>{digest.objectives.map((o) => <li key={o.id}><span className="mm6-verb">{o.verb}</span> <Rich text={o.text} /></li>)}</ol></section> : null}
+      <ol className="mm6-topics">
+        {sk.topics.map((t, i) => {
+          const body = digest?.topics?.[t.id]?.body ?? [];
+          const items: OutlineItem[] = body.length ? body.map((l) => ({ key: l.id, name: l.name, pages: l.pages })) : streamed.get(t.id) ?? [];
+          const mine = byTopic.get(t.id) ?? [];
+          const flow = mine.filter(isFlowCard);
+          const under = (it: OutlineItem) => mine.filter((c) => !isFlowCard(c) && (digest?.notes?.[c.id]?.covers ?? []).includes(it.key));
+          const placed = new Set(items.flatMap((it) => under(it).map((c) => c.id)));
+          const loose = mine.filter((c) => !isFlowCard(c) && !placed.has(c.id));
+          const openHere = mine.find((c) => c.id === open);
+          return (
+            <li key={t.id} className="mm6-topic">
+              <div className="mm6-thead"><span className="mm3-num">{i + 1}</span><b><Rich text={t.title} /></b><span className="small muted">{range(t.pages)}</span>
+                <span className="cs-gap" />{flow.map(chip)}</div>
+              {items.length ? <p className="mm6-learn small muted"><Rich text={`${items.map((it) => it.name).join(", ")}을(를) 배워요.`} /></p> : null}
+              <ul className="mm6-items">
+                {items.map((it) => { const got = under(it); return (
+                  <li key={it.key} className="mm6-item"><span className="mm6-iname"><Rich text={it.name} /></span>
+                    <span className="mm6-chips">{got.length ? got.map(chip) : <span className="small muted">{making ? "기억 만드는 중…" : "—"}</span>}</span></li>); })}
+                {loose.length ? <li className="mm6-item"><span className="mm6-iname muted">그 밖</span><span className="mm6-chips">{loose.map(chip)}</span></li> : null}
+              </ul>
+              {openHere ? detail(openHere) : null}
+            </li>);
+        })}
+      </ol>
+      {sk.status === "writing" ? <p className="small muted">목차를 이어 쓰는 중…</p> : null}
+    </div>);
+}
+
 function SummaryPane({ summary, making }: { summary: Summary | null | undefined; making: boolean }) {
   const end = useRef<HTMLDivElement>(null);
   const writing = summary?.status === "writing";
@@ -280,6 +350,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const view = "outline" as const;
   const [tab, setTab] = useState<"summary" | "knowledge" | null>(null);
   const [summary, setSummary] = useState<Summary | null | undefined>(undefined);
+  const [digest, setDigest] = useState<DigestLite | null | undefined>(undefined);
   const [coreOnly, setCoreOnly] = useState(false);
   // 첫 화면은 목차만 (사용자 10/30): every group starts folded; a group opens to one line per piece of knowledge, a line to its card.
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
@@ -324,8 +395,10 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
     const poll = () => call<LiveData>(`/api/study-map/${genId}/live?since=${Date.now() + 60_000}`).then((r) => {
       if (!alive) return;
       setSummary(r.summary ?? null);
+      setDigest(r.digest ?? null);
       const running = ["queued", "running"].includes(r.status);
-      if (r.summary?.status === "writing" || (!r.summary && running && ++idle < 200)) timer = setTimeout(poll, r.summary ? 600 : 1500);
+      // 목차 (11/6): the outline streams and cards attach to it, so the live state is read while the run goes on.
+      if (r.summary?.status === "writing" || (running && ++idle < 600)) timer = setTimeout(poll, r.summary?.status === "writing" ? 600 : 1200);
     }).catch(() => { if (alive) timer = setTimeout(poll, 2000); });
     poll();
     return () => { alive = false; if (timer) clearTimeout(timer); };
@@ -368,20 +441,26 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const cardsN = map?.counts.cards ?? 0;
   const steps: Step[] = [
     { label: "자료 읽기", state: live?.outline.length || cardsN || summary?.text ? "done" : "now" },
-    { label: "요약", state: summary?.status === "done" ? "done" : summary?.status === "writing" ? "now" : summary?.status === "failed" ? "done" : running ? "wait" : "done",
-      note: summary?.status === "failed" ? "못 씀" : summary?.ms ? `${Math.round(summary.ms / 1000)}초` : undefined },
+    ...(summary ? [{ label: "요약", state: (summary.status === "done" || summary.status === "failed" ? "done" : summary.status === "writing" ? "now" : running ? "wait" : "done") as Step["state"],
+      note: summary.status === "failed" ? "못 씀" : summary.ms ? `${Math.round(summary.ms / 1000)}초` : undefined }]
+      : [{ label: "목차", state: (digest?.skeleton?.status === "done" ? "done" : digest?.skeleton?.text ? "now" : running ? "now" : "done") as Step["state"],
+        note: digest?.skeleton?.topics.length ? `주제 ${digest.skeleton.topics.length}` : undefined }]),
     { label: "기억 카드", state: !running || map?.topics?.length ? "done" : cardsN || board === "live" ? "now" : "wait",
       note: cardsN ? `${cardsN}개` : board === "live" && live?.outline.length ? `${pagesIn}/${live.outline.length}쪽` : undefined },
     { label: "핵심·연결 정리", state: map?.topics?.length || !running ? "done" : cardsN && board === "off" ? "now" : "wait" },
     ...(map && !map.questionsLater ? [{ label: "문제", state: (!running ? "done" : map.topics?.length ? "now" : "wait") as Step["state"], note: map.counts.questions ? `${map.counts.questions}개` : undefined }] : []),
   ];
-  const shownTab = tab ?? (summary && (summary.text || summary.status === "writing") ? "summary" : running && summary === undefined ? "summary" : "knowledge");
-  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", "요약"], ["knowledge", "기억"]] as const).map(([k, label]) =>
+  // 목차가 있으면(엔진의 목차 → 카드) 첫 탭은 목차, 예전 실행의 정리 글은 요약으로 그대로 보인다.
+  const hasOutline = Boolean(digest?.skeleton && (digest.skeleton.topics.length || digest.skeleton.text));
+  const firstLabel = summary && !hasOutline ? "요약" : "목차";
+  const shownTab = tab ?? (hasOutline || (summary && (summary.text || summary.status === "writing")) ? "summary" : running && summary === undefined ? "summary" : "knowledge");
+  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ["knowledge", "기억"]] as const).map(([k, label]) =>
     <button key={k} className={shownTab === k ? "on" : ""} aria-pressed={shownTab === k} onClick={() => setTab(k)}>{label}{k === "knowledge" && running ? <span className="mm5-badge">만드는 중</span> : null}</button>)}</div>;
-  if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>기억을 정리하는 중…</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
+  if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>{hasOutline ? "목차가 나오는 중…" : "자료를 읽는 중…"}</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
     <Steps steps={steps} />{tabs}
-    {shownTab === "summary" ? <SummaryPane summary={summary} making /> : board !== "off" && live ? <LiveBoard data={live} />
-      : <p className="small muted">{error || "요약을 바탕으로 기억을 만드는 중이에요. 다 되면 여기에 목차별로 보여요."}</p>}</div>;
+    {shownTab === "summary" ? (hasOutline || !summary ? <OutlinePane digest={digest} cards={[]} making onPage={onPage} onPractice={onPractice} /> : <SummaryPane summary={summary} making />)
+      : board !== "off" && live ? <LiveBoard data={live} />
+      : <p className="small muted">{error || "목차 항목마다 기억을 만드는 중이에요. 다 되면 여기에 목차별로 보여요."}</p>}</div>;
   const shown = (c: Card) => (!coreOnly || c.core) && (only === "all" || (only === "unknown" ? c.state === "unknown" : c.state === "new" || c.state === "met"));
   const n = map.counts;
   const making = map.status !== "done";
@@ -405,8 +484,9 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
       </div>
       {making ? <Steps steps={steps} /> : null}
       {tabs}
-      {shownTab === "summary" ? <SummaryPane summary={summary} making={making} /> : <>
-      {making ? <p className="small mm5-note-line">기억은 요약을 바탕으로 조금씩 만들어져요. 다 되기 전에도 지금까지 된 것을 볼 수 있어요.</p> : null}
+      {shownTab === "summary" ? (hasOutline || !summary ? <OutlinePane digest={digest} cards={map.sections.flatMap((x) => x.cards)} making={making} onPage={onPage} onPractice={onPractice} />
+        : <SummaryPane summary={summary} making={making} />) : <>
+      {making ? <p className="small mm5-note-line">기억은 목차 항목마다 조금씩 만들어져요. 다 되기 전에도 지금까지 된 것을 볼 수 있어요.</p> : null}
       <div className="row small mm3-tools">
         {map.topics?.length ? <label className="row small"><input type="checkbox" checked={coreOnly} onChange={(e) => setCoreOnly(e.target.checked)} /> 핵심만</label> : null}
         {n.unknown || n.known || n.graduated ? <div className="ws-seg">{([["all", "전체"], ["unknown", `몰랐음 ${n.unknown}`], ["new", "아직 확인 안 한 것"]] as const).map(([k, label]) =>
