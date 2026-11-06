@@ -16,7 +16,7 @@ import { CHAT_MODELS } from "./agent-chat.ts";
 
 type Role = "user" | "assistant" | "tool" | "error";
 type Msg = { id: number; role: Role; text: string; at: string; item?: string; status?: string };
-export type CodexChat = { id: string; threadId?: string; workspace?: string; model?: string; edit?: "allow" | "deny"; messages: Msg[]; at: string; usage?: { input: number; cached: number; output: number; ms: number }[] };
+export type CodexChat = { id: string; threadId?: string; threadSandbox?: string; workspace?: string; model?: string; edit?: "allow" | "deny"; messages: Msg[]; at: string; usage?: { input: number; cached: number; output: number; ms: number }[] };
 
 const now = () => new Date().toISOString();
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
@@ -160,7 +160,9 @@ export async function setOptions(id: string, b: Record<string, unknown>) {
   await update<CodexChat>(file(id), c, (x) => {
     if (ws !== undefined) { if (ws === defaultWs(id)) delete x.workspace; else x.workspace = ws; delete x.threadId; } // 폴더가 바뀌면 Codex 대화도 새로(앞 대화는 첫 메시지에 붙임)
     if (b.model !== undefined) { if (b.model === CHAT_MODELS[0].id) delete x.model; else x.model = String(b.model); }
-    if (b.edit !== undefined) x.edit = b.edit as "allow" | "deny";
+    // 11/6: Codex는 이어 가는 대화(resume)에 --sandbox를 줘도 처음 연 대화의 권한(읽기 전용)을 그대로 쓴다 → 학습자가 [허용]해도 "읽기 전용이라 못 써요".
+    // 권한이 바뀌면 Codex 대화를 새로 연다(앞 대화는 첫 메시지에 붙여 맥락은 이어짐)
+    if (b.edit !== undefined) { if ((x.edit ?? "deny") !== b.edit) delete x.threadId; x.edit = b.edit as "allow" | "deny"; }
   });
   return view(id);
 }
@@ -214,6 +216,8 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     // 옮기기 전 대화나 다른 PC에서 시작한 대화는 threadId만 남아 "thread/resume failed: no rollout found"로 끝나던 것.
     // 새로 열 때는 아래에서 앞 대화를 붙이므로 맥락은 이어진다.
     if (c.threadId && !hasRollout(c.threadId)) { log.resumeLost = c.threadId; await update<CodexChat>(file(id), c, (x) => { delete x.threadId; }); delete c.threadId; }
+    // 예전에 읽기 전용으로 연 대화에 나중에 [허용]한 경우(위 수정 전 대화)도 새로 연다
+    if (c.threadId && (c.threadSandbox ?? "read-only") !== opts.sandboxMode) { log.sandboxReset = `${c.threadSandbox ?? "read-only"} → ${opts.sandboxMode}`; await update<CodexChat>(file(id), c, (x) => { delete x.threadId; }); delete c.threadId; }
     const fresh = !c.threadId;
     const thread = fresh ? codex.startThread(opts) : codex.resumeThread(c.threadId!, opts);
     // 새 Codex 대화면 튜터 안내 + (폴더를 바꿔 새로 열었으면) 앞 대화를 붙인다. 정해 둔 진행 방식은 매번 맨 앞에
@@ -228,7 +232,7 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     const { events } = await thread.runStreamed(input, { signal: ac.signal });
     const rows = new Map<string, number>(); // Codex item id → 우리 메시지 id
     for await (const ev of events) {
-      if (ev.type === "thread.started") await update<CodexChat>(file(id), c, (x) => { x.threadId = ev.thread_id; });
+      if (ev.type === "thread.started") await update<CodexChat>(file(id), c, (x) => { x.threadId = ev.thread_id; x.threadSandbox = opts.sandboxMode; });
       else if (ev.type === "item.started" || ev.type === "item.updated" || ev.type === "item.completed") {
         const it = ev.item; if (!it || it.type === "reasoning") continue;
         const role: Role = it.type === "agent_message" ? "assistant" : "tool";
