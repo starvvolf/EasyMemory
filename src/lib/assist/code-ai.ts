@@ -3,6 +3,7 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { askJson, askText, S } from "./model.ts";
+import { tagTrace } from "../ai/trace.ts";
 import { LANG_LABEL, judge, type Lang, type TestCase } from "../code/run.ts";
 import { CodeError, findCounterexample, problemKnowledgeNames, readProblem, readProblemMeta, saveProblem, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
 import { runTestgen, runVerify } from "../code/testgen/index.ts";
@@ -47,23 +48,27 @@ const LEVELS: Record<1 | 2 | 3, string> = {
   3: "힌트 3단계: 고친 코드를 보여 준다. 바꾼 줄만, 바꾼 이유와 함께. 전체 코드를 다시 쓰지 않는다.",
 };
 export async function hint(input: { problemId: string; lang: Lang; code: string; level: 1 | 2 | 3; last?: LastResult }) {
+  tagTrace({ ref: input.problemId, action: "hint" });
   const p = await readProblemMeta(input.problemId);
   const user = [problemBlock(p), `[언어] ${LANG_LABEL[input.lang]}`, `[학습자 코드]\n${input.code.slice(0, 20000)}`, resultBlock(input.last), await pastMisses(p), await thisAttempt(p), LEVELS[input.level]].filter(Boolean).join("\n\n");
   return { text: await askText("code:hint", TUTOR, user, { heavy: input.level > 1 }) };
 }
 export async function explainCode(input: { problemId?: string; lang: Lang; code: string; selection: string; question?: string }) {
+  tagTrace({ ref: input.problemId, action: "explainCode" });
   const p = input.problemId ? await readProblemMeta(input.problemId).catch(() => null) : null;
   const user = [p ? problemBlock(p) : "", `[언어] ${LANG_LABEL[input.lang]}`, `[전체 코드]\n${input.code.slice(0, 20000)}`, `[학습자가 드래그한 부분]\n${input.selection.slice(0, 4000)}`,
     input.question ? `[질문] ${input.question}` : "드래그한 부분이 무엇을 하는지 한 줄씩 쉽게 설명한다."].filter(Boolean).join("\n\n");
   return { text: await askText("code:explain", TUTOR, user) };
 }
 export async function reviewApproach(input: { problemId: string; lang: Lang; code: string; note?: string }) {
+  tagTrace({ ref: input.problemId, action: "reviewApproach" });
   const p = await readProblemMeta(input.problemId);
   const user = [problemBlock(p), `[언어] ${LANG_LABEL[input.lang]}`, `[학습자 코드 (아직 제출 전)]\n${input.code.slice(0, 20000)}`, input.note ? `[학습자 메모] ${input.note}` : "", await pastMisses(p), await thisAttempt(p),
     "학습자가 '맞는지 봐 줘'라고 했다. 접근이 문제에 맞는지, 시간 안에 돌지(입력 크기 기준), 놓친 경우(경계, 자료형 범위)가 있는지 짧게 확인해 준다. 고친 코드는 주지 않는다."].filter(Boolean).join("\n\n");
   return { text: await askText("code:review", TUTOR, user, { heavy: true }) };
 }
 export async function explainError(input: { problemId?: string; lang: Lang; code: string; error: string }) {
+  tagTrace({ ref: input.problemId, action: "explainError" });
   const p = input.problemId ? await readProblemMeta(input.problemId).catch(() => null) : null;
   const user = [p ? problemBlock(p) : "", `[언어] ${LANG_LABEL[input.lang]}`, `[코드]\n${input.code.slice(0, 20000)}`, `[에러 메시지]\n${input.error.slice(0, 6000)}`,
     "에러가 무슨 뜻인지, 몇 번째 줄의 무엇 때문인지 쉬운 말로 설명한다. 고치는 방향만 말하고 고친 코드는 주지 않는다."].filter(Boolean).join("\n\n");
@@ -72,6 +77,7 @@ export async function explainError(input: { problemId?: string; lang: Lang; code
 
 /** 반례 찾기: the model proposes small tricky inputs; the reference and the learner's code decide which one breaks it. */
 export async function counterexample(input: { problemId: string; lang: Lang; code: string }) {
+  tagTrace({ ref: input.problemId, action: "counterexample" });
   const p = await readProblemMeta(input.problemId);
   const data = await askJson<{ inputs: string[] }>("code:counter",
     "문제의 입력 형식을 정확히 지키는 작고 까다로운 입력을 10개 만든다 (경계값, 최소 크기, 같은 값 반복, 음수, 자료형 범위). 각 입력은 프로그램 표준입력에 그대로 들어갈 문자열.",
@@ -238,6 +244,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   /** 실험: this request only, the faulty solutions' model (imported problems). */ mutantsModel?: string;
   /** An imported original (statement and examples as published): the independent solution starts from it with the draft. */
   original?: { statement: string; inputText: string; outputText: string; examples: TestCase[] } }) {
+  tagTrace({ ...(input.id ? { ref: input.id } : {}), action: "makeProblem" });
   const makeModel = input.model || MAKE_MODEL();
   const makeLabel = input.effort ? `${makeModel} ${input.effort}` : makeModel;
   // PS → 지식 (2026-10-30): an imported statement rarely names its idea ("동적 계획법"), so the search alone came back empty
@@ -294,6 +301,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
  * the result on that problem's own tests (whose answers were already checked). One model call per run.
  */
 export async function solveCheck(problemId: string, model: string, effort?: string) {
+  tagTrace({ ref: problemId, action: "solveCheck" });
   const p = await readProblem(problemId);
   const alone = await solveAlone({ statement: p.statement, inputText: p.inputText, outputText: p.outputText, constraints: p.constraints, examples: p.examplesFrom === "made" ? [] : p.examples }, model, effort);
   const judged = await judge("javascript", alone.code, [...p.examples, ...p.tests], { timeLimitMs: 10_000, stopAtFirstFail: true });
@@ -348,6 +356,7 @@ const STEP_ASK: Record<"understand" | "model" | "approach" | "correct", string> 
 };
 /** One step's answer, or with `field` just that box (the other boxes are context) — the box-by-box check as you type. */
 export async function trainCheck(input: { problemId: string; step: "understand" | "model" | "approach" | "correct"; answer: Record<string, unknown>; field?: string }) {
+  tagTrace({ ref: input.problemId, action: "trainCheck" });
   const p = await readProblemMeta(input.problemId);
   const ref = p.reference?.code ?? "";
   const user = [problemBlock(p), p.constraints ? `[제약] ${p.constraints}` : "", ref ? `[모범 풀이 — 학습자에게 보이지 않음]\n${ref.slice(0, 12000)}` : "",
@@ -364,6 +373,7 @@ const COACH_TALK = `너는 알고리즘 문제 풀이 코치다. 학습자는 7�
 - 지금 단계의 생각을 학습자가 스스로 하도록 돕는다: 무엇을 보면 되는지, 어떤 작은 예를 손으로 해 보면 되는지, 쓴 답의 어느 부분이 어긋났는지.
 - 질문이 다음 단계의 답을 요구하면, 지금 단계에서 먼저 정리할 것을 알려 준다.`;
 export async function trainAsk(input: { problemId: string; step: string; answers: Record<string, unknown>; question: string }) {
+  tagTrace({ ref: input.problemId, action: "trainAsk" });
   const p = await readProblemMeta(input.problemId);
   const ref = p.reference?.code ?? "";
   const user = [problemBlock(p), p.constraints ? `[제약] ${p.constraints}` : "", `[시간 제한] ${p.timeLimitMs / 1000}초`, ref ? `[모범 풀이 — 학습자에게 보이지 않음]\n${ref.slice(0, 12000)}` : "",
@@ -373,6 +383,7 @@ export async function trainAsk(input: { problemId: string; step: string; answers
 }
 /** 지켜보기 W3: the code so far against the reference's road, when running it found nothing wrong. */
 export async function watchAdvice(input: { problemId: string; lang: Lang; code: string; facts?: Record<string, string | undefined> }) {
+  tagTrace({ ref: input.problemId, action: "watchAdvice" });
   const p = await readProblemMeta(input.problemId);
   const ref = p.reference?.code ?? "";
   const user = [problemBlock(p), p.constraints ? `[제약] ${p.constraints}` : "", `[시간 제한] ${p.timeLimitMs / 1000}초`, ref ? `[모범 풀이 — 학습자에게 보이지 않음]\n${ref.slice(0, 12000)}` : "",
@@ -386,6 +397,7 @@ export async function watchAdvice(input: { problemId: string; lang: Lang; code: 
 }
 /** 복기 초안: from the steps' answers, this attempt and the first wrong code against the code that passed. */
 export async function trainReview(input: { problemId: string; steps?: Record<string, unknown>; firstWrong?: string; passed?: string }) {
+  tagTrace({ ref: input.problemId, action: "trainReview" });
   const p = await readProblemMeta(input.problemId);
   const user = [problemBlock(p), input.steps ? `[훈련 단계 답]\n${JSON.stringify(input.steps).slice(0, 4000)}` : "", await thisAttempt(p),
     input.firstWrong ? `[처음 틀린 코드]\n${input.firstWrong.slice(0, 6000)}` : "", input.passed ? `[통과한 코드]\n${input.passed.slice(0, 6000)}` : "",

@@ -4,6 +4,7 @@
 
 | 무엇 | 켜기 | 주인 | 데이터 |
 |---|---|---|---|
+| AI 호출 실험실 | 앱 서버의 `http://127.0.0.1:3000/lab/ai` (11/6) | A | 기록 `<data>/ai-calls/`, 설정 `<data>/lab/ai-settings.json` (이 PC에만) |
 | 엔진 실험 서버 (3002) | `엔진 실험 서버.cmd` (`run-engine-lab.mjs`) | C | `tmp/engine-data`, 로그 `tmp/engine-lab.log` |
 | 루트별 실험 서버 (PS 3003 등) | `PS 실험 서버.cmd` (`run-lab.mjs --name … --port …`) | A | `tmp/lab-<이름>/data` |
 | 토론방 | `토론방.cmd` (앱 서버의 `/room`) | 공통 | `협업/토론/` |

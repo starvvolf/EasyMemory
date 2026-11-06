@@ -3,6 +3,8 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { callModel, type ModelCaller } from "../ai/model.ts";
+import { labChoice } from "../ai/lab-settings.ts";
+import { currentTrace, newCallId, recordCall } from "../ai/trace.ts";
 
 export const LOCAL_CALLER: ModelCaller = { uid: "local-experiment" };
 const str = { type: "string" } as const;
@@ -24,18 +26,25 @@ export function assistSettings(heavy = false) {
 const clip = (text: string, n: number) => text.length > n ? `${text.slice(0, n)}\n…(이하 생략)` : text;
 
 type AskOptions = { heavy?: boolean; caller?: ModelCaller; /** this call only: a model and effort other than the assist settings */ model?: string; effort?: string };
-const settingsFor = (options: AskOptions) => { const s = assistSettings(options.heavy); return { model: options.model || s.model, effort: options.effort || s.effort }; };
+// AI 호출 실험실(11/6)에서 이 호출 종류의 모델·강도를 바꿨으면 그것이 먼저(lab-settings.ts).
+const settingsFor = (purpose: string, options: AskOptions) => { const s = assistSettings(options.heavy); const lab = labChoice(purpose); return { model: lab?.model || options.model || s.model, effort: lab?.effort || options.effort || s.effort }; };
 /** 걸린 시간 기록 (2026-10-29, 시연 시간 재기): one line per call in <data>/assist-log.jsonl — what for, which model, how long. */
 // firstTextMs: when the answer began to come (before it, the model was thinking); tokens as the model reports them.
 type Usage = { inputTokens?: number; outputTokens?: number; reasoningTokens?: number; cachedInputTokens?: number };
-async function timed<T extends { usage?: Usage }>(purpose: string, model: string, effort: string, inChars: number, run: (onText: () => void) => Promise<T>, outChars: (r: T) => number): Promise<T> {
+// 실험실(11/6): 같은 호출의 입력·출력 원문도 ai-calls/에 남긴다(trace.ts). sent = 실제로 보낸 system·user.
+async function timed<T extends { usage?: Usage }>(purpose: string, model: string, effort: string, sent: { system: string; user: string }, run: (onText: () => void) => Promise<T>, outText: (r: T) => string): Promise<T> {
   const started = Date.now();
-  let ok = false, out = 0, first = 0, usage: Usage | undefined;
-  try { const r = await run(() => { if (!first) first = Date.now(); }); ok = true; out = outChars(r); usage = r.usage; return r; }
+  let ok = false, reply = "", first = 0, usage: Usage | undefined, error = "";
+  try { const r = await run(() => { if (!first) first = Date.now(); }); ok = true; reply = outText(r); usage = r.usage; return r; }
+  catch (e) { error = (e as Error)?.message?.slice(0, 500) ?? String(e); throw e; }
   finally {
-    const line = { at: new Date(started).toISOString(), purpose, model, effort, ms: Date.now() - started, ...(first ? { firstTextMs: first - started } : {}), ok, inChars, outChars: out,
-      ...(usage ? { tokens: { in: usage.inputTokens, cached: usage.cachedInputTokens, out: usage.outputTokens, reasoning: usage.reasoningTokens } } : {}) };
+    const at = new Date(started).toISOString(), ms = Date.now() - started, trace = currentTrace();
+    const tokens = usage ? { in: usage.inputTokens, cached: usage.cachedInputTokens, out: usage.outputTokens, reasoning: usage.reasoningTokens } : undefined;
+    const line = { at, purpose, model, effort, ms, ...(first ? { firstTextMs: first - started } : {}), ok, inChars: sent.system.length + sent.user.length, outChars: reply.length,
+      ...(tokens ? { tokens } : {}), ...(trace ? { trace } : {}) };
     logAssistCall(line);
+    recordCall({ id: newCallId(), at, purpose, model, effort, ms, ...(first ? { firstTextMs: first - started } : {}), ok, ...(error ? { error } : {}), ...(tokens ? { tokens } : {}), ...(trace ? { trace } : {}),
+      system: sent.system, user: sent.user, reply });
   }
 }
 /** One line in assist-log.jsonl, for calls that do not go through askText/askJson (같은 지식 판정의 Decisions API). */
@@ -44,15 +53,17 @@ export function logAssistCall(line: Record<string, unknown>) {
   void mkdir(path.dirname(file), { recursive: true }).then(() => appendFile(file, JSON.stringify(line) + "\n", "utf8")).catch(() => undefined);
 }
 export async function askText(purpose: string, system: string, user: string, options: AskOptions = {}) {
-  const { model, effort } = settingsFor(options);
-  const reply = await timed(purpose, model, effort, system.length + user.length,
-    (onText) => callModel({ purpose, system: clip(system, 12000), user: clip(user, 60000), model, effort, caller: options.caller ?? LOCAL_CALLER, onText }), (r) => r.text.length);
+  const { model, effort } = settingsFor(purpose, options);
+  const sent = { system: clip(system, 12000), user: clip(user, 60000) };
+  const reply = await timed(purpose, model, effort, sent,
+    (onText) => callModel({ purpose, ...sent, model, effort, caller: options.caller ?? LOCAL_CALLER, onText }), (r) => r.text);
   return reply.text.trim();
 }
 export async function askJson<T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, options: AskOptions = {}): Promise<T> {
-  const { model, effort } = settingsFor(options);
-  const reply = await timed(purpose, model, effort, system.length + user.length,
-    (onText) => callModel({ purpose, system: clip(`${system}\n출력은 JSON으로만 한다.`, 12000), user: clip(user, 60000), json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`,
-      model, effort, caller: options.caller ?? LOCAL_CALLER, onText }), (r) => JSON.stringify(r.data ?? "").length);
+  const { model, effort } = settingsFor(purpose, options);
+  const sent = { system: clip(`${system}\n출력은 JSON으로만 한다.`, 12000), user: clip(user, 60000) };
+  const reply = await timed(purpose, model, effort, sent,
+    (onText) => callModel({ purpose, ...sent, json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`,
+      model, effort, caller: options.caller ?? LOCAL_CALLER, onText }), (r) => JSON.stringify(r.data ?? "", null, 1));
   return reply.data as T;
 }

@@ -1036,3 +1036,12 @@
 - 원인: Windows에서 Codex는 Windows 샌드박스 설정(`windows.sandbox`)이 없으면 workspace-write를 요청받아도 읽기 전용으로 돈다(노트북 기록 전부 read-only, 셸도 "blocked by policy"). Recaller 전용 CODEX_HOME에는 그 설정이 없다.
 - `write_workspace_file`(작업 폴더 기준 경로 · 파일 전체 내용)을 MCP에 더한다. 학습자가 [허용]했을 때만(RECALLER_EDIT=allow) 보이고, 작업 폴더 밖 · 숨김 폴더 · node_modules · 20만 자 넘는 것은 거절. 읽기 도구와 같은 방식.
 - 남은 것: 작업 폴더가 저장소 안(`.data/codex-chat/workspaces/`)이라 Codex가 저장소 맨 위 AGENTS.md를 읽고 CLAUDE.md를 읽으려 한다(셸이 막혀 못 읽음). 저장소 밖으로 옮기는 건 따로 정한다.
+
+## 2026-11-06 AI 호출 실험실 `/lab/ai` (A)
+
+- 정한 사람: 사용자 ("통합으로 AI 호출하는 부분을 관리하는 실험실" → "PDF 엔진은 다이어그램처럼 호출마다 비용·시간·모델, 입출력 보기 좋게 + 지시문 요약, 실습·알고리즘은 화면 통째로 붙이고 입출력 단계 실시간, 방식 바꾸면 갱신" → "만들어서 쓸 거야")
+- 도우미 호출(askText/askJson)은 모두 원문(보낸 system·user, 답)을 `<data>/ai-calls/날짜.jsonl`에 칸마다 4만 자까지 남긴다(끄기 `RECALLER_AI_CALLS=0`). 어느 일에서 나왔는지는 API가 `withTrace`, 안쪽 함수가 `tagTrace`(AsyncLocalStorage).
+- 실험실에서 바꾼 모델·강도(`<data>/lab/ai-settings.json`)는 코드 기본값과 호출마다 넘긴 값보다 먼저 쓴다. 두 파일 모두 이 PC에만 둔다(RecallerData `.gitignore`) — 강의 내용이 들어가고, 다른 PC의 앱이 실험 설정으로 돌지 않게.
+- 지시문 요약은 AI로 그때그때 만들지 않고 `src/lib/ai/catalog.ts`에 써 둔다(비용 0, 말이 매번 같음).
+- 비용은 API 가격으로 환산한 값(ChatGPT 구독이라 실제로 나가지 않음): terra $1/$0.05/$5, 6.1-sol $2/$0.1/$10, 6-sol $2/$0.2/$10, luna $0.1/$0.01/$0.5 (100만 토큰당 입력/캐시/출력, `src/lib/ai/prices.ts`).
+

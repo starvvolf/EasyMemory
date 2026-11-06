@@ -192,6 +192,23 @@ const routes: [string, RegExp, Handler][] = [
     }));
     return out.filter((x) => x && x.count > 0).sort((a, b) => String(b!.at).localeCompare(String(a!.at)));
   }],
+  // AI 호출 실험실(11/6, 앱 /lab/ai의 실습 탭): 대화 실습 하나의 차례 기록 — 차례마다 학습자 말 · 보낸 글 · 도구 · 답 · 토큰 · 시간 · 모델
+  ["GET", /^\/api\/lab\/practice\/(\w{4,40})$/, async (_q, m) => {
+    const run = (await runs()).runs.find((r) => r.id === m[1]);
+    if (!run || (!run.codexId && !run.chatId)) throw Object.assign(new Error("대화 실습이 아니에요."), { status: 404 });
+    if (run.codexId) {
+      const cx = await import("../lib/codex-chat.ts");
+      const c = await cx.view(run.codexId);
+      const { turns, busy } = await cx.turns(run.codexId);
+      const { CHAT_MODELS } = await import("../lib/agent-chat.ts");
+      return { runId: run.id, engine: "codex", chatId: run.codexId, model: (c as { model?: string }).model ?? CHAT_MODELS[0].id, models: CHAT_MODELS, busy, turns,
+        live: busy ? c.messages.slice(-12) : [] };
+    }
+    const ac = await import("../lib/agent-chat.ts");
+    const c = await ac.chatView(run.chatId!);
+    return { runId: run.id, engine: "basic", chatId: run.chatId, model: (c as { model?: string }).model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, busy: c.busy, turns: [],
+      live: c.messages.slice(-30) };
+  }],
   ["POST", /^\/api\/free$/, async (req) => {
     const b = await body(req);
     const course = await loadCourse(String(b.courseId || "hello-api"));

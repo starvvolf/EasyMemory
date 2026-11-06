@@ -6,7 +6,7 @@
 import path from "node:path";
 import os from "node:os";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { mkdir, appendFile } from "node:fs/promises";
+import { mkdir, appendFile, readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
@@ -231,6 +231,10 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     const goal = ext?.context ? `${await ext.context()}\n\n` : "";
     const input = `${fresh ? `${TUTOR_FIRST}\n\n${prior ? `[앞 대화]\n${prior}\n\n` : ""}` : ""}${pref}${goal}${editLine}[학습자] ${q}`;
     log.fresh = fresh; log.model = opts.model; log.sandbox = opts.sandboxMode; log.inputChars = input.length;
+    // AI 호출 실험실(11/6): 이 차례에 실제로 보낸 글(Codex 자체 지시문은 빼고 우리가 붙인 것)과 학습자 말, 도구, 답을 남긴다
+    log.q = q.slice(0, 4000); log.input = input.length > 20000 ? `${input.slice(0, 20000)}\n…(${input.length - 20000}자 더)` : input; log.engine = "codex";
+    log.turn = c.messages.filter((m) => m.role === "user").length;
+    const tools: Array<{ label: string; status?: string }> = []; let reply = ""; let firstText = 0;
     const { events } = await thread.runStreamed(input, { signal: ac.signal });
     const rows = new Map<string, number>(); // Codex item id → 우리 메시지 id
     for await (const ev of events) {
@@ -240,6 +244,8 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
         const role: Role = it.type === "agent_message" ? "assistant" : "tool";
         const textNow = it.type === "agent_message" ? String(it.text ?? "") : label(it);
         if (!textNow) continue;
+        if (role === "assistant") { if (!firstText) firstText = Date.now(); if (ev.type === "item.completed") reply += (reply ? "\n\n" : "") + textNow; }
+        else if (ev.type === "item.completed") tools.push({ label: textNow.slice(0, 300), status: it.status });
         await update<CodexChat>(file(id), c, (x) => {
           const mid = rows.get(it.id); const m = mid ? x.messages.find((y) => y.id === mid) : undefined;
           if (m) { m.text = textNow; m.status = it.status; } else rows.set(it.id, push(x, role, textNow, { item: it.type, status: it.status }).id);
@@ -247,7 +253,7 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
       } else if (ev.type === "turn.completed") {
         const u = ev.usage ?? {};
         const use = { input: u.input_tokens ?? 0, cached: u.cached_input_tokens ?? 0, output: u.output_tokens ?? 0, ms: Date.now() - t0 };
-        log.usage = use;
+        log.usage = use; log.tools = tools; log.reply = reply.slice(0, 20000); if (firstText) log.firstTextMs = firstText - t0;
         await update<CodexChat>(file(id), c, (x) => { (x.usage ??= []).push(use); });
       } else if (ev.type === "turn.failed" || ev.type === "error") {
         const msg = ev.error?.message ?? ev.message ?? "알 수 없는 오류";
@@ -271,6 +277,12 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
       if (c) await (await import("./chat-learned.ts")).extractLearned(learnKey(id), c.messages.filter((m) => m.role === "user" || m.role === "assistant")).catch(() => null);
     }
   }
+}
+/** AI 호출 실험실(11/6): 이 대화의 차례 기록(새것이 뒤). log.jsonl에서 이 대화 줄만. */
+export async function turns(id: string) {
+  const text = await readFile(logFile(), "utf8").catch(() => "");
+  const rows = text.split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } }).filter((x): x is Record<string, unknown> => !!x && x.chatId === id);
+  return { turns: rows.slice(-60), busy: active.has(id) };
 }
 /** 이 대화의 작업 폴더를 VS Code로 연다(11/4 사용자 "맞는 작업 폴더가 안 열리는 것 같은데") */
 export async function openInCode(id: string) { const c = await chatOf(id); return (await import("./learn.ts")).openFolderInCode(wsOf(c)); }

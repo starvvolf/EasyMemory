@@ -1,0 +1,72 @@
+/* AI 호출 실험실 (11/6). 바탕 색·버튼은 ../lab.css(.lab)를 그대로 쓴다. */
+.ai-lab{--terra:#2563EB;--terra-soft:#E3ECFD;--sol:#B45309;--sol-soft:#FCEEDC;--luna:#7C3AED;--luna-soft:#EFE7FD;--code:#64748B}
+.ai-lab .top small{font-size:11.5px}
+.ai-lab .pad{padding:10px 12px}
+.ai-model{display:inline-flex;align-items:center;border-radius:999px;padding:0 8px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.ai-model.m-terra{background:var(--terra-soft);color:var(--terra)}.ai-model.m-sol{background:var(--sol-soft);color:var(--sol)}.ai-model.m-luna{background:var(--luna-soft);color:var(--luna)}.ai-model.m-other{background:var(--reuse-soft);color:var(--reuse)}
+.ai-legend{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;margin:6px 0 0}
+
+/* 시간 다이어그램 */
+.ai-gantt{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px 8px}
+.ai-gantt-title{display:flex;gap:10px;align-items:baseline;margin-bottom:6px}
+.ai-axis{position:relative;height:16px;margin-left:190px;margin-right:230px;border-bottom:1px solid var(--line);font-size:10.5px;color:var(--faint)}
+.ai-axis i{position:absolute;transform:translateX(-50%);font-style:normal;top:0;white-space:nowrap}
+.ai-axis i:first-of-type{transform:none}.ai-axis i:last-of-type{transform:translateX(-100%)}
+.ai-row{display:grid;grid-template-columns:190px minmax(0,1fr) 230px;align-items:center;min-height:34px;border-bottom:1px dashed var(--line);cursor:pointer}
+.ai-row:last-child{border-bottom:0}.ai-row:hover{background:var(--surface-2)}.ai-row.on{background:var(--accent-soft)}
+.ai-row-label{display:flex;flex-direction:column;line-height:1.25;padding:4px 8px 4px 0;min-width:0}
+.ai-row-label b{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ai-row-label small{font-size:11px}
+.ai-track{position:relative;height:22px;background:repeating-linear-gradient(90deg,transparent 0 calc(20% - 1px),var(--line) calc(20% - 1px) 20%)}
+.ai-bar{position:absolute;top:3px;height:16px;border-radius:4px;border:0;padding:0;overflow:hidden;opacity:.85;min-width:3px}
+.ai-bar:hover,.ai-bar.on{opacity:1;outline:2px solid var(--ink);outline-offset:1px;z-index:2}
+.ai-bar.m-terra{background:var(--terra)}.ai-bar.m-sol{background:var(--sol)}.ai-bar.m-luna{background:var(--luna)}.ai-bar.m-other{background:var(--reuse)}
+.ai-bar.code{background:repeating-linear-gradient(45deg,var(--code) 0 4px,#94A3B8 4px 8px);opacity:.6}
+.ai-bar.bad{background:var(--bad)!important}
+.ai-bar em{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,.28)}
+.ai-row-sum{display:flex;gap:8px;justify-content:flex-end;font-size:11.5px;color:var(--muted);padding-left:8px;white-space:nowrap}
+.ai-row-sum b{color:var(--ink)}
+
+/* 호출 하나 */
+.ai-detail{border:1px solid var(--line);border-radius:10px}
+.ai-call{display:flex;flex-direction:column;gap:10px}
+.ai-call-head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.ai-call-head h3{font-size:16px}
+.ai-does{font-size:13px;background:var(--surface-2);border-left:3px solid var(--accent);padding:6px 10px;border-radius:0 6px 6px 0;margin:0}
+.ai-does b{margin-right:6px}
+.ai-facts{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:13px}
+.ai-facts small{color:var(--muted)}
+.ai-io{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.ai-io section{border:1px solid var(--line);border-radius:8px;padding:8px 10px;max-height:560px;overflow:auto;min-width:0}
+.ai-io h4{font-size:13px;margin:0 0 6px;position:sticky;top:-8px;background:var(--surface);padding:4px 0}
+.ai-io h4 small{font-weight:400;color:var(--muted)}
+.ai-text{white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.55}
+.ai-kv{margin:0;display:grid;gap:3px}.ai-kv>div{display:grid;grid-template-columns:minmax(70px,max-content) minmax(0,1fr);gap:8px;font-size:12.5px}
+.ai-kv dt{color:var(--muted);font-family:var(--mono);font-size:11.5px}.ai-kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.ai-cards{margin:0;padding-left:20px;display:grid;gap:6px}.ai-card{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface-2)}
+.ai-list{margin:0;padding-left:18px;font-size:12.5px}
+.ai-pipe td{padding:3px 6px;font-size:12px;border-bottom:1px solid var(--line)}
+.ai-pages details.block summary{font-size:12px}
+
+/* 화면 통째 + 실시간 */
+.ai-split{display:grid;grid-template-columns:minmax(0,1fr) 400px;height:calc(100vh - 53px)}
+.ai-frame{min-width:0;border-right:1px solid var(--line);background:var(--surface)}
+.ai-frame iframe{width:100%;height:100%;border:0;display:block}
+.ai-live{overflow:auto;background:var(--surface-2);display:flex;flex-direction:column}
+.ai-live-head{position:sticky;top:0;z-index:3;display:flex;gap:8px;align-items:center;padding:10px 12px;background:var(--surface);border-bottom:1px solid var(--line)}
+.ai-live-sub{padding:10px 12px;display:grid;gap:6px;border-bottom:1px solid var(--line);background:var(--surface)}
+.ai-group{margin:8px 8px 0}
+.ai-group-head{display:flex;justify-content:space-between;gap:8px;padding:4px 4px;font-size:12.5px}
+.ai-callrow{display:flex;flex-direction:column;gap:2px;text-align:left;width:100%;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;margin:0 0 6px;font-size:12.5px}
+.ai-live>.ai-callrow{width:auto;margin:8px 8px 0}
+.ai-callrow:hover{border-color:var(--ink)}.ai-callrow.bad{border-color:var(--bad)}
+.ai-callrow-top{display:flex;justify-content:space-between;gap:6px}
+.ai-callrow-io{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.ai-callrow-io small{display:inline-block;width:36px;color:var(--muted)}
+.ai-callrow-facts{display:flex;gap:10px;align-items:center;margin-top:3px;font-size:11.5px;color:var(--muted)}
+.ai-callrow-facts b{color:var(--ink);margin-left:auto}
+.ai-livemsg{margin:0 4px 4px;font-size:12px;background:var(--surface);border-radius:6px;padding:5px 8px}.ai-livemsg small{color:var(--muted);margin-right:4px}
+.ai-dialog{width:min(1200px,100%)}
+.ai-settings select{font-size:12px;padding:3px 4px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.ai-settings tr.changed td{background:var(--help-soft)}
+.ai-live .ai-settings td,.ai-live .ai-settings th{padding:4px 6px;font-size:12px}
+@media(max-width:900px){.ai-split{grid-template-columns:minmax(0,1fr);grid-template-rows:60vh auto;height:auto}.ai-io{grid-template-columns:minmax(0,1fr)}
+  .ai-row{grid-template-columns:110px minmax(0,1fr)}.ai-row-sum{display:none}.ai-axis{margin-left:110px;margin-right:0}}

@@ -9,6 +9,7 @@ import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, re
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
 import { resolveSource, type Resolved } from "@/lib/code/source";
+import { withTrace } from "@/lib/ai/trace";
 
 type MakeInput = Parameters<typeof makeProblem>[0];
 /** The full problem from an imported original, under the id the learner already has open (바로 열기, 2026-10-29). */
@@ -31,7 +32,12 @@ const cut = (n: number) => z.string().transform((s) => s.length > n ? `${s.slice
 const last = z.object({ verdict: z.string().max(20).optional(), input: cut(4000).optional(), expected: cut(4000).optional(), got: cut(4000).optional(),
   stderr: cut(4000).optional(), compile: cut(8000).optional() }).optional();
 
+// AI 호출 실험실(11/6): 이 API에서 나간 AI 호출에 "알고리즘 · 어느 동작 · 어느 문제" 표시를 붙인다(lib/ai/trace.ts).
 async function handle(request: Request, context: RouteContext) {
+  const p0 = (await context.params).path ?? [];
+  return withTrace({ area: "code", action: p0.filter((x) => !/^cp_/.test(x)).join("/"), ...(p0[0] === "problem" && p0[1] ? { ref: p0[1] } : {}) }, () => inner(request, context));
+}
+async function inner(request: Request, context: RouteContext) {
   try {
     await guard(request);
     const p = (await context.params).path ?? [];
