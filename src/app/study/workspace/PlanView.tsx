@@ -41,7 +41,6 @@ export default function PlanView() {
   const thisWeek = !start;
   const did = week.did ?? { correct: 0, wrong: 0, met: 0, help: 0 };
   const grass = week.grass ?? [];
-  const activeDays = grass.filter((g) => g.minutes > 0).length;
   return (
     <div className="pl stack">
       <header className="row" style={{ justifyContent: "space-between" }}>
@@ -75,13 +74,46 @@ export default function PlanView() {
         ) : <p className="small muted">이 주에는 기록이 없어요.</p>}
       </section>
 
-      <section className="panel stack" aria-label="20주 공부 기록">
-        <div className="row" style={{ justifyContent: "space-between" }}><b>20주 기록</b><span className="small muted num">공부한 날 {activeDays}일</span></div>
-        <div className="pl-grass" role="img" aria-label={`지난 20주 중 공부한 날 ${activeDays}일`}>
-          {grass.map((g) => <i key={g.date} className={`g${level(g.minutes)}${g.date === week.today ? " now" : ""}`} title={`${g.date} · ${g.minutes ? minutes(g.minutes) : "기록 없음"}`} />)}
-        </div>
-        <div className="pl-grass-key small muted"><span>적게</span>{[0, 1, 2, 3, 4].map((n) => <i key={n} className={`g${n}`} />)}<span>많이</span></div>
-      </section>
+      <Board grass={grass} today={week.today} />
     </div>
+  );
+}
+
+/** 20주 기록판 (2026-11-06 사용자 "잔디 중앙정렬하고 까리하게"): 바둑판 위의 돌. 칸 = 하루, 진할수록 오래. 위는 달, 왼쪽은 요일. */
+function Board({ grass, today }: { grass: Array<{ date: string; minutes: number }>; today: string }) {
+  const weeks: Array<typeof grass> = [];
+  for (let i = 0; i < grass.length; i += 7) weeks.push(grass.slice(i, i + 7));
+  const active = grass.filter((g) => g.minutes > 0 && g.date <= today);
+  const totalMin = active.reduce((n, g) => n + g.minutes, 0);
+  const best = active.reduce<{ date: string; minutes: number } | null>((b, g) => (!b || g.minutes > b.minutes ? g : b), null);
+  let streak = 0;
+  for (let i = grass.findIndex((g) => g.date === today); i >= 0; i--) { if (grass[i].minutes > 0) streak++; else if (grass[i].date !== today) break; }
+  const mon = (d: string) => Number(d.slice(5, 7));
+  const month = (w: typeof grass, i: number) => (i === 0 || mon(w[0].date) !== mon(weeks[i - 1][0].date) ? `${mon(w[0].date)}월` : "");
+  return (
+    <section className="panel pl-board-card" aria-label="20주 공부 기록">
+      <div className="pl-board-head">
+        <div><b>20주 기록</b><p className="small muted">하루에 돌 하나 · 오래 공부한 날일수록 진해요</p></div>
+        <div className="pl-board-stats">
+          <span><b className="num">{active.length}</b><small>공부한 날</small></span>
+          <span><b className="num">{streak}</b><small>연속</small></span>
+          <span><b className="num">{minutes(totalMin)}</b><small>모두</small></span>
+        </div>
+      </div>
+      <div className="pl-board-wrap">
+        <div className="pl-board" role="img" aria-label={`지난 20주 중 공부한 날 ${active.length}일, 연속 ${streak}일`}>
+          <div className="pl-board-months" aria-hidden="true">{weeks.map((w, i) => <span key={w[0].date}>{month(w, i)}</span>)}</div>
+          <div className="pl-board-days" aria-hidden="true">{["월", "", "수", "", "금", "", ""].map((d, i) => <span key={i}>{d}</span>)}</div>
+          <div className="pl-board-grid">
+            {grass.map((g) => <i key={g.date} className={`s${g.date > today ? " future" : ` g${level(g.minutes)}`}${g.date === today ? " now" : ""}`}
+              title={g.date > today ? g.date : `${Number(g.date.slice(5, 7))}월 ${Number(g.date.slice(8))}일 · ${g.minutes ? minutes(g.minutes) : "쉼"}`} />)}
+          </div>
+        </div>
+      </div>
+      <div className="pl-board-foot small muted">
+        <span>{best ? `가장 오래 한 날 ${Number(best.date.slice(5, 7))}/${Number(best.date.slice(8))} · ${minutes(best.minutes)}` : "아직 기록이 없어요"}</span>
+        <span className="pl-board-key"><span>적게</span>{[1, 2, 3, 4].map((n) => <i key={n} className={`s g${n}`} />)}<span>많이</span></span>
+      </div>
+    </section>
   );
 }

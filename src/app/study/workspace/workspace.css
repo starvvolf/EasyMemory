@@ -681,15 +681,38 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pl-studied{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .dejipgi .pl-studied li{display:flex;gap:8px;align-items:center;min-width:0}
 .dejipgi .pl-st-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dejipgi .pl-grass{display:grid;grid-template-rows:repeat(7,18px);grid-auto-flow:column;grid-auto-columns:18px;gap:6px;overflow-x:auto;padding:2px 2px 4px}
-.dejipgi .pl-grass i{display:block;width:18px;height:18px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line)}
-.dejipgi .pl-grass-key i{display:block;width:12px;height:12px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line)}
-.dejipgi .pl-grass i.g1,.dejipgi .pl-grass-key i.g1{background:color-mix(in srgb,var(--accent) 30%,var(--surface-2));border-color:transparent}
-.dejipgi .pl-grass i.g2,.dejipgi .pl-grass-key i.g2{background:color-mix(in srgb,var(--accent) 55%,var(--surface-2));border-color:transparent}
-.dejipgi .pl-grass i.g3,.dejipgi .pl-grass-key i.g3{background:color-mix(in srgb,var(--accent) 78%,var(--surface-2));border-color:transparent}
-.dejipgi .pl-grass i.g4,.dejipgi .pl-grass-key i.g4{background:var(--accent);border-color:transparent}
-.dejipgi .pl-grass i.now{box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--accent)}
-.dejipgi .pl-grass-key{display:flex;gap:4px;align-items:center;justify-content:flex-end}
+/* 20주 기록판: 바둑판 위의 돌 (2026-11-06) */
+.dejipgi .pl-board-card{display:flex;flex-direction:column;gap:18px;padding:22px 24px}
+.dejipgi .pl-board-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.dejipgi .pl-board-head p{margin:4px 0 0}
+.dejipgi .pl-board-stats{display:flex;gap:22px}
+.dejipgi .pl-board-stats span{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.dejipgi .pl-board-stats b{font-size:22px;line-height:1.1;font-weight:700}
+.dejipgi .pl-board-stats small{font-size:11.5px;color:var(--muted);letter-spacing:.02em}
+.dejipgi .pl-board-wrap{display:flex;justify-content:center;overflow-x:auto;padding:4px 0}
+.dejipgi .pl-board{--cell:22px;--gap:6px;display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;column-gap:10px;row-gap:6px}
+.dejipgi .pl-board-months{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:var(--cell);column-gap:var(--gap);font-size:11px;color:var(--muted);height:14px}
+.dejipgi .pl-board-months span{white-space:nowrap;overflow:visible}
+.dejipgi .pl-board-days{grid-column:1;grid-row:2;display:grid;grid-template-rows:repeat(7,var(--cell));row-gap:var(--gap);font-size:11px;color:var(--muted);align-items:center}
+.dejipgi .pl-board-grid{grid-column:2;grid-row:2;position:relative;display:grid;grid-template-rows:repeat(7,var(--cell));grid-auto-flow:column;grid-auto-columns:var(--cell);gap:var(--gap);padding:0;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:calc(var(--cell) + var(--gap)) calc(var(--cell) + var(--gap));background-position:calc(var(--cell) / 2) calc(var(--cell) / 2)}
+.dejipgi .pl-board-grid .s{width:var(--cell);height:var(--cell)}
+.dejipgi .s{display:block;border-radius:50%;position:relative;transition:transform .15s ease}
+.dejipgi .s.g0{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);transform:scale(.42)}
+.dejipgi .s.future{background:transparent;transform:scale(.3)}
+.dejipgi .s.g1,.dejipgi .s.g2,.dejipgi .s.g3,.dejipgi .s.g4{box-shadow:0 1px 1.5px rgba(10,14,40,.28),0 2px 6px -2px rgba(10,14,40,.25),inset 0 -1.5px 2px rgba(0,0,0,.18)}
+.dejipgi .s.g1{--c:color-mix(in srgb,var(--accent) 32%,var(--surface));background:radial-gradient(circle at 34% 30%,color-mix(in srgb,var(--c) 55%,#fff) 0 18%,var(--c) 55%,color-mix(in srgb,var(--c) 80%,#000))}
+.dejipgi .s.g2{--c:color-mix(in srgb,var(--accent) 56%,var(--surface));background:radial-gradient(circle at 34% 30%,color-mix(in srgb,var(--c) 55%,#fff) 0 18%,var(--c) 55%,color-mix(in srgb,var(--c) 80%,#000))}
+.dejipgi .s.g3{--c:color-mix(in srgb,var(--accent) 80%,var(--surface));background:radial-gradient(circle at 34% 30%,color-mix(in srgb,var(--c) 55%,#fff) 0 18%,var(--c) 55%,color-mix(in srgb,var(--c) 75%,#000))}
+.dejipgi .s.g4{--c:var(--accent);background:radial-gradient(circle at 34% 30%,color-mix(in srgb,var(--c) 45%,#fff) 0 18%,var(--c) 55%,color-mix(in srgb,var(--c) 65%,#000))}
+.dejipgi .pl-board-grid .s:not(.future):hover{transform:scale(1.15);z-index:1}
+.dejipgi .pl-board-grid .s.g0:hover{transform:scale(.6)}
+.dejipgi .s.now{outline:2px solid var(--accent);outline-offset:3px}
+.dejipgi .s.now.g0{transform:scale(.55)}
+.dejipgi .pl-board-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.dejipgi .pl-board-key{display:inline-flex;align-items:center;gap:6px}
+.dejipgi .pl-board-key .s{width:13px;height:13px}
 /* 오늘 두 칸 (2026-11-06) */
 .dejipgi .td-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
 .dejipgi .td-two .td-card{padding:18px;gap:10px}
