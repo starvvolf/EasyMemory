@@ -84,6 +84,9 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       let item = g.map.find((m) => m.status === "doing") ?? g.map.find((m) => m.status === "todo");
       // 지도에 남은 단계가 없으면(바텀업으로 넓혀 가는 중 등) 이 목표를 지도 끝에 더한다 → 지도는 늘 지나온 길 + 남은 길
       if (!item) { item = { id: nid(), title: s(input.title, 80), status: "doing" }; g.map.push(item); }
+      // 같은 단계에서 목표를 다시 정하면(너무 쉬워요 등, 11/6 "목표 수준 올렸을 때 맵에 반영이 안 됨") 바텀업은 단계 = 목표라 지도 제목도 바꾼다.
+      // 탑다운 단계는 목표보다 큰 묶음이라 제목을 그대로 둔다(남은 단계는 튜터가 update_map으로)
+      else if (item.status === "doing" && g.mode !== "topdown") item.title = s(input.title, 80);
       item.status = "doing";
       g.current = { id: nid(), title: s(input.title, 120), done: s(input.done, 200), understood: false, applied: false, mapId: item?.id, at: now() };
       logIt(g, "current", g.current.title);
@@ -173,7 +176,7 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
       // 11/5 사용자 "너무 쉬워 / 너무 어려워 두 개가 막혔어요보다 낫다": 쉬우면 수준을 올리고, 필요하면 현재 목표를 더 어렵게 다듬게 한다
       logIt(g, "easy", g.stack.at(-1)?.title ?? g.current?.title ?? "");
       const at = g.stack.at(-1)?.title ?? g.current?.title ?? "지금 하던 것";
-      say = `[너무 쉬워요] 지금 "${at}"이(가) 너무 쉬워요. 이미 아는 부분은 건너뛰고 수준을 올려 주세요.${g.current && !g.stack.length ? " 현재 목표가 너무 쉬우면 set_current_goal로 더 어려운 목표와 완료 조건으로 다듬어도 돼요." : ""}`;
+      say = `[너무 쉬워요] 지금 "${at}"이(가) 너무 쉬워요. 이미 아는 부분은 건너뛰고 수준을 올려 주세요.${g.current && !g.stack.length ? " 현재 목표가 너무 쉬우면 set_current_goal로 더 어려운 목표와 완료 조건으로 다듬어도 돼요." : ""}${g.map.some((m) => m.status === "todo") ? " 지도의 남은 단계도 이 학습자에게 쉬워 보이면 update_map으로 수준에 맞게 고쳐 주세요." : ""}`;
     } else if (op === "stuck" || op === "hard") {
       const reasons = (Array.isArray(b.reasons) ? b.reasons : []).map((r) => String(r)).filter((r) => STUCK_REASONS.includes(r));
       const text = String(b.text ?? "").trim().slice(0, 500);

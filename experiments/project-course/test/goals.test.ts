@@ -114,3 +114,14 @@ test("해 봤어요(11/6): 저장한 코드가 없으면 튜터를 안 부르고
   assert.equal(await G.goalAction(r, "applied", { codeSaved: false }), null);
   assert.equal((await G.goalsOf(r)).current!.applied, true);
 });
+
+test("너무 쉬워요(11/6): 다시 정한 목표가 지도에 반영되고, 남은 단계도 고치라고 한다", async () => {
+  const r = "run11";
+  await G.runGoalTool(r, "propose_plan", { long: "비동기", spec: "", mode: "bottomup", map: ["동기와 비동기 순서", "async 예제", "여러 작업 기다리기"], first: { title: "동기와 비동기 순서", done: "b" } }, []);
+  await G.goalAction(r, "confirm", {});
+  assert.match((await G.goalAction(r, "easy", {}))!, /남은 단계도 .* update_map/);
+  await G.runGoalTool(r, "set_current_goal", { title: "코루틴의 실행과 대기 순서", done: "c" }, []);
+  const g = await G.goalsOf(r);
+  assert.deepEqual(g.map.map((m) => [m.title, m.status]), [["코루틴의 실행과 대기 순서", "doing"], ["async 예제", "todo"], ["여러 작업 기다리기", "todo"]]);
+  assert.equal(g.current!.mapId, g.map[0].id);
+});
