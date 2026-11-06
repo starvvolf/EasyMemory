@@ -208,7 +208,8 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
       // rg 같은 Codex 도구가 PATH에서 보이게(SDK가 원래 하는 일. 경로를 직접 줘서 우리가 붙인다)
       env: { ...process.env, CODEX_HOME, PATH: `${path.join(path.dirname(exe), "..", "path")}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}` },
       // Recaller 도구는 승인 없이(approval never에서 MCP 호출이 거절되던 것, 11/4 첫 시험). 키: mcp_servers.<id>.default_tools_approval_mode
-      config: { mcp_servers: { ...off, recaller: { command: process.execPath, args: [MCP_SCRIPT], default_tools_approval_mode: "approve", env: { RECALLER_URL: `http://127.0.0.1:${process.env.PC_PORT ?? 4100}`, RECALLER_CHAT: id, RECALLER_WS: ws, RECALLER_EDIT: c.edit ?? "deny" } } } },
+      // project_doc_max_bytes 0(11/6): 작업 폴더가 저장소 안이라 Codex가 저장소 맨 위 AGENTS.md("먼저 CLAUDE.md를 읽는다")를 지시로 읽고 CLAUDE.md · 협업 문서를 열려 했다 → 프로젝트 지시 파일을 읽지 않게
+      config: { project_doc_max_bytes: 0, mcp_servers: { ...off, recaller: { command: process.execPath, args: [MCP_SCRIPT], default_tools_approval_mode: "approve", env: { RECALLER_URL: `http://127.0.0.1:${process.env.PC_PORT ?? 4100}`, RECALLER_CHAT: id, RECALLER_WS: ws, RECALLER_EDIT: c.edit ?? "deny" } } } },
     });
     const opts = { workingDirectory: ws, skipGitRepoCheck: true, model: c.model ?? CHAT_MODELS[0].id, modelReasoningEffort: "low",
       sandboxMode: c.edit === "allow" ? "workspace-write" : "read-only", approvalPolicy: "never", networkAccessEnabled: false, webSearchMode: "disabled" };
@@ -225,7 +226,8 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     // 진행 방식 · 경향은 학습자 메모리(lib/memory.ts). 제품 대화는 목표 맥락(goalContext)에 이미 들어가므로 여기서는 맥락이 없을 때만
     const mem = ext?.context ? "" : await (await import("./memory.ts")).memoryText();
     const pref = mem ? `${mem}\n\n` : "";
-    const editLine = c.edit === "allow" ? "" : "[파일 고치기] 학습자가 아직 허락하지 않았다. 고칠 곳과 코드를 알려 주고 학습자가 직접 고치게 한다.\n\n";
+    // 허락했을 때(11/6 A안): Windows에서는 셸 · 기본 쓰기가 막혀 있어 튜터가 "읽기 전용이라 못 써요"로 포기하던 것 → 쓰는 길을 알려 준다
+    const editLine = c.edit === "allow" ? "[파일 고치기] 학습자가 허락했다. 작업 폴더에 파일을 쓸 때는 write_workspace_file 도구를 쓴다(이 환경의 셸 · 기본 쓰기는 막혀 있다).\n\n" : "[파일 고치기] 학습자가 아직 허락하지 않았다. 고칠 곳과 코드를 알려 주고 학습자가 직접 고치게 한다.\n\n";
     const goal = ext?.context ? `${await ext.context()}\n\n` : "";
     const input = `${fresh ? `${TUTOR_FIRST}\n\n${prior ? `[앞 대화]\n${prior}\n\n` : ""}` : ""}${pref}${goal}${editLine}[학습자] ${q}`;
     log.fresh = fresh; log.model = opts.model; log.sandbox = opts.sandboxMode; log.inputChars = input.length;
