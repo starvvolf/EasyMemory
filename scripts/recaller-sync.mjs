@@ -46,6 +46,12 @@ function pullRemote(dir) {
 }
 
 const command = process.argv[2];
+// 동기화 끄기 (11/6 사용자 "데이터 동기화 오래 걸림, 문제·지식 데이터는 걍 꺼줘"): this computer only, while tmp/no-data-sync exists
+// (not committed). The app starts and quits without taking or sending data; delete the file to sync again.
+if (existsSync(path.join(projectRoot, "tmp", "no-data-sync"))) {
+  console.log(`[데이터 동기화] 이 컴퓨터는 꺼 두었어요(tmp/no-data-sync). ${command === "push" ? "올리지" : "받지"} 않아요.`);
+  process.exit(0);
+}
 let dir = configuredDir();
 
 // A data folder that already has files but is not a RecallerData clone (a test data folder set in .env.local):

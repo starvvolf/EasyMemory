@@ -1011,3 +1011,9 @@
 - 앱의 정리 글(`summary.ts`, PDF마다 sol 1번)은 끈다(`studyRecallerLab`에서 `summary: true` 뺌). 예전에 정리 글로 만든 자료는 첫 탭이 그대로 [요약]으로 보인다.
 - 데이터는 이미 있던 `/api/study-map/<id>/live`의 `digest`(목차·항목·카드가 덮는 항목·학습 목표)를 1.2초마다 읽는다. 서버 쪽 새 API 없음.
 - 바꾼 곳: `workspace/MaterialMap.tsx`(OutlinePane, 탭·단계 줄), `workspace/workspace.css`(mm6-*), `src/lib/study/gen/runner.ts`(summary 끔).
+
+## 2026-11-06 데이터 동기화를 컴퓨터마다 끌 수 있게 (`tmp/no-data-sync`) — 노트북은 끔 (C, [경계] 켜고 끄기)
+
+- 정한 사람: 사용자 (데이터를 보관하고 비운 뒤 첫 시작의 동기화가 오래 걸림 → "문제·지식 데이터는 걍 꺼줘")
+- `scripts/recaller-sync.mjs`: 프로젝트의 `tmp/no-data-sync` 파일이 있으면 setup·pull·push를 건너뛰고 성공으로 끝낸다(앱 켤 때 데이터 받기, 끌 때 올리기 둘 다). `tmp/`는 커밋되지 않아 그 컴퓨터만 해당. 다시 켜려면 그 파일을 지운다.
+- 노트북(DESKTOP-NPHA6T7)에 이 파일을 만들었다. PC는 그대로 동기화한다.
