@@ -125,3 +125,20 @@ test("너무 쉬워요(11/6): 다시 정한 목표가 지도에 반영되고, �
   assert.deepEqual(g.map.map((m) => [m.title, m.status]), [["코루틴의 실행과 대기 순서", "doing"], ["async 예제", "todo"], ["여러 작업 기다리기", "todo"]]);
   assert.equal(g.current!.mapId, g.map[0].id);
 });
+
+test("보충 단계는 지도에 끼워지고(11/6), 너무 쉬워요 → 다음으로는 끝남으로 넘어간다", async () => {
+  const r = "run12";
+  await G.runGoalTool(r, "propose_plan", { long: "비동기", spec: "", mode: "topdown", map: ["코루틴", "async 예제", "여러 작업"], first: { title: "코루틴 순서", done: "b" } }, []);
+  await G.goalAction(r, "confirm", {});
+  await G.goalAction(r, "hard", { reasons: [] });
+  await G.runGoalTool(r, "open_support", { title: "함수 호출과 반환", done: "d", why_quote: "" }, []);
+  let g = await G.goalsOf(r);
+  assert.deepEqual(g.map.map((m) => [m.title, m.status, !!m.support]), [["함수 호출과 반환", "doing", true], ["코루틴", "doing", false], ["async 예제", "todo", false], ["여러 작업", "todo", false]]);
+  assert.match(await G.goalContext(r), /1\.▶ \(보충\) 함수 호출과 반환/);
+  await G.goalAction(r, "understood", {}); // 보충 이해 → 돌아감
+  g = await G.goalsOf(r);
+  assert.equal(g.map[0].status, "done"); assert.equal(g.stack.length, 0);
+  const say = await G.goalAction(r, "easy_next", {});
+  assert.match(say!, /이미 알아요.*다음 단계는 "async 예제"/);
+  assert.equal((await G.goalsOf(r)).map[1].status, "done");
+});

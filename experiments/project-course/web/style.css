@@ -814,3 +814,7 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .endbox .spin { width: 26px; height: 26px; border: 3px solid #ccc; border-top-color: #4a7bd8; border-radius: 50%; animation: endspin .8s linear infinite; }
 @keyframes endspin { to { transform: rotate(360deg); } }
 .learned pre.gcode { background: var(--soft); padding: 6px 8px; border-radius: 6px; overflow-x: auto; font-size: 12px; margin: 4px 0; }
+/* 보충 단계 · 너무 쉬워요 고르기(11/6) */
+.gmap .gstep.sup { outline: 1px dashed currentColor; outline-offset: -1px; font-style: italic; }
+.gmap .gstep.sup.done { opacity: .6; }
+.feasy { display: inline-flex; gap: 6px; flex-wrap: wrap; }

@@ -443,7 +443,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   // 학습 목표 버튼(11/4): 이해 · 적용 · 보충 끝은 AI 안 부름. 다음으로 · 확정 · 막혔어요 · 설문 답은 튜터에게 한 번
   if ((run.codexId || run.chatId) && input.do === "goal") {
     const op = String((input as { op?: string }).op ?? "");
-    const before = op === "next" ? await (await import("./goals.ts")).goalsOf(runId) : null;
+    const before = op === "next" || op === "easy_next" ? await (await import("./goals.ts")).goalsOf(runId) : null;
     // [해 봤어요](11/6 사용자 "해 봤어요 누르면 똑같은 말을 또 해"): 이 목표 동안 VS Code에서 저장한 코드가 있을 때만 튜터가 확인. 채팅으로 답했으면 이미 확인됐으니 안 부른다
     if (op === "applied") {
       const cur = (await (await import("./goals.ts")).goalsOf(runId)).current;

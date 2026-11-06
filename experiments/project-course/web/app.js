@@ -1414,7 +1414,12 @@ function drawFree() {
     h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
     // 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
     lesson.chat && lesson.goals && !lesson.busy ? h("div", { class: "fquick" },
-      h("button", { class: "fchip", onclick: send({ do: "goal", op: "easy" }) }, "너무 쉬워요"),
+      // 11/6 사용자 "너무 쉬워요 → 엎거나 다음으로 넘어간다": 둘 중 고르기
+      goalUi.easy && lesson.goals.current ? h("span", { class: "feasy" },
+        h("button", { class: "fchip on", onclick: (e) => { goalUi.easy = false; send({ do: "goal", op: "easy_next" })(e); }, title: "이 단계는 이미 알아요. 끝남으로 두고 다음 단계로" }, "다음 단계로 넘어가기"),
+        h("button", { class: "fchip on", onclick: (e) => { goalUi.easy = false; send({ do: "goal", op: "easy" })(e); }, title: "이 단계를 더 어렵게 다시 짜요(남은 지도도 같이)" }, "더 어렵게 다시 짜기"),
+        h("button", { class: "fchip", onclick: () => { goalUi.easy = false; drawLesson(); } }, "취소"))
+      : h("button", { class: "fchip", onclick: lesson.goals.current ? () => { goalUi.easy = true; goalUi.stuck = false; drawLesson(); } : send({ do: "goal", op: "easy" }) }, "너무 쉬워요"),
       h("button", { class: `fchip warm ${goalUi.stuck ? "on" : ""}`, onclick: () => { goalUi.stuck = !goalUi.stuck; drawLesson(); } }, "너무 어려워요")) : null,
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
@@ -1435,7 +1440,7 @@ function drawFree() {
 const go_ = (hash) => go(hash);
 
 /* 학습 목표(11/4 사용자 설계 "장기 목표 / 현재 목표"): 장기 · 지도 · 현재 목표(이해 · 적용 · 다음으로) · 보충, 설문 · 계획 확정 · 막혔어요 */
-const goalUi = { stuck: false, picks: {}, texts: {}, reasons: new Set(), stuckText: "" };
+const goalUi = { stuck: false, easy: false, picks: {}, texts: {}, reasons: new Set(), stuckText: "" };
 function goalBar(lesson, send) {
   const g = lesson.goals;
   if (!g.long) return g.survey || g.plan ? null : h("div", { class: "gbar mut small" }, "만들고 싶은 걸 말하면 튜터가 몇 가지 물어보고 장기 목표를 같이 정해요.");
@@ -1446,7 +1451,9 @@ function goalBar(lesson, send) {
     h("div", { class: "glong" }, h("span", { class: "gk" }, "장기"), h("b", { title: g.long.spec || "" }, g.long.text),
       h("button", { class: "gmode", disabled: lesson.busy, title: "진행 방식 바꾸기", onclick: op("mode", { mode: g.mode === "topdown" ? "bottomup" : "topdown" }) }, g.mode === "topdown" ? "탑다운" : "바텀업"),
       g.progress.total ? h("span", { class: "mut small" }, `${g.progress.done}/${g.progress.total}`) : h("span", { class: "mut small" }, `해 본 것 ${g.progress.done}개`)),
-    g.map.length ? h("div", { class: "gmap" }, g.map.map((m, i) => h("span", { class: `gstep ${m.status}` }, `${i + 1}${mark[m.status] ? " " + mark[m.status] : ""} ${m.title}`))) : null,
+    // 보충 단계(11/6 사용자 "그 단계가 넣어진 게 로드맵에 떠야, 흐름 볼 수 있게, (보충) 표시"): 번호는 본 단계만 세고, 보충은 ↳ (보충)
+    g.map.length ? h("div", { class: "gmap" }, (() => { let n = 0; return g.map.map((m) => h("span", { class: `gstep ${m.status} ${m.support ? "sup" : ""}` },
+      m.support ? `↳ (보충)${mark[m.status] ? " " + mark[m.status] : ""} ${m.title}` : `${++n}${mark[m.status] ? " " + mark[m.status] : ""} ${m.title}`)); })()) : null,
     top ? h("div", { class: "gcur sup" }, h("div", {}, h("span", { class: "gk warm" }, `보충${g.stack.length > 1 ? ` ${g.stack.length}겹` : ""}`), h("b", {}, top.title), h("span", { class: "mut small" }, ` — ${top.done}`)),
       h("div", { class: "mut small" }, `막힌 이유: ${top.why} · 끝나면 "${top.from}"로 돌아가요`),
       h("div", { class: "grow2" }, h("button", { class: "btn small primary", disabled: lesson.busy, onclick: op("understood") }, "이해했어요, 돌아가기"))) : null,

@@ -11,9 +11,10 @@ import { randomBytes } from "node:crypto";
 import { DATA, read, update } from "./store.ts";
 import { CHOICES } from "./stuck.ts";
 
-type Item = { id: string; title: string; status: "todo" | "doing" | "done" | "skipped" };
+/** support: [너무 어려워요]로 끼워 넣은 보충 단계(11/6 사용자 "중간에 보충 단계를 만들어서 넣어 줘야") — 원래 단계 바로 앞에 들어간다 */
+type Item = { id: string; title: string; status: "todo" | "doing" | "done" | "skipped"; support?: boolean };
 type Current = { id: string; title: string; done: string; understood: boolean; applied: boolean; mapId?: string; at: string };
-type Support = { id: string; title: string; done: string; why: string; from: string; understood?: boolean; at: string };
+type Support = { id: string; title: string; done: string; why: string; from: string; understood?: boolean; at: string; mapId?: string };
 type Question = { q: string; options: string[]; multi?: boolean };
 export type Goals = {
   mode: "topdown" | "bottomup" | null;
@@ -81,7 +82,7 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       // 바꿀 수 있는 때: 현재 목표가 없을 때 · 학습자가 [다음으로]를 누른 직후 · [확정] 직후(첫 목표를 다듬기). 그 밖엔 학습자 버튼으로만
       const last = [...g.log].reverse().find((l) => !["survey", "answer", "map"].includes(l.kind))?.kind;
       if (g.current && last !== "next" && last !== "confirm" && last !== "easy") throw err("현재 목표가 진행 중이에요. 학습자가 [다음으로]를 누르면 바꿀 수 있어요.");
-      let item = g.map.find((m) => m.status === "doing") ?? g.map.find((m) => m.status === "todo");
+      let item = g.map.find((m) => m.status === "doing" && !m.support) ?? g.map.find((m) => m.status === "todo" && !m.support);
       // 지도에 남은 단계가 없으면(바텀업으로 넓혀 가는 중 등) 이 목표를 지도 끝에 더한다 → 지도는 늘 지나온 길 + 남은 길
       if (!item) { item = { id: nid(), title: s(input.title, 80), status: "doing" }; g.map.push(item); }
       // 같은 단계에서 목표를 다시 정하면(너무 쉬워요 등, 11/6 "목표 수준 올렸을 때 맵에 반영이 안 됨") 바텀업은 단계 = 목표라 지도 제목도 바꾼다.
@@ -98,7 +99,12 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       if (g.stack.length >= 5) throw err("보충이 5겹이에요. 지금 보충부터 마치세요.");
       const from = g.stack.at(-1)?.title ?? g.current?.title ?? "(목표 정하기)";
       const why = g.stuck ? [...g.stuck.reasons, g.stuck.text].filter(Boolean).join(" · ") : q;
-      g.stack.push({ id: nid(), title: s(input.title, 120), done: s(input.done, 200), why, from, at: now() });
+      // 지도에도 보충 단계로 끼운다: 돌아갈 단계(위 보충 또는 현재 목표의 단계) 바로 앞
+      const parent = g.stack.at(-1)?.mapId ?? g.current?.mapId;
+      const sup: Item = { id: nid(), title: s(input.title, 80), status: "doing", support: true };
+      const at = g.map.findIndex((m) => m.id === parent);
+      if (at >= 0) g.map.splice(at, 0, sup); else g.map.push(sup);
+      g.stack.push({ id: nid(), title: s(input.title, 120), done: s(input.done, 200), why, from, at: now(), mapId: sup.id });
       g.stuck = null;
       logIt(g, "support", g.stack.at(-1)!.title);
       out = `보충을 열었어요: ${g.stack.at(-1)!.title}. 이제 바로 설명을 시작하세요. 학습자가 이해했다고 누르면 '${from}'로 돌아가요.`;
@@ -144,6 +150,7 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
       const top = g.stack.at(-1);
       if (top && op === "understood") { // 보충은 이해만 하면 돌아간다
         g.stack.pop(); logIt(g, "support-done", top.title);
+        const sm = g.map.find((m) => m.id === top.mapId); if (sm) sm.status = "done";
         say = null;
       } else if (g.current && op === "understood" && !g.current.understood) {
         // 11/5 사용자 "목표마다 이해 → 적용 흐름이 있으면 좋겠다": 이해했어요 → 적용 단계로, 튜터가 직접 해 볼 과제를 낸다
@@ -153,15 +160,18 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
         g.current.applied = true; if (!g.current.understood) g.current.understood = true; logIt(g, "applied", g.current.title);
         say = b.codeSaved === false ? null : `[해 봤어요] 학습자가 "${g.current.title}" 적용 과제를 해 봤어요. 작업 폴더의 파일을 읽거나 실행해서 확인할 수 있으면 확인하고, 됐으면 짧게 알려 주세요. 안 됐으면 어디가 문제인지 짚어 주세요.`;
       }
-    } else if (op === "next") {
+    } else if (op === "next" || op === "easy_next") {
+      // easy_next(11/6 사용자 "너무 쉬워요 → 엎거나 다음으로 넘어간다"): 이미 아는 것 → 이 단계는 끝남으로 보고 다음으로
       if (!g.current) throw err("현재 목표가 없어요.");
-      const c = g.current; const full = c.understood && c.applied;
+      const c = g.current; const easy = op === "easy_next"; const full = easy || (c.understood && c.applied);
       const item = g.map.find((m) => m.id === c.mapId);
       if (item) item.status = full ? "done" : "skipped";
-      logIt(g, "next", `${c.title}: ${full ? "마침" : `건너뜀(이해 ${c.understood ? "✓" : "–"}, 적용 ${c.applied ? "✓" : "–"})`}`);
+      logIt(g, "next", `${c.title}: ${easy ? "너무 쉬워서 넘어감" : full ? "마침" : `건너뜀(이해 ${c.understood ? "✓" : "–"}, 적용 ${c.applied ? "✓" : "–"})`}`);
+      for (const m of g.map) if (m.support && m.status === "doing") m.status = "skipped";
       g.stack = [];
-      const nextItem = g.map.find((m) => m.status === "todo");
-      say = g.mode === "topdown"
+      const nextItem = g.map.find((m) => m.status === "todo" && !m.support);
+      const head = easy ? `[너무 쉬워요 → 다음으로] "${c.title}"은(는) 이미 알아요. 다음은 이보다 한 단계 높여 주세요.` : "";
+      say = head ? `${head} ${nextItem ? `지도의 다음 단계는 "${nextItem.title}"이에요. ` : ""}set_current_goal로 지금 할 만큼 구체적인 현재 목표와 완료 조건을 정하고 바로 시작해 주세요.` : g.mode === "topdown"
         ? nextItem ? `[다음으로] "${c.title}"을(를) ${full ? "마쳤어요" : "여기까지 하고 넘어갈게요"}. 지도의 다음 단계는 "${nextItem.title}"이에요. set_current_goal로 지금 할 만큼 구체적인 현재 목표와 완료 조건을 정하고 바로 시작해 주세요.`
           : `[다음으로] "${c.title}"을(를) ${full ? "마쳤어요" : "여기까지 하고 넘어갈게요"}. 지도의 단계를 다 지났어요. 장기 목표가 다 됐는지 같이 보고, 더 할 게 있으면 update_map으로 단계를 더한 뒤 set_current_goal로 정해 주세요.`
         : `[다음으로] "${c.title}"을(를) ${full ? "마쳤어요" : "여기까지 하고 넘어갈게요"}. 여기서 넓혀 볼 다음 작은 것을 하나 정해 set_current_goal로 정하고 바로 시작해 주세요.`;
@@ -170,13 +180,14 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
       const c = g.current;
       if (c) { const item = g.map.find((m) => m.id === c.mapId); if (item) item.status = c.understood && c.applied ? "done" : "skipped"; }
       logIt(g, "end", c ? `${c.title}: ${c.understood && c.applied ? "마침" : `건너뜀(이해 ${c.understood ? "✓" : "–"}, 적용 ${c.applied ? "✓" : "–"})`}` : "");
+      for (const m of g.map) if (m.support && m.status === "doing") m.status = "skipped";
       g.current = null; g.stack = []; g.stuck = null;
       say = null;
     } else if (op === "easy") {
       // 11/5 사용자 "너무 쉬워 / 너무 어려워 두 개가 막혔어요보다 낫다": 쉬우면 수준을 올리고, 필요하면 현재 목표를 더 어렵게 다듬게 한다
       logIt(g, "easy", g.stack.at(-1)?.title ?? g.current?.title ?? "");
       const at = g.stack.at(-1)?.title ?? g.current?.title ?? "지금 하던 것";
-      say = `[너무 쉬워요] 지금 "${at}"이(가) 너무 쉬워요. 이미 아는 부분은 건너뛰고 수준을 올려 주세요.${g.current && !g.stack.length ? " 현재 목표가 너무 쉬우면 set_current_goal로 더 어려운 목표와 완료 조건으로 다듬어도 돼요." : ""}${g.map.some((m) => m.status === "todo") ? " 지도의 남은 단계도 이 학습자에게 쉬워 보이면 update_map으로 수준에 맞게 고쳐 주세요." : ""}`;
+      say = `[너무 쉬워요 → 더 어렵게] 지금 "${at}"이(가) 너무 쉬워요. 이미 아는 부분은 건너뛰고 수준을 올려 주세요.${g.current && !g.stack.length ? " 현재 목표가 너무 쉬우면 set_current_goal로 더 어려운 목표와 완료 조건으로 다듬어도 돼요." : ""}${g.map.some((m) => m.status === "todo") ? " 지도의 남은 단계도 이 학습자에게 쉬워 보이면 update_map으로 수준에 맞게 고쳐 주세요." : ""}`;
     } else if (op === "stuck" || op === "hard") {
       const reasons = (Array.isArray(b.reasons) ? b.reasons : []).map((r) => String(r)).filter((r) => STUCK_REASONS.includes(r));
       const text = String(b.text ?? "").trim().slice(0, 500);
@@ -218,7 +229,7 @@ async function goalContextBody(runId: string) {
     "[학습 목표 — Recaller가 관리하고 화면 위에 보인다]",
     `장기 목표: ${g.long.text} (${g.mode === "topdown" ? "탑다운" : "바텀업"})`,
     g.long.spec ? `범위: ${g.long.spec}` : "",
-    g.map.length ? `지도: ${g.map.map((m, i) => `${i + 1}.${mark(m)} ${m.title}`).join(" · ")}` : "",
+    g.map.length ? `지도: ${g.map.map((m, i) => `${i + 1}.${mark(m)} ${m.support ? "(보충) " : ""}${m.title}`).join(" · ")}` : "",
     c ? `현재 목표: ${c.title} — 완료 조건: ${c.done} · 단계: ${!c.understood ? "① 이해 중" : !c.applied ? "② 적용 중(학습자가 직접 해 보는 중)" : "적용까지 끝(학습자가 다음으로 넘어갈 수 있음)"}` : "현재 목표: 없음 — set_current_goal로 정한다",
     top ? `보충 중(${g.stack.length}겹): ${top.title} — ${top.done} (막힌 이유: ${top.why}). 학습자가 이해했다고 누르면 '${top.from}'로 돌아간다. 지금은 보충에 집중한다.` : "",
     g.survey ? "지금 화면에 질문을 띄워 두었다 — 학습자 답을 기다린다." : "",
