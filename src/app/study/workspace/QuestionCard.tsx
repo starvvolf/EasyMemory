@@ -61,7 +61,7 @@ export function QuestionRun({ questions, sourceId, onClose, title }: { questions
   const [i, setI] = useState(0);
   const [score, setScore] = useState({ right: 0, done: 0 });
   const [answered, setAnswered] = useState(false);
-  if (!questions.length) return <div className="panel small muted">낼 문제가 없어요. 지식에 설명을 적거나 고리를 이으면 문제가 생겨요. <button className="btn ghost small" onClick={onClose}>닫기</button></div>;
+  if (!questions.length) return <div className="panel small muted">낼 문제가 없어요. 기억에 설명을 적거나 고리를 이으면 문제가 생겨요. <button className="btn ghost small" onClick={onClose}>닫기</button></div>;
   const done = i >= questions.length;
   return (
     <section className="panel ws-run">
@@ -71,7 +71,7 @@ export function QuestionRun({ questions, sourceId, onClose, title }: { questions
         <button className="btn ghost small" onClick={onClose}>그만하기</button>
       </div>
       {done ? (
-        <div className="stack"><p><b>{questions.length}문제 중 {score.right}개 맞혔어요.</b></p><p className="small muted">결과는 각 지식의 기록에 남았어요. 틀린 것은 몰랐음이 되어 복습에 먼저 나와요.</p>
+        <div className="stack"><p><b>{questions.length}문제 중 {score.right}개 맞혔어요.</b></p><p className="small muted">결과는 각 기억의 기록에 남았어요. 틀린 것은 몰랐음이 되어 복습에 먼저 나와요.</p>
           <div className="row"><button className="btn primary small" onClick={onClose}>닫기</button></div></div>
       ) : (
         <>
@@ -126,7 +126,7 @@ export function QuestionList({ questions, title, note, nameOf, onClose, onRunAll
           );
         })}
       </ol>
-      {done ? <p className="small muted">결과는 각 지식의 기록에 남았어요. 틀린 것은 몰랐음이 되어 복습에 먼저 나와요.</p> : null}
+      {done ? <p className="small muted">결과는 각 기억의 기록에 남았어요. 틀린 것은 몰랐음이 되어 복습에 먼저 나와요.</p> : null}
     </section>
   );
 }

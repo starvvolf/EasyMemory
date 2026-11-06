@@ -192,8 +192,8 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
       const due = await call<{ questions: Question[] } & ReviewStatus>(`/api/knowledge/quiz${q}`);
       if (due.questions.length) { setRun(null); setList({ title: `문제 풀어보기 · ${folderName}`, questions: due.questions }); return; }
       const more = await call<{ questions: Question[] }>(`/api/knowledge/quiz${q}&all=1`);
-      if (more.questions.length) { setRun(null); setList({ title: `문제 풀어보기 · ${folderName}`, note: due.next ? `지금 복습할 지식은 없어요(다음 복습 ${whenText(due.next)}). 미리 연습할 문제예요.` : "지금 복습할 지식은 없어요. 미리 연습할 문제예요.", questions: more.questions }); }
-      else setNotice("풀 문제가 아직 없어요. 공부하다 만난 지식에 뜻이 생기면 문제가 만들어져요.");
+      if (more.questions.length) { setRun(null); setList({ title: `문제 풀어보기 · ${folderName}`, note: due.next ? `지금 복습할 기억은 없어요(다음 복습 ${whenText(due.next)}). 미리 연습할 문제예요.` : "지금 복습할 기억은 없어요. 미리 연습할 문제예요.", questions: more.questions }); }
+      else setNotice("풀 문제가 아직 없어요. 공부하다 만난 기억에 뜻이 생기면 문제가 만들어져요.");
     } catch (e) { setError(errorText(e)); }
     finally { setQuizBusy(false); }
   };
@@ -224,51 +224,51 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
     <div className="kw">
       <header className="kw-top">
         <div>
-          <h2>지식</h2>
+          <h2>기억</h2>
           <p className="small muted num kw-sum"><span>{counts.total}개</span><span><i className="dot bad" />몰랐음 {counts.unknown}</span><span><i className="dot good" />앎 {counts.known}</span><span>만남 {counts.met}</span></p>
           <div className="kw-origins small" role="group" aria-label="출처로 거르기">{(Object.keys(ORIGIN_LABEL) as Origin[]).map((o) => (
             <label key={o} className={`kw-origin${origins.has(o) ? " on" : ""}`}><input type="checkbox" checked={origins.has(o)} onChange={() => toggleOrigin(o)} />{ORIGIN_LABEL[o]} <span className="num muted">{originCount[o]}</span></label>))}</div>
         </div>
         <div className="row kw-actions">
-          <input className="ws-input kw-search" type="search" placeholder="지식 찾기" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="지식 찾기 (이름·설명)" />
-          <button className="btn primary small kw-review" onClick={() => void startQuiz()} disabled={quizBusy} title="복습할 지식의 문제를 목록으로 보여 줘요">{quizBusy ? "불러오는 중…" : "문제 풀어보기"}{dueNow ? <span className="kw-badge">{dueNow}</span> : null}</button>
+          <input className="ws-input kw-search" type="search" placeholder="기억 찾기" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="기억 찾기 (이름·설명)" />
+          <button className="btn primary small kw-review" onClick={() => void startQuiz()} disabled={quizBusy} title="복습할 기억의 문제를 목록으로 보여 줘요">{quizBusy ? "불러오는 중…" : "문제 풀어보기"}{dueNow ? <span className="kw-badge">{dueNow}</span> : null}</button>
           <details className="ws-menu">
-            <summary aria-label="만들기" title="새 지식 · 새 폴더">＋</summary>
+            <summary aria-label="만들기" title="새 기억 · 새 폴더">＋</summary>
             <div className="ws-menu-card">
-              <button className="mm-item" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setMaking("item"); setDraft(""); }}><span>새 지식</span><small>직접 적어 넣기 (보통은 공부하면 저절로 쌓여요)</small></button>
+              <button className="mm-item" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setMaking("item"); setDraft(""); }}><span>새 기억</span><small>직접 적어 넣기 (보통은 공부하면 저절로 쌓여요)</small></button>
               <button className="mm-item" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; setMaking("folder"); setDraft(""); }}><span>새 폴더</span><small>{folder !== "all" && folder !== "none" ? `${folderName} 안에` : "맨 위에"} 주제 폴더 만들기</small></button>
             </div>
           </details>
           <details className="ws-menu">
-            <summary aria-label="지식 더보기">⋯</summary>
+            <summary aria-label="기억 더보기">⋯</summary>
             <div className="ws-menu-card">
               <button className="mm-item" onClick={async (e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; if (!showOverview) { try { setOverview((await call<{ text: string }>("/api/knowledge/memory?level=1")).text); } catch (err) { setError(errorText(err)); } } setShowOverview(!showOverview); }}>
                 <span>{showOverview ? "AI가 보는 요약 닫기" : "AI가 보는 요약"}</span><small>메모리 1단계: AI가 매번 보는 내 공부의 큰 그림</small></button>
-              <button className="mm-item" onClick={() => window.open("/api/knowledge/report", "_blank", "noopener")}><span>점검 보고서</span><small>저장소 전체를 글로: 요약·점검·주제별 지식 (.md)</small></button>
+              <button className="mm-item" onClick={() => window.open("/api/knowledge/report", "_blank", "noopener")}><span>점검 보고서</span><small>저장소 전체를 글로: 요약·점검·주제별 기억 (.md)</small></button>
               <button className="mm-item" onClick={() => { window.location.href = "/api/knowledge/report?download=1"; }}><span>점검 보고서 받기</span><small>.md 파일로 저장</small></button>
-              {onLegacy ? <button className="mm-item" onClick={onLegacy}><span>자료별 지식 포인트</span><small>예전 화면 (PDF 자료마다)</small></button> : null}
+              {onLegacy ? <button className="mm-item" onClick={onLegacy}><span>자료별 기억 포인트</span><small>예전 화면 (PDF 자료마다)</small></button> : null}
             </div>
           </details>
         </div>
       </header>
       {making ? (
         <form className="kw-make row" onSubmit={(e) => { e.preventDefault(); void create(); }}>
-          <span className="small muted">{making === "folder" ? `새 폴더 (${folder !== "all" && folder !== "none" ? `${folderName} 안에` : "맨 위에"})` : `새 지식 (${folder !== "all" && folder !== "none" ? folderName : "폴더 없음"})`}</span>
-          <input className="ws-input" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={making === "folder" ? "폴더 이름" : "지식 이름 (예: 기준금리)"} maxLength={making === "folder" ? 60 : 120} />
+          <span className="small muted">{making === "folder" ? `새 폴더 (${folder !== "all" && folder !== "none" ? `${folderName} 안에` : "맨 위에"})` : `새 기억 (${folder !== "all" && folder !== "none" ? folderName : "폴더 없음"})`}</span>
+          <input className="ws-input" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={making === "folder" ? "폴더 이름" : "기억 이름 (예: 기준금리)"} maxLength={making === "folder" ? 60 : 120} />
           <button className="btn primary small" disabled={!draft.trim()}>만들기</button><button type="button" className="btn ghost small" onClick={() => setMaking("")}>취소</button>
         </form>
       ) : null}
       {chores ? (
         <details className="kw-chores">
-          <summary><i className="dot bad" /><b>정리할 것</b><span className="small muted kw-chores-what">{[dupes.length ? `같은 지식 의심 ${dupes.length}` : "",
-            emptyMeaning ? `뜻 빈 지식 ${emptyMeaning}` : "", unsorted ? `정리 중 ${unsorted}` : ""].filter(Boolean).join(" · ")}</span></summary>
+          <summary><i className="dot bad" /><b>정리할 것</b><span className="small muted kw-chores-what">{[dupes.length ? `같은 기억 의심 ${dupes.length}` : "",
+            emptyMeaning ? `뜻 빈 기억 ${emptyMeaning}` : "", unsorted ? `정리 중 ${unsorted}` : ""].filter(Boolean).join(" · ")}</span></summary>
           <div className="stack kw-chores-body">
-            {unsorted ? <p className="kw-fill row small"><span className="muted">주제·종류를 정리하는 중인 지식 {unsorted}개 (새로 들어오면 몇 초 뒤 저절로 정리돼요)</span>
+            {unsorted ? <p className="kw-fill row small"><span className="muted">주제·종류를 정리하는 중인 기억 {unsorted}개 (새로 들어오면 몇 초 뒤 저절로 정리돼요)</span>
         <button className="btn ghost small" disabled={sorting} onClick={() => { setSorting(true); void act(async () => { const r = await call<{ sorted: number }>("/api/knowledge/classify", {});
           setNotice(`${r.sorted}개를 주제·종류로 정리했어요.`); }).finally(() => setSorting(false)); }}>{sorting ? "정리하는 중…" : "지금 정리"}</button></p> : null}
             {dupes.length ? <Duplicates pairs={dupes} onOpen={setSel} onAct={act} /> : null}
             {tree.items.some((i) => !i.line) ? (
-        <p className="kw-fill row small"><span className="muted">뜻이 빈 지식 {emptyMeaning}개 — 복습 문제가 플래시카드만 나와요.</span>
+        <p className="kw-fill row small"><span className="muted">뜻이 빈 기억 {emptyMeaning}개 — 복습 문제가 플래시카드만 나와요.</span>
           <button className="btn small" disabled={filling} onClick={() => { setFilling(true); void act(async () => {
             const r = await call<{ done: number; changed: string[]; left: number }>("/api/knowledge/layer", { ids: tree.items.filter((i) => !i.line).map((i) => i.id) });
             setNotice(`AI가 ${r.done}개를 보고 ${r.changed.length}개의 뜻을 채웠어요. 틀린 데가 있으면 편집으로 고쳐 주세요.`);
@@ -285,7 +285,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
         onRunAll={() => setRun({ title: list.title, questions: list.questions })} onClose={() => { setList(null); void load(); if (sel) void loadDetail(sel); }} /> : null}
 
       <div className="kw-grid">
-        <nav className="kw-tree panel" aria-label="폴더" title="지식이나 폴더를 끌어다 폴더에 놓으면 옮겨져요. 손으로 옮긴 지식은 주제 정리가 다시 옮기지 않아요.">
+        <nav className="kw-tree panel" aria-label="폴더" title="기억이나 폴더를 끌어다 폴더에 놓으면 옮겨져요. 손으로 옮긴 기억은 주제 정리가 다시 옮기지 않아요.">
           <div className={`kw-folder root${view === "topic" && folder === "all" ? " on" : ""}`}><button className="kw-fname" onClick={() => { setView("topic"); setFolder("all"); setQuery(""); }}>전체</button><span className="kw-count num">{counts.total}</span></div>
           {origins.has("theory") ? <>
           <div className="kw-sec" {...matDrop(null)}><span>자료</span><MatFolderNew onAct={act} /></div>
@@ -304,7 +304,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
           </details>
         </nav>
 
-        <section className="kw-list panel" aria-label="지식 목록">
+        <section className="kw-list panel" aria-label="기억 목록">
           <div className="row kw-list-head">
             <b>{hits ? `"${query}" 찾은 것 ${hits.length}` : `${folderName} · ${shown.length}`}</b>
             {!hits && !(view === "material" && material && matMode === "map" && (material.genId || material.sourceId || material.stages)) ? <select className="ws-select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="정렬"><option value="recent">최근 순</option><option value="weak">약한 순</option><option value="name">이름 순</option></select> : null}
@@ -315,13 +315,13 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
           : view === "material" && material && !hits && matMode === "map" && material.stages ? <ProjectStages stages={material.stages} items={tree.items} sel={sel} onPick={setSel} />
           : <>
           <div className="kw-filters">{FILTERS.map(([key, label]) => <button key={key} className="chip-btn" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
-          {!shown.length ? <p className="small muted">{tree.items.length ? "여기에 맞는 지식이 없어요." : "아직 지식이 없어요. 자료를 읽거나 문제를 풀면 저절로 쌓이고, + 지식으로 직접 넣을 수도 있어요."}</p> : null}
+          {!shown.length ? <p className="small muted">{tree.items.length ? "여기에 맞는 기억이 없어요." : "아직 기억이 없어요. 자료를 읽거나 문제를 풀면 저절로 쌓이고, + 기억으로 직접 넣을 수도 있어요."}</p> : null}
           <ul className="kw-items">
             {shown.slice(0, 400).map((i) => (
               <li key={i.id}>
                 <button className={`kw-item${sel === i.id ? " on" : ""}`} onClick={() => setSel(i.id)} {...dragOf("item", i.id)}>
                   <span className="kw-item-top"><StateChip state={i.state} graduated={i.graduated} /><span className="kw-title"><Inline text={i.title} /></span>
-                    <span className="kw-item-side">{i.weak ? <span className="kw-weak" title="틀림·힌트·물어봄을 합친 수">막힘 {i.weak}회</span> : null}{i.links ? <span title="이어진 지식">고리 {i.links}</span> : null}</span></span>
+                    <span className="kw-item-side">{i.weak ? <span className="kw-weak" title="틀림·힌트·물어봄을 합친 수">막힘 {i.weak}회</span> : null}{i.links ? <span title="이어진 기억">고리 {i.links}</span> : null}</span></span>
                   {i.line ? <span className="kw-line"><Inline text={tidyLine(i.line)} /></span> : <span className="kw-line kw-empty">뜻이 아직 없어요</span>}
                   <span className="kw-meta">{hits && i.folderId ? `${folderPaths(tree.folders).find((f) => f.id === i.folderId)?.path ?? ""} · ` : ""}{i.kind ? `${KIND_LABEL[i.kind]} · ` : ""}{ago(i.lastAt)}</span>
                 </button>
@@ -331,9 +331,9 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
           </>}
         </section>
 
-        <section className="kw-detail panel" aria-label="지식 자세히">
+        <section className="kw-detail panel" aria-label="기억 자세히">
           {detail ? <ItemDetail key={detail.item.id} detail={detail} folders={tree.folders} quizzing={Boolean(run)} onAct={act} onOpen={setSel} onGone={() => setSel(null)}
-            onQuiz={(questions) => setRun({ title: `확인 문제 · ${detail.item.title}`, questions })} /> : <p className="muted small">왼쪽에서 지식을 고르면 뜻, 이어진 지식, 내 기록이 여기 보여요.</p>}
+            onQuiz={(questions) => setRun({ title: `확인 문제 · ${detail.item.title}`, questions })} /> : <p className="muted small">왼쪽에서 기억을 고르면 뜻, 이어진 기억, 내 기록이 여기 보여요.</p>}
         </section>
       </div>
     </div>
@@ -352,7 +352,7 @@ function FolderTools({ folder, onAct, onGone }: { folder: Folder; onAct: (run: (
       </form>
       <textarea className="ws-input" rows={2} value={note} placeholder="폴더 메모 (AI 요약에 같이 들어가요)" onChange={(e) => setNote(e.target.value)} onBlur={() => { if (note !== (folder.note ?? "")) void onAct(() => call(`/api/knowledge/folder/${folder.id}`, { note }, "PATCH")); }} />
       {!sure ? <button className="btn ghost small" onClick={() => setSure(true)}>폴더 지우기</button> : (
-        <div className="row small"><span>안의 지식은 위 폴더로 올라가요.</span><button className="btn small danger" onClick={() => void onAct(() => call(`/api/knowledge/folder/${folder.id}`, undefined, "DELETE"), onGone)}>지우기</button><button className="btn ghost small" onClick={() => setSure(false)}>취소</button></div>
+        <div className="row small"><span>안의 기억은 위 폴더로 올라가요.</span><button className="btn small danger" onClick={() => void onAct(() => call(`/api/knowledge/folder/${folder.id}`, undefined, "DELETE"), onGone)}>지우기</button><button className="btn ghost small" onClick={() => setSure(false)}>취소</button></div>
       )}
     </div>
   );
@@ -416,7 +416,7 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
       {/* 보이는 것: 무엇인지(이름·상태·뜻), 바로 할 일(확인 문제·다음 복습), 이어진 지식. 나머지는 아래 접힌 칸에. */}
       <header className="kw-d-head">
         <p className="kw-crumb">{detail.path ? detail.path.split(" / ").join(" › ") : "주제 없음"}</p>
-        {editing ? <input className="ws-input kw-d-title" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="지식 이름" /> : <h3 className="kw-d-title" onDoubleClick={() => setEditing(true)}><Inline text={item.title} /></h3>}
+        {editing ? <input className="ws-input kw-d-title" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="기억 이름" /> : <h3 className="kw-d-title" onDoubleClick={() => setEditing(true)}><Inline text={item.title} /></h3>}
         <div className="kw-d-meta"><StateChip state={item.state} graduated={item.graduated} />{item.kind ? <span>{KIND_LABEL[item.kind]}{item.vocab ? " · 어휘" : ""}</span> : null}
           {item.aliases.length ? <span className="kw-aka" title="다른 이름">{item.aliases.slice(0, 4).join(" · ")}{item.aliases.length > 4 ? " …" : ""}</span> : null}
           {detail.tags?.map((t) => <button key={t.id} className="kw-tag" title="제목에 들어 있는 개념" onClick={() => onOpen(t.id)}>#{t.title.replace(/\s+/g, "")}</button>)}</div>
@@ -458,7 +458,7 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
         <span className="small muted">{item.graduated ? "졸업했어요 · 복습에서 빠져요" : next ? `다음 복습 ${whenText(next.dueAt)}` : item.state === "met" ? "아직 물어본 적 없어요" : ""}</span>
       </div>
 
-      {links.length ? <section><p className="eyebrow">이어진 지식 · {links.length}</p>
+      {links.length ? <section><p className="eyebrow">이어진 기억 · {links.length}</p>
         <ul className="kw-rels">{links.map((l) => <li key={`${l.out ? "f" : "b"}${l.item.id}`}>
           <span className="kw-rel-head">{relWord(l.relation, l.out) ? <span className="kw-rel" title={l.out ? `이것 —${l.relation}→ ${l.item.title}` : `${l.item.title} —${l.relation}→ 이것`}>{relWord(l.relation, l.out)}</span>
               : <><span className="kw-rel">{l.relation}</span><span className="kw-dir" aria-hidden>{l.out ? "→" : "←"}</span></>}
@@ -470,7 +470,7 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
       {detail.tagged?.length ? <section><p className="eyebrow">#{item.title.replace(/\s+/g, "")} · {detail.tagged.length}</p>
         <p className="kw-near small">{detail.tagged.map((t) => <button key={t.id} className="linkish" onClick={() => onOpen(t.id)}><Inline text={t.title} />{t.kind ? <span className="muted"> {KIND_LABEL[t.kind]}</span> : null}</button>)}</p></section> : null}
 
-      {detail.near?.length ? <p className="kw-near small"><span className="muted" title="뜻이 겹치거나 같이 나오지만, 어느 쪽이 먼저인지·무엇을 쓰는지 분명하지 않아 고리로 잇지 않았어요.">가까운 지식</span>
+      {detail.near?.length ? <p className="kw-near small"><span className="muted" title="뜻이 겹치거나 같이 나오지만, 어느 쪽이 먼저인지·무엇을 쓰는지 분명하지 않아 고리로 잇지 않았어요.">가까운 기억</span>
         {detail.near.map((n) => <button key={n.id} className="linkish" onClick={() => onOpen(n.id)}>{n.title}</button>)}</p> : null}
 
       <div className="kw-folds">
@@ -504,16 +504,16 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
               {mode === "link" || mode === "merge" ? (
                 <div className="kw-pick">
                   <div className="row">{mode === "link" ? <input className="ws-input kw-rel-in" value={relation} onChange={(e) => setRelation(e.target.value)} aria-label="관계" /> : null}
-                    <input className="ws-input" autoFocus value={linkQuery} onChange={(e) => setLinkQuery(e.target.value)} placeholder={mode === "link" ? "이을 지식 찾기" : "이것과 같은 지식 찾기"} />
+                    <input className="ws-input" autoFocus value={linkQuery} onChange={(e) => setLinkQuery(e.target.value)} placeholder={mode === "link" ? "이을 기억 찾기" : "이것과 같은 기억 찾기"} />
                     <button className="btn ghost small" onClick={() => { setMode(""); setLinkQuery(""); }}>취소</button></div>
                   <ul>{linkHits.map((h) => <li key={h.id}><button className="kw-hit" onClick={() => void onAct(() => mode === "link" ? call("/api/knowledge/link", { from: item.id, to: h.id, relation }) : call("/api/knowledge/merge", { keep: item.id, drop: h.id }), () => { setMode(""); setLinkQuery(""); })}>
                     <StateChip state={h.state} /> {h.title} <span className="small muted">{h.line.slice(0, 50)}</span></button></li>)}</ul>
-                  {mode === "merge" ? <p className="small muted">고른 지식의 이름, 출처, 고리, 기록이 이 지식으로 합쳐져요.</p> : null}
+                  {mode === "merge" ? <p className="small muted">고른 기억의 이름, 출처, 고리, 기록이 이 기억으로 합쳐져요.</p> : null}
                 </div>
-              ) : <div className="row"><button className="btn ghost small" onClick={() => setMode("link")}>+ 고리 잇기</button><button className="btn ghost small" onClick={() => setMode("merge")}>같은 지식 합치기</button></div>}</div>
+              ) : <div className="row"><button className="btn ghost small" onClick={() => setMode("link")}>+ 고리 잇기</button><button className="btn ghost small" onClick={() => setMode("merge")}>같은 기억 합치기</button></div>}</div>
             <Similar itemId={item.id} onOpen={onOpen} onAct={onAct} />
-            {mode === "delete" ? <div className="row small"><span>이 지식과 기록을 모두 지울까요?</span><button className="btn small danger" onClick={() => void onAct(() => call(`/api/knowledge/item/${item.id}`, undefined, "DELETE"), onGone)}>지우기</button><button className="btn ghost small" onClick={() => setMode("")}>취소</button></div>
-              : <button className="btn ghost small kw-del" onClick={() => setMode("delete")}>지식 지우기</button>}
+            {mode === "delete" ? <div className="row small"><span>이 기억과 기록을 모두 지울까요?</span><button className="btn small danger" onClick={() => void onAct(() => call(`/api/knowledge/item/${item.id}`, undefined, "DELETE"), onGone)}>지우기</button><button className="btn ghost small" onClick={() => setMode("")}>취소</button></div>
+              : <button className="btn ghost small kw-del" onClick={() => setMode("delete")}>기억 지우기</button>}
           </div>
         </details>
       </div>
@@ -536,15 +536,15 @@ function Similar({ itemId, onOpen, onAct }: { itemId: string; onOpen: (id: strin
     try { setHits((await call<{ hits: SimilarHit[] }>(`/api/knowledge/item/${itemId}/similar?limit=5`)).hits); } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
   };
   return (
-    <div><p className="eyebrow">비슷한 지식</p>
-      {hits === null ? <div className="row"><button className="btn ghost small" disabled={busy} onClick={() => void find()}>{busy ? "찾는 중… (처음 한 번은 모델을 내려받아 1~2분)" : "뜻이 비슷한 지식 찾기"}</button></div> : null}
+    <div><p className="eyebrow">비슷한 기억</p>
+      {hits === null ? <div className="row"><button className="btn ghost small" disabled={busy} onClick={() => void find()}>{busy ? "찾는 중… (처음 한 번은 모델을 내려받아 1~2분)" : "뜻이 비슷한 기억 찾기"}</button></div> : null}
       {err ? <p className="ws-err small">{err}</p> : null}
-      {hits?.length === 0 ? <p className="small muted">비슷한 지식이 없어요.</p> : null}
+      {hits?.length === 0 ? <p className="small muted">비슷한 기억이 없어요.</p> : null}
       {hits?.length ? <><ul className="kw-links">{hits.map((h) => <li key={h.id}>
         <button className="linkish" onClick={() => onOpen(h.id)}>{h.title}</button> <span className="small muted num">{Math.round(h.score * 100)}%{h.linked ? " · 이어짐" : ""}</span>{" "}
-        <button className="btn ghost small" onClick={() => { if (window.confirm(`"${h.title}"을(를) 이 지식으로 합칠까요? 이름·출처·고리·기록이 이쪽으로 옵니다.`)) void onAct(() => call("/api/knowledge/merge", { keep: itemId, drop: h.id }), () => setHits(null)); }}>같은 것 · 합치기</button>
+        <button className="btn ghost small" onClick={() => { if (window.confirm(`"${h.title}"을(를) 이 기억으로 합칠까요? 이름·출처·고리·기록이 이쪽으로 옵니다.`)) void onAct(() => call("/api/knowledge/merge", { keep: itemId, drop: h.id }), () => setHits(null)); }}>같은 것 · 합치기</button>
         {!h.linked ? <button className="btn ghost small" onClick={() => void onAct(() => call("/api/knowledge/link", { from: itemId, to: h.id, relation: "관련" }), () => setHits((x) => x?.map((y) => y.id === h.id ? { ...y, linked: true } : y) ?? null))}>관련 · 잇기</button> : null}
-      </li>)}</ul><p className="small muted">뜻이 가까운 순서예요. 가깝다고 같은 지식은 아니에요(깊이·너비 우선 탐색처럼 반대 개념도 가깝게 나와요).</p></> : null}
+      </li>)}</ul><p className="small muted">뜻이 가까운 순서예요. 가깝다고 같은 기억은 아니에요(깊이·너비 우선 탐색처럼 반대 개념도 가깝게 나와요).</p></> : null}
     </div>
   );
 }
@@ -558,13 +558,13 @@ function Duplicates({ pairs, onOpen, onAct }: { pairs: Dup[]; onOpen: (id: strin
   const [open, setOpen] = useState(true);
   return (
     <section className="panel kw-dupes">
-      <button className="linkish" onClick={() => setOpen((x) => !x)}><b>같은 지식일 수 있어요 · {pairs.length}</b> <span className="small muted">{open ? "접기" : "확인하기"}</span></button>
+      <button className="linkish" onClick={() => setOpen((x) => !x)}><b>같은 기억일 수 있어요 · {pairs.length}</b> <span className="small muted">{open ? "접기" : "확인하기"}</span></button>
       {open ? <ul className="kw-links">{pairs.map((p) => <li key={p.id} className="stack">
         <span><button className="linkish" onClick={() => onOpen(p.otherId)}>{p.otherTitle}</button> <span className="muted">↔</span> <button className="linkish" onClick={() => onOpen(p.newId)}>{p.newTitle}</button>
           <span className="small muted"> · {p.reason}</span></span>
         <span className="row">
           <button className="btn small" onClick={() => void onAct(() => call(`/api/knowledge/dupes/${p.id}`, { action: "merge", keep: p.otherId }))}>“{p.otherTitle}”으로 합치기</button>
-          <button className="btn ghost small" onClick={() => void onAct(() => call(`/api/knowledge/dupes/${p.id}`, { action: "dismiss" }))}>다른 지식이에요</button>
+          <button className="btn ghost small" onClick={() => void onAct(() => call(`/api/knowledge/dupes/${p.id}`, { action: "dismiss" }))}>다른 기억이에요</button>
         </span></li>)}</ul> : null}
     </section>
   );
@@ -611,7 +611,7 @@ function MaterialHead({ m, folders, mode, onMode, onPlace }: { m: MaterialRow; f
   const hasMap = Boolean(m.genId || m.sourceId || m.stages);
   return (
     <div className="row kw-mhead">
-      {hasMap ? <div className="ws-seg" role="tablist" aria-label="보기">{([["map", m.genId ? "목차" : m.stages ? "단계별" : "글 지도"], ["list", "지식 목록"]] as const).map(([k, label]) =>
+      {hasMap ? <div className="ws-seg" role="tablist" aria-label="보기">{([["map", m.genId ? "목차" : m.stages ? "단계별" : "글 지도"], ["list", "기억 목록"]] as const).map(([k, label]) =>
         <button key={k} role="tab" aria-selected={mode === k} className={mode === k ? "on" : ""} onClick={() => onMode(k)}>{label}</button>)}</div> : null}
       {m.genId ? <button className="btn small ghost" title="원문 쪽 보기·문제 풀기는 공부 화면의 자료 지도에서" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: m.genId } }))}>원문·문제</button> : null}
       {m.group === "project" ? <button className="btn small" onClick={() => go("project")}>실습 화면</button> : null}
@@ -644,7 +644,7 @@ function MaterialOutline({ genId, items, sel, onPick, onAct }: { genId: string; 
   return (
     <div className="ko">
       <p className="small muted ko-legend"><span><i className="dot bad" />몰랐음 {map.counts.unknown}</span><span><i className="dot read" />만남 {map.counts.met}</span>
-        <span><i className="dot good" />앎 {map.counts.known + map.counts.graduated}</span>{map.counts.new ? <span><i className="dot none" />아직 {map.counts.new}</span> : null}<span>· {map.pages}쪽</span>{map.counts.new ? <span>· ★ 핵심만 지식이 되고, 나머지는 모르면 “모름”</span> : null}</p>
+        <span><i className="dot good" />앎 {map.counts.known + map.counts.graduated}</span>{map.counts.new ? <span><i className="dot none" />아직 {map.counts.new}</span> : null}<span>· {map.pages}쪽</span>{map.counts.new ? <span>· ★ 핵심만 기억이 되고, 나머지는 모르면 “모름”</span> : null}</p>
       <ol className="ko-list">{map.sections.map((sec, n) => {
         const on = open === sec.id, t = tally(sec.cards), total = sec.cards.length || 1;
         return <li key={sec.id} className={on ? "on" : ""}>
@@ -661,7 +661,7 @@ function MaterialOutline({ genId, items, sel, onPick, onAct }: { genId: string; 
               <span className="ko-ctext"><b><Inline text={c.title} />{c.core ? <span className="ko-core" title="핵심">★</span> : null}</b>
                 {line(c.knowledgeId) ? <span className="ko-line"><Inline text={line(c.knowledgeId)} /></span> : null}</span>
               <span className="small muted ko-cp">{pageRange(c.pages)}</span>
-            </button>{!c.knowledgeId ? <button className="btn ghost small ko-pick" title="이 카드를 지식(몰랐음)으로 넣고 복습에 올려요" onClick={() => pick(c.ref)}>모름</button> : null}</li>)}</ul> : null}
+            </button>{!c.knowledgeId ? <button className="btn ghost small ko-pick" title="이 카드를 기억(몰랐음)으로 넣고 복습에 올려요" onClick={() => pick(c.ref)}>모름</button> : null}</li>)}</ul> : null}
         </li>;
       })}</ol>
     </div>

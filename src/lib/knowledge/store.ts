@@ -311,7 +311,7 @@ const sameSource = (a: KSource, b: Omit<KSource, "at">) => (a.ref && b.ref ? a.r
 
 function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult {
   const title = input.title.trim().slice(0, 120);
-  if (!title) throw new KnowledgeError(400, "지식 이름이 비어 있어요.");
+  if (!title) throw new KnowledgeError(400, "기억 이름이 비어 있어요.");
   const at = nowIso();
   const existing = sameAs(store.items, title, input.aliases);
   const item = existing ?? blank(title);
@@ -434,8 +434,8 @@ export const enrichKnowledge = (entries: Array<{ id: string; body?: string; alia
 export const updateKnowledge = (id: string, patch: { title?: string; body?: string; aliases?: string[]; folderId?: string | null; kind?: KKind | LegacyKind; example?: string; explain?: string;
   explainParts?: ExplainParts; explainSee?: Knowledge["explainSee"] }) => change((store) => {
   const item = store.items.find((x) => x.id === id);
-  if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
-  if (patch.title !== undefined) { if (!patch.title.trim()) throw new KnowledgeError(400, "지식 이름이 비어 있어요."); item.title = patch.title.trim().slice(0, 120); }
+  if (!item) throw new KnowledgeError(404, "기억을 찾을 수 없어요.");
+  if (patch.title !== undefined) { if (!patch.title.trim()) throw new KnowledgeError(400, "기억 이름이 비어 있어요."); item.title = patch.title.trim().slice(0, 120); }
   // 이 함수로 뜻을 바꾸는 것은 지식 창의 학습자뿐이다(AI 쪽은 layerKnowledge·enrichKnowledge를 쓴다).
   if (patch.body !== undefined) { item.body = patch.body.slice(0, 4000); item.bodyByHand = true; }
   if (patch.aliases !== undefined) item.aliases = [...new Set(patch.aliases.map((a) => a.trim()).filter(Boolean))].slice(0, 20);
@@ -455,7 +455,7 @@ export const updateKnowledge = (id: string, patch: { title?: string; body?: stri
 });
 export async function deleteKnowledge(id: string) {
   await change((store) => {
-    if (!store.items.some((x) => x.id === id)) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
+    if (!store.items.some((x) => x.id === id)) throw new KnowledgeError(404, "기억을 찾을 수 없어요.");
     store.items = store.items.filter((x) => x.id !== id);
     for (const item of store.items) item.links = item.links.filter((l) => l.to !== id);
   });
@@ -464,10 +464,10 @@ export async function deleteKnowledge(id: string) {
 }
 /** Two items that are one thing: the second folds into the first (names, sources, links, record). */
 export async function mergeKnowledge(keepId: string, dropId: string) {
-  if (keepId === dropId) throw new KnowledgeError(400, "같은 지식끼리는 합칠 수 없어요.");
+  if (keepId === dropId) throw new KnowledgeError(400, "같은 기억끼리는 합칠 수 없어요.");
   const item = await change((store) => {
     const keep = store.items.find((x) => x.id === keepId), drop = store.items.find((x) => x.id === dropId);
-    if (!keep || !drop) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
+    if (!keep || !drop) throw new KnowledgeError(404, "기억을 찾을 수 없어요.");
     for (const name of namesOf(drop)) if (!namesOf(keep).some((n) => normalize(n) === normalize(name))) keep.aliases.push(name);
     if (!keep.body.trim()) keep.body = drop.body; else if (drop.body.trim() && !keep.body.includes(drop.body.trim())) keep.body = `${keep.body}\n\n${drop.body}`.slice(0, 4000);
     for (const s of drop.sources) if (!keep.sources.some((x) => sameSource(x, s))) keep.sources.push(s);
@@ -487,7 +487,7 @@ export async function mergeKnowledge(keepId: string, dropId: string) {
 }
 export const linkKnowledge = (fromId: string, toId: string, relation: string, note?: string) => change((store) => {
   const from = store.items.find((x) => x.id === fromId), to = store.items.find((x) => x.id === toId);
-  if (!from || !to) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
+  if (!from || !to) throw new KnowledgeError(404, "기억을 찾을 수 없어요.");
   if (fromId === toId) throw new KnowledgeError(400, "자기 자신과는 이을 수 없어요.");
   const existing = from.links.find((l) => l.to === toId);
   const text = note?.trim().slice(0, 120);
@@ -498,14 +498,14 @@ export const linkKnowledge = (fromId: string, toId: string, relation: string, no
 });
 export const unlinkKnowledge = (fromId: string, toId: string) => change((store) => {
   const from = store.items.find((x) => x.id === fromId);
-  if (!from) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
+  if (!from) throw new KnowledgeError(404, "기억을 찾을 수 없어요.");
   from.links = from.links.filter((l) => l.to !== toId);
   return from;
 });
 /** The learner's own call: 만남 / 몰랐음 / 앎, and 졸업 (out of review, still in what they know). */
 export const setKnowledgeState = (id: string, patch: { state?: KState; graduated?: boolean }) => change((store) => {
   const item = store.items.find((x) => x.id === id);
-  if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
+  if (!item) throw new KnowledgeError(404, "기억을 찾을 수 없어요.");
   if (patch.state) item.state = patch.state;
   if (patch.graduated !== undefined) item.graduated = patch.graduated && item.state !== "unknown" ? true : false;
   if (patch.graduated && item.state === "met") { item.state = "known"; item.graduated = true; }
@@ -522,7 +522,7 @@ export const GRADUATE_DAYS = 3;
 export async function recordEvent(knowledgeId: string, kind: KEventKind, detail = "", source?: KEvent["source"], at = nowIso()) {
   const item = await change((store) => {
     const item = store.items.find((x) => x.id === knowledgeId);
-    if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
+    if (!item) throw new KnowledgeError(404, "기억을 찾을 수 없어요.");
     if (kind === "asked" || kind === "wrong" || kind === "hint") {
       item.stats[kind] += 1; item.state = "unknown"; item.graduated = false; item.stats.correctDays = [];
     } else if (kind === "correct") {
@@ -630,7 +630,7 @@ export async function tree() {
 export async function getKnowledge(id: string) {
   const store = await readStore();
   const item = store.items.find((x) => x.id === id);
-  if (!item) throw new KnowledgeError(404, "지식을 찾을 수 없어요.");
+  if (!item) throw new KnowledgeError(404, "기억을 찾을 수 없어요.");
   const byId = new Map(store.items.map((x) => [x.id, x]));
   const links = item.links.flatMap((l) => byId.has(l.to) ? [{ ...l, item: lite(byId.get(l.to)!) }] : []);
   const backlinks = store.items.flatMap((x) => x.links.filter((l) => l.to === id).map((l) => ({ relation: l.relation, ...(l.note ? { note: l.note } : {}), item: lite(x) })));

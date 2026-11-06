@@ -55,7 +55,7 @@ export type Knowledge = { id: string; title: string; body: string; folderId: str
   links: Array<{ to: string; relation: string; note?: string }>; sources: Array<{ kind: string; title: string; ref?: string; url?: string; page?: number; quote?: string; at: string }>;
   stats: { asked: number; wrong: number; hint: number; correct: number; correctDays: string[] }; createdAt: string; updatedAt: string; lastAt: string;
   review?: { algorithm: "leitner"; box: number; dueAt: string; repetitions: number; lapses: number } };
-export type Detail = { item: Knowledge; path: string; /** 제목에 들어 있는 개념(태그), 이 지식이 개념이면 이 태그가 붙은 지식 (11/5) */ tags?: Array<{ id: string; title: string }>; tagged?: ItemLite[]; links: Array<{ to: string; relation: string; note?: string; item: ItemLite }>; backlinks: Array<{ relation: string; note?: string; item: ItemLite }>; events: KEvent[];
+export type Detail = { item: Knowledge; path: string; /** 제목에 들어 있는 개념(태그), 이 기억이 개념이면 이 태그가 붙은 기억 (11/5) */ tags?: Array<{ id: string; title: string }>; tagged?: ItemLite[]; links: Array<{ to: string; relation: string; note?: string; item: ItemLite }>; backlinks: Array<{ relation: string; note?: string; item: ItemLite }>; events: KEvent[];
   /** 가까운 지식: close, but no clear link (AI 판정 "가까움"). */
   near?: Array<{ id: string; title: string; line: string }> };
 export type Question = { id: string; kind: "flashcard" | "choice" | "ox" | "blank" | "short" | "recognize"; label: string; knowledgeId: string; prompt: string; context?: string;

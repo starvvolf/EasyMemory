@@ -71,7 +71,7 @@ export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: bool
     if (!answer?.link.from) return;
     try {
       const [a, b] = await Promise.all([answer.link.from, answer.link.to].map(async (t) => (await call<{ hits: ItemLite[] }>(`/api/knowledge/search?q=${encodeURIComponent(t)}&limit=1`)).hits[0]));
-      if (!a || !b) throw new Error("이을 지식을 찾지 못했어요.");
+      if (!a || !b) throw new Error("이을 기억을 찾지 못했어요.");
       await call("/api/knowledge/link", { from: a.id, to: b.id, relation: answer.link.relation });
       setLinked(true);
       window.dispatchEvent(new Event("recaller:knowledge-changed"));
@@ -79,11 +79,11 @@ export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: bool
   };
 
   const list = hits ?? related;
-  if (!open) return <button className="sb-handle" onClick={onOpen} title="지식 사이드바 열기" aria-label="지식 사이드바 열기"><span>지식</span>{related.length ? <i className="num">{related.length}</i> : null}</button>;
+  if (!open) return <button className="sb-handle" onClick={onOpen} title="기억 사이드바 열기" aria-label="기억 사이드바 열기"><span>기억</span>{related.length ? <i className="num">{related.length}</i> : null}</button>;
   return (
-    <aside className="sb" aria-label="지식 사이드바">
-      <div className="sb-head"><b>지식</b><div className="row"><button className="btn ghost small" onClick={() => go("knowledge")}>지식창 열기</button><button className="btn ghost small" aria-label="사이드바 닫기" title="닫기" onClick={onClose}>→</button></div></div>
-      <input className="ws-input" type="search" placeholder="지식 찾기" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="사이드바 지식 찾기" />
+    <aside className="sb" aria-label="기억 사이드바">
+      <div className="sb-head"><b>기억</b><div className="row"><button className="btn ghost small" onClick={() => go("knowledge")}>기억창 열기</button><button className="btn ghost small" aria-label="사이드바 닫기" title="닫기" onClick={onClose}>→</button></div></div>
+      <input className="ws-input" type="search" placeholder="기억 찾기" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="사이드바 기억 찾기" />
       {error ? <p className="ws-err" onClick={() => setError("")}>{error}</p> : null}
 
       {sel ? (
@@ -101,8 +101,8 @@ export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: bool
         </section>
       ) : (
         <section>
-          <p className="eyebrow">{hits ? `찾은 것 ${hits.length}` : context?.title ? `지금 화면: ${context.title.slice(0, 30)}` : "지금 화면과 관련된 지식"}</p>
-          {!list.length ? <p className="small muted">{hits ? "찾은 지식이 없어요." : "이 화면과 이어진 지식이 아직 없어요."}</p> : null}
+          <p className="eyebrow">{hits ? `찾은 것 ${hits.length}` : context?.title ? `지금 화면: ${context.title.slice(0, 30)}` : "지금 화면과 관련된 기억"}</p>
+          {!list.length ? <p className="small muted">{hits ? "찾은 기억이 없어요." : "이 화면과 이어진 기억이 아직 없어요."}</p> : null}
           <ul className="sb-list">{list.map((i) => <li key={i.id}><button className="sb-item" onClick={() => void pick(i.id)}><StateChip state={i.state} graduated={i.graduated} /><span>{i.title}</span></button></li>)}</ul>
           {!hits && recent.length ? <><p className="eyebrow">최근</p><ul className="sb-list">{recent.map((i) => <li key={i.id}><button className="sb-item" onClick={() => void pick(i.id)}><StateChip state={i.state} graduated={i.graduated} /><span>{i.title}</span></button></li>)}</ul></> : null}
         </section>

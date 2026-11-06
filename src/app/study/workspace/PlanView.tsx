@@ -64,12 +64,12 @@ export default function PlanView() {
         <div className="pl-stats">
           <span><b className="num">{did.correct}</b><small>맞힘</small></span>
           <span><b className="num">{did.wrong}</b><small>틀림</small></span>
-          <span><b className="num">{did.met}</b><small>새 지식</small></span>
+          <span><b className="num">{did.met}</b><small>새 기억</small></span>
           <span><b className="num">{did.help}</b><small>힌트·질문</small></span>
         </div>
         {week.studied?.length ? (
           <ul className="pl-studied">{week.studied.map((s) => (
-            <li key={`${s.kind}:${s.title}`}><span className="chip">{KIND[s.kind] ?? s.kind}</span><span className="pl-st-title">{s.kind === "review" ? "지식 복습" : s.title}</span><span className="small muted num">{s.n}번 · {Number(s.last.slice(5, 7))}/{Number(s.last.slice(8, 10))}</span></li>))}
+            <li key={`${s.kind}:${s.title}`}><span className="chip">{KIND[s.kind] ?? s.kind}</span><span className="pl-st-title">{s.kind === "review" ? "기억 복습" : s.title}</span><span className="small muted num">{s.n}번 · {Number(s.last.slice(5, 7))}/{Number(s.last.slice(8, 10))}</span></li>))}
           </ul>
         ) : <p className="small muted">이 주에는 기록이 없어요.</p>}
       </section>

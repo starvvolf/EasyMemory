@@ -29,7 +29,7 @@ export default function WebStudy() {
       </section>
       {open.map ? <section className="panel"><ArticleMap source={open} onChanged={setOpen} /></section> : null}
       <section className="panel"><ArticleGoals source={open} onChanged={setOpen} /></section>
-      <section className="panel stack"><b>이 글의 지식</b><ArticleKnowledge source={open} /></section>
+      <section className="panel stack"><b>이 글의 기억</b><ArticleKnowledge source={open} /></section>
     </div>
   );
   return (
@@ -44,7 +44,7 @@ export default function WebStudy() {
       ) : null}
       {/* [경계] 2026-11-02 A (점검_UIUX화면연결 15번): 목록 위에 뜻 풀이와 글 넣기 */}
       {list?.length ? <div className="row small muted" style={{ justifyContent: "space-between" }}>
-        <span><span className="ws-dots" aria-hidden><i className="on" /><i /></span> 잘 읽었는지 확인 4단계 중 한 것 · <span className="chip read">예전 지식 n</span> 다른 자료에서 이미 배운 지식이 이 글에 n개</span>
+        <span><span className="ws-dots" aria-hidden><i className="on" /><i /></span> 잘 읽었는지 확인 4단계 중 한 것 · <span className="chip read">예전 기억 n</span> 다른 자료에서 이미 배운 기억이 이 글에 n개</span>
         <button className="btn small" onClick={() => go("start", { kind: "web" })}>+ 글 붙여 넣기</button></div> : null}
       <ul className="cs-list">
         {(list ?? []).map((s) => {
@@ -53,8 +53,8 @@ export default function WebStudy() {
             <li key={s.id}><button className="cs-row" onClick={() => void show(s.id)}>
               <span className="ws-dots" aria-label={`확인 ${done}/4`} title={`잘 읽었는지 확인 ${done}/4`}>{[0, 1, 2, 3].map((i) => <i key={i} className={i < done ? "on" : ""} />)}</span>
               <span className="cs-title">{s.title}</span>
-              {s.againIds.length ? <span className="chip read" title="다른 자료에서 이미 배운 지식">예전 지식 {s.againIds.length}</span> : null}
-              <span className="small muted">지식 {s.knowledgeIds.length} · {new Date(s.readAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</span>
+              {s.againIds.length ? <span className="chip read" title="다른 자료에서 이미 배운 기억">예전 기억 {s.againIds.length}</span> : null}
+              <span className="small muted">기억 {s.knowledgeIds.length} · {new Date(s.readAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</span>
             </button></li>
           );
         })}

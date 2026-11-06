@@ -43,7 +43,7 @@ export default function AgentScreen() {
           <b>{b.title}</b>
           {b.body ? <Rich text={b.body} className="small" /> : null}
           {b.kind === "question" && b.question ? <QuestionCard question={b.question} compact onDone={(g) => void answer(b.id, g.correct ? "맞힘" : "틀림")} /> : null}
-          {b.kind === "knowledge" && b.ref ? <button className="btn small" onClick={() => { go("knowledge"); setTimeout(() => window.dispatchEvent(new CustomEvent("recaller:knowledge-focus", { detail: { id: b.ref } })), 50); void close(b.id); }}>지식창에서 보기</button> : null}
+          {b.kind === "knowledge" && b.ref ? <button className="btn small" onClick={() => { go("knowledge"); setTimeout(() => window.dispatchEvent(new CustomEvent("recaller:knowledge-focus", { detail: { id: b.ref } })), 50); void close(b.id); }}>기억창에서 보기</button> : null}
           {b.kind === "problem" && b.ref ? <button className="btn small" onClick={() => { go("code"); setTimeout(() => window.dispatchEvent(new CustomEvent("recaller:code-open", { detail: { id: b.ref } })), 50); void close(b.id); }}>문제 풀기</button> : null}
           {b.kind === "ask" ? (
             <form className="stack" onSubmit={(e) => { e.preventDefault(); if (text[b.id]?.trim()) void answer(b.id, text[b.id]); }}>

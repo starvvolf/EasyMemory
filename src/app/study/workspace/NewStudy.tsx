@@ -8,8 +8,8 @@ import type { SourceView } from "./ArticleStudy";
 
 type Kind = "pdf" | "web" | "code" | "project";
 const KINDS: Array<{ kind: Kind; title: string; text: string; eg: string }> = [
-  { kind: "pdf", title: "PDF · 강의 자료", text: "알아야 할 지식을 뽑아 자료 지도로 보여 주고, 원하면 문제로 확인해요.", eg: "전공 PPT, 암기 과목, 교재 PDF" },
-  { kind: "web", title: "웹 글 · 칼럼", text: "글에서 알아야 할 지식과 고리를 잡고, 다음 글에서 다시 만나면 알려 줘요.", eg: "주식 칼럼, 기술 블로그, 뉴스 해설" },
+  { kind: "pdf", title: "PDF · 강의 자료", text: "기억할 것을 뽑아 자료 지도로 보여 주고, 원하면 문제로 확인해요.", eg: "전공 PPT, 암기 과목, 교재 PDF" },
+  { kind: "web", title: "웹 글 · 칼럼", text: "글에서 기억할 것과 고리를 잡고, 다음 글에서 다시 만나면 알려 줘요.", eg: "주식 칼럼, 기술 블로그, 뉴스 해설" },
   { kind: "code", title: "알고리즘 · 문제 풀이", text: "배운 개념으로 문제를 만들고, 직접 짜서 실행·채점해요.", eg: "바킹독 강의, 백준 대비, 언어 문법" },
   { kind: "project", title: "실습 · 직접 만들기", text: "VS Code에서 작은 서비스를 한 단계씩 만들고, 옆의 튜터가 알려 줘요.", eg: "게시판 API, 로그인, DB 저장" },
 ];
@@ -24,7 +24,7 @@ export default function NewStudy() {
   }, []);
   return (
     <div className="stack ws-narrow">
-      <header><h2 className="ws-title">무엇을 공부할까요?</h2><p className="muted">자료를 넣으면 알아야 할 지식을 뽑고, 문제로 확인하고, 잊을 때쯤 다시 물어봐요.</p></header>
+      <header><h2 className="ws-title">무엇을 공부할까요?</h2><p className="muted">자료를 넣으면 기억할 것을 뽑고, 문제로 확인하고, 잊을 때쯤 다시 물어봐요.</p></header>
       <div className="ns-kinds">
         {KINDS.map((k) => (
           <button key={k.kind} className={`ns-kind${kind === k.kind ? " on" : ""}`} onClick={() => { if (k.kind === "pdf") go("create"); else if (k.kind === "project") go("project"); else setKind(k.kind); }}>
@@ -54,7 +54,7 @@ function WebForm({ onMade }: { onMade: (sourceId: string) => void }) {
       <input className="ws-input" value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} placeholder="제목 (비워 두면 첫 줄)" />
       <input className="ws-input" value={v.url} onChange={(e) => setV({ ...v, url: e.target.value })} placeholder="주소 (선택)" />
       <textarea className="ws-input" rows={8} value={v.text} onChange={(e) => setV({ ...v, text: e.target.value })} placeholder="글 본문을 붙여 넣어요" />
-      <div className="row"><button className="btn primary" disabled={busy || v.text.trim().length < 80} onClick={() => void make()}>{/* 기다리는 시간 (2026-10-29 글 지도 실측): 글 길이와 거의 상관없이 14~20초 */}{busy ? "지식 잡는 중… (20초쯤)" : "지식 잡기"}</button>
+      <div className="row"><button className="btn primary" disabled={busy || v.text.trim().length < 80} onClick={() => void make()}>{/* 기다리는 시간 (2026-10-29 글 지도 실측): 글 길이와 거의 상관없이 14~20초 */}{busy ? "기억 잡는 중… (20초쯤)" : "기억 잡기"}</button>
         {v.text.trim() && v.text.trim().length < 80 ? <span className="small muted">본문이 조금 더 필요해요.</span> : null}</div>
       {error ? <p className="ws-err">{error}</p> : null}
     </section>

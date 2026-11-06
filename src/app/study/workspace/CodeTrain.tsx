@@ -284,14 +284,14 @@ function Review({ id, solved, saved }: { id: string; solved: boolean; saved?: Re
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
   const draft = async () => { setBusy("draft"); setMsg(""); try { setV((await call<{ draft: Review3 }>(`/api/code/problem/${id}/train/review-draft`, {})).draft); } catch (e) { setMsg(errorText(e)); } finally { setBusy(""); } };
-  const save = async () => { setBusy("save"); setMsg(""); try { const r = await call<{ recorded: number }>(`/api/code/problem/${id}/train/review`, v); setMsg(r.recorded ? "지식에 남겼어요. 지식 창의 '겪은 일'에서 볼 수 있어요." : "빈칸이라 남기지 않았어요."); window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar")); } catch (e) { setMsg(errorText(e)); } finally { setBusy(""); } };
+  const save = async () => { setBusy("save"); setMsg(""); try { const r = await call<{ recorded: number }>(`/api/code/problem/${id}/train/review`, v); setMsg(r.recorded ? "기억에 남겼어요. 기억 창의 '겪은 일'에서 볼 수 있어요." : "빈칸이라 남기지 않았어요."); window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar")); } catch (e) { setMsg(errorText(e)); } finally { setBusy(""); } };
   const field = (k: keyof Review3, label: string) => <label className="small cs-tr-edge"><span>{label}</span><textarea className="ws-input" rows={2} value={v[k] ?? ""} onChange={(e) => setV((x) => ({ ...x, [k]: e.target.value }))} /></label>;
   return (
     <div className="cs-tr-body">
       <p className="small muted">{solved ? "맞혔어요. 무엇을 배웠는지 세 줄로 남겨요." : "맞힌 뒤에 쓰면 좋아요. 포기할 때 써도 돼요."} 초안은 AI가 이번 풀이로 만들어요. 고쳐서 저장해요.</p>
       <div className="row"><button className="btn small" disabled={Boolean(busy)} onClick={() => void draft()}>{busy === "draft" ? "만드는 중…" : "초안 만들기"}</button></div>
       {field("idea", "핵심 발상")}{field("stuck", "막힌 이유")}{field("transfer", "다른 문제에도 쓸 원리")}
-      <div className="row"><button className="btn primary small" disabled={Boolean(busy)} onClick={() => void save()}>{busy === "save" ? "남기는 중…" : "지식에 남기기"}</button></div>
+      <div className="row"><button className="btn primary small" disabled={Boolean(busy)} onClick={() => void save()}>{busy === "save" ? "남기는 중…" : "기억에 남기기"}</button></div>
       {msg ? <p className="small muted">{msg}</p> : null}
     </div>
   );

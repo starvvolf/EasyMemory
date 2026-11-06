@@ -140,14 +140,14 @@ function SummaryPane({ summary, making }: { summary: Summary | null | undefined;
   const writing = summary?.status === "writing";
   // 글을 읽는 중에 화면이 밀리지 않게, 맨 아래를 보고 있을 때만 따라 내려간다.
   useEffect(() => { const el = end.current; if (!el || !writing) return; const r = el.getBoundingClientRect(); if (r.top < window.innerHeight + 120) el.scrollIntoView({ block: "end" }); }, [summary?.text, writing]);
-  if (!summary || (!summary.text && writing)) return <div className="mm5-chat"><p className="mm5-wait">{making || writing ? "자료를 읽고 요약을 쓰기 시작하는 중이에요…" : "이 자료는 요약 없이 만들었어요. [지식] 탭에서 보세요."}</p></div>;
+  if (!summary || (!summary.text && writing)) return <div className="mm5-chat"><p className="mm5-wait">{making || writing ? "자료를 읽고 요약을 쓰기 시작하는 중이에요…" : "이 자료는 요약 없이 만들었어요. [기억] 탭에서 보세요."}</p></div>;
   // 소제목 다음 줄이 바로 붙어 와도 소제목으로 보이게 문단을 나눈다.
   const text = summary.text.replace(/^(#{1,4} .+)$/gm, "\n$1\n").replace(/\n{3,}/g, "\n\n");
   return (
     <div className="mm5-chat" aria-live="polite">
       <RichBlock text={text} className="mm5-text" />
       {writing ? <span className="mm5-caret" aria-label="쓰는 중" /> : null}
-      {summary.status === "failed" ? <p className="small muted">요약을 끝까지 쓰지 못했어요{summary.error ? ` (${summary.error})` : ""}. 지식은 따로 만들어져요.</p> : null}
+      {summary.status === "failed" ? <p className="small muted">요약을 끝까지 쓰지 못했어요{summary.error ? ` (${summary.error})` : ""}. 기억은 따로 만들어져요.</p> : null}
       <div ref={end} />
     </div>
   );
@@ -239,7 +239,7 @@ function LiveBoard({ data }: { data: LiveData }) {
   const writing = data.outline.filter((o) => byPage.has(o.page) && !byPage.get(o.page)!.done).length;
   const cards = data.pages.reduce((n, p) => n + p.cards.length, 0);
   return (
-    <section className="mm4" aria-label="지식 카드를 쓰는 중">
+    <section className="mm4" aria-label="기억 카드를 쓰는 중">
       <div className="mm4-progress">
         <div className="mm4-bar"><span style={{ width: `${data.outline.length ? (done / data.outline.length) * 100 : 0}%` }} /><i style={{ width: `${data.outline.length ? ((done + writing) / data.outline.length) * 100 : 0}%` }} /></div>
         <span className="small"><b>{done}</b>/{data.outline.length}쪽 · 쓰는 중 {writing} · 카드 {cards}장</span>
@@ -367,18 +367,18 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
     { label: "자료 읽기", state: live?.outline.length || cardsN || summary?.text ? "done" : "now" },
     { label: "요약", state: summary?.status === "done" ? "done" : summary?.status === "writing" ? "now" : summary?.status === "failed" ? "done" : running ? "wait" : "done",
       note: summary?.status === "failed" ? "못 씀" : summary?.ms ? `${Math.round(summary.ms / 1000)}초` : undefined },
-    { label: "지식 카드", state: !running || map?.topics?.length ? "done" : cardsN || board === "live" ? "now" : "wait",
+    { label: "기억 카드", state: !running || map?.topics?.length ? "done" : cardsN || board === "live" ? "now" : "wait",
       note: cardsN ? `${cardsN}개` : board === "live" && live?.outline.length ? `${pagesIn}/${live.outline.length}쪽` : undefined },
     { label: "핵심·연결 정리", state: map?.topics?.length || !running ? "done" : cardsN && board === "off" ? "now" : "wait" },
     ...(map && !map.questionsLater ? [{ label: "문제", state: (!running ? "done" : map.topics?.length ? "now" : "wait") as Step["state"], note: map.counts.questions ? `${map.counts.questions}개` : undefined }] : []),
   ];
   const shownTab = tab ?? (summary && (summary.text || summary.status === "writing") ? "summary" : running && summary === undefined ? "summary" : "knowledge");
-  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", "요약"], ["knowledge", "지식"]] as const).map(([k, label]) =>
+  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", "요약"], ["knowledge", "기억"]] as const).map(([k, label]) =>
     <button key={k} className={shownTab === k ? "on" : ""} aria-pressed={shownTab === k} onClick={() => setTab(k)}>{label}{k === "knowledge" && running ? <span className="mm5-badge">만드는 중</span> : null}</button>)}</div>;
-  if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>지식을 정리하는 중…</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
+  if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>기억을 정리하는 중…</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
     <Steps steps={steps} />{tabs}
     {shownTab === "summary" ? <SummaryPane summary={summary} making /> : board !== "off" && live ? <LiveBoard data={live} />
-      : <p className="small muted">{error || "요약을 바탕으로 지식을 만드는 중이에요. 다 되면 여기에 목차별로 보여요."}</p>}</div>;
+      : <p className="small muted">{error || "요약을 바탕으로 기억을 만드는 중이에요. 다 되면 여기에 목차별로 보여요."}</p>}</div>;
   const shown = (c: Card) => (!coreOnly || c.core) && (only === "all" || (only === "unknown" ? c.state === "unknown" : c.state === "new" || c.state === "met"));
   const n = map.counts;
   const making = map.status !== "done";
@@ -390,10 +390,10 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
     <div className="mm2 mm3" role="dialog" aria-label="자료 지도">
       <div className="mm2-head">
         <div><p className="eyebrow">자료 지도</p><b>{map.title.replace(/\.pdf$/i, "")}</b>
-          <span className="small muted"> · {map.pages}쪽 · 지식 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater ? "" : ` · 문제 ${n.questions}`}</span>
-          {making ? <span className="small mm3-making"> · {board !== "off" ? "카드 쓰는 중" : map.questionsLater ? (n.cards ? "지식 정리 중" : "자료 읽는 중") : map.topics?.length ? "문제 만드는 중" : n.cards ? "지식 정리 중" : "자료 읽는 중"}…</span> : null}</div>
+          <span className="small muted"> · {map.pages}쪽 · 기억 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater ? "" : ` · 문제 ${n.questions}`}</span>
+          {making ? <span className="small mm3-making"> · {board !== "off" ? "카드 쓰는 중" : map.questionsLater ? (n.cards ? "기억 정리 중" : "자료 읽는 중") : map.topics?.length ? "문제 만드는 중" : n.cards ? "기억 정리 중" : "자료 읽는 중"}…</span> : null}</div>
         <span className="row small">
-          {map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="지식마다 확인 문제를 만들어 연습·복습에 붙여요"
+          {map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="기억마다 확인 문제를 만들어 연습·복습에 붙여요"
             onClick={() => { setAsking(true); void onMakeQuestions().then((ok) => { if (ok) setReload((k) => k + 1); }).finally(() => setAsking(false)); }}>{asking ? "시작하는 중…" : "문제 만들기"}</button> : null}
           <button className="btn ghost small" onClick={onClose}>닫기</button>
         </span>
@@ -401,7 +401,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
       {making ? <Steps steps={steps} /> : null}
       {tabs}
       {shownTab === "summary" ? <SummaryPane summary={summary} making={making} /> : <>
-      {making ? <p className="small mm5-note-line">지식은 요약을 바탕으로 조금씩 만들어져요. 다 되기 전에도 지금까지 된 것을 볼 수 있어요.</p> : null}
+      {making ? <p className="small mm5-note-line">기억은 요약을 바탕으로 조금씩 만들어져요. 다 되기 전에도 지금까지 된 것을 볼 수 있어요.</p> : null}
       <div className="row small mm3-tools">
         {map.topics?.length ? <label className="row small"><input type="checkbox" checked={coreOnly} onChange={(e) => setCoreOnly(e.target.checked)} /> 핵심만</label> : null}
         {n.unknown || n.known || n.graduated ? <div className="ws-seg">{([["all", "전체"], ["unknown", `몰랐음 ${n.unknown}`], ["new", "아직 확인 안 한 것"]] as const).map(([k, label]) =>
@@ -452,18 +452,18 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
                           {/* [경계] 2026-11-02 A (점검_UIUX화면연결 4번): 지도에서 이 지식의 내 상태와 지식창으로 가는 길 */}
                           {c.state !== "new" ? <span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span> : null}
                           <span className="cs-gap" />
-                          {c.knowledgeId ? <button className="btn ghost small" onClick={() => { const id = c.knowledgeId!; onClose(); go("knowledge", { id }); }} title="지식창에서 이 지식의 뜻·기록·이어진 지식 보기">지식창에서 보기</button> : null}
+                          {c.knowledgeId ? <button className="btn ghost small" onClick={() => { const id = c.knowledgeId!; onClose(); go("knowledge", { id }); }} title="기억창에서 이 기억의 뜻·기록·이어진 기억 보기">기억창에서 보기</button> : null}
                           {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
                         </div>
                         <Body s={c.shape} />
-                        {links.length ? <div className="mm3-rel"><span className="mm3-tag">이어지는 지식</span>
+                        {links.length ? <div className="mm3-rel"><span className="mm3-tag">이어지는 기억</span>
                           <div className="mm3-relchips">{links.map((x, i) =>
                             <button key={i} className="mm3-relchip" onClick={() => jump(x.to)} title={x.what || undefined}>
                               <span className="mm3-arrow">{x.back ? "←" : "→"}</span><Rich text={titles.get(x.to) ?? ""} />{x.what && x.what.length <= 20 ? <em>{x.what}</em> : null}</button>)}</div></div> : null}
                         {c.same.length || c.questions ? <div className="mm3-dfoot">
                           {c.same.length ? <span className="small muted">같은 내용: {c.same.map((x) => range(x.pages)).join(", ")}</span> : null}
                           <span className="cs-gap" />
-                          {c.questions ? <button className="btn small primary" onClick={() => onPractice ? onPractice(c.pages[0], c.id) : onPage(c.pages[0])}>이 지식 문제 풀기 ({c.questions})</button> : null}
+                          {c.questions ? <button className="btn small primary" onClick={() => onPractice ? onPractice(c.pages[0], c.id) : onPage(c.pages[0])}>이 기억 문제 풀기 ({c.questions})</button> : null}
                         </div> : null}
                       </div> : null}
                     </li>
@@ -474,7 +474,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
           );
         })}
       </ol>
-      {!visible.length ? <p className="small muted">{making ? "지식을 정리하는 중… 첫 카드까지 5~10초쯤 걸려요." : "고른 조건에 맞는 지식이 없어요."}</p> : null}
+      {!visible.length ? <p className="small muted">{making ? "기억을 정리하는 중… 첫 카드까지 5~10초쯤 걸려요." : "고른 조건에 맞는 기억이 없어요."}</p> : null}
       </div>}
       </>}
     </div>

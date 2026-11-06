@@ -27,7 +27,7 @@ export default function ProjectStudy() {
       if (!out.online) return;
       const sum = out.runs.reduce((a, r) => ({ items: a.items + r.items, created: a.created + r.created, events: a.events + r.events }), { items: 0, created: 0, events: 0 });
       const bad = out.runs.find((r) => r.error);
-      if (bad) setMsg(`지식에 넣지 못했어요: ${bad.error}`);
+      if (bad) setMsg(`기억에 넣지 못했어요: ${bad.error}`);
       if (!bad || out.runs.some((r) => !r.error)) setSynced({ at: new Date(), ...sum });
       if (sum.items) window.dispatchEvent(new Event("recaller:knowledge-changed"));
     } catch (e) { if (!quiet) setMsg(errorText(e)); }
@@ -67,7 +67,7 @@ export default function ProjectStudy() {
   return (
     <div className="pj stack">
       <header className="row" style={{ justifyContent: "space-between" }}>
-        <div><h2>실습</h2><p className="small muted">VS Code에서 직접 만들고, 튜터 탭이 한 걸음씩 알려 줘요. 배운 개념은 지식에 저절로 들어가요.</p></div>
+        <div><h2>실습</h2><p className="small muted">VS Code에서 직접 만들고, 튜터 탭이 한 걸음씩 알려 줘요. 배운 개념은 기억에 저절로 들어가요.</p></div>
         {status?.online ? <a className="btn ghost small" href={courseUrl} target="_blank" rel="noreferrer">+ 새 실습</a> : null}
       </header>
 
@@ -121,9 +121,9 @@ export default function ProjectStudy() {
           ) : null}
 
           <p className="small muted pj-sync">
-            {synced ? (synced.items ? `${synced.at.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}에 ${synced.items}개를 지식에 넣었어요${synced.created ? ` (새 지식 ${synced.created}개)` : ""}.` : "지식에 새로 넣을 것은 없어요.") : msg ? "아직 지식에 못 넣었어요." : "지식과 맞추는 중…"}
+            {synced ? (synced.items ? `${synced.at.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}에 ${synced.items}개를 기억에 넣었어요${synced.created ? ` (새 기억 ${synced.created}개)` : ""}.` : "기억에 새로 넣을 것은 없어요.") : msg ? "아직 기억에 못 넣었어요." : "기억과 맞추는 중…"}
             {" "}<button className="linkish" onClick={() => { setMsg(null); void sync(false); }}>지금 넣기</button>
-            {" · "}<button className="linkish" onClick={() => go("knowledge")}>지식 보기</button>
+            {" · "}<button className="linkish" onClick={() => go("knowledge")}>기억 보기</button>
           </p>
         </>
       )}

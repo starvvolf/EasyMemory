@@ -75,17 +75,17 @@ export default function TodayBoard() {
         <p className="td-big num">{due}<small>개 복습 차례</small></p>
         {!pick ? (
           <>
-            <p className="small muted">{unknown ? `몰랐던 지식 ${unknown}개가 먼저 나와요.` : due ? "오래 안 본 것부터 나와요." : "복습 차례는 없어요. 미리 연습하거나 새 문제를 풀어 보세요."}</p>
+            <p className="small muted">{unknown ? `몰랐던 기억 ${unknown}개가 먼저 나와요.` : due ? "오래 안 본 것부터 나와요." : "복습 차례는 없어요. 미리 연습하거나 새 문제를 풀어 보세요."}</p>
             <button className="btn primary" onClick={() => setPick(true)}>문제 풀기</button>
           </>
         ) : (
           <>
             <ul className="td-pick">
-              {review.length ? <li><button onClick={() => void quiz("지식 복습", "/api/knowledge/quiz?count=10")}><span><b>지식 복습</b> <small>{review.length}개 중 10문제</small></span><span aria-hidden="true">→</span></button></li> : null}
+              {review.length ? <li><button onClick={() => void quiz("기억 복습", "/api/knowledge/quiz?count=10")}><span><b>기억 복습</b> <small>{review.length}개 중 10문제</small></span><span aria-hidden="true">→</span></button></li> : null}
               {pdfLeft && pdf ? <li><button onClick={() => pdf.start()}><span><b>PDF 문제</b> <small>{pdfLeft}개 · 약 {pdf.minutes}분</small></span><span aria-hidden="true">→</span></button></li> : null}
               {wrong.length ? <li><button onClick={() => go("code", { id: wrong[0].id })}><span><b>틀린 알고리즘 다시</b> <small>{wrong[0].title}{wrong.length > 1 ? ` 외 ${wrong.length - 1}개` : ""}</small></span><span aria-hidden="true">→</span></button></li> : null}
               <li><button onClick={() => go("code")}><span><b>알고리즘 문제 고르기</b> <small>안 푼 것 {unsolved.length}개</small></span><span aria-hidden="true">→</span></button></li>
-              <li><button onClick={() => void quiz("미리 연습", "/api/knowledge/quiz?count=20&all=1")}><span><b>미리 연습</b> <small>복습 날이 안 된 지식까지</small></span><span aria-hidden="true">→</span></button></li>
+              <li><button onClick={() => void quiz("미리 연습", "/api/knowledge/quiz?count=20&all=1")}><span><b>미리 연습</b> <small>복습 날이 안 된 기억까지</small></span><span aria-hidden="true">→</span></button></li>
             </ul>
             {note ? <p className="small muted">{note}</p> : null}
             <button className="btn ghost small" onClick={() => setPick(false)}>닫기</button>

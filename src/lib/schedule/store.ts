@@ -159,7 +159,7 @@ export async function makeSchedule(deadlineId: string, now = new Date()) {
     const only = new Set(ids);
     const pool = items.length ? items : (await tree()).items.filter((i) => only.has(i.id) && !i.graduated);
     units = pool.map((i) => i.title);
-    what = `${deadline.title} 지식`;
+    what = `${deadline.title} 기억`;
   } else if (deadline.folderId) {
     const { folders } = await tree();
     const name = folders.find((f) => f.id === deadline.folderId)?.name ?? "폴더";
@@ -167,7 +167,7 @@ export async function makeSchedule(deadlineId: string, now = new Date()) {
     const all = (await tree()).items.filter((i) => i.folderId === deadline.folderId || false);
     const pool = items.length ? items : all.filter((i) => !i.graduated);
     units = pool.map((i) => i.title);
-    what = `${name} 지식`;
+    what = `${name} 기억`;
   } else {
     units = Array.from({ length: deadline.amount || 1 }, (_, i) => `${i + 1}`);
     what = deadline.title;

@@ -160,12 +160,12 @@ async function handle(request: Request, context: RouteContext) {
       }
       if (p[2] === "similar" && m === "GET") {
         try { return json(await similarKnowledge({ id: itemId }, { limit: Math.min(Number(url.searchParams.get("limit") ?? 8) || 8, 20) })); }
-        catch (error) { return NextResponse.json({ message: `비슷한 지식을 찾는 모델을 불러오지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
+        catch (error) { return NextResponse.json({ message: `비슷한 기억을 찾는 모델을 불러오지 못했어요: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` }, { status: 503 }); }
       }
       if (p[2] === "questions" && m === "GET") {
         const pool = await allItems();
         const item = pool.find((x) => x.id === itemId);
-        if (!item) return NextResponse.json({ message: "지식을 찾을 수 없어요." }, { status: 404 });
+        if (!item) return NextResponse.json({ message: "기억을 찾을 수 없어요." }, { status: 404 });
         return json({ questions: questionsFor(item, pool, url.searchParams.get("seed") ?? String(Date.now())) });
       }
     }

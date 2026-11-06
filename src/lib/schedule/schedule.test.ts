@@ -42,7 +42,7 @@ test("a deadline with a folder splits its review items over the days and keeps t
   const made = await makeSchedule(d.id, now);
   assert.equal(made.days, 4);
   assert.deepEqual(made.todos.map((t) => t.date), ["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29"]);
-  assert.match(made.todos[0].text, /조선 지식 3개 보기/);
+  assert.match(made.todos[0].text, /조선 기억 3개 보기/);
   assert.match(made.todos.at(-1)!.text, /전체 훑기 \+ 약한 것 몰아 보기/);
   // Making it again replaces the undone ones only.
   await updateTodo(made.todos[0].id, { done: true });

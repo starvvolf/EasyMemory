@@ -51,7 +51,7 @@ export function ArticleMap({ source, onChanged }: { source: SourceView; onChange
       <div className="am-head"><span className="chip">{GENRE[map.genre] ?? "글"}</span><p className="am-q">{map.question}</p></div>
       {map.flow.length ? <ol className="am-flow">{map.flow.map((f, i) => <li key={i}>{f}</li>)}</ol> : null}
       <div><p className="eyebrow">이 글의 핵심 {map.ideas.length}</p>
-        <ul className="am-ideas">{map.ideas.map((x) => <li key={x.id}><b>{x.title}{source.againIds.includes(x.id) ? <span className="am-again">이미 있던 지식</span> : null}</b><span>{x.body}</span></li>)}</ul></div>
+        <ul className="am-ideas">{map.ideas.map((x) => <li key={x.id}><b>{x.title}{source.againIds.includes(x.id) ? <span className="am-again">이미 있던 기억</span> : null}</b><span>{x.body}</span></li>)}</ul></div>
       <div className="stack">
         <p className="eyebrow">개념어 {terms.length} · 모르는 것만 눌러 주세요</p>
         <ul className="am-terms">{shown.map((t) => (
@@ -60,7 +60,7 @@ export function ArticleMap({ source, onChanged }: { source: SourceView; onChange
             <b>{t.name}</b><span className="am-line">{t.line}</span>{t.have === "met" ? <span className="am-tag">만난 적 있음</span> : t.have === "known" ? <span className="am-tag">아는 말</span> : null}
           </button></li>))}</ul>
         {terms.length > 8 ? <button className="linkish small am-more" onClick={() => setAll(!all)}>{all ? "접기" : `나머지 ${terms.length - 8}개 보기`}</button> : null}
-        <p className="small muted">누른 말은 ‘몰랐음’으로 지식창에 들어가 복습에 나와요{map.termIds.length ? ` · 지금 ${map.termIds.length}개 골랐어요` : ""}. 다시 누르면 빠져요.
+        <p className="small muted">누른 말은 ‘몰랐음’으로 기억창에 들어가 복습에 나와요{map.termIds.length ? ` · 지금 ${map.termIds.length}개 골랐어요` : ""}. 다시 누르면 빠져요.
           {known.length || againIdeas.length ? ` 이미 아는 것: ${[...againIdeas.map((x) => x.title), ...known.map((t) => t.name)].join(", ")}.` : ""}</p>
       </div>
       {map.consider.length ? <details className="ws-fold"><summary>생각해 볼 점 {map.consider.length}</summary><ul className="small am-consider">{map.consider.map((c, i) => <li key={i}>{c}</li>)}</ul>
@@ -128,7 +128,7 @@ export function ArticleGoals({ source, onChanged }: { source: SourceView; onChan
             <button key={g} className={`ag-goal${source.goals[g].done ? " done" : ""}`} disabled={locked} onClick={() => void quiz(g)}>
               <span className="ag-goal-n num">{source.goals[g].done ? "✓" : n + 1}</span>
               <span className="ag-goal-t">{source.goalText[g]}</span>
-              <span className="small muted">{locked ? (g === "terms" ? "모르는 개념어를 고르면 열려요" : "예전 지식이 나오면 열려요") : g === "claim" ? "한 줄 쓰기" : g === "recognize" ? "알아보기" : g === "chains" ? (source.map ? "핵심 문제" : "빈칸") : "객관식"}</span>
+              <span className="small muted">{locked ? (g === "terms" ? "모르는 개념어를 고르면 열려요" : "예전 기억이 나오면 열려요") : g === "claim" ? "한 줄 쓰기" : g === "recognize" ? "알아보기" : g === "chains" ? (source.map ? "핵심 문제" : "빈칸") : "객관식"}</span>
             </button>
           );
         })}

@@ -297,7 +297,7 @@ const displayTitle = deck => deckDisplayTitle(deck, Object.values(S.decks));
 function decksOf(subject){ return Object.values(S.decks).filter(d => !d.pending && subjectOf(d) === subject).sort(byTitle); }
 function weakList(decks){ return decks.flatMap(d => d.items.filter(it => isWeak(d, it)).map(it => ({ d, it, miss:missCount(d, it) }))); }
 /* 과목 = 목표 (2026-10-28 "4개 축"): subjects and their materials go to the knowledge store's goals whenever they change,
-   so the 지식 screen and 일정 use the same 과목·시험일 (env.onSubjects in DejipgiStudy.tsx; nothing outside local mode). */
+   so the 기억 screen and 일정 use the same 과목·시험일 (env.onSubjects in DejipgiStudy.tsx; nothing outside local mode). */
 function syncSubjects(renamed){
   if (!env.onSubjects) return;
   const materials = Object.values(S.decks).filter(d => !d.pending && subjectOf(d)).map(d => ({ subject:subjectOf(d), title:String(d.sourceName || d.title || "").replace(/\.pdf$/i, "") }));
@@ -572,8 +572,8 @@ on(document.getElementById("tabs"), "click", (e) => {
   setView(b.dataset.view);
 });
 /* ==========================================================================================================
-   Recaller 2 (설계 문서 "Recaller 2 설계", 2026-10-24): 홈 · 지식 · 작업대.
-   What to know (지식 포인트) is kept apart from where it is (원문 쪽·스팬); mastery is read per point from the
+   Recaller 2 (설계 문서 "Recaller 2 설계", 2026-10-24): 홈 · 기억 · 작업대.
+   What to know (기억 포인트) is kept apart from where it is (원문 쪽·스팬); mastery is read per point from the
    same records the practice screen writes. Old materials without a plan get one point per goal.
    ========================================================================================================== */
 const KP_STATE = {
@@ -632,7 +632,7 @@ function kpCounts(list){
   return c;
 }
 function startPoint(k){
-  if (!k.items.length){ toast("이 지식 포인트에 묶인 문제가 아직 없어요."); return; }
+  if (!k.items.length){ toast("이 기억 포인트에 묶인 문제가 아직 없어요."); return; }
   S.session = { queue: shuffle(k.items).map(({ d, it }) => ({ deck:d.id, item:it.id })), i:0, phase:"ask", assisted:new Set(), requeued:new Set(), results:[], cur:null, mode:"point", viewed:new Set() };
   S.session.from = S.view; prepCurrent(); setView("practice");
 }
@@ -658,7 +658,7 @@ async function askCoach(q){
   const weak = points.filter(k => k.state === "weak").slice(0, 12).map(k => "- " + k.title).join("\n") || "(없음)";
   const plan = todayPlan();
   const exam = subject ? examOf(subject) : "";
-  const prompt = `너는 학습 앱 Recaller의 코치다. 학습자의 상태를 보고 짧고 구체적으로 답한다. 다음에 할 일이 있으면 앱 안의 행동(오늘 할 것 시작, 약점 다시 풀기, 지식 포인트 열기, 원문 쪽 읽기)으로 제안한다. 모르는 것은 지어내지 않는다.\n\n[학습자 상태]\n과목: ${subject || "전체"}${exam ? ` (시험 ${exam}, ${ddayLabel(daysLeft(exam))})` : ""}\n지식 포인트 ${points.length}개: 숙련 ${c.mastered}, 혼자 맞힘 ${c.good}, 푸는 중 ${c.mid}, 약점 ${c.weak}, 안 풀어봄 ${c.new}\n약점 지식 포인트:\n${weak}\n오늘 할 것: ${plan ? plan.queue.length + "문제" : "없음"}\n\n[질문]\n${q}`;
+  const prompt = `너는 학습 앱 Recaller의 코치다. 학습자의 상태를 보고 짧고 구체적으로 답한다. 다음에 할 일이 있으면 앱 안의 행동(오늘 할 것 시작, 약점 다시 풀기, 기억 포인트 열기, 원문 쪽 읽기)으로 제안한다. 모르는 것은 지어내지 않는다.\n\n[학습자 상태]\n과목: ${subject || "전체"}${exam ? ` (시험 ${exam}, ${ddayLabel(daysLeft(exam))})` : ""}\n기억 포인트 ${points.length}개: 숙련 ${c.mastered}, 혼자 맞힘 ${c.good}, 푸는 중 ${c.mid}, 약점 ${c.weak}, 안 풀어봄 ${c.new}\n약점 기억 포인트:\n${weak}\n오늘 할 것: ${plan ? plan.queue.length + "문제" : "없음"}\n\n[질문]\n${q}`;
   Coach.q = q; Coach.text = ""; Coach.err = ""; Coach.busy = true; Coach.ctl = new AbortController(); render();
   try{ await ask([{ role:"user", content:prompt }], { signal:Coach.ctl.signal, onText: ({ text }) => { Coach.text = text; paintCoach(); } }); }
   catch(e){ if (!(e && e.name === "AbortError")) Coach.err = composeErrorCopy(e); }
@@ -680,7 +680,7 @@ function renderCoachBox(){
     h("div", { class:"row", style:"gap:8px;flex-wrap:nowrap" }, input, h("button", { class:"btn primary", disabled:Coach.busy || !ask ? true : null, onclick:send }, Coach.busy ? "답하는 중…" : "묻기")),
     h("div", { class:"chat-sugs", style:"margin-top:10px" },
       weakN ? h("button", { class:"chip-btn", onclick: () => startWeak(subject || "") }, `PDF 약점 다시 풀기 · ${Math.min(weakN, WEAK_MAX)}`) : null,
-      h("button", { class:"chip-btn", onclick: () => setView("knowledge") }, "지식 보기")));
+      h("button", { class:"chip-btn", onclick: () => setView("knowledge") }, "기억 보기")));
   if (Coach.q && (Coach.text || Coach.busy || Coach.err)){
     box.append(h("div", { class:"coach-answer" },
       h("p", { class:"small muted", text:"Q. " + Coach.q }),
@@ -699,7 +699,7 @@ function renderKpMeter(c, total){
   return h("div", { class:"bar kp-meter", "aria-hidden":"true" }, seg(c.mastered + c.good, "g"), seg(c.weak, "r"), seg(c.mid, "h"));
 }
 /* 오늘 (2026-10-26): what to do today, in the order a learner wants it — start something, the day's review and
-   to-dos, then the PDF plan and the coach. The knowledge cloud moved to 지식, the material list to 공부. */
+   to-dos, then the PDF plan and the coach. The knowledge cloud moved to 기억, the material list to 공부. */
 function publishPdfToday(plan){
   const left = plan ? plan.queue.length : 0;
   const minutes = plan ? Math.round(plan.queue.reduce((sum, r) => { const d = S.decks[r.deckId]; const it = d && (d.allItems || d.items).find(x => x.id === r.itemId); return sum + ((S.rules && S.rules.seconds && it && S.rules.seconds[it.format]) || 40); }, 0) / 60) : 0;
@@ -733,7 +733,7 @@ function renderKnowledge(){
   const wrap = h("div", { class:"stack" });
   if (liveSubjects().length) wrap.append(subjectChips());
   const subject = currentSubject(), points = knowledgeOf(subject);
-  if (!points.length){ wrap.append(h("div", { class:"panel small muted", text:"이 과목에는 아직 지식 포인트가 없어요. 자료를 넣고 문제를 만들면 생겨요." })); return wrap; }
+  if (!points.length){ wrap.append(h("div", { class:"panel small muted", text:"이 과목에는 아직 기억 포인트가 없어요. 자료를 넣고 문제를 만들면 생겨요." })); return wrap; }
   const sel = points.find(k => k.key === S.kp.sel) || null;
   const filter = S.kp.filter || "all";
   const shown = points.filter(k => filter === "all" || (filter === "weak" ? k.state === "weak" : filter === "new" ? k.state === "new" : k.state === "good" || k.state === "mastered"));
@@ -742,7 +742,7 @@ function renderKnowledge(){
   const c = kpCounts(points);
   const list = h("section", { class:"panel kp-list" },
     h("div", { class:"row", style:"justify-content:space-between" },
-      h("h2", { text:`${subject || "전체"} · 지식 포인트 ${points.length}` }),
+      h("h2", { text:`${subject || "전체"} · 기억 포인트 ${points.length}` }),
       h("button", { class:"btn small ghost", onclick: () => { S.sum.subject = subject || null; setView("summary"); } }, "한 장 정리")),
     h("div", { class:"chat-sugs" }, [["all", `전체 ${points.length}`], ["weak", `약점 ${c.weak}`], ["new", `안 풀어봄 ${c.new}`], ["good", `혼자 맞힘 ${c.good + c.mastered}`]].map(([key, label]) =>
       h("button", { class:"chip-btn", "aria-pressed": filter === key ? "true" : "false", onclick: () => { S.kp.filter = key; render(); } }, label))),
@@ -751,7 +751,7 @@ function renderKnowledge(){
         h("span", { class:`chip ${KP_STATE[k.state].cls}`, text:KP_STATE[k.state].label }), h("span", { class:"kp-title" }, ...inlineLabel(k.title)),
         h("span", { class:"small muted num", text:k.items.length ? `문제 ${k.items.length}` : "" }))))))));
   const detail = h("section", { class:"panel kp-detail" });
-  if (!sel) detail.append(h("p", { class:"muted", text:"왼쪽에서 지식 포인트를 고르면 원문 근거와 문제가 보여요." }));
+  if (!sel) detail.append(h("p", { class:"muted", text:"왼쪽에서 기억 포인트를 고르면 원문 근거와 문제가 보여요." }));
   else {
     const st = KP_STATE[sel.state];
     const spans = sel.refs.flatMap(r => (r.spans.length ? r.spans : r.pages.map(p => ({ page:p, kind:"text", quote:"" }))).map(s => ({ ...s, d:r.d })));
@@ -765,7 +765,7 @@ function renderKnowledge(){
       h("h2", { class:"kp-name" }, richText(sel.title)),
       sel.essentials.length ? h("ul", { class:"kp-ess" }, sel.essentials.map(e => h("li", null, richText(e)))) : null,
       h("div", { class:"row", style:"gap:8px;flex-wrap:wrap" },
-        h("button", { class:"btn primary", disabled: sel.items.length ? null : true, onclick: () => startPoint(sel) }, sel.items.length ? `이 지식 문제 풀기 · ${sel.items.length}` : "묶인 문제 없음"),
+        h("button", { class:"btn primary", disabled: sel.items.length ? null : true, onclick: () => startPoint(sel) }, sel.items.length ? `이 기억 문제 풀기 · ${sel.items.length}` : "묶인 문제 없음"),
         uniq.length ? h("button", { class:"btn", onclick: () => openReader(uniq[0].d.id, uniq[0].page) }, `원문 읽기 p.${uniq[0].page}`) : null,
         h("button", { class:"btn ghost", onclick: () => { setView("home"); askCoach(`"${sel.title}"을(를) 쉽게 설명해 주고, 시험에 어떻게 나올지 알려줘.`); } }, "코치에게 묻기")),
       h("p", { class:"eyebrow", style:"margin-top:16px", text:`원문 근거 ${uniq.length}` }),
@@ -778,10 +778,10 @@ function renderKnowledge(){
   return wrap;
 }
 /* 지식창 (2026-10-26): the new learner-wide knowledge window is a React screen (workspace/KnowledgeWindow.tsx). The
-   per-subject view above stays as "자료별 지식 포인트" (예전 화면), one button away. */
+   per-subject view above stays as "자료별 기억 포인트" (예전 화면), one button away. */
 function renderKnowledgeLegacy(){
   const wrap = renderKnowledge();
-  if (env.mountView) wrap.prepend(h("div", { class:"row" }, h("button", { class:"btn small ghost", onclick: () => { S.kp.legacy = false; render(); } }, "← 새 지식창으로")));
+  if (env.mountView) wrap.prepend(h("div", { class:"row" }, h("button", { class:"btn small ghost", onclick: () => { S.kp.legacy = false; render(); } }, "← 새 기억창으로")));
   return wrap;
 }
 /* 지식창 · 코드 · 일정 hosts: made once, kept across re-renders (like the flow canvas), so their state survives. */
@@ -794,7 +794,7 @@ function viewHost(name, props){
 let lastContextKey = "";
 function emitContext(){
   if (S.view === "code" || S.view === "web") return;
-  let ctx = { view:S.view, title:{ home:"오늘", knowledge:"지식", practice:"공부 · PDF 자료", create:"자료 넣기", records:"학습 기록", bench:"작업대", plan:"일정", summary:"한 장 정리", archive:"보관함", web:"공부 · 웹 글", project:"공부 · 실습", start:"새 공부" }[S.view] || S.view, refs:[], knowledgeIds:[] };
+  let ctx = { view:S.view, title:{ home:"오늘", knowledge:"기억", practice:"공부 · PDF 자료", create:"자료 넣기", records:"학습 기록", bench:"작업대", plan:"일정", summary:"한 장 정리", archive:"보관함", web:"공부 · 웹 글", project:"공부 · 실습", start:"새 공부" }[S.view] || S.view, refs:[], knowledgeIds:[] };
   if (S.view === "read" && S.reader && S.reader.deckId && S.decks[S.reader.deckId]){
     const d = S.decks[S.reader.deckId];
     ctx = { ...ctx, title:`${displayTitle(d)} p.${S.reader.page}`, refs:[d.id + ":"] };
@@ -1045,7 +1045,7 @@ function renderHome(){
   wrap.append(h("section", { class:"panel today" },
     h("div", null,
       h("p", { class:"eyebrow", text:"PDF 자료 연습" }),
-      h("h2", { text: due ? "복습할 문제가 기다리고 있어요" : fresh ? "새 문제로 시작해 볼까요" : pendings.length ? "지식을 정리하는 동안 자료 지도가 채워져요" : decks.length ? "오늘 할 문제를 모두 마쳤어요" : "새 자료로 시작해 볼까요" }),
+      h("h2", { text: due ? "복습할 문제가 기다리고 있어요" : fresh ? "새 문제로 시작해 볼까요" : pendings.length ? "기억을 정리하는 동안 자료 지도가 채워져요" : decks.length ? "오늘 할 문제를 모두 마쳤어요" : "새 자료로 시작해 볼까요" }),
       // 2026-10-30 (A): the flow is 자료 지도 first, questions when asked — say so where the counts are about questions.
       h("p", { class:"small muted", style:"margin:4px 0 10px", text:"새 자료는 자료 지도부터 열려요. 문제는 지도에서 원할 때 만들어요." }),
       h("div", { class:"counts" },
@@ -1148,7 +1148,7 @@ function materialName(list){
 /* Decks of one subject grouped by their material (PDF). A material with one deck shows that card directly. */
 function pendingCard(d){
   return h("article", { class:"deck" },
-    h("div", null, h("h3", { text:d.title }), h("div", { class:"meta" }, h("span", { text:"지식만 정리한 것 · 문제 없음" }), h("span", { class:"chip acc", text:PENDING_LABEL[d.pending.status] || "준비 중" }))),
+    h("div", null, h("h3", { text:d.title }), h("div", { class:"meta" }, h("span", { text:"기억만 정리한 것 · 문제 없음" }), h("span", { class:"chip acc", text:PENDING_LABEL[d.pending.status] || "준비 중" }))),
     h("div", { class:"row" }, genDeck(d.id) ? h("button", { class:"btn small primary", onclick: () => MaterialMapView.open(d) }, "자료 지도") : null),
     h("div", { style:"grid-column:1/-1" }, pendingNote(d)));
 }
@@ -1206,7 +1206,7 @@ function deckCard(d, growing){
       h("h3", null, d.pastExam ? h("span", { class:"chip exam", style:"margin-right:6px;vertical-align:2px", text:"기출형" }) : null, displayTitle(d).replace(/ · 기출형/, "")),
       h("div", { class:"meta" },
         pick,
-        h("span", { class:"num", text:`지식 ${d.objectives.length} · 문제 ${d.items.length}` }),
+        h("span", { class:"num", text:`기억 ${d.objectives.length} · 문제 ${d.items.length}` }),
         c.due ? h("span", { class:"chip bad num", text:`복습 ${c.due}` }) : null,
         c.fresh ? h("span", { class:"chip num", text:`새 문제 ${c.fresh}` }) : null,
         d.skipped && d.skipped.length ? h("span", { class:"chip help num", title:d.skipped.map(x => `${x.questionId}: ${x.reason}`).join("\n"), text:`빠진 문항 ${d.skipped.length}` }) : null
@@ -1969,7 +1969,7 @@ function renderReader(){
       onclick: () => { (S.plan.prefs || (S.plan.prefs = {})).showTerms = !termsOn(); Store.savePlan(S.plan); render(); } }, "핵심 용어") : null,
     pdfOn && Trans.can(d) ? h("button", { class:"btn small", "aria-pressed": Trans.on() ? "true" : "false", title: Trans.on() ? "원문(영어)으로 보기" : "쪽을 한국어로 덧씌워 보기 (핵심 용어는 영어 병기)", onclick: () => Trans.toggle() }, Trans.on() ? "번역 켬" : "번역") : null,
     d.example || (notesApi && notesApi.compose) ? h("button", { class:"btn small", title:"이 자료의 용어를 한국어 뜻·비유와 함께 묶은 지도와 이야기", onclick: () => TermMap.openFor(d) }, "용어 지도") : null,
-    env.mountView && /^(pending:)?gen_/.test(d.id) ? h("button", { class:"btn small", title:"목차와 지식을 한 화면에: 구역마다 알아야 할 것과 내 상태(몰랐음·만남·앎)", onclick: () => MaterialMapView.open(d) }, "자료 지도") : null,
+    env.mountView && /^(pending:)?gen_/.test(d.id) ? h("button", { class:"btn small", title:"목차와 기억을 한 화면에: 구역마다 알아야 할 것과 내 상태(몰랐음·만남·앎)", onclick: () => MaterialMapView.open(d) }, "자료 지도") : null,
     notesButton(d),
     h("div", { class:"pager" },
       h("button", { class:"qbtn", disabled: R.page <= 1, "aria-label":"이전 쪽", onclick: () => goPage(R.page - 1) }, "‹"),
@@ -3756,8 +3756,8 @@ function renderSummary(){
         weakQs ? h("button", { class:"btn small primary", onclick: () => startWeak(subject) }, `약점 다시 풀기${weakQs ? ` ${Math.min(weakQs, WEAK_MAX)}` : ""}`) : null,
         h("button", { class:"btn small ghost", onclick: () => window.print() }, "인쇄"))),
     h("div", { class:"row" }, toggle("weakOnly", "약점·물어본 것만"), toggle("hide", "떠올릴 것 가리기"),
-      h("span", { class:"small muted num", text:`지식 ${total} · 약점 ${weak} · 안 풀어봄 ${fresh}` })),
-    S.sum.hide ? h("p", { class:"small muted", text:"지식 이름만 보고 떠올린 뒤 눌러서 확인하세요. 여기서 확인한 것은 풀이 기록에 들어가지 않아요." }) : null));
+      h("span", { class:"small muted num", text:`기억 ${total} · 약점 ${weak} · 안 풀어봄 ${fresh}` })),
+    S.sum.hide ? h("p", { class:"small muted", text:"기억 이름만 보고 떠올린 뒤 눌러서 확인하세요. 여기서 확인한 것은 풀이 기록에 들어가지 않아요." }) : null));
 
   if (!decks.length) wrap.append(h("div", { class:"panel small muted", text:"이 과목에 묶인 자료가 없어요. 연습 탭의 자료 카드에서 과목을 골라 주세요." }));
   for (const { d, secs, st, asked } of perDeck){
@@ -3766,7 +3766,7 @@ function renderSummary(){
     const supportN = (d.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").length;
     const coreOnly = !!(S.plan.prefs && S.plan.prefs.detail && S.plan.prefs.detail[planKey(d)] === "core");
     box.append(h("header", { class:"row", style:"justify-content:space-between" },
-      h("div", null, h("h3", { text:displayTitle(d) }), h("p", { class:"small muted num", text:`지식 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}${coreOnly ? ` · 핵심만 (보조 ${supportN}개 뺌)` : ""}` })),
+      h("div", null, h("h3", { text:displayTitle(d) }), h("p", { class:"small muted num", text:`기억 ${st.size}${dWeak ? ` · 약점 ${dWeak}` : ""}${coreOnly ? ` · 핵심만 (보조 ${supportN}개 뺌)` : ""}` })),
       h("div", { class:"row" },
         supportN ? h("button", { class:"chip-btn", "aria-pressed": coreOnly ? "true" : "false", title:"보조 목표를 연습·오늘 할 것에서 빼거나 다시 넣어요",
           onclick: () => { const det = prefs().detail || (prefs().detail = {}); if (coreOnly) delete det[planKey(d)]; else det[planKey(d)] = "core";
@@ -4102,7 +4102,7 @@ async function startMaterial(){
     S.builder = freshBuilder();
     // 사용자 10/30: 시작하면 PDF 읽기 대신 자료 지도로 바로 (지식이 정리되는 대로 채워짐). 닫으면 그 아래 읽기 화면.
     const toMap = env.mountView && /^(pending:)?gen_/.test(deck.id);
-    toast(toMap ? "지식 정리를 시작했어요. 정리되는 대로 자료 지도에 채워져요." : "문제 만들기를 시작했어요. 그동안 읽어 두세요.");
+    toast(toMap ? "기억 정리를 시작했어요. 정리되는 대로 자료 지도에 채워져요." : "문제 만들기를 시작했어요. 그동안 읽어 두세요.");
     if (toMap){ setView("practice"); MaterialMapView.open(deck); } else openReader(deck.id, rec.from);
     pollPending();
   }catch(e){
@@ -4138,7 +4138,7 @@ async function resumeMaterial(d){
     savePending(); render(); pollPending();
   }catch(e){ toast(e.message || "다시 시작하지 못했어요."); }
 }
-const PENDING_LABEL = { waiting:"시작 대기", running:"자료 파악 중", confirm:"목표 확인 필요", paused:"잠시 멈춤", authoring:"문제 만드는 중", cards:"지식 정리됨", ready:"준비됨", failed:"실패" };
+const PENDING_LABEL = { waiting:"시작 대기", running:"자료 파악 중", confirm:"목표 확인 필요", paused:"잠시 멈춤", authoring:"문제 만드는 중", cards:"기억 정리됨", ready:"준비됨", failed:"실패" };
 let pollTimer = null;
 async function pollPending(){
   clearTimeout(pollTimer);
@@ -4238,7 +4238,7 @@ function renderBuilder(){
   wrap.append(h("ol", { class:"steps" },
     h("li", { "data-on": step === 1 ? "true" : "false", "data-done": step > 1 ? "true" : "false" }, "자료 올리기"),
     h("li", { "data-on": step === 2 ? "true" : "false" }, "방향 정하기"),
-    h("li", { "data-on":"false" }, "지식 정리 시작")));
+    h("li", { "data-on":"false" }, "기억 정리 시작")));
   if (!engine) wrap.append(h("div", { class:"note warn", text:"이 화면에서는 생성 요청을 보낼 수 없어요. 로컬 실험 모드에서 열어 주세요." }));
   const acc = accountNote(); if (acc) wrap.append(acc);
   if (b.error) wrap.append(h("div", { class:"note err", role:"alert", text:b.error }));
@@ -4246,7 +4246,7 @@ function renderBuilder(){
 
   const drop = h("div", { class:"drop", id:"drop" },
     h("strong", { text: b.pages.length ? `${b.sourceName} · ${b.pages.length}쪽` : "PDF를 끌어다 놓거나 골라 주세요" }),
-    h("span", { class:"small muted", text:"알아야 할 지식을 뽑아 자료 지도로 보여 줘요. 문제는 지도에서 원할 때 만들어요." }),
+    h("span", { class:"small muted", text:"기억할 것을 뽑아 자료 지도로 보여 줘요. 문제는 지도에서 원할 때 만들어요." }),
     h("label", { class:"btn", for:"pdf" }, b.pages.length ? "다른 PDF 고르기" : "PDF 고르기"),
     h("input", { id:"pdf", type:"file", accept:"application/pdf", class:"hidden", disabled:b.busy, onchange:(e) => { const f = e.target.files[0]; if (f) readPdf(f); } }));
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.dataset.over = "true"; });
@@ -4312,8 +4312,8 @@ function renderBuilder(){
             h("option", { value:"", text:label }), ...opts.map(([v, t]) => h("option", { value:v, selected: b.survey[key] === v ? true : null, text:t })))),
         h("input", { placeholder:"이미 아는 부분", value:b.survey.known || "", disabled:b.busy, oninput:(e) => { b.survey = { ...b.survey, known: e.target.value || undefined }; } })) : null),
     h("div", { class:"row" },
-      h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "지식 정리 시작"),
-      h("span", { class:"small muted", text:"바로 자료 지도로 넘어가요. 지식이 정리되는 대로 채워지고, 문제는 지도에서 원할 때 만들어요." }))));
+      h("button", { class:"btn primary", id:"startBtn", disabled: b.busy || !engine, onclick:startMaterial }, "기억 정리 시작"),
+      h("span", { class:"small muted", text:"바로 자료 지도로 넘어가요. 기억이 정리되는 대로 채워지고, 문제는 지도에서 원할 때 만들어요." }))));
   return wrap;
 }
 
