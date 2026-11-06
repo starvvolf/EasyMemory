@@ -691,7 +691,11 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 /* 프리스타일(11/4): 걸음 없이 대화만 */
 .freewrap { display: flex; flex-direction: column; height: 100vh; max-width: 860px; margin: 0 auto; }
 .freewrap.fw { max-width: none; height: 100vh; }
-.freehead { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--f-line, var(--line)); }
+.freehead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--f-line, var(--line)); }
+/* 제목 한 줄 (2026-11-06): 버튼 줄 위에 따로, 길면 … */
+.freehead .fhtitle { flex: 1 0 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+.freehead .fhtitle b { font-size: 14px; }
+.freehead .fhtitle + * { margin-left: auto; }
 .freelist { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .freeme { align-self: flex-end; max-width: 85%; background: var(--acc-soft); border-radius: 12px; padding: 8px 12px; white-space: pre-wrap; display: grid; gap: 4px; }
 .freeai { max-width: 100%; min-width: 0; }

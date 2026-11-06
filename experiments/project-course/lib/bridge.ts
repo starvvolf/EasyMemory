@@ -49,9 +49,14 @@ export function events(runId: string, res: ServerResponse) {
   res.on("close", () => { clearInterval(ping); set.delete(res); if (!set.size) states.delete(runId); onChange(runId); });
 }
 
+let onSaved: (runId: string, file: string) => void = () => {};
+/** Ctrl+S (2026-11-06 사용자 "ctrl s 누르면 자동으로 튜터가 확인"): 같은 파일이 '저장 안 한 변경 있음'에서 없음으로 바뀐 때. */
+export function onBridgeSaved(fn: (runId: string, file: string) => void) { onSaved = fn; }
 export function setState(runId: string, s: Omit<BridgeState, "at">) {
+  const before = states.get(runId);
   states.set(runId, { ...s, at: new Date().toISOString() });
   onChange(runId);
+  if (before?.dirty && !s.dirty && s.file && before.file === s.file) onSaved(runId, s.file);
 }
 export const connected = (runId: string) => (streams.get(runId)?.size ?? 0) > 0;
 export const bridgeState = (runId: string) => (connected(runId) ? states.get(runId) ?? null : null);

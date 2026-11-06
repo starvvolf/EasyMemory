@@ -20,7 +20,7 @@ import { runSnippet } from "../lib/tutor-tools.ts";
 import { genStatus, startGeneration } from "../lib/generate.ts";
 import { floatInUse, openFloat, poll as floatPoll, setFloat, typing as floatTyping } from "../lib/float.ts";
 import { act, ask as lessonAsk, explainBlock as lessonBlock, closeWatchers, lessonView, loadPlan, notifyLesson, refocus, subscribe, what as lessonWhat } from "../lib/lesson.ts";
-import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeConnect, setState as bridgeSetState } from "../lib/bridge.ts";
+import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeConnect, onBridgeSaved, setState as bridgeSetState } from "../lib/bridge.ts";
 
 /** 대화 실습의 이름: Codex 대화(codex-chat) 또는 실험판 대화(agent-chat)의 학습자 첫 말, 60자. 못 읽으면 null. */
 async function chatTitle(r: Run): Promise<string | null> {
@@ -329,6 +329,8 @@ const routes: [string, RegExp, Handler][] = [
     return { accepted: got?.ok.length ?? 0, rejected: got?.bad ?? [], ...(await cl.learnedOf(key)) };
   }],
   // 11/4 사용자 "현재 작업 폴더 위치도 사람이 보고 수정 가능하게": 대화(실험판 엔진)의 작업 폴더를 바꾼다. VS Code도 그 폴더를 연다
+  // 저장하면 튜터가 확인 켜고 끄기 (2026-11-06)
+  ["POST", /^\/api\/runs\/(\w+)\/auto-check$/, async (req, m) => { const b = await body(req); await saveRun(m[1], (r) => { r.autoCheck = b.on !== false; }); notifyLesson(m[1]); return { autoCheck: b.on !== false }; }],
   ["POST", /^\/api\/runs\/(\w+)\/workspace$/, async (req, m) => {
     const b = await body(req);
     const run = await getRun(m[1]);
@@ -402,6 +404,7 @@ const server = createServer(async (req, res) => {
 
 onBridgeChange((id) => notifyLesson(id));
 onBridgeConnect((id) => { refocus(id).catch(() => {}); });
+onBridgeSaved((id, file) => { import("../lib/lesson.ts").then((m) => m.checkOnSave(id, file)).catch((e) => console.error("저장 확인:", e)); });
 const shutdown = () => { killAll(); closeWatchers(); process.exit(0); };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

@@ -254,7 +254,7 @@ export async function lessonView(runId: string, n: number) {
     recap: await recap(runId, { stageTitle: (k) => course.stages.find((x) => x.n === k)?.title ?? "", nowLabel: `${n}단계 · ${now ?? plan.title}` }).catch(() => null),
     now, mode: s.mode ?? null, resumable: !!s.asked && !s.busy && (s.waiting === "action" || s.waiting === "save"),
     thinking: s.busy ? thinking.get(lk(runId, n)) ?? null : null, asking: askWaiters.get(lk(runId, n))?.id ?? null,
-    stuck: await stuckView(runId), stuckChoices: Object.values(CHOICES).map((c) => c.label), free: !!run.free,
+    stuck: await stuckView(runId), stuckChoices: Object.values(CHOICES).map((c) => c.label), free: !!run.free, autoCheck: run.autoCheck !== false,
     ...(run.codexId ? await codexPart(run.codexId) : run.chatId ? await chatPart(run.chatId) : {}),
     ...(run.codexId || run.chatId ? { records: await (await import("./goal-record.ts")).recordsOf(runId) } : {}),
     ...(run.codexId || run.chatId ? { goals: await (await import("./goals.ts")).goalsView(runId) } : {}) };
@@ -303,6 +303,24 @@ async function codexPart(codexId: string) {
   });
   return { messages, busy: v.busy, workspace: v.workspace, learned: v.learned,
     chat: { id: v.id, engine: "codex", goal: "", focus: "", support: [], observations: 0, noCourse: true, model: v.model, models: v.models, edit: v.edit, codexLogin: v.status.loggedIn } };
+}
+/**
+ * 저장하면 튜터가 확인 (2026-11-06 사용자 "ctrl s 누르면 자동으로 확인 해주면 좋겠음"): 대화로 배우는 실습(Codex·실험판)에서
+ * VS Code가 파일을 저장하면, 튜터가 답하는 중이 아니고 학습자가 자동 확인을 끄지 않았을 때 그 파일을 확인하라고 한 번 묻는다.
+ * 정해진 코스(단계 수업)는 원래 저장하면 검사가 돈다(onSave). 같은 파일은 20초 안에 다시 묻지 않는다.
+ */
+const savedAt = new Map<string, number>();
+export async function checkOnSave(runId: string, saved: string) {
+  const run = await getRun(runId).catch(() => null);
+  if (!run || !(run.codexId || run.chatId) || run.autoCheck === false) return;
+  if (!/\.(m?[jt]sx?|py|java|c|cc|cpp|h|go|rs|rb|kt|cs|html|css|json|sql)$/i.test(saved)) return;
+  const key = `${runId}:${saved}`;
+  if (Date.now() - (savedAt.get(key) ?? 0) < 20_000) return;
+  const busy = run.codexId ? (await (await import("./codex-chat.ts")).view(run.codexId)).busy : (await (await import("./agent-chat.ts")).chatView(run.chatId!)).busy;
+  if (busy) return;
+  savedAt.set(key, Date.now());
+  const say = `[저장함] ${saved}을(를) 저장했어요. 작업 폴더에서 이 파일을 읽고, 지금 목표 기준으로 맞게 했는지 짧게 확인해 주세요. 틀린 곳은 답을 바로 주지 말고 어디를 보면 되는지 알려 주세요.`;
+  if (run.codexId) await codexAsk(runId, run.codexId, say); else await chatAsk(runId, run.chatId!, say);
 }
 async function codexAsk(runId: string, codexId: string, text: string) {
   const cx = await import("./codex-chat.ts");

@@ -63,6 +63,8 @@ export type Run = {
   plan: Plan; current: number; workspaces: Record<string, string>; stages: Record<string, StageProgress>;
   /** 프리스타일(11/4 사용자 "실험판 느낌 그대로 제품에 연결"): 걸음 없이 대화만, 짧은 지시문 · effort low */
   free?: boolean;
+  /** 저장하면 튜터가 확인(2026-11-06). false면 끔. */
+  autoCheck?: boolean;
   /** 11/4 사용자 "이번에 GPT가 만든 것까지 그대로 붙여 봐": 프리스타일 대화를 GPT 실험판 엔진(agent-chat)이 그대로 맡는다. 그 대화 id */
   chatId?: string;
   /** 11/4 사용자 "기존 UI에 붙여 봐, 첫 화면에서 Codex 버전 · 기존 버전": Codex 엔진 대화 id(lib/codex-chat) */

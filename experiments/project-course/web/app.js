@@ -1380,7 +1380,8 @@ function drawFree() {
       h("button", { class: `fchip warm ${goalUi.stuck ? "on" : ""}`, onclick: () => { goalUi.stuck = !goalUi.stuck; drawLesson(); } }, "너무 어려워요")) : null,
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
-    h("div", { class: "grow" }, h("b", {}, lesson.chat ? (lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · ${lesson.chat.engine === "codex" ? "Codex" : "기존"} 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
+    // 제목은 한 줄 전체를 쓰고, 길면 … (2026-11-06 사용자 "제목한테 가로줄 하나주고 길면 ..."). 전체 제목은 마우스를 올리면 보인다.
+    h("div", { class: "fhtitle", title: lesson.chat ? (lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일" }, h("b", {}, lesson.chat ? (lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · ${lesson.chat.engine === "codex" ? "Codex" : "기존"} 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
     lesson.chat ? modelPick(run, lesson) : null,
     h("button", { class: "fib", title: "대화 목록", "aria-label": "대화 목록", onclick: () => go_("#/home") }, icon("home")),
     h("button", { class: "btn small", title: "새 대화", onclick: () => go_("#/home") }, "+ 새 대화"),
@@ -1517,5 +1518,6 @@ function wsBar(run, lesson) {
   return h("div", { class: "wsbar" }, h("span", { class: "mut small" }, "작업 폴더"), h("code", { class: "wsp", title: path }, path),
     h("button", { class: "btn small", disabled: lesson.busy, title: lesson.busy ? "답하는 중에는 못 바꿔요" : "다른 폴더로 바꾸기", onclick: () => { wsUi.edit = true; drawLesson(); } }, "바꾸기"),
     h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/editor`, { float: false }); toast("VS Code에서 열었어요."); }) }, "VS Code로 열기"),
+    h("label", { class: "small edittog", title: "VS Code에서 저장(Ctrl+S)하면 튜터가 그 파일을 확인해요" }, h("input", { type: "checkbox", checked: lesson.autoCheck !== false, onchange: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/auto-check`, { on: e.target.checked }); toast(e.target.checked ? "저장하면 튜터가 확인해요." : "저장해도 튜터가 확인하지 않아요."); }) }), " 저장하면 확인"),
     lesson.chat.edit ? h("label", { class: "small edittog", title: "튜터가 이 폴더의 파일을 고칠 수 있는지" }, h("input", { type: "checkbox", checked: lesson.chat.edit === "allow", disabled: lesson.busy, onchange: (e) => chatOpt(run, { edit: e.target.checked ? "allow" : "deny" }) }), " 튜터가 고치기") : null);
 }
