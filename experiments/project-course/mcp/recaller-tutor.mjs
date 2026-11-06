@@ -3,7 +3,7 @@
 // 도구 둘: 학습자 기록 보기 · 진행 방식 기억하기. 실제 일은 코스 서버(4100)가 한다 — 여기서는 넘기기만.
 // 환경: RECALLER_URL(코스 서버 주소), RECALLER_CHAT(이 대화 id)
 import { createInterface } from "node:readline";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const BASE = process.env.RECALLER_URL || "http://127.0.0.1:4100";
@@ -22,6 +22,18 @@ function wsList() {
   } };
   walk(WS, 0);
   return out.length ? out.join("\n") : "(작업 폴더가 비어 있어요)";
+}
+// 작업 폴더에 쓰기 (2026-11-06 사용자 A안): Windows에서는 Codex가 쓰기 권한을 요청받아도 읽기 전용으로 낮춘다(Windows 샌드박스 설정이 없으면).
+// 학습자가 [허용]했을 때만(RECALLER_EDIT=allow) 이 도구를 보이고, 작업 폴더 밖 · 숨김 폴더는 거절한다.
+const EDIT = process.env.RECALLER_EDIT === "allow";
+function wsWrite(rel, content) {
+  const p = inWs(rel); if (!p || p === WS) throw new Error("작업 폴더 안의 파일 경로를 주세요.");
+  if (path.relative(WS, p).split(path.sep).some((x) => x.startsWith(".") || x === "node_modules")) throw new Error("숨김 폴더 · node_modules에는 쓰지 않아요.");
+  const text = String(content ?? "");
+  if (text.length > 200000) throw new Error("20만 자가 넘어요. 나눠서 써 주세요.");
+  mkdirSync(path.dirname(p), { recursive: true });
+  writeFileSync(p, text, "utf8");
+  return `썼어요: ${path.relative(WS, p).split(path.sep).join("/")} (${text.split("\n").length}줄)`;
 }
 function wsRead(rel) {
   const p = inWs(rel); if (!p) throw new Error("작업 폴더 밖은 읽지 않아요.");
@@ -48,6 +60,12 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { path: { type: "string", description: "작업 폴더 기준 경로" } }, required: ["path"], additionalProperties: false },
     annotations: { title: "작업 폴더 파일 읽기", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   },
+  ...(EDIT ? [{
+    name: "write_workspace_file",
+    description: "학습자 작업 폴더에 파일을 만들거나 통째로 덮어쓴다(작업 폴더 기준 경로, 예: async_example.py). 학습자가 파일 고치기를 허락해서 보이는 도구다. Codex 실행 환경이 읽기 전용으로 보여도 이 도구로는 쓸 수 있다. 고칠 때는 먼저 read_workspace_file로 읽고 전체 내용을 보낸다.",
+    inputSchema: { type: "object", properties: { path: { type: "string", description: "작업 폴더 기준 경로" }, content: { type: "string", description: "파일 전체 내용" } }, required: ["path", "content"], additionalProperties: false },
+    annotations: { title: "작업 폴더에 파일 쓰기", readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+  }] : []),
   {
     name: "remember_preference",
     description: "학습자가 앞으로의 진행 방식을 말하면 기억한다(다음 대화에도 이어짐). quote는 학습자가 한 말에서 글자 그대로 옮긴 구절.",
@@ -68,9 +86,9 @@ async function call(name, args) {
     const j = await r.json().catch(() => ({}));
     return r.ok ? { content: [{ type: "text", text: String(j.text ?? "") }] } : { content: [{ type: "text", text: `학습 조정 실패: ${j.error || r.status}` }], isError: true };
   }
-  if (name === "list_workspace_files" || name === "read_workspace_file") {
-    try { return { content: [{ type: "text", text: name === "list_workspace_files" ? wsList() : wsRead(args?.path) }] }; }
-    catch (e) { return { content: [{ type: "text", text: `읽지 못했어요: ${e.message}` }], isError: true }; }
+  if (name === "list_workspace_files" || name === "read_workspace_file" || name === "write_workspace_file") {
+    try { return { content: [{ type: "text", text: name === "list_workspace_files" ? wsList() : name === "read_workspace_file" ? wsRead(args?.path) : wsWrite(args?.path, args?.content) }] }; }
+    catch (e) { return { content: [{ type: "text", text: `${name === "write_workspace_file" ? "쓰지" : "읽지"} 못했어요: ${e.message}` }], isError: true }; }
   }
   const url = name === "learner_profile" ? `${BASE}/api/codex-chat/${CHAT}/learner` : `${BASE}/api/codex-chat/${CHAT}/preference`;
   const r = await fetch(url, name === "learner_profile" ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(args ?? {}) });
