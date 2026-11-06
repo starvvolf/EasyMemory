@@ -81,3 +81,28 @@ test("목표 단계(11/5): ① 이해 → [이해했어요] 적용 과제 → [�
   await G.goalAction(r, "next", {});
   assert.match((await G.goalsOf(r)).log.at(-1)!.text, /마침/);
 });
+
+test("지도는 늘 있다(11/6): 바텀업으로 해 온 목표가 지도에 남고, 탑다운으로 바꿔도 1단계부터 다시 돌지 않는다", async () => {
+  const r = "run9";
+  await G.runGoalTool(r, "propose_plan", { long: "캐시", spec: "", mode: "bottomup", map: [], first: { title: "반복 계산 보기", done: "x" } }, []);
+  await G.goalAction(r, "confirm", {});
+  assert.deepEqual((await G.goalsOf(r)).map.map((m) => [m.title, m.status]), [["반복 계산 보기", "doing"]]);
+  await G.goalAction(r, "understood", {}); await G.goalAction(r, "applied", {});
+  await G.goalAction(r, "next", {});
+  await G.runGoalTool(r, "set_current_goal", { title: "딕셔너리에 저장", done: "y" }, []);
+  assert.deepEqual((await G.goalsOf(r)).map.map((m) => [m.title, m.status]), [["반복 계산 보기", "done"], ["딕셔너리에 저장", "doing"]]);
+  // 탑다운으로 바꾸면: 지나온 단계는 두고 남은 단계만 정하라고 한다
+  assert.match((await G.goalAction(r, "mode", { mode: "topdown" }))!, /지나온 단계는 그대로/);
+  // 모델이 처음부터 다 보내도 이미 지난 단계와 같은 제목은 빠진다
+  await G.runGoalTool(r, "update_map", { titles: ["반복 계산 보기", "딕셔너리에 저장", "오래된 캐시", "정리"] }, []);
+  assert.deepEqual((await G.goalsOf(r)).map.map((m) => m.status), ["done", "doing", "todo", "todo"]);
+  assert.match((await G.goalAction(r, "next", {}))!, /다음 단계는 "오래된 캐시"/);
+  const g = await G.goalsOf(r);
+  assert.equal(g.map[1].status, "skipped");
+  assert.match(await G.goalContext(r), /3\.· 오래된 캐시/);
+  // 학습 종료: 하던 목표를 닫고 튜터는 안 부른다
+  await G.runGoalTool(r, "set_current_goal", { title: "오래된 캐시 보기", done: "z" }, []);
+  assert.equal(await G.goalAction(r, "end", {}), null);
+  const e = await G.goalsOf(r);
+  assert.equal(e.current, null); assert.equal(e.map[2].status, "skipped");
+});

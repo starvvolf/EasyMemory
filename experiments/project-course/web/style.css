@@ -804,7 +804,12 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .mem.better { opacity: .65; }
 .memrow { display: flex; align-items: center; gap: 8px; }
 .memrow .hin { flex: 1; }
-.memst { font-size: 12px; padding: 1px 7px; border-radius: 10px; background: #e8e8e8; color: #333; white-space: nowrap; }
+.memst { font-size: 12px; padding: 1px 7px; border-radius: 10px; background: var(--soft); color: #333; white-space: nowrap; }
 .memst.확인 { background: #f6d38a; }
 .memst.가설 { background: #e3e7f0; }
 .memst.나아짐 { background: #cfe9cf; }
+/* 학습 종료 덮개(11/6) */
+.endcover { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 999; }
+.endbox { background: var(--panel); color: var(--ink); padding: 22px 26px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 260px; }
+.endbox .spin { width: 26px; height: 26px; border: 3px solid #ccc; border-top-color: #4a7bd8; border-radius: 50%; animation: endspin .8s linear infinite; }
+@keyframes endspin { to { transform: rotate(360deg); } }

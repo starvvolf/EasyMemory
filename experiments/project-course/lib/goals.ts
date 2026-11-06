@@ -41,13 +41,13 @@ const str = { type: "string" } as const;
 export const GOAL_TOOLS = [
   { name: "ask_questions", description: "학습자에게 고르기형 질문을 화면에 띄운다(설문지). 만들 것을 어느 수준으로 할지 좁힐 때, 진행 방식(topdown: 구조부터 / bottomup: 작은 것부터)을 물을 때 쓴다. 앞에서 학습자가 한 말을 바탕으로 3~5개. 띄운 뒤에는 답을 기다린다.",
     properties: { intro: str, questions: { type: "array", items: { type: "object", additionalProperties: false, properties: { q: str, options: { type: "array", items: str }, multi: { type: "boolean" } }, required: ["q", "options", "multi"] } } }, required: ["intro", "questions"] },
-  { name: "propose_plan", description: "좁혀진 내용으로 장기 목표를 제안한다. 학습자가 [확정]을 누르면 장기 목표 · 방식 · 지도 · 첫 현재 목표가 정해진다. map은 topdown이면 큰 단계 제목 3~6개, bottomup이면 빈 목록. first는 첫 현재 목표와 완료 조건(학습자가 확인할 수 있는 한 문장).",
+  { name: "propose_plan", description: "좁혀진 내용으로 장기 목표를 제안한다. 학습자가 [확정]을 누르면 장기 목표 · 방식 · 지도 · 첫 현재 목표가 정해진다. map은 큰 단계 제목: topdown이면 3~6개, bottomup이면 지금 보이는 첫 몇 단계만(넓혀 가며 update_map으로 더한다). first는 첫 현재 목표와 완료 조건(학습자가 확인할 수 있는 한 문장).",
     properties: { long: str, spec: str, mode: { type: "string", enum: ["topdown", "bottomup"] }, map: { type: "array", items: str }, first: { type: "object", additionalProperties: false, properties: { title: str, done: str }, required: ["title", "done"] } }, required: ["long", "spec", "mode", "map", "first"] },
   { name: "set_current_goal", description: "다음 현재 목표와 완료 조건을 정한다. 학습자가 [다음으로]를 눌러 앞 목표가 끝났을 때 쓴다. 탑다운이면 지도의 다음 단계를 지금 할 만큼 구체적으로.",
     properties: { title: str, done: str }, required: ["title", "done"] },
   { name: "open_support", description: "막힌 곳을 메우는 보충 목표를 연다(현재 목표는 미뤄 둠). 학습자가 [막혔어요]로 이유를 보냈을 때, 또는 학습자 말에서 막힘이 분명할 때(why_quote에 그 말을 글자 그대로). 보충은 작게, 원래 목표로 돌아가는 데 필요한 만큼.",
     properties: { title: str, done: str, why_quote: str }, required: ["title", "done", "why_quote"] },
-  { name: "update_map", description: "탑다운 지도의 남은 단계 제목을 고친다(끝난 · 하는 중 단계는 그대로). 진행하다 계획이 달라졌을 때.",
+  { name: "update_map", description: "지도의 남은 단계 제목을 고친다(끝난 · 하는 중 단계는 그대로 두고 titles에는 남은 단계만). 진행하다 계획이 달라졌거나, 바텀업에서 넓혀 갈 방향이 보일 때.",
     properties: { titles: { type: "array", items: str } }, required: ["titles"] },
 ] as const;
 export const GOAL_NAMES = new Set<string>(GOAL_TOOLS.map((t) => t.name));
@@ -67,7 +67,8 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       out = "질문을 화면에 띄웠어요. 학습자가 고르고 보내면 답이 다음 메시지로 와요. 이번 답은 짧게 마치세요.";
     } else if (name === "propose_plan") {
       const mode = input.mode === "bottomup" ? "bottomup" : "topdown";
-      const map = mode === "topdown" ? (Array.isArray(input.map) ? input.map : []).map((t: unknown) => s(t, 80)).filter(Boolean).slice(0, 8) : [];
+      // 11/6 사용자 "지도는 어떤 상황에서도 있는 게 좋겠다, 가끔 갱신": 바텀업도 지도를 둔다(비면 첫 목표로 시작)
+      const map = (Array.isArray(input.map) ? input.map : []).map((t: unknown) => s(t, 80)).filter(Boolean).slice(0, 8);
       const first = input.first as { title?: unknown; done?: unknown } | undefined;
       if (!s(input.long) || !s(first?.title) || !s(first?.done)) throw err("long, first.title, first.done가 필요해요.");
       if (mode === "topdown" && map.length < 2) throw err("탑다운이면 지도(map)에 큰 단계 제목이 2개 이상 있어야 해요.");
@@ -80,8 +81,10 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       // 바꿀 수 있는 때: 현재 목표가 없을 때 · 학습자가 [다음으로]를 누른 직후 · [확정] 직후(첫 목표를 다듬기). 그 밖엔 학습자 버튼으로만
       const last = [...g.log].reverse().find((l) => !["survey", "answer", "map"].includes(l.kind))?.kind;
       if (g.current && last !== "next" && last !== "confirm" && last !== "easy") throw err("현재 목표가 진행 중이에요. 학습자가 [다음으로]를 누르면 바꿀 수 있어요.");
-      const item = g.map.find((m) => m.status === "doing") ?? g.map.find((m) => m.status === "todo");
-      if (item) item.status = "doing";
+      let item = g.map.find((m) => m.status === "doing") ?? g.map.find((m) => m.status === "todo");
+      // 지도에 남은 단계가 없으면(바텀업으로 넓혀 가는 중 등) 이 목표를 지도 끝에 더한다 → 지도는 늘 지나온 길 + 남은 길
+      if (!item) { item = { id: nid(), title: s(input.title, 80), status: "doing" }; g.map.push(item); }
+      item.status = "doing";
       g.current = { id: nid(), title: s(input.title, 120), done: s(input.done, 200), understood: false, applied: false, mapId: item?.id, at: now() };
       logIt(g, "current", g.current.title);
       out = `현재 목표를 정했어요: ${g.current.title}`;
@@ -97,9 +100,10 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       logIt(g, "support", g.stack.at(-1)!.title);
       out = `보충을 열었어요: ${g.stack.at(-1)!.title}. 이제 바로 설명을 시작하세요. 학습자가 이해했다고 누르면 '${from}'로 돌아가요.`;
     } else if (name === "update_map") {
-      if (g.mode !== "topdown") throw err("지도는 탑다운일 때만 있어요.");
-      const titles = (Array.isArray(input.titles) ? input.titles : []).map((t: unknown) => s(t, 80)).filter(Boolean).slice(0, 8);
       const kept = g.map.filter((m) => m.status !== "todo");
+      // 끝난 · 하는 중 단계와 같은 제목을 또 보내면 뺀다(처음부터 다시 도는 것 막기)
+      const keptT = new Set(kept.map((m) => norm(m.title)));
+      const titles = (Array.isArray(input.titles) ? input.titles : []).map((t: unknown) => s(t, 80)).filter((t: string) => t && !keptT.has(norm(t))).slice(0, 8);
       g.map = [...kept, ...titles.map((t) => ({ id: nid(), title: t, status: "todo" as const }))];
       logIt(g, "map", titles.join(" / "));
       out = `남은 단계를 고쳤어요: ${titles.join(" → ")}`;
@@ -127,7 +131,7 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
       if (!g.plan) throw err("확정할 계획이 없어요.");
       const p = g.plan;
       g.long = { text: p.long, spec: p.spec, at: now() }; g.mode = p.mode;
-      g.map = p.map.map((t, i) => ({ id: nid(), title: t, status: i === 0 ? "doing" : "todo" }));
+      g.map = (p.map.length ? p.map : [p.first.title]).map((t, i) => ({ id: nid(), title: t, status: i === 0 ? "doing" : "todo" }));
       g.current = { id: nid(), title: p.first.title, done: p.first.done, understood: false, applied: false, mapId: g.map[0]?.id, at: now() };
       g.plan = null; g.stack = [];
       logIt(g, "confirm", p.long);
@@ -158,6 +162,13 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
         ? nextItem ? `[다음으로] "${c.title}"을(를) ${full ? "마쳤어요" : "여기까지 하고 넘어갈게요"}. 지도의 다음 단계는 "${nextItem.title}"이에요. set_current_goal로 지금 할 만큼 구체적인 현재 목표와 완료 조건을 정하고 바로 시작해 주세요.`
           : `[다음으로] "${c.title}"을(를) ${full ? "마쳤어요" : "여기까지 하고 넘어갈게요"}. 지도의 단계를 다 지났어요. 장기 목표가 다 됐는지 같이 보고, 더 할 게 있으면 update_map으로 단계를 더한 뒤 set_current_goal로 정해 주세요.`
         : `[다음으로] "${c.title}"을(를) ${full ? "마쳤어요" : "여기까지 하고 넘어갈게요"}. 여기서 넓혀 볼 다음 작은 것을 하나 정해 set_current_goal로 정하고 바로 시작해 주세요.`;
+    } else if (op === "end") {
+      // 학습 종료(11/6): 하던 목표는 지금까지로 닫고(정리는 lesson.ts가), 튜터는 안 부른다
+      const c = g.current;
+      if (c) { const item = g.map.find((m) => m.id === c.mapId); if (item) item.status = c.understood && c.applied ? "done" : "skipped"; }
+      logIt(g, "end", c ? `${c.title}: ${c.understood && c.applied ? "마침" : `건너뜀(이해 ${c.understood ? "✓" : "–"}, 적용 ${c.applied ? "✓" : "–"})`}` : "");
+      g.current = null; g.stack = []; g.stuck = null;
+      say = null;
     } else if (op === "easy") {
       // 11/5 사용자 "너무 쉬워 / 너무 어려워 두 개가 막혔어요보다 낫다": 쉬우면 수준을 올리고, 필요하면 현재 목표를 더 어렵게 다듬게 한다
       logIt(g, "easy", g.stack.at(-1)?.title ?? g.current?.title ?? "");
@@ -175,7 +186,10 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
     } else if (op === "mode") {
       if (b.mode !== "topdown" && b.mode !== "bottomup") throw err("mode는 topdown 또는 bottomup이에요.");
       g.mode = b.mode; logIt(g, "mode", b.mode);
-      say = `[진행 방식 변경] 이제부터 ${b.mode === "topdown" ? "탑다운(구조부터 보고, 지도를 따라)" : "바텀업(작은 것 하나부터 넓혀 가기)"}으로 가요.${b.mode === "topdown" && !g.map.length ? " 장기 목표를 큰 단계로 나눠 update_map으로 지도를 만들어 주세요." : ""}`;
+      // 바텀업에서 하던 목표가 지도에 안 붙어 있으면(예전 진행) 지금 붙인다 — 탑다운 지도가 1단계부터 다시 돌지 않게(11/6 찐빠)
+      if (g.current && !g.map.some((m) => m.id === g.current!.mapId)) { const it = { id: nid(), title: g.current.title.slice(0, 80), status: "doing" as const }; g.map.push(it); g.current.mapId = it.id; }
+      const left = g.map.some((m) => m.status === "todo");
+      say = `[진행 방식 변경] 이제부터 ${b.mode === "topdown" ? "탑다운(구조부터 보고, 지도를 따라)" : "바텀업(작은 것 하나부터 넓혀 가기)"}으로 가요.${b.mode === "topdown" && !left ? " 지도의 지나온 단계는 그대로 두고, 장기 목표까지 남은 큰 단계를 update_map으로 정해 주세요. 지금 하던 목표는 이어서 해요." : ""}`;
     } else throw err("모르는 동작이에요.");
   });
   return say;

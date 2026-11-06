@@ -355,6 +355,30 @@ async function recordFinished(runId: string, run: { codexId?: string; chatId?: s
   const rec = await R.recordGoal(runId, goal, mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId)).catch(() => null);
   if (rec) notifyLesson(runId);
 }
+/**
+ * 학습 종료(11/6 사용자 "도중에 학습 종료 버튼. 끄면서 알아서 처리할 거 정리하면서 로딩 살짝 걸리고 종료"):
+ * 하던 목표를 지금까지로 닫고 → 그 목표 정리(+ 학습자 메모리 갱신, AI 1번, 목표가 있을 때만) → 앱 지식으로 넣기(앱이 켜져 있으면, 앱의 sync가 넣는다).
+ */
+export async function endLearning(runId: string) {
+  const run = await getRun(runId);
+  if (!run.codexId && !run.chatId) throw err(400, "대화로 하는 실습이 아니에요.");
+  const G = await import("./goals.ts");
+  const before = await G.goalsOf(runId);
+  await G.goalAction(runId, "end", {});
+  let recorded: { goal: string; learned: number; gaps: number; memory: number } | null = null;
+  if (before.current) {
+    const R = await import("./goal-record.ts");
+    const rec = await R.recordGoal(runId, before.current, before.mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId)).catch(() => null);
+    if (rec) recorded = { goal: rec.goal, learned: rec.learned.length, gaps: rec.gaps?.length ?? 0, memory: rec.memory?.done.length ?? 0 };
+  }
+  await saveRun(runId, (r) => { (r as { endedAt?: string }).endedAt = new Date().toISOString(); });
+  // 앱 지식 넣기: 코스 서버는 앱 데이터에 직접 쓰지 않는다 → 앱의 sync 주소를 불러 앱이 넣게 한다
+  const app = (process.env.PROJECT_APP_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
+  const synced = await fetch(`${app}/api/project-course/sync`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ runId }), signal: AbortSignal.timeout(30000) })
+    .then(async (r) => (r.ok ? ((await r.json()) as { runs?: { items: number; created: number }[] }).runs?.[0] ?? null : null)).catch(() => null);
+  notifyLesson(runId);
+  return { recorded, synced };
+}
 /** 끝난 목표 정리를 다시 한다(AI 호출 = 목표 수). */
 export async function redoGoalRecords(runId: string) {
   const run = await getRun(runId);

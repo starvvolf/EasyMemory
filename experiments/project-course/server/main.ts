@@ -359,6 +359,7 @@ const routes: [string, RegExp, Handler][] = [
   // 학습자 메모리(11/6): 보기 · 고치기 · 지우기
   ["GET", /^\/api\/memory$/, async () => ({ items: await (await import("../lib/memory.ts")).memoryOf() })],
   ["POST", /^\/api\/memory\/(m[a-f0-9]{6})$/, async (req, m) => (await import("../lib/memory.ts")).editMemory(m[1], await body(req))],
+  ["POST", /^\/api\/runs\/(\w+)\/end$/, async (_q, m) => (await import("../lib/lesson.ts")).endLearning(m[1])],
   ["POST", /^\/api\/runs\/(\w+)\/redo-records$/, async (_q, m) => (await import("../lib/lesson.ts")).redoGoalRecords(m[1])],
   ["POST", /^\/api\/runs\/(\w+)\/sync$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return markSent(m[1], Array.isArray(b.keys) ? b.keys.map(String) : []); }],
   ["GET", /^\/api\/runs\/(\w+)\/notes$/, async (_q, m) => {

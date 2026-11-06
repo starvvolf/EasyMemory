@@ -215,6 +215,17 @@ async function renderHome() {
   view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), h("div", { class: "hmem" }, memBtn), list));
   input.focus();
 }
+/* 학습 종료(11/6): 정리하는 동안 덮개 → 결과 한 줄 → 홈 */
+async function endLearning(run) {
+  const cover = h("div", { class: "endcover" }, h("div", { class: "endbox" }, h("div", { class: "spin" }), h("b", {}, "학습을 정리하는 중이에요"), h("div", { class: "mut small" }, "배운 것 · 부족했던 점 · 학습자 메모리를 정리하고 지식에 넣어요")));
+  document.body.append(cover);
+  try {
+    const r = await api("POST", `/api/runs/${run.id}/end`);
+    const a = r.recorded ? `배운 것 ${r.recorded.learned} · 부족했던 점 ${r.recorded.gaps}${r.recorded.memory ? ` · 메모리 ${r.recorded.memory}곳 갱신` : ""}` : "정리할 목표가 없었어요";
+    toast(`${a}${r.synced ? ` · 지식 ${r.synced.created}개 새로` : " · 앱이 꺼져 있어 지식은 다음에 넣어요"}`);
+    go("#/");
+  } catch (e) { toast(e.message); } finally { cover.remove(); }
+}
 /* 학습자 메모리(11/6 사용자 "GPT 메모리 관리하듯이 이 사람이 어느 정도인지 관리"): 진행 방식 · 경향, 상태 · 근거 · 갱신 기록, 고치기 · 지우기 */
 const memUi = { edit: null };
 async function renderMemory() {
@@ -1412,6 +1423,7 @@ function drawFree() {
     lesson.chat ? modelPick(run, lesson) : null,
     h("button", { class: "fib", title: "대화 목록", "aria-label": "대화 목록", onclick: () => go_("#/home") }, icon("home")),
     h("button", { class: "btn small", title: "새 대화", onclick: () => go_("#/home") }, "+ 새 대화"),
+    lesson.goals?.long ? h("button", { class: "btn small", title: "하던 목표를 정리하고(배운 것 · 부족했던 점 · 학습자 메모리) 앱 지식으로 넣은 뒤 끝내요", disabled: lesson.busy, onclick: () => endLearning(run) }, "학습 종료") : null,
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
     FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);

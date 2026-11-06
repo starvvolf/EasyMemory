@@ -283,7 +283,9 @@ export async function rememberPreference(id: string, b: Record<string, unknown>)
   const textIn = String(b.text ?? "").trim().slice(0, 200), quote = String(b.quote ?? "").trim();
   const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
   if (!textIn) throw err(400, "기억할 진행 방식을 적어 주세요.");
-  if (quote.length < 2 || !c.messages.some((m) => m.role === "user" && norm(m.text).includes(norm(quote)))) throw err(400, "quote는 이 대화에서 학습자가 한 말을 그대로 옮긴 구절이어야 해요.");
+  // 버튼이 보낸 말([진행 방식 변경] 등)은 학습자가 정한 진행 방식의 근거가 아니다(11/6: 바텀업 버튼이 "기억"으로 남던 것)
+  const BUTTON = /^\[(이해했어요|해 봤어요|다음으로|너무 쉬워요|너무 어려워요|진행 방식 변경|확정|질문 답|계획 다시 얘기하기|저장함)\]/;
+  if (quote.length < 2 || !c.messages.some((m) => m.role === "user" && !BUTTON.test(m.text.trim()) && norm(m.text).includes(norm(quote)))) throw err(400, "quote는 이 대화에서 학습자가 한 말을 그대로 옮긴 구절이어야 해요.");
   await (await import("./memory.ts")).addPreference(textIn, quote, id);
   return `기억했어요: ${textIn}`;
 }
