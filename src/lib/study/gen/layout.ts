@@ -46,10 +46,11 @@ export function answerShapeProblem(reply: AuthoredReplyQuestion): string | null 
     const options = answer.options ?? [];
     // v5 OX: a two-option choice whose options are exactly O and X.
     if (options.length === 2 && options.map((option) => (option.text ?? "").trim()).join() === "O,X") return answer.correctIndex === 0 || answer.correctIndex === 1 ? null : "OX의 correctIndex가 0(O) 또는 1(X)이 아닙니다.";
-    if (options.length !== 4 || options.some((option) => !(option.text ?? option.latex ?? "").trim())) return "choice는 내용이 있는 보기가 정확히 4개여야 합니다.";
-    if (answer.correctIndex === null || answer.correctIndex < 0 || answer.correctIndex > 3) return "choice의 correctIndex가 0~3이 아닙니다.";
+    // 3~5 (11/6 목표형: a 판정's three verdicts); the generators still write 4 everywhere else.
+    if (options.length < 3 || options.length > 5 || options.some((option) => !(option.text ?? option.latex ?? "").trim())) return "choice는 내용이 있는 보기가 3~5개여야 합니다.";
+    if (answer.correctIndex === null || answer.correctIndex < 0 || answer.correctIndex >= options.length) return "choice의 correctIndex가 보기 범위 밖입니다.";
     const keys = options.map((option) => (option.text ?? option.latex ?? "").trim().toLocaleLowerCase("ko-KR"));
-    if (new Set(keys).size !== 4) return "choice 보기 중 같은 보기가 있습니다.";
+    if (new Set(keys).size !== options.length) return "choice 보기 중 같은 보기가 있습니다.";
   } else if (!(answer.accepted ?? []).some((value) => value.trim())) {
     return answer.kind === "short" ? "short의 인정 답안이 비어 있습니다." : "self-check의 모범 답이 비어 있습니다.";
   }

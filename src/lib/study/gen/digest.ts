@@ -30,7 +30,7 @@ export type DigestTopicState = {
   given: number[];
   firstMs?: number; bodyMs?: number; ms?: number; error?: string;
 };
-export type DigestObjective = { id: string; verb: string; text: string; topics: string[]; core: boolean };
+export type DigestObjective = { id: string; verb: string; text: string; topics: string[]; core: boolean; /** lab.goalQuiz: the situation a question gives, and what the learner answers */ given?: string; output?: string };
 export type DigestState = {
   startedAt: string;
   skeleton: { status: "writing" | "done" | "failed"; text: string; overview: number[]; topics: DigestTopic[]; problems: string[]; firstMs?: number; ms?: number; error?: string };
@@ -250,6 +250,12 @@ export const OBJECTIVES_SYSTEM = `${BASE}
 - 설명 목표는 이유·관계·원리가 있는 것만("왜 ~하면 ~인지 설명할 수 있다"). 정의를 되말하거나 순서를 읊는 것은 설명 목표가 아니다(그런 것은 떠올리기).
 - 계산·적용할 식·규칙·알고리즘이 있으면 그것을 구체 값에 적용하는 판정·계산 목표를 적어도 하나 둔다.
 - 핵심: 이 자료의 중심(시험에 꼭 나올 것), 보조: 그 밖.`;
+// 목표형 문제 (11/6 사용자 "데드락 시연: 알아야 할 것과 학습 목표부터 정리하고, 그 목표에 맞는 문제"): each objective
+// also says what a question gives the learner and what the learner answers, so a 판정 objective gets a situation to judge.
+export const OBJECTIVES_GIVEN = `[주는 것·내는 것] 목표 줄마다 끝에 두 칸을 더 쓴다: 목표|oN|동사|할 수 있어야 할 것|주제 id들|핵심 또는 보조|주는 것|내는 것
+- 주는 것: 이 목표를 확인하는 문제에서 학습자에게 줄 구체적인 상황 한 가지(예: "두 프로세스의 세마포어 실행 순서와 어디까지 실행했는지", "자원 할당 그래프의 간선 목록과 자원마다 인스턴스 수", "OS가 하는 동작 한두 문장"). 판정·계산·구별 목표는 반드시 구체적인 상황이다. 떠올리기 목표만 "정의 한 문장"일 수 있다.
+- 내는 것: 학습자가 그 상황에서 내야 할 답의 종류(예: "교착 발생 / 교착 가능성만 / 교착 없음 중 하나", "네 조건 중 깨지는 것", "고친 실행 순서", "왜 그런지 2~3문장").
+- 자료의 학습 목표 쪽은 큰 방향이다: 그것을 시험으로 확인할 수 있는 크기로 쪼갠다. 같은 규칙을 다른 상황에 적용하는 목표는 하나로 둔다.`;
 export function objectivesUser(fileName: string, topics: DigestTopic[], pages: Array<{ page: number; text: string }>) {
   return [`[목차]`, ...topics.map((t) => `${t.id} | ${t.title} | ${t.pages.join(", ")}`), "", oneUser(fileName, pages)].join("\n");
 }
@@ -271,7 +277,7 @@ export function parseObjectives(text: string): DigestObjective[] {
     const f = raw.trim().replace(/^[-*]\s*/, "").split("|").map((x) => x.trim());
     if (f[0] !== "목표" || !/^o\d+$/.test(f[1] ?? "") || !f[3]) continue;
     const verb = verbs.find((v) => (f[2] ?? "").includes(v.slice(0, 2))) ?? "판정";
-    out.push({ id: f[1], verb, text: f[3], topics: (f[4] ?? "").split(/[,\s]+/).filter((x) => /^t\d+$/.test(x)), core: !(f[5] ?? "").includes("보조") });
+    out.push({ id: f[1], verb, text: f[3], topics: (f[4] ?? "").split(/[,\s]+/).filter((x) => /^t\d+$/.test(x)), core: !(f[5] ?? "").includes("보조"), ...(f[6] ? { given: f[6] } : {}), ...(f[7] ? { output: f[7] } : {}) });
   }
   return out;
 }

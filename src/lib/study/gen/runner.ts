@@ -264,7 +264,7 @@ export const genInputSchema = z.strictObject({
     readParallel: z.number().int().min(1).max(64).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
     outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional(),
     chunk: z.number().int().min(1).max(4).optional(), hedgeMs: z.number().int().min(1000).max(120000).optional(),
-    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), summary: z.boolean().optional(), digest: z.boolean().optional(), digestTopicCards: z.boolean().optional(), digestOne: z.boolean().optional(), digestStyle: z.enum(["univ", "plan"]).optional(), quiz: z.enum(["luna"]).optional(), quizCount: z.number().int().min(1).max(60).optional(), goalsInPlan: z.boolean().optional(), conceptLines: z.boolean().optional(), mapCards: z.boolean().optional(), prompts: z.record(z.string().max(40), z.string().max(30000)).optional(), mapUnit: z.enum(["topic", "page"]).optional(), flowCard: z.enum(["with", "after"]).optional(), outlineOnly: z.boolean().optional(), noSourceOutline: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
+    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), summary: z.boolean().optional(), digest: z.boolean().optional(), digestTopicCards: z.boolean().optional(), digestOne: z.boolean().optional(), digestStyle: z.enum(["univ", "plan"]).optional(), quiz: z.enum(["luna"]).optional(), quizCount: z.number().int().min(1).max(60).optional(), goalsInPlan: z.boolean().optional(), conceptLines: z.boolean().optional(), mapCards: z.boolean().optional(), prompts: z.record(z.string().max(40), z.string().max(30000)).optional(), mapUnit: z.enum(["topic", "page"]).optional(), flowCard: z.enum(["with", "after"]).optional(), goalQuiz: z.boolean().optional(), outlineOnly: z.boolean().optional(), noSourceOutline: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -303,7 +303,11 @@ export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
     digest: true, digestTopicCards: true, digestStyle: "plan", mapCards: true, mapUnit: "topic", flowCard: "after", noSourceOutline: true, quiz: "luna", quizCount: 10,
     // 정리 글 스트리밍 (11/6 사용자 "처음에 요약을 스트리밍으로 띄우고 지식은 천천히"): summary.ts의 정리 글을 카드와 함께 켠다.
     // 자료 지도 [요약] 탭이 /live의 summary를 받아 바로 보여 준다(데드락 14쪽 첫 글자 2.7초, 끝까지 94초, sol·low, 10/31 실측).
-    summary: true };
+    summary: true,
+    // 목표형 문제 (11/6 사용자 "데드락 시연: 학습 목표부터, 그 목표에 맞는 문제" → "sol로 가고 본 앱에 연결"): 목표마다 주는 것·내는 것,
+    // 판정·구별은 상황 객관식(보기는 가능한 판정 전부), 설명은 상황만 주는 서술, OX 없음, 다시 만들기 없음(예비 문제가 빈 목표를 채움).
+    // 모델은 DEFAULT_GEN_MODELS(학습 목표·출제 고르기·상황 판정·서술 sol low).
+    goalQuiz: true };
 }
 
 export const forkInputSchema = z.strictObject({
@@ -348,6 +352,35 @@ export async function remergeGen(baseId: string, raw: unknown): Promise<GenState
   for (const s of sections) if (recaller.units[s.id]) recaller.units[s.id].status = "ready";
   const input: GenInput = { ...structuredClone(base.input), lab: { ...base.input.lab, skimOnly: true, consolidate: true },
     models: { ...base.input.models, ...(options.model ? { "rc-merge": options.model } : {}) } };
+  const now = new Date().toISOString();
+  const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued", phase: "author", message: "", calls: 0,
+    sections, recaller, remergeOf: base.id };
+  await saveState(state);
+  return state;
+}
+/** 실험 (11/6 사용자 "그 학습 목표 가지고 문제 다시 만들어 봐, 다른 부분도 모델 바꾸면 더 좋을 수 있으니 테스트"): the same
+ *  cards, 학습 목표 and 자료 전체 정리, only the questions again — so question-step models (or lab options) compare on the same input. */
+export async function requizGen(baseId: string, raw: unknown): Promise<GenState> {
+  const options = z.strictObject({ models: z.record(z.string(), modelChoice).optional(), lab: z.record(z.string(), z.unknown()).optional() }).parse(raw ?? {});
+  const base = await loadGen(baseId);
+  if (!base?.recaller?.prep || base.input.engine !== "recaller") throw new GenError(404, "카드가 있는 Recaller 실행을 찾을 수 없습니다.");
+  if (base.status !== "done") throw new GenError(409, "기준 실행이 끝난 뒤에 문제만 다시 만들 수 있어요.");
+  if (!state0Cards(base)) throw new GenError(409, "기준 실행에 카드가 없습니다.");
+  const recaller = structuredClone(base.recaller);
+  for (const unit of Object.values(recaller.units)) {
+    delete unit.questions; delete unit.held; delete unit.issues;
+    for (const chunk of Object.values(unit.chunks ?? {})) { delete chunk.questions; delete chunk.held; }
+    unit.status = "waiting";
+  }
+  recaller.deep = {};
+  delete recaller.dups;
+  recaller.warnings = [];
+  const t = recaller.timing;
+  recaller.timing = { startedAt: new Date().toISOString(), ...(t.skimDoneAt ? { skimDoneAt: t.skimDoneAt } : {}), ...(t.cardsDoneAt ? { cardsDoneAt: t.cardsDoneAt } : {}), ...(t.organizedAt ? { organizedAt: t.organizedAt } : {}) };
+  const sections = structuredClone(base.sections);
+  for (const s of sections) { delete s.author; delete s.design; }
+  const lab = { ...base.input.lab, ...(options.lab ?? {}) } as NonNullable<GenInput["lab"]>;
+  const input: GenInput = { ...structuredClone(base.input), questionsLater: false, lab, models: { ...base.input.models, ...(options.models ?? {}) } };
   const now = new Date().toISOString();
   const state: GenState = { id: `gen_${randomBytes(16).toString("hex")}`, createdAt: now, updatedAt: now, input, status: "queued", phase: "author", message: "", calls: 0,
     sections, recaller, remergeOf: base.id };

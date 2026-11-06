@@ -1,8 +1,8 @@
 // 실험실 프롬프트 고치기 (11/5 사용자 "실험실에서 프롬프트 수정 가능하게"): the prompts a run may replace (input.lab.prompts[name]),
 // with the step that uses them and the code's text. The topic summary's instructions depend on the topic's kind, so they are
 // not listed (the 목차 → 카드 way has no topic summary call).
-import { DIGEST_CARD, FLOW_AFTER, FLOW_WITH, MAP_CARD, OBJECTIVES_SYSTEM, PLAN_COMMON, PLAN_TASK, PLAN_TASK_CONCEPTS, PLAN_TASK_GOALS, SOURCE_EN, WRAP_SYSTEM } from "./digest.ts";
-import { Q_CHOICE, Q_CLOZE, Q_EXPLAIN, Q_MATERIAL, Q_PICK, Q_PICK_GOALS, Q_SCORE, Q_WRITE } from "./quiz.ts";
+import { OBJECTIVES_GIVEN, DIGEST_CARD, FLOW_AFTER, FLOW_WITH, MAP_CARD, OBJECTIVES_SYSTEM, PLAN_COMMON, PLAN_TASK, PLAN_TASK_CONCEPTS, PLAN_TASK_GOALS, SOURCE_EN, WRAP_SYSTEM } from "./digest.ts";
+import { Q_CASE, Q_PICK_CASE, Q_WRITE_CASE, Q_CHOICE, Q_CLOZE, Q_EXPLAIN, Q_MATERIAL, Q_PICK, Q_PICK_GOALS, Q_SCORE, Q_WRITE } from "./quiz.ts";
 import { SAME_ANSWER, VERIFY } from "./recaller.ts";
 import { ORGANIZE } from "./cards.ts";
 
@@ -23,6 +23,10 @@ export const EDITABLE_PROMPTS: EditablePrompt[] = [
   { name: "FLOW_AFTER", step: "rc-flow", label: "흐름 카드 · 카드 다음에", text: FLOW_AFTER, when: "flowCard after" },
   { name: "WRAP_SYSTEM", step: "rc-wrap", label: "개요·핵심 정리", text: WRAP_SYSTEM },
   { name: "OBJECTIVES_SYSTEM", step: "rc-q-goals", label: "학습 목표", text: OBJECTIVES_SYSTEM, when: "퀴즈" },
+  { name: "OBJECTIVES_GIVEN", step: "rc-q-goals", label: "학습 목표 · 주는 것·내는 것(목표형)", text: OBJECTIVES_GIVEN, when: "goalQuiz" },
+  { name: "Q_PICK_CASE", step: "rc-q-pick", label: "출제 고르기 · 목표형 형식", text: Q_PICK_CASE, when: "goalQuiz" },
+  { name: "Q_CASE", step: "rc-q-case", label: "상황 판정 객관식(목표형)", text: Q_CASE, when: "goalQuiz" },
+  { name: "Q_WRITE_CASE", step: "rc-q-write", label: "서술 · 상황만 주기(목표형)", text: Q_WRITE_CASE, when: "goalQuiz" },
   { name: "Q_PICK_GOALS", step: "rc-q-pick", label: "출제할 카드 고르기(목표 있음)", text: Q_PICK_GOALS, when: "퀴즈" },
   { name: "Q_PICK", step: "rc-q-pick", label: "출제할 카드 고르기(목표 없음)", text: Q_PICK, when: "퀴즈" },
   { name: "Q_MATERIAL", step: "rc-q-material", label: "문제 재료(맞는 진술·오개념 쌍)", text: Q_MATERIAL, when: "퀴즈" },

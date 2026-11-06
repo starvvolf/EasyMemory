@@ -17,9 +17,9 @@ import { extractTerms, sameKnowledge, similarity, termLines } from "./terms.ts";
 import { authoredStem, type AuthoredReplyQuestion } from "./schemas.ts";
 import type { GenStep, GenState, Issue, Objective, ObjectiveKind, SectionState } from "./types.ts";
 import { citedPages, pagesOutside, summaryUser } from "./summary.ts";
-import { quizRank, cleanText, oxNotesOf, writeDrafts, Q_WRITE, qWriteSchema, QUIZ_MIX_SHORT, Q_PICK, Q_PICK_GOALS, qPickSchema, mixCounts, sameAsk, answerInStem, buildChoice, choicePool, clozeDrafts, focusOf, nextFormat, oxDrafts, sameQuestion, quizFakeReply, Q_CHOICE, Q_CLOZE, Q_EXPLAIN, Q_MATERIAL, Q_SCORE,
+import { Q_CASE, qCaseSchema, caseDrafts, Q_PICK_CASE, Q_WRITE_CASE, writeLeaks, quizRank, cleanText, oxNotesOf, writeDrafts, Q_WRITE, qWriteSchema, QUIZ_MIX_SHORT, Q_PICK, Q_PICK_GOALS, qPickSchema, mixCounts, sameAsk, answerInStem, buildChoice, choicePool, clozeDrafts, focusOf, nextFormat, oxDrafts, sameQuestion, quizFakeReply, Q_CHOICE, Q_CLOZE, Q_EXPLAIN, Q_MATERIAL, Q_SCORE,
   blankMatches, shuffleOrder, qChoiceSchema, qClozeSchema, qExplainSchema, qMaterialSchema, qScoreSchema, type QuizDraft, type QuizFormat } from "./quiz.ts";
-import { FLOW_AFTER, FLOW_WITH, MAP_CARD, parseObjectives, PLAN_TASK_GOALS, PLAN_TASK_CONCEPTS, planTaskGiven, parseConcepts, sourceGroups, OBJECTIVES_SYSTEM, objectivesUser, batchLines, DIGEST_CARD, ONE_OUTLINE_END, ONE_SYSTEM, ONE_UNIV_SYSTEM, PLAN_COMMON, PLAN_TASK, assembleTask, planKinds, topicPlanSystem, oneDomains, oneTopicText, oneUser, splitOne, digestFakeReply, digestOverlaps, fallbackTopics, parseSkeleton, parseTopic, settleSkeleton, SKELETON_SYSTEM, skeletonLines, skeletonUser, TOPIC_SYSTEM, topicPages, topicUser, WRAP_SYSTEM,
+import { OBJECTIVES_GIVEN, FLOW_AFTER, FLOW_WITH, MAP_CARD, parseObjectives, PLAN_TASK_GOALS, PLAN_TASK_CONCEPTS, planTaskGiven, parseConcepts, sourceGroups, OBJECTIVES_SYSTEM, objectivesUser, batchLines, DIGEST_CARD, ONE_OUTLINE_END, ONE_SYSTEM, ONE_UNIV_SYSTEM, PLAN_COMMON, PLAN_TASK, assembleTask, planKinds, topicPlanSystem, oneDomains, oneTopicText, oneUser, splitOne, digestFakeReply, digestOverlaps, fallbackTopics, parseSkeleton, parseTopic, settleSkeleton, SKELETON_SYSTEM, skeletonLines, skeletonUser, TOPIC_SYSTEM, topicPages, topicUser, WRAP_SYSTEM,
   SOURCE_EN, sourceLanguage, type DigestLine, type DigestState, type DigestTopic } from "./digest.ts";
 
 const text = z.string().trim().min(1);
@@ -247,10 +247,11 @@ export function toAuthored(q: BasicReply, objectiveId: string): AuthoredReplyQue
 /** Choice answers come back with the answer in the same place too often; the order is shuffled, stable per question. */
 function shuffle<T extends { option: number }>(authored: AuthoredReplyQuestion, notes: T[], seedText: string): { authored: AuthoredReplyQuestion; notes: T[] } {
   const a = authored.answer;
-  if (a.kind !== "choice" || !a.options || a.options.length !== 4 || a.correctIndex === null) return { authored, notes };
+  // 3~5 options (11/6 목표형: a 판정 has three verdicts — 발생 / 가능성 / 없음); every other question still has 4.
+  if (a.kind !== "choice" || !a.options || a.options.length < 3 || a.options.length > 5 || a.correctIndex === null) return { authored, notes };
   let seed = [...seedText].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-  const order = [0, 1, 2, 3];
-  for (let i = 3; i > 0; i--) { seed = (seed * 1103515245 + 12345) >>> 0; const j = (seed >>> 16) % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+  const order = a.options.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) { seed = (seed * 1103515245 + 12345) >>> 0; const j = (seed >>> 16) % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
   return { authored: { ...authored, answer: { ...a, options: order.map((i) => a.options![i]), correctIndex: order.indexOf(a.correctIndex) } },
     notes: notes.map((n) => ({ ...n, option: order.indexOf(n.option) })) };
 }
@@ -259,11 +260,12 @@ function shuffle<T extends { option: number }>(authored: AuthoredReplyQuestion, 
 export function basicProblem(q: BasicReply, card: Card | undefined): string | null {
   if (!card) return "없는 카드에 대한 문제입니다.";
   if (q.format === "choice") {
-    if (q.options?.length !== 4) return "객관식은 보기 4개여야 합니다.";
-    if (new Set(q.options.map((o) => o.trim())).size !== 4) return "같은 보기가 있습니다.";
-    if (q.correctIndex === null || q.correctIndex < 0 || q.correctIndex > 3) return "정답 보기 번호가 없습니다.";
-    if (q.optionNotes?.length !== 4 || q.optionNotes.some((n) => !n.trim())) return "보기마다 한 줄 설명(optionNotes)이 있어야 합니다.";
-    if (new Set(q.mistakes.filter((m) => m.option !== q.correctIndex).map((m) => m.option)).size < 3) return "오답마다 어떤 실수인지 적어야 합니다.";
+    const n = q.options?.length ?? 0;
+    if (n < 3 || n > 5) return "객관식은 보기 3~5개여야 합니다.";
+    if (new Set(q.options!.map((o) => o.trim())).size !== n) return "같은 보기가 있습니다.";
+    if (q.correctIndex === null || q.correctIndex < 0 || q.correctIndex >= n) return "정답 보기 번호가 없습니다.";
+    if (q.optionNotes?.length !== n || q.optionNotes.some((x) => !x.trim())) return "보기마다 한 줄 설명(optionNotes)이 있어야 합니다.";
+    if (new Set(q.mistakes.filter((m) => m.option !== q.correctIndex).map((m) => m.option)).size < n - 1) return "오답마다 어떤 실수인지 적어야 합니다.";
   }
   if (q.format === "ox") {
     if (q.correctIndex !== 0 && q.correctIndex !== 1) return "OX 정답은 0(O) 또는 1(X)입니다.";
@@ -639,7 +641,7 @@ export async function runRecaller(ctx: RecallerContext) {
         // 학습 목표 for the short quiz: one luna call from the outline and the page text, beside the topic summaries.
         if (lab.quiz === "luna" && lab.quizCount && !lab.goalsInPlan && d.skeleton.topics.length && !d.objectives) {
           const topicsNow = d.skeleton.topics;
-          objectivesReady = ctx.askText("rc-q-goals", null, 1, prompt("OBJECTIVES_SYSTEM", OBJECTIVES_SYSTEM), objectivesUser(input.fileName, topicsNow, input.pageNumbers.map((page) => ({ page, text: data.texts[page] ?? "" }))), [])
+          objectivesReady = ctx.askText("rc-q-goals", null, 1, `${prompt("OBJECTIVES_SYSTEM", OBJECTIVES_SYSTEM)}${lab.goalQuiz ? `\n${prompt("OBJECTIVES_GIVEN", OBJECTIVES_GIVEN)}` : ""}`, objectivesUser(input.fileName, topicsNow, input.pageNumbers.map((page) => ({ page, text: data.texts[page] ?? "" }))), [])
             .then((reply) => { d.timing.goalsMs = Date.now() - digestT0; d.objectives = parseObjectives(reply).map((g) => ({ ...g, topics: g.topics.filter((id) => topicsNow.some((t) => t.id === id)) })); },
               (error) => { if (pausesRun(error)) throw error; data.warnings.push({ severity: "warning", code: "rc-q-goals", message: `학습 목표를 받지 못했어요: ${fail(error)}` }); });
           objectivesReady.catch(() => undefined);
@@ -1082,7 +1084,8 @@ export async function runRecaller(ctx: RecallerContext) {
     const neighbors = materialCards().filter((c) => c.id !== card.id && (c.id.split(".")[0] === card.id.split(".")[0] || c.kind === card.kind)).slice(0, 6)
       .map((c) => ({ title: c.title, kind: c.kind, shape: c.shape }));
     const picked = quizPlan.get(card.id);
-    const goalText = data.digest?.objectives?.find((g) => g.id === picked?.objective)?.text;
+    const goal = data.digest?.objectives?.find((g) => g.id === picked?.objective);
+    const goalText = goal?.text;
     const base = { card: { id: card.id, title: card.title, kind: card.kind, shape: card.shape, mistakes: card.mistakes }, focus: focusOf(card), ...(picked?.angle ? { ask: goalText ? `${picked.angle} (학습 목표: ${goalText})` : picked.angle } : {}), topic, neighbors, source: src };
     let drafts: QuizDraft[] = [];
     // Formats as cards arrive, kept close to the mix (유니브 10문항), OX answers alternating.
@@ -1091,13 +1094,24 @@ export async function runRecaller(ctx: RecallerContext) {
     let material: Promise<z.infer<typeof qMaterialSchema>> | null = null;
     const getMaterial = () => material ??= ctx.ask("rc-q-material", section.id, 1, prompt("Q_MATERIAL", Q_MATERIAL), JSON.stringify(base), qMaterialSchema, { maxChars: 8000 });
     const draftsFor = async (f: QuizFormat): Promise<QuizDraft[]> => {
+      // 목표형 (lab.goalQuiz): the objective's situation; a 서술 whose stem holds its own scoring points is not kept.
+      if (f === "write" && lab.goalQuiz) {
+        const w = await ctx.ask("rc-q-write", section.id, 1, `${prompt("Q_WRITE", Q_WRITE)}\n${prompt("Q_WRITE_CASE", Q_WRITE_CASE)}`, JSON.stringify({ ...base, ...(goal ? { objective: goal } : {}) }), qWriteSchema, { maxChars: 3000 });
+        return writeLeaks(w) ? [] : writeDrafts(w);
+      }
+      if (lab.goalQuiz && (f === "choice" || f === "ox")) {
+        const caseUser = { objective: goal ?? null, ask: base.ask ?? "", card: base.card, topic: base.topic, source: src };
+        const c = await ctx.ask("rc-q-case", section.id, 1, prompt("Q_CASE", Q_CASE), JSON.stringify(caseUser), qCaseSchema, { maxChars: 3000 });
+        // No second try (11/6 사용자 "다시 만들기 없애고"): a case that fails the code checks is dropped, a spare covers it.
+        return caseDrafts(c);
+      }
       if (f === "write") return writeDrafts(await ctx.ask("rc-q-write", section.id, 1, prompt("Q_WRITE", Q_WRITE), JSON.stringify(base), qWriteSchema, { maxChars: 3000 }));
       const m = await getMaterial();
       if (f === "ox") return oxDrafts(m, card, plan.wantX);
       if (f === "cloze") {
         let z1 = await ctx.ask("rc-q-cloze", section.id, 1, prompt("Q_CLOZE", Q_CLOZE), JSON.stringify({ card: base.card, focus: base.focus, ...(base.ask ? { ask: base.ask } : {}), termCard: card.shape.form === "term", source: src, truths: m.truths }), qClozeSchema, { maxChars: 3000 });
         let out = clozeDrafts(z1, card);
-        if (!out.length) { z1 = await ctx.ask("rc-q-cloze", section.id, 2, prompt("Q_CLOZE", Q_CLOZE), JSON.stringify({ card: base.card, focus: base.focus, ...(base.ask ? { ask: base.ask } : {}), termCard: card.shape.form === "term", source: src, previous: z1, revision: "focus 중 하나를 글자 그대로 sentence에 넣고, 그 말을 blanks의 첫 후보로." }), qClozeSchema, { maxChars: 3000 }); out = clozeDrafts(z1, card); }
+        if (!out.length && !lab.goalQuiz) { z1 = await ctx.ask("rc-q-cloze", section.id, 2, prompt("Q_CLOZE", Q_CLOZE), JSON.stringify({ card: base.card, focus: base.focus, ...(base.ask ? { ask: base.ask } : {}), termCard: card.shape.form === "term", source: src, previous: z1, revision: "focus 중 하나를 글자 그대로 sentence에 넣고, 그 말을 blanks의 첫 후보로." }), qClozeSchema, { maxChars: 3000 }); out = clozeDrafts(z1, card); }
         return out;
       }
       let c = await ctx.ask("rc-q-choice", section.id, 1, prompt("Q_CHOICE", Q_CHOICE), JSON.stringify({ ...base, pairs: m.pairs }), qChoiceSchema, { maxChars: 5000 });
@@ -1127,7 +1141,7 @@ export async function runRecaller(ctx: RecallerContext) {
       for (;;) {
         tried.add(now);
         drafts = await draftsFor(now);
-        if (drafts.length) break;
+        if (drafts.length || lab.goalQuiz) break;
         const rest = (["choice", "ox", "cloze"] as QuizFormat[]).filter((x) => !tried.has(x));
         if (!rest.length) break;
         if (target) rest.sort((a, b) => quizPlanned[a] / Math.max(target[a], 0.5) - quizPlanned[b] / Math.max(target[b], 0.5));
@@ -1147,7 +1161,7 @@ export async function runRecaller(ctx: RecallerContext) {
       const check = d.format === "ox" ? verifyBasic(probe("ox", d.statement, null, d.answer === "O" ? 0 : 1), card, attempt)
         : d.format === "choice" ? (() => {
           // The solver must not find the answer by its place: its options are shuffled here, the index mapped back.
-          const order = shuffleOrder(4, `${state.id}:${card.id}:${attempt}`);
+          const order = shuffleOrder(d.options.length, `${state.id}:${card.id}:${attempt}`);
           const opts = d.options.map(cleanText);
           return verifyBasic(probe("choice", d.stem, order.map((i) => opts[i]), order.indexOf(d.correct)), card, attempt);
         })() : undefined;
@@ -1173,7 +1187,11 @@ export async function runRecaller(ctx: RecallerContext) {
         accepted: [...new Set([d.answer, ...ex.accepted].map((x) => x.trim()).filter(Boolean))], before: cleanText(d.before), after: cleanText(d.after), mistakes: [] } };
     };
   };
-  const lunaAsked: Array<{ format: string; ask: string; answer: string }> = [];
+  const lunaAsked: Array<{ format: string; ask: string; answer: string; objective?: string }> = [];
+  // 목표형 (lab.goalQuiz): a situation question shares most of its words with its neighbours (자원 할당 그래프, 간선, 인스턴스),
+  // so the word-overlap test only compares questions of one objective (11/6: the 그래프 판정 and 예약 간선 판정 were dropped
+  // as repeats of the 간선 종류 question). Other runs compare every question as before.
+  const sameObjective = (x: { objective?: string }, card: Card) => !lab.goalQuiz || !x.objective || x.objective === (quizPlan.get(card.id)?.objective ?? "");
   // At most two questions on one quoted sentence of the source (cards of different topics often cite the same line: 데드락 p.7
   // "cycle … several instances" gave six questions, 11/2). 유니브 asked the same line twice at most (an OX and a choice).
   const quoteUses = new Map<string, number>();
@@ -1271,8 +1289,9 @@ export async function runRecaller(ctx: RecallerContext) {
     try {
       const topics = state.sections.map((sc) => ({ id: sc.id, title: sc.title, lines: (data.digest?.topics[sc.id]?.body ?? []).slice(0, 4).map((l) => l.text.slice(0, 90)) }));
       let done = 0;
-      const got = await ctx.ask("rc-q-pick", null, 1, objectives.length ? prompt("Q_PICK_GOALS", Q_PICK_GOALS) : prompt("Q_PICK", Q_PICK), JSON.stringify({ count: quizCount, mix: mixCounts(quizCount), topics,
-        ...(objectives.length ? { objectives: objectives.map((g) => ({ id: g.id, verb: g.verb, text: g.text, topics: g.topics, core: g.core })) } : {}),
+      const pickSystem = objectives.length ? prompt("Q_PICK_GOALS", Q_PICK_GOALS) : prompt("Q_PICK", Q_PICK);
+      const got = await ctx.ask("rc-q-pick", null, 1, lab.goalQuiz ? `${pickSystem}\n${prompt("Q_PICK_CASE", Q_PICK_CASE)}` : pickSystem, JSON.stringify({ count: quizCount, mix: mixCounts(quizCount), topics,
+        ...(objectives.length ? { objectives: objectives.map((g) => ({ id: g.id, verb: g.verb, text: g.text, topics: g.topics, core: g.core, ...(g.given ? { given: g.given, output: g.output ?? "" } : {}) })) } : {}),
         cards: cards.map((w) => ({ id: w.card.id, topic: w.section.id, kind: w.card.kind, weight: w.card.weight, line: cardLine(w.card).slice(0, 160), mistakes: (w.card.mistakes ?? []).slice(0, 2) })) }), qPickSchema,
         { maxChars: 6000, onPartial: (text) => { const items = completeItems(text, "picks"); for (; done < items.length; done++) consider(items[done], true); } });
       for (const p of got.picks) consider(p, true);
@@ -1285,7 +1304,18 @@ export async function runRecaller(ctx: RecallerContext) {
     // Spares from the topics the picks cover least (데드락 11/2: one topic ended with four questions, another with none).
     const covered = (id: string) => picked.filter((p) => p.w.section.id === id).length;
     quizReserve.sort((a, b) => covered(a.w.section.id) - covered(b.w.section.id));
-    const spares = quizReserve.splice(0, 3);
+    // 목표형 (11/6): spares first for the objectives no pick asks (a spare on an asked objective was held as "같은 학습 목표"),
+    // one per objective, and four of them since nothing is made again.
+    if (lab.goalQuiz) {
+      const asked = new Set(picked.map((p) => p.objective).filter(Boolean));
+      quizReserve.sort((a, b) => (a.objective && asked.has(a.objective) ? 1 : 0) - (b.objective && asked.has(b.objective) ? 1 : 0));
+    }
+    const spares: typeof quizReserve = [];
+    for (const r of [...quizReserve]) {
+      if (spares.length >= (lab.goalQuiz ? 4 : 3)) break;
+      if (lab.goalQuiz && r.objective && spares.some((x) => x.objective === r.objective)) continue;
+      spares.push(r); quizReserve.splice(quizReserve.indexOf(r), 1);
+    }
     for (const p of spares) { quizPlan.set(p.w.card.id, { format: p.format, angle: p.angle, objective: p.objective }); quizWait.splice(quizWait.indexOf(p.w), 1); quizSpare.add(p.w.card.id); }
     const main = Promise.allSettled(runs).then((r) => { quizMainSettle(); return r; });
     const spare = Promise.allSettled(spares.map((p) => authorCard(p.w.section, p.w.k, p.w.card)));
@@ -1297,7 +1327,7 @@ export async function runRecaller(ctx: RecallerContext) {
     quizSpare.clear();
     // One question short is left short: another round is a whole question's chain (~30 s) for one item.
     const reserveRound = quizShown < quizCount - 1 && quizReserve.length > 0;
-    for (let round = 0; round < 1 && quizShown < quizCount - 1 && quizReserve.length; round++) {
+    for (let round = 0; round < (lab.goalQuiz ? 0 : 1) && quizShown < quizCount - 1 && quizReserve.length; round++) {
       quizReserve.sort((a, b) => (a.objective && objShown.has(a.objective) ? 1 : 0) - (b.objective && objShown.has(b.objective) ? 1 : 0));
       const batch: typeof quizReserve = [];
       while (batch.length < quizCount - quizShown && quizReserve.length) {
@@ -1315,7 +1345,8 @@ export async function runRecaller(ctx: RecallerContext) {
     }
     // Still short (picks named cards that were merged away, holds): the best waiting cards, all at once, one round.
     // (At most one extra round in all: each costs a whole question's chain, ~30 s.)
-    if (!reserveRound && quizShown < quizCount - 1) {
+    // 목표형 (no 다시 만들기): only when the pick itself came short (cards not in yet), not to replace held questions.
+    if (!reserveRound && (!lab.goalQuiz || picked.length < Math.ceil(quizCount / 2)) && quizShown < quizCount - 1) {
       const list = [...quizWait].filter((x) => !data.dups?.[x.card.id]).sort((a, b) => (b.card.weight === "핵심" ? 1 : 0) - (a.card.weight === "핵심" ? 1 : 0) || quizRank(b.card) - quizRank(a.card));
       const batch = list.slice(0, quizCount - quizShown);
       for (const w of batch) { quizWait.splice(quizWait.indexOf(w), 1); quizSpare.add(w.card.id); }
@@ -1325,7 +1356,8 @@ export async function runRecaller(ctx: RecallerContext) {
   };
   const authorOne = async (section: SectionState, k: number, card: Card, given = false, taken = false): Promise<void> => {
     if (quizCount) {
-      if (!given) { quizWait.push({ section, k, card }); return; }
+      // 흐름 카드 is not a question (11/6: the gap-filling took it, "프로세스의 자원 이용 순서는?").
+      if (!given) { if (!isFlow(card)) quizWait.push({ section, k, card }); return; }
       if (!taken) quizTake(section.id);
       const before = data.units[section.id].chunks?.[k]?.questions?.length ?? 0;
       await authorCard(section, k, card);
@@ -1352,7 +1384,8 @@ export async function runRecaller(ctx: RecallerContext) {
       for (const k of keys) quoteUses.set(k, (quoteUses.get(k) ?? 0) + 1);
     }
     const luna = lab.quiz === "luna" ? lunaQuiz(section, card) : null;
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    // 목표형: one try per question; a held question is covered by the spares made beside it, not by a second chain.
+    for (let attempt = 1; attempt <= (lab.goalQuiz && luna ? 1 : 2); attempt++) {
       let reply: z.infer<typeof basicReplySchema>;
       let extra: { hint: string; oxNotes: string[]; check?: Promise<string | null> } | null = null;
       if (luna) {
@@ -1360,7 +1393,7 @@ export async function runRecaller(ctx: RecallerContext) {
         try { built = await luna(attempt); } catch (error) { if (pausesRun(error) || !(error instanceof RunawayReply)) throw error; built = null; }
         if (!built) { revision ??= "문제 재료가 모자라 만들지 못했습니다."; break; }
         const a1 = askOf(built.q);
-        if (lunaAsked.some((x) => (x.format === a1.format && sameQuestion(x, a1)) || (quizCount && sameAsk(`${x.ask} ${x.answer}`, `${a1.ask} ${a1.answer}`, 0.5)))) { revision = "같은 자료의 다른 문제와 같은 것을 묻습니다."; continue; }
+        if (lunaAsked.some((x) => (x.format === a1.format && sameQuestion(x, a1)) || (quizCount && sameObjective(x, card) && sameAsk(`${x.ask} ${x.answer}`, `${a1.ask} ${a1.answer}`, 0.5)))) { revision = "같은 자료의 다른 문제와 같은 것을 묻습니다."; continue; }
         reply = { questions: [built.q] };
         extra = { hint: built.hint, oxNotes: built.oxNotes, check: built.check };
       } else try {
@@ -1404,11 +1437,11 @@ export async function runRecaller(ctx: RecallerContext) {
         // Two picks on one thing can be checked at the same moment and both pass the test above; the later one stops here.
         const objective = quizPlan.get(card.id)?.objective;
         if (!shape && extra && quizCount && objective && ((objShown.get(objective) ?? 0) >= objCap() || objFormats.has(`${objective}:${q.format}`))) shape = "같은 학습 목표의 문제가 이미 있습니다.";
-        if (!shape && extra && quizCount) { const a1 = askOf(q); if (lunaAsked.some((x) => sameAsk(`${x.ask} ${x.answer}`, `${a1.ask} ${a1.answer}`, 0.5))) shape = "같은 자료의 다른 문제와 같은 것을 묻습니다."; }
+        if (!shape && extra && quizCount) { const a1 = askOf(q); if (lunaAsked.some((x) => sameObjective(x, card) && sameAsk(`${x.ask} ${x.answer}`, `${a1.ask} ${a1.answer}`, 0.5))) shape = "같은 자료의 다른 문제와 같은 것을 묻습니다."; }
         if (!shape) {
           if (extra && quizCount) { quizShown++; if (objective) { objShown.set(objective, (objShown.get(objective) ?? 0) + 1); objFormats.add(`${objective}:${q.format}`); } }
           // Only shown questions count as asked: a held one must not block the next card on the same thing (11/2).
-          if (extra) lunaAsked.push(askOf(q));
+          if (extra) lunaAsked.push({ ...askOf(q), objective: quizPlan.get(card.id)?.objective ?? "" });
           (chunk.questions ??= []).push(made);
           collect(unit);
           await save();

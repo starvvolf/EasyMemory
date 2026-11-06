@@ -6,7 +6,7 @@
 import { z } from "zod";
 import type { Card } from "./cards.ts";
 
-export const quizSteps = ["rc-q-material", "rc-q-choice", "rc-q-cloze", "rc-q-score", "rc-q-explain", "rc-q-write", "rc-q-pick", "rc-q-goals"] as const;
+export const quizSteps = ["rc-q-material", "rc-q-choice", "rc-q-cloze", "rc-q-score", "rc-q-explain", "rc-q-write", "rc-q-pick", "rc-q-goals", "rc-q-case"] as const;
 export type QuizFormat = "ox" | "choice" | "cloze" | "write";
 
 // ---------- text helpers (A run.ts) ----------
@@ -233,6 +233,48 @@ export const Q_PICK_GOALS = `${BASE}
 - angle: 그 카드에서 물을 결정적인 지점 한 줄(50자 이내).
 - picks: count개. reserve: picks가 못 쓰일 때 대신 쓸 6개(picks와 다른 카드, 같은 목표의 다른 카드여도 된다; objective를 적는다).
 - card는 cards의 id를 그대로.`;
+// 목표형 문제 (11/6, lab.goalQuiz): a 판정·구별·적용 objective is asked as a situation to judge. One call writes the
+// situation, the question and the options (every possible verdict, or names of the same kind), so no option stands out by
+// its wording (11/6 데드락 9문항: only the answer said "가능성이 있다", OX false statements contradicted themselves).
+export const Q_PICK_CASE = `[목표형] 형식은 목표의 동사와 주는 것으로 정한다: 판정·계산·구별·적용 → choice(목표의 "주는 것" 상황을 주고 "내는 것"을 고르게) / 설명 → write(상황만 주고 결론과 이유를 쓰게) / 떠올리기 → cloze. ox는 쓰지 않는다. angle에는 그 목표의 "주는 것 → 내는 것"을 이 카드에 맞게 한 줄로 쓴다.`;
+export const Q_CASE = `${BASE}
+학습 목표(objective) 하나를 확인하는 상황 판정 객관식 한 문제를 만든다. 카드(card)와 같은 주제 카드(topic), 원문(source)이 근거다.
+- situation: 목표의 "주는 것"에 맞는 구체적인 상황. 코드 실행 순서, 간선 목록("P1 → R1 (요청)", "R1 → P2 (할당)"), 자원마다 인스턴스 수, OS가 하는 동작처럼 학습자가 원문 규칙을 적용해 직접 판정할 재료를 준다. 답을 하나로 정하는 조건(인스턴스 수, 무엇까지 실행했는지 등)을 빠짐없이 쓴다. 원문의 예를 그대로 쓰거나 값을 바꿔도 되지만, 원문 규칙만으로 답이 하나로 정해져야 한다. 줄이 여럿이면 줄바꿈(\n)으로 나눈다. 300자 이내.
+- situation에는 학습자가 찾아내야 할 결정적인 사실을 쓰지 않는다. "순환이 생긴다/있다", "강제로 회수할 수 있다", "적어도 하나가 성립하지 않게 한다", "안전 상태다"처럼 판정의 근거가 되는 말 대신, 그것을 찾아낼 재료(간선 목록, 실행 순서, 할당·요청 상태, OS가 실제로 하는 동작)를 준다. 원문의 정의·판정 문장을 상황으로 옮기지 않는다(예: 나쁨 "그래프에 순환이 있다", 좋음 "P1 → R1 (요청), R1 → P2 (할당), P2 → R2 (요청), R2 → P1 (할당)").
+- ask: 무엇을 판정하는지만 묻는 한 문장(60자 이내). 결론·정답 말·판정 근거와 보기에 나오는 판정어("가능성", "적어도 하나" 등)를 넣지 않는다.
+- options: 3~5개. 가능한 답 전체를 같은 꼴로 늘어놓는다: 판정이면 가능한 판정 전부(예: "교착 상태가 발생한다" / "교착 상태가 발생할 수 있지만 확정되지 않는다" / "교착 상태가 발생하지 않는다"), 이름이면 같은 범주의 이름(네 조건, 세 처리 방식), 동작이면 같은 틀의 동작. 이유를 붙이지 않는다. 모든 보기는 같은 길이·같은 말투다. 정답만 조심스럽거나 자세하면 안 된다. 상황과 상관없는 보기, 스스로 모순인 보기, "모두 맞다/없음"은 쓰지 않는다.
+- correct: options에서 정답의 번호(0부터).
+- check: 원문 규칙을 situation에 적용해 정답이 나오는 풀이 한두 문장(예: "P1→R1→P2→R2→P1이 사이클이고 자원마다 인스턴스가 1개이므로 교착이다").
+- 같은 목표의 문제가 여럿이면 정답이 늘 같은 판정이 되지 않게 상황을 바꾼다(예: 인스턴스를 2개로 하면 '가능성').`;
+export const qCaseSchema = z.object({ situation: z.string(), ask: z.string(), options: z.array(z.string()), correct: z.number().int(), check: z.string() });
+/** The case question as a choice draft, answer first (the explanation sees it in that fixed order), or none. */
+export function caseDrafts(c: z.infer<typeof qCaseSchema>): QuizDraft[] {
+  const options = c.options.map((o) => o.trim()).filter(Boolean);
+  if (options.length < 3 || options.length > 5 || new Set(options.map(qnorm)).size !== options.length) return [];
+  if (!Number.isInteger(c.correct) || c.correct < 0 || c.correct >= options.length) return [];
+  const situation = c.situation.trim(), ask = c.ask.trim();
+  if (situation.length < 15 || !ask) return [];
+  const correct = options[c.correct];
+  // The answer's wording must not sit in the question (a 판정 asked by naming its verdict).
+  if (qnorm(ask).includes(qnorm(correct)) || (correct.length >= 6 && qnorm(situation).includes(qnorm(correct)))) return [];
+  if (caseLeak(`${situation} ${ask}`, correct, options)) return [];
+  const rest = options.filter((_, i) => i !== c.correct);
+  return [{ format: "choice", stem: `${situation}\n${ask}`, options: [correct, ...rest], correct: 0, froms: ["", ...rest.map(() => "판정")] }];
+}
+/** A word only the answer has (not the other options) that the question already says: "여부 또는 가능성을 판정하시오" with
+ *  "가능성이 있다" as the answer, "적어도 하나가 성립할 수 없도록" with "적어도 하나가 성립하지 않게 한다" (11/6 데드락 M05·M07). */
+export function caseLeak(question: string, correct: string, options: string[]): string | null {
+  const COMMON = /^(교착|상태|자원|프로세스|그래프|요청|할당|판정|있다|없다|한다|된다|이다|않는다|발생|여부|방식|조건|경우|때|수)$/;
+  const others = new Set(options.filter((o) => o !== correct).flatMap((o) => stems(o)));
+  const asked = new Set(stems(question));
+  return stems(correct).find((w) => w.length >= 2 && !COMMON.test(w) && !others.has(w) && asked.has(w)) ?? null;
+}
+export const Q_WRITE_CASE = `[목표형 서술] stem은 목표의 "주는 것" 상황(코드·값·동작)만 주고, 그 상황에서 무슨 일이 일어나는지와 왜 그런지를 쓰게 한다. 결론·이유·조건 이름은 stem에 쓰지 않는다(예: 나쁨 "P0은 S를, P1은 Q를 얻고 서로의 것을 요청할 때 왜 진행하지 못하는가", 좋음 "S, Q를 1로 초기화했다. P0은 P(S); P(Q); 를, P1은 P(Q); P(S); 를 실행하는데 P0이 P(S), P1이 P(Q)까지 실행했다. 다음에 두 프로세스는 어떻게 되는지와 그 이유를 쓰시오"). points의 말이 stem에 들어 있으면 안 된다.`;
+/** 목표형 서술: a stem that already holds the scoring points answers itself (11/6 데드락 1·2번). */
+export function writeLeaks(w: { stem: string; points: string[] }) {
+  const stem = qnorm(w.stem);
+  return w.points.filter((p) => { const k = qnorm(p); return k.length >= 4 && stem.includes(k); }).length >= 1;
+}
 /** How many of each format a quiz of n gets (QUIZ_MIX_SHORT, rounded so they add up to n). */
 export function mixCounts(n: number): Record<QuizFormat, number> {
   const order: QuizFormat[] = ["choice", "ox", "write", "cloze"];
@@ -381,6 +423,7 @@ export function quizFakeReply(step: string, user: string): string | undefined {
   if (step === "rc-q-pick") { const cs = (JSON.parse(user) as { cards: Array<{ id: string }>; count: number; objectives?: Array<{ id: string }> }); const fs = ["choice", "ox", "write", "cloze"];
     return JSON.stringify({ picks: cs.cards.slice(0, cs.count).map((c, i) => ({ card: c.id, format: fs[(i + (cs.count === 4 ? 3 : 0)) % 4], angle: "가짜 지점", objective: cs.objectives?.[i]?.id ?? "" })), reserve: cs.cards.slice(cs.count, cs.count + 4).map((c) => ({ card: c.id, format: "choice", angle: "" })) }); }
   if (step === "rc-q-write") return JSON.stringify({ stem: `${name}에서 ${focus}이 왜 필요한지 설명하시오.`, answer: `${name}은 ${focus}을 써야 결과가 하나로 정해진다. 그렇지 않으면 다른 결과가 나온다.`, points: [`${focus} 사용`, "결과가 하나로 정해짐"] });
+  if (step === "rc-q-case") return JSON.stringify({ situation: `${name}: 가짜 상황 첫 줄\n가짜 상황 둘째 줄`, ask: "이때 맞는 판정은?", options: [`${focus} 앞에서 정해진다`, `${focus} 뒤에서 정해진다`, `${focus} 옆에서 정해진다`], correct: 0, check: "가짜 풀이" });
   if (step === "rc-q-cloze") return JSON.stringify({ sentence: `${name}의 핵심은 ${focus} 이다.`, blanks: [focus] });
   if (step === "rc-q-score") return JSON.stringify({ fits: true, items: (u.candidates ?? []).map((_, n) => ({ n, wrong: true, tempting: 2, sameKind: true, sameAs: -1 })) });
   const d = u.draft;

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
 import { ExperimentRequestError } from "@/lib/mcp-experiment-requests";
 import { boundedJson, requireLocalRequest, responseError } from "../../../mcp-experiment-requests/http";
-import { astraReadingView, setAstraReadingPage, confirmObjectives, createGen, remergeGen, questionsGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, setGenFocus, stepLabel, studyDocument } from "@/lib/study/gen/runner";
+import { astraReadingView, setAstraReadingPage, confirmObjectives, createGen, remergeGen, requizGen, questionsGen, enqueueGen, forkGen, loadGen, genView, GenError, listGens, readGenCalls, readSectionDocument, setGenFocus, stepLabel, studyDocument } from "@/lib/study/gen/runner";
 import { scorecard } from "@/lib/study/gen/scorecard";
 import { EDITABLE_PROMPTS } from "@/lib/study/gen/prompt-registry";
 import { listJudges, loadJudge, readJudgeCalls, startJudge } from "@/lib/study/gen/judge";
@@ -115,6 +115,15 @@ async function handle(request: Request, context: Context) {
       const gen = await remergeGen(p[0], options);
       await enqueueGen(gen.id, caller, { confirmedRealCalls: confirmed === true });
       result = { gen: await genView(gen.id) };
+    } else if (p.length === 2 && p[1] === "requiz" && method === "POST") {
+      // 실험 (11/6): same cards and 학습 목표, only the questions again. Body: { models?, lab?, confirmed }.
+      const body = z.object({ confirmed: z.boolean().optional() }).passthrough().parse(await boundedJson(request));
+      const { confirmed, ...options } = body;
+      const base = await loadGen(p[0]);
+      if (base && base.input.provider !== "fake" && confirmed !== true) throw new ExperimentRequestError(400, "실제 모델 실행 확인이 필요합니다.");
+      const gen = await requizGen(p[0], options);
+      await enqueueGen(gen.id, caller, { confirmedRealCalls: confirmed === true });
+      result = { gen: await genView(gen.id) };
     } else if (p.length === 2 && p[1] === "questions" && method === "POST") {
       // 문제 만들기: a run that stopped after its cards (questionsLater) goes on to the questions.
       const body = z.object({ confirmed: z.boolean().optional() }).parse(await boundedJson(request));
@@ -146,6 +155,6 @@ export const POST = handle;
 function methodOf(gen: { input: { engine?: string; lab?: Record<string, unknown> } }) {
   const lab = gen.input.lab ?? {};
   if (gen.input.engine !== "recaller") return "";
-  const how = lab.mapCards ? `목차→카드(${lab.mapUnit === "page" ? "쪽" : "주제"})${lab.flowCard === "with" ? "+흐름(같이)" : lab.flowCard === "after" ? "+흐름(다음에)" : ""}` : lab.conceptLines ? "개념 줄" : lab.digest ? "목차→요약→카드" : "쪽 정리";
+  const how = lab.mapCards ? `목차→카드(${lab.mapUnit === "page" ? "쪽" : "주제"})${lab.flowCard === "with" ? "+흐름(같이)" : lab.flowCard === "after" ? "+흐름(다음에)" : ""}${lab.goalQuiz ? " · 목표형 문제" : ""}` : lab.conceptLines ? "개념 줄" : lab.digest ? "목차→요약→카드" : "쪽 정리";
   return `${how}${lab.quiz === "luna" ? ` · 퀴즈${lab.quizCount ?? ""}` : ""}`;
 }

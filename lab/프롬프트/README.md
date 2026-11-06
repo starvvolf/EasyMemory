@@ -26,15 +26,19 @@
 | [흐름 카드 · 카드와 같이](10_FLOW_WITH.md) | `rc-digest-card` | gpt-6.1-terra low | flowCard with |  |
 | [흐름 카드 · 카드 다음에](11_FLOW_AFTER.md) | `rc-flow` | gpt-6.1-terra low | flowCard after |  |
 | [개요·핵심 정리](12_WRAP_SYSTEM.md) | `rc-wrap` | gpt-6.1-terra low | 늘 | 정리 글의 맨 앞 개요 두 문장과 주제마다 시험 전에 볼 것 한 줄. |
-| [학습 목표](13_OBJECTIVES_SYSTEM.md) | `rc-q-goals` | gpt-6-luna medium | 퀴즈 | 시험이라면 확인할 학습 목표 6~12개. 동사(떠올리기·구별·판정·계산·설명)가 문제 형식을 정한다. |
-| [출제할 카드 고르기(목표 있음)](14_Q_PICK_GOALS.md) | `rc-q-pick` | gpt-6-luna medium | 퀴즈 | 학습 목표 하나에 문항 하나, 목표 동사로 형식을 골라 출제할 카드를 정한다. |
-| [출제할 카드 고르기(목표 없음)](15_Q_PICK.md) | `rc-q-pick` | gpt-6-luna medium | 퀴즈 | 목표 없이 카드와 주제 흐름만 보고 출제할 카드를 고른다. |
-| [문제 재료(맞는 진술·오개념 쌍)](16_Q_MATERIAL.md) | `rc-q-material` | gpt-6-luna medium | 퀴즈 | 문제 재료: 맞는 진술 3개와 오개념 쌍 5개(한 단어만 다른 맞는/틀린 문장). OX·객관식·빈칸이 여기서 나온다. |
-| [객관식](17_Q_CHOICE.md) | `rc-q-choice` | gpt-6-luna medium | 퀴즈 | 객관식 문제 글, 정답, 오답 후보 6개. 상황형 우선, 판단이 두세 갈래면 "판단: 이유" 꼴. |
-| [객관식 보기 채점](18_Q_SCORE.md) | `rc-q-score` | gpt-6-luna medium | 퀴즈 | 오답 후보마다 틀림 확실·그럴듯함·같은 꼴·같은 뜻을 매기고, 정답이 질문에 맞는지(fits)를 본다. |
-| [빈칸](19_Q_CLOZE.md) | `rc-q-cloze` | gpt-6-luna medium | 퀴즈 | 빈칸 문제 문장 하나와 비울 말 후보 3개. |
-| [서술형](20_Q_WRITE.md) | `rc-q-write` | gpt-6-luna medium | 퀴즈 | 서술형: 왜·어떻게를 2~3문장으로 설명하게 하는 질문, 모범 답, 채점 요소. |
-| [해설·힌트](21_Q_EXPLAIN.md) | `rc-q-explain` | gpt-6-luna low | 퀴즈 | 다 만든 문제에 힌트, 보기별 한 줄 설명, 해설, 빈칸 인정 표기, 목표 한 줄. |
-| [정답 확인(따로 풀기)](22_VERIFY.md) | `rc-check` | gpt-6.1-terra low | 퀴즈 | 정답을 모르고 카드 근거 쪽만 보고 문제를 따로 푼다. 답이 하나로 안 정해지거나 다르면 그 문항은 버린다. |
-| [빈칸 같은 답 판정](23_SAME_ANSWER.md) | `rc-check` | gpt-6.1-terra low | 퀴즈 | 빈칸에서 따로 푼 답이 인정 답과 뜻이 같은지 판정. |
-| [주제 요약(성격별)](24_TOPIC_%EC%A3%BC%EC%A0%9C%EC%9A%94%EC%95%BD.md) | `rc-topic` | gpt-6.1-sol low | 목차 → 요약 → 카드 | 주제 하나의 본문 줄·쉬운 설명·흔한 오해. 성격마다 지시가 다르다. |
+| [학습 목표](13_OBJECTIVES_SYSTEM.md) | `rc-q-goals` | gpt-6.1-sol low | 퀴즈 | 시험이라면 확인할 학습 목표 6~12개. 동사(떠올리기·구별·판정·계산·설명)가 문제 형식을 정한다. |
+| [학습 목표 · 주는 것·내는 것(목표형)](14_OBJECTIVES_GIVEN.md) | `rc-q-goals` | gpt-6.1-sol low | goalQuiz |  |
+| [출제 고르기 · 목표형 형식](15_Q_PICK_CASE.md) | `rc-q-pick` | gpt-6.1-sol low | goalQuiz |  |
+| [상황 판정 객관식(목표형)](16_Q_CASE.md) | `rc-q-case` | gpt-6.1-sol low | goalQuiz |  |
+| [서술 · 상황만 주기(목표형)](17_Q_WRITE_CASE.md) | `rc-q-write` | gpt-6.1-sol low | goalQuiz |  |
+| [출제할 카드 고르기(목표 있음)](18_Q_PICK_GOALS.md) | `rc-q-pick` | gpt-6.1-sol low | 퀴즈 | 학습 목표 하나에 문항 하나, 목표 동사로 형식을 골라 출제할 카드를 정한다. |
+| [출제할 카드 고르기(목표 없음)](19_Q_PICK.md) | `rc-q-pick` | gpt-6.1-sol low | 퀴즈 | 목표 없이 카드와 주제 흐름만 보고 출제할 카드를 고른다. |
+| [문제 재료(맞는 진술·오개념 쌍)](20_Q_MATERIAL.md) | `rc-q-material` | gpt-6-luna medium | 퀴즈 | 문제 재료: 맞는 진술 3개와 오개념 쌍 5개(한 단어만 다른 맞는/틀린 문장). OX·객관식·빈칸이 여기서 나온다. |
+| [객관식](21_Q_CHOICE.md) | `rc-q-choice` | gpt-6-luna medium | 퀴즈 | 객관식 문제 글, 정답, 오답 후보 6개. 상황형 우선, 판단이 두세 갈래면 "판단: 이유" 꼴. |
+| [객관식 보기 채점](22_Q_SCORE.md) | `rc-q-score` | gpt-6-luna medium | 퀴즈 | 오답 후보마다 틀림 확실·그럴듯함·같은 꼴·같은 뜻을 매기고, 정답이 질문에 맞는지(fits)를 본다. |
+| [빈칸](23_Q_CLOZE.md) | `rc-q-cloze` | gpt-6-luna medium | 퀴즈 | 빈칸 문제 문장 하나와 비울 말 후보 3개. |
+| [서술형](24_Q_WRITE.md) | `rc-q-write` | gpt-6.1-sol low | 퀴즈 | 서술형: 왜·어떻게를 2~3문장으로 설명하게 하는 질문, 모범 답, 채점 요소. |
+| [해설·힌트](25_Q_EXPLAIN.md) | `rc-q-explain` | gpt-6-luna low | 퀴즈 | 다 만든 문제에 힌트, 보기별 한 줄 설명, 해설, 빈칸 인정 표기, 목표 한 줄. |
+| [정답 확인(따로 풀기)](26_VERIFY.md) | `rc-check` | gpt-6.1-terra low | 퀴즈 | 정답을 모르고 카드 근거 쪽만 보고 문제를 따로 푼다. 답이 하나로 안 정해지거나 다르면 그 문항은 버린다. |
+| [빈칸 같은 답 판정](27_SAME_ANSWER.md) | `rc-check` | gpt-6.1-terra low | 퀴즈 | 빈칸에서 따로 푼 답이 인정 답과 뜻이 같은지 판정. |
+| [주제 요약(성격별)](28_TOPIC_%EC%A3%BC%EC%A0%9C%EC%9A%94%EC%95%BD.md) | `rc-topic` | gpt-6.1-sol low | 목차 → 요약 → 카드 | 주제 하나의 본문 줄·쉬운 설명·흔한 오해. 성격마다 지시가 다르다. |

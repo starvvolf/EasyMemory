@@ -393,6 +393,7 @@ test("앱(공부 화면) 기본 (11/5): 목차 → 바로 카드로 카드 먼�
   const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "core", engine: "recaller", provider: "fake", origin: "study", questionsLater: true });
   assert.equal(start.input.lab?.mapCards, true);
   assert.equal(start.input.lab?.flowCard, "after", "앱은 카드 다음에 흐름 카드 한 장 (11/6)");
+  assert.equal(start.input.lab?.goalQuiz, true, "앱은 목표형 문제 (11/6)");
   const first = await runGen(start.id, { uid: "local-experiment" }, io);
   assert.equal(first.status, "done", first.message);
   const before = await readGenCalls(first.id);
@@ -401,7 +402,7 @@ test("앱(공부 화면) 기본 (11/5): 목차 → 바로 카드로 카드 먼�
   const done = await runGen(first.id, { uid: "local-experiment" }, io);
   assert.equal(done.status, "done", done.message);
   const after = (await readGenCalls(done.id)).slice(before.length).map((c) => c.step);
-  assert.ok(after.includes("rc-q-pick") && after.includes("rc-q-material"), after.join(","));
+  assert.ok(after.includes("rc-q-pick") && (after.includes("rc-q-case") || after.includes("rc-q-material")), after.join(","));
   assert.ok(!after.includes("rc-digest-card") && !after.includes("rc-digest-plan"), `카드를 다시 만들지 않는다: ${after.join(",")}`);
   const qs = done.sections.flatMap((s) => Object.values(done.recaller!.units[s.id].chunks ?? {}).flatMap((c) => c.questions ?? []));
   assert.ok(qs.length >= 1, "문제가 나온다");
@@ -436,4 +437,49 @@ test("흐름 카드 (11/6): 주제마다 흐름 카드 한 장이 맨 앞에 —
     if (flowCard === "after") assert.equal(calls.filter((c) => c.step === "rc-flow").length, 0, "카드 한 장짜리 주제에는 흐름 카드를 만들지 않는다");
     for (const c of calls.filter((c) => c.step === "rc-q-material")) assert.ok(!/"title":"흐름: /.test(c.user ?? ""), "흐름 카드는 출제하지 않는다");
   }
+}));
+
+test("목표형 문제 (11/6): 목표에 주는 것·내는 것, 판정은 상황 객관식(rc-q-case), OX는 상황 객관식으로, 서술이 채점 요소를 담으면 버린다", () => withData(async () => {
+  const io = { pdf: async () => null, pages: async () => pages };
+  const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake", lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, goalQuiz: true, quiz: "luna", quizCount: 3 } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, io);
+  assert.equal(done.status, "done", done.message);
+  const calls = await readGenCalls(done.id);
+  assert.ok(calls.find((c) => c.step === "rc-q-goals")?.system?.includes("[주는 것·내는 것]"));
+  assert.ok(calls.find((c) => c.step === "rc-q-pick")?.system?.includes("[목표형]"));
+  assert.ok(calls.some((c) => c.step === "rc-q-case"), `판정 문제는 상황 판정 호출로: ${calls.map((c) => c.step).join(",")} / ${calls.find((c) => c.step === "rc-q-pick")?.reply}`);
+  assert.ok(!calls.some((c) => c.step === "rc-q-choice" || c.step === "rc-q-score"), "목표형 객관식·OX는 보기 재료·보기 채점 호출을 쓰지 않는다");
+  const qs = Object.values(done.recaller!.units).flatMap((u) => u.questions ?? []);
+  // Which card lands on which format depends on arrival order: every published choice is a case (situation, then the question).
+  for (const q of qs.filter((q) => q.format === "choice")) assert.ok(q.authored.stem.some((b) => (b.text ?? "").includes("\n")), "상황과 질문이 한 문제에");
+  assert.ok(!qs.some((q) => q.format === "ox"));
+}));
+test("목표형 문제 (11/6): 보기 검사와 서술 새는 말", async () => {
+  const { caseDrafts, writeLeaks } = await import("./quiz.ts");
+  assert.equal(caseDrafts({ situation: "R1, R2 인스턴스 1개. P1 → R1 (요청)", ask: "교착 상태가 발생한다?", options: ["교착 상태가 발생한다", "가능성만", "없다"], correct: 0, check: "" }).length, 0, "질문에 정답 말");
+  assert.equal(caseDrafts({ situation: "R1, R2 인스턴스 1개. P1 → R1 (요청)", ask: "판정은?", options: ["발생", "발생"], correct: 0, check: "" }).length, 0);
+  const d = caseDrafts({ situation: "R1, R2 인스턴스 1개. P1 → R1 (요청)", ask: "판정은?", options: ["없다", "발생한다", "가능성만"], correct: 1, check: "" })[0];
+  assert.ok(d && d.format === "choice" && d.correct === 0 && d.options[0] === "발생한다");
+  const { caseLeak } = await import("./quiz.ts");
+  assert.ok(caseLeak("자원 유형마다 인스턴스가 여러 개 있다. 교착 상태 여부 또는 가능성을 판정하시오.", "교착 상태일 가능성이 있다", ["교착 상태가 발생한다", "교착 상태일 가능성이 있다", "교착 상태가 발생하지 않는다"]));
+  assert.equal(caseLeak("P1 → R1 (요청), R1 → P2 (할당). 판정은?", "교착 상태가 발생한다", ["교착 상태가 발생한다", "교착 상태일 가능성이 있다", "교착 상태가 발생하지 않는다"]), null);
+  assert.equal(writeLeaks({ stem: "P0은 S를, P1은 Q를 얻고 서로의 것을 요청할 때 왜 진행하지 못하는가", points: ["서로의 것을 요청", "기다림"] }), true);
+  assert.equal(writeLeaks({ stem: "P0이 P(S), P1이 P(Q)까지 실행했다. 다음은?", points: ["서로 상대 세마포어를 기다림"] }), false);
+});
+
+test("문제만 다시 (11/6, 실험): 같은 카드·학습 목표로 문제 단계만, 모델을 바꿔서", () => withData(async () => {
+  const io = { pdf: async () => null, pages: async () => pages };
+  const { requizGen } = await import("./runner.ts");
+  const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake", lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, goalQuiz: true, quiz: "luna", quizCount: 3 } });
+  const first = await runGen(start.id, { uid: "local-experiment" }, io);
+  assert.equal(first.status, "done", first.message);
+  const again = await requizGen(first.id, { models: { "rc-q-case": { model: "gpt-6.1-terra", effort: "low" } } });
+  const done = await runGen(again.id, { uid: "local-experiment" }, io);
+  assert.equal(done.status, "done", done.message);
+  const steps = (await readGenCalls(done.id)).map((c) => c.step);
+  assert.ok(!steps.some((s) => s === "rc-digest-plan" || s === "rc-digest-card" || s === "rc-q-goals" || s === "rc-merge" || s === "rc-flow"), steps.join(","));
+  assert.ok(steps.includes("rc-q-pick"));
+  assert.deepEqual(done.recaller!.digest!.objectives, first.recaller!.digest!.objectives);
+  assert.equal(done.input.models?.["rc-q-case"]?.model, "gpt-6.1-terra");
+  assert.ok(Object.values(done.recaller!.units).some((u) => (u.questions ?? []).length));
 }));
