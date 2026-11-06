@@ -4,7 +4,7 @@
 // Data: GET /api/study-map/<material> (src/lib/study/material-map.ts). Opened from the PDF reader's bar.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { call, errorText, go } from "./api";
-import { RichInline as Rich } from "./Rich";
+import { Rich as RichBlock, RichInline as Rich } from "./Rich";
 
 type Shape =
   | { form: "term"; name: string; symbol: string; definition: string; neighbors: string[] }
@@ -131,7 +131,35 @@ function keyLine(s: Shape): string {
 // cards written in as the engine streams them; pages run at once, the board keeps page order. Then the map takes over.
 type LiveCard = { title: string; kind: string; weight: string; shape: Record<string, unknown> };
 type LivePage = { page: number; done: boolean; cards: LiveCard[] };
-type LiveData = { now: number; status: string; live: boolean; outline: Array<{ page: number; title: string }>; pages: LivePage[] };
+type Summary = { status: "writing" | "done" | "failed"; text: string; firstMs?: number; ms?: number; error?: string };
+type LiveData = { now: number; status: string; live: boolean; outline: Array<{ page: number; title: string }>; pages: LivePage[]; summary?: Summary | null };
+
+// [요약] 탭 (11/6 사용자 "요약을 스트리밍으로, 넓은 채팅창처럼"): 엔진이 쓰는 정리 글(summary.json)을 쓰는 대로 보여 준다.
+function SummaryPane({ summary, making }: { summary: Summary | null | undefined; making: boolean }) {
+  const end = useRef<HTMLDivElement>(null);
+  const writing = summary?.status === "writing";
+  // 글을 읽는 중에 화면이 밀리지 않게, 맨 아래를 보고 있을 때만 따라 내려간다.
+  useEffect(() => { const el = end.current; if (!el || !writing) return; const r = el.getBoundingClientRect(); if (r.top < window.innerHeight + 120) el.scrollIntoView({ block: "end" }); }, [summary?.text, writing]);
+  if (!summary || (!summary.text && writing)) return <div className="mm5-chat"><p className="mm5-wait">{making || writing ? "자료를 읽고 요약을 쓰기 시작하는 중이에요…" : "이 자료는 요약 없이 만들었어요. [지식] 탭에서 보세요."}</p></div>;
+  // 소제목 다음 줄이 바로 붙어 와도 소제목으로 보이게 문단을 나눈다.
+  const text = summary.text.replace(/^(#{1,4} .+)$/gm, "\n$1\n").replace(/\n{3,}/g, "\n\n");
+  return (
+    <div className="mm5-chat" aria-live="polite">
+      <RichBlock text={text} className="mm5-text" />
+      {writing ? <span className="mm5-caret" aria-label="쓰는 중" /> : null}
+      {summary.status === "failed" ? <p className="small muted">요약을 끝까지 쓰지 못했어요{summary.error ? ` (${summary.error})` : ""}. 지식은 따로 만들어져요.</p> : null}
+      <div ref={end} />
+    </div>
+  );
+}
+
+// 지금 무엇을 하는지 (11/6 사용자 "오래 걸리는데 뭐 하는지 모르겠다"): 단계마다 끝남·하는 중·기다림.
+type Step = { label: string; state: "done" | "now" | "wait"; note?: string };
+function Steps({ steps }: { steps: Step[] }) {
+  return <ol className="mm5-steps" aria-label="만드는 단계">{steps.map((st) => (
+    <li key={st.label} className={`mm5-step ${st.state}`}><span className="mm5-dot" aria-hidden />{st.label}{st.note ? <span className="mm5-note num"> {st.note}</span> : null}
+      <span className="sr-only">{st.state === "done" ? " 끝남" : st.state === "now" ? " 하는 중" : " 기다림"}</span></li>))}</ol>;
+}
 
 // A shape the engine is still writing: every field the drawing reads, present (empty until it comes).
 function filled(raw: Record<string, unknown>): Shape | null {
@@ -245,8 +273,10 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
   const [board, setBoard] = useState<"live" | "leaving" | "off">("off");
   const [error, setError] = useState("");
   const [only, setOnly] = useState<"all" | "unknown" | "new">("all");
-  // 개념별 (the whole-material pass's topics, each with what it is there to say) once it exists; 목차별 keeps the slides' own titles.
-  const [picked, setView] = useState<"outline" | "topic" | null>(null);
+  // 11/6 사용자: 목차별·개념별을 빼고 위에 [요약 | 지식] 두 탭. 지식은 목차(자료의 순서)로만 보인다.
+  const view = "outline" as const;
+  const [tab, setTab] = useState<"summary" | "knowledge" | null>(null);
+  const [summary, setSummary] = useState<Summary | null | undefined>(undefined);
   const [coreOnly, setCoreOnly] = useState(false);
   // 첫 화면은 목차만 (사용자 10/30): every group starts folded; a group opens to one line per piece of knowledge, a line to its card.
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
@@ -275,6 +305,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
       // Every page in (or the run stopped, or pages it had made before a restart are not streamed again): the map takes over.
       const all = (acc.outline.length > 0 && acc.outline.every((o) => pages.get(o.page)?.done)) || !["queued", "running"].includes(r.status);
       setLive(acc);
+      if (r.summary !== undefined) setSummary(r.summary);
       // Nothing written yet: a run still reading its pages is waited for; a finished or stopped one has no board.
       if (!r.live && !pages.size) { if (!["queued", "running"].includes(r.status) || ++misses > 120) { setBoard("off"); return; } timer = setTimeout(poll, 800); return; }
       else if (all) { setBoard((b) => (b === "live" ? "leaving" : b)); setTimeout(() => { if (alive) setBoard("off"); }, 900); return; }
@@ -284,8 +315,19 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
     poll();
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [genId]);
+  // 요약은 카드가 다 써진 뒤에도 이어 쓰일 수 있어, 끝날 때까지 따로 받는다.
+  useEffect(() => {
+    let alive = true, timer: ReturnType<typeof setTimeout> | undefined, idle = 0;
+    const poll = () => call<LiveData>(`/api/study-map/${genId}/live?since=${Date.now() + 60_000}`).then((r) => {
+      if (!alive) return;
+      setSummary(r.summary ?? null);
+      const running = ["queued", "running"].includes(r.status);
+      if (r.summary?.status === "writing" || (!r.summary && running && ++idle < 200)) timer = setTimeout(poll, r.summary ? 600 : 1500);
+    }).catch(() => { if (alive) timer = setTimeout(poll, 2000); });
+    poll();
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+  }, [genId]);
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", esc); return () => document.removeEventListener("keydown", esc); }, [onClose]);
-  const view = picked ?? (map?.topics?.length ? "topic" : "outline");
   const titles = useMemo(() => new Map(map?.sections.flatMap((s) => s.cards.map((c) => [c.id, c.title] as const)) ?? []), [map]);
   // Where a card leads (→) and what leads to it (←), once each.
   const next = useMemo(() => { const m = new Map<string, Array<{ to: string; what: string; back: boolean }>>();
@@ -317,8 +359,26 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
     setOpenCard(id);
     setTimeout(() => { const el = document.getElementById(`mm3-${id}`); if (!el) return; el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1200); }, 60);
   };
+  // 단계: 자료 읽기 → 요약 → 지식 카드 → 핵심·연결 정리 → (문제). 있는 정보로만 판단한다(엔진이 따로 알려 주지 않아도).
+  const running = map ? map.status !== "done" : true;
+  const pagesIn = live ? live.outline.filter((o) => live.pages.find((p) => p.page === o.page)?.done).length : 0;
+  const cardsN = map?.counts.cards ?? 0;
+  const steps: Step[] = [
+    { label: "자료 읽기", state: live?.outline.length || cardsN || summary?.text ? "done" : "now" },
+    { label: "요약", state: summary?.status === "done" ? "done" : summary?.status === "writing" ? "now" : summary?.status === "failed" ? "done" : running ? "wait" : "done",
+      note: summary?.status === "failed" ? "못 씀" : summary?.ms ? `${Math.round(summary.ms / 1000)}초` : undefined },
+    { label: "지식 카드", state: !running || map?.topics?.length ? "done" : cardsN || board === "live" ? "now" : "wait",
+      note: cardsN ? `${cardsN}개` : board === "live" && live?.outline.length ? `${pagesIn}/${live.outline.length}쪽` : undefined },
+    { label: "핵심·연결 정리", state: map?.topics?.length || !running ? "done" : cardsN && board === "off" ? "now" : "wait" },
+    ...(map && !map.questionsLater ? [{ label: "문제", state: (!running ? "done" : map.topics?.length ? "now" : "wait") as Step["state"], note: map.counts.questions ? `${map.counts.questions}개` : undefined }] : []),
+  ];
+  const shownTab = tab ?? (summary && (summary.text || summary.status === "writing") ? "summary" : running && summary === undefined ? "summary" : "knowledge");
+  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", "요약"], ["knowledge", "지식"]] as const).map(([k, label]) =>
+    <button key={k} className={shownTab === k ? "on" : ""} aria-pressed={shownTab === k} onClick={() => setTab(k)}>{label}{k === "knowledge" && running ? <span className="mm5-badge">만드는 중</span> : null}</button>)}</div>;
   if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>지식을 정리하는 중…</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
-    {board !== "off" && live ? <LiveBoard data={live} /> : <p className="small muted">{error || "쪽을 읽고 있어요. 첫 카드까지 5~10초쯤 걸려요."}</p>}</div>;
+    <Steps steps={steps} />{tabs}
+    {shownTab === "summary" ? <SummaryPane summary={summary} making /> : board !== "off" && live ? <LiveBoard data={live} />
+      : <p className="small muted">{error || "요약을 바탕으로 지식을 만드는 중이에요. 다 되면 여기에 목차별로 보여요."}</p>}</div>;
   const shown = (c: Card) => (!coreOnly || c.core) && (only === "all" || (only === "unknown" ? c.state === "unknown" : c.state === "new" || c.state === "met"));
   const n = map.counts;
   const making = map.status !== "done";
@@ -338,9 +398,11 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
           <button className="btn ghost small" onClick={onClose}>닫기</button>
         </span>
       </div>
+      {making ? <Steps steps={steps} /> : null}
+      {tabs}
+      {shownTab === "summary" ? <SummaryPane summary={summary} making={making} /> : <>
+      {making ? <p className="small mm5-note-line">지식은 요약을 바탕으로 조금씩 만들어져요. 다 되기 전에도 지금까지 된 것을 볼 수 있어요.</p> : null}
       <div className="row small mm3-tools">
-        {map.topics?.length ? <div className="ws-seg">{([["outline", "목차별"], ["topic", "개념별"]] as const).map(([k, label]) =>
-          <button key={k} aria-pressed={view === k} onClick={() => { setView(k); setOpenGroups(new Set()); setOpenCard(null); }}>{label}</button>)}</div> : null}
         {map.topics?.length ? <label className="row small"><input type="checkbox" checked={coreOnly} onChange={(e) => setCoreOnly(e.target.checked)} /> 핵심만</label> : null}
         {n.unknown || n.known || n.graduated ? <div className="ws-seg">{([["all", "전체"], ["unknown", `몰랐음 ${n.unknown}`], ["new", "아직 확인 안 한 것"]] as const).map(([k, label]) =>
           <button key={k} aria-pressed={only === k} onClick={() => setOnly(k)}>{label}</button>)}</div> : null}
@@ -365,7 +427,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
                 <span className="mm3-caret" aria-hidden>{open ? "▾" : "▸"}</span>
                 <span className="mm3-num">{gi + 1}</span>
                 <span className="mm3-gtext"><b className="mm3-gtitle"><Rich text={g.title} /></b>
-                  {view === "topic" && map.topicNotes?.[g.title] ? <span className="mm3-gist"><Rich text={map.topicNotes[g.title]} /></span> : null}</span>
+                  {map.topicNotes?.[g.title] ? <span className="mm3-gist"><Rich text={map.topicNotes[g.title]} /></span> : null}</span>
                 <span className="small muted">{range(g.pages)}</span>
                 <span className="cs-gap" />
                 <span className="small muted">{map.topics?.length && core ? `★${core} · ` : ""}{g.list.length}개</span>
@@ -414,6 +476,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
       </ol>
       {!visible.length ? <p className="small muted">{making ? "지식을 정리하는 중… 첫 카드까지 5~10초쯤 걸려요." : "고른 조건에 맞는 지식이 없어요."}</p> : null}
       </div>}
+      </>}
     </div>
   );
 }

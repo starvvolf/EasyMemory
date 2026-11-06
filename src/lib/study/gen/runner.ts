@@ -300,7 +300,10 @@ export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
     // and the quiz is 10 luna questions picked by learning objective. 데드락 14쪽 카드까지 $0.09 (전 $0.12~0.19).
     // 흐름 카드 (11/6 사용자 "1번으로 그냥 앱에 박아"): after a topic's cards, one short terra call writes its one story card
     // (in what order the pieces come and why), first in the topic and not quizzed. 그래픽스 04: 카드 단계 +$0.09, +20초.
-    digest: true, digestTopicCards: true, digestStyle: "plan", mapCards: true, mapUnit: "topic", flowCard: "after", noSourceOutline: true, quiz: "luna", quizCount: 10 };
+    digest: true, digestTopicCards: true, digestStyle: "plan", mapCards: true, mapUnit: "topic", flowCard: "after", noSourceOutline: true, quiz: "luna", quizCount: 10,
+    // 정리 글 스트리밍 (11/6 사용자 "처음에 요약을 스트리밍으로 띄우고 지식은 천천히"): summary.ts의 정리 글을 카드와 함께 켠다.
+    // 자료 지도 [요약] 탭이 /live의 summary를 받아 바로 보여 준다(데드락 14쪽 첫 글자 2.7초, 끝까지 94초, sol·low, 10/31 실측).
+    summary: true };
 }
 
 export const forkInputSchema = z.strictObject({
