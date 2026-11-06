@@ -818,3 +818,5 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .gmap .gstep.sup { outline: 1px dashed currentColor; outline-offset: -1px; font-style: italic; }
 .gmap .gstep.sup.done { opacity: .6; }
 .feasy { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.gfold { all: unset; cursor: pointer; font-size: 12px; color: var(--mut); padding: 2px 0; }
+.gfold:hover { color: var(--ink); }
