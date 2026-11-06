@@ -372,9 +372,10 @@ export async function endLearning(runId: string) {
     if (rec) recorded = { goal: rec.goal, learned: rec.learned.length, gaps: rec.gaps?.length ?? 0, memory: rec.memory?.done.length ?? 0 };
   }
   await saveRun(runId, (r) => { (r as { endedAt?: string }).endedAt = new Date().toISOString(); });
-  // 앱 지식 넣기: 코스 서버는 앱 데이터에 직접 쓰지 않는다 → 앱의 sync 주소를 불러 앱이 넣게 한다
+  // 앱 지식 넣기: 코스 서버는 앱 데이터에 직접 쓰지 않는다 → 앱의 sync 주소를 불러 앱이 넣게 한다.
+  // 앱은 POST에 같은 출처(origin)를 요구한다(local-experiment-mode isSameOriginExperimentMutation) → 앱 주소를 origin으로(11/6 한 바퀴 점검에서 synced null)
   const app = (process.env.PROJECT_APP_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
-  const synced = await fetch(`${app}/api/project-course/sync`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ runId }), signal: AbortSignal.timeout(30000) })
+  const synced = await fetch(`${app}/api/project-course/sync`, { method: "POST", headers: { "content-type": "application/json", origin: app }, body: JSON.stringify({ runId }), signal: AbortSignal.timeout(30000) })
     .then(async (r) => (r.ok ? ((await r.json()) as { runs?: { items: number; created: number }[] }).runs?.[0] ?? null : null)).catch(() => null);
   notifyLesson(runId);
   return { recorded, synced };
