@@ -791,3 +791,7 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 /* 튜터 창의 걸음 카드 바깥 화면(홈 등) 맨 위 줄 (11/5) */
 .float.float-bar body { padding-top: 28px !important; }
 .float .floatbar[hidden] { display: none; }
+
+/* 부족했던 점(11/6) */
+.learned .gaps { border-left: 3px solid #e0a030; padding: 4px 0 4px 10px; margin: 6px 0 10px; }
+.learned .gaps ul { margin: 4px 0 0; }

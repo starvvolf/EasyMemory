@@ -17,7 +17,8 @@ const COURSE = (process.env.PROJECT_COURSE_URL || "http://127.0.0.1:4100").repla
 const runId = z.string().regex(/^\w{4,40}$/);
 
 type SyncEvent = { key: string; kind: "asked" | "wrong" | "hint" | "correct" | "note"; detail: string; at: string };
-type SyncItem = { key: string; title: string; kind: "concept" | "vocab"; state: "met" | "unknown"; body: string; topicHint: string; events: SyncEvent[] };
+// kind: 대화 실습의 목표 정리는 여섯 종류(개념·원리·절차·규칙·방법·비교)로 온다(11/6)
+type SyncItem = { key: string; title: string; kind: "concept" | "principle" | "procedure" | "rule" | "method" | "compare" | "vocab"; state: "met" | "unknown"; body: string; topicHint: string; events: SyncEvent[] };
 type SyncPayload = { runId: string; source: { kind: "code"; title: string; ref: string }; items: SyncItem[] };
 type Status = { runs: Array<{ id: string; courseTitle: string; stageTitle: string; current: number; done: number; workspace: string | null; createdAt: string }>; active: string | null; engine?: string; ai?: unknown };
 

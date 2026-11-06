@@ -1472,12 +1472,19 @@ function recordsBar(lesson) {
   if (!rs.length) return null;
   // 11/5 사용자 "개념/원리/절차/규칙/방법/비교 탭": 끝낸 목표들에서 배운 것을 칸별로, 그 밑에 목표별 과정
   const all = rs.flatMap((r) => (r.learned || []).map((x) => ({ ...x, goal: r.goal })));
-  const head = h("button", { class: "lhead", onclick: () => { learnedUi.open = !learnedUi.open; drawLesson(); } }, `배운 것 ${all.length}개 · 끝낸 목표 ${rs.length}개`, h("span", { class: "mut small" }, learnedUi.open ? " 접기" : " 펼치기"));
+  // 11/6 사용자 "부족한 점을 캐치해서 지식으로": 목표 정리의 부족한 점은 맨 위에 따로
+  const gaps = rs.flatMap((r) => (r.gaps || []).map((x) => ({ ...x, goal: r.goal })));
+  const head = h("button", { class: "lhead", onclick: () => { learnedUi.open = !learnedUi.open; drawLesson(); } }, `배운 것 ${all.length}개 · 부족했던 점 ${gaps.length}개 · 끝낸 목표 ${rs.length}개`, h("span", { class: "mut small" }, learnedUi.open ? " 접기" : " 펼치기"));
   if (!learnedUi.open) return h("div", { class: "learned" }, head);
   const count = (t) => all.filter((x) => (x.type || "개념") === t).length;
   const tabs = h("div", { class: "rtabs" }, REC_TABS.map((t) => h("button", { class: `rtab ${recUi.tab === t ? "on" : ""}`, onclick: () => { recUi.tab = t; drawLesson(); } }, `${t} ${count(t)}`)));
   const items = all.filter((x) => (x.type || "개념") === recUi.tab);
-  return h("div", { class: "learned" }, head, tabs,
+  const gapList = gaps.length ? h("div", { class: "gaps" }, h("div", { class: "small" }, h("b", {}, "부족했던 점")), h("ul", {}, gaps.map((x) => h("li", {},
+    h("b", {}, x.concept), h("span", { class: "mut small" }, ` · ${x.type}`),
+    x.wrong ? h("div", { class: "small" }, `헷갈린 것: ${x.wrong}`) : null,
+    x.right ? h("div", { class: "small" }, `바로 알기: ${x.right}`) : null,
+    h("div", { class: "mut small" }, `목표: ${x.goal}${x.quote ? ` · "${x.quote}"` : ""}`))))) : null;
+  return h("div", { class: "learned" }, head, gapList, tabs,
     items.length ? h("ul", {}, items.map((x) => h("li", {}, h("b", {}, x.concept), h("span", { class: "mut small" }, ` · ${x.how}`),
       x.meaning ? h("div", { class: "small" }, x.meaning) : null,
       h("div", { class: "mut small" }, `목표: ${x.goal}${x.quote ? ` · "${x.quote}"` : ""}`)))) : h("p", { class: "mut small" }, "이 칸에는 아직 없어요."),

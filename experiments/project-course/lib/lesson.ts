@@ -312,8 +312,11 @@ async function codexPart(codexId: string) {
 const savedAt = new Map<string, number>();
 export async function checkOnSave(runId: string, saved: string) {
   const run = await getRun(runId).catch(() => null);
-  if (!run || !(run.codexId || run.chatId) || run.autoCheck === false) return;
+  if (!run || !(run.codexId || run.chatId)) return;
   if (!/\.(m?[jt]sx?|py|java|c|cc|cpp|h|go|rs|rb|kt|cs|html|css|json|sql)$/i.test(saved)) return;
+  // 목표 정리가 학습자 코드를 볼 수 있게 저장본을 남긴다(11/6 사용자 A안). 자동 확인을 꺼도 남긴다
+  await logSaved(runId, run, saved).catch((e) => console.error("저장본 기록:", e));
+  if (run.autoCheck === false) return;
   const key = `${runId}:${saved}`;
   if (Date.now() - (savedAt.get(key) ?? 0) < 20_000) return;
   const busy = run.codexId ? (await (await import("./codex-chat.ts")).view(run.codexId)).busy : (await (await import("./agent-chat.ts")).chatView(run.chatId!)).busy;
@@ -321,6 +324,15 @@ export async function checkOnSave(runId: string, saved: string) {
   savedAt.set(key, Date.now());
   const say = `[저장함] ${saved}을(를) 저장했어요. 작업 폴더에서 이 파일을 읽고, 지금 목표 기준으로 맞게 했는지 짧게 확인해 주세요. 틀린 곳은 답을 바로 주지 말고 어디를 보면 되는지 알려 주세요.`;
   if (run.codexId) await codexAsk(runId, run.codexId, say); else await chatAsk(runId, run.chatId!, say);
+}
+async function logSaved(runId: string, run: { codexId?: string; workspaces: Record<string, string> }, saved: string) {
+  const ws = run.codexId ? (await (await import("./codex-chat.ts")).view(run.codexId)).workspace : Object.values(run.workspaces)[0];
+  if (!ws) return;
+  const root = path.resolve(ws), abs = path.resolve(root, saved);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return; // 작업 폴더 밖 파일은 안 남긴다
+  const text = await readFile(abs, "utf8").catch(() => null);
+  if (text === null) return;
+  await (await import("./goal-record.ts")).logSave(runId, path.relative(root, abs).split(path.sep).join("/"), text);
 }
 async function codexAsk(runId: string, codexId: string, text: string) {
   const cx = await import("./codex-chat.ts");
@@ -334,13 +346,22 @@ async function codexAsk(runId: string, codexId: string, text: string) {
 }
 const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
 /** 끝난 목표를 정리한다(그 목표가 시작된 뒤의 대화 전체, 버튼 말은 짧게, 도구는 한 줄) */
+async function chatMessages(run: { codexId?: string; chatId?: string }): Promise<{ role: string; text: string; at: string }[]> {
+  return run.codexId ? (await (await import("./codex-chat.ts")).chatOf(run.codexId)).messages : (await (await import("./agent-chat.ts")).chatOf(run.chatId!)).messages;
+}
+const recordShow = (m: { role: string; text: string }) => m.role === "user" ? `[학습자] ${shownUser(m.text)}` : m.role === "assistant" ? `[튜터] ${m.text.slice(0, 2500)}` : m.role === "tool" ? `[도구] ${m.text.split("\n")[0].slice(0, 120)}` : "";
 async function recordFinished(runId: string, run: { codexId?: string; chatId?: string }, goal: { title: string; done: string; understood: boolean; applied: boolean; at: string }, mode: string | null) {
-  const msgs: { role: string; text: string; at: string }[] = run.codexId
-    ? (await (await import("./codex-chat.ts")).chatOf(run.codexId)).messages
-    : (await (await import("./agent-chat.ts")).chatOf(run.chatId!)).messages;
-  const show = (m: { role: string; text: string }) => m.role === "user" ? `[학습자] ${shownUser(m.text)}` : m.role === "assistant" ? `[튜터] ${m.text.slice(0, 2500)}` : m.role === "tool" ? `[도구] ${m.text.split("\n")[0].slice(0, 120)}` : "";
-  const rec = await (await import("./goal-record.ts")).recordGoal(runId, goal, mode, msgs, show).catch(() => null);
+  const R = await import("./goal-record.ts");
+  const rec = await R.recordGoal(runId, goal, mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId)).catch(() => null);
   if (rec) notifyLesson(runId);
+}
+/** 끝난 목표 정리를 다시 한다(AI 호출 = 목표 수). */
+export async function redoGoalRecords(runId: string) {
+  const run = await getRun(runId);
+  if (!run.codexId && !run.chatId) throw new Error("대화로 하는 실습이 아니에요.");
+  const out = await (await import("./goal-record.ts")).redoRecords(runId, await chatMessages(run), recordShow);
+  notifyLesson(runId);
+  return { redone: out.filter(Boolean).length, total: out.length };
 }
 async function chatAsk(runId: string, chatId: string, text: string) {
   const ac = await import("./agent-chat.ts");

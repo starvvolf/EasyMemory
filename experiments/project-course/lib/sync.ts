@@ -7,10 +7,14 @@
 import path from "node:path";
 import type { Course } from "./course.ts";
 import { notesOf } from "./notes.ts";
-import { DATA, candidates, read, update } from "./store.ts";
+import { DATA, candidates, read, update, type Run } from "./store.ts";
+import { recordsOf, type Tab } from "./goal-record.ts";
 
 export type SyncEvent = { key: string; kind: "asked" | "wrong" | "hint" | "correct" | "note"; detail: string; at: string };
-export type SyncItem = { key: string; title: string; kind: "concept" | "vocab"; state: "met" | "unknown"; body: string; topicHint: string; events: SyncEvent[] };
+export type SyncKind = "concept" | "principle" | "procedure" | "rule" | "method" | "compare" | "vocab";
+export type SyncItem = { key: string; title: string; kind: SyncKind; state: "met" | "unknown"; body: string; topicHint: string; events: SyncEvent[] };
+/** 목표 정리의 여섯 칸 = 지식 저장소의 여섯 종류(B, store.ts KIND_LABEL) */
+const TAB_KIND: Record<Tab, SyncKind> = { 개념: "concept", 원리: "principle", 절차: "procedure", 규칙: "rule", 방법: "method", 비교: "compare" };
 export type SyncPayload = { runId: string; source: { kind: "code"; title: string; ref: string }; items: SyncItem[]; sentBefore: number };
 
 type Ledger = { sent: string[]; at?: string };
@@ -19,10 +23,43 @@ const ledgerFile = (runId: string) => path.join(DATA, "sync", `${runId}.json`);
 const TOPIC: Record<string, string> = { 문법: "프로그래밍 언어/TypeScript/문법", 도구: "프로그래밍 언어/Node.js/도구" };
 
 /** 지금까지 쌓인 것 전부를 앱이 받을 꼴로. 보낸 열쇠는 빼고(sent), 안 보낸 사건이 없고 이미 보낸 지식이면 지식째 뺀다. */
-export async function pending(runId: string, course: Course): Promise<SyncPayload> {
+export async function pending(runId: string, course: Course, run?: Run): Promise<SyncPayload> {
   const sent = new Set((await read<Ledger>(ledgerFile(runId), { sent: [] })).sent);
-  const source = { kind: "code" as const, title: `프로젝트 코스: ${course.title}`, ref: `project:${course.id}` }; // 같은 코스를 다시 해도 "다른 자료"가 아니다
   const byKey = new Map<string, SyncItem>();
+  // 대화로 하는 실습(11/6): 목표 정리의 배운 것 · 부족한 점을 보낸다. 출처 이름은 장기 목표, ref는 이 실습 하나("project:" → 앱에서 실습 출처)
+  if (run?.codexId || run?.chatId) {
+    const goals = await read<{ long?: { text: string } | null }>(path.join(DATA, "goals", `${runId}.json`), {});
+    const long = goals.long?.text || "대화로 배우기";
+    const source = { kind: "code" as const, title: `실습: ${long}`.slice(0, 120), ref: `project:${runId}` };
+    const topicHint = `실습/${long.slice(0, 40)}`;
+    const name = (c: string) => c.replace(/\s+/g, " ").trim();
+    for (const rec of await recordsOf(runId)) {
+      const item = (type: Tab, concept: string, body: string) => {
+        const key = `g:${name(concept).toLowerCase()}`;
+        const it = byKey.get(key) ?? { key, title: name(concept), kind: TAB_KIND[type] ?? "concept", state: "met" as const, body, topicHint, events: [] };
+        byKey.set(key, it);
+        return it;
+      };
+      for (const x of rec.learned) {
+        const it = item(x.type, x.concept, x.meaning);
+        it.events.push({ key: `g:${rec.at}:L:${it.key}`, kind: "note", detail: `목표 "${rec.goal}" · ${x.how}${x.quote ? ` · 학습자: "${x.quote}"` : ""}`.slice(0, 600), at: rec.to });
+      }
+      for (const x of rec.gaps ?? []) {
+        const it = item(x.type, x.concept, x.right);
+        it.state = "unknown"; // 부족했던 것은 "몰랐음"으로 들어가 복습에 먼저 오른다
+        if (x.right) it.body = x.right;
+        it.events.push({ key: `g:${rec.at}:G:${it.key}`, kind: "wrong", detail: `목표 "${rec.goal}" · 부족: ${x.wrong}${x.quote ? ` · 학습자: "${x.quote}"` : ""}`.slice(0, 600), at: rec.to });
+      }
+    }
+    const items: SyncItem[] = [];
+    for (const it of byKey.values()) {
+      const events = it.events.filter((e) => !sent.has(e.key));
+      if (sent.has(it.key) && !events.length) continue;
+      items.push({ ...it, events });
+    }
+    return { runId, source, items, sentBefore: sent.size };
+  }
+  const source = { kind: "code" as const, title: `프로젝트 코스: ${course.title}`, ref: `project:${course.id}` }; // 같은 코스를 다시 해도 "다른 자료"가 아니다
 
   for (const r of await candidates(runId)) {
     const k = course.knowledge.find((x) => x.id === r.knowledgeId);
