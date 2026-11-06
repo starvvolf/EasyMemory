@@ -1484,7 +1484,11 @@ function recordsBar(lesson) {
     x.wrong ? h("div", { class: "small" }, `헷갈린 것: ${x.wrong}`) : null,
     x.right ? h("div", { class: "small" }, `바로 알기: ${x.right}`) : null,
     h("div", { class: "mut small" }, `목표: ${x.goal}${x.quote ? ` · "${x.quote}"` : ""}`))))) : null;
-  return h("div", { class: "learned" }, head, gapList, tabs,
+  // 사람에 대한 관찰(가설, 근거 = 부족했던 점 이름)
+  const obs = rs.filter((r) => r.observation?.text);
+  const obsList = obs.length ? h("div", { class: "gaps" }, h("div", { class: "small" }, h("b", {}, "튜터가 본 경향")), h("ul", {}, obs.map((r) => h("li", { class: "small" }, r.observation.text,
+    h("div", { class: "mut small" }, `근거 ${r.observation.evidence.length}개${r.observation.evidence.length ? `: ${r.observation.evidence.join(", ")}` : ""} · 목표: ${r.goal}`))))) : null;
+  return h("div", { class: "learned" }, head, obsList, gapList, tabs,
     items.length ? h("ul", {}, items.map((x) => h("li", {}, h("b", {}, x.concept), h("span", { class: "mut small" }, ` · ${x.how}`),
       x.meaning ? h("div", { class: "small" }, x.meaning) : null,
       h("div", { class: "mut small" }, `목표: ${x.goal}${x.quote ? ` · "${x.quote}"` : ""}`)))) : h("p", { class: "mut small" }, "이 칸에는 아직 없어요."),

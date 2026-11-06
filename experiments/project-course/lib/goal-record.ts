@@ -10,7 +10,9 @@ export type GoalRecord = {
   goal: string; done: string; status: "마침" | "건너뜀"; mode: string | null; from: string; to: string;
   summary: string; steps: string[]; learned: { type: Tab; concept: string; meaning: string; how: string; quote: string; verified: boolean }[];
   /** 11/6 사용자 "대화 내역을 봤을 때 나한테 부족한 점이 딱 보인다. 그걸 캐치해서 지식으로 잡는 게 중요" */
-  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean }[]; at: string;
+  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean }[];
+  /** 11/6 사용자 "코드 보면 이 사람 파이썬 문법 잘 모르는 것 같은데? 이런 생각. 하드코딩 말고 자유를 주면 잡을 수 있다": 사람에 대한 관찰(가설). 근거는 gaps 이름 */
+  observation?: { text: string; evidence: string[] }; at: string;
 };
 type Msg = { role: string; text: string; at: string };
 /** 11/5 사용자 "그 목표랑 목표 수행하는 동안의 대화 내역 보고 개념/원리/절차/규칙/방법/비교 탭에 넣으라고 시키면 될 것 같다" */
@@ -77,9 +79,11 @@ learned: 이 목표에서 학습자가 배운 것을 여섯 칸 중 하나(type)
 - 비교: 둘 이상의 차이. 예: 리스트와 딕셔너리, 스택과 큐
 각 항목은 concept(다른 곳에서도 통하는 이름), meaning(그 칸에 맞는 한두 문장: 개념은 정의, 원리는 이유, 절차는 단계, 규칙은 약속, 방법은 언제 · 어떻게, 비교는 차이), how(학습자가 그걸 어떻게 만났는지 한 구절: 설명을 들음 · 예측해 맞힘/틀림 · 직접 써 봄 · 헷갈려 물어봄 등), quote(그게 드러난 학습자 말을 글자 그대로, 없으면 빈 글).
 [학습자 코드 저장]은 학습자가 직접 저장한 코드에서 바뀐 줄이다(+ 더함, - 뺌). 학습자의 말과 코드에서 드러난 것을 기준으로 쓰고, 튜터가 말만 하고 지나간 것은 뺀다.
-gaps: 이 목표 동안 드러난 학습자의 부족한 점. 틀린 답, 잘못 쓴 코드, 오해, 몰라서 물어본 것, 튜터가 바로잡아 준 것. 같은 원인은 하나로 묶는다. 각 항목은 type(위 여섯 칸), concept(그 지식 이름), wrong(학습자가 무엇을 몰랐거나 어떻게 잘못 알았는지 한 문장), right(바로 알아야 할 내용 한두 문장), quote(그게 드러난 학습자 말이나 코드 한 줄을 글자 그대로, 없으면 빈 글). 없으면 빈 목록.`;
+gaps: 이 목표 동안 드러난 학습자의 부족한 점. 틀린 답, 잘못 쓴 코드, 오해, 몰라서 물어본 것, 튜터가 바로잡아 준 것. 같은 원인은 하나로 묶는다. 각 항목은 type(위 여섯 칸), concept(그 지식 이름), wrong(학습자가 무엇을 몰랐거나 어떻게 잘못 알았는지 한 문장), right(바로 알아야 할 내용 한두 문장), quote(그게 드러난 학습자 말이나 코드 한 줄을 글자 그대로, 없으면 빈 글). 없으면 빈 목록.
+observation: 이 목표에서 드러난 것을 모아 보면 이 학습자에게 어떤 경향이 보이는지 한두 문장으로(text). 단정하지 말고 "~가 부족해 보인다" 정도로 쓴다. evidence에는 그 판단의 근거가 된 gaps의 concept를 그대로 적는다. 드러난 게 없으면 text는 빈 글.`;
 const SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str), learned: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, meaning: S.str, how: S.str, quote: S.str })),
-  gaps: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, wrong: S.str, right: S.str, quote: S.str })) });
+  gaps: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, wrong: S.str, right: S.str, quote: S.str })),
+  observation: S.obj({ text: S.str, evidence: S.arr(S.str) }) });
 const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
 
 /** 목표 하나를 정리한다. messages: 그 대화 전체(at 포함), since: 목표가 시작된 시각 */
@@ -94,7 +98,7 @@ export async function recordGoal(runId: string, goal: { title: string; done: str
     const text = [...seg.map((m) => ({ at: m.at, text: show(m) })), ...code.map((c) => ({ at: c.at, text: c.text }))]
       .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).map((x) => x.text).filter(Boolean).join("\n\n").slice(-60000);
     const user = `[목표] ${goal.title}\n[완료 조건] ${goal.done}\n[결과] ${goal.understood && goal.applied ? "이해 · 적용까지 하고 마침" : `건너뜀(이해 ${goal.understood ? "✓" : "–"}, 적용 ${goal.applied ? "✓" : "–"})`}\n\n[이 목표 동안의 대화]\n${text}`;
-    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[]; gaps?: { type: string; concept: string; wrong: string; right: string; quote: string }[] }>("goal-record", SYSTEM_RECORD, user, SCHEMA);
+    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[]; gaps?: { type: string; concept: string; wrong: string; right: string; quote: string }[]; observation?: { text: string; evidence: string[] } }>("goal-record", SYSTEM_RECORD, user, SCHEMA);
     // 근거는 학습자 말 또는 학습자가 저장한 코드 줄
     const learnerText = [...seg.filter((m) => m.role === "user").map((m) => norm(m.text)), ...code.flatMap((c) => c.added.map(norm))];
     const unverified: string[] = [];
@@ -112,8 +116,12 @@ export async function recordGoal(runId: string, goal: { title: string; done: str
       if (q && !ok) unverified.push(`부족 ${x.concept}: "${q}"`);
       return { type: tab(x.type), concept: String(x.concept).trim().slice(0, 80), wrong: String(x.wrong ?? "").trim().slice(0, 300), right: String(x.right ?? "").trim().slice(0, 300), quote: ok ? q.slice(0, 200) : "", verified: ok };
     });
+    // 관찰의 근거는 이번 gaps 이름에 있는 것만 남긴다(지어낸 근거는 뺌)
+    const gapNames = new Set(gaps.map((g) => norm(g.concept)));
+    const obsText = String(out.observation?.text ?? "").trim().slice(0, 400);
+    const observation = obsText ? { text: obsText, evidence: (out.observation?.evidence ?? []).map((e) => String(e).trim()).filter((e) => gapNames.has(norm(e))).slice(0, 10) } : undefined;
     const rec: GoalRecord = { goal: goal.title, done: goal.done, status: goal.understood && goal.applied ? "마침" : "건너뜀", mode, from: goal.at, to: redo?.to ?? new Date().toISOString(),
-      summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), learned, gaps, at: new Date().toISOString() };
+      summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), learned, gaps, ...(observation ? { observation } : {}), at: new Date().toISOString() };
     await update<{ items: GoalRecord[] }>(file(runId), { items: [] }, (s) => { if (redo && s.items[redo.index]) s.items[redo.index] = rec; else s.items.push(rec); });
     Object.assign(log, { ms: Date.now() - t0, chars: user.length, codeSaves: code.length, raw: out, unverified });
     return rec;
