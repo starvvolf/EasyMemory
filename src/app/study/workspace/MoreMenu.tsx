@@ -35,6 +35,7 @@ export default function MoreMenu() {
           {/* 2026-11-02 A (점검_UIUX화면연결 17번): 만드는 사람용 화면은 접어 둔다 */}
           <details className="mm-dev"><summary>개발용 화면</summary>
             {/* 2026-11-05 정리: 실험 서버·도구는 lab/·tools/에서 켠다. 여기는 같은 서버 안의 실험 화면만. */}
+            {item("AI 호출 실험실", "호출마다 모델·시간·비용, 입력·출력 ↗", () => window.open("/lab/ai", "_blank"))}
             {item("엔진 실험실", "PDF 생성 단계별로 보기 ↗", () => window.open("/lab", "_blank"))}
             {item("작업대", "모델 흐름 실험", () => go("bench"))}
             {item("토론방", "Claude·Codex와 기획 토론 ↗", () => window.open("/room", "_blank"))}
