@@ -444,6 +444,11 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   if ((run.codexId || run.chatId) && input.do === "goal") {
     const op = String((input as { op?: string }).op ?? "");
     const before = op === "next" ? await (await import("./goals.ts")).goalsOf(runId) : null;
+    // [해 봤어요](11/6 사용자 "해 봤어요 누르면 똑같은 말을 또 해"): 이 목표 동안 VS Code에서 저장한 코드가 있을 때만 튜터가 확인. 채팅으로 답했으면 이미 확인됐으니 안 부른다
+    if (op === "applied") {
+      const cur = (await (await import("./goals.ts")).goalsOf(runId)).current;
+      (input as Record<string, unknown>).codeSaved = !!cur && (await (await import("./goal-record.ts")).savesOf(runId)).some((sv) => sv.at >= cur.at);
+    }
     const say = await (await import("./goals.ts")).goalAction(runId, op, input as Record<string, unknown>);
     // 11/5 사용자 "각 목표가 끝나면 쭉 대화 기록 받아서 정리(학습자가 어떤 절차를 거쳐서 뭘 배웠는지)": 뒤에서 한 번
     if (before?.current) void recordFinished(runId, run, before.current, before.mode);

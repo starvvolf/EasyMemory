@@ -106,3 +106,11 @@ test("지도는 늘 있다(11/6): 바텀업으로 해 온 목표가 지도에 �
   const e = await G.goalsOf(r);
   assert.equal(e.current, null); assert.equal(e.map[2].status, "skipped");
 });
+
+test("해 봤어요(11/6): 저장한 코드가 없으면 튜터를 안 부르고 적용 ✓만", async () => {
+  const r = "run10";
+  await G.runGoalTool(r, "propose_plan", { long: "x", spec: "", mode: "bottomup", map: [], first: { title: "a", done: "b" } }, []);
+  await G.goalAction(r, "confirm", {}); await G.goalAction(r, "understood", {});
+  assert.equal(await G.goalAction(r, "applied", { codeSaved: false }), null);
+  assert.equal((await G.goalsOf(r)).current!.applied, true);
+});

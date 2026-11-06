@@ -12,7 +12,9 @@ import { recordsOf, type Tab } from "./goal-record.ts";
 
 export type SyncEvent = { key: string; kind: "asked" | "wrong" | "hint" | "correct" | "note"; detail: string; at: string };
 export type SyncKind = "concept" | "principle" | "procedure" | "rule" | "method" | "compare" | "vocab";
-export type SyncItem = { key: string; title: string; kind: SyncKind; state: "met" | "unknown"; body: string; topicHint: string; events: SyncEvent[] };
+/** 틀렸던 코드(11/6): 학습자 저장본에서 코드가 잘라 낸 덩어리 → 기억(지식)의 mistakes */
+export type SyncMistake = { file: string; from: number; to: number; code: string; note: string; ref: string; at: string };
+export type SyncItem = { key: string; title: string; kind: SyncKind; state: "met" | "unknown"; body: string; topicHint: string; events: SyncEvent[]; mistake?: SyncMistake; mistakeKey?: string };
 /** 목표 정리의 여섯 칸 = 지식 저장소의 여섯 종류(B, store.ts KIND_LABEL) */
 const TAB_KIND: Record<Tab, SyncKind> = { 개념: "concept", 원리: "principle", 절차: "procedure", 규칙: "rule", 방법: "method", 비교: "compare" };
 export type SyncPayload = { runId: string; source: { kind: "code"; title: string; ref: string }; items: SyncItem[]; sentBefore: number };
@@ -48,14 +50,17 @@ export async function pending(runId: string, course: Course, run?: Run): Promise
         const it = item(x.type, x.concept, x.right);
         it.state = "unknown"; // 부족했던 것은 "몰랐음"으로 들어가 복습에 먼저 오른다
         if (x.right) it.body = x.right;
+        if (x.code) { it.mistake = { file: x.code.file, from: x.code.from, to: x.code.to, code: x.code.code, note: x.wrong, ref: `project:${runId}`, at: rec.to }; it.mistakeKey = `g:${rec.at}:C:${it.key}`; }
         it.events.push({ key: `g:${rec.at}:G:${it.key}`, kind: "wrong", detail: `목표 "${rec.goal}" · 부족: ${x.wrong}${x.quote ? ` · 학습자: "${x.quote}"` : ""}`.slice(0, 600), at: rec.to });
       }
     }
     const items: SyncItem[] = [];
     for (const it of byKey.values()) {
       const events = it.events.filter((e) => !sent.has(e.key));
-      if (sent.has(it.key) && !events.length) continue;
-      items.push({ ...it, events });
+      const mistake = it.mistakeKey && !sent.has(it.mistakeKey) ? it.mistake : undefined;
+      if (sent.has(it.key) && !events.length && !mistake) continue;
+      const { mistake: _m, mistakeKey, ...rest } = it;
+      items.push({ ...rest, events, ...(mistake ? { mistake, mistakeKey } : {}) });
     }
     return { runId, source, items, sentBefore: sent.size };
   }

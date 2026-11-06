@@ -59,8 +59,27 @@ test("코드 저장(11/6 A안): 목표 동안 저장한 코드의 바뀐 줄이 
   ];
   const msgs = [{ role: "user", text: "이렇게 했어요", at: "2026-11-06T01:00:01Z" }, { role: "user", text: "해 봤어요", at: "2026-11-06T01:00:09Z" }];
   const rec = await R.recordGoal("run3", { title: "캐시", done: "d", understood: true, applied: true, at: "2026-11-06T01:00:00Z" }, null, msgs, (m) => m.text, { to: "2026-11-06T02:00:00Z", index: 99 }, saves);
-  assert.match(sent, /이렇게 했어요\n\n\[학습자 코드 저장 a\.py\]\n\+ if cache\[n\]=False:\n\+     pass\n\n해 봤어요/);
+  assert.match(sent, /이렇게 했어요\n\n\[학습자 코드 저장 S2 a\.py\]\n\+   2\| if cache\[n\]=False:\n\+   3\|     pass\n\n해 봤어요/);
   assert.ok(!sent.includes("cache = {}") && !sent.includes("나중 것")); // 구간 앞 저장본은 기준으로만, 구간 뒤는 안 씀
   assert.equal(rec!.gaps![0].verified, true);
   assert.deepEqual(R.lineDiff("a\nb\nc", "a\nc\nd"), ["- b", "+ d"]);
+});
+
+test("틀렸던 코드(11/6): AI가 저장본 번호 · 줄 범위로 짚으면 코드가 원문을 잘라 기억으로 보낸다", async () => {
+  const saves = [{ at: "2026-11-06T05:00:05Z", file: "c.py", text: "cache = {}\ndef sq(n):\n    if cache[n]=False:\n        cache[n] = n*n\n    return n*n\n" }];
+  ai.setFakeAi(() => ({ summary: "", steps: [], learned: [], gaps: [
+    { type: "규칙", concept: "비교 연산", wrong: "조건에 = 씀", right: "==", quote: "", code: { save: "S1", from: 3, to: 3 } },
+    { type: "원리", concept: "없는 저장본", wrong: "w", right: "r", quote: "", code: { save: "S9", from: 1, to: 2 } }],
+    memory: { add: [], update: [], improved: [] } }));
+  const rec = await R.recordGoal("run5", { title: "캐시", done: "d", understood: true, applied: true, at: "2026-11-06T05:00:00Z" }, null, [{ role: "user", text: "해 봤어요", at: "2026-11-06T05:00:09Z" }], (m) => m.text, { to: "2026-11-06T06:00:00Z", index: 99 }, saves);
+  assert.deepEqual(rec!.gaps![0].code, { save: "S1", file: "c.py", from: 3, to: 3, code: "    if cache[n]=False:" });
+  assert.equal(rec!.gaps![0].verified, true);
+  assert.equal(rec!.gaps![1].code, undefined); assert.equal(rec!.gaps![1].verified, false);
+  assert.equal(R.cutCode([{ id: "S1", save: saves[0] }], { save: "S1", from: 1, to: 40 })!.to, 6); // 끝 줄 넘으면 잘림
+  const S = await import("../lib/sync.ts");
+  const p = await S.pending("run5", { id: "hello-api", title: "t", knowledge: [] } as never, { id: "run5", codexId: "x" } as never);
+  const it = p.items.find((i) => i.title === "비교 연산")!;
+  assert.equal(it.mistake!.code, "    if cache[n]=False:"); assert.equal(it.mistake!.note, "조건에 = 씀");
+  await S.markSent("run5", p.items.flatMap((i) => [i.key, ...(i.mistakeKey ? [i.mistakeKey] : []), ...i.events.map((e) => e.key)]));
+  assert.equal((await S.pending("run5", { id: "hello-api", title: "t", knowledge: [] } as never, { id: "run5", codexId: "x" } as never)).items.length, 0);
 });

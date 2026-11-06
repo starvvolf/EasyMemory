@@ -27,6 +27,7 @@ export function nextReview(current: KReview | undefined, remembered: boolean, at
 export type KState = "met" | "unknown" | "known";
 export const STATE_LABEL: Record<KState, string> = { met: "만남", unknown: "몰랐음", known: "앎" };
 export type SourceKind = "pdf" | "web" | "code" | "chat" | "manual";
+export type KMistake = { file: string; from: number; to: number; code: string; note: string; ref?: string; at: string };
 export type KSource = { kind: SourceKind; title: string; ref?: string; url?: string; page?: number; quote?: string; at: string };
 /** `note`: a short 연결 문장 for the learner ("누적 합으로 구간 합을 한 번에 구한다"), from the link check. */
 export type KLink = { to: string; relation: string; note?: string };
@@ -74,6 +75,11 @@ export type Knowledge = {
    */
   example?: string;
   explain?: string;
+  /**
+   * 틀렸던 코드 (2026-11-06 D [경계], 사용자 "틀린 코드를 기억에 넣으면 좋겠다. AI가 몇 줄부터 몇 줄까지 문제라고 덩어리로"):
+   * 실습에서 학습자가 저장한 코드 중 그 지식을 잘못 쓴 덩어리(코드가 원본에서 잘라 넣음, AI가 쓴 코드 아님). 최근 3개.
+   */
+  mistakes?: KMistake[];
   /** 확인 질문 (2026-10-29): 글 지도의 핵심 아이디어처럼 이름만으로는 떠올릴 단서가 약할 때, 카드 앞면에 쓰는 질문. */
   ask?: string;
   /** 쉽게 풀어 보기의 칸들 (explain은 이것을 이은 글, 예전 데이터·검색용). */
@@ -299,6 +305,8 @@ export type SaveInput = {
   topicHint?: string;
   /** 확인 질문 (카드 앞면). */
   ask?: string;
+  /** 틀렸던 코드 하나(실습, 2026-11-06 D [경계]). 같은 코드면 다시 안 넣는다. */
+  mistake?: Omit<KMistake, "at"> & { at?: string };
 };
 export type SaveResult = { item: Knowledge; merged: boolean; created: boolean; again: boolean };
 
@@ -337,6 +345,10 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   // The ask goes with the body it was written for (2026-11-05 A 품질 점검): an article's "BFS의 시간 복잡도는?" landed on an
   // existing "시간 복잡도" whose body is the general definition, and the flashcard showed that definition as the answer.
   if (input.ask?.trim() && !item.ask && (tookBody || !existing)) item.ask = input.ask.trim().slice(0, 300);
+  if (input.mistake?.code?.trim() && !(item.mistakes ?? []).some((m) => m.code === input.mistake!.code)) {
+    const m = input.mistake;
+    item.mistakes = [...(item.mistakes ?? []), { file: String(m.file).slice(0, 120), from: Number(m.from) || 0, to: Number(m.to) || 0, code: m.code.slice(0, 1500), note: String(m.note ?? "").slice(0, 300), ...(m.ref ? { ref: m.ref } : {}), at: m.at ?? at }].slice(-3);
+  }
   if (!existing && input.topicHint && item.folderId === null) item.topicHint = input.topicHint.slice(0, 200);
   else if (input.state === "unknown" || input.state === "known") item.state = input.state;
   if (item.state === "unknown") item.graduated = false;

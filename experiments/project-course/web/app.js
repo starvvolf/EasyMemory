@@ -1459,7 +1459,7 @@ function goalBar(lesson, send) {
         h("span", { class: `gph ${c.applied ? "done" : c.understood ? "now" : ""}` }, c.applied ? "② 적용 ✓" : "② 적용")),
       top ? null : h("div", { class: "grow2" },
         !c.understood ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 직접 해 볼 과제를 내요", onclick: op("understood") }, "이해했어요 → 적용하기") : null,
-        c.understood && !c.applied ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 파일 · 실행으로 확인해 줘요", onclick: op("applied") }, "해 봤어요") : null,
+        c.understood && !c.applied ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "VS Code에서 저장한 코드가 있으면 튜터가 확인해 줘요(채팅으로 답했으면 바로 적용 ✓)", onclick: op("applied") }, "해 봤어요") : null,
         h("button", { class: `btn small ${c.understood && c.applied ? "primary" : ""}`, disabled: lesson.busy, title: c.understood && c.applied ? "" : "이해 · 적용을 다 안 해도 넘어갈 수 있어요(건너뜀으로 남아요)", onclick: op("next") }, "다음으로 →"))) : null);
 }
 function surveyCard(sv, send) {
@@ -1522,6 +1522,7 @@ function recordsBar(lesson) {
     h("b", {}, x.concept), h("span", { class: "mut small" }, ` · ${x.type}`),
     x.wrong ? h("div", { class: "small" }, `헷갈린 것: ${x.wrong}`) : null,
     x.right ? h("div", { class: "small" }, `바로 알기: ${x.right}`) : null,
+    x.code ? h("details", { class: "small" }, h("summary", {}, `틀렸던 코드 ${x.code.file} ${x.code.from}~${x.code.to}줄`), h("pre", { class: "gcode" }, x.code.code)) : null,
     h("div", { class: "mut small" }, `목표: ${x.goal}${x.quote ? ` · "${x.quote}"` : ""}`))))) : null;
   // 학습자 메모리에 반영한 것(11/6) → 자세히는 학습자 메모리 화면
   const memN = rs.reduce((n, r) => n + (r.memory?.done?.length ?? 0), 0);

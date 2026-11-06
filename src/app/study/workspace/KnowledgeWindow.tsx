@@ -436,6 +436,12 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
             <span className={`kw-ex-tag${item.example ? "" : " soft"}`}>{item.example ? "예" : "만난 곳"}</span>
             <span>{where ? <span className="kw-ex-where">{where}{item.example ? "에서 " : ""}</span> : null}{item.example ? <Inline text={exampleText} /> : null}
               {openSource}{srcs.length > 1 ? <span className="kw-ex-more"> · 외 {srcs.length - 1}곳</span> : null}</span></p> : null}
+          {/* 틀렸던 코드(2026-11-06 D [경계]): 실습에서 저장한 코드 중 이 지식을 잘못 쓴 덩어리 */}
+          {item.mistakes?.length ? <details className="kw-explain" open>
+            <summary>틀렸던 코드 {item.mistakes.length > 1 ? item.mistakes.length : ""}</summary>
+            <div className="kw-explain-body">{item.mistakes.slice().reverse().map((m, n) => <div key={n} className="kw-part">
+              <p className="small muted">{m.file} {m.from}~{m.to}줄{m.note ? ` · ${m.note}` : ""}</p>
+              <Rich text={"```\n" + m.code + "\n```"} /></div>)}</div></details> : null}
           {item.explain || explaining ? <details className="kw-explain" open={explainOpen} onToggle={(e) => setExplainOpen((e.currentTarget as HTMLDetailsElement).open)}>
             <summary>쉽게 풀어 보기</summary>
             <div className="kw-explain-body">{explaining && !item.explain ? <p className="small muted">설명을 만드는 중이에요… (10초쯤)</p> : null}

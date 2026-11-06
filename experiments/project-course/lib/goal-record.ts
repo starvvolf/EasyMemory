@@ -11,7 +11,7 @@ export type GoalRecord = {
   goal: string; done: string; status: "마침" | "건너뜀"; mode: string | null; from: string; to: string;
   summary: string; steps: string[]; learned: { type: Tab; concept: string; meaning: string; how: string; quote: string; verified: boolean }[];
   /** 11/6 사용자 "대화 내역을 봤을 때 나한테 부족한 점이 딱 보인다. 그걸 캐치해서 지식으로 잡는 게 중요" */
-  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean }[];
+  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean; code?: GapCode }[];
   /** 11/6 사용자 "코드 보면 이 사람 파이썬 문법 잘 모르는 것 같은데? 이런 생각. 하드코딩 말고 자유를 주면 잡을 수 있다" → 학습자 메모리(lib/memory.ts)에 반영한 것 */
   memory?: { done: string[]; dropped: string[] }; at: string;
 };
@@ -23,6 +23,9 @@ const file = (runId: string) => path.join(DATA, "goals", `${runId}.records.json`
 const logFile = () => path.join(DATA, "goals", "records.log.jsonl");
 /** 학습자가 VS Code에서 저장한 코드(11/6 사용자 A안 "튜터는 내 코드를 보는데 정리하는 쪽은 못 본다"). 저장할 때마다 한 줄, AI 호출 없음 */
 export type Save = { at: string; file: string; text: string };
+/** 틀린 코드 덩어리(11/6 사용자 "AI가 몇 줄부터 몇 줄까지 뭐가 문제다 덩어리로 → 코드가 그 덩어리를 기억에"). code는 저장본에서 코드가 잘라 낸 원문 */
+export type GapCode = { save: string; file: string; from: number; to: number; code: string };
+const MAX_LINES = 12;
 const savesFile = (runId: string) => path.join(DATA, "goals", `${runId}.saves.jsonl`);
 const lastSaved = new Map<string, string>();
 export async function logSave(runId: string, file: string, text: string) {
@@ -52,19 +55,41 @@ export function lineDiff(a: string, b: string): string[] {
   }
   return out.slice(0, 80);
 }
-/** 목표 구간의 저장본을 "바뀐 줄" 조각으로. 구간 앞의 마지막 저장본이 비교 기준 */
+/** 더한 줄에 저장본의 줄 번호를 붙인다("+ 12| 코드"). AI가 덩어리를 줄 번호로 짚게 */
+function numbered(a: string, b: string): string[] {
+  const d = lineDiff(a, b), y = b.split(/\r?\n/);
+  let k = 0;
+  return d.map((l) => {
+    if (!l.startsWith("+ ")) return l;
+    const t = l.slice(2);
+    while (k < y.length && y[k] !== t) k++;
+    return k < y.length ? `+ ${String(++k).padStart(3)}| ${t}` : l;
+  });
+}
+/** 목표 구간의 저장본을 "바뀐 줄" 조각으로. 구간 앞의 마지막 저장본이 비교 기준. 저장본 번호 S1, S2…(전체 순서) */
 function codeTurns(saves: Save[], from: string, to: string) {
   const prev = new Map<string, string>();
-  const out: { at: string; text: string; added: string[] }[] = [];
-  for (const sv of saves) {
-    if (sv.at > to) break;
+  const out: { at: string; id: string; save: Save; text: string; added: string[] }[] = [];
+  saves.forEach((sv, i) => {
+    if (sv.at > to) return;
     if (sv.at >= from) {
-      const d = lineDiff(prev.get(sv.file) ?? "", sv.text);
-      if (d.length) out.push({ at: sv.at, text: `[학습자 코드 저장 ${sv.file}]\n${d.join("\n")}`, added: d.filter((l) => l.startsWith("+ ")).map((l) => l.slice(2)) });
+      const d = numbered(prev.get(sv.file) ?? "", sv.text);
+      if (d.length) out.push({ at: sv.at, id: `S${i + 1}`, save: sv, text: `[학습자 코드 저장 S${i + 1} ${sv.file}]\n${d.join("\n")}`, added: d.filter((l) => l.startsWith("+ ")).map((l) => l.replace(/^\+ (\s*\d+\| )?/, "")) });
     }
     prev.set(sv.file, sv.text);
-  }
+  });
   return out;
+}
+/** AI가 짚은 범위를 저장본 원문에서 자른다(없는 저장본 · 범위 밖이면 버림, 길면 앞 12줄) */
+export function cutCode(code: { id: string; save: Save }[], ref: { save?: string; from?: number; to?: number } | undefined): GapCode | undefined {
+  const c = code.find((x) => x.id === String(ref?.save ?? "").trim());
+  if (!c) return undefined;
+  const lines = c.save.text.split(/\r?\n/);
+  const from = Math.max(1, Math.floor(Number(ref?.from) || 0)), to0 = Math.floor(Number(ref?.to) || 0);
+  if (!from || from > lines.length || to0 < from) return undefined;
+  const to = Math.min(to0, lines.length, from + MAX_LINES - 1);
+  const text = lines.slice(from - 1, to).join("\n");
+  return text.trim() ? { save: c.id, file: c.save.file, from, to, code: text } : undefined;
 }
 export const recordsOf = async (runId: string) => (await read<{ items: GoalRecord[] }>(file(runId), { items: [] })).items;
 
@@ -79,15 +104,15 @@ learned: 이 목표에서 학습자가 배운 것을 여섯 칸 중 하나(type)
 - 방법: 문제를 푸는 기법 · 요령. 예: 같은 칸의 항목을 리스트로 묶는 체이닝, 스택으로 괄호 검사
 - 비교: 둘 이상의 차이. 예: 리스트와 딕셔너리, 스택과 큐
 각 항목은 concept(다른 곳에서도 통하는 이름), meaning(그 칸에 맞는 한두 문장: 개념은 정의, 원리는 이유, 절차는 단계, 규칙은 약속, 방법은 언제 · 어떻게, 비교는 차이), how(학습자가 그걸 어떻게 만났는지 한 구절: 설명을 들음 · 예측해 맞힘/틀림 · 직접 써 봄 · 헷갈려 물어봄 등), quote(그게 드러난 학습자 말을 글자 그대로, 없으면 빈 글).
-[학습자 코드 저장]은 학습자가 직접 저장한 코드에서 바뀐 줄이다(+ 더함, - 뺌). 학습자의 말과 코드에서 드러난 것을 기준으로 쓰고, 튜터가 말만 하고 지나간 것은 뺀다.
-gaps: 이 목표 동안 드러난 학습자의 부족한 점. 틀린 답, 잘못 쓴 코드, 오해, 몰라서 물어본 것, 튜터가 바로잡아 준 것. 같은 원인은 하나로 묶는다. 각 항목은 type(위 여섯 칸), concept(그 지식 이름), wrong(학습자가 무엇을 몰랐거나 어떻게 잘못 알았는지 한 문장), right(바로 알아야 할 내용 한두 문장), quote(그게 드러난 학습자 말이나 코드 한 줄을 글자 그대로, 없으면 빈 글). 없으면 빈 목록.
+[학습자 코드 저장 S번호 파일]은 학습자가 직접 저장한 코드에서 바뀐 줄이다(+ 더함, - 뺌, + 뒤의 숫자는 그 저장본의 줄 번호). 학습자의 말과 코드에서 드러난 것을 기준으로 쓰고, 튜터가 말만 하고 지나간 것은 뺀다.
+gaps: 이 목표 동안 드러난 학습자의 부족한 점. 틀린 답, 잘못 쓴 코드, 오해, 몰라서 물어본 것, 튜터가 바로잡아 준 것. 같은 원인은 하나로 묶는다. 각 항목은 type(위 여섯 칸), concept(그 지식 이름), wrong(학습자가 무엇을 몰랐거나 어떻게 잘못 알았는지 한 문장), right(바로 알아야 할 내용 한두 문장), quote(그게 드러난 학습자 말이나 코드 한 줄을 글자 그대로, 없으면 빈 글), code(그 부족함이 드러난 학습자 코드 덩어리: save는 저장본 번호(S3), from~to는 그 저장본의 줄 번호로 문제가 있는 곳만 좁게(12줄 이내). 코드에서 드러난 게 아니면 save는 빈 글, from · to는 0). 없으면 빈 목록.
 memory: [지금 학습자 메모리]는 지금까지 여러 목표에서 쌓인 이 학습자의 경향이다. 이번 목표에서 드러난 것을 모아 보면 이 학습자가 어떤지 보고 메모리를 갱신한다. 단정하지 말고 "~가 부족해 보인다" 정도로 쓴다.
 - add: 메모리에 없는 새 경향. text는 한 문장, evidence는 근거가 된 gaps의 concept 그대로.
 - update: 이미 있는 경향이 이번에도 보이면 그 id, text(고칠 게 없으면 그대로), evidence(gaps의 concept 그대로).
 - improved: 있던 경향이 이번에는 나아진 게 보이면 그 id와 evidence(나아진 게 드러난 learned의 concept 그대로).
 바뀔 게 없으면 모두 빈 목록.`;
 const SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str), learned: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, meaning: S.str, how: S.str, quote: S.str })),
-  gaps: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, wrong: S.str, right: S.str, quote: S.str })),
+  gaps: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, wrong: S.str, right: S.str, quote: S.str, code: S.obj({ save: S.str, from: S.int, to: S.int }) })),
   memory: S.obj({ add: S.arr(S.obj({ text: S.str, evidence: S.arr(S.str) })), update: S.arr(S.obj({ id: S.str, text: S.str, evidence: S.arr(S.str) })), improved: S.arr(S.obj({ id: S.str, evidence: S.arr(S.str) })) }) });
 const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
 
@@ -103,7 +128,7 @@ export async function recordGoal(runId: string, goal: { title: string; done: str
     const text = [...seg.map((m) => ({ at: m.at, text: show(m) })), ...code.map((c) => ({ at: c.at, text: c.text }))]
       .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).map((x) => x.text).filter(Boolean).join("\n\n").slice(-60000);
     const user = `[목표] ${goal.title}\n[완료 조건] ${goal.done}\n[지금 학습자 메모리]\n${await memoryForRecord()}\n[결과] ${goal.understood && goal.applied ? "이해 · 적용까지 하고 마침" : `건너뜀(이해 ${goal.understood ? "✓" : "–"}, 적용 ${goal.applied ? "✓" : "–"})`}\n\n[이 목표 동안의 대화]\n${text}`;
-    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[]; gaps?: { type: string; concept: string; wrong: string; right: string; quote: string }[]; memory?: MemOps }>("goal-record", SYSTEM_RECORD, user, SCHEMA);
+    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[]; gaps?: { type: string; concept: string; wrong: string; right: string; quote: string; code?: { save: string; from: number; to: number } }[]; memory?: MemOps }>("goal-record", SYSTEM_RECORD, user, SCHEMA);
     // 근거는 학습자 말 또는 학습자가 저장한 코드 줄
     const learnerText = [...seg.filter((m) => m.role === "user").map((m) => norm(m.text)), ...code.flatMap((c) => c.added.map(norm))];
     const unverified: string[] = [];
@@ -119,7 +144,10 @@ export async function recordGoal(runId: string, goal: { title: string; done: str
     const gaps = (out.gaps ?? []).filter((x) => String(x.concept ?? "").trim()).slice(0, 10).map((x) => {
       const q = String(x.quote ?? "").trim(), ok = found(q);
       if (q && !ok) unverified.push(`부족 ${x.concept}: "${q}"`);
-      return { type: tab(x.type), concept: String(x.concept).trim().slice(0, 80), wrong: String(x.wrong ?? "").trim().slice(0, 300), right: String(x.right ?? "").trim().slice(0, 300), quote: ok ? q.slice(0, 200) : "", verified: ok };
+      const cc = x.code?.save ? cutCode(code, x.code) : undefined;
+      if (x.code?.save && !cc) unverified.push(`부족 ${x.concept}: 코드 ${x.code.save} ${x.code.from}~${x.code.to}`);
+      // 근거: 학습자 말 구절 또는 학습자 코드 덩어리
+      return { type: tab(x.type), concept: String(x.concept).trim().slice(0, 80), wrong: String(x.wrong ?? "").trim().slice(0, 300), right: String(x.right ?? "").trim().slice(0, 300), quote: ok ? q.slice(0, 200) : "", verified: ok || !!cc, ...(cc ? { code: cc } : {}) };
     });
     // 메모리 갱신: 근거는 이번 정리의 부족했던 점(나아짐은 배운 것) 이름만 인정, 상태는 코드가(lib/memory.ts)
     const memory = await applyMemory(runId, goal.title, out.memory, gaps.map((g) => g.concept), learned.map((l) => l.concept));

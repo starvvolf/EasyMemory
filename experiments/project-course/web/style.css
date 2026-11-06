@@ -813,3 +813,4 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .endbox { background: var(--panel); color: var(--ink); padding: 22px 26px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 260px; }
 .endbox .spin { width: 26px; height: 26px; border: 3px solid #ccc; border-top-color: #4a7bd8; border-radius: 50%; animation: endspin .8s linear infinite; }
 @keyframes endspin { to { transform: rotate(360deg); } }
+.learned pre.gcode { background: var(--soft); padding: 6px 8px; border-radius: 6px; overflow-x: auto; font-size: 12px; margin: 4px 0; }

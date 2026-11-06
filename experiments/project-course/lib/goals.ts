@@ -148,7 +148,7 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
         say = `[이해했어요] "${g.current.title}"을(를) 이해했어요. 이제 적용 단계예요. 완료 조건("${g.current.done}")을 학습자가 직접 해 볼 수 있는 작은 과제 하나를 내 주세요. 완성 코드는 주지 말고, 막히면 힌트만 주세요.`;
       } else if (g.current && op === "applied" && !g.current.applied) {
         g.current.applied = true; if (!g.current.understood) g.current.understood = true; logIt(g, "applied", g.current.title);
-        say = `[해 봤어요] 학습자가 "${g.current.title}" 적용 과제를 해 봤어요. 작업 폴더의 파일을 읽거나 실행해서 확인할 수 있으면 확인하고, 됐으면 짧게 알려 주세요. 안 됐으면 어디가 문제인지 짚어 주세요.`;
+        say = b.codeSaved === false ? null : `[해 봤어요] 학습자가 "${g.current.title}" 적용 과제를 해 봤어요. 작업 폴더의 파일을 읽거나 실행해서 확인할 수 있으면 확인하고, 됐으면 짧게 알려 주세요. 안 됐으면 어디가 문제인지 짚어 주세요.`;
       }
     } else if (op === "next") {
       if (!g.current) throw err("현재 목표가 없어요.");

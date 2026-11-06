@@ -50,6 +50,8 @@ export type KEvent = { id: string; at: string; knowledgeId: string; kind: "met" 
 export const EVENT_LABEL: Record<KEvent["kind"], string> = { met: "만남", asked: "물어봄", wrong: "틀림", hint: "힌트 받음", correct: "맞힘", note: "메모" };
 export type Knowledge = { id: string; title: string; body: string; folderId: string | null; state: KState; graduated: boolean; aliases: string[]; kind?: KKind; vocab?: boolean;
   example?: string; explain?: string;
+  /** 틀렸던 코드(실습, 2026-11-06 D [경계]) */
+  mistakes?: Array<{ file: string; from: number; to: number; code: string; note: string; at: string }>;
   explainParts?: { plain?: string; extras?: Array<{ label: string; text: string }>; differs?: string };
   explainSee?: Array<{ title: string; id: string | null; sure: boolean }>;
   links: Array<{ to: string; relation: string; note?: string }>; sources: Array<{ kind: string; title: string; ref?: string; url?: string; page?: number; quote?: string; at: string }>;
