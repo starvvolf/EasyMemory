@@ -183,6 +183,12 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
 
 /* ---------- 매 차례 맥락(두 엔진 공통) ---------- */
 export async function goalContext(runId: string) {
+  // 학습자 메모리(11/6): 진행 방식 · 경향을 매 차례 맨 앞에(두 엔진 같게)
+  const mem = await (await import("./memory.ts")).memoryText().catch(() => "");
+  const body = await goalContextBody(runId);
+  return mem ? `${mem}\n\n${body}` : body;
+}
+async function goalContextBody(runId: string) {
   const g = await goalsOf(runId);
   if (!g.long) {
     const wait = g.survey ? "\n지금 화면에 질문을 띄워 두었다 — 학습자 답이 오면 이어 간다." : g.plan ? "\n지금 화면에 계획을 띄워 두었다 — 학습자가 확정하거나 고칠 곳을 말한다." : "";

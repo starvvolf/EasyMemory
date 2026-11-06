@@ -367,7 +367,7 @@ async function chatAsk(runId: string, chatId: string, text: string) {
   const ac = await import("./agent-chat.ts");
   const G = await import("./goals.ts");
   // 학습 목표(11/4): 매 차례 맥락 + 목표 도구. 실험판의 목표 · 초점 도구(adjust_learning · get_learning_state)는 숨겨 두 체계가 섞이지 않게
-  const ext = { context: () => G.goalContext(runId), hide: ["adjust_learning", "get_learning_state", "get_course_material"], tool: (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner), onTool: () => notifyLesson(runId) };
+  const ext = { context: () => G.goalContext(runId), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner), onTool: () => notifyLesson(runId) };
   const job = ac.askChat(chatId, text, undefined, ext).catch(() => {}).finally(async () => {
     clearInterval(chatPolls.get(runId)); chatPolls.delete(runId); notifyLesson(runId);
     // 11/5 사용자 "질문 단위가 아니라 목표가 끝나면 정리": 질문마다 뽑던 것(chat-learned)은 제품 대화에서 끔 → 목표 정리(goal-record)

@@ -32,7 +32,7 @@ function wsRead(rel) {
 const TOOLS = [
   {
     name: "learner_profile",
-    description: "학습자가 정해 둔 진행 방식(예: 완성 코드를 한 번에 주지 않기)과, 지난 대화들에서 배운 것 · 헷갈린 것을 본다. 대화를 시작할 때나 설명 수준을 정할 때 쓴다.",
+    description: "학습자 메모리를 본다: 학습자가 정해 둔 진행 방식(예: 완성 코드를 한 번에 주지 않기)과 여러 목표에서 본 경향(가설 · 확인). 대화를 시작할 때나 설명 수준을 정할 때 쓴다.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { title: "학습자 기록 보기", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   },

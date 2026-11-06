@@ -143,6 +143,7 @@ async function route() {
   let m;
   try {
     if (hash === "#/lab") return await renderLab();
+    if (hash === "#/memory") return await renderMemory();
     if ((m = /^#\/intake\/(\w+)/.exec(hash))) return await renderIntake(m[1]);
     if ((m = /^#\/run\/(\w+)\/summary/.exec(hash))) return await renderSummary(m[1]);
     if ((m = /^#\/run\/(\w+)\/cards/.exec(hash))) return await renderRun(m[1]);
@@ -210,8 +211,34 @@ async function renderHome() {
   // 11/4 사용자 "첫 화면에서 Codex 버전 · 기존 버전 나눠서 체크": 고른 것은 이 브라우저에 기억
   const eng = h("div", { class: "heng", role: "radiogroup", "aria-label": "엔진" }, [["codex", "Codex 버전"], ["basic", "기존 버전"]].map(([k, t]) =>
     h("button", { class: `hchip ${homeEngine() === k ? "on" : ""}`, role: "radio", "aria-checked": String(homeEngine() === k), onclick: () => { setHomeEngine(k); renderHome(); } }, t)));
-  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), list));
+  const memBtn = h("button", { class: "btn small", onclick: () => go("#/memory") }, "학습자 메모리");
+  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), h("div", { class: "hmem" }, memBtn), list));
   input.focus();
+}
+/* 학습자 메모리(11/6 사용자 "GPT 메모리 관리하듯이 이 사람이 어느 정도인지 관리"): 진행 방식 · 경향, 상태 · 근거 · 갱신 기록, 고치기 · 지우기 */
+const memUi = { edit: null };
+async function renderMemory() {
+  const { items } = await api("GET", "/api/memory");
+  const post = (id, b) => busy(null, async () => { await api("POST", `/api/memory/${id}`, b); memUi.edit = null; renderMemory(); });
+  const card = (i) => {
+    const editing = memUi.edit === i.id;
+    const input = editing ? h("textarea", { rows: 2, class: "hin" }, i.text) : null;
+    return h("li", { class: `mem ${i.status === "나아짐" ? "better" : ""}` },
+      h("div", { class: "memrow" }, h("span", { class: `memst ${i.status}` }, i.kind === "진행 방식" ? "정해 둠" : i.status),
+        editing ? input : h("span", { class: "grow" }, i.text),
+        editing ? h("button", { class: "btn small primary", onclick: () => post(i.id, { text: input.value }) }, "저장") : h("button", { class: "btn small", onclick: () => { memUi.edit = i.id; renderMemory(); } }, "고치기"),
+        h("button", { class: "btn small", onclick: () => post(i.id, { delete: true }) }, "지우기")),
+      h("div", { class: "mut small" }, i.kind === "진행 방식"
+        ? `근거: ${i.evidence.map((e) => `"${e.name}"`).join(", ")}`
+        : `근거 ${i.evidence.length}개 (목표 ${new Set(i.evidence.map((e) => e.runId + e.goal)).size}곳): ${[...new Set(i.evidence.map((e) => e.name))].join(", ")}`),
+      i.history.length ? h("details", { class: "small" }, h("summary", {}, `갱신 기록 ${i.history.length}`), h("ul", {}, [...i.history].reverse().map((x) => h("li", {}, `${x.at.slice(5, 16).replace("T", " ")} · ${x.what}`)))) : null);
+  };
+  const pref = items.filter((i) => i.kind === "진행 방식"), tend = items.filter((i) => i.kind === "경향").sort((a, b) => b.at.localeCompare(a.at));
+  view.replaceChildren(h("div", { class: `home2 memory ${FLOAT ? "fw" : ""}` },
+    h("div", { class: "memhead" }, h("button", { class: "btn small", onclick: () => go("#/") }, "← 홈"), h("h1", {}, "학습자 메모리")),
+    h("p", { class: "mut small" }, "목표를 끝낼 때마다 튜터가 정리하면서 갱신해요. 처음 보면 가설, 다른 목표에서도 보이면 확인, 나아진 게 보이면 나아짐. 튜터는 대화할 때 이걸 읽어요."),
+    h("h3", {}, "경향"), tend.length ? h("ul", { class: "memlist" }, tend.map(card)) : h("p", { class: "mut small" }, "아직 없어요. 목표를 하나 끝내면 생겨요."),
+    h("h3", {}, "정해 둔 진행 방식"), pref.length ? h("ul", { class: "memlist" }, pref.map(card)) : h("p", { class: "mut small" }, "대화에서 \"앞으로는 이렇게 해 줘\"라고 하면 여기에 남아요.")));
 }
 /** 대화 열기: 튜터 창이면 VS Code 폴더도 그 대화로, VS Code 탭이면 폴더가 다를 때 폴더부터 */
 function openChat(c) {
@@ -1484,10 +1511,9 @@ function recordsBar(lesson) {
     x.wrong ? h("div", { class: "small" }, `헷갈린 것: ${x.wrong}`) : null,
     x.right ? h("div", { class: "small" }, `바로 알기: ${x.right}`) : null,
     h("div", { class: "mut small" }, `목표: ${x.goal}${x.quote ? ` · "${x.quote}"` : ""}`))))) : null;
-  // 사람에 대한 관찰(가설, 근거 = 부족했던 점 이름)
-  const obs = rs.filter((r) => r.observation?.text);
-  const obsList = obs.length ? h("div", { class: "gaps" }, h("div", { class: "small" }, h("b", {}, "튜터가 본 경향")), h("ul", {}, obs.map((r) => h("li", { class: "small" }, r.observation.text,
-    h("div", { class: "mut small" }, `근거 ${r.observation.evidence.length}개${r.observation.evidence.length ? `: ${r.observation.evidence.join(", ")}` : ""} · 목표: ${r.goal}`))))) : null;
+  // 학습자 메모리에 반영한 것(11/6) → 자세히는 학습자 메모리 화면
+  const memN = rs.reduce((n, r) => n + (r.memory?.done?.length ?? 0), 0);
+  const obsList = memN ? h("div", { class: "small mut" }, `학습자 메모리에 ${memN}번 반영 `, h("a", { href: "#/memory" }, "보기")) : null;
   return h("div", { class: "learned" }, head, obsList, gapList, tabs,
     items.length ? h("ul", {}, items.map((x) => h("li", {}, h("b", {}, x.concept), h("span", { class: "mut small" }, ` · ${x.how}`),
       x.meaning ? h("div", { class: "small" }, x.meaning) : null,

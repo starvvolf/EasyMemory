@@ -17,7 +17,6 @@ import { CHAT_MODELS } from "./agent-chat.ts";
 type Role = "user" | "assistant" | "tool" | "error";
 type Msg = { id: number; role: Role; text: string; at: string; item?: string; status?: string };
 export type CodexChat = { id: string; threadId?: string; workspace?: string; model?: string; edit?: "allow" | "deny"; messages: Msg[]; at: string; usage?: { input: number; cached: number; output: number; ms: number }[] };
-type Prefs = { items: { text: string; quote: string; chatId: string; at: string }[] };
 
 const now = () => new Date().toISOString();
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
@@ -26,7 +25,6 @@ const dir = () => path.join(DATA, "codex-chat");
 const file = (id: string) => path.join(dir(), `${valid(id)}.json`);
 const defaultWs = (id: string) => path.join(dir(), "workspaces", valid(id));
 const wsOf = (c: CodexChat) => c.workspace || defaultWs(c.id);
-const prefsFile = () => path.join(dir(), "preferences.json");
 const logFile = () => path.join(dir(), "log.jsonl");
 export const MCP_SCRIPT = path.join(ROOT, "mcp", "recaller-tutor.mjs");
 const learnKey = (id: string) => `codex-${id}`;
@@ -202,7 +200,6 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
   try {
     const c = await chatOf(id);
     const ws = wsOf(c);
-    const prefs = (await read<Prefs>(prefsFile(), { items: [] })).items.slice(-8);
     const off = Object.fromEntries(otherMcpServers().map((n) => [n, { enabled: false }]));
     const codex = new Codex({
       codexPathOverride: exe,
@@ -221,7 +218,9 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     const thread = fresh ? codex.startThread(opts) : codex.resumeThread(c.threadId!, opts);
     // 새 Codex 대화면 튜터 안내 + (폴더를 바꿔 새로 열었으면) 앞 대화를 붙인다. 정해 둔 진행 방식은 매번 맨 앞에
     const prior = c.messages.slice(0, -1).filter((m) => m.role === "user" || m.role === "assistant").slice(-30).map((m) => `[${m.role === "user" ? "학습자" : "튜터"}] ${m.text.slice(0, 2000)}`).join("\n\n");
-    const pref = prefs.length ? `[학습자가 정해 둔 진행 방식]\n${prefs.map((p) => `- ${p.text}`).join("\n")}\n\n` : "";
+    // 진행 방식 · 경향은 학습자 메모리(lib/memory.ts). 제품 대화는 목표 맥락(goalContext)에 이미 들어가므로 여기서는 맥락이 없을 때만
+    const mem = ext?.context ? "" : await (await import("./memory.ts")).memoryText();
+    const pref = mem ? `${mem}\n\n` : "";
     const editLine = c.edit === "allow" ? "" : "[파일 고치기] 학습자가 아직 허락하지 않았다. 고칠 곳과 코드를 알려 주고 학습자가 직접 고치게 한다.\n\n";
     const goal = ext?.context ? `${await ext.context()}\n\n` : "";
     const input = `${fresh ? `${TUTOR_FIRST}\n\n${prior ? `[앞 대화]\n${prior}\n\n` : ""}` : ""}${pref}${goal}${editLine}[학습자] ${q}`;
@@ -273,19 +272,10 @@ export function stop(id: string) { active.get(id)?.abort(); return view(id); }
 
 /* ---------- MCP 도구가 부르는 것(튜터로서 필요한 것만) ---------- */
 /** 학습자 기록: 지난 대화들에서 뽑은 배운 것 · 헷갈린 것 + 정해 둔 진행 방식 */
+/** 학습자 기록 보기(튜터 도구): 학습자 메모리만(11/6 사용자 "옛날 거 안 쓰는 거 다 버리고 학습자 메모리만") */
 export async function learnerProfile(id: string) {
   valid(id);
-  const { learnedOf } = await import("./chat-learned.ts");
-  const ld = path.join(DATA, "agent-chat", "learned");
-  const names = (() => { try { return readdirSync(ld).filter((f) => f.endsWith(".json")); } catch { return []; } })();
-  const all: { concept: string; kind: string; meaning: string; at: string }[] = [];
-  for (const n of names) for (const x of (await learnedOf(n.replace(/\.json$/, ""))).items) all.push(x);
-  const by = new Map<string, { kinds: Set<string>; meaning: string; last: string }>();
-  for (const x of all) { const k = x.concept; const v = by.get(k) ?? { kinds: new Set(), meaning: x.meaning, last: x.at }; v.kinds.add(x.kind); if (x.at > v.last) v.last = x.at; by.set(k, v); }
-  const ko: Record<string, string> = { asked: "물어봄", confused: "헷갈림", misconception: "틀리게 앎", explained: "자기 말로 설명", applied: "직접 써 봄" };
-  const lines = [...by].sort((a, b) => b[1].last.localeCompare(a[1].last)).slice(0, 40).map(([k, v]) => `- ${k} (${[...v.kinds].map((x) => ko[x] ?? x).join(", ")}, ${v.last.slice(0, 10)}): ${v.meaning}`);
-  const prefs = (await read<Prefs>(prefsFile(), { items: [] })).items.slice(-10).map((p) => `- ${p.text}`);
-  return `[학습자가 정해 둔 진행 방식]\n${prefs.join("\n") || "- (없음)"}\n\n[지난 학습 기록 — 대화에서 뽑은 것, 최근 순]\n${lines.join("\n") || "- (없음)"}`;
+  return (await (await import("./memory.ts")).memoryText()) || "(아직 학습자 메모리가 없어요)";
 }
 /** 진행 방식 기억: 근거는 이 대화의 학습자 말에서 그대로 옮긴 구절이어야 한다 */
 export async function rememberPreference(id: string, b: Record<string, unknown>) {
@@ -294,6 +284,6 @@ export async function rememberPreference(id: string, b: Record<string, unknown>)
   const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
   if (!textIn) throw err(400, "기억할 진행 방식을 적어 주세요.");
   if (quote.length < 2 || !c.messages.some((m) => m.role === "user" && norm(m.text).includes(norm(quote)))) throw err(400, "quote는 이 대화에서 학습자가 한 말을 그대로 옮긴 구절이어야 해요.");
-  await update<Prefs>(prefsFile(), { items: [] }, (p) => { p.items.push({ text: textIn, quote, chatId: id, at: now() }); });
+  await (await import("./memory.ts")).addPreference(textIn, quote, id);
   return `기억했어요: ${textIn}`;
 }
