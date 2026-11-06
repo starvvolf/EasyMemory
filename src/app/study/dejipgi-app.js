@@ -721,7 +721,7 @@ function renderRecallerHome(){
     h("div", { class:"home-when" }, h("span", { class:"home-date", text:today }), h("span", { id:"homeClock", class:"home-clock num", text:clock })),
     h("div", { class:"row" },
       h("button", { class:"btn primary", onclick: () => setView("start") }, "+ 새 공부 시작"),
-      real.length ? h("button", { class:"btn", onclick: () => setView("practice") }, "내 공부 보기") : null)));
+      h("button", { class:"btn", onclick: () => setView("practice") }, "내 공부 보기"))));
   if (env.mountView) wrap.append(viewHost("today", {}));
   // 목표·시험일은 10/30에 뺐다(docs/DECISIONS.md): 오늘 화면에는 과목 칩·D-day를 두지 않는다.
   // 복습 입구 하나 (2026-11-02 A, 점검_UIUX화면연결 1번): PDF 문제도 오늘 카드(TodayBoard) 안의 한 줄로 보낸다.

@@ -53,7 +53,7 @@ export default function PlanView() {
 
       <section className="pl-week" aria-label="요일별 공부 시간">
         {week.days.map((d, i) => (
-          <div key={d.date} className={`pl-day${d.date === week.today ? " today" : ""}`}>
+          <div key={d.date} className={`pl-day${d.date === week.today ? " pl-now" : ""}`}>
             <div className="pl-day-head"><b>{DOW[i]}</b><span className="small muted num">{Number(d.date.slice(5, 7))}/{Number(d.date.slice(8))}</span></div>
             <div className="pl-bar" title={`기록으로 센 시간 ${d.auto ?? 0}분 · 타이머·직접 넣은 시간 ${d.minutes}분`}><i style={{ height: `${Math.round((shownOf(d) / max) * 100)}%` }} /></div>
             <span className="small num pl-min">{shownOf(d) ? minutes(shownOf(d)) : "–"}</span>
@@ -70,7 +70,7 @@ export default function PlanView() {
         </div>
         {week.studied?.length ? (
           <ul className="pl-studied">{week.studied.map((s) => (
-            <li key={`${s.kind}:${s.title}`}><span className="chip">{KIND[s.kind] ?? s.kind}</span><span className="pl-st-title">{s.title}</span><span className="small muted num">{s.n}번 · {Number(s.last.slice(5, 7))}/{Number(s.last.slice(8, 10))}</span></li>))}
+            <li key={`${s.kind}:${s.title}`}><span className="chip">{KIND[s.kind] ?? s.kind}</span><span className="pl-st-title">{s.kind === "review" ? "지식 복습" : s.title}</span><span className="small muted num">{s.n}번 · {Number(s.last.slice(5, 7))}/{Number(s.last.slice(8, 10))}</span></li>))}
           </ul>
         ) : <p className="small muted">이 주에는 기록이 없어요.</p>}
       </section>
