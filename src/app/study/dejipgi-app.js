@@ -367,7 +367,7 @@ function renderToday(plan, pendings){
         : plan.doneToday ? `오늘 ${plan.doneToday}문제를 풀었어요. 내일 할 것은 내일 아침에 다시 계산해요.` : "새 자료를 올려 보세요." })),
     h("div", { class:"row" },
       left ? h("button", { class:"btn primary big", "data-autofocus":"1", onclick:startToday }, plan.doneToday ? "이어서 하기" : "시작하기", h("span", { class:"btn-sub num", text:`${Math.min(left, chunkSize())}문제` })) : null,
-      S.view === "home" ? null : h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부"))));
+      S.view === "home" || S.view === "practice" ? null : h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부"))));
   if (total) panel.append(h("div", { class:"today2-bar", "aria-hidden":"true" }, h("i", { style:`width:${(plan.doneToday / total * 100).toFixed(1)}%` })));
   const rows = h("div", { class:"today2-rows" });
   for (const sp of []){ // 과목별 D-day 줄: 10/30에 뺌 (plan.subjects)
@@ -826,7 +826,8 @@ function studyNav(active){
   const seg = h("div", { class:"seg study-seg", role:"tablist", "aria-label":"공부 종류" },
     [["practice", "PDF 자료"], ["web", "웹 글"], ["code", "알고리즘"], ["project", "실습"]].map(([v, label]) =>
       h("button", { role:"tab", "aria-selected": active === v ? "true" : "false", class: active === v ? "on" : "", onclick: () => { S.session = null; setView(v); } }, label)));
-  return h("div", { class:"study-nav" }, seg, h("button", { class:"btn primary small", onclick: () => setView("start") }, "+ 새 공부"));
+  // 2026-11-06 사용자: "+ 새 공부"를 없애고, PDF 자료 갈래에서만 새 자료 넣기로 바로 간다.
+  return h("div", { class:"study-nav" }, seg, active === "practice" ? h("button", { class:"btn primary small", onclick: () => setView("create") }, "+ 새 PDF 자료") : null);
 }
 /* 작업대: where the agent's MD (출제 노하우) and small-sample feedback will live. First version: what is coming. */
 /* ---------- 작업대 · 흐름 (2026-10-24): 입력 박스와 모델 박스를 화살표로 이어 돌려 보는 캔버스.
@@ -929,7 +930,7 @@ function render(){
   else if (S.view === "bench") app.append(renderBench());
   else if (S.view === "archive") app.append(renderArchive());
   else if (S.view === "practice"){ if (S.session) app.append(renderSession()); else app.append(studyNav("practice"), renderHome()); }
-  else if (S.view === "create") app.append(h("div", { class:"study-nav" }, h("button", { class:"btn ghost small", onclick: () => setView("start") }, "← 새 공부"), h("span", { class:"small muted", text:"PDF · 강의 자료 넣기" })), renderBuilder());
+  else if (S.view === "create") app.append(h("div", { class:"study-nav" }, h("button", { class:"btn ghost small", onclick: () => setView("practice") }, "← PDF 자료"), h("span", { class:"small muted", text:"PDF · 강의 자료 넣기" })), renderBuilder());
   else if (S.view === "read") {
     const typing = Chat.el && Chat.el.contains(document.activeElement);
     app.append(renderReader()); dockChat(typing); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer();

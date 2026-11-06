@@ -1,5 +1,5 @@
 "use client";
-// 공부 · 프로젝트 (2026-10-30, D 스레드): 직접 만들며 배우는 프로젝트 코스(experiments/project-course)를 공부 탭에서 잇는다.
+// 공부 · 실습 (2026-10-30, D 스레드; 11/6 세로 목록으로 바꿈, 사용자): 직접 만들며 배우는 프로젝트 코스(experiments/project-course)를 공부 탭에서 잇는다.
 // 만들기는 VS Code에서(오른쪽 Recaller 튜터 탭), 여기서는 이어 하기 · 노트 · 배운 것을 지식에 넣기.
 // 배운 것은 이 화면이 열려 있는 동안 저절로 지식에 들어간다(/api/project-course/sync, 1분마다).
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -50,84 +50,81 @@ export default function ProjectStudy() {
     finally { setBusy(null); }
   };
   const courseUrl = status?.url ?? "http://127.0.0.1:4100";
-  // 같은 코스를 여러 번 시작했으면 코스마다 하나만 크게(지금 하던 것, 없으면 가장 최근), 나머지는 접어 둔다 (2026-10-30 A: 같은 카드가 둘로 보여 헷갈림).
+  // 2026-11-06 사용자: 가로·세로 박스 배열 말고 알고리즘처럼 세로로. 맨 위에 가장 마지막에 하던 실습 하나, 그 밑은 대화방처럼 긴 줄 목록,
+  // 줄을 누르면 세부 내용과 "VS Code에서 이어 하기".
   const runs = status?.runs ?? [];
   const newest = (a: RunLite, b: RunLite) => Date.parse(b.createdAt) - Date.parse(a.createdAt);
-  const shown = [...new Set(runs.map((r) => r.courseTitle))].map((title) => {
-    const same = runs.filter((r) => r.courseTitle === title).sort(newest);
-    return same.find((r) => r.id === status?.active) ?? same[0];
-  });
-  const others = runs.filter((r) => !shown.includes(r)).sort(newest);
-  const started = (r: RunLite) => { const d = new Date(r.createdAt); return Number.isNaN(d.getTime()) ? "" : `${d.getMonth() + 1}/${d.getDate()} 시작`; };
+  const sorted = [...runs].sort(newest);
+  const top = sorted.find((r) => r.id === status?.active) ?? sorted[0] ?? null;
+  const rest = sorted.filter((r) => r !== top);
+  const day = (r: RunLite) => { const d = new Date(r.createdAt); return Number.isNaN(d.getTime()) ? "" : `${d.getMonth() + 1}/${d.getDate()}`; };
+  const where = (r: RunLite) => `${r.current}단계 · ${r.stageTitle}`;
+  const resume = (r: RunLite, primary = true) => (
+    <button className={`btn ${primary ? "primary" : "ghost"} small`} disabled={busy === r.id} onClick={() => void openEditor(r)}>{busy === r.id ? "여는 중…" : "VS Code에서 이어 하기"}</button>
+  );
+  const notes = (r: RunLite) => <a className="btn ghost small" href={`${courseUrl}/#/run/${r.id}/notes`} target="_blank" rel="noreferrer">노트</a>;
 
   return (
-    <div className="pj">
-      <div className="pj-head">
-        <div>
-          <p className="eyebrow">실습 · 직접 만들기</p>
-          <h2 style={{ margin: "4px 0 6px" }}>만들면서 배워요</h2>
-          <p className="small muted" style={{ margin: 0 }}>코드는 VS Code에서 직접 고치고, 오른쪽 튜터 탭이 한 걸음씩 알려 줘요. 물어본 말·배운 개념은 지식에 저절로 들어가요.</p>
-        </div>
-      </div>
+    <div className="pj stack">
+      <header className="row" style={{ justifyContent: "space-between" }}>
+        <div><h2>실습</h2><p className="small muted">VS Code에서 직접 만들고, 튜터 탭이 한 걸음씩 알려 줘요. 배운 개념은 지식에 저절로 들어가요.</p></div>
+        {status?.online ? <a className="btn ghost small" href={courseUrl} target="_blank" rel="noreferrer">+ 새 실습</a> : null}
+      </header>
 
-      {msg ? <p className="small" role="status" style={{ margin: "12px 0" }}>{msg}</p> : null}
+      {msg ? <p className="small" role="status">{msg}</p> : null}
 
       {!status ? <p className="small muted">불러오는 중…</p> : starting ? (
-        <section className="td-card" style={{ marginTop: 16 }}>
-          <p className="eyebrow">실습 서버를 켜는 중이에요</p>
-          <p className="small" style={{ margin: "6px 0 0" }}>몇 초면 돼요.</p>
-        </section>
+        <section className="panel"><b>실습 서버를 켜는 중이에요</b><p className="small muted" style={{ margin: "4px 0 0" }}>몇 초면 돼요.</p></section>
       ) : !status.online ? (
-        <section className="td-card" style={{ marginTop: 16 }}>
-          <p className="eyebrow">실습 서버가 꺼져 있어요</p>
-          <p className="small" style={{ margin: "6px 0 12px" }}>{status.error ? `저절로 켜지 못했어요(${status.error}). ` : ""}실습 서버는 Recaller 앱을 켤 때 같이 켜져요. 잠시 뒤 아래 버튼을 누르거나, 앱을 껐다 켜 주세요.</p>
-          <button className="btn primary small" onClick={() => { setMsg(null); void load().then(() => sync(true)); }}>다시 확인</button>
+        <section className="panel stack">
+          <b>실습 서버가 꺼져 있어요</b>
+          <p className="small muted" style={{ margin: 0 }}>{status.error ? `저절로 켜지 못했어요(${status.error}). ` : ""}실습 서버는 Recaller 앱을 켤 때 같이 켜져요. 잠시 뒤 다시 확인하거나 앱을 껐다 켜 주세요.</p>
+          <div><button className="btn primary small" onClick={() => { setMsg(null); void load().then(() => sync(true)); }}>다시 확인</button></div>
+        </section>
+      ) : !top ? (
+        <section className="panel stack">
+          <b>아직 시작한 실습이 없어요</b>
+          <p className="small muted" style={{ margin: 0 }}>무엇을 만들지, 어디서부터 할지 몇 가지 물어보고 계획을 짜 줘요.</p>
+          <div><a className="btn primary small" href={courseUrl} target="_blank" rel="noreferrer">새 실습 시작</a></div>
         </section>
       ) : (
         <>
-          <div className="td-grid" style={{ marginTop: 16 }}>
-            {shown.map((r) => (
-              <section key={r.id} className="td-card">
-                <p className="eyebrow">{status.active === r.id ? "하던 실습" : "실습"}</p>
-                <h3 style={{ margin: "4px 0" }}>{r.courseTitle}</h3>
-                <p className="small muted" style={{ margin: "0 0 10px" }}>{r.current}단계 · {r.stageTitle}{r.done ? ` · ${r.done}단계 끝냄` : ""}</p>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <button className="btn primary small" disabled={busy === r.id} onClick={() => void openEditor(r)}>{busy === r.id ? "여는 중…" : "VS Code에서 이어 하기"}</button>
-                  <a className="btn ghost small" href={`${courseUrl}/#/run/${r.id}/notes`} target="_blank" rel="noreferrer">📒 노트</a>
-                </div>
-              </section>
-            ))}
-            {others.length ? (
-              // 접어 두기 (2026-11-05 A 앱 한 바퀴 점검): 같은 코스를 여러 번 시작하면 기록이 줄줄이 펼쳐져 화면을 덮었다.
-              <details className="td-card">
-                <summary className="eyebrow" style={{ cursor: "pointer" }}>같은 코스의 다른 기록 {others.length}개</summary>
-                <p className="small muted" style={{ margin: "6px 0 10px" }}>같은 실습을 다시 시작한 기록이에요. 보통은 위 카드에서 이어 하면 돼요.</p>
-                <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>
-                  {others.map((r) => (
-                    <li key={r.id}>{r.courseTitle} · {r.current}단계{started(r) ? ` · ${started(r)}` : ""}{" "}
-                      <button className="btn ghost small" disabled={busy === r.id} onClick={() => void openEditor(r)}>{busy === r.id ? "여는 중…" : "이걸로 이어 하기"}</button></li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-            <section className="td-card">
-              <p className="eyebrow">새로 시작</p>
-              <p className="small" style={{ margin: "6px 0 12px" }}>무엇을 만들지, 어디서부터 할지 몇 가지 물어보고 계획을 짜 줘요.</p>
-              <a className="btn ghost small" href={courseUrl} target="_blank" rel="noreferrer">새 실습 시작</a>
-            </section>
-          </div>
-
-          <section className="td-card" style={{ marginTop: 16 }}>
-            <p className="eyebrow">지식과 연결</p>
-            <p className="small" style={{ margin: "6px 0 10px" }}>
-              {synced ? (synced.items ? `${synced.at.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}에 ${synced.items}개를 지식에 넣었어요${synced.created ? ` (새 지식 ${synced.created}개)` : ""}.` : "새로 넣을 것은 없어요. 실습에서 물어보거나 단계를 통과하면 여기로 들어와요.") : msg ? "아직 못 넣었어요(위 안내를 봐 주세요)." : "확인하는 중…"}
-            </p>
-            <p className="small muted" style={{ margin: "0 0 10px" }}>코스 개념(상태 코드, 라우팅…)은 <b>개념</b>으로, 물어본 문법·도구(await, JSON.parse…)는 <b>어휘</b>로 들어가요. 이 실습에서만 쓰는 이름은 넣지 않아요.</p>
-            <div className="row" style={{ gap: 8 }}>
-              <button className="btn ghost small" onClick={() => { setMsg(null); void sync(false); }}>지금 넣기</button>
-              <button className="btn ghost small" onClick={() => go("knowledge")}>지식 보기</button>
-            </div>
+          <section className="panel pj-top">
+            <p className="eyebrow">{status.active === top.id ? "하던 실습" : "가장 최근 실습"}</p>
+            <h3>{top.courseTitle}</h3>
+            <p className="small muted num">{where(top)}{top.done ? ` · ${top.done}단계 끝냄` : ""}{day(top) ? ` · ${day(top)} 시작` : ""}</p>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(top)}{notes(top)}</div>
           </section>
+
+          {rest.length ? (
+            <section className="panel stack">
+              <b>실습 기록 {rest.length}</b>
+              <ul className="cs-list">
+                {rest.map((r) => (
+                  <li key={r.id}>
+                    <details className="pj-row">
+                      <summary className="cs-row">
+                        <span className="cs-title">{r.courseTitle}</span>
+                        <span className="small muted">{where(r)}</span>
+                        <span className="small muted num">{day(r)}</span>
+                      </summary>
+                      <div className="pj-more stack">
+                        <p className="small" style={{ margin: 0 }}>{r.current}단계 「{r.stageTitle}」 하는 중{r.done ? ` · ${r.done}단계 끝냄` : ""}{day(r) ? ` · ${day(r)} 시작` : ""}</p>
+                        {r.workspace ? <p className="small muted" style={{ margin: 0 }}>폴더 <code>{r.workspace}</code></p> : null}
+                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(r)}{notes(r)}</div>
+                      </div>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <p className="small muted pj-sync">
+            {synced ? (synced.items ? `${synced.at.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })}에 ${synced.items}개를 지식에 넣었어요${synced.created ? ` (새 지식 ${synced.created}개)` : ""}.` : "지식에 새로 넣을 것은 없어요.") : msg ? "아직 지식에 못 넣었어요." : "지식과 맞추는 중…"}
+            {" "}<button className="linkish" onClick={() => { setMsg(null); void sync(false); }}>지금 넣기</button>
+            {" · "}<button className="linkish" onClick={() => go("knowledge")}>지식 보기</button>
+          </p>
         </>
       )}
     </div>

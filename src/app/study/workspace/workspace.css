@@ -727,3 +727,14 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .kw-origin input{margin:0;accent-color:var(--accent)}
 .dejipgi .kw-origin.on{color:var(--ink);border-color:color-mix(in srgb,var(--accent) 45%,var(--line-strong))}
 .dejipgi .kw-origin:focus-within{outline:2px solid color-mix(in srgb,var(--accent) 40%,transparent);outline-offset:1px}
+/* 실습 (11/6): 세로 목록. 맨 위 하던 실습, 아래 실습 기록 줄(누르면 펼침) */
+.dejipgi .pj h2{font-size:22px}
+.dejipgi .pj-top{display:flex;flex-direction:column;gap:6px;padding:16px}
+.dejipgi .pj-top h3{margin:0;font-size:18px}
+.dejipgi .pj-top p{margin:0}
+.dejipgi .pj-row > summary{list-style:none;cursor:pointer}
+.dejipgi .pj-row > summary::-webkit-details-marker{display:none}
+.dejipgi .pj-row[open] > summary{border-color:var(--accent);border-bottom-left-radius:0;border-bottom-right-radius:0}
+.dejipgi .pj-more{border:1px solid var(--accent);border-top:0;border-radius:0 0 10px 10px;padding:10px 12px;gap:8px;background:var(--surface)}
+.dejipgi .pj-more code{font-size:12px;word-break:break-all}
+.dejipgi .pj-sync{margin:0}
