@@ -1256,9 +1256,9 @@ function startWeak(subject){
 function itemsOnPage(d, page){
   return d.items.filter(it => it.page === page || (d.objectives.find(o => o.id === it.objectiveId)?.pages || []).includes(page));
 }
-function startCheck(deckId, page, objId){
+function startCheck(deckId, page, objId, given){
   const d = S.decks[deckId];
-  const items = objId ? d.items.filter(it => it.objectiveId === objId) : itemsOnPage(d, page);
+  const items = given || (objId ? d.items.filter(it => it.objectiveId === objId) : itemsOnPage(d, page));
   if (!items.length){ toast(objId ? "이 목표에 연결된 문제가 없어요." : "이 쪽에 연결된 문제가 없어요."); return; }
   // From the reader the check opens over the page (blurred so the answer can't be read off it) and closes back to it.
   const overlay = S.view === "read";
@@ -2567,6 +2567,7 @@ const TM = { open:false, run:null, err:null, sel:null, key:"" };
 const genDeck = (id) => !!env.mountView && /^(pending:)?gen_/.test(String(id || ""));
 const MaterialMapView = {
   cur: null,
+  asked: {},
   open(d){
     this.close();
     const ov = h("div", { class:"mm2-overlay" }), host = h("div");
@@ -2585,6 +2586,19 @@ const MaterialMapView = {
         startCheck(gid, p, real.items.some(it => it.objectiveId === objId) ? objId : undefined);
       },
       onMakeQuestions: () => makeQuestions(deckNow()),
+      // 만든 문제부터 풀기 (11/6 사용자 "자료 입력하고 실시간으로 만들어지는 창에서 문제도 바로 풀 수 있게, 만들어진 문제부터"):
+      // while the material is still being made, the questions published so far; pressed again, only the ones not yet asked here.
+      onPracticeAll: () => {
+        const real = S.decks[gid];
+        const items = real ? real.items : [];
+        if (!items.length){ toast("아직 만들어진 문제가 없어요. 잠시 뒤 다시 눌러 주세요."); return; }
+        const asked = this.asked[gid] || (this.asked[gid] = new Set());
+        const fresh = items.filter(it => !asked.has(it.id));
+        const pick = fresh.length ? fresh : items;
+        for (const it of pick) asked.add(it.id);
+        this.close(); S.session = null;
+        startCheck(gid, pick[0].page, undefined, pick);
+      },
       onClose: () => this.close() });
     this.cur = { ov, stop };
   },

@@ -264,8 +264,11 @@ function LiveBoard({ data }: { data: LiveData }) {
 
 // 사용자 10/30: the map is where a material is studied (no reading screen): 원문 opens one page over it, 문제 풀기 starts that
 // page's questions, and a material made without questions gets them here (문제 만들기).
-export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions, onClose }: { genId: string; onPage: (page: number) => void;
-  onPractice?: (page: number, cardId: string) => void; onMakeQuestions?: () => Promise<boolean>; onClose: () => void }) {
+export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, onMakeQuestions, onClose }: { genId: string; onPage: (page: number) => void;
+  onPractice?: (page: number, cardId: string) => void;
+  /** 만든 문제부터 풀기 (11/6): the questions made so far, even while the material is still being made. */
+  onPracticeAll?: () => void;
+  onMakeQuestions?: () => Promise<boolean>; onClose: () => void }) {
   const [map, setMap] = useState<MatMap | null>(null);
   const [asking, setAsking] = useState(false);
   const [reload, setReload] = useState(0);
@@ -395,6 +398,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onMakeQuestions
         <span className="row small">
           {map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="기억마다 확인 문제를 만들어 연습·복습에 붙여요"
             onClick={() => { setAsking(true); void onMakeQuestions().then((ok) => { if (ok) setReload((k) => k + 1); }).finally(() => setAsking(false)); }}>{asking ? "시작하는 중…" : "문제 만들기"}</button> : null}
+          {!map.questionsLater && n.questions && onPracticeAll ? <button className="btn small primary" title={making ? "지금까지 만들어진 문제부터 풀어요. 나머지는 계속 만들어져요." : "이 자료의 문제를 풀어요."}
+            onClick={onPracticeAll}>{making ? `만든 문제부터 풀기 (${n.questions})` : `문제 풀기 (${n.questions})`}</button> : null}
           <button className="btn ghost small" onClick={onClose}>닫기</button>
         </span>
       </div>
