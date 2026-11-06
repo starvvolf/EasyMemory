@@ -707,15 +707,18 @@ function publishPdfToday(plan){
   window.__recallerPdfToday = info;
   try{ window.dispatchEvent(new CustomEvent("recaller:pdf-today", { detail: info })); }catch(e){}
 }
+// 홈 시계: 1분마다 글자만 바꾼다(다시 그리지 않음).
+setInterval(() => { const el = document.getElementById("homeClock"); if (el) el.textContent = new Date().toLocaleTimeString("ko-KR", { hour:"2-digit", minute:"2-digit", hour12:false }); }, 20000);
 function renderRecallerHome(){
   const all = Object.values(S.decks), pendings = all.filter(d => d.pending);
   const wrap = h("div", { class:"stack" });
-  const today = new Date().toLocaleDateString("ko-KR", { month:"long", day:"numeric", weekday:"long" });
+  // 2026-11-06 사용자 "맨 위 무엇을 공부할까요?·설명 글 싹 지우고 날짜 시간이랑 새 공부 시작·내 공부 보기만, 코치에게 묻기도 지워":
+  const now = new Date();
+  const today = now.toLocaleDateString("ko-KR", { month:"long", day:"numeric", weekday:"long" });
+  const clock = now.toLocaleTimeString("ko-KR", { hour:"2-digit", minute:"2-digit", hour12:false });
   const real = realDecks();
-  wrap.append(h("section", { class:"panel hero" },
-    h("p", { class:"eyebrow", text:today }),
-    h("h2", { text:"무엇을 공부할까요?" }),
-    h("p", { class:"muted", text:"PDF·웹 글은 읽고, 알고리즘은 풀고, 실습에서는 직접 만들어 보며 배운 것을 지식 하나로 쌓아요. 잊을 때쯤 다시 물어봐요." }),
+  wrap.append(h("section", { class:"panel hero home-head" },
+    h("div", { class:"home-when" }, h("span", { class:"home-date", text:today }), h("span", { id:"homeClock", class:"home-clock num", text:clock })),
     h("div", { class:"row" },
       h("button", { class:"btn primary", onclick: () => setView("start") }, "+ 새 공부 시작"),
       real.length ? h("button", { class:"btn", onclick: () => setView("practice") }, "내 공부 보기") : null)));
@@ -724,7 +727,6 @@ function renderRecallerHome(){
   // 복습 입구 하나 (2026-11-02 A, 점검_UIUX화면연결 1번): PDF 문제도 오늘 카드(TodayBoard) 안의 한 줄로 보낸다.
   publishPdfToday(real.length ? todayPlan() : null);
   void pendings;
-  wrap.append(renderCoachBox());
   return wrap;
 }
 function renderKnowledge(){

@@ -198,16 +198,35 @@ export async function week(startDay?: string, now = new Date()) {
   // 공부한 시간 저절로 (2026-11-02 A, 협업/결과보고/점검_UIUX화면연결_A_20261102.md 9번): 지식 기록(복습·코드 문제·웹 글·프로젝트)이
   // 생긴 5분 칸을 센다. 타이머나 직접 넣은 시간이 있는 날은 그 시간과 겹칠 수 있으니 화면은 둘 중 큰 쪽을 쓴다.
   const busy = new Map<string, Set<number>>();
+  // 공부 기록 (2026-11-06 사용자 "할 일이랑 기한 빼고 뭐 했는지 기록만, 위에는 이번 주에 뭐 했는지, 밑에는 GitHub 잔디처럼"):
+  // 이번 주 한 일(무엇을 몇 번, 어떤 자료) + 지난 20주 날마다 공부한 칸 수(잔디). 지식 기록 하나를 한 번으로 센다.
+  const grassFrom = addDays(base, -7 * 19);
+  const grassBusy = new Map<string, Set<number>>();
+  const did = { correct: 0, wrong: 0, met: 0, help: 0 };
+  const by = new Map<string, { kind: string; title: string; ref: string; n: number; last: string }>();
   try {
     const { events } = await memoryEvents({ limit: 20000 });
-    for (const e of events) { const d = dayOf(e.at); if (d < base || d > days[6]) continue; const t = Date.parse(e.at); if (!Number.isFinite(t)) continue; if (!busy.has(d)) busy.set(d, new Set()); busy.get(d)!.add(Math.floor(t / 300_000)); }
+    for (const e of events) {
+      const d = dayOf(e.at); const t = Date.parse(e.at); if (!Number.isFinite(t)) continue;
+      if (d >= grassFrom && d <= days[6]) { if (!grassBusy.has(d)) grassBusy.set(d, new Set()); grassBusy.get(d)!.add(Math.floor(t / 300_000)); }
+      if (d < base || d > days[6]) continue;
+      if (!busy.has(d)) busy.set(d, new Set()); busy.get(d)!.add(Math.floor(t / 300_000));
+      if (e.kind === "correct") did.correct++; else if (e.kind === "wrong") did.wrong++; else if (e.kind === "met") did.met++; else if (e.kind === "hint" || e.kind === "asked") did.help++;
+      const kind = e.source?.kind ?? "review"; const title = e.source?.title || (kind === "review" ? "복습" : "");
+      if (!title) continue;
+      const key = `${kind}:${title}`; const row = by.get(key) ?? { kind, title, ref: e.source?.ref ?? "", n: 0, last: e.at };
+      row.n++; if (e.at > row.last) { row.last = e.at; row.ref = e.source?.ref ?? row.ref; } by.set(key, row);
+    }
   } catch { /* 기록을 못 읽어도 일정은 보인다 */ }
+  const grass = Array.from({ length: 7 * 20 }, (_, i) => { const date = addDays(grassFrom, i); const mins = Math.max((grassBusy.get(date)?.size ?? 0) * 5, sessions.filter((s) => dayOf(s.start) === date).reduce((n, s) => n + s.minutes, 0)); return { date, minutes: mins }; });
+  const studied = [...by.values()].sort((x, y) => y.last.localeCompare(x.last)).slice(0, 12);
   return {
     start: base, today: today(now),
     days: days.map((date) => {
       const mine = sessions.filter((s) => dayOf(s.start) === date);
       return { date, minutes: mine.reduce((sum, s) => sum + s.minutes, 0), auto: (busy.get(date)?.size ?? 0) * 5, sessions: mine, todos: todos.filter((t) => t.date === date), deadlines: deadlines.filter((d) => d.date === date) };
     }),
+    did, studied, grass,
     undated: todos.filter((t) => !t.date && !t.done),
     upcoming: deadlines.filter((d) => d.date >= today(now)),
   };

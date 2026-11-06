@@ -1,27 +1,31 @@
 "use client";
-// 일정: 이번 주 시간표(공부한 시간, 할 일, 기한), 할 일, 기한. 기한을 넣을 때는 먼저 "시험이나 기한이 있나요?"를 묻고,
-// 있으면 그날까지 날짜별로 나눠 할 일을 만든다. 없으면 복습 간격대로 간다.
+// 일정 = 공부 기록 (2026-11-06 사용자 "할 일이랑 기한 빼고 그냥 뭐 했는지 기록만 남기고, 위에는 이번 주에 뭐 했는지,
+// 밑에는 GitHub 잔디처럼 바둑알 붙여서"): 할 일·기한 화면은 뺐다(API와 데이터는 그대로 둔다). 위는 이번 주 요일별 시간과
+// 한 일(맞힘·틀림·새 지식·도움, 공부한 자료), 아래는 지난 20주 날마다 공부한 시간을 칸 색으로.
 import { useCallback, useEffect, useState } from "react";
-import { call, errorText, folderPaths, later, type Tree } from "./api";
+import { call, errorText, later } from "./api";
 
 type Session = { id: string; start: string; end: string; minutes: number; label: string };
-type Todo = { id: string; text: string; date: string | null; done: boolean; origin: "user" | "schedule" | "agent"; deadlineId: string | null };
-type Deadline = { id: string; title: string; date: string; folderId: string | null; goalId?: string | null; amount: number; unit: string };
-type Week = { start: string; today: string; days: Array<{ date: string; minutes: number; auto?: number; sessions: Session[]; todos: Todo[]; deadlines: Deadline[] }>; undated: Todo[]; upcoming: Deadline[] };
+type Studied = { kind: string; title: string; n: number; last: string };
+type Week = {
+  start: string; today: string;
+  days: Array<{ date: string; minutes: number; auto?: number; sessions: Session[] }>;
+  did?: { correct: number; wrong: number; met: number; help: number };
+  studied?: Studied[];
+  grass?: Array<{ date: string; minutes: number }>;
+};
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
+const KIND: Record<string, string> = { pdf: "PDF", web: "웹 글", code: "알고리즘", project: "실습", manual: "직접", review: "복습" };
 const addDays = (day: string, n: number) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-const hm = (iso: string) => new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
-const dleft = (date: string, today: string) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
 const minutes = (m: number) => m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`;
+const level = (m: number) => (m <= 0 ? 0 : m < 15 ? 1 : m < 40 ? 2 : m < 90 ? 3 : 4);
 
 export default function PlanView() {
   const [week, setWeek] = useState<Week | null>(null);
   const [start, setStart] = useState<string | undefined>(undefined);
-  const [tree, setTree] = useState<Tree>({ folders: [], items: [] });
   const [error, setError] = useState("");
-  const [todo, setTodo] = useState({ text: "", date: "" });
   const load = useCallback(async () => {
-    try { setWeek(await call<Week>(`/api/schedule/week${start ? `?start=${start}` : ""}`)); setTree(await call<Tree>("/api/knowledge")); } catch (e) { setError(errorText(e)); }
+    try { setWeek(await call<Week>(`/api/schedule/week${start ? `?start=${start}` : ""}`)); } catch (e) { setError(errorText(e)); }
   }, [start]);
   useEffect(() => later(() => void load()), [load]);
   useEffect(() => {
@@ -29,108 +33,55 @@ export default function PlanView() {
     window.addEventListener("recaller:timer-changed", on); window.addEventListener("recaller:timer-changed-plan", on);
     return () => { window.removeEventListener("recaller:timer-changed", on); window.removeEventListener("recaller:timer-changed-plan", on); };
   }, [load]);
-  const act = async (run: () => Promise<unknown>) => { setError(""); try { await run(); await load(); } catch (e) { setError(errorText(e)); } };
-  if (!week) return <div className="panel small muted">{error || "일정을 읽는 중…"}</div>;
-  // 2026-11-02 A: 직접 넣은·타이머 시간과 기록으로 센 시간 중 큰 쪽 (겹칠 수 있어서 더하지 않는다)
+  if (!week) return <div className="panel small muted">{error || "기록을 읽는 중…"}</div>;
+  // 직접 넣은·타이머 시간과 기록으로 센 시간 중 큰 쪽 (겹칠 수 있어서 더하지 않는다)
   const shownOf = (d: { minutes: number; auto?: number }) => Math.max(d.minutes, d.auto ?? 0);
   const max = Math.max(60, ...week.days.map(shownOf));
   const total = week.days.reduce((s, d) => s + shownOf(d), 0);
+  const thisWeek = !start;
+  const did = week.did ?? { correct: 0, wrong: 0, met: 0, help: 0 };
+  const grass = week.grass ?? [];
+  const activeDays = grass.filter((g) => g.minutes > 0).length;
   return (
     <div className="pl stack">
       <header className="row" style={{ justifyContent: "space-between" }}>
-        <div><h2>일정</h2><p className="small muted num" title="복습·문제 풀기·웹 글·실습 기록이 생긴 시간을 5분 단위로 센 것과, 타이머·직접 넣은 시간 중 큰 쪽">이번 주 공부 {minutes(total)}</p></div>
-        <div className="row"><button className="btn ghost small" onClick={() => setStart(addDays(week.start, -7))}>← 지난주</button><button className="btn ghost small" onClick={() => setStart(undefined)}>이번 주</button><button className="btn ghost small" onClick={() => setStart(addDays(week.start, 7))}>다음 주 →</button></div>
+        <div><h2>공부 기록</h2><p className="small muted num">{thisWeek ? "이번 주" : `${Number(week.start.slice(5, 7))}/${Number(week.start.slice(8))} 주`} 공부 {minutes(total)}</p></div>
+        <div className="row"><button className="btn ghost small" onClick={() => setStart(addDays(week.start, -7))}>← 지난주</button>{!thisWeek ? <button className="btn ghost small" onClick={() => setStart(undefined)}>이번 주</button> : null}
+          {!thisWeek ? <button className="btn ghost small" onClick={() => setStart(addDays(week.start, 7))}>다음 주 →</button> : null}</div>
       </header>
       {error ? <p className="ws-err" onClick={() => setError("")}>{error}</p> : null}
-      {week.upcoming.length ? <div className="row">{week.upcoming.slice(0, 4).map((d) => { const n = dleft(d.date, week.today); return <span key={d.id} className={`chip ${n <= 3 ? "bad" : "help"}`}>{d.title} {n === 0 ? "오늘" : `D-${n}`}</span>; })}</div> : null}
 
-      <section className="pl-week" aria-label="주간 시간표">
+      <section className="pl-week" aria-label="요일별 공부 시간">
         {week.days.map((d, i) => (
           <div key={d.date} className={`pl-day${d.date === week.today ? " today" : ""}`}>
             <div className="pl-day-head"><b>{DOW[i]}</b><span className="small muted num">{Number(d.date.slice(5, 7))}/{Number(d.date.slice(8))}</span></div>
             <div className="pl-bar" title={`기록으로 센 시간 ${d.auto ?? 0}분 · 타이머·직접 넣은 시간 ${d.minutes}분`}><i style={{ height: `${Math.round((shownOf(d) / max) * 100)}%` }} /></div>
             <span className="small num pl-min">{shownOf(d) ? minutes(shownOf(d)) : "–"}</span>
-            {d.deadlines.map((x) => <span key={x.id} className="chip bad pl-dl">{x.title}</span>)}
-            <ul className="pl-sessions">{d.sessions.map((s) => <li key={s.id} className="small">{hm(s.start)}–{hm(s.end)} {s.label}</li>)}</ul>
-            <ul className="pl-todos">{d.todos.map((t) => <li key={t.id}><label className="small"><input type="checkbox" checked={t.done} onChange={() => void act(() => call(`/api/schedule/todos/${t.id}`, { done: !t.done }, "PATCH"))} /> <span className={t.done ? "pl-done" : ""}>{t.text}</span></label></li>)}</ul>
           </div>
         ))}
       </section>
 
-      <div className="pl-grid">
-        <section className="panel stack">
-          <b>할 일</b>
-          <form className="row" onSubmit={(e) => { e.preventDefault(); if (todo.text.trim()) void act(() => call("/api/schedule/todos", { text: todo.text, date: todo.date || null })).then(() => setTodo({ text: "", date: "" })); }}>
-            <input className="ws-input" value={todo.text} onChange={(e) => setTodo({ ...todo, text: e.target.value })} placeholder="할 일 (예: 바킹독 0x12 읽기)" />
-            <input className="ws-input pl-date" type="date" value={todo.date} onChange={(e) => setTodo({ ...todo, date: e.target.value })} aria-label="날짜" />
-            <button className="btn small" disabled={!todo.text.trim()}>추가</button>
-          </form>
-          {week.undated.length ? <ul className="pl-todos">{week.undated.map((t) => <li key={t.id} className="row"><label className="small"><input type="checkbox" checked={t.done} onChange={() => void act(() => call(`/api/schedule/todos/${t.id}`, { done: !t.done }, "PATCH"))} /> {t.text}</label>
-            <button className="kw-x" aria-label="지우기" onClick={() => void act(() => call(`/api/schedule/todos/${t.id}`, undefined, "DELETE"))}>×</button></li>)}</ul> : <p className="small muted">날짜 없는 할 일이 없어요. 날짜가 있는 할 일은 위 시간표에 보여요.</p>}
-          <ManualSession onDone={load} />
-        </section>
-        <Deadlines tree={tree} week={week} onAct={act} />
-      </div>
+      <section className="panel stack pl-did" aria-label="이번 주 한 일">
+        <div className="pl-stats">
+          <span><b className="num">{did.correct}</b><small>맞힘</small></span>
+          <span><b className="num">{did.wrong}</b><small>틀림</small></span>
+          <span><b className="num">{did.met}</b><small>새 지식</small></span>
+          <span><b className="num">{did.help}</b><small>힌트·질문</small></span>
+        </div>
+        {week.studied?.length ? (
+          <ul className="pl-studied">{week.studied.map((s) => (
+            <li key={`${s.kind}:${s.title}`}><span className="chip">{KIND[s.kind] ?? s.kind}</span><span className="pl-st-title">{s.title}</span><span className="small muted num">{s.n}번 · {Number(s.last.slice(5, 7))}/{Number(s.last.slice(8, 10))}</span></li>))}
+          </ul>
+        ) : <p className="small muted">이 주에는 기록이 없어요.</p>}
+      </section>
+
+      <section className="panel stack" aria-label="20주 공부 기록">
+        <div className="row" style={{ justifyContent: "space-between" }}><b>20주 기록</b><span className="small muted num">공부한 날 {activeDays}일</span></div>
+        <div className="pl-grass" role="img" aria-label={`지난 20주 중 공부한 날 ${activeDays}일`}>
+          {grass.map((g) => <i key={g.date} className={`g${level(g.minutes)}${g.date === week.today ? " now" : ""}`} title={`${g.date} · ${g.minutes ? minutes(g.minutes) : "기록 없음"}`} />)}
+        </div>
+        <div className="pl-grass-key small muted"><span>적게</span>{[0, 1, 2, 3, 4].map((n) => <i key={n} className={`g${n}`} />)}<span>많이</span></div>
+      </section>
     </div>
-  );
-}
-
-function ManualSession({ onDone }: { onDone: () => Promise<void> }) {
-  const [open, setOpen] = useState(false);
-  const [v, setV] = useState({ start: "", minutes: 60, label: "" });
-  if (!open) return <button className="btn ghost small" onClick={() => setOpen(true)}>공부한 시간 직접 넣기</button>;
-  return (
-    <form className="row small" onSubmit={async (e) => { e.preventDefault(); await call("/api/schedule/sessions", { start: new Date(v.start).toISOString(), minutes: v.minutes, label: v.label }); setOpen(false); await onDone(); }}>
-      <input className="ws-input" type="datetime-local" value={v.start} onChange={(e) => setV({ ...v, start: e.target.value })} required aria-label="시작" />
-      <input className="ws-input pl-num" type="number" min={1} max={1440} value={v.minutes} onChange={(e) => setV({ ...v, minutes: Number(e.target.value) })} aria-label="분" /> 분
-      <input className="ws-input" value={v.label} onChange={(e) => setV({ ...v, label: e.target.value })} placeholder="무엇을" />
-      <button className="btn small" disabled={!v.start}>넣기</button><button type="button" className="btn ghost small" onClick={() => setOpen(false)}>취소</button>
-    </form>
-  );
-}
-
-function Deadlines({ tree, week, onAct }: { tree: Tree; week: Week; onAct: (run: () => Promise<unknown>) => Promise<void> }) {
-  const [step, setStep] = useState<"" | "ask" | "form" | "none">("");
-  const blank = { title: "", date: "", scope: "", amount: 0, unit: "쪽" };
-  const [f, setF] = useState(blank);
-  const [list, setList] = useState<Deadline[]>([]);
-  const load = useCallback(async () => {
-    try { setList((await call<{ deadlines: Deadline[] }>("/api/schedule/deadlines")).deadlines); } catch { setList([]); }
-  }, []);
-  useEffect(() => later(() => void load()), [load, week]);
-  const paths = folderPaths(tree.folders);
-  const folderId = f.scope.startsWith("folder:") ? f.scope.slice(7) : "";
-  const scoped = Boolean(folderId);
-  // 목표는 없앴다(2026-10-30): 기한은 주제(폴더) 또는 분량으로만.
-  const send = () => call("/api/schedule/deadlines", { title: f.title, date: f.date, folderId: folderId || null, amount: folderId ? 0 : f.amount, unit: f.unit, plan: true });
-  return (
-    <section className="panel stack">
-      <b>기한</b>
-      {step === "" ? <button className="btn small" onClick={() => setStep("ask")}>+ 기한 넣기</button> : null}
-      {step === "ask" ? (
-        <div className="stack"><p>시험이나 기한이 있나요?</p>
-          <div className="row"><button className="btn primary small" onClick={() => setStep("form")}>있어요</button><button className="btn small" onClick={() => setStep("none")}>없어요</button></div></div>
-      ) : null}
-      {step === "none" ? <div className="stack"><p className="small">기한이 없으면 따로 나누지 않고, 복습 간격대로 ‘오늘 할 것’과 지식창의 복습에서 나와요.</p><button className="btn ghost small" onClick={() => setStep("")}>알겠어요</button></div> : null}
-      {step === "form" ? (
-        <form className="stack" onSubmit={(e) => { e.preventDefault(); void onAct(send).then(() => { setStep(""); setF(blank); void load(); }); }}>
-          <label className="row small">무엇의 기한인가요
-            <select className="ws-select" value={f.scope} onChange={(e) => setF({ ...f, scope: e.target.value })}>
-              <option value="">분량으로 적기</option>
-              {paths.length ? <optgroup label="주제">{paths.map((p) => <option key={p.id} value={`folder:${p.id}`}>{p.path}</option>)}</optgroup> : null}
-            </select></label>
-          <input className="ws-input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="이름 (예: 한국사 중간고사)" required />
-          <label className="row small">날짜 <input className="ws-input pl-date" type="date" value={f.date} min={week.today} onChange={(e) => setF({ ...f, date: e.target.value })} required /></label>
-          {!scoped ? <label className="row small">분량 <input className="ws-input pl-num" type="number" min={1} max={1000} value={f.amount || ""} onChange={(e) => setF({ ...f, amount: Number(e.target.value) })} required />
-            <select className="ws-select" value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}>{["쪽", "강", "장", "문제", "단원"].map((u) => <option key={u}>{u}</option>)}</select></label> : null}
-          <p className="small muted">기한 전날까지 날짜별로 나눠 할 일로 넣고, 마지막 날은 전체 훑기와 약한 것 몰아 보기로 잡아요.</p>
-          <div className="row"><button className="btn primary small">날짜별로 나누기</button><button type="button" className="btn ghost small" onClick={() => setStep("")}>취소</button></div>
-        </form>
-      ) : null}
-      <ul className="pl-dls">{list.map((d) => { const n = dleft(d.date, week.today); return (
-        <li key={d.id} className="row"><span className={`chip ${n < 0 ? "" : n <= 3 ? "bad" : "help"}`}>{n < 0 ? "지남" : n === 0 ? "오늘" : `D-${n}`}</span><b>{d.title}</b><span className="small muted">{d.date}{d.folderId ? ` · ${paths.find((p) => p.id === d.folderId)?.path ?? "폴더"}` : d.amount ? ` · ${d.amount}${d.unit}` : ""}</span>
-          {n > 0 ? <button className="btn ghost small" onClick={() => void onAct(() => call(`/api/schedule/deadlines/${d.id}/schedule`, {}))}>다시 나누기</button> : null}
-          <button className="kw-x" aria-label="기한 지우기" onClick={() => void onAct(async () => { await call(`/api/schedule/deadlines/${d.id}`, undefined, "DELETE"); await load(); })}>×</button></li>); })}</ul>
-    </section>
   );
 }

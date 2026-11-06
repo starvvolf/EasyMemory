@@ -1033,3 +1033,8 @@ html .dejipgi .sb-handle:hover{opacity:1}
 .dejipgi .mm-dev>summary{cursor:pointer;font-size:12px;color:var(--muted);padding:6px 12px;list-style:none}
 .dejipgi .mm-dev>summary::before{content:"▸ "}
 .dejipgi .mm-dev[open]>summary::before{content:"▾ "}
+/* 홈 머리 (2026-11-06): 날짜·시각 + 새 공부 시작·내 공부 보기 */
+.dejipgi .home-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.dejipgi .home-when{display:flex;align-items:baseline;gap:14px}
+.dejipgi .home-date{font-size:22px;font-weight:700}
+.dejipgi .home-clock{font-size:22px;font-weight:600;color:var(--muted)}
