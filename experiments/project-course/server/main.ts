@@ -356,6 +356,8 @@ const routes: [string, RegExp, Handler][] = [
   ["GET", /^\/api\/runs\/(\w+)\/knowledge-export$/, async (_q, m) => { const run = await getRun(m[1]); const course = await loadCourse(run.courseId); return knowledgeExport(run.id, course.title); }],
   // 앱 지식 저장소 잇기: 앱(3000)이 안 보낸 것을 받아 넣고, 넣은 열쇠를 돌려준다(lib/sync.ts)
   ["GET", /^\/api\/runs\/(\w+)\/sync$/, async (_q, m) => { const run = await getRun(m[1]); return pending(run.id, await loadCourse(run.courseId), run); }],
+  // 실험 자료 비우기(11/6): 실습 자료만 보관으로(앱 자료는 앱이 꺼져 있을 때 "자료 비우기(실험용).cmd")
+  ["POST", /^\/api\/dev\/reset$/, async () => { const { archivePractice } = await import("../tools/reset-data.mjs"); const { DATA } = await import("../lib/store.ts"); return archivePractice(DATA, "실험") ?? { label: null, count: 0 }; }],
   // 학습자 메모리(11/6): 보기 · 고치기 · 지우기
   ["GET", /^\/api\/memory$/, async () => ({ items: await (await import("../lib/memory.ts")).memoryOf() })],
   ["POST", /^\/api\/memory\/(m[a-f0-9]{6})$/, async (req, m) => (await import("../lib/memory.ts")).editMemory(m[1], await body(req))],

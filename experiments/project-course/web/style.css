@@ -796,7 +796,7 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .learned .gaps { border-left: 3px solid #e0a030; padding: 4px 0 4px 10px; margin: 6px 0 10px; }
 .learned .gaps ul { margin: 4px 0 0; }
 /* 학습자 메모리(11/6) */
-.hmem { display: flex; justify-content: flex-end; margin: 6px 0; }
+.hmem { display: flex; justify-content: flex-end; gap: 6px; margin: 6px 0; }
 .memory .memhead { display: flex; align-items: center; gap: 10px; }
 .memory .memhead h1 { margin: 0; }
 .memlist { list-style: none; padding: 0; }

@@ -212,7 +212,13 @@ async function renderHome() {
   const eng = h("div", { class: "heng", role: "radiogroup", "aria-label": "엔진" }, [["codex", "Codex 버전"], ["basic", "기존 버전"]].map(([k, t]) =>
     h("button", { class: `hchip ${homeEngine() === k ? "on" : ""}`, role: "radio", "aria-checked": String(homeEngine() === k), onclick: () => { setHomeEngine(k); renderHome(); } }, t)));
   const memBtn = h("button", { class: "btn small", onclick: () => go("#/memory") }, "학습자 메모리");
-  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), h("div", { class: "hmem" }, memBtn), list));
+  // 실험 자료 비우기(11/6 사용자 "실험용으로 작게"): 두 번 눌러야 비움(보관으로 옮김, 지우지 않음)
+  const resetBtn = h("button", { class: "btn small", title: "대화 · 목표 · 학습자 메모리를 .data/보관으로 옮겨요(지우지 않음). 앱의 기억은 그대로.", onclick: async (e) => {
+    const b = e.currentTarget;
+    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "한 번 더 누르면 비워요"; setTimeout(() => { delete b.dataset.sure; b.textContent = "실험 자료 비우기"; }, 4000); return; }
+    const r = await api("POST", "/api/dev/reset"); toast(r.label ? `보관했어요: .data/보관/${r.label} (${r.count}개)` : "이미 비어 있어요"); go("#/");
+  } }, "실험 자료 비우기");
+  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), h("div", { class: "hmem" }, resetBtn, memBtn), list));
   input.focus();
 }
 /* 학습 종료(11/6): 정리하는 동안 덮개 → 결과 한 줄 → 홈 */
