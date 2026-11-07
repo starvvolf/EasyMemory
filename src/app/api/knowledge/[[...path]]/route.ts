@@ -4,6 +4,8 @@ import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { readAll, createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, itemsByRef, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
   onKnowledgeCreated, pickWaiting, recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
+import { isPsItem, psQuestions } from "@/lib/code/tutor/review";
+import { recordPsReview } from "@/lib/code/tutor/service";
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
 import { similarKnowledge } from "@/lib/knowledge/embed";
 import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
@@ -166,7 +168,10 @@ async function handle(request: Request, context: RouteContext) {
         const pool = await allItems();
         const item = pool.find((x) => x.id === itemId);
         if (!item) return NextResponse.json({ message: "기억을 찾을 수 없어요." }, { status: 404 });
-        return json({ questions: questionsFor(item, pool, url.searchParams.get("seed") ?? String(Date.now())) });
+        const seed = url.searchParams.get("seed") ?? String(Date.now());
+        // PS 패턴 기억(11/8): 뜻 대신 문제에서 알아보고 쓰는 것을 묻는다(code/tutor/review.ts). 재료가 없으면 원래 질문.
+        const ps = isPsItem(item) ? await psQuestions(item, seed).catch(() => []) : [];
+        return json({ questions: ps.length ? ps : questionsFor(item, pool, seed) });
       }
     }
     if (p[0] === "merge" && m === "POST") { const b = await body(z.object({ keep: id, drop: id })); return json({ item: await mergeKnowledge(b.keep, b.drop) }); }
@@ -199,13 +204,16 @@ async function handle(request: Request, context: RouteContext) {
       }
       const status = await reviewStatus({ folderId, ids });
       const seed = String(Date.now());
-      const questions = picked.flatMap((lite, n) => {
+      const questions = (await Promise.all(picked.map(async (lite, n) => {
         const item = pool.find((x) => x.id === lite.id);
         if (!item) return [];
+        // PS 패턴 기억은 복습 차례에 맞는 PS 질문 하나(내 실수 다시 보기 → 알아보기 → 설계·출력 예측).
+        const ps = isPsItem(item) ? await psQuestions(item, seed).catch(() => []) : [];
+        if (ps.length) return [ps[0]];
         const qs = questionsFor(item, pool, seed);
         // 다시 확인 문항(실습 부족함, 11/8 D [경계])이 있으면 늘 그것을 묻는다
         return [qs[0]?.label === "다시 확인" ? qs[0] : qs[(n + qs.length - 1) % qs.length]];
-      });
+      }))).flat();
       return json({ questions, due: status.due, next: status.next });
     }
     if (p[0] === "grade" && m === "POST") {
@@ -214,7 +222,9 @@ async function handle(request: Request, context: RouteContext) {
       const q = b.question as unknown as Question;
       const g = grade(q, b.answer);
       // A flashcard's "answer" is the learner's own call (knew / didnt), not words worth keeping in the record.
-      await recordEvent(q.knowledgeId, g.correct ? "correct" : "wrong", `${QUESTION_LABEL[q.kind]}${g.correct || q.kind === "flashcard" ? "" : `: "${b.answer.slice(0, 60)}"`}`).catch(() => undefined);
+      await recordEvent(q.knowledgeId, g.correct ? "correct" : "wrong", `${q.id.startsWith("ps:") ? (q.label || QUESTION_LABEL[q.kind]) : QUESTION_LABEL[q.kind]}${g.correct || q.kind === "flashcard" ? "" : `: "${b.answer.slice(0, 60)}"`}`).catch(() => undefined);
+      // PS 질문이면 튜터 기록에도(단원 숨긴 복습 = 강한 증거). 기억 기록은 바로 위에서 이미 남겼다.
+      if (q.id.startsWith("ps:")) await recordPsReview(q.id, g.correct, b.answer).catch(() => undefined);
       if (q.kind === "recognize" && g.correct && b.sourceId) await markGoal(b.sourceId, "recognize", true, "예전 지식을 알아봄").catch(() => undefined);
       return json(g);
     }

@@ -64,7 +64,7 @@ async function inner(request: Request, context: RouteContext) {
       await recordAsked(b.problemId, b.question || `코드 드래그해서 물어봄: ${b.selection.split("\n")[0].slice(0, 60)}`);
       const out = await explainCode(b);
       // 11/8: AI에게 배운 것은 PS 튜터 문제일 때 그 패턴의 기억으로(tutor/service.ts noteAiHelp).
-      if (b.problemId) await noteAiHelp(b.problemId, "드래그한 코드 설명", `${b.question ? `물음: ${b.question} · ` : ""}${out.text}`).catch(() => undefined);
+      if (b.problemId) void noteAiHelp(b.problemId, "드래그한 코드 설명", `${b.question ? `물음: ${b.question} · ` : ""}${out.text}`).catch(() => undefined);
       return json(out);
     }
     if (p[0] === "error" && m === "POST") { const b = await body(z.object({ problemId: pid.optional(), lang, code, error: z.string().min(1).max(12000) })); return json(await explainError(b)); }
@@ -135,7 +135,7 @@ async function inner(request: Request, context: RouteContext) {
         // Ask first, record after: recorded first, this very hint was in the "earlier misses" the model sees ("지난번에도").
         const out = await hint({ problemId: id, ...b });
         await recordHint(id, b.level);
-        await noteAiHelp(id, `AI 힌트 ${b.level}단계`, out.text).catch(() => undefined);
+        void noteAiHelp(id, `AI 힌트 ${b.level}단계`, out.text).catch(() => undefined); // 카드 정리(AI 1번)는 화면을 기다리게 하지 않는다
         return json(out);
       }
       // 문제 목록으로 돌아가거나 다른 문제로: this attempt's 틀림 · 힌트 · 물어봄 go into the knowledge record now.

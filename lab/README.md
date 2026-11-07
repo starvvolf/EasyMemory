@@ -9,6 +9,7 @@
 | 루트별 실험 서버 (PS 3003 등) | `PS 실험 서버.cmd` (`run-lab.mjs --name … --port …`) | A | `tmp/lab-<이름>/data` |
 | 토론방 | `토론방.cmd` (앱 서버의 `/room`) | 공통 | `협업/토론/` |
 | 문제 만들기 실험 (luna) | `question-gen/문제만들기 실험.cmd` | A | `question-gen/out/` |
+| 기억 정제 실험 (PS 배운 것 카드) | `memory-refine/기억 정제 실험.cmd` (11/8) | B | `memory-refine/out/` |
 | 프롬프트 점검 실험 | `prompt-review/README.md` | 공통 | `tmp/prompt-review-*` |
 | 실험 코드 모음 | `실험코드/` (요약카드, 검사 스크립트) | C | — |
 

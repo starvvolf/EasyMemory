@@ -7,6 +7,8 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { recordEvent, saveMany, type KEventKind } from "../../knowledge/api.ts";
 import { patternsOfNumber, readLinks, writeLink } from "./links.ts";
+import { appendLesson, lessonLine, refineAiHelp, type LessonKind } from "./lessons.ts";
+import { parsePsId } from "./review.ts";
 import { problemIdOf } from "../bakingdog.ts";
 import { readSubmissions } from "../problems.ts";
 import { COMPLEXITIES, complexityVerdict } from "../train.ts";
@@ -49,25 +51,46 @@ async function toMemory(patterns: string[], kind: KEventKind, learned: boolean, 
     if (id) await recordEvent(id, kind, `[PS 튜터] ${detail}`.slice(0, 600), SOURCE(pid)).catch(() => undefined);
   }
 }
-async function record(e: Omit<TutorEvent, "id" | "at">, model?: ProblemModel, lesson = "") {
+type Card = { situation: string; gap: string; fix: string; cue: string; distinguish?: string };
+/** 구별할 조건(11/8 GPT 점검): 대조 문제가 있으면 그 차이, 없으면 그럴듯하지만 아닌 접근이 왜 아닌지 하나. */
+const distinguishOf = (m: ProblemModel) => {
+  if (m.contrast?.differs) return m.contrast.differs;
+  const w = m.approaches.find((a) => a.verdict !== "best" && a.why);
+  return w ? `「${w.name}」이 아닌 이유: ${w.why}` : "";
+};
+/** 사건을 남기고, 몰랐던 게 드러났으면 배운 것 카드를 만들어 기억에 한 줄로 넣는다. */
+async function record(e: Omit<TutorEvent, "id" | "at">, model?: ProblemModel, card?: Card) {
   const event = await appendEvent(e);
   const where = `BOJ ${e.number}${model ? ` ${model.title}` : ""}`;
-  if (e.kind === "predict" && e.ok === false) await toMemory(e.patterns, "wrong", true, `${where} 결과 예측이 달랐음. ${lesson}`);
+  const learn = async (kind: KEventKind, lk: LessonKind) => {
+    if (!card) return toMemory(e.patterns, kind, true, `${where}: ${ABILITY_LABEL[e.ability ?? "recognize"]}`);
+    for (const pid of e.patterns) await appendLesson({ pattern: pid, number: e.number, title: model?.title ?? "", kind: lk, refined: "code", ...card }).catch(() => undefined);
+    await toMemory(e.patterns, kind, true, lessonLine(card));
+  };
+  if (e.kind === "predict" && e.ok === false) await learn("wrong", "predict");
   else if (e.ability && e.ok !== undefined) {
-    const what = `${ABILITY_LABEL[e.ability]}`;
-    if (e.hinted) await toMemory(e.patterns, e.ok ? "hint" : "wrong", true, `${where} ${what}: 도움을 받고서야 ${e.ok ? "맞힘" : "풀지 못함"}. ${lesson}`);
-    else if (!e.ok) await toMemory(e.patterns, "wrong", true, `${where} ${what}에서 몰랐던 것: ${lesson}`);
-    else await toMemory(e.patterns, "correct", false, `${where} ${what}: 혼자 맞힘 (${GRADE_LABEL[e.grade]})`);
+    const lk: LessonKind = e.kind === "design" ? "design" : e.kind === "implement" ? "implement" : "drill";
+    if (e.hinted || !e.ok) await learn(e.hinted && e.ok ? "hint" : "wrong", lk);
+    else await toMemory(e.patterns, "correct", false, `${where} ${ABILITY_LABEL[e.ability]}: 혼자 맞힘 (${GRADE_LABEL[e.grade]})`);
   }
   return event;
 }
-/** 문제 화면에서 AI에게 배운 것(힌트·드래그 설명): 튜터 문제(cp_boj_N, 교육용 모델이 있음)일 때만, 그 패턴의 기억에. */
+/** 문제 화면에서 AI에게 배운 것(힌트·드래그 설명): 튜터 문제(cp_boj_N, 교육용 모델이 있음)일 때만. AI 1번으로 카드로 정리하고
+ *  (실패하면 원문 앞부분), 그 패턴의 기억에 "힌트"로. 화면을 기다리게 하지 않게 경로에서는 끝나기를 기다리지 않는다. */
 export async function noteAiHelp(problemId: string, what: string, text: string) {
   const n = /^cp_boj_(\d{1,6})$/.exec(problemId)?.[1];
   if (!n) return;
   const patterns = await patternsOfNumber(n);
   if (!patterns.length) return;
-  await toMemory(patterns, "hint", true, `BOJ ${n} ${what}로 배운 것: ${text.replace(/\s+/g, " ").trim().slice(0, 300)}`);
+  const model = (await readModels())[n];
+  const names = patterns.map((id) => patternOf(id)?.name ?? id).join(", ");
+  const refined = await refineAiHelp({ what, text, problem: model ? `BOJ ${n} ${model.title}: ${model.summary}` : `BOJ ${n}`, pattern: names });
+  if (refined === "empty") return; // 격려·되묻기뿐: 배운 것이 없다
+  const raw = text.replace(/\s+/g, " ").trim();
+  const card: Card = refined ? { situation: `BOJ ${n}${model ? ` ${model.title}` : ""}를 풀다 ${what}`, ...refined }
+    : { situation: `BOJ ${n}${model ? ` ${model.title}` : ""}를 풀다 ${what}`, gap: "", fix: raw.slice(0, 200), cue: "" };
+  for (const pid of patterns) await appendLesson({ pattern: pid, number: n, title: model?.title ?? "", kind: what.includes("설명") ? "explain" : "hint", refined: refined ? "ai" : "raw", raw: raw.slice(0, 1200), ...card }).catch(() => undefined);
+  await toMemory(patterns, "hint", true, lessonLine(card));
 }
 
 /* ---------- 혼자 구현: 문제 화면의 제출 기록으로 확인 ---------- */
@@ -86,7 +109,8 @@ async function syncImplement() {
     const hinted = subs.some((s) => s.hints > 0);
     await record({ kind: "implement", number: p.number, patterns: models[p.number]?.patterns ?? [p.pattern], ability: "execute", ok: true, hinted,
       mixed: p.mixed, grade: gradeOf(events, p.number, "execute", { hinted, mixed: p.mixed }), ms: Date.parse(ac.at) - Date.parse(p.startedAt), detail: `제출 ${subs.length}번` }, models[p.number],
-      `제출 ${subs.length}번 만에 맞힘(문제 화면의 힌트를 받음)`);
+      hinted ? { situation: `BOJ ${p.number}${models[p.number] ? ` ${models[p.number].title}` : ""}를 혼자 구현하다 문제 화면의 힌트를 받고 제출 ${subs.length}번 만에 맞힘`,
+        gap: "혼자서는 구현을 끝내지 못함", fix: models[p.number]?.update ?? "", cue: models[p.number]?.signals[0] ?? "" } : undefined);
   }
   await writeJson("pending.json", left);
 }
@@ -146,7 +170,8 @@ export async function answer(a: Answer) {
     if (a.predict === undefined || !m.predict) return { ok: true };
     const ok = Boolean(a.predict.trim()) && norm(a.predict) === norm(m.predict.answer);
     await record({ kind: "predict", number: a.number, patterns, ok, grade: 0, detail: ok ? "예측 맞음" : a.predict.trim() ? "예측 틀림" : "모르겠어요" }, m,
-      `${a.predict.trim() ? `예측 「${a.predict.trim().slice(0, 60)}」, ` : ""}실제 출력 「${m.predict.answer.slice(0, 60)}」. ${m.walkthrough.choose}`);
+      { situation: `BOJ ${a.number} ${m.title} 시범에서 입력 「${m.predict.input.replace(/\n/g, " / ").slice(0, 40)}」의 출력을 ${a.predict.trim() ? `「${a.predict.trim().replace(/\n/g, " / ").slice(0, 40)}」로 예측` : "예측하지 못함"}`,
+        gap: `실제 출력은 「${m.predict.answer.replace(/\n/g, " / ").slice(0, 40)}」`, fix: m.walkthrough.choose, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     return { ok, answer: m.predict.answer };
   }
   if (a.kind === "drill") {
@@ -155,8 +180,11 @@ export async function answer(a: Answer) {
     const ok = chosen?.verdict === "best" || chosen?.verdict === "ok";
     const grade = gradeOf(events, a.number, "recognize", { hinted: a.hinted, mixed: a.mixed });
     const best = m.approaches.find((x) => x.verdict === "best");
-    const lesson = `고른 「${a.choice}」${chosen ? `(${{ best: "의도된 풀이", ok: "가능하지만 덜 좋음", slow: "맞지만 느림", wrong: "틀림" }[chosen.verdict]}${chosen.why ? `: ${chosen.why}` : ""})` : ""}. 의도된 풀이 「${best?.name ?? "?"}」${best?.why ? ` — ${best.why}` : ""}. 신호: ${m.signals.join(" · ")}`;
-    await record({ kind: "drill", number: a.number, patterns, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${a.choice}` }, m, lesson);
+    const verdictWord = chosen ? { best: "의도된 풀이", ok: "가능하지만 덜 좋음", slow: "맞지만 느림", wrong: "틀림" }[chosen.verdict] : "";
+    const card: Card = { situation: `BOJ ${a.number} ${m.title}에서 접근으로 「${a.choice}」를 고름${a.hinted ? "(신호를 보고)" : ""}`,
+      gap: ok ? "신호를 보기 전에는 떠올리지 못함" : `「${a.choice}」는 ${verdictWord}${chosen?.why ? `: ${chosen.why}` : ""}`,
+      fix: `「${best?.name ?? "?"}」${best?.why ? ` — ${best.why}` : ""}`, cue: m.signals.join(" · "), distinguish: distinguishOf(m) };
+    await record({ kind: "drill", number: a.number, patterns, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${a.choice}` }, m, card);
     return { ok, intended: chosen?.verdict === "best", grade: GRADE_LABEL[grade], approaches: m.approaches, signals: m.signals, patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
   }
   if (a.kind === "design") {
@@ -164,7 +192,9 @@ export async function answer(a: Answer) {
     const grade = gradeOf(events, a.number, "design", { hinted: a.hinted, mixed: a.mixed });
     await record({ kind: "design", number: a.number, patterns, ability: "design", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms,
       detail: `상태: ${a.state} · 복잡도: ${a.complexity}${a.update ? ` · 갱신: ${a.update.slice(0, 120)}` : ""}` }, m,
-      `${stateOk ? "" : `기억할 상태는 「${m.state.right}」(고른 것 「${a.state}」). `}바꾸는 법: ${m.update}. ${cxOk ? "" : `복잡도는 O(${m.complexity})(고른 것 O(${a.complexity})). `}${m.pitfalls.length ? `흔한 실수: ${m.pitfalls.join(" · ")}` : ""}`);
+      { situation: `BOJ ${a.number} ${m.title} 설계에서 상태 「${a.state}」, 복잡도 O(${a.complexity})를 고름`,
+        gap: [stateOk ? "" : `기억할 상태는 「${m.state.right}」`, cxOk ? "" : `복잡도는 O(${m.complexity})${m.maxN ? `(N ≤ ${m.maxN.toLocaleString()})` : ""}`].filter(Boolean).join(", ") || "도움을 받고서야 맞힘",
+        fix: `${m.update}${m.pitfalls[0] ? ` (흔한 실수: ${m.pitfalls[0]})` : ""}`, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     const verdict = (cx: string) => (m.maxN && cx in COMPLEXITIES ? complexityVerdict(cx, m.maxN, 1000).note : null);
     return { ok, stateOk, cxOk, state: m.state, update: m.update, complexity: m.complexity, mine: verdict(a.complexity), theirs: verdict(m.complexity), pitfalls: m.pitfalls, grade: GRADE_LABEL[grade] };
   }
@@ -189,9 +219,23 @@ export async function answer(a: Answer) {
     const subs = (await readSubmissions(problemIdOf(a.number)).catch(() => [])).filter((s) => s.mode === "submit" && s.at >= still.startedAt);
     if (subs.length) await record({ kind: "implement", number: a.number, patterns, ability: "execute", ok: false, hinted: subs.some((s) => s.hints > 0), mixed: still.mixed,
       grade: gradeOf(events, a.number, "execute", { mixed: still.mixed }), detail: `제출 ${subs.length}번, 맞히지 못함` }, m,
-      `제출 ${subs.length}번 모두 틀림. 바꾸는 법: ${m.update}. ${m.pitfalls.length ? `흔한 실수: ${m.pitfalls.join(" · ")}` : ""}`);
+      { situation: `BOJ ${a.number} ${m.title}를 혼자 구현하다 제출 ${subs.length}번 모두 틀리고 그만둠`, gap: "구현을 끝내지 못함", fix: `${m.update}${m.pitfalls.length ? ` (흔한 실수: ${m.pitfalls.join(" · ")})` : ""}`, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     await writeJson("pending.json", (await readJson<Pending[]>("pending.json", [])).filter((p) => p.number !== a.number));
   }
   return { ok: false };
+}
+/** 기억 복습에서 PS 질문(review.ts)을 채점한 뒤: 튜터 사건으로 남긴다. 알아보기 → 인식, 설계 → 설계(둘 다 단원 숨김),
+ *  출력 예측 → 예측, 내 실수 다시 보기 → 복습. 기억 기록은 기억 경로가 이미 남겼으므로 여기서는 쓰지 않는다. */
+export async function recordPsReview(questionId: string, correct: boolean, answerText: string) {
+  const q = parsePsId(questionId);
+  if (!q) return;
+  const models = await readModels();
+  const patterns = models[q.number]?.patterns.includes(q.pattern) ? models[q.number].patterns : [q.pattern];
+  const events = await readEvents();
+  const base = { number: q.number, patterns, ok: correct, detail: `기억 복습(${{ mistake: "내 실수 다시 보기", recognize: "알아보기", design: "설계", predict: "출력 예측" }[q.kind]}): ${answerText.slice(0, 80)}` };
+  if (q.kind === "recognize") await appendEvent({ ...base, kind: "drill", ability: "recognize", mixed: true, grade: gradeOf(events, q.number, "recognize", { mixed: true }) });
+  else if (q.kind === "design") await appendEvent({ ...base, kind: "design", ability: "design", mixed: true, grade: gradeOf(events, q.number, "design", { mixed: true }) });
+  else if (q.kind === "predict") await appendEvent({ ...base, kind: "predict", grade: 0 });
+  else await appendEvent({ ...base, kind: "review", grade: 0 });
 }
 export type { Ability };

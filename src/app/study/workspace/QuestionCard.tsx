@@ -118,7 +118,7 @@ export function QuestionList({ questions, title, note, nameOf, onClose, onRunAll
               <button className="ql-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : q.id)}>
                 <span className="ql-n num">{n}</span>
                 <span className="chip">{q.label}</span>
-                <span className="ql-text"><span className="ql-name">{nameOf(q.knowledgeId)}</span><span className="ql-prompt"><Inline text={q.prompt} /></span></span>
+                <span className="ql-text"><span className="ql-name">{q.kind === "recognize" ? "어떤 기억일까요" : nameOf(q.knowledgeId)}</span><span className="ql-prompt"><Inline text={q.prompt} /></span></span>
                 <span className="ql-mark">{mark === true ? "맞음" : mark === false ? "틀림" : isOpen ? "닫기" : "풀기"}</span>
               </button>
               {isOpen ? <div className="ql-body"><QuestionCard question={q} compact onDone={(g) => setMarks((m) => ({ ...m, [q.id]: g.correct }))} /></div> : null}

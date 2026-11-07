@@ -1,5 +1,6 @@
 // PS 튜터 API (2026-11-08, src/lib/code/tutor/).
 //   GET  /api/code/tutor            패턴별 상태 · 다음 할 일 · 교육용 모델 준비 상태 (AI 없음)
+//   GET  /api/code/tutor/journal    학습 관찰일지(사건 + 배운 것 카드, AI 없음)
 //   POST /api/code/tutor/prepare    교육용 문제 모델을 아직 없는 문제만큼 만든다(문제당 AI 1번, 백그라운드, 동시에 3개)
 //   POST /api/code/tutor/answer     드릴·설계·예측·대조 답, 구현 시작·그만하기 (AI 없음, 코드가 대조)
 import { NextResponse } from "next/server";
@@ -7,6 +8,8 @@ import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { withTrace } from "@/lib/ai/trace";
 import { answer, startPrepare, tutorOverview, type Answer } from "@/lib/code/tutor/service";
+import { journal } from "@/lib/code/tutor/journal";
+import { readModels } from "@/lib/code/tutor/problem-model";
 
 export const runtime = "nodejs";
 const num = z.string().regex(/^\d{1,6}$/);
@@ -25,6 +28,11 @@ async function handle(request: Request, context: RouteContext) {
     try {
       await guard(request);
       if (!p.length && request.method === "GET") return NextResponse.json(await tutorOverview());
+      // 학습 관찰일지(11/8): 사건 기록 + 배운 것 카드 → 한 줄씩(AI 없음).
+      if (p[0] === "journal" && request.method === "GET") {
+        const models = await readModels();
+        return NextResponse.json({ entries: await journal(Object.fromEntries(Object.values(models).map((m) => [m.number, m.title]))) });
+      }
       if (p[0] === "prepare" && request.method === "POST") {
         const b = z.object({ limit: z.number().int().min(1).max(200).optional(), workers: z.number().int().min(1).max(3).optional() }).parse(await boundedJson(request));
         return NextResponse.json({ prep: await startPrepare(b.limit, b.workers) });

@@ -954,3 +954,8 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pt-help.h3{color:#2f9e6a;border-color:color-mix(in srgb,#2f9e6a 45%,transparent);background:color-mix(in srgb,#2f9e6a 10%,transparent)}
 .dejipgi .pt-tag{font-style:normal;font-size:10.5px;margin-left:4px;padding:0 5px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
 .dejipgi .pt-tag.good{color:#2f9e6a}.dejipgi .pt-tag.help{color:#b07b00}.dejipgi .pt-tag.bad{color:#d4572a}
+.dejipgi .pt-journal{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:13.5px}
+.dejipgi .pt-journal li{display:grid;grid-template-columns:44px auto 1fr;gap:8px;align-items:baseline}
+.dejipgi .pt-journal li > span:last-child{min-width:0}
+.dejipgi .pt-lesson{display:block;margin-top:4px;padding:6px 10px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;font-size:13px}
+.dejipgi .pt-day{gap:6px}

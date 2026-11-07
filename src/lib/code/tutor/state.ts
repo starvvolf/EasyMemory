@@ -12,7 +12,7 @@ import { PATTERNS } from "./patterns.ts";
 export const ABILITIES = ["recognize", "design", "execute"] as const;
 export type Ability = (typeof ABILITIES)[number];
 export const ABILITY_LABEL: Record<Ability, string> = { recognize: "인식", design: "설계", execute: "실행" };
-export type EventKind = "walkthrough" | "predict" | "contrast" | "drill" | "design" | "implement" | "skip";
+export type EventKind = "walkthrough" | "predict" | "contrast" | "drill" | "design" | "implement" | "skip" | "review";
 export type TutorEvent = {
   id: string; at: string; kind: EventKind; number: string; patterns: string[];
   ability?: Ability; ok?: boolean; grade: 0 | 1 | 2 | 3 | 4; hinted?: boolean; mixed?: boolean; ms?: number; detail?: string;

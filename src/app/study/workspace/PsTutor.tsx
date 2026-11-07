@@ -62,6 +62,7 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
         </section>
       ) : null}
       <PatternTable rows={data.patterns} />
+      <Journal key={data.done} />
     </div>
   );
 }
@@ -258,6 +259,44 @@ function ContrastCard({ a, send, fb, busy, err, next }: CardProps) {
       {f ? <p className={`small ${f.ok ? "pt-good" : "pt-bad"}`}><b>{f.ok ? "둘 다 맞았어요." : "다르게 골랐어요."}</b> 차이: {f.differs}</p>
         : <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" disabled={items.some((it) => !picks[it.number]) || Boolean(busy)} onClick={() => void send({ kind: "contrast", picks })}>{busy || "확인"}</button></div>}
       {f ? next : null}
+    </section>
+  );
+}
+
+/* ---------- 학습 관찰일지 (11/8) ---------- */
+type Entry = { at: string; number: string; title: string; patterns: string[]; what: string; result: "learned" | "alone" | "helped" | "seen" | "other"; text: string; lesson?: { gap: string; fix: string; cue: string; distinguish?: string } };
+const RESULT: Record<Entry["result"], [string, string]> = { learned: ["배움", "bad"], alone: ["혼자", "good"], helped: ["도움", "help"], seen: ["봄", ""], other: ["", ""] };
+function Journal() {
+  const [entries, setEntries] = useState<Entry[] | null>(null);
+  const [onlyLearned, setOnlyLearned] = useState(false);
+  useEffect(() => later(() => { void call<{ entries: Entry[] }>("/api/code/tutor/journal").then((r) => setEntries(r.entries)).catch(() => setEntries([])); }), []);
+  if (!entries?.length) return null;
+  const shown = onlyLearned ? entries.filter((e) => e.result === "learned") : entries;
+  const days = new Map<string, Entry[]>();
+  for (const e of shown) { const d = new Date(e.at).toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" }); days.set(d, [...(days.get(d) ?? []), e]); }
+  return (
+    <section className="panel stack">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <b>학습 일지</b>
+        <label className="small row" style={{ gap: 4 }}><input type="checkbox" checked={onlyLearned} onChange={(e) => setOnlyLearned(e.target.checked)} /> 몰랐다가 배운 것만</label>
+      </div>
+      <p className="small muted">무엇을 했고, 어디서 몰랐고, 무엇을 배웠는지 시간 순서로 남아요. 몰랐다가 배운 것은 기억에도 들어가요.</p>
+      {[...days].slice(0, 7).map(([day, list]) => {
+        const learned = list.filter((e) => e.result === "learned").length, alone = list.filter((e) => e.result === "alone").length;
+        return (
+          <div key={day} className="stack pt-day">
+            <p className="eyebrow">{day} · 배움 {learned} · 혼자 {alone}</p>
+            <ol className="pt-journal">{list.map((e, i) => (
+              <li key={`${e.at}${i}`}>
+                <span className="muted num">{new Date(e.at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>
+                {RESULT[e.result][0] ? <span className={`chip ${RESULT[e.result][1]}`}>{RESULT[e.result][0]}</span> : null}
+                <span><b>{e.what}</b> · BOJ {e.number} {e.title} — {e.text}
+                  {e.lesson && (e.lesson.gap || e.lesson.fix) ? <span className="pt-lesson">{e.lesson.gap ? <>몰랐던 것: {e.lesson.gap}<br /></> : null}{e.lesson.fix ? <>고친 생각: {e.lesson.fix}</> : null}{e.lesson.cue ? <><br /><span className="muted">신호: {e.lesson.cue}</span></> : null}{e.lesson.distinguish ? <><br /><span className="muted">구별: {e.lesson.distinguish}</span></> : null}</span> : null}
+                </span>
+              </li>))}</ol>
+          </div>
+        );
+      })}
     </section>
   );
 }
