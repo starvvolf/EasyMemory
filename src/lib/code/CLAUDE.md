@@ -10,6 +10,8 @@
 - `run.ts`: 실행·채점 (Windows 작업 개체로 시간·메모리, `calibrate.ts`로 PC 속도 보정)
 - `problems.ts`: 문제 파일·제출 기록 · `service.ts`: 풀이 기록을 지식 저장소로 (`knowledge/api.ts`만 부른다)
 - 화면 `src/app/study/workspace/CodeStudy.tsx`, API `src/app/api/code/[[...path]]/route.ts`
+- `grade.ts`: 필요한 능력 6단계 사다리 · `../assist/code-level.ts`: 난이도(AI가 알면 바로, 모르면 웹 검색) + 자체 판단 (11/8)
+- `tutor/`: PS 튜터 (11/8). `patterns.ts` 패턴 23개 · `problem-model.ts` 교육용 문제 모델(문제당 AI 1번, 코드 검사, 데이터 폴더 `code/tutor/models.json`) · `state.ts` 사건 기록 → 인식·설계·실행 상태(E0~E4, 상자, 도움 수준) · `policy.ts` 다음 할 일 규칙 · `service.ts`. 화면 `PsTutor.tsx`, API `src/app/api/code/tutor/`. 설계: DECISIONS 11/8
 
 ## 지켜야 하는 것
 
