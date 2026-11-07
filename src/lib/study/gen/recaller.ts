@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
+import { imageSize } from "./image-size.ts";
 import { cardKinds, cardLine, cardSchema, checkCards, cleanFigure, FIGURE_RULES, figureSchema, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
@@ -915,7 +916,8 @@ export async function runRecaller(ctx: RecallerContext) {
       try { reply = await ctx.ask("rc-digest-card", section.id, attempt, withFigures ? `${system}\n\n${prompt("FIGURE_RULES", FIGURE_RULES)}` : system, user, withFigures ? digestCardFigSchema : digestCardSchema, { guide: g, maxChars: 2500 * left.length + 4000, ...(images.length ? { images } : {}) }); }
       catch (error) { if (error instanceof RunawayReply) continue; throw error; }
       // 그림 칸: 이 호출의 쪽 안, 0~100으로 다듬은 것만 남긴다
-      const figs = new Map((reply.cards as Array<{ id: string; figure?: unknown }>).map((c) => [c.id, withFigures ? cleanFigure(c.figure, pages) : undefined]));
+      const sizes = new Map(images.flatMap((im) => { const m = /^원문 p\.(\d+)$/.exec(im.label); const d = m ? imageSize(im.dataUrl) : undefined; return m && d ? [[Number(m[1]), d] as const] : []; }));
+      const figs = new Map((reply.cards as Array<{ id: string; figure?: unknown }>).map((c) => [c.id, withFigures ? cleanFigure(c.figure, pages, (n) => sizes.get(n)) : undefined]));
       const checked = checkCards({ cards: reply.cards }, { pages }, textMap(), { lenientQuotes: lab.lenientQuotes });
       issues.push(...checked.issues);
       const prefix = `${section.id}.${i + 1}${attempt > 1 ? "r" : ""}`;

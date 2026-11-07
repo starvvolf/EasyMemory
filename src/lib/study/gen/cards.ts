@@ -53,16 +53,26 @@ export const FIGURE_RULES = `[그림] 카드마다 figure를 쓴다. 그림은 �
   - role 근거: 카드 내용을 이 그림에서 읽었다(그림 없이는 근거가 없다). 이런 카드는 반드시 figure를 쓴다.
   - role 장면: 그 개념이 실제로 쓰이는 장면·예(판정 과정, 요청 전후, 예제 실행)를 보여 준다.
   - role 그림풀이: 글로 된 정의를 그림으로 다시 그린 것.
-  - box는 그 쪽 이미지를 가로·세로 0~100으로 본 상자(왼쪽 위 0,0)로 그림만 감싼다(쪽 제목·글줄은 넣지 않는다). 여러 그림이 이어져 한 덩어리로 봐야 뜻이 서면 덩어리 전체.
+  - box는 [x0, y0, x1, y1] 퍼센트다: x는 쪽 너비의, y는 쪽 높이의 0~100(왼쪽 위 0,0, 오른쪽 아래 100,100). 이미지 픽셀 좌표를 쓰지 않는다. 그림만 감싼다(쪽 제목·글줄은 넣지 않는다). 여러 그림이 이어져 한 덩어리로 봐야 뜻이 서면 덩어리 전체.
   - says는 그림 속 요소가 무엇이고 무엇을 보여 주는지 한 줄(예: "격자 셋: 화소 하나의 영역, (0,0)–(5,2)–(1,4) 선, 끝점 하나를 뺀 (20,10)–(30,18) 선").
 - 카드 하나에 그림은 하나. 후보가 여럿이면 장면 > 근거 > 그림풀이 순으로 하나만.
 - 장식·사진·로고, 그 카드와 상관없는 그림, 쪽 이미지가 없는 쪽: figure는 null.
 - 그림 자체가 다른 카드에 없는 지식을 담은 예제(예: 두 프로세스가 서로의 자원을 기다리는 코드 예)라면, 그 그림을 근거로 하는 예제 카드(kind 패턴 또는 절차, title은 "예: …")를 하나 만들고 figure를 붙인다.`;
-/** AI가 준 그림 칸을 쓸 수 있게 다듬는다: 쪽이 그 호출의 쪽이 아니면 버리고, 0~100을 벗어난 값(588 → 58.8)은 고치고, 뒤집힌 상자는 버린다. */
-export function cleanFigure(f: unknown, pages: number[]): CardFigure | undefined {
+/**
+ * AI가 준 그림 칸을 쓸 수 있게 다듬는다: 쪽이 그 호출의 쪽이 아니면 버리고, 뒤집힌 상자는 버린다.
+ * 11/8 그래픽스 04: AI가 0~100 대신 보낸 쪽 이미지의 픽셀 좌표([162,328,346,509], 이미지 1024×576)를 주는 일이 있다. 두 값 넘게 100을 넘으면
+ * 픽셀로 보고 그 쪽 이미지 크기(sizeOf)로 나눈다(크기를 모르면 버림). 한 값만 넘으면 자리 실수(588 → 58.8).
+ */
+export function cleanFigure(f: unknown, pages: number[], sizeOf?: (page: number) => { width: number; height: number } | undefined): CardFigure | undefined {
   const r = figureSchema.safeParse(f);
   if (!r.success || !pages.includes(r.data.page) || r.data.box.length !== 4) return undefined;
-  const box = r.data.box.map((v) => (v > 100 && v <= 1000 ? v / 10 : Math.min(100, Math.max(0, v))));
+  const over = r.data.box.filter((v) => v > 100).length;
+  let box: number[];
+  if (over >= 2) {
+    const size = sizeOf?.(r.data.page);
+    if (!size) return undefined;
+    box = r.data.box.map((v, i) => Math.min(100, Math.max(0, v / (i % 2 ? size.height : size.width) * 100)));
+  } else box = r.data.box.map((v) => (v > 100 && v <= 1000 ? v / 10 : Math.min(100, Math.max(0, v))));
   if (box[2] - box[0] < 2 || box[3] - box[1] < 2) return undefined;
   return { ...r.data, box, says: r.data.says.trim().slice(0, 120) };
 }
