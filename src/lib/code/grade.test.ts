@@ -20,9 +20,10 @@ console.log(lo + " " + hi);`;
 });
 
 test("난이도 검사: 찾은 등급은 그 사이트 형식 + 페이지 주소가 있어야 남는다, 자체 판단은 다섯 중 하나", () => {
-  assert.deepEqual(checkKnown({ site: "solved.ac", rating: "실버 III", from: "https://www.teferi.net/ps/problems/boj/1004" }), { site: "solved.ac", rating: "실버 III", from: "https://www.teferi.net/ps/problems/boj/1004" });
+  assert.deepEqual(checkKnown({ site: "solved.ac", rating: "실버 III", from: "https://www.teferi.net/ps/problems/boj/1004" }), { site: "solved.ac", rating: "실버 III", from: "https://www.teferi.net/ps/problems/boj/1004", by: "web" });
+  assert.deepEqual(checkKnown({ site: "백준", rating: "골드 IV" }, "memory"), { site: "solved.ac", rating: "골드 IV", from: "", by: "memory" }, "what the model knows needs no page");
   assert.equal(checkKnown({ site: "solved.ac", rating: "실버 쯤", from: "https://x.kr" }).site, "", "not the tier shape");
-  assert.equal(checkKnown({ site: "solved.ac", rating: "실버 III", from: "" }).site, "", "no page it was read from");
+  assert.equal(checkKnown({ site: "solved.ac", rating: "실버 III", from: "" }).site, "", "found on the web but no page it was read from");
   assert.equal(checkKnown({ site: "프로그래머스", rating: "Lv. 2", from: "https://school.programmers.co.kr/x" }).rating, "Lv. 2");
   assert.equal(checkSelf({ level: "어려움", why: "" }).level, "중급");
   assert.deepEqual(checkSelf({ level: "중급", why: "w", abilities: ["dp", "dp", "io"] }).abilities, ["dp"]);

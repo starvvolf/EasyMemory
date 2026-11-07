@@ -5,7 +5,7 @@ import { useState } from "react";
 import { call } from "./api";
 
 export type SelfLevel = "입문" | "기초" | "중급" | "상급" | "고급";
-export type Known = { site: string; rating: string; from: string; failed?: true };
+export type Known = { site: string; rating: string; from: string; by?: "memory" | "web"; failed?: true };
 export type Self = { level: SelfLevel; why: string; abilities: string[] };
 export type Level = { self?: Self; known?: Known };
 export type Need = { id: string; name: string; what: string; why: Array<"code" | "ai" | "memory" | "basic"> };
@@ -29,8 +29,10 @@ export function LevelBox({ source, level, busy, error }: { source: { title: stri
     <div className="cg-box">
       <div className="cg-line"><span className="cg-k">문제</span><span className="small">{source.title}{host ? <span className="muted"> · {host}</span> : null}</span></div>
       <div className="cg-line"><span className="cg-k">난이도</span>{k?.site
-        ? <span className="small"><a href={k.from} target="_blank" rel="noreferrer"><b>{by || k.site}</b></a>에 의하면 {by && by !== k.site ? `${k.site} ` : ""}<b>{k.rating}</b> <span className="muted">(웹 검색)</span></span>
-        : <span className="small muted">{busy.known ? "웹에서 찾는 중…" : k?.failed ? "웹 검색이 실패했어요. 다음에 열 때 다시 찾아요." : k ? "알려진 등급을 찾지 못했어요." : ""}</span>}</div>
+        ? (k.by === "memory"
+          ? <span className="small"><b>{k.site}</b>에 의하면 <b>{k.rating}</b> <span className="muted">(AI가 아는 값)</span></span>
+          : <span className="small"><a href={k.from} target="_blank" rel="noreferrer"><b>{by || k.site}</b></a>에 의하면 {by && by !== k.site ? `${k.site} ` : ""}<b>{k.rating}</b> <span className="muted">(웹 검색)</span></span>)
+        : <span className="small muted">{busy.known ? "AI가 몰라서 웹에서 찾는 중…" : busy.self && !k ? "AI에게 묻는 중…" : k?.failed ? "웹 검색이 실패했어요. 다음에 열 때 다시 찾아요." : k ? "알려진 등급을 찾지 못했어요." : ""}</span>}</div>
       <div className="cg-line"><span className="cg-k">자체 판단</span>{level.self
         ? <span className="row small" style={{ gap: 6 }}><LevelChip level={level.self.level} /><span>{level.self.why}</span></span>
         : <span className="small muted">{error || (busy.self ? "AI가 판단하는 중…" : "")}</span>}</div>

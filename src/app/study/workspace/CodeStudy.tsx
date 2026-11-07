@@ -199,15 +199,15 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     return () => clearInterval(timer);
   }, [id, preparing]);
   // 난이도·필요한 능력: 받아 둔 판단이 없으면 한 번 묻는다(AI 1번). 숨은 테스트를 만드는 중이면 끝난 뒤에(모범 풀이를 같이 보려고).
-  // 자체 판단(검색 없음, 약 3초)과 알려진 난이도(웹 검색, 약 9초)는 따로 불러 먼저 온 것부터 보인다.
+  // 먼저 검색 없는 호출(자체 판단 + AI가 아는 등급, 약 3초). 그 뒤에도 등급이 비었을 때만 웹 검색(약 9초).
   const needSelf = grade.loaded && !grade.level.self && !preparing;
-  const needKnown = grade.loaded && (!grade.level.known || grade.level.known.failed) && !preparing;
+  const needKnown = grade.loaded && Boolean(grade.level.self) && (!grade.level.known || grade.level.known.failed) && !preparing;
   useEffect(() => {
     if (!needSelf) return;
     let alive = true;
     setGrade((g) => ({ ...g, busy: { ...g.busy, self: true }, error: "" }));
-    call<{ self: NonNullable<Level["self"]>; needs: Needs }>(`/api/code/problem/${id}/level/self`, {})
-      .then((r) => { if (alive) setGrade((g) => ({ ...g, level: { ...g.level, self: r.self }, needs: r.needs, busy: { ...g.busy, self: false } })); })
+    call<{ self: NonNullable<Level["self"]>; known: Level["known"] | null; needs: Needs }>(`/api/code/problem/${id}/level/self`, {})
+      .then((r) => { if (alive) setGrade((g) => ({ ...g, level: { ...g.level, self: r.self, ...(r.known ? { known: r.known } : {}) }, needs: r.needs, busy: { ...g.busy, self: false } })); })
       .catch((e) => { if (alive) setGrade((g) => ({ ...g, busy: { ...g.busy, self: false }, error: `수준을 받지 못했어요: ${errorText(e)}` })); });
     return () => { alive = false; };
   }, [id, needSelf]);

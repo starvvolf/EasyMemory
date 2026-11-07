@@ -110,12 +110,13 @@ async function inner(request: Request, context: RouteContext) {
         const needs = needsOf({ reference: problem.reference?.code, picked: level?.self?.abilities, knowledge: problem.knowledge });
         return json({ problem: publicProblem(problem), drafts: await readDrafts(id), submissions: subs, level, needs });
       }
-      // 난이도(11/8): 처음 열 때 화면이 둘을 동시에 부른다. 받은 것은 code/levels.json에(code-level.ts).
-      //   self: 자체 판단 + 필요한 능력, AI 1번(terra low, 검색 없음). known: 알려진 난이도, AI 1번(웹 검색).
+      // 난이도(11/8): 처음 열 때 화면이 self를 부르고, 알려진 등급이 비었으면 known을 잇는다. 받은 것은 code/levels.json에(code-level.ts).
+      //   self: 자체 판단 + 필요한 능력 + AI가 아는 등급, AI 1번(terra low, 검색 없음). known: 그 등급이 없을 때만 AI 1번(웹 검색).
       if (p[2] === "level" && p[3] === "self" && m === "POST") {
         const problem = await readProblemMeta(id);
         const self = await selfLevelOf(problem);
-        return json({ self, needs: needsOf({ reference: problem.reference?.code, picked: self.abilities, knowledge: problem.knowledge }) });
+        // AI가 알던 등급이 있으면 같이 보낸다. 없으면 화면이 이어서 …/level/known(웹 검색)을 부른다.
+        return json({ self, known: (await keptLevel(problem))?.known ?? null, needs: needsOf({ reference: problem.reference?.code, picked: self.abilities, knowledge: problem.knowledge }) });
       }
       if (p[2] === "level" && p[3] === "known" && m === "POST") return json({ known: await knownLevelOf(await readProblemMeta(id)) });
       if (p.length === 2 && m === "DELETE") return json(await deleteProblem(id));
