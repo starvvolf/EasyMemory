@@ -1,8 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { bojNumber, gradesFor, needsOf, tierOf } from "./grade.ts";
 
 test("티어: solved.ac level → 이름", () => {
@@ -21,20 +18,13 @@ test("백준 번호: id·제목·출처·주소에서", () => {
   assert.equal(bojNumber({ id: "cp_seed_pair_sum", title: "합이 X인 두 수", source: { title: "기본 문제" } }), null);
 });
 
-test("등급: 한 번 묻고 보관본을 쓴다, 실패해도 던지지 않는다", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "grade-"));
-  const prior = process.env.STUDY_FORGE_DATA_DIR; process.env.STUDY_FORGE_DATA_DIR = dir;
-  try {
-    let calls = 0;
-    const ok = async () => { calls++; return new Response(JSON.stringify([{ problemId: 10818, level: 3, acceptedUserCount: 170093, averageTries: 2.2193,
-      tags: [{ key: "implementation", displayNames: [{ language: "ko", name: "구현" }] }] }])); };
-    const g = (await gradesFor(["10818"], ok)).get("10818")!;
-    assert.equal(g.tier, "브론즈 III"); assert.deepEqual(g.tags, [{ key: "implementation", name: "구현" }]); assert.equal(g.avgTries, 2.22);
-    await gradesFor(["10818"], ok);
-    assert.equal(calls, 1, "kept copy is used");
-    const down = async () => { throw new Error("offline"); };
-    assert.equal((await gradesFor(["10818", "1003"], down)).size, 1, "what is kept still comes back");
-  } finally { if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior; await rm(dir, { recursive: true, force: true }); }
+test("등급: 앱 안의 solved.ac 묶음에서 읽고, 없는 번호는 뺀다", () => {
+  const g = gradesFor(["10818", "1003", "99999"]);
+  assert.equal(g.size, 2);
+  assert.equal(g.get("10818")!.tier, "브론즈 III");
+  assert.deepEqual(g.get("10818")!.tags.map((t) => t.name), ["수학", "구현"]);
+  assert.equal(g.get("1003")!.tier, "실버 III");
+  assert.equal(gradesFor(["1"], { fetchedAt: "x", probs: { "1": [0, 0, 0, []] }, tags: {} }).get("1")!.group, "unrated");
 });
 
 test("요구 능력: 모범 풀이 코드 → 낮은 단계, 분류·기억 → 높은 단계", () => {

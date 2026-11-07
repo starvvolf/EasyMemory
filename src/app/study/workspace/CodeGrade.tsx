@@ -16,13 +16,13 @@ export function TierBadge({ tier, group, small }: { tier: string; group: TierGro
 }
 
 export function GradeLine({ grade, boj }: { grade: Grade | null; boj: string | null }) {
-  if (!grade) return <p className="small muted">{boj ? `난이도: solved.ac에서 BOJ ${boj}번 등급을 가져오지 못했어요(인터넷 연결을 확인해 주세요).` : "난이도: 백준 문제가 아니라 등급이 없어요. 아래 요구 능력으로 수준을 가늠해 주세요."}</p>;
+  if (!grade) return <p className="small muted">{boj ? `난이도: BOJ ${boj}번은 앱에 받아 둔 solved.ac 등급 묶음(바킹독 문제집)에 없어요. 아래 요구 능력으로 수준을 가늠해 주세요.` : "난이도: 백준 문제가 아니라 등급이 없어요. 아래 요구 능력으로 수준을 가늠해 주세요."}</p>;
   return (
     <div className="cg-grade">
       <TierBadge tier={grade.tier} group={grade.group} />
       <div className="stack" style={{ gap: 2, minWidth: 0 }}>
         <span className="small">{grade.meaning}</span>
-        <span className="small muted">solved.ac · 푼 사람 {grade.solvers.toLocaleString("ko-KR")}명 · 평균 {grade.avgTries}번 제출{grade.tags.length ? ` · 분류: ${grade.tags.map((t) => t.name).join(", ")}` : ""}</span>
+        <span className="small muted">solved.ac({grade.at} 기준) · 푼 사람 {grade.solvers.toLocaleString("ko-KR")}명 · 평균 {grade.avgTries}번 제출{grade.tags.length ? ` · 분류: ${grade.tags.map((t) => t.name).join(", ")}` : ""}</span>
       </div>
     </div>
   );

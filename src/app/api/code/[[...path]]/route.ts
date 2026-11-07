@@ -51,10 +51,10 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "calibration" && m === "GET") return json({ calibration: await calibration() });
     if (p[0] === "calibration" && m === "POST") return json({ calibration: await calibration(true) });
     if (p[0] === "problems" && m === "GET") {
-      // 등급(11/7): 백준 문제는 solved.ac 티어를 같이 보낸다(보관본 우선, 없으면 한 번에 묻는다).
+      // 등급(11/7): 백준 문제는 solved.ac 티어를 같이 보낸다(앱 안의 묶음에서).
       const problems = await listProblemsWithKnowledge();
       const nums = new Map(problems.map((x) => [x.id, bojNumber({ id: x.id, title: x.title, source: { title: x.source } })]));
-      const grades = await gradesFor([...nums.values()].filter((n): n is string => Boolean(n)));
+      const grades = gradesFor([...nums.values()].filter((n): n is string => Boolean(n)));
       return json({ problems: problems.map((x) => { const g = grades.get(nums.get(x.id) ?? ""); return g ? { ...x, tier: { level: g.level, tier: g.tier, group: g.group } } : x; }) });
     }
     if (p[0] === "ladder" && m === "GET") return json({ ladder: LADDER.map((s) => ({ step: s.step, name: s.name, what: s.what, abilities: s.abilities.map((a) => ({ id: a.id, name: a.name, what: a.what })) })) });
@@ -108,7 +108,7 @@ async function inner(request: Request, context: RouteContext) {
         const problem = await ensureProblemKnowledge(await readProblemMeta(id));
         const subs = (await readSubmissions(id)).slice(-30).reverse().map(({ code: c, ...rest }) => ({ ...rest, lines: c.split("\n").length }));
         const num = bojNumber(problem);
-        const grade = num ? (await gradesFor([num])).get(num) ?? null : null;
+        const grade = num ? gradesFor([num]).get(num) ?? null : null;
         const needs = needsOf({ reference: problem.reference?.code, tags: grade?.tags, knowledge: problem.knowledge });
         return json({ problem: publicProblem(problem), drafts: await readDrafts(id), submissions: subs, grade, needs, boj: num });
       }

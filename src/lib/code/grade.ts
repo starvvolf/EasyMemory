@@ -1,9 +1,8 @@
 // 문제 등급과 요구 능력 (2026-11-07, 사용자 요청). AI 없이 코드로만 정한다.
-//   등급: 백준 문제는 solved.ac에서 티어(1~30)·분류·푼 사람 수를 가져와 데이터 폴더에 보관한다(30일마다 새로).
+//   등급: 백준 문제는 solved.ac 티어(1~30)·분류·푼 사람 수. 앱 안의 묶음(solvedac-snapshot.json)에서 읽는다.
 //   요구 능력: 문법(1단계)부터 심화 알고리즘(6단계)까지 고정된 사다리. 낮은 단계는 모범 풀이 코드에서 찾고,
 //   높은 단계는 solved.ac 분류와 문제에 걸린 기억 이름으로 찾는다.
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
+import snapshot from "./solvedac-snapshot.json" with { type: "json" };
 
 /* ---------- 등급 ---------- */
 export type Grade = { platform: "boj"; number: string; level: number; tier: string; group: TierGroup; meaning: string;
@@ -25,22 +24,10 @@ export function tierOf(level: number): { tier: string; group: TierGroup; meaning
   return { tier: `${name} ${ROMAN[(level - 1) % 5]}`, group, meaning };
 }
 
-type Cached = { level: number; tags: Array<{ key: string; name: string }>; solvers: number; avgTries: number; at: string };
-type Lookup = Array<{ problemId: number; level: number; acceptedUserCount?: number; averageTries?: number;
-  tags?: Array<{ key: string; displayNames?: Array<{ language: string; name: string }> }> }>;
-export type GradeFetcher = (url: string, init?: RequestInit) => Promise<Response>;
-const FRESH_MS = 30 * 24 * 60 * 60 * 1000;
-const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
-const cacheFile = () => path.join(dataDir(), "code", "solvedac.json");
-async function readCache(): Promise<Record<string, Cached>> {
-  try { return JSON.parse(await readFile(cacheFile(), "utf8")) as Record<string, Cached>; } catch { return {}; }
-}
-async function writeCache(cache: Record<string, Cached>) {
-  await mkdir(path.dirname(cacheFile()), { recursive: true });
-  const tmp = `${cacheFile()}.${process.pid}.tmp`;
-  await writeFile(tmp, JSON.stringify(cache), "utf8");
-  await rename(tmp, cacheFile());
-}
+// solved.ac는 앱 서버의 요청을 Cloudflare 확인으로 막아서(11/8 확인, 403) 서버에서 묻지 않는다.
+// 대신 바킹독 문제집 전체(483문제)를 PC 브라우저로 한 번 받아 둔 묶음을 읽는다. 묶음에 없는 번호는 등급 없음.
+type Snapshot = { fetchedAt: string; probs: Record<string, [number, number, number, string[]]>; tags: Record<string, string> };
+const SNAP = snapshot as unknown as Snapshot;
 
 /** The Baekjoon number of a problem, from its id, title, source title or address. */
 export function bojNumber(p: { id: string; title: string; source: { title: string; url?: string } }): string | null {
@@ -49,29 +36,15 @@ export function bojNumber(p: { id: string; title: string; source: { title: strin
   return hit ? hit[1] : null;
 }
 
-/** Grades for Baekjoon numbers: from the kept copy, asking solved.ac (one call per 100) only for missing or old ones.
- *  solved.ac being down never fails the caller: what is kept is used, the rest is left out. */
-export async function gradesFor(numbers: string[], fetcher: GradeFetcher = fetch): Promise<Map<string, Grade>> {
-  const want = [...new Set(numbers.filter((n) => /^\d{1,6}$/.test(n)))];
-  const cache = await readCache();
-  const now = Date.now();
-  const stale = want.filter((n) => !cache[n] || now - Date.parse(cache[n].at) > FRESH_MS);
-  let changed = false;
-  for (let i = 0; i < stale.length; i += 100) {
-    const part = stale.slice(i, i + 100);
-    try {
-      const r = await fetcher(`https://solved.ac/api/v3/problem/lookup?problemIds=${part.join(",")}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(5000) });
-      if (!r.ok) break;
-      for (const x of (await r.json()) as Lookup) {
-        cache[String(x.problemId)] = { level: x.level, solvers: x.acceptedUserCount ?? 0, avgTries: Math.round((x.averageTries ?? 0) * 100) / 100, at: new Date().toISOString(),
-          tags: (x.tags ?? []).map((t) => ({ key: t.key, name: t.displayNames?.find((d) => d.language === "ko")?.name ?? t.key })) };
-        changed = true;
-      }
-    } catch { break; }
-  }
-  if (changed) await writeCache(cache).catch(() => undefined);
+/** Grades for Baekjoon numbers, from the kept solved.ac copy. Numbers it does not have are left out. */
+export function gradesFor(numbers: string[], snap: Snapshot = SNAP): Map<string, Grade> {
   const out = new Map<string, Grade>();
-  for (const n of want) { const c = cache[n]; if (c) out.set(n, { platform: "boj", number: n, ...tierOf(c.level), ...c }); }
+  for (const n of new Set(numbers)) {
+    const row = snap.probs[n];
+    if (!row) continue;
+    const [level, solvers, avgTries, keys] = row;
+    out.set(n, { platform: "boj", number: n, level, ...tierOf(level), solvers, avgTries, at: snap.fetchedAt, tags: keys.map((key) => ({ key, name: snap.tags[key] ?? key })) });
+  }
   return out;
 }
 
