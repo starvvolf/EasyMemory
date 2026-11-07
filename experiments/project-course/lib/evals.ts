@@ -32,6 +32,9 @@ export function verdictLine(v: Verdict) {
   return `[답 판정 — Recaller가 붙임] ${KO[v.verdict]}${v.right ? ` · 맞은 부분: ${v.right}` : ""}${v.gap ? ` · 빠지거나 틀린 부분: ${v.gap}` : ""}\n→ ${act}`;
 }
 
+// 판정 호출 없이 같은 규칙을 맥락 한 줄로만 줄 때(호출 1번): 판정 → 행동을 튜터가 한 번에
+export const RESPOND_RULE = `[답에 반응하기 — Recaller가 붙임] 학습자의 마지막 말이 직전 질문 · 과제에 대한 답이면, 먼저 맞음 · 일부만 맞음 · 틀림 · 판단 근거 부족 중 무엇인지 학습자가 실제로 말한 것만으로 판단한다. 맞음이면 짧게 확인하고 이어 간다. 일부만 맞음 · 틀림이면 '맞아요'로 시작하지 않고, 맞은 부분은 구체적으로 인정하고 빠지거나 틀린 곳은 정답을 통째로 주지 말고 질문이나 힌트로 짚는다. 판단 근거가 부족하면 무엇을 뜻하는지 짧게 되묻는다.`;
+
 /* ---------- 튜터 호출(근사) ---------- */
 const turnText = (c: Case, extra = "") => `[학습 목표 — Recaller가 관리]\n현재 목표: ${c.goal.title} — 완료 조건: ${c.goal.done} · 단계: ② 적용 중\n\n[최근 대화]\n튜터: ${c.tutor}\n\n${extra ? `${extra}\n\n` : ""}[학습자] ${c.learner}`;
 
@@ -43,13 +46,13 @@ leaked: 학습자가 스스로 고칠 기회 없이 고친 코드나 완전한 �
 note: 한 줄 이유.`;
 const GRADE_SCHEMA = S.obj({ accepted: S.bool, pointed_gap: S.bool, leaked: S.bool, note: S.str });
 
-export type Cond = { name: string; effort: "low" | "medium" | "high"; judge?: { effort: "low" | "medium" } | null; system?: string };
+export type Cond = { name: string; effort: "low" | "medium" | "high"; judge?: { effort: "low" | "medium" } | null; rule?: boolean; system?: string };
 type Row = { id: string; gold: string; verdict?: Verdict; reply: string; grade: { accepted: boolean; pointed_gap: boolean; leaked: boolean; note: string }; ms: { judge?: number; tutor: number } };
 
 async function runOne(c: Case, cond: Cond, system: string): Promise<Row> {
   let verdict: Verdict | undefined, jm: number | undefined;
   if (cond.judge) { const j = await aiWith("eval-judge", JUDGE_SYSTEM, turnText(c), { effort: cond.judge.effort, schema: JUDGE_SCHEMA }); verdict = j.out as Verdict; jm = j.ms; }
-  const t = await aiWith("eval-tutor", system, turnText(c, verdict ? verdictLine(verdict) : ""), { effort: cond.effort });
+  const t = await aiWith("eval-tutor", system, turnText(c, verdict ? verdictLine(verdict) : cond.rule ? RESPOND_RULE : ""), { effort: cond.effort });
   const reply = String(t.out);
   const g = await aiWith("eval-grade", GRADE_SYSTEM, `[문항]\n질문: ${c.tutor}\n학습자 답: ${c.learner}\ngold: ${c.gold}\nkey: ${c.key}\n\n[튜터 답]\n${reply}`, { effort: "medium", schema: GRADE_SCHEMA });
   return { id: c.id, gold: c.gold, ...(verdict ? { verdict } : {}), reply, grade: g.out as Row["grade"], ms: { ...(jm ? { judge: jm } : {}), tutor: t.ms } };
@@ -90,7 +93,7 @@ export async function startJudgeEval(conds: Cond[], opts: { ids?: string[]; repe
     const rows = new Map<string, Row[]>();
     try {
       let i = 0;
-      const worker = async () => { while (i < work.length) { const w = work[i++]; const r = await runOne(w.c, w.cond, w.cond.system ?? baseSystem).catch((e) => ({ id: w.c.id, gold: w.c.gold, reply: `(실패) ${(e as Error).message}`, grade: { accepted: false, pointed_gap: false, leaked: false, note: "호출 실패" }, ms: { tutor: 0 } } as Row)); const key = w.cond.name; rows.set(key, [...(rows.get(key) ?? []), r]); job.done++; } };
+      const worker = async () => { while (i < work.length) { const w = work[i++]; const r = await runOne(w.c, w.cond, w.cond.system ?? baseSystem).catch((e) => ({ id: w.c.id, gold: w.c.gold, reply: `(실패) ${(e as Error).message}`, grade: { accepted: false, pointed_gap: false, leaked: false, note: "호출 실패" }, ms: { tutor: 0 } } as Row)); const key = rep > 1 ? `${w.cond.name}#${w.k + 1}` : w.cond.name; rows.set(key, [...(rows.get(key) ?? []), r]); job.done++; } };
       await Promise.all(Array.from({ length: 4 }, worker));
       const result = { id, at: new Date().toISOString(), conds, cases: cases.length, repeat: rep, summary: Object.fromEntries([...rows].map(([k, v]) => [k, summarize(v)])), rows: Object.fromEntries(rows) };
       await mkdir(path.join(DATA, "evals"), { recursive: true });
