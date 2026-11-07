@@ -267,7 +267,7 @@ export function shuffleChoice(q: QuizReply, seed: string) {
   if (right < 0 || right >= q.options.length) return;
   let h = 0; for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const order = q.options.map((_, i) => i);
-  for (let i = order.length - 1; i > 0; i--) { h = (h * 1103515245 + 12345) >>> 0; const j = h % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+  for (let i = order.length - 1; i > 0; i--) { h = (h * 1103515245 + 12345) >>> 0; const j = (h >>> 16) % (i + 1); // 아래 비트는 주기가 짧아 2번 자리가 안 나왔다 [order[i], order[j]] = [order[j], order[i]]; }
   q.options = order.map((i) => q.options[i]);
   q.answer = String(order.indexOf(right) + 1);
   // 해설이 "2번"처럼 번호를 말하면 섞은 뒤 틀리므로 번호 말을 뺀다
