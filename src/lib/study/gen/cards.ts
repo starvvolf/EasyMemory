@@ -39,7 +39,33 @@ export const cardSchema = z.object({
   takes: z.array(text).max(3).describe("이 지식을 쓰려면 주어져야 하는 것(자료의 말로, 명사구). 계산·판정·절차에 쓰이지 않으면 빈 배열"),
   gives: z.array(text).max(3).describe("이 지식을 쓰면 나오는 결과(자료의 말로, 명사구). 없으면 빈 배열"),
 });
-export type Card = z.infer<typeof cardSchema>;
+export type Card = z.infer<typeof cardSchema> & { figure?: CardFigure };
+
+// 카드에 붙는 그림 (2026-11-08 사용자 "그림은 카드가 아니라 카드에 붙는 것" → 시험 → "한번 해봐"): 카드 AI가 쪽 그림을 볼 때
+// 그 카드에 붙일 그림의 대략 위치(쪽을 0~100으로 본 상자)·역할·설명 한 줄을 같이 쓴다. 코드가 위치를 그림에 맞춰 잘라 둔다(quote-crop.ts).
+// 글자 층이 있는 쪽은 인용으로 위치를 찾는다(AI 위치 없이).
+export const figureRoles = ["근거", "장면", "그림풀이"] as const;
+export const figureSchema = z.object({ page, box: z.array(z.number()).describe("쪽 이미지를 가로·세로 0~100으로 본 [x0, y0, x1, y1], 왼쪽 위 0,0"),
+  role: z.enum(figureRoles), says: z.string().describe("그림이 보여 주는 것 한 줄(40자 안팎)") });
+export type CardFigure = z.infer<typeof figureSchema> & { /** 잘라 둔 그림 파일(figures/ 아래) */ file?: string; mode?: "figure" | "block"; from?: "hint" | "quote" };
+export const FIGURE_RULES = `[그림] 카드마다 figure를 쓴다. 그림은 카드가 아니라 카드에 붙는 것이다.
+- 쪽 이미지에 그려진 그림·도표·그래프·격자·도식·코드 상자 중 그 카드에 붙일 것이 있으면 figure: {page, box, role, says}.
+  - role 근거: 카드 내용을 이 그림에서 읽었다(그림 없이는 근거가 없다). 이런 카드는 반드시 figure를 쓴다.
+  - role 장면: 그 개념이 실제로 쓰이는 장면·예(판정 과정, 요청 전후, 예제 실행)를 보여 준다.
+  - role 그림풀이: 글로 된 정의를 그림으로 다시 그린 것.
+  - box는 그 쪽 이미지를 가로·세로 0~100으로 본 상자(왼쪽 위 0,0)로 그림만 감싼다(쪽 제목·글줄은 넣지 않는다). 여러 그림이 이어져 한 덩어리로 봐야 뜻이 서면 덩어리 전체.
+  - says는 그림 속 요소가 무엇이고 무엇을 보여 주는지 한 줄(예: "격자 셋: 화소 하나의 영역, (0,0)–(5,2)–(1,4) 선, 끝점 하나를 뺀 (20,10)–(30,18) 선").
+- 카드 하나에 그림은 하나. 후보가 여럿이면 장면 > 근거 > 그림풀이 순으로 하나만.
+- 장식·사진·로고, 그 카드와 상관없는 그림, 쪽 이미지가 없는 쪽: figure는 null.
+- 그림 자체가 다른 카드에 없는 지식을 담은 예제(예: 두 프로세스가 서로의 자원을 기다리는 코드 예)라면, 그 그림을 근거로 하는 예제 카드(kind 패턴 또는 절차, title은 "예: …")를 하나 만들고 figure를 붙인다.`;
+/** AI가 준 그림 칸을 쓸 수 있게 다듬는다: 쪽이 그 호출의 쪽이 아니면 버리고, 0~100을 벗어난 값(588 → 58.8)은 고치고, 뒤집힌 상자는 버린다. */
+export function cleanFigure(f: unknown, pages: number[]): CardFigure | undefined {
+  const r = figureSchema.safeParse(f);
+  if (!r.success || !pages.includes(r.data.page) || r.data.box.length !== 4) return undefined;
+  const box = r.data.box.map((v) => (v > 100 && v <= 1000 ? v / 10 : Math.min(100, Math.max(0, v))));
+  if (box[2] - box[0] < 2 || box[3] - box[1] < 2) return undefined;
+  return { ...r.data, box, says: r.data.says.trim().slice(0, 120) };
+}
 export const organizeSchema = z.object({ cards: z.array(cardSchema) });
 // 쪽 의도 (2026-10-29, 사용자 "PDF는 페이지마다 의도가 있지"): what each page is there to do, decided before its cards.
 // A cover, a preview or a guide page makes no card; a page that goes on with the one before adds only what is new;

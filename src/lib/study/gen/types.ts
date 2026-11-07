@@ -150,6 +150,8 @@ export type RecallerLab = {
   mapUnit?: "topic" | "page";
   /** 흐름 카드 (11/6): 주제마다 흐름 카드 한 장 — "with"는 그 주제의 카드 호출에서 같이, "after"는 카드가 나온 뒤 짧은 호출(rc-flow) 하나로. 퀴즈에는 쓰지 않는다. */
   flowCard?: "with" | "after";
+  /** 카드에 그림 붙이기 (11/8): 카드 AI가 그림 위치·역할·설명을 쓰고, 코드가 잘라 둔다(figures.ts) */
+  figures?: boolean;
   /** 목표형 문제 (11/6): 학습 목표마다 주는 것(상황)·내는 것을 쓰고, 판정·구별 목표는 상황을 주는 객관식(보기는 가능한 판정 전부), 설명은 상황만 주는 서술, OX는 내지 않는다. */
   goalQuiz?: boolean;
   /** Stop after the plan call (outline tests). */

@@ -18,6 +18,8 @@ export type MapCard = {
   state: MapState; knowledgeId?: string; dueAt?: string;
   /** The whole-material pass (consolidated): its larger idea, and whether the weight came from it rather than the page. */
   topic?: string;
+  /** 카드에 붙은 그림 (11/8): 잘라 둔 파일은 GET /api/study-map/<id>/figure/<file> */
+  figure?: { page: number; role: string; says: string; file: string; mode?: string };
 };
 export type MapSection = { id: string; title: string; pages: number[]; cards: MapCard[] };
 /** wording: one card's result is another's input (takes/gives); group: a deep question joins them; meaning: the whole-material pass. */
@@ -70,7 +72,8 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
         pages: [...new Set([...card.evidence.map((e) => e.page), ...same.flatMap((s) => s.pages)])].sort((a, b) => a - b),
         quotes: card.evidence.map((e) => e.quote).filter(Boolean), mistakes: card.mistakes, takes: card.takes ?? [], gives: card.gives ?? [],
         questions: (asked.get(card.id) ?? 0) + same.reduce((n, s) => n + (asked.get(s.id) ?? 0), 0), same,
-        state: stateOf(k), ...(k ? { knowledgeId: k.id } : {}), ...(k?.dueAt ? { dueAt: k.dueAt } : {}) };
+        state: stateOf(k), ...(k ? { knowledgeId: k.id } : {}), ...(k?.dueAt ? { dueAt: k.dueAt } : {}),
+        ...(card.figure?.file ? { figure: { page: card.figure.page, role: card.figure.role, says: card.figure.says, file: card.figure.file, ...(card.figure.mode ? { mode: card.figure.mode } : {}) } } : {}) };
     }),
   })).filter((section) => section.cards.length);
 

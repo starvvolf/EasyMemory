@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
-import { cardKinds, cardLine, cardSchema, checkCards, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
+import { cardKinds, cardLine, cardSchema, checkCards, cleanFigure, FIGURE_RULES, figureSchema, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
@@ -108,7 +108,7 @@ export type RecallerState = {
   timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string;
     /** 연구 1: when each page's reading and cards were done (the first pass over the material). */
     readAt?: Record<string, string>; organizedAt?: Record<string, string>; skimDoneAt?: string;
-    /** every page's cards are in (자료 전체 정리 starts here) */ cardsDoneAt?: string };
+    /** every page's cards are in (자료 전체 정리 starts here) */ cardsDoneAt?: string; /** 그림 자르기(11/8) */ figuresMs?: number };
   guides?: Record<string, string>;
 };
 
@@ -127,6 +127,8 @@ export type RecallerContext = {
   /** Readings of the same PDF page from earlier runs (by PDF hash), so a page is read from its image once. */
   reading?: { get: (hash: string, page: number) => Promise<string | null>; put: (hash: string, page: number, text: string) => Promise<void> };
   save: () => Promise<void>;
+  /** 카드에 붙는 그림 파일 저장 (11/8 lab.figures) */
+  saveFigure?: (name: string, jpeg: Buffer) => Promise<void>;
   publish: (section: SectionState, questions: AuthoredQuestion[]) => Promise<string | null>;
   priorityPage?: () => number | undefined;
   /** Parallel calls at most (sections organized and authored at once, pages read at once). */
@@ -426,6 +428,8 @@ export function chainHolds(g: { cardIds: string[]; joints: Array<{ from: string;
 /** Which cards get a basic question: core ones always, supporting ones for 통암기 (and for 이해, the kinds that are judged). */
 /** 요약 → 카드: a card from summary lines says which lines it covers. */
 export const digestCardSchema = z.object({ cards: z.array(cardSchema.extend({ covers: z.array(z.string()).describe("이 카드가 담은 본문 줄 id") })) });
+/** lab.figures (11/8): 카드마다 붙일 그림(없으면 null) — 쪽 이미지가 같이 가는 호출에만 */
+export const digestCardFigSchema = z.object({ cards: z.array(cardSchema.extend({ covers: z.array(z.string()).describe("이 카드가 담은 본문 줄 id"), figure: figureSchema.nullable() })) });
 
 export function slotCards(cards: Card[], purpose: GenState["input"]["purpose"]) {
   return cards.filter((c) => c.weight === "핵심" || purpose === "all" || (purpose === "understand" && ["조건", "절차", "비교", "개념"].includes(c.kind)));
@@ -907,8 +911,11 @@ export async function runRecaller(ctx: RecallerContext) {
         ...(attempt > 1 ? { revision: { problems: [`덮지 않은 줄: ${left.map((l) => l.id).join(", ")}`, ...issues.filter((x) => x.severity === "error").map((x) => x.message).slice(0, 4)], ask: "이 줄들만 카드로 만든다." } } : {}),
         source: sourceOf(pages) });
       let reply: z.infer<typeof digestCardSchema>;
-      try { reply = await ctx.ask("rc-digest-card", section.id, attempt, system, user, digestCardSchema, { guide: g, maxChars: 2500 * left.length + 4000, ...(images.length ? { images } : {}) }); }
+      const withFigures = Boolean(lab.figures && images.length);
+      try { reply = await ctx.ask("rc-digest-card", section.id, attempt, withFigures ? `${system}\n\n${prompt("FIGURE_RULES", FIGURE_RULES)}` : system, user, withFigures ? digestCardFigSchema : digestCardSchema, { guide: g, maxChars: 2500 * left.length + 4000, ...(images.length ? { images } : {}) }); }
       catch (error) { if (error instanceof RunawayReply) continue; throw error; }
+      // 그림 칸: 이 호출의 쪽 안, 0~100으로 다듬은 것만 남긴다
+      const figs = new Map((reply.cards as Array<{ id: string; figure?: unknown }>).map((c) => [c.id, withFigures ? cleanFigure(c.figure, pages) : undefined]));
       const checked = checkCards({ cards: reply.cards }, { pages }, textMap(), { lenientQuotes: lab.lenientQuotes });
       issues.push(...checked.issues);
       const prefix = `${section.id}.${i + 1}${attempt > 1 ? "r" : ""}`;
@@ -920,7 +927,9 @@ export async function runRecaller(ctx: RecallerContext) {
         const mine = covers.filter((x) => want.has(x));
         for (const x of mine) covered.add(x);
         if (isFlow(card) || c.id === "flow") card.title = flowTitle(section);
-        made.push({ ...card, id, links: card.links.filter((l) => ids.has(l.to)).map((l) => ({ ...l, to: ids.get(l.to)! })) });
+        const figure = figs.get(c.id);
+        delete (card as { figure?: unknown }).figure;
+        made.push({ ...card, id, links: card.links.filter((l) => ids.has(l.to)).map((l) => ({ ...l, to: ids.get(l.to)! })), ...(figure ? { figure } : {}) });
         data.digest!.notes[id] = { topic: section.id, covers: mine };
       }
       left = left.filter((l) => !covered.has(l.id));
@@ -1676,6 +1685,15 @@ export async function runRecaller(ctx: RecallerContext) {
     }
     for (const s of state.sections) attachNotes(s.id);
     await save();
+    // 카드에 그림 붙이기 (11/8 lab.figures): 코드만, 자료 전체 정리와 같이 돈다
+    if (lab.figures && ctx.pdf && ctx.saveFigure) {
+      try {
+        const { attachFigures } = await import("./figures.ts");
+        const r = await attachFigures(ctx.pdf, input.pageNumbers, all, ctx.saveFigure);
+        data.timing.figuresMs = r.ms;
+        await save();
+      } catch (error) { state.recaller?.warnings.push({ severity: "warning", code: "rc-figures", message: `그림을 붙이지 못했어요: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300) }); }
+    }
   }
   data.timing.skimDoneAt ??= new Date().toISOString();
   const merged = mergeEarly ?? (lab.consolidate === false || (lab.skimOnly && !lab.consolidate) || (data.consolidated && !data.consolidated.error) ? Promise.resolve() : lab.consolidate ? consolidate() : merging());
