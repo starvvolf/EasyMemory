@@ -791,3 +791,29 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm6-card{border-top:1px dashed var(--line);padding-top:8px;display:flex;flex-direction:column;gap:6px}
 @keyframes mm6-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 @media (max-width:560px){.dejipgi .mm6-item{grid-template-columns:1fr}}
+
+/* 구조 탭 (11/7): 뜻 묶음의 나무 */
+.dejipgi .mm7{display:flex;flex-direction:column;gap:10px}
+.dejipgi .mm7-empty{display:flex;flex-direction:column;gap:8px;padding:8px 0}
+.dejipgi .mm7-root,.dejipgi .mm7-kids{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dejipgi .mm7-kids{margin-top:4px;padding-left:14px;border-left:2px solid color-mix(in srgb,var(--accent) 25%,transparent)}
+.dejipgi .mm7-group{display:flex;flex-direction:column;gap:6px;border-radius:10px;padding:8px 10px;transition:outline-color .3s}
+.dejipgi .mm7-group.d0{border:1px solid var(--line);padding:10px 12px}
+.dejipgi .mm7-group.d0>.mm7-head b{font-size:16px;font-weight:700}
+.dejipgi .mm7-group.d1>.mm7-head b{font-weight:600}
+.dejipgi .mm7-group.d1,.dejipgi .mm7-group.d2,.dejipgi .mm7-group.d3{background:color-mix(in srgb,var(--line) 22%,transparent)}
+.dejipgi .mm7-group.flash{outline:2px solid var(--accent,#4a7);outline-offset:1px}
+.dejipgi .mm7-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.dejipgi .mm7-explain{margin:0;color:var(--muted,#666);line-height:1.5}
+.dejipgi .mm7-flow{margin:0;padding:6px 8px;border-left:3px solid color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 6%,transparent);border-radius:0 6px 6px 0;line-height:1.5;cursor:pointer;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.dejipgi .mm7-flow.full{display:block}
+.dejipgi .mm7-flowtag{font-size:10.5px;font-weight:600;color:var(--accent);margin-right:6px}
+.dejipgi .mm7-edges{display:flex;flex-wrap:wrap;gap:4px}
+.dejipgi .mm7-edge{display:inline-flex;align-items:center;gap:4px;font-size:12px;border:1px dashed var(--line);border-radius:999px;padding:1px 8px;background:none;cursor:pointer;color:inherit}
+.dejipgi .mm7-edge em{font-style:normal;color:var(--muted,#777);font-size:11px}
+.dejipgi .mm7-edge.back{opacity:.8}
+.dejipgi .mm7-type{font-size:10.5px;font-weight:600;padding:0 5px;border-radius:999px;background:color-mix(in srgb,var(--line) 60%,transparent)}
+.dejipgi .mm7-type.t-막음{background:color-mix(in srgb,#d55 18%,transparent);color:#b33}
+.dejipgi .mm7-type.t-씀{background:color-mix(in srgb,#38c 18%,transparent);color:#26a}
+.dejipgi .mm7-type.t-대비{background:color-mix(in srgb,#a6c 18%,transparent);color:#84a}
+.dejipgi .mm7-type.t-예시{background:color-mix(in srgb,#4a7 18%,transparent);color:#385}
