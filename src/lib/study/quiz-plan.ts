@@ -234,7 +234,8 @@ export function figureLeaks(q: QuizReply): boolean {
   return w.every((x) => tw.some((v) => v.includes(x.toLowerCase()) || x.toLowerCase().includes(v)));
 }
 export type MadeQuestion = PlanItem & { ok: boolean; held?: string; q?: QuizReply; solved?: SolveReply; blind?: SolveReply; needsFigure?: boolean; judge?: JudgeReply; easy?: boolean; fixed?: string; tries: number; problems: string[]; ms: number };
-export type QuizRun = { at: string; ms: number; label?: string; plan: QuizPlan; made: MadeQuestion[] };
+export type CheckedFigureQuiz = FigureQuiz & { ok: boolean; solved?: SolveReply; held?: string };
+export type QuizRun = { at: string; ms: number; label?: string; plan: QuizPlan; made: MadeQuestion[]; figureChecks?: CheckedFigureQuiz[] };
 export const QUIZ_MODEL = { model: "gpt-6-sol", effort: "low" };
 
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
@@ -294,15 +295,33 @@ export async function makeQuiz(id: string, map: MaterialMap, structure: Structur
   const t0 = Date.now();
   const plan = planQuiz(map, structure, run.options);
   const byId = new Map(map.sections.flatMap((s) => s.cards).map((c) => [c.id, c]));
-  const made: MadeQuestion[] = [];
+  const made: MadeQuestion[] = [], figureChecks: CheckedFigureQuiz[] = [];
   if (run.make) {
     let list = run.only ? plan.items.slice(0, run.only) : plan.items;
     if (run.units?.length) list = [...plan.items, ...plan.later].filter((it) => run.units!.includes(it.n));
-    made.push(...await Promise.all(list.map((it) => makeOne(id, map, it, byId, texts, run))));
+    const [m, f] = await Promise.all([Promise.all(list.map((it) => makeOne(id, map, it, byId, texts, run))), run.units?.length ? Promise.resolve([]) : checkFigureQuizzes(id, plan.figureQuizzes)]);
+    made.push(...m); figureChecks.push(...f);
   }
-  const out: QuizRun = { at: new Date().toISOString(), ms: Date.now() - t0, ...(run.label ? { label: run.label } : {}), plan, made };
+  const out: QuizRun = { at: new Date().toISOString(), ms: Date.now() - t0, ...(run.label ? { label: run.label } : {}), plan, made, ...(figureChecks.length ? { figureChecks } : {}) };
   if (run.make) { await mkdir(genDir(id), { recursive: true }); await writeFile(fileOf(id, run.label), JSON.stringify(out, null, 1)); }
   return out;
+}
+
+/**
+ * 그림 알아보기 확인 (11/8 3회차): 코드가 고른 오답이 그 그림에도 맞을 수 있다("요청 간선" 그림에 "자원 할당 그래프").
+ * 그림만 보고(지식·원문 없이) 한 번 풀어, 정답을 하나로 고르면 남긴다.
+ */
+async function checkFigureQuizzes(id: string, list: FigureQuiz[]): Promise<CheckedFigureQuiz[]> {
+  return Promise.all(list.map(async (f): Promise<CheckedFigureQuiz> => {
+    const image = await readFile(path.join(genDir(id), "figures", f.file)).then(toDataUrl).catch(() => null);
+    if (!image) return { ...f, ok: false, held: "그림 파일 없음" };
+    try {
+      const solved = await withTrace({ area: "pdf", action: "quiz-figure-id", ref: id }, () => ask<SolveReply>("map:quiz-figure-id", `${SOLVE_SYSTEM}\n그림이 보여 주는 것을 고르는 문제다. 그림에 보기 둘 이상이 함께 보이거나 보기 하나가 다른 보기를 포함하면(전체와 부분) unique=false.`,
+        `form: choice\n${f.stem}\n${f.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`, SOLVE_SCHEMA, [{ label: "그림", dataUrl: image }]));
+      const ok = solved.unique && sameAnswer("choice", String(f.answer), solved.answer);
+      return { ...f, ok, solved, ...(ok ? {} : { held: solved.unique ? `그림만 보고 고른 답이 다름(${solved.answer})` : `답이 하나가 아님: ${solved.doubt}` }) };
+    } catch (error) { return { ...f, ok: false, held: `실패: ${(error as Error).message}`.slice(0, 160) }; }
+  }));
 }
 
 async function makeOne(id: string, map: MaterialMap, it: PlanItem, byId: Map<string, MapCard>, texts: Record<string, string>, run: { noRetry?: boolean; noBlind?: boolean }): Promise<MadeQuestion> {
