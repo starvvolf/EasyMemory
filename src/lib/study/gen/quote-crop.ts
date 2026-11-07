@@ -329,7 +329,8 @@ export function snapHint(hint: Box, graphics: Graphic[], page: { width: number; 
   if (touching.length) {
     const box = cluster(touching, graphics, joinGap)!;
     // 덩어리가 힌트보다 훨씬 크면(쪽 전체로 번짐) 힌트 쪽을 믿는다
-    if (area(box) <= area(hint) * 4) return { mode: "figure", box: union(box, { x0: Math.max(box.x0, hint.x0), y0: Math.max(box.y0, hint.y0), x1: Math.min(box.x1, hint.x1), y1: Math.min(box.y1, hint.y1) }) };
+    // 맞춘 그림이 힌트보다 훨씬 작으면(세마포어: 화살표만 그림이고 코드는 글) 힌트가 가리킨 덩어리 전체를 믿는다
+    if (area(box) <= area(hint) * 4 && area(box) >= area(hint) * 0.35) return { mode: "figure", box: union(box, { x0: Math.max(box.x0, hint.x0), y0: Math.max(box.y0, hint.y0), x1: Math.min(box.x1, hint.x1), y1: Math.min(box.y1, hint.y1) }) };
   }
   const padX = (hint.x1 - hint.x0) * 0.08 + 6, padY = (hint.y1 - hint.y0) * 0.08 + 6;
   return { mode: "block", box: { x0: Math.max(0, hint.x0 - padX), y0: Math.max(0, hint.y0 - padY), x1: Math.min(page.width, hint.x1 + padX), y1: Math.min(page.height, hint.y1 + padY) } };
