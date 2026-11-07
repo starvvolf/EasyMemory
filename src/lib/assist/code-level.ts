@@ -14,7 +14,8 @@ export const SELF_LEVELS = ["입문", "기초", "중급", "상급", "고급"] as
 export type SelfLevel = typeof SELF_LEVELS[number];
 /** 알려진 난이도. site가 ""이면 모름. by: AI가 알던 값(memory)인지 웹에서 찾은 값(web)인지. `from`은 웹에서 읽은 페이지. */
 export type Known = { site: string; rating: string; from: string; by: "memory" | "web"; at: string; failed?: true;
-  /** 웹에서 찾은 값이 이 문제가 아니라 비슷한 문제의 것일 때 그 문제 이름(예: "BOJ 3273 두 수의 합") */ similar?: string };
+  /** 웹에서 값을 찾은 문제의 이름(예: "BOJ 3273 두 수의 합") */ matched?: string;
+  /** 그 문제가 이 문제와 다른, 비슷한 문제일 때 그 이름 */ similar?: string };
 export type Self = { level: SelfLevel; why: string; abilities: string[]; at: string };
 export type Level = { key: string; self?: Self; known?: Known };
 
@@ -73,8 +74,8 @@ function update(id: string, key: string, part: Partial<Level>) {
   writing = run.catch(() => undefined);
   return run;
 }
-// 판단 방식을 바꾸면 VERSION을 올린다: 받아 둔 판단을 모두 다시 묻는다(11/8 v2: 비슷한 문제 구분).
-const VERSION = "v2";
+// 판단 방식을 바꾸면 VERSION을 올린다: 받아 둔 판단을 모두 다시 묻는다(11/8 v2: 비슷한 문제 구분, v3: 찾은 문제 이름).
+const VERSION = "v3";
 const keyOf = (p: Pick<ProblemMeta, "title" | "statement">) => createHash("sha1").update(`${VERSION}\n${p.title}\n${p.statement}`).digest("hex").slice(0, 12);
 
 /** The kept levels by problem id (no model call): for the list. */
@@ -122,7 +123,9 @@ export function knownLevelOf(p: ProblemMeta): Promise<Known> {
       const raw = await askJson<Parameters<typeof checkKnown>[0] & { matched?: string; same?: boolean }>("code:level-web", KNOWN_SYSTEM, problemText(p), KNOWN_SCHEMA, { webSearch: true });
       known = { ...checkKnown(raw, "web"), at: new Date().toISOString() };
       // 비슷한 다른 문제의 등급이면 그 문제 이름을 같이 남겨 화면이 "비슷한 문제"라고 적게 한다.
-      if (known.site && raw.same === false) known.similar = (raw.matched ?? "").trim().slice(0, 60) || "이름 모름";
+      const matched = (raw.matched ?? "").trim().slice(0, 60);
+      if (known.site && matched) known.matched = matched;
+      if (known.site && raw.same === false) known.similar = matched || "이름 모름";
     } catch { known = { site: "", rating: "", from: "", by: "web", at: new Date().toISOString(), failed: true }; }
     await update(p.id, keyOf(p), { known });
     return known;
