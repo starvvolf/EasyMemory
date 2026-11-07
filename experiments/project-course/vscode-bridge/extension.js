@@ -221,6 +221,7 @@ function chunkLabel(doc, from, to) {
 }
 
 async function handle(cmd) {
+  if (cmd.type === "lsp") { let result; try { result = await answerLsp(cmd); } catch (e) { result = `실패: ${e && e.message || e}`; } request("POST", "/api/bridge/answer", { id: cmd.id, result }).catch(() => {}); return; }
   if (cmd.type === "open") {
     const { ed, range } = await openAt(cmd.file, cmd.line, cmd.toLine);
     if (cmd.highlight !== false) mark(ed, range, cmd.note);
@@ -536,6 +537,106 @@ function watchTerminal(context) {
       request("POST", "/api/bridge/terminal", { runId, command: command.slice(0, 2000), exitCode: typeof e.exitCode === "number" ? e.exitCode : null, cwd: rel, output: stripAnsi(buf.out).slice(-12000) }).catch(() => {});
     }),
   );
+}
+
+/* ---------- 코드 이해(언어 서버) · 디버거(11/8, 0.9.0): 튜터 도구 code_nav · debug_peek가 부른다 ---------- */
+const where = (uri) => { const f = uri.fsPath; const r = path.relative(root, f); return r.startsWith("..") || path.isAbsolute(r) ? `(작업 폴더 밖) ${path.basename(f)}` : r.split(path.sep).join("/"); };
+async function lineText(uri, line) { try { const d = await vscode.workspace.openTextDocument(uri); return d.lineAt(line).text.trim().slice(0, 160); } catch { return ""; } }
+async function locs(list, max) {
+  const out = [];
+  for (const l of (list || []).slice(0, max)) {
+    const uri = l.targetUri || l.uri, range = l.targetSelectionRange || l.targetRange || l.range;
+    if (!uri || !range) continue;
+    out.push(`${where(uri)}:${range.start.line + 1}  ${await lineText(uri, range.start.line)}`);
+  }
+  return out;
+}
+const KINDS = ["파일", "모듈", "이름공간", "패키지", "클래스", "메서드", "속성", "필드", "생성자", "열거형", "인터페이스", "함수", "변수", "상수", "문자열", "숫자", "참거짓", "배열", "객체", "키", "null", "열거 값", "구조체", "이벤트", "연산자", "타입 매개변수"];
+async function answerLsp(cmd) {
+  if (cmd.op === "problems") {
+    const out = [];
+    for (const [uri, ds] of vscode.languages.getDiagnostics()) {
+      if (uri.scheme !== "file" || path.relative(root, uri.fsPath).startsWith("..")) continue;
+      for (const d of ds) if (d.severity <= 1) out.push(`${where(uri)}:${d.range.start.line + 1} ${d.severity === 0 ? "오류" : "경고"}: ${d.message.split("\n")[0].slice(0, 200)}`);
+    }
+    return out.length ? out.slice(0, 60).join("\n") : "빨간 줄 · 경고 없음(열어 본 파일 기준일 수 있어요)";
+  }
+  if (!cmd.file) return "file이 필요해요";
+  const uri = vscode.Uri.file(absOf(cmd.file));
+  const doc = await vscode.workspace.openTextDocument(uri);
+  if (cmd.op === "symbols") {
+    const syms = await vscode.commands.executeCommand("vscode.executeDocumentSymbolProvider", uri) || [];
+    const out = [];
+    const walk = (xs, depth) => { for (const x of xs) { if (out.length >= 100) return; const r = x.range || (x.location && x.location.range); out.push(`${"  ".repeat(depth)}${KINDS[x.kind] || "?"} ${x.name}${r ? ` ${r.start.line + 1}~${r.end.line + 1}줄` : ""}`); if (x.children) walk(x.children, depth + 1); } };
+    walk(syms, 0);
+    return out.length ? out.join("\n") : "목차를 못 받았어요(언어 서버가 없거나 준비 중)";
+  }
+  if (cmd.op === "debug") return debugPeek(cmd, uri, doc);
+  const ln = Math.max(0, Math.min(doc.lineCount - 1, (cmd.line || 1) - 1));
+  const text = doc.lineAt(ln).text;
+  let col = cmd.symbol ? text.indexOf(cmd.symbol) : -1;
+  if (col < 0) col = text.search(/\S/);
+  const pos = new vscode.Position(ln, Math.max(0, col) + (cmd.symbol && col >= 0 ? Math.floor(cmd.symbol.length / 2) : 0));
+  if (cmd.op === "definition") { const r = await locs(await vscode.commands.executeCommand("vscode.executeDefinitionProvider", uri, pos), 10); return r.length ? `정의:\n${r.join("\n")}` : "정의를 못 찾았어요"; }
+  if (cmd.op === "references") { const all = await vscode.commands.executeCommand("vscode.executeReferenceProvider", uri, pos) || []; const r = await locs(all, 30); return r.length ? `쓰인 곳 ${all.length}곳${all.length > 30 ? "(앞 30곳)" : ""}:\n${r.join("\n")}` : "쓰인 곳을 못 찾았어요"; }
+  if (cmd.op === "hover") {
+    const hs = await vscode.commands.executeCommand("vscode.executeHoverProvider", uri, pos) || [];
+    const parts = [];
+    for (const h of hs) for (const c of h.contents || []) parts.push(typeof c === "string" ? c : c.value || "");
+    return parts.join("\n").trim().slice(0, 3000) || "설명이 없어요";
+  }
+  return `모르는 op: ${cmd.op}`;
+}
+/** 디버거로 그 줄에서 멈추고 변수를 본다. 끝나면 중단점을 지우고 세션을 끝낸다 */
+async function debugPeek(cmd, uri, doc) {
+  const lang = doc.languageId;
+  const type = /javascript|typescript/.test(lang) ? "node" : lang === "python" ? "debugpy" : null;
+  if (!type) return `이 언어(${lang})는 디버거 설정이 없어요`;
+  if (type === "debugpy" && !vscode.extensions.getExtension("ms-python.debugpy") && !vscode.extensions.getExtension("ms-python.python")) return "VS Code에 Python 확장이 없어 디버거를 못 켜요";
+  const bp = new vscode.SourceBreakpoint(new vscode.Location(uri, new vscode.Position(Math.max(0, cmd.line - 1), 0)), true);
+  vscode.debug.addBreakpoints([bp]);
+  const name = `Recaller 튜터: ${cmd.file}:${cmd.line}`;
+  let session = null, out = "";
+  const subs = [];
+  try {
+    const stopped = new Promise((resolve) => {
+      subs.push(vscode.debug.registerDebugAdapterTrackerFactory("*", { createDebugAdapterTracker: (s) => s.name !== name ? undefined : {
+        onDidSendMessage: (m) => {
+          if (m.type === "event" && m.event === "output" && m.body && m.body.category !== "telemetry") out += m.body.output || "";
+          if (m.type === "event" && m.event === "stopped") resolve({ s, thread: m.body.threadId });
+          if (m.type === "event" && (m.event === "terminated" || m.event === "exited")) resolve(null);
+        } } }));
+      setTimeout(() => resolve(null), 30000);
+    });
+    const cfg = type === "node"
+      ? { type: "node", request: "launch", name, program: uri.fsPath, cwd: root, console: "internalConsole", skipFiles: ["<node_internals>/**"], ...(lang === "typescript" ? { runtimeArgs: ["--experimental-strip-types"] } : {}) }
+      : { type: "debugpy", request: "launch", name, program: uri.fsPath, cwd: root, console: "internalConsole", justMyCode: true };
+    const folder = (vscode.workspace.workspaceFolders || [])[0];
+    if (!(await vscode.debug.startDebugging(folder, cfg))) return "디버거를 켜지 못했어요";
+    const hit = await stopped;
+    if (!hit) return `${cmd.line}번째 줄에 닿지 않고 끝났어요.\n출력:\n${out.slice(-2000) || "(없음)"}`;
+    session = hit.s;
+    const st = await session.customRequest("stackTrace", { threadId: hit.thread, startFrame: 0, levels: 1 });
+    const frame = st.stackFrames[0];
+    const scopes = await session.customRequest("scopes", { frameId: frame.id });
+    const lines = [`멈춘 곳: ${where(uri)}:${frame.line}  ${await lineText(uri, frame.line - 1)}`];
+    for (const sc of scopes.scopes.filter((x) => !x.expensive).slice(0, 2)) {
+      const vs = await session.customRequest("variables", { variablesReference: sc.variablesReference });
+      const shown = vs.variables.filter((v) => !/^__|^special variables$|^function variables$/.test(v.name)).slice(0, 30);
+      lines.push(`[${sc.name}]`, ...shown.map((v) => `  ${v.name} = ${String(v.value).slice(0, 200)}${v.type ? `  (${v.type})` : ""}`));
+    }
+    for (const e of cmd.expr || []) {
+      try { const r = await session.customRequest("evaluate", { expression: e, frameId: frame.id, context: "watch" }); lines.push(`식 ${e} = ${String(r.result).slice(0, 300)}`); }
+      catch (er) { lines.push(`식 ${e}: 계산 못 함 (${(er && er.message || er).toString().slice(0, 120)})`); }
+    }
+    if (out.trim()) lines.push(`멈추기 전 출력:\n${out.slice(-1500)}`);
+    return lines.join("\n");
+  } finally {
+    vscode.debug.removeBreakpoints([bp]);
+    for (const x of subs) x.dispose();
+    const s = session || vscode.debug.activeDebugSession;
+    if (s && s.name === name) await vscode.debug.stopDebugging(s).catch(() => {});
+  }
 }
 
 function activate(context) {

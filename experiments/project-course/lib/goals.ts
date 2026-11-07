@@ -14,6 +14,7 @@ import { DATA, read, update } from "./store.ts";
 import { CHOICES } from "./stuck.ts";
 import { RESPOND_RULE } from "./judge.ts";
 import { SHELL_TOOL } from "./shell.ts";
+import { CODE_TOOL, DEBUG_TOOL } from "./codenav.ts";
 
 /** support: [너무 어려워요]로 끼워 넣은 보충 단계(11/6 사용자 "중간에 보충 단계를 만들어서 넣어 줘야") — 원래 단계 바로 앞에 들어간다 */
 type Item = { id: string; title: string; status: "todo" | "doing" | "done" | "skipped"; support?: boolean };
@@ -73,6 +74,8 @@ export const GOAL_TOOLS = [
     properties: { titles: { type: "array", items: str } }, required: ["titles"] },
   // 터미널 명령(11/8 결정 8). 학습 목표 도구와 같은 길(두 엔진 공통)로 내보낸다. 처리는 lib/shell.ts
   SHELL_TOOL,
+  // 코드 이해(언어 서버) · 디버거(11/8, 확장 0.9.0). 처리는 lib/codenav.ts
+  CODE_TOOL, DEBUG_TOOL,
 ] as const;
 export const GOAL_NAMES = new Set<string>(GOAL_TOOLS.map((t) => t.name));
 /** MCP(Codex)용: inputSchema 꼴로 */
@@ -80,6 +83,8 @@ export const goalToolsMcp = () => GOAL_TOOLS.map((t) => ({ name: t.name, descrip
 
 /** 모델이 부른 도구를 처리한다. learner: 이 대화의 학습자 말들(근거 대조용) */
 export async function runGoalTool(runId: string, name: string, input: Record<string, unknown>, learner: string[]): Promise<string> {
+  if (name === CODE_TOOL.name) return (await import("./codenav.ts")).codeNavTool(runId, input);
+  if (name === DEBUG_TOOL.name) return (await import("./codenav.ts")).debugPeekTool(runId, input);
   if (name === SHELL_TOOL.name) { const sh = await import("./shell.ts"); return sh.runCommandTool(runId, await runWorkspace(runId), input); }
   const s = (v: unknown, n = 300) => String(v ?? "").trim().slice(0, n);
   let out = "";

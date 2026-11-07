@@ -56,6 +56,7 @@ export function classify(command: string, ws: string): { kind: Kind; reason: str
     const root = path.resolve(ws);
     for (const a of args) {
       if (/^-/.test(a) || /^https?:/i.test(a)) continue;
+      if (win && /^\/[A-Za-z?][-:A-Za-z0-9]{0,3}$/.test(a)) continue; // Windows 옵션(dir /b, findstr /i …)은 경로가 아니다(11/8 실측)
       const looksPath = path.isAbsolute(a) || /^~[\\/]?/.test(a) || /(^|[\\/])\.\.([\\/]|$)/.test(a) || /^[A-Za-z]:/.test(a);
       if (!looksPath) continue;
       if (/^[A-Za-z]:/.test(a) && !a.replace(/\\/g, "/").toLowerCase().startsWith(root.replace(/\\/g, "/").toLowerCase())) return { kind: "ask", reason: `작업 폴더 밖(${a})을 건드려요` };

@@ -19,7 +19,8 @@ export type BridgeCommand =
   | { type: "clearFocus" }
   | { type: "toast"; text: string }
   | { type: "tour"; file: string; from: number; to: number; label?: string }
-  | { type: "tourEnd" };
+  | { type: "tourEnd" }
+  | { type: "lsp"; id: string; op: string; file?: string; line?: number; symbol?: string; expr?: string[] };
 
 const norm = (p: string) => { const r = path.resolve(p).replace(/\\/g, "/").replace(/\/$/, ""); return process.platform === "win32" ? r.toLowerCase() : r; };
 const states = new Map<string, BridgeState>();
@@ -79,3 +80,16 @@ export function bridgeContext(runId: string) {
   if (s.errors?.length) parts.push(`빨간 줄(편집기 오류):\n${s.errors.map((e) => `- ${e.line}줄: ${e.message}`).join("\n")}`);
   return parts.join("\n");
 }
+
+/* ---------- 코드 이해(언어 서버) · 디버거 요청(11/8 결정 8 다음 순서): 서버 → 확장 → 결과 POST ---------- */
+const waiting = new Map<string, (r: unknown) => void>();
+/** 확장에 물어보고 답을 기다린다. 연결이 없거나 시간이 지나면 null */
+export function askBridge(runId: string, req: { op: string; file?: string; line?: number; symbol?: string; expr?: string[] }, ms = 10_000): Promise<unknown | null> {
+  const id = Math.random().toString(36).slice(2, 12);
+  if (!send(runId, { type: "lsp", id, ...req })) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const t = setTimeout(() => { waiting.delete(id); resolve(null); }, ms);
+    waiting.set(id, (r) => { clearTimeout(t); waiting.delete(id); resolve(r); });
+  });
+}
+export function bridgeAnswer(id: string, result: unknown) { const f = waiting.get(id); if (f) f(result); return { ok: !!f }; }
