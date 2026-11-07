@@ -317,3 +317,44 @@ export async function frameOf(bytes: Uint8Array, pages: number[], share = 0.4) {
   } finally { await (document as unknown as { cleanup?: () => Promise<void> }).cleanup?.(); }
   return new Set([...count].filter(([, c]) => pages.length >= 3 && c >= pages.length * share).map(([k]) => k));
 }
+
+/**
+ * 그림 위치 힌트로 자르기 (11/8 그래픽스 04처럼 글자가 그림으로 박혀 인용으로 위치를 못 찾는 자료): 카드 AI가 쪽 그림을 보고
+ * 대략의 상자(쪽을 0~100으로 본 [x0, y0, x1, y1])를 주면, 코드가 그 상자와 겹치는 그림 덩어리에 맞춘다(figure).
+ * 겹치는 그림이 없거나 애매하면 AI 상자를 조금 넓혀 그대로 자른다(block, 사용자 "애매하면 덩어리").
+ */
+export function snapHint(hint: Box, graphics: Graphic[], page: { width: number; height: number }): { mode: CropMode; box: Box } {
+  const joinGap = Math.min(page.width, page.height) * 0.06;
+  const touching = graphics.filter((g) => overlap(g.box, hint) > Math.min(area(g.box), area(hint)) * 0.3);
+  if (touching.length) {
+    const box = cluster(touching, graphics, joinGap)!;
+    // 덩어리가 힌트보다 훨씬 크면(쪽 전체로 번짐) 힌트 쪽을 믿는다
+    if (area(box) <= area(hint) * 4) return { mode: "figure", box: union(box, { x0: Math.max(box.x0, hint.x0), y0: Math.max(box.y0, hint.y0), x1: Math.min(box.x1, hint.x1), y1: Math.min(box.y1, hint.y1) }) };
+  }
+  const padX = (hint.x1 - hint.x0) * 0.08 + 6, padY = (hint.y1 - hint.y0) * 0.08 + 6;
+  return { mode: "block", box: { x0: Math.max(0, hint.x0 - padX), y0: Math.max(0, hint.y0 - padY), x1: Math.min(page.width, hint.x1 + padX), y1: Math.min(page.height, hint.y1 + padY) } };
+}
+
+export async function cropHints(bytes: Uint8Array, page: number, hints: Array<[number, number, number, number]>, options: { width?: number; frame?: Set<string> } = {}) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const { createCanvas } = await import("@napi-rs/canvas");
+  const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
+  try {
+    const p = await document.getPage(page) as unknown as PdfPage & { render: (o: unknown) => { promise: Promise<void> } };
+    const { viewport, runs, shapes, graphics: images } = await readPage(p, pdfjs.OPS as Record<string, number>);
+    const rows = rowsOf(placeRuns(runs, viewport.height));
+    const { graphics } = sortShapes(shapes, images, rows, viewport, options.frame ?? new Set());
+    const width = options.width ?? 1600, scale = width / Math.max(viewport.width, viewport.height);
+    const view = p.getViewport({ scale });
+    const canvas = createCanvas(Math.ceil(view.width), Math.ceil(view.height));
+    const ctx = canvas.getContext("2d"); ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await p.render({ canvas, canvasContext: ctx, viewport: view }).promise;
+    return hints.map((h) => {
+      const hint: Box = { x0: h[0] / 100 * viewport.width, y0: h[1] / 100 * viewport.height, x1: h[2] / 100 * viewport.width, y1: h[3] / 100 * viewport.height };
+      const d = snapHint(hint, graphics, viewport);
+      const r = cropRect(d.box, scale, viewport, { top: 8, bottom: 8 }, 8);
+      const cut = createCanvas(Math.max(1, r.w), Math.max(1, r.h)); cut.getContext("2d").drawImage(canvas as never, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+      return { hint: h, mode: d.mode, box: [d.box.x0 / viewport.width, d.box.y0 / viewport.height, d.box.x1 / viewport.width, d.box.y1 / viewport.height], image: `data:image/jpeg;base64,${cut.toBuffer("image/jpeg", 85).toString("base64")}` };
+    });
+  } finally { await (document as unknown as { cleanup?: () => Promise<void> }).cleanup?.(); }
+}

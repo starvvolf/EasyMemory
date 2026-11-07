@@ -4,7 +4,7 @@
 // 원래와 시도들을 나란히 본다. 그림이 같이 갔던 호출은 그림 없이 간다(기록에 그림이 없음 — 화면에 알림).
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { callModel, type ModelCaller } from "./model.ts";
+import { callModel, type ModelCaller, type ModelRequest } from "./model.ts";
 import { costOf } from "./prices.ts";
 import { newCallId } from "./trace.ts";
 
@@ -12,6 +12,7 @@ export type TrialBase = { kind: "gen"; genId: string; n: number } | { kind: "cal
 export type Trial = {
   id: string; at: string; base: TrialBase; step: string; note: string;
   system: string; user: string; model: string; effort: string; json: boolean;
+  /** 쪽 그림을 같이 보낸 시도(11/8): 그 쪽 번호들(그림 자체는 남기지 않는다) */ pages?: number[];
   ok: boolean; error?: string; reply: string; ms: number; firstTextMs?: number;
   usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; reasoningTokens?: number }; cost: number | null;
 };
@@ -25,14 +26,15 @@ export async function listTrials(base: TrialBase): Promise<Trial[]> {
 }
 
 const caller: ModelCaller = { uid: "local-experiment" };
-export async function runTrial(input: { base: TrialBase; step: string; note?: string; system: string; user: string; model: string; effort: string; json: boolean }): Promise<Trial> {
+export async function runTrial(input: { base: TrialBase; step: string; note?: string; system: string; user: string; model: string; effort: string; json: boolean;
+  images?: ModelRequest["images"]; pages?: number[] }): Promise<Trial> {
   const started = Date.now();
   let first = 0;
   const t: Trial = { id: newCallId(), at: new Date(started).toISOString(), base: input.base, step: input.step, note: (input.note ?? "").slice(0, 300),
-    system: input.system, user: input.user, model: input.model, effort: input.effort, json: input.json, ok: false, reply: "", ms: 0, cost: null };
+    system: input.system, user: input.user, model: input.model, effort: input.effort, json: input.json, ...(input.pages?.length ? { pages: input.pages } : {}), ok: false, reply: "", ms: 0, cost: null };
   try {
     const r = await callModel({ purpose: `lab:trial:${input.step}`, system: input.system, user: input.user, model: input.model, effort: input.effort,
-      ...(input.json ? { json: true } : {}), caller, onText: () => { if (!first) first = Date.now(); } });
+      ...(input.json ? { json: true } : {}), ...(input.images?.length ? { images: input.images } : {}), caller, onText: () => { if (!first) first = Date.now(); } });
     t.ok = true;
     t.reply = input.json && r.data !== undefined ? JSON.stringify(r.data, null, 1) : r.text;
     t.usage = r.usage;

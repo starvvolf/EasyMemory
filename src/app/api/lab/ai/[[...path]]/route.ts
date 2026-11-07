@@ -90,8 +90,20 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "trial" && m === "POST") {
       const b = z.object({ base: z.union([z.object({ kind: z.literal("gen"), genId: z.string().regex(/^gen_\w{6,80}$/), n: z.number().int().min(1) }), z.object({ kind: z.literal("call"), id: z.string().regex(/^\w{4,40}$/) })]),
         step: z.string().min(1).max(80), note: z.string().max(300).optional(), system: z.string().max(80_000), user: z.string().min(1).max(900_000),
-        model: z.string().min(3).max(40), effort: z.enum(["minimal", "low", "medium", "high", "xhigh"]), json: z.boolean() }).parse(await boundedJson(request));
-      return json({ trial: await runTrial(b) });
+        model: z.string().min(3).max(40), effort: z.enum(["minimal", "low", "medium", "high", "xhigh"]), json: z.boolean(),
+        // 쪽 그림을 같이 (11/8 그림 위치 시험): 그 실행의 원본 PDF에서 쪽을 그려 붙인다(호출 기록에는 그림이 없어서)
+        pages: z.array(z.number().int().min(1).max(2000)).max(12).optional(), imageWidth: z.number().int().min(256).max(2048).optional() }).parse(await boundedJson(request));
+      let images: Array<{ label: string; dataUrl: string }> | undefined;
+      if (b.pages?.length && b.base.kind === "gen") {
+        const gen = await loadGen(b.base.genId);
+        const { readRegisteredMcpSourcePdf } = await import("@/lib/mcp-source-registry");
+        const bytes = gen ? await readRegisteredMcpSourcePdf(gen.input.sourceId) : null;
+        if (!bytes) return NextResponse.json({ message: "그 실행의 원본 PDF를 읽을 수 없어요." }, { status: 404 });
+        const { renderPageImages } = await import("@/lib/study/gen/pages");
+        const drawn = await renderPageImages(bytes, b.pages, b.imageWidth ?? 1024);
+        images = b.pages.filter((n) => drawn.get(n)).map((n) => ({ label: `원문 p.${n}`, dataUrl: drawn.get(n)! }));
+      }
+      return json({ trial: await runTrial({ ...b, images }) });
     }
     // 지시문 조각 버전 (11/7): GET prompt-versions?key= · POST prompt-versions {key, step, label, text, note}
     if (p[0] === "prompt-versions" && m === "GET") return json({ versions: await listPromptVersions(z.string().min(1).max(160).parse(q.get("key"))) });
