@@ -257,7 +257,6 @@ export function sortShapes(shapes: Array<{ box: Box; filled: boolean; stroked: b
   while (left.length) {
     const group = [left.shift()!];
     for (let grew = true; grew;) { grew = false; for (let i = left.length - 1; i >= 0; i--) if (group.some((g) => gapBetween(g.box, left[i].box) <= gap)) { group.push(...left.splice(i, 1)); grew = true; } }
-    const box = group.map((g) => g.box).reduce(union);
     // 덩어리 상자가 아니라 도형 하나하나가 문장 줄을 덮는지로 본다(세마포어 화살표처럼 줄 사이를 지나는 선은 줄을 덮지 않는다)
     const sentences = rows.filter((r) => isSentence(r) && group.reduce((a, g) => a + (area(g.box) < area(r.box) * 3 ? overlap(r.box, g.box) : 0), 0) > area(r.box) * 0.3).length; // 줄을 통째로 감싼 큰 테두리는 빼고
     if (sentences < 2) keep.push(...group);
