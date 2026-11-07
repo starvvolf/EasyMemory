@@ -100,7 +100,7 @@ export async function tutorOverview() {
     actions, done: events.filter((e) => e.ability).length,
   };
 }
-export const startPrepare = (limit?: number) => prepareModels(limit);
+export const startPrepare = (limit?: number, workers?: number) => prepareModels(limit, workers);
 
 export type Answer =
   | { kind: "walkthrough"; number: string; pattern: string; predict?: string; skipped?: boolean }

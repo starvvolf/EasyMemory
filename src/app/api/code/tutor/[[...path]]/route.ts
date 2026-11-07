@@ -26,8 +26,8 @@ async function handle(request: Request, context: RouteContext) {
       await guard(request);
       if (!p.length && request.method === "GET") return NextResponse.json(await tutorOverview());
       if (p[0] === "prepare" && request.method === "POST") {
-        const b = z.object({ limit: z.number().int().min(1).max(200).optional() }).parse(await boundedJson(request));
-        return NextResponse.json({ prep: await startPrepare(b.limit) });
+        const b = z.object({ limit: z.number().int().min(1).max(200).optional(), workers: z.number().int().min(1).max(3).optional() }).parse(await boundedJson(request));
+        return NextResponse.json({ prep: await startPrepare(b.limit, b.workers) });
       }
       if (p[0] === "answer" && request.method === "POST") return NextResponse.json(await answer(ANSWER.parse(await boundedJson(request)) as Answer));
       return NextResponse.json({ message: "없는 주소예요." }, { status: 404 });

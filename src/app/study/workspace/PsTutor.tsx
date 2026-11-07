@@ -31,7 +31,8 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
   useEffect(() => later(() => void load()), [load]);
   const running = data?.prep.running;
   useEffect(() => { if (!running) return; const t = setInterval(() => void load(), 3000); return () => clearInterval(t); }, [running, load]);
-  const prepare = async () => { try { await call("/api/code/tutor/prepare", {}); await load(); } catch (e) { setError(errorText(e)); } };
+  // 실패한 것이 있으면(인터넷 아카이브가 막음) 다시 할 때는 하나씩.
+  const prepare = async () => { try { await call("/api/code/tutor/prepare", data?.prep.failed.length ? { workers: 1 } : {}); await load(); } catch (e) { setError(errorText(e)); } };
 
   if (!data) return <section className="panel small muted">{error || "PS 튜터를 여는 중…"}</section>;
   const action = data.actions[0];

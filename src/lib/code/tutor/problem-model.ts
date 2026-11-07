@@ -157,8 +157,9 @@ export async function buildModel(target: Target, deps: Deps = { fetcher: fetch, 
 export type Prep = { running: boolean; total: number; done: number; failed: Array<{ number: string; why: string }>; startedAt?: string };
 const prep: Prep = { running: false, total: 0, done: 0, failed: [] };
 export const prepStatus = () => ({ ...prep, failed: [...prep.failed] });
-/** 아직 모델이 없는 튜터 문제를 만든다(백그라운드). 이미 돌고 있으면 그대로 둔다. */
-export async function prepareModels(limit?: number) {
+/** 아직 모델이 없는 튜터 문제를 만든다(백그라운드). 이미 돌고 있으면 그대로 둔다.
+ *  workers: 동시에 몇 개(기본 3). 인터넷 아카이브가 한꺼번에 묻는 것을 막을 때가 있어서(11/8 실측: 73개 중 일부 "원문 없음"), 다시 할 때는 1개씩. */
+export async function prepareModels(limit?: number, workers = 3) {
   if (prep.running) return prepStatus();
   const have = await readModels();
   const todo = tutorTargets().filter((t) => !have[t.number]).slice(0, limit ?? Infinity);
@@ -170,6 +171,6 @@ export async function prepareModels(limit?: number) {
       prep.done++;
     }
   };
-  void Promise.all([worker(), worker(), worker()]).finally(() => { prep.running = false; });
+  void Promise.all(Array.from({ length: Math.max(1, Math.min(3, workers)) }, () => worker())).finally(() => { prep.running = false; });
   return prepStatus();
 }
