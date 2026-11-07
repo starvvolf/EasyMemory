@@ -895,3 +895,16 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm8-rel{align-self:flex-start;white-space:nowrap}
 .dejipgi .mm8-vs{flex-wrap:wrap}
 .dejipgi .mm8-vsmark,.dejipgi .mm8-vsmark em{white-space:nowrap}
+/* 구조 4차 (11/8): 관계 표시는 한 줄, 차례로는 위에서 아래로, 연 카드 칸이 덮지 않게 */
+.dejipgi .mm8-relrow{display:flex;align-items:center;gap:8px;margin-bottom:-2px}
+.dejipgi .mm8-relrow::after{content:"";flex:1;height:1px;background:var(--line)}
+.dejipgi .mm8-relrow.r-모두::after{background:color-mix(in srgb,#d0464b 30%,transparent)}
+.dejipgi .mm8-relrow.r-종류::after{background:color-mix(in srgb,#2f7fd0 30%,transparent)}
+.dejipgi .mm8-cards.seq{flex-direction:column;align-items:flex-start;gap:0}
+.dejipgi .mm8-cards.seq .mm8-item{flex-direction:column;align-items:flex-start;gap:0}
+.dejipgi .mm8-cards.seq .mm8-join{font-size:15px;line-height:1;padding:3px 0 3px 14px;color:var(--muted,#888)}
+.dejipgi .mm8.has-detail>.mm8-wrap{margin-bottom:38vh}
+.dejipgi .mm8-wrap{cursor:default}
+.dejipgi .mm8-kids.seq{flex-direction:column;flex-wrap:nowrap;gap:0;align-items:stretch}
+.dejipgi .mm8-kids.seq>.mm8-box{flex:none}
+.dejipgi .mm8-join.seq{align-self:center;font-size:16px;line-height:1;padding:4px 0;color:var(--muted,#888);font-weight:700}

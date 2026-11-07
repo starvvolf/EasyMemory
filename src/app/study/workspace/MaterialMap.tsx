@@ -2,7 +2,7 @@
 // 자료 지도 (2026-10-29): one material on one screen — the outline, under each section its knowledge in its own shape,
 // and the learner's state on each. Page reading is for the first pass; this is for the second pass and the night before.
 // Data: GET /api/study-map/<material> (src/lib/study/material-map.ts). Opened from the PDF reader's bar.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { call, errorText, go } from "./api";
 import { Rich as RichBlock, RichInline as Rich } from "./Rich";
 
@@ -306,6 +306,19 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
     const t = setTimeout(measure, 0);
     return () => { ro.disconnect(); clearTimeout(t); };
   }, [s, pairs, hover, allPairs, open, ancestors, groupOfCard]);
+  // 연 카드가 아래 칸(내용)에 가리면 그 위로 굴린다.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => {
+      const el = wrap.current?.querySelector<HTMLElement>(`[data-c="${open}"]`), panel = document.querySelector<HTMLElement>(".mm8-detail");
+      if (!el || !panel) return;
+      const r = el.getBoundingClientRect(), top = panel.getBoundingClientRect().top;
+      if (r.bottom > top - 12) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const again = el.getBoundingClientRect();
+      if (again.bottom > top - 12) { let box: HTMLElement | null = el.parentElement; while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement; (box ?? document.scrollingElement as HTMLElement | null)?.scrollBy({ top: again.bottom - top + 40, behavior: "smooth" }); }
+    }, 60);
+    return () => clearTimeout(t);
+  }, [open]);
   const makeBtn = (label: string, primary = true) => <button className={`btn small ${primary ? "primary" : "ghost"}`} disabled={busy || making} onClick={make}
     title="기억 카드를 뜻으로 다시 묶어요. AI 1번(terra), 약 15초">{busy ? "구조를 만드는 중… (약 15초)" : label}</button>;
   if (!data && !error) return <p className="small muted mm6-wait">불러오는 중…</p>;
@@ -341,23 +354,27 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
           <span className="mm8-headname"><Rich text={head.title} />{pairCount.get(head.id) ? <span className="mm8-n">↔{pairCount.get(head.id)}</span> : null}</span>
           <span className="mm8-headline"><Rich text={keyLine(head.shape)} /></span></button> : null}
         {g.explain && depth < 2 && !ok(head) ? <p className="mm8-explain"><Rich text={g.explain} /></p> : null}
-        {items.length ? <div className={`mm8-cards${rel ? " rel" : ""}`}>
-          {rel ? <span className={`mm8-rel r-${g.members}`}>{rel}</span> : null}
+        {/* 11/8 사용자: 관계 표시는 한 줄을 온전히, 차례로는 상자처럼 위에서 아래로 ↓ */}
+        {items.length && rel ? <div className={`mm8-relrow r-${g.members}`}><span className={`mm8-rel r-${g.members}`}>{rel}</span></div> : null}
+        {items.length ? <div className={`mm8-cards${g.members === "순서" ? " seq" : ""}`}>
           {items.map((it, i) => <span key={i} className="mm8-item">
-            {i && join ? <span className="mm8-join" aria-hidden>{join}</span> : null}
+            {i && join ? <span className="mm8-join" aria-hidden>{g.members === "순서" ? "↓" : join}</span> : null}
             {it.vs ? <span className="mm8-vs" title={it.vs.on || undefined}>{pill(byId.get(it.vs.a)!)}<span className="mm8-vsmark">vs{it.vs.on ? <em>{it.vs.on}</em> : null}</span>{pill(byId.get(it.vs.b)!)}</span> : pill(it.c!)}
           </span>)}</div> : null}
-        {sub.length ? <>{!items.length && rel ? <span className={`mm8-rel r-${g.members}`}>{rel}</span> : null}<div className="mm8-kids">{sub.map((k) => box(k, depth + 1))}</div></> : null}
+        {sub.length ? <>{!items.length && rel ? <div className={`mm8-relrow r-${g.members}`}><span className={`mm8-rel r-${g.members}`}>{rel}</span></div> : null}{g.members === "순서" && !items.length
+          ? <div className="mm8-kids seq">{sub.map((k, i) => <Fragment key={k.id}>{i ? <span className="mm8-join seq" aria-hidden>↓</span> : null}{box(k, depth + 1)}</Fragment>)}</div>
+          : <div className="mm8-kids">{sub.map((k) => box(k, depth + 1))}</div>}</> : null}
       </div>);
   };
   const types = [...new Set(s.edges.map((e) => e.type))];
   return (
-    <div className="mm8">
+    <div className={`mm8${openCard ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("[data-c],button,a,input,label,.mm8-detail")) setOpen(null); }}>
       <div className="row small mm7-bar"><span className="small muted">뜻으로 묶은 그림 · 상자 안은 그 부분 · 선은 묶음 사이 연결 · 카드에 올리면 다른 묶음의 짝</span><span className="cs-gap" />
         {pairs.length ? <label className="row small"><input type="checkbox" checked={allPairs} onChange={(e) => setAllPairs(e.target.checked)} /> 카드 연결 모두 ({pairs.length})</label> : null}
         {data?.stale ? <span className="small bad">기억 카드가 바뀌었어요</span> : null}{makeBtn("다시 만들기", Boolean(data?.stale))}</div>
       {types.length ? <div className="mm8-legend small">{types.map((t) => <span key={t}><i style={{ background: EDGE_COLOR[t] ?? "#888" }} />{t}</span>)}{pairs.length ? <span><i className="pair" />카드 짝</span> : null}</div> : null}
       {error ? <p className="small bad">{error}</p> : null}
+      {/* 11/8 사용자 "눌렀을 때 아래 칸이 덮어서 다시 누를 수 없다": 빈 곳을 누르면 닫히고, 연 카드는 아래 칸 위로 보이게 굴린다. */}
       <div className="mm8-wrap" ref={wrap} onMouseLeave={() => setHover(null)} onMouseOver={(e) => {
         // 가장 안쪽 것 하나만: 카드 위면 그 카드, 아니면 그 상자.
         const t = (e.target as HTMLElement).closest<HTMLElement>("[data-c],[data-g]");
