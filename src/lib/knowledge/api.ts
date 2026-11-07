@@ -17,6 +17,8 @@ export { recordEvent, memoryOverview, memorySummary, memoryEvents } from "./stor
 
 /* ---------- 복습 ---------- */
 export { reviewQueue, reviewStatus, dayOf } from "./store.ts";
+// 복습 상자 간격(10분→1→3→7→16→35일): PS 튜터가 능력별 상자에 같은 간격을 쓴다(11/8).
+export { REVIEW_BOXES } from "./store.ts";
 // 자료 지도(src/lib/study/material-map.ts, A 10/29): 카드 ref마다 저장된 지식, 읽기만.
 export { itemsForRefs } from "./store.ts";
 

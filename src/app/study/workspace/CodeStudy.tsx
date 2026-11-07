@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, handoff, later, shareContext } from "./api";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
+import PsTutor from "./PsTutor";
 import { LevelBox, LevelChip, NeedsPanel, type Level, type Needs, type SelfLevel } from "./CodeGrade";
 import { COACH_ASKS, ModeSwitch, STEP_LABEL, TrainPanel, useLab, useTrain, useWatch, WatchStrip } from "./CodeTrain";
 
@@ -36,6 +37,10 @@ export default function CodeStudy({ openId }: { openId?: string }) {
   const [current, setCurrent] = useState<string | null>(() => { const id = openId ?? handoff.codeId ?? null; handoff.codeId = undefined; return id; });
   const [filter, setFilter] = useState<"all" | ProblemLite["status"]>("all");
   const [error, setError] = useState("");
+  // PS 튜터(11/8) | 문제 목록: 마지막에 본 쪽을 기억한다.
+  const [tab, setTab] = useState<"tutor" | "list">("tutor");
+  useEffect(() => later(() => { try { if (localStorage.getItem("code:tab") === "list") setTab("list"); } catch { /* 없음 */ } }), []);
+  const pickTab = (t: "tutor" | "list") => { setTab(t); try { localStorage.setItem("code:tab", t); } catch { /* 없음 */ } };
   const load = useCallback(async () => {
     try { const [p, l] = await Promise.all([call<{ problems: ProblemLite[] }>("/api/code/problems"), call<{ langs: LangInfo[] }>("/api/code/langs")]); setList(p.problems); setLangs(l.langs); }
     catch (e) { setError(errorText(e)); }
@@ -48,8 +53,11 @@ export default function CodeStudy({ openId }: { openId?: string }) {
   }, []);
   if (current) return <Solve key={current} id={current} langs={langs} onBack={() => { setCurrent(null); void load(); }} />;
   const shown = list.filter((p) => filter === "all" || p.status === filter);
+  const tabs = <div className="ws-seg" role="tablist" style={{ alignSelf: "flex-start" }}>{([["tutor", "PS 튜터"], ["list", "문제 목록"]] as const).map(([k, label]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => pickTab(k)}>{label}</button>)}</div>;
+  if (tab === "tutor") return <div className="cs stack">{tabs}<PsTutor onOpenProblem={(id) => { void load(); setCurrent(id); }} /></div>;
   return (
     <div className="cs stack">
+      {tabs}
       <header className="row" style={{ justifyContent: "space-between" }}>
         <div><h2>알고리즘 문제</h2><p className="small muted">직접 짜서 실행하고 채점해요. 결과는 그 문제의 기억 기록에 남아요.</p></div>
         {langs.some((l) => !l.ready) ? <div className="row small">{langs.filter((l) => !l.ready).map((l) => <span key={l.lang} className="chip help" title={l.help}>{l.label} 설치 안 됨</span>)}</div> : null}
