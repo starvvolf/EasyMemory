@@ -44,5 +44,5 @@ test("다시 확인: 맞으면 간격을 늘리고 틀리면 다시 열린다", 
 });
 test("세션 노트: 제목 · 태그 · 부족함 상태 개수", async () => {
   const n = await G.sessionNote("r1");
-  assert.equal(n.counts.all, 3); assert.ok(n.tags.includes("지도 항목 고르기 순서"));
+  assert.equal(n.counts.all, 2, "묶인 칸은 하나로 센다"); assert.ok(n.tags.includes("지도 항목 고르기 순서"));
 });

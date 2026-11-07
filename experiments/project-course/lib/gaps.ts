@@ -173,15 +173,16 @@ export async function sessionNote(runId: string) {
   const tags = new Map<string, number>();
   for (const r of recs) for (const x of [...r.learned, ...(r.gaps ?? [])]) tags.set(x.concept, (tags.get(x.concept) ?? 0) + 1);
   for (const x of gaps) if (x.type) tags.set(x.concept, (tags.get(x.concept) ?? 0) + 2);
-  const count = (st: GapStatus[]) => gaps.filter((x) => st.includes(x.status)).length;
+  const count = (st: GapStatus[]) => gaps.filter((x) => !x.mergedInto && st.includes(x.status)).length;
   return {
     runId, title: g.long?.text ?? "목표를 정하기 전", mode: g.mode, at: g.long?.at ?? null,
     tags: [...tags].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t]) => t),
     map: g.map.map((m) => ({ title: m.title, status: m.status, support: !!m.support })),
     goals: recs.map((r) => ({ goal: r.goal, done: r.done, status: r.status, summary: r.summary, steps: r.steps, learned: r.learned.map((x) => ({ type: x.type, concept: x.concept, meaning: x.meaning, how: x.how })) })),
-    gaps: gaps.map((x) => ({ id: x.id, goal: x.goal.title, unit: x.unit.title, concept: x.type ? x.concept : "", type: x.type, wrong: x.wrong, right: x.right, cause: x.cause,
+    // 묶인 칸(mergedInto)은 첫 칸에 합쳐 한 줄로: 드러난 곳 · 고른 이유를 더한다
+    gaps: gaps.filter((x) => !x.mergedInto).map((x0) => { const extra = gaps.filter((y) => y.mergedInto === x0.id); return { ...x0, evidence: [...x0.evidence, ...extra.flatMap((y) => y.evidence)], cause: [...new Set([...x0.cause, ...extra.flatMap((y) => y.cause)])] }; }).map((x) => ({ id: x.id, goal: x.goal.title, unit: x.unit.title, concept: x.type ? x.concept : "", type: x.type, wrong: x.wrong, right: x.right, cause: x.cause,
       from: [...new Set(x.evidence.map((e) => e.from))], evidence: x.evidence.map((e) => e.text).slice(-4), remedy: x.remedy.map((r) => `${r.kind}: ${r.text}`), status: x.status,
       fillEvidence: x.fillEvidence ?? "", code: x.code ?? null, recheck: x.recheck?.q ?? "", dueAt: x.dueAt ?? null, checks: x.checks })),
-    counts: { all: gaps.length, filled: count(["세션에서 채움", "다시 확인 맞음"]), open: count(["열림", "채우는 중", "다시 틀림"]), rechecked: count(["다시 확인 맞음"]) },
+    counts: { all: gaps.filter((x) => !x.mergedInto).length, filled: count(["세션에서 채움", "다시 확인 맞음"]), open: count(["열림", "채우는 중", "다시 틀림"]), rechecked: count(["다시 확인 맞음"]) },
   };
 }
