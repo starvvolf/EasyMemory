@@ -105,9 +105,9 @@ export function planQuiz(map: MaterialMap, structure: Structure): QuizPlan {
 }
 
 export const QUIZ_SYSTEM = `너는 대학 강의 자료로 복습 문제를 만든다. 문제 하나를 만든다.
-- 받은 카드(지식)와 원문(source)에 있는 것만 묻는다. 원문에 없는 사실·수치를 지어내지 않는다(예제 수치는 새로 정해도 되지만 원문의 방법으로 풀려야 한다).
+- 받은 카드(지식)와 원문(source)에 있는 것만 묻는다. 원문에 없는 사실·수치를 지어내지 않는다(예제 수치는 새로 정해도 되지만 원문의 방법으로 풀려야 한다). 자료에 없는 변환 규칙·절차를 지어서 상황을 만들지 않는다.
 - unit이 차례면 카드 여러 장의 단계를 다 써야 풀리게 하나로 묶는다. 대비면 두 카드를 가르는 기준으로, 갈래면 갈래들 사이에서 고르게.
-- form: ox(맞다/틀리다 명제 하나), choice(보기 4개, 정답 하나), order(단계 3~6개를 뒤섞어 주고 바른 순서), short(짧은 답: 수, 좌표, 낱말).
+- form: ox(맞다/틀리다 명제 하나), choice(보기 4개, 정답 하나), order(단계 3~6개를 뒤섞어 주고 바른 순서), short(짧은 답: 수, 좌표, 낱말 — answer에는 값만, 문장 말고).
 - level: 2 알아보기 · 3 구별하기 · 4 적용하기(상황·계산). 받은 level에 맞춘다.
 - 오답 보기는 카드의 mistakes(헷갈리기 쉬운 점)에서 가져온다. 정답이 문장 길이나 말투로 드러나지 않게.
 - 한국어로 쓴다. 용어는 처음에 "한국어(영어 원어)". 수식·기호·변수는 원문 그대로.
@@ -117,9 +117,9 @@ export const QUIZ_SYSTEM = `너는 대학 강의 자료로 복습 문제를 만�
 const QUIZ_SCHEMA = S.obj({ form: S.oneOf(...FORMS), level: S.int, stem: S.str, options: S.arr(S.str), answer: S.str, explain: S.str, uses: S.arr(S.int) });
 type QuizReply = { form: Form; level: number; stem: string; options: string[]; answer: string; explain: string; uses: number[] };
 
-export const SOLVE_SYSTEM = `정답을 모르는 상태에서 문제 하나를 원문(source)만 보고 푼다.
+export const SOLVE_SYSTEM = `정답을 모르는 상태에서 문제 하나를 정리된 지식과 원문(source)으로 푼다(원문 글이 비었으면 정리된 지식이 그 쪽 그림에서 읽은 것이다).
 answer: ox는 "O"/"X", choice는 보기 번호(1부터), order는 바른 순서 번호를 쉼표로, short는 답.
-원문으로 답이 하나로 정해지지 않으면(보기 둘이 맞음, 원문에 없음, 조건이 모자람) unique=false와 doubt 한 줄.`;
+short는 값·낱말만 짧게(문장 말고). 지식과 원문으로 답이 하나로 정해지지 않으면(보기 둘이 맞음, 원문에 없음, 조건이 모자람) unique=false와 doubt 한 줄.`;
 const SOLVE_SCHEMA = S.obj({ answer: S.str, unique: { type: "boolean" }, doubt: S.str });
 type SolveReply = { answer: string; unique: boolean; doubt: string };
 
@@ -131,11 +131,19 @@ const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(proc
 const fileOf = (id: string) => { if (!/^gen_[a-z0-9]{8,64}$/.test(id)) throw Object.assign(new Error("자료 id가 올바르지 않아요."), { status: 400 }); return path.join(dataDir(), "study-gen", id, "quiz-plan.json"); };
 export async function loadQuizRun(id: string): Promise<QuizRun | null> { try { return JSON.parse(await readFile(fileOf(id), "utf8")) as QuizRun; } catch { return null; } }
 
-const norm = (s: string) => s.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
+// 11/8 첫 시험: "−6"(유니코드 빼기)과 "-6", "거부, 요청 간선"과 "순환이 생기므로 요청을 거부한다. P2 → R2는 요청 간선이다."를 다르다고 봤다.
+const norm = (s: string) => s.normalize("NFKC").replace(/[−–—]/g, "-").replace(/\s+/g, "").replace(/[()（）.,·:;'"“”]/g, "").toLowerCase();
+const nums = (s: string): string[] => s.normalize("NFKC").replace(/[−–—]/g, "-").match(/-?\d+(?:\.\d+)?/g) ?? [];
+const words = (s: string) => new Set((s.normalize("NFKC").match(/[\p{L}\d]{2,}/gu) ?? []).map((w) => w.replace(/(이다|한다|된다|는|은|을|를|이|가|다)$/u, "")).filter((w) => w.length >= 2));
 export function sameAnswer(form: Form, a: string, b: string) {
-  if (form === "ox") return norm(a).startsWith(norm(b).slice(0, 1)) && norm(a).slice(0, 1) === norm(b).slice(0, 1);
+  if (form === "ox") { const f = (x: string) => /^\s*(o|맞|참|true)/i.test(x) ? "O" : /^\s*(x|틀|거짓|false)/i.test(x) ? "X" : ""; return f(a) !== "" && f(a) === f(b); }
   if (form === "choice" || form === "order") return (a.match(/\d+/g) ?? []).join(",") === (b.match(/\d+/g) ?? []).join(",");
-  return norm(a) === norm(b) || norm(a).includes(norm(b)) || norm(b).includes(norm(a));
+  if (norm(a) === norm(b) || norm(a).includes(norm(b)) || norm(b).includes(norm(a))) return true;
+  const na = nums(a), nb = nums(b);
+  if (na.length && nb.length) return na.join(",") === nb.join(",") || (nb.every((x) => na.includes(x)) && na.every((x) => nb.includes(x)));
+  // 말로 된 짧은 답: 정답의 낱말이 풀이 답에 다 있으면 같다
+  const wa = words(a), wb = words(b);
+  return wa.size > 0 && [...wa].every((w) => [...wb].some((v) => v.includes(w) || w.includes(v)));
 }
 
 /** 계획 + (make면) 단위마다 문제 하나를 만들고 따로 풀어 확인한다. texts: 쪽 번호 → 원문 글. */
@@ -156,7 +164,9 @@ export async function makeQuiz(id: string, map: MaterialMap, structure: Structur
       try {
         const q = await withTrace({ area: "pdf", action: "quiz-unit", ref: id }, () => askJson<QuizReply>("map:quiz-unit", QUIZ_SYSTEM, user, QUIZ_SCHEMA, QUIZ_MODEL));
         const view = `form: ${q.form}\n${q.stem}${q.options.length ? `\n${q.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}`;
-        const solved = await withTrace({ area: "pdf", action: "quiz-solve", ref: id }, () => askJson<SolveReply>("map:quiz-solve", SOLVE_SYSTEM, `${view}\n\nsource\n${source}`, SOLVE_SCHEMA, QUIZ_MODEL));
+        // 따로 풀기도 카드(정리된 지식, 헷갈리는 점 빼고)를 본다: 그래픽스 04처럼 글자가 그림인 쪽은 원문 글이 거의 비어 "원문에 없다"가 났다(11/8)
+        const known = cards.map((c, i) => `${i + 1}. ${cardLine({ kind: c.kind, title: c.title, shape: c.shape, takes: c.takes, gives: c.gives } as Card).replace(/\s+/g, " ").slice(0, 400)}`).join("\n");
+        const solved = await withTrace({ area: "pdf", action: "quiz-solve", ref: id }, () => askJson<SolveReply>("map:quiz-solve", SOLVE_SYSTEM, `${view}\n\n정리된 지식\n${known}\n\nsource\n${source}`, SOLVE_SCHEMA, QUIZ_MODEL));
         const agree = sameAnswer(q.form, q.answer, solved.answer);
         const held = !solved.unique ? `답이 하나가 아님: ${solved.doubt}` : !agree ? `따로 푼 답이 다름(${solved.answer} ≠ ${q.answer})` : (q.form === "choice" && q.options.length < 3) ? "보기가 모자람" : undefined;
         return { ...it, ok: !held, ...(held ? { held } : {}), q, solved, ms: Date.now() - t };

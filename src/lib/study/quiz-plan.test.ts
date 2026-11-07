@@ -31,3 +31,8 @@ test("답 맞추기", () => {
   assert.ok(sameAnswer("ox", "X", "x"));
   assert.ok(sameAnswer("short", "(21, 11)", "(21,11)"));
 });
+test("답 맞추기: 빼기 기호·문장으로 쓴 답", () => {
+  assert.ok(sameAnswer("short", "(A,B,C,D)=(3,2,6,-6)", "(3,2,6,−6)"));
+  assert.ok(sameAnswer("short", "거부, 요청 간선", "순환이 생기므로 요청을 거부한다. P2 → R2는 요청 간선이다."));
+  assert.ok(!sameAnswer("short", "허용, 할당 간선", "요청을 거부한다. 요청 간선이다."));
+});
