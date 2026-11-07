@@ -1,4 +1,4 @@
-// 구조 단위 출제 시험 (src/lib/study/quiz-plan.ts): GET ?o=<설정 JSON>&label= 계획만(AI 없음) + 저장된 결과
+// 구조 단위 출제 시험 (src/lib/study/quiz-plan.ts): GET ?o=<설정 JSON>&label= 계획만(AI 없음) + 저장된 결과 (11/8)
 // · POST {options?, label?, only?, units?, noRetry?, noBlind?} 계획대로 만들고 따로 풀기(AI 단위마다 2~5번).
 import { NextResponse } from "next/server";
 import { boundedJson, fail, guard } from "@/lib/assist/http";
