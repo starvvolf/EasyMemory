@@ -382,7 +382,8 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
   const saves = await R.savesOf(runId);
   const lastBy = new Map<string, string>(), beforeBy = new Map<string, string>();
   for (const sv of saves) (sv.at >= since ? lastBy : beforeBy).set(sv.file, sv.text);
-  const code = [...lastBy].map(([f, t]) => { const d = R.lineDiff(beforeBy.get(f) ?? "", t); return d.length ? `[저장한 코드 ${f}]\n${d.join("\n")}` : ""; }).filter(Boolean);
+  // 판정에는 과제 뒤 저장한 파일의 최신본 전체(줄 번호, 200줄까지) — 바뀐 줄만 주면 안 바뀐 줄을 "없다"고 봄(11/8 실측)
+  const code = [...lastBy].filter(([f, t]) => (beforeBy.get(f) ?? "") !== t).map(([f, t]) => `[저장한 코드 ${f} — 최신본]\n${t.split(/\r?\n/).slice(0, 200).map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}`);
   const v = await J.judgeApply(unit, lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task, [...said, ...code].join("\n\n"));
   return { verdict: v.verdict, right: v.right, gap: v.gap };
 }
