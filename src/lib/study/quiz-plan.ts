@@ -206,6 +206,7 @@ export const QUIZ_SYSTEM = `너는 대학 강의 자료로 복습 문제를 만�
 // 그림 상황 문제 (11/8): 그림을 문제에 보여 준다. 그림을 읽어야 풀리게, 그림 속 이름·수를 그대로 쓴다.
 export const FIGURE_QUIZ = `[그림] 이 문제는 받은 그림을 학습자에게 같이 보여 준다.
 - 그림을 읽어야 풀리게 만든다: 그림 속 요소(정점·간선·화소·좌표·라벨)를 문제가 직접 가리키고, 답이 그림에서 정해지게.
+- 그림이 보여 주는 상황 자체를 판정·계산하게 한다(이 그래프에 순환이 있나, 이 화소 다음은 어디인가). 그림 요소를 억지로 세게 하거나 그림의 수를 다른 계산에 끌어다 쓰지 않는다(11/8: "맨 아래 행 화소 개수만큼 x를 늘려…").
 - 그림에 보이는 이름·수·기호를 그대로 쓴다. 그림에 없는 요소를 있다고 하지 않는다. 그림을 글로 다시 다 풀어 쓰지 않는다(그러면 그림이 필요 없다).
 - figure_read: 그림에서 읽은 것(문제에 쓰는 요소만) 한두 줄. 확인용이다.
 - figure_text: 그림 안에 적힌 문장·설명 글을 그대로 옮긴다(라벨·변수 이름은 빼고, 없으면 빈 문자열).
@@ -267,7 +268,8 @@ export function shuffleChoice(q: QuizReply, seed: string) {
   if (right < 0 || right >= q.options.length) return;
   let h = 0; for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   const order = q.options.map((_, i) => i);
-  for (let i = order.length - 1; i > 0; i--) { h = (h * 1103515245 + 12345) >>> 0; const j = (h >>> 16) % (i + 1); // 아래 비트는 주기가 짧아 2번 자리가 안 나왔다 [order[i], order[j]] = [order[j], order[i]]; }
+  // 위쪽 비트를 쓴다(아래 비트는 주기가 짧아 2번 자리가 안 나왔다, 11/8 5회차)
+  for (let i = order.length - 1; i > 0; i--) { h = (h * 1103515245 + 12345) >>> 0; const j = (h >>> 16) % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
   q.options = order.map((i) => q.options[i]);
   q.answer = String(order.indexOf(right) + 1);
   // 해설이 "2번"처럼 번호를 말하면 섞은 뒤 틀리므로 번호 말을 뺀다
