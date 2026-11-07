@@ -323,6 +323,7 @@ const routes: [string, RegExp, Handler][] = [
     const r = await G.answerRecheck(m[1], m[2], String(b.answer ?? ""), (g) => G.gradeRecheck(g, String(b.answer ?? "")));
     return { verdict: r.verdict.verdict, sameMistake: r.verdict.same_mistake, note: r.verdict.note, answer: r.gap?.recheck?.a ?? "", right: r.gap?.right ?? "", status: r.gap?.status, dueAt: r.gap?.dueAt ?? null };
   }],
+  ["POST", /^\/api\/dev\/rerecord\/(\w+)$/, async (_q, m) => (await import("../lib/lesson.ts")).rerecordWithLedger(m[1])],
   ["GET", /^\/api\/runs\/(\w+)\/note$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/gaps.ts")).sessionNote(m[1]); }],
   ["POST", /^\/api\/bridge\/answer$/, async (req) => { const b = await body(req); return (await import("../lib/bridge.ts")).bridgeAnswer(String(b.id ?? ""), b.result ?? null); }],
   ["POST", /^\/api\/bridge\/state$/, async (req) => { const b = await body(req) as Record<string, never>; await getRun(String(b.runId)); const { runId, ...state } = b; bridgeSetState(runId, state); return { ok: true }; }],

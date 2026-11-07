@@ -360,6 +360,22 @@ async function recordFinished(runId: string, run: { codexId?: string; chatId?: s
   const rec = await R.recordGoal(runId, goal, mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId), gid ? await GP.gapsForRecord(runId, gid, await verdictLines(runId, goal.at)) : "").catch(() => null);
   if (rec && gid) await GP.mergeRecord(runId, { id: gid, title: goal.title, done: goal.done }, (rec.gaps ?? []) as never, rec.to).catch((e) => console.error("부족함 원장 합치기:", e));
   if (rec) { await (await import("./timeline.ts")).systemStep(runId, `목표 정리: ${goal.title}`, { learned: rec.learned.map((x) => `${x.type} · ${x.concept}`), gaps: (rec.gaps ?? []).map((x) => `${x.type} · ${x.concept}${x.code ? ` (코드 ${x.code.file} ${x.code.from}~${x.code.to}줄)` : ""}`) }, Date.now() - t0); notifyLesson(runId); }
+  return rec;
+}
+/** 시험용(11/8): 원장에 있는 목표를 원장과 함께 다시 정리한다(학습 종료가 원장을 건너뛰던 때의 실습을 다시 보기). 정리 기록이 하나 더 생긴다 */
+export async function rerecordWithLedger(runId: string) {
+  const run = await getRun(runId);
+  const recs = await (await import("./goal-record.ts")).recordsOf(runId);
+  const gaps = await (await import("./gaps.ts")).ledgerOf(runId);
+  const out: string[] = [];
+  for (const gid of [...new Set(gaps.map((g) => g.goal.id))]) {
+    const title = gaps.find((g) => g.goal.id === gid)!.goal.title;
+    const r = [...recs].reverse().find((x) => x.goal === title);
+    if (!r) continue;
+    const rec = await recordFinished(runId, run, { id: gid, title, done: r.done, understood: true, applied: r.status === "마침", at: r.from }, r.mode);
+    if (rec) out.push(title);
+  }
+  return { rerecorded: out };
 }
 /**
  * 학습 종료(11/6 사용자 "도중에 학습 종료 버튼. 끄면서 알아서 처리할 거 정리하면서 로딩 살짝 걸리고 종료"):
@@ -462,8 +478,8 @@ export async function endLearning(runId: string) {
   await G.goalAction(runId, "end", {});
   let recorded: { goal: string; learned: number; gaps: number; memory: number } | null = null;
   if (before.current) {
-    const R = await import("./goal-record.ts");
-    const rec = await R.recordGoal(runId, before.current, before.mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId)).catch(() => null);
+    // 목표 정리는 한 길로(11/8 실측: 학습 종료가 정리를 따로 불러 부족함 원장 합치기 · 타임라인을 건너뜀)
+    const rec = await recordFinished(runId, run, before.current, before.mode);
     if (rec) recorded = { goal: rec.goal, learned: rec.learned.length, gaps: rec.gaps?.length ?? 0, memory: rec.memory?.done.length ?? 0 };
   }
   await Promise.all(recordJobs.get(runId) ?? []); recordJobs.delete(runId);
