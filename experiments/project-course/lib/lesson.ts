@@ -384,7 +384,9 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
   for (const sv of saves) (sv.at >= since ? lastBy : beforeBy).set(sv.file, sv.text);
   // 판정에는 과제 뒤 저장한 파일의 최신본 전체(줄 번호, 200줄까지) — 바뀐 줄만 주면 안 바뀐 줄을 "없다"고 봄(11/8 실측)
   const code = [...lastBy].filter(([f, t]) => (beforeBy.get(f) ?? "") !== t).map(([f, t]) => `[저장한 코드 ${f} — 최신본]\n${t.split(/\r?\n/).slice(0, 200).map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}`);
-  const v = await J.judgeApply(unit, lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task, [...said, ...code].join("\n\n"));
+  // 학습자가 과제 뒤 VS Code 터미널에서 친 명령과 결과(마지막 5개)도 한 것으로 본다(11/8)
+  const typed = (await (await import("./shell.ts")).learnerRunsSince(runId, since)).slice(-5).map((r) => `[학습자가 터미널에서 친 명령] ${r.command}\n종료 코드 ${r.code ?? "모름"}\n${r.out.slice(-1500)}`);
+  const v = await J.judgeApply(unit, lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task, [...said, ...code, ...typed].join("\n\n"));
   return { verdict: v.verdict, right: v.right, gap: v.gap };
 }
 const recordJobs = new Map<string, Promise<unknown>[]>();

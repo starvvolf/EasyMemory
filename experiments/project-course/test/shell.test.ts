@@ -39,3 +39,11 @@ test("작업 폴더가 자기 저장소가 아니면 git 읽기도 묻기", asyn
   assert.equal(classify("git status", bare).kind, "ask");
   assert.equal(classify("node a.js", bare).kind, "auto");
 });
+test("학습자가 터미널에서 친 명령은 다음 맥락에 한 번", async () => {
+  const { learnerRan, learnerRunsSince } = await import("../lib/shell.ts");
+  const t0 = new Date(Date.now() - 1000).toISOString();
+  await learnerRan("r4", { command: "python count.py", exitCode: 1, cwd: "", output: "KeyError: 'a'" });
+  const c = await shellContext("r4"); assert.match(c, /직접 친 명령/); assert.match(c, /KeyError/);
+  assert.equal(await shellContext("r4"), "");
+  assert.equal((await learnerRunsSince("r4", t0)).length, 1);
+});

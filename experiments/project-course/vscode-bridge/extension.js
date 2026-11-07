@@ -509,6 +509,35 @@ function goOfflineSoon() {
   offlineTimer = setTimeout(() => { if (panel && panelOnline !== false) renderOffline(); }, 4000);
 }
 
+// 학습자가 VS Code 터미널에서 친 명령과 결과(11/8 결정 8 다음 순서 "VS Code 터미널 출력을 맥락에"):
+// 셸 통합이 있는 VS Code(1.93+)에서만. 작업 폴더 안에서 친 명령만 보낸다(다른 폴더 일은 안 보냄)
+const termBufs = new WeakMap();
+const stripAnsi = (t) => String(t).replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, "").replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, "").replace(/\r(?!\n)/g, "\n");
+function watchTerminal(context) {
+  const w = vscode.window;
+  if (!w.onDidStartTerminalShellExecution || !w.onDidEndTerminalShellExecution) return;
+  context.subscriptions.push(
+    w.onDidStartTerminalShellExecution((e) => {
+      const buf = { out: "", done: null };
+      termBufs.set(e.execution, buf);
+      buf.done = (async () => { try { for await (const d of e.execution.read()) { buf.out += d; if (buf.out.length > 60000) buf.out = buf.out.slice(-30000); } } catch { /* 읽기 실패는 출력 없이 */ } })();
+    }),
+    w.onDidEndTerminalShellExecution(async (e) => {
+      if (!runId) return;
+      const command = (e.execution.commandLine && e.execution.commandLine.value || "").trim();
+      if (!command) return;
+      const cwdUri = e.execution.cwd || (e.shellIntegration && e.shellIntegration.cwd);
+      const cwd = cwdUri ? cwdUri.fsPath : "";
+      const inside = cwd && (path.resolve(cwd).toLowerCase() + path.sep).startsWith(path.resolve(root).toLowerCase() + path.sep);
+      if (!inside) return;
+      const buf = termBufs.get(e.execution) || { out: "", done: null };
+      if (buf.done) await Promise.race([buf.done, new Promise((r) => setTimeout(r, 800))]);
+      const rel = path.relative(root, cwd).split(path.sep).join("/");
+      request("POST", "/api/bridge/terminal", { runId, command: command.slice(0, 2000), exitCode: typeof e.exitCode === "number" ? e.exitCode : null, cwd: rel, output: stripAnsi(buf.out).slice(-12000) }).catch(() => {});
+    }),
+  );
+}
+
 function activate(context) {
   const folder = (vscode.workspace.workspaceFolders || []).find((f) => ["stage.json", "lobby.json"].some((n) => fs.existsSync(path.join(f.uri.fsPath, ".recaller", n))));
   if (!folder) return;
@@ -547,6 +576,7 @@ function activate(context) {
   );
   if (vscode.window.activeTextEditor && inRoot(vscode.window.activeTextEditor.document)) lastEditor = vscode.window.activeTextEditor;
   setStatus("$(sync~spin) Recaller", "튜터에 연결하는 중…", false);
+  watchTerminal(context);
   connect();
   // 코스 프로그램이 꺼져 있어도 튜터 자리에 안내가 보이게
   setTimeout(() => { if (!panel && !runId && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); } }, 6000);

@@ -19,7 +19,7 @@ export const SHELL_TOOL = {
 
 export type Kind = "auto" | "ask";
 export type Pending = { id: string; command: string; why: string; reason: string; at: string };
-export type Ran = { command: string; by: "auto" | "learner-ok"; code: number | null; out: string; ms: number; at: string };
+export type Ran = { command: string; by: "auto" | "learner-ok" | "learner"; code: number | null; out: string; ms: number; at: string; cwd?: string; told?: boolean };
 type ShellState = { pending: Pending | null; history: Ran[]; refused: { command: string; at: string; told?: boolean }[] };
 const file = (runId: string) => path.join(DATA, "shell", `${runId}.json`);
 const empty = (): ShellState => ({ pending: null, history: [], refused: [] });
@@ -131,11 +131,27 @@ export async function decide(runId: string, ws: string | undefined, id: string, 
   return { say: `[명령 실행함 — 학습자가 허락] \`${p.command}\`\n${result(r)}\n\n이 결과를 보고 이어 가 주세요.`, label: "명령 실행", text: `${p.command} → 종료 코드 ${r.code ?? "없음"}` };
 }
 
-/** 매 차례 맥락: 학습자가 거절한 명령은 한 번만 알린다 */
+/** 학습자가 VS Code 터미널에서 친 명령(확장이 보냄, 작업 폴더 안만) */
+export async function learnerRan(runId: string, b: { command?: unknown; exitCode?: unknown; cwd?: unknown; output?: unknown }) {
+  const command = String(b.command ?? "").trim().slice(0, 2000);
+  if (!command) return { ok: false };
+  const ran: Ran = { command, by: "learner", code: typeof b.exitCode === "number" ? b.exitCode : null, out: clip(String(b.output ?? ""), 3000), ms: 0, at: new Date().toISOString(), cwd: String(b.cwd ?? "").slice(0, 200), told: false };
+  await update<ShellState>(file(runId), empty(), (s) => { s.history.push(ran); if (s.history.length > 50) s.history.splice(0, s.history.length - 50); });
+  return { ok: true };
+}
+/** 판정용: 어느 때 뒤로 학습자가 친 명령과 결과 */
+export async function learnerRunsSince(runId: string, since: string) {
+  return (await shellOf(runId)).history.filter((r) => r.by === "learner" && r.at >= since);
+}
+const ranLine = (r: Ran) => `\`${r.command}\`${r.cwd ? ` (폴더 ${r.cwd})` : ""} → 종료 코드 ${r.code ?? "모름"}\n${clip(r.out, 1500) || "(출력 없음)"}`;
+/** 매 차례 맥락: 학습자가 거절한 명령 · 터미널에서 친 명령은 한 번만 알린다(최근 5개) */
 export async function shellContext(runId: string): Promise<string> {
   const s = await shellOf(runId);
   const fresh = s.refused.filter((r) => !r.told);
-  if (!fresh.length && !s.pending) return "";
-  if (fresh.length) await update<ShellState>(file(runId), empty(), (st) => { for (const r of st.refused) r.told = true; });
-  return [s.pending ? `[명령] \`${s.pending.command}\` 실행 여부를 학습자가 고르는 중이다.` : "", ...fresh.map((r) => `[명령] 학습자가 \`${r.command}\` 실행을 거절했다. 다시 돌리려 하지 말고 다른 길을 찾거나 학습자에게 직접 쳐 보게 한다.`)].filter(Boolean).join("\n");
+  const typed = s.history.filter((r) => r.by === "learner" && !r.told).slice(-5);
+  if (!fresh.length && !typed.length && !s.pending) return "";
+  if (fresh.length || typed.length) await update<ShellState>(file(runId), empty(), (st) => { for (const r of st.refused) r.told = true; for (const r of st.history) if (r.by === "learner") r.told = true; });
+  return [s.pending ? `[명령] \`${s.pending.command}\` 실행 여부를 학습자가 고르는 중이다.` : "",
+    ...fresh.map((r) => `[명령] 학습자가 \`${r.command}\` 실행을 거절했다. 다시 돌리려 하지 말고 다른 길을 찾거나 학습자에게 직접 쳐 보게 한다.`),
+    typed.length ? `[터미널 — 지난 차례 뒤 학습자가 VS Code 터미널에서 직접 친 명령]\n${typed.map(ranLine).join("\n\n")}` : ""].filter(Boolean).join("\n");
 }

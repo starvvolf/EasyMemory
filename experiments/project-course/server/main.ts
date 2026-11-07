@@ -312,6 +312,8 @@ const routes: [string, RegExp, Handler][] = [
     if (out.runId) openFloat(out.runId, PORT);
     return { ...out, update, float: floatInUse() };
   }],
+  // 학습자가 VS Code 터미널에서 친 명령(확장 0.8.0, 작업 폴더 안만): 다음 튜터 차례 맥락과 [해 봤어요] 판정에 들어간다
+  ["POST", /^\/api\/bridge\/terminal$/, async (req) => { const b = await body(req); const id = String(b.runId ?? ""); await getRun(id); const r = await (await import("../lib/shell.ts")).learnerRan(id, b); await (await import("../lib/timeline.ts")).systemStep(id, `터미널: ${String(b.command ?? "").slice(0, 80)}`, { exitCode: b.exitCode ?? null }, 0, "system").catch(() => {}); return r; }],
   ["POST", /^\/api\/bridge\/state$/, async (req) => { const b = await body(req) as Record<string, never>; await getRun(String(b.runId)); const { runId, ...state } = b; bridgeSetState(runId, state); return { ok: true }; }],
   ["POST", /^\/api\/bridge\/ask$/, async (req) => {
     const b = await body(req);
