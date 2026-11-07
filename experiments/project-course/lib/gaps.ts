@@ -106,7 +106,8 @@ export async function mergeRecord(runId: string, goal: { id: string; title: stri
       })()];
       for (const [i, g] of targets.entries()) {
         if (i > 0) g.mergedInto = targets[0].id; else delete g.mergedInto;
-        g.concept = clean(r.concept, 80) || g.concept; g.type = r.type || g.type;
+        // 이미 이름이 붙은 칸은 이름을 바꾸지 않는다(다시 정리해도 같은 지식 하나로)
+        if (!g.type) { g.concept = clean(r.concept, 80) || g.concept; g.type = r.type || g.type; }
         if (r.wrong) g.wrong = clean(r.wrong); if (r.right) g.right = clean(r.right, 600);
         if (r.code?.code) g.code = { file: r.code.file, from: r.code.from, to: r.code.to, code: r.code.code.slice(0, 1500) };
         if (r.recheck?.q && r.recheck?.a) g.recheck = { q: clean(r.recheck.q, 1200), a: clean(r.recheck.a, 600) };

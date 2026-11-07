@@ -132,7 +132,10 @@ export function recordInput(goal: GoalIn, messages: Msg[], show: (m: Msg) => str
 export async function recordGoal(runId: string, goal: GoalIn, mode: string | null, messages: Msg[], show: (m: Msg) => string, redo?: { to: string; index: number }, saves: Save[] = [], ledger = "") {
   const base = recordInput(goal, messages, show, saves, redo?.to ?? new Date().toISOString(), await memoryForRecord());
   // 부족함 원장(11/8): 이 목표 동안 코드가 잡은 부족함을 같이 보내 이름 · 재확인 문항을 받는다
-  const { seg, code } = base, user = ledger ? `${base.user}\n\n${ledger}` : base.user;
+  // 이미 쓴 지식 이름(11/8 실측: 정리마다 "빈 목표 상태와 대체값" / "빈 목표 상태"처럼 이름이 흔들려 앱 지식이 늘어남) — 같은 것이면 그 이름 그대로
+  const used = [...new Set((await recordsOf(runId)).flatMap((r) => [...r.learned.map((x) => x.concept), ...(r.gaps ?? []).map((x) => x.concept)]))].slice(-60);
+  const names = used.length ? `\n\n[이 실습에서 이미 쓴 지식 이름 — 같은 지식이면 새 이름을 만들지 말고 이 이름을 글자 그대로 쓴다]\n${used.join(" · ")}` : "";
+  const { seg, code } = base, user = `${base.user}${ledger ? `\n\n${ledger}` : ""}${names}`;
   const log: Record<string, unknown> = { at: new Date().toISOString(), runId, goal: goal.title, messages: seg.length };
   const t0 = Date.now();
   try {
