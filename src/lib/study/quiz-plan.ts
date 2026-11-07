@@ -9,8 +9,9 @@
 //    그림 문제는 잘린 그림을 출제·따로 풀기에 같이 보여 주고, 그림 없이 한 번 더 풀어 "그림이 있어야 풀리는지"를 확인한다.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { askJson, S } from "../assist/model.ts";
-import { withTrace } from "../ai/trace.ts";
+import { askJson, LOCAL_CALLER, S } from "../assist/model.ts";
+import { callModel } from "../ai/model.ts";
+import { currentTrace, newCallId, recordCall, withTrace } from "../ai/trace.ts";
 import { cardLine, type Card } from "./gen/cards.ts";
 import type { MapCard, MaterialMap } from "./material-map.ts";
 import type { Structure } from "./structure.ts";
@@ -244,6 +245,24 @@ export function shapeProblem(q: QuizReply, want: { form: Form; level: number }):
 }
 
 const toDataUrl = (b: Buffer) => `data:image/jpeg;base64,${b.toString("base64")}`;
+type Img = { label: string; dataUrl: string; detail?: "low" | "high" };
+/** askJson과 같되 그림을 같이 보낸다(함께 쓰는 assist/model.ts는 건드리지 않으려고 여기서, 호출 기록도 같은 모양으로). */
+async function ask<T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, images?: Img[]): Promise<T> {
+  if (!images?.length) return askJson<T>(purpose, system, user, schema, QUIZ_MODEL);
+  const started = Date.now(); let first = 0, ok = false, reply = "", error = "";
+  let usage: { inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; reasoningTokens?: number } | undefined;
+  const sent = { system: `${system}\n출력은 JSON으로만 한다.`, user };
+  try {
+    const r = await callModel({ purpose, ...sent, json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`, ...QUIZ_MODEL, caller: LOCAL_CALLER, images, onText: () => { if (!first) first = Date.now(); } });
+    ok = true; usage = r.usage; reply = JSON.stringify(r.data ?? ""); return r.data as T;
+  } catch (e) { error = (e as Error)?.message?.slice(0, 500) ?? String(e); throw e; }
+  finally {
+    const trace = currentTrace();
+    recordCall({ id: newCallId(), at: new Date(started).toISOString(), purpose, ...QUIZ_MODEL, ms: Date.now() - started, ...(first ? { firstTextMs: first - started } : {}), ok, ...(error ? { error } : {}),
+      ...(usage ? { tokens: { in: usage.inputTokens, cached: usage.cachedInputTokens, out: usage.outputTokens, reasoning: usage.reasoningTokens } } : {}), ...(trace ? { trace } : {}),
+      system: sent.system, user: `${sent.user}\n[그림 ${images.length}장]`, reply });
+  }
+}
 
 /** 계획 + (make면) 단위마다 문제 하나를 만들고 따로 풀어 확인한다. texts: 쪽 번호 → 원문 글. */
 export async function makeQuiz(id: string, map: MaterialMap, structure: Structure, texts: Record<string, string>,
@@ -277,12 +296,12 @@ async function makeOne(id: string, map: MaterialMap, it: PlanItem, byId: Map<str
   for (let tries = 1; tries <= (run.noRetry ? 1 : 2); tries++) {
     try {
       const user = `자료: ${map.title}\nunit: ${it.unit} (${it.name}) — ${it.ask}\nform: ${it.form} · level: ${it.level}\n\n카드 (번호|종류|내용)\n${lines.join("\n")}\n\nsource\n${source}${revision ? `\n\n고쳐 쓰기: 앞 문제는 이래서 안 됐다 — ${revision}` : ""}`;
-      const q = await withTrace({ area: "pdf", action: "quiz-unit", ref: id }, () => askJson<QuizReply>(images ? "map:quiz-figure" : "map:quiz-unit", images ? `${QUIZ_SYSTEM}\n\n${FIGURE_QUIZ}` : QUIZ_SYSTEM, user, images ? QUIZ_FIG_SCHEMA : QUIZ_SCHEMA, { ...QUIZ_MODEL, ...(images ? { images } : {}) }));
+      const q = await withTrace({ area: "pdf", action: "quiz-unit", ref: id }, () => ask<QuizReply>(images ? "map:quiz-figure" : "map:quiz-unit", images ? `${QUIZ_SYSTEM}\n\n${FIGURE_QUIZ}` : QUIZ_SYSTEM, user, images ? QUIZ_FIG_SCHEMA : QUIZ_SCHEMA, images));
       if (q.form === "short") q.options = [];
       const shape = shapeProblem(q, it);
       if (shape) { problems.push(shape); revision = `${shape} (앞 문제: ${q.stem.slice(0, 200)})`; continue; }
       const view = `form: ${q.form}\n${q.stem}${q.options.length ? `\n${q.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}`;
-      const solve = (withImage: boolean) => withTrace({ area: "pdf", action: "quiz-solve", ref: id }, () => askJson<SolveReply>("map:quiz-solve", SOLVE_SYSTEM, `${view}\n\n정리된 지식\n${known}\n\nsource\n${source}`, SOLVE_SCHEMA, { ...QUIZ_MODEL, ...(withImage && images ? { images } : {}) }));
+      const solve = (withImage: boolean) => withTrace({ area: "pdf", action: "quiz-solve", ref: id }, () => ask<SolveReply>("map:quiz-solve", SOLVE_SYSTEM, `${view}\n\n정리된 지식\n${known}\n\nsource\n${source}`, SOLVE_SCHEMA, withImage ? images : undefined));
       // 그림 문제는 그림 없이도 한 번(그림이 있어야 풀리는지). 둘은 동시에.
       const [solved, blind] = await Promise.all([solve(true), images && !run.noBlind ? solve(false).catch(() => undefined) : Promise.resolve(undefined)]);
       const agree = sameAnswer(q.form, q.answer, solved.answer);
