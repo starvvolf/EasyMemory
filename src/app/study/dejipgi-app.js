@@ -4017,8 +4017,10 @@ function examField(b){
     picked.length ? h("p", { class:"small", style:"color:var(--ask)", text:`기출 ${picked.length}개 반영 · 처음 한 번 기출을 분석하고 문제마다 베끼기 검사를 해서 조금 더 걸려요.` }) : null);
 }
 // 문제도 바로 만들기 (11/6 사용자 "문제 만들기 자동으로 바로 만들기 걸고 수동 체크 가능하게"): on by default, the last choice remembered.
-function autoQuestionsPref(){ try{ return localStorage.getItem("dejipgi.autoQuestions") !== "0"; }catch(e){ return true; } }
-function setAutoQuestionsPref(on){ try{ localStorage.setItem("dejipgi.autoQuestions", on ? "1" : "0"); }catch(e){} }
+/* 11/8 사용자 "문제 만들기는 당분간 수동으로, 자동으로 만들지 않게": 기본은 꺼짐(지식까지만, 문제는 자료 지도의 [문제 만들기]).
+   예전 열쇠(dejipgi.autoQuestions)에 켜짐이 남아 있어도 따르지 않게 새 열쇠를 쓴다. 켜기는 체크 상자로 그대로. */
+function autoQuestionsPref(){ try{ return localStorage.getItem("dejipgi.autoQuestions.v2") === "1"; }catch(e){ return false; } }
+function setAutoQuestionsPref(on){ try{ localStorage.setItem("dejipgi.autoQuestions.v2", on ? "1" : "0"); }catch(e){} }
 function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, deep:false, deepFast:false, autoQuestions:autoQuestionsPref(), engine:"recaller", survey:{}, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
