@@ -553,6 +553,8 @@ async function locs(list, max) {
 }
 const KINDS = ["파일", "모듈", "이름공간", "패키지", "클래스", "메서드", "속성", "필드", "생성자", "열거형", "인터페이스", "함수", "변수", "상수", "문자열", "숫자", "참거짓", "배열", "객체", "키", "null", "열거 값", "구조체", "이벤트", "연산자", "타입 매개변수"];
 async function answerLsp(cmd) {
+  // 새 폴더는 VS Code가 "이 폴더를 신뢰하나요?"를 묻고, 신뢰 전(제한 모드)에는 디버거 · 언어 기능이 막힌다(11/8 실측: 빈 답 · 디버거 안 켜짐)
+  if (vscode.workspace.isTrusted === false) return "VS Code가 이 폴더를 아직 신뢰하지 않아(제한 모드) 코드 이해 · 디버거가 막혀 있어요. 학습자에게 VS Code 위쪽 띠나 창에서 '신뢰'를 눌러 달라고 하세요. 그동안은 read · grep · run_command로 보세요.";
   if (cmd.op === "problems") {
     const out = [];
     for (const [uri, ds] of vscode.languages.getDiagnostics()) {
