@@ -13,6 +13,7 @@ import { randomBytes } from "node:crypto";
 import { DATA, read, update } from "./store.ts";
 import { CHOICES } from "./stuck.ts";
 import { RESPOND_RULE } from "./judge.ts";
+import { SHELL_TOOL } from "./shell.ts";
 
 /** support: [너무 어려워요]로 끼워 넣은 보충 단계(11/6 사용자 "중간에 보충 단계를 만들어서 넣어 줘야") — 원래 단계 바로 앞에 들어간다 */
 type Item = { id: string; title: string; status: "todo" | "doing" | "done" | "skipped"; support?: boolean };
@@ -70,6 +71,8 @@ export const GOAL_TOOLS = [
     properties: { steps: { type: "array", items: { type: "object", additionalProperties: false, properties: { title: str, done: str }, required: ["title", "done"] } }, why_quote: str }, required: ["steps", "why_quote"] },
   { name: "update_map", description: "지도의 남은 단계 제목을 고친다(끝난 · 하는 중 단계는 그대로 두고 titles에는 남은 단계만). 진행하다 계획이 달라졌거나, 바텀업에서 넓혀 갈 방향이 보일 때.",
     properties: { titles: { type: "array", items: str } }, required: ["titles"] },
+  // 터미널 명령(11/8 결정 8). 학습 목표 도구와 같은 길(두 엔진 공통)로 내보낸다. 처리는 lib/shell.ts
+  SHELL_TOOL,
 ] as const;
 export const GOAL_NAMES = new Set<string>(GOAL_TOOLS.map((t) => t.name));
 /** MCP(Codex)용: inputSchema 꼴로 */
@@ -77,6 +80,7 @@ export const goalToolsMcp = () => GOAL_TOOLS.map((t) => ({ name: t.name, descrip
 
 /** 모델이 부른 도구를 처리한다. learner: 이 대화의 학습자 말들(근거 대조용) */
 export async function runGoalTool(runId: string, name: string, input: Record<string, unknown>, learner: string[]): Promise<string> {
+  if (name === SHELL_TOOL.name) { const sh = await import("./shell.ts"); return sh.runCommandTool(runId, await runWorkspace(runId), input); }
   const s = (v: unknown, n = 300) => String(v ?? "").trim().slice(0, n);
   let out = "";
   await save(runId, (g) => {
@@ -279,7 +283,16 @@ export async function goalContext(runId: string) {
   // 학습자 메모리(11/6): 진행 방식 · 경향을 매 차례 맨 앞에(두 엔진 같게)
   const mem = await (await import("./memory.ts")).memoryText().catch(() => "");
   const body = await goalContextBody(runId);
-  return mem ? `${mem}\n\n${body}` : body;
+  const sh = await (await import("./shell.ts")).shellContext(runId).catch(() => "");
+  return [mem, body, sh].filter(Boolean).join("\n\n");
+}
+/** 진행 기록의 작업 폴더(Codex는 그 대화의 폴더, 기본 엔진은 실험판 대화의 폴더) */
+export async function runWorkspace(runId: string): Promise<string | undefined> {
+  const run = await (await import("./store.ts")).getRun(runId).catch(() => null);
+  if (!run) return undefined;
+  if (run.codexId) return (await (await import("./codex-chat.ts")).view(run.codexId)).workspace;
+  if (run.chatId) return (await (await import("./agent-chat.ts")).chatView(run.chatId)).workspace ?? Object.values(run.workspaces)[0];
+  return Object.values(run.workspaces)[0];
 }
 async function goalContextBody(runId: string) {
   const g = await goalsOf(runId);
@@ -310,5 +323,6 @@ async function goalContextBody(runId: string) {
 export async function goalsView(runId: string) {
   const g = await goalsOf(runId);
   const doneN = g.map.filter((m) => m.status === "done" || m.status === "skipped").length;
-  return { ...g, log: g.log.slice(-8), progress: g.map.length ? { done: doneN, total: g.map.length } : { done: g.log.filter((l) => l.kind === "next").length, total: 0 }, stuckReasons: STUCK_REASONS };
+  const shell = (await (await import("./shell.ts")).shellOf(runId)).pending;
+  return { ...g, shell, log: g.log.slice(-8), progress: g.map.length ? { done: doneN, total: g.map.length } : { done: g.log.filter((l) => l.kind === "next").length, total: 0 }, stuckReasons: STUCK_REASONS };
 }

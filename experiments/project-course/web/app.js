@@ -1499,6 +1499,7 @@ function drawFree() {
   if (!lesson.messages.length) list.append(h("p", { class: "mut small freeempty" }, "아무거나 물어보세요. VS Code에서 줄을 고르고 물어보면 그 줄을 같이 봐요."));
   if (lesson.goals?.survey && !lesson.busy) list.append(surveyCard(lesson.goals.survey, send));
   if (lesson.goals?.plan && !lesson.busy) list.append(goalPlanCard(lesson.goals.plan, send));
+  if (lesson.goals?.shell && !lesson.busy) list.append(shellCard(lesson.goals.shell, send));
   if (lesson.goals && goalUi.stuck && !lesson.busy) list.append(goalStuckCard(lesson.goals, send));
   if (lesson.busy) list.append(thinkLine(run, lesson));
   const input = h("textarea", { rows: 2, placeholder: "물어보기 (Enter 보내기, Shift+Enter 줄바꿈)", "aria-label": "튜터에게 물어보기" });
@@ -1585,6 +1586,16 @@ function surveyCard(sv, send) {
       h("input", { class: "gin", placeholder: "덧붙일 말(없으면 비워 둬요)", value: texts[i], oninput: (e) => { texts[i] = e.target.value; } }))),
     h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: (e) => send({ do: "goal", op: "answer", answers: sv.questions.map((_, i) => ({ picks: [...picks[i]], text: texts[i] })) })(e) }, "보내기"),
       h("span", { class: "mut small" }, "고르지 않은 질문은 \"알아서\"로 보내요")));
+}
+// 튜터가 돌리려는 명령(11/8 결정 8): 설치 · git 기록 바꾸기 · 지우기 · 작업 폴더 밖은 학습자가 고른다
+function shellCard(p, send) {
+  return h("div", { class: "gcard" }, h("div", { class: "gk" }, "튜터가 이 명령을 돌리려고 해요"),
+    h("pre", { class: "gcmd" }, p.command),
+    p.why ? h("p", { class: "small" }, p.why) : null,
+    h("p", { class: "small mut" }, `먼저 묻는 이유: ${p.reason}`),
+    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: send({ do: "goal", op: "cmd", id: p.id, ok: true }) }, "실행"),
+      h("button", { class: "btn small", onclick: send({ do: "goal", op: "cmd", id: p.id, ok: false }) }, "안 함"),
+      h("span", { class: "mut small" }, "직접 쳐 보고 싶으면 [안 함]을 누르고 VS Code 터미널에서 쳐 보세요")));
 }
 function goalPlanCard(p, send) {
   return h("div", { class: "gcard plan" }, h("div", { class: "gk" }, "장기 목표 제안"), h("h3", {}, p.long), p.spec ? h("p", { class: "small" }, p.spec) : null,

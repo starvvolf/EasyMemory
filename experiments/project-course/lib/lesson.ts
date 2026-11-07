@@ -480,6 +480,15 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     // [해 봤어요](11/8 사용자 결정 "적용 과제의 답이 맞을 때만 적용 ✓"): 판정 호출 한 번(완료 조건 · 튜터가 낸 과제 · 학습자 답과 저장한 코드)
     if (op === "applied") (input as Record<string, unknown>).verdict = await applyVerdict(runId, run).catch((e) => { console.error("적용 판정:", e); return undefined; });
     const TL = await import("./timeline.ts");
+    // 튜터가 묻고 돌리려는 명령(11/8 결정 8): [실행]이면 돌리고 결과를 튜터에게 한 번, [안 함]이면 AI 안 부름(다음 차례 맥락에 한 줄)
+    if (op === "cmd") {
+      const ci = input as { id?: string; ok?: boolean };
+      const d = await (await import("./shell.ts")).decide(runId, await (await import("./goals.ts")).runWorkspace(runId), String(ci.id ?? ""), ci.ok === true);
+      await TL.beginStep(runId, { kind: "button", label: d.label, text: d.text });
+      notifyLesson(runId);
+      if (d.say) { if (run.codexId) await codexAsk(runId, run.codexId, d.say); else await chatAsk(runId, run.chatId!, d.say); } else await TL.endStep(runId);
+      return;
+    }
     const OPS: Record<string, string> = { understood: "이해했어요", applied: "해 봤어요", next: "다음으로", easy_next: "너무 쉬워요 → 다음으로", easy: "너무 쉬워요 → 더 어렵게", hard: "너무 어려워요", stuck: "너무 어려워요", answer: "설문 답", confirm: "확정", dismiss_plan: "계획 다시 얘기하기", dismiss_survey: "설문 닫기", mode: "진행 방식 바꾸기", end: "학습 종료" };
     const b = input as Record<string, unknown>;
     const detail = op === "answer" ? (Array.isArray(b.answers) ? (b.answers as { picks?: string[]; text?: string }[]).map((a) => [...(a.picks ?? []), a.text].filter(Boolean).join(", ") || "알아서").join(" / ") : "")

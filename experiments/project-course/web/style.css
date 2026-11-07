@@ -857,3 +857,5 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .evcase { margin: 14px 0 22px; }
 .tlchip.bad { background: #f6d0cc; color: #7a1d12; } .tlchip.ok { background: #d5ecd8; color: #1d5a2a; }
 .tl .memhead h1 { flex: 1; }
+
+.gcmd { margin: 6px 0; padding: 6px 8px; border-radius: 6px; background: var(--code-bg, rgba(127,127,127,.12)); font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: pre-wrap; word-break: break-all; }
