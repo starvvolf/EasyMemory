@@ -143,7 +143,8 @@ export function planQuiz(map: MaterialMap, structure: Structure, options: Partia
   if (o.figures !== "끔") {
     const cap = Math.round(firstItems.length * (o.figures === "많이" ? 0.4 : 0.2));
     const prefer: Record<Unit, number> = { 차례: 3, 낱장: 3, 대비: 2, 잇기: 1, 갈래: 0, 대표: 0 };
-    const cands = firstItems.map((it) => ({ it, fig: it.cards.map((id) => byId.get(id)?.figure).find((f) => f && (f.role === "장면" || f.role === "근거")) }))
+    // 글 덩어리(mode block)는 빼고 그림 조각만(11/8 1회차: 예약 간선 그림은 글 상자째 잘려 "So, deny"가 답을 말했다)
+    const cands = firstItems.map((it) => ({ it, fig: it.cards.map((id) => byId.get(id)?.figure).find((f) => f && (f.role === "장면" || f.role === "근거") && f.mode !== "block") }))
       .filter((x) => x.fig && prefer[x.it.unit] > 0).sort((a, b) => prefer[b.it.unit] - prefer[a.it.unit]);
     const files = new Set<string>();
     for (const { it, fig } of cands) {
@@ -259,6 +260,20 @@ export function sameAnswer(form: Form, a: string, b: string) {
   return wa.size > 0 && [...wa].every((w) => [...wb].some((v) => v.includes(w) || w.includes(v)));
 }
 
+/** 보기 섞기(코드, 11/8 4회차: 정답이 1번에 몰렸다 — 데드락 시험 대비 1,1,1,3). 같은 문제면 늘 같게 섞는다. */
+export function shuffleChoice(q: QuizReply, seed: string) {
+  if (q.form !== "choice" || q.options.length < 2) return;
+  const right = Number(q.answer.match(/\d+/)?.[0] ?? 0) - 1;
+  if (right < 0 || right >= q.options.length) return;
+  let h = 0; for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const order = q.options.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) { h = (h * 1103515245 + 12345) >>> 0; const j = h % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+  q.options = order.map((i) => q.options[i]);
+  q.answer = String(order.indexOf(right) + 1);
+  // 해설이 "2번"처럼 번호를 말하면 섞은 뒤 틀리므로 번호 말을 뺀다
+  q.explain = q.explain.replace(/\(?\s*[1-4]\s*번\s*\)?/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
 /** 모양 검사(코드): 고쳐 쓰게 할 문제를 말로. 없으면 null. */
 export function shapeProblem(q: QuizReply, want: { form: Form; level: number }): string | null {
   if (q.form === "short" && q.options.length) return "short인데 보기를 줬다. 보기 없이 값을 묻는다.";
@@ -363,7 +378,8 @@ async function makeOne(id: string, map: MaterialMap, it: PlanItem, byId: Map<str
         else if (judge.winner === "solver" && sameAnswer(q.form, solved.answer, judge.answer) && q.form === "short" && nums(solved.answer).every((x) => nums(q.explain).includes(x))) { fixed = `답 ${q.answer} → ${solved.answer}`; q.answer = solved.answer; }
         else held = `따로 푼 답이 다름(${solved.answer} ≠ ${q.answer}, 판정 ${judge.winner}: ${judge.why})`;
       }
-      const easy = !held && (solved.steps === 0 || (it.level >= 4 && solved.steps <= 1));
+      // 쉬움으로 고쳐 쓰기는 계산·순서 문제만(11/8 4회차: 개념 객관식은 한 단계가 자연스러운데 데드락 11개 중 8개를 다시 썼다). 답이 보이는 것(0단계)은 늘.
+      const easy = !held && (solved.steps === 0 || (it.level >= 4 && solved.steps <= 1 && (q.form === "short" || q.form === "order")));
       // 그림이 있어도 그림 없이 풀리면(그림이 장식) 한 번 고쳐 쓴다
       const decorative = !held && images && needsFigure === false;
       const result: MadeQuestion = { ...it, ok: !held, ...(held ? { held } : {}), q, solved, ...(blind ? { blind, needsFigure } : {}), ...(judge ? { judge } : {}), ...(fixed ? { fixed } : {}), ...(easy ? { easy } : {}), tries, problems, ms: Date.now() - t };
@@ -375,6 +391,7 @@ async function makeOne(id: string, map: MaterialMap, it: PlanItem, byId: Map<str
       const final = !result.ok && last?.ok ? { ...last, tries, problems, ms: Date.now() - t } : result;
       // 고쳐 써도 쉬우면 난이도 표시를 2로 낮춘다(11/8 2회차: 장치 좌표 "최종 좌표 기호는?"이 L4로 남았다)
       if (final.ok && final.easy && final.level >= 4) final.level = 2;
+      if (final.ok && final.q) shuffleChoice(final.q, `${id}:${it.n}:${it.cards.join(",")}`);
       return final;
     } catch (error) { problems.push(`실패: ${(error as Error).message}`.slice(0, 200)); }
   }

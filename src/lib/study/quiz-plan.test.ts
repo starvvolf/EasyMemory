@@ -69,3 +69,12 @@ test("그림 안 글이 답을 말하면 샌 것", async () => {
   assert.ok(!figureLeaks(q("2", ["P1", "P2 → R2 요청 간선", "R1", "R2"], "If we grant it, a cycle is formed.")));
   assert.ok(!figureLeaks(q("1", ["교착 상태"], "")));
 });
+test("보기 섞기: 정답을 따라 옮기고 같은 씨앗이면 같게", async () => {
+  const { shuffleChoice } = await import("./quiz-plan.ts");
+  const make = () => ({ form: "choice" as const, level: 3, stem: "?", options: ["정답", "b", "c", "d"], answer: "1", explain: "1번이 맞다.", uses: [] });
+  const a = make(), b = make();
+  shuffleChoice(a, "x"); shuffleChoice(b, "x");
+  assert.equal(a.options[Number(a.answer) - 1], "정답");
+  assert.deepEqual(a.options, b.options);
+  assert.ok(!/1번/.test(a.explain));
+});
