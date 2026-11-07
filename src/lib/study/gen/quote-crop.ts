@@ -171,7 +171,17 @@ const keyOf = (b: Box) => [b.x0, b.y0, b.x1, b.y1].map((v) => Math.round(v / 3))
  */
 export function sortShapes(shapes: Array<{ box: Box; filled: boolean; stroked: boolean; fill: string }>, images: Graphic[], rows: Row[], page: { width: number; height: number }, frame: Set<string>) {
   const pageArea = page.width * page.height;
-  const graphics: Graphic[] = images.filter((g) => area(g.box) < pageArea * 0.8 && area(g.box) > pageArea * 0.002 && !frame.has(keyOf(g.box)));
+  // 글줄 높이: 식을 그림으로 박은 자료(그래픽스 04)는 줄마다 작은 식 그림이 있다 — 글줄 높이의 2.5배보다 낮은 그림은 글로 본다.
+  const hs = rows.map((r) => r.box.y1 - r.box.y0).sort((a, b) => a - b), lineH = hs.length ? hs[Math.floor(hs.length / 2)] : 12;
+  const graphics: Graphic[] = images.filter((g) => {
+    if (area(g.box) >= pageArea * 0.8 || area(g.box) <= pageArea * 0.002 || frame.has(keyOf(g.box))) return false;
+    if (g.box.y1 - g.box.y0 < lineH * 2.5) return false; // 줄 속 식
+    // 글줄 바로 옆에 붙은 그림(줄머리 "– " 뒤의 여러 줄 식)도 글로 본다
+    if (rows.some((r) => vOverlap(r.box, g.box) > (r.box.y1 - r.box.y0) * 0.5 && gapBetween(r.box, g.box) < lineH * 3 && r.box.x1 <= g.box.x0 + lineH)) return false;
+    const under = rows.filter((r) => overlap(r.box, g.box) > area(r.box) * 0.6).length;
+    if (under >= 4 && area(g.box) > pageArea * 0.2) return false; // 글 뒤에 깐 큰 그림(바탕)
+    return true;
+  });
   const shades: Shade[] = [];
   for (const s of shapes) {
     const w = s.box.x1 - s.box.x0, h = s.box.y1 - s.box.y0;
@@ -189,7 +199,16 @@ export function sortShapes(shapes: Array<{ box: Box; filled: boolean; stroked: b
     if (covered.length >= 2 && textArea > area(s.box) * 0.25 && w > page.width * 0.3) continue;
     graphics.push({ box: s.box, kind: "drawing" });
   }
-  return { graphics, shades };
+  // 이어진 그림 덩어리마다 그 안에 문장 줄이 둘 이상이면 그림이 아니라 글(선으로 그린 식·글자)로 본다(그래픽스 04 p.14의 식들).
+  const gap = Math.min(page.width, page.height) * 0.06, left = [...graphics], keep: Graphic[] = [];
+  while (left.length) {
+    const group = [left.shift()!];
+    for (let grew = true; grew;) { grew = false; for (let i = left.length - 1; i >= 0; i--) if (group.some((g) => gapBetween(g.box, left[i].box) <= gap)) { group.push(...left.splice(i, 1)); grew = true; } }
+    const box = group.map((g) => g.box).reduce(union);
+    const sentences = rows.filter((r) => r.box.x1 - r.box.x0 > (r.box.y1 - r.box.y0) * 4 && overlap(r.box, box) > area(r.box) * 0.3).length;
+    if (sentences < 2) keep.push(...group);
+  }
+  return { graphics: keep, shades };
 }
 
 /** For each quote on one page: whether to cut and what (JPEG data URL when cut). `frame` from `frameOf` (shapes repeated across the deck). */
