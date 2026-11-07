@@ -10,7 +10,8 @@ import { counterexample, explainCode, explainError, hint, makeProblem, reviewApp
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
 import { resolveSource, type Resolved } from "@/lib/code/source";
 import { withTrace } from "@/lib/ai/trace";
-import { bojNumber, gradesFor, LADDER, needsOf } from "@/lib/code/grade";
+import { LADDER, needsOf } from "@/lib/code/grade";
+import { keptLevel, keptLevels, levelOf } from "@/lib/assist/code-level";
 
 type MakeInput = Parameters<typeof makeProblem>[0];
 /** The full problem from an imported original, under the id the learner already has open (바로 열기, 2026-10-29). */
@@ -51,11 +52,9 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "calibration" && m === "GET") return json({ calibration: await calibration() });
     if (p[0] === "calibration" && m === "POST") return json({ calibration: await calibration(true) });
     if (p[0] === "problems" && m === "GET") {
-      // 등급(11/7): 백준 문제는 solved.ac 티어를 같이 보낸다(앱 안의 묶음에서).
-      const problems = await listProblemsWithKnowledge();
-      const nums = new Map(problems.map((x) => [x.id, bojNumber({ id: x.id, title: x.title, source: { title: x.source } })]));
-      const grades = gradesFor([...nums.values()].filter((n): n is string => Boolean(n)));
-      return json({ problems: problems.map((x) => { const g = grades.get(nums.get(x.id) ?? ""); return g ? { ...x, tier: { level: g.level, tier: g.tier, group: g.group } } : x; }) });
+      // 난이도(11/8): 받아 둔 AI 판단을 같이 보낸다(새로 묻지 않음).
+      const [problems, levels] = await Promise.all([listProblemsWithKnowledge(), keptLevels()]);
+      return json({ problems: problems.map((x) => levels[x.id] ? { ...x, level: { self: levels[x.id].self.level, known: levels[x.id].known } } : x) });
     }
     if (p[0] === "ladder" && m === "GET") return json({ ladder: LADDER.map((s) => ({ step: s.step, name: s.name, what: s.what, abilities: s.abilities.map((a) => ({ id: a.id, name: a.name, what: a.what })) })) });
     if (p[0] === "run" && m === "POST") { const b = await body(z.object({ lang, code, input: z.string().max(500_000) })); return json(await runCustom(b.lang, b.code, b.input)); }
@@ -107,10 +106,15 @@ async function inner(request: Request, context: RouteContext) {
         warmTests(id); // read the hidden tests now, so 제출 doesn't wait for them
         const problem = await ensureProblemKnowledge(await readProblemMeta(id));
         const subs = (await readSubmissions(id)).slice(-30).reverse().map(({ code: c, ...rest }) => ({ ...rest, lines: c.split("\n").length }));
-        const num = bojNumber(problem);
-        const grade = num ? gradesFor([num]).get(num) ?? null : null;
-        const needs = needsOf({ reference: problem.reference?.code, tags: grade?.tags, knowledge: problem.knowledge });
-        return json({ problem: publicProblem(problem), drafts: await readDrafts(id), submissions: subs, grade, needs, boj: num });
+        const level = await keptLevel(problem);
+        const needs = needsOf({ reference: problem.reference?.code, picked: level?.abilities, knowledge: problem.knowledge });
+        return json({ problem: publicProblem(problem), drafts: await readDrafts(id), submissions: subs, level, needs });
+      }
+      // 난이도·필요한 능력(11/8): 처음 열 때 화면이 한 번 부른다. AI 1번(terra low), 받은 것은 code/levels.json에.
+      if (p[2] === "level" && m === "POST") {
+        const problem = await readProblemMeta(id);
+        const level = await levelOf(problem);
+        return json({ level, needs: needsOf({ reference: problem.reference?.code, picked: level.abilities, knowledge: problem.knowledge }) });
       }
       if (p.length === 2 && m === "DELETE") return json(await deleteProblem(id));
       if (p[2] === "draft" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await saveDraft(id, b.lang, b.code)); }

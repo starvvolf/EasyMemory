@@ -6,13 +6,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, handoff, later, shareContext } from "./api";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
-import { GradeLine, NeedsPanel, TierBadge, type Grade, type Needs, type TierGroup } from "./CodeGrade";
+import { LevelBox, LevelChip, NeedsPanel, type Level, type Needs, type SelfLevel } from "./CodeGrade";
 import { COACH_ASKS, ModeSwitch, STEP_LABEL, TrainPanel, useLab, useTrain, useWatch, WatchStrip } from "./CodeTrain";
 
 type Lang = "python" | "javascript" | "cpp" | "csharp";
 type LangInfo = { lang: Lang; label: string; ready: boolean; version: string; help: string };
 type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledge: string[]; folder: string; source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string; createdAt: string; preparing?: boolean;
-  tier?: { level: number; tier: string; group: TierGroup } };
+  level?: { self: SelfLevel; known: { site: string; rating: string } } };
 type TestCase = { input: string; output: string };
 type Problem = { id: string; title: string; statement: string; inputText: string; outputText: string; examples: TestCase[]; hiddenTests: number; kind: "full" | "blank"; knowledge: string[]; knowledgeIds: string[];
   folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number; memoryLimitMb?: number;
@@ -67,10 +67,10 @@ export default function CodeStudy({ openId }: { openId?: string }) {
           {shown.map((p) => (
             <li key={p.id}><button className="cs-row" onClick={() => setCurrent(p.id)}>
               <span className={`chip ${p.preparing ? "help" : STATUS[p.status][1]}`}>{p.preparing ? "준비 중" : STATUS[p.status][0]}</span>
-              {p.tier ? <TierBadge tier={p.tier.tier} group={p.tier.group} small /> : null}
+              {p.level ? <LevelChip level={p.level.self} /> : null}
               <span className="cs-title">{p.title}</span>
               {p.kind === "blank" ? <span className="chip">빈칸</span> : null}
-              <span className="small muted">{p.knowledge.join(" · ")}</span>
+              <span className="small muted">{p.level?.known.site ? `${p.level.known.site} ${p.level.known.rating} · ` : ""}{p.knowledge.join(" · ")}</span>
               <span className="small muted num">{p.tries ? `제출 ${p.tries}` : ""}</span>
             </button></li>
           ))}
@@ -152,7 +152,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const [problem, setProblem] = useState<Problem | null>(null);
   const [drafts, setDrafts] = useState<Partial<Record<Lang, string>>>({});
   const [subs, setSubs] = useState<SubLite[]>([]);
-  const [grade, setGrade] = useState<{ grade: Grade | null; needs: Needs | null; boj: string | null }>({ grade: null, needs: null, boj: null });
+  const [grade, setGrade] = useState<{ level: Level | null; needs: Needs | null; busy: boolean; error: string }>({ level: null, needs: null, busy: false, error: "" });
   const [lang, setLang] = useState<Lang>(storedLang());
   const [code, setCode] = useState("");
   const [result, setResult] = useState<(Judged & { mode: "example" | "submit" }) | null>(null);
@@ -178,8 +178,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const watch = useWatch({ id, lang, code, enabled: lab.watch && Boolean(problem), examples: problem?.examples ?? [] });
 
   useEffect(() => {
-    call<{ problem: Problem; drafts: Partial<Record<Lang, string>>; submissions: SubLite[]; grade: Grade | null; needs: Needs; boj: string | null }>(`/api/code/problem/${id}`).then((r) => {
-      setProblem(r.problem); setDrafts(r.drafts); setSubs(r.submissions); setGrade({ grade: r.grade, needs: r.needs, boj: r.boj });
+    call<{ problem: Problem; drafts: Partial<Record<Lang, string>>; submissions: SubLite[]; level: Level | null; needs: Needs }>(`/api/code/problem/${id}`).then((r) => {
+      setProblem(r.problem); setDrafts(r.drafts); setSubs(r.submissions); setGrade({ level: r.level, needs: r.needs, busy: false, error: "" });
       const l = storedLang();
       setCode(r.drafts[l] ?? r.problem.starters[l]);
       shareContext({ view: "code", title: r.problem.title, refs: [`code:${id}`], knowledgeIds: r.problem.knowledgeIds, problemId: id, text: r.problem.statement });
@@ -190,14 +190,25 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   useEffect(() => {
     if (!preparing) return;
     const timer = setInterval(() => {
-      void call<{ problem: Problem; grade: Grade | null; needs: Needs; boj: string | null }>(`/api/code/problem/${id}`).then((r) => {
+      void call<{ problem: Problem; level: Level | null; needs: Needs }>(`/api/code/problem/${id}`).then((r) => {
         if (r.problem.preparing && !r.problem.preparing.error) return;
-        setProblem(r.problem); setGrade({ grade: r.grade, needs: r.needs, boj: r.boj });
+        setProblem(r.problem); setGrade((g) => ({ ...g, level: r.level ?? g.level, needs: r.level ? r.needs : g.needs }));
         shareContext({ view: "code", title: r.problem.title, refs: [`code:${id}`], knowledgeIds: r.problem.knowledgeIds, problemId: id, text: r.problem.statement });
       }).catch(() => undefined);
     }, 2000);
     return () => clearInterval(timer);
   }, [id, preparing]);
+  // 난이도·필요한 능력: 받아 둔 판단이 없으면 한 번 묻는다(AI 1번). 숨은 테스트를 만드는 중이면 끝난 뒤에(모범 풀이를 같이 보려고).
+  const needLevel = Boolean(problem) && !grade.level && !preparing;
+  useEffect(() => {
+    if (!needLevel) return;
+    let alive = true;
+    setGrade((g) => ({ ...g, busy: true, error: "" }));
+    call<{ level: Level; needs: Needs }>(`/api/code/problem/${id}/level`, {})
+      .then((r) => { if (alive) setGrade({ level: r.level, needs: r.needs, busy: false, error: "" }); })
+      .catch((e) => { if (alive) setGrade((g) => ({ ...g, busy: false, error: `난이도를 받지 못했어요: ${errorText(e)}` })); });
+    return () => { alive = false; };
+  }, [id, needLevel]);
   const retryPrepare = async () => {
     setError("");
     try { await call(`/api/code/problem/${id}/prepare`, {}); setProblem((p) => p ? { ...p, preparing: { since: new Date().toISOString() } } : p); }
@@ -282,7 +293,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {lab.train ? <ModeSwitch mode={training ? "train" : "base"} onMode={(m) => void train.setMode(m)} /> : null}
         <div className="row"><span className="chip">{problem.kind === "blank" ? "빈칸" : "코드"}</span><span className="small muted">{problem.folder}</span></div>
         <h2>{problem.title}</h2>
-        <GradeLine grade={grade.grade} boj={grade.boj} />
+        <LevelBox source={problem.source} level={grade.level} busy={grade.busy} error={grade.error} />
         {problem.preparing ? (problem.preparing.error
           ? <div className="ws-err small">숨은 테스트를 만들지 못했어요: {problem.preparing.error} <button className="btn small" onClick={() => void retryPrepare()}>다시 시도</button></div>
           : <p className="small muted">숨은 테스트를 만드는 중이에요(보통 15~20초). 그동안 문제를 읽고 코드를 짜고, 예제 실행을 해 볼 수 있어요. 제출은 준비가 끝나면 열려요.</p>) : null}
