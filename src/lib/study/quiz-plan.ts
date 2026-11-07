@@ -59,7 +59,8 @@ const ASK: Record<Unit, string> = {
 function formFor(unit: Unit, cards: MapCard[], o: QuizOptions, lean: "계산" | "개념"): { form: Form; level: number } {
   const calc = cards.some(isCalc) && o.style !== "개념" && (lean === "계산" || o.style === "계산");
   const down = o.goal === "처음" ? 1 : 0, up = o.goal === "시험" ? 1 : 0;
-  const lv = (n: number) => Math.max(2, Math.min(5, n - down + up));
+  // 5(잇기)는 잇기 단위만. 시험 대비는 2·3을 한 단계 올리고 4는 4로 둔다(11/8: 그래픽스 시험 대비 29개 중 19개가 5가 됐다)
+  const lv = (n: number) => Math.max(2, Math.min(4, n - down + up));
   if (unit === "차례") return calc ? { form: "short", level: lv(4) } : { form: "order", level: lv(3) };
   if (unit === "대비") return { form: "choice", level: lv(3) };
   if (unit === "갈래") return { form: "choice", level: lv(2) };
