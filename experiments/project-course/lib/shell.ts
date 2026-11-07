@@ -6,6 +6,7 @@
 // 두 엔진 공통: OpenCode는 GOAL_TOOLS로, Codex는 MCP goal-tool로 같은 runGoalTool을 거친다.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DATA, read, update } from "./store.ts";
 
@@ -37,10 +38,16 @@ const RUNS = /^(node|npx|tsx|ts-node|deno|python|python3|py|pytest|java|javac|go
 export function classify(command: string, ws: string): { kind: Kind; reason: string } {
   const c = command.trim().replace(/\s*2>&1/g, "");
   if (!c) return { kind: "ask", reason: "빈 명령" };
-  if (/`|\$\(|%[A-Za-z_]+%|\$env:|\$\{/.test(c)) return { kind: "ask", reason: "다른 명령 · 환경 값을 끼워 넣는 명령이에요" };
-  if (/(^|[^0-9&])>{1,2}(?!&)/.test(c.replace(/>\s*(nul|NUL|\/dev\/null)\b/g, ""))) return { kind: "ask", reason: "출력을 파일로 쓰는 명령이에요" };
-  const parts = c.split(/\s*(?:&&|\|\||;|\||&)\s*/).filter(Boolean);
-  for (const p of parts) {
+  // 따옴표 안(코드 조각 등)의 ; > | 는 명령 구분 · 파일 쓰기가 아니다(11/8 실측: node -e "…;…"를 처음 보는 명령으로 봄)
+  // cmd는 "…"만, sh는 '…'도 따옴표다. sh의 "…" 안 $( ) · `는 실행되므로 그건 따로 본다
+  const win = process.platform === "win32";
+  const masked = c.replace(win ? /"[^"]*"/g : /"[^"]*"|'[^']*'/g, (q) => `"${"x".repeat(Math.max(0, q.length - 2))}"`);
+  if (!win && /`|\$\(/.test(c.replace(/'[^']*'/g, ""))) return { kind: "ask", reason: "다른 명령을 끼워 넣는 명령이에요" };
+  if (win && /%[A-Za-z_][A-Za-z0-9_]*%/.test(c)) return { kind: "ask", reason: "환경 값을 끼워 넣는 명령이에요" };
+  if (/(^|[^0-9&=])>{1,2}(?!&)/.test(masked.replace(/>\s*(nul|NUL|\/dev\/null)\b/g, ""))) return { kind: "ask", reason: "출력을 파일로 쓰는 명령이에요" };
+  // 나누기는 가린 글에서 자리를 찾고 원래 글에서 자른다
+  const parts: string[] = []; { let from = 0; const re = /\s*(?:&&|\|\||;|\||&)\s*/g; let m: RegExpExecArray | null; while ((m = re.exec(masked))) { parts.push(c.slice(from, m.index)); from = m.index + m[0].length; } parts.push(c.slice(from)); }
+  for (const p of parts.filter((x) => x.trim())) {
     const words = p.match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
     const first = (words[0] ?? "").replace(/^["']|["']$/g, "");
     const head = path.basename(first).replace(/\.(exe|cmd|bat)$/i, "");
@@ -68,10 +75,9 @@ export function classify(command: string, ws: string): { kind: Kind; reason: str
     }
     if (INSTALLERS.test(head)) {
       const sub = args.find((a) => !a.startsWith("-")) ?? "";
-      if (/^-m$/.test(args[0] ?? "") && /^pip$/i.test(args[1] ?? "")) return { kind: "ask", reason: "패키지를 설치 · 제거해요" };
-      if (INSTALL_SUB.test(sub)) return { kind: "ask", reason: "패키지를 설치 · 제거해요" };
+      if (INSTALL_SUB.test(sub)) return { kind: "ask", reason: /^(pip|pip3|conda|apt|apt-get|brew|choco|winget|scoop)$/i.test(head) || args.includes("-g") || args.includes("--global") ? "패키지를 이 컴퓨터 전체에 설치 · 제거해요(작업 폴더 밖)" : "패키지를 작업 폴더에 설치 · 제거해요" };
     }
-    if (/^(python|python3|py)$/i.test(head) && args[0] === "-m" && /^(pip|venv|ensurepip)$/i.test(args[1] ?? "")) return { kind: "ask", reason: "패키지 · 가상환경을 바꿔요" };
+    if (/^(python|python3|py)$/i.test(head) && args[0] === "-m" && /^(pip|venv|ensurepip)$/i.test(args[1] ?? "")) return { kind: "ask", reason: /pip/i.test(args[1] ?? "") ? "패키지를 이 컴퓨터의 파이썬 전체에 설치 · 제거해요(작업 폴더 밖)" : "가상환경을 만들어요" };
     if (CHANGES.test(head)) return { kind: "ask", reason: `${head}은(는) 파일 · 시스템을 바꾸거나 밖으로 나가요` };
     if (!RUNS.test(head)) return { kind: "ask", reason: `처음 보는 명령(${head})이에요` };
   }
@@ -79,6 +85,15 @@ export function classify(command: string, ws: string): { kind: Kind; reason: str
 }
 
 /* ---------- 돌리기 ---------- */
+/** npm · pnpm · yarn · bun은 작업 폴더에 package.json이 없으면 위 폴더의 package.json에 설치한다(11/8 실측: 실습 코스 폴더에 들어감)
+ *  → 설치 전에 작업 폴더에 빈 package.json을 만든다. 만들었으면 알릴 말 */
+async function ownPackageJson(command: string, ws: string): Promise<string> {
+  if (!/(^|&&|;|\|)\s*(npm|pnpm|yarn|bun)(\.cmd)?\s+(i|install|add|ci|uninstall|remove|rm|un|update|link)\b/i.test(command)) return "";
+  const f = path.join(ws, "package.json");
+  if (existsSync(f)) return "";
+  await writeFile(f, JSON.stringify({ name: path.basename(ws).toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/^-+/, "") || "workspace", private: true }, null, 2) + "\n");
+  return "(작업 폴더에 package.json이 없어 빈 package.json을 먼저 만들었어요 — 위 폴더에 설치되지 않게)\n";
+}
 const SECRET = /TOKEN|KEY|SECRET|PASSWORD|AUTH|COOKIE|SESSION/i;
 export function exec(command: string, ws: string, ms = 60_000): Promise<{ code: number | null; out: string; ms: number }> {
   const t0 = Date.now();
@@ -113,9 +128,10 @@ export async function runCommandTool(runId: string, ws: string | undefined, inpu
     await update<ShellState>(file(runId), empty(), (st) => { st.pending = { id: Math.random().toString(36).slice(2, 10), command, why, reason: c.reason, at: new Date().toISOString() }; });
     return `학습자에게 먼저 묻는 명령이에요(${c.reason}). 화면에 [실행] / [안 함]을 띄웠어요. 답에서는 무엇을 왜 돌리려는지 한 줄로 말하고 이번 답을 마친다. 학습자가 고르면 결과를 알려 준다.`;
   }
+  const pre = await ownPackageJson(command, ws);
   const r = await exec(command, ws);
   await remember(runId, { command, by: "auto", code: r.code, out: r.out, ms: r.ms, at: new Date().toISOString() });
-  return result(r);
+  return pre + result(r);
 }
 
 /** 학습자가 [실행] / [안 함]을 골랐을 때. 실행했으면 튜터에게 넘길 말을 돌려준다 */
@@ -126,9 +142,10 @@ export async function decide(runId: string, ws: string | undefined, id: string, 
   await update<ShellState>(file(runId), empty(), (st) => { st.pending = null; if (!ok) st.refused.push({ command: p.command, at: new Date().toISOString() }); });
   if (!ok || !ws) return { say: null, label: "명령 안 함", text: p.command };
   // 설치는 오래 걸릴 수 있어 학습자가 허락한 명령은 3분까지
+  const pre = await ownPackageJson(p.command, ws);
   const r = await exec(p.command, ws, 180_000);
   await remember(runId, { command: p.command, by: "learner-ok", code: r.code, out: r.out, ms: r.ms, at: new Date().toISOString() });
-  return { say: `[명령 실행함 — 학습자가 허락] \`${p.command}\`\n${result(r)}\n\n이 결과를 보고 이어 가 주세요.`, label: "명령 실행", text: `${p.command} → 종료 코드 ${r.code ?? "없음"}` };
+  return { say: `[명령 실행함 — 학습자가 허락] \`${p.command}\`\n${pre}${result(r)}\n\n이 결과를 보고 이어 가 주세요.`, label: "명령 실행", text: `${p.command} → 종료 코드 ${r.code ?? "없음"}` };
 }
 
 /** 학습자가 VS Code 터미널에서 친 명령(확장이 보냄, 작업 폴더 안만) */

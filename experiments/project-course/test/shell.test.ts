@@ -10,7 +10,7 @@ const ws = await mkdtemp(path.join(os.tmpdir(), "ws-"));
 await (await import("node:fs/promises")).mkdir(path.join(ws, ".git"));
 
 test("작업 폴더 안에서 돌리거나 보기만 하는 명령은 바로", () => {
-  for (const c of ["node app.js", "python main.py", "npm test", "npm run build", "git status", "git diff HEAD~1", "git log --oneline -5", "ls", "dir", "git branch", "node -e \"console.log(1)\" 2>&1", "cat a.txt | head -3", "pytest -q"]) assert.equal(classify(c, ws).kind, "auto", c);
+  for (const c of ["node app.js", "python main.py", "npm test", "npm run build", "git status", "git diff HEAD~1", "git log --oneline -5", "ls", "dir", "git branch", "node -e \"console.log(1)\" 2>&1", "cat a.txt | head -3", "pytest -q", "node -e \"const a = 1; console.log(a > 0 ? 'ok' : 'no')\"", "node -e \"[1,2].map((x) => x * 2)\""]) assert.equal(classify(c, ws).kind, "auto", c);
 });
 test("설치 · git 기록 바꾸기 · 지우기 · 밖 · 처음 보는 명령은 묻기", () => {
   for (const c of ["npm install express", "npm i", "pip install requests", "python -m pip install x", "git commit -m x", "git push", "git reset --hard", "git checkout main", "rm -rf build", "del a.txt", "cat ../secret.txt", "type C:\\Users\\x\\a.txt", "node ~/x.js", "echo hi > a.txt", "curl https://x.y", "echo `whoami`", "frobnicate", "node a.js && git push", "git branch -D x"]) assert.equal(classify(c, ws).kind, "ask", c);
@@ -46,4 +46,12 @@ test("학습자가 터미널에서 친 명령은 다음 맥락에 한 번", asyn
   const c = await shellContext("r4"); assert.match(c, /직접 친 명령/); assert.match(c, /KeyError/);
   assert.equal(await shellContext("r4"), "");
   assert.equal((await learnerRunsSince("r4", t0)).length, 1);
+});
+test("npm 설치는 작업 폴더에 package.json을 먼저 만든다", async () => {
+  const w = await mkdtemp(path.join(os.tmpdir(), "ws3-"));
+  await runCommandTool("r5", w, { command: "npm install --offline --no-audit definitely-not-a-real-pkg-xyz", why: "" });
+  const p = (await shellOf("r5")).pending!;
+  const d = await decide("r5", w, p.id, true);
+  assert.match(d.say!, /빈 package.json/);
+  assert.ok((await import("node:fs")).existsSync(path.join(w, "package.json")));
 });
