@@ -11,7 +11,7 @@ export type GoalRecord = {
   goal: string; done: string; status: "마침" | "건너뜀"; mode: string | null; from: string; to: string;
   summary: string; steps: string[]; learned: { type: Tab; concept: string; meaning: string; how: string; quote: string; verified: boolean }[];
   /** 11/6 사용자 "대화 내역을 봤을 때 나한테 부족한 점이 딱 보인다. 그걸 캐치해서 지식으로 잡는 게 중요" */
-  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean; code?: GapCode }[];
+  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean; code?: GapCode; ids?: string[]; recheck?: { q: string; a: string } }[];
   /** 11/6 사용자 "코드 보면 이 사람 파이썬 문법 잘 모르는 것 같은데? 이런 생각. 하드코딩 말고 자유를 주면 잡을 수 있다" → 학습자 메모리(lib/memory.ts)에 반영한 것 */
   memory?: { done: string[]; dropped: string[] }; at: string;
 };
@@ -106,13 +106,15 @@ learned: 이 목표에서 학습자가 배운 것을 여섯 칸 중 하나(type)
 각 항목은 concept(다른 곳에서도 통하는 이름), meaning(그 칸에 맞는 한두 문장: 개념은 정의, 원리는 이유, 절차는 단계, 규칙은 약속, 방법은 언제 · 어떻게, 비교는 차이), how(학습자가 그걸 어떻게 만났는지 한 구절: 설명을 들음 · 예측해 맞힘/틀림 · 직접 써 봄 · 헷갈려 물어봄 등), quote(그게 드러난 학습자 말을 글자 그대로, 없으면 빈 글).
 [학습자 코드 저장 S번호 파일]은 학습자가 직접 저장한 코드에서 바뀐 줄이다(+ 더함, - 뺌, + 뒤의 숫자는 그 저장본의 줄 번호). 학습자의 말과 코드에서 드러난 것을 기준으로 쓰고, 튜터가 말만 하고 지나간 것은 뺀다.
 gaps: 이 목표 동안 드러난 학습자의 부족한 점. 틀린 답, 잘못 쓴 코드, 오해, 몰라서 물어본 것, 튜터가 바로잡아 준 것. 같은 원인은 하나로 묶는다. 각 항목은 type(위 여섯 칸), concept(그 지식 이름), wrong(학습자가 무엇을 몰랐거나 어떻게 잘못 알았는지 한 문장), right(바로 알아야 할 내용 한두 문장), quote(그게 드러난 학습자 말이나 코드 한 줄을 글자 그대로, 없으면 빈 글), code(그 부족함이 드러난 학습자 코드 덩어리: save는 저장본 번호(S3), from~to는 그 저장본의 줄 번호로 문제가 있는 곳만 좁게(12줄 이내). 코드에서 드러난 게 아니면 save는 빈 글, from · to는 0). 없으면 빈 목록.
+  ids: [이 목표 동안 Recaller가 잡은 부족함]에 같은 부족함이 있으면 그 id들(G1-…). 없으면 빈 목록. 거기 적힌 부족함은 이 대화에서 사실이면 빠짐없이 gaps에 넣는다.
+  recheck: 며칠 뒤 이 부족함이 채워졌는지 다시 확인할 문항 하나. q는 이 대화를 몰라도 풀 수 있게 스스로 완결해서(필요하면 짧은 코드나 상황을 넣는다), 학습자가 잘못 알았던 바로 그 지점을 건드리게 만든다(같은 오해가 남아 있으면 다시 틀리게). 대화의 예를 그대로 되풀이하지 말고 이름 · 값을 조금 바꾼다. 질문 안에 정답이나 정답에 들어갈 말을 넣지 않는다. 한 번에 답할 수 있는 짧은 질문(예측 · 설명 · 한두 줄 고치기)으로. a는 모범답과 이유 한두 문장.
 memory: [지금 학습자 메모리]는 지금까지 여러 목표에서 쌓인 이 학습자의 경향이다. 이번 목표에서 드러난 것을 모아 보면 이 학습자가 어떤지 보고 메모리를 갱신한다. 단정하지 말고 "~가 부족해 보인다" 정도로 쓴다.
 - add: 메모리에 없는 새 경향. text는 한 문장, evidence는 근거가 된 gaps의 concept 그대로.
 - update: 이미 있는 경향이 이번에도 보이면 그 id, text(고칠 게 없으면 그대로), evidence(gaps의 concept 그대로).
 - improved: 있던 경향이 이번에는 나아진 게 보이면 그 id와 evidence(나아진 게 드러난 learned의 concept 그대로).
 바뀔 게 없으면 모두 빈 목록.`;
 export const RECORD_SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str), learned: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, meaning: S.str, how: S.str, quote: S.str })),
-  gaps: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, wrong: S.str, right: S.str, quote: S.str, code: S.obj({ save: S.str, from: S.int, to: S.int }) })),
+  gaps: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, wrong: S.str, right: S.str, quote: S.str, code: S.obj({ save: S.str, from: S.int, to: S.int }), ids: S.arr(S.str), recheck: S.obj({ q: S.str, a: S.str }) })),
   memory: S.obj({ add: S.arr(S.obj({ text: S.str, evidence: S.arr(S.str) })), update: S.arr(S.obj({ id: S.str, text: S.str, evidence: S.arr(S.str) })), improved: S.arr(S.obj({ id: S.str, evidence: S.arr(S.str) })) }) });
 const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
 
@@ -127,13 +129,15 @@ export function recordInput(goal: GoalIn, messages: Msg[], show: (m: Msg) => str
   const user = `[목표] ${goal.title}\n[완료 조건] ${goal.done}\n[지금 학습자 메모리]\n${memory}\n[결과] ${goal.understood && goal.applied ? "이해 · 적용까지 하고 마침" : `건너뜀(이해 ${goal.understood ? "✓" : "–"}, 적용 ${goal.applied ? "✓" : "–"})`}\n\n[이 목표 동안의 대화]\n${text}`;
   return { seg, code, user };
 }
-export async function recordGoal(runId: string, goal: GoalIn, mode: string | null, messages: Msg[], show: (m: Msg) => string, redo?: { to: string; index: number }, saves: Save[] = []) {
-  const { seg, code, user } = recordInput(goal, messages, show, saves, redo?.to ?? new Date().toISOString(), await memoryForRecord());
+export async function recordGoal(runId: string, goal: GoalIn, mode: string | null, messages: Msg[], show: (m: Msg) => string, redo?: { to: string; index: number }, saves: Save[] = [], ledger = "") {
+  const base = recordInput(goal, messages, show, saves, redo?.to ?? new Date().toISOString(), await memoryForRecord());
+  // 부족함 원장(11/8): 이 목표 동안 코드가 잡은 부족함을 같이 보내 이름 · 재확인 문항을 받는다
+  const { seg, code } = base, user = ledger ? `${base.user}\n\n${ledger}` : base.user;
   const log: Record<string, unknown> = { at: new Date().toISOString(), runId, goal: goal.title, messages: seg.length };
   const t0 = Date.now();
   try {
     if (!seg.some((m) => m.role === "user")) { log.skipped = "학습자 말 없음"; return null; }
-    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[]; gaps?: { type: string; concept: string; wrong: string; right: string; quote: string; code?: { save: string; from: number; to: number } }[]; memory?: MemOps }>("goal-record", SYSTEM_RECORD, user, RECORD_SCHEMA);
+    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[]; gaps?: { type: string; concept: string; wrong: string; right: string; quote: string; code?: { save: string; from: number; to: number }; ids?: string[]; recheck?: { q: string; a: string } }[]; memory?: MemOps }>("goal-record", SYSTEM_RECORD, user, RECORD_SCHEMA);
     // 근거는 학습자 말 또는 학습자가 저장한 코드 줄
     const learnerText = [...seg.filter((m) => m.role === "user").map((m) => norm(m.text)), ...code.flatMap((c) => c.added.map(norm))];
     const unverified: string[] = [];
@@ -152,7 +156,8 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
       const cc = x.code?.save ? cutCode(code, x.code) : undefined;
       if (x.code?.save && !cc) unverified.push(`부족 ${x.concept}: 코드 ${x.code.save} ${x.code.from}~${x.code.to}`);
       // 근거: 학습자 말 구절 또는 학습자 코드 덩어리
-      return { type: tab(x.type), concept: String(x.concept).trim().slice(0, 80), wrong: String(x.wrong ?? "").trim().slice(0, 300), right: String(x.right ?? "").trim().slice(0, 300), quote: ok ? q.slice(0, 200) : "", verified: ok || !!cc, ...(cc ? { code: cc } : {}) };
+      return { type: tab(x.type), concept: String(x.concept).trim().slice(0, 80), wrong: String(x.wrong ?? "").trim().slice(0, 300), right: String(x.right ?? "").trim().slice(0, 300), quote: ok ? q.slice(0, 200) : "", verified: ok || !!cc, ...(cc ? { code: cc } : {}),
+        ids: (x.ids ?? []).map(String).filter((i) => /^G\d+-[0-9a-f]{4}$/.test(i)).slice(0, 6), ...(x.recheck?.q && x.recheck?.a ? { recheck: { q: String(x.recheck.q).trim().slice(0, 1200), a: String(x.recheck.a).trim().slice(0, 600) } } : {}) };
     });
     // 메모리 갱신: 근거는 이번 정리의 부족했던 점(나아짐은 배운 것) 이름만 인정, 상태는 코드가(lib/memory.ts)
     const memory = await applyMemory(runId, goal.title, out.memory, gaps.map((g) => g.concept), learned.map((l) => l.concept));

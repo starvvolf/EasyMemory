@@ -20,7 +20,9 @@ type SyncEvent = { key: string; kind: "asked" | "wrong" | "hint" | "correct" | "
 // kind: 대화 실습의 목표 정리는 여섯 종류(개념·원리·절차·규칙·방법·비교)로 온다(11/6)
 type SyncItem = { key: string; title: string; kind: "concept" | "principle" | "procedure" | "rule" | "method" | "compare" | "vocab"; state: "met" | "unknown"; body: string; topicHint: string; events: SyncEvent[];
   /** 틀렸던 코드(11/6): 학습자 저장본에서 잘라 낸 덩어리 → 지식의 mistakes */
-  mistake?: { file: string; from: number; to: number; code: string; note: string; ref: string; at: string }; mistakeKey?: string };
+  mistake?: { file: string; from: number; to: number; code: string; note: string; ref: string; at: string }; mistakeKey?: string;
+  /** 다시 확인 문항(11/8, 실습 부족함 원장) */
+  check?: { q: string; a: string; note: string; ref: string; at: string }; checkKey?: string };
 type SyncPayload = { runId: string; source: { kind: "code"; title: string; ref: string }; items: SyncItem[] };
 type Status = { runs: Array<{ id: string; courseTitle: string; stageTitle: string; current: number; done: number; workspace: string | null; createdAt: string }>; active: string | null; engine?: string; ai?: unknown };
 
@@ -62,7 +64,7 @@ async function syncRun(id: string) {
   const p = await course<SyncPayload>(`runs/${id}/sync`);
   if (!p.items.length) return { runId: id, items: 0, created: 0, events: 0 };
   const results = await saveMany(p.items.map((it) => ({ title: it.title.slice(0, 120), kind: it.kind, state: it.state, topicHint: it.topicHint,
-    ...(it.body ? { body: it.body.slice(0, 4000) } : {}), ...(it.mistake ? { mistake: it.mistake } : {}), source: p.source })));
+    ...(it.body ? { body: it.body.slice(0, 4000) } : {}), ...(it.mistake ? { mistake: it.mistake } : {}), ...(it.check ? { check: it.check } : {}), source: p.source })));
   const keys: string[] = [];
   let events = 0;
   for (let i = 0; i < p.items.length; i++) {
@@ -70,6 +72,7 @@ async function syncRun(id: string) {
     if (!saved) continue;
     keys.push(it.key);
     if (it.mistakeKey) keys.push(it.mistakeKey);
+    if (it.checkKey) keys.push(it.checkKey);
     for (const e of it.events) {
       try { await recordEvent(saved.id, e.kind, e.detail, { kind: p.source.kind, title: p.source.title, ref: p.source.ref }, e.at); keys.push(e.key); events++; }
       catch { /* 다음 번에 다시 */ }

@@ -203,7 +203,8 @@ async function handle(request: Request, context: RouteContext) {
         const item = pool.find((x) => x.id === lite.id);
         if (!item) return [];
         const qs = questionsFor(item, pool, seed);
-        return [qs[(n + qs.length - 1) % qs.length]];
+        // 다시 확인 문항(실습 부족함, 11/8 D [경계])이 있으면 늘 그것을 묻는다
+        return [qs[0]?.label === "다시 확인" ? qs[0] : qs[(n + qs.length - 1) % qs.length]];
       });
       return json({ questions, due: status.due, next: status.next });
     }

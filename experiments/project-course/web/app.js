@@ -144,6 +144,8 @@ async function route() {
   try {
     if (hash === "#/lab") return await renderLab();
     if (hash === "#/memory") return await renderMemory();
+    if (hash === "#/rechecks") return await renderRechecks();
+    if ((m = /^#\/note\/(\w+)/.exec(hash))) return await renderNote(m[1]);
     if ((m = /^#\/timeline\/(\w+)/.exec(hash))) return await renderTimeline(m[1]);
     if ((m = /^#\/evals(?:\/([\w-]+))?/.exec(hash))) return await renderEvals(m[1]);
     if ((m = /^#\/intake\/(\w+)/.exec(hash))) return await renderIntake(m[1]);
@@ -214,6 +216,9 @@ async function renderHome() {
   const eng = h("div", { class: "heng", role: "radiogroup", "aria-label": "엔진" }, [["codex", "Codex 버전"], ["basic", "기존 버전"]].map(([k, t]) =>
     h("button", { class: `hchip ${homeEngine() === k ? "on" : ""}`, role: "radio", "aria-checked": String(homeEngine() === k), onclick: () => { setHomeEngine(k); renderHome(); } }, t)));
   const memBtn = h("button", { class: "btn small", onclick: () => go("#/memory") }, "학습자 메모리");
+  // 다시 확인(11/8): 예전 실습에서 부족했던 것 중 날짜가 된 것
+  const due = await api("GET", "/api/rechecks").catch(() => ({ items: [], total: 0 }));
+  const reBtn = due.total ? h("button", { class: `btn small ${due.items.length ? "primary" : ""}`, title: "예전 실습에서 부족했던 바로 그 지점을 다시 물어봐요", onclick: () => go("#/rechecks") }, due.items.length ? `다시 확인 ${due.items.length}개` : "다시 확인") : null;
   const evBtn = h("button", { class: "btn small", title: "튜터 평가 실험 결과", onclick: () => go("#/evals") }, "실험 결과");
   // 실험 자료 비우기(11/6 사용자 "실험용으로 작게"): 두 번 눌러야 비움(보관으로 옮김, 지우지 않음)
   const resetBtn = h("button", { class: "btn small", title: "대화 · 목표 · 학습자 메모리를 .data/보관으로 옮겨요(지우지 않음). 앱의 기억은 그대로.", onclick: async (e) => {
@@ -221,7 +226,7 @@ async function renderHome() {
     if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "한 번 더 누르면 비워요"; setTimeout(() => { delete b.dataset.sure; b.textContent = "실험 자료 비우기"; }, 4000); return; }
     const r = await api("POST", "/api/dev/reset"); toast(r.label ? `보관했어요: .data/보관/${r.label} (${r.count}개)` : "이미 비어 있어요"); go("#/");
   } }, "실험 자료 비우기");
-  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), h("div", { class: "hmem" }, resetBtn, evBtn, memBtn), list));
+  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), h("div", { class: "hmem" }, reBtn, resetBtn, evBtn, memBtn), list));
   input.focus();
 }
 /* 학습 종료(11/6): 정리하는 동안 덮개 → 결과 한 줄 → 홈 */
@@ -232,7 +237,7 @@ async function endLearning(run) {
     const r = await api("POST", `/api/runs/${run.id}/end`);
     const a = r.recorded ? `배운 것 ${r.recorded.learned} · 부족했던 점 ${r.recorded.gaps}${r.recorded.memory ? ` · 메모리 ${r.recorded.memory}곳 갱신` : ""}` : "정리할 목표가 없었어요";
     toast(`${a}${r.synced ? ` · 지식 ${r.synced.created}개 새로` : " · 앱이 꺼져 있어 지식은 다음에 넣어요"}`);
-    go("#/");
+    go(`#/note/${run.id}`); // 11/8: 끝나면 이번 학습의 세션 노트(배운 것 · 부족함과 그 뒤)를 먼저 보여 준다
   } catch (e) { toast(e.message); } finally { cover.remove(); }
 }
 /* 학습 기록 타임라인(11/8 사용자 "행동이 완수되는 걸 시간 기준으로, 상태가 어떻게 변하는지 모서리 둥근 상자를 화살표로 잇고, 토큰 · 속도는 작게 버튼으로") */
@@ -345,6 +350,55 @@ async function renderMemory() {
     h("p", { class: "mut small" }, "목표를 끝낼 때마다 튜터가 정리하면서 갱신해요. 처음 보면 가설, 다른 목표에서도 보이면 확인, 나아진 게 보이면 나아짐. 튜터는 대화할 때 이걸 읽어요."),
     h("h3", {}, "경향"), tend.length ? h("ul", { class: "memlist" }, tend.map(card)) : h("p", { class: "mut small" }, "아직 없어요. 목표를 하나 끝내면 생겨요."),
     h("h3", {}, "정해 둔 진행 방식"), pref.length ? h("ul", { class: "memlist" }, pref.map(card)) : h("p", { class: "mut small" }, "대화에서 \"앞으로는 이렇게 해 줘\"라고 하면 여기에 남아요.")));
+}
+/* 다시 확인(11/8 사용자 "알려준 데서 끝난 게 아니라 다시 한번 확인하는 것까지"): 예전 실습의 부족함을 겨냥한 문항을 하나씩 */
+const reUi = { all: false, idx: 0, result: null, answer: "" };
+async function renderRechecks() {
+  const r = await api("GET", `/api/rechecks${reUi.all ? "?all=1" : ""}`);
+  const list = r.items;
+  const cur = list[Math.min(reUi.idx, Math.max(0, list.length - 1))];
+  const head = h("div", { class: "memhead" }, h("button", { class: "btn small", onclick: () => go("#/") }, "← 홈"), h("h1", {}, "다시 확인"));
+  const tog = h("label", { class: "small" }, h("input", { type: "checkbox", checked: reUi.all, onchange: (e) => { reUi.all = e.target.checked; reUi.idx = 0; reUi.result = null; renderRechecks(); } }), " 날짜가 안 된 것도 보기");
+  if (!cur) { view.replaceChildren(h("div", { class: "home2 memory" }, head, tog, h("p", { class: "mut" }, r.total ? "오늘 다시 확인할 것이 없어요. 날짜가 되면 여기 나와요." : "아직 다시 확인할 것이 없어요. 실습에서 목표를 끝내면 부족했던 점마다 문항이 생겨요."))); return; }
+  const ta = h("textarea", { rows: 5, placeholder: "기억나는 대로 답해 보세요(모르면 모른다고 적어도 돼요)", value: reUi.answer, oninput: (e) => { reUi.answer = e.target.value; } });
+  const submit = h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => {
+    reUi.result = await api("POST", `/api/rechecks/${cur.runId}/${cur.id}`, { answer: reUi.answer }); renderRechecks();
+  }) }, "답 내기");
+  const res = reUi.result;
+  const KO = { correct: "맞았어요", partial: "일부만 맞았어요", incorrect: "아직 틀려요", unclear: "판단하기 어려워요" };
+  const resultBox = res ? h("div", { class: `gcard ${res.verdict === "correct" ? "plan" : ""}` },
+    h("b", {}, KO[res.verdict] ?? res.verdict, res.sameMistake ? " · 예전과 같은 곳에서 헷갈렸어요" : ""), h("p", { class: "small" }, res.note),
+    h("div", { class: "small" }, h("b", {}, "모범답: "), res.answer),
+    h("div", { class: "mut small" }, `다음 확인: ${res.dueAt ? new Date(res.dueAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" }) : "-"} · 상태: ${res.status}`),
+    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: () => { reUi.result = null; reUi.answer = ""; reUi.idx += 1; renderRechecks(); } }, reUi.idx + 1 < list.length ? "다음 문항" : "끝"))) : null;
+  view.replaceChildren(h("div", { class: "home2 memory" }, head, tog,
+    h("div", { class: "mut small" }, `${Math.min(reUi.idx, list.length - 1) + 1} / ${list.length} · ${cur.concept} · 예전 목표: ${cur.goal}${cur.tries ? ` · ${cur.tries}번째 다시 확인` : ""}${cur.status === "다시 틀림" ? " · 지난번에도 틀림" : ""}`),
+    h("div", { class: "gcard" }, h("pre", { class: "gcmd", style: "white-space:pre-wrap" }, cur.q)),
+    res ? resultBox : h("div", {}, ta, h("div", { class: "grow2" }, submit, h("button", { class: "btn small", onclick: () => { reUi.idx += 1; reUi.answer = ""; renderRechecks(); } }, "건너뛰기")))));
+}
+/* 세션 노트(11/8): 학습 한 번 = 제목 · 태그 · 목표마다 요약 · 배운 것 · 부족함(어디서 드러났고 · 무엇으로 채웠고 · 확인됐는지 · 다시 확인 문항) */
+async function renderNote(runId) {
+  const n = await api("GET", `/api/runs/${runId}/note`);
+  const ST = { "열림": "bad", "채우는 중": "", "세션에서 채움": "ok", "다시 확인 맞음": "ok", "다시 틀림": "bad" };
+  const gap = (x) => h("li", { class: "gnote" },
+    h("div", {}, h("b", {}, x.concept || x.unit), x.type ? h("span", { class: "mut small" }, ` · ${x.type}`) : null, " ", h("span", { class: `tlchip ${ST[x.status] ?? ""}` }, x.status)),
+    x.wrong ? h("div", { class: "small" }, `무엇이 부족했나: ${x.wrong}`) : null,
+    h("div", { class: "mut small" }, `드러난 곳: ${x.from.join(" · ")}${x.cause.length ? ` · 고른 이유: ${x.cause.join(", ")}` : ""}`),
+    x.remedy.length ? h("div", { class: "small" }, `채운 방법: ${x.remedy.join(" / ")}`) : null,
+    x.fillEvidence ? h("div", { class: "small" }, `채운 근거: ${x.fillEvidence}`) : null,
+    x.right ? h("div", { class: "small" }, `바로 알기: ${x.right}`) : null,
+    x.code ? h("details", { class: "small" }, h("summary", {}, `틀렸던 코드 ${x.code.file} ${x.code.from}~${x.code.to}줄`), h("pre", { class: "gcode" }, x.code.code)) : null,
+    x.recheck ? h("details", { class: "small" }, h("summary", {}, `다시 확인 문항${x.dueAt ? ` · ${new Date(x.dueAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}` : ""}`), h("pre", { class: "gcmd", style: "white-space:pre-wrap" }, x.recheck),
+      x.checks.length ? h("ul", {}, x.checks.map((c) => h("li", {}, `${c.at.slice(5, 10)} ${c.verdict} · ${c.note}`))) : null) : null);
+  view.replaceChildren(h("div", { class: "home2 memory" },
+    h("div", { class: "memhead" }, h("button", { class: "btn small", onclick: () => go("#/") }, "← 홈"), h("h1", {}, "세션 노트")),
+    h("h2", {}, n.title), n.tags.length ? h("div", { class: "gopts" }, n.tags.map((t) => h("span", { class: "gopt" }, t))) : null,
+    h("p", { class: "small" }, `부족함 ${n.counts.all}개 · 채움 확인 ${n.counts.filled} · 아직 열림 ${n.counts.open}${n.counts.rechecked ? ` · 다시 확인까지 맞음 ${n.counts.rechecked}` : ""}`,
+      " ", h("a", { href: `#/run/${runId}` }, "대화로"), " · ", h("a", { href: `#/timeline/${runId}` }, "타임라인"), n.counts.all ? [" · ", h("a", { href: "#/rechecks" }, "다시 확인")] : null),
+    h("h3", {}, "부족했던 것과 그 뒤"), n.gaps.length ? h("ul", { class: "memlist" }, n.gaps.map(gap)) : h("p", { class: "mut small" }, "아직 없어요."),
+    h("h3", {}, "목표마다"), n.goals.length ? h("ul", { class: "memlist" }, n.goals.map((g) => h("li", {}, h("b", {}, g.goal), h("span", { class: "mut small" }, ` · ${g.status}`), h("p", { class: "small" }, g.summary),
+      g.learned.length ? h("div", { class: "small" }, "배운 것: ", g.learned.map((x) => `${x.concept}(${x.type})`).join(", ")) : null,
+      h("details", { class: "small" }, h("summary", {}, "거친 과정"), h("ol", {}, g.steps.map((s) => h("li", {}, s))))))) : h("p", { class: "mut small" }, "목표를 끝내면 정리가 여기 와요.")));
 }
 /** 대화 열기: 튜터 창이면 VS Code 폴더도 그 대화로, VS Code 탭이면 폴더가 다를 때 폴더부터 */
 function openChat(c) {
@@ -1652,7 +1706,8 @@ function recordsBar(lesson) {
   // 학습자 메모리에 반영한 것(11/6) → 자세히는 학습자 메모리 화면
   const memN = rs.reduce((n, r) => n + (r.memory?.done?.length ?? 0), 0);
   const obsList = memN ? h("div", { class: "small mut" }, `학습자 메모리에 ${memN}번 반영 `, h("a", { href: "#/memory" }, "보기")) : null;
-  return h("div", { class: "learned" }, head, obsList, gapList, tabs,
+  const noteLink = h("div", { class: "small" }, h("a", { href: `#/note/${lessonCtx.run?.id ?? ""}` }, "세션 노트 보기"), h("span", { class: "mut" }, " — 부족했던 것마다 채웠는지 · 다시 확인 문항"));
+  return h("div", { class: "learned" }, head, noteLink, obsList, gapList, tabs,
     items.length ? h("ul", {}, items.map((x) => h("li", {}, h("b", {}, x.concept), h("span", { class: "mut small" }, ` · ${x.how}`),
       x.meaning ? h("div", { class: "small" }, x.meaning) : null,
       h("div", { class: "mut small" }, `목표: ${x.goal}${x.quote ? ` · "${x.quote}"` : ""}`)))) : h("p", { class: "mut small" }, "이 칸에는 아직 없어요."),

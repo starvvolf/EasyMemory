@@ -20,3 +20,26 @@ test("saveMany mistake → mistakes(같은 코드 한 번, 최근 3개)", async 
     assert.deepEqual(z.item.mistakes!.map((x) => x.code), ["a", "b", "c"]);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test("다시 확인 문항(실습 부족함)은 저장되고 복습에서 뜻 카드 대신 먼저 나온다", async () => {
+  const { questionsFor } = await import("./questions.ts");
+  const item = { id: "k1", title: "딕셔너리 키 확인", body: "키가 없을 때 d[k]는 KeyError", aliases: [], folderId: null, links: [], state: "unknown" as const,
+    checks: [{ q: "counts = {}; counts['x'] += 1 은 어떻게 될까요?", a: "KeyError. 없는 키를 먼저 읽기 때문", note: "+=가 기존 값을 읽는 걸 몰랐음", at: "2026-11-08" }] };
+  const qs = questionsFor(item, [item], "s");
+  assert.equal(qs[0].label, "다시 확인"); assert.match(qs[0].prompt, /counts/);
+  const known = questionsFor({ ...item, state: "known" as const }, [item], "s");
+  assert.notEqual(known[0].label, "다시 확인");
+});
+
+test("saveMany check → checks(같은 질문 한 번)", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "knowledge-check-"));
+  process.env.STUDY_FORGE_DATA_DIR = dir; process.env.RECALLER_AFTER_SAVE = "off";
+  try {
+    const { saveMany, getKnowledge } = await import("./store.ts");
+    const check = { q: "빈 dict에 += 1 하면?", a: "KeyError", note: "몰랐음", ref: "project:r1" };
+    const [r] = await saveMany([{ title: "dict 키", body: "없는 키는 KeyError", state: "unknown", check }]);
+    await saveMany([{ title: "dict 키", check }]);
+    const k = await getKnowledge(r.item.id);
+    assert.equal(k.item.checks?.length, 1); assert.equal(k.item.checks?.[0].a, "KeyError");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

@@ -11,7 +11,7 @@ export type Question = {
 };
 export type Graded = { correct: boolean; expected: string; note: string };
 
-type Pool = Array<Pick<Knowledge, "id" | "title" | "body" | "aliases" | "folderId" | "links"> & { sources?: Knowledge["sources"]; kind?: Knowledge["kind"]; vocab?: boolean; ask?: string }>;
+type Pool = Array<Pick<Knowledge, "id" | "title" | "body" | "aliases" | "folderId" | "links"> & { sources?: Knowledge["sources"]; kind?: Knowledge["kind"]; vocab?: boolean; ask?: string; checks?: Knowledge["checks"]; state?: Knowledge["state"] }>;
 function rng(seed: string) { let h = 2166136261; for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => { h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 2 ** 32; }; }
 function shuffle<T>(items: T[], r: () => number) { const a = [...items]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 // ⟨받음: … / 냄: …⟩ is the engine's wiring between knowledge points; it names other items, so it never goes into a question.
@@ -50,7 +50,12 @@ export function questionsFor(item: Pool[number], pool: Pool, seed = ""): Questio
   const meaning = meaningOf(item);
   const out: Question[] = [];
   const id = (kind: string) => `${item.id}:${kind}:${seed}`;
-  out.push({ id: id("flashcard"), kind: "flashcard", label: QUESTION_LABEL.flashcard, knowledgeId: item.id, prompt: item.ask || item.title, answer: meaning || "(설명이 아직 없어요. 지식창에서 적어 주세요.)", explain: item.ask ? item.title : "" });
+  // 다시 확인(2026-11-08 D [경계]): 실습에서 부족했던 바로 그 지점을 겨냥한 문항이 있으면 뜻 카드 대신 그걸 먼저(가장 최근 것).
+  // 스스로 채점(플래시카드처럼). 맞히면 앎으로, 틀리면 몰랐음 — 상태 · 날짜는 다른 문제와 같은 기록으로 정해진다
+  const check = item.checks?.length && item.state !== "known" ? item.checks[item.checks.length - 1] : null;
+  if (check) out.push({ id: id("flashcard"), kind: "flashcard", label: "다시 확인", knowledgeId: item.id, prompt: check.q, answer: check.a,
+    explain: check.note ? `예전 실습에서: ${check.note}` : item.title });
+  else out.push({ id: id("flashcard"), kind: "flashcard", label: QUESTION_LABEL.flashcard, knowledgeId: item.id, prompt: item.ask || item.title, answer: meaning || "(설명이 아직 없어요. 지식창에서 적어 주세요.)", explain: item.ask ? item.title : "" });
   // 어휘 (종류 vocab): a word is learned both ways — the word from its meaning (주관식), and which word fits (객관식).
   if (item.vocab && meaning) {
     out.push({ id: id("short"), kind: "short", label: QUESTION_LABEL.short, knowledgeId: item.id, prompt: `뜻에 맞는 단어를 쓰세요.\n${meaning}`, answer: item.title, accept: item.aliases,

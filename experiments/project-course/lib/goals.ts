@@ -154,6 +154,8 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       out = `남은 단계를 고쳤어요: ${titles.join(" → ")}`;
     } else throw err("없는 도구예요.");
   });
+  // 부족함 원장(11/8): 보충 로드맵 = 그 목표에서 열린 부족함의 처방
+  if (name === "plan_support" && out.startsWith("보충 로드맵을 짰어요")) { const g = await goalsOf(runId); if (g.current && g.support) await (await import("./gaps.ts")).addRemedy(runId, g.current.id, "보충", `${g.support.steps.filter((x) => x.status !== "done").map((x) => x.title).join(" → ")} (막힌 이유: ${g.support.why})`).catch(() => {}); }
   return out;
 }
 
@@ -221,7 +223,8 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
         const v = b.verdict as { verdict: string; right: string; gap: string } | undefined;
         const ko = ({ correct: "맞음", partial: "일부만 맞음", incorrect: "틀림", unclear: "판단 근거 부족", not_answer: "판단 근거 부족" } as Record<string, string>)[v?.verdict ?? ""] ?? "";
         const line = v ? `판정: ${ko}${v.right ? ` · 맞은 부분: ${v.right}` : ""}${v.gap ? ` · 빠지거나 틀린 부분: ${v.gap}` : ""}` : "";
-        logIt(g, "apply-check", `${sp ? `보충 ${sp.title}` : c!.title}: ${ko || "판정 없음"}`);
+        const vq = String((v as { quote?: string } | undefined)?.quote ?? "").slice(0, 200);
+        logIt(g, "apply-check", `${sp ? `보충 ${sp.title}` : c!.title}: ${ko || "판정 없음"}${v?.gap ? ` · 빠진 곳: ${v.gap}` : ""}${vq ? ` · 학습자 답: "${vq}"` : ""}`);
         if (!v || v.verdict === "correct") {
           u.applied = true; u.understood = true; logIt(g, "applied", sp ? `보충 ${sp.title}` : c!.title);
           say = sp ? `[해 봤어요 — ${line}] ${what} 적용을 확인했어요. ${finishSupport("적용까지 함")}`
@@ -295,7 +298,8 @@ export async function goalContext(runId: string) {
   const sh = await (await import("./shell.ts")).shellContext(runId).catch(() => "");
   // 학습자가 물을 때(11/8): 장기 목표가 없을 때도 붙는다
   const J = await import("./judge.ts");
-  return [mem, body, sh, `${J.QUESTION_RULE} ${J.ON_REQUEST_RULE}`].filter(Boolean).join("\n\n");
+  const refail = await (await import("./gaps.ts")).refailedContext().catch(() => "");
+  return [mem, body, refail, sh, `${J.QUESTION_RULE} ${J.ON_REQUEST_RULE}`].filter(Boolean).join("\n\n");
 }
 /** 진행 기록의 작업 폴더(Codex는 그 대화의 폴더, 기본 엔진은 실험판 대화의 폴더) */
 export async function runWorkspace(runId: string): Promise<string | undefined> {

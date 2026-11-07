@@ -351,16 +351,76 @@ async function chatMessages(run: { codexId?: string; chatId?: string }): Promise
   return run.codexId ? (await (await import("./codex-chat.ts")).chatOf(run.codexId)).messages : (await (await import("./agent-chat.ts")).chatOf(run.chatId!)).messages;
 }
 export const recordShow = (m: { role: string; text: string }) => m.role === "user" ? `[학습자] ${shownUser(m.text)}` : m.role === "assistant" ? `[튜터] ${m.text.slice(0, 2500)}` : m.role === "tool" ? `[도구] ${m.text.split("\n")[0].slice(0, 120)}` : "";
-async function recordFinished(runId: string, run: { codexId?: string; chatId?: string }, goal: { title: string; done: string; understood: boolean; applied: boolean; at: string }, mode: string | null) {
+async function recordFinished(runId: string, run: { codexId?: string; chatId?: string }, goal: { id?: string; title: string; done: string; understood: boolean; applied: boolean; at: string }, mode: string | null) {
   const R = await import("./goal-record.ts");
   const t0 = Date.now();
-  const rec = await R.recordGoal(runId, goal, mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId)).catch(() => null);
+  // 부족함 원장(11/8): 이 목표 동안 잡힌 부족함을 정리에 같이 보내고, 정리 결과(이름 · 재확인 문항)를 원장에 합친다
+  const GP = await import("./gaps.ts");
+  const gid = (goal as { id?: string }).id ?? "";
+  const rec = await R.recordGoal(runId, goal, mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId), gid ? await GP.gapsForRecord(runId, gid, await verdictLines(runId, goal.at)) : "").catch(() => null);
+  if (rec && gid) await GP.mergeRecord(runId, { id: gid, title: goal.title, done: goal.done }, (rec.gaps ?? []) as never, rec.to).catch((e) => console.error("부족함 원장 합치기:", e));
   if (rec) { await (await import("./timeline.ts")).systemStep(runId, `목표 정리: ${goal.title}`, { learned: rec.learned.map((x) => `${x.type} · ${x.concept}`), gaps: (rec.gaps ?? []).map((x) => `${x.type} · ${x.concept}${x.code ? ` (코드 ${x.code.file} ${x.code.from}~${x.code.to}줄)` : ""}`) }, Date.now() - t0); notifyLesson(runId); }
 }
 /**
  * 학습 종료(11/6 사용자 "도중에 학습 종료 버튼. 끄면서 알아서 처리할 거 정리하면서 로딩 살짝 걸리고 종료"):
  * 하던 목표를 지금까지로 닫고 → 그 목표 정리(+ 학습자 메모리 갱신, AI 1번, 목표가 있을 때만) → 앱 지식으로 넣기(앱이 켜져 있으면, 앱의 sync가 넣는다).
  */
+/** 튜터 말에 나온 작업 폴더 파일(과 줄)을 줄 번호와 함께 — 판정의 기준이 되는 실제 코드. 파일 3개 · 파일마다 120줄까지 */
+export async function referencedCode(runId: string, text: string) {
+  const ws = await (await import("./goals.ts")).runWorkspace(runId);
+  if (!ws) return "";
+  const root = path.resolve(ws);
+  const seen = new Map<string, { from: number; to: number }[]>();
+  const re = /([\w.\-/]+\.(?:m?[jt]sx?|py|java|c|cc|cpp|h|go|rs|rb|kt|cs|html|css|json|sql))\b(?:[^\n\d]{0,12}(\d+)(?:\s*[~\-–]\s*(\d+))?\s*(?:줄|행|번째 줄|line))?/g;
+  for (const m of text.matchAll(re)) {
+    const rel = m[1].replace(/^\.\//, "");
+    const abs = path.resolve(root, rel);
+    if (abs !== root && !abs.startsWith(root + path.sep)) continue;
+    const list = seen.get(abs) ?? []; seen.set(abs, list);
+    if (m[2]) list.push({ from: Number(m[2]), to: Number(m[3] ?? m[2]) });
+  }
+  // 줄만 따로 말한 경우("119줄부터")도 그 파일의 범위로 본다(파일이 하나일 때)
+  if (seen.size === 1) { const [only] = seen.values(); for (const m of text.matchAll(/(\d+)(?:\s*[~\-–]\s*(\d+))?\s*(?:줄|행)/g)) only.push({ from: Number(m[1]), to: Number(m[2] ?? m[1]) }); }
+  const out: string[] = [];
+  for (const [abs, ranges] of [...seen].slice(0, 3)) {
+    const lines = (await readFile(abs, "utf8").catch(() => null))?.split(/\r?\n/);
+    if (!lines) continue;
+    const keep = new Set<number>();
+    if (ranges.length) for (const r of ranges) for (let i = Math.max(1, Math.min(r.from, r.to) - 8); i <= Math.min(lines.length, Math.max(r.from, r.to) + 8); i++) keep.add(i);
+    else for (let i = 1; i <= Math.min(lines.length, 120); i++) keep.add(i);
+    const nums = [...keep].sort((a, b) => a - b).slice(0, 120);
+    out.push(`[과제가 가리키는 코드 ${path.relative(root, abs).split(path.sep).join("/")} — 판정 기준]\n${nums.map((i) => `${String(i).padStart(4)}| ${lines[i - 1]}`).join("\n")}`);
+  }
+  return out.join("\n\n");
+}
+/** 이 목표 동안의 [해 봤어요] 판정(타임라인 버튼 칸의 판정 글) — 시각 · 단위 · 판정 */
+async function verdictLines(runId: string, since: string) {
+  const g = await (await import("./goals.ts")).goalsOf(runId);
+  return g.log.filter((l) => l.kind === "apply-check" && l.at >= since).map((l) => `${l.at.slice(11, 19)} ${l.text}`).slice(-10);
+}
+/** 버튼 하나가 부족함 원장에 남기는 것(코드가 정함): 판정 결과 · 막힌 이유 */
+async function noteGap(runId: string, op: string, b: Record<string, unknown>) {
+  const g = await (await import("./goals.ts")).goalsOf(runId);
+  const sp = g.support && !g.support.back ? g.support.steps.find((x) => x.status === "doing") : null;
+  const c = g.current;
+  if (!c) return;
+  const unit = sp ? { id: sp.id, title: `보충: ${sp.title}`, done: sp.done, support: true } : { id: c.id, title: c.title, done: c.done };
+  const goal = { id: c.id, title: c.title };
+  const GP = await import("./gaps.ts");
+  const v = b.verdict as { verdict: string; right: string; gap: string; quote?: string } | undefined;
+  if (op === "applied" && v) {
+    if (v.verdict === "partial" || v.verdict === "incorrect") await GP.openGap(runId, { goal, unit, from: "판정", wrong: v.gap, right: "", quote: v.quote });
+    else if (v.verdict === "correct") {
+      await GP.fillUnit(runId, unit.id, v.quote || v.right);
+      // 보충을 거쳐 돌아온 종착지가 맞으면, 그 목표에서 막혔던 것도 채운 것으로
+      if (!sp) await GP.fillUnit(runId, c.id, v.quote || v.right);
+    }
+  } else if (op === "hard" || op === "stuck") {
+    const reasons = (Array.isArray(b.reasons) ? b.reasons : []).map(String);
+    const text = String(b.text ?? "").trim();
+    await GP.openGap(runId, { goal, unit, from: "막힘", wrong: text || "어려움(이유를 고름)", cause: reasons, quote: text });
+  }
+}
 /** [해 봤어요] 판정: 지금 단위(보충 단계 또는 현재 목표)가 이해된 뒤 튜터가 낸 과제와 학습자가 한 것만 본다 */
 async function applyVerdict(runId: string, run: { codexId?: string; chatId?: string }) {
   const G = await import("./goals.ts"), R = await import("./goal-record.ts"), J = await import("./judge.ts");
@@ -386,8 +446,11 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
   const code = [...lastBy].filter(([f, t]) => (beforeBy.get(f) ?? "") !== t).map(([f, t]) => `[저장한 코드 ${f} — 최신본]\n${t.split(/\r?\n/).slice(0, 200).map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}`);
   // 학습자가 과제 뒤 VS Code 터미널에서 친 명령과 결과(마지막 5개)도 한 것으로 본다(11/8)
   const typed = (await (await import("./shell.ts")).learnerRunsSince(runId, since)).slice(-5).map((r) => `[학습자가 터미널에서 친 명령] ${r.command}\n종료 코드 ${r.code ?? "모름"}\n${r.out.slice(-1500)}`);
-  const v = await J.judgeApply(unit, lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task, [...said, ...code, ...typed].join("\n\n"));
-  return { verdict: v.verdict, right: v.right, gap: v.gap };
+  // 과제가 가리키는 코드(11/8 실측: "goals.ts 119줄을 따라가 보라"는 과제에서 판정이 코드를 못 봐 틀린 답을 맞은 부분으로 봄)
+  const taskText = lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task;
+  const refs = await referencedCode(runId, taskText).catch(() => "");
+  const v = await J.judgeApply(unit, refs ? `${taskText}\n\n${refs}` : taskText, [...said, ...code, ...typed].join("\n\n"));
+  return { verdict: v.verdict, right: v.right, gap: v.gap, quote: lastU?.text.trim().slice(0, 400) ?? "" };
 }
 const recordJobs = new Map<string, Promise<unknown>[]>();
 export async function endLearning(runId: string) {
@@ -479,9 +542,15 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   // 학습 목표 버튼(11/4): 이해 · 적용 · 보충 끝은 AI 안 부름. 다음으로 · 확정 · 막혔어요 · 설문 답은 튜터에게 한 번
   if ((run.codexId || run.chatId) && input.do === "goal") {
     const op = String((input as { op?: string }).op ?? "");
-    const before = op === "next" || op === "easy_next" ? await (await import("./goals.ts")).goalsOf(runId) : null;
+    // 목표 정리는 현재 목표가 끝날 때만: [다음으로] 또는 보충 중이 아닐 때의 [너무 쉬워요 → 다음으로].
+    // 11/8 실측: 보충 단계에서 [너무 쉬워요 → 넘어가기]마다 끝나지 않은 목표를 "건너뜀"으로 정리해 같은 목표 정리가 3번, 지식이 이름만 다르게 7개
+    const g0 = op === "next" || op === "easy_next" ? await (await import("./goals.ts")).goalsOf(runId) : null;
+    const inSupport = !!(g0?.support && !g0.support.back && g0.support.steps.some((x) => x.status === "doing"));
+    const before = op === "next" || (op === "easy_next" && !inSupport) ? g0 : null;
     // [해 봤어요](11/8 사용자 결정 "적용 과제의 답이 맞을 때만 적용 ✓"): 판정 호출 한 번(완료 조건 · 튜터가 낸 과제 · 학습자 답과 저장한 코드)
     if (op === "applied") (input as Record<string, unknown>).verdict = await applyVerdict(runId, run).catch((e) => { console.error("적용 판정:", e); return undefined; });
+    // 부족함 원장(11/8): 판정이 일부만 · 틀림이면 열고, 맞음이면 그 단위에 열린 것을 채움으로. [너무 어려워요]도 연다
+    await noteGap(runId, op, input as Record<string, unknown>).catch((e) => console.error("부족함 원장:", e));
     const TL = await import("./timeline.ts");
     // 튜터가 묻고 돌리려는 명령(11/8 결정 8): [실행]이면 돌리고 결과를 튜터에게 한 번, [안 함]이면 AI 안 부름(다음 차례 맥락에 한 줄)
     if (op === "cmd") {

@@ -14,7 +14,9 @@ export type SyncEvent = { key: string; kind: "asked" | "wrong" | "hint" | "corre
 export type SyncKind = "concept" | "principle" | "procedure" | "rule" | "method" | "compare" | "vocab";
 /** 틀렸던 코드(11/6): 학습자 저장본에서 코드가 잘라 낸 덩어리 → 기억(지식)의 mistakes */
 export type SyncMistake = { file: string; from: number; to: number; code: string; note: string; ref: string; at: string };
-export type SyncItem = { key: string; title: string; kind: SyncKind; state: "met" | "unknown"; body: string; topicHint: string; events: SyncEvent[]; mistake?: SyncMistake; mistakeKey?: string };
+/** 다시 확인 문항(11/8 부족함 원장): 부족했던 바로 그 지점을 겨냥한 질문 → 지식의 checks, 앱 복습이 먼저 묻는다 */
+export type SyncCheck = { q: string; a: string; note: string; ref: string; at: string };
+export type SyncItem = { key: string; title: string; kind: SyncKind; state: "met" | "unknown"; body: string; topicHint: string; events: SyncEvent[]; mistake?: SyncMistake; mistakeKey?: string; check?: SyncCheck; checkKey?: string };
 /** 목표 정리의 여섯 칸 = 지식 저장소의 여섯 종류(B, store.ts KIND_LABEL) */
 const TAB_KIND: Record<Tab, SyncKind> = { 개념: "concept", 원리: "principle", 절차: "procedure", 규칙: "rule", 방법: "method", 비교: "compare" };
 export type SyncPayload = { runId: string; source: { kind: "code"; title: string; ref: string }; items: SyncItem[]; sentBefore: number };
@@ -35,13 +37,13 @@ export async function pending(runId: string, course: Course, run?: Run): Promise
     const source = { kind: "code" as const, title: `실습: ${long}`.slice(0, 120), ref: `project:${runId}` };
     const topicHint = `실습/${long.slice(0, 40)}`;
     const name = (c: string) => c.replace(/\s+/g, " ").trim();
+    const item = (type: Tab, concept: string, body: string): SyncItem => {
+      const key = `g:${name(concept).toLowerCase()}`;
+      const it = byKey.get(key) ?? { key, title: name(concept), kind: TAB_KIND[type] ?? "concept", state: "met" as const, body, topicHint, events: [] };
+      byKey.set(key, it);
+      return it;
+    };
     for (const rec of await recordsOf(runId)) {
-      const item = (type: Tab, concept: string, body: string) => {
-        const key = `g:${name(concept).toLowerCase()}`;
-        const it = byKey.get(key) ?? { key, title: name(concept), kind: TAB_KIND[type] ?? "concept", state: "met" as const, body, topicHint, events: [] };
-        byKey.set(key, it);
-        return it;
-      };
       for (const x of rec.learned) {
         const it = item(x.type, x.concept, x.meaning);
         it.events.push({ key: `g:${rec.at}:L:${it.key}`, kind: "note", detail: `목표 "${rec.goal}" · ${x.how}${x.quote ? ` · 학습자: "${x.quote}"` : ""}`.slice(0, 600), at: rec.to });
@@ -54,13 +56,23 @@ export async function pending(runId: string, course: Course, run?: Run): Promise
         it.events.push({ key: `g:${rec.at}:G:${it.key}`, kind: "wrong", detail: `목표 "${rec.goal}" · 부족: ${x.wrong}${x.quote ? ` · 학습자: "${x.quote}"` : ""}`.slice(0, 600), at: rec.to });
       }
     }
+    // 부족함 원장(11/8): 이름이 붙은 부족함마다 다시 확인 문항, 세션 안에서 채운 근거(메모), 실습에서 다시 확인한 결과(맞힘 · 틀림)
+    for (const g of await (await import("./gaps.ts")).ledgerOf(runId)) {
+      if (!g.type || !g.concept) continue;
+      const it = item(g.type as Tab, g.concept, g.right);
+      if (g.status !== "다시 확인 맞음") it.state = "unknown";
+      if (g.recheck) { it.check = { q: g.recheck.q, a: g.recheck.a, note: g.wrong, ref: `project:${runId}`, at: g.at }; it.checkKey = `gap:${g.id}:check`; }
+      if (g.filledAt) it.events.push({ key: `gap:${g.id}:fill`, kind: "note", detail: `실습에서 채움 확인(목표 "${g.goal.title}"): ${g.fillEvidence ?? ""}${g.remedy.length ? ` · 처방: ${g.remedy.map((r) => r.text).join(" / ")}` : ""}`.slice(0, 600), at: g.filledAt });
+      for (const c of g.checks) if (c.verdict !== "unclear") it.events.push({ key: `gap:${g.id}:chk:${c.at}`, kind: c.verdict === "correct" ? "correct" : "wrong", detail: `실습에서 다시 확인: ${c.note}${c.answer ? ` · 답: "${c.answer.slice(0, 200)}"` : ""}`.slice(0, 600), at: c.at });
+    }
     const items: SyncItem[] = [];
     for (const it of byKey.values()) {
       const events = it.events.filter((e) => !sent.has(e.key));
       const mistake = it.mistakeKey && !sent.has(it.mistakeKey) ? it.mistake : undefined;
-      if (sent.has(it.key) && !events.length && !mistake) continue;
-      const { mistake: _m, mistakeKey, ...rest } = it;
-      items.push({ ...rest, events, ...(mistake ? { mistake, mistakeKey } : {}) });
+      const check = it.checkKey && !sent.has(it.checkKey) ? it.check : undefined;
+      if (sent.has(it.key) && !events.length && !mistake && !check) continue;
+      const { mistake: _m, mistakeKey, check: _c, checkKey, ...rest } = it;
+      items.push({ ...rest, events, ...(mistake ? { mistake, mistakeKey } : {}), ...(check ? { check, checkKey } : {}) });
     }
     return { runId, source, items, sentBefore: sent.size };
   }

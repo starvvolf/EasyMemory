@@ -28,6 +28,8 @@ export type KState = "met" | "unknown" | "known";
 export const STATE_LABEL: Record<KState, string> = { met: "만남", unknown: "몰랐음", known: "앎" };
 export type SourceKind = "pdf" | "web" | "code" | "chat" | "manual";
 export type KMistake = { file: string; from: number; to: number; code: string; note: string; ref?: string; at: string };
+/** 다시 확인 문항(2026-11-08 D [경계], 사용자 "모르는 걸 알려준 데서 끝나지 않고 다시 확인하는 것까지"): 실습에서 부족했던 바로 그 지점을 겨냥한 질문 · 모범답 · 무엇을 잘못 알았나. 최근 3개 */
+export type KCheck = { q: string; a: string; note: string; ref?: string; at: string };
 export type KSource = { kind: SourceKind; title: string; ref?: string; url?: string; page?: number; quote?: string; at: string };
 /** `note`: a short 연결 문장 for the learner ("누적 합으로 구간 합을 한 번에 구한다"), from the link check. */
 export type KLink = { to: string; relation: string; note?: string };
@@ -80,6 +82,8 @@ export type Knowledge = {
    * 실습에서 학습자가 저장한 코드 중 그 지식을 잘못 쓴 덩어리(코드가 원본에서 잘라 넣음, AI가 쓴 코드 아님). 최근 3개.
    */
   mistakes?: KMistake[];
+  /** 다시 확인 문항(실습 부족함, 2026-11-08 D [경계]). 복습에서 뜻보다 먼저 묻는다(questions.ts). 최근 3개 */
+  checks?: KCheck[];
   /** 확인 질문 (2026-10-29): 글 지도의 핵심 아이디어처럼 이름만으로는 떠올릴 단서가 약할 때, 카드 앞면에 쓰는 질문. */
   ask?: string;
   /** 쉽게 풀어 보기의 칸들 (explain은 이것을 이은 글, 예전 데이터·검색용). */
@@ -307,6 +311,8 @@ export type SaveInput = {
   ask?: string;
   /** 틀렸던 코드 하나(실습, 2026-11-06 D [경계]). 같은 코드면 다시 안 넣는다. */
   mistake?: Omit<KMistake, "at"> & { at?: string };
+  /** 다시 확인 문항 하나(실습, 2026-11-08 D [경계]). 같은 질문이면 다시 안 넣는다. */
+  check?: Omit<KCheck, "at"> & { at?: string };
 };
 export type SaveResult = { item: Knowledge; merged: boolean; created: boolean; again: boolean };
 
@@ -348,6 +354,10 @@ function saveInto(store: Store, input: SaveInput, events: KEvent[]): SaveResult 
   if (input.mistake?.code?.trim() && !(item.mistakes ?? []).some((m) => m.code === input.mistake!.code)) {
     const m = input.mistake;
     item.mistakes = [...(item.mistakes ?? []), { file: String(m.file).slice(0, 120), from: Number(m.from) || 0, to: Number(m.to) || 0, code: m.code.slice(0, 1500), note: String(m.note ?? "").slice(0, 300), ...(m.ref ? { ref: m.ref } : {}), at: m.at ?? at }].slice(-3);
+  }
+  if (input.check?.q?.trim() && input.check.a?.trim() && !(item.checks ?? []).some((c) => normalize(c.q) === normalize(input.check!.q))) {
+    const c = input.check;
+    item.checks = [...(item.checks ?? []), { q: c.q.trim().slice(0, 1200), a: c.a.trim().slice(0, 600), note: String(c.note ?? "").slice(0, 300), ...(c.ref ? { ref: c.ref } : {}), at: c.at ?? at }].slice(-3);
   }
   if (!existing && input.topicHint && item.folderId === null) item.topicHint = input.topicHint.slice(0, 200);
   else if (input.state === "unknown" || input.state === "known") item.state = input.state;
