@@ -32,23 +32,37 @@ test("목표: 설문 → 계획 → 확정 → 이해·적용 → 다음으로 �
   assert.match(await G.goalContext(r), /지도: 1\.↷ 화면 · 2\.▶ 점프 · 3\.· 장애물/);
 });
 
-test("보충: [막혔어요] 이유 뒤에만(또는 학습자 말 그대로) 열리고, 이해하면 돌아온다", async () => {
+test("보충 로드맵(11/7): 어려워요 설문 뒤에만(또는 학습자 말 그대로) 짜고, 원래 로드맵은 보관, 보충을 다 하면 막힌 단계로 돌아가고 해내면 닫힌다", async () => {
   const r = "run2";
-  await G.runGoalTool(r, "propose_plan", { long: "캐시", spec: "", mode: "bottomup", map: [], first: { title: "딕셔너리", done: "값 꺼내기" } }, []);
+  await G.runGoalTool(r, "propose_plan", { long: "캐시", spec: "", mode: "topdown", map: ["딕셔너리", "캐시 함수", "정리"], first: { title: "딕셔너리", done: "값 꺼내기" } }, []);
   await G.goalAction(r, "confirm", {});
-  await assert.rejects(G.runGoalTool(r, "open_support", { title: "괄호", done: "x", why_quote: "지어낸 말" }, ["cache(1)?"]), /글자 그대로/);
-  const say = await G.goalAction(r, "stuck", { reasons: ["처음 보는 모양이 있어요"], text: "" });
-  assert.match(say!, /open_support/);
-  await G.runGoalTool(r, "open_support", { title: "[]와 ()의 차이", done: "둘을 구분한다", why_quote: "" }, []);
+  await assert.rejects(G.runGoalTool(r, "plan_support", { steps: [{ title: "괄호", done: "x" }], why_quote: "지어낸 말" }, ["cache(1)?"]), /글자 그대로/);
+  const say = await G.goalAction(r, "hard", { reasons: [G.STUCK_REASONS[1]], text: "키가 뭐예요" });
+  assert.match(say!, /plan_support로 보충 로드맵/); assert.match(say!, /개념 · 용어를 몰라요 · 덧붙임: 키가 뭐예요/);
+  await G.runGoalTool(r, "plan_support", { steps: [{ title: "키와 값", done: "키로 값을 찾는다" }, { title: "[]로 꺼내기", done: "d[k]를 쓴다" }], why_quote: "" }, []);
   let g = await G.goalsOf(r);
-  assert.equal(g.stack.length, 1); assert.equal(g.stack[0].from, "딕셔너리"); assert.equal(g.stuck, null);
-  assert.match(await G.goalContext(r), /보충 중\(1겹\): \[\]와 \(\)의 차이/);
-  assert.equal(await G.goalAction(r, "understood", {}), null); // 보충 이해 → AI 안 부르고 돌아옴
+  assert.deepEqual(g.support!.steps.map((x) => [x.title, x.status]), [["키와 값", "doing"], ["[]로 꺼내기", "todo"]]);
+  assert.equal(g.support!.target.title, "딕셔너리"); assert.equal(g.map.length, 3); // 원래 로드맵은 그대로 보관
+  const ctx = await G.goalContext(r);
+  assert.match(ctx, /원래 로드맵\(보충 중이라 잠시 보관\)/); assert.match(ctx, /▶ 키와 값 → · \[\]로 꺼내기 → 🎯 딕셔너리/);
+  await assert.rejects(G.runGoalTool(r, "set_current_goal", { title: "x", done: "y" }, []), /보충 로드맵을 진행 중/);
+  assert.match((await G.goalAction(r, "understood", {}))!, /다음 보충 "\[\]로 꺼내기"/);
+  // 보충 중 또 어려움 → 끝낸 보충은 두고 남은 것만 다시, 종착지는 그대로
+  assert.match((await G.goalAction(r, "hard", {}))!, /보충 "\[\]로 꺼내기"도 어려워요.*종착지 "딕셔너리"는 그대로/s);
+  await G.runGoalTool(r, "plan_support", { steps: [{ title: "대괄호 모양", done: "a" }, { title: "[]로 꺼내기", done: "b" }], why_quote: "" }, []);
   g = await G.goalsOf(r);
-  assert.equal(g.stack.length, 0); assert.equal(g.current!.understood, false);
-  // 학습자 말 그대로면 [막혔어요] 없이도
-  await G.runGoalTool(r, "open_support", { title: "키", done: "x", why_quote: "키가 뭔지 모르겠어" }, ["음 키가 뭔지 모르겠어요"]);
-  assert.equal((await G.goalsOf(r)).stack.length, 1);
+  assert.deepEqual(g.support!.steps.map((x) => x.status), ["done", "doing", "todo"]); assert.equal(g.support!.round, 2);
+  await G.goalAction(r, "understood", {});
+  assert.match((await G.goalAction(r, "understood", {}))!, /\[보충 끝\].*"딕셔너리"/s); // 마지막 보충 → 종착지로
+  g = await G.goalsOf(r);
+  assert.equal(g.support!.back, true); assert.equal(g.current!.understood, false);
+  // 종착지를 해내면(이해) 보충이 닫히고 적용 단계로
+  assert.match((await G.goalAction(r, "understood", {}))!, /원래 로드맵으로 돌아왔어요.*적용 단계/s);
+  g = await G.goalsOf(r);
+  assert.equal(g.support, null); assert.equal(g.current!.understood, true);
+  // 학습자 말 그대로면 설문 없이도
+  await G.runGoalTool(r, "plan_support", { steps: [{ title: "키", done: "x" }], why_quote: "키가 뭔지 모르겠어" }, ["음 키가 뭔지 모르겠어요"]);
+  assert.ok((await G.goalsOf(r)).support);
 });
 
 test("너무 쉬워요 · 너무 어려워요(11/5): 쉬우면 수준 올리기(현재 목표 다듬기 허용), 어려우면 이유 없이도 보충", async () => {
@@ -63,8 +77,8 @@ test("너무 쉬워요 · 너무 어려워요(11/5): 쉬우면 수준 올리기(
   assert.equal((await G.goalsOf(r)).current!.title, "괄호 검사");
   const say = await G.goalAction(r, "hard", {});
   assert.match(say!, /너무 어려워요\(어디가 어려운지는 모르겠어요\)/);
-  await G.runGoalTool(r, "open_support", { title: "스택이 뭔지", done: "z", why_quote: "" }, []);
-  assert.equal((await G.goalsOf(r)).stack.length, 1);
+  await G.runGoalTool(r, "plan_support", { steps: [{ title: "스택이 뭔지", done: "z" }], why_quote: "" }, []);
+  assert.equal((await G.goalsOf(r)).support!.steps.length, 1);
   assert.match(await G.goalContext(r), /너무 쉬움 1번 · 너무 어려움 1번/);
 });
 
@@ -126,19 +140,20 @@ test("너무 쉬워요(11/6): 다시 정한 목표가 지도에 반영되고, �
   assert.equal(g.current!.mapId, g.map[0].id);
 });
 
-test("보충 단계는 지도에 끼워지고(11/6), 너무 쉬워요 → 다음으로는 끝남으로 넘어간다", async () => {
+test("너무 쉬워요 → 다음으로(11/6~7): 본 단계는 끝남으로 넘어가고, 보충 중이면 그 보충만 넘어간다", async () => {
   const r = "run12";
   await G.runGoalTool(r, "propose_plan", { long: "비동기", spec: "", mode: "topdown", map: ["코루틴", "async 예제", "여러 작업"], first: { title: "코루틴 순서", done: "b" } }, []);
   await G.goalAction(r, "confirm", {});
   await G.goalAction(r, "hard", { reasons: [] });
-  await G.runGoalTool(r, "open_support", { title: "함수 호출과 반환", done: "d", why_quote: "" }, []);
+  await G.runGoalTool(r, "plan_support", { steps: [{ title: "함수 호출과 반환", done: "d" }, { title: "이벤트 루프", done: "e" }], why_quote: "" }, []);
+  assert.match((await G.goalAction(r, "easy_next", {}))!, /다음 보충 "이벤트 루프"/); // 보충 하나만 넘어감
   let g = await G.goalsOf(r);
-  assert.deepEqual(g.map.map((m) => [m.title, m.status, !!m.support]), [["함수 호출과 반환", "doing", true], ["코루틴", "doing", false], ["async 예제", "todo", false], ["여러 작업", "todo", false]]);
-  assert.match(await G.goalContext(r), /1\.▶ \(보충\) 함수 호출과 반환/);
-  await G.goalAction(r, "understood", {}); // 보충 이해 → 돌아감
+  assert.equal(g.map[0].status, "doing"); assert.equal(g.support!.steps[0].status, "done");
+  await G.goalAction(r, "next", {}); // 다음으로 → 보충은 닫힘
   g = await G.goalsOf(r);
-  assert.equal(g.map[0].status, "done"); assert.equal(g.stack.length, 0);
+  assert.equal(g.support, null);
+  await G.runGoalTool(r, "set_current_goal", { title: "async 예제 실행", done: "c" }, []);
   const say = await G.goalAction(r, "easy_next", {});
-  assert.match(say!, /이미 알아요.*다음 단계는 "async 예제"/);
+  assert.match(say!, /이미 알아요.*다음 단계는 "여러 작업"/s);
   assert.equal((await G.goalsOf(r)).map[1].status, "done");
 });

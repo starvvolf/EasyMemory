@@ -820,3 +820,9 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .feasy { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 .gfold { all: unset; cursor: pointer; font-size: 12px; color: var(--mut); padding: 2px 0; }
 .gfold:hover { color: var(--ink); }
+/* 보충 로드맵(11/7) · 너무 쉬워요 덤 링크 */
+.gmap.kept { opacity: .55; }
+.gmap.sup { align-items: center; }
+.gmap .gstep.goal { font-weight: 600; outline: 1px solid currentColor; outline-offset: -1px; }
+.flink { all: unset; cursor: pointer; font-size: 11px; color: var(--mut); text-decoration: underline; margin-left: 4px; }
+.flink:hover { color: var(--ink); }

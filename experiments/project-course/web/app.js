@@ -1420,11 +1420,11 @@ function drawFree() {
     h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
     // 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
     lesson.chat && lesson.goals && !lesson.busy ? h("div", { class: "fquick" },
-      // 11/6 사용자 "너무 쉬워요 → 엎거나 다음으로 넘어간다": 둘 중 고르기
+      // 11/7 사용자 "다음으로 넘어가는 게 기본, 새로 짜기는 고객센터 밑에 조그맣게 써 놓은 것처럼 덤으로"
       goalUi.easy && lesson.goals.current ? h("span", { class: "feasy" },
-        h("button", { class: "fchip on", onclick: (e) => { goalUi.easy = false; send({ do: "goal", op: "easy_next" })(e); }, title: "이 단계는 이미 알아요. 끝남으로 두고 다음 단계로" }, "다음 단계로 넘어가기"),
-        h("button", { class: "fchip on", onclick: (e) => { goalUi.easy = false; send({ do: "goal", op: "easy" })(e); }, title: "이 단계를 더 어렵게 다시 짜요(남은 지도도 같이)" }, "더 어렵게 다시 짜기"),
-        h("button", { class: "fchip", onclick: () => { goalUi.easy = false; drawLesson(); } }, "취소"))
+        h("button", { class: "fchip on", onclick: (e) => { goalUi.easy = false; send({ do: "goal", op: "easy_next" })(e); }, title: "이 단계는 이미 알아요. 끝남으로 두고 다음 단계로" }, lesson.goals.support && !lesson.goals.support.back ? "이 보충 넘어가기" : "다음 단계로 넘어가기"),
+        h("button", { class: "fchip", onclick: () => { goalUi.easy = false; drawLesson(); } }, "취소"),
+        h("button", { class: "flink", onclick: (e) => { goalUi.easy = false; send({ do: "goal", op: "easy" })(e); }, title: "이 단계를 더 어렵게 다시 짜요(남은 로드맵도 같이)" }, "그래도 안 맞으면: 더 어렵게 다시 짜기"))
       : h("button", { class: "fchip", onclick: lesson.goals.current ? () => { goalUi.easy = true; goalUi.stuck = false; drawLesson(); } : send({ do: "goal", op: "easy" }) }, "너무 쉬워요"),
       h("button", { class: `fchip warm ${goalUi.stuck ? "on" : ""}`, onclick: () => { goalUi.stuck = !goalUi.stuck; drawLesson(); } }, "너무 어려워요")) : null,
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
@@ -1452,29 +1452,31 @@ function goalBar(lesson, send) {
   if (!g.long) return g.survey || g.plan ? null : h("div", { class: "gbar mut small" }, "만들고 싶은 걸 말하면 튜터가 몇 가지 물어보고 장기 목표를 같이 정해요.");
   const op = (o, extra = {}) => send({ do: "goal", op: o, ...extra });
   const mark = { done: "✓", skipped: "↷", doing: "▶", todo: "" };
-  const c = g.current, top = g.stack.at(-1);
+  const c = g.current, S = g.support, sp = S && !S.back ? S.steps.find((x) => x.status === "doing") : null;
   // 11/6 사용자 "지금만 보이게 하고 장기 목표는 눌러서 보게": 장기 목표 · 로드맵은 접어 두고 한 줄 버튼으로 연다
   const prog = g.progress.total ? `${g.progress.done}/${g.progress.total}` : `해 본 것 ${g.progress.done}개`;
   const fold = h("button", { class: "gfold", "aria-expanded": String(goalUi.showLong), onclick: () => { goalUi.showLong = !goalUi.showLong; drawLesson(); } },
-    `${goalUi.showLong ? "▾" : "▸"} 장기 목표 · 로드맵 (${prog}${top ? ` · 보충 중` : ""})`);
+    `${goalUi.showLong ? "▾" : "▸"} 장기 목표 · ${S ? "원래 로드맵(잠시 보관)" : "로드맵"} (${prog})`);
   return h("div", { class: "gbar" }, fold,
     goalUi.showLong ? h("div", { class: "glong" }, h("span", { class: "gk" }, "장기"), h("b", { title: g.long.spec || "" }, g.long.text),
       h("button", { class: "gmode", disabled: lesson.busy, title: "진행 방식 바꾸기", onclick: op("mode", { mode: g.mode === "topdown" ? "bottomup" : "topdown" }) }, g.mode === "topdown" ? "탑다운" : "바텀업"),
       h("span", { class: "mut small" }, prog)) : null,
-    // 보충 단계(11/6 사용자 "그 단계가 넣어진 게 로드맵에 떠야, 흐름 볼 수 있게, (보충) 표시"): 번호는 본 단계만 세고, 보충은 ↳ (보충)
-    goalUi.showLong && g.map.length ? h("div", { class: "gmap" }, (() => { let n = 0; return g.map.map((m) => h("span", { class: `gstep ${m.status} ${m.support ? "sup" : ""}` },
-      m.support ? `↳ (보충)${mark[m.status] ? " " + mark[m.status] : ""} ${m.title}` : `${++n}${mark[m.status] ? " " + mark[m.status] : ""} ${m.title}`)); })()) : null,
-    top ? h("div", { class: "gcur sup" }, h("div", {}, h("span", { class: "gk warm" }, `보충${g.stack.length > 1 ? ` ${g.stack.length}겹` : ""}`), h("b", {}, top.title), h("span", { class: "mut small" }, ` — ${top.done}`)),
-      h("div", { class: "mut small" }, `막힌 이유: ${top.why} · 끝나면 "${top.from}"로 돌아가요`),
-      h("div", { class: "grow2" }, h("button", { class: "btn small primary", disabled: lesson.busy, onclick: op("understood") }, "이해했어요, 돌아가기"))) : null,
-    c ? h("div", { class: `gcur ${top ? "paused" : ""}` }, h("div", {}, h("span", { class: "gk" }, top ? "미뤄 둔 목표" : "지금"), h("b", {}, c.title)),
+    goalUi.showLong && g.map.length ? h("div", { class: `gmap ${S ? "kept" : ""}` }, g.map.map((m, i) => h("span", { class: `gstep ${m.status}` }, `${i + 1}${mark[m.status] ? " " + mark[m.status] : ""} ${m.title}`))) : null,
+    // 보충 로드맵(11/7 사용자 "원래 로드맵은 보관해 숨기고, 맨 마지막 종착지를 A로 놓고 보충 시작"): 보충 단계들 → 🎯 막힌 단계
+    S ? h("div", { class: "gmap sup" }, h("span", { class: "gk warm" }, `보충 로드맵${S.round > 1 ? ` (${S.round}번째)` : ""}`),
+      S.steps.map((x) => h("span", { class: `gstep ${x.status} sup` }, `${mark[x.status] ? mark[x.status] + " " : ""}${x.title}`)),
+      h("span", { class: `gstep goal ${S.back ? "doing" : ""}` }, `🎯 ${S.target.title}`)) : null,
+    sp ? h("div", { class: "gcur sup" }, h("div", {}, h("span", { class: "gk warm" }, "보충"), h("b", {}, sp.title)),
+      h("div", { class: "mut small" }, `완료 조건: ${sp.done} · 막힌 이유: ${S.why}`),
+      h("div", { class: "grow2" }, h("button", { class: "btn small primary", disabled: lesson.busy, onclick: op("understood") }, S.steps.some((x) => x.status === "todo") ? "이해했어요 → 다음 보충" : `이해했어요 → "${S.target.title}"로 돌아가기`))) : null,
+    c ? h("div", { class: `gcur ${sp ? "paused" : ""}` }, h("div", {}, h("span", { class: "gk" }, sp ? "종착지(막힌 단계)" : S?.back ? "보충 마치고 돌아옴" : "지금"), h("b", {}, c.title)),
       h("div", { class: "mut small" }, `완료 조건: ${c.done}`),
       // 11/5 사용자 "목표마다 이해 → 적용 흐름": 지금 단계 표시 + 그 단계 버튼 하나 + 다음으로(언제든)
-      top ? null : h("div", { class: "gsteps" },
+      sp ? null : h("div", { class: "gsteps" },
         h("span", { class: `gph ${c.understood ? "done" : "now"}` }, c.understood ? "① 이해 ✓" : "① 이해"),
         h("span", { class: "mut" }, "→"),
         h("span", { class: `gph ${c.applied ? "done" : c.understood ? "now" : ""}` }, c.applied ? "② 적용 ✓" : "② 적용")),
-      top ? null : h("div", { class: "grow2" },
+      sp ? null : h("div", { class: "grow2" },
         !c.understood ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 직접 해 볼 과제를 내요", onclick: op("understood") }, "이해했어요 → 적용하기") : null,
         c.understood && !c.applied ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "VS Code에서 저장한 코드가 있으면 튜터가 확인해 줘요(채팅으로 답했으면 바로 적용 ✓)", onclick: op("applied") }, "해 봤어요") : null,
         h("button", { class: `btn small ${c.understood && c.applied ? "primary" : ""}`, disabled: lesson.busy, title: c.understood && c.applied ? "" : "이해 · 적용을 다 안 해도 넘어갈 수 있어요(건너뜀으로 남아요)", onclick: op("next") }, "다음으로 →"))) : null);
@@ -1497,10 +1499,10 @@ function goalPlanCard(p, send) {
     h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: send({ do: "goal", op: "confirm" }) }, "확정"), h("button", { class: "btn small", onclick: send({ do: "goal", op: "dismiss_plan" }) }, "다시 얘기하기")));
 }
 function goalStuckCard(g, send) {
-  return h("div", { class: "gcard" }, h("div", { class: "gqq" }, "어디가 어려워요? 아는 만큼만 골라 주세요(안 골라도 돼요)"),
+  return h("div", { class: "gcard" }, h("div", { class: "gqq" }, "어디가 어려워요? 해당하는 걸 골라 주세요(여러 개 · 안 골라도 돼요). 여기 없으면 아래에 적어 주세요"),
     h("div", { class: "gopts col" }, g.stuckReasons.map((r) => h("button", { class: `gopt ${goalUi.reasons.has(r) ? "on" : ""}`, onclick: () => { goalUi.reasons.has(r) ? goalUi.reasons.delete(r) : goalUi.reasons.add(r); drawLesson(); } }, r))),
     h("input", { class: "gin", placeholder: "적어도 되고 안 적어도 돼요(예: cache(1)이 왜 안 되는지)", value: goalUi.stuckText, oninput: (e) => { goalUi.stuckText = e.target.value; } }),
-    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: (e) => { const reasons = [...goalUi.reasons], text = goalUi.stuckText; goalUi.stuck = false; goalUi.reasons = new Set(); goalUi.stuckText = ""; send({ do: "goal", op: "hard", reasons, text })(e); } }, "한 단계 내려가기"),
+    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: (e) => { const reasons = [...goalUi.reasons], text = goalUi.stuckText; goalUi.stuck = false; goalUi.reasons = new Set(); goalUi.stuckText = ""; send({ do: "goal", op: "hard", reasons, text })(e); } }, "보충 로드맵 짜기"),
       h("button", { class: "btn small", onclick: () => { goalUi.stuck = false; drawLesson(); } }, "취소")));
 }
 
