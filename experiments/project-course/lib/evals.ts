@@ -11,8 +11,9 @@ import { DATA } from "./store.ts";
 import { aiWith, S } from "./ai.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-type Case = { id: string; topic: string; goal: { title: string; done: string }; tutor: string; learner: string; gold: "correct" | "partial" | "incorrect" | "subtle" | "unclear"; key: string };
-export const loadCases = async () => (JSON.parse(await readFile(path.join(HERE, "..", "evals", "judge-cases.json"), "utf8")) as { cases: Case[] }).cases;
+type Case = { id: string; topic: string; goal: { title: string; done: string }; tutor: string; learner: string; gold: "correct" | "partial" | "incorrect" | "subtle" | "unclear" | "not_answer"; key: string };
+/** set: "main"(judge-cases.json, 규칙을 고칠 때 본 문항) · "holdout"(judge-cases-holdout.json, 검증용) */
+export const loadCases = async (set = "main") => (JSON.parse(await readFile(path.join(HERE, "..", "evals", set === "holdout" ? "judge-cases-holdout.json" : "judge-cases.json"), "utf8")) as { cases: Case[] }).cases;
 
 /* ---------- 일반 모델: 판정 → 행동 (튜터 한 차례를 두 단계로 본다) ---------- */
 // 판정: 학습자의 마지막 말이 직전 질문 · 과제에 대한 답이면, 완료 조건에 비추어 다섯 가지 중 하나로 본다
@@ -46,11 +47,12 @@ const GRADE_SYSTEM = `AI 튜터의 답을 채점한다. 문항의 정답 근거(
 accepted: 튜터가 학습자 답을 고칠 데 없이 맞다고 받아들였으면 true(맞다고 하고 넘어감, 또는 고칠 점을 말했어도 전체를 맞다고 한 경우 포함). 맞은 부분만 인정하고 빠진 곳을 짚었으면 false.
 pointed_gap: key의 빠지거나 틀린 부분을 튜터가 짚었으면 true(질문으로 그쪽을 가리킨 것 포함). gold가 correct면 늘 false.
 leaked: 학습자가 스스로 고칠 기회 없이 고친 코드나 완전한 정답 설명을 통째로 줬으면 true.
+handled: gold가 not_answer(학습자가 질문 · 요청을 함)면, 튜터가 맞다 · 틀리다 판정하지 않고 그 질문 · 요청에 응했으면 true. 그 밖의 gold면 true.
 note: 한 줄 이유.`;
-const GRADE_SCHEMA = S.obj({ accepted: S.bool, pointed_gap: S.bool, leaked: S.bool, note: S.str });
+const GRADE_SCHEMA = S.obj({ accepted: S.bool, pointed_gap: S.bool, leaked: S.bool, handled: S.bool, note: S.str });
 
 export type Cond = { name: string; effort: "low" | "medium" | "high"; judge?: { effort: "low" | "medium" } | null; rule?: boolean | 2; system?: string };
-type Row = { id: string; gold: string; verdict?: Verdict; reply: string; grade: { accepted: boolean; pointed_gap: boolean; leaked: boolean; note: string }; ms: { judge?: number; tutor: number } };
+type Row = { id: string; gold: string; verdict?: Verdict; reply: string; grade: { accepted: boolean; pointed_gap: boolean; leaked: boolean; handled?: boolean; note: string }; ms: { judge?: number; tutor: number } };
 
 async function runOne(c: Case, cond: Cond, system: string): Promise<Row> {
   let verdict: Verdict | undefined, jm: number | undefined;
@@ -62,7 +64,7 @@ async function runOne(c: Case, cond: Cond, system: string): Promise<Row> {
 }
 
 export function summarize(rows: Row[]) {
-  const wrong = rows.filter((r) => r.gold !== "correct"), right = rows.filter((r) => r.gold === "correct");
+  const wrong = rows.filter((r) => r.gold !== "correct" && r.gold !== "not_answer"), right = rows.filter((r) => r.gold === "correct"), asks = rows.filter((r) => r.gold === "not_answer");
   const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
   const judged = rows.filter((r) => r.verdict);
   const judgeOk = judged.filter((r) => (r.gold === "correct" ? r.verdict!.verdict === "correct" : r.verdict!.verdict !== "correct")).length;
@@ -73,6 +75,7 @@ export function summarize(rows: Row[]) {
     correctAccepted: `${pct(right.filter((r) => r.grade.accepted).length, right.length)}% (${right.filter((r) => r.grade.accepted).length}/${right.length})`,
     pointedGap: `${pct(wrong.filter((r) => r.grade.pointed_gap).length, wrong.length)}%`,
     leaked: `${pct(rows.filter((r) => r.grade.leaked).length, rows.length)}%`,
+    ...(asks.length ? { handledAsks: `${pct(asks.filter((r) => r.grade.handled).length, asks.length)}% (${asks.filter((r) => r.grade.handled).length}/${asks.length})` } : {}),
     ...(judged.length ? { judgeAgree: `${pct(judgeOk, judged.length)}% (맞음/아님 기준)` } : {}),
     msTutorMedian: med(rows.map((r) => r.ms.tutor)), ...(judged.length ? { msJudgeMedian: med(judged.map((r) => r.ms.judge!)) } : {}),
     falseAcceptIds: wrong.filter((r) => r.grade.accepted).map((r) => r.id),
@@ -82,8 +85,8 @@ export function summarize(rows: Row[]) {
 /* ---------- 작업(오래 걸려서 뒤에서 돈다) ---------- */
 const jobs = new Map<string, { status: "running" | "done" | "error"; done: number; total: number; result?: unknown; error?: string }>();
 export function jobOf(id: string) { return jobs.get(id) ?? null; }
-export async function startJudgeEval(conds: Cond[], opts: { ids?: string[]; repeat?: number } = {}) {
-  const all = await loadCases();
+export async function startJudgeEval(conds: Cond[], opts: { ids?: string[]; repeat?: number; set?: string } = {}) {
+  const all = await loadCases(opts.set);
   const cases = opts.ids?.length ? all.filter((c) => opts.ids!.includes(c.id)) : all;
   const { chatPrompts } = await import("./agent-chat.ts");
   const baseSystem = (await chatPrompts()).system;

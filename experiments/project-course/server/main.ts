@@ -374,7 +374,7 @@ const routes: [string, RegExp, Handler][] = [
   // 앱 지식 저장소 잇기: 앱(3000)이 안 보낸 것을 받아 넣고, 넣은 열쇠를 돌려준다(lib/sync.ts)
   ["GET", /^\/api\/runs\/(\w+)\/sync$/, async (_q, m) => { const run = await getRun(m[1]); return pending(run.id, await loadCourse(run.courseId), run); }],
   // 튜터 평가(11/8, 실험실): 판정 시험을 뒤에서 돌리고 결과를 .data/evals/에
-  ["POST", /^\/api\/dev\/eval\/judge$/, async (req) => { const b = await body(req) as { conds?: unknown; ids?: string[]; repeat?: number }; return (await import("../lib/evals.ts")).startJudgeEval(Array.isArray(b.conds) ? b.conds as never : [{ name: "base-low", effort: "low" }], { ids: b.ids, repeat: b.repeat }); }],
+  ["POST", /^\/api\/dev\/eval\/judge$/, async (req) => { const b = await body(req) as { conds?: unknown; ids?: string[]; repeat?: number; set?: string }; return (await import("../lib/evals.ts")).startJudgeEval(Array.isArray(b.conds) ? b.conds as never : [{ name: "base-low", effort: "low" }], { ids: b.ids, repeat: b.repeat, set: b.set }); }],
   ["POST", /^\/api\/dev\/eval\/record$/, async (req) => { const b = await body(req) as { archive?: string; runIds?: string[]; efforts?: string[]; repeat?: number }; const { DATA } = await import("../lib/store.ts");
     // archive: .data/보관/<이름> (없으면 지금 데이터)
     const dir = b.archive ? path.join(DATA, "보관", path.basename(String(b.archive))) : DATA;

@@ -1,0 +1,17 @@
+{
+  "about": "판정 평가 검증용 문항(2026-11-08). judge-cases.json으로 규칙을 고친 뒤 처음 쓰는 문항이라, 규칙이 그 문항에만 맞춘 것인지 본다. 맞는데 말이 짧거나 거친 답(너무 깐깐해지지 않는지)과 답이 아닌 말(질문)도 넣었다. gold not_answer는 accepted를 따지지 않는다.",
+  "cases": [
+    { "id": "h-css-box", "topic": "CSS", "goal": { "title": "박스 크기", "done": "box-sizing: border-box가 바꾸는 것을 설명한다" }, "tutor": "width: 100px; padding: 10px;인 상자에 box-sizing: border-box를 주면 화면에서 상자 전체 너비는 얼마일까요?", "learner": "100px이요 패딩이 안쪽으로 들어가니까", "gold": "correct", "key": "맞음(패딩·테두리가 width 안에 포함)" },
+    { "id": "h-java-eq", "topic": "Java", "goal": { "title": "문자열 비교", "done": "==와 equals의 차이를 말한다" }, "tutor": "Java에서 두 String을 비교할 때 ==와 equals()는 무엇이 다를까요?", "learner": "==는 같은 객체인지, equals는 내용이 같은지 봐요", "gold": "correct", "key": "맞음" },
+    { "id": "h-recursion-base", "topic": "재귀", "goal": { "title": "재귀 함수", "done": "종료 조건이 왜 필요한지 설명한다" }, "tutor": "재귀 함수에 종료 조건(base case)이 없으면 어떻게 될까요?", "learner": "그냥 결과가 0으로 나와요", "gold": "incorrect", "key": "자기 자신을 끝없이 불러 스택이 넘침(RecursionError / stack overflow)" },
+    { "id": "h-regex-dot", "topic": "정규식", "goal": { "title": "정규식 기본", "done": "점(.)의 뜻을 말한다" }, "tutor": "정규식에서 a.c는 어떤 문자열과 맞을까요?", "learner": "a.c라는 글자 그대로만 맞아요", "gold": "incorrect", "key": "점은 줄바꿈을 뺀 아무 한 글자. abc, a1c 등과 맞음(글자 그대로 점은 \\.)" },
+    { "id": "h-c-pointer", "topic": "C", "goal": { "title": "포인터", "done": "*p와 &x를 구분한다" }, "tutor": "int x = 5; int *p = &x; 다음에 *p = 7을 하면 x는 얼마일까요?", "learner": "7이요. p가 x를 가리키니까 *p에 넣으면 x가 바뀌어요", "gold": "correct", "key": "맞음" },
+    { "id": "h-oop-inherit", "topic": "객체지향", "goal": { "title": "상속", "done": "오버라이딩을 설명한다" }, "tutor": "자식 클래스에서 부모와 같은 이름의 메서드를 다시 정의하면 무슨 일이 생기나요?", "learner": "자식 것이 쓰여요", "gold": "partial", "key": "자식 객체에서 부를 때 자식 것이 쓰인다는 방향은 맞지만, 부모 것은 사라지지 않고 super로 부를 수 있다는 점·어떤 객체에서 부르느냐에 따라 다르다는 점이 빠짐" },
+    { "id": "h-test-assert", "topic": "테스트", "goal": { "title": "단위 테스트", "done": "테스트가 실패하는 조건을 말한다" }, "tutor": "assert add(2, 3) == 6 이 있는 테스트를 돌리면 어떻게 될까요?", "learner": "통과해요 add가 잘 만들어져 있으면", "gold": "incorrect", "key": "2+3은 5라서 add가 올바르면 오히려 실패함(기대값 6이 틀림)" },
+    { "id": "h-py-async", "topic": "Python", "goal": { "title": "asyncio", "done": "asyncio.gather가 하는 일을 말한다" }, "tutor": "asyncio.gather(a(), b())는 무엇을 하나요?", "learner": "a랑 b를 같이 돌리고 둘 다 끝나면 결과를 모아 줘요", "gold": "correct", "key": "맞음(동시에 기다리고 결과를 순서대로 리스트로)" },
+    { "id": "h-net-dns", "topic": "네트워크", "goal": { "title": "DNS", "done": "DNS가 하는 일을 말한다" }, "tutor": "브라우저에 example.com을 치면 DNS는 무슨 일을 하나요?", "learner": "웹사이트를 보여 줘요", "gold": "incorrect", "key": "DNS는 이름을 IP 주소로 바꿔 줄 뿐, 페이지를 보여 주는 건 웹 서버·브라우저" },
+    { "id": "h-git-branch", "topic": "Git", "goal": { "title": "브랜치", "done": "브랜치를 왜 쓰는지 말한다" }, "tutor": "git에서 브랜치는 왜 쓰나요?", "learner": "따로 작업하려고요", "gold": "unclear", "key": "방향은 맞지만 무엇과 따로(본 줄기와 나눠 작업하고 나중에 합침)인지 근거가 부족" },
+    { "id": "h-q-ask", "topic": "Python", "goal": { "title": "딕셔너리", "done": "get으로 기본값을 꺼낸다" }, "tutor": "d.get('x', 0)은 무엇을 돌려줄까요?", "learner": "근데 get이랑 그냥 d['x']는 뭐가 달라요?", "gold": "not_answer", "key": "답이 아니라 질문. 질문에 답해야 함" },
+    { "id": "h-q-hint", "topic": "SQL", "goal": { "title": "JOIN", "done": "INNER JOIN 결과를 예측한다" }, "tutor": "users와 orders를 INNER JOIN하면 주문이 없는 사용자는 결과에 나올까요?", "learner": "힌트 좀 주세요", "gold": "not_answer", "key": "답이 아니라 힌트 요청" }
+  ]
+}
