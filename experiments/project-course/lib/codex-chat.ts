@@ -209,7 +209,8 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
       env: { ...process.env, CODEX_HOME, PATH: `${path.join(path.dirname(exe), "..", "path")}${path.delimiter}${process.env.PATH ?? process.env.Path ?? ""}` },
       // Recaller 도구는 승인 없이(approval never에서 MCP 호출이 거절되던 것, 11/4 첫 시험). 키: mcp_servers.<id>.default_tools_approval_mode
       // project_doc_max_bytes 0(11/6): 작업 폴더가 저장소 안이라 Codex가 저장소 맨 위 AGENTS.md("먼저 CLAUDE.md를 읽는다")를 지시로 읽고 CLAUDE.md · 협업 문서를 열려 했다 → 프로젝트 지시 파일을 읽지 않게
-      config: { project_doc_max_bytes: 0, mcp_servers: { ...off, recaller: { command: process.execPath, args: [MCP_SCRIPT], default_tools_approval_mode: "approve", env: { RECALLER_URL: `http://127.0.0.1:${process.env.PC_PORT ?? 4100}`, RECALLER_CHAT: id, RECALLER_WS: ws, RECALLER_EDIT: c.edit ?? "deny" } } } },
+      // codex_apps(11/8 사용자 "여기서만 꺼지면 끄세요"): ChatGPT 계정에 연결된 앱 도구(Google Drive 등)가 튜터에게 보이던 것. 이 프로세스의 설정에만 넘긴다(ChatGPT · 평소 Codex는 그대로)
+      config: { project_doc_max_bytes: 0, mcp_servers: { ...off, codex_apps: { enabled: false }, recaller: { command: process.execPath, args: [MCP_SCRIPT], default_tools_approval_mode: "approve", env: { RECALLER_URL: `http://127.0.0.1:${process.env.PC_PORT ?? 4100}`, RECALLER_CHAT: id, RECALLER_WS: ws, RECALLER_EDIT: c.edit ?? "deny" } } } },
     });
     const opts = { workingDirectory: ws, skipGitRepoCheck: true, model: c.model ?? CHAT_MODELS[0].id, modelReasoningEffort: "low",
       sandboxMode: c.edit === "allow" ? "workspace-write" : "read-only", approvalPolicy: "never", networkAccessEnabled: false, webSearchMode: "disabled" };
