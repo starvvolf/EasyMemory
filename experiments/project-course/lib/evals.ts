@@ -17,11 +17,8 @@ export const loadCases = async (set = "main") => (JSON.parse(await readFile(path
 
 /* ---------- 일반 모델: 판정 → 행동 (튜터 한 차례를 두 단계로 본다) ---------- */
 // 판정: 학습자의 마지막 말이 직전 질문 · 과제에 대한 답이면, 완료 조건에 비추어 다섯 가지 중 하나로 본다
-export const JUDGE_SYSTEM = `학습자의 마지막 말이 튜터가 바로 앞에 낸 질문 · 과제에 대한 답인지 보고, 답이면 지금 목표의 완료 조건에 비추어 판정한다.
-verdict: correct(핵심이 다 맞음) · partial(맞은 부분이 있지만 핵심이 하나 이상 빠지거나 틀림) · incorrect(핵심이 틀림) · unclear(뜻이 모호하거나 이해했는지 판단할 근거가 부족) · not_answer(질문 · 요청 · 잡담).
-right: 맞은 부분 한 구절(없으면 빈 글). gap: 빠지거나 틀린 부분 한 문장(correct · not_answer면 빈 글).
-학습자가 실제로 말한 것만으로 판단한다. 학습자가 알 거라고 너그럽게 채우지 않는다.`;
-export const JUDGE_SCHEMA = S.obj({ verdict: S.oneOf("correct", "partial", "incorrect", "unclear", "not_answer"), right: S.str, gap: S.str });
+import { JUDGE_SYSTEM, JUDGE_SCHEMA } from "./judge.ts";
+export { JUDGE_SYSTEM, JUDGE_SCHEMA };
 type Verdict = { verdict: string; right: string; gap: string };
 const KO: Record<string, string> = { correct: "맞음", partial: "일부만 맞음", incorrect: "틀림", unclear: "판단 근거 부족", not_answer: "답이 아님" };
 // 행동: 판정마다 일반 규칙(어느 주제든 같다). 맥락 줄로 붙인다

@@ -361,6 +361,27 @@ async function recordFinished(runId: string, run: { codexId?: string; chatId?: s
  * 학습 종료(11/6 사용자 "도중에 학습 종료 버튼. 끄면서 알아서 처리할 거 정리하면서 로딩 살짝 걸리고 종료"):
  * 하던 목표를 지금까지로 닫고 → 그 목표 정리(+ 학습자 메모리 갱신, AI 1번, 목표가 있을 때만) → 앱 지식으로 넣기(앱이 켜져 있으면, 앱의 sync가 넣는다).
  */
+/** [해 봤어요] 판정: 지금 단위(보충 단계 또는 현재 목표)가 이해된 뒤 튜터가 낸 과제와 학습자가 한 것만 본다 */
+async function applyVerdict(runId: string, run: { codexId?: string; chatId?: string }) {
+  const G = await import("./goals.ts"), R = await import("./goal-record.ts"), J = await import("./judge.ts");
+  const g = await G.goalsOf(runId);
+  const sp = g.support && !g.support.back ? g.support.steps.find((x) => x.status === "doing") : null;
+  const unit = sp ?? g.current;
+  if (!unit) return undefined;
+  const label = sp ? `보충 ${sp.title}` : g.current!.title;
+  const since = [...g.log].reverse().find((l) => l.kind === "understood" && l.text === label)?.at ?? (g.current?.at ?? "");
+  const msgs = (await chatMessages(run)).filter((m) => m.at >= since);
+  const firstUser = msgs.findIndex((m) => m.role === "user" && !/^\[/.test(m.text.trim()));
+  const task = msgs.slice(0, firstUser < 0 ? msgs.length : firstUser).filter((m) => m.role === "assistant").map((m) => m.text).join("\n\n");
+  const said = msgs.filter((m) => m.role === "user" && !/^\[/.test(m.text.trim())).map((m) => m.text.trim());
+  // 저장한 코드: 과제 이후 파일마다 마지막 저장본과 과제 전 저장본의 차이(바뀐 줄)
+  const saves = await R.savesOf(runId);
+  const lastBy = new Map<string, string>(), beforeBy = new Map<string, string>();
+  for (const sv of saves) (sv.at >= since ? lastBy : beforeBy).set(sv.file, sv.text);
+  const code = [...lastBy].map(([f, t]) => { const d = R.lineDiff(beforeBy.get(f) ?? "", t); return d.length ? `[저장한 코드 ${f}]\n${d.join("\n")}` : ""; }).filter(Boolean);
+  const v = await J.judgeApply(unit, task, [...said, ...code].join("\n\n"));
+  return { verdict: v.verdict, right: v.right, gap: v.gap };
+}
 const recordJobs = new Map<string, Promise<unknown>[]>();
 export async function endLearning(runId: string) {
   const run = await getRun(runId);
@@ -451,16 +472,14 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   if ((run.codexId || run.chatId) && input.do === "goal") {
     const op = String((input as { op?: string }).op ?? "");
     const before = op === "next" || op === "easy_next" ? await (await import("./goals.ts")).goalsOf(runId) : null;
-    // [해 봤어요](11/6 사용자 "해 봤어요 누르면 똑같은 말을 또 해"): 이 목표 동안 VS Code에서 저장한 코드가 있을 때만 튜터가 확인. 채팅으로 답했으면 이미 확인됐으니 안 부른다
-    if (op === "applied") {
-      const cur = (await (await import("./goals.ts")).goalsOf(runId)).current;
-      (input as Record<string, unknown>).codeSaved = !!cur && (await (await import("./goal-record.ts")).savesOf(runId)).some((sv) => sv.at >= cur.at);
-    }
+    // [해 봤어요](11/8 사용자 결정 "적용 과제의 답이 맞을 때만 적용 ✓"): 판정 호출 한 번(완료 조건 · 튜터가 낸 과제 · 학습자 답과 저장한 코드)
+    if (op === "applied") (input as Record<string, unknown>).verdict = await applyVerdict(runId, run).catch((e) => { console.error("적용 판정:", e); return undefined; });
     const TL = await import("./timeline.ts");
     const OPS: Record<string, string> = { understood: "이해했어요", applied: "해 봤어요", next: "다음으로", easy_next: "너무 쉬워요 → 다음으로", easy: "너무 쉬워요 → 더 어렵게", hard: "너무 어려워요", stuck: "너무 어려워요", answer: "설문 답", confirm: "확정", dismiss_plan: "계획 다시 얘기하기", dismiss_survey: "설문 닫기", mode: "진행 방식 바꾸기", end: "학습 종료" };
     const b = input as Record<string, unknown>;
     const detail = op === "answer" ? (Array.isArray(b.answers) ? (b.answers as { picks?: string[]; text?: string }[]).map((a) => [...(a.picks ?? []), a.text].filter(Boolean).join(", ") || "알아서").join(" / ") : "")
-      : op === "hard" || op === "stuck" ? [...((b.reasons as string[]) ?? []), String(b.text ?? "")].filter(Boolean).join(" · ") : op === "mode" ? String(b.mode ?? "") : "";
+      : op === "hard" || op === "stuck" ? [...((b.reasons as string[]) ?? []), String(b.text ?? "")].filter(Boolean).join(" · ") : op === "mode" ? String(b.mode ?? "")
+      : op === "applied" && b.verdict ? (() => { const v = b.verdict as { verdict: string; right: string; gap: string }; return `판정: ${({ correct: "맞음", partial: "일부만 맞음", incorrect: "틀림", unclear: "판단 근거 부족", not_answer: "판단 근거 부족" } as Record<string, string>)[v.verdict] ?? v.verdict}${v.right ? ` · 맞은 부분: ${v.right}` : ""}${v.gap ? ` · 빠진 곳: ${v.gap}` : ""}`; })() : "";
     await TL.beginStep(runId, { kind: "button", label: OPS[op] ?? op, ...(detail ? { text: detail } : {}) });
     const say = await (await import("./goals.ts")).goalAction(runId, op, input as Record<string, unknown>);
     if (!say) await TL.endStep(runId);

@@ -11,7 +11,7 @@ export type Snap = {
   long: string | null; mode: string | null;
   map: { title: string; status: string }[];
   current: { title: string; done: string; phase: string } | null;
-  support: { target: string; steps: { title: string; status: string }[]; round: number; back: boolean } | null;
+  support: { target: string; steps: { title: string; status: string; phase?: string }[]; round: number; back: boolean } | null;
   survey: string[] | null; plan: string | null; stuck: string | null;
   memory: { kind: string; status: string; text: string }[];
   edit: string | null; autoCheck: boolean; records: number;
@@ -38,7 +38,7 @@ export async function snapshot(runId: string): Promise<Snap> {
     long: g.long?.text ?? null, mode: g.mode,
     map: g.map.map((m) => ({ title: m.title, status: m.status })),
     current: c ? { title: c.title, done: c.done, phase: !c.understood ? "① 이해" : !c.applied ? "② 적용" : "적용까지 끝" } : null,
-    support: g.support ? { target: g.support.target.title, steps: g.support.steps.map((x) => ({ title: x.title, status: x.status })), round: g.support.round, back: g.support.back } : null,
+    support: g.support ? { target: g.support.target.title, steps: g.support.steps.map((x) => ({ title: x.title, status: x.status, phase: !x.understood ? "① 이해" : !x.applied ? "② 적용" : "적용까지 끝" })), round: g.support.round, back: g.support.back } : null,
     survey: g.survey ? g.survey.questions.map((q) => q.q) : null, plan: g.plan?.long ?? null,
     stuck: g.stuck ? [...g.stuck.reasons, g.stuck.text].filter(Boolean).join(" · ") : null,
     memory: mem.map((i) => ({ kind: i.kind, status: i.status, text: i.text })),
@@ -62,7 +62,7 @@ export function diff(a: Snap | null, b: Snap): string[] {
   else if (a.support && !b.support) out.push("보충 로드맵 닫힘(원래 로드맵으로)");
   else if (a.support && b.support) {
     if (a.support.round !== b.support.round) out.push(`보충 다시 짬(${b.support.round}번째): ${b.support.steps.filter((x) => x.status !== "done").map((x) => x.title).join(" → ")}`);
-    else b.support.steps.forEach((x, i) => { if (a.support!.steps[i]?.status !== x.status) out.push(`보충 "${x.title}" ${st(a.support!.steps[i]?.status ?? "")} → ${st(x.status)}`); });
+    else b.support.steps.forEach((x, i) => { const y = a.support!.steps[i]; if (y?.status !== x.status) out.push(`보충 "${x.title}" ${st(y?.status ?? "")} → ${st(x.status)}`); else if (y?.phase && x.phase && y.phase !== x.phase) out.push(`보충 "${x.title}" 단계: ${y.phase} → ${x.phase}`); });
     if (!a.support.back && b.support.back) out.push(`보충 끝 → 🎯 "${b.support.target}"로 돌아옴`);
   }
   if (!a.survey && b.survey) out.push(`설문 띄움(${b.survey.length}문항)`);

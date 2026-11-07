@@ -1558,7 +1558,12 @@ function goalBar(lesson, send) {
       h("span", { class: `gstep goal ${S.back ? "doing" : ""}` }, `🎯 ${S.target.title}`)) : null,
     sp ? h("div", { class: "gcur sup" }, h("div", {}, h("span", { class: "gk warm" }, "보충"), h("b", {}, sp.title)),
       h("div", { class: "mut small" }, `완료 조건: ${sp.done} · 막힌 이유: ${S.why}`),
-      h("div", { class: "grow2" }, h("button", { class: "btn small primary", disabled: lesson.busy, onclick: op("understood") }, S.steps.some((x) => x.status === "todo") ? "이해했어요 → 다음 보충" : `이해했어요 → "${S.target.title}"로 돌아가기`))) : null,
+      // 11/8 사용자 "보충 단계도 현재 단계랑 똑같이 이해와 적용"
+      h("div", { class: "gsteps" }, h("span", { class: `gph ${sp.understood ? "done" : "now"}` }, sp.understood ? "① 이해 ✓" : "① 이해"), h("span", { class: "mut" }, "→"), h("span", { class: `gph ${sp.applied ? "done" : sp.understood ? "now" : ""}` }, "② 적용")),
+      h("div", { class: "grow2" },
+        !sp.understood ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 직접 해 볼 과제를 내요", onclick: op("understood") }, "이해했어요 → 적용하기")
+          : h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 완료 조건에 맞게 했는지 판정해요. 맞으면 다음으로 가요", onclick: op("applied") }, "해 봤어요"),
+        h("span", { class: "mut small" }, S.steps.some((x) => x.status === "todo") ? "끝나면 다음 보충" : `끝나면 "${S.target.title}"로 돌아가요`))) : null,
     c ? h("div", { class: `gcur ${sp ? "paused" : ""}` }, h("div", {}, h("span", { class: "gk" }, sp ? "종착지(막힌 단계)" : S?.back ? "보충 마치고 돌아옴" : "지금"), h("b", {}, c.title)),
       h("div", { class: "mut small" }, `완료 조건: ${c.done}`),
       // 11/5 사용자 "목표마다 이해 → 적용 흐름": 지금 단계 표시 + 그 단계 버튼 하나 + 다음으로(언제든)
@@ -1568,7 +1573,7 @@ function goalBar(lesson, send) {
         h("span", { class: `gph ${c.applied ? "done" : c.understood ? "now" : ""}` }, c.applied ? "② 적용 ✓" : "② 적용")),
       sp ? null : h("div", { class: "grow2" },
         !c.understood ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 직접 해 볼 과제를 내요", onclick: op("understood") }, "이해했어요 → 적용하기") : null,
-        c.understood && !c.applied ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "VS Code에서 저장한 코드가 있으면 튜터가 확인해 줘요(채팅으로 답했으면 바로 적용 ✓)", onclick: op("applied") }, "해 봤어요") : null,
+        c.understood && !c.applied ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 완료 조건에 맞게 했는지 판정해요(채팅 답 · 저장한 코드). 맞으면 적용 ✓", onclick: op("applied") }, "해 봤어요") : null,
         h("button", { class: `btn small ${c.understood && c.applied ? "primary" : ""}`, disabled: lesson.busy, title: c.understood && c.applied ? "" : "이해 · 적용을 다 안 해도 넘어갈 수 있어요(건너뜀으로 남아요)", onclick: op("next") }, "다음으로 →"))) : null);
 }
 function surveyCard(sv, send) {

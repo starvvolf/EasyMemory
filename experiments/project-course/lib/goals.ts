@@ -12,13 +12,15 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { DATA, read, update } from "./store.ts";
 import { CHOICES } from "./stuck.ts";
+import { RESPOND_RULE } from "./judge.ts";
 
 /** support: [너무 어려워요]로 끼워 넣은 보충 단계(11/6 사용자 "중간에 보충 단계를 만들어서 넣어 줘야") — 원래 단계 바로 앞에 들어간다 */
 type Item = { id: string; title: string; status: "todo" | "doing" | "done" | "skipped"; support?: boolean };
 type Current = { id: string; title: string; done: string; understood: boolean; applied: boolean; mapId?: string; at: string };
 type Support = { id: string; title: string; done: string; why: string; from: string; understood?: boolean; at: string; mapId?: string };
 /** 보충 로드맵(11/7). target = 막힌 단계 A(종착지), steps = 보충 단계, back = 보충을 다 하고 A로 돌아와 있는 중, round = 몇 번째로 짠 보충인지 */
-type SupStep = { id: string; title: string; done: string; status: "todo" | "doing" | "done" };
+/** 보충 단계도 현재 목표와 같이 ① 이해 → ② 적용(11/8 사용자 "보충 단계도 현재 단계랑 똑같이. 쉬우면 너무 쉬워요로 넘어감") */
+type SupStep = { id: string; title: string; done: string; status: "todo" | "doing" | "done"; understood?: boolean; applied?: boolean };
 export type SupportPlan = { target: { title: string; done: string; mapId?: string }; steps: SupStep[]; why: string; round: number; back: boolean; at: string };
 type Question = { q: string; options: string[]; multi?: boolean };
 export type Goals = {
@@ -128,7 +130,7 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       }
       g.stuck = null;
       logIt(g, "support", fresh.map((x) => x.title).join(" / "));
-      out = `보충 로드맵을 짰어요: ${fresh.map((x) => x.title).join(" → ")} → (종착지) ${g.support.target.title}. 첫 보충 "${fresh[0].title}"부터 바로 설명을 시작하세요. 학습자가 [이해했어요]를 누르면 다음 보충으로 가요.`;
+      out = `보충 로드맵을 짰어요: ${fresh.map((x) => x.title).join(" → ")} → (종착지) ${g.support.target.title}. 첫 보충 "${fresh[0].title}"부터 바로 설명을 시작하세요(보충도 ① 이해 → ② 적용).`;
     } else if (name === "update_map") {
       const kept = g.map.filter((m) => m.status !== "todo");
       // 끝난 · 하는 중 단계와 같은 제목을 또 보내면 뺀다(처음부터 다시 도는 것 막기)
@@ -157,8 +159,6 @@ void CHOICES; // 예전 [막혔어요] 칸 목록(lib/stuck.ts)은 옛 코스 �
 /** 버튼 하나를 처리하고, 튜터에게 보낼 말이 있으면 돌려준다(없으면 null = AI 안 부름) */
 export async function goalAction(runId: string, op: string, b: Record<string, unknown>): Promise<string | null> {
   let say: string | null = null;
-  // 보충 단계에서 [너무 쉬워요 → 다음으로]는 그 보충을 끝낸 것으로(다음 보충 · 종착지로)
-  if (op === "easy_next" && supNow(await goalsOf(runId))) op = "understood";
   await save(runId, (g) => {
     if (op === "answer") {
       if (!g.survey) throw err("답할 질문이 없어요.");
@@ -178,31 +178,46 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
       logIt(g, "confirm", p.long);
       say = `[확정] 계획을 확정했어요. 첫 현재 목표 "${p.first.title}"부터 시작해 주세요.`;
     } else if (op === "dismiss_plan") { g.plan = null; logIt(g, "plan-dismiss", ""); say = "[계획 다시 얘기하기] 제안한 계획은 아직 확정하지 않을게요. 어디를 바꾸면 좋을지 짧게 물어봐 주세요."; }
-    else if (op === "understood" || op === "applied") {
-      const sup = supNow(g);
-      if (sup && op === "understood") {
-        // 보충 단계는 이해하면 끝. 다음 보충으로, 마지막이면 종착지 A로 돌아간다
-        sup.status = "done"; logIt(g, "support-done", sup.title);
+    else if (op === "understood" || op === "applied" || (op === "easy_next" && supNow(g))) {
+      // 지금 하는 단위 = 보충 단계(보충 중이면) 또는 현재 목표. 둘 다 ① 이해 → ② 적용으로 같다(11/8)
+      const sp = supNow(g), c = g.current;
+      const u = sp ?? c;
+      if (!u) throw err("지금 하는 목표가 없어요.");
+      const what = sp ? `보충 "${sp.title}"` : `"${c!.title}"`;
+      const task = (x: { done: string }) => `완료 조건("${x.done}")을 학습자가 직접 해 볼 수 있는 작은 과제 하나를 내 주세요. 완성 코드는 주지 말고, 막히면 힌트만 주세요.`;
+      // 단위 하나가 끝났을 때(보충이면 다음 보충 · 종착지로)
+      const finishSupport = (how: string) => {
+        sp!.status = "done"; logIt(g, "support-done", `${sp!.title}: ${how}`);
         const nx = g.support!.steps.find((x) => x.status === "todo");
-        if (nx) { nx.status = "doing"; say = `[이해했어요] 보충 "${sup.title}"을(를) 이해했어요. 다음 보충 "${nx.title}"(완료 조건: ${nx.done})을 바로 시작해 주세요.`; }
+        if (nx) { nx.status = "doing"; return `다음 보충 "${nx.title}"(완료 조건: ${nx.done})을 바로 시작해 주세요.`; }
+        // 종착지로: 막혔던 그 단계(이해 또는 적용)에서 이어 간다 — 단계 표시는 그대로 둔다
+        g.support!.back = true; logIt(g, "support-back", g.support!.target.title);
+        return `보충을 다 했어요. 이제 막혔던 "${g.support!.target.title}"(완료 조건: ${g.support!.target.done})로 돌아가요. 막혔던 ${c && c.understood ? "② 적용" : "① 이해"} 단계부터, 보충에서 익힌 것과 이어서 짧게 다시 짚고 이어 가 주세요.`;
+      };
+      // 종착지(막혔던 단계)가 한 걸음 나아가면 보충 로드맵을 닫는다
+      const closeIfBack = () => { if (!sp && g.support?.back) { logIt(g, "support-close", g.support.target.title); g.support = null; return " 보충을 거쳐 원래 로드맵으로 돌아왔어요."; } return ""; };
+      if (op === "easy_next") { say = `[너무 쉬워요 → 다음으로] ${what}은(는) 이미 알아요. ${finishSupport("너무 쉬워서 넘어감")}`; }
+      else if (op === "understood") {
+        if (u.understood) { say = null; }
         else {
-          g.support!.back = true; logIt(g, "support-back", g.support!.target.title);
-          if (g.current) { g.current.understood = false; g.current.applied = false; }
-          say = `[보충 끝] 보충을 다 했어요. 이제 막혔던 "${g.support!.target.title}"(완료 조건: ${g.support!.target.done})로 돌아가요. 보충에서 익힌 것과 이어서, 막혔던 곳을 짧게 다시 짚고 이어 가 주세요.`;
+          u.understood = true; logIt(g, "understood", sp ? `보충 ${sp.title}` : c!.title);
+          say = `[이해했어요] ${what}을(를) 이해했어요.${closeIfBack()} 이제 적용 단계예요. ${task(u)}`;
         }
-      } else if (g.support?.back && g.current && op === "understood" && !g.current.understood) {
-        // A를 해냈다 → 보충 로드맵을 닫고 원래 로드맵으로(적용 단계부터 이어서)
-        logIt(g, "support-close", g.support.target.title); g.support = null;
-        g.current.understood = true; logIt(g, "understood", g.current.title);
-        say = `[이해했어요] 보충을 거쳐 "${g.current.title}"을(를) 이해했어요. 원래 로드맵으로 돌아왔어요. 이제 적용 단계예요. 완료 조건("${g.current.done}")을 학습자가 직접 해 볼 수 있는 작은 과제 하나를 내 주세요. 완성 코드는 주지 말고, 막히면 힌트만 주세요.`;
-      } else if (g.current && op === "understood" && !g.current.understood) {
-        // 11/5 사용자 "목표마다 이해 → 적용 흐름이 있으면 좋겠다": 이해했어요 → 적용 단계로, 튜터가 직접 해 볼 과제를 낸다
-        g.current.understood = true; logIt(g, "understood", g.current.title);
-        say = `[이해했어요] "${g.current.title}"을(를) 이해했어요. 이제 적용 단계예요. 완료 조건("${g.current.done}")을 학습자가 직접 해 볼 수 있는 작은 과제 하나를 내 주세요. 완성 코드는 주지 말고, 막히면 힌트만 주세요.`;
-      } else if (supNow(g) && op === "applied") { throw err("보충은 [이해했어요]로 넘어가요.");
-      } else if (g.current && op === "applied" && !g.current.applied) {
-        g.current.applied = true; if (!g.current.understood) g.current.understood = true; logIt(g, "applied", g.current.title);
-        say = b.codeSaved === false ? null : `[해 봤어요] 학습자가 "${g.current.title}" 적용 과제를 해 봤어요. 작업 폴더의 파일을 읽거나 실행해서 확인할 수 있으면 확인하고, 됐으면 짧게 알려 주세요. 안 됐으면 어디가 문제인지 짚어 주세요.`;
+      } else {
+        // [해 봤어요]: 판정(lesson.ts가 한 번 부름)이 "맞음"일 때만 적용 ✓
+        const v = b.verdict as { verdict: string; right: string; gap: string } | undefined;
+        const ko = ({ correct: "맞음", partial: "일부만 맞음", incorrect: "틀림", unclear: "판단 근거 부족", not_answer: "판단 근거 부족" } as Record<string, string>)[v?.verdict ?? ""] ?? "";
+        const line = v ? `판정: ${ko}${v.right ? ` · 맞은 부분: ${v.right}` : ""}${v.gap ? ` · 빠지거나 틀린 부분: ${v.gap}` : ""}` : "";
+        logIt(g, "apply-check", `${sp ? `보충 ${sp.title}` : c!.title}: ${ko || "판정 없음"}`);
+        if (!v || v.verdict === "correct") {
+          u.applied = true; u.understood = true; logIt(g, "applied", sp ? `보충 ${sp.title}` : c!.title);
+          say = sp ? `[해 봤어요 — ${line}] ${what} 적용을 확인했어요. ${finishSupport("적용까지 함")}`
+            : `[해 봤어요${line ? ` — ${line}` : ""}] ${what} 적용을 확인했어요.${closeIfBack()} 맞은 점을 짧게 확인해 주세요.`;
+        } else if (v.verdict === "partial" || v.verdict === "incorrect") {
+          say = `[해 봤어요 — ${line}] 아직 적용 단계예요. '맞아요'로 시작하지 말고, 맞은 부분은 인정하고 빠지거나 틀린 곳은 정답을 통째로 주지 말고 질문이나 힌트로 짚어 주세요.`;
+        } else {
+          say = `[해 봤어요 — ${line}] 학습자가 무엇을 했는지 아직 판단할 근거가 부족해요. 해 본 결과(답 · 코드 · 실행 결과)를 짧게 보여 달라고 해 주세요.`;
+        }
       }
     } else if (op === "next" || op === "easy_next") {
       // easy_next(11/6 사용자 "너무 쉬워요 → 엎거나 다음으로 넘어간다"): 이미 아는 것 → 이 단계는 끝남으로 보고 다음으로
@@ -282,10 +297,12 @@ async function goalContextBody(runId: string) {
     g.map.length ? `${S ? "원래 로드맵(보충 중이라 잠시 보관)" : "지도"}: ${g.map.map((m, i) => `${i + 1}.${mark(m)} ${m.title}`).join(" · ")}` : "",
     S ? `보충 로드맵(${S.round}번째, 막힌 이유: ${S.why}): ${S.steps.map((x) => `${({ done: "✓", doing: "▶", todo: "·" })[x.status]} ${x.title}`).join(" → ")} → 🎯 ${S.target.title}${S.back ? " (보충을 다 하고 지금 여기로 돌아와 있음)" : ""}` : "",
     c ? `현재 목표: ${c.title} — 완료 조건: ${c.done} · 단계: ${!c.understood ? "① 이해 중" : !c.applied ? "② 적용 중(학습자가 직접 해 보는 중)" : "적용까지 끝(학습자가 다음으로 넘어갈 수 있음)"}` : "현재 목표: 없음 — set_current_goal로 정한다",
-    sp ? `지금 보충: ${sp.title} — 완료 조건: ${sp.done}. 학습자가 [이해했어요]를 누르면 다음 보충(없으면 종착지)으로 간다. 지금은 보충에 집중한다.` : "",
+    sp ? `지금 보충: ${sp.title} — 완료 조건: ${sp.done} · 단계: ${!sp.understood ? "① 이해 중" : !sp.applied ? "② 적용 중" : "적용까지 끝"}. 끝나면 다음 보충(없으면 종착지)으로 간다. 지금은 보충에 집중한다.` : "",
     g.survey ? "지금 화면에 질문을 띄워 두었다 — 학습자 답을 기다린다." : "",
     (() => { const r = g.log.slice(-12); const e = r.filter((l) => l.kind === "easy").length, h = r.filter((l) => l.kind === "stuck").length; return e || h ? `최근 학습자 표시: 너무 쉬움 ${e}번 · 너무 어려움 ${h}번 — 설명 수준을 여기에 맞춘다.` : ""; })(),
-    "목표마다 ① 이해 → ② 적용 순서로 간다. 이해 단계에서는 설명과 예시로 이해를 돕고, 학습자가 [이해했어요]를 누르면 적용 과제를 낸다. [해 봤어요]가 오면 실행 · 파일로 확인을 돕는다. 단계를 넘기는 건 학습자가 화면 버튼으로 하므로, 버튼 안내는 그 단계가 끝날 무렵 한 번이면 충분하다.",
+    // 11/8 사용자 결정: 버튼 안내 끄기("버튼을 잘 다듬으면 사용자가 누르겠지"), 적용은 Recaller가 판정
+    "목표와 보충 모두 ① 이해 → ② 적용 순서로 간다. 이해 단계에서는 설명과 예시로 이해를 돕고, 학습자가 이해했다고 하면 적용 과제를 낸다. 적용은 학습자가 해 봤다고 하면 Recaller가 완료 조건에 비추어 판정해 알려 준다. 단계를 넘기는 건 학습자가 화면 버튼으로 한다. 답에서 버튼을 누르라고 안내하지 않는다.",
+    RESPOND_RULE,
   ].filter(Boolean).join("\n");
 }
 
