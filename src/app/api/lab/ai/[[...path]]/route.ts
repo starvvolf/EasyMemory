@@ -16,6 +16,7 @@ import { ASSIST_CATALOG, GEN_CATALOG, TUTOR_CATALOG } from "@/lib/ai/catalog";
 import { listGens, loadGen, readGenCalls } from "@/lib/study/gen/runner";
 import { genStepLabel } from "@/lib/study/gen/types";
 import { listTrials, runTrial, type TrialBase } from "@/lib/ai/trials";
+import { EDITABLE_PROMPTS } from "@/lib/study/gen/prompt-registry";
 
 export const runtime = "nodejs";
 const COURSE = (process.env.PROJECT_COURSE_URL || "http://127.0.0.1:4100").replace(/\/$/, "");
@@ -44,7 +45,9 @@ async function handle(request: Request, context: RouteContext) {
     const q = new URL(request.url).searchParams;
     const json = (v: unknown) => NextResponse.json(v);
 
-    if (p[0] === "catalog" && m === "GET") return json({ assist: ASSIST_CATALOG, gen: GEN_CATALOG, genLabels: genStepLabel, tutor: TUTOR_CATALOG, prices: PRICES, models: MODELS, efforts: EFFORTS, settings: labSettings() });
+    if (p[0] === "catalog" && m === "GET") return json({ assist: ASSIST_CATALOG, gen: GEN_CATALOG, genLabels: genStepLabel, tutor: TUTOR_CATALOG,
+      // 지시문이 system·user에 나뉘어 들어간 단계를 색으로 나눠 보이려고(11/7): 엔진의 이름 붙은 지시문 원문
+      genPrompts: EDITABLE_PROMPTS.filter((x) => x.text.trim()).map((x) => ({ name: x.name, label: x.label, step: x.step, text: x.text })), prices: PRICES, models: MODELS, efforts: EFFORTS, settings: labSettings() });
     if (p[0] === "settings" && m === "POST") {
       const b = z.object({ purpose: z.string().min(2).max(60), model: z.string().max(40).optional(), effort: z.string().max(10).optional() }).parse(await boundedJson(request));
       return json({ settings: saveLabChoice(b.purpose, b.model || b.effort ? { model: b.model, effort: b.effort } : null) });

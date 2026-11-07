@@ -6,9 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../lab.css";
 import "./ai.css";
 import { TrialPanel } from "./trials";
-import { CallView, modelClass, num, sec, short, usd, type Entry, type Tok } from "./view";
+import { CallView, modelClass, num, sec, short, usd, type Entry, type NamedPrompt, type Tok } from "./view";
 
-type Catalog = { assist: Record<string, Entry>; gen: Record<string, Entry>; genLabels: Record<string, string>; tutor: Entry;
+type Catalog = { assist: Record<string, Entry>; gen: Record<string, Entry>; genLabels: Record<string, string>; tutor: Entry; genPrompts: NamedPrompt[];
   prices: Array<{ model: string; in: number; cached: number; out: number }>; models: string[]; efforts: string[]; settings: { assist: Record<string, { model?: string; effort?: string }> } };
 const api = async <T,>(path: string, init?: { method?: string; body?: unknown }): Promise<T> => {
   const res = await fetch(`/api/lab/ai/${path}`, { method: init?.method ?? "GET", cache: "no-store", headers: init?.body === undefined ? undefined : { "Content-Type": "application/json" }, body: init?.body === undefined ? undefined : JSON.stringify(init.body) });
@@ -152,9 +152,9 @@ function StepDetail({ cat, genId, step, n, calls, entry, title, images, onPick }
     <div className="pane">{err ? <p className="warnline errline">{err}</p> : null}
       {full && one && full.n === pick ? <CallView entry={entry} label={`${step}${full.sectionId ? ` · ${full.sectionId}` : ""} · #${full.n}${full.attempt > 1 ? ` (다시 ${full.attempt})` : ""}`}
         facts={{ model: one.model, effort: one.effort, ms: one.ms, first: one.firstTextMs, tokens: tokOf(one.usage), cost: one.cost }}
-        system={full.system} user={full.user} reply={full.reply ?? ""} error={full.error}
+        system={full.system} user={full.user} reply={full.reply ?? ""} error={full.error} prompts={cat?.genPrompts ?? []}
         extra={images ? <p className="purpose">이 호출에는 그림 쪽 이미지 {images}장이 같이 갔다(넣은 것의 글에는 안 보임).</p> : null} /> : <p className="muted">읽는 중…</p>}
-      {full && one && full.n === pick ? <TrialPanel key={`${genId}:${pick}`} base={{ kind: "gen", genId, n: full.n }} step={step} models={cat?.models ?? []} efforts={cat?.efforts ?? ["low", "medium", "high"]}
+      {full && one && full.n === pick ? <TrialPanel key={`${genId}:${pick}`} base={{ kind: "gen", genId, n: full.n }} step={step} prompts={cat?.genPrompts ?? []} models={cat?.models ?? []} efforts={cat?.efforts ?? ["low", "medium", "high"]}
         images={Boolean(images) || ["rc-organize", "rc-intent", "rc-digest-card"].includes(step)}
         orig={{ system: full.system, user: full.user, reply: full.reply ?? "", model: one.model, effort: one.effort, ms: one.ms, first: one.firstTextMs, tokens: tokOf(one.usage), cost: one.cost }} /> : null}
     </div>

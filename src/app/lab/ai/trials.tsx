@@ -2,7 +2,7 @@
 // "이 호출만 다시" (11/7 사용자): 저장된 호출의 넣은 것을 그대로 두고 지시문·넣은 것·모델·강도를 바꿔 AI 한 번. 제품은 그대로이고,
 // 시도는 데이터로 남아(<data>/lab/trials/) 원래 답과 나란히 비교한다.
 import { useEffect, useMemo, useState } from "react";
-import { Facts, Readable, parseMaybe, sec, short, usd, type Tok } from "./view";
+import { Facts, Marked, PromptViewer, Readable, colorMap, hasMarks, parseMaybe, sec, short, usd, type NamedPrompt, type Tok } from "./view";
 
 export type TrialBase = { kind: "gen"; genId: string; n: number } | { kind: "call"; id: string };
 type Trial = { id: string; at: string; step: string; note: string; system: string; user: string; model: string; effort: string; json: boolean;
@@ -40,7 +40,7 @@ function Diff({ label, a, b }: { label: string; a: string; b: string }) {
     <pre className="ai-diff">{d.slice(0, 200).map((x, i) => <span key={i} className={x.t === "+" ? "add" : "del"}>{x.t} {x.s}{"\n"}</span>)}{d.length > 200 ? `…${d.length - 200}줄 더` : ""}</pre></details>;
 }
 
-export function TrialPanel({ base, step, orig, models, efforts, images }: { base: TrialBase; step: string; orig: Original; models: string[]; efforts: string[]; images?: boolean }) {
+export function TrialPanel({ base, step, orig, models, efforts, images, prompts = [] }: { base: TrialBase; step: string; orig: Original; models: string[]; efforts: string[]; images?: boolean; prompts?: NamedPrompt[] }) {
   const [trials, setTrials] = useState<Trial[]>([]);
   const [open, setOpen] = useState(false);
   const [system, setSystem] = useState(orig.system);
@@ -52,6 +52,7 @@ export function TrialPanel({ base, step, orig, models, efforts, images }: { base
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [pick, setPick] = useState<string | null>(null);
+  const [big, setBig] = useState(false);
   const key = q(base);
   useEffect(() => { fetch(`/api/lab/ai/trials?${key}`, { cache: "no-store" }).then((r) => r.json()).then((d: { trials?: Trial[] }) => setTrials(d.trials ?? [])).catch(() => undefined); }, [key]);
   const run = async () => {
@@ -70,9 +71,15 @@ export function TrialPanel({ base, step, orig, models, efforts, images }: { base
       <button className="btn small" onClick={() => setOpen((x) => !x)}>{open ? "접기" : "새 시도"}</button></div>
     {images ? <p className="warnline">이 단계는 원래 그림 쪽 이미지가 같이 갔어요. 다시 돌리기는 글만 보내서 결과가 다를 수 있어요.</p> : null}
     {open ? <div className="ai-trial-form">
+      <div className="row"><button className="btn small" onClick={() => setBig(true)}>지금 고친 지시문 크게 보기</button></div>
+      {big ? <PromptViewer title={`${step} · 고치는 중`} system={system} user={user} prompts={prompts} onClose={() => setBig(false)} /> : null}
       <label className="field">지시문 (system) <small className="num">{system.length.toLocaleString()}자</small>
         <textarea value={system} onChange={(e) => setSystem(e.target.value)} rows={12} spellCheck={false} /></label>
-      <details className="block"><summary><span>넣은 것 (user)도 고치기</span><small className="num">{user.length.toLocaleString()}자</small></summary>
+      {hasMarks(user, prompts) ? <p className="ai-warn-mark">이 단계는 지시문이 넣은 것(user) 쪽에도 들어 있어요 — 아래 [나뉜 모양 보기]에서 색칠된 부분.</p> : null}
+      {hasMarks(system, prompts) || hasMarks(user, prompts) ? <details className="block"><summary><span>나뉜 모양 보기 (지금 고친 글 기준)</span></summary>
+        <div className="pad ai-split2"><div><h4>지시문 (system)</h4><Marked text={system} prompts={prompts} colors={colorMap([system, user], prompts)} dataLabel="지시문 · 코드가 붙인 것" readable={false} /></div>
+          <div><h4>넣은 것 (user)</h4><Marked text={user} prompts={prompts} colors={colorMap([system, user], prompts)} dataLabel="자료 · 앞 단계 결과" /></div></div></details> : null}
+      <details className="block" open={hasMarks(user, prompts)}><summary><span>넣은 것 (user)도 고치기</span><small className="num">{user.length.toLocaleString()}자</small></summary>
         <textarea value={user} onChange={(e) => setUser(e.target.value)} rows={10} spellCheck={false} style={{ width: "100%" }} /></details>
       <div className="row">
         <label className="field">모델<select value={model} onChange={(e) => setModel(e.target.value)}>{[...new Set([orig.model, ...models])].map((m) => <option key={m} value={m}>{short(m)}</option>)}</select></label>

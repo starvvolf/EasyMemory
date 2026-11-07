@@ -82,3 +82,53 @@
 .ai-compare{display:flex;flex-direction:column;gap:8px}
 .ai-diff{max-height:260px;overflow:auto;font-size:11.5px;line-height:1.45}
 .ai-diff .add{background:var(--ok-soft,#E3F6EA);color:var(--ok,#167A3E)}.ai-diff .del{background:var(--bad-soft,#FDE8E8);color:var(--bad);text-decoration:line-through}
+
+/* 지시문이 나뉜 모양 (11/7): 이름 붙은 지시문마다 색, 자료는 회색 */
+.ai-marked{display:flex;flex-direction:column;gap:6px}
+.ai-seg{border-left:4px solid;border-radius:0 6px 6px 0;padding:6px 8px 6px 10px}
+.ai-seg-tag{display:block;font-size:11px;font-weight:600;margin-bottom:3px}.ai-seg-tag code{font-weight:400;opacity:.7}
+.ai-seg.data{border-color:var(--line-strong);background:var(--surface)}.ai-seg.data .ai-seg-tag{color:var(--muted)}
+.ai-seg.p0{border-color:#2563EB;background:#EEF3FE}.ai-seg.p0 .ai-seg-tag{color:#2563EB}
+.ai-seg.p1{border-color:#B45309;background:#FDF3E6}.ai-seg.p1 .ai-seg-tag{color:#B45309}
+.ai-seg.p2{border-color:#7C3AED;background:#F3EDFD}.ai-seg.p2 .ai-seg-tag{color:#7C3AED}
+.ai-seg.p3{border-color:#0F766E;background:#E6F5F3}.ai-seg.p3 .ai-seg-tag{color:#0F766E}
+.ai-seg.p4{border-color:#BE185D;background:#FCEAF2}.ai-seg.p4 .ai-seg-tag{color:#BE185D}
+.ai-seg.p5{border-color:#4D7C0F;background:#EEF6E3}.ai-seg.p5 .ai-seg-tag{color:#4D7C0F}
+.ai-warn-mark{color:#B45309;font-weight:600;font-size:12px;margin:0}
+.ai-split2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;max-height:520px;overflow:auto}.ai-split2 h4{font-size:12.5px;margin:0 0 4px}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .ai-seg:not(.data){background:transparent}}
+
+/* 글꼴·크기 (11/7 사용자 "모던하고 이쁜 폰트로, 크기도 살짝 키워"): 본문 Pretendard, 지시문·코드 JetBrains Mono, 전체 한두 단계 크게 */
+.ai-lab{--mono:"JetBrains Mono","D2Coding",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;font-size:15px;letter-spacing:-.005em}
+.ai-lab code,.ai-lab pre,.ai-lab textarea,.ai-lab .num{font-family:var(--mono)}
+.ai-lab .top h1{font-size:19px;font-weight:700;letter-spacing:-.02em}
+.ai-lab .seg button{font-size:14px}
+.ai-lab .head h2{font-size:21px;letter-spacing:-.02em}
+.ai-lab .ai-text{font-size:14px;line-height:1.65}
+.ai-lab .ai-kv>div{font-size:13.5px}.ai-lab .ai-kv dt{font-size:12.5px}
+.ai-lab .ai-list,.ai-lab .ai-pipe td{font-size:13.5px}
+.ai-lab .ai-facts{font-size:14px}.ai-lab .ai-does{font-size:14px;line-height:1.6}
+.ai-lab .ai-row-label b{font-size:14px}.ai-lab .ai-row-label small{font-size:12px}.ai-lab .ai-row-sum{font-size:12.5px}
+.ai-lab .ai-callrow{font-size:13.5px}.ai-lab .ai-callrow-facts{font-size:12.5px}
+.ai-lab .ai-io h4{font-size:14px}.ai-lab .ai-call-head h3{font-size:18px}
+.ai-lab .ai-trial textarea{font-size:13px;line-height:1.6}
+.ai-lab .ai-seg-tag{font-size:12px}
+
+/* 지시문 크게 보기 */
+.ai-pv{position:fixed;inset:0;z-index:200;background:var(--ground,#F6F7F9);display:flex;flex-direction:column}
+.ai-pv-top{display:flex;gap:12px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
+.ai-pv-top b{font-size:17px}
+.ai-pv-body{flex:1;min-height:0;display:grid;grid-template-columns:240px minmax(0,1fr)}
+.ai-pv-toc{overflow:auto;border-right:1px solid var(--line);padding:10px;display:flex;flex-direction:column;gap:4px;background:var(--surface)}
+.ai-pv-toc a{display:block;text-decoration:none;color:var(--ink);font-size:13px;padding:6px 8px;border-radius:6px;border-left:4px solid var(--line-strong)}
+.ai-pv-toc a small{display:block;font-size:10.5px;color:var(--muted);font-family:var(--mono)}
+.ai-pv-toc a:hover{background:var(--surface-2)}
+.ai-pv-toc a.p0{border-color:#2563EB}.ai-pv-toc a.p1{border-color:#B45309}.ai-pv-toc a.p2{border-color:#7C3AED}.ai-pv-toc a.p3{border-color:#0F766E}.ai-pv-toc a.p4{border-color:#BE185D}.ai-pv-toc a.p5{border-color:#4D7C0F}
+.ai-pv-cols{overflow:auto;display:grid;gap:18px;padding:16px 20px;align-items:start}
+.ai-pv-cols.both{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.ai-pv-cols section{display:flex;flex-direction:column;gap:8px;min-width:0}
+.ai-pv-cols h3{font-size:15px;position:sticky;top:-16px;background:var(--ground,#F6F7F9);padding:6px 0;z-index:1}
+.ai-pv .ai-text{font-size:15px;line-height:1.75}
+.ai-pv .ai-seg{padding:10px 12px 10px 14px}.ai-pv .ai-seg-tag{font-size:12.5px;margin-bottom:6px}
+@media(max-width:900px){.ai-pv-body{grid-template-columns:minmax(0,1fr)}.ai-pv-toc{display:none}.ai-pv-cols.both{grid-template-columns:minmax(0,1fr)}}
