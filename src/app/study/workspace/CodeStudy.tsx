@@ -12,7 +12,7 @@ import { COACH_ASKS, ModeSwitch, STEP_LABEL, TrainPanel, useLab, useTrain, useWa
 type Lang = "python" | "javascript" | "cpp" | "csharp";
 type LangInfo = { lang: Lang; label: string; ready: boolean; version: string; help: string };
 type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledge: string[]; folder: string; source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string; createdAt: string; preparing?: boolean;
-  level?: { self: SelfLevel; known: { site: string; rating: string } } };
+  level?: { self: SelfLevel; known?: { site: string; rating: string } } };
 type TestCase = { input: string; output: string };
 type Problem = { id: string; title: string; statement: string; inputText: string; outputText: string; examples: TestCase[]; hiddenTests: number; kind: "full" | "blank"; knowledge: string[]; knowledgeIds: string[];
   folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number; memoryLimitMb?: number;
@@ -70,7 +70,7 @@ export default function CodeStudy({ openId }: { openId?: string }) {
               {p.level ? <LevelChip level={p.level.self} /> : null}
               <span className="cs-title">{p.title}</span>
               {p.kind === "blank" ? <span className="chip">빈칸</span> : null}
-              <span className="small muted">{p.level?.known.site ? `${p.level.known.site} ${p.level.known.rating} · ` : ""}{p.knowledge.join(" · ")}</span>
+              <span className="small muted">{p.level?.known?.site ? `${p.level.known.site} ${p.level.known.rating} · ` : ""}{p.knowledge.join(" · ")}</span>
               <span className="small muted num">{p.tries ? `제출 ${p.tries}` : ""}</span>
             </button></li>
           ))}
@@ -152,7 +152,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const [problem, setProblem] = useState<Problem | null>(null);
   const [drafts, setDrafts] = useState<Partial<Record<Lang, string>>>({});
   const [subs, setSubs] = useState<SubLite[]>([]);
-  const [grade, setGrade] = useState<{ level: Level | null; needs: Needs | null; busy: boolean; error: string }>({ level: null, needs: null, busy: false, error: "" });
+  const [grade, setGrade] = useState<{ level: Level; needs: Needs | null; busy: { self: boolean; known: boolean }; error: string; loaded: boolean }>({ level: {}, needs: null, busy: { self: false, known: false }, error: "", loaded: false });
   const [lang, setLang] = useState<Lang>(storedLang());
   const [code, setCode] = useState("");
   const [result, setResult] = useState<(Judged & { mode: "example" | "submit" }) | null>(null);
@@ -179,7 +179,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
 
   useEffect(() => {
     call<{ problem: Problem; drafts: Partial<Record<Lang, string>>; submissions: SubLite[]; level: Level | null; needs: Needs }>(`/api/code/problem/${id}`).then((r) => {
-      setProblem(r.problem); setDrafts(r.drafts); setSubs(r.submissions); setGrade({ level: r.level, needs: r.needs, busy: false, error: "" });
+      setProblem(r.problem); setDrafts(r.drafts); setSubs(r.submissions); setGrade({ level: r.level ?? {}, needs: r.needs, busy: { self: false, known: false }, error: "", loaded: true });
       const l = storedLang();
       setCode(r.drafts[l] ?? r.problem.starters[l]);
       shareContext({ view: "code", title: r.problem.title, refs: [`code:${id}`], knowledgeIds: r.problem.knowledgeIds, problemId: id, text: r.problem.statement });
@@ -192,23 +192,34 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     const timer = setInterval(() => {
       void call<{ problem: Problem; level: Level | null; needs: Needs }>(`/api/code/problem/${id}`).then((r) => {
         if (r.problem.preparing && !r.problem.preparing.error) return;
-        setProblem(r.problem); setGrade((g) => ({ ...g, level: r.level ?? g.level, needs: r.level ? r.needs : g.needs }));
+        setProblem(r.problem);
         shareContext({ view: "code", title: r.problem.title, refs: [`code:${id}`], knowledgeIds: r.problem.knowledgeIds, problemId: id, text: r.problem.statement });
       }).catch(() => undefined);
     }, 2000);
     return () => clearInterval(timer);
   }, [id, preparing]);
   // 난이도·필요한 능력: 받아 둔 판단이 없으면 한 번 묻는다(AI 1번). 숨은 테스트를 만드는 중이면 끝난 뒤에(모범 풀이를 같이 보려고).
-  const needLevel = Boolean(problem) && !grade.level && !preparing;
+  // 자체 판단(검색 없음, 약 3초)과 알려진 난이도(웹 검색, 약 9초)는 따로 불러 먼저 온 것부터 보인다.
+  const needSelf = grade.loaded && !grade.level.self && !preparing;
+  const needKnown = grade.loaded && (!grade.level.known || grade.level.known.failed) && !preparing;
   useEffect(() => {
-    if (!needLevel) return;
+    if (!needSelf) return;
     let alive = true;
-    setGrade((g) => ({ ...g, busy: true, error: "" }));
-    call<{ level: Level; needs: Needs }>(`/api/code/problem/${id}/level`, {})
-      .then((r) => { if (alive) setGrade({ level: r.level, needs: r.needs, busy: false, error: "" }); })
-      .catch((e) => { if (alive) setGrade((g) => ({ ...g, busy: false, error: `난이도를 받지 못했어요: ${errorText(e)}` })); });
+    setGrade((g) => ({ ...g, busy: { ...g.busy, self: true }, error: "" }));
+    call<{ self: NonNullable<Level["self"]>; needs: Needs }>(`/api/code/problem/${id}/level/self`, {})
+      .then((r) => { if (alive) setGrade((g) => ({ ...g, level: { ...g.level, self: r.self }, needs: r.needs, busy: { ...g.busy, self: false } })); })
+      .catch((e) => { if (alive) setGrade((g) => ({ ...g, busy: { ...g.busy, self: false }, error: `수준을 받지 못했어요: ${errorText(e)}` })); });
     return () => { alive = false; };
-  }, [id, needLevel]);
+  }, [id, needSelf]);
+  useEffect(() => {
+    if (!needKnown) return;
+    let alive = true;
+    setGrade((g) => ({ ...g, busy: { ...g.busy, known: true } }));
+    call<{ known: NonNullable<Level["known"]> }>(`/api/code/problem/${id}/level/known`, {})
+      .then((r) => { if (alive) setGrade((g) => ({ ...g, level: { ...g.level, known: r.known }, busy: { ...g.busy, known: false } })); })
+      .catch(() => { if (alive) setGrade((g) => ({ ...g, level: { ...g.level, known: { site: "", rating: "", from: "", failed: true } }, busy: { ...g.busy, known: false } })); });
+    return () => { alive = false; };
+  }, [id, needKnown]);
   const retryPrepare = async () => {
     setError("");
     try { await call(`/api/code/problem/${id}/prepare`, {}); setProblem((p) => p ? { ...p, preparing: { since: new Date().toISOString() } } : p); }

@@ -21,7 +21,7 @@ export function responseFailure(status: number, body: ApiError): ModelError {
 type ResponseBody = {
   model: string; instructions: string; store: boolean; stream: boolean; prompt_cache_key?: string;
   input: Array<{ role: string; content: string | Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string; detail: "high" | "low" } | { type: "input_file"; filename: string; file_data: string }> }>;
-  reasoning?: { effort: string }; text?: { format: { type: string } & Record<string, unknown> };
+  reasoning?: { effort: string }; text?: { format: { type: string } & Record<string, unknown> }; tools?: Array<{ type: string }>;
 };
 export function responseRequest(request: ModelRequest, format: "schema" | "fallback" = "schema"): ResponseBody {
   const useSchema = Boolean(request.schema) && format === "schema";
@@ -63,6 +63,7 @@ export function responseRequest(request: ModelRequest, format: "schema" | "fallb
     stream: true,
     ...(request.cacheKey ? { prompt_cache_key: request.cacheKey } : {}),
     ...(request.effort ? { reasoning: { effort: request.effort } } : {}),
+    ...(request.webSearch ? { tools: [{ type: "web_search" }] } : {}),
     ...(useSchema
       ? { text: { format: { type: "json_schema", name: request.schemaName ?? "response", schema: request.schema, strict: true } } }
       : request.json || request.schema ? { text: { format: { type: "json_object" } } } : {}),

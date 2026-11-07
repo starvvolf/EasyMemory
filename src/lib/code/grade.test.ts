@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { needsOf } from "./grade.ts";
-import { checkLevel } from "../assist/code-level.ts";
+import { checkKnown, checkSelf } from "../assist/code-level.ts";
 
 test("요구 능력: 모범 풀이 코드 → 낮은 단계, AI가 고른 칸·기억 → 높은 단계", () => {
   const reference = `const a = require("fs").readFileSync(0,"utf8").trim().split(/\\s+/).map(Number);
@@ -19,10 +19,11 @@ console.log(lo + " " + hi);`;
   assert.ok(!needsOf({ picked: ["io"] }).steps.some((s) => s.needs.some((n) => n.why.includes("ai"))), "the model may not pick steps 1~2");
 });
 
-test("난이도 검사: 알려진 등급은 그 사이트 형식이어야 남는다", () => {
-  assert.deepEqual(checkLevel({ known: { site: "solved.ac", rating: "실버 III" }, self: { level: "중급", why: "w" }, abilities: ["dp", "dp", "io"] }).known, { site: "solved.ac", rating: "실버 III" });
-  assert.deepEqual(checkLevel({ known: { site: "solved.ac", rating: "실버 쯤" }, self: { level: "중급", why: "" } }).known, { site: "", rating: "" });
-  assert.deepEqual(checkLevel({ known: { site: "프로그래머스", rating: "Lv. 2" }, self: { level: "기초", why: "" } }).known.rating, "Lv. 2");
-  assert.equal(checkLevel({ known: { site: "", rating: "" }, self: { level: "어려움", why: "" } }).self.level, "중급");
-  assert.deepEqual(checkLevel({ known: { site: "", rating: "" }, self: { level: "중급", why: "" }, abilities: ["dp", "dp", "io"] }).abilities, ["dp"]);
+test("난이도 검사: 찾은 등급은 그 사이트 형식 + 페이지 주소가 있어야 남는다, 자체 판단은 다섯 중 하나", () => {
+  assert.deepEqual(checkKnown({ site: "solved.ac", rating: "실버 III", from: "https://www.teferi.net/ps/problems/boj/1004" }), { site: "solved.ac", rating: "실버 III", from: "https://www.teferi.net/ps/problems/boj/1004" });
+  assert.equal(checkKnown({ site: "solved.ac", rating: "실버 쯤", from: "https://x.kr" }).site, "", "not the tier shape");
+  assert.equal(checkKnown({ site: "solved.ac", rating: "실버 III", from: "" }).site, "", "no page it was read from");
+  assert.equal(checkKnown({ site: "프로그래머스", rating: "Lv. 2", from: "https://school.programmers.co.kr/x" }).rating, "Lv. 2");
+  assert.equal(checkSelf({ level: "어려움", why: "" }).level, "중급");
+  assert.deepEqual(checkSelf({ level: "중급", why: "w", abilities: ["dp", "dp", "io"] }).abilities, ["dp"]);
 });

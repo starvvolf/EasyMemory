@@ -11,7 +11,7 @@ import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog
 import { resolveSource, type Resolved } from "@/lib/code/source";
 import { withTrace } from "@/lib/ai/trace";
 import { LADDER, needsOf } from "@/lib/code/grade";
-import { keptLevel, keptLevels, levelOf } from "@/lib/assist/code-level";
+import { keptLevel, keptLevels, knownLevelOf, selfLevelOf } from "@/lib/assist/code-level";
 
 type MakeInput = Parameters<typeof makeProblem>[0];
 /** The full problem from an imported original, under the id the learner already has open (바로 열기, 2026-10-29). */
@@ -54,7 +54,7 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "problems" && m === "GET") {
       // 난이도(11/8): 받아 둔 AI 판단을 같이 보낸다(새로 묻지 않음).
       const [problems, levels] = await Promise.all([listProblemsWithKnowledge(), keptLevels()]);
-      return json({ problems: problems.map((x) => levels[x.id] ? { ...x, level: { self: levels[x.id].self.level, known: levels[x.id].known } } : x) });
+      return json({ problems: problems.map((x) => { const l = levels[x.id]; return l?.self ? { ...x, level: { self: l.self.level, ...(l.known?.site ? { known: { site: l.known.site, rating: l.known.rating } } : {}) } } : x; }) });
     }
     if (p[0] === "ladder" && m === "GET") return json({ ladder: LADDER.map((s) => ({ step: s.step, name: s.name, what: s.what, abilities: s.abilities.map((a) => ({ id: a.id, name: a.name, what: a.what })) })) });
     if (p[0] === "run" && m === "POST") { const b = await body(z.object({ lang, code, input: z.string().max(500_000) })); return json(await runCustom(b.lang, b.code, b.input)); }
@@ -107,15 +107,17 @@ async function inner(request: Request, context: RouteContext) {
         const problem = await ensureProblemKnowledge(await readProblemMeta(id));
         const subs = (await readSubmissions(id)).slice(-30).reverse().map(({ code: c, ...rest }) => ({ ...rest, lines: c.split("\n").length }));
         const level = await keptLevel(problem);
-        const needs = needsOf({ reference: problem.reference?.code, picked: level?.abilities, knowledge: problem.knowledge });
+        const needs = needsOf({ reference: problem.reference?.code, picked: level?.self?.abilities, knowledge: problem.knowledge });
         return json({ problem: publicProblem(problem), drafts: await readDrafts(id), submissions: subs, level, needs });
       }
-      // 난이도·필요한 능력(11/8): 처음 열 때 화면이 한 번 부른다. AI 1번(terra low), 받은 것은 code/levels.json에.
-      if (p[2] === "level" && m === "POST") {
+      // 난이도(11/8): 처음 열 때 화면이 둘을 동시에 부른다. 받은 것은 code/levels.json에(code-level.ts).
+      //   self: 자체 판단 + 필요한 능력, AI 1번(terra low, 검색 없음). known: 알려진 난이도, AI 1번(웹 검색).
+      if (p[2] === "level" && p[3] === "self" && m === "POST") {
         const problem = await readProblemMeta(id);
-        const level = await levelOf(problem);
-        return json({ level, needs: needsOf({ reference: problem.reference?.code, picked: level.abilities, knowledge: problem.knowledge }) });
+        const self = await selfLevelOf(problem);
+        return json({ self, needs: needsOf({ reference: problem.reference?.code, picked: self.abilities, knowledge: problem.knowledge }) });
       }
+      if (p[2] === "level" && p[3] === "known" && m === "POST") return json({ known: await knownLevelOf(await readProblemMeta(id)) });
       if (p.length === 2 && m === "DELETE") return json(await deleteProblem(id));
       if (p[2] === "draft" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await saveDraft(id, b.lang, b.code)); }
       if (p[2] === "submission" && p[3] && m === "GET") { const s = (await readSubmissions(id)).find((x) => x.id === p[3]); return s ? json({ submission: s }) : NextResponse.json({ message: "제출을 찾을 수 없어요." }, { status: 404 }); }

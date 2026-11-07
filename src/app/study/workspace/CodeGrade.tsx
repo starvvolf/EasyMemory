@@ -5,7 +5,9 @@ import { useState } from "react";
 import { call } from "./api";
 
 export type SelfLevel = "입문" | "기초" | "중급" | "상급" | "고급";
-export type Level = { known: { site: string; rating: string }; self: { level: SelfLevel; why: string }; abilities: string[]; at: string };
+export type Known = { site: string; rating: string; from: string; failed?: true };
+export type Self = { level: SelfLevel; why: string; abilities: string[] };
+export type Level = { self?: Self; known?: Known };
 export type Need = { id: string; name: string; what: string; why: Array<"code" | "ai" | "memory" | "basic"> };
 export type Needs = { steps: Array<{ step: number; name: string; what: string; needs: Need[] }>; other: string[]; top: number };
 type Ladder = Array<{ step: number; name: string; what: string; abilities: Array<{ id: string; name: string; what: string }> }>;
@@ -18,17 +20,20 @@ export function LevelChip({ level }: { level: SelfLevel }) {
   return <span className={`cg-level ${LEVEL_CLASS[level]}`}>{level}</span>;
 }
 
-/** 문제 출처와 난이도. level이 없으면 "판단 중"(화면이 POST …/level을 부른다). */
-export function LevelBox({ source, level, busy, error }: { source: { title: string; url?: string }; level: Level | null; busy: boolean; error: string }) {
-  const host = (() => { try { return source.url ? new URL(source.url).host.replace(/^www\./, "") : ""; } catch { return ""; } })();
+const hostOf = (url?: string) => { try { return url ? new URL(url).host.replace(/^www\./, "") : ""; } catch { return ""; } };
+/** 문제 출처와 난이도. 없는 칸은 화면이 POST …/level/self·known을 불러 채운다. */
+export function LevelBox({ source, level, busy, error }: { source: { title: string; url?: string }; level: Level; busy: { self: boolean; known: boolean }; error: string }) {
+  const host = hostOf(source.url);
+  const k = level.known, by = hostOf(k?.from);
   return (
     <div className="cg-box">
       <div className="cg-line"><span className="cg-k">문제</span><span className="small">{source.title}{host ? <span className="muted"> · {host}</span> : null}</span></div>
-      <div className="cg-line"><span className="cg-k">난이도</span>{level
-        ? (level.known.site ? <span className="small"><b>{level.known.site}</b>에 의하면 <b>{level.known.rating}</b> <span className="muted">(AI가 아는 값이에요. 확인하지 않았어요)</span></span>
-          : <span className="small muted">알려진 등급을 찾지 못했어요.</span>)
-        : <span className="small muted">{error || (busy ? "AI가 판단하는 중…" : "")}</span>}</div>
-      {level ? <div className="cg-line"><span className="cg-k">자체 판단</span><span className="row small" style={{ gap: 6 }}><LevelChip level={level.self.level} /><span>{level.self.why}</span></span></div> : null}
+      <div className="cg-line"><span className="cg-k">난이도</span>{k?.site
+        ? <span className="small"><a href={k.from} target="_blank" rel="noreferrer"><b>{by || k.site}</b></a>에 의하면 {by && by !== k.site ? `${k.site} ` : ""}<b>{k.rating}</b> <span className="muted">(웹 검색)</span></span>
+        : <span className="small muted">{busy.known ? "웹에서 찾는 중…" : k?.failed ? "웹 검색이 실패했어요. 다음에 열 때 다시 찾아요." : k ? "알려진 등급을 찾지 못했어요." : ""}</span>}</div>
+      <div className="cg-line"><span className="cg-k">자체 판단</span>{level.self
+        ? <span className="row small" style={{ gap: 6 }}><LevelChip level={level.self.level} /><span>{level.self.why}</span></span>
+        : <span className="small muted">{error || (busy.self ? "AI가 판단하는 중…" : "")}</span>}</div>
     </div>
   );
 }

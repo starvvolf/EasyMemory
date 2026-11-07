@@ -36,6 +36,8 @@ export type ModelRequest = {
   sharedContext?: string;
   /** Streaming progress only, never partial model content. */
   onProgress?: (receivedChars: number) => void;
+  /** 웹 검색 도구를 켠다(ChatGPT 경로만, 11/8 알고리즘 난이도). 입력 토큰이 크게 늘어서 꼭 필요한 호출에만. */
+  webSearch?: boolean;
 };
 
 export type ModelResult = {
