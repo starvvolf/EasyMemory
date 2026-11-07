@@ -826,3 +826,34 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .gmap .gstep.goal { font-weight: 600; outline: 1px solid currentColor; outline-offset: -1px; }
 .flink { all: unset; cursor: pointer; font-size: 11px; color: var(--mut); text-decoration: underline; margin-left: 4px; }
 .flink:hover { color: var(--ink); }
+/* 학습 기록 타임라인(11/8) */
+.tl .tlflow { display: flex; flex-direction: column; align-items: stretch; gap: 0; margin-top: 8px; }
+.tlbox { border: 1px solid var(--line, #d9d9d9); border-radius: 12px; padding: 10px 12px; background: var(--panel); display: flex; flex-direction: column; gap: 6px; }
+.tlbox.system { border-style: dashed; }
+.tlbox.button { border-left: 4px solid #4a7bd8; }
+.tlbox.message { border-left: 4px solid #3aa06b; }
+.tlbox.save { border-left: 4px solid #c98a1b; }
+.tlarrow { text-align: center; color: var(--mut); font-size: 18px; line-height: 22px; }
+.tlhead { display: flex; align-items: center; gap: 8px; }
+.tln { font-size: 12px; color: var(--mut); }
+.tlwho { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--soft); }
+.tlm { all: unset; cursor: pointer; font-size: 13px; opacity: .7; }
+.tlmetric { font-size: 11px; color: var(--mut); }
+.tlsay { font-size: 13px; }
+.tlai { display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; }
+.tlreply { font-size: 13px; white-space: pre-wrap; flex: 1; min-width: 0; }
+.tlreply.clip { max-height: 4.2em; overflow: hidden; }
+.tlk { font-size: 11px; color: var(--mut); white-space: nowrap; margin-right: 4px; }
+.tltools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.tlchip { font-size: 11px; padding: 1px 7px; border-radius: 8px; background: var(--soft); }
+.tlchip.done { opacity: .6; } .tlchip.doing { outline: 1px solid currentColor; } .tlchip.sup { font-style: italic; } .tlchip.goal { font-weight: 600; }
+.tlchip.tool { font-family: ui-monospace, monospace; }
+.tlchg { margin: 0; padding-left: 18px; font-size: 13px; }
+.tlchg li { color: var(--ink); }
+.tlstate { border-top: 1px solid var(--line, #e3e3e3); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.tlrow { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 13px; }
+.tlrow .tlk { min-width: 76px; }
+.tlrow .tlv { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; flex: 1; min-width: 0; }
+.evcase { margin: 14px 0 22px; }
+.tlchip.bad { background: #f6d0cc; color: #7a1d12; } .tlchip.ok { background: #d5ecd8; color: #1d5a2a; }
+.tl .memhead h1 { flex: 1; }

@@ -322,6 +322,7 @@ export async function checkOnSave(runId: string, saved: string) {
   const busy = run.codexId ? (await (await import("./codex-chat.ts")).view(run.codexId)).busy : (await (await import("./agent-chat.ts")).chatView(run.chatId!)).busy;
   if (busy) return;
   savedAt.set(key, Date.now());
+  await (await import("./timeline.ts")).beginStep(runId, { kind: "save", label: `저장: ${saved}` });
   const say = `[저장함] ${saved}을(를) 저장했어요. 작업 폴더에서 이 파일을 읽고, 지금 목표 기준으로 맞게 했는지 짧게 확인해 주세요. 틀린 곳은 답을 바로 주지 말고 어디를 보면 되는지 알려 주세요.`;
   if (run.codexId) await codexAsk(runId, run.codexId, say); else await chatAsk(runId, run.chatId!, say);
 }
@@ -341,7 +342,7 @@ async function codexAsk(runId: string, codexId: string, text: string) {
   clearInterval(chatPolls.get(runId));
   chatPolls.set(runId, setInterval(async () => {
     notifyLesson(runId);
-    if (!(await cx.view(codexId)).busy) { clearInterval(chatPolls.get(runId)); chatPolls.delete(runId); setTimeout(() => notifyLesson(runId), 15000); }
+    if (!(await cx.view(codexId)).busy) { clearInterval(chatPolls.get(runId)); chatPolls.delete(runId); void (await import("./timeline.ts")).endStep(runId).then(() => notifyLesson(runId)); setTimeout(() => notifyLesson(runId), 15000); }
   }, 450));
 }
 const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
@@ -352,8 +353,9 @@ async function chatMessages(run: { codexId?: string; chatId?: string }): Promise
 export const recordShow = (m: { role: string; text: string }) => m.role === "user" ? `[학습자] ${shownUser(m.text)}` : m.role === "assistant" ? `[튜터] ${m.text.slice(0, 2500)}` : m.role === "tool" ? `[도구] ${m.text.split("\n")[0].slice(0, 120)}` : "";
 async function recordFinished(runId: string, run: { codexId?: string; chatId?: string }, goal: { title: string; done: string; understood: boolean; applied: boolean; at: string }, mode: string | null) {
   const R = await import("./goal-record.ts");
+  const t0 = Date.now();
   const rec = await R.recordGoal(runId, goal, mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId)).catch(() => null);
-  if (rec) notifyLesson(runId);
+  if (rec) { await (await import("./timeline.ts")).systemStep(runId, `목표 정리: ${goal.title}`, { learned: rec.learned.map((x) => `${x.type} · ${x.concept}`), gaps: (rec.gaps ?? []).map((x) => `${x.type} · ${x.concept}${x.code ? ` (코드 ${x.code.file} ${x.code.from}~${x.code.to}줄)` : ""}`) }, Date.now() - t0); notifyLesson(runId); }
 }
 /**
  * 학습 종료(11/6 사용자 "도중에 학습 종료 버튼. 끄면서 알아서 처리할 거 정리하면서 로딩 살짝 걸리고 종료"):
@@ -377,6 +379,7 @@ export async function endLearning(runId: string) {
   const app = (process.env.PROJECT_APP_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
   const synced = await fetch(`${app}/api/project-course/sync`, { method: "POST", headers: { "content-type": "application/json", origin: app }, body: JSON.stringify({ runId }), signal: AbortSignal.timeout(30000) })
     .then(async (r) => (r.ok ? ((await r.json()) as { runs?: { items: number; created: number }[] }).runs?.[0] ?? null : null)).catch(() => null);
+  await (await import("./timeline.ts")).systemStep(runId, "학습 종료", { recorded, synced });
   notifyLesson(runId);
   return { recorded, synced };
 }
@@ -394,7 +397,8 @@ async function chatAsk(runId: string, chatId: string, text: string) {
   // 학습 목표(11/4): 매 차례 맥락 + 목표 도구. 실험판의 목표 · 초점 도구(adjust_learning · get_learning_state)는 숨겨 두 체계가 섞이지 않게
   const ext = { context: () => G.goalContext(runId), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner), onTool: () => notifyLesson(runId) };
   const job = ac.askChat(chatId, text, undefined, ext).catch(() => {}).finally(async () => {
-    clearInterval(chatPolls.get(runId)); chatPolls.delete(runId); notifyLesson(runId);
+    clearInterval(chatPolls.get(runId)); chatPolls.delete(runId);
+    await (await import("./timeline.ts")).endStep(runId); notifyLesson(runId);
     // 11/5 사용자 "질문 단위가 아니라 목표가 끝나면 정리": 질문마다 뽑던 것(chat-learned)은 제품 대화에서 끔 → 목표 정리(goal-record)
   });
   // 실험판은 대화 파일에 바로 쓴다 → 답하는 동안 화면에 0.45초마다 알린다(SSE)
@@ -450,7 +454,14 @@ export async function act(runId: string, n: number, input: { do: string; choice?
       const cur = (await (await import("./goals.ts")).goalsOf(runId)).current;
       (input as Record<string, unknown>).codeSaved = !!cur && (await (await import("./goal-record.ts")).savesOf(runId)).some((sv) => sv.at >= cur.at);
     }
+    const TL = await import("./timeline.ts");
+    const OPS: Record<string, string> = { understood: "이해했어요", applied: "해 봤어요", next: "다음으로", easy_next: "너무 쉬워요 → 다음으로", easy: "너무 쉬워요 → 더 어렵게", hard: "너무 어려워요", stuck: "너무 어려워요", answer: "설문 답", confirm: "확정", dismiss_plan: "계획 다시 얘기하기", dismiss_survey: "설문 닫기", mode: "진행 방식 바꾸기", end: "학습 종료" };
+    const b = input as Record<string, unknown>;
+    const detail = op === "answer" ? (Array.isArray(b.answers) ? (b.answers as { picks?: string[]; text?: string }[]).map((a) => [...(a.picks ?? []), a.text].filter(Boolean).join(", ") || "알아서").join(" / ") : "")
+      : op === "hard" || op === "stuck" ? [...((b.reasons as string[]) ?? []), String(b.text ?? "")].filter(Boolean).join(" · ") : op === "mode" ? String(b.mode ?? "") : "";
+    await TL.beginStep(runId, { kind: "button", label: OPS[op] ?? op, ...(detail ? { text: detail } : {}) });
     const say = await (await import("./goals.ts")).goalAction(runId, op, input as Record<string, unknown>);
+    if (!say) await TL.endStep(runId);
     // 11/5 사용자 "각 목표가 끝나면 쭉 대화 기록 받아서 정리(학습자가 어떤 절차를 거쳐서 뭘 배웠는지)": 뒤에서 한 번
     if (before?.current) void recordFinished(runId, run, before.current, before.mode);
     notifyLesson(runId);
@@ -461,6 +472,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     if (input.do === "stop_chat") { await (await import("./codex-chat.ts")).stop(run.codexId); notifyLesson(runId); return; }
     const sel = bridgeState(runId)?.selection;
     const pre = sel?.text ? `[VS Code에서 고른 코드 ${bridgeState(runId)?.file ?? ""} ${sel.from}~${sel.to}줄]\n${sel.text}\n\n` : "";
+    await (await import("./timeline.ts")).beginStep(runId, { kind: "message", label: "학습자", text: String(input.text ?? "").slice(0, 600) });
     await codexAsk(runId, run.codexId, pre + String(input.text ?? ""));
     return;
   }
@@ -469,6 +481,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     // VS Code에서 고른 줄이 있으면 질문 앞에 붙인다(실험판 엔진에는 고른 줄 칸이 없다)
     const sel = bridgeState(runId)?.selection;
     const pre = sel?.text ? `[VS Code에서 고른 코드 ${bridgeState(runId)?.file ?? ""} ${sel.from}~${sel.to}줄]\n${sel.text}\n\n` : "";
+    await (await import("./timeline.ts")).beginStep(runId, { kind: "message", label: "학습자", text: String(input.text ?? "").slice(0, 600) });
     await chatAsk(runId, run.chatId, pre + String(input.text ?? ""));
     return;
   }

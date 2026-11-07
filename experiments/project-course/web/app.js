@@ -144,6 +144,8 @@ async function route() {
   try {
     if (hash === "#/lab") return await renderLab();
     if (hash === "#/memory") return await renderMemory();
+    if ((m = /^#\/timeline\/(\w+)/.exec(hash))) return await renderTimeline(m[1]);
+    if ((m = /^#\/evals(?:\/([\w-]+))?/.exec(hash))) return await renderEvals(m[1]);
     if ((m = /^#\/intake\/(\w+)/.exec(hash))) return await renderIntake(m[1]);
     if ((m = /^#\/run\/(\w+)\/summary/.exec(hash))) return await renderSummary(m[1]);
     if ((m = /^#\/run\/(\w+)\/cards/.exec(hash))) return await renderRun(m[1]);
@@ -212,13 +214,14 @@ async function renderHome() {
   const eng = h("div", { class: "heng", role: "radiogroup", "aria-label": "엔진" }, [["codex", "Codex 버전"], ["basic", "기존 버전"]].map(([k, t]) =>
     h("button", { class: `hchip ${homeEngine() === k ? "on" : ""}`, role: "radio", "aria-checked": String(homeEngine() === k), onclick: () => { setHomeEngine(k); renderHome(); } }, t)));
   const memBtn = h("button", { class: "btn small", onclick: () => go("#/memory") }, "학습자 메모리");
+  const evBtn = h("button", { class: "btn small", title: "튜터 평가 실험 결과", onclick: () => go("#/evals") }, "실험 결과");
   // 실험 자료 비우기(11/6 사용자 "실험용으로 작게"): 두 번 눌러야 비움(보관으로 옮김, 지우지 않음)
   const resetBtn = h("button", { class: "btn small", title: "대화 · 목표 · 학습자 메모리를 .data/보관으로 옮겨요(지우지 않음). 앱의 기억은 그대로.", onclick: async (e) => {
     const b = e.currentTarget;
     if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "한 번 더 누르면 비워요"; setTimeout(() => { delete b.dataset.sure; b.textContent = "실험 자료 비우기"; }, 4000); return; }
     const r = await api("POST", "/api/dev/reset"); toast(r.label ? `보관했어요: .data/보관/${r.label} (${r.count}개)` : "이미 비어 있어요"); go("#/");
   } }, "실험 자료 비우기");
-  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), h("div", { class: "hmem" }, resetBtn, memBtn), list));
+  view.replaceChildren(h("div", { class: `home2 ${FLOAT ? "fw" : ""}` }, h("h1", {}, "무엇을 배워 볼까요?"), eng, h("div", { class: "hbox" }, input, btn), h("div", { class: "hmem" }, resetBtn, evBtn, memBtn), list));
   input.focus();
 }
 /* 학습 종료(11/6): 정리하는 동안 덮개 → 결과 한 줄 → 홈 */
@@ -232,6 +235,92 @@ async function endLearning(run) {
     go("#/");
   } catch (e) { toast(e.message); } finally { cover.remove(); }
 }
+/* 학습 기록 타임라인(11/8 사용자 "행동이 완수되는 걸 시간 기준으로, 상태가 어떻게 변하는지 모서리 둥근 상자를 화살표로 잇고, 토큰 · 속도는 작게 버튼으로") */
+const tlUi = { metrics: false, open: new Set(), full: new Set() };
+function stateBox(st) {
+  if (!st) return h("div", { class: "mut small" }, "(이 칸은 타임라인을 남기기 전 기록이라 상태가 없어요)");
+  const mk = { done: "✓", skipped: "↷", doing: "▶", todo: "·" };
+  const row = (k, ...v) => h("div", { class: "tlrow" }, h("span", { class: "tlk" }, k), h("span", { class: "tlv" }, ...v));
+  return h("div", { class: "tlstate" },
+    row("장기 목표", st.long ?? "없음", st.mode ? h("span", { class: "chip" }, st.mode === "topdown" ? "탑다운" : "바텀업") : null),
+    st.map.length ? row(st.support ? "로드맵(보관)" : "로드맵", ...st.map.map((m, i) => h("span", { class: `tlchip ${m.status}` }, `${i + 1}${mk[m.status] ? " " + mk[m.status] : ""} ${m.title}`))) : null,
+    row("현재 목표", st.current ? `${st.current.title} — ${st.current.phase}` : "없음", st.current ? h("div", { class: "mut small" }, `완료 조건: ${st.current.done}`) : null),
+    st.support ? row(`보충${st.support.round > 1 ? ` (${st.support.round}번째)` : ""}`, ...st.support.steps.map((x) => h("span", { class: `tlchip sup ${x.status}` }, `${mk[x.status] ? mk[x.status] + " " : ""}${x.title}`)), h("span", { class: `tlchip goal ${st.support.back ? "doing" : ""}` }, `🎯 ${st.support.target}`)) : null,
+    st.survey ? row("설문", st.survey.join(" / ")) : null, st.plan ? row("계획 제안", st.plan) : null, st.stuck ? row("어려움", st.stuck) : null,
+    row("학습자 메모리", st.memory.length ? h("div", {}, st.memory.map((m) => h("div", { class: "small" }, `${m.kind === "진행 방식" ? "정해 둠" : m.status} · ${m.text}`))) : "없음"),
+    row("설정", `파일 고치기 ${st.edit === "allow" ? "허용" : st.edit === "deny" ? "거절" : "안 물음"} · 저장하면 확인 ${st.autoCheck ? "켬" : "끔"} · 목표 정리 ${st.records}개`));
+}
+async function renderTimeline(runId) {
+  const t = await api("GET", `/api/runs/${runId}/timeline`);
+  const steps = t.steps;
+  const sum = steps.reduce((a, s) => (s.usage ? { input: a.input + s.usage.input, cached: a.cached + s.usage.cached, output: a.output + s.usage.output, ms: a.ms + s.usage.ms } : a), { input: 0, cached: 0, output: 0, ms: 0 });
+  const k = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
+  const metric = (u) => u ? h("span", { class: "tlmetric" }, u.input || u.output ? `입력 ${k(u.input)}(캐시 ${k(u.cached)}) · 출력 ${k(u.output)} · ` : "", `${(u.ms / 1000).toFixed(1)}초${u.calls ? ` · 호출 ${u.calls}` : ""}`) : null;
+  const who = { message: "학습자", button: "버튼", save: "저장", system: "Recaller" };
+  const box = (s) => {
+    const open = tlUi.open.has(s.n), full = tlUi.full.has(s.n), reply = s.reply || "";
+    return h("div", { class: `tlbox ${s.trigger.kind}` },
+      h("div", { class: "tlhead" }, h("span", { class: "tln" }, `#${s.n}`), h("span", { class: `tlwho ${s.trigger.kind}` }, who[s.trigger.kind] ?? s.trigger.kind), h("b", {}, s.trigger.kind === "message" ? "" : s.trigger.label),
+        h("span", { class: "grow" }), s.usage ? h("button", { class: "tlm", title: "토큰 · 속도", onclick: () => { tlUi.metrics = !tlUi.metrics; drawTl(); } }, "⏱") : null),
+      tlUi.metrics && s.usage ? h("div", {}, metric(s.usage)) : null,
+      s.trigger.text ? h("div", { class: "tlsay" }, s.trigger.kind === "message" ? `“${s.trigger.text}”` : s.trigger.text) : null,
+      reply ? h("div", { class: "tlai" }, h("span", { class: "tlk" }, "AI"), h("div", { class: `tlreply ${full ? "" : "clip"}` }, reply), reply.length > 220 ? h("button", { class: "flink", onclick: () => { full ? tlUi.full.delete(s.n) : tlUi.full.add(s.n); drawTl(); } }, full ? "접기" : "더 보기") : null) : null,
+      s.tools?.length ? h("div", { class: "tltools" }, h("span", { class: "tlk" }, `도구 ${s.tools.length}`), ...s.tools.map((x) => h("span", { class: "tlchip tool" }, x))) : null,
+      s.extra ? h("div", { class: "tlextra small" }, Object.entries(s.extra).filter(([, v]) => v && (!Array.isArray(v) || v.length)).map(([kk, v]) => h("div", {}, h("span", { class: "tlk" }, ({ learned: "배운 것", gaps: "부족했던 점", memory: "메모리 반영", recorded: "정리", synced: "기억에 넣음" })[kk] ?? kk), " ", Array.isArray(v) ? v.join(" · ") : typeof v === "object" ? JSON.stringify(v) : String(v)))) : null,
+      s.changes?.length ? h("ul", { class: "tlchg" }, s.changes.map((c) => h("li", {}, c))) : h("div", { class: "mut small" }, "상태 변화 없음"),
+      s.state ? h("button", { class: "flink", onclick: () => { open ? tlUi.open.delete(s.n) : tlUi.open.add(s.n); drawTl(); } }, open ? "상태 접기" : "이때 상태 보기") : null,
+      open ? stateBox(s.state) : null);
+  };
+  const drawTl = () => view.replaceChildren(h("div", { class: `home2 tl ${FLOAT ? "fw" : ""}` },
+    h("div", { class: "memhead" }, h("button", { class: "btn small", onclick: () => history.back() }, "← 돌아가기"), h("h1", {}, "학습 기록"), h("span", { class: "grow" }),
+      h("button", { class: `btn small ${tlUi.metrics ? "primary" : ""}`, title: "칸마다 토큰 · 속도", onclick: () => { tlUi.metrics = !tlUi.metrics; drawTl(); } }, "⏱ 토큰 · 속도")),
+    h("p", { class: "mut small" }, `행동 ${steps.length}개 — 학습자의 말 · 버튼 · 저장 하나와 그에 대한 AI 응답이 한 칸이에요.${t.rough ? " 이 대화는 타임라인을 남기기 전이라 목표 기록으로 만든 거친 칸이에요." : ""}`),
+    tlUi.metrics ? h("p", { class: "small" }, `전체: 입력 ${k(sum.input)}(캐시 ${k(sum.cached)}) · 출력 ${k(sum.output)} · AI 시간 ${(sum.ms / 1000).toFixed(1)}초`) : null,
+    steps.length ? h("div", { class: "tlflow" }, steps.flatMap((s, i) => [box(s), i < steps.length - 1 ? h("div", { class: "tlarrow" }, "↓") : null])) : h("p", { class: "mut" }, "아직 기록이 없어요.")));
+  drawTl();
+}
+
+/* 실험 결과(11/8 사용자 "실험도 같은 모양으로"): 문항 하나 = 상황 → 학습자 답 → (판정) → 튜터 답 → 채점, 조건 탭 */
+const evUi = { cond: null, onlyFail: false };
+async function renderEvals(id) {
+  if (!id) {
+    const { items } = await api("GET", "/api/dev/evals");
+    view.replaceChildren(h("div", { class: `home2 tl ${FLOAT ? "fw" : ""}` }, h("div", { class: "memhead" }, h("button", { class: "btn small", onclick: () => go("#/") }, "← 홈"), h("h1", {}, "실험 결과")),
+      items.length ? h("ul", { class: "memlist" }, items.map((x) => h("li", { class: "mem" }, h("a", { href: `#/evals/${x}` }, x)))) : h("p", { class: "mut" }, "아직 실험이 없어요.")));
+    return;
+  }
+  const r = await api("GET", `/api/dev/evals/${id}`);
+  const conds = Object.keys(r.rows ?? {});
+  if (!evUi.cond || !conds.includes(evUi.cond)) evUi.cond = conds[0];
+  const GOLD = { correct: "맞음", partial: "일부만 맞음", incorrect: "틀림", subtle: "미묘하게 틀림", unclear: "근거 부족", not_answer: "답이 아님" };
+  const draw = () => {
+    const rows = (r.rows[evUi.cond] ?? []).filter((x) => !evUi.onlyFail || (x.gold && (x.grade?.accepted && x.gold !== "correct" && x.gold !== "not_answer" || x.grade?.leaked)));
+    const sm = r.summary?.[evUi.cond] ?? {};
+    const box = (cls, who, ...kids) => h("div", { class: `tlbox ${cls}` }, h("div", { class: "tlhead" }, h("span", { class: `tlwho ${cls}` }, who)), ...kids);
+    const judgeCase = (x) => { const c = r.cases?.[x.id] ?? {};
+      return h("div", { class: "evcase" }, h("div", { class: "small mut" }, `${x.id} · ${c.topic ?? ""} · 기대: ${GOLD[x.gold] ?? x.gold}`),
+        h("div", { class: "tlflow" },
+          box("system", "상황", h("div", { class: "small" }, `현재 목표: ${c.goal?.title ?? ""} — ${c.goal?.done ?? ""}`), h("div", { class: "tlsay" }, `튜터: ${c.tutor ?? ""}`)), h("div", { class: "tlarrow" }, "↓"),
+          box("message", "학습자", h("div", { class: "tlsay" }, `“${c.learner ?? ""}”`)), h("div", { class: "tlarrow" }, "↓"),
+          x.verdict ? box("save", "판정", h("div", { class: "small" }, `${x.verdict.verdict}${x.verdict.right ? ` · 맞은 부분: ${x.verdict.right}` : ""}${x.verdict.gap ? ` · 빠진 곳: ${x.verdict.gap}` : ""}`), x.ms?.judge ? h("span", { class: "tlmetric" }, `${(x.ms.judge / 1000).toFixed(1)}초`) : null) : null, x.verdict ? h("div", { class: "tlarrow" }, "↓") : null,
+          box("button", "튜터", h("div", { class: "tlreply" }, x.reply), h("span", { class: "tlmetric" }, `${((x.ms?.tutor ?? 0) / 1000).toFixed(1)}초`)), h("div", { class: "tlarrow" }, "↓"),
+          box("system", "채점", h("div", { class: "tltools" },
+            h("span", { class: `tlchip ${x.grade.accepted && x.gold !== "correct" && x.gold !== "not_answer" ? "bad" : "ok"}` }, x.grade.accepted ? "맞다고 받아들임" : "맞다고 안 함"),
+            x.gold !== "correct" && x.gold !== "not_answer" ? h("span", { class: `tlchip ${x.grade.pointed_gap ? "ok" : "bad"}` }, x.grade.pointed_gap ? "빠진 곳 짚음" : "빠진 곳 못 짚음") : null,
+            h("span", { class: `tlchip ${x.grade.leaked ? "bad" : "ok"}` }, x.grade.leaked ? "정답 통째로" : "정답 안 줌")), h("div", { class: "small mut" }, x.grade.note)))); };
+    const recordCase = (x) => h("div", { class: "evcase" }, h("div", { class: "tlflow" }, box("system", "목표", h("b", {}, x.goal), h("span", { class: "tlmetric" }, `${((x.ms ?? 0) / 1000).toFixed(1)}초`)), h("div", { class: "tlarrow" }, "↓"),
+      box("button", "정리", h("div", { class: "small" }, `배운 것 ${x.learned} · 부족했던 점 ${x.gaps}${x.withCode ? ` (코드 ${x.withCode})` : ""}: ${(x.gapsOut ?? []).join(" · ")}`)), h("div", { class: "tlarrow" }, "↓"),
+      box("system", "채점", h("div", { class: "small" }, `대화에서 찾은 부족함 ${x.found}개 · 놓침 ${x.missed?.length ?? 0}${x.missed?.length ? `: ${x.missed.join(" / ")}` : ""}`), x.unsupported?.length ? h("div", { class: "small" }, `근거 없는 부족함: ${x.unsupported.join(" / ")}`) : null)));
+    view.replaceChildren(h("div", { class: `home2 tl ${FLOAT ? "fw" : ""}` },
+      h("div", { class: "memhead" }, h("button", { class: "btn small", onclick: () => go("#/evals") }, "← 실험 목록"), h("h1", {}, id.startsWith("judge") ? "답 판정 실험" : "목표 정리 실험")),
+      h("div", { class: "tltools" }, conds.map((k) => h("button", { class: `btn small ${k === evUi.cond ? "primary" : ""}`, onclick: () => { evUi.cond = k; draw(); } }, k)),
+        id.startsWith("judge") ? h("label", { class: "small" }, h("input", { type: "checkbox", checked: evUi.onlyFail, onchange: (e) => { evUi.onlyFail = e.target.checked; draw(); } }), " 실패만") : null),
+      h("p", { class: "small" }, Object.entries(sm).filter(([kk]) => kk !== "falseAcceptIds").map(([kk, v]) => `${({ falseAccept: "틀린 답 인정", correctAccepted: "맞는 답 인정", pointedGap: "빠진 곳 짚음", leaked: "정답 통째로", handledAsks: "질문에 응함", judgeAgree: "판정 일치", msTutorMedian: "튜터 ms", msJudgeMedian: "판정 ms", gapRecall: "부족함 잡음", unsupportedGaps: "근거 없는 부족함", msMedian: "ms" })[kk] ?? kk} ${v}`).join(" · ")),
+      ...rows.map((x) => (id.startsWith("judge") ? judgeCase(x) : recordCase(x)))));
+  };
+  draw();
+}
+
 /* 학습자 메모리(11/6 사용자 "GPT 메모리 관리하듯이 이 사람이 어느 정도인지 관리"): 진행 방식 · 경향, 상태 · 근거 · 갱신 기록, 고치기 · 지우기 */
 const memUi = { edit: null };
 async function renderMemory() {
@@ -1434,6 +1523,7 @@ function drawFree() {
     lesson.chat ? modelPick(run, lesson) : null,
     h("button", { class: "fib", title: "대화 목록", "aria-label": "대화 목록", onclick: () => go_("#/home") }, icon("home")),
     h("button", { class: "btn small", title: "새 대화", onclick: () => go_("#/home") }, "+ 새 대화"),
+    lesson.chat ? h("button", { class: "btn small", title: "행동마다 상태가 어떻게 바뀌었는지 기록 보기", onclick: () => go(`#/timeline/${run.id}`) }, "기록") : null,
     lesson.goals?.long ? h("button", { class: "btn small", title: "하던 목표를 정리하고(배운 것 · 부족했던 점 · 학습자 메모리) 앱 지식으로 넣은 뒤 끝내요", disabled: lesson.busy, onclick: () => endLearning(run) }, "학습 종료") : null,
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,

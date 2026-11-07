@@ -379,12 +379,19 @@ const routes: [string, RegExp, Handler][] = [
     // archive: .data/보관/<이름> (없으면 지금 데이터)
     const dir = b.archive ? path.join(DATA, "보관", path.basename(String(b.archive))) : DATA;
     return (await import("../lib/evals.ts")).startRecordEval({ dataDir: dir, runIds: (b.runIds ?? []).map(String), efforts: (b.efforts ?? ["low", "medium"]).map(String), repeat: b.repeat }); }],
+  // 평가 결과 보기(11/8 사용자 "실험도 같은 모양으로 보기 편하게")
+  ["GET", /^\/api\/dev\/evals$/, async () => { const { DATA } = await import("../lib/store.ts"); const { readdir } = await import("node:fs/promises"); const xs = (await readdir(path.join(DATA, "evals")).catch(() => [] as string[])).filter((f) => f.endsWith(".json")).sort().reverse(); return { items: xs.map((f) => f.replace(/\.json$/, "")) }; }],
+  ["GET", /^\/api\/dev\/evals\/([\w-]+)$/, async (_q, m) => { const { DATA } = await import("../lib/store.ts"); const { readFile } = await import("node:fs/promises"); const r = JSON.parse(await readFile(path.join(DATA, "evals", `${m[1]}.json`), "utf8"));
+    if (String(m[1]).startsWith("judge")) { const { loadCases } = await import("../lib/evals.ts"); const all = [...await loadCases("main"), ...await loadCases("holdout")]; r.cases = Object.fromEntries(all.map((c) => [c.id, c])); }
+    return r; }],
   ["GET", /^\/api\/dev\/eval\/([\w-]+)$/, async (_q, m) => (await import("../lib/evals.ts")).jobOf(m[1]) ?? { status: "none" }],
   // 실험 자료 비우기(11/6): 실습 자료만 보관으로(앱 자료는 앱이 꺼져 있을 때 "자료 비우기(실험용).cmd")
   ["POST", /^\/api\/dev\/reset$/, async () => { const { archivePractice } = await import("../tools/reset-data.mjs"); const { DATA } = await import("../lib/store.ts"); return archivePractice(DATA, "실험") ?? { label: null, count: 0 }; }],
   // 학습자 메모리(11/6): 보기 · 고치기 · 지우기
   ["GET", /^\/api\/memory$/, async () => ({ items: await (await import("../lib/memory.ts")).memoryOf() })],
   ["POST", /^\/api\/memory\/(m[a-f0-9]{6})$/, async (req, m) => (await import("../lib/memory.ts")).editMemory(m[1], await body(req))],
+  // 학습 기록 타임라인(11/8): 행동 하나 = 한 칸, 칸마다 상태 · 변화 · 도구 · 토큰
+  ["GET", /^\/api\/runs\/(\w+)\/timeline$/, async (_q, m) => (await import("../lib/timeline.ts")).timelineView(m[1])],
   ["POST", /^\/api\/runs\/(\w+)\/end$/, async (_q, m) => (await import("../lib/lesson.ts")).endLearning(m[1])],
   ["POST", /^\/api\/runs\/(\w+)\/redo-records$/, async (_q, m) => (await import("../lib/lesson.ts")).redoGoalRecords(m[1])],
   ["POST", /^\/api\/runs\/(\w+)\/sync$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return markSent(m[1], Array.isArray(b.keys) ? b.keys.map(String) : []); }],
