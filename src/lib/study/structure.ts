@@ -16,7 +16,8 @@ export const EDGE_TYPES = ["막음", "씀", "이어짐", "대비", "예시"] as 
 export type EdgeType = (typeof EDGE_TYPES)[number];
 export type StructGroup = { id: string; name: string; parent: string; cards: string[]; explain: string };
 export type StructEdge = { a: string; b: string; type: EdgeType; why: string };
-export type Structure = { at: string; ms: number; model: string; effort: string; sig: string; groups: StructGroup[]; edges: StructEdge[]; fixes: string[] };
+export type StructPair = { a: string; b: string; why: string };
+export type Structure = { at: string; ms: number; model: string; effort: string; sig: string; groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; fixes: string[] };
 
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 const fileOf = (id: string) => { if (!/^gen_[a-z0-9]{8,64}$/.test(id)) throw Object.assign(new Error("자료 id가 올바르지 않아요."), { status: 400 }); return path.join(dataDir(), "study-gen", id, "structure.json"); };
@@ -28,48 +29,55 @@ export async function loadStructure(id: string): Promise<Structure | null> {
 }
 
 // 고정 지시문은 앞(프롬프트 캐시), 자료마다 다른 것은 user에.
-export const STRUCTURE_SYSTEM = `너는 강의 자료 한 편에서 뽑은 지식 카드들을 "구조"로 다시 묶는다.
-목차는 자료가 쪽 순서로 보여 준 차례다. 구조는 뜻으로 본 차례다: 무엇이 무엇의 일부이고, 무엇이 무엇을 막거나 쓰고, 무엇이 무엇의 예인지.
+// 2차 (11/7 사용자 "목차와 거의 같고 위에서 아래로 내리는 느낌 — 집합으로, 가까운 것·먼 것, 조건이 발생 조건과 예방에 두 번 나오는 연계까지"):
+// 목차를 따르지 말 것, 3단까지 뜻으로 쪼갤 것, 이웃 순서, 카드끼리 짝(pairs)을 더 받는다. 흐름 카드는 넣지 않는다(카드 만들 때만 쓰는 것).
+export const STRUCTURE_SYSTEM = `너는 강의 자료 한 편에서 뽑은 지식 카드들을 "구조"로 다시 묶는다. 학습자가 이 구조를 집합 그림(큰 상자 안에 작은 상자)으로 본다.
+목차는 자료가 쪽 순서로 보여 준 차례다. 구조는 뜻으로 본 차례다: 무엇이 무엇의 부분이고, 무엇과 무엇이 가깝고, 무엇이 무엇을 막거나 쓰는지.
+목차 순서를 그대로 따르면 실패다. 쪽 순서가 아니라 "이것은 저것의 한 갈래다"로 묶는다.
 
 묶음 만들기
-- 묶음은 나무다. 맨 위 묶음은 자료가 다루는 큰 덩어리 2~4개(예: "그것이 무엇인가" 쪽과 "그것을 어떻게 다루나" 쪽). 깊이는 3단까지.
-- 아래 묶음은 위 묶음의 한 부분이어야 한다(예: "발생 조건"은 "교착 상태"의 부분, "예방"은 "처리 방법"의 부분).
-- 카드는 정확히 한 묶음에만 넣고, 모든 카드를 넣는다. 묶음 하나에 카드 1~6장. 카드가 없는 묶음은 아래 묶음이 있을 때만 둔다.
-- 목차에서 떨어져 있던 카드라도 뜻이 같은 덩어리면 한 묶음에 넣는다(예: 정의 쪽의 조건 카드와 뒤쪽 예제의 같은 조건 카드).
-- 이름: 자료의 말로 짧은 명사구. 목차 제목을 그대로 베끼지 말고, 그 묶음이 무엇인지가 보이게.
-- [흐름] 표시 카드는 설명용 카드다. 그 내용이 맞는 묶음에 넣고, 그 묶음의 explain에 녹여 쓴다.
-- explain: 이 묶음 안의 카드들이 어떻게 이어지는지(무엇을 받아 무엇을 정하는지) 한두 문장. 카드 내용을 되풀이하지 않는다.
+- 묶음은 나무다. 맨 위 묶음은 2~3개: 자료의 중심 대상 자체(무엇인가·어떻게 생기나·어떻게 나타내나)와 그것을 다루는 쪽(어떻게 다루나) 같은 큰 갈래.
+- 맨 위 묶음 아래를 다시 갈래로 나눈다. 셋 이상의 방법·종류가 있으면 그 사이에도 공통점으로 한 단을 더 둔다
+  (예: "다루는 방법" 아래 "일어나기 전에"(막기, 피하기)와 "일어난 뒤에"(찾기, 되돌리기)). 깊이는 3단까지, 맨 아래 묶음은 카드 2~6장.
+- 같은 부모 아래 묶음은 가까운 것끼리 이웃하게 순서를 정한다(서로 견주는 것, 앞의 결과를 쓰는 것이 옆에).
+- 카드는 정확히 한 묶음에만 넣고, 모든 카드를 넣는다. 카드가 없는 묶음은 아래 묶음이 있을 때만 둔다.
+- 다른 쪽에 떨어져 있던 카드라도 같은 갈래면 한 묶음에 넣는다(예: 정의 쪽의 판정 카드와 뒤쪽 예제의 같은 판정 카드).
+- 이름: 자료의 말로 짧은 명사구(2~8자 안팎). 목차 제목을 베끼지 않는다.
+- explain: 이 묶음이 위 묶음 안에서 맡는 몫을 한 문장. 카드 내용을 되풀이하지 않는다.
 
-연결 만들기 (묶음과 묶음 사이, 0~10개)
-- type: 막음(a가 b의 조건 하나를 깨서 b를 막는다) · 씀(a의 결과를 b가 받아 쓴다) · 이어짐(a 다음에 b를 봐야 한다) · 대비(a와 b를 견준다) · 예시(b가 a의 예다)
-- 부모·자식 사이는 연결로 잇지 않는다(나무가 이미 말한다). 후보 연결은 참고만 한다.
-- why: 무엇이 무엇을, 15자 안팎.
+묶음 사이 연결 (edges, 0~10개)
+- type: 막음(a가 b의 조건을 깨서 b를 막는다) · 씀(a의 결과를 b가 받아 쓴다) · 이어짐(a 다음에 b) · 대비(a와 b를 견준다) · 예시(b가 a의 예다)
+- 부모·자식 사이는 잇지 않는다(상자가 이미 말한다). why: 15자 안팎.
+
+카드끼리 짝 (pairs, 0~15개)
+- 서로 다른 묶음에 있는 두 카드가 같은 것의 두 모습일 때: 조건 ↔ 그 조건을 깨는 방법, 정의 ↔ 그것으로 하는 판정, 판정 ↔ 그 판정을 다시 쓰는 곳.
+- a·b는 카드 번호. why: 무엇으로 이어지는지 12자 안팎. 후보 연결은 참고만 한다.
 
 id는 g1, g2 … 순서대로. parent는 맨 위면 빈 문자열.`;
 
 const SCHEMA = S.obj({
   groups: S.arr(S.obj({ id: S.str, name: S.str, parent: S.str, cards: S.arr(S.int), explain: S.str })),
   edges: S.arr(S.obj({ a: S.str, b: S.str, type: S.oneOf(...EDGE_TYPES), why: S.str })),
+  pairs: S.arr(S.obj({ a: S.int, b: S.int, why: S.str })),
 });
 
 /** The user part: cards numbered in outline order, then candidate links. Numbers keep the reply short (no long ids). */
 export function structureInput(map: MaterialMap) {
-  const cards = map.sections.flatMap((s) => s.cards.map((c) => ({ c, s })));
+  const cards = map.sections.flatMap((s) => s.cards.filter((c) => !c.title.startsWith("흐름: ")).map((c) => ({ c, s })));
   const num = new Map(cards.map(({ c }, i) => [c.id, i + 1]));
   const lines = cards.map(({ c, s }, i) => {
-    const flow = c.title.startsWith("흐름: ");
     const line = cardLine({ kind: c.kind, title: c.title, shape: c.shape, takes: c.takes, gives: c.gives } as Card).replace(/\s+/g, " ").slice(0, 260);
-    return `${i + 1}|${s.title}|${c.core ? "핵심" : "보조"}${flow ? "|[흐름]" : ""}|${line}`;
+    return `${i + 1}|${s.title}|${c.core ? "핵심" : "보조"}|${line}`;
   });
   const links = map.chains.filter((x) => num.has(x.from) && num.has(x.to)).slice(0, 80)
     .map((x) => `${num.get(x.from)}→${num.get(x.to)}|${x.by === "wording" ? "받음/냄" : x.by === "meaning" ? "정리" : "함께 묻기"}|${x.what.slice(0, 40)}`);
-  const user = `자료: ${map.title}\n${map.topics?.length ? `큰 주제(자료 전체 정리): ${map.topics.join(" / ")}\n` : ""}\n카드 (번호|목차 자리|핵심·보조|카드)\n${lines.join("\n")}\n\n후보 연결 (앞→뒤|어디서|무엇)\n${links.join("\n") || "(없음)"}`;
+  const user = `자료: ${map.title}\n${map.topics?.length ? `큰 주제(자료 전체 정리): ${map.topics.join(" / ")}\n` : ""}\n카드 (번호|나온 곳(목차)|핵심·보조|카드)\n${lines.join("\n")}\n\n후보 연결 (앞→뒤|어디서|무엇)\n${links.join("\n") || "(없음)"}`;
   return { user, ids: cards.map(({ c }) => c.id) };
 }
 
-type Reply = { groups: Array<{ id: string; name: string; parent: string; cards: number[]; explain: string }>; edges: Array<{ a: string; b: string; type: string; why: string }> };
+type Reply = { groups: Array<{ id: string; name: string; parent: string; cards: number[]; explain: string }>; edges: Array<{ a: string; b: string; type: string; why: string }>; pairs?: Array<{ a: number; b: number; why: string }> };
 /** Code checks on the model's tree (exported for tests). `ids[n-1]` is card n. */
-export function checkStructure(reply: Reply, ids: string[]): { groups: StructGroup[]; edges: StructEdge[]; fixes: string[] } {
+export function checkStructure(reply: Reply, ids: string[]): { groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; fixes: string[] } {
   const fixes: string[] = [];
   const seenGroup = new Set<string>();
   const groups: StructGroup[] = [];
@@ -118,7 +126,17 @@ export function checkStructure(reply: Reply, ids: string[]): { groups: StructGro
     const key = `${a}>${b}>${type}`; if (edgeSeen.has(key)) continue; edgeSeen.add(key);
     edges.push({ a, b, type, why: String(e.why ?? "").trim().slice(0, 60) });
   }
-  return { groups, edges, fixes };
+  // 카드 짝: 둘 다 있는 카드, 서로 다른 묶음, 한 번씩.
+  const groupOf = new Map(groups.flatMap((g) => g.cards.map((c) => [c, g.id] as const)));
+  const pairSeen = new Set<string>();
+  const pairs: StructPair[] = [];
+  for (const p of reply.pairs ?? []) {
+    const a = ids[p.a - 1], b = ids[p.b - 1];
+    if (!a || !b || a === b || groupOf.get(a) === groupOf.get(b)) { fixes.push(`짝 ${p.a}-${p.b} 뺌`); continue; }
+    const key = [a, b].sort().join(">"); if (pairSeen.has(key)) continue; pairSeen.add(key);
+    pairs.push({ a, b, why: String(p.why ?? "").trim().slice(0, 40) });
+  }
+  return { groups, edges, pairs, fixes };
 }
 
 export const STRUCTURE_MODEL = { model: "gpt-6.1-terra", effort: "low" };
