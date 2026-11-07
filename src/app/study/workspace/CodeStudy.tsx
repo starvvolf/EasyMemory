@@ -6,11 +6,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, handoff, later, shareContext } from "./api";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
+import { GradeLine, NeedsPanel, TierBadge, type Grade, type Needs, type TierGroup } from "./CodeGrade";
 import { COACH_ASKS, ModeSwitch, STEP_LABEL, TrainPanel, useLab, useTrain, useWatch, WatchStrip } from "./CodeTrain";
 
 type Lang = "python" | "javascript" | "cpp" | "csharp";
 type LangInfo = { lang: Lang; label: string; ready: boolean; version: string; help: string };
-type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledge: string[]; folder: string; source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string; createdAt: string; preparing?: boolean };
+type ProblemLite = { id: string; title: string; kind: "full" | "blank"; knowledge: string[]; folder: string; source: string; status: "new" | "tried" | "wrong" | "solved"; tries: number; lastAt: string; createdAt: string; preparing?: boolean;
+  tier?: { level: number; tier: string; group: TierGroup } };
 type TestCase = { input: string; output: string };
 type Problem = { id: string; title: string; statement: string; inputText: string; outputText: string; examples: TestCase[]; hiddenTests: number; kind: "full" | "blank"; knowledge: string[]; knowledgeIds: string[];
   folder: string; source: { kind: string; title: string; url?: string }; starters: Record<Lang, string>; hasReference: boolean; timeLimitMs: number; memoryLimitMb?: number;
@@ -65,6 +67,7 @@ export default function CodeStudy({ openId }: { openId?: string }) {
           {shown.map((p) => (
             <li key={p.id}><button className="cs-row" onClick={() => setCurrent(p.id)}>
               <span className={`chip ${p.preparing ? "help" : STATUS[p.status][1]}`}>{p.preparing ? "준비 중" : STATUS[p.status][0]}</span>
+              {p.tier ? <TierBadge tier={p.tier.tier} group={p.tier.group} small /> : null}
               <span className="cs-title">{p.title}</span>
               {p.kind === "blank" ? <span className="chip">빈칸</span> : null}
               <span className="small muted">{p.knowledge.join(" · ")}</span>
@@ -149,6 +152,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const [problem, setProblem] = useState<Problem | null>(null);
   const [drafts, setDrafts] = useState<Partial<Record<Lang, string>>>({});
   const [subs, setSubs] = useState<SubLite[]>([]);
+  const [grade, setGrade] = useState<{ grade: Grade | null; needs: Needs | null; boj: string | null }>({ grade: null, needs: null, boj: null });
   const [lang, setLang] = useState<Lang>(storedLang());
   const [code, setCode] = useState("");
   const [result, setResult] = useState<(Judged & { mode: "example" | "submit" }) | null>(null);
@@ -174,8 +178,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const watch = useWatch({ id, lang, code, enabled: lab.watch && Boolean(problem), examples: problem?.examples ?? [] });
 
   useEffect(() => {
-    call<{ problem: Problem; drafts: Partial<Record<Lang, string>>; submissions: SubLite[] }>(`/api/code/problem/${id}`).then((r) => {
-      setProblem(r.problem); setDrafts(r.drafts); setSubs(r.submissions);
+    call<{ problem: Problem; drafts: Partial<Record<Lang, string>>; submissions: SubLite[]; grade: Grade | null; needs: Needs; boj: string | null }>(`/api/code/problem/${id}`).then((r) => {
+      setProblem(r.problem); setDrafts(r.drafts); setSubs(r.submissions); setGrade({ grade: r.grade, needs: r.needs, boj: r.boj });
       const l = storedLang();
       setCode(r.drafts[l] ?? r.problem.starters[l]);
       shareContext({ view: "code", title: r.problem.title, refs: [`code:${id}`], knowledgeIds: r.problem.knowledgeIds, problemId: id, text: r.problem.statement });
@@ -186,9 +190,9 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   useEffect(() => {
     if (!preparing) return;
     const timer = setInterval(() => {
-      void call<{ problem: Problem }>(`/api/code/problem/${id}`).then((r) => {
+      void call<{ problem: Problem; grade: Grade | null; needs: Needs; boj: string | null }>(`/api/code/problem/${id}`).then((r) => {
         if (r.problem.preparing && !r.problem.preparing.error) return;
-        setProblem(r.problem);
+        setProblem(r.problem); setGrade({ grade: r.grade, needs: r.needs, boj: r.boj });
         shareContext({ view: "code", title: r.problem.title, refs: [`code:${id}`], knowledgeIds: r.problem.knowledgeIds, problemId: id, text: r.problem.statement });
       }).catch(() => undefined);
     }, 2000);
@@ -278,6 +282,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {lab.train ? <ModeSwitch mode={training ? "train" : "base"} onMode={(m) => void train.setMode(m)} /> : null}
         <div className="row"><span className="chip">{problem.kind === "blank" ? "빈칸" : "코드"}</span><span className="small muted">{problem.folder}</span></div>
         <h2>{problem.title}</h2>
+        <GradeLine grade={grade.grade} boj={grade.boj} />
         {problem.preparing ? (problem.preparing.error
           ? <div className="ws-err small">숨은 테스트를 만들지 못했어요: {problem.preparing.error} <button className="btn small" onClick={() => void retryPrepare()}>다시 시도</button></div>
           : <p className="small muted">숨은 테스트를 만드는 중이에요(보통 15~20초). 그동안 문제를 읽고 코드를 짜고, 예제 실행을 해 볼 수 있어요. 제출은 준비가 끝나면 열려요.</p>) : null}
@@ -292,6 +297,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}${problem.check.by === "source" && problem.check.compared ? `, 단순 풀이와 작은 입력 ${problem.check.compared}개 일치` : ""}${problem.check.human === "match" ? " · 사람이 쓴 정답 코드와 일치" : ""}` : ""}
           {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}
           {problem.check?.second && problem.check.second.status !== "skipped" ? ` · ${problem.check.second.status === "agreed" ? `다른 호출의 독립 풀이(${problem.check.second.model})와 테스트 ${problem.check.second.agreed}/${problem.check.second.total}개 일치` : problem.check.second.status === "second-wrong" ? "독립 풀이가 틀려서 큰 입력 대조는 못 함" : "독립 풀이로 대조하지 못함"}` : ""}</p>}
+        {grade.needs ? <NeedsPanel needs={grade.needs} /> : null}
         {problem.knowledge.length ? <div className="row small"><span className="muted">확인하는 기억</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
         {subs.length ? <><p className="eyebrow">내 제출</p><ul className="cs-subs">{subs.filter((s) => s.mode === "submit").slice(0, 8).map((s) => <li key={s.id}><button className="linkish small" onClick={() => void openSubmission(s.id)}>
           <span className={`chip ${VERDICT[s.verdict]?.[1] ?? ""}`}>{VERDICT[s.verdict]?.[0] ?? s.verdict}</span> {s.lang} · {new Date(s.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{s.hints ? ` · 힌트 ${s.hints}` : ""}</button></li>)}</ul></> : null}

@@ -854,3 +854,19 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm8-label.pair{font-size:10.5px}
 .dejipgi .mm8-detail{position:sticky;bottom:0;z-index:4;background:var(--panel,#fff);border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:0 -4px 16px rgba(0,0,0,.08)}
 @media (max-width:700px){.dejipgi .mm8-box.d0{flex-basis:100%}}
+/* 문제 등급 · 요구 능력 (11/7, CodeGrade.tsx). 티어 색은 solved.ac 색 */
+.dejipgi .cg-tier{display:inline-flex;align-items:center;flex:none;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:700;color:#fff;background:var(--faint);white-space:nowrap}
+.dejipgi .cg-tier.small{padding:1px 8px;font-size:11.5px}
+.dejipgi .cg-bronze{background:#ad5600}.dejipgi .cg-silver{background:#435f7a}.dejipgi .cg-gold{background:#d28a00}
+.dejipgi .cg-platinum{background:#17a87a}.dejipgi .cg-diamond{background:#0090cc}.dejipgi .cg-ruby{background:#e0004f}
+.dejipgi .cg-grade{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.dejipgi .cg-needs{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.dejipgi .cg-ladder{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dejipgi .cg-ladder li{display:flex;gap:10px;align-items:flex-start;opacity:.45}
+.dejipgi .cg-ladder li.on{opacity:1}
+.dejipgi .cg-step{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--muted)}
+.dejipgi .cg-ladder li.on .cg-step{background:var(--accent);border-color:var(--accent);color:#fff}
+.dejipgi .cg-chips{display:flex;flex-wrap:wrap;gap:4px}
+.dejipgi .cg-ab{display:inline-flex;gap:4px;align-items:center;font-size:12.5px;padding:2px 8px;border-radius:7px;border:1px dashed var(--line-strong);color:var(--faint)}
+.dejipgi .cg-ab.on{border-style:solid;border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.dejipgi .cg-ab i{font-style:normal;font-size:10.5px;color:var(--muted)}
