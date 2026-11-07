@@ -22,3 +22,21 @@ test("cards go to one group, missing ones to 그 밖, cycles and empty groups ar
   assert.ok(roots.includes("g3") || roots.includes("g4"));
   assert.deepEqual(r.edges.map((e) => `${e.a}>${e.b}>${e.type}`), ["g4>g2>막음"]);
 });
+
+test("a head card names its group and is not also a member; versus pairs are kept", () => {
+  const r = checkStructure({
+    groups: [
+      { id: "g1", name: "그래프", parent: "", head: 1, cards: [1, 2, 3], members: "부분", explain: "" },
+      { id: "g2", name: "판정", parent: "", head: 0, cards: [4, 5], members: "엉뚱", explain: "" },
+    ],
+    edges: [], pairs: [], versus: [{ a: 4, b: 5, on: "인스턴스 수" }, { a: 4, b: 4, on: "" }],
+  }, ids);
+  const g1 = r.groups.find((g) => g.id === "g1")!, g2 = r.groups.find((g) => g.id === "g2")!;
+  assert.equal(g1.head, "t1c1");
+  assert.deepEqual(g1.cards, ["t1c2", "t2c1"]);
+  assert.equal(g1.members, "부분");
+  assert.equal(g2.members, undefined);
+  assert.equal(g2.head, undefined);
+  assert.deepEqual(r.versus, [{ a: "t2c2", b: "t3c1", on: "인스턴스 수" }]);
+  assert.equal(r.groups.find((g) => g.id === "g_rest"), undefined);
+});

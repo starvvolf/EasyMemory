@@ -118,7 +118,7 @@ function keyLine(s: Shape): string {
   const clip = (x: string, n = 90) => (x.length > n ? `${x.slice(0, n - 1)}…` : x);
   switch (s.form) {
     case "formula": return asLine(s.expr);
-    case "term": return clip(s.definition);
+    case "term": return clip(`${s.symbol ? `${s.symbol.includes("$") ? s.symbol : tex(s.symbol)} · ` : ""}${s.definition}`);
     case "fact": return clip(s.value);
     case "rule": return clip(`${s.condition} → ${s.result}`);
     case "procedure": return clip(s.steps.map((st) => st.action).join(" → "));
@@ -211,10 +211,16 @@ function OutlinePane({ digest, cards, making, onPage, onPractice }: { digest: Di
 // AI 한 번(terra)으로 묶은 것을 집합 그림으로 그린다. 큰 묶음은 나란한 큰 상자, 하위 묶음은 그 안의 상자, 카드는 상자 안의 알약.
 // 묶음 사이 연결(막음·씀·이어짐·대비·예시)은 늘 보이는 선, 카드끼리 짝(구조의 짝 + 자료 전체 정리의 연결 중 묶음을 넘는 것)은
 // 카드·상자에 마우스를 올리면(또는 "카드 연결 모두") 선으로. 흐름 카드는 보이지 않는다(카드 만들 때 쓰는 것, 사용자 11/7).
-type StructGroup = { id: string; name: string; parent: string; cards: string[]; explain: string };
+// 3차 (11/8 사용자 "큰 개념과 작은 개념, 대비, 모두 성립 — 위와 아래를 레이어로"): head는 상자의 대표 카드(상자 머리에 크게),
+// members는 안의 것과 대표의 관계(이루는 것·갈래·모두 성립해야·차례로), versus는 나란히 견주는 카드(같은 상자면 A vs B 한 덩어리).
+type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: string; explain: string };
+type StructVersus = { a: string; b: string; on: string };
+const MEMBER_LABEL: Record<string, string> = { 부분: "이루는 것", 종류: "갈래", 모두: "모두 성립해야", 순서: "차례로" };
+const MEMBER_JOIN: Record<string, string> = { 모두: "+", 순서: "→" };
+const sameName = (a: string, b: string) => { const n = (x: string) => x.replace(/\(.*?\)|[\s·]/g, "").toLowerCase(); const x = n(a), y = n(b); return !!x && !!y && (x.includes(y) || y.includes(x)); };
 type StructEdge = { a: string; b: string; type: string; why: string };
 type StructPair = { a: string; b: string; why: string };
-type Structure = { at: string; ms: number; model: string; effort: string; groups: StructGroup[]; edges: StructEdge[]; pairs?: StructPair[]; fixes: string[] };
+type Structure = { at: string; ms: number; model: string; effort: string; groups: StructGroup[]; edges: StructEdge[]; pairs?: StructPair[]; versus?: StructVersus[]; fixes: string[] };
 type Line = { key: string; d: string; x: number; y: number; type: string; why: string; kind: "edge" | "pair"; lit: boolean };
 const EDGE_COLOR: Record<string, string> = { 막음: "#d0464b", 씀: "#2f7fd0", 이어짐: "#7a808a", 대비: "#9a5bd0", 예시: "#2f9a62" };
 /** A curve between two boxes, from the sides that face each other. */
@@ -254,7 +260,7 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
     call<{ structure: Structure; stale: boolean }>(`/api/study-map/${genId}/structure`, {}).then(setData).catch((e) => setError(errorText(e))).finally(() => setBusy(false)); };
   const s = data?.structure;
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
-  const groupOfCard = useMemo(() => new Map((s?.groups ?? []).flatMap((g) => g.cards.map((id) => [id, g.id] as const))), [s]);
+  const groupOfCard = useMemo(() => new Map((s?.groups ?? []).flatMap((g) => [...(g.head ? [g.head] : []), ...g.cards].map((id) => [id, g.id] as const))), [s]);
   // Card pairs across groups: the structure's own, then the whole-material pass's links that cross a group.
   const pairs = useMemo(() => {
     const out: StructPair[] = [], seen = new Set<string>();
@@ -264,6 +270,7 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
       const k = [a, b].sort().join(">"); if (seen.has(k)) return; seen.add(k); out.push({ a, b, why });
     };
     for (const p of s?.pairs ?? []) add(p.a, p.b, p.why);
+    for (const v of s?.versus ?? []) add(v.a, v.b, `대비${v.on ? ` · ${v.on}` : ""}`); // 다른 상자끼리 견주는 것은 짝 선으로
     for (const c of chains) if (c.by === "meaning" || c.by === "wording") add(c.from, c.to, c.what);
     return out;
   }, [s, chains, groupOfCard, byId]);
@@ -308,19 +315,39 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
   const kids = (id: string) => s.groups.filter((g) => g.parent === id);
   const openCard = open ? byId.get(open) : undefined;
   const litCards = new Set(hover?.card ? [hover.card, ...pairs.filter((p) => p.a === hover.card || p.b === hover.card).map((p) => (p.a === hover.card ? p.b : p.a))] : []);
+  const pill = (c: Card) => <button key={c.id} data-c={c.id} className={`mm8-pill${c.core ? " core" : ""}${open === c.id ? " on" : ""}${litCards.has(c.id) ? " lit" : ""}`}
+    onClick={() => setOpen(open === c.id ? null : c.id)} title={keyLine(c.shape)}>
+    <Rich text={c.title} />{pairCount.get(c.id) ? <span className="mm8-n" aria-label={`다른 묶음과 연결 ${pairCount.get(c.id)}`}>↔{pairCount.get(c.id)}</span> : null}</button>;
   const box = (g: StructGroup, depth: number): ReactNode => {
-    const mine = g.cards.map((id) => byId.get(id)).filter((c): c is Card => !!c && !isFlowCard(c));
+    const ok = (c: Card | undefined): c is Card => !!c && !isFlowCard(c);
+    const head = g.head ? byId.get(g.head) : undefined;
+    const mine = g.cards.map((id) => byId.get(id)).filter(ok);
     const sub = kids(g.id);
-    if (!mine.length && !sub.length) return null;
+    if (!mine.length && !sub.length && !ok(head)) return null;
+    // 같은 상자 안에서 견주는 둘은 한 덩어리(A vs B)로, 나머지는 하나씩.
+    const ids = new Set(mine.map((c) => c.id)), used = new Set<string>();
+    const items: Array<{ vs?: StructVersus; c?: Card }> = [];
+    for (const c of mine) {
+      if (used.has(c.id)) continue;
+      const v = (s.versus ?? []).find((x) => (x.a === c.id && ids.has(x.b) && !used.has(x.b)) || (x.b === c.id && ids.has(x.a) && !used.has(x.a)));
+      if (v) { used.add(v.a); used.add(v.b); items.push({ vs: v }); } else { used.add(c.id); items.push({ c }); }
+    }
+    const rel = g.members ? MEMBER_LABEL[g.members] : "", join = g.members ? MEMBER_JOIN[g.members] : undefined;
+    const merged = ok(head) && sameName(head.title, g.name);
     return (
       <div key={g.id} data-g={g.id} className={`mm8-box d${Math.min(depth, 3)}${hover?.group === g.id ? " hov" : ""}`}>
-        <div className="mm8-title" title={g.explain || undefined}><Rich text={g.name} /></div>
-        {g.explain && depth < 2 ? <p className="mm8-explain"><Rich text={g.explain} /></p> : null}
-        {mine.length ? <div className="mm8-cards">{mine.map((c) =>
-          <button key={c.id} data-c={c.id} className={`mm8-pill${c.core ? " core" : ""}${open === c.id ? " on" : ""}${litCards.has(c.id) ? " lit" : ""}`}
-            onClick={() => setOpen(open === c.id ? null : c.id)} title={keyLine(c.shape)}>
-            <Rich text={c.title} />{pairCount.get(c.id) ? <span className="mm8-n" aria-label={`다른 묶음과 연결 ${pairCount.get(c.id)}`}>↔{pairCount.get(c.id)}</span> : null}</button>)}</div> : null}
-        {sub.length ? <div className="mm8-kids">{sub.map((k) => box(k, depth + 1))}</div> : null}
+        {merged ? null : <div className="mm8-title" title={g.explain || undefined}><Rich text={g.name} /></div>}
+        {ok(head) ? <button data-c={head.id} className={`mm8-head${merged ? " as-title" : ""}${open === head.id ? " on" : ""}${litCards.has(head.id) ? " lit" : ""}`} onClick={() => setOpen(open === head.id ? null : head.id)}>
+          <span className="mm8-headname"><Rich text={head.title} />{pairCount.get(head.id) ? <span className="mm8-n">↔{pairCount.get(head.id)}</span> : null}</span>
+          <span className="mm8-headline"><Rich text={keyLine(head.shape)} /></span></button> : null}
+        {g.explain && depth < 2 && !ok(head) ? <p className="mm8-explain"><Rich text={g.explain} /></p> : null}
+        {items.length ? <div className={`mm8-cards${rel ? " rel" : ""}`}>
+          {rel ? <span className={`mm8-rel r-${g.members}`}>{rel}</span> : null}
+          {items.map((it, i) => <span key={i} className="mm8-item">
+            {i && join ? <span className="mm8-join" aria-hidden>{join}</span> : null}
+            {it.vs ? <span className="mm8-vs" title={it.vs.on || undefined}>{pill(byId.get(it.vs.a)!)}<span className="mm8-vsmark">vs{it.vs.on ? <em>{it.vs.on}</em> : null}</span>{pill(byId.get(it.vs.b)!)}</span> : pill(it.c!)}
+          </span>)}</div> : null}
+        {sub.length ? <>{!items.length && rel ? <span className={`mm8-rel r-${g.members}`}>{rel}</span> : null}<div className="mm8-kids">{sub.map((k) => box(k, depth + 1))}</div></> : null}
       </div>);
   };
   const types = [...new Set(s.edges.map((e) => e.type))];
@@ -405,7 +432,7 @@ function filled(raw: Record<string, unknown>): Shape | null {
 // The text a card being written shows, field by field in the order the engine writes them (no math drawing until it is done).
 function liveLines(s: Shape): Array<[string, string]> {
   switch (s.form) {
-    case "term": return [["", s.definition], ["헷갈리는 말", s.neighbors.join(", ")]];
+    case "term": return [["", s.definition], ["표기", s.symbol], ["헷갈리는 말", s.neighbors.join(", ")]];
     case "fact": return [["", s.value]];
     case "list": return s.items.map((it, i) => [s.ordered ? String(i + 1) : "·", it]);
     case "rule": return [["전제", s.premise], ["조건", s.condition], ["결과", s.result], ["경계", s.boundary]];
@@ -623,7 +650,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   // State dots say something only once the learner has answered (all 만남 at first is one colour, noise).
   const marked = Boolean(n.unknown || n.known || n.graduated);
   return (
-    <div className="mm2 mm3" role="dialog" aria-label="자료 지도">
+    <div className={`mm2 mm3${shownTab === "structure" ? " mm3-wide" : ""}`} role="dialog" aria-label="자료 지도">
       <div className="mm2-head">
         <div><p className="eyebrow">자료 지도</p><b>{map.title.replace(/\.pdf$/i, "")}</b>
           <span className="small muted"> · {map.pages}쪽 · 기억 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater ? "" : ` · 문제 ${n.questions}`}</span>

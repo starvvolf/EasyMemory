@@ -870,3 +870,28 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .cg-ab{display:inline-flex;gap:4px;align-items:center;font-size:12.5px;padding:2px 8px;border-radius:7px;border:1px dashed var(--line-strong);color:var(--faint)}
 .dejipgi .cg-ab.on{border-style:solid;border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
 .dejipgi .cg-ab i{font-style:normal;font-size:10.5px;color:var(--muted)}
+
+/* 구조 3차 (11/8): 상자의 대표 카드(큰 개념), 안의 것과의 관계, 견주는 둘 */
+.dejipgi .mm8-head{position:relative;z-index:2;display:flex;flex-direction:column;gap:2px;text-align:left;border:0;border-left:4px solid color-mix(in srgb,var(--accent) 55%,transparent);background:color-mix(in srgb,var(--accent) 7%,var(--panel,#fff));border-radius:4px 10px 10px 4px;padding:6px 10px;cursor:pointer;color:inherit}
+.dejipgi .mm8-head:hover,.dejipgi .mm8-head.on{outline:2px solid var(--accent)}
+.dejipgi .mm8-head.lit{background:color-mix(in srgb,#f2c94c 35%,var(--panel,#fff))}
+.dejipgi .mm8-headname{font-weight:700;font-size:13.5px}
+.dejipgi .mm8-box.d0>.mm8-head .mm8-headname{font-size:15px}
+.dejipgi .mm8-head.as-title{border-left-width:5px}
+.dejipgi .mm8-box.d0>.mm8-head.as-title .mm8-headname{font-size:19px}
+.dejipgi .mm8-box.d1>.mm8-head.as-title .mm8-headname{font-size:15.5px}
+.dejipgi .mm8-headline{font-size:12px;line-height:1.45;color:var(--muted,#6b7078);font-weight:400}
+.dejipgi .mm8-cards.rel{align-items:center}
+.dejipgi .mm8-item{display:inline-flex;align-items:center;gap:5px}
+.dejipgi .mm8-rel{font-size:10.5px;font-weight:600;letter-spacing:.02em;padding:1px 7px;border-radius:999px;color:var(--muted,#666);background:color-mix(in srgb,var(--line) 55%,transparent);margin-right:2px}
+.dejipgi .mm8-rel.r-모두{color:#b0392f;background:color-mix(in srgb,#d0464b 12%,transparent)}
+.dejipgi .mm8-rel.r-종류{color:#2f6fb0;background:color-mix(in srgb,#2f7fd0 12%,transparent)}
+.dejipgi .mm8-rel.r-순서{color:#566;background:color-mix(in srgb,#7a808a 16%,transparent)}
+.dejipgi .mm8-join{font-size:12px;font-weight:700;color:var(--muted,#888)}
+.dejipgi .mm8-vs{display:inline-flex;align-items:center;gap:4px;padding:2px;border-radius:10px;border:1.5px solid color-mix(in srgb,#9a5bd0 45%,transparent);background:color-mix(in srgb,#9a5bd0 6%,transparent)}
+.dejipgi .mm8-vsmark{display:inline-flex;flex-direction:column;align-items:center;font-size:11px;font-weight:700;color:#8a4bc0;line-height:1.1;padding:0 2px}
+.dejipgi .mm8-vsmark em{font-style:normal;font-weight:400;font-size:9.5px;color:var(--muted,#777)}
+.dejipgi .mm3.mm3-wide{max-width:min(1480px,100%)}
+.dejipgi .mm8-rel{align-self:flex-start;white-space:nowrap}
+.dejipgi .mm8-vs{flex-wrap:wrap}
+.dejipgi .mm8-vsmark,.dejipgi .mm8-vsmark em{white-space:nowrap}
