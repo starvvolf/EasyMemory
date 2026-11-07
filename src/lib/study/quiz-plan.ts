@@ -216,9 +216,11 @@ export type QuizReply = { form: Form; level: number; stem: string; options: stri
 export const SOLVE_SYSTEM = `정답을 모르는 상태에서 문제 하나를 정리된 지식과 원문(source)으로 푼다(원문 글이 비었으면 정리된 지식이 그 쪽 그림에서 읽은 것이다). 그림이 있으면 그림도 본다.
 answer: ox는 "O"/"X", choice는 보기 번호(1부터), order는 바른 순서 번호를 쉼표로, short는 값·낱말만 짧게(문장 말고).
 steps: 답까지 실제로 거친 단계 수(문제에 답이 이미 보이면 0, 한 번 보고 바로 알면 1).
+true_options: choice면 보기를 하나씩 따져 지식·원문으로 맞는 보기 번호를 모두(답을 고르기 전에). 다른 형식은 빈 배열.
 지식·원문·그림으로 답이 하나로 정해지지 않으면(보기 둘이 맞음, 근거가 없음, 조건이 모자람) unique=false와 doubt 한 줄.`;
-const SOLVE_SCHEMA = S.obj({ answer: S.str, steps: S.int, unique: { type: "boolean" }, doubt: S.str });
-export type SolveReply = { answer: string; steps: number; unique: boolean; doubt: string };
+// true_options: 보기마다 따로 (11/8 3회차: "점유와 대기 예방"에서 보기 둘이 다 자료의 방법이었는데 따로 풀기가 하나만 고르고 넘어갔다)
+const SOLVE_SCHEMA = S.obj({ true_options: S.arr(S.int), answer: S.str, steps: S.int, unique: { type: "boolean" }, doubt: S.str });
+export type SolveReply = { answer: string; steps: number; unique: boolean; doubt: string; true_options?: number[] };
 
 // 답이 엇갈릴 때 (11/8 1회차: 중점 원은 출제 답이 맞고 따로 풀기가 틀렸다, 타원은 출제 답 칸만 틀리고 해설은 맞았다)
 export const JUDGE_SYSTEM = `문제 하나에 출제자 답과 따로 푼 답이 다르다. 정리된 지식·원문(그림이 있으면 그림)으로 직접 다시 풀어 어느 쪽이 맞는지 정한다.
@@ -352,7 +354,8 @@ async function makeOne(id: string, map: MaterialMap, it: PlanItem, byId: Map<str
       const [solved, blind] = await Promise.all([solve(true), images && !run.noBlind ? solve(false).catch(() => undefined) : Promise.resolve(undefined)]);
       const needsFigure = blind ? !(blind.unique && sameAnswer(q.form, q.answer, blind.answer)) : undefined;
       let judge: JudgeReply | undefined, fixed: string | undefined;
-      let held: string | undefined = !solved.unique ? `답이 하나가 아님: ${solved.doubt}` : undefined;
+      const many = q.form === "choice" && (solved.true_options?.length ?? 0) > 1;
+      let held: string | undefined = !solved.unique ? `답이 하나가 아님: ${solved.doubt}` : many ? `맞는 보기가 여럿(${solved.true_options!.join(", ")})` : undefined;
       if (!held && !sameAnswer(q.form, q.answer, solved.answer)) {
         judge = await withTrace({ area: "pdf", action: "quiz-judge", ref: id }, () => ask<JudgeReply>("map:quiz-judge", JUDGE_SYSTEM, `${view}\n\n출제자 답: ${q.answer}\n출제자 해설: ${q.explain}\n따로 푼 답: ${solved.answer}\n\n${ctxText}`, JUDGE_SCHEMA, images));
         if (judge.winner === "author" && sameAnswer(q.form, q.answer, judge.answer)) { /* 출제 답이 맞다 */ }
