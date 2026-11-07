@@ -323,17 +323,27 @@ export async function frameOf(bytes: Uint8Array, pages: number[], share = 0.4) {
  * 대략의 상자(쪽을 0~100으로 본 [x0, y0, x1, y1])를 주면, 코드가 그 상자와 겹치는 그림 덩어리에 맞춘다(figure).
  * 겹치는 그림이 없거나 애매하면 AI 상자를 조금 넓혀 그대로 자른다(block, 사용자 "애매하면 덩어리").
  */
-export function snapHint(hint: Box, graphics: Graphic[], page: { width: number; height: number }): { mode: CropMode; box: Box } {
+export function snapHint(hint: Box, graphics: Graphic[], page: { width: number; height: number }, rows: Row[] = []): { mode: CropMode; box?: Box } {
+  const pageArea = page.width * page.height;
   const joinGap = Math.min(page.width, page.height) * 0.06;
+  const big = (b: Box) => area(b) > pageArea * 0.6;
+  // 그림에 붙은 짧은 라벨(R_j, P_i, (a))이 상자 밖으로 조금 나가면 같이
+  const hs = rows.map((r) => r.box.y1 - r.box.y0).sort((x, y) => x - y), lineH = hs.length ? hs[Math.floor(hs.length / 2)] : 12;
+  const withLabels = (box: Box) => rows.reduce((b, r) => (!isSentence(r) && gapBetween(r.box, box) <= lineH * 0.9 && r.box.x0 >= box.x0 - lineH * 2 && r.box.x1 <= box.x1 + lineH * 2 ? union(b, r.box) : b), box);
   const touching = graphics.filter((g) => overlap(g.box, hint) > Math.min(area(g.box), area(hint)) * 0.3);
   if (touching.length) {
     const box = cluster(touching, graphics, joinGap)!;
-    // 덩어리가 힌트보다 훨씬 크면(쪽 전체로 번짐) 힌트 쪽을 믿는다
-    // 맞춘 그림이 힌트보다 훨씬 작으면(세마포어: 화살표만 그림이고 코드는 글) 힌트가 가리킨 덩어리 전체를 믿는다
-    if (area(box) <= area(hint) * 4 && area(box) >= area(hint) * 0.35) return { mode: "figure", box: union(box, { x0: Math.max(box.x0, hint.x0), y0: Math.max(box.y0, hint.y0), x1: Math.min(box.x1, hint.x1), y1: Math.min(box.y1, hint.y1) }) };
+    if (!big(box)) {
+      // 그림이 힌트보다 훨씬 작으면(세마포어: 화살표만 그림이고 코드는 글) 힌트가 가리킨 덩어리를 믿는다. 힌트가 쪽 대부분이면 그림 쪽을.
+      if (area(box) >= area(hint) * 0.35 || big(hint)) return { mode: "figure", box: withLabels(box) };
+      return { mode: "block", box: withLabels(hint) };
+    }
   }
+  if (big(hint)) return { mode: "none" }; // 쪽 전체를 가리킨 힌트는 쓸모없다
+  // 너무 가늘거나 낮은 힌트(쪽 폭·높이의 12% 미만)는 믿지 않는다
+  if (hint.x1 - hint.x0 < page.width * 0.12 || hint.y1 - hint.y0 < page.height * 0.12) return { mode: "none" };
   const padX = (hint.x1 - hint.x0) * 0.08 + 6, padY = (hint.y1 - hint.y0) * 0.08 + 6;
-  return { mode: "block", box: { x0: Math.max(0, hint.x0 - padX), y0: Math.max(0, hint.y0 - padY), x1: Math.min(page.width, hint.x1 + padX), y1: Math.min(page.height, hint.y1 + padY) } };
+  return { mode: "block", box: withLabels({ x0: Math.max(0, hint.x0 - padX), y0: Math.max(0, hint.y0 - padY), x1: Math.min(page.width, hint.x1 + padX), y1: Math.min(page.height, hint.y1 + padY) }) };
 }
 
 export async function cropHints(bytes: Uint8Array, page: number, hints: Array<[number, number, number, number]>, options: { width?: number; frame?: Set<string> } = {}) {
@@ -352,7 +362,8 @@ export async function cropHints(bytes: Uint8Array, page: number, hints: Array<[n
     await p.render({ canvas, canvasContext: ctx, viewport: view }).promise;
     return hints.map((h) => {
       const hint: Box = { x0: h[0] / 100 * viewport.width, y0: h[1] / 100 * viewport.height, x1: h[2] / 100 * viewport.width, y1: h[3] / 100 * viewport.height };
-      const d = snapHint(hint, graphics, viewport);
+      const d = snapHint(hint, graphics, viewport, rows);
+      if (d.mode === "none" || !d.box) return { hint: h, mode: "none" as CropMode };
       const r = cropRect(d.box, scale, viewport, { top: 8, bottom: 8 }, 8);
       const cut = createCanvas(Math.max(1, r.w), Math.max(1, r.h)); cut.getContext("2d").drawImage(canvas as never, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
       return { hint: h, mode: d.mode, box: [d.box.x0 / viewport.width, d.box.y0 / viewport.height, d.box.x1 / viewport.width, d.box.y1 / viewport.height], image: `data:image/jpeg;base64,${cut.toBuffer("image/jpeg", 85).toString("base64")}` };

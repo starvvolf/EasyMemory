@@ -179,6 +179,22 @@ async function saveJson(file: string, value: unknown) {
   queue.set(file, pending);
   try { await pending; } finally { if (queue.get(file) === pending) queue.delete(file); }
 }
+/** 그림 다시 자르기 (11/8): 자르는 코드를 고친 뒤 AI 호출 없이 카드 그림만 다시. 쪽 그림 위치(AI 힌트)는 그대로 쓴다. */
+export async function recropFigures(id: string) {
+  const state = await loadGen(id);
+  if (!state?.recaller) throw new GenError(404, "자료를 찾을 수 없어요.");
+  const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
+  const bytes = await readRegisteredMcpSourcePdf(state.input.sourceId);
+  if (!bytes) throw new GenError(404, "원본 PDF를 읽을 수 없어요.");
+  const cards = state.sections.flatMap((s) => state.recaller!.units[s.id]?.cards ?? []);
+  const dir = path.join(dirOf(id), "figures");
+  await mkdir(dir, { recursive: true });
+  const { attachFigures } = await import("./figures.ts");
+  const r = await attachFigures(bytes, state.input.pageNumbers, cards, async (name, jpeg) => { await writeFile(path.join(dir, name.replace(/[^\w.-]/g, "_")), jpeg); });
+  state.recaller.timing.figuresMs = r.ms;
+  await saveState(state);
+  return r;
+}
 async function saveState(state: GenState) { state.updatedAt = new Date().toISOString(); await saveJson(path.join(dirOf(state.id), "state.json"), state); }
 export async function loadGen(id: string): Promise<GenState | null> {
   try { return JSON.parse(await readFile(path.join(dirOf(id), "state.json"), "utf8")) as GenState; }

@@ -7,6 +7,8 @@ import type { Card, CardFigure } from "./cards.ts";
 
 export async function attachFigures(pdf: Uint8Array, pages: number[], cards: Card[], save: (name: string, jpeg: Buffer) => Promise<void>) {
   const t0 = Date.now();
+  // 다시 자르기(코드를 고친 뒤): 인용으로 찾은 것은 지우고 다시, AI 위치는 그대로 두고 파일만 다시
+  for (const c of cards) if (c.figure?.from === "quote") delete c.figure;
   const frame = await frameOf(pdf, pages);
   const done = new Map<string, { file: string; mode: "figure" | "block" }>();
   const keyOf = (page: number, box: number[]) => `${page}:${box.map((v) => Math.round(v / 4)).join(",")}`;
@@ -17,16 +19,23 @@ export async function attachFigures(pdf: Uint8Array, pages: number[], cards: Car
   for (const [page, list] of byPage) {
     const fresh = list.filter((c) => !done.has(keyOf(page, c.figure!.box)));
     const cut = fresh.length ? await cropHints(pdf, page, fresh.map((c) => c.figure!.box as [number, number, number, number]), { frame }) : [];
+    const none = new Set<string>();
     for (const [i, c] of fresh.entries()) {
+      const r = cut[i];
+      if (!("image" in r) || !r.image) { none.add(keyOf(page, c.figure!.box)); continue; } // 힌트를 믿을 수 없음(쪽 전체·너무 가늚)
       const file = `${c.id.replace(/[^\w.-]/g, "_")}.jpg`;
-      await save(file, Buffer.from(cut[i].image.split(",")[1], "base64"));
-      done.set(keyOf(page, c.figure!.box), { file, mode: cut[i].mode === "block" ? "block" : "figure" });
+      await save(file, Buffer.from(r.image.split(",")[1], "base64"));
+      done.set(keyOf(page, c.figure!.box), { file, mode: r.mode === "block" ? "block" : "figure" });
     }
-    for (const c of list) { const d = done.get(keyOf(page, c.figure!.box))!; c.figure = { ...c.figure!, file: d.file, mode: d.mode, from: "hint" }; hinted++; }
+    for (const c of list) {
+      const d = done.get(keyOf(page, c.figure!.box));
+      if (!d) { delete c.figure; continue; }
+      c.figure = { ...c.figure!, file: d.file, mode: d.mode, from: "hint" }; hinted++;
+    }
   }
   // 2) 위치가 없고 인용이 있는 카드: 인용 둘레에 그림이 있을 때만
   const quotes = new Map<number, Array<{ card: Card; quote: string }>>();
-  for (const c of cards) if (!c.figure) for (const e of c.evidence) if (e.quote.trim()) { quotes.set(e.page, [...(quotes.get(e.page) ?? []), { card: c, quote: e.quote }]); break; }
+  for (const c of cards) if (!c.figure && !c.title.startsWith("흐름: ")) for (const e of c.evidence) if (e.quote.trim()) { quotes.set(e.page, [...(quotes.get(e.page) ?? []), { card: c, quote: e.quote }]); break; }
   for (const [page, list] of quotes) {
     const res = await cropQuotes(pdf, page, list.map((x) => x.quote), { frame });
     for (const [i, r] of res.entries()) {
