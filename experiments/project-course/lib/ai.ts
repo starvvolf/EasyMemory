@@ -127,6 +127,20 @@ export async function aiText(purpose: string, system: string, user: string, heav
   }
 }
 
+/** 시험용(11/8 lab 평가): 이 호출만 모델 · 강도를 바꿔 부른다. 제품 흐름에서는 쓰지 않는다 */
+export async function aiWith(purpose: string, system: string, user: string, opts: { model?: string; effort?: string; schema?: Record<string, unknown> }): Promise<{ out: unknown; ms: number }> {
+  if (aiMode() !== "app") throw new AiUnavailable("off", "평가는 실제 AI(로그인)에서만 돌아요.");
+  await budget(purpose);
+  const a = await loadAssist() as unknown as { askText: (p: string, s: string, u: string, o: object) => Promise<string>; askJson: (p: string, s: string, u: string, sc: object, o: object) => Promise<unknown> };
+  const t0 = Date.now();
+  const o = { ...(opts.model ? { model: opts.model } : {}), ...(opts.effort ? { effort: opts.effort } : {}) };
+  try {
+    const out = opts.schema ? await a.askJson(`project-course:${purpose}`, system, user, opts.schema, o) : await a.askText(`project-course:${purpose}`, system, user, o);
+    await count(purpose, true);
+    return { out, ms: Date.now() - t0 };
+  } catch (e) { await count(purpose, false, (e as Error).message); throw explain(e); }
+}
+
 /** 구조화 출력용 스키마 도우미(앱의 S와 같은 꼴). */
 export const S = {
   str: { type: "string" } as const,
