@@ -21,7 +21,8 @@ app.whenReady().then(async () => {
   // 페이지가 밖으로 나가는 요청(외부 스크립트 · 이미지 등)은 막지 않지만, 주 문서는 localhost만
   session.defaultSession.webRequest.onCompleted({ urls: ["*://*/*"] }, (d) => { if (d.resourceType === "mainFrame") status = d.statusCode; });
   const win = new BrowserWindow({ show: false, width: 1100, height: 800, webPreferences: { offscreen: false, sandbox: true, contextIsolation: true, javascript: true } });
-  win.webContents.on("console-message", (_e, level, message, line, source) => { if (consoleMsgs.length < 40) consoleMsgs.push(`${["log", "warn", "error", "error"][level] || "log"}: ${String(message).slice(0, 300)}${source ? ` (${path.basename(String(source))}:${line})` : ""}`); });
+  // Electron 등급: 0 verbose · 1 info · 2 warning · 3 error. Electron 자신의 보안 경고는 학습자 페이지 일이 아니라 뺀다
+  win.webContents.on("console-message", (_e, level, message, line, source) => { if (/Electron Security Warning/i.test(String(message))) return; if (consoleMsgs.length < 40) consoleMsgs.push(`${["log", "log", "warn", "error"][level] || "log"}: ${String(message).slice(0, 300)}${source ? ` (${path.basename(String(source))}:${line})` : ""}`); });
   win.webContents.on("did-fail-load", (_e, code, desc, u, isMain) => { if (isMain) failed = `${desc} (${code})`; });
   win.webContents.on("will-navigate", (e, u) => { if (!LOCAL.test(u)) e.preventDefault(); });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
