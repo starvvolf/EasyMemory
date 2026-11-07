@@ -294,7 +294,7 @@ async function renderEvals(id) {
   if (!evUi.cond || !conds.includes(evUi.cond)) evUi.cond = conds[0];
   const GOLD = { correct: "맞음", partial: "일부만 맞음", incorrect: "틀림", subtle: "미묘하게 틀림", unclear: "근거 부족", not_answer: "답이 아님" };
   const draw = () => {
-    const rows = (r.rows[evUi.cond] ?? []).filter((x) => !evUi.onlyFail || (x.gold && (x.grade?.accepted && x.gold !== "correct" && x.gold !== "not_answer" || x.grade?.leaked)));
+    const rows = (r.rows[evUi.cond] ?? []).filter((x) => !evUi.onlyFail || (x.gold && (x.grade?.accepted && x.gold !== "correct" && x.gold !== "not_answer" || x.grade?.leaked || x.grade?.near)));
     const sm = r.summary?.[evUi.cond] ?? {};
     const box = (cls, who, ...kids) => h("div", { class: `tlbox ${cls}` }, h("div", { class: "tlhead" }, h("span", { class: `tlwho ${cls}` }, who)), ...kids);
     const judgeCase = (x) => { const c = r.cases?.[x.id] ?? {};
@@ -307,7 +307,7 @@ async function renderEvals(id) {
           box("system", "채점", h("div", { class: "tltools" },
             h("span", { class: `tlchip ${x.grade.accepted && x.gold !== "correct" && x.gold !== "not_answer" ? "bad" : "ok"}` }, x.grade.accepted ? "맞다고 받아들임" : "맞다고 안 함"),
             x.gold !== "correct" && x.gold !== "not_answer" ? h("span", { class: `tlchip ${x.grade.pointed_gap ? "ok" : "bad"}` }, x.grade.pointed_gap ? "빠진 곳 짚음" : "빠진 곳 못 짚음") : null,
-            h("span", { class: `tlchip ${x.grade.leaked ? "bad" : "ok"}` }, x.grade.leaked ? "정답 통째로" : "정답 안 줌")), h("div", { class: "small mut" }, x.grade.note)))); };
+            h("span", { class: `tlchip ${x.grade.leaked || x.grade.near ? "bad" : "ok"}` }, x.grade.leaked ? "정답 통째로" : x.grade.near ? "힌트에 정답 핵심" : "정답 안 줌")), h("div", { class: "small mut" }, x.grade.note)))); };
     const recordCase = (x) => h("div", { class: "evcase" }, h("div", { class: "tlflow" }, box("system", "목표", h("b", {}, x.goal), h("span", { class: "tlmetric" }, `${((x.ms ?? 0) / 1000).toFixed(1)}초`)), h("div", { class: "tlarrow" }, "↓"),
       box("button", "정리", h("div", { class: "small" }, `배운 것 ${x.learned} · 부족했던 점 ${x.gaps}${x.withCode ? ` (코드 ${x.withCode})` : ""}: ${(x.gapsOut ?? []).join(" · ")}`)), h("div", { class: "tlarrow" }, "↓"),
       box("system", "채점", h("div", { class: "small" }, `대화에서 찾은 부족함 ${x.found}개 · 놓침 ${x.missed?.length ?? 0}${x.missed?.length ? `: ${x.missed.join(" / ")}` : ""}`), x.unsupported?.length ? h("div", { class: "small" }, `근거 없는 부족함: ${x.unsupported.join(" / ")}`) : null)));
@@ -315,7 +315,7 @@ async function renderEvals(id) {
       h("div", { class: "memhead" }, h("button", { class: "btn small", onclick: () => go("#/evals") }, "← 실험 목록"), h("h1", {}, id.startsWith("judge") ? "답 판정 실험" : "목표 정리 실험")),
       h("div", { class: "tltools" }, conds.map((k) => h("button", { class: `btn small ${k === evUi.cond ? "primary" : ""}`, onclick: () => { evUi.cond = k; draw(); } }, k)),
         id.startsWith("judge") ? h("label", { class: "small" }, h("input", { type: "checkbox", checked: evUi.onlyFail, onchange: (e) => { evUi.onlyFail = e.target.checked; draw(); } }), " 실패만") : null),
-      h("p", { class: "small" }, Object.entries(sm).filter(([kk]) => kk !== "falseAcceptIds").map(([kk, v]) => `${({ falseAccept: "틀린 답 인정", correctAccepted: "맞는 답 인정", pointedGap: "빠진 곳 짚음", leaked: "정답 통째로", handledAsks: "질문에 응함", judgeAgree: "판정 일치", msTutorMedian: "튜터 ms", msJudgeMedian: "판정 ms", gapRecall: "부족함 잡음", unsupportedGaps: "근거 없는 부족함", msMedian: "ms" })[kk] ?? kk} ${v}`).join(" · ")),
+      h("p", { class: "small" }, Object.entries(sm).filter(([kk]) => kk !== "falseAcceptIds").map(([kk, v]) => `${({ falseAccept: "틀린 답 인정", correctAccepted: "맞는 답 인정", pointedGap: "빠진 곳 짚음", leaked: "정답 통째로", nearAnswer: "정답에 가까운 힌트", handledAsks: "질문에 응함", judgeAgree: "판정 일치", msTutorMedian: "튜터 ms", msJudgeMedian: "판정 ms", gapRecall: "부족함 잡음", unsupportedGaps: "근거 없는 부족함", msMedian: "ms" })[kk] ?? kk} ${v}`).join(" · ")),
       ...rows.map((x) => (id.startsWith("judge") ? judgeCase(x) : recordCase(x)))));
   };
   draw();
