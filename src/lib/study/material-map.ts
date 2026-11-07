@@ -35,7 +35,10 @@ export type MaterialMap = {
   counts: Record<MapState, number> & { cards: number; questions: number; core: number };
   /** 공부 화면: the run stopped after its cards; the learner makes the questions from the map (문제 만들기). */
   questionsLater?: boolean;
+  /** 그림 목록 (11/8): 잘린 그림 하나와 그것을 쓰는 카드들(그림 하나가 여러 개념을 설명). 문제 만들 때 같은 그림이 겹치지 않게도 쓴다. */
+  figures?: MapFigure[];
 };
+export type MapFigure = { file: string; page: number; uses: Array<{ cardId: string; role: string; says: string }> };
 
 const norm = (s: string) => s.toLowerCase().replace(/[\s·()[\]{}'"`.,:;!?-]+/g, "");
 const stateOf = (k: MapKnowledge | undefined): MapState => !k ? "new" : k.graduated ? "graduated" : k.state === "known" ? "known" : k.state === "unknown" ? "unknown" : "met";
@@ -103,6 +106,12 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
   for (const c of shown) { counts[c.state]++; counts.questions += c.questions; if (c.core) counts.core++; }
   const pages = state.input.pageNumbers?.length ? Math.max(...state.input.pageNumbers) : Math.max(0, ...state.sections.flatMap((s) => s.pages));
   const principles = (rc.consolidated?.principles ?? []).map((p) => ({ ...p, cardIds: [...new Set(p.cardIds.map(root))].filter((id) => ids.has(id)) })).filter((p) => p.cardIds.length >= 2);
-  return { id: state.id, title, status: state.status, pages, sections, chains, topics, counts, ...(state.input.questionsLater ? { questionsLater: true } : {}),
+  const figs = new Map<string, MapFigure>();
+  for (const section of sections) for (const c of section.cards) if (c.figure) {
+    const f = figs.get(c.figure.file) ?? { file: c.figure.file, page: c.figure.page, uses: [] };
+    f.uses.push({ cardId: c.id, role: c.figure.role, says: c.figure.says }); figs.set(f.file, f);
+  }
+  const figures = [...figs.values()];
+  return { id: state.id, title, status: state.status, pages, sections, chains, topics, counts, ...(figures.length ? { figures } : {}), ...(state.input.questionsLater ? { questionsLater: true } : {}),
     ...(rc.consolidated?.topicNotes ? { topicNotes: rc.consolidated.topicNotes } : {}), ...(principles.length ? { principles } : {}) };
 }

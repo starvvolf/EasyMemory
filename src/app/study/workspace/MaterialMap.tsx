@@ -160,9 +160,11 @@ function streamedItems(text: string): Map<string, OutlineItem[]> {
 const isFlowCard = (c: Card) => c.title.startsWith("흐름: ");
 // 카드에 붙은 그림 (11/8): 잘라 둔 그림 + 역할 + 그림 설명 한 줄. 누르면 원문 쪽으로.
 const FIG_ROLE: Record<string, string> = { 근거: "근거", 장면: "장면", 그림풀이: "그림풀이" };
-function FigureView({ genId, c, onPage }: { genId: string; c: Card; onPage: (page: number) => void }) {
+// 같은 그림을 쓰는 다른 카드(그림 하나가 여러 개념을 설명, 11/8): 이름을 보이고 누르면 그 카드로.
+function FigureView({ genId, c, onPage, all = [], onCard }: { genId: string; c: Card; onPage: (page: number) => void; all?: Card[]; onCard?: (id: string) => void }) {
   if (!c.figure) return null;
   const f = c.figure;
+  const others = all.filter((x) => x.id !== c.id && x.figure?.file === f.file);
   return (
     <figure className={`mm9-fig r-${f.role}`}>
       <button className="mm9-img" onClick={() => onPage(f.page)} title={`원문 p.${f.page}에서 보기`}>
@@ -170,6 +172,9 @@ function FigureView({ genId, c, onPage }: { genId: string; c: Card; onPage: (pag
         <img src={`/api/study-map/${genId}/figure/${encodeURIComponent(f.file)}`} alt={f.says || `p.${f.page} 그림`} loading="lazy" />
       </button>
       <figcaption className="small"><span className="mm9-role">{FIG_ROLE[f.role] ?? f.role}</span>{f.says ? <Rich text={f.says} /> : null}<span className="muted"> · p.{f.page}</span></figcaption>
+      {others.length ? <div className="mm9-share small"><span className="muted">이 그림을 같이 쓰는 카드</span>{others.map((o) => onCard
+        ? <button key={o.id} className="mm3-relchip" onClick={() => onCard(o.id)} title={o.figure?.says || undefined}><Rich text={o.title} /></button>
+        : <span key={o.id} className="mm3-relchip" title={o.figure?.says || undefined}><Rich text={o.title} /></span>)}</div> : null}
     </figure>);
 }
 function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { genId: string; digest: DigestLite | null | undefined; cards: Card[]; making: boolean;
@@ -185,7 +190,7 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
       <div className="mm3-dhead"><b><Rich text={c.title} /></b><span className="mm3-kind">{c.kind}</span>{c.core ? <span className="mm3-kind core">핵심</span> : null}<span className="cs-gap" />
         {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
       <Body s={c.shape} />
-      <FigureView genId={genId} c={c} onPage={onPage} />
+      <FigureView genId={genId} c={c} onPage={onPage} all={cards} onCard={setOpen} />
       {c.questions && onPractice ? <div className="mm3-dfoot"><span className="cs-gap" /><button className="btn small primary" onClick={() => onPractice(c.pages[0], c.id)}>이 기억 문제 풀기 ({c.questions})</button></div> : null}
     </div>);
   const chip = (c: Card) => <button key={c.id} className={`chip mm6-chip${open === c.id ? " on" : ""}${c.core ? " core" : ""}`} aria-expanded={open === c.id}
@@ -410,7 +415,7 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
         <div className="mm3-dhead"><b><Rich text={openCard.title} /></b><span className="mm3-kind">{openCard.kind}</span>{openCard.core ? <span className="mm3-kind core">핵심</span> : null}<span className="cs-gap" />
           {openCard.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}<button className="btn ghost small" onClick={() => setOpen(null)}>닫기</button></div>
         <Body s={openCard.shape} />
-        <FigureView genId={genId} c={openCard} onPage={onPage} />
+        <FigureView genId={genId} c={openCard} onPage={onPage} all={cards} onCard={setOpen} />
         {pairs.some((p) => p.a === openCard.id || p.b === openCard.id) ? <div className="mm3-rel"><span className="mm3-tag">다른 묶음의 짝</span><div className="mm3-relchips">
           {pairs.filter((p) => p.a === openCard.id || p.b === openCard.id).map((p, i) => { const other = p.a === openCard.id ? p.b : p.a; return <button key={i} className="mm3-relchip" onClick={() => setOpen(other)} title={p.why}>
             <Rich text={byId.get(other)?.title ?? ""} />{p.why && p.why.length <= 24 ? <em>{p.why}</em> : null}</button>; })}</div></div> : null}
@@ -619,6 +624,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   }, [genId]);
   useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", esc); return () => document.removeEventListener("keydown", esc); }, [onClose]);
   const titles = useMemo(() => new Map(map?.sections.flatMap((s) => s.cards.map((c) => [c.id, c.title] as const)) ?? []), [map]);
+  const everyCard = useMemo(() => map?.sections.flatMap((s) => s.cards) ?? [], [map]);
   // Where a card leads (→) and what leads to it (←), once each.
   const next = useMemo(() => { const m = new Map<string, Array<{ to: string; what: string; back: boolean }>>();
     for (const c of map?.chains ?? []) { m.set(c.from, [...(m.get(c.from) ?? []), { to: c.to, what: c.what, back: false }]); if (c.by === "meaning") m.set(c.to, [...(m.get(c.to) ?? []), { to: c.from, what: c.what, back: true }]); }
@@ -757,7 +763,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                           {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
                         </div>
                         <Body s={c.shape} />
-                        <FigureView genId={genId} c={c} onPage={onPage} />
+                        <FigureView genId={genId} c={c} onPage={onPage} all={everyCard} onCard={jump} />
                         {links.length ? <div className="mm3-rel"><span className="mm3-tag">이어지는 기억</span>
                           <div className="mm3-relchips">{links.map((x, i) =>
                             <button key={i} className="mm3-relchip" onClick={() => jump(x.to)} title={x.what || undefined}>
