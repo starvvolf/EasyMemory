@@ -577,10 +577,12 @@ async function answerLsp(cmd) {
   let col = cmd.symbol ? text.indexOf(cmd.symbol) : -1;
   if (col < 0) col = text.search(/\S/);
   const pos = new vscode.Position(ln, Math.max(0, col) + (cmd.symbol && col >= 0 ? Math.floor(cmd.symbol.length / 2) : 0));
-  if (cmd.op === "definition") { const r = await locs(await vscode.commands.executeCommand("vscode.executeDefinitionProvider", uri, pos), 10); return r.length ? `정의:\n${r.join("\n")}` : "정의를 못 찾았어요"; }
-  if (cmd.op === "references") { const all = await vscode.commands.executeCommand("vscode.executeReferenceProvider", uri, pos) || []; const r = await locs(all, 30); return r.length ? `쓰인 곳 ${all.length}곳${all.length > 30 ? "(앞 30곳)" : ""}:\n${r.join("\n")}` : "쓰인 곳을 못 찾았어요"; }
+  // 막 연 파일은 언어 서버가 준비 중이라 빈 답을 줄 수 있다(11/8 실측) → 빈 답이면 잠깐 뒤 두 번 더
+  const ask = async (command) => { for (let i = 0; i < 3; i++) { const r = await vscode.commands.executeCommand(command, uri, pos); if (r && r.length) return r; await new Promise((ok) => setTimeout(ok, 1500)); } return []; };
+  if (cmd.op === "definition") { const r = await locs(await ask("vscode.executeDefinitionProvider"), 10); return r.length ? `정의:\n${r.join("\n")}` : "정의를 못 찾았어요"; }
+  if (cmd.op === "references") { const all = await ask("vscode.executeReferenceProvider"); const r = await locs(all, 30); return r.length ? `쓰인 곳 ${all.length}곳${all.length > 30 ? "(앞 30곳)" : ""}:\n${r.join("\n")}` : "쓰인 곳을 못 찾았어요"; }
   if (cmd.op === "hover") {
-    const hs = await vscode.commands.executeCommand("vscode.executeHoverProvider", uri, pos) || [];
+    const hs = await ask("vscode.executeHoverProvider");
     const parts = [];
     for (const h of hs) for (const c of h.contents || []) parts.push(typeof c === "string" ? c : c.value || "");
     return parts.join("\n").trim().slice(0, 3000) || "설명이 없어요";
@@ -589,11 +591,17 @@ async function answerLsp(cmd) {
 }
 /** 디버거로 그 줄에서 멈추고 변수를 본다. 끝나면 중단점을 지우고 세션을 끝낸다 */
 async function debugPeek(cmd, uri, doc) {
+  // 어디서 멈췄는지 알 수 있게 단계를 남기고, 35초 안에 못 끝나면 그 단계를 돌려준다(11/8 실측: 답이 안 옴)
+  const stage = { now: "시작" };
+  return Promise.race([debugPeekRun(cmd, uri, doc, stage), new Promise((ok) => setTimeout(() => ok(`디버거가 35초 안에 끝나지 않았어요(멈춘 단계: ${stage.now})`), 35000))]);
+}
+async function debugPeekRun(cmd, uri, doc, stage) {
   const lang = doc.languageId;
   const type = /javascript|typescript/.test(lang) ? "node" : lang === "python" ? "debugpy" : null;
   if (!type) return `이 언어(${lang})는 디버거 설정이 없어요`;
   if (type === "debugpy" && !vscode.extensions.getExtension("ms-python.debugpy") && !vscode.extensions.getExtension("ms-python.python")) return "VS Code에 Python 확장이 없어 디버거를 못 켜요";
-  const bp = new vscode.SourceBreakpoint(new vscode.Location(uri, new vscode.Position(Math.max(0, cmd.line - 1), 0)), true);
+  const hit = Number(cmd.hit) > 1 ? String(Math.floor(Number(cmd.hit))) : undefined;
+  const bp = new vscode.SourceBreakpoint(new vscode.Location(uri, new vscode.Position(Math.max(0, cmd.line - 1), 0)), true, undefined, hit);
   vscode.debug.addBreakpoints([bp]);
   const name = `Recaller 튜터: ${cmd.file}:${cmd.line}`;
   let session = null, out = "";
@@ -612,11 +620,16 @@ async function debugPeek(cmd, uri, doc) {
       ? { type: "node", request: "launch", name, program: uri.fsPath, cwd: root, console: "internalConsole", skipFiles: ["<node_internals>/**"], ...(lang === "typescript" ? { runtimeArgs: ["--experimental-strip-types"] } : {}) }
       : { type: "debugpy", request: "launch", name, program: uri.fsPath, cwd: root, console: "internalConsole", justMyCode: true };
     const folder = (vscode.workspace.workspaceFolders || [])[0];
-    if (!(await vscode.debug.startDebugging(folder, cfg))) return "디버거를 켜지 못했어요";
-    const hit = await stopped;
-    if (!hit) return `${cmd.line}번째 줄에 닿지 않고 끝났어요.\n출력:\n${out.slice(-2000) || "(없음)"}`;
-    session = hit.s;
-    const st = await session.customRequest("stackTrace", { threadId: hit.thread, startFrame: 0, levels: 1 });
+    stage.now = "디버거 켜는 중";
+    const started = await Promise.race([vscode.debug.startDebugging(folder, cfg), new Promise((ok) => setTimeout(() => ok("timeout"), 15000))]);
+    if (started === "timeout") return `디버거가 15초 안에 켜지지 않았어요(VS Code에 확인 창이 떴을 수 있어요). 출력:\n${out.slice(-1000) || "(없음)"}`;
+    if (!started) return "디버거를 켜지 못했어요";
+    stage.now = "그 줄에 닿기를 기다리는 중";
+    const got = await stopped;
+    if (!got) return `${cmd.line}번째 줄에 닿지 않고 끝났어요.\n출력:\n${out.slice(-2000) || "(없음)"}`;
+    session = got.s;
+    stage.now = "멈춘 곳 변수 읽는 중";
+    const st = await session.customRequest("stackTrace", { threadId: got.thread, startFrame: 0, levels: 1 });
     const frame = st.stackFrames[0];
     const scopes = await session.customRequest("scopes", { frameId: frame.id });
     const lines = [`멈춘 곳: ${where(uri)}:${frame.line}  ${await lineText(uri, frame.line - 1)}`];
@@ -635,7 +648,7 @@ async function debugPeek(cmd, uri, doc) {
     vscode.debug.removeBreakpoints([bp]);
     for (const x of subs) x.dispose();
     const s = session || vscode.debug.activeDebugSession;
-    if (s && s.name === name) await vscode.debug.stopDebugging(s).catch(() => {});
+    if (s && s.name === name) await Promise.race([vscode.debug.stopDebugging(s).catch(() => {}), new Promise((ok) => setTimeout(ok, 3000))]);
   }
 }
 

@@ -20,7 +20,7 @@ export type BridgeCommand =
   | { type: "toast"; text: string }
   | { type: "tour"; file: string; from: number; to: number; label?: string }
   | { type: "tourEnd" }
-  | { type: "lsp"; id: string; op: string; file?: string; line?: number; symbol?: string; expr?: string[] };
+  | { type: "lsp"; id: string; op: string; file?: string; line?: number; symbol?: string; expr?: string[]; hit?: number };
 
 const norm = (p: string) => { const r = path.resolve(p).replace(/\\/g, "/").replace(/\/$/, ""); return process.platform === "win32" ? r.toLowerCase() : r; };
 const states = new Map<string, BridgeState>();
@@ -84,7 +84,7 @@ export function bridgeContext(runId: string) {
 /* ---------- 코드 이해(언어 서버) · 디버거 요청(11/8 결정 8 다음 순서): 서버 → 확장 → 결과 POST ---------- */
 const waiting = new Map<string, (r: unknown) => void>();
 /** 확장에 물어보고 답을 기다린다. 연결이 없거나 시간이 지나면 null */
-export function askBridge(runId: string, req: { op: string; file?: string; line?: number; symbol?: string; expr?: string[] }, ms = 10_000): Promise<unknown | null> {
+export function askBridge(runId: string, req: { op: string; file?: string; line?: number; symbol?: string; expr?: string[]; hit?: number }, ms = 10_000): Promise<unknown | null> {
   const id = Math.random().toString(36).slice(2, 12);
   if (!send(runId, { type: "lsp", id, ...req })) return Promise.resolve(null);
   return new Promise((resolve) => {

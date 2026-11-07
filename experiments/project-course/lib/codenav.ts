@@ -11,8 +11,8 @@ export const CODE_TOOL = {
 } as const;
 export const DEBUG_TOOL = {
   name: "debug_peek",
-  description: "학습자 VS Code의 디버거로 프로그램을 돌려 file의 line(1부터)에서 멈추고, 그때의 지역 변수 값(과 expr에 적은 식의 값)을 본 뒤 끝낸다. 값이 왜 그렇게 되는지 실제로 확인해야 할 때 쓴다. 학습자 화면에서 디버거가 잠깐 켜진다. JavaScript · TypeScript(node) · Python(VS Code Python 확장이 있을 때). 그 줄에 닿지 않으면 출력만 돌려준다.",
-  properties: { file: str, line: { type: "integer" }, expr: { type: "array", items: str } }, required: ["file", "line", "expr"],
+  description: "학습자 VS Code의 디버거로 프로그램을 돌려 file의 line(1부터)에서 멈추고, 그때의 지역 변수 값(과 expr에 적은 식의 값)을 본 뒤 끝낸다. 값이 왜 그렇게 되는지 실제로 확인해야 할 때 쓴다. 학습자 화면에서 디버거가 잠깐 켜진다. 반복문 안에서 n번째로 지날 때 보려면 hit에 n(처음이면 1). JavaScript · TypeScript(node) · Python(VS Code Python 확장이 있을 때). 그 줄에 닿지 않으면 출력만 돌려준다.",
+  properties: { file: str, line: { type: "integer" }, hit: { type: "integer" }, expr: { type: "array", items: str } }, required: ["file", "line", "hit", "expr"],
 } as const;
 
 const fmt = (v: unknown) => typeof v === "string" ? v : JSON.stringify(v, null, 1);
@@ -26,7 +26,7 @@ export async function codeNavTool(runId: string, input: Record<string, unknown>)
 export async function debugPeekTool(runId: string, input: Record<string, unknown>): Promise<string> {
   if (!connected(runId)) return "VS Code가 이 작업 폴더로 연결돼 있지 않아 디버거를 쓸 수 없어요. run_command로 출력을 보세요.";
   const expr = (Array.isArray(input.expr) ? input.expr : []).map(String).filter(Boolean).slice(0, 8).map((e) => e.slice(0, 200));
-  const r = await askBridge(runId, { op: "debug", file: String(input.file ?? ""), line: Number(input.line) || 1, expr }, 40_000);
+  const r = await askBridge(runId, { op: "debug", file: String(input.file ?? ""), line: Number(input.line) || 1, hit: Math.max(1, Math.min(1000, Number(input.hit) || 1)), expr }, 40_000);
   if (r === null) return "디버거가 40초 안에 답하지 않았어요. run_command로 출력을 보세요.";
   return fmt(r).slice(0, 6000);
 }
