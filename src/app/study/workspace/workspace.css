@@ -839,6 +839,7 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm8-kids{display:flex;flex-wrap:wrap;gap:12px;align-items:stretch}
 .dejipgi .mm8-cards{display:flex;flex-wrap:wrap;gap:5px}
 .dejipgi .mm8-pill{position:relative;z-index:2;font-size:12px;line-height:1.3;padding:3px 9px;border-radius:8px;border:1px solid var(--line);background:var(--panel,#fff);color:inherit;cursor:pointer;text-align:left}
+.dejipgi .mm8-fig{margin-left:4px;font-size:10px;color:var(--accent);opacity:.8}
 .dejipgi .mm8-pill.core{font-weight:600;border-color:color-mix(in srgb,var(--accent) 22%,var(--line))}
 .dejipgi .mm8-pill.on,.dejipgi .mm8-pill:hover{outline:2px solid var(--accent)}
 .dejipgi .mm8-pill.lit{background:color-mix(in srgb,#f2c94c 35%,var(--panel,#fff))}

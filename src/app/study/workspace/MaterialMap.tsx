@@ -346,7 +346,7 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
   const litCards = new Set(hover?.card ? [hover.card, ...pairs.filter((p) => p.a === hover.card || p.b === hover.card).map((p) => (p.a === hover.card ? p.b : p.a))] : []);
   const pill = (c: Card) => <button key={c.id} data-c={c.id} className={`mm8-pill${c.core ? " core" : ""}${open === c.id ? " on" : ""}${litCards.has(c.id) ? " lit" : ""}`}
     onClick={() => setOpen(open === c.id ? null : c.id)} title={keyLine(c.shape)}>
-    <Rich text={c.title} />{pairCount.get(c.id) ? <span className="mm8-n" aria-label={`다른 묶음과 연결 ${pairCount.get(c.id)}`}>↔{pairCount.get(c.id)}</span> : null}</button>;
+    <Rich text={c.title} />{c.figure?.file ? <span className="mm8-fig" aria-label="그림 있음">▣</span> : null}{pairCount.get(c.id) ? <span className="mm8-n" aria-label={`다른 묶음과 연결 ${pairCount.get(c.id)}`}>↔{pairCount.get(c.id)}</span> : null}</button>;
   const box = (g: StructGroup, depth: number): ReactNode => {
     const ok = (c: Card | undefined): c is Card => !!c && !isFlowCard(c);
     const head = g.head ? byId.get(g.head) : undefined;
