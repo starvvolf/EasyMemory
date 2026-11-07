@@ -15,7 +15,7 @@ import { labSettings, saveLabChoice } from "@/lib/ai/lab-settings";
 import { ASSIST_CATALOG, GEN_CATALOG, TUTOR_CATALOG } from "@/lib/ai/catalog";
 import { listGens, loadGen, readGenCalls } from "@/lib/study/gen/runner";
 import { genStepLabel } from "@/lib/study/gen/types";
-import { listTrials, runTrial, type TrialBase } from "@/lib/ai/trials";
+import { listPromptVersions, listTrials, runTrial, savePromptVersion, type TrialBase } from "@/lib/ai/trials";
 import { EDITABLE_PROMPTS } from "@/lib/study/gen/prompt-registry";
 
 export const runtime = "nodejs";
@@ -92,6 +92,12 @@ async function handle(request: Request, context: RouteContext) {
         step: z.string().min(1).max(80), note: z.string().max(300).optional(), system: z.string().max(80_000), user: z.string().min(1).max(900_000),
         model: z.string().min(3).max(40), effort: z.enum(["minimal", "low", "medium", "high", "xhigh"]), json: z.boolean() }).parse(await boundedJson(request));
       return json({ trial: await runTrial(b) });
+    }
+    // 지시문 조각 버전 (11/7): GET prompt-versions?key= · POST prompt-versions {key, step, label, text, note}
+    if (p[0] === "prompt-versions" && m === "GET") return json({ versions: await listPromptVersions(z.string().min(1).max(160).parse(q.get("key"))) });
+    if (p[0] === "prompt-versions" && m === "POST") {
+      const b = z.object({ key: z.string().min(1).max(160), step: z.string().max(80), label: z.string().max(120), text: z.string().max(200_000), note: z.string().max(200).optional() }).parse(await boundedJson(request));
+      return json({ version: await savePromptVersion(b) });
     }
     if (p[0] === "practice" && p.length === 1 && m === "GET") return json({ chats: await course("/api/chats") });
     if (p[0] === "practice" && p[1] && p.length === 2 && m === "GET") {

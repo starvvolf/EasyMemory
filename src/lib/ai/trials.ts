@@ -43,3 +43,18 @@ export async function runTrial(input: { base: TrialBase; step: string; note?: st
   await appendFile(file(input.base), JSON.stringify(t) + "\n", "utf8");
   return t;
 }
+
+// 지시문 조각의 버전 (11/7 사용자 "폴더 같은 버튼 — 이전 지시문 버전 정리"): 실험실 상자에서 조각을 고치고 [완료]를 누를 때마다
+// <data>/lab/prompt-versions/<조각 열쇠>.jsonl에 한 줄. 제품 지시문은 바꾸지 않는다(시도에 쓰는 초안의 기록).
+export type PromptVersion = { id: string; at: string; key: string; step: string; label: string; text: string; note: string };
+const vfile = (key: string) => path.join(dataDir(), "lab", "prompt-versions", `${key.replace(/[^\w:#.-]/g, "_").replace(/[:#]/g, "-").slice(0, 120)}.jsonl`);
+export async function listPromptVersions(key: string): Promise<PromptVersion[]> {
+  const text = await readFile(vfile(key), "utf8").catch(() => "");
+  return text.split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l) as PromptVersion; } catch { return null; } }).filter((x): x is PromptVersion => !!x);
+}
+export async function savePromptVersion(v: { key: string; step: string; label: string; text: string; note?: string }): Promise<PromptVersion> {
+  const row: PromptVersion = { id: newCallId(), at: new Date().toISOString(), key: v.key, step: v.step, label: v.label, text: v.text, note: (v.note ?? "").slice(0, 200) };
+  await mkdir(path.dirname(vfile(v.key)), { recursive: true });
+  await appendFile(vfile(v.key), JSON.stringify(row) + "\n", "utf8");
+  return row;
+}

@@ -67,15 +67,16 @@ export function Facts({ model, effort, ms, first, tokens, cost }: { model?: stri
 }
 
 /** 호출 하나: 무엇을 하는 호출인지(대장 요약) → 숫자 → 입력 → 출력 → 지시문 원문 */
-export function CallView({ entry, label, facts, system, user, reply, error, extra, prompts = [] }: { entry?: Entry | null; label: string; facts: Parameters<typeof Facts>[0];
-  system: string; user: string; reply: string; error?: string | null; extra?: ReactNode; prompts?: NamedPrompt[] }) {
+export function CallView({ entry, label, facts, system, user, reply, error, extra, prompts = [], onPrompts }: { entry?: Entry | null; label: string; facts: Parameters<typeof Facts>[0];
+  system: string; user: string; reply: string; error?: string | null; extra?: ReactNode; prompts?: NamedPrompt[]; /** 지시문 상자 열기(11/7). 없으면 예전 전체 화면 보기 */ onPrompts?: () => void }) {
   const [raw, setRaw] = useState(false);
   const userMarked = !raw && hasMarks(user, prompts), sysMarked = !raw && hasMarks(system, prompts);
   const [big, setBig] = useState(false);
   const colors = useMemo(() => colorMap([system, user], prompts), [system, user, prompts]);
   return <div className="ai-call">
     <div className="ai-call-head"><h3>{entry?.title ?? label}</h3><code className="muted">{label}</code></div>
-    {entry ? <p className="ai-does"><b>지시문 요약</b> {entry.does}</p> : null}
+    {entry ? <button type="button" className="ai-does ai-does-btn" onClick={() => (onPrompts ? onPrompts() : setBig(true))} title="눌러서 지시문 보기"><b>지시문 요약</b> {entry.does}<span className="ai-does-go">지시문 보기 ›</span></button>
+      : <button type="button" className="ai-does ai-does-btn" onClick={() => (onPrompts ? onPrompts() : setBig(true))}><b>지시문</b> 눌러서 보기<span className="ai-does-go">지시문 보기 ›</span></button>}
     <Facts {...facts} />
     {extra}
     {error ? <p className="warnline errline">{error}</p> : null}
@@ -84,7 +85,7 @@ export function CallView({ entry, label, facts, system, user, reply, error, extr
         {raw ? <pre>{user}</pre> : userMarked ? <Marked text={user} prompts={prompts} colors={colors} dataLabel="자료 · 앞 단계 결과" /> : <Readable text={user} />}</section>
       <section><h4>나온 것 {entry?.output ? <small>· {entry.output}</small> : null} <small className="num">{reply.length.toLocaleString()}자</small></h4>{raw ? <pre>{reply}</pre> : reply ? <Readable text={reply} /> : <p className="muted">(답 없음)</p>}</section>
     </div>
-    <div className="row"><button className="btn small" onClick={() => setBig(true)}>지시문 크게 보기</button><label className="chip"><input type="checkbox" checked={raw} onChange={(e) => setRaw(e.target.checked)} /> 원문 그대로</label></div>
+    <div className="row"><button className="btn small" onClick={() => (onPrompts ? onPrompts() : setBig(true))}>지시문 보기·고치기</button><label className="chip"><input type="checkbox" checked={raw} onChange={(e) => setRaw(e.target.checked)} /> 원문 그대로</label></div>
     {big ? <PromptViewer title={entry?.title ?? label} system={system} user={user} prompts={prompts} onClose={() => setBig(false)} /> : null}
     <details className="block" open={userMarked}><summary><span>지시문 (system){sysMarked ? " · 이름 붙은 지시문마다 색" : ""}</span><small className="num">{system.length.toLocaleString()}자</small></summary>
       {sysMarked ? <div className="pad"><Marked text={system} prompts={prompts} colors={colors} dataLabel="지시문 · 코드가 붙인 것" readable={false} /></div> : <pre>{system || "(이 기록에는 없음)"}</pre>}</details>
@@ -95,7 +96,7 @@ export function CallView({ entry, label, facts, system, user, reply, error, extr
    엔진의 이름 붙은 지시문(prompt-registry) 원문의 줄과 같은 줄을 찾아 그 지시문 색으로 칠한다. 지시문에 없는 줄은 자료(데이터).
    [정리 기준] … 은 출제기준 폴더에서 오는 글이라 원문이 없으니 머리말로 찾는다. */
 export type NamedPrompt = { name: string; label: string; step: string; text: string };
-type Seg = { tag: string | null; label: string; lines: string[] };
+export type Seg = { tag: string | null; label: string; lines: string[] };
 const PALETTE = ["p0", "p1", "p2", "p3", "p4", "p5"];
 // 색은 한 화면 안에서 나오는 순서대로 정한다(system → user). 그래서 한 호출 안의 지시문끼리는 늘 다른 색이다.
 export function colorMap(texts: string[], prompts: NamedPrompt[]): Record<string, string> {
@@ -103,7 +104,8 @@ export function colorMap(texts: string[], prompts: NamedPrompt[]): Record<string
   for (const t of texts) for (const s of splitByPrompt(t, prompts)) if (s.tag && !names.includes(s.tag)) names.push(s.tag);
   return Object.fromEntries(names.map((n, i) => [n, PALETTE[i % PALETTE.length]]));
 }
-export function splitByPrompt(text: string, prompts: NamedPrompt[]): Seg[] {
+/** keepAll: 빈 줄만 있는 조각도 남긴다 — 조각을 다시 이어 붙이면 원래 글과 똑같아진다(고치기용). */
+export function splitByPrompt(text: string, prompts: NamedPrompt[], keepAll = false): Seg[] {
   // 같은 줄이 여러 지시문에 있으면(공통 머리말, 작업 지시의 변형들) 이 글과 가장 많이 겹치는 지시문에 준다.
   const keys = new Set(text.split("\n").map((l) => l.trim()).filter((k) => k.length >= 8));
   const lineSets = prompts.map((p) => new Set(p.text.split("\n").map((l) => l.trim()).filter((k) => k.length >= 8)));
@@ -124,7 +126,7 @@ export function splitByPrompt(text: string, prompts: NamedPrompt[]): Seg[] {
     const tag = p?.name ?? (k === "" && last ? last.tag : null);
     if (last && last.tag === tag) last.lines.push(line); else segs.push({ tag, label: p?.label ?? (tag ? last?.label ?? "" : ""), lines: [line] });
   }
-  return segs.filter((s) => s.lines.join("").trim());
+  return keepAll ? segs : segs.filter((s) => s.lines.join("").trim());
 }
 /** 색으로 나눈 글. data = 지시문이 아닌 부분을 어떻게 보일지(넣은 것은 Readable, 지시문 칸은 그대로). */
 export function Marked({ text, prompts, dataLabel, readable = true, colors }: { text: string; prompts: NamedPrompt[]; dataLabel: string; readable?: boolean; colors?: Record<string, string> }) {

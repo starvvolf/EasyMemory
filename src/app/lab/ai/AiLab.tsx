@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../lab.css";
 import "./ai.css";
-import { TrialPanel } from "./trials";
+import { CallBlock } from "./editor";
 import { CallView, modelClass, num, sec, short, usd, type Entry, type NamedPrompt, type Tok } from "./view";
 
 type Catalog = { assist: Record<string, Entry>; gen: Record<string, Entry>; genLabels: Record<string, string>; tutor: Entry; genPrompts: NamedPrompt[];
@@ -150,13 +150,12 @@ function StepDetail({ cat, genId, step, n, calls, entry, title, images, onPick }
     {calls.length > 1 ? <div className="calls" style={{ padding: "10px 16px 0" }}>{calls.map((c) => <button key={c.n} aria-pressed={c.n === pick} onClick={() => onPick(c.n)}>
       {c.sectionId ?? `#${c.n}`} <small className="num">{sec(c.ms)}</small>{c.ok ? null : " ⚠"}</button>)}</div> : null}
     <div className="pane">{err ? <p className="warnline errline">{err}</p> : null}
-      {full && one && full.n === pick ? <CallView entry={entry} label={`${step}${full.sectionId ? ` · ${full.sectionId}` : ""} · #${full.n}${full.attempt > 1 ? ` (다시 ${full.attempt})` : ""}`}
+      {full && one && full.n === pick ? <CallBlock key={`${genId}:${pick}`} entry={entry} label={`${step}${full.sectionId ? ` · ${full.sectionId}` : ""} · #${full.n}${full.attempt > 1 ? ` (다시 ${full.attempt})` : ""}`}
         facts={{ model: one.model, effort: one.effort, ms: one.ms, first: one.firstTextMs, tokens: tokOf(one.usage), cost: one.cost }}
-        system={full.system} user={full.user} reply={full.reply ?? ""} error={full.error} prompts={cat?.genPrompts ?? []}
-        extra={images ? <p className="purpose">이 호출에는 그림 쪽 이미지 {images}장이 같이 갔다(넣은 것의 글에는 안 보임).</p> : null} /> : <p className="muted">읽는 중…</p>}
-      {full && one && full.n === pick ? <TrialPanel key={`${genId}:${pick}`} base={{ kind: "gen", genId, n: full.n }} step={step} prompts={cat?.genPrompts ?? []} models={cat?.models ?? []} efforts={cat?.efforts ?? ["low", "medium", "high"]}
-        images={Boolean(images) || ["rc-organize", "rc-intent", "rc-digest-card"].includes(step)}
-        orig={{ system: full.system, user: full.user, reply: full.reply ?? "", model: one.model, effort: one.effort, ms: one.ms, first: one.firstTextMs, tokens: tokOf(one.usage), cost: one.cost }} /> : null}
+        system={full.system} user={full.user} reply={full.reply ?? ""} error={full.error} prompts={cat?.genPrompts ?? []} step={step}
+        extra={images ? <p className="purpose">이 호출에는 그림 쪽 이미지 {images}장이 같이 갔다(넣은 것의 글에는 안 보임).</p> : null}
+        trial={{ base: { kind: "gen", genId, n: full.n }, models: cat?.models ?? [], efforts: cat?.efforts ?? ["low", "medium", "high"], images: Boolean(images) || ["rc-organize", "rc-intent", "rc-digest-card"].includes(step),
+          orig: { system: full.system, user: full.user, reply: full.reply ?? "", model: one.model, effort: one.effort, ms: one.ms, first: one.firstTextMs, tokens: tokOf(one.usage), cost: one.cost } }} /> : <p className="muted">읽는 중…</p>}
     </div>
   </section>;
 }
@@ -228,10 +227,10 @@ function RecDialog({ cat, rec, entry, onClose }: { cat: Catalog | null; rec: Rec
   const c = full ?? rec;
   return <div className="scrim" onClick={onClose}><div className="dialog ai-dialog" onClick={(e) => e.stopPropagation()}>
     <div className="dh"><h3>{entry?.title ?? rec.purpose}</h3><button className="btn small" onClick={onClose}>닫기</button></div>
-    <div className="db">{full ? <CallView entry={entry} label={`${c.purpose}${c.trace?.action ? ` · ${c.trace.action}` : ""}`} facts={{ model: c.model, effort: c.effort, ms: c.ms, first: c.firstTextMs, tokens: c.tokens, cost: c.cost }}
-      system={c.system} user={c.user} reply={c.reply} error={c.error} /> : <p className="muted">읽는 중…</p>}
-      {full ? <TrialPanel base={{ kind: "call", id: c.id }} step={c.purpose} models={cat?.models ?? []} efforts={cat?.efforts ?? ["low", "medium", "high"]}
-        orig={{ system: c.system, user: c.user, reply: c.reply, model: c.model, effort: c.effort, ms: c.ms, first: c.firstTextMs, tokens: c.tokens, cost: c.cost }} /> : null}</div>
+    <div className="db">{full ? <CallBlock key={c.id} entry={entry} label={`${c.purpose}${c.trace?.action ? ` · ${c.trace.action}` : ""}`} facts={{ model: c.model, effort: c.effort, ms: c.ms, first: c.firstTextMs, tokens: c.tokens, cost: c.cost }}
+      system={c.system} user={c.user} reply={c.reply} error={c.error} prompts={[]} step={c.purpose}
+      trial={{ base: { kind: "call", id: c.id }, models: cat?.models ?? [], efforts: cat?.efforts ?? ["low", "medium", "high"],
+        orig: { system: c.system, user: c.user, reply: c.reply, model: c.model, effort: c.effort, ms: c.ms, first: c.firstTextMs, tokens: c.tokens, cost: c.cost } }} /> : <p className="muted">읽는 중…</p>}</div>
   </div></div>;
 }
 
