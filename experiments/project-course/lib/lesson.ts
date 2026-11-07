@@ -392,6 +392,7 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
 const recordJobs = new Map<string, Promise<unknown>[]>();
 export async function endLearning(runId: string) {
   const run = await getRun(runId);
+  (await import("./shell.ts")).stopBackground(runId); // 튜터가 뒤에서 켜 둔 서버 끄기
   if (!run.codexId && !run.chatId) throw err(400, "대화로 하는 실습이 아니에요.");
   const G = await import("./goals.ts");
   const before = await G.goalsOf(runId);

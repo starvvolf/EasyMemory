@@ -55,3 +55,10 @@ test("npm 설치는 작업 폴더에 package.json을 먼저 만든다", async ()
   assert.match(d.say!, /빈 package.json/);
   assert.ok((await import("node:fs")).existsSync(path.join(w, "package.json")));
 });
+test("뒤에서 켜 두는 명령은 처음 출력만 돌려주고 끌 수 있다", async () => {
+  const { execBackground, stopBackground } = await import("../lib/shell.ts");
+  await writeFile(path.join(ws, "srv.js"), "console.log('켜짐'); setInterval(() => {}, 1000);");
+  const r = await execBackground("r6", "node srv.js", ws, 1500);
+  assert.equal(r.running, true); assert.match(r.out, /켜짐/);
+  assert.equal(stopBackground("r6"), 1);
+});

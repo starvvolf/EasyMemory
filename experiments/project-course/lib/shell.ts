@@ -15,11 +15,11 @@ const SHELL_NAME = process.platform === "win32" ? "Windows cmd" : "sh";
 export const SHELL_TOOL = {
   name: "run_command",
   description: `학습자의 작업 폴더에서 터미널 명령 하나를 돌리고 출력을 본다(${SHELL_NAME}). 코드 실행 · 테스트 · 파일 목록 · git status/diff/log처럼 작업 폴더 안에서 읽거나 돌려 보기만 하는 명령은 바로 돌고 결과가 돌아온다. 설치(npm/pip install 등) · git commit/push/reset 같은 기록을 바꾸는 명령 · 지우기 · 작업 폴더 밖을 건드리는 명령은 학습자에게 먼저 묻는다(화면에 [실행] / [안 함]이 뜬다). 그때는 무엇을 왜 돌리려는지 한 줄 말하고 학습자의 선택을 기다린다. 학습자가 직접 쳐 보며 익히는 게 목표인 명령이나 학습자가 하려던 명령은 먼저 돌리지 말고 학습자에게 쳐 보게 한다. why에는 이 명령으로 무엇을 확인하려는지 한 문장.`,
-  properties: { command: str, why: str }, required: ["command", "why"],
+  properties: { command: str, why: str, background: { type: "boolean", description: "서버처럼 끝나지 않고 계속 도는 명령이면 true(뒤에서 켜 두고 처음 몇 초 출력만 돌려준다. 같은 명령을 다시 켜면 앞의 것은 끈다)" } }, required: ["command", "why", "background"],
 } as const;
 
 export type Kind = "auto" | "ask";
-export type Pending = { id: string; command: string; why: string; reason: string; at: string };
+export type Pending = { id: string; command: string; why: string; reason: string; at: string; background?: boolean };
 export type Ran = { command: string; by: "auto" | "learner-ok" | "learner"; code: number | null; out: string; ms: number; at: string; cwd?: string; told?: boolean };
 type ShellState = { pending: Pending | null; history: Ran[]; refused: { command: string; at: string; told?: boolean }[] };
 const file = (runId: string) => path.join(DATA, "shell", `${runId}.json`);
@@ -109,6 +109,34 @@ export function exec(command: string, ws: string, ms = 60_000): Promise<{ code: 
     ch.on("close", (code) => { clearTimeout(timer); resolve({ code, out, ms: Date.now() - t0 }); });
   });
 }
+/** 뒤에서 켜 둔 명령(서버 등): 진행 기록마다. 같은 명령을 다시 켜면 앞의 것을 끈다. 코스 서버가 꺼지면 같이 끈다 */
+const bg = new Map<string, Map<string, ReturnType<typeof spawn>>>();
+function killTree(ch: ReturnType<typeof spawn>) {
+  if (ch.exitCode !== null || !ch.pid) return;
+  if (process.platform === "win32") spawn("taskkill", ["/pid", String(ch.pid), "/T", "/F"], { windowsHide: true }); else { try { process.kill(-ch.pid); } catch { ch.kill(); } }
+}
+process.on("exit", () => { for (const m of bg.values()) for (const ch of m.values()) killTree(ch); });
+export function execBackground(runId: string, command: string, ws: string, firstMs = 3000): Promise<{ code: number | null; out: string; ms: number; running: boolean }> {
+  const t0 = Date.now();
+  const mine = bg.get(runId) ?? new Map(); bg.set(runId, mine);
+  const old = mine.get(command); if (old) killTree(old);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !SECRET.test(k)));
+  const ch = spawn(command, { cwd: ws, shell: true, windowsHide: true, detached: process.platform !== "win32", env: { ...env, FORCE_COLOR: "0", NO_COLOR: "1" } });
+  mine.set(command, ch);
+  let out = "";
+  const add = (b: Buffer) => { if (out.length < 20_000) out += b.toString("utf8"); };
+  ch.stdout?.on("data", add); ch.stderr?.on("data", add);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (running: boolean, code: number | null) => { if (settled) return; settled = true; resolve({ code, out, ms: Date.now() - t0, running }); };
+    ch.on("close", (code) => { if (mine.get(command) === ch) mine.delete(command); finish(false, code); });
+    ch.on("error", (e) => { out += `실행하지 못했어요: ${e.message}`; finish(false, null); });
+    setTimeout(() => finish(true, null), firstMs);
+  });
+}
+export function stopBackground(runId: string) { const m = bg.get(runId); if (!m) return 0; const n = m.size; for (const ch of m.values()) killTree(ch); m.clear(); return n; }
+const bgResult = (r: { code: number | null; out: string; running: boolean }) => r.running ? `뒤에서 켜 두었어요(계속 도는 중). 처음 ${Math.round(3)}초 출력:\n${clip(r.out, 2000) || "(출력 없음)"}` : `곧바로 끝났어요(종료 코드 ${r.code ?? "없음"})\n${clip(r.out) || "(출력 없음)"}`;
+
 /** 모델 · 화면에 보낼 출력: 앞뒤를 남기고 가운데를 줄인다 */
 export function clip(out: string, n = 4000) {
   const t = out.replace(/\x1b\[[0-9;]*m/g, "").trimEnd();
@@ -126,10 +154,15 @@ export async function runCommandTool(runId: string, ws: string | undefined, inpu
   if (s.pending) return `학습자가 아직 \`${s.pending.command}\` 실행 여부를 고르지 않았어요. 고를 때까지 기다린다.`;
   const c = classify(command, ws);
   if (c.kind === "ask") {
-    await update<ShellState>(file(runId), empty(), (st) => { st.pending = { id: Math.random().toString(36).slice(2, 10), command, why, reason: c.reason, at: new Date().toISOString() }; });
+    await update<ShellState>(file(runId), empty(), (st) => { st.pending = { id: Math.random().toString(36).slice(2, 10), command, why, reason: c.reason, at: new Date().toISOString(), ...(input.background === true ? { background: true } : {}) }; });
     return `학습자에게 먼저 묻는 명령이에요(${c.reason}). 화면에 [실행] / [안 함]을 띄웠어요. 답에서는 무엇을 왜 돌리려는지 한 줄로 말하고 이번 답을 마친다. 학습자가 고르면 결과를 알려 준다.`;
   }
   const pre = await ownPackageJson(command, ws);
+  if (input.background === true) {
+    const b = await execBackground(runId, command, ws);
+    await remember(runId, { command: `${command} (뒤에서)`, by: "auto", code: b.code, out: b.out, ms: b.ms, at: new Date().toISOString() });
+    return pre + bgResult(b);
+  }
   const r = await exec(command, ws);
   await remember(runId, { command, by: "auto", code: r.code, out: r.out, ms: r.ms, at: new Date().toISOString() });
   return pre + result(r);
@@ -144,6 +177,11 @@ export async function decide(runId: string, ws: string | undefined, id: string, 
   if (!ok || !ws) return { say: null, label: "명령 안 함", text: p.command };
   // 설치는 오래 걸릴 수 있어 학습자가 허락한 명령은 3분까지
   const pre = await ownPackageJson(p.command, ws);
+  if (p.background) {
+    const b = await execBackground(runId, p.command, ws);
+    await remember(runId, { command: `${p.command} (뒤에서)`, by: "learner-ok", code: b.code, out: b.out, ms: b.ms, at: new Date().toISOString() });
+    return { say: `[명령 실행함 — 학습자가 허락] \`${p.command}\`\n${pre}${bgResult(b)}\n\n이 결과를 보고 이어 가 주세요.`, label: "명령 실행", text: `${p.command} → ${b.running ? "뒤에서 도는 중" : `종료 코드 ${b.code ?? "없음"}`}` };
+  }
   const r = await exec(p.command, ws, 180_000);
   await remember(runId, { command: p.command, by: "learner-ok", code: r.code, out: r.out, ms: r.ms, at: new Date().toISOString() });
   return { say: `[명령 실행함 — 학습자가 허락] \`${p.command}\`\n${pre}${result(r)}\n\n이 결과를 보고 이어 가 주세요.`, label: "명령 실행", text: `${p.command} → 종료 코드 ${r.code ?? "없음"}` };
