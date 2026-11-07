@@ -361,6 +361,7 @@ async function recordFinished(runId: string, run: { codexId?: string; chatId?: s
  * 학습 종료(11/6 사용자 "도중에 학습 종료 버튼. 끄면서 알아서 처리할 거 정리하면서 로딩 살짝 걸리고 종료"):
  * 하던 목표를 지금까지로 닫고 → 그 목표 정리(+ 학습자 메모리 갱신, AI 1번, 목표가 있을 때만) → 앱 지식으로 넣기(앱이 켜져 있으면, 앱의 sync가 넣는다).
  */
+const recordJobs = new Map<string, Promise<unknown>[]>();
 export async function endLearning(runId: string) {
   const run = await getRun(runId);
   if (!run.codexId && !run.chatId) throw err(400, "대화로 하는 실습이 아니에요.");
@@ -373,13 +374,14 @@ export async function endLearning(runId: string) {
     const rec = await R.recordGoal(runId, before.current, before.mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId)).catch(() => null);
     if (rec) recorded = { goal: rec.goal, learned: rec.learned.length, gaps: rec.gaps?.length ?? 0, memory: rec.memory?.done.length ?? 0 };
   }
+  await Promise.all(recordJobs.get(runId) ?? []); recordJobs.delete(runId);
   await saveRun(runId, (r) => { (r as { endedAt?: string }).endedAt = new Date().toISOString(); });
   // 앱 지식 넣기: 코스 서버는 앱 데이터에 직접 쓰지 않는다 → 앱의 sync 주소를 불러 앱이 넣게 한다.
   // 앱은 POST에 같은 출처(origin)를 요구한다(local-experiment-mode isSameOriginExperimentMutation) → 앱 주소를 origin으로(11/6 한 바퀴 점검에서 synced null)
   const app = (process.env.PROJECT_APP_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
   const synced = await fetch(`${app}/api/project-course/sync`, { method: "POST", headers: { "content-type": "application/json", origin: app }, body: JSON.stringify({ runId }), signal: AbortSignal.timeout(30000) })
     .then(async (r) => (r.ok ? ((await r.json()) as { runs?: { items: number; created: number }[] }).runs?.[0] ?? null : null)).catch(() => null);
-  await (await import("./timeline.ts")).systemStep(runId, "학습 종료", { recorded, synced });
+  await (await import("./timeline.ts")).systemStep(runId, "학습 종료", { recorded, synced }, undefined, "button");
   notifyLesson(runId);
   return { recorded, synced };
 }
@@ -463,7 +465,8 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     const say = await (await import("./goals.ts")).goalAction(runId, op, input as Record<string, unknown>);
     if (!say) await TL.endStep(runId);
     // 11/5 사용자 "각 목표가 끝나면 쭉 대화 기록 받아서 정리(학습자가 어떤 절차를 거쳐서 뭘 배웠는지)": 뒤에서 한 번
-    if (before?.current) void recordFinished(runId, run, before.current, before.mode);
+    // 학습 종료가 이 정리를 기다렸다가 앱에 넣도록 붙잡아 둔다(11/8 타임라인에서 정리 전에 넣기가 돌아 0개)
+    if (before?.current) { const job = recordFinished(runId, run, before.current, before.mode).catch(() => {}); recordJobs.set(runId, [...(recordJobs.get(runId) ?? []), job]); }
     notifyLesson(runId);
     if (say) { if (run.codexId) await codexAsk(runId, run.codexId, say); else await chatAsk(runId, run.chatId!, say); }
     return;

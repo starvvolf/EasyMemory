@@ -131,8 +131,8 @@ export async function endStep(runId: string) {
   } catch { return null; }
 }
 /** 뒤에서 돈 일(목표 정리 등)을 한 칸으로 */
-export async function systemStep(runId: string, label: string, extra: Record<string, unknown>, ms?: number) {
-  try { const now = new Date().toISOString(); return await append(runId, { at: now, endAt: now, trigger: { kind: "system", label }, reply: "", tools: [], usage: ms ? { input: 0, cached: 0, output: 0, ms } : null, state: await snapshot(runId), extra }); } catch { return null; }
+export async function systemStep(runId: string, label: string, extra: Record<string, unknown>, ms?: number, kind: Trigger["kind"] = "system") {
+  try { const now = new Date().toISOString(); return await append(runId, { at: now, endAt: now, trigger: { kind, label }, reply: "", tools: [], usage: ms ? { input: 0, cached: 0, output: 0, ms } : null, state: await snapshot(runId), extra }); } catch { return null; }
 }
 
 export async function stepsOf(runId: string): Promise<Step[]> {
