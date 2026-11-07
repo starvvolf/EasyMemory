@@ -195,6 +195,9 @@ export const QUIZ_SYSTEM = `너는 대학 강의 자료로 복습 문제를 만�
 - level: 2 알아보기 · 3 구별하기 · 4 적용하기(상황·계산) · 5 잇기. 받은 level에 맞춘다.
   - 4·5는 풀이에 두 단계 넘게 써야 한다. 답이 문제에 이미 주어진 값(끝점, 시작점, 주어진 수)이거나 한 번 보고 바로 나오면 실패다.
 - 오답 보기는 카드의 mistakes(헷갈리기 쉬운 점)에서 가져온다. 정답이 문장 길이나 말투로 드러나지 않게, 보기끼리 같은 말을 되풀이하지 않게.
+- 답이 문제 글에 드러나면 실패다: 정답 보기가 문제 글의 말을 그대로 되풀이하지 않는다(문제가 "사전 정보를 요구하는 방법은?"이면 보기에 "사전 정보를 요구한다"를 쓰지 않는다).
+  상황 문제는 판정의 열쇠(순환이 생겼다, 불안전하다)를 문제 글에 말하지 않는다. 학습자가 주어진 간선·수치에서 그것을 끌어내게 한다.
+- 서로 상관없는 두 값을 더하거나 이어 붙인 억지 문제, 단계 이름의 개수 세기 같은 외우기 문제를 level 4로 내지 않는다.
 - 한국어로 쓴다. 용어는 처음에 "한국어(영어 원어)". 수식·기호·변수는 원문 그대로.
 - answer: ox는 "O" 또는 "X", choice는 정답 보기 번호(1부터), order는 바른 순서의 번호를 쉼표로(예: "3,1,2,4"), short는 답.
 - explain: 왜 그 답인지 두세 문장. 차례·계산이면 단계별 값을 짧게.
@@ -203,10 +206,12 @@ export const QUIZ_SYSTEM = `너는 대학 강의 자료로 복습 문제를 만�
 export const FIGURE_QUIZ = `[그림] 이 문제는 받은 그림을 학습자에게 같이 보여 준다.
 - 그림을 읽어야 풀리게 만든다: 그림 속 요소(정점·간선·화소·좌표·라벨)를 문제가 직접 가리키고, 답이 그림에서 정해지게.
 - 그림에 보이는 이름·수·기호를 그대로 쓴다. 그림에 없는 요소를 있다고 하지 않는다. 그림을 글로 다시 다 풀어 쓰지 않는다(그러면 그림이 필요 없다).
-- figure_read: 그림에서 읽은 것(문제에 쓰는 요소만) 한두 줄. 확인용이다.`;
+- figure_read: 그림에서 읽은 것(문제에 쓰는 요소만) 한두 줄. 확인용이다.
+- figure_text: 그림 안에 적힌 문장·설명 글을 그대로 옮긴다(라벨·변수 이름은 빼고, 없으면 빈 문자열).
+- 그림 안 글이 결론을 말하면(예: "Cycle → unsafe → deny", "So, deny") 그 결론을 묻지 않는다. 그림의 다른 요소(간선 방향, 좌표, 개수)로 묻는다.`;
 const QUIZ_SCHEMA = S.obj({ form: S.oneOf(...FORMS), level: S.int, stem: S.str, options: S.arr(S.str), answer: S.str, explain: S.str, uses: S.arr(S.int) });
-const QUIZ_FIG_SCHEMA = S.obj({ figure_read: S.str, form: S.oneOf(...FORMS), level: S.int, stem: S.str, options: S.arr(S.str), answer: S.str, explain: S.str, uses: S.arr(S.int) });
-export type QuizReply = { form: Form; level: number; stem: string; options: string[]; answer: string; explain: string; uses: number[]; figure_read?: string };
+const QUIZ_FIG_SCHEMA = S.obj({ figure_read: S.str, figure_text: S.str, form: S.oneOf(...FORMS), level: S.int, stem: S.str, options: S.arr(S.str), answer: S.str, explain: S.str, uses: S.arr(S.int) });
+export type QuizReply = { form: Form; level: number; stem: string; options: string[]; answer: string; explain: string; uses: number[]; figure_read?: string; figure_text?: string };
 
 export const SOLVE_SYSTEM = `정답을 모르는 상태에서 문제 하나를 정리된 지식과 원문(source)으로 푼다(원문 글이 비었으면 정리된 지식이 그 쪽 그림에서 읽은 것이다). 그림이 있으면 그림도 본다.
 answer: ox는 "O"/"X", choice는 보기 번호(1부터), order는 바른 순서 번호를 쉼표로, short는 값·낱말만 짧게(문장 말고).
@@ -215,7 +220,20 @@ steps: 답까지 실제로 거친 단계 수(문제에 답이 이미 보이면 0
 const SOLVE_SCHEMA = S.obj({ answer: S.str, steps: S.int, unique: { type: "boolean" }, doubt: S.str });
 export type SolveReply = { answer: string; steps: number; unique: boolean; doubt: string };
 
-export type MadeQuestion = PlanItem & { ok: boolean; held?: string; q?: QuizReply; solved?: SolveReply; blind?: SolveReply; needsFigure?: boolean; tries: number; problems: string[]; ms: number };
+// 답이 엇갈릴 때 (11/8 1회차: 중점 원은 출제 답이 맞고 따로 풀기가 틀렸다, 타원은 출제 답 칸만 틀리고 해설은 맞았다)
+export const JUDGE_SYSTEM = `문제 하나에 출제자 답과 따로 푼 답이 다르다. 정리된 지식·원문(그림이 있으면 그림)으로 직접 다시 풀어 어느 쪽이 맞는지 정한다.
+winner: author(출제자 답이 맞음) · solver(따로 푼 답이 맞음) · neither(둘 다 틀림이거나 문제가 모호함). answer: 맞는 답(값만). why: 한 줄.`;
+const JUDGE_SCHEMA = S.obj({ winner: S.oneOf("author", "solver", "neither"), answer: S.str, why: S.str });
+export type JudgeReply = { winner: "author" | "solver" | "neither"; answer: string; why: string };
+/** 그림 안 글이 답을 말하는지(코드): 정답 보기·답의 낱말이 그림 글에 다 들어 있으면 샌 것으로 본다. */
+export function figureLeaks(q: QuizReply): boolean {
+  const text = q.figure_text?.trim(); if (!text || q.form === "order") return false;
+  const ans = q.form === "choice" ? q.options[Number(q.answer.match(/\d+/)?.[0] ?? 0) - 1] ?? "" : q.form === "ox" ? "" : q.answer;
+  const w = [...words(ans)].filter((x) => !/^\d+$/.test(x)); if (!w.length) return false;
+  const tw = [...words(text.toLowerCase())];
+  return w.every((x) => tw.some((v) => v.includes(x.toLowerCase()) || x.toLowerCase().includes(v)));
+}
+export type MadeQuestion = PlanItem & { ok: boolean; held?: string; q?: QuizReply; solved?: SolveReply; blind?: SolveReply; needsFigure?: boolean; judge?: JudgeReply; easy?: boolean; fixed?: string; tries: number; problems: string[]; ms: number };
 export type QuizRun = { at: string; ms: number; label?: string; plan: QuizPlan; made: MadeQuestion[] };
 export const QUIZ_MODEL = { model: "gpt-6-sol", effort: "low" };
 
@@ -299,24 +317,42 @@ async function makeOne(id: string, map: MaterialMap, it: PlanItem, byId: Map<str
   const images = image ? [{ label: `그림 (원문 p.${it.figure!.page})`, dataUrl: image }] : undefined;
   const problems: string[] = [];
   let revision = "";
-  for (let tries = 1; tries <= (run.noRetry ? 1 : 2); tries++) {
+  const max = run.noRetry ? 1 : 2;
+  let last: MadeQuestion | null = null;
+  for (let tries = 1; tries <= max; tries++) {
     try {
       const user = `자료: ${map.title}\nunit: ${it.unit} (${it.name}) — ${it.ask}\nform: ${it.form} · level: ${it.level}\n\n카드 (번호|종류|내용)\n${lines.join("\n")}\n\nsource\n${source}${revision ? `\n\n고쳐 쓰기: 앞 문제는 이래서 안 됐다 — ${revision}` : ""}`;
       const q = await withTrace({ area: "pdf", action: "quiz-unit", ref: id }, () => ask<QuizReply>(images ? "map:quiz-figure" : "map:quiz-unit", images ? `${QUIZ_SYSTEM}\n\n${FIGURE_QUIZ}` : QUIZ_SYSTEM, user, images ? QUIZ_FIG_SCHEMA : QUIZ_SCHEMA, images));
       if (q.form === "short") q.options = [];
-      const shape = shapeProblem(q, it);
-      if (shape) { problems.push(shape); revision = `${shape} (앞 문제: ${q.stem.slice(0, 200)})`; continue; }
+      const shape = shapeProblem(q, it) ?? (images && figureLeaks(q) ? `그림 안 글("${q.figure_text!.slice(0, 60)}")이 답을 말한다. 그림의 다른 요소로 묻는다.` : null);
+      if (shape) { problems.push(shape); revision = `${shape} (앞 문제: ${q.stem.slice(0, 200)})`; last = { ...it, ok: false, held: shape, q, tries, problems, ms: 0 }; continue; }
       const view = `form: ${q.form}\n${q.stem}${q.options.length ? `\n${q.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}`;
-      const solve = (withImage: boolean) => withTrace({ area: "pdf", action: "quiz-solve", ref: id }, () => ask<SolveReply>("map:quiz-solve", SOLVE_SYSTEM, `${view}\n\n정리된 지식\n${known}\n\nsource\n${source}`, SOLVE_SCHEMA, withImage ? images : undefined));
+      const ctxText = `정리된 지식\n${known}\n\nsource\n${source}`;
+      const solve = (withImage: boolean) => withTrace({ area: "pdf", action: "quiz-solve", ref: id }, () => ask<SolveReply>("map:quiz-solve", SOLVE_SYSTEM, `${view}\n\n${ctxText}`, SOLVE_SCHEMA, withImage ? images : undefined));
       // 그림 문제는 그림 없이도 한 번(그림이 있어야 풀리는지). 둘은 동시에.
       const [solved, blind] = await Promise.all([solve(true), images && !run.noBlind ? solve(false).catch(() => undefined) : Promise.resolve(undefined)]);
-      const agree = sameAnswer(q.form, q.answer, solved.answer);
-      const easy = it.level >= 4 && solved.steps <= 1;
-      const held = !solved.unique ? `답이 하나가 아님: ${solved.doubt}` : !agree ? `따로 푼 답이 다름(${solved.answer} ≠ ${q.answer})` : easy ? `너무 쉬움(풀이 ${solved.steps}단계, level ${it.level})` : undefined;
       const needsFigure = blind ? !(blind.unique && sameAnswer(q.form, q.answer, blind.answer)) : undefined;
-      if (held) { problems.push(held); revision = `${held}. 앞 문제: ${q.stem.slice(0, 300)} / 답 ${q.answer}`; if (tries < (run.noRetry ? 1 : 2)) continue; return { ...it, ok: false, held, q, solved, ...(blind ? { blind, needsFigure } : {}), tries, problems, ms: Date.now() - t }; }
-      return { ...it, ok: true, q, solved, ...(blind ? { blind, needsFigure } : {}), tries, problems, ms: Date.now() - t };
+      let judge: JudgeReply | undefined, fixed: string | undefined;
+      let held: string | undefined = !solved.unique ? `답이 하나가 아님: ${solved.doubt}` : undefined;
+      if (!held && !sameAnswer(q.form, q.answer, solved.answer)) {
+        judge = await withTrace({ area: "pdf", action: "quiz-judge", ref: id }, () => ask<JudgeReply>("map:quiz-judge", JUDGE_SYSTEM, `${view}\n\n출제자 답: ${q.answer}\n출제자 해설: ${q.explain}\n따로 푼 답: ${solved.answer}\n\n${ctxText}`, JUDGE_SCHEMA, images));
+        if (judge.winner === "author" && sameAnswer(q.form, q.answer, judge.answer)) { /* 출제 답이 맞다 */ }
+        // 따로 푼 답이 맞고 출제 해설이 그 답을 말하면 답 칸만 고친다(타원: 답 칸 √21/3, 해설 5√5/3)
+        else if (judge.winner === "solver" && sameAnswer(q.form, solved.answer, judge.answer) && q.form === "short" && nums(solved.answer).every((x) => nums(q.explain).includes(x))) { fixed = `답 ${q.answer} → ${solved.answer}`; q.answer = solved.answer; }
+        else held = `따로 푼 답이 다름(${solved.answer} ≠ ${q.answer}, 판정 ${judge.winner}: ${judge.why})`;
+      }
+      const easy = !held && (solved.steps === 0 || (it.level >= 4 && solved.steps <= 1));
+      // 그림이 있어도 그림 없이 풀리면(그림이 장식) 한 번 고쳐 쓴다
+      const decorative = !held && images && needsFigure === false;
+      const result: MadeQuestion = { ...it, ok: !held, ...(held ? { held } : {}), q, solved, ...(blind ? { blind, needsFigure } : {}), ...(judge ? { judge } : {}), ...(fixed ? { fixed } : {}), ...(easy ? { easy } : {}), tries, problems, ms: Date.now() - t };
+      if ((held || easy || decorative) && tries < max) {
+        const why = held ?? (easy ? `너무 쉽다(풀이 ${solved.steps}단계). 판정의 열쇠를 문제 글에 말하지 말고 학습자가 끌어내게, 단계를 더 쓰게` : "그림 없이도 풀린다. 그림을 읽어야 풀리게(그림 내용을 문제 글에 다 적지 않는다)");
+        problems.push(why); revision = `${why}. 앞 문제: ${q.stem.slice(0, 300)} / 답 ${q.answer}`; last = result; continue;
+      }
+      // 고쳐 쓴 것이 오히려 걸리면, 앞의 것(쉽거나 그림이 장식일 뿐 맞는 문제)을 쓴다
+      return !result.ok && last?.ok ? { ...last, tries, problems, ms: Date.now() - t } : result;
     } catch (error) { problems.push(`실패: ${(error as Error).message}`.slice(0, 200)); }
   }
+  if (last) return { ...last, tries: max, problems, ms: Date.now() - t };
   return { ...it, ok: false, held: problems.at(-1) ?? "실패", tries: run.noRetry ? 1 : 2, problems, ms: Date.now() - t };
 }

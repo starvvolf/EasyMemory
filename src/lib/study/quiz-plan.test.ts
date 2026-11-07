@@ -62,3 +62,10 @@ test("그림 알아보기(코드): 같은 그림을 쓰는 카드는 오답에�
   assert.ok(q && !q.options.includes("이름 t1.1c2"));
   assert.equal(q.options[q.answer - 1], "이름 t1.1c1");
 });
+test("그림 안 글이 답을 말하면 샌 것", async () => {
+  const { figureLeaks } = await import("./quiz-plan.ts");
+  const q = (answer: string, options: string[], figure_text: string) => ({ form: "choice" as const, level: 3, stem: "?", options, answer, explain: "", uses: [], figure_text });
+  assert.ok(figureLeaks(q("2", ["grant", "deny", "wait", "abort"], "If we grant it, a cycle is formed. So, deny!!!")));
+  assert.ok(!figureLeaks(q("2", ["P1", "P2 → R2 요청 간선", "R1", "R2"], "If we grant it, a cycle is formed.")));
+  assert.ok(!figureLeaks(q("1", ["교착 상태"], "")));
+});
