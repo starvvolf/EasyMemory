@@ -40,3 +40,20 @@ test("a head card names its group and is not also a member; versus pairs are kep
   assert.deepEqual(r.versus, [{ a: "t2c2", b: "t3c1", on: "인스턴스 수" }]);
   assert.equal(r.groups.find((g) => g.id === "g_rest"), undefined);
 });
+
+test("a big box: split, in order, or kept — only when every card is used once", async () => {
+  const { applyBox } = await import("./structure.ts");
+  const mk = (): import("./structure.ts").StructGroup[] => [{ id: "g1", name: "원 생성", parent: "", cards: ["a", "b", "c", "d"], members: "묶음", explain: "" }];
+  let gs = mk();
+  assert.equal(applyBox(gs, gs[0], { mode: "나누기", reason: "", parts: [{ name: "방정식", link: "", order: false, cards: [1, 2] }, { name: "중점", link: "", order: true, cards: [4, 3] }] }), true);
+  assert.deepEqual(gs.map((g) => [g.id, g.parent, g.cards.join(""), g.members ?? ""]), [["g1", "", "", "종류"], ["g1_1", "g1", "ab", ""], ["g1_2", "g1", "dc", "순서"]]);
+  gs = mk();
+  assert.equal(applyBox(gs, gs[0], { mode: "차례로", reason: "", parts: [{ name: "문제", link: "x", order: false, cards: [1] }, { name: "해결", link: "문제를 받아", order: false, cards: [2, 3, 4] }] }), true);
+  assert.equal(gs[0].members, "순서"); assert.equal(gs[1].link, undefined); assert.equal(gs[2].link, "문제를 받아");
+  gs = mk();
+  assert.equal(applyBox(gs, gs[0], { mode: "나누기", reason: "", parts: [{ name: "x", link: "", order: false, cards: [1, 2] }, { name: "y", link: "", order: false, cards: [2, 3] }] }), false);
+  assert.deepEqual(gs[0].cards, ["a", "b", "c", "d"]); assert.equal(gs.length, 1);
+  gs = mk();
+  assert.equal(applyBox(gs, gs[0], { mode: "그대로", reason: "", parts: [{ name: "", link: "", order: false, cards: [3, 1, 2, 4] }] }), true);
+  assert.deepEqual(gs[0].cards, ["c", "a", "b", "d"]);
+});

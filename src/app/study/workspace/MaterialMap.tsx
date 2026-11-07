@@ -213,7 +213,7 @@ function OutlinePane({ digest, cards, making, onPage, onPractice }: { digest: Di
 // 카드·상자에 마우스를 올리면(또는 "카드 연결 모두") 선으로. 흐름 카드는 보이지 않는다(카드 만들 때 쓰는 것, 사용자 11/7).
 // 3차 (11/8 사용자 "큰 개념과 작은 개념, 대비, 모두 성립 — 위와 아래를 레이어로"): head는 상자의 대표 카드(상자 머리에 크게),
 // members는 안의 것과 대표의 관계(이루는 것·갈래·모두 성립해야·차례로), versus는 나란히 견주는 카드(같은 상자면 A vs B 한 덩어리).
-type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: string; explain: string };
+type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: string; explain: string; link?: string };
 type StructVersus = { a: string; b: string; on: string };
 const MEMBER_LABEL: Record<string, string> = { 부분: "이루는 것", 종류: "갈래", 모두: "모두 성립해야", 순서: "차례로" };
 const MEMBER_JOIN: Record<string, string> = { 모두: "+", 순서: "→" };
@@ -362,7 +362,7 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
             {it.vs ? <span className="mm8-vs" title={it.vs.on || undefined}>{pill(byId.get(it.vs.a)!)}<span className="mm8-vsmark">vs{it.vs.on ? <em>{it.vs.on}</em> : null}</span>{pill(byId.get(it.vs.b)!)}</span> : pill(it.c!)}
           </span>)}</div> : null}
         {sub.length ? <>{!items.length && rel ? <div className={`mm8-relrow r-${g.members}`}><span className={`mm8-rel r-${g.members}`}>{rel}</span></div> : null}{g.members === "순서" && !items.length
-          ? <div className="mm8-kids seq">{sub.map((k, i) => <Fragment key={k.id}>{i ? <span className="mm8-join seq" aria-hidden>↓</span> : null}{box(k, depth + 1)}</Fragment>)}</div>
+          ? <div className="mm8-kids seq">{sub.map((k, i) => <Fragment key={k.id}>{i ? <span className="mm8-join seq" aria-hidden>↓{k.link ? <em>{k.link}</em> : null}</span> : null}{box(k, depth + 1)}</Fragment>)}</div>
           : <div className="mm8-kids">{sub.map((k) => box(k, depth + 1))}</div>}</> : null}
       </div>);
   };

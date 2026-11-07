@@ -19,11 +19,13 @@ export type EdgeType = (typeof EDGE_TYPES)[number];
 // 견주는 카드 쌍(versus)을 더 받는다.
 export const MEMBER_KINDS = ["부분", "종류", "모두", "순서", "묶음"] as const;
 export type MemberKind = (typeof MEMBER_KINDS)[number];
-export type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: MemberKind; explain: string };
+export type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: MemberKind; explain: string;
+  /** 차례로 세운 단계(11/8 큰 상자 다시 정리): 앞 단계에서 이어받는 것 한 줄 */ link?: string };
 export type StructVersus = { a: string; b: string; on: string };
 export type StructEdge = { a: string; b: string; type: EdgeType; why: string };
 export type StructPair = { a: string; b: string; why: string };
-export type Structure = { at: string; ms: number; model: string; effort: string; sig: string; groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; versus?: StructVersus[]; fixes: string[] };
+export type BoxNote = { box: string; name: string; mode: string; reason: string; ms: number; ok: boolean };
+export type Structure = { at: string; ms: number; model: string; effort: string; sig: string; boxes?: BoxNote[]; groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; versus?: StructVersus[]; fixes: string[] };
 
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 const fileOf = (id: string) => { if (!/^gen_[a-z0-9]{8,64}$/.test(id)) throw Object.assign(new Error("자료 id가 올바르지 않아요."), { status: 400 }); return path.join(dataDir(), "study-gen", id, "structure.json"); };
@@ -175,6 +177,63 @@ export function checkStructure(reply: Reply, ids: string[]): { groups: StructGro
   return { groups, edges, pairs, versus, fixes };
 }
 
+// 큰 상자 다시 정리 (11/8 사용자 "15개가 있더라도 배치나 묶는 거나 중요한 거를 어떻게 정리하느냐에 따라 괜찮아질 수 있다 — 무조건 나누면 안 된다"
+// → 실험: 평면 방정식 9장은 나누기, 브레젠험 12장은 차례로, 원 생성 15장은 나누기 + 그 안 차례로 → "그렇게 가자"): 카드가 6장 넘는 상자만
+// 그 상자 카드로 AI를 한 번씩(동시에) 더 불러, 나누기 / 차례로 / 그대로 중 맞는 것을 고르게 한다. 코드는 몇 개로 나눌지 정하지 않는다.
+// 모든 카드를 정확히 한 번 쓰지 않은 답은 버리고 원래 상자를 둔다.
+export const BOX_LIMIT = 6;
+export const BOX_SYSTEM = `너는 지식 구조 그림의 상자 하나를 다시 정리한다. 이 상자에는 카드가 많아 학습자가 한눈에 보기 어렵다.
+상자 안 카드들을 보고, 이 상자에 맞는 정리 방식을 셋 중 하나 고른다. 억지로 나누지 않는다.
+- 나누기: 카드들이 실제로 서로 다른 것(다른 대상·다른 계산·다른 판정) 몇 갈래일 때. parts는 작은 상자들(2~4개).
+- 차례로: 카드들이 한 이야기·한 알고리즘의 단계일 때(문제 → 해결, 정의 → 판정 → 갱신 → 마무리). parts는 차례대로 놓인 단계(2~5개).
+- 그대로: 카드들이 정말 나란한 항목일 때. parts는 하나.
+규칙
+- 모든 카드를 정확히 한 번 쓴다. 카드는 번호로 쓴다. part 안의 카드는 먼저 볼 것부터(차례가 있으면 차례대로).
+- part 이름은 자료의 말로 짧게(2~10자). 차례로일 때는 그 단계가 하는 일이 보이게(예: "문제", "대칭으로 줄이기", "판정과 갱신").
+- order: 나누기의 한 갈래 안 카드들이 다시 한 흐름의 단계면 true(그 갈래 안을 차례로 세운다), 아니면 false. 차례로·그대로에서는 false.
+- link: 차례로일 때 이 단계가 앞 단계에서 무엇을 이어받는지 한 줄(12자 안팎). 첫 단계와 나누기·그대로는 빈 문자열.
+- reason: 왜 이 방식인지 한 문장.`;
+const BOX_SCHEMA = S.obj({ mode: S.oneOf("나누기", "차례로", "그대로"), reason: S.str, parts: S.arr(S.obj({ name: S.str, link: S.str, order: { type: "boolean" }, cards: S.arr(S.int) })) });
+type BoxReply = { mode: string; reason: string; parts: Array<{ name: string; link: string; order: boolean; cards: number[] }> };
+
+/** Apply one box's reply to the tree (exported for tests). Returns false (tree unchanged) when the reply does not use every card once. */
+export function applyBox(groups: StructGroup[], box: StructGroup, reply: BoxReply): boolean {
+  const ids = box.cards;
+  const used = (reply.parts ?? []).flatMap((p) => p.cards ?? []);
+  if (used.length !== ids.length || new Set(used).size !== ids.length || used.some((n) => !Number.isInteger(n) || n < 1 || n > ids.length)) return false;
+  const parts = (reply.parts ?? []).filter((p) => p.cards?.length);
+  const at = groups.indexOf(box);
+  if (reply.mode === "그대로" || parts.length < 2) { box.cards = parts.flatMap((p) => p.cards.map((n) => ids[n - 1])); return true; }
+  const kids: StructGroup[] = parts.map((p, i) => ({ id: `${box.id}_${i + 1}`, name: String(p.name ?? "").trim().slice(0, 30) || `${i + 1}`, parent: box.id,
+    cards: p.cards.map((n) => ids[n - 1]), explain: "",
+    ...(reply.mode === "차례로" ? { members: "순서" as const, ...(i && String(p.link ?? "").trim() ? { link: String(p.link).trim().slice(0, 40) } : {}) } : p.order ? { members: "순서" as const } : {}) }));
+  box.cards = [];
+  box.members = reply.mode === "차례로" ? "순서" : box.members && box.members !== "묶음" ? box.members : "종류";
+  // 차례로: 단계 상자 안은 나란히(단계 사이에 ↓). 나누기: 갈래 안이 흐름이면 그 안을 차례로.
+  if (reply.mode === "차례로") for (const k of kids) delete k.members;
+  groups.splice(at + 1, 0, ...kids);
+  return true;
+}
+
+async function refineBoxes(id: string, map: MaterialMap, groups: StructGroup[]): Promise<BoxNote[]> {
+  const byId = new Map(map.sections.flatMap((s) => s.cards).map((c) => [c.id, c]));
+  const line = (cid: string) => { const c = byId.get(cid)!; return cardLine({ kind: c.kind, title: c.title, shape: c.shape, takes: c.takes, gives: c.gives } as Card).replace(/\s+/g, " ").slice(0, 240) + (c.core ? " (핵심)" : ""); };
+  const big = groups.filter((g) => g.cards.length > BOX_LIMIT && g.id !== "g_rest" && g.cards.every((c) => byId.has(c)));
+  const nameOf = new Map(groups.map((g) => [g.id, g]));
+  return Promise.all(big.map(async (box) => {
+    const t0 = Date.now();
+    const trail: string[] = []; for (let a = box.parent; a; a = nameOf.get(a)?.parent ?? "") trail.unshift(nameOf.get(a)?.name ?? "");
+    const num = new Map(box.cards.map((c, i) => [c, i + 1]));
+    const links = map.chains.filter((x) => num.has(x.from) && num.has(x.to)).map((x) => `${num.get(x.from)}→${num.get(x.to)} ${x.what.slice(0, 30)}`);
+    const user = `자료: ${map.title}\n상자 자리: ${[...trail, box.name].join(" > ")}\n상자 대표 카드: ${box.head && byId.has(box.head) ? line(box.head) : "(없음)"}\n상자 설명: ${box.explain}\n\n카드 (번호|카드)\n${box.cards.map((c, i) => `${i + 1}|${line(c)}`).join("\n")}\n\n카드끼리 연결 (앞→뒤)\n${links.join("\n") || "(없음)"}`;
+    try {
+      const reply = await withTrace({ area: "pdf", action: "structure-box", ref: id }, () => askJson<BoxReply>("map:structure-box", BOX_SYSTEM, user, BOX_SCHEMA, STRUCTURE_MODEL));
+      const ok = applyBox(groups, box, reply);
+      return { box: box.id, name: box.name, mode: ok ? reply.mode : "그대로(답 버림)", reason: String(reply.reason ?? "").slice(0, 200), ms: Date.now() - t0, ok };
+    } catch (e) { return { box: box.id, name: box.name, mode: "그대로(실패)", reason: (e as Error).message?.slice(0, 200) ?? "", ms: Date.now() - t0, ok: false }; }
+  }));
+}
+
 export const STRUCTURE_MODEL = { model: "gpt-6.1-terra", effort: "low" };
 /** One AI call (terra low, about 15 s). Fails when more than a third of the cards had to be put under 그 밖. */
 export async function makeStructure(id: string, map: MaterialMap): Promise<Structure> {
@@ -186,7 +245,8 @@ export async function makeStructure(id: string, map: MaterialMap): Promise<Struc
   const checked = checkStructure(reply, ids);
   const rest = checked.groups.find((g) => g.id === "g_rest")?.cards.length ?? 0;
   if (rest > ids.length / 3) throw Object.assign(new Error(`AI가 카드 ${ids.length}장 중 ${rest}장을 묶지 못했어요. 다시 해 보세요.`), { status: 502 });
-  const s: Structure = { at: new Date().toISOString(), ms: Date.now() - t0, ...STRUCTURE_MODEL, sig: cardSig(map), ...checked };
+  const boxes = await refineBoxes(id, map, checked.groups);
+  const s: Structure = { at: new Date().toISOString(), ms: Date.now() - t0, ...STRUCTURE_MODEL, sig: cardSig(map), ...checked, ...(boxes.length ? { boxes } : {}) };
   const file = fileOf(id);
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, JSON.stringify(s, null, 1), "utf8");

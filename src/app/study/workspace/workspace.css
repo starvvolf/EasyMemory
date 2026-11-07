@@ -912,3 +912,4 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm8-kids.seq{flex-direction:column;flex-wrap:nowrap;gap:0;align-items:stretch}
 .dejipgi .mm8-kids.seq>.mm8-box{flex:none}
 .dejipgi .mm8-join.seq{align-self:center;font-size:16px;line-height:1;padding:4px 0;color:var(--muted,#888);font-weight:700}
+.dejipgi .mm8-join.seq em{font-style:normal;font-weight:500;font-size:11px;margin-left:6px;color:var(--muted,#777)}
