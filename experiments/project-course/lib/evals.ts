@@ -103,3 +103,57 @@ export async function startJudgeEval(conds: Cond[], opts: { ids?: string[]; repe
   })();
   return { id, total: work.length };
 }
+
+/* ---------- 시험 2: 목표 정리 호출(배운 것 · 부족했던 점) 강도 비교 ---------- */
+// 실제 대화(보관본 포함)의 끝난 목표를 같은 입력으로 다시 정리한다(저장 · 메모리 반영 없음). 채점 호출이 대화에서 학습자 부족함을 스스로 찾고 정리 결과와 맞춘다
+const GRADE_RECORD_SYSTEM = `학습 목표 하나의 대화와, 그 대화를 정리한 결과를 채점한다.
+먼저 대화에서 학습자에게 실제로 드러난 부족한 점(틀린 답, 잘못 쓴 코드, 오해, 몰라서 물어본 것)을 스스로 찾아 found에 한 줄씩 쓴다(없으면 빈 목록).
+missed: found 중 정리 결과의 gaps에 없는 것. unsupported: gaps 중 대화에 근거가 없는 것(튜터가 설명만 하고 학습자는 틀린 적 없는 것 포함).
+learned_unsupported: learned 중 학습자의 말 · 행동에 근거가 없는 것(튜터 설명만 있던 것).`;
+const GRADE_RECORD_SCHEMA = S.obj({ found: S.arr(S.str), missed: S.arr(S.str), unsupported: S.arr(S.str), learned_unsupported: S.arr(S.str) });
+export async function startRecordEval(opts: { dataDir: string; runIds: string[]; efforts: string[]; repeat?: number }) {
+  const R = await import("./goal-record.ts");
+  const { recordShow } = await import("./lesson.ts");
+  const id = `record-${new Date().toISOString().replace(/[:.]/g, "").slice(0, 15)}-${randomBytes(2).toString("hex")}`;
+  const items: { runId: string; goal: { title: string; done: string; understood: boolean; applied: boolean; at: string }; to: string; messages: { role: string; text: string; at: string }[]; saves: { at: string; file: string; text: string }[] }[] = [];
+  for (const runId of opts.runIds) {
+    const recs = JSON.parse(await readFile(path.join(opts.dataDir, "goals", `${runId}.records.json`), "utf8")).items as { goal: string; done: string; status: string; from: string; to: string }[];
+    const runs = JSON.parse(await readFile(path.join(opts.dataDir, "runs.json"), "utf8")) as { runs?: { id: string; codexId?: string; chatId?: string }[] } | { id: string; codexId?: string; chatId?: string }[];
+    const run = (Array.isArray(runs) ? runs : runs.runs ?? []).find((r) => r.id === runId);
+    const chatFile = run?.codexId ? path.join(opts.dataDir, "codex-chat", `${run.codexId}.json`) : path.join(opts.dataDir, "agent-chat", `${run?.chatId}.json`);
+    const messages = JSON.parse(await readFile(chatFile, "utf8")).messages;
+    const saves = (await readFile(path.join(opts.dataDir, "goals", `${runId}.saves.jsonl`), "utf8").catch(() => "")).split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    for (const r of recs) items.push({ runId, goal: { title: r.goal, done: r.done, understood: r.status === "마침", applied: r.status === "마침", at: r.from }, to: r.to, messages, saves });
+  }
+  const rep = Math.max(1, Math.min(3, opts.repeat ?? 1));
+  const work = opts.efforts.flatMap((effort) => Array.from({ length: rep }, () => items.map((it) => ({ effort, it }))).flat());
+  const job = { status: "running" as const, done: 0, total: work.length };
+  jobs.set(id, job);
+  void (async () => {
+    const rows: Record<string, unknown[]> = {};
+    try {
+      let i = 0;
+      const worker = async () => { while (i < work.length) {
+        const w = work[i++];
+        const inp = R.recordInput(w.it.goal, w.it.messages, recordShow, w.it.saves, w.it.to, "(아직 없음)");
+        if (!inp.seg.some((m) => m.role === "user")) { job.done++; continue; }
+        try {
+          const r = await aiWith("eval-record", R.SYSTEM_RECORD, inp.user, { effort: w.effort, schema: R.RECORD_SCHEMA });
+          const out = r.out as { learned: { concept: string }[]; gaps?: { concept: string; wrong: string; code?: { save: string } }[] };
+          const g = await aiWith("eval-record-grade", GRADE_RECORD_SYSTEM, `${inp.user}\n\n[정리 결과]\n${JSON.stringify({ learned: out.learned, gaps: out.gaps }, null, 1)}`, { effort: "medium", schema: GRADE_RECORD_SCHEMA });
+          const gr = g.out as { found: string[]; missed: string[]; unsupported: string[]; learned_unsupported: string[] };
+          (rows[w.effort] ??= []).push({ goal: w.it.goal.title, ms: r.ms, learned: out.learned.length, gaps: out.gaps?.length ?? 0, withCode: (out.gaps ?? []).filter((x) => x.code?.save).length, found: gr.found.length, missed: gr.missed, unsupported: gr.unsupported, learnedUnsupported: gr.learned_unsupported, gapsOut: (out.gaps ?? []).map((x) => x.concept) });
+        } catch (e) { (rows[w.effort] ??= []).push({ goal: w.it.goal.title, error: (e as Error).message }); }
+        job.done++;
+      } };
+      await Promise.all(Array.from({ length: 3 }, worker));
+      const sum = Object.fromEntries(Object.entries(rows).map(([k, v]) => { const ok = v.filter((x: any) => !x.error) as any[]; const tot = (f: (x: any) => number) => ok.reduce((n, x) => n + f(x), 0);
+        const found = tot((x) => x.found), missed = tot((x) => x.missed.length);
+        return [k, { goals: ok.length, gapRecall: found ? `${Math.round(((found - missed) / found) * 100)}% (${found - missed}/${found})` : "-", unsupportedGaps: tot((x) => x.unsupported.length), unsupportedLearned: tot((x) => x.learnedUnsupported.length), gapsWithCode: tot((x) => x.withCode), msMedian: ok.map((x) => x.ms).sort((a, b) => a - b)[Math.floor(ok.length / 2)] ?? 0 }]; }));
+      await mkdir(path.join(DATA, "evals"), { recursive: true });
+      await writeFile(path.join(DATA, "evals", `${id}.json`), JSON.stringify({ id, opts, summary: sum, rows }, null, 1));
+      Object.assign(job, { status: "done", result: { id, summary: sum } });
+    } catch (e) { Object.assign(job, { status: "error", error: (e as Error).message }); }
+  })();
+  return { id, total: work.length };
+}

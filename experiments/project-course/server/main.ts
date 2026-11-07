@@ -375,6 +375,10 @@ const routes: [string, RegExp, Handler][] = [
   ["GET", /^\/api\/runs\/(\w+)\/sync$/, async (_q, m) => { const run = await getRun(m[1]); return pending(run.id, await loadCourse(run.courseId), run); }],
   // 튜터 평가(11/8, 실험실): 판정 시험을 뒤에서 돌리고 결과를 .data/evals/에
   ["POST", /^\/api\/dev\/eval\/judge$/, async (req) => { const b = await body(req) as { conds?: unknown; ids?: string[]; repeat?: number }; return (await import("../lib/evals.ts")).startJudgeEval(Array.isArray(b.conds) ? b.conds as never : [{ name: "base-low", effort: "low" }], { ids: b.ids, repeat: b.repeat }); }],
+  ["POST", /^\/api\/dev\/eval\/record$/, async (req) => { const b = await body(req) as { archive?: string; runIds?: string[]; efforts?: string[]; repeat?: number }; const { DATA } = await import("../lib/store.ts");
+    // archive: .data/보관/<이름> (없으면 지금 데이터)
+    const dir = b.archive ? path.join(DATA, "보관", path.basename(String(b.archive))) : DATA;
+    return (await import("../lib/evals.ts")).startRecordEval({ dataDir: dir, runIds: (b.runIds ?? []).map(String), efforts: (b.efforts ?? ["low", "medium"]).map(String), repeat: b.repeat }); }],
   ["GET", /^\/api\/dev\/eval\/([\w-]+)$/, async (_q, m) => (await import("../lib/evals.ts")).jobOf(m[1]) ?? { status: "none" }],
   // 실험 자료 비우기(11/6): 실습 자료만 보관으로(앱 자료는 앱이 꺼져 있을 때 "자료 비우기(실험용).cmd")
   ["POST", /^\/api\/dev\/reset$/, async () => { const { archivePractice } = await import("../tools/reset-data.mjs"); const { DATA } = await import("../lib/store.ts"); return archivePractice(DATA, "실험") ?? { label: null, count: 0 }; }],

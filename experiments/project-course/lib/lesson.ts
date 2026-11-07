@@ -349,7 +349,7 @@ const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
 async function chatMessages(run: { codexId?: string; chatId?: string }): Promise<{ role: string; text: string; at: string }[]> {
   return run.codexId ? (await (await import("./codex-chat.ts")).chatOf(run.codexId)).messages : (await (await import("./agent-chat.ts")).chatOf(run.chatId!)).messages;
 }
-const recordShow = (m: { role: string; text: string }) => m.role === "user" ? `[학습자] ${shownUser(m.text)}` : m.role === "assistant" ? `[튜터] ${m.text.slice(0, 2500)}` : m.role === "tool" ? `[도구] ${m.text.split("\n")[0].slice(0, 120)}` : "";
+export const recordShow = (m: { role: string; text: string }) => m.role === "user" ? `[학습자] ${shownUser(m.text)}` : m.role === "assistant" ? `[튜터] ${m.text.slice(0, 2500)}` : m.role === "tool" ? `[도구] ${m.text.split("\n")[0].slice(0, 120)}` : "";
 async function recordFinished(runId: string, run: { codexId?: string; chatId?: string }, goal: { title: string; done: string; understood: boolean; applied: boolean; at: string }, mode: string | null) {
   const R = await import("./goal-record.ts");
   const rec = await R.recordGoal(runId, goal, mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId)).catch(() => null);

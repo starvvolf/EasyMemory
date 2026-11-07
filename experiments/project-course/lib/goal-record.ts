@@ -111,24 +111,29 @@ memory: [지금 학습자 메모리]는 지금까지 여러 목표에서 쌓인 
 - update: 이미 있는 경향이 이번에도 보이면 그 id, text(고칠 게 없으면 그대로), evidence(gaps의 concept 그대로).
 - improved: 있던 경향이 이번에는 나아진 게 보이면 그 id와 evidence(나아진 게 드러난 learned의 concept 그대로).
 바뀔 게 없으면 모두 빈 목록.`;
-const SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str), learned: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, meaning: S.str, how: S.str, quote: S.str })),
+export const RECORD_SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str), learned: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, meaning: S.str, how: S.str, quote: S.str })),
   gaps: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, wrong: S.str, right: S.str, quote: S.str, code: S.obj({ save: S.str, from: S.int, to: S.int }) })),
   memory: S.obj({ add: S.arr(S.obj({ text: S.str, evidence: S.arr(S.str) })), update: S.arr(S.obj({ id: S.str, text: S.str, evidence: S.arr(S.str) })), improved: S.arr(S.obj({ id: S.str, evidence: S.arr(S.str) })) }) });
 const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
 
 /** 목표 하나를 정리한다. messages: 그 대화 전체(at 포함), since: 목표가 시작된 시각 */
-export async function recordGoal(runId: string, goal: { title: string; done: string; understood: boolean; applied: boolean; at: string }, mode: string | null, messages: Msg[], show: (m: Msg) => string, redo?: { to: string; index: number }, saves: Save[] = []) {
-  const seg = messages.filter((m) => m.at >= goal.at && (!redo || m.at <= redo.to));
-  const code = codeTurns(saves, goal.at, redo?.to ?? new Date().toISOString());
+type GoalIn = { title: string; done: string; understood: boolean; applied: boolean; at: string };
+/** 정리 호출에 보낼 글(평가에서도 같은 것을 쓴다, lib/evals.ts). 대화와 코드 저장을 시각 순서로 섞는다 */
+export function recordInput(goal: GoalIn, messages: Msg[], show: (m: Msg) => string, saves: Save[], to: string, memory: string) {
+  const seg = messages.filter((m) => m.at >= goal.at && m.at <= to);
+  const code = codeTurns(saves, goal.at, to);
+  const text = [...seg.map((m) => ({ at: m.at, text: show(m) })), ...code.map((c) => ({ at: c.at, text: c.text }))]
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).map((x) => x.text).filter(Boolean).join("\n\n").slice(-60000);
+  const user = `[목표] ${goal.title}\n[완료 조건] ${goal.done}\n[지금 학습자 메모리]\n${memory}\n[결과] ${goal.understood && goal.applied ? "이해 · 적용까지 하고 마침" : `건너뜀(이해 ${goal.understood ? "✓" : "–"}, 적용 ${goal.applied ? "✓" : "–"})`}\n\n[이 목표 동안의 대화]\n${text}`;
+  return { seg, code, user };
+}
+export async function recordGoal(runId: string, goal: GoalIn, mode: string | null, messages: Msg[], show: (m: Msg) => string, redo?: { to: string; index: number }, saves: Save[] = []) {
+  const { seg, code, user } = recordInput(goal, messages, show, saves, redo?.to ?? new Date().toISOString(), await memoryForRecord());
   const log: Record<string, unknown> = { at: new Date().toISOString(), runId, goal: goal.title, messages: seg.length };
   const t0 = Date.now();
   try {
     if (!seg.some((m) => m.role === "user")) { log.skipped = "학습자 말 없음"; return null; }
-    // 대화와 코드 저장을 시각 순서로 섞는다
-    const text = [...seg.map((m) => ({ at: m.at, text: show(m) })), ...code.map((c) => ({ at: c.at, text: c.text }))]
-      .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).map((x) => x.text).filter(Boolean).join("\n\n").slice(-60000);
-    const user = `[목표] ${goal.title}\n[완료 조건] ${goal.done}\n[지금 학습자 메모리]\n${await memoryForRecord()}\n[결과] ${goal.understood && goal.applied ? "이해 · 적용까지 하고 마침" : `건너뜀(이해 ${goal.understood ? "✓" : "–"}, 적용 ${goal.applied ? "✓" : "–"})`}\n\n[이 목표 동안의 대화]\n${text}`;
-    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[]; gaps?: { type: string; concept: string; wrong: string; right: string; quote: string; code?: { save: string; from: number; to: number } }[]; memory?: MemOps }>("goal-record", SYSTEM_RECORD, user, SCHEMA);
+    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[]; gaps?: { type: string; concept: string; wrong: string; right: string; quote: string; code?: { save: string; from: number; to: number } }[]; memory?: MemOps }>("goal-record", SYSTEM_RECORD, user, RECORD_SCHEMA);
     // 근거는 학습자 말 또는 학습자가 저장한 코드 줄
     const learnerText = [...seg.filter((m) => m.role === "user").map((m) => norm(m.text)), ...code.flatMap((c) => c.added.map(norm))];
     const unverified: string[] = [];
