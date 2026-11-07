@@ -70,3 +70,15 @@
 .ai-live .ai-settings td,.ai-live .ai-settings th{padding:4px 6px;font-size:12px}
 @media(max-width:900px){.ai-split{grid-template-columns:minmax(0,1fr);grid-template-rows:60vh auto;height:auto}.ai-io{grid-template-columns:minmax(0,1fr)}
   .ai-row{grid-template-columns:110px minmax(0,1fr)}.ai-row-sum{display:none}.ai-axis{margin-left:110px;margin-right:0}}
+
+/* 이 호출만 다시 (11/7) */
+.ai-trial{margin-top:14px;border:1px dashed var(--line-strong);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:10px;background:var(--surface-2)}
+.ai-trial-head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.ai-trial-form{display:flex;flex-direction:column;gap:8px}
+.ai-trial textarea{width:100%;font-family:var(--mono);font-size:12px;line-height:1.5;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--surface);color:var(--ink);resize:vertical}
+.ai-trial .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.ai-trial select{border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:var(--surface)}
+.ai-note{flex:1;min-width:160px;border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--surface)}
+.ai-compare{display:flex;flex-direction:column;gap:8px}
+.ai-diff{max-height:260px;overflow:auto;font-size:11.5px;line-height:1.45}
+.ai-diff .add{background:var(--ok-soft,#E3F6EA);color:var(--ok,#167A3E)}.ai-diff .del{background:var(--bad-soft,#FDE8E8);color:var(--bad);text-decoration:line-through}

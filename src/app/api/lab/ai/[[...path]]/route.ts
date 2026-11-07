@@ -4,6 +4,7 @@
 //   POST settings {purpose, model?, effort?}   이 호출 종류의 모델·강도(비우면 원래대로)
 //   GET  calls?area=&ref=&since=     최근 호출 요약(새것부터, 비용 포함) · GET calls/<id> 원문
 //   GET  pdf                         PDF 실행 목록 · GET pdf/<id> 실행 하나(단계·호출·비용) · GET pdf/<id>/calls/<n> 원문
+//   GET  trials?gen=<id>&n=<n> | ?call=<id>   이 호출을 바꿔 다시 부른 시도들 · POST trial {base, step, system, user, model, effort, json, note}  AI 1번
 //   GET  practice                    대화 실습 목록 · GET practice/<runId> 차례 기록 · POST practice/<runId>/model {model}
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -14,6 +15,7 @@ import { labSettings, saveLabChoice } from "@/lib/ai/lab-settings";
 import { ASSIST_CATALOG, GEN_CATALOG, TUTOR_CATALOG } from "@/lib/ai/catalog";
 import { listGens, loadGen, readGenCalls } from "@/lib/study/gen/runner";
 import { genStepLabel } from "@/lib/study/gen/types";
+import { listTrials, runTrial, type TrialBase } from "@/lib/ai/trials";
 
 export const runtime = "nodejs";
 const COURSE = (process.env.PROJECT_COURSE_URL || "http://127.0.0.1:4100").replace(/\/$/, "");
@@ -76,6 +78,18 @@ async function handle(request: Request, context: RouteContext) {
       return json({ call: { ...c, cost: costOf(c.model, c.usage) } });
     }
 
+    // 이 호출만 다시 (11/7): 제품 지시문은 그대로, 바꾼 것으로 한 번 부르고 lab/trials/에 남긴다
+    if (p[0] === "trials" && m === "GET") {
+      const base: TrialBase | null = q.get("gen") && q.get("n") ? { kind: "gen", genId: q.get("gen")!, n: Number(q.get("n")) } : q.get("call") ? { kind: "call", id: q.get("call")! } : null;
+      if (!base) return NextResponse.json({ message: "어느 호출인지 알려 주세요." }, { status: 400 });
+      return json({ trials: await listTrials(base) });
+    }
+    if (p[0] === "trial" && m === "POST") {
+      const b = z.object({ base: z.union([z.object({ kind: z.literal("gen"), genId: z.string().regex(/^gen_\w{6,80}$/), n: z.number().int().min(1) }), z.object({ kind: z.literal("call"), id: z.string().regex(/^\w{4,40}$/) })]),
+        step: z.string().min(1).max(80), note: z.string().max(300).optional(), system: z.string().max(80_000), user: z.string().min(1).max(900_000),
+        model: z.string().min(3).max(40), effort: z.enum(["minimal", "low", "medium", "high", "xhigh"]), json: z.boolean() }).parse(await boundedJson(request));
+      return json({ trial: await runTrial(b) });
+    }
     if (p[0] === "practice" && p.length === 1 && m === "GET") return json({ chats: await course("/api/chats") });
     if (p[0] === "practice" && p[1] && p.length === 2 && m === "GET") {
       const d = await course(`/api/lab/practice/${encodeURIComponent(p[1])}`) as { turns?: Array<Record<string, unknown>> };

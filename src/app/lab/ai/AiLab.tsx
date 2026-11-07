@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../lab.css";
 import "./ai.css";
+import { TrialPanel } from "./trials";
 import { CallView, modelClass, num, sec, short, usd, type Entry, type Tok } from "./view";
 
 type Catalog = { assist: Record<string, Entry>; gen: Record<string, Entry>; genLabels: Record<string, string>; tutor: Entry;
@@ -104,7 +105,7 @@ function PdfRun({ d, cat }: { d: GenDetail; cat: Catalog | null }) {
     {d.prep ? <p className="purpose">전처리(코드): 쪽마다 읽는 길 — 글자만 {routes.layer ?? 0} · 그림 잘라 붙임 {routes.figures ?? 0} · 쪽 전체 이미지 {routes.page ?? 0}{routes.empty ? ` · 빈 쪽 ${routes.empty}` : ""}. 이미지는 1024px로 그림 쪽에만 보낸다.</p> : null}
     {segs.map((s, si) => <Gantt key={si} seg={s} first={si === 0} label={label} sel={sel} setSel={setSel} />)}
     <p className="muted ai-legend"><span className="ai-model m-terra">terra</span><span className="ai-model m-sol">sol</span><span className="ai-model m-luna">luna</span> 막대 하나 = 호출 하나(길이 = 걸린 시간, 진한 앞부분 = 첫 글자까지). 줄을 누르면 그 단계, 막대를 누르면 그 호출.</p>
-    {sel ? <StepDetail genId={d.gen.id} step={sel.step} n={sel.n} calls={d.calls.filter((c) => c.step === sel.step)} entry={cat?.gen[sel.step] ?? null} title={label(sel.step)} images={sel.step === "rc-digest-plan" ? images : 0} onPick={(n) => setSel({ step: sel.step, n })} /> : null}
+    {sel ? <StepDetail cat={cat} genId={d.gen.id} step={sel.step} n={sel.n} calls={d.calls.filter((c) => c.step === sel.step)} entry={cat?.gen[sel.step] ?? null} title={label(sel.step)} images={sel.step === "rc-digest-plan" ? images : 0} onPick={(n) => setSel({ step: sel.step, n })} /> : null}
   </>;
 }
 
@@ -137,7 +138,7 @@ function Gantt({ seg, first, label, sel, setSel }: { seg: Seg; first: boolean; l
 }
 
 type FullGenCall = GenCallLite & { system: string; user: string; reply: string | null };
-function StepDetail({ genId, step, n, calls, entry, title, images, onPick }: { genId: string; step: string; n?: number; calls: GenCallLite[]; entry: Entry | null; title: string; images: number; onPick: (n: number) => void }) {
+function StepDetail({ cat, genId, step, n, calls, entry, title, images, onPick }: { cat: Catalog | null; genId: string; step: string; n?: number; calls: GenCallLite[]; entry: Entry | null; title: string; images: number; onPick: (n: number) => void }) {
   const pick = n ?? calls[0]?.n;
   const [full, setFull] = useState<FullGenCall | null>(null);
   const [err, setErr] = useState("");
@@ -153,6 +154,9 @@ function StepDetail({ genId, step, n, calls, entry, title, images, onPick }: { g
         facts={{ model: one.model, effort: one.effort, ms: one.ms, first: one.firstTextMs, tokens: tokOf(one.usage), cost: one.cost }}
         system={full.system} user={full.user} reply={full.reply ?? ""} error={full.error}
         extra={images ? <p className="purpose">이 호출에는 그림 쪽 이미지 {images}장이 같이 갔다(넣은 것의 글에는 안 보임).</p> : null} /> : <p className="muted">읽는 중…</p>}
+      {full && one && full.n === pick ? <TrialPanel key={`${genId}:${pick}`} base={{ kind: "gen", genId, n: full.n }} step={step} models={cat?.models ?? []} efforts={cat?.efforts ?? ["low", "medium", "high"]}
+        images={Boolean(images) || ["rc-organize", "rc-intent", "rc-digest-card"].includes(step)}
+        orig={{ system: full.system, user: full.user, reply: full.reply ?? "", model: one.model, effort: one.effort, ms: one.ms, first: one.firstTextMs, tokens: tokOf(one.usage), cost: one.cost }} /> : null}
     </div>
   </section>;
 }
@@ -205,7 +209,7 @@ function CodeTab({ cat, reloadCat }: { cat: Catalog | null; reloadCat: () => voi
         {g.calls.map((c) => <CallRow key={c.id} c={c} entry={entryOf(cat, c.purpose)} onOpen={() => setOpen(c)} />)}
       </div>)}
     </aside>
-    {open ? <RecDialog rec={open} entry={entryOf(cat, open.purpose)} onClose={() => setOpen(null)} /> : null}
+    {open ? <RecDialog cat={cat} rec={open} entry={entryOf(cat, open.purpose)} onClose={() => setOpen(null)} /> : null}
   </div>;
 }
 
@@ -218,14 +222,16 @@ function CallRow({ c, entry, onOpen }: { c: Rec; entry: Entry | null; onOpen: ()
   </button>;
 }
 
-function RecDialog({ rec, entry, onClose }: { rec: Rec; entry: Entry | null; onClose: () => void }) {
+function RecDialog({ cat, rec, entry, onClose }: { cat: Catalog | null; rec: Rec; entry: Entry | null; onClose: () => void }) {
   const [full, setFull] = useState<Rec | null>(null);
   useEffect(() => { api<{ call: Rec }>(`calls/${rec.id}`).then((r) => setFull(r.call), () => setFull(rec)); }, [rec]);
   const c = full ?? rec;
   return <div className="scrim" onClick={onClose}><div className="dialog ai-dialog" onClick={(e) => e.stopPropagation()}>
     <div className="dh"><h3>{entry?.title ?? rec.purpose}</h3><button className="btn small" onClick={onClose}>닫기</button></div>
     <div className="db">{full ? <CallView entry={entry} label={`${c.purpose}${c.trace?.action ? ` · ${c.trace.action}` : ""}`} facts={{ model: c.model, effort: c.effort, ms: c.ms, first: c.firstTextMs, tokens: c.tokens, cost: c.cost }}
-      system={c.system} user={c.user} reply={c.reply} error={c.error} /> : <p className="muted">읽는 중…</p>}</div>
+      system={c.system} user={c.user} reply={c.reply} error={c.error} /> : <p className="muted">읽는 중…</p>}
+      {full ? <TrialPanel base={{ kind: "call", id: c.id }} step={c.purpose} models={cat?.models ?? []} efforts={cat?.efforts ?? ["low", "medium", "high"]}
+        orig={{ system: c.system, user: c.user, reply: c.reply, model: c.model, effort: c.effort, ms: c.ms, first: c.firstTextMs, tokens: c.tokens, cost: c.cost }} /> : null}</div>
   </div></div>;
 }
 
