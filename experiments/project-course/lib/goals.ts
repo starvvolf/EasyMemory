@@ -293,7 +293,9 @@ export async function goalContext(runId: string) {
   const mem = await (await import("./memory.ts")).memoryText().catch(() => "");
   const body = await goalContextBody(runId);
   const sh = await (await import("./shell.ts")).shellContext(runId).catch(() => "");
-  return [mem, body, sh].filter(Boolean).join("\n\n");
+  // 학습자가 물을 때(11/8): 장기 목표가 없을 때도 붙는다
+  const J = await import("./judge.ts");
+  return [mem, body, sh, `${J.QUESTION_RULE} ${J.ON_REQUEST_RULE}`].filter(Boolean).join("\n\n");
 }
 /** 진행 기록의 작업 폴더(Codex는 그 대화의 폴더, 기본 엔진은 실험판 대화의 폴더) */
 export async function runWorkspace(runId: string): Promise<string | undefined> {

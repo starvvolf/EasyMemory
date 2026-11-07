@@ -391,7 +391,7 @@ const routes: [string, RegExp, Handler][] = [
     return r; }],
   ["GET", /^\/api\/dev\/eval\/([\w-]+)$/, async (_q, m) => (await import("../lib/evals.ts")).jobOf(m[1]) ?? { status: "none" }],
   // 실험 자료 비우기(11/6): 실습 자료만 보관으로(앱 자료는 앱이 꺼져 있을 때 "자료 비우기(실험용).cmd")
-  ["POST", /^\/api\/dev\/reset$/, async () => { const { archivePractice } = await import("../tools/reset-data.mjs"); const { DATA } = await import("../lib/store.ts"); return archivePractice(DATA, "실험") ?? { label: null, count: 0 }; }],
+  ["POST", /^\/api\/dev\/reset$/, async () => { const { archivePractice } = await import("../tools/reset-data.mjs"); const { DATA, PRACTICE } = await import("../lib/store.ts"); return archivePractice(DATA, "실험", PRACTICE) ?? { label: null, count: 0 }; }],
   // 학습자 메모리(11/6): 보기 · 고치기 · 지우기
   ["GET", /^\/api\/memory$/, async () => ({ items: await (await import("../lib/memory.ts")).memoryOf() })],
   ["POST", /^\/api\/memory\/(m[a-f0-9]{6})$/, async (req, m) => (await import("../lib/memory.ts")).editMemory(m[1], await body(req))],

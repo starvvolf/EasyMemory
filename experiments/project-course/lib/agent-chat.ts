@@ -1,7 +1,7 @@
 import path from "node:path";
 import { randomBytes, createHash } from "node:crypto";
 import { mkdir, readdir, stat } from "node:fs/promises";
-import { DATA, read, update } from "./store.ts";
+import { DATA, read, update, PRACTICE } from "./store.ts";
 import { loadCourse, stageFiles } from "./course.ts";
 import { writeWorkspace } from "./stagegen.ts";
 import { ready, stopRun } from "./oc-engine.ts";
@@ -95,10 +95,12 @@ export async function newChat(opts: { course?: string | null } = {}) {
   const id = randomBytes(8).toString("hex");
   // 11/4 사용자 A안: course가 null이면 코스 없이 빈 폴더로 시작한다(실험 페이지는 예전처럼 인사 서버)
   let courseId = "";
-  if (opts.course === null) await mkdir(ws(id), { recursive: true });
-  else { const course = await loadCourse(opts.course ?? "hello-api"); courseId = course.id; await writeWorkspace(ws(id), await stageFiles(course, 1)); }
+  // 새 대화의 작업 폴더는 Recaller 밖(PRACTICE, 11/8). 옛 대화는 workspace 칸이 없어 예전 자리(ws(id))를 그대로 쓴다
+  const home = path.join(PRACTICE, `chat-${id}`);
+  if (opts.course === null) await mkdir(home, { recursive: true });
+  else { const course = await loadCourse(opts.course ?? "hello-api"); courseId = course.id; await writeWorkspace(home, await stageFiles(course, 1)); }
   // 11/4 사용자 "프리스타일로, 뭐 여쭤보는 거 없이": 첫 인사·질문 없이 빈 대화로 시작, 목표·초점도 대화에서 정해진다
-  const s: Chat = { id, courseId, goal: "", focus: "", support: [], observations: [], messages: [], at: now() };
+  const s: Chat = { id, courseId, goal: "", focus: "", support: [], observations: [], messages: [], at: now(), workspace: home };
   await update<Chat>(file(id), s, () => s);
   return chatView(id);
 }

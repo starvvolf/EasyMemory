@@ -10,7 +10,7 @@ import { mkdir, appendFile, readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
-import { DATA, read, update } from "./store.ts";
+import { DATA, read, update, PRACTICE } from "./store.ts";
 import { ROOT } from "./course.ts";
 import { CHAT_MODELS } from "./agent-chat.ts";
 
@@ -138,8 +138,10 @@ export async function list() {
 }
 export async function create() {
   const id = randomBytes(8).toString("hex");
-  await mkdir(defaultWs(id), { recursive: true });
-  const c: CodexChat = { id, messages: [], at: now() };
+  // 새 대화의 작업 폴더는 Recaller 밖(PRACTICE, 11/8). 옛 대화는 workspace 칸이 없어 예전 자리를 그대로 쓴다
+  const home = path.join(PRACTICE, `codex-${id}`);
+  await mkdir(home, { recursive: true });
+  const c: CodexChat = { id, messages: [], at: now(), workspace: home };
   await update<CodexChat>(file(id), c, () => c);
   return view(id);
 }

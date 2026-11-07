@@ -2,9 +2,13 @@
 // 실제 지식 저장소(src/lib/knowledge)에는 쓰지 않는다. 최종에 붙일 때 records를 knowledge/api.ts로 넘긴다.
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { ROOT } from "./course.ts";
 
 export const DATA = process.env.PC_DATA_DIR ? path.resolve(process.env.PC_DATA_DIR) : path.join(ROOT, ".data");
+// 학습자 작업 폴더(대화 실습)는 Recaller 폴더 밖에 만든다(11/8 사용자 "그래, 일단 그렇게 해봐"): 안에 두면 npm · Node · git이 위로 올라가
+// 실습 코스의 package.json · Recaller 저장소를 따라간다(11/8 실측 셋). 시험(PC_DATA_DIR)에서는 그 안에
+export const PRACTICE = process.env.PC_PRACTICE_DIR ? path.resolve(process.env.PC_PRACTICE_DIR) : process.env.PC_DATA_DIR ? path.join(DATA, "practice") : path.join(os.homedir(), "RecallerPractice");
 export const WORKSPACES = process.env.PC_WORKSPACES ? path.resolve(process.env.PC_WORKSPACES) : path.join(DATA, "workspaces");
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
