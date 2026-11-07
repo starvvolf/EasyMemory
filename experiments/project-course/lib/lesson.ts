@@ -373,13 +373,17 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
   const msgs = (await chatMessages(run)).filter((m) => m.at >= since);
   const firstUser = msgs.findIndex((m) => m.role === "user" && !/^\[/.test(m.text.trim()));
   const task = msgs.slice(0, firstUser < 0 ? msgs.length : firstUser).filter((m) => m.role === "assistant").map((m) => m.text).join("\n\n");
-  const said = msgs.filter((m) => m.role === "user" && !/^\[/.test(m.text.trim())).map((m) => m.text.trim());
+  // 판정은 마지막 시도만(11/8 실측: 앞의 틀린 답까지 보고 다시 맞게 한 답을 '일부만'으로 봄). 과제는 그 시도 바로 앞 튜터 말까지 포함
+  const users = msgs.filter((m) => m.role === "user" && !/^\[/.test(m.text.trim()));
+  const lastU = users.at(-1);
+  const said = lastU ? [lastU.text.trim()] : [];
+  const lastTutor = lastU ? msgs.filter((m) => m.role === "assistant" && m.at < lastU.at).at(-1)?.text ?? "" : "";
   // 저장한 코드: 과제 이후 파일마다 마지막 저장본과 과제 전 저장본의 차이(바뀐 줄)
   const saves = await R.savesOf(runId);
   const lastBy = new Map<string, string>(), beforeBy = new Map<string, string>();
   for (const sv of saves) (sv.at >= since ? lastBy : beforeBy).set(sv.file, sv.text);
   const code = [...lastBy].map(([f, t]) => { const d = R.lineDiff(beforeBy.get(f) ?? "", t); return d.length ? `[저장한 코드 ${f}]\n${d.join("\n")}` : ""; }).filter(Boolean);
-  const v = await J.judgeApply(unit, task, [...said, ...code].join("\n\n"));
+  const v = await J.judgeApply(unit, lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task, [...said, ...code].join("\n\n"));
   return { verdict: v.verdict, right: v.right, gap: v.gap };
 }
 const recordJobs = new Map<string, Promise<unknown>[]>();
