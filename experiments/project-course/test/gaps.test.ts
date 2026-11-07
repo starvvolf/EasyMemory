@@ -23,6 +23,11 @@ test("찾기 → 채우기 → 세션 안 확인 → 목표 정리로 이름 · 
   const named = l.find((g) => g.id === a!.id)!;
   assert.equal(named.concept, "지도 항목 고르기 순서"); assert.equal(named.status, "세션에서 채움"); assert.ok(named.recheck && named.dueAt);
   assert.equal(l.length, 3, "원장에 없던 부족함은 목표 정리로 새로 연다");
+  // 같은 부족함으로 둘을 묶으면 다시 확인은 하나만
+  const second = l.find((g) => g.id !== a!.id && g.evidence.some((e) => e.from === "막힘"))!;
+  await G.mergeRecord("r1", { ...goal, done: "설명한다" }, [{ type: "절차", concept: "지도 항목 고르기 순서", wrong: "x", right: "y", quote: "", ids: [a!.id, second.id], recheck: { q: "doing과 todo가 다 있으면 무엇을 고를까요?", a: "doing" } }], new Date().toISOString());
+  assert.equal((await G.ledgerOf("r1")).find((g) => g.id === second.id)!.mergedInto, a!.id);
+  assert.equal((await G.rechecks()).filter((g) => g.concept === "지도 항목 고르기 순서").length, 1);
 });
 test("다시 확인: 맞으면 간격을 늘리고 틀리면 다시 열린다", async () => {
   const gid = (await G.ledgerOf("r1")).find((g) => g.recheck)!.id;

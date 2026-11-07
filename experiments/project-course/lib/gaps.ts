@@ -24,6 +24,8 @@ export type Gap = {
   status: GapStatus;
   filledAt?: string; fillEvidence?: string;
   recheck?: Recheck;
+  /** 목표 정리가 같은 부족함으로 묶은 것(11/8 실측: 판정 · 막힘 두 칸이 같은 문항을 두 번): 다시 확인은 묶인 첫 칸에서만 */
+  mergedInto?: string;
   checks: { at: string; answer: string; verdict: string; note: string }[];
   dueAt?: string; box: number;
   at: string;
@@ -102,7 +104,8 @@ export async function mergeRecord(runId: string, goal: { id: string; title: stri
           cause: [], evidence: [{ at: endAt, from: "목표 정리", text: clean([r.wrong, r.quote ? `학습자: "${clean(r.quote, 300)}"` : ""].filter(Boolean).join(" · "), 700) }], remedy: [], status: "열림", checks: [], box: 0, at: endAt };
         l.gaps.push(g); return g;
       })()];
-      for (const g of targets) {
+      for (const [i, g] of targets.entries()) {
+        if (i > 0) g.mergedInto = targets[0].id; else delete g.mergedInto;
         g.concept = clean(r.concept, 80) || g.concept; g.type = r.type || g.type;
         if (r.wrong) g.wrong = clean(r.wrong); if (r.right) g.right = clean(r.right, 600);
         if (r.code?.code) g.code = { file: r.code.file, from: r.code.from, to: r.code.to, code: r.code.code.slice(0, 1500) };
@@ -122,7 +125,7 @@ export async function rechecks(opts: { due?: boolean; at?: number } = {}) {
   const all: Gap[] = [];
   for (const n of names) if (n.endsWith(".json")) all.push(...(await ledgerOf(n.slice(0, -5))));
   const t = opts.at ?? Date.now();
-  return all.filter((g) => g.recheck && (!opts.due || !g.dueAt || Date.parse(g.dueAt) <= t))
+  return all.filter((g) => g.recheck && !g.mergedInto && (!opts.due || !g.dueAt || Date.parse(g.dueAt) <= t))
     .sort((a, b) => (a.status === "다시 틀림" ? -1 : 0) - (b.status === "다시 틀림" ? -1 : 0) || String(a.dueAt).localeCompare(String(b.dueAt)));
 }
 export const RECHECK_SYSTEM = `학습자가 예전에 부족했던 것을 다시 확인하는 문항의 답을 채점한다. 문항 · 모범답 · 학습자가 예전에 잘못 알았던 것을 보고, 학습자의 답만으로 판단한다.
