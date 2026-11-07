@@ -7,6 +7,7 @@ import path from "node:path";
 process.env.PC_DATA_DIR ??= await mkdtemp(path.join(os.tmpdir(), "pc-shell-"));
 const { classify, runCommandTool, decide, shellOf, shellContext } = await import("../lib/shell.ts");
 const ws = await mkdtemp(path.join(os.tmpdir(), "ws-"));
+await (await import("node:fs/promises")).mkdir(path.join(ws, ".git"));
 
 test("작업 폴더 안에서 돌리거나 보기만 하는 명령은 바로", () => {
   for (const c of ["node app.js", "python main.py", "npm test", "npm run build", "git status", "git diff HEAD~1", "git log --oneline -5", "ls", "dir", "git branch", "node -e \"console.log(1)\" 2>&1", "cat a.txt | head -3", "pytest -q"]) assert.equal(classify(c, ws).kind, "auto", c);
@@ -32,4 +33,9 @@ test("[실행]이면 돌리고 튜터에게 결과", async () => {
   const p = (await shellOf("r3")).pending!;
   const d = await decide("r3", ws, p.id, true); assert.match(d.say!, /학습자가 허락/); assert.match(d.say!, /종료 코드 0/);
   assert.equal((await decide("r3", ws, p.id, true)).say, null);
+});
+test("작업 폴더가 자기 저장소가 아니면 git 읽기도 묻기", async () => {
+  const bare = await mkdtemp(path.join(os.tmpdir(), "ws2-"));
+  assert.equal(classify("git status", bare).kind, "ask");
+  assert.equal(classify("node a.js", bare).kind, "auto");
 });

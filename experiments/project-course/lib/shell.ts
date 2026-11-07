@@ -5,6 +5,7 @@
 // 판정은 명령 종류(첫 낱말 · git 하위 명령 · 경로)로만 한다. 특정 문항에 맞춘 목록이 아니라 "기록 · 설치 · 밖을 바꾸는가" 하나로 나눈다.
 // 두 엔진 공통: OpenCode는 GOAL_TOOLS로, Codex는 MCP goal-tool로 같은 runGoalTool을 거친다.
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { DATA, read, update } from "./store.ts";
 
@@ -56,6 +57,8 @@ export function classify(command: string, ws: string): { kind: Kind; reason: str
     }
     if (path.isAbsolute(first) || first.includes("..")) return { kind: "ask", reason: "작업 폴더 밖 프로그램을 돌려요" };
     if (head.toLowerCase() === "git") {
+      // 작업 폴더가 자기 저장소가 아니면 git은 바깥(위 폴더의) 저장소를 본다 → 밖을 건드리는 것과 같다
+      if (!existsSync(path.join(root, ".git")) && !/^(init|--version|version|help)$/.test(args.find((x) => !x.startsWith("-")) ?? "")) return { kind: "ask", reason: "작업 폴더가 자기 git 저장소가 아니라 바깥 저장소를 봐요" };
       const sub = args.find((a) => !a.startsWith("-")) ?? "";
       if (sub === "branch" && args.every((a) => a === "branch" || /^-(a|v|vv|r|-list|-show-current)$/.test(a))) continue;
       if (sub === "remote" && args.every((a) => a === "remote" || a === "-v")) continue;
