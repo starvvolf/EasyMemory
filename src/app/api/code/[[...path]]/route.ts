@@ -54,7 +54,7 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "problems" && m === "GET") {
       // 난이도(11/8): 받아 둔 AI 판단을 같이 보낸다(새로 묻지 않음).
       const [problems, levels] = await Promise.all([listProblemsWithKnowledge(), keptLevels()]);
-      return json({ problems: problems.map((x) => { const l = levels[x.id]; return l?.self ? { ...x, level: { self: l.self.level, ...(l.known?.site ? { known: { site: l.known.site, rating: l.known.rating } } : {}) } } : x; }) });
+      return json({ problems: problems.map((x) => { const l = levels[x.id]; return l?.self ? { ...x, level: { self: l.self.level, ...(l.known?.site && !l.known.similar ? { known: { site: l.known.site, rating: l.known.rating } } : {}) } } : x; }) });
     }
     if (p[0] === "ladder" && m === "GET") return json({ ladder: LADDER.map((s) => ({ step: s.step, name: s.name, what: s.what, abilities: s.abilities.map((a) => ({ id: a.id, name: a.name, what: a.what })) })) });
     if (p[0] === "run" && m === "POST") { const b = await body(z.object({ lang, code, input: z.string().max(500_000) })); return json(await runCustom(b.lang, b.code, b.input)); }
