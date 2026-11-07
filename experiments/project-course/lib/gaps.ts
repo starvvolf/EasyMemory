@@ -70,13 +70,27 @@ export async function fillUnit(runId: string, unitId: string, evidence: string) 
   return filled;
 }
 
+/**
+ * 부족함의 원인 → 채우는 방법 → 다시 확인하는 꼴(11/8 사용자 "이게 부족하면 이거, 이거 부족하면 이거 … 매칭").
+ * 원인은 [너무 어려워요]의 6가지(goals.ts STUCK_REASONS)와 같은 말. 판정에서 드러난 것은 원인을 모르니 "틀린 지점 그대로"로 본다.
+ * 튜터(보충 로드맵)와 목표 정리(재확인 문항)가 같은 표를 본다.
+ */
+export const CAUSE_PLAN: { cause: string; fill: string; recheck: string }[] = [
+  { cause: "무엇을 하라는 건지(과제 · 완료 조건)를 모르겠어요", fill: "과제를 더 작은 할 일로 쪼개고 완료 조건을 예로 보여 준다", recheck: "비슷한 과제를 주고 무엇을 해야 끝인지 자기 말로 말하게" },
+  { cause: "설명에 나온 개념 · 용어를 몰라요", fill: "그 말의 뜻을 작은 예 하나로 먼저", recheck: "그 개념이 들어간 짧은 코드나 상황의 결과를 예측하게" },
+  { cause: "알겠는데 코드(문법)로 못 옮기겠어요", fill: "빈칸 한두 개짜리 코드로 옮기는 연습", recheck: "한두 줄을 직접 쓰거나 고치게" },
+  { cause: "어디서부터 어떤 순서로 할지 모르겠어요", fill: "단계를 순서대로 나눠 하나씩", recheck: "단계를 순서대로 말하거나 코드가 지나가는 순서를 따라가게" },
+  { cause: "코드를 썼는데 오류가 나거나 결과가 달라요", fill: "실제로 돌려 오류 · 값을 보고 원인을 같이 찾기", recheck: "비슷한 코드의 오류나 출력을 예측하고 이유를 말하게" },
+  { cause: "앞에서 배운 게 기억이 안 나요", fill: "앞에서 배운 것을 먼저 떠올리게 하고 짧게 다시", recheck: "앞에서 배운 것을 힌트 없이 떠올려 설명하게" },
+];
+const planOf = (cause: string[]) => CAUSE_PLAN.filter((p) => cause.includes(p.cause));
 /** 목표 정리 호출에 보낼 것: 이 목표 동안 원장에 잡힌 부족함(정리가 이름을 붙이고 재확인 문항을 만든다) */
 export async function gapsForRecord(runId: string, goalId: string, verdicts: string[] = []) {
   const gs = (await ledgerOf(runId)).filter((g) => g.goal.id === goalId);
   // 판정 기록(11/8 실측: 정리가 판정을 몰라 틀린 답을 "배운 것"의 근거로 씀)
   const vline = verdicts.length ? `[이 목표 동안 [해 봤어요] 판정 — 틀림 · 일부만 맞음으로 판정된 답은 배운 것의 근거로 쓰지 않는다]\n${verdicts.join("\n")}\n\n` : "";
   if (!gs.length) return vline.trim();
-  return `${vline}[이 목표 동안 Recaller가 잡은 부족함 — 정리할 때 같은 것이면 ids에 그 id를 넣는다]\n${gs.map((g) => `${g.id} (${g.evidence.map((e) => e.from).join("·")}, ${g.status}) 단위 "${g.unit.title}": ${g.wrong}${g.cause.length ? ` · 막힌 이유: ${g.cause.join(", ")}` : ""}${g.remedy.length ? ` · 처방: ${g.remedy.map((r) => r.text).join(" / ")}` : ""}${g.fillEvidence ? ` · 채운 근거: ${g.fillEvidence}` : ""}`).join("\n")}`;
+  return `${vline}[이 목표 동안 Recaller가 잡은 부족함 — 정리할 때 같은 것이면 ids에 그 id를 넣는다]\n${gs.map((g) => `${g.id} (${g.evidence.map((e) => e.from).join("·")}, ${g.status}) 단위 "${g.unit.title}": ${g.wrong}${g.cause.length ? ` · 막힌 이유: ${g.cause.join(", ")} → 재확인 꼴: ${planOf(g.cause).map((p) => p.recheck).join(" / ") || "틀린 지점 그대로"}` : " · 재확인 꼴: 틀렸던 그 지점을 이름 · 값만 바꿔 다시"}${g.remedy.length ? ` · 처방: ${g.remedy.map((r) => r.text).join(" / ")}` : ""}${g.fillEvidence ? ` · 채운 근거: ${g.fillEvidence}` : ""}`).join("\n")}`;
 }
 /** 목표 정리 결과(gaps)를 원장에 합친다: ids로 이은 것은 이름 · 칸 · 바로 알 것 · 코드 · 재확인 문항을 채우고, 원장에 없던 것은 "목표 정리"로 새로 연다 */
 export async function mergeRecord(runId: string, goal: { id: string; title: string; done: string }, recGaps: { type: string; concept: string; wrong: string; right: string; quote: string; ids?: string[]; recheck?: Recheck; code?: { file: string; from: number; to: number; code: string } | null }[], endAt: string) {

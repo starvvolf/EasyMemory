@@ -15,6 +15,7 @@ import { CHOICES } from "./stuck.ts";
 import { RESPOND_RULE } from "./judge.ts";
 import { SHELL_TOOL } from "./shell.ts";
 import { CODE_TOOL, DEBUG_TOOL } from "./codenav.ts";
+import { CAUSE_PLAN } from "./gaps.ts";
 import { BROWSE_TOOL } from "./browse.ts";
 
 /** support: [너무 어려워요]로 끼워 넣은 보충 단계(11/6 사용자 "중간에 보충 단계를 만들어서 넣어 줘야") — 원래 단계 바로 앞에 들어간다 */
@@ -273,11 +274,14 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
       const sp = supNow(g);
       const at = sp?.title ?? g.current?.title ?? "지금 하던 것";
       const why = [...reasons, text ? `덧붙임: ${text}` : ""].filter(Boolean).join(" · ");
+      // 원인 → 채우는 방법(11/8 lib/gaps.ts CAUSE_PLAN): 고른 이유마다 보충을 어떻게 짤지 한 줄씩 붙인다
+      const fills = CAUSE_PLAN.filter((p) => reasons.includes(p.cause)).map((p) => `${p.cause} → ${p.fill}`);
+      const whyFill = fills.length ? `${why}\n이유별로 채우는 방법: ${fills.join(" / ")}` : why;
       say = sp
-        ? `[너무 어려워요] 보충 "${sp.title}"도 어려워요. 어려운 점(학습자가 고름): ${why}\n종착지 "${g.support!.target.title}"는 그대로 두고, plan_support로 남은 보충을 더 쉬운 단계부터 다시 짜고 바로 설명을 시작해 주세요.`
+        ? `[너무 어려워요] 보충 "${sp.title}"도 어려워요. 어려운 점(학습자가 고름): ${whyFill}\n종착지 "${g.support!.target.title}"는 그대로 두고, plan_support로 남은 보충을 더 쉬운 단계부터 다시 짜고 바로 설명을 시작해 주세요.`
         : g.support?.back
-          ? `[너무 어려워요] 보충을 하고 돌아왔는데 "${at}"이(가) 아직 어려워요. 어려운 점(학습자가 고름): ${why}\n이 단계는 종착지로 그대로 두고, plan_support로 보충을 한 번 더 짜고 바로 설명을 시작해 주세요.`
-          : `[너무 어려워요] 지금: "${at}". 어려운 점(학습자가 고름): ${why}\n학습자는 뭘 모르는지 정확히 모를 수 있어요. 이걸 보고 plan_support로 보충 로드맵(이 단계까지 닿는 작은 단계 1~4개)을 짜고, 첫 보충부터 바로 설명을 시작해 주세요.`;
+          ? `[너무 어려워요] 보충을 하고 돌아왔는데 "${at}"이(가) 아직 어려워요. 어려운 점(학습자가 고름): ${whyFill}\n이 단계는 종착지로 그대로 두고, plan_support로 보충을 한 번 더 짜고 바로 설명을 시작해 주세요.`
+          : `[너무 어려워요] 지금: "${at}". 어려운 점(학습자가 고름): ${whyFill}\n학습자는 뭘 모르는지 정확히 모를 수 있어요. 이걸 보고 plan_support로 보충 로드맵(이 단계까지 닿는 작은 단계 1~4개)을 짜고, 첫 보충부터 바로 설명을 시작해 주세요.`;
     } else if (op === "mode") {
       if (b.mode !== "topdown" && b.mode !== "bottomup") throw err("mode는 topdown 또는 bottomup이에요.");
       g.mode = b.mode; logIt(g, "mode", b.mode);
