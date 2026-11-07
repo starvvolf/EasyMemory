@@ -350,7 +350,10 @@ async function makeOne(id: string, map: MaterialMap, it: PlanItem, byId: Map<str
         problems.push(why); revision = `${why}. 앞 문제: ${q.stem.slice(0, 300)} / 답 ${q.answer}`; last = result; continue;
       }
       // 고쳐 쓴 것이 오히려 걸리면, 앞의 것(쉽거나 그림이 장식일 뿐 맞는 문제)을 쓴다
-      return !result.ok && last?.ok ? { ...last, tries, problems, ms: Date.now() - t } : result;
+      const final = !result.ok && last?.ok ? { ...last, tries, problems, ms: Date.now() - t } : result;
+      // 고쳐 써도 쉬우면 난이도 표시를 2로 낮춘다(11/8 2회차: 장치 좌표 "최종 좌표 기호는?"이 L4로 남았다)
+      if (final.ok && final.easy && final.level >= 4) final.level = 2;
+      return final;
     } catch (error) { problems.push(`실패: ${(error as Error).message}`.slice(0, 200)); }
   }
   if (last) return { ...last, tries: max, problems, ms: Date.now() - t };
