@@ -458,6 +458,9 @@ if (!(await portFree(PORT))) {
   console.error(`${PORT}번 포트를 이미 쓰고 있어요. 코스 서버가 이미 켜져 있으면 http://127.0.0.1:${PORT} 을 여세요.`);
   process.exit(1);
 }
+// 학습자 작업 폴더는 이 폴더(.data) 아래에 있다 → Node · npm이 위로 올라가 실습 코스의 package.json("type": "module", 의존성)을 따르지 않게
+// 데이터 폴더 맨 위에 빈 package.json을 둔다(11/8 실측: 학습자 require가 막히고, npm이 실습 코스 package.json에 설치함)
+await (async () => { const { writeFile, access } = await import("node:fs/promises"); const { DATA } = await import("../lib/store.ts"); const f = (await import("node:path")).join(DATA, "package.json"); await access(f).catch(() => writeFile(f, JSON.stringify({ name: "recaller-practice-data", private: true, description: "학습자 작업 폴더가 위쪽(실습 코스) 설정을 따르지 않게 막는 빈 파일" }, null, 2) + "\n").catch(() => {})); })();
 server.listen(PORT, "127.0.0.1", () => {
   const n = nodeSupport();
   console.log(`프로젝트 코스 실험: http://127.0.0.1:${PORT}  (창을 닫으면 실습 서버도 같이 꺼져요)`);
