@@ -170,7 +170,7 @@ function Walkthrough({ a, send, onDone }: { a: ActionView; send: (b: Record<stri
           <pre className="ws-code">{a.predict!.input}</pre>
           <textarea className="ws-input" rows={2} value={guess} onChange={(e) => setGuess(e.target.value)} placeholder="출력을 적어 보세요" />
           <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-            <button className="btn ghost small" onClick={() => setPred({ ok: false })}>모르겠어요</button>
+            <button className="btn ghost small" onClick={async () => { const r = await send({ kind: "walkthrough", predict: "" }); setPred({ ok: false, answer: r?.answer as string | undefined }); }}>모르겠어요</button>
             <button className="btn small" disabled={!guess.trim()} onClick={async () => { const r = await send({ kind: "walkthrough", predict: guess }); if (r) setPred({ ok: Boolean(r.ok), answer: r.answer as string }); }}>확인</button>
           </div>
         </div>

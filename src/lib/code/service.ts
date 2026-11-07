@@ -1,38 +1,25 @@
-// 코드 문제와 지식을 잇는 곳: a problem's knowledge lives in the knowledge store, and every submission leaves its mark
-// there (맞힘 / 틀림 / 힌트), so the sidebar, the review queue and the agent see code practice like any other study.
+// 코드 문제의 풀이 기록 (2026-11-08 바꿈, 사용자 결정 "원래 있던 거는 버리고 오늘 만든 거로"): 문제 풀이는 더 이상 기억 저장소에
+// 쓰지 않는다. "풀었다 = 맞힘"이 아니라, 배우는 과정에서 몰랐던 게 드러나고 배운 것만 기억이 된다 — 그건 PS 튜터(tutor/)가 한다
+// (문제 화면의 AI 힌트·드래그 설명은 경로에서 tutor/service.ts noteAiHelp로). 여기 남은 일: 이번 풀이의 틀림·힌트·물어봄을
+// 모아 두기(AI 튜터가 "이번 풀이에서"로 읽는다), 제출 채점, 훈련 모드 복기 저장. 예전에 만든 문제의 knowledgeIds는 그대로 두지만 쓰지 않는다.
 //
-// 이번 풀이 (2026-10-26): while a problem is being solved, its 틀림 · 힌트 · 물어봄 wait in the attempt, not in the
-// knowledge record. The tutor sees them as this attempt (never "지난번에도"), and they go into the record together when
-// the attempt ends: 맞았습니다, leaving the problem, or two hours without a move.
+// 이번 풀이 (2026-10-26): while a problem is being solved, its 틀림 · 힌트 · 물어봄 wait in the attempt. The AI tutor sees
+// them as this attempt (never "지난번에도"); the attempt is cleared when it ends: 맞았습니다, leaving, or two hours idle.
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { recordEvent, saveMany, type KEventKind } from "../knowledge/api.ts";
-import { listProblems, readProblemMeta, setProblemKnowledge, submit, type Problem, type ProblemMeta } from "./problems.ts";
+import type { KEventKind } from "../knowledge/api.ts";
+import { listProblems, readProblemMeta, submit, type Problem, type ProblemMeta } from "./problems.ts";
 import { VERDICT_LABEL, type Lang } from "./run.ts";
-import { SEED_KNOWLEDGE } from "./seeds.ts";
-import { readTrain, saveStep } from "./train.ts";
+import { saveStep } from "./train.ts";
 
-const filled = new Set<string>();
-
-/** The problem's knowledge names as items (만남 the first time), ids written back on the problem. */
+/** 11/8부터 아무것도 하지 않는다(문제의 개념 이름을 기억으로 만들지 않음). 부르는 곳이 많아 이름은 남긴다. */
 export async function ensureProblemKnowledge<T extends Problem | ProblemMeta>(problem: T): Promise<T> {
-  // Seed problems also fill in their knowledge's meaning once per run (an item made before keeps its own text).
-  const seedFill = problem.source.kind === "seed" && !filled.has(problem.id);
-  if (problem.knowledgeIds.length === problem.knowledge.length && problem.knowledgeIds.length && !seedFill) return problem;
-  filled.add(problem.id);
-  const results = await saveMany(problem.knowledge.map((title, i) => ({ title, folder: problem.folder,
-    ...(SEED_KNOWLEDGE[title] || problem.knowledgeBodies?.[i] ? { body: SEED_KNOWLEDGE[title] || problem.knowledgeBodies![i] } : {}),
-    source: { kind: "code" as const, title: problem.title, ref: `code:${problem.id}` } })));
-  const knowledgeIds = results.map((r) => r.item.id);
-  await setProblemKnowledge(problem.id, knowledgeIds);
-  return { ...problem, knowledgeIds };
+  return problem;
 }
 export async function listProblemsWithKnowledge() {
   await endIdleAttempts();
-  const list = await listProblems();
-  for (const p of list) { try { await ensureProblemKnowledge(await readProblemMeta(p.id)); } catch { /* listed anyway */ } }
-  return list;
+  return listProblems();
 }
 
 /* ---------- 이번 풀이: what happened in the attempt still going on ---------- */
@@ -71,25 +58,16 @@ async function hold(problemId: string, kind: AttemptEvent["kind"], detail: strin
 export async function currentAttempt(problemId: string): Promise<AttemptEvent[]> {
   return (await readAttempts())[problemId]?.events ?? [];
 }
-/**
- * The attempt ends: what waited goes into the knowledge record, at the times it happened, then the ending itself
- * (맞힘 / 힌트 받고 통과). Nothing waited and no ending: nothing to write.
- */
+/** The attempt ends (맞았습니다, leaving the problem, or two hours without a move): it is cleared. 11/8부터 기억에는 쓰지 않는다. */
 export async function endAttempt(problemId: string, ending?: { kind: "correct" | "note"; detail: string }, now = new Date().toISOString()) {
+  void now;
   const attempt = await serial(async () => {
     const all = await readAttempts();
     const found = all[problemId];
     if (found) { delete all[problemId]; await writeAttempts(all); }
     return found;
   });
-  if (!attempt?.events.length && !ending) return { recorded: 0 };
-  const problem = await ensureProblemKnowledge(await readProblemMeta(problemId));
-  const source = { kind: "code" as const, title: problem.title, ref: `code:${problem.id}` };
-  for (const id of problem.knowledgeIds) {
-    for (const e of attempt?.events ?? []) await recordEvent(id, e.kind, e.detail, source, e.at).catch(() => undefined);
-    if (ending) await recordEvent(id, ending.kind, ending.detail, source, now).catch(() => undefined);
-  }
-  return { recorded: (attempt?.events.length ?? 0) + (ending ? 1 : 0) };
+  return { recorded: 0, ended: (attempt?.events.length ?? 0) + (ending ? 1 : 0) };
 }
 /** Attempts left without a move for two hours end as they stand. */
 export async function endIdleAttempts(now = Date.now()) {
@@ -98,18 +76,15 @@ export async function endIdleAttempts(now = Date.now()) {
 }
 
 /**
- * 제출 → 채점 → 기록. Only "제출" counts: 맞았습니다 ends the attempt — without hints it is 맞힘 (→ 앎); after hints it is
- * noted, since the hints already mark 몰랐음. 틀림·시간 초과·런타임 에러 wait in the attempt as 틀림. Compile errors and
- * "예제 실행" leave the knowledge alone.
+ * 제출 → 채점. Only "제출" counts: 맞았습니다 ends the attempt; 틀림·시간 초과·런타임 에러 wait in the attempt as 틀림.
+ * PS 튜터는 이 제출 기록을 읽어 "혼자 구현"을 확인한다(tutor/service.ts).
  */
 export async function submitAndRecord(problemId: string, lang: Lang, code: string, mode: "example" | "submit", hints: number, advice = 0) {
-  await ensureProblemKnowledge(await readProblemMeta(problemId));
   const result = await submit(problemId, lang, code, mode, hints);
   if (mode === "submit" && result.verdict !== "CE" && result.verdict !== "MISSING") {
     // 훈련 모드 · 지켜보기 (2026-10-31): passing with the steps checked one by one, or after the watcher's warnings, is not
     // 앎 yet (a note); 앎 comes from solving it alone later, as after hints.
-    const training = (await readTrain(problemId)).mode === "train";
-    if (result.verdict === "AC") await endAttempt(problemId, training ? { kind: "note", detail: "훈련 모드로 통과" } : hints ? { kind: "note", detail: `힌트 ${hints}번 받고 통과` }
+    if (result.verdict === "AC") await endAttempt(problemId, hints ? { kind: "note", detail: `힌트 ${hints}번 받고 통과` }
       : advice ? { kind: "note", detail: `지켜보기 조언 ${advice}번 받고 통과` } : { kind: "correct", detail: "힌트 없이 통과" });
     else {
       const failed = result.shown[0];
@@ -129,15 +104,10 @@ export async function recordAsked(problemId: string | undefined, detail: string)
 }
 
 /**
- * 복기 (훈련 모드 7단계, 2026-10-31): what the learner kept of the review goes onto the problem's knowledge as a note, so the
- * knowledge window shows it under 겪은 일 and the tutor reads it next time. Empty lines are not saved.
+ * 복기 (훈련 모드 7단계, 2026-10-31): kept in the step record. 11/8부터 기억에는 쓰지 않는다.
  */
 export async function saveReview(problemId: string, review: { idea?: string; stuck?: string; transfer?: string }) {
   const lines = [review.idea?.trim() && `핵심 발상: ${review.idea.trim()}`, review.stuck?.trim() && `막힌 이유: ${review.stuck.trim()}`, review.transfer?.trim() && `다른 문제에도: ${review.transfer.trim()}`].filter(Boolean) as string[];
   await saveStep(problemId, "review", { answer: review });
-  if (!lines.length) return { recorded: 0 };
-  const problem = await ensureProblemKnowledge(await readProblemMeta(problemId));
-  const source = { kind: "code" as const, title: problem.title, ref: `code:${problem.id}` };
-  for (const id of problem.knowledgeIds) await recordEvent(id, "note", `[복기] ${lines.join(" · ")}`.slice(0, 600), source).catch(() => undefined);
-  return { recorded: problem.knowledgeIds.length };
+  return { recorded: 0, lines: lines.length };
 }

@@ -45,3 +45,45 @@ test("튜터 흐름: 화면엔 답이 없고, 드릴·설계·예측은 코드�
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("기억 규칙: 혼자 맞힘·시범 보기만으로는 기억이 생기지 않고, 몰랐던 게 드러나 배운 것만 몰랐음으로 생긴다", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tutor-mem-"));
+  const prior = { data: process.env.STUDY_FORGE_DATA_DIR, after: process.env.RECALLER_AFTER_SAVE };
+  process.env.STUDY_FORGE_DATA_DIR = dir; process.env.RECALLER_AFTER_SAVE = "off";
+  try {
+    const m = (number: string, patterns: string[]) => ({ number, title: `문제 ${number}`, chapter: "0x09", role: "basic", url: "u", statement: "s", inputText: "i", outputText: "o", summary: "요약",
+      maxN: null, patterns, signals: ["같은 칸에 여러 길"], approaches: [{ name: "방문 표시하며 BFS", verdict: "best", why: "중복 방지" }, { name: "표시 없이 BFS", verdict: "wrong", why: "무한히 돈다" }, { name: "정렬", verdict: "wrong", why: "" }],
+      state: { right: "방문 배열", wrong: ["합계", "포인터"] }, update: "넣을 때 표시", complexity: "n", pitfalls: ["꺼낼 때 표시"], walkthrough: { observe: "o", choose: "넣을 때 표시한다", compare: "x", verify: "v" },
+      predict: { question: "q", input: "1", answer: "3" }, at: "" });
+    await mkdir(path.join(dir, "code", "tutor"), { recursive: true });
+    await writeFile(path.join(dir, "code", "tutor", "models.json"), JSON.stringify({ "7562": m("7562", ["visited"]), "2178": m("2178", ["bfs-distance"]), "1697": m("1697", ["multi-source"]) }));
+    const { answer, noteAiHelp } = await import("./service.ts");
+    const { searchKnowledge, getKnowledge, memoryEvents } = await import("../../knowledge/api.ts");
+    const find = async (title: string) => (await searchKnowledge(title)).find((h) => h.title === title);
+
+    await answer({ kind: "drill", number: "7562", pattern: "visited", mixed: false, choice: "방문 표시하며 BFS" });
+    await answer({ kind: "walkthrough", number: "2178", pattern: "bfs-distance" });
+    assert.equal(await find("방문 표시"), undefined, "solved alone: nothing new to remember");
+    assert.equal(await find("거리 배열 BFS"), undefined, "only watched: not a memory");
+
+    await answer({ kind: "walkthrough", number: "2178", pattern: "bfs-distance", predict: "" });
+    const dist = (await getKnowledge((await find("거리 배열 BFS"))!.id)).item;
+    assert.equal(dist.state, "unknown");
+    const e = (await memoryEvents({ knowledgeId: dist.id })).events.find((x) => x.kind === "wrong")!;
+    assert.match(e.detail, /실제 출력 「3」/, "what was learned is written down");
+
+    await noteAiHelp("cp_boj_1697", "AI 힌트 2단계", "시작점을 모두 큐에 먼저 넣고 동시에 퍼뜨려 보세요.");
+    const multi = (await getKnowledge((await find("시작점 여러 개 BFS"))!.id)).item;
+    assert.equal(multi.stats.hint, 1);
+    assert.match((await memoryEvents({ knowledgeId: multi.id, kinds: ["hint"] })).events[0].detail, /AI 힌트 2단계로 배운 것: 시작점을 모두/);
+    await noteAiHelp("cp_seed_pair_sum", "AI 힌트 1단계", "x");
+    assert.equal(await find("투 포인터"), undefined, "a problem outside the tutor leaves memory alone");
+
+    // A pattern already a memory: solving it alone later moves it on.
+    await answer({ kind: "drill", number: "2178", pattern: "bfs-distance", mixed: true, choice: "방문 표시하며 BFS" });
+    assert.equal((await getKnowledge(dist.id)).item.stats.correct, 1);
+  } finally {
+    for (const [key, v] of [["STUDY_FORGE_DATA_DIR", prior.data], ["RECALLER_AFTER_SAVE", prior.after]] as const) { if (v === undefined) delete process.env[key]; else process.env[key] = v; }
+    await rm(dir, { recursive: true, force: true });
+  }
+});

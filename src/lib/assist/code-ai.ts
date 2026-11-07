@@ -9,6 +9,7 @@ import { CodeError, findCounterexample, problemKnowledgeNames, readProblem, read
 import { runTestgen, runVerify } from "../code/testgen/index.ts";
 import { memoryEvents, searchKnowledge } from "../knowledge/api.ts";
 import { currentAttempt } from "../code/service.ts";
+import { memoryIdsOfProblem } from "../code/tutor/links.ts";
 
 const TUTOR = `너는 알고리즘을 가르치는 튜터다. 학습자가 스스로 고치게 돕는다. 한국어로 짧게 답한다.
 - 통과 여부는 채점기가 정한다. 너는 맞았다/틀렸다를 단정하지 않는다.
@@ -29,7 +30,8 @@ function resultBlock(r?: LastResult) {
 /** Memory level 3 for this problem's knowledge: the learner's own earlier misses, so a hint can say "지난번에도". */
 async function pastMisses(p: ProblemMeta) {
   const lines: string[] = [];
-  for (const id of p.knowledgeIds.slice(0, 4)) {
+  // 11/8: 문제 풀이는 기억에 쓰지 않는다. 지난번 기록은 PS 튜터가 남긴 이 문제 패턴의 기억에서 읽는다.
+  for (const id of (await memoryIdsOfProblem(p.id)).slice(0, 4)) {
     const { text } = await memoryEvents({ knowledgeId: id, kinds: ["wrong", "hint", "asked"], limit: 5 });
     if (text !== "기록이 없어요.") lines.push(text);
   }

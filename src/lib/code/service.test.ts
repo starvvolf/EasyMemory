@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getKnowledge, memoryEvents } from "../knowledge/api.ts";
+import { searchKnowledge } from "../knowledge/api.ts";
 import { findBySource, readProblem, readProblemMeta, savePreparing, saveProblem, setPreparing, sourceKey, submit } from "./problems.ts";
-import { ensureProblemKnowledge, currentAttempt, endAttempt, endIdleAttempts, listProblemsWithKnowledge, recordAsked, recordHint, ATTEMPT_IDLE_MS } from "./service.ts";
+import { currentAttempt, endAttempt, endIdleAttempts, listProblemsWithKnowledge, recordAsked, recordHint, ATTEMPT_IDLE_MS } from "./service.ts";
 
 async function withData<T>(run: () => Promise<T>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "code-svc-"));
@@ -17,49 +17,31 @@ async function withData<T>(run: () => Promise<T>) {
   }
 }
 
-test("this attempt's hints wait in the attempt, so the tutor never calls them 지난번; they reach the record when it ends", () => withData(async () => {
+test("이번 풀이의 힌트·물어봄은 풀이 동안 모였다가 끝나면 비워진다; 11/8부터 기억에는 쓰지 않는다", () => withData(async () => {
   const [first] = await listProblemsWithKnowledge();
   const problem = await readProblem(first.id);
-  const kid = problem.knowledgeIds[0];
   await recordHint(problem.id, 1);
   await recordAsked(problem.id, "while 조건이 왜 st < en이지?");
   await recordHint(problem.id, 2);
   assert.deepEqual((await currentAttempt(problem.id)).map((e) => e.kind), ["hint", "asked", "hint"]);
-  const before = (await getKnowledge(kid)).item;
-  assert.equal(before.stats.hint + before.stats.asked, 0, "nothing in the knowledge record while solving");
-  assert.equal((await memoryEvents({ knowledgeId: kid, kinds: ["hint", "asked"] })).events.length, 0, "so the tutor's 'earlier misses' stay empty");
-
-  await endAttempt(problem.id, { kind: "note", detail: "힌트 2번 받고 통과" });
-  const after = (await getKnowledge(kid)).item;
-  assert.equal(after.stats.hint, 2);
-  assert.equal(after.stats.asked, 1);
-  assert.equal(after.state, "unknown");
-  assert.deepEqual((await memoryEvents({ knowledgeId: kid })).events.map((e) => e.kind).filter((k) => k !== "met").reverse(), ["hint", "asked", "hint", "note"]);
+  assert.deepEqual(await endAttempt(problem.id, { kind: "note", detail: "힌트 2번 받고 통과" }), { recorded: 0, ended: 4 });
   assert.equal((await currentAttempt(problem.id)).length, 0, "a new attempt starts empty");
+  assert.equal((await searchKnowledge("이분 탐색")).length, 0, "the problem's concept names are not memories");
 }));
 
-test("an attempt left for two hours ends as it stands; ending one with nothing in it writes nothing", () => withData(async () => {
+test("an attempt left for two hours ends as it stands", () => withData(async () => {
   const [first] = await listProblemsWithKnowledge();
   const problem = await readProblem(first.id);
-  assert.deepEqual(await endAttempt(problem.id), { recorded: 0 });
   await recordHint(problem.id, 1);
   await endIdleAttempts(Date.now() + 60_000);
   assert.equal((await currentAttempt(problem.id)).length, 1, "a short pause keeps the attempt");
   await endIdleAttempts(Date.now() + ATTEMPT_IDLE_MS + 60_000);
   assert.equal((await currentAttempt(problem.id)).length, 0);
-  assert.equal((await getKnowledge(problem.knowledgeIds[0])).item.stats.hint, 1);
 }));
 
 const made = (url: string, kind: "full" | "blank" = "full") => saveProblem({ title: "랜선 자르기", statement: "s", inputText: "i", outputText: "o", examples: [], tests: [{ input: "1\n", output: "1" }], timeLimitMs: 1000,
   kind, templates: {}, reference: null, knowledge: ["매개 변수 탐색", "자른 개수 세기"], knowledgeBodies: ["답을 정해 놓고 되는지 확인하며 범위를 줄이는 방법", ""], folder: "알고리즘",
   source: { kind: "ai", title: "BOJ 1654", url } });
-
-test("a problem's knowledge comes with its meaning; a meaning the learner wrote is kept", () => withData(async () => {
-  const p = await ensureProblemKnowledge(await made("https://www.acmicpc.net/problem/1654"));
-  const [param, binary] = await Promise.all(p.knowledgeIds.map(async (id) => (await getKnowledge(id)).item));
-  assert.equal(param.body, "답을 정해 놓고 되는지 확인하며 범위를 줄이는 방법");
-  assert.equal(binary.body, "", "no meaning given, none made up (and no seed meaning for this name)");
-}));
 
 test("the same address is found again (loosely), but not for the other kind", () => withData(async () => {
   assert.equal(sourceKey("https://www.acmicpc.net/problem/1654/"), sourceKey("http://acmicpc.net/problem/1654#top"));

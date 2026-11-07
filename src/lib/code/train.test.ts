@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getKnowledge, memoryEvents } from "../knowledge/api.ts";
+import { searchKnowledge } from "../knowledge/api.ts";
 import { saveProblem } from "./problems.ts";
 import { ensureProblemKnowledge, saveReview, submitAndRecord } from "./service.ts";
 import { checkUnderstand, complexityVerdict, numbersIn, quickCheck, readTrain, setMode, sizeOf, tryInputs } from "./train.ts";
@@ -75,29 +75,16 @@ test("지켜보기 runs the examples and the largest test, and says only what we
   assert.ok(!JSON.stringify(slow).includes("100000\n"), "the test itself is not shown");
 }));
 
-test("passing in 훈련 모드 is a note, not 앎; the review lands on the knowledge as a note", () => withData(async () => {
+test("11/8: 문제 풀이(훈련 모드 포함)는 기억에 쓰지 않는다; 복기는 단계 기록에만 남는다", () => withData(async () => {
   const p = await sumProblem();
   await setMode(p.id, "train");
-  assert.equal((await readTrain(p.id)).mode, "train");
   const r = await submitAndRecord(p.id, "javascript", SUM, "submit", 0);
   assert.equal(r.verdict, "AC");
-  const k = (await getKnowledge(p.knowledgeIds[0])).item;
-  assert.notEqual(k.state, "known");
+  assert.deepEqual(p.knowledgeIds, [], "the problem's concept names are no longer made into memories");
   const saved = await saveReview(p.id, { idea: "한 번 훑으며 더한다", stuck: "", transfer: "" });
-  assert.equal(saved.recorded, 1);
-  const notes = (await memoryEvents({ knowledgeId: p.knowledgeIds[0], kinds: ["note"] })).events.map((e) => e.detail);
-  assert.ok(notes.includes("훈련 모드로 통과"));
-  assert.ok(notes.some((d) => d.startsWith("[복기] 핵심 발상: 한 번 훑으며 더한다")));
+  assert.equal(saved.recorded, 0);
   assert.deepEqual((await readTrain(p.id)).steps.review?.answer, { idea: "한 번 훑으며 더한다", stuck: "", transfer: "" });
-}));
-
-test("after the watcher's warnings a pass is a note too; alone it is 앎", () => withData(async () => {
-  const p = await sumProblem();
-  await submitAndRecord(p.id, "javascript", SUM, "submit", 0, 2);
-  assert.notEqual((await getKnowledge(p.knowledgeIds[0])).item.state, "known");
-  const q = await sumProblem();
-  await submitAndRecord(q.id, "javascript", SUM, "submit", 0);
-  assert.equal((await getKnowledge(q.knowledgeIds[0])).item.state, "known");
+  assert.equal((await searchKnowledge("누적 합")).length, 0);
 }));
 
 test("the coach sees the reference but a reply that copies a line of it is not passed on", () => withData(async () => {

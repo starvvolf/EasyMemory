@@ -59,7 +59,7 @@ export default function CodeStudy({ openId }: { openId?: string }) {
     <div className="cs stack">
       {tabs}
       <header className="row" style={{ justifyContent: "space-between" }}>
-        <div><h2>알고리즘 문제</h2><p className="small muted">직접 짜서 실행하고 채점해요. 결과는 그 문제의 기억 기록에 남아요.</p></div>
+        <div><h2>알고리즘 문제</h2><p className="small muted">직접 짜서 실행하고 채점해요. 기억에는 PS 튜터에서 몰랐다가 배운 것만 남아요.</p></div>
         {langs.some((l) => !l.ready) ? <div className="row small">{langs.filter((l) => !l.ready).map((l) => <span key={l.lang} className="chip help" title={l.help}>{l.label} 설치 안 됨</span>)}</div> : null}
       </header>
       <Calibrated />
@@ -328,7 +328,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}
           {problem.check?.second && problem.check.second.status !== "skipped" ? ` · ${problem.check.second.status === "agreed" ? `다른 호출의 독립 풀이(${problem.check.second.model})와 테스트 ${problem.check.second.agreed}/${problem.check.second.total}개 일치` : problem.check.second.status === "second-wrong" ? "독립 풀이가 틀려서 큰 입력 대조는 못 함" : "독립 풀이로 대조하지 못함"}` : ""}</p>}
         {grade.needs ? <NeedsPanel needs={grade.needs} /> : null}
-        {problem.knowledge.length ? <div className="row small"><span className="muted">확인하는 기억</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
+        {problem.knowledge.length ? <div className="row small"><span className="muted">다루는 개념</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
         {subs.length ? <><p className="eyebrow">내 제출</p><ul className="cs-subs">{subs.filter((s) => s.mode === "submit").slice(0, 8).map((s) => <li key={s.id}><button className="linkish small" onClick={() => void openSubmission(s.id)}>
           <span className={`chip ${VERDICT[s.verdict]?.[1] ?? ""}`}>{VERDICT[s.verdict]?.[0] ?? s.verdict}</span> {s.lang} · {new Date(s.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{s.hints ? ` · 힌트 ${s.hints}` : ""}</button></li>)}</ul></> : null}
       </section>
@@ -376,7 +376,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {coaching ? <>
         <p className="small muted">코드를 쓰기 전이라 AI는 답이나 코드를 주지 않고, 지금 단계를 스스로 생각하도록 도와요. 구현 단계부터는 힌트·반례 버튼이 다시 나와요.</p>
         </> : <>
-        <p className="small muted">통과 여부는 채점기가 정해요. AI는 설명과 힌트만 줘요. 힌트·틀린 제출은 이번 풀이에 모아 두었다가, 맞히거나 문제를 나가면 기억 기록에 남아요.</p>
+        <p className="small muted">통과 여부는 채점기가 정해요. AI는 설명과 힌트만 줘요. PS 튜터 문제라면 AI 힌트·설명으로 배운 것은 그 패턴의 기억에 남아요.</p>
         <div className="cs-hints">
           <button className="btn small" disabled={asking} onClick={() => hint(1)}>힌트 1 · 방향</button>
           <button className="btn small" disabled={asking} onClick={() => hint(2)}>힌트 2 · 줄 짚기</button>
