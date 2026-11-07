@@ -352,13 +352,16 @@ async function renderMemory() {
     h("h3", {}, "정해 둔 진행 방식"), pref.length ? h("ul", { class: "memlist" }, pref.map(card)) : h("p", { class: "mut small" }, "대화에서 \"앞으로는 이렇게 해 줘\"라고 하면 여기에 남아요.")));
 }
 /* 다시 확인(11/8 사용자 "알려준 데서 끝난 게 아니라 다시 한번 확인하는 것까지"): 예전 실습의 부족함을 겨냥한 문항을 하나씩 */
-const reUi = { all: false, idx: 0, result: null, answer: "" };
+// 답을 내면 그 문항의 날짜가 뒤로 가서 목록에서 빠진다 → 결과는 답한 문항(reUi.cur)에 붙여 보여 주고, [다음]에서 목록을 새로 받는다(검토 11/8).
+// 건너뛴 문항은 이번 화면에서만 뒤로 미룬다
+const reUi = { all: false, result: null, answer: "", cur: null, skipped: new Set() };
 async function renderRechecks() {
   const r = await api("GET", `/api/rechecks${reUi.all ? "?all=1" : ""}`);
-  const list = r.items;
-  const cur = list[Math.min(reUi.idx, Math.max(0, list.length - 1))];
+  const list = [...r.items.filter((x) => !reUi.skipped.has(x.id)), ...r.items.filter((x) => reUi.skipped.has(x.id))];
+  const cur = reUi.result && reUi.cur ? reUi.cur : list[0];
+  reUi.cur = cur ?? null;
   const head = h("div", { class: "memhead" }, h("button", { class: "btn small", onclick: () => go("#/") }, "← 홈"), h("h1", {}, "다시 확인"));
-  const tog = h("label", { class: "small" }, h("input", { type: "checkbox", checked: reUi.all, onchange: (e) => { reUi.all = e.target.checked; reUi.idx = 0; reUi.result = null; renderRechecks(); } }), " 날짜가 안 된 것도 보기");
+  const tog = h("label", { class: "small" }, h("input", { type: "checkbox", checked: reUi.all, onchange: (e) => { reUi.all = e.target.checked; reUi.result = null; reUi.cur = null; reUi.skipped = new Set(); renderRechecks(); } }), " 날짜가 안 된 것도 보기");
   if (!cur) { view.replaceChildren(h("div", { class: "home2 memory" }, head, tog, h("p", { class: "mut" }, r.total ? "오늘 다시 확인할 것이 없어요. 날짜가 되면 여기 나와요." : "아직 다시 확인할 것이 없어요. 실습에서 목표를 끝내면 부족했던 점마다 문항이 생겨요."))); return; }
   const ta = h("textarea", { rows: 5, placeholder: "기억나는 대로 답해 보세요(모르면 모른다고 적어도 돼요)", value: reUi.answer, oninput: (e) => { reUi.answer = e.target.value; } });
   const submit = h("button", { class: "btn primary", onclick: (e) => busy(e.target, async () => {
@@ -370,11 +373,11 @@ async function renderRechecks() {
     h("b", {}, KO[res.verdict] ?? res.verdict, res.sameMistake ? " · 예전과 같은 곳에서 헷갈렸어요" : ""), h("p", { class: "small" }, res.note),
     h("div", { class: "small" }, h("b", {}, "모범답: "), res.answer),
     h("div", { class: "mut small" }, `다음 확인: ${res.dueAt ? new Date(res.dueAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" }) : "-"} · 상태: ${res.status}`),
-    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: () => { reUi.result = null; reUi.answer = ""; reUi.idx += 1; renderRechecks(); } }, reUi.idx + 1 < list.length ? "다음 문항" : "끝"))) : null;
+    h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: () => { reUi.result = null; reUi.answer = ""; reUi.cur = null; renderRechecks(); } }, "다음"))) : null;
   view.replaceChildren(h("div", { class: "home2 memory" }, head, tog,
-    h("div", { class: "mut small" }, `${Math.min(reUi.idx, list.length - 1) + 1} / ${list.length} · ${cur.concept} · 예전 목표: ${cur.goal}${cur.tries ? ` · ${cur.tries}번째 다시 확인` : ""}${cur.status === "다시 틀림" ? " · 지난번에도 틀림" : ""}`),
+    h("div", { class: "mut small" }, `${res ? "방금 답한 문항" : `남은 ${list.length}개`} · ${cur.concept} · 예전 목표: ${cur.goal}${cur.tries ? ` · ${cur.tries}번째 다시 확인` : ""}${cur.status === "다시 틀림" ? " · 지난번에도 틀림" : ""}`),
     h("div", { class: "gcard" }, h("pre", { class: "gcmd", style: "white-space:pre-wrap" }, cur.q)),
-    res ? resultBox : h("div", {}, ta, h("div", { class: "grow2" }, submit, h("button", { class: "btn small", onclick: () => { reUi.idx += 1; reUi.answer = ""; renderRechecks(); } }, "건너뛰기")))));
+    res ? resultBox : h("div", {}, ta, h("div", { class: "grow2" }, submit, h("button", { class: "btn small", onclick: () => { reUi.skipped.add(cur.id); reUi.answer = ""; reUi.cur = null; renderRechecks(); } }, "건너뛰기")))));
 }
 /* 세션 노트(11/8): 학습 한 번 = 제목 · 태그 · 목표마다 요약 · 배운 것 · 부족함(어디서 드러났고 · 무엇으로 채웠고 · 확인됐는지 · 다시 확인 문항) */
 async function renderNote(runId) {

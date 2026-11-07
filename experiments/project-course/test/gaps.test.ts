@@ -41,6 +41,9 @@ test("다시 확인: 맞으면 간격을 늘리고 틀리면 다시 열린다", 
   assert.ok(Date.parse(r.gap!.dueAt!) > Date.now() + 2 * 86_400_000);
   r = await G.answerRecheck("r1", gid, "", async () => { throw new Error("빈 답은 채점 안 함"); });
   assert.equal(r.verdict.verdict, "unclear");
+  assert.equal(r.gap!.status, "다시 확인 맞음", "빈 답은 상태를 안 바꾼다");
+  r = await G.answerRecheck("r1", gid, "모르겠어요", async () => ({ verdict: "unclear", same_mistake: false, note: "" }));
+  assert.equal(r.gap!.status, "다시 틀림", "모르겠어요는 못 떠올린 것");
 });
 test("세션 노트: 제목 · 태그 · 부족함 상태 개수", async () => {
   const n = await G.sessionNote("r1");

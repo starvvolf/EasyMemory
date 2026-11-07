@@ -432,8 +432,10 @@ async function noteGap(runId: string, op: string, b: Record<string, unknown>) {
       if (!sp) await GP.fillUnit(runId, c.id, v.quote || v.right);
     }
   } else if (op === "hard" || op === "stuck") {
-    const reasons = (Array.isArray(b.reasons) ? b.reasons : []).map(String);
+    const { STUCK_REASONS } = await import("./goals.ts");
+    const reasons = (Array.isArray(b.reasons) ? b.reasons : []).map(String).filter((r) => STUCK_REASONS.includes(r));
     const text = String(b.text ?? "").trim();
+    if (op === "stuck" && !reasons.length && !text) return; // goalAction이 거절할 요청(검토 11/8)
     await GP.openGap(runId, { goal, unit, from: "막힘", wrong: text || "어려움(이유를 고름)", cause: reasons, quote: text });
   }
 }

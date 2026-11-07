@@ -53,4 +53,9 @@ test("찾기 → 채우기 → 확인 → 정리 → 앱 → 다시 확인 → �
   p = await pending("run1", course, run);
   const kinds = p.items.find((x) => x.title === "없는 키 읽기")!.events.map((e) => e.kind);
   assert.deepEqual(kinds, ["wrong", "correct"], "실습에서 다시 확인한 결과가 앱 사건으로");
+  assert.equal(p.items.find((x) => x.title === "없는 키 읽기")!.state, "met", "다시 확인까지 맞힌 것은 몰랐음으로 다시 보내지 않는다");
+  // 다시 정리해도(ids 없이 같은 이름) 새 부족함이 안 생기고, 문항이 바뀌면 새 문항이 간다
+  await G.mergeRecord("run1", goal, [{ type: "규칙", concept: "없는 키 읽기", wrong: "w", right: "r", quote: "", ids: [], recheck: { q: "d = {}; d['a'] -= 1 은?", a: "KeyError" } }], new Date().toISOString());
+  assert.equal((await G.ledgerOf("run1")).length, 1);
+  assert.match(((await pending("run1", course, run)).items.find((x) => x.title === "없는 키 읽기")!.check ?? { q: "" }).q, /-= 1/);
 });

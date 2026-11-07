@@ -5,6 +5,7 @@
 // - 노트의 문법·도구 말 중 학습자가 눌러 보거나 물어본 것만 = 어휘(vocab). 물어본 횟수만큼 "물어봄".
 //   튜터 설명에 나오기만 한 말, 프로젝트 이름(router, findPost…)은 안 보낸다(2026-10-30 실제 데이터 확인 뒤).
 import path from "node:path";
+import { createHash } from "node:crypto";
 import type { Course } from "./course.ts";
 import { notesOf } from "./notes.ts";
 import { DATA, candidates, read, update, type Run } from "./store.ts";
@@ -57,14 +58,18 @@ export async function pending(runId: string, course: Course, run?: Run): Promise
       }
     }
     // 부족함 원장(11/8): 이름이 붙은 부족함마다 다시 확인 문항, 세션 안에서 채운 근거(메모), 실습에서 다시 확인한 결과(맞힘 · 틀림)
-    for (const g of await (await import("./gaps.ts")).ledgerOf(runId)) {
-      if (!g.type || !g.concept) continue;
+    const ledger = (await (await import("./gaps.ts")).ledgerOf(runId)).filter((g) => g.type && g.concept && !g.mergedInto); // 묶인 칸은 첫 칸이 대신(검토 11/8)
+    // 다시 확인까지 맞힌 지식은 "몰랐음"으로 다시 보내지 않는다(검토 11/8: 다음 동기화에서 앎 → 몰랐음으로 내려갈 수 있던 것)
+    const passed = new Set(ledger.filter((g) => g.status === "다시 확인 맞음").map((g) => `g:${name(g.concept).toLowerCase()}`));
+    const stillOpen = new Set(ledger.filter((g) => g.status !== "다시 확인 맞음").map((g) => `g:${name(g.concept).toLowerCase()}`));
+    for (const g of ledger) {
       const it = item(g.type as Tab, g.concept, g.right);
-      if (g.status !== "다시 확인 맞음") it.state = "unknown";
-      if (g.recheck) { it.check = { q: g.recheck.q, a: g.recheck.a, note: g.wrong, ref: `project:${runId}`, at: g.at }; it.checkKey = `gap:${g.id}:check`; }
+      // 문항이 바뀌면 열쇠도 바뀌어 새 문항이 간다(검토 11/8)
+      if (g.recheck) { it.check = { q: g.recheck.q, a: g.recheck.a, note: g.wrong, ref: `project:${runId}`, at: g.at }; it.checkKey = `gap:${g.id}:check:${createHash("sha1").update(g.recheck.q).digest("hex").slice(0, 8)}`; }
       if (g.filledAt) it.events.push({ key: `gap:${g.id}:fill`, kind: "note", detail: `실습에서 채움 확인(목표 "${g.goal.title}"): ${g.fillEvidence ?? ""}${g.remedy.length ? ` · 처방: ${g.remedy.map((r) => r.text).join(" / ")}` : ""}`.slice(0, 600), at: g.filledAt });
-      for (const c of g.checks) if (c.verdict !== "unclear") it.events.push({ key: `gap:${g.id}:chk:${c.at}`, kind: c.verdict === "correct" ? "correct" : "wrong", detail: `실습에서 다시 확인: ${c.note}${c.answer ? ` · 답: "${c.answer.slice(0, 200)}"` : ""}`.slice(0, 600), at: c.at });
+      for (const c of g.checks) if (c.answer) it.events.push({ key: `gap:${g.id}:chk:${c.at}`, kind: c.verdict === "correct" ? "correct" : "wrong", detail: `실습에서 다시 확인: ${c.note}${c.answer ? ` · 답: "${c.answer.slice(0, 200)}"` : ""}`.slice(0, 600), at: c.at });
     }
+    for (const k of passed) { const it = byKey.get(k); if (it && !stillOpen.has(k)) it.state = "met"; }
     const items: SyncItem[] = [];
     for (const it of byKey.values()) {
       const events = it.events.filter((e) => !sent.has(e.key));

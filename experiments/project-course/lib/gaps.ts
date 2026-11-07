@@ -98,7 +98,9 @@ export async function gapsForRecord(runId: string, goalId: string, verdicts: str
 export async function mergeRecord(runId: string, goal: { id: string; title: string; done: string }, recGaps: { type: string; concept: string; wrong: string; right: string; quote: string; ids?: string[]; recheck?: Recheck; code?: { file: string; from: number; to: number; code: string } | null }[], endAt: string) {
   await update<Ledger>(file(runId), empty(), (l) => {
     for (const r of recGaps) {
-      const linked = l.gaps.filter((g) => (r.ids ?? []).includes(g.id) && g.goal.id === goal.id);
+      // ids로 이은 것, 없으면 같은 목표에서 같은 이름으로 이미 연 것(다시 정리할 때 같은 부족함이 새로 생기지 않게)
+      const byIds = l.gaps.filter((g) => (r.ids ?? []).includes(g.id) && g.goal.id === goal.id);
+      const linked = byIds.length ? byIds : l.gaps.filter((g) => g.goal.id === goal.id && g.type && clean(g.concept, 80).toLowerCase() === clean(r.concept, 80).toLowerCase()).slice(0, 1);
       const targets = linked.length ? linked : [(() => {
         const g: Gap = { id: `G${l.gaps.length + 1}-${randomBytes(2).toString("hex")}`, runId, goal: { id: goal.id, title: goal.title }, unit: { id: goal.id, title: goal.title, done: goal.done }, concept: "", type: "", wrong: "", right: "",
           cause: [], evidence: [{ at: endAt, from: "목표 정리", text: clean([r.wrong, r.quote ? `학습자: "${clean(r.quote, 300)}"` : ""].filter(Boolean).join(" · "), 700) }], remedy: [], status: "열림", checks: [], box: 0, at: endAt };
@@ -144,7 +146,8 @@ export async function answerRecheck(runId: string, gapId: string, answer: string
     const g = l.gaps.find((x) => x.id === gapId)!;
     g.checks.push({ at: now(), answer: a, verdict: v.verdict, note: clean(v.note, 400) });
     if (v.verdict === "correct") { g.status = "다시 확인 맞음"; g.box = Math.min(g.box + 1, RECHECK_DAYS.length - 1); g.dueAt = dueFrom(g.box); }
-    else if (v.verdict !== "unclear" || !a) { g.status = "다시 틀림"; g.box = 0; g.dueAt = dueFrom(0); g.evidence.push({ at: now(), from: "다시 확인", text: clean(`${v.verdict}${v.same_mistake ? " · 같은 오해" : ""}: ${a}`, 600) }); }
+    // "모르겠어요"도 못 떠올린 것(검토 11/8: unclear면 아무것도 안 바뀌어 다시 열리지 않던 것). 빈 답만 그대로 둔다
+    else if (a) { g.status = "다시 틀림"; g.box = 0; g.dueAt = dueFrom(0); g.evidence.push({ at: now(), from: "다시 확인", text: clean(`${v.verdict}${v.same_mistake ? " · 같은 오해" : ""}: ${a}`, 600) }); }
     out = g;
   });
   return { gap: out as Gap | null, verdict: v };
