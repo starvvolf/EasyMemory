@@ -91,6 +91,7 @@ export function planQuiz(map: MaterialMap, structure: Structure, options: Partia
     for (const c of cards) used.add(c.id);
   };
   const kids = (g: Structure["groups"][number]) => structure.groups.filter((x) => x.parent === g.id);
+  const mainTopic = (it: Omit<PlanItem, "n" | "topic">) => { const counts = new Map<string, number>(); for (const id of it.cards) counts.set(topicOf(id), (counts.get(topicOf(id)) ?? 0) + 1); return [...counts].sort((a, b) => b[1] - a[1])[0][0]; };
   for (const g of structure.groups) {
     if (g.members !== "순서") continue;
     const ids = [...(g.head ? [g.head] : []), ...g.cards, ...kids(g).flatMap((k) => [...(k.head ? [k.head] : []), ...k.cards])].filter((id) => byId.has(id));
@@ -108,24 +109,28 @@ export function planQuiz(map: MaterialMap, structure: Structure, options: Partia
   for (const p of structure.pairs ?? []) if (byId.has(p.a) && byId.has(p.b)) add("잇기", `${title(p.a)} → ${title(p.b)}`, [p.a, p.b], `짝: ${p.why}`);
   if (o.scope !== "핵심") for (const c of all) if (c.core && !used.has(c.id)) add("낱장", c.title, [c.id], "핵심 카드");
   const topics = [...new Set(all.map((c) => topicOf(c.id)))];
+  // 주제 덮기는 "그 주제가 중심인 문제"로 센다(11/8: 다른 주제 문제에 카드 한 장 끼었다고 덮었다고 봐서 그래픽스 24개 중 4개가 빠졌다)
+  const centered = (t: string) => items.some((it) => mainTopic(it) === t);
   if (o.scope !== "핵심") for (const t of topics) {
-    if (items.some((it) => it.cards.some((id) => topicOf(id) === t))) continue;
-    const c = all.find((x) => topicOf(x.id) === t && x.core) ?? all.find((x) => topicOf(x.id) === t);
+    if (centered(t)) continue;
+    const c = all.find((x) => topicOf(x.id) === t && x.core && !used.has(x.id)) ?? all.find((x) => topicOf(x.id) === t && !used.has(x.id)) ?? all.find((x) => topicOf(x.id) === t);
     if (c) add("낱장", c.title, [c.id], "이 주제에 문제가 없어서");
   }
   // 무게: 차례·대비 > 대표 > 잇기(시험이면 위로) > 갈래 > 낱장, 같으면 핵심 카드가 많은 것
   const weight: Record<Unit, number> = { 차례: 5, 대비: 4, 대표: 3, 잇기: o.goal === "시험" ? 4.5 : 1.5, 갈래: 2, 낱장: 1 };
   const score = (it: Omit<PlanItem, "n" | "topic">) => weight[it.unit] * 10 + it.cards.filter((id) => byId.get(id)?.core).length;
   const sorted = [...items].sort((a, b) => score(b) - score(a));
-  const mainTopic = (it: Omit<PlanItem, "n" | "topic">) => { const counts = new Map<string, number>(); for (const id of it.cards) counts.set(topicOf(id), (counts.get(topicOf(id)) ?? 0) + 1); return [...counts].sort((a, b) => b[1] - a[1])[0][0]; };
   // 첫 묶음 크기: 처음 1/5 · 복습 1/4 · 시험 1/3 (최소 6, 최대 30). 고르게면 주제 수보다 작지 않게(11/8: 20개 제한에 주제 24개 중 4개가 빠졌다)
   const share = o.goal === "처음" ? 5 : o.goal === "시험" ? 3 : 4;
   let size = o.count ?? Math.max(6, Math.min(30, Math.round(all.length / share)));
   if (!o.count && o.scope === "고르게") size = Math.max(size, Math.min(30, topics.length));
   if (o.scope === "전부") size = sorted.length;
   const first: typeof items = [], seen = new Set<string>();
-  if (o.scope !== "핵심") for (const it of sorted) if (first.length < size && !seen.has(mainTopic(it))) { first.push(it); seen.add(mainTopic(it)); }
-  for (const it of sorted) if (first.length < size && !first.includes(it)) first.push(it);
+  if (o.scope !== "핵심") for (const it of sorted) if (first.length < size && !seen.has(mainTopic(it)) && it.unit !== "잇기") { first.push(it); seen.add(mainTopic(it)); }
+  // 잇기는 첫 묶음의 1/4까지(11/8: 시험 대비에서 데드락 10개 중 6개가 잇기였다), 시험이 아니면 1개
+  const capOf = (u: Unit) => u === "잇기" ? (o.goal === "시험" ? Math.max(1, Math.round(size / 4)) : 1) : Infinity;
+  const fits = (it: typeof items[number]) => first.filter((x) => x.unit === it.unit).length < capOf(it.unit);
+  for (const it of sorted) if (first.length < size && !first.includes(it) && fits(it)) first.push(it);
   // 같은 카드가 첫 묶음에 세 번 넘게 나오지 않게(대비·잇기·대표가 한 카드에 몰림)
   const uses = new Map<string, number>();
   const firstSet = new Set<typeof items[number]>();
