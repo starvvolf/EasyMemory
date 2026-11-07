@@ -77,7 +77,9 @@ function Body({ s }: { s: Shape }) {
     case "compare": return <div className="mm2-tablewrap"><table className="mm2-table"><thead><tr><th />{s.targets.map((t) => <th key={t}><Rich text={t} /></th>)}</tr></thead>
       <tbody>{s.criteria.map((c) => <tr key={c.name}><th><Rich text={c.name} /></th>{s.targets.map((_, i) => <td key={i}><Rich text={c.values[i] ?? ""} /></td>)}</tr>)}</tbody></table></div>;
     case "list": return s.ordered ? <ol className="mm3-steps">{s.items.map((it, i) => <li key={i}><span className="mm3-stepn">{i + 1}</span><div><Rich text={it} /></div></li>)}</ol> : <ul className="mm3-bullets">{s.items.map((it, i) => <li key={i}><Rich text={it} /></li>)}</ul>;
-    case "term": return <div className="mm3-body"><p className="mm3-lead"><Rich text={s.definition} /></p>{s.neighbors.length ? <p className="mm3-when"><span className="mm3-tag">헷갈리는 말</span><Rich text={s.neighbors.join(", ")} /></p> : null}</div>;
+    // 표기(기호) 11/8 사용자 "요청 간선 P→R 표기가 안 보여": 카드에는 있었는데 그리지 않았다.
+    case "term": return <div className="mm3-body"><p className="mm3-lead"><Rich text={s.definition} /></p>
+      {s.symbol ? <p className="mm3-when"><span className="mm3-tag">표기</span><Rich text={s.symbol.includes("$") ? s.symbol : tex(s.symbol)} /></p> : null}{s.neighbors.length ? <p className="mm3-when"><span className="mm3-tag">헷갈리는 말</span><Rich text={s.neighbors.join(", ")} /></p> : null}</div>;
     case "fact": return <p className="mm3-lead"><Rich text={s.value} /></p>;
     case "concept": return <div className="mm3-body"><p className="mm3-lead"><Rich text={s.claim} /></p>{s.reason ? <p className="mm3-when"><span className="mm3-tag">왜</span><Rich text={s.reason} /></p> : null}{s.limit ? <p className="mm3-when"><span className="mm3-tag">한계</span><Rich text={s.limit} /></p> : null}</div>;
     case "pattern": return <p><Rich text={s.frame} />{s.example ? <span className="small muted"> · 예: <Rich text={s.example} /></span> : null}</p>;
