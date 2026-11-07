@@ -126,11 +126,12 @@ export async function answer(a: Answer) {
     return { ok, answer: m.predict.answer };
   }
   if (a.kind === "drill") {
-    const best = m.approaches.find((x) => x.verdict === "best");
-    const ok = Boolean(best) && a.choice === best!.name;
+    // 맞는 풀이가 여럿일 수 있다(BFS·DFS 둘 다 되는 문제): 의도된 풀이(best)와 "가능하지만 덜 좋음"(ok)은 인식 성공, 느림·틀림은 실패.
+    const chosen = m.approaches.find((x) => x.name === a.choice);
+    const ok = chosen?.verdict === "best" || chosen?.verdict === "ok";
     const grade = gradeOf(events, a.number, "recognize", { hinted: a.hinted, mixed: a.mixed });
     await record({ kind: "drill", number: a.number, patterns, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${a.choice}` }, m);
-    return { ok, grade: GRADE_LABEL[grade], approaches: m.approaches, signals: m.signals, patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
+    return { ok, intended: chosen?.verdict === "best", grade: GRADE_LABEL[grade], approaches: m.approaches, signals: m.signals, patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
   }
   if (a.kind === "design") {
     const stateOk = a.state === m.state.right, cxOk = a.complexity === m.complexity, ok = stateOk && cxOk;

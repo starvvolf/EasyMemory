@@ -203,7 +203,7 @@ function DrillCard({ a, elapsed, send, fb, busy, err, next }: CardProps) {
       {!fb && !hint && (a.signals?.length ?? 0) > 0 ? <button className="linkish small" onClick={() => setHint(true)}>신호 보기 (도움 받은 것으로 남아요)</button> : null}
       {hint && !fb ? <p className="small muted">신호: {(a.signals ?? []).join(" · ")}</p> : null}
       {err ? <p className="ws-err small">{err}</p> : null}
-      {fb ? <p className={`small ${fb.ok ? "pt-good" : "pt-bad"}`}><b>{fb.ok ? "맞았어요." : "다른 접근이 의도된 풀이예요."}</b> 이 문제의 패턴: {(fb.patternNames as string[]).join(", ")} · 신호: {(fb.signals as string[]).join(" · ")} <span className="muted">({String(fb.grade)})</span></p>
+      {fb ? <p className={`small ${fb.ok ? "pt-good" : "pt-bad"}`}><b>{fb.ok ? (fb.intended ? "맞았어요." : "맞는 풀이예요. 다만 의도된 풀이는 따로 있어요.") : "이 접근으로는 안 돼요."}</b> 이 문제의 패턴: {(fb.patternNames as string[]).join(", ")} · 신호: {(fb.signals as string[]).join(" · ")} <span className="muted">({String(fb.grade)})</span></p>
         : <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" disabled={!pick || Boolean(busy)} onClick={() => void send({ kind: "drill", mixed: a.mixed, choice: pick, hinted: hint, ms: elapsed?.() })}>{busy || "확인"}</button></div>}
       {fb ? next : null}
     </section>

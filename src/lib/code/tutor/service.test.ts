@@ -29,6 +29,8 @@ test("튜터 흐름: 화면엔 답이 없고, 드릴·설계·예측은 코드�
     assert.ok(d && !("approaches" in d), "the drill sends choices, not verdicts");
     const r = await answer({ kind: "drill", number: d.number, pattern: "components", mixed: false, choice: "BFS로 덩어리 세기" }) as { ok: boolean; grade: string };
     assert.equal(r.ok, true); assert.equal(r.grade, "새 문제를 혼자");
+    const slow = await answer({ kind: "drill", number: "2667", pattern: "components", mixed: true, choice: "모든 쌍 비교" }) as { ok: boolean };
+    assert.equal(slow.ok, false, "a slow approach is not a recognition");
     const des = await answer({ kind: "design", number: "2667", pattern: "components", mixed: false, state: "방문 배열", complexity: "n" }) as { ok: boolean; cxOk: boolean; mine: string };
     assert.equal(des.ok, false); assert.equal(des.cxOk, false); assert.match(des.mine, /n = 500/);
     const hits = await searchKnowledge("덩어리 세기");
@@ -37,7 +39,7 @@ test("튜터 흐름: 화면엔 답이 없고, 드릴·설계·예측은 코드�
     assert.ok(k.sources.some((s) => s.ref === "tutor:pattern:components"));
     o = await tutorOverview();
     const row = o.patterns.find((p) => p.id === "components")!;
-    assert.equal(row.abilities.recognize.freshWins, 1); assert.equal(row.abilities.design.failStreak, 1);
+    assert.equal(row.abilities.recognize.freshWins, 1); assert.equal(row.abilities.recognize.failStreak, 1); assert.equal(row.abilities.design.failStreak, 1);
   } finally {
     for (const [key, v] of [["STUDY_FORGE_DATA_DIR", prior.data], ["RECALLER_AFTER_SAVE", prior.after]] as const) { if (v === undefined) delete process.env[key]; else process.env[key] = v; }
     await rm(dir, { recursive: true, force: true });
