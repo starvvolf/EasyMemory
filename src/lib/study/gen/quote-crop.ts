@@ -323,27 +323,39 @@ export async function frameOf(bytes: Uint8Array, pages: number[], share = 0.4) {
  * 대략의 상자(쪽을 0~100으로 본 [x0, y0, x1, y1])를 주면, 코드가 그 상자와 겹치는 그림 덩어리에 맞춘다(figure).
  * 겹치는 그림이 없거나 애매하면 AI 상자를 조금 넓혀 그대로 자른다(block, 사용자 "애매하면 덩어리").
  */
-export function snapHint(hint: Box, graphics: Graphic[], page: { width: number; height: number }, rows: Row[] = []): { mode: CropMode; box?: Box } {
+export function snapHint(hint: Box, graphics: Graphic[], page: { width: number; height: number }, rows: Row[] = [], placed: Placed[] = []): { mode: CropMode; box?: Box } {
+  const d = snapAt(hint, graphics, page, rows, placed);
+  if (d.mode !== "none" || page.width <= page.height) return d;
+  // 11/8 그래픽스 04: 가로 쪽에서 AI가 세로 위치를 가로 길이 기준(정사각형)으로 준 카드가 있었다(p.29 힌트 y 33~51 → 그림 57~91 = ×960/540).
+  // 그 자리에 그림이 없을 때만, 비율을 고친 자리에서 그림이 딱 잡히면 그것을 쓴다.
+  const k = page.width / page.height;
+  if (hint.y1 * k > page.height * 1.02) return d;
+  const fixed = snapAt({ ...hint, y0: hint.y0 * k, y1: hint.y1 * k }, graphics, page, rows, placed);
+  return fixed.mode === "figure" ? fixed : d;
+}
+
+function snapAt(hint: Box, graphics: Graphic[], page: { width: number; height: number }, rows: Row[], placed: Placed[]): { mode: CropMode; box?: Box } {
   const pageArea = page.width * page.height;
   const joinGap = Math.min(page.width, page.height) * 0.06;
   const big = (b: Box) => area(b) > pageArea * 0.6;
   // 그림에 붙은 짧은 라벨(R_j, P_i, (a))이 상자 밖으로 조금 나가면 같이
   const hs = rows.map((r) => r.box.y1 - r.box.y0).sort((x, y) => x - y), lineH = hs.length ? hs[Math.floor(hs.length / 2)] : 12;
-  const withLabels = (box: Box) => rows.reduce((b, r) => (!isSentence(r) && gapBetween(r.box, box) <= lineH * 0.9 && r.box.x0 >= box.x0 - lineH * 2 && r.box.x1 <= box.x1 + lineH * 2 ? union(b, r.box) : b), box);
-  const touching = graphics.filter((g) => overlap(g.box, hint) > Math.min(area(g.box), area(hint)) * 0.3);
+  // 줄이 아니라 글자 조각 단위로(같은 높이의 라벨 R₁, R₂가 한 줄로 묶이면 줄 폭이 그림보다 넓어져 빠졌다)
+  const labels = placed.length ? placed.filter((p) => (p.str.match(/[\p{L}]{2,}/gu) ?? []).length < 3).map((p) => p.box) : rows.filter((r) => !isSentence(r)).map((r) => r.box);
+  const withLabels = (box: Box) => labels.reduce((b, l) => (gapBetween(l, box) <= lineH * 1.2 && l.x0 >= box.x0 - lineH * 2 && l.x1 <= box.x1 + lineH * 2 ? union(b, l) : b), box);
+  // 쪽 절반이 넘는 그림은 바탕·내용 틀로 본다(11/8: 틀을 12쪽만 보고 정해 놓친 내용 상자가 덩어리를 쪽 전체로 키워 그림 27개가 빠졌다)
+  const pool = big(hint) ? graphics : graphics.filter((g) => area(g.box) <= pageArea * 0.5);
+  const touching = pool.filter((g) => overlap(g.box, hint) > Math.min(area(g.box), area(hint)) * 0.3);
   if (touching.length) {
-    const box = cluster(touching, graphics, joinGap)!;
+    const box = cluster(touching, pool, joinGap)!;
     if (!big(box)) {
       // 그림이 힌트보다 훨씬 작으면(세마포어: 화살표만 그림이고 코드는 글) 힌트가 가리킨 덩어리를 믿는다. 힌트가 쪽 대부분이면 그림 쪽을.
       if (area(box) >= area(hint) * 0.35 || big(hint)) return { mode: "figure", box: withLabels(box) };
       return { mode: "block", box: withLabels(hint) };
     }
   }
-  if (big(hint)) return { mode: "none" }; // 쪽 전체를 가리킨 힌트는 쓸모없다
-  // 너무 가늘거나 낮은 힌트(쪽 폭·높이의 12% 미만)는 믿지 않는다
-  if (hint.x1 - hint.x0 < page.width * 0.12 || hint.y1 - hint.y0 < page.height * 0.12) return { mode: "none" };
-  const padX = (hint.x1 - hint.x0) * 0.08 + 6, padY = (hint.y1 - hint.y0) * 0.08 + 6;
-  return { mode: "block", box: withLabels({ x0: Math.max(0, hint.x0 - padX), y0: Math.max(0, hint.y0 - padY), x1: Math.min(page.width, hint.x1 + padX), y1: Math.min(page.height, hint.y1 + padY) }) };
+  // 근처에 그림이 없으면 자르지 않는다(11/8 그래픽스 점검: 글줄이 그림으로 박힌 쪽에서 글만 반쯤 잘려 나왔다)
+  return { mode: "none" };
 }
 
 export async function cropHints(bytes: Uint8Array, page: number, hints: Array<[number, number, number, number]>, options: { width?: number; frame?: Set<string> } = {}) {
@@ -362,11 +374,79 @@ export async function cropHints(bytes: Uint8Array, page: number, hints: Array<[n
     await p.render({ canvas, canvasContext: ctx, viewport: view }).promise;
     return hints.map((h) => {
       const hint: Box = { x0: h[0] / 100 * viewport.width, y0: h[1] / 100 * viewport.height, x1: h[2] / 100 * viewport.width, y1: h[3] / 100 * viewport.height };
-      const d = snapHint(hint, graphics, viewport, rows);
+      const d = snapHint(hint, graphics, viewport, rows, placeRuns(runs, viewport.height));
       if (d.mode === "none" || !d.box) return { hint: h, mode: "none" as CropMode };
       const r = cropRect(d.box, scale, viewport, { top: 8, bottom: 8 }, 8);
       const cut = createCanvas(Math.max(1, r.w), Math.max(1, r.h)); cut.getContext("2d").drawImage(canvas as never, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
       return { hint: h, mode: d.mode, box: [d.box.x0 / viewport.width, d.box.y0 / viewport.height, d.box.x1 / viewport.width, d.box.y1 / viewport.height], image: `data:image/jpeg;base64,${cut.toBuffer("image/jpeg", 85).toString("base64")}` };
     });
   } finally { await (document as unknown as { cleanup?: () => Promise<void> }).cleanup?.(); }
+}
+
+/**
+ * 한 자료를 한 번만 열어 쪽마다 한 번만 읽고 그린다 (11/8 그래픽스 04: 쪽마다 PDF를 다시 열고 다시 그려 61초) — figures.ts가 주제 카드가
+ * 나오는 대로 부른다. 틀(여러 쪽 되풀이 도형)은 쪽을 고르게 최대 12쪽만 보고 정한다.
+ */
+export async function openCropper(bytes: Uint8Array, pages: number[], width = 1400) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const { createCanvas } = await import("@napi-rs/canvas");
+  const document = await pdfjs.getDocument({ data: Uint8Array.from(bytes) }).promise;
+  const OPS = pdfjs.OPS as Record<string, number>;
+  type Ctx = { viewport: { width: number; height: number }; placed: Placed[]; rows: Row[]; graphics: Graphic[]; shades: Shade[]; scale: number; canvas?: import("@napi-rs/canvas").Canvas; page: PdfPage & { render: (o: unknown) => { promise: Promise<void> } } };
+  const cache = new Map<number, Promise<Ctx>>();
+  let queue: Promise<unknown> = Promise.resolve(); // pdf.js는 한 줄로
+  const serial = <T>(fn: () => Promise<T>) => { const run = queue.then(fn, fn); queue = run.catch(() => undefined); return run; };
+  const sample = pages.length <= 12 ? pages : Array.from({ length: 12 }, (_, i) => pages[Math.floor(i * (pages.length - 1) / 11)]);
+  const raw = new Map<number, Awaited<ReturnType<typeof readPage>>>();
+  const framePromise = serial(async () => {
+    const count = new Map<string, number>();
+    for (const n of sample) {
+      const r = await readPage(await document.getPage(n) as unknown as PdfPage, OPS); raw.set(n, r);
+      for (const k of new Set([...r.shapes.map((x) => keyOf(x.box)), ...r.graphics.map((g) => keyOf(g.box))])) count.set(k, (count.get(k) ?? 0) + 1);
+    }
+    return new Set([...count].filter(([, c]) => sample.length >= 3 && c >= sample.length * 0.4).map(([k]) => k));
+  });
+  const ctxOf = (n: number) => {
+    if (!cache.has(n)) cache.set(n, framePromise.then((frame) => serial(async () => {
+      const page = await document.getPage(n) as unknown as Ctx["page"];
+      const r = raw.get(n) ?? await readPage(page, OPS);
+      const placed = placeRuns(r.runs, r.viewport.height), rows = rowsOf(placed);
+      const { graphics, shades } = sortShapes(r.shapes, r.graphics, rows, r.viewport, frame);
+      return { viewport: r.viewport, placed, rows, graphics, shades, scale: width / Math.max(r.viewport.width, r.viewport.height), page };
+    })));
+    return cache.get(n)!;
+  };
+  const cut = async (c: Ctx, box: Box, pad?: { top: number; bottom: number }) => serial(async () => {
+    if (!c.canvas) {
+      const view = c.page.getViewport({ scale: c.scale });
+      const cv = createCanvas(Math.ceil(view.width), Math.ceil(view.height));
+      const g = cv.getContext("2d"); g.fillStyle = "white"; g.fillRect(0, 0, cv.width, cv.height);
+      await c.page.render({ canvas: cv, canvasContext: g, viewport: view }).promise;
+      c.canvas = cv;
+    }
+    const r = cropRect(box, c.scale, c.viewport, pad ?? { top: 8, bottom: 8 }, 8);
+    const out = createCanvas(Math.max(1, r.w), Math.max(1, r.h)); out.getContext("2d").drawImage(c.canvas as never, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+    return out.toBuffer("image/jpeg", 85);
+  });
+  const frac = (c: Ctx, b: Box) => [b.x0 / c.viewport.width * 100, b.y0 / c.viewport.height * 100, b.x1 / c.viewport.width * 100, b.y1 / c.viewport.height * 100];
+  return {
+    /** AI 그림 위치(0~100) → 맞춘 그림 */
+    async hint(n: number, h: number[]) {
+      const c = await ctxOf(n);
+      const hint: Box = { x0: h[0] / 100 * c.viewport.width, y0: h[1] / 100 * c.viewport.height, x1: h[2] / 100 * c.viewport.width, y1: h[3] / 100 * c.viewport.height };
+      const d = snapHint(hint, c.graphics, c.viewport, c.rows, c.placed);
+      if (d.mode === "none" || !d.box) return null;
+      return { mode: d.mode, box: frac(c, d.box), jpeg: await cut(c, d.box) };
+    },
+    /** 원문 인용 → 둘레에 그림이 있을 때만 */
+    async quote(n: number, q: string) {
+      const c = await ctxOf(n);
+      const hit = findQuote(c.placed, q);
+      if (!hit) return null;
+      const d = decideCrop(hit, c.rows, c.graphics, c.viewport, c.shades);
+      if (d.mode === "none" || !d.box) return null;
+      return { mode: d.mode, box: frac(c, d.box), jpeg: await cut(c, d.box, d.pad) };
+    },
+    async close() { await queue; await (document as unknown as { cleanup?: () => Promise<void> }).cleanup?.(); },
+  };
 }

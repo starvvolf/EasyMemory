@@ -108,7 +108,7 @@ export type RecallerState = {
   timing: { startedAt: string; prepMs?: number; firstPublishedAt?: string; basicDoneAt?: string; completedAt?: string;
     /** 연구 1: when each page's reading and cards were done (the first pass over the material). */
     readAt?: Record<string, string>; organizedAt?: Record<string, string>; skimDoneAt?: string;
-    /** every page's cards are in (자료 전체 정리 starts here) */ cardsDoneAt?: string; /** 그림 자르기(11/8) */ figuresMs?: number };
+    /** every page's cards are in (자료 전체 정리 starts here) */ cardsDoneAt?: string; /** 그림 자르기(11/8): 처음부터 끝까지, 카드가 다 나온 뒤 더 기다린 시간 */ figuresMs?: number; figuresWaitMs?: number };
   guides?: Record<string, string>;
 };
 
@@ -1648,6 +1648,8 @@ export async function runRecaller(ctx: RecallerContext) {
   if (!cardsLeft.size) cardsDone();
   const mergeEarly = !combine && !lab.skimOnly && lab.consolidate === undefined && !(data.consolidated && !data.consolidated.error) ? cardsReady.then(() => merging()) : null;
   mergeEarly?.catch(() => undefined);
+  // 카드에 그림 붙이기 (11/8 lab.figures): 주제 카드가 나오는 대로 그 주제 그림을 자른다(코드만)
+  const figureJob = digestOn && lab.figures && ctx.pdf && ctx.saveFigure ? (await import("./figures.ts")).figureCropper(ctx.pdf, input.pageNumbers, ctx.saveFigure) : null;
   const work = order().map((section) => sectionLimit(async () => {
     const unit = data.units[section.id];
     if (unit.status === "ready") return;
@@ -1655,7 +1657,7 @@ export async function runRecaller(ctx: RecallerContext) {
     // Each page waits only for its own reading; the pages of a section run at once.
     await Promise.all((digestOn ? [section.pages] : chunksOf(section.pages)).map(async (pages, k) => pageLimit(async () => {
       // lab.digest: the cards come from the topic's summary lines (the model sees the pictures there), not from a page call.
-      if (digestOn) await digestCards(section);
+      if (digestOn) { await digestCards(section); void figureJob?.add(data.units[section.id]?.cards ?? []); }
       else if (!lab.inlineRead) await Promise.all(pages.map(readPage));
       // inlineRead with questions: the reading starts now, beside 정리, for the checks that come after (not for skimOnly).
       else if (!cardsOnly) for (const p of pages) void readPage(p).catch(() => undefined);
@@ -1685,14 +1687,9 @@ export async function runRecaller(ctx: RecallerContext) {
     }
     for (const s of state.sections) attachNotes(s.id);
     await save();
-    // 카드에 그림 붙이기 (11/8 lab.figures): 코드만, 자료 전체 정리와 같이 돈다
-    if (lab.figures && ctx.pdf && ctx.saveFigure) {
-      try {
-        const { attachFigures } = await import("./figures.ts");
-        const r = await attachFigures(ctx.pdf, input.pageNumbers, all, ctx.saveFigure);
-        data.timing.figuresMs = r.ms;
-        await save();
-      } catch (error) { state.recaller?.warnings.push({ severity: "warning", code: "rc-figures", message: `그림을 붙이지 못했어요: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300) }); }
+    if (figureJob) {
+      try { const r = await figureJob.finish(); data.timing.figuresMs = r.ms; data.timing.figuresWaitMs = Date.now() - Date.parse(data.timing.cardsDoneAt ?? new Date().toISOString()); await save(); }
+      catch (error) { state.recaller?.warnings.push({ severity: "warning", code: "rc-figures", message: `그림을 붙이지 못했어요: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300) }); }
     }
   }
   data.timing.skimDoneAt ??= new Date().toISOString();
