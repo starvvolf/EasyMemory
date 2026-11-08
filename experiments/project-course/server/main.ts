@@ -15,6 +15,7 @@ import { markSent, pending } from "../lib/sync.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
 import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
+import { blockedRequest } from "../lib/guard.ts";
 import { answerAsk, stopAsk, stuckWords } from "../lib/lesson.ts";
 import { runSnippet } from "../lib/tutor-tools.ts";
 import { genStatus, startGeneration } from "../lib/generate.ts";
@@ -423,6 +424,8 @@ const routes: [string, RegExp, Handler][] = [
 const TYPES: Record<string, string> = { ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml" };
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
+  const blocked = blockedRequest(req.method ?? "GET", req.headers);
+  if (blocked) { res.writeHead(403, { "content-type": "application/json; charset=utf-8" }); res.end(JSON.stringify({ error: blocked })); return; }
   try {
     const ev = /^\/api\/runs\/(\w+)\/events$/.exec(url.pathname);
     if (ev) { subscribe(ev[1], res); return; }
