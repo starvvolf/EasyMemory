@@ -9,8 +9,8 @@ import { recordEvent, saveMany, type KEventKind } from "../../knowledge/api.ts";
 import { patternsOfNumber, readLinks, writeLink } from "./links.ts";
 import { appendLesson, lessonLine, refineAiHelp, type LessonKind } from "./lessons.ts";
 import { parsePsId } from "./review.ts";
-import { problemIdOf } from "../bakingdog.ts";
-import { readSubmissions } from "../problems.ts";
+import { fillProblem, problemIdOf } from "../bakingdog.ts";
+import { readProblemMeta, readSubmissions } from "../problems.ts";
 import { COMPLEXITIES, complexityVerdict } from "../train.ts";
 import { patternOf, PATTERNS } from "./patterns.ts";
 import { nextActions, type Action } from "./policy.ts";
@@ -138,7 +138,9 @@ export async function tutorOverview() {
   await syncImplement().catch(() => undefined);
   const [models, events] = await Promise.all([readModels(), readEvents()]);
   const state = computeState(events);
-  const actions = nextActions(state, models).flatMap((a) => (models[a.number] ? [view(a, models[a.number], models)] : []));
+  const planned = nextActions(state, models);
+  const actions = planned.flatMap((a) => (models[a.number] ? [view(a, models[a.number], models)] : []));
+  prefetchImplement(planned, events, models);
   const covered = PATTERNS.filter((p) => Object.values(models).some((m) => m.patterns.includes(p.id)));
   return {
     targets: tutorTargets().length, ready: Object.keys(models).length, prep: prepStatus(), pending: await readJson<Pending[]>("pending.json", []),
@@ -146,6 +148,27 @@ export async function tutorOverview() {
       abilities: Object.fromEntries((["recognize", "design", "execute"] as const).map((ab) => [ab, { help: s.abilities[ab].help, freshWins: s.abilities[ab].freshWins, accuracy: s.abilities[ab].accuracy, dueAt: s.abilities[ab].dueAt, due: Boolean(s.abilities[ab].dueAt && Date.parse(s.abilities[ab].dueAt!) <= Date.now()), failStreak: s.abilities[ab].failStreak, n: s.abilities[ab].independent.n + s.abilities[ab].assisted.n }])) }; }),
     actions, done: events.filter((e) => e.ability).length,
   };
+}
+/** 미리 만들기(11/9, 사용자 "느리다"): 구현 차례가 오기 전에 그 문제의 숨은 테스트를 뒤에서 만든다. 지금 할 일이 설계면 설계를
+ *  맞혔다고 치고 다음 구현 문제를 고른다(정책이 같은 문제를 고르게). 한 번에 하나만, 앱 서버 안에서만(시험에서는 안 함). */
+const prefetching = new Set<string>();
+function prefetchImplement(planned: ReturnType<typeof nextActions>, events: TutorEvent[], models: Record<string, ProblemModel>) {
+  if (!process.env.NEXT_RUNTIME || process.env.RECALLER_TUTOR_PREFETCH === "off" || prefetching.size) return;
+  let target = planned.find((a) => a.kind === "implement");
+  const first = planned[0];
+  if (!target && first?.kind === "design") {
+    const ifRight: TutorEvent = { id: "te_if", at: new Date().toISOString(), kind: "design", number: first.number, patterns: models[first.number]?.patterns ?? [first.pattern], ability: "design", ok: true, grade: 3 };
+    target = nextActions(computeState([...events, ifRight]), models).find((a) => a.kind === "implement" && a.pattern === first.pattern);
+  }
+  if (!target) return;
+  const n = target.number;
+  prefetching.add(n);
+  void (async () => {
+    try {
+      if (await readProblemMeta(problemIdOf(n)).catch(() => null)) return;
+      await fillProblem(n, undefined, { avoid: await mistakesToCatch(n) });
+    } catch { /* 실패는 문제집 상태에 남고, 구현을 시작할 때 다시 시도된다 */ } finally { prefetching.delete(n); }
+  })();
 }
 export const startPrepare = (limit?: number, workers?: number) => prepareModels(limit, workers);
 
