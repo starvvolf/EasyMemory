@@ -50,6 +50,8 @@
 .dejipgi .brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .dejipgi .brand h1{font-family:var(--display);font-weight:700;font-size:28px;letter-spacing:-.01em}
 .dejipgi .brand p{color:var(--muted);font-size:13.5px}
+.dejipgi .theme-toggle{font:inherit;font-size:12.5px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface);cursor:pointer}
+.dejipgi .theme-toggle:hover{color:var(--ink)}
 .dejipgi .store{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface)}
 .dejipgi .store i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
 .dejipgi .store[data-mode="db"] i{background:var(--good)}

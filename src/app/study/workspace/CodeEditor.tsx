@@ -39,7 +39,8 @@ export function CodeEditor({ value, lang, onChange, handle }: { value: string; l
 
   useEffect(() => {
     let gone = false;
-    const dark = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light";
+    const theme = document.documentElement.dataset.theme;
+    const dark = theme === "dark" || (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
     loadMonaco().then((monaco) => {
       if (gone || !host.current) return;
       const ed = monaco.editor.create(host.current, { value, language: MONACO_LANG[lang] ?? "plaintext", theme: dark ? "vs-dark" : "vs", automaticLayout: true, minimap: { enabled: false },

@@ -33,6 +33,28 @@ async function readJson<T>(response: Response, fallback: string): Promise<T> {
   return data as T;
 }
 
+// 밝게·어둡게 (11/8 사용자: "다크모드 PC 설정 따라가지 말고 내가 누를 수 있게"). <html data-theme>을 바꾸고 이 브라우저에 기억한다.
+// 처음(고른 적 없음)에는 PC 설정을 따른다. CSS는 dejipgi.css의 :root[data-theme] 규칙.
+const THEME_KEY = "recaller:theme";
+function ThemeToggle() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch { /* storage off */ }
+    const isDark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    if (saved) document.documentElement.dataset.theme = saved;
+    const t = setTimeout(() => setDark(isDark), 0);
+    return () => clearTimeout(t);
+  }, []);
+  const flip = () => {
+    const next = dark ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* storage off */ }
+    setDark(!dark);
+  };
+  return <button type="button" className="theme-toggle" onClick={flip} aria-label={dark ? "밝게 보기" : "어둡게 보기"} title={dark ? "밝게 보기" : "어둡게 보기"}>{dark ? "☀ 밝게" : "☾ 어둡게"}</button>;
+}
+
 export default function DejipgiStudy() {
   const session = useAuthSession();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -512,6 +534,7 @@ export default function DejipgiStudy() {
               <AccountChip />
               <MoreMenu />
             </div> : null}
+            <ThemeToggle />
             <span className="store" id="store" data-mode="memory"><i></i><span id="storeText">저장 준비 중</span></span>
           </header>
           <nav className="tabs" role="tablist" id="tabs">
