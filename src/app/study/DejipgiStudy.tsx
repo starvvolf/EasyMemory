@@ -52,7 +52,7 @@ function ThemeToggle() {
     try { localStorage.setItem(THEME_KEY, next); } catch { /* storage off */ }
     setDark(!dark);
   };
-  return <button type="button" className="theme-toggle" onClick={flip} aria-label={dark ? "밝게 보기" : "어둡게 보기"} title={dark ? "밝게 보기" : "어둡게 보기"}>{dark ? "☀ 밝게" : "☾ 어둡게"}</button>;
+  return <button type="button" className="theme-toggle" onClick={flip} aria-label={dark ? "밝게 보기" : "어둡게 보기"} title={dark ? "밝게 보기" : "어둡게 보기"}>{dark ? "☀" : "☾"}</button>;
 }
 
 export default function DejipgiStudy() {
@@ -532,9 +532,9 @@ export default function DejipgiStudy() {
             </div>
             {session.mode === "local-experiment" ? <div className="ws-tools">
               <AccountChip />
+              <ThemeToggle />
               <MoreMenu />
-            </div> : null}
-            <ThemeToggle />
+            </div> : <ThemeToggle />}
             <span className="store" id="store" data-mode="memory"><i></i><span id="storeText">저장 준비 중</span></span>
           </header>
           <nav className="tabs" role="tablist" id="tabs">

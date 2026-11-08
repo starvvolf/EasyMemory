@@ -50,7 +50,7 @@
 .dejipgi .brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .dejipgi .brand h1{font-family:var(--display);font-weight:700;font-size:28px;letter-spacing:-.01em}
 .dejipgi .brand p{color:var(--muted);font-size:13.5px}
-.dejipgi .theme-toggle{font:inherit;font-size:12.5px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface);cursor:pointer}
+.dejipgi .theme-toggle{font:inherit;font-size:14px;line-height:1;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 8px;background:var(--surface);cursor:pointer}
 .dejipgi .theme-toggle:hover{color:var(--ink)}
 .dejipgi .store{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface)}
 .dejipgi .store i{width:7px;height:7px;border-radius:50%;background:var(--faint)}
@@ -956,9 +956,8 @@
 :root[data-shell="desktop"] .dejipgi .masthead .tablet-btn{order:3;align-self:center;margin:0;padding:3px 9px;font-size:12px;-webkit-app-region:no-drag}
 /* 11/7 사용자 "앱에서는 ··· 버튼이 안 눌린다": 상단 띠 전체가 창 끌기 영역(drag)이라 계정 칩·⋯ 메뉴가 클릭을 못 받았다. 펼친 메뉴도 이 안이라 같이 no-drag. */
 :root[data-shell="desktop"] .dejipgi .masthead .ws-tools{order:4;align-self:center;-webkit-app-region:no-drag}
-/* 11/8 사용자 "안 눌림": 밝게/어둡게 버튼도 끌기 영역 안이었다. 저장 표시 바로 앞에 no-drag로. */
-:root[data-shell="desktop"] .dejipgi .masthead .theme-toggle{order:2;margin-left:auto;align-self:center;padding:3px 9px;font-size:12px;-webkit-app-region:no-drag}
-:root[data-shell="desktop"] .dejipgi .masthead .theme-toggle + .store{margin-left:0}
+/* 11/8 사용자 "안 눌림" → "ChatGPT 연결됨 바로 옆, 아이콘만": 밝게/어둡게 버튼은 계정 칩 옆(ws-tools 안, no-drag). */
+:root[data-shell="desktop"] .dejipgi .masthead .theme-toggle{align-self:center;padding:3px 7px;font-size:13px;-webkit-app-region:no-drag}
 /* 읽기 화면은 높이를 내용만큼만 써서(min-height:0) 큰 화면·전체 화면에서 아래로 body의 검은 바탕이 보였다. body도 같은 바탕으로. */
 body:has(.dejipgi){background:#F2F3F6}
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) body:has(.dejipgi){background:#0F1115} }
