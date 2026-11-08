@@ -1202,4 +1202,4 @@
 - RecallerData(GitHub)를 노트북의 지금 데이터 한 커밋(584c059, 136개 파일, 약 17MB)으로 새로 시작했다(강제로 올림). 옛 기록은 노트북 데이터 폴더의 `old-main` 가지에만 남아 있다(GitHub에는 없음).
 - 동기화에서 빼는 것(.gitignore, 각 PC에만): `보관/`, `study-gen/*/calls|pages|judge/`(호출 기록·쪽 그림), `study-gen/*/quiz-plan.*.json`(출제 실험), `assist-log.jsonl`, `*.bak-before-origin`, 그리고 전부터 `ai-calls/`, `lab/`. 잘린 그림(figures/)은 동기화한다.
 - 노트북의 동기화 끔(`tmp/no-data-sync`, 11/6)을 다시 켰다.
-- ⋯ 메뉴 → "데이터 관리"(DataPanel, /api/data-admin): 크기·동기화 상태·지금 올리기·동기화 켜고 끄기, 고른 자료/PDF/문제 보관, 전부 보관하고 비우기, 보관본 지우기(이것만 진짜 지움). 보관은 보관/로 옮기기라 그 PC에만 남는다.
+- ⋯ 메뉴 → "데이터 관리"(DataPanel, /api/study-map/data-admin): 크기·동기화 상태·지금 올리기·동기화 켜고 끄기, 고른 자료/PDF/문제 보관, 전부 보관하고 비우기, 보관본 지우기(이것만 진짜 지움). 보관은 보관/로 옮기기라 그 PC에만 남는다.

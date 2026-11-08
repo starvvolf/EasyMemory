@@ -39,7 +39,7 @@ export default function DataPanel({ onClose }: { onClose: () => void }) {
   const [msg, setMsg] = useState("");
   const load = useCallback(async () => {
     setError("");
-    try { const r = await fetch("/api/data-admin", { cache: "no-store" }); const j = await r.json(); if (!r.ok) throw new Error(j.message || "불러오지 못했어요."); setView(j as View); }
+    try { const r = await fetch("/api/study-map/data-admin", { cache: "no-store" }); const j = await r.json(); if (!r.ok) throw new Error(j.message || "불러오지 못했어요."); setView(j as View); }
     catch (e) { setError((e as Error).message); }
   }, []);
   useEffect(() => { const t = setTimeout(() => { void load(); }, 0); return () => clearTimeout(t); }, [load]);
@@ -47,7 +47,7 @@ export default function DataPanel({ onClose }: { onClose: () => void }) {
   const act = async (label: string, body: Record<string, unknown>, after?: (j: Record<string, unknown>) => Promise<void> | void) => {
     setBusy(label); setMsg(""); setError("");
     try {
-      const r = await fetch("/api/data-admin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const r = await fetch("/api/study-map/data-admin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json() as Record<string, unknown>; if (!r.ok) throw new Error(String(j.message || "하지 못했어요."));
       await after?.(j); await load();
     } catch (e) { setError((e as Error).message); } finally { setBusy(""); }

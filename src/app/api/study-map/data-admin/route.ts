@@ -1,4 +1,4 @@
-// 데이터 관리 (src/lib/data-admin.ts): GET 지금 데이터·동기화 상태 · POST {action: archive|archiveAll|deleteArchive|sync|push}
+// 데이터 관리 (src/lib/data-admin.ts): GET 지금 데이터·동기화 상태 · POST {action: archive|archiveAll|deleteArchive|sync|push}. /api/study-map 아래에 둔 것은 로컬 실험 경로 목록(local-experiment-mode.ts)에 이미 있어서.
 import { NextResponse } from "next/server";
 import { boundedJson, fail, guard } from "@/lib/assist/http";
 import { archiveAll, archiveItems, dataView, deleteArchive, pushNow, setSync } from "@/lib/data-admin";
