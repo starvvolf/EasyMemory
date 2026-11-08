@@ -877,7 +877,7 @@ async function renderRunOrLesson(id) {
 /* ---------- 글자 흘리기(11/3 사용자 "gpt챗·클로드처럼 일정한 속도로") ----------
  * 서버는 0.45초마다 덩어리로 보내 오지만, 화면은 받은 글을 일정한 속도로 한 글자씩 보여 준다.
  * 밀린 글이 많으면 빨라진다(0.6초 안에 따라잡게). 처음 열 때 이미 있던 말은 그대로 다 보인다. */
-const TY = { shown: new Map(), full: new Map(), ws: "", raf: 0, last: 0, key: null, init: true };
+const TY = { shown: new Map(), full: new Map(), ws: "", raf: 0, last: 0, key: null, init: true, guard: 0 };
 function tyText(m, ws, key) {
   if (TY.key !== key) { TY.key = key; TY.shown.clear(); TY.full.clear(); TY.init = true; }
   const full = m.text || "";
@@ -891,6 +891,12 @@ function tyText(m, ws, key) {
 function tyAfterDraw() {
   TY.init = false;
   if (!TY.raf) { TY.last = performance.now(); TY.raf = requestAnimationFrame(tyTick); }
+  // 창이 가려져 그림 그리기가 멈추면(튜터 창이 VS Code 뒤 · 숨은 탭) 흘리기도 멈춰 답이 안 보인다(11/9 화면 점검) → 1초 안에 안 돌면 다 보여 준다
+  clearTimeout(TY.guard);
+  TY.guard = setTimeout(() => {
+    if (performance.now() - TY.last < 900) return;
+    for (const el of document.querySelectorAll(".ty[data-mid]")) { const id = el.dataset.mid, full = TY.full.get(id) ?? ""; if ((TY.shown.get(id) ?? full.length) < full.length) { TY.shown.set(id, full.length); el.replaceChildren(rich(full, TY.ws)); } }
+  }, 1000);
 }
 function tyTick(t) {
   const dt = Math.min(0.1, (t - TY.last) / 1000); TY.last = t;
@@ -1471,7 +1477,8 @@ async function renderLab() {
     const acts = !lesson.busy && last ? h("div", { class: "row wrap" }, last.actions.map((a) => h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { lesson = await api("POST", L + "/act", { do: a.do }); draw(); }) }, a.label))) : null;
     if (lesson.busy) list.append(h("p", { class: "mut small" }, lesson.thinking ? `💭 ${lesson.thinking}` : "튜터가 답하는 중…"));
     const input = h("textarea", { rows: 2, placeholder: "튜터에게 말하기 (Enter 보내기, Shift+Enter 줄바꿈)" });
-    const sendIt = () => { const t = input.value.trim(); if (!t || lesson.busy) return; input.value = ""; api("POST", L + "/act", { do: "ask", text: t }).catch((e) => alert(e.message)); };
+    // 보내지 못하면(답하는 중 409 등) 쓴 글을 되돌려 놓는다(11/9: 글이 사라지고 경고창만 뜸)
+    const sendIt = () => { const t = input.value.trim(); if (!t || lesson.busy) return; input.value = ""; api("POST", L + "/act", { do: "ask", text: t }).catch((e) => { if (!input.value) input.value = t; toast(e.message); }); };
     input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendIt(); } });
     const stop = lesson.busy ? h("button", { class: "btn small", onclick: () => api("POST", L + "/stop") }, "■ 멈추기") : null;
     chatCol.replaceChildren(list, acts, h("div", { class: "labin" }, input, h("button", { class: "btn primary", onclick: sendIt }, "보내기"), stop));
