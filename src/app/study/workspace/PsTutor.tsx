@@ -43,15 +43,16 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
         <p className="small muted">문제를 오래 붙잡기보다, 고수가 문제를 볼 때의 판단(관찰 → 선택 → 비교 → 검증)을 짧게 여러 번 연습해요. 답을 맞히면 다음 칸으로, 틀리면 필요한 곳만 다시 보여 줘요.</p>
       </header>
       {error ? <p className="ws-err">{error}</p> : null}
+      {/* 문제 준비 상태는 안쪽 정보라 접어 둔다(11/9 사용자 "안쪽으로 숨기던지"). 자료 출처 이름은 화면에 쓰지 않는다. */}
       {data.ready < data.targets ? (
-        <section className="panel stack pt-prep">
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <span className="small"><b>교육용 문제 모델</b> {data.ready}/{data.targets}개 준비됨 <span className="muted">(바킹독 배열~정렬 단원의 연습·기본 문제)</span></span>
-            {running ? <span className="small muted">만드는 중 {data.prep.done}/{data.prep.total}…</span>
-              : <button className="btn small" onClick={() => void prepare()}>남은 {data.targets - data.ready}개 만들기</button>}
+        <details className="small muted pt-prep">
+          <summary>문제 {data.ready}/{data.targets}개 준비됨{running ? ` · 만드는 중 ${data.prep.done}/${data.prep.total}…` : ""}</summary>
+          <div className="row" style={{ justifyContent: "space-between", marginTop: 6 }}>
+            <span>배열부터 정렬까지 기본 단원의 문제를, 문제마다 AI 1번(terra, 약 7원)으로 시범·드릴 재료로 만들고 코드가 검사해요. 한 번 만들면 다시 부르지 않아요.</span>
+            {running ? null : <button className="btn small" onClick={() => void prepare()}>남은 {data.targets - data.ready}개 만들기</button>}
           </div>
-          <p className="small muted">문제마다 AI 1번(terra, 약 7원). 원문과 바킹독 풀이를 읽고 시범·드릴 재료를 쓰고, 코드가 검사해요. 한 번 만들면 다시 부르지 않아요.{data.prep.failed.length ? ` 실패 ${data.prep.failed.length}개: ${data.prep.failed.slice(0, 3).map((f) => `${f.number}(${f.why})`).join(", ")}` : ""}</p>
-        </section>
+          {data.prep.failed.length ? <p>실패 {data.prep.failed.length}개: {data.prep.failed.slice(0, 3).map((f) => `${f.number}(${f.why})`).join(", ")}</p> : null}
+        </details>
       ) : null}
       {action ? <ActionCard key={action.id + data.done} a={action} onDone={() => void load()} onOpenProblem={onOpenProblem} pending={data.pending.some((p) => p.number === action.number)} />
         : data.ready ? <section className="panel small muted">지금 할 일이 없어요. 복습 날짜가 되면 다시 나와요.</section> : null}
