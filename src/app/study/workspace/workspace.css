@@ -959,3 +959,19 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pt-journal li > span:last-child{min-width:0}
 .dejipgi .pt-lesson{display:block;margin-top:4px;padding:6px 10px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;font-size:13px}
 .dejipgi .pt-day{gap:6px}
+
+/* 데이터 관리 (11/9, DataPanel.tsx) */
+.dejipgi .dp-back{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;padding:56px 16px;-webkit-app-region:no-drag}
+.dejipgi .dp-card{width:min(640px,100%);max-height:calc(100vh - 96px);overflow:auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.25);text-align:left;font-size:14px}
+.dejipgi .dp-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.dejipgi .dp-x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px}
+.dejipgi .dp-sync{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;display:grid;gap:6px;word-break:break-all}
+.dejipgi .dp-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.dejipgi .dp-group{border-top:1px solid var(--line);padding:6px 0}
+.dejipgi .dp-group>summary{display:flex;justify-content:space-between;cursor:pointer;padding:4px 0;font-weight:600}
+.dejipgi .dp-list{list-style:none;margin:4px 0;padding:0;display:grid;gap:2px}
+.dejipgi .dp-list li{display:flex;align-items:center;gap:8px;padding:3px 2px}
+.dejipgi .dp-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .dp-dot{width:13px}
+.dejipgi .dp-err{color:var(--bad, #c0392b);font-size:13px}
+.dejipgi .dp-msg{color:var(--ask, #2b6cb0);font-size:13px}

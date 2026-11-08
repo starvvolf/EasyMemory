@@ -1,6 +1,7 @@
 "use client";
 // ⋯ 더보기: what most study days do not need, out of the way — records and account, the one-page summary, the older
 // archive, prompt settings, the tablet, and (folded) the developer screens.
+import DataPanel from "./DataPanel";
 import { useEffect, useRef, useState } from "react";
 import { go } from "./api";
 
@@ -8,6 +9,7 @@ const clickById = (id: string) => (document.getElementById(id) as HTMLButtonElem
 
 export default function MoreMenu() {
   const [open, setOpen] = useState(false);
+  const [data, setData] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -28,6 +30,7 @@ export default function MoreMenu() {
           {item("학습 기록", "문제별 기록 (ChatGPT 연결은 위의 버튼)", () => go("records"))}
           {item("한 장 정리", "자료별로 떠올릴 것 모아 보기 · 인쇄", () => go("summary"))}
           {item("보관함", "치워 둔 문제 세트", () => go("archive"))}
+          {item("데이터 관리", "크기·동기화·보관하고 비우기", () => setData(true))}
           <hr />
           {has("promptBtn") ? item("프롬프트 설정", "설명·답변을 어떻게 해 줄지", () => clickById("promptBtn")) : null}
           {has("tabletBtn") ? item("태블릿에서 열기", "같은 와이파이의 태블릿", () => clickById("tabletBtn")) : null}
@@ -43,6 +46,7 @@ export default function MoreMenu() {
           <p className="mm-note">이 컴퓨터에서 돌아가요. 기록은 RecallerData에 저장되고, 앱을 끌 때 올라가요.</p>
         </div>
       ) : null}
+      {data ? <DataPanel onClose={() => setData(false)} /> : null}
     </div>
   );
 }
