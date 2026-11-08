@@ -238,4 +238,10 @@ export async function recordPsReview(questionId: string, correct: boolean, answe
   else if (q.kind === "predict") await appendEvent({ ...base, kind: "predict", grade: 0 });
   else await appendEvent({ ...base, kind: "review", grade: 0 });
 }
+/** 숨은 테스트의 틀린 풀이에 꼭 넣을 실수(11/9): 교육용 모델의 느림·틀림 접근과 흔한 실수. 학습자가 실제로 빠질 함정을 테스트가 잡게. */
+export async function mistakesToCatch(number: string) {
+  const m = (await readModels())[number];
+  if (!m) return [];
+  return [...m.approaches.filter((a) => a.verdict === "slow" || a.verdict === "wrong").map((a) => `${a.name}${a.why ? ` (${a.why})` : ""}`), ...m.pitfalls].slice(0, 5);
+}
 export type { Ability };

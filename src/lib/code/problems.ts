@@ -230,10 +230,10 @@ export async function saveProblem(input: Omit<Problem, "id" | "createdAt" | "kno
   return problem;
 }
 /** The original problem to read and try at once; makeProblem later saves the full problem under the same id. */
-export async function savePreparing(input: Pick<Problem, "title" | "statement" | "inputText" | "outputText" | "examples" | "folder" | "source"> & { from: string }) {
+export async function savePreparing(input: Pick<Problem, "title" | "statement" | "inputText" | "outputText" | "examples" | "folder" | "source"> & { from: string; id?: string }) {
   if (!input.title.trim() || !input.examples.length) throw new CodeError(400, "원문에 제목이나 예제가 없어요.");
-  const { from, ...rest } = input;
-  const problem: Problem = { ...rest, id: newId(), kind: "full", tests: [], timeLimitMs: 2000, templates: {}, reference: null, knowledge: [], knowledgeIds: [],
+  const { from, id, ...rest } = input;
+  const problem: Problem = { ...rest, id: id ?? newId(), kind: "full", tests: [], timeLimitMs: 2000, templates: {}, reference: null, knowledge: [], knowledgeIds: [],
     examplesFrom: "source", preparing: { from, since: new Date().toISOString() }, createdAt: new Date().toISOString() };
   await writeProblem(problem);
   return problem;

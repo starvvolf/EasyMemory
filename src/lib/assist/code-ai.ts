@@ -244,6 +244,7 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   /** 실험: this request only, a model other than MAKE_MODEL for the draft (the independent solution keeps its own). */ model?: string;
   /** 실험: this request only, the draft's thinking effort (default: MAKE_EFFORT, low). */ effort?: "low" | "medium" | "high";
   /** 실험: this request only, the faulty solutions' model (imported problems). */ mutantsModel?: string;
+  /** 틀린 풀이에 꼭 넣을 실수(11/9, 튜터 교육용 모델의 틀린 접근·흔한 실수): 학습자가 실제로 빠질 함정을 테스트가 잡는지 본다. */ mutantsHint?: string[];
   /** An imported original (statement and examples as published): the independent solution starts from it with the draft. */
   original?: { statement: string; inputText: string; outputText: string; examples: TestCase[] } }) {
   tagTrace({ ...(input.id ? { ref: input.id } : {}), action: "makeProblem" });
@@ -265,7 +266,8 @@ export async function makeProblem(input: { topic?: string; lesson?: string; kind
   let early = original ? solveAloneSafe({ ...original, examples: original.examples.slice(0, 3) }) : undefined;
   const originalText = original ? [`[문제]\n${original.statement}`, `[입력]\n${original.inputText}`, `[출력]\n${original.outputText}`,
     ...original.examples.slice(0, 3).map((ex, i) => `[예제 ${i + 1}]\n입력:\n${ex.input}\n출력:\n${ex.output}`)].join("\n\n") : "";
-  const mutantsOf = original ? askJson<{ mutants: Drafted["mutants"] }>("code:mutants", MUTANTS_SYSTEM, originalText, MUTANTS_SCHEMA, { model: input.mutantsModel || MUTANTS_MODEL() || makeModel })
+  const mutantsUser = originalText + (input.mutantsHint?.length ? `\n\n[꼭 넣을 실수] 아래 실수가 들어간 풀이를 하나씩 먼저 쓰고, 나머지는 평소대로.\n${input.mutantsHint.map((h) => `- ${h.slice(0, 200)}`).join("\n")}` : "");
+  const mutantsOf = original ? askJson<{ mutants: Drafted["mutants"] }>("code:mutants", MUTANTS_SYSTEM, mutantsUser, MUTANTS_SCHEMA, { model: input.mutantsModel || MUTANTS_MODEL() || makeModel })
     .then((m) => m.mutants).catch((e: unknown) => { console.warn(`[code] faulty solutions failed: ${(e as Error).message}`); return [] as Drafted["mutants"]; }) : undefined;
   for (let tries = 1; tries <= 1 + MAKE_RETRIES; tries++) {
     const retry = reasons.length ? `\n\n[지난 시도에서 막힌 곳]\n${reasons.map((r, i) => `${i + 1}. ${r}`).join("\n")}\n같은 실수가 없게 다시 세팅한다.` : "";

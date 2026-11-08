@@ -12,7 +12,7 @@ import { resolveSource, type Resolved } from "@/lib/code/source";
 import { withTrace } from "@/lib/ai/trace";
 import { LADDER, needsOf } from "@/lib/code/grade";
 import { keptLevel, keptLevels, knownLevelOf, selfLevelOf } from "@/lib/assist/code-level";
-import { noteAiHelp } from "@/lib/code/tutor/service";
+import { mistakesToCatch, noteAiHelp } from "@/lib/code/tutor/service";
 
 type MakeInput = Parameters<typeof makeProblem>[0];
 /** The full problem from an imported original, under the id the learner already has open (바로 열기, 2026-10-29). */
@@ -101,7 +101,9 @@ async function inner(request: Request, context: RouteContext) {
     // 바킹독 문제집: the built-in list, and filling one problem the first time it is picked.
     if (p[0] === "bakingdog" && p.length === 1 && m === "GET") return json({ chapters: await bakingdogChapters() });
     if (p[0] === "bakingdog" && p[2] === "fill" && m === "POST") {
-      const made = await ensureProblemKnowledge(await fillProblem(z.string().regex(/^\d{1,6}$/).parse(p[1])));
+      // 11/9: 바로 열기(원문 먼저, 숨은 테스트는 뒤에서). 튜터 문제면 교육용 모델의 틀린 접근을 틀린 풀이에 넣는다.
+      const n = z.string().regex(/^\d{1,6}$/).parse(p[1]);
+      const made = await ensureProblemKnowledge(await fillProblem(n, undefined, { avoid: await mistakesToCatch(n).catch(() => []) }));
       return json({ problem: publicProblem(made) });
     }
     if (p[0] === "problem" && p[1]) {
