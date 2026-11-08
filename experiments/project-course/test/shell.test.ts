@@ -25,8 +25,8 @@ test("묻는 명령은 대기 → [안 함]이면 돌리지 않고 다음 맥락
   assert.match(out, /먼저 묻는/);
   const p = (await shellOf("r2")).pending!; assert.equal(p.command, "npm install left-pad");
   assert.match(await runCommandTool("r2", ws, { command: "node a.js", why: "" }), /고르지 않았/);
-  const d = await decide("r2", ws, p.id, false); assert.equal(d.say, null);
-  assert.match(await shellContext("r2"), /거절/); assert.equal(await shellContext("r2"), "");
+  const d = await decide("r2", ws, p.id, false); assert.match(d.say!, /거절/, "거절도 튜터에게 바로 알린다");
+  assert.equal(await shellContext("r2"), "", "바로 알렸으니 다음 맥락에 또 붙이지 않는다");
 });
 test("[실행]이면 돌리고 튜터에게 결과", async () => {
   await runCommandTool("r3", ws, { command: "node a.js > out.txt", why: "파일로" });

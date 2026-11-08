@@ -14,17 +14,18 @@ test("찾기 → 채우기 → 세션 안 확인 → 목표 정리로 이름 · 
   await G.openGap("r1", { goal, unit, from: "막힘", wrong: "순서가 헷갈림", cause: ["어디서부터 어떤 순서로 할지 모르겠어요"] });
   await G.addRemedy("r1", "g1", "보충", "용어 → 고르는 순서");
   let l = await G.ledgerOf("r1");
-  assert.equal(l.length, 2); assert.ok(l.every((g) => g.status === "채우는 중"));
+  assert.equal(l.length, 1, "같은 단계의 판정 · 막힘은 한 칸"); assert.ok(l.every((g) => g.status === "채우는 중"));
+  assert.deepEqual(l[0].cause, ["어디서부터 어떤 순서로 할지 모르겠어요"]);
   assert.match(await G.gapsForRecord("r1", "g1"), new RegExp(a!.id));
-  assert.deepEqual((await G.fillUnit("r1", "g1", "doing을 먼저 찾아요")).length, 2);
+  assert.deepEqual((await G.fillUnit("r1", "g1", "doing을 먼저 찾아요")).length, 1);
   await G.mergeRecord("r1", { ...goal, done: "설명한다" }, [{ type: "절차", concept: "지도 항목 고르기 순서", wrong: "todo를 먼저 고른다고 앎", right: "doing을 먼저, 없으면 todo", quote: "", ids: [a!.id], recheck: { q: "doing과 todo가 다 있으면 무엇을 고를까요?", a: "doing" } },
     { type: "개념", concept: "mapId", wrong: "새 항목에 연결된다고 앎", right: "고른 항목", quote: "", ids: [] }], new Date().toISOString());
   l = await G.ledgerOf("r1");
   const named = l.find((g) => g.id === a!.id)!;
   assert.equal(named.concept, "지도 항목 고르기 순서"); assert.equal(named.status, "세션에서 채움"); assert.ok(named.recheck && named.dueAt);
-  assert.equal(l.length, 3, "원장에 없던 부족함은 목표 정리로 새로 연다");
+  assert.equal(l.length, 2, "원장에 없던 부족함은 목표 정리로 새로 연다");
   // 같은 부족함으로 둘을 묶으면 다시 확인은 하나만
-  const second = l.find((g) => g.id !== a!.id && g.evidence.some((e) => e.from === "막힘"))!;
+  const second = (await G.openGap("r1", { goal, unit: { id: "s1", title: "보충: 순서", done: "말한다", support: true }, from: "막힘", wrong: "보충에서도 헷갈림" }))!;
   await G.mergeRecord("r1", { ...goal, done: "설명한다" }, [{ type: "절차", concept: "지도 항목 고르기 순서", wrong: "x", right: "y", quote: "", ids: [a!.id, second.id], recheck: { q: "doing과 todo가 다 있으면 무엇을 고를까요?", a: "doing" } }], new Date().toISOString());
   assert.equal((await G.ledgerOf("r1")).find((g) => g.id === second.id)!.mergedInto, a!.id);
   assert.equal((await G.rechecks()).filter((g) => g.concept === "지도 항목 고르기 순서").length, 1);

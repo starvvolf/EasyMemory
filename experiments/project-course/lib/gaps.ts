@@ -46,7 +46,8 @@ const open = (g: Gap) => g.status === "열림" || g.status === "채우는 중" |
 export async function openGap(runId: string, x: { goal: { id: string; title: string }; unit: Unit; from: GapFrom; wrong: string; right?: string; quote?: string; cause?: string[] }) {
   let out: Gap | null = null;
   await update<Ledger>(file(runId), empty(), (l) => {
-    const same = l.gaps.find((g) => g.unit.id === x.unit.id && open(g) && g.status !== "다시 틀림" && g.evidence.some((e) => e.from === x.from));
+    // 같은 단계에서 아직 안 채워진 부족함은 판정에서 왔든 막힘에서 왔든 하나로(11/9 시험: 같은 단계의 판정 · 막힘이 처방 · 근거가 같은 두 칸으로 남음)
+    const same = l.gaps.find((g) => g.unit.id === x.unit.id && (g.status === "열림" || g.status === "채우는 중"));
     const ev = { at: now(), from: x.from, text: clean([x.wrong, x.quote ? `학습자: "${clean(x.quote, 300)}"` : "", x.cause?.length ? `고른 이유: ${x.cause.join(", ")}` : ""].filter(Boolean).join(" · "), 700) };
     if (same) { same.evidence.push(ev); if (x.wrong) same.wrong = clean(x.wrong); for (const c of x.cause ?? []) if (!same.cause.includes(c)) same.cause.push(c); out = same; return; }
     const g: Gap = { id: `G${l.gaps.length + 1}-${randomBytes(2).toString("hex")}`, runId, goal: x.goal, unit: x.unit, concept: x.unit.title, type: "", wrong: clean(x.wrong), right: clean(x.right ?? ""),

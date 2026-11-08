@@ -260,7 +260,7 @@ function policyPlugin(fake: boolean) {
         await l.chain;
         const resultText = typeof ev.result?.content === "string" ? ev.result.content : Array.isArray(ev.result?.content) ? ev.result.content.map((c: { text?: string }) => c.text ?? "").join("\n") : "";
         const failed = ev.status === "error" || (ev.tool === "run_snippet" && /^오류/.test(resultText)) || /^학습 조정 실패:/.test(resultText);
-        await l.io.progress?.(toolProgress(String(ev.id), ev.tool, ev.input ?? {}, l.stopped ? "cancelled" : failed ? "failed" : "completed", failed ? String(ev.error?.message ?? resultText).slice(0, 300) : undefined));
+        await l.io.progress?.(toolProgress(String(ev.id), ev.tool, ev.input ?? {}, l.stopped ? "cancelled" : failed ? "failed" : "completed", failed ? String(ev.error?.message ?? resultText).slice(0, 300) : undefined, String(resultText ?? "")));
         const ok = ev.status === "completed";
         const p = String(ev.input?.path ?? ev.input?.filePath ?? ev.input?.pattern ?? "");
         const relOf = (x: string) => (x.startsWith(l.io.ws) ? path.relative(l.io.ws, x) : x).replace(/\\/g, "/");
@@ -516,9 +516,18 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
     const end = await new Promise<any>((resolve) => {
       const check = () => {
         const hit = h.events.slice(from).find((e) => e?.data?.sessionID === sid && /^session\.execution\.(succeeded|failed|interrupted)$/.test(e.type));
-        if (hit) { h.waiters.delete(check); clearTimeout(timer); resolve(hit); }
+        if (hit) { h.waiters.delete(check); clearTimeout(timer); clearInterval(idle); resolve(hit); }
       };
-      const timer = setTimeout(() => { h.waiters.delete(check); resolve({ type: "timeout" }); }, 300_000); // 학습자에게 되묻고 기다리는 시간까지
+      const timer = setTimeout(() => { h.waiters.delete(check); clearInterval(idle); resolve({ type: "timeout" }); }, 300_000); // 학습자에게 되묻고 기다리는 시간까지
+      // 대화 실습은 되묻고 기다리는 도구가 없다 → 엔진에서 아무 일도 2분 넘게 없으면 멈춘 것으로 본다
+      // (11/9 실습 시험: 동시에 여러 개 돌릴 때 한 차례가 응답 없이 5~6분 "답하는 중"에 멈춤)
+      let seen = -1, still = Date.now();
+      const idle = setInterval(() => {
+        if (!io.learningChat) return;
+        const n = h.events.slice(from).filter((e) => e?.data?.sessionID === sid).length; // 다른 대화의 일은 세지 않는다
+        if (n !== seen) { seen = n; still = Date.now(); return; }
+        if (Date.now() - still > 120_000) { h.waiters.delete(check); clearTimeout(timer); clearInterval(idle); resolve({ type: "timeout" }); }
+      }, 5_000);
       h.waiters.add(check); check();
     });
     await l.chain; // 흘려 보내던 글을 다 쓴 뒤에 끝낸다
@@ -528,7 +537,7 @@ async function run(h: Host, io: AgentIO, question: string): Promise<string> {
     void logUsage({ kind: "tutor", runId: io.runId, stage: io.n, mode: io.mode ?? "normal", ms: Date.now() - l.t0, calls: l.steps, tokens: l.usage, raw: l.raw, prompt: plog, chars: text.length });
     if (l.stopped) return l.texts.join("\n\n"); // 멈춘 건 화면에 이미 "멈췄어요"가 있다
     await countCalls(io.mode === "explain" ? "explain" : "agent", l.steps, end.type === "session.execution.succeeded");
-    if (end.type === "timeout") { await h.oc.sessions.interrupt?.({ sessionID: sid }).catch(() => {}); return "생각이 너무 길어져서 멈췄어요. 질문을 조금 나눠서 다시 물어봐 주세요."; }
+    if (end.type === "timeout") { await h.oc.sessions.interrupt?.({ sessionID: sid }).catch(() => {}); return io.learningChat ? "응답이 2분 넘게 오지 않아 멈췄어요. 같은 말을 한 번 더 보내 주세요." : "생각이 너무 길어져서 멈췄어요. 질문을 조금 나눠서 다시 물어봐 주세요."; }
     if (end.type !== "session.execution.succeeded") {
       const msg = JSON.stringify(end.data?.error ?? end.data ?? "").slice(0, 300);
       // 생각 요약을 이 계정이 못 받으면 끄고 한 번 더(요약은 있으면 좋은 것이지 꼭 필요한 건 아니다)

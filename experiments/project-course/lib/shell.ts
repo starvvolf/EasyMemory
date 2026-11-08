@@ -173,8 +173,10 @@ export async function decide(runId: string, ws: string | undefined, id: string, 
   const s = await shellOf(runId);
   const p = s.pending;
   if (!p || p.id !== id) return { say: null, label: "명령", text: "이미 처리한 요청이에요" };
-  await update<ShellState>(file(runId), empty(), (st) => { st.pending = null; if (!ok) st.refused.push({ command: p.command, at: new Date().toISOString() }); });
-  if (!ok || !ws) return { say: null, label: "명령 안 함", text: p.command };
+  await update<ShellState>(file(runId), empty(), (st) => { st.pending = null; if (!ok) st.refused.push({ command: p.command, at: new Date().toISOString(), told: true }); });
+  // [안 함]도 튜터에게 한 번 알린다(11/9 시험: 거절 뒤 튜터가 아무 말이 없어 학습자가 막힘)
+  if (!ok) return { say: `[명령 안 함] 학습자가 \`${p.command}\` 실행을 거절했어요. 같은 명령을 다시 돌리려 하지 말고, 이 명령 없이 지금 목표를 이어 갈 길(필요하면 계획을 그에 맞게 고치기)을 짧게 제안하거나, 학습자가 직접 쳐 보고 싶은 거라면 무엇을 치면 되는지 알려 주세요.`, label: "명령 안 함", text: p.command };
+  if (!ws) return { say: null, label: "명령 안 함", text: p.command };
   // 설치는 오래 걸릴 수 있어 학습자가 허락한 명령은 3분까지
   const pre = await ownPackageJson(p.command, ws);
   if (p.background) {

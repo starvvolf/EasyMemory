@@ -283,7 +283,27 @@ async function chatPart(chatId: string) {
 const marked = new Set<string>();
 async function markOnce(ws: string) { if (marked.has(ws)) return; marked.add(ws); await (await import("./learn.ts")).markChatFolder(ws); }
 /** 버튼이 튜터에게 보낸 말(지시가 섞인 것)은 화면에선 짧게(11/4) */
+/**
+ * 버튼이 학습자 대신 튜터에게 보내는 글(11/9 실습 시험: "[해 봤어요 — 판정 …] '맞아요'로 시작하지 말고…"가 학습자 말풍선으로 보이고,
+ * 판정은 "["로 시작하는 학습자 답("[기존 글, 글 B]…")을 버튼 글로 보고 버려 예전 답을 채점함) → 글 모양 대신 보이지 않는 표시로 구분한다.
+ * 모양: SYS + 화면 이름 + SYS + 튜터에게 가는 글
+ */
+const SYS = "\u2063";
+export const sysSay = (label: string, body: string) => `${SYS}${label}${SYS}${body}`;
+const LEGACY_SYS = /^\[(확정|다음으로|막혔어요|너무 어려워요|너무 쉬워요|이해했어요|해 봤어요|진행 방식 변경|계획 다시 얘기하기|저장함|명령 실행함|보충|설문)[\]\s—]/;
+export const isSys = (t: string) => t.startsWith(SYS) || LEGACY_SYS.test(t.trim());
+/** 버튼 글의 화면 이름(해 봤어요는 판정까지) */
+function sysLabel(t: string) {
+  if (!t.startsWith(SYS)) return null;
+  const end = t.indexOf(SYS, 1);
+  const label = t.slice(1, end < 0 ? undefined : end), body = end < 0 ? "" : t.slice(end + 1);
+  const verdict = /판정: ([^·\]\n]+)/.exec(body)?.[1]?.trim();
+  const why = /(?:막힌|어려운) 점\(학습자가 고름\): ([^\n]*)/.exec(body)?.[1];
+  return `${label}${verdict ? ` → ${verdict}` : ""}${why ? ` — ${why.split(" · ").slice(0, 2).join(", ")}` : ""}`;
+}
 function shownUser(t: string) {
+  const sl = sysLabel(t);
+  if (sl !== null) return sl;
   const m = /^\[(확정|다음으로|막혔어요|너무 어려워요|너무 쉬워요|이해했어요|해 봤어요|진행 방식 변경|계획 다시 얘기하기)\]/.exec(t);
   if (!m) return t;
   if (m[1] === "너무 쉬워요" || m[1] === "해 봤어요") return m[1];
@@ -324,7 +344,7 @@ export async function checkOnSave(runId: string, saved: string) {
   savedAt.set(key, Date.now());
   await (await import("./timeline.ts")).beginStep(runId, { kind: "save", label: `저장: ${saved}` });
   const say = `[저장함] ${saved}을(를) 저장했어요. 작업 폴더에서 이 파일을 읽고, 지금 목표 기준으로 맞게 했는지 짧게 확인해 주세요. 틀린 곳은 답을 바로 주지 말고 어디를 보면 되는지 알려 주세요.`;
-  if (run.codexId) await codexAsk(runId, run.codexId, say); else await chatAsk(runId, run.chatId!, say);
+  if (run.codexId) await codexAsk(runId, run.codexId, sysSay("저장함", say)); else await chatAsk(runId, run.chatId!, sysSay("저장함", say));
 }
 async function logSaved(runId: string, run: { codexId?: string; workspaces: Record<string, string> }, saved: string) {
   const ws = run.codexId ? (await (await import("./codex-chat.ts")).view(run.codexId)).workspace : Object.values(run.workspaces)[0];
@@ -350,7 +370,7 @@ const chatPolls = new Map<string, ReturnType<typeof setInterval>>();
 async function chatMessages(run: { codexId?: string; chatId?: string }): Promise<{ role: string; text: string; at: string }[]> {
   return run.codexId ? (await (await import("./codex-chat.ts")).chatOf(run.codexId)).messages : (await (await import("./agent-chat.ts")).chatOf(run.chatId!)).messages;
 }
-export const recordShow = (m: { role: string; text: string }) => m.role === "user" ? `[학습자] ${shownUser(m.text)}` : m.role === "assistant" ? `[튜터] ${m.text.slice(0, 2500)}` : m.role === "tool" ? `[도구] ${m.text.split("\n")[0].slice(0, 120)}` : "";
+export const recordShow = (m: { role: string; text: string }) => m.role === "user" ? (isSys(m.text) ? `[버튼 — 학습자가 한 말이 아님] ${shownUser(m.text)}` : `[학습자] ${shownUser(m.text)}`) : m.role === "assistant" ? `[튜터] ${m.text.slice(0, 2500)}` : m.role === "tool" ? `[도구] ${m.text.split("\n")[0].slice(0, 120)}` : "";
 async function recordFinished(runId: string, run: { codexId?: string; chatId?: string }, goal: { id?: string; title: string; done: string; understood: boolean; applied: boolean; at: string }, mode: string | null) {
   const R = await import("./goal-record.ts");
   const t0 = Date.now();
@@ -381,16 +401,31 @@ export async function rerecordWithLedger(runId: string) {
  * 학습 종료(11/6 사용자 "도중에 학습 종료 버튼. 끄면서 알아서 처리할 거 정리하면서 로딩 살짝 걸리고 종료"):
  * 하던 목표를 지금까지로 닫고 → 그 목표 정리(+ 학습자 메모리 갱신, AI 1번, 목표가 있을 때만) → 앱 지식으로 넣기(앱이 켜져 있으면, 앱의 sync가 넣는다).
  */
-/** 튜터 말에 나온 작업 폴더 파일(과 줄)을 줄 번호와 함께 — 판정의 기준이 되는 실제 코드. 파일 3개 · 파일마다 120줄까지 */
+/** 튜터 말에 나온 작업 폴더 파일(과 줄)을 줄 번호와 함께 — 판정의 기준이 되는 실제 코드. 파일 3개 · 파일마다 120줄까지.
+ *  데이터 파일(.json)은 붙이지 않는다(11/9 시험: "파일에 [기존 글]이 있다고 하자"는 과제를 실제 posts.json의 [] 와 비교해 정답을 두 번 거절) */
 export async function referencedCode(runId: string, text: string) {
   const ws = await (await import("./goals.ts")).runWorkspace(runId);
   if (!ws) return "";
   const root = path.resolve(ws);
   const seen = new Map<string, { from: number; to: number }[]>();
-  const re = /([\w.\-/]+\.(?:m?[jt]sx?|py|java|c|cc|cpp|h|go|rs|rb|kt|cs|html|css|json|sql))\b(?:[^\n\d]{0,12}(\d+)(?:\s*[~\-–]\s*(\d+))?\s*(?:줄|행|번째 줄|line))?/g;
+  const re = /([\w.\-/]+\.(?:m?[jt]sx?|py|java|c|cc|cpp|h|go|rs|rb|kt|cs|html|css|sql))\b(?:[^\n\d]{0,12}(\d+)(?:\s*[~\-–]\s*(\d+))?\s*(?:줄|행|번째 줄|line))?/g;
+  // 폴더 없이 이름만 말한 파일("goals.ts")은 작업 폴더 안에서 이름이 하나뿐일 때 그 파일로(검토 11/8)
+  const { existsSync } = await import("node:fs");
+  let names: Map<string, string[]> | null = null;
+  const byName = async (base: string) => {
+    if (!names) {
+      names = new Map();
+      const walk = async (d: string, depth: number) => { if (depth > 4) return; for (const e of await readdir(d, { withFileTypes: true }).catch(() => [])) { if (e.name.startsWith(".") || e.name === "node_modules") continue; const f = path.join(d, e.name); if (e.isDirectory()) await walk(f, depth + 1); else names!.set(e.name, [...(names!.get(e.name) ?? []), f]); } };
+      await walk(root, 0);
+    }
+    const hits = names.get(base) ?? [];
+    return hits.length === 1 ? hits[0] : null;
+  };
   for (const m of text.matchAll(re)) {
     const rel = m[1].replace(/^\.\//, "");
-    const abs = path.resolve(root, rel);
+    let abs = path.resolve(root, rel);
+    if (!existsSync(abs) && !rel.includes("/")) abs = (await byName(rel)) ?? abs;
+    if (!existsSync(abs)) continue; // 없는 파일은 자리(3개)를 차지하지 않는다
     if (abs !== root && !abs.startsWith(root + path.sep)) continue;
     const list = seen.get(abs) ?? []; seen.set(abs, list);
     if (m[2]) list.push({ from: Number(m[2]), to: Number(m[3] ?? m[2]) });
@@ -449,10 +484,10 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
   const label = sp ? `보충 ${sp.title}` : g.current!.title;
   const since = [...g.log].reverse().find((l) => l.kind === "understood" && l.text === label)?.at ?? (g.current?.at ?? "");
   const msgs = (await chatMessages(run)).filter((m) => m.at >= since);
-  const firstUser = msgs.findIndex((m) => m.role === "user" && !/^\[/.test(m.text.trim()));
+  const firstUser = msgs.findIndex((m) => m.role === "user" && !isSys(m.text));
   const task = msgs.slice(0, firstUser < 0 ? msgs.length : firstUser).filter((m) => m.role === "assistant").map((m) => m.text).join("\n\n");
   // 판정은 마지막 시도만(11/8 실측: 앞의 틀린 답까지 보고 다시 맞게 한 답을 '일부만'으로 봄). 과제는 그 시도 바로 앞 튜터 말까지 포함
-  const users = msgs.filter((m) => m.role === "user" && !/^\[/.test(m.text.trim()));
+  const users = msgs.filter((m) => m.role === "user" && !isSys(m.text));
   const lastU = users.at(-1);
   const said = lastU ? [lastU.text.trim()] : [];
   const lastTutor = lastU ? msgs.filter((m) => m.role === "assistant" && m.at < lastU.at).at(-1)?.text ?? "" : "";
@@ -558,6 +593,11 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   if (!plan) throw err(404, "이 단계의 수업 계획서가 없어요.");
 
   // 학습 목표 버튼(11/4): 이해 · 적용 · 보충 끝은 AI 안 부름. 다음으로 · 확정 · 막혔어요 · 설문 답은 튜터에게 한 번
+  // 답하는 중에 온 버튼 · 말은 거절한다(11/9 시험: 엔진이 "답하는 중"으로 거절한 것을 삼키고 200을 돌려 버튼 · 말이 조용히 사라짐)
+  if ((run.codexId || run.chatId) && (input.do === "goal" || input.do === "ask")) {
+    const busyNow = run.codexId ? (await (await import("./codex-chat.ts")).view(run.codexId)).busy : (await (await import("./agent-chat.ts")).chatView(run.chatId!)).busy;
+    if (busyNow) throw err(409, "튜터가 아직 답하는 중이에요. 답이 끝난 뒤 다시 해 주세요.");
+  }
   if ((run.codexId || run.chatId) && input.do === "goal") {
     const op = String((input as { op?: string }).op ?? "");
     // 목표 정리는 현재 목표가 끝날 때만: [다음으로] 또는 보충 중이 아닐 때의 [너무 쉬워요 → 다음으로].
@@ -576,7 +616,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
       const d = await (await import("./shell.ts")).decide(runId, await (await import("./goals.ts")).runWorkspace(runId), String(ci.id ?? ""), ci.ok === true);
       await TL.beginStep(runId, { kind: "button", label: d.label, text: d.text });
       notifyLesson(runId);
-      if (d.say) { if (run.codexId) await codexAsk(runId, run.codexId, d.say); else await chatAsk(runId, run.chatId!, d.say); } else await TL.endStep(runId);
+      if (d.say) { const t = sysSay(d.label, d.say); if (run.codexId) await codexAsk(runId, run.codexId, t); else await chatAsk(runId, run.chatId!, t); } else await TL.endStep(runId);
       return;
     }
     const OPS: Record<string, string> = { understood: "이해했어요", applied: "해 봤어요", next: "다음으로", easy_next: "너무 쉬워요 → 다음으로", easy: "너무 쉬워요 → 더 어렵게", hard: "너무 어려워요", stuck: "너무 어려워요", answer: "설문 답", confirm: "확정", dismiss_plan: "계획 다시 얘기하기", dismiss_survey: "설문 닫기", mode: "진행 방식 바꾸기", end: "학습 종료" };
@@ -591,7 +631,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     // 학습 종료가 이 정리를 기다렸다가 앱에 넣도록 붙잡아 둔다(11/8 타임라인에서 정리 전에 넣기가 돌아 0개)
     if (before?.current) { const job = recordFinished(runId, run, before.current, before.mode).catch(() => {}); recordJobs.set(runId, [...(recordJobs.get(runId) ?? []), job]); }
     notifyLesson(runId);
-    if (say) { if (run.codexId) await codexAsk(runId, run.codexId, say); else await chatAsk(runId, run.chatId!, say); }
+    if (say) { const t = sysSay(OPS[op] ?? op, say); if (run.codexId) await codexAsk(runId, run.codexId, t); else await chatAsk(runId, run.chatId!, t); }
     return;
   }
   if (run.codexId && (input.do === "ask" || input.do === "stop_chat")) {
