@@ -27,7 +27,13 @@ const VERDICT: Record<string, [string, string]> = { best: ["의도된 풀이", "
 export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string) => void }) {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState("");
-  const load = useCallback(async () => { try { setData(await call<Overview>("/api/code/tutor")); setError(""); } catch (e) { setError(errorText(e)); } }, []);
+  // 지금 보고 있는 할 일은 끝낼 때까지 그대로 둔다: 문제 모델을 만드는 동안 3초마다 새로 읽으면서 다음 할 일이 바뀌어
+  // 풀던 카드가 다른 문제로 넘어가던 것(11/9 사용자). 끝내면(onDone) 비우고 새 첫 할 일을 잡는다.
+  const [pinned, setPinned] = useState<ActionView | null>(null);
+  const load = useCallback(async () => {
+    try { const d = await call<Overview>("/api/code/tutor"); setData(d); setPinned((p) => p ?? d.actions[0] ?? null); setError(""); } catch (e) { setError(errorText(e)); }
+  }, []);
+  const next = useCallback(() => { setPinned(null); void load(); }, [load]);
   useEffect(() => later(() => void load()), [load]);
   const running = data?.prep.running;
   useEffect(() => { if (!running) return; const t = setInterval(() => void load(), 3000); return () => clearInterval(t); }, [running, load]);
@@ -35,7 +41,7 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
   const prepare = async () => { try { await call("/api/code/tutor/prepare", data?.prep.failed.length ? { workers: 1 } : {}); await load(); } catch (e) { setError(errorText(e)); } };
 
   if (!data) return <section className="panel small muted">{error || "PS 튜터를 여는 중…"}</section>;
-  const action = data.actions[0];
+  const action = pinned ?? data.actions[0];
   return (
     <div className="stack pt">
       <header className="stack" style={{ gap: 4 }}>
@@ -54,7 +60,7 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
           {data.prep.failed.length ? <p>실패 {data.prep.failed.length}개: {data.prep.failed.slice(0, 3).map((f) => `${f.number}(${f.why})`).join(", ")}</p> : null}
         </details>
       ) : null}
-      {action ? <ActionCard key={action.id + data.done} a={action} onDone={() => void load()} onOpenProblem={onOpenProblem} pending={data.pending.some((p) => p.number === action.number)} />
+      {action ? <ActionCard key={action.id + data.done} a={action} onDone={next} onOpenProblem={onOpenProblem} pending={data.pending.some((p) => p.number === action.number)} />
         : data.ready ? <section className="panel small muted">지금 할 일이 없어요. 복습 날짜가 되면 다시 나와요.</section> : null}
       {data.actions.length > 1 ? (
         <section className="stack" style={{ gap: 4 }}>

@@ -122,8 +122,16 @@ const LANG_OF: Record<string, Lang> = { cpp: "cpp", cc: "cpp", py: "python", js:
 type Deps = { fetcher: Fetcher; run: typeof runOnce };
 
 /** One problem's model: AI 1번. Refuses (throws) when the archived original cannot be read. */
+// 원문 가져오기(인터넷 아카이브)는 한꺼번에 많이 물으면 막혀서 2개씩만, AI 호출은 더 많이 동시에(11/9 사용자 "74개 만드는 게 느리다").
+let archiveActive = 0;
+const archiveWaiting: Array<() => void> = [];
+async function archiveGate<T>(f: () => Promise<T>): Promise<T> {
+  if (archiveActive >= 2) await new Promise<void>((r) => archiveWaiting.push(r));
+  archiveActive++;
+  try { return await f(); } finally { archiveActive--; archiveWaiting.shift()?.(); }
+}
 export async function buildModel(target: Target, deps: Deps = { fetcher: fetch, run: runOnce }): Promise<ProblemModel> {
-  const original = await archivedBojProblem(target.number, deps.fetcher);
+  const original = await archiveGate(() => archivedBojProblem(target.number, deps.fetcher));
   if (!original) throw new Error("인터넷 아카이브에서 원문을 찾지 못했어요.");
   let code = "", lang: Lang | undefined;
   if (target.solution) {
@@ -153,13 +161,13 @@ export async function buildModel(target: Target, deps: Deps = { fetcher: fetch, 
   return model;
 }
 
-/* ---------- 준비(여러 문제를 한 번에, 동시에 3개) ---------- */
+/* ---------- 준비(여러 문제를 한 번에, 동시에 6개; 원문 가져오기는 2개씩) ---------- */
 export type Prep = { running: boolean; total: number; done: number; failed: Array<{ number: string; why: string }>; startedAt?: string };
 const prep: Prep = { running: false, total: 0, done: 0, failed: [] };
 export const prepStatus = () => ({ ...prep, failed: [...prep.failed] });
 /** 아직 모델이 없는 튜터 문제를 만든다(백그라운드). 이미 돌고 있으면 그대로 둔다.
- *  workers: 동시에 몇 개(기본 3). 인터넷 아카이브가 한꺼번에 묻는 것을 막을 때가 있어서(11/8 실측: 73개 중 일부 "원문 없음"), 다시 할 때는 1개씩. */
-export async function prepareModels(limit?: number, workers = 3) {
+ *  workers: 동시에 몇 개(기본 6, 최대 8, 11/9에 3 → 6: 문제당 약 15초라 3개씩이면 74개에 6분). 인터넷 아카이브가 한꺼번에 묻는 것을 막을 때가 있어서(11/8 실측: 73개 중 일부 "원문 없음"), 다시 할 때는 1개씩. */
+export async function prepareModels(limit?: number, workers = 6) {
   if (prep.running) return prepStatus();
   const have = await readModels();
   const todo = tutorTargets().filter((t) => !have[t.number]).slice(0, limit ?? Infinity);
@@ -171,6 +179,6 @@ export async function prepareModels(limit?: number, workers = 3) {
       prep.done++;
     }
   };
-  void Promise.all(Array.from({ length: Math.max(1, Math.min(3, workers)) }, () => worker())).finally(() => { prep.running = false; });
+  void Promise.all(Array.from({ length: Math.max(1, Math.min(8, workers)) }, () => worker())).finally(() => { prep.running = false; });
   return prepStatus();
 }

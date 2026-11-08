@@ -59,22 +59,24 @@ test("상태: 혼자·도움을 따로, 새 문제 승리로 도움 수준이 �
 
 test("다음 할 일: 처음엔 진단, 새 패턴은 시범 → 드릴, 드릴 둘 뒤 설계, 설계 뒤 구현", () => {
   const models = { "1926": model("1926", ["visited"], "lecture"), "2667": model("2667", ["visited"]), "1012": model("1012", ["visited"]), "2583": model("2583", ["visited"]), "2468": model("2468", ["visited"]) };
+  // 사건 시각이 고정이라, "지금"을 마지막 사건 1분 뒤로 둔다(아니면 날이 지나 복습이 먼저 나온다, 11/9).
+  const soon = (es: TutorEvent[]) => new Date(Date.parse(es.at(-1)!.at) + 60_000);
   const diag = nextActions(computeState([]), models);
   assert.ok(diag.length >= 1 && diag.every((a) => a.kind === "drill" && a.mixed), "diagnosis hides the chapter");
   let events: TutorEvent[] = [ev({ number: "9", patterns: ["count-array"], ability: "recognize", ok: true })];
-  let next = nextActions(computeState(events), models);
+  let next = nextActions(computeState(events), models, soon(events));
   assert.equal(next[0].kind, "walkthrough"); assert.equal(next[0].number, "1926", "a lecture problem first");
   assert.equal(next[1].kind, "drill"); assert.notEqual(next[1].number, "1926");
   events = [...events, ev({ kind: "walkthrough", number: "1926", ability: undefined, grade: 0 }), ev({ number: "2667", ability: "recognize", ok: true }), ev({ number: "1012", ability: "recognize", ok: true })];
-  next = nextActions(computeState(events), models);
+  next = nextActions(computeState(events), models, soon(events));
   assert.equal(next[0].kind, "design");
   assert.ok(!["1926"].includes(next[0].number), "a problem seen in the walkthrough is not a fresh test");
   events = [...events, ev({ kind: "design", number: next[0].number, ability: "design", ok: true })];
-  next = nextActions(computeState(events), models);
+  next = nextActions(computeState(events), models, soon(events));
   assert.equal(next[0].kind, "implement");
   // 구현을 두 번 틀리면 설계로 한 칸 물러난다.
   events = [...events, ev({ kind: "implement", number: "2468", ability: "execute", ok: false }), ev({ kind: "implement", number: "2583", ability: "execute", ok: false })];
-  next = nextActions(computeState(events), models);
+  next = nextActions(computeState(events), models, soon(events));
   assert.equal(next.find((a) => a.pattern === "visited" && a.kind !== "walkthrough")?.kind, "design");
 });
 

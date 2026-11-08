@@ -1,7 +1,7 @@
 // PS 튜터 API (2026-11-08, src/lib/code/tutor/).
 //   GET  /api/code/tutor            패턴별 상태 · 다음 할 일 · 교육용 모델 준비 상태 (AI 없음)
 //   GET  /api/code/tutor/journal    학습 관찰일지(사건 + 배운 것 카드, AI 없음)
-//   POST /api/code/tutor/prepare    교육용 문제 모델을 아직 없는 문제만큼 만든다(문제당 AI 1번, 백그라운드, 동시에 3개)
+//   POST /api/code/tutor/prepare    교육용 문제 모델을 아직 없는 문제만큼 만든다(문제당 AI 1번, 백그라운드, 동시에 6개)
 //   POST /api/code/tutor/answer     드릴·설계·예측·대조 답, 구현 시작·그만하기 (AI 없음, 코드가 대조)
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -34,7 +34,7 @@ async function handle(request: Request, context: RouteContext) {
         return NextResponse.json({ entries: await journal(Object.fromEntries(Object.values(models).map((m) => [m.number, m.title]))) });
       }
       if (p[0] === "prepare" && request.method === "POST") {
-        const b = z.object({ limit: z.number().int().min(1).max(200).optional(), workers: z.number().int().min(1).max(3).optional() }).parse(await boundedJson(request));
+        const b = z.object({ limit: z.number().int().min(1).max(200).optional(), workers: z.number().int().min(1).max(8).optional() }).parse(await boundedJson(request));
         return NextResponse.json({ prep: await startPrepare(b.limit, b.workers) });
       }
       if (p[0] === "answer" && request.method === "POST") return NextResponse.json(await answer(ANSWER.parse(await boundedJson(request)) as Answer));
