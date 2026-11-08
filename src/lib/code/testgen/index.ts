@@ -4,7 +4,8 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 
-export type GenTest = { input: string; output: string; kind: string; size: string; refMs: number };
+export type GenTest = { input: string; output: string; kind: string; size: string; refMs: number;
+  /** the seed gen() got (made by the generator), and whether the input (regenOut: the output too) can be made again instead of saved (11/9) */ genSeed?: number; regen?: boolean; regenOut?: boolean };
 export type Mutant = { flaw: string; code: string };
 export type TestgenJob = {
   generator: string; reference: string; brute?: string; mutants?: Mutant[];
@@ -39,10 +40,15 @@ export function runCheckInputs(generator: string, inputs: string[]): Promise<Che
   return runHarness({ checkInputs: { generator, inputs } }) as unknown as Promise<CheckInputsResult>;
 }
 
+export type RegenJob = { regen: { generator: string; reference?: string; runMs?: number; items: Array<{ kind: string; size: string; seed: number; needOutput?: boolean }> } };
+export type RegenResult = { ok: true; items: Array<{ input: string; output?: string }> } | { ok: false; reason: string };
+/** 저장하지 않은 큰 입력을 다시 만든다(regen() in harness.mjs). */
+export function runRegen(job: RegenJob): Promise<RegenResult> { return runHarness(job) as unknown as Promise<RegenResult>; }
+
 /** Runs one job in its own process. Only what Node needs to start is passed on: no keys, no tokens, no app settings. */
 export function runTestgen(job: TestgenJob): Promise<TestgenResult> { return runHarness(job) as Promise<TestgenResult>; }
 
-function runHarness(job: TestgenJob | VerifyJob | { checkInputs: { generator: string; inputs: string[] } }): Promise<TestgenResult | VerifyResult> {
+function runHarness(job: TestgenJob | VerifyJob | RegenJob | { checkInputs: { generator: string; inputs: string[] } }): Promise<TestgenResult | VerifyResult> {
   return new Promise((resolve) => {
     const env = {} as NodeJS.ProcessEnv;
     for (const key of ["PATH", "Path", "SystemRoot", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR"]) if (process.env[key]) env[key] = process.env[key];

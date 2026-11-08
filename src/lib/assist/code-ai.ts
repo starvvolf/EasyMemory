@@ -5,7 +5,7 @@ import path from "node:path";
 import { askJson, askText, S } from "./model.ts";
 import { tagTrace } from "../ai/trace.ts";
 import { LANG_LABEL, judge, type Lang, type TestCase } from "../code/run.ts";
-import { CodeError, findCounterexample, problemKnowledgeNames, readProblem, readProblemMeta, saveProblem, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
+import { CodeError, findCounterexample, problemKnowledgeNames, readProblem, readProblemMeta, saveProblem, type HiddenTest, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
 import { runTestgen, runVerify } from "../code/testgen/index.ts";
 import { memoryEvents, searchKnowledge } from "../knowledge/api.ts";
 import { currentAttempt } from "../code/service.ts";
@@ -177,7 +177,7 @@ const solveAloneSafe = (p: Statement) => solveAlone(p).catch((e: unknown) => { c
 /** Without source examples, the simple solution must agree with the reference on at least this many small inputs. */
 const CROSS_MIN = 30;
 
-type Checked = { ok: true; examples: TestCase[]; tests: TestCase[]; check: Omit<ProblemCheck, "tries">; from: "source" | "made"; seed: number } | { ok: false; reason: string; /** the independent solution disagreed: it may be the wrong one */ verify?: boolean };
+type Checked = { ok: true; examples: TestCase[]; tests: HiddenTest[]; check: Omit<ProblemCheck, "tries">; from: "source" | "made"; seed: number } | { ok: false; reason: string; /** the independent solution disagreed: it may be the wrong one */ verify?: boolean };
 /** One draft through the check. Returns the reason it failed (sent back to the model) or the tests that survived. */
 type Human = { lang: Lang; code: string };
 /** Where one try spent its time (ms): writing the draft, making the tests, waiting for the independent solution, comparing with it. */
@@ -201,7 +201,8 @@ async function checkDraft(d: Drafted, kind: "full" | "blank", lang: Lang, pasted
   times.testsMs = Date.now() - mark;
   if (!made.ok) { void second; return { ok: false, reason: made.reason }; }
   const examples: TestCase[] = made.examples;
-  const tests: TestCase[] = made.tests.map(({ input, output }) => ({ input, output }));
+  // 큰 입력은 생성기·시드로 다시 만들 수 있으면 저장하지 않는다(11/9, problems.ts HiddenTest).
+  const tests: HiddenTest[] = made.tests.map((t) => ({ input: t.input, output: t.output, ...(t.regen && t.genSeed !== undefined ? { regen: { kind: t.kind, size: t.size, seed: t.genSeed, ...(t.regenOut ? { out: true } : {}) } } : {}) }));
   // 안전장치 ⑤: a solution from another call must print the same on every test, big ones included.
   mark = Date.now();
   const alone = await second;

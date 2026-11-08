@@ -119,3 +119,18 @@ test("a simple solution that is slow even on small inputs is left out of the com
   if (r.ok) { assert.equal(r.compared, 0); assert.equal(r.bruteSlow, 20); }
   assert.ok(Date.now() - started < 40_000, `gave up quickly (${Date.now() - started}ms)`);
 });
+
+test("용량 줄이기: a big input is marked to be made again (same text from the same seed); a generator using Math.random is not", { timeout: 120_000 }, async () => {
+  const { runRegen } = await import("./index.ts");
+  const r = await runTestgen(base);
+  assert.ok(r.ok);
+  const big = r.tests.filter((t) => t.input.length > 100_000);
+  assert.ok(big.length >= 1 && big.every((t) => t.regen && t.genSeed !== undefined), "max-size inputs can be made again");
+  assert.ok(r.tests.filter((t) => t.input.length <= 100_000).every((t) => !t.regen), "small ones are just saved");
+  const again = await runRegen({ regen: { generator: GENERATOR, items: big.map((t) => ({ kind: t.kind, size: t.size, seed: t.genSeed! })) } });
+  assert.ok(again.ok);
+  assert.deepEqual(again.items.map((x) => x.input), big.map((t) => t.input));
+  const noisy = await runTestgen({ ...base, generator: GENERATOR.replace('return line(vals(LO, HI));', 'return line(vals(LO, HI).map((v) => (Math.random() < 0.5 ? v : -v)));') });
+  assert.ok(noisy.ok);
+  assert.ok(noisy.tests.filter((t) => t.kind === "random" && t.size === "max").every((t) => !t.regen), "not the same twice: kept as it is");
+});

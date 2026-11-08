@@ -8,11 +8,11 @@ import path from "node:path";
 import { calibration } from "./calibrate.ts";
 import { judge, LANGS, normalizeOutput, runOnce, type CompareHow, type Judgement, type Lang, type TestCase } from "./run.ts";
 import { SEEDS } from "./seeds.ts";
-import { runCheckInputs } from "./testgen/index.ts";
+import { runCheckInputs, runRegen } from "./testgen/index.ts";
 
 export type Problem = {
   id: string; title: string; statement: string; inputText: string; outputText: string;
-  examples: TestCase[]; tests: TestCase[]; timeLimitMs: number; /** MB; 256 when left out */ memoryLimitMb?: number;
+  examples: TestCase[]; tests: HiddenTest[]; timeLimitMs: number; /** MB; 256 when left out */ memoryLimitMb?: number;
   /** "full": write the whole program. "blank": fill the ____ in a given program. */
   kind: "full" | "blank";
   templates: Partial<Record<Lang, string>>;
@@ -80,18 +80,23 @@ async function writeJson(file: string, value: unknown, compact = false) {
    <id>.json is what the list and the problem screen need (a few KB); <id>.tests.json holds the hidden tests (up to
    tens of MB with max-size inputs). The list never opens the tests; opening a problem starts reading them, so they
    are in memory by the time the learner submits. Files from before kept the tests inline and are split on first read. */
+/** A hidden test. regen (2026-11-09, 용량 줄이기): a big input made by the generator is not written to the tests file — only its
+ *  kind/size/seed (out: the output too, made again by the reference) — and it is made again when the tests are read. */
+export type HiddenTest = TestCase & { regen?: { kind: string; size: string; seed: number; out?: boolean } };
+type StoredTest = { input?: string; output?: string; regen?: HiddenTest["regen"] };
+const stored = (t: HiddenTest): StoredTest => t.regen ? { regen: t.regen, ...(t.regen.out ? {} : { output: t.output }) } : { input: t.input, output: t.output };
 /** A problem without its hidden tests (and how many there are). */
 export type ProblemMeta = Omit<Problem, "tests"> & { hiddenTests: number };
 const testsFileOf = (id: string) => fileOf(problemsDir(), id).replace(/\.json$/, ".tests.json");
-const testsCache = globalThis as unknown as { __codeTests?: Map<string, { mtimeMs: number; tests: TestCase[] }> };
+const testsCache = globalThis as unknown as { __codeTests?: Map<string, { mtimeMs: number; tests: HiddenTest[] }> };
 const cache = () => (testsCache.__codeTests ??= new Map());
-const remember = (id: string, mtimeMs: number, tests: TestCase[]) => {
+const remember = (id: string, mtimeMs: number, tests: HiddenTest[]) => {
   const c = cache(); c.delete(id); c.set(id, { mtimeMs, tests });
   while (c.size > 4) c.delete(c.keys().next().value!); // the few problems open lately
 };
 async function writeProblem(problem: Problem) {
   const { tests, ...rest } = problem;
-  await writeJson(testsFileOf(problem.id), tests, true); // tests first: a problem file means its tests are there
+  await writeJson(testsFileOf(problem.id), tests.map(stored), true); // tests first: a problem file means its tests are there
   remember(problem.id, (await stat(testsFileOf(problem.id))).mtimeMs, tests);
   await writeJson(fileOf(problemsDir(), problem.id), { ...rest, hiddenTests: tests.length });
 }
@@ -106,15 +111,37 @@ async function readMeta(id: string): Promise<ProblemMeta> {
   }
   return raw;
 }
-async function readTests(id: string): Promise<TestCase[]> {
+async function readTests(id: string): Promise<HiddenTest[]> {
   const file = testsFileOf(id);
   const { mtimeMs } = await stat(file).catch(() => ({ mtimeMs: -1 }));
   if (mtimeMs < 0) return [];
   const hit = cache().get(id);
   if (hit && hit.mtimeMs === mtimeMs) return hit.tests;
-  const tests = JSON.parse(await readFile(file, "utf8")) as TestCase[];
-  remember(id, mtimeMs, tests);
-  return tests;
+  const key = `${id}:${mtimeMs}`;
+  const pending = reading.get(key);
+  if (pending) return pending; // opened and submitted at once: make the big inputs again only once
+  const job = (async () => {
+    const raw = JSON.parse(await readFile(file, "utf8")) as StoredTest[];
+    const tests = await filled(id, raw);
+    remember(id, mtimeMs, tests);
+    return tests;
+  })().finally(() => reading.delete(key));
+  reading.set(key, job);
+  return job;
+}
+const reading = new Map<string, Promise<HiddenTest[]>>();
+/** Big inputs that were not saved are made again from the problem's generator (and reference, for a big output). */
+async function filled(id: string, raw: StoredTest[]): Promise<HiddenTest[]> {
+  const todo = raw.map((t, i) => ({ t, i })).filter(({ t }) => t.regen && t.input === undefined);
+  if (!todo.length) return raw as HiddenTest[];
+  const meta = JSON.parse(await readFile(fileOf(problemsDir(), id), "utf8")) as ProblemMeta;
+  if (!meta.testgen?.generator) throw new CodeError(500, "숨은 테스트를 다시 만들 생성기가 없어요.");
+  const got = await runRegen({ regen: { generator: meta.testgen.generator, reference: meta.reference?.lang === "javascript" ? meta.reference.code : undefined,
+    items: todo.map(({ t }) => ({ kind: t.regen!.kind, size: t.regen!.size, seed: t.regen!.seed, needOutput: Boolean(t.regen!.out) })) } });
+  if (!got.ok) throw new CodeError(500, `숨은 테스트를 다시 만들지 못했어요: ${got.reason}`);
+  const out = [...raw] as HiddenTest[];
+  todo.forEach(({ t, i }, k) => { out[i] = { input: got.items[k].input, output: got.items[k].output ?? t.output ?? "", regen: t.regen }; });
+  return out;
 }
 /** The same address, compared loosely (an archive copy's prefix, http/https, www, a trailing slash or #part don't count). */
 export const sourceKey = (url: string) => url.trim().replace(/^https?:\/\/web\.archive\.org\/web\/\d+[a-z_]*\//i, "").replace(/^https?:\/\//i, "").replace(/^(www\.|m\.)/i, "").replace(/#.*$/, "").replace(/\/+$/, "").toLowerCase();

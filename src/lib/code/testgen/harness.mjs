@@ -12,6 +12,10 @@ import { compareOutput, normalizeOutput as norm } from "../compare.mjs";
 const EXIT = Symbol("exit");
 const MAX_TESTS = 60;
 const MAX_TOTAL_INPUT = 40_000_000;
+/** 용량 줄이기 (2026-11-09, 사용자 "테스트는 세게, 용량·속도는 줄일 수 있으면"): an input (or output) longer than this is not
+ *  saved; its generator kind/size/seed are, and it is made again when the problem's tests are read (regen()). Saved
+ *  this way only when making it again gave the very same text (a generator that is not deterministic keeps its input). */
+const BIG = 100_000;
 /** The simple solution's time per small input, and how many slow ones before its comparison stops. */
 const BRUTE_MS = 500, BRUTE_GIVE_UP = 20;
 
@@ -133,7 +137,7 @@ function main(job) {
     // A small input the checker refuses is dropped (it says nothing either way); too many of them is a broken generator.
     if (made.rejected) { rejected.small++; rejected.kinds.add(`${kind}/small`); if (rejected.small > smallCount) return fail(made.rejected + FIX); continue; }
     if (seen.has(made.input)) continue;
-    seen.add(made.input); small.push({ kind, input: made.input });
+    seen.add(made.input); small.push({ kind, input: made.input, seed: seed0 * 7919 + i });
   }
   if (!small.length) return fail(`작은 입력을 하나도 못 만듦 (검사기가 모두 거부)${FIX}`);
   let compared = 0, bruteSlow = 0;
@@ -160,13 +164,14 @@ function main(job) {
     const count = Math.max(0, Math.min(Number(item.count) || 1, item.size === "max" ? 3 : 10));
     let kept = 0, lastRejected = "";
     for (let c = 0; c < count; c++) {
-      const made = make(item.kind, item.size, seed0 * 104729 + p * 101 + c, "숨은 테스트");
+      const genSeed = seed0 * 104729 + p * 101 + c;
+      const made = make(item.kind, item.size, genSeed, "숨은 테스트");
       if (made.error) return fail(made.error);
       if (made.rejected) { rejected.tests++; rejected.kinds.add(`${item.kind}/${item.size}`); lastRejected = made.rejected; continue; }
       kept++;
       const r = run(reference, made.input, runMs); const why = badRun(r);
       if (why) return fail(`숨은 테스트(${item.kind}/${item.size}): 모범 풀이 ${why}${r.timedOut ? ` — ${runMs}ms 안에 못 풂, 모범 풀이가 느리거나 입력이 제약보다 큼` : ""}`);
-      if (!add({ input: made.input, output: norm(r.stdout), kind: item.kind, size: item.size, refMs: Math.round(r.ms) })) break;
+      if (!add({ input: made.input, output: norm(r.stdout), kind: item.kind, size: item.size, refMs: Math.round(r.ms), genSeed })) break;
     }
     // A planned kind that never passes the checker is left out; a max-size one is not (it is what catches slow solutions).
     if (count && !kept && lastRejected) { if (item.size === "max") return fail(lastRejected + FIX); holes.push(`${item.kind}/${item.size}`); lastHole = lastRejected; }
@@ -175,7 +180,7 @@ function main(job) {
   if (tests.length && tests.every((t) => !t.output.trim())) return fail("모범 풀이가 모든 숨은 테스트에서 아무것도 출력하지 않음 (출력을 빠뜨렸거나 입력을 못 읽음)");
   const picked = new Set();
   for (const s of small) { if (picked.size >= 10) break; if (![...picked].some((x) => x.kind === s.kind) || picked.size >= g.smallKinds.length) picked.add(s); }
-  for (const s of picked) add({ input: s.input, output: smallOut.get(s.input), kind: s.kind, size: "small", refMs: 0 });
+  for (const s of picked) add({ input: s.input, output: smallOut.get(s.input), kind: s.kind, size: "small", refMs: 0, genSeed: s.seed });
   if (tests.length < 3) return fail(`숨은 테스트가 ${tests.length}개뿐 (생성기의 tests 계획을 늘려야 함)`);
 
   // 4. 결함 풀이: each must fail some test. One that passes everything is checked against the simple solution on the
@@ -199,11 +204,19 @@ function main(job) {
     }
     if (found) {
       mutation.total++; mutation.killed++;
-      if (add({ input: found.input, output: smallOut.get(found.input), kind: `반례:${m.flaw}`, size: "small", refMs: 0 })) mutation.added++;
+      if (add({ input: found.input, output: smallOut.get(found.input), kind: `반례:${m.flaw}`, size: "small", refMs: 0 })) mutation.added++; // small: always saved
     } else if (brute) mutation.maybeRight.push(m.flaw);
     else { mutation.total++; mutation.survived.push(m.flaw); }
   }
 
+  // 5. 큰 입력은 다시 만들 수 있는지 한 번 확인(같은 글자가 나와야 저장하지 않는다). 큰 출력은 모범 풀이를 한 번 더 돌려 확인.
+  for (const t of tests) {
+    if (t.genSeed === undefined || t.input.length <= BIG) continue;
+    const again = make(t.kind, t.size, t.genSeed, "다시 만들기");
+    if (again.input !== t.input) continue;
+    t.regen = true;
+    if (t.output.length > BIG) { const r = run(reference, t.input, runMs); if (!badRun(r) && norm(r.stdout) === t.output) t.regenOut = true; }
+  }
   return { ok: true, examples, tests, compared, small: small.length, maxTests: tests.filter((t) => t.size === "max").length, mutation,
     rejected: { small: rejected.small, tests: rejected.tests, kinds: [...rejected.kinds], holes }, bruteSlow };
 }
@@ -237,6 +250,29 @@ function verify(job) {
   return { ok: true, status, agreed, total: v.tests.length, unchecked, secondWrong };
 }
 
+/** 저장하지 않은 큰 입력(과 큰 출력)을 다시 만든다(11/9): 같은 생성기·시드면 같은 입력, 같은 모범 풀이면 같은 출력. */
+function regen(job) {
+  const loaded = loadGenerator(job.generator);
+  if (loaded.error) return { ok: false, reason: loaded.error };
+  const reference = job.reference ? compile(job.reference, "reference") : null;
+  if (reference?.error) return { ok: false, reason: reference.error };
+  const out = [];
+  for (const it of job.items) {
+    let input;
+    try { input = loaded.g.gen(it.kind, it.size, rng(it.seed)); } catch (e) { return { ok: false, reason: `다시 만들기(${it.kind}/${it.size}) 에러: ${String(e.message).slice(0, 160)}` }; }
+    if (typeof input !== "string") return { ok: false, reason: `다시 만들기(${it.kind}/${it.size})가 입력을 내지 않음` };
+    let output;
+    if (it.needOutput) {
+      if (!reference) return { ok: false, reason: "모범 풀이가 없어 큰 출력을 다시 만들 수 없음" };
+      const r = run(reference, input, job.runMs ?? 10_000); const why = badRun(r);
+      if (why) return { ok: false, reason: `다시 만들기: 모범 풀이 ${why}` };
+      output = norm(r.stdout);
+    }
+    out.push({ input, ...(output !== undefined ? { output } : {}) });
+  }
+  return { ok: true, items: out };
+}
+
 /** 반례 찾기 (2026-11-04, GPT 프롬프트 점검 A P2): which of the AI's candidate inputs keep the problem's constraints. */
 function checkInputs(job) {
   const loaded = loadGenerator(job.generator);
@@ -255,6 +291,6 @@ process.stdin.setEncoding("utf8");
 process.stdin.on("data", (c) => { raw += c; });
 process.stdin.on("end", () => {
   let result;
-  try { const job = JSON.parse(raw); result = job.verify ? verify(job) : job.checkInputs ? checkInputs(job.checkInputs) : main(job); } catch (e) { result = { ok: false, reason: `테스트 만들기 실행기 에러: ${String(e && e.message || e).slice(0, 300)}` }; }
+  try { const job = JSON.parse(raw); result = job.verify ? verify(job) : job.checkInputs ? checkInputs(job.checkInputs) : job.regen ? regen(job.regen) : main(job); } catch (e) { result = { ok: false, reason: `테스트 만들기 실행기 에러: ${String(e && e.message || e).slice(0, 300)}` }; }
   process.stdout.write(JSON.stringify(result));
 });
