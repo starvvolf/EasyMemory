@@ -14,7 +14,7 @@ import { materialMap, type MapCard } from "./material-map.ts";
 import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "./quiz-plan.ts";
 import { loadGoalLinks, makeGoalLinks } from "./goal-links.ts";
 
-export const LAB2_METHODS = ["nine", "five", "goals", "stem"] as const;
+export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design"] as const;
 export type Lab2Method = (typeof LAB2_METHODS)[number];
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 
@@ -40,6 +40,20 @@ export async function runQuizLab2(id: string, method: Lab2Method) {
   const map = state ? materialMap(state, {}) : null;
   if (!state || !map) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });
   const texts = (state as unknown as { recaller?: { texts?: Record<string, string> } }).recaller?.texts ?? {};
+  if (method === "design") {
+    // 시험지 설계 → 문제 쓰기(exam-design.ts), 풀기 검사 없음
+    const [{ designExam }, { loadStructure }] = await Promise.all([import("./exam-design.ts"), import("./structure.ts")]);
+    const goals = (state as unknown as { recaller?: { digest?: { objectives?: DigestObjective[] } } }).recaller?.digest?.objectives ?? [];
+    const t0 = Date.now();
+    const r = await designExam(id, map, await loadStructure(id), goals, texts);
+    const calls = await callsOf(id, t0);
+    const out = { method, id, at: new Date().toISOString(), wall: Date.now() - t0, designMs: r.designMs, items: r.items.length, calls: calls.length,
+      tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0), questions: r.items };
+    const dir = path.join(dataDir(), "study-gen", id, "quiz-lab2");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, `${method}.json`), JSON.stringify(out, null, 1));
+    return out;
+  }
   const all = map.sections.flatMap((s) => s.cards).filter((c) => !c.title.startsWith("흐름: "));
   const byId = new Map(all.map((c) => [c.id, c]));
   const main = all.filter((c) => c.core);
