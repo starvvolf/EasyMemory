@@ -991,3 +991,21 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .td-cont-b{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;background:none;border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer;color:inherit;font:inherit;min-width:0}
 .dejipgi .td-cont-b:hover{border-color:var(--ink)}
 .dejipgi .td-cont-t{font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 기억 탭: 자료·알고리즘·실습 (11/9, KnowledgeTabs.tsx) */
+.dejipgi .kt{max-width:900px;margin:0 auto;width:100%}
+.dejipgi .kt-seg{align-self:flex-start}
+.dejipgi .kt-seg small{color:var(--muted);font-weight:500}
+.dejipgi .kt-rows{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.dejipgi .kt-row{border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.dejipgi .kt-row.on{border-color:var(--ink)}
+.dejipgi .kt-head{width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dejipgi .kt-icon{font-size:16px}
+.dejipgi .kt-name{flex:1;min-width:0;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .kt-go{font-size:12.5px;color:var(--muted)}
+.dejipgi .kt-body{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.dejipgi .kt-items{list-style:none;margin:0;padding:0;display:grid;gap:4px;width:100%}
+.dejipgi .kt-item{width:100%;display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:center;text-align:left;background:var(--surface-2);border:1px solid transparent;border-radius:8px;padding:7px 10px;color:inherit;font:inherit;cursor:pointer}
+.dejipgi .kt-item:hover{border-color:var(--line)}
+.dejipgi .kt-t{font-weight:600;min-width:0}
+.dejipgi .kt-line{grid-column:2;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

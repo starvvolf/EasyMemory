@@ -44,7 +44,7 @@ function tidyMeaning(text: string) {
   if (SHAPE_KV.test(t) && !/[.다]\s/.test(t.split("=")[0])) return kvLines(t);
   return t;
 }
-function tidyLine(text: string) {
+export function tidyLine(text: string) {
   let t = tidyMeaning(text).replace(/^- /gm, "").replace(/\*\*/g, "").replace(/\n+/g, " · ");
   if ((t.match(/\$/g) ?? []).length % 2) t = t.slice(0, t.lastIndexOf("$")).trimEnd() + " …";
   return t;
@@ -576,7 +576,7 @@ function Duplicates({ pairs, onOpen, onAct }: { pairs: Dup[]; onOpen: (id: strin
   );
 }
 
-type MaterialRow = { key: string; group: "material" | "project" | "code"; kind: string; title: string; items: number; itemIds: string[]; lastAt: string; keys: string[];
+export type MaterialRow = { key: string; group: "material" | "project" | "code"; kind: string; title: string; items: number; itemIds: string[]; lastAt: string; keys: string[];
   folderId: string | null; genId?: string; sourceId?: string; stages?: Array<{ name: string; itemIds: string[] }> };
 type MaterialFolder = { id: string; name: string; order: number };
 const MAT_ICON: Record<string, string> = { pdf: "📄", web: "🌐", project: "🛠", code: "⌨" };
@@ -674,7 +674,7 @@ function MaterialOutline({ genId, items, sel, onPick, onAct }: { genId: string; 
   );
 }
 /** 웹 글 자료: its 글 지도 (질문·흐름·핵심·개념어), the same one the 웹 글 screen shows. */
-function MaterialArticle({ id, onChanged }: { id: string; onChanged: () => void }) {
+export function MaterialArticle({ id, onChanged }: { id: string; onChanged: () => void }) {
   const [source, setSource] = useState<SourceView | null>(null);
   const [error, setError] = useState("");
   useEffect(() => later(() => void call<{ source: SourceView }>(`/api/knowledge/source/${id}`).then((r) => setSource(r.source)).catch((e) => setError(errorText(e)))), [id]);
@@ -684,7 +684,7 @@ function MaterialArticle({ id, onChanged }: { id: string; onChanged: () => void 
   return <div className="stack"><ArticleMap source={source} onChanged={(s) => { setSource(s); onChanged(); }} /><button className="linkish small" onClick={() => go("web", { id })}>웹 글 화면에서 열기 (확인 문제·원문)</button></div>;
 }
 /** 프로젝트 자료: the knowledge by the course stage it first came up in. */
-function ProjectStages({ stages, items, sel, onPick }: { stages: Array<{ name: string; itemIds: string[] }>; items: ItemLite[]; sel: string | null; onPick: (id: string) => void }) {
+export function ProjectStages({ stages, items, sel, onPick }: { stages: Array<{ name: string; itemIds: string[] }>; items: ItemLite[]; sel: string | null; onPick: (id: string) => void }) {
   return (
     <div className="stack kw-stages">{stages.map((st) => {
       const mine = st.itemIds.map((id) => items.find((i) => i.id === id)).filter((i): i is ItemLite => Boolean(i));
