@@ -19,7 +19,9 @@ import { materialMap } from "./material-map.ts";
 import { loadStructure } from "./structure.ts";
 import { AREA_MEMORY_SYSTEM, AREA_SCHEMA, AREA_SYSTEM, COMPACT_MODEL, COMPACT_SYSTEM, MEM_SCHEMA, MEMORY_KINDS, MEMORY_ROLES, checkCompact, compactInput, type Reply } from "./compact.ts";
 
-export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards", "planDirect", "planShort", "stemDirect", "outlineNow", "stemCards"] as const;
+export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards", "planDirect", "planShort", "stemDirect", "outlineNow", "stemCards", "stemInline"] as const;
+// stemInline (11/10 사용자 "카드가 왜 이렇게 많냐" → "누누이 말하지만 줄 수 제한 이런 거 걸지 마"): 카드를 따로 쪼개지 않고 기억 안에
+//   식·조건(단계에 없는 것만), 근거 인용, 그림 위치를 쓴다. 개수·글자 수를 지시하지 않고 역할로만 말한다.
 // stemCards = 바로 줄기(stemDirect에 저장된 계획을 다시 씀) 다음 카드 단계만: 기억을 쪽이 이어지는 묶음(쪽 6장 안팎)으로 나눠 동시에,
 //   묶음마다 그 쪽 원문 + 쪽 그림 + 기억 계획 → 기억마다 질문·요지·단계와 그 밑 카드(인용·쪽). 엔진 카드 단계(그래픽스 57초)와 견준다.
 // outlineNow = 비교용: 지금 제품의 목차 호출(PLAN_COMMON + PLAN_TASK_CONCEPTS, 같은 입력)을 지금 다시 잰다(같은 조건에서 시간·토큰).
@@ -160,7 +162,7 @@ export async function runCompactLab(id: string, method: LabMethod) {
       return { name: r.name, question: r.question, mems: (r.memories ?? []).map((m) => ({ ...m, area: ai + 1, cards: (m.cards ?? []).map((k) => nums[k - 1] ?? -1) })) };
     }));
     reply = { areas: parts.map((p) => ({ name: p.name, question: p.question })), memories: parts.flatMap((p) => p.mems) };
-  } else if (method === "stemCards") {
+  } else if (method === "stemCards" || method === "stemInline") {
     const saved = JSON.parse(await readFile(path.join(dataDir(), "study-gen", id, "compact-lab", "stemDirect.json"), "utf8").catch(() => "null")) as { planMemories: Array<{ area: number; name: string; role: string; kind: string; pages: number[] }>; areas: Array<{ name: string; question: string }> } | null;
     if (!saved?.planMemories?.length) throw Object.assign(new Error("먼저 stemDirect를 돌려야 해요."), { status: 409 });
     const state = await loadGen(id) as unknown as { input: { sourceId: string; fileName: string }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
@@ -181,6 +183,18 @@ export async function runCompactLab(id: string, method: LabMethod) {
       }
       if (cur.length) groups.push(cur);
     }
+    const INLINE_SYSTEM = `강의 자료 몇 쪽(원문 [p.N]과 쪽 그림)과, 이 쪽들에서 학습자가 외울 기억 계획(이름·종류·역할)을 받는다. 기억을 완성한다.
+기억은 학습자가 외우고 복습하는 단위다. 원문을 낱장으로 다시 옮기지 말고, 이 기억을 이해하고 떠올리는 데 필요한 것만 쓴다.
+- question: 이 기억이 답하는 질문 한 줄.
+- line: 이 기억의 요지 한 줄(핵심 생각).
+- steps: 알고리즘·절차일 때 원문이 밟는 차례. 아니면 빈 배열.
+- facts: 요지와 단계만으로는 빠지는 식·조건·경우·정의. 요지나 단계에 이미 들어 있는 것은 다시 쓰지 않는다. 식은 원문 그대로. 따로 쓸 것이 없으면 빈 배열.
+- evidence: 이 기억을 원문에서 확인할 구절 {quote: 원문 그대로, page}. 그림 쪽이면 그림 속 글.
+- figure: 이 기억을 가장 잘 보여 주는 그림이 있으면 {page, box: [x0, y0, x1, y1] 쪽 안의 퍼센트, says: 그림이 보여 주는 것 한 줄}, 없으면 page 0.
+- 바탕·곁 기억은 어디에 쓰이는지가 보이게 짧게. 기억 번호(memory)는 받은 번호 그대로.`;
+    const INLINE_SCHEMA = S.obj({ memories: S.arr(S.obj({ memory: S.int, question: S.str, line: S.str, steps: S.arr(S.str), facts: S.arr(S.str),
+      evidence: S.arr(S.obj({ quote: S.str, page: S.int })), figure: S.obj({ page: S.int, box: S.arr({ type: "number" }), says: S.str }) })) });
+    const inline = method === "stemInline";
     const SC_SYSTEM = `강의 자료 몇 쪽(원문 [p.N]과 쪽 그림)과, 이 쪽들에서 학습자가 외울 기억 계획(이름·종류·역할)을 받는다. 기억마다:
 - question(이 기억이 답하는 질문 한 줄), line(요지 40~90자), steps(알고리즘·절차면 3~7단계, 아니면 []).
 - cards: 그 기억 밑에 들어갈 근거 카드. 원문의 정의·식·조건·단계·경우 하나씩, 보통 1~8장. {title 10~30자, kind(용어·사실·목록·조건·절차·공식·비교·개념·패턴), text(내용 한두 문장, 식은 그대로), quote(원문 구절 그대로 10~60자, 그림 쪽이면 그림 속 글), page}.
@@ -200,11 +214,15 @@ export async function runCompactLab(id: string, method: LabMethod) {
       const user = `[자료] ${state.input.fileName}\n영역: ${saved.areas[g[0].area - 1]?.name ?? ""}\n\n[기억 계획] (번호|역할|종류|이름|쪽)\n${planText}\n\n${ps.map((p) => `[p.${p}]\n${(texts[p] ?? "").trim() || "(글자 없음)"}`).join("\n\n")}`;
       const started = Date.now(); let first = 0;
       const r = await withTrace({ area: "pdf", action: `clab:${run}:g${gi + 1}`, ref: id }, async () => {
-        const x = await callModel({ purpose: "lab:compact-stemCards", system: `${SC_SYSTEM}\n출력은 JSON으로만 한다.`, user, json: true, schema: SC_SCHEMA, schemaName: "recaller_lab_stemcards", ...M, caller: LOCAL_CALLER, images, onText: () => { if (!first) first = Date.now(); } });
+        const x = await callModel({ purpose: `lab:compact-${method}`, system: `${inline ? INLINE_SYSTEM : SC_SYSTEM}\n출력은 JSON으로만 한다.`, user, json: true, schema: inline ? INLINE_SCHEMA : SC_SCHEMA, schemaName: `recaller_lab_${method}`, ...M, caller: LOCAL_CALLER, images, onText: () => { if (!first) first = Date.now(); } });
         const u = x.usage;
         logAssistCall({ at: new Date(started).toISOString(), purpose: "lab:compact-stemCards", ...M, ms: Date.now() - started, ...(first ? { firstTextMs: first - started } : {}), ok: true, inChars: user.length, outChars: JSON.stringify(x.data ?? "").length,
           ...(u ? { tokens: { in: u.inputTokens, cached: u.cachedInputTokens, out: u.outputTokens, reasoning: u.reasoningTokens } } : {}), trace: currentTrace() });
-        return x.data as { memories: Array<{ memory: number; question: string; line: string; steps: string[]; cards: Array<{ title: string; kind: string; text: string; quote: string; page: number }> }> };
+        const data = x.data as { memories: Array<{ memory: number; question: string; line: string; steps: string[]; facts?: string[]; evidence?: Array<{ quote: string; page: number }>; figure?: { page: number; box: number[]; says: string };
+          cards?: Array<{ title: string; kind: string; text: string; quote: string; page: number }> }> };
+        // 비교를 위해 근거를 카드 모양으로(같은 인용 확인을 쓴다).
+        if (inline) for (const m of data.memories ?? []) m.cards = (m.evidence ?? []).map((e) => ({ title: "", kind: "근거", text: "", quote: e.quote, page: e.page }));
+        return data as { memories: Array<{ memory: number; question: string; line: string; steps: string[]; facts?: string[]; figure?: { page: number; box: number[]; says: string }; cards: Array<{ title: string; kind: string; text: string; quote: string; page: number }> }> };
       });
       return { pages: ps, images: images.length, mems: (r.memories ?? []).map((m) => ({ ...m, name: g[m.memory - 1]?.name ?? "(번호 틀림)", role: g[m.memory - 1]?.role })) };
     }));
@@ -217,7 +235,8 @@ export async function runCompactLab(id: string, method: LabMethod) {
       tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0),
       memories: out.length, planned: mems.length, empty: mems.filter((m) => !out.some((o) => o.name === m.name && o.cards.length)).map((m) => m.name),
       cards: cards.length, quoteOk: cards.filter((c) => c.quoteOk).length,
-      list: out.map((m) => ({ name: m.name, role: m.role, cards: m.cards.length, steps: m.steps.length, line: m.line })), sample: cards.filter((c) => c.memory.includes("브레젠험") || c.memory.includes("주사선")).slice(0, 12) };
+      list: out.map((m) => ({ name: m.name, role: m.role, cards: m.cards.length, steps: m.steps.length, facts: (m as { facts?: string[] }).facts?.length ?? 0, figure: (m as { figure?: { page: number } }).figure?.page ?? 0, line: m.line })),
+      full: inline ? out.filter((m) => /브레젠험|주사선|교착 상태 예방|예방/.test(m.name)).slice(0, 3) : undefined, sample: cards.filter((c) => c.memory.includes("브레젠험") || c.memory.includes("주사선")).slice(0, 12) };
     await save(id, method, summary);
     return summary;
   } else if (method === "stemDirect" || method === "outlineNow") {
