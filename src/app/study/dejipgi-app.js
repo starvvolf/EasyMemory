@@ -4241,12 +4241,14 @@ function renderBuilder(){
   if (b.status) wrap.append(h("div", { class:"note", role:"status", text:b.status }));
 
   const drop = h("div", { class:"drop", id:"drop" },
-    h("strong", { text: b.pages.length ? `${b.sourceName} · ${b.pages.length}쪽` : "PDF를 끌어다 놓거나 골라 주세요" }),
+    h("strong", { text: b.pages.length ? `${b.sourceName} · ${b.pages.length}쪽` : "PDF를 끌어다 놓거나 자료를 골라 주세요" }),
     h("span", { class:"small muted", text:"기억할 것을 뽑아 자료 지도로 보여 줘요. 문제는 지도에서 원할 때 만들어요." }),
-    h("label", { class:"btn", for:"pdf" }, b.pages.length ? "다른 PDF 고르기" : "PDF 고르기"),
-    h("input", { id:"pdf", type:"file", accept:"application/pdf", class:"hidden", disabled:b.busy, onchange:(e) => { const f = e.target.files[0]; if (f) readPdf(f); } }),
-    engine ? h("button", { class:"btn ghost small", disabled:b.busy, onclick: () => openWebPick() }, "저장한 웹 글에서") : null,
-    b.webOpen ? webPickList(b) : null);
+    // 11/9 사용자 "웹글 버튼이랑 PDF 버튼 둘 다 있는 것 같음" → 버튼 하나: 누르면 PDF 파일 고르기와 저장한 웹 글이 한 칸에
+    h("button", { class:"btn", disabled:b.busy, onclick: () => engine ? openWebPick() : document.getElementById("pdf")?.click() }, b.pages.length ? "다른 자료 고르기" : "자료 고르기"),
+    h("input", { id:"pdf", type:"file", accept:"application/pdf", class:"hidden", disabled:b.busy, onchange:(e) => { const f = e.target.files[0]; if (f){ b.webOpen = false; readPdf(f); } } }),
+    b.webOpen ? h("div", { class:"stack", style:"gap:6px;width:100%;text-align:left" },
+      h("label", { class:"chip-btn", for:"pdf", style:"cursor:pointer" }, "📄 이 컴퓨터의 PDF 파일"),
+      h("span", { class:"small muted", text:"저장한 웹 글" }), webPickList(b)) : null);
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.dataset.over = "true"; });
   drop.addEventListener("dragleave", () => { drop.dataset.over = "false"; });
   drop.addEventListener("drop", (e) => { e.preventDefault(); drop.dataset.over = "false"; const f = e.dataTransfer.files[0]; if (f && /pdf$/i.test(f.name)) readPdf(f); });
