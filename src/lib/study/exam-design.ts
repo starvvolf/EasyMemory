@@ -19,12 +19,12 @@ export const DESIGN_SYSTEM = `너는 이 강의를 가르친 교수다. 학생�
 설계 원칙
 - 기억마다 한 문제가 아니라, 이 강의의 큰 생각마다 한 문제다. 같은 생각을 두 번 묻지 않는다. 학생이 지치지 않게 꼭 필요한 문제만.
 - 한 문제는 질문 하나다: 노리는 오개념 하나, 답 하나. 서로 다른 생각을 한 문제에 이어 붙이지 않는다("별도로 …도 구하라", "이어서 …" 금지). 여러 기억을 쓴다는 것은 그 하나의 답을 내려면 함께 알아야 한다는 뜻이다.
-- 강의의 큰 갈래(예: 선 그리기, 원·타원, 다각형 판정, 면과 평면, 채우기)가 빠짐없이 시험지에 들어가게 한다. 큰 생각이 여럿인 갈래는 생각마다 따로.
+- 강의의 큰 갈래가 빠짐없이 시험지에 들어가게 한다. 큰 생각이 여럿인 갈래는 생각마다 따로.
 - 바탕 지식(앞 과목의 식·정의)은 따로 묻지 않고, 다른 문제를 풀 때 쓰이게 한다. 곁가지(배경·종류 나열)는 묻지 않는다.
 - 문제마다 노릴 오개념을 하나 정한다: 이 주제에서 학생이 실제로 틀리는 생각(받은 "헷갈림"이 좋은 출발점이다). 그 오개념대로 풀면 다른 답이 나오는 상황을 고른다.
-- 경계에서 묻는다: 동점(p = 0), 꼭짓점을 지나는 선, 같은 직선 위의 점, 자원이 여러 개인 순환처럼 대충 알면 틀리는 자리.
-- 중간값이 아니라 결론을 묻는다(그래서 오목한가, 승인하는가, 다음 화소는 어디인가).
-- 상황의 전제가 강의의 규칙대로 성립해야 한다: 회피에서 요청하는 자원은 지금 비어 있어야 판정이 의미 있다(이미 다른 프로세스가 쥔 자원이면 그냥 기다린다), 꼭짓점 순서는 말한 방향과 맞아야 한다.
+- 경계에서 묻는다: 규칙이 갈리는 자리(값이 같아 두 갈래가 맞닿는 때, 특수한 경우, 한계값, 겹치는 경우)처럼 대충 알면 틀리는 자리.
+- 중간값이 아니라 결론을 묻는다(그래서 무엇으로 판정되는가, 다음은 무엇인가).
+- 상황은 강의의 규칙이 실제로 적용되는 조건을 만족해야 한다(그 규칙이 다루지 않는 상황을 만들지 않는다).
 - 형식은 노린 오개념이 가장 잘 드러나는 것으로:
   - ox: 오개념이 그럴듯한 문장 하나로 말해질 때(그 문장을 맞다/틀리다로).
   - choice: 비슷한 갈래 사이에서 헷갈릴 때, 판정 결과를 고를 때. 오답은 각각 다른 오개념의 결과.
@@ -39,15 +39,25 @@ export type DesignItem = { memories: number[]; target: string; form: (typeof EXA
 export const WRITE_SYSTEM = `너는 이 강의를 가르친 교수다. 설계된 문제 하나를 실제 문제로 쓴다.
 - 문제 글에는 상황과 값만 준다. 학생이 알아야 할 규칙·판정식·갱신식·정의를 문제 글에 쓰지 않는다(그것을 아는지가 시험이다).
 - 노린 오개념(target)대로 풀면 틀리게 되도록 상황을 그대로 살린다(설계의 situation). 값을 바꾸면 직접 계산해 경계 상황이 실제로 생기는지 확인한다.
-- 오답 보기는 각각 실제 학생 실수 하나에서 나온 답이다(오개념대로 풀었을 때, 축·부호를 바꿨을 때, 하나 차이, 반대로 판정했을 때…). 문제 글과 모순되는 보기, "언제나·반드시·모두"로 티 나는 보기, 아무것도 아닌 보기를 쓰지 않는다. 정답만 길거나 말이 누그러지지 않게 보기 길이와 말투를 맞춘다.
+- 오답 보기는 각각 실제 학생 실수 하나에서 나온 답이다(오개념대로 풀었을 때, 순서·방향·부호를 뒤바꿨을 때, 하나 차이, 반대로 판정했을 때…). 문제 글과 모순되는 보기, "언제나·반드시·모두"로 티 나는 보기, 아무것도 아닌 보기를 쓰지 않는다. 정답만 길거나 말이 누그러지지 않게 보기 길이와 말투를 맞춘다.
 - 강의를 듣지 않은 사람이 상식이나 보기 소거로 풀 수 있으면 실패다.
 - 문제는 그것만 보고 풀 수 있게 쓴다(자료의 쪽·그림을 가리키지 않는다). 필요한 값은 다 준다.
-- 상황의 전제가 성립하는지 확인한다(요청한 자원이 실제로 비어 있는가, 꼭짓점 순서가 말한 방향인가).
+- 상황의 전제가 강의의 규칙대로 성립하는지 확인한다(규칙이 적용되는 조건을 만족하는가, 문제 글의 값끼리 서로 맞는가).
 - form: ox(answer "O"/"X"), choice(보기 4개, answer는 정답 번호 1부터), blank(문제 글에 빈칸 ___ 하나 이상, answer는 빈칸 답을 차례로 "; "로), short(answer는 값만).
 - explain: 정답 풀이. traps: 오답(또는 흔한 틀린 답)마다 어떤 실수에서 나오는지 한 줄씩.
 - 한국어로. 용어는 처음에 "한국어(영어 원어)". 수식·기호는 원문 그대로.`;
 const WRITE_SCHEMA = S.obj({ form: S.oneOf(...EXAM_FORMS), stem: S.str, options: S.arr(S.str), answer: S.str, explain: S.str, traps: S.arr(S.str) });
 export type Written = { form: (typeof EXAM_FORMS)[number]; stem: string; options: string[]; answer: string; explain: string; traps: string[] };
+
+// 상황 확인 (11/10 사용자 "그렇게 해서 한 번 더 테스트" — 풀기 검사 대신 싸게): 쓴 문제를 한 번 보고, 노린 함정이 실제로 생기는지·전제가 성립하는지·
+// 답이 하나인지만 본다. 걸리면 그 이유를 주고 한 번 고쳐 쓴다.
+export const CHECK_SYSTEM = `강의 문제 하나와 그 문제가 노린 오개념을 받는다. 정리된 지식과 원문을 기준으로 세 가지만 확인한다.
+1. trap: 노린 오개념대로 풀면 정답과 다른 답이 실제로 나오는가(직접 따져 본다). 같은 답이 나오면 함정이 없는 것이다.
+2. premise: 상황이 강의의 규칙이 적용되는 조건을 만족하는가, 문제 글의 값끼리 서로 맞는가.
+3. unique: 정답이 하나로 정해지는가(맞는 보기가 둘이거나, 정의에 따라 답이 갈리거나, 계산 방식(반올림 등)에 따라 갈리면 아니다). 표시된 정답이 맞는가.
+셋 다 문제없으면 ok true. 아니면 ok false와 problems(무엇이 왜 문제인지, 고칠 방향).`;
+const CHECK_SCHEMA = S.obj({ trap: S.str, premise: S.str, unique: S.str, ok: { type: "boolean" }, problems: S.arr(S.str) });
+type Check = { trap: string; premise: string; unique: string; ok: boolean; problems: string[] };
 
 const line = (c: MapCard) => cardLine({ kind: c.kind, title: c.title, shape: c.shape, takes: c.takes, gives: c.gives } as Card).replace(/\s+/g, " ").slice(0, 500);
 
@@ -77,8 +87,17 @@ export async function designExam(id: string, map: MaterialMap, structure: Struct
     const source = pages.map((p) => `[원문 p.${p}]\n${texts[p] ?? ""}`).join("\n\n").slice(0, 12000);
     const mem = used.map((c) => [`- ${c.title} (${c.kind})`, c.memo?.line ? `  요지: ${c.memo.line}` : "", `  ${line(c)}`, ...(c.memo?.facts ?? []).map((f) => `  식·조건: ${f}`), ...(c.mistakes ?? []).map((m) => `  헷갈림: ${m}`)].filter(Boolean).join("\n")).join("\n");
     const u = `자료: ${map.title}\n\n[설계]\n노릴 오개념: ${it.target}\n형식: ${it.form}\n상황: ${it.situation}\n확인할 것: ${it.why}\n\n[쓸 기억]\n${mem}\n\n[원문]\n${source}`;
-    try { return { item: it, titles: used.map((c) => c.title), q: await withTrace({ area: "pdf", action: "quiz-write", ref: id }, () => askJson<Written>("map:exam-write", WRITE_SYSTEM, u, WRITE_SCHEMA, EXAM_MODEL)) }; }
-    catch (e) { return { item: it, titles: used.map((c) => c.title), error: (e as Error).message }; }
+    try {
+      const write = (extra = "") => withTrace({ area: "pdf", action: "quiz-write", ref: id }, () => askJson<Written>("map:exam-write", WRITE_SYSTEM, `${u}${extra}`, WRITE_SCHEMA, EXAM_MODEL));
+      const check = (q: Written) => withTrace({ area: "pdf", action: "quiz-check", ref: id }, () => askJson<Check>("map:exam-check", CHECK_SYSTEM,
+        `노린 오개념: ${it.target}\n\n[문제] (${q.form})\n${q.stem}${q.options.length ? `\n${q.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}\n정답: ${q.answer}\n풀이: ${q.explain}\n\n[정리된 지식]\n${mem}\n\n[원문]\n${source}`, CHECK_SCHEMA, EXAM_MODEL));
+      const first = await write();
+      const c1 = await check(first).catch(() => null);
+      if (!c1 || c1.ok) return { item: it, titles: used.map((c) => c.title), q: first, check: c1 };
+      const second = await write(`\n\n[고쳐 쓰기] 앞에서 쓴 문제는 이래서 안 됐다: ${c1.problems.join(" / ")}\n앞 문제: ${first.stem.slice(0, 600)} / 정답 ${first.answer}`);
+      const c2 = await check(second).catch(() => null);
+      return { item: it, titles: used.map((c) => c.title), q: second, check: c2, first, firstCheck: c1, rewritten: true };
+    } catch (e) { return { item: it, titles: used.map((c) => c.title), error: (e as Error).message }; }
   }));
   return { designMs, ms: Date.now() - t0, items: written };
 }
