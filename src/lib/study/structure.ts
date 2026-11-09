@@ -90,7 +90,7 @@ export const STRUCTURE_SYSTEM = `너는 강의 자료 한 편에서 뽑은 지�
 
 id는 g1, g2 … 순서대로. parent는 맨 위면 빈 문자열.`;
 
-const SCHEMA = S.obj({
+export const STRUCT_SCHEMA = S.obj({
   groups: S.arr(S.obj({ id: S.str, name: S.str, parent: S.str, head: S.int, cards: S.arr(S.int), members: S.oneOf(...MEMBER_KINDS), role: S.oneOf(...ROLES), explain: S.str })),
   base: S.arr(S.int),
   edges: S.arr(S.obj({ a: S.str, b: S.str, type: S.oneOf(...EDGE_TYPES), why: S.str })),
@@ -257,7 +257,7 @@ export async function makeStructure(id: string, map: MaterialMap): Promise<Struc
   if (ids.length < 3) throw Object.assign(new Error("카드가 너무 적어 구조를 만들 수 없어요."), { status: 422 });
   const t0 = Date.now();
   const reply = await withTrace({ area: "pdf", action: "structure", ref: id }, () =>
-    askJson<Reply>("map:structure", STRUCTURE_SYSTEM, user, SCHEMA, STRUCTURE_MODEL));
+    askJson<Reply>("map:structure", STRUCTURE_SYSTEM, user, STRUCT_SCHEMA, STRUCTURE_MODEL));
   const checked = checkStructure(reply, ids);
   const rest = checked.groups.find((g) => g.id === "g_rest")?.cards.length ?? 0;
   if (rest > ids.length / 3) throw Object.assign(new Error(`AI가 카드 ${ids.length}장 중 ${rest}장을 묶지 못했어요. 다시 해 보세요.`), { status: 502 });
@@ -301,7 +301,7 @@ export function stemStructureInput(compact: { areas: Array<{ name: string }>; me
 export async function makeStemStructure(id: string, map: MaterialMap, compact: Parameters<typeof stemStructureInput>[0] & { at: string }): Promise<Structure> {
   const { user, ids } = stemStructureInput(compact, map.title);
   const t0 = Date.now();
-  const reply = await withTrace({ area: "pdf", action: "structure-stem", ref: id }, () => askJson<Reply>("map:structure", STEM_STRUCTURE_SYSTEM, user, SCHEMA, STRUCTURE_MODEL));
+  const reply = await withTrace({ area: "pdf", action: "structure-stem", ref: id }, () => askJson<Reply>("map:structure", STEM_STRUCTURE_SYSTEM, user, STRUCT_SCHEMA, STRUCTURE_MODEL));
   const checked = checkStructure(reply, ids);
   const roles = new Map(compact.memories.map((m) => [m.id, m.role]));
   // 메인·바탕·곁은 줄기 것으로: 묶음의 role은 안에 든 기억이 모두 같은 역할일 때만(아니면 메인).

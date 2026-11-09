@@ -47,7 +47,7 @@ export const COMPACT_SYSTEM = `너는 강의 자료 한 편에서 뽑은 기억 
 - area: areas의 번호(1부터). cards: 카드 번호.
 - kind: 알고리즘 / 원리 / 개념 / 비교 / 판정 / 구조(자료 구조·표·표현 방식) 중 하나.`;
 
-type Reply = { areas: Array<{ name: string; question: string }>; memories: Array<{ name: string; kind: string; role: string; area: number; question: string; line: string; steps: string[]; cards: number[] }> };
+export type Reply = { areas: Array<{ name: string; question: string }>; memories: Array<{ name: string; kind: string; role: string; area: number; question: string; line: string; steps: string[]; cards: number[] }> };
 
 /** 카드 줄: 번호|구조 자리|역할|핵심·보조|카드. 흐름 카드는 뺀다. */
 export function compactInput(map: MaterialMap, structure: Structure | null) {
@@ -96,9 +96,9 @@ export const AREA_SYSTEM = `너는 강의 자료 한 편에서 뽑은 기억 카
 - 영역은 보통 3~7개, 자료 흐름 순서로. name은 자료의 말로 짧게(2~14자), question은 그 영역의 "배우는 질문" 한 줄.
 - 모든 카드를 정확히 한 영역에 넣는다(cards: 카드 번호). 한 알고리즘·방법의 카드는 한 영역에 모은다.
 - 앞 과목의 수학 식·정의를 다시 적은 카드(바탕)는 그것을 쓰는 영역에 넣는다.`;
-const AREA_SCHEMA = S.obj({ areas: S.arr(S.obj({ name: S.str, question: S.str, cards: S.arr(S.int) })) });
+export const AREA_SCHEMA = S.obj({ areas: S.arr(S.obj({ name: S.str, question: S.str, cards: S.arr(S.int) })) });
 export const AREA_MEMORY_SYSTEM = COMPACT_SYSTEM.replace(/먼저 \(쓰지 말고\)[\s\S]*?기억을 만든다\.\n/, "지금은 이 강의의 한 영역만 받는다(영역 이름·배우는 질문이 주어진다). 그 영역의 카드만으로 기억을 만든다. area는 1로 쓴다.\n");
-const MEM_SCHEMA = S.obj({ memories: S.arr(S.obj({ name: S.str, kind: S.oneOf(...MEMORY_KINDS), role: S.oneOf(...MEMORY_ROLES), area: S.int, question: S.str, line: S.str, steps: S.arr(S.str), cards: S.arr(S.int) })) });
+export const MEM_SCHEMA = S.obj({ memories: S.arr(S.obj({ name: S.str, kind: S.oneOf(...MEMORY_KINDS), role: S.oneOf(...MEMORY_ROLES), area: S.int, question: S.str, line: S.str, steps: S.arr(S.str), cards: S.arr(S.int) })) });
 
 export const COMPACT_MODEL = { model: "gpt-6.1-terra", effort: "low" };
 export async function makeCompact(id: string): Promise<Compact> {
