@@ -17,7 +17,9 @@ import { materialMap } from "./material-map.ts";
 import { loadStructure } from "./structure.ts";
 import { AREA_MEMORY_SYSTEM, AREA_SCHEMA, AREA_SYSTEM, COMPACT_MODEL, COMPACT_SYSTEM, MEM_SCHEMA, MEMORY_KINDS, MEMORY_ROLES, checkCompact, compactInput, type Reply } from "./compact.ts";
 
-export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards"] as const;
+export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards", "planDirect", "planShort"] as const;
+// 11/10 "목차 빼고 바로 줄기로 가면?": planDirect = 목차 없이 쪽(제목 + 글 앞 300자)에서 바로 줄기(짧게: 이름·종류·역할·영역·쪽만).
+//   planShort = plan과 같은 입력(목차)이되 짧게. 둘을 견주면 목차가 줄기에 무엇을 보태는지, 출력 줄이기가 얼마나 빠른지 보인다.
 // 거꾸로 (11/10 사용자 "줄기에서 바로 카드로 가면 어떻게 되는지"): 카드 → 줄기가 아니라 줄기 → 카드.
 //   plan       목차(엔진의 목차 단계 결과: 주제·항목 이름·쪽) + 쪽 첫 줄로 줄기(영역·기억·쪽)를 먼저. 카드 없이. 카드로 만든 줄기와 견준다.
 //   planCards  plan 다음, 영역마다 동시에 그 쪽 원문 + 그 영역 기억 계획을 주고 기억 아래 카드를 쓴다(글자만, 그림 없음).
@@ -58,6 +60,9 @@ const PLAN_SYSTEM = `강의 자료 한 편의 목차(주제·항목 이름·쪽)
 - 기억마다 {name, kind(알고리즘·원리·개념·비교·판정·구조), role, area(번호), question, line(요지 40~90자), steps(알고리즘·절차면 3~7단계, 아니면 []), pages(근거 쪽)}.
 - 목차의 항목을 빠뜨리지 않는다(표지·목차 쪽 빼고).`;
 const PLAN_SCHEMA = S.obj({ areas: S.arr(S.obj({ name: S.str, question: S.str })), memories: S.arr(S.obj({ name: S.str, kind: S.oneOf(...MEMORY_KINDS), role: S.oneOf(...MEMORY_ROLES), area: S.int, question: S.str, line: S.str, steps: S.arr(S.str), pages: S.arr(S.int) })) });
+const SHORT_RULE = "\n\n[짧게] 지금은 계획만: 기억마다 name, kind, role, area, pages만 쓴다. question·line은 빈 문자열, steps는 빈 배열(카드를 쓸 때 채운다).";
+const DIRECT_SYSTEM = PLAN_SYSTEM.replace("강의 자료 한 편의 목차(주제·항목 이름·쪽)와 쪽마다 첫 줄을 받는다.", "강의 자료 한 편을 쪽마다(제목 | 글 앞부분) 받는다. 글자가 없는 쪽은 그림으로 된 쪽이다(제목과 앞뒤 쪽으로 짐작).")
+  .replace("- 목차의 항목을 빠뜨리지 않는다(표지·목차 쪽 빼고).", "- 자료에서 배울 것을 빠뜨리지 않는다(표지·목차 쪽 빼고).");
 const PCARD_SYSTEM = `강의 자료 한 영역의 원문(쪽마다 [p.N])과, 이 영역에서 학습자가 외울 기억 계획을 받는다. 기억마다 그 아래에 들어갈 카드(근거 조각)를 원문에서 뽑는다.
 - 카드는 원문에 있는 정의·식·조건·단계·경우 하나씩. 기억의 단계·식·조건을 원문으로 받쳐 주는 것. 기억 하나에 보통 1~8장.
 - 카드마다 {memory(기억 번호), title(10~30자), kind(용어·사실·목록·조건·절차·공식·비교·개념·패턴), text(내용 한두 문장, 식은 그대로), quote(원문 구절 그대로 10~60자), page}.
@@ -148,6 +153,26 @@ export async function runCompactLab(id: string, method: LabMethod) {
       return { name: r.name, question: r.question, mems: (r.memories ?? []).map((m) => ({ ...m, area: ai + 1, cards: (m.cards ?? []).map((k) => nums[k - 1] ?? -1) })) };
     }));
     reply = { areas: parts.map((p) => ({ name: p.name, question: p.question })), memories: parts.flatMap((p) => p.mems) };
+  } else if (method === "planDirect" || method === "planShort") {
+    let u: string;
+    if (method === "planDirect") {
+      const prep = (await loadGen(id) as unknown as { recaller?: { prep?: { pages?: Array<{ page: number; title?: string }> } } })?.recaller?.prep?.pages ?? [];
+      const title = new Map(prep.map((x) => [x.page, x.title ?? ""]));
+      const pages = Object.keys(texts).map(Number).filter((x) => x > 0).sort((a, b) => a - b);
+      u = `자료: ${map.title}\n\n${pages.map((p) => `p.${p} ${title.get(p) || "(제목 없음)"} | ${(texts[p] ?? "").replace(/\s+/g, " ").trim().slice(0, 300) || "(글자 없음)"}`).join("\n")}`;
+    } else {
+      const d = (await loadGen(id) as unknown as { recaller?: { digest?: { skeleton?: { topics: Array<{ id: string; title: string; pages: number[] }> }; topics?: Record<string, { body?: Array<{ name: string; pages: number[] }> }> } } })?.recaller?.digest;
+      u = `자료: ${map.title}\n\n[목차]\n${(d?.skeleton?.topics ?? []).map((t) => `${t.id} | ${t.title} | p.${t.pages.join(",")}\n${(d?.topics?.[t.id]?.body ?? []).map((l) => `  - ${l.name} (p.${l.pages.join(",")})`).join("\n")}`).join("\n")}`;
+    }
+    const plan = await ask<{ areas: Array<{ name: string; question: string }>; memories: Array<Omit<Mem, "cards"> & { pages: number[] }> }>("plan", (method === "planDirect" ? DIRECT_SYSTEM : PLAN_SYSTEM) + SHORT_RULE, u, PLAN_SCHEMA);
+    const mems = plan.memories ?? [];
+    const wall = Date.now() - t0;
+    const calls = await callsOf(run, t0);
+    const summary = { method, run, wall, calls, tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0),
+      areas: plan.areas ?? [], memories: mems.length, main: mems.filter((m) => m.role === "메인").length,
+      planMemories: mems.map((m) => ({ area: m.area, name: m.name, role: m.role, kind: m.kind, pages: m.pages })) };
+    await save(id, method, summary);
+    return summary;
   } else if (method === "plan" || method === "planCards") {
     const d = (await loadGen(id) as unknown as { recaller?: { digest?: { skeleton?: { topics: Array<{ id: string; title: string; pages: number[] }> }; topics?: Record<string, { body?: Array<{ name: string; pages: number[] }> }> } } })?.recaller?.digest;
     const outline = (d?.skeleton?.topics ?? []).map((t) => `${t.id} | ${t.title} | p.${t.pages.join(",")}\n${(d?.topics?.[t.id]?.body ?? []).map((l) => `  - ${l.name} (p.${l.pages.join(",")})`).join("\n")}`).join("\n");
