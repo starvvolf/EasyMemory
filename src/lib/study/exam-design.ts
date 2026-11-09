@@ -57,11 +57,12 @@ export const WRITE_SYSTEM = `너는 이 강의를 가르친 교수다. 설계된
 - form: ox(answer "O"/"X"), choice(보기 4개, answer는 정답 번호 1부터), blank(문제 글에 빈칸 ___ 하나 이상, answer는 빈칸 답을 차례로 "; "로), short(answer는 값만).
 - explain: 정답 풀이. traps: 오답(또는 흔한 틀린 답)마다 어떤 실수에서 나오는지 한 줄씩.
 - 한국어로. 용어는 처음에 "한국어(영어 원어)". 수식·기호는 원문 그대로.`;
-const WRITE_SCHEMA = S.obj({ form: S.oneOf(...EXAM_FORMS), stem: S.str, options: S.arr(S.str), answer: S.str, explain: S.str, traps: S.arr(S.str),
-  work: { type: "boolean", description: "답을 내려면 값을 넣어 계산하거나 단계를 따라가야 하면 true, 개념을 고르거나 판단만 하면 false" } });
-export type Written = { form: (typeof EXAM_FORMS)[number]; stem: string; options: string[]; answer: string; explain: string; traps: string[]; work?: boolean };
+const WRITE_SCHEMA = S.obj({ form: S.oneOf(...EXAM_FORMS), stem: S.str, options: S.arr(S.str), answer: S.str, explain: S.str, traps: S.arr(S.str) });
+export type Written = { form: (typeof EXAM_FORMS)[number]; stem: string; options: string[]; answer: string; explain: string; traps: string[] };
 
-// 직접 풀어 보기 (11/10 사용자 "한 번 해 봐"): 계산·따라가기 문제(work)만, 정답을 보여 주지 않고 따로 푼다. 상황 확인과 동시에.
+// 직접 풀어 보기 (11/10 사용자 "한 번 해 봐"): 정답을 보여 주지 않고 따로 푼다. 상황 확인과 동시에.
+// 11/10 사용자 "전부 다시 풀기 넣자": 계산 문제만이 아니라 모든 문제를 푼다(개념 문제의 틀린 정답도 잡게).
+// 풀기(평균 3.5초)가 확인(5초)보다 빨라 시간은 그대로, 문제당 약 $0.004. 문제를 쓸 때 work 칸도 뺐다.
 // 11/10 시험: 상황 확인은 "답이 하나인가"만 보고 칠하기 문제의 틀린 정답을 놓쳤다.
 export const SOLVE_SYSTEM = `강의 문제 하나를 정답을 모르는 채로 정리된 지식과 원문을 기준으로 푼다. 단계마다 직접 계산하거나 따라간다.
 answer: choice면 정답 보기 번호(1부터), ox면 "O"/"X", blank면 빈칸 답을 차례로 "; "로, short면 값만. work: 푼 과정을 짧게.`;
@@ -109,7 +110,7 @@ export async function designExam(id: string, map: MaterialMap, structure: Struct
       const write = (extra = "") => withTrace({ area: "pdf", action: "quiz-write", ref: id }, () => askJson<Written>("map:exam-write", WRITE_SYSTEM, `${u}${extra}`, WRITE_SCHEMA, EXAM_MODEL));
       const check = (q: Written) => withTrace({ area: "pdf", action: "quiz-check", ref: id }, () => askJson<Check>("map:exam-check", CHECK_SYSTEM,
         `노린 오개념: ${it.target}\n\n[문제] (${q.form})\n${q.stem}${q.options.length ? `\n${q.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}\n정답: ${q.answer}\n풀이: ${q.explain}\n\n[정리된 지식]\n${mem}\n\n[원문]\n${source}`, CHECK_SCHEMA, EXAM_MODEL));
-      const solve = (q: Written) => !q.work ? Promise.resolve(null) : withTrace({ area: "pdf", action: "quiz-solve", ref: id }, () => askJson<{ work: string; answer: string }>("map:exam-solve", SOLVE_SYSTEM,
+      const solve = (q: Written) => withTrace({ area: "pdf", action: "quiz-solve", ref: id }, () => askJson<{ work: string; answer: string }>("map:exam-solve", SOLVE_SYSTEM,
         `[문제] (${q.form})\n${q.stem}${q.options.length ? `\n${q.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}\n\n[정리된 지식]\n${mem}\n\n[원문]\n${source}`, SOLVE_SCHEMA, EXAM_MODEL)).catch(() => null);
       // 확인 + 풀어 보기(동시). 풀어 본 답이 정답과 다르면 걸림.
       const review = async (q: Written) => {
