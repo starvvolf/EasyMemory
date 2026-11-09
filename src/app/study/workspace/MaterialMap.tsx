@@ -291,6 +291,9 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
   // 메인 = 핵심 목표를 풀 때 필요한 카드가 든 묶음(강조, 위로), 서브 = 어느 목표에도 필요 없고 핵심 카드도 없는 묶음(흐리게, 아래로), 그 사이는 보통.
   const [goalData, setGoalData] = useState<GoalLinksLite | null | undefined>(undefined);
   const [linking, setLinking] = useState(false);
+  // 11/9 사용자 "별로다, 풀기 하나 만들어 봐": 강조를 끄고 켜는 스위치(끄면 원래 순서·모양).
+  const [goalOn, setGoalOnState] = useState(() => { try { return localStorage.getItem("recaller:goal-hl") !== "0"; } catch { return true; } });
+  const setGoalOn = (on: boolean) => { setGoalOnState(on); try { localStorage.setItem("recaller:goal-hl", on ? "1" : "0"); } catch { /* storage off */ } };
   useEffect(() => { let alive = true;
     call<{ links: GoalLinksLite | null }>(`/api/study-map/${genId}/goal-links`).then((r) => { if (alive) setGoalData(r.links); }).catch(() => { if (alive) setGoalData(null); });
     return () => { alive = false; }; }, [genId]);
@@ -309,8 +312,8 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
       tier.set(g.id, [...set].some((o) => coreGoal.has(o)) ? 2 : set.size || core ? 1 : 0);
     };
     if (goalData?.links.length) for (const g of (s?.groups ?? []).filter((x) => !x.parent)) walk(g);
-    return { on: Boolean(goalData?.links.length), goalsOfCard, goalsOf, tier, text: new Map((goalData?.goals ?? []).map((g) => [g.id, `${g.verb} · ${g.text}`])) };
-  }, [goalData, s, byId]);
+    return { has: Boolean(goalData?.links.length), on: goalOn && Boolean(goalData?.links.length), goalsOfCard, goalsOf, tier, text: new Map((goalData?.goals ?? []).map((g) => [g.id, `${g.verb} · ${g.text}`])) };
+  }, [goalData, s, byId, goalOn]);
   const makeBtn = (label: string, primary = true) => <button className={`btn small ${primary ? "primary" : "ghost"}`} disabled={busy || making} onClick={make}
     title="기억 카드를 뜻으로 다시 묶어요. AI 1번(terra), 약 15초">{busy ? "구조를 만드는 중… (약 15초)" : label}</button>;
   if (!data && !error) return <p className="small muted mm6-wait">불러오는 중…</p>;
@@ -323,7 +326,7 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
   const tierClass = (id: string) => !goalView.on ? "" : goalView.tier.get(id) === 2 ? " main" : goalView.tier.get(id) === 0 ? " side" : "";
   const openCard = open ? byId.get(open) : undefined;
   const litCards = new Set(hover?.card ? [hover.card, ...pairs.filter((p) => p.a === hover.card || p.b === hover.card).map((p) => (p.a === hover.card ? p.b : p.a))] : []);
-  const pill = (c: Card) => <button key={c.id} data-c={c.id} className={`mm8-pill${c.core ? " core" : ""}${goalView.goalsOfCard.has(c.id) ? " goal" : ""}${open === c.id ? " on" : ""}${litCards.has(c.id) ? " lit" : ""}`}
+  const pill = (c: Card) => <button key={c.id} data-c={c.id} className={`mm8-pill${c.core ? " core" : ""}${goalView.on && goalView.goalsOfCard.has(c.id) ? " goal" : ""}${open === c.id ? " on" : ""}${litCards.has(c.id) ? " lit" : ""}`}
     onClick={() => setOpen(open === c.id ? null : c.id)} title={[keyLine(c.shape), ...(goalView.goalsOfCard.get(c.id) ?? []).map((o) => `학습 목표 ${o}: ${goalView.text.get(o) ?? ""}`)].join("\n")}>
     <Rich text={c.title} />{c.figure?.file ? <span className="mm8-fig" aria-label="그림 있음">▣</span> : null}{pairCount.get(c.id) ? <span className="mm8-n" aria-label={`다른 묶음과 연결 ${pairCount.get(c.id)}`}>↔{pairCount.get(c.id)}</span> : null}</button>;
   const box = (g: StructGroup, depth: number): ReactNode => {
@@ -367,8 +370,9 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
     <div className={`mm8${openCard ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("[data-c],button,a,input,label,.mm8-detail")) setOpen(null); }}>
       <div className="row small mm7-bar"><span className="small muted">뜻으로 묶은 그림 · 상자 안은 그 부분 · 카드를 열면 다른 묶음의 짝</span><span className="cs-gap" />
         {data?.stale ? <span className="small bad">기억 카드가 바뀌었어요</span> : null}{makeBtn("다시 만들기", Boolean(data?.stale))}</div>
-      {goalData !== undefined ? <div className="row small mm8-goalbar">{goalView.on
-        ? <><span className="mm8-goal">목표</span><span className="muted">학습 목표를 풀 때 필요한 묶음이 위에, 진하게 · 흐린 것은 목표에 안 쓰이는 보조 내용</span><span className="cs-gap" />
+      {goalData !== undefined ? <div className="row small mm8-goalbar">{goalView.has
+        ? <><label className="row small" style={{ gap: 6, cursor: "pointer" }}><input type="checkbox" checked={goalOn} onChange={(e) => setGoalOn(e.target.checked)} /> 학습 목표 강조</label>
+          {goalOn ? <span className="muted">목표에 쓰이는 묶음이 위에 · 흐린 것은 보조 내용</span> : null}<span className="cs-gap" />
           <button className="linkish small" disabled={linking} onClick={linkGoals}>{linking ? "잇는 중…" : "다시 잇기"}</button></>
         : <><span className="muted">학습 목표와 기억을 이으면, 목표에 필요한 묶음을 위로 올리고 보조 내용은 흐리게 보여요.</span><span className="cs-gap" />
           <button className="btn small" disabled={linking || making} onClick={linkGoals} title="AI 1번(terra low), 약 10초">{linking ? "잇는 중… (약 10초)" : "학습 목표와 잇기"}</button></>}</div> : null}

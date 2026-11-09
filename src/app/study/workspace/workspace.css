@@ -1038,12 +1038,11 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pp-all{width:100%}
 .dejipgi .pp-all summary{cursor:pointer;margin-bottom:6px}
 
-/* 학습 목표 강조 (11/9): 메인 묶음은 진하게·위로, 보조 묶음은 흐리게·아래로 */
+/* 학습 목표 강조 (11/9, 2차 "색이 너무 진해"): 메인은 왼쪽 가는 줄 + 아주 옅은 바탕, 보조는 조금만 흐리게 */
 .dejipgi .mm8-goalbar{gap:8px;align-items:center;margin:2px 0 6px}
 .dejipgi .mm8-goals{display:flex;flex-wrap:wrap;gap:4px;margin:-2px 0 4px}
-.dejipgi .mm8-goal{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);cursor:default}
-.dejipgi .mm8-box.main{border-color:color-mix(in srgb,var(--accent) 65%,var(--line));border-width:2px;background:color-mix(in srgb,var(--accent) 5%,transparent)}
-.dejipgi .mm8-box.main>.mm8-title{color:var(--accent)}
-.dejipgi .mm8-box.side{opacity:.55;border-style:dashed}
-.dejipgi .mm8-box.side:hover{opacity:.9}
-.dejipgi .mm8-pill.goal{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 55%,transparent)}
+.dejipgi .mm8-goal{display:inline-block;font-size:10.5px;padding:0 6px;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));color:color-mix(in srgb,var(--accent) 70%,var(--muted,#666));cursor:default}
+.dejipgi .mm8-box.main{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 2.5%,transparent)}
+.dejipgi .mm8-box.side{opacity:.7}
+.dejipgi .mm8-box.side:hover{opacity:1}
+.dejipgi .mm8-pill.goal{box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--accent) 35%,transparent)}
