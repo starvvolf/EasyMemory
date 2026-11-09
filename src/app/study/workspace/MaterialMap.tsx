@@ -185,18 +185,20 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
   const streamed = streamedItems(sk.text ?? "");
   const byTopic = new Map<string, Card[]>();
   for (const c of cards) { const t = c.id.split(".")[0]; byTopic.set(t, [...(byTopic.get(t) ?? []), c]); }
+  // 11/9 사용자 "목차에서 개념 누르면 뜨는 거 새 미니 화면에서, 구조처럼": 구조 탭과 같은 아래 칸(떠 있는 카드)에 연다.
   const detail = (c: Card) => (
-    <div className="mm6-card">
+    <div className="mm8-detail mm6-card">
       <div className="mm3-dhead"><b><Rich text={c.title} /></b><span className="mm3-kind">{c.kind}</span>{c.core ? <span className="mm3-kind core">핵심</span> : null}<span className="cs-gap" />
-        {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
+        {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}<button className="btn ghost small" onClick={() => setOpen(null)}>닫기</button></div>
       <Body s={c.shape} />
       <FigureView genId={genId} c={c} onPage={onPage} all={cards} onCard={setOpen} />
       {c.questions && onPractice ? <div className="mm3-dfoot"><span className="cs-gap" /><button className="btn small primary" onClick={() => onPractice(c.pages[0], c.id)}>이 기억 문제 풀기 ({c.questions})</button></div> : null}
     </div>);
   const chip = (c: Card) => <button key={c.id} className={`chip mm6-chip${open === c.id ? " on" : ""}${c.core ? " core" : ""}`} aria-expanded={open === c.id}
     onClick={() => setOpen(open === c.id ? null : c.id)}><Rich text={isFlowCard(c) ? "흐름 보기" : c.title} /></button>;
+  const openCard = open ? cards.find((c) => c.id === open) : undefined;
   return (
-    <div className="mm6">
+    <div className={`mm6${openCard ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("button,a,input,label,.mm8-detail")) setOpen(null); }}>
       {digest?.objectives?.length ? <section className="mm6-goals"><p className="mm3-label">학습 목표</p>
         <ol>{digest.objectives.map((o) => <li key={o.id}><span className="mm6-verb">{o.verb}</span> <Rich text={o.text} /></li>)}</ol></section> : null}
       <ol className="mm6-topics">
@@ -207,7 +209,6 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
           const under = (it: OutlineItem) => mine.filter((c) => !isFlowCard(c) && (digest?.notes?.[c.id]?.covers ?? []).includes(it.key));
           const placed = new Set(items.flatMap((it) => under(it).map((c) => c.id)));
           const loose = mine.filter((c) => !isFlowCard(c) && !placed.has(c.id));
-          const openHere = mine.find((c) => c.id === open);
           return (
             <li key={t.id} className="mm6-topic">
               <div className="mm6-thead"><span className="mm3-num">{i + 1}</span><b><Rich text={t.title} /></b><span className="small muted">{range(t.pages)}</span>
@@ -219,11 +220,11 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
                     <span className="mm6-chips">{got.length ? got.map(chip) : <span className="small muted">{making ? "기억 만드는 중…" : "—"}</span>}</span></li>); })}
                 {loose.length ? <li className="mm6-item"><span className="mm6-iname muted">그 밖</span><span className="mm6-chips">{loose.map(chip)}</span></li> : null}
               </ul>
-              {openHere ? detail(openHere) : null}
             </li>);
         })}
       </ol>
       {sk.status === "writing" ? <p className="small muted">목차를 이어 쓰는 중…</p> : null}
+      {openCard ? detail(openCard) : null}
     </div>);
 }
 

@@ -911,6 +911,8 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm8-cards.seq .mm8-item{flex-direction:column;align-items:flex-start;gap:0}
 .dejipgi .mm8-cards.seq .mm8-join{font-size:15px;line-height:1;padding:3px 0 3px 14px;color:var(--muted,#888)}
 .dejipgi .mm8.has-detail>.mm8-wrap{margin-bottom:38vh}
+.dejipgi .mm6.has-detail>.mm6-topics{margin-bottom:38vh}
+.dejipgi .mm6>.mm8-detail{border-top:1px solid var(--line);padding-top:10px}
 .dejipgi .mm8-wrap{cursor:default}
 .dejipgi .mm8-kids.seq{flex-direction:column;flex-wrap:nowrap;gap:0;align-items:stretch}
 .dejipgi .mm8-kids.seq>.mm8-box{flex:none}
