@@ -242,27 +242,6 @@ const sameName = (a: string, b: string) => { const n = (x: string) => x.replace(
 type StructEdge = { a: string; b: string; type: string; why: string };
 type StructPair = { a: string; b: string; why: string };
 type Structure = { at: string; ms: number; model: string; effort: string; groups: StructGroup[]; edges: StructEdge[]; pairs?: StructPair[]; versus?: StructVersus[]; fixes: string[] };
-type Line = { key: string; d: string; x: number; y: number; type: string; why: string; kind: "edge" | "pair"; lit: boolean };
-const EDGE_COLOR: Record<string, string> = { 막음: "#d0464b", 씀: "#2f7fd0", 이어짐: "#7a808a", 대비: "#9a5bd0", 예시: "#2f9a62" };
-/** A curve between two boxes, from the sides that face each other. */
-function curve(a: DOMRect, b: DOMRect, base: DOMRect) {
-  const ax = a.left - base.left, ay = a.top - base.top, bx = b.left - base.left, by = b.top - base.top;
-  const ca = { x: ax + a.width / 2, y: ay + a.height / 2 }, cb = { x: bx + b.width / 2, y: by + b.height / 2 };
-  const dx = cb.x - ca.x, dy = cb.y - ca.y;
-  let p: { x: number; y: number }, q: { x: number; y: number }, c1: { x: number; y: number }, c2: { x: number; y: number };
-  if (Math.abs(dx) * (a.height + b.height) > Math.abs(dy) * (a.width + b.width)) {
-    const s = dx > 0 ? 1 : -1;
-    p = { x: ca.x + s * a.width / 2, y: ca.y }; q = { x: cb.x - s * b.width / 2, y: cb.y };
-    const k = Math.max(30, Math.abs(q.x - p.x) / 2); c1 = { x: p.x + s * k, y: p.y }; c2 = { x: q.x - s * k, y: q.y };
-  } else {
-    const s = dy > 0 ? 1 : -1;
-    p = { x: ca.x, y: ca.y + s * a.height / 2 }; q = { x: cb.x, y: cb.y - s * b.height / 2 };
-    const k = Math.max(24, Math.abs(q.y - p.y) / 2); c1 = { x: p.x, y: p.y + s * k }; c2 = { x: q.x, y: q.y - s * k };
-  }
-  // the curve's middle (t = 0.5)
-  const mid = { x: (p.x + 3 * c1.x + 3 * c2.x + q.x) / 8, y: (p.y + 3 * c1.y + 3 * c2.y + q.y) / 8 };
-  return { d: `M${p.x},${p.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${q.x},${q.y}`, ...mid };
-}
 function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { genId: string; cards: Card[]; chains: MatMap["chains"]; making: boolean;
   onPage: (page: number) => void; onPractice?: (page: number, cardId: string) => void }) {
   const [data, setData] = useState<{ structure: Structure | null; stale: boolean } | null>(null);
@@ -270,9 +249,6 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [hover, setHover] = useState<{ card?: string; group?: string } | null>(null);
-  const [allPairs, setAllPairs] = useState(false);
-  const [lines, setLines] = useState<Line[]>([]);
-  const [size, setSize] = useState({ w: 0, h: 0 });
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => { let alive = true;
     call<{ structure: Structure | null; stale: boolean }>(`/api/study-map/${genId}/structure`).then((r) => { if (alive) setData(r); }).catch((e) => { if (alive) setError(errorText(e)); });
@@ -296,37 +272,6 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
     return out;
   }, [s, chains, groupOfCard, byId]);
   const pairCount = useMemo(() => { const m = new Map<string, number>(); for (const p of pairs) { m.set(p.a, (m.get(p.a) ?? 0) + 1); m.set(p.b, (m.get(p.b) ?? 0) + 1); } return m; }, [pairs]);
-  const ancestors = useMemo(() => { const parent = new Map((s?.groups ?? []).map((g) => [g.id, g.parent]));
-    return (id: string) => { const out = [id]; for (let at = parent.get(id); at; at = parent.get(at)) out.push(at); return out; }; }, [s]);
-  // Lines are measured from the laid-out boxes; again whenever the diagram's size changes (open card, window).
-  useEffect(() => {
-    const el = wrap.current;
-    if (!el || !s) return;
-    const measure = () => {
-      const base = el.getBoundingClientRect();
-      const rect = (sel: string) => el.querySelector<HTMLElement>(sel)?.getBoundingClientRect();
-      const out: Line[] = [];
-      for (const [i, e] of s.edges.entries()) {
-        const a = rect(`[data-g="${e.a}"]`), b = rect(`[data-g="${e.b}"]`);
-        if (!a || !b) continue;
-        // 상자에 올렸을 때만 묶음 연결을 밝힌다(카드에 올리면 그 카드의 짝만).
-        const lit = !!hover?.group && [e.a, e.b].some((g) => ancestors(g).includes(hover.group!) || ancestors(hover.group!).includes(g));
-        out.push({ key: `e${i}`, ...curve(a, b, base), type: e.type, why: e.why, kind: "edge", lit });
-      }
-      for (const [i, p] of pairs.entries()) {
-        const on = allPairs || (hover?.card ? hover.card === p.a || hover.card === p.b : hover?.group ? groupOfCard.get(p.a) === hover.group || groupOfCard.get(p.b) === hover.group : false);
-        if (!on) continue;
-        const a = rect(`[data-c="${p.a}"]`), b = rect(`[data-c="${p.b}"]`);
-        if (!a || !b) continue;
-        out.push({ key: `p${i}`, ...curve(a, b, base), type: "짝", why: p.why, kind: "pair", lit: !!hover });
-      }
-      setLines(out); setSize({ w: el.scrollWidth, h: el.scrollHeight });
-    };
-    const ro = new ResizeObserver(() => measure());
-    ro.observe(el);
-    const t = setTimeout(measure, 0);
-    return () => { ro.disconnect(); clearTimeout(t); };
-  }, [s, pairs, hover, allPairs, open, ancestors, groupOfCard]);
   // 연 카드가 아래 칸(내용)에 가리면 그 위로 굴린다.
   useEffect(() => {
     if (!open) return;
@@ -387,13 +332,10 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
           : <div className="mm8-kids">{sub.map((k) => box(k, depth + 1))}</div>}</> : null}
       </div>);
   };
-  const types = [...new Set(s.edges.map((e) => e.type))];
   return (
     <div className={`mm8${openCard ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("[data-c],button,a,input,label,.mm8-detail")) setOpen(null); }}>
-      <div className="row small mm7-bar"><span className="small muted">뜻으로 묶은 그림 · 상자 안은 그 부분 · 선은 묶음 사이 연결 · 카드에 올리면 다른 묶음의 짝</span><span className="cs-gap" />
-        {pairs.length ? <label className="row small"><input type="checkbox" checked={allPairs} onChange={(e) => setAllPairs(e.target.checked)} /> 카드 연결 모두 ({pairs.length})</label> : null}
+      <div className="row small mm7-bar"><span className="small muted">뜻으로 묶은 그림 · 상자 안은 그 부분 · 카드를 열면 다른 묶음의 짝</span><span className="cs-gap" />
         {data?.stale ? <span className="small bad">기억 카드가 바뀌었어요</span> : null}{makeBtn("다시 만들기", Boolean(data?.stale))}</div>
-      {types.length ? <div className="mm8-legend small">{types.map((t) => <span key={t}><i style={{ background: EDGE_COLOR[t] ?? "#888" }} />{t}</span>)}{pairs.length ? <span><i className="pair" />카드 짝</span> : null}</div> : null}
       {error ? <p className="small bad">{error}</p> : null}
       {/* 11/8 사용자 "눌렀을 때 아래 칸이 덮어서 다시 누를 수 없다": 빈 곳을 누르면 닫히고, 연 카드는 아래 칸 위로 보이게 굴린다. */}
       <div className="mm8-wrap" ref={wrap} onMouseLeave={() => setHover(null)} onMouseOver={(e) => {
@@ -403,13 +345,7 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
         if (next?.card !== hover?.card || next?.group !== hover?.group) setHover(next);
       }}>
         <div className="mm8-roots">{kids("").map((g) => box(g, 0))}</div>
-        <svg className="mm8-lines" width={size.w} height={size.h} aria-hidden>
-          <defs>{Object.entries({ ...EDGE_COLOR, 짝: "#8a8f98" }).map(([t, c]) => <marker key={t} id={`mm8-arrow-${t}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={c} /></marker>)}</defs>
-          {lines.map((l) => <path key={l.key} d={l.d} className={`${l.kind}${l.lit ? " lit" : ""}`} stroke={l.kind === "pair" ? "#8a8f98" : EDGE_COLOR[l.type] ?? "#888"}
-            markerEnd={l.kind === "edge" ? `url(#mm8-arrow-${l.type})` : undefined} />)}
-        </svg>
-        {lines.map((l) => (l.kind === "edge" || l.lit) && l.why ? <span key={`t${l.key}`} className={`mm8-label ${l.kind}${l.lit ? " lit" : ""}`} style={{ left: l.x, top: l.y, borderColor: l.kind === "edge" ? EDGE_COLOR[l.type] : undefined }}>
-          {l.kind === "edge" ? <b style={{ color: EDGE_COLOR[l.type] }}>{l.type}</b> : null}{l.lit || l.kind === "pair" ? ` ${l.why}` : ""}</span> : null)}
+        {/* 11/9 사용자 "자료 지도에서 줄로 연결하는 건 빼자": 상자 사이·카드 짝 선을 그리지 않는다. 짝은 카드를 열면 아래 칸에 나온다. */}
       </div>
       {openCard ? <div className="mm8-detail mm6-card">
         <div className="mm3-dhead"><b><Rich text={openCard.title} /></b><span className="mm3-kind">{openCard.kind}</span>{openCard.core ? <span className="mm3-kind core">핵심</span> : null}<span className="cs-gap" />
