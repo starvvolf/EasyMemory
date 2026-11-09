@@ -84,5 +84,7 @@ export function grade(question: Question, answer: string): Graded {
     const close = !exact && names.some((n) => normalize(n).length >= 3 && similarity(n, a) >= 0.8);
     return { correct: exact || close, expected: question.answer, note: close ? "표기가 조금 달라도 맞은 것으로 봤어요." : "" };
   }
-  return { correct: normalize(a) === normalize(question.answer), expected: question.answer, note: "" };
+  // 보기 문제도 "이것도 맞아요"(accept)를 받는다(11/10, PS 개념 보기: BFS·DFS 둘 다 되는 문제).
+  const ok = [question.answer, ...(question.accept ?? [])].some((n) => normalize(n) === normalize(a));
+  return { correct: ok, expected: question.answer, note: ok && normalize(a) !== normalize(question.answer) ? `${question.answer}도 돼요.` : "" };
 }

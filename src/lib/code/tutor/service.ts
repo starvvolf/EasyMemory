@@ -15,6 +15,7 @@ import { COMPLEXITIES, complexityVerdict } from "../train.ts";
 import { patternOf, PATTERNS } from "./patterns.ts";
 import { nextActions, type Action } from "./policy.ts";
 import { board } from "./summary.ts";
+import { answerOf, conceptIdOf, conceptOf, conceptOptions, diffOf } from "./concepts.ts";
 import { ensurePool, modelForProblem, prepareModels, prepStatus, readModels, tutorNumberOf, tutorTargets, type ProblemModel } from "./problem-model.ts";
 import { ABILITY_LABEL, appendEvent, computeState, gradeOf, GRADE_LABEL, readEvents, type Ability, type TutorEvent } from "./state.ts";
 
@@ -139,7 +140,11 @@ function view(a: Action, m: ProblemModel, models: Record<string, ProblemModel>) 
   if (a.kind === "walkthrough") return { ...base, walkthrough: m.walkthrough, signals: m.signals, pitfalls: m.pitfalls, patternNames: m.patterns.map((id) => patternOf(id)?.name ?? id),
     predict: m.predict ? { question: m.predict.question, input: m.predict.input } : null };
   // 신호는 답이 아니라 힌트: 화면은 "신호 보기"를 누를 때만 보여 주고, 누르면 도움 받은 것으로 남긴다.
-  if (a.kind === "drill") return { ...base, options: shuffle(m.approaches.map((x) => x.name), a.id), signals: m.signals };
+  // 보기는 개념 이름(11/10, concepts.ts): 정답 + 이어진(헷갈리는) 개념 둘 + 섞은 것 하나. 요령 패턴만 있는 문제는 예전처럼 접근 문장.
+  if (a.kind === "drill") {
+    const co = conceptOptions([a.pattern, ...m.patterns], a.id);
+    return { ...base, options: co ? co.options : shuffle(m.approaches.map((x) => x.name), a.id), concept: Boolean(co), signals: m.signals };
+  }
   if (a.kind === "design") return { ...base, states: shuffle([m.state.right, ...m.state.wrong], a.id), complexities: Object.keys(COMPLEXITIES) };
   if (a.kind === "contrast") {
     const other = m.contrast ? models[m.contrast.number] : undefined;
@@ -229,6 +234,23 @@ export async function answer(a: Answer) {
         gap: a.predict.trim() ? `결과가 「${a.predict.trim().replace(/\n/g, " / ").slice(0, 40)}」일 줄 알았는데 「${m.predict.answer.replace(/\n/g, " / ").slice(0, 40)}」였어요` : `결과를 떠올리지 못했어요(답은 「${m.predict.answer.replace(/\n/g, " / ").slice(0, 40)}」)`,
         fix: m.walkthrough.choose, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     return { ok, answer: m.predict.answer };
+  }
+  if (a.kind === "drill" && conceptIdOf(a.choice)) {
+    // 개념 보기(11/10): 문제 패턴의 개념(+ "이것도 돼요")이면 맞음. 틀리면 그 짝의 "언제 이쪽, 언제 저쪽"이 설명이자 카드.
+    const { main, ok: okSet } = answerOf([a.pattern, ...m.patterns]);
+    const pick = conceptIdOf(a.choice)!;
+    const ok = okSet.has(pick);
+    const grade = gradeOf(events, a.number, "recognize", { hinted: a.hinted, mixed: a.mixed });
+    const mainC = main ? conceptOf(main) : undefined;
+    const best = m.approaches.find((x) => x.verdict === "best");
+    const why = !ok && main ? diffOf(main, pick) ?? `${mainC?.name}: ${mainC?.what}` : undefined;
+    const card: Card = { situation: `BOJ ${a.number} ${m.title}에서 「${a.choice}」를 골랐어요${a.hinted ? "(눈여겨볼 곳을 보고)" : ""}`,
+      gap: ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : `「${a.choice}」 쓰면 될 줄 알았어요`,
+      fix: ok ? `${mainC?.name ?? ""}: ${mainC?.what ?? ""}` : `정답은 「${mainC?.name}」 — ${why ?? ""}`.trim(), cue: m.signals[0] ?? "" };
+    await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${a.choice}` }, m, card);
+    return { ok, concept: true, intended: pick === main, answer: mainC?.name ?? "", alsoOk: [...okSet].filter((c) => c !== main).map((c) => conceptOf(c)?.name ?? c), why: why ?? "",
+      what: mainC?.what ?? "", how: best ? `${best.name}${best.why ? ` — ${best.why}` : ""}` : "", grade: GRADE_LABEL[grade], signals: m.signals,
+      patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
   }
   if (a.kind === "drill") {
     // 맞는 풀이가 여럿일 수 있다(BFS·DFS 둘 다 되는 문제): 의도된 풀이(best)와 "가능하지만 덜 좋음"(ok)은 인식 성공, 느림·틀림은 실패.

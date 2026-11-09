@@ -35,10 +35,12 @@ test("PS 기억 복습: 배운 직후엔 내 실수, 다음엔 처음 보는 문
     const item = { id: "k1", title: "시작점 여러 개 BFS", sources: [{ ref: "tutor:pattern:multi-source" }], review: { repetitions: 5 } };
     let qs = await psQuestions(item, "s");
     assert.equal(qs[0].label, "내 실수 다시 보기", "right after learning: my own mistake first, whatever the store's repetition count");
-    assert.ok(qs[0].prompt.includes(lesson.situation) && qs[0].options!.includes(lesson.fix) && qs[0].answer === lesson.fix);
+    assert.ok(qs[0].prompt.includes(lesson.situation));
+    assert.equal(qs[0].answer, "BFS", "a 방법 고르기 mistake is asked again with concept options (11/10)");
+    assert.equal(qs[0].options!.length, 4); assert.ok(qs[0].options!.includes("BFS"));
     const rec = qs.find((q) => q.label === "알아보기")!;
     assert.equal(parsePsId(rec.id)!.number, "4179", "recognize asks about the problem seen least recently (never seen)");
-    assert.ok(!rec.options!.includes("시작점 여러 개 BFS") || rec.answer === "시작점 여러 개 BFS");
+    assert.equal(rec.answer, "BFS", "concept options (11/10)");
     assert.equal(rec.options!.length, 4); assert.equal(new Set(rec.options).size, 4);
     const pred = qs.find((q) => q.label === "출력 예측")!;
     assert.equal(pred.answer, "4", "only a one-token answer is asked as a short answer");
@@ -101,4 +103,22 @@ test("해결된 착각(11/10): 그 뒤 같은 능력으로 다른 문제를 혼�
   assert.equal(isResolved(card, later), true);
   const s = summarize("multi-source", later, [card]);
   assert.equal(s.open, 0); assert.equal(s.resolved, true); assert.equal(s.wrong, card.gap, "kept, shown as resolved");
+});
+
+test("개념 보기(11/10): 정답 + 이어진 개념 + 섞은 것, '이것도 돼요'는 오답으로 안 나오고, 같은 seed면 같은 보기", async () => {
+  const { conceptOptions, answerOf, diffOf, EDGES, CONCEPTS, PATTERN_CONCEPT } = await import("./concepts.ts");
+  const { PATTERNS } = await import("./patterns.ts");
+  for (const p of PATTERNS) assert.ok(p.id in PATTERN_CONCEPT, `every pattern has a concept (or null): ${p.id}`);
+  const ids = new Set(CONCEPTS.map((c) => c.id));
+  for (const e of EDGES) assert.ok(ids.has(e.a) && ids.has(e.b) && e.diff.length > 10, `${e.a}-${e.b}`);
+  const o = conceptOptions(["components"], "s1")!;
+  assert.equal(o.answer, "BFS"); assert.equal(o.options.length, 4); assert.equal(new Set(o.options).size, 4);
+  assert.ok(!o.options.includes("DFS") && !o.options.includes("유니온 파인드"), "both also work for 덩어리 세기: not shown as wrong");
+  assert.deepEqual(conceptOptions(["components"], "s1"), o, "same seed, same options");
+  const d = conceptOptions(["bfs-distance"], "s2")!;
+  assert.ok(d.options.includes("BFS"));
+  const near = d.options.filter((n) => n !== "BFS").filter((n) => diffOf("bfs", CONCEPTS.find((c) => c.name === n)!.id));
+  assert.ok(near.length >= 2, "at least two options are linked to the answer");
+  assert.equal(conceptOptions(["grid-dxdy", "fast-io"], "s"), null, "only techniques: no concept question");
+  assert.equal(answerOf(["grid-dxdy", "multi-source"]).main, "bfs");
 });

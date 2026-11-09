@@ -99,3 +99,28 @@ test("기억 규칙: 혼자 맞힘·시범 보기만으로는 기억이 생기�
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("방법 고르기 개념 보기(11/10): 보기는 개념 이름, 틀리면 그 짝의 설명이 카드가 되고, 둘 다 되는 개념은 맞음", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tutor-concept-"));
+  const prior = { data: process.env.STUDY_FORGE_DATA_DIR, after: process.env.RECALLER_AFTER_SAVE };
+  process.env.STUDY_FORGE_DATA_DIR = dir; process.env.RECALLER_AFTER_SAVE = "off";
+  try {
+    const m = (number: string, patterns: string[]) => ({ number, title: `문제 ${number}`, chapter: "0x09", role: "basic", url: "u", statement: "s", inputText: "i", outputText: "o", summary: "요약",
+      maxN: 100, patterns, signals: ["가장 짧은"], approaches: [{ name: "BFS로 거리 적기", verdict: "best", why: "w" }, { name: "DFS", verdict: "slow", why: "w" }, { name: "정렬", verdict: "wrong", why: "w" }],
+      state: { right: "거리", wrong: ["합", "칸"] }, update: "u", complexity: "n", pitfalls: [], walkthrough: { observe: "o", choose: "c", compare: "x", verify: "v" }, at: "" });
+    await mkdir(path.join(dir, "code", "tutor"), { recursive: true });
+    await writeFile(path.join(dir, "code", "tutor", "models.json"), JSON.stringify({ "2178": m("2178", ["bfs-distance", "grid-dxdy"]), "1012": m("1012", ["components"]) }));
+    const { answer } = await import("./service.ts");
+    const { readLessons } = await import("./lessons.ts");
+    const wrong = await answer({ kind: "drill", number: "2178", pattern: "bfs-distance", mixed: false, choice: "DFS" }) as { ok: boolean; answer: string; why: string };
+    assert.equal(wrong.ok, false); assert.equal(wrong.answer, "BFS"); assert.match(wrong.why, /가장 짧은 거리를 물으면 BFS/);
+    const card = (await readLessons()).at(-1)!;
+    assert.equal(card.pattern, "bfs-distance", "only the pattern being asked, not 격자 사방 탐색");
+    assert.match(card.gap, /「DFS」 쓰면 될 줄 알았어요/); assert.match(card.fix, /정답은 「BFS」/);
+    const also = await answer({ kind: "drill", number: "1012", pattern: "components", mixed: false, choice: "DFS" }) as { ok: boolean; intended: boolean };
+    assert.equal(also.ok, true); assert.equal(also.intended, false, "DFS also counts for 덩어리 세기");
+  } finally {
+    for (const [key, v] of [["STUDY_FORGE_DATA_DIR", prior.data], ["RECALLER_AFTER_SAVE", prior.after]] as const) { if (v === undefined) delete process.env[key]; else process.env[key] = v; }
+    await rm(dir, { recursive: true, force: true });
+  }
+});

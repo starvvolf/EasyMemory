@@ -9,6 +9,7 @@
 import type { Question } from "../../knowledge/api.ts";
 import { readLessons } from "./lessons.ts";
 import { PATTERNS, patternOf } from "./patterns.ts";
+import { conceptOptions } from "./concepts.ts";
 import { ensurePool, readModels, type ProblemModel } from "./problem-model.ts";
 import { readEvents } from "./state.ts";
 
@@ -48,7 +49,9 @@ export async function psQuestions(item: { id: string; title: string; sources?: A
     const ask = `예전에 이런 일이 있었어요.\n${mine.situation}`;
     const explain = [mine.gap && `그때 잘못 생각한 것: ${mine.gap}`, `고친 생각: ${mine.fix}`, mine.cue && `다음에 떠올릴 신호: ${mine.cue}`].filter(Boolean).join(" · ");
     const base = { id: psId("mistake", mine.number, pid, seed), kind: "choice" as const, label: "내 실수 다시 보기", knowledgeId: item.id, explain };
-    if (mine.kind === "drill" && mm && best && mm.approaches.length >= 3) out.mistake = { ...base, prompt: `${ask}\n다시 고른다면 이 문제에 맞는 접근은?`, context: mm.summary, options: shuffle(mm.approaches.map((a) => a.name), r), answer: best.name };
+    const co = mine.kind === "drill" && mm ? conceptOptions([pid, ...mm.patterns], `${mine.id}:${seed}`) : null;
+    if (co) out.mistake = { ...base, prompt: `${ask}\n다시 고른다면 이 문제에서는 무엇을 써야 할까요?`, context: mm!.summary, options: co.options, answer: co.answer, accept: co.ok.filter((n) => n !== co.answer) };
+    else if (mine.kind === "drill" && mm && best && mm.approaches.length >= 3) out.mistake = { ...base, prompt: `${ask}\n다시 고른다면 이 문제에 맞는 접근은?`, context: mm.summary, options: shuffle(mm.approaches.map((a) => a.name), r), answer: best.name };
     else if (mine.kind === "design" && mm?.state.right && mm.state.wrong.length === 2) out.mistake = { ...base, prompt: `${ask}\n다시 설계한다면 꼭 기억할 상태는?`, context: mm.summary, options: shuffle([mm.state.right, ...mm.state.wrong], r), answer: mm.state.right };
     else {
       const plain = (t: string) => !/^「/.test(t);
@@ -59,13 +62,17 @@ export async function psQuestions(item: { id: string; title: string; sources?: A
   }
   const m = fresh[0];
   if (m) {
+    // 보기는 개념 이름 + 이어진(헷갈리는) 개념(11/10, concepts.ts). 개념이 없는 요령 패턴만 예전처럼 패턴 이름.
+    const co = conceptOptions([pid, ...m.patterns], `${item.id}:${seed}`);
     const not = new Set(m.patterns);
     const near = PATTERNS.filter((p) => !not.has(p.id) && p.chapters.some((c) => pattern.chapters.includes(c)));
     const far = PATTERNS.filter((p) => !not.has(p.id) && !near.includes(p));
     const picks = [...shuffle(near, r), ...shuffle(far, r)].slice(0, 3).map((p) => p.name); // 헷갈리기 쉬운 같은 단원 패턴부터
     out.recognize = { id: psId("recognize", m.number, pid, seed), kind: "recognize", label: "알아보기", knowledgeId: item.id,
-      prompt: "처음 보는 문제예요. 이 문제를 푸는 데 핵심인 패턴은? (단원은 숨겼어요)", context: m.summary, options: shuffle([pattern.name, ...picks], r), answer: pattern.name,
-      explain: `BOJ ${m.number} ${m.title} — 신호: ${m.signals.join(" · ")}${m.approaches.find((a) => a.verdict === "best") ? ` · 의도된 풀이: ${m.approaches.find((a) => a.verdict === "best")!.name}` : ""}` };
+      ...(co ? { prompt: "처음 보는 문제예요. 무엇을 써야 할까요? (단원은 숨겼어요)", options: co.options, answer: co.answer, accept: co.ok.filter((n) => n !== co.answer) }
+        : { prompt: "처음 보는 문제예요. 이 문제를 푸는 데 핵심인 패턴은? (단원은 숨겼어요)", options: shuffle([pattern.name, ...picks], r), answer: pattern.name }),
+      context: m.summary,
+      explain: `BOJ ${m.number} ${m.title} — 이럴 때 떠올려요: ${m.signals.join(" · ")}${m.approaches.find((a) => a.verdict === "best") ? ` · 이렇게 풀어요: ${m.approaches.find((a) => a.verdict === "best")!.name}` : ""}` };
     if (m.state.right && m.state.wrong.length === 2) out.design = { id: psId("design", m.number, pid, seed), kind: "choice", label: "설계", knowledgeId: item.id,
       prompt: "이 문제를 풀 때 꼭 기억해야 하는 상태는?", context: m.summary, options: shuffle([m.state.right, ...m.state.wrong], r), answer: m.state.right,
       explain: `바꾸는 법: ${m.update}` };
