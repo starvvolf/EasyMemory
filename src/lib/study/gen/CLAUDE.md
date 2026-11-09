@@ -2,7 +2,16 @@
 
 PDF를 지식 카드 → 자료 전체 정리 → 자료 지도로 만들고, 학습자가 원하면 문제를 만든다. 기본 엔진은 `recaller`. 경계: 이 문서와 루트 `CLAUDE.md` (`docs/GENERATION_ENGINE_BOUNDARY.md`는 옛 엔진 기준이라 맞지 않는다). 정한 것은 `docs/DECISIONS.md`의 10/29~10/30 엔진 항목.
 
-## 흐름 (기본 엔진 recaller, 공부 화면)
+## 흐름 — 줄기 모드 (11/10부터 앱 기본, `stem.ts`, DECISIONS 2026-11-10)
+
+1. 전처리(아래와 같음).
+2. 줄기 계획(rc-stem-plan, terra low): 모든 쪽 원문 + 쪽 그림 → 영역·기억(이름·모양·메인/바탕/곁·근거 쪽). 빠진 쪽은 그 쪽만 한 번 더. 영역 = 주제(`state.sections`), 기억 = 목차 항목(`digest.concepts`), 계획은 `digest.stem`.
+3. 기억 채우기(rc-stem-fill, terra low, 영역 안 쪽이 이어지는 묶음마다 동시): 기억 하나 = 카드 한 장(`tN.mK`, `card.memo` = 질문·요지·식과 조건·역할). 그림 위치 → 코드가 자름.
+4. 정리(rc-merge)·흐름 카드·rc-wrap 없음. 핵심 = 메인 기억(`weight`).
+5. [문제 만들기] → `questionsGen` → `../stem-quiz.ts`: 학습 목표마다 하나 + 목표 밖 메인 기억마다 하나(quiz-plan의 출제 고리), RcQuestion으로 바꿔 publish.
+- 지시문에 개수·줄 수 제한을 두지 않는다(사용자). 호출 크기 나눔(쪽 6장·기억 5개 묶음)은 코드에서.
+
+## 흐름 (예전 기본 엔진 recaller, `stem` 없을 때)
 
 공부 화면에서 시작하면 `runner.ts`의 `studyRecallerLab`이 손잡이를 정하고, 시작은 늘 `questionsLater`(지식까지만)다.
 
