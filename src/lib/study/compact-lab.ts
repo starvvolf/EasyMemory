@@ -19,7 +19,9 @@ import { materialMap } from "./material-map.ts";
 import { loadStructure } from "./structure.ts";
 import { AREA_MEMORY_SYSTEM, AREA_SCHEMA, AREA_SYSTEM, COMPACT_MODEL, COMPACT_SYSTEM, MEM_SCHEMA, MEMORY_KINDS, MEMORY_ROLES, checkCompact, compactInput, type Reply } from "./compact.ts";
 
-export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards", "planDirect", "planShort", "stemDirect", "outlineNow"] as const;
+export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards", "planDirect", "planShort", "stemDirect", "outlineNow", "stemCards"] as const;
+// stemCards = 바로 줄기(stemDirect에 저장된 계획을 다시 씀) 다음 카드 단계만: 기억을 쪽이 이어지는 묶음(쪽 6장 안팎)으로 나눠 동시에,
+//   묶음마다 그 쪽 원문 + 쪽 그림 + 기억 계획 → 기억마다 질문·요지·단계와 그 밑 카드(인용·쪽). 엔진 카드 단계(그래픽스 57초)와 견준다.
 // outlineNow = 비교용: 지금 제품의 목차 호출(PLAN_COMMON + PLAN_TASK_CONCEPTS, 같은 입력)을 지금 다시 잰다(같은 조건에서 시간·토큰).
 // 11/10 "바로 줄기로 가면?" (공정하게): stemDirect = 지금 목차 호출(rc-digest-plan)이 받는 것 그대로(모든 쪽 원문 + 쪽 그림, 그림 쪽은 그림 조각)를
 //   주고, 목차 대신 줄기 계획(짧게)을 쓰게 한다. 기존 목차 호출(그래픽스 50초)과 견준다.
@@ -158,6 +160,66 @@ export async function runCompactLab(id: string, method: LabMethod) {
       return { name: r.name, question: r.question, mems: (r.memories ?? []).map((m) => ({ ...m, area: ai + 1, cards: (m.cards ?? []).map((k) => nums[k - 1] ?? -1) })) };
     }));
     reply = { areas: parts.map((p) => ({ name: p.name, question: p.question })), memories: parts.flatMap((p) => p.mems) };
+  } else if (method === "stemCards") {
+    const saved = JSON.parse(await readFile(path.join(dataDir(), "study-gen", id, "compact-lab", "stemDirect.json"), "utf8").catch(() => "null")) as { planMemories: Array<{ area: number; name: string; role: string; kind: string; pages: number[] }>; areas: Array<{ name: string; question: string }> } | null;
+    if (!saved?.planMemories?.length) throw Object.assign(new Error("먼저 stemDirect를 돌려야 해요."), { status: 409 });
+    const state = await loadGen(id) as unknown as { input: { sourceId: string; fileName: string }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
+    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
+    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const pdf = await readRegisteredMcpSourcePdf(state.input.sourceId);
+    if (!pdf) throw Object.assign(new Error("원본 PDF를 읽을 수 없어요."), { status: 409 });
+    const route = new Map((state.recaller?.prep?.pages ?? []).map((x) => [x.page, x.route ?? "text"]));
+    // 묶음: 영역 안에서 기억을 쪽 순서로, 쪽 6장이 넘으면 끊는다(기억은 쪼개지 않는다).
+    const mems = saved.planMemories.map((m, i) => ({ ...m, i, pages: (m.pages ?? []).filter((p) => texts[p] !== undefined) }));
+    const groups: Array<typeof mems> = [];
+    for (let a = 1; a <= saved.areas.length; a++) {
+      let cur: typeof mems = [], pages = new Set<number>();
+      for (const m of mems.filter((x) => x.area === a).sort((x, y) => (x.pages[0] ?? 0) - (y.pages[0] ?? 0))) {
+        const next = new Set([...pages, ...m.pages]);
+        if (cur.length && next.size > 6) { groups.push(cur); cur = []; pages = new Set(); }
+        cur.push(m); for (const p of m.pages) pages.add(p);
+      }
+      if (cur.length) groups.push(cur);
+    }
+    const SC_SYSTEM = `강의 자료 몇 쪽(원문 [p.N]과 쪽 그림)과, 이 쪽들에서 학습자가 외울 기억 계획(이름·종류·역할)을 받는다. 기억마다:
+- question(이 기억이 답하는 질문 한 줄), line(요지 40~90자), steps(알고리즘·절차면 3~7단계, 아니면 []).
+- cards: 그 기억 밑에 들어갈 근거 카드. 원문의 정의·식·조건·단계·경우 하나씩, 보통 1~8장. {title 10~30자, kind(용어·사실·목록·조건·절차·공식·비교·개념·패턴), text(내용 한두 문장, 식은 그대로), quote(원문 구절 그대로 10~60자, 그림 쪽이면 그림 속 글), page}.
+- 바탕·곁 기억은 카드 1~2장이면 된다. 기억 번호(memory)는 받은 번호 그대로.`;
+    const SC_SCHEMA = S.obj({ memories: S.arr(S.obj({ memory: S.int, question: S.str, line: S.str, steps: S.arr(S.str), cards: S.arr(S.obj({ title: S.str, kind: S.str, text: S.str, quote: S.str, page: S.int })) })) });
+    const tDraw = Date.now();
+    const allPages = [...new Set(groups.flatMap((g) => g.flatMap((m) => m.pages)))];
+    const figs = await renderPageFigures(pdf, allPages.filter((p) => route.get(p) === "figures"), 1024).catch(() => new Map<number, Array<{ label: string; dataUrl: string }>>());
+    const wholes = await renderPageImages(pdf, allPages.filter((p) => route.get(p) === "page" || (route.get(p) === "figures" && !figs.get(p)?.length)), 1024).catch(() => new Map<number, string>());
+    const drawMs = Date.now() - tDraw;
+    const tCards = Date.now();
+    const made = await Promise.all(groups.map(async (g, gi) => {
+      const ps = [...new Set(g.flatMap((m) => m.pages))].sort((a, b) => a - b);
+      const images: Array<{ label: string; dataUrl: string }> = [];
+      for (const p of ps) { const f = figs.get(p) ?? []; if (f.length) images.push(...f.map((x) => ({ label: `p.${p} ${x.label}`, dataUrl: x.dataUrl }))); else if (wholes.get(p)) images.push({ label: `원문 p.${p}`, dataUrl: wholes.get(p)! }); }
+      const planText = g.map((m, k) => `${k + 1}|${m.role}|${m.kind}|${m.name}|p.${m.pages.join(",")}`).join("\n");
+      const user = `[자료] ${state.input.fileName}\n영역: ${saved.areas[g[0].area - 1]?.name ?? ""}\n\n[기억 계획] (번호|역할|종류|이름|쪽)\n${planText}\n\n${ps.map((p) => `[p.${p}]\n${(texts[p] ?? "").trim() || "(글자 없음)"}`).join("\n\n")}`;
+      const started = Date.now(); let first = 0;
+      const r = await withTrace({ area: "pdf", action: `clab:${run}:g${gi + 1}`, ref: id }, async () => {
+        const x = await callModel({ purpose: "lab:compact-stemCards", system: `${SC_SYSTEM}\n출력은 JSON으로만 한다.`, user, json: true, schema: SC_SCHEMA, schemaName: "recaller_lab_stemcards", ...M, caller: LOCAL_CALLER, images, onText: () => { if (!first) first = Date.now(); } });
+        const u = x.usage;
+        logAssistCall({ at: new Date(started).toISOString(), purpose: "lab:compact-stemCards", ...M, ms: Date.now() - started, ...(first ? { firstTextMs: first - started } : {}), ok: true, inChars: user.length, outChars: JSON.stringify(x.data ?? "").length,
+          ...(u ? { tokens: { in: u.inputTokens, cached: u.cachedInputTokens, out: u.outputTokens, reasoning: u.reasoningTokens } } : {}), trace: currentTrace() });
+        return x.data as { memories: Array<{ memory: number; question: string; line: string; steps: string[]; cards: Array<{ title: string; kind: string; text: string; quote: string; page: number }> }> };
+      });
+      return { pages: ps, images: images.length, mems: (r.memories ?? []).map((m) => ({ ...m, name: g[m.memory - 1]?.name ?? "(번호 틀림)", role: g[m.memory - 1]?.role })) };
+    }));
+    const cardsMs = Date.now() - tCards;
+    const out = made.flatMap((g) => g.mems);
+    const cards = out.flatMap((m) => m.cards.map((c) => ({ ...c, memory: m.name, quoteOk: (texts[c.page] ?? "").replace(/\s+/g, "").includes(String(c.quote).replace(/\s+/g, "")) })));
+    const wall = Date.now() - t0;
+    const calls = await callsOf(run, t0);
+    const summary = { method, run, wall, drawMs, cardsMs, groups: made.map((g) => ({ pages: g.pages.length, images: g.images, memories: g.mems.length })), calls,
+      tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0),
+      memories: out.length, planned: mems.length, empty: mems.filter((m) => !out.some((o) => o.name === m.name && o.cards.length)).map((m) => m.name),
+      cards: cards.length, quoteOk: cards.filter((c) => c.quoteOk).length,
+      list: out.map((m) => ({ name: m.name, role: m.role, cards: m.cards.length, steps: m.steps.length, line: m.line })), sample: cards.filter((c) => c.memory.includes("브레젠험") || c.memory.includes("주사선")).slice(0, 12) };
+    await save(id, method, summary);
+    return summary;
   } else if (method === "stemDirect" || method === "outlineNow") {
     const state = await loadGen(id) as unknown as { input: { sourceId: string; fileName: string; pageNumbers: number[] }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
     const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
