@@ -192,31 +192,40 @@ type CardProps = { a: ActionView; elapsed?: () => number; send: (b: Record<strin
 function DrillCard({ a, elapsed, send, fb, busy, err, next }: CardProps) {
   const [hint, setHint] = useState(false);
   const [pick, setPick] = useState("");
+  const [picks, setPicks] = useState<string[]>([]);
   const approaches = (fb?.approaches ?? []) as Array<{ name: string; verdict: string; why: string }>;
-  // 개념 보기(11/10): 정답·"이것도 돼요"는 초록, 고른 오답은 빨강. 아래에 "왜 그건 아닌지"(그 짝의 설명)와 이렇게 푸는 법.
-  const c = fb?.concept ? fb as { ok: boolean; intended: boolean; answer: string; alsoOk: string[]; why: string; what: string; how: string; signals: string[]; grade: string } : null;
-  const tone = (o: string) => (c ? (o === c.answer || c.alsoOk.includes(o) ? " good" : pick === o ? " bad" : "") : "");
+  // 개념 보기(11/10): 맞는 것을 모두 고른다(둘 다 되는 문제는 둘 다 골라야 정답). 정답은 초록, 고른 오답은 빨강, 놓친 정답은 점선.
+  const c = fb?.concept ? fb as { ok: boolean; answer: string; answers: string[]; wrongPick: string; missed: string[]; why: string; usually: string; what: string; how: string; signals: string[]; grade: string } : null;
+  const tone = (o: string) => (c ? (c.answers.includes(o) ? (picks.includes(o) ? " good" : " good missed") : picks.includes(o) ? " bad" : "") : "");
+  const toggle = (o: string) => setPicks((xs) => (xs.includes(o) ? xs.filter((x) => x !== o) : [...xs, o]));
   return (
     <section className="panel stack pt-card">
       <Problem a={a} />
-      <p className="small"><b>이 문제에서는 무엇을 써야 할까요?</b> 코드는 짜지 않아요. 30초~1분 안에 골라 보세요.</p>
-      <div className={`pt-options${a.concept ? " concept" : ""}`}>{(a.options ?? []).map((o) => {
-        const v = approaches.find((x) => x.name === o);
-        return <button key={o} className={`pt-opt${pick === o ? " on" : ""}${v ? ` ${VERDICT[v.verdict]?.[1] ?? ""}` : tone(o)}`} disabled={Boolean(fb) || Boolean(busy)} onClick={() => setPick(o)}>
-          {o}{v ? <span className="small"> — {VERDICT[v.verdict]?.[0]}. {v.why}</span> : null}</button>; })}</div>
+      <p className="small"><b>이 문제에서는 무엇을 써야 할까요?</b> {a.concept ? "맞는 것을 모두 고르세요." : ""} 코드는 짜지 않아요. 30초~1분 안에 골라 보세요.</p>
+      {a.concept ? (
+        <div className="pt-options concept">{(a.options ?? []).map((o) => (
+          <button key={o} className={`pt-opt${picks.includes(o) ? " on" : ""}${tone(o)}`} aria-pressed={picks.includes(o)} disabled={Boolean(fb) || Boolean(busy)} onClick={() => toggle(o)}>{picks.includes(o) ? "✓ " : ""}{o}</button>))}</div>
+      ) : (
+        <div className="pt-options">{(a.options ?? []).map((o) => {
+          const v = approaches.find((x) => x.name === o);
+          return <button key={o} className={`pt-opt${pick === o ? " on" : ""}${v ? ` ${VERDICT[v.verdict]?.[1] ?? ""}` : ""}`} disabled={Boolean(fb) || Boolean(busy)} onClick={() => setPick(o)}>
+            {o}{v ? <span className="small"> — {VERDICT[v.verdict]?.[0]}. {v.why}</span> : null}</button>; })}</div>
+      )}
       {!fb && !hint && (a.signals?.length ?? 0) > 0 ? <button className="linkish small" onClick={() => setHint(true)}>힌트: 문제에서 눈여겨볼 곳 (도움 받은 것으로 남아요)</button> : null}
       {hint && !fb ? <p className="small muted">눈여겨볼 곳: {(a.signals ?? []).join(" · ")}</p> : null}
       {err ? <p className="ws-err small">{err}</p> : null}
       {c ? (
         <div className={`stack small ${c.ok ? "pt-good" : "pt-bad"}`} style={{ gap: 4 }}>
-          <b>{c.ok ? (c.intended ? "맞았어요." : `「${pick}」도 돼요. 보통 쓰는 것: ${c.answer}`) : `아니에요. 정답: ${c.answer}`}</b>
-          {!c.ok && c.why ? <span>「{pick}」 말고 「{c.answer}」인 까닭: {c.why}</span> : null}
-          <span>{c.answer}: {c.what}</span>
+          <b>{c.ok ? "맞았어요." : `아니에요. 정답: ${c.answers.join(", ")}`}</b>
+          {!c.ok && c.wrongPick && c.why ? <span>「{c.wrongPick}」 말고 「{c.answer}」인 까닭: {c.why}</span> : null}
+          {!c.ok && !c.wrongPick && c.missed.length ? <span>「{c.missed.join(", ")}」도 돼요.</span> : null}
+          {c.usually ? <span>보통은: {c.usually}</span> : <span>{c.answer}: {c.what}</span>}
           {c.how ? <span>이렇게 풀어요: {c.how}</span> : null}
           {c.signals.length ? <span className="muted">이럴 때 떠올려요: {c.signals.join(" · ")} · ({c.grade})</span> : null}
         </div>
       ) : fb ? <p className={`small ${fb.ok ? "pt-good" : "pt-bad"}`}><b>{fb.ok ? (fb.intended ? "맞았어요." : "되는 방법이에요. 다만 이 문제에 더 맞는 방법이 따로 있어요.") : "이 방법으로는 안 돼요."}</b> 이 문제에 쓰는 것: {(fb.patternNames as string[]).join(", ")} · 이럴 때 떠올려요: {(fb.signals as string[]).join(" · ")} <span className="muted">({String(fb.grade)})</span></p>
-        : <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" disabled={!pick || Boolean(busy)} onClick={() => void send({ kind: "drill", mixed: a.mixed, choice: pick, hinted: hint, ms: elapsed?.() })}>{busy || "확인"}</button></div>}
+        : <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" disabled={(a.concept ? !picks.length : !pick) || Boolean(busy)}
+          onClick={() => void send(a.concept ? { kind: "drill", mixed: a.mixed, choice: picks.join(", "), choices: picks, hinted: hint, ms: elapsed?.() } : { kind: "drill", mixed: a.mixed, choice: pick, hinted: hint, ms: elapsed?.() })}>{busy || "확인"}</button></div>}
       {fb ? next : null}
     </section>
   );

@@ -15,7 +15,7 @@ import { COMPLEXITIES, complexityVerdict } from "../train.ts";
 import { patternOf, PATTERNS } from "./patterns.ts";
 import { nextActions, type Action } from "./policy.ts";
 import { board } from "./summary.ts";
-import { answerOf, conceptIdOf, conceptOf, conceptOptions, diffOf } from "./concepts.ts";
+import { answerOf, conceptIdOf, conceptOf, conceptOptions, diffOf, USUALLY } from "./concepts.ts";
 import { ensurePool, modelForProblem, prepareModels, prepStatus, readModels, tutorNumberOf, tutorTargets, type ProblemModel } from "./problem-model.ts";
 import { ABILITY_LABEL, appendEvent, computeState, gradeOf, GRADE_LABEL, readEvents, type Ability, type TutorEvent } from "./state.ts";
 
@@ -142,7 +142,7 @@ function view(a: Action, m: ProblemModel, models: Record<string, ProblemModel>) 
   // 신호는 답이 아니라 힌트: 화면은 "신호 보기"를 누를 때만 보여 주고, 누르면 도움 받은 것으로 남긴다.
   // 보기는 개념 이름(11/10, concepts.ts): 정답 + 이어진(헷갈리는) 개념 둘 + 섞은 것 하나. 요령 패턴만 있는 문제는 예전처럼 접근 문장.
   if (a.kind === "drill") {
-    const co = conceptOptions([a.pattern, ...m.patterns], a.id);
+    const co = conceptOptions([a.pattern, ...m.patterns], a.id, { withAlso: true });
     return { ...base, options: co ? co.options : shuffle(m.approaches.map((x) => x.name), a.id), concept: Boolean(co), signals: m.signals };
   }
   if (a.kind === "design") return { ...base, states: shuffle([m.state.right, ...m.state.wrong], a.id), complexities: Object.keys(COMPLEXITIES) };
@@ -208,7 +208,7 @@ export const startPrepare = (limit?: number, workers?: number) => prepareModels(
 
 export type Answer =
   | { kind: "walkthrough"; number: string; pattern: string; predict?: string; skipped?: boolean }
-  | { kind: "drill"; number: string; pattern: string; mixed: boolean; choice: string; hinted?: boolean; ms?: number }
+  | { kind: "drill"; number: string; pattern: string; mixed: boolean; choice: string; choices?: string[]; hinted?: boolean; ms?: number }
   | { kind: "design"; number: string; pattern: string; mixed: boolean; state: string; complexity: string; update?: string; hinted?: boolean; ms?: number }
   | { kind: "contrast"; number: string; pattern: string; picks: Record<string, string> }
   | { kind: "implement"; number: string; pattern: string; mixed: boolean; action: "start" | "giveup" };
@@ -235,20 +235,29 @@ export async function answer(a: Answer) {
         fix: m.walkthrough.choose, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     return { ok, answer: m.predict.answer };
   }
-  if (a.kind === "drill" && conceptIdOf(a.choice)) {
-    // 개념 보기(11/10): 문제 패턴의 개념(+ "이것도 돼요")이면 맞음. 틀리면 그 짝의 "언제 이쪽, 언제 저쪽"이 설명이자 카드.
-    const { main, ok: okSet } = answerOf([a.pattern, ...m.patterns]);
-    const pick = conceptIdOf(a.choice)!;
-    const ok = okSet.has(pick);
+  const picks = a.kind === "drill" ? (a.choices?.length ? a.choices : [a.choice]) : [];
+  if (a.kind === "drill" && picks.every((c) => conceptIdOf(c))) {
+    // 개념 보기(11/10): 보기에 나온 정답을 모두 골라야 맞음(둘 다 되는 문제는 둘 다). 틀리면 그 짝의 "언제 이쪽, 언제 저쪽"이 설명이자 카드.
+    const { main } = answerOf([a.pattern, ...m.patterns]);
+    const shown = conceptOptions([a.pattern, ...m.patterns], `drill:${a.number}:${a.pattern}:${a.mixed ? "m" : "c"}`, { withAlso: true });
+    const answers = new Set((shown?.answers ?? []).map((n) => conceptIdOf(n)!));
+    const chosen = picks.map((n) => conceptIdOf(n)!);
+    const wrongPick = chosen.find((c) => !answers.has(c));
+    const missed = [...answers].filter((c) => !chosen.includes(c));
+    const ok = !wrongPick && !missed.length;
+    const okSet = answers;
     const grade = gradeOf(events, a.number, "recognize", { hinted: a.hinted, mixed: a.mixed });
     const mainC = main ? conceptOf(main) : undefined;
     const best = m.approaches.find((x) => x.verdict === "best");
-    const why = !ok && main ? diffOf(main, pick) ?? `${mainC?.name}: ${mainC?.what}` : undefined;
-    const card: Card = { situation: `BOJ ${a.number} ${m.title}에서 「${a.choice}」를 골랐어요${a.hinted ? "(눈여겨볼 곳을 보고)" : ""}`,
-      gap: ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : `「${a.choice}」 쓰면 될 줄 알았어요`,
-      fix: ok ? `${mainC?.name ?? ""}: ${mainC?.what ?? ""}` : `정답은 「${mainC?.name}」 — ${why ?? ""}`.trim(), cue: m.signals[0] ?? "" };
-    await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${a.choice}` }, m, card);
-    return { ok, concept: true, intended: pick === main, answer: mainC?.name ?? "", alsoOk: [...okSet].filter((c) => c !== main).map((c) => conceptOf(c)?.name ?? c), why: why ?? "",
+    const why = !ok && main ? (wrongPick ? diffOf(main, wrongPick) : undefined) ?? (missed.length ? missed.map((c) => `${conceptOf(c)?.name}도 돼요: ${conceptOf(c)?.what}`).join(" ") : `${mainC?.name}: ${mainC?.what}`) : undefined;
+    const card: Card = { situation: `BOJ ${a.number} ${m.title}에서 「${picks.join(", ")}」를 골랐어요${a.hinted ? "(눈여겨볼 곳을 보고)" : ""}`,
+      gap: ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : wrongPick ? `「${conceptOf(wrongPick)?.name}」 쓰면 될 줄 알았어요` : `「${missed.map((c) => conceptOf(c)?.name).join(", ")}」도 된다는 걸 몰랐어요`,
+      fix: (() => { const usual = answers.size > 1 ? [a.pattern, ...m.patterns].map((p) => USUALLY[p]).find(Boolean) : undefined;
+        return ok ? (usual ?? `${mainC?.name ?? ""}: ${mainC?.what ?? ""}`) : `정답은 「${[...answers].map((c) => conceptOf(c)?.name).join("」·「")}」 — ${[why, usual].filter(Boolean).join(" ")}`.trim(); })(), cue: m.signals[0] ?? "" };
+    await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${picks.join(", ")}` }, m, card);
+    return { ok, concept: true, intended: ok, answer: mainC?.name ?? "", answers: [...okSet].map((c) => conceptOf(c)?.name ?? c), alsoOk: [...okSet].filter((c) => c !== main).map((c) => conceptOf(c)?.name ?? c),
+      wrongPick: wrongPick ? conceptOf(wrongPick)?.name ?? "" : "", missed: missed.map((c) => conceptOf(c)?.name ?? c), why: why ?? "",
+      usually: okSet.size > 1 ? [a.pattern, ...m.patterns].map((p) => USUALLY[p]).find(Boolean) ?? "" : "",
       what: mainC?.what ?? "", how: best ? `${best.name}${best.why ? ` — ${best.why}` : ""}` : "", grade: GRADE_LABEL[grade], signals: m.signals,
       patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
   }

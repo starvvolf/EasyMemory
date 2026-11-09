@@ -117,8 +117,14 @@ test("방법 고르기 개념 보기(11/10): 보기는 개념 이름, 틀리면 
     const card = (await readLessons()).at(-1)!;
     assert.equal(card.pattern, "bfs-distance", "only the pattern being asked, not 격자 사방 탐색");
     assert.match(card.gap, /「DFS」 쓰면 될 줄 알았어요/); assert.match(card.fix, /정답은 「BFS」/);
-    const also = await answer({ kind: "drill", number: "1012", pattern: "components", mixed: false, choice: "DFS" }) as { ok: boolean; intended: boolean };
-    assert.equal(also.ok, true); assert.equal(also.intended, false, "DFS also counts for 덩어리 세기");
+    // 둘 다 되는 문제(덩어리 세기)는 보기에 둘 다 나오고, 둘 다 골라야 맞음(11/10 사용자). 보통은 무엇인지도 짚는다.
+    const { conceptOptions } = await import("./concepts.ts");
+    const shown = conceptOptions(["components", "components"], "drill:1012:components:c", { withAlso: true })!;
+    assert.equal(shown.answers.length, 2); assert.equal(shown.options.length, 5);
+    const half = await answer({ kind: "drill", number: "1012", pattern: "components", mixed: false, choice: "BFS", choices: ["BFS"] }) as { ok: boolean; missed: string[] };
+    assert.equal(half.ok, false, "only one of the two: not yet"); assert.deepEqual(half.missed, shown.answers.filter((n) => n !== "BFS"));
+    const both = await answer({ kind: "drill", number: "1012", pattern: "components", mixed: false, choice: shown.answers.join(", "), choices: shown.answers }) as { ok: boolean; usually: string };
+    assert.equal(both.ok, true); assert.match(both.usually, /보통은 BFS/);
   } finally {
     for (const [key, v] of [["STUDY_FORGE_DATA_DIR", prior.data], ["RECALLER_AFTER_SAVE", prior.after]] as const) { if (v === undefined) delete process.env[key]; else process.env[key] = v; }
     await rm(dir, { recursive: true, force: true });

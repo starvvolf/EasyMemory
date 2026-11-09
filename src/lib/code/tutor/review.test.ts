@@ -112,7 +112,7 @@ test("개념 보기(11/10): 정답 + 이어진 개념 + 섞은 것, '이것도 �
   const ids = new Set(CONCEPTS.map((c) => c.id));
   for (const e of EDGES) assert.ok(ids.has(e.a) && ids.has(e.b) && e.diff.length > 10, `${e.a}-${e.b}`);
   const o = conceptOptions(["components"], "s1")!;
-  assert.equal(o.answer, "BFS"); assert.equal(o.options.length, 4); assert.equal(new Set(o.options).size, 4);
+  assert.equal(o.answer, "BFS"); assert.equal(o.options.length, 4); assert.equal(new Set(o.options).size, 4, "review (one answer): also-ok concepts left out");
   assert.ok(!o.options.includes("DFS") && !o.options.includes("유니온 파인드"), "both also work for 덩어리 세기: not shown as wrong");
   assert.deepEqual(conceptOptions(["components"], "s1"), o, "same seed, same options");
   const d = conceptOptions(["bfs-distance"], "s2")!;

@@ -95,6 +95,19 @@ export const ALSO_OK: Record<string, string[]> = {
   "stack-match": [], "union-find": [],
 };
 
+/** 둘 다 되는 문제에서 "보통은 무엇을 쓰고 왜"(11/10 사용자 "일반적으로 뭐가 맞으면 그것도 짚고"). */
+export const USUALLY: Record<string, string> = {
+  components: "보통은 BFS를 많이 써요. DFS도 짧게 짤 수 있지만 칸이 많으면 재귀가 너무 깊어질 수 있어요. 연결이 하나씩 더해지며 계속 물을 때는 유니온 파인드가 편해요.",
+  "graph-adj": "보통은 BFS나 DFS 아무거나 써요. 가장 짧은 거리를 물으면 BFS예요.",
+  "tree-walk": "트리는 사이클이 없어 BFS도 DFS도 돼요. 보통은 짧게 짜기 쉬운 DFS를 많이 쓰고, 노드가 아주 많으면 재귀 깊이 때문에 BFS가 안전해요.",
+  "exist-table": "값의 범위가 작은 정수면 보통 배열로 표를 만들어요. 값이 크거나 음수·문자열이면 해시를 써요.",
+  "count-array": "값의 범위가 작으면 보통 배열 칸에 바로 세요. 범위가 크거나 문자열이면 해시예요.",
+  "cursor-list": "보통은 연결 리스트로 풀어요. 커서 왼쪽·오른쪽을 스택 두 개로 나눠도 똑같이 돼요.",
+  "queue-sim": "보통은 큐로 충분해요. 양쪽에서 넣고 빼야 할 때만 덱이에요.",
+  "divide-quarter": "분할 정복은 보통 재귀로 짜요. 둘은 같은 생각의 다른 이름처럼 쓰여요.",
+  "merge-two": "정렬된 두 줄 합치기는 보통 두 손가락(투 포인터)으로 앞에서부터 비교해요.",
+  "hash-lookup": "있는지·몇 번인지만 보면 보통 해시예요. 순서도 필요하면 이진 검색 트리, 한 번 정렬해 두고 찾으면 이분 탐색도 돼요.",
+};
 const neighbors = (c: string) => EDGES.flatMap((e) => (e.a === c ? [e.b] : e.b === c ? [e.a] : []));
 export const diffOf = (x: string, y: string) => EDGES.find((e) => (e.a === x && e.b === y) || (e.a === y && e.b === x))?.diff;
 
@@ -108,20 +121,23 @@ export function answerOf(patterns: string[]) {
 function rng(seed: string) { let h = 2166136261; for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => { h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 2 ** 32; }; }
 const shuffle = <T,>(xs: T[], r: () => number) => { const a = [...xs]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-/** 보기 4개(개념 이름): 정답 + 정답과 이어진 개념 둘 + 섞은 것 하나(이웃의 이웃이나 아무 개념). 정답으로 치는 개념은 오답으로 안 낸다.
- *  같은 seed면 같은 보기(다시 열어도 그대로). */
-export function conceptOptions(patterns: string[], seed: string, count = 4): { options: string[]; answer: string; ok: string[] } | null {
+/** 보기(개념 이름): 정답 + 정답과 이어진 개념 둘 + 섞은 것 하나(이웃의 이웃이나 아무 개념).
+ *  "이것도 돼요" 개념이 있으면 그중 하나를 보기에 같이 넣고(보기 5개), 방법 고르기에서는 둘 다 골라야 정답이다
+ *  (11/10 사용자 "둘 다 되는 건 둘 다 골라야 정답으로"). answers = 보기에 나온 정답들. 같은 seed면 같은 보기. */
+export function conceptOptions(patterns: string[], seed: string, opts: { withAlso?: boolean } = {}): { options: string[]; answer: string; answers: string[]; ok: string[] } | null {
   const { main, ok } = answerOf(patterns);
   if (!main) return null;
   const r = rng(`${seed}:${patterns.join(",")}`);
+  const also = opts.withAlso ? shuffle([...ok].filter((c) => c !== main), r).slice(0, 1) : [];
   const near = shuffle(neighbors(main).filter((c) => !ok.has(c)), r);
   const twoHop = shuffle([...new Set(near.flatMap(neighbors))].filter((c) => c !== main && !ok.has(c) && !near.includes(c)), r);
   const rest = shuffle(CONCEPTS.map((c) => c.id).filter((c) => c !== main && !ok.has(c) && !near.includes(c) && !twoHop.includes(c)), r);
   const mixed = r() < 0.5 ? (twoHop[0] ?? rest[0]) : (rest[0] ?? twoHop[0]);
-  const picks = [...near.slice(0, count - 2), ...(mixed ? [mixed] : [])];
-  for (const c of [...near.slice(count - 2), ...twoHop, ...rest]) if (picks.length < count - 1 && !picks.includes(c)) picks.push(c);
+  const wrongCount = 3;
+  const picks = [...near.slice(0, wrongCount - 1), ...(mixed ? [mixed] : [])];
+  for (const c of [...near.slice(wrongCount - 1), ...twoHop, ...rest]) if (picks.length < wrongCount && !picks.includes(c)) picks.push(c);
   const name = (id: string) => NAME.get(id)!.name;
-  return { options: shuffle([main, ...picks.slice(0, count - 1)], r).map(name), answer: name(main), ok: [...ok].map(name) };
+  return { options: shuffle([main, ...also, ...picks.slice(0, wrongCount)], r).map(name), answer: name(main), answers: [main, ...also].map(name), ok: [...ok].map(name) };
 }
 /** 개념 이름 → id */
 export const conceptIdOf = (name: string) => CONCEPTS.find((c) => c.name === name)?.id;

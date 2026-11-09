@@ -1067,3 +1067,4 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .ln-pre{font-size:10.5px;padding:0 5px;border-radius:999px;border:1px solid rgba(127,127,127,.4);flex:none}
 .dejipgi .ln-rep{flex:none;margin-left:auto;font-size:11px;color:#e07070}
 .dejipgi .ln-line{margin:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dejipgi .pt-opt.missed{border-style:dashed}

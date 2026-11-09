@@ -16,7 +16,7 @@ const num = z.string().regex(/^\d{1,6}$/);
 const pat = z.string().regex(/^[a-z0-9-]{2,40}$/);
 const ANSWER = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("walkthrough"), number: num, pattern: pat, predict: z.string().max(2000).optional(), skipped: z.boolean().optional() }),
-  z.object({ kind: z.literal("drill"), number: num, pattern: pat, mixed: z.boolean(), choice: z.string().max(200), hinted: z.boolean().optional(), ms: z.number().int().min(0).max(36e5).optional() }),
+  z.object({ kind: z.literal("drill"), number: num, pattern: pat, mixed: z.boolean(), choice: z.string().max(200), choices: z.array(z.string().max(60)).max(6).optional(), hinted: z.boolean().optional(), ms: z.number().int().min(0).max(36e5).optional() }),
   z.object({ kind: z.literal("design"), number: num, pattern: pat, mixed: z.boolean(), state: z.string().max(200), complexity: z.string().max(20), update: z.string().max(500).optional(), hinted: z.boolean().optional(), ms: z.number().int().min(0).max(36e5).optional() }),
   z.object({ kind: z.literal("contrast"), number: num, pattern: pat, picks: z.record(num, pat) }),
   z.object({ kind: z.literal("implement"), number: num, pattern: pat, mixed: z.boolean(), action: z.enum(["start", "giveup"]) }),
