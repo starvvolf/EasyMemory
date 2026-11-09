@@ -60,8 +60,8 @@ async function startCourse() {
   splashLine("⑤ 실습 코스 서버 켜기\n");
   course = spawn("node", [isWin ? `"${path.join(dir, "tools", "keeper.mjs")}"` : path.join(dir, "tools", "keeper.mjs")], { cwd: dir, shell: isWin, windowsHide: true, stdio: "ignore", env: { ...process.env, PC_NO_OPEN: "1" } });
   course.on("error", () => { course = null; });
-  for (let i = 0; i < 20 && !(await up(`${COURSE_ORIGIN}/api/status`)); i++) await new Promise((r) => setTimeout(r, 500));
-  splashLine((await up(`${COURSE_ORIGIN}/api/status`)) ? "   켰어요.\n" : "   아직 켜는 중이에요(실습 탭을 열 때 다시 확인해요).\n");
+  // 11/9 사용자 "실습서버 안기다리기": 켜지는 것을 기다리지 않고 창을 연다(전에는 최대 10초). 실습 탭이 열 때 확인한다.
+  splashLine("   뒤에서 켜요(실습 탭을 열 때 확인해요).\n");
 }
 function stopCourse() {
   if (!course || course.exitCode !== null) return;
