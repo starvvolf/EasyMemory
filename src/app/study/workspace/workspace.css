@@ -1035,6 +1035,7 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pp-gap.bad{background:rgba(220,90,90,.18);color:#e07070}
 .dejipgi .pp-gap.now{background:rgba(107,140,255,.18);color:#7f9cff}
 .dejipgi .pp-sum{margin:0 0 6px}
+.dejipgi .pp-base{margin:0 0 8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;opacity:.9}
 .dejipgi .pp-weak{margin:1px 0 0;font-size:12.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .dejipgi .pp-all{width:100%}
 .dejipgi .pp-all summary{cursor:pointer;margin-bottom:6px}

@@ -1617,6 +1617,10 @@ function goalBar(lesson, send) {
       h("button", { class: "gmode", disabled: lesson.busy, title: "진행 방식 바꾸기", onclick: op("mode", { mode: g.mode === "topdown" ? "bottomup" : "topdown" }) }, g.mode === "topdown" ? "탑다운" : "바텀업"),
       h("span", { class: "mut small" }, prog)) : null,
     goalUi.showLong && g.map.length ? h("div", { class: `gmap ${S ? "kept" : ""}` }, g.map.map((m, i) => h("span", { class: `gstep ${m.status}` }, `${i + 1}${mark[m.status] ? " " + mark[m.status] : ""} ${m.title}`))) : null,
+    // 먼저 알 것 지도: 됨 ✓ · 비어 있음 ✗ · 확인 전(흐림). 마우스를 올리면 그 전에 알아야 할 것 · 어떻게 알았나
+    goalUi.showLong && g.base?.length ? h("div", { class: "gbase" }, h("span", { class: "gk" }, "먼저 알 것"),
+      g.base.map((b) => h("span", { class: `gbn ${b.result === "됨" ? "ok" : b.result === "비어 있음" ? "bad" : ""}`, title: [b.needs.length ? `그 전에: ${b.needs.join(", ")}` : "", b.result ? `${b.result}${b.by === "노트" ? " (지난 실습에서 확인)" : b.by === "명령" ? ` (${b.quote ?? "명령으로 확인"})` : ""}` : "아직 확인 전"].filter(Boolean).join("\n") },
+        `${b.result === "됨" ? "✓ " : b.result === "비어 있음" ? "✗ " : ""}${b.kind === "도구" ? "🔧 " : ""}${b.name}`))) : null,
     // 보충 로드맵(11/7 사용자 "원래 로드맵은 보관해 숨기고, 맨 마지막 종착지를 A로 놓고 보충 시작"): 보충 단계들 → 🎯 막힌 단계
     S ? h("div", { class: "gmap sup" }, h("span", { class: "gk warm" }, `보충 로드맵${S.round > 1 ? ` (${S.round}번째)` : ""}`),
       S.steps.map((x) => h("span", { class: `gstep ${x.status} sup` }, `${mark[x.status] ? mark[x.status] + " " : ""}${x.title}`)),
@@ -1666,6 +1670,9 @@ function goalPlanCard(p, send) {
     h("div", { class: "small" }, h("b", {}, "진행 방식: "), p.mode === "topdown" ? "탑다운 — 구조부터 보고, 지도를 따라" : "바텀업 — 작은 것 하나부터 넓혀 가기"),
     p.map.length ? h("ol", { class: "small" }, p.map.map((t) => h("li", {}, t))) : null,
     h("div", { class: "small" }, h("b", {}, "첫 목표: "), p.first.title, h("span", { class: "mut" }, ` — 완료 조건: ${p.first.done}`)),
+    // 먼저 알 것 지도(11/10 사용자 "장기목표 잡으면서 선행개념이랑 의존성을 다 정리해"): 아래 것부터, ← 는 그 전에 알아야 할 것
+    p.base?.length ? h("div", { class: "small" }, h("b", {}, "먼저 알 것: "), h("span", { class: "mut" }, "이걸 알고 있어야 따라올 수 있어요. 모르는 건 그때그때 같이 채워요"),
+      h("div", { class: "gbase" }, p.base.map((b) => h("span", { class: "gbn", title: b.needs.length ? `그 전에: ${b.needs.join(", ")}` : "" }, `${b.kind === "도구" ? "🔧 " : ""}${b.name}`)))) : null,
     h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: send({ do: "goal", op: "confirm" }) }, "확정"), h("button", { class: "btn small", onclick: send({ do: "goal", op: "dismiss_plan" }) }, "다시 얘기하기")));
 }
 function goalStuckCard(g, send) {

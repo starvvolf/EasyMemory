@@ -8,7 +8,8 @@ import { call, errorText, later } from "./api";
 
 type Ev = { at: string; kind: string; text: string };
 type PGoal = { title: string; at: string; endAt: string | null; result: string; events: Ev[]; gaps: Array<{ id: string; name: string; wrong: string; status: string }>; learned: string[] };
-type Note = { online: boolean; missing?: boolean; runId?: string; title?: string; at?: string | null; path?: PGoal[] };
+type Base = { name: string; kind: string; needs: string[]; result: string | null };
+type Note = { online: boolean; missing?: boolean; base?: Base[]; runId?: string; title?: string; at?: string | null; path?: PGoal[] };
 
 const RESULT_CLASS: Record<string, string> = { 마침: "ok", "너무 쉬움": "ok", 건너뜀: "skip", 멈춤: "skip", "진행 중": "now" };
 const GAP_CLASS: Record<string, string> = { "다시 확인 맞음": "ok", "세션에서 채움": "ok", "다시 틀림": "bad", 열림: "bad", "채우는 중": "now" };
@@ -51,6 +52,7 @@ export default function ProjectPath({ runs }: { runs: string }) {
       <section key={n.runId} className="pp-run">
         {shown.length > 1 || n.title ? <p className="eyebrow">{n.at ? `${hm(n.at)} · ` : ""}{n.title}</p> : null}
         <p className="pp-sum small muted">{summary(n.path!)}</p>
+        {n.base?.length ? <p className="pp-base small" title="먼저 알 것: ✓ 됨 · ✗ 비어 있었음 · 흐림 = 확인 안 함">먼저 알 것 {n.base.map((b) => <span key={b.name} className={`pp-gap ${b.result === "됨" ? "ok" : b.result === "비어 있음" ? "bad" : ""}`} title={b.needs.length ? `그 전에: ${b.needs.join(", ")}` : ""}>{b.result === "됨" ? "✓ " : b.result === "비어 있음" ? "✗ " : ""}{b.name}</span>)}</p> : null}
         <ol className="pp-goals">{n.path!.map((g, i) => {
           // 딱 보이게(11/10 사용자 "주절주절 붙이지 말고 어떤 흐름으로 공부했는데 뭐가 부족했구나"):
           // 한 줄 = 목표 · 결과 · 시간, 그 아래는 부족했던 것 이름만. 그 안의 일(이해 · 맞음 · 막힘 · 보충)은 작은 표시로, 글은 마우스를 올리면.

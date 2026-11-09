@@ -461,11 +461,21 @@ async function noteGap(runId: string, op: string, b: Record<string, unknown>) {
   const v = b.verdict as { verdict: string; right: string; gap: string; prereq?: string; quote?: string } | undefined;
   if (op === "applied" && v) {
     // 선행이 빈 것(11/10): 단위를 그 선행으로 연다 → 같은 선행을 또 틀리면 같은 칸, 목표가 맞으면 함께 채움
-    if (v.verdict === "partial" || v.verdict === "incorrect") await GP.openGap(runId, { goal, unit: v.prereq ? GP.prereqUnit(c.id, v.prereq) : unit, from: "판정", wrong: v.gap, right: "", quote: v.quote, prereq: v.prereq });
+    if (v.verdict === "partial" || v.verdict === "incorrect") {
+      await GP.openGap(runId, { goal, unit: v.prereq ? GP.prereqUnit(c.id, v.prereq) : unit, from: "판정", wrong: v.gap, right: "", quote: v.quote, prereq: v.prereq });
+      // 먼저 알 것 지도에도(11/10 사용자 "그것도 이용해서 사용자가 모르는 걸 찾고 그때그때 목표 달성에 필요한 부분을 채워")
+      if (v.prereq) await (await import("./goals.ts")).setBaseResult(runId, v.prereq, "비어 있음", v.quote ?? "");
+    }
     else if (v.verdict === "correct") {
       await GP.fillUnit(runId, unit.id, v.quote || v.right);
       // 보충을 거쳐 돌아온 종착지가 맞으면, 그 목표에서 막혔던 것(선행 포함)도 채운 것으로
-      if (!sp) { await GP.fillUnit(runId, c.id, v.quote || v.right); await GP.fillPrereqs(runId, c.id, v.quote || v.right); }
+      if (!sp) {
+        await GP.fillUnit(runId, c.id, v.quote || v.right);
+        const filled = await GP.fillPrereqs(runId, c.id, v.quote || v.right);
+        // 채운 먼저 알 것은 지도에서 됨으로(다시 확인은 원장이 따로 잡는다)
+        const names = (await GP.ledgerOf(runId)).filter((x) => filled.includes(x.id) && x.prereq).map((x) => x.prereq!);
+        for (const n of names) await (await import("./goals.ts")).setBaseResult(runId, n, "됨");
+      }
     }
   } else if (op === "hard" || op === "stuck") {
     const { STUCK_REASONS } = await import("./goals.ts");
@@ -616,6 +626,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     if (op === "cmd") {
       const ci = input as { id?: string; ok?: boolean };
       const d = await (await import("./shell.ts")).decide(runId, await (await import("./goals.ts")).runWorkspace(runId), String(ci.id ?? ""), ci.ok === true);
+      await (await import("./goals.ts")).baseFromEnv(runId).catch(() => {});
       await TL.beginStep(runId, { kind: "button", label: d.label, text: d.text });
       notifyLesson(runId);
       if (d.say) { const t = sysSay(d.label, d.say); if (run.codexId) await codexAsk(runId, run.codexId, t); else await chatAsk(runId, run.chatId!, t); } else await TL.endStep(runId);
