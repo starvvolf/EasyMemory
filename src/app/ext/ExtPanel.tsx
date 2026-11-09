@@ -97,7 +97,7 @@ export default function ExtPanel() {
             <button className="btn primary small" disabled={busy === "explain"}>{busy === "explain" ? "생각하는 중…" : "설명 듣기"}</button></form> : null}
           {explained ? <div className="sb-answer"><Rich text={explained.answer} className="small" />
             {explained.otherView ? <p className="small"><b>다르게 보면:</b> {explained.otherView}</p> : null}
-            {explained.knowledge ? <p className="small muted">“{explained.knowledge.title}”을(를) 몰랐음으로 {explained.knowledge.created ? "저장" : "표시"}했어요. 나중에 확인 문제로 나와요.</p> : null}</div> : null}
+            {explained.knowledge ? <p className="small muted">“{explained.knowledge.title}”을(를) 기억으로 {explained.knowledge.created ? "저장" : "표시"}했어요. 나중에 확인 문제로 나와요.</p> : null}</div> : null}
         </section>
 
         {source ? <section className="panel"><ArticleGoals source={source} onChanged={setSource} /></section> : null}

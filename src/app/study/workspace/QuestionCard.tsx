@@ -45,7 +45,7 @@ export function QuestionCard({ question, sourceId, onDone, compact }: { question
       )}
       {result ? (
         <div className={`ws-q-result ${result.correct ? "good" : "bad"}`}>
-          <b>{question.kind === "flashcard" ? (result.correct ? "알았어요 → 앎" : "몰랐어요 → 몰랐음") : result.correct ? "맞았어요" : "틀렸어요"}</b>
+          <b>{question.kind === "flashcard" ? (result.correct ? "알았어요" : "몰랐어요") : result.correct ? "맞았어요" : "틀렸어요"}</b>
           {!result.correct && question.kind !== "flashcard" ? <span> · 정답: <Inline text={result.expected} /></span> : null}
           {result.note ? <span className="muted"> · {result.note}</span> : null}
           {question.explain && !(question.kind === "flashcard") ? <div className="small muted"><Inline text={question.explain} /></div> : null}
@@ -71,7 +71,7 @@ export function QuestionRun({ questions, sourceId, onClose, title }: { questions
         <button className="btn ghost small" onClick={onClose}>그만하기</button>
       </div>
       {done ? (
-        <div className="stack"><p><b>{questions.length}문제 중 {score.right}개 맞혔어요.</b></p><p className="small muted">결과는 각 기억의 기록에 남았어요. 틀린 것은 몰랐음이 되어 복습에 먼저 나와요.</p>
+        <div className="stack"><p><b>{questions.length}문제 중 {score.right}개 맞혔어요.</b></p><p className="small muted">결과는 각 기억의 기록에 남았어요. 틀린 것은 복습에 먼저 나와요.</p>
           <div className="row"><button className="btn primary small" onClick={onClose}>닫기</button></div></div>
       ) : (
         <>
@@ -126,7 +126,7 @@ export function QuestionList({ questions, title, note, nameOf, onClose, onRunAll
           );
         })}
       </ol>
-      {done ? <p className="small muted">결과는 각 기억의 기록에 남았어요. 틀린 것은 몰랐음이 되어 복습에 먼저 나와요.</p> : null}
+      {done ? <p className="small muted">결과는 각 기억의 기록에 남았어요. 틀린 것은 복습에 먼저 나와요.</p> : null}
     </section>
   );
 }

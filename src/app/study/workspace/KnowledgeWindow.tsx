@@ -10,7 +10,7 @@ import { QuestionList, QuestionRun } from "./QuestionCard";
 import { Inline, Rich } from "./Rich";
 
 type Filter = "all" | KState | "graduated";
-const FILTERS: Array<[Filter, string]> = [["all", "전체"], ["unknown", "몰랐음"], ["known", "앎"], ["met", "만남"], ["graduated", "졸업"]];
+const FILTERS: Array<[Filter, string]> = [["all", "전체"], ["known", "앎"], ["graduated", "졸업"]];
 const stateClass: Record<KState, string> = { met: "met", unknown: "bad", known: "good" };
 /**
  * 고리를 이 지식 쪽에서 읽는 말: "이것 —씀→ X"는 X 앞에 "씀", "X —씀→ 이것"은 "쓰임". 모르는 관계(직접 적은 것)는 화살표로.
@@ -21,6 +21,8 @@ const relWord = (relation: string, out: boolean) => REL_WORDS[relation]?.[out ? 
 const ago = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; };
 
 export function StateChip({ state, graduated }: { state: KState; graduated?: boolean }) {
+  // 11/9 사용자 "만남/몰랐음도 일단 다 숨겨봐": 앎·졸업만 글자로 보인다.
+  if (!graduated && (state === "met" || state === "unknown")) return null;
   return <span className={`chip ws-st ${stateClass[state]}`}>{graduated ? "졸업" : STATE_LABEL[state]}</span>;
 }
 
@@ -178,7 +180,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
       <span className="kw-mat-ic" aria-hidden>{MAT_ICON[m.group === "material" ? m.kind : m.group] ?? "•"}</span>
       <button className="kw-fname" onClick={() => pickMaterial(m)}>{m.title}</button>
       <span className="kw-count num">{m.items}</span>
-      <span className="kw-mbar" aria-label={`몰랐음 ${Math.round(b.unknown)}% · 앎 ${Math.round(b.known)}%`}><i className="bad" style={{ width: `${b.unknown}%` }} /><i className="good" style={{ width: `${b.known}%` }} /></span>
+      <span className="kw-mbar" aria-label={`다시 볼 것 ${Math.round(b.unknown)}% · 앎 ${Math.round(b.known)}%`}><i className="bad" style={{ width: `${b.unknown}%` }} /><i className="good" style={{ width: `${b.known}%` }} /></span>
     </div></li>); };
   const unfiled = (g: MaterialRow["group"]) => materials.filter((m) => m.group === g && !m.folderId);
 
@@ -213,7 +215,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
         <div className={`kw-folder${view === "topic" && folder === f.id ? " on" : ""}`} style={{ paddingLeft: 8 + depth * 14 }} {...dragOf("folder", f.id)} {...dropZone(f.id)}>
           <button className="kw-twist" aria-label={isOpen ? "접기" : "펴기"} onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(f.id)) n.delete(f.id); else n.add(f.id); return n; })} style={{ visibility: kids.length ? "visible" : "hidden" }}>{isOpen ? "▾" : "▸"}</button>
           <button className="kw-fname" onClick={() => { setView("topic"); setFolder(f.id); setQuery(""); }}>{f.name}</button>
-          <span className="kw-count num" title={`몰랐음 ${c.unknown} · 앎 ${c.known}`}>{c.unknown ? <i className="dot bad" /> : null}{c.total}</span>
+          <span className="kw-count num" title={`앎 ${c.known}`}>{c.unknown ? <i className="dot bad" /> : null}{c.total}</span>
         </div>
         {isOpen && kids.length ? <ul>{kids.map((k) => <FolderRow key={k.id} f={k} depth={depth + 1} />)}</ul> : null}
       </li>
@@ -225,7 +227,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
       <header className="kw-top">
         <div>
           <h2>기억</h2>
-          <p className="small muted num kw-sum"><span>{counts.total}개</span><span><i className="dot bad" />몰랐음 {counts.unknown}</span><span><i className="dot good" />앎 {counts.known}</span><span>만남 {counts.met}</span></p>
+          <p className="small muted num kw-sum"><span>{counts.total}개</span><span><i className="dot good" />앎 {counts.known}</span></p>
           <div className="kw-origins small" role="group" aria-label="출처로 거르기">{(Object.keys(ORIGIN_LABEL) as Origin[]).map((o) => (
             <label key={o} className={`kw-origin${origins.has(o) ? " on" : ""}`}><input type="checkbox" checked={origins.has(o)} onChange={() => toggleOrigin(o)} />{ORIGIN_LABEL[o]} <span className="num muted">{originCount[o]}</span></label>))}</div>
         </div>
@@ -649,8 +651,7 @@ function MaterialOutline({ genId, items, sel, onPick, onAct }: { genId: string; 
   const tally = (cards: OutlineCard[]) => (["unknown", "met", "known", "new"] as const).map((k) => [k, cards.filter((c) => (k === "known" ? c.state === "known" || c.state === "graduated" : c.state === k)).length] as const);
   return (
     <div className="ko">
-      <p className="small muted ko-legend"><span><i className="dot bad" />몰랐음 {map.counts.unknown}</span><span><i className="dot read" />만남 {map.counts.met}</span>
-        <span><i className="dot good" />앎 {map.counts.known + map.counts.graduated}</span>{map.counts.new ? <span><i className="dot none" />아직 {map.counts.new}</span> : null}<span>· {map.pages}쪽</span>{map.counts.new ? <span>· ★ 핵심만 기억이 되고, 나머지는 모르면 “모름”</span> : null}</p>
+      <p className="small muted ko-legend"><span><i className="dot good" />앎 {map.counts.known + map.counts.graduated}</span>{map.counts.new ? <span><i className="dot none" />아직 {map.counts.new}</span> : null}<span>· {map.pages}쪽</span>{map.counts.new ? <span>· ★ 핵심만 기억이 되고, 나머지는 모르면 “모름”</span> : null}</p>
       <ol className="ko-list">{map.sections.map((sec, n) => {
         const on = open === sec.id, t = tally(sec.cards), total = sec.cards.length || 1;
         return <li key={sec.id} className={on ? "on" : ""}>
@@ -663,11 +664,11 @@ function MaterialOutline({ genId, items, sel, onPick, onAct }: { genId: string; 
           </button>
           {on ? <ul className="ko-cards">{sec.cards.map((c) => <li key={c.id}>
             <button className={`ko-card${c.knowledgeId && sel === c.knowledgeId ? " sel" : ""}`} disabled={!c.knowledgeId} onClick={() => c.knowledgeId && onPick(c.knowledgeId)}>
-              <span className={`ko-st ${OUT_STATE[c.state][1]}`}>{OUT_STATE[c.state][0]}</span>
+              {c.state === "met" || c.state === "unknown" ? <span /> : <span className={`ko-st ${OUT_STATE[c.state][1]}`}>{OUT_STATE[c.state][0]}</span>}
               <span className="ko-ctext"><b><Inline text={c.title} />{c.core ? <span className="ko-core" title="핵심">★</span> : null}</b>
                 {line(c.knowledgeId) ? <span className="ko-line"><Inline text={line(c.knowledgeId)} /></span> : null}</span>
               <span className="small muted ko-cp">{pageRange(c.pages)}</span>
-            </button>{!c.knowledgeId ? <button className="btn ghost small ko-pick" title="이 카드를 기억(몰랐음)으로 넣고 복습에 올려요" onClick={() => pick(c.ref)}>모름</button> : null}</li>)}</ul> : null}
+            </button>{!c.knowledgeId ? <button className="btn ghost small ko-pick" title="이 카드를 기억으로 넣고 복습에 올려요" onClick={() => pick(c.ref)}>모름</button> : null}</li>)}</ul> : null}
         </li>;
       })}</ol>
     </div>

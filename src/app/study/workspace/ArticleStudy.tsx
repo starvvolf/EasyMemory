@@ -60,7 +60,7 @@ export function ArticleMap({ source, onChanged }: { source: SourceView; onChange
             <b>{t.name}</b><span className="am-line">{t.line}</span>{t.have === "met" ? <span className="am-tag">만난 적 있음</span> : t.have === "known" ? <span className="am-tag">아는 말</span> : null}
           </button></li>))}</ul>
         {terms.length > 8 ? <button className="linkish small am-more" onClick={() => setAll(!all)}>{all ? "접기" : `나머지 ${terms.length - 8}개 보기`}</button> : null}
-        <p className="small muted">누른 말은 ‘몰랐음’으로 기억창에 들어가 복습에 나와요{map.termIds.length ? ` · 지금 ${map.termIds.length}개 골랐어요` : ""}. 다시 누르면 빠져요.
+        <p className="small muted">누른 말은 기억창에 들어가 복습에 나와요{map.termIds.length ? ` · 지금 ${map.termIds.length}개 골랐어요` : ""}. 다시 누르면 빠져요.
           {known.length || againIdeas.length ? ` 이미 아는 것: ${[...againIdeas.map((x) => x.title), ...known.map((t) => t.name)].join(", ")}.` : ""}</p>
       </div>
       {map.consider.length ? <details className="ws-fold"><summary>생각해 볼 점 {map.consider.length}</summary><ul className="small am-consider">{map.consider.map((c, i) => <li key={i}>{c}</li>)}</ul>
