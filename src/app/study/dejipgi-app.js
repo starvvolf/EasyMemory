@@ -817,7 +817,9 @@ on(window, "recaller:map-open", (e) => {
   const id = String((e.detail && e.detail.genId) || "");
   const d = S.decks[id] || S.decks["pending:" + id];
   const page = Number(e.detail && e.detail.page) || 0;
-  if (d && genDeck(d.id)){ MaterialMapView.open(d); if (page) SourcePeek.open(d, page); } else toast("이 자료의 지도를 아직 열 수 없어요. 공부 › PDF 자료에서 열어 주세요.");
+  // 11/10: 공부 기록에 없는 자료(기억 탭이 실제로 만든 자료 목록에서 연 것)도 지도는 연다(문제 풀기는 자료가 공부에 붙은 뒤).
+  const deck = d || (genDeck(id) ? { id, title: "" } : null);
+  if (deck && genDeck(deck.id)){ MaterialMapView.open(deck); if (page && d) SourcePeek.open(d, page); } else toast("이 자료의 지도를 아직 열 수 없어요. 공부 › PDF 자료에서 열어 주세요.");
 });
 /* 공부 안의 갈래: PDF 자료 · 웹 글 · 코드 · 프로젝트(2026-10-30, D), and "+ 새 공부" — the same bar on each, so the three feel like one place. */
 function studyNav(active){
