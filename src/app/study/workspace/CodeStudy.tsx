@@ -327,8 +327,6 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           {problem.check ? ` · 모범 풀이 확인: ${problem.check.by === "source" ? `원문 예제 ${problem.check.cases}개 일치` : `단순 풀이와 작은 입력 ${problem.check.cases}개 일치`}${problem.check.by === "source" && problem.check.compared ? `, 단순 풀이와 작은 입력 ${problem.check.compared}개 일치` : ""}${problem.check.human === "match" ? " · 사람이 쓴 정답 코드와 일치" : ""}` : ""}
           {problem.check?.mutation?.total ? ` · 흔한 실수 풀이 ${problem.check.mutation.total}개 중 ${problem.check.mutation.killed}개를 테스트가 잡음${problem.check.mutation.survived.length ? ` (못 잡음: ${problem.check.mutation.survived.join(", ")})` : ""}` : ""}
           {problem.check?.second && problem.check.second.status !== "skipped" ? ` · ${problem.check.second.status === "agreed" ? `다른 호출의 독립 풀이(${problem.check.second.model})와 테스트 ${problem.check.second.agreed}/${problem.check.second.total}개 일치` : problem.check.second.status === "second-wrong" ? "독립 풀이가 틀려서 큰 입력 대조는 못 함" : "독립 풀이로 대조하지 못함"}` : ""}</p>}
-        {grade.needs ? <NeedsPanel needs={grade.needs} /> : null}
-        {problem.knowledge.length ? <div className="row small"><span className="muted">다루는 개념</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
         {subs.length ? <><p className="eyebrow">내 제출</p><ul className="cs-subs">{subs.filter((s) => s.mode === "submit").slice(0, 8).map((s) => <li key={s.id}><button className="linkish small" onClick={() => void openSubmission(s.id)}>
           <span className={`chip ${VERDICT[s.verdict]?.[1] ?? ""}`}>{VERDICT[s.verdict]?.[0] ?? s.verdict}</span> {s.lang} · {new Date(s.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{s.hints ? ` · 힌트 ${s.hints}` : ""}</button></li>)}</ul></> : null}
       </section>
@@ -370,6 +368,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         ) : null}
       </section>
 
+      {/* 오른쪽 열: AI 채팅 아래에 필요한 능력 사다리와 다루는 개념(11/9 사용자) */}
+      <div className="cs-side">
       <aside className={`cs-ai panel${training ? " training" : ""}`} aria-label="코드 옆 AI">
         {training ? <div className="cs-ai-train"><b>훈련</b><TrainPanel id={id} train={train} onStep={setTrainStep} timeLimitMs={problem.timeLimitMs} lang={lang} code={now} solved={subs.some((s) => s.mode === "submit" && s.verdict === "AC")} /></div> : null}
         <b>AI</b>{coaching ? <span className="small muted"> · 훈련 코치 ({STEP_LABEL[trainStep]} 단계)</span> : null}
@@ -403,6 +403,11 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           <button className="btn primary small" disabled={asking || !question.trim()}>묻기</button>
         </form>
       </aside>
+      {grade.needs || problem.knowledge.length ? <section className="cs-needs panel" aria-label="이 문제에 필요한 능력">
+        {grade.needs ? <NeedsPanel needs={grade.needs} /> : null}
+        {problem.knowledge.length ? <div className="row small"><span className="muted">다루는 개념</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
+      </section> : null}
+      </div>
     </div>
   );
 }
