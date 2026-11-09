@@ -407,7 +407,7 @@ test("앱(공부 화면) 기본 (11/5): 목차 → 바로 카드로 카드 먼�
   const done = await runGen(first.id, { uid: "local-experiment" }, io);
   assert.equal(done.status, "done", done.message);
   const after = (await readGenCalls(done.id)).slice(before.length).map((c) => c.step);
-  assert.ok(after.includes("rc-q-pick") && (after.includes("rc-q-case") || after.includes("rc-q-material")), after.join(","));
+  // 줄기 모드 문제(11/10, stem-quiz.ts)는 엔진 호출이 아니라 출제 고리(quiz-plan makeOne)로 — 가짜 모델에선 AI 없이 기억마다 하나.
   assert.ok(!after.includes("rc-stem-fill") && !after.includes("rc-stem-plan"), `기억을 다시 만들지 않는다: ${after.join(",")}`);
   const qs = done.sections.flatMap((s) => Object.values(done.recaller!.units[s.id].chunks ?? {}).flatMap((c) => c.questions ?? []));
   assert.ok(qs.length >= 1, "문제가 나온다");
@@ -496,6 +496,6 @@ test("앱 문제도 바로 만들기 (11/6): 공부 화면에서 questionsLater 
   const done = await runGen(start.id, { uid: "local-experiment" }, io);
   assert.equal(done.status, "done", done.message);
   const steps = (await readGenCalls(done.id)).map((c) => c.step);
-  assert.ok(steps.includes("rc-stem-fill") && steps.includes("rc-q-pick"), steps.join(","));
+  assert.ok(steps.includes("rc-stem-fill") && !steps.includes("rc-q-pick"), steps.join(","));
   assert.ok(Object.values(done.recaller!.units).some((u) => (u.questions ?? []).length), "문제가 나온다");
 }));

@@ -83,17 +83,21 @@ async function inputs(id: string) {
   return { goals, cards };
 }
 
-/** AI 한 번으로 잇고 저장한다. */
-export async function makeGoalLinks(id: string): Promise<GoalLinks> {
-  const { goals, cards } = await inputs(id);
-  const t0 = Date.now();
+/** AI 한 번으로 잇는다(저장 없이, 엔진의 문제 만들기도 쓴다). */
+export async function linkGoalsFor(goals: DigestObjective[], cards: MapCard[]) {
   const user = JSON.stringify({
     cards: cards.map((c) => ({ id: c.id, kind: c.kind, title: c.title, line: cardLine({ kind: c.kind, title: c.title, shape: c.shape } as never).slice(0, 120), ...(c.core ? { core: true } : {}) })),
     goals: goals.map((g) => { const cand = candidatesOf(g, cards); return { id: g.id, verb: g.verb, text: g.text, ...(g.given ? { given: g.given, output: g.output ?? "" } : {}),
       cand: cand.map((c) => c.id), named: nameHits(g, cand) }; }),
   });
   const r = await askJson<{ links: Array<{ goal: string; need: string[]; confuse: string[] }> }>("map:goal-links", SYSTEM, user, SCHEMA, GOAL_LINK_MODEL);
-  const settled = settleLinks(goals, cards, r.links ?? []);
+  return settleLinks(goals, cards, r.links ?? []);
+}
+/** AI 한 번으로 잇고 저장한다. */
+export async function makeGoalLinks(id: string): Promise<GoalLinks> {
+  const { goals, cards } = await inputs(id);
+  const t0 = Date.now();
+  const settled = await linkGoalsFor(goals, cards);
   const out: GoalLinks = { at: new Date().toISOString(), ms: Date.now() - t0, ...GOAL_LINK_MODEL, cards: cards.length,
     goals: goals.map((g) => ({ id: g.id, verb: g.verb, text: g.text, core: g.core, topics: g.topics })), ...settled };
   await mkdir(path.dirname(fileOf(id)), { recursive: true });

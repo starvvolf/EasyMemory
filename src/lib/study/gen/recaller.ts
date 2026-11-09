@@ -1780,6 +1780,31 @@ export async function runRecaller(ctx: RecallerContext) {
   data.timing.skimDoneAt ??= new Date().toISOString();
   const merged = mergeEarly ?? (lab.consolidate === false || (lab.skimOnly && !lab.consolidate) || (data.consolidated && !data.consolidated.error) ? Promise.resolve() : lab.consolidate ? consolidate() : merging());
   merged.catch(() => undefined); // awaited below; a pause that ends the run first must not leave it unhandled
+  // 줄기 모드 문제 (11/10, src/lib/study/stem-quiz.ts): 학습 목표마다 하나 + 목표 밖 메인 기억마다 하나, 출제 → 따로 풀기 → 판정.
+  if (lab.stem && !cardsOnly) {
+    await merged;
+    await objectivesReady.catch(() => undefined);
+    const [{ materialMap }, { makeStemQuestions, toRcQuestion }] = await Promise.all([import("../material-map.ts"), import("../stem-quiz.ts")]);
+    const map = materialMap(state, {});
+    if (!map) throw new Error("자료 지도를 만들 수 없어요.");
+    const { made, byId } = await makeStemQuestions(state.id, map, data.texts as Record<string, string>, data.digest?.objectives ?? [], { fake: input.provider === "fake" });
+    const counts = new Map<string, number>();
+    for (const m of made) {
+      const sectionId = (m.cards[0] ?? "").split(".")[0];
+      const unit = data.units[sectionId];
+      if (!unit) continue;
+      const k = (counts.get(sectionId) ?? 0) + 1; counts.set(sectionId, k);
+      const q = toRcQuestion(m, byId, `${sectionId}-q${k}`);
+      const chunk = ((unit.chunks ??= {})[0] ??= {});
+      if (q) { (unit.questions ??= []).push(q); (chunk.questions ??= []).push(q); }
+      else (unit.held ??= []).push({ cardId: m.cards[0] ?? "", reason: m.held ?? "문제를 만들지 못했어요" });
+    }
+    for (const s of state.sections) { if (data.units[s.id]) data.units[s.id].status = "ready"; await publish(s.id); }
+    data.timing.completedAt = new Date().toISOString();
+    state.status = "done"; state.phase = "done"; state.message = "";
+    await save();
+    return;
+  }
   // The topics are all done: slots a topic could not use go to the best cards still waiting anywhere.
   if (quizCount && !cardsOnly) await quizPickRun();
   if (cardsOnly) {
