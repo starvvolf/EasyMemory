@@ -1047,3 +1047,4 @@ html .dejipgi .sb-handle:hover{opacity:1}
 /* 앱(Electron) 창에서는 맨 위 40px가 창 버튼(최소화·최대화·X) 띠라, 지식 사이드바를 그 아래에서 시작한다
    (2026-11-06 사용자 "사이드바 높이를 상태 표시줄에 안 걸리게"). 닫기(→) 버튼이 X 밑에 숨지 않게. */
 :root[data-shell="desktop"] .dejipgi .sb{top:env(titlebar-area-height,40px)}
+.dejipgi .study-sub{margin:22px 0 8px;font-size:15px}

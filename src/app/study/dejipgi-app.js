@@ -824,10 +824,12 @@ on(window, "recaller:map-open", (e) => {
 /* 공부 안의 갈래: PDF 자료 · 웹 글 · 코드 · 프로젝트(2026-10-30, D), and "+ 새 공부" — the same bar on each, so the three feel like one place. */
 function studyNav(active){
   const seg = h("div", { class:"seg study-seg", role:"tablist", "aria-label":"공부 종류" },
-    [["practice", "PDF 자료"], ["web", "웹 글"], ["code", "알고리즘"], ["project", "실습"]].map(([v, label]) =>
-      h("button", { role:"tab", "aria-selected": active === v ? "true" : "false", class: active === v ? "on" : "", onclick: () => { S.session = null; setView(v); } }, label)));
-  // 2026-11-06 사용자: "+ 새 공부"를 없애고, PDF 자료 갈래에서만 새 자료 넣기로 바로 간다.
-  return h("div", { class:"study-nav" }, seg, active === "practice" ? h("button", { class:"btn primary small", onclick: () => setView("create") }, "+ 새 PDF 자료") : null);
+    // 11/9 사용자 "웹글 PDF 그냥 하나로 합치는 거지 UI를": PDF 자료·웹 글 갈래를 "자료" 하나로(웹 글은 자료 목록 아래에).
+    [["practice", "자료"], ["code", "알고리즘"], ["project", "실습"]].map(([v, label]) => {
+      const on = active === v || (v === "practice" && active === "web");
+      return h("button", { role:"tab", "aria-selected": on ? "true" : "false", class: on ? "on" : "", onclick: () => { S.session = null; setView(v); } }, label); }));
+  // 2026-11-06 사용자: "+ 새 공부"를 없애고, 자료 갈래에서만 새 자료 넣기로 바로 간다.
+  return h("div", { class:"study-nav" }, seg, active === "practice" || active === "web" ? h("button", { class:"btn primary small", onclick: () => setView("create") }, "+ 새 자료") : null);
 }
 /* 작업대: where the agent's MD (출제 노하우) and small-sample feedback will live. First version: what is coming. */
 /* ---------- 작업대 · 흐름 (2026-10-24): 입력 박스와 모델 박스를 화살표로 이어 돌려 보는 캔버스.
@@ -929,7 +931,7 @@ function render(){
   else if (S.view === "plan") app.append(env.mountView ? viewHost("plan", {}) : h("div", { class:"panel small muted", text:"일정은 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "bench") app.append(renderBench());
   else if (S.view === "archive") app.append(renderArchive());
-  else if (S.view === "practice"){ if (S.session) app.append(renderSession()); else app.append(studyNav("practice"), renderHome()); }
+  else if (S.view === "practice"){ if (S.session) app.append(renderSession()); else app.append(studyNav("practice"), renderHome(), ...(env.mountView ? [h("h3", { class:"study-sub", text:"웹 글" }), viewHost("web", {})] : [])); }
   else if (S.view === "create") app.append(h("div", { class:"study-nav" }, h("button", { class:"btn ghost small", onclick: () => setView("practice") }, "← PDF 자료"), h("span", { class:"small muted", text:"PDF · 강의 자료 넣기" })), renderBuilder());
   else if (S.view === "read") {
     const typing = Chat.el && Chat.el.contains(document.activeElement);
