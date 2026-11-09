@@ -143,7 +143,11 @@ export function clip(out: string, n = 4000) {
   return t.length <= n ? t : `${t.slice(0, n * 0.3)}\n… (${t.length - n}자 줄임) …\n${t.slice(-n * 0.7)}`;
 }
 const result = (r: { code: number | null; out: string }) => `종료 코드 ${r.code ?? "없음"}\n${clip(r.out) || "(출력 없음)"}`;
-const remember = (runId: string, ran: Ran) => update<ShellState>(file(runId), empty(), (s) => { s.history.push({ ...ran, out: clip(ran.out, 1500) }); if (s.history.length > 50) s.history.splice(0, s.history.length - 50); });
+const remember = async (runId: string, ran: Ran) => {
+  // 확인된 환경(11/10 학습 노트): "docker 없음" · "node 22.13.0" 같은 사실은 코드가 결과에서 알아낸다
+  await (await import("./learner-note.ts")).noteEnv(ran.command, ran.code, ran.out).catch(() => null);
+  return update<ShellState>(file(runId), empty(), (s) => { s.history.push({ ...ran, out: clip(ran.out, 1500) }); if (s.history.length > 50) s.history.splice(0, s.history.length - 50); });
+};
 
 /** 모델이 부른 run_command */
 export async function runCommandTool(runId: string, ws: string | undefined, input: Record<string, unknown>): Promise<string> {
@@ -194,6 +198,7 @@ export async function learnerRan(runId: string, b: { command?: unknown; exitCode
   const command = String(b.command ?? "").trim().slice(0, 2000);
   if (!command) return { ok: false };
   const ran: Ran = { command, by: "learner", code: typeof b.exitCode === "number" ? b.exitCode : null, out: clip(String(b.output ?? ""), 3000), ms: 0, at: new Date().toISOString(), cwd: String(b.cwd ?? "").slice(0, 200), told: false };
+  await (await import("./learner-note.ts")).noteEnv(ran.command, ran.code, ran.out).catch(() => null);
   await update<ShellState>(file(runId), empty(), (s) => { s.history.push(ran); if (s.history.length > 50) s.history.splice(0, s.history.length - 50); });
   return { ok: true };
 }

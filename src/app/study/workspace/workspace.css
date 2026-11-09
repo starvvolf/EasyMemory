@@ -1057,3 +1057,13 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pt-board-list li:last-child{border-bottom:0;padding-bottom:0}
 .dejipgi .pt-options.concept{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
 .dejipgi .pt-options.concept .pt-opt{text-align:center;font-weight:600}
+/* 기억 탭 › 실습: 나의 학습 노트 (LearnerNote, 11/10 D) */
+.dejipgi .ln{display:flex;flex-direction:column;gap:6px;padding:12px 14px;min-width:0}
+.dejipgi .ln-head{display:flex;gap:8px;align-items:baseline}
+.dejipgi .ln-label{margin:0;font-size:12.5px;opacity:.8}
+.dejipgi .ln-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.dejipgi .ln-list li{font-size:13px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:6px;align-items:baseline;min-width:0}
+.dejipgi .ln-list li .muted{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.dejipgi .ln-pre{font-size:10.5px;padding:0 5px;border-radius:999px;border:1px solid rgba(127,127,127,.4);flex:none}
+.dejipgi .ln-rep{flex:none;margin-left:auto;font-size:11px;color:#e07070}
+.dejipgi .ln-line{margin:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

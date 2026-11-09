@@ -6,6 +6,7 @@
 //   넣은 것의 열쇠를 코스 서버에 돌려준다. 코스 서버는 앱 데이터에 직접 쓰지 않는다.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -82,6 +83,25 @@ async function syncRun(id: string) {
   return { runId: id, items: p.items.length, created: results.filter((r) => r.created).length, events };
 }
 
+// 나의 학습 노트(11/10): 실습 서버는 컴퓨터마다 따로라, 각 컴퓨터의 노트를 앱 데이터(RecallerData, 컴퓨터끼리 동기화됨)에
+// 컴퓨터 이름별로 둔다. 합치기는 실습 서버가(lib/learner-note.ts combine). 여기는 받아 두고 내주기만.
+type LocalNote = { machine: string; at: string; items: unknown[]; env: unknown[] };
+const noteFile = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "practice", "learner-notes.json");
+async function readNotes(): Promise<{ machines: Record<string, LocalNote> }> {
+  try { const d = JSON.parse(await readFile(noteFile(), "utf8")); return { machines: d.machines ?? {} }; } catch { return { machines: {} }; }
+}
+/** 이 컴퓨터 실습 서버의 노트를 받아 앱 데이터에 넣는다(꺼져 있으면 그대로) */
+async function pullNote() {
+  const local = await course<LocalNote>("learner-note?local=1").catch(() => null);
+  if (!local?.machine || !Array.isArray(local.items)) return;
+  const d = await readNotes();
+  d.machines[local.machine.slice(0, 80)] = local;
+  await mkdir(path.dirname(noteFile()), { recursive: true });
+  const tmp = `${noteFile()}.${process.pid}.tmp`;
+  await writeFile(tmp, JSON.stringify(d), "utf8");
+  await rename(tmp, noteFile());
+}
+
 async function handle(request: Request, context: RouteContext) {
   try {
     await guard(request);
@@ -94,6 +114,12 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "runs" && p[1] && p.length === 3 && m === "POST" && (p[2] === "editor" || p[2] === "activate")) {
       return NextResponse.json(await course(`runs/${runId.parse(p[1])}/${p[2]}`, { method: "POST", body: {} }));
     }
+    // 나의 학습 노트: GET learner = 컴퓨터별 노트(실습 서버가 합침), GET learner/view = 화면용 네 칸(실습 서버가 합친 것, 꺼져 있으면 online:false)
+    if (p[0] === "learner" && p.length === 1 && m === "GET") return NextResponse.json(await readNotes());
+    if (p[0] === "learner" && p[1] === "view" && p.length === 2 && m === "GET") {
+      try { await pullNote(); return NextResponse.json({ online: true, ...await course<object>("learner-note") }); }
+      catch (error) { if (offline(error)) return NextResponse.json({ online: false }); throw error; }
+    }
     // 세션 노트(지나온 목표 길 · 부족함): 기억 탭 실습 갈래가 읽는다(11/9). 코스 서버가 꺼져 있으면 online:false
     if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "note" && m === "GET") {
       try { return NextResponse.json({ online: true, ...await course<object>(`runs/${runId.parse(p[1])}/note`) }); }
@@ -104,6 +130,7 @@ async function handle(request: Request, context: RouteContext) {
       let ids: string[];
       try { ids = b.runId ? [b.runId] : (await course<Status>("status")).runs.map((r) => r.id); }
       catch (error) { if (offline(error)) return NextResponse.json({ online: false, runs: [] }); throw error; }
+      await pullNote().catch(() => undefined);
       const runs = [];
       for (const id of ids) runs.push(await syncRun(id).catch((e: Error) => ({ runId: id, items: 0, created: 0, events: 0, error: e.message.slice(0, 200) })));
       return NextResponse.json({ online: true, runs });

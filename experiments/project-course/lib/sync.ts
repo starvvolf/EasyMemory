@@ -44,15 +44,19 @@ export async function pending(runId: string, course: Course, run?: Run): Promise
       byKey.set(key, it);
       return it;
     };
+    // 실습 기억 카드(11/10)는 카드 꼴 그대로 본문에: 상황 · 내가 한 것 · 알게 된 것 · 다음엔
+    const cardBody = (c: { situation: string; did: string; learned: string; next: string; how: string }, goal: string) =>
+      [`알게 된 것: ${c.learned}`, c.next ? `다음엔: ${c.next}` : "", `상황: ${goal}${c.situation ? ` — ${c.situation}` : ""}`, c.did ? `내가 한 것: ${c.did} (${c.how})` : ""].filter(Boolean).join("\n");
     for (const rec of await recordsOf(runId)) {
       for (const x of rec.learned) {
-        const it = item(x.type, x.concept, x.meaning);
-        it.events.push({ key: `g:${rec.at}:L:${it.key}`, kind: "note", detail: `목표 "${rec.goal}" · ${x.how}${x.quote ? ` · 학습자: "${x.quote}"` : ""}`.slice(0, 600), at: rec.to });
+        const it = item(x.type, x.concept, x.card ? cardBody(x.card, rec.goal) : x.meaning);
+        if (x.card) it.body = cardBody(x.card, rec.goal);
+        if (!it.events.some((e) => e.key === `g:${rec.at}:L:${it.key}`)) it.events.push({ key: `g:${rec.at}:L:${it.key}`, kind: "note", detail: `목표 "${rec.goal}" · ${x.how}${x.quote ? ` · 학습자: "${x.quote}"` : ""}`.slice(0, 600), at: rec.to });
       }
       for (const x of rec.gaps ?? []) {
         const it = item(x.type, x.concept, x.right);
         it.state = "unknown"; // 부족했던 것은 "몰랐음"으로 들어가 복습에 먼저 오른다
-        if (x.right) it.body = x.right;
+        if (x.right && !it.body.startsWith("알게 된 것:")) it.body = x.right;
         if (x.code) { it.mistake = { file: x.code.file, from: x.code.from, to: x.code.to, code: x.code.code, note: x.wrong, ref: `project:${runId}`, at: rec.to }; it.mistakeKey = `g:${rec.at}:C:${it.key}`; }
         it.events.push({ key: `g:${rec.at}:G:${it.key}`, kind: "wrong", detail: `목표 "${rec.goal}" · 부족: ${x.wrong}${x.quote ? ` · 학습자: "${x.quote}"` : ""}`.slice(0, 600), at: rec.to });
       }

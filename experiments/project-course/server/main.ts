@@ -325,6 +325,8 @@ const routes: [string, RegExp, Handler][] = [
     return { verdict: r.verdict.verdict, sameMistake: r.verdict.same_mistake, note: r.verdict.note, answer: r.gap?.recheck?.a ?? "", right: r.gap?.right ?? "", status: r.gap?.status, dueAt: r.gap?.dueAt ?? null };
   }],
   ["POST", /^\/api\/dev\/rerecord\/(\w+)$/, async (_q, m) => (await import("../lib/lesson.ts")).rerecordWithLedger(m[1])],
+  // 나의 학습 노트(11/10): local=1이면 이 컴퓨터 것만(앱이 받아 앱 데이터에 둔다), 아니면 다른 컴퓨터 것까지 합친 네 칸
+  ["GET", /^\/api\/learner-note$/, async (q) => { const L = await import("../lib/learner-note.ts"); return new URL(q.url ?? "/", "http://x").searchParams.get("local") ? L.localNote() : L.learnerNote(); }],
   ["GET", /^\/api\/runs\/(\w+)\/note$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/gaps.ts")).sessionNote(m[1]); }],
   ["POST", /^\/api\/bridge\/answer$/, async (req) => { const b = await body(req); return (await import("../lib/bridge.ts")).bridgeAnswer(String(b.id ?? ""), b.result ?? null); }],
   ["POST", /^\/api\/bridge\/state$/, async (req) => { const b = await body(req) as Record<string, never>; await getRun(String(b.runId)); const { runId, ...state } = b; bridgeSetState(runId, state); return { ok: true }; }],

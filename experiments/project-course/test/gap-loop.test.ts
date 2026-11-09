@@ -8,6 +8,8 @@ import path from "node:path";
 const dir = await mkdtemp(path.join(os.tmpdir(), "pc-loop-"));
 process.env.PC_DATA_DIR = dir; process.env.PC_FAKE_AI = "1";
 const ai = await import("../lib/ai.ts");
+const { wrapFake } = await import("./old-record.ts");
+const setFake = wrapFake(ai);
 const G = await import("../lib/gaps.ts");
 const R = await import("../lib/goal-record.ts");
 const { pending, markSent } = await import("../lib/sync.ts");
@@ -22,7 +24,7 @@ test("찾기 → 채우기 → 확인 → 정리 → 앱 → 다시 확인 → �
   await G.addRemedy("run1", "goalA", "보충", "딕셔너리 키 확인 → get 기본값");
   await G.fillUnit("run1", "goalA", "counts[w] = counts.get(w, 0) + 1");
   let seenLedger = "";
-  ai.setFakeAi((purpose: string, user: string) => {
+  setFake((purpose: string, user: string) => {
     if (purpose === "goal-record") { seenLedger = user; return { summary: "단어 세기", steps: ["틀림", "보충", "맞음"], learned: [{ type: "방법", concept: "dict.get 기본값", meaning: "없으면 기본값", how: "직접 써 봄", quote: "counts.get(w, 0)" }],
       gaps: [{ type: "규칙", concept: "없는 키 읽기", wrong: "없는 키를 먼저 읽는 걸 몰랐음", right: "+=는 기존 값을 읽으므로 KeyError", quote: "counts[w] += 1", code: { save: "", from: 0, to: 0 }, ids: [gp!.id], recheck: { q: "scores = {}; scores['kim'] += 10 은 어떻게 될까요?", a: "KeyError. +=가 먼저 scores['kim']을 읽는데 없어서" } }],
       memory: { add: [], update: [], improved: [] } }; }

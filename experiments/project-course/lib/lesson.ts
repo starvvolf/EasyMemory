@@ -458,13 +458,14 @@ async function noteGap(runId: string, op: string, b: Record<string, unknown>) {
   const unit = sp ? { id: sp.id, title: `보충: ${sp.title}`, done: sp.done, support: true } : { id: c.id, title: c.title, done: c.done };
   const goal = { id: c.id, title: c.title };
   const GP = await import("./gaps.ts");
-  const v = b.verdict as { verdict: string; right: string; gap: string; quote?: string } | undefined;
+  const v = b.verdict as { verdict: string; right: string; gap: string; prereq?: string; quote?: string } | undefined;
   if (op === "applied" && v) {
-    if (v.verdict === "partial" || v.verdict === "incorrect") await GP.openGap(runId, { goal, unit, from: "판정", wrong: v.gap, right: "", quote: v.quote });
+    // 선행이 빈 것(11/10): 단위를 그 선행으로 연다 → 같은 선행을 또 틀리면 같은 칸, 목표가 맞으면 함께 채움
+    if (v.verdict === "partial" || v.verdict === "incorrect") await GP.openGap(runId, { goal, unit: v.prereq ? GP.prereqUnit(c.id, v.prereq) : unit, from: "판정", wrong: v.gap, right: "", quote: v.quote, prereq: v.prereq });
     else if (v.verdict === "correct") {
       await GP.fillUnit(runId, unit.id, v.quote || v.right);
-      // 보충을 거쳐 돌아온 종착지가 맞으면, 그 목표에서 막혔던 것도 채운 것으로
-      if (!sp) await GP.fillUnit(runId, c.id, v.quote || v.right);
+      // 보충을 거쳐 돌아온 종착지가 맞으면, 그 목표에서 막혔던 것(선행 포함)도 채운 것으로
+      if (!sp) { await GP.fillUnit(runId, c.id, v.quote || v.right); await GP.fillPrereqs(runId, c.id, v.quote || v.right); }
     }
   } else if (op === "hard" || op === "stuck") {
     const { STUCK_REASONS } = await import("./goals.ts");
@@ -503,7 +504,8 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
   const taskText = lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task;
   const refs = await referencedCode(runId, taskText).catch(() => "");
   const v = await J.judgeApply(unit, refs ? `${taskText}\n\n${refs}` : taskText, [...said, ...code, ...typed].join("\n\n"));
-  return { verdict: v.verdict, right: v.right, gap: v.gap, quote: lastU?.text.trim().slice(0, 400) ?? "" };
+  const prereq = v.verdict === "partial" || v.verdict === "incorrect" ? String(v.prereq ?? "").trim().slice(0, 60) : "";
+  return { verdict: v.verdict, right: v.right, gap: v.gap, ...(prereq ? { prereq } : {}), quote: lastU?.text.trim().slice(0, 400) ?? "" };
 }
 const recordJobs = new Map<string, Promise<unknown>[]>();
 export async function endLearning(runId: string) {

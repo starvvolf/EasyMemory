@@ -9,9 +9,12 @@ import { applyMemory, memoryForRecord, type MemOps } from "./memory.ts";
 
 export type GoalRecord = {
   goal: string; done: string; status: "마침" | "건너뜀"; mode: string | null; from: string; to: string;
-  summary: string; steps: string[]; learned: { type: Tab; concept: string; meaning: string; how: string; quote: string; verified: boolean }[];
+  summary: string; steps: string[];
+  /** 실습 기억 카드(11/10). 있으면 이게 원본이고 learned · gaps는 거기서 펼친 것 */
+  cards?: Card[];
+  learned: { type: Tab; concept: string; meaning: string; how: string; quote: string; verified: boolean; card?: Card }[];
   /** 11/6 사용자 "대화 내역을 봤을 때 나한테 부족한 점이 딱 보인다. 그걸 캐치해서 지식으로 잡는 게 중요" */
-  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean; code?: GapCode; ids?: string[]; recheck?: { q: string; a: string } }[];
+  gaps?: { type: Tab; concept: string; wrong: string; right: string; quote: string; verified: boolean; code?: GapCode; ids?: string[]; recheck?: { q: string; a: string }; prereq?: boolean; card?: { situation: string; next: string; how: string } }[];
   /** 11/6 사용자 "코드 보면 이 사람 파이썬 문법 잘 모르는 것 같은데? 이런 생각. 하드코딩 말고 자유를 주면 잡을 수 있다" → 학습자 메모리(lib/memory.ts)에 반영한 것 */
   memory?: { done: string[]; dropped: string[] }; at: string;
 };
@@ -93,29 +96,34 @@ export function cutCode(code: { id: string; save: Save }[], ref: { save?: string
 }
 export const recordsOf = async (runId: string) => (await read<{ items: GoalRecord[] }>(file(runId), { items: [] })).items;
 
-export const SYSTEM_RECORD = `학습 목표 하나 동안 나눈 대화를 읽고, 학습자가 어떤 과정을 거쳐 무엇을 배웠는지 정리한다.
+// 11/10 사용자 "자료 정리할 때 쓰던 기준, 그 종류 6개 … 필요 없어. 실습에서 쓰는 거는 실습용 폼을 하나": 배운 것 · 부족한 점을 실습 기억 카드 하나로.
+// 카드 = 상황 · 내가 한 것 · 알게 된 것 · 다음엔 · 다시 확인 · 어떻게 알게 됐나. 혼자 해낸 게 아니면(도움 · 틀렸다 고침 · 아직) 부족함 원장으로 가 다시 확인한다.
+export const HOW = ["혼자 해냄", "도움 받고 됨", "틀렸다 고침", "아직 모름"] as const;
+export type How = (typeof HOW)[number];
+export type Card = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: How; prereq: boolean; verified: boolean; code?: GapCode; ids?: string[]; recheck?: { q: string; a: string } };
+export const SYSTEM_RECORD = `학습 목표 하나 동안 나눈 대화를 읽고, 학습자가 어떤 과정을 거쳐 무엇을 알게 됐고 무엇이 부족했는지 실습 기억 카드로 정리한다.
 summary: 이 목표에서 학습자가 한 일과 도달한 곳을 2~3문장으로.
 steps: 학습자가 거친 과정을 일어난 순서대로 3~8개. 각각 짧은 한 구절(예: "리스트 인덱스 예측 질문에 답함", "빈 리스트 pop이 오류인지 예측해 맞힘", "튜터가 만든 파일을 실행해 봄", "너무 쉽다고 해서 괄호 검사로 넘어감").
-learned: 이 목표에서 학습자가 배운 것을 여섯 칸 중 하나(type)에 넣는다.
-- 개념: 무엇인지(정의). 예: 해시 테이블, 스택
-- 원리: 왜 · 어떻게 그렇게 동작하는지. 예: 같은 키는 늘 같은 칸으로 가서 다시 찾을 수 있다
-- 절차: 순서대로 하는 단계. 예: 충돌이 나는 해시 테이블에 넣고 찾는 순서
-- 규칙: 지켜야 하는 문법 · 약속. 예: 딕셔너리 값은 대괄호에 키를 넣어 꺼낸다
-- 방법: 문제를 푸는 기법 · 요령. 예: 같은 칸의 항목을 리스트로 묶는 체이닝, 스택으로 괄호 검사
-- 비교: 둘 이상의 차이. 예: 리스트와 딕셔너리, 스택과 큐
-각 항목은 concept(다른 곳에서도 통하는 이름), meaning(그 칸에 맞는 한두 문장: 개념은 정의, 원리는 이유, 절차는 단계, 규칙은 약속, 방법은 언제 · 어떻게, 비교는 차이), how(학습자가 그걸 어떻게 만났는지 한 구절: 설명을 들음 · 예측해 맞힘/틀림 · 직접 써 봄 · 헷갈려 물어봄 등), quote(그게 드러난 학습자 말을 글자 그대로, 없으면 빈 글).
-[학습자 코드 저장 S번호 파일]은 학습자가 직접 저장한 코드에서 바뀐 줄이다(+ 더함, - 뺌, + 뒤의 숫자는 그 저장본의 줄 번호). 학습자의 말과 코드에서 드러난 것을 기준으로 쓰고, 튜터가 말만 하고 지나간 것은 뺀다.
-gaps: 이 목표 동안 드러난 학습자의 부족한 점. 틀린 답, 잘못 쓴 코드, 오해, 몰라서 물어본 것, 튜터가 바로잡아 준 것. 같은 원인은 하나로 묶는다. 각 항목은 type(위 여섯 칸), concept(그 지식 이름), wrong(학습자가 무엇을 몰랐거나 어떻게 잘못 알았는지 한 문장), right(바로 알아야 할 내용 한두 문장), quote(그게 드러난 학습자 말이나 코드 한 줄을 글자 그대로, 없으면 빈 글), code(그 부족함이 드러난 학습자 코드 덩어리: save는 저장본 번호(S3), from~to는 그 저장본의 줄 번호로 문제가 있는 곳만 좁게(12줄 이내). 코드에서 드러난 게 아니면 save는 빈 글, from · to는 0). 없으면 빈 목록.
-  wrong · quote: 학습자가 실제로 틀리게 한 말 · 코드 · 명령을 그대로 인용해 쓴다. 나중에 한 질문이나 궁금해한 것이 아니라 그 전에 실제로 틀린 것이 우선이다(11/9 시험: "실행 setup_db.py"라고 친 실수 대신 나중 질문이 들어감).
-  ids: [이 목표 동안 Recaller가 잡은 부족함]에 같은 부족함이 있으면 그 id들(G1-…). 없으면 빈 목록. 거기 적힌 부족함은 이 대화에서 사실이면 빠짐없이 gaps에 넣는다.
-  recheck: 며칠 뒤 이 부족함이 채워졌는지 다시 확인할 문항 하나. q는 이 대화를 몰라도 풀 수 있게 스스로 완결해서(필요하면 짧은 코드나 상황을 넣는다), 학습자가 잘못 알았던 바로 그 지점을 건드리게 만든다(같은 오해가 남아 있으면 다시 틀리게). 대화의 예를 그대로 되풀이하지 말고 이름 · 값을 조금 바꾼다. 질문 안에 정답이나 정답에 들어갈 말을 넣지 않는다. 한 번에 답할 수 있는 짧은 질문(예측 · 설명 · 한두 줄 고치기)으로. a는 모범답과 이유 한두 문장.
+cards: 다음에 비슷한 상황을 만나면 학습자의 판단이 달라질 것만 카드로 만든다. 보통 1~3장, 많아도 5장. 튜터가 말만 하고 지나간 것, 이 프로젝트에서만 쓰는 이름(변수 · 함수 이름), 튜터가 대신 해 준 것을 학습자가 안 것처럼 쓰지 않는다. [이 목표 동안 Recaller가 잡은 부족함]에 적힌 것은 이 대화에서 사실이면 빠짐없이 카드로 만든다. 같은 원인은 한 장으로 묶는다.
+- name: 다른 곳에서도 통하는 짧은 이름(예: 리스트 인덱스, 이미지와 컨테이너, 경쟁 상태, 같은 포트 두 번 켜기).
+- situation: 무엇을 하다가 만났는지 한 구절(예: "단어 수 세기 결과를 정렬하다가").
+- did: 학습자가 실제로 한 말 · 코드 · 명령이 무엇이었는지 한 문장. 틀렸으면 어떻게 잘못 알았는지(예: "이미지를 실행 중인 프로그램이라고 말함"). 나중에 한 질문보다 그 전에 실제로 틀린 것이 우선이다.
+- quote: 그 근거가 된 학습자 말이나 코드 한 줄을 글자 그대로(없으면 빈 글).
+- learned: 알게 된 것(바로 알아야 할 것) 한두 문장.
+- next: 다음엔 이렇게 한다 — "이런 걸 보면 → 이렇게 한다" 꼴의 행동 한 줄(예: "포트 오류가 나면 이미 켜 둔 서버부터 찾는다").
+- how: 혼자 해냄(도움 없이 맞힘 · 직접 해냄) · 도움 받고 됨(힌트 · 보충 · 튜터가 보여 준 뒤에 됨) · 틀렸다 고침(틀린 뒤 스스로 고침) · 아직 모름(끝까지 안 됨). 판정 기록에서 틀림 · 일부만 맞음인 답은 혼자 해냄의 근거가 아니다.
+- prereq: 이 카드가 지금 목표 자체가 아니라 그 아래 먼저 알아야 할 것(선행)이면 true.
+- code: 그 카드가 드러난 학습자 코드 덩어리(혼자 해냄이 아니고 코드에서 드러났을 때만): save는 저장본 번호(S3), from~to는 그 저장본의 줄 번호로 문제가 있는 곳만 좁게(12줄 이내). 아니면 save를 빈 글로.
+- ids: [이 목표 동안 Recaller가 잡은 부족함]에 같은 것이 있으면 그 id들(G1-…). 없으면 빈 목록.
+- recheck: 혼자 해냄이 아니면 며칠 뒤 다시 확인할 문항 하나. q는 이 대화를 몰라도 풀 수 있게 스스로 완결해서(필요하면 짧은 코드나 상황을 넣는다), 학습자가 잘못 알았거나 도움을 받았던 바로 그 지점을 건드리게(같은 오해가 남아 있으면 다시 틀리게). 대화의 예를 그대로 되풀이하지 말고 이름 · 값 · 상황을 바꾼다. 질문 안에 정답이나 정답에 들어갈 말을 넣지 않는다. 한 번에 답할 수 있는 짧은 질문(예측 · 설명 · 한두 줄 고치기 · 상황 판단)으로. a는 모범답과 이유 한두 문장. 혼자 해냄이면 q · a 모두 빈 글.
+[학습자 코드 저장 S번호 파일]은 학습자가 직접 저장한 코드에서 바뀐 줄이다(+ 더함, - 뺌, + 뒤의 숫자는 그 저장본의 줄 번호). 학습자의 말과 코드에서 드러난 것을 기준으로 쓴다.
 memory: [지금 학습자 메모리]는 지금까지 여러 목표에서 쌓인 이 학습자의 경향이다. 이번 목표에서 드러난 것을 모아 보면 이 학습자가 어떤지 보고 메모리를 갱신한다. 단정하지 말고 "~가 부족해 보인다" 정도로 쓴다.
-- add: 메모리에 없는 새 경향. text는 한 문장, evidence는 근거가 된 gaps의 concept 그대로.
-- update: 이미 있는 경향이 이번에도 보이면 그 id, text(고칠 게 없으면 그대로), evidence(gaps의 concept 그대로).
-- improved: 있던 경향이 이번에는 나아진 게 보이면 그 id와 evidence(나아진 게 드러난 learned의 concept 그대로).
+- add: 메모리에 없는 새 경향. text는 한 문장, evidence는 근거가 된 카드(혼자 해냄이 아닌 것)의 name 그대로.
+- update: 이미 있는 경향이 이번에도 보이면 그 id, text(고칠 게 없으면 그대로), evidence(카드 name 그대로).
+- improved: 있던 경향이 이번에는 나아진 게 보이면 그 id와 evidence(혼자 해냄 카드의 name 그대로).
 바뀔 게 없으면 모두 빈 목록.`;
-export const RECORD_SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str), learned: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, meaning: S.str, how: S.str, quote: S.str })),
-  gaps: S.arr(S.obj({ type: S.oneOf(...TABS), concept: S.str, wrong: S.str, right: S.str, quote: S.str, code: S.obj({ save: S.str, from: S.int, to: S.int }), ids: S.arr(S.str), recheck: S.obj({ q: S.str, a: S.str }) })),
+export const RECORD_SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str),
+  cards: S.arr(S.obj({ name: S.str, situation: S.str, did: S.str, quote: S.str, learned: S.str, next: S.str, how: S.oneOf(...HOW), prereq: S.bool, code: S.obj({ save: S.str, from: S.int, to: S.int }), ids: S.arr(S.str), recheck: S.obj({ q: S.str, a: S.str }) })),
   memory: S.obj({ add: S.arr(S.obj({ text: S.str, evidence: S.arr(S.str) })), update: S.arr(S.obj({ id: S.str, text: S.str, evidence: S.arr(S.str) })), improved: S.arr(S.obj({ id: S.str, evidence: S.arr(S.str) })) }) });
 const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
 
@@ -135,38 +143,41 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
   // 부족함 원장(11/8): 이 목표 동안 코드가 잡은 부족함을 같이 보내 이름 · 재확인 문항을 받는다
   // 이미 쓴 지식 이름(11/8 실측: 정리마다 "빈 목표 상태와 대체값" / "빈 목표 상태"처럼 이름이 흔들려 앱 지식이 늘어남) — 같은 것이면 그 이름 그대로
   const used = [...new Set((await recordsOf(runId)).flatMap((r) => [...r.learned.map((x) => x.concept), ...(r.gaps ?? []).map((x) => x.concept)]))].slice(-60);
+  // 다른 실습에서 이미 쓴 이름도(11/10 학습 노트: 같은 선행 · 오해가 실습마다 다른 이름이 되지 않게)
+  const other = await (await import("./learner-note.ts")).knownNames().catch(() => [] as string[]);
+  for (const n of other) if (!used.includes(n) && used.length < 120) used.push(n);
   const names = used.length ? `\n\n[이 실습에서 이미 쓴 지식 이름 — 같은 지식이면 새 이름을 만들지 말고 이 이름을 글자 그대로 쓴다]\n${used.join(" · ")}` : "";
   const { seg, code } = base, user = `${base.user}${ledger ? `\n\n${ledger}` : ""}${names}`;
   const log: Record<string, unknown> = { at: new Date().toISOString(), runId, goal: goal.title, messages: seg.length };
   const t0 = Date.now();
   try {
     if (!seg.some((m) => m.role === "user")) { log.skipped = "학습자 말 없음"; return null; }
-    const out = await aiJson<{ summary: string; steps: string[]; learned: { type: string; concept: string; meaning: string; how: string; quote: string }[]; gaps?: { type: string; concept: string; wrong: string; right: string; quote: string; code?: { save: string; from: number; to: number }; ids?: string[]; recheck?: { q: string; a: string } }[]; memory?: MemOps }>("goal-record", SYSTEM_RECORD, user, RECORD_SCHEMA);
+    type RawCard = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: string; prereq: boolean; code?: { save: string; from: number; to: number }; ids?: string[]; recheck?: { q: string; a: string } };
+    const out = await aiJson<{ summary: string; steps: string[]; cards: RawCard[]; memory?: MemOps }>("goal-record", SYSTEM_RECORD, user, RECORD_SCHEMA);
     // 근거는 학습자 말 또는 학습자가 저장한 코드 줄
     const learnerText = [...seg.filter((m) => m.role === "user").map((m) => norm(m.text)), ...code.flatMap((c) => c.added.map(norm))];
     const unverified: string[] = [];
     // 한 글자 답("3")은 그 말 전체와 같을 때만, 두 글자 이상은 그 말 안에 있으면 근거로 인정
     const found = (q: string) => q.length >= 1 && learnerText.some((t) => (q.length >= 2 ? t.includes(norm(q)) : t === norm(q)));
-    const tab = (t: string) => ((TABS as readonly string[]).includes(t) ? t : "개념") as Tab;
-    const learned = (out.learned ?? []).filter((x) => String(x.concept ?? "").trim()).slice(0, 12).map((x) => {
-      const q = String(x.quote ?? "").trim();
-      const ok = found(q);
-      if (q && !ok) unverified.push(`${x.concept}: "${q}"`);
-      return { type: tab(x.type), concept: String(x.concept).trim().slice(0, 80), meaning: String(x.meaning ?? "").trim().slice(0, 300), how: String(x.how ?? "").trim().slice(0, 120), quote: ok ? q.slice(0, 200) : "", verified: ok };
+    const t = (v: unknown, n: number) => String(v ?? "").trim().slice(0, n);
+    const cards: Card[] = (out.cards ?? []).filter((x) => t(x.name, 80)).slice(0, 6).map((x) => {
+      const q = t(x.quote, 200), ok = found(q);
+      if (q && !ok) unverified.push(`${x.name}: "${q}"`);
+      const how = ((HOW as readonly string[]).includes(x.how) ? x.how : "도움 받고 됨") as How;
+      const cc = how !== "혼자 해냄" && x.code?.save ? cutCode(code, x.code) : undefined;
+      if (how !== "혼자 해냄" && x.code?.save && !cc) unverified.push(`${x.name}: 코드 ${x.code.save} ${x.code.from}~${x.code.to}`);
+      return { name: t(x.name, 80), situation: t(x.situation, 160), did: t(x.did, 300), quote: ok ? q : "", learned: t(x.learned, 400), next: t(x.next, 200), how, prereq: !!x.prereq, verified: ok || !!cc,
+        ...(cc ? { code: cc } : {}), ids: (x.ids ?? []).map(String).filter((i) => /^G\d+-[0-9a-f]{4}$/.test(i)).slice(0, 6),
+        ...(how !== "혼자 해냄" && x.recheck?.q && x.recheck?.a ? { recheck: { q: t(x.recheck.q, 1200), a: t(x.recheck.a, 600) } } : {}) };
     });
-    const gaps = (out.gaps ?? []).filter((x) => String(x.concept ?? "").trim()).slice(0, 10).map((x) => {
-      const q = String(x.quote ?? "").trim(), ok = found(q);
-      if (q && !ok) unverified.push(`부족 ${x.concept}: "${q}"`);
-      const cc = x.code?.save ? cutCode(code, x.code) : undefined;
-      if (x.code?.save && !cc) unverified.push(`부족 ${x.concept}: 코드 ${x.code.save} ${x.code.from}~${x.code.to}`);
-      // 근거: 학습자 말 구절 또는 학습자 코드 덩어리
-      return { type: tab(x.type), concept: String(x.concept).trim().slice(0, 80), wrong: String(x.wrong ?? "").trim().slice(0, 300), right: String(x.right ?? "").trim().slice(0, 300), quote: ok ? q.slice(0, 200) : "", verified: ok || !!cc, ...(cc ? { code: cc } : {}),
-        ids: (x.ids ?? []).map(String).filter((i) => /^G\d+-[0-9a-f]{4}$/.test(i)).slice(0, 6), ...(x.recheck?.q && x.recheck?.a ? { recheck: { q: String(x.recheck.q).trim().slice(0, 1200), a: String(x.recheck.a).trim().slice(0, 600) } } : {}) };
-    });
+    // 예전 꼴(learned · gaps)로도 펼친다: 앱 지식 · 원장 · 메모리 · 화면이 그대로 읽게. 칸(type)은 더 쓰지 않아 "개념"으로 둔다
+    const learned = cards.map((c) => ({ type: "개념" as Tab, concept: c.name, meaning: c.learned, how: c.how, quote: c.quote, verified: c.verified, card: c }));
+    const gaps = cards.filter((c) => c.how !== "혼자 해냄").map((c) => ({ type: "개념" as Tab, concept: c.name, wrong: c.did, right: c.learned, quote: c.quote, verified: c.verified, ...(c.code ? { code: c.code } : {}), ids: c.ids, ...(c.recheck ? { recheck: c.recheck } : {}),
+      prereq: c.prereq, card: { situation: c.situation, next: c.next, how: c.how } }));
     // 메모리 갱신: 근거는 이번 정리의 부족했던 점(나아짐은 배운 것) 이름만 인정, 상태는 코드가(lib/memory.ts)
     const memory = await applyMemory(runId, goal.title, out.memory, gaps.map((g) => g.concept), learned.map((l) => l.concept));
     const rec: GoalRecord = { goal: goal.title, done: goal.done, status: goal.understood && goal.applied ? "마침" : "건너뜀", mode, from: goal.at, to: redo?.to ?? new Date().toISOString(),
-      summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), learned, gaps, memory, at: new Date().toISOString() };
+      summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), cards, learned, gaps, memory, at: new Date().toISOString() };
     await update<{ items: GoalRecord[] }>(file(runId), { items: [] }, (s) => { if (redo && s.items[redo.index]) s.items[redo.index] = rec; else s.items.push(rec); });
     Object.assign(log, { ms: Date.now() - t0, chars: user.length, codeSaves: code.length, raw: out, unverified });
     return rec;

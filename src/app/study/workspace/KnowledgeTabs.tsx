@@ -3,11 +3,12 @@
 // 자료는 자료 지도, 알고리즘과 실습은 나름의 방식으로"): 갈래 셋.
 //   자료: 자료(PDF·웹 글) 한 줄씩 → PDF는 자료 지도(목차·구조·기억)를 열고, 웹 글은 글 지도를 펼친다.
 //   알고리즘: 문제마다 그 문제에서 생긴 기억(패턴·실수)을 펼쳐 본다.
-//   실습: 실습마다 지나온 목표 길(ProjectPath, 11/9 D [경계]) + 그 실습에서 생긴 기억 전체(접힘).
+//   실습: 맨 위 나의 학습 노트(LearnerNote, 11/10 D [경계]), 실습마다 지나온 목표 길(ProjectPath, 11/9 D [경계]) + 그 실습에서 생긴 기억 전체(접힘).
 // 폴더로 기억을 정리하던 예전 기억 창(KnowledgeWindow)은 맨 아래 "기억 전체 정리"로 남긴다.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { call, errorText, go, later, type ItemLite, type Tree } from "./api";
 import KnowledgeWindow, { MaterialArticle, ProjectStages, StateChip, tidyLine, type MaterialRow } from "./KnowledgeWindow";
+import LearnerNote from "./LearnerNote";
 import ProjectPath from "./ProjectPath";
 import { Inline } from "./Rich";
 
@@ -54,6 +55,7 @@ export default function KnowledgeTabs({ onLegacy, focusId }: { onLegacy?: () => 
         return <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => pick(t)}>{label}{rows ? <small> {n}</small> : null}</button>;
       })}</div>
       {error ? <p className="ws-err">{error}</p> : null}
+      {tab === "project" ? <LearnerNote /> : null}
       {!rows ? <p className="small muted">불러오는 중…</p> : !list.length ? <p className="small muted panel">{tab === "material" ? "아직 자료가 없어요. 공부 › 자료에서 PDF나 웹 글로 자료를 만들면 여기 생겨요." : tab === "code" ? "아직 알고리즘 기억이 없어요. 문제를 풀면 패턴·실수가 기억으로 쌓여요." : "아직 실습 기억이 없어요."}</p> : (
         <ul className="kt-rows">{list.map((r) => {
           const on = open === r.key;

@@ -6,11 +6,13 @@ import path from "node:path";
 process.env.PC_DATA_DIR = mkdtempSync(path.join(os.tmpdir(), "grec-"));
 process.env.PC_FAKE_AI = "1";
 const ai = await import("../lib/ai.ts");
+const { wrapFake } = await import("./old-record.ts");
+const setFake = wrapFake(ai);
 const R = await import("../lib/goal-record.ts");
 
 test("목표 정리(11/5): 그 목표 시작 뒤의 대화만 보내고, 근거 구절은 학습자 말과 대조", async () => {
   let sent = "";
-  ai.setFakeAi((purpose: string, user: string) => { sent = user; return { summary: "스택을 리스트로 써 봄", steps: ["설명을 들음", "pop 결과를 예측해 맞힘"], learned: [
+  setFake((purpose: string, user: string) => { sent = user; return { summary: "스택을 리스트로 써 봄", steps: ["설명을 들음", "pop 결과를 예측해 맞힘"], learned: [
     { type: "개념", concept: "스택", meaning: "나중에 넣은 것을 먼저 꺼냄", how: "예측해 맞힘", quote: "3" },
     { type: "규칙", concept: "IndexError", meaning: "빈 리스트 pop은 오류", how: "예측해 맞힘", quote: "오류가 난다고 했잖아" }] }; });
   const msgs = [
@@ -29,7 +31,7 @@ test("목표 정리(11/5): 그 목표 시작 뒤의 대화만 보내고, 근거 
 });
 
 test("부족한 점(11/6): 목표 정리의 gaps가 '몰랐음' 지식 + 틀림 사건으로 앱에 가고, 보낸 것은 다시 안 감", async () => {
-  ai.setFakeAi(() => ({ summary: "캐시를 딕셔너리로 만들어 봄", steps: ["캐시 위치를 물어봄"], learned: [
+  setFake(() => ({ summary: "캐시를 딕셔너리로 만들어 봄", steps: ["캐시 위치를 물어봄"], learned: [
     { type: "개념", concept: "캐시", meaning: "계산 결과를 저장해 다시 씀", how: "설명을 들음", quote: "" }],
     gaps: [{ type: "규칙", concept: "= 와 ==", wrong: "조건에 대입 기호 =를 씀", right: "같은지 비교는 ==, =는 대입", quote: "if cache[n]=False:" },
       { type: "개념", concept: "캐시", wrong: "캐시를 함수 안에 만들어 매번 비움", right: "캐시는 함수 밖에 두어야 호출 사이에 남는다", quote: "캐시를 어디에 넣어야하지" }] }));
@@ -42,16 +44,16 @@ test("부족한 점(11/6): 목표 정리의 gaps가 '몰랐음' 지식 + 틀림 
   assert.equal(p.source.ref, "project:run2");
   const cache = p.items.find((i) => i.title === "캐시")!;
   assert.equal(cache.state, "unknown"); // 배운 것 + 부족한 것 → 한 지식, 몰랐음
-  assert.equal(cache.body, "캐시는 함수 밖에 두어야 호출 사이에 남는다");
+  assert.match(cache.body, /^알게 된 것: 캐시는 함수 밖에 두어야 호출 사이에 남는다\n상황: 캐시 만들기\n내가 한 것: 캐시를 함수 안에 만들어 매번 비움 \(틀렸다 고침\)$/); // 실습 기억 카드 꼴(11/10)
   assert.deepEqual(cache.events.map((e) => e.kind), ["note", "wrong"]);
-  assert.equal(p.items.find((i) => i.title === "= 와 ==")!.kind, "rule");
+  assert.equal(p.items.find((i) => i.title === "= 와 ==")!.kind, "concept"); // 여섯 칸은 더 안 씀(11/10)
   await S.markSent("run2", p.items.flatMap((i) => [i.key, ...i.events.map((e) => e.key)]));
   assert.equal((await S.pending("run2", { id: "hello-api", title: "t", knowledge: [] } as never, run)).items.length, 0);
 });
 
 test("코드 저장(11/6 A안): 목표 동안 저장한 코드의 바뀐 줄이 대화 사이에 들어가고, 코드 줄도 근거가 된다", async () => {
   let sent = "";
-  ai.setFakeAi((_p: string, user: string) => { sent = user; return { summary: "s", steps: [], learned: [], gaps: [{ type: "규칙", concept: "= 와 ==", wrong: "비교에 = 씀", right: "==로 비교", quote: "if cache[n]=False:" }] }; });
+  setFake((_p: string, user: string) => { sent = user; return { summary: "s", steps: [], learned: [], gaps: [{ type: "규칙", concept: "= 와 ==", wrong: "비교에 = 씀", right: "==로 비교", quote: "if cache[n]=False:" }] }; });
   const saves = [
     { at: "2026-11-06T00:59:00Z", file: "a.py", text: "cache = {}\n" },
     { at: "2026-11-06T01:00:05Z", file: "a.py", text: "cache = {}\nif cache[n]=False:\n    pass\n" },
@@ -67,7 +69,7 @@ test("코드 저장(11/6 A안): 목표 동안 저장한 코드의 바뀐 줄이 
 
 test("틀렸던 코드(11/6): AI가 저장본 번호 · 줄 범위로 짚으면 코드가 원문을 잘라 기억으로 보낸다", async () => {
   const saves = [{ at: "2026-11-06T05:00:05Z", file: "c.py", text: "cache = {}\ndef sq(n):\n    if cache[n]=False:\n        cache[n] = n*n\n    return n*n\n" }];
-  ai.setFakeAi(() => ({ summary: "", steps: [], learned: [], gaps: [
+  setFake(() => ({ summary: "", steps: [], learned: [], gaps: [
     { type: "규칙", concept: "비교 연산", wrong: "조건에 = 씀", right: "==", quote: "", code: { save: "S1", from: 3, to: 3 } },
     { type: "원리", concept: "없는 저장본", wrong: "w", right: "r", quote: "", code: { save: "S9", from: 1, to: 2 } }],
     memory: { add: [], update: [], improved: [] } }));
