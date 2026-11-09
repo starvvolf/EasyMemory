@@ -317,7 +317,7 @@ export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
     // 흐름 카드 (11/6 사용자 "1번으로 그냥 앱에 박아"): after a topic's cards, one short terra call writes its one story card
     // (in what order the pieces come and why), first in the topic and not quizzed. 그래픽스 04: 카드 단계 +$0.09, +20초.
     // 카드에 그림 붙이기 (11/8 사용자 "한번 해봐"): 카드 AI가 그림 위치·역할·설명을 쓰고 코드가 잘라 둔다(figures.ts).
-    digest: true, digestTopicCards: true, digestStyle: "plan", mapCards: true, mapUnit: "topic", flowCard: "after", figures: true, noSourceOutline: true, quiz: "luna", quizCount: 10,
+    digest: true, digestTopicCards: true, digestStyle: "plan", mapCards: true, mapUnit: "topic", figures: true, noSourceOutline: true, quiz: "luna", quizCount: 10,
     // 정리 글(summary.ts, sol)은 끈다 (11/6 사용자 "1의 목차로 바꾸고, 목차가 나오면서 지식이 하나씩 붙게"): 자료 지도의 첫 탭은
     // 엔진 목차(위의 목차 호출, 쓰는 대로 흘러나옴)에 카드가 항목마다 붙는 화면이다. 켜려면 summary: true (그 전 결정 11/6 B).
     // 목표형 문제 (11/6 사용자 "데드락 시연: 학습 목표부터, 그 목표에 맞는 문제" → "sol로 가고 본 앱에 연결"): 목표마다 주는 것·내는 것,
