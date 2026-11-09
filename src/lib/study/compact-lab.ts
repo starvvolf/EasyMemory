@@ -9,7 +9,9 @@
 //   raw        카드 없이 원문에서 바로: ① 쪽 첫 줄들로 영역(쪽 범위) → ② 영역마다 그 쪽 원문으로 기억(근거는 쪽)
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { askJson, S } from "../assist/model.ts";
+import { askJson, LOCAL_CALLER, logAssistCall, S } from "../assist/model.ts";
+import { callModel } from "../ai/model.ts";
+import { currentTrace } from "../ai/trace.ts";
 import { withTrace } from "../ai/trace.ts";
 import { costOf } from "../ai/prices.ts";
 import { loadGen } from "./gen/runner.ts";
@@ -17,7 +19,10 @@ import { materialMap } from "./material-map.ts";
 import { loadStructure } from "./structure.ts";
 import { AREA_MEMORY_SYSTEM, AREA_SCHEMA, AREA_SYSTEM, COMPACT_MODEL, COMPACT_SYSTEM, MEM_SCHEMA, MEMORY_KINDS, MEMORY_ROLES, checkCompact, compactInput, type Reply } from "./compact.ts";
 
-export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards", "planDirect", "planShort"] as const;
+export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards", "planDirect", "planShort", "stemDirect", "outlineNow"] as const;
+// outlineNow = 비교용: 지금 제품의 목차 호출(PLAN_COMMON + PLAN_TASK_CONCEPTS, 같은 입력)을 지금 다시 잰다(같은 조건에서 시간·토큰).
+// 11/10 "바로 줄기로 가면?" (공정하게): stemDirect = 지금 목차 호출(rc-digest-plan)이 받는 것 그대로(모든 쪽 원문 + 쪽 그림, 그림 쪽은 그림 조각)를
+//   주고, 목차 대신 줄기 계획(짧게)을 쓰게 한다. 기존 목차 호출(그래픽스 50초)과 견준다.
 // 11/10 "목차 빼고 바로 줄기로 가면?": planDirect = 목차 없이 쪽(제목 + 글 앞 300자)에서 바로 줄기(짧게: 이름·종류·역할·영역·쪽만).
 //   planShort = plan과 같은 입력(목차)이되 짧게. 둘을 견주면 목차가 줄기에 무엇을 보태는지, 출력 줄이기가 얼마나 빠른지 보인다.
 // 거꾸로 (11/10 사용자 "줄기에서 바로 카드로 가면 어떻게 되는지"): 카드 → 줄기가 아니라 줄기 → 카드.
@@ -153,6 +158,46 @@ export async function runCompactLab(id: string, method: LabMethod) {
       return { name: r.name, question: r.question, mems: (r.memories ?? []).map((m) => ({ ...m, area: ai + 1, cards: (m.cards ?? []).map((k) => nums[k - 1] ?? -1) })) };
     }));
     reply = { areas: parts.map((p) => ({ name: p.name, question: p.question })), memories: parts.flatMap((p) => p.mems) };
+  } else if (method === "stemDirect" || method === "outlineNow") {
+    const state = await loadGen(id) as unknown as { input: { sourceId: string; fileName: string; pageNumbers: number[] }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
+    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
+    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const pdf = await readRegisteredMcpSourcePdf(state.input.sourceId);
+    if (!pdf) throw Object.assign(new Error("원본 PDF를 읽을 수 없어요."), { status: 409 });
+    const pages = state.input.pageNumbers;
+    const route = new Map((state.recaller?.prep?.pages ?? []).map((x) => [x.page, x.route ?? "text"]));
+    const tDraw = Date.now();
+    const figs = await renderPageFigures(pdf, pages.filter((p) => route.get(p) === "figures"), 1024).catch(() => new Map<number, Array<{ label: string; dataUrl: string }>>());
+    const wholes = await renderPageImages(pdf, pages.filter((p) => route.get(p) === "page" || (route.get(p) === "figures" && !figs.get(p)?.length)), 1024).catch(() => new Map<number, string>());
+    const images: Array<{ label: string; dataUrl: string }> = [];
+    for (const p of pages) { const f = figs.get(p) ?? []; if (f.length) images.push(...f.map((x) => ({ label: `p.${p} ${x.label}`, dataUrl: x.dataUrl }))); else if (wholes.get(p)) images.push({ label: `원문 p.${p}`, dataUrl: wholes.get(p)! }); }
+    const drawMs = Date.now() - tDraw;
+    const user = [`[자료] ${state.input.fileName}`, ...pages.map((p) => `[p.${p}]\n${(texts[p] ?? "").trim() || "(글자 없음)"}`)].join("\n\n");
+    const { PLAN_COMMON, PLAN_TASK_CONCEPTS } = await import("./gen/digest.ts");
+    const system = method === "outlineNow" ? PLAN_COMMON : `${PLAN_SYSTEM.replace("강의 자료 한 편의 목차(주제·항목 이름·쪽)와 쪽마다 첫 줄을 받는다.", "강의 자료 한 편 전체(쪽마다 [p.N] 원문, 그림으로 된 쪽과 그림 조각은 이미지로 \"원문 p.N\" 이름표)를 받는다.").replace("- 목차의 항목을 빠뜨리지 않는다(표지·목차 쪽 빼고).", "- 자료에서 배울 것을 빠뜨리지 않는다(표지·목차 쪽 빼고). 그림으로만 된 쪽도 그림을 읽고 넣는다.")}${SHORT_RULE}\n출력은 JSON으로만 한다.`;
+    const started = Date.now(); let first = 0;
+    const plan = await withTrace({ area: "pdf", action: `clab:${run}:stem`, ref: id }, async () => {
+      if (method === "outlineNow") {
+        const r = await callModel({ purpose: "lab:compact-outlineNow", system, user: `${user}\n\n${PLAN_TASK_CONCEPTS}`, ...M, caller: LOCAL_CALLER, images, onText: () => { if (!first) first = Date.now(); } });
+        const u = r.usage;
+        logAssistCall({ at: new Date(started).toISOString(), purpose: "lab:compact-outlineNow", ...M, ms: Date.now() - started, ...(first ? { firstTextMs: first - started } : {}), ok: true, inChars: system.length + user.length, outChars: r.text.length,
+          ...(u ? { tokens: { in: u.inputTokens, cached: u.cachedInputTokens, out: u.outputTokens, reasoning: u.reasoningTokens } } : {}), trace: currentTrace() });
+        return { areas: [], memories: [], outline: r.text.slice(0, 3000) } as unknown as { areas: Array<{ name: string; question: string }>; memories: Array<Omit<Mem, "cards"> & { pages: number[] }> };
+      }
+      const r = await callModel({ purpose: "lab:compact-stemDirect", system, user, json: true, schema: PLAN_SCHEMA, schemaName: "recaller_lab_stem", ...M, caller: LOCAL_CALLER, images, onText: () => { if (!first) first = Date.now(); } });
+      const u = r.usage;
+      logAssistCall({ at: new Date(started).toISOString(), purpose: "lab:compact-stemDirect", ...M, ms: Date.now() - started, ...(first ? { firstTextMs: first - started } : {}), ok: true, inChars: system.length + user.length, outChars: JSON.stringify(r.data ?? "").length,
+        ...(u ? { tokens: { in: u.inputTokens, cached: u.cachedInputTokens, out: u.outputTokens, reasoning: u.reasoningTokens } } : {}), trace: currentTrace() });
+      return r.data as { areas: Array<{ name: string; question: string }>; memories: Array<Omit<Mem, "cards"> & { pages: number[] }> };
+    });
+    const mems = plan.memories ?? [];
+    const wall = Date.now() - t0;
+    const calls = await callsOf(run, t0);
+    const summary = { method, run, wall, drawMs, images: images.length, calls, tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0),
+      areas: plan.areas ?? [], memories: mems.length, main: mems.filter((m) => m.role === "메인").length, ...((plan as { outline?: string }).outline ? { outline: (plan as { outline?: string }).outline } : {}),
+      planMemories: mems.map((m) => ({ area: m.area, name: m.name, role: m.role, kind: m.kind, pages: m.pages })) };
+    await save(id, method, summary);
+    return summary;
   } else if (method === "planDirect" || method === "planShort") {
     let u: string;
     if (method === "planDirect") {
