@@ -504,7 +504,10 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const [only, setOnly] = useState<"all" | "unknown" | "new">("all");
   // 11/6 사용자: 목차별·개념별을 빼고 위에 [요약 | 지식] 두 탭. 지식은 목차(자료의 순서)로만 보인다.
   const view = "outline" as const;
-  const [tab, setTab] = useState<"summary" | "structure" | "knowledge" | null>(null);
+  // 11/9 사용자 "기존 목록형 탭으로 돌아가지 않게": 고른 탭을 기억하고(원문을 보고 돌아와도, 다시 열어도), 불러오는 동안 [기억] 목록으로 떨어지지 않는다.
+  type Tab = "summary" | "structure" | "knowledge";
+  const [tab, setTabState] = useState<Tab | null>(() => { try { const t = localStorage.getItem("recaller:map-tab"); return t === "summary" || t === "structure" || t === "knowledge" ? t : null; } catch { return null; } });
+  const setTab = (t: Tab) => { setTabState(t); try { localStorage.setItem("recaller:map-tab", t); } catch { /* storage off */ } };
   const [summary, setSummary] = useState<Summary | null | undefined>(undefined);
   const [digest, setDigest] = useState<DigestLite | null | undefined>(undefined);
   const [coreOnly, setCoreOnly] = useState(false);
@@ -610,7 +613,9 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   // 목차가 있으면(엔진의 목차 → 카드) 첫 탭은 목차, 예전 실행의 정리 글은 요약으로 그대로 보인다.
   const hasOutline = Boolean(digest?.skeleton && (digest.skeleton.topics.length || digest.skeleton.text));
   const firstLabel = summary && !hasOutline ? "요약" : "목차";
-  const shownTab = tab ?? (hasOutline || (summary && (summary.text || summary.status === "writing")) ? "summary" : running && summary === undefined ? "summary" : "knowledge");
+  const noFirst = digest !== undefined && summary !== undefined && !hasOutline && !(summary && (summary.text || summary.status === "writing"));
+  const picked = tab === "structure" && !(hasOutline || !summary) ? null : tab;
+  const shownTab: Tab = picked ?? (noFirst ? "knowledge" : "summary");
   const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ["knowledge", "기억"]] as const).map(([k, label]) =>
     <button key={k} className={shownTab === k ? "on" : ""} aria-pressed={shownTab === k} onClick={() => setTab(k)}>{label}{k === "knowledge" && running ? <span className="mm5-badge">만드는 중</span> : null}</button>)}</div>;
   if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>{hasOutline ? "목차가 나오는 중…" : "자료를 읽는 중…"}</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
