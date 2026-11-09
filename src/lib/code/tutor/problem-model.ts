@@ -28,6 +28,7 @@ export type ProblemModel = {
   state: { right: string; wrong: string[] }; update: string; complexity: string; pitfalls: string[];
   walkthrough: { observe: string; choose: string; compare: string; verify: string };
   /** 코드로 확인한 결과 예측 질문(강의 풀이를 돌린 출력이 답) */ predict?: { question: string; input: string; answer: string };
+  /** 아직 답이 없는 예측 질문(11/10): 유저 문제는 숨은 테스트와 재료를 같이 만들어서, 모범 풀이가 검증되면 그걸 돌려 답을 채운다(fillPredict). */ predictDraft?: { question: string; input: string };
   contrast?: { number: string; differs: string };
   /** 유저가 넣은 문제(11/10): 문제 화면의 id. 없으면 튜터 문제(cp_boj_N). */ problemId?: string;
   at: string;
@@ -169,7 +170,7 @@ async function modelFrom(target: Target & { problemId?: string; verified?: boole
   }
   const model: ProblemModel = { number: target.number, title: original.title || target.title, chapter: target.chapter, role: target.role, url: original.url,
     statement: original.statement, inputText: original.inputText, outputText: original.outputText, ...(original.examples[0] ? { example: original.examples[0] } : {}),
-    ...checked, ...(predict ? { predict } : {}), ...(target.problemId ? { problemId: target.problemId } : {}), at: new Date().toISOString() };
+    ...checked, ...(predict ? { predict } : !code && predictDraft ? { predictDraft } : {}), ...(target.problemId ? { problemId: target.problemId } : {}), at: new Date().toISOString() };
   await keep(model);
   return model;
 }
@@ -232,20 +233,42 @@ export async function ensurePool(patternId: string, want: number, deps?: Deps) {
   return { started: todo.map((t) => t.number) };
 }
 
-/** 유저가 넣은 백준 문제의 재료(11/10): 숨은 테스트까지 만든 문제 파일(원문·예제·검증된 모범 풀이)에서 AI 1번. 예측 답은 그 모범 풀이를 돌린 값. */
+/** 유저가 넣은 백준 문제의 재료(11/10): AI 1번. 사용자 "테스트 만들고 만들면 늦으니까 같이 만들어" → 원문을 받은 순간 숨은 테스트와
+ *  동시에 시작한다(모범 풀이 없이). 예측 질문의 답은 숨은 테스트가 끝나 모범 풀이가 검증된 뒤 fillPredict가 채운다(AI 없이 실행만).
+ *  모범 풀이가 이미 있으면(다시 만들기) 바로 돌린다. */
+const inFlight = new Map<string, Promise<ProblemModel | null>>();
+const bojNumberOf = (problem: { title: string; source?: { url?: string } }) => /BOJ\s*(\d{1,6})/.exec(problem.title)?.[1] ?? /acmicpc\.net\/problem\/(\d{1,6})/.exec(problem.source?.url ?? "")?.[1];
 export async function modelForProblem(problem: { id: string; title: string; statement: string; inputText: string; outputText: string; examples: Array<{ input: string; output: string }>;
-  source?: { url?: string }; reference?: { lang: string; code: string } | null }, deps: Pick<Deps, "run"> = { run: runOnce }) {
-  const number = /BOJ\s*(\d{1,6})/.exec(problem.title)?.[1] ?? /acmicpc\.net\/problem\/(\d{1,6})/.exec(problem.source?.url ?? "")?.[1];
-  if (!number || building.has(number)) return null;
-  const have = await readModels();
-  if (have[number]) return have[number];
-  building.add(number);
-  try {
+  source?: { url?: string }; reference?: { lang: string; code: string } | null }, deps: Pick<Deps, "run"> = { run: runOnce }): Promise<ProblemModel | null> {
+  const number = bojNumberOf(problem);
+  if (!number) return null;
+  const going = inFlight.get(number);
+  if (going) return going;
+  const job = (async () => {
+    const have = (await readModels())[number];
+    if (have) return have;
     const lang = problem.reference && (["javascript", "python", "cpp", "csharp"] as const).includes(problem.reference.lang as Lang) ? problem.reference.lang as Lang : undefined;
-    return await modelFrom({ number, title: problem.title.replace(/^BOJ\s*\d+번?:?\s*/, ""), chapter: "", chapterTitle: "", role: "basic", solution: "", problemId: problem.id, verified: true },
-      { title: problem.title.replace(/^BOJ\s*\d+번?:?\s*/, ""), url: problem.source?.url ?? `https://www.acmicpc.net/problem/${number}`, statement: problem.statement, inputText: problem.inputText, outputText: problem.outputText, examples: problem.examples },
+    const title = problem.title.replace(/^BOJ\s*\d+번?:?\s*/, "");
+    return modelFrom({ number, title, chapter: "", chapterTitle: "", role: "basic", solution: "", problemId: problem.id, verified: true },
+      { title, url: problem.source?.url ?? `https://www.acmicpc.net/problem/${number}`, statement: problem.statement, inputText: problem.inputText, outputText: problem.outputText, examples: problem.examples },
       problem.reference?.code.slice(0, 12_000) ?? "", lang, deps);
-  } finally { building.delete(number); }
+  })();
+  const shared = job.catch(() => null);
+  inFlight.set(number, shared);
+  try { return await job; } finally { if (inFlight.get(number) === shared) inFlight.delete(number); }
+}
+/** 숨은 테스트가 끝난 뒤(모범 풀이가 검증됨): 예측 질문의 답을 그 풀이를 돌려 채운다. 재료가 아직 만들어지는 중이면 기다리고, 없으면 지금 만든다. */
+export async function fillPredict(problem: Parameters<typeof modelForProblem>[0], deps: Pick<Deps, "run"> = { run: runOnce }) {
+  const number = bojNumberOf(problem);
+  if (!number || !problem.reference) return null;
+  const m = (await inFlight.get(number)) ?? (await readModels())[number] ?? null;
+  if (!m) return modelForProblem(problem, deps);
+  if (m.predict || !m.predictDraft) return m;
+  const out = await deps.run(problem.reference.lang as Lang, problem.reference.code, m.predictDraft.input.endsWith("\n") ? m.predictDraft.input : `${m.predictDraft.input}\n`, 5000).catch(() => null);
+  const { predictDraft, ...rest } = m;
+  const done: ProblemModel = out?.ok && out.code === 0 && !out.timedOut && out.stdout.trim() && out.stdout.length <= 300 ? { ...rest, predict: { ...predictDraft, answer: out.stdout.replace(/\s+$/g, "") } } : rest;
+  await keep(done);
+  return done;
 }
 /** 문제 화면의 id → 튜터 번호(튜터 문제 cp_boj_N, 또는 재료가 있는 유저 문제). */
 export async function tutorNumberOf(problemId: string) {

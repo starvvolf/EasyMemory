@@ -51,3 +51,14 @@ test("modelForProblem: a learner's own BOJ problem gets its material from the sa
   assert.equal(await tutorNumberOf("cp_boj_7576"), "7576");
   assert.equal(await modelForProblem({ id: "cp_x", title: "합이 X인 두 수", statement: "", inputText: "", outputText: "", examples: [] }), null, "not a BOJ problem: nothing");
 }));
+
+test("같이 만들기: the material starts with the hidden tests (no solution yet); the prediction is answered once the solution is verified", () => withFake(async () => {
+  const { modelForProblem, fillPredict } = await import("./problem-model.ts");
+  const run = (async () => ({ ok: true, code: 0, timedOut: false, stdout: "5\n", stderr: "", ms: 1 })) as never;
+  const p = { id: "cp_mine9", title: "BOJ 8888번: 같이", statement: "s", inputText: "i", outputText: "o", examples: [{ input: "1\n", output: "1\n" }] };
+  const [early, again] = await Promise.all([modelForProblem(p, { run }), modelForProblem(p, { run })]);
+  assert.equal(early, again, "one build even when asked twice at once");
+  assert.equal(early!.predict, undefined); assert.equal(early!.predictDraft?.input, "2");
+  const done = await fillPredict({ ...p, reference: { lang: "javascript", code: "console.log(5)" } }, { run });
+  assert.equal(done!.predict?.answer, "5"); assert.equal(done!.predictDraft, undefined);
+}));

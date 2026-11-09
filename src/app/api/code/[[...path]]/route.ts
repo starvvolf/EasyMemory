@@ -13,7 +13,7 @@ import { withTrace } from "@/lib/ai/trace";
 import { LADDER, needsOf } from "@/lib/code/grade";
 import { keptLevel, keptLevels, knownLevelOf, selfLevelOf } from "@/lib/assist/code-level";
 import { mistakesToCatch, noteAiHelp } from "@/lib/code/tutor/service";
-import { modelForProblem } from "@/lib/code/tutor/problem-model";
+import { fillPredict, modelForProblem } from "@/lib/code/tutor/problem-model";
 
 type MakeInput = Parameters<typeof makeProblem>[0];
 /** The full problem from an imported original, under the id the learner already has open (바로 열기, 2026-10-29). */
@@ -21,8 +21,8 @@ async function prepare(id: string, got: Resolved, rest: Omit<MakeInput, "lesson"
   try {
     const made = await ensureProblemKnowledge(await makeProblem({ ...rest, id, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
       sourceTitle: got.title, sourceUrl: got.url, ...(got.original ? { original: got.original } : {}) }));
-    // 유저가 넣은 백준 문제는 숨은 테스트까지 만든 뒤 PS 튜터 재료도 만든다(11/10, AI 1번, 뒤에서).
-    void readProblem(made.id).then((full) => modelForProblem(full)).catch(() => undefined);
+    // PS 튜터 재료는 원문을 받을 때 같이 시작했다(아래). 모범 풀이가 검증됐으니 예측 질문의 답을 채운다(AI 없이 실행만, 11/10).
+    void readProblem(made.id).then((full) => fillPredict(full)).catch(() => undefined);
   } catch (error) {
     const meta = await readProblemMeta(id).catch(() => null);
     if (meta?.preparing) await setPreparing(id, { ...meta.preparing, error: (error as Error).message.slice(0, 500) }).catch(() => undefined);
@@ -95,6 +95,8 @@ async function inner(request: Request, context: RouteContext) {
         const pending = await savePreparing({ title: got.title.replace(/^BOJ (\d+) /, "BOJ $1번: "), statement: got.original.statement, inputText: got.original.inputText, outputText: got.original.outputText,
           examples: got.original.examples, folder: "알고리즘", source: { kind: "ai", title: got.title, url: got.url }, from: from!.trim() });
         void prepare(pending.id, got, rest);
+        // 백준 문제면 PS 튜터 재료를 숨은 테스트와 같이 만든다(11/10 사용자 "같이 만들어", AI 1번).
+        void modelForProblem(pending).catch(() => undefined);
         return json({ problem: publicProblem(pending) });
       }
       const made = await ensureProblemKnowledge(await makeProblem(got ? { ...rest, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
