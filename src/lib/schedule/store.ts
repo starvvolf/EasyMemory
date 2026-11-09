@@ -199,8 +199,8 @@ export async function week(startDay?: string, now = new Date()) {
   // 생긴 5분 칸을 센다. 타이머나 직접 넣은 시간이 있는 날은 그 시간과 겹칠 수 있으니 화면은 둘 중 큰 쪽을 쓴다.
   const busy = new Map<string, Set<number>>();
   // 공부 기록 (2026-11-06 사용자 "할 일이랑 기한 빼고 뭐 했는지 기록만, 위에는 이번 주에 뭐 했는지, 밑에는 GitHub 잔디처럼"):
-  // 이번 주 한 일(무엇을 몇 번, 어떤 자료) + 지난 20주 날마다 공부한 칸 수(잔디). 지식 기록 하나를 한 번으로 센다.
-  const grassFrom = addDays(base, -7 * 19);
+  // 이번 주 한 일(무엇을 몇 번, 어떤 자료) + 지난 53주 날마다 공부한 칸 수(잔디). 지식 기록 하나를 한 번으로 센다.
+  const grassFrom = addDays(base, -7 * 52); // 11/9 사용자 "바둑알 이 느낌 살려봐"(1년 칸): 지난 53주
   const grassBusy = new Map<string, Set<number>>();
   const did = { correct: 0, wrong: 0, met: 0, help: 0 };
   const by = new Map<string, { kind: string; title: string; ref: string; n: number; last: string }>();
@@ -218,7 +218,7 @@ export async function week(startDay?: string, now = new Date()) {
       row.n++; if (e.at > row.last) { row.last = e.at; row.ref = e.source?.ref ?? row.ref; } by.set(key, row);
     }
   } catch { /* 기록을 못 읽어도 일정은 보인다 */ }
-  const grass = Array.from({ length: 7 * 20 }, (_, i) => { const date = addDays(grassFrom, i); const mins = Math.max((grassBusy.get(date)?.size ?? 0) * 5, sessions.filter((s) => dayOf(s.start) === date).reduce((n, s) => n + s.minutes, 0)); return { date, minutes: mins }; });
+  const grass = Array.from({ length: 7 * 53 }, (_, i) => { const date = addDays(grassFrom, i); const mins = Math.max((grassBusy.get(date)?.size ?? 0) * 5, sessions.filter((s) => dayOf(s.start) === date).reduce((n, s) => n + s.minutes, 0)); return { date, minutes: mins }; });
   const studied = [...by.values()].sort((x, y) => y.last.localeCompare(x.last)).slice(0, 12);
   return {
     start: base, today: today(now),
