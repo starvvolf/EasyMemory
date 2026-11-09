@@ -13,6 +13,8 @@ type Note = { online: boolean; missing?: boolean; runId?: string; title?: string
 const RESULT_CLASS: Record<string, string> = { 마침: "ok", "너무 쉬움": "ok", 건너뜀: "skip", 멈춤: "skip", "진행 중": "now" };
 const GAP_CLASS: Record<string, string> = { "다시 확인 맞음": "ok", "세션에서 채움": "ok", "다시 틀림": "bad", 열림: "bad", "채우는 중": "now" };
 // 시각: 실습을 시작한 날과 같은 날이면 시:분만
+// 부족했던 것 옆 표시: 그 뒤 어떻게 됐나
+const GAP_LABEL: Record<string, string> = { "다시 확인 맞음": "채움 ✓", "세션에서 채움": "채움", "다시 틀림": "다시 틀림", 열림: "부족", "채우는 중": "채우는 중" };
 const hm = (iso: string, base?: string | null) => { const d = new Date(iso), b = base ? new Date(base) : null; const t = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   return b && b.toDateString() === d.toDateString() ? t : `${d.getMonth() + 1}/${d.getDate()} ${t}`; };
 const mins = (a: string, b: string | null) => { if (!b) return ""; const m = Math.round((Date.parse(b) - Date.parse(a)) / 60000); return m < 1 ? "" : m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간 ${m % 60}분`; };
@@ -24,11 +26,11 @@ function summary(path: PGoal[]) {
   return [`목표 ${path.length}개`, n("마침") ? `마침 ${n("마침")}` : "", n("너무 쉬움") ? `쉬워서 넘김 ${n("너무 쉬움")}` : "", n("건너뜀") + n("멈춤") ? `덜 함 ${n("건너뜀") + n("멈춤")}` : "",
     gaps.length ? `부족함 ${gaps.length}${open ? `(아직 ${open})` : ""}` : ""].filter(Boolean).join(" · ");
 }
-// 목표 안에서 있었던 일: 아이콘만(무엇이었는지는 마우스를 올리면)
+// 목표 안에서 있었던 일: 막힘 · 보충 낱말만(무엇이었는지는 마우스를 올리면)
 function Marks({ events }: { events: Ev[] }) {
   const has = (k: string) => events.filter((e) => e.kind === k);
-  const xs = [["stuck", "🧱", "막힘"], ["support", "🪜", "보충"]].flatMap(([k, icon, label]) => has(k).length ? [{ icon, tip: has(k).map((e) => `${label}: ${e.text}`).join("\n") }] : []);
-  return xs.length ? <span className="pp-marks">{xs.map((x) => <span key={x.icon} title={x.tip}>{x.icon}</span>)}</span> : null;
+  const xs = [["stuck", "막힘"], ["support", "보충"]].flatMap(([k, label]) => has(k).length ? [{ label, tip: has(k).map((e) => `${label}: ${e.text}`).join("\n") }] : []);
+  return xs.length ? <span className="pp-marks">{xs.map((x) => <span key={x.label} title={x.tip}>{x.label}</span>)}</span> : null;
 }
 
 export default function ProjectPath({ runs }: { runs: string }) {
@@ -52,8 +54,8 @@ export default function ProjectPath({ runs }: { runs: string }) {
         <ol className="pp-goals">{n.path!.map((g, i) => {
           // 딱 보이게(11/10 사용자 "주절주절 붙이지 말고 어떤 흐름으로 공부했는데 뭐가 부족했구나"):
           // 한 줄 = 목표 · 결과 · 시간, 그 아래는 부족했던 것 이름만. 그 안의 일(이해 · 맞음 · 막힘 · 보충)은 작은 표시로, 글은 마우스를 올리면.
-          const weak = g.gaps.length ? g.gaps.map((x) => ({ key: x.id, name: x.name, cls: GAP_CLASS[x.status] ?? "", tip: `${x.status}${x.wrong ? ` — ${x.wrong}` : ""}` }))
-            : g.events.filter((e) => e.kind === "check" && / · 빠진 곳: /.test(e.text)).slice(-1).map((e, k) => ({ key: `c${k}`, name: e.text.split(" · 빠진 곳: ")[1], cls: "bad", tip: e.text }));
+          const weak = g.gaps.length ? g.gaps.map((x) => ({ key: x.id, name: x.name, cls: GAP_CLASS[x.status] ?? "", label: GAP_LABEL[x.status] ?? "부족", tip: `${x.status}${x.wrong ? ` — ${x.wrong}` : ""}` }))
+            : g.events.filter((e) => e.kind === "check" && / · 빠진 곳: /.test(e.text)).slice(-1).map((e, k) => ({ key: `c${k}`, name: e.text.split(" · 빠진 곳: ")[1], cls: "bad", label: "부족", tip: e.text }));
           return <li key={i} className={`pp-goal ${RESULT_CLASS[g.result] ?? ""}`}>
             <div className="pp-head">
               <span className="pp-dot" aria-hidden>{i + 1}</span>
@@ -62,7 +64,7 @@ export default function ProjectPath({ runs }: { runs: string }) {
               <Marks events={g.events} />
               <span className="pp-when">{mins(g.at, g.endAt)}</span>
             </div>
-            {weak.map((w) => <p key={w.key} className="pp-weak" title={w.tip}><span className={`pp-gap ${w.cls}`}>부족</span> {w.name}</p>)}
+            {weak.map((w) => <p key={w.key} className="pp-weak" title={w.tip}><span className={`pp-gap ${w.cls}`}>{w.label}</span> {w.name}</p>)}
           </li>;
         })}</ol>
       </section>
