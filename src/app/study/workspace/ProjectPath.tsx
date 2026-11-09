@@ -8,7 +8,7 @@ import { call, errorText, later, type ItemLite } from "./api";
 
 type Ev = { at: string; kind: string; text: string };
 type PGoal = { title: string; at: string; endAt: string | null; result: string; events: Ev[]; gaps: Array<{ id: string; name: string; wrong: string; status: string }>; learned: string[] };
-type Note = { online: boolean; runId?: string; title?: string; at?: string | null; path?: PGoal[] };
+type Note = { online: boolean; missing?: boolean; runId?: string; title?: string; at?: string | null; path?: PGoal[] };
 
 const EV: Record<string, string> = { understood: "💡", check: "🧪", applied: "✅", stuck: "🧱", easy: "⏭", support: "🪜", "support-done": "·", back: "↩", refine: "✎" };
 const RESULT_CLASS: Record<string, string> = { 마침: "ok", "너무 쉬움": "ok", 건너뜀: "skip", 멈춤: "skip", "진행 중": "now" };
@@ -20,7 +20,7 @@ export default function ProjectPath({ runs, items, onPick }: { runs: string; ite
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [error, setError] = useState("");
   useEffect(() => later(() => {
-    Promise.all(runs.split(",").filter(Boolean).map((id) => call<Note>(`/api/project-course/runs/${encodeURIComponent(id)}/note`).catch(() => ({ online: true, runId: id, path: [] }) as Note)))
+    Promise.all(runs.split(",").filter(Boolean).map((id) => call<Note>(`/api/project-course/runs/${encodeURIComponent(id)}/note`).catch(() => ({ online: true, missing: true, runId: id, path: [] }) as Note)))
       .then(setNotes).catch((e) => setError(errorText(e)));
   }), [runs]);
   if (error) return <p className="ws-err">{error}</p>;
@@ -28,7 +28,8 @@ export default function ProjectPath({ runs, items, onPick }: { runs: string; ite
   if (notes.some((n) => !n.online)) return <p className="small muted">실습 서버가 꺼져 있어 지나온 목표를 못 불러왔어요. 실습 탭을 열면 켜져요.</p>;
   const byTitle = new Map(items.map((i) => [i.title, i.id]));
   const shown = notes.filter((n) => n.path?.length);
-  if (!shown.length) return <p className="small muted">이 실습에는 목표 기록이 없어요(목표를 정하기 전에 끝났거나 예전 방식의 실습).</p>;
+  // 실습 진행 기록은 그 실습을 한 컴퓨터의 실습 서버에만 있다(기억은 데이터 동기화로 옮겨 와도)
+  if (!shown.length) return <p className="small muted">{notes.every((n) => n.missing) ? "이 실습의 진행 기록이 이 컴퓨터에 없어요. 다른 컴퓨터에서 한 실습이면 그 컴퓨터에서 보여요." : "이 실습에는 목표 기록이 없어요(목표를 정하기 전에 끝났거나 예전 방식의 실습)."}</p>;
   return (
     <div className="pp">{shown.map((n) => (
       <section key={n.runId} className="pp-run">
