@@ -946,7 +946,8 @@ export async function runRecaller(ctx: RecallerContext) {
   };
   // 줄기 먼저 (11/10, stem.ts) ⓐ 줄기 계획: 목차 호출과 같은 입력(모든 쪽 원문 + 쪽 그림)으로 영역·기억을 쓰고, 빠진 쪽은 그 쪽만 한 번 더.
   // 영역 → 주제(topics, state.sections), 기억 → 목차 항목(concepts) → 주제마다 본문 줄 → 기억 채우기가 그 줄을 기억 카드로.
-  const stemPlanRun = async (d: NonNullable<typeof data.digest>) => {
+  // (function 선언: startDigest가 이 줄보다 먼저 불린다 — const면 "초기화 전 접근"으로 목차가 전처리 구역으로 떨어졌다, 11/10 첫 실행)
+  async function stemPlanRun(d: NonNullable<typeof data.digest>) {
     const t0 = Date.now();
     const user = oneUser(input.fileName, input.pageNumbers.map((page) => ({ page, text: data.texts[page] ?? "" })));
     let plan = settlePlan(await ctx.ask("rc-stem-plan", null, 1, prompt("STEM_PLAN", STEM_PLAN), user, stemPlanSchema, { images: await imagesOf(input.pageNumbers), maxChars: 200 * input.pageNumbers.length + 8000 }), input.pageNumbers);
@@ -971,7 +972,7 @@ export async function runRecaller(ctx: RecallerContext) {
     d.skeleton.text = d.skeleton.topics.map((t) => `${t.id} | ${t.title} | ${t.pages.join(",")}`).join("\n");
     d.stem = { questions: Object.fromEntries(used.map((a) => [topicId.get(a)!, plan.areas[a - 1].question])),
       memories: Object.fromEntries(plan.memories.map((m, i) => [d.concepts![i].id, { kind: m.kind, role: m.role }])), missing: missingPages(plan, input.pageNumbers), ms: Date.now() - t0 };
-  };
+  }
   // ⓑ 기억 채우기: 묶음(쪽이 이어지는 기억 몇 개)마다 그 쪽 원문 + 쪽 그림. 기억 하나 = 카드 한 장(id tN.mK).
   const stemFillRun = async (section: SectionState, group: Array<{ line: DigestLine; pages: number[]; kind: string; role: StemRole }>) => {
     const pages = [...new Set(group.flatMap((m) => m.pages))].filter((p) => input.pageNumbers.includes(p)).sort((a, b) => a - b);

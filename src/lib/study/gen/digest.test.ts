@@ -402,6 +402,7 @@ test("앱(공부 화면) 기본 (11/5): 목차 → 바로 카드로 카드 먼�
   // 기억 하나 = 카드 한 장(id tN.mK), 메인이면 핵심, 질문·요지는 memo에
   const cards = first.sections.flatMap((s) => first.recaller!.units[s.id].cards ?? []);
   assert.ok(cards.length && cards.every((c) => /^t\d+\.m\d+$/.test(c.id) && c.memo), cards.map((c) => c.id).join(","));
+  assert.ok(first.recaller!.digest?.stem && !first.recaller!.digest.skeleton.error, `줄기 계획이 목차를 대신한다: ${first.recaller!.digest?.skeleton.error ?? ""}`);
   await questionsGen(first.id);
   const done = await runGen(first.id, { uid: "local-experiment" }, io);
   assert.equal(done.status, "done", done.message);
