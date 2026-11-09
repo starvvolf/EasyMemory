@@ -38,7 +38,6 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
   const running = data?.prep.running;
   useEffect(() => { if (!running) return; const t = setInterval(() => void load(), 3000); return () => clearInterval(t); }, [running, load]);
   // 실패한 것이 있으면(인터넷 아카이브가 막음) 다시 할 때는 하나씩.
-  const prepare = async () => { try { await call("/api/code/tutor/prepare", data?.prep.failed.length ? { workers: 1 } : {}); await load(); } catch (e) { setError(errorText(e)); } };
 
   if (!data) return <section className="panel small muted">{error || "PS 튜터를 여는 중…"}</section>;
   const action = pinned ?? data.actions[0];
@@ -49,17 +48,8 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
         <p className="small muted">문제를 오래 붙잡기보다, 고수가 문제를 볼 때의 판단(관찰 → 선택 → 비교 → 검증)을 짧게 여러 번 연습해요. 답을 맞히면 다음 칸으로, 틀리면 필요한 곳만 다시 보여 줘요.</p>
       </header>
       {error ? <p className="ws-err">{error}</p> : null}
-      {/* 문제 준비 상태는 안쪽 정보라 접어 둔다(11/9 사용자 "안쪽으로 숨기던지"). 자료 출처 이름은 화면에 쓰지 않는다. */}
-      {data.ready < data.targets ? (
-        <details className="small muted pt-prep">
-          <summary>문제 {data.ready}/{data.targets}개 준비됨{running ? ` · 만드는 중 ${data.prep.done}/${data.prep.total}…` : ""}</summary>
-          <div className="row" style={{ justifyContent: "space-between", marginTop: 6 }}>
-            <span>배열부터 정렬까지 기본 단원의 문제를, 문제마다 AI 1번(terra, 약 7원)으로 시범·드릴 재료로 만들고 코드가 검사해요. 한 번 만들면 다시 부르지 않아요.</span>
-            {running ? null : <button className="btn small" onClick={() => void prepare()}>남은 {data.targets - data.ready}개 만들기</button>}
-          </div>
-          {data.prep.failed.length ? <p>실패 {data.prep.failed.length}개: {data.prep.failed.slice(0, 3).map((f) => `${f.number}(${f.why})`).join(", ")}</p> : null}
-        </details>
-      ) : null}
+      {/* 문제 재료는 필요할 때 조금씩 뒤에서 만든다(11/10). 만드는 동안만 한 줄. */}
+      {running ? <p className="small muted pt-prep">다음에 배울 패턴의 문제를 준비하는 중… ({data.prep.done}/{data.prep.total})</p> : null}
       {action ? <ActionCard key={action.id + data.done} a={action} onDone={next} onOpenProblem={onOpenProblem} pending={data.pending.some((p) => p.number === action.number)} />
         : data.ready ? <section className="panel small muted">지금 할 일이 없어요. 복습 날짜가 되면 다시 나와요.</section> : null}
       {data.actions.length > 1 ? (
@@ -140,7 +130,7 @@ function ActionCard({ a, onDone, onOpenProblem, pending }: { a: ActionView; onDo
     setBusy("문제를 준비하는 중… (처음이면 숨은 테스트를 만드느라 15~50초, AI 4번)"); setErr("");
     try {
       const r = await call<{ problemId: string }>("/api/code/tutor/answer", { kind: "implement", number: a.number, pattern: a.pattern, mixed: a.mixed, action: "start" });
-      await call(`/api/code/bakingdog/${a.number}/fill`, {}); // 이미 만들어진 문제면 그대로 돌아온다
+      if (r.problemId.startsWith("cp_boj_")) await call(`/api/code/bakingdog/${a.number}/fill`, {}); // 이미 만들어진 문제면 그대로 돌아온다(유저가 넣은 문제는 이미 있음)
       onOpenProblem(r.problemId);
     } catch (e) { setErr(errorText(e)); } finally { setBusy(""); }
   };

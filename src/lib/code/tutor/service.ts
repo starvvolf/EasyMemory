@@ -10,11 +10,11 @@ import { patternsOfNumber, readLinks, writeLink } from "./links.ts";
 import { appendLesson, lessonLine, refineAiHelp, type LessonKind } from "./lessons.ts";
 import { parsePsId } from "./review.ts";
 import { fillProblem, problemIdOf } from "../bakingdog.ts";
-import { readProblemMeta, readSubmissions } from "../problems.ts";
+import { listProblems, readProblem, readProblemMeta, readSubmissions } from "../problems.ts";
 import { COMPLEXITIES, complexityVerdict } from "../train.ts";
 import { patternOf, PATTERNS } from "./patterns.ts";
 import { nextActions, type Action } from "./policy.ts";
-import { prepareModels, prepStatus, readModels, tutorTargets, type ProblemModel } from "./problem-model.ts";
+import { ensurePool, modelForProblem, prepareModels, prepStatus, readModels, tutorNumberOf, tutorTargets, type ProblemModel } from "./problem-model.ts";
 import { ABILITY_LABEL, appendEvent, computeState, gradeOf, GRADE_LABEL, readEvents, type Ability, type TutorEvent } from "./state.ts";
 
 const dir = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "tutor");
@@ -78,7 +78,7 @@ async function record(e: Omit<TutorEvent, "id" | "at">, model?: ProblemModel, ca
 /** 문제 화면에서 AI에게 배운 것(힌트·드래그 설명): 튜터 문제(cp_boj_N, 교육용 모델이 있음)일 때만. AI 1번으로 카드로 정리하고
  *  (실패하면 원문 앞부분), 그 패턴의 기억에 "힌트"로. 화면을 기다리게 하지 않게 경로에서는 끝나기를 기다리지 않는다. */
 export async function noteAiHelp(problemId: string, what: string, text: string) {
-  const n = /^cp_boj_(\d{1,6})$/.exec(problemId)?.[1];
+  const n = await tutorNumberOf(problemId);
   if (!n) return;
   const patterns = await patternsOfNumber(n);
   if (!patterns.length) return;
@@ -102,7 +102,7 @@ async function syncImplement() {
   const models = await readModels();
   const left: Pending[] = [];
   for (const p of pending) {
-    const subs = (await readSubmissions(problemIdOf(p.number)).catch(() => [])).filter((s) => s.mode === "submit" && s.at >= p.startedAt);
+    const subs = (await readSubmissions(models[p.number]?.problemId ?? problemIdOf(p.number)).catch(() => [])).filter((s) => s.mode === "submit" && s.at >= p.startedAt);
     const ac = subs.find((s) => s.verdict === "AC");
     if (!ac) { left.push(p); continue; }
     const events = await readEvents();
@@ -141,6 +141,7 @@ export async function tutorOverview() {
   const planned = nextActions(state, models);
   const actions = planned.flatMap((a) => (models[a.number] ? [view(a, models[a.number], models)] : []));
   prefetchImplement(planned, events, models);
+  void fillAsNeeded(state, planned, models).catch(() => undefined);
   const covered = PATTERNS.filter((p) => Object.values(models).some((m) => m.patterns.includes(p.id)));
   return {
     targets: tutorTargets().length, ready: Object.keys(models).length, prep: prepStatus(), pending: await readJson<Pending[]>("pending.json", []),
@@ -160,7 +161,7 @@ function prefetchImplement(planned: ReturnType<typeof nextActions>, events: Tuto
     const ifRight: TutorEvent = { id: "te_if", at: new Date().toISOString(), kind: "design", number: first.number, patterns: models[first.number]?.patterns ?? [first.pattern], ability: "design", ok: true, grade: 3 };
     target = nextActions(computeState([...events, ifRight]), models).find((a) => a.kind === "implement" && a.pattern === first.pattern);
   }
-  if (!target) return;
+  if (!target || models[target.number]?.problemId) return; // 유저가 넣은 문제는 이미 숨은 테스트가 있다
   const n = target.number;
   prefetching.add(n);
   void (async () => {
@@ -169,6 +170,17 @@ function prefetchImplement(planned: ReturnType<typeof nextActions>, events: Tuto
       await fillProblem(n, undefined, { avoid: await mistakesToCatch(n) });
     } catch { /* 실패는 문제집 상태에 남고, 구현을 시작할 때 다시 시도된다 */ } finally { prefetching.delete(n); }
   })();
+}
+/** 필요할 때 조금씩(11/10): 지금 배우는 패턴과 그다음 패턴은 문제 재료 3개, 복습·할 일에 나온 패턴은 2개가 되게 뒤에서 만든다.
+ *  유저가 넣은 백준 문제 중 아직 재료가 없는 것도 하나씩(문제를 만든 직후에 이미 만들지만, 그때 실패했거나 앱이 꺼졌을 때). */
+async function fillAsNeeded(state: ReturnType<typeof computeState>, planned: ReturnType<typeof nextActions>, models: Record<string, ProblemModel>) {
+  if (!process.env.NEXT_RUNTIME) return;
+  const chaptersWithTargets = new Set(tutorTargets().map((t) => t.chapter));
+  const upcoming = PATTERNS.filter((p) => !state.patterns[p.id]?.solid && p.chapters.some((c) => chaptersWithTargets.has(c))).slice(0, 2);
+  for (const p of upcoming) await ensurePool(p.id, 3);
+  for (const id of new Set(planned.map((a) => a.pattern))) await ensurePool(id, 2);
+  const mine = (await listProblems()).filter((x) => !x.preparing && /^BOJ\s*\d+/.test(x.title) && !Object.values(models).some((m) => m.problemId === x.id || x.title.startsWith(`BOJ ${m.number}번`)));
+  if (mine[0]) await modelForProblem(await readProblem(mine[0].id));
 }
 export const startPrepare = (limit?: number, workers?: number) => prepareModels(limit, workers);
 
@@ -233,13 +245,13 @@ export async function answer(a: Answer) {
   if (a.action === "start") {
     if (!pending.some((p) => p.number === a.number)) pending.push({ number: a.number, pattern: a.pattern, mixed: a.mixed, startedAt: new Date().toISOString() });
     await writeJson("pending.json", pending);
-    return { ok: true, problemId: problemIdOf(a.number) };
+    return { ok: true, problemId: m.problemId ?? problemIdOf(a.number) };
   }
   // 그만하기: 맞힌 제출이 없으면, 제출한 것이 있을 때만 "혼자 구현 틀림"으로 남긴다(제출이 없으면 기록 없이 닫음).
   await syncImplement();
   const still = (await readJson<Pending[]>("pending.json", [])).find((p) => p.number === a.number);
   if (still) {
-    const subs = (await readSubmissions(problemIdOf(a.number)).catch(() => [])).filter((s) => s.mode === "submit" && s.at >= still.startedAt);
+    const subs = (await readSubmissions(m.problemId ?? problemIdOf(a.number)).catch(() => [])).filter((s) => s.mode === "submit" && s.at >= still.startedAt);
     if (subs.length) await record({ kind: "implement", number: a.number, patterns, ability: "execute", ok: false, hinted: subs.some((s) => s.hints > 0), mixed: still.mixed,
       grade: gradeOf(events, a.number, "execute", { mixed: still.mixed }), detail: `제출 ${subs.length}번, 맞히지 못함` }, m,
       { situation: `BOJ ${a.number} ${m.title}를 혼자 구현하다 제출 ${subs.length}번 모두 틀리고 그만둠`, gap: "구현을 끝내지 못함", fix: `${m.update}${m.pitfalls.length ? ` (흔한 실수: ${m.pitfalls.join(" · ")})` : ""}`, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });

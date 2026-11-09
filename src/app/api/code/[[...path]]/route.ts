@@ -3,7 +3,7 @@ import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
-import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
+import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblem, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
@@ -13,13 +13,16 @@ import { withTrace } from "@/lib/ai/trace";
 import { LADDER, needsOf } from "@/lib/code/grade";
 import { keptLevel, keptLevels, knownLevelOf, selfLevelOf } from "@/lib/assist/code-level";
 import { mistakesToCatch, noteAiHelp } from "@/lib/code/tutor/service";
+import { modelForProblem } from "@/lib/code/tutor/problem-model";
 
 type MakeInput = Parameters<typeof makeProblem>[0];
 /** The full problem from an imported original, under the id the learner already has open (바로 열기, 2026-10-29). */
 async function prepare(id: string, got: Resolved, rest: Omit<MakeInput, "lesson" | "sourceTitle" | "sourceUrl" | "original" | "id"> & { lesson?: string }) {
   try {
-    await ensureProblemKnowledge(await makeProblem({ ...rest, id, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
+    const made = await ensureProblemKnowledge(await makeProblem({ ...rest, id, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
       sourceTitle: got.title, sourceUrl: got.url, ...(got.original ? { original: got.original } : {}) }));
+    // 유저가 넣은 백준 문제는 숨은 테스트까지 만든 뒤 PS 튜터 재료도 만든다(11/10, AI 1번, 뒤에서).
+    void readProblem(made.id).then((full) => modelForProblem(full)).catch(() => undefined);
   } catch (error) {
     const meta = await readProblemMeta(id).catch(() => null);
     if (meta?.preparing) await setPreparing(id, { ...meta.preparing, error: (error as Error).message.slice(0, 500) }).catch(() => undefined);
@@ -96,6 +99,7 @@ async function inner(request: Request, context: RouteContext) {
       }
       const made = await ensureProblemKnowledge(await makeProblem(got ? { ...rest, lesson: [got.lesson, rest.lesson?.trim() ? `[학습자가 덧붙인 글]\n${rest.lesson}` : ""].filter(Boolean).join("\n\n"),
         sourceTitle: got.title, sourceUrl: got.url, ...(got.original ? { original: got.original } : {}) } : rest));
+      void readProblem(made.id).then((full) => modelForProblem(full)).catch(() => undefined);
       return json({ problem: publicProblem(made) });
     }
     // 바킹독 문제집: the built-in list, and filling one problem the first time it is picked.

@@ -9,7 +9,7 @@
 import type { Question } from "../../knowledge/api.ts";
 import { readLessons } from "./lessons.ts";
 import { PATTERNS, patternOf } from "./patterns.ts";
-import { readModels, type ProblemModel } from "./problem-model.ts";
+import { ensurePool, readModels, type ProblemModel } from "./problem-model.ts";
 import { readEvents } from "./state.ts";
 
 export const isPsItem = (item: { sources?: Array<{ ref?: string }> }) => (item.sources ?? []).some((s) => s.ref?.startsWith("tutor:pattern:"));
@@ -36,6 +36,8 @@ export async function psQuestions(item: { id: string; title: string; sources?: A
   const lastSeen = (m: ProblemModel) => events.filter((e) => e.number === m.number).at(-1)?.at ?? "";
   const fresh = [...pool].sort((a, b) => lastSeen(a).localeCompare(lastSeen(b)) || a.number.localeCompare(b.number));
   const out: Partial<Record<PsKind, Question>> = {};
+  // 처음 보는 문제가 없으면 하나 더 만들어 둔다(11/10, 다음 복습부터 쓰임. 뒤에서, 앱 서버 안에서만).
+  if (fresh[0] && lastSeen(fresh[0])) void ensurePool(pid, pool.length + 1).catch(() => undefined);
 
   const mine = lessons.filter((l) => l.pattern === pid && l.fix).at(-1);
   if (mine) {

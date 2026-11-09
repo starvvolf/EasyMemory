@@ -4,6 +4,11 @@
 //   - 최대 N은 문제 글에 실제로 있는 수만, 대조 문제는 튜터 문제 목록 안의 번호만.
 //   - 시범의 "결과 예측" 답은 AI가 아니라 강의 풀이 코드를 실제로 돌린 출력으로 바꾼다(못 돌리면 예측 질문을 뺀다).
 // 원문이 들어 있으므로 데이터 폴더 code/tutor/models.json에만 둔다(공개 저장소에 올리지 않음).
+// 11/10 사용자 "문제 넣을 때마다 만들면 안 됨? 굳이 먼저 해야 돼?": 74개를 미리 다 만들지 않는다. 필요해질 때 조금씩 만든다.
+//   - 유저가 백준 문제를 넣음 → 그 문제(숨은 테스트까지 만든 뒤, 예측 답은 검증된 모범 풀이로)  modelForProblem
+//   - 튜터가 어떤 패턴을 시작하거나 그 패턴 문제가 모자람 → 그 패턴 단원의 문제를 2~3개만  ensurePool
+//   - 복습에서 처음 보는 문제가 모자람 → 하나 더  ensurePool
+//   원문이 아카이브에 없는 번호는 missing.json에 적어 다시 묻지 않는다.
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
@@ -24,6 +29,7 @@ export type ProblemModel = {
   walkthrough: { observe: string; choose: string; compare: string; verify: string };
   /** 코드로 확인한 결과 예측 질문(강의 풀이를 돌린 출력이 답) */ predict?: { question: string; input: string; answer: string };
   contrast?: { number: string; differs: string };
+  /** 유저가 넣은 문제(11/10): 문제 화면의 id. 없으면 튜터 문제(cp_boj_N). */ problemId?: string;
   at: string;
 };
 export type Target = { number: string; title: string; chapter: string; chapterTitle: string; role: "lecture" | "basic"; solution: string };
@@ -130,22 +136,29 @@ async function archiveGate<T>(f: () => Promise<T>): Promise<T> {
   archiveActive++;
   try { return await f(); } finally { archiveActive--; archiveWaiting.shift()?.(); }
 }
+type Original = { title: string; url: string; statement: string; inputText: string; outputText: string; examples: Array<{ input: string; output: string }> };
 export async function buildModel(target: Target, deps: Deps = { fetcher: fetch, run: runOnce }): Promise<ProblemModel> {
   const original = await archiveGate(() => archivedBojProblem(target.number, deps.fetcher));
-  if (!original) throw new Error("인터넷 아카이브에서 원문을 찾지 못했어요.");
+  if (!original) { await markMissing(target.number); throw new Error("인터넷 아카이브에서 원문을 찾지 못했어요."); }
   let code = "", lang: Lang | undefined;
   if (target.solution) {
     lang = LANG_OF[/\.(\w+)$/.exec(target.solution)?.[1] ?? ""];
     const r = await deps.fetcher(target.solution, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
     if (r?.ok) code = (await r.text()).slice(0, 12_000);
   }
-  const pool = tutorTargets().map((t) => t.number);
-  const others = tutorTargets().filter((t) => t.number !== target.number).map((t) => `${t.number} ${t.title}(${t.chapterTitle})`).join(", ");
+  return modelFrom(target, original, code, lang, deps);
+}
+async function modelFrom(target: Target & { problemId?: string; verified?: boolean }, original: Original, code: string, lang: Lang | undefined, deps: Pick<Deps, "run">): Promise<ProblemModel> {
+  const known = await readModels();
+  const pool = [...new Set([...tutorTargets().map((t) => t.number), ...Object.keys(known)])];
+  const others = [...tutorTargets().filter((t) => t.number !== target.number).map((t) => `${t.number} ${t.title}(${t.chapterTitle})`),
+    ...Object.values(known).filter((m) => m.problemId && m.number !== target.number).map((m) => `${m.number} ${m.title}`)].join(", ");
   const statementText = `${original.statement}\n${original.inputText}`;
-  const user = [`[문제] BOJ ${target.number} ${original.title || target.title} (바킹독 ${target.chapter} ${target.chapterTitle}, ${target.role === "lecture" ? "강의 연습 문제" : "기본 문제"})`,
+  const where = target.chapter ? `바킹독 ${target.chapter} ${target.chapterTitle}, ${target.role === "lecture" ? "강의 연습 문제" : "기본 문제"}` : "학습자가 직접 넣은 문제";
+  const user = [`[문제] BOJ ${target.number} ${original.title || target.title} (${where})`,
     `문제\n${original.statement.slice(0, 4000)}`, `입력\n${original.inputText.slice(0, 1500)}`, `출력\n${original.outputText.slice(0, 800)}`,
     original.examples[0] ? `예제 입력\n${original.examples[0].input.slice(0, 600)}\n예제 출력\n${original.examples[0].output.slice(0, 300)}` : "",
-    code ? `[강의 풀이]\n${code}` : "[강의 풀이] 없음", `[같은 튜터의 다른 문제] ${others}`].filter(Boolean).join("\n\n");
+    code ? `[${target.verified ? "검증된 풀이" : "강의 풀이"}]\n${code}` : "[강의 풀이] 없음", `[같은 튜터의 다른 문제] ${others}`].filter(Boolean).join("\n\n");
   const raw = await askJson<Raw>("code:tutor-model", MODEL_SYSTEM, user, MODEL_SCHEMA);
   const { predictDraft, ...checked } = checkModel(raw, { target, statementText, pool });
   // 예측 질문의 답은 강의 풀이를 실제로 돌린 출력. 못 돌리면 예측 질문을 뺀다.
@@ -156,7 +169,7 @@ export async function buildModel(target: Target, deps: Deps = { fetcher: fetch, 
   }
   const model: ProblemModel = { number: target.number, title: original.title || target.title, chapter: target.chapter, role: target.role, url: original.url,
     statement: original.statement, inputText: original.inputText, outputText: original.outputText, ...(original.examples[0] ? { example: original.examples[0] } : {}),
-    ...checked, ...(predict ? { predict } : {}), at: new Date().toISOString() };
+    ...checked, ...(predict ? { predict } : {}), ...(target.problemId ? { problemId: target.problemId } : {}), at: new Date().toISOString() };
   await keep(model);
   return model;
 }
@@ -181,4 +194,62 @@ export async function prepareModels(limit?: number, workers = 6) {
   };
   void Promise.all(Array.from({ length: Math.max(1, Math.min(8, workers)) }, () => worker())).finally(() => { prep.running = false; });
   return prepStatus();
+}
+
+/* ---------- 필요할 때 조금씩 (11/10) ---------- */
+const missingFile = () => path.join(dir(), "missing.json");
+async function readMissing(): Promise<string[]> { try { return JSON.parse(await readFile(missingFile(), "utf8")) as string[]; } catch { return []; } }
+let missingWrite: Promise<unknown> = Promise.resolve();
+function markMissing(number: string) {
+  const run = missingWrite.then(async () => {
+    const all = new Set(await readMissing()); all.add(number);
+    await mkdir(dir(), { recursive: true }); await writeFile(missingFile(), JSON.stringify([...all]), "utf8");
+  });
+  missingWrite = run.catch(() => undefined);
+  return run.catch(() => undefined);
+}
+const building = new Set<string>();
+/** 이 패턴의 문제 재료가 want개가 되도록, 그 패턴 단원의 튜터 문제 중 아직 안 만든 것을 뒤에서 만든다(한 번에 최대 3개 시도).
+ *  만들어 봐야 그 문제의 패턴을 알아서, 만든 것이 다른 패턴이면 다음 부름 때 더 만든다. 앱 서버 안에서만(시험에서는 deps로). */
+export async function ensurePool(patternId: string, want: number, deps?: Deps) {
+  if (!deps && !process.env.NEXT_RUNTIME) return { started: [] as string[] };
+  const pattern = PATTERNS.find((p) => p.id === patternId);
+  if (!pattern) return { started: [] };
+  const have = await readModels();
+  const count = Object.values(have).filter((m) => m.patterns.includes(patternId)).length;
+  if (count >= want) return { started: [] };
+  const missing = new Set(await readMissing());
+  const todo = tutorTargets().filter((t) => pattern.chapters.includes(t.chapter) && !have[t.number] && !missing.has(t.number) && !building.has(t.number))
+    .sort((a, b) => Number(b.role === (count ? "basic" : "lecture")) - Number(a.role === (count ? "basic" : "lecture")))
+    .slice(0, Math.min(3, want - count));
+  for (const t of todo) building.add(t.number);
+  Object.assign(prep, { running: true, total: prep.total + todo.length });
+  const job = Promise.all(todo.map(async (t) => {
+    try { await buildModel(t, deps); } catch (error) { prep.failed.push({ number: t.number, why: (error as Error).message.slice(0, 200) }); }
+    finally { building.delete(t.number); prep.done++; if (!building.size) prep.running = false; }
+  }));
+  if (deps) await job; else void job;
+  return { started: todo.map((t) => t.number) };
+}
+
+/** 유저가 넣은 백준 문제의 재료(11/10): 숨은 테스트까지 만든 문제 파일(원문·예제·검증된 모범 풀이)에서 AI 1번. 예측 답은 그 모범 풀이를 돌린 값. */
+export async function modelForProblem(problem: { id: string; title: string; statement: string; inputText: string; outputText: string; examples: Array<{ input: string; output: string }>;
+  source?: { url?: string }; reference?: { lang: string; code: string } | null }, deps: Pick<Deps, "run"> = { run: runOnce }) {
+  const number = /BOJ\s*(\d{1,6})/.exec(problem.title)?.[1] ?? /acmicpc\.net\/problem\/(\d{1,6})/.exec(problem.source?.url ?? "")?.[1];
+  if (!number || building.has(number)) return null;
+  const have = await readModels();
+  if (have[number]) return have[number];
+  building.add(number);
+  try {
+    const lang = problem.reference && (["javascript", "python", "cpp", "csharp"] as const).includes(problem.reference.lang as Lang) ? problem.reference.lang as Lang : undefined;
+    return await modelFrom({ number, title: problem.title.replace(/^BOJ\s*\d+번?:?\s*/, ""), chapter: "", chapterTitle: "", role: "basic", solution: "", problemId: problem.id, verified: true },
+      { title: problem.title.replace(/^BOJ\s*\d+번?:?\s*/, ""), url: problem.source?.url ?? `https://www.acmicpc.net/problem/${number}`, statement: problem.statement, inputText: problem.inputText, outputText: problem.outputText, examples: problem.examples },
+      problem.reference?.code.slice(0, 12_000) ?? "", lang, deps);
+  } finally { building.delete(number); }
+}
+/** 문제 화면의 id → 튜터 번호(튜터 문제 cp_boj_N, 또는 재료가 있는 유저 문제). */
+export async function tutorNumberOf(problemId: string) {
+  const n = /^cp_boj_(\d{1,6})$/.exec(problemId)?.[1];
+  if (n) return n;
+  return Object.values(await readModels()).find((m) => m.problemId === problemId)?.number ?? null;
 }

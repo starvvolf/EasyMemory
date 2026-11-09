@@ -18,7 +18,10 @@ export async function patternsOfNumber(number: string): Promise<string[]> {
 }
 /** 문제 id(cp_boj_N) → 이미 기억이 된 패턴들의 기억 id. "지난번에도"를 말할 때 쓴다. */
 export async function memoryIdsOfProblem(problemId: string): Promise<string[]> {
-  const n = /^cp_boj_(\d{1,6})$/.exec(problemId)?.[1];
+  // 유저가 넣은 문제(11/10)는 재료의 problemId로 번호를 찾는다(problem-model을 부르지 않는 것은 순환 import를 피하려고).
+  const n = /^cp_boj_(\d{1,6})$/.exec(problemId)?.[1] ?? await (async () => {
+    try { return Object.values(JSON.parse(await readFile(path.join(dir(), "models.json"), "utf8")) as Record<string, { number: string; problemId?: string }>).find((m) => m.problemId === problemId)?.number; } catch { return undefined; }
+  })();
   if (!n) return [];
   const [links, patterns] = await Promise.all([readLinks(), patternsOfNumber(n)]);
   return patterns.map((p) => links[p]).filter(Boolean);
