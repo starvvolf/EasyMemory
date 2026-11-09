@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { readAll, createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, itemsByRef, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
-  onKnowledgeCreated, pickWaiting, recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge } from "@/lib/knowledge/store";
+  onKnowledgeCreated, originsOf, pickWaiting, recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge, type Origin } from "@/lib/knowledge/store";
+/** ?origin=theory|algo|lab (11/9 자료·알고리즘·실습 기억 따로 복습) */
+const originParam = (url: URL): Origin | undefined => { const o = url.searchParams.get("origin"); return o === "theory" || o === "algo" || o === "lab" ? o : undefined; };
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { isPsItem, psQuestions } from "@/lib/code/tutor/review";
 import { recordPsReview } from "@/lib/code/tutor/service";
@@ -135,7 +137,8 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "review" && m === "GET") {
       const folderId = url.searchParams.get("folderId") ?? undefined;
       const ids = url.searchParams.get("goalId") ? await goalItemIds(goalId.parse(url.searchParams.get("goalId"))) : undefined;
-      return json({ items: await reviewQueue({ folderId, ids, limit: Number(url.searchParams.get("limit") ?? 20), dueOnly: url.searchParams.get("all") !== "1" }), ...(await reviewStatus({ folderId, ids })) });
+      const origin = originParam(url);
+      return json({ items: await reviewQueue({ folderId, ids, origin, limit: Number(url.searchParams.get("limit") ?? 20), dueOnly: url.searchParams.get("all") !== "1" }), ...(await reviewStatus({ folderId, ids })) });
     }
 
     // items
@@ -194,13 +197,14 @@ async function handle(request: Request, context: RouteContext) {
       const practice = url.searchParams.get("all") === "1";
       // 미리 연습에는 아직 한 번도 묻지 않은 지식(만남)도 넣는다: 새로 시작한 데이터에서도 목록이 빈 채로 나오지 않게.
       // 절반은 복습 차례 앞쪽, 나머지는 방금 읽은 것부터(2026-11-05 품질 점검: 지식이 많으면 새 글의 지식이 목록에 안 나왔다).
-      const picked = await reviewQueue({ folderId, ids, limit: practice ? Math.ceil(count / 2) : count, dueOnly: !practice });
+      const origin = originParam(url);
+      const picked = await reviewQueue({ folderId, ids, origin, limit: practice ? Math.ceil(count / 2) : count, dueOnly: !practice });
       if (practice && picked.length < count) {
         const have = new Set(picked.map((x) => x.id));
-        const fresh = pool.filter((i) => !have.has(i.id) && !i.graduated && !i.review && (!folderId || i.folderId === folderId) && (!ids || ids.includes(i.id)))
+        const fresh = pool.filter((i) => !have.has(i.id) && !i.graduated && !i.review && (!folderId || i.folderId === folderId) && (!ids || ids.includes(i.id)) && (!origin || originsOf(i).includes(origin)))
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         for (const i of fresh) if (picked.length < count) picked.push({ id: i.id } as (typeof picked)[number]);
-        if (picked.length < count) for (const x of await reviewQueue({ folderId, ids, limit: count, dueOnly: false })) if (picked.length < count && !picked.some((y) => y.id === x.id)) picked.push(x);
+        if (picked.length < count) for (const x of await reviewQueue({ folderId, ids, origin, limit: count, dueOnly: false })) if (picked.length < count && !picked.some((y) => y.id === x.id)) picked.push(x);
       }
       const status = await reviewStatus({ folderId, ids });
       const seed = String(Date.now());

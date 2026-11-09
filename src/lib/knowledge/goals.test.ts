@@ -110,7 +110,7 @@ test("어휘: words with the same meaning are asked both ways and never offered 
   const base = { aliases: [], folderId: "f", links: [] as Array<{ to: string; relation: string }>, kind: "concept" as const, vocab: true };
   const pool = [{ ...base, id: "a", title: "abandon", body: "버리다" }, { ...base, id: "b", title: "acquire", body: "얻다" }, { ...base, id: "c", title: "adapt", body: "적응하다" }];
   const qs = questionsFor(pool[0], pool, "s");
-  assert.deepEqual(qs.map((q) => q.kind), ["flashcard", "short", "choice"]);
-  assert.equal(qs[1].answer, "abandon");
-  assert.ok(qs[2].options!.includes("abandon") && qs[2].options!.every((o) => /^[a-z]+$/.test(o)), "options are words, not meanings");
+  // 11/9 사용자 "코드가 바로 문제 만들기 X": 어휘도 뜻 카드 하나만
+  assert.deepEqual(qs.map((q) => q.kind), ["flashcard"]);
+  assert.equal(qs[0].answer, "버리다");
 });

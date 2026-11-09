@@ -751,12 +751,14 @@ const inReview = (item: Knowledge) => !item.graduated && item.state !== "met";
  * What to look at again: 몰랐음 first, then 앎 not yet graduated. With dueOnly, only what is due by now (box date),
  * soonest first — the review session. Without it, everything still in review, most missed first (deadline planning).
  */
-export async function reviewQueue(options: { folderId?: string; limit?: number; dueOnly?: boolean; now?: Date; ids?: string[] } = {}) {
+/** origin (11/9 사용자 "자료/실습/알고리즘 기억 구분"): theory 자료(PDF·웹 글) · algo 알고리즘 · lab 실습만. */
+export async function reviewQueue(options: { folderId?: string; limit?: number; dueOnly?: boolean; now?: Date; ids?: string[]; origin?: Origin } = {}) {
   const store = await readStore();
   const inFolder = options.folderId ? subtree(store, options.folderId) : null;
   const only = options.ids ? new Set(options.ids) : null;
   const now = (options.now ?? new Date()).getTime();
-  const pool = store.items.filter((i) => inReview(i) && (!inFolder || (i.folderId && inFolder.has(i.folderId))) && (!only || only.has(i.id)) && (!options.dueOnly || dueTime(i) <= now));
+  const pool = store.items.filter((i) => inReview(i) && (!inFolder || (i.folderId && inFolder.has(i.folderId))) && (!only || only.has(i.id)) && (!options.dueOnly || dueTime(i) <= now)
+    && (!options.origin || originsOf(i).includes(options.origin)));
   const byState = (a: Knowledge, b: Knowledge) => (a.state === b.state ? 0 : a.state === "unknown" ? -1 : 1);
   return pool.sort((a, b) => byState(a, b) || (options.dueOnly ? dueTime(a) - dueTime(b) : 0) || weakness(b) - weakness(a) || a.lastAt.localeCompare(b.lastAt))
     .slice(0, options.limit ?? 20).map(lite);

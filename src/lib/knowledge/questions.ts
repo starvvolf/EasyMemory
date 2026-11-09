@@ -15,7 +15,13 @@ type Pool = Array<Pick<Knowledge, "id" | "title" | "body" | "aliases" | "folderI
 function rng(seed: string) { let h = 2166136261; for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return () => { h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 2 ** 32; }; }
 function shuffle<T>(items: T[], r: () => number) { const a = [...items]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 // ⟨받음: … / 냄: …⟩ is the engine's wiring between knowledge points; it names other items, so it never goes into a question.
-const line = (body: string) => body.split("\n").map((l) => l.replace(/⟨[^⟩]*⟩/g, "").trim()).filter(Boolean).filter((l) => !/^헷갈림:/.test(l)).join(" ").slice(0, 220);
+// "헷갈림: …"은 줄 앞에도, 한 줄 안 " / 헷갈림: …"으로도 붙는다(11/9 사용자 "플래시카드에서 헷갈림은 숨겨야지": 문제·보기·답에 새지 않게).
+const MISTAKE = /\s*(?:\/\s*)?헷갈림\s*:\s*/;
+const line = (body: string) => body.split("\n").map((l) => l.replace(/⟨[^⟩]*⟩/g, "").split(MISTAKE)[0].trim()).filter(Boolean).join(" ").slice(0, 220);
+/** 헷갈리기 쉬운 점(이 지식에서 틀리기 쉬운 생각): OX의 틀린 문장 재료. */
+export function mistakesOf(body: string) {
+  return body.split("\n").flatMap((l) => l.split(MISTAKE).slice(1)).map((x) => x.replace(/⟨[^⟩]*⟩/g, "").trim()).filter((x) => x.length >= 6);
+}
 /** The meaning without the name in front ("z_vp — 뷰 평면의 위치…" → "뷰 평면의 위치…"), so an option does not give away whose it is. */
 export function meaningOf(item: Pick<Knowledge, "title" | "body">) {
   const m = line(item.body), t = item.title.trim();
@@ -33,20 +39,19 @@ const materials = (x: Pool[number]) => new Set((x.sources ?? []).map((s) => s.ti
  * Others to pick wrong options from: the same folder first, then the same material. Never knowledge from another
  * subject — a 3D viewing item with an algorithm's meaning as an option is no question at all.
  */
+// 11/9 사용자 "ㅈㄴ 어색하게 나온다": 폴더가 없는 지식은 모두 같은 "폴더 없음"이라, 교착 상태 문제에 SQL·앱 코드 보기가 섞였다.
+// 같은 자료가 먼저, 그다음은 (진짜 폴더가 있을 때만) 같은 폴더 + 같은 출처 종류(PDF·웹 글끼리, 코드끼리).
+const kinds = (x: Pool[number]) => new Set((x.sources ?? []).map((s) => (s.kind === "web" ? "pdf" : s.kind)));
 const others = (item: Pool[number], pool: Pool) => {
-  const mine = materials(item);
-  const usable = pool.filter((x) => x.id !== item.id && optionText(x) && !isSteps(optionText(x)) && normalize(optionText(x)) !== normalize(optionText(item)));
-  const sameFolder = usable.filter((x) => x.folderId === item.folderId);
-  const sameMaterial = usable.filter((x) => !sameFolder.includes(x) && [...materials(x)].some((m) => mine.has(m)));
-  return [...sameFolder, ...sameMaterial];
+  const mine = materials(item), myKinds = kinds(item);
+  const usable = pool.filter((x) => x.id !== item.id && optionText(x) && !isSteps(optionText(x)) && normalize(optionText(x)) !== normalize(optionText(item)) && similarity(x.title, item.title) < 0.8);
+  const sameMaterial = usable.filter((x) => [...materials(x)].some((m) => mine.has(m)));
+  const sameFolder = item.folderId ? usable.filter((x) => !sameMaterial.includes(x) && x.folderId === item.folderId && ([...kinds(x)].some((k) => myKinds.has(k)) || (!myKinds.size && !kinds(x).size))) : [];
+  return [...sameMaterial, ...sameFolder];
 };
 
-/**
- * Questions for one item, the kinds its content allows: a flashcard always; 객관식 and OX when it has a meaning and
- * there are others to mix in; 빈칸 when it sits in a chain (A → ? → C, or A → ?).
- */
-export function questionsFor(item: Pool[number], pool: Pool, seed = ""): Question[] {
-  const r = rng(`${item.id}:${seed}`);
+/** Questions for one item: the 뜻 카드(플래시카드), or its 다시 확인 문항. (11/9: 코드가 만드는 객관식·OX·빈칸은 뺐다.) */
+export function questionsFor(item: Pool[number], _pool: Pool, seed = ""): Question[] {
   const meaning = meaningOf(item);
   const out: Question[] = [];
   const id = (kind: string) => `${item.id}:${kind}:${seed}`;
@@ -56,39 +61,8 @@ export function questionsFor(item: Pool[number], pool: Pool, seed = ""): Questio
   if (check) out.push({ id: id("flashcard"), kind: "flashcard", label: "다시 확인", knowledgeId: item.id, prompt: check.q, answer: check.a,
     explain: check.note ? `예전 실습에서: ${check.note}` : item.title });
   else out.push({ id: id("flashcard"), kind: "flashcard", label: QUESTION_LABEL.flashcard, knowledgeId: item.id, prompt: item.ask || item.title, answer: meaning || "(설명이 아직 없어요. 지식창에서 적어 주세요.)", explain: item.ask ? item.title : "" });
-  // 어휘 (종류 vocab): a word is learned both ways — the word from its meaning (주관식), and which word fits (객관식).
-  if (item.vocab && meaning) {
-    out.push({ id: id("short"), kind: "short", label: QUESTION_LABEL.short, knowledgeId: item.id, prompt: `뜻에 맞는 단어를 쓰세요.\n${meaning}`, answer: item.title, accept: item.aliases,
-      explain: `${item.title}: ${meaning}` });
-    const words = shuffle(pool.filter((x) => x.id !== item.id && x.vocab && x.folderId === item.folderId && normalize(x.title) !== normalize(item.title)), r).slice(0, 3).map((x) => x.title);
-    if (words.length >= 2) out.push({ id: id("choice"), kind: "choice", label: QUESTION_LABEL.choice, knowledgeId: item.id, prompt: `뜻에 맞는 단어는?\n${meaning}`, options: shuffle([item.title, ...words], r),
-      answer: item.title, explain: `${item.title}: ${meaning}` });
-    return out;
-  }
-  const wrong = others(item, pool);
-  const own = optionText(item);
-  if (own && wrong.length >= 1) {
-    // Wrong options close to the answer in length (from a few random ones), so the longest option is not the answer.
-    const picks = shuffle(wrong, r).slice(0, 6).map((x) => optionText(x))
-      .sort((a, b) => Math.abs(a.length - own.length) - Math.abs(b.length - own.length)).slice(0, 3);
-    const options = shuffle([own, ...picks], r);
-    // 객관식 needs at least three options to be worth asking; with one other, only OX. A procedure is asked as a card.
-    if (picks.length >= 2 && !isSteps(own)) out.push({ id: id("choice"), kind: "choice", label: QUESTION_LABEL.choice, knowledgeId: item.id, prompt: item.ask ? `${item.ask} 맞는 것은?` : `"${item.title}"의 뜻으로 맞는 것은?`, options, answer: own, explain: `${item.title}: ${meaning}` });
-    const truth = r() < 0.5;
-    const shown = truth ? own : picks[0];
-    out.push({ id: id("ox"), kind: "ox", label: QUESTION_LABEL.ox, knowledgeId: item.id, prompt: `${item.title}: ${shown}`, options: ["O", "X"], answer: truth ? "O" : "X",
-      explain: truth ? "맞는 설명이에요." : `${item.title}의 뜻은 "${meaning}"이에요. 보기의 설명은 다른 지식의 것이에요.` });
-  }
-  const byId = new Map(pool.map((x) => [x.id, x]));
-  const before = pool.filter((x) => x.links.some((l) => l.to === item.id));
-  const after = item.links.map((l) => byId.get(l.to)).filter(Boolean) as Pool;
-  if (before.length || after.length) {
-    const a = before[0], c = after[0];
-    const rel = (from: Pool[number] | undefined, to: string) => from?.links.find((l) => l.to === to)?.relation ?? "→";
-    const prompt = [a ? `${a.title} —${rel(a, item.id)}→` : "", "( ? )", c ? `—${rel(item, c.id)}→ ${c.title}` : ""].filter(Boolean).join(" ");
-    out.push({ id: id("blank"), kind: "blank", label: QUESTION_LABEL.blank, knowledgeId: item.id, prompt: `고리의 빈칸에 들어갈 지식은?\n${prompt}`, answer: item.title, accept: item.aliases,
-      explain: meaning ? `${item.title}: ${meaning}` : item.title });
-  }
+  // 11/9 사용자 "코드가 바로 문제 만들기 X": 지식에서 코드로 객관식·OX·고리 빈칸을 만들지 않는다(다른 지식 설명을 오답으로
+  // 갖다 붙여 어색했다). 복습은 뜻 카드(헷갈림은 숨김)와, 따로 만들어 둔 문제(PS 질문·다시 확인)만.
   return out;
 }
 

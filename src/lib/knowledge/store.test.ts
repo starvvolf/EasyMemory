@@ -122,19 +122,13 @@ test("questions from knowledge: flashcard always, 객관식/OX with others to mi
   const base = { aliases: [], folderId: "f", links: [] as Array<{ to: string; relation: string }> };
   const pool = [
     { ...base, id: "a", title: "금리 인하", body: "중앙은행이 기준금리를 낮춤", links: [{ to: "b", relation: "그러면" }] },
-    { ...base, id: "b", title: "대출 증가", body: "돈을 빌리는 사람이 늘어남", aliases: ["대출 확대"], links: [{ to: "c", relation: "그러면" }] },
+    { ...base, id: "b", title: "대출 증가", body: "돈을 빌리는 사람이 늘어남 / 헷갈림: 금리가 내리면 대출이 줄어든다고 생각한다.", aliases: ["대출 확대"], links: [{ to: "c", relation: "그러면" }] },
     { ...base, id: "c", title: "성장주 상승", body: "미래 이익 비중이 큰 주식이 오름" },
   ];
   const qs = questionsFor(pool[1], pool, "s1");
-  assert.deepEqual(qs.map((q) => q.label), ["플래시카드", "객관식", "OX", "빈칸"]);
-  const blank = qs.find((q) => q.kind === "blank")!;
-  assert.match(blank.prompt, /금리 인하 —그러면→ \( \? \) —그러면→ 성장주 상승/);
-  assert.equal(grade(blank, "대출확대").correct, true, "aliases count");
-  assert.equal(grade(blank, "대출 증가함").correct, true, "a close spelling counts");
-  assert.equal(grade(blank, "환율").correct, false);
-  const choice = qs.find((q) => q.kind === "choice")!;
-  assert.equal(choice.options!.length, 3);
-  assert.equal(grade(choice, "돈을 빌리는 사람이 늘어남").correct, true);
+  // 11/9 사용자 "코드가 바로 문제 만들기 X": 뜻 카드 하나만, 헷갈림은 숨긴다.
+  assert.deepEqual(qs.map((q) => q.label), ["플래시카드"]);
+  assert.equal(qs[0].answer, "돈을 빌리는 사람이 늘어남");
   assert.equal(grade(qs[0], "knew").correct, true);
   const rq = recognizeQuestion(pool[0], "한국은행이 금리를 0.25%p 내렸다", pool);
   assert.equal(rq.label, "알아보기");
@@ -185,26 +179,11 @@ test("내 답도 맞아요 takes the last miss back: as 맞힘 in practice, as n
   assert.equal(read.stats.wrong, 0);
 }));
 
-test("review questions mix only knowledge of the same folder or material, and options do not carry the name", async () => {
-  const { questionsFor, meaningOf } = await import("./questions.ts");
-  const src = (title: string) => [{ kind: "pdf" as const, title, at: "2026-10-26T00:00:00Z" }];
-  const base = { aliases: [] as string[], links: [] as Array<{ to: string; relation: string }> };
-  const pool = [
-    { ...base, id: "a", title: "z_vp", body: "z_vp — 뷰 평면의 위치를 정하는 스칼라", folderId: "f1", sources: src("3D뷰잉.pdf") },
-    { ...base, id: "b", title: "V", body: "V — y_view 방향을 정한다", folderId: "f1", sources: src("3D뷰잉.pdf") },
-    { ...base, id: "c", title: "N", body: "뷰 평면의 법선", folderId: "f2", sources: src("3D뷰잉") },
-    { ...base, id: "d", title: "이분 탐색", body: "범위를 절반씩 줄여 찾는다", folderId: "f9", sources: src("알고리즘") },
-  ];
-  assert.equal(meaningOf(pool[0]), "뷰 평면의 위치를 정하는 스칼라");
-  for (const seed of ["1", "2", "3", "4", "5"]) {
-    const qs = questionsFor(pool[0], pool, seed);
-    const choice = qs.find((q) => q.kind === "choice")!;
-    assert.ok(choice, "two others of the same material make a 객관식");
-    assert.ok(!choice.options!.some((o) => o.includes("절반")), "no option from another subject");
-    assert.ok(!choice.options!.some((o) => o.startsWith("V —") || o.startsWith("z_vp —")), "no name in front of an option");
-  }
-  const lonely = questionsFor(pool[3], pool, "1");
-  assert.deepEqual(lonely.map((q) => q.kind), ["flashcard"], "nothing of its own subject to mix in: a flashcard only");
+test("뜻 카드: 이름을 앞에 단 설명은 이름을 떼고 보여 준다", async () => {
+  const { meaningOf, questionsFor } = await import("./questions.ts");
+  const item = { aliases: [] as string[], links: [] as Array<{ to: string; relation: string }>, id: "a", title: "z_vp", body: "z_vp — 뷰 평면의 위치를 정하는 스칼라 / 헷갈림: 거리로 생각한다.", folderId: "f1" };
+  assert.equal(meaningOf(item), "뷰 평면의 위치를 정하는 스칼라");
+  assert.equal(questionsFor(item, [item], "1")[0].answer, "뷰 평면의 위치를 정하는 스칼라");
 });
 
 test("PDF points: 냄 → 받음 become 고리, the wiring and the repeated name leave the text, no file-name folder", () => withData(async () => {
@@ -250,21 +229,6 @@ test("old FSRS schedules read as the first box; saving what is already there kee
   const more = await saveKnowledge({ title: "이분 탐색", aliases: ["Binary Search"] });
   assert.notEqual(more.item.lastAt, "2026-10-26T00:00:00.000Z");
 }));
-
-test("review options give nothing away: no [맥락] in front, no procedure among options, lengths close to the answer", async () => {
-  const { questionsFor } = await import("./questions.ts");
-  const base = { aliases: [], folderId: "f", links: [] as Array<{ to: string; relation: string }> };
-  const pool = [
-    { ...base, id: "a", title: "view-up vector (V)", body: "[N이 z_view 축을 정하는 좌표계] V를 N에 수직인 평면에 투영해 y_view를 정한다" },
-    { ...base, id: "b", title: "uvn 좌표계", body: "1) n = N/|N| 2) u = V × n 3) v = n × u" },
-    { ...base, id: "c", title: "법선 벡터 N", body: "뷰 평면에 수직인 방향으로 z_view 축을 정한다" },
-    { ...base, id: "d", title: "z_vp", body: "관찰 원점에서 뷰 평면까지의 거리" },
-  ];
-  const choice = questionsFor(pool[0], pool, "s").find((q) => q.kind === "choice")!;
-  assert.ok(choice.options!.every((o) => !o.startsWith("[")), "no context bracket on any option");
-  assert.ok(!choice.options!.some((o) => o.startsWith("1)")), "the procedure is not an option");
-  assert.equal(questionsFor(pool[1], pool, "s").some((q) => q.kind === "choice"), false, "a procedure is asked as a card, not 객관식");
-});
 
 test("an article's ask lands on an existing item only with its body (2026-11-05 품질 점검)", () => withData(async () => {
   const general = await saveKnowledge({ title: "시간 복잡도", body: "입력 크기에 따라 연산 횟수가 느는 정도." });
