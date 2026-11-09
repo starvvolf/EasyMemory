@@ -11,13 +11,13 @@ import { PATTERNS } from "./patterns.ts";
 
 export const ABILITIES = ["recognize", "design", "execute"] as const;
 export type Ability = (typeof ABILITIES)[number];
-export const ABILITY_LABEL: Record<Ability, string> = { recognize: "인식", design: "설계", execute: "실행" };
+export const ABILITY_LABEL: Record<Ability, string> = { recognize: "방법 알아채기", design: "계획 세우기", execute: "직접 짜기" };
 export type EventKind = "walkthrough" | "predict" | "contrast" | "drill" | "design" | "implement" | "skip" | "review";
 export type TutorEvent = {
   id: string; at: string; kind: EventKind; number: string; patterns: string[];
   ability?: Ability; ok?: boolean; grade: 0 | 1 | 2 | 3 | 4; hinted?: boolean; mixed?: boolean; ms?: number; detail?: string;
 };
-export const GRADE_LABEL = ["시범을 봄", "도움 받고 맞힘", "본 문제를 혼자", "새 문제를 혼자", "섞인 새 문제를 혼자"] as const;
+export const GRADE_LABEL = ["풀이를 봄", "도움 받고 맞힘", "본 적 있는 문제를 혼자 맞힘", "처음 보는 문제를 혼자 맞힘", "단원도 모른 채 처음 보는 문제를 혼자 맞힘"] as const;
 export const HELP_LABEL = ["시범", "따라 하기", "힌트", "실전"] as const;
 
 const dir = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "tutor");

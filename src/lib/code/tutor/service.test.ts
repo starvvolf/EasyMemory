@@ -28,7 +28,7 @@ test("튜터 흐름: 화면엔 답이 없고, 드릴·설계·예측은 코드�
     const d = o.actions.find((a) => a.kind === "drill")!;
     assert.ok(d && !("approaches" in d), "the drill sends choices, not verdicts");
     const r = await answer({ kind: "drill", number: d.number, pattern: "components", mixed: false, choice: "BFS로 덩어리 세기" }) as { ok: boolean; grade: string };
-    assert.equal(r.ok, true); assert.equal(r.grade, "새 문제를 혼자");
+    assert.equal(r.ok, true); assert.equal(r.grade, "처음 보는 문제를 혼자 맞힘");
     const slow = await answer({ kind: "drill", number: "2667", pattern: "components", mixed: true, choice: "모든 쌍 비교" }) as { ok: boolean };
     assert.equal(slow.ok, false, "a slow approach is not a recognition");
     const des = await answer({ kind: "design", number: "2667", pattern: "components", mixed: false, state: "방문 배열", complexity: "n" }) as { ok: boolean; cxOk: boolean; mine: string };

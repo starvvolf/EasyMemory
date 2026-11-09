@@ -43,7 +43,7 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
     .filter((x) => x.a.dueAt && Date.parse(x.a.dueAt) <= now.getTime()).sort((x, y) => (x.a.dueAt ?? "").localeCompare(y.a.dueAt ?? "")).slice(0, 2);
   for (const d of due) {
     const m = pick(models, state, d.p.id, d.ab, "basic", used);
-    if (m) push(make({ kind: KIND_OF[d.ab], number: m.number, pattern: d.p.id, mixed: true, why: `복습 날짜: ${d.p.name}` }));
+    if (m) push(make({ kind: KIND_OF[d.ab], number: m.number, pattern: d.p.id, mixed: true, why: `${d.p.name}: 다시 볼 날이에요` }));
   }
 
   // ② 처음이면 진단: 단원이 다른 문제 6개, 단원 숨김.
@@ -52,7 +52,7 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
     for (const m of [...models].sort((a, b) => a.number.localeCompare(b.number))) {
       if (seenChapters.has(m.chapter) || !m.approaches.length || m.role !== "basic") continue;
       seenChapters.add(m.chapter);
-      push(make({ kind: "drill", number: m.number, pattern: m.patterns[0], mixed: true, why: "처음 진단: 어떤 패턴이 익숙한지 본다" }));
+      push(make({ kind: "drill", number: m.number, pattern: m.patterns[0], mixed: true, why: "처음이라 무엇이 익숙한지 먼저 봐요" }));
       if (seenChapters.size >= 6) break;
     }
     return out;
@@ -66,17 +66,17 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
     const stuck = (["recognize", "design", "execute"] as const).find((ab) => ps.abilities[ab].failStreak >= 3);
     if (r.help === 0 && !ps.seen) {
       const m = pick(models, state, current.id, "walkthrough", "lecture", used);
-      if (m) push(make({ kind: "walkthrough", number: m.number, pattern: current.id, mixed: false, why: `새 패턴: ${current.name}` }));
+      if (m) push(make({ kind: "walkthrough", number: m.number, pattern: current.id, mixed: false, why: `새로 배울 것: ${current.name}` }));
     } else if (stuck) {
       const m = pick(models, state, current.id, "walkthrough", "lecture", used);
-      if (m) push(make({ kind: "walkthrough", number: m.number, pattern: current.id, mixed: false, why: `${current.name}: 3번 연속 틀려서 다른 문제로 다시 시범` }));
+      if (m) push(make({ kind: "walkthrough", number: m.number, pattern: current.id, mixed: false, why: `${current.name}: 3번 연달아 틀려서 다른 문제로 풀이 과정을 다시 봐요` }));
     } else if (r.failStreak >= 2) {
       const m = models.find((mm) => mm.patterns.includes(current.id) && mm.contrast && !used.has(mm.number));
-      if (m) push(make({ kind: "contrast", number: m.number, pattern: current.id, mixed: false, why: `${current.name}: 언제 쓰는지 헷갈려서 대조 예시` }));
+      if (m) push(make({ kind: "contrast", number: m.number, pattern: current.id, mixed: false, why: `${current.name}: 언제 쓰는지 헷갈려서 비슷한 문제와 비교해 봐요` }));
     }
     const step: Ability = r.freshWins < 2 ? "recognize" : d.freshWins < 1 ? "design" : x.freshWins < 1 && x.failStreak < 2 ? "execute" : x.freshWins < 1 ? "design" : "recognize";
     const m = pick(models, state, current.id, step, "basic", used);
-    const why = step === "recognize" ? `${current.name}: 문제를 보고 이 패턴을 떠올리기` : step === "design" ? (x.failStreak >= 2 ? `${current.name}: 구현을 2번 틀려서 설계로 한 칸 물러남` : `${current.name}: 상태와 복잡도 정하기`) : `${current.name}: 혼자 구현`;
+    const why = step === "recognize" ? `${current.name}: 문제를 보고 이 방법을 떠올려 봐요` : step === "design" ? (x.failStreak >= 2 ? `${current.name}: 짜기를 2번 틀려서 계획부터 다시 세워 봐요` : `${current.name}: 풀면서 적어 둘 것과 걸리는 시간을 정해 봐요`) : `${current.name}: 혼자 직접 짜 봐요`;
     if (m) push(make({ kind: KIND_OF[step], number: m.number, pattern: current.id, mixed: false, why }));
   }
 
@@ -86,7 +86,7 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
     const learned = covered.filter((p) => p.id !== current?.id && state.patterns[p.id].seen).sort((a, b) => (state.patterns[a.id].lastAt ?? "").localeCompare(state.patterns[b.id].lastAt ?? ""));
     for (const p of learned) {
       const m = pick(models, state, p.id, "recognize", "basic", used);
-      if (m) { push(make({ kind: "drill", number: m.number, pattern: p.id, mixed: true, why: `섞어 풀기: 단원을 숨기고 ${p.name}인지 알아보기` })); break; }
+      if (m) { push(make({ kind: "drill", number: m.number, pattern: p.id, mixed: true, why: `섞어 풀기: 어느 단원인지 모른 채 ${p.name}을 알아채는지 봐요` })); break; }
     }
   }
   return out;

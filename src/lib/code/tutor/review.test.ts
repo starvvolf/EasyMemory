@@ -71,7 +71,7 @@ test("학습 관찰일지: 사건에 그 순간의 카드가 붙고, AI 힌트�
   assert.equal(j[0].what, "AI 힌트");
   assert.equal(j[2].lesson?.distinguish, "d");
   assert.equal(j[1].lesson, undefined, "solved alone: no card");
-  assert.match(j[1].text, /섞인 새 문제를 혼자 \(단원 숨김\)/);
+  assert.match(j[1].text, /단원도 모른 채 처음 보는 문제를 혼자 맞힘/);
 });
 
 test("기억 요약(11/10): 어디서 막혔나 한마디, 흐름 한 줄, 마지막으로 잘못 생각한 것과 이제 기억할 것", async () => {

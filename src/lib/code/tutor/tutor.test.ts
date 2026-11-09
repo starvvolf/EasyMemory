@@ -86,5 +86,5 @@ test("다음 할 일: 날짜가 된 복습이 먼저이고 단원을 숨긴다",
   const events = [ev({ kind: "walkthrough", number: "1926", ability: undefined, grade: 0 }), ev({ number: "2667", ability: "recognize", ok: true })];
   const later = new Date(Date.parse(events[1].at) + 11 * 60_000);
   const next = nextActions(computeState(events), models, later);
-  assert.equal(next[0].mixed, true); assert.match(next[0].why, /복습/);
+  assert.equal(next[0].mixed, true); assert.match(next[0].why, /다시 볼 날/);
 });

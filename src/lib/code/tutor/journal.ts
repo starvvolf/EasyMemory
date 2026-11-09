@@ -19,16 +19,16 @@ export function journalOf(events: TutorEvent[], lessons: Lesson[], titles: Recor
     const card = cardFor(e);
     if (card) used.add(card.id);
     const lesson = card ? { gap: card.gap, fix: card.fix, cue: card.cue, distinguish: card.distinguish } : undefined;
-    if (e.kind === "walkthrough") out.push({ ...base, what: "시범", result: "seen", text: `시범을 봄 (${names(e.patterns)})` });
-    else if (e.kind === "skip") out.push({ ...base, what: "시범", result: "other", text: `시범을 건너뜀: 이미 안다고 함 (${names(e.patterns)})` });
-    else if (e.kind === "predict") out.push({ ...base, what: "결과 예측", result: e.ok ? "alone" : "learned", text: e.ok ? "결과를 맞게 예측함" : e.detail === "모르겠어요" ? "결과를 예측하지 못함" : "결과 예측이 달랐음", lesson });
-    else if (e.kind === "review") out.push({ ...base, what: "기억 복습", result: e.ok ? "alone" : "learned", text: e.ok ? "예전 실수를 다시 보고 바로잡은 생각을 골라냄" : "예전 실수를 다시 봤지만 바로잡은 생각을 고르지 못함" });
-    else if (e.kind === "contrast") out.push({ ...base, what: "비교하기", result: e.ok ? "alone" : "other", text: e.ok ? "비슷한 두 문제의 패턴을 맞게 구별함" : "비슷한 두 문제를 구별하지 못함" });
+    if (e.kind === "walkthrough") out.push({ ...base, what: "풀이 과정 보기", result: "seen", text: `풀이 과정을 봤어요 (${names(e.patterns)})` });
+    else if (e.kind === "skip") out.push({ ...base, what: "풀이 과정 보기", result: "other", text: `이미 안다고 해서 건너뛰었어요 (${names(e.patterns)})` });
+    else if (e.kind === "predict") out.push({ ...base, what: "결과 맞히기", result: e.ok ? "alone" : "learned", text: e.ok ? "결과를 맞혔어요" : e.detail === "모르겠어요" ? "결과를 떠올리지 못했어요" : "결과가 생각과 달랐어요", lesson });
+    else if (e.kind === "review") out.push({ ...base, what: "다시 보기", result: e.ok ? "alone" : "learned", text: e.ok ? "예전 실수를 다시 보고 맞는 생각을 골랐어요" : "예전 실수를 다시 봤지만 맞는 생각을 고르지 못했어요" });
+    else if (e.kind === "contrast") out.push({ ...base, what: "비슷한 문제 구별", result: e.ok ? "alone" : "other", text: e.ok ? "비슷한 두 문제를 맞게 구별했어요" : "비슷한 두 문제를 구별하지 못했어요" });
     else if (e.ability && e.ok !== undefined) {
       const what = { recognize: "방법 알아채기", design: "계획 세우기", execute: "직접 짜기" }[e.ability];
       const result = e.hinted ? (e.ok ? "helped" : "learned") : e.ok ? "alone" : "learned";
-      const text = e.hinted ? (e.ok ? `${what}: 도움(신호·힌트)을 받고 맞힘` : `${what}: 도움을 받고도 틀림`) : e.ok ? `${what}: 혼자 맞힘 · ${GRADE_LABEL[e.grade]}` : `${what}: 틀림`;
-      out.push({ ...base, what, result, text: `${text}${e.mixed ? " (단원 숨김)" : ""}`, lesson });
+      const text = e.hinted ? (e.ok ? "힌트를 보고 맞혔어요" : "힌트를 보고도 틀렸어요") : e.ok ? `${GRADE_LABEL[e.grade]}` : "틀렸어요";
+      out.push({ ...base, what, result, text, lesson });
     }
   }
   // AI 힌트·설명으로 배운 것은 사건이 아니라 카드로만 있다.
@@ -38,7 +38,7 @@ export function journalOf(events: TutorEvent[], lessons: Lesson[], titles: Recor
     if (seenAi.has(key)) continue;
     seenAi.add(key);
     out.push({ at: l.at, number: l.number, title: l.title, patterns: [l.pattern], what: l.kind === "hint" ? "AI 힌트" : "AI 설명", result: "learned",
-      text: `${l.kind === "hint" ? "AI 힌트" : "AI 설명"}로 배움 (${names([l.pattern])})${l.refined === "raw" ? " · 정리 못 해서 원문 그대로" : ""}`, lesson: { gap: l.gap, fix: l.fix, cue: l.cue } });
+      text: `${l.kind === "hint" ? "AI 힌트" : "AI 설명"}로 배웠어요 (${names([l.pattern])})${l.refined === "raw" ? " · 정리하지 못해 받은 글 그대로" : ""}`, lesson: { gap: l.gap, fix: l.fix, cue: l.cue } });
   }
   return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
 }
