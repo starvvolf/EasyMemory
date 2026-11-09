@@ -1038,3 +1038,16 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pp-weak{margin:1px 0 0;font-size:12.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .dejipgi .pp-all{width:100%}
 .dejipgi .pp-all summary{cursor:pointer;margin-bottom:6px}
+
+/* PS 패턴 기억의 알고리즘 전용 모양 (11/10) */
+.dejipgi .kw-ps{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);margin-bottom:8px}
+.dejipgi .kw-ps-stage{margin:0;font-weight:700}
+.dejipgi .kw-ps-marks{display:flex;gap:6px;flex-wrap:wrap}
+.dejipgi .kw-ps-mark{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted)}
+.dejipgi .kw-ps-mark.ok{border-color:var(--good);color:var(--good)}
+.dejipgi .kw-ps-mark.bad{border-color:var(--bad);color:var(--bad)}
+.dejipgi .kw-ps-mark.help{border-color:var(--help);color:var(--help)}
+.dejipgi .kw-ps-line{margin:0;display:flex;gap:8px;align-items:baseline;font-size:14px}
+.dejipgi .kw-ps-tag{flex:none;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px}
+.dejipgi .kw-ps-tag.bad{background:var(--bad-soft);color:var(--bad)}
+.dejipgi .kw-ps-tag.good{background:var(--good-soft);color:var(--good)}

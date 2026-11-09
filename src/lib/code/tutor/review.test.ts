@@ -73,3 +73,19 @@ test("학습 관찰일지: 사건에 그 순간의 카드가 붙고, AI 힌트�
   assert.equal(j[1].lesson, undefined, "solved alone: no card");
   assert.match(j[1].text, /섞인 새 문제를 혼자 \(단원 숨김\)/);
 });
+
+test("기억 요약(11/10): 어디서 막혔나 한마디, 흐름 한 줄, 마지막으로 잘못 생각한 것과 이제 기억할 것", async () => {
+  const { summarize } = await import("./summary.ts");
+  const e = (at: string, kind: TutorEvent["kind"], extra: Partial<TutorEvent> = {}): TutorEvent => ({ id: at, at, kind, number: "7576", patterns: ["multi-source"], grade: 3, ...extra });
+  const events = [e("2026-11-10T01:00:00Z", "walkthrough"), e("2026-11-10T01:01:00Z", "predict", { ok: false }),
+    e("2026-11-10T01:02:00Z", "drill", { ability: "recognize", ok: false }), e("2026-11-10T01:03:00Z", "drill", { ability: "recognize", ok: true }),
+    e("2026-11-10T01:04:00Z", "design", { ability: "design", ok: false })];
+  const lessons: Lesson[] = [{ id: "l", at: "2026-11-10T01:04:00.5Z", pattern: "multi-source", number: "7576", title: "토마토", kind: "design", situation: "s",
+    gap: "기억할 상태를 「합계」로 생각함", fix: "꺼낸 칸의 날짜 + 1", cue: "여러 곳에서 동시에", refined: "code" },
+    { id: "h", at: "2026-11-10T01:05:00Z", pattern: "multi-source", number: "7576", title: "토마토", kind: "hint", situation: "s", gap: "", fix: "f", cue: "", refined: "ai" }];
+  const s = summarize("multi-source", events, lessons);
+  assert.equal(s.stage, "아직 설계에서 막힘");
+  assert.deepEqual(s.flow, ["시범", "예측 틀림", "알아보기 2번(1번 틀림)", "설계 틀림", "AI 힌트"]);
+  assert.deepEqual(s.marks, { recognize: "ok", design: "bad", execute: "none" });
+  assert.equal(s.wrong, "기억할 상태를 「합계」로 생각함"); assert.equal(s.remember, "꺼낸 칸의 날짜 + 1"); assert.equal(s.where, "BOJ 7576 토마토");
+});

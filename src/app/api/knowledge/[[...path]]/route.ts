@@ -8,6 +8,7 @@ const originParam = (url: URL): Origin | undefined => { const o = url.searchPara
 import { grade, questionsFor, recognizeQuestion, QUESTION_LABEL, type Question } from "@/lib/knowledge/questions";
 import { isPsItem, psQuestions } from "@/lib/code/tutor/review";
 import { recordPsReview } from "@/lib/code/tutor/service";
+import { psSummaryOf } from "@/lib/code/tutor/summary";
 import { getSource, listSources, markGoal, GOAL_TEXT, type GoalId, type ReadSource } from "@/lib/knowledge/sources";
 import { similarKnowledge } from "@/lib/knowledge/embed";
 import { runDedupeEval } from "@/lib/knowledge/dedupe-eval";
@@ -149,7 +150,12 @@ async function handle(request: Request, context: RouteContext) {
     }
     if (p[0] === "item" && p[1]) {
       const itemId = id.parse(p[1]);
-      if (p.length === 2 && m === "GET") return json({ ...await getKnowledge(itemId), near: await nearOf(itemId) });
+      if (p.length === 2 && m === "GET") {
+        const got = await getKnowledge(itemId);
+        // PS 패턴 기억은 알고리즘 전용 모양(11/10): 어디서 막혔나 · 흐름 · 잘못 생각한 것 / 이제 기억할 것.
+        const ps = await psSummaryOf(got.item).catch(() => null);
+        return json({ ...got, near: await nearOf(itemId), ...(ps ? { ps } : {}) });
+      }
       if (p.length === 2 && m === "PATCH") return json({ item: await updateKnowledge(itemId, await body(z.object({ title: z.string().max(120).optional(), body: z.string().max(4000).optional(),
         aliases: z.array(z.string().max(120)).max(20).optional(), folderId: id.nullable().optional(), kind: kind.optional(), example: z.string().max(600).optional(), explain: z.string().max(3000).optional() }))) });
       if (p.length === 2 && m === "DELETE") return json(await deleteKnowledge(itemId));

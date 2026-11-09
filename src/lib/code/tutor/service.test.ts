@@ -70,7 +70,7 @@ test("기억 규칙: 혼자 맞힘·시범 보기만으로는 기억이 생기�
     const dist = (await getKnowledge((await find("거리 배열 BFS"))!.id)).item;
     assert.equal(dist.state, "unknown");
     const e = (await memoryEvents({ knowledgeId: dist.id })).events.find((x) => x.kind === "wrong")!;
-    assert.match(e.detail, /실제 출력은 「3」/, "what was learned is written down");
+    assert.match(e.detail, /실제 「3」/, "what was learned is written down");
 
     // AI가 한 말은 AI 1번(가짜 모델)으로 카드가 되고, 원문은 카드에 함께 남는다.
     const { setFakeModelResponder } = await import("../../ai/model.ts");
@@ -84,7 +84,7 @@ test("기억 규칙: 혼자 맞힘·시범 보기만으로는 기억이 생기�
     assert.equal(await find("방문 표시"), undefined, "a hint with nothing to learn (cheering only) is not a memory");
     const multi = (await getKnowledge((await find("시작점 여러 개 BFS"))!.id)).item;
     assert.equal(multi.stats.hint, 1);
-    assert.match((await memoryEvents({ knowledgeId: multi.id, kinds: ["hint"] })).events[0].detail, /몰랐던 것: 시작점이 여럿이면 .* 고친 생각: 시작점을 처음에 모두/);
+    assert.match((await memoryEvents({ knowledgeId: multi.id, kinds: ["hint"] })).events[0].detail, /잘못 생각한 것: 시작점이 여럿이면 .* 고친 생각: 시작점을 처음에 모두/);
     const { readLessons } = await import("./lessons.ts");
     const card = (await readLessons()).find((l) => l.kind === "hint")!;
     assert.equal(card.refined, "ai"); assert.match(card.raw!, /동시에 퍼뜨려/);

@@ -59,7 +59,9 @@ export type Knowledge = { id: string; title: string; body: string; folderId: str
   review?: { algorithm: "leitner"; box: number; dueAt: string; repetitions: number; lapses: number } };
 export type Detail = { item: Knowledge; path: string; /** 제목에 들어 있는 개념(태그), 이 기억이 개념이면 이 태그가 붙은 기억 (11/5) */ tags?: Array<{ id: string; title: string }>; tagged?: ItemLite[]; links: Array<{ to: string; relation: string; note?: string; item: ItemLite }>; backlinks: Array<{ relation: string; note?: string; item: ItemLite }>; events: KEvent[];
   /** 가까운 지식: close, but no clear link (AI 판정 "가까움"). */
-  near?: Array<{ id: string; title: string; line: string }> };
+  near?: Array<{ id: string; title: string; line: string }>;
+  /** PS 패턴 기억(11/10): 알고리즘 전용 모양. 코드가 사건·카드에서 만든 요약. */
+  ps?: { stage: string; flow: string[]; marks: Record<"recognize" | "design" | "execute", "ok" | "help" | "bad" | "none">; wrong?: string; remember?: string; cue?: string; at?: string; where?: string } };
 export type Question = { id: string; kind: "flashcard" | "choice" | "ox" | "blank" | "short" | "recognize"; label: string; knowledgeId: string; prompt: string; context?: string;
   options?: string[]; answer: string; accept?: string[]; explain: string };
 export type Graded = { correct: boolean; expected: string; note: string };

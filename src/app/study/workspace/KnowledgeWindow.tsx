@@ -360,6 +360,22 @@ function FolderTools({ folder, onAct, onGone }: { folder: Folder; onAct: (run: (
   );
 }
 
+/** PS 패턴 기억의 알고리즘 전용 모양(11/10, 사용자 "어떤 흐름으로 공부했는데 뭐가 부족했구나 딱 볼 수 있게"): 어디서 막혔나 → 흐름 → 잘못 생각한 것 / 이제 기억할 것. */
+function PsBox({ ps }: { ps: NonNullable<Detail["ps"]> }) {
+  const MARK = { ok: ["✓", "혼자 됨"], help: ["△", "도움 받고"], bad: ["✗", "막힘"], none: ["·", "아직"] } as const;
+  return (
+    <div className="kw-ps">
+      <p className="kw-ps-stage">{ps.stage}</p>
+      <div className="kw-ps-marks">{(["recognize", "design", "execute"] as const).map((ab) => (
+        <span key={ab} className={`kw-ps-mark ${ps.marks[ab]}`} title={MARK[ps.marks[ab]][1]}>{{ recognize: "알아보기", design: "설계", execute: "구현" }[ab]} {MARK[ps.marks[ab]][0]}</span>))}</div>
+      {ps.flow.length ? <p className="small"><span className="muted">흐름 </span>{ps.flow.join(" → ")}</p> : null}
+      {ps.wrong ? <p className="kw-ps-line"><span className="kw-ps-tag bad">잘못 생각한 것</span><span>{ps.wrong}</span></p> : null}
+      {ps.remember ? <p className="kw-ps-line"><span className="kw-ps-tag good">이제 기억할 것</span><span>{ps.remember}{ps.cue ? <span className="muted"> · 신호: {ps.cue}</span> : null}</span></p> : null}
+      {ps.where ? <p className="small muted">{ps.where}에서{ps.at ? ` · ${ago(ps.at)}` : ""}</p> : null}
+    </div>
+  );
+}
+
 function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }: { detail: Detail; folders: Folder[]; quizzing: boolean; onAct: (run: () => Promise<unknown>, after?: () => void) => Promise<void>; onOpen: (id: string) => void; onGone: () => void; onQuiz: (q: Question[]) => void }) {
   const { item } = detail;
   const [editing, setEditing] = useState(false);
@@ -386,7 +402,8 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
   const extra = ex?.extras ?? [];
   const see = item.explainSee ?? [];
   // 뜻 박스: 뜻 줄과 "헷갈림:" 줄을 나눠, 헷갈림은 머리말 대신 "주의" 칸으로.
-  const meaningText = tidyMeaning(item.body.split("\n").filter((l) => !/^\s*헷갈림\s*:/.test(l)).join("\n").trim());
+  // PS 패턴 기억(11/10)의 예전 뜻에 붙어 있던 신호·흔한 실수 줄은 숨긴다(알고리즘은 아래 요약이 대신한다).
+  const meaningText = tidyMeaning(item.body.split("\n").filter((l) => !/^\s*헷갈림\s*:/.test(l) && !(detail.ps && /^\s*(흔한 실수|떠올리게 하는 신호)\s*:/.test(l))).join("\n").trim());
   const traps = item.body.split("\n").filter((l) => /^\s*헷갈림\s*:/.test(l)).map((l) => l.replace(/^\s*헷갈림\s*:\s*/, "").trim()).filter(Boolean);
   // 예와 만난 곳을 한 줄로: "코드 문제 「이름별 누적 포인트 조회」에서 이름을 키로 … 문제 보기 →"
   const srcs = [...new Map(item.sources.map((src) => [src.title, src])).values()];
@@ -431,6 +448,7 @@ function ItemDetail({ detail, folders, quizzing, onAct, onOpen, onGone, onQuiz }
           <div className="row"><button className="btn primary small" onClick={save}>저장</button><button className="btn ghost small" onClick={() => { setEditing(false); setTitle(item.title); setBody(item.body); setExample(item.example ?? ""); }}>취소</button></div></>
       ) : quizzing ? <p className="kw-hide">확인 문제를 푸는 동안 뜻과 예를 가려 뒀어요.</p> : (
         <>
+          {detail.ps ? <PsBox ps={detail.ps} /> : null}
           <div className="kw-body" onDoubleClick={() => setEditing(true)}>{meaningText ? <Rich text={meaningText} /> : <p className="muted small">뜻이 아직 없어요. 편집으로 적거나, 위 “정리할 것”에서 AI로 채울 수 있어요.</p>}
             {traps.map((t, n) => <p key={n} className="kw-trap"><span className="kw-trap-tag">주의</span><span><Inline text={t} /></span></p>)}
             <button className="btn ghost small kw-edit" onClick={() => setEditing(true)} aria-label="이름·뜻 편집">편집</button></div>

@@ -46,7 +46,7 @@ export async function psQuestions(item: { id: string; title: string; sources?: A
     const mm = models[mine.number];
     const best = mm?.approaches.find((a) => a.verdict === "best");
     const ask = `예전에 이런 일이 있었어요.\n${mine.situation}`;
-    const explain = [mine.gap && `몰랐던 것: ${mine.gap}`, `고친 생각: ${mine.fix}`, mine.cue && `다음에 떠올릴 신호: ${mine.cue}`, mine.distinguish && `구별: ${mine.distinguish}`].filter(Boolean).join(" · ");
+    const explain = [mine.gap && `그때 잘못 생각한 것: ${mine.gap}`, `고친 생각: ${mine.fix}`, mine.cue && `다음에 떠올릴 신호: ${mine.cue}`].filter(Boolean).join(" · ");
     const base = { id: psId("mistake", mine.number, pid, seed), kind: "choice" as const, label: "내 실수 다시 보기", knowledgeId: item.id, explain };
     if (mine.kind === "drill" && mm && best && mm.approaches.length >= 3) out.mistake = { ...base, prompt: `${ask}\n다시 고른다면 이 문제에 맞는 접근은?`, context: mm.summary, options: shuffle(mm.approaches.map((a) => a.name), r), answer: best.name };
     else if (mine.kind === "design" && mm?.state.right && mm.state.wrong.length === 2) out.mistake = { ...base, prompt: `${ask}\n다시 설계한다면 꼭 기억할 상태는?`, context: mm.summary, options: shuffle([mm.state.right, ...mm.state.wrong], r), answer: mm.state.right };
@@ -68,7 +68,7 @@ export async function psQuestions(item: { id: string; title: string; sources?: A
       explain: `BOJ ${m.number} ${m.title} — 신호: ${m.signals.join(" · ")}${m.approaches.find((a) => a.verdict === "best") ? ` · 의도된 풀이: ${m.approaches.find((a) => a.verdict === "best")!.name}` : ""}` };
     if (m.state.right && m.state.wrong.length === 2) out.design = { id: psId("design", m.number, pid, seed), kind: "choice", label: "설계", knowledgeId: item.id,
       prompt: "이 문제를 풀 때 꼭 기억해야 하는 상태는?", context: m.summary, options: shuffle([m.state.right, ...m.state.wrong], r), answer: m.state.right,
-      explain: `바꾸는 법: ${m.update}${m.pitfalls[0] ? ` · 흔한 실수: ${m.pitfalls[0]}` : ""}` };
+      explain: `바꾸는 법: ${m.update}` };
     const p = pool.find((x) => x.predict && !/\s/.test(x.predict.answer.trim()));
     if (p?.predict) out.predict = { id: psId("predict", p.number, pid, seed), kind: "short", label: "출력 예측", knowledgeId: item.id,
       prompt: `${p.predict.question}\n입력:\n${p.predict.input}`, context: p.summary, answer: p.predict.answer.trim(),

@@ -13,7 +13,7 @@ export type LessonKind = "drill" | "design" | "predict" | "implement" | "hint" |
 export type Lesson = {
   id: string; at: string; pattern: string; number: string; title: string; kind: LessonKind;
   /** 무슨 문제에서 무엇을 했나 */ situation: string;
-  /** 몰랐던 것 */ gap: string;
+  /** 잘못 생각한 것(11/10부터 이 꼴로, 그 전 카드는 "몰랐던 것") */ gap: string;
   /** 고친 생각(맞는 생각) */ fix: string;
   /** 다음에 떠올리게 하는 신호 */ cue: string;
   /** 구별할 조건: 언제는 이 패턴이 아닌지·헷갈리는 것과 무엇이 다른지 (11/8 GPT 점검 반영) */ distinguish?: string;
@@ -32,11 +32,11 @@ export async function appendLesson(l: Omit<Lesson, "id" | "at">): Promise<Lesson
 }
 /** 기억 기록에 넣을 한 줄. */
 export const lessonLine = (l: Pick<Lesson, "situation" | "gap" | "fix" | "cue" | "distinguish">) =>
-  [l.situation, l.gap && `몰랐던 것: ${l.gap}`, l.fix && `고친 생각: ${l.fix}`, l.cue && `신호: ${l.cue}`, l.distinguish && `구별: ${l.distinguish}`].filter(Boolean).join(" · ");
+  [l.situation, l.gap && `잘못 생각한 것: ${l.gap}`, l.fix && `고친 생각: ${l.fix}`, l.cue && `신호: ${l.cue}`].filter(Boolean).join(" · ");
 
 /* ---------- AI 힌트·설명 정리 ---------- */
 export const REFINE_SYSTEM = `알고리즘 문제를 풀던 학습자가 AI에게 받은 힌트나 코드 설명을, 나중에 복습할 카드로 정리한다. 한국어, 짧게.
-- gap: 학습자가 몰랐던 것 한 문장(40자 안팎). "~를 몰랐다"처럼 학습자 입장에서.
+- gap: 학습자가 잘못 생각했던 것 한 문장(40자 안팎). "~면 된다고 생각함"처럼 학습자가 실제로 믿었던 틀린 생각으로. "~ 방법을 몰랐다"처럼 뭉뚱그리지 않는다. 힌트에서 드러나지 않으면 학습자가 놓친 구체적인 한 가지.
 - fix: 맞는 생각 한 문장(60자 안팎). 일반적인 규칙으로 쓰고, 이 문제의 정답 코드나 숫자는 쓰지 않는다.
 - cue: 다음에 이 생각을 떠올리게 할 문제의 신호 한 구절(30자 안팎). 모르면 "".
 - 힌트가 학습 내용 없이 격려나 질문뿐이면 gap과 fix를 모두 ""로 둔다.
