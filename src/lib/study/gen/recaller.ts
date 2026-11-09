@@ -1784,20 +1784,25 @@ export async function runRecaller(ctx: RecallerContext) {
   if (lab.stem && !cardsOnly) {
     await merged;
     await objectivesReady.catch(() => undefined);
-    const [{ materialMap }, { makeStemQuestions, toRcQuestion }] = await Promise.all([import("../material-map.ts"), import("../stem-quiz.ts")]);
+    // 11/10 사용자 "너처럼 할 수 있게 해 봐": 시험지 설계 → 문제 쓰기 → 상황 확인·직접 풀어 보기(../exam-design.ts). 가짜 모델은 기억마다 하나(stem-quiz).
+    const [{ materialMap }, { makeStemQuestions, toRcQuestion }, { designExam, examToRc }, { loadStructure }] = await Promise.all([import("../material-map.ts"), import("../stem-quiz.ts"), import("../exam-design.ts"), import("../structure.ts")]);
     const map = materialMap(state, {});
     if (!map) throw new Error("자료 지도를 만들 수 없어요.");
-    const { made, byId } = await makeStemQuestions(state.id, map, data.texts as Record<string, string>, data.digest?.objectives ?? [], { fake: input.provider === "fake" });
+    const byCard = new Map(map.sections.flatMap((s) => s.cards).map((c) => [c.id, c]));
     const counts = new Map<string, number>();
-    for (const m of made) {
-      const sectionId = (m.cards[0] ?? "").split(".")[0];
+    const put = (sectionId: string, q: RcQuestion | null, why: string) => {
       const unit = data.units[sectionId];
-      if (!unit) continue;
-      const k = (counts.get(sectionId) ?? 0) + 1; counts.set(sectionId, k);
-      const q = toRcQuestion(m, byId, `${sectionId}-q${k}`);
+      if (!unit) return;
       const chunk = ((unit.chunks ??= {})[0] ??= {});
-      if (q) { (unit.questions ??= []).push(q); (chunk.questions ??= []).push(q); }
-      else (unit.held ??= []).push({ cardId: m.cards[0] ?? "", reason: m.held ?? "문제를 만들지 못했어요" });
+      if (q) { (unit.questions ??= []).push(q); (chunk.questions ??= []).push(q); } else (unit.held ??= []).push({ cardId: sectionId, reason: why });
+    };
+    const next = (sectionId: string) => { const k = (counts.get(sectionId) ?? 0) + 1; counts.set(sectionId, k); return `${sectionId}-q${k}`; };
+    if (input.provider === "fake") {
+      const { made, byId } = await makeStemQuestions(state.id, map, data.texts as Record<string, string>, data.digest?.objectives ?? [], { fake: true });
+      for (const m of made) { const sid = (m.cards[0] ?? "").split(".")[0]; put(sid, toRcQuestion(m, byId, next(sid)), m.held ?? "문제를 만들지 못했어요"); }
+    } else {
+      const exam = await designExam(state.id, map, await loadStructure(state.id), data.digest?.objectives ?? [], data.texts as Record<string, string>);
+      for (const x of exam.items) { const sid = (x.cardIds[0] ?? "").split(".")[0]; put(sid, examToRc(x, byCard, next(sid), `${state.id}:${x.cardIds.join(",")}`), ("held" in x && x.held) || ("error" in x && x.error) || "문제를 만들지 못했어요"); }
     }
     for (const s of state.sections) { if (data.units[s.id]) data.units[s.id].status = "ready"; await publish(s.id); }
     data.timing.completedAt = new Date().toISOString();

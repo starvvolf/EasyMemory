@@ -9,7 +9,17 @@ import type { DigestObjective } from "./gen/digest.ts";
 import { cardLine, type Card } from "./gen/cards.ts";
 import type { MapCard, MaterialMap } from "./material-map.ts";
 import type { Structure } from "./structure.ts";
-import { sameAnswer } from "./quiz-plan.ts";
+import { sameAnswer, shuffleChoice, type QuizReply } from "./quiz-plan.ts";
+import type { RcQuestion } from "./gen/recaller.ts";
+
+// 예/아니요 답은 말이 달라도 같은 것으로(11/10 시험: "아니요" ≠ "승인하지 않는다"로 쓸데없이 고쳐 썼다).
+const YES = /^(예|네|그렇다|맞다|참|승인|허용|가능|있다|o\b)/i, NO = /^(아니|아니요|아니오|불허|거부|승인하지|허용하지|불가능|없다|틀리다|거짓|x\b)/i;
+const yn = (x: string) => { const t = x.trim().replace(/[.\s]+$/, ""); return NO.test(t) ? "no" : YES.test(t) ? "yes" : ""; };
+export function sameExamAnswer(form: (typeof EXAM_FORMS)[number], a: string, b: string) {
+  const ya = yn(a), yb = yn(b);
+  if (ya && yb) return ya === yb;
+  return sameAnswer(form === "blank" ? "short" : form, a, b);
+}
 
 export const EXAM_MODEL = { model: "gpt-6-sol", effort: "low" };
 export const EXAM_FORMS = ["ox", "choice", "blank", "short"] as const;
@@ -104,20 +114,43 @@ export async function designExam(id: string, map: MaterialMap, structure: Struct
       // 확인 + 풀어 보기(동시). 풀어 본 답이 정답과 다르면 걸림.
       const review = async (q: Written) => {
         const [c, s] = await Promise.all([check(q).catch(() => null), solve(q)]);
-        const form = q.form === "blank" ? "short" : q.form;
-        const differs = s && !sameAnswer(form, q.answer, s.answer);
+        const differs = s && !sameExamAnswer(q.form, q.answer, s.answer);
         const problems = [...(c && !c.ok ? c.problems : []), ...(differs ? [`정답을 모르고 직접 풀면 "${s!.answer}"가 나온다(표시된 정답 "${q.answer}"). 풀이: ${s!.work.slice(0, 400)}`] : [])];
         return { check: c, solved: s, ok: problems.length === 0, problems };
       };
       const first = await write();
       const r1 = await review(first);
-      if (r1.ok) return { item: it, titles: used.map((c) => c.title), q: first, check: r1.check, solved: r1.solved };
+      if (r1.ok) return { item: it, cardIds: used.map((c) => c.id), titles: used.map((c) => c.title), q: first, check: r1.check, solved: r1.solved };
       const second = await write(`\n\n[고쳐 쓰기] 앞에서 쓴 문제는 이래서 안 됐다: ${r1.problems.join(" / ")}\n앞 문제: ${first.stem.slice(0, 600)} / 정답 ${first.answer}`);
       const r2 = await review(second);
       // 고쳐도 직접 푼 답과 정답이 다르면 내지 않는다(틀린 정답을 학생에게 주지 않는다).
       const held = r2.problems.some((x) => x.startsWith("정답을 모르고 직접 풀면")) ? r2.problems.join(" / ") : undefined;
-      return { item: it, titles: used.map((c) => c.title), q: second, check: r2.check, solved: r2.solved, first, firstProblems: r1.problems, rewritten: true, ...(held ? { held } : {}) };
-    } catch (e) { return { item: it, titles: used.map((c) => c.title), error: (e as Error).message }; }
+      return { item: it, cardIds: used.map((c) => c.id), titles: used.map((c) => c.title), q: second, check: r2.check, solved: r2.solved, first, firstProblems: r1.problems, rewritten: true, ...(held ? { held } : {}) };
+    } catch (e) { return { item: it, cardIds: used.map((c) => c.id), titles: used.map((c) => c.title), error: (e as Error).message }; }
   }));
   return { designMs, ms: Date.now() - t0, items: written };
+}
+
+/** 시험지 문제 → 엔진 문제(RcQuestion): 보기는 섞고(정답이 1번에 몰림), 해설 뒤에 오답마다 어떤 실수인지. 고쳐도 틀린 문제(held)는 뺀다. */
+export function examToRc(x: { item: DesignItem; cardIds: string[]; q?: Written; held?: string }, cards: Map<string, MapCard>, objectiveId: string, seed: string): RcQuestion | null {
+  if (!x.q || x.held) return null;
+  const q = { ...x.q, options: [...x.q.options] };
+  const used = x.cardIds.map((id) => cards.get(id)).filter((c): c is MapCard => !!c);
+  const sectionId = (x.cardIds[0] ?? "").split(".")[0];
+  const reply: QuizReply = { form: q.form === "choice" ? "choice" : "short", level: 3, stem: q.stem, options: q.options, answer: q.answer, explain: q.explain, uses: [] };
+  if (q.form === "choice") shuffleChoice(reply, seed);
+  const traps = q.traps.map((t) => t.replace(/^\s*\(?\s*[1-4]\s*번?\s*\)?\s*[:.)]\s*/, "")).filter(Boolean);
+  const explanation = `${reply.explain}${traps.length ? `\n헷갈리기 쉬운 것: ${traps.join(" / ")}` : ""}`;
+  const stem = [{ kind: "text" as const, text: q.stem, latex: null, rows: null }];
+  let answer: RcQuestion["authored"]["answer"];
+  if (q.form === "choice" || q.form === "ox") {
+    const options = q.form === "ox" ? ["맞다(O)", "틀리다(X)"] : reply.options;
+    const correct = q.form === "ox" ? (yn(q.answer) === "no" || /^\s*x/i.test(q.answer) ? 1 : 0) : Number(reply.answer) - 1;
+    if (!(correct >= 0 && correct < options.length)) return null;
+    answer = { kind: "choice", options: options.map((o) => ({ text: o, latex: null })), correctIndex: correct, accepted: null, before: null, after: null, explanation };
+  } else answer = { kind: "short", options: null, correctIndex: null, accepted: [q.answer, ...(q.form === "blank" ? q.answer.split(/\s*;\s*/).filter((a) => a && a !== q.answer) : [])], before: null, after: null, explanation };
+  const kindOf: Record<string, RcQuestion["kind"]> = { 용어: "용어", 사실: "사실", 개념: "개념", 패턴: "패턴", 목록: "사실", 비교: "관계", 절차: "절차", 조건: "관계", 공식: "공식" };
+  return { objectiveId, sectionId, tier: "basic", cardIds: x.cardIds, format: answer.kind === "choice" ? "choice" : "short", goal: x.item.why || x.item.target,
+    authored: { objectiveId, stem, answer }, pages: [...new Set(used.flatMap((c) => c.pages))].sort((a, b) => a - b), quotes: used.flatMap((c) => c.quotes).slice(0, 3),
+    kind: kindOf[used[0]?.kind ?? ""] ?? "개념", core: true, checks: [] };
 }
