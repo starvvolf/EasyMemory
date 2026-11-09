@@ -29,7 +29,8 @@ export type StructVersus = { a: string; b: string; on: string };
 export type StructEdge = { a: string; b: string; type: EdgeType; why: string };
 export type StructPair = { a: string; b: string; why: string };
 export type BoxNote = { box: string; name: string; mode: string; reason: string; ms: number; ok: boolean };
-export type Structure = { at: string; ms: number; model: string; effort: string; sig: string; boxes?: BoxNote[]; groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; versus?: StructVersus[];
+export type Structure = { at: string; ms: number; model: string; effort: string; sig: string;
+  /** 무엇을 묶었나: 카드(예전) 또는 줄기의 기억(11/9 "구조는 줄기 기반으로") — memory면 cards·head·짝은 기억 id(m1…) */ unit?: "card" | "memory"; boxes?: BoxNote[]; groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; versus?: StructVersus[];
   /** 메인 묶음 안에 있지만 바탕(미리 알아야 할 것을 다시 적은) 카드 */ base?: string[]; fixes: string[] };
 
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
@@ -262,6 +263,52 @@ export async function makeStructure(id: string, map: MaterialMap): Promise<Struc
   if (rest > ids.length / 3) throw Object.assign(new Error(`AI가 카드 ${ids.length}장 중 ${rest}장을 묶지 못했어요. 다시 해 보세요.`), { status: 502 });
   const boxes = await refineBoxes(id, map, checked.groups);
   const s: Structure = { at: new Date().toISOString(), ms: Date.now() - t0, ...STRUCTURE_MODEL, sig: cardSig(map), ...checked, ...(boxes.length ? { boxes } : {}) };
+  const file = fileOf(id);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify(s, null, 1), "utf8");
+  return s;
+}
+
+// 줄기 기반 구조 (11/9 사용자 "구조는 줄기 기반으로 만들면?" → "ㅇㅇ 해봐"): 카드 대신 기억 합치기(compact.ts)의 기억을 묶는다.
+// 알고리즘의 단계는 이미 한 기억 안에 있으니, 구조는 기억 사이의 관계(갈래·대비·같은 틀·씀)만 본다. 메인·바탕·곁은 줄기 것을 그대로 쓰고
+// (AI가 다시 고르지 않음), 바탕 기억은 그것을 쓰는 메인 옆에 둔다. 큰 상자 다시 나누기는 하지 않는다(기억이 적다).
+export const STEM_STRUCTURE_SYSTEM = `너는 강의 자료 한 편을 정리한 "기억"들(알고리즘·원리·개념 하나씩)을 뜻의 구조로 묶는다. 학습자가 집합 그림(큰 상자 안 작은 상자)으로 본다.
+기억들은 이미 영역(자료 순서)별로 정리되어 있다. 구조는 그 순서를 다시 보여 주는 것이 아니라, 기억들이 뜻으로 어떻게 이어지는지를 보여 준다.
+영역 순서를 그대로 따라 상자를 만들면 실패다.
+
+묶음
+- 나무다. 맨 위 묶음은 2~4개: 이 강의가 다루는 큰 일(예: "외곽선 그리기"와 "내부 채우기", "무엇인가"와 "어떻게 다루나").
+- 같은 일을 하는 여러 방법은 한 묶음의 갈래다(예: 선 그리기 방법들). 셋 이상이면 공통점으로 한 단 더(깊이 3단까지).
+- head: 묶음이 가리키는 것 자체인 기억이 있으면 그 번호(없으면 0). cards: 그 밖에 이 묶음에 든 기억 번호.
+- members: 안의 것과 대표의 관계 하나: 부분 · 종류(갈래들) · 모두(모두 성립해야) · 순서(차례로 한다) · 묶음(뚜렷하지 않음).
+- 바탕 기억(역할이 바탕)은 그것을 가장 많이 쓰는 메인 기억과 같은 묶음에 넣는다. 곁 기억은 맨 위 아무 데나 넣지 말고 관련 묶음의 끝에.
+- 모든 기억을 정확히 한 번(head 또는 cards). name은 자료의 말로 짧게(2~10자), explain은 이 묶음이 맡는 몫 한 문장.
+
+관계 — 이것이 구조의 핵심이다
+- versus (0~8): 나란히 견주어야 뜻이 서는 두 기억(같은 일의 두 방법, 반대 상태). on: 무엇으로 견주는지 8~14자(예: "실수 vs 정수 연산").
+- pairs (0~12): 서로 다른 묶음의 두 기억이 이어질 때. why 12~20자로 어떻게: "같은 틀: 결정 변수 증분", "외적으로 판정", "법선을 씀", "막는 조건".
+  특히 다른 대상에 같은 생각(같은 판정·같은 갱신·같은 대칭)을 쓰는 두 기억은 꼭 잇는다 — 학습자가 놓치기 쉬운 연결이다.
+- edges (0~8): 묶음 사이 연결. type: 막음 · 씀(a의 결과를 b가 씀) · 이어짐 · 대비 · 예시. 부모·자식 사이는 잇지 않는다. why 15자 안팎.
+
+id는 g1, g2 … parent는 맨 위면 빈 문자열.`;
+
+/** 기억 줄: 번호|영역|역할|종류|이름|요지 */
+export function stemStructureInput(compact: { areas: Array<{ name: string }>; memories: Array<{ id: string; name: string; role: string; kind: string; area: number; line: string; steps: string[] }> }, title: string) {
+  const lines = compact.memories.map((m, i) => `${i + 1}|${compact.areas[m.area - 1]?.name ?? "그 밖"}|${m.role}|${m.kind}${m.steps.length ? `(${m.steps.length}단계)` : ""}|${m.name}|${m.line.slice(0, 120)}`);
+  return { user: `자료: ${title}\n영역(자료 순서): ${compact.areas.map((a) => a.name).join(" / ")}\n\n기억 (번호|영역|역할|종류|이름|요지)\n${lines.join("\n")}`, ids: compact.memories.map((m) => m.id) };
+}
+
+export async function makeStemStructure(id: string, map: MaterialMap, compact: Parameters<typeof stemStructureInput>[0] & { at: string }): Promise<Structure> {
+  const { user, ids } = stemStructureInput(compact, map.title);
+  const t0 = Date.now();
+  const reply = await withTrace({ area: "pdf", action: "structure-stem", ref: id }, () => askJson<Reply>("map:structure", STEM_STRUCTURE_SYSTEM, user, SCHEMA, STRUCTURE_MODEL));
+  const checked = checkStructure(reply, ids);
+  const roles = new Map(compact.memories.map((m) => [m.id, m.role]));
+  // 메인·바탕·곁은 줄기 것으로: 묶음의 role은 안에 든 기억이 모두 같은 역할일 때만(아니면 메인).
+  const walk = (g: StructGroup): string[] => [...(g.head ? [g.head] : []), ...g.cards, ...checked.groups.filter((k) => k.parent === g.id).flatMap(walk)];
+  for (const g of checked.groups) { const rs = new Set(walk(g).map((x) => roles.get(x) ?? "메인")); g.role = rs.size === 1 ? [...rs][0] as GroupRole : "메인"; }
+  const s: Structure = { at: new Date().toISOString(), ms: Date.now() - t0, ...STRUCTURE_MODEL, sig: `stem:${compact.at}`, unit: "memory", ...checked,
+    base: compact.memories.filter((m) => m.role !== "메인").map((m) => m.id) };
   const file = fileOf(id);
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, JSON.stringify(s, null, 1), "utf8");

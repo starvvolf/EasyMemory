@@ -306,8 +306,8 @@ const sameName = (a: string, b: string) => { const n = (x: string) => x.replace(
 type StructRole = "메인" | "바탕" | "곁";
 type StructEdge = { a: string; b: string; type: string; why: string };
 type StructPair = { a: string; b: string; why: string };
-type Structure = { at: string; ms: number; model: string; effort: string; groups: StructGroup[]; edges: StructEdge[]; pairs?: StructPair[]; versus?: StructVersus[]; base?: string[]; fixes: string[] };
-function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { genId: string; cards: Card[]; chains: MatMap["chains"]; making: boolean;
+type Structure = { at: string; ms: number; model: string; effort: string; unit?: "card" | "memory"; groups: StructGroup[]; edges: StructEdge[]; pairs?: StructPair[]; versus?: StructVersus[]; base?: string[]; fixes: string[] };
+function StructurePane({ genId, cards: cardList, chains: chainList, making, onPage, onPractice }: { genId: string; cards: Card[]; chains: MatMap["chains"]; making: boolean;
   onPage: (page: number) => void; onPractice?: (page: number, cardId: string) => void }) {
   const [data, setData] = useState<{ structure: Structure | null; stale: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -316,11 +316,27 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
   const [hover, setHover] = useState<{ card?: string; group?: string } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => { let alive = true;
-    call<{ structure: Structure | null; stale: boolean }>(`/api/study-map/${genId}/structure`).then((r) => { if (alive) setData(r); }).catch((e) => { if (alive) setError(errorText(e)); });
+    call<{ structure: Structure | null; stale: boolean }>(`/api/study-map/${genId}/structure-v2`).then((r) => { if (alive) setData(r); }).catch((e) => { if (alive) setError(errorText(e)); });
     return () => { alive = false; }; }, [genId]);
   const make = () => { setBusy(true); setError("");
-    call<{ structure: Structure; stale: boolean }>(`/api/study-map/${genId}/structure`, {}).then(setData).catch((e) => setError(errorText(e))).finally(() => setBusy(false)); };
+    call<{ structure: Structure; stale: boolean }>(`/api/study-map/${genId}/structure-v2`, {}).then(setData).catch((e) => setError(errorText(e))).finally(() => setBusy(false)); };
   const s = data?.structure;
+  // 줄기 기반 구조 (11/9): 묶은 것이 기억이면 기억을 카드 모양으로 바꿔 같은 그림에 올린다(알약 = 기억, 열면 요지·단계·근거 카드).
+  const [compact, setCompact] = useState<CompactLite | null>(null);
+  const [srcCard, setSrcCard] = useState<string | null>(null);
+  useEffect(() => { if (s?.unit !== "memory") return; let alive = true;
+    call<{ compact: CompactLite | null }>(`/api/study-map/${genId}/compact`).then((r) => { if (alive) setCompact(r.compact); }).catch(() => undefined);
+    return () => { alive = false; }; }, [genId, s?.unit]);
+  const cardById = useMemo(() => new Map(cardList.map((c) => [c.id, c])), [cardList]);
+  const memById = useMemo(() => new Map((compact?.memories ?? []).map((m) => [m.id, m])), [compact]);
+  const cards = useMemo<Card[]>(() => s?.unit !== "memory" ? cardList : (compact?.memories ?? []).map((m) => {
+    const src = m.cards.map((id) => cardById.get(id)).filter((c): c is Card => !!c);
+    return { id: m.id, ref: m.id, kind: m.kind, title: m.name, core: m.role === "메인",
+      shape: m.steps.length ? { form: "procedure", steps: m.steps.map((x) => ({ action: x, input: "", output: "" })) } as Shape : { form: "concept", claim: m.line, reason: "", limit: "" } as Shape,
+      pages: [...new Set(src.flatMap((c) => c.pages))].sort((a, b) => a - b), quotes: [], mistakes: [], takes: [], gives: [], questions: 0, same: [], state: "new" as MapState,
+      ...(src.find((c) => c.figure) ? { figure: src.find((c) => c.figure)!.figure } : {}) };
+  }), [s?.unit, cardList, compact, cardById]);
+  const chains = useMemo(() => (s?.unit === "memory" ? [] : chainList), [s?.unit, chainList]);
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
   const groupOfCard = useMemo(() => new Map((s?.groups ?? []).flatMap((g) => [...(g.head ? [g.head] : []), ...g.cards].map((id) => [id, g.id] as const))), [s]);
   // Card pairs across groups: the structure's own, then the whole-material pass's links that cross a group.
@@ -417,7 +433,7 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
   return (
     <div className={`mm8${openCard ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("[data-c],button,a,input,label,.mm8-detail")) setOpen(null); }}>
       <div className="row small mm7-bar"><span className="small muted">뜻으로 묶은 그림 · 상자 안은 그 부분 · 카드를 열면 다른 묶음의 짝</span><span className="cs-gap" />
-        {data?.stale ? <span className="small bad">기억 카드가 바뀌었어요</span> : null}{makeBtn("다시 만들기", Boolean(data?.stale))}</div>
+        {data?.stale ? <span className="small bad">{s?.unit === "memory" ? "줄기가 바뀌었어요" : "줄기나 카드가 바뀌었어요"}</span> : null}{makeBtn("다시 만들기", Boolean(data?.stale))}</div>
       {roleView.has ? <div className="row small mm8-goalbar"><label className="row small" style={{ gap: 6, cursor: "pointer" }}><input type="checkbox" checked={roleOn} onChange={(e) => setRoleOn(e.target.checked)} /> 메인 포인트 보기</label>
         {roleOn ? <span className="muted">이 강의에서 새로 배우는 것이 위에 · 흐린 것은 바탕 지식(미리 알아야 할 것)·곁가지</span> : null}</div>
         : s ? <p className="small muted mm8-goalbar">구조를 다시 만들면 메인 포인트와 바탕 지식이 나뉘어 보여요.</p> : null}
@@ -436,7 +452,11 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
         <div className="mm3-dhead"><b><Rich text={openCard.title} /></b><span className="mm3-kind">{openCard.kind}</span>{openCard.core ? <span className="mm3-kind core">핵심</span> : null}<span className="cs-gap" />
           {openCard.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}<button className="btn ghost small" onClick={() => setOpen(null)}>닫기</button></div>
         <Body s={openCard.shape} />
-        <FigureView genId={genId} c={openCard} onPage={onPage} all={cards} onCard={setOpen} />
+        {memById.get(openCard.id) ? <>{memById.get(openCard.id)!.steps.length ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
+          <div className="st-src"><span className="small muted">근거 카드 {memById.get(openCard.id)!.cards.length}</span>{memById.get(openCard.id)!.cards.map((id) => cardById.get(id)).filter((c): c is Card => !!c).map((c) =>
+            <button key={c.id} className={`mm3-relchip${srcCard === c.id ? " on" : ""}`} onClick={() => setSrcCard(srcCard === c.id ? null : c.id)}><Rich text={c.title} /></button>)}</div>
+          {srcCard && cardById.get(srcCard) ? <div className="st-card"><Body s={cardById.get(srcCard)!.shape} /><FigureView genId={genId} c={cardById.get(srcCard)!} onPage={onPage} /></div> : null}</>
+          : <FigureView genId={genId} c={openCard} onPage={onPage} all={cards} onCard={setOpen} />}
         {pairs.some((p) => p.a === openCard.id || p.b === openCard.id) ? <div className="mm3-rel"><span className="mm3-tag">다른 묶음의 짝</span><div className="mm3-relchips">
           {pairs.filter((p) => p.a === openCard.id || p.b === openCard.id).map((p, i) => { const other = p.a === openCard.id ? p.b : p.a; return <button key={i} className="mm3-relchip" onClick={() => setOpen(other)} title={p.why}>
             <Rich text={byId.get(other)?.title ?? ""} />{p.why && p.why.length <= 24 ? <em>{p.why}</em> : null}</button>; })}</div></div> : null}
