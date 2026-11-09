@@ -1037,3 +1037,13 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pp-learned{margin:6px 0 0}
 .dejipgi .pp-all{width:100%}
 .dejipgi .pp-all summary{cursor:pointer;margin-bottom:6px}
+
+/* 학습 목표 강조 (11/9): 메인 묶음은 진하게·위로, 보조 묶음은 흐리게·아래로 */
+.dejipgi .mm8-goalbar{gap:8px;align-items:center;margin:2px 0 6px}
+.dejipgi .mm8-goals{display:flex;flex-wrap:wrap;gap:4px;margin:-2px 0 4px}
+.dejipgi .mm8-goal{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);cursor:default}
+.dejipgi .mm8-box.main{border-color:color-mix(in srgb,var(--accent) 65%,var(--line));border-width:2px;background:color-mix(in srgb,var(--accent) 5%,transparent)}
+.dejipgi .mm8-box.main>.mm8-title{color:var(--accent)}
+.dejipgi .mm8-box.side{opacity:.55;border-style:dashed}
+.dejipgi .mm8-box.side:hover{opacity:.9}
+.dejipgi .mm8-pill.goal{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 55%,transparent)}
