@@ -792,7 +792,7 @@ function viewHost(name, props){
 let lastContextKey = "";
 function emitContext(){
   if (S.view === "code" || S.view === "web") return;
-  let ctx = { view:S.view, title:{ home:"오늘", knowledge:"기억", practice:"공부 · PDF 자료", create:"자료 넣기", records:"학습 기록", bench:"작업대", plan:"일정", summary:"한 장 정리", archive:"보관함", web:"공부 · 웹 글", project:"공부 · 실습", start:"새 공부" }[S.view] || S.view, refs:[], knowledgeIds:[] };
+  let ctx = { view:S.view, title:{ home:"오늘", knowledge:"기억", practice:"공부 · PDF 자료", create:"자료 넣기", records:"학습 기록", bench:"작업대", plan:"기록", summary:"한 장 정리", archive:"보관함", web:"공부 · 웹 글", project:"공부 · 실습", start:"새 공부" }[S.view] || S.view, refs:[], knowledgeIds:[] };
   if (S.view === "read" && S.reader && S.reader.deckId && S.decks[S.reader.deckId]){
     const d = S.decks[S.reader.deckId];
     ctx = { ...ctx, title:`${displayTitle(d)} p.${S.reader.page}`, refs:[d.id + ":"] };
@@ -927,7 +927,7 @@ function render(){
   else if (S.view === "web") app.append(studyNav("web"), env.mountView ? viewHost("web", {}) : h("div", { class:"panel small muted", text:"웹 글 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
   // "새 공부 시작" 화면(NewStudy)은 11/9 사용자 "그 화면도 없애고"로 뺐다. 예전 링크는 자료 갈래로.
   else if (S.view === "start") app.append(studyNav("practice"), renderHome());
-  else if (S.view === "plan") app.append(env.mountView ? viewHost("plan", {}) : h("div", { class:"panel small muted", text:"일정은 로컬 실험 모드에서 쓸 수 있어요." }));
+  else if (S.view === "plan") app.append(env.mountView ? viewHost("plan", {}) : h("div", { class:"panel small muted", text:"기록은 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "bench") app.append(renderBench());
   else if (S.view === "archive") app.append(renderArchive());
   else if (S.view === "practice"){ if (S.session) app.append(renderSession()); else app.append(studyNav("practice"), renderHome(), ...(env.mountView ? [h("h3", { class:"study-sub", text:"웹 글" }), viewHost("web", {})] : [])); }

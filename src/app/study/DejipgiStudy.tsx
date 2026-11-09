@@ -541,7 +541,7 @@ export default function DejipgiStudy() {
             <button role="tab" data-view="home" aria-selected="true">오늘</button>
             <button role="tab" data-view="practice" aria-selected="false">공부</button>
             <button role="tab" data-view="knowledge" aria-selected="false">기억</button>
-            <button role="tab" data-view="plan" aria-selected="false">일정</button>
+            <button role="tab" data-view="plan" aria-selected="false">기록</button>
           </nav>
         </div>
         <main id="app"></main>
