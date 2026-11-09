@@ -219,9 +219,9 @@ function DrillCard({ a, elapsed, send, fb, busy, err, next }: CardProps) {
           <b>{c.ok ? "맞았어요." : `아니에요. 정답: ${c.answers.join(", ")}`}</b>
           {!c.ok && c.wrongPick && c.why ? <span>「{c.wrongPick}」 말고 「{c.answer}」인 까닭: {c.why}</span> : null}
           {!c.ok && !c.wrongPick && c.missed.length ? <span>「{c.missed.join(", ")}」도 돼요.</span> : null}
-          {c.usually ? <span>보통은: {c.usually}</span> : <span>{c.answer}: {c.what}</span>}
+          {c.usually ? <span>{c.usually}</span> : <span>{c.answer}: {c.what}</span>}
           {c.how ? <span>이렇게 풀어요: {c.how}</span> : null}
-          {c.signals.length ? <span className="muted">이럴 때 떠올려요: {c.signals.join(" · ")} · ({c.grade})</span> : null}
+          {c.signals.length ? <span className="muted">이럴 때 떠올려요: {c.signals.join(" · ")}{c.ok ? ` · (${c.grade})` : ""}</span> : null}
         </div>
       ) : fb ? <p className={`small ${fb.ok ? "pt-good" : "pt-bad"}`}><b>{fb.ok ? (fb.intended ? "맞았어요." : "되는 방법이에요. 다만 이 문제에 더 맞는 방법이 따로 있어요.") : "이 방법으로는 안 돼요."}</b> 이 문제에 쓰는 것: {(fb.patternNames as string[]).join(", ")} · 이럴 때 떠올려요: {(fb.signals as string[]).join(" · ")} <span className="muted">({String(fb.grade)})</span></p>
         : <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" disabled={(a.concept ? !picks.length : !pick) || Boolean(busy)}
