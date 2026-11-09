@@ -9,6 +9,7 @@ import type { DigestObjective } from "./gen/digest.ts";
 import { cardLine, type Card } from "./gen/cards.ts";
 import type { MapCard, MaterialMap } from "./material-map.ts";
 import type { Structure } from "./structure.ts";
+import { sameAnswer } from "./quiz-plan.ts";
 
 export const EXAM_MODEL = { model: "gpt-6-sol", effort: "low" };
 export const EXAM_FORMS = ["ox", "choice", "blank", "short"] as const;
@@ -46,8 +47,15 @@ export const WRITE_SYSTEM = `너는 이 강의를 가르친 교수다. 설계된
 - form: ox(answer "O"/"X"), choice(보기 4개, answer는 정답 번호 1부터), blank(문제 글에 빈칸 ___ 하나 이상, answer는 빈칸 답을 차례로 "; "로), short(answer는 값만).
 - explain: 정답 풀이. traps: 오답(또는 흔한 틀린 답)마다 어떤 실수에서 나오는지 한 줄씩.
 - 한국어로. 용어는 처음에 "한국어(영어 원어)". 수식·기호는 원문 그대로.`;
-const WRITE_SCHEMA = S.obj({ form: S.oneOf(...EXAM_FORMS), stem: S.str, options: S.arr(S.str), answer: S.str, explain: S.str, traps: S.arr(S.str) });
-export type Written = { form: (typeof EXAM_FORMS)[number]; stem: string; options: string[]; answer: string; explain: string; traps: string[] };
+const WRITE_SCHEMA = S.obj({ form: S.oneOf(...EXAM_FORMS), stem: S.str, options: S.arr(S.str), answer: S.str, explain: S.str, traps: S.arr(S.str),
+  work: { type: "boolean", description: "답을 내려면 값을 넣어 계산하거나 단계를 따라가야 하면 true, 개념을 고르거나 판단만 하면 false" } });
+export type Written = { form: (typeof EXAM_FORMS)[number]; stem: string; options: string[]; answer: string; explain: string; traps: string[]; work?: boolean };
+
+// 직접 풀어 보기 (11/10 사용자 "한 번 해 봐"): 계산·따라가기 문제(work)만, 정답을 보여 주지 않고 따로 푼다. 상황 확인과 동시에.
+// 11/10 시험: 상황 확인은 "답이 하나인가"만 보고 칠하기 문제의 틀린 정답을 놓쳤다.
+export const SOLVE_SYSTEM = `강의 문제 하나를 정답을 모르는 채로 정리된 지식과 원문을 기준으로 푼다. 단계마다 직접 계산하거나 따라간다.
+answer: choice면 정답 보기 번호(1부터), ox면 "O"/"X", blank면 빈칸 답을 차례로 "; "로, short면 값만. work: 푼 과정을 짧게.`;
+const SOLVE_SCHEMA = S.obj({ work: S.str, answer: S.str });
 
 // 상황 확인 (11/10 사용자 "그렇게 해서 한 번 더 테스트" — 풀기 검사 대신 싸게): 쓴 문제를 한 번 보고, 노린 함정이 실제로 생기는지·전제가 성립하는지·
 // 답이 하나인지만 본다. 걸리면 그 이유를 주고 한 번 고쳐 쓴다.
@@ -91,12 +99,24 @@ export async function designExam(id: string, map: MaterialMap, structure: Struct
       const write = (extra = "") => withTrace({ area: "pdf", action: "quiz-write", ref: id }, () => askJson<Written>("map:exam-write", WRITE_SYSTEM, `${u}${extra}`, WRITE_SCHEMA, EXAM_MODEL));
       const check = (q: Written) => withTrace({ area: "pdf", action: "quiz-check", ref: id }, () => askJson<Check>("map:exam-check", CHECK_SYSTEM,
         `노린 오개념: ${it.target}\n\n[문제] (${q.form})\n${q.stem}${q.options.length ? `\n${q.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}\n정답: ${q.answer}\n풀이: ${q.explain}\n\n[정리된 지식]\n${mem}\n\n[원문]\n${source}`, CHECK_SCHEMA, EXAM_MODEL));
+      const solve = (q: Written) => !q.work ? Promise.resolve(null) : withTrace({ area: "pdf", action: "quiz-solve", ref: id }, () => askJson<{ work: string; answer: string }>("map:exam-solve", SOLVE_SYSTEM,
+        `[문제] (${q.form})\n${q.stem}${q.options.length ? `\n${q.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}\n\n[정리된 지식]\n${mem}\n\n[원문]\n${source}`, SOLVE_SCHEMA, EXAM_MODEL)).catch(() => null);
+      // 확인 + 풀어 보기(동시). 풀어 본 답이 정답과 다르면 걸림.
+      const review = async (q: Written) => {
+        const [c, s] = await Promise.all([check(q).catch(() => null), solve(q)]);
+        const form = q.form === "blank" ? "short" : q.form;
+        const differs = s && !sameAnswer(form, q.answer, s.answer);
+        const problems = [...(c && !c.ok ? c.problems : []), ...(differs ? [`정답을 모르고 직접 풀면 "${s!.answer}"가 나온다(표시된 정답 "${q.answer}"). 풀이: ${s!.work.slice(0, 400)}`] : [])];
+        return { check: c, solved: s, ok: problems.length === 0, problems };
+      };
       const first = await write();
-      const c1 = await check(first).catch(() => null);
-      if (!c1 || c1.ok) return { item: it, titles: used.map((c) => c.title), q: first, check: c1 };
-      const second = await write(`\n\n[고쳐 쓰기] 앞에서 쓴 문제는 이래서 안 됐다: ${c1.problems.join(" / ")}\n앞 문제: ${first.stem.slice(0, 600)} / 정답 ${first.answer}`);
-      const c2 = await check(second).catch(() => null);
-      return { item: it, titles: used.map((c) => c.title), q: second, check: c2, first, firstCheck: c1, rewritten: true };
+      const r1 = await review(first);
+      if (r1.ok) return { item: it, titles: used.map((c) => c.title), q: first, check: r1.check, solved: r1.solved };
+      const second = await write(`\n\n[고쳐 쓰기] 앞에서 쓴 문제는 이래서 안 됐다: ${r1.problems.join(" / ")}\n앞 문제: ${first.stem.slice(0, 600)} / 정답 ${first.answer}`);
+      const r2 = await review(second);
+      // 고쳐도 직접 푼 답과 정답이 다르면 내지 않는다(틀린 정답을 학생에게 주지 않는다).
+      const held = r2.problems.some((x) => x.startsWith("정답을 모르고 직접 풀면")) ? r2.problems.join(" / ") : undefined;
+      return { item: it, titles: used.map((c) => c.title), q: second, check: r2.check, solved: r2.solved, first, firstProblems: r1.problems, rewritten: true, ...(held ? { held } : {}) };
     } catch (e) { return { item: it, titles: used.map((c) => c.title), error: (e as Error).message }; }
   }));
   return { designMs, ms: Date.now() - t0, items: written };
