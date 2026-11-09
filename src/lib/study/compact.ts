@@ -36,6 +36,7 @@ export const COMPACT_SYSTEM = `너는 강의 자료 한 편에서 뽑은 기억 
 - 따로 서는 정의·개념·판정 규칙은 혼자 기억이 된다. 억지로 합치지 않는다. 비교 카드는 견주는 둘이 한 기억이면 그 기억에, 아니면 비교 기억으로.
 - role: 메인 = 이 강의에서 새로 배우는 것(강의 제목이 약속하는 것, 시험에 이 강의 몫으로 나올 것). 바탕 = 이 강의 전에 알고 와야 하는 것을 다시 적은 것(앞 과목의 수학 식·정의, 예: 선 그리기 강의의 기울기·절편 방정식, 외적, 행렬식). 곁 = 배경·종류 나열·제품 이름·덧붙인 예.
 - 바탕·곁 카드도 비슷한 것끼리 기억으로 합친다(바탕은 "어디에 쓰이는지"가 line에 보이게).
+- 카드 한 장짜리 기억은 정말 따로 서는 것만 둔다. 같은 생각(같은 대칭·같은 판정 규칙·같은 식)을 다른 대상에 적은 카드는 한 기억으로 합친다.
 - 모든 카드를 정확히 한 기억에 넣는다. 메인 기억 하나는 보통 카드 1~14장이다.
 
 쓰는 법
@@ -46,10 +47,6 @@ export const COMPACT_SYSTEM = `너는 강의 자료 한 편에서 뽑은 기억 
 - area: areas의 번호(1부터). cards: 카드 번호.
 - kind: 알고리즘 / 원리 / 개념 / 비교 / 판정 / 구조(자료 구조·표·표현 방식) 중 하나.`;
 
-const SCHEMA = S.obj({
-  areas: S.arr(S.obj({ name: S.str, question: S.str })),
-  memories: S.arr(S.obj({ name: S.str, kind: S.oneOf(...MEMORY_KINDS), role: S.oneOf(...MEMORY_ROLES), area: S.int, question: S.str, line: S.str, steps: S.arr(S.str), cards: S.arr(S.int) })),
-});
 type Reply = { areas: Array<{ name: string; question: string }>; memories: Array<{ name: string; kind: string; role: string; area: number; question: string; line: string; steps: string[]; cards: number[] }> };
 
 /** 카드 줄: 번호|구조 자리|역할|핵심·보조|카드. 흐름 카드는 뺀다. */
@@ -93,6 +90,16 @@ export function checkCompact(reply: Reply, ids: string[], titles: string[]): Pic
   return { areas, memories, fixes };
 }
 
+// 2차 (11/9, 한 번에 하면 출력이 길어 90초): ① 영역 나누기(짧은 답: 영역과 카드 번호만) → ② 영역마다 동시에 기억 만들기.
+export const AREA_SYSTEM = `너는 강의 자료 한 편에서 뽑은 기억 카드들을 보고, 이 강의가 가르치려는 것을 큰 영역으로 나눈다.
+먼저 (쓰지 말고) 생각한다: 이 강의가 답하려는 큰 질문은 무엇인가? 학습자가 52쪽을 낱장 52개가 아니라 몇 덩어리로 이해하려면 어떻게 나누나?
+- 영역은 보통 3~7개, 자료 흐름 순서로. name은 자료의 말로 짧게(2~14자), question은 그 영역의 "배우는 질문" 한 줄.
+- 모든 카드를 정확히 한 영역에 넣는다(cards: 카드 번호). 한 알고리즘·방법의 카드는 한 영역에 모은다.
+- 앞 과목의 수학 식·정의를 다시 적은 카드(바탕)는 그것을 쓰는 영역에 넣는다.`;
+const AREA_SCHEMA = S.obj({ areas: S.arr(S.obj({ name: S.str, question: S.str, cards: S.arr(S.int) })) });
+export const AREA_MEMORY_SYSTEM = COMPACT_SYSTEM.replace(/먼저 \(쓰지 말고\)[\s\S]*?기억을 만든다\.\n/, "지금은 이 강의의 한 영역만 받는다(영역 이름·배우는 질문이 주어진다). 그 영역의 카드만으로 기억을 만든다. area는 1로 쓴다.\n");
+const MEM_SCHEMA = S.obj({ memories: S.arr(S.obj({ name: S.str, kind: S.oneOf(...MEMORY_KINDS), role: S.oneOf(...MEMORY_ROLES), area: S.int, question: S.str, line: S.str, steps: S.arr(S.str), cards: S.arr(S.int) })) });
+
 export const COMPACT_MODEL = { model: "gpt-6.1-terra", effort: "low" };
 export async function makeCompact(id: string): Promise<Compact> {
   const state = await loadGen(id);
@@ -101,7 +108,27 @@ export async function makeCompact(id: string): Promise<Compact> {
   const { user, ids, titles } = compactInput(map, await loadStructure(id));
   if (ids.length < 3) throw Object.assign(new Error("카드가 너무 적어요."), { status: 422 });
   const t0 = Date.now();
-  const reply = await withTrace({ area: "pdf", action: "compact", ref: id }, () => askJson<Reply>("map:compact", COMPACT_SYSTEM, user, SCHEMA, COMPACT_MODEL));
+  const lines = user.split("\n");
+  const head = lines.slice(0, lines.findIndex((l) => l.startsWith("카드 (")));
+  const cardLines = lines.filter((l) => /^\d+\|/.test(l));
+  // ① 영역: 카드는 번호와 제목만(짧게)
+  const brief = `${head.join("\n")}\n카드 (번호|구조 자리|구조 역할|핵심·보조|카드)\n${cardLines.map((l) => l.slice(0, 120)).join("\n")}`;
+  const split = await withTrace({ area: "pdf", action: "compact-areas", ref: id }, () => askJson<{ areas: Array<{ name: string; question: string; cards: number[] }> }>("map:compact-areas", AREA_SYSTEM, brief, AREA_SCHEMA, COMPACT_MODEL));
+  const seen = new Set<number>();
+  const areas = (split.areas ?? []).map((a) => ({ name: String(a.name ?? "").trim(), question: String(a.question ?? "").trim(),
+    cards: (a.cards ?? []).filter((n) => Number.isInteger(n) && n >= 1 && n <= ids.length && !seen.has(n) && (seen.add(n), true)) })).filter((a) => a.name && a.cards.length);
+  if (!areas.length) throw Object.assign(new Error("AI가 영역을 나누지 못했어요. 다시 해 보세요."), { status: 502 });
+  // 영역에 안 들어간 카드는 앞뒤 번호가 든 영역으로(카드는 쪽 순서다).
+  for (let n = 1; n <= ids.length; n++) if (!seen.has(n)) { let best = areas[0], gap = Infinity; for (const a of areas) for (const m of a.cards) if (Math.abs(m - n) < gap) { gap = Math.abs(m - n); best = a; } best.cards.push(n); }
+  // ② 영역마다 동시에. 영역 안 번호는 1부터 다시 매기고 돌려받아 원래 번호로.
+  const parts = await Promise.all(areas.map(async (a, ai) => {
+    const nums = [...a.cards].sort((x, y) => x - y);
+    const own = nums.map((n, i) => `${i + 1}|${cardLines[n - 1].split("|").slice(1).join("|")}`);
+    const u = `${head.join("\n")}\n영역 ${ai + 1}/${areas.length}: ${a.name} — ${a.question}\n(다른 영역: ${areas.filter((x) => x !== a).map((x) => x.name).join(" / ")})\n\n카드 (번호|구조 자리|구조 역할|핵심·보조|카드)\n${own.join("\n")}`;
+    const r = await withTrace({ area: "pdf", action: "compact-area", ref: id }, () => askJson<{ memories: Reply["memories"] }>("map:compact", AREA_MEMORY_SYSTEM, u, MEM_SCHEMA, COMPACT_MODEL));
+    return (r.memories ?? []).map((m) => ({ ...m, area: ai + 1, cards: (m.cards ?? []).map((k) => nums[k - 1] ?? -1) }));
+  }));
+  const reply: Reply = { areas: areas.map(({ name, question }) => ({ name, question })), memories: parts.flat() };
   const checked = checkCompact(reply, ids, titles);
   const missing = checked.fixes.filter((f) => f.startsWith("빠진 카드")).length;
   if (missing > ids.length / 4) throw Object.assign(new Error(`AI가 카드 ${ids.length}장 중 ${missing}장을 빠뜨렸어요. 다시 해 보세요.`), { status: 502 });

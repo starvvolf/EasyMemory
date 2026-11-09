@@ -228,6 +228,69 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
     </div>);
 }
 
+// 줄기 (11/9 사용자 "목차를 없애야 하나, 줄기로 바꾸려면" → "바꿔서 테스트 후 보고"): 기억 합치기(src/lib/study/compact.ts)가 묶은 영역 → 기억.
+// 영역은 자료 순서라 목차를 겸한다(쪽 범위). 메인 기억은 한 줄씩, 바탕·곁은 영역 끝에 접어 둔다. 누르면 아래 떠 있는 칸에 요지·단계·근거 카드.
+// 아직 합치지 않은 자료는 예전 목차를 보이고 위에 [줄기 만들기].
+type MemoryLite = { id: string; name: string; kind: string; role: "메인" | "바탕" | "곁"; area: number; question: string; line: string; steps: string[]; cards: string[] };
+type CompactLite = { at: string; ms: number; cards: number; areas: Array<{ name: string; question: string }>; memories: MemoryLite[] };
+function StemPane(props: { genId: string; digest: DigestLite | null | undefined; cards: Card[]; making: boolean; onPage: (page: number) => void; onPractice?: (page: number, cardId: string) => void }) {
+  const { genId, cards, making, onPage } = props;
+  const [data, setData] = useState<CompactLite | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
+  const [card, setCard] = useState<string | null>(null);
+  useEffect(() => { let alive = true;
+    call<{ compact: CompactLite | null }>(`/api/study-map/${genId}/compact`).then((r) => { if (alive) setData(r.compact); }).catch(() => { if (alive) setData(null); });
+    return () => { alive = false; }; }, [genId]);
+  const make = () => { setBusy(true); setError("");
+    call<{ compact: CompactLite }>(`/api/study-map/${genId}/compact`, {}).then((r) => setData(r.compact)).catch((e) => setError(errorText(e))).finally(() => setBusy(false)); };
+  const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
+  const btn = (label: string, primary: boolean) => <button className={`btn small ${primary ? "primary" : "ghost"}`} disabled={busy || making} onClick={make} title="카드를 영역·기억으로 묶어요. AI 영역 1번 + 영역마다 1번(동시), 약 30초">{busy ? "줄기를 만드는 중… (약 30초)" : label}</button>;
+  if (data === undefined) return <p className="small muted mm6-wait">불러오는 중…</p>;
+  if (!data) return <>
+    <div className="row small mm8-goalbar"><span className="muted">카드 {cards.filter((c) => !isFlowCard(c)).length}장을 외울 단위(알고리즘은 한 장)로 묶어 줄기로 볼 수 있어요.</span><span className="cs-gap" />{btn("줄기 만들기", true)}</div>
+    {error ? <p className="small bad">{error}</p> : null}
+    <OutlinePane {...props} /></>;
+  const pagesOf = (m: MemoryLite) => [...new Set(m.cards.flatMap((id) => byId.get(id)?.pages ?? []))].sort((a, b) => a - b);
+  const mem = data.memories.find((m) => m.id === open);
+  const openCard = card ? byId.get(card) : undefined;
+  const range = (ps: number[]) => ps.length ? (ps[0] === ps.at(-1) ? `p.${ps[0]}` : `p.${ps[0]}–${ps.at(-1)}`) : "";
+  const main = data.memories.filter((m) => m.role === "메인").length;
+  return (
+    <div className={`mm6 st${mem ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("button,a,input,label,summary,.mm8-detail")) { setOpen(null); setCard(null); } }}>
+      <div className="row small mm8-goalbar"><span className="muted">카드 {data.cards}장 → 기억 {data.memories.length}개 (이 강의에서 새로 배우는 것 {main}개)</span><span className="cs-gap" />{btn("다시 만들기", false)}</div>
+      {error ? <p className="small bad">{error}</p> : null}
+      <ol className="mm6-topics">{data.areas.map((a, i) => {
+        const list = data.memories.filter((m) => m.area === i + 1);
+        const mains = list.filter((m) => m.role === "메인"), rest = list.filter((m) => m.role !== "메인");
+        const ps = [...new Set(list.flatMap(pagesOf))].sort((x, y) => x - y);
+        const row = (m: MemoryLite) => <li key={m.id}><button className={`st-row${open === m.id ? " on" : ""}${m.role !== "메인" ? " side" : ""}`} onClick={() => { setOpen(open === m.id ? null : m.id); setCard(null); }}>
+          <span className="st-name"><Rich text={m.name} /></span>{m.kind === "알고리즘" ? <span className="st-kind">알고리즘 · {m.steps.length}단계</span> : <span className="st-kind">{m.kind}</span>}
+          <span className="st-line"><Rich text={m.line} /></span></button></li>;
+        return <li key={i} className="mm6-topic">
+          <div className="mm6-thead"><span className="mm3-num">{i + 1}</span><b><Rich text={a.name} /></b><span className="small muted">{range(ps)}</span></div>
+          {a.question ? <p className="st-q small muted"><Rich text={a.question} /></p> : null}
+          <ul className="st-list">{mains.map(row)}</ul>
+          {rest.length ? <details className="st-more"><summary className="small muted">바탕·곁 {rest.length}개 · {rest.map((m) => m.name).join(", ")}</summary><ul className="st-list">{rest.map(row)}</ul></details> : null}
+        </li>;
+      })}
+      {data.memories.some((m) => !m.area) ? <li className="mm6-topic"><div className="mm6-thead"><b>그 밖</b></div><ul className="st-list">{data.memories.filter((m) => !m.area).map((m) =>
+        <li key={m.id}><button className="st-row side" onClick={() => setOpen(m.id)}><span className="st-name"><Rich text={m.name} /></span></button></li>)}</ul></li> : null}
+      </ol>
+      {mem ? <div className="mm8-detail mm6-card">
+        <div className="mm3-dhead"><b><Rich text={mem.name} /></b><span className="mm3-kind">{mem.kind}</span>{mem.role !== "메인" ? <span className="mm3-kind">{mem.role === "바탕" ? "바탕 지식" : "곁가지"}</span> : null}<span className="cs-gap" />
+          {pagesOf(mem).slice(0, 6).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}<button className="btn ghost small" onClick={() => { setOpen(null); setCard(null); }}>닫기</button></div>
+        {mem.question ? <p className="small muted" style={{ margin: 0 }}><Rich text={mem.question} /></p> : null}
+        <p style={{ margin: 0 }}><Rich text={mem.line} /></p>
+        {mem.steps.length ? <ol className="st-steps">{mem.steps.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ol> : null}
+        <div className="st-src"><span className="small muted">근거 카드 {mem.cards.length}</span>{mem.cards.map((id) => byId.get(id)).filter((c): c is Card => !!c).map((c) =>
+          <button key={c.id} className={`mm3-relchip${card === c.id ? " on" : ""}`} onClick={() => setCard(card === c.id ? null : c.id)}><Rich text={c.title} /></button>)}</div>
+        {openCard ? <div className="st-card"><Body s={openCard.shape} /><FigureView genId={genId} c={openCard} onPage={onPage} /></div> : null}
+      </div> : null}
+    </div>);
+}
+
 // 구조 (11/7 사용자 "목차와 구조 두 탭, 구조는 뜻으로 재배치" → 2차 "위에서 아래로 내리는 느낌, 집합으로 정리되고 가까운 것·먼 것,
 // 조건이 발생 조건에서 한 번, 예방에서 한 번 더 나오는 연계까지 — 다이어그램이면 완전 다른 구조도"): src/lib/study/structure.ts가
 // AI 한 번(terra)으로 묶은 것을 집합 그림으로 그린다. 큰 묶음은 나란한 큰 상자, 하위 묶음은 그 안의 상자, 카드는 상자 안의 알약.
@@ -633,7 +696,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   ];
   // 목차가 있으면(엔진의 목차 → 카드) 첫 탭은 목차, 예전 실행의 정리 글은 요약으로 그대로 보인다.
   const hasOutline = Boolean(digest?.skeleton && (digest.skeleton.topics.length || digest.skeleton.text));
-  const firstLabel = summary && !hasOutline ? "요약" : "목차";
+  const firstLabel = summary && !hasOutline ? "요약" : "줄기";
   const noFirst = digest !== undefined && summary !== undefined && !hasOutline && !(summary && (summary.text || summary.status === "writing"));
   const picked = tab === "structure" && !(hasOutline || !summary) ? null : tab;
   const shownTab: Tab = picked ?? (noFirst ? "knowledge" : "summary");
@@ -668,7 +731,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
       </div>
       {making ? <Steps steps={steps} /> : null}
       {tabs}
-      {shownTab === "summary" ? (hasOutline || !summary ? <OutlinePane genId={genId} digest={digest} cards={map.sections.flatMap((x) => x.cards)} making={making} onPage={onPage} onPractice={onPractice} />
+      {shownTab === "summary" ? (hasOutline || !summary ? <StemPane genId={genId} digest={digest} cards={map.sections.flatMap((x) => x.cards)} making={making} onPage={onPage} onPractice={onPractice} />
         : <SummaryPane summary={summary} making={making} />)
       : shownTab === "structure" ? <StructurePane genId={genId} cards={map.sections.flatMap((x) => x.cards)} chains={map.chains} making={making} onPage={onPage} onPractice={onPractice} /> : <>
       {making ? <p className="small mm5-note-line">기억은 목차 항목마다 조금씩 만들어져요. 다 되기 전에도 지금까지 된 것을 볼 수 있어요.</p> : null}

@@ -1048,3 +1048,19 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm8-pill.goal{box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--accent) 35%,transparent)}
 .dejipgi .mm8-role{display:inline-block;align-self:flex-start;font-size:10.5px;padding:0 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted,#777);margin:-2px 0 3px}
 .dejipgi .mm8-pill.basecard{opacity:.6;border-style:dashed}
+/* 줄기 (11/9) */
+.dejipgi .st-q{margin:-2px 0 2px}
+.dejipgi .st-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.dejipgi .st-row{all:unset;box-sizing:border-box;width:100%;cursor:pointer;display:grid;grid-template-columns:minmax(140px,30%) auto 1fr;gap:8px;align-items:baseline;padding:5px 8px;border-radius:8px;font-size:13px}
+.dejipgi .st-row:hover{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.dejipgi .st-row.on{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.dejipgi .st-row.side{opacity:.7}
+.dejipgi .st-name{font-weight:600}
+.dejipgi .st-kind{font-size:11px;color:var(--muted,#777);white-space:nowrap}
+.dejipgi .st-line{color:var(--muted,#666);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .st-more>summary{cursor:pointer;padding:3px 8px;list-style:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dejipgi .st-steps{margin:2px 0;padding-left:20px;display:flex;flex-direction:column;gap:3px;font-size:13px}
+.dejipgi .st-src{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.dejipgi .st-card{border-top:1px dashed var(--line);padding-top:6px}
+.dejipgi .mm6.st.has-detail>.mm6-topics{margin-bottom:42vh}
+@media (max-width:560px){.dejipgi .st-row{grid-template-columns:1fr}.dejipgi .st-line{white-space:normal}}
