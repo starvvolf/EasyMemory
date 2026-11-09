@@ -4026,6 +4026,33 @@ async function readPdf(file){
   }finally{ b.busy = false; b.status = ""; render(); }
 }
 
+/* 저장한 웹 글 → 자료 (11/9 사용자 "자료로 합쳐", 글만일 때): 서버가 글을 PDF로 인쇄해(Recaller 앱의 인쇄 창) 돌려주면
+   그 PDF를 고른 것처럼 읽는다. 그 뒤는 PDF와 같다. 이미지 포함은 확장 프로그램이 페이지를 PDF로 뽑는다(아직). */
+async function openWebPick(){
+  const b = S.builder;
+  b.webOpen = !b.webOpen; if (!b.webOpen){ render(); return; }
+  b.webList = null; render();
+  try{ const r = await fetch("/api/study-map/web-sources", { cache:"no-store" }); const j = await r.json(); if (!r.ok) throw new Error(j.message || "웹 글 목록을 불러오지 못했어요."); b.webList = j.sources || []; }
+  catch(e){ b.webList = []; b.error = e.message || String(e); }
+  render();
+}
+function webPickList(b){
+  if (b.webList === null) return h("p", { class:"small muted", text:"웹 글 목록을 불러오는 중…" });
+  if (!b.webList.length) return h("p", { class:"small muted", text:"저장한 웹 글이 없어요. 크롬 확장 프로그램으로 글을 읽으면 여기 생겨요." });
+  return h("div", { class:"stack", style:"gap:4px;max-height:220px;overflow:auto;width:100%" }, b.webList.map(x => h("button", { class:"chip-btn", style:"text-align:left", disabled:b.busy, title:x.url,
+    onclick: async () => {
+      b.busy = true; b.error = ""; b.status = `‘${x.title}’을 PDF로 바꾸는 중…`; render();
+      try{
+        const r = await fetch("/api/study-map/web-sources", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ id:x.id }) });
+        if (!r.ok){ const j = await r.json().catch(() => ({})); throw new Error(j.message || "PDF로 바꾸지 못했어요."); }
+        const name = decodeURIComponent(r.headers.get("x-file-name") || "웹 글.pdf");
+        const file = new File([await r.blob()], name, { type:"application/pdf" });
+        b.webOpen = false; b.busy = false; b.status = "";
+        await readPdf(file);
+      }catch(e){ b.busy = false; b.status = ""; b.error = e.message || String(e); render(); }
+    } }, h("span", { text:x.title }), h("span", { class:"small muted", text:` · ${(x.readAt || "").slice(5, 10).replace("-", "/")}` }))));
+}
+
 /* pending material: readable now, questions later */
 function pendingDeck(rec){
   return { id:rec.id, pending:rec, title:rec.title, sourceName:rec.sourceName, sourceCatalogId:rec.sourceId, pageCount:rec.pageCount,
@@ -4217,7 +4244,9 @@ function renderBuilder(){
     h("strong", { text: b.pages.length ? `${b.sourceName} · ${b.pages.length}쪽` : "PDF를 끌어다 놓거나 골라 주세요" }),
     h("span", { class:"small muted", text:"기억할 것을 뽑아 자료 지도로 보여 줘요. 문제는 지도에서 원할 때 만들어요." }),
     h("label", { class:"btn", for:"pdf" }, b.pages.length ? "다른 PDF 고르기" : "PDF 고르기"),
-    h("input", { id:"pdf", type:"file", accept:"application/pdf", class:"hidden", disabled:b.busy, onchange:(e) => { const f = e.target.files[0]; if (f) readPdf(f); } }));
+    h("input", { id:"pdf", type:"file", accept:"application/pdf", class:"hidden", disabled:b.busy, onchange:(e) => { const f = e.target.files[0]; if (f) readPdf(f); } }),
+    engine ? h("button", { class:"btn ghost small", disabled:b.busy, onclick: () => openWebPick() }, "저장한 웹 글에서") : null,
+    b.webOpen ? webPickList(b) : null);
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.dataset.over = "true"; });
   drop.addEventListener("dragleave", () => { drop.dataset.over = "false"; });
   drop.addEventListener("drop", (e) => { e.preventDefault(); drop.dataset.over = "false"; const f = e.dataTransfer.files[0]; if (f && /pdf$/i.test(f.name)) readPdf(f); });

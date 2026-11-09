@@ -69,6 +69,40 @@ function stopCourse() {
   course = null;
 }
 
+/* ---------- 글 → PDF (11/9 사용자 "웹 글을 자료로, 이미지 포함을 고른 경우만 페이지 그대로"): 글만일 때는 앱 서버가 만든
+   HTML(글자만, 바깥 주소 없음)을 이 창에서 PDF로 인쇄한다. 이 PC 안에서만(127.0.0.1, 임의 포트 + 토큰을 tmp/print-port에). ---------- */
+const crypto = require("node:crypto");
+const http = require("node:http");
+let printServer = null;
+function startPrintService() {
+  const token = crypto.randomBytes(16).toString("hex");
+  const noWeb = session.fromPartition("recaller-print");
+  // 인쇄 창은 인터넷에 나가지 않는다: data: 주소만
+  noWeb.webRequest.onBeforeRequest((details, done) => done({ cancel: !details.url.startsWith("data:") }));
+  printServer = http.createServer((req, res) => {
+    const fail = (code, msg) => { res.writeHead(code, { "content-type": "text/plain; charset=utf-8" }); res.end(msg); };
+    if (req.method !== "POST" || req.url !== "/pdf" || req.headers["x-print-token"] !== token) return fail(403, "no");
+    let body = "";
+    req.on("data", (d) => { body += d; if (body.length > 8 * 1024 * 1024) req.destroy(); });
+    req.on("end", async () => {
+      const win = new BrowserWindow({ show: false, webPreferences: { session: noWeb, javascript: false, sandbox: true } });
+      try {
+        await win.loadURL("data:text/html;charset=utf-8;base64," + Buffer.from(body, "utf8").toString("base64"));
+        const pdf = await win.webContents.printToPDF({ pageSize: "A4", printBackground: true, margins: { marginType: "default" } });
+        res.writeHead(200, { "content-type": "application/pdf" }); res.end(pdf);
+      } catch (error) { fail(500, String(error && error.message || error)); }
+      finally { if (!win.isDestroyed()) win.destroy(); }
+    });
+  });
+  printServer.listen(0, "127.0.0.1", () => {
+    try { fs.mkdirSync(path.join(root, "tmp"), { recursive: true }); fs.writeFileSync(path.join(root, "tmp", "print-port"), JSON.stringify({ port: printServer.address().port, token })); } catch { /* 글 → PDF만 안 됨 */ }
+  });
+}
+function stopPrintService() {
+  try { fs.unlinkSync(path.join(root, "tmp", "print-port")); } catch { /* gone */ }
+  if (printServer) { printServer.close(); printServer = null; }
+}
+
 /* ---------- closing asks first (X, Ctrl+Q, menu) ---------- */
 async function askQuit(win) {
   if (confirmed) return true;
@@ -148,6 +182,7 @@ app.whenReady().then(async () => {
     await session.defaultSession.clearStorageData({ storages: ["localstorage", "indexdb", "serviceworkers", "cachestorage"] }).catch(() => {});
     try { fs.unlinkSync(fresh); } catch { /* next start clears again */ }
   }
+  startPrintService();
   openMain();
 });
 
@@ -157,6 +192,7 @@ app.on("before-quit", (event) => {
   event.preventDefault();
   quitting = true;
   if (main && !main.isDestroyed()) { saveBounds(main); main.destroy(); }
+  stopPrintService();
   openSplash("끝내는 중이에요 · 서버를 끄고 데이터를 올려요");
   splashLine("① 실습 코스 서버 끄기\n");
   stopCourse();
