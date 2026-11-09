@@ -855,7 +855,7 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm8-label{position:absolute;z-index:3;transform:translate(-50%,-50%);pointer-events:none;font-size:11px;white-space:nowrap;padding:1px 7px;border-radius:999px;border:1px solid var(--line);background:var(--panel,#fff);color:var(--muted,#555);opacity:.85}
 .dejipgi .mm8-label.lit{opacity:1;box-shadow:0 1px 4px rgba(0,0,0,.12)}
 .dejipgi .mm8-label.pair{font-size:10.5px}
-.dejipgi .mm8-detail{position:sticky;bottom:0;z-index:4;background:var(--panel,#fff);border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+.dejipgi .mm8-detail{position:sticky;bottom:0;z-index:4;background:var(--surface,#fff);border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:0 -4px 16px rgba(0,0,0,.08)}
 @media (max-width:700px){.dejipgi .mm8-box.d0{flex-basis:100%}}
 /* 문제 출처 · 난이도 · 요구 능력 (11/7, 11/8 바꿈, CodeGrade.tsx) */
 .dejipgi .cg-level{display:inline-flex;align-items:center;flex:none;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700;white-space:nowrap;border:1px solid transparent}
