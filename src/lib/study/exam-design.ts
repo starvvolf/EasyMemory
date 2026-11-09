@@ -68,6 +68,12 @@ export const SOLVE_SYSTEM = `강의 문제 하나를 정답을 모르는 채로 
 answer: choice면 정답 보기 번호(1부터), ox면 "O"/"X", blank면 빈칸 답을 차례로 "; "로, short면 값만. work: 푼 과정을 짧게.`;
 const SOLVE_SCHEMA = S.obj({ work: S.str, answer: S.str });
 
+// 같은 뜻 보기 (11/10 전부 다시 풀기 시험): 빈칸·짧은 답은 코드 비교로는 "거부"/"불승인", 문장 답의 낱말 차이를 다르다고 봐
+// 쓸데없이 고쳐 쓰거나(약 20초) 내지 않았다. 코드가 다르다고 할 때만 terra로 한 번 묻는다(약 3초, 걸릴 때만).
+const SAME_SYSTEM = `문제 하나에 정답과, 따로 푼 사람의 답이 있다. 채점자라면 둘을 같은 답으로 인정하는지만 정한다. 표현·낱말·순서·표기만 다르고 뜻이 같으면 same true. 값·판정·가리키는 대상이 다르면 false.`;
+const SAME_SCHEMA = S.obj({ same: { type: "boolean" } });
+const SAME_MODEL = { model: "gpt-6.1-terra", effort: "low" };
+
 // 상황 확인 (11/10 사용자 "그렇게 해서 한 번 더 테스트" — 풀기 검사 대신 싸게): 쓴 문제를 한 번 보고, 노린 함정이 실제로 생기는지·전제가 성립하는지·
 // 답이 하나인지만 본다. 걸리면 그 이유를 주고 한 번 고쳐 쓴다.
 export const CHECK_SYSTEM = `강의 문제 하나와 그 문제가 노린 오개념을 받는다. 정리된 지식과 원문을 기준으로 세 가지만 확인한다.
@@ -115,7 +121,12 @@ export async function designExam(id: string, map: MaterialMap, structure: Struct
       // 확인 + 풀어 보기(동시). 풀어 본 답이 정답과 다르면 걸림.
       const review = async (q: Written) => {
         const [c, s] = await Promise.all([check(q).catch(() => null), solve(q)]);
-        const differs = s && !sameExamAnswer(q.form, q.answer, s.answer);
+        let differs = Boolean(s && !sameExamAnswer(q.form, q.answer, s.answer));
+        if (differs && (q.form === "short" || q.form === "blank")) {
+          const same = await withTrace({ area: "pdf", action: "quiz-same", ref: id }, () => askJson<{ same: boolean }>("map:exam-same", SAME_SYSTEM,
+            `[문제]\n${q.stem}\n\n정답: ${q.answer}\n따로 푼 답: ${s!.answer}`, SAME_SCHEMA, SAME_MODEL)).catch(() => null);
+          if (same?.same) differs = false;
+        }
         const problems = [...(c && !c.ok ? c.problems : []), ...(differs ? [`정답을 모르고 직접 풀면 "${s!.answer}"가 나온다(표시된 정답 "${q.answer}"). 풀이: ${s!.work.slice(0, 400)}`] : [])];
         return { check: c, solved: s, ok: problems.length === 0, problems };
       };
