@@ -275,6 +275,8 @@ export async function runCompactLab(id: string, method: LabMethod) {
     const wall = Date.now() - t0;
     const calls = await callsOf(run, t0);
     const summary = { method, run, wall, drawMs, images: images.length, calls, tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0),
+      // 11/10 사용자 "줄기 딸 때 페이지 찍으라 하고 모든 페이지 다 나왔는지 체크": 어느 기억에도 안 들어간 쪽(코드가 센다).
+      missingPages: pages.filter((p) => !mems.some((m) => (m.pages ?? []).includes(p))),
       areas: plan.areas ?? [], memories: mems.length, main: mems.filter((m) => m.role === "메인").length, ...((plan as { outline?: string }).outline ? { outline: (plan as { outline?: string }).outline } : {}),
       planMemories: mems.map((m) => ({ area: m.area, name: m.name, role: m.role, kind: m.kind, pages: m.pages })) };
     await save(id, method, summary);
