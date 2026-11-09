@@ -20,8 +20,8 @@ export const FIVE_ASK: Record<string, { form: Form; level: number; ask: string }
 };
 const VERB: Record<string, { form: Form; level: number }> = { 떠올리기: { form: "choice", level: 2 }, 구별: { form: "choice", level: 3 }, 판정: { form: "choice", level: 4 }, 계산: { form: "short", level: 4 }, 설명: { form: "choice", level: 3 } };
 
-/** 계획(코드): 목표마다 하나 + 목표 밖 메인 기억마다 하나. */
-export function planStemQuiz(goals: DigestObjective[], links: Array<{ goal: string; need: string[]; confuse: string[] }>, cards: MapCard[], topicOf: (c: MapCard) => string): PlanItem[] {
+/** 계획(코드): 목표마다 하나 + 목표 밖 메인 기억마다 하나. `covered`를 주면 "목표 밖"을 목표에 묶였는지가 아니라 실제로 문제에 쓰였는지로 본다. */
+export function planStemQuiz(goals: DigestObjective[], links: Array<{ goal: string; need: string[]; confuse: string[] }>, cards: MapCard[], topicOf: (c: MapCard) => string, covered?: Set<string>): PlanItem[] {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const items: PlanItem[] = [];
   for (const l of links) {
@@ -31,7 +31,7 @@ export function planStemQuiz(goals: DigestObjective[], links: Array<{ goal: stri
     items.push({ n: items.length + 1, unit: l.need.length > 1 ? "잇기" : "낱장", name: g.id, cards: l.need, form: fl.form, level: fl.level === 5 ? 4 : fl.level, topic: topicOf(byId.get(l.need[0])!), why: g.text,
       ask: `학습 목표 "${g.text}"를 확인한다.${g.given ? ` 주는 것: ${g.given}. 내는 것: ${g.output ?? ""}.` : ""}${l.confuse.length ? ` 헷갈리게 할 것: ${l.confuse.map((x) => byId.get(x)?.title).filter(Boolean).join(", ")}.` : ""}` });
   }
-  const used = new Set(links.flatMap((l) => l.need));
+  const used = covered ?? new Set(links.flatMap((l) => l.need));
   for (const c of cards.filter((x) => x.core && !used.has(x.id))) {
     const t = FIVE[c.kind] ?? "뜻";
     items.push({ n: items.length + 1, unit: "낱장", name: c.title, cards: [c.id], ...FIVE_ASK[t], topic: topicOf(c), why: t });
@@ -45,13 +45,19 @@ export async function makeStemQuestions(id: string, map: MaterialMap, texts: Rec
   const byId = new Map(cards.map((c) => [c.id, c]));
   const topicOf = (c: MapCard) => map.sections.find((s) => s.cards.includes(c))?.id ?? "";
   const links = goals.length && !opts.fake ? (await linkGoalsFor(goals, cards).catch(() => ({ links: [] as Array<{ goal: string; need: string[]; confuse: string[] }> }))).links : [];
+  // 11/10 사용자 "빠진 주제가 구조에는 담김?" → 기억에는 있었다: 목표 문제가 묶인 기억 중 한 면만 물어 나머지가 빠졌다.
+  // ① 목표 문제를 먼저 내고, ② 목표 문제가 실제로 쓴 기억(uses)에 없는 메인 기억마다 하나를 더 낸다.
+  const goalItems = planStemQuiz(goals, links, cards, topicOf, new Set(cards.map((c) => c.id))).filter((it) => goals.some((g) => g.id === it.name));
   const items = planStemQuiz(goals, links, cards, topicOf);
   // 가짜 모델(테스트): AI 없이 기억 제목으로 객관식 하나씩.
   if (opts.fake) return { items, byId, made: items.map((it): MadeQuestion => ({ ...it, ok: true, tries: 1, problems: [], ms: 0,
     q: { form: "choice", level: it.level, stem: `${it.name}에 맞는 것은?`, options: ["가", "나", "다", "라"], answer: "1", explain: "가짜", uses: [1] } })) };
-  const made: MadeQuestion[] = [];
-  for (let i = 0; i < items.length; i += 8) made.push(...await Promise.all(items.slice(i, i + 8).map((it) => makeOne(id, map, it, byId, texts, {}))));
-  return { items, made, byId };
+  const run = async (list: PlanItem[]) => { const out: MadeQuestion[] = []; for (let i = 0; i < list.length; i += 8) out.push(...await Promise.all(list.slice(i, i + 8).map((it) => makeOne(id, map, it, byId, texts, {})))); return out; };
+  const made = await run(goalItems);
+  const usedIds = new Set(made.filter((m) => m.ok && m.q).flatMap((m) => (m.q!.uses ?? []).map((n) => m.cards[n - 1]).filter(Boolean)));
+  const rest = planStemQuiz([], [], cards, topicOf, usedIds).map((it, k) => ({ ...it, n: goalItems.length + k + 1 }));
+  made.push(...await run(rest));
+  return { items: [...goalItems, ...rest], made, byId };
 }
 
 /** 만든 문제 → 엔진 문제(RcQuestion): 연습 화면·자료 지도가 그대로 쓴다. */

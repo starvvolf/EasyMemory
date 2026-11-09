@@ -14,7 +14,7 @@ import { materialMap, type MapCard } from "./material-map.ts";
 import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "./quiz-plan.ts";
 import { loadGoalLinks, makeGoalLinks } from "./goal-links.ts";
 
-export const LAB2_METHODS = ["nine", "five", "goals"] as const;
+export const LAB2_METHODS = ["nine", "five", "goals", "stem"] as const;
 export type Lab2Method = (typeof LAB2_METHODS)[number];
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 
@@ -68,14 +68,20 @@ export async function runQuizLab2(id: string, method: Lab2Method) {
   }
   const t0 = Date.now();
   const limit = 8; const made: MadeQuestion[] = [];
-  for (let i = 0; i < items.length; i += limit)
+  if (method === "stem") {
+    // 제품 경로 그대로(stem-quiz.ts): 목표 문제 → 실제로 안 쓰인 메인 기억 문제
+    const { makeStemQuestions } = await import("./stem-quiz.ts");
+    const goals = (state as unknown as { recaller?: { digest?: { objectives?: DigestObjective[] } } }).recaller?.digest?.objectives ?? [];
+    const r = await makeStemQuestions(id, map, texts, goals);
+    items.push(...r.items); made.push(...r.made);
+  } else for (let i = 0; i < items.length; i += limit)
     made.push(...await Promise.all(items.slice(i, i + limit).map((it) => withTrace({ area: "pdf", action: "quiz-lab2", ref: id }, () => makeOne(id, map, it, byId, texts, {})))));
   const wall = Date.now() - t0;
   const calls = await callsOf(id, t0);
   const out = { method, id, at: new Date().toISOString(), wall, items: items.length, ok: made.filter((m) => m.ok).length, calls: calls.length,
     tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0),
     held: made.filter((m) => !m.ok).map((m) => `${m.name}: ${m.held}`),
-    questions: made.map((m) => ({ n: m.n, name: m.name, kind: m.why, form: m.q?.form, level: m.level, ok: m.ok, stem: m.q?.stem, options: m.q?.options, answer: m.q?.answer, explain: m.q?.explain, solved: m.solved?.answer, steps: m.solved?.steps, fixed: m.fixed, easy: m.easy })) };
+    questions: made.map((m) => ({ n: m.n, name: m.name, kind: m.why, cards: m.cards.map((x) => byId.get(x)?.title ?? x), uses: (m.q?.uses ?? []).map((n) => byId.get(m.cards[n - 1])?.title ?? n), form: m.q?.form, level: m.level, ok: m.ok, stem: m.q?.stem, options: m.q?.options, answer: m.q?.answer, explain: m.q?.explain, solved: m.solved?.answer, steps: m.solved?.steps, fixed: m.fixed, easy: m.easy })) };
   const dir = path.join(dataDir(), "study-gen", id, "quiz-lab2");
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, `${method}.json`), JSON.stringify(out, null, 1));
