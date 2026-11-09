@@ -56,7 +56,7 @@ const ASK: Record<Unit, string> = {
   낱장: "카드 하나의 핵심을 묻는다.",
 };
 // 단위 × 설정 → 방식·난이도 (코드 규칙)
-function formFor(unit: Unit, cards: MapCard[], o: QuizOptions, lean: "계산" | "개념"): { form: Form; level: number } {
+export function formFor(unit: Unit, cards: MapCard[], o: QuizOptions, lean: "계산" | "개념"): { form: Form; level: number } {
   const calc = cards.some(isCalc) && o.style !== "개념" && (lean === "계산" || o.style === "계산");
   const down = o.goal === "처음" ? 1 : 0, up = o.goal === "시험" ? 1 : 0;
   // 5(잇기)는 잇기 단위만. 시험 대비는 2·3을 한 단계 올리고 4는 4로 둔다(11/8: 그래픽스 시험 대비 29개 중 19개가 5가 됐다)
@@ -343,7 +343,7 @@ async function checkFigureQuizzes(id: string, list: FigureQuiz[]): Promise<Check
   }));
 }
 
-async function makeOne(id: string, map: MaterialMap, it: PlanItem, byId: Map<string, MapCard>, texts: Record<string, string>, run: { noRetry?: boolean; noBlind?: boolean }): Promise<MadeQuestion> {
+export async function makeOne(id: string, map: MaterialMap, it: PlanItem, byId: Map<string, MapCard>, texts: Record<string, string>, run: { noRetry?: boolean; noBlind?: boolean }): Promise<MadeQuestion> {
   const t = Date.now();
   const cards = it.cards.map((x) => byId.get(x)!).filter(Boolean);
   const pages = [...new Set(cards.flatMap((c) => c.pages))].sort((a, b) => a - b);
