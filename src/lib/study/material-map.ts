@@ -20,6 +20,8 @@ export type MapCard = {
   topic?: string;
   /** 카드에 붙은 그림 (11/8): 잘라 둔 파일은 GET /api/study-map/<id>/figure/<file> */
   figure?: { page: number; role: string; says: string; file: string; mode?: string };
+  /** 줄기 모드(11/10): 이 카드가 기억 하나 — 질문·요지·모양에 없는 식과 조건·역할 */
+  memo?: { question: string; line: string; facts: string[]; role: "메인" | "바탕" | "곁" };
 };
 export type MapSection = { id: string; title: string; pages: number[]; cards: MapCard[] };
 /** wording: one card's result is another's input (takes/gives); group: a deep question joins them; meaning: the whole-material pass. */
@@ -76,6 +78,7 @@ export function materialMap(state: GenState, knowledge: Record<string, MapKnowle
         quotes: card.evidence.map((e) => e.quote).filter(Boolean), mistakes: card.mistakes, takes: card.takes ?? [], gives: card.gives ?? [],
         questions: (asked.get(card.id) ?? 0) + same.reduce((n, s) => n + (asked.get(s.id) ?? 0), 0), same,
         state: stateOf(k), ...(k ? { knowledgeId: k.id } : {}), ...(k?.dueAt ? { dueAt: k.dueAt } : {}),
+        ...(card.memo ? { memo: card.memo } : {}),
         ...(card.figure?.file ? { figure: { page: card.figure.page, role: card.figure.role, says: card.figure.says, file: card.figure.file, ...(card.figure.mode ? { mode: card.figure.mode } : {}) } } : {}) };
     }),
   })).filter((section) => section.cards.length);

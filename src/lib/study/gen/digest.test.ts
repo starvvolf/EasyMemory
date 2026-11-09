@@ -392,18 +392,22 @@ test("앱(공부 화면) 기본 (11/5): 목차 → 바로 카드로 카드 먼�
   const io = { pdf: async () => null, pages: async () => pages };
   const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "core", engine: "recaller", provider: "fake", origin: "study", questionsLater: true });
   assert.equal(start.input.lab?.mapCards, true);
-  assert.equal(start.input.lab?.flowCard, "after", "앱은 카드 다음에 흐름 카드 한 장 (11/6)");
+  assert.equal(start.input.lab?.flowCard, undefined, "흐름 카드는 만들지 않는다 (11/9)");
+  assert.equal(start.input.lab?.stem, true, "앱은 줄기 먼저 → 기억 채우기 (11/10)");
   assert.equal(start.input.lab?.goalQuiz, true, "앱은 목표형 문제 (11/6)");
   const first = await runGen(start.id, { uid: "local-experiment" }, io);
   assert.equal(first.status, "done", first.message);
   const before = await readGenCalls(first.id);
-  assert.ok(before.some((c) => c.step === "rc-digest-card") && !before.some((c) => (c.step.startsWith("rc-q-") && c.step !== "rc-q-goals") || c.step === "rc-topic"), before.map((c) => c.step).join(","));
+  assert.ok(before.some((c) => c.step === "rc-stem-fill") && !before.some((c) => (c.step.startsWith("rc-q-") && c.step !== "rc-q-goals") || c.step === "rc-topic" || c.step === "rc-digest-card" || c.step === "rc-merge" || c.step === "rc-wrap"), before.map((c) => c.step).join(","));
+  // 기억 하나 = 카드 한 장(id tN.mK), 메인이면 핵심, 질문·요지는 memo에
+  const cards = first.sections.flatMap((s) => first.recaller!.units[s.id].cards ?? []);
+  assert.ok(cards.length && cards.every((c) => /^t\d+\.m\d+$/.test(c.id) && c.memo), cards.map((c) => c.id).join(","));
   await questionsGen(first.id);
   const done = await runGen(first.id, { uid: "local-experiment" }, io);
   assert.equal(done.status, "done", done.message);
   const after = (await readGenCalls(done.id)).slice(before.length).map((c) => c.step);
   assert.ok(after.includes("rc-q-pick") && (after.includes("rc-q-case") || after.includes("rc-q-material")), after.join(","));
-  assert.ok(!after.includes("rc-digest-card") && !after.includes("rc-digest-plan"), `카드를 다시 만들지 않는다: ${after.join(",")}`);
+  assert.ok(!after.includes("rc-stem-fill") && !after.includes("rc-stem-plan"), `기억을 다시 만들지 않는다: ${after.join(",")}`);
   const qs = done.sections.flatMap((s) => Object.values(done.recaller!.units[s.id].chunks ?? {}).flatMap((c) => c.questions ?? []));
   assert.ok(qs.length >= 1, "문제가 나온다");
 }));
@@ -491,6 +495,6 @@ test("앱 문제도 바로 만들기 (11/6): 공부 화면에서 questionsLater 
   const done = await runGen(start.id, { uid: "local-experiment" }, io);
   assert.equal(done.status, "done", done.message);
   const steps = (await readGenCalls(done.id)).map((c) => c.step);
-  assert.ok(steps.includes("rc-digest-card") && steps.includes("rc-q-pick"), steps.join(","));
+  assert.ok(steps.includes("rc-stem-fill") && steps.includes("rc-q-pick"), steps.join(","));
   assert.ok(Object.values(done.recaller!.units).some((u) => (u.questions ?? []).length), "문제가 나온다");
 }));

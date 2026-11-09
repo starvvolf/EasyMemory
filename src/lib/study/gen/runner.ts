@@ -280,7 +280,7 @@ export const genInputSchema = z.strictObject({
     readParallel: z.number().int().min(1).max(64).optional(), imageWidth: z.number().int().min(512).max(2400).optional(), inlineRead: z.boolean().optional(),
     outline: z.boolean().optional(), consolidate: z.boolean().optional(), fastPrep: z.number().int().min(1).max(16).optional(),
     chunk: z.number().int().min(1).max(4).optional(), hedgeMs: z.number().int().min(1000).max(120000).optional(),
-    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), summary: z.boolean().optional(), digest: z.boolean().optional(), digestTopicCards: z.boolean().optional(), digestOne: z.boolean().optional(), digestStyle: z.enum(["univ", "plan"]).optional(), quiz: z.enum(["luna"]).optional(), quizCount: z.number().int().min(1).max(60).optional(), goalsInPlan: z.boolean().optional(), conceptLines: z.boolean().optional(), mapCards: z.boolean().optional(), prompts: z.record(z.string().max(40), z.string().max(30000)).optional(), mapUnit: z.enum(["topic", "page"]).optional(), flowCard: z.enum(["with", "after"]).optional(), figures: z.boolean().optional(), goalQuiz: z.boolean().optional(), outlineOnly: z.boolean().optional(), noSourceOutline: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
+    lean: z.boolean().optional(), lenientQuotes: z.boolean().optional(), intent: z.boolean().optional(), intentPass: z.boolean().optional(), intentLean: z.boolean().optional(), intentParallel: z.boolean().optional(), summary: z.boolean().optional(), digest: z.boolean().optional(), digestTopicCards: z.boolean().optional(), digestOne: z.boolean().optional(), digestStyle: z.enum(["univ", "plan"]).optional(), quiz: z.enum(["luna"]).optional(), quizCount: z.number().int().min(1).max(60).optional(), goalsInPlan: z.boolean().optional(), conceptLines: z.boolean().optional(), mapCards: z.boolean().optional(), prompts: z.record(z.string().max(40), z.string().max(30000)).optional(), mapUnit: z.enum(["topic", "page"]).optional(), flowCard: z.enum(["with", "after"]).optional(), stem: z.boolean().optional(), figures: z.boolean().optional(), goalQuiz: z.boolean().optional(), outlineOnly: z.boolean().optional(), noSourceOutline: z.boolean().optional(), sectionContext: z.boolean().optional(), callCap: z.number().int().min(10).max(2000).optional() }).optional(),
   survey: z.strictObject({ style: z.enum(["recall", "understand"]).optional(), difficulty: z.enum(["easy", "normal", "hard"]).optional(), exam: z.enum(["choice", "mixed", "written"]).optional(), depth: z.enum(["core", "all"]).optional(),
     time: z.enum(["short", "normal", "long"]).optional(), known: z.string().max(500).optional() }).optional(),
 });
@@ -323,7 +323,10 @@ export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
     // 목표형 문제 (11/6 사용자 "데드락 시연: 학습 목표부터, 그 목표에 맞는 문제" → "sol로 가고 본 앱에 연결"): 목표마다 주는 것·내는 것,
     // 판정·구별은 상황 객관식(보기는 가능한 판정 전부), 설명은 상황만 주는 서술, OX 없음, 다시 만들기 없음(예비 문제가 빈 목표를 채움).
     // 모델은 DEFAULT_GEN_MODELS(학습 목표·출제 고르기·상황 판정·서술 sol low).
-    goalQuiz: true };
+    goalQuiz: true,
+    // 줄기 먼저 (11/10 사용자 "기억 단위로 다 옮겨"): 목차 대신 줄기 계획 → 기억 채우기. 자료 전체 정리(rc-merge)는 하지 않는다(핵심 = 메인 기억).
+    // 그래픽스 52쪽: 줄기 약 47초, 기억 채우기 약 39초 (전: 목차 50~68초 + 카드 57초 + 정리 80초 + 합치기 36초).
+    stem: true, consolidate: false };
 }
 
 export const forkInputSchema = z.strictObject({

@@ -14,13 +14,36 @@ import { loadStructure, type Structure } from "./structure.ts";
 
 export const MEMORY_KINDS = ["알고리즘", "원리", "개념", "비교", "판정", "구조"] as const;
 export const MEMORY_ROLES = ["메인", "바탕", "곁"] as const;
-export type Memory = { id: string; name: string; kind: (typeof MEMORY_KINDS)[number]; role: (typeof MEMORY_ROLES)[number]; area: number;
+export type Memory = { id: string; name: string; kind: (typeof MEMORY_KINDS)[number] | string; role: (typeof MEMORY_ROLES)[number]; area: number; facts?: string[];
   question: string; line: string; steps: string[]; cards: string[] };
 export type Compact = { at: string; ms: number; model: string; effort: string; cards: number; areas: Array<{ name: string; question: string }>; memories: Memory[]; fixes: string[] };
 
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 const fileOf = (id: string) => { if (!/^gen_[a-z0-9]{8,64}$/.test(id)) throw Object.assign(new Error("자료 id가 올바르지 않아요."), { status: 400 }); return path.join(dataDir(), "study-gen", id, "compact.json"); };
-export async function loadCompact(id: string): Promise<Compact | null> { try { return JSON.parse(await readFile(fileOf(id), "utf8")) as Compact; } catch { return null; } }
+export async function loadCompact(id: string): Promise<Compact | null> {
+  try { return JSON.parse(await readFile(fileOf(id), "utf8")) as Compact; } catch { return stemCompact(id); }
+}
+/**
+ * 줄기 모드로 만든 자료(11/10, gen/stem.ts)는 엔진이 이미 영역·기억으로 만들었다: 따로 합치지 않고 실행 기록에서 바로 줄기를 읽는다.
+ * 영역 = 주제(state.sections), 기억 = memo가 있는 카드 한 장(근거 카드 = 그 자신).
+ */
+export async function stemCompact(id: string): Promise<Compact | null> {
+  const state = await loadGen(id).catch(() => null);
+  const rc = state?.recaller;
+  if (!state || !rc || !state.input.lab?.stem) return null;
+  const memories: Memory[] = [];
+  const areas = state.sections.map((s) => ({ name: s.title, question: rc.digest?.stem?.questions[s.id] ?? "" }));
+  state.sections.forEach((s, i) => {
+    for (const c of rc.units[s.id]?.cards ?? []) {
+      if (!c.memo) continue;
+      memories.push({ id: c.id, name: c.title, kind: c.kind, role: c.memo.role, area: i + 1, question: c.memo.question, line: c.memo.line, facts: c.memo.facts,
+        steps: c.shape.form === "procedure" ? c.shape.steps.map((x) => x.action) : [], cards: [c.id] });
+    }
+  });
+  if (!memories.length) return null;
+  const done = rc.timing?.completedAt ?? state.updatedAt ?? "";
+  return { at: String(done), ms: 0, model: "stem", effort: "", cards: memories.length, areas, memories, fixes: rc.digest?.stem?.missing.length ? [`어느 기억에도 안 든 쪽: p.${rc.digest.stem.missing.join(", ")}`] : [] };
+}
 
 export const COMPACT_SYSTEM = `너는 강의 자료 한 편에서 뽑은 기억 카드(조각)들을, 학습자가 실제로 외우고 복습할 "기억"으로 합친다.
 카드는 자료를 쪽마다 읽으며 잘게 뽑은 것이라 같은 알고리즘의 단계·식·조건이 여러 장으로 흩어져 있다. 목표는 카드 N장을 낱장으로 외우는 게 아니라,
@@ -102,6 +125,8 @@ export const MEM_SCHEMA = S.obj({ memories: S.arr(S.obj({ name: S.str, kind: S.o
 
 export const COMPACT_MODEL = { model: "gpt-6.1-terra", effort: "low" };
 export async function makeCompact(id: string): Promise<Compact> {
+  const stem = await stemCompact(id);
+  if (stem) return stem;
   const state = await loadGen(id);
   const map = state ? materialMap(state, {}) : null;
   if (!map) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });

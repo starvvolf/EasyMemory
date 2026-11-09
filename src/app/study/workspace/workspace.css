@@ -1064,3 +1064,5 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .st-card{border-top:1px dashed var(--line);padding-top:6px}
 .dejipgi .mm6.st.has-detail>.mm6-topics{margin-bottom:42vh}
 @media (max-width:560px){.dejipgi .st-row{grid-template-columns:1fr}.dejipgi .st-line{white-space:normal}}
+.dejipgi .st-facts{margin:2px 0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:2px}
+.dejipgi .st-quotes{display:flex;flex-wrap:wrap;gap:4px 10px}

@@ -231,8 +231,8 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
 // 줄기 (11/9 사용자 "목차를 없애야 하나, 줄기로 바꾸려면" → "바꿔서 테스트 후 보고"): 기억 합치기(src/lib/study/compact.ts)가 묶은 영역 → 기억.
 // 영역은 자료 순서라 목차를 겸한다(쪽 범위). 메인 기억은 한 줄씩, 바탕·곁은 영역 끝에 접어 둔다. 누르면 아래 떠 있는 칸에 요지·단계·근거 카드.
 // 아직 합치지 않은 자료는 예전 목차를 보이고 위에 [줄기 만들기].
-type MemoryLite = { id: string; name: string; kind: string; role: "메인" | "바탕" | "곁"; area: number; question: string; line: string; steps: string[]; cards: string[] };
-type CompactLite = { at: string; ms: number; cards: number; areas: Array<{ name: string; question: string }>; memories: MemoryLite[] };
+type MemoryLite = { id: string; name: string; kind: string; role: "메인" | "바탕" | "곁"; area: number; question: string; line: string; steps: string[]; cards: string[]; facts?: string[] };
+type CompactLite = { at: string; ms: number; model?: string; cards: number; areas: Array<{ name: string; question: string }>; memories: MemoryLite[] };
 function StemPane(props: { genId: string; digest: DigestLite | null | undefined; cards: Card[]; making: boolean; onPage: (page: number) => void; onPractice?: (page: number, cardId: string) => void }) {
   const { genId, cards, making, onPage } = props;
   const [data, setData] = useState<CompactLite | null | undefined>(undefined);
@@ -254,12 +254,13 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
     <OutlinePane {...props} /></>;
   const pagesOf = (m: MemoryLite) => [...new Set(m.cards.flatMap((id) => byId.get(id)?.pages ?? []))].sort((a, b) => a - b);
   const mem = data.memories.find((m) => m.id === open);
+  const self = mem && mem.cards.length === 1 && mem.cards[0] === mem.id ? byId.get(mem.id) : undefined;
   const openCard = card ? byId.get(card) : undefined;
   const range = (ps: number[]) => ps.length ? (ps[0] === ps.at(-1) ? `p.${ps[0]}` : `p.${ps[0]}–${ps.at(-1)}`) : "";
   const main = data.memories.filter((m) => m.role === "메인").length;
   return (
     <div className={`mm6 st${mem ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("button,a,input,label,summary,.mm8-detail")) { setOpen(null); setCard(null); } }}>
-      <div className="row small mm8-goalbar"><span className="muted">카드 {data.cards}장 → 기억 {data.memories.length}개 (이 강의에서 새로 배우는 것 {main}개)</span><span className="cs-gap" />{btn("다시 만들기", false)}</div>
+      <div className="row small mm8-goalbar"><span className="muted">{data.model === "stem" ? `기억 ${data.memories.length}개` : `카드 ${data.cards}장 → 기억 ${data.memories.length}개`} (이 강의에서 새로 배우는 것 {main}개)</span><span className="cs-gap" />{btn("다시 만들기", false)}</div>
       {error ? <p className="small bad">{error}</p> : null}
       <ol className="mm6-topics">{data.areas.map((a, i) => {
         const list = data.memories.filter((m) => m.area === i + 1);
@@ -283,10 +284,18 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
           {pagesOf(mem).slice(0, 6).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}<button className="btn ghost small" onClick={() => { setOpen(null); setCard(null); }}>닫기</button></div>
         {mem.question ? <p className="small muted" style={{ margin: 0 }}><Rich text={mem.question} /></p> : null}
         <p style={{ margin: 0 }}><Rich text={mem.line} /></p>
+        {self ? <>
+          {/* 줄기 모드(11/10): 기억 하나가 곧 카드 한 장 — 모양(단계·기준…), 모양에 없는 식·조건, 근거, 그림을 바로 */}
+          <Body s={self.shape} />
+          {mem.facts?.length ? <ul className="st-facts">{mem.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+          {self.quotes.length ? <div className="st-quotes small muted">{self.quotes.map((q, k) => <span key={k}>“{q}”</span>)}</div> : null}
+          <FigureView genId={genId} c={self} onPage={onPage} />
+        </> : <>
         {mem.steps.length ? <ol className="st-steps">{mem.steps.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ol> : null}
         <div className="st-src"><span className="small muted">근거 카드 {mem.cards.length}</span>{mem.cards.map((id) => byId.get(id)).filter((c): c is Card => !!c).map((c) =>
           <button key={c.id} className={`mm3-relchip${card === c.id ? " on" : ""}`} onClick={() => setCard(card === c.id ? null : c.id)}><Rich text={c.title} /></button>)}</div>
         {openCard && mem.cards.includes(openCard.id) ? <div className="st-card"><Body s={openCard.shape} /><FigureView genId={genId} c={openCard} onPage={onPage} /></div> : null}
+        </>}
       </div> : null}
     </div>);
 }
@@ -330,6 +339,9 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
   const cardById = useMemo(() => new Map(cardList.map((c) => [c.id, c])), [cardList]);
   const memById = useMemo(() => new Map((compact?.memories ?? []).map((m) => [m.id, m])), [compact]);
   const cards = useMemo<Card[]>(() => s?.unit !== "memory" ? cardList : (compact?.memories ?? []).map((m) => {
+    // 줄기 모드로 만든 자료(11/10): 기억이 곧 카드 — 그 카드를 그대로(모양·그림까지).
+    const own = m.cards.length === 1 && m.cards[0] === m.id ? cardById.get(m.id) : undefined;
+    if (own) return { ...own, core: m.role === "메인" };
     const src = m.cards.map((id) => cardById.get(id)).filter((c): c is Card => !!c);
     return { id: m.id, ref: m.id, kind: m.kind, title: m.name, core: m.role === "메인",
       shape: m.steps.length ? { form: "procedure", steps: m.steps.map((x) => ({ action: x, input: "", output: "" })) } as Shape : { form: "concept", claim: m.line, reason: "", limit: "" } as Shape,
@@ -452,7 +464,11 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
         <div className="mm3-dhead"><b><Rich text={openCard.title} /></b><span className="mm3-kind">{openCard.kind}</span>{openCard.core ? <span className="mm3-kind core">핵심</span> : null}<span className="cs-gap" />
           {openCard.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}<button className="btn ghost small" onClick={() => setOpen(null)}>닫기</button></div>
         <Body s={openCard.shape} />
-        {memById.get(openCard.id) ? <>{memById.get(openCard.id)!.steps.length ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
+        {memById.get(openCard.id) && cardById.get(openCard.id) ? <>
+          {memById.get(openCard.id)!.line ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
+          {memById.get(openCard.id)!.facts?.length ? <ul className="st-facts">{memById.get(openCard.id)!.facts!.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+          <FigureView genId={genId} c={openCard} onPage={onPage} /></>
+          : memById.get(openCard.id) ? <>{memById.get(openCard.id)!.steps.length ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
           <div className="st-src"><span className="small muted">근거 카드 {memById.get(openCard.id)!.cards.length}</span>{memById.get(openCard.id)!.cards.map((id) => cardById.get(id)).filter((c): c is Card => !!c).map((c) =>
             <button key={c.id} className={`mm3-relchip${srcCard === c.id ? " on" : ""}`} onClick={() => setSrcCard(srcCard === c.id ? null : c.id)}><Rich text={c.title} /></button>)}</div>
           {srcCard && cardById.get(srcCard) && memById.get(openCard.id)!.cards.includes(srcCard) ? <div className="st-card"><Body s={cardById.get(srcCard)!.shape} /><FigureView genId={genId} c={cardById.get(srcCard)!} onPage={onPage} /></div> : null}</>
