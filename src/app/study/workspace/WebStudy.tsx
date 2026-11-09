@@ -1,7 +1,7 @@
 "use client";
 // 공부 → 웹 글: articles read with the Chrome extension or pasted here, each with its knowledge and its four goals.
 import { useCallback, useEffect, useState } from "react";
-import { call, errorText, go, handoff, later } from "./api";
+import { call, errorText, handoff, later } from "./api";
 import { ArticleGoals, ArticleKnowledge, ArticleMap, type GoalId, type SourceView } from "./ArticleStudy";
 
 type SourceLite = { id: string; kind: string; title: string; url: string; readAt: string; againIds: string[]; knowledgeIds: string[]; goals: Record<GoalId, { done: boolean }> };
@@ -38,14 +38,13 @@ export default function WebStudy() {
       {list && !list.length ? (
         <section className="panel ws-empty">
           <b>아직 읽은 웹 글이 없어요</b>
-          <p className="small muted">칼럼이나 블로그 글을 읽으면서 크롬 확장(Recaller 사이드바)을 켜면 여기에 쌓여요. 확장이 없으면 글을 붙여 넣어 시작할 수도 있어요.</p>
-          <button className="btn primary small" onClick={() => go("start", { kind: "web" })}>글 붙여 넣기</button>
+          <p className="small muted">칼럼이나 블로그 글을 읽으면서 크롬 확장(Recaller 사이드바)을 켜면 여기에 쌓여요.</p>
         </section>
       ) : null}
       {/* [경계] 2026-11-02 A (점검_UIUX화면연결 15번): 목록 위에 뜻 풀이와 글 넣기 */}
       {list?.length ? <div className="row small muted" style={{ justifyContent: "space-between" }}>
         <span><span className="ws-dots" aria-hidden><i className="on" /><i /></span> 잘 읽었는지 확인 4단계 중 한 것 · <span className="chip read">예전 기억 n</span> 다른 자료에서 이미 배운 기억이 이 글에 n개</span>
-        <button className="btn small" onClick={() => go("start", { kind: "web" })}>+ 글 붙여 넣기</button></div> : null}
+        </div> : null}
       <ul className="cs-list">
         {(list ?? []).map((s) => {
           const done = (Object.values(s.goals) as Array<{ done: boolean }>).filter((g) => g.done).length;

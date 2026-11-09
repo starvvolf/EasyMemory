@@ -367,7 +367,7 @@ function renderToday(plan, pendings){
         : plan.doneToday ? `오늘 ${plan.doneToday}문제를 풀었어요. 내일 할 것은 내일 아침에 다시 계산해요.` : "새 자료를 올려 보세요." })),
     h("div", { class:"row" },
       left ? h("button", { class:"btn primary big", "data-autofocus":"1", onclick:startToday }, plan.doneToday ? "이어서 하기" : "시작하기", h("span", { class:"btn-sub num", text:`${Math.min(left, chunkSize())}문제` })) : null,
-      S.view === "home" || S.view === "practice" ? null : h("button", { class:"btn", onclick: () => setView("start") }, "+ 새 공부"))));
+      S.view === "home" || S.view === "practice" ? null : h("button", { class:"btn", onclick: () => setView("create") }, "+ 새 자료"))));
   if (total) panel.append(h("div", { class:"today2-bar", "aria-hidden":"true" }, h("i", { style:`width:${(plan.doneToday / total * 100).toFixed(1)}%` })));
   const rows = h("div", { class:"today2-rows" });
   for (const sp of []){ // 과목별 D-day 줄: 10/30에 뺌 (plan.subjects)
@@ -717,11 +717,9 @@ function renderRecallerHome(){
   const today = now.toLocaleDateString("ko-KR", { month:"long", day:"numeric", weekday:"long" });
   const clock = now.toLocaleTimeString("ko-KR", { hour:"2-digit", minute:"2-digit", hour12:false });
   const real = realDecks();
+  // 11/9 사용자 "새 공부 시작·내 공부 보기 없애고": 날짜·시계만.
   wrap.append(h("section", { class:"panel hero home-head" },
-    h("div", { class:"home-when" }, h("span", { class:"home-date", text:today }), h("span", { id:"homeClock", class:"home-clock num", text:clock })),
-    h("div", { class:"row" },
-      h("button", { class:"btn primary", onclick: () => setView("start") }, "+ 새 공부 시작"),
-      h("button", { class:"btn", onclick: () => setView("practice") }, "내 공부 보기"))));
+    h("div", { class:"home-when" }, h("span", { class:"home-date", text:today }), h("span", { id:"homeClock", class:"home-clock num", text:clock }))));
   if (env.mountView) wrap.append(viewHost("today", {}));
   // 목표·시험일은 10/30에 뺐다(docs/DECISIONS.md): 오늘 화면에는 과목 칩·D-day를 두지 않는다.
   // 복습 입구 하나 (2026-11-02 A, 점검_UIUX화면연결 1번): PDF 문제도 오늘 카드(TodayBoard) 안의 한 줄로 보낸다.
@@ -927,7 +925,8 @@ function render(){
   else if (S.view === "code") app.append(studyNav("code"), env.mountView ? viewHost("code", {}) : h("div", { class:"panel small muted", text:"알고리즘 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "project") app.append(studyNav("project"), env.mountView ? viewHost("project", {}) : h("div", { class:"panel small muted", text:"실습은 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "web") app.append(studyNav("web"), env.mountView ? viewHost("web", {}) : h("div", { class:"panel small muted", text:"웹 글 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
-  else if (S.view === "start") app.append(env.mountView ? viewHost("start", {}) : renderBuilder());
+  // "새 공부 시작" 화면(NewStudy)은 11/9 사용자 "그 화면도 없애고"로 뺐다. 예전 링크는 자료 갈래로.
+  else if (S.view === "start") app.append(studyNav("practice"), renderHome());
   else if (S.view === "plan") app.append(env.mountView ? viewHost("plan", {}) : h("div", { class:"panel small muted", text:"일정은 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "bench") app.append(renderBench());
   else if (S.view === "archive") app.append(renderArchive());

@@ -1,6 +1,6 @@
 "use client";
 // 오늘: 두 칸만 (2026-11-06 사용자 "딱 두 가지로, 문제 풀기랑 이어서 하기, 조잡하지 않게"). 문제 풀기를 누르면 무엇을 풀지
-// 고르는 목록이 열리고(지식 복습·PDF 문제·틀린 알고리즘·알고리즘 문제·미리 연습), 이어서 하기는 마지막으로 한 공부 하나를 보여 준다.
+// 고르는 목록이 열리고(지식 복습·PDF 문제·틀린 알고리즘·알고리즘 문제·미리 연습), 이어서 하기는 자료·알고리즘·실습마다 마지막 하나(11/9).
 // 기한·할 일 칩은 뺐다(일정 탭에서 할 일·기한을 없앰).
 import { useCallback, useEffect, useState } from "react";
 import { call, go, later, type ItemLite, type Question } from "./api";
@@ -12,7 +12,6 @@ type ProblemLite = { id: string; title: string; status: "new" | "tried" | "wrong
 type SourceLite = { id: string; title: string; readAt: string; goals: Record<string, { done: boolean }> };
 type Studied = { kind: string; title: string; ref: string; n: number; last: string };
 type Last = { kind: string; title: string; at: string; open: () => void; note: string };
-const KIND: Record<string, string> = { pdf: "PDF", web: "웹 글", code: "알고리즘", project: "실습", manual: "직접 넣은 것", review: "복습" };
 const ago = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
   return m < 60 ? `${m || 1}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`;
@@ -52,21 +51,27 @@ export default function TodayBoard() {
   const pdfLeft = pdf?.left ?? 0;
   const due = review.length + pdfLeft;
 
-  // 마지막으로 한 공부: 지식 기록(이번 주)에서 가장 최근 것, 없으면 알고리즘·웹 글 중 최근 것.
-  const fromStudied = (s: Studied): Last | null => {
-    if (s.kind === "code" && s.ref.startsWith("code:")) return { kind: "code", title: s.title, at: s.last, open: () => go("code", { id: s.ref.slice(5) }), note: "이어서 풀기" };
-    if (s.kind === "code" && s.ref.startsWith("project:")) return { kind: "project", title: s.title.replace(/^프로젝트 코스: /, ""), at: s.last, open: () => go("project"), note: "실습 열기" };
-    if (s.kind === "web") { const src = sources.find((x) => x.title === s.title); return { kind: "web", title: s.title, at: s.last, open: () => (src ? go("web", { id: src.id }) : go("web")), note: "이어서 읽기" }; }
-    if (s.kind === "pdf") return { kind: "pdf", title: s.title, at: s.last, open: () => go("practice"), note: "PDF 자료 열기" };
-    return null;
-  };
-  const cands: Last[] = [];
-  for (const s of studied) { const l = fromStudied(s); if (l) { cands.push(l); break; } }
-  const lastProblem = [...problems].filter((p) => p.lastAt).sort((a, b) => b.lastAt.localeCompare(a.lastAt))[0];
-  if (lastProblem) cands.push({ kind: "code", title: lastProblem.title, at: lastProblem.lastAt, open: () => go("code", { id: lastProblem.id }), note: "이어서 풀기" });
+  // 이어서 하기 (11/9 사용자 "자료/알고리즘/실습 세 가지 탭에서 각각 하나씩"): 갈래마다 가장 최근에 한 것 하나.
+  const newest = (xs: Array<Last | null>) => xs.filter((x): x is Last => !!x).sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
+  const openPdf = (s: Studied) => () => { const gen = /^(gen_[a-z0-9]+)/.exec(s.ref)?.[1]; if (gen) window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: gen } })); else go("practice"); };
   const lastSource = [...sources].sort((a, b) => b.readAt.localeCompare(a.readAt))[0];
-  if (lastSource) cands.push({ kind: "web", title: lastSource.title, at: lastSource.readAt, open: () => go("web", { id: lastSource.id }), note: "이어서 읽기" });
-  const last = cands.sort((a, b) => b.at.localeCompare(a.at))[0];
+  const lastProblem = [...problems].filter((p) => p.lastAt).sort((a, b) => b.lastAt.localeCompare(a.lastAt))[0];
+  const material = newest([
+    ...studied.filter((x) => x.kind === "pdf").slice(0, 1).map((x): Last => ({ kind: "pdf", title: x.title, at: x.last, open: openPdf(x), note: "자료 지도 열기" })),
+    ...studied.filter((x) => x.kind === "web").slice(0, 1).map((x): Last => { const src = sources.find((y) => y.title === x.title); return { kind: "web", title: x.title, at: x.last, open: () => (src ? go("web", { id: src.id }) : go("practice")), note: "이어서 읽기" }; }),
+    lastSource ? { kind: "web", title: lastSource.title, at: lastSource.readAt, open: () => go("web", { id: lastSource.id }), note: "이어서 읽기" } : null,
+  ]);
+  const algo = newest([
+    ...studied.filter((x) => x.kind === "code" && x.ref.startsWith("code:")).slice(0, 1).map((x): Last => ({ kind: "code", title: x.title, at: x.last, open: () => go("code", { id: x.ref.slice(5) }), note: "이어서 풀기" })),
+    lastProblem ? { kind: "code", title: lastProblem.title, at: lastProblem.lastAt, open: () => go("code", { id: lastProblem.id }), note: "이어서 풀기" } : null,
+  ]);
+  const lab = newest(studied.filter((x) => x.kind === "code" && x.ref.startsWith("project:")).slice(0, 1)
+    .map((x): Last => ({ kind: "project", title: x.title.replace(/^프로젝트 코스: /, ""), at: x.last, open: () => go("project"), note: "실습 열기" })));
+  const rows: Array<{ label: string; last: Last | null; empty: string; to: () => void }> = [
+    { label: "자료", last: material, empty: "자료 열기", to: () => go("practice") },
+    { label: "알고리즘", last: algo, empty: "알고리즘 열기", to: () => go("code") },
+    { label: "실습", last: lab, empty: "실습 열기", to: () => go("project") },
+  ];
 
   return (
     <div className="td-two">
@@ -94,18 +99,13 @@ export default function TodayBoard() {
       </section>
       <section className="td-card">
         <p className="eyebrow">이어서 하기</p>
-        {last ? (
-          <>
-            <p className="td-last">{last.title}</p>
-            <p className="small muted">{KIND[last.kind] ?? last.kind} · {ago(last.at)}</p>
-            <button className="btn" onClick={last.open}>{last.note}</button>
-          </>
-        ) : (
-          <>
-            <p className="small muted">아직 한 공부가 없어요.</p>
-            <button className="btn" onClick={() => go("start")}>+ 새 공부 시작</button>
-          </>
-        )}
+        <ul className="td-cont">
+          {rows.map((r) => <li key={r.label}>
+            <span className="td-cont-k">{r.label}</span>
+            {r.last ? <button className="td-cont-b" onClick={r.last.open} title={r.last.note}><span className="td-cont-t">{r.last.title}</span><small className="muted">{ago(r.last.at)} · {r.last.note}</small></button>
+              : <button className="td-cont-b" onClick={r.to}><span className="td-cont-t muted">아직 없음</span><small className="muted">{r.empty}</small></button>}
+          </li>)}
+        </ul>
       </section>
     </div>
   );

@@ -982,3 +982,11 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .ps-dots i:nth-child(3){animation-delay:.4s}
 @keyframes ps-dot{0%,80%,100%{opacity:.15}40%{opacity:1}}
 @media (prefers-reduced-motion: reduce){.dejipgi .ps-dots i{animation:none;opacity:1}}
+
+/* 오늘 › 이어서 하기: 자료·알고리즘·실습 한 줄씩 (11/9) */
+.dejipgi .td-cont{list-style:none;margin:0;padding:0;width:100%;display:grid;gap:6px}
+.dejipgi .td-cont li{display:grid;grid-template-columns:64px 1fr;align-items:center;gap:8px}
+.dejipgi .td-cont-k{font-size:12.5px;color:var(--muted);font-weight:600}
+.dejipgi .td-cont-b{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;background:none;border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer;color:inherit;font:inherit;min-width:0}
+.dejipgi .td-cont-b:hover{border-color:var(--ink)}
+.dejipgi .td-cont-t{font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
