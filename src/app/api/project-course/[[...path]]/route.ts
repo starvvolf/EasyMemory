@@ -94,6 +94,11 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "runs" && p[1] && p.length === 3 && m === "POST" && (p[2] === "editor" || p[2] === "activate")) {
       return NextResponse.json(await course(`runs/${runId.parse(p[1])}/${p[2]}`, { method: "POST", body: {} }));
     }
+    // 세션 노트(지나온 목표 길 · 부족함): 기억 탭 실습 갈래가 읽는다(11/9). 코스 서버가 꺼져 있으면 online:false
+    if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "note" && m === "GET") {
+      try { return NextResponse.json({ online: true, ...await course<object>(`runs/${runId.parse(p[1])}/note`) }); }
+      catch (error) { if (offline(error)) return NextResponse.json({ online: false }); throw error; }
+    }
     if (p[0] === "sync" && p.length === 1 && m === "POST") {
       const b = z.object({ runId: runId.optional() }).parse(await boundedJson(request).catch(() => ({})));
       let ids: string[];

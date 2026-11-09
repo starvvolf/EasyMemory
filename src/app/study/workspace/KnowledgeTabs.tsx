@@ -3,11 +3,12 @@
 // 자료는 자료 지도, 알고리즘과 실습은 나름의 방식으로"): 갈래 셋.
 //   자료: 자료(PDF·웹 글) 한 줄씩 → PDF는 자료 지도(목차·구조·기억)를 열고, 웹 글은 글 지도를 펼친다.
 //   알고리즘: 문제마다 그 문제에서 생긴 기억(패턴·실수)을 펼쳐 본다.
-//   실습: 실습마다 단계별로 생긴 기억.
+//   실습: 실습마다 지나온 목표 길(ProjectPath, 11/9 D [경계]) + 그 실습에서 생긴 기억 전체(접힘).
 // 폴더로 기억을 정리하던 예전 기억 창(KnowledgeWindow)은 맨 아래 "기억 전체 정리"로 남긴다.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { call, errorText, go, later, type ItemLite, type Tree } from "./api";
 import KnowledgeWindow, { MaterialArticle, ProjectStages, StateChip, tidyLine, type MaterialRow } from "./KnowledgeWindow";
+import ProjectPath from "./ProjectPath";
 import { Inline } from "./Rich";
 
 type Tab = "material" | "code" | "project";
@@ -68,7 +69,10 @@ export default function KnowledgeTabs({ onLegacy, focusId }: { onLegacy?: () => 
             </button>
             {on ? <div className="kt-body">
               {tab === "material" && r.sourceId ? <MaterialArticle id={r.sourceId} onChanged={() => void load()} />
-                : tab === "project" && r.stages?.length ? <ProjectStages stages={r.stages} items={items} sel={null} onPick={(id) => setFull(id)} />
+                : tab === "project" ? <>
+                  <ProjectPath runs={r.keys.filter((k) => k.startsWith("code:project:")).map((k) => k.slice("code:project:".length)).join(",")} items={items} onPick={(id) => setFull(id)} />
+                  {r.stages?.length ? <details className="pp-all"><summary className="small muted">이 실습에서 생긴 기억 전체 {r.items}</summary><ProjectStages stages={r.stages} items={items} sel={null} onPick={(id) => setFull(id)} /></details> : null}
+                </>
                 : itemList(mine(r))}
               {tab === "code" ? <button className="btn ghost small" onClick={() => go("code")}>알고리즘 탭에서 문제 보기</button> : null}
               {tab === "project" ? <button className="btn ghost small" onClick={() => go("project")}>실습 탭 열기</button> : null}

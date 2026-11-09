@@ -187,6 +187,10 @@ export async function sessionNote(runId: string) {
     gaps: gaps.filter((x) => !x.mergedInto).map((x0) => { const extra = gaps.filter((y) => y.mergedInto === x0.id); return { ...x0, evidence: [...x0.evidence, ...extra.flatMap((y) => y.evidence)], cause: [...new Set([...x0.cause, ...extra.flatMap((y) => y.cause)])] }; }).map((x) => ({ id: x.id, goal: x.goal.title, unit: x.unit.title, concept: x.type ? x.concept : "", type: x.type, wrong: x.wrong, right: x.right, cause: x.cause,
       from: [...new Set(x.evidence.map((e) => e.from))], evidence: x.evidence.map((e) => e.text).slice(-4), remedy: x.remedy.map((r) => `${r.kind}: ${r.text}`), status: x.status,
       fillEvidence: x.fillEvidence ?? "", code: x.code ?? null, recheck: x.recheck?.q ?? "", dueAt: x.dueAt ?? null, checks: x.checks })),
+    // 지나온 목표 길(11/9): 목표마다 그 안의 일 + 그 목표에서 드러난 부족함 · 정리에서 남긴 지식(이름으로 맞춤)
+    path: (await import("./goal-path.ts")).goalPath(g.log, g.current).map((p) => ({ ...p,
+      gaps: gaps.filter((x) => !x.mergedInto && x.goal.title === p.title).map((x) => ({ id: x.id, name: x.type ? x.concept : x.unit.title, wrong: x.wrong, status: x.status })),
+      learned: recs.filter((r) => r.goal === p.title).flatMap((r) => r.learned.map((x) => x.concept)) })),
     counts: { all: gaps.filter((x) => !x.mergedInto).length, filled: count(["세션에서 채움", "다시 확인 맞음"]), open: count(["열림", "채우는 중", "다시 틀림"]), rechecked: count(["다시 확인 맞음"]) },
   };
 }
