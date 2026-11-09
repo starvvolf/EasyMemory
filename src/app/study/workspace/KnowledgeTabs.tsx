@@ -70,7 +70,7 @@ export default function KnowledgeTabs({ onLegacy, focusId }: { onLegacy?: () => 
             {on ? <div className="kt-body">
               {tab === "material" && r.sourceId ? <MaterialArticle id={r.sourceId} onChanged={() => void load()} />
                 : tab === "project" ? <>
-                  <ProjectPath runs={r.keys.filter((k) => k.startsWith("code:project:")).map((k) => k.slice("code:project:".length)).join(",")} items={items} onPick={(id) => setFull(id)} />
+                  <ProjectPath runs={r.keys.filter((k) => k.startsWith("code:project:")).map((k) => k.slice("code:project:".length)).join(",")} />
                   {r.stages?.length ? <details className="pp-all"><summary className="small muted">이 실습에서 생긴 기억 전체 {r.items}</summary><ProjectStages stages={r.stages} items={items} sel={null} onPick={(id) => setFull(id)} /></details> : null}
                 </>
                 : itemList(mine(r))}

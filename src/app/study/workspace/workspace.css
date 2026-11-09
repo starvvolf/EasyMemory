@@ -1011,58 +1011,29 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .kt-item:hover{border-color:var(--line)}
 .dejipgi .kt-t{font-weight:600;min-width:0}
 .dejipgi .kt-line{grid-column:2;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* 기억 탭 › 실습: 지나온 목표 길 (ProjectPath, 11/9 D) */
-.dejipgi .pp{width:100%;display:flex;flex-direction:column;gap:12px}
-.dejipgi .pp-goals{list-style:none;margin:0;padding:0 0 0 4px;display:flex;flex-direction:column;gap:0}
-.dejipgi .pp-goal{position:relative;padding:0 0 14px 26px;border-left:2px solid var(--line, rgba(127,127,127,.3));margin-left:10px}
-.dejipgi .pp-goal:last-child{border-left-color:transparent}
-.dejipgi .pp-dot{position:absolute;left:-12px;top:0;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--panel-2, #2a2a33);border:2px solid var(--line, rgba(127,127,127,.4))}
+/* 기억 탭 › 실습: 지나온 목표 길 (ProjectPath, 11/9 D · 11/10 컴팩트) */
+.dejipgi .pp{width:100%;display:flex;flex-direction:column;gap:10px;min-width:0}
+.dejipgi .pp-run .eyebrow{margin:0 0 6px}
+.dejipgi .pp-goals{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.dejipgi .pp-goal{position:relative;padding:0 0 7px 20px;margin-left:9px;border-left:2px solid rgba(127,127,127,.25);min-width:0}
+.dejipgi .pp-goal:last-child{border-left-color:transparent;padding-bottom:0}
+.dejipgi .pp-dot{position:absolute;left:-10px;top:1px;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;background:var(--panel-2, #23232b);border:2px solid rgba(127,127,127,.45)}
 .dejipgi .pp-goal.ok .pp-dot{border-color:#3fb37f}
 .dejipgi .pp-goal.skip .pp-dot{border-color:#b98a3a}
 .dejipgi .pp-goal.now .pp-dot{border-color:#6b8cff}
-.dejipgi .pp-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;min-height:22px}
-.dejipgi .pp-title{font-weight:600}
-.dejipgi .pp-res{font-size:11px;padding:1px 7px;border-radius:999px;background:rgba(127,127,127,.15)}
+.dejipgi .pp-head{display:flex;gap:6px;align-items:center;min-height:20px;min-width:0;font-size:13.5px}
+.dejipgi .pp-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dejipgi .pp-res{flex:none;font-size:10.5px;padding:0 6px;border-radius:999px;background:rgba(127,127,127,.15);line-height:17px}
 .dejipgi .pp-res.ok{background:rgba(63,179,127,.18);color:#3fb37f}
 .dejipgi .pp-res.skip{background:rgba(185,138,58,.18);color:#c99a48}
 .dejipgi .pp-res.now{background:rgba(107,140,255,.18);color:#7f9cff}
-.dejipgi .pp-when{margin:2px 0 4px}
-.dejipgi .pp-evs,.dejipgi .pp-gaps{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:3px;font-size:13px}
-.dejipgi .pp-ev.support-done{padding-left:18px;opacity:.8}
-.dejipgi .pp-gaps{margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(127,127,127,.08)}
-.dejipgi .pp-gap{font-size:11px;padding:1px 6px;border-radius:999px;background:rgba(127,127,127,.15);white-space:nowrap}
+.dejipgi .pp-marks{flex:none;font-size:11px;letter-spacing:1px}
+.dejipgi .pp-when{flex:none;margin-left:auto;font-size:11.5px;opacity:.55;white-space:nowrap;padding-left:6px}
+.dejipgi .pp-gap{font-size:10.5px;padding:0 5px;border-radius:999px;background:rgba(127,127,127,.15);white-space:nowrap}
 .dejipgi .pp-gap.ok{background:rgba(63,179,127,.18);color:#3fb37f}
 .dejipgi .pp-gap.bad{background:rgba(220,90,90,.18);color:#e07070}
 .dejipgi .pp-gap.now{background:rgba(107,140,255,.18);color:#7f9cff}
-.dejipgi .pp-learned{margin:6px 0 0}
+.dejipgi .pp-sum{margin:0 0 6px}
+.dejipgi .pp-weak{margin:1px 0 0;font-size:12.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .dejipgi .pp-all{width:100%}
 .dejipgi .pp-all summary{cursor:pointer;margin-bottom:6px}
-
-/* 학습 목표 강조 (11/9, 2차 "색이 너무 진해"): 메인은 왼쪽 가는 줄 + 아주 옅은 바탕, 보조는 조금만 흐리게 */
-.dejipgi .mm8-goalbar{gap:8px;align-items:center;margin:2px 0 6px}
-.dejipgi .mm8-goals{display:flex;flex-wrap:wrap;gap:4px;margin:-2px 0 4px}
-.dejipgi .mm8-goal{display:inline-block;font-size:10.5px;padding:0 6px;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));color:color-mix(in srgb,var(--accent) 70%,var(--muted,#666));cursor:default}
-.dejipgi .mm8-box.main{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 2.5%,transparent)}
-.dejipgi .mm8-box.side{opacity:.7}
-.dejipgi .mm8-box.side:hover{opacity:1}
-.dejipgi .mm8-pill.goal{box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--accent) 35%,transparent)}
-.dejipgi .mm8-role{display:inline-block;align-self:flex-start;font-size:10.5px;padding:0 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted,#777);margin:-2px 0 3px}
-.dejipgi .mm8-pill.basecard{opacity:.6;border-style:dashed}
-/* 줄기 (11/9) */
-.dejipgi .st-q{margin:-2px 0 2px}
-.dejipgi .st-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.dejipgi .st-row{all:unset;box-sizing:border-box;width:100%;cursor:pointer;display:grid;grid-template-columns:minmax(140px,30%) auto 1fr;gap:8px;align-items:baseline;padding:5px 8px;border-radius:8px;font-size:13px}
-.dejipgi .st-row:hover{background:color-mix(in srgb,var(--accent) 6%,transparent)}
-.dejipgi .st-row.on{background:color-mix(in srgb,var(--accent) 10%,transparent)}
-.dejipgi .st-row.side{opacity:.7}
-.dejipgi .st-name{font-weight:600}
-.dejipgi .st-kind{font-size:11px;color:var(--muted,#777);white-space:nowrap}
-.dejipgi .st-line{color:var(--muted,#666);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dejipgi .st-more>summary{cursor:pointer;padding:3px 8px;list-style:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dejipgi .st-steps{margin:2px 0;padding-left:20px;display:flex;flex-direction:column;gap:3px;font-size:13px}
-.dejipgi .st-src{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-.dejipgi .st-card{border-top:1px dashed var(--line);padding-top:6px}
-.dejipgi .mm6.st.has-detail>.mm6-topics{margin-bottom:42vh}
-@media (max-width:560px){.dejipgi .st-row{grid-template-columns:1fr}.dejipgi .st-line{white-space:normal}}
-.dejipgi .st-facts{margin:2px 0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:2px}
-.dejipgi .st-quotes{display:flex;flex-wrap:wrap;gap:4px 10px}
