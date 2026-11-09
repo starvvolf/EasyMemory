@@ -235,15 +235,15 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
 // 카드·상자에 마우스를 올리면(또는 "카드 연결 모두") 선으로. 흐름 카드는 보이지 않는다(카드 만들 때 쓰는 것, 사용자 11/7).
 // 3차 (11/8 사용자 "큰 개념과 작은 개념, 대비, 모두 성립 — 위와 아래를 레이어로"): head는 상자의 대표 카드(상자 머리에 크게),
 // members는 안의 것과 대표의 관계(이루는 것·갈래·모두 성립해야·차례로), versus는 나란히 견주는 카드(같은 상자면 A vs B 한 덩어리).
-type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: string; explain: string; link?: string };
+type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: string; explain: string; link?: string; role?: StructRole };
 type StructVersus = { a: string; b: string; on: string };
 const MEMBER_LABEL: Record<string, string> = { 부분: "이루는 것", 종류: "갈래", 모두: "모두 성립해야", 순서: "차례로" };
 const MEMBER_JOIN: Record<string, string> = { 모두: "+", 순서: "→" };
 const sameName = (a: string, b: string) => { const n = (x: string) => x.replace(/\(.*?\)|[\s·]/g, "").toLowerCase(); const x = n(a), y = n(b); return !!x && !!y && (x.includes(y) || y.includes(x)); };
-type GoalLinksLite = { goals: Array<{ id: string; verb: string; text: string; core: boolean }>; links: Array<{ goal: string; need: string[]; confuse: string[] }>; outside: string[] };
+type StructRole = "메인" | "바탕" | "곁";
 type StructEdge = { a: string; b: string; type: string; why: string };
 type StructPair = { a: string; b: string; why: string };
-type Structure = { at: string; ms: number; model: string; effort: string; groups: StructGroup[]; edges: StructEdge[]; pairs?: StructPair[]; versus?: StructVersus[]; fixes: string[] };
+type Structure = { at: string; ms: number; model: string; effort: string; groups: StructGroup[]; edges: StructEdge[]; pairs?: StructPair[]; versus?: StructVersus[]; base?: string[]; fixes: string[] };
 function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { genId: string; cards: Card[]; chains: MatMap["chains"]; making: boolean;
   onPage: (page: number) => void; onPractice?: (page: number, cardId: string) => void }) {
   const [data, setData] = useState<{ structure: Structure | null; stale: boolean } | null>(null);
@@ -287,33 +287,18 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
     }, 60);
     return () => clearTimeout(t);
   }, [open]);
-  // 학습 목표 ↔ 카드 (11/9 사용자 "학습목표랑 관련 있는 부분은 강조하고 위쪽에", "메인 내용이랑 서브 내용을 가릴 필요"; src/lib/study/goal-links.ts).
-  // 메인 = 핵심 목표를 풀 때 필요한 카드가 든 묶음(강조, 위로), 서브 = 어느 목표에도 필요 없고 핵심 카드도 없는 묶음(흐리게, 아래로), 그 사이는 보통.
-  const [goalData, setGoalData] = useState<GoalLinksLite | null | undefined>(undefined);
-  const [linking, setLinking] = useState(false);
-  // 11/9 사용자 "별로다, 풀기 하나 만들어 봐": 강조를 끄고 켜는 스위치(끄면 원래 순서·모양).
-  const [goalOn, setGoalOnState] = useState(() => { try { return localStorage.getItem("recaller:goal-hl") !== "0"; } catch { return true; } });
-  const setGoalOn = (on: boolean) => { setGoalOnState(on); try { localStorage.setItem("recaller:goal-hl", on ? "1" : "0"); } catch { /* storage off */ } };
-  useEffect(() => { let alive = true;
-    call<{ links: GoalLinksLite | null }>(`/api/study-map/${genId}/goal-links`).then((r) => { if (alive) setGoalData(r.links); }).catch(() => { if (alive) setGoalData(null); });
-    return () => { alive = false; }; }, [genId]);
-  const linkGoals = () => { setLinking(true); setError("");
-    call<{ links: GoalLinksLite }>(`/api/study-map/${genId}/goal-links`, {}).then((r) => setGoalData(r.links)).catch((e) => setError(errorText(e))).finally(() => setLinking(false)); };
-  const goalView = useMemo(() => {
-    const goalsOfCard = new Map<string, string[]>();
-    for (const l of goalData?.links ?? []) for (const id of l.need) goalsOfCard.set(id, [...(goalsOfCard.get(id) ?? []), l.goal]);
-    const coreGoal = new Set((goalData?.goals ?? []).filter((g) => g.core).map((g) => g.id));
-    const goalsOf = new Map<string, Set<string>>(), tier = new Map<string, number>();
-    const walk = (g: StructGroup): void => {
-      const set = new Set<string>(); let core = false;
-      for (const id of [...(g.head ? [g.head] : []), ...g.cards]) { for (const o of goalsOfCard.get(id) ?? []) set.add(o); if (byId.get(id)?.core) core = true; }
-      for (const k of (s?.groups ?? []).filter((x) => x.parent === g.id)) { walk(k); for (const o of goalsOf.get(k.id) ?? []) set.add(o); if ((tier.get(k.id) ?? 0) >= 1) core = true; }
-      goalsOf.set(g.id, set);
-      tier.set(g.id, [...set].some((o) => coreGoal.has(o)) ? 2 : set.size || core ? 1 : 0);
-    };
-    if (goalData?.links.length) for (const g of (s?.groups ?? []).filter((x) => !x.parent)) walk(g);
-    return { has: Boolean(goalData?.links.length), on: goalOn && Boolean(goalData?.links.length), goalsOfCard, goalsOf, tier, text: new Map((goalData?.goals ?? []).map((g) => [g.id, `${g.verb} · ${g.text}`])) };
-  }, [goalData, s, byId, goalOn]);
+  // 메인·바탕·곁 (11/9 사용자: 목표 기준 강조는 "이렇게 하면 안 될 것 같음" → "구조 묶을 때 AI가 메인 포인트를 잡게, 기울기·절편 방정식은 메인이
+  // 아니라 사전에 알아야 하는 지식"): 구조 AI가 묶음마다 role을 고른다(src/lib/study/structure.ts). 메인은 위에 옅게 강조, 바탕·곁은 흐리게 아래로.
+  // 아래 묶음에 role이 없으면(큰 상자 다시 정리로 생긴 것) 위 묶음을 따른다. "풀기"(사용자 "풀기 하나 만들어 봐")는 체크 상자로 끈다.
+  const [roleOn, setRoleOnState] = useState(() => { try { return localStorage.getItem("recaller:role-hl") !== "0"; } catch { return true; } });
+  const setRoleOn = (on: boolean) => { setRoleOnState(on); try { localStorage.setItem("recaller:role-hl", on ? "1" : "0"); } catch { /* storage off */ } };
+  const roleView = useMemo(() => {
+    const groups = s?.groups ?? [];
+    const byG = new Map(groups.map((g) => [g.id, g]));
+    const roleOf = (id: string): StructRole | undefined => { for (let g = byG.get(id); g; g = byG.get(g.parent)) if (g.role) return g.role; return undefined; };
+    const has = groups.some((g) => g.role);
+    return { has, on: has && roleOn, roleOf, base: new Set(s?.base ?? []) };
+  }, [s, roleOn]);
   const makeBtn = (label: string, primary = true) => <button className={`btn small ${primary ? "primary" : "ghost"}`} disabled={busy || making} onClick={make}
     title="기억 카드를 뜻으로 다시 묶어요. AI 1번(terra), 약 15초">{busy ? "구조를 만드는 중… (약 15초)" : label}</button>;
   if (!data && !error) return <p className="small muted mm6-wait">불러오는 중…</p>;
@@ -322,12 +307,13 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
     {error ? <p className="small bad">{error}</p> : null}</div>;
   const kids = (id: string) => s.groups.filter((g) => g.parent === id);
   // 메인 묶음을 위로(차례로 묶인 것은 순서를 지킨다). 같은 등급 안에서는 원래 순서.
-  const ranked = (list: StructGroup[]) => goalView.on ? [...list].sort((a, b) => (goalView.tier.get(b.id) ?? 1) - (goalView.tier.get(a.id) ?? 1)) : list;
-  const tierClass = (id: string) => !goalView.on ? "" : goalView.tier.get(id) === 2 ? " main" : goalView.tier.get(id) === 0 ? " side" : "";
+  const RANK: Record<StructRole, number> = { 메인: 0, 바탕: 1, 곁: 2 };
+  const ranked = (list: StructGroup[]) => roleView.on ? [...list].sort((a, b) => RANK[roleView.roleOf(a.id) ?? "메인"] - RANK[roleView.roleOf(b.id) ?? "메인"]) : list;
+  const tierClass = (id: string) => { if (!roleView.on) return ""; const r = roleView.roleOf(id); return r === "메인" ? " main" : r === "바탕" ? " side base" : r === "곁" ? " side" : ""; };
   const openCard = open ? byId.get(open) : undefined;
   const litCards = new Set(hover?.card ? [hover.card, ...pairs.filter((p) => p.a === hover.card || p.b === hover.card).map((p) => (p.a === hover.card ? p.b : p.a))] : []);
-  const pill = (c: Card) => <button key={c.id} data-c={c.id} className={`mm8-pill${c.core ? " core" : ""}${goalView.on && goalView.goalsOfCard.has(c.id) ? " goal" : ""}${open === c.id ? " on" : ""}${litCards.has(c.id) ? " lit" : ""}`}
-    onClick={() => setOpen(open === c.id ? null : c.id)} title={[keyLine(c.shape), ...(goalView.goalsOfCard.get(c.id) ?? []).map((o) => `학습 목표 ${o}: ${goalView.text.get(o) ?? ""}`)].join("\n")}>
+  const pill = (c: Card) => <button key={c.id} data-c={c.id} className={`mm8-pill${c.core ? " core" : ""}${roleView.on && roleView.base.has(c.id) && roleView.roleOf(groupOfCard.get(c.id) ?? "") === "메인" ? " basecard" : ""}${open === c.id ? " on" : ""}${litCards.has(c.id) ? " lit" : ""}`}
+    onClick={() => setOpen(open === c.id ? null : c.id)} title={`${keyLine(c.shape)}${roleView.on && roleView.base.has(c.id) ? "\n바탕 지식(미리 알아야 할 것을 다시 적은 것)" : ""}`}>
     <Rich text={c.title} />{c.figure?.file ? <span className="mm8-fig" aria-label="그림 있음">▣</span> : null}{pairCount.get(c.id) ? <span className="mm8-n" aria-label={`다른 묶음과 연결 ${pairCount.get(c.id)}`}>↔{pairCount.get(c.id)}</span> : null}</button>;
   const box = (g: StructGroup, depth: number): ReactNode => {
     const ok = (c: Card | undefined): c is Card => !!c && !isFlowCard(c);
@@ -348,8 +334,7 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
     return (
       <div key={g.id} data-g={g.id} className={`mm8-box d${Math.min(depth, 3)}${tierClass(g.id)}${hover?.group === g.id ? " hov" : ""}`}>
         {merged ? null : <div className="mm8-title" title={g.explain || undefined}><Rich text={g.name} /></div>}
-        {goalView.on && depth < 2 && goalView.tier.get(g.id) === 2 && !(g.parent && goalView.tier.get(g.parent) === 2) ? <div className="mm8-goals">{[...(goalView.goalsOf.get(g.id) ?? [])].sort().map((o) =>
-          <span key={o} className="mm8-goal" title={goalView.text.get(o)}>목표 {o.replace(/^o/, "")}</span>)}</div> : null}
+        {roleView.on && g.role && g.role !== "메인" && (!g.parent || roleView.roleOf(g.parent) !== g.role) ? <span className="mm8-role">{g.role === "바탕" ? "바탕 지식" : "곁가지"}</span> : null}
         {ok(head) ? <button data-c={head.id} className={`mm8-head${merged ? " as-title" : ""}${open === head.id ? " on" : ""}${litCards.has(head.id) ? " lit" : ""}`} onClick={() => setOpen(open === head.id ? null : head.id)}>
           <span className="mm8-headname"><Rich text={head.title} />{pairCount.get(head.id) ? <span className="mm8-n">↔{pairCount.get(head.id)}</span> : null}</span>
           <span className="mm8-headline"><Rich text={keyLine(head.shape)} /></span></button> : null}
@@ -370,12 +355,9 @@ function StructurePane({ genId, cards, chains, making, onPage, onPractice }: { g
     <div className={`mm8${openCard ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("[data-c],button,a,input,label,.mm8-detail")) setOpen(null); }}>
       <div className="row small mm7-bar"><span className="small muted">뜻으로 묶은 그림 · 상자 안은 그 부분 · 카드를 열면 다른 묶음의 짝</span><span className="cs-gap" />
         {data?.stale ? <span className="small bad">기억 카드가 바뀌었어요</span> : null}{makeBtn("다시 만들기", Boolean(data?.stale))}</div>
-      {goalData !== undefined ? <div className="row small mm8-goalbar">{goalView.has
-        ? <><label className="row small" style={{ gap: 6, cursor: "pointer" }}><input type="checkbox" checked={goalOn} onChange={(e) => setGoalOn(e.target.checked)} /> 학습 목표 강조</label>
-          {goalOn ? <span className="muted">목표에 쓰이는 묶음이 위에 · 흐린 것은 보조 내용</span> : null}<span className="cs-gap" />
-          <button className="linkish small" disabled={linking} onClick={linkGoals}>{linking ? "잇는 중…" : "다시 잇기"}</button></>
-        : <><span className="muted">학습 목표와 기억을 이으면, 목표에 필요한 묶음을 위로 올리고 보조 내용은 흐리게 보여요.</span><span className="cs-gap" />
-          <button className="btn small" disabled={linking || making} onClick={linkGoals} title="AI 1번(terra low), 약 10초">{linking ? "잇는 중… (약 10초)" : "학습 목표와 잇기"}</button></>}</div> : null}
+      {roleView.has ? <div className="row small mm8-goalbar"><label className="row small" style={{ gap: 6, cursor: "pointer" }}><input type="checkbox" checked={roleOn} onChange={(e) => setRoleOn(e.target.checked)} /> 메인 포인트 보기</label>
+        {roleOn ? <span className="muted">이 강의에서 새로 배우는 것이 위에 · 흐린 것은 바탕 지식(미리 알아야 할 것)·곁가지</span> : null}</div>
+        : s ? <p className="small muted mm8-goalbar">구조를 다시 만들면 메인 포인트와 바탕 지식이 나뉘어 보여요.</p> : null}
       {error ? <p className="small bad">{error}</p> : null}
       {/* 11/8 사용자 "눌렀을 때 아래 칸이 덮어서 다시 누를 수 없다": 빈 곳을 누르면 닫히고, 연 카드는 아래 칸 위로 보이게 굴린다. */}
       <div className="mm8-wrap" ref={wrap} onMouseLeave={() => setHover(null)} onMouseOver={(e) => {

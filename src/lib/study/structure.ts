@@ -19,13 +19,18 @@ export type EdgeType = (typeof EDGE_TYPES)[number];
 // 견주는 카드 쌍(versus)을 더 받는다.
 export const MEMBER_KINDS = ["부분", "종류", "모두", "순서", "묶음"] as const;
 export type MemberKind = (typeof MEMBER_KINDS)[number];
-export type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: MemberKind; explain: string;
+// 메인·바탕·곁 (11/9 사용자 "구조 묶을 때 쉬운 설명으로 메인 포인트를 잡게 — 기울기·절편 방정식이 메인은 아니잖아, 사전에 알아야 하는 지식을
+// 다시 적어 놓은 느낌"): 묶음마다 이 강의에서 맡는 몫을 고르고, 메인 묶음 안에 섞인 바탕 카드는 base로 따로 받는다.
+export const ROLES = ["메인", "바탕", "곁"] as const;
+export type GroupRole = (typeof ROLES)[number];
+export type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: MemberKind; explain: string; role?: GroupRole;
   /** 차례로 세운 단계(11/8 큰 상자 다시 정리): 앞 단계에서 이어받는 것 한 줄 */ link?: string };
 export type StructVersus = { a: string; b: string; on: string };
 export type StructEdge = { a: string; b: string; type: EdgeType; why: string };
 export type StructPair = { a: string; b: string; why: string };
 export type BoxNote = { box: string; name: string; mode: string; reason: string; ms: number; ok: boolean };
-export type Structure = { at: string; ms: number; model: string; effort: string; sig: string; boxes?: BoxNote[]; groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; versus?: StructVersus[]; fixes: string[] };
+export type Structure = { at: string; ms: number; model: string; effort: string; sig: string; boxes?: BoxNote[]; groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; versus?: StructVersus[];
+  /** 메인 묶음 안에 있지만 바탕(미리 알아야 할 것을 다시 적은) 카드 */ base?: string[]; fixes: string[] };
 
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 const fileOf = (id: string) => { if (!/^gen_[a-z0-9]{8,64}$/.test(id)) throw Object.assign(new Error("자료 id가 올바르지 않아요."), { status: 400 }); return path.join(dataDir(), "study-gen", id, "structure.json"); };
@@ -74,10 +79,19 @@ export const STRUCTURE_SYSTEM = `너는 강의 자료 한 편에서 뽑은 지�
 - 서로 다른 묶음에 있는 두 카드가 같은 것의 두 모습일 때: 조건 ↔ 그 조건을 깨는 방법, 정의 ↔ 그것으로 하는 판정, 판정 ↔ 그 판정을 다시 쓰는 곳.
 - a·b는 카드 번호. why: 무엇으로 이어지는지 12자 안팎. 후보 연결은 참고만 한다.
 
+이 강의에서 맡는 몫 (role) — 메인 포인트 잡기
+- 쉽게 말해, 이 강의를 듣고 나서 "오늘 새로 배운 것"이 메인이다. 강의 제목이 약속하는 것, 시험에 이 강의 몫으로 나올 것.
+- 바탕: 이 강의 전에 이미 알고 와야 하는 것을 다시 적어 둔 것. 앞 과목·앞 강의에서 배운 정의·공식·기호를 떠올려 주려고 적은 것
+  (예: 선 그리기 강의의 "기울기·절편 직선 방정식", 운영체제 강의의 "프로세스란"). 강의가 그 위에서 새것을 쌓으면, 그 밑돌은 바탕이다.
+- 곁: 메인을 돕지만 없어도 되는 것. 역사·배경·사례·제품 이름·덧붙인 이야기.
+- 묶음마다 role을 하나 고른다. 맨 위 묶음만이 아니라 아래 묶음도 따로 고른다(메인 안에 바탕 하위 묶음이 있을 수 있다). 메인은 보통 전체의 절반 안팎이다.
+- base: 메인 묶음에 들어 있지만 그 카드만 보면 바탕인 카드 번호(0~15개). 따로 묶음을 만들 만큼 많지 않을 때 쓴다.
+
 id는 g1, g2 … 순서대로. parent는 맨 위면 빈 문자열.`;
 
 const SCHEMA = S.obj({
-  groups: S.arr(S.obj({ id: S.str, name: S.str, parent: S.str, head: S.int, cards: S.arr(S.int), members: S.oneOf(...MEMBER_KINDS), explain: S.str })),
+  groups: S.arr(S.obj({ id: S.str, name: S.str, parent: S.str, head: S.int, cards: S.arr(S.int), members: S.oneOf(...MEMBER_KINDS), role: S.oneOf(...ROLES), explain: S.str })),
+  base: S.arr(S.int),
   edges: S.arr(S.obj({ a: S.str, b: S.str, type: S.oneOf(...EDGE_TYPES), why: S.str })),
   versus: S.arr(S.obj({ a: S.int, b: S.int, on: S.str })),
   pairs: S.arr(S.obj({ a: S.int, b: S.int, why: S.str })),
@@ -97,9 +111,9 @@ export function structureInput(map: MaterialMap) {
   return { user, ids: cards.map(({ c }) => c.id) };
 }
 
-type Reply = { groups: Array<{ id: string; name: string; parent: string; head?: number; cards: number[]; members?: string; explain: string }>; versus?: Array<{ a: number; b: number; on: string }>; edges: Array<{ a: string; b: string; type: string; why: string }>; pairs?: Array<{ a: number; b: number; why: string }> };
+type Reply = { base?: number[]; groups: Array<{ id: string; name: string; parent: string; head?: number; cards: number[]; members?: string; role?: string; explain: string }>; versus?: Array<{ a: number; b: number; on: string }>; edges: Array<{ a: string; b: string; type: string; why: string }>; pairs?: Array<{ a: number; b: number; why: string }> };
 /** Code checks on the model's tree (exported for tests). `ids[n-1]` is card n. */
-export function checkStructure(reply: Reply, ids: string[]): { groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; versus: StructVersus[]; fixes: string[] } {
+export function checkStructure(reply: Reply, ids: string[]): { groups: StructGroup[]; edges: StructEdge[]; pairs: StructPair[]; versus: StructVersus[]; base: string[]; fixes: string[] } {
   const fixes: string[] = [];
   const seenGroup = new Set<string>();
   const groups: StructGroup[] = [];
@@ -109,7 +123,7 @@ export function checkStructure(reply: Reply, ids: string[]): { groups: StructGro
     if (!id || id === "g_rest" || seenGroup.has(id)) { fixes.push(`겹친 묶음 id ${id} 뺌`); continue; }
     seenGroup.add(id);
     const mine: StructGroup = { id, name: String(g.name ?? "").trim() || id, parent: String(g.parent ?? "").trim(), cards: [], explain: String(g.explain ?? "").trim(),
-      ...(MEMBER_KINDS.includes(g.members as MemberKind) ? { members: g.members as MemberKind } : {}) };
+      ...(MEMBER_KINDS.includes(g.members as MemberKind) ? { members: g.members as MemberKind } : {}), ...(ROLES.includes(g.role as GroupRole) ? { role: g.role as GroupRole } : {}) };
     groups.push(mine); asked.push([mine, g.cards ?? [], Number(g.head) || 0]);
   }
   const byId = new Map(groups.map((g) => [g.id, g]));
@@ -174,7 +188,8 @@ export function checkStructure(reply: Reply, ids: string[]): { groups: StructGro
     const key = [a, b].sort().join(">"); if (pairSeen.has(key)) continue; pairSeen.add(key);
     pairs.push({ a, b, why: String(p.why ?? "").trim().slice(0, 40) });
   }
-  return { groups, edges, pairs, versus, fixes };
+  const base = [...new Set((reply.base ?? []).map((n) => ids[n - 1]).filter(Boolean))];
+  return { groups, edges, pairs, versus, base, fixes };
 }
 
 // 큰 상자 다시 정리 (11/8 사용자 "15개가 있더라도 배치나 묶는 거나 중요한 거를 어떻게 정리하느냐에 따라 괜찮아질 수 있다 — 무조건 나누면 안 된다"

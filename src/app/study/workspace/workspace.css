@@ -1046,3 +1046,5 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm8-box.side{opacity:.7}
 .dejipgi .mm8-box.side:hover{opacity:1}
 .dejipgi .mm8-pill.goal{box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--accent) 35%,transparent)}
+.dejipgi .mm8-role{display:inline-block;align-self:flex-start;font-size:10.5px;padding:0 6px;border-radius:999px;border:1px solid var(--line);color:var(--muted,#777);margin:-2px 0 3px}
+.dejipgi .mm8-pill.basecard{opacity:.6;border-style:dashed}
