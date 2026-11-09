@@ -24,8 +24,12 @@ export default function KnowledgeTabs({ onLegacy, focusId }: { onLegacy?: () => 
   const [error, setError] = useState("");
   const load = useCallback(async () => {
     try {
-      const [v, t] = await Promise.all([call<{ materials: MaterialRow[] }>("/api/knowledge/material-view"), call<Tree>("/api/knowledge")]);
-      setRows(v.materials); setItems(t.items);
+      const [v, t, g] = await Promise.all([call<{ materials: MaterialRow[] }>("/api/knowledge/material-view"), call<Tree>("/api/knowledge"),
+        call<{ runs: Array<{ id: string; createdAt: string; status: string; fileName: string; pages: number[]; sectionCount?: number }> }>("/api/lab/gen?origin=study").catch(() => ({ runs: [] }))]);
+      // 자료(PDF)는 실제로 만든 자료(study-gen) 기준: 기억 저장소에 기억이 아직 안 들어간 자료도, 보관한 자료는 빼고(11/9 점검).
+      const pdfs: MaterialRow[] = g.runs.filter((r) => r.status === "done" || r.status === "cards").map((r) => ({ key: `gen:${r.id}`, group: "material", kind: "pdf",
+        title: r.fileName.replace(/\.pdf$/i, ""), items: r.sectionCount ?? 0, itemIds: [], lastAt: r.createdAt, keys: [], folderId: null, genId: r.id, pages: r.pages.length }) as MaterialRow & { pages: number });
+      setRows([...pdfs, ...v.materials.filter((r) => !(r.group === "material" && r.kind === "pdf"))]); setItems(t.items);
     } catch (e) { setError(errorText(e)); }
   }, []);
   useEffect(() => later(() => void load()), [load]);
@@ -45,7 +49,7 @@ export default function KnowledgeTabs({ onLegacy, focusId }: { onLegacy?: () => 
   return (
     <div className="stack kt">
       <div className="seg kt-seg" role="tablist" aria-label="기억 갈래">{TABS.map(([t, label]) => {
-        const n = (rows ?? []).filter((r) => r.group === t).reduce((s, r) => s + r.items, 0);
+        const n = (rows ?? []).filter((r) => r.group === t).length;
         return <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => pick(t)}>{label}{rows ? <small> {n}</small> : null}</button>;
       })}</div>
       {error ? <p className="ws-err">{error}</p> : null}
@@ -59,7 +63,7 @@ export default function KnowledgeTabs({ onLegacy, focusId }: { onLegacy?: () => 
             <button className="kt-head" onClick={click} aria-expanded={tab === "material" && r.genId ? undefined : on}>
               <span className="kt-icon" aria-hidden>{icon}</span>
               <span className="kt-name">{r.title}</span>
-              <span className="muted small">기억 {r.items} · {ago(r.lastAt)}</span>
+              <span className="muted small">{r.key.startsWith("gen:") ? `${(r as MaterialRow & { pages?: number }).pages ?? "?"}쪽 · 주제 ${r.items}` : `기억 ${r.items}`} · {ago(r.lastAt)}</span>
               <span className="kt-go" aria-hidden>{tab === "material" && r.genId ? "자료 지도 ↗" : on ? "▴" : "▾"}</span>
             </button>
             {on ? <div className="kt-body">
