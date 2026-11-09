@@ -74,7 +74,7 @@ export default function ProjectStudy() {
       {msg ? <p className="small" role="status">{msg}</p> : null}
 
       {!status ? <p className="small muted">불러오는 중…</p> : starting ? (
-        <section className="panel"><b>실습 서버를 켜는 중이에요</b><p className="small muted" style={{ margin: "4px 0 0" }}>몇 초면 돼요.</p></section>
+        <section className="panel" role="status"><b>실습 서버 켜는 중<span className="ps-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></b><p className="small muted" style={{ margin: "4px 0 0" }}>몇 초면 돼요. 켜지면 바로 바뀌어요.</p></section>
       ) : !status.online ? (
         <section className="panel stack">
           <b>실습 서버가 꺼져 있어요</b>

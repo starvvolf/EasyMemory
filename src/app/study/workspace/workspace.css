@@ -975,3 +975,10 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .dp-dot{width:13px}
 .dejipgi .dp-err{color:var(--bad, #c0392b);font-size:13px}
 .dejipgi .dp-msg{color:var(--ask, #2b6cb0);font-size:13px}
+
+/* 실습 서버 켜는 중 (11/9 사용자 "서버 키는중 ... 하면서 움직이는 ...") */
+.dejipgi .ps-dots i{font-style:normal;animation:ps-dot 1.2s infinite;opacity:.15}
+.dejipgi .ps-dots i:nth-child(2){animation-delay:.2s}
+.dejipgi .ps-dots i:nth-child(3){animation-delay:.4s}
+@keyframes ps-dot{0%,80%,100%{opacity:.15}40%{opacity:1}}
+@media (prefers-reduced-motion: reduce){.dejipgi .ps-dots i{animation:none;opacity:1}}
