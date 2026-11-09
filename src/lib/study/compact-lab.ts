@@ -17,7 +17,11 @@ import { materialMap } from "./material-map.ts";
 import { loadStructure } from "./structure.ts";
 import { AREA_MEMORY_SYSTEM, AREA_SCHEMA, AREA_SYSTEM, COMPACT_MODEL, COMPACT_SYSTEM, MEM_SCHEMA, MEMORY_KINDS, MEMORY_ROLES, checkCompact, compactInput, type Reply } from "./compact.ts";
 
-export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw"] as const;
+export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards"] as const;
+// 거꾸로 (11/10 사용자 "줄기에서 바로 카드로 가면 어떻게 되는지"): 카드 → 줄기가 아니라 줄기 → 카드.
+//   plan       목차(엔진의 목차 단계 결과: 주제·항목 이름·쪽) + 쪽 첫 줄로 줄기(영역·기억·쪽)를 먼저. 카드 없이. 카드로 만든 줄기와 견준다.
+//   planCards  plan 다음, 영역마다 동시에 그 쪽 원문 + 그 영역 기억 계획을 주고 기억 아래 카드를 쓴다(글자만, 그림 없음).
+//              엔진 카드(지금 있는 것)의 핵심 카드 제목이 새 카드에 얼마나 나오는지 코드로 센다.
 export type LabMethod = (typeof LAB_METHODS)[number];
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 const M = COMPACT_MODEL;
@@ -46,6 +50,20 @@ const RAW_SYSTEM = COMPACT_SYSTEM
   .replace(/먼저 \(쓰지 말고\)[\s\S]*?기억을 만든다\.\n/, "지금은 이 강의의 한 영역(쪽 구간)만 받는다. area는 1로 쓴다.\n")
   .replace("- 모든 카드를 정확히 한 기억에 넣는다.", "- 원문에서 배울 것을 빠뜨리지 않는다(표지·목차·참고문헌은 빼도 된다).")
   .replace("area: areas의 번호(1부터). cards: 카드 번호.", "area: 1. pages: 그 기억의 근거 쪽 번호.");
+const PLAN_SYSTEM = `강의 자료 한 편의 목차(주제·항목 이름·쪽)와 쪽마다 첫 줄을 받는다. 카드를 만들기 전에, 학습자가 외우고 복습할 "기억"의 계획(줄기)을 먼저 세운다.
+먼저 (쓰지 말고) 생각한다: 이 강의가 가르치려는 것은 무엇인가? 큰 영역 몇 개로 나뉘고, 영역마다 "배우는 질문"은 무엇인가?
+- areas: 영역 3~7개, 자료 순서로 {name 2~14자, question 한 줄}.
+- memories: 하나의 알고리즘·절차·방법은 기억 하나(그 방법의 식·조건·초깃값·경우를 모두 안에), 따로 서는 정의·개념·판정 규칙은 혼자 기억. 같은 것을 다른 꼴로 적은 항목은 하나로.
+- role: 메인(이 강의에서 새로 배우는 것) · 바탕(앞 과목의 수학 식·정의를 다시 적은 것) · 곁(배경·종류 나열·제품 이름).
+- 기억마다 {name, kind(알고리즘·원리·개념·비교·판정·구조), role, area(번호), question, line(요지 40~90자), steps(알고리즘·절차면 3~7단계, 아니면 []), pages(근거 쪽)}.
+- 목차의 항목을 빠뜨리지 않는다(표지·목차 쪽 빼고).`;
+const PLAN_SCHEMA = S.obj({ areas: S.arr(S.obj({ name: S.str, question: S.str })), memories: S.arr(S.obj({ name: S.str, kind: S.oneOf(...MEMORY_KINDS), role: S.oneOf(...MEMORY_ROLES), area: S.int, question: S.str, line: S.str, steps: S.arr(S.str), pages: S.arr(S.int) })) });
+const PCARD_SYSTEM = `강의 자료 한 영역의 원문(쪽마다 [p.N])과, 이 영역에서 학습자가 외울 기억 계획을 받는다. 기억마다 그 아래에 들어갈 카드(근거 조각)를 원문에서 뽑는다.
+- 카드는 원문에 있는 정의·식·조건·단계·경우 하나씩. 기억의 단계·식·조건을 원문으로 받쳐 주는 것. 기억 하나에 보통 1~8장.
+- 카드마다 {memory(기억 번호), title(10~30자), kind(용어·사실·목록·조건·절차·공식·비교·개념·패턴), text(내용 한두 문장, 식은 그대로), quote(원문 구절 그대로 10~60자), page}.
+- 기억 계획에 없는데 원문에 꼭 배울 것이 있으면 memory 0으로.`;
+const PCARD_SCHEMA = S.obj({ cards: S.arr(S.obj({ memory: S.int, title: S.str, kind: S.str, text: S.str, quote: S.str, page: S.int })) });
+const bareName = (x: string) => x.replace(/\([^)]*\)/g, "").replace(/[\s·:,/]/g, "").toLowerCase();
 const RAW_SCHEMA = S.obj({ memories: S.arr(S.obj({ name: S.str, kind: S.oneOf(...MEMORY_KINDS), role: S.oneOf(...MEMORY_ROLES), area: S.int, question: S.str, line: S.str, steps: S.arr(S.str), pages: S.arr(S.int) })) });
 
 async function inputs(id: string) {
@@ -130,6 +148,39 @@ export async function runCompactLab(id: string, method: LabMethod) {
       return { name: r.name, question: r.question, mems: (r.memories ?? []).map((m) => ({ ...m, area: ai + 1, cards: (m.cards ?? []).map((k) => nums[k - 1] ?? -1) })) };
     }));
     reply = { areas: parts.map((p) => ({ name: p.name, question: p.question })), memories: parts.flatMap((p) => p.mems) };
+  } else if (method === "plan" || method === "planCards") {
+    const d = (await loadGen(id) as unknown as { recaller?: { digest?: { skeleton?: { topics: Array<{ id: string; title: string; pages: number[] }> }; topics?: Record<string, { body?: Array<{ name: string; pages: number[] }> }> } } })?.recaller?.digest;
+    const outline = (d?.skeleton?.topics ?? []).map((t) => `${t.id} | ${t.title} | p.${t.pages.join(",")}\n${(d?.topics?.[t.id]?.body ?? []).map((l) => `  - ${l.name} (p.${l.pages.join(",")})`).join("\n")}`).join("\n");
+    const pages = Object.keys(texts).map(Number).filter((x) => x > 0).sort((a, b) => a - b);
+    const firstLines = pages.map((p) => `p.${p}: ${(texts[p] ?? "").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 2).join(" / ").slice(0, 90)}`).join("\n");
+    const plan = await ask<{ areas: Array<{ name: string; question: string }>; memories: Array<Omit<Mem, "cards"> & { pages: number[] }> }>("plan", PLAN_SYSTEM, `자료: ${map.title}\n\n[목차]\n${outline}\n\n[쪽 첫 줄]\n${firstLines}`, PLAN_SCHEMA);
+    const mems = plan.memories ?? [];
+    extra = { planMemories: mems.map((m) => ({ area: m.area, name: m.name, role: m.role, kind: m.kind, pages: m.pages, steps: m.steps.length, line: m.line })) };
+    if (method === "planCards") {
+      const areas = plan.areas ?? [];
+      const made = await Promise.all(areas.map(async (a, ai) => {
+        const own = mems.map((m, i) => ({ m, i })).filter(({ m }) => m.area === ai + 1);
+        const ps = [...new Set(own.flatMap(({ m }) => m.pages))].filter((p) => texts[p] !== undefined).sort((x, y) => x - y);
+        if (!own.length || !ps.length) return [];
+        const planText = own.map(({ m }, k) => `${k + 1}|${m.role}|${m.kind}|${m.name}|${m.line}${m.steps.length ? ` | 단계: ${m.steps.join(" → ")}` : ""}`).join("\n");
+        const r = await ask<{ cards: Array<{ memory: number; title: string; kind: string; text: string; quote: string; page: number }> }>(`cards${ai + 1}`, PCARD_SYSTEM,
+          `자료: ${map.title}\n영역: ${a.name} — ${a.question}\n\n[기억 계획] (번호|역할|종류|이름|요지)\n${planText}\n\n[원문]\n${ps.map((p) => `[p.${p}]\n${(texts[p] ?? "").slice(0, 2500)}`).join("\n\n")}`, PCARD_SCHEMA);
+        return (r.cards ?? []).map((c) => ({ ...c, memory: c.memory >= 1 && c.memory <= own.length ? own[c.memory - 1].m.name : "(계획 밖)", quoteOk: (texts[c.page] ?? "").replace(/\s+/g, "").includes(String(c.quote).replace(/\s+/g, "")) }));
+      }));
+      const cards = made.flat();
+      const engineCore = map.sections.flatMap((s) => s.cards).filter((c) => c.core && !c.title.startsWith("흐름: "));
+      const newTitles = cards.map((c) => bareName(`${c.title} ${c.text}`));
+      const covered = engineCore.filter((c) => { const b = bareName(c.title).slice(0, 8); return b.length >= 2 && newTitles.some((t) => t.includes(b)); });
+      extra = { ...extra, cards: cards.length, quoteOk: cards.filter((c) => c.quoteOk).length, outsidePlan: cards.filter((c) => c.memory === "(계획 밖)").length,
+        engineCore: engineCore.length, coreCovered: covered.length, coreMissed: engineCore.filter((c) => !covered.includes(c)).map((c) => c.title),
+        perMemory: Object.entries(cards.reduce<Record<string, number>>((o, c) => { o[c.memory] = (o[c.memory] ?? 0) + 1; return o; }, {})), sample: cards.slice(0, 12) };
+    }
+    const wall = Date.now() - t0;
+    const calls = await callsOf(run, t0);
+    const summary = { method, run, wall, calls, tokensIn: calls.reduce((s2, c) => s2 + c.in, 0), tokensOut: calls.reduce((s2, c) => s2 + c.out, 0), cost: calls.reduce((s2, c) => s2 + c.cost, 0),
+      areas: plan.areas ?? [], memories: mems.length, main: mems.filter((m) => m.role === "메인").length, ...extra };
+    await save(id, method, summary);
+    return summary;
   } else if (method === "raw") {
     const pages = Object.keys(texts).map(Number).filter((x) => x > 0).sort((a, b) => a - b);
     const firstLines = pages.map((p) => `p.${p}: ${(texts[p] ?? "").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 2).join(" / ").slice(0, 90)}`).join("\n");
