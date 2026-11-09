@@ -17,12 +17,12 @@ type ActionView = Base & {
   other?: { number: string; title: string; summary: string } | null; patternChoices?: Array<{ id: string; name: string }>;
 };
 type Overview = { targets: number; ready: number; prep: { running: boolean; total: number; done: number; failed: Array<{ number: string; why: string }> };
-  pending: Array<{ number: string }>; patterns: PatternRow[]; actions: ActionView[]; done: number };
+  pending: Array<{ number: string }>; patterns: PatternRow[]; actions: ActionView[]; done: number;
+  board?: Array<{ id: string; name: string; stage: string; marks: Record<Ab, "ok" | "help" | "bad" | "none">; open: number; wrong?: string }> };
 
-const HELP = ["시범", "따라 하기", "힌트", "실전"] as const;
-const AB_LABEL: Record<Ab, string> = { recognize: "인식", design: "설계", execute: "실행" };
-const KIND_LABEL: Record<Base["kind"], string> = { walkthrough: "보기", contrast: "비교하기", drill: "판단하기", design: "설계하기", implement: "구현하기" };
-const VERDICT: Record<string, [string, string]> = { best: ["의도된 풀이", "good"], ok: ["가능하지만 덜 좋음", "help"], slow: ["맞지만 느림", "help"], wrong: ["틀림", "bad"] };
+// 쉬운 말로(11/10 사용자 "항상 인간이 이해하기 쉽게").
+const KIND_LABEL: Record<Base["kind"], string> = { walkthrough: "풀이 과정 보기", contrast: "비슷한 문제 구별", drill: "방법 고르기", design: "계획 세우기", implement: "직접 짜기" };
+const VERDICT: Record<string, [string, string]> = { best: ["이 문제에 맞는 방법", "good"], ok: ["되긴 하지만 더 좋은 방법이 있어요", "help"], slow: ["답은 맞지만 느려요", "help"], wrong: ["틀려요", "bad"] };
 
 export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string) => void }) {
   const [data, setData] = useState<Overview | null>(null);
@@ -45,40 +45,43 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
     <div className="stack pt">
       <header className="stack" style={{ gap: 4 }}>
         <h2>PS 튜터</h2>
-        <p className="small muted">문제를 오래 붙잡기보다, 고수가 문제를 볼 때의 판단(관찰 → 선택 → 비교 → 검증)을 짧게 여러 번 연습해요. 답을 맞히면 다음 칸으로, 틀리면 필요한 곳만 다시 보여 줘요.</p>
+        <p className="small muted">문제 하나를 오래 붙잡기보다, 잘하는 사람이 문제를 볼 때 하는 생각(무엇을 보고 → 어떤 방법을 고르고 → 왜 다른 건 아닌지 → 어떻게 확인하는지)을 짧게 여러 번 연습해요. 맞히면 다음으로, 틀리면 필요한 곳만 다시 보여 줘요.</p>
       </header>
       {error ? <p className="ws-err">{error}</p> : null}
       {/* 문제 재료는 필요할 때 조금씩 뒤에서 만든다(11/10). 만드는 동안만 한 줄. */}
       {running ? <p className="small muted pt-prep">다음에 배울 패턴의 문제를 준비하는 중… ({data.prep.done}/{data.prep.total})</p> : null}
       {action ? <ActionCard key={action.id + data.done} a={action} onDone={next} onOpenProblem={onOpenProblem} pending={data.pending.some((p) => p.number === action.number)} />
         : data.ready ? <section className="panel small muted">지금 할 일이 없어요. 복습 날짜가 되면 다시 나와요.</section> : null}
+      {data.board?.length ? <Board rows={data.board} /> : null}
       {data.actions.length > 1 ? (
         <section className="stack" style={{ gap: 4 }}>
           <p className="eyebrow">그다음</p>
-          <ul className="pt-next">{data.actions.slice(1).map((a) => <li key={a.id} className="small"><span className="chip">{KIND_LABEL[a.kind]}</span> {a.mixed ? "단원 숨김 문제" : `BOJ ${a.number} ${a.title}`} <span className="muted">· {a.why} · 약 {a.minutes}분</span></li>)}</ul>
+          <ul className="pt-next">{data.actions.slice(1).map((a) => <li key={a.id} className="small"><span className="chip">{KIND_LABEL[a.kind]}</span> {a.mixed ? "어느 단원인지 안 알려 주는 문제" : `BOJ ${a.number} ${a.title}`} <span className="muted">· {a.why} · 약 {a.minutes}분</span></li>)}</ul>
         </section>
       ) : null}
-      <PatternTable rows={data.patterns} />
       <Journal key={data.done} />
     </div>
   );
 }
 
-function PatternTable({ rows }: { rows: PatternRow[] }) {
-  if (!rows.length) return null;
+/** 한눈에 보기(11/10): 해 본 패턴마다 지금 어디서 막혔는지 한 줄. 아직 남은 착각이 있는 것부터. 자세한 건 기억 창. */
+function Board({ rows }: { rows: NonNullable<Overview["board"]> }) {
+  const [all, setAll] = useState(false);
+  const MARK = { ok: "✓", help: "△", bad: "✗", none: "" } as const;
+  const shown = all ? rows : rows.slice(0, 5);
   return (
-    <section className="panel stack">
-      <div className="row" style={{ justifyContent: "space-between" }}><b>내 PS 패턴</b><span className="small muted">칸마다 지금 도움 수준 · 혼자 맞힌 새 문제 수</span></div>
-      <div className="pt-table" role="table">
-        <div className="pt-tr pt-th" role="row"><span role="columnheader">패턴</span>{(["recognize", "design", "execute"] as const).map((ab) => <span key={ab} role="columnheader">{AB_LABEL[ab]}</span>)}</div>
-        {rows.map((r) => (
-          <div key={r.id} className={`pt-tr${r.seen ? "" : " dim"}`} role="row">
-            <span role="cell" title={r.what}>{r.name}{r.graduated ? <i className="pt-tag good">졸업</i> : r.solid ? <i className="pt-tag">단단함</i> : null}</span>
-            {(["recognize", "design", "execute"] as const).map((ab) => { const a = r.abilities[ab]; const due = a.due;
-              return <span key={ab} role="cell" className="pt-cell"><span className={`pt-help h${a.help}`}>{HELP[a.help]}</span>{a.n ? <span className="muted"> {a.freshWins}</span> : null}{due ? <i className="pt-tag help">복습</i> : null}{a.failStreak >= 2 ? <i className="pt-tag bad">막힘</i> : null}</span>; })}
+    <section className="panel stack pt-board">
+      <div className="row" style={{ justifyContent: "space-between" }}><b>지금 내 상태</b><span className="small muted">✓ 혼자 했어요 · △ 도움 받고 · ✗ 막혔어요</span></div>
+      <ul className="pt-board-list">{shown.map((r) => (
+        <li key={r.id}>
+          <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+            <b className="small">{r.name}</b>
+            <span className="small muted">{(["recognize", "design", "execute"] as const).map((ab) => `${{ recognize: "알아채기", design: "계획", execute: "짜기" }[ab]}${MARK[r.marks[ab]] ? ` ${MARK[r.marks[ab]]}` : ""}`).join(" · ")}</span>
           </div>
-        ))}
-      </div>
+          <span className="small">{r.stage}</span>
+          {r.wrong ? <span className="small muted">그때 내 생각: {r.wrong}</span> : null}
+        </li>))}</ul>
+      {rows.length > 5 ? <button className="linkish small" onClick={() => setAll(!all)}>{all ? "접기" : `${rows.length - 5}개 더 보기`}</button> : null}
     </section>
   );
 }
@@ -153,18 +156,18 @@ function Walkthrough({ a, send, onDone }: { a: ActionView; send: (b: Record<stri
   const [step, setStep] = useState(0);
   const [guess, setGuess] = useState(""); const [pred, setPred] = useState<{ ok: boolean; answer?: string } | null>(null);
   useEffect(() => { void send({ kind: "walkthrough" }); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- 시범을 연 순간 한 번 "봄"으로 남긴다
-  const steps: Array<[string, string]> = [["관찰", w.observe], ["선택", w.choose], ["비교", w.compare], ["검증", w.verify]];
+  const steps: Array<[string, string]> = [["먼저 본 것", w.observe], ["고른 방법", w.choose], ["다른 방법이 아닌 이유", w.compare], ["맞는지 확인하는 법", w.verify]];
   const showPredict = a.predict && step >= 2 && !pred;
   return (
     <section className="panel stack pt-card">
       <Problem a={a} full />
-      <p className="eyebrow">고수는 이렇게 봐요{a.patternNames?.length ? ` · ${a.patternNames.join(", ")}` : ""}</p>
+      <p className="eyebrow">잘하는 사람은 이렇게 봐요{a.patternNames?.length ? ` · ${a.patternNames.join(", ")}` : ""}</p>
       <ol className="pt-steps">
-        {steps.slice(0, step + 1).map(([k, v], i) => <li key={k}><b>{k}</b> {v}{i === 1 && a.signals?.length ? <div className="small muted">신호: {a.signals.join(" · ")}</div> : null}</li>)}
+        {steps.slice(0, step + 1).map(([k, v], i) => <li key={k}><b>{k}</b> {v}{i === 1 && a.signals?.length ? <div className="small muted">이럴 때 떠올려요: {a.signals.join(" · ")}</div> : null}</li>)}
       </ol>
       {showPredict ? (
         <div className="stack pt-predict">
-          <p className="small"><b>예측해 보기</b> {a.predict!.question}</p>
+          <p className="small"><b>결과 맞혀 보기</b> {a.predict!.question}</p>
           <pre className="ws-code">{a.predict!.input}</pre>
           <textarea className="ws-input" rows={2} value={guess} onChange={(e) => setGuess(e.target.value)} placeholder="출력을 적어 보세요" />
           <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
@@ -173,10 +176,10 @@ function Walkthrough({ a, send, onDone }: { a: ActionView; send: (b: Record<stri
           </div>
         </div>
       ) : null}
-      {pred ? <p className={`small ${pred.ok ? "pt-good" : "pt-bad"}`}>{pred.ok ? "맞았어요." : "다르게 나와요."}{pred.answer !== undefined ? <> 강의 풀이를 실제로 돌린 출력: <code>{pred.answer}</code></> : null}</p> : null}
+      {pred ? <p className={`small ${pred.ok ? "pt-good" : "pt-bad"}`}>{pred.ok ? "맞았어요." : "다르게 나와요."}{pred.answer !== undefined ? <> 실제로 돌려 본 결과: <code>{pred.answer}</code></> : null}</p> : null}
       {step >= 3 && a.pitfalls?.length ? <p className="small"><b>흔한 실수</b> {a.pitfalls.join(" · ")}</p> : null}
       <div className="row" style={{ justifyContent: "space-between" }}>
-        <button className="linkish small" onClick={async () => { await send({ kind: "walkthrough", skipped: true }); onDone(); }}>이 패턴은 알아요 (건너뛰기)</button>
+        <button className="linkish small" onClick={async () => { await send({ kind: "walkthrough", skipped: true }); onDone(); }}>이건 알아요 (건너뛰기)</button>
         {step < 3 ? <button className="btn" disabled={Boolean(showPredict)} onClick={() => setStep(step + 1)}>{steps[step + 1][0]} 보기</button>
           : <button className="btn" onClick={onDone}>다 봤어요 →</button>}
       </div>
@@ -193,15 +196,15 @@ function DrillCard({ a, elapsed, send, fb, busy, err, next }: CardProps) {
   return (
     <section className="panel stack pt-card">
       <Problem a={a} />
-      <p className="small"><b>이 문제는 어떤 접근으로 풀까요?</b> 코드는 짜지 않아요. 30초~1분 안에 골라 보세요.</p>
+      <p className="small"><b>이 문제는 어떤 방법으로 풀까요?</b> 코드는 짜지 않아요. 30초~1분 안에 골라 보세요.</p>
       <div className="pt-options">{(a.options ?? []).map((o) => {
         const v = approaches.find((x) => x.name === o);
         return <button key={o} className={`pt-opt${pick === o ? " on" : ""}${v ? ` ${VERDICT[v.verdict]?.[1] ?? ""}` : ""}`} disabled={Boolean(fb) || Boolean(busy)} onClick={() => setPick(o)}>
           {o}{v ? <span className="small"> — {VERDICT[v.verdict]?.[0]}. {v.why}</span> : null}</button>; })}</div>
-      {!fb && !hint && (a.signals?.length ?? 0) > 0 ? <button className="linkish small" onClick={() => setHint(true)}>신호 보기 (도움 받은 것으로 남아요)</button> : null}
-      {hint && !fb ? <p className="small muted">신호: {(a.signals ?? []).join(" · ")}</p> : null}
+      {!fb && !hint && (a.signals?.length ?? 0) > 0 ? <button className="linkish small" onClick={() => setHint(true)}>힌트: 문제에서 눈여겨볼 곳 (도움 받은 것으로 남아요)</button> : null}
+      {hint && !fb ? <p className="small muted">눈여겨볼 곳: {(a.signals ?? []).join(" · ")}</p> : null}
       {err ? <p className="ws-err small">{err}</p> : null}
-      {fb ? <p className={`small ${fb.ok ? "pt-good" : "pt-bad"}`}><b>{fb.ok ? (fb.intended ? "맞았어요." : "맞는 풀이예요. 다만 의도된 풀이는 따로 있어요.") : "이 접근으로는 안 돼요."}</b> 이 문제의 패턴: {(fb.patternNames as string[]).join(", ")} · 신호: {(fb.signals as string[]).join(" · ")} <span className="muted">({String(fb.grade)})</span></p>
+      {fb ? <p className={`small ${fb.ok ? "pt-good" : "pt-bad"}`}><b>{fb.ok ? (fb.intended ? "맞았어요." : "되는 방법이에요. 다만 이 문제에 더 맞는 방법이 따로 있어요.") : "이 방법으로는 안 돼요."}</b> 이 문제에 쓰는 것: {(fb.patternNames as string[]).join(", ")} · 이럴 때 떠올려요: {(fb.signals as string[]).join(" · ")} <span className="muted">({String(fb.grade)})</span></p>
         : <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" disabled={!pick || Boolean(busy)} onClick={() => void send({ kind: "drill", mixed: a.mixed, choice: pick, hinted: hint, ms: elapsed?.() })}>{busy || "확인"}</button></div>}
       {fb ? next : null}
     </section>
@@ -214,19 +217,19 @@ function DesignCard({ a, elapsed, send, fb, busy, err, next }: CardProps) {
   return (
     <section className="panel stack pt-card">
       <Problem a={a} />
-      <p className="small"><b>풀이를 설계해 보세요.</b> 무엇을 기억해야 하고, 얼마나 걸리는지만 정해요.</p>
-      <p className="eyebrow">1. 꼭 기억해야 하는 상태</p>
+      <p className="small"><b>풀기 전에 계획을 세워 보세요.</b> 풀면서 무엇을 기억해 둘지, 얼마나 오래 걸릴지만 정해요.</p>
+      <p className="eyebrow">1. 풀면서 꼭 적어 둘 것</p>
       <div className="pt-options">{(a.states ?? []).map((s) => <button key={s} className={`pt-opt${state === s ? " on" : ""}${f ? (s === f.state.right ? " good" : state === s ? " bad" : "") : ""}`} disabled={Boolean(f)} onClick={() => setState(s)}>{s}</button>)}</div>
-      <p className="eyebrow">2. 그 상태를 언제·어떻게 바꾸나 (한 줄, 채점 안 함)</p>
+      <p className="eyebrow">2. 그걸 언제·어떻게 바꾸나 (한 줄, 채점 안 함)</p>
       <input className="ws-input" value={update} disabled={Boolean(f)} onChange={(e) => setUpdate(e.target.value)} placeholder="예: 큐에 넣을 때 방문 표시" />
-      <p className="eyebrow">3. 시간 복잡도{a.maxN ? ` (N ≤ ${a.maxN.toLocaleString()})` : ""}</p>
+      <p className="eyebrow">3. 걸리는 시간 (시간 복잡도){a.maxN ? ` · 입력은 최대 ${a.maxN.toLocaleString()}개` : ""}</p>
       <div className="pt-options cx">{(a.complexities ?? []).map((c) => <button key={c} className={`pt-opt${cx === c ? " on" : ""}${f ? (c === f.complexity ? " good" : cx === c ? " bad" : "") : ""}`} disabled={Boolean(f)} onClick={() => setCx(c)}>O({c})</button>)}</div>
       {err ? <p className="ws-err small">{err}</p> : null}
       {f ? (
         <div className={`stack small ${f.ok ? "pt-good" : "pt-bad"}`} style={{ gap: 4 }}>
-          <b>{f.ok ? "설계가 맞아요." : `${!f.stateOk ? "상태" : ""}${!f.stateOk && !f.cxOk ? "와 " : ""}${!f.cxOk ? "복잡도" : ""}가 달라요.`}</b>
-          <span>상태: {f.state.right} · 바꾸는 법: {f.update}</span>
-          <span>복잡도: O({f.complexity}){f.theirs ? ` — ${f.theirs}` : ""}</span>
+          <b>{f.ok ? "계획이 맞아요." : `${!f.stateOk ? "적어 둘 것" : ""}${!f.stateOk && !f.cxOk ? "과 " : ""}${!f.cxOk ? "걸리는 시간" : ""}이 달라요.`}</b>
+          <span>적어 둘 것: {f.state.right} · 바꾸는 법: {f.update}</span>
+          <span>걸리는 시간: O({f.complexity}){f.theirs ? ` — ${f.theirs}` : ""}</span>
           {!f.cxOk && f.mine ? <span>고른 O({cx}): {f.mine}</span> : null}
           {f.pitfalls.length ? <span>흔한 실수: {f.pitfalls.join(" · ")}</span> : null}
           <span className="muted">({f.grade})</span>

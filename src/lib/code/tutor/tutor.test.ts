@@ -20,7 +20,8 @@ test("패턴 목록: id가 겹치지 않고, 사다리 칸·튜터 단원에 이
   for (const p of PATTERNS) assert.ok(ladder.has(p.ability), `${p.id} → ${p.ability}`);
   for (const c of TUTOR_CHAPTERS) assert.ok(PATTERNS.some((p) => p.chapters.includes(c)), c);
   const targets = tutorTargets();
-  assert.equal(targets.length, 74, "연습 문제 19 + 기본 문제 56, 두 단원에 나오는 10814는 한 번");
+  assert.equal(new Set(targets.map((t) => t.number)).size, targets.length, "한 번호는 한 번(두 단원에 나오는 10814 등)");
+  assert.ok(targets.filter((t) => ["0x03", "0x04", "0x05", "0x06", "0x07", "0x08", "0x09", "0x0B", "0x0C", "0x0E", "0x0F"].includes(t.chapter)).length === 74, "기본 단원 74개는 그대로");
   assert.ok(targets.some((x) => x.number === "1926" && x.role === "lecture"));
 });
 

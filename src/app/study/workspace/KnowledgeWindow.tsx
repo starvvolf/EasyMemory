@@ -369,7 +369,8 @@ function PsBox({ ps }: { ps: NonNullable<Detail["ps"]> }) {
       <div className="kw-ps-marks">{(["recognize", "design", "execute"] as const).map((ab) => (
         <span key={ab} className={`kw-ps-mark ${ps.marks[ab]}`} title={MARK[ps.marks[ab]][1]}>{{ recognize: "방법 알아채기", design: "계획 세우기", execute: "직접 짜기" }[ab]} {MARK[ps.marks[ab]][0]}</span>))}</div>
       {ps.flow.length ? <p className="small"><span className="muted">지금까지 </span>{ps.flow.join(" → ")}</p> : null}
-      {ps.wrong ? <p className="kw-ps-line"><span className="kw-ps-tag bad">그때 내 생각</span><span>{ps.wrong}</span></p> : null}
+      {ps.wrong ? <p className={`kw-ps-line${ps.resolved ? " done" : ""}`}><span className={`kw-ps-tag ${ps.resolved ? "" : "bad"}`}>{ps.resolved ? "예전 내 생각 · 이제 해결" : "그때 내 생각"}</span><span>{ps.wrong}</span></p> : null}
+      {ps.open > 1 ? <p className="small muted">아직 남은 착각이 {ps.open}개 있어요. 내 기록에서 볼 수 있어요.</p> : null}
       {ps.remember ? <p className="kw-ps-line"><span className="kw-ps-tag good">이렇게 하면 돼요</span><span>{ps.remember}</span></p> : null}
       {ps.cue ? <p className="kw-ps-line"><span className="kw-ps-tag">이럴 때 떠올리기</span><span>{ps.cue}</span></p> : null}
       {ps.where ? <p className="small muted">{ps.where} 풀 때{ps.at ? ` · ${ago(ps.at)}` : ""}</p> : null}

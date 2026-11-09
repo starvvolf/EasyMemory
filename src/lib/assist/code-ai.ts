@@ -7,9 +7,9 @@ import { tagTrace } from "../ai/trace.ts";
 import { LANG_LABEL, judge, type Lang, type TestCase } from "../code/run.ts";
 import { CodeError, findCounterexample, problemKnowledgeNames, readProblem, readProblemMeta, saveProblem, type HiddenTest, type ProblemCheck, type ProblemMeta } from "../code/problems.ts";
 import { runTestgen, runVerify } from "../code/testgen/index.ts";
-import { memoryEvents, searchKnowledge } from "../knowledge/api.ts";
+import { searchKnowledge } from "../knowledge/api.ts";
 import { currentAttempt } from "../code/service.ts";
-import { memoryIdsOfProblem } from "../code/tutor/links.ts";
+import { learnerNoteFor } from "../code/tutor/summary.ts";
 
 const TUTOR = `너는 알고리즘을 가르치는 튜터다. 학습자가 스스로 고치게 돕는다. 한국어로 짧게 답한다.
 - 통과 여부는 채점기가 정한다. 너는 맞았다/틀렸다를 단정하지 않는다.
@@ -27,15 +27,9 @@ function resultBlock(r?: LastResult) {
   if (r.compile) return `[채점 결과] 컴파일 에러\n${r.compile.slice(0, 3000)}`;
   return `[채점 결과] ${r.verdict ?? ""}\n[실패한 입력]\n${(r.input ?? "").slice(0, 1500)}\n[기대 출력]\n${(r.expected ?? "").slice(0, 800)}\n[내 출력]\n${(r.got ?? "").slice(0, 800)}${r.stderr ? `\n[에러]\n${r.stderr.slice(0, 1500)}` : ""}`;
 }
-/** Memory level 3 for this problem's knowledge: the learner's own earlier misses, so a hint can say "지난번에도". */
+/** 학습자의 지난 기록(11/10): PS 튜터의 학습자 모델에서 이 문제 패턴의 줄과 아직 해결 안 된 착각만 골라 온다(코드가 고름, 5줄 이내). */
 async function pastMisses(p: ProblemMeta) {
-  const lines: string[] = [];
-  // 11/8: 문제 풀이는 기억에 쓰지 않는다. 지난번 기록은 PS 튜터가 남긴 이 문제 패턴의 기억에서 읽는다.
-  for (const id of (await memoryIdsOfProblem(p.id)).slice(0, 4)) {
-    const { text } = await memoryEvents({ knowledgeId: id, kinds: ["wrong", "hint", "asked"], limit: 5 });
-    if (text !== "기록이 없어요.") lines.push(text);
-  }
-  return lines.length ? `[학습자가 전에 막힌 기록]\n${lines.join("\n")}` : "";
+  return learnerNoteFor(p.id).catch(() => "");
 }
 const ATTEMPT_LABEL = { wrong: "틀림", hint: "힌트 받음", asked: "물어봄" } as const;
 /** This attempt so far (src/lib/code/service.ts): hints given and misses since the problem was opened. */

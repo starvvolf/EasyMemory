@@ -14,6 +14,7 @@ import { listProblems, readProblem, readProblemMeta, readSubmissions } from "../
 import { COMPLEXITIES, complexityVerdict } from "../train.ts";
 import { patternOf, PATTERNS } from "./patterns.ts";
 import { nextActions, type Action } from "./policy.ts";
+import { board } from "./summary.ts";
 import { ensurePool, modelForProblem, prepareModels, prepStatus, readModels, tutorNumberOf, tutorTargets, type ProblemModel } from "./problem-model.ts";
 import { ABILITY_LABEL, appendEvent, computeState, gradeOf, GRADE_LABEL, readEvents, type Ability, type TutorEvent } from "./state.ts";
 
@@ -85,19 +86,32 @@ export async function noteAiHelp(problemId: string, what: string, text: string) 
   if (!patterns.length) return;
   const model = (await readModels())[n];
   const names = patterns.map((id) => patternOf(id)?.name ?? id).join(", ");
-  const refined = await refineAiHelp({ what, text, problem: model ? `BOJ ${n} ${model.title}: ${model.summary}` : `BOJ ${n}`, pattern: names });
+  const refined = await refineAiHelp({ what, text, problem: model ? `BOJ ${n} ${model.title}: ${model.summary}` : `BOJ ${n}`, pattern: names,
+    choices: patterns.map((id) => ({ id, name: patternOf(id)?.name ?? id })) });
   if (refined === "empty") return; // 격려·되묻기뿐: 배운 것이 없다
   const raw = text.replace(/\s+/g, " ").trim();
-  const card: Card = refined ? { situation: `BOJ ${n}${model ? ` ${model.title}` : ""}를 풀다 ${what}`, ...refined }
+  // 어느 패턴 이야기인지(11/10): AI가 고른 하나에만. 정리에 실패하면 이 문제의 첫 패턴에만.
+  const target = refined?.pattern && patterns.includes(refined.pattern) ? [refined.pattern] : patterns.slice(0, 1);
+  const { pattern: _chosen, ...fields } = refined ?? { pattern: undefined };
+  void _chosen;
+  const card: Card = refined ? { situation: `BOJ ${n}${model ? ` ${model.title}` : ""}를 풀다 ${what}`, ...(fields as { gap: string; fix: string; cue: string }) }
     : { situation: `BOJ ${n}${model ? ` ${model.title}` : ""}를 풀다 ${what}`, gap: "", fix: raw.slice(0, 200), cue: "" };
-  for (const pid of patterns) await appendLesson({ pattern: pid, number: n, title: model?.title ?? "", kind: what.includes("설명") ? "explain" : "hint", refined: refined ? "ai" : "raw", raw: raw.slice(0, 1200), ...card }).catch(() => undefined);
-  await toMemory(patterns, "hint", true, lessonLine(card));
+  for (const pid of target) await appendLesson({ pattern: pid, number: n, title: model?.title ?? "", kind: what.includes("설명") ? "explain" : "hint", refined: refined ? "ai" : "raw", raw: raw.slice(0, 1200), ...card }).catch(() => undefined);
+  await toMemory(target, "hint", true, lessonLine(card));
 }
 
 /* ---------- 혼자 구현: 문제 화면의 제출 기록으로 확인 ---------- */
 type Pending = { number: string; pattern: string; mixed: boolean; startedAt: string };
 /** 구현하러 간 문제의 제출을 본다: 맞았으면(힌트 없이 → 혼자, 힌트 있으면 → 도움) 기록하고 끝. */
-async function syncImplement() {
+export const syncTutorImplement = () => syncImplement();
+// 제출 직후와 튜터 화면 열기가 겹쳐도 한 번만 기록되게 차례로.
+let syncing: Promise<unknown> = Promise.resolve();
+function syncImplement(): Promise<void> {
+  const run = syncing.then(() => syncImplementOnce());
+  syncing = run.catch(() => undefined);
+  return run;
+}
+async function syncImplementOnce() {
   const pending = await readJson<Pending[]>("pending.json", []);
   if (!pending.length) return;
   const models = await readModels();
@@ -108,7 +122,7 @@ async function syncImplement() {
     if (!ac) { left.push(p); continue; }
     const events = await readEvents();
     const hinted = subs.some((s) => s.hints > 0);
-    await record({ kind: "implement", number: p.number, patterns: models[p.number]?.patterns ?? [p.pattern], ability: "execute", ok: true, hinted,
+    await record({ kind: "implement", number: p.number, patterns: [p.pattern], ability: "execute", ok: true, hinted,
       mixed: p.mixed, grade: gradeOf(events, p.number, "execute", { hinted, mixed: p.mixed }), ms: Date.parse(ac.at) - Date.parse(p.startedAt), detail: `제출 ${subs.length}번` }, models[p.number],
       hinted ? { situation: `BOJ ${p.number}${models[p.number] ? ` ${models[p.number].title}` : ""}를 혼자 구현하다 문제 화면의 힌트를 받고 제출 ${subs.length}번 만에 맞힘`,
         gap: "혼자서는 끝까지 짜지 못했어요", fix: models[p.number]?.update ?? "", cue: models[p.number]?.signals[0] ?? "" } : undefined);
@@ -149,6 +163,8 @@ export async function tutorOverview() {
     patterns: covered.map((p) => { const s = state.patterns[p.id]; return { id: p.id, name: p.name, ability: p.ability, what: p.what, seen: s.seen, solid: s.solid, graduated: s.graduated,
       abilities: Object.fromEntries((["recognize", "design", "execute"] as const).map((ab) => [ab, { help: s.abilities[ab].help, freshWins: s.abilities[ab].freshWins, accuracy: s.abilities[ab].accuracy, dueAt: s.abilities[ab].dueAt, due: Boolean(s.abilities[ab].dueAt && Date.parse(s.abilities[ab].dueAt!) <= Date.now()), failStreak: s.abilities[ab].failStreak, n: s.abilities[ab].independent.n + s.abilities[ab].assisted.n }])) }; }),
     actions, done: events.filter((e) => e.ability).length,
+    // 한눈에 보기(11/10): 해 본 패턴마다 "지금 어디서 막혔나" 한 줄, 아직 남은 착각이 있는 것부터.
+    board: await board().catch(() => []),
   };
 }
 /** 미리 만들기(11/9, 사용자 "느리다"): 구현 차례가 오기 전에 그 문제의 숨은 테스트를 뒤에서 만든다. 지금 할 일이 설계면 설계를
@@ -200,12 +216,15 @@ export async function answer(a: Answer) {
   if (!m) throw Object.assign(new Error("이 문제의 교육용 모델이 아직 없어요."), { status: 404 });
   const events = await readEvents();
   const patterns = m.patterns.length ? m.patterns : [a.pattern];
+  // 맞고 틀림은 지금 묻는 패턴에만(11/10, 사용자 "메모리가 정리가 잘 되어 있어야"): 토마토(시작점 여러 개 BFS + 격자 사방 탐색)에서
+  // 접근을 틀렸다고 격자 탐색까지 "막힘"이 되지 않게. 시범·대조처럼 본 것은 문제의 모든 패턴에 남긴다.
+  const focus = m.patterns.includes(a.pattern) ? [a.pattern] : patterns.slice(0, 1);
   if (a.kind === "walkthrough") {
     if (a.skipped) { await record({ kind: "skip", number: a.number, patterns, grade: 0 }); return { ok: true }; }
     if (!events.some((e) => e.kind === "walkthrough" && e.number === a.number)) await record({ kind: "walkthrough", number: a.number, patterns, grade: 0 }, m);
     if (a.predict === undefined || !m.predict) return { ok: true };
     const ok = Boolean(a.predict.trim()) && norm(a.predict) === norm(m.predict.answer);
-    await record({ kind: "predict", number: a.number, patterns, ok, grade: 0, detail: ok ? "예측 맞음" : a.predict.trim() ? "예측 틀림" : "모르겠어요" }, m,
+    await record({ kind: "predict", number: a.number, patterns: focus, ok, grade: 0, detail: ok ? "예측 맞음" : a.predict.trim() ? "예측 틀림" : "모르겠어요" }, m,
       { situation: `BOJ ${a.number} ${m.title} 시범에서 입력 「${m.predict.input.replace(/\n/g, " / ").slice(0, 40)}」의 출력을 ${a.predict.trim() ? `「${a.predict.trim().replace(/\n/g, " / ").slice(0, 40)}」로 예측` : "예측하지 못함"}`,
         gap: a.predict.trim() ? `결과가 「${a.predict.trim().replace(/\n/g, " / ").slice(0, 40)}」일 줄 알았는데 「${m.predict.answer.replace(/\n/g, " / ").slice(0, 40)}」였어요` : `결과를 떠올리지 못했어요(답은 「${m.predict.answer.replace(/\n/g, " / ").slice(0, 40)}」)`,
         fix: m.walkthrough.choose, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
@@ -220,13 +239,13 @@ export async function answer(a: Answer) {
     const card: Card = { situation: `BOJ ${a.number} ${m.title}에서 접근으로 「${a.choice}」를 고름${a.hinted ? "(신호를 보고)" : ""}`,
       gap: ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : `「${a.choice}」로 풀면 될 줄 알았어요${chosen ? ` (그러면 ${{ slow: "느려요", wrong: "틀려요", ok: "되긴 하지만 더 좋은 방법이 있어요", best: "" }[chosen.verdict]}${chosen.why ? ` — ${chosen.why}` : ""})` : ""}`,
       fix: `「${best?.name ?? "?"}」${best?.why ? ` — ${best.why}` : ""}`, cue: m.signals.join(" · "), distinguish: distinguishOf(m) };
-    await record({ kind: "drill", number: a.number, patterns, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${a.choice}` }, m, card);
+    await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${a.choice}` }, m, card);
     return { ok, intended: chosen?.verdict === "best", grade: GRADE_LABEL[grade], approaches: m.approaches, signals: m.signals, patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
   }
   if (a.kind === "design") {
     const stateOk = a.state === m.state.right, cxOk = a.complexity === m.complexity, ok = stateOk && cxOk;
     const grade = gradeOf(events, a.number, "design", { hinted: a.hinted, mixed: a.mixed });
-    await record({ kind: "design", number: a.number, patterns, ability: "design", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms,
+    await record({ kind: "design", number: a.number, patterns: focus, ability: "design", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms,
       detail: `상태: ${a.state} · 복잡도: ${a.complexity}${a.update ? ` · 갱신: ${a.update.slice(0, 120)}` : ""}` }, m,
       { situation: `BOJ ${a.number} ${m.title} 설계에서 상태 「${a.state}」, 복잡도 O(${a.complexity})를 고름`,
         gap: [stateOk ? "" : `「${a.state}」만 기억하면 될 줄 알았어요 (실제로는 「${m.state.right}」이 필요해요)`, cxOk ? "" : `시간이 O(${a.complexity})쯤 걸린다고 봤어요 (실제로는 O(${m.complexity})${m.maxN ? `, N이 최대 ${m.maxN.toLocaleString()}` : ""})`].filter(Boolean).join(" · ") || "도움을 받고서야 맞혔어요",
@@ -253,7 +272,7 @@ export async function answer(a: Answer) {
   const still = (await readJson<Pending[]>("pending.json", [])).find((p) => p.number === a.number);
   if (still) {
     const subs = (await readSubmissions(m.problemId ?? problemIdOf(a.number)).catch(() => [])).filter((s) => s.mode === "submit" && s.at >= still.startedAt);
-    if (subs.length) await record({ kind: "implement", number: a.number, patterns, ability: "execute", ok: false, hinted: subs.some((s) => s.hints > 0), mixed: still.mixed,
+    if (subs.length) await record({ kind: "implement", number: a.number, patterns: [still.pattern], ability: "execute", ok: false, hinted: subs.some((s) => s.hints > 0), mixed: still.mixed,
       grade: gradeOf(events, a.number, "execute", { mixed: still.mixed }), detail: `제출 ${subs.length}번, 맞히지 못함` }, m,
       { situation: `BOJ ${a.number} ${m.title}를 혼자 구현하다 제출 ${subs.length}번 모두 틀리고 그만둠`, gap: "끝까지 짜지 못했어요", fix: m.update, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     await writeJson("pending.json", (await readJson<Pending[]>("pending.json", [])).filter((p) => p.number !== a.number));

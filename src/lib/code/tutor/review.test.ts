@@ -89,3 +89,16 @@ test("기억 요약(11/10): 어디서 막혔나 한마디, 흐름 한 줄, 마�
   assert.deepEqual(s.marks, { recognize: "ok", design: "bad", execute: "none" });
   assert.equal(s.wrong, "기억할 상태를 「합계」로 생각함"); assert.equal(s.remember, "꺼낸 칸의 날짜 + 1"); assert.equal(s.where, "BOJ 7576 토마토");
 });
+
+test("해결된 착각(11/10): 그 뒤 같은 능력으로 다른 문제를 혼자 맞히면 해결됨, 지우지 않고 표시만", async () => {
+  const { summarize, isResolved } = await import("./summary.ts");
+  const card: Lesson = { id: "c", at: "2026-11-10T01:00:00Z", pattern: "multi-source", number: "7576", title: "토마토", kind: "design", situation: "s", gap: "「합계」만 기억하면 될 줄 알았어요", fix: "날짜 배열", cue: "", refined: "code" };
+  const e = (at: string, number: string, extra: Partial<TutorEvent>): TutorEvent => ({ id: at, at, kind: "design", number, patterns: ["multi-source"], ability: "design", grade: 3, ...extra });
+  assert.equal(isResolved(card, [e("2026-11-10T02:00:00Z", "7576", { ok: true })]), false, "the same problem again is not enough");
+  assert.equal(isResolved(card, [e("2026-11-10T02:00:00Z", "7569", { ok: true, hinted: true })]), false, "with help is not enough");
+  assert.equal(isResolved(card, [e("2026-11-10T02:00:00Z", "7569", { kind: "drill", ability: "recognize", ok: true })]), false, "another ability is not enough");
+  const later = [e("2026-11-10T00:59:00Z", "7576", { ok: false }), e("2026-11-10T02:00:00Z", "7569", { ok: true })];
+  assert.equal(isResolved(card, later), true);
+  const s = summarize("multi-source", later, [card]);
+  assert.equal(s.open, 0); assert.equal(s.resolved, true); assert.equal(s.wrong, card.gap, "kept, shown as resolved");
+});

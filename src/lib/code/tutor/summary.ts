@@ -8,7 +8,16 @@ export type Mark = "ok" | "help" | "bad" | "none";
 export type PsSummary = {
   stage: string; flow: string[]; marks: Record<Ability, Mark>;
   wrong?: string; remember?: string; cue?: string; at?: string; where?: string;
+  /** 위의 "그때 내 생각"이 이미 해결된 것인지(아직인 착각이 없어서 지난 것을 보여 줄 때) */ resolved?: boolean;
+  /** 아직 해결 안 된 착각 수 */ open: number;
 };
+/** 카드가 어느 능력의 착각인지: 방법 고르기 → 알아채기, 설계·결과 맞히기 → 계획, 구현·AI 힌트·설명(문제 화면) → 직접 짜기. */
+const ABILITY_OF_CARD: Record<Lesson["kind"], Ability> = { drill: "recognize", design: "design", predict: "design", implement: "execute", hint: "execute", explain: "execute" };
+/** 해결된 착각(11/10, 사용자 "메모리가 정리가 잘 되어 있어야"): 그 뒤 같은 능력으로 다른 문제를 도움 없이 맞혔으면. 지우지 않고 표시만. */
+export function isResolved(card: Lesson, events: TutorEvent[]) {
+  const ab = ABILITY_OF_CARD[card.kind];
+  return events.some((e) => e.ability === ab && e.ok && !e.hinted && e.at > card.at && e.number !== card.number && e.patterns.includes(card.pattern));
+}
 // 사람 말로(11/10 사용자 "단어가 딱딱해, 직관적이지 않을 수 있어"): 알아채기 · 계획 세우기 · 직접 짜기.
 const LABEL: Record<Ability, string> = { recognize: "방법 알아채기", design: "계획 세우기", execute: "직접 짜기" };
 
@@ -51,9 +60,13 @@ export function summarize(pattern: string, events: TutorEvent[], lessons: Lesson
   const stage = stuck ? (marks[stuck] === "help" ? `${STAGE[stuck]} 아직 도움이 필요해요` : `${STAGE[stuck]} 막혔어요`)
     : todo ? (marks.recognize === "ok" ? `${order.filter((ab) => marks[ab] === "ok").map((ab) => LABEL[ab]).join(", ")}까지는 혼자 했어요. ${LABEL[todo]}는 아직이에요` : "아직 혼자 해 본 적이 없어요")
     : "알아채기부터 직접 짜기까지 혼자 다 했어요";
-  // 잘못 생각한 것이 적힌 마지막 카드(그 카드의 고친 생각과 짝으로). 없으면 고친 생각만 있는 마지막 카드.
-  const last = lessons.filter((l) => l.pattern === pattern && l.gap).at(-1) ?? lessons.filter((l) => l.pattern === pattern && l.fix).at(-1);
-  return { stage, flow, marks, ...(last ? { wrong: last.gap || undefined, remember: last.fix || undefined, cue: last.cue || undefined, at: last.at, where: last.title ? `BOJ ${last.number} ${last.title}` : `BOJ ${last.number}` } : {}) };
+  // 아직 해결 안 된 착각 중 마지막 것(그 카드의 "이렇게 하면 돼요"와 짝으로). 다 해결됐으면 지난 것 하나를 "해결됨"으로.
+  const cards = lessons.filter((l) => l.pattern === pattern && (l.gap || l.fix));
+  const open = cards.filter((l) => !isResolved(l, events));
+  const pick = (xs: Lesson[]) => xs.filter((l) => l.gap).at(-1) ?? xs.at(-1);
+  const last = pick(open) ?? pick(cards);
+  return { stage, flow, marks, open: open.length, ...(last ? { wrong: last.gap || undefined, remember: last.fix || undefined, cue: last.cue || undefined, at: last.at,
+    where: last.title ? `BOJ ${last.number} ${last.title}` : `BOJ ${last.number}`, ...(open.length ? {} : { resolved: true }) } : {}) };
 }
 
 /** 기억 저장소의 PS 패턴 기억이면 요약을, 아니면 null. */
@@ -63,4 +76,35 @@ export async function psSummaryOf(item: { sources?: Array<{ ref?: string }> }): 
   const [{ readEvents }, { readLessons }] = await Promise.all([import("./state.ts"), import("./lessons.ts")]);
   const [events, lessons] = await Promise.all([readEvents(), readLessons()]);
   return summarize(pattern, events, lessons);
+}
+
+/** 학습자 모델(알고리즘) → 한눈에 보기: 해 본 패턴마다 한 줄(11/10). */
+export async function board() {
+  const [{ readEvents }, { readLessons }, { PATTERNS }] = await Promise.all([import("./state.ts"), import("./lessons.ts"), import("./patterns.ts")]);
+  const [events, lessons] = await Promise.all([readEvents(), readLessons()]);
+  const touched = new Set([...events.flatMap((e) => e.patterns), ...lessons.map((l) => l.pattern)]);
+  return PATTERNS.filter((p) => touched.has(p.id)).map((p) => { const s = summarize(p.id, events, lessons); return { id: p.id, name: p.name, stage: s.stage, marks: s.marks, open: s.open, wrong: s.resolved ? undefined : s.wrong }; })
+    .sort((a, b) => Number(b.open > 0) - Number(a.open > 0));
+}
+
+/** AI 힌트·설명에 넣을 학습자 기록(11/10, 사용자 "통으로 주면 비효율, 유형에 맞춰 골라서"): 이 문제의 패턴만, 아직 해결 안 된 착각만,
+ *  많아야 5줄·약 300자. 고르는 건 코드(패턴 id 맞추기)이고 AI를 부르지 않는다. 재료가 없는 문제면 "". */
+export async function learnerNoteFor(problemId: string) {
+  const [{ numberOfProblem, patternsOfNumber }, { readEvents }, { readLessons }, { patternOf }] = await Promise.all([import("./links.ts"), import("./state.ts"), import("./lessons.ts"), import("./patterns.ts")]);
+  const n = await numberOfProblem(problemId);
+  const patterns = n ? await patternsOfNumber(n) : [];
+  if (!patterns.length) return "";
+  const [events, lessons] = await Promise.all([readEvents(), readLessons()]);
+  const lines: string[] = [];
+  for (const pid of patterns) {
+    const touched = events.some((e) => e.patterns.includes(pid)) || lessons.some((l) => l.pattern === pid);
+    if (!touched) continue;
+    const s = summarize(pid, events, lessons);
+    lines.push(`- ${patternOf(pid)?.name ?? pid}: ${s.stage}`);
+    for (const c of lessons.filter((l) => l.pattern === pid && l.gap && !isResolved(l, events)).slice(-2).reverse())
+      lines.push(`  · 아직 남은 착각(BOJ ${c.number}): ${c.gap}${c.fix ? ` → ${c.fix}` : ""}`);
+  }
+  let text = "";
+  for (const l of lines.slice(0, 5)) { if ((text + l).length > 320) break; text += `${l}\n`; }
+  return text ? `[이 학습자의 지난 기록: 이 문제의 패턴만]\n${text}이 기록과 지금 막힌 곳이 같으면 "지난번에도 …"처럼 짧게 짚는다. 상관없으면 말하지 않는다.` : "";
 }

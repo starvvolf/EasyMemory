@@ -1051,3 +1051,7 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .kw-ps-tag{flex:none;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--surface);color:var(--muted)}
 .dejipgi .kw-ps-tag.bad{background:var(--bad-soft);color:var(--bad)}
 .dejipgi .kw-ps-tag.good{background:var(--good-soft);color:var(--good)}
+.dejipgi .kw-ps-line.done{opacity:.6}
+.dejipgi .pt-board-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dejipgi .pt-board-list li{display:flex;flex-direction:column;gap:2px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.dejipgi .pt-board-list li:last-child{border-bottom:0;padding-bottom:0}
