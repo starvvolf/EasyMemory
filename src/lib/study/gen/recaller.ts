@@ -1741,7 +1741,8 @@ export async function runRecaller(ctx: RecallerContext) {
     // Each page waits only for its own reading; the pages of a section run at once.
     await Promise.all((digestOn ? [section.pages] : chunksOf(section.pages)).map(async (pages, k) => pageLimit(async () => {
       // lab.digest: the cards come from the topic's summary lines (the model sees the pictures there), not from a page call.
-      if (digestOn) { await digestCards(section); void figureJob?.add(data.units[section.id]?.cards ?? []); }
+      // 11/10: 주제 카드는 이때 아직 chunk에만 있다(unit.cards는 organize의 collect가 채운다) — chunk 카드를 자른다(같은 객체).
+      if (digestOn) { await digestCards(section); void figureJob?.add(data.units[section.id]?.chunks?.[0]?.cards ?? data.units[section.id]?.cards ?? []); }
       else if (!lab.inlineRead) await Promise.all(pages.map(readPage));
       // inlineRead with questions: the reading starts now, beside 정리, for the checks that come after (not for skimOnly).
       else if (!cardsOnly) for (const p of pages) void readPage(p).catch(() => undefined);
