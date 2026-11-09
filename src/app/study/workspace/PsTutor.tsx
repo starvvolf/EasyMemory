@@ -288,7 +288,7 @@ function Journal() {
                 <span className="muted num">{new Date(e.at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>
                 {RESULT[e.result][0] ? <span className={`chip ${RESULT[e.result][1]}`}>{RESULT[e.result][0]}</span> : null}
                 <span><b>{e.what}</b> · BOJ {e.number} {e.title} — {e.text}
-                  {e.lesson && (e.lesson.gap || e.lesson.fix) ? <span className="pt-lesson">{e.lesson.gap ? <>잘못 생각한 것: {e.lesson.gap}<br /></> : null}{e.lesson.fix ? <>이제 기억할 것: {e.lesson.fix}</> : null}{e.lesson.cue ? <><br /><span className="muted">신호: {e.lesson.cue}</span></> : null}</span> : null}
+                  {e.lesson && (e.lesson.gap || e.lesson.fix) ? <span className="pt-lesson">{e.lesson.gap ? <>그때 내 생각: {e.lesson.gap}<br /></> : null}{e.lesson.fix ? <>이렇게 하면 돼요: {e.lesson.fix}</> : null}{e.lesson.cue ? <><br /><span className="muted">이럴 때 떠올리기: {e.lesson.cue}</span></> : null}</span> : null}
                 </span>
               </li>))}</ol>
           </div>

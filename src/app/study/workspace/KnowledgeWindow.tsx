@@ -362,16 +362,17 @@ function FolderTools({ folder, onAct, onGone }: { folder: Folder; onAct: (run: (
 
 /** PS 패턴 기억의 알고리즘 전용 모양(11/10, 사용자 "어떤 흐름으로 공부했는데 뭐가 부족했구나 딱 볼 수 있게"): 어디서 막혔나 → 흐름 → 잘못 생각한 것 / 이제 기억할 것. */
 function PsBox({ ps }: { ps: NonNullable<Detail["ps"]> }) {
-  const MARK = { ok: ["✓", "혼자 됨"], help: ["△", "도움 받고"], bad: ["✗", "막힘"], none: ["·", "아직"] } as const;
+  const MARK = { ok: ["✓", "혼자 했어요"], help: ["△", "도움 받고 했어요"], bad: ["✗", "막혔어요"], none: ["", "아직 안 해 봤어요"] } as const;
   return (
     <div className="kw-ps">
       <p className="kw-ps-stage">{ps.stage}</p>
       <div className="kw-ps-marks">{(["recognize", "design", "execute"] as const).map((ab) => (
-        <span key={ab} className={`kw-ps-mark ${ps.marks[ab]}`} title={MARK[ps.marks[ab]][1]}>{{ recognize: "알아보기", design: "설계", execute: "구현" }[ab]} {MARK[ps.marks[ab]][0]}</span>))}</div>
-      {ps.flow.length ? <p className="small"><span className="muted">흐름 </span>{ps.flow.join(" → ")}</p> : null}
-      {ps.wrong ? <p className="kw-ps-line"><span className="kw-ps-tag bad">잘못 생각한 것</span><span>{ps.wrong}</span></p> : null}
-      {ps.remember ? <p className="kw-ps-line"><span className="kw-ps-tag good">이제 기억할 것</span><span>{ps.remember}{ps.cue ? <span className="muted"> · 신호: {ps.cue}</span> : null}</span></p> : null}
-      {ps.where ? <p className="small muted">{ps.where}에서{ps.at ? ` · ${ago(ps.at)}` : ""}</p> : null}
+        <span key={ab} className={`kw-ps-mark ${ps.marks[ab]}`} title={MARK[ps.marks[ab]][1]}>{{ recognize: "방법 알아채기", design: "계획 세우기", execute: "직접 짜기" }[ab]} {MARK[ps.marks[ab]][0]}</span>))}</div>
+      {ps.flow.length ? <p className="small"><span className="muted">지금까지 </span>{ps.flow.join(" → ")}</p> : null}
+      {ps.wrong ? <p className="kw-ps-line"><span className="kw-ps-tag bad">그때 내 생각</span><span>{ps.wrong}</span></p> : null}
+      {ps.remember ? <p className="kw-ps-line"><span className="kw-ps-tag good">이렇게 하면 돼요</span><span>{ps.remember}</span></p> : null}
+      {ps.cue ? <p className="kw-ps-line"><span className="kw-ps-tag">이럴 때 떠올리기</span><span>{ps.cue}</span></p> : null}
+      {ps.where ? <p className="small muted">{ps.where} 풀 때{ps.at ? ` · ${ago(ps.at)}` : ""}</p> : null}
     </div>
   );
 }

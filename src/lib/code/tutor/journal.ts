@@ -25,7 +25,7 @@ export function journalOf(events: TutorEvent[], lessons: Lesson[], titles: Recor
     else if (e.kind === "review") out.push({ ...base, what: "기억 복습", result: e.ok ? "alone" : "learned", text: e.ok ? "예전 실수를 다시 보고 바로잡은 생각을 골라냄" : "예전 실수를 다시 봤지만 바로잡은 생각을 고르지 못함" });
     else if (e.kind === "contrast") out.push({ ...base, what: "비교하기", result: e.ok ? "alone" : "other", text: e.ok ? "비슷한 두 문제의 패턴을 맞게 구별함" : "비슷한 두 문제를 구별하지 못함" });
     else if (e.ability && e.ok !== undefined) {
-      const what = { recognize: "접근 판단", design: "설계", execute: "혼자 구현" }[e.ability];
+      const what = { recognize: "방법 알아채기", design: "계획 세우기", execute: "직접 짜기" }[e.ability];
       const result = e.hinted ? (e.ok ? "helped" : "learned") : e.ok ? "alone" : "learned";
       const text = e.hinted ? (e.ok ? `${what}: 도움(신호·힌트)을 받고 맞힘` : `${what}: 도움을 받고도 틀림`) : e.ok ? `${what}: 혼자 맞힘 · ${GRADE_LABEL[e.grade]}` : `${what}: 틀림`;
       out.push({ ...base, what, result, text: `${text}${e.mixed ? " (단원 숨김)" : ""}`, lesson });

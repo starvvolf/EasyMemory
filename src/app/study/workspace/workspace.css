@@ -1048,6 +1048,6 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .kw-ps-mark.bad{border-color:var(--bad);color:var(--bad)}
 .dejipgi .kw-ps-mark.help{border-color:var(--help);color:var(--help)}
 .dejipgi .kw-ps-line{margin:0;display:flex;gap:8px;align-items:baseline;font-size:14px}
-.dejipgi .kw-ps-tag{flex:none;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px}
+.dejipgi .kw-ps-tag{flex:none;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--surface);color:var(--muted)}
 .dejipgi .kw-ps-tag.bad{background:var(--bad-soft);color:var(--bad)}
 .dejipgi .kw-ps-tag.good{background:var(--good-soft);color:var(--good)}

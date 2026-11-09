@@ -111,7 +111,7 @@ async function syncImplement() {
     await record({ kind: "implement", number: p.number, patterns: models[p.number]?.patterns ?? [p.pattern], ability: "execute", ok: true, hinted,
       mixed: p.mixed, grade: gradeOf(events, p.number, "execute", { hinted, mixed: p.mixed }), ms: Date.parse(ac.at) - Date.parse(p.startedAt), detail: `제출 ${subs.length}번` }, models[p.number],
       hinted ? { situation: `BOJ ${p.number}${models[p.number] ? ` ${models[p.number].title}` : ""}를 혼자 구현하다 문제 화면의 힌트를 받고 제출 ${subs.length}번 만에 맞힘`,
-        gap: "혼자서는 구현을 끝내지 못함", fix: models[p.number]?.update ?? "", cue: models[p.number]?.signals[0] ?? "" } : undefined);
+        gap: "혼자서는 끝까지 짜지 못했어요", fix: models[p.number]?.update ?? "", cue: models[p.number]?.signals[0] ?? "" } : undefined);
   }
   await writeJson("pending.json", left);
 }
@@ -207,7 +207,7 @@ export async function answer(a: Answer) {
     const ok = Boolean(a.predict.trim()) && norm(a.predict) === norm(m.predict.answer);
     await record({ kind: "predict", number: a.number, patterns, ok, grade: 0, detail: ok ? "예측 맞음" : a.predict.trim() ? "예측 틀림" : "모르겠어요" }, m,
       { situation: `BOJ ${a.number} ${m.title} 시범에서 입력 「${m.predict.input.replace(/\n/g, " / ").slice(0, 40)}」의 출력을 ${a.predict.trim() ? `「${a.predict.trim().replace(/\n/g, " / ").slice(0, 40)}」로 예측` : "예측하지 못함"}`,
-        gap: a.predict.trim() ? `출력을 「${a.predict.trim().replace(/\n/g, " / ").slice(0, 40)}」로 생각함(실제 「${m.predict.answer.replace(/\n/g, " / ").slice(0, 40)}」)` : `출력을 떠올리지 못함(실제 「${m.predict.answer.replace(/\n/g, " / ").slice(0, 40)}」)`,
+        gap: a.predict.trim() ? `결과가 「${a.predict.trim().replace(/\n/g, " / ").slice(0, 40)}」일 줄 알았는데 「${m.predict.answer.replace(/\n/g, " / ").slice(0, 40)}」였어요` : `결과를 떠올리지 못했어요(답은 「${m.predict.answer.replace(/\n/g, " / ").slice(0, 40)}」)`,
         fix: m.walkthrough.choose, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     return { ok, answer: m.predict.answer };
   }
@@ -217,9 +217,8 @@ export async function answer(a: Answer) {
     const ok = chosen?.verdict === "best" || chosen?.verdict === "ok";
     const grade = gradeOf(events, a.number, "recognize", { hinted: a.hinted, mixed: a.mixed });
     const best = m.approaches.find((x) => x.verdict === "best");
-    const verdictWord = chosen ? { best: "의도된 풀이", ok: "가능하지만 덜 좋음", slow: "맞지만 느림", wrong: "틀림" }[chosen.verdict] : "";
     const card: Card = { situation: `BOJ ${a.number} ${m.title}에서 접근으로 「${a.choice}」를 고름${a.hinted ? "(신호를 보고)" : ""}`,
-      gap: ok ? "신호를 보기 전에는 떠올리지 못함" : `「${a.choice}」로 풀면 된다고 생각함 → ${verdictWord}${chosen?.why ? `: ${chosen.why}` : ""}`,
+      gap: ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : `「${a.choice}」로 풀면 될 줄 알았어요${chosen ? ` (그러면 ${{ slow: "느려요", wrong: "틀려요", ok: "되긴 하지만 더 좋은 방법이 있어요", best: "" }[chosen.verdict]}${chosen.why ? ` — ${chosen.why}` : ""})` : ""}`,
       fix: `「${best?.name ?? "?"}」${best?.why ? ` — ${best.why}` : ""}`, cue: m.signals.join(" · "), distinguish: distinguishOf(m) };
     await record({ kind: "drill", number: a.number, patterns, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${a.choice}` }, m, card);
     return { ok, intended: chosen?.verdict === "best", grade: GRADE_LABEL[grade], approaches: m.approaches, signals: m.signals, patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
@@ -230,7 +229,7 @@ export async function answer(a: Answer) {
     await record({ kind: "design", number: a.number, patterns, ability: "design", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms,
       detail: `상태: ${a.state} · 복잡도: ${a.complexity}${a.update ? ` · 갱신: ${a.update.slice(0, 120)}` : ""}` }, m,
       { situation: `BOJ ${a.number} ${m.title} 설계에서 상태 「${a.state}」, 복잡도 O(${a.complexity})를 고름`,
-        gap: [stateOk ? "" : `기억할 상태를 「${a.state}」로 생각함(맞는 것: 「${m.state.right}」)`, cxOk ? "" : `복잡도를 O(${a.complexity})로 봄(맞는 것: O(${m.complexity})${m.maxN ? `, N ≤ ${m.maxN.toLocaleString()}` : ""})`].filter(Boolean).join(", ") || "도움을 받고서야 맞힘",
+        gap: [stateOk ? "" : `「${a.state}」만 기억하면 될 줄 알았어요 (실제로는 「${m.state.right}」이 필요해요)`, cxOk ? "" : `시간이 O(${a.complexity})쯤 걸린다고 봤어요 (실제로는 O(${m.complexity})${m.maxN ? `, N이 최대 ${m.maxN.toLocaleString()}` : ""})`].filter(Boolean).join(" · ") || "도움을 받고서야 맞혔어요",
         fix: m.update, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     const verdict = (cx: string) => (m.maxN && cx in COMPLEXITIES ? complexityVerdict(cx, m.maxN, 1000).note : null);
     return { ok, stateOk, cxOk, state: m.state, update: m.update, complexity: m.complexity, mine: verdict(a.complexity), theirs: verdict(m.complexity), pitfalls: m.pitfalls, grade: GRADE_LABEL[grade] };
@@ -256,7 +255,7 @@ export async function answer(a: Answer) {
     const subs = (await readSubmissions(m.problemId ?? problemIdOf(a.number)).catch(() => [])).filter((s) => s.mode === "submit" && s.at >= still.startedAt);
     if (subs.length) await record({ kind: "implement", number: a.number, patterns, ability: "execute", ok: false, hinted: subs.some((s) => s.hints > 0), mixed: still.mixed,
       grade: gradeOf(events, a.number, "execute", { mixed: still.mixed }), detail: `제출 ${subs.length}번, 맞히지 못함` }, m,
-      { situation: `BOJ ${a.number} ${m.title}를 혼자 구현하다 제출 ${subs.length}번 모두 틀리고 그만둠`, gap: "구현을 끝내지 못함", fix: m.update, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
+      { situation: `BOJ ${a.number} ${m.title}를 혼자 구현하다 제출 ${subs.length}번 모두 틀리고 그만둠`, gap: "끝까지 짜지 못했어요", fix: m.update, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     await writeJson("pending.json", (await readJson<Pending[]>("pending.json", [])).filter((p) => p.number !== a.number));
   }
   return { ok: false };
