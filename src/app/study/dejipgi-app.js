@@ -555,6 +555,9 @@ function touchMemory(subject){
 const TAB_OF = { home:"home", practice:"practice", read:"practice", code:"practice", web:"practice", project:"practice", start:"practice", create:"practice",
   knowledge:"knowledge", summary:"knowledge", plan:"plan" };
 function setView(v){
+  // 11/11 사용자 "자료 지도에서 [오늘] 눌러도 아무 반응 없음": 위에 떠 있는 자료 지도·원문 보기가 바뀐 화면을 가렸다. 다른 화면으로 가면 닫는다.
+  if (typeof SourcePeek !== "undefined") SourcePeek.close();
+  if (typeof MaterialMapView !== "undefined") MaterialMapView.close();
   if (S.session && S.session.overlay && v !== "read") S.session = null;
   S.view = v;
   if (v !== "read" && Chat.isOpen() && typeof Chat !== "undefined"){ if (Chat.ctl) Chat.ctl.abort(); Chat.el.hidden = true; }
@@ -2607,6 +2610,26 @@ const MaterialMapView = {
   },
   close(){ if (this.cur){ this.cur.stop(); this.cur.ov.remove(); this.cur = null; } },
 };
+/* 뒤로 한 칸(11/11 사용자 "뒤로 가기, 하나 더 열린 탭 있으면 그것만 닫기"): Esc · 마우스 뒤로 버튼 · Alt+← 가 맨 위의 것 하나만 닫는다.
+   원문 보기(자기 Esc가 먼저) → 자료 지도 안에서 열린 것(플래시카드·펼친 카드: 지도가 recaller:back을 받아 처리하면 끝) → 자료 지도 → 새 자료 화면은 PDF 자료로. */
+function backOne(){
+  if (SourcePeek.cur){ SourcePeek.close(); return true; }
+  if (MaterialMapView.cur){
+    const ev = new CustomEvent("recaller:back", { cancelable:true });
+    window.dispatchEvent(ev);
+    if (!ev.defaultPrevented) MaterialMapView.close();
+    return true;
+  }
+  if (S.view === "create" && !S.builder?.busy){ setView("practice"); render(); return true; }
+  return false;
+}
+document.addEventListener("keydown", (e) => {
+  if (e.defaultPrevented || e.isComposing) return;
+  const t = e.target; const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  if ((e.key === "Escape" && MaterialMapView.cur && !typing) || (e.altKey && e.key === "ArrowLeft")){ if (backOne()) e.preventDefault(); }
+});
+document.addEventListener("mouseup", (e) => { if (e.button === 3 && backOne()) e.preventDefault(); });
+
 /* 원문 보기: one page of the PDF in a window over whatever is on screen (the map, a result), ‹ › to turn, Esc to close. */
 const SourcePeek = {
   cur: null,

@@ -950,9 +950,13 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const [digest, setDigest] = useState<DigestLite | null | undefined>(undefined);
   const [coreOnly, setCoreOnly] = useState(false);
   const [flash, setFlash] = useState<Card[] | null>(null); // 플래시카드로 풀기(11/11)
+  // 뒤로 한 칸(11/11): 앱이 recaller:back을 보내면 지도 안에서 열린 것 하나만 닫는다(없으면 앱이 지도를 닫는다).
+  const back = useRef<() => boolean>(() => false);
+  useEffect(() => { const on = (e: Event) => { if (back.current()) e.preventDefault(); }; window.addEventListener("recaller:back", on); return () => window.removeEventListener("recaller:back", on); }, []);
   // 첫 화면은 목차만 (사용자 10/30): every group starts folded; a group opens to one line per piece of knowledge, a line to its card.
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [openCard, setOpenCard] = useState<string | null>(null);
+  useEffect(() => { back.current = () => { if (flash) { setFlash(null); setReload((k) => k + 1); return true; } if (openCard) { setOpenCard(null); return true; } return false; }; });
   // While the material is still being made, the map refills every few seconds (cards, then 핵심·주제·연결).
   useEffect(() => {
     let alive = true, timer: ReturnType<typeof setTimeout> | undefined, misses = 0;
