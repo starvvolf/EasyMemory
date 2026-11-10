@@ -471,15 +471,21 @@ export default function DejipgiStudy() {
         return (await import("katex")).default;
       },
       // 지식창 · 코드 · 일정: React screens mounted into hosts the vanilla app keeps across re-renders, like the flow canvas.
-      mountView(name: "knowledge" | "code" | "plan" | "web" | "start" | "today" | "map" | "project" | "create" | "materials" | "session" | "records" | "summary" | "archive" | "reader" | "overlays", host: HTMLElement, props: Record<string, unknown>) {
+      // 자료 지도(겹창)는 앱이 연 칸에 React로 띄운다.
+      mountView(name: "map", host: HTMLElement, props: Record<string, unknown>) {
         let root: import("react-dom/client").Root | null = null, gone = false;
-        const load = { knowledge: () => import("./workspace/KnowledgeTabs"), code: () => import("./workspace/CodeStudy"), plan: () => import("./workspace/PlanView"),
-          web: () => import("./workspace/WebStudy"), start: () => import("./workspace/NewStudy"), today: () => import("./workspace/TodayBoard"), map: () => import("./workspace/MaterialMap"),
-          project: () => import("./workspace/ProjectStudy"), create: () => import("./workspace/NewMaterial"),
-          materials: () => import("./workspace/MaterialList"), session: () => import("./workspace/PracticeSession"), records: () => import("./workspace/StudyRecords"),
-          summary: () => import("./workspace/OnePageSummary"), archive: () => import("./workspace/ArchiveView"),
-          reader: () => import("./workspace/reader/ReaderView"), overlays: () => import("./workspace/reader/ReaderOverlays") }[name]();
-        void Promise.all([import("react-dom/client"), load]).then(([{ createRoot }, mod]) => {
+        void Promise.all([import("react-dom/client"), import("./workspace/MaterialMap")]).then(([{ createRoot }, mod]) => {
+          if (gone) return;
+          root = createRoot(host);
+          const View = mod.default as unknown as (p: Record<string, unknown>) => ReactElement;
+          root.render(<View {...props} />);
+        });
+        return () => { gone = true; root?.unmount(); };
+      },
+      // 11/11 공부 화면 전체(StudyApp.tsx): #app 한 칸에 React 하나.
+      mountApp(host: HTMLElement, props: Record<string, unknown>) {
+        let root: import("react-dom/client").Root | null = null, gone = false;
+        void Promise.all([import("react-dom/client"), import("./workspace/StudyApp")]).then(([{ createRoot }, mod]) => {
           if (gone) return;
           root = createRoot(host);
           const View = mod.default as unknown as (p: Record<string, unknown>) => ReactElement;
@@ -538,14 +544,11 @@ export default function DejipgiStudy() {
               <ThemeToggle />
               <MoreMenu />
             </div> : <ThemeToggle />}
-            <span className="store" id="store" data-mode="memory"><i></i><span id="storeText">저장 준비 중</span></span>
+            {/* 전체화면·태블릿·프롬프트 단추와 저장 표시: StudyApp.tsx가 이 자리에 그린다 */}
+            <span className="shell-tools" id="shellTools" />
           </header>
-          <nav className="tabs" role="tablist" id="tabs">
-            <button role="tab" data-view="home" aria-selected="true">오늘</button>
-            <button role="tab" data-view="practice" aria-selected="false">공부</button>
-            <button role="tab" data-view="knowledge" aria-selected="false">기억</button>
-            <button role="tab" data-view="plan" aria-selected="false">기록</button>
-          </nav>
+          {/* 메뉴 탭(오늘·공부·기억·기록): StudyApp.tsx가 이 자리에 그린다 */}
+          <nav className="tabs" role="tablist" id="tabs" />
         </div>
         <main id="app"></main>
       </div>
