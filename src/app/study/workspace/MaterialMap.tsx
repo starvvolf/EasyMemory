@@ -666,6 +666,8 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
       <div className="lc3-bar">
         <button className="lc3-arrow" disabled={!canPrev} onClick={goPrev} aria-label="이전 장">‹</button>
         <div className="lc3-progress">{areas.map((a, i) => <button key={a.id} className={`lc3-segbtn${i === cur.ai ? " on" : ""}`} title={`영역 ${i + 1}. ${a.title}`} aria-label={`영역 ${i + 1}. ${a.title}로 가기`} onClick={() => jumpArea(i)}>
+          <span className={`lc3-seglabel${i === 0 ? " first" : i === areas.length - 1 ? " last" : ""}`} aria-hidden><span className="lc3-segnum num">{i + 1}</span>{a.title.replace(/\s*\([^)]*\)\s*$/, "")}
+            {i === cur.ai && step ? <span className="lc3-segstep num">{area.steps.findIndex((x) => x.n === step.n) + 1}/{area.steps.length}{area.status === "writing" ? "…" : ""}</span> : null}</span>
           <span className={`lc3-seg${i < cur.ai ? " done" : i === cur.ai ? " on" : ""}`}>
           {i === cur.ai && area.steps.length && step ? <span className="lc3-progress-fill" style={{ width: `${(area.steps.findIndex((s) => s.n === step.n) + 1) / Math.max(area.steps.length, 1) * 100}%` }} /> : null}</span></button>)}</div>
         <span className="lc3-count num">영역 {cur.ai + 1}/{areas.length}</span>
