@@ -4,6 +4,7 @@
 // 배운 것은 이 화면이 열려 있는 동안 저절로 지식에 들어간다(/api/project-course/sync, 1분마다).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, go, later } from "./api";
+import ProjectStudio from "./ProjectStudio";
 
 type RunLite = { id: string; courseTitle: string; stageTitle: string; current: number; done: number; workspace: string | null; createdAt: string };
 type Status = { online: boolean; url: string; runs: RunLite[]; active?: string | null; starting?: boolean; error?: string };
@@ -14,6 +15,8 @@ export default function ProjectStudy() {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [synced, setSynced] = useState<{ at: Date; items: number; created: number; events: number } | null>(null);
+  // 앱 안 편집기(11/11 사용자 "새 창 말고 앱 안의 창이 바뀌면서 vscode 나오면"): 이 창 전체를 편집기 · 튜터 화면으로 바꾼다
+  const [studioRun, setStudioRun] = useState<string | null>(null);
   const syncing = useRef(false);
 
   const load = useCallback(async () => {
@@ -63,8 +66,11 @@ export default function ProjectStudy() {
     <button className={`btn ${primary ? "primary" : "ghost"} small`} disabled={busy === r.id} onClick={() => void openEditor(r)}>{busy === r.id ? "여는 중…" : "VS Code에서 이어 하기"}</button>
   );
   // 앱 안 편집기(11/11 사용자 "기존 방식 남기고 한번 도입해봐"): 왼쪽 편집기(VSCodium 웹 서버판) · 오른쪽 튜터를 한 창에
-  const studio = (r: RunLite) => <a className="btn ghost small" href={`${courseUrl}/studio.html?run=${r.id}`} target="_blank" rel="noreferrer" title="VS Code와 같은 편집기를 튜터 옆에 띄워요(내 VS Code 설정과는 따로)">앱 안에서 이어 하기</a>;
+  const studio = (r: RunLite) => <button className="btn ghost small" onClick={() => setStudioRun(r.id)} title="이 화면이 편집기 · 튜터로 바뀌어요(앱 머리는 그대로). 내 VS Code 설정과는 따로예요">앱 안에서 이어 하기</button>;
   const notes = (r: RunLite) => <a className="btn ghost small" href={`${courseUrl}/#/run/${r.id}/notes`} target="_blank" rel="noreferrer">노트</a>;
+
+  const studioOf = studioRun ? (status?.runs ?? []).find((r) => r.id === studioRun) : null;
+  if (studioOf) return <ProjectStudio run={studioOf} courseUrl={courseUrl} onClose={() => setStudioRun(null)} />;
 
   return (
     <div className="pj stack">

@@ -27,8 +27,8 @@ type SyncItem = { key: string; title: string; kind: "concept" | "principle" | "p
 type SyncPayload = { runId: string; source: { kind: "code"; title: string; ref: string }; items: SyncItem[] };
 type Status = { runs: Array<{ id: string; courseTitle: string; stageTitle: string; current: number; done: number; workspace: string | null; createdAt: string }>; active: string | null; engine?: string; ai?: unknown };
 
-async function course<T>(pathname: string, init?: { method?: string; body?: unknown }): Promise<T> {
-  const res = await fetch(`${COURSE}/api/${pathname}`, { method: init?.method ?? "GET", cache: "no-store", signal: AbortSignal.timeout(init?.method === "POST" ? 20000 : 4000),
+async function course<T>(pathname: string, init?: { method?: string; body?: unknown; timeout?: number }): Promise<T> {
+  const res = await fetch(`${COURSE}/api/${pathname}`, { method: init?.method ?? "GET", cache: "no-store", signal: AbortSignal.timeout(init?.timeout ?? (init?.method === "POST" ? 20000 : 4000)),
     headers: init?.body === undefined ? undefined : { "Content-Type": "application/json" }, body: init?.body === undefined ? undefined : JSON.stringify(init.body) });
   const data = await res.json().catch(() => ({}));
   // 옛 코스 서버(지식 연결 전)는 sync 주소를 모른다 → 다시 켜 달라고 말한다
@@ -113,6 +113,12 @@ async function handle(request: Request, context: RouteContext) {
     }
     if (p[0] === "runs" && p[1] && p.length === 3 && m === "POST" && (p[2] === "editor" || p[2] === "activate")) {
       return NextResponse.json(await course(`runs/${runId.parse(p[1])}/${p[2]}`, { method: "POST", body: {} }));
+    }
+    // 앱 안 편집기(11/11): 상태(받기 전이면 크기) · 받기 · 실습 폴더를 연 편집기 주소(켜는 데 몇십 초 걸릴 수 있다)
+    if (p[0] === "editor-web" && p.length === 1 && m === "GET") return NextResponse.json(await course("editor-web", { timeout: 10000 }));
+    if (p[0] === "editor-web" && p[1] === "install" && p.length === 2 && m === "POST") return NextResponse.json(await course("editor-web/install", { method: "POST", body: {} }));
+    if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "editor-web" && m === "POST") {
+      return NextResponse.json(await course(`runs/${runId.parse(p[1])}/editor-web`, { method: "POST", body: {}, timeout: 45000 }));
     }
     // 나의 학습 노트: GET learner = 컴퓨터별 노트(실습 서버가 합침), GET learner/view = 화면용 네 칸(실습 서버가 합친 것, 꺼져 있으면 online:false)
     if (p[0] === "learner" && p.length === 1 && m === "GET") return NextResponse.json(await readNotes());

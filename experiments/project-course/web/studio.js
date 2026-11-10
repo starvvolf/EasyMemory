@@ -29,6 +29,14 @@ grip.addEventListener("pointerdown", (e) => {
   grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", up, { once: true });
 });
 
+// 앱 창 안에서 열렸으면(?inapp=1, 11/11 사용자 "새 창 말고 앱 안의 창이 바뀌면서"): 맨 앞에 [← 실습으로] — 앱이 이 화면을 닫는다
+if (q.has("inapp")) {
+  const back = document.createElement("button");
+  back.className = "btn"; back.textContent = "← 실습으로"; back.title = "실습 목록으로 돌아가요(편집기는 켜 둔 채)";
+  back.onclick = () => window.parent.postMessage({ recallerStudioClose: true }, "*");
+  document.querySelector(".bar").prepend(back);
+}
+
 $("#mine").onclick = async () => {
   try { const r = await api("POST", `/api/runs/${run}/editor`, { float: false }); $("#where").textContent = r.ok === false ? r.message : "내 VS Code에서 열었어요."; }
   catch (e) { $("#where").textContent = e.message; }

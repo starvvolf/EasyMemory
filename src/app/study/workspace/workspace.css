@@ -1282,3 +1282,27 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .fc-btn.no:hover{border-color:var(--line-strong)}
 .dejipgi .fc-done{border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:28px;display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center}
 .dejipgi .fc-donetitle{margin:0;font-size:19px;font-weight:700}
+/* 앱 안 편집기 화면 (ProjectStudio, 11/11 D): 앱 머리 아래 세 칸 — 왼쪽 Recaller 칸 · 가운데 편집기 · 오른쪽 튜터. 칸마다 둥근 판, 사이 틈 */
+.dejipgi .pst-host{min-height:60vh}
+.dejipgi .pst{position:fixed;left:10px;right:10px;bottom:10px;display:flex;gap:8px;z-index:30;min-width:0}
+.dejipgi .pst-side,.dejipgi .pst-main{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:0;position:relative}
+.dejipgi .pst-main{flex:1;background:#1f1f1f;display:flex}
+.dejipgi .pst-main iframe,.dejipgi .pst-right iframe{border:0;width:100%;height:100%;display:block}
+.dejipgi .nopt{pointer-events:none}
+.dejipgi .pst-left{flex:none;width:212px;display:flex;flex-direction:column;gap:10px;padding:10px;overflow:auto}
+.dejipgi .pst-right{flex:none;background:#1e1e1e}
+.dejipgi .pst-right.light{background:#fff}
+.dejipgi .pst-row{display:flex;align-items:center;gap:6px}
+.dejipgi .pst-block{display:flex;flex-direction:column;gap:6px;min-width:0}
+.dejipgi .pst-title{font-size:14px;line-height:1.35}
+.dejipgi .pst-path{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:11px}
+.dejipgi .pst-note .ln{padding:8px;border:0;background:transparent}
+.dejipgi .pst-note .ln-list li{white-space:normal}
+.dejipgi .pst-grip{flex:none;width:6px;margin:0 -7px;cursor:col-resize;z-index:2;border-radius:3px}
+.dejipgi .pst-grip:hover,.dejipgi .pst-grip.on{background:var(--accent, #6b8cff)}
+.dejipgi .pst-rail{flex:none;width:26px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--muted, #888);cursor:pointer;font-size:12px;writing-mode:vertical-rl;padding:8px 0}
+.dejipgi .pst-fold{position:absolute;top:6px;right:6px;z-index:3;border:1px solid var(--line);background:var(--surface);border-radius:6px;font-size:11px;padding:0 6px;cursor:pointer;opacity:.6}
+.dejipgi .pst-fold:hover{opacity:1}
+.dejipgi .pst-card{margin:auto;max-width:460px;display:flex;flex-direction:column;gap:6px;padding:18px 20px;background:var(--surface);border:1px solid var(--line);border-radius:12px;color:var(--text, inherit)}
+.dejipgi .pst-prog{height:6px;background:var(--line);border-radius:99px;overflow:hidden}
+.dejipgi .pst-prog i{display:block;height:100%;background:var(--accent, #6b8cff);transition:width .3s}
