@@ -255,3 +255,44 @@ export function compareLists(a: Array<{ name: string; pages: number[] }>, b: Arr
   const matched = pairs.filter((p) => p.b).length;
   return { a: a.length, b: b.length, matched, onlyA: pairs.filter((p) => !p.b).map((p) => p.a), onlyB: b.filter((_, k) => !used.has(k)).map((y) => y.name), pairs };
 }
+
+// ---------- 4차 (11/10 사용자 "PDF에서 파트를 나눠서 한 파트 끝나고 넘어가면 다음 파트 강의(사용자 선택지 주는 거). 스트리밍 중간에 멈추는 거 가능?") ----------
+// ① 안다 모드 호출로 목차 + 카드 목록 전체(카드는 곧바로 만들기 시작) → ② 학생이 [다음 파트]를 누를 때 그 장만 강의(그 장의 쪽 원문·그림만 보냄,
+// 앞 장의 맺음말을 이어받음). 멈춤: 장 강의 도중 학생이 나가면 AbortController로 끊는다(끊은 뒤로는 출력이 생기지 않는다).
+export const PART_SYSTEM = `너는 이 강의를 맡은 강사다. 강의 전체의 목차와 카드 목록은 이미 정해져 있고, 지금은 그중 한 장만 강의한다.
+받는 것: 목차, 카드 목록(cN. 이름 | 모양 | 역할 | 쪽), 이번 장, 앞 장의 맺음말(첫 장이면 없음), 이번 장 쪽들의 원문과 그림("[이미지] 이름표").
+- 학생은 이 내용을 처음 배운다. 채팅으로 말하듯 강의한다. 앞 장의 맺음말에서 이어 시작하고(첫 장이면 이 강의가 풀려는 문제에서), 한 단계씩 설명한다.
+- 식은 $…$(한 줄 식은 $$…$$)로 쓰고, 무엇이 커지면 무엇이 어떻게 되는지 말로 풀어 준다. 원문에 예·값이 있으면 그것으로 보여 준다. 기호는 처음 나올 때 뜻을 말한다.
+- 카드: 이번 장의 쪽에 있는 카드가 처음 제대로 설명된 자리 바로 뒤에 ⟦카드 cN⟧을 한 줄로 단다. 목록에 없는 카드를 새로 만들지 않는다.
+- 그림·표: ⟦그림: 이미지 이름표 | 이 그림에서 볼 것⟧(받은 이름표 그대로), 표는 ⟦표: p.쪽 | 무엇의 표인지⟧.
+- 마지막은 "### 맺음" 아래에 이 장에서 손에 쥔 것과 다음 장으로 넘어가는 까닭을 짧게.
+- 자료에 없는 사실을 지어내지 않는다. 쉬운 말, "~해요" 체, 용어는 "한국어(영어 원어)".`;
+
+export async function runLfParts(id: string, fileName: string, pages: number[], texts: Record<string, string>, images: Img[], opts: { parts: number; abortAfterMs?: number }) {
+  const t0 = Date.now();
+  const know = await runLectureFirst3(id, "know", fileName, pages, texts, images);
+  const toc = know.toc.length ? know.toc : [{ n: 1, title: fileName, pages }];
+  const listText = know.list.map((c) => `c${c.n}. ${c.name} | ${c.kind} | ${c.role} | p.${c.pages.join(",")}`).join("\n");
+  const tocText = toc.map((c) => `${c.n}. ${c.title} (p.${c.pages.join(",")})`).join("\n");
+  const imagesOf = (ps: number[]) => images.filter((x) => ps.includes(x.page)).map(({ label, dataUrl }) => ({ label, dataUrl }));
+  const parts: Array<{ n: number; title: string; pages: number[]; firstTextMs: number | null; ms: number; aborted: boolean; chars: number; refs: number[]; outsideRefs: number[]; text: string }> = [];
+  let prevEnd = "";
+  for (const ch of toc.slice(0, opts.parts + (opts.abortAfterMs ? 1 : 0))) {
+    const abort = parts.length === opts.parts && opts.abortAfterMs ? new AbortController() : null;
+    const t = Date.now(); let first = 0; let seen = "";
+    const user = `[목차]\n${tocText}\n\n[카드 목록]\n${listText}\n\n[이번 장] ${ch.n}. ${ch.title} (p.${ch.pages.join(",")})\n[앞 장의 맺음말]\n${prevEnd || "(첫 장)"}\n\n${ch.pages.map((p) => `[p.${p}]\n${(texts[p] ?? "").trim() || "(글자 없음)"}`).join("\n\n")}`;
+    let text = "", aborted = false;
+    if (abort) setTimeout(() => abort.abort(), opts.abortAfterMs);
+    try {
+      const r = await withTrace({ area: "pdf", action: "quiz-lf-part", ref: id }, () => callModel({ purpose: "lab:lf-part", system: PART_SYSTEM, user, ...LF_LECTURE_MODEL, caller: LOCAL_CALLER, images: imagesOf(ch.pages),
+        ...(abort ? { signal: abort.signal } : {}), onText: (x) => { if (!first) first = Date.now(); seen = x; } }));
+      log("lab:lf-part", LF_LECTURE_MODEL, t, r.usage, user.length, first ? first - t : undefined);
+      text = r.text;
+    } catch { aborted = Boolean(abort?.signal.aborted); text = seen; }
+    const refs = [...text.matchAll(/⟦카드\s*c(\d+)\s*⟧/g)].map((m) => Number(m[1]));
+    const own = new Set(know.list.filter((c) => c.pages.some((p) => ch.pages.includes(p))).map((c) => c.n));
+    parts.push({ n: ch.n, title: ch.title, pages: ch.pages, firstTextMs: first ? first - t : null, ms: Date.now() - t, aborted, chars: text.length, refs, outsideRefs: refs.filter((n) => !own.has(n)), text });
+    prevEnd = (/### 맺음\s*\n([\s\S]*)$/.exec(text)?.[1] ?? text.slice(-600)).trim();
+  }
+  return { wall: Date.now() - t0, know: { firstTextMs: know.firstTextMs, listDoneMs: know.listDoneMs, lastCardMs: know.lastCardMs, list: know.list, toc, cardsOk: know.cards.filter((c) => c.ok).length }, parts };
+}
