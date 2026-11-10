@@ -120,6 +120,8 @@ export async function makeLecture(id: string) {
 /** /api/study-map/<id>/lecture: GET 저장된 강의(만드는 중이면 된 데까지), POST 만들기 시작(뒤에서, 곧바로 답함). */
 export async function lectureApi(request: Request, id: string) {
   const { NextResponse } = await import("next/server");
+  // 카드 하나씩 강의(11/10, lecture-steps.ts)는 ?v=2
+  if (new URL(request.url).searchParams.get("v") === "2") { const { lectureStepsApi } = await import("./lecture-steps.ts"); return lectureStepsApi(request, id); }
   if (request.method === "GET") return NextResponse.json({ lecture: await loadLecture(id) });
   const prev = await loadLecture(id);
   if (!running.has(id) && !(prev?.status === "writing" && Date.now() - Date.parse(prev.at) < 5 * 60_000)) {

@@ -1092,3 +1092,19 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .lc-check{border-left:3px solid var(--accent);padding:6px 10px;background:var(--accent-soft);border-radius:0 8px 8px 0}
 .dejipgi .lc-check p{margin:0 0 4px}
 .dejipgi .lc-nav{align-items:center;gap:10px;position:sticky;bottom:0;background:var(--ground);padding:8px 0}
+/* 강의 — 카드 하나씩 가로, 묻고 들은 것은 그 밑에 세로 (11/10) */
+.dejipgi .lc2{display:flex;flex-direction:column;gap:10px}
+.dejipgi .lc2-track{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px}
+.dejipgi .lc2-box{flex:0 0 min(680px,88%);scroll-snap-align:start;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:8px;opacity:.55;cursor:pointer;max-height:62vh;overflow-y:auto}
+.dejipgi .lc2-box.on{opacity:1;border-color:var(--accent);cursor:default}
+.dejipgi .lc2-box .eyebrow{margin:0}
+.dejipgi .lc2-say{font-size:15.5px;line-height:1.75}
+.dejipgi .lc2-fig{margin:6px 0;display:flex;flex-direction:column;gap:4px}
+.dejipgi .lc2-fig img{max-width:100%;max-height:300px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff;align-self:flex-start}
+.dejipgi .lc2-caret{display:inline-block;width:8px;height:16px;background:var(--accent);vertical-align:text-bottom;animation:mm5-pulse 1s infinite}
+.dejipgi .lc2-below{display:flex;flex-direction:column;gap:8px;max-width:680px}
+.dejipgi .lc2-qa{border-left:3px solid var(--accent);padding:4px 0 4px 12px;display:flex;flex-direction:column;gap:4px}
+.dejipgi .lc2-q{margin:0;color:var(--ink)}
+.dejipgi .lc2-a{font-size:15px;line-height:1.7}
+.dejipgi .lc2-ask{gap:6px}
+.dejipgi .lc2-ask .input{flex:1}
