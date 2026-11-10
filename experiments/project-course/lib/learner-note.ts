@@ -13,7 +13,7 @@ import type { Gap } from "./gaps.ts";
 export type NoteStatus = "아직 모름" | "다시 틀림" | "채움, 다시 확인 전" | "이제 됨";
 export type NoteItem = { key: string; name: string; status: NoteStatus; prereq: boolean; wrong: string; next: string; goal: string; runId: string; gapId: string; at: string; dueAt: string | null; places: string[] };
 export type EnvFact = { tool: string; fact: string; at: string };
-export type LocalNote = { machine: string; at: string; items: NoteItem[]; env: EnvFact[] };
+export type LocalNote = { machine: string; at: string; items: NoteItem[]; env: EnvFact[]; history?: import("./history.ts").Entry[] };
 export type LearnerNote = { at: string; unknown: NoteItem[]; repeated: NoteItem[]; known: NoteItem[]; env: EnvFact[]; tendencies: { text: string; status: string }[]; machines: string[] };
 
 const APP = () => (process.env.PROJECT_APP_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
@@ -49,11 +49,13 @@ export async function localNote(): Promise<LocalNote> {
     by.set(key, it); // 오래된 것부터 덮어써 가장 최근 일의 상태가 남는다
   }
   const env = Object.values(await read<Record<string, EnvFact>>(ENV_FILE(), {}));
-  return { machine: os.hostname(), at: new Date().toISOString(), items: [...by.values()], env };
+  // 학습 기록(11/11)도 같은 길로 컴퓨터끼리 — 최근 3000줄
+  const history = (await (await import("./history.ts")).localEntries()).slice(-3000);
+  return { machine: os.hostname(), at: new Date().toISOString(), items: [...by.values()], env, history };
 }
 
 /** 앱에 모인 다른 컴퓨터의 노트(앱이 꺼져 있거나 없으면 빈 목록) */
-async function remoteNotes(): Promise<LocalNote[]> {
+export async function remoteNotes(): Promise<LocalNote[]> {
   try {
     const r = await fetch(`${APP()}/api/project-course/learner`, { signal: AbortSignal.timeout(1500) });
     if (!r.ok) return [];

@@ -16,7 +16,7 @@ export default function ProjectStudy() {
   const [msg, setMsg] = useState<string | null>(null);
   const [synced, setSynced] = useState<{ at: Date; items: number; created: number; events: number } | null>(null);
   // 앱 안 편집기(11/11 사용자 "새 창 말고 앱 안의 창이 바뀌면서 vscode 나오면"): 이 창 전체를 편집기 · 튜터 화면으로 바꾼다
-  const [studioRun, setStudioRun] = useState<string | null>(null);
+  const [studioRun, setStudioRun] = useState<RunLite | null>(null);
   const syncing = useRef(false);
 
   const load = useCallback(async () => {
@@ -46,6 +46,15 @@ export default function ProjectStudy() {
     return () => clearInterval(t);
   }, [starting, load, sync]);
 
+  // 새 실습을 앱 안에서(11/11): 빈 대화 실습을 만들고 바로 앱 안 편집기 · 튜터 화면으로. 튜터가 "무엇을 만들지"부터 묻는다
+  const newInApp = async () => {
+    setBusy("new"); setMsg(null);
+    try {
+      const out = await call<{ runId: string; workspace: string }>("/api/project-course/free", {});
+      setStudioRun({ id: out.runId, courseTitle: "새 실습", stageTitle: "", current: 1, done: 0, workspace: out.workspace ?? null, createdAt: new Date().toISOString() });
+    } catch (e) { setMsg(errorText(e)); }
+    finally { setBusy(null); }
+  };
   const openEditor = async (r: RunLite) => {
     setBusy(r.id); setMsg(null);
     try { await call(`/api/project-course/runs/${r.id}/activate`, {}); await call(`/api/project-course/runs/${r.id}/editor`, {}); setMsg("VS Code를 열었어요. 오른쪽 Recaller 튜터 탭에서 이어 하면 돼요."); }
@@ -66,17 +75,19 @@ export default function ProjectStudy() {
     <button className={`btn ${primary ? "primary" : "ghost"} small`} disabled={busy === r.id} onClick={() => void openEditor(r)}>{busy === r.id ? "여는 중…" : "VS Code에서 이어 하기"}</button>
   );
   // 앱 안 편집기(11/11 사용자 "기존 방식 남기고 한번 도입해봐"): 왼쪽 편집기(VSCodium 웹 서버판) · 오른쪽 튜터를 한 창에
-  const studio = (r: RunLite) => <button className="btn ghost small" onClick={() => setStudioRun(r.id)} title="이 화면이 편집기 · 튜터로 바뀌어요(앱 머리는 그대로). 내 VS Code 설정과는 따로예요">앱 안에서 이어 하기</button>;
+  const studio = (r: RunLite) => <button className="btn ghost small" onClick={() => setStudioRun(r)} title="이 화면이 편집기 · 튜터로 바뀌어요(앱 머리는 그대로). 내 VS Code 설정과는 따로예요">앱 안에서 이어 하기</button>;
   const notes = (r: RunLite) => <a className="btn ghost small" href={`${courseUrl}/#/run/${r.id}/notes`} target="_blank" rel="noreferrer">노트</a>;
 
-  const studioOf = studioRun ? (status?.runs ?? []).find((r) => r.id === studioRun) : null;
-  if (studioOf) return <ProjectStudio run={studioOf} courseUrl={courseUrl} onClose={() => setStudioRun(null)} />;
+  if (studioRun) return <ProjectStudio run={studioRun} courseUrl={courseUrl} onClose={() => { setStudioRun(null); void load(); }} />;
 
   return (
     <div className="pj stack">
       <header className="row" style={{ justifyContent: "space-between" }}>
         <div><h2>실습</h2><p className="small muted">VS Code에서 직접 만들고, 튜터 탭이 한 걸음씩 알려 줘요. 배운 개념은 기억에 저절로 들어가요.</p></div>
-        {status?.online ? <a className="btn ghost small" href={courseUrl} target="_blank" rel="noreferrer">+ 새 실습</a> : null}
+        {status?.online ? <div className="row" style={{ gap: 6, alignItems: "center" }}>
+          <button className="btn primary small" disabled={busy === "new"} onClick={() => void newInApp()} title="앱 안 편집기(왼쪽) · 튜터(오른쪽)로 바로 시작해요">{busy === "new" ? "만드는 중…" : "+ 새 실습"}</button>
+          <a className="linkish small" href={courseUrl} target="_blank" rel="noreferrer" title="예전처럼 튜터 화면을 새 창으로 열고 내 VS Code로 해요">새 창 · 내 VS Code로</a>
+        </div> : null}
       </header>
 
       {msg ? <p className="small" role="status">{msg}</p> : null}
@@ -93,7 +104,8 @@ export default function ProjectStudy() {
         <section className="panel stack">
           <b>아직 시작한 실습이 없어요</b>
           <p className="small muted" style={{ margin: 0 }}>무엇을 만들지, 어디서부터 할지 몇 가지 물어보고 계획을 짜 줘요.</p>
-          <div><a className="btn primary small" href={courseUrl} target="_blank" rel="noreferrer">새 실습 시작</a></div>
+          <div className="row" style={{ gap: 8, alignItems: "center" }}><button className="btn primary small" disabled={busy === "new"} onClick={() => void newInApp()}>{busy === "new" ? "만드는 중…" : "새 실습 시작"}</button>
+            <a className="linkish small" href={courseUrl} target="_blank" rel="noreferrer">새 창 · 내 VS Code로</a></div>
         </section>
       ) : (
         <>

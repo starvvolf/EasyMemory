@@ -1573,7 +1573,8 @@ function drawFree() {
     lesson.chat ? null : stuckBar(lesson, send), lesson.chat ? null : stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
     h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
     // 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
-    lesson.chat && lesson.goals && !lesson.busy ? h("div", { class: "fquick" },
+    // 11/11 사용자: 목표가 정해지기 전에는 눌러도 할 일이 없어 숨긴다
+    lesson.chat && lesson.goals && lesson.goals.current && !lesson.busy ? h("div", { class: "fquick" },
       // 11/7 사용자 "다음으로 넘어가는 게 기본, 새로 짜기는 고객센터 밑에 조그맣게 써 놓은 것처럼 덤으로"
       goalUi.easy && lesson.goals.current ? h("span", { class: "feasy" },
         h("button", { class: "fchip on", onclick: (e) => { goalUi.easy = false; send({ do: "goal", op: "easy_next" })(e); }, title: "이 단계는 이미 알아요. 끝남으로 두고 다음 단계로" }, lesson.goals.support && !lesson.goals.support.back ? "이 보충 넘어가기" : "다음 단계로 넘어가기"),
@@ -1635,6 +1636,7 @@ function goalBar(lesson, send) {
         h("span", { class: "mut small" }, S.steps.some((x) => x.status === "todo") ? "끝나면 다음 보충" : `끝나면 "${S.target.title}"로 돌아가요`))) : null,
     c ? h("div", { class: `gcur ${sp ? "paused" : ""}` }, h("div", {}, h("span", { class: "gk" }, sp ? "종착지(막힌 단계)" : S?.back ? "보충 마치고 돌아옴" : "지금"), h("b", {}, c.title)),
       h("div", { class: "mut small" }, `완료 조건: ${c.done}`),
+      c.names?.length ? namesBox(c.names, send) : null,
       // 11/5 사용자 "목표마다 이해 → 적용 흐름": 지금 단계 표시 + 그 단계 버튼 하나 + 다음으로(언제든)
       sp ? null : h("div", { class: "gsteps" },
         h("span", { class: `gph ${c.understood ? "done" : "now"}` }, c.understood ? "① 이해 ✓" : "① 이해"),
@@ -1644,6 +1646,22 @@ function goalBar(lesson, send) {
         !c.understood ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 직접 해 볼 과제를 내요", onclick: op("understood") }, "이해했어요 → 적용하기") : null,
         c.understood && !c.applied ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 완료 조건에 맞게 했는지 판정해요(채팅 답 · 저장한 코드). 맞으면 적용 ✓", onclick: op("applied") }, "해 봤어요") : null,
         h("button", { class: `btn small ${c.understood && c.applied ? "primary" : ""}`, disabled: lesson.busy, title: c.understood && c.applied ? "" : "이해 · 적용을 다 안 해도 넘어갈 수 있어요(건너뜀으로 남아요)", onclick: op("next") }, "다음으로 →"))) : null);
+}
+// 새로 쓰는 이름(11/11 사용자 "문법 같이 생각하기 힘든 거는 그냥 알려 주는 게"): 과제 아래 접는 칸. 처음인 이름은 펼친 채(코드가 기록으로 정함),
+// 접힌 걸 펼치면 "봤음"으로 남는다(AI 안 부름)
+const namesUi = { open: {} };
+function namesBox(names, send) {
+  const openNow = (n) => namesUi.open[n.name] ?? n.open;
+  const anyOpen = names.some(openNow);
+  const toggle = (e) => {
+    const to = !anyOpen;
+    for (const n of names) namesUi.open[n.name] = to;
+    const fresh = to ? names.filter((n) => !n.seen).map((n) => n.name) : [];
+    if (fresh.length) send({ do: "goal", op: "names_seen", names: fresh })(e); else drawLesson();
+  };
+  return h("div", { class: "gnames" },
+    h("button", { class: "gnames-h", "aria-expanded": String(anyOpen), onclick: toggle }, `${anyOpen ? "▾" : "▸"} 이 과제에 쓰는 새 이름 ${names.length}개${anyOpen ? "" : " (눌러서 보기)"}`),
+    anyOpen ? h("ul", { class: "gnames-l" }, names.map((n) => h("li", {}, h("code", {}, n.name), h("span", { class: "mut small" }, ` ${n.what}`), n.example ? h("div", {}, h("code", { class: "gnames-ex" }, n.example)) : null))) : null);
 }
 function surveyCard(sv, send) {
   const picks = (goalUi.picks[sv.id] ??= sv.questions.map(() => new Set()));

@@ -146,6 +146,12 @@ const result = (r: { code: number | null; out: string }) => `종료 코드 ${r.c
 const remember = async (runId: string, ran: Ran) => {
   // 확인된 환경(11/10 학습 노트): "docker 없음" · "node 22.13.0" 같은 사실은 코드가 결과에서 알아낸다
   await (await import("./learner-note.ts")).noteEnv(ran.command, ran.code, ran.out).catch(() => null);
+  // 학습 기록(11/11): 학습자가 친 명령이 실패하면 "오류" 한 줄(무슨 명령 · 첫 오류 줄)
+  if (ran.code !== null && ran.code !== 0) {
+    const first = ran.out.split("\n").map((l) => l.trim()).find((l) => /error|오류|not found|not recognized|Traceback|Exception/i.test(l)) ?? ran.out.trim().split("\n").at(-1) ?? "";
+    const goal = (await (await import("./goals.ts")).goalsOf(runId).catch(() => null))?.current?.title ?? "";
+    await (await import("./history.ts")).add({ run: runId, goal, kind: "오류", name: ran.command.split(/\s+/).slice(0, 2).join(" "), result: first, where: ran.command });
+  }
   return update<ShellState>(file(runId), empty(), (s) => { s.history.push({ ...ran, out: clip(ran.out, 1500) }); if (s.history.length > 50) s.history.splice(0, s.history.length - 50); });
 };
 

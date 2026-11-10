@@ -459,7 +459,17 @@ async function noteGap(runId: string, op: string, b: Record<string, unknown>) {
   const goal = { id: c.id, title: c.title };
   const GP = await import("./gaps.ts");
   const v = b.verdict as { verdict: string; right: string; gap: string; prereq?: string; quote?: string } | undefined;
+  // 학습 기록(11/11, lib/history.ts): 판정 · 새 이름을 직접 씀 · 막힘을 이름 단위로 한 줄씩
+  const H = await import("./history.ts");
   if (op === "applied" && v) {
+    const KIND: Record<string, "맞음" | "일부" | "틀림"> = { correct: "맞음", partial: "일부", incorrect: "틀림" };
+    const k = KIND[v.verdict];
+    if (k) await H.add({ run: runId, goal: c.title, kind: k, name: v.prereq || unit.title, result: k === "맞음" ? "" : v.gap, quote: v.quote });
+    // 과제의 새 이름을 답 · 최근 명령에서 직접 썼으면 "씀"(펼쳐 본 뒤면 "본 뒤에", 아니면 "혼자")
+    const typed = (await (await import("./shell.ts")).shellOf(runId)).history.filter((r) => r.by === "learner").slice(-10).map((r) => r.command).join("\n");
+    const said = `${v.quote ?? ""}\n${typed}`.toLowerCase();
+    const used = (c.names ?? []).filter((n) => n.name.length >= 2 && said.includes(n.name.toLowerCase()));
+    if (used.length) await H.add(...used.map((n) => ({ run: runId, goal: c.title, kind: "씀" as const, name: n.name, result: n.seen ? "본 뒤에" : "혼자", quote: v.quote })));
     // 선행이 빈 것(11/10): 단위를 그 선행으로 연다 → 같은 선행을 또 틀리면 같은 칸, 목표가 맞으면 함께 채움
     if (v.verdict === "partial" || v.verdict === "incorrect") {
       await GP.openGap(runId, { goal, unit: v.prereq ? GP.prereqUnit(c.id, v.prereq) : unit, from: "판정", wrong: v.gap, right: "", quote: v.quote, prereq: v.prereq });
@@ -483,6 +493,7 @@ async function noteGap(runId: string, op: string, b: Record<string, unknown>) {
     const text = String(b.text ?? "").trim();
     if (op === "stuck" && !reasons.length && !text) return; // goalAction이 거절할 요청(검토 11/8)
     await GP.openGap(runId, { goal, unit, from: "막힘", wrong: text || "어려움(이유를 고름)", cause: reasons, quote: text });
+    await H.add({ run: runId, goal: c.title, kind: "막힘", name: unit.title, result: reasons.join(" · "), quote: text });
   }
 }
 /** [해 봤어요] 판정: 지금 단위(보충 단계 또는 현재 목표)가 이해된 뒤 튜터가 낸 과제와 학습자가 한 것만 본다 */
@@ -606,7 +617,8 @@ export async function act(runId: string, n: number, input: { do: string; choice?
 
   // 학습 목표 버튼(11/4): 이해 · 적용 · 보충 끝은 AI 안 부름. 다음으로 · 확정 · 막혔어요 · 설문 답은 튜터에게 한 번
   // 답하는 중에 온 버튼 · 말은 거절한다(11/9 시험: 엔진이 "답하는 중"으로 거절한 것을 삼키고 200을 돌려 버튼 · 말이 조용히 사라짐)
-  if ((run.codexId || run.chatId) && (input.do === "goal" || input.do === "ask")) {
+  // 새 이름 펼쳐 보기(11/11)는 AI를 안 부르니 답하는 중에도 된다
+  if ((run.codexId || run.chatId) && (input.do === "goal" || input.do === "ask") && (input as { op?: string }).op !== "names_seen") {
     const busyNow = run.codexId ? (await (await import("./codex-chat.ts")).view(run.codexId)).busy : (await (await import("./agent-chat.ts")).chatView(run.chatId!)).busy;
     if (busyNow) throw err(409, "튜터가 아직 답하는 중이에요. 답이 끝난 뒤 다시 해 주세요.");
   }
@@ -632,7 +644,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
       if (d.say) { const t = sysSay(d.label, d.say); if (run.codexId) await codexAsk(runId, run.codexId, t); else await chatAsk(runId, run.chatId!, t); } else await TL.endStep(runId);
       return;
     }
-    const OPS: Record<string, string> = { understood: "이해했어요", applied: "해 봤어요", next: "다음으로", easy_next: "너무 쉬워요 → 다음으로", easy: "너무 쉬워요 → 더 어렵게", hard: "너무 어려워요", stuck: "너무 어려워요", answer: "설문 답", confirm: "확정", dismiss_plan: "계획 다시 얘기하기", dismiss_survey: "설문 닫기", mode: "진행 방식 바꾸기", end: "학습 종료" };
+    const OPS: Record<string, string> = { names_seen: "새 이름 펼쳐 봄", understood: "이해했어요", applied: "해 봤어요", next: "다음으로", easy_next: "너무 쉬워요 → 다음으로", easy: "너무 쉬워요 → 더 어렵게", hard: "너무 어려워요", stuck: "너무 어려워요", answer: "설문 답", confirm: "확정", dismiss_plan: "계획 다시 얘기하기", dismiss_survey: "설문 닫기", mode: "진행 방식 바꾸기", end: "학습 종료" };
     const b = input as Record<string, unknown>;
     const detail = op === "answer" ? (Array.isArray(b.answers) ? (b.answers as { picks?: string[]; text?: string }[]).map((a) => [...(a.picks ?? []), a.text].filter(Boolean).join(", ") || "알아서").join(" / ") : "")
       : op === "hard" || op === "stuck" ? [...((b.reasons as string[]) ?? []), String(b.text ?? "")].filter(Boolean).join(" · ") : op === "mode" ? String(b.mode ?? "")

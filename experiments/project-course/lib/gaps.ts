@@ -173,6 +173,9 @@ export async function answerRecheck(runId: string, gapId: string, answer: string
     else if (a) { g.status = "다시 틀림"; g.box = 0; g.dueAt = dueFrom(0); g.evidence.push({ at: now(), from: "다시 확인", text: clean(`${v.verdict}${v.same_mistake ? " · 같은 오해" : ""}: ${a}`, 600) }); }
     out = g;
   });
+  // 학습 기록(11/11): 다시 확인 결과
+  const og = out as Gap | null;
+  if (og && a) await (await import("./history.ts")).add({ run: og.runId, goal: og.goal.title, kind: "다시 확인", name: og.type ? og.concept : og.prereq ?? og.unit.title, result: v.verdict === "correct" ? "맞음" : v.same_mistake ? "같은 오해로 틀림" : "틀림", quote: a });
   return { gap: out as Gap | null, verdict: v };
 }
 /** 다음 실습 맥락: 다시 틀린 것 중 가장 최근 3개(튜터가 이어서 채울 수 있게) */
