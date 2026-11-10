@@ -26,6 +26,9 @@ export const STEM_PLAN = `너는 강의 자료 한 편 전체(쪽마다 [p.N] �
   - area: areas의 번호(1부터). pages: 이 기억의 근거가 되는 쪽 번호 전부.
 - 표지·목차·참고문헌 쪽이 아니면 모든 쪽이 어느 기억의 pages에 들어가야 한다. 그림으로만 된 쪽도 그림을 읽고 넣는다.
 - name은 자료의 말로 짧게(원어가 있으면 괄호로).`;
+// 소제목 용어 남기기 (11/10 사용자 "옵션으로 넣고 한번 테스트", lab.headingTerms): 강의 소제목의 말이 기억 이름에서 사라져
+// 소제목으로 찾으면 안 보이던 것(조명 모델 6쪽 "Directional Light Sources and Spotlight Effects" → "집중 조명 효과…").
+export const HEADING_TERMS = `\n- 강의의 제목·소제목에 나온 용어가 이 기억의 내용을 가리키면, 그 용어를 기억 이름에 남긴다(이름을 내용대로 바꾸더라도 소제목의 말을 함께 적는다).`;
 export const STEM_MORE = `[빠진 쪽] 앞 계획에서 어느 기억에도 들어가지 않은 쪽만 다시 받는다. 이 쪽들에서 배울 것이 있으면 기억으로 더한다
 (이미 있는 기억에 들어가야 하면 그 기억의 이름을 그대로 쓰고 pages에 이 쪽을 넣는다). 표지·목차·참고문헌처럼 배울 것이 없는 쪽이면 memories를 비운다.`;
 export const stemPlanSchema = z.object({

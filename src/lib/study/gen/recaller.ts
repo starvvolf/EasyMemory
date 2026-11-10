@@ -8,7 +8,7 @@ import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
 import { imageSize } from "./image-size.ts";
-import { addMore, fillGroups, memoryCard, missingPages, settlePlan, STEM_FILL, STEM_MORE, STEM_PLAN, stemFakeReply, stemFillSchema, stemPlanSchema, type StemRole } from "./stem.ts";
+import { addMore, fillGroups, HEADING_TERMS, memoryCard, missingPages, settlePlan, STEM_FILL, STEM_MORE, STEM_PLAN, stemFakeReply, stemFillSchema, stemPlanSchema, type StemRole } from "./stem.ts";
 import { cardKinds, cardLine, cardSchema, checkCards, cleanFigure, FIGURE_RULES, figureSchema, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
@@ -950,11 +950,11 @@ export async function runRecaller(ctx: RecallerContext) {
   async function stemPlanRun(d: NonNullable<typeof data.digest>) {
     const t0 = Date.now();
     const user = oneUser(input.fileName, input.pageNumbers.map((page) => ({ page, text: data.texts[page] ?? "" })));
-    let plan = settlePlan(await ctx.ask("rc-stem-plan", null, 1, prompt("STEM_PLAN", STEM_PLAN), user, stemPlanSchema, { images: await imagesOf(input.pageNumbers), maxChars: 200 * input.pageNumbers.length + 8000 }), input.pageNumbers);
+    let plan = settlePlan(await ctx.ask("rc-stem-plan", null, 1, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}`, user, stemPlanSchema, { images: await imagesOf(input.pageNumbers), maxChars: 200 * input.pageNumbers.length + 8000 }), input.pageNumbers);
     const miss = missingPages(plan, input.pageNumbers);
     if (miss.length) {
       try {
-        const more = await ctx.ask("rc-stem-plan", null, 2, `${prompt("STEM_PLAN", STEM_PLAN)}\n\n${prompt("STEM_MORE", STEM_MORE)}`,
+        const more = await ctx.ask("rc-stem-plan", null, 2, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}\n\n${prompt("STEM_MORE", STEM_MORE)}`,
           `[이미 있는 기억]\n${plan.memories.map((m) => m.name).join("\n")}\n\n[영역]\n${plan.areas.map((a, i) => `${i + 1} ${a.name}`).join("\n")}\n\n${oneUser(input.fileName, miss.map((page) => ({ page, text: data.texts[page] ?? "" })))}`,
           stemPlanSchema, { images: await imagesOf(miss), maxChars: 200 * miss.length + 4000 });
         plan = addMore(plan, more, input.pageNumbers);
@@ -985,7 +985,7 @@ export async function runRecaller(ctx: RecallerContext) {
     for (let attempt = 1; attempt <= 2 && left.length; attempt++) {
       const user = `[자료] ${input.fileName}\n영역: ${section.title}${data.digest?.stem?.questions[section.id] ? ` — ${data.digest.stem.questions[section.id]}` : ""}\n\n[기억 계획] (id|역할|모양|이름|쪽)\n${left.map((m) => `${m.line.id}|${m.role}|${m.kind}|${m.line.name}|p.${m.pages.join(",")}`).join("\n")}\n\n${pages.map((p) => `[p.${p}]\n${(data.texts[p] ?? "").trim() || "(글자 없음)"}`).join("\n\n")}`;
       let reply: z.infer<typeof stemFillSchema>;
-      try { reply = await ctx.ask("rc-stem-fill", section.id, attempt, `${prompt("STEM_FILL", STEM_FILL)}${images.length ? `\n${INLINE_READ}` : ""}`, user, stemFillSchema, { maxChars: 3000 * left.length + 4000, ...(images.length ? { images } : {}) }); }
+      try { reply = await ctx.ask("rc-stem-fill", section.id, attempt, `${prompt("STEM_FILL", STEM_FILL)}${lab.headingTerms ? HEADING_TERMS : ""}${images.length ? `\n${INLINE_READ}` : ""}`, user, stemFillSchema, { maxChars: 3000 * left.length + 4000, ...(images.length ? { images } : {}) }); }
       catch (error) { if (error instanceof RunawayReply) continue; throw error; }
       const done = new Set<string>();
       for (const f of reply.memories) {
