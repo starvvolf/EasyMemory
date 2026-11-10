@@ -9,7 +9,7 @@ import { askJson, S } from "../assist/model.ts";
 import type { MapCard } from "./material-map.ts";
 
 type Memo = { line?: string; facts?: string[]; role?: string };
-const memoOf = (c: MapCard) => (c as MapCard & { memo?: Memo }).memo ?? {};
+const memoOf = (c: MapCard): Memo => (c as MapCard & { memo?: Memo }).memo ?? {};
 const line = (c: MapCard) => {
   const m = memoOf(c);
   return [`[${c.id}] ${c.title}${m.role ? ` (${m.role})` : ""}`, m.line ? `  요지: ${m.line}` : "", ...(m.facts ?? []).map((f) => `  식·조건: ${f}`),
