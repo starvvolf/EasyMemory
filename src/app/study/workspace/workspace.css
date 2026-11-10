@@ -1069,3 +1069,7 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .ln-rep{flex:none;margin-left:auto;font-size:11px;color:#e07070}
 .dejipgi .ln-line{margin:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dejipgi .pt-opt.missed{border-style:dashed}
+/* 11/10 사용자 "상태표시줄이 온전히 자기 영역을 가지지 못해서 UI 버튼이 가려짐": 데스크톱 창에서는 맨 위 40px가 제목 표시줄(윈도우 창 버튼이
+   그 위에 그려짐)이라, 위에 뜨는 화면(자료 지도·옆 패널)은 그 아래에서 시작한다. */
+:root[data-shell="desktop"] .mm2-overlay{top:var(--shell-top,40px)}
+:root[data-shell="desktop"] .dejipgi .sb{top:var(--shell-top,40px)}
