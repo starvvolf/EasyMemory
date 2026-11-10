@@ -586,8 +586,9 @@ function LectureText({ genId, text, byId, onPage }: { genId: string; text: strin
     e.stopPropagation(); setOpen((x) => (x && x.id === id && x.part === part ? null : { part, id }));
   };
   const parts: ReactNode[] = []; let last = 0, k = 0;
-  const block = (t: string) => { const n = k++; parts.push(<div key={n} data-part={n}><RichBlock text={flatMath(t)} /></div>);
-    if (open?.part === n) { const c = byId.get(open.id); if (c) parts.push(<div key={`o${n}`} className="lc3-pop"><LectureCard genId={genId} c={c} onPage={onPage} startOpen /></div>); } };
+  // 문단마다 나눠 그려서, 누른 굵은 말이 있는 그 문단 바로 밑에 카드가 펼쳐지게
+  const block = (t: string) => { for (const para of flatMath(t).split(/\n{2,}/)) { if (!para.trim()) continue; const n = k++; parts.push(<div key={n} data-part={n}><RichBlock text={para} /></div>);
+    if (open?.part === n) { const c = byId.get(open.id); if (c) parts.push(<div key={`o${n}`} className="lc3-pop"><LectureCard genId={genId} c={c} onPage={onPage} startOpen /></div>); } } };
   for (const m of plain.matchAll(FIG_MARK)) {
     if (m.index! > last) block(plain.slice(last, m.index));
     if (m[3]) { const c = byId.get(m[3]); if (c) parts.push(<LectureCard key={k++} genId={genId} c={c} onPage={onPage} />); }
