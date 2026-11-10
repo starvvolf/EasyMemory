@@ -762,18 +762,20 @@ function FlashCards({ genId, title, cards, onPage, onClose }: { genId: string; t
   const [shown, setShown] = useState(false);
   const [marks, setMarks] = useState<Record<string, "known" | "unknown">>({});
   const [error, setError] = useState("");
+  const [missed, setMissed] = useState(0); // 저장소에 남지 않은 수
   const c = list[i];
   const mark = (v: "known" | "unknown") => {
     if (!c) return;
     setMarks((m) => ({ ...m, [c.id]: v }));
-    if (c.knowledgeId) void call(`/api/knowledge/${c.knowledgeId}/event`, { kind: v === "known" ? "correct" : "wrong", detail: v === "known" ? "플래시카드: 알았어요" : "플래시카드: 몰랐어요", source: { kind: "pdf", title, ref: genId } })
-      .catch((e) => setError(errorText(e)));
+    // 카드 ref로 남긴다: 아직 기억 저장소에 안 들어간(기다리는) 카드면 이때 들어간다(ref-event → recordByRef).
+    void call<{ recorded: number }>("/api/knowledge/ref-event", { refs: [c.ref], kind: v === "known" ? "correct" : "wrong", detail: v === "known" ? "플래시카드: 알았어요" : "플래시카드: 몰랐어요", material: title })
+      .then((r) => { if (!r.recorded) setMissed((n) => n + 1); }).catch((e) => setError(errorText(e)));
     setShown(false); setI((x) => x + 1);
   };
   const known = list.filter((x) => marks[x.id] === "known").length, unknown = list.filter((x) => marks[x.id] === "unknown").length;
   if (!c) return <div className="fc-wrap"><div className="fc-done">
     <p className="fc-donetitle">다 봤어요</p>
-    <p className="small muted">알았어요 {known} · 몰랐어요 {unknown}{list.some((x) => !x.knowledgeId) ? " · 기억 저장소에 아직 없는 카드는 기록하지 않았어요" : ""}</p>
+    <p className="small muted">알았어요 {known} · 몰랐어요 {unknown}{missed ? ` · ${missed}장은 기억 저장소에 남기지 못했어요` : " · 기억에 남겼어요"}</p>
     {error ? <p className="small bad">{error}</p> : null}
     <div className="row small">{unknown ? <button className="btn small primary" onClick={() => { setList(list.filter((x) => marks[x.id] === "unknown")); setMarks({}); setI(0); }}>몰랐던 {unknown}장 다시</button> : null}
       <button className="btn ghost small" onClick={onClose}>닫기</button></div></div></div>;
