@@ -524,7 +524,9 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
   const load = () => call<{ lecture: { cards: StepCard[] } }>(base).then((r) => { setList(r.lecture.cards); return r.lecture.cards; }).catch((e) => { setError(errorText(e)); setList(null); return null; });
   useEffect(() => { void load().then((l) => { if (l) { const n = l.filter((c) => c.status).length; setAt(Math.max(0, n - 1)); } }); }, [genId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!writing) return; const t = setTimeout(() => void load(), 500); return () => clearTimeout(t); }); // 쓰는 동안 0.5초마다
-  useEffect(() => { const el = track.current?.children[at] as HTMLElement | undefined; el?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" }); }, [at]);
+  // 지금 카드를 가로 줄의 맨 앞으로(새 박스가 그려진 뒤에도): 줄 안에서만 움직인다(페이지는 그대로).
+  const boxes = list ? Math.max(list.filter((c) => c.status).length, at + 1) : 0;
+  useEffect(() => { const t = track.current; const el = t?.children[at] as HTMLElement | undefined; if (t && el) t.scrollTo({ left: el.offsetLeft, behavior: "smooth" }); }, [at, boxes]);
   const post = (body: Record<string, string>) => call(base, body).then(() => load()).catch((e) => setError(errorText(e)));
   if (list === undefined) return <p className="small muted mm6-wait">불러오는 중…</p>;
   if (!list) return <p className="small bad">{error || "강의를 열 수 없어요."}</p>;
@@ -542,7 +544,7 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
     <div className="lc2">
       <div className="row small lc2-top"><span className="muted num">{at + 1} / {list.length}</span><span className="cs-gap" />
         {writing ? <button className="btn ghost small" onClick={() => void post({ action: "stop" })}>멈추기</button> : null}</div>
-      <div className="lc2-track" ref={track}>{list.slice(0, Math.max(started.length, at + 1)).map((s, i) => <section key={s.id} className={`lc2-box${i === at ? " on" : ""}`} onClick={() => setAt(i)}>
+      <div className="lc2-track" ref={track}>{list.slice(0, boxes).map((s, i) => <section key={s.id} className={`lc2-box${i === at ? " on" : ""}`} onClick={() => setAt(i)}>
         <p className="eyebrow">{i + 1}. <Rich text={s.title} />{s.role && s.role !== "메인" ? <span className="mm3-kind"> {s.role === "바탕" ? "바탕 지식" : s.role}</span> : null}</p>
         {s.status ? <div className="lc2-say"><LectureText genId={genId} text={s.text ?? ""} />{s.status === "writing" ? <span className="lc2-caret" /> : null}
           {s.status === "failed" ? <p className="small bad">설명을 못 받았어요. <button className="linkish" onClick={() => void post({ action: "step", card: s.id })}>다시</button></p> : null}

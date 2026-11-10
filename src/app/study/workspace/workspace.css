@@ -1094,7 +1094,7 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .lc-nav{align-items:center;gap:10px;position:sticky;bottom:0;background:var(--ground);padding:8px 0}
 /* 강의 — 카드 하나씩 가로, 묻고 들은 것은 그 밑에 세로 (11/10) */
 .dejipgi .lc2{display:flex;flex-direction:column;gap:10px}
-.dejipgi .lc2-track{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px}
+.dejipgi .lc2-track{position:relative;display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px}
 .dejipgi .lc2-box{flex:0 0 min(680px,88%);scroll-snap-align:start;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:8px;opacity:.55;cursor:pointer;max-height:62vh;overflow-y:auto}
 .dejipgi .lc2-box.on{opacity:1;border-color:var(--accent);cursor:default}
 .dejipgi .lc2-box .eyebrow{margin:0}
