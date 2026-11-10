@@ -19,7 +19,8 @@ type Shape =
 type MapState = "new" | "met" | "unknown" | "known" | "graduated";
 type Card = { id: string; ref: string; kind: string; title: string; core: boolean; shape: Shape; pages: number[]; quotes: string[]; mistakes: string[];
   takes: string[]; gives: string[]; questions: number; same: Array<{ id: string; pages: number[] }>; state: MapState; knowledgeId?: string; dueAt?: string; topic?: string;
-  figure?: { page: number; role: string; says: string; file: string; mode?: string } };
+  figure?: { page: number; role: string; says: string; file: string; mode?: string };
+  memo?: { question?: string; line?: string; facts?: string[]; role?: string } };
 type Section = { id: string; title: string; pages: number[]; cards: Card[] };
 type MatMap = { id: string; title: string; status: string; pages: number; sections: Section[]; chains: Array<{ from: string; to: string; what: string; by?: string }>;
   topics?: string[]; topicNotes?: Record<string, string>; principles?: Array<{ title: string; line: string; cardIds: string[] }>; counts: Record<MapState, number> & { cards: number; questions: number; core?: number };
@@ -481,6 +482,79 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
     </div>);
 }
 
+// 강의 (11/10 사용자 "카드 쥐어 주고 스토리라인을 짜서 카드를 보여 주면서 자연스러운 설명"): src/lib/study/lecture.ts가 이야기 줄기(AI 1번) →
+// 장마다 설명(AI 1번씩 동시)을 쓰고, 화면은 걸음마다 강사의 말 + 그 걸음의 기억 카드. 장이 다 써지기 전에도 된 장부터 듣는다.
+type LectureStepLite = { cards: string[]; point: string; say?: string };
+type LectureChapterLite = { title: string; why: string; bridge: string; steps: LectureStepLite[]; status: string; check?: { after: number; question: string; answer: string; why: string } };
+type LectureLite = { at: string; status: string; problem: string; chapters: LectureChapterLite[]; ms: number; error?: string };
+function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; onPage: (page: number) => void }) {
+  const [lec, setLec] = useState<LectureLite | null | undefined>(undefined);
+  const [error, setError] = useState("");
+  const key = `recaller:lecture:${genId}`;
+  const [pos, setPosState] = useState<{ c: number; s: number }>(() => { try { const v = JSON.parse(localStorage.getItem(key) ?? "null"); return v && typeof v.c === "number" ? v : { c: -1, s: 0 }; } catch { return { c: -1, s: 0 }; } });
+  const setPos = (p: { c: number; s: number }) => { setPosState(p); setShowAnswer(false); try { localStorage.setItem(key, JSON.stringify(p)); } catch { /* storage off */ } };
+  const [showAnswer, setShowAnswer] = useState(false);
+  const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
+  useEffect(() => {
+    let alive = true, timer: ReturnType<typeof setTimeout> | undefined;
+    const load = () => call<{ lecture: LectureLite | null }>(`/api/study-map/${genId}/lecture`).then((r) => { if (!alive) return; setLec(r.lecture);
+      if (r.lecture?.status === "writing") timer = setTimeout(load, 2000); }).catch((e) => { if (alive) { setLec(null); setError(errorText(e)); } });
+    void load();
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+  }, [genId]);
+  const start = () => { setError(""); call<{ lecture: LectureLite | null }>(`/api/study-map/${genId}/lecture`, {}).then((r) => { setLec(r.lecture);
+    const poll = () => call<{ lecture: LectureLite | null }>(`/api/study-map/${genId}/lecture`).then((x) => { setLec(x.lecture); if (x.lecture?.status === "writing") setTimeout(poll, 2000); }).catch(() => undefined);
+    setTimeout(poll, 2000); }).catch((e) => setError(errorText(e))); };
+  const ch = lec && pos.c >= 0 ? lec.chapters[pos.c] : undefined;
+  const st = ch?.steps[pos.s];
+  const ready = (c?: LectureChapterLite) => c?.status === "done";
+  const next = () => { if (!lec) return; if (pos.c < 0) return setPos({ c: 0, s: 0 }); if (ch && pos.s < ch.steps.length - 1) return setPos({ c: pos.c, s: pos.s + 1 }); if (pos.c < lec.chapters.length - 1) setPos({ c: pos.c + 1, s: 0 }); };
+  const prev = () => { if (!lec) return; if (pos.s > 0) return setPos({ c: pos.c, s: pos.s - 1 }); if (pos.c > 0) return setPos({ c: pos.c - 1, s: lec.chapters[pos.c - 1].steps.length - 1 }); setPos({ c: -1, s: 0 }); };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if ((e.target as HTMLElement).closest("input,textarea")) return; if (e.key === "ArrowRight") next(); else if (e.key === "ArrowLeft") prev(); };
+    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
+  });
+  if (lec === undefined) return <p className="small muted mm6-wait">불러오는 중…</p>;
+  if (!lec || (lec.status === "failed" && !lec.chapters.some(ready))) return <div className="lc-empty">
+    <p>기억 카드를 한 장씩 띄우며, 강사가 이 자료를 처음부터 끝까지 이야기로 설명해요.</p>
+    <p className="small muted">처음 한 번 만들어요. 이야기 줄기를 짠 뒤 장마다 설명을 써서 1~2분쯤 걸리고, 첫 장이 되면 바로 들을 수 있어요.</p>
+    {lec?.error ? <p className="small bad">{lec.error}</p> : null}{error ? <p className="small bad">{error}</p> : null}
+    <button className="btn primary" onClick={start}>강의 만들기</button></div>;
+  const total = lec.chapters.reduce((n, c) => n + c.steps.length, 0);
+  const done = lec.chapters.slice(0, Math.max(0, pos.c)).reduce((n, c) => n + c.steps.length, 0) + (pos.c >= 0 ? pos.s + 1 : 0);
+  const isLast = ch && pos.c === lec.chapters.length - 1 && pos.s === ch.steps.length - 1;
+  const nextReady = pos.c < 0 ? ready(lec.chapters[0]) : ch && pos.s < ch.steps.length - 1 ? true : ready(lec.chapters[pos.c + 1]);
+  const showCheck = ch?.check && pos.s + 1 === ch.check.after && ready(ch);
+  return (
+    <div className="lc">
+      <ol className="lc-chapters">{lec.chapters.map((c, i) => <li key={i}><button className={`lc-chip${i === pos.c ? " on" : ""}${ready(c) ? "" : " wait"}`} disabled={!ready(c)} onClick={() => setPos({ c: i, s: 0 })}>
+        <span className="mm3-num">{i + 1}</span><Rich text={c.title} />{c.status === "writing" || c.status === "waiting" ? <span className="small muted"> · 쓰는 중</span> : c.status === "failed" ? <span className="small bad"> · 실패</span> : null}</button></li>)}
+        {lec.status === "writing" && !lec.chapters.length ? <li className="small muted">이야기 줄기를 짜는 중… (약 20~30초)</li> : null}</ol>
+      {pos.c < 0 ? <section className="lc-stage">
+        <p className="eyebrow">들어가며</p>
+        <p className="lc-say">{lec.problem ? <Rich text={lec.problem} /> : "이야기 줄기를 짜는 중이에요…"}</p>
+        {lec.chapters.length ? <ol className="lc-plan small">{lec.chapters.map((c, i) => <li key={i}><b><Rich text={c.title} /></b> <span className="muted"><Rich text={c.why} /></span></li>)}</ol> : null}
+      </section> : ch && st ? <section className="lc-stage">
+        <p className="eyebrow">{pos.c + 1}장 · <Rich text={ch.title} /> · {pos.s + 1}/{ch.steps.length}</p>
+        {pos.s === 0 && ch.why ? <p className="small muted lc-why"><Rich text={ch.why} /></p> : null}
+        {ready(ch) ? <p className="lc-say"><Rich text={st.say || st.point} /></p> : <p className="lc-say muted">이 장의 설명을 쓰는 중이에요… <span className="small">({st.point})</span></p>}
+        <div className="lc-cards">{st.cards.map((cid) => byId.get(cid)).filter((c): c is Card => !!c).map((c) => <article key={c.id} className="lc-card">
+          <header className="mm3-dhead"><b><Rich text={c.title} /></b><span className="mm3-kind">{c.kind}</span><span className="cs-gap" />
+            {c.pages.slice(0, 3).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}</header>
+          {c.memo?.line ? <p className="lc-line"><Rich text={c.memo.line} /></p> : null}
+          <Body s={c.shape} />
+          {c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+          <FigureView genId={genId} c={c} onPage={onPage} />
+        </article>)}</div>
+        {showCheck && ch.check ? <div className="lc-check"><p className="eyebrow">잠깐, 직접 따져 봐요</p><p><Rich text={ch.check.question} /></p>
+          {showAnswer ? <p className="small"><b><Rich text={ch.check.answer} /></b> <Rich text={ch.check.why} /></p> : <button className="btn ghost small" onClick={() => setShowAnswer(true)}>답 보기</button>}</div> : null}
+        {pos.s === ch.steps.length - 1 && ch.bridge && ready(ch) ? <p className="small muted lc-bridge"><Rich text={ch.bridge} /></p> : null}
+      </section> : null}
+      <div className="row lc-nav"><button className="btn ghost small" disabled={pos.c < 0} onClick={prev}>‹ 이전</button><span className="small muted num">{done}/{total}</span><span className="cs-gap" />
+        {isLast ? <span className="small muted">강의 끝</span> : <button className="btn primary small" disabled={!nextReady} onClick={next}>{pos.c < 0 ? "시작" : nextReady ? "다음 ›" : "다음 장 쓰는 중…"}</button>}</div>
+    </div>);
+}
+
 function SummaryPane({ summary, making }: { summary: Summary | null | undefined; making: boolean }) {
   const end = useRef<HTMLDivElement>(null);
   const writing = summary?.status === "writing";
@@ -625,8 +699,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   // 11/6 사용자: 목차별·개념별을 빼고 위에 [요약 | 지식] 두 탭. 지식은 목차(자료의 순서)로만 보인다.
   const view = "outline" as const;
   // 11/9 사용자 "기존 목록형 탭으로 돌아가지 않게": 고른 탭을 기억하고(원문을 보고 돌아와도, 다시 열어도), 불러오는 동안 [기억] 목록으로 떨어지지 않는다.
-  type Tab = "summary" | "structure" | "knowledge";
-  const [tab, setTabState] = useState<Tab | null>(() => { try { const t = localStorage.getItem("recaller:map-tab"); return t === "summary" || t === "structure" || t === "knowledge" ? t : null; } catch { return null; } });
+  type Tab = "summary" | "structure" | "knowledge" | "lecture";
+  const [tab, setTabState] = useState<Tab | null>(() => { try { const t = localStorage.getItem("recaller:map-tab"); return t === "summary" || t === "structure" || t === "knowledge" || t === "lecture" ? t : null; } catch { return null; } });
   const setTab = (t: Tab) => { setTabState(t); try { localStorage.setItem("recaller:map-tab", t); } catch { /* storage off */ } };
   const [summary, setSummary] = useState<Summary | null | undefined>(undefined);
   const [digest, setDigest] = useState<DigestLite | null | undefined>(undefined);
@@ -734,9 +808,9 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const hasOutline = Boolean(digest?.skeleton && (digest.skeleton.topics.length || digest.skeleton.text));
   const firstLabel = summary && !hasOutline ? "요약" : "줄기";
   const noFirst = digest !== undefined && summary !== undefined && !hasOutline && !(summary && (summary.text || summary.status === "writing"));
-  const picked = tab === "structure" && !(hasOutline || !summary) ? null : tab;
+  const picked = (tab === "structure" && !(hasOutline || !summary)) || (tab === "lecture" && running) ? null : tab;
   const shownTab: Tab = picked ?? (noFirst ? "knowledge" : "summary");
-  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ["knowledge", "기억"]] as const).map(([k, label]) =>
+  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ["knowledge", "기억"], ...(running ? [] : [["lecture", "강의"] as const])] as const).map(([k, label]) =>
     <button key={k} className={shownTab === k ? "on" : ""} aria-pressed={shownTab === k} onClick={() => setTab(k)}>{label}{k === "knowledge" && running ? <span className="mm5-badge">만드는 중</span> : null}</button>)}</div>;
   if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>{hasOutline ? "목차가 나오는 중…" : "자료를 읽는 중…"}</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
     <Steps steps={steps} />{tabs}
@@ -769,7 +843,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
       {tabs}
       {shownTab === "summary" ? (hasOutline || !summary ? <StemPane genId={genId} digest={digest} cards={map.sections.flatMap((x) => x.cards)} making={making} onPage={onPage} onPractice={onPractice} />
         : <SummaryPane summary={summary} making={making} />)
-      : shownTab === "structure" ? <StructurePane genId={genId} cards={map.sections.flatMap((x) => x.cards)} chains={map.chains} making={making} onPage={onPage} onPractice={onPractice} /> : <>
+      : shownTab === "structure" ? <StructurePane genId={genId} cards={map.sections.flatMap((x) => x.cards)} chains={map.chains} making={making} onPage={onPage} onPractice={onPractice} />
+      : shownTab === "lecture" ? <LecturePane genId={genId} cards={map.sections.flatMap((x) => x.cards)} onPage={onPage} /> : <>
       {making ? <p className="small mm5-note-line">기억은 목차 항목마다 조금씩 만들어져요. 다 되기 전에도 지금까지 된 것을 볼 수 있어요.</p> : null}
       <div className="row small mm3-tools">
         {map.topics?.length ? <label className="row small"><input type="checkbox" checked={coreOnly} onChange={(e) => setCoreOnly(e.target.checked)} /> 핵심만</label> : null}
