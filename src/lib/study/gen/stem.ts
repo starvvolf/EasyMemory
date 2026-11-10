@@ -42,15 +42,16 @@ export const STEM_FILL = `강의 자료 몇 쪽(원문 [p.N]과 쪽 그림)과, 
 기억은 학습자가 외우고 복습하는 단위다. 원문을 낱장으로 다시 옮기지 말고, 이 기억을 이해하고 떠올리는 데 필요한 것을 쓴다.
 - memory: 받은 기억 id 그대로. title: 받은 이름(더 맞는 자료의 말이 있으면 고쳐도 된다). kind: 받은 모양(원문을 보니 다른 모양이 맞으면 바꿔도 된다).
 카드는 세 겹이다(11/11 사용자 "중요 내용이 들어가야 하고, 보이는 부분은 의미 전달이 잘 되어야 하고, 문제로 바꿀 때도 도움이 되어야"):
-앞면(question · line) → 핵심(shape · facts) → 자세히(details). 헷갈리는 점(mistakes)은 화면에 안 보이고 문제를 만들 때 쓴다.
+앞면(question · line · idea) → 핵심(shape · facts) → 자세히(details). 헷갈리는 점(mistakes)은 화면에 안 보이고 문제를 만들 때 쓴다.
 - question: 이 기억에서 학습자가 떠올려야 할 것 하나를 묻는 질문 한 줄. "~이고 ~인가", "~와 ~는" 처럼 두 가지를 한꺼번에 묻지 않고, 둘이 한 기억이면 둘을 묶는 하나로 묻는다.
 - line: question의 답 한 줄. 처음 보는 사람이 한 번 읽고 아는 쉬운 말로, 무엇이 무엇을 하는지·무엇이 되는지로 쓴다. 기호·식·용어 나열 대신 말로(식은 shape에).
 - shape: kind에 맞는 모양 하나 — 절차면 원문이 밟는 단계(하는 일·받는 것·내는 것), 비교면 대상과 기준, 조건이면 전제·조건·결과·경계, 공식이면 식과 변수, 목록이면 원소, 용어면 정의와 헷갈리는 이웃, 개념이면 무엇·왜·한계, 패턴이면 틀과 예.
   모양의 칸은 강제가 아니다: 원문이 실제로 말하는 것만 채우고, 원문에 없는 칸(왜·한계·전제·경계·쓸 때·헷갈리는 이웃 등)은 빈 문자열이나 빈 배열로 둔다. 칸을 채우려고 문장을 만들거나, 다른 내용(정의·배경)을 그 칸 이름에 맞춰 넣지 않는다.
   모양은 question의 답을 펼친 것이다: question·line에 이미 쓴 말을 모양에서 되풀이하지 않는다. 원문을 보니 받은 kind보다 다른 모양이 이 기억을 더 바로 담으면(예: 개념으로 받았지만 원문이 나열이면 목록) 바꾼다.
+- idea(풀이): 카드만 보고도 핵심이 이해되게 하는 짧은 풀이. 강의처럼 이어 쓰지 않고, 처음 보는 사람에게 꼭 필요한 것만 쉬운 말로: 무엇이 모자라서(무엇을 하려고) 나왔는지, 핵심 아이디어가 무엇인지, 식이 있으면 그 식이 말로 무엇을 뜻하는지(무엇이 커지면 무엇이 어떻게 되는지). line과 같은 말을 되풀이하지 않는다. 원문에 없는 사실은 넣지 않는다.
 - facts(핵심 덧붙임): 요지와 모양에 이미 들어간 것은 다시 쓰지 않고, 그것만으로 빠지는 것 중 시험에 나올 만한 것 — 조건·경우·경계·결과를 바꾸는 값·정의를 쓴다(식은 원문 그대로). 없으면 빈 배열.
   원문이 이 기억에서 강조하는 것(결론, 조건, 예외, 장점·단점)이 앞면·shape·facts 어디에도 없으면 안 된다.
-- details(자세히): 알면 좋지만 외울 핵심은 아닌 참고 — 유도 과정, 참고 표의 개별 값, 구현 세부, 배경. 핵심을 여기로 내리지 않는다. 없으면 빈 배열.
+- details(자세히): 알면 좋지만 외울 핵심은 아닌 참고 — 유도 과정, 참고 표의 개별 값, 구현 세부, 배경. 핵심을 여기로 내리지 않는다: 이 기억이 나온 까닭(무엇을 해결하나)은 idea에, 계산 문제에 쓰이는 식·조건은 shape·facts에. 없으면 빈 배열.
 - evidence: 이 기억을 원문에서 확인할 구절 {page, quote: 원문 그대로}. 그림에서 읽은 것이면 그림 속 글을 쓴다.
 - mistakes: 학습자가 실제로 할 법한 틀린 생각(원문으로 분명할 때만, 없으면 빈 배열).
 - takes·gives: 이 지식을 쓰려면 주어져야 하는 것, 쓰면 나오는 것(자료의 말로, 계산·판정·절차에 쓰이지 않으면 빈 배열).
@@ -58,7 +59,7 @@ export const STEM_FILL = `강의 자료 몇 쪽(원문 [p.N]과 쪽 그림)과, 
 - 바탕·곁 기억은 어디에 쓰이는지가 보이게 짧게.`;
 export const stemFillSchema = z.object({
   memories: z.array(z.object({
-    memory: z.string(), title: z.string().trim().min(1), kind: z.enum(cardKinds), question: z.string(), line: z.string(), shape: shapeSchema,
+    memory: z.string(), title: z.string().trim().min(1), kind: z.enum(cardKinds), question: z.string(), line: z.string(), idea: z.string(), shape: shapeSchema,
     facts: z.array(z.string()), details: z.array(z.string()), evidence: z.array(z.object({ page: z.number().int(), quote: z.string() })),
     mistakes: z.array(z.string()), takes: z.array(z.string()), gives: z.array(z.string()), figure: figureSchema.nullable(),
   })),
@@ -123,7 +124,7 @@ export function memoryCard(id: string, role: StemRole, f: StemFill["memories"][n
   return { id, kind, title: f.title.trim(), weight: role === "메인" ? "핵심" : "보조", shape: f.shape,
     evidence: evidence.length ? evidence : [{ page: pages[0], quote: "" }],
     mistakes: f.mistakes.map((x) => x.trim()).filter(Boolean), links: [], takes: f.takes.map((x) => x.trim()).filter(Boolean), gives: f.gives.map((x) => x.trim()).filter(Boolean),
-    memo: { question: f.question.trim(), line: f.line.trim(), facts: f.facts.map((x) => x.trim()).filter(Boolean), details: (f.details ?? []).map((x) => x.trim()).filter(Boolean), role } };
+    memo: { question: f.question.trim(), line: f.line.trim(), ...(f.idea?.trim() ? { idea: f.idea.trim() } : {}), facts: f.facts.map((x) => x.trim()).filter(Boolean), details: (f.details ?? []).map((x) => x.trim()).filter(Boolean), role } };
 }
 
 /** 가짜 답(테스트·fake provider). */
@@ -136,7 +137,7 @@ export function stemFakeReply(step: string, user: string): string | undefined {
   if (step === "rc-stem-fill") {
     const ids = [...user.matchAll(/^(t\d+-b\d+)\|/gm)].map((m) => m[1]);
     const page = Number(/\[p\.(\d+)\]/.exec(user)?.[1] ?? 1);
-    return JSON.stringify({ memories: ids.map((id) => ({ memory: id, title: `${id} 기억`, kind: "사실", question: "무엇인가?", line: "요지", shape: { form: "fact", subject: id, value: "값" },
+    return JSON.stringify({ memories: ids.map((id) => ({ memory: id, title: `${id} 기억`, kind: "사실", question: "무엇인가?", line: "요지", idea: "", shape: { form: "fact", subject: id, value: "값" },
       facts: [], details: [], evidence: [{ page, quote: "" }], mistakes: [], takes: [], gives: [], figure: null })) });
   }
   return undefined;

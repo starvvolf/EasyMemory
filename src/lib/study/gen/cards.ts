@@ -40,7 +40,7 @@ export const cardSchema = z.object({
   gives: z.array(text).max(3).describe("이 지식을 쓰면 나오는 결과(자료의 말로, 명사구). 없으면 빈 배열"),
 });
 /** 줄기 모드(stem.ts, 11/10): 카드 한 장이 기억 하나 — 질문·요지·모양에 없는 식과 조건·역할(메인/바탕/곁). */
-export type CardMemo = { question: string; line: string; facts: string[]; /** 자세히(11/11): 유도·표의 값·구현 세부 — 외울 핵심은 아닌 참고 */ details?: string[]; role: "메인" | "바탕" | "곁" };
+export type CardMemo = { question: string; line: string; facts: string[]; /** 풀이(11/11): 처음 보는 사람이 핵심을 이해하게 — 왜 나왔나 · 아이디어 · 식이 말하는 것 */ idea?: string; /** 자세히(11/11): 유도·표의 값·구현 세부 — 외울 핵심은 아닌 참고 */ details?: string[]; role: "메인" | "바탕" | "곁" };
 export type Card = z.infer<typeof cardSchema> & { figure?: CardFigure; memo?: CardMemo };
 
 // 카드에 붙는 그림 (2026-11-08 사용자 "그림은 카드가 아니라 카드에 붙는 것" → 시험 → "한번 해봐"): 카드 AI가 쪽 그림을 볼 때
