@@ -1005,7 +1005,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
     poll();
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [genId]);
-  useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", esc); return () => document.removeEventListener("keydown", esc); }, [onClose]);
+  // Esc는 앱의 뒤로 한 칸(backOne → recaller:back)이 맡는다: 지도 안에서 열린 것이 있으면 그것만 닫고, 없으면 앱이 지도를 닫는다(11/11).
   const titles = useMemo(() => new Map(map?.sections.flatMap((s) => s.cards.map((c) => [c.id, c.title] as const)) ?? []), [map]);
   const everyCard = useMemo(() => map?.sections.flatMap((s) => s.cards) ?? [], [map]);
   // Where a card leads (→) and what leads to it (←), once each.
