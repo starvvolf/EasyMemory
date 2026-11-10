@@ -1251,3 +1251,4 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm3-ftitle{margin:0;font-size:16px;font-weight:700;color:var(--ink);line-height:1.45}
 .dejipgi .mm3-item.open .mm3-name{white-space:normal}
 .dejipgi .lc3-idea{margin:2px 0 0;font-size:14.5px;line-height:1.75;color:var(--ink);background:var(--ground);border-left:3px solid var(--accent-soft);border-radius:0 8px 8px 0;padding:8px 12px}
+.dejipgi .mm3-varsbox{display:flex;flex-direction:column;gap:6px;align-items:flex-start}

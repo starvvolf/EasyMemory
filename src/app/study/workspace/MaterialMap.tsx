@@ -68,6 +68,13 @@ function Formula({ expr }: { expr: string }) {
     : <Rich key={i} text={tex(part.text.trim())} />)}</div>)}</div>;
 }
 
+// 11/11 사용자 "약어 하나씩 다 설명해 주잖아" → "접기 가자": 식의 기호 뜻은 접어 두고 눌러야 펼친다.
+function VarList({ vars }: { vars: Array<{ symbol: string; meaning: string }> }) {
+  const [open, setOpen] = useState(false);
+  return <div className="mm3-varsbox">
+    <button className="lc3-detailsbtn" onClick={(e) => { e.stopPropagation(); setOpen(!open); }} aria-expanded={open}>{open ? "기호 뜻 접기" : `기호 뜻 ${vars.length}개`}</button>
+    {open ? <dl className="mm3-vars">{vars.map((v, i) => <div key={i}><dt><Rich text={v.symbol.includes("$") ? v.symbol : tex(v.symbol)} /></dt><dd><Rich text={v.meaning} /></dd></div>)}</dl> : null}</div>;
+}
 function Body({ s }: { s: Shape }) {
   switch (s.form) {
     case "procedure": return <ol className="mm3-steps">{s.steps.map((st, i) => <li key={i}><span className="mm3-stepn">{i + 1}</span><div><Rich text={st.action} />{st.output ? <div className="mm3-stepio"><Rich text={`→ ${st.output}`} /></div> : null}</div></li>)}</ol>;
@@ -75,7 +82,7 @@ function Body({ s }: { s: Shape }) {
       {s.premise ? <p className="mm3-when"><span className="mm3-tag">전제</span><Rich text={s.premise} /></p> : null}{s.boundary ? <p className="mm3-when"><span className="mm3-tag">경계</span><Rich text={s.boundary} /></p> : null}</div>;
     case "formula": return <div className="mm3-body"><Formula expr={s.expr} />
       {s.when ? <p className="mm3-when"><span className="mm3-tag">쓸 때</span><Rich text={s.when} /></p> : null}
-      {s.vars.length ? <dl className="mm3-vars">{s.vars.map((v, i) => <div key={i}><dt><Rich text={v.symbol.includes("$") ? v.symbol : tex(v.symbol)} /></dt><dd><Rich text={v.meaning} /></dd></div>)}</dl> : null}</div>;
+      {s.vars.length ? <VarList vars={s.vars} /> : null}</div>;
     case "compare": return <div className="mm2-tablewrap"><table className="mm2-table"><thead><tr><th />{s.targets.map((t) => <th key={t}><Rich text={t} /></th>)}</tr></thead>
       <tbody>{s.criteria.map((c) => <tr key={c.name}><th><Rich text={c.name} /></th>{s.targets.map((_, i) => <td key={i}><Rich text={c.values[i] ?? ""} /></td>)}</tr>)}</tbody></table></div>;
     case "list": return s.ordered ? <ol className="mm3-steps">{s.items.map((it, i) => <li key={i}><span className="mm3-stepn">{i + 1}</span><div><Rich text={it} /></div></li>)}</ol> : <ul className="mm3-bullets">{s.items.map((it, i) => <li key={i}><Rich text={it} /></li>)}</ul>;
