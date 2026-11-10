@@ -11,7 +11,8 @@ export const QUICK_MODEL = { model: "gpt-6.1-terra", effort: "low" };
 type Form = "ox" | "choice" | "none";
 type Item = { card: string; form: Form; why: string; statement: string; truth: string; stem: string; options: string[]; correct: number; explain: string; sources: string[] };
 
-const memo = (c: MapCard) => (c as MapCard & { memo?: { question?: string; line?: string; idea?: string; facts?: string[]; details?: string[]; role?: string } }).memo ?? {};
+type Memo = { question?: string; line?: string; idea?: string; facts?: string[]; details?: string[]; role?: string };
+const memo = (c: MapCard): Memo => (c as MapCard & { memo?: Memo }).memo ?? {};
 const cardText = (c: MapCard) => { const m = memo(c); return [`[${c.id}] ${c.title} (${c.kind}${m.role ? `, ${m.role}` : ""})`, m.question ? `  질문: ${m.question}` : "", m.line ? `  답: ${m.line}` : "", m.idea ? `  풀이: ${m.idea}` : "",
   c.shape ? `  모양: ${JSON.stringify(c.shape)}` : "", ...(m.facts ?? []).map((f) => `  핵심: ${f}`), ...c.mistakes.map((x) => `  헷갈림: ${x}`)].filter(Boolean).join("\n"); };
 
