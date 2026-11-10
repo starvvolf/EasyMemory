@@ -560,11 +560,11 @@ function setView(v){
   if (typeof MaterialMapView !== "undefined") MaterialMapView.close();
   if (S.session && S.session.overlay && v !== "read") S.session = null;
   S.view = v;
-  if (v !== "read" && Chat.isOpen() && typeof Chat !== "undefined"){ if (Chat.ctl) Chat.ctl.abort(); Chat.el.hidden = true; }
-  if (v !== "read" && typeof Chat !== "undefined" && Chat.docked){ Chat.undock(); Explain.stop(); }
+  if (v !== "read" && typeof Chat !== "undefined" && Chat.isOpen()){ if (Chat.ctl) Chat.ctl.abort(); Chat.visible = false; }
+  if (v !== "read" && typeof Chat !== "undefined" && Chat.docked){ Chat.docked = false; Explain.stop(); }
   root.dataset.view = v;
   if (v === "create") loadAccount();
-  if (v !== "read" && typeof hideSel === "function"){ hideSel(); NT.drawer = false; paintDrawer(); }
+  if (v !== "read" && typeof hideSel === "function"){ hideSel(); NT.drawer = false; }
   const group = TAB_OF[v] || "";
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.view === group ? "true" : "false"));
   render();
@@ -959,8 +959,8 @@ function render(){
     ...(env.mountView ? [accountNote() || h("span"), viewHost("create", { engineReady: !!engine, devEngines: location.port === "3002" || /[?&]engines=1/.test(location.search),
       noteSeed: (S.plan.prefs && S.plan.prefs.genNote) || "", loadPdfjs: async () => { if (!pdfjs) pdfjs = await env.loadPdfjs(); return pdfjs; }, onStart: startFromNewMaterial })] : [renderBuilder()]));
   else if (S.view === "read") {
-    const typing = Chat.el && Chat.el.contains(document.activeElement);
-    app.append(renderReader()); dockChat(typing); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer();
+    prepReader();
+    app.append(viewHost("reader", { ui, api:readerApi }));
     if (overlayCheck()){
       app.append(h("div", { class:"checklayer", role:"dialog", "aria-modal":"true", "aria-label":`p.${S.session.page} 확인 문제`,
         onclick: (e) => { if (e.target === e.currentTarget) closeCheck(); } }, h("div", { class:"checkbox" }, env.mountView ? viewHost("session", { ui, api:sessionApi }) : renderSession())));
@@ -1998,7 +1998,6 @@ function termMarks(d, tl){
     }
   }
   pageTermsFound(d, found);
-  if (Chat.el && !Chat.busy) Chat.paintSugs();
   return out;
 }
 async function drawPage(){
@@ -2011,7 +2010,7 @@ async function drawPage(){
   if (token !== drawToken) return;
   const zb = document.getElementById("zoombox");
   if (zb) await paintBox(zb, d, R.page, Math.max(200, Math.floor(zb.getBoundingClientRect().width)));
-  placeNoteCard();
+  NT.placeTick = (NT.placeTick || 0) + 1; ui.bump();
 }
 /* One screen, no scrolling: a slide page gets the width that makes its height fit between the reader bar and the
    action bar; the rail beside it takes the rest. Tall (portrait) pages keep the column width and scroll as before. */
@@ -2125,92 +2124,163 @@ function markTextRefs(text, refs){
   out.push(text.slice(pos));
   return out;
 }
-function renderReader(){
-  const decks = sortedDecks();
-  if (!decks.length) return h("div", { class:"panel", text:"아직 자료가 없어요." });
+/* 11/11 원문 읽기를 React로(workspace/reader/ReaderView.tsx). 그리기 전 준비(자료·쪽 고르기, PDF·노트 불러오기, 질문 창 붙이기). */
+function readerLayout(d){
+  const P = S.pdf[d.id], pdfOn = !!(P && (P.status === "ready" || P.status === "loading"));
+  const wide = pdfOn && pageAspect(d) > 1.15;          // slides: explanation goes below, not beside
+  return { P, pdfOn, wide, docked: wide && dockWanted() };
+}
+function prepReader(){
+  const decks = sortedDecks(); if (!decks.length) return;
   const R = S.reader;
   if (!R.deckId || !S.decks[R.deckId]){ R.deckId = decks[0].id; R.page = firstPage(decks[0]); }
   const d = S.decks[R.deckId]; ensurePdf(d); loadNotes(d);
-  const P = S.pdf[d.id]; const total = pageTotal(d);
-  R.page = Math.max(1, Math.min(total, R.page));
+  R.page = Math.max(1, Math.min(pageTotal(d), R.page));
   if (S.session && !S.session.overlay) S.session.viewed.add(d.id + ":" + R.page);
-  const pdfOn = P && (P.status === "ready" || P.status === "loading");
-  const wide = pdfOn && pageAspect(d) > 1.15;          // slides: explanation goes below, not beside
-  const objs = d.objectives.filter(o => o.pages.includes(R.page) && !(d.hidden || []).includes(o.id));
-  const n = itemsOnPage(d, R.page).length;
-  const nxt = nextPageWithItems(d, R.page);
-  const wrap = h("div");
-
-  if (S.session && !S.session.overlay) wrap.append(h("div", { class:"banner", role:"status" },
-    h("span", { text:"연습 중이에요. 여기서 본 쪽의 문제는 이번 연습에서 ‘정답 보고 풂’으로 기록돼요." }),
-    h("button", { class:"btn small", onclick: () => setView("practice") }, "연습으로 돌아가기")));
-
-  const sel = h("select", { id:"readDeck", "aria-label":"자료 고르기" }, decks.map(x => h("option", { value:x.id, selected: x.id === d.id ? "selected" : null }, displayTitle(x))));
-  sel.addEventListener("change", () => openReader(sel.value, firstPage(S.decks[sel.value])));
-  const pg = h("input", { class:"num", id:"pgInput", type:"number", min:"1", max:String(total), "aria-label":"쪽 번호" });
-  pg.value = String(R.page); pg.addEventListener("change", () => goPage(Number(pg.value)));
-  wrap.append(h("div", { class:"rbar" }, sel, h("span", { class:"grow" }),
-    env.chunk && env.chunk.important && !d.example ? h("button", { class:"btn small", "aria-pressed": termsOn() ? "true" : "false", title:"핵심 용어·개념 목표의 용어를 쪽에 표시",
-      onclick: () => { (S.plan.prefs || (S.plan.prefs = {})).showTerms = !termsOn(); Store.savePlan(S.plan); render(); } }, "핵심 용어") : null,
-    pdfOn && Trans.can(d) ? h("button", { class:"btn small", "aria-pressed": Trans.on() ? "true" : "false", title: Trans.on() ? "원문(영어)으로 보기" : "쪽을 한국어로 덧씌워 보기 (핵심 용어는 영어 병기)", onclick: () => Trans.toggle() }, Trans.on() ? "번역 켬" : "번역") : null,
-    d.example || (notesApi && notesApi.compose) ? h("button", { class:"btn small", title:"이 자료의 용어를 한국어 뜻·비유와 함께 묶은 지도와 이야기", onclick: () => TermMap.openFor(d) }, "용어 지도") : null,
-    env.mountView && /^(pending:)?gen_/.test(d.id) ? h("button", { class:"btn small", title:"목차와 기억을 한 화면에: 구역마다 알아야 할 것과 내 상태(몰랐음·만남·앎)", onclick: () => MaterialMapView.open(d) }, "자료 지도") : null,
-    notesButton(d),
-    h("div", { class:"pager" },
-      h("button", { class:"qbtn", disabled: R.page <= 1, "aria-label":"이전 쪽", onclick: () => goPage(R.page - 1) }, "‹"),
-      pg, h("span", { class:"num", text:`/ ${total}` }),
-      h("button", { class:"qbtn", disabled: R.page >= total, "aria-label":"다음 쪽", onclick: () => goPage(R.page + 1) }, "›"))));
-  const making = pendingOf(d);
-  if (making) wrap.append(h("div", { style:"margin-bottom:12px" }, pendingNote(making)));
-
-  const page = h("section", { class:"rpage" + (wide ? " wide" : "") });
-  let sheet;
-  if (pdfOn){
-    sheet = h("div", { class:"sheet" },
-      h("div", { class:"pagebox", id:"pagebox", "data-key":d.id + ":" + R.page, style: wide ? `aspect-ratio:${pageAspect(d)}` : null }, h("div", { class:"loading", text: P.status === "loading" ? "원본 PDF를 불러오는 중…" : "쪽을 그리는 중…" })),
-      P.status === "ready" ? h("button", { class:"zoombtn", "aria-label":"크게 보기", onclick: () => { R.zoom = true; render(); } }, "크게 보기") : null);
-  } else {
-    const stored = d.pages.find(p => p.n === R.page);
-    sheet = h("div", { class:"sheet" }, h("div", { class:"paper" }, h("div", { class:"inner" }, h("span", { class:"pn", text:`p.${R.page}` }),
-      stored && stored.text.trim() ? markTextRefs(stored.text, activeRefs(d, R.page)) : h("span", { class:"muted", text:"이 쪽은 저장된 텍스트가 없어요." }))));
-  }
-  page.append(sheet);
-  // Slides fit the screen (fitPage): the page is sized to the height left, and the side panel sits beside it:
-  // 설명 (docked question window with this page's easy explanation) · 목표 · 상태, switched like browser tabs.
-  if (wide && dockWanted()) page.append(sidePanel(d, objs, n));
-  const holder = wide ? h("aside", { class:"rrail" }) : page;
-  if (wide && !dockWanted()) page.append(holder);
-  if (wide && !dockWanted() && window.innerWidth >= 1000) holder.append(h("button", { class:"btn small", title:"질문 창을 쪽 옆에 붙이고 쉬운 설명을 바로 보기",
-    onclick: () => { S.plan.prefs.chatFloat = false; Store.savePlan(S.plan); if (Chat.el) Chat.el.hidden = true; render(); } }, "질문 창 옆에 붙이기"));
-  if (objs.length && !(wide && dockWanted())){
-    holder.append(h("div", { class:"goals" }, h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
-      objs.flatMap((o, i) => [h("div", { class:"goalrow" },
-        h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", "aria-expanded": GoalEx.isOpen(d, o) ? "true" : "false", title:"이 목표를 정리해서 보기 (원문에서도 이 부분을 진하게)", onclick: () => GoalEx.toggle(d, o) },
-          h("span", { class:"gnum", text:String(i + 1) }), h("span", null, richText(o.statement))),
-        d.example ? null : h("button", { class:"linkish", title:"이 목표의 문제를 연습·복습에서 빼기", onclick: () => hideObjective(d, o.id) }, "빼기")), GoalEx.node(d, o)])));
-  }
-  if (P && P.status === "error") page.append(h("p", { class:"attach", text:"원본 PDF를 불러오지 못했어요. 원본 등록 상태를 확인해 주세요." }));
-
-  const card = renderNoteCard(d);
-  const grid = h("div", { class:"rgrid" + (card ? (wide || !pdfOn ? " noteflt" : " open noteopen") : "") }, page, card);
-  wrap.append(grid);
-
-  if (R.zoom && P && P.status === "ready"){
-    const a = pageAspect(d);
-    wrap.append(h("div", { class:"zoomlayer", role:"dialog", "aria-label":`원본 ${R.page}쪽 크게 보기`, onclick: (e) => { if (e.target === e.currentTarget){ R.zoom = false; render(); } } },
-      h("div", { class:"zoombar" }, h("span", { text:`p.${R.page}` }), h("button", { class:"qbtn", onclick: () => { R.zoom = false; render(); } }, "닫기 ✕")),
-      h("div", { class:"pagebox", id:"zoombox", "data-key":d.id + ":" + R.page, style:`width:min(calc(100vw - 32px), calc((100vh - 90px) * ${a}));aspect-ratio:${a}` })));
-  }
-
-  wrap.append(h("div", { class:"ractions" },
-    h("span", { class:"where" }, h("b", { text:`p.${R.page}` }), objs.length ? ` · 익힐 것 ${objs.length}` : " · 연결된 목표 없음",
-      notesOn(d) && pdfOn ? h("span", { class:"nhint", text:" · 모르는 건 원문을 드래그해 물어보세요" }) : null),
-    wide && dockWanted() ? null : h("button", { class:"btn", "aria-pressed": Chat.isOpen() ? "true" : "false", onclick: () => Chat.toggle() }, Chat.isOpen() ? "질문 창 닫기" : "질문하기"),
-    S.session && !S.session.overlay ? h("button", { class:"btn primary", onclick: () => setView("practice") }, "연습으로 돌아가기")
-      : n ? h("button", { class:"btn primary", title:"읽은 직후 푼 결과는 기억 기록으로 세지 않고, 내일부터 복습에 넣어요.", onclick: () => startCheck(d.id, R.page) }, `이 쪽 문제 풀기 (${n})`)
-      : nxt ? h("button", { class:"btn", onclick: () => goPage(nxt) }, `문제 있는 다음 쪽 · p.${nxt} →`) : null));
-  return wrap;
+  const L = readerLayout(d);
+  if (L.docked){ Chat.docked = true; Explain.want(d, R.page); }
+  else if (Chat.docked){ Chat.docked = false; Explain.stop(); }
 }
+/* 원문 읽기 화면에 그릴 값과 동작 (reader/ReaderView.tsx). */
+function textMarks(text, refs){
+  const ranges = [];
+  for (const q of refs){ const r = findRange(text, q.quote); if (r) ranges.push({ s:r[0], e:r[1], num:q.num, dim:q.dim, line:q.kind === "line" }); }
+  ranges.sort((a,b) => a.s - b.s);
+  const out = []; let pos = 0;
+  for (const r of ranges){ if (r.s < pos) continue; out.push({ text:text.slice(pos, r.s) }); out.push({ text:text.slice(r.s, r.e), mark:true, num:r.num || 0, dim:!!r.dim, line:r.line }); pos = r.e; }
+  out.push({ text:text.slice(pos) });
+  return out;
+}
+function chatView(){
+  const c = Chat.context();
+  Chat.switchThread(c);
+  const sg = Chat.sugs(c);
+  return { docked:Chat.docked, visible:Chat.isOpen(), mode:Chat.mode, page: c ? c.page : 0, noteTitle:Chat.noteTitle, quote:Chat.quote, fromNote:Chat.fromNote || "",
+    msgs: Chat.msgs.map(m => ({ role:m.role, page:m.page || 0, quote:m.quote || "", text: m.role === "assistant" ? (shown(m.content) || "…") : m.content })),
+    err:Chat.err, busy:Chat.busy, input:Chat.input, focusTick:Chat.focusTick,
+    sugs: sg.qs.map(q => ({ label:q.label, why:q.why || "" })), act: sg.act ? sg.act.label : "",
+    explain: Chat.docked && c ? Explain.view(c.d, c.page) : null };
+}
+const chatApi = {
+  input: (v) => { Chat.input = v; ui.bump(); },
+  send: (t) => Chat.send(t), stop: () => Chat.stop(), reset: () => Chat.reset(), close: () => Chat.close(), mode: (m) => Chat.setMode(m),
+  unquote: () => { Chat.quote = null; ui.bump(); },
+  edit: (label) => { Chat.input = label; Chat.focus(); },
+  act: () => { const sg = Chat.sugs(Chat.context()); if (sg.act) sg.act.run(); },
+  explainAuto: (on) => Explain.setAuto(on), explainAgain: () => Explain.again(), gear: (k) => openPrompts(k),
+};
+function noteCardView(d){
+  if (!notesOn(d)) return null;
+  const note = NT.open ? noteList(d).find(n => n.id === NT.open) : null;
+  if (!note && !NT.asking) return null;
+  const [kl, kc] = NOTE_KIND[note ? note.kind : "term"];
+  return { id: note ? note.id : "", quote: note ? note.quote : NT.asking.quote, kind:kl, kindCls:kc, weak: !!(note && note.seen >= NOTE_WEAK),
+    loading: !note || (NT.busy && !(note && note.answer)), answer: note && note.answer ? note.answer : null,
+    thread: note ? note.thread.map(t => ({ role:t.role, text:t.text })) : [], err: NT.err, busy:NT.busy, again: !!(note && NT.again), seen: note ? note.seen : 0,
+    page: note ? note.page : 0, ago: note ? agoText(note.askedAt) : "", long: !!(note && note.thread.length >= 4), anchorY: NT.anchor && NT.anchor.yRatio != null ? NT.anchor.yRatio : null, placeTick:NT.placeTick || 0 };
+}
+const readerApi = {
+  snapshot(){
+    const decks = sortedDecks();
+    if (!decks.length) return null;
+    const R = S.reader, d = S.decks[R.deckId]; if (!d) return null;
+    const L = readerLayout(d), P = L.P, total = pageTotal(d);
+    const objs = d.objectives.filter(o => o.pages.includes(R.page) && !(d.hidden || []).includes(o.id));
+    const n = itemsOnPage(d, R.page).length, nxt = nextPageWithItems(d, R.page);
+    let side = null;
+    if (L.docked){
+      detectPeek(panelSnap(d, objs, n));
+      const c = deckCounts(d), weak = weakList([d]).length, notes = pageNotes(d, R.page), plan = d.example ? null : todayPlan();
+      side = { shown: R.peek ? R.peek.tab : R.panel, peek:!!R.peek, badge:[...R.badge], pulseState:!!R.pulseState,
+        state:{ n, notes, terms: R.terms.key === d.id + ":" + R.page ? R.terms.list : null, good:c.good, total:c.total, weak, due:c.due, fresh:c.fresh,
+          today: plan ? { mine:plan.queue.filter(r => r.deckId === d.id).length, left:plan.queue.length, done:plan.doneToday, canGo: !!plan.queue.length && !S.session } : null } };
+    }
+    const making = pendingOf(d), stored = !L.pdfOn ? d.pages.find(p => p.n === R.page) : null;
+    return { decks:decks.map(x => ({ id:x.id, title:displayTitle(x) })), deckId:d.id, title:d.title, page:R.page, total, key:d.id + ":" + R.page, example:!!d.example,
+      practicing: !!(S.session && !S.session.overlay), pdf: P ? P.status : "none", pdfOn:L.pdfOn, wide:L.wide, docked:L.docked, aspect:pageAspect(d), zoom: !!(R.zoom && P && P.status === "ready"),
+      floatable: L.wide && !L.docked && window.innerWidth >= 1000,
+      tools:{ terms: env.chunk && env.chunk.important && !d.example ? termsOn() : null, trans: L.pdfOn && Trans.can(d) ? Trans.on() : null,
+        termMap: !!(d.example || (notesApi && notesApi.compose)), map: genDeck(d.id), notes: notesOn(d) ? { count:noteList(d).length, open:NT.drawer } : null },
+      making: making ? pendingView(making) : null,
+      text: stored && stored.text.trim() ? textMarks(stored.text, activeRefs(d, R.page)) : null,
+      objs: objs.map((o, i) => { const [label, cls] = GOAL_STATE[objectiveState(d, o.id)] || GOAL_STATE.none;
+        return { id:o.id, num:i + 1, statement:o.statement, active:R.active === o.id, open:GoalEx.isOpen(d, o), gx:GoalEx.view(d, o), label, cls, pulse: !!(R.pulse && R.pulse.has(o.id)) }; }),
+      pendingGoals: !!d.pending, n, nxt, notesHint: notesOn(d) && L.pdfOn, chatOpen:Chat.isOpen(), side,
+      paint:[d.id, R.page, R.active || "", termsOn(), Trans.on(), noteList(d).map(x => x.id + x.seen + x.status).join(","), NT.open || "", P ? P.status : "", R.zoom ? 1 : 0, L.wide ? 1 : 0, L.docked ? 1 : 0].join("|"),
+      note: noteCardView(d), chat: L.docked ? chatView() : null };
+  },
+  pickDeck: (id) => openReader(id, firstPage(S.decks[id])),
+  go: (n) => goPage(n),
+  terms: () => { (S.plan.prefs || (S.plan.prefs = {})).showTerms = !termsOn(); Store.savePlan(S.plan); render(); },
+  trans: () => Trans.toggle(),
+  termMap: () => TermMap.openFor(S.decks[S.reader.deckId]),
+  map: () => MaterialMapView.open(S.decks[S.reader.deckId]),
+  notes: () => { NT.drawer = !NT.drawer; ui.bump(); },
+  zoom: (on) => { S.reader.zoom = on; render(); },
+  chat: () => Chat.toggle(),
+  attach: () => { S.plan.prefs.chatFloat = false; Store.savePlan(S.plan); Chat.visible = false; render(); },
+  float: () => { (S.plan.prefs || (S.plan.prefs = {})).chatFloat = true; Store.savePlan(S.plan); Chat.docked = false; Explain.stop(); render(); Chat.open(); },
+  newChat: () => { setPanelTab("ask"); Chat.reset(); },
+  tab: (k) => setPanelTab(k),
+  goal: (oid) => { const d = S.decks[S.reader.deckId], o = d && d.objectives.find(x => x.id === oid); if (o) GoalEx.toggle(d, o); },
+  goalRedo: (oid) => { const d = S.decks[S.reader.deckId], o = d && d.objectives.find(x => x.id === oid); if (o) GoalEx.go(d, o); },
+  goalAsk: (oid) => { const d = S.decks[S.reader.deckId], o = d && d.objectives.find(x => x.id === oid); if (o) Chat.quoteIn(o.statement); },
+  hide: (oid) => hideObjective(S.decks[S.reader.deckId], oid),
+  check: (oid) => startCheck(S.reader.deckId, S.reader.page, oid || undefined),
+  practice: () => setView("practice"),
+  today: () => startToday(),
+  quote: (t) => Chat.quoteIn(t),
+  gear: (k) => openPrompts(k),
+  draw: () => drawPage(),
+  fit: () => { const d = S.decks[S.reader.deckId]; if (d) fitPage(d); },
+  noteClose: () => closeNote(),
+  noteFollow: (q) => { const d = S.decks[S.reader.deckId], note = d && noteList(d).find(n => n.id === NT.open); if (note && q && !NT.busy) followNote(d, note, q); },
+  noteRetry: () => { const d = S.decks[S.reader.deckId]; if (d && NT.asking) askPhrase(d, NT.asking.page, NT.asking.quote, NT.anchor); },
+  noteContinue: () => { const d = S.decks[S.reader.deckId], note = d && noteList(d).find(n => n.id === NT.open); if (note){ Chat.continueNote(d, note); closeNote(); } },
+  connect: () => connectAccount(),
+  chatApi, goalApi:null,
+  // 자료 목록의 PendingNote와 같은 동작(만드는 중인 자료)
+  toggleGoal: (id, gid) => materialsApi.toggleGoal(id, gid), confirmGoals: (id) => materialsApi.confirmGoals(id), makeQuestions: (id) => materialsApi.makeQuestions(id),
+  resume: (id) => materialsApi.resume(id), restart: (id) => materialsApi.restart(id), remove: (id) => materialsApi.remove(id),
+};
+/* 원문 읽기 밖에 떠 있는 것들 (reader/ReaderOverlays.tsx): 프롬프트 설정 · 용어 지도 · 모르는 것 서랍 · 고른 글 메뉴 · 떠 있는 질문 창. */
+function drawerView(){
+  const d = S.decks[S.reader.deckId];
+  if (!NT.drawer || S.view !== "read" || !notesOn(d)) return null;
+  const filters = [["all","전체"],["weak","약점"],["term","용어"],["procedure","절차"],["concept","개념"],["talk","대화"],["marked","아직 안 물어봄"]];
+  const pass = (n) => NT.filter === "all" || (NT.filter === "weak" ? n.seen >= NOTE_WEAK : NT.filter === "marked" ? n.status === "marked" : n.kind === NT.filter && n.status !== "marked");
+  const all = noteList(d);
+  const list = all.filter(pass).sort((a, b) => b.seen - a.seen || Date.parse(b.askedAt) - Date.parse(a.askedAt));
+  return { tab:NT.tab, count:all.length, filter:NT.filter, filters:filters.map(([key, label]) => ({ key, label })), weakAt:NOTE_WEAK, page:S.reader.page,
+    list: list.map(n => { const [kl, kc] = NOTE_KIND[n.kind]; return { id:n.id, quote:n.quote, kind:n.kind, kl, kc, weak:n.seen >= NOTE_WEAK, marked:n.status === "marked", page:n.page, ago:agoText(n.askedAt), seen:n.seen,
+      lead: n.answer ? n.answer.lead : "", open: n.kind === "talk" && NT.talkOpen === n.id,
+      thread: n.kind === "talk" && NT.talkOpen === n.id ? n.thread.slice(-12).map(t => ({ role:t.role, text: t.role === "assistant" ? shown(t.text) : t.text })) : [] }; }),
+    toc: NT.tab === "toc" ? tocView(d) : null };
+}
+const overlaysApi = {
+  snapshot(){
+    const view = S.view;
+    return { prompts: promptsView(), termMap: view === "read" ? TermMap.view() : null, drawer: drawerView(),
+      sel: NT.sel && view === "read" ? { x:NT.sel.x, y:NT.sel.y, below:NT.sel.below, actions:selActions().map(a => ({ label:a.label, key:a.key || "", title:a.title || "" })) } : null,
+      chat: view === "read" && Chat.isOpen() ? chatView() : null, peek: SourcePeek.view() };
+  },
+  peek: { close: () => SourcePeek.close(), go: (k) => SourcePeek.go(k), paint: (box) => SourcePeek.paint(box) },
+  get promptsApi(){ return promptsApi; }, chatApi,
+  selRun: (i) => { const a = selActions()[i]; if (a) a.run(); },
+  tm: { close: () => { TM.open = false; ui.bump(); }, make: () => TermMap.go(S.decks[S.reader.deckId]), pick: (en) => TermMap.pick(en), gear: () => openPrompts("terms"),
+    go: (page) => { TM.open = false; ui.bump(); goPage(page); } },
+  drawer: {
+    close: () => closeDrawer(), tab: (k) => { NT.tab = k; ui.bump(); }, filter: (k) => { NT.filter = k; ui.bump(); },
+    go: (page) => { if (S.reader.page !== page) goPage(page); },
+    toc: (page) => goPage(page),
+    item: (id) => { const d = S.decks[S.reader.deckId], n = d && noteList(d).find(x => x.id === id); if (!n) return;
+      if (n.kind === "talk"){ NT.talkOpen = NT.talkOpen === id ? null : id; ui.bump(); return; }
+      NT.drawer = false; if (S.reader.page !== n.page) goPage(n.page); openNote(d, n.id, true);
+      setTimeout(() => { const m = document.querySelector(`.nu[data-note="${n.id}"]`); if (m) m.scrollIntoView({ block:"center", behavior:"smooth" }); }, 400); },
+    talkGo: (id) => { const d = S.decks[S.reader.deckId], n = d && noteList(d).find(x => x.id === id); if (!n) return; NT.drawer = false; if (S.reader.page !== n.page) goPage(n.page); else ui.bump(); },
+    talkContinue: (id) => { const d = S.decks[S.reader.deckId], n = d && noteList(d).find(x => x.id === id); if (!n) return; NT.drawer = false; if (S.reader.page !== n.page) goPage(n.page); Chat.openTalk(d, n); },
+  },
+};
 on(document, "keydown", (e) => {
   if (S.view !== "read" || overlayCheck() || e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return;
   const tag = (e.target.tagName || "").toLowerCase();
@@ -2223,7 +2293,8 @@ let resizeTimer;
 on(window, "resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => {
   if (S.view !== "read") return;
   // crossing the side-by-side width: the question window moves between the side panel and its own window
-  if (!!document.querySelector(".rside") !== (dockWanted() && !!document.querySelector(".rpage.wide"))) render(); else drawPage();
+  const d = S.decks[S.reader.deckId];
+  if (d && readerLayout(d).docked !== Chat.docked) render(); else drawPage();
 }, 150); });
 (function watchDpr(){
   try{
@@ -2236,22 +2307,11 @@ on(window, "resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout
    the panel slides to that tab for a moment, pulses what changed, and slides back (motion off → a dot on the tab). ----- */
 const reducedMotion = () => { try{ return matchMedia("(prefers-reduced-motion: reduce)").matches; }catch(e){ return false; } };
 function dockWanted(){ return window.innerWidth >= 1000 && !(S.plan.prefs && S.plan.prefs.chatFloat); }
-function dockChat(refocus){
-  const slot = document.getElementById("chatDock");
-  if (slot){ Chat.dockInto(slot, refocus); const R = S.reader; Explain.want(S.decks[R.deckId], R.page); }
-  else if (Chat.docked){ Chat.undock(); Explain.stop(); }
-}
 let peekTimer, pulseTimer;
 function setPanelTab(k){
   const R = S.reader; R.panel = k; R.badge.delete(k);
   if (R.peek){ R.peek = null; clearTimeout(peekTimer); }
-  showPane(k);
-}
-function showPane(k){
-  const side = document.querySelector(".rside"); if (!side) return;
-  side.classList.toggle("peeking", !!S.reader.peek);
-  side.querySelectorAll(".rtabs [data-tab]").forEach(b => { b.setAttribute("aria-selected", b.dataset.tab === k ? "true" : "false"); b.classList.toggle("dot", S.reader.badge.has(b.dataset.tab)); });
-  side.querySelectorAll(".rpane").forEach(p => p.classList.toggle("on", p.dataset.pane === k));
+  ui.bump();
 }
 const GOAL_STATE = { weak:["약점", "bad"], new:["안 풀어봄", ""], mid:["푸는 중", "help"], good:["혼자 맞힘", "good"], none:["문제 없음", ""] };
 function pageNotes(d, page){ return noteList(d).filter(x => x.page === page).length; }
@@ -2271,71 +2331,18 @@ function detectPeek(snap){
   clearTimeout(pulseTimer); pulseTimer = setTimeout(() => { R.pulse = new Set(); R.pulseState = false; }, 3000);
   const tab = goals ? "goals" : "state";
   if (R.panel === tab) return;
-  const ta = Chat.el && Chat.el.querySelector("textarea");
-  const busy = Chat.busy || (ta && (ta.value.trim() || document.activeElement === ta));
+  const ta = document.querySelector(".chatwin textarea");
+  const busy = Chat.busy || Chat.input.trim() || (ta && document.activeElement === ta);
   if (R.panel !== "ask" || busy || reducedMotion()){ R.badge.add(tab); return; }
   R.peek = { tab };
   clearTimeout(peekTimer);
-  peekTimer = setTimeout(() => { if (R.peek && R.peek.tab === tab){ R.peek = null; showPane(R.panel); } }, 2600);
-}
-function sidePanel(d, objs, n){
-  const R = S.reader;
-  detectPeek(panelSnap(d, objs, n));
-  const shown = R.peek ? R.peek.tab : R.panel;
-  const tabs = [["ask", "설명"], ["goals", objs.length ? `목표 ${objs.length}` : "목표"], ["state", "상태"]];
-  const bar = h("div", { class:"rtabs", role:"tablist", "aria-label":"곁 패널" },
-    tabs.map(([k, label]) => h("button", { role:"tab", "data-tab":k, class: R.badge.has(k) && k !== shown ? "dot" : null, "aria-selected": shown === k ? "true" : "false", onclick: () => setPanelTab(k) }, label)),
-    h("span", { class:"grow" }),
-    h("button", { class:"qbtn", title:"새 대화 시작 (지금 대화는 노트에 남아요)", onclick: () => { setPanelTab("ask"); Chat.reset(); } }, "새 대화"),
-    h("button", { class:"qbtn", title:"질문 창을 따로 띄우기", "aria-label":"질문 창 띄우기", onclick: () => {
-      (S.plan.prefs || (S.plan.prefs = {})).chatFloat = true; Store.savePlan(S.plan); Chat.undock(); Explain.stop(); render(); Chat.open(); } }, "⧉"));
-  const panes = h("div", { class:"rpanes" },
-    h("div", { class:"rpane", "data-pane":"ask", id:"chatDock", role:"tabpanel" }),
-    h("div", { class:"rpane pad", "data-pane":"goals", role:"tabpanel" }, goalsPane(d, objs, n)),
-    h("div", { class:"rpane pad", "data-pane":"state", role:"tabpanel" }, statePane(d, n)));
-  for (const p of panes.children) if (p.dataset.pane === shown) p.classList.add("on");
-  return h("aside", { class:"rrail rside" + (R.peek ? " peeking" : "") }, bar, panes);
-}
-function goalsPane(d, objs, n){
-  const R = S.reader, nxt = nextPageWithItems(d, R.page);
-  if (!objs.length) return [h("p", { class:"small muted", text: d.pending ? "문제를 만드는 중이에요. 이 쪽의 목표가 생기면 여기에 떠요." : "이 쪽에 연결된 학습목표가 없어요." }),
-    nxt ? h("button", { class:"btn small", onclick: () => goPage(nxt) }, `목표 있는 다음 쪽 · p.${nxt} →`) : null];
-  return [h("span", { class:"lbl", text:"이 쪽에서 익힐 것" }),
-    ...objs.map((o, i) => { const [label, cls] = GOAL_STATE[objectiveState(d, o.id)] || GOAL_STATE.none;
-      return h("div", { class:"pgoal" + (R.pulse.has(o.id) ? " pulse" : "") },
-        h("button", { class:"goal", "aria-pressed": R.active === o.id ? "true" : "false", "aria-expanded": GoalEx.isOpen(d, o) ? "true" : "false", title:"이 목표를 정리해서 보기 (원문에서도 이 부분을 진하게)", onclick: () => GoalEx.toggle(d, o) },
-          h("span", { class:"gnum", text:String(i + 1) }), h("span", null, richText(o.statement))),
-        GoalEx.node(d, o),
-        h("div", { class:"pgoal-foot" }, h("span", { class:"chip " + cls, text:label }), h("span", { class:"grow" }),
-          d.example ? null : h("button", { class:"linkish", title:"이 목표의 문제를 연습·복습에서 빼기", onclick: () => hideObjective(d, o.id) }, "빼기"))); }),
-  ];
-}
-function termChips(list){
-  if (!list.length) return [h("span", { class:"small muted", text:"이 쪽엔 표시된 핵심 용어가 없어요." })];
-  return list.map(t => h("button", { class:"chip-btn", title:"질문 창에 넣기", onclick: () => Chat.quoteIn(t) }, t));
+  peekTimer = setTimeout(() => { if (R.peek && R.peek.tab === tab){ R.peek = null; ui.bump(); } }, 2600);
 }
 function pageTermsFound(d, found){
-  const R = S.reader; R.terms = { key:d.id + ":" + R.page, list:found };
-  const el = document.getElementById("pgTerms"); if (el) el.replaceChildren(...termChips(found));
-}
-function statePane(d, n){
-  const R = S.reader, c = deckCounts(d), weak = weakList([d]).length, notes = pageNotes(d, R.page);
-  const key = d.id + ":" + R.page, plan = d.example ? null : todayPlan();
-  const mine = plan ? plan.queue.filter(r => r.deckId === d.id).length : 0;
-  const pct = c.total ? Math.round(c.good / c.total * 100) : 0;
-  const row = (k, v, cls) => h("div", { class:"strow" }, h("span", { text:k }), h("b", { class:"num" + (cls ? " " + cls : ""), text:v }));
-  return [
-    h("div", { class:"stbox" + (R.pulseState ? " pulse" : "") }, h("span", { class:"lbl", text:`이 쪽 · p.${R.page}` }),
-      row("연결된 문제", `${n}개`), row("모르는 것 노트", `${notes}개`, notes ? "ask" : "")),
-    h("div", { class:"stbox" }, h("span", { class:"lbl", text:"이 쪽 핵심 용어" }),
-      h("div", { class:"pgterms", id:"pgTerms" }, R.terms.key === key ? termChips(R.terms.list) : h("span", { class:"small muted", text:"쪽을 그리는 중…" }))),
-    h("div", { class:"stbox" + (R.pulseState ? " pulse" : "") }, h("span", { class:"lbl", text:"이 자료" }),
-      h("div", { class:"stbar", title:`혼자 맞힘 ${c.good} / ${c.total}` }, h("i", { style:`width:${pct}%` })),
-      row("혼자 맞힘", `${c.good} / ${c.total}`), row("약점", `${weak}개`, weak ? "bad" : ""), row("복습 차례", `${c.due}개`), row("새 문제", `${c.fresh}개`)),
-    plan ? h("div", { class:"stbox" }, h("span", { class:"lbl", text:"오늘" }),
-      row("이 자료에서 남은 것", `${mine}개`), row("전체 남은 것", `${plan.queue.length}개`), row("오늘 푼 것", `${plan.doneToday}개`),
-      plan.queue.length && !S.session ? h("button", { class:"btn small", style:"margin-top:6px", onclick: () => startToday() }, "오늘 할 것 이어서") : null) : null,
-  ];
+  const R = S.reader, key = d.id + ":" + R.page;
+  if (R.terms && R.terms.key === key && R.terms.list.join("\n") === found.join("\n")) return;
+  R.terms = { key, list:found };
+  setTimeout(() => ui.bump(), 0);
 }
 /* ----- 질문 칩: what to ask or do next on this page. Built from the page's own data (free, instant): my weak goal,
    a pair of look-alike terms, a core term, a formula, the exam angle; plus the model's own follow-ups, which ride
@@ -2432,8 +2439,8 @@ function promptOf(k){
 }
 const explainAsk = () => promptOf("explain") || EXPLAIN_ASK;
 const PS = { open:false, tab:"explain", draft:{}, fixed:null, preview:null };
-function openPrompts(tab){ PS.open = true; if (tab) PS.tab = tab; PS.preview = null; paintPrompts();
-  if (!PS.fixed && notesApi && notesApi.prompts) notesApi.prompts().then(f => { PS.fixed = f; paintPrompts(); }, () => {}); }
+function openPrompts(tab){ PS.open = true; if (tab) PS.tab = tab; PS.preview = null; ui.bump();
+  if (!PS.fixed && notesApi && notesApi.prompts) notesApi.prompts().then(f => { PS.fixed = f; ui.bump(); }, () => {}); }
 function savePrompt(k, value){
   const p = S.plan.prefs || (S.plan.prefs = {}); const v = String(value || "").trim().slice(0, 1500);
   p.prompts = { ...(p.prompts || {}) };
@@ -2461,42 +2468,28 @@ async function buildPreview(k){
     const o = d.objectives.find(x => x.pages.includes(R.page));
     PS.preview = GoalEx.prompt(d, o, await GoalEx.source(d, o), (PS.draft[k] ?? promptOf(k)) || "");
   } else PS.preview = fixedText(k).replace("(내 요청)", (PS.draft[k] ?? promptOf(k)) || "(비어 있음 — 이 부분은 빠져요)");
-  paintPrompts();
+  ui.bump();
 }
-function paintPrompts(){
-  let el = document.getElementById("promptCard");
-  if (!PS.open){ if (el) el.remove(); return; }
+function paintPrompts(){ ui.bump(); }
+/* 프롬프트 설정 창에 그릴 값 (reader/PromptsDialog.tsx) */
+function promptsView(){
+  if (!PS.open) return null;
   const k = PS.tab, def = PROMPTS[k], cur = PS.draft[k] ?? (promptOf(k) || def.def);
-  const ta = h("textarea", { class:"ex-prompt", rows:"6", placeholder: def.def ? "" : "비워 두면 기본 방식으로 답해요. 예: 더 짧게, 예시 먼저" });
-  ta.value = cur; ta.addEventListener("input", () => { PS.draft[k] = ta.value; });
-  const custom = !!promptOf(k);
   const R = S.reader, d = S.decks[R.deckId];
-  const redo = k === "explain" && ask && S.view === "read" && d && Chat.docked;
-  const fresh = h("div", { class:"pset-layer", id:"promptCard", onclick: (e) => { if (e.target === e.currentTarget){ PS.open = false; paintPrompts(); } } },
-    h("aside", { class:"pset", role:"dialog", "aria-label":"프롬프트 설정" },
-      h("div", { class:"row", style:"justify-content:space-between" }, h("strong", { text:"⚙ 프롬프트 설정" }),
-        h("button", { class:"dclose", "aria-label":"닫기", onclick: () => { PS.open = false; paintPrompts(); } }, "✕")),
-      h("div", { class:"dtabs pset-tabs", role:"tablist" }, Object.entries(PROMPTS).map(([key, x]) =>
-        h("button", { role:"tab", class:"dtab", "aria-selected": key === k ? "true" : "false", onclick: () => { PS.tab = key; PS.preview = null; paintPrompts(); } },
-          x.label, promptOf(key) ? h("span", { class:"pset-dot", title:"내 요청 사용 중" }) : null))),
-      h("p", { class:"small muted", text:def.when }),
-      h("div", { class:"field" }, h("label", { text:"내 요청 (바꿀 수 있어요)" }),
-        h("div", { class:"ex-presets" }, def.presets.map(([label, text]) =>
-          h("button", { class:"chip-btn", "aria-pressed": cur.trim() === text ? "true" : "false", onclick: () => { PS.draft[k] = text; paintPrompts(); } }, label))),
-        ta,
-        h("div", { class:"row", style:"gap:6px;justify-content:flex-end" },
-          custom ? h("button", { class:"btn small ghost", onclick: () => { savePrompt(k, def.def); paintPrompts(); toast("기본으로 되돌렸어요."); } }, "기본으로") : null,
-          h("button", { class:"btn small", onclick: () => { savePrompt(k, ta.value); paintPrompts(); toast("저장했어요. 다음 요청부터 적용돼요."); } }, "저장"),
-          redo ? h("button", { class:"btn small primary", onclick: () => { savePrompt(k, ta.value); PS.open = false; paintPrompts();
-            Explain.skip.delete(Explain.sid(d) + ":" + R.page); Explain.go(d, R.page, true); toast("새 요청으로 이 쪽을 다시 설명해요."); } }, "저장하고 이 쪽 다시 설명") : null)),
-      h("div", { class:"field" }, h("label", { text:"자동으로 함께 들어가는 것" }),
-        h("div", { class:"ex-presets" }, def.auto.map(t => h("span", { class:"chip", text:t })))),
-      h("details", null, h("summary", { class:"small", text:"고정 지시 보기 (바꿀 수 없음 · 내 요청보다 우선)" }), h("pre", { class:"pset-pre", text:fixedText(k) })),
-      h("details", { open: PS.preview ? true : null, ontoggle: (e) => { if (e.target.open && !PS.preview) buildPreview(k); } },
-        h("summary", { class:"small", text: (k === "explain" || k === "chat" || k === "goal") && S.view === "read" ? "실제로 보내는 모양 (지금 보는 쪽 기준)" : "실제로 보내는 모양" }),
-        h("pre", { class:"pset-pre", text: PS.preview || "만드는 중…" }))));
-  if (el) el.replaceWith(fresh); else root.append(fresh);
+  return { tab:k, tabs:Object.entries(PROMPTS).map(([key, x]) => ({ key, label:x.label, custom:!!promptOf(key) })), when:def.when, cur, hasDefault:!!def.def,
+    presets:def.presets.map(([label, text]) => ({ label, text })), auto:def.auto, custom:!!promptOf(k), redo: k === "explain" && !!ask && S.view === "read" && !!d && Chat.docked,
+    fixed:fixedText(k), preview:PS.preview, previewLabel: (k === "explain" || k === "chat" || k === "goal") && S.view === "read" ? "실제로 보내는 모양 (지금 보는 쪽 기준)" : "실제로 보내는 모양" };
 }
+const promptsApi = {
+  close: () => { PS.open = false; ui.bump(); },
+  tab: (k) => { PS.tab = k; PS.preview = null; ui.bump(); },
+  draft: (v) => { PS.draft[PS.tab] = v; ui.bump(); },
+  reset: () => { savePrompt(PS.tab, PROMPTS[PS.tab].def); ui.bump(); toast("기본으로 되돌렸어요."); },
+  save: () => { const k = PS.tab; savePrompt(k, PS.draft[k] ?? (promptOf(k) || PROMPTS[k].def)); ui.bump(); toast("저장했어요. 다음 요청부터 적용돼요."); },
+  saveRedo: () => { const k = PS.tab, R = S.reader, d = S.decks[R.deckId]; savePrompt(k, PS.draft[k] ?? (promptOf(k) || PROMPTS[k].def)); PS.open = false; ui.bump();
+    if (d){ Explain.skip.delete(Explain.sid(d) + ":" + R.page); Explain.go(d, R.page, true); } toast("새 요청으로 이 쪽을 다시 설명해요."); },
+  preview: () => { if (!PS.preview) buildPreview(PS.tab); },
+};
 function promptsButton(){
   if (document.getElementById("promptBtn")) return;
   const store = document.getElementById("store"); if (!store) return;
@@ -2516,7 +2509,7 @@ const Explain = {
     const e = this.src[k] = { status:"loading", map:new Map(), goals:new Map() };
     if (!notesOn(d) || !notesApi.explanations){ e.status = "ready"; return; }
     notesApi.explanations(k).then(list => { for (const x of list){ if (x.goal) e.goals.set(x.goal, x.text); else e.map.set(x.page, x.text); } }, () => {})
-      .then(() => { e.status = "ready"; const R = S.reader, cur = S.decks[R.deckId]; if (S.view === "read" && cur && this.sid(cur) === k){ GoalEx.paintAll(); if (TM.open) TermMap.paint(); if (Trans.on()) drawPage(); } if (S.view === "read" && Chat.docked && cur && this.sid(cur) === k){ this.paintNode(); this.want(cur, R.page); } });
+      .then(() => { e.status = "ready"; const R = S.reader, cur = S.decks[R.deckId]; if (S.view === "read" && cur && this.sid(cur) === k){ ui.bump(); if (Trans.on()) drawPage(); } if (S.view === "read" && Chat.docked && cur && this.sid(cur) === k) this.want(cur, R.page); });
   },
   stop(){ clearTimeout(this.timer); this.timer = null; if (this.run && this.run.ctl) this.run.ctl.abort(); this.run = null; },
   want(d, page){
@@ -2561,30 +2554,19 @@ ${explainAsk().slice(0, 1500)}
     }
     this.paintNode();
   },
-  node(d, page){
+  /* 쉬운 설명 칸에 그릴 값 (ChatWindow.tsx의 ExplainCard) */
+  view(d, page){
     const key = this.sid(d) + ":" + page, e = this.src[this.sid(d)];
     const saved = e && e.map.get(page), run = this.run && this.run.key === key ? this.run : null;
-    const auto = h("input", { type:"checkbox" }); auto.checked = this.auto();
-    auto.addEventListener("change", () => { (S.plan.prefs || (S.plan.prefs = {})).autoExplain = auto.checked; Store.savePlan(S.plan); this.paintNode(); if (auto.checked) this.want(d, page); });
-    const head = h("div", { class:"ex-head" }, h("b", { text:`쉬운 설명 · p.${page}` }), h("span", { class:"grow" }),
-      ask ? h("label", { class:"ex-auto", title:"쪽을 넘기고 1.5초 머무르면 자동으로 설명해요. 쪽마다 한 번만 만들고 저장해 둬요." }, auto, "자동") : null,
-      h("button", { class:"ex-gear" + (promptOf("explain") ? " on" : ""), 
-        title: promptOf("explain") ? "설명 방식 바꾸기 (내 요청 사용 중)" : "설명 방식 바꾸기", "aria-label":"쉬운 설명 설정",
-        onclick: () => openPrompts("explain") }, "⚙"));
-    const again = (label) => h("button", { class:"chip-btn", onclick: () => { this.skip.delete(key); this.go(d, page, true); } }, label);
-    let body;
-    if (run) body = h("div", { class:"ex-body streaming", id:"explainBody" }, richLines(shown(run.text) || "쉬운 설명을 쓰는 중…"));
-    else if (saved) body = h("div", { class:"ex-body", id:"explainBody" }, richLines(shown(saved)));
-    else if (!ask) body = h("p", { class:"small muted", text:"질문 답변이 연결되면 쪽마다 쉬운 설명이 여기 바로 떠요." });
-    else if (this.err && this.err.key === key) body = h("div", null, h("p", { class:"check", text:this.err.text }), again("다시 설명 받기"));
-    else if (this.skip.has(key)) body = h("div", null, h("p", { class:"small muted", text:"글자가 거의 없는 쪽이라 자동 설명은 건너뛰었어요." }), again("그래도 설명 보기"));
-    else if (!this.auto()) body = again("이 쪽 쉬운 설명 보기");
-    else body = h("p", { class:"small muted ex-wait", text: e && e.status === "loading" ? "저장된 설명을 불러오는 중…" : "잠깐 머무르면 쉬운 설명이 떠요…" });
-    return h("div", { class:"explain", id:"explainCard" }, head, body);
+    return { page, auto:this.auto(), canAsk:!!ask, custom:!!promptOf("explain"), loading: !!(e && e.status === "loading"),
+      text: run ? (shown(run.text) || "쉬운 설명을 쓰는 중…") : saved ? shown(saved) : "", streaming:!!run,
+      err: this.err && this.err.key === key ? this.err.text : "", skipped:this.skip.has(key) };
   },
+  setAuto(on){ const R = S.reader, d = S.decks[R.deckId]; (S.plan.prefs || (S.plan.prefs = {})).autoExplain = on; Store.savePlan(S.plan); ui.bump(); if (on && d) this.want(d, R.page); },
+  again(){ const R = S.reader, d = S.decks[R.deckId]; if (!d) return; this.skip.delete(this.sid(d) + ":" + R.page); this.go(d, R.page, true); },
   next(d, page){ const e = this.src[this.sid(d)], t = e && e.map.get(page); return t ? splitNext(t).next : []; },
-  paintNode(){ const el = document.getElementById("explainCard"), R = S.reader, d = S.decks[R.deckId]; if (el && d) el.replaceWith(this.node(d, R.page)); if (Chat.el && !Chat.busy) Chat.paintSugs(); },
-  paintBody(){ const b = document.getElementById("explainBody"); if (b && this.run) b.replaceChildren(...richLines(shown(this.run.text) || "…")); else this.paintNode(); },
+  paintNode(){ ui.bump(); },
+  paintBody(){ ui.bump(); },
 };
 /* ----- 번역 보기: the PDF page itself turns Korean. Text lines are grouped into blocks (a bullet, a wrapped paragraph,
    a title, a label); each block is covered with the page's own background and the translation is written in the same
@@ -2808,43 +2790,38 @@ document.addEventListener("keydown", (e) => {
   if ((e.key === "Escape" && MaterialMapView.cur && !typing) || (e.altKey && e.key === "ArrowLeft")){ if (backOne()) e.preventDefault(); }
 });
 document.addEventListener("mouseup", (e) => { if (e.button === 3 && backOne()) e.preventDefault(); });
+// 원문 보기가 열려 있으면 Esc·←·→는 그 창 것 (다른 곳보다 먼저)
+on(document, "keydown", (e) => {
+  if (!SourcePeek.cur) return;
+  if (e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); SourcePeek.close(); }
+  else if (e.key === "ArrowLeft"){ e.stopPropagation(); SourcePeek.go(-1); }
+  else if (e.key === "ArrowRight"){ e.stopPropagation(); SourcePeek.go(1); }
+}, { capture:true });
 
 /* 원문 보기: one page of the PDF in a window over whatever is on screen (the map, a result), ‹ › to turn, Esc to close. */
+// 11/11 React로: 창은 reader/ReaderOverlays.tsx의 SourcePeekLayer가 그리고, 쪽 그림만 여기 paintBox가 그 칸에 그린다.
 const SourcePeek = {
   cur: null,
   open(d, page){
     if (!d) return;
-    this.close();
     ensurePdf(d);
     const total = pageTotal(d);
-    const box = h("div", { class:"pagebox" }), label = h("span", { class:"num" });
-    const prev = h("button", { class:"qbtn", "aria-label":"이전 쪽", onclick: () => this.go(-1) }, "‹");
-    const next = h("button", { class:"qbtn", "aria-label":"다음 쪽", onclick: () => this.go(1) }, "›");
-    const ov = h("div", { class:"zoomlayer peek", role:"dialog", "aria-label":"원문 보기", onclick: (e) => { if (e.target === e.currentTarget) this.close(); } },
-      h("div", { class:"zoombar" }, h("span", { class:"row" }, prev, label, next), h("button", { class:"qbtn", onclick: () => this.close() }, "닫기 ✕")), box);
-    (document.getElementById("app").closest(".dejipgi") || document.body).append(ov);
-    const key = (e) => {
-      if (e.key === "Escape"){ e.stopPropagation(); e.preventDefault(); this.close(); }
-      else if (e.key === "ArrowLeft"){ e.stopPropagation(); this.go(-1); }
-      else if (e.key === "ArrowRight"){ e.stopPropagation(); this.go(1); }
-    };
-    document.addEventListener("keydown", key, true);
-    this.cur = { d, page: Math.max(1, Math.min(total, page || 1)), total, ov, box, label, prev, next, key };
-    this.paint();
+    this.cur = { d, page: Math.max(1, Math.min(total, page || 1)) };
+    ui.bump();
   },
-  go(k){ const c = this.cur; if (!c) return; const n = c.page + k; if (n < 1 || n > c.total) return; c.page = n; this.paint(); },
-  async paint(){
-    const c = this.cur; if (!c) return;
-    c.label.textContent = `p.${c.page} / ${c.total}`; c.prev.disabled = c.page <= 1; c.next.disabled = c.page >= c.total;
+  go(k){ const c = this.cur; if (!c) return; const n = c.page + k; if (n < 1 || n > pageTotal(c.d)) return; c.page = n; ui.bump(); },
+  view(){
+    const c = this.cur; if (!c) return null;
     const P = S.pdf[c.d.id];
-    if (!P || P.status === "loading"){ c.box.textContent = "원본 PDF를 불러오는 중…"; setTimeout(() => { if (this.cur === c) this.paint(); }, 300); return; }
-    if (P.status === "error"){ c.box.textContent = "원본 PDF를 불러오지 못했어요."; return; }
-    const a = pageAspect(c.d);
-    c.box.style.cssText = `width:min(calc(100vw - 32px), calc((100vh - 90px) * ${a}));aspect-ratio:${a}`;
-    c.box.dataset.key = c.d.id + ":" + c.page;
-    await paintBox(c.box, c.d, c.page, Math.max(200, Math.floor(c.box.getBoundingClientRect().width)));
+    if (!P || P.status === "loading") setTimeout(() => { if (this.cur === c) ui.bump(); }, 300);
+    return { page:c.page, total:pageTotal(c.d), key:c.d.id + ":" + c.page, status: !P ? "loading" : P.status, aspect:pageAspect(c.d) };
   },
-  close(){ const c = this.cur; if (!c) return; document.removeEventListener("keydown", c.key, true); c.ov.remove(); this.cur = null; },
+  async paint(box){
+    const c = this.cur; if (!c || !box) return;
+    const P = S.pdf[c.d.id]; if (!P || P.status !== "ready") return;
+    await paintBox(box, c.d, c.page, Math.max(200, Math.floor(box.getBoundingClientRect().width)));
+  },
+  close(){ if (!this.cur) return; this.cur = null; ui.bump(); },
 };
 const TermMap = {
   // The studied range: real decks carry no page texts, so it comes from where the objectives and questions sit.
@@ -2874,11 +2851,11 @@ const TermMap = {
     return parts.join("\n\n");
   },
   system(style){ style = String(style || "").trim(); return TERMS_RULES + (style ? `\n\n[학습자가 정한 방식 — 위 규칙·형식과 충돌하면 위 규칙을 따른다]\n${style.slice(0, 1500)}` : ""); },
-  openFor(d){ TM.open = true; TM.sel = null; TM.key = Explain.sid(d) + ":" + this.key(d); Explain.load(d); this.paint(); },
+  openFor(d){ TM.open = true; TM.sel = null; TM.key = Explain.sid(d) + ":" + this.key(d); Explain.load(d); ui.bump(); },
   async go(d){
     if (!notesApi || !notesApi.compose) return;
     const k = Explain.sid(d) + ":" + this.key(d);
-    TM.err = null; TM.run = { key:k, at:Date.now() }; this.paint();
+    TM.err = null; TM.run = { key:k, at:Date.now() }; ui.bump();
     try{
       const user = `[자료] ${d.title}\n\n${await this.source(d)}`;
       const raw = await notesApi.compose({ system:this.system(promptOf("terms")), user, kind:"terms" });
@@ -2890,61 +2867,18 @@ const TermMap = {
     }catch(err){
       TM.err = { key:k, text: err instanceof SyntaxError || (err && err.message === "빈 지도") ? "지도를 읽지 못했어요. 다시 만들어 주세요." : composeErrorCopy(err) };
     }
-    TM.run = null; this.paint();
+    TM.run = null; ui.bump();
   },
   find(map, name){ const n = String(name).trim().toLowerCase(); for (const g of map.groups) for (const t of g.terms) if (t.en.toLowerCase() === n || t.ko.toLowerCase() === n) return t; return null; },
-  pick(t){ TM.sel = TM.sel === t.en ? null : t.en; this.paint();
-    if (TM.sel) requestAnimationFrame(() => { const el = [...document.querySelectorAll("[data-term]")].find(x => x.dataset.term === t.en); if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" }); }); },
-  termNode(d, t, kids){
-    const on = TM.sel === t.en;
-    return h("li", { class:"tm-term" + (on ? " on" : ""), "data-term":t.en },
-      h("button", { class:"tm-name", "aria-expanded": on ? "true" : "false", onclick: () => this.pick(t) },
-        h("b", { text:t.en }), t.ko ? h("span", { text:t.ko }) : null),
-      on ? h("div", { class:"tm-card" },
-        t.parts ? h("p", { class:"tm-parts", text:t.parts }) : null,
-        t.def ? h("p", null, h("span", { class:"tm-k", text:"정의" }), ...richText(t.def)) : null,
-        t.analogy ? h("p", { class:"tm-ana" }, h("span", { class:"tm-k", text:"비유" }), ...richText(t.analogy)) : null,
-        t.pair ? h("p", null, h("span", { class:"tm-k", text:"헷갈리는 짝" }), ...richText(t.pair)) : null,
-        t.page ? h("button", { class:"linkish", onclick: () => { TM.open = false; this.paint(); goPage(t.page); } }, `원문 p.${t.page}로 가기`) : null) : null,
-      kids.length ? h("ul", { class:"tm-sub" }, kids) : null);
-  },
-  tree(d, g){
-    const names = new Set(g.terms.map(t => t.en));
-    const build = (t, seen) => this.termNode(d, t, g.terms.filter(c => c.under === t.en && !seen.has(c.en)).map(c => build(c, new Set([...seen, c.en]))));
-    return g.terms.filter(t => !t.under || !names.has(t.under) || t.under === t.en).map(t => build(t, new Set([t.en])));
-  },
-  story(map){
-    return String(map.story).split(/\n+/).filter(Boolean).map(par => h("p", null, par.split(/\[\[(.+?)\]\]/g).flatMap((bit, i) => {
-      if (i % 2 === 0) return richText(bit);
-      const t = this.find(map, bit);
-      return t ? [h("button", { class:"tm-link", title:t.ko || "", onclick: () => this.pick(t) }, t.en)] : [h("b", { text:bit })];
-    })));
-  },
-  paint(){
-    let el = document.getElementById("termMap");
+  pick(en){ TM.sel = TM.sel === en ? null : en; ui.bump();
+    if (TM.sel) requestAnimationFrame(() => { const el = [...document.querySelectorAll("[data-term]")].find(x => x.dataset.term === en); if (el) el.scrollIntoView({ block:"nearest", behavior:"smooth" }); }); },
+  /* 용어 지도 창에 그릴 값 (reader/TermMapDialog.tsx) */
+  view(){
     const R = S.reader, d = S.decks[R.deckId];
-    if (!TM.open || !d){ if (el) el.remove(); return; }
-    const k = Explain.sid(d) + ":" + this.key(d), map = this.saved(d), e = Explain.src[Explain.sid(d)];
-    const close = () => { TM.open = false; this.paint(); };
-    let body;
-    if (TM.run && TM.run.key === k) body = h("div", { class:"tm-empty" }, h("p", { class:"ex-wait", text:"자료 전체에서 용어를 뽑아 묶고 이야기를 쓰는 중이에요… (자료가 길면 1~2분)" }));
-    else if (map) body = h("div", { class:"tm-grid" },
-      h("section", { class:"tm-map" }, h("span", { class:"lbl", text:`지도 · 용어 ${map.groups.reduce((n, g) => n + g.terms.length, 0)}개` }),
-        map.groups.map(g => h("div", { class:"tm-group" }, h("div", { class:"tm-gname", text:g.name }), h("ul", { class:"tm-list" }, this.tree(d, g))))),
-      map.story ? h("section", { class:"tm-story" }, h("span", { class:"lbl", text:"이야기로 한 번에 · 비유가 섞여 있어요" }), this.story(map)) : null);
-    else if (e && e.status === "loading") body = h("div", { class:"tm-empty" }, h("p", { class:"small muted", text:"저장된 지도를 불러오는 중…" }));
-    else if (!notesApi || !notesApi.compose) body = h("div", { class:"tm-empty" }, h("p", { class:"small muted", text:"질문 답변이 연결되면 용어 지도를 만들 수 있어요." }));
-    else body = h("div", { class:"tm-empty" },
-      TM.err && TM.err.key === k ? h("p", { class:"check", text:TM.err.text }) : h("p", { class:"small muted", text:"이 자료의 용어를 한국어 뜻·비유와 함께 묶어 지도와 이야기로 만들어요. 자료마다 한 번 만들고 저장해요." }),
-      h("button", { class:"btn primary", onclick: () => this.go(d) }, "용어 지도 만들기"));
-    const fresh = h("div", { class:"pset-layer tm-layer", id:"termMap", onclick: (ev) => { if (ev.target === ev.currentTarget) close(); } },
-      h("aside", { class:"pset tmap", role:"dialog", "aria-label":"용어 지도" },
-        h("div", { class:"row tm-head" }, h("strong", { text:`용어 지도 · ${displayTitle(d)}` }), h("span", { class:"grow" }),
-          map && !(TM.run && TM.run.key === k) ? h("button", { class:"linkish", title:"지금 요청으로 새로 만들어요", onclick: () => this.go(d) }, "다시 만들기") : null,
-          h("button", { class:"ex-gear" + (promptOf("terms") ? " on" : ""), title:"용어 지도 방식 바꾸기 (비유 소재 등)", "aria-label":"용어 지도 설정", onclick: () => openPrompts("terms") }, "⚙"),
-          h("button", { class:"dclose", "aria-label":"닫기", onclick: close }, "✕")),
-        body));
-    if (el) el.replaceWith(fresh); else root.append(fresh);
+    if (!TM.open || !d) return null;
+    const k = Explain.sid(d) + ":" + this.key(d), e = Explain.src[Explain.sid(d)];
+    return { title:displayTitle(d), map:this.saved(d), sel:TM.sel, running:!!(TM.run && TM.run.key === k), loading:!!(e && e.status === "loading"),
+      canMake:!!(notesApi && notesApi.compose), err: TM.err && TM.err.key === k ? TM.err.text : "", custom:!!promptOf("terms") };
   },
 };
 /* ----- 목표 설명: press a goal in "이 쪽에서 익힐 것" and it opens into a compact note of exactly what the goal asks —
@@ -3011,157 +2945,37 @@ ${source}`;
     }
     this.paintAll();
   },
-  node(d, o){
+  /* 펼친 목표 정리에 그릴 값 (reader/ReaderView.tsx) */
+  view(d, o){
     if (!this.isOpen(d, o)) return null;
     const k = this.key(d, o), saved = this.saved(d, o), run = this.run && this.run.key === k ? this.run : null;
-    const R = S.reader;
-    let body;
-    if (run) body = h("div", { class:"ex-body streaming", "data-gxbody":k }, richLines(shown(run.text) || "정리하는 중…"));
-    else if (saved) body = h("div", { class:"ex-body" }, richLines(saved));
-    else if (!ask) body = h("p", { class:"small muted", text:"질문 답변이 연결되면 목표를 누를 때 정리가 여기 떠요." });
-    else if (this.err && this.err.key === k) body = h("p", { class:"check", text:this.err.text });
-    else { const e = Explain.src[Explain.sid(d)]; body = h("p", { class:"small muted ex-wait", text: e && e.status === "loading" ? "저장된 정리를 불러오는 중…" : "정리하는 중…" }); }
-    const has = d.items.some(it => it.objectiveId === o.id);
-    return h("div", { class:"gx", "data-gx":k },
-      body,
-      run ? null : h("div", { class:"gx-foot" },
-        has ? h("button", { class:"chip-btn", onclick: () => startCheck(d.id, R.page, o.id) }, "이 목표 문제 풀기") : null,
-        h("button", { class:"chip-btn", onclick: () => Chat.quoteIn(o.statement) }, "질문 창에서 더 묻기"),
-        h("span", { class:"grow" }),
-        ask && (saved || (this.err && this.err.key === k)) ? h("button", { class:"linkish", title:"지금 요청으로 새로 정리해요", onclick: () => this.go(d, o) }, saved ? "다시 정리" : "다시 시도") : null,
-        h("button", { class:"ex-gear" + (promptOf("goal") ? " on" : ""), title:"목표 설명 방식 바꾸기", "aria-label":"목표 설명 설정", onclick: () => openPrompts("goal") }, "⚙")));
+    const e = Explain.src[Explain.sid(d)];
+    return { text: run ? (shown(run.text) || "정리하는 중…") : saved || "", streaming:!!run, canAsk:!!ask, err: this.err && this.err.key === k ? this.err.text : "",
+      loading: !!(e && e.status === "loading"), saved:!!saved, hasItems:d.items.some(it => it.objectiveId === o.id), custom:!!promptOf("goal") };
   },
-  paintAll(){
-    const R = S.reader, d = S.decks[R.deckId]; if (!d) return;
-    document.querySelectorAll("[data-gx]").forEach(el => { const o = d.objectives.find(x => this.key(d, x) === el.dataset.gx); const n = o && this.node(d, o); if (n) el.replaceWith(n); else el.remove(); });
-  },
-  paintBody(){
-    const b = this.run && [...document.querySelectorAll("[data-gxbody]")].find(el => el.dataset.gxbody === this.run.key);
-    if (b) b.replaceChildren(...richLines(shown(this.run.text) || "…")); else this.paintAll();
-  },
+  paintAll(){ ui.bump(); },
+  paintBody(){ ui.bump(); },
 };
 /* ----- floating question window: lives outside #app so re-renders never reset it.
    Answers need a paid model call, so `ask` stays unset until the user approves wiring it. ----- */
+/* ----- 질문 창 (11/11 React로: workspace/reader/ChatWindow.tsx가 그린다). 여기는 대화 상태와 보내기만.
+   떠 있는 창(floating) 또는 읽기 곁 패널에 붙은 창(docked). Answers need a paid model call (`ask`). ----- */
 const Chat = {
-  el:null, msgs:[], busy:false, ctl:null, err:"",
+  visible:false, msgs:[], busy:false, ctl:null, err:"", input:"", focusTick:0,
   // 모르는 것 노트: one conversation is one note item; a conversation continued from a card extends that card.
   noteId:null, noteSource:null, noteTitle:"", fromNote:null, base:0, quote:null,
-  box(){ try{ return JSON.parse(localStorage.getItem("dejipgi.chatbox") || "null"); }catch(e){ return null; } },
-  saveBox(){ if (!this.el || this.mode !== "normal") return; const r = this.el.getBoundingClientRect(); try{ localStorage.setItem("dejipgi.chatbox", JSON.stringify({ x:r.left, y:r.top, w:r.width, h:r.height })); }catch(e){} },
   mode:"normal", docked:false,
-  isOpen(){ return !!(this.el && !this.el.hidden && !this.docked); },
-  /* 곁 패널에 붙기: the same window, moved into the reader's side panel (no header; the panel's tabs replace it). */
-  dockInto(slot, refocus){
-    if (!this.el) this.build();
-    const log = this.el.querySelector("#chatLog"), top = log ? log.scrollTop : 0;
-    this.docked = true; this.el.classList.add("docked"); this.el.hidden = false;
-    this.el.querySelector("textarea").placeholder = "물어보기 · Enter 보내기";
-    for (const k of ["left","top","width","height"]) this.el.style[k] = "";
-    slot.append(this.el); this.paint();
-    if (log && top) log.scrollTop = top;
-    if (refocus) this.el.querySelector("textarea").focus({ preventScroll:true });
-  },
-  undock(){
-    if (!this.el || !this.docked) return;
-    this.docked = false; this.el.classList.remove("docked"); this.el.hidden = true;
-    this.el.querySelector("textarea").placeholder = "지금 보는 쪽에 대해 물어보세요 (Enter 보내기, Shift+Enter 줄바꿈)";
-    root.append(this.el); this.setMode("normal");
-  },
-  setMode(m){
-    if (!this.el) return;
-    if (this.mode === "normal" && m !== "normal" && innerWidth > 700) this.saveBox();
-    this.mode = m;
-    this.el.dataset.mode = m;
-    const max = this.el.querySelector("#chatMax"), min = this.el.querySelector("#chatMin");
-    max.textContent = m === "max" ? "⤡" : "⤢"; max.title = m === "max" ? "원래 크기" : "크게 보기"; max.setAttribute("aria-label", max.title);
-    min.textContent = m === "min" ? "▢" : "—"; min.title = m === "min" ? "펼치기" : "접기"; min.setAttribute("aria-label", min.title);
-    if (m === "normal") this.place();
-    else if (m === "max" && innerWidth > 700){
-      const w = Math.min(innerWidth - 32, Math.max(560, Math.round(innerWidth * 0.46)));
-      Object.assign(this.el.style, { left:(innerWidth - w - 16) + "px", top:"16px", width:w + "px", height:(innerHeight - 32) + "px" });
-    }
-    else if (m === "min" && innerWidth > 700){
-      const r = this.el.getBoundingClientRect();
-      Object.assign(this.el.style, { height:"", top:Math.min(r.top, innerHeight - 60) + "px" });
-    }
-    if (m !== "min") setTimeout(() => { const log = this.el.querySelector("#chatLog"); if (log) log.scrollTop = log.scrollHeight; }, 0);
-  },
+  isOpen(){ return this.visible && !this.docked; },
+  focus(){ this.focusTick++; ui.bump(); },
+  setMode(m){ this.mode = m; ui.bump(); },
   toggle(){ this.isOpen() ? this.close() : this.open(); },
-  close(){ if (this.docked) return; if (this.ctl) this.ctl.abort(); if (this.el) this.el.hidden = true; if (S.view === "read") render(); },
+  close(){ if (this.docked) return; if (this.ctl) this.ctl.abort(); this.visible = false; if (S.view === "read") render(); else ui.bump(); },
   open(){
-    // Docked: the window is already on screen; show what was just loaded into it (a saved talk, a card's thread).
-    if (this.docked){ setPanelTab("ask"); this.paint(); setTimeout(() => this.el.querySelector("textarea").focus(), 0); return; }
-    if (!this.el) this.build();
-    this.el.hidden = false; this.setMode(this.mode === "max" ? "max" : "normal"); this.paint();
-    ensureKatex().then(ok => { if (ok && this.isOpen()) this.paint(); });
-    setTimeout(() => this.el.querySelector("textarea").focus(), 0);
-    if (S.view === "read") render();
-  },
-  place(){
-    const b = this.box(), vw = innerWidth, vh = innerHeight;
-    if (vw <= 700){ Object.assign(this.el.style, { left:"", top:"", width:"", height:"" }); return; }
-    const w = Math.min(Math.max(b?.w || 380, 300), vw - 24), hgt = Math.min(Math.max(b?.h || Math.min(480, vh - 220), 260), vh - 24);
-    const x = Math.min(Math.max(b?.x ?? vw - w - 24, 8), vw - w - 8), y = Math.min(Math.max(b?.y ?? 120, 8), vh - hgt - 8);
-    Object.assign(this.el.style, { left:x + "px", top:y + "px", width:w + "px", height:hgt + "px" });
-  },
-  build(){
-    const ta = h("textarea", { id:"chatInput", rows:"2", placeholder:"지금 보는 쪽에 대해 물어보세요 (Enter 보내기, Shift+Enter 줄바꿈)" });
-    ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); this.send(); } });
-    const head = h("div", { class:"chat-head" },
-      h("span", { class:"chat-grip", "aria-hidden":"true" }),
-      h("strong", { id:"chatTitle", text:"질문하기" }),
-      h("span", { class:"grow" }),
-      h("button", { class:"qbtn", title:"새 대화 시작 (지금 대화는 노트에 남아요)", onclick: () => this.reset() }, "새 대화"),
-      h("button", { class:"qbtn", id:"chatMin", "aria-label":"질문 창 접기", title:"접기", onclick: () => this.setMode(this.mode === "min" ? "normal" : "min") }, "—"),
-      h("button", { class:"qbtn", id:"chatMax", "aria-label":"질문 창 크게", title:"크게 보기", onclick: () => this.setMode(this.mode === "max" ? "normal" : "max") }, "⤢"),
-      h("button", { class:"qbtn", "aria-label":"질문 창 닫기", title:"닫기", onclick: () => this.close() }, "✕"));
-    head.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) this.setMode(this.mode === "max" ? "normal" : "max"); });
-    this.el = h("section", { class:"chatwin", role:"dialog", "aria-label":"질문하기", hidden:true },
-      head, h("div", { class:"chat-saved", id:"chatSaved", hidden:true }),
-      h("div", { class:"chat-log", id:"chatLog", "aria-live":"polite" }),
-      h("div", { class:"chat-foot" }, h("div", { class:"chat-in" }, h("div", { id:"chatQuote" }), ta), h("button", { class:"btn primary small", id:"chatSend", onclick: () => this.send() }, "보내기")));
-    root.append(this.el);
-    // drag by the header (desktop only)
-    let drag = null;
-    head.addEventListener("pointerdown", (e) => {
-      if (innerWidth <= 700 || e.target.closest("button")) return;
-      const r = this.el.getBoundingClientRect(); drag = { dx:e.clientX - r.left, dy:e.clientY - r.top };
-      head.setPointerCapture(e.pointerId); this.el.classList.add("dragging");
-    });
-    head.addEventListener("pointermove", (e) => {
-      if (!drag) return;
-      const r = this.el.getBoundingClientRect();
-      const x = Math.min(Math.max(e.clientX - drag.dx, 4), innerWidth - r.width - 4);
-      const y = Math.min(Math.max(e.clientY - drag.dy, 4), innerHeight - 48);
-      this.el.style.left = x + "px"; this.el.style.top = y + "px";
-    });
-    const end = () => { if (!drag) return; drag = null; this.el.classList.remove("dragging"); this.saveBox(); };
-    head.addEventListener("pointerup", end); head.addEventListener("pointercancel", end);
-    // resize from any edge or corner
-    for (const dir of ["n","s","e","w","ne","nw","se","sw"]){
-      const hd = h("div", { class:"rz rz-" + dir, "aria-hidden":"true" });
-      let st = null;
-      hd.addEventListener("pointerdown", (e) => {
-        if (innerWidth <= 700) return;
-        if (this.mode !== "normal") this.setMode("normal");
-        const r = this.el.getBoundingClientRect(); st = { x:e.clientX, y:e.clientY, l:r.left, t:r.top, w:r.width, h:r.height };
-        hd.setPointerCapture(e.pointerId); this.el.classList.add("dragging"); e.preventDefault();
-      });
-      hd.addEventListener("pointermove", (e) => {
-        if (!st) return;
-        const dx = e.clientX - st.x, dy = e.clientY - st.y, MINW = 300, MINH = 220;
-        let { l, t, w, h:hh } = st;
-        if (dir.includes("e")) w = Math.min(Math.max(st.w + dx, MINW), innerWidth - st.l - 4);
-        if (dir.includes("s")) hh = Math.min(Math.max(st.h + dy, MINH), innerHeight - st.t - 4);
-        if (dir.includes("w")){ w = Math.min(Math.max(st.w - dx, MINW), st.l + st.w - 4); l = st.l + st.w - w; }
-        if (dir.includes("n")){ hh = Math.min(Math.max(st.h - dy, MINH), st.t + st.h - 4); t = st.t + st.h - hh; }
-        Object.assign(this.el.style, { left:l + "px", top:t + "px", width:w + "px", height:hh + "px" });
-      });
-      const stop = () => { if (!st) return; st = null; this.el.classList.remove("dragging"); this.saveBox(); };
-      hd.addEventListener("pointerup", stop); hd.addEventListener("pointercancel", stop);
-      this.el.append(hd);
-    }
-    on(window, "resize", () => { if (this.isOpen()) this.setMode(this.mode); });
+    if (this.docked){ setPanelTab("ask"); this.focus(); return; }
+    this.visible = true; if (this.mode === "min") this.mode = "normal";
+    ensureKatex().then(ok => { if (ok && this.isOpen()) ui.bump(); });
+    this.focusTick++;
+    if (S.view === "read") render(); else ui.bump();
   },
   context(){
     const R = S.reader, d = S.decks[R.deckId];
@@ -3179,52 +2993,14 @@ const Chat = {
     Object.assign(this, saved ? { ...saved } : { msgs:[], noteId:null, noteSource:null, noteTitle:"", fromNote:null, base:0 }, { err:"", quote:null });
     this.threadKey = key;
   },
-  paint(){
-    if (!this.el) return;
-    const c = this.context();
-    this.switchThread(c);
-    this.el.querySelector("#chatTitle").textContent = c ? `질문하기 · p.${c.page}` : "질문하기";
-    const saved = this.el.querySelector("#chatSaved");
-    saved.hidden = !this.noteTitle; saved.textContent = this.noteTitle ? `노트 · ${this.noteTitle}` : ""; saved.title = saved.textContent;
-    const qbox = this.el.querySelector("#chatQuote");
-    qbox.replaceChildren(...(this.quote ? [h("div", { class:"qchip" }, h("span", { text:`“${this.quote}”` }), h("button", { class:"qbtn", "aria-label":"인용 빼기", onclick: () => { this.quote = null; this.paint(); } }, "✕"))] : []));
-    const log = this.el.querySelector("#chatLog");
-    const nodes = [];
-    if (this.fromNote) nodes.push(h("p", { class:"chat-hint", style:"text-align:center", text:`‘${this.fromNote}’ 카드에서 이어진 대화예요. 여기 대화도 그 카드에 저장돼요.` }));
-    if (this.docked && c) nodes.push(Explain.node(c.d, c.page));
-    if (!this.msgs.length)
-      nodes.push(h("p", { class:"chat-hint", text: this.docked ? "더 궁금한 건 바로 물어보거나 아래에서 골라 보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." : "지금 보는 쪽을 근거로 답해요. 바로 물어보거나 아래에서 골라 보세요. 원문을 드래그해 [질문 창에 넣기]로 인용할 수도 있어요." }));
-    for (const m of this.msgs){
-      nodes.push(h("div", { class:"bubble " + m.role },
-        m.page && m.role === "user" ? h("span", { class:"bpage", text:`p.${m.page}` }) : null,
-        m.quote ? h("div", { class:"qchip", text:`“${m.quote}”` }) : null,
-        h("div", { class:"btext" }, m.role === "assistant" ? richLines(shown(m.content) || "…") : m.content)));
-    }
-    if (this.err) nodes.push(h("p", { class:"check", text:this.err }));
-    nodes.push(this.sugs(c));
-    log.replaceChildren(...nodes);
-    log.scrollTop = log.scrollHeight;
-    const send = this.el.querySelector("#chatSend");
-    send.textContent = this.busy ? "멈추기" : "보내기";
-    send.onclick = () => this.busy ? (this.ctl && this.ctl.abort()) : this.send();
-  },
-  /* 질문 칩: up to 2–3 questions for this page (✎ puts one in the box to edit) and one next action */
+  paint(){ ui.bump(); },
+  paintSugs(){ ui.bump(); },
+  /* 질문 칩: up to 2–3 questions for this page and one next action */
   sugs(c){
-    const box = h("div", { class:"chat-sugs", id:"chatSugs" });
-    if (!c || this.busy) return box;
+    if (!c || this.busy) return { qs:[], act:null };
     const act = pageAction(c), qs = pageSuggestions(c).slice(0, act ? 2 : 3);
     if (!qs.length && !this.msgs.length) qs.push({ label:"이 쪽 쉽게 설명해 줘", why:"" });
-    for (const q of qs) box.append(h("span", { class:"sug" + (q.why === "AI 제안" ? " ai" : "") },
-      h("button", { class:"chip-btn", title:q.why ? `${q.why} · 누르면 바로 물어봐요` : null, onclick: () => { this.el.querySelector("textarea").value = q.label; this.send(); } },
-        q.why === "AI 제안" ? h("span", { class:"sug-ai", "aria-label":"AI 제안", text:"✦" }) : null, q.label),
-      h("button", { class:"sug-edit", title:"입력창에 넣고 고쳐 쓰기", "aria-label":"고쳐서 묻기", onclick: () => { const ta = this.el.querySelector("textarea"); ta.value = q.label; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, "✎")));
-    if (act) box.append(h("button", { class:"chip-btn act", onclick: act.run }, act.label));
-    return box;
-  },
-  paintSugs(){
-    const old = this.el && this.el.querySelector("#chatSugs"); if (!old) return;
-    const log = this.el.querySelector("#chatLog"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-    old.replaceWith(this.sugs(this.context())); if (atEnd) log.scrollTop = log.scrollHeight;
+    return { qs, act };
   },
   prompt(c, text, style){
     text = String(text || "").slice(0, 6000); style = String(style || "").trim();
@@ -3248,26 +3024,26 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
   reset(keepOpen){
     if (this.ctl) this.ctl.abort();
     Object.assign(this, { msgs:[], err:"", noteId:null, noteSource:null, noteTitle:"", fromNote:null, base:0, quote: keepOpen ? this.quote : null });
-    if (!keepOpen) this.paint();
+    if (!keepOpen) ui.bump();
   },
   /* 질문 창에 넣기: the dragged text becomes a quote chip on the next question */
   quoteIn(text){
     this.quote = text;
-    if (this.docked){ setPanelTab("ask"); this.paint(); this.el.querySelector("textarea").focus(); return; }
-    if (!this.isOpen()) this.open(); else { this.paint(); this.el.querySelector("textarea").focus(); }
+    if (this.docked){ setPanelTab("ask"); this.focus(); return; }
+    if (!this.isOpen()) this.open(); else this.focus();
   },
   /* 질문 창에서 계속: carry a card's answer and turns into the window; new turns go back to that card */
   continueNote(d, note){
     this.reset(true);
     this.msgs = [{ role:"assistant", content:note.answer ? note.answer.lead : "" }, ...note.thread.map(t => ({ role:t.role, content:t.text, quote:t.quote || null }))];
     Object.assign(this, { base:this.msgs.length, noteId:note.id, noteSource:d.sourceCatalogId, fromNote:note.quote, noteTitle:`‘${note.quote}’ 카드` });
-    if (this.isOpen()) this.paint(); else this.open();
+    this.open();
   },
   openTalk(d, note){
     this.reset(true);
     this.msgs = note.thread.map(t => ({ role:t.role, content:t.text, quote:t.quote || null, page:t.role === "user" ? t.page : undefined }));
     Object.assign(this, { base:0, noteId:note.id, noteSource:d.sourceCatalogId, noteTitle:note.quote });
-    if (this.isOpen()) this.paint(); else this.open();
+    this.open();
     notesApi.seen(d.sourceCatalogId, note.id).then(n => { if (n) putNote(d, n); }, () => {});
   },
   async saveTalk(c){
@@ -3278,29 +3054,27 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
       const note = await notesApi.talk({ sourceId:c.d.sourceCatalogId, page:c.page, noteId:this.noteId, turns });
       const first = !this.noteId;
       Object.assign(this, { noteId:note.id, noteSource:c.d.sourceCatalogId, noteTitle: note.kind === "talk" ? note.quote : `‘${note.quote}’ 카드` });
-      putNote(c.d, note); this.paint(); paintDrawer();
+      putNote(c.d, note); ui.bump();
       // The window's title already shows the note; no toast or re-render (it pulled the screen away mid-question).
-      if (first && note.kind === "talk") paintDrawer();
     }catch{ /* the answer is already on screen; saving is retried with the next turn */ }
   },
-  async send(){
-    const ta = this.el.querySelector("textarea");
-    const q = ta.value.trim() || (this.quote ? "이 부분 설명해 줘" : ""); if (!q || this.busy) return;
+  async send(text){
+    const q = String(text ?? this.input).trim() || (this.quote ? "이 부분 설명해 줘" : ""); if (!q || this.busy) return;
     const c = this.context();
     if (!c) return;
-    if (!ask){ this.err = "질문 답변은 아직 연결하지 않았어요. 유료 호출이라 확인을 받은 뒤 붙일 예정이에요."; this.paint(); return; }
+    if (!ask){ this.err = "질문 답변은 아직 연결하지 않았어요. 유료 호출이라 확인을 받은 뒤 붙일 예정이에요."; ui.bump(); return; }
     if (S.session) S.session.viewed.add(c.d.id + ":" + c.page);   // asking about a page during practice counts as help
-    ta.value = ""; this.err = "";
+    this.input = ""; this.err = "";
     if (this.noteId && this.noteSource !== c.d.sourceCatalogId) this.reset(true);   // another material: a new conversation
     this.msgs.push({ role:"user", content:q, page:c.page, quote:this.quote });
     this.quote = null;
     const reply = { role:"assistant", content:"", page:c.page }; this.msgs.push(reply);
-    this.busy = true; this.ctl = new AbortController(); this.paint();
+    this.busy = true; this.ctl = new AbortController(); ui.bump();
     const history = this.msgs.slice(0, -1).slice(-12).map(m => ({ role:m.role, content: m.role === "user" ? `${m.page ? `(p.${m.page}를 보며) ` : ""}${m.quote ? `[원문 인용] “${m.quote}”\n` : ""}${m.content}` : m.content })).filter(m => m.content);
     const ctext = await pageText(c.d, c.page);
     const turns = [{ role:"user", content:this.prompt(c, ctext, promptOf("chat")) }, ...history];
     try{
-      await ask(turns, { ...(picturePage(c.d, ctext) ? { pageImage:{ sourceId:c.d.sourceCatalogId, page:c.page } } : {}), signal:this.ctl.signal, onText: ({ text }) => { reply.content = text; const last = this.el.querySelector("#chatLog .bubble.assistant:last-of-type .btext"); if (last) last.replaceChildren(...richLines(shown(text))); } });
+      await ask(turns, { ...(picturePage(c.d, ctext) ? { pageImage:{ sourceId:c.d.sourceCatalogId, page:c.page } } : {}), signal:this.ctl.signal, onText: ({ text }) => { reply.content = text; ui.bump(); } });
       const sp = splitNext(reply.content); reply.content = sp.body; reply.next = sp.next;
       if (JSON.stringify(reply.content).includes("$") && !katexLib){ await ensureKatex(); }
       this.saveTalk(c);
@@ -3308,8 +3082,9 @@ ${c.objs.length ? `\n[이 쪽의 학습목표]\n${c.objs.map(o => "- " + o.state
       if (e && e.text) reply.content = shown(e.text);
       if (!(e && e.code === "cancelled")) this.err = sampleErrorCopy(e);
       if (!reply.content) this.msgs.pop();
-    }finally{ this.busy = false; this.ctl = null; this.paint(); }
-  }
+    }finally{ this.busy = false; this.ctl = null; ui.bump(); }
+  },
+  stop(){ if (this.ctl) this.ctl.abort(); },
 };
 /* ----- 모르는 것 노트 (docs/DECISIONS.md 2026-09-30): drag over the page → ask → a card linked to the text.
    A phrase asked once is answered from the note after that (no model call); re-views mark weak points. ----- */
@@ -3649,8 +3424,9 @@ function noteMarks(d, entry, W, H){
 }
 
 /* selection menu: lives outside #app so re-renders do not reset it */
-let selPop = null, selTimer = null;
-function hideSel(){ if (selPop) selPop.remove(); selPop = null; }
+// 11/11 React로: 고른 글 메뉴는 reader/ReaderOverlays.tsx가 그린다. 여기는 무엇을 골랐는지(NT.sel)와 누를 것들.
+let selTimer = null;
+function hideSel(){ if (NT.sel){ NT.sel = null; ui.bump(); } }
 function readSelection(){
   const sel = window.getSelection(); if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
   const text = sel.toString().replace(/\s+/g, " ").trim(); if (!text || text.length > 400) return null;
@@ -3662,117 +3438,46 @@ function readSelection(){
   const rect = range.getBoundingClientRect(), br = box.getBoundingClientRect();
   return { text, rect, deckId:key.slice(0, cut), page:Number(key.slice(cut + 1)), yRatio:(rect.top + rect.height / 2 - br.top) / br.height };
 }
+function selActions(){
+  const info = NT.sel; if (!info) return [];
+  const d = S.decks[info.deckId]; if (!d) return [];
+  const canNote = notesOn(d), chatOpen = Chat.isOpen() || Chat.docked;
+  const known = canNote ? findPhrase(d, info.text) : null;
+  const anchor = { deckId:d.id, page:info.page, yRatio:info.yRatio };
+  const clear = () => { try{ window.getSelection().removeAllRanges(); }catch(e){} };
+  const out = [];
+  if (canNote){
+    out.push(known && known.status === "answered"
+      ? { label:"저장된 답 보기", run: () => { clear(); hideSel(); openNote(d, known.id, true); } }
+      : { label:"물어보기", key:"Enter", run: () => { clear(); askPhrase(d, info.page, info.text, anchor); } });
+    if (!known) out.push({ label:"모름 표시", title:"답은 나중에, 모른다는 표시만", run: () => { clear(); markPhrase(d, info.page, info.text); } });
+  }
+  if (chatOpen) out.push({ label:"질문 창에 넣기", run: () => { clear(); hideSel(); Chat.quoteIn(info.text); } });
+  return out;
+}
 function showSel(){
   const info = readSelection(); if (!info){ hideSel(); return; }
   const d = S.decks[info.deckId]; if (!d) return;
-  const canNote = notesOn(d), chatOpen = Chat.isOpen() || Chat.docked;
-  if (!canNote && !chatOpen){ hideSel(); return; }
-  hideSel();
-  const known = canNote ? findPhrase(d, info.text) : null;
-  const anchor = { deckId:d.id, page:info.page, yRatio:info.yRatio };
-  const btns = [];
-  if (canNote){
-    btns.push(known && known.status === "answered"
-      ? h("button", { onclick: () => { window.getSelection().removeAllRanges(); hideSel(); openNote(d, known.id, true); } }, "저장된 답 보기")
-      : h("button", { onclick: () => { window.getSelection().removeAllRanges(); askPhrase(d, info.page, info.text, anchor); } }, "물어보기", h("span", { class:"k", text:"Enter" })));
-    if (!known) btns.push(h("button", { title:"답은 나중에, 모른다는 표시만", onclick: () => { window.getSelection().removeAllRanges(); markPhrase(d, info.page, info.text); } }, "모름 표시"));
-  }
-  if (chatOpen) btns.push(h("button", { onclick: () => { window.getSelection().removeAllRanges(); hideSel(); Chat.quoteIn(info.text); } }, "질문 창에 넣기"));
-  const below = info.rect.top < 64;
-  selPop = h("div", { class:"selpop" + (below ? " below" : ""), role:"toolbar", "aria-label":"고른 글",
-    style:`left:${Math.min(Math.max(info.rect.left + info.rect.width / 2, 110), innerWidth - 110)}px;top:${below ? info.rect.bottom + 8 : info.rect.top - 8}px` }, btns);
-  selPop.addEventListener("mousedown", (e) => e.preventDefault());   // keep the selection while clicking
-  root.append(selPop);
+  if (!notesOn(d) && !(Chat.isOpen() || Chat.docked)){ hideSel(); return; }
+  const r = info.rect, below = r.top < 64;
+  NT.sel = { ...info, below, x:Math.min(Math.max(r.left + r.width / 2, 110), innerWidth - 110), y: below ? r.bottom + 8 : r.top - 8 };
+  ui.bump();
 }
 on(document, "mouseup", (e) => { if (e.target.closest && e.target.closest(".selpop")) return; setTimeout(showSel, 0); });
 on(document, "selectionchange", () => {
   clearTimeout(selTimer);
   const sel = window.getSelection();
-  if (!sel || sel.isCollapsed){ if (selPop && !selPop.matches(":hover")) hideSel(); return; }
+  if (!sel || sel.isCollapsed){ const pop = document.querySelector(".selpop"); if (NT.sel && !(pop && pop.matches(":hover"))) hideSel(); return; }
   if (matchMedia("(hover:none)").matches) selTimer = setTimeout(showSel, 450);   // touch: no mouseup after handles move
 });
-on(window, "scroll", () => { if (selPop) hideSel(); }, { passive:true });
+on(window, "scroll", () => { if (NT.sel) hideSel(); }, { passive:true });
 on(document, "keydown", (e) => {
-  if (!selPop || e.isComposing) return;
+  if (!NT.sel || e.isComposing) return;
   if (e.key === "Escape"){ hideSel(); return; }
-  if (e.key === "Enter"){ const b = selPop.querySelector("button"); if (b){ e.preventDefault(); b.click(); } }
+  if (e.key === "Enter"){ const a = selActions()[0]; if (a){ e.preventDefault(); a.run(); } }
 });
 
-/* answer card: right column on wide screens (linked by a line), bottom sheet on narrow ones */
-function renderNoteCard(d){
-  if (!notesOn(d)) return null;
-  const note = NT.open ? noteList(d).find(n => n.id === NT.open) : null;
-  if (!note && !NT.asking) return null;
-  const quote = note ? note.quote : NT.asking.quote;
-  const [kl, kc] = NOTE_KIND[note ? note.kind : "term"];
-  const weak = note && note.seen >= NOTE_WEAK;
-  const a = note && note.answer;
-  const body = [];
-  if (!note || NT.busy && !a){
-    body.push(NT.err ? null : h("div", { class:"nskel" }, h("i", { style:"width:88%" }), h("i", { style:"width:62%" }), h("i", { style:"width:74%" })));
-  } else if (a){
-    body.push(h("p", { class:"nlead" }, ...richText(a.lead)));
-    if (a.steps && a.steps.length) body.push(h("ol", { class:"nsteps" }, a.steps.map(s => h("li", null, h("b", null, ...richText(s.step)), s.why ? h("span", { class:"why" }, " — ", ...richText(s.why)) : null))));
-    if (a.quote) body.push(h("div", { class:"nquote", text:`“${a.quote}”` }));
-    if (a.extra) body.push(h("p", { class:"nextra" }, ...richText(a.extra)));
-    if (a.outsideSource) body.push(h("div", { class:"nout" }, h("b", { text:"원문 밖 설명" }), " · ", ...richText(a.outsideSource)));
-  }
-  const thread = note && note.thread.length ? h("div", { class:"nthread" }, note.thread.map(t => h("div", { class:"bubble " + (t.role === "user" ? "user" : "assistant") }, h("div", { class:"btext" }, t.role === "user" ? t.text : richLines(t.text))))) : null;
-  const err = NT.err ? h("div", { class:"nerr", role:"alert" }, h("span", { text:NT.err.text }),
-    NT.err.login ? h("button", { class:"btn small", onclick:connectAccount }, "ChatGPT 연결") : null,
-    NT.err.retry && !note ? h("button", { class:"btn small", onclick: () => askPhrase(d, NT.asking.page, NT.asking.quote, NT.anchor) }, "다시 시도") : null) : null;
-  const input = h("input", { name:"q", placeholder:"이어서 물어보기", "aria-label":"이어서 물어보기", autocomplete:"off", disabled: NT.busy ? "" : null });
-  const follow = note && a ? h("form", { class:"nfollow", onsubmit:(e) => { e.preventDefault(); const q = input.value.trim(); if (q && !NT.busy) followNote(d, note, q); } },
-    input, h("button", { class:"btn small", disabled: NT.busy ? "" : null }, NT.busy ? "답 기다리는 중…" : "보내기")) : null;
-  return h("aside", { class:"notecard" + (weak ? " weak" : ""), role:"dialog", "aria-label":`${quote} 노트` },
-    h("div", { class:"nhd" }, h("span", { class:`nk ${kc}`, text:kl }), h("span", { class:"nq", title:quote, text:quote }), weak ? h("span", { class:"nk k-weak", text:"약점" }) : null,
-      h("button", { class:"qbtn", "aria-label":"닫기", onclick:closeNote }, "✕")),
-    note && NT.again ? h("div", { class:"nagain", text: weak ? `${note.seen}번째 다시 봄 · 약점으로 표시했어요` : `${note.seen}번째 다시 봄 · 저장된 답이에요 (AI 호출 없음)` }) : null,
-    h("div", { class:"nbody" }, body, thread, err),
-    follow,
-    note && note.thread.length >= 4 ? h("div", { class:"ncont" }, h("span", { text:"대화가 길어졌어요." }), h("button", { class:"btn small", onclick: () => { Chat.continueNote(d, note); closeNote(); } }, "질문 창에서 계속")) : null,
-    note ? h("div", { class:"nft" }, h("span", { text:`p.${note.page} · ${agoText(note.askedAt)} 물어봄` }), h("span", { class:"grow" }), h("span", { text:`다시 본 횟수 ${note.seen}` })) : null);
-}
-/* line the card up with its text and draw the link from the page's right edge (wide layout only) */
-function placeNoteCard(){
-  // Side panel layout (slides, wide screens): the answer card opens over the panel, like a page laid on top of it,
-  // instead of floating in the corner where the docked question window is.
-  const side = document.querySelector(".rside"), flt = document.querySelector(".rgrid.noteflt .notecard");
-  if (flt){
-    flt.classList.toggle("onside", !!side);
-    if (side){ const r = side.getBoundingClientRect();
-      Object.assign(flt.style, { left:r.left + "px", top:Math.max(8, r.top) + "px", width:r.width + "px", height:Math.min(r.height, innerHeight - Math.max(8, r.top) - 8) + "px", right:"auto", bottom:"auto" }); }
-    else for (const k of ["left","top","width","height","right","bottom"]) flt.style[k] = "";
-  }
-  const grid = document.querySelector(".rgrid.noteopen"); if (!grid) return;
-  const card = grid.querySelector(".notecard"), box = document.getElementById("pagebox");
-  grid.querySelectorAll(".nlink,.ntick").forEach(el => el.remove());
-  if (!card || !box || getComputedStyle(card).position === "fixed") return;
-  const gr = grid.getBoundingClientRect(), br = box.getBoundingClientRect();
-  let y = null;
-  const mark = box.querySelector(`.nu[data-note="${NT.open}"]`);
-  if (mark){ const r = mark.getBoundingClientRect(); y = r.top + r.height / 2 - br.top; }
-  else if (NT.anchor && NT.anchor.yRatio != null) y = NT.anchor.yRatio * br.height;
-  if (y == null){ card.style.marginTop = "0px"; return; }
-  const top = Math.max(0, Math.min(br.top - gr.top + y - 24, br.bottom - gr.top - 120));
-  card.style.marginTop = top + "px";
-  const x1 = br.right - gr.left, y1 = br.top - gr.top + y, cr = card.getBoundingClientRect(), x2 = cr.left - gr.left, y2 = cr.top - gr.top + 22;
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("class", "nlink"); svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("style", `left:0;top:0;width:${gr.width}px;height:${Math.max(y1, y2) + 4}px`);
-  const mx = (x1 + x2) / 2;
-  svg.innerHTML = `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/><circle cx="${x1}" cy="${y1}" r="3"/>`;
-  grid.append(svg);
-  grid.append(h("i", { class:"ntick", style:`left:${x1 - 2}px;top:${y1 - 9}px` }));
-}
-on(window, "resize", () => { if (S.view === "read") requestAnimationFrame(placeNoteCard); });
-
-/* the notes drawer: this material's asked and marked things */
-function notesButton(d){
-  if (!notesOn(d)) return null;
-  const n = noteList(d).length;
-  return h("button", { class:"btn small", "data-notes-toggle":"", "aria-pressed": NT.drawer ? "true" : "false", onclick: () => { NT.drawer = !NT.drawer; paintDrawer(); } }, "모르는 것", n ? h("span", { class:"ncount", text:String(n) }) : null);
-}
+/* 답 카드·모르는 것 서랍은 11/11 React로(reader/NoteCard.tsx, reader/NotesDrawer.tsx). */
 /* 목차 (서랍의 두 번째 탭): the material's own AI outline from generation — unit → part → goal — with where I got stuck.
    Red dot = 모르는 것 notes on those pages; "틀림" = a weak goal. Old-flow materials (no outline) list goals by page. */
 function unitState(d, sec){
@@ -3780,107 +3485,42 @@ function unitState(d, sec){
   if (!Array.isArray(out)) return null;
   return out.find(u => u.title === sec.title && (u.pages || [])[0] === (sec.pages || [])[0]) || null;
 }
-function tocList(d){
+/* 목차에 그릴 값: 구역 → 묶음 → 목표 */
+function tocView(d){
   const R = S.reader, notes = noteList(d), hidden = new Set(d.hidden || []);
   const notesIn = (pages) => { const set = new Set(pages); return notes.filter(n => set.has(n.page)).length; };
-  const dot = (n, weak) => h("span", { class:"tmarks" }, weak ? h("span", { class:"tweak", text:"틀림" }) : null,
-    n ? h("span", { class:"tdot", title:`모르는 것 ${n}개`, text:String(n) }) : null);
   const span = (pages) => pages.length ? (pages.length > 1 && pages.at(-1) !== pages[0] ? `p.${pages[0]}–${pages.at(-1)}` : `p.${pages[0]}`) : "";
   const here = (pages) => pages.includes(R.page);
   const goal = (o) => { const st = objectiveState(d, o.id), pages = (o.pages || []).slice().sort((a, b) => a - b);
-    return h("button", { class:"trow goal-row" + (here(pages) ? " here" : "") + (st === "weak" ? " weak" : ""), onclick: () => goPage(pages[0] || R.page) },
-      h("span", { class:"tt" }, richText(o.statement)), dot(notesIn(pages), st === "weak"), h("span", { class:"tp", text:span(pages) })); };
+    return { kind:"goal", id:o.id, text:o.statement, here:here(pages), weak:st === "weak", notes:notesIn(pages), span:span(pages), page:pages[0] || R.page }; };
   const outline = Array.isArray(d.outline) && d.outline.length ? d.outline : null;
-  if (!outline){
-    const objs = d.objectives.filter(o => !hidden.has(o.id)).slice().sort((a, b) => (a.pages[0] || 0) - (b.pages[0] || 0));
-    return objs.length ? objs.map(goal) : [h("p", { class:"small muted", style:"padding:8px", text:"아직 목차가 없어요. 문제를 만들면 목표별 목차가 생겨요." })];
-  }
-  return outline.map(sec => {
+  if (!outline) return { flat: d.objectives.filter(o => !hidden.has(o.id)).slice().sort((a, b) => (a.pages[0] || 0) - (b.pages[0] || 0)).map(goal), secs:[] };
+  return { flat:null, secs: outline.map(sec => {
     const objs = sec.objectives.filter(o => !hidden.has(o.id));
     const allPages = [...new Set([...(sec.pages || []), ...objs.flatMap(o => o.pages || [])])].sort((a, b) => a - b);
-    const weakN = objs.filter(o => objectiveState(d, o.id) === "weak").length;
     const unit = unitState(d, sec);
     const parts = []; const byPart = new Map();
     for (const o of objs){ const k = o.part || ""; if (!byPart.has(k)){ byPart.set(k, []); parts.push(k); } byPart.get(k).push(o); }
-    return h("section", { class:"tsec" },
-      h("button", { class:"trow sec" + (here(allPages) ? " in" : ""), onclick: () => goPage(allPages[0] || R.page) },
-        h("span", { class:"tt", text:sec.title }),
-        unit && UNIT_LABEL[unit.state] ? h("span", { class:`chip${unit.state === "held" ? " bad" : " acc"}`, text:UNIT_LABEL[unit.state] }) : null,
-        unit && unit.state === "ready" && unit.held ? h("span", { class:"chip", title:"관문 검사를 통과하지 못해 빼 둔 문제", text:`보류 ${unit.held}` }) : null,
-        dot(notesIn(allPages), weakN > 0), h("span", { class:"tp", text:span(allPages) })),
-      ...parts.flatMap(k => {
-        const list = byPart.get(k);
-        if (!k) return list.map(goal);
-        const pp = [...new Set(list.flatMap(o => o.pages || []))].sort((a, b) => a - b);
-        return h("div", { class:"tpart" },
-          h("button", { class:"trow part" + (here(pp) ? " in" : ""), onclick: () => goPage(pp[0] || R.page) }, h("span", { class:"tt", text:k }), dot(notesIn(pp), list.some(o => objectiveState(d, o.id) === "weak")), h("span", { class:"tp", text:span(pp) })),
-          list.map(goal));
-      }));
-  });
+    return { title:sec.title, in:here(allPages), page:allPages[0] || R.page, span:span(allPages), notes:notesIn(allPages), weak:objs.some(o => objectiveState(d, o.id) === "weak"),
+      unit: unit && UNIT_LABEL[unit.state] ? { label:UNIT_LABEL[unit.state], held:unit.state === "held" } : null, heldN: unit && unit.state === "ready" && unit.held ? unit.held : 0,
+      parts: parts.map(k => { const list = byPart.get(k); const pp = [...new Set(list.flatMap(o => o.pages || []))].sort((a, b) => a - b);
+        return { name:k, in:here(pp), page:pp[0] || R.page, span:span(pp), notes:notesIn(pp), weak:list.some(o => objectiveState(d, o.id) === "weak"), goals:list.map(goal) }; }) };
+  }) };
 }
 /* 모르는 것 서랍: ✕, Esc, or a click anywhere outside it closes it */
-function closeDrawer(){ if (!NT.drawer) return; NT.drawer = false; paintDrawer(); if (S.view === "read") render(); }
+function closeDrawer(){ if (!NT.drawer) return; NT.drawer = false; if (S.view === "read") render(); else ui.bump(); }
 on(document, "keydown", (e) => {
   if (e.key !== "Escape" || e.isComposing) return;
-  if (PS.open){ e.preventDefault(); PS.open = false; paintPrompts(); return; }
-  if (TM.open){ e.preventDefault(); TM.open = false; TermMap.paint(); return; }
+  if (PS.open){ e.preventDefault(); PS.open = false; ui.bump(); return; }
+  if (TM.open){ e.preventDefault(); TM.open = false; ui.bump(); return; }
   if (NT.drawer){ e.preventDefault(); closeDrawer(); }
 });
 on(document, "pointerdown", (e) => {
   if (!NT.drawer || !e.target.closest) return;
-  if (e.target.closest("#notesDrawer, [data-notes-toggle], .ncard, .selpop, .chatwin")) return;
+  if (e.target.closest("#notesDrawer, [data-notes-toggle], .ncard, .notecard, .selpop, .chatwin")) return;
   closeDrawer();
 });
-function paintDrawer(){
-  let el = document.getElementById("notesDrawer");
-  const d = S.decks[S.reader.deckId];
-  if (!NT.drawer || S.view !== "read" || !notesOn(d)){ if (el) el.remove(); return; }
-  const filters = [["all","전체"],["weak","약점"],["term","용어"],["procedure","절차"],["concept","개념"],["talk","대화"],["marked","아직 안 물어봄"]];
-  const pass = (n) => NT.filter === "all" || (NT.filter === "weak" ? n.seen >= NOTE_WEAK : NT.filter === "marked" ? n.status === "marked" : n.kind === NT.filter && n.status !== "marked");
-  const list = noteList(d).filter(pass).sort((a, b) => b.seen - a.seen || Date.parse(b.askedAt) - Date.parse(a.askedAt));
-  // A saved conversation opens right here to re-read (reading is the drawer's job); "질문 창에서 이어가기" continues it.
-  const talkView = (n) => h("div", { class:"ntalk" },
-    n.thread.slice(-12).map(t => h("div", { class:"ntalk-turn " + t.role }, h("span", { class:"ntalk-who", text: t.role === "user" ? "나" : "답" }),
-      h("div", { class:"ntalk-text" }, t.role === "assistant" ? richLines(shown(t.text)) : t.text))),
-    h("div", { class:"row", style:"gap:6px;justify-content:flex-end;margin-top:4px" },
-      h("button", { class:"btn small ghost", onclick: () => { NT.drawer = false; paintDrawer(); if (S.reader.page !== n.page) goPage(n.page); } }, `p.${n.page}로 가기`),
-      h("button", { class:"btn small", onclick: () => { NT.drawer = false; paintDrawer(); if (S.reader.page !== n.page) goPage(n.page); Chat.openTalk(d, n); } }, "질문 창에서 이어가기")));
-  const item = (n) => { const [kl, kc] = NOTE_KIND[n.kind];
-    if (n.kind === "talk" && NT.talkOpen === n.id) return h("div", { class:"nitem open" },
-      h("button", { class:"nitem-head", "aria-expanded":"true", onclick: () => { NT.talkOpen = null; paintDrawer(); } },
-        h("div", { class:"t" }, h("span", { class:"q", text:n.quote }), h("span", { class:`nk ${kc}`, text:kl })),
-        h("div", { class:"m" }, h("span", { text:`p.${n.page}` }), h("span", { text:agoText(n.askedAt) }))),
-      talkView(n));
-    return h("button", { class:"nitem", onclick: () => {
-      if (n.kind === "talk"){ NT.talkOpen = n.id; paintDrawer(); return; }
-      NT.drawer = false; paintDrawer();
-      if (S.reader.page !== n.page) goPage(n.page);
-      openNote(d, n.id, true);
-      setTimeout(() => { const m = document.querySelector(`.nu[data-note="${n.id}"]`); if (m) m.scrollIntoView({ block:"center", behavior:"smooth" }); }, 400);
-    } },
-      h("div", { class:"t" }, h("span", { class:"q", text:n.quote }), n.seen >= NOTE_WEAK ? h("span", { class:"nk k-weak", text:"약점" }) : null, h("span", { class:`nk ${kc}`, text: n.status === "marked" ? "모름" : kl })),
-      h("div", { class:"s", text: n.status === "marked" ? "아직 안 물어봤어요 · 누르면 물어봐요" : n.kind === "talk" ? `질문 · ${n.answer ? n.answer.lead : ""}` : (n.answer ? n.answer.lead : "") }),
-      h("div", { class:"m" }, h("span", { text:`p.${n.page}` }), h("span", { text:agoText(n.askedAt) }), h("span", { text:`다시 본 횟수 ${n.seen}` }))); };
-  const dlist = el && el.querySelector(".dlist"), keepTop = dlist && el.dataset.tab === NT.tab ? dlist.scrollTop : null;
-  const tabBtn = (k, label) => h("button", { role:"tab", class:"dtab", "aria-selected": NT.tab === k ? "true" : "false", onclick: () => { NT.tab = k; paintDrawer(); } }, label);
-  const head = h("div", { class:"dh" },
-    h("div", { class:"dtabs", role:"tablist", "aria-label":"모르는 것" }, tabBtn("notes", `노트${noteList(d).length ? " " + noteList(d).length : ""}`), tabBtn("toc", "목차")),
-    h("span", { class:"grow" }), h("button", { class:"dclose", title:"닫기 (Esc)", "aria-label":"모르는 것 닫기", onclick: closeDrawer }, "✕"));
-  if (NT.tab === "toc"){
-    const fresh = h("aside", { class:"notesdrawer", id:"notesDrawer", role:"dialog", "aria-label":"목차", "data-tab":"toc" }, head,
-      h("div", { class:"dlist toc" }, tocList(d)),
-      h("div", { class:"dfoot small muted" }, h("span", { class:"tdot" }), " 모르는 것 노트 수 · ", h("span", { class:"tweak", text:"틀림" }), " 약점 목표 · 누르면 그 쪽으로 가요"));
-    if (el) el.replaceWith(fresh); else root.append(fresh);
-    if (keepTop != null) fresh.querySelector(".dlist").scrollTop = keepTop;
-    else { const here = fresh.querySelector(".here"); if (here) here.scrollIntoView({ block:"center" }); }
-    return;
-  }
-  const fresh = h("aside", { class:"notesdrawer", id:"notesDrawer", role:"dialog", "aria-label":"모르는 것 노트", "data-tab":"notes" }, head,
-    h("div", { class:"dfilters" }, filters.map(([k, t]) => h("button", { class:"chip-btn", "aria-pressed": NT.filter === k ? "true" : "false", onclick: () => { NT.filter = k; paintDrawer(); } }, t))),
-    h("div", { class:"dlist" }, list.length ? list.map(item) : h("p", { class:"small muted", style:"padding:8px", text: noteList(d).length ? "해당하는 항목이 없어요." : "원문을 드래그해 모르는 것을 물어보면 여기에 쌓여요." })),
-    h("div", { class:"dfoot small muted", text:`같은 것을 ${NOTE_WEAK}번 이상 다시 보면 약점으로 표시해요.` }));
-  if (el) el.replaceWith(fresh); else root.append(fresh);
-}
+function paintDrawer(){ ui.bump(); }
 /* Chat-style answers: paragraphs, **bold**, `code`, # headings, - / 1. lists and | tables |, with $…$ math inside.
    A line starting with "원문 밖 설명:" is marked as outside the material. */
 function mdInline(text){
@@ -4657,7 +4297,10 @@ function reloadDecks(){
 Store.init();
 S.plan = Store.plan();
 for (const rec of Store.pendingList()) if (rec && rec.id && rec.requestId) S.decks[rec.id] = pendingDeck(rec);
-updateStoreChip(); tabletButton(); render();
+updateStoreChip(); tabletButton();
+// 11/11 떠 있는 것들(프롬프트 설정·용어 지도·모르는 것 서랍·고른 글 메뉴·떠 있는 질문 창)은 React 한 칸이 맨 위에 그린다.
+if (env.mountView) root.append(viewHost("overlays", { ui, api:overlaysApi }));
+render();
 pollPending();
 loadAccount();
 {
