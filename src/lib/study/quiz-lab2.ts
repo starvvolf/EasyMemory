@@ -54,8 +54,9 @@ export async function runQuizLab2(id: string, method: Lab2Method) {
     const figs = await renderPageFigures(pdf, pages.filter((p) => route.get(p) === "figures"), 1024).catch(() => new Map<number, Array<{ label: string; dataUrl: string }>>());
     const wholes = await renderPageImages(pdf, pages.filter((p) => route.get(p) === "page" || (route.get(p) === "figures" && !figs.get(p)?.length)), 1024).catch(() => new Map<number, string>());
     const drawMs = Date.now() - t0;
-    const imagesOf = (ps: number[]) => ps.flatMap((p) => { const f = figs.get(p) ?? []; return f.length ? f.map((x) => ({ label: `p.${p} ${x.label}`, dataUrl: x.dataUrl })) : wholes.get(p) ? [{ label: `원문 p.${p}`, dataUrl: wholes.get(p)! }] : []; });
-    const r = await runLectureFirst(id, st.input.fileName, pages, texts, imagesOf);
+    // 이미지 이름표는 그대로(그림 조각 "원문 p.6 그림1 (…)" · 쪽 전체 "원문 p.N"): 강의가 그 이름표로 그림을 가리킨다.
+    const images = pages.flatMap((p) => { const f = figs.get(p) ?? []; return f.length ? f.map((x) => ({ page: p, label: x.label, dataUrl: x.dataUrl })) : wholes.get(p) ? [{ page: p, label: `원문 p.${p}`, dataUrl: wholes.get(p)! }] : []; });
+    const r = await runLectureFirst(id, st.input.fileName, pages, texts, images);
     const calls = await callsOf(id, t0);
     const out = { method, id, at: new Date().toISOString(), drawMs, ...r, calls: calls.length, tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0) };
     const dir = path.join(dataDir(), "study-gen", id, "quiz-lab2");
