@@ -77,9 +77,10 @@ export async function runLpPlan(id: string, fileName: string, pages: number[], t
   const user = material(fileName, pages, texts);
   const t = Date.now();
   let first = 0;
-  const r = await withTrace({ area: "pdf", action: "quiz-lp-plan", ref: id }, () => callModel({ purpose: `lab:lp-plan-${effort}`, system: `${LP_PLAN_SYSTEM}\n출력은 JSON으로만 한다.`, user, json: true, schema: PLAN_SCHEMA,
-    schemaName: "recaller_lab_lp_plan", ...m, caller: LOCAL_CALLER, images: images.map(({ label, dataUrl }) => ({ label, dataUrl })), onText: () => { if (!first) first = Date.now(); } }));
-  log(`lab:lp-plan-${effort}`, m, t, r.usage, user.length, first ? first - t : undefined);
+  // 기록은 withTrace 안에서(밖이면 trace가 없어 비용 집계에서 빠진다).
+  const r = await withTrace({ area: "pdf", action: "quiz-lp-plan", ref: id }, async () => { const x = await callModel({ purpose: `lab:lp-plan-${effort}`, system: `${LP_PLAN_SYSTEM}\n출력은 JSON으로만 한다.`, user, json: true, schema: PLAN_SCHEMA,
+    schemaName: "recaller_lab_lp_plan", ...m, caller: LOCAL_CALLER, images: images.map(({ label, dataUrl }) => ({ label, dataUrl })), onText: () => { if (!first) first = Date.now(); } });
+    log(`lab:lp-plan-${effort}`, m, t, x.usage, user.length, first ? first - t : undefined); return x; });
   const plan = r.data as LpPlan;
   return { effort, ms: Date.now() - t, firstTextMs: first ? first - t : null, usage: r.usage, check: checkPlan(plan, pages), plan };
 }
@@ -112,9 +113,9 @@ export async function runLpLecture(id: string, plan: LpPlan, area: number, texts
   const tail = `[할 일] 영역 ${area}. ${a.name}을 걸음 ${a.steps.map((s) => s.n).join(", ")} 순서로 강의한다.`;
   const t = Date.now();
   let first = 0;
-  const r = await withTrace({ area: "pdf", action: "quiz-lp-lecture", ref: id }, () => callModel({ purpose: "lab:lp-lecture", system: LP_LECTURE_SYSTEM, user, tail, cacheKey: `recaller-lp-${id}-${area}`, ...m, caller: LOCAL_CALLER,
-    images: images.filter((x) => pages.includes(x.page)).map(({ label, dataUrl }) => ({ label, dataUrl })), onText: () => { if (!first) first = Date.now(); } }));
-  log("lab:lp-lecture", m, t, r.usage, user.length, first ? first - t : undefined);
+  const r = await withTrace({ area: "pdf", action: "quiz-lp-lecture", ref: id }, async () => { const x = await callModel({ purpose: "lab:lp-lecture", system: LP_LECTURE_SYSTEM, user, tail, cacheKey: `recaller-lp-${id}-${area}`, ...m, caller: LOCAL_CALLER,
+    images: images.filter((y) => pages.includes(y.page)).map(({ label, dataUrl }) => ({ label, dataUrl })), onText: () => { if (!first) first = Date.now(); } });
+    log("lab:lp-lecture", m, t, x.usage, user.length, first ? first - t : undefined); return x; });
   const text = r.text;
   const want = plan.memories.filter((x) => x.area === area).map((x) => x.id);
   const shown = [...text.matchAll(/⟦카드\s*([^⟧\s]+)\s*⟧/g)].map((x) => x[1]);
