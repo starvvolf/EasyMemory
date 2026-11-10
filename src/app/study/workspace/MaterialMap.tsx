@@ -502,11 +502,54 @@ function LectureFig({ genId, label, says }: { genId: string; label: string; says
 }
 function LectureCard({ genId, c, onPage }: { genId: string; c: Card; onPage: (page: number) => void }) {
   const [open, setOpen] = useState(false);
-  return <div className={`lc2-card${open ? " open" : ""}`}><button className="lc2-cardhead" onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>
-    <span className="lc2-cardtag">기억</span><b><Rich text={c.title} /></b>{c.memo?.line ? <span className="small muted"> <Rich text={c.memo.line} /></span> : null}<span className="cs-gap" /><span className="small muted">{open ? "접기" : "펼치기"}</span></button>
-    {open ? <div className="lc2-cardbody"><Body s={c.shape} />{c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
-      <div className="row small">{c.pages.slice(0, 4).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
-      <FigureView genId={genId} c={c} onPage={onPage} /></div> : null}</div>;
+  return <div className={`lc3-card${open ? " open" : ""}`}>
+    <button className="lc3-cardhead" onClick={(e) => { e.stopPropagation(); setOpen(!open); }} aria-expanded={open}>
+      <span className="lc3-cardtag">기억 카드</span>
+      <span className="lc3-cardtitle"><Rich text={c.title} /></span>
+      {c.memo?.line ? <span className="lc3-cardline"><Rich text={c.memo.line} /></span> : null}
+      <span className="lc3-chev" aria-hidden>›</span>
+    </button>
+    {open ? <div className="lc3-cardbody"><Body s={c.shape} />{c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+      <FigureView genId={genId} c={c} onPage={onPage} />
+      <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div></div> : null}</div>;
+}
+/**
+ * 흘러나오는 글을 일정한 속도로 보여 준다(11/11 사용자 "스트리밍 오는 거 부드럽게 일정 속도로 나오는 것처럼"). 받은 글보다 늦게, 한 글자씩
+ * 같은 빠르기로 따라가고, 밀린 글이 많으면 조금씩 빨라진다. animate가 아니면(이미 본 글) 바로 다 보인다. 쓰다 만 식($)·표시(⟦)는 감춘다.
+ */
+function useSmoothText(target: string, animate: boolean, onCaughtUp?: () => void) {
+  const [shown, setShown] = useState(() => (animate ? 0 : target.length));
+  const want = useRef(target);
+  const done = useRef(onCaughtUp);
+  useEffect(() => { want.current = target; done.current = onCaughtUp; });
+  useEffect(() => {
+    if (!animate) return;
+    let raf = 0, last = 0, pos = 0, acc = 0, told = false;
+    const tick = (t: number) => {
+      const dt = last ? Math.min(100, t - last) : 16; last = t;
+      const total = want.current.length;
+      if (pos < total) {
+        const backlog = total - pos;
+        acc += (dt / 1000) * (42 + backlog * 0.6); // 기본 초당 약 42자, 밀리면 빨라짐
+        const step = Math.floor(acc);
+        if (step > 0) { acc -= step; pos = Math.min(total, pos + step); setShown(pos); }
+      } else if (pos > total) { pos = total; setShown(pos); }
+      else if (!told && done.current) { told = true; done.current(); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [animate]);
+  let out = animate ? target.slice(0, shown) : target;
+  if (animate && shown < target.length) {
+    const open = out.lastIndexOf("⟦"); if (open > out.lastIndexOf("⟧")) out = out.slice(0, open);
+    if ((out.match(/\$/g) ?? []).length % 2) out = out.slice(0, out.lastIndexOf("$"));
+  }
+  return { text: out, behind: animate && shown < target.length };
+}
+function SmoothLecture({ genId, text, live, animate, byId, onPage, onSeen }: { genId: string; text: string; live: boolean; animate: boolean; byId: Map<string, Card>; onPage: (page: number) => void; onSeen?: () => void }) {
+  const smooth = useSmoothText(text, animate, live ? undefined : onSeen);
+  return <><LectureText genId={genId} text={smooth.text} byId={byId} onPage={onPage} />{live || smooth.behind ? <span className="lc2-caret" /> : null}</>;
 }
 function LectureText({ genId, text, byId, onPage }: { genId: string; text: string; byId: Map<string, Card>; onPage: (page: number) => void }) {
   const parts: ReactNode[] = []; let last = 0, k = 0;
@@ -520,57 +563,81 @@ function LectureText({ genId, text, byId, onPage }: { genId: string; text: strin
   if (rest.trim()) parts.push(<RichBlock key={k++} text={flatMath(rest)} />);
   return <>{parts}</>;
 }
+// 11/11 사용자 "옆으로 넘어가는 건 좋은데 드래그는 별로. 그냥 넘어가고 이전 건 안 보이게, 앞뒤 <> 버튼으로": 박스는 지금 것 하나만, 넘길 때 옆에서 밀려 들어온다.
 function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; onPage: (page: number) => void }) {
   const [list, setList] = useState<StepCard[] | null | undefined>(undefined);
   const [error, setError] = useState("");
   const [at, setAtState] = useState(0);
+  const [dir, setDir] = useState<"next" | "prev">("next");
   const [q, setQ] = useState("");
   const [showCard, setShowCard] = useState(false);
-  const setAt = (n: number) => { setAtState(n); setShowCard(false); };
-  const track = useRef<HTMLDivElement>(null);
+  const [seen, setSeen] = useState<Set<string>>(() => new Set()); // 끝까지 다 흘려 보여 준 박스·답(다시 오면 바로 다 보임)
+  const markSeen = (key: string) => setSeen((x) => (x.has(key) ? x : new Set(x).add(key)));
+  const setAt = (n: number) => { setDir(n < at ? "prev" : "next"); setAtState(n); setShowCard(false); };
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
   const base = `/api/study-map/${genId}/lecture?v=2`;
   const writing = Boolean(list?.some((c) => c.status === "writing" || c.asks?.some((a) => a.status === "writing")));
   const load = () => call<{ lecture: { cards: StepCard[] } }>(base).then((r) => { setList(r.lecture.cards); return r.lecture.cards; }).catch((e) => { setError(errorText(e)); setList(null); return null; });
-  useEffect(() => { void load().then((l) => { if (l) { const n = l.filter((c) => c.status).length; setAt(Math.max(0, n - 1)); } }); }, [genId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load().then((l) => { if (l) { const n = l.filter((c) => c.status).length; setSeen(new Set(l.filter((c) => c.status === "done").flatMap((c) => [c.id, ...(c.asks ?? []).map((_, k) => `${c.id}:${k}`)]))); setAtState(Math.max(0, n - 1)); } }); }, [genId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!writing) return; const t = setTimeout(() => void load(), 500); return () => clearTimeout(t); }); // 쓰는 동안 0.5초마다
-  // 지금 카드를 가로 줄의 맨 앞으로(새 박스가 그려진 뒤에도): 줄 안에서만 움직인다(페이지는 그대로).
-  const boxes = list ? Math.max(list.filter((c) => c.status).length, at + 1) : 0;
-  useEffect(() => { const t = track.current; const el = t?.children[at] as HTMLElement | undefined; if (t && el) t.scrollTo({ left: el.offsetLeft, behavior: "smooth" }); }, [at, boxes]);
   const post = (body: Record<string, string>) => call(base, body).then(() => load()).catch((e) => setError(errorText(e)));
+  const cur = list?.[at];
+  const canPrev = at > 0;
+  const canNext = Boolean(list && at < list.length - 1 && cur?.status && cur.status !== "writing");
+  const goNext = () => { if (!list || !canNext) return; const n = at + 1; if (!list[n].status) void post({ action: "step", card: list[n].id }); setAt(n); };
+  const goPrev = () => { if (canPrev) setAt(at - 1); };
+  // ← → 키로도 넘긴다(입력 칸에 쓰는 중이면 빼고).
+  const keys = useRef({ goNext, goPrev });
+  useEffect(() => { keys.current = { goNext, goPrev }; });
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => { const t = e.target as HTMLElement | null; if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.key === "ArrowRight") keys.current.goNext(); else if (e.key === "ArrowLeft") keys.current.goPrev(); };
+    window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
+  }, []);
   if (list === undefined) return <p className="small muted mm6-wait">불러오는 중…</p>;
   if (!list) return <p className="small bad">{error || "강의를 열 수 없어요."}</p>;
   const started = list.filter((c) => c.status);
-  const cur = list[at];
-  const goNext = () => { const n = at + 1; if (n >= list.length) return; if (!list[n].status) void post({ action: "step", card: list[n].id }); setAt(n); };
   const begin = () => { void post({ action: "step", card: list[0].id }); setAt(0); };
-  if (!started.length) return <div className="lc-empty">
-    <p>기억 카드를 하나씩 넘기며 강사가 설명해요. 모르는 게 있으면 그 카드 밑에 물어보세요. 다음 카드는 그걸 알고 이어서 설명해요.</p>
-    <p className="small muted">카드 {list.length}개 · 다음 카드는 지금 카드를 읽는 동안 미리 준비해요</p>
+  if (!started.length) return <div className="lc3-empty">
+    <p className="lc3-empty-title">강사와 함께 한 장씩 넘기며 공부해요</p>
+    <p className="small muted">카드 {list.length}장 · 모르는 게 있으면 그 장 밑에 물어보세요. 다음 장은 그걸 알고 이어서 설명해요.</p>
     {error ? <p className="small bad">{error}</p> : null}
     <button className="btn primary" onClick={begin}>강의 시작</button></div>;
+  const next = list[at + 1];
   return (
-    <div className="lc2">
-      <div className="row small lc2-top"><span className="muted num">{at + 1} / {list.length}</span><span className="cs-gap" />
-        {writing ? <button className="btn ghost small" onClick={() => void post({ action: "stop" })}>멈추기</button> : null}</div>
-      <div className="lc2-track" ref={track}>{list.slice(0, boxes).map((s, i) => <section key={s.id} className={`lc2-box${i === at ? " on" : ""}`} onClick={() => setAt(i)}>
-        <p className="eyebrow">{i + 1}. <Rich text={s.title} />{s.role && s.role !== "메인" ? <span className="mm3-kind"> {s.role === "바탕" ? "바탕 지식" : s.role}</span> : null}</p>
-        {s.status ? <div className="lc2-say"><LectureText genId={genId} text={s.text ?? ""} byId={byId} onPage={onPage} />{s.status === "writing" ? <span className="lc2-caret" /> : null}
-          {s.status === "failed" ? <p className="small bad">설명을 못 받았어요. <button className="linkish" onClick={() => void post({ action: "step", card: s.id })}>다시</button></p> : null}
-          {s.status === "stopped" ? <p className="small muted">멈췄어요. <button className="linkish" onClick={() => void post({ action: "step", card: s.id })}>처음부터 다시</button></p> : null}</div>
-          : <p className="small muted">아직 듣지 않은 카드예요.</p>}
-      </section>)}</div>
-      {cur?.status ? <div className="lc2-below">
-        {cur.cards?.length ? <div><button className="linkish small" onClick={() => setShowCard(!showCard)}>{showCard ? "기억 카드 접기" : "이 기억 카드 보기"}</button>
-          {showCard ? <div className="lc2-cards">{cur.cards.map((cid) => byId.get(cid)).filter((x): x is Card => !!x).map((x) => <LectureCard key={x.id} genId={genId} c={x} onPage={onPage} />)}</div> : null}</div> : null}
-        {(cur.asks ?? []).map((a, k) => <div key={k} className="lc2-qa"><p className="lc2-q"><b>나</b> {a.q}</p>
-          <div className="lc2-a"><LectureText genId={genId} text={a.a} byId={byId} onPage={onPage} />{a.status === "writing" ? <span className="lc2-caret" /> : null}</div></div>)}
-        <form className="row lc2-ask" onSubmit={(e) => { e.preventDefault(); if (!q.trim() || cur.status !== "done") return; void post({ action: "ask", card: cur.id, q }); setQ(""); }}>
-          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={cur.status === "done" ? "여기서 모르는 걸 물어보세요" : "설명이 끝나면 물어볼 수 있어요"} disabled={cur.status !== "done"} />
-          <button className="btn ghost small" disabled={!q.trim() || cur.status !== "done"}>묻기</button></form>
-      </div> : null}
-      <div className="row lc-nav"><button className="btn ghost small" disabled={at === 0} onClick={() => setAt(at - 1)}>‹ 이전</button><span className="cs-gap" />
-        {at < list.length - 1 ? <button className="btn primary small" disabled={cur?.status === "writing"} onClick={goNext}>{list[at + 1]?.status ? "다음 ›" : `다음: ${list[at + 1].title.replace(/\(.*?\)/g, "").trim()} ›`}</button> : <span className="small muted">강의 끝</span>}</div>
+    <div className="lc3">
+      <div className="lc3-bar">
+        <button className="lc3-arrow" disabled={!canPrev} onClick={goPrev} aria-label="이전 장">‹</button>
+        <div className="lc3-progress"><div className="lc3-progress-fill" style={{ width: `${((at + 1) / list.length) * 100}%` }} /></div>
+        <span className="lc3-count num">{at + 1} / {list.length}</span>
+        <button className="lc3-arrow" disabled={!canNext} onClick={goNext} aria-label="다음 장">›</button>
+      </div>
+      {cur ? <section key={cur.id} className={`lc3-box lc3-in-${dir}`}>
+        <header className="lc3-head">
+          <span className="lc3-step num">{at + 1}</span>
+          <h3 className="lc3-title"><Rich text={cur.title} /></h3>
+          {cur.role && cur.role !== "메인" ? <span className="lc3-role">{cur.role === "바탕" ? "바탕 지식" : cur.role}</span> : null}
+          {writing ? <button className="lc3-stop" onClick={() => void post({ action: "stop" })}>멈추기</button> : null}
+        </header>
+        {cur.status ? <div className="lc3-say">
+          <SmoothLecture key={cur.id} genId={genId} text={cur.text ?? ""} live={cur.status === "writing"} animate={!seen.has(cur.id)} byId={byId} onPage={onPage} onSeen={() => markSeen(cur.id)} />
+          {cur.status === "failed" ? <p className="small bad">설명을 못 받았어요. <button className="linkish" onClick={() => void post({ action: "step", card: cur.id })}>다시</button></p> : null}
+          {cur.status === "stopped" ? <p className="small muted">멈췄어요. <button className="linkish" onClick={() => void post({ action: "step", card: cur.id })}>처음부터 다시</button></p> : null}
+        </div> : <p className="small muted">설명을 준비하는 중이에요…</p>}
+        {cur.status === "done" && cur.cards?.length ? <div className="lc3-mem">
+          <button className="lc3-memtoggle" onClick={() => setShowCard(!showCard)}>{showCard ? "기억 카드 접기" : "이 장의 기억 카드"}</button>
+          {showCard ? <div className="lc3-cards">{cur.cards.map((cid) => byId.get(cid)).filter((x): x is Card => !!x).map((x) => <LectureCard key={x.id} genId={genId} c={x} onPage={onPage} />)}</div> : null}</div> : null}
+        {(cur.asks ?? []).length ? <div className="lc3-thread">{(cur.asks ?? []).map((a, k) => <div key={k} className="lc3-qa">
+          <p className="lc3-q">{a.q}</p>
+          <div className="lc3-a"><SmoothLecture genId={genId} text={a.a} live={a.status === "writing"} animate={!seen.has(`${cur.id}:${k}`)} byId={byId} onPage={onPage} onSeen={() => markSeen(`${cur.id}:${k}`)} /></div></div>)}</div> : null}
+        {cur.status ? <form className="lc3-ask" onSubmit={(e) => { e.preventDefault(); if (!q.trim() || cur.status !== "done") return; void post({ action: "ask", card: cur.id, q }); setQ(""); }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={cur.status === "done" ? "여기서 모르는 걸 물어보세요" : "설명이 끝나면 물어볼 수 있어요"} disabled={cur.status !== "done"} />
+          <button className="lc3-send" disabled={!q.trim() || cur.status !== "done"} aria-label="묻기">↑</button></form> : null}
+      </section> : null}
+      <div className="lc3-foot">
+        {next ? <button className="lc3-next" disabled={!canNext} onClick={goNext}><span className="small">다음 장</span><b><Rich text={next.title.replace(/\(.*?\)/g, "").trim()} /></b><span aria-hidden>›</span></button>
+          : <span className="small muted">강의 끝</span>}
+      </div>
     </div>);
 }
 

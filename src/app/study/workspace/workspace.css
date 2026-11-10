@@ -1114,3 +1114,64 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .lc2-cardbody{padding:0 10px 8px;display:flex;flex-direction:column;gap:6px}
 .dejipgi .lc2-cards{display:flex;flex-direction:column;gap:4px;margin-top:4px}
 .dejipgi .lc2-box{flex-basis:min(760px,92%)}
+/* 강의 3 (11/11 사용자 "드래그 별로, 그냥 넘어가고 이전 건 안 보이게, 앞뒤 <> 버튼, 디자인 이쁘게, 밑에 카드도"): 지금 장 하나만, 옆에서 밀려 들어옴 */
+.dejipgi .lc3{display:flex;flex-direction:column;gap:14px;max-width:780px}
+.dejipgi .lc3-bar{display:flex;align-items:center;gap:10px}
+.dejipgi .lc3-arrow{width:34px;height:34px;flex:0 0 34px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:20px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:background .15s,border-color .15s,transform .1s}
+.dejipgi .lc3-arrow:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}
+.dejipgi .lc3-arrow:active:not(:disabled){transform:scale(.94)}
+.dejipgi .lc3-arrow:disabled{opacity:.35;cursor:default}
+.dejipgi .lc3-progress{flex:1;height:4px;border-radius:99px;background:var(--line);overflow:hidden}
+.dejipgi .lc3-progress-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .35s ease}
+.dejipgi .lc3-count{font-size:12px;color:var(--muted);min-width:44px;text-align:right}
+.dejipgi .lc3-box{border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:22px 26px 20px;display:flex;flex-direction:column;gap:16px;box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px -12px rgba(0,0,0,.12)}
+.dejipgi .lc3-in-next{animation:lc3-in-next .32s cubic-bezier(.2,.7,.2,1)}
+.dejipgi .lc3-in-prev{animation:lc3-in-prev .32s cubic-bezier(.2,.7,.2,1)}
+@keyframes lc3-in-next{from{opacity:0;transform:translateX(48px)}to{opacity:1;transform:none}}
+@keyframes lc3-in-prev{from{opacity:0;transform:translateX(-48px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.dejipgi .lc3-in-next,.dejipgi .lc3-in-prev{animation:none}}
+.dejipgi .lc3-head{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.dejipgi .lc3-step{flex:0 0 auto;min-width:26px;height:26px;padding:0 6px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700;display:grid;place-items:center}
+.dejipgi .lc3-title{margin:0;font-size:18px;font-weight:700;line-height:1.4;flex:1;color:var(--ink)}
+.dejipgi .lc3-role{font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:2px 8px;white-space:nowrap}
+.dejipgi .lc3-stop{font-size:12px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:99px;padding:3px 10px;cursor:pointer}
+.dejipgi .lc3-stop:hover{color:var(--ink);border-color:var(--line-strong)}
+.dejipgi .lc3-say{font-size:16px;line-height:1.85;color:var(--ink)}
+.dejipgi .lc3-say p{margin:0 0 .8em}
+.dejipgi .lc3-mem{display:flex;flex-direction:column;gap:8px}
+.dejipgi .lc3-memtoggle{align-self:flex-start;font-size:13px;font-weight:600;color:var(--accent);background:var(--accent-soft);border:0;border-radius:99px;padding:5px 12px;cursor:pointer}
+.dejipgi .lc3-cards{display:flex;flex-direction:column;gap:8px}
+.dejipgi .lc3-card{border:1px solid var(--line);border-radius:12px;background:var(--ground);margin:10px 0;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+.dejipgi .lc3-card:hover{border-color:var(--line-strong)}
+.dejipgi .lc3-card.open{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.dejipgi .lc3-cardhead{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"tag title chev" "tag line chev";column-gap:12px;row-gap:2px;align-items:center;width:100%;text-align:left;background:none;border:0;padding:12px 14px;cursor:pointer;color:var(--ink)}
+.dejipgi .lc3-cardtag{grid-area:tag;align-self:start;font-size:11px;font-weight:700;color:#fff;background:var(--accent);border-radius:6px;padding:3px 7px;margin-top:1px}
+.dejipgi .lc3-cardtitle{grid-area:title;font-size:15px;font-weight:700}
+.dejipgi .lc3-cardline{grid-area:line;font-size:13.5px;color:var(--muted);line-height:1.55}
+.dejipgi .lc3-chev{grid-area:chev;font-size:20px;color:var(--muted);transition:transform .2s}
+.dejipgi .lc3-card.open .lc3-chev{transform:rotate(90deg);color:var(--accent)}
+.dejipgi .lc3-cardbody{padding:2px 14px 14px;display:flex;flex-direction:column;gap:10px;border-top:1px dashed var(--line);font-size:14.5px;line-height:1.7}
+.dejipgi .lc3-pages{display:flex;flex-wrap:wrap;gap:6px}
+.dejipgi .lc3-pagechip{font-size:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:99px;padding:3px 10px;cursor:pointer}
+.dejipgi .lc3-pagechip:hover{border-color:var(--accent);color:var(--accent)}
+.dejipgi .lc3-thread{display:flex;flex-direction:column;gap:14px;padding-top:4px}
+.dejipgi .lc3-qa{display:flex;flex-direction:column;gap:8px}
+.dejipgi .lc3-q{align-self:flex-end;max-width:85%;margin:0;background:var(--accent);color:#fff;border-radius:16px 16px 4px 16px;padding:9px 14px;font-size:14.5px;line-height:1.6}
+.dejipgi .lc3-a{align-self:flex-start;max-width:92%;background:var(--ground);border:1px solid var(--line);border-radius:16px 16px 16px 4px;padding:10px 14px;font-size:15px;line-height:1.75}
+.dejipgi .lc3-a p{margin:0 0 .6em}
+.dejipgi .lc3-ask{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;background:var(--ground);padding:4px 4px 4px 16px;transition:border-color .15s,box-shadow .15s}
+.dejipgi .lc3-ask:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.dejipgi .lc3-ask input{flex:1;border:0;background:none;outline:none;font:inherit;font-size:14.5px;color:var(--ink);padding:6px 0}
+.dejipgi .lc3-send{width:32px;height:32px;border-radius:50%;border:0;background:var(--accent);color:#fff;font-size:16px;font-weight:700;cursor:pointer;flex:0 0 32px}
+.dejipgi .lc3-send:disabled{opacity:.35;cursor:default}
+.dejipgi .lc3-foot{display:flex;justify-content:flex-end}
+.dejipgi .lc3-next{display:flex;align-items:center;gap:10px;max-width:100%;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:14px;padding:10px 16px;cursor:pointer;text-align:left;transition:filter .15s,transform .1s}
+.dejipgi .lc3-next .small{opacity:.8;white-space:nowrap}
+.dejipgi .lc3-next b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .lc3-next:hover:not(:disabled){filter:brightness(1.07)}
+.dejipgi .lc3-next:active:not(:disabled){transform:translateY(1px)}
+.dejipgi .lc3-next:disabled{opacity:.45;cursor:default}
+.dejipgi .lc3-empty{display:flex;flex-direction:column;gap:10px;align-items:flex-start;padding:24px;border:1px solid var(--line);border-radius:18px;background:var(--surface);max-width:780px}
+.dejipgi .lc3-empty p{margin:0}
+.dejipgi .lc3-empty-title{font-size:17px;font-weight:700}
+.dejipgi .lc3 .lc2-fig img{max-height:340px;border-radius:10px}
