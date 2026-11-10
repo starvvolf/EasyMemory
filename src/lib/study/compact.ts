@@ -14,7 +14,7 @@ import { loadStructure, type Structure } from "./structure.ts";
 
 export const MEMORY_KINDS = ["알고리즘", "원리", "개념", "비교", "판정", "구조"] as const;
 export const MEMORY_ROLES = ["메인", "바탕", "곁"] as const;
-export type Memory = { id: string; name: string; kind: (typeof MEMORY_KINDS)[number] | string; role: (typeof MEMORY_ROLES)[number]; area: number; facts?: string[];
+export type Memory = { id: string; name: string; kind: (typeof MEMORY_KINDS)[number] | string; role: (typeof MEMORY_ROLES)[number]; area: number; facts?: string[]; details?: string[];
   question: string; line: string; steps: string[]; cards: string[] };
 export type Compact = { at: string; ms: number; model: string; effort: string; cards: number; areas: Array<{ name: string; question: string }>; memories: Memory[]; fixes: string[] };
 
@@ -36,7 +36,7 @@ export async function stemCompact(id: string): Promise<Compact | null> {
   state.sections.forEach((s, i) => {
     for (const c of rc.units[s.id]?.cards ?? []) {
       if (!c.memo) continue;
-      memories.push({ id: c.id, name: c.title, kind: c.kind, role: c.memo.role, area: i + 1, question: c.memo.question, line: c.memo.line, facts: c.memo.facts,
+      memories.push({ id: c.id, name: c.title, kind: c.kind, role: c.memo.role, area: i + 1, question: c.memo.question, line: c.memo.line, facts: c.memo.facts, details: c.memo.details ?? [],
         steps: c.shape.form === "procedure" ? c.shape.steps.map((x) => x.action) : [], cards: [c.id] });
     }
   });

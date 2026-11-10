@@ -1236,3 +1236,13 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .lc3-pop{animation:lc3-pop .22s ease}
 .dejipgi .lc3-pop .lc3-card{margin:4px 0 12px}
 @keyframes lc3-pop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+/* 카드 세 겹(11/11): 앞면 질문·답, 자세히 */
+.dejipgi .lc3-cardline{display:flex;flex-direction:column;gap:3px}
+.dejipgi .lc3-cq{display:flex;gap:6px;align-items:baseline;margin:0;font-size:13.5px;color:var(--muted);line-height:1.55}
+.dejipgi .lc3-qtag{flex:0 0 auto;font-size:10.5px;font-weight:800;color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:0 4px;line-height:1.5}
+.dejipgi .lc3-ca{margin:0;font-size:14.5px;color:var(--ink);line-height:1.6;font-weight:500}
+.dejipgi .lc3-details{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--line);padding-top:8px}
+.dejipgi .lc3-detailshead{margin:0}
+.dejipgi .lc3-detaillist{opacity:.85;font-size:13.5px}
+.dejipgi .lc3-detailsbtn{align-self:flex-start;font-size:12px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:99px;padding:2px 10px;cursor:pointer}
+.dejipgi .lc3-detailsbtn:hover{color:var(--ink);border-color:var(--line-strong)}

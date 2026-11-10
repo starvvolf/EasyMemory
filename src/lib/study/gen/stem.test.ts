@@ -20,6 +20,6 @@ test("채우기 묶음: 쪽이 넘치면 끊고 기억은 쪼개지 않는다", 
 });
 test("기억 → 카드: 모양을 따라 종류를 맞추고 근거 쪽은 묶음 쪽만, 메인은 핵심", () => {
   const c = memoryCard("t1.m1", "메인", { memory: "t1-b1", title: "브레젠험", kind: "개념", question: "q", line: "l", shape: { form: "procedure", steps: [{ action: "a", input: "", output: "" }, { action: "b", input: "", output: "" }] },
-    facts: ["p0 = 2dy - dx"], evidence: [{ page: 3, quote: "x" }, { page: 50, quote: "y" }], mistakes: [], takes: [], gives: [], figure: null }, [3, 4]);
+    facts: ["p0 = 2dy - dx"], details: [], evidence: [{ page: 3, quote: "x" }, { page: 50, quote: "y" }], mistakes: [], takes: [], gives: [], figure: null }, [3, 4]);
   assert.equal(c.kind, "절차"); assert.equal(c.weight, "핵심"); assert.deepEqual(c.evidence, [{ page: 3, quote: "x" }]); assert.deepEqual(c.memo?.facts, ["p0 = 2dy - dx"]);
 });

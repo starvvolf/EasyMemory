@@ -92,7 +92,7 @@ export function designInput(map: MaterialMap, structure: Structure | null, goals
   const num = new Map(cards.map((c, i) => [c.id, i + 1]));
   const lines = cards.map((c, i) => [`${i + 1}|${c.memo?.role ?? (c.core ? "메인" : "보조")}|${c.kind}|${c.title}`,
     c.memo?.line ? `  요지: ${c.memo.line}` : `  ${line(c)}`,
-    ...(c.memo?.facts ?? []).map((f) => `  식·조건: ${f}`),
+    ...(c.memo?.facts ?? []).map((f) => `  식·조건: ${f}`), ...(c.memo?.details ?? []).map((f) => `  참고: ${f}`),
     ...(c.mistakes ?? []).map((m) => `  헷갈림: ${m}`)].join("\n"));
   const rel = [...(structure?.versus ?? []).map((v) => `대비 ${num.get(v.a)} vs ${num.get(v.b)}: ${v.on}`), ...(structure?.pairs ?? []).map((p) => `짝 ${num.get(p.a)} — ${num.get(p.b)}: ${p.why}`)]
     .filter((x) => !x.includes("undefined"));
@@ -110,7 +110,7 @@ export async function designExam(id: string, map: MaterialMap, structure: Struct
     const used = it.memories.map((n) => cards[n - 1]);
     const pages = [...new Set(used.flatMap((c) => c.pages))].sort((a, b) => a - b);
     const source = pages.map((p) => `[원문 p.${p}]\n${texts[p] ?? ""}`).join("\n\n").slice(0, 12000);
-    const mem = used.map((c) => [`- ${c.title} (${c.kind})`, c.memo?.line ? `  요지: ${c.memo.line}` : "", `  ${line(c)}`, ...(c.memo?.facts ?? []).map((f) => `  식·조건: ${f}`), ...(c.mistakes ?? []).map((m) => `  헷갈림: ${m}`)].filter(Boolean).join("\n")).join("\n");
+    const mem = used.map((c) => [`- ${c.title} (${c.kind})`, c.memo?.line ? `  요지: ${c.memo.line}` : "", `  ${line(c)}`, ...(c.memo?.facts ?? []).map((f) => `  식·조건: ${f}`), ...(c.memo?.details ?? []).map((f) => `  참고: ${f}`), ...(c.mistakes ?? []).map((m) => `  헷갈림: ${m}`)].filter(Boolean).join("\n")).join("\n");
     const u = `자료: ${map.title}\n\n[설계]\n노릴 오개념: ${it.target}\n형식: ${it.form}\n상황: ${it.situation}\n확인할 것: ${it.why}\n\n[쓸 기억]\n${mem}\n\n[원문]\n${source}`;
     try {
       const write = (extra = "") => withTrace({ area: "pdf", action: "quiz-write", ref: id }, () => askJson<Written>("map:exam-write", WRITE_SYSTEM, `${u}${extra}`, WRITE_SCHEMA, EXAM_MODEL));

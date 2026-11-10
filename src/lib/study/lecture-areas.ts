@@ -77,9 +77,9 @@ export function stepsOf(text: string) {
 }
 
 const cardText = (c: MapCard) => {
-  const m = (c as MapCard & { memo?: { line?: string; facts?: string[]; role?: string } }).memo;
+  const m = (c as MapCard & { memo?: { line?: string; facts?: string[]; details?: string[]; role?: string } }).memo;
   return [`[${c.id}] ${c.title} (${c.kind}, ${m?.role ?? (c.core ? "메인" : "바탕")}, p.${c.pages.join(",")})`, c.shape ? `  모양: ${JSON.stringify(c.shape)}` : "", m?.line ? `  요지: ${m.line}` : "",
-    ...(m?.facts ?? []).map((f) => `  식·조건: ${f}`), ...c.mistakes.map((x) => `  헷갈리는 점: ${x}`)].filter(Boolean).join("\n");
+    ...(m?.facts ?? []).map((f) => `  식·조건: ${f}`), ...(m?.details ?? []).map((f) => `  참고: ${f}`), ...c.mistakes.map((x) => `  헷갈리는 점: ${x}`)].filter(Boolean).join("\n");
 };
 // 캐시(session_id): 앞쪽(지시문 · 목록 · 이 영역 카드 · 쪽 원문 + 그림)은 그 영역의 강의와 질문들이 똑같이 쓰고, 바뀌는 것은 tail로.
 async function prefix(id: string, sectionId: string) {

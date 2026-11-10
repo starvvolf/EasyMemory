@@ -20,7 +20,7 @@ type MapState = "new" | "met" | "unknown" | "known" | "graduated";
 type Card = { id: string; ref: string; kind: string; title: string; core: boolean; shape: Shape; pages: number[]; quotes: string[]; mistakes: string[];
   takes: string[]; gives: string[]; questions: number; same: Array<{ id: string; pages: number[] }>; state: MapState; knowledgeId?: string; dueAt?: string; topic?: string;
   figure?: { page: number; role: string; says: string; file: string; mode?: string };
-  memo?: { question?: string; line?: string; facts?: string[]; role?: string } };
+  memo?: { question?: string; line?: string; facts?: string[]; details?: string[]; role?: string } };
 type Section = { id: string; title: string; pages: number[]; cards: Card[] };
 type MatMap = { id: string; title: string; status: string; pages: number; sections: Section[]; chains: Array<{ from: string; to: string; what: string; by?: string }>;
   topics?: string[]; topicNotes?: Record<string, string>; principles?: Array<{ title: string; line: string; cardIds: string[] }>; counts: Record<MapState, number> & { cards: number; questions: number; core?: number };
@@ -83,7 +83,8 @@ function Body({ s }: { s: Shape }) {
     case "term": return <div className="mm3-body"><p className="mm3-lead"><Rich text={s.definition} /></p>
       {s.symbol ? <p className="mm3-when"><span className="mm3-tag">표기</span><Rich text={s.symbol.includes("$") ? s.symbol : tex(s.symbol)} /></p> : null}{s.neighbors.length ? <p className="mm3-when"><span className="mm3-tag">헷갈리는 말</span><Rich text={s.neighbors.join(", ")} /></p> : null}</div>;
     case "fact": return <p className="mm3-lead"><Rich text={s.value} /></p>;
-    case "concept": return <div className="mm3-body"><p className="mm3-lead"><Rich text={s.claim} /></p>{s.reason ? <p className="mm3-when"><span className="mm3-tag">왜</span><Rich text={s.reason} /></p> : null}{s.limit ? <p className="mm3-when"><span className="mm3-tag">한계</span><Rich text={s.limit} /></p> : null}</div>;
+    // 11/11 사용자 "왜, 한계 안 보이게": 개념은 무엇(claim)만 보인다. 왜·한계는 데이터로 남아 문제 만들기에 쓰인다.
+    case "concept": return <div className="mm3-body"><p className="mm3-lead"><Rich text={s.claim} /></p></div>;
     case "pattern": return <p><Rich text={s.frame} />{s.example ? <span className="small muted"> · 예: <Rich text={s.example} /></span> : null}</p>;
   }
 }
@@ -232,7 +233,7 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
 // 줄기 (11/9 사용자 "목차를 없애야 하나, 줄기로 바꾸려면" → "바꿔서 테스트 후 보고"): 기억 합치기(src/lib/study/compact.ts)가 묶은 영역 → 기억.
 // 영역은 자료 순서라 목차를 겸한다(쪽 범위). 메인 기억은 한 줄씩, 바탕·곁은 영역 끝에 접어 둔다. 누르면 아래 떠 있는 칸에 요지·단계·근거 카드.
 // 아직 합치지 않은 자료는 예전 목차를 보이고 위에 [줄기 만들기].
-type MemoryLite = { id: string; name: string; kind: string; role: "메인" | "바탕" | "곁"; area: number; question: string; line: string; steps: string[]; cards: string[]; facts?: string[] };
+type MemoryLite = { id: string; name: string; kind: string; role: "메인" | "바탕" | "곁"; area: number; question: string; line: string; steps: string[]; cards: string[]; facts?: string[]; details?: string[] };
 type CompactLite = { at: string; ms: number; model?: string; cards: number; areas: Array<{ name: string; question: string }>; memories: MemoryLite[] };
 // 줄기 잡는 동안(11/11 사용자 "줄기 만들 때는 뭐 대단한 거 하는 척하면서 큰 동그라미 세 개 움직이는 애니메이션"): 자료 전체를 한 번에 보는 호출이라
 // 글이 흘러나오지 않는다. 큰 동그라미 셋이 돌고, 하는 일을 몇 초마다 바꿔 보여 준다(자료와 상관없는 말만).
@@ -296,12 +297,13 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
       {mem ? <div className="mm8-detail mm6-card">
         <div className="mm3-dhead"><b><Rich text={mem.name} /></b><span className="mm3-kind">{mem.kind}</span>{mem.role !== "메인" ? <span className="mm3-kind">{mem.role === "바탕" ? "바탕 지식" : "곁가지"}</span> : null}<span className="cs-gap" />
           {pagesOf(mem).slice(0, 6).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}<button className="btn ghost small" onClick={() => { setOpen(null); setCard(null); }}>닫기</button></div>
-        {mem.question ? <p className="small muted" style={{ margin: 0 }}><Rich text={mem.question} /></p> : null}
-        <p style={{ margin: 0 }}><Rich text={mem.line} /></p>
+        {mem.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={mem.question} /></p> : null}
+        <p className="lc3-ca"><Rich text={mem.line} /></p>
         {self ? <>
           {/* 줄기 모드(11/10): 기억 하나가 곧 카드 한 장 — 모양(단계·기준…), 모양에 없는 식·조건, 근거, 그림을 바로 */}
           <Body s={self.shape} />
           {mem.facts?.length ? <ul className="st-facts">{mem.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+          <CardDetails items={mem.details} />
           {self.quotes.length ? <div className="st-quotes small muted">{self.quotes.map((q, k) => <span key={k}>“{q}”</span>)}</div> : null}
           <FigureView genId={genId} c={self} onPage={onPage} />
         </> : <>
@@ -481,6 +483,7 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
         {memById.get(openCard.id) && cardById.get(openCard.id) ? <>
           {memById.get(openCard.id)!.line ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
           {memById.get(openCard.id)!.facts?.length ? <ul className="st-facts">{memById.get(openCard.id)!.facts!.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+          <CardDetails items={memById.get(openCard.id)!.details} />
           <FigureView genId={genId} c={openCard} onPage={onPage} /></>
           : memById.get(openCard.id) ? <>{memById.get(openCard.id)!.steps.length ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
           <div className="st-src"><span className="small muted">근거 카드 {memById.get(openCard.id)!.cards.length}</span>{memById.get(openCard.id)!.cards.map((id) => cardById.get(id)).filter((c): c is Card => !!c).map((c) =>
@@ -511,16 +514,26 @@ function LectureFig({ genId, label, says }: { genId: string; label: string; says
   return <figure className="lc2-fig">{img ?? <div className="small muted">{src === null ? "그림을 불러오지 못했어요" : "그림 불러오는 중…"}</div>}
     <figcaption className="small muted">{says}</figcaption></figure>;
 }
+/** 자세히(11/11): 외울 핵심은 아닌 참고 — 눌러야 보인다. */
+function CardDetails({ items }: { items?: string[] }) {
+  const [open, setOpen] = useState(false);
+  if (!items?.length) return null;
+  return <div className="lc3-details">{open ? <><p className="lc3-detailshead small muted">자세히 (참고)</p><ul className="st-facts lc3-detaillist">{items.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul>
+    <button className="lc3-detailsbtn" onClick={(e) => { e.stopPropagation(); setOpen(false); }}>접기</button></> : <button className="lc3-detailsbtn" onClick={(e) => { e.stopPropagation(); setOpen(true); }}>자세히 {items.length}</button>}</div>;
+}
+// 카드 세 겹(11/11 사용자 "중요 내용 · 보이는 부분은 의미 전달 · 문제로 바꿀 때도 도움"): 앞면 = 이름 + 질문 + 답 한 줄, 펼치면 핵심(모양 · 덧붙임), 자세히는 눌러야.
 function LectureCard({ genId, c, onPage, startOpen = false }: { genId: string; c: Card; onPage: (page: number) => void; startOpen?: boolean }) {
   const [open, setOpen] = useState(startOpen);
   return <div className={`lc3-card${open ? " open" : ""}`}>
     <button className="lc3-cardhead" onClick={(e) => { e.stopPropagation(); setOpen(!open); }} aria-expanded={open}>
       <span className="lc3-cardtag">기억 카드</span>
       <span className="lc3-cardtitle"><Rich text={c.title} /></span>
-      {c.memo?.line ? <span className="lc3-cardline"><Rich text={c.memo.line} /></span> : null}
+      <span className="lc3-cardline">{c.memo?.question ? <span className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={c.memo.question} /></span> : null}
+        {c.memo?.line ? <span className="lc3-ca"><Rich text={c.memo.line} /></span> : null}</span>
       <span className="lc3-chev" aria-hidden>›</span>
     </button>
     {open ? <div className="lc3-cardbody"><Body s={c.shape} />{c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+      <CardDetails items={c.memo?.details} />
       <FigureView genId={genId} c={c} onPage={onPage} />
       <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div></div> : null}</div>;
 }
