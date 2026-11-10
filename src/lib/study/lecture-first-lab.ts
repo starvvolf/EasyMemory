@@ -296,3 +296,47 @@ export async function runLfParts(id: string, fileName: string, pages: number[], 
   }
   return { wall: Date.now() - t0, know: { firstTextMs: know.firstTextMs, listDoneMs: know.listDoneMs, lastCardMs: know.lastCardMs, list: know.list, toc, cardsOk: know.cards.filter((c) => c.ok).length }, parts };
 }
+
+// ---------- 5차 (11/10 사용자 "AI로 공부하다 보면 설명은 긴데 앞부분에서 모르는 거 나오면 자연스럽게 연계가 안 돼", "카드 단위로 순서 잡고 그 사이에
+// 학생 개입 들어오면 집어넣으면 되잖아") — 카드 하나씩 설명하고, 카드 사이에 학생이 물으면 답을 끼워 넣고 다음 카드가 그걸 이어받는다. ----------
+export const STEP_SYSTEM = `너는 이 강의를 맡은 강사다. 카드 목록 순서대로 학생과 한 카드씩 강의하고 있다. 지금은 카드 하나만 설명한다.
+받는 것: 목차, 카드 목록, 지금 카드, 지금까지의 수업(앞에서 설명한 카드, 바로 앞 설명, 학생이 묻고 들은 것), 이 카드 쪽의 원문과 그림("[이미지] 이름표").
+- 바로 앞 설명(또는 학생과 나눈 말)에서 자연스럽게 이어 시작한다. 첫 카드면 이 강의가 풀려는 문제에서 시작한다.
+- 학생이 앞에서 물은 것이 이 카드와 이어지면 그 답을 바탕으로 설명하고, 학생이 몰랐던 것이 여기서 다시 쓰이면 그 자리에서 짚어 준다.
+- 이 카드의 내용만, 학생이 한 번에 소화할 만큼 설명한다. 식은 $…$(한 줄 식은 $$…$$)로 쓰고 무엇이 커지면 무엇이 어떻게 되는지 말로 풀어 준다. 원문에 예·값이 있으면 그것으로 보여 준다.
+- 그림을 보며 설명할 자리에 ⟦그림: 이미지 이름표 | 이 그림에서 볼 것⟧(받은 이름표 그대로).
+- 다음 카드 예고나 "질문 있나요?"는 쓰지 않는다(학생이 화면에서 고른다).
+- 자료에 없는 사실을 지어내지 않는다. 쉬운 말, "~해요" 체, 용어는 "한국어(영어 원어)".`;
+export const ASK_SYSTEM = `너는 이 강의를 맡은 강사다. 강의 도중 학생이 물었다. 지금까지의 수업과 이 카드 쪽의 원문을 바탕으로, 학생이 막힌 곳만 짧고 쉽게 답한다.
+학생이 무엇을 잘못 알고 있었는지가 보이면 그것을 바로잡는다. 식은 $…$. 자료에 없는 사실을 지어내지 않는다. "~해요" 체.`;
+
+type ListCard = { n: number; name: string; kind: string; role: string; pages: number[] };
+export async function runCardSteps(id: string, pages: number[], texts: Record<string, string>, images: Img[], list: ListCard[], toc: Array<{ n: number; title: string; pages: number[] }>,
+  script: { upto: number; asks: Record<number, string> }) {
+  const t0 = Date.now();
+  const imagesOf = (ps: number[]) => images.filter((x) => ps.includes(x.page)).map(({ label, dataUrl }) => ({ label, dataUrl }));
+  const head = `[목차]\n${toc.map((c) => `${c.n}. ${c.title} (p.${c.pages.join(",")})`).join("\n")}\n\n[카드 목록]\n${list.map((c) => `c${c.n}. ${c.name} | ${c.kind} | ${c.role} | p.${c.pages.join(",")}`).join("\n")}`;
+  const done: string[] = []; const qa: Array<{ after: number; q: string; a: string }> = [];
+  let last = "";
+  const steps: Array<{ kind: "card" | "ask"; n: number; firstTextMs: number | null; ms: number; chars: number; text: string; q?: string }> = [];
+  const call = async (purpose: string, system: string, user: string, ps: number[]) => {
+    const t = Date.now(); let first = 0;
+    const r = await withTrace({ area: "pdf", action: "quiz-lf-step", ref: id }, () => callModel({ purpose, system, user, ...LF_LECTURE_MODEL, caller: LOCAL_CALLER, images: imagesOf(ps), onText: () => { if (!first) first = Date.now(); } }));
+    log(purpose, LF_LECTURE_MODEL, t, r.usage, user.length, first ? first - t : undefined);
+    return { text: r.text, firstTextMs: first ? first - t : null, ms: Date.now() - t };
+  };
+  const history = () => `[지금까지의 수업]\n설명한 카드: ${done.join(", ") || "(아직 없음)"}\n${qa.length ? `학생이 묻고 들은 것:\n${qa.map((x) => `- (c${x.after} 뒤) 학생: ${x.q}\n  강사: ${x.a}`).join("\n")}\n` : ""}바로 앞 설명:\n${last || "(첫 카드)"}`;
+  for (const c of list.filter((x) => x.n <= script.upto)) {
+    const user = `${head}\n\n[지금 카드] c${c.n}. ${c.name} | ${c.kind} | p.${c.pages.join(",")}\n\n${history()}\n\n[원문]\n${c.pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`;
+    const r = await call("lab:lf-step", STEP_SYSTEM, user, c.pages);
+    steps.push({ kind: "card", n: c.n, ...r, chars: r.text.length });
+    done.push(`c${c.n} ${c.name}`); last = r.text;
+    const q = script.asks[c.n];
+    if (q) {
+      const a = await call("lab:lf-ask", ASK_SYSTEM, `${head}\n\n${history()}\n\n[학생 질문] ${q}\n\n[원문]\n${c.pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`, c.pages);
+      steps.push({ kind: "ask", n: c.n, q, ...a, chars: a.text.length });
+      qa.push({ after: c.n, q, a: a.text }); last = a.text;
+    }
+  }
+  return { wall: Date.now() - t0, steps };
+}

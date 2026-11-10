@@ -14,7 +14,7 @@ import { materialMap, type MapCard } from "./material-map.ts";
 import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "./quiz-plan.ts";
 import { loadGoalLinks, makeGoalLinks } from "./goal-links.ts";
 
-export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn", "lfParts"] as const;
+export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn", "lfParts", "lfSteps"] as const;
 export type Lab2Method = (typeof LAB2_METHODS)[number];
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 
@@ -40,7 +40,7 @@ export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?
   const map = state ? materialMap(state, {}) : null;
   if (!state || !map) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });
   const texts = (state as unknown as { recaller?: { texts?: Record<string, string> } }).recaller?.texts ?? {};
-  if (method === "lfKnow" || method === "lfLearn" || method === "lfParts") {
+  if (method === "lfKnow" || method === "lfLearn" || method === "lfParts" || method === "lfSteps") {
     // 강의 먼저 3차(lecture-first-lab.ts runLectureFirst3, 11/10): 카드 목록을 강의보다 먼저. 안다 = 목록까지, 모른다 = 이어서 강의. 쪽을 골라 작게(?pages=2-13).
     const { runLectureFirst3, compareLists } = await import("./lecture-first-lab.ts");
     const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
@@ -55,6 +55,18 @@ export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?
     const wholes = await renderPageImages(pdf, pages.filter((p) => route.get(p) === "page" || (route.get(p) === "figures" && !figs.get(p)?.length)), 1024).catch(() => new Map<number, string>());
     const drawMs = Date.now() - t0;
     const images = pages.flatMap((p) => { const f = figs.get(p) ?? []; return f.length ? f.map((x) => ({ page: p, label: x.label, dataUrl: x.dataUrl })) : wholes.get(p) ? [{ page: p, label: `원문 p.${p}`, dataUrl: wholes.get(p)! }] : []; });
+    if (method === "lfSteps") {
+      // 카드 하나씩 + 카드 사이 학생 질문(5차): 안다 모드로 만든 목록(lfKnow-a.json)을 다시 쓴다(AI 없이).
+      const { runCardSteps } = await import("./lecture-first-lab.ts");
+      const saved = JSON.parse(await readFile(path.join(dataDir(), "study-gen", id, "quiz-lab2", "lfKnow-a.json"), "utf8")) as { list: Array<{ n: number; name: string; kind: string; role: string; pages: number[] }>; toc: Array<{ n: number; title: string; pages: number[] }> };
+      const r = await runCardSteps(id, pages, texts, images, saved.list, saved.toc, { upto: 6, asks: { 4: "거리가 두 배가 되면 왜 반이 아니라 4분의 1이 돼요?", 5: "두 벡터를 내적하면 왜 cos α가 나와요? 그게 원뿔이랑 무슨 상관이에요?" } });
+      const calls = await callsOf(id, t0);
+      const out = { method, id, tag: opts.tag ?? "", pages, at: new Date().toISOString(), drawMs, ...r, calls: calls.length, tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0) };
+      const dir = path.join(dataDir(), "study-gen", id, "quiz-lab2");
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, `${method}${opts.tag ? `-${opts.tag}` : ""}.json`), JSON.stringify(out, null, 1));
+      return out;
+    }
     if (method === "lfParts") {
       // 파트 나눠 강의(4차): 목록 → 1·2장을 차례로(학생이 [다음]을 누른 것처럼) → 3장은 몇 초 뒤 끊기
       const { runLfParts } = await import("./lecture-first-lab.ts");
