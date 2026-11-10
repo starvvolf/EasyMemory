@@ -627,6 +627,15 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
   const canNext = Boolean(cur && !curLive && cur.step && (hasNextSlot || (cur.area.status === "done" && nextArea)));
   const goNext = () => { if (!canNext) return; if (hasNextSlot) go(atIdx + 1); else if (nextArea) { if (!nextArea.status) void post({ action: "area", section: nextArea.id }); setDir("next"); setAtKey(`${nextArea.id}:0`); } };
   const goPrev = () => { if (canPrev) go(atIdx - 1); };
+  // 11/11 사용자 "위에 바 덩어리 눌러서 그쪽 덩어리로 갈 수 있게": 영역 칸을 누르면 그 영역의 첫 장으로(아직 안 쓴 영역이면 쓰기 시작).
+  const jumpArea = (i: number) => {
+    const a = areas?.[i]; if (!a || !cur || i === cur.ai) return;
+    setDir(i < cur.ai ? "prev" : "next"); setQ("");
+    const first = slots.findIndex((x) => x.ai === i);
+    if (first >= 0) { setAtKey(slots[first].key); return; }
+    if (!a.status) void post({ action: "area", section: a.id });
+    setAtKey(`${a.id}:0`);
+  };
   const keys = useRef({ goNext, goPrev });
   useEffect(() => { keys.current = { goNext, goPrev }; });
   useEffect(() => {
@@ -656,8 +665,9 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
     <div className="lc3">
       <div className="lc3-bar">
         <button className="lc3-arrow" disabled={!canPrev} onClick={goPrev} aria-label="이전 장">‹</button>
-        <div className="lc3-progress" title={`영역 ${cur.ai + 1} / ${areas.length}`}>{areas.map((a, i) => <div key={a.id} className={`lc3-seg${i < cur.ai ? " done" : i === cur.ai ? " on" : ""}`}>
-          {i === cur.ai && area.steps.length && step ? <div className="lc3-progress-fill" style={{ width: `${(area.steps.findIndex((s) => s.n === step.n) + 1) / Math.max(area.steps.length, 1) * 100}%` }} /> : null}</div>)}</div>
+        <div className="lc3-progress">{areas.map((a, i) => <button key={a.id} className={`lc3-segbtn${i === cur.ai ? " on" : ""}`} title={`영역 ${i + 1}. ${a.title}`} aria-label={`영역 ${i + 1}. ${a.title}로 가기`} onClick={() => jumpArea(i)}>
+          <span className={`lc3-seg${i < cur.ai ? " done" : i === cur.ai ? " on" : ""}`}>
+          {i === cur.ai && area.steps.length && step ? <span className="lc3-progress-fill" style={{ width: `${(area.steps.findIndex((s) => s.n === step.n) + 1) / Math.max(area.steps.length, 1) * 100}%` }} /> : null}</span></button>)}</div>
         <span className="lc3-count num">영역 {cur.ai + 1}/{areas.length}</span>
         <button className="lc3-arrow" disabled={!canNext} onClick={goNext} aria-label="다음 장">›</button>
       </div>
