@@ -482,12 +482,13 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
     </div>);
 }
 
+// 11/10 "카드 단위 말고 더 큰 단위로": 박스 하나 = 영역 하나, 기억은 설명 안 ⟦카드 id⟧ 자리에 붙는다.
 // 강의 (11/10 사용자 "카드 단위로 순서 잡고 그 사이에 학생 개입 들어오면 집어넣으면 되잖아", "기본 강의 순서는 가로로, 학생이 개입해서 새로 알려 주는 건
 // 그 박스 밑으로 세로로"): src/lib/study/lecture-steps.ts. 카드 하나 = 가로로 넘기는 박스 하나(강사의 설명이 흘러나옴), 박스 밑에 묻고 들은 것이 세로로 쌓인다.
 // 다음 카드는 [다음]을 누를 때 부르고, 앞에서 묻고 들은 것을 이어받는다.
 type StepAsk = { q: string; a: string; status: string };
-type StepCard = { id: string; title: string; role: string; status?: string; text?: string; asks?: StepAsk[] };
-const FIG_MARK = /⟦그림:\s*([^|⟧]+?)\s*\|\s*([^⟧]*?)\s*⟧/g;
+type StepCard = { id: string; title: string; role: string; cards?: string[]; pages?: number[]; status?: string; text?: string; asks?: StepAsk[] };
+const FIG_MARK = /⟦그림:\s*([^|⟧]+?)\s*\|\s*([^⟧]*?)\s*⟧|⟦카드\s*([^⟧\s]+)\s*⟧/g;
 /** $$…$$(여러 줄)를 한 줄 $…$로: Rich는 줄마다 식을 읽는다. */
 const flatMath = (t: string) => t.replace(/\$\$\s*([\s\S]*?)\s*\$\$/g, (_, x: string) => `\n\n$${x.replace(/\s*\n\s*/g, " ")}$\n\n`);
 function LectureFig({ genId, label, says }: { genId: string; label: string; says: string }) {
@@ -499,11 +500,20 @@ function LectureFig({ genId, label, says }: { genId: string; label: string; says
   return <figure className="lc2-fig">{img ?? <div className="small muted">{src === null ? "그림을 불러오지 못했어요" : "그림 불러오는 중…"}</div>}
     <figcaption className="small muted">{says}</figcaption></figure>;
 }
-function LectureText({ genId, text }: { genId: string; text: string }) {
+function LectureCard({ genId, c, onPage }: { genId: string; c: Card; onPage: (page: number) => void }) {
+  const [open, setOpen] = useState(false);
+  return <div className={`lc2-card${open ? " open" : ""}`}><button className="lc2-cardhead" onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>
+    <span className="lc2-cardtag">기억</span><b><Rich text={c.title} /></b>{c.memo?.line ? <span className="small muted"> <Rich text={c.memo.line} /></span> : null}<span className="cs-gap" /><span className="small muted">{open ? "접기" : "펼치기"}</span></button>
+    {open ? <div className="lc2-cardbody"><Body s={c.shape} />{c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+      <div className="row small">{c.pages.slice(0, 4).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
+      <FigureView genId={genId} c={c} onPage={onPage} /></div> : null}</div>;
+}
+function LectureText({ genId, text, byId, onPage }: { genId: string; text: string; byId: Map<string, Card>; onPage: (page: number) => void }) {
   const parts: ReactNode[] = []; let last = 0, k = 0;
   for (const m of text.matchAll(FIG_MARK)) {
     if (m.index! > last) parts.push(<RichBlock key={k++} text={flatMath(text.slice(last, m.index))} />);
-    parts.push(<LectureFig key={k++} genId={genId} label={m[1]} says={m[2]} />);
+    if (m[3]) { const c = byId.get(m[3]); if (c) parts.push(<LectureCard key={k++} genId={genId} c={c} onPage={onPage} />); }
+    else parts.push(<LectureFig key={k++} genId={genId} label={m[1]} says={m[2]} />);
     last = m.index! + m[0].length;
   }
   const rest = text.slice(last).replace(/⟦[^⟧]*$/, "");
@@ -535,33 +545,28 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
   const goNext = () => { const n = at + 1; if (n >= list.length) return; if (!list[n].status) void post({ action: "step", card: list[n].id }); setAt(n); };
   const begin = () => { void post({ action: "step", card: list[0].id }); setAt(0); };
   if (!started.length) return <div className="lc-empty">
-    <p>카드를 하나씩 넘기며 강사가 설명해요. 설명 중에 모르는 게 있으면 그 카드 밑에 물어보세요. 다음 카드는 그걸 알고 이어서 설명해요.</p>
-    <p className="small muted">카드 {list.length}개 · 카드마다 처음 글자까지 4~5초</p>
+    <p>영역을 하나씩 넘기며 강사가 설명해요. 기억이 나오는 자리에는 그 기억 카드가 붙어요. 모르는 게 있으면 그 영역 밑에 물어보세요. 다음 영역은 그걸 알고 이어서 설명해요.</p>
+    <p className="small muted">영역 {list.length}개 · 영역마다 처음 글자까지 4~5초</p>
     {error ? <p className="small bad">{error}</p> : null}
     <button className="btn primary" onClick={begin}>강의 시작</button></div>;
-  const c = cur && byId.get(cur.id);
   return (
     <div className="lc2">
       <div className="row small lc2-top"><span className="muted num">{at + 1} / {list.length}</span><span className="cs-gap" />
         {writing ? <button className="btn ghost small" onClick={() => void post({ action: "stop" })}>멈추기</button> : null}</div>
       <div className="lc2-track" ref={track}>{list.slice(0, boxes).map((s, i) => <section key={s.id} className={`lc2-box${i === at ? " on" : ""}`} onClick={() => setAt(i)}>
         <p className="eyebrow">{i + 1}. <Rich text={s.title} />{s.role && s.role !== "메인" ? <span className="mm3-kind"> {s.role === "바탕" ? "바탕 지식" : s.role}</span> : null}</p>
-        {s.status ? <div className="lc2-say"><LectureText genId={genId} text={s.text ?? ""} />{s.status === "writing" ? <span className="lc2-caret" /> : null}
+        {s.status ? <div className="lc2-say"><LectureText genId={genId} text={s.text ?? ""} byId={byId} onPage={onPage} />{s.status === "writing" ? <span className="lc2-caret" /> : null}
           {s.status === "failed" ? <p className="small bad">설명을 못 받았어요. <button className="linkish" onClick={() => void post({ action: "step", card: s.id })}>다시</button></p> : null}
           {s.status === "stopped" ? <p className="small muted">멈췄어요. <button className="linkish" onClick={() => void post({ action: "step", card: s.id })}>처음부터 다시</button></p> : null}</div>
-          : <p className="small muted">아직 듣지 않은 카드예요.</p>}
+          : <p className="small muted">아직 듣지 않은 영역이에요.</p>}
       </section>)}</div>
       {cur?.status ? <div className="lc2-below">
-        {c ? <div><button className="linkish small" onClick={() => setShowCard(!showCard)}>{showCard ? "기억 카드 접기" : "이 기억 카드 보기"}</button>
-          {showCard ? <article className="lc-card"><header className="mm3-dhead"><b><Rich text={c.title} /></b><span className="mm3-kind">{c.kind}</span><span className="cs-gap" />
-            {c.pages.slice(0, 3).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}</header>
-            {c.memo?.line ? <p className="lc-line"><Rich text={c.memo.line} /></p> : null}<Body s={c.shape} />
-            {c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
-            <FigureView genId={genId} c={c} onPage={onPage} /></article> : null}</div> : null}
+        {cur.cards?.length ? <div><button className="linkish small" onClick={() => setShowCard(!showCard)}>{showCard ? "이 영역의 기억 접기" : `이 영역의 기억 ${cur.cards.length}개 보기`}</button>
+          {showCard ? <div className="lc2-cards">{cur.cards.map((cid) => byId.get(cid)).filter((x): x is Card => !!x).map((x) => <LectureCard key={x.id} genId={genId} c={x} onPage={onPage} />)}</div> : null}</div> : null}
         {(cur.asks ?? []).map((a, k) => <div key={k} className="lc2-qa"><p className="lc2-q"><b>나</b> {a.q}</p>
-          <div className="lc2-a"><LectureText genId={genId} text={a.a} />{a.status === "writing" ? <span className="lc2-caret" /> : null}</div></div>)}
+          <div className="lc2-a"><LectureText genId={genId} text={a.a} byId={byId} onPage={onPage} />{a.status === "writing" ? <span className="lc2-caret" /> : null}</div></div>)}
         <form className="row lc2-ask" onSubmit={(e) => { e.preventDefault(); if (!q.trim() || cur.status !== "done") return; void post({ action: "ask", card: cur.id, q }); setQ(""); }}>
-          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={cur.status === "done" ? "여기서 모르는 걸 물어보세요" : "설명이 끝나면 물어볼 수 있어요"} disabled={cur.status !== "done"} />
+          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={cur.status === "done" ? "이 영역에서 모르는 걸 물어보세요" : "설명이 끝나면 물어볼 수 있어요"} disabled={cur.status !== "done"} />
           <button className="btn ghost small" disabled={!q.trim() || cur.status !== "done"}>묻기</button></form>
       </div> : null}
       <div className="row lc-nav"><button className="btn ghost small" disabled={at === 0} onClick={() => setAt(at - 1)}>‹ 이전</button><span className="cs-gap" />

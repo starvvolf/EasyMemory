@@ -1108,3 +1108,9 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .lc2-a{font-size:15px;line-height:1.7}
 .dejipgi .lc2-ask{gap:6px}
 .dejipgi .lc2-ask .input{flex:1}
+.dejipgi .lc2-card{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;background:var(--ground);margin:6px 0}
+.dejipgi .lc2-cardhead{display:flex;gap:6px;align-items:baseline;width:100%;text-align:left;background:none;border:0;padding:6px 10px;cursor:pointer;color:var(--ink);font-size:14px}
+.dejipgi .lc2-cardtag{font-size:11px;color:var(--accent);font-weight:700}
+.dejipgi .lc2-cardbody{padding:0 10px 8px;display:flex;flex-direction:column;gap:6px}
+.dejipgi .lc2-cards{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.dejipgi .lc2-box{flex-basis:min(760px,92%)}

@@ -1,6 +1,6 @@
 // 강의 (카드 하나씩, 11/10 사용자 "카드 단위로 순서 잡고 그 사이에 학생 개입 들어오면 집어넣으면 되잖아", "기본 강의 순서는 가로로 진행되게 하고,
 // 학생이 개입해서 새로 알려 주는 건 그 박스 밑으로 세로로 달아"). 실험(lecture-first-lab.ts 5차, 6카드 + 질문 2개: 카드마다 첫 글자 3~5초, 약 $0.008)을 제품으로.
-// - 순서: 자료의 기억(줄기 순서, 곁 기억 뺌). 카드 하나 = 강의 한 걸음(sol low, 스트리밍). 학생이 [다음]을 누를 때 그 카드를 부른다.
+// - 순서: 줄기의 영역. 영역 하나 = 강의 한 걸음(sol low, 스트리밍, 11/10 "더 큰 단위로"). 학생이 [다음]을 누를 때 그 영역을 부른다.
 // - 카드 사이 질문: 그 카드 밑에 묻고 답(sol low). 다음 카드는 지금까지의 질문·답과 바로 앞 설명을 이어받는다.
 // - 그 카드 쪽의 원문 글자와 쪽 그림을 함께 보낸다. 강의가 ⟦그림: 이름표 | 볼 것⟧으로 가리키면 화면이 GET ?fig=로 그 그림을 띄운다.
 // - 저장 study-gen/<id>/lecture-steps.json, 쓰는 중인 글은 서버 메모리(GET이 합쳐서 돌려줌). /api/study-map/<id>/lecture?v=2
@@ -13,15 +13,19 @@ import { loadGen } from "./gen/runner.ts";
 import { materialMap, type MapCard } from "./material-map.ts";
 
 export const STEP_MODEL = { model: "gpt-6.1-sol", effort: "low" };
-export const STEP_SYSTEM = `너는 이 강의를 맡은 강사다. 카드 목록 순서대로 학생과 한 카드씩 강의하고 있다. 지금은 카드 하나만 설명한다.
-받는 것: 카드 목록(영역별), 지금 카드(이름·요지·식과 조건), 지금까지의 수업(앞에서 설명한 카드, 바로 앞 설명, 학생이 묻고 들은 것), 이 카드 쪽의 원문과 그림("[이미지] 이름표").
-- 바로 앞 설명(또는 학생과 나눈 말)에서 자연스럽게 이어 시작한다. 첫 카드면 이 강의가 풀려는 문제에서 시작한다.
-- 학생이 앞에서 물은 것이 이 카드와 이어지면 그 답을 바탕으로 설명하고, 학생이 몰랐던 것이 여기서 다시 쓰이면 그 자리에서 짚어 준다.
-- 이 카드의 내용만, 학생이 한 번에 소화할 만큼 설명한다. 식은 $…$(한 줄 식은 $$…$$)로 쓰고 무엇이 커지면 무엇이 어떻게 되는지 말로 풀어 준다. 원문에 예·값이 있으면 그것으로 보여 준다.
-- 그림을 보며 설명할 자리에 ⟦그림: 이미지 이름표 | 이 그림에서 볼 것⟧ 한 줄(받은 이름표 그대로).
-- 다음 카드 예고나 "질문 있나요?"는 쓰지 않는다(학생이 화면에서 고른다).
+// 11/10 사용자 "카드 단위 말고 더 큰 단위로": 한 걸음 = 영역 하나(줄기의 영역). 그 영역의 쪽 전부(글자 + 그림)와 그 영역의 기억을 주고,
+// 강의 안에서 기억이 처음 제대로 설명된 자리에 ⟦카드 id⟧를 달게 한다(화면이 그 자리에 카드를 붙인다). 질문은 그 영역 박스 밑에.
+export const STEP_SYSTEM = `너는 이 강의를 맡은 강사다. 영역 순서대로 학생과 한 영역씩 강의하고 있다. 지금은 영역 하나를 강의한다.
+받는 것: 강의 전체의 영역과 기억 목록, 지금 영역의 쪽들 원문과 그림("[이미지] 이름표"), 지금 영역의 기억(id·이름·역할·요지·식과 조건·쪽), 지금까지의 수업(앞 영역들, 바로 앞 설명, 학생이 묻고 들은 것).
+- 학생은 이 내용을 처음 배운다. 채팅으로 말하듯 강의한다. 바로 앞 설명(또는 학생과 나눈 말)에서 자연스럽게 이어 시작한다. 첫 영역이면 이 강의가 풀려는 문제에서 시작한다.
+- 이 영역의 쪽에 있는 내용을 빠뜨리지 않고, 학생이 따라오게 한 단계씩 설명한다. 이해하기 쉬운 순서라면 쪽 순서를 바꿔도 된다.
+- 학생이 앞에서 물은 것이 이어지면 그 답을 바탕으로 설명하고, 학생이 몰랐던 것이 여기서 다시 쓰이면 그 자리에서 짚어 준다.
+- 식은 $…$(한 줄 식은 $$…$$)로 쓰고, 무엇이 커지면 무엇이 어떻게 되는지 말로 풀어 준다. 원문에 예·값이 있으면 그것으로 보여 준다. 기호는 처음 나올 때 뜻을 말한다.
+- 기억: 각 기억이 처음 제대로 설명된 자리 바로 뒤에 ⟦카드 id⟧를 한 줄로 단다(받은 id 그대로). 메인 기억은 모두 다룬다. 바탕 기억은 짧게 떠올려 주고, 곁 기억은 지나가며 짚어도 된다.
+- 그림: 그림을 보며 설명할 자리에 ⟦그림: 이미지 이름표 | 이 그림에서 볼 것⟧ 한 줄(받은 이름표 그대로). 표는 본문에 표로 옮겨 써도 된다.
+- 마지막은 이 영역에서 손에 쥔 것을 짧게 묶는다. 다음 영역 예고나 "질문 있나요?"는 쓰지 않는다(학생이 화면에서 고른다).
 - 자료에 없는 사실을 지어내지 않는다. 쉬운 말, "~해요" 체, 용어는 "한국어(영어 원어)".`;
-export const ASK_SYSTEM = `너는 이 강의를 맡은 강사다. 강의 도중 학생이 물었다. 지금까지의 수업과 이 카드 쪽의 원문을 바탕으로, 학생이 막힌 곳만 짧고 쉽게 답한다.
+export const ASK_SYSTEM = `너는 이 강의를 맡은 강사다. 강의 도중 학생이 물었다. 지금까지의 수업과 이 영역 쪽들의 원문을 바탕으로, 학생이 막힌 곳만 짧고 쉽게 답한다.
 학생이 무엇을 잘못 알고 있었는지가 보이면 그것을 바로잡는다. 식은 $…$. 그림이 도움이 되면 ⟦그림: 이미지 이름표 | 볼 것⟧. 자료에 없는 사실을 지어내지 않는다. "~해요" 체.`;
 
 type Ask = { q: string; a: string; status: "writing" | "done" | "failed"; at: string };
@@ -71,26 +75,28 @@ async function context(id: string) {
   if (state.status !== "done") throw Object.assign(new Error("자료를 다 만든 뒤에 강의를 들을 수 있어요."), { status: 409 });
   const texts = (state as unknown as { recaller?: { texts?: Record<string, string> } }).recaller?.texts ?? {};
   const isFlow = (c: MapCard) => c.title.startsWith("흐름: ");
-  const sections = map.sections.map((s) => ({ title: s.title, cards: s.cards.filter((c) => !isFlow(c) && c.memo?.role !== "곁") })).filter((s) => s.cards.length);
+  const sections = map.sections.map((s) => { const cards = s.cards.filter((c) => !isFlow(c)); return { id: s.id, title: s.title, cards, pages: [...new Set([...s.pages, ...cards.flatMap((c) => c.pages)])].sort((a, b) => a - b) }; }).filter((s) => s.cards.length);
   const cards = sections.flatMap((s) => s.cards);
-  return { map, texts, sections, cards, byId: new Map(cards.map((c) => [c.id, c])) };
+  return { map, texts, sections, cards, byId: new Map(cards.map((c) => [c.id, c])), bySection: new Map(sections.map((x) => [x.id, x])) };
 }
 async function lectureOf(id: string) {
   let l = lectures.get(id) ?? await load(id);
-  const { cards } = await context(id);
-  if (!l) { l = { order: cards.map((c) => c.id), steps: {} }; await save(id, l); }
+  const { sections } = await context(id);
+  const order = sections.map((x) => x.id);
+  // 걸음 단위가 바뀌었으면(카드 하나 → 영역) 새로
+  if (!l || l.order.join() !== order.join()) { l = { order, steps: {} }; await save(id, l); }
   lectures.set(id, l);
   return l;
 }
-const cardText = (c: MapCard) => [`${c.title} (${c.kind})`, c.memo?.line ? `요지: ${c.memo.line}` : "", ...(c.memo?.facts ?? []).map((f) => `식·조건: ${f}`)].filter(Boolean).join("\n");
+const cardText = (c: MapCard) => [`[${c.id}] ${c.title} (${c.kind}, ${c.memo?.role ?? (c.core ? "메인" : "바탕")}, p.${c.pages.join(",")})`, c.memo?.line ? `  요지: ${c.memo.line}` : "", ...(c.memo?.facts ?? []).map((f) => `  식·조건: ${f}`)].filter(Boolean).join("\n");
 
-function history(l: LectureSteps, upto: string, byId: Map<string, MapCard>) {
+function history(l: LectureSteps, upto: string, titles: Map<string, string>) {
   const idx = l.order.indexOf(upto);
   const before = l.order.slice(0, idx).filter((x) => l.steps[x]?.status === "done");
-  const qa = before.concat(l.steps[upto]?.asks?.length ? [upto] : []).flatMap((x) => (l.steps[x]?.asks ?? []).filter((a) => a.status === "done").map((a) => `- (${byId.get(x)?.title ?? x} 뒤) 학생: ${a.q}\n  강사: ${a.a}`));
+  const qa = before.concat(l.steps[upto]?.asks?.length ? [upto] : []).flatMap((x) => (l.steps[x]?.asks ?? []).filter((a) => a.status === "done").map((a) => `- (${titles.get(x) ?? x}에서) 학생: ${a.q}\n  강사: ${a.a}`));
   const prev = before.at(-1);
   const lastAsk = prev ? l.steps[prev].asks.filter((a) => a.status === "done").at(-1) : undefined;
-  return `[지금까지의 수업]\n설명한 카드: ${before.map((x) => byId.get(x)?.title ?? x).join(", ") || "(아직 없음)"}\n${qa.length ? `학생이 묻고 들은 것:\n${qa.join("\n")}\n` : ""}바로 앞 설명:\n${lastAsk ? `${l.steps[prev!].text}\n(이어서 학생이 물었다) ${lastAsk.q}\n(강사) ${lastAsk.a}` : prev ? l.steps[prev].text : "(첫 카드)"}`;
+  return `[지금까지의 수업]\n강의한 영역: ${before.map((x) => titles.get(x) ?? x).join(", ") || "(아직 없음)"}\n${qa.length ? `학생이 묻고 들은 것:\n${qa.join("\n")}\n` : ""}바로 앞 설명:\n${lastAsk ? `${l.steps[prev!].text}\n(이어서 학생이 물었다) ${lastAsk.q}\n(강사) ${lastAsk.a}` : prev ? l.steps[prev].text : "(첫 영역)"}`;
 }
 
 async function stream(id: string, key: string, purpose: string, system: string, user: string, tail: string, images: Img[], onDone: (text: string, ok: boolean, stopped: boolean) => void) {
@@ -107,39 +113,37 @@ async function stream(id: string, key: string, purpose: string, system: string, 
   finally { live.delete(key); aborts.delete(key); }
 }
 
-export async function stepCard(id: string, cardId: string) {
+const listOf = (sections: Awaited<ReturnType<typeof context>>["sections"]) => sections.map((x, i) => `영역 ${i + 1}. ${x.title}\n${x.cards.map((c) => `- ${c.title}`).join("\n")}`).join("\n");
+// 캐시(11/10, session_id): 앞쪽(자료·목록·이 영역의 쪽 원문 + 그림)은 그 영역의 강의와 질문들이 똑같이 쓰고, 바뀌는 것(수업 기록·질문)은 tail로.
+async function prefix(id: string, sectionId: string) {
+  const { map, texts, sections, bySection } = await context(id);
+  const sec = bySection.get(sectionId);
+  if (!sec) throw Object.assign(new Error("그 영역을 찾을 수 없어요."), { status: 404 });
+  const user = `[자료] ${map.title}\n\n[영역과 기억 목록]\n${listOf(sections)}\n\n[지금 영역] ${sec.title} (p.${sec.pages.join(",")})\n[지금 영역의 기억]\n${sec.cards.map(cardText).join("\n")}\n\n[원문]\n${sec.pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`;
+  return { sec, user, images: await imagesOf(id, sec.pages), titles: new Map(sections.map((x) => [x.id, x.title])) };
+}
+export async function stepCard(id: string, sectionId: string) {
   const l = await lectureOf(id);
-  const { map, texts, sections, byId } = await context(id);
-  const c = byId.get(cardId);
-  if (!c) throw Object.assign(new Error("그 카드를 찾을 수 없어요."), { status: 404 });
-  if (l.steps[cardId]?.status === "writing") return;
-  const asks = l.steps[cardId]?.asks ?? [];
-  l.steps[cardId] = { status: "writing", text: "", at: new Date().toISOString(), asks };
+  if (l.steps[sectionId]?.status === "writing") return;
+  const { user, images, titles } = await prefix(id, sectionId);
+  l.steps[sectionId] = { status: "writing", text: "", at: new Date().toISOString(), asks: l.steps[sectionId]?.asks ?? [] };
   await save(id, l);
-  const list = sections.map((s, i) => `영역 ${i + 1}. ${s.title}\n${s.cards.map((x) => `- ${x.title}`).join("\n")}`).join("\n");
-  const images = await imagesOf(id, c.pages);
-  // 캐시(11/10): 앞쪽은 카드마다 같게(자료·카드 목록), 바뀌는 것(지금 카드·수업·원문)은 이미지 뒤 tail로.
-  const user = `[자료] ${map.title}\n\n[카드 목록]\n${list}`;
-  const tail = `[지금 카드]\n${cardText(c)}\n\n${history(l, cardId, byId)}\n\n[원문]\n${c.pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`;
   const t = Date.now();
-  void stream(id, `${id}:${cardId}`, "map:lecture-step", STEP_SYSTEM, user, tail, images, (text, ok, stopped) => {
-    l.steps[cardId] = { ...l.steps[cardId], status: ok ? "done" : stopped ? "stopped" : "failed", text, ms: Date.now() - t };
+  void stream(id, `${id}:${sectionId}`, "map:lecture-step", STEP_SYSTEM, user, history(l, sectionId, titles), images, (text, ok, stopped) => {
+    l.steps[sectionId] = { ...l.steps[sectionId], status: ok ? "done" : stopped ? "stopped" : "failed", text, ms: Date.now() - t };
     void save(id, l);
   });
 }
-export async function askCard(id: string, cardId: string, q: string) {
+export async function askCard(id: string, sectionId: string, q: string) {
   const l = await lectureOf(id);
-  const { texts, byId } = await context(id);
-  const c = byId.get(cardId); const step = l.steps[cardId];
-  if (!c || !step) throw Object.assign(new Error("설명을 들은 카드에서 물을 수 있어요."), { status: 409 });
+  const step = l.steps[sectionId];
+  if (!step) throw Object.assign(new Error("강의를 들은 영역에서 물을 수 있어요."), { status: 409 });
+  const { user, images, titles } = await prefix(id, sectionId);
   const ask: Ask = { q: q.slice(0, 1000), a: "", status: "writing", at: new Date().toISOString() };
-  const { map, sections } = await context(id);
-  const user = `[자료] ${map.title}\n\n[카드 목록]\n${sections.map((s, i) => `영역 ${i + 1}. ${s.title}\n${s.cards.map((x) => `- ${x.title}`).join("\n")}`).join("\n")}`;
-  const tail = `${history(l, cardId, byId)}\n\n[지금 카드] ${cardText(c)}\n이 카드 설명:\n${step.text}\n\n[학생 질문] ${ask.q}\n\n[원문]\n${c.pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`;
+  const tail = `${history(l, sectionId, titles)}\n\n이 영역의 강의:\n${step.text}\n\n[학생 질문] ${ask.q}`;
   step.asks.push(ask);
   await save(id, l);
-  const images = await imagesOf(id, c.pages);
-  void stream(id, `${id}:${cardId}:ask`, "map:lecture-ask", ASK_SYSTEM, user, tail, images, (text, ok, stopped) => {
+  void stream(id, `${id}:${sectionId}:ask`, "map:lecture-ask", ASK_SYSTEM, user, tail, images, (text, ok, stopped) => {
     ask.a = text; ask.status = ok || stopped ? "done" : "failed";
     void save(id, l);
   });
@@ -157,10 +161,10 @@ export async function lectureStepsApi(request: Request, id: string) {
       return NextResponse.json({ dataUrl: img?.dataUrl ?? null });
     }
     const l = await lectureOf(id);
-    const { byId } = await context(id);
+    const { bySection } = await context(id);
     const view = l.order.map((cid) => {
-      const s = l.steps[cid]; const c = byId.get(cid);
-      return { id: cid, title: c?.title ?? cid, role: c?.memo?.role ?? "", ...(s ? { status: s.status, text: s.status === "writing" ? live.get(`${id}:${cid}`) ?? s.text : s.text,
+      const s = l.steps[cid]; const sec = bySection.get(cid);
+      return { id: cid, title: sec?.title ?? cid, role: "", cards: sec?.cards.map((c) => c.id) ?? [], pages: sec?.pages ?? [], ...(s ? { status: s.status, text: s.status === "writing" ? live.get(`${id}:${cid}`) ?? s.text : s.text,
         asks: s.asks.map((a, i) => ({ ...a, a: a.status === "writing" && i === s.asks.length - 1 ? live.get(`${id}:${cid}:ask`) ?? a.a : a.a })) } : {}) };
     });
     return NextResponse.json({ lecture: { cards: view } });
@@ -169,7 +173,7 @@ export async function lectureStepsApi(request: Request, id: string) {
   if (body.action === "step" && body.card) await stepCard(id, body.card);
   else if (body.action === "ask" && body.card && body.q?.trim()) await askCard(id, body.card, body.q.trim());
   else if (body.action === "stop") { for (const [k, a] of aborts) if (k.startsWith(`${id}:`)) a.abort(); }
-  else if (body.action === "reset") { for (const [k, a] of aborts) if (k.startsWith(`${id}:`)) a.abort(); lectures.delete(id); const { cards } = await context(id); const l = { order: cards.map((c) => c.id), steps: {} }; lectures.set(id, l); await save(id, l); }
+  else if (body.action === "reset") { for (const [k, a] of aborts) if (k.startsWith(`${id}:`)) a.abort(); lectures.delete(id); const { sections } = await context(id); const l = { order: sections.map((x) => x.id), steps: {} }; lectures.set(id, l); await save(id, l); }
   else return NextResponse.json({ message: "action은 step·ask·stop·reset" }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
