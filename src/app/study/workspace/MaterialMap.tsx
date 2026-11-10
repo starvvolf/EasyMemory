@@ -609,8 +609,11 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
   const slots = areas ? slotsOf(areas) : [];
   // 걸음 0(아직 첫 걸음 표시가 안 온 영역)에 있다가 첫 걸음이 오면 그 영역의 첫 걸음으로
   const found = slots.findIndex((s) => s.key === atKey);
-  const byArea = atKey?.endsWith(":0") ? slots.findIndex((s) => s.area.id === atKey.slice(0, -2)) : -1;
-  const atIdx = Math.max(0, found >= 0 ? found : byArea >= 0 ? byArea : slots.length - 1);
+  // 찾는 장이 없으면(아직 안 왔거나 영역을 다시 쓰는 중) 같은 영역에서 그 번호 이하의 마지막 장 — 마지막 장으로 튀지 않게
+  const [wantArea, wantN] = atKey ? [atKey.slice(0, atKey.lastIndexOf(":")), Number(atKey.slice(atKey.lastIndexOf(":") + 1))] : ["", 0];
+  const sameArea = slots.map((s, i) => [s, i] as const).filter(([s]) => s.area.id === wantArea);
+  const near = sameArea.filter(([s]) => (s.step?.n ?? 0) <= Math.max(wantN, 1)).at(-1)?.[1] ?? sameArea[0]?.[1] ?? -1;
+  const atIdx = Math.max(0, found >= 0 ? found : near >= 0 ? near : slots.length - 1);
   const cur = slots[atIdx];
   const nextArea = cur && areas ? areas[cur.ai + 1] : undefined;
   // 다음 영역은 지금 영역을 다 쓴 뒤 하나만 미리

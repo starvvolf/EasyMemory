@@ -44,7 +44,13 @@ function save(id: string, l: LectureAreas) { saving = saving.then(async () => { 
 const live = new Map<string, string>();
 const aborts = new Map<string, AbortController>();
 const lectures = new Map<string, LectureAreas>();
-async function lectureOf(id: string) { const l = lectures.get(id) ?? await load(id); lectures.set(id, l); return l; }
+// 서버가 다시 켜지면(개발 서버가 코드를 다시 읽을 때도) 쓰던 호출은 사라진다: 파일에 '쓰는 중'으로 남은 영역은 멈춘 것으로.
+async function lectureOf(id: string) {
+  let l = lectures.get(id);
+  if (!l) { l = await load(id); for (const [k, a] of Object.entries(l.areas)) if (a.status === "writing" && !aborts.has(`${id}:${k}`)) a.status = "stopped";
+    for (const list of Object.values(l.asks)) for (const q of list) if (q.status === "writing") q.status = "failed"; lectures.set(id, l); }
+  return l;
+}
 
 /** 강사의 글을 걸음으로 나눈다(⟦걸음 n | 제목⟧). 첫 표시 앞의 글은 첫 걸음에 붙인다. */
 export function stepsOf(text: string) {
@@ -69,35 +75,46 @@ async function prefix(id: string, sectionId: string) {
   return { sec, n: i + 1, user, images: await imagesOf(id, sec.pages) };
 }
 
-async function stream(id: string, key: string, purpose: string, user: string, tail: string, images: Array<{ label: string; dataUrl: string }>, cacheKey: string, onDone: (text: string, ok: boolean, stopped: boolean, ms: number, firstMs?: number) => void) {
+async function stream(id: string, key: string, purpose: string, user: string, tail: string, images: Array<{ label: string; dataUrl: string }>, cacheKey: string, onDone: (text: string, ok: boolean, stopped: boolean, ms: number, firstMs?: number) => void, current: () => boolean = () => true) {
+  aborts.get(key)?.abort();
   const abort = new AbortController(); aborts.set(key, abort); live.set(key, "");
   const t = Date.now(); let first = 0;
   try {
     const r = await withTrace({ area: "pdf", action: "lecture-area", ref: id }, async () => {
       const x = await callModel({ purpose, system: AREA_SYSTEM, user, tail, cacheKey, ...AREA_MODEL, caller: LOCAL_CALLER, images: images.map(({ label, dataUrl }) => ({ label, dataUrl })),
-        signal: abort.signal, onText: (s) => { if (!first) first = Date.now(); live.set(key, s); } });
+        signal: abort.signal, onText: (s) => { if (!first) first = Date.now(); if (current()) live.set(key, s); } });
       const u = x.usage;
       logAssistCall({ at: new Date(t).toISOString(), purpose, ...AREA_MODEL, ms: Date.now() - t, ...(first ? { firstTextMs: first - t } : {}), ok: true, inChars: user.length,
         ...(u ? { tokens: { in: u.inputTokens, cached: u.cachedInputTokens, out: u.outputTokens, reasoning: u.reasoningTokens } } : {}), trace: currentTrace() });
       return x;
     });
     onDone(r.text, true, false, Date.now() - t, first ? first - t : undefined);
-  } catch { onDone(live.get(key) ?? "", false, abort.signal.aborted, Date.now() - t, first ? first - t : undefined); }
-  finally { live.delete(key); aborts.delete(key); }
+  } catch { onDone(current() ? live.get(key) ?? "" : "", false, abort.signal.aborted, Date.now() - t, first ? first - t : undefined); }
+  finally { if (aborts.get(key) === abort) { live.delete(key); aborts.delete(key); } }
 }
 
+// 같은 영역을 두 번 부르지 않는다(11/11 버그: [다음 영역]과 미리 부르기가 거의 같이 와서, 둘 다 그림을 그리는 동안 검사를 지나 호출이 둘 —
+// 두 글이 같은 자리에 번갈아 써져 화면의 장이 혼자 바뀌었다). 검사와 '쓰는 중' 표시를 기다림 없이 한 번에 하고, 한 영역에 도는 호출은 하나(새로 부르면 앞의 것은 끊고 그 답은 버린다).
+const runs = new Map<string, number>();
 export async function startArea(id: string, sectionId: string, opts: { again?: boolean } = {}) {
   const l = await lectureOf(id);
   const had = l.areas[sectionId];
-  if (had && (had.status === "writing" || (had.status === "done" && !opts.again))) return;
-  const { sec, n, user, images } = await prefix(id, sectionId);
+  if (had && !opts.again && (had.status === "writing" || had.status === "done")) return;
+  const key = `${id}:${sectionId}`;
+  const run = (runs.get(key) ?? 0) + 1; runs.set(key, run);
+  aborts.get(key)?.abort();
   l.areas[sectionId] = { status: "writing", text: "", at: new Date().toISOString() };
   if (opts.again) for (const k of Object.keys(l.asks)) if (k.startsWith(`${sectionId}:`)) delete l.asks[k];
-  await save(id, l);
-  void stream(id, `${id}:${sectionId}`, "map:lecture-area", user, `[할 일] 영역 ${n}. ${sec.title}을 강의한다.`, images, `recaller-lecture3-${id}-${sectionId}`, (text, ok, stopped, ms, firstTextMs) => {
+  void save(id, l);
+  let pre: Awaited<ReturnType<typeof prefix>>;
+  try { pre = await prefix(id, sectionId); } catch (e) { if (runs.get(key) === run) { l.areas[sectionId] = { ...l.areas[sectionId], status: "failed" }; void save(id, l); } throw e; }
+  if (runs.get(key) !== run) return; // 그사이 다시 불렸다
+  const { sec, n, user, images } = pre;
+  void stream(id, key, "map:lecture-area", user, `[할 일] 영역 ${n}. ${sec.title}을 강의한다.`, images, `recaller-lecture3-${id}-${sectionId}`, (text, ok, stopped, ms, firstTextMs) => {
+    if (runs.get(key) !== run) return; // 끊고 다시 부른 앞의 호출
     l.areas[sectionId] = { status: ok ? "done" : stopped ? "stopped" : "failed", text, ms, ...(firstTextMs ? { firstTextMs } : {}), at: l.areas[sectionId]?.at ?? new Date().toISOString() };
     void save(id, l);
-  });
+  }, () => runs.get(key) === run);
 }
 
 export async function askStep(id: string, sectionId: string, step: number, q: string) {
