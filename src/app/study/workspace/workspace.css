@@ -1306,3 +1306,15 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pst-card{margin:auto;max-width:460px;display:flex;flex-direction:column;gap:6px;padding:18px 20px;background:var(--surface);border:1px solid var(--line);border-radius:12px;color:var(--text, inherit)}
 .dejipgi .pst-prog{height:6px;background:var(--line);border-radius:99px;overflow:hidden}
 .dejipgi .pst-prog i{display:block;height:100%;background:var(--accent, #6b8cff);transition:width .3s}
+
+/* PS 튜터 설문·다음에 배울 것 (11/11) */
+.dejipgi .pt-survey-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.dejipgi .pt-survey-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid var(--line)}
+.dejipgi .pt-seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:999px;overflow:hidden;flex:none}
+.dejipgi .pt-seg button{border:0;background:var(--surface);color:var(--ink);padding:4px 10px;font-size:13px;cursor:pointer}
+.dejipgi .pt-seg button+button{border-left:1px solid var(--line)}
+.dejipgi .pt-seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.dejipgi .pt-pick{cursor:pointer;border:1px solid var(--line-strong);background:var(--surface)}
+.dejipgi .pt-pick.on{border-color:var(--accent);background:var(--accent-soft)}
+.dejipgi .pt-focus{background:var(--accent-soft);border-radius:8px;padding:6px 10px}
+@media (max-width:560px){.dejipgi .pt-survey-list li{flex-direction:column;align-items:flex-start}}

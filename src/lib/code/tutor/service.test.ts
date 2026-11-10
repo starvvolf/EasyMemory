@@ -130,3 +130,41 @@ test("방법 고르기 개념 보기(11/10): 보기는 개념 이름, 틀리면 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("설문(11/11): 처음엔 설문부터, 저장하면 알아요는 확인 문제로, 모르겠어요는 틀림으로 남고 한 칸 내림, 분야 집중", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "tutor-survey-"));
+  const prior = { data: process.env.STUDY_FORGE_DATA_DIR, after: process.env.RECALLER_AFTER_SAVE };
+  process.env.STUDY_FORGE_DATA_DIR = dir; process.env.RECALLER_AFTER_SAVE = "off";
+  try {
+    const m = (number: string, patterns: string[]) => ({ number, title: `문제 ${number}`, chapter: "0x05", role: "basic", url: "u", statement: "s", inputText: "i", outputText: "o", summary: "괄호 짝",
+      maxN: 500, patterns, signals: ["괄호"], approaches: [{ name: "스택", verdict: "best", why: "w" }, { name: "정렬", verdict: "wrong", why: "w" }, { name: "모든 쌍", verdict: "slow", why: "w" }],
+      state: { right: "스택", wrong: ["합계", "정렬된 배열"] }, update: "u", complexity: "n", pitfalls: [], walkthrough: { observe: "o", choose: "c", compare: "x", verify: "v" }, at: "" });
+    await mkdir(path.join(dir, "code", "tutor"), { recursive: true });
+    await writeFile(path.join(dir, "code", "tutor", "models.json"), JSON.stringify({ "9012": m("9012", ["stack-match"]), "4949": m("4949", ["stack-match"]), "10845": m("10845", ["queue-sim"]), "2164": m("2164", ["queue-sim"]) }));
+    const { tutorOverview, answer, setProfile } = await import("./service.ts");
+    let o = await tutorOverview();
+    assert.equal(o.survey.needed, true); assert.equal(o.actions.length, 0, "no diagnosis drills before the survey");
+    assert.equal(o.survey.patterns.length, 44);
+    await setProfile({ op: "survey", levels: { "stack-match": "know", "없는패턴": "good" } });
+    o = await tutorOverview();
+    const c = o.actions[0];
+    assert.ok(c.check && c.pattern === "stack-match" && c.kind === "drill");
+    const r = await answer({ kind: "drill", number: c.number, pattern: "stack-match", mixed: true, choice: "", dunno: true }) as { ok: boolean; dunno: boolean };
+    assert.equal(r.ok, false); assert.equal(r.dunno, true);
+    o = await tutorOverview();
+    const row = o.survey.patterns.find((p) => p.id === "stack-match")!;
+    assert.equal(row.checked, "fail"); assert.equal(row.now, "none", "알아요 + 모르겠어요 → 모름");
+    assert.ok(!o.survey.patterns.some((p) => p.id === "없는패턴"));
+    const { readLessons } = await import("./lessons.ts");
+    assert.ok((await readLessons()).some((l) => l.gap.includes("떠올리지 못했어요")), "모르겠어요 leaves a card");
+    await setProfile({ op: "focus", patterns: ["queue-sim"] });
+    o = await tutorOverview();
+    assert.equal(o.learning.focused, true);
+    assert.ok(o.actions.filter((a) => !a.why.includes("다시 볼 날")).every((a) => a.pattern === "queue-sim"));
+    await setProfile({ op: "unfocus" });
+    assert.equal((await tutorOverview()).learning.focused, false);
+  } finally {
+    process.env.STUDY_FORGE_DATA_DIR = prior.data; process.env.RECALLER_AFTER_SAVE = prior.after;
+    await rm(dir, { recursive: true, force: true });
+  }
+});

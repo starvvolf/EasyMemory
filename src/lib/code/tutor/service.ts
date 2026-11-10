@@ -13,7 +13,8 @@ import { fillProblem, problemIdOf } from "../bakingdog.ts";
 import { listProblems, readProblem, readProblemMeta, readSubmissions } from "../problems.ts";
 import { COMPLEXITIES, complexityVerdict } from "../train.ts";
 import { patternOf, PATTERNS } from "./patterns.ts";
-import { nextActions, type Action } from "./policy.ts";
+import { learningOrder, nextActions, pendingChecks, type Action } from "./policy.ts";
+import { levelOf, ORDERED, readProfile, TIER, TIER_NAME, updateProfile, type Level, type Profile } from "./profile.ts";
 import { board } from "./summary.ts";
 import { answerOf, conceptIdOf, conceptOf, conceptOptions, diffOf, USUALLY } from "./concepts.ts";
 import { ensurePool, modelForProblem, prepareModels, prepStatus, readModels, tutorNumberOf, tutorTargets, type ProblemModel } from "./problem-model.ts";
@@ -156,12 +157,15 @@ function view(a: Action, m: ProblemModel, models: Record<string, ProblemModel>) 
 
 export async function tutorOverview() {
   await syncImplement().catch(() => undefined);
-  const [models, events] = await Promise.all([readModels(), readEvents()]);
+  const [models, events, profile] = await Promise.all([readModels(), readEvents(), readProfile()]);
   const state = computeState(events);
-  const planned = nextActions(state, models);
+  // 설문(11/11): 처음이면 설문부터(할 일 없음). 이미 풀어 온 사람은 설문 없이도 그대로, 원하면 언제든.
+  const needSurvey = !profile.surveyed && !events.length;
+  const planned = needSurvey ? [] : nextActions(state, models, new Date(), 5, profile.surveyed || profile.focus.length ? profile : undefined);
   const actions = planned.flatMap((a) => (models[a.number] ? [view(a, models[a.number], models)] : []));
   prefetchImplement(planned, events, models);
-  void fillAsNeeded(state, planned, models).catch(() => undefined);
+  void fillAsNeeded(state, planned, models, profile).catch(() => undefined);
+  const order = learningOrder(state, profile.surveyed || profile.focus.length ? profile : undefined);
   const covered = PATTERNS.filter((p) => Object.values(models).some((m) => m.patterns.includes(p.id)));
   return {
     targets: tutorTargets().length, ready: Object.keys(models).length, prep: prepStatus(), pending: await readJson<Pending[]>("pending.json", []),
@@ -170,6 +174,10 @@ export async function tutorOverview() {
     actions, done: events.filter((e) => e.ability).length,
     // 한눈에 보기(11/10): 해 본 패턴마다 "지금 어디서 막혔나" 한 줄, 아직 남은 착각이 있는 것부터.
     board: await board().catch(() => []),
+    survey: surveyView(profile, needSurvey, state),
+    // 다음에 배울 것(11/11): 추천은 순서에서 맨 앞. 사용자가 고르면 분야 집중이 된다.
+    learning: { focused: order.focused, focus: profile.focus, next: order.list.slice(0, 6).map((p) => ({ id: p.id, name: p.name, ready: Object.values(models).some((m) => m.patterns.includes(p.id)) })),
+      checks: pendingChecks(state, profile).length },
   };
 }
 /** 미리 만들기(11/9, 사용자 "느리다"): 구현 차례가 오기 전에 그 문제의 숨은 테스트를 뒤에서 만든다. 지금 할 일이 설계면 설계를
@@ -195,10 +203,14 @@ function prefetchImplement(planned: ReturnType<typeof nextActions>, events: Tuto
 }
 /** 필요할 때 조금씩(11/10): 지금 배우는 패턴과 그다음 패턴은 문제 재료 3개, 복습·할 일에 나온 패턴은 2개가 되게 뒤에서 만든다.
  *  유저가 넣은 백준 문제 중 아직 재료가 없는 것도 하나씩(문제를 만든 직후에 이미 만들지만, 그때 실패했거나 앱이 꺼졌을 때). */
-async function fillAsNeeded(state: ReturnType<typeof computeState>, planned: ReturnType<typeof nextActions>, models: Record<string, ProblemModel>) {
+async function fillAsNeeded(state: ReturnType<typeof computeState>, planned: ReturnType<typeof nextActions>, models: Record<string, ProblemModel>, profile?: Profile) {
   if (!process.env.NEXT_RUNTIME) return;
   const chaptersWithTargets = new Set(tutorTargets().map((t) => t.chapter));
-  const upcoming = PATTERNS.filter((p) => !state.patterns[p.id]?.solid && p.chapters.some((c) => chaptersWithTargets.has(c))).slice(0, 2);
+  const has = (p: { chapters: string[] }) => p.chapters.some((c) => chaptersWithTargets.has(c));
+  const use = profile && (profile.surveyed || profile.focus.length) ? profile : undefined;
+  // 확인할 것 둘은 1개씩, 배울 순서(분야 집중이면 그 안)의 앞 둘은 3개씩.
+  for (const p of pendingChecks(state, use).filter(has).slice(0, 2)) await ensurePool(p.id, 1);
+  const upcoming = learningOrder(state, use).list.filter(has).slice(0, 2);
   for (const p of upcoming) await ensurePool(p.id, 3);
   for (const id of new Set(planned.map((a) => a.pattern))) await ensurePool(id, 2);
   const mine = (await listProblems()).filter((x) => !x.preparing && /^BOJ\s*\d+/.test(x.title) && !Object.values(models).some((m) => m.problemId === x.id || x.title.startsWith(`BOJ ${m.number}번`)));
@@ -208,7 +220,7 @@ export const startPrepare = (limit?: number, workers?: number) => prepareModels(
 
 export type Answer =
   | { kind: "walkthrough"; number: string; pattern: string; predict?: string; skipped?: boolean }
-  | { kind: "drill"; number: string; pattern: string; mixed: boolean; choice: string; choices?: string[]; hinted?: boolean; ms?: number }
+  | { kind: "drill"; number: string; pattern: string; mixed: boolean; choice: string; choices?: string[]; hinted?: boolean; ms?: number; /** [모르겠어요] 11/11 */ dunno?: boolean }
   | { kind: "design"; number: string; pattern: string; mixed: boolean; state: string; complexity: string; update?: string; hinted?: boolean; ms?: number }
   | { kind: "contrast"; number: string; pattern: string; picks: Record<string, string> }
   | { kind: "implement"; number: string; pattern: string; mixed: boolean; action: "start" | "giveup" };
@@ -235,8 +247,9 @@ export async function answer(a: Answer) {
         fix: m.walkthrough.choose, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     return { ok, answer: m.predict.answer };
   }
-  const picks = a.kind === "drill" ? (a.choices?.length ? a.choices : [a.choice]) : [];
-  if (a.kind === "drill" && picks.every((c) => conceptIdOf(c))) {
+  const dunno = a.kind === "drill" && Boolean(a.dunno);
+  const picks = a.kind === "drill" && !dunno ? (a.choices?.length ? a.choices : [a.choice]) : [];
+  if (a.kind === "drill" && (dunno ? Boolean(answerOf([a.pattern, ...m.patterns]).main) : picks.every((c) => conceptIdOf(c)))) {
     // 개념 보기(11/10): 보기에 나온 정답을 모두 골라야 맞음(둘 다 되는 문제는 둘 다). 틀리면 그 짝의 "언제 이쪽, 언제 저쪽"이 설명이자 카드.
     const { main } = answerOf([a.pattern, ...m.patterns]);
     const shown = conceptOptions([a.pattern, ...m.patterns], `drill:${a.number}:${a.pattern}:${a.mixed ? "m" : "c"}`, { withAlso: true });
@@ -249,13 +262,14 @@ export async function answer(a: Answer) {
     const grade = gradeOf(events, a.number, "recognize", { hinted: a.hinted, mixed: a.mixed });
     const mainC = main ? conceptOf(main) : undefined;
     const best = m.approaches.find((x) => x.verdict === "best");
-    const why = !ok && main ? (wrongPick ? diffOf(main, wrongPick) : undefined) ?? (missed.length ? missed.map((c) => `${conceptOf(c)?.name}도 돼요: ${conceptOf(c)?.what}`).join(" ") : `${mainC?.name}: ${mainC?.what}`) : undefined;
-    const card: Card = { situation: `BOJ ${a.number} ${m.title}에서 「${picks.join(", ")}」를 골랐어요${a.hinted ? "(눈여겨볼 곳을 보고)" : ""}`,
-      gap: ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : wrongPick ? `「${conceptOf(wrongPick)?.name}」 쓰면 될 줄 알았어요` : `「${missed.map((c) => conceptOf(c)?.name).join(", ")}」도 된다는 걸 몰랐어요`,
+    const why = dunno && mainC ? `${mainC.name}: ${mainC.what}` : !ok && main ? (wrongPick ? diffOf(main, wrongPick) : undefined) ?? (missed.length ? missed.map((c) => `${conceptOf(c)?.name}도 돼요: ${conceptOf(c)?.what}`).join(" ") : `${mainC?.name}: ${mainC?.what}`) : undefined;
+    const card: Card = { situation: dunno ? `BOJ ${a.number} ${m.title}에서 어떤 방법을 쓸지 모르겠다고 했어요` : `BOJ ${a.number} ${m.title}에서 「${picks.join(", ")}」를 골랐어요${a.hinted ? "(눈여겨볼 곳을 보고)" : ""}`,
+      gap: dunno ? "이 문제에 어떤 방법을 써야 할지 떠올리지 못했어요" : ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : wrongPick ? `「${conceptOf(wrongPick)?.name}」 쓰면 될 줄 알았어요` : `「${missed.map((c) => conceptOf(c)?.name).join(", ")}」도 된다는 걸 몰랐어요`,
       fix: (() => { const usual = answers.size > 1 ? [a.pattern, ...m.patterns].map((p) => USUALLY[p]).find(Boolean) : undefined;
         return ok ? (usual ?? `${mainC?.name ?? ""}: ${mainC?.what ?? ""}`) : `정답은 「${[...answers].map((c) => conceptOf(c)?.name).join("」·「")}」 — ${[why, usual].filter(Boolean).join(" ")}`.trim(); })(), cue: m.signals[0] ?? "" };
-    await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${picks.join(", ")}` }, m, card);
-    return { ok, concept: true, intended: ok, answer: mainC?.name ?? "", answers: [...okSet].map((c) => conceptOf(c)?.name ?? c), alsoOk: [...okSet].filter((c) => c !== main).map((c) => conceptOf(c)?.name ?? c),
+    await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: dunno ? "모르겠어요" : `고른 것: ${picks.join(", ")}` }, m, card);
+    await noteCheck(a.pattern, ok);
+    return { ok, concept: true, dunno, intended: ok, answer: mainC?.name ?? "", answers: [...okSet].map((c) => conceptOf(c)?.name ?? c), alsoOk: [...okSet].filter((c) => c !== main).map((c) => conceptOf(c)?.name ?? c),
       wrongPick: wrongPick ? conceptOf(wrongPick)?.name ?? "" : "", missed: missed.map((c) => conceptOf(c)?.name ?? c), why: why ?? "",
       usually: okSet.size > 1 ? [a.pattern, ...m.patterns].map((p) => USUALLY[p]).find(Boolean) ?? "" : "",
       what: mainC?.what ?? "", how: best ? `${best.name}${best.why ? ` — ${best.why}` : ""}` : "", grade: GRADE_LABEL[grade], signals: m.signals,
@@ -263,15 +277,16 @@ export async function answer(a: Answer) {
   }
   if (a.kind === "drill") {
     // 맞는 풀이가 여럿일 수 있다(BFS·DFS 둘 다 되는 문제): 의도된 풀이(best)와 "가능하지만 덜 좋음"(ok)은 인식 성공, 느림·틀림은 실패.
-    const chosen = m.approaches.find((x) => x.name === a.choice);
+    const chosen = dunno ? undefined : m.approaches.find((x) => x.name === a.choice);
     const ok = chosen?.verdict === "best" || chosen?.verdict === "ok";
     const grade = gradeOf(events, a.number, "recognize", { hinted: a.hinted, mixed: a.mixed });
     const best = m.approaches.find((x) => x.verdict === "best");
-    const card: Card = { situation: `BOJ ${a.number} ${m.title}에서 접근으로 「${a.choice}」를 고름${a.hinted ? "(신호를 보고)" : ""}`,
-      gap: ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : `「${a.choice}」로 풀면 될 줄 알았어요${chosen ? ` (그러면 ${{ slow: "느려요", wrong: "틀려요", ok: "되긴 하지만 더 좋은 방법이 있어요", best: "" }[chosen.verdict]}${chosen.why ? ` — ${chosen.why}` : ""})` : ""}`,
+    const card: Card = { situation: dunno ? `BOJ ${a.number} ${m.title}에서 어떤 방법을 쓸지 모르겠다고 했어요` : `BOJ ${a.number} ${m.title}에서 접근으로 「${a.choice}」를 고름${a.hinted ? "(신호를 보고)" : ""}`,
+      gap: dunno ? "이 문제에 어떤 방법을 써야 할지 떠올리지 못했어요" : ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : `「${a.choice}」로 풀면 될 줄 알았어요${chosen ? ` (그러면 ${{ slow: "느려요", wrong: "틀려요", ok: "되긴 하지만 더 좋은 방법이 있어요", best: "" }[chosen.verdict]}${chosen.why ? ` — ${chosen.why}` : ""})` : ""}`,
       fix: `「${best?.name ?? "?"}」${best?.why ? ` — ${best.why}` : ""}`, cue: m.signals.join(" · "), distinguish: distinguishOf(m) };
-    await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: `고른 것: ${a.choice}` }, m, card);
-    return { ok, intended: chosen?.verdict === "best", grade: GRADE_LABEL[grade], approaches: m.approaches, signals: m.signals, patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
+    await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: dunno ? "모르겠어요" : `고른 것: ${a.choice}` }, m, card);
+    await noteCheck(a.pattern, ok);
+    return { ok, dunno, intended: chosen?.verdict === "best", grade: GRADE_LABEL[grade], approaches: m.approaches, signals: m.signals, patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
   }
   if (a.kind === "design") {
     const stateOk = a.state === m.state.right, cxOk = a.complexity === m.complexity, ok = stateOk && cxOk;
@@ -312,6 +327,36 @@ export async function answer(a: Answer) {
 }
 /** 기억 복습에서 PS 질문(review.ts)을 채점한 뒤: 튜터 사건으로 남긴다. 알아보기 → 인식, 설계 → 설계(둘 다 단원 숨김),
  *  출력 예측 → 예측, 내 실수 다시 보기 → 복습. 기억 기록은 기억 경로가 이미 남겼으므로 여기서는 쓰지 않는다. */
+/* ---------- 설문·빠른 확인·분야 집중 (11/11) ---------- */
+/** 알아요·잘해요라고 한 패턴의 첫 알아채기 결과를 확인 결과로 남긴다: 틀리면(모르겠어요 포함) 한 칸 내림. */
+async function noteCheck(pattern: string, ok: boolean) {
+  const p = await readProfile();
+  if (!p.surveyed || p.checked[pattern] || (p.levels[pattern] !== "know" && p.levels[pattern] !== "good")) return;
+  await updateProfile((x) => ({ ...x, checked: { ...x.checked, [pattern]: ok ? "pass" : "fail" } }));
+}
+function surveyView(p: Profile, needed: boolean, state: ReturnType<typeof computeState>) {
+  return { needed, surveyed: p.surveyed,
+    patterns: ORDERED.map((x) => ({ id: x.id, name: x.name, tier: TIER[x.id] ?? 3, tierName: TIER_NAME[TIER[x.id] ?? 3], example: x.signals.slice(0, 2).join(" · "),
+      level: p.levels[x.id] ?? "none", now: levelOf(p, x.id), checked: p.checked[x.id] ?? null, solid: Boolean(state.patterns[x.id]?.solid) })) };
+}
+export type ProfileOp =
+  | { op: "survey"; levels: Record<string, Level> }
+  | { op: "later"; pattern: string }
+  | { op: "focus"; patterns: string[] }
+  | { op: "unfocus" };
+/** 설문 저장 · 확인 미루기 · 분야 집중 시작/끝. 패턴 id는 목록에 있는 것만 받는다. */
+export async function setProfile(o: ProfileOp) {
+  const known = new Set(PATTERNS.map((x) => x.id));
+  if (o.op === "survey") {
+    const levels = Object.fromEntries(Object.entries(o.levels).filter(([k]) => known.has(k))) as Record<string, Level>;
+    // 다시 하면: 수준을 바꾼 패턴만 확인을 다시 한다.
+    return updateProfile((x) => ({ ...x, surveyed: true, levels, checked: Object.fromEntries(Object.entries(x.checked).filter(([k]) => x.levels[k] === levels[k])) }));
+  }
+  if (o.op === "later") return updateProfile((x) => (known.has(o.pattern) ? { ...x, checked: { ...x.checked, [o.pattern]: "skip" } } : x));
+  if (o.op === "focus") return updateProfile((x) => ({ ...x, focus: o.patterns.filter((id) => known.has(id)).slice(0, 12) }));
+  return updateProfile((x) => ({ ...x, focus: [] }));
+}
+
 export async function recordPsReview(questionId: string, correct: boolean, answerText: string) {
   const q = parsePsId(questionId);
   if (!q) return;
