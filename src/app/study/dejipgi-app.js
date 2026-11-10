@@ -936,7 +936,10 @@ function render(){
   else if (S.view === "bench") app.append(renderBench());
   else if (S.view === "archive") app.append(renderArchive());
   else if (S.view === "practice"){ if (S.session) app.append(renderSession()); else app.append(studyNav("practice"), renderHome(), ...(env.mountView ? [h("h3", { class:"study-sub", text:"웹 글" }), viewHost("web", {})] : [])); }
-  else if (S.view === "create") app.append(h("div", { class:"study-nav" }, h("button", { class:"btn ghost small", onclick: () => setView("practice") }, "← PDF 자료"), h("span", { class:"small muted", text:"PDF · 강의 자료 넣기" })), renderBuilder());
+  else if (S.view === "create") app.append(h("div", { class:"study-nav" }, h("button", { class:"btn ghost small", onclick: () => setView("practice") }, "← PDF 자료"), h("span", { class:"small muted", text:"PDF · 강의 자료 넣기" })),
+    // 11/11 React로 옮긴 첫 화면(workspace/NewMaterial.tsx). ChatGPT 연결 안내는 여기(바닐라)가 위에 그린다. React가 없으면 예전 화면.
+    ...(env.mountView ? [accountNote() || h("span"), viewHost("create", { engineReady: !!engine, devEngines: location.port === "3002" || /[?&]engines=1/.test(location.search),
+      noteSeed: (S.plan.prefs && S.plan.prefs.genNote) || "", loadPdfjs: async () => { if (!pdfjs) pdfjs = await env.loadPdfjs(); return pdfjs; }, onStart: startFromNewMaterial })] : [renderBuilder()]));
   else if (S.view === "read") {
     const typing = Chat.el && Chat.el.contains(document.activeElement);
     app.append(renderReader()); dockChat(typing); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer();
@@ -4123,6 +4126,25 @@ async function startMaterial(){
   }catch(e){
     b.busy = false; b.status = ""; b.error = (e && e.message) || "요청을 올리지 못했어요."; render();
   }
+}
+/* 새 자료 넣기(React, NewMaterial.tsx)의 [기억 정리 시작]: 바닐라 startMaterial과 같은 일을 화면이 고른 값으로. 실패하면 던져서 화면이 보여 준다. */
+async function startFromNewMaterial(o, doc){
+  if (!engine) throw new Error("이 화면에서는 생성 요청을 보낼 수 없어요.");
+  const res = await engine.start({ file:o.file, from:o.from, to:o.to, purpose:o.purpose, note:o.note, readImages:o.readImages, ...(o.engine !== "v2" ? { engine:o.engine } : {}),
+    ...(o.engine === "recaller" ? { autoQuestions:o.autoQuestions !== false, ...(o.lecture ? { lecture:true } : {}) } : {}), ...(o.engine === "recaller" && o.deep ? { deep:true, ...(o.deepFast ? { deepDrafts:2 } : {}) } : {}),
+    ...((o.engine === "v5" || o.engine === "alpha") && Object.values(o.survey || {}).some(Boolean) ? { survey:o.survey } : {}) });
+  const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:o.sourceName.replace(/\.pdf$/i, ""), sourceName:o.sourceName,
+    pageCount:o.pageCount, from:o.from, to:o.to, purpose:o.purpose, note:o.note, createdAt:now(), status:"waiting", message:"" };
+  const deck = pendingDeck(rec);
+  S.decks[deck.id] = deck;
+  if (doc) S.pdf[deck.id] = { status:"ready", doc, canv:{}, aspect: await docAspect(doc) };
+  savePending();
+  // 다음에 열 때는 빈 화면부터: 이 화면을 내린다.
+  if (viewHosts.create){ viewHosts.create.stop(); delete viewHosts.create; }
+  const toMap = env.mountView && /^(pending:)?gen_/.test(deck.id);
+  toast(toMap ? "기억 정리를 시작했어요. 정리되는 대로 자료 지도에 채워져요." : "문제 만들기를 시작했어요. 그동안 읽어 두세요.");
+  if (toMap){ setView("practice"); render(); MaterialMapView.open(deck); } else openReader(deck.id, rec.from);
+  pollPending();
 }
 async function remakeReported(deck){
   if (!engine) return;
