@@ -72,6 +72,30 @@ function inline(text: string): ReactNode[] {
 export function Inline({ text }: { text: string }) {
   return <>{inline(text)}</>;
 }
+// 표(11/11 사용자 "AI가 한 번씩 표 쓰잖아, 이런 거 처리 안 됨?"): | a | b | 머리줄 + |---|---:| 구분줄이 있으면 표로.
+const TABLE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+const isRow = (l: string) => /^\s*\|.*\|\s*$/.test(l) || (l.includes("|") && /^\s*\|/.test(l));
+const cellsOf = (l: string) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+function table(lines: string[], key: string) {
+  const head = cellsOf(lines[0]); const aligns = cellsOf(lines[1]).map((c) => (c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : "left") as "center" | "right" | "left");
+  const rows = lines.slice(2).map(cellsOf);
+  return <div key={key} className="ws-tablewrap"><table className="ws-table"><thead><tr>{head.map((h, i) => <th key={i} style={{ textAlign: aligns[i] ?? "left" }}>{inline(h)}</th>)}</tr></thead>
+    <tbody>{rows.map((r, ri) => <tr key={ri}>{head.map((_, i) => <td key={i} style={{ textAlign: aligns[i] ?? "left" }}>{inline(r[i] ?? "")}</td>)}</tr>)}</tbody></table></div>;
+}
+/** 한 덩어리 안에서 표 부분과 글 부분을 나눈다. */
+function splitTables(lines: string[]): Array<{ table: boolean; lines: string[] }> {
+  const out: Array<{ table: boolean; lines: string[] }> = [];
+  for (let i = 0; i < lines.length;) {
+    if (isRow(lines[i]) && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1])) {
+      let j = i + 2; while (j < lines.length && isRow(lines[j]) && !TABLE_SEP.test(lines[j])) j++;
+      out.push({ table: true, lines: lines.slice(i, j) }); i = j; continue;
+    }
+    const last = out[out.length - 1];
+    if (last && !last.table) last.lines.push(lines[i]); else out.push({ table: false, lines: [lines[i]] });
+    i++;
+  }
+  return out;
+}
 export function Rich({ text, className }: { text: string; className?: string }) {
   const out: ReactNode[] = [];
   const chunks = text.replace(/\r/g, "").split(/```/);
@@ -79,13 +103,16 @@ export function Rich({ text, className }: { text: string; className?: string }) 
     if (ci % 2 === 1) { out.push(<pre key={`c${ci}`} className="ws-code">{chunk.replace(/^[a-z+#]*\n/i, "").replace(/\n$/, "")}</pre>); return; }
     chunk.split(/\n{2,}/).forEach((block, bi) => {
       if (!block.trim()) return;
-      const lines = block.split("\n").filter((l) => l.trim());
-      const key = `${ci}-${bi}`;
+      const all = block.split("\n").filter((l) => l.trim());
+      const parts = splitTables(all);
+      parts.forEach((part, pi) => { const lines = part.lines; const key = `${ci}-${bi}-${pi}`;
+      if (part.table) { out.push(table(lines, key)); return; }
       if (lines.every((l) => /^\s*([-*•]|\d+[.)])\s+/.test(l))) {
         const items = lines.map((l, k) => <li key={k}>{inline(l.replace(/^\s*([-*•]|\d+[.)])\s+/, ""))}</li>);
         out.push(/^\s*\d/.test(lines[0]) ? <ol key={key}>{items}</ol> : <ul key={key}>{items}</ul>);
       } else if (/^#{1,4}\s/.test(lines[0]) && lines.length === 1) out.push(<p key={key} className="ws-h">{inline(lines[0].replace(/^#+\s/, ""))}</p>);
       else out.push(<p key={key}>{lines.map((l, k) => <Fragment key={k}>{k ? <br /> : null}{inline(l)}</Fragment>)}</p>);
+      });
     });
   });
   return <div className={`ws-rich ${className ?? ""}`}>{out}</div>;

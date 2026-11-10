@@ -1252,3 +1252,10 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm3-item.open .mm3-name{white-space:normal}
 .dejipgi .lc3-idea{margin:2px 0 0;font-size:14.5px;line-height:1.75;color:var(--ink);background:var(--ground);border-left:3px solid var(--accent-soft);border-radius:0 8px 8px 0;padding:8px 12px}
 .dejipgi .mm3-varsbox{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+/* 글 속 표(11/11 사용자 "AI가 한 번씩 표 쓰잖아"): | a | b | 표를 표로 */
+.ws-tablewrap{overflow-x:auto;margin:10px 0;border:1px solid var(--line);border-radius:10px}
+.ws-table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.55}
+.ws-table th,.ws-table td{padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.ws-table thead th{background:var(--surface-2,var(--ground));font-weight:700;color:var(--ink);white-space:nowrap}
+.ws-table tbody tr:last-child td{border-bottom:0}
+.ws-table tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--ground) 60%,transparent)}
