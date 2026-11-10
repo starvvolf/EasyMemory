@@ -14,7 +14,7 @@ import { materialMap, type MapCard } from "./material-map.ts";
 import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "./quiz-plan.ts";
 import { loadGoalLinks, makeGoalLinks } from "./goal-links.ts";
 
-export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn", "lfParts", "lfSteps"] as const;
+export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn", "lfParts", "lfSteps", "lpPlan", "lpLecture"] as const;
 export type Lab2Method = (typeof LAB2_METHODS)[number];
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 
@@ -35,11 +35,40 @@ async function callsOf(ref: string, t0: number) {
     .map((x) => ({ ms: x.ms as number, in: x.tokens?.in ?? 0, out: x.tokens?.out ?? 0, cost: costOf(x.model, { inputTokens: x.tokens?.in, cachedInputTokens: x.tokens?.cached, outputTokens: x.tokens?.out }) ?? 0 }));
 }
 
-export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?: number[]; tag?: string } = {}) {
+export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?: number[]; tag?: string; effort?: string; area?: number; from?: string } = {}) {
   const state = await loadGen(id);
   const map = state ? materialMap(state, {}) : null;
   if (!state || !map) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });
   const texts = (state as unknown as { recaller?: { texts?: Record<string, string> } }).recaller?.texts ?? {};
+  if (method === "lpPlan" || method === "lpLecture") {
+    // 줄기 먼저 + 영역 강의(lecture-plan-lab.ts, 11/10): lpPlan = sol low·medium 동시(?effort=로 하나만), lpLecture = 저장한 줄기로 ?area=N 강의(?from=low면 low 줄기).
+    const { runLpPlan, runLpLecture } = await import("./lecture-plan-lab.ts");
+    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
+    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const st = state as unknown as { input: { sourceId: string; fileName: string; pageNumbers: number[] }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
+    const pdf = await readRegisteredMcpSourcePdf(st.input.sourceId);
+    if (!pdf) throw Object.assign(new Error("원본 PDF를 읽을 수 없어요."), { status: 409 });
+    const dir = path.join(dataDir(), "study-gen", id, "quiz-lab2");
+    await mkdir(dir, { recursive: true });
+    const t0 = Date.now();
+    const saved = method === "lpLecture" ? JSON.parse(await readFile(path.join(dir, "lpPlan.json"), "utf8")) as { runs: Array<{ effort: string; plan: import("./lecture-plan-lab.ts").LpPlan }> } : null;
+    const run = saved ? saved.runs.find((x) => x.effort === (opts.from ?? "medium")) ?? saved.runs[0] : null;
+    const area = run?.plan.areas[(opts.area ?? 1) - 1];
+    const pages = run ? [...new Set((area?.steps ?? []).flatMap((x) => x.pages))].sort((a, b) => a - b) : opts.pages?.length ? st.input.pageNumbers.filter((p) => opts.pages!.includes(p)) : st.input.pageNumbers;
+    const route = new Map((st.recaller?.prep?.pages ?? []).map((x) => [x.page, x.route ?? "text"]));
+    const figs = await renderPageFigures(pdf, pages.filter((p) => route.get(p) === "figures"), 1024).catch(() => new Map<number, Array<{ label: string; dataUrl: string }>>());
+    const wholes = await renderPageImages(pdf, pages.filter((p) => route.get(p) === "page" || (route.get(p) === "figures" && !figs.get(p)?.length)), 1024).catch(() => new Map<number, string>());
+    const drawMs = Date.now() - t0;
+    const images = pages.flatMap((p) => { const f = figs.get(p) ?? []; return f.length ? f.map((x) => ({ page: p, label: x.label, dataUrl: x.dataUrl })) : wholes.get(p) ? [{ page: p, label: `원문 p.${p}`, dataUrl: wholes.get(p)! }] : []; });
+    const r = run
+      ? { lecture: await runLpLecture(id, run.plan, opts.area ?? 1, texts, images, opts.effort ?? "low"), planFrom: run.effort }
+      : { runs: (await Promise.allSettled((opts.effort ? [opts.effort] : ["low", "medium"]).map((e) => runLpPlan(id, st.input.fileName, pages, texts, images, e))))
+        .map((x, i) => x.status === "fulfilled" ? x.value : { effort: (opts.effort ? [opts.effort] : ["low", "medium"])[i], error: String(x.reason) }) };
+    const calls = await callsOf(id, t0);
+    const out = { method, id, tag: opts.tag ?? "", pages, images: images.length, at: new Date().toISOString(), drawMs, ...r, calls: calls.length, tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0) };
+    await writeFile(path.join(dir, `${method}${method === "lpLecture" ? `-${opts.area ?? 1}` : ""}${opts.tag ? `-${opts.tag}` : ""}.json`), JSON.stringify(out, null, 1));
+    return out;
+  }
   if (method === "lfKnow" || method === "lfLearn" || method === "lfParts" || method === "lfSteps") {
     // 강의 먼저 3차(lecture-first-lab.ts runLectureFirst3, 11/10): 카드 목록을 강의보다 먼저. 안다 = 목록까지, 모른다 = 이어서 강의. 쪽을 골라 작게(?pages=2-13).
     const { runLectureFirst3, compareLists } = await import("./lecture-first-lab.ts");
@@ -213,5 +242,5 @@ export async function quizLab2Api(request: Request, id: string) {
   const q = new URL(request.url).searchParams;
   const range = q.get("pages") ?? "";
   const pages = range ? range.split(",").flatMap((r) => { const [a, b] = r.split("-").map(Number); return b ? Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i) : [a]; }).filter((n) => Number.isInteger(n)) : undefined;
-  return NextResponse.json({ result: await runQuizLab2(id, m, { pages, tag: q.get("tag")?.replace(/[^\w-]/g, "") ?? undefined }) });
+  return NextResponse.json({ result: await runQuizLab2(id, m, { pages, tag: q.get("tag")?.replace(/[^\w-]/g, "") ?? undefined, effort: q.get("effort")?.replace(/[^a-z]/g, "") || undefined, area: Number(q.get("area")) || undefined, from: q.get("from")?.replace(/[^a-z]/g, "") || undefined }) });
 }
