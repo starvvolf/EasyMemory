@@ -14,7 +14,7 @@ import { materialMap, type MapCard } from "./material-map.ts";
 import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "./quiz-plan.ts";
 import { loadGoalLinks, makeGoalLinks } from "./goal-links.ts";
 
-export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn", "lfParts", "lfSteps", "lpPlan", "lpLecture"] as const;
+export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn", "lfParts", "lfSteps", "lpPlan", "lpLecture", "quickCode", "quickAI"] as const;
 export type Lab2Method = (typeof LAB2_METHODS)[number];
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 
@@ -40,6 +40,18 @@ export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?
   const map = state ? materialMap(state, {}) : null;
   if (!state || !map) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });
   const texts = (state as unknown as { recaller?: { texts?: Record<string, string> } }).recaller?.texts ?? {};
+  if (method === "quickCode" || method === "quickAI") {
+    // 플래시카드 → 한 번 더(OX · 객관식) 두 방식 비교(quick-lab.ts, 11/11)
+    const { runQuick } = await import("./quick-lab.ts");
+    const t0 = Date.now();
+    const r = await runQuick(id, map, method);
+    const calls = await callsOf(id, t0);
+    const out = { id, tag: opts.tag ?? "", at: new Date().toISOString(), ...r, calls: calls.length, tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0) };
+    const dir = path.join(dataDir(), "study-gen", id, "quiz-lab2");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, `${method}${opts.tag ? `-${opts.tag}` : ""}.json`), JSON.stringify(out, null, 1));
+    return out;
+  }
   if (method === "lpPlan" || method === "lpLecture") {
     // 줄기 먼저 + 영역 강의(lecture-plan-lab.ts, 11/10): lpPlan = sol low·medium 동시(?effort=로 하나만), lpLecture = 저장한 줄기로 ?area=N 강의(?from=low면 low 줄기).
     const { runLpPlan, runLpLecture } = await import("./lecture-plan-lab.ts");
