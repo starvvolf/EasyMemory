@@ -180,7 +180,10 @@ export const chatgptBackend: ModelBackend = {
       // Built outside the network try: a request the code itself refuses must not read as "could not connect".
       const body = JSON.stringify(responseRequest(request, format));
       try {
-        return await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+        // 11/10 사용자 "캐시 히트시키는 방법 중에 ChatGPT 로그인에선 session id": Codex 백엔드는 session_id 헤더로 캐시가 있는 서버를 고른다
+        // (실습 튜터 11/3 실험: 없으면 0%, 있으면 97%, experiments/project-course/lib/oc-engine.ts). cacheKey가 있는 호출은 같은 값을 붙인다.
+        const session: Record<string, string> = request.cacheKey ? { session_id: request.cacheKey, "session-id": request.cacheKey } : {};
+        return await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json", ...session },
           body, signal: request.signal });
       } catch { throw new ModelError("transient", "ChatGPT 모델 서버에 연결하지 못했어요."); }
     };

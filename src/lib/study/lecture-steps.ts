@@ -93,11 +93,11 @@ function history(l: LectureSteps, upto: string, byId: Map<string, MapCard>) {
   return `[지금까지의 수업]\n설명한 카드: ${before.map((x) => byId.get(x)?.title ?? x).join(", ") || "(아직 없음)"}\n${qa.length ? `학생이 묻고 들은 것:\n${qa.join("\n")}\n` : ""}바로 앞 설명:\n${lastAsk ? `${l.steps[prev!].text}\n(이어서 학생이 물었다) ${lastAsk.q}\n(강사) ${lastAsk.a}` : prev ? l.steps[prev].text : "(첫 카드)"}`;
 }
 
-async function stream(id: string, key: string, purpose: string, system: string, user: string, images: Img[], onDone: (text: string, ok: boolean, stopped: boolean) => void) {
+async function stream(id: string, key: string, purpose: string, system: string, user: string, tail: string, images: Img[], onDone: (text: string, ok: boolean, stopped: boolean) => void) {
   const abort = new AbortController(); aborts.set(key, abort); live.set(key, "");
   const t = Date.now(); let first = 0;
   try {
-    const r = await withTrace({ area: "pdf", action: "lecture-step", ref: id }, () => callModel({ purpose, system, user, ...STEP_MODEL, caller: LOCAL_CALLER, images: images.map(({ label, dataUrl }) => ({ label, dataUrl })),
+    const r = await withTrace({ area: "pdf", action: "lecture-step", ref: id }, () => callModel({ purpose, system, user, tail, cacheKey: `recaller-lecture-${id}`, ...STEP_MODEL, caller: LOCAL_CALLER, images: images.map(({ label, dataUrl }) => ({ label, dataUrl })),
       signal: abort.signal, onText: (x) => { if (!first) first = Date.now(); live.set(key, x); } }));
     const u = r.usage;
     logAssistCall({ at: new Date(t).toISOString(), purpose, ...STEP_MODEL, ms: Date.now() - t, ...(first ? { firstTextMs: first - t } : {}), ok: true, inChars: user.length,
@@ -118,9 +118,11 @@ export async function stepCard(id: string, cardId: string) {
   await save(id, l);
   const list = sections.map((s, i) => `영역 ${i + 1}. ${s.title}\n${s.cards.map((x) => `- ${x.title}`).join("\n")}`).join("\n");
   const images = await imagesOf(id, c.pages);
-  const user = `[자료] ${map.title}\n\n[카드 목록]\n${list}\n\n[지금 카드]\n${cardText(c)}\n\n${history(l, cardId, byId)}\n\n[원문]\n${c.pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`;
+  // 캐시(11/10): 앞쪽은 카드마다 같게(자료·카드 목록), 바뀌는 것(지금 카드·수업·원문)은 이미지 뒤 tail로.
+  const user = `[자료] ${map.title}\n\n[카드 목록]\n${list}`;
+  const tail = `[지금 카드]\n${cardText(c)}\n\n${history(l, cardId, byId)}\n\n[원문]\n${c.pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`;
   const t = Date.now();
-  void stream(id, `${id}:${cardId}`, "map:lecture-step", STEP_SYSTEM, user, images, (text, ok, stopped) => {
+  void stream(id, `${id}:${cardId}`, "map:lecture-step", STEP_SYSTEM, user, tail, images, (text, ok, stopped) => {
     l.steps[cardId] = { ...l.steps[cardId], status: ok ? "done" : stopped ? "stopped" : "failed", text, ms: Date.now() - t };
     void save(id, l);
   });
@@ -131,11 +133,13 @@ export async function askCard(id: string, cardId: string, q: string) {
   const c = byId.get(cardId); const step = l.steps[cardId];
   if (!c || !step) throw Object.assign(new Error("설명을 들은 카드에서 물을 수 있어요."), { status: 409 });
   const ask: Ask = { q: q.slice(0, 1000), a: "", status: "writing", at: new Date().toISOString() };
-  const user = `${history(l, cardId, byId)}\n\n[지금 카드] ${cardText(c)}\n이 카드 설명:\n${step.text}\n\n[학생 질문] ${ask.q}\n\n[원문]\n${c.pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`;
+  const { map, sections } = await context(id);
+  const user = `[자료] ${map.title}\n\n[카드 목록]\n${sections.map((s, i) => `영역 ${i + 1}. ${s.title}\n${s.cards.map((x) => `- ${x.title}`).join("\n")}`).join("\n")}`;
+  const tail = `${history(l, cardId, byId)}\n\n[지금 카드] ${cardText(c)}\n이 카드 설명:\n${step.text}\n\n[학생 질문] ${ask.q}\n\n[원문]\n${c.pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`;
   step.asks.push(ask);
   await save(id, l);
   const images = await imagesOf(id, c.pages);
-  void stream(id, `${id}:${cardId}:ask`, "map:lecture-ask", ASK_SYSTEM, user, images, (text, ok, stopped) => {
+  void stream(id, `${id}:${cardId}:ask`, "map:lecture-ask", ASK_SYSTEM, user, tail, images, (text, ok, stopped) => {
     ask.a = text; ask.status = ok || stopped ? "done" : "failed";
     void save(id, l);
   });
