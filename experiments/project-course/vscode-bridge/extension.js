@@ -657,7 +657,47 @@ async function debugPeekRun(cmd, uri, doc, stage) {
   }
 }
 
+/**
+ * 앱 안 편집기 첫 설정(0.9.4, 11/11): 웹 편집기의 사용자 설정은 브라우저 쪽에 있어 서버 설정 파일이 안 먹는다(시험에서 안내 화면 · 밝은 테마가 떴다).
+ * 그래서 확장이 한 번만, 학습자가 직접 정하지 않은 것만 넣는다: 어두운 테마(튜터와 맞춤) · 시작 안내 끄기 · 확장 업데이트 확인 끄기 등. 처음에 뜬 안내 탭은 닫는다.
+ */
+const EMBEDDED_DEFAULTS = {
+  "workbench.colorTheme": "Default Dark Modern",
+  "workbench.startupEditor": "none",
+  "workbench.tips.enabled": false,
+  "workbench.welcomePage.walkthroughs.openOnInstall": false,
+  "extensions.autoCheckUpdates": false,
+  "extensions.autoUpdate": false,
+  "extensions.ignoreRecommendations": true,
+  "update.mode": "none",
+  "telemetry.telemetryLevel": "off",
+  "python.languageServer": "None",
+  "editor.minimap.enabled": false,
+  // 오른쪽 빈 보조 사이드바(채팅 자리)를 닫아 두고 AI 기능 칸을 숨긴다(튜터는 바로 옆 칸)
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  "chat.disableAIFeatures": true,
+};
+async function embeddedSetup(context) {
+  if (!EMBEDDED) return;
+  if (!context.globalState.get("recaller.embeddedDefaults.v2")) {
+    const cfg = vscode.workspace.getConfiguration();
+    for (const [k, v] of Object.entries(EMBEDDED_DEFAULTS)) {
+      try { const i = cfg.inspect(k); if (i && i.globalValue === undefined) await cfg.update(k, v, vscode.ConfigurationTarget.Global); }
+      catch (e) { console.error("[recaller] 설정을 못 넣음", k, e); }
+    }
+    await context.globalState.update("recaller.embeddedDefaults.v2", true);
+  }
+  try { await vscode.commands.executeCommand("workbench.action.closeAuxiliaryBar"); } catch { /* 없는 판 */ }
+  // 시작 안내 탭(Welcome · Walkthrough)은 닫는다
+  try {
+    for (const g of vscode.window.tabGroups.all) for (const t of g.tabs) {
+      if (/^(Welcome|Walkthrough|시작|연습)/i.test(t.label) && !t.isDirty) await vscode.window.tabGroups.close(t);
+    }
+  } catch (e) { console.error("[recaller] 안내 탭을 못 닫음", e); }
+}
+
 function activate(context) {
+  void embeddedSetup(context);
   const folder = (vscode.workspace.workspaceFolders || []).find((f) => ["stage.json", "lobby.json"].some((n) => fs.existsSync(path.join(f.uri.fsPath, ".recaller", n))));
   if (!folder) return;
   root = folder.uri.fsPath;

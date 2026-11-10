@@ -114,7 +114,7 @@ function run(cmd: string, args: string[], ms: number, env?: NodeJS.ProcessEnv) {
 function killTree(ch: ChildProcess) {
   if (!ch.pid || ch.exitCode !== null) return;
   if (process.platform === "win32") spawn("taskkill", ["/pid", String(ch.pid), "/T", "/F"], { windowsHide: true });
-  else ch.kill("SIGTERM");
+  else { try { process.kill(-ch.pid, "SIGTERM"); } catch { ch.kill("SIGTERM"); } }
 }
 
 /** 공통 인자: 전용 데이터 · 확장 폴더 */
@@ -183,8 +183,10 @@ export async function ensureRunning() {
     token = randomBytes(24).toString("hex");
     const tokenFile = path.join(dataDir(), "token");
     await writeFile(tokenFile, token, { mode: 0o600 });
+    await killOrphan();
     const ch = spawnServer(serverArgs(tokenFile));
     child = ch;
+    if (ch.pid) await writeFile(path.join(dataDir(), "pid"), String(ch.pid));
     let log = "";
     ch.stdout?.on("data", (d) => { log = (log + d).slice(-4000); });
     ch.stderr?.on("data", (d) => { log = (log + d).slice(-4000); });
@@ -204,7 +206,21 @@ export async function ensureRunning() {
 function spawnServer(args: string[]) {
   // 우리 연결 확장이 "앱 안 편집기"인 줄 알게(튜터 탭 · 떠 있는 창 안 띄움)
   const env = { ...process.env, RECALLER_EMBEDDED: "1", RECALLER_COURSE_PORT: process.env.PORT || "4100" };
-  return spawnAny(bin(), args, env);
+  // Windows는 taskkill /T로 트리째, 그 밖은 새 프로세스 그룹으로 띄워 그룹째 끈다
+  if (process.platform === "win32") return spawnAny(bin(), args, env);
+  return spawn(bin(), args, { env, detached: true });
+}
+/** 실습 서버가 갑자기 꺼져(다시 켜기 등) 남은 예전 편집기가 포트를 잡고 있으면 끈다 */
+async function killOrphan() {
+  const pid = Number(await readFile(path.join(dataDir(), "pid"), "utf8").catch(() => ""));
+  const busy = () => fetch(`http://${HOST}:${PORT}/version`, { signal: AbortSignal.timeout(800) }).then(() => true, () => false);
+  if (!(await busy())) return;
+  if (pid > 0) {
+    if (process.platform === "win32") await run("taskkill", ["/pid", String(pid), "/T", "/F"], 10_000);
+    else { try { process.kill(-pid, "SIGTERM"); } catch { try { process.kill(pid, "SIGTERM"); } catch { /* 없음 */ } } }
+  }
+  for (let i = 0; i < 20 && (await busy()); i++) await new Promise((r) => setTimeout(r, 250));
+  if (await busy()) throw new Error(`편집기 자리(포트 ${PORT})를 다른 프로그램이 쓰고 있어요.`);
 }
 export function stop() { if (child) killTree(child); child = null; token = ""; }
 process.on("exit", stop);
