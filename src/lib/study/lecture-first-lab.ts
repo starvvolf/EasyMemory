@@ -140,3 +140,118 @@ function log(purpose: string, m: { model: string; effort: string }, started: num
   logAssistCall({ at: new Date(started).toISOString(), purpose, ...m, ms: Date.now() - started, ...(firstTextMs ? { firstTextMs } : {}), ok: true, inChars,
     ...(u ? { tokens: { in: u.inputTokens, cached: u.cachedInputTokens, out: u.outputTokens, reasoning: u.reasoningTokens } } : {}), trace: currentTrace() });
 }
+
+// ---------- 3차 (11/10 사용자 "안다/모른다 두 가지 — 알면 카드만, 모르면 강의. 강의에서 잡은 카드랑 그냥 잡은 카드가 같거나 상당히 비슷해야. 원칙을 잘 잡아야",
+// "PDF를 쪼개서 작게 테스트"): 카드 목록을 강의보다 먼저, 같은 호출 안에서. 안다 = 목차 + 카드 목록에서 멈춤, 모른다 = 이어서 강의(카드는 번호로만 짚음).
+// 카드 원칙은 줄기 엔진의 기억 기준(stem.ts STEM_PLAN)을 그대로 옮겼다. ----------
+const CARD_RULES = `카드는 학습자가 외우고 복습하는 단위(기억)다. 쪽마다 잘게 뽑는 것이 아니라, 서로 이어진 원리·알고리즘·개념 단위로 나눈다.
+- 하나의 알고리즘·절차·방법은 카드 하나다(그 방법의 식·조건·초깃값·경우·구현 단계를 모두 그 안에).
+- 같은 것을 다른 꼴로 적은 쪽들(같은 식의 다른 표기, 같은 성질의 여러 장)은 카드 하나다.
+- 따로 서는 정의·개념·판정 규칙은 혼자 카드다. 억지로 합치지 않는다.
+- 모양: 용어 · 사실 · 목록 · 조건(판정 규칙) · 절차(알고리즘·방법) · 공식 · 비교(둘 이상을 견줌) · 개념(원리·주장) · 패턴(틀·예).
+- 역할: 메인 = 이 강의에서 새로 배우는 것. 바탕 = 이 강의 전에 알고 와야 하는 것을 다시 적은 것(앞 과목의 수학 식·정의). 곁 = 배경·종류 나열·제품 이름·덧붙인 이야기.
+- 이름은 자료의 말로 짧게(원어가 있으면 괄호로).
+- 표지·목차·참고문헌 쪽이 아니면 모든 쪽이 어느 카드의 쪽에 들어가야 한다. 그림으로만 된 쪽도 그림을 읽고 넣는다.`;
+const HEAD = `너는 이 강의를 맡은 강사다. 강의 자료 한 편 전체(쪽마다 [p.N] 원문, 그림은 "[이미지] 이름표"가 붙은 이미지)를 받는다.
+먼저 (쓰지 말고) 생각한다: 이 강의가 가르치려는 것은 무엇인가? 학생이 이해하기 쉬운 순서로 장을 나누면 무엇인가?
+
+1. "## 목차": 줄마다 "N. 장 이름 (p.쪽, 쪽–쪽)". 이해하기 쉬운 순서라면 자료의 순서를 바꾸고 쪽을 마음대로 묶어도 된다.
+2. "## 카드": 이 자료의 카드 목록 전체를 목차 순서로. 줄마다 "cN. 이름 | 모양 | 역할 | p.쪽,쪽" (N은 1부터).
+${CARD_RULES}`;
+export const KNOW_SYSTEM = `${HEAD}
+여기까지만 쓴다(학생은 이미 내용을 안다. 강의는 쓰지 않는다).`;
+export const LEARN_SYSTEM = `${HEAD}
+3. "## 강의": 학생은 이 내용을 처음 배운다. 목차의 장마다 "### N. 장 이름" 아래에서 채팅으로 말하듯 강의한다.
+   이 장이 왜 필요한지에서 시작해, 학생이 따라오게 한 단계씩 설명하고, 다음 장으로 넘어가는 까닭으로 맺는다.
+   식은 $…$(한 줄 식은 $$…$$)로 쓰고, 무엇이 커지면 무엇이 어떻게 되는지 말로 풀어 준다. 원문에 예·값이 있으면 그것으로 보여 준다. 기호는 처음 나올 때 뜻을 말한다.
+   - 카드: 위 목록의 카드가 처음 제대로 설명된 자리 바로 뒤에 ⟦카드 cN⟧을 한 줄로 단다. 목록에 없는 카드를 새로 만들지 않는다.
+   - 그림·표: 그림을 보여 주며 설명할 자리에 ⟦그림: 이미지 이름표 | 이 그림에서 볼 것⟧(받은 "[이미지]" 뒤의 이름표 그대로), 표는 ⟦표: p.쪽 | 무엇의 표인지⟧.
+   자료에 없는 사실을 지어내지 않는다. 쉬운 말, "~해요" 체, 용어는 "한국어(영어 원어)".`;
+
+const LINE = /^\s*c(\d+)\.\s*([^|\n]+?)\s*\|\s*([^|\n]+?)\s*\|\s*([^|\n]+?)\s*\|\s*([^\n]*?)\s*$/;
+/** "## 카드" 아래의 완성된 줄(줄바꿈까지 온 것)만. */
+export function cardListOf(text: string, pageNumbers: number[], complete = true) {
+  const start = text.indexOf("## 카드");
+  if (start < 0) return [];
+  let body = text.slice(start + 6);
+  const end = body.search(/\n## /);
+  if (end >= 0) body = body.slice(0, end); else if (complete) body = body.slice(0, body.lastIndexOf("\n") + 1);
+  return body.split("\n").map((l) => LINE.exec(l)).filter((m): m is RegExpExecArray => !!m)
+    .map((m) => ({ n: Number(m[1]), name: m[2].trim(), kind: m[3].trim(), role: ROLES.includes(m[4].trim()) ? m[4].trim() : "메인", pages: nums(m[5], pageNumbers) }));
+}
+
+export async function runLectureFirst3(id: string, mode: "know" | "learn", fileName: string, pages: number[], texts: Record<string, string>, images: Img[]) {
+  const t0 = Date.now();
+  const imagesOf = (ps: number[]) => images.filter((x) => ps.includes(x.page)).map(({ label, dataUrl }) => ({ label, dataUrl }));
+  const user = [`[자료] ${fileName}`, ...pages.map((p) => `[p.${p}]\n${(texts[p] ?? "").trim() || "(글자 없음)"}`)].join("\n\n");
+  type C = ReturnType<typeof cardListOf>[number] & { at: number };
+  const listed: C[] = [];
+  let pending: C[] = [];
+  const cards: Array<{ n: number; name: string; doneAt: number; ok: boolean; card?: unknown }> = [];
+  const jobs: Promise<void>[] = [];
+  let firstText = 0, listDone = 0;
+  const schema = astraJsonSchema(stemFillSchema);
+  const flush = () => {
+    if (!pending.length) return;
+    const group = pending; pending = [];
+    jobs.push(withTrace({ area: "pdf", action: "quiz-lf-card", ref: id }, async () => {
+      const t = Date.now();
+      const ps = [...new Set(group.flatMap((m) => m.pages))].sort((x, y) => x - y);
+      const u = `[기억 계획]\n${group.map((m) => `- c${m.n} | ${m.name} | ${m.kind} | ${m.role} | p.${m.pages.join(",")}`).join("\n")}\n\n[원문]\n${ps.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}`;
+      try {
+        const r = await callModel({ purpose: "lab:lf-card", system: `${STEM_FILL}\n출력은 JSON으로만 한다.`, user: u, json: true, schema, schemaName: "recaller_lab_lf_card", ...LF_CARD_MODEL, caller: LOCAL_CALLER, images: imagesOf(ps) });
+        log("lab:lf-card", LF_CARD_MODEL, t, r.usage, u.length);
+        const got = ((r.data as { memories?: Array<{ memory: string }> })?.memories ?? []);
+        for (const m of group) { const card = got.find((x) => x.memory === `c${m.n}`); cards.push({ n: m.n, name: m.name, doneAt: Date.now() - t0, ok: Boolean(card), card }); }
+      } catch { for (const m of group) cards.push({ n: m.n, name: m.name, doneAt: Date.now() - t0, ok: false }); }
+    }));
+  };
+  const take = (text: string, final: boolean) => {
+    for (const c of cardListOf(text, pages, !final)) if (!listed.some((x) => x.n === c.n)) { const x = { ...c, at: Date.now() - t0 }; listed.push(x); pending.push(x); }
+    const closed = /## 카드[\s\S]*?\n## /.test(text);
+    if (closed && !listDone) listDone = Date.now() - t0;
+    if (pending.length >= 3 || closed || final) flush();
+  };
+  const started = Date.now();
+  const text = await withTrace({ area: "pdf", action: "quiz-lf-lecture", ref: id }, async () => {
+    const r = await callModel({ purpose: `lab:lf-${mode}`, system: mode === "know" ? KNOW_SYSTEM : LEARN_SYSTEM, user, ...LF_LECTURE_MODEL, caller: LOCAL_CALLER, images: imagesOf(pages),
+      onText: (t) => { if (!firstText) firstText = Date.now(); take(t, false); } });
+    log(`lab:lf-${mode}`, LF_LECTURE_MODEL, started, r.usage, user.length, firstText ? firstText - started : undefined);
+    return r.text;
+  });
+  const textMs = Date.now() - t0;
+  take(text, true);
+  if (!listDone) listDone = textMs;
+  await Promise.all(jobs);
+  const lecture = text.indexOf("## 강의") >= 0 ? text.slice(text.indexOf("## 강의")) : "";
+  const refs = [...lecture.matchAll(/⟦카드\s*c(\d+)\s*⟧/g)].map((m) => Number(m[1]));
+  const byLabel = new Map(images.map((x) => [bareLabel(x.label), x]));
+  const figures = figuresOf(lecture).map((f) => { const img = byLabel.get(bareLabel(f.label)); return { ...f, found: Boolean(img), page: img?.page, dataUrl: img?.dataUrl }; });
+  const covered = new Set(listed.flatMap((c) => c.pages));
+  return { mode, wall: Date.now() - t0, firstTextMs: firstText ? firstText - t0 : null, listDoneMs: listDone, textMs, lastCardMs: cards.length ? Math.max(...cards.map((c) => c.doneAt)) : null,
+    toc: tocOf(text), list: listed.map(({ at, ...c }) => ({ ...c, at })), cards: cards.sort((a, b) => a.n - b.n),
+    roles: Object.fromEntries(ROLES.map((r) => [r, listed.filter((m) => m.role === r).length])), missingPages: pages.filter((p) => !covered.has(p)),
+    refs: { total: refs.length, distinct: new Set(refs).size, notInList: [...new Set(refs)].filter((n) => !listed.some((c) => c.n === n)), listedNotReferenced: listed.filter((c) => !refs.includes(c.n)).map((c) => c.name) },
+    figures, lectureChars: lecture.length, text };
+}
+
+/** 두 카드 목록이 얼마나 같은가(코드): 이름(괄호 뺀 것)이 같거나 한쪽이 다른 쪽을 품으면 같은 카드, 아니면 쪽이 가장 많이 겹치는 것을 짝으로(겹침 절반 이상). */
+export function compareLists(a: Array<{ name: string; pages: number[] }>, b: Array<{ name: string; pages: number[] }>) {
+  const used = new Set<number>();
+  const pairs: Array<{ a: string; b: string | null; how: string }> = [];
+  for (const x of a) {
+    const nx = norm(x.name);
+    let j = b.findIndex((y, k) => !used.has(k) && norm(y.name) === nx);
+    if (j < 0) j = b.findIndex((y, k) => !used.has(k) && (() => { const ny = norm(y.name); return nx.length >= 2 && ny.length >= 2 && (nx.includes(ny) || ny.includes(nx)) && x.pages.some((p) => y.pages.includes(p)); })());
+    let how = "이름";
+    if (j < 0) {
+      let best = -1, score = 0;
+      b.forEach((y, k) => { if (used.has(k)) return; const inter = x.pages.filter((p) => y.pages.includes(p)).length; const s = inter / Math.max(x.pages.length, y.pages.length, 1); if (s > score) { score = s; best = k; } });
+      if (score >= 0.5) { j = best; how = "쪽"; }
+    }
+    if (j >= 0) used.add(j);
+    pairs.push({ a: x.name, b: j >= 0 ? b[j].name : null, how: j >= 0 ? how : "없음" });
+  }
+  const matched = pairs.filter((p) => p.b).length;
+  return { a: a.length, b: b.length, matched, onlyA: pairs.filter((p) => !p.b).map((p) => p.a), onlyB: b.filter((_, k) => !used.has(k)).map((y) => y.name), pairs };
+}

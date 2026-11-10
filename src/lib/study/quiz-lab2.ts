@@ -14,7 +14,7 @@ import { materialMap, type MapCard } from "./material-map.ts";
 import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "./quiz-plan.ts";
 import { loadGoalLinks, makeGoalLinks } from "./goal-links.ts";
 
-export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst"] as const;
+export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn"] as const;
 export type Lab2Method = (typeof LAB2_METHODS)[number];
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 
@@ -35,11 +35,37 @@ async function callsOf(ref: string, t0: number) {
     .map((x) => ({ ms: x.ms as number, in: x.tokens?.in ?? 0, out: x.tokens?.out ?? 0, cost: costOf(x.model, { inputTokens: x.tokens?.in, cachedInputTokens: x.tokens?.cached, outputTokens: x.tokens?.out }) ?? 0 }));
 }
 
-export async function runQuizLab2(id: string, method: Lab2Method) {
+export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?: number[]; tag?: string } = {}) {
   const state = await loadGen(id);
   const map = state ? materialMap(state, {}) : null;
   if (!state || !map) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });
   const texts = (state as unknown as { recaller?: { texts?: Record<string, string> } }).recaller?.texts ?? {};
+  if (method === "lfKnow" || method === "lfLearn") {
+    // 강의 먼저 3차(lecture-first-lab.ts runLectureFirst3, 11/10): 카드 목록을 강의보다 먼저. 안다 = 목록까지, 모른다 = 이어서 강의. 쪽을 골라 작게(?pages=2-13).
+    const { runLectureFirst3, compareLists } = await import("./lecture-first-lab.ts");
+    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
+    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const st = state as unknown as { input: { sourceId: string; fileName: string; pageNumbers: number[] }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
+    const pdf = await readRegisteredMcpSourcePdf(st.input.sourceId);
+    if (!pdf) throw Object.assign(new Error("원본 PDF를 읽을 수 없어요."), { status: 409 });
+    const pages = opts.pages?.length ? st.input.pageNumbers.filter((p) => opts.pages!.includes(p)) : st.input.pageNumbers;
+    const route = new Map((st.recaller?.prep?.pages ?? []).map((x) => [x.page, x.route ?? "text"]));
+    const t0 = Date.now();
+    const figs = await renderPageFigures(pdf, pages.filter((p) => route.get(p) === "figures"), 1024).catch(() => new Map<number, Array<{ label: string; dataUrl: string }>>());
+    const wholes = await renderPageImages(pdf, pages.filter((p) => route.get(p) === "page" || (route.get(p) === "figures" && !figs.get(p)?.length)), 1024).catch(() => new Map<number, string>());
+    const drawMs = Date.now() - t0;
+    const images = pages.flatMap((p) => { const f = figs.get(p) ?? []; return f.length ? f.map((x) => ({ page: p, label: x.label, dataUrl: x.dataUrl })) : wholes.get(p) ? [{ page: p, label: `원문 p.${p}`, dataUrl: wholes.get(p)! }] : []; });
+    const r = await runLectureFirst3(id, method === "lfKnow" ? "know" : "learn", st.input.fileName, pages, texts, images);
+    const calls = await callsOf(id, t0);
+    // 줄기 엔진의 같은 쪽 기억과 견주기(이 자료가 줄기 모드로 만든 것이면)
+    const stemList = map.sections.flatMap((x) => x.cards).filter((c) => c.pages.some((p) => pages.includes(p))).map((c) => ({ name: c.title, pages: c.pages }));
+    const out = { method, id, tag: opts.tag ?? "", pages, at: new Date().toISOString(), drawMs, ...r, vsStem: compareLists(r.list, stemList),
+      calls: calls.length, tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0) };
+    const dir = path.join(dataDir(), "study-gen", id, "quiz-lab2");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, `${method}${opts.tag ? `-${opts.tag}` : ""}.json`), JSON.stringify(out, null, 1));
+    return out;
+  }
   if (method === "lectureFirst") {
     // 강의 먼저 엔진(lecture-first-lab.ts, 11/10): sol 강의(스트리밍) + 카드 표시 → 표시마다 terra 카드
     const { runLectureFirst } = await import("./lecture-first-lab.ts");
@@ -161,5 +187,8 @@ export async function quizLab2Api(request: Request, id: string) {
   const m = new URL(request.url).searchParams.get("m") as Lab2Method;
   if (!LAB2_METHODS.includes(m)) return NextResponse.json({ message: `m은 ${LAB2_METHODS.join(", ")}` }, { status: 400 });
   if (request.method === "GET") return NextResponse.json({ result: JSON.parse(await readFile(path.join(dataDir(), "study-gen", id, "quiz-lab2", `${m}.json`), "utf8").catch(() => "null")) });
-  return NextResponse.json({ result: await runQuizLab2(id, m) });
+  const q = new URL(request.url).searchParams;
+  const range = q.get("pages") ?? "";
+  const pages = range ? range.split(",").flatMap((r) => { const [a, b] = r.split("-").map(Number); return b ? Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i) : [a]; }).filter((n) => Number.isInteger(n)) : undefined;
+  return NextResponse.json({ result: await runQuizLab2(id, m, { pages, tag: q.get("tag")?.replace(/[^\w-]/g, "") ?? undefined }) });
 }
