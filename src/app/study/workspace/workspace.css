@@ -1230,3 +1230,9 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .lc3-segnum{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-size:11px}
 .dejipgi .lc3-segbtn.on .lc3-segnum{background:rgba(255,255,255,.22);color:#fff}
 .dejipgi .lc3-segstep{font-weight:500;opacity:.85;padding-left:6px;margin-left:2px;border-left:1px solid rgba(255,255,255,.35)}
+/* 굵은 말 = 카드(11/11): 누를 수 있는 굵은 말, 그 밑에 펼쳐지는 카드 */
+.dejipgi .lc3-say b.lc3-link,.dejipgi .lc3-a b.lc3-link{cursor:pointer;color:var(--ink);background:linear-gradient(transparent 62%,var(--accent-soft) 62%);border-bottom:1.5px dotted var(--accent);transition:background .15s}
+.dejipgi .lc3-say b.lc3-link:hover,.dejipgi .lc3-a b.lc3-link:hover{background:var(--accent-soft)}
+.dejipgi .lc3-pop{animation:lc3-pop .22s ease}
+.dejipgi .lc3-pop .lc3-card{margin:4px 0 12px}
+@keyframes lc3-pop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}

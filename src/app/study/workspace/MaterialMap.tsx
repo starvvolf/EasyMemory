@@ -511,8 +511,8 @@ function LectureFig({ genId, label, says }: { genId: string; label: string; says
   return <figure className="lc2-fig">{img ?? <div className="small muted">{src === null ? "그림을 불러오지 못했어요" : "그림 불러오는 중…"}</div>}
     <figcaption className="small muted">{says}</figcaption></figure>;
 }
-function LectureCard({ genId, c, onPage }: { genId: string; c: Card; onPage: (page: number) => void }) {
-  const [open, setOpen] = useState(false);
+function LectureCard({ genId, c, onPage, startOpen = false }: { genId: string; c: Card; onPage: (page: number) => void; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
   return <div className={`lc3-card${open ? " open" : ""}`}>
     <button className="lc3-cardhead" onClick={(e) => { e.stopPropagation(); setOpen(!open); }} aria-expanded={open}>
       <span className="lc3-cardtag">기억 카드</span>
@@ -570,18 +570,34 @@ function LectureCheck({ q, a }: { q: string; a: string }) {
   return <div className={`lc3-check${open ? " open" : ""}`}><p className="lc3-checkq"><span className="lc3-checktag">확인</span><Rich text={q} /></p>
     {a ? open ? <p className="lc3-checka"><Rich text={a} /></p> : <button className="lc3-checkbtn" onClick={() => setOpen(true)}>답 보기</button> : null}</div>;
 }
+// 굵게 = 카드(11/11 사용자 "굵게 쓰는 걸 컨트롤해서 카드로 만들 수 있게" → "굵게 누르면 그 카드"): 강사가 카드의 핵심 말을 ⟦굵게 id | 말⟧로 쓰면
+// 그 말을 **굵게** 그리고, 누르면 그 말이 있는 문단 바로 밑에 그 카드가 펼쳐진다(다시 누르면 닫힘). 카드와 상관없는 **강조**는 그냥 굵게.
+const BOLD_CARD = /⟦굵게\s*([^|⟧\s]+)\s*\|\s*([^⟧]+?)\s*⟧/g;
 function LectureText({ genId, text, byId, onPage }: { genId: string; text: string; byId: Map<string, Card>; onPage: (page: number) => void }) {
+  const [open, setOpen] = useState<{ part: number; id: string } | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const links = new Map<string, string>(); // 굵은 말 → 카드 id
+  const plain = text.replace(BOLD_CARD, (_, id: string, word: string) => { if (byId.has(id)) { links.set(word.trim(), id); return `**${word.trim()}**`; } return `**${word.trim()}**`; });
+  // 카드에 이어진 굵은 말만 누를 수 있게 표시(문단은 Rich가 그려서, 그린 뒤 <b>에 표시를 붙인다)
+  useEffect(() => { for (const el of box.current?.querySelectorAll("b") ?? []) { const id = links.get((el.textContent ?? "").trim()); el.classList.toggle("lc3-link", Boolean(id)); if (id) el.setAttribute("data-card", id); else el.removeAttribute("data-card"); } });
+  const onClick = (e: React.MouseEvent) => {
+    const b = (e.target as HTMLElement).closest("b[data-card]") as HTMLElement | null; if (!b) return;
+    const part = Number((b.closest("[data-part]") as HTMLElement | null)?.dataset.part ?? -1); const id = b.dataset.card!;
+    e.stopPropagation(); setOpen((x) => (x && x.id === id && x.part === part ? null : { part, id }));
+  };
   const parts: ReactNode[] = []; let last = 0, k = 0;
-  for (const m of text.matchAll(FIG_MARK)) {
-    if (m.index! > last) parts.push(<RichBlock key={k++} text={flatMath(text.slice(last, m.index))} />);
+  const block = (t: string) => { const n = k++; parts.push(<div key={n} data-part={n}><RichBlock text={flatMath(t)} /></div>);
+    if (open?.part === n) { const c = byId.get(open.id); if (c) parts.push(<div key={`o${n}`} className="lc3-pop"><LectureCard genId={genId} c={c} onPage={onPage} startOpen /></div>); } };
+  for (const m of plain.matchAll(FIG_MARK)) {
+    if (m.index! > last) block(plain.slice(last, m.index));
     if (m[3]) { const c = byId.get(m[3]); if (c) parts.push(<LectureCard key={k++} genId={genId} c={c} onPage={onPage} />); }
     else if (m[4] !== undefined) parts.push(<LectureCheck key={k++} q={m[4]} a={m[5] ?? ""} />);
     else parts.push(<LectureFig key={k++} genId={genId} label={m[1]} says={m[2]} />);
     last = m.index! + m[0].length;
   }
-  const rest = text.slice(last).replace(/⟦[^⟧]*$/, "");
-  if (rest.trim()) parts.push(<RichBlock key={k++} text={flatMath(rest)} />);
-  return <>{parts}</>;
+  const rest = plain.slice(last).replace(/⟦[^⟧]*$/, "");
+  if (rest.trim()) block(rest);
+  return <div ref={box} onClick={onClick}>{parts}</div>;
 }
 // 11/11 사용자 "옆으로 넘어가는 건 좋은데 드래그는 별로. 그냥 넘어가고 이전 건 안 보이게, 앞뒤 <> 버튼으로": 장은 지금 것 하나만, 넘길 때 옆에서 밀려 들어온다.
 // 11/11 "강의 탭 새 방식으로 연결": src/lib/study/lecture-areas.ts(?v=3). 영역 하나를 강사가 한 흐름으로 쓰고(걸음으로 나눔), 장 하나 = 걸음 하나.
