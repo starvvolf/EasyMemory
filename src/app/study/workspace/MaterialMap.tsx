@@ -58,10 +58,27 @@ function splitMatrices(expr: string): Array<{ text: string } | { rows: string[][
 }
 // Rich draws $…$ only when it looks like TeX (a letter, or _ ^ \\ { } =); plain words and Greek letters stay text.
 const tex = (x: string) => (/[_^\\{}=]/.test(x) || /^[A-Za-z]$/.test(x.trim()) ? `$${x}$` : x);
+// 경우 나눔 식(11/11 버그: "I = { a, if c; b, if d }"를 ;에서 잘라 괄호가 갈라져 빨갛게 깨짐): 평문 경우 식을 cases로.
+const mathSym = (x: string) => x.replace(/·/g, " \\cdot ").replace(/≤/g, " \\le ").replace(/≥/g, " \\ge ").replace(/≠/g, " \\ne ").replace(/×/g, " \\times ");
+/** 괄호 밖의 ;에서만 나눈다. */
+function splitTop(x: string, sep = ";") { const out: string[] = []; let d = 0, cur = ""; for (const ch of x) { if ("({[".includes(ch)) d++; if (")}]".includes(ch)) d--; if (ch === sep && d === 0) { out.push(cur); cur = ""; } else cur += ch; } out.push(cur); return out.map((y) => y.trim()).filter(Boolean); }
+function piecewiseTex(expr: string): string | null {
+  const m = /^\s*(.*?=)\s*\{([\s\S]*)\}\s*$/.exec(expr);
+  if (!m || !/\b(if|otherwise)\b|일 때|그 밖/.test(m[2])) return null;
+  const rows = splitTop(m[2]).map((piece) => {
+    const c = /^(.*?)(?:,\s*|\s+)(if\s+.+|otherwise|그 밖.*|.+일 때)$/.exec(piece);
+    if (!c) return mathSym(piece);
+    const cond = c[2].replace(/^if\s+/, "");
+    return `${mathSym(c[1])} & ${/^otherwise$/.test(c[2]) ? "\\text{otherwise}" : `\\text{if } ${mathSym(cond)}`}`;
+  });
+  return `$${mathSym(m[1])} \\begin{cases} ${rows.join(" \\\\ ")} \\end{cases}$`;
+}
 function Formula({ expr }: { expr: string }) {
   if (expr.includes("$")) return <div className="mm3-formula"><Rich text={expr} /></div>;
-  // "a; b; c": one equation per line.
-  const lines = expr.split(/\s*;\s*/).filter(Boolean);
+  const cases = piecewiseTex(expr);
+  if (cases) return <div className="mm3-formula"><div className="mm3-eq"><Rich text={cases} /></div></div>;
+  // "a; b; c": one equation per line (괄호 안의 ;는 자르지 않는다).
+  const lines = splitTop(expr);
   return <div className="mm3-formula">{lines.map((line, k) => <div key={k} className="mm3-eq">{splitMatrices(line).map((part, i) => "rows" in part
     ? <span key={i} className="mm3-matrix" style={{ gridTemplateColumns: `repeat(${Math.max(...part.rows.map((r) => r.length))}, auto)` }}>
         {part.rows.flatMap((r, ri) => r.map((cell, ci) => <span key={`${ri}-${ci}`}><Rich text={tex(cell)} /></span>))}</span>
