@@ -754,6 +754,49 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
     </div>);
 }
 
+// 플래시카드(11/11 사용자 "기억 카드가 사실상 플래시카드 역할" → "일단 플래시카드는 바로 풀 수 있게, 기억에서 바로 연동되니까"):
+// 앞면 = 질문(없으면 이름) → [답 보기] → 답 · 풀이 · 모양 · 핵심 → [알았어요]/[몰랐어요]를 기억 저장소에 남긴다(맞힘/틀림 → 복습 날짜는 저장소가 정함).
+function FlashCards({ genId, title, cards, onPage, onClose }: { genId: string; title: string; cards: Card[]; onPage: (page: number) => void; onClose: () => void }) {
+  const [list, setList] = useState(cards);
+  const [i, setI] = useState(0);
+  const [shown, setShown] = useState(false);
+  const [marks, setMarks] = useState<Record<string, "known" | "unknown">>({});
+  const [error, setError] = useState("");
+  const c = list[i];
+  const mark = (v: "known" | "unknown") => {
+    if (!c) return;
+    setMarks((m) => ({ ...m, [c.id]: v }));
+    if (c.knowledgeId) void call(`/api/knowledge/${c.knowledgeId}/event`, { kind: v === "known" ? "correct" : "wrong", detail: v === "known" ? "플래시카드: 알았어요" : "플래시카드: 몰랐어요", source: { kind: "pdf", title, ref: genId } })
+      .catch((e) => setError(errorText(e)));
+    setShown(false); setI((x) => x + 1);
+  };
+  const known = list.filter((x) => marks[x.id] === "known").length, unknown = list.filter((x) => marks[x.id] === "unknown").length;
+  if (!c) return <div className="fc-wrap"><div className="fc-done">
+    <p className="fc-donetitle">다 봤어요</p>
+    <p className="small muted">알았어요 {known} · 몰랐어요 {unknown}{list.some((x) => !x.knowledgeId) ? " · 기억 저장소에 아직 없는 카드는 기록하지 않았어요" : ""}</p>
+    {error ? <p className="small bad">{error}</p> : null}
+    <div className="row small">{unknown ? <button className="btn small primary" onClick={() => { setList(list.filter((x) => marks[x.id] === "unknown")); setMarks({}); setI(0); }}>몰랐던 {unknown}장 다시</button> : null}
+      <button className="btn ghost small" onClick={onClose}>닫기</button></div></div></div>;
+  const m = c.memo;
+  return <div className="fc-wrap">
+    <div className="fc-top"><span className="small muted num">{i + 1} / {list.length}</span><div className="fc-bar"><span style={{ width: `${(i / list.length) * 100}%` }} /></div><button className="btn ghost small" onClick={onClose}>그만</button></div>
+    <section key={c.id} className="fc-card lc3-in-next">
+      <p className="fc-name"><Rich text={c.title} /></p>
+      <p className="fc-q">{m?.question ? <Rich text={m.question} /> : <>이 기억을 떠올려 보세요</>}</p>
+      {shown ? <div className="fc-back">
+        {m?.line ? <p className="lc3-ca"><Rich text={m.line} /></p> : null}
+        {m?.idea ? <p className="lc3-idea"><Rich text={m.idea} /></p> : null}
+        <Body s={c.shape} />
+        {m?.facts?.length ? <ul className="st-facts">{m.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+        <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
+      </div> : null}
+    </section>
+    {error ? <p className="small bad">{error}</p> : null}
+    <div className="fc-actions">{shown ? <><button className="fc-btn no" onClick={() => mark("unknown")}>몰랐어요</button><button className="fc-btn yes" onClick={() => mark("known")}>알았어요</button></>
+      : <button className="fc-btn show" onClick={() => setShown(true)}>답 보기</button>}</div>
+  </div>;
+}
+
 function SummaryPane({ summary, making }: { summary: Summary | null | undefined; making: boolean }) {
   const end = useRef<HTMLDivElement>(null);
   const writing = summary?.status === "writing";
@@ -904,6 +947,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const [summary, setSummary] = useState<Summary | null | undefined>(undefined);
   const [digest, setDigest] = useState<DigestLite | null | undefined>(undefined);
   const [coreOnly, setCoreOnly] = useState(false);
+  const [flash, setFlash] = useState<Card[] | null>(null); // 플래시카드로 풀기(11/11)
   // 첫 화면은 목차만 (사용자 10/30): every group starts folded; a group opens to one line per piece of knowledge, a line to its card.
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [openCard, setOpenCard] = useState<string | null>(null);
@@ -1050,9 +1094,11 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
         {n.unknown || n.known || n.graduated ? <div className="ws-seg">{([["all", "전체"], ["unknown", "다시 볼 것"], ["new", "아직 확인 안 한 것"]] as const).map(([k, label]) =>
           <button key={k} aria-pressed={only === k} onClick={() => setOnly(k)}>{label}</button>)}</div> : null}
         <span className="cs-gap" />
-        {visible.length ? <button className="linkish small" onClick={() => setOpenGroups(allOpen ? new Set() : new Set(visible.map((g) => g.key)))}>{allOpen ? "모두 접기" : "모두 펼치기"}</button> : null}
+        {visible.length && !flash ? <button className="linkish small" onClick={() => setOpenGroups(allOpen ? new Set() : new Set(visible.map((g) => g.key)))}>{allOpen ? "모두 접기" : "모두 펼치기"}</button> : null}
+        {visible.length && !making && !flash ? <button className="btn small primary" onClick={() => setFlash(visible.flatMap((g) => g.list))} title="지금 보이는 기억을 카드 한 장씩 떠올려 보고, 안다/모른다를 기억에 남겨요">플래시카드로 풀기 ({visible.reduce((a, g) => a + g.list.length, 0)})</button> : null}
       </div>
-      {board !== "off" && live ? <div className={board === "leaving" ? "mm4-leaving" : undefined}><LiveBoard data={live} /></div> : <div className="mm4-arrive">
+      {flash ? <FlashCards genId={genId} title={map.title} cards={flash} onPage={onPage} onClose={() => { setFlash(null); setReload((k) => k + 1); }} /> : null}
+      {flash ? null : board !== "off" && live ? <div className={board === "leaving" ? "mm4-leaving" : undefined}><LiveBoard data={live} /></div> : <div className="mm4-arrive">
       {map.principles?.length ? <section className="mm3-principles" aria-label="이 자료를 꿰는 원리">
         <p className="mm3-label">이 자료를 꿰는 원리</p>
         {map.principles.map((p, i) => <div key={i} className="mm3-principle">
