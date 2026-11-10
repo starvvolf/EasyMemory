@@ -548,7 +548,9 @@ function useSmoothText(target: string, animate: boolean, onCaughtUp?: () => void
   return { text: out, behind: animate && shown < target.length };
 }
 function SmoothLecture({ genId, text, live, animate, byId, onPage, onSeen }: { genId: string; text: string; live: boolean; animate: boolean; byId: Map<string, Card>; onPage: (page: number) => void; onSeen?: () => void }) {
-  const smooth = useSmoothText(text, animate, live ? undefined : onSeen);
+  // 11/11 사용자 "처음 스트리밍 오는 것만 부드럽게, 완성된 걸 여는 건 창 넘기기 애니메이션으로": 열 때 이미 다 쓴 글이면 한 번에 보인다.
+  const [typing] = useState(() => animate && live);
+  const smooth = useSmoothText(text, typing, live ? undefined : onSeen);
   return <><LectureText genId={genId} text={smooth.text} byId={byId} onPage={onPage} />{live || smooth.behind ? <span className="lc2-caret" /> : null}</>;
 }
 function LectureText({ genId, text, byId, onPage }: { genId: string; text: string; byId: Map<string, Card>; onPage: (page: number) => void }) {
