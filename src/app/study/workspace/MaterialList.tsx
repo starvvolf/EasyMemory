@@ -8,7 +8,7 @@ type Note = {
   goals: { chosen: string[]; confirming: boolean; objectives: Goal[] } | null; headline: string; text: string; failed: boolean; making: boolean;
   canQuestions: boolean; canConnect: boolean; canResume: boolean; canRestart: boolean; canRemove: boolean;
 };
-type Pending = { id: string; title: string; sourceName: string; status: string; label: string; map: boolean; readPage: number; lastPage: number; note: Note };
+export type Pending = { id: string; title: string; sourceName: string; status: string; label: string; map: boolean; readPage: number; lastPage: number; note: Note };
 type Counts = { due: number; fresh: number; good: number; review: number; help: number; read: number; total: number };
 type DeckV = { id: string; title: string; pastExam: boolean; objectives: number; items: number; counts: Counts; skipped: string[]; map: boolean; lastPage: number; firstPage: number; growing: Pending | null };
 type Mat = { key: string; name: string; open: boolean; count: number; due: number; fresh: number; extra: Pending[]; decks: DeckV[] };
@@ -126,7 +126,7 @@ function DeckCard({ d, api }: { d: DeckV; api: Api }) {
   );
 }
 
-function PendingNote({ p, api }: { p: Pending; api: Api }) {
+export function PendingNote({ p, api }: { p: Pending; api: Pick<Api, "toggleGoal" | "confirmGoals" | "makeQuestions" | "connect" | "resume" | "restart" | "remove"> }) {
   const n = p.note;
   if (n.goals) {
     const chosen = new Set(n.goals.chosen);
