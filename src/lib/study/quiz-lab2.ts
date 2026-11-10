@@ -14,7 +14,7 @@ import { materialMap, type MapCard } from "./material-map.ts";
 import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "./quiz-plan.ts";
 import { loadGoalLinks, makeGoalLinks } from "./goal-links.ts";
 
-export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn", "lfParts", "lfSteps", "lpPlan", "lpLecture", "quickCode", "quickAI", "quickAI2"] as const;
+export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn", "lfParts", "lfSteps", "lpPlan", "lpLecture", "quickCode", "quickAI", "quickAI2", "quickMCQ"] as const;
 export type Lab2Method = (typeof LAB2_METHODS)[number];
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 
@@ -40,7 +40,7 @@ export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?
   const map = state ? materialMap(state, {}) : null;
   if (!state || !map) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });
   const texts = (state as unknown as { recaller?: { texts?: Record<string, string> } }).recaller?.texts ?? {};
-  if (method === "quickCode" || method === "quickAI" || method === "quickAI2") {
+  if (method === "quickCode" || method === "quickAI" || method === "quickAI2" || method === "quickMCQ") {
     // 플래시카드 → 한 번 더(OX · 객관식) 두 방식 비교(quick-lab.ts, 11/11)
     const { runQuick } = await import("./quick-lab.ts");
     const t0 = Date.now();
