@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
+// 11/11 사용자 "렌더링이 조잡하게 느껴져": 브라우저 기본 MathML 대신 KaTeX 글꼴·조판(html)으로. 스타일은 여기서 같이 불러 Rich를 쓰는 어느 화면에서나.
+import "katex/dist/katex.min.css";
 
 /* ---------- math: $…$ and bare subscripts (z_{vp}, P_0, y_view) as KaTeX, like the study screen ---------- */
 type Katex = { renderToString(tex: string, options: Record<string, unknown>): string };
@@ -15,19 +17,21 @@ function useKatex() {
   }, []);
   return ready ? katex : null;
 }
-/** One formula. MathML output needs no stylesheet, so it reads the same on every screen that shows Rich text. */
-function TeX({ tex }: { tex: string }) {
+/** One formula, KaTeX html (글꼴·간격이 KaTeX 것). 화면 읽기용 MathML도 함께 붙는다(htmlAndMathml, 스타일이 MathML을 가린다). */
+function TeX({ tex, display = false }: { tex: string; display?: boolean }) {
   const k = useKatex();
-  if (!k) return <span className="ws-math">{tex}</span>;
+  if (!k) return <span className={display ? "ws-math ws-math-d" : "ws-math"}>{tex}</span>;
+  // 따로 떼어 쓴 식(11/11 사용자 "수식이 위엄이 없음"): 가운데·크게, 분수는 펴서(displayMode)
+  if (display) return <span className="ws-math ws-math-d" dangerouslySetInnerHTML={{ __html: k.renderToString(tex, { output: "htmlAndMathml", displayMode: true, throwOnError: false, strict: "ignore", trust: false }) }} />;
   // KaTeX escapes its input and trust is off: this is markup KaTeX built, not text from the learner as HTML.
-  return <span className="ws-math" dangerouslySetInnerHTML={{ __html: k.renderToString(tex, { output: "mathml", throwOnError: false, strict: "ignore", trust: false }) }} />;
+  return <span className="ws-math" dangerouslySetInnerHTML={{ __html: k.renderToString(tex, { output: "htmlAndMathml", throwOnError: false, strict: "ignore", trust: false }) }} />;
 }
 /**
  * Knowledge text keeps formulas without $ (z_{vp}, P_0, y_view, xw_{min}): short names with a subscript or superscript
  * become $…$. Longer words with "_" (lower_bound, snake_case) stay text; so do $ amounts ("$5 and $10").
  */
 const BARE = /(?<![\w$\\])([A-Za-z]{1,2}(?:_\{[^{}\s]{1,16}\}|_[A-Za-z0-9]{1,4})(?:\^\{[^{}]{1,8}\}|\^[A-Za-z0-9])?|[A-Za-z]\^\{[^{}]{1,8}\})(?![\w{])/g;
-const isTex = (inner: string) => /[\\_^{}=|]/.test(inner) || /^[A-Za-z]$/.test(inner);
+const isTex = (inner: string) => /[\\_^{}=|]/.test(inner) || /^[A-Za-z]$/.test(inner) || /^[-−+]\s?[A-Za-z]{1,2}\d?$/.test(inner.trim()); // -u 같은 짧은 식(11/11)
 /*
  * Formulas written with plain signs (n = N/|N|, u = (V × n)/|V × n|, P_0=(x_0,y_0,z_0)): a run of one- or two-letter
  * names, digits and signs that holds = or × becomes one $…$, cut where its brackets close.
@@ -107,6 +111,9 @@ export function Rich({ text, className }: { text: string; className?: string }) 
       const parts = splitTables(all);
       parts.forEach((part, pi) => { const lines = part.lines; const key = `${ci}-${bi}-${pi}`;
       if (part.table) { out.push(table(lines, key)); return; }
+      // 한 줄 전체가 식 하나($…$ 또는 $$…$$)면 따로 떼어 쓴 식으로
+      const solo = lines.map((l) => /^\s*\$\$?([^$]+?)\$\$?\s*$/.exec(l)?.[1] ?? null);
+      if (solo.every((x) => x !== null && isTex(x))) { lines.forEach((_, k) => out.push(<div key={`${key}d${k}`} className="ws-display"><TeX tex={solo[k]!} display /></div>)); return; }
       if (lines.every((l) => /^\s*([-*•]|\d+[.)])\s+/.test(l))) {
         const items = lines.map((l, k) => <li key={k}>{inline(l.replace(/^\s*([-*•]|\d+[.)])\s+/, ""))}</li>);
         out.push(/^\s*\d/.test(lines[0]) ? <ol key={key}>{items}</ol> : <ul key={key}>{items}</ul>);

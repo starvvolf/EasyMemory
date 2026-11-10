@@ -1259,3 +1259,10 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .ws-table thead th{background:var(--surface-2,var(--ground));font-weight:700;color:var(--ink);white-space:nowrap}
 .ws-table tbody tr:last-child td{border-bottom:0}
 .ws-table tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--ground) 60%,transparent)}
+/* 따로 떼어 쓴 식(11/11 사용자 "수식이 위엄이 없음"): 가운데·크게·옅은 판 위에 */
+.ws-display{margin:16px 0;padding:10px 12px;text-align:center;overflow-x:auto;overflow-y:hidden;line-height:1.4}
+.ws-display .katex-display{margin:0}
+.ws-display .katex{font-size:1.12em}
+.ws-display + .ws-display{margin-top:-6px}
+
+.ws-rich .katex{font-size:1.06em}
