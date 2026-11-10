@@ -632,7 +632,10 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
   const allText = area.steps.map((s) => s.text).join("\n");
   const leftover = isLastOfArea ? area.cards.filter((cid) => !allText.includes(`⟦카드 ${cid}⟧`) && !new RegExp(`⟦카드\\s*${cid.replace(/\./g, "\\.")}\\s*⟧`).test(allText)) : [];
   const nextSlot = slots[atIdx + 1];
-  const nextLabel = nextSlot?.step ? (nextSlot.ai === cur.ai ? nextSlot.step.title : `${nextSlot.area.title}`) : nextArea ? nextArea.title : "";
+  // 지금 영역을 아직 쓰는 중이면 다음 장 제목을 모른다(다음 영역 이름을 띄우지 않는다)
+  const moreHere = area.status === "writing" && !nextSlot;
+  const nextLabel = nextSlot?.step ? (nextSlot.ai === cur.ai ? nextSlot.step.title : nextSlot.area.title) : !moreHere && nextArea ? nextArea.title : "";
+  const nextKind = nextSlot ? (nextSlot.ai === cur.ai ? "다음 장" : "다음 영역") : moreHere ? "다음 장" : nextArea ? "다음 영역" : "다음 장";
   return (
     <div className="lc3">
       <div className="lc3-bar">
@@ -663,7 +666,7 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
           <button className="lc3-send" disabled={!q.trim() || curLive} aria-label="묻기">↑</button></form> : null}
       </section>
       <div className="lc3-foot">
-        {canNext || curLive || !step ? <button className="lc3-next" disabled={!canNext} onClick={goNext}><span className="small">{nextSlot?.step && nextSlot.ai === cur.ai ? "다음 장" : nextArea ? "다음 영역" : "다음 장"}</span>{nextLabel ? <b><Rich text={nextLabel.replace(/\(.*?\)/g, "").trim()} /></b> : null}<span aria-hidden>›</span></button>
+        {canNext || curLive || !step ? <button className="lc3-next" disabled={!canNext} onClick={goNext}><span className="small">{moreHere ? "다음 장 쓰는 중" : nextKind}</span>{nextLabel ? <b><Rich text={nextLabel.replace(/\(.*?\)/g, "").trim()} /></b> : null}<span aria-hidden>›</span></button>
           : <span className="small muted">강의 끝</span>}
       </div>
     </div>);
