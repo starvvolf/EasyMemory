@@ -1049,3 +1049,6 @@ html .dejipgi .sb-handle:hover{opacity:1}
    (2026-11-06 사용자 "사이드바 높이를 상태 표시줄에 안 걸리게"). 닫기(→) 버튼이 X 밑에 숨지 않게. */
 :root[data-shell="desktop"] .dejipgi .sb{top:env(titlebar-area-height,40px)}
 .dejipgi .study-sub{margin:22px 0 8px;font-size:15px}
+/* 11/11 React: 알림(예전엔 바닐라가 style을 직접 붙였다) · 머리 단추 자리 */
+.dejipgi #toast.toast-msg{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:10px;font-size:13.5px;max-width:calc(100% - 32px);z-index:9;box-shadow:var(--shadow)}
+.dejipgi .shell-tools{display:contents}
