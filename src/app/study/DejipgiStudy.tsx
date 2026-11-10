@@ -471,11 +471,13 @@ export default function DejipgiStudy() {
         return (await import("katex")).default;
       },
       // 지식창 · 코드 · 일정: React screens mounted into hosts the vanilla app keeps across re-renders, like the flow canvas.
-      mountView(name: "knowledge" | "code" | "plan" | "web" | "start" | "today" | "map" | "project" | "create", host: HTMLElement, props: Record<string, unknown>) {
+      mountView(name: "knowledge" | "code" | "plan" | "web" | "start" | "today" | "map" | "project" | "create" | "materials" | "session" | "records" | "summary" | "archive", host: HTMLElement, props: Record<string, unknown>) {
         let root: import("react-dom/client").Root | null = null, gone = false;
         const load = { knowledge: () => import("./workspace/KnowledgeTabs"), code: () => import("./workspace/CodeStudy"), plan: () => import("./workspace/PlanView"),
           web: () => import("./workspace/WebStudy"), start: () => import("./workspace/NewStudy"), today: () => import("./workspace/TodayBoard"), map: () => import("./workspace/MaterialMap"),
-          project: () => import("./workspace/ProjectStudy"), create: () => import("./workspace/NewMaterial") }[name]();
+          project: () => import("./workspace/ProjectStudy"), create: () => import("./workspace/NewMaterial"),
+          materials: () => import("./workspace/MaterialList"), session: () => import("./workspace/PracticeSession"), records: () => import("./workspace/StudyRecords"),
+          summary: () => import("./workspace/OnePageSummary"), archive: () => import("./workspace/ArchiveView") }[name]();
         void Promise.all([import("react-dom/client"), load]).then(([{ createRoot }, mod]) => {
           if (gone) return;
           root = createRoot(host);

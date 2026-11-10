@@ -787,6 +787,11 @@ function renderKnowledgeLegacy(){
 }
 /* 지식창 · 코드 · 일정 hosts: made once, kept across re-renders (like the flow canvas), so their state survives. */
 const viewHosts = {};
+// 11/11 React로 옮기는 동안의 다리(workspace/bridge.ts): render()가 끝나면 bump()로 React 화면에 다시 그리라고 알린다.
+const ui = { v:0, subs:new Set(),
+  subscribe: (fn) => { ui.subs.add(fn); return () => { ui.subs.delete(fn); }; },
+  version: () => ui.v,
+  bump(){ ui.v++; for (const fn of ui.subs) fn(); } };
 function viewHost(name, props){
   if (!viewHosts[name]){ const el = h("div", { class:`view-host view-${name}` }); viewHosts[name] = { el, stop: env.mountView(name, el, props) }; }
   return viewHosts[name].el;
@@ -920,8 +925,21 @@ function renderArchive(){
       h("button", { class:"btn small ghost", onclick: () => restoreArchived([e.id]) }, "꺼내기")))) : h("p", { class:"muted", text:"비어 있어요." })));
   return wrap;
 }
+/* 11/11 보관함을 React로(workspace/ArchiveView.tsx). */
+const archiveApi = {
+  snapshot(){
+    if (!env.archive) return { off:true, loading:false, entries:[] };
+    if (S.archive.entries === null){ if (!S.archive.loading){ S.archive.loading = true; loadArchive().finally(() => { S.archive.loading = false; }); } return { off:false, loading:true, entries:[] }; }
+    return { off:false, loading:false, entries:S.archive.entries.slice().sort((a, b) => String(a.title).localeCompare(String(b.title), "ko", { numeric:true })).map(e => ({ id:e.id, title:e.title, reason:e.reason || "" })) };
+  },
+  restore: (ids) => restoreArchived(ids),
+  tidy: () => tidyExperiments(false),
+};
 function render(){
   const app = document.getElementById("app");
+  // 11/11 React 화면은 다시 그릴 때 같은 칸(viewHost)을 떼었다 다시 붙인다. 떼는 순간 입력칸 커서가 풀리므로, 그 칸에 있던 커서는 다시 둔다.
+  const was = document.activeElement, keep = was && was !== document.body && app.contains(was) && was.closest(".view-host") ? was : null;
+  const caret = keep && typeof keep.selectionStart === "number" ? [keep.selectionStart, keep.selectionEnd] : null;
   app.replaceChildren();
   const bar = S.view !== "create" && !(S.session && S.session.phase === "ask") ? hideSuggestBar() : null;
   if (bar) app.append(bar);
@@ -931,11 +949,11 @@ function render(){
   else if (S.view === "project") app.append(studyNav("project"), env.mountView ? viewHost("project", {}) : h("div", { class:"panel small muted", text:"실습은 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "web") app.append(studyNav("web"), env.mountView ? viewHost("web", {}) : h("div", { class:"panel small muted", text:"웹 글 공부는 로컬 실험 모드에서 쓸 수 있어요." }));
   // "새 공부 시작" 화면(NewStudy)은 11/9 사용자 "그 화면도 없애고"로 뺐다. 예전 링크는 자료 갈래로.
-  else if (S.view === "start") app.append(studyNav("practice"), renderHome());
+  else if (S.view === "start") app.append(studyNav("practice"), env.mountView ? viewHost("materials", { ui, api:materialsApi }) : renderHome());
   else if (S.view === "plan") app.append(env.mountView ? viewHost("plan", {}) : h("div", { class:"panel small muted", text:"기록은 로컬 실험 모드에서 쓸 수 있어요." }));
   else if (S.view === "bench") app.append(renderBench());
-  else if (S.view === "archive") app.append(renderArchive());
-  else if (S.view === "practice"){ if (S.session) app.append(renderSession()); else app.append(studyNav("practice"), renderHome(), ...(env.mountView ? [h("h3", { class:"study-sub", text:"웹 글" }), viewHost("web", {})] : [])); }
+  else if (S.view === "archive") app.append(env.mountView ? viewHost("archive", { ui, api:archiveApi }) : renderArchive());
+  else if (S.view === "practice"){ if (S.session) app.append(env.mountView ? viewHost("session", { ui, api:sessionApi }) : renderSession()); else app.append(studyNav("practice"), env.mountView ? viewHost("materials", { ui, api:materialsApi }) : renderHome(), ...(env.mountView ? [h("h3", { class:"study-sub", text:"웹 글" }), viewHost("web", {})] : [])); }
   else if (S.view === "create") app.append(h("div", { class:"study-nav" }, h("button", { class:"btn ghost small", onclick: () => setView("practice") }, "← PDF 자료"), h("span", { class:"small muted", text:"PDF · 강의 자료 넣기" })),
     // 11/11 React로 옮긴 첫 화면(workspace/NewMaterial.tsx). ChatGPT 연결 안내는 여기(바닐라)가 위에 그린다. React가 없으면 예전 화면.
     ...(env.mountView ? [accountNote() || h("span"), viewHost("create", { engineReady: !!engine, devEngines: location.port === "3002" || /[?&]engines=1/.test(location.search),
@@ -945,14 +963,16 @@ function render(){
     app.append(renderReader()); dockChat(typing); requestAnimationFrame(drawPage); if (Chat.isOpen()) Chat.paint(); paintDrawer();
     if (overlayCheck()){
       app.append(h("div", { class:"checklayer", role:"dialog", "aria-modal":"true", "aria-label":`p.${S.session.page} 확인 문제`,
-        onclick: (e) => { if (e.target === e.currentTarget) closeCheck(); } }, h("div", { class:"checkbox" }, renderSession())));
+        onclick: (e) => { if (e.target === e.currentTarget) closeCheck(); } }, h("div", { class:"checkbox" }, env.mountView ? viewHost("session", { ui, api:sessionApi }) : renderSession())));
       const f = app.querySelector(".checklayer [data-autofocus]");
       if (f && !f.disabled && !app.querySelector(".checklayer").contains(document.activeElement)) f.focus({ preventScroll:true });
     }
   }
-  else if (S.view === "summary") app.append(renderSummary());
-  else app.append(renderRecords());
+  else if (S.view === "summary") app.append(env.mountView ? viewHost("summary", { ui, api:summaryApi }) : renderSummary());
+  else app.append(env.mountView ? viewHost("records", { ui, api:recordsApi }) : renderRecords());
   emitContext();
+  if (keep && keep.isConnected && document.activeElement !== keep){ keep.focus({ preventScroll:true }); if (caret) try{ keep.setSelectionRange(caret[0], caret[1]); }catch(e){} }
+  ui.bump();
   if (S.view === "practice" && S.session){
     const f = app.querySelector("[data-autofocus]");
     if (f && !f.disabled && (document.activeElement === document.body || !app.contains(document.activeElement))) f.focus({ preventScroll:true });
@@ -1233,6 +1253,75 @@ function deckCard(d, growing){
     growing.has(d.id) ? h("div", { style:"grid-column:1/-1" }, pendingNote(growing.get(d.id))) : null
   );
 }
+
+/* 11/11 PDF 자료 목록을 React로(workspace/MaterialList.tsx): 위 renderHome과 같은 값을 그림 없이 넘긴다. */
+function pendingView(d){
+  const p = d.pending;
+  let text = p.message || PENDING_LABEL[p.status] || "";
+  if (p.status === "paused" && /호출 수\((\d+)\)/.test(text)) text = `만들다 멈췄어요. 한 번에 AI를 부를 수 있는 횟수(${text.match(/호출 수\((\d+)\)/)[1]}번)를 다 썼어요. ‘이어 만들기’를 누르면 멈춘 곳부터 다시 만들어요 (AI 사용량이 들어요).`;
+  const goals = p.status === "confirm" && p.objectives && p.objectives.length ? {
+    chosen: [...(p.chosen || [])], confirming: !!p.confirming,
+    objectives: p.objectives.map(o => ({ id:o.id, section:o.section || "", part:o.part || "", statement:o.statement || "", support:o.importance === "support", recall:o.recall || "" })) } : null;
+  return {
+    id:d.id, title:d.title, sourceName:d.sourceName || "", status:p.status, label:PENDING_LABEL[p.status] || "준비 중", map:genDeck(d.id),
+    readPage:d.lastPage || p.from || 1, lastPage:d.lastPage || 0,
+    note: {
+      goals, headline: `문제 준비 중 · ${p.message || PENDING_LABEL.confirm}`,
+      text: p.status === "failed" ? `문제 만들기 실패 · ${text}` : p.status === "cards" ? text : p.status === "authoring" ? `문제 준비 중 · ${text}` : p.status === "paused" ? text : `준비 중 · ${text}`,
+      failed: p.status === "failed", making: !!p.making,
+      canQuestions: p.status === "cards" && !!(engine && engine.questions),
+      canConnect: p.status === "paused" && !!(account && S.account && S.account.show && !S.account.ready),
+      canResume: p.status === "paused" && !!(engine && engine.resume),
+      canRestart: p.status === "failed", canRemove: p.status === "failed" || p.status === "paused" },
+  };
+}
+function deckView(d, growing){
+  const c = deckCounts(d);
+  return { id:d.id, title:displayTitle(d).replace(/ · 기출형/, ""), pastExam:!!d.pastExam, objectives:d.objectives.length, items:d.items.length,
+    counts:c, skipped:(d.skipped || []).map(x => `${x.questionId}: ${x.reason}`), map:genDeck(d.id), lastPage:d.lastPage || 0, firstPage:firstPage(d),
+    growing: growing.has(d.id) ? pendingView(growing.get(d.id)) : null };
+}
+const materialsApi = {
+  snapshot(){
+    const all = Object.values(S.decks).sort((a,b) => (a.example?1:0) - (b.example?1:0) || b.createdAt - a.createdAt);
+    const pendings = all.filter(d => d.pending), decks = all.filter(d => !d.pending);
+    let due = 0, fresh = 0;
+    decks.forEach(d => { const c = deckCounts(d); due += c.due; fresh += Math.min(c.fresh, 10); });
+    const plan = decks.some(d => !d.example) ? todayPlan() : null, todayLeft = plan ? plan.queue.length : 0;
+    const growing = new Map(pendings.filter(p => p.pending.artifactId && S.decks[p.pending.artifactId]).map(p => [p.pending.artifactId, p]));
+    const matKey = (x) => looseText(String(x.sourceName || x.title || "").replace(/\.pdf$/i, "").replace(/\s*\(\d+\)$/, "").replace(/\s*·\s*p\.[\d–-]+.*$/, ""));
+    const realNames = new Set(decks.map(matKey));
+    const joined = new Map(), loose = [];
+    for (const d of pendings){
+      if (d.pending.artifactId && growing.has(d.pending.artifactId)) continue;
+      if (d.pending.status === "cards" && realNames.has(matKey(d))){ const k = matKey(d); if (!joined.has(k)) joined.set(k, []); joined.get(k).push(d); continue; }
+      loose.push(pendingView(d));
+    }
+    const byMat = new Map();
+    for (const d of decks.slice().sort(byTitle)){ const k = planKey(d); if (!byMat.has(k)) byMat.set(k, []); byMat.get(k).push(d); }
+    const mats = [...byMat.entries()].map(([k, list]) => {
+      const extra = joined.get(matKey(list[0])) || [];
+      return { key:"m:" + k, name:materialName(list), open:Fold.is("m:" + k), count:list.length + extra.length,
+        due:list.reduce((n, d) => n + deckCounts(d).due, 0), fresh:list.reduce((n, d) => n + deckCounts(d).fresh, 0),
+        extra:extra.map(pendingView), decks:list.map(d => deckView(d, growing)) };
+    }).sort((a, b) => a.name.localeCompare(b.name, "ko", { numeric:true }));
+    return { todayLeft, due, fresh, chunk:chunkSize(), pendings:pendings.length, decks:decks.length, loose, mats, lib:{ status:S.lib.status, error:S.lib.error || "" } };
+  },
+  startToday: () => startToday(),
+  startAll: () => startSession(null),
+  practice: (id) => startSession(id, true),
+  records: (id) => { S.recordsDeck = id; setView("records"); },
+  map: (id) => { const d = S.decks[id]; if (d) MaterialMapView.open(d); },
+  read: (id, page) => openReader(id, page),
+  fold: (key) => Fold.toggle(key),
+  toggleGoal: (id, gid) => { const d = S.decks[id]; if (!d) return; const p = d.pending, chosen = new Set(p.chosen || []); p.chosen = chosen.has(gid) ? [...chosen].filter(x => x !== gid) : [...chosen, gid]; savePending(); render(); },
+  confirmGoals: (id) => { const d = S.decks[id]; if (d) confirmGoals(d); },
+  makeQuestions: (id) => { const d = S.decks[id]; if (d) makeQuestions(d); },
+  connect: () => connectAccount(),
+  resume: (id) => { const d = S.decks[id]; if (d) resumeMaterial(d); },
+  restart: (id) => { const d = S.decks[id]; if (d) restartMaterial(d); },
+  remove: (id) => { const d = S.decks[id]; if (d) removePending(d); },
+};
 
 /* ----- session ----- */
 function shuffle(a){ const b = a.slice(); for (let i = b.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
@@ -1607,6 +1696,93 @@ function renderSession(){
   card.append(act);
   return h("div", null, top, card);
 }
+/* 11/11 문제 풀기를 React로(workspace/PracticeSession.tsx): 위 renderSession·renderSessionEnd와 같은 값과 동작. */
+function sessionFbAct(key, label){
+  const s = S.session; s.fb = s.fb || {}; s.fbPick = s.fbPick || {};
+  if (s.fb[key]) return;
+  const decks = [...new Set(s.queue.map(q => q.deck))].map(id => S.decks[id]).filter(Boolean);
+  const minutes = prefs().dailyMinutes || (S.rules && S.rules.dailyMinutes) || 90;
+  const supportOf = (d) => (d.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").length;
+  let msg = "";
+  if (key === "amount"){
+    const delta = (FEEDBACK.amount.find(x => x[0] === label) || [0, 0])[1];
+    if (!delta) msg = "지금 분량을 유지해요.";
+    else { const next = Math.min(300, Math.max(20, minutes + delta)); prefs().dailyMinutes = next; Store.savePlan(S.plan);
+      ledger({ deck:{ title:"전체" }, signal:`분량: ${label}`, action:`하루 ${minutes}분 → ${next}분`, cause:"분량" });
+      msg = `하루 ${minutes}분 → ${next}분. 오늘 할 것을 다시 계산했어요.`; }
+  } else if (key === "repeat"){
+    const k = (FEEDBACK.repeat.find(x => x[0] === label) || [0, 1])[1];
+    const cur = prefs().intervalScale || 1; const next = Math.round(Math.min(2, Math.max(0.5, cur * k)) * 100) / 100; prefs().intervalScale = next; Store.savePlan(S.plan);
+    ledger({ deck:{ title:"전체" }, signal:`간격: ${label}`, action:`복습 간격 ×${cur} → ×${next}`, cause:"간격" });
+    msg = `복습 간격 ×${next}. 다음에 맞히는 문제부터 적용돼요.`;
+  } else if (key === "content" && label === "지엽"){
+    let n = 0;
+    for (const d of decks){ if (!supportOf(d)) continue; (prefs().detail || (prefs().detail = {}))[planKey(d)] = "core"; n++; }
+    for (const d of decks) ledger({ deck:d, signal:"내용: 너무 꼼꼼·지엽적", action: supportOf(d) ? "보조 목표 빼고 핵심만" : "바꿀 보조 목표 없음", cause:"지엽" });
+    Store.savePlan(S.plan); for (const d of decks) applyFilters(d);
+    msg = n ? `자료 ${n}개를 ‘핵심만’으로 바꿨어요. 정리 탭에서 되돌릴 수 있어요.` : "보조 목표가 따로 없는 자료예요. 문제의 ‘너무 지엽적’으로 하나씩 빼 주세요.";
+  } else if (key === "content"){
+    for (const d of decks) ledger({ deck:d, signal:"내용: 빠진 게 많아요", action:"문제 없는 쪽을 정리 탭에 표시", cause:"빠뜨림" });
+    const name = decks.length ? subjectOf(decks[0]) : ""; setTimeout(() => openSummary(name), 900);
+    msg = "정리 탭에서 문제가 없는 쪽을 보여 드릴게요. 빠진 쪽을 누르면 기록돼요.";
+  }
+  s.fbPick[key] = label; s.fb[key] = msg; render();
+}
+const sessionApi = {
+  snapshot(){
+    const s = S.session; if (!s) return null;
+    if (s.phase === "done"){
+      const r = s.results;
+      const next = Object.values(S.decks).flatMap(d => Object.values(d.sched).filter(x => x.seen).map(x => x.due)).filter(t => t > now()).sort((a,b) => a-b)[0];
+      const todayLeft = s.mode === "today" ? ((todayPlan() || { queue:[] }).queue.length) : 0;
+      const weakLeft = s.mode === "weak" ? weakList(s.subject ? decksOf(s.subject) : realDecks()).length : 0;
+      return { done:true, mode:s.mode, page:s.page, from:s.from || "", subject:s.subject || "",
+        good:r.filter(x => x.outcome === "correct").length, bad:r.filter(x => x.outcome === "wrong").length, help:r.filter(x => x.outcome === "assisted").length, mid:r.filter(x => x.outcome === "unsure").length, n:r.length,
+        next: next ? fmtWhen(next) : "", todayLeft, weakLeft, mapBack: s.mode === "check" && genDeck(s.queue[0].deck),
+        fb: s.mode !== "check" && r.length ? { picked:{ ...(s.fbPick || {}) }, said:{ ...(s.fb || {}) }, amount:FEEDBACK.amount.map(x => x[0]), repeat:FEEDBACK.repeat.map(x => x[0]) } : null };
+    }
+    const { deck, item } = curRef(); const c = s.cur;
+    const obj = deck.objectives.find(o => o.id === item.objectiveId);
+    const q = s.queue[s.i];
+    const times = deck.events.filter(e => e.item === item.id && e.override).length;
+    const numeric = /^[\s\d().,+\-−*/×÷^°√πθ=<>≤≥]+$|^\$/.test(String((item.accepted && item.accepted[0]) || item.answerText || item.answer || ""));
+    return { done:false, i:s.i, total:s.queue.length, phase:s.phase, mode:s.mode, overlay:!!s.overlay, page:s.page,
+      reason: q.reason && REASON[q.reason] ? REASON[q.reason] : null, retry:!!q.retry,
+      deck:{ id:deck.id, title:displayTitle(deck).replace(/ · 기출형/, ""), pastExam:!!deck.pastExam },
+      item, format:formatLabel(item), objective: obj ? obj.statement : "", numeric,
+      assetUrl: (path) => env.assetUrl ? env.assetUrl(deck.id, path) : "",
+      cur:{ pick:c.pick, text:c.text, order:c.order.slice(), pool:c.pool.slice(), optOrder:c.optOrder.slice(), verdict:c.verdict, overridden:!!c.overridden, selfJudged:!!c.selfJudged,
+        feedback:c.feedback || "", reporting:!!c.reporting, reported: c.reported || (deck.reported && deck.reported[item.id] ? deck.reported[item.id].reason : ""),
+        key:c.itemKey + ":" + s.i },
+      quickFix: item.format === "value" && c.overridden && c.text.trim() && !c.fixed ? { times, card: times >= rule("cardAfterOverrides", 2) } : null,
+      reportReasons: REPORT_REASONS };
+  },
+  pick: (oi) => { S.session.cur.pick = oi; render(); },
+  setText: (t) => { S.session.cur.text = t; ui.bump(); },
+  orderAdd: (k) => { const c = S.session.cur; const si = c.pool.splice(k, 1)[0]; c.order.push(si); render(); },
+  orderRemove: (k) => { const c = S.session.cur; const si = c.order.splice(k, 1)[0]; c.pool.push(si); render(); },
+  submit: () => submitAnswer(), dontKnow: () => dontKnow(), peek: () => peek(), showCard: () => showCard(),
+  rate: (r) => rateCard(r), judge: (ok) => judgeSelf(ok), override: () => overrideCorrect(), next: () => nextItem(),
+  asCard: () => { const c = S.session.cur; c.asChoice = null; c.optOrder = []; c.pick = null; render(); },
+  leave: () => leaveSession(), close: () => closeCheck(),
+  source: () => { const s = S.session; const { deck, item } = curRef();
+    if (s.overlay){ const pg = item.page, oid = item.objectiveId; closeCheck(); S.reader.active = oid; if (S.reader.page !== pg) goPage(pg); else render(); } else openReader(deck.id, item.page, item.objectiveId); },
+  fixAccept: () => { const { deck, item } = curRef(); const c = S.session.cur; const answer = c.text.trim(); c.fixed = true; patchItem(deck, { kind:"accept", itemId:item.id, answer }, undefined, `‘${answer}’도 정답으로 쳐요.`); },
+  fixCard: () => { const { deck, item } = curRef(); const c = S.session.cur; const times = deck.events.filter(e => e.item === item.id && e.override).length; c.fixed = true;
+    patchItem(deck, { kind:"card", itemId:item.id }, { at:stamp(), deck:deck.title, item:item.id, objective:item.objectiveId, signal:`내 답도 맞아요 ${times}번`, action:"떠올리기 카드로 바꿈", cause:"형식선택" }, "떠올리기 카드로 바꿨어요. 기록 탭 ‘고친 것’에서 되돌릴 수 있어요."); },
+  fbNarrow: () => { const { deck, item } = curRef(); S.session.cur.feedback = "목표를 뺐어요. 비슷한 게 있으면 위에 보여요."; hideObjective(deck, item.objectiveId, "지엽"); },
+  fbEasy: () => { const { deck, item } = curRef(); const s = schedOf(deck, item.id); s.box = INTERVALS.length - 1; s.due = now() + gap(s.box); s.easy = true; Store.save(deck);
+    ledger({ deck, item, signal:"너무 쉬워요", action:"가장 긴 복습 간격으로", cause:"너무쉬움" }); S.session.cur.feedback = `${fmtWhen(s.due)}에 다시 나와요.`; render(); },
+  reporting: (on) => { S.session.cur.reporting = on; render(); },
+  report: (r) => reportItem(r),
+  sessionFb: (key, label) => sessionFbAct(key, label),
+  toMap: () => { const d = S.decks[S.session.queue[0].deck]; S.session = null; setView("practice"); if (d) MaterialMapView.open(d); },
+  toList: () => { S.session = null; setView("practice"); },
+  nextPage: () => { const d = S.session.queue[0].deck, pg = S.session.page; S.session = null; openReader(d, nextPageWithItems(S.decks[d], pg) || pg); },
+  backPage: () => { const d = S.session.queue[0].deck, pg = S.session.page; S.session = null; openReader(d, pg); },
+  continueToday: () => startToday(),
+  records: () => { S.session = null; setView("records"); },
+};
 /* 그만하기·처음으로 (2026-11-02 A, 점검_UIUX화면연결 2번): back to the screen the practice was started from (오늘 → 오늘). */
 function leaveSession(){
   const back = S.session && S.session.from;
@@ -3872,6 +4048,88 @@ function renderSummary(){
     h("span", { style:"--c:var(--line-strong)", text:"안 풀어봄" })));
   return wrap;
 }
+/* 11/11 한 장 정리를 React로(workspace/OnePageSummary.tsx): renderSummary와 같은 값. */
+const summaryApi = {
+  snapshot(){
+    const all = Object.values(S.decks).filter(d => !d.pending);
+    const mats = all.filter(d => !d.example).sort(byTitle);
+    if (S.sum.deckId && !S.decks[S.sum.deckId]) S.sum.deckId = "";
+    const decks = S.sum.deckId ? [S.decks[S.sum.deckId]] : mats;
+    let total = 0, weak = 0, fresh = 0;
+    const per = decks.map(d => {
+      const secs = summarySections(d);
+      const st = new Map(); let asked = new Map();
+      if (planner){ try{ const list = (NT.src[d.sourceCatalogId] && NT.src[d.sourceCatalogId].list) || []; for (const id of planner.asked(d, list.map(n => ({ page:n.page, quote:n.quote, askedAt:n.askedAt, kind:n.kind })))) asked.set(id, list.filter(n => (d.objectives.find(o => o.id === id)?.pages || []).includes(n.page)).map(n => n.quote)); }catch(e){ asked = new Map(); } }
+      for (const sec of secs) for (const o of sec.objectives){ const v = objectiveState(d, o.id); st.set(o.id, v); total++; if (v === "weak") weak++; else if (v === "new") fresh++; }
+      const supportN = (d.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").length;
+      const coreOnly = !!(S.plan.prefs && S.plan.prefs.detail && S.plan.prefs.detail[planKey(d)] === "core");
+      let gaps = [];
+      if (Array.isArray(d.outline) && d.outline.length){
+        const covered = new Set(d.outline.flatMap(sec => sec.objectives).flatMap(o => o.pages || []));
+        gaps = [...new Set(d.outline.flatMap(sec => sec.pages || []))].filter(n => !covered.has(n)).sort((a, b) => a - b).slice(0, 40).map(n => ({ n, marked:S.gapMarks.has(d.id + ":" + n) }));
+      }
+      return { id:d.id, title:displayTitle(d), count:st.size, weak:[...st.values()].filter(v => v === "weak").length, supportN, coreOnly, gaps, readPage:d.lastPage || firstPage(d),
+        secs: secs.map(sec => ({ title:sec.title, pages: sec.pages && sec.pages.length ? (sec.pages.length > 1 ? `p.${sec.pages[0]}–${sec.pages[sec.pages.length - 1]}` : `p.${sec.pages[0]}`) : "",
+          objectives: sec.objectives.filter(o => !S.sum.weakOnly || st.get(o.id) === "weak" || asked.has(o.id)).map(o => ({ id:o.id, part:o.part || "", statement:o.statement, recall:o.recall || "", quote:o.quote || "",
+            state:st.get(o.id) || "none", asked: asked.has(o.id) ? asked.get(o.id) : null, support:o.importance === "support", pages:o.pages || [],
+            covered: S.sum.hide && !S.sum.shown.has(d.id + ":" + o.id) })) })).filter(sec => sec.objectives.length) };
+    });
+    return { any:all.length > 0, deckId:S.sum.deckId || "", mats:mats.map(d => ({ id:d.id, title:displayTitle(d) })), total, weak, fresh, weakQs:Math.min(weakList(decks).length, WEAK_MAX),
+      weakOnly:!!S.sum.weakOnly, hide:!!S.sum.hide, decks:per, states:SUM_STATE };
+  },
+  pickDeck: (id) => { S.sum.deckId = id; S.sum.shown = new Set(); render(); },
+  toggle: (key) => { S.sum[key] = !S.sum[key]; S.sum.shown = new Set(); render(); },
+  weak: () => startWeak(""),
+  print: () => window.print(),
+  coreOnly: (id) => { const d = S.decks[id]; if (!d) return; const det = prefs().detail || (prefs().detail = {}); const on = det[planKey(d)] === "core";
+    const supportN = (d.outline || []).flatMap(sec => sec.objectives).filter(o => o.importance === "support").length;
+    if (on) delete det[planKey(d)]; else det[planKey(d)] = "core";
+    ledger({ deck:d, signal: on ? "정리: 보조 목표 다시 넣기" : "정리: 핵심만", action: on ? "보조 목표 포함" : `보조 ${supportN}개 뺌`, cause:"지엽" });
+    applyFilters(d); savePrefs(); },
+  read: (id, page, oid) => openReader(id, page, oid),
+  gap: (id, n) => { const d = S.decks[id]; if (!d) return; const key = id + ":" + n; if (S.gapMarks.has(key)){ openReader(id, n); return; }
+    S.gapMarks.add(key); ledger({ deck:d, signal:`p.${n} 내용이 빠짐`, action:"빠뜨린 쪽으로 기록(다시 만들기 후보)", cause:"빠뜨림", detail:`p.${n}` }); toast(`p.${n}을 빠진 쪽으로 기록했어요. 다시 누르면 그 쪽을 열어요.`); render(); },
+  reveal: (id, oid) => { S.sum.shown.add(id + ":" + oid); render(); },
+};
+/* 11/11 학습 기록을 React로(workspace/StudyRecords.tsx): renderRecords와 같은 값. */
+const recordsApi = {
+  snapshot(){
+    const decks = Object.values(S.decks).filter(d => !d.pending).sort((a,b) => (a.example?1:0) - (b.example?1:0) || b.createdAt - a.createdAt);
+    if (!decks.length) return null;
+    if (!S.recordsDeck || !S.decks[S.recordsDeck]) S.recordsDeck = decks[0].id;
+    const deck = S.decks[S.recordsDeck];
+    const graded = deck.events.filter(e => e.kind === "submit" && !e.assisted && !e.gaveUp && !e.afterReading);
+    const st = deck.items.map(it => itemStatus(deck, it));
+    const cnt = (k) => st.filter(x => x === k).length;
+    const t = now();
+    const fixes = (S.patches && S.patches[deck.id]) || [];
+    return { id:deck.id, decks:decks.map(d => ({ id:d.id, title:displayTitle(d) })), deleting:S.deleting === deck.id, example:!!deck.example, engine:!!engine,
+      counts:{ good:cnt("recent") + cnt("steady"), review:cnt("review"), assisted:cnt("assisted"), read:cnt("readcheck"), fresh:cnt("new") },
+      acc: graded.length ? Math.round(graded.filter(e => e.correct).length / graded.length * 100) : null, graded:graded.length,
+      rows: deck.items.map((it, idx) => {
+        const o = deck.objectives.find(x => x.id === it.objectiveId);
+        const evs = deck.events.filter(e => e.item === it.id && e.kind !== "reveal" && e.kind !== "report").slice(-14);
+        const sc = deck.sched[it.id]; const status = STATUS[st[idx]];
+        return { id:it.id, title:o ? o.statement : it.prompt, page:it.page, format:FORMAT_LABEL[it.format], objectiveId:it.objectiveId || "", status:status.label, cls:status.cls,
+          trail: evs.map(e => { const ok = e.kind === "submit" ? e.correct : e.rating === "remembered"; return { cls: e.assisted ? "h" : e.afterReading ? (ok ? "c" : "r") : e.kind === "rate" ? (ok ? "s" : "r") : ok ? "g" : "r", t:new Date(e.t).toLocaleString("ko-KR") }; }),
+          next: sc && sc.seen ? (sc.due <= t ? "지금" : fmtWhen(sc.due)) : "–" };
+      }),
+      hidden: deck.objectives.filter(o => (deck.hidden || []).includes(o.id)).map(o => ({ id:o.id, statement:o.statement, pages:o.pages.join(",") })),
+      reported: (deck.allItems || []).filter(it => deck.reported && deck.reported[it.id]).map(it => ({ id:it.id, prompt:it.prompt, page:it.page, reason:deck.reported[it.id].reason })),
+      fixes: fixes.map(f => { const it = (deck.allItems || []).find(x => x.id === f.itemId); return { id:f.id, label: f.kind === "accept" ? `정답 추가 · ${f.answer}` : "떠올리기 카드로",
+        at:new Date(f.at).toLocaleString("ko-KR", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" }), prompt: it ? it.prompt.slice(0, 160) : "" }; }) };
+  },
+  pick: (id) => { S.recordsDeck = id; S.deleting = null; render(); },
+  askReset: (on) => { S.deleting = on ? S.recordsDeck : null; render(); },
+  reset: () => { const deck = S.decks[S.recordsDeck]; deck.events = []; deck.sched = {}; Store.save(deck); S.deleting = null; render(); },
+  read: (page, oid) => openReader(S.recordsDeck, page, oid),
+  unhide: (oid) => { const deck = S.decks[S.recordsDeck]; deck.hidden = deck.hidden.filter(x => x !== oid); applyFilters(deck); Store.save(deck); render(); },
+  unreport: (iid) => { const deck = S.decks[S.recordsDeck]; delete deck.reported[iid]; applyFilters(deck); Store.save(deck); render(); },
+  remake: () => remakeReported(S.decks[S.recordsDeck]),
+  unpatch: async (fid) => { const deck = S.decks[S.recordsDeck]; const f = ((S.patches && S.patches[deck.id]) || []).find(x => x.id === fid); if (!f) return;
+    try{ await env.quality.unpatch(deck.id, f.id, { at:stamp(), deck:deck.title, item:f.itemId, signal:"고친 것 되돌리기", action: f.kind === "accept" ? `정답 추가 취소 ${f.answer}` : "카드 전환 취소", cause: f.kind === "accept" ? "인정답안누락" : "형식선택" });
+      toast("되돌렸어요."); loadPatchList(); await reloadDecks(); render(); }catch(e){ toast("되돌리지 못했어요."); } },
+};
 /* ----- records ----- */
 function renderRecords(){
   const decks = Object.values(S.decks).filter(d => !d.pending).sort((a,b) => (a.example?1:0) - (b.example?1:0) || b.createdAt - a.createdAt);

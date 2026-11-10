@@ -18,7 +18,7 @@ function useKatex() {
   return ready ? katex : null;
 }
 /** One formula, KaTeX html (글꼴·간격이 KaTeX 것). 화면 읽기용 MathML도 함께 붙는다(htmlAndMathml, 스타일이 MathML을 가린다). */
-function TeX({ tex, display = false }: { tex: string; display?: boolean }) {
+export function TeX({ tex, display = false }: { tex: string; display?: boolean }) {
   const k = useKatex();
   if (!k) return <span className={display ? "ws-math ws-math-d" : "ws-math"}>{tex}</span>;
   // 따로 떼어 쓴 식(11/11 사용자 "수식이 위엄이 없음"): 가운데·크게, 분수는 펴서(displayMode)
@@ -127,4 +127,8 @@ export function Rich({ text, className }: { text: string; className?: string }) 
 /** One line inside other text (no paragraph): math and `code` still render (자료 지도 cards, 2026-10-29). */
 export function RichInline({ text }: { text: string }) {
   return <span className="ws-rich-inline">{inline(text.replace(/\s*\n+\s*/g, " "))}</span>;
+}
+/** Several lines, each with its formulas (정답 순서·내가 적은 답처럼 줄바꿈을 살려야 할 때). */
+export function RichLines({ text }: { text: string }) {
+  return <>{String(text ?? "").split("\n").map((l, i) => <Fragment key={i}>{i ? <br /> : null}<RichInline text={l} /></Fragment>)}</>;
 }
