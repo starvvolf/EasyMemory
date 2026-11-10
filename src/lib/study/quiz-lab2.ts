@@ -14,7 +14,7 @@ import { materialMap, type MapCard } from "./material-map.ts";
 import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "./quiz-plan.ts";
 import { loadGoalLinks, makeGoalLinks } from "./goal-links.ts";
 
-export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI"] as const;
+export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture"] as const;
 export type Lab2Method = (typeof LAB2_METHODS)[number];
 const dataDir = () => process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data");
 
@@ -40,6 +40,21 @@ export async function runQuizLab2(id: string, method: Lab2Method) {
   const map = state ? materialMap(state, {}) : null;
   if (!state || !map) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });
   const texts = (state as unknown as { recaller?: { texts?: Record<string, string> } }).recaller?.texts ?? {};
+  if (method === "lecture") {
+    // AI 강의(lecture-lab.ts, 11/10): 여는 말 1번 → 영역 수업 동시
+    const { runLecture } = await import("./lecture-lab.ts");
+    const areas = map.sections.map((x) => { const cards = x.cards.filter((c) => !c.title.startsWith("흐름: ")); return { title: x.title, cards, pages: [...new Set(cards.flatMap((c) => c.pages))].sort((a, b) => a - b) }; }).filter((a) => a.cards.length);
+    const t0 = Date.now();
+    const r = await runLecture(id, areas, texts);
+    const calls = await callsOf(id, t0);
+    const out = { method, id, at: new Date().toISOString(), wall: r.wall, openMs: r.openMs, calls: calls.length, callMs: calls.map((c) => c.ms),
+      tokensIn: calls.reduce((a, c) => a + c.in, 0), tokensOut: calls.reduce((a, c) => a + c.out, 0), cost: calls.reduce((a, c) => a + c.cost, 0),
+      opening: r.opening, lessons: r.lessons };
+    const dir = path.join(dataDir(), "study-gen", id, "quiz-lab2");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, `${method}.json`), JSON.stringify(out, null, 1));
+    return out;
+  }
   if (method === "readCode" || method === "readAI") {
     // 기억 카드 읽기 쉽게(card-read-lab.ts, 11/10)
     const { readCode, readAI } = await import("./card-read-lab.ts");
