@@ -34,6 +34,16 @@ export const QUICK_AI_SYSTEM = `너는 이 강의의 복습 문제를 쓰는 사
 - 안 낼 때: 답이 계산 과정이나 서술이어야 해서 고르기로 바꾸면 핵심이 사라지거나, 그럴듯한 오답이 나오지 않아 너무 쉬워질 때.
 ${COMMON}`;
 
+// 2차(11/11, 1차 결과: 코드 방식은 억지 객관식, AI 방식은 OX로 쏠리고 뻔한 X 문장, 따로 풀기는 카드를 줘서 다 맞힘):
+// 갈래가 있으면 객관식이 먼저, OX는 날카로운 주장 하나일 때만, "반드시·항상"으로 뻔하게 틀린 문장 금지. 따로 풀기는 카드 대신 원문 쪽으로.
+export const QUICK_AI2_SYSTEM = `너는 이 강의의 복습 문제를 쓰는 사람이다. 카드마다 한 번 더 확인할 문제로 객관식 · OX · 안 냄 가운데 하나를 고르고(why에 까닭 한 줄), 골랐으면 쓴다.
+고르는 순서:
+1. 먼저 카드에 갈래가 있는지 본다: 식이나 값의 변형(지수·분모·부호·계수), 부등호나 방향, 목록의 원소, 견주는 대상, 판정·결과의 갈래, 헷갈리는 이웃 용어. 갈래가 있으면 객관식이다. 오답은 그 갈래의 다른 값들로(정답과 같은 꼴, 한 군데만 다르게).
+2. 갈래가 없고, 참·거짓이 한 문장으로 날카롭게 갈리는 주장 하나(규칙의 경계, 원인과 결과의 방향, 학생이 실제로 하는 오해)가 있으면 OX다.
+3. 둘 다 아니면(답이 계산 과정·서술이어야 하거나, 그럴듯한 오답이 나오지 않으면) 안 낸다.
+OX 문장: X 문장은 학생이 실제로 믿을 법해야 한다. "반드시·항상·절대·모든·전혀" 같은 말을 붙여 뻔하게 틀리게 만들지 않는다. 상식만으로 바로 틀린 줄 아는 문장도 쓰지 않는다. O 문장도 카드 문장을 베끼지 않는다.
+${COMMON}`;
+
 /** 코드 규칙: 헷갈림 2개 이상 · 이웃 용어 · 목록 · 비교 → 객관식, 헷갈림 1개 → OX, 그 밖 → 안 냄. */
 export function codeForm(c: MapCard): Form {
   const s = c.shape as { form?: string; neighbors?: string[] } | undefined;
@@ -49,6 +59,7 @@ export function checkItem(it: Item): string[] {
     if (!it.statement.trim()) bad.push("OX 문장 없음");
     if (!/^[OX]$/.test(it.truth.trim())) bad.push("OX 답이 O/X가 아님");
     if (/(그리고|또한|이며|이고)\s/.test(it.statement) && it.statement.length > 70) bad.push("OX에 주장 둘?");
+    if (it.truth.trim() === "X" && /반드시|항상|절대|모든|전혀/.test(it.statement)) bad.push("뻔한 X(반드시·항상)?");
   } else if (it.form === "choice") {
     if (!it.stem.trim()) bad.push("발문 없음");
     if (it.options.length < 3) bad.push("보기가 적음");
@@ -60,25 +71,29 @@ export function checkItem(it: Item): string[] {
   return bad;
 }
 
+const SOLVE_SRC_SYSTEM = `강의 원문 몇 쪽과, 그 내용으로 만든 확인 문제들을 받는다(정답은 가려져 있다). 원문만으로 문제마다 답을 고른다. OX면 "O"/"X", 객관식이면 보기 번호(0부터). 원문으로 답이 하나로 정해지지 않으면 ambiguous true와 까닭.`;
 const SOLVE_SYSTEM = `기억 카드들과, 그 카드로 만든 확인 문제들을 받는다(정답은 가려져 있다). 카드 내용만으로 문제마다 답을 고른다. OX면 "O"/"X", 객관식이면 보기 번호(0부터). 카드로 답이 하나로 정해지지 않으면 ambiguous true와 까닭.`;
 const SOLVE_SCHEMA = S.obj({ answers: S.arr(S.obj({ n: S.int, answer: S.str, ambiguous: { type: "boolean" }, note: S.str })) });
 
-export async function runQuick(id: string, map: MaterialMap, method: "quickCode" | "quickAI") {
+export async function runQuick(id: string, map: MaterialMap, method: "quickCode" | "quickAI" | "quickAI2", texts: Record<string, string> = {}) {
   const t0 = Date.now();
   const sections = map.sections.map((s) => ({ title: s.title, cards: s.cards.filter((c) => !c.title.startsWith("흐름: ")) })).filter((s) => s.cards.length);
   const per = await Promise.all(sections.map(async (sec) => {
     const t = Date.now();
     const plan = method === "quickCode" ? sec.cards.map((c) => `- ${c.id}: ${codeForm(c)}`).join("\n") : "";
     const user = `영역: ${sec.title}\n\n${sec.cards.map(cardText).join("\n\n")}${plan ? `\n\n[카드마다 정한 형식]\n${plan}` : ""}`;
-    const r = await withTrace({ area: "pdf", action: "quiz-quick", ref: id }, () => askJson<{ items: Item[] }>(`lab:${method}`, method === "quickCode" ? QUICK_CODE_SYSTEM : QUICK_AI_SYSTEM, user, SCHEMA, QUICK_MODEL)).catch((e) => ({ items: [] as Item[], error: String(e) }));
+    const r = await withTrace({ area: "pdf", action: "quiz-quick", ref: id }, () => askJson<{ items: Item[] }>(`lab:${method}`, method === "quickCode" ? QUICK_CODE_SYSTEM : method === "quickAI2" ? QUICK_AI2_SYSTEM : QUICK_AI_SYSTEM, user, SCHEMA, QUICK_MODEL)).catch((e) => ({ items: [] as Item[], error: String(e) }));
     const items = (r.items ?? []).filter((x) => sec.cards.some((c) => c.id === x.card));
     // 코드 방식이면 코드가 정한 형식을 따랐는지
     const followed = method === "quickCode" ? items.filter((x) => x.form === codeForm(sec.cards.find((c) => c.id === x.card)!)).length : null;
     // 따로 풀기
     const asked = items.filter((x) => x.form !== "none" && !checkItem(x).length);
     const q = asked.map((x, n) => x.form === "ox" ? `${n}. [OX] ${x.statement}` : `${n}. [객관식] ${x.stem}\n${x.options.map((o, k) => `   ${k}) ${o}`).join("\n")}`).join("\n\n");
-    const solved = asked.length ? await withTrace({ area: "pdf", action: "quiz-quick-solve", ref: id }, () => askJson<{ answers: Array<{ n: number; answer: string; ambiguous: boolean; note: string }> }>("lab:quick-solve", SOLVE_SYSTEM,
-      `[카드]\n${sec.cards.map(cardText).join("\n\n")}\n\n[문제]\n${q}`, SOLVE_SCHEMA, QUICK_MODEL)).catch(() => ({ answers: [] })) : { answers: [] };
+    // 2차는 카드 대신 원문 쪽으로 푼다(카드를 주면 답이 카드에 적혀 있어 다 맞힘)
+    const pages = [...new Set(sec.cards.flatMap((c) => c.pages))].sort((a, b) => a - b);
+    const solveUser = method === "quickAI2" ? `[원문]\n${pages.map((p) => `[p.${p}]\n${texts[p] ?? ""}`).join("\n\n")}\n\n[문제]\n${q}` : `[카드]\n${sec.cards.map(cardText).join("\n\n")}\n\n[문제]\n${q}`;
+    const solved = asked.length ? await withTrace({ area: "pdf", action: "quiz-quick-solve", ref: id }, () => askJson<{ answers: Array<{ n: number; answer: string; ambiguous: boolean; note: string }> }>("lab:quick-solve", method === "quickAI2" ? SOLVE_SRC_SYSTEM : SOLVE_SYSTEM,
+      solveUser, SOLVE_SCHEMA, QUICK_MODEL)).catch(() => ({ answers: [] })) : { answers: [] };
     const graded = asked.map((x, n) => { const a = solved.answers.find((y) => y.n === n); const want = x.form === "ox" ? x.truth.trim() : String(x.correct);
       return { card: x.card, form: x.form, agree: a ? a.answer.trim().replace(/\D*(\d+).*/, "$1").replace(/^([OX]).*/i, (m) => m[0].toUpperCase()) === want : false, ambiguous: a?.ambiguous ?? false, note: a?.note ?? "" }; });
     return { area: sec.title, ms: Date.now() - t, cards: sec.cards.length, items, followed, graded, error: (r as { error?: string }).error };
