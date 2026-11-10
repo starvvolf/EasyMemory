@@ -25,8 +25,10 @@ export const STEP_SYSTEM = `너는 이 강의를 맡은 강사다. 영역 순서
 - 그림: 그림을 보며 설명할 자리에 ⟦그림: 이미지 이름표 | 이 그림에서 볼 것⟧ 한 줄(받은 이름표 그대로). 표는 본문에 표로 옮겨 써도 된다.
 - 마지막은 이 영역에서 손에 쥔 것을 짧게 묶는다. 다음 영역 예고나 "질문 있나요?"는 쓰지 않는다(학생이 화면에서 고른다).
 - 자료에 없는 사실을 지어내지 않는다. 쉬운 말, "~해요" 체, 용어는 "한국어(영어 원어)".`;
-export const ASK_SYSTEM = `너는 이 강의를 맡은 강사다. 강의 도중 학생이 물었다. 지금까지의 수업과 이 영역 쪽들의 원문을 바탕으로, 학생이 막힌 곳만 짧고 쉽게 답한다.
-학생이 무엇을 잘못 알고 있었는지가 보이면 그것을 바로잡는다. 식은 $…$. 그림이 도움이 되면 ⟦그림: 이미지 이름표 | 볼 것⟧. 자료에 없는 사실을 지어내지 않는다. "~해요" 체.`;
+// 질문에 답할 때도 같은 지시문을 쓴다(캐시는 지시문부터 같아야 붙는다, 11/10 실측: 지시문이 다르면 같은 영역 쪽을 보내도 0). 할 일은 tail 맨 끝에.
+const ASK_RULE = `[할 일] 강의 도중 학생이 물었다. 지금까지의 수업과 이 영역 쪽들의 원문을 바탕으로, 학생이 막힌 곳만 짧고 쉽게 답한다.
+학생이 무엇을 잘못 알고 있었는지가 보이면 그것을 바로잡는다. 식은 $…$. 그림이 도움이 되면 ⟦그림: 이미지 이름표 | 볼 것⟧. 강의를 처음부터 다시 하지 않는다.`;
+const STEP_RULE = `[할 일] 지금 영역을 강의한다.`;
 
 type Ask = { q: string; a: string; status: "writing" | "done" | "failed"; at: string };
 type Step = { status: "writing" | "done" | "failed" | "stopped"; text: string; ms?: number; at: string; asks: Ask[] };
@@ -129,7 +131,7 @@ export async function stepCard(id: string, sectionId: string) {
   l.steps[sectionId] = { status: "writing", text: "", at: new Date().toISOString(), asks: l.steps[sectionId]?.asks ?? [] };
   await save(id, l);
   const t = Date.now();
-  void stream(id, `${id}:${sectionId}`, "map:lecture-step", STEP_SYSTEM, user, history(l, sectionId, titles), images, (text, ok, stopped) => {
+  void stream(id, `${id}:${sectionId}`, "map:lecture-step", STEP_SYSTEM, user, `${history(l, sectionId, titles)}\n\n${STEP_RULE}`, images, (text, ok, stopped) => {
     l.steps[sectionId] = { ...l.steps[sectionId], status: ok ? "done" : stopped ? "stopped" : "failed", text, ms: Date.now() - t };
     void save(id, l);
   });
@@ -140,10 +142,10 @@ export async function askCard(id: string, sectionId: string, q: string) {
   if (!step) throw Object.assign(new Error("강의를 들은 영역에서 물을 수 있어요."), { status: 409 });
   const { user, images, titles } = await prefix(id, sectionId);
   const ask: Ask = { q: q.slice(0, 1000), a: "", status: "writing", at: new Date().toISOString() };
-  const tail = `${history(l, sectionId, titles)}\n\n이 영역의 강의:\n${step.text}\n\n[학생 질문] ${ask.q}`;
+  const tail = `${history(l, sectionId, titles)}\n\n이 영역의 강의:\n${step.text}\n\n[학생 질문] ${ask.q}\n\n${ASK_RULE}`;
   step.asks.push(ask);
   await save(id, l);
-  void stream(id, `${id}:${sectionId}:ask`, "map:lecture-ask", ASK_SYSTEM, user, tail, images, (text, ok, stopped) => {
+  void stream(id, `${id}:${sectionId}:ask`, "map:lecture-ask", STEP_SYSTEM, user, tail, images, (text, ok, stopped) => {
     ask.a = text; ask.status = ok || stopped ? "done" : "failed";
     void save(id, l);
   });
