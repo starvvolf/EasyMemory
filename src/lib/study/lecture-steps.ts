@@ -47,7 +47,7 @@ const lectures = new Map<string, LectureSteps>();
 
 type Img = { page: number; label: string; dataUrl: string };
 const imageCache = new Map<string, { at: number; images: Img[] }>();
-async function imagesOf(id: string, pages: number[]): Promise<Img[]> {
+export async function imagesOf(id: string, pages: number[]): Promise<Img[]> {
   const cached = imageCache.get(id) ?? { at: Date.now(), images: [] };
   const need = pages.filter((p) => !cached.images.some((x) => x.page === p) && !(cached as { none?: Set<number> }).none?.has(p));
   if (need.length) {
@@ -70,7 +70,7 @@ async function imagesOf(id: string, pages: number[]): Promise<Img[]> {
 }
 const bare = (s: string) => s.replace(/^\[이미지\]\s*/, "").replace(/\s*\([^)]*\)\s*$/, "").replace(/\s+/g, "").toLowerCase();
 
-async function context(id: string) {
+export async function context(id: string) {
   const state = await loadGen(id);
   const map = state ? materialMap(state, {}) : null;
   if (!state || !map) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });

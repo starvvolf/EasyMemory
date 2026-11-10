@@ -486,9 +486,7 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
 // 강의 (11/10 사용자 "카드 단위로 순서 잡고 그 사이에 학생 개입 들어오면 집어넣으면 되잖아", "기본 강의 순서는 가로로, 학생이 개입해서 새로 알려 주는 건
 // 그 박스 밑으로 세로로"): src/lib/study/lecture-steps.ts. 카드 하나 = 가로로 넘기는 박스 하나(강사의 설명이 흘러나옴), 박스 밑에 묻고 들은 것이 세로로 쌓인다.
 // 다음 카드는 [다음]을 누를 때 부르고, 앞에서 묻고 들은 것을 이어받는다.
-type StepAsk = { q: string; a: string; status: string };
-type StepCard = { id: string; title: string; role: string; cards?: string[]; pages?: number[]; status?: string; text?: string; asks?: StepAsk[] };
-const FIG_MARK = /⟦그림:\s*([^|⟧]+?)\s*\|\s*([^⟧]*?)\s*⟧|⟦카드\s*([^⟧\s]+)\s*⟧/g;
+const FIG_MARK = /⟦그림:\s*([^|⟧]+?)\s*\|\s*([^⟧]*?)\s*⟧|⟦카드\s*([^⟧\s]+)\s*⟧|⟦확인⟧\s*([^\n]*)(?:\n+\s*⟦답⟧\s*([^\n]*))?/g;
 /** $$…$$(여러 줄)를 한 줄 $…$로: Rich는 줄마다 식을 읽는다. */
 const flatMath = (t: string) => t.replace(/\$\$\s*([\s\S]*?)\s*\$\$/g, (_, x: string) => `\n\n$${x.replace(/\s*\n\s*/g, " ")}$\n\n`);
 function LectureFig({ genId, label, says }: { genId: string; label: string; says: string }) {
@@ -553,11 +551,18 @@ function SmoothLecture({ genId, text, live, animate, byId, onPage, onSeen }: { g
   const smooth = useSmoothText(text, typing, live ? undefined : onSeen);
   return <><LectureText genId={genId} text={smooth.text} byId={byId} onPage={onPage} />{live || smooth.behind ? <span className="lc2-caret" /> : null}</>;
 }
+/** 걸음 끝의 스스로 따져 보기(⟦확인⟧ 질문 / ⟦답⟧ 답): 답은 눌러서 본다. */
+function LectureCheck({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return <div className={`lc3-check${open ? " open" : ""}`}><p className="lc3-checkq"><span className="lc3-checktag">확인</span><Rich text={q} /></p>
+    {a ? open ? <p className="lc3-checka"><Rich text={a} /></p> : <button className="lc3-checkbtn" onClick={() => setOpen(true)}>답 보기</button> : null}</div>;
+}
 function LectureText({ genId, text, byId, onPage }: { genId: string; text: string; byId: Map<string, Card>; onPage: (page: number) => void }) {
   const parts: ReactNode[] = []; let last = 0, k = 0;
   for (const m of text.matchAll(FIG_MARK)) {
     if (m.index! > last) parts.push(<RichBlock key={k++} text={flatMath(text.slice(last, m.index))} />);
     if (m[3]) { const c = byId.get(m[3]); if (c) parts.push(<LectureCard key={k++} genId={genId} c={c} onPage={onPage} />); }
+    else if (m[4] !== undefined) parts.push(<LectureCheck key={k++} q={m[4]} a={m[5] ?? ""} />);
     else parts.push(<LectureFig key={k++} genId={genId} label={m[1]} says={m[2]} />);
     last = m.index! + m[0].length;
   }
@@ -565,30 +570,47 @@ function LectureText({ genId, text, byId, onPage }: { genId: string; text: strin
   if (rest.trim()) parts.push(<RichBlock key={k++} text={flatMath(rest)} />);
   return <>{parts}</>;
 }
-// 11/11 사용자 "옆으로 넘어가는 건 좋은데 드래그는 별로. 그냥 넘어가고 이전 건 안 보이게, 앞뒤 <> 버튼으로": 박스는 지금 것 하나만, 넘길 때 옆에서 밀려 들어온다.
+// 11/11 사용자 "옆으로 넘어가는 건 좋은데 드래그는 별로. 그냥 넘어가고 이전 건 안 보이게, 앞뒤 <> 버튼으로": 장은 지금 것 하나만, 넘길 때 옆에서 밀려 들어온다.
+// 11/11 "강의 탭 새 방식으로 연결": src/lib/study/lecture-areas.ts(?v=3). 영역 하나를 강사가 한 흐름으로 쓰고(걸음으로 나눔), 장 하나 = 걸음 하나.
+// 질문은 그 걸음 밑에. 다음 영역은 지금 영역을 다 쓴 뒤 하나만 미리 부른다.
+type L3Ask = { q: string; a: string; status: string };
+type L3Step = { n: number; title: string; text: string; asks: L3Ask[] };
+type L3Area = { id: string; title: string; cards: string[]; status: string | null; steps: L3Step[] };
+type L3Slot = { key: string; ai: number; area: L3Area; step: L3Step | null };
 function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; onPage: (page: number) => void }) {
-  const [list, setList] = useState<StepCard[] | null | undefined>(undefined);
+  const [areas, setAreas] = useState<L3Area[] | null | undefined>(undefined);
   const [error, setError] = useState("");
-  const [at, setAtState] = useState(0);
+  const [atKey, setAtKey] = useState<string | null>(null);
   const [dir, setDir] = useState<"next" | "prev">("next");
   const [q, setQ] = useState("");
-  const [showCard, setShowCard] = useState(false);
-  const [seen, setSeen] = useState<Set<string>>(() => new Set()); // 끝까지 다 흘려 보여 준 박스·답(다시 오면 바로 다 보임)
+  const [seen, setSeen] = useState<Set<string>>(() => new Set()); // 끝까지 흘려 보여 준 글(다시 오면 바로 다 보임)
   const markSeen = (key: string) => setSeen((x) => (x.has(key) ? x : new Set(x).add(key)));
-  const setAt = (n: number) => { setDir(n < at ? "prev" : "next"); setAtState(n); setShowCard(false); };
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
-  const base = `/api/study-map/${genId}/lecture?v=2`;
-  const writing = Boolean(list?.some((c) => c.status === "writing" || c.asks?.some((a) => a.status === "writing")));
-  const load = () => call<{ lecture: { cards: StepCard[] } }>(base).then((r) => { setList(r.lecture.cards); return r.lecture.cards; }).catch((e) => { setError(errorText(e)); setList(null); return null; });
-  useEffect(() => { void load().then((l) => { if (l) { const n = l.filter((c) => c.status).length; setSeen(new Set(l.filter((c) => c.status === "done").flatMap((c) => [c.id, ...(c.asks ?? []).map((_, k) => `${c.id}:${k}`)]))); setAtState(Math.max(0, n - 1)); } }); }, [genId]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!writing) return; const t = setTimeout(() => void load(), 500); return () => clearTimeout(t); }); // 쓰는 동안 0.5초마다
-  const post = (body: Record<string, string>) => call(base, body).then(() => load()).catch((e) => setError(errorText(e)));
-  const cur = list?.[at];
-  const canPrev = at > 0;
-  const canNext = Boolean(list && at < list.length - 1 && cur?.status && cur.status !== "writing");
-  const goNext = () => { if (!list || !canNext) return; const n = at + 1; if (!list[n].status) void post({ action: "step", card: list[n].id }); setAt(n); };
-  const goPrev = () => { if (canPrev) setAt(at - 1); };
-  // ← → 키로도 넘긴다(입력 칸에 쓰는 중이면 빼고).
+  const base = `/api/study-map/${genId}/lecture?v=3`;
+  const writing = Boolean(areas?.some((a) => a.status === "writing" || a.steps.some((s) => s.asks.some((x) => x.status === "writing"))));
+  const load = () => call<{ lecture: { areas: L3Area[] } }>(base).then((r) => { setAreas(r.lecture.areas); return r.lecture.areas; }).catch((e) => { setError(errorText(e)); setAreas(null); return null; });
+  const slotsOf = (list: L3Area[]): L3Slot[] => list.flatMap((a, ai): L3Slot[] => a.steps.length ? a.steps.map((s) => ({ key: `${a.id}:${s.n}`, ai, area: a, step: s })) : a.status ? [{ key: `${a.id}:0`, ai, area: a, step: null }] : []);
+  useEffect(() => { void load().then((l) => { if (!l) return; setSeen(new Set(l.filter((a) => a.status === "done").flatMap((a) => a.steps.flatMap((s) => [`${a.id}:${s.n}`, ...s.asks.map((_, k) => `${a.id}:${s.n}:${k}`)])))); const sl = slotsOf(l); if (sl.length) setAtKey(sl[sl.length - 1].key); }); }, [genId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!writing) return; const t = setTimeout(() => void load(), 400); return () => clearTimeout(t); }); // 쓰는 동안 0.4초마다
+  const post = (body: Record<string, unknown>) => call(base, body).then(() => load()).catch((e) => setError(errorText(e)));
+  const slots = areas ? slotsOf(areas) : [];
+  // 걸음 0(아직 첫 걸음 표시가 안 온 영역)에 있다가 첫 걸음이 오면 그 영역의 첫 걸음으로
+  const found = slots.findIndex((s) => s.key === atKey);
+  const byArea = atKey?.endsWith(":0") ? slots.findIndex((s) => s.area.id === atKey.slice(0, -2)) : -1;
+  const atIdx = Math.max(0, found >= 0 ? found : byArea >= 0 ? byArea : slots.length - 1);
+  const cur = slots[atIdx];
+  const nextArea = cur && areas ? areas[cur.ai + 1] : undefined;
+  // 다음 영역은 지금 영역을 다 쓴 뒤 하나만 미리
+  const curArea = cur?.area;
+  useEffect(() => { if (curArea?.status === "done" && nextArea && !nextArea.status) void call(base, { action: "area", section: nextArea.id }).then(() => load()).catch(() => undefined); }, [curArea?.id, curArea?.status, nextArea?.id, nextArea?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const go = (i: number) => { const s = slots[i]; if (!s) return; setDir(i < atIdx ? "prev" : "next"); setAtKey(s.key); setQ(""); };
+  const liveStep = (s: L3Slot | undefined) => Boolean(s?.area.status === "writing" && s.step && s.area.steps[s.area.steps.length - 1]?.n === s.step.n);
+  const curLive = liveStep(cur);
+  const canPrev = atIdx > 0;
+  const hasNextSlot = atIdx < slots.length - 1;
+  const canNext = Boolean(cur && !curLive && cur.step && (hasNextSlot || (cur.area.status === "done" && nextArea)));
+  const goNext = () => { if (!canNext) return; if (hasNextSlot) go(atIdx + 1); else if (nextArea) { if (!nextArea.status) void post({ action: "area", section: nextArea.id }); setDir("next"); setAtKey(`${nextArea.id}:0`); } };
+  const goPrev = () => { if (canPrev) go(atIdx - 1); };
   const keys = useRef({ goNext, goPrev });
   useEffect(() => { keys.current = { goNext, goPrev }; });
   useEffect(() => {
@@ -596,48 +618,52 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
       if (e.key === "ArrowRight") keys.current.goNext(); else if (e.key === "ArrowLeft") keys.current.goPrev(); };
     window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
   }, []);
-  if (list === undefined) return <p className="small muted mm6-wait">불러오는 중…</p>;
-  if (!list) return <p className="small bad">{error || "강의를 열 수 없어요."}</p>;
-  const started = list.filter((c) => c.status);
-  const begin = () => { void post({ action: "step", card: list[0].id }); setAt(0); };
-  if (!started.length) return <div className="lc3-empty">
+  if (areas === undefined) return <p className="small muted mm6-wait">불러오는 중…</p>;
+  if (!areas) return <p className="small bad">{error || "강의를 열 수 없어요."}</p>;
+  if (!areas.length) return <p className="small muted">강의할 영역이 없어요.</p>;
+  const begin = () => { void post({ action: "area", section: areas[0].id }); setAtKey(`${areas[0].id}:0`); };
+  if (!slots.length || !cur) return <div className="lc3-empty">
     <p className="lc3-empty-title">강사와 함께 한 장씩 넘기며 공부해요</p>
-    <p className="small muted">카드 {list.length}장 · 모르는 게 있으면 그 장 밑에 물어보세요. 다음 장은 그걸 알고 이어서 설명해요.</p>
+    <p className="small muted">영역 {areas.length}개 · 강사가 영역마다 이야기를 이어 설명하고, 설명이 끝난 자리에 기억 카드를 띄워요. 모르는 게 있으면 그 장 밑에 물어보세요.</p>
     {error ? <p className="small bad">{error}</p> : null}
     <button className="btn primary" onClick={begin}>강의 시작</button></div>;
-  const next = list[at + 1];
+  const area = cur.area, step = cur.step;
+  const isLastOfArea = Boolean(step && area.status === "done" && area.steps[area.steps.length - 1]?.n === step.n);
+  const allText = area.steps.map((s) => s.text).join("\n");
+  const leftover = isLastOfArea ? area.cards.filter((cid) => !allText.includes(`⟦카드 ${cid}⟧`) && !new RegExp(`⟦카드\\s*${cid.replace(/\./g, "\\.")}\\s*⟧`).test(allText)) : [];
+  const nextSlot = slots[atIdx + 1];
+  const nextLabel = nextSlot?.step ? (nextSlot.ai === cur.ai ? nextSlot.step.title : `${nextSlot.area.title}`) : nextArea ? nextArea.title : "";
   return (
     <div className="lc3">
       <div className="lc3-bar">
         <button className="lc3-arrow" disabled={!canPrev} onClick={goPrev} aria-label="이전 장">‹</button>
-        <div className="lc3-progress"><div className="lc3-progress-fill" style={{ width: `${((at + 1) / list.length) * 100}%` }} /></div>
-        <span className="lc3-count num">{at + 1} / {list.length}</span>
+        <div className="lc3-progress" title={`영역 ${cur.ai + 1} / ${areas.length}`}>{areas.map((a, i) => <div key={a.id} className={`lc3-seg${i < cur.ai ? " done" : i === cur.ai ? " on" : ""}`}>
+          {i === cur.ai && area.steps.length && step ? <div className="lc3-progress-fill" style={{ width: `${(area.steps.findIndex((s) => s.n === step.n) + 1) / Math.max(area.steps.length, 1) * 100}%` }} /> : null}</div>)}</div>
+        <span className="lc3-count num">영역 {cur.ai + 1}/{areas.length}</span>
         <button className="lc3-arrow" disabled={!canNext} onClick={goNext} aria-label="다음 장">›</button>
       </div>
-      {cur ? <section key={cur.id} className={`lc3-box lc3-in-${dir}`}>
+      <section key={cur.key} className={`lc3-box lc3-in-${dir}`}>
         <header className="lc3-head">
-          <span className="lc3-step num">{at + 1}</span>
-          <h3 className="lc3-title"><Rich text={cur.title} /></h3>
-          {cur.role && cur.role !== "메인" ? <span className="lc3-role">{cur.role === "바탕" ? "바탕 지식" : cur.role}</span> : null}
+          <span className="lc3-step num">{step ? step.n : "…"}</span>
+          <div className="lc3-headtext"><span className="lc3-area">{area.title}</span><h3 className="lc3-title">{step?.title ? <Rich text={step.title} /> : step ? "" : "강의를 준비하고 있어요"}</h3></div>
           {writing ? <button className="lc3-stop" onClick={() => void post({ action: "stop" })}>멈추기</button> : null}
         </header>
-        {cur.status ? <div className="lc3-say">
-          <SmoothLecture key={cur.id} genId={genId} text={cur.text ?? ""} live={cur.status === "writing"} animate={!seen.has(cur.id)} byId={byId} onPage={onPage} onSeen={() => markSeen(cur.id)} />
-          {cur.status === "failed" ? <p className="small bad">설명을 못 받았어요. <button className="linkish" onClick={() => void post({ action: "step", card: cur.id })}>다시</button></p> : null}
-          {cur.status === "stopped" ? <p className="small muted">멈췄어요. <button className="linkish" onClick={() => void post({ action: "step", card: cur.id })}>처음부터 다시</button></p> : null}
-        </div> : <p className="small muted">설명을 준비하는 중이에요…</p>}
-        {cur.status === "done" && cur.cards?.length ? <div className="lc3-mem">
-          <button className="lc3-memtoggle" onClick={() => setShowCard(!showCard)}>{showCard ? "기억 카드 접기" : "이 장의 기억 카드"}</button>
-          {showCard ? <div className="lc3-cards">{cur.cards.map((cid) => byId.get(cid)).filter((x): x is Card => !!x).map((x) => <LectureCard key={x.id} genId={genId} c={x} onPage={onPage} />)}</div> : null}</div> : null}
-        {(cur.asks ?? []).length ? <div className="lc3-thread">{(cur.asks ?? []).map((a, k) => <div key={k} className="lc3-qa">
+        {step ? <div className="lc3-say">
+          <SmoothLecture key={cur.key} genId={genId} text={step.text} live={curLive} animate={!seen.has(cur.key)} byId={byId} onPage={onPage} onSeen={() => markSeen(cur.key)} />
+        </div> : <div className="lc3-wait"><span className="lc2-caret" /> 강사가 이 영역의 첫 장을 쓰고 있어요</div>}
+        {area.status === "failed" && (curLive || isLastOfArea || !step) ? <p className="small bad">설명을 다 받지 못했어요. <button className="linkish" onClick={() => void post({ action: "again", section: area.id })}>이 영역 다시</button></p> : null}
+        {area.status === "stopped" && (isLastOfArea || !step || area.steps[area.steps.length - 1]?.n === step?.n) ? <p className="small muted">멈췄어요. <button className="linkish" onClick={() => void post({ action: "again", section: area.id })}>이 영역 처음부터 다시</button></p> : null}
+        {leftover.length ? <div className="lc3-mem"><p className="small muted lc3-memnote">이 영역의 다른 기억 카드</p>
+          <div className="lc3-cards">{leftover.map((cid) => byId.get(cid)).filter((x): x is Card => !!x).map((x) => <LectureCard key={x.id} genId={genId} c={x} onPage={onPage} />)}</div></div> : null}
+        {step?.asks.length ? <div className="lc3-thread">{step.asks.map((a, k) => <div key={k} className="lc3-qa">
           <p className="lc3-q">{a.q}</p>
-          <div className="lc3-a"><SmoothLecture genId={genId} text={a.a} live={a.status === "writing"} animate={!seen.has(`${cur.id}:${k}`)} byId={byId} onPage={onPage} onSeen={() => markSeen(`${cur.id}:${k}`)} /></div></div>)}</div> : null}
-        {cur.status ? <form className="lc3-ask" onSubmit={(e) => { e.preventDefault(); if (!q.trim() || cur.status !== "done") return; void post({ action: "ask", card: cur.id, q }); setQ(""); }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={cur.status === "done" ? "여기서 모르는 걸 물어보세요" : "설명이 끝나면 물어볼 수 있어요"} disabled={cur.status !== "done"} />
-          <button className="lc3-send" disabled={!q.trim() || cur.status !== "done"} aria-label="묻기">↑</button></form> : null}
-      </section> : null}
+          <div className="lc3-a"><SmoothLecture genId={genId} text={a.a} live={a.status === "writing"} animate={!seen.has(`${cur.key}:${k}`)} byId={byId} onPage={onPage} onSeen={() => markSeen(`${cur.key}:${k}`)} /></div></div>)}</div> : null}
+        {step ? <form className="lc3-ask" onSubmit={(e) => { e.preventDefault(); if (!q.trim() || curLive) return; void post({ action: "ask", section: area.id, step: step.n, q }); setQ(""); }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={curLive ? "이 장 설명이 끝나면 물어볼 수 있어요" : "여기서 모르는 걸 물어보세요"} disabled={curLive} />
+          <button className="lc3-send" disabled={!q.trim() || curLive} aria-label="묻기">↑</button></form> : null}
+      </section>
       <div className="lc3-foot">
-        {next ? <button className="lc3-next" disabled={!canNext} onClick={goNext}><span className="small">다음 장</span><b><Rich text={next.title.replace(/\(.*?\)/g, "").trim()} /></b><span aria-hidden>›</span></button>
+        {canNext || curLive || !step ? <button className="lc3-next" disabled={!canNext} onClick={goNext}><span className="small">{nextSlot?.step && nextSlot.ai === cur.ai ? "다음 장" : nextArea ? "다음 영역" : "다음 장"}</span>{nextLabel ? <b><Rich text={nextLabel.replace(/\(.*?\)/g, "").trim()} /></b> : null}<span aria-hidden>›</span></button>
           : <span className="small muted">강의 끝</span>}
       </div>
     </div>);

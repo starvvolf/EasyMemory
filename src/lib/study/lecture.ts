@@ -121,6 +121,8 @@ export async function makeLecture(id: string) {
 export async function lectureApi(request: Request, id: string) {
   const { NextResponse } = await import("next/server");
   // 카드 하나씩 강의(11/10, lecture-steps.ts)는 ?v=2
+  // 영역 한 흐름 강의(11/11, lecture-areas.ts)는 ?v=3 — 강의 탭이 쓰는 것
+  if (new URL(request.url).searchParams.get("v") === "3") { const { lectureAreasApi } = await import("./lecture-areas.ts"); return lectureAreasApi(request, id); }
   if (new URL(request.url).searchParams.get("v") === "2") { const { lectureStepsApi } = await import("./lecture-steps.ts"); return lectureStepsApi(request, id); }
   if (request.method === "GET") return NextResponse.json({ lecture: await loadLecture(id) });
   const prev = await loadLecture(id);

@@ -1175,3 +1175,18 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .lc3-empty p{margin:0}
 .dejipgi .lc3-empty-title{font-size:17px;font-weight:700}
 .dejipgi .lc3 .lc2-fig img{max-height:340px;border-radius:10px}
+/* 강의 3 영역 흐름(11/11): 영역 칸 진행 막대, 영역 이름, 확인 문제 */
+.dejipgi .lc3-progress{display:flex;gap:4px;background:none;height:4px}
+.dejipgi .lc3-seg{flex:1;height:4px;border-radius:99px;background:var(--line);overflow:hidden}
+.dejipgi .lc3-seg.done{background:var(--accent)}
+.dejipgi .lc3-seg.on{background:var(--accent-soft)}
+.dejipgi .lc3-count{min-width:64px}
+.dejipgi .lc3-headtext{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.dejipgi .lc3-area{font-size:12px;font-weight:600;color:var(--muted)}
+.dejipgi .lc3-wait{color:var(--muted);font-size:15px;display:flex;align-items:center;gap:10px;padding:18px 0}
+.dejipgi .lc3-memnote{margin:0}
+.dejipgi .lc3-check{border-radius:12px;background:var(--accent-soft);padding:12px 16px;margin:14px 0;display:flex;flex-direction:column;gap:8px}
+.dejipgi .lc3-checkq{margin:0;font-weight:600;line-height:1.7}
+.dejipgi .lc3-checktag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--accent);border-radius:6px;padding:2px 7px;margin-right:8px;vertical-align:2px}
+.dejipgi .lc3-checkbtn{align-self:flex-start;font-size:13px;color:var(--accent);background:var(--surface);border:1px solid var(--accent);border-radius:99px;padding:4px 12px;cursor:pointer}
+.dejipgi .lc3-checka{margin:0;font-size:15px;line-height:1.75;border-top:1px dashed var(--accent);padding-top:8px}
