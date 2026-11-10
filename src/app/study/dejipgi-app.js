@@ -3967,7 +3967,7 @@ function accountNote(){
 // 문제도 바로 만들기 (11/6 사용자 "문제 만들기 자동으로 바로 만들기 걸고 수동 체크 가능하게"): on by default, the last choice remembered.
 /* 11/8 사용자 "문제 만들기는 당분간 수동으로, 자동으로 만들지 않게": 기본은 꺼짐(지식까지만, 문제는 자료 지도의 [문제 만들기]).
    예전 열쇠(dejipgi.autoQuestions)에 켜짐이 남아 있어도 따르지 않게 새 열쇠를 쓴다. 켜기는 체크 상자로 그대로. */
-function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, deep:false, deepFast:false, autoQuestions:false, engine:"recaller", survey:{}, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
+function freshBuilder(){ return { pages:[], sourceName:"", from:1, to:1, purpose:"core", note:"", readImages:true, deep:false, deepFast:false, autoQuestions:false, lecture:false, engine:"recaller", survey:{}, busy:false, status:"", error:"", file:null, pdfDoc:null, sections:[], picked:[], pastExamSourceIds:[], pastExamSources:null, pastExamOpen:false }; }
 /* Range picking without any AI call: the PDF's own bookmarks, or each page's first line when it has none. */
 async function readSections(doc, pages){
   const flat = [];
@@ -4084,7 +4084,7 @@ async function startMaterial(){
   const b = S.builder; if (b.busy || !engine || !b.file) return;
   b.busy = true; b.error = ""; b.status = "PDF를 등록하고 문제 만들기를 시작하는 중…"; render();
   try{
-    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.engine !== "v2" ? { engine:b.engine } : {}), ...(b.engine === "recaller" ? { autoQuestions:b.autoQuestions !== false } : {}), ...(b.engine === "recaller" && b.deep ? { deep:true, ...(b.deepFast ? { deepDrafts:2 } : {}) } : {}), ...((b.engine === "v5" || b.engine === "alpha") && Object.values(b.survey).some(Boolean) ? { survey:b.survey } : {}), ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
+    const res = await engine.start({ file:b.file, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), readImages:b.readImages, ...(b.engine !== "v2" ? { engine:b.engine } : {}), ...(b.engine === "recaller" ? { autoQuestions:b.autoQuestions !== false, ...(b.lecture ? { lecture:true } : {}) } : {}), ...(b.engine === "recaller" && b.deep ? { deep:true, ...(b.deepFast ? { deepDrafts:2 } : {}) } : {}), ...((b.engine === "v5" || b.engine === "alpha") && Object.values(b.survey).some(Boolean) ? { survey:b.survey } : {}), ...(b.pastExamSourceIds.length ? { pastExamSourceIds:b.pastExamSourceIds } : {}) });
     const rec = { id:"pending:" + res.requestId, requestId:res.requestId, sourceId:res.sourceId, title:b.sourceName.replace(/\.pdf$/i, ""), sourceName:b.sourceName,
       pageCount:b.pages.length, from:b.from, to:b.to, purpose:b.purpose, note:b.note.trim(), createdAt:now(), status:"waiting", message:"" };
     const deck = pendingDeck(rec);
@@ -4282,6 +4282,11 @@ function renderBuilder(){
     thin ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
       h("input", { type:"checkbox", checked:b.readImages ? true : null, disabled:b.busy, onchange:(e) => { b.readImages = e.target.checked; render(); } }),
       h("span", null, h("b", { text:"그림·수식도 읽기" }), h("span", { class:"muted", text:` · 글자가 적은 ${thin}쪽을 그림으로 읽어요 (약 ${Math.max(1, Math.ceil(thin * 20 / 3 / 60))}분 더). 행렬·도표·그림 속 글자가 문제에 들어가요.` }))) : null,
+    /* 11/11 사용자 "아예 시작할 때 강의 OX 넣고": 고르면 자료를 다 만든 뒤 강의 첫 영역을 뒤에서 써 둔다(강의 탭을 열면 바로 읽기). */
+    b.engine === "recaller" ? h("div", { class:"field" }, h("label", { text:"강의도 준비할까요?" }),
+      h("div", { class:"chat-sugs" }, [[true, "O · 강의 들으며 공부"], [false, "X · 기억 카드만"]].map(([on, label]) => h("button", { class:"chip-btn", "aria-pressed": b.lecture === on ? "true" : "false", disabled:b.busy,
+        onclick: () => { b.lecture = on; render(); } }, label))),
+      h("p", { class:"small muted", text: b.lecture ? "자료를 다 만들면 강사가 첫 영역부터 설명을 써 둬요. 다음 영역은 읽는 동안 이어서 써요." : "아는 내용이면 카드만 보고, 강의는 나중에 자료 지도의 [강의] 탭에서 언제든 들을 수 있어요." })) : null,
     /* 11/9 사용자 "버튼 눌러서 만드는 거로": 문제는 자료 지도의 [문제 만들기]로만 만든다(바로 만들기 체크 상자 뺌). */
     b.engine === "recaller" && b.purpose !== "read" ? h("label", { class:"row small", style:"gap:8px;cursor:pointer" },
       h("input", { type:"checkbox", checked:b.deep ? true : null, disabled:b.busy, onchange:(e) => { b.deep = e.target.checked; render(); } }),

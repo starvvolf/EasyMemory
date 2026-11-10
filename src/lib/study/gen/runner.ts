@@ -266,6 +266,8 @@ export const genInputSchema = z.strictObject({
   /** recaller: also make deep questions (several cards tied into one worked problem). The learner turns it on. */
   deep: z.boolean().optional(),
   questionsLater: z.boolean().optional(),
+  /** 강의 준비(11/11 사용자 "아예 시작할 때 강의 OX 넣고"): 자료를 다 만들면 강의 첫 영역을 뒤에서 써 둔다(lecture-areas.ts). */
+  lecture: z.boolean().optional(),
   /** recaller: write two drafts of each deep question at once and keep the first that passes (faster, twice the use). */
   deepDrafts: z.union([z.literal(1), z.literal(2)]).optional(),
   /** recaller 검증 실험: one plain call per section instead of cards and checks (the comparison baseline). */
@@ -577,6 +579,13 @@ export function chainTask<T>(task: () => Promise<T>) {
 }
 
 /** One request at a time in this server process. Throws before queueing when the request may not run. */
+/** 강의 준비를 골랐으면(input.lecture) 다 만든 뒤 강의 첫 영역을 뒤에서 부른다. 실패해도 자료에는 영향 없음. */
+async function lectureAfter(state: GenState) {
+  if (state?.status !== "done" || !state.input.lecture) return state;
+  void (async () => { const { context } = await import("../lecture-steps.ts"); const { startArea } = await import("../lecture-areas.ts");
+    const first = (await context(state.id)).sections[0]; if (first) await startArea(state.id, first.id); })().catch(() => undefined);
+  return state;
+}
 export async function enqueueGen(id: string, caller: ModelCaller, options: RunOptions & { confirmedRealCalls?: boolean } = {}) {
   const queued = (queue.__studyGenQueued ??= new Set());
   if (queued.has(id)) return;
@@ -587,7 +596,7 @@ export async function enqueueGen(id: string, caller: ModelCaller, options: RunOp
   queued.add(id);
   state.status = "queued"; state.message = "";
   await saveState(state);
-  const finished = (queue.__studyGenQueue ?? Promise.resolve()).then(() => runGen(id, caller, options)).catch(() => undefined).finally(() => queued.delete(id));
+  const finished = (queue.__studyGenQueue ?? Promise.resolve()).then(() => runGen(id, caller, options)).then(lectureAfter).catch(() => undefined).finally(() => queued.delete(id));
   queue.__studyGenQueue = finished;
   // Resolves once queued; `finished` settles when the run stops (done, paused or failed).
   return { finished };

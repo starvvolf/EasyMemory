@@ -65,6 +65,7 @@ export type GenInput = {
   deep?: boolean;
   /** 공부 화면: cards and 자료 전체 정리 only; the questions are made when the learner asks (questionsGen clears it). */
   questionsLater?: boolean;
+  lecture?: boolean;
   /** recaller: drafts of each deep question written at once (1 by default; 2 is faster and uses twice as much). */
   deepDrafts?: 1 | 2;
   /** recaller 검증 실험: the plain one-call baseline (no cards, no checks). */

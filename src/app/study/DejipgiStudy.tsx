@@ -118,12 +118,12 @@ export default function DejipgiStudy() {
     // ---- engine v2 (/api/lab/gen) ----
     const isGen = (id: string) => /^gen_[a-f0-9]{32}$/.test(id);
     const genState = async (id: string) => (await readJson<{ gen: GenState; label: string }>(await fetchExperiment(`/api/lab/gen/${id}`), "만드는 상태를 읽지 못했어요."));
-    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[], engine?: Engine, survey?: GenSurvey, deep?: boolean, deepDrafts?: 1 | 2, autoQuestions = true) => {
+    const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[], engine?: Engine, survey?: GenSurvey, deep?: boolean, deepDrafts?: 1 | 2, autoQuestions = true, lecture = false) => {
       const pageNumbers = Array.from({ length: Math.max(1, to - from + 1) }, (_, index) => from + index);
       const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
-          models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(engine === "recaller" && !autoQuestions ? { questionsLater: true } : {}), ...(engine === "recaller" && deep ? { deep: true, ...(deepDrafts === 2 ? { deepDrafts } : {}) } : {}), ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), ...(engine && !pastExamSourceIds?.length ? { engine } : {}),
+          models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(lecture ? { lecture: true } : {}), ...(engine === "recaller" && !autoQuestions ? { questionsLater: true } : {}), ...(engine === "recaller" && deep ? { deep: true, ...(deepDrafts === 2 ? { deepDrafts } : {}) } : {}), ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), ...(engine && !pastExamSourceIds?.length ? { engine } : {}),
           // v5 streams goals and authors right away; a goal the learner does not want is hidden from practice (목표 빼기).
           ...((engine === "v5" || engine === "alpha") && !pastExamSourceIds?.length ? { autoConfirm: true, ...(survey ? { survey } : {}) } : {}), confirmed: true }),
       }), "문제 만들기를 시작하지 못했어요.");
@@ -206,7 +206,7 @@ export default function DejipgiStudy() {
           const { sources } = await readJson<{ sources: McpSourceCatalogEntry[] }>(await fetchExperiment("/api/mcp-runs/sources"), "등록한 PDF를 읽지 못했어요.");
           return sources.filter((source) => /^src_[a-f0-9]{64}$/.test(source.id));
         },
-        async start({ file, from, to, purpose, note, readImages, pastExamSourceIds, engine, survey, deep, deepDrafts, autoQuestions }) {
+        async start({ file, from, to, purpose, note, readImages, pastExamSourceIds, engine, survey, deep, deepDrafts, autoQuestions, lecture }) {
           if (session.mode !== "local-experiment") throw new Error("자료 등록과 문제 만들기는 로컬 실험 모드에서만 할 수 있어요.");
           const form = new FormData();
           form.append("pdf", file);
@@ -214,7 +214,7 @@ export default function DejipgiStudy() {
             method: "POST", body: form,
           }), "PDF를 등록하지 못했어요.");
           const source = await findSource(registered.id);
-          const gen = await startGen(source, from, to, purpose, note, readImages, pastExamSourceIds, engine, survey, deep, deepDrafts, autoQuestions !== false);
+          const gen = await startGen(source, from, to, purpose, note, readImages, pastExamSourceIds, engine, survey, deep, deepDrafts, autoQuestions !== false, lecture === true);
           return { requestId: gen.id, sourceId: source.id };
         },
         async focus(requestId, page) {
