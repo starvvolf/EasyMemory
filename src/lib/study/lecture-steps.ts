@@ -131,7 +131,7 @@ const stepRule = (card: MapCard, lastOf: number[]) => `[할 일] 지금 카드 [
 export async function stepCard(id: string, cardId: string, opts: { prefetch?: boolean } = {}) {
   const l = await lectureOf(id);
   const had = l.steps[cardId];
-  if (had && !opts.prefetch && had.prefetched) { delete had.prefetched; await save(id, l); return; } // 미리 부른 것을 학생이 열었다
+  if (had && !opts.prefetch && had.prefetched) { delete had.prefetched; await save(id, l); if (had.status === "done") void prefetchNext(id, cardId); return; } // 미리 부른 것을 학생이 열었다
   if (had?.status === "writing" || (had?.status === "done" && opts.prefetch)) return;
   const { card, user, images, titles, lastOf } = await prefix(id, cardId);
   l.steps[cardId] = { status: "writing", text: "", at: new Date().toISOString(), asks: had?.asks ?? [], ...(opts.prefetch ? { prefetched: true } : {}) };
@@ -141,7 +141,7 @@ export async function stepCard(id: string, cardId: string, opts: { prefetch?: bo
     if (!l.steps[cardId]) return; // 버린 미리 부르기
     l.steps[cardId] = { ...l.steps[cardId], status: ok ? "done" : stopped ? "stopped" : "failed", text, ms: Date.now() - t };
     void save(id, l);
-    if (ok) void prefetchNext(id, cardId);
+    if (ok && !l.steps[cardId].prefetched) void prefetchNext(id, cardId); // 한 장 앞까지만(학생이 연 카드의 다음)
   });
 }
 async function prefetchNext(id: string, cardId: string) {
