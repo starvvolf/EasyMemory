@@ -341,6 +341,15 @@ const routes: [string, RegExp, Handler][] = [
     else void lessonAsk(run.id, run.current, plan, String(b.question ?? ""), quote).catch((e) => console.error(e));
     return { ok: true };
   }],
+  // 앱 안 편집기(11/11): 상태(받기 전이면 크기) · 받기 · 실습 폴더를 연 주소
+  ["GET", /^\/api\/editor-web$/, async () => (await import("../lib/editor-web.ts")).status()],
+  ["POST", /^\/api\/editor-web\/install$/, async () => (await import("../lib/editor-web.ts")).install()],
+  ["POST", /^\/api\/runs\/(\w+)\/editor-web$/, async (_req, m) => {
+    const folder = await (await import("../lib/goals.ts")).runWorkspace(m[1]);
+    if (!folder) throw Object.assign(new Error("이 실습의 작업 폴더가 없어요."), { status: 409 });
+    await (await import("../lib/learn.ts")).markChatFolder(folder);
+    return { folder, url: await (await import("../lib/editor-web.ts")).urlFor(folder) };
+  }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (req, m) => { const b = await body(req).catch(() => ({} as Record<string, unknown>)); const out = await openEditor(m[1]); if (b.float !== false) openFloat(m[1], PORT); return out; }],
   // 11/4 사용자 "직접 고치는 권한(처음에 확인 요청)" · "채팅창에서 모델 변경": 대화 설정
   ["POST", /^\/api\/runs\/(\w+)\/chat-options$/, async (req, m) => {

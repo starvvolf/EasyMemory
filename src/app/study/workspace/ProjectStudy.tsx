@@ -62,6 +62,8 @@ export default function ProjectStudy() {
   const resume = (r: RunLite, primary = true) => (
     <button className={`btn ${primary ? "primary" : "ghost"} small`} disabled={busy === r.id} onClick={() => void openEditor(r)}>{busy === r.id ? "여는 중…" : "VS Code에서 이어 하기"}</button>
   );
+  // 앱 안 편집기(11/11 사용자 "기존 방식 남기고 한번 도입해봐"): 왼쪽 편집기(VSCodium 웹 서버판) · 오른쪽 튜터를 한 창에
+  const studio = (r: RunLite) => <a className="btn ghost small" href={`${courseUrl}/studio.html?run=${r.id}`} target="_blank" rel="noreferrer" title="VS Code와 같은 편집기를 튜터 옆에 띄워요(내 VS Code 설정과는 따로)">앱 안에서 이어 하기</a>;
   const notes = (r: RunLite) => <a className="btn ghost small" href={`${courseUrl}/#/run/${r.id}/notes`} target="_blank" rel="noreferrer">노트</a>;
 
   return (
@@ -93,7 +95,7 @@ export default function ProjectStudy() {
             <p className="eyebrow">{status.active === top.id ? "하던 실습" : "가장 최근 실습"}</p>
             <h3>{top.courseTitle}</h3>
             <p className="small muted num">{where(top)}{top.done ? ` · ${top.done}단계 끝냄` : ""}{day(top) ? ` · ${day(top)} 시작` : ""}</p>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(top)}{notes(top)}</div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(top)}{studio(top)}{notes(top)}</div>
           </section>
 
           {rest.length ? (
@@ -111,7 +113,7 @@ export default function ProjectStudy() {
                       <div className="pj-more stack">
                         <p className="small" style={{ margin: 0 }}>{r.current}단계 「{r.stageTitle}」 하는 중{r.done ? ` · ${r.done}단계 끝냄` : ""}{day(r) ? ` · ${day(r)} 시작` : ""}</p>
                         {r.workspace ? <p className="small muted" style={{ margin: 0 }}>폴더 <code>{r.workspace}</code></p> : null}
-                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(r)}{notes(r)}</div>
+                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(r)}{studio(r)}{notes(r)}</div>
                       </div>
                     </details>
                   </li>

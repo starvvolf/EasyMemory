@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>실습 · 앱 안 편집기 · Recaller</title>
+<style>
+/* 앱 안 편집기(11/11): 왼쪽 VS Code(VSCodium 웹 서버판) · 오른쪽 튜터. 크기는 가운데 줄을 끌어 바꾼다 */
+@font-face { font-family: "Pretendard"; src: url("PretendardVariable.woff2") format("woff2"); font-weight: 45 920; }
+:root { --bg: #1e1e1e; --panel: #252526; --line: #3a3a3d; --fg: #e6e6e6; --mut: #9a9aa2; --acc: #6b8cff; --bad: #ff8a80; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.5 Pretendard, system-ui, sans-serif; overflow: hidden; }
+.bar { height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.bar b { font-weight: 650; }
+.bar .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mut); }
+.btn { font: inherit; font-size: 12px; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+.btn:hover { border-color: var(--acc); }
+.btn.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+.split { position: absolute; top: 35px; left: 0; right: 0; bottom: 0; display: flex; }
+.pane { position: relative; min-width: 0; }
+.pane iframe { border: 0; width: 100%; height: 100%; display: block; background: var(--bg); }
+#left { flex: 1; }
+#right { flex: none; width: 420px; border-left: 1px solid var(--line); }
+#grip { flex: none; width: 5px; cursor: col-resize; background: transparent; margin: 0 -2px; z-index: 2; }
+#grip:hover, #grip.drag { background: var(--acc); }
+.drag iframe { pointer-events: none; }
+.center { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; }
+.card { max-width: 460px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+.card h2 { margin: 0 0 6px; font-size: 16px; }
+.card p { margin: 6px 0; color: var(--mut); }
+.card code { font-size: 11.5px; color: var(--fg); word-break: break-all; }
+.row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.prog { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 10px; }
+.prog i { display: block; height: 100%; background: var(--acc); width: 0; transition: width .3s; }
+.err { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="bar"><b>실습</b><span id="where" class="grow"></span>
+  <button id="mine" class="btn" title="내 PC에 깔린 VS Code(내 확장 · 설정 그대로)로 이 폴더를 열어요">내 VS Code로 열기</button></div>
+<div class="split" id="split">
+  <div class="pane" id="left"><div class="center"><div class="card"><p>편집기를 켜는 중…</p></div></div></div>
+  <div id="grip" role="separator" aria-label="편집기와 튜터 사이 크기 바꾸기" tabindex="0"></div>
+  <div class="pane" id="right"></div>
+</div>
+<script src="studio.js"></script>
+</body>
+</html>

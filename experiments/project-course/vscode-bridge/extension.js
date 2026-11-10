@@ -10,6 +10,9 @@ const path = require("path");
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.RECALLER_COURSE_PORT || 4100);
+// 앱 안 편집기(0.9.3, 11/11): 실습 화면 왼쪽 칸의 VS Code(VSCodium 웹 서버판). 튜터는 바로 옆 칸에 있으니 VS Code 안 튜터 탭은 저절로 열지 않는다
+const EMBEDDED = process.env.RECALLER_EMBEDDED === "1";
+const wantTab = () => !EMBEDDED && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true);
 
 let root = null;          // 작업 폴더
 let runId = null;
@@ -73,14 +76,14 @@ async function connect() {
     lobby = !!hello.lobby;
     clearTimeout(offlineTimer);
     if (panel && panelOnline !== true) renderTutor();
-    if (hello.update && !updateAsked) {
+    if (hello.update && !updateAsked && !EMBEDDED) {
       updateAsked = true;
       vscode.window.showInformationMessage("Recaller 튜터 연결이 새 버전으로 바뀌었어요. 창을 다시 불러오면 적용돼요.", "다시 불러오기")
         .then((pick) => { if (pick) vscode.commands.executeCommand("workbench.action.reloadWindow"); });
     }
     if (lobby) {
       setStatus("$(mortar-board) Recaller", "코스를 정하는 곳이에요. 누르면 오른쪽에 튜터가 열려요.", false);
-      if (!autoOpened && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
+      if (!autoOpened && wantTab()) { autoOpened = true; openTutor(); }
       retryTimer = setTimeout(connect, 10000); // 코스 프로그램이 꺼지면 알아채려고 가끔 확인
       return;
     }
@@ -88,7 +91,7 @@ async function connect() {
     // 튜터 창(VS Code 위에 떠서 따라다니는 창, 11/2)을 쓰면 VS Code 탭은 저절로 열지 않는다. 상태 줄을 누르면 탭도 열 수 있다.
     floatInUse = !!hello.float;
     if (floatInUse && panel) panel.dispose(); // 튜터 창으로 옮겨 갔으니 VS Code 탭은 닫는다
-    if (!autoOpened && !floatInUse && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); }
+    if (!autoOpened && !floatInUse && wantTab()) { autoOpened = true; openTutor(); }
     listen();
     scheduleReport(0);
     lensChanged.fire();
@@ -695,7 +698,7 @@ function activate(context) {
   watchTerminal(context);
   connect();
   // 코스 프로그램이 꺼져 있어도 튜터 자리에 안내가 보이게
-  setTimeout(() => { if (!panel && !runId && vscode.workspace.getConfiguration("recaller").get("openTutorBeside", true)) { autoOpened = true; openTutor(); } }, 6000);
+  setTimeout(() => { if (!panel && !runId && wantTab()) { autoOpened = true; openTutor(); } }, 6000);
 }
 function deactivate() { if (stream) stream.destroy(); }
 module.exports = { activate, deactivate };

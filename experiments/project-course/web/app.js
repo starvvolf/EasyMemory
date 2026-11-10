@@ -1765,6 +1765,8 @@ function wsBar(run, lesson) {
   return h("div", { class: "wsbar" }, h("span", { class: "mut small" }, "작업 폴더"), h("code", { class: "wsp", title: path }, path),
     h("button", { class: "btn small", disabled: lesson.busy, title: lesson.busy ? "답하는 중에는 못 바꿔요" : "다른 폴더로 바꾸기", onclick: () => { wsUi.edit = true; drawLesson(); } }, "바꾸기"),
     h("button", { class: "btn small", onclick: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/editor`, { float: false }); toast("VS Code에서 열었어요."); }) }, "VS Code로 열기"),
+    // 앱 안 편집기(11/11): 왼쪽 편집기 · 오른쪽 튜터 한 화면. 그 화면 안(?embed)에서는 안 보인다
+    EMBED ? null : h("a", { class: "btn small", href: `/studio.html?run=${run.id}`, title: "VS Code와 같은 편집기를 이 화면 왼쪽에 띄우고 튜터는 오른쪽에(내 VS Code 설정과는 따로)" }, "앱 안에서 편집"),
     h("label", { class: "small edittog", title: "VS Code에서 저장(Ctrl+S)하면 튜터가 그 파일을 확인해요" }, h("input", { type: "checkbox", checked: lesson.autoCheck !== false, onchange: (e) => busy(e.target, async () => { await api("POST", `/api/runs/${run.id}/auto-check`, { on: e.target.checked }); toast(e.target.checked ? "저장하면 튜터가 확인해요." : "저장해도 튜터가 확인하지 않아요."); }) }), " 저장하면 확인"),
     lesson.chat.edit ? h("label", { class: "small edittog", title: "튜터가 이 폴더의 파일을 고칠 수 있는지" }, h("input", { type: "checkbox", checked: lesson.chat.edit === "allow", disabled: lesson.busy, onchange: (e) => chatOpt(run, { edit: e.target.checked ? "allow" : "deny" }) }), " 튜터가 고치기") : null);
 }
