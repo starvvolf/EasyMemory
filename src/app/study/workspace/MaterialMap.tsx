@@ -545,8 +545,8 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
   const goNext = () => { const n = at + 1; if (n >= list.length) return; if (!list[n].status) void post({ action: "step", card: list[n].id }); setAt(n); };
   const begin = () => { void post({ action: "step", card: list[0].id }); setAt(0); };
   if (!started.length) return <div className="lc-empty">
-    <p>영역을 하나씩 넘기며 강사가 설명해요. 기억이 나오는 자리에는 그 기억 카드가 붙어요. 모르는 게 있으면 그 영역 밑에 물어보세요. 다음 영역은 그걸 알고 이어서 설명해요.</p>
-    <p className="small muted">영역 {list.length}개 · 영역마다 처음 글자까지 4~5초</p>
+    <p>기억 카드를 하나씩 넘기며 강사가 설명해요. 모르는 게 있으면 그 카드 밑에 물어보세요. 다음 카드는 그걸 알고 이어서 설명해요.</p>
+    <p className="small muted">카드 {list.length}개 · 다음 카드는 지금 카드를 읽는 동안 미리 준비해요</p>
     {error ? <p className="small bad">{error}</p> : null}
     <button className="btn primary" onClick={begin}>강의 시작</button></div>;
   return (
@@ -558,15 +558,15 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
         {s.status ? <div className="lc2-say"><LectureText genId={genId} text={s.text ?? ""} byId={byId} onPage={onPage} />{s.status === "writing" ? <span className="lc2-caret" /> : null}
           {s.status === "failed" ? <p className="small bad">설명을 못 받았어요. <button className="linkish" onClick={() => void post({ action: "step", card: s.id })}>다시</button></p> : null}
           {s.status === "stopped" ? <p className="small muted">멈췄어요. <button className="linkish" onClick={() => void post({ action: "step", card: s.id })}>처음부터 다시</button></p> : null}</div>
-          : <p className="small muted">아직 듣지 않은 영역이에요.</p>}
+          : <p className="small muted">아직 듣지 않은 카드예요.</p>}
       </section>)}</div>
       {cur?.status ? <div className="lc2-below">
-        {cur.cards?.length ? <div><button className="linkish small" onClick={() => setShowCard(!showCard)}>{showCard ? "이 영역의 기억 접기" : `이 영역의 기억 ${cur.cards.length}개 보기`}</button>
+        {cur.cards?.length ? <div><button className="linkish small" onClick={() => setShowCard(!showCard)}>{showCard ? "기억 카드 접기" : "이 기억 카드 보기"}</button>
           {showCard ? <div className="lc2-cards">{cur.cards.map((cid) => byId.get(cid)).filter((x): x is Card => !!x).map((x) => <LectureCard key={x.id} genId={genId} c={x} onPage={onPage} />)}</div> : null}</div> : null}
         {(cur.asks ?? []).map((a, k) => <div key={k} className="lc2-qa"><p className="lc2-q"><b>나</b> {a.q}</p>
           <div className="lc2-a"><LectureText genId={genId} text={a.a} byId={byId} onPage={onPage} />{a.status === "writing" ? <span className="lc2-caret" /> : null}</div></div>)}
         <form className="row lc2-ask" onSubmit={(e) => { e.preventDefault(); if (!q.trim() || cur.status !== "done") return; void post({ action: "ask", card: cur.id, q }); setQ(""); }}>
-          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={cur.status === "done" ? "이 영역에서 모르는 걸 물어보세요" : "설명이 끝나면 물어볼 수 있어요"} disabled={cur.status !== "done"} />
+          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={cur.status === "done" ? "여기서 모르는 걸 물어보세요" : "설명이 끝나면 물어볼 수 있어요"} disabled={cur.status !== "done"} />
           <button className="btn ghost small" disabled={!q.trim() || cur.status !== "done"}>묻기</button></form>
       </div> : null}
       <div className="row lc-nav"><button className="btn ghost small" disabled={at === 0} onClick={() => setAt(at - 1)}>‹ 이전</button><span className="cs-gap" />
