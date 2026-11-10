@@ -1061,7 +1061,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                       <button className="mm3-line" aria-expanded={isOpen} onClick={() => setOpenCard(isOpen ? null : c.id)}>
                         <span className="mm3-star" aria-label={c.core ? "핵심" : undefined}>{map.topics?.length && c.core ? "★" : ""}</span>
                         <span className="mm3-name"><Rich text={c.title} /></span>
-                        <span className="mm3-key"><Rich text={keyLine(c.shape)} /></span>
+                        {/* 11/11 사용자 "공식만 박은 느낌": 기억 카드(줄기 모드)는 줄에 식 대신 답 한 줄을 */}
+                        <span className="mm3-key"><Rich text={c.memo?.line || keyLine(c.shape)} /></span>
                         {marked ? <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /> : <span />}
                       </button>
                       {isOpen ? <div className="mm3-detail">
@@ -1074,7 +1075,13 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                           {c.knowledgeId ? <button className="btn ghost small" onClick={() => { const id = c.knowledgeId!; onClose(); go("knowledge", { id }); }} title="기억창에서 이 기억의 뜻·기록·이어진 기억 보기">기억창에서 보기</button> : null}
                           {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
                         </div>
+                        {/* 11/11 사용자 "눌렀을 때 제목이 안 뜨고 …으로 잘림, 카드만 봐서는 이해가 안 됨": 펼치면 제목 전체 → 질문 → 답 한 줄 → 핵심(모양·덧붙임) → 자세히 */}
+                        {c.memo ? <div className="mm3-front"><p className="mm3-ftitle"><Rich text={c.title} /></p>
+                          {c.memo.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={c.memo.question} /></p> : null}
+                          {c.memo.line ? <p className="lc3-ca"><Rich text={c.memo.line} /></p> : null}</div> : null}
                         <Body s={c.shape} />
+                        {c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+                        <CardDetails items={c.memo?.details} />
                         <FigureView genId={genId} c={c} onPage={onPage} all={everyCard} onCard={jump} />
                         {links.length ? <div className="mm3-rel"><span className="mm3-tag">이어지는 기억</span>
                           <div className="mm3-relchips">{links.map((x, i) =>
