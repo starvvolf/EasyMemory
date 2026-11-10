@@ -1190,3 +1190,16 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .lc3-checktag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--accent);border-radius:6px;padding:2px 7px;margin-right:8px;vertical-align:2px}
 .dejipgi .lc3-checkbtn{align-self:flex-start;font-size:13px;color:var(--accent);background:var(--surface);border:1px solid var(--accent);border-radius:99px;padding:4px 12px;cursor:pointer}
 .dejipgi .lc3-checka{margin:0;font-size:15px;line-height:1.75;border-top:1px dashed var(--accent);padding-top:8px}
+/* 줄기 잡는 중(11/11): 큰 동그라미 셋 */
+.dejipgi .orbs-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:56px 16px 48px;text-align:center}
+.dejipgi .orbs{position:relative;width:132px;height:132px;animation:orbs-spin 3.2s linear infinite}
+.dejipgi .orbs span{position:absolute;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 32% 30%,#fff9,transparent 42%),var(--accent);box-shadow:0 8px 26px -6px var(--accent);animation:orbs-pulse 1.6s ease-in-out infinite}
+.dejipgi .orbs span:nth-child(1){left:43px;top:0}
+.dejipgi .orbs span:nth-child(2){left:0;top:76px;animation-delay:-.53s;filter:hue-rotate(40deg)}
+.dejipgi .orbs span:nth-child(3){left:86px;top:76px;animation-delay:-1.06s;filter:hue-rotate(-40deg)}
+@keyframes orbs-spin{to{transform:rotate(360deg)}}
+@keyframes orbs-pulse{0%,100%{transform:scale(.72);opacity:.75}50%{transform:scale(1.08);opacity:1}}
+.dejipgi .orbs-title{margin:18px 0 0;font-size:17px;font-weight:700;color:var(--ink)}
+.dejipgi .orbs-line{margin:0;font-size:14px;color:var(--muted);animation:orbs-line .5s ease}
+@keyframes orbs-line{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.dejipgi .orbs,.dejipgi .orbs span{animation-duration:12s}}

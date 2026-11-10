@@ -182,7 +182,7 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
   onPage: (page: number) => void; onPractice?: (page: number, cardId: string) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const sk = digest?.skeleton;
-  if (!sk || (!sk.topics.length && !sk.text)) return <p className="small muted mm6-wait">{making ? "목차를 만드는 중이에요. 몇 초 뒤부터 주제가 하나씩 보여요." : "이 자료에는 목차가 없어요. [기억] 탭에서 보세요."}</p>;
+  if (!sk || (!sk.topics.length && !sk.text)) return making ? <ThinkingOrbs /> : <p className="small muted mm6-wait">이 자료에는 목차가 없어요. [기억] 탭에서 보세요.</p>;
   const streamed = streamedItems(sk.text ?? "");
   const byTopic = new Map<string, Card[]>();
   for (const c of cards) { const t = c.id.split(".")[0]; byTopic.set(t, [...(byTopic.get(t) ?? []), c]); }
@@ -234,6 +234,18 @@ function OutlinePane({ genId, digest, cards, making, onPage, onPractice }: { gen
 // 아직 합치지 않은 자료는 예전 목차를 보이고 위에 [줄기 만들기].
 type MemoryLite = { id: string; name: string; kind: string; role: "메인" | "바탕" | "곁"; area: number; question: string; line: string; steps: string[]; cards: string[]; facts?: string[] };
 type CompactLite = { at: string; ms: number; model?: string; cards: number; areas: Array<{ name: string; question: string }>; memories: MemoryLite[] };
+// 줄기 잡는 동안(11/11 사용자 "줄기 만들 때는 뭐 대단한 거 하는 척하면서 큰 동그라미 세 개 움직이는 애니메이션"): 자료 전체를 한 번에 보는 호출이라
+// 글이 흘러나오지 않는다. 큰 동그라미 셋이 돌고, 하는 일을 몇 초마다 바꿔 보여 준다(자료와 상관없는 말만).
+const ORB_LINES = ["자료 전체를 한꺼번에 펼쳐 보는 중", "쪽들 사이의 흐름을 잇는 중", "큰 영역으로 나누는 중", "외울 단위를 고르는 중", "빠진 쪽이 없는지 맞춰 보는 중", "기억마다 근거 쪽을 다는 중"];
+function ThinkingOrbs({ lines = ORB_LINES }: { lines?: string[] }) {
+  const [i, setI] = useState(0);
+  useEffect(() => { const t = setInterval(() => setI((x) => (x + 1) % lines.length), 2600); return () => clearInterval(t); }, [lines.length]);
+  return <div className="orbs-wrap" role="status" aria-live="polite">
+    <div className="orbs" aria-hidden><span /><span /><span /></div>
+    <p className="orbs-title">줄기를 잡고 있어요</p>
+    <p key={i} className="orbs-line">{lines[i]}…</p>
+  </div>;
+}
 function StemPane(props: { genId: string; digest: DigestLite | null | undefined; cards: Card[]; making: boolean; onPage: (page: number) => void; onPractice?: (page: number, cardId: string) => void }) {
   const { genId, cards, making, onPage } = props;
   const [data, setData] = useState<CompactLite | null | undefined>(undefined);
@@ -249,6 +261,7 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
   const btn = (label: string, primary: boolean) => <button className={`btn small ${primary ? "primary" : "ghost"}`} disabled={busy || making} onClick={make} title="카드를 영역·기억으로 묶어요. AI 영역 1번 + 영역마다 1번(동시), 약 30초">{busy ? "줄기를 만드는 중… (약 30초)" : label}</button>;
   if (data === undefined) return <p className="small muted mm6-wait">불러오는 중…</p>;
+  if (busy) return <ThinkingOrbs />;
   if (!data) return <>
     <div className="row small mm8-goalbar"><span className="muted">카드 {cards.filter((c) => !isFlowCard(c)).length}장을 외울 단위(알고리즘은 한 장)로 묶어 줄기로 볼 수 있어요.</span><span className="cs-gap" />{btn("줄기 만들기", true)}</div>
     {error ? <p className="small bad">{error}</p> : null}
