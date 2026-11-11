@@ -467,3 +467,28 @@
 .dejipgi .rv-code pre{margin:0;padding:10px 12px;font-family:var(--mono, ui-monospace, monospace);font-size:13.5px;line-height:1.65;color:#e8eaf0;white-space:pre-wrap;overflow-x:auto}
 .dejipgi .rv-card .rv-ic{background:color-mix(in srgb, var(--ink) 8%, transparent);border-color:transparent}
 .dejipgi .rv-beat.core .rv-dot,.dejipgi .rv-beat.build .rv-dot,.dejipgi .rv-beat.edge .rv-dot,.dejipgi .rv-beat.syntax .rv-dot{color:var(--surface);border:0}
+/* 총정리 머리·도입 카드(11/12 B, 사용자 "문제 상황이랑 이렇게 해야 풀려요도… 총정리도 제목 느낌 나게… 색깔로 구분할 수 있는 건 구분"):
+   제목 줄(작은 머리말 + 큰 제목 + 아래 줄), 사실은 색 칩, 문제 상황 = 파랑 카드, 이렇게 해야 풀려요 = 초록 카드, 다음에 떠올릴 것 = 주황 카드 */
+.dejipgi .rp-review2 .rv-head{display:flex;flex-direction:column;gap:10px;padding-bottom:14px;border-bottom:2px solid var(--accent)}
+.dejipgi .rv-titlerow{display:flex;align-items:baseline;gap:10px}
+.dejipgi .rv-eyebrow{font-size:11.5px;font-weight:800;letter-spacing:.08em;color:var(--accent)}
+.dejipgi .rv-title{margin:0;font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+.dejipgi .rv-factrow{display:flex;flex-wrap:wrap;gap:6px}
+.dejipgi .rv-fact{font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink)}
+.dejipgi .rv-fact.ok{background:var(--good-soft);border-color:transparent;color:var(--good)}
+.dejipgi .rv-fact.bad{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+.dejipgi .rv-fact.help{background:var(--help-soft);border-color:transparent;color:var(--help)}
+.dejipgi .rv-fact.ask{background:var(--ask-soft);border-color:transparent;color:var(--ask)}
+.dejipgi .rv-intro{border-radius:14px;padding:14px 18px;display:flex;flex-direction:column;gap:8px;border:1px solid transparent}
+.dejipgi .rv-intro.sit{background:var(--read-soft);border-color:color-mix(in srgb, var(--read) 35%, transparent)}
+.dejipgi .rv-intro.sol{background:var(--good-soft);border-color:color-mix(in srgb, var(--good) 35%, transparent)}
+.dejipgi .rv-intro.nxt{background:var(--help-soft);border-color:color-mix(in srgb, var(--help) 35%, transparent);max-width:none}
+.dejipgi .rv-introhead{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800}
+.dejipgi .rv-intro.sit .rv-introhead{color:var(--read)} .dejipgi .rv-intro.sol .rv-introhead{color:var(--good)} .dejipgi .rv-intro.nxt .rv-introhead{color:var(--help)}
+.dejipgi .rv-icon{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font-size:12.5px;font-weight:800;color:var(--surface)}
+.dejipgi .rv-intro.sit .rv-icon{background:var(--read)} .dejipgi .rv-intro.sol .rv-icon{background:var(--good)} .dejipgi .rv-intro.nxt .rv-icon{background:var(--help)}
+.dejipgi .rv-intro .rv-lines li, .dejipgi .rv-intro .rv-p{color:var(--ink)}
+.dejipgi .rv-two{max-width:none}
+.dejipgi .rv-sectitle{margin:0 0 12px!important;font-size:17px!important;font-weight:800!important;color:var(--ink)!important;letter-spacing:0!important;display:flex;align-items:baseline;gap:8px}
+.dejipgi .rv-sectitle span{font-size:12.5px;font-weight:700;color:var(--muted)}
+.dejipgi .rp-review2 > .rv-story{max-width:none}

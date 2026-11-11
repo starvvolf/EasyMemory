@@ -434,13 +434,15 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
   // 읽기 좋게(11/12 사용자 "가독성이 구려… 읽기 좋게 정리가 안 된 느낌"): 글 폭을 줄이고, 문단은 문장마다 한 줄로,
   // 빈틈은 먼저 한 줄 목록으로 보여 주고 누르면 펼침(맨 위 하나만 펼쳐 둠), "이렇게 채워요"는 눈에 띄는 상자.
   return <section className="rp-review2">
-    <header className="rv-head"><b>총정리</b>{live ? <span className="lc2-caret" /> : null}
-      {facts ? <span className="rv-facts">{[END[facts.end], facts.hints ? `힌트 ${facts.hints}칸${facts.skeleton ? "·뼈대" : ""}` : "힌트 안 봄", `AI에게 ${facts.asked}번 물음`, `제출 ${facts.submits}번${facts.wrong ? `(틀림 ${facts.wrong})` : ""}`, `${facts.minutes}분`].join(" · ")}</span> : null}</header>
+    <header className="rv-head">
+      <div className="rv-titlerow"><span className="rv-eyebrow">풀이 노트</span><h3 className="rv-title">총정리</h3>{live ? <span className="lc2-caret" /> : null}</div>
+      {facts ? <div className="rv-factrow">{[[END[facts.end], facts.end === "solved" ? "ok" : "bad"], [facts.hints ? `힌트 ${facts.hints}칸${facts.skeleton ? "·뼈대" : ""}` : "힌트 안 봄", facts.hints ? "help" : ""], [`AI에게 ${facts.asked}번 물음`, facts.asked ? "ask" : ""], [`제출 ${facts.submits}번${facts.wrong ? ` · 틀림 ${facts.wrong}` : ""}`, facts.wrong ? "bad" : ""], [`${facts.minutes}분`, ""]].map(([x, tone]) => <span key={x} className={`rv-fact ${tone}`}>{x}</span>)}</div> : null}
+    </header>
     <div className="rv-two">
-      {rv.situation ? <div className="rv-block"><h4>문제 상황</h4><Lines text={rv.situation} /></div> : null}
-      {rv.solve ? <div className="rv-block"><h4>이렇게 해야 풀려요</h4><Lines text={rv.solve} /></div> : null}
+      {rv.situation ? <div className="rv-intro sit"><div className="rv-introhead"><span className="rv-icon" aria-hidden>?</span>문제 상황</div><Lines text={rv.situation} /></div> : null}
+      {rv.solve ? <div className="rv-intro sol"><div className="rv-introhead"><span className="rv-icon" aria-hidden>✓</span>이렇게 해야 풀려요</div><Lines text={rv.solve} /></div> : null}
     </div>
-    {rv.story?.length ? <div className="rv-story"><h4>이렇게 흘러갔어요</h4>
+    {rv.story?.length ? <div className="rv-story"><h4 className="rv-sectitle">이렇게 흘러갔어요 <span>{rv.story.length}단계</span></h4>
       <ol className="rv-beats">{rv.story.map((b, i) => <li key={i} className={`rv-beat ${b.kind ?? ""}`}>
         <span className="rv-dot">{i + 1}</span>
         <article className="rv-card">
@@ -467,7 +469,7 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
           {w.fill ? <div className="rv-fill"><h5>이렇게 채워요</h5><Lines text={w.fill} /></div> : null}
         </div>
       </details>)}</div> : null}
-    {rv.next ? <div className="rv-next"><h4>다음에 떠올릴 것</h4><Lines text={rv.next} /></div> : null}
+    {rv.next ? <div className="rv-intro nxt"><div className="rv-introhead"><span className="rv-icon" aria-hidden>→</span>다음에 떠올릴 것</div><Lines text={rv.next} /></div> : null}
   </section>;
 }
 /** `코드`만 고정폭 글자로(나머지는 그대로). */
