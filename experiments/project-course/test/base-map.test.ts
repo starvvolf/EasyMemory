@@ -52,3 +52,23 @@ test("먼저 알 것 지도(11/10): 확정 때 노트 · 환경으로 채움 →
   assert.equal(g.base!.find((b) => b.name === "리스트")!.result, "됨");
   assert.equal(g.base!.at(-1)!.name, "문자열 메서드");
 });
+
+test("현재 목표의 선행(11/11): 비면 맥락이 set_prereqs를 시키고, 적으면 지도 결과를 옮기고, 학습자가 알아요 · 몰라요로 표시 · 지움", async () => {
+  const run = "rp";
+  await GO.runGoalTool(run, "propose_plan", { long: "REST API 요청 · 응답 이해", spec: "", mode: "topdown", map: ["요청 · 응답", "HTTP 메서드", "작은 API"],
+    first: { title: "요청 · 응답 이해하기", done: "주소를 치면 무슨 일이 일어나는지 말한다", prereqs: [] },
+    base: [{ name: "URL", kind: "개념", needs: [], for: ["작은 API"], check: "?" }] }, []);
+  await GO.goalAction(run, "confirm", {});
+  assert.match(await GO.goalContext(run), /\[선행 비어 있음\]/);
+  await GO.setBaseSelf(run, "URL", "됨");
+  await GO.runGoalTool(run, "set_prereqs", { prereqs: [{ name: "클라이언트와 서버", check: "브라우저와 서버는 각각 무슨 일을 하나요?" }, { name: "URL", check: "주소의 각 부분은?" }] }, []);
+  let g = await GO.goalsOf(run);
+  assert.deepEqual(g.current!.prereqs!.map((p) => [p.name, p.result ?? null, p.by ?? null]), [["클라이언트와 서버", null, null], ["URL", "됨", "학습자"]]);
+  assert.doesNotMatch(await GO.goalContext(run), /\[선행 비어 있음\]/);
+  const r = await GO.setBaseSelf(run, "클라이언트와 서버", "비어 있음");
+  assert.equal(r.prereqs[0].result, "비어 있음"); assert.equal(r.prereqs[0].by, "학습자");
+  assert.match(await GO.goalContext(run), /클라이언트와 서버\(비어 있음·학습자가 스스로 표시\)/);
+  await GO.setBaseSelf(run, "클라이언트와 서버", null);
+  g = await GO.goalsOf(run);
+  assert.equal(g.current!.prereqs![0].result, undefined);
+});

@@ -1372,3 +1372,20 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pbt-b{border:0;border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer;background:var(--surface);color:var(--ink);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--line) 100%,transparent)}
 .dejipgi .pbt-b.yes.on{background:var(--pbt-ok);color:#fff;box-shadow:none}
 .dejipgi .pbt-b.no.on{background:var(--pbt-gap);color:#fff;box-shadow:none}
+.dejipgi .pbt-more{display:block;width:100%;text-align:left;border:0;background:none;color:var(--muted,#888);font-size:12px;font-weight:600;padding:12px 6px 6px;cursor:pointer}
+/* 미니 창: 로드맵 가로줄 + 지금 단계 아래로 매달린 선행(11/11 사용자) */
+.dejipgi .pbt{width:min(580px,calc(100% - 24px))}
+.dejipgi .pbt-road{display:flex;gap:6px;margin:4px 0 0;padding:6px 16px 0;list-style:none;overflow-x:auto;scrollbar-width:none}
+.dejipgi .pbt-rs{flex:none;display:flex;align-items:center;gap:5px;max-width:170px;height:26px;padding:0 10px 0 4px;border-radius:999px;font-size:12px;color:var(--muted,#888);background:color-mix(in srgb,var(--line) 40%,var(--surface))}
+.dejipgi .pbt-rs.doing{max-width:260px;color:var(--ink);font-weight:600;background:color-mix(in srgb,var(--accent,#6b8cff) 14%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent,#6b8cff) 40%,transparent)}
+.dejipgi .pbt-rn{flex:none;display:grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:10px;background:var(--surface)}
+.dejipgi .pbt-rs.done .pbt-rn{color:var(--pbt-ok)}
+.dejipgi .pbt-rs.doing .pbt-rn{background:var(--accent,#6b8cff);color:#fff}
+.dejipgi .pbt-rt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dejipgi .pbt-tree{position:relative;padding-top:4px}
+.dejipgi .pbt-tree::before{content:"";position:absolute;left:var(--stem);top:-6px;bottom:22px;width:2px;border-radius:2px;background:color-mix(in srgb,var(--accent,#6b8cff) 45%,transparent)}
+.dejipgi .pbt-tree .pbt-k{margin-left:calc(var(--stem) + 14px)}
+.dejipgi .pbt-tree ul{margin-left:calc(var(--stem) + 12px)}
+.dejipgi .pbt-tree li{position:relative}
+.dejipgi .pbt-tree li::before{content:"";position:absolute;left:-12px;top:20px;width:10px;height:2px;border-radius:2px;background:color-mix(in srgb,var(--accent,#6b8cff) 45%,transparent)}
+.dejipgi .pbt-item.prev{background:color-mix(in srgb,var(--line) 22%,var(--surface));opacity:.9}

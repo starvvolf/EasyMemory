@@ -10,8 +10,8 @@ import { call, errorText, later } from "./api";
 
 type EdStatus = { installed: boolean; running: boolean; asset: string; source: string; size: number | null; job: { phase: string; got: number; total: number; error?: string } | null };
 type Run = { id: string; courseTitle: string; workspace: string | null };
-type BaseItem = { name: string; kind: "개념" | "도구"; needs: string[]; check: string; result: "됨" | "비어 있음" | null; by: "확인" | "노트" | "명령" | "학습자" | null; quote: string; now: boolean };
-type Brief = { long: string | null; current: { title: string; done: string; understood: boolean; applied: boolean } | null; support: { title: string; target: string } | null; map: Array<{ title: string; status: string }>; base?: BaseItem[] };
+type BaseItem = { name: string; kind?: "개념" | "도구"; needs?: string[]; check: string; result: "됨" | "비어 있음" | null; by: "확인" | "노트" | "명령" | "학습자" | null; quote: string; now?: boolean };
+type Brief = { long: string | null; current: { title: string; done: string; understood: boolean; applied: boolean } | null; support: { title: string; target: string } | null; map: Array<{ title: string; status: string }>; base?: BaseItem[]; prereqs?: BaseItem[] };
 
 const mb = (n: number | null | undefined) => (n ? `${Math.round(n / 1048576)}MB` : "크기 확인 못 함");
 // 11/11 저녁 사용자 "내장 VS Code 창 크기는 딱 적당 · 왼쪽으로 옮기고 오른쪽 대화창은 그만큼 비중을 키워": 왼쪽 칸을 뺀 만큼 튜터가 넓어진다(기본 폭 약 31%)
@@ -127,14 +127,19 @@ export default function ProjectStudio({ run, courseUrl, onClose }: { run: Run; c
         <header className="pst-top">
           <button className="btn ghost small" onClick={onClose} title="실습 목록으로(편집기는 켜 둔 채)">← 실습</button>
           <Goals brief={brief} fallback={run.courseTitle} />
-          {brief?.base?.length ? <button className={`pst-basebtn ${baseOpen ? "on" : ""}`} onClick={() => setBaseOpen((o) => !o)} aria-expanded={baseOpen}
-            title="장기 목표를 정할 때 튜터가 모아 둔 '먼저 알 것'. 눌러서 보고 안다 · 모른다를 표시해요">
-            먼저 알 것 <b>{brief.base.filter((b) => b.result === "됨").length}/{brief.base.length}</b>{brief.base.some((b) => b.result === "비어 있음") ? <i className="pst-dot" /> : null}
-          </button> : null}
+          {brief?.prereqs?.length || brief?.base?.length ? (() => {
+            // 11/11 사용자 "현재 목표의 선행 개념을": 숫자는 지금 목표의 선행(없으면 전체 지도)
+            const xs = brief.prereqs?.length ? brief.prereqs : brief.base!;
+            return <button className={`pst-basebtn ${baseOpen ? "on" : ""}`} onClick={() => setBaseOpen((o) => !o)} aria-expanded={baseOpen}
+              title="지금 목표를 하기 전에 알고 있어야 할 것. 눌러서 보고 안다 · 모른다를 표시해요">
+              먼저 알 것 <b>{xs.filter((x) => x.result === "됨").length}/{xs.length}</b>{xs.some((x) => x.result === "비어 있음") ? <i className="pst-dot" /> : null}
+            </button>;
+          })() : null}
           {msg ? <span className="small muted pst-msg">{msg}</span> : null}
           <button className="btn ghost small" onClick={() => void mine()} title="내 PC의 VS Code(내 확장 · 설정 그대로)로 이 폴더를 열어요">내 VS Code로 열기</button>
         </header>
-        {baseOpen && brief?.base?.length ? <BaseTab runId={run.id} items={brief.base} onClose={() => setBaseOpen(false)} onChange={(base) => setBrief((b) => (b ? { ...b, base } : b))} /> : null}
+        {baseOpen && (brief?.prereqs?.length || brief?.base?.length) ? <BaseTab runId={run.id} goal={brief.current?.title ?? ""} map={brief.map} prereqs={brief.prereqs ?? []} items={brief.base ?? []} onClose={() => setBaseOpen(false)}
+          onChange={(next) => setBrief((b) => (b ? { ...b, ...next } : b))} /> : null}
         <div className="pst-body">
         <main className="pst-main">{center}</main>
         {rightOpen ? <>
@@ -177,46 +182,73 @@ function Goals({ brief, fallback }: { brief: Brief | null; fallback: string }) {
   </div>;
 }
 
-/** 먼저 알 것 미니 창(11/11 사용자 "선행 개념 버튼 → 미니 탭에 잘 정리된 선행 개념 · 안다 모른다 체크"):
- *  지금 단계에 쓰이는 것 먼저, 그다음 나머지(기대는 순서). 항목마다 그 전에 알 것 · 확인 방법 · 누가 확인했는지, [알아요] · [몰라요](한 번 더 누르면 지움) */
-function BaseTab({ runId, items, onClose, onChange }: { runId: string; items: BaseItem[]; onClose: () => void; onChange: (b: BaseItem[]) => void }) {
+/** 먼저 알 것 미니 창(11/11 사용자 "선행 개념 버튼 → 미니 탭에 잘 정리된 선행 개념 · 안다 모른다 체크", "현재 목표의 선행 개념을"):
+ *  맨 위에 지금 목표의 선행, 그 아래 장기 목표 전체 지도(접힘). 항목마다 그 전에 알 것 · 확인 문항 · 누가 확인했는지, [알아요] · [몰라요](한 번 더 누르면 지움) */
+function BaseTab({ runId, goal, map, prereqs, items, onClose, onChange }: { runId: string; goal: string; map: Brief["map"]; prereqs: BaseItem[]; items: BaseItem[]; onClose: () => void; onChange: (b: { base?: BaseItem[]; prereqs?: BaseItem[] }) => void }) {
   const [err, setErr] = useState("");
+  // 11/11 사용자 "현재 목표가 오른쪽으로 한 칸씩 가면서 로드맵이 완성 · 현재 목표 밑으로 선행 개념을 붙이는 느낌 · 현재 목표조차 오른쪽 다음 목표의 선행":
+  // 위는 로드맵 가로줄, 지금 단계 칩 아래로 줄기를 내려 선행을 매단다. 맨 위 가지는 바로 앞 단계(그것도 선행)
+  const road = useRef<HTMLOListElement>(null);
+  const [stemX, setStemX] = useState(24);
+  const cur = map.findIndex((x) => x.status === "doing");
+  useLayoutEffect(() => {
+    const ol = road.current, li = ol?.children[cur] as HTMLElement | undefined;
+    if (!ol || !li) return;
+    li.scrollIntoView({ block: "nearest", inline: "nearest" });
+    setStemX(Math.min(220, Math.max(14, li.offsetLeft - ol.scrollLeft + 4)));
+  }, [cur, map.length]);
+  const prev = cur > 0 ? map[cur - 1] : null;
+  const [showAll, setShowAll] = useState(!prereqs.length);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
   const mark = async (it: BaseItem, want: "됨" | "비어 있음") => {
     const result = it.result === want && it.by === "학습자" ? null : want;
+    const set = (xs: BaseItem[]) => xs.map((x) => (x.name.trim().toLowerCase() === it.name.trim().toLowerCase() ? { ...x, result, by: result ? "학습자" as const : null } : x));
     setErr("");
-    onChange(items.map((x) => (x.name === it.name ? { ...x, result, by: result ? "학습자" : null } : x)));
-    try { const r = await call<{ base: BaseItem[] }>(`/api/project-course/runs/${runId}/base`, { name: it.name, result }); onChange(r.base); }
-    catch (e) { setErr(errorText(e)); onChange(items); }
+    onChange({ base: set(items), prereqs: set(prereqs) });
+    try { onChange(await call<{ base: BaseItem[]; prereqs: BaseItem[] }>(`/api/project-course/runs/${runId}/base`, { name: it.name, result })); }
+    catch (e) { setErr(errorText(e)); onChange({ base: items, prereqs }); }
   };
-  const byText = (it: BaseItem) => !it.result ? "아직 확인 전" : it.by === "학습자" ? "내가 표시" : it.by === "노트" ? "지난 실습에서 확인" : it.by === "명령" ? `명령으로 확인${it.quote ? ` · ${it.quote}` : ""}` : "튜터가 물어보고 확인";
-  const known = items.filter((x) => x.result === "됨").length, gap = items.filter((x) => x.result === "비어 있음").length;
-  const now = items.filter((x) => x.now), rest = items.filter((x) => !x.now);
+  const byText = (it: BaseItem) => !it.result ? "아직 확인 전" : it.by === "학습자" ? "내가 표시" : it.by === "노트" ? "지난 실습에서 확인" : it.by === "명령" ? `명령으로 확인${it.quote ? ` · ${it.quote}` : ""}` : `튜터가 물어보고 확인${it.quote ? ` · "${it.quote}"` : ""}`;
+  const head = prereqs.length ? prereqs : items;
+  const known = head.filter((x) => x.result === "됨").length, gap = head.filter((x) => x.result === "비어 있음").length;
   const row = (it: BaseItem) => (
     <li key={it.name} className={`pbt-item ${it.result === "됨" ? "ok" : it.result === "비어 있음" ? "gap" : ""}`}>
       <span className="pbt-mark" aria-hidden>{it.result === "됨" ? "✓" : it.result === "비어 있음" ? "!" : ""}</span>
       <div className="pbt-main">
         <div className="pbt-name">{it.name}{it.kind === "도구" ? <span className="pbt-tag">도구</span> : null}</div>
-        {it.needs.length ? <div className="pbt-sub">그 전에: {it.needs.join(", ")}</div> : null}
+        {it.needs?.length ? <div className="pbt-sub">그 전에: {it.needs.join(", ")}</div> : null}
         {it.check ? <div className="pbt-sub">확인: {it.check}</div> : null}
         <div className="pbt-by">{byText(it)}</div>
       </div>
       <div className="pbt-acts">
         <button className={`pbt-b yes ${it.result === "됨" ? "on" : ""}`} onClick={() => void mark(it, "됨")} title={it.result === "됨" && it.by === "학습자" ? "표시 지우기" : "알아요 — 튜터가 이건 묻지 않아요"}>알아요</button>
-        <button className={`pbt-b no ${it.result === "비어 있음" ? "on" : ""}`} onClick={() => void mark(it, "비어 있음")} title={it.result === "비어 있음" && it.by === "학습자" ? "표시 지우기" : "몰라요 — 튜터가 이 단계 전에 짧게 채워 줘요"}>몰라요</button>
+        <button className={`pbt-b no ${it.result === "비어 있음" ? "on" : ""}`} onClick={() => void mark(it, "비어 있음")} title={it.result === "비어 있음" && it.by === "학습자" ? "표시 지우기" : "몰라요 — 튜터가 이 목표 전에 짧게 채워 줘요"}>몰라요</button>
       </div>
     </li>
   );
   return <>
     <div className="pbt-scrim" onClick={onClose} />
     <section className="pbt" role="dialog" aria-label="먼저 알 것">
-      <header className="pbt-head"><b>먼저 알 것</b><span className="pbt-sum">알아요 {known} · 몰라요 {gap} · 확인 전 {items.length - known - gap}</span><span className="grow" />
+      <header className="pbt-head"><b>먼저 알 것</b><span className="pbt-sum">알아요 {known} · 몰라요 {gap} · 확인 전 {head.length - known - gap}</span><span className="grow" />
         <button className="pbt-x" onClick={onClose} aria-label="닫기">×</button></header>
-      <p className="pbt-note">장기 목표를 정할 때 튜터가 모아 둔 것이에요. 아는 건 <b>알아요</b>, 모르는 건 <b>몰라요</b>로 표시하면 튜터가 아는 건 묻지 않고 모르는 건 먼저 짧게 채워 줘요.</p>
+      <p className="pbt-note">{prereqs.length ? <>지금 목표 <b>{goal}</b>를 하기 전에 알고 있어야 할 것이에요.</> : <>지금 목표의 선행은 튜터가 다음 답에서 적어요. 아래는 장기 목표를 정할 때 모아 둔 전체 지도예요.</>} 아는 건 <b>알아요</b>, 모르는 건 <b>몰라요</b>로 표시하면 튜터가 아는 건 묻지 않고 모르는 건 먼저 짧게 채워 줘요.</p>
       {err ? <p className="pbt-err">{err}</p> : null}
+      {map.length ? <ol className="pbt-road" ref={road}>
+        {map.map((x, i) => <li key={i} className={`pbt-rs ${x.status}`} title={x.title}><span className="pbt-rn">{x.status === "done" ? "✓" : x.status === "skipped" ? "↷" : i + 1}</span><span className="pbt-rt">{x.title}</span></li>)}
+      </ol> : null}
       <div className="pbt-list">
-        {now.length ? <><div className="pbt-k">지금 단계에 쓰이는 것</div><ul>{now.map(row)}</ul></> : null}
-        {rest.length ? <><div className="pbt-k">{now.length ? "나머지 (아래일수록 바탕)" : "전체 (아래일수록 바탕)"}</div><ul>{rest.map(row)}</ul></> : null}
+        {prereqs.length || prev ? <div className="pbt-tree" style={{ ["--stem" as string]: `${stemX}px` }}>
+          <div className="pbt-k">{goal ? <><b>{goal}</b> 아래에 붙은 선행</> : "지금 목표에 필요한 것"}</div>
+          <ul>
+            {prev ? <li className={`pbt-item prev ${prev.status === "done" ? "ok" : ""}`}><span className="pbt-mark" aria-hidden>{prev.status === "done" ? "✓" : ""}</span>
+              <div className="pbt-main"><div className="pbt-name">{prev.title}<span className="pbt-tag">앞 단계</span></div><div className="pbt-by">로드맵의 바로 앞 단계도 이 목표의 선행이에요{prev.status === "skipped" ? " · 건너뜀" : ""}</div></div></li> : null}
+            {prereqs.map(row)}
+          </ul>
+        </div> : null}
+        {items.length ? <>
+          {prereqs.length ? <button className="pbt-more" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>{showAll ? "▾" : "▸"} 장기 목표 전체 지도 ({items.filter((x) => x.result === "됨").length}/{items.length})</button> : <div className="pbt-k">장기 목표 전체 지도 (아래일수록 바탕)</div>}
+          {showAll ? <ul>{items.map(row)}</ul> : null}
+        </> : null}
       </div>
     </section>
   </>;
