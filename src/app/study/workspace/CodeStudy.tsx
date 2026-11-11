@@ -412,7 +412,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         </div>
         </>}
         <div className="cs-chat">
-          {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">막히면 힌트 1부터 받아 보세요. 편집기에서 코드를 드래그하고 질문하면 그 부분을 설명해요.</p> : null}
+          {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">{help ? "막히면 위 「막혔을 때」 1번부터 열어 보세요." : "막히면 힌트 1부터 받아 보세요."} 편집기에서 코드를 드래그하고 질문하면 그 부분을 설명해요.</p> : null}
           {shownMsgs.map((m, i) => <div key={i} className={`cs-msg ${m.who}`}>{m.tag ? <span className="chip">{m.tag}</span> : null}<Rich text={m.text} className="small" /></div>)}
           {asking ? <div className="cs-msg ai"><span className="small muted">생각하는 중…</span></div> : null}
           <div ref={chatEnd} />
