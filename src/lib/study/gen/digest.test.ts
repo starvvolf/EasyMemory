@@ -459,6 +459,23 @@ test("목표형 문제 (11/6): 목표에 주는 것·내는 것, 판정은 상�
   for (const q of qs.filter((q) => q.format === "choice")) assert.ok(q.authored.stem.some((b) => (b.text ?? "").includes("\n")), "상황과 질문이 한 문제에");
   assert.ok(!qs.some((q) => q.format === "ox"));
 }));
+test("줄기 모드 끝까지 (11/11, 가짜 모델): 줄 형식 계획 → 질문이 채우기와 학습 목표로 넘어간다", () => withData(async () => {
+  const io = { pdf: async () => null, pages: async () => pages };
+  const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake",
+    lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, goalQuiz: true, quiz: "luna", quizCount: 3, stem: true, consolidate: false } });
+  const done = await runGen(start.id, { uid: "local-experiment" }, io);
+  assert.ok(done.status === "done" || done.status === "awaiting-questions" || done.phase !== "failed", `${done.status} ${done.message}`);
+  const calls = await readGenCalls(done.id);
+  const plan = calls.find((c) => c.step === "rc-stem-plan");
+  assert.ok(plan?.reply?.startsWith("영역|1|"), "줄기 계획은 줄 형식");
+  const stem = done.recaller!.digest!.stem!;
+  assert.equal(Object.values(stem.memories).length, 3);
+  assert.ok(Object.values(stem.memories).every((m) => m.question), "기억마다 질문");
+  const fill = calls.filter((c) => c.step === "rc-stem-fill");
+  assert.ok(fill.length && fill.every((c) => c.user?.includes("[줄기 전체]") && c.user.includes("p.2의 내용 — p.2에서 무엇을 배우나?")), "채우기가 줄기 전체(이름 — 질문)를 받는다");
+  assert.ok(calls.find((c) => c.step === "rc-q-goals")?.user?.includes("  t1.m1 | p.1의 내용 | p.1에서 무엇을 배우나?"), "학습 목표가 기억 목록을 받는다");
+  assert.equal(Object.values(done.recaller!.units).flatMap((u) => u.cards ?? u.chunks?.[0]?.cards ?? []).length, 3);
+}));
 test("목표형 문제 (11/6): 보기 검사와 서술 새는 말", async () => {
   const { caseDrafts, writeLeaks } = await import("./quiz.ts");
   assert.equal(caseDrafts({ situation: "R1, R2 인스턴스 1개. P1 → R1 (요청)", ask: "교착 상태가 발생한다?", options: ["교착 상태가 발생한다", "가능성만", "없다"], correct: 0, check: "" }).length, 0, "질문에 정답 말");

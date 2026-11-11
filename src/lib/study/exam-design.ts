@@ -96,7 +96,7 @@ export function designInput(map: MaterialMap, structure: Structure | null, goals
     ...(c.mistakes ?? []).map((m) => `  헷갈림: ${m}`)].join("\n"));
   const rel = [...(structure?.versus ?? []).map((v) => `대비 ${num.get(v.a)} vs ${num.get(v.b)}: ${v.on}`), ...(structure?.pairs ?? []).map((p) => `짝 ${num.get(p.a)} — ${num.get(p.b)}: ${p.why}`)]
     .filter((x) => !x.includes("undefined"));
-  const user = `자료: ${map.title}\n\n[기억] (번호|역할|종류|이름)\n${lines.join("\n")}\n\n[대비·짝]\n${rel.join("\n") || "(없음)"}\n\n[학습 목표]\n${goals.map((g) => `${g.id} ${g.verb}: ${g.text}`).join("\n") || "(없음)"}`;
+  const user = `자료: ${map.title}\n\n[기억] (번호|역할|종류|이름)\n${lines.join("\n")}\n\n[대비·짝]\n${rel.join("\n") || "(없음)"}\n\n[학습 목표]\n${goals.map((g) => { const ns = (g.memories ?? []).map((id) => num.get(id)).filter(Boolean); return `${g.id} ${g.verb}: ${g.text}${ns.length ? ` (기억 ${ns.join(", ")})` : ""}`; }).join("\n") || "(없음)"}`;
   return { user, cards };
 }
 

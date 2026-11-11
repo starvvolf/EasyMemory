@@ -8,7 +8,7 @@ import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
 import { imageSize } from "./image-size.ts";
-import { addMore, fillGroups, HEADING_TERMS, memoryCard, missingPages, settlePlan, STEM_FILL, STEM_MORE, STEM_PLAN, stemFakeReply, stemFillSchema, stemPlanSchema, type StemRole } from "./stem.ts";
+import { addMore, fillGroups, HEADING_TERMS, memoryCard, missingPages, parsePlan, settlePlan, STEM_FILL, STEM_MORE, STEM_PLAN, stemFakeReply, stemFillSchema, type StemRole } from "./stem.ts";
 import { cardKinds, cardLine, cardSchema, checkCards, cleanFigure, FIGURE_RULES, figureSchema, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
@@ -21,7 +21,7 @@ import type { GenStep, GenState, Issue, Objective, ObjectiveKind, SectionState }
 import { citedPages, pagesOutside, summaryUser } from "./summary.ts";
 import { Q_CASE, qCaseSchema, caseDrafts, Q_PICK_CASE, Q_WRITE_CASE, writeLeaks, quizRank, cleanText, oxNotesOf, writeDrafts, Q_WRITE, qWriteSchema, QUIZ_MIX_SHORT, Q_PICK, Q_PICK_GOALS, qPickSchema, mixCounts, sameAsk, answerInStem, buildChoice, choicePool, clozeDrafts, focusOf, nextFormat, oxDrafts, sameQuestion, quizFakeReply, Q_CHOICE, Q_CLOZE, Q_EXPLAIN, Q_MATERIAL, Q_SCORE,
   blankMatches, shuffleOrder, qChoiceSchema, qClozeSchema, qExplainSchema, qMaterialSchema, qScoreSchema, type QuizDraft, type QuizFormat } from "./quiz.ts";
-import { OBJECTIVES_GIVEN, FLOW_AFTER, FLOW_WITH, MAP_CARD, parseObjectives, PLAN_TASK_GOALS, PLAN_TASK_CONCEPTS, planTaskGiven, parseConcepts, sourceGroups, OBJECTIVES_SYSTEM, objectivesUser, batchLines, DIGEST_CARD, ONE_OUTLINE_END, ONE_SYSTEM, ONE_UNIV_SYSTEM, PLAN_COMMON, PLAN_TASK, assembleTask, planKinds, topicPlanSystem, oneDomains, oneTopicText, oneUser, splitOne, digestFakeReply, digestOverlaps, fallbackTopics, parseSkeleton, parseTopic, settleSkeleton, SKELETON_SYSTEM, skeletonLines, skeletonUser, TOPIC_SYSTEM, topicPages, topicUser, WRAP_SYSTEM,
+import { OBJECTIVES_GIVEN, FLOW_AFTER, FLOW_WITH, MAP_CARD, parseObjectives, PLAN_TASK_GOALS, PLAN_TASK_CONCEPTS, planTaskGiven, parseConcepts, sourceGroups, OBJECTIVES_MEMORIES, OBJECTIVES_SYSTEM, objectivesUser, batchLines, DIGEST_CARD, ONE_OUTLINE_END, ONE_SYSTEM, ONE_UNIV_SYSTEM, PLAN_COMMON, PLAN_TASK, assembleTask, planKinds, topicPlanSystem, oneDomains, oneTopicText, oneUser, splitOne, digestFakeReply, digestOverlaps, fallbackTopics, parseSkeleton, parseTopic, settleSkeleton, SKELETON_SYSTEM, skeletonLines, skeletonUser, TOPIC_SYSTEM, topicPages, topicUser, WRAP_SYSTEM,
   SOURCE_EN, sourceLanguage, type DigestLine, type DigestState, type DigestTopic } from "./digest.ts";
 
 const text = z.string().trim().min(1);
@@ -650,8 +650,12 @@ export async function runRecaller(ctx: RecallerContext) {
         // 학습 목표 for the short quiz: one luna call from the outline and the page text, beside the topic summaries.
         if (lab.quiz === "luna" && lab.quizCount && !lab.goalsInPlan && d.skeleton.topics.length && !d.objectives) {
           const topicsNow = d.skeleton.topics;
-          objectivesReady = ctx.askText("rc-q-goals", null, 1, `${prompt("OBJECTIVES_SYSTEM", OBJECTIVES_SYSTEM)}${lab.goalQuiz ? `\n${prompt("OBJECTIVES_GIVEN", OBJECTIVES_GIVEN)}` : ""}`, objectivesUser(input.fileName, topicsNow, input.pageNumbers.map((page) => ({ page, text: data.texts[page] ?? "" }))), [])
-            .then((reply) => { d.timing.goalsMs = Date.now() - digestT0; d.objectives = parseObjectives(reply).map((g) => ({ ...g, topics: g.topics.filter((id) => topicsNow.some((t) => t.id === id)) })); },
+          // 줄기 모드: 기억(카드 id tN.mK = 목차 항목 tN-cK) 이름과 질문을 같이 준다 — 목표가 기억에 걸린다(11/11).
+          const memsNow = lab.stem && d.stem ? (d.concepts ?? []).map((c) => ({ id: c.id.replace("-c", ".m"), topic: c.topic, name: c.name, question: d.stem!.memories[c.id]?.question ?? "" })) : [];
+          objectivesReady = ctx.askText("rc-q-goals", null, 1, `${prompt("OBJECTIVES_SYSTEM", OBJECTIVES_SYSTEM)}${lab.goalQuiz ? `\n${prompt("OBJECTIVES_GIVEN", OBJECTIVES_GIVEN)}` : ""}${memsNow.length ? `\n${OBJECTIVES_MEMORIES}` : ""}`, objectivesUser(input.fileName, topicsNow, input.pageNumbers.map((page) => ({ page, text: data.texts[page] ?? "" })), memsNow), [])
+            .then((reply) => { d.timing.goalsMs = Date.now() - digestT0; d.objectives = parseObjectives(reply).map((g) => { const memories = (g.memories ?? []).filter((id) => memsNow.some((m) => m.id === id));
+              const { memories: _given, ...rest } = g; void _given;
+              return { ...rest, topics: g.topics.filter((id) => topicsNow.some((t) => t.id === id)), ...(memories.length ? { memories } : {}) }; }); },
               (error) => { if (pausesRun(error)) throw error; data.warnings.push({ severity: "warning", code: "rc-q-goals", message: `학습 목표를 받지 못했어요: ${fail(error)}` }); });
           objectivesReady.catch(() => undefined);
         }
@@ -950,13 +954,16 @@ export async function runRecaller(ctx: RecallerContext) {
   async function stemPlanRun(d: NonNullable<typeof data.digest>) {
     const t0 = Date.now();
     const user = oneUser(input.fileName, input.pageNumbers.map((page) => ({ page, text: data.texts[page] ?? "" })));
-    let plan = settlePlan(await ctx.ask("rc-stem-plan", null, 1, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}`, user, stemPlanSchema, { images: await imagesOf(input.pageNumbers), maxChars: 200 * input.pageNumbers.length + 8000 }), input.pageNumbers);
+    // 줄 형식으로 받는다(11/11, stem.ts parsePlan). 기억 줄이 하나도 없으면 한 번 더 묻고, 그래도 없으면 멈춘다(예전의 틀 검사 자리).
+    let plan = settlePlan(parsePlan(await ctx.askText("rc-stem-plan", null, 1, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}`, user, await imagesOf(input.pageNumbers))), input.pageNumbers);
+    if (!plan.areas.length || !plan.memories.length) plan = settlePlan(parsePlan(await ctx.askText("rc-stem-plan", null, 3, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}`, user, await imagesOf(input.pageNumbers))), input.pageNumbers);
+    if (!plan.areas.length || !plan.memories.length) throw new Error("줄기 계획에서 영역·기억 줄을 읽지 못했어요.");
     const miss = missingPages(plan, input.pageNumbers);
     if (miss.length) {
       try {
-        const more = await ctx.ask("rc-stem-plan", null, 2, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}\n\n${prompt("STEM_MORE", STEM_MORE)}`,
+        const more = parsePlan(await ctx.askText("rc-stem-plan", null, 2, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}\n\n${prompt("STEM_MORE", STEM_MORE)}`,
           `[이미 있는 기억]\n${plan.memories.map((m) => m.name).join("\n")}\n\n[영역]\n${plan.areas.map((a, i) => `${i + 1} ${a.name}`).join("\n")}\n\n${oneUser(input.fileName, miss.map((page) => ({ page, text: data.texts[page] ?? "" })))}`,
-          stemPlanSchema, { images: await imagesOf(miss), maxChars: 200 * miss.length + 4000 });
+          await imagesOf(miss)));
         plan = addMore(plan, more, input.pageNumbers);
       } catch (error) { if (pausesRun(error)) throw error; }
     }
@@ -971,10 +978,13 @@ export async function runRecaller(ctx: RecallerContext) {
     d.conceptSource = "AI";
     d.skeleton.text = d.skeleton.topics.map((t) => `${t.id} | ${t.title} | ${t.pages.join(",")}`).join("\n");
     d.stem = { questions: Object.fromEntries(used.map((a) => [topicId.get(a)!, plan.areas[a - 1].question])),
-      memories: Object.fromEntries(plan.memories.map((m, i) => [d.concepts![i].id, { kind: m.kind, role: m.role }])), missing: missingPages(plan, input.pageNumbers), ms: Date.now() - t0 };
+      memories: Object.fromEntries(plan.memories.map((m, i) => [d.concepts![i].id, { kind: m.kind, role: m.role, ...(m.question?.trim() ? { question: m.question.trim() } : {}) }])), missing: missingPages(plan, input.pageNumbers), ms: Date.now() - t0 };
   }
   // ⓑ 기억 채우기: 묶음(쪽이 이어지는 기억 몇 개)마다 그 쪽 원문 + 쪽 그림. 기억 하나 = 카드 한 장(id tN.mK).
-  const stemFillRun = async (section: SectionState, group: Array<{ line: DigestLine; pages: number[]; kind: string; role: StemRole }>) => {
+  // [줄기 전체]: 이 자료의 모든 기억 이름과 질문(11/11) — 묶음마다 같아서 요청 앞쪽에 둔다. 채우기가 다른 호출의 몫을 알게 한다.
+  const stemAll = () => { const meta = data.digest?.stem?.memories ?? {}; const topics = data.digest?.skeleton.topics ?? [];
+    return topics.map((t) => `${t.title}\n${(data.digest?.concepts ?? []).filter((c) => c.topic === t.id).map((c) => `- ${c.name}${meta[c.id]?.question ? ` — ${meta[c.id].question}` : ""}`).join("\n")}`).join("\n"); };
+  const stemFillRun = async (section: SectionState, group: Array<{ line: DigestLine; pages: number[]; kind: string; role: StemRole; question?: string }>) => {
     const pages = [...new Set(group.flatMap((m) => m.pages))].filter((p) => input.pageNumbers.includes(p)).sort((a, b) => a - b);
     const images = await imagesOf(pages);
     const sizes = new Map(images.flatMap((im) => { const m = /^원문 p\.(\d+)$/.exec(im.label); const dim = m ? imageSize(im.dataUrl) : undefined; return m && dim ? [[Number(m[1]), dim] as const] : []; }));
@@ -983,7 +993,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const out: Card[] = [];
     let left = group;
     for (let attempt = 1; attempt <= 2 && left.length; attempt++) {
-      const user = `[자료] ${input.fileName}\n영역: ${section.title}${data.digest?.stem?.questions[section.id] ? ` — ${data.digest.stem.questions[section.id]}` : ""}\n\n[기억 계획] (id|역할|모양|이름|쪽)\n${left.map((m) => `${m.line.id}|${m.role}|${m.kind}|${m.line.name}|p.${m.pages.join(",")}`).join("\n")}\n\n${pages.map((p) => `[p.${p}]\n${(data.texts[p] ?? "").trim() || "(글자 없음)"}`).join("\n\n")}`;
+      const user = `[자료] ${input.fileName}\n\n[줄기 전체] (영역마다 기억 이름 — 떠올릴 질문)\n${stemAll()}\n\n지금 영역: ${section.title}${data.digest?.stem?.questions[section.id] ? ` — ${data.digest.stem.questions[section.id]}` : ""}\n\n[기억 계획] 지금 채울 기억 (id|역할|모양|이름|쪽|떠올릴 질문)\n${left.map((m) => `${m.line.id}|${m.role}|${m.kind}|${m.line.name}|p.${m.pages.join(",")}|${m.question ?? ""}`).join("\n")}\n\n${pages.map((p) => `[p.${p}]\n${(data.texts[p] ?? "").trim() || "(글자 없음)"}`).join("\n\n")}`;
       let reply: z.infer<typeof stemFillSchema>;
       try { reply = await ctx.ask("rc-stem-fill", section.id, attempt, `${prompt("STEM_FILL", STEM_FILL)}${lab.headingTerms ? HEADING_TERMS : ""}${images.length ? `\n${INLINE_READ}` : ""}`, user, stemFillSchema, { maxChars: 3000 * left.length + 4000, ...(images.length ? { images } : {}) }); }
       catch (error) { if (error instanceof RunawayReply) continue; throw error; }
@@ -1039,7 +1049,7 @@ export async function runRecaller(ctx: RecallerContext) {
     const lines = (await bodies.get(section.id)?.promise) ?? [];
     if (lab.stem) {
       const meta = data.digest!.stem?.memories ?? {};
-      const mems = lines.map((line) => { const m = meta[line.concepts?.[0] ?? ""]; return { line, pages: line.pages, kind: m?.kind ?? "개념", role: (m?.role ?? "메인") as StemRole }; });
+      const mems = lines.map((line) => { const m = meta[line.concepts?.[0] ?? ""]; return { line, pages: line.pages, kind: m?.kind ?? "개념", role: (m?.role ?? "메인") as StemRole, question: m?.question }; });
       const made = await Promise.all(fillGroups(mems).map((g) => stemFillRun(section, g)));
       chunk.cards = made.flat(); chunk.issues = [];
       stamp("organizedAt", section.pages);
