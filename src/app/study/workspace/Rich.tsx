@@ -32,7 +32,9 @@ export function TeX({ tex, display = false }: { tex: string; display?: boolean }
  */
 const BARE = /(?<![\w$\\])([A-Za-z]{1,2}(?:_\{[^{}\s]{1,16}\}|_[A-Za-z0-9]{1,4})(?:\^\{[^{}]{1,8}\}|\^[A-Za-z0-9])?|[A-Za-z]\^\{[^{}]{1,8}\})(?![\w{])/g;
 const isTex = (inner: string) => /[\\_^{}=|]/.test(inner) || /^[A-Za-z]$/.test(inner) || /^[-−+]\s?[A-Za-z]{1,2}\d?$/.test(inner.trim()) // -u 같은 짧은 식(11/11)
-  || /^[A-Za-z0-9]{1,4}(?:\([A-Za-z0-9, ]{1,12}\))?$/.test(inner); // $P0$ $1$ $P(S)$ 같은 짧은 이름·숫자·함수꼴 (11/11, 강의에서 $가 그대로 보임)
+  || /^[A-Za-z0-9]{1,4}(?:\([A-Za-z0-9, ]{1,12}\))?$/.test(inner) // $P0$ $1$ $P(S)$ 같은 짧은 이름·숫자·함수꼴 (11/11, 강의에서 $가 그대로 보임)
+  // 그리스 문자·수학 기호가 든 짧은 식(11/12 질문·답 카드 "$Δx$", "$0 ≤ m ≤ 1$", "$2Δy − 2Δx$"가 그대로 보임). 한글이 든 것은 글로 둔다.
+  || (/[Α-Ωα-ω≤≥−×·→←∑√∞≠±∈∉⊂∩∪∠°]/.test(inner) && !/[가-힣]/.test(inner) && inner.length <= 80);
 /*
  * Formulas written with plain signs (n = N/|N|, u = (V × n)/|V × n|, P_0=(x_0,y_0,z_0)): a run of one- or two-letter
  * names, digits and signs that holds = or × becomes one $…$, cut where its brackets close.

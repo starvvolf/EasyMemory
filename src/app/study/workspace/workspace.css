@@ -15,6 +15,9 @@
 .dejipgi .ws-rich p,.dejipgi .ws-rich ul,.dejipgi .ws-rich ol{margin:0 0 6px}
 .dejipgi .ws-rich>:last-child{margin-bottom:0}
 .dejipgi .ws-rich ul,.dejipgi .ws-rich ol{padding-left:20px}
+/* 목록 표시는 바깥 목록(list-style:none)을 물려받지 않게(11/12 질문·답 카드의 단계 번호가 안 보이던 것) */
+.dejipgi .ws-rich ol{list-style:decimal}
+.dejipgi .ws-rich ul{list-style:disc}
 .dejipgi .ws-rich code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:0 4px}
 .dejipgi .ws-rich .ws-h{font-weight:700}
 .dejipgi .ws-code,.dejipgi .cs-out,.dejipgi .cs-io pre,.dejipgi .kw-overview{font-family:var(--mono);font-size:12.5px;line-height:1.5;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;overflow:auto;white-space:pre;max-height:280px;margin:0 0 6px}
