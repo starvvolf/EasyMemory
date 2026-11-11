@@ -539,6 +539,8 @@ function SmoothText({ text, live, onGrow }: { text: string; live: boolean; onGro
   useEffect(() => { grow.current = onGrow; });
   useEffect(() => {
     if (shown >= text.length) return;
+    // 창이 가려져 있으면 그리기 차례(requestAnimationFrame)가 오지 않아 말풍선이 빈 채로 남았다(11/11 시험): 그때는 한 번에 다 보인다.
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") { const t = setTimeout(() => setShown(text.length), 0); return () => clearTimeout(t); }
     const id = requestAnimationFrame(() => {
       const left = text.length - shown;
       setShown((n) => Math.min(text.length, n + Math.max(1, Math.ceil(left / (live ? 18 : 6)))));
