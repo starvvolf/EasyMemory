@@ -1399,26 +1399,28 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pt-week{background:var(--accent-soft);border-radius:8px;padding:6px 10px}
 .dejipgi .pbt-debt{font-size:11.5px;color:var(--pbt-gap);line-height:1.5}
 
-/* 막혔을 때 (11/11, 자료 지도 강의 탭 모양을 따름) */
-.dejipgi .hd{display:flex;flex-direction:column;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
-.dejipgi .hd-top{display:flex;justify-content:space-between;align-items:baseline}
-.dejipgi .hd-bar{gap:8px}
-.dejipgi .hd-bar .lc3-arrow{width:28px;height:28px;flex:0 0 28px;font-size:17px}
-.dejipgi .hd-gauge{flex:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
-.dejipgi .hd-seg{display:flex;flex-direction:column;gap:5px;background:none;border:0;padding:0;cursor:pointer;text-align:left;min-width:0}
+/* 막혔을 때 (11/11, 자료 지도 강의 탭 모양을 따름: 위 게이지, 한 장씩 옆으로 넘김) */
+.dejipgi .hd{display:flex;flex-direction:column;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.dejipgi .hd-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.dejipgi .hd-gauge{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.dejipgi .hd-seg{display:block;width:100%;height:6px;padding:0;border:0;border-radius:99px;background:var(--line);cursor:pointer;transition:background .3s ease}
+.dejipgi .hd-seg.done{background:var(--accent)}
+.dejipgi .hd-seg.on{outline:2px solid var(--accent-soft);outline-offset:1px}
 .dejipgi .hd-seg:disabled{cursor:default}
-.dejipgi .hd-bar-fill{display:block;height:4px;border-radius:99px;background:var(--line);transition:background .3s ease}
-.dejipgi .hd-seg.done .hd-bar-fill{background:var(--accent)}
-.dejipgi .hd-seg.on .hd-bar-fill{box-shadow:0 0 0 2px var(--accent-soft)}
-.dejipgi .hd-seglabel{font-size:11.5px;color:var(--muted);text-align:center}
-.dejipgi .hd-seg.on .hd-seglabel{color:var(--ink);font-weight:700}
-.dejipgi .hd-seg:disabled:not(.done) .hd-seglabel{opacity:.55}
-.dejipgi .hd-box{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-.dejipgi .hd-box .lc3-head{padding-bottom:8px}
-.dejipgi .hd-box .lc3-title{font-size:15.5px}
-.dejipgi .hd-empty{background:var(--ground)}
-.dejipgi .hd-title{margin:0;font-weight:700}
-.dejipgi .hd-say{font-size:14.5px;line-height:1.75;white-space:pre-line}
-.dejipgi .hd .lc3-next{padding:8px 14px;border-radius:12px}
-/* 힌트 버튼을 뺀 만큼 채팅을 크게 */
-.dejipgi .cs-ai:not(.training) .cs-chat{min-height:260px}
+.dejipgi .hd-box{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.dejipgi .hd-empty{background:var(--ground);gap:4px}
+.dejipgi .hd-empty p{margin:0}
+.dejipgi .hd-head{display:flex;align-items:flex-start;gap:10px}
+.dejipgi .hd-headtext{display:flex;flex-direction:column;min-width:0}
+.dejipgi .hd-say{font-size:14px;line-height:1.7;white-space:pre-line}
+.dejipgi .hd-foot{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dejipgi .hd-prev{background:none;border:0;padding:4px 0;font-size:13px;color:var(--muted)}
+.dejipgi .hd-prev:disabled{opacity:.35;cursor:default}
+.dejipgi .hd-next{background:var(--accent-soft);color:var(--accent);border:1px solid transparent;border-radius:99px;padding:5px 12px;font-size:13px}
+.dejipgi .hd-next:hover:not(:disabled){border-color:var(--accent)}
+.dejipgi .hd-next b{font-weight:700}
+/* 오른쪽 열: AI 칸은 제 높이 그대로(채팅은 그 안에서 스크롤), 필요한 능력 칸이 남는 높이를 쓰고 스크롤. 열 전체가 화면보다 길면 열이 스크롤. */
+.dejipgi .cs-side{overflow:auto}
+.dejipgi .cs-ai:not(.training){flex:0 0 auto;min-height:0}
+.dejipgi .cs-ai:not(.training) .cs-chat{flex:none;height:clamp(160px,32vh,360px);min-height:0}
+.dejipgi .cs-ai:not(.training) ~ .cs-needs{flex:1 1 auto;min-height:120px}

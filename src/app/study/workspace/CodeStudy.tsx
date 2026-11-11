@@ -397,7 +397,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {help ? <HelpDeck help={help} deck={deck} onOpen={(r) => void openHelp(r)} before={before} onUndo={() => { if (before !== null) { onCode(before); setBefore(null); } }} /> : null}
         </>}
         <div className="cs-chat">
-          {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">{help ? "막히면 위 「막혔을 때」를 한 장씩 넘겨 보세요. " : ""}AI에게 무엇이든 물어보세요. 편집기에서 코드를 드래그하고 물으면 그 부분을 봐요. 물어본 풀이는 「도움 받고 맞힘」으로 남아요.</p> : null}
+          {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">AI에게 무엇이든 물어보세요. 코드를 드래그하고 물으면 그 부분을 봐요. 물어본 풀이는 「도움 받고 맞힘」으로 남아요.</p> : null}
           {shownMsgs.map((m, i) => <div key={i} className={`cs-msg ${m.who}`}>{m.tag ? <span className="chip">{m.tag}</span> : null}<Rich text={m.text} className="small" /></div>)}
           {asking ? <div className="cs-msg ai"><span className="small muted">생각하는 중…</span></div> : null}
           <div ref={chatEnd} />
@@ -421,39 +421,32 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
 }
 
 const RUNG_NOTE = ["", "문제에서 무엇을 보면 되는지만", "어떤 방법을 쓰는지까지", "무엇을 적어 두고 어떻게 바꾸는지까지", "핵심 줄만 비운 코드 (편집기에 바로 들어가요)"];
-/** 막혔을 때(11/11): 자료 지도 강의 탭처럼 한 장씩 넘긴다. 위 게이지 4칸 = 연 만큼 차오름, › = 다음 도움. */
+/** 막혔을 때(11/11): 자료 지도 강의 탭처럼 한 장씩 넘긴다. 위 게이지 4칸 = 연 만큼 차오름(눌러서 그 장으로), 아래 줄 = 이전 / 다음 도움. */
 function HelpDeck({ help, deck, onOpen, before, onUndo }: { help: { opened: number; labels: string[] }; deck: { at: number; dir: "next" | "prev"; texts: Record<number, string>; busy: boolean; err: string }; onOpen: (rung: number) => void; before: string | null; onUndo: () => void }) {
   const at = deck.at, max = Math.min(4, help.opened + 1);
   const label = (r: number) => help.labels[r - 1] ?? "";
-  const nextFresh = at + 1 > help.opened;
   return (
     <div className="hd">
-      <div className="hd-top"><b>막혔을 때</b><span className="small muted num">{help.opened}/4 열었어요</span></div>
-      <div className="lc3-bar hd-bar">
-        <button className="lc3-arrow" disabled={at <= 1 || deck.busy} onClick={() => onOpen(at - 1)} aria-label="이전 도움">‹</button>
-        <div className="hd-gauge" role="group" aria-label="도움 단계">{[1, 2, 3, 4].map((r) => (
-          <button key={r} className={`hd-seg${r <= help.opened ? " done" : ""}${r === at ? " on" : ""}`} disabled={r > max || deck.busy} onClick={() => onOpen(r)} title={`${r}. ${label(r)}`} aria-label={`${r}. ${label(r)}${r <= help.opened ? " (열었음)" : ""}`}>
-            <span className="hd-bar-fill" /><span className="hd-seglabel num">{r}</span></button>))}</div>
-        <button className="lc3-arrow" disabled={at >= max || deck.busy} onClick={() => onOpen(at + 1)} aria-label="다음 도움">›</button>
-      </div>
+      <div className="hd-top"><b>막혔을 때</b><span className="small muted num">{help.opened ? `${help.opened}/4 열었어요` : "작은 도움부터 한 장씩"}</span></div>
+      <div className="hd-gauge" role="group" aria-label="도움 단계">{[1, 2, 3, 4].map((r) => (
+        <button key={r} className={`hd-seg${r <= help.opened ? " done" : ""}${r === at ? " on" : ""}`} disabled={r > max || deck.busy} onClick={() => onOpen(r)} title={`${r}. ${label(r)}`} aria-label={`${r}. ${label(r)}${r <= help.opened ? " (열었음)" : ""}`} />))}</div>
       {at === 0 ? (
         <div className="hd-box hd-empty">
-          <p className="hd-title">혼자 먼저 해 보고, 막히면 한 장씩</p>
-          <p className="small muted">작은 도움부터 열어요. 연 것은 기록에 남고, 도움 받고 푼 문제는 하루 뒤 혼자 다시 풀어요.</p>
+          <p className="small">혼자 먼저 해 보고, 막히면 한 장씩 열어요.</p>
+          <p className="small muted">연 것은 기록에 남고, 도움 받고 푼 문제는 하루 뒤 혼자 다시 풀어요.</p>
         </div>
       ) : (
         <section key={at} className={`hd-box lc3-in-${deck.dir}`}>
-          <header className="lc3-head"><span className="lc3-step num">{at}</span><div className="lc3-headtext"><h3 className="lc3-title">{label(at)}</h3><span className="small muted">{RUNG_NOTE[at]}</span></div></header>
+          <header className="hd-head"><span className="lc3-step num">{at}</span><div className="hd-headtext"><b>{label(at)}</b><span className="small muted">{RUNG_NOTE[at]}</span></div></header>
           {deck.busy && !deck.texts[at] ? <p className="small muted">{at === 4 ? "뼈대 코드를 만드는 중… (처음이면 10~30초)" : "여는 중…"}</p>
             : deck.err ? <p className="small bad">{deck.err}</p>
             : <Rich text={deck.texts[at] ?? ""} className="hd-say" />}
-          {at === 4 && before !== null ? <button className="linkish small" onClick={onUndo}>내 코드로 되돌리기 (뼈대 넣기 전 코드)</button> : null}
+          {at === 4 && before !== null ? <button className="linkish small" onClick={onUndo}>내 코드로 되돌리기</button> : null}
         </section>
       )}
-      <div className="lc3-foot">
-        {at < 4 ? <button className="lc3-next" disabled={deck.busy} onClick={() => onOpen(at + 1)}>
-          <span className="small">{at === 0 ? "첫 도움" : nextFresh ? "다음 도움" : "다음"}</span><b>{label(at + 1)}</b><span aria-hidden>›</span></button>
-          : <span className="small muted">도움은 여기까지예요. 더 막히면 아래에 물어보세요.</span>}
+      <div className="hd-foot">
+        <button className="hd-prev" disabled={at <= 1 || deck.busy} onClick={() => onOpen(at - 1)}>‹ 이전</button>
+        {at < 4 ? <button className="hd-next" disabled={deck.busy} onClick={() => onOpen(at + 1)}>{at + 1 > help.opened ? "다음 도움" : "다음"}: <b>{label(at + 1)}</b> ›</button> : <span className="small muted">더 막히면 아래에 물어보세요</span>}
       </div>
     </div>
   );
