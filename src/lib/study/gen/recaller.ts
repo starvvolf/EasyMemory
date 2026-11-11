@@ -115,7 +115,7 @@ export type RecallerState = {
 };
 
 export type RecallerAsk = <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, parser: z.ZodType<T>,
-  extra?: { images?: NonNullable<ModelRequest["images"]>; guide?: LoadedGuide; maxChars?: number; onPartial?: (text: string) => void }) => Promise<T>;
+  extra?: { images?: NonNullable<ModelRequest["images"]>; guide?: LoadedGuide; maxChars?: number; onPartial?: (text: string) => void; cacheKey?: string }) => Promise<T>;
 export type RecallerContext = {
   state: GenState; pdf: Uint8Array | null;
   ask: RecallerAsk;
@@ -989,7 +989,7 @@ export async function runRecaller(ctx: RecallerContext) {
     for (let attempt = 1; attempt <= 2 && left.length; attempt++) {
       const user = `[자료] ${input.fileName}\n영역: ${section.title}${data.digest?.stem?.questions[section.id] ? ` — ${data.digest.stem.questions[section.id]}` : ""}\n\n[기억 계획] (id|역할|모양|이름|쪽)\n${left.map((m) => `${m.line.id}|${m.role}|${m.kind}|${m.line.name}|p.${m.pages.join(",")}`).join("\n")}\n\n${pages.map((p) => `[p.${p}]\n${(data.texts[p] ?? "").trim() || "(글자 없음)"}`).join("\n\n")}`;
       let reply: z.infer<typeof stemFillSchema>;
-      try { reply = await ctx.ask("rc-stem-fill", section.id, attempt, `${prompt("STEM_FILL", STEM_FILL)}${lab.headingTerms ? HEADING_TERMS : ""}${images.length ? `\n${INLINE_READ}` : ""}`, user, stemFillSchema, { maxChars: 3000 * left.length + 4000, ...(images.length ? { images } : {}) }); }
+      try { reply = await ctx.ask("rc-stem-fill", section.id, attempt, `${prompt("STEM_FILL", STEM_FILL)}${lab.headingTerms ? HEADING_TERMS : ""}${images.length ? `\n${INLINE_READ}` : ""}`, user, stemFillSchema, { maxChars: 3000 * left.length + 4000, ...(images.length ? { images } : {}), cacheKey: `recaller-stemfill-${(data.pdfHash ?? state.id).slice(0, 16)}` }); }
       catch (error) { if (error instanceof RunawayReply) continue; throw error; }
       const done = new Set<string>();
       for (const f of reply.memories) {

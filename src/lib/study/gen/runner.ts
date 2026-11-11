@@ -769,7 +769,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
   };
   /** A call whose reply did not parse or match the schema counts as one try; a dropped connection too. */
   const askParsed = async <T>(step: GenStep, sectionId: string | null, attempt: number, system: string, user: string, schema: Record<string, unknown>, parser: z.ZodType<T>, guide?: LoadedGuide,
-    extra: { files?: ModelRequest["files"]; cachePrefix?: string; onPartial?: (text: string) => void; images?: ModelRequest["images"]; maxChars?: number; sharedContext?: string } = {}) => {
+    extra: { files?: ModelRequest["files"]; cachePrefix?: string; onPartial?: (text: string) => void; images?: ModelRequest["images"]; maxChars?: number; sharedContext?: string; cacheKey?: string } = {}) => {
     try {
       const parsed = parser.safeParse(await ask(step, sectionId, attempt, system, user, schema, guide, extra));
       return parsed.success ? { ok: true as const, value: parsed.data } : { ok: false as const, problem: "응답이 정해진 JSON 형식과 다릅니다." };
@@ -812,7 +812,7 @@ export async function runGen(id: string, caller: ModelCaller, options: RunOption
         live: (pages, text) => setGenLive(id, pages, text),
         ask: async (step, sectionId, attempt, system, user, parser, extra = {}) => {
           const schema = astraJsonSchema(parser);
-          const more = { ...(extra.images ? { images: extra.images } : {}), ...(extra.maxChars ? { maxChars: extra.maxChars } : {}), ...(extra.onPartial ? { onPartial: extra.onPartial } : {}) };
+          const more = { ...(extra.images ? { images: extra.images } : {}), ...(extra.maxChars ? { maxChars: extra.maxChars } : {}), ...(extra.onPartial ? { onPartial: extra.onPartial } : {}), ...(extra.cacheKey ? { cacheKey: extra.cacheKey } : {}) };
           let result = await askParsed(step, sectionId, attempt, system, user, schema, parser, extra.guide, more);
           // One quiet retry for a reply that did not match the format; then the run pauses where it is.
           if (!result.ok) result = await askParsed(step, sectionId, attempt, system, `${user}
