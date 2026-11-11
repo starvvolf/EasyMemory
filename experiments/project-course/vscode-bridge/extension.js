@@ -71,7 +71,7 @@ async function connect() {
   clearTimeout(retryTimer);
   if (stream) { stream.destroy(); stream = null; }
   try {
-    const hello = await request("POST", "/api/bridge/hello", { root, vscode: vscode.version, version: myVersion });
+    const hello = await request("POST", "/api/bridge/hello", { root, vscode: vscode.version, version: myVersion, embedded: EMBEDDED });
     runId = hello.runId;
     lobby = !!hello.lobby;
     clearTimeout(offlineTimer);

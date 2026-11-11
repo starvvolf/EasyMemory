@@ -309,6 +309,8 @@ const routes: [string, RegExp, Handler][] = [
     const out = await bridgeHello(String(b.root ?? ""));
     // 옛 확장이 붙으면 새 것을 깔아 두고 "다시 불러오기"를 띄우게 한다(초보가 Reload Window를 몰라도 되게)
     const update = typeof b.version === "string" ? await updateBridgeIfOld(b.version).catch(() => false) : false;
+    // 앱 안 편집기(11/11 사용자 "내 VS Code에서 열기 안 해도 그 UI 열린다"): 튜터가 이미 옆 칸에 있으니 떠 있는 튜터 창을 띄우지 않는다
+    if (b.embedded === true) return { ...out, update, float: false };
     // 튜터 창을 쓸 수 있으면 그쪽으로 열고, 확장은 VS Code 탭을 저절로 열지 않는다
     if (out.runId) openFloat(out.runId, PORT);
     return { ...out, update, float: floatInUse() };
