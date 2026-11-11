@@ -779,7 +779,7 @@ function FlashCards({ genId, title, cards, onPage, onClose }: { genId: string; t
   const [marks, setMarks] = useState<Record<string, "known" | "unknown">>({});
   const [error, setError] = useState("");
   const [missed, setMissed] = useState(0); // 저장소에 남지 않은 수
-  // 그림 보기 켜고 끄기(11/12 사용자): 켜면 답을 볼 때 카드에 붙은 그림도. 고른 것은 다음에도(이 브라우저).
+  // 그림 미리 보기(11/12 사용자 "그림을 미리 보기 할지 말지"): 켜면 질문과 함께 그림부터, 끄면 그림은 답을 볼 때. 고른 것은 다음에도(이 브라우저).
   const [pics, setPics] = useState(() => { try { return localStorage.getItem("recaller:fc-pics") === "1"; } catch { return false; } });
   const togglePics = () => setPics((v) => { try { localStorage.setItem("recaller:fc-pics", v ? "0" : "1"); } catch { /* storage off */ } return !v; });
   const c = list[i];
@@ -801,16 +801,17 @@ function FlashCards({ genId, title, cards, onPage, onClose }: { genId: string; t
   const m = c.memo;
   return <div className="fc-wrap">
     <div className="fc-top"><span className="small muted num">{i + 1} / {list.length}</span><div className="fc-bar"><span style={{ width: `${(i / list.length) * 100}%` }} /></div>
-      <button className={`fc-pics${pics ? " on" : ""}`} role="switch" aria-checked={pics} onClick={togglePics} title="답을 볼 때 그림도 보기">그림 {pics ? "켬" : "끔"}</button>
+      <button className={`fc-pics${pics ? " on" : ""}`} role="switch" aria-checked={pics} onClick={togglePics} title="켜면 질문과 함께 그림을 먼저 보여 줘요. 끄면 답을 볼 때 보여 줘요.">그림 미리 보기 {pics ? "켬" : "끔"}</button>
       <button className="btn ghost small" onClick={onClose}>그만</button></div>
     <section key={c.id} className="fc-card lc3-in-next">
       <p className="fc-name"><Rich text={c.title} /></p>
       <p className="fc-q">{m?.question ? <Rich text={m.question} /> : <>이 기억을 떠올려 보세요</>}</p>
+      {pics ? <FigureView genId={genId} c={c} onPage={onPage} /> : null}
       {shown ? <div className="fc-back">
         {m?.answer ? <Answer text={m.answer} /> : m?.line ? <>
         <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p>
         <OldMore idea={m.idea} shape={c.shape} details={m.details} /></> : <Body s={c.shape} />}
-        {pics ? <FigureView genId={genId} c={c} onPage={onPage} /> : null}
+        {pics ? null : <FigureView genId={genId} c={c} onPage={onPage} />}
         <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
       </div> : null}
     </section>
