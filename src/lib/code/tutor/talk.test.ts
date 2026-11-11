@@ -30,7 +30,9 @@ test("대화 요약 확인: 빈 칸은 버리고, 코드 덩어리는 빼고, �
   assert.equal(checkNote({ need: "가".repeat(200), gave: "나" })!.need.length, 80);
 });
 
-test("튜터 대화 캐시: 앞선 대화는 16개까지 처음부터, 넘으면 8개씩 앞을 덜어 내 8번 동안 같은 앞부분", async () => {
+test("튜터 대화 캐시: 앞선 대화는 처음부터 전부, 한도를 넘을 때만 앞에서 20개씩 덜어 냄", async () => {
   const { keepFrom } = await import("../../assist/code-ai.ts");
-  assert.deepEqual([0, 5, 16, 23, 24, 31, 32].map(keepFrom), [0, 0, 0, 0, 8, 8, 16]);
+  assert.equal(keepFrom(Array(60).fill(500)), 0);
+  assert.equal(keepFrom(Array(100).fill(1000)), 60);
+  assert.equal(keepFrom([]), 0);
 });
