@@ -111,6 +111,7 @@ function Calibrated() {
   );
 }
 
+type Found = { title: string; number: string; url: string; site: string; why: string; level: string; pattern: string };
 function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [topic, setTopic] = useState("");
@@ -122,8 +123,25 @@ function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string
   const [error, setError] = useState("");
   /** A problem made before from the same address: open it, or make a new one anyway. */
   const [existing, setExisting] = useState<{ id: string; title: string; createdAt: string; count: number } | null>(null);
-  if (!open) return <div className="row"><button className="btn" onClick={() => setOpen(true)}>+ 문제 만들기 (AI)</button></div>;
-  const done = (id: string) => { setOpen(false); setTopic(""); setFrom(""); setLesson(""); setExisting(null); onMade(id); };
+  // 문제 찾아오기(11/11 사용자 "인터넷에 찾긴 귀찮아. 얘가 서치해서 긁어오는 거지"): AI 웹 검색 → 후보 3개 → 고르면 from으로 만든다.
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<Found[] | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [picking, setPicking] = useState("");
+  if (!open) return <div className="row"><button className="btn" onClick={() => setOpen(true)}>+ 문제 찾기 · 만들기 (AI)</button></div>;
+  const done = (id: string) => { setOpen(false); setTopic(""); setFrom(""); setLesson(""); setExisting(null); setFound(null); setQuery(""); onMade(id); };
+  const find = async () => {
+    setFinding(true); setError(""); setFound(null);
+    try { setFound((await call<{ candidates: Found[] }>("/api/code/find", { query })).candidates); } catch (e) { setError(errorText(e)); } finally { setFinding(false); }
+  };
+  const pick = async (c: Found) => {
+    setPicking(c.url); setError("");
+    try {
+      const made = await call<{ problem?: { id: string }; existing?: { id: string } }>("/api/code/make", { from: c.number || c.url, kind: "full" });
+      const id = made.problem?.id ?? made.existing?.id;
+      if (id) done(id);
+    } catch (e) { setError(errorText(e)); } finally { setPicking(""); }
+  };
   const make = async (again = false) => {
     setBusy(true); setError(""); setExisting(null);
     try {
@@ -133,7 +151,21 @@ function MakeProblem({ langs, onMade }: { langs: LangInfo[]; onMade: (id: string
   };
   return (
     <section className="panel stack">
-      <b>문제 만들기</b>
+      <b>문제 찾아오기</b>
+      <p className="small muted">풀고 싶은 걸 말로 적어요. 비워 두면 다음에 배울 것으로 찾아요. 지금까지 푼 기록을 보고 수준을 맞춰서, 인터넷에서 진짜 문제를 찾아 와요.</p>
+      <div className="row">
+        <input className="ws-input cs-find-q" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !finding) void find(); }} placeholder="예: BFS 쉬운 거, 투 포인터 하나 더 (비워도 돼요)" />
+        <button className="btn primary small" disabled={finding || Boolean(picking)} onClick={() => void find()}>{finding ? "찾는 중… (10~30초)" : found ? "다시 찾기" : "찾기"}</button>
+      </div>
+      {found ? (found.length ? (
+        <ul className="cs-found">{found.map((c) => (
+          <li key={c.url}>
+            <div className="cs-found-text"><b>{c.title}</b> <span className="small muted">{[c.site, c.level, c.pattern].filter(Boolean).join(" · ")}</span>{c.why ? <p className="small">{c.why}</p> : null}</div>
+            <button className="btn small" disabled={Boolean(picking) || finding} onClick={() => void pick(c)}>{picking === c.url ? "가져오는 중…" : "이걸로 풀기"}</button>
+          </li>))}
+        </ul>) : <p className="small muted">새로 고를 만한 문제를 못 찾았어요. 말을 조금 바꿔서 다시 찾아 봐요.</p>) : null}
+      <hr className="cs-find-hr" />
+      <b>직접 넣기</b>
       <p className="small muted">주제만 적거나, 문제·풀이 블로그 주소나 백준 번호를 넣거나, 강의 글이나 문제 글을 붙여 넣어요. 모범 풀이가 원문 예제(없으면 단순 풀이)와 맞아야 저장해요.</p>
       <input className="ws-input" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="주소나 백준 번호 (예: https://…/123, 7785)" />
       <input className="ws-input" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="주제 (예: 이분 탐색으로 경계 찾기)" />

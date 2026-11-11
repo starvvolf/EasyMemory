@@ -10,6 +10,7 @@ export const ASSIST_CATALOG: Record<string, CatalogEntry> = {
   "code:review": { title: "풀이 방향 검토", does: "제출 전 생각한 방향이 맞는지, 놓친 조건이 있는지 짚는다(heavy: 강도 medium).", input: "문제 · 코드 · 메모", output: "검토 글" },
   "code:error": { title: "오류 설명", does: "에러가 무슨 뜻인지, 몇 번째 줄 무엇 때문인지 쉬운 말로. 고치는 방향만, 고친 코드는 주지 않는다.", input: "코드 · 오류 글", output: "설명 글" },
   "code:counter": { title: "반례 후보", does: "학습자 코드를 깨뜨릴 만한 작고 까다로운 입력들을 제안. 실제로 깨지는지는 모범 풀이와 학습자 코드를 돌려 코드가 판정.", input: "문제 · 학습자 코드", output: "입력 후보 목록(JSON)" },
+  "code:find": { title: "문제 찾아오기", does: "AI 웹 검색으로 다음에 풀 실제 문제 후보 3~5개(백준 먼저). 최근 한 것·푼 문제·다음에 배울 패턴으로 수준을 맞춘다. 이미 있는 문제는 코드가 거른다.", input: "요청 · 최근 기록 · 푼 문제 · 다음 패턴", output: "후보 목록(JSON)" },
   "code:make": { title: "문제 만들기(초안)", does: "주제·강의 글·붙여 넣은 문제로 표준 입출력 문제를 세팅: 문제 글, 제약, 모범 풀이, 단순 풀이(brute), 지식 이름. 원문이 있으면 원문 그대로.", input: "주제 또는 강의 글 · 원문 문제", output: "문제 초안(JSON)" },
   "code:generator": { title: "숨은 테스트 생성기", does: "입력 형식·제약을 그대로 지키는 테스트 입력 생성기를 JavaScript로. 정답은 모범 풀이가 낸다.", input: "문제 글 · 제약", output: "생성기 코드(JSON)" },
   "code:mutants": { title: "틀린 풀이들", does: "흔한 실수(경계값, off-by-one, 오버플로, 잘못된 그리디, 시간 초과…)가 든 틀린 풀이 3~5개. 숨은 테스트가 이걸 다 잡는지 코드가 확인.", input: "문제 글", output: "틀린 풀이 목록(JSON)" },

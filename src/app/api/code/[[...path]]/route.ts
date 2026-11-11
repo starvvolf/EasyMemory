@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { findProblems } from "@/lib/code/find";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
@@ -87,6 +88,8 @@ async function inner(request: Request, context: RouteContext) {
       return json(out);
     }
     if (p[0] === "error" && m === "POST") { const b = await body(z.object({ problemId: pid.optional(), lang, code, error: z.string().min(1).max(12000) })); return json(await explainError(b)); }
+    // 문제 찾아오기(11/11): AI 웹 검색 1번 → 후보 3개(이미 있는 문제는 코드가 거름). 고르면 화면이 make(from)로 만든다.
+    if (p[0] === "find" && m === "POST") { const b = await body(z.object({ query: z.string().max(300) })); return json(await findProblems(b.query)); }
     if (p[0] === "make" && m === "POST") {
       const b = await body(z.object({ topic: z.string().max(300).optional(), lesson: z.string().max(60_000).optional(), kind: z.enum(["full", "blank"]), lang: lang.optional(),
         sourceTitle: z.string().max(300).optional(), sourceUrl: z.string().max(2000).optional(),

@@ -1448,3 +1448,9 @@ html .dejipgi[data-view="code"] .wrap{max-width:1520px}
 .dejipgi .pt-part{margin:10px 0 0;font-size:15px;font-weight:700;color:var(--ink)}
 .dejipgi .hd-refill{margin-left:auto;align-self:flex-start;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:15px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
 .dejipgi .hd-refill:hover{color:var(--accent);border-color:var(--accent)}
+.dejipgi .cs-find-q{flex:1;min-width:0}
+.dejipgi .cs-found{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dejipgi .cs-found li{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}
+.dejipgi .cs-found-text{flex:1;min-width:0}
+.dejipgi .cs-found-text p{margin:4px 0 0}
+.dejipgi .cs-find-hr{border:0;border-top:1px solid var(--line);margin:6px 0;width:100%}
