@@ -1186,3 +1186,69 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
     </div>
   );
 }
+
+/* ---------- 기억 도서관의 자료 한 편 (11/11 사용자 "옛 기억 시스템 말고 최신 기억으로") ----------
+ * 자료 지도와 같은 데이터(/api/study-map/<id>)를 읽는다: 줄기 영역 순서의 기억 카드(질문·답·풀이·모양) + 카드마다 기억 저장소의 내 상태·다음 복습.
+ * 기억 저장소 항목(옛 지식 줄: 같은 이름이면 다른 실행끼리 합쳐짐)을 그대로 늘어놓던 목록을 대신한다. 기록·복습 날짜는 그대로 저장소가 맡는다. */
+const known = (c: Card) => c.state === "known" || c.state === "graduated";
+const dueNow = (c: Card) => Boolean(c.dueAt && Date.parse(c.dueAt) <= Date.now());
+function ShelfCard({ genId, c, onPage, onHistory, all, onCard }: { genId: string; c: Card; onPage: (page: number) => void; onHistory: (knowledgeId: string) => void; all: Card[]; onCard: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const m = c.memo;
+  const side = m?.role && m.role !== "메인" ? (m.role === "바탕" ? "바탕 지식" : "곁가지") : "";
+  return <>
+    <button className={`shelf-row${open ? " on" : ""}${side ? " side" : ""}`} onClick={() => setOpen(!open)} aria-expanded={open}>
+      <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /><b className="shelf-t"><Rich text={c.title} /></b>
+      <span className="shelf-l"><Rich text={m?.line || keyLine(c.shape)} /></span>
+      {dueNow(c) ? <span className="shelf-due">복습 차례</span> : side ? <span className="shelf-side">{side}</span> : null}
+    </button>
+    {open ? <div className="shelf-card">
+      {m?.question || m?.line ? <div className="mm3-qa">
+        {m?.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={m.question} /></p> : null}
+        {m?.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}</div> : null}
+      {m?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={m.idea} /></div> : null}
+      <Body s={c.shape} />
+      {m?.facts?.length ? <ul className="st-facts">{m.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+      <CardDetails items={m?.details} />
+      <FigureView genId={genId} c={c} onPage={onPage} all={all} onCard={onCard} />
+      <div className="shelf-foot"><span className="small muted">{STATE[c.state][0]}{c.dueAt ? ` · 다음 복습 ${new Date(c.dueAt).getMonth() + 1}/${new Date(c.dueAt).getDate()}` : ""}</span><span className="cs-gap" />
+        {c.pages.slice(0, 4).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}
+        {c.knowledgeId ? <button className="btn ghost small" onClick={() => onHistory(c.knowledgeId!)}>지나온 일</button> : null}</div>
+    </div> : null}
+  </>;
+}
+export function MemoryShelf({ genId, title, onHistory }: { genId: string; title: string; onHistory: (knowledgeId: string) => void }) {
+  const [map, setMap] = useState<MatMap | null>(null);
+  const [error, setError] = useState("");
+  const [flash, setFlash] = useState<Card[] | null>(null);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    call<{ map: MatMap }>(`/api/study-map/${genId}`).then((r) => { if (alive) { setMap(r.map); setError(""); } }).catch((e) => { if (alive) setError(errorText(e)); });
+    return () => { alive = false; };
+  }, [genId, reload]);
+  // 원문 쪽은 자료 지도와 같은 길(그 쪽을 띄운 지도)로
+  const onPage = (page: number) => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId, page } }));
+  if (error) return <p className="ws-err">{error}</p>;
+  if (!map) return <p className="small muted">기억을 불러오는 중…</p>;
+  const sections = map.sections.map((s) => ({ ...s, cards: s.cards.filter((c) => !isFlowCard(c)) })).filter((s) => s.cards.length);
+  const all = sections.flatMap((s) => s.cards);
+  if (flash) return <FlashCards genId={genId} title={title} cards={flash} onPage={onPage} onClose={() => { setFlash(null); setReload((k) => k + 1); }} />;
+  const weak = all.filter((c) => c.state === "unknown" || dueNow(c));
+  const jump = (id: string) => document.getElementById(`shelf-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (!all.length) return <p className="small muted">이 자료에는 아직 기억이 없어요.</p>;
+  return <div className="shelf">
+    <div className="shelf-sum">
+      <span><b>{all.length}</b>기억</span><span className="good"><b>{all.filter(known).length}</b>앎</span><span className="bad"><b>{all.filter((c) => c.state === "unknown").length}</b>몰랐음</span>
+      <span><b>{all.filter((c) => c.state === "new" || c.state === "met").length}</b>아직</span>{all.some(dueNow) ? <span className="now"><b>{all.filter(dueNow).length}</b>복습 차례</span> : null}
+      <span className="cs-gap" />
+      {weak.length && weak.length < all.length ? <button className="btn small" onClick={() => setFlash(weak)}>몰랐던 · 차례 {weak.length}장</button> : null}
+      <button className="btn small primary" onClick={() => setFlash(all)}>플래시카드로 풀기 ({all.length})</button>
+    </div>
+    {sections.map((s, i) => <section key={s.id} className="shelf-area">
+      <header className="shelf-ah"><span className="mm3-num">{i + 1}</span><b><Rich text={s.title} /></b><span className="small muted">{range(s.pages)}</span><span className="cs-gap" />
+        <span className="shelf-bar" title={`${s.cards.filter(known).length}/${s.cards.length} 앎`}>{s.cards.map((c) => <i key={c.id} className={STATE[c.state][1]} />)}</span></header>
+      <ul className="shelf-list">{s.cards.map((c) => <li key={c.id} id={`shelf-${c.id}`}><ShelfCard genId={genId} c={c} onPage={onPage} onHistory={onHistory} all={all} onCard={jump} /></li>)}</ul>
+    </section>)}
+  </div>;
+}

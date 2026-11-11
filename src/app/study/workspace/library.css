@@ -164,3 +164,31 @@
 .dejipgi .rp-subs li.bad{border-left:4px solid var(--bad)}
 .dejipgi .rp-subs .lib-diff{margin:0 10px 10px}
 .dejipgi .rp-sub{width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+
+/* 자료 한 편의 기억 (11/11, MaterialMap.tsx MemoryShelf): 맨 위 한 줄 요약 · 영역마다 상태 띠 · 줄기 순서 기억 줄, 누르면 카드 */
+.dejipgi .lib-runs{border:1px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:8px;font:inherit;font-size:12px;padding:3px 6px}
+.dejipgi .shelf{display:flex;flex-direction:column;gap:12px}
+.dejipgi .shelf-sum{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.dejipgi .shelf-sum>span{display:inline-flex;align-items:baseline;gap:4px;font-size:12.5px;color:var(--muted)}
+.dejipgi .shelf-sum>span b{font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
+.dejipgi .shelf-sum>span.good b{color:var(--good)} .dejipgi .shelf-sum>span.bad b{color:var(--bad)} .dejipgi .shelf-sum>span.now b{color:var(--accent)}
+.dejipgi .shelf-area{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:6px 8px 8px}
+.dejipgi .shelf-ah{display:flex;align-items:baseline;gap:8px;padding:6px 6px 4px}
+.dejipgi .shelf-ah b{font-size:14.5px}
+.dejipgi .shelf-bar{display:inline-flex;gap:2px;align-self:center}
+.dejipgi .shelf-bar i{width:8px;height:8px;border-radius:2px;background:var(--line-strong)}
+.dejipgi .shelf-bar i.good{background:var(--good)} .dejipgi .shelf-bar i.bad{background:var(--bad)} .dejipgi .shelf-bar i.read{background:var(--read,var(--accent-soft))}
+.dejipgi .shelf-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.dejipgi .shelf-row{all:unset;box-sizing:border-box;width:100%;cursor:pointer;display:grid;grid-template-columns:auto minmax(140px,32%) 1fr auto;gap:8px;align-items:baseline;padding:6px 8px;border-radius:9px;font-size:13px}
+.dejipgi .shelf-row:hover{background:var(--surface-2)}
+.dejipgi .shelf-row.on{background:var(--accent-soft)}
+.dejipgi .shelf-row.side{opacity:.72}
+.dejipgi .shelf-row .dot{align-self:center;width:8px;height:8px;background:var(--line-strong)}
+.dejipgi .shelf-t{font-weight:600;min-width:0}
+.dejipgi .shelf-l{color:var(--muted);font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .shelf-row.on .shelf-l{white-space:normal}
+.dejipgi .shelf-due{font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap}
+.dejipgi .shelf-side{font-size:11px;color:var(--muted);white-space:nowrap}
+.dejipgi .shelf-card{margin:2px 6px 10px 22px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.7}
+.dejipgi .shelf-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+@media (max-width:760px){.dejipgi .shelf-row{grid-template-columns:auto 1fr auto}.dejipgi .shelf-l{grid-column:2/4;white-space:normal}}

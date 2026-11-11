@@ -8,13 +8,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { call, errorText, go, handoff, later, type ItemLite, type Tree } from "./api";
 import { MaterialArticle, StateChip, tidyLine, type MaterialRow } from "./KnowledgeWindow";
 import LearnerNote from "./LearnerNote";
+import { MemoryShelf } from "./MaterialMap";
 import { Inline, Rich } from "./Rich";
 import "./library.css";
 
 type Branch = "material" | "code" | "project";
 const BRANCHES: Array<[Branch, string]> = [["material", "자료"], ["code", "알고리즘"], ["project", "실습"]];
 const KEY = "recaller:lib-branch";
-type Entry = { key: string; branch: Branch; icon: string; title: string; sub: string; lastAt: string; itemIds: string[]; row?: MaterialRow; runId?: string; pages?: number; log?: SolveLog };
+type Entry = { key: string; branch: Branch; icon: string; title: string; sub: string; lastAt: string; itemIds: string[]; row?: MaterialRow; runId?: string; pages?: number; log?: SolveLog;
+  /** 같은 PDF를 다시 만든 예전 실행(11/11): 목록에는 최신 하나만, 예전 것은 내용 머리에서 고른다 */ older?: Entry[] };
 type RunRow = { id: string; title: string; createdAt: string; lastAt: string; ended: boolean; goals: number; cards: number; moments: number; gaps: number };
 type Msg = { role: "me" | "ai"; text: string };
 
@@ -62,9 +64,18 @@ export default function Library() {
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
 
   const entries = useMemo<Entry[]>(() => {
-    const mat: Entry[] = (rows ?? []).filter((r) => r.group === "material").map((r) => ({ key: r.key, branch: r.group as Branch, row: r, itemIds: r.itemIds, lastAt: r.lastAt, title: r.title,
+    const allMat: Entry[] = (rows ?? []).filter((r) => r.group === "material").map((r) => ({ key: r.key, branch: r.group as Branch, row: r, itemIds: r.itemIds, lastAt: r.lastAt, title: r.title,
       icon: r.kind === "web" ? "🌐" : r.group === "code" ? "⌨" : "📄", pages: (r as MaterialRow & { pages?: number }).pages,
-      sub: r.key.startsWith("gen:") ? `${(r as MaterialRow & { pages?: number }).pages ?? "?"}쪽 · 기억 ${r.items}` : `기억 ${r.items}` }));
+      // PDF 기억 수는 자료 지도의 카드 수(펼치면 보임) — 저장소 항목 수는 합쳐진 수라 다르다(11/11 지도 32 · 도서관 27)
+      sub: r.key.startsWith("gen:") ? `${(r as MaterialRow & { pages?: number }).pages ?? "?"}쪽` : `기억 ${r.items}` }));
+    // 같은 PDF(같은 제목 · 같은 쪽 수)를 여러 번 만들었으면 최신 하나만 목록에(11/11 — 기억 저장소가 같은 이름을 합쳐 예전 실행 글이 섞여 보였다)
+    const latest = new Map<string, Entry>();
+    for (const e of [...allMat].sort((a, b) => b.lastAt.localeCompare(a.lastAt))) {
+      const k = e.key.startsWith("gen:") ? `${e.title}|${e.pages ?? ""}` : e.key;
+      const top = latest.get(k);
+      if (top) (top.older ??= []).push(e); else latest.set(k, e);
+    }
+    const mat = [...latest.values()].map((e) => e.older?.length ? { ...e, sub: `${e.sub} · ${e.older.length + 1}번 만듦` } : e);
     // 실습: 실습 서버의 대화 실습 한 줄씩 + 그 실습에서 앱 기억으로 넘어간 것(ref project:<runId>)
     const projRows = (rows ?? []).filter((r) => r.group === "project");
     const proj: Entry[] = (runs ?? []).map((r) => {
@@ -123,7 +134,7 @@ export default function Library() {
           {error ? <p className="ws-err">{error}</p> : null}
           {itemId ? <ItemView id={itemId} onBack={() => setItemId(null)} backLabel={cur ? `← ${cur.title}` : "← 목록으로"} onPick={setItemId} />
             : sel === "note" ? <><Head icon="📒" title="나의 학습 노트" sub="여러 실습에서 드러난 아직 모르는 것 · 자꾸 틀리는 것 · 이제 되는 것 · 내 환경" /><LearnerNote /></>
-            : cur ? <EntryView e={cur} byId={byId} onItem={setItemId} />
+            : cur ? <EntryView key={cur.key} e={cur} byId={byId} onItem={setItemId} />
             : <Welcome branch={branch} n={list.length} />}
         </div>
         <Chat key={sel ?? branch} pageRef={main} focusIds={itemId ? [itemId] : (cur?.itemIds ?? []).slice(0, 6)}
@@ -149,10 +160,22 @@ function ItemList({ ids, byId, onItem }: { ids: string[]; byId: Map<string, Item
     {i.line ? <span className="lib-il"><Inline text={tidyLine(i.line)} /></span> : null}</button></li>)}</ul>;
 }
 
-function EntryView({ e, byId, onItem }: { e: Entry; byId: Map<string, ItemLite>; onItem: (id: string) => void }) {
+function EntryView({ e: top, byId, onItem }: { e: Entry; byId: Map<string, ItemLite>; onItem: (id: string) => void }) {
+  // 같은 PDF의 예전 실행을 고르면 그 실행의 기억으로(목록 줄은 최신 하나)
+  const [pickKey, setPickKey] = useState(top.key);
+  const e = top.older?.find((x) => x.key === pickKey) ?? top;
   if (e.branch === "project" && e.runId) return <RunView e={e} />;
   if (e.branch === "code" && e.log) return <SolveView log={e.log} />;
   if (e.branch === "material" && e.row?.kind === "web" && e.row.sourceId) return <><Head icon="🌐" title={e.title} sub={`${e.sub} · ${day(e.lastAt)}`} /><MaterialArticle id={e.row.sourceId} onChanged={() => {}} /></>;
+  // PDF: 자료 지도와 같은 최신 기억 카드(영역 순서 + 내 상태), 11/11
+  if (e.branch === "material" && e.row?.genId) return <>
+    <Head icon={e.icon} title={e.title} sub={`${e.pages ?? "?"}쪽 · ${day(e.lastAt)}`}>
+      {top.older?.length ? <select className="lib-runs" value={e.key} onChange={(x) => setPickKey(x.target.value)} aria-label="만든 때 고르기">
+        {[top, ...top.older].map((x, i) => <option key={x.key} value={x.key}>{i ? "예전 · " : "최신 · "}{day(x.lastAt)} {x.title === top.title ? "" : x.title}</option>)}</select> : null}
+      <button className="btn small" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: e.row!.genId } }))}>자료 지도 열기 ↗</button>
+    </Head>
+    <MemoryShelf genId={e.row.genId} title={e.title} onHistory={onItem} />
+  </>;
   return <>
     <Head icon={e.icon} title={e.title} sub={`${e.sub} · ${day(e.lastAt)}`}>
       {e.row?.genId ? <button className="btn small" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: e.row!.genId } }))}>자료 지도 열기 ↗</button> : null}
