@@ -29,11 +29,14 @@
 
 | 영역 | 주인 | 폴더 (자세히는 그 폴더의 CLAUDE.md) |
 |---|---|---|
-| 알고리즘 (PS, 예전 이름 코드 문제) | A | `src/lib/code/`, `src/lib/assist/code-ai.ts`, `src/app/api/code/`, `workspace/CodeStudy.tsx`, 켜고 끄기(`scripts/`, `desktop/`), `tools/` |
-| 지식 저장소 | B | `src/lib/knowledge/`, `src/lib/assist/knowledge-ai.ts`, `src/app/api/knowledge/`, `workspace/Knowledge*.tsx` |
-| 생성 엔진 (PDF) | C | `src/lib/study/gen/`, `src/lib/study/knowledge.ts`, `src/app/lab/`, `src/app/api/lab/`, `lab/run-engine-lab.mjs` |
-| 실습 (예전 이름 프로젝트 코스) | D | `experiments/project-course/`, `workspace/ProjectStudy.tsx`, `src/app/api/project-course/` |
-| 함께 쓰는 곳 | 모두 | `src/app/study/dejipgi-app.js`·`DejipgiStudy.tsx`(공부 화면, 화면을 크게 바꾸기 전 상의), `src/lib/study/knowledge-contract.ts`(B·C 약속), `src/lib/assist/model.ts`, `src/lib/ai/model.ts`, `src/lib/schedule/`(일정, 주인 미정), `docs/DECISIONS.md`, `협업/현황.md` |
+| 총괄 · 앱 구조 · 자료 엔진 (PDF·자료 지도·문제) | A | 공부 화면(`src/app/study/`, `StudyApp.tsx`·`dejipgi-app.js`), `src/lib/study/`(엔진 `gen/`·자료 지도·강의·문제), `src/app/lab/`, `src/app/api/lab/`, `src/app/api/study-map/`, 켜고 끄기(`scripts/`, `desktop/`), `tools/` |
+| 알고리즘 (PS 튜터, 안쪽 이름 code) | B | `src/lib/code/`, `src/lib/assist/code-ai.ts`, `src/app/api/code/`, `workspace/CodeStudy.tsx`·`PsTutor.tsx` 등 |
+| 실습 (안쪽 이름 project) | D | `experiments/project-course/`, `workspace/ProjectStudy.tsx`·`ProjectStudio.tsx`, `src/app/api/project-course/` |
+| 기억 저장소 (지식 시스템) | 정하는 중 (11/11, `협업/현황.md` 📢 참고) | `src/lib/knowledge/`, `src/lib/assist/knowledge-ai.ts`, `src/app/api/knowledge/`, `workspace/Knowledge*.tsx`, `TodayBoard.tsx` |
+| (C) | 쉬는 중 (11/11) | — |
+| 함께 쓰는 곳 | 모두 | `src/lib/study/knowledge-contract.ts`, `src/lib/assist/model.ts`, `src/lib/ai/model.ts`, `src/lib/schedule/`(일정, 주인 미정), `docs/DECISIONS.md`, `협업/현황.md` |
+
+- 영역 바꿈 (2026-11-11 사용자): A 총괄·엔진, B PS, C 쉬는 중, D 실습. 예전 표(A 알고리즘, B 지식, C 엔진, D 실습)로 적힌 옛 문서·커밋의 A/B/C는 그때 기준이다.
 
 - 화면 이름과 안쪽 이름 (2026-11-05): 화면에 보이는 "알고리즘"은 안쪽에서 `code`(`src/lib/code/`, `/api/code`, 화면 `code`, 지식 출처 `code`), "실습"은 `project`(`experiments/project-course/`, `/api/project-course`, 화면 `project`)다. 안쪽 이름은 바꾸지 않았다. 새 화면 글에는 알고리즘·실습을 쓴다.
 - 자기 영역 밖 파일을 고치면 커밋 첫 줄에 `[경계]`를 붙이고 무엇을 왜 바꿨는지 적는다.
