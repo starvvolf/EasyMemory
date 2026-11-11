@@ -64,16 +64,17 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "ladder" && m === "GET") return json({ ladder: LADDER.map((s) => ({ step: s.step, name: s.name, what: s.what, abilities: s.abilities.map((a) => ({ id: a.id, name: a.name, what: a.what })) })) });
     if (p[0] === "run" && m === "POST") { const b = await body(z.object({ lang, code, input: z.string().max(500_000) })); return json(await runCustom(b.lang, b.code, b.input)); }
     if (p[0] === "explain" && m === "POST") {
-      const b = await body(z.object({ problemId: pid.optional(), lang, code, selection: z.string().min(1).max(8000), question: z.string().max(2000).optional() }));
+      const b = await body(z.object({ problemId: pid.optional(), lang, code, selection: z.string().min(1).max(8000), question: z.string().max(2000).optional(),
+        history: z.array(z.object({ q: z.string().max(2000), a: z.string().max(4000) })).max(12).optional() }));
       await recordAsked(b.problemId, b.question || `코드 드래그해서 물어봄: ${b.selection.split("\n")[0].slice(0, 60)}`);
       // 스트리밍(11/11 사용자 "AI 튜터 답 오는 것도 스트리밍으로"): ?stream=1이면 지금까지의 글을 한 줄씩(JSON) 흘려보내고, 끝나면 {done, text}.
       if (new URL(request.url).searchParams.get("stream") === "1") {
         const enc = new TextEncoder();
         const stream = new ReadableStream({ start(ctrl) {
-          let last = "";
+          let last = ""; let usage: unknown = null;
           const send = (o: unknown) => { try { ctrl.enqueue(enc.encode(`${JSON.stringify(o)}\n`)); } catch { /* 화면이 닫힘 */ } };
-          void explainCode(b, (t) => { if (t.length > last.length) { send({ delta: t.slice(last.length) }); last = t; } })
-            .then((out) => { if (out.text.length > last.length && out.text.startsWith(last)) send({ delta: out.text.slice(last.length) }); send({ done: true, text: out.text });
+          void explainCode(b, (t) => { if (t.length > last.length) { send({ delta: t.slice(last.length) }); last = t; } }, (u) => { usage = u; })
+            .then((out) => { if (out.text.length > last.length && out.text.startsWith(last)) send({ delta: out.text.slice(last.length) }); send({ done: true, text: out.text, usage });
               if (b.problemId) void noteAiHelp(b.problemId, "드래그한 코드 설명", `${b.question ? `물음: ${b.question} · ` : ""}${out.text}`).catch(() => undefined); })
             .catch((e) => send({ error: (e as Error)?.message || "답을 받지 못했어요." }))
             .finally(() => { try { ctrl.close(); } catch { /* 이미 닫힘 */ } });

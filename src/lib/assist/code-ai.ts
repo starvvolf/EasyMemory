@@ -49,12 +49,16 @@ export async function hint(input: { problemId: string; lang: Lang; code: string;
   const user = [problemBlock(p), `[언어] ${LANG_LABEL[input.lang]}`, `[학습자 코드]\n${input.code.slice(0, 20000)}`, resultBlock(input.last), await pastMisses(p), await thisAttempt(p), LEVELS[input.level]].filter(Boolean).join("\n\n");
   return { text: await askText("code:hint", TUTOR, user, { heavy: input.level > 1 }) };
 }
-export async function explainCode(input: { problemId?: string; lang: Lang; code: string; selection: string; question?: string }, onText?: (textSoFar: string) => void) {
+/** AI 튜터 채팅(11/11): 앞부분(지시문 · 문제 · 언어 · 이 문제에서 나눈 대화)은 대화가 이어지는 동안 그대로라 프롬프트 캐시를 탄다.
+ *  지금 코드·드래그한 부분·질문은 매번 바뀌므로 맨 뒤(tail). 캐시 키는 문제마다 하나. */
+export async function explainCode(input: { problemId?: string; lang: Lang; code: string; selection: string; question?: string; history?: Array<{ q: string; a: string }> }, onText?: (textSoFar: string) => void, onUsage?: (u: { inputTokens?: number; cachedInputTokens?: number; outputTokens?: number }) => void) {
   tagTrace({ ref: input.problemId, action: "explainCode" });
   const p = input.problemId ? await readProblemMeta(input.problemId).catch(() => null) : null;
-  const user = [p ? problemBlock(p) : "", `[언어] ${LANG_LABEL[input.lang]}`, `[전체 코드]\n${input.code.slice(0, 20000)}`, `[학습자가 드래그한 부분]\n${input.selection.slice(0, 4000)}`,
-    input.question ? `[질문] ${input.question}` : "드래그한 부분이 무엇을 하는지 한 줄씩 쉽게 설명한다."].filter(Boolean).join("\n\n");
-  return { text: await askText("code:explain", TUTOR, user, { onText }) };
+  const history = (input.history ?? []).slice(-8).map((h, i) => `[앞선 대화 ${i + 1}]\n학습자: ${h.q.slice(0, 1000)}\n튜터: ${h.a.slice(0, 2000)}`).join("\n\n");
+  const user = [p ? problemBlock(p) : "", `[언어] ${LANG_LABEL[input.lang]}`, history].filter(Boolean).join("\n\n");
+  const tail = [`[지금 코드]\n${input.code.slice(0, 20000)}`, `[학습자가 드래그한 부분]\n${input.selection.slice(0, 4000)}`,
+    input.question ? `[질문] ${input.question}` : "드래그한 부분이 무엇을 하는지 한 줄씩 쉽게 설명한다."].join("\n\n");
+  return { text: await askText("code:explain", TUTOR, user, { onText, onUsage, tail, ...(input.problemId ? { cacheKey: `recaller-tutor-${input.problemId}` } : {}) }) };
 }
 export async function reviewApproach(input: { problemId: string; lang: Lang; code: string; note?: string }) {
   tagTrace({ ref: input.problemId, action: "reviewApproach" });

@@ -342,7 +342,10 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     const sel = editor.current?.selection() ?? "";
     const q = question; setQuestion("");
     setHints((h) => h + 1); // AI에게 물어본 것도 도움 받은 풀이로 남긴다(11/11: 힌트 버튼을 빼고 채팅 하나로)
-    void streamAsk(q, { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q });
+    // 이 문제에서 나눈 대화를 같이 보낸다(앞에서부터 그대로 → 서버에서 프롬프트 캐시를 탄다). 오래된 것부터 잘리지 않게 최근 8개.
+    const history: Array<{ q: string; a: string }> = [];
+    for (let i = 0; i + 1 < msgs.length; i++) if (msgs[i].who === "me" && msgs[i + 1].who === "ai" && !msgs[i].tag && !msgs[i + 1].live && !msgs[i + 1].tag) history.push({ q: msgs[i].text.slice(0, 2000), a: msgs[i + 1].text.slice(0, 4000) });
+    void streamAsk(q, { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q, history: history.slice(-8) });
   };
   const openSubmission = async (sid: string) => {
     try { const { submission } = await call<{ submission: { code: string; lang: Lang } }>(`/api/code/problem/${id}/submission/${sid}`); setLang(submission.lang); setCode(submission.code); } catch (e) { setError(errorText(e)); }
