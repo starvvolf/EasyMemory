@@ -152,6 +152,8 @@ async function closeOnce(problemId: string, end: End, opts: { later?: boolean; c
     }
   }
   await writeSheet(sheet);
+  // 대화 장부 요약도 이때 한 번(11/12, 실습 일지처럼 "저장할 때 AI가 한 번 쓰고 도서관은 보여주기만"). 앱을 끄는 중이면 다음에 볼 때.
+  if (!opts.later) void import("./talk.ts").then(async (t) => t.summarizeTalk(await t.readTalk({ problemId }), problemId)).catch(() => undefined);
   return sheet;
 }
 /** 앱을 끄느라 미뤄 둔 정리: 켜고 나서 하나씩(AI 1번씩). */
