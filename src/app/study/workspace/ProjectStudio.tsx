@@ -10,7 +10,7 @@ import { call, errorText, later } from "./api";
 
 type EdStatus = { installed: boolean; running: boolean; asset: string; source: string; size: number | null; job: { phase: string; got: number; total: number; error?: string } | null };
 type Run = { id: string; courseTitle: string; workspace: string | null };
-type BaseItem = { name: string; kind?: "개념" | "도구"; needs?: string[]; check: string; result: "됨" | "비어 있음" | null; by: "확인" | "노트" | "명령" | "학습자" | null; quote: string; now?: boolean };
+type BaseItem = { name: string; kind?: "개념" | "도구"; needs?: string[]; check: string; result: "됨" | "비어 있음" | null; by: "확인" | "노트" | "명령" | "학습자" | null; quote: string; now?: boolean; debts?: string[] };
 type Brief = { long: string | null; current: { title: string; done: string; understood: boolean; applied: boolean } | null; support: { title: string; target: string } | null; map: Array<{ title: string; status: string }>; base?: BaseItem[]; prereqs?: BaseItem[] };
 
 const mb = (n: number | null | undefined) => (n ? `${Math.round(n / 1048576)}MB` : "크기 확인 못 함");
@@ -213,7 +213,7 @@ function BaseTab({ runId, goal, map, prereqs, items, onClose, onChange }: { runI
     try { onChange(await call<{ base: BaseItem[]; prereqs: BaseItem[] }>(`/api/project-course/runs/${runId}/base`, { name: it.name, result })); }
     catch (e) { setErr(errorText(e)); onChange({ base: items, prereqs }); }
   };
-  const byText = (it: BaseItem) => !it.result ? "아직 확인 전" : it.by === "학습자" ? "내가 표시" : it.by === "노트" ? "지난 실습에서 확인" : it.by === "명령" ? `명령으로 확인${it.quote ? ` · ${it.quote}` : ""}` : `튜터가 물어보고 확인${it.quote ? ` · "${it.quote}"` : ""}`;
+  const byText = (it: BaseItem) => !it.result ? "아직 표시 전" : it.by === "학습자" ? "내가 표시" : it.by === "노트" ? "지난 실습에서 확인" : it.by === "명령" ? `명령으로 확인${it.quote ? ` · ${it.quote}` : ""}` : `막혔을 때 드러남${it.quote ? ` · "${it.quote}"` : ""}`;
   const head = prereqs.length ? prereqs : items;
   const known = head.filter((x) => x.result === "됨").length, gap = head.filter((x) => x.result === "비어 있음").length;
   const row = (it: BaseItem) => (
@@ -222,21 +222,22 @@ function BaseTab({ runId, goal, map, prereqs, items, onClose, onChange }: { runI
       <div className="pbt-main">
         <div className="pbt-name">{it.name}{it.kind === "도구" ? <span className="pbt-tag">도구</span> : null}</div>
         {it.needs?.length ? <div className="pbt-sub">그 전에: {it.needs.join(", ")}</div> : null}
-        {it.check ? <div className="pbt-sub">확인: {it.check}</div> : null}
+        {it.check ? <div className="pbt-sub">{it.check}</div> : null}
+        {it.debts?.length ? <div className="pbt-debt" title="이 덩어리에서 온 것 중 튜터가 바로 알려 줘서 쓴 것. 자꾸 쌓이면 튜터가 이것들만 정리하자고 한 번 물어봐요">받아 쓴 것 {it.debts.length} · {it.debts.join(", ")}</div> : null}
         <div className="pbt-by">{byText(it)}</div>
       </div>
       <div className="pbt-acts">
-        <button className={`pbt-b yes ${it.result === "됨" ? "on" : ""}`} onClick={() => void mark(it, "됨")} title={it.result === "됨" && it.by === "학습자" ? "표시 지우기" : "알아요 — 튜터가 이건 묻지 않아요"}>알아요</button>
-        <button className={`pbt-b no ${it.result === "비어 있음" ? "on" : ""}`} onClick={() => void mark(it, "비어 있음")} title={it.result === "비어 있음" && it.by === "학습자" ? "표시 지우기" : "몰라요 — 튜터가 이 목표 전에 짧게 채워 줘요"}>몰라요</button>
+        <button className={`pbt-b yes ${it.result === "됨" ? "on" : ""}`} onClick={() => void mark(it, "됨")} title={it.result === "됨" && it.by === "학습자" ? "표시 지우기" : "알아요 — 써 본 적 있어요"}>알아요</button>
+        <button className={`pbt-b no ${it.result === "비어 있음" ? "on" : ""}`} onClick={() => void mark(it, "비어 있음")} title={it.result === "비어 있음" && it.by === "학습자" ? "표시 지우기" : "몰라요 — 처음이에요. 여기서 온 문법 · 이름은 튜터가 바로 알려 줘요"}>몰라요</button>
       </div>
     </li>
   );
   return <>
     <div className="pbt-scrim" onClick={onClose} />
     <section className="pbt" role="dialog" aria-label="먼저 알 것">
-      <header className="pbt-head"><b>먼저 알 것</b><span className="pbt-sum">알아요 {known} · 몰라요 {gap} · 확인 전 {head.length - known - gap}</span><span className="grow" />
+      <header className="pbt-head"><b>먼저 알 것</b><span className="pbt-sum">알아요 {known} · 몰라요 {gap} · 표시 전 {head.length - known - gap}</span><span className="grow" />
         <button className="pbt-x" onClick={onClose} aria-label="닫기">×</button></header>
-      <p className="pbt-note">{prereqs.length ? <>지금 목표 <b>{goal}</b>를 하기 전에 알고 있어야 할 것이에요.</> : <>지금 목표의 선행은 튜터가 다음 답에서 적어요. 아래는 장기 목표를 정할 때 모아 둔 전체 지도예요.</>} 아는 건 <b>알아요</b>, 모르는 건 <b>몰라요</b>로 표시하면 튜터가 아는 건 묻지 않고 모르는 건 먼저 짧게 채워 줘요.</p>
+      <p className="pbt-note">{prereqs.length ? <>지금 목표 <b>{goal}</b>를 하려면 먼저 알고 있어야 하는 큰 덩어리예요.</> : <>지금 목표의 선행은 튜터가 다음 답에서 적어요. 아래는 장기 목표를 정할 때 모아 둔 전체 지도예요.</>} 튜터는 미리 묻지 않아요. 스스로 <b>알아요</b> · <b>몰라요</b>를 표시해 두면, 모르는 덩어리에서 나오는 문법 · 이름은 걸린 만큼만 바로 알려 주고 <b>받아 쓴 것</b>으로 쌓아 둬요.</p>
       {err ? <p className="pbt-err">{err}</p> : null}
       {map.length ? <ol className="pbt-road" ref={road}>
         {map.map((x, i) => <li key={i} className={`pbt-rs ${x.status}`} title={x.title}><span className="pbt-rn">{x.status === "done" ? "✓" : x.status === "skipped" ? "↷" : i + 1}</span><span className="pbt-rt">{x.title}</span></li>)}

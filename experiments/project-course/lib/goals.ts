@@ -22,9 +22,18 @@ import { HISTORY_TOOL } from "./history.ts";
 /** support: [너무 어려워요]로 끼워 넣은 보충 단계(11/6 사용자 "중간에 보충 단계를 만들어서 넣어 줘야") — 원래 단계 바로 앞에 들어간다 */
 type Item = { id: string; title: string; status: "todo" | "doing" | "done" | "skipped"; support?: boolean };
 /** 선행(11/10 사용자 "개념 간의 선행관계랑 의존성"): 이 목표를 받치는 먼저 알아야 할 것 3~6개와 1분 확인 문항, 확인 결과 */
-export type Prereq = { name: string; check: string; result?: "됨" | "비어 있음"; quote?: string; at?: string; by?: "확인" | "학습자" | "노트" };
+/** debts(11/11 "걸린 만큼만 받아 쓰고 빚으로"): 이 덩어리에서 온 것 중 튜터가 그냥 알려 준 이름 · 문법. asked = 정리하자고 이미 한 번 제안함 */
+export type Prereq = { name: string; check: string; result?: "됨" | "비어 있음"; quote?: string; at?: string; by?: "확인" | "학습자" | "노트"; debts?: string[]; asked?: boolean };
+/** 도움 다이얼(11/11 사용자 "다이얼 하나 + 기록은 정직하게"): 막혔을 때 튜터가 어디까지 해 주나 */
+export type Help = "self" | "together" | "fast";
+export const HELP_LABEL: Record<Help, string> = { self: "스스로", together: "같이", fast: "빨리 만들기" };
+const HELP_RULE: Record<Help, string> = {
+  self: "[도움 정도: 스스로] 학습자가 직접 하고 싶어 한다. 방향과 생각할 거리만 주고 코드 · 답은 쓰지 않는다(달라고 하면 그 순간만 준다). 정해진 이름 · 문법은 이름만 알려 준다.",
+  together: "[도움 정도: 같이] 틀(빈칸 · 뼈대 · 순서)은 주고 핵심은 학습자가 채우게 한다. 두 번 해도 안 되면 그 부분을 보여 주고 왜 그런지 한 줄로 설명한다.",
+  fast: "[도움 정도: 빨리 만들기] 학습자는 빨리 만들면서 설명을 듣고 싶어 한다. 되묻지 말고 필요한 코드를 바로 파일에 쓰고(고치기 허용일 때, 아니면 채팅에) 줄마다 무엇을 하는지 짧게 설명한다. 확인 문항 · 적용 과제를 강요하지 않는다(학습자가 원하면 한다).",
+};
 /** 새 이름(11/11 사용자 "문법 같이 머릿속으로 생각하기 힘든 거는 그냥 알려 주는 게 맞는"): 과제에 쓰는 정해진 이름(함수 · 명령 · 문법 · 파일 이름). seen = 학습자가 펼쳐 봄 */
-export type NewName = { name: string; what: string; example: string; seen?: boolean };
+export type NewName = { name: string; what: string; example: string; seen?: boolean; from?: string };
 type Current = { id: string; title: string; done: string; understood: boolean; applied: boolean; mapId?: string; at: string; prereqs?: Prereq[]; names?: NewName[] };
 /**
  * 먼저 알 것 지도(11/10 사용자 "장기목표 잡으면서 선행개념이랑 의존성을 다 정리해"): 장기 목표 전체를 하려면 그 전에 알아야 할 개념과
@@ -40,6 +49,8 @@ export type SupportPlan = { target: { title: string; done: string; mapId?: strin
 type Question = { q: string; options: string[]; multi?: boolean };
 export type Goals = {
   mode: "topdown" | "bottomup" | null;
+  /** 도움 다이얼. 없으면 같이 */
+  help?: Help;
   long: { text: string; spec: string; at: string } | null;
   map: Item[];
   current: Current | null;
@@ -77,7 +88,7 @@ const logIt = (g: Goals, kind: string, text: string) => { g.log.push({ at: now()
 /* ---------- 모델 도구(두 엔진 공통 정의: OpenCode는 그대로, Codex는 MCP inputSchema로) ---------- */
 const str = { type: "string" } as const;
 /** 현재 목표의 선행을 구체적으로(11/11 사용자 "구체적이지 않은 느낌 · 현재 목표의 선행 개념을 적게 해") */
-const PREREQ_SPEC = "선행은 이 목표의 내용을 이해하고 해내는 데 바로 기대는 개념 · 문법 · 도구 사용 3~5개다. 그 분야의 바탕 개념을 먼저 고른다(예: REST API 요청 · 응답이면 클라이언트와 서버 · URL · HTTP 메서드 · 상태 코드 · JSON). 변수 · 문자열 · 프로그램 실행 같은 일반 기초는 이 목표에서 정말 걸릴 때만 넣는다. check는 이 목표의 상황 · 코드로 묻는다(예: \"주소창에 주소를 치면 무슨 일이 일어나나요?\").";
+const PREREQ_SPEC = "선행은 큰 덩어리로 3~5개만 적는다(11/11 사용자 \"리액트를 하려면 자바스크립트를 알아야 되고, 그런 것\"): 이 목표를 하려면 먼저 알고 있어야 하는 과목 · 기술 · 도구 단위(예: React 목표면 JavaScript 기본 · HTML/CSS · Node와 npm, REST API 서버 목표면 Python 기본 · HTTP가 무엇인지 · JSON). 누가 들어도 \"그건 알아야지\" 싶은 것만. 괄호 · 변수 하나 같은 잔 문법으로 쪼개지 않는다. check는 그 덩어리를 써 봤는지 스스로 가늠할 한 줄(예: \"함수와 배열을 써서 짧은 JavaScript 코드를 짜 본 적이 있나요?\").";
 export const GOAL_TOOLS = [
   { name: "ask_questions", description: "학습자에게 고르기형 질문을 화면에 띄운다(설문지). 만들 것을 어느 수준으로 할지 좁힐 때, 진행 방식(topdown: 구조부터 / bottomup: 작은 것부터)을 물을 때 쓴다. 앞에서 학습자가 한 말을 바탕으로 3~5개. 띄운 뒤에는 답을 기다린다.",
     properties: { intro: str, questions: { type: "array", items: { type: "object", additionalProperties: false, properties: { q: str, options: { type: "array", items: str }, multi: { type: "boolean" } }, required: ["q", "options", "multi"] } } }, required: ["intro", "questions"] },
@@ -86,8 +97,8 @@ export const GOAL_TOOLS = [
       base: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: str, kind: { type: "string", enum: ["개념", "도구"] }, needs: { type: "array", items: str }, for: { type: "array", items: str }, check: str }, required: ["name", "kind", "needs", "for", "check"] } } }, required: ["long", "spec", "mode", "map", "first", "base"] },
   { name: "set_current_goal", description: "다음 현재 목표와 완료 조건을 정한다. 학습자가 [다음으로]를 눌러 앞 목표가 끝났을 때 쓴다. 탑다운이면 지도의 다음 단계를 지금 할 만큼 구체적으로. prereqs는 이 목표를 하려면 그 전에 이미 알고 있어야 할 것 — 이 목표에서 새로 배울 것(목표 자체)은 넣지 않는다, 각각 다른 곳에서도 통하는 짧은 이름(name)과 1분 안에 답할 확인 문항(check, 정답을 넣지 않는다). " + PREREQ_SPEC,
     properties: { title: str, done: str, prereqs: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: str, check: str }, required: ["name", "check"] } } }, required: ["title", "done", "prereqs"] },
-  { name: "new_names", description: "적용 과제(또는 설명)에 학습자가 처음 쓸 수 있는 정해진 이름(함수 · 명령 · 문법 키워드 · 옵션 · 파일 이름처럼 생각으로 알아낼 수 없고 찾아봐야 아는 것)을 넘긴다. 화면의 과제 아래 '새로 쓰는 이름' 칸에 뜬다(처음인 이름은 펼쳐서, 전에 써 본 이름은 접어서 — Recaller가 기록으로 정한다). 과제를 낼 때 같이 부른다. name은 그 이름 그대로(예: console.log), what은 하는 일 한 구절, example은 짧은 쓰는 꼴(과제의 답 줄은 그대로 쓰지 않는다).",
-    properties: { names: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: str, what: str, example: str }, required: ["name", "what", "example"] } } }, required: ["names"] },
+  { name: "new_names", description: "적용 과제(또는 설명)에 학습자가 처음 쓸 수 있는 정해진 이름(함수 · 명령 · 문법 키워드 · 옵션 · 파일 이름처럼 생각으로 알아낼 수 없고 찾아봐야 아는 것)을 넘긴다. 화면의 과제 아래 '새로 쓰는 이름' 칸에 뜬다(처음인 이름은 펼쳐서, 전에 써 본 이름은 접어서 — Recaller가 기록으로 정한다). 과제를 낼 때 같이 부른다. name은 그 이름 그대로(예: console.log), what은 하는 일 한 구절, example은 짧은 쓰는 꼴(과제의 답 줄은 그대로 쓰지 않는다), from은 그 이름이 이 목표의 선행 덩어리에서 온 것이면 그 덩어리 이름(선행 목록 글자 그대로, 아니면 뺀다).",
+    properties: { names: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: str, what: str, example: str, from: str }, required: ["name", "what", "example"] } } }, required: ["names"] },
   { name: "set_prereqs", description: "현재 목표의 선행 목록을 새로 적는다(지금 목표에 선행이 비어 있을 때, 또는 목표를 다듬어 선행이 달라졌을 때). 이미 확인한 결과는 같은 이름이면 남는다. " + PREREQ_SPEC,
     properties: { prereqs: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: str, check: str }, required: ["name", "check"] } } }, required: ["prereqs"] },
   { name: "check_prereq", description: "선행 하나를 학습자에게 확인한 결과를 적는다. 확인 문항에 학습자가 답한 뒤에 쓴다. result는 됨 · 비어 있음, quote는 그 판단의 근거가 된 학습자 말을 글자 그대로. 비어 있으면 Recaller가 부족함으로 잡고, 튜터는 그 선행을 지금 목표의 코드 · 상황으로 짧게 채우거나(plan_support) 이어 간다.",
@@ -162,7 +173,7 @@ export async function setBaseSelf(runId: string, name: string, result: "됨" | "
 }
 /** 현재 목표의 선행(미니 창 맨 위) */
 export function prereqBrief(g: Goals) {
-  return (g.current?.prereqs ?? []).map((p) => ({ name: p.name, check: p.check, result: p.result ?? null, by: p.by ?? (p.result ? "확인" : null), quote: p.quote ?? "" }));
+  return (g.current?.prereqs ?? []).map((p) => ({ name: p.name, check: p.check, result: p.result ?? null, by: p.by ?? (p.result ? "확인" : null), quote: p.quote ?? "", debts: p.debts ?? [] }));
 }
 /** 위 띠 · 미니 창용: 지도 전체(기대는 순서) + 지금 단계에 쓰이는 것 표시 */
 export function baseBrief(g: Goals) {
@@ -242,9 +253,14 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
     } else if (name === "new_names") {
       const c = g.current;
       if (!c) throw err("현재 목표가 없어요.");
-      const list = (Array.isArray(input.names) ? input.names : []).map((x: any) => ({ name: s(x?.name, 60), what: s(x?.what, 120), example: s(x?.example, 200) })).filter((x) => x.name).slice(0, 8);
+      const list = (Array.isArray(input.names) ? input.names : []).map((x: any) => ({ name: s(x?.name, 60), what: s(x?.what, 120), example: s(x?.example, 200), ...(s(x?.from, 60) ? { from: s(x?.from, 60) } : {}) })).filter((x) => x.name).slice(0, 8);
       c.names ??= [];
-      for (const n of list) { const have = c.names.find((y) => norm(y.name) === norm(n.name)); if (have) Object.assign(have, { what: n.what, example: n.example }); else c.names.push(n); }
+      for (const n of list) { const have = c.names.find((y) => norm(y.name) === norm(n.name)); if (have) Object.assign(have, { what: n.what, example: n.example, ...(n.from ? { from: n.from } : {}) }); else c.names.push(n); }
+      // 선행 덩어리에서 받아 쓴 것(빚)으로 쌓는다
+      for (const n of list) {
+        const p = n.from ? (c.prereqs ?? []).find((y) => norm(y.name) === norm(n.from!)) : null;
+        if (p && !(p.debts ?? []).some((d) => norm(d) === norm(n.name))) p.debts = [...(p.debts ?? []), n.name].slice(-12);
+      }
       newNames = list.map((n) => n.name);
       out = `새 이름 ${list.length}개를 과제 아래 칸에 넣었어요. 처음 보는 이름은 펼쳐 보이니 채팅에서 다시 되묻지 말고 과제를 이어 가세요.`;
     } else if (name === "set_prereqs") {
@@ -253,7 +269,7 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       if (awaitingNext(g)) throw err("학습자가 [다음으로]를 눌러 새 목표를 기다리는 중이에요. set_current_goal로 다음 목표를 정하고, 선행은 거기 prereqs로 적으세요.");
       const list = prereqsOf(input.prereqs);
       if (list.length < 2) throw err("prereqs를 3~5개 적어 주세요. " + PREREQ_SPEC);
-      c.prereqs = list.map((p) => ({ ...p, ...(() => { const o = (c.prereqs ?? []).find((y) => norm(y.name) === norm(p.name)); return o?.result ? { result: o.result, quote: o.quote, at: o.at, by: o.by } : {}; })() }));
+      c.prereqs = list.map((p) => ({ ...p, ...(() => { const o = (c.prereqs ?? []).find((y) => norm(y.name) === norm(p.name)); return { ...(o?.result ? { result: o.result, quote: o.quote, at: o.at, by: o.by } : {}), ...(o?.debts?.length ? { debts: o.debts } : {}), ...(o?.asked ? { asked: true } : {}) }; })() }));
       markPrereqs(g, c);
       logIt(g, "prereqs", list.map((p) => p.name).join(", "));
       out = `이 목표의 선행 ${list.length}개를 적었어요. 학습자가 위 띠 [먼저 알 것]에서 안다 · 모른다를 표시할 수 있어요.`;
@@ -354,7 +370,12 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
       logIt(g, "confirm", p.long);
       say = `[확정] 계획을 확정했어요. 첫 현재 목표 "${p.first.title}"부터 시작해 주세요.`;
     } else if (op === "dismiss_plan") { g.plan = null; logIt(g, "plan-dismiss", ""); say = "[계획 다시 얘기하기] 제안한 계획은 아직 확정하지 않을게요. 어디를 바꾸면 좋을지 짧게 물어봐 주세요."; }
-    else if (op === "names_seen") {
+    else if (op === "help") {
+      // 도움 다이얼(11/11): AI를 부르지 않는다. 다음 답부터 맥락에 붙는다
+      if (b.help !== "self" && b.help !== "together" && b.help !== "fast") throw err("help는 self · together · fast 중 하나예요.");
+      g.help = b.help; logIt(g, "help", HELP_LABEL[g.help]);
+      say = null;
+    } else if (op === "names_seen") {
       // 새 이름 칸을 펼쳐 봄(11/11): AI를 부르지 않는다. 기록에 "봤음"
       const c = g.current;
       const want = new Set((Array.isArray(b.names) ? b.names : []).map((x) => norm(String(x))));
@@ -467,7 +488,7 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
 // 선행 찔러 보기(11/10 사용자 "선행관계도 안 돼 있고 의존성도 안 돼 있을 때 어떻게 가르칠 것인가, 어떻게 파악할 것인가")
 /** 지금 지도 단계에 쓰이는 먼저 알 것(for가 비면 장기 목표 전체에 쓰이는 것으로 본다) */
 /** 목표를 바꿀 수 있는지 볼 때의 마지막 일(설문 · 지도 · 선행 적기/확인 같은 곁일은 건너뜀 — 11/11 [다음으로] 뒤 set_prereqs가 끼어 목표 바꾸기가 막혔던 것) */
-const lastKind = (g: Goals) => [...g.log].reverse().find((l) => !["survey", "answer", "map", "support-close", "prereq", "prereqs"].includes(l.kind))?.kind;
+const lastKind = (g: Goals) => [...g.log].reverse().find((l) => !["survey", "answer", "map", "support-close", "prereq", "prereqs", "help"].includes(l.kind))?.kind;
 /** [다음으로]를 눌러 새 목표를 기다리는 중(현재 목표 칸에는 아직 앞 목표가 남아 있다) */
 const awaitingNext = (g: Goals) => !!g.current && lastKind(g) === "next";
 /** 선행에 먼저 알 것 지도의 같은 이름 결과를 옮긴다(이미 확인된 건 다시 묻지 않게) */
@@ -482,12 +503,14 @@ export function baseFor(g: Goals): Base[] {
   const step = g.map.find((m) => m.id === g.current?.mapId)?.title ?? "";
   return (g.base ?? []).filter((b) => !b.for.length || b.for.some((f) => norm(f) === norm(step)));
 }
-export const PREREQ_RULE = "[선행 확인] 먼저 알 것 지도에서 지금 단계에 쓰이는 것 중 확인 전인 것은, 그것에 기대는 것이 많은 위쪽 항목부터 하나 묻고, 비어 있으면 그것이 기대는(← 뒤) 항목으로 한 칸씩 내려가 어디부터 비었는지 찾는다. 이 목표를 설명하기 전에, 선행 중 [학습 노트]에서 이미 된다고 적힌 것 · 학습자가 스스로 안다고 표시한 것(·학습자) · 대화에서 이미 보여 준 것은 건너뛰고, 학습자가 모른다고 표시한 것은 묻지 말고 바로 짧게 채우며, 의심되는 것(노트에서 아직 모르는 것, 처음 보는 것) 중 이 목표에 꼭 필요한 것만 한두 개 확인 문항으로 짧게 묻는다. 확인 문항은 이름을 아는지가 아니라 그 뜻을 아는지를 묻는다. 답을 보고 check_prereq로 적는다. 비어 있으면 그 선행을 지금 목표의 코드 · 상황으로 짧게 채우고 돌아온다(길면 plan_support). 도구 · 환경(설치 여부 · 버전)은 묻지 말고 그 check 명령을 run_command로 돌려 확인한다(결과는 Recaller가 적는다). 다 확인됐거나 확인할 게 없으면 바로 목표로 간다.";
+export const PREREQ_RULE = "[선행 — 미리 묻지 않는다] 선행(큰 덩어리)은 학습자가 화면의 [먼저 알 것]에서 스스로 알아요 · 몰라요로 표시한다. 튜터는 목표를 시작하기 전에 선행을 확인하는 문항을 내지 않는다. 대신 이렇게 쓴다: (1) 학습자가 틀리거나 막혔을 때 그것이 지금 목표 탓인지 어느 선행 덩어리 탓인지 가려 한 줄로 짚는다(예: \"이건 React가 아니라 JavaScript 배열 쪽이에요\"). 선행 탓으로 드러났고 학습자가 답한 말이 있으면 check_prereq로 적는다. (2) 모른다고 표시했거나 처음인 덩어리에서 온 문법 · 이름은 그 덩어리를 처음부터 가르치지 말고, 지금 줄이 풀릴 만큼만 바로 알려 준다 — new_names에 from(그 덩어리 이름)을 붙여 넘긴다(받아 쓴 것으로 쌓인다). (3) 도구 · 환경은 묻지 말고 명령으로 확인한다. 목표는 학습자의 것이다: 선행이 비었다고 목표를 미루지 않는다.";
 
 export async function goalContext(runId: string) {
   // 학습자 메모리(11/6): 진행 방식 · 경향을 매 차례 맨 앞에(두 엔진 같게)
   const mem = await (await import("./memory.ts")).memoryText().catch(() => "");
   const body = await goalContextBody(runId);
+  // [자꾸 걸림] 제안은 덩어리마다 한 번만: 맥락에 실어 보낸 뒤 표시
+  if (body.includes("[자꾸 걸림]")) await save(runId, (x) => { const p = (x.current?.prereqs ?? []).find((y) => (y.debts?.length ?? 0) >= 3 && !y.asked); if (p) p.asked = true; });
   const sh = await (await import("./shell.ts")).shellContext(runId).catch(() => "");
   // 학습자가 물을 때(11/8): 장기 목표가 없을 때도 붙는다
   const J = await import("./judge.ts");
@@ -522,10 +545,12 @@ async function goalContextBody(runId: string) {
     c ? `현재 목표: ${c.title} — 완료 조건: ${c.done} · 단계: ${!c.understood ? "① 이해 중" : !c.applied ? "② 적용 중(학습자가 직접 해 보는 중)" : "적용까지 끝(학습자가 다음으로 넘어갈 수 있음)"}` : "현재 목표: 없음 — set_current_goal로 정한다",
     g.base?.length ? `먼저 알 것 지도(기대는 순서, ← 는 그 전에 알아야 할 것): ${g.base.map((b) => `${b.name}${b.kind === "도구" ? "[도구]" : ""}(${b.result ? `${b.result}${b.by === "노트" ? "·노트" : b.by === "명령" ? "·명령" : b.by === "학습자" ? "·학습자가 스스로 표시" : ""}` : "확인 전"})${b.needs.length ? ` ← ${b.needs.join(", ")}` : ""}`).join(" · ")}` : "",
     c && baseFor(g).length ? `지금 단계에 쓰이는 먼저 알 것: ${baseFor(g).map((b) => `${b.name}(${b.result ?? "확인 전"})`).join(" · ")}` : "",
-    c?.prereqs?.length ? `이 목표의 선행: ${c.prereqs.map((p) => `${p.name}(${p.result ? `${p.result}${p.by === "학습자" ? "·학습자가 스스로 표시" : p.by === "노트" ? "·노트" : ""}` : "확인 전"})`).join(" · ")}` : "",
+    HELP_RULE[g.help ?? "together"],
+    c?.prereqs?.length ? `이 목표의 선행(큰 덩어리): ${c.prereqs.map((p) => `${p.name}(${p.result ? `${p.result === "됨" ? "알아요" : "몰라요"}${p.by === "학습자" ? "·스스로 표시" : p.by === "노트" ? "·노트" : ""}` : "표시 전"}${p.debts?.length ? ` · 받아 쓴 것 ${p.debts.length}: ${p.debts.slice(-5).join(", ")}` : ""})`).join(" · ")}` : "",
+    (() => { const p = (c?.prereqs ?? []).find((x) => (x.debts?.length ?? 0) >= 3 && !x.asked); return p ? `[자꾸 걸림] "${p.name}"에서 받아 쓴 것이 ${p.debts!.length}개(${p.debts!.join(", ")})다. 이번 답 끝에 한 번만 제안한다: 지금까지 걸린 이것들만 짧게 정리하고 갈지(덩어리 전체를 가르치자는 게 아니다). 고르는 것은 학습자다. 싫다고 하면 그대로 목표를 이어 간다.` : ""; })(),
     awaitingNext(g) ? `[다음으로 뒤] 학습자가 "${c!.title}"을(를) 넘겼고 새 목표를 기다린다. 다른 것보다 먼저 set_current_goal로 다음 목표(선행 prereqs 포함)를 정하고 바로 시작한다.` : "",
     c && !c.prereqs?.length && !S && !awaitingNext(g) ? "[선행 비어 있음] 이 목표의 선행이 아직 없다. 이번 답에서 다른 것보다 먼저 set_prereqs로 이 목표의 선행을 적는다." : "",
-    c && !c.understood ? PREREQ_RULE : "",
+    c ? PREREQ_RULE : "",
     // 너무 깊이 내려감(11/10): 코드가 조건을 보고 그때만 한 줄
     c && ((S?.round ?? 0) >= 3 || (c.prereqs ?? []).filter((p) => p.result === "비어 있음").length >= 2 || baseFor(g).filter((b) => b.result === "비어 있음").length >= 2) ? "[깊이] 이 목표에서 보충을 여러 번 짰거나 비어 있는 선행이 2개 이상이다. 계속 아래로 내려가기보다, 목표를 낮추거나 기초부터 깔고 올라가는 지도(update_map)로 바꾸자고 학습자에게 한 번 제안한다." : "",
     sp ? `지금 보충: ${sp.title} — 완료 조건: ${sp.done} · 단계: ${!sp.understood ? "① 이해 중" : !sp.applied ? "② 적용 중" : "적용까지 끝"}. 끝나면 다음 보충(없으면 종착지)으로 간다. 지금은 보충에 집중한다.` : "",

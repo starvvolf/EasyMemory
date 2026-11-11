@@ -104,7 +104,7 @@ export async function noteText() {
     un.length ? `아직 모르는 것(최근 순):\n${un.join("\n")}` : "",
     n.known.length ? `이제 되는 것(다시 확인까지 맞음 — 선행 확인에서 건너뛴다): ${n.known.slice(0, 20).map((i) => i.name).join(" · ")}` : "",
     n.env.length ? `확인된 환경: ${n.env.map((e) => e.fact).join(" · ")}` : "",
-    un.length ? "지금 목표와 관련된 아직 모르는 것이 있으면, 목표를 설명하기 전에 그것부터 짧게 확인한다(관련 없으면 꺼내지 않는다)." : "",
+    un.length ? "지금 목표와 관련된 아직 모르는 것이 있으면, 설명할 때 그 부분을 한 번 더 짚어 준다(확인 문항을 따로 내지 않는다, 관련 없으면 꺼내지 않는다)." : "",
   ].filter(Boolean).join("\n");
 }
 

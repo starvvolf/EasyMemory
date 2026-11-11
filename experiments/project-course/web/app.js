@@ -1616,6 +1616,11 @@ function drawFree() {
   paint();
   const foot = h("footer", { class: "freefoot" },
     lesson.chat ? null : stuckBar(lesson, send), lesson.chat ? null : stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
+    // 도움 다이얼(11/11 사용자 "다이얼 하나 + 기록은 정직하게"): 막혔을 때 튜터가 어디까지 해 주나. 누르면 바로 바뀌고(AI 안 부름) 다음 답부터
+    lesson.chat && lesson.goals ? h("div", { class: "fdial", role: "group", "aria-label": "도움 정도" }, h("span", { class: "fdial-k" }, "도움"),
+      [["self", "스스로", "방향만 받아요. 코드는 내가 써요"], ["together", "같이", "틀은 받고 핵심은 내가 채워요"], ["fast", "빨리 만들기", "튜터가 바로 써 주고 설명해 줘요(받아 쓴 것으로 기록돼요)"]].map(([k, label, tip]) =>
+        h("button", { class: `fdial-b ${(lesson.goals.help ?? "together") === k ? "on" : ""}`, title: tip, "aria-pressed": String((lesson.goals.help ?? "together") === k),
+          onclick: (e) => { if ((lesson.goals.help ?? "together") !== k) send({ do: "goal", op: "help", help: k })(e); } }, label))) : null,
     // 11/11 사용자 "채팅창 위에 끝이 동글동글한 직사각형으로" · 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
     // 11/11 사용자: 목표가 정해지기 전에는 눌러도 할 일이 없어 숨긴다
     lesson.chat && lesson.goals && lesson.goals.current && !lesson.busy ? h("div", { class: "fquick" },

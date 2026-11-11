@@ -973,3 +973,10 @@ body:has(.tlpage), .embed body:has(.tlpage) { --tl-page: color-mix(in srgb, #000
 .tlpage .tlstate { background: color-mix(in srgb, var(--ink) 4%, var(--tl-card)); }
 .tlpage .tlarrow { background: color-mix(in srgb, var(--mut) 45%, transparent); }
 .tlpage .tltop .btn:not(.primary), .tlpage .tlcount { background: var(--tl-card); box-shadow: 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent); }
+/* 도움 다이얼(11/11): 스스로 · 같이 · 빨리 만들기 */
+.fdial { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: var(--f-s2, var(--soft)); width: fit-content; }
+.fdial-k { font-size: 11.5px; color: var(--f-mut, var(--mut)); padding: 0 6px 0 8px; }
+.fdial-b { border: 0; background: transparent; color: var(--f-ink2, var(--ink)); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; cursor: pointer; transition: background .15s; }
+.fdial-b:hover { background: color-mix(in srgb, var(--f-ink, var(--ink)) 8%, transparent); }
+.fdial-b.on { background: var(--f-s1, var(--panel)); color: var(--f-ink, var(--ink)); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.fdial-b.busy { color: transparent; }

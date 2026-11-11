@@ -67,7 +67,7 @@ test("현재 목표의 선행(11/11): 비면 맥락이 set_prereqs를 시키고,
   assert.doesNotMatch(await GO.goalContext(run), /\[선행 비어 있음\]/);
   const r = await GO.setBaseSelf(run, "클라이언트와 서버", "비어 있음");
   assert.equal(r.prereqs[0].result, "비어 있음"); assert.equal(r.prereqs[0].by, "학습자");
-  assert.match(await GO.goalContext(run), /클라이언트와 서버\(비어 있음·학습자가 스스로 표시\)/);
+  assert.match(await GO.goalContext(run), /클라이언트와 서버\(몰라요·스스로 표시\)/);
   await GO.setBaseSelf(run, "클라이언트와 서버", null);
   g = await GO.goalsOf(run);
   assert.equal(g.current!.prereqs![0].result, undefined);
@@ -87,4 +87,24 @@ test("[다음으로] 뒤(11/11 실제로 꼬인 것): 선행 적기가 끼어도
   const g = await GO.goalsOf(run);
   assert.equal(g.current!.title, "GET과 주소");
   assert.equal(g.current!.prereqs!.length, 2);
+});
+
+test("도움 다이얼 · 받아 쓴 것(11/11): 다이얼은 AI 없이 바뀌어 맥락에 붙고, 선행 덩어리에서 받아 쓴 이름이 3개 쌓이면 정리를 한 번만 제안", async () => {
+  const run = "rh";
+  await GO.runGoalTool(run, "propose_plan", { long: "React 할 일 앱", spec: "", mode: "topdown", map: ["화면 띄우기", "목록"],
+    first: { title: "화면 띄우기", done: "브라우저에 제목이 보인다", prereqs: [{ name: "JavaScript 기본", check: "함수와 배열을 써 봤나요?" }, { name: "Node와 npm", check: "npm install을 해 봤나요?" }] } }, []);
+  await GO.goalAction(run, "confirm", {});
+  assert.match(await GO.goalContext(run), /\[도움 정도: 같이\]/);
+  assert.match(await GO.goalContext(run), /\[선행 — 미리 묻지 않는다\]/);
+  const r = await GO.goalAction(run, "help", { help: "fast" });
+  assert.equal(r, null); // 튜터를 부르지 않는다
+  assert.match(await GO.goalContext(run), /\[도움 정도: 빨리 만들기\]/);
+  await GO.runGoalTool(run, "new_names", { names: [{ name: "const", what: "값에 이름 붙이기", example: "const a = 1", from: "JavaScript 기본" }, { name: "=>", what: "짧은 함수", example: "(x) => x + 1", from: "javascript  기본" }] }, []);
+  assert.doesNotMatch(await GO.goalContext(run), /\[자꾸 걸림\]/);
+  await GO.runGoalTool(run, "new_names", { names: [{ name: "map", what: "배열을 바꿔 새 배열로", example: "xs.map(f)", from: "JavaScript 기본" }, { name: "useState", what: "화면이 기억할 값", example: "useState(0)" }] }, []);
+  const g = await GO.goalsOf(run);
+  assert.deepEqual(g.current!.prereqs![0].debts, ["const", "=>", "map"]);
+  assert.match(await GO.goalContext(run), /\[자꾸 걸림\] "JavaScript 기본"에서 받아 쓴 것이 3개/);
+  assert.doesNotMatch(await GO.goalContext(run), /\[자꾸 걸림\]/); // 한 번만
+  assert.deepEqual(GO.prereqBrief(await GO.goalsOf(run))[0].debts, ["const", "=>", "map"]);
 });

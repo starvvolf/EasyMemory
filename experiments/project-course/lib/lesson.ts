@@ -618,7 +618,7 @@ export async function act(runId: string, n: number, input: { do: string; choice?
   // 학습 목표 버튼(11/4): 이해 · 적용 · 보충 끝은 AI 안 부름. 다음으로 · 확정 · 막혔어요 · 설문 답은 튜터에게 한 번
   // 답하는 중에 온 버튼 · 말은 거절한다(11/9 시험: 엔진이 "답하는 중"으로 거절한 것을 삼키고 200을 돌려 버튼 · 말이 조용히 사라짐)
   // 새 이름 펼쳐 보기(11/11)는 AI를 안 부르니 답하는 중에도 된다
-  if ((run.codexId || run.chatId) && (input.do === "goal" || input.do === "ask") && (input as { op?: string }).op !== "names_seen") {
+  if ((run.codexId || run.chatId) && (input.do === "goal" || input.do === "ask") && !["names_seen", "help"].includes(String((input as { op?: string }).op))) {
     const busyNow = run.codexId ? (await (await import("./codex-chat.ts")).view(run.codexId)).busy : (await (await import("./agent-chat.ts")).chatView(run.chatId!)).busy;
     if (busyNow) throw err(409, "튜터가 아직 답하는 중이에요. 답이 끝난 뒤 다시 해 주세요.");
   }
@@ -644,10 +644,10 @@ export async function act(runId: string, n: number, input: { do: string; choice?
       if (d.say) { const t = sysSay(d.label, d.say); if (run.codexId) await codexAsk(runId, run.codexId, t); else await chatAsk(runId, run.chatId!, t); } else await TL.endStep(runId);
       return;
     }
-    const OPS: Record<string, string> = { names_seen: "새 이름 펼쳐 봄", understood: "이해했어요", applied: "해 봤어요", next: "다음으로", easy_next: "너무 쉬워요 → 다음으로", easy: "너무 쉬워요 → 더 어렵게", hard: "너무 어려워요", stuck: "너무 어려워요", answer: "설문 답", confirm: "확정", dismiss_plan: "계획 다시 얘기하기", dismiss_survey: "설문 닫기", mode: "진행 방식 바꾸기", end: "학습 종료" };
+    const OPS: Record<string, string> = { help: "도움 정도 바꾸기", names_seen: "새 이름 펼쳐 봄", understood: "이해했어요", applied: "해 봤어요", next: "다음으로", easy_next: "너무 쉬워요 → 다음으로", easy: "너무 쉬워요 → 더 어렵게", hard: "너무 어려워요", stuck: "너무 어려워요", answer: "설문 답", confirm: "확정", dismiss_plan: "계획 다시 얘기하기", dismiss_survey: "설문 닫기", mode: "진행 방식 바꾸기", end: "학습 종료" };
     const b = input as Record<string, unknown>;
     const detail = op === "answer" ? (Array.isArray(b.answers) ? (b.answers as { picks?: string[]; text?: string }[]).map((a) => [...(a.picks ?? []), a.text].filter(Boolean).join(", ") || "알아서").join(" / ") : "")
-      : op === "hard" || op === "stuck" ? [...((b.reasons as string[]) ?? []), String(b.text ?? "")].filter(Boolean).join(" · ") : op === "mode" ? String(b.mode ?? "")
+      : op === "hard" || op === "stuck" ? [...((b.reasons as string[]) ?? []), String(b.text ?? "")].filter(Boolean).join(" · ") : op === "mode" ? String(b.mode ?? "") : op === "help" ? ({ self: "스스로", together: "같이", fast: "빨리 만들기" } as Record<string, string>)[String(b.help)] ?? ""
       : op === "applied" && b.verdict ? (() => { const v = b.verdict as { verdict: string; right: string; gap: string }; return `판정: ${({ correct: "맞음", partial: "일부만 맞음", incorrect: "틀림", unclear: "판단 근거 부족", not_answer: "판단 근거 부족" } as Record<string, string>)[v.verdict] ?? v.verdict}${v.right ? ` · 맞은 부분: ${v.right}` : ""}${v.gap ? ` · 빠진 곳: ${v.gap}` : ""}`; })() : "";
     await TL.beginStep(runId, { kind: "button", label: OPS[op] ?? op, ...(detail ? { text: detail } : {}) });
     const say = await (await import("./goals.ts")).goalAction(runId, op, input as Record<string, unknown>);

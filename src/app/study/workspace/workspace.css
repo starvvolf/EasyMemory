@@ -1399,3 +1399,4 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pt-log dt{color:var(--muted)}
 .dejipgi .pt-log dd{margin:0;min-width:0}
 .dejipgi .pt-week{background:var(--accent-soft);border-radius:8px;padding:6px 10px}
+.dejipgi .pbt-debt{font-size:11.5px;color:var(--pbt-gap);line-height:1.5}

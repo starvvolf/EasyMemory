@@ -38,7 +38,7 @@ test("선행 확인(11/10): check_prereq — 근거는 학습자 말 그대로, 
   const out2 = await GO.runGoalTool(run, "check_prereq", { name: "JS 함수", result: "비어 있음", quote: "몰라요" }, ["몰라요"]);
   assert.match(out2, /목표를 낮추거나/);
   const ctx = await GO.goalContext(run);
-  assert.match(ctx, /이 목표의 선행: JS 함수\(비어 있음\) · 객체 참조\(비어 있음\)/);
+  assert.match(ctx, /이 목표의 선행\(큰 덩어리\): JS 함수\(몰라요\) · 객체 참조\(몰라요\)/);
   assert.match(ctx, /\[깊이\]/);
   g = await GO.goalsOf(run);
   assert.equal(g.current!.prereqs!.length, 2);
