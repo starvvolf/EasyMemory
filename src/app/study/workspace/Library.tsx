@@ -494,7 +494,8 @@ function SolveView({ log }: { log: SolveLog }) {
   useEffect(() => later(() => { setProb(null); if (!pid && !talkPid) { setProb(false); return; }
     const get = (id: string) => call<{ problem: PubProblem; submissions: SubLite[] }>(`/api/code/problem/${id}`);
     (pid ? get(pid).catch(() => (talkPid && talkPid !== pid ? get(talkPid) : Promise.reject(new Error("없음")))) : get(talkPid)).then(setProb).catch(() => setProb(false)); }), [pid, talkPid]);
-  const reviewPid = pid || talkPid;
+  // 유저가 넣은 백준 문제는 cp_boj_N이 아니라서(11/12 "총정리 왜 안 뜨냐"): 원문을 찾은 문제 id → 대화 장부의 문제 id → cp_boj_N 순서.
+  const reviewPid = prob === null ? "" : (prob && (prob.problem as { id?: string }).id) || talkPid || pid;
   const verdict = log.alone ? ["처음부터 혼자 풂", "ok"] : log.solved ? ["도움 받고 풂", ""] : ["아직 못 풂", "bad"];
   return <>
     <Head icon="⌨" title={`${log.number}${log.title ? ` · ${log.title}` : ""}`} sub={[day(log.at), log.patterns.join(", ")].filter(Boolean).join(" · ")}><button className="btn ghost small" onClick={() => go("code", { id: log.number })}>문제 다시 열기</button></Head>
