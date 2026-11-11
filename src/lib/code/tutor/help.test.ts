@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { checkBlanks, rungText, skeletonText } from "./help.ts";
+import { checkBlanks, checkFriendly, rungText, skeletonText } from "./help.ts";
 import { solveLogs, weekLine } from "./journal.ts";
 import type { Lesson } from "./lessons.ts";
 import { nextActions, redoList } from "./policy.ts";
@@ -139,4 +139,12 @@ test("도움 칸 열기와 뼈대 만들기: 앞 칸부터, 연 칸은 기록에
     if (prior === undefined) delete process.env.STUDY_FORGE_DATA_DIR; else process.env.STUDY_FORGE_DATA_DIR = prior;
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("힌트 말투 다시 쓰기의 코드 검사: 1장에 방법 이름, 2장에 계획이 새면 그 장은 원래 글로", () => {
+  const m = model("2178");
+  const c = checkFriendly(m, { one: "미로에서 가장 적게 움직이는 횟수를 묻고 있어요. 칸이 최대 1000개라 하나씩 다 따져 보면 느려요.", two: "BFS를 써요. 가까운 칸부터 차례로 퍼져 나가서 처음 닿을 때가 가장 짧아요.", three: "거리 배열에 칸마다 몇 번 만에 왔는지 적어 둬요. 넣을 때 이전 거리 + 1을 적어요." });
+  assert.ok(c.one && c.two && c.three);
+  const leak = checkFriendly(m, { one: "BFS로 풀면 돼요. 가까운 곳부터 퍼지는 문제예요.", two: "BFS를 쓰고 거리 배열에 적어요. 넣을 때 이전 거리 + 1을 적어요.", three: "짧" });
+  assert.equal(leak.one, null, "1장에 방법 이름"); assert.equal(leak.two, null, "2장에 계획"); assert.equal(leak.three, null, "너무 짧음");
 });
