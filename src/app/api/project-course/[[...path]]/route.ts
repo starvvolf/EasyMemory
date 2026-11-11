@@ -139,11 +139,8 @@ async function handle(request: Request, context: RouteContext) {
       try { return NextResponse.json({ online: true, ...await course<object>("library") }); }
       catch (error) { if (offline(error)) return NextResponse.json({ online: false, runs: [] }); throw error; }
     }
-    // 실습 일지(11/12): 도서관의 [일지 쓰기]. AI 1번(실습 서버가 새 기록이 없으면 안 부른다)
-    if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "diary" && m === "POST") {
-      const b = await boundedJson(request).catch(() => ({})) as { force?: boolean };
-      return NextResponse.json(await course(`runs/${runId.parse(p[1])}/diary`, { method: "POST", body: { force: b.force === true }, timeout: 120000 }));
-    }
+    // 도서관의 [목표마다 다시 정리](11/12): 예전 모양으로 정리된 실습. 목표마다 AI 1번
+    if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "redo-records" && m === "POST") return NextResponse.json(await course(`runs/${runId.parse(p[1])}/redo-records`, { method: "POST", body: {}, timeout: 600000 }));
     if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "library" && m === "GET") {
       try { return NextResponse.json({ online: true, ...await course<object>(`runs/${runId.parse(p[1])}/library`) }); }
       catch (error) { if (offline(error)) return NextResponse.json({ online: false }); throw error; }

@@ -27,8 +27,8 @@ export async function libraryRun(runId: string) {
   return {
     runId, title: g.long?.text ?? "", map: (g.map ?? []).map((x) => x.title), current: g.current?.title ?? null,
     goals: recs.map((x) => ({ goal: x.goal, status: x.status, summary: x.summary, steps: x.steps, from: x.from, to: x.to,
-      cards: (x.cards ?? []).map((c) => ({ name: c.name, situation: c.situation, did: c.did, quote: c.verified ? c.quote : "", learned: c.learned, next: c.next, how: c.how, recheck: c.recheck?.q ?? "" })) })),
-    path: note?.path ?? [], moments: ms.moments, chunks, diary: await (await import("./diary.ts")).diaryOf(runId), scenes: await scenesOf(runId, recs.map((x) => ({ goal: x.goal, from: x.from, to: x.to }))),
+      review: x.review ?? null, cards: (x.cards ?? []).map((c) => ({ name: c.name, situation: c.situation, did: c.did, quote: c.verified ? c.quote : "", learned: c.learned, next: c.next, how: c.how, recheck: c.recheck?.q ?? "" })) })),
+    path: note?.path ?? [], moments: ms.moments, chunks, ongoing: await GR.ongoingOf(runId).catch(() => null), scenes: await scenesOf(runId, recs.map((x) => ({ goal: x.goal, from: x.from, to: x.to }))),
   };
 }
 
@@ -76,7 +76,7 @@ export async function scenesOf(runId: string, recs: { goal: string; from: string
   for (const c of chapters) c.events = c.events.filter((e, i, xs) => !(e.kind === "button" && xs[i + 1]?.kind === "button" && xs[i + 1].text.split(" · ")[0] === e.text.split(" · ")[0]));
   // 타임라인이 없던 예전 실습: 목표 정리 시각으로 빈 장이라도
   if (!chapters.length) return recs.map((r) => ({ goal: r.goal, from: r.from, to: r.to, events: [] }));
-  // 기록 번호(g): 실습 일지(diary.ts)가 "이 장면" 근거로 가리키는 번호. 장을 건너 이어 센다
+  // 기록 번호(g): 장면마다 붙는 번호. 장을 건너 이어 센다
   let g = 0;
   const out = chapters.filter((c) => c.events.length);
   for (const c of out) for (const e of c.events) e.g = g++;

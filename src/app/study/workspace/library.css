@@ -318,3 +318,12 @@
 .dejipgi .rv-weak li{display:flex;flex-direction:column;gap:2px}
 .dejipgi .rv-weak li b{font-size:14px;color:var(--ink)}
 .dejipgi .rv-weak li span{font-size:13px;color:var(--bad)}
+/* 실습 정리 v2(11/12): 장면 = 물음 제목 + 이어진 글, 여기까지(초록 줄), 판 바뀜 = 칸 사이 둥근 줄 */
+.dejipgi .rv-q{margin:0;padding:10px 12px 4px;font-size:14px;font-weight:700;color:var(--ink);background:var(--surface-2)}
+.dejipgi .rv-body{margin:0;padding:0 12px 11px;font-size:14px;line-height:1.7;color:var(--ink);background:var(--surface-2)}
+.dejipgi .rv-reach{margin:0;display:flex;gap:8px;padding:9px 12px;border-radius:12px;background:var(--good-soft);color:var(--good);font-size:14px;font-weight:600;line-height:1.55}
+.dejipgi .rv-shift{align-self:flex-start;margin:10px 0 0 12px;display:inline-flex;align-items:baseline;gap:8px;padding:6px 14px;border-radius:999px;border:1.5px dashed var(--line-strong);font-size:13px;font-weight:600;color:var(--muted);background:var(--surface)}
+.dejipgi .rv-shift small{font-weight:400;color:var(--faint);font-size:11px}
+.dejipgi .rv-shift.goal{border-color:var(--accent);color:var(--accent)}
+.dejipgi .rv-shift.turn,.dejipgi .rv-shift.sup{border-color:var(--help);color:var(--help)}
+.dejipgi .rp-review{display:flex;flex-direction:column}

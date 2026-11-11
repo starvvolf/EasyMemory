@@ -3,13 +3,14 @@
 // 근거 구절은 코드가 그 목표 동안의 학습자 말과 대조한다(없으면 근거 없음으로 남김). 받은 것 · 버린 것 · 원문 답을 모두 기록한다.
 import path from "node:path";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
-import { DATA, read, update } from "./store.ts";
+import { DATA, read, update, writeAtomic } from "./store.ts";
 import { aiJson, S } from "./ai.ts";
 import { applyMemory, memoryForRecord, type MemOps } from "./memory.ts";
 
 export type GoalRecord = {
   goal: string; done: string; status: "마침" | "건너뜀"; mode: string | null; from: string; to: string;
   summary: string; steps: string[];
+  /** 목표 한 칸 총정리(11/12, 도서관) */ review?: Review;
   /** 실습 기억 카드(11/10). 있으면 이게 원본이고 learned · gaps는 거기서 펼친 것 */
   cards?: Card[];
   learned: { type: Tab; concept: string; meaning: string; how: string; quote: string; verified: boolean; card?: Card }[];
@@ -121,10 +122,32 @@ memory: [지금 학습자 메모리]는 지금까지 여러 목표에서 쌓인 
 - add: 메모리에 없는 새 경향. text는 한 문장, evidence는 근거가 된 카드(혼자 해냄이 아닌 것)의 name 그대로.
 - update: 이미 있는 경향이 이번에도 보이면 그 id, text(고칠 게 없으면 그대로), evidence(카드 name 그대로).
 - improved: 있던 경향이 이번에는 나아진 게 보이면 그 id와 evidence(혼자 해냄 카드의 name 그대로).
-바뀔 게 없으면 모두 빈 목록.`;
+바뀔 게 없으면 모두 빈 목록.
+review: 나중에 '기억 도서관'에서 이 목표 한 칸으로 보여 줄 총정리(11/12 사용자 · GPT 검토 "판정문처럼 나열하지 말고 장면을 다시 보여 주듯"). 며칠 뒤 이것만 읽어도 그 장면이 그려져야 한다.
+말투는 "~해요" 체, 중학생도 읽히게 쉬운 말(용어는 바로 뒤에 쉬운 말로). "사실은", "~단계예요", "부족한 점"을 문장 속에서 되풀이하지 않는다. 순서는 하려던 일 → 막힌 장면과 푼 방법 → 여기까지 → 부족한 점.
+- aim: 하려던 일 1~2문장(100자 안팎). 무엇을 만들거나 확인하려 했고 왜 그게 필요했는지, 실습 속 행동으로. 예) "실행할 때마다 지출을 money.txt에 쌓고, 저장된 기록을 다시 읽어 보려 했어요."
+- scenes: 막힌 장면과 푼 방법 0~4개, 일어난 순서대로. 같은 원인에서 나온 것은 한 장면으로 묶는다. 막힌 것 없이 지나갔으면 빈 목록.
+  · title: 그 장면을 한 줄 물음으로(25자 안팎). 예) "세 값을 어떻게 한 줄로 쓸까요?", "기록을 쌓으려면 어떤 모드로 열까요?"
+  · body: 2~3문장(200자 안팎). 학습자가 무엇을 하려고 무엇을 했거나 물었는지(쓴 코드 · 넣은 값 · 한 말을 짧게 그대로) → 왜 그렇게 됐는지와 무엇이 맞는지를 바로 이어서 → 힌트 · 보충 · 튜터 설명을 받아 어떻게 됐는지. 행동과 설명을 붙여 쓴다.
+    예) "날짜 · 금액 · 사용한 곳을 저장하려고 file.write(date, money, place)처럼 세 값을 따로 넣었다가 TypeError가 났어요. write()에는 문자열 하나를 넣어야 해요. 여러 값을 한 문자열로 만드는 법을 몰라 f-string 힌트를 받았고, 그 뒤 값을 한 줄로 묶는 코드를 썼어요."
+- reached: 여기까지 했어요 1문장(80자 안팎). 무엇을 완성하거나 확인했는지, 도움을 받았으면 밝힌다. 확인하지 못한 것은 성과로 부풀리지 않는다.
+- weak: 이 목표에서 드러난 부족한 점 0~2개. 장면들을 묶어 "무엇을 아직 혼자 못 하는가"로. gap 한 문장(50자 안팎, "~를 몰라요 / ~를 아직 혼자 못 해요" 꼴), seen 어느 장면에서 드러났는지 한 문장(80자 안팎).
+- 코드를 언제 보여 줬는지 같은 절차 이야기는 학습 내용에 꼭 필요할 때만. 기록에 없는 대화 · 코드 · 결과는 지어내지 않는다.`;
 export const RECORD_SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str),
   cards: S.arr(S.obj({ name: S.str, situation: S.str, did: S.str, quote: S.str, learned: S.str, next: S.str, how: S.oneOf(...HOW), prereq: S.bool, code: S.obj({ save: S.str, from: S.int, to: S.int }), ids: S.arr(S.str), recheck: S.obj({ q: S.str, a: S.str }) })),
-  memory: S.obj({ add: S.arr(S.obj({ text: S.str, evidence: S.arr(S.str) })), update: S.arr(S.obj({ id: S.str, text: S.str, evidence: S.arr(S.str) })), improved: S.arr(S.obj({ id: S.str, evidence: S.arr(S.str) })) }) });
+  memory: S.obj({ add: S.arr(S.obj({ text: S.str, evidence: S.arr(S.str) })), update: S.arr(S.obj({ id: S.str, text: S.str, evidence: S.arr(S.str) })), improved: S.arr(S.obj({ id: S.str, evidence: S.arr(S.str) })) }),
+  review: S.obj({ aim: S.str, scenes: S.arr(S.obj({ title: S.str, body: S.str })), reached: S.str, weak: S.arr(S.obj({ gap: S.str, seen: S.str })) }) });
+/** 목표 한 칸 총정리(11/12): 도서관이 목표마다 그대로 보여 준다 */
+export type Review = { aim: string; scenes: { title: string; body: string }[]; reached: string; weak: { gap: string; seen: string }[] };
+export function cleanReview(raw: unknown): Review | undefined {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const c = (v: unknown, n: number) => String(v ?? "").replace(/```[\s\S]*?```/g, "").replace(/\s+/g, " ").trim().slice(0, n);
+  const arr = (v: unknown) => (Array.isArray(v) ? v : []) as Record<string, unknown>[];
+  const r: Review = { aim: c(o.aim, 200), reached: c(o.reached, 160),
+    scenes: arr(o.scenes).map((x) => ({ title: c(x.title, 60), body: c(x.body, 360) })).filter((x) => x.title && x.body).slice(0, 4),
+    weak: arr(o.weak).map((x) => ({ gap: c(x.gap, 110), seen: c(x.seen, 160) })).filter((x) => x.gap && !/확인되지 않|알 수 없/.test(x.gap)).slice(0, 2) };
+  return r.aim || r.scenes.length ? r : undefined;
+}
 const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
 
 /** 목표 하나를 정리한다. messages: 그 대화 전체(at 포함), since: 목표가 시작된 시각 */
@@ -138,7 +161,12 @@ export function recordInput(goal: GoalIn, messages: Msg[], show: (m: Msg) => str
   const user = `[목표] ${goal.title}\n[완료 조건] ${goal.done}\n[지금 학습자 메모리]\n${memory}\n[결과] ${goal.understood && goal.applied ? "이해 · 적용까지 하고 마침" : `건너뜀(이해 ${goal.understood ? "✓" : "–"}, 적용 ${goal.applied ? "✓" : "–"})`}\n\n[이 목표 동안의 대화]\n${text}`;
   return { seg, code, user };
 }
-export async function recordGoal(runId: string, goal: GoalIn, mode: string | null, messages: Msg[], show: (m: Msg) => string, redo?: { to: string; index: number }, saves: Save[] = [], ledger = "") {
+/** 하다가 나간 목표(11/12 사용자 "하다가 나간 목표는 진행 중으로 정리해서 관리"): 끝나지 않은 현재 목표를 그때까지로 정리한 것. 기록 · 메모리 · 앱 기억에는 안 넣고 따로 둔다.
+ *  그 목표가 진짜로 끝나 정리되면 지운다. */
+export type Ongoing = { goal: string; from: string; at: string; msgs: number; summary: string; review?: Review };
+const ongoingFile = (runId: string) => path.join(DATA, "goals", `${runId}.ongoing.json`);
+export const ongoingOf = (runId: string) => read<Ongoing | null>(ongoingFile(runId), null);
+export async function recordGoal(runId: string, goal: GoalIn, mode: string | null, messages: Msg[], show: (m: Msg) => string, redo?: { to: string; index: number }, saves: Save[] = [], ledger = "", ongoing = false) {
   const base = recordInput(goal, messages, show, saves, redo?.to ?? new Date().toISOString(), await memoryForRecord());
   // 부족함 원장(11/8): 이 목표 동안 코드가 잡은 부족함을 같이 보내 이름 · 재확인 문항을 받는다
   // 이미 쓴 지식 이름(11/8 실측: 정리마다 "빈 목표 상태와 대체값" / "빈 목표 상태"처럼 이름이 흔들려 앱 지식이 늘어남) — 같은 것이면 그 이름 그대로
@@ -152,8 +180,19 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
   const t0 = Date.now();
   try {
     if (!seg.some((m) => m.role === "user")) { log.skipped = "학습자 말 없음"; return null; }
+    if (ongoing) { // 그 뒤로 말이 늘지 않았으면 다시 안 부른다
+      const was = await ongoingOf(runId);
+      if (was && was.goal === goal.title && was.msgs >= seg.length) { log.skipped = "진행 중 정리: 새 말 없음"; return null; }
+    }
     type RawCard = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: string; prereq: boolean; code?: { save: string; from: number; to: number }; ids?: string[]; recheck?: { q: string; a: string } };
-    const out = await aiJson<{ summary: string; steps: string[]; cards: RawCard[]; memory?: MemOps }>("goal-record", SYSTEM_RECORD, user, RECORD_SCHEMA);
+    const out = await aiJson<{ summary: string; steps: string[]; cards: RawCard[]; memory?: MemOps; review?: unknown }>("goal-record", SYSTEM_RECORD, user + (ongoing ? "\n\n[참고] 이 목표는 아직 끝나지 않았다(학습자가 하다가 손을 놓음). 지금까지로만 쓴다. reached는 어디까지 하다 멈췄는지." : ""), RECORD_SCHEMA);
+    if (ongoing) {
+      const o: Ongoing = { goal: goal.title, from: goal.at, at: new Date().toISOString(), msgs: seg.length, summary: String(out.summary ?? "").trim().slice(0, 600), review: cleanReview(out.review) };
+      await mkdir(path.dirname(ongoingFile(runId)), { recursive: true });
+      await writeAtomic(ongoingFile(runId), JSON.stringify(o, null, 1));
+      Object.assign(log, { ms: Date.now() - t0, chars: user.length, ongoing: true });
+      return null;
+    }
     // 근거는 학습자 말 또는 학습자가 저장한 코드 줄
     const learnerText = [...seg.filter((m) => m.role === "user").map((m) => norm(m.text)), ...code.flatMap((c) => c.added.map(norm))];
     const unverified: string[] = [];
@@ -177,8 +216,10 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
     // 메모리 갱신: 근거는 이번 정리의 부족했던 점(나아짐은 배운 것) 이름만 인정, 상태는 코드가(lib/memory.ts)
     const memory = await applyMemory(runId, goal.title, out.memory, gaps.map((g) => g.concept), learned.map((l) => l.concept));
     const rec: GoalRecord = { goal: goal.title, done: goal.done, status: goal.understood && goal.applied ? "마침" : "건너뜀", mode, from: goal.at, to: redo?.to ?? new Date().toISOString(),
-      summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), cards, learned, gaps, memory, at: new Date().toISOString() };
+      review: cleanReview(out.review), summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), cards, learned, gaps, memory, at: new Date().toISOString() };
     await update<{ items: GoalRecord[] }>(file(runId), { items: [] }, (s) => { if (redo && s.items[redo.index]) s.items[redo.index] = rec; else s.items.push(rec); });
+    // 진짜로 끝나 정리됐으니 그 목표의 '진행 중' 정리는 지운다
+    if (!redo) { const was = await ongoingOf(runId); if (was?.goal === goal.title) await writeAtomic(ongoingFile(runId), "null"); }
     Object.assign(log, { ms: Date.now() - t0, chars: user.length, codeSaves: code.length, raw: out, unverified });
     return rec;
   } catch (e) {

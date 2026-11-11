@@ -59,8 +59,8 @@ const routes: [string, RegExp, Handler][] = [
   // 새 실습: 대화(기본 엔진 또는 Codex) + 빈 작업 폴더
   ["POST", /^\/api\/free$/, async (req) => {
     const b = await body(req);
-    // 새 실습을 열면 하던 실습은 그때까지로 일지(11/12)
-    { const was = (await runs()).active; if (was) (await import("../lib/diary.ts")).diaryNow(was, "새 실습을 엶"); }
+    // 새 실습을 열면 하던 실습의 현재 목표는 진행 중으로 정리(11/12)
+    { const was = (await runs()).active; if (was) (await import("../lib/ongoing.ts")).ongoingNow(was); }
     const plan = { start: 1, stages: [1], quick: [], transfer: false, reasons: ["대화로 배우기"], notes: [], minutes: 0 };
     const run: Run = { id: randomBytes(5).toString("hex"), courseId: "chat", createdAt: new Date().toISOString(), plan, current: 1, workspaces: {}, stages: {}, free: true };
     if (b.engine === "codex") { const cx = await (await import("../lib/codex-chat.ts")).create(); run.codexId = cx.id; run.workspaces = { chat: cx.workspace }; }
@@ -126,9 +126,7 @@ const routes: [string, RegExp, Handler][] = [
     return { runId: run.id, engine: "basic", chatId: run.chatId, model: (c as { model?: string }).model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, busy: c.busy, turns: [],
       live: c.messages.slice(-30) };
   }],
-  ["POST", /^\/api\/runs\/(\w+)\/activate$/, async (_q, m) => { await getRun(m[1]); const was = (await runs()).active; await setActive(m[1]); if (was && was !== m[1]) (await import("../lib/diary.ts")).diaryNow(was, "다른 실습으로 옮김"); return { ok: true }; }],
-  // 실습 일지(11/12): 도서관의 [일지 쓰기](예전 실습 · 다시 쓰기). AI 1번, 새 기록이 없으면 안 부른다(force면 다시)
-  ["POST", /^\/api\/runs\/(\w+)\/diary$/, async (req, m) => { await getRun(m[1]); const b = await body(req); const d = await (await import("../lib/diary.ts")).writeDiary(m[1], "직접 쓰기", b.force === true); return { diary: d }; }],
+  ["POST", /^\/api\/runs\/(\w+)\/activate$/, async (_q, m) => { await getRun(m[1]); const was = (await runs()).active; await setActive(m[1]); if (was && was !== m[1]) (await import("../lib/ongoing.ts")).ongoingNow(was); return { ok: true }; }],
   ["POST", /^\/api\/runs\/(\w+)\/snippet$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return runSnippet(String(b.code ?? "")); }],
   ["POST", /^\/api\/bridge\/hello$/, async (req) => {
     const b = await body(req);
