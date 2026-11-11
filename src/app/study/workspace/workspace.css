@@ -1442,7 +1442,7 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 /* 11/12 사용자 "코드 창 좀 더 넓혀 봐. 왼쪽·오른쪽 여백을 더 줄여도": 화면 폭을 다 쓰고(양옆 16px만), 가운데 코드 칸을 더 넓게 */
 html .dejipgi[data-view="code"] .wrap{max-width:none}
 .dejipgi .cs-solve{grid-template-columns:minmax(0,.9fr) minmax(0,1.9fr) minmax(0,.95fr)}
-.dejipgi .cs-statement,.dejipgi .cs-side{height:calc(100vh - 24px);max-height:calc(100vh - 24px)}
+.dejipgi .cs-statement,.dejipgi .cs-side{height:var(--cs-h, calc(100vh - 24px));max-height:var(--cs-h, calc(100vh - 24px))}
 .dejipgi .cs-side{overflow:hidden}
 .dejipgi .cs-ai:not(.training){flex:1 1 auto;min-height:0;overflow:hidden}
 .dejipgi .cs-ai:not(.training) .hd{flex:none}

@@ -206,6 +206,15 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const [help, setHelp] = useState<HelpInfo | null>(null);
   // 뼈대 코드(4칸)는 누르면 편집기에 바로 들어간다(11/11 사용자 "자동으로 덮어 써주면"). 그 전 코드는 [내 코드로 되돌리기]로.
   const [before, setBefore] = useState<string | null>(null);
+  // 왼쪽 문제 칸·오른쪽 튜터 칸 높이를 "화면에서 이 칸이 시작하는 곳 ~ 화면 아래"로(11/12 사용자 "채팅창이 너무 밑에 가 있는 느낌"):
+  // 예전엔 화면 높이 그대로라 위 머리·탭만큼 아래로 넘쳐 질문 칸이 화면 밖에 있었다.
+  const solveRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const fit = () => { const el = solveRef.current; if (!el) return; const top = el.getBoundingClientRect().top + window.scrollY; el.style.setProperty("--cs-h", `max(480px, calc(100vh - ${Math.round(top) + 14}px))`); };
+    fit(); const t = setTimeout(fit, 400);
+    window.addEventListener("resize", fit);
+    return () => { clearTimeout(t); window.removeEventListener("resize", fit); };
+  }, [id, Boolean(problem)]); // eslint-disable-line react-hooks/exhaustive-deps -- 문제가 처음 그려진 뒤 한 번 더 잰다
   // 도움 칸(AI 튜터)은 이 문제의 교육용 모델이 있어야 나온다. 방금 만든 백준 문제는 모델을 뒤에서 만드는 중(AI 1번, 20초쯤)이라
   // 처음엔 없다 → 백준 문제면 생길 때까지 4초마다 다시 물어본다(최대 2분). 11/12 사용자 "새로 문제 만들었는데 AI 튜터가 없음".
   const [helpWait, setHelpWait] = useState(false);
@@ -449,7 +458,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const info = langs.find((l) => l.lang === lang);
   const shownMsgs = training ? msgs.filter((m) => m.step === trainStep) : msgs;
   return (
-    <div className="cs-solve">
+    <div className="cs-solve" ref={solveRef}>
       <section className="cs-statement panel">
         <div className="row" style={{ justifyContent: "space-between" }}><button className="btn ghost small" onClick={onBack}>← 문제 목록</button></div>
         {lab.train ? <ModeSwitch mode={training ? "train" : "base"} onMode={(m) => void train.setMode(m)} /> : null}
