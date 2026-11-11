@@ -206,13 +206,17 @@ export function checkReview(raw: { situation?: unknown; solve?: unknown; missed?
     .filter((m) => m.gap && !/확인되지 않|알 수 없/.test(m.gap)).slice(0, 4);
   return situation && solve ? { v: 5, situation, solve, missed, weak, next } : null;
 }
+/** 총정리할 장: 이 문제의 마지막 장 중 한 게 있는 것(제출·물음·AI 힌트가 있거나 끝까지 간 것). 힌트만 열어 보고 나간 장은 건너뛴다(11/12 시험). */
+async function reviewTarget(problemId: string) {
+  return (await readSheets()).filter((x) => x.problemId === problemId && (x.submits > 0 || x.asked > 0 || x.aiHints > 0 || x.end !== "paused")).at(-1);
+}
 const reviewing = new Map<string, Promise<Review | null>>();
 /** 이 문제의 마지막 장의 총정리(없으면 만든다). */
 export function reviewFor(problemId: string, onText?: (soFar: string) => void): Promise<Review | null> {
   const running = reviewing.get(problemId);
   if (running) return running;
   const job = (async () => {
-    const sheet = (await readSheets()).filter((x) => x.problemId === problemId).at(-1);
+    const sheet = await reviewTarget(problemId);
     if (!sheet) return null;
     if (sheet.review?.v === 5) return sheet.review; // 예전 모양은 다시 만든다
     const meta = await readProblemMeta(problemId).catch(() => null);
@@ -239,7 +243,7 @@ export function reviewFor(problemId: string, onText?: (soFar: string) => void): 
 
 /** 총정리 위에 붙는 사실 한 줄(코드가 셈, AI 없음): 연 힌트 칸 · 물은 횟수 · 제출(틀린 수) · 결과 · 걸린 분. */
 export async function reviewFacts(problemId: string) {
-  const sheet = (await readSheets()).filter((x) => x.problemId === problemId).at(-1);
+  const sheet = await reviewTarget(problemId);
   if (!sheet) return null;
   const since = new Date(Number(/_(\d+)$/.exec(sheet.id)?.[1] ?? 0) - 60_000).toISOString(), until = new Date(Date.parse(sheet.at) + 60_000).toISOString();
   const { readTalk } = await import("./talk.ts");
