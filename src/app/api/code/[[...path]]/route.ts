@@ -6,7 +6,7 @@ import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
 import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblem, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, idleAttempts, listProblemsWithKnowledge, noteAnswer, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
-import { closeSheet, distillLater, waitSheet } from "@/lib/code/tutor/sheets";
+import { closeSheet, distillLater, reviewFor, waitSheet } from "@/lib/code/tutor/sheets";
 import { keepTalk } from "@/lib/code/tutor/talk";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
@@ -209,6 +209,8 @@ async function inner(request: Request, context: RouteContext) {
         return json({ sheet });
       }
       if (p[2] === "sheet" && m === "GET") return json({ sheet: await waitSheet(id) });
+      // 총정리(11/12): 이 문제의 마지막 장. 없으면 만든다(AI 1번, 보통 4~6초).
+      if (p[2] === "review" && m === "GET") return json({ review: await reviewFor(id) });
       // 바로 열기 failed: make the hidden tests again from the same address.
       if (p[2] === "prepare" && m === "POST") {
         const meta = await readProblemMeta(id);

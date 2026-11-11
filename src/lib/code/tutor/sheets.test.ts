@@ -42,3 +42,12 @@ test("학습자 기억: 태그 한 줄씩, 고른 패턴만, 틀린 종류·최�
   const t = memoryText(m, { patterns: ["components"], withErrors: true, withRecent: true });
   assert.match(t, /^#components/); assert.doesNotMatch(t, /bfs-distance/); assert.match(t, /#틀린종류 틀린 답 2 · 시간 초과 1/); assert.match(t, /#최근 2178 도움3/);
 });
+
+test("총정리 확인: 문제가 보는 것·풀어 낸 법이 없으면 버리고, 헷갈린 것은 넷까지, 코드 덩어리는 뺀다", async () => {
+  const { checkReview } = await import("./sheets.ts");
+  assert.equal(checkReview({ tests: "", how: "x" }), null);
+  const r = checkReview({ tests: " 이 문제는 여러 곳에서 동시에 퍼지는 걸 따라가는지 보는 문제예요 ", missed: ["a", "b", "", "c", "d", "e"], how: "힌트를 보고 ```py\nx\n``` 고쳤어요", next: "n" })!;
+  assert.equal(r.tests, "이 문제는 여러 곳에서 동시에 퍼지는 걸 따라가는지 보는 문제예요");
+  assert.deepEqual(r.missed, ["a", "b", "c", "d"]);
+  assert.equal(r.how, "힌트를 보고 고쳤어요");
+});
