@@ -38,7 +38,9 @@ const isTex = (inner: string) => /[\\_^{}=|]/.test(inner) || /^[A-Za-z]$/.test(i
   // 쉼표로 늘어놓은 기호(11/12 "$A,B,C$"가 그대로 보임): 한두 글자 이름·숫자만 쉼표로 이은 것. 돈 표기("$5 and $")는 낱말이 있어 걸리지 않는다
   || /^\s*[A-Za-z0-9]{1,2}(?:'|_\w+)?(?:\s*,\s*[A-Za-z0-9]{1,2}(?:'|_\w+)?)+\s*$/.test(inner)
   // 괄호로 묶은 좌표·순서쌍(11/12 "$(0, 0)$")
-  || /^\s*\(\s*[A-Za-z0-9.]{1,6}(?:\s*,\s*[A-Za-z0-9.]{1,6})+\s*\)\s*$/.test(inner);
+  || /^\s*\(\s*[A-Za-z0-9.]{1,6}(?:\s*,\s*[A-Za-z0-9.]{1,6})+\s*\)\s*$/.test(inner)
+  // 기호 이름과 + − * / < > 로 된 식(11/12 "$Ax+By+Cz+D<0$"): 연산자와 글자가 있고, 세 글자 넘는 소문자 낱말(글)은 없을 때
+  || (/^[A-Za-z0-9\s+\-*/<>().,']{1,60}$/.test(inner) && /[+*/<>]|[A-Za-z0-9]\s*-\s*[A-Za-z0-9]/.test(inner) && /[A-Za-z]/.test(inner) && !/[a-z]{4,}/.test(inner));
 /*
  * Formulas written with plain signs (n = N/|N|, u = (V × n)/|V × n|, P_0=(x_0,y_0,z_0)): a run of one- or two-letter
  * names, digits and signs that holds = or × becomes one $…$, cut where its brackets close.
