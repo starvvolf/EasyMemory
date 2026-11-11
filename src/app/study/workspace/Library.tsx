@@ -331,17 +331,25 @@ function SubRow({ pid, s }: { pid: string; s: SubLite }) {
     <span className={`lib-res ${ok ? "ok" : "bad"}`}>{VERDICT[s.verdict] ?? s.verdict}</span><span className="small muted">{s.passed}/{s.total} · {s.lang} · {s.lines}줄{s.hints ? ` · 힌트 ${s.hints}` : ""}</span><span className="small muted">{open ? "▴" : "▾"}</span></button>
     {open ? <pre className="lib-diff">{code ?? "불러오는 중…"}</pre> : null}</li>;
 }
-/** 대화 장부 한 줄(B, /api/code/tutor/talk — 원문 그대로) */
-type Talk = { id: string; at: string; problemId: string; number?: string; kind: string; q: string; a: string; selection?: string; code?: string; verdict?: string };
-/** AI와 주고받은 한 번: 이름표(무엇을 했나) · 내 말(오른쪽) · AI 답(왼쪽, 길면 접기) · 그때 코드(접어 둠) · 그때 채점 */
+/** 대화 장부 한 줄(B, /api/code/tutor/talk — 원문 + note: 두 줄 요약) */
+type Talk = { id: string; at: string; problemId: string; number?: string; kind: string; q: string; a: string; selection?: string; code?: string; verdict?: string; note?: { need: string; gave: string } };
+/** AI와 주고받은 한 번(11/12 사용자 "채팅창이 통으로 나오면 안 돼… 사용자가 뭐를 몰라서 AI가 뭐를 제공했다 이런 식으로"):
+ *  푼 과정의 다른 줄과 같은 모양으로 두 줄 요약(몰랐던 것 · 알려 준 것). 대화 원문은 접어 둔다. */
 function TalkScene({ t }: { t: Talk }) {
-  const kindLabel = t.kind === "힌트" && /단계/.test(t.q) ? t.q.split(/\s*[·:]\s*/)[0] : t.kind;
-  return <div className="rp-talk">
-    <p className="rp-tk"><span className="lib-tag">{kindLabel}</span><span className="rp-t">{hm(t.at)}</span>{t.verdict ? <span className="small muted">그때: {VERDICT[t.verdict] ?? t.verdict}</span> : null}</p>
-    {t.q ? <div className="rp-row me"><div className="rp-b me"><Para text={t.q} /></div></div> : null}
-    {t.selection ? <details className="rp-code"><summary className="small muted">드래그한 코드</summary><pre className="lib-diff">{t.selection}</pre></details> : null}
-    <div className="rp-row"><span className="rp-who" aria-hidden>🧑‍🏫</span><div className="rp-b tutor"><Para text={t.a} /></div></div>
-    {t.code ? <details className="rp-code"><summary className="small muted">그때 코드</summary><pre className="lib-diff">{t.code}</pre></details> : null}
+  const kindLabel = t.kind === "힌트" && /단계/.test(t.q) ? t.q.split(/\s*[·:]\s*/)[0] : t.kind === "질문" ? "AI에게 물음" : t.kind;
+  const first = (x: string) => (x.replace(/\s+/g, " ").split(/(?<=[.!?요])\s/)[0] ?? x).slice(0, 120);
+  const need = t.note?.need ?? first(t.q), gave = t.note?.gave ?? first(t.a);
+  return <div className="rp-step talk">
+    <span className="rp-t">{hm(t.at)}</span><b>{kindLabel}</b>{t.verdict ? <span className="small muted">그때 {VERDICT[t.verdict] ?? t.verdict}</span> : null}
+    <p className="small"><span className="lib-k bad">몰랐던 것</span>{need}<br /><span className="lib-k ok">알려 준 것</span>{gave}</p>
+    <details className="rp-code"><summary className="small muted">대화 원문 보기</summary>
+      <div className="rp-talk">
+        {t.q ? <div className="rp-row me"><div className="rp-b me"><Para text={t.q} /></div></div> : null}
+        {t.selection ? <details className="rp-code"><summary className="small muted">드래그한 코드</summary><pre className="lib-diff">{t.selection}</pre></details> : null}
+        <div className="rp-row"><span className="rp-who" aria-hidden>🧑‍🏫</span><div className="rp-b tutor"><Para text={t.a} /></div></div>
+        {t.code ? <details className="rp-code"><summary className="small muted">그때 코드</summary><pre className="lib-diff">{t.code}</pre></details> : null}
+      </div>
+    </details>
   </div>;
 }
 function SolveView({ log }: { log: SolveLog }) {
