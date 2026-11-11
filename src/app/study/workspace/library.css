@@ -297,3 +297,24 @@
 .dejipgi .rv-gh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14.5px;color:var(--ink)}
 .dejipgi .rv-sub{margin:4px 0 0 !important;font-size:12px;font-weight:700;color:var(--muted)}
 .dejipgi .rv-sub.bad{color:var(--bad)}
+
+/* 실습 총정리 다시 그림(11/12 사용자 "디자인 마음에 안 들어 · '사실은' 별로 · 회색/검정 구분 안 감 · 묶을 건 박스"):
+   목표 = 테두리 있는 큰 상자, 문제 하나 = 안쪽 작은 상자(위: 그때 한 일, 아래: → 왜 · 어떻게, 색 다르게), 부족한 점 = 빨간 상자 */
+.dejipgi .rv-goal{display:flex;flex-direction:column;gap:10px;border:1.5px solid var(--line-strong);border-radius:18px;padding:14px 16px;background:var(--surface);margin-top:10px}
+.dejipgi .rv-gh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dejipgi .rv-gh b{flex:1;min-width:0;font-size:15.5px;color:var(--ink);word-break:keep-all}
+.dejipgi .rv-n{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.dejipgi .rv-sit{margin:0;padding:10px 12px;border-radius:12px;background:var(--accent-soft);color:var(--ink);font-size:14px;line-height:1.65}
+.dejipgi .rv-probs{display:flex;flex-direction:column;gap:8px}
+.dejipgi .rv-prob{border-radius:14px;border:1px solid var(--line);overflow:hidden}
+.dejipgi .rv-what{margin:0;padding:10px 12px;display:flex;gap:8px;font-size:14px;line-height:1.6;color:var(--ink);background:var(--surface-2)}
+.dejipgi .rv-ico{flex:none}
+.dejipgi .rv-fix{margin:0;padding:10px 12px 10px 12px;display:flex;gap:8px;font-size:14px;line-height:1.6;color:var(--good);background:var(--good-soft);font-weight:500}
+.dejipgi .rv-arrow{flex:none;font-weight:800}
+.dejipgi .rv-none{margin:0;font-size:13px;color:var(--muted)}
+.dejipgi .rv-weak{border-radius:14px;border:1.5px solid var(--bad);background:var(--bad-soft);padding:10px 14px}
+.dejipgi .rv-wh{margin:0 0 6px;font-size:12.5px;font-weight:800;color:var(--bad)}
+.dejipgi .rv-weak ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.dejipgi .rv-weak li{display:flex;flex-direction:column;gap:2px}
+.dejipgi .rv-weak li b{font-size:14px;color:var(--ink)}
+.dejipgi .rv-weak li span{font-size:13px;color:var(--bad)}

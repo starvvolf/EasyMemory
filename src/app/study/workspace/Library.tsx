@@ -291,11 +291,15 @@ function RunView({ e }: { e: Entry }) {
         <p className="rp-facts">{[`목표 ${scenes.filter((c) => c.goal).length}개 · 마침 ${done}`, sup ? `보충 ${sup}번` : "보충 없음", `튜터에게 ${evs.filter((x) => x.kind === "me").length}번 말함`, errs ? `실행 오류 ${errs}번` : "", fixed ? `튜터가 고쳐 줌 ${fixed}번` : "", `${span}분`].filter(Boolean).map((x) => <span key={x}>{x}</span>)}</p>
         {dy.reviews!.map((r, i) => {
           const res = resultOf({ goal: r.goal, from: "", to: "", events: [] });
-          return <div key={i} className="rp-card rv-goal">
-            <b className="rp-h rv-gh"><span className="lib-dot">{i + 1}</span>{r.goal}{res ? <span className={`lib-res ${RES[res] ?? ""}`}>{res}</span> : null}</b>
-            {r.situation ? <p>{r.situation}</p> : null}
-            {r.missed.length ? <><p className="rv-sub bad">이 목표에서 생긴 문제</p><ol className="rp-miss">{r.missed.map((m, k) => <li key={k}><p>{m.thought}</p>{m.truth ? <p className="rp-truth"><span>사실은</span>{m.truth}</p> : null}</li>)}</ol></> : <p className="small muted">걸린 문제 없이 지나갔어요.</p>}
-            {r.weak.length ? <><p className="rv-sub bad">부족한 점</p><ul className="rp-weak">{r.weak.map((w, k) => <li key={k}><b>{w.gap}</b>{w.seen ? <span className="small muted">{w.seen}</span> : null}</li>)}</ul></> : null}
+          // 11/12 사용자 "'사실은' 별로 · 회색이랑 검은색이라 구분 안 감 · 묶어서 봐야 되는 부분은 박스": 문제 하나 = 박스 하나(그때 한 일 → 왜 · 어떻게), 부족한 점은 빨간 박스
+          return <div key={i} className="rv-goal">
+            <div className="rv-gh"><span className="rv-n">{i + 1}</span><b>{r.goal}</b>{res ? <span className={`lib-res ${RES[res] ?? ""}`}>{res}</span> : null}</div>
+            {r.situation ? <p className="rv-sit">{r.situation}</p> : null}
+            {r.missed.length ? <div className="rv-probs">{r.missed.map((m, k) => <div key={k} className="rv-prob">
+              <p className="rv-what"><span className="rv-ico" aria-hidden>🧱</span>{m.thought}</p>
+              {m.truth ? <p className="rv-fix"><span className="rv-arrow" aria-hidden>→</span>{m.truth}</p> : null}
+            </div>)}</div> : <p className="rv-none">걸린 문제 없이 지나갔어요.</p>}
+            {r.weak.length ? <div className="rv-weak"><p className="rv-wh">부족한 점</p><ul>{r.weak.map((w, k) => <li key={k}><b>{w.gap}</b>{w.seen ? <span>{w.seen}</span> : null}</li>)}</ul></div> : null}
           </div>;
         })}
       </section>;
