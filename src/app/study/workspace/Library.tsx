@@ -194,7 +194,7 @@ type Moment = { id: string; goal: string; by: string; command?: string; error?: 
 type SceneEv = { g?: number; at: string; kind: "me" | "tutor" | "button" | "cmd" | "save" | "note"; text: string; tools?: string[]; ok?: boolean; diff?: string[]; file?: string; err?: string };
 type Chapter = { goal: string; from: string; to: string; events: SceneEv[] };
 type RunLib = { online: boolean; title?: string; map?: string[]; current?: string | null; goals?: GoalRec[]; path?: PGoal[]; moments?: Moment[]; scenes?: Chapter[]; ongoing?: Ongoing | null; chunks?: Array<{ name: string; result: string | null; debts: string[] }> };
-const RES: Record<string, string> = { 마침: "ok", "너무 쉬움": "ok", 건너뜀: "skip", 멈춤: "skip", "진행 중": "now" };
+const RES: Record<string, string> = { 마침: "ok", "너무 쉬움": "ok", 건너뜀: "skip", 멈춤: "skip", "바꿔서 멈춤": "skip", "진행 중": "now" };
 const mins = (a: string, b: string | null) => { if (!b) return ""; const m = Math.round((Date.parse(b) - Date.parse(a)) / 60000); return m < 1 ? "1분 안" : m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간 ${m % 60}분`; };
 const hm = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
@@ -276,18 +276,28 @@ function RunView({ e }: { e: Entry }) {
   // 흐름: 목표가 처음 나오는 곳에 그 목표 칸, 각 장의 판 바뀜은 칸 뒤에 둥근 줄로
   const seen = new Set<string>(); let longSeen = false; let gn = 0;
   const flow: ReactNode[] = [];
+  const goalsInOrder = [...new Set(scenes.map((c) => c.goal).filter(Boolean))];
+  const shift = (x: SceneEv, key: string) => {
+    const s = shiftOf(x.text, /^장기 목표/.test(x.text) && !longSeen); if (/^장기 목표/.test(x.text)) longSeen = true;
+    if (s) flow.push(<p key={key} className={`rv-shift ${s.cls}`}><span aria-hidden>{s.icon}</span>{s.text}<small>{hm(x.at)}</small></p>);
+  };
   scenes.forEach((c, ci) => {
-    if (c.goal && !seen.has(c.goal)) {
+    // 학습자가 처음 말하기 전에 생긴 바뀜(계획 확정으로 장기 목표를 정함 등)은 그 목표 칸 앞에
+    const firstMe = c.events.findIndex((x) => x.kind === "me");
+    const lead = (k: number) => firstMe < 0 || k < firstMe;
+    const newGoal = c.goal && !seen.has(c.goal);
+    if (newGoal) c.events.forEach((x, k) => { if (x.kind === "note" && lead(k)) shift(x, `s${ci}-${k}`); });
+    if (newGoal) {
       seen.add(c.goal); gn += 1;
       const rec = [...recs].reverse().find((r) => r.goal === c.goal);
       const og = !rec && d.ongoing?.goal === c.goal ? d.ongoing : null;
-      flow.push(<GoalCard key={`g${ci}`} n={gn} goal={c.goal} result={resultOf(c)} rv={rec?.review ?? og?.review ?? null} summary={rec?.summary ?? og?.summary} ongoing={!rec && (Boolean(og) || d.current === c.goal)} />);
+      // 정리 없이 다음 목표로 넘어간 것(예전 기록: 계획을 다시 확정해 바뀜)은 '진행 중'이 아니라 '바꿔서 멈춤'
+      let result = resultOf(c);
+      const later = goalsInOrder.indexOf(c.goal) < goalsInOrder.length - 1;
+      if (result === "진행 중" && later) result = "바꿔서 멈춤";
+      flow.push(<GoalCard key={`g${ci}`} n={gn} goal={c.goal} result={result} rv={rec?.review ?? og?.review ?? null} summary={rec?.summary ?? og?.summary} ongoing={!rec && !later && (Boolean(og) || d.current === c.goal)} />);
     }
-    c.events.forEach((x, k) => {
-      if (x.kind !== "note") return;
-      const s = shiftOf(x.text, /^장기 목표/.test(x.text) && !longSeen); if (/^장기 목표/.test(x.text)) longSeen = true;
-      if (s) flow.push(<p key={`s${ci}-${k}`} className={`rv-shift ${s.cls}`}><span aria-hidden>{s.icon}</span>{s.text}<small>{hm(x.at)}</small></p>);
-    });
+    c.events.forEach((x, k) => { if (x.kind === "note" && !(newGoal && lead(k))) shift(x, `s${ci}-${k}`); });
   });
   const oldOnes = recs.filter((r) => !r.review).length;
   return <>
