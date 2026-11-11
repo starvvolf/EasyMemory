@@ -91,21 +91,11 @@ export async function board() {
 /** AI 힌트·설명에 넣을 학습자 기록(11/10, 사용자 "통으로 주면 비효율, 유형에 맞춰 골라서"): 이 문제의 패턴만, 아직 해결 안 된 착각만,
  *  많아야 5줄·약 300자. 고르는 건 코드(패턴 id 맞추기)이고 AI를 부르지 않는다. 재료가 없는 문제면 "". */
 export async function learnerNoteFor(problemId: string) {
-  const [{ numberOfProblem, patternsOfNumber }, { readEvents }, { readLessons }, { patternOf }] = await Promise.all([import("./links.ts"), import("./state.ts"), import("./lessons.ts"), import("./patterns.ts")]);
+  // 11/11: ③ 학습자 기억(memory.ts)의 이 문제 패턴 줄만. 태그 한 줄씩.
+  const [{ numberOfProblem, patternsOfNumber }, { readMemory, memoryText, MEMORY_LEGEND }] = await Promise.all([import("./links.ts"), import("./memory.ts")]);
   const n = await numberOfProblem(problemId);
   const patterns = n ? await patternsOfNumber(n) : [];
   if (!patterns.length) return "";
-  const [events, lessons] = await Promise.all([readEvents(), readLessons()]);
-  const lines: string[] = [];
-  for (const pid of patterns) {
-    const touched = events.some((e) => e.patterns.includes(pid)) || lessons.some((l) => l.pattern === pid);
-    if (!touched) continue;
-    const s = summarize(pid, events, lessons);
-    lines.push(`- ${patternOf(pid)?.name ?? pid}: ${s.stage}`);
-    for (const c of lessons.filter((l) => l.pattern === pid && l.gap && !isResolved(l, events)).slice(-2).reverse())
-      lines.push(`  · 아직 남은 착각(BOJ ${c.number}): ${c.gap}${c.fix ? ` → ${c.fix}` : ""}`);
-  }
-  let text = "";
-  for (const l of lines.slice(0, 5)) { if ((text + l).length > 320) break; text += `${l}\n`; }
-  return text ? `[이 학습자의 지난 기록: 이 문제의 패턴만]\n${text}이 기록과 지금 막힌 곳이 같으면 "지난번에도 …"처럼 짧게 짚는다. 상관없으면 말하지 않는다.` : "";
+  const text = memoryText(await readMemory(), { patterns, maxRows: 4 });
+  return text ? `[학습자의 지난 기록] ${MEMORY_LEGEND}\n${text}\n착각이 지금 막힌 곳과 같으면 "지난번에도 …"처럼 짧게 짚는다. 상관없으면 말하지 않는다.` : "";
 }

@@ -26,16 +26,17 @@ export async function findContext() {
   const recent = list.filter((x) => x.lastAt).slice(0, 5).map((x) => `- ${x.title} (${STATUS[x.status]}${x.tries ? `, 제출 ${x.tries}번` : ""}, ${x.lastAt.slice(5, 10).replace("-", "/")})`);
   const solved = list.filter((x) => x.status === "solved").slice(0, 30).map((x) => x.title.replace(/^BOJ (\d+)번: /, "$1 "));
   const have = new Set(list.map((x) => bojOf(x.title)).filter(Boolean));
-  let next: string[] = [], stuck: string[] = [];
+  let next: string[] = [], memory = "";
   try {
-    const [{ readEvents, computeState }, { readProfile }, { learningOrder }, { readModels }, { board }] = await Promise.all([
-      import("./tutor/state.ts"), import("./tutor/profile.ts"), import("./tutor/policy.ts"), import("./tutor/problem-model.ts"), import("./tutor/summary.ts")]);
+    const [{ readEvents, computeState }, { readProfile }, { learningOrder }, { readModels }, { readMemory, memoryText, MEMORY_LEGEND }] = await Promise.all([
+      import("./tutor/state.ts"), import("./tutor/profile.ts"), import("./tutor/policy.ts"), import("./tutor/problem-model.ts"), import("./tutor/memory.ts")]);
     const [events, profile, models] = await Promise.all([readEvents(), readProfile(), readModels()]);
     for (const n of Object.keys(models)) have.add(n);
     next = learningOrder(computeState(events), profile.surveyed || profile.focus.length ? profile : undefined).list.slice(0, 3).map((p) => p.name);
-    stuck = (await board().catch(() => [])).slice(0, 3).map((b) => `- ${b.name}: ${b.stage}`);
+    const text = memoryText(await readMemory(), { maxRows: 6, withErrors: true, withRecent: true });
+    memory = text ? `${MEMORY_LEGEND}\n${text}` : "";
   } catch { /* 튜터 기록이 없으면 문제 목록만 */ }
-  return { recent, solved, have, next, stuck };
+  return { recent, solved, have, next, memory };
 }
 
 export async function findProblems(query: string): Promise<{ candidates: Found[] }> {
@@ -43,7 +44,7 @@ export async function findProblems(query: string): Promise<{ candidates: Found[]
   const user = [
     c.recent.length ? `[최근 한 것]\n${c.recent.join("\n")}` : "[최근 한 것] 없음(처음)",
     c.solved.length ? `[푼 문제] ${c.solved.join(", ")}` : "",
-    c.stuck.length ? `[패턴마다 지금 상태]\n${c.stuck.join("\n")}` : "",
+    c.memory ? `[학습자 기억]\n${c.memory}` : "",
     c.next.length ? `[다음에 배울 것] ${c.next.join(" → ")}` : "",
     c.have.size ? `[이미 있는 문제(백준 번호)] ${[...c.have].slice(0, 200).join(", ")}` : "",
     `[요청] ${query.trim() || "(비어 있음)"}`,

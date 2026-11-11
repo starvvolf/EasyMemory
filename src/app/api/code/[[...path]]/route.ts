@@ -5,7 +5,8 @@ import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
 import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
 import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblem, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
-import { endAttempt, ensureProblemKnowledge, listProblemsWithKnowledge, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
+import { endAttempt, ensureProblemKnowledge, idleAttempts, listProblemsWithKnowledge, noteAnswer, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
+import { closeSheet, distillLater, waitSheet } from "@/lib/code/tutor/sheets";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
@@ -13,7 +14,7 @@ import { resolveSource, type Resolved } from "@/lib/code/source";
 import { withTrace } from "@/lib/ai/trace";
 import { LADDER, needsOf } from "@/lib/code/grade";
 import { keptLevel, keptLevels, knownLevelOf, selfLevelOf } from "@/lib/assist/code-level";
-import { mistakesToCatch, noteAiHelp, notePlainSolve, syncTutorImplement } from "@/lib/code/tutor/service";
+import { mistakesToCatch, notePlainSolve, syncTutorImplement } from "@/lib/code/tutor/service";
 import { helpState, openHelp } from "@/lib/code/tutor/help";
 import { fillPredict, modelForProblem } from "@/lib/code/tutor/problem-model";
 
@@ -59,6 +60,9 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "calibration" && m === "POST") return json({ calibration: await calibration(true) });
     if (p[0] === "problems" && m === "GET") {
       // 난이도(11/8): 받아 둔 AI 판단을 같이 보낸다(새로 묻지 않음).
+      // 두 시간 그대로인 풀이는 먼저 문제 한 장으로(AI는 미룸), 앱을 끄느라 미룬 정리는 뒤에서 하나씩.
+      for (const pid of await idleAttempts()) await closeSheet(pid, "paused", { later: true }).catch(() => undefined);
+      void distillLater().catch(() => undefined);
       const [problems, levels] = await Promise.all([listProblemsWithKnowledge(), keptLevels()]);
       return json({ problems: problems.map((x) => { const l = levels[x.id]; return l?.self ? { ...x, level: { self: l.self.level, ...(l.known?.site && !l.known.similar ? { known: { site: l.known.site, rating: l.known.rating } } : {}) } } : x; }) });
     }
@@ -66,7 +70,8 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "run" && m === "POST") { const b = await body(z.object({ lang, code, input: z.string().max(500_000) })); return json(await runCustom(b.lang, b.code, b.input)); }
     if (p[0] === "explain" && m === "POST") {
       const b = await body(z.object({ problemId: pid.optional(), lang, code, selection: z.string().min(1).max(8000), question: z.string().max(2000).optional(),
-        history: z.array(z.object({ q: z.string().max(2000), a: z.string().max(4000) })).max(12).optional() }));
+        history: z.array(z.object({ q: z.string().max(2000), a: z.string().max(4000) })).max(12).optional(),
+        /** 마지막 채점 결과(11/11): 튜터가 "왜 틀렸어요?"에 답할 수 있게 */ last: z.object({ verdict: z.string().max(20).optional(), input: z.string().max(4000).optional(), expected: z.string().max(2000).optional(), got: z.string().max(2000).optional(), stderr: z.string().max(3000).optional(), compile: z.string().max(4000).optional() }).optional() }));
       await recordAsked(b.problemId, b.question || `코드 드래그해서 물어봄: ${b.selection.split("\n")[0].slice(0, 60)}`);
       // 스트리밍(11/11 사용자 "AI 튜터 답 오는 것도 스트리밍으로"): ?stream=1이면 지금까지의 글을 한 줄씩(JSON) 흘려보내고, 끝나면 {done, text}.
       if (new URL(request.url).searchParams.get("stream") === "1") {
@@ -76,7 +81,7 @@ async function inner(request: Request, context: RouteContext) {
           const send = (o: unknown) => { try { ctrl.enqueue(enc.encode(`${JSON.stringify(o)}\n`)); } catch { /* 화면이 닫힘 */ } };
           void explainCode(b, (t) => { if (t.length > last.length) { send({ delta: t.slice(last.length) }); last = t; } }, (u) => { usage = u; })
             .then((out) => { if (out.text.length > last.length && out.text.startsWith(last)) send({ delta: out.text.slice(last.length) }); send({ done: true, text: out.text, usage });
-              if (b.problemId) void noteAiHelp(b.problemId, "드래그한 코드 설명", `${b.question ? `물음: ${b.question} · ` : ""}${out.text}`).catch(() => undefined); })
+              if (b.problemId) void noteAnswer(b.problemId, out.text).catch(() => undefined); })
             .catch((e) => send({ error: (e as Error)?.message || "답을 받지 못했어요." }))
             .finally(() => { try { ctrl.close(); } catch { /* 이미 닫힘 */ } });
         } });
@@ -84,7 +89,7 @@ async function inner(request: Request, context: RouteContext) {
       }
       const out = await explainCode(b);
       // 11/8: AI에게 배운 것은 PS 튜터 문제일 때 그 패턴의 기억으로(tutor/service.ts noteAiHelp).
-      if (b.problemId) void noteAiHelp(b.problemId, "드래그한 코드 설명", `${b.question ? `물음: ${b.question} · ` : ""}${out.text}`).catch(() => undefined);
+      if (b.problemId) void noteAnswer(b.problemId, out.text).catch(() => undefined);
       return json(out);
     }
     if (p[0] === "error" && m === "POST") { const b = await body(z.object({ problemId: pid.optional(), lang, code, error: z.string().min(1).max(12000) })); return json(await explainError(b)); }
@@ -158,7 +163,11 @@ async function inner(request: Request, context: RouteContext) {
         const result = await submitAndRecord(id, b.lang, b.code, b.mode, b.hints ?? 0, b.advice ?? 0);
         // 튜터에서 "직접 짜기"로 연 문제면 맞히는 순간 튜터 기록에 남긴다(11/10, 전에는 튜터 탭으로 돌아와야 남았다).
         // 튜터를 거치지 않고 바로 푼 문제도 재료가 있으면 풀이로 남는다(11/11).
-        if (b.mode === "submit") void notePlainSolve(id).then(() => syncTutorImplement()).catch(() => undefined);
+        // 맞았으면 튜터 기록 다음에 문제 한 장으로 정리(11/11, AI 1번은 화면을 기다리게 하지 않음. 화면은 /sheet로 기다린다).
+        if (b.mode === "submit") {
+          const synced = notePlainSolve(id).then(() => syncTutorImplement()).catch(() => undefined);
+          if (result.verdict === "AC") void closeSheet(id, "solved", { after: synced }).catch(() => undefined);
+        }
         return json(result);
       }
       // 도움 네 칸(11/11): 1 눈여겨볼 곳 · 2 방법 이름 · 3 계획(AI 없음) · 4 뼈대 코드(처음이면 AI 1번 + 채점). 연 칸은 튜터 기록에 남는다.
@@ -172,13 +181,22 @@ async function inner(request: Request, context: RouteContext) {
         // Ask first, record after: recorded first, this very hint was in the "earlier misses" the model sees ("지난번에도").
         const out = await hint({ problemId: id, ...b });
         await recordHint(id, b.level);
-        void noteAiHelp(id, `AI 힌트 ${b.level}단계`, out.text).catch(() => undefined); // 카드 정리(AI 1번)는 화면을 기다리게 하지 않는다
+        void noteAnswer(id, out.text, "hint").catch(() => undefined); // 11/11: 카드 정리는 끝날 때 문제 한 장에서 한 번(tutor/sheets.ts)
         return json(out);
       }
       // 문제 목록으로 돌아가거나 다른 문제로: this attempt's 틀림 · 힌트 · 물어봄 go into the knowledge record now.
       // 실험: one model call — which model writes the independent solution (안전장치 ⑤) best.
       if (p[2] === "solve-check" && m === "POST") { const b = await body(z.object({ model: z.string().regex(/^[a-z0-9.-]{3,40}$/), effort: z.enum(["low", "medium", "high"]).optional() })); return json(await solveCheck(id, b.model, b.effort)); }
-      if (p[2] === "end" && m === "POST") return json(await endAttempt(id));
+      // 나가기(11/11 "인터랙션이 있이 나갔으면 저장"): 쓰던 코드를 남기고, 한 게 있으면 문제 한 장(하다가 나감)으로. 앱을 끄는 중이면 AI는 다음에 켤 때.
+      if (p[2] === "end" && m === "POST") {
+        const b = await body(z.object({ lang: lang.optional(), code: z.string().max(200_000).optional(), touched: z.boolean().optional(), quit: z.boolean().optional(), since: z.string().max(40).optional() }));
+        if (!b.touched) return json({ ...(await endAttempt(id)), sheet: null }); // 보기만 하고 나감: 예전처럼 이번 풀이만 닫는다
+        if (b.lang && b.code !== undefined) await saveDraft(id, b.lang, b.code).catch(() => undefined);
+        const sheet = await closeSheet(id, "paused", { later: Boolean(b.quit), ...(b.code ? { code: b.code } : {}), ...(b.since ? { since: b.since } : {}) }).catch(() => null);
+        await endAttempt(id);
+        return json({ sheet });
+      }
+      if (p[2] === "sheet" && m === "GET") return json({ sheet: await waitSheet(id) });
       // 바로 열기 failed: make the hidden tests again from the same address.
       if (p[2] === "prepare" && m === "POST") {
         const meta = await readProblemMeta(id);

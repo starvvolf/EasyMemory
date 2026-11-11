@@ -23,8 +23,8 @@ export async function listProblemsWithKnowledge() {
 }
 
 /* ---------- 이번 풀이: what happened in the attempt still going on ---------- */
-export type AttemptEvent = { at: string; kind: Extract<KEventKind, "wrong" | "hint" | "asked">; detail: string };
-type Attempt = { startedAt: string; lastAt: string; events: AttemptEvent[] };
+export type AttemptEvent = { at: string; kind: Extract<KEventKind, "wrong" | "hint" | "asked">; detail: string; /** 물어봄의 튜터 답(11/11, 끝날 때 정리에 씀) */ answer?: string };
+export type Attempt = { startedAt: string; lastAt: string; events: AttemptEvent[] };
 /** An attempt with no move for this long is over (the learner went away), and goes into the record as it stands. */
 export const ATTEMPT_IDLE_MS = 2 * 60 * 60 * 1000;
 const attemptsFile = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "attempts.json");
@@ -54,6 +54,21 @@ async function hold(problemId: string, kind: AttemptEvent["kind"], detail: strin
     await writeAttempts(all);
   });
 }
+/** 이번 풀이 그대로(문제 한 장 정리용, tutor/sheets.ts). */
+export async function peekAttempt(problemId: string): Promise<Attempt | undefined> { return (await readAttempts())[problemId]; }
+/** 끝나서 지운 풀이를 잠깐 들고 있는다: 맞았습니다로 끝난 풀이도 문제 한 장으로 정리할 수 있게(tutor/sheets.ts가 가져감). */
+const ended = globalThis as unknown as { __endedAttempts?: Map<string, Attempt> };
+export function takeEnded(problemId: string) { const m = (ended.__endedAttempts ??= new Map()); const a = m.get(problemId); m.delete(problemId); return a; }
+/** 튜터 답을 마지막 물어봄에 붙인다(11/11 "한 문제를 풀면서 기억을 가져가야"). */
+export async function noteAnswer(problemId: string, answer: string, kind: "asked" | "hint" = "asked") {
+  await serial(async () => {
+    const all = await readAttempts();
+    const ev = [...(all[problemId]?.events ?? [])].reverse().find((e) => e.kind === kind && !e.answer);
+    if (!ev) return;
+    ev.answer = answer.slice(0, 1500);
+    await writeAttempts(all);
+  });
+}
 /** This attempt so far, for the tutor: told as this attempt, not as an earlier one. */
 export async function currentAttempt(problemId: string): Promise<AttemptEvent[]> {
   return (await readAttempts())[problemId]?.events ?? [];
@@ -64,11 +79,13 @@ export async function endAttempt(problemId: string, ending?: { kind: "correct" |
   const attempt = await serial(async () => {
     const all = await readAttempts();
     const found = all[problemId];
-    if (found) { delete all[problemId]; await writeAttempts(all); }
+    if (found) { delete all[problemId]; await writeAttempts(all); (ended.__endedAttempts ??= new Map()).set(problemId, found); }
     return found;
   });
   return { recorded: 0, ended: (attempt?.events.length ?? 0) + (ending ? 1 : 0) };
 }
+/** 두 시간 그대로인 풀이(문제 한 장으로 먼저 정리하려고 고른다). */
+export async function idleAttempts(now = Date.now()) { return Object.entries(await readAttempts()).filter(([, a]) => now - Date.parse(a.lastAt) > ATTEMPT_IDLE_MS).map(([id]) => id); }
 /** Attempts left without a move for two hours end as they stand. */
 export async function endIdleAttempts(now = Date.now()) {
   const all = await readAttempts();

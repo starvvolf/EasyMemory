@@ -7,6 +7,7 @@ import { call, errorText, handoff, later, shareContext } from "./api";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
 import PsTutor from "./PsTutor";
+import MemoToast, { memo, sheetLine, type SheetLite } from "./MemoToast";
 import { LevelBox, LevelChip, NeedsPanel, type Level, type Needs, type SelfLevel } from "./CodeGrade";
 import { COACH_ASKS, ModeSwitch, STEP_LABEL, TrainPanel, useLab, useTrain, useWatch, WatchStrip } from "./CodeTrain";
 
@@ -51,12 +52,13 @@ export default function CodeStudy({ openId }: { openId?: string }) {
     window.addEventListener("recaller:code-open", on);
     return () => window.removeEventListener("recaller:code-open", on);
   }, []);
-  if (current) return <Solve key={current} id={current} langs={langs} onBack={() => { setCurrent(null); void load(); }} />;
+  if (current) return <><MemoToast /><Solve key={current} id={current} langs={langs} onBack={() => { setCurrent(null); void load(); }} /></>;
   const shown = list.filter((p) => filter === "all" || p.status === filter);
   const tabs = <div className="ws-seg" role="tablist" style={{ alignSelf: "flex-start" }}>{([["tutor", "PS 튜터"], ["list", "문제 목록"]] as const).map(([k, label]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => pickTab(k)}>{label}</button>)}</div>;
-  if (tab === "tutor") return <div className="cs stack">{tabs}<PsTutor onOpenProblem={(id) => { void load(); setCurrent(id); }} /></div>;
+  if (tab === "tutor") return <div className="cs stack"><MemoToast />{tabs}<PsTutor onOpenProblem={(id) => { void load(); setCurrent(id); }} /></div>;
   return (
     <div className="cs stack">
+      <MemoToast />
       {tabs}
       <header className="row" style={{ justifyContent: "space-between" }}>
         <div><h2>알고리즘 문제</h2><p className="small muted">직접 짜서 실행하고 채점해요. 기억에는 PS 튜터에서 몰랐다가 배운 것만 남아요.</p></div>
@@ -271,9 +273,44 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     catch (e) { setError(errorText(e)); }
   };
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [msgs]);
-  // Leaving the problem ends this attempt: its 틀림 · 힌트 · 물어봄 go into the knowledge record (src/lib/code/service.ts).
-  useEffect(() => () => { void call(`/api/code/problem/${id}/end`, {}).catch(() => undefined); }, [id]);
+  // 나가기·앱 끄기(11/11 사용자 "인터랙션이 있이 나갔으면 저장", "X를 눌러 앱을 끌 때도"): 한 게 있으면 문제 한 장(하다가 나감)으로
+  // 남기고, 그동안 미니 탭으로 보여 준다. 앱을 끄는 중이면 AI 정리는 다음에 켤 때(tutor/sheets.ts).
+  const touched = useRef(false);
+  const openedAt = useRef("");
+  const latest = useRef({ code: "", lang: "python" as Lang });
+  useEffect(() => { latest.current = { code, lang }; }, [code, lang]);
+  const leave = useRef<(quit: boolean) => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    if (!openedAt.current) openedAt.current = new Date().toISOString();
+    leave.current = async (quit: boolean) => {
+      const t = touched.current;
+      touched.current = false;
+      const { code: c, lang: l } = latest.current;
+      if (t) memo({ state: "saving", text: quit ? "끄기 전에 공부하던 것을 남기는 중이에요" : "공부하던 것을 기억에 남기는 중이에요" });
+      try {
+        const r = await call<{ sheet: SheetLite | null }>(`/api/code/problem/${id}/end`, { ...(t && c ? { lang: l, code: c } : {}), touched: t, quit, since: openedAt.current });
+        if (t) memo(r.sheet ? { state: "done", text: sheetLine(r.sheet, quit) } : { state: "hide" });
+      } catch { if (t) memo({ state: "hide" }); }
+    };
+  });
+  useEffect(() => {
+    const w = window as unknown as { __recallerQuitHooks?: Set<() => Promise<unknown>>; __recallerBeforeQuit?: () => Promise<unknown> };
+    const hooks = (w.__recallerQuitHooks ??= new Set());
+    // 끄기 전에(desktop/main.js): 남긴 게 있었는지(수)를 돌려준다. 있으면 앱이 미니 탭을 잠깐 보여 주고 끈다.
+    w.__recallerBeforeQuit ??= () => Promise.all([...hooks].map((h) => h().catch(() => false))).then((r) => r.filter(Boolean).length);
+    const hook = () => { const had = touched.current; return leave.current(true).then(() => had); };
+    hooks.add(hook);
+    // 데스크톱 앱 밖(브라우저 탭 닫기): 남은 게 있으면 keepalive로 한 번 보낸다(AI 정리는 다음에).
+    const onHide = () => {
+      if (!touched.current) return;
+      touched.current = false;
+      try { void fetch(`/api/code/problem/${id}/end`, { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...latest.current, touched: true, quit: true, since: openedAt.current }) }); } catch { /* 닫히는 중 */ }
+    };
+    window.addEventListener("pagehide", onHide);
+    return () => { hooks.delete(hook); window.removeEventListener("pagehide", onHide); void leave.current(false); };
+  }, [id]);
   const onCode = useCallback((v: string) => {
+    touched.current = true;
     setCode(v);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => { void call(`/api/code/problem/${id}/draft`, { lang, code: v }).catch(() => undefined); setDrafts((d) => ({ ...d, [lang]: v })); }, 800);
@@ -287,6 +324,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   // The editor is the source of truth at the moment of a click (state may lag a keystroke behind).
   const now = () => editor.current?.value() ?? code;
   const judge = async (mode: "example" | "submit") => {
+    touched.current = true;
     setRunning(mode); setError("");
     try {
       const r = await call<Judged>(`/api/code/problem/${id}/submit`, { lang, code: now(), mode, hints, ...(watch.advice ? { advice: watch.advice } : {}) });
@@ -297,6 +335,12 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         if (r.verdict === "AC" && (training || watch.advice)) { setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: "채점", text: training ? "맞았습니다! 훈련 모드로 푼 문제는 기록에 '훈련 모드로 통과'로 남아요. 왼쪽 7단계 복기에서 배운 것을 남기고, 며칠 뒤 기본 모드로 혼자 풀면 '앎'이 돼요." : `맞았습니다! 지켜보기 조언을 ${watch.advice}번 받고 풀었어요. 며칠 뒤 혼자 다시 풀면 '앎'이 돼요.` }]); setHints(0); watch.resetAdvice(); }
         else if (r.verdict === "AC") { setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: "채점", text: hints ? `맞았습니다! 힌트 ${hints}번을 받고 풀었어요. 며칠 뒤 힌트 없이 다시 풀어 보면 기억이 '앎'이 돼요.` : "맞았습니다! 힌트 없이 풀어서 이 문제의 기억이 '앎'이 됐어요." }]); setHints(0); }
         window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar"));
+        // 맞았으면 이 풀이를 문제 한 장으로(11/11): 서버가 정리하는 동안 미니 탭, 끝나면 한 줄.
+        if (r.verdict === "AC") {
+          touched.current = false;
+          memo({ state: "saving", text: "이 문제를 기억에 정리하는 중이에요" });
+          void call<{ sheet: SheetLite | null }>(`/api/code/problem/${id}/sheet`).then((x) => memo({ state: "done", text: sheetLine(x.sheet) })).catch(() => memo({ state: "hide" }));
+        }
       }
     } catch (e) { setError(errorText(e)); } finally { setRunning(""); }
   };
@@ -329,6 +373,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const refillSkeleton = () => { if (!deck.skel) return; setBefore(now()); onCode(deck.skel); };
   const openHelp = async (rung: number) => {
     if (!help || deck.busy || rung < 1 || rung > Math.min(4, help.opened + 1)) return;
+    touched.current = true;
     const fresh = rung > help.opened;
     setDeck((d) => ({ ...d, at: rung, dir: rung < d.at ? "prev" : "next", err: "" }));
     if (deck.texts[rung] && !fresh) return;
@@ -344,6 +389,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   // 스트리밍(11/11 사용자 "질문하는 거, 답 오는 거 스트리밍으로, 부드럽지 않으면 부드럽게"): 글이 오는 대로 마지막 AI 말풍선에 붙이고, 화면은 SmoothText가 고르게 풀어 보여 준다.
   const streamAsk = async (q: string, payload: Record<string, unknown>) => {
     if (asking) return;
+    touched.current = true;
     setAsking(true);
     setMsgs((m) => [...m, { step: stepNow, who: "me", text: q }, { step: stepNow, who: "ai", text: "", live: true }]);
     const patch = (f: (last: Msg) => Msg) => setMsgs((m) => { const i = m.length - 1; return i >= 0 && m[i].who === "ai" ? [...m.slice(0, i), f(m[i])] : m; });
@@ -379,7 +425,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     // 이 문제에서 나눈 대화를 같이 보낸다(앞에서부터 그대로 → 서버에서 프롬프트 캐시를 탄다). 오래된 것부터 잘리지 않게 최근 8개.
     const history: Array<{ q: string; a: string }> = [];
     for (let i = 0; i + 1 < msgs.length; i++) if (msgs[i].who === "me" && msgs[i + 1].who === "ai" && !msgs[i].tag && !msgs[i + 1].live && !msgs[i + 1].tag) history.push({ q: msgs[i].text.slice(0, 2000), a: msgs[i + 1].text.slice(0, 4000) });
-    void streamAsk(q, { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q, history: history.slice(-8) });
+    void streamAsk(q, { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q, history: history.slice(-8), ...(last ? { last } : {}) });
   };
   const openSubmission = async (sid: string) => {
     try { const { submission } = await call<{ submission: { code: string; lang: Lang } }>(`/api/code/problem/${id}/submission/${sid}`); setLang(submission.lang); setCode(submission.code); } catch (e) { setError(errorText(e)); }

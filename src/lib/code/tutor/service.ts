@@ -105,6 +105,13 @@ export async function noteAiHelp(problemId: string, what: string, text: string) 
   await toMemory(target, "hint", true, lessonLine(card));
 }
 
+/** 문제 한 장(sheets.ts)에서 드러난 "그때 내 생각"을 배운 것 카드와 그 패턴의 기억으로(11/11: 힌트마다가 아니라 끝날 때 한 번). */
+export async function rememberLesson(n: string, target: string[], card: Card, kind: LessonKind, raw: string) {
+  const model = (await readModels())[n];
+  for (const pid of target) await appendLesson({ pattern: pid, number: n, title: model?.title ?? "", kind, refined: "ai", raw: raw.slice(0, 1200), ...card }).catch(() => undefined);
+  await toMemory(target, "hint", true, lessonLine(card));
+}
+
 /* ---------- 혼자 구현: 문제 화면의 제출 기록으로 확인 ---------- */
 type Pending = { number: string; pattern: string; mixed: boolean; startedAt: string; /** 뼈대에서 채우기 */ fill?: boolean; /** 혼자 다시 풀기 */ redo?: boolean };
 /** 튜터를 거치지 않고 문제 화면에서 바로 푼 문제도(유저가 넣은 백준 문제) 재료가 있으면 풀이로 남긴다(11/11): 첫 제출 때 한 번. */
@@ -357,6 +364,8 @@ export async function answer(a: Answer) {
       { situation: `BOJ ${a.number} ${m.title}를 ${still.fill ? "뼈대 코드에서 채우다" : help ? `도움 ${help}칸까지 받고도` : "혼자 구현하다"} 제출 ${subs.length}번 모두 틀리고 그만둠`, gap: "끝까지 짜지 못했어요", fix: m.update, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     await writeJson("pending.json", (await readJson<Pending[]>("pending.json", [])).filter((p) => p.number !== a.number));
   }
+  // 문제 한 장(11/11): 그만둠으로 정리(AI 1번, 화면은 기다리지 않음).
+  void import("./sheets.ts").then((x) => x.closeSheet(m.problemId ?? problemIdOf(a.number), "gaveup")).catch(() => undefined);
   return { ok: false };
 }
 /** 기억 복습에서 PS 질문(review.ts)을 채점한 뒤: 튜터 사건으로 남긴다. 알아보기 → 인식, 설계 → 설계(둘 다 단원 숨김),
