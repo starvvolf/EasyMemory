@@ -238,7 +238,7 @@ function shiftOf(text: string, first: boolean): { icon: string; text: string; cl
 function GoalCard({ n, goal, done, result, rv, summary, ongoing }: { n: number; goal: string; done?: string; result: string; rv?: GoalReview | null; summary?: string; ongoing?: boolean }) {
   return <div className="rv-goal">
     <div className="rv-gh"><span className="rv-n">{n}</span><b>{goal}</b>{ongoing ? <span className="lib-res now">진행 중</span> : result ? <span className={`lib-res ${RES[result] ?? ""}`}>{result}</span> : null}</div>
-    {done ? <p className="rv-done"><b>끝나면</b>{done}</p> : null}
+    {done ? <p className="rv-done"><b>해낼 것</b>{done}</p> : null}
     {rv ? <>
       {rv.aim ? <p className="rv-sit">{rv.aim}</p> : null}
       {rv.scenes.length ? <div className="rv-probs">{rv.scenes.map((s, k) => <div key={k} className="rv-prob"><p className="rv-q">{s.title}</p><p className="rv-body">{s.body}</p>
