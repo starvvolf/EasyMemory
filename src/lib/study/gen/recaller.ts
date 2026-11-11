@@ -8,7 +8,7 @@ import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
 import { imageSize } from "./image-size.ts";
-import { addMore, fillGroups, HEADING_TERMS, memoryCard, missingPages, parsePlan, settlePlan, STEM_FILL, STEM_MORE, STEM_PLAN, stemFakeReply, stemFillSchema, type StemRole } from "./stem.ts";
+import { addMore, fillGroups, HEADING_TERMS, memoryCard, missingPages, settlePlan, STEM_FILL, STEM_MORE, STEM_PLAN, stemFakeReply, stemFillSchema, stemPlanSchema, type StemRole } from "./stem.ts";
 import { cardKinds, cardLine, cardSchema, checkCards, cleanFigure, FIGURE_RULES, figureSchema, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
@@ -954,16 +954,13 @@ export async function runRecaller(ctx: RecallerContext) {
   async function stemPlanRun(d: NonNullable<typeof data.digest>) {
     const t0 = Date.now();
     const user = oneUser(input.fileName, input.pageNumbers.map((page) => ({ page, text: data.texts[page] ?? "" })));
-    // 줄 형식으로 받는다(11/11, stem.ts parsePlan). 기억 줄이 하나도 없으면 한 번 더 묻고, 그래도 없으면 멈춘다(예전의 틀 검사 자리).
-    let plan = settlePlan(parsePlan(await ctx.askText("rc-stem-plan", null, 1, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}`, user, await imagesOf(input.pageNumbers))), input.pageNumbers);
-    if (!plan.areas.length || !plan.memories.length) plan = settlePlan(parsePlan(await ctx.askText("rc-stem-plan", null, 3, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}`, user, await imagesOf(input.pageNumbers))), input.pageNumbers);
-    if (!plan.areas.length || !plan.memories.length) throw new Error("줄기 계획에서 영역·기억 줄을 읽지 못했어요.");
+    let plan = settlePlan(await ctx.ask("rc-stem-plan", null, 1, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}`, user, stemPlanSchema, { images: await imagesOf(input.pageNumbers), maxChars: 200 * input.pageNumbers.length + 8000 }), input.pageNumbers);
     const miss = missingPages(plan, input.pageNumbers);
     if (miss.length) {
       try {
-        const more = parsePlan(await ctx.askText("rc-stem-plan", null, 2, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}\n\n${prompt("STEM_MORE", STEM_MORE)}`,
+        const more = await ctx.ask("rc-stem-plan", null, 2, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}\n\n${prompt("STEM_MORE", STEM_MORE)}`,
           `[이미 있는 기억]\n${plan.memories.map((m) => m.name).join("\n")}\n\n[영역]\n${plan.areas.map((a, i) => `${i + 1} ${a.name}`).join("\n")}\n\n${oneUser(input.fileName, miss.map((page) => ({ page, text: data.texts[page] ?? "" })))}`,
-          await imagesOf(miss)));
+          stemPlanSchema, { images: await imagesOf(miss), maxChars: 200 * miss.length + 4000 });
         plan = addMore(plan, more, input.pageNumbers);
       } catch (error) { if (pausesRun(error)) throw error; }
     }
@@ -978,7 +975,7 @@ export async function runRecaller(ctx: RecallerContext) {
     d.conceptSource = "AI";
     d.skeleton.text = d.skeleton.topics.map((t) => `${t.id} | ${t.title} | ${t.pages.join(",")}`).join("\n");
     d.stem = { questions: Object.fromEntries(used.map((a) => [topicId.get(a)!, plan.areas[a - 1].question])),
-      memories: Object.fromEntries(plan.memories.map((m, i) => [d.concepts![i].id, { kind: m.kind, role: m.role, ...(m.question?.trim() ? { question: m.question.trim() } : {}) }])), missing: missingPages(plan, input.pageNumbers), ms: Date.now() - t0 };
+      memories: Object.fromEntries(plan.memories.map((m, i) => [d.concepts![i].id, { kind: m.kind, role: m.role }])), missing: missingPages(plan, input.pageNumbers), ms: Date.now() - t0 };
   }
   // ⓑ 기억 채우기: 묶음(쪽이 이어지는 기억 몇 개)마다 그 쪽 원문 + 쪽 그림. 기억 하나 = 카드 한 장(id tN.mK).
   const stemFillRun = async (section: SectionState, group: Array<{ line: DigestLine; pages: number[]; kind: string; role: StemRole }>) => {

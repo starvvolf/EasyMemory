@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addMore, fillGroups, memoryCard, missingPages, parsePlan, settlePlan } from "./stem.ts";
+import { addMore, fillGroups, memoryCard, missingPages, settlePlan } from "./stem.ts";
 
 const plan = { areas: [{ name: "선", question: "?" }, { name: "원", question: "?" }], memories: [
   { name: "DDA", kind: "절차" as const, role: "메인" as const, area: 1, pages: [5, 6, 99] },
@@ -22,13 +22,4 @@ test("기억 → 카드: 모양을 따라 종류를 맞추고 근거 쪽은 묶�
   const c = memoryCard("t1.m1", "메인", { memory: "t1-b1", title: "브레젠험", kind: "개념", question: "q", line: "l", idea: "", shape: { form: "procedure", steps: [{ action: "a", input: "", output: "" }, { action: "b", input: "", output: "" }] },
     facts: ["p0 = 2dy - dx"], details: [], evidence: [{ page: 3, quote: "x" }, { page: 50, quote: "y" }], mistakes: [], takes: [], gives: [], figure: null }, [3, 4]);
   assert.equal(c.kind, "절차"); assert.equal(c.weight, "핵심"); assert.deepEqual(c.evidence, [{ page: 3, quote: "x" }]); assert.deepEqual(c.memo?.facts, ["p0 = 2dy - dx"]);
-});
-test("줄기 계획 줄 읽기: 영역·기억 줄, 쪽 범위, 건너뛴 영역 번호, 질문 속 |", () => {
-  const p = parsePlan(["설명 한 줄", "영역|1|선 그리기|직선을 어떻게 화소로 옮기나?", "영역|3|원 그리기|원은?", "기억|1|절차(알고리즘)|메인|5-7, 9|DDA|DDA는 다음 화소를 어떻게 정하는가?",
-    "- 기억|3|공식|바탕|21|원의 방정식|원 위의 점은 |r|로 어떻게 나타내는가?", "기억|3|이상한모양|이상한역할|p.22|대칭성|"].join("\n"));
-  assert.deepEqual(p.areas.map((a) => a.name), ["선 그리기", "원 그리기"]);
-  assert.deepEqual(p.memories.map((m) => [m.name, m.area, m.kind, m.role, m.pages]), [["DDA", 1, "절차", "메인", [5, 6, 7, 9]], ["원의 방정식", 2, "공식", "바탕", [21]], ["대칭성", 2, "개념", "메인", [22]]]);
-  assert.equal(p.memories[0].question, "DDA는 다음 화소를 어떻게 정하는가?");
-  assert.ok(p.memories[1].question?.includes("r"));
-  assert.deepEqual(parsePlan("없음"), { areas: [], memories: [] });
 });

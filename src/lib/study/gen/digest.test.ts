@@ -459,15 +459,13 @@ test("목표형 문제 (11/6): 목표에 주는 것·내는 것, 판정은 상�
   for (const q of qs.filter((q) => q.format === "choice")) assert.ok(q.authored.stem.some((b) => (b.text ?? "").includes("\n")), "상황과 질문이 한 문제에");
   assert.ok(!qs.some((q) => q.format === "ox"));
 }));
-test("줄기 모드 끝까지 (11/11, 가짜 모델): 줄 형식 계획 → 기억 채우기, 학습 목표가 기억 목록을 받는다", () => withData(async () => {
+test("줄기 모드 끝까지 (11/11, 가짜 모델): 줄기 계획 → 기억 채우기, 학습 목표가 기억 목록을 받는다", () => withData(async () => {
   const io = { pdf: async () => null, pages: async () => pages };
   const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake",
     lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, goalQuiz: true, quiz: "luna", quizCount: 3, stem: true, consolidate: false } });
   const done = await runGen(start.id, { uid: "local-experiment" }, io);
   assert.equal(done.status, "done", done.message);
   const calls = await readGenCalls(done.id);
-  const plan = calls.find((c) => c.step === "rc-stem-plan");
-  assert.ok(plan?.reply?.startsWith("영역|1|"), "줄기 계획은 줄 형식");
   const stem = done.recaller!.digest!.stem!;
   assert.equal(Object.values(stem.memories).length, 3);
   assert.ok(calls.some((c) => c.step === "rc-stem-fill"), "기억 채우기");

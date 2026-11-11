@@ -45,7 +45,7 @@ export type DigestState = {
   conceptSource?: "책갈피" | "쪽 제목" | "AI";
   wrap?: { status: "writing" | "done" | "failed"; text: string; ms?: number; error?: string };
   /** 줄기 먼저 (11/10, stem.ts): 영역(= topics)의 배우는 질문, 기억(= concepts)마다 모양·역할, 계획 뒤에도 어느 기억에 안 든 쪽 */
-  stem?: { questions: Record<string, string>; memories: Record<string, { kind: string; role: "메인" | "바탕" | "곁"; /** 줄기가 정한 떠올릴 질문 (11/11) */ question?: string }>; missing: number[]; ms?: number };
+  stem?: { questions: Record<string, string>; memories: Record<string, { kind: string; role: "메인" | "바탕" | "곁" }>; missing: number[]; ms?: number };
   /** per card: the body lines it covers, the analogy of those lines and the topic's common mistake (code, no call) */
   notes: Record<string, { topic: string; covers: string[]; analogy?: string; mistake?: string }>;
   checks: {
