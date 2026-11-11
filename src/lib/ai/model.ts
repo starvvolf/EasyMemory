@@ -149,6 +149,8 @@ export function modelBackend(provider?: ModelRequest["provider"]): ModelBackend 
 
 /** Pulls the JSON value out of a reply that may wrap it in a code fence or a sentence. */
 export function parseJsonReply(text: string): unknown {
+  // 통째로 JSON이면 그대로(11/12: 값 안에 ``` 코드 블록이 든 JSON을 울타리로 잘못 잘라 실패했다).
+  try { return JSON.parse(text.trim()); } catch { /* 울타리·문장에 싸인 경우 아래에서 */ }
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
   const body = (fenced ? fenced[1] : text).trim();
   try { return JSON.parse(body); } catch { /* fall through to the widest object/array */ }
