@@ -1446,3 +1446,5 @@ html .dejipgi[data-view="code"] .wrap{max-width:1520px}
 .dejipgi .hd-place dd{margin:0;min-width:0;display:flex;flex-wrap:wrap;gap:4px}
 .dejipgi .hd-path{display:block;width:100%}
 .dejipgi .pt-part{margin:10px 0 0;font-size:15px;font-weight:700;color:var(--ink)}
+.dejipgi .hd-refill{margin-left:auto;align-self:flex-start;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:15px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
+.dejipgi .hd-refill:hover{color:var(--accent);border-color:var(--accent)}

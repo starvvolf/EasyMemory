@@ -291,8 +291,10 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   };
   const hint = (level: 1 | 2 | 3) => { setHints((h) => h + 1); void assist(`힌트 ${level}`, ["", "방향만 알려 줘", "어느 줄이 문제인지 짚어 줘", "고친 코드를 보여 줘"][level], () => call(`/api/code/problem/${id}/hint`, { lang, code: now(), level, last })); };
   // 도움 칸(11/11 사용자 "강의 탭처럼 넘기는 느낌"): 한 장에 한 칸, 위에 게이지, 오른쪽으로 가면 다음 칸. 이미 연 칸은 다시 봐도 기록이 안 늘어난다.
-  const [deck, setDeck] = useState<{ at: number; dir: "next" | "prev"; texts: Record<number, string>; busy: boolean; err: string }>({ at: 0, dir: "next", texts: {}, busy: false, err: "" });
+  const [deck, setDeck] = useState<Deck>({ at: 0, dir: "next", texts: {}, busy: false, err: "" });
   useEffect(() => { setDeck({ at: help?.opened ?? 0, dir: "next", texts: {}, busy: false, err: "" }); }, [id, help === null]); // eslint-disable-line react-hooks/exhaustive-deps -- 문제가 바뀌거나 도움 칸 정보가 처음 올 때만
+  // 11/11 사용자 "뼈대 다시 넣기, 새로 고침 버튼 같은 거": 고치다 꼬이면 ↻로 처음 뼈대를 다시 넣는다(그 전 코드는 되돌리기로).
+  const refillSkeleton = () => { if (!deck.skel) return; setBefore(now()); onCode(deck.skel); };
   const openHelp = async (rung: number) => {
     if (!help || deck.busy || rung < 1 || rung > Math.min(4, help.opened + 1)) return;
     const fresh = rung > help.opened;
@@ -304,7 +306,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
       setHelp((h) => (h ? { ...h, opened: r.opened } : h));
       // 뼈대 코드는 처음 열 때만 편집기에 넣는다(다시 보기로는 덮어쓰지 않음). 그 전 코드는 되돌릴 수 있게.
       if (r.skeleton && fresh) { setBefore(now()); onCode(r.skeleton); }
-      setDeck((d) => ({ ...d, busy: false, texts: { ...d.texts, [rung]: r.skeleton ? (fresh ? "뼈대 코드를 편집기에 넣었어요. 「여기를 채워요」라고 적힌 줄만 직접 채워서 제출해 보세요." : "편집기에 넣었던 뼈대 코드예요. 「여기를 채워요」 줄만 채우면 돼요.") : r.text } }));
+      setDeck((d) => ({ ...d, busy: false, ...(r.skeleton ? { skel: r.skeleton } : {}), texts: { ...d.texts, [rung]: r.skeleton ? SKEL_SAY : r.text } }));
     } catch (e) { setDeck((d) => ({ ...d, busy: false, err: errorText(e) })); }
   };
   // 스트리밍(11/11 사용자 "질문하는 거, 답 오는 거 스트리밍으로, 부드럽지 않으면 부드럽게"): 글이 오는 대로 마지막 AI 말풍선에 붙이고, 화면은 SmoothText가 고르게 풀어 보여 준다.
@@ -425,7 +427,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {coaching ? <>
         <p className="small muted">코드를 쓰기 전이라 AI는 답이나 코드를 주지 않고, 지금 단계를 스스로 생각하도록 도와요. 구현 단계부터는 힌트·반례 버튼이 다시 나와요.</p>
         </> : <>
-        {help ? <HelpDeck key={id} help={help} deck={deck} onOpen={(r) => void openHelp(r)} before={before} onUndo={() => { if (before !== null) { onCode(before); setBefore(null); } }} needs={<PlaceCard place={help.place} basics={(grade.needs?.steps ?? []).filter((x) => x.step <= 2).flatMap((x) => x.needs.map((n) => n.name))} knowledge={problem.knowledge} />} /> : null}
+        {help ? <HelpDeck key={id} help={help} deck={deck} onOpen={(r) => void openHelp(r)} onRefill={refillSkeleton} before={before} onUndo={() => { if (before !== null) { onCode(before); setBefore(null); } }} needs={<PlaceCard place={help.place} basics={(grade.needs?.steps ?? []).filter((x) => x.step <= 2).flatMap((x) => x.needs.map((n) => n.name))} knowledge={problem.knowledge} />} /> : null}
         </>}
         <div className="cs-chat">
           {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">AI에게 무엇이든 물어보세요. 코드를 드래그하고 물으면 그 부분을 봐요. 물어본 풀이는 「도움 받고 맞힘」으로 남아요.</p> : null}
@@ -495,8 +497,9 @@ const CARDS: Array<{ label: string; note: string; rung: 0 | 1 | 2 | 3 | 4 }> = [
   { label: "계획", note: "무엇을 적어 두고 어떻게 바꾸는지까지", rung: 3 },
   { label: "뼈대 코드", note: "핵심 줄만 비운 코드 (편집기에 바로 들어가요)", rung: 4 },
 ];
-type Deck = { at: number; dir: "next" | "prev"; texts: Record<number, string>; busy: boolean; err: string };
-function HelpDeck({ help, deck, onOpen, before, onUndo, needs }: { help: HelpInfo; deck: Deck; onOpen: (rung: number) => void; before: string | null; onUndo: () => void; needs: ReactNode }) {
+const SKEL_SAY = "편집기에 뼈대 코드가 들어갔어요. 큰 틀은 이미 짜여 있고, 비어 있는 「여기를 채워요」 줄이 이 문제의 핵심이에요. 그 줄만 내 손으로 써서 제출해 봐요.\n\n고치다가 꼬이면 오른쪽 위 ↻를 눌러 처음 뼈대로 다시 시작해요.";
+type Deck = { at: number; dir: "next" | "prev"; texts: Record<number, string>; busy: boolean; err: string; skel?: string };
+function HelpDeck({ help, deck, onOpen, onRefill, before, onUndo, needs }: { help: HelpInfo; deck: Deck; onOpen: (rung: number) => void; onRefill: () => void; before: string | null; onUndo: () => void; needs: ReactNode }) {
   const s = help.opened;
   const [needsSeen, setNeedsSeen] = useState(s >= 3);
   const opened = s >= 3 ? s + 1 : s === 2 && needsSeen ? 3 : s; // 연 장 수(0~5)
@@ -530,7 +533,8 @@ function HelpDeck({ help, deck, onOpen, before, onUndo, needs }: { help: HelpInf
         </div>
       ) : (
         <section key={view} className={`hd-box lc3-in-${dir}`}>
-          <header className="hd-head"><span className="lc3-step num">{view}</span><div className="hd-headtext"><b>{card.label}</b><span className="small muted">{card.note}</span></div></header>
+          <header className="hd-head"><span className="lc3-step num">{view}</span><div className="hd-headtext"><b>{card.label}</b><span className="small muted">{card.note}</span></div>
+            {card.rung === 4 && deck.skel ? <button className="hd-refill" onClick={onRefill} title="뼈대 코드 다시 넣기" aria-label="뼈대 코드 다시 넣기">↻</button> : null}</header>
           {card.rung === 0 ? (needs ?? <p className="small muted">이 문제는 필요한 능력을 아직 정리하지 못했어요.</p>)
             : deck.busy && !deck.texts[card.rung] ? <p className="small muted">{card.rung === 4 ? "뼈대 코드를 만드는 중… (처음이면 10~30초)" : "여는 중…"}</p>
             : deck.err && deck.at === card.rung ? <p className="small bad">{deck.err}</p>
