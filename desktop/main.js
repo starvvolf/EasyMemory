@@ -191,6 +191,12 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   event.preventDefault();
   quitting = true;
+  // 11/11 (B): 화면이 하던 것을 먼저 남긴다(알고리즘 문제를 풀던 중이면 문제 한 장). 창은 아직 보여서 "남기는 중" 미니 탭이 보인다. 4초까지만 기다린다.
+  const page = main && !main.isDestroyed() ? main : null;
+  const flush = page ? Promise.race([page.webContents.executeJavaScript("window.__recallerBeforeQuit ? window.__recallerBeforeQuit().then((n) => (n ? new Promise((r) => setTimeout(r, 900)) : null)) : null").catch(() => null), new Promise((r) => setTimeout(r, 4000))]) : Promise.resolve();
+  void flush.then(() => shutDown());
+});
+function shutDown() {
   if (main && !main.isDestroyed()) { saveBounds(main); main.destroy(); }
   stopPrintService();
   openSplash("끝내는 중이에요 · 서버를 끄고 데이터를 올려요");
@@ -203,7 +209,7 @@ app.on("before-quit", (event) => {
     }
     app.exit(0);
   });
-});
+}
 app.on("window-all-closed", () => { if (!quitting) app.quit(); });
 // The loading window closed before the app opened (it failed): nothing to save, just stop what was started.
 app.on("will-quit", () => stopCourse());
