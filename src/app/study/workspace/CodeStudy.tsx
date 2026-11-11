@@ -168,6 +168,10 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const [running, setRunning] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [hints, setHints] = useState(0);
+  // 도움 네 칸(11/11): 작은 도움부터 차례로. 재료(교육용 문제 모델)가 있는 문제에서만 나온다. 연 칸은 서버가 튜터 기록에 남긴다.
+  const [help, setHelp] = useState<{ opened: number; labels: string[] } | null>(null);
+  const [skeleton, setSkeleton] = useState("");
+  useEffect(() => { setHelp(null); setSkeleton(""); void call<{ help: { opened: number; labels: string[] } | null }>(`/api/code/problem/${id}/help`).then((r) => setHelp(r.help)).catch(() => undefined); }, [id]);
   const [asking, setAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
@@ -285,6 +289,18 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     finally { setAsking(false); }
   };
   const hint = (level: 1 | 2 | 3) => { setHints((h) => h + 1); void assist(`힌트 ${level}`, ["", "방향만 알려 줘", "어느 줄이 문제인지 짚어 줘", "고친 코드를 보여 줘"][level], () => call(`/api/code/problem/${id}/hint`, { lang, code: now(), level, last })); };
+  const openHelp = async (rung: number) => {
+    if (asking) return;
+    setAsking(true);
+    setMsgs((m) => [...m, { step: stepNow, who: "me", text: `도움 ${rung}칸: ${help?.labels[rung - 1] ?? ""}` }]);
+    try {
+      const r = await call<{ text: string; skeleton?: string; opened: number }>(`/api/code/problem/${id}/help`, { rung, lang });
+      setHelp((h) => (h ? { ...h, opened: r.opened } : h));
+      if (r.skeleton) setSkeleton(r.skeleton);
+      setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: `도움 ${rung}`, text: r.skeleton ? `${r.text}\n\n\`\`\`\n${r.skeleton}\n\`\`\`` : r.text }]);
+    } catch (e) { setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: `도움 ${rung}`, text: `도움을 열지 못했어요: ${errorText(e)}` }]); }
+    finally { setAsking(false); }
+  };
   const explainSel = () => {
     const sel = editor.current?.selection() ?? "";
     if (!sel.trim()) { setMsgs((m) => [...m, { step: stepNow, who: "ai", text: "편집기에서 설명을 듣고 싶은 부분을 드래그한 다음 눌러 주세요." }]); return; }
@@ -377,6 +393,13 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         <p className="small muted">코드를 쓰기 전이라 AI는 답이나 코드를 주지 않고, 지금 단계를 스스로 생각하도록 도와요. 구현 단계부터는 힌트·반례 버튼이 다시 나와요.</p>
         </> : <>
         <p className="small muted">통과 여부는 채점기가 정해요. AI는 설명과 힌트만 줘요. PS 튜터 문제라면 AI 힌트·설명으로 배운 것은 그 패턴의 기억에 남아요.</p>
+        {help ? <div className="cs-help">
+          <p className="small"><b>막혔을 때</b> <span className="muted">작은 도움부터 차례로 열어요. 연 것은 기록에 남고, 도움 받고 푼 문제는 며칠 뒤 혼자 다시 풀어요.</span></p>
+          <div className="cs-hints">{help.labels.map((label, i) => (
+            <button key={label} className={`btn small${i < help.opened ? " opened" : ""}`} disabled={asking || i > help.opened} title={i === 3 ? "핵심 줄만 비운 코드를 만들어요(처음이면 AI 1번, 10~30초)" : "AI를 쓰지 않아요"} onClick={() => void openHelp(i + 1)}>{i < help.opened ? "✓ " : ""}{i + 1} · {label}</button>))}</div>
+          {skeleton ? <button className="linkish small" onClick={() => onCode(skeleton)}>뼈대 코드를 편집기에 넣기 (지금 코드를 덮어써요)</button> : null}
+        </div> : null}
+        {help ? <p className="small muted">내 코드를 보고 짚어 주는 AI 힌트</p> : null}
         <div className="cs-hints">
           <button className="btn small" disabled={asking} onClick={() => hint(1)}>힌트 1 · 방향</button>
           <button className="btn small" disabled={asking} onClick={() => hint(2)}>힌트 2 · 줄 짚기</button>

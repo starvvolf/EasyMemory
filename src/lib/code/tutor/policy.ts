@@ -10,6 +10,8 @@
 //     ②' 알아요·잘해요라고 한 패턴을 쉬운 것부터 한 문제씩 확인(확인이 남아 있으면 배우기보다 먼저)
 //     ③ 배우는 순서 = 분야 집중(고른 것)이 있으면 그것, 없으면 쉬운 순서. 잘해요+확인 통과는 건너뛰고 섞어 풀기에만.
 //        알아요+확인 통과는 시범 없이, 알아채기는 1번만 더 맞히면 계획 세우기로.
+//   11/11 "도움 받은 건 혼자 다시": 도움을 받고 통과한 문제는 하루 뒤 같은 문제를 혼자 다시 푸는 할 일로 돌아온다(맨 앞, 한 번에 하나).
+//     처음 짜 보는 패턴은 뼈대에서 핵심 줄만 채우기(fill)부터: 계획 3분 → 혼자 25분 사이가 너무 멀어서.
 //   거르는 규칙: 그 능력으로 이미 본 문제는 새 문제 평가로 쓰지 않는다(없으면 가장 오래된 것, 등급은 E2로 기록됨).
 import type { ProblemModel } from "./problem-model.ts";
 import { PATTERNS } from "./patterns.ts";
@@ -31,7 +33,8 @@ export function pendingChecks(state: LearnerState, profile?: Profile) {
 }
 
 export type ActionKind = "walkthrough" | "contrast" | "drill" | "design" | "implement";
-export type Action = { id: string; kind: ActionKind; number: string; pattern: string; ability?: Ability; mixed: boolean; minutes: number; why: string; /** 설문의 빠른 확인(11/11) */ check?: boolean };
+export type Action = { id: string; kind: ActionKind; number: string; pattern: string; ability?: Ability; mixed: boolean; minutes: number; why: string; /** 설문의 빠른 확인(11/11) */ check?: boolean;
+  /** 도움 받고 푼 문제를 혼자 다시(11/11) */ redo?: boolean; /** 뼈대에서 핵심 줄만 채우기(11/11) */ fill?: boolean };
 const MINUTES: Record<ActionKind, number> = { walkthrough: 5, contrast: 3, drill: 1, design: 3, implement: 25 };
 const ABILITY_OF: Partial<Record<ActionKind, Ability>> = { drill: "recognize", design: "design", implement: "execute" };
 const KIND_OF: Record<Ability, ActionKind> = { recognize: "drill", design: "design", execute: "implement" };
@@ -49,6 +52,15 @@ function pick(models: ProblemModel[], state: LearnerState, pattern: string, abil
   return ordered[0];
 }
 
+export const REDO_AFTER_MS = 24 * 3600_000;
+/** 혼자 다시 풀 문제(11/11): 도움을 받고(힌트·도움 칸·뼈대) 통과했고, 그 뒤 같은 문제를 혼자 통과한 적이 없는 것. 오래된 것부터.
+ *  due = 하루가 지나 지금 풀 차례인지. */
+export function redoList(state: LearnerState, now = new Date()) {
+  const last = new Map<string, { at: string; pattern: string; alone: boolean }>();
+  for (const e of state.events) if (e.kind === "implement" && e.ok) last.set(e.number, { at: e.at, pattern: e.patterns[0], alone: !e.hinted });
+  return [...last].filter(([, v]) => !v.alone).map(([number, v]) => ({ number, pattern: v.pattern, since: v.at, due: now.getTime() - Date.parse(v.at) >= REDO_AFTER_MS })).sort((a, b) => a.since.localeCompare(b.since));
+}
+
 export function nextActions(state: LearnerState, modelMap: Record<string, ProblemModel>, now = new Date(), limit = 5, profile?: Profile): Action[] {
   const models = Object.values(modelMap);
   if (!models.length) return [];
@@ -57,6 +69,10 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
   const push = (a: Action | null) => { if (a && !out.some((x) => x.id === a.id) && out.length < limit) { out.push(a); used.add(a.number); } };
   const covered = PATTERNS.filter((p) => models.some((m) => m.patterns.includes(p.id)));
   const order = learningOrder(state, profile);
+
+  // ⓪ 도움 받고 푼 문제를 혼자 다시(하루 뒤, 한 번에 하나).
+  const redo = redoList(state, now).find((r) => r.due && modelMap[r.number]);
+  if (redo) push(make({ kind: "implement", number: redo.number, pattern: redo.pattern, mixed: false, why: "지난번에 도움을 받고 푼 문제예요. 이번엔 혼자 다시 풀어 봐요", redo: true }));
 
   // ① 날짜가 된 복습: 단원을 숨기고 묻는다.
   const due = covered.flatMap((p) => (["recognize", "design", "execute"] as const).map((ab) => ({ p, ab, a: state.patterns[p.id].abilities[ab] })))
@@ -114,7 +130,9 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
     const step: Ability = r.freshWins < needR ? "recognize" : d.freshWins < 1 ? "design" : x.freshWins < 1 && x.failStreak < 2 ? "execute" : x.freshWins < 1 ? "design" : "recognize";
     const m = pick(models, state, current.id, step, "basic", used);
     const why = step === "recognize" ? `${current.name}: 문제를 보고 이 방법을 떠올려 봐요` : step === "design" ? (x.failStreak >= 2 ? `${current.name}: 짜기를 2번 틀려서 계획부터 다시 세워 봐요` : `${current.name}: 풀면서 적어 둘 것과 걸리는 시간을 정해 봐요`) : `${current.name}: 혼자 직접 짜 봐요`;
-    if (m) push(make({ kind: KIND_OF[step], number: m.number, pattern: current.id, mixed: false, why }));
+    // 이 패턴을 처음 짜 보는 거면 뼈대에서 핵심 줄만 채우기부터(도움 받은 것으로 남고, 다음엔 다른 문제를 혼자).
+    const first = step === "execute" && x.independent.n + x.assisted.n === 0;
+    if (m) push(make({ kind: KIND_OF[step], number: m.number, pattern: current.id, mixed: false, why: first ? `${current.name}: 처음 짜 보는 거라, 뼈대 코드에서 핵심 줄만 채워 봐요` : why, ...(first ? { fill: true } : {}) }));
   }
 
   // ④ 섞기: 최근 활동 넷 중 단원을 숨긴 것이 없으면, 배운 패턴 중 오래된 것에서 하나.

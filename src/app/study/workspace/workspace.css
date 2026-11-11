@@ -1389,3 +1389,13 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pbt-tree li{position:relative}
 .dejipgi .pbt-tree li::before{content:"";position:absolute;left:-12px;top:20px;width:10px;height:2px;border-radius:2px;background:color-mix(in srgb,var(--accent,#6b8cff) 45%,transparent)}
 .dejipgi .pbt-item.prev{background:color-mix(in srgb,var(--line) 22%,var(--surface));opacity:.9}
+
+/* 도움 네 칸 · 풀이 일지 (11/11) */
+.dejipgi .cs-help{border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:8px}
+.dejipgi .cs-help .btn.opened{border-color:var(--accent);color:var(--accent)}
+.dejipgi .pt-logs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.dejipgi .pt-log{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.dejipgi .pt-log dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:0;font-size:13.5px}
+.dejipgi .pt-log dt{color:var(--muted)}
+.dejipgi .pt-log dd{margin:0;min-width:0}
+.dejipgi .pt-week{background:var(--accent-soft);border-radius:8px;padding:6px 10px}

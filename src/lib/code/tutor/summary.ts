@@ -16,7 +16,8 @@ const ABILITY_OF_CARD: Record<Lesson["kind"], Ability> = { drill: "recognize", d
 /** 해결된 착각(11/10, 사용자 "메모리가 정리가 잘 되어 있어야"): 그 뒤 같은 능력으로 다른 문제를 도움 없이 맞혔으면. 지우지 않고 표시만. */
 export function isResolved(card: Lesson, events: TutorEvent[]) {
   const ab = ABILITY_OF_CARD[card.kind];
-  return events.some((e) => e.ability === ab && e.ok && !e.hinted && e.at > card.at && e.number !== card.number && e.patterns.includes(card.pattern));
+  // 직접 짜기는 같은 문제를 혼자 다시 풀어도 해결(11/11 "도움 받은 건 혼자 다시"). 알아채기·계획은 답을 이미 봤으니 다른 문제여야 한다.
+  return events.some((e) => e.ability === ab && e.ok && !e.hinted && e.at > card.at && (e.number !== card.number || ab === "execute") && e.patterns.includes(card.pattern));
 }
 // 사람 말로(11/10 사용자 "단어가 딱딱해, 직관적이지 않을 수 있어"): 알아채기 · 계획 세우기 · 직접 짜기.
 const LABEL: Record<Ability, string> = { recognize: "방법 알아채기", design: "계획 세우기", execute: "직접 짜기" };

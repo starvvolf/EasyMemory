@@ -4,7 +4,7 @@
 //   - AI 힌트·드래그 설명은 자유 글이라 AI 1번(terra low)이 두 줄로 정리하고 코드가 길이·형식을 검사한다(refined "ai").
 //     정리가 실패하면 원문 앞부분을 그대로 둔다(refined "raw"). 원문은 늘 함께 남긴다(정리가 틀렸을 때 돌아볼 수 있게).
 // 카드는 데이터 폴더 code/tutor/lessons.jsonl(덧붙이기만). 기억 저장소의 기록에는 카드를 한 줄로 줄여 넣는다.
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { askJson, S } from "../../assist/model.ts";
@@ -18,11 +18,31 @@ export type Lesson = {
   /** 다음에 떠올리게 하는 신호 */ cue: string;
   /** 구별할 조건: 언제는 이 패턴이 아닌지·헷갈리는 것과 무엇이 다른지 (11/8 GPT 점검 반영) */ distinguish?: string;
   refined: "code" | "ai" | "raw"; raw?: string;
+  /** 사용자가 "맞아요" 하거나 고쳐 쓴 카드(11/11): 초안은 코드·AI가 쓰고, 확인은 사람이 */ confirmed?: boolean;
 };
 const dir = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "tutor");
 const file = () => path.join(dir(), "lessons.jsonl");
+const editsFile = () => path.join(dir(), "lesson-edits.json");
+type Edits = Record<string, { gap?: string; at: string }>;
+async function readEdits(): Promise<Edits> { try { return JSON.parse(await readFile(editsFile(), "utf8")) as Edits; } catch { return {}; } }
 export async function readLessons(): Promise<Lesson[]> {
-  try { return (await readFile(file(), "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l) as Lesson); } catch { return []; }
+  let list: Lesson[];
+  try { list = (await readFile(file(), "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l) as Lesson); } catch { return []; }
+  const edits = await readEdits();
+  return list.map((l) => (edits[l.id] ? { ...l, ...(edits[l.id].gap ? { gap: edits[l.id].gap! } : {}), confirmed: true } : l));
+}
+/** "뭐가 막았나" 한 줄을 사용자가 확인하거나 고친다(11/11). 카드 파일은 덧붙이기만이라 고친 것은 따로 둔다. gap 없이 부르면 "맞아요". */
+let editing: Promise<unknown> = Promise.resolve();
+export function confirmLesson(id: string, gap?: string) {
+  const run = editing.then(async () => {
+    const edits = await readEdits();
+    const text = gap?.replace(/\s+/g, " ").trim().slice(0, 120);
+    edits[id] = { ...(text ? { gap: text } : {}), at: new Date().toISOString() };
+    await mkdir(dir(), { recursive: true });
+    await writeFile(editsFile(), JSON.stringify(edits), "utf8");
+  });
+  editing = run.catch(() => undefined);
+  return run;
 }
 export async function appendLesson(l: Omit<Lesson, "id" | "at">): Promise<Lesson> {
   const lesson: Lesson = { id: `ls_${randomBytes(5).toString("hex")}`, at: new Date().toISOString(), ...l };

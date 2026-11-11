@@ -10,7 +10,9 @@ import { patternsOfNumber, readLinks, writeLink } from "./links.ts";
 import { appendLesson, lessonLine, refineAiHelp, type LessonKind } from "./lessons.ts";
 import { parsePsId } from "./review.ts";
 import { fillProblem, problemIdOf } from "../bakingdog.ts";
-import { listProblems, readProblem, readProblemMeta, readSubmissions } from "../problems.ts";
+import { clearDraft, listProblems, readProblem, readProblemMeta, readSubmissions, saveDraft } from "../problems.ts";
+import type { Lang } from "../run.ts";
+import { RUNG_LABEL, skeletonFor, skeletonText } from "./help.ts";
 import { COMPLEXITIES, complexityVerdict } from "../train.ts";
 import { patternOf, PATTERNS } from "./patterns.ts";
 import { learningOrder, nextActions, pendingChecks, type Action } from "./policy.ts";
@@ -103,7 +105,19 @@ export async function noteAiHelp(problemId: string, what: string, text: string) 
 }
 
 /* ---------- 혼자 구현: 문제 화면의 제출 기록으로 확인 ---------- */
-type Pending = { number: string; pattern: string; mixed: boolean; startedAt: string };
+type Pending = { number: string; pattern: string; mixed: boolean; startedAt: string; /** 뼈대에서 채우기 */ fill?: boolean; /** 혼자 다시 풀기 */ redo?: boolean };
+/** 튜터를 거치지 않고 문제 화면에서 바로 푼 문제도(유저가 넣은 백준 문제) 재료가 있으면 풀이로 남긴다(11/11): 첫 제출 때 한 번. */
+export async function notePlainSolve(problemId: string) {
+  const n = await tutorNumberOf(problemId);
+  const m = n ? (await readModels())[n] : undefined;
+  if (!n || !m?.patterns.length) return;
+  const pending = await readJson<Pending[]>("pending.json", []);
+  if (pending.some((p) => p.number === n)) return;
+  // 이번 풀이의 시작: 이 문제를 마지막으로 맞힌 뒤(없으면 12시간 전)부터. 그 사이에 연 도움 칸·틀린 제출이 이번 풀이에 들어간다.
+  const lastOk = (await readEvents()).filter((e) => e.number === n && e.kind === "implement" && e.ok).at(-1)?.at ?? "";
+  const since = new Date(Date.now() - 12 * 3600_000).toISOString();
+  await writeJson("pending.json", [...pending, { number: n, pattern: m.patterns[0], mixed: false, startedAt: lastOk > since ? lastOk : since }]);
+}
 /** 구현하러 간 문제의 제출을 본다: 맞았으면(힌트 없이 → 혼자, 힌트 있으면 → 도움) 기록하고 끝. */
 export const syncTutorImplement = () => syncImplement();
 // 제출 직후와 튜터 화면 열기가 겹쳐도 한 번만 기록되게 차례로.
@@ -123,11 +137,18 @@ async function syncImplementOnce() {
     const ac = subs.find((s) => s.verdict === "AC");
     if (!ac) { left.push(p); continue; }
     const events = await readEvents();
-    const hinted = subs.some((s) => s.hints > 0);
-    await record({ kind: "implement", number: p.number, patterns: [p.pattern], ability: "execute", ok: true, hinted,
-      mixed: p.mixed, grade: gradeOf(events, p.number, "execute", { hinted, mixed: p.mixed }), ms: Date.parse(ac.at) - Date.parse(p.startedAt), detail: `제출 ${subs.length}번` }, models[p.number],
-      hinted ? { situation: `BOJ ${p.number}${models[p.number] ? ` ${models[p.number].title}` : ""}를 혼자 구현하다 문제 화면의 힌트를 받고 제출 ${subs.length}번 만에 맞힘`,
-        gap: "혼자서는 끝까지 짜지 못했어요", fix: models[p.number]?.update ?? "", cue: models[p.number]?.signals[0] ?? "" } : undefined);
+    // 도움(11/11): 문제 화면의 AI 힌트(제출에 남음) + 연 도움 칸(help 사건). 가장 큰 칸을 그 풀이에 남긴다. AI 힌트만 받았으면 코드까지 본 것이라 4.
+    const rungs = events.filter((e) => e.kind === "help" && e.number === p.number && e.at >= p.startedAt).map((e) => e.help ?? 0);
+    const aiHints = subs.some((s) => s.hints > 0);
+    const help = Math.max(p.fill ? 4 : 0, aiHints ? 4 : 0, ...rungs) as 0 | 1 | 2 | 3 | 4;
+    const hinted = help > 0;
+    const m = models[p.number], where = `BOJ ${p.number}${m ? ` ${m.title}` : ""}`;
+    // 어느 칸에서 풀렸는지가 곧 "어디서 막혔나"다: 1·2칸 → 방법을 못 떠올림, 3칸 → 계획, 4칸·AI 힌트·뼈대 → 코드로 옮기기.
+    const gap = p.fill ? "뼈대가 있어야 짤 수 있었어요(핵심 줄만 직접 채움)" : help <= 2 ? "어떤 방법을 쓸지 혼자서는 떠올리지 못했어요" : help === 3 ? "방법은 알았지만 무엇을 적어 두고 어떻게 바꿀지 몰랐어요" : "계획은 섰지만 코드로 옮기다 막혔어요";
+    const fix = !m ? "" : help <= 2 ? `${m.patterns.map((id) => patternOf(id)?.name ?? id).join(", ")} — ${m.approaches.find((x) => x.verdict === "best")?.name ?? m.walkthrough.choose}` : m.update || m.state.right;
+    await record({ kind: "implement", number: p.number, patterns: [p.pattern], ability: "execute", ok: true, hinted, ...(hinted ? { help } : {}), ...(p.fill ? { fill: true } : {}), ...(p.redo ? { redo: true } : {}),
+      mixed: p.mixed, grade: gradeOf(events, p.number, "execute", { hinted, mixed: p.mixed }), ms: Date.parse(ac.at) - Date.parse(p.startedAt), detail: `제출 ${subs.length}번${hinted ? ` · 도움 ${help}칸(${RUNG_LABEL[help]})` : ""}` }, m,
+      hinted ? { situation: `${where}를 ${p.fill ? "뼈대 코드에서 핵심 줄만 채워" : `도움 ${help}칸(${RUNG_LABEL[help]})까지 받고`} 제출 ${subs.length}번 만에 맞힘`, gap, fix, cue: m?.signals[0] ?? "" } : undefined);
   }
   await writeJson("pending.json", left);
 }
@@ -223,7 +244,7 @@ export type Answer =
   | { kind: "drill"; number: string; pattern: string; mixed: boolean; choice: string; choices?: string[]; hinted?: boolean; ms?: number; /** [모르겠어요] 11/11 */ dunno?: boolean }
   | { kind: "design"; number: string; pattern: string; mixed: boolean; state: string; complexity: string; update?: string; hinted?: boolean; ms?: number }
   | { kind: "contrast"; number: string; pattern: string; picks: Record<string, string> }
-  | { kind: "implement"; number: string; pattern: string; mixed: boolean; action: "start" | "giveup" };
+  | { kind: "implement"; number: string; pattern: string; mixed: boolean; action: "start" | "giveup"; fill?: boolean; redo?: boolean; lang?: Lang };
 
 const norm = (s: string) => s.replace(/\r/g, "").split("\n").map((l) => l.replace(/\s+$/g, "")).join("\n").trim();
 /** 학습자의 답을 모델과 대조해 기록하고, 피드백(이제 보여 줘도 되는 답)을 돌려준다. */
@@ -309,9 +330,18 @@ export async function answer(a: Answer) {
   // implement
   const pending = await readJson<Pending[]>("pending.json", []);
   if (a.action === "start") {
-    if (!pending.some((p) => p.number === a.number)) pending.push({ number: a.number, pattern: a.pattern, mixed: a.mixed, startedAt: new Date().toISOString() });
-    await writeJson("pending.json", pending);
-    return { ok: true, problemId: m.problemId ?? problemIdOf(a.number) };
+    // 다시 시작하면(뼈대·혼자 다시 포함) 지금부터의 제출·도움만 이번 풀이로 친다.
+    const problemId = m.problemId ?? problemIdOf(a.number);
+    const had = pending.find((p) => p.number === a.number);
+    // 같은 풀이를 다시 여는 것이면 그대로 둔다(그동안의 제출·도움이 이번 풀이). 종류가 바뀌면(뼈대·혼자 다시) 지금부터 새 풀이.
+    if (!had || Boolean(had.fill) !== Boolean(a.fill) || Boolean(had.redo) !== Boolean(a.redo)) {
+      const rest = pending.filter((p) => p.number !== a.number);
+      rest.push({ number: a.number, pattern: a.pattern, mixed: a.mixed, startedAt: new Date().toISOString(), ...(a.fill ? { fill: true } : {}), ...(a.redo ? { redo: true } : {}) });
+      await writeJson("pending.json", rest);
+      // 혼자 다시: 지난번 코드가 남아 있으면 다시 푸는 게 아니라서, 쓰던 코드를 비운다(제출 기록에는 그대로 남아 있다).
+      if (a.redo && a.lang) await clearDraft(problemId, a.lang).catch(() => undefined);
+    }
+    return { ok: true, problemId };
   }
   // 그만하기: 맞힌 제출이 없으면, 제출한 것이 있을 때만 "혼자 구현 틀림"으로 남긴다(제출이 없으면 기록 없이 닫음).
   await syncImplement();
@@ -327,6 +357,16 @@ export async function answer(a: Answer) {
 }
 /** 기억 복습에서 PS 질문(review.ts)을 채점한 뒤: 튜터 사건으로 남긴다. 알아보기 → 인식, 설계 → 설계(둘 다 단원 숨김),
  *  출력 예측 → 예측, 내 실수 다시 보기 → 복습. 기억 기록은 기억 경로가 이미 남겼으므로 여기서는 쓰지 않는다. */
+/** 뼈대에서 채우기(11/11): 뼈대를 만들어(AI 1번 + 채점, 이미 있으면 그대로) 문제 화면의 쓰던 코드로 넣는다. */
+export async function startFill(number: string, lang: Lang) {
+  const m = (await readModels())[number];
+  if (!m) throw Object.assign(new Error("이 문제의 교육용 모델이 아직 없어요."), { status: 404 });
+  const problemId = m.problemId ?? problemIdOf(number);
+  const sk = await skeletonFor(problemId, number, lang);
+  await saveDraft(problemId, lang, skeletonText(sk));
+  return { ok: true, problemId, blanks: sk.blanks.length };
+}
+
 /* ---------- 설문·빠른 확인·분야 집중 (11/11) ---------- */
 /** 알아요·잘해요라고 한 패턴의 첫 알아채기 결과를 확인 결과로 남긴다: 틀리면(모르겠어요 포함) 한 칸 내림. */
 async function noteCheck(pattern: string, ok: boolean) {

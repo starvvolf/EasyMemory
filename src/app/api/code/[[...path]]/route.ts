@@ -12,7 +12,8 @@ import { resolveSource, type Resolved } from "@/lib/code/source";
 import { withTrace } from "@/lib/ai/trace";
 import { LADDER, needsOf } from "@/lib/code/grade";
 import { keptLevel, keptLevels, knownLevelOf, selfLevelOf } from "@/lib/assist/code-level";
-import { mistakesToCatch, noteAiHelp, syncTutorImplement } from "@/lib/code/tutor/service";
+import { mistakesToCatch, noteAiHelp, notePlainSolve, syncTutorImplement } from "@/lib/code/tutor/service";
+import { helpState, openHelp } from "@/lib/code/tutor/help";
 import { fillPredict, modelForProblem } from "@/lib/code/tutor/problem-model";
 
 type MakeInput = Parameters<typeof makeProblem>[0];
@@ -138,8 +139,15 @@ async function inner(request: Request, context: RouteContext) {
         const b = await body(z.object({ lang, code, mode: z.enum(["example", "submit"]), hints: z.number().int().min(0).max(10).optional(), advice: z.number().int().min(0).max(20).optional() }));
         const result = await submitAndRecord(id, b.lang, b.code, b.mode, b.hints ?? 0, b.advice ?? 0);
         // 튜터에서 "직접 짜기"로 연 문제면 맞히는 순간 튜터 기록에 남긴다(11/10, 전에는 튜터 탭으로 돌아와야 남았다).
-        if (b.mode === "submit") void syncTutorImplement().catch(() => undefined);
+        // 튜터를 거치지 않고 바로 푼 문제도 재료가 있으면 풀이로 남는다(11/11).
+        if (b.mode === "submit") void notePlainSolve(id).then(() => syncTutorImplement()).catch(() => undefined);
         return json(result);
+      }
+      // 도움 네 칸(11/11): 1 눈여겨볼 곳 · 2 방법 이름 · 3 계획(AI 없음) · 4 뼈대 코드(처음이면 AI 1번 + 채점). 연 칸은 튜터 기록에 남는다.
+      if (p[2] === "help" && m === "GET") return json({ help: await helpState(id) });
+      if (p[2] === "help" && m === "POST") {
+        const b = await body(z.object({ rung: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]), lang }));
+        return json(await openHelp(id, b.rung, b.lang));
       }
       if (p[2] === "hint" && m === "POST") {
         const b = await body(z.object({ lang, code, level: z.union([z.literal(1), z.literal(2), z.literal(3)]), last }));

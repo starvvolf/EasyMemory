@@ -12,10 +12,13 @@ import { PATTERNS } from "./patterns.ts";
 export const ABILITIES = ["recognize", "design", "execute"] as const;
 export type Ability = (typeof ABILITIES)[number];
 export const ABILITY_LABEL: Record<Ability, string> = { recognize: "방법 알아채기", design: "계획 세우기", execute: "직접 짜기" };
-export type EventKind = "walkthrough" | "predict" | "contrast" | "drill" | "design" | "implement" | "skip" | "review";
+// "help"(11/11): 문제 화면에서 도움 칸을 연 것(1 눈여겨볼 곳 · 2 방법 · 3 계획 · 4 뼈대 코드). 능력 상태는 바꾸지 않고, 그 풀이가 도움 받은 것임을 남긴다.
+export type EventKind = "walkthrough" | "predict" | "contrast" | "drill" | "design" | "implement" | "skip" | "review" | "help";
 export type TutorEvent = {
   id: string; at: string; kind: EventKind; number: string; patterns: string[];
   ability?: Ability; ok?: boolean; grade: 0 | 1 | 2 | 3 | 4; hinted?: boolean; mixed?: boolean; ms?: number; detail?: string;
+  /** 연 도움 칸(help 사건) 또는 그 풀이에서 연 가장 큰 칸(implement 사건). 0·없음 = 도움 없이 */ help?: 0 | 1 | 2 | 3 | 4;
+  /** 뼈대에서 빈칸만 채운 풀이(11/11) */ fill?: boolean; /** 도움 받고 푼 문제를 혼자 다시 푼 것 */ redo?: boolean;
 };
 export const GRADE_LABEL = ["풀이를 봄", "도움 받고 맞힘", "본 적 있는 문제를 혼자 맞힘", "처음 보는 문제를 혼자 맞힘", "단원도 모른 채 처음 보는 문제를 혼자 맞힘"] as const;
 export const HELP_LABEL = ["시범", "따라 하기", "힌트", "실전"] as const;
@@ -64,6 +67,7 @@ export function computeState(events: TutorEvent[]): LearnerState {
     for (const pid of e.patterns) {
       const ps = patterns[pid];
       if (!ps) continue;
+      if (e.kind === "help") continue; // 도움 칸을 연 것은 상태를 바꾸지 않는다(그 풀이의 implement 사건이 hinted로 남는다)
       ps.lastAt = e.at;
       // 시범을 건너뛰어도(skip) 본 것으로 친다: 바로 드릴로 가고, 틀리면 그때 필요한 시범만 나온다.
       if (e.kind === "walkthrough" || e.kind === "contrast" || e.kind === "predict" || e.kind === "skip") { ps.seen = true; continue; }

@@ -326,6 +326,12 @@ export async function listProblems(): Promise<ProblemLite[]> {
 export async function readDrafts(id: string): Promise<Partial<Record<Lang, string>>> {
   try { return JSON.parse(await readFile(fileOf(draftsDir(), id), "utf8")) as Partial<Record<Lang, string>>; } catch { return {}; }
 }
+/** 한 언어의 쓰던 코드를 지운다(다음에 열면 처음 코드로): 도움 받고 푼 문제를 혼자 다시 풀 때(11/11). */
+export async function clearDraft(id: string, lang: Lang) {
+  const drafts = await readDrafts(id);
+  delete drafts[lang];
+  await writeJson(fileOf(draftsDir(), id), drafts);
+}
 export async function saveDraft(id: string, lang: Lang, code: string) {
   const drafts = await readDrafts(id);
   drafts[lang] = code.slice(0, 100_000);

@@ -8,7 +8,7 @@ import { Rich } from "./Rich";
 type Ab = "recognize" | "design" | "execute";
 type PatternRow = { id: string; name: string; what: string; seen: boolean; solid: boolean; graduated: boolean;
   abilities: Record<Ab, { help: 0 | 1 | 2 | 3; freshWins: number; accuracy: number | null; dueAt: string | null; due: boolean; failStreak: number; n: number }> };
-type Base = { id: string; kind: "walkthrough" | "contrast" | "drill" | "design" | "implement"; number: string; pattern: string; mixed: boolean; minutes: number; why: string; check?: boolean;
+type Base = { id: string; kind: "walkthrough" | "contrast" | "drill" | "design" | "implement"; number: string; pattern: string; mixed: boolean; minutes: number; why: string; check?: boolean; redo?: boolean; fill?: boolean;
   title: string; url: string; chapter: string | null; patternName: string | null; summary: string; statement: string; inputText: string; outputText: string;
   example: { input: string; output: string } | null; maxN: number | null };
 type ActionView = Base & {
@@ -79,6 +79,7 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
           <ul className="pt-next">{data.actions.slice(1).map((a) => <li key={a.id} className="small"><span className="chip">{KIND_LABEL[a.kind]}</span> {a.mixed ? "어느 단원인지 안 알려 주는 문제" : `BOJ ${a.number} ${a.title}`} <span className="muted">· {a.why} · 약 {a.minutes}분</span></li>)}</ul>
         </section>
       ) : null}
+      <SolveLogs key={`logs${data.done}`} />
       <Journal key={data.done} />
     </div>
   );
@@ -151,9 +152,19 @@ function ActionCard({ a, onDone, onOpenProblem, pending, onLater }: { a: ActionV
   // implement
   const open = async () => {
     setBusy("문제를 준비하는 중… (처음이면 숨은 테스트를 만드느라 15~50초, AI 4번)"); setErr("");
+    let lang = "python";
+    try { lang = localStorage.getItem("code:lang") || "python"; } catch { /* 저장소 꺼짐 */ }
     try {
-      const r = await call<{ problemId: string }>("/api/code/tutor/answer", { kind: "implement", number: a.number, pattern: a.pattern, mixed: a.mixed, action: "start" });
+      const r = await call<{ problemId: string }>("/api/code/tutor/answer", { kind: "implement", number: a.number, pattern: a.pattern, mixed: a.mixed, action: "start", ...(a.fill ? { fill: true } : {}), ...(a.redo ? { redo: true } : {}), lang });
       if (r.problemId.startsWith("cp_boj_")) await call(`/api/code/bakingdog/${a.number}/fill`, {}); // 이미 만들어진 문제면 그대로 돌아온다(유저가 넣은 문제는 이미 있음)
+      if (a.fill && !pending) {
+        // 뼈대 코드(11/11): 숨은 테스트가 다 만들어져야 검증할 수 있어서, 아직이면 3초마다 다시 물어본다(최대 약 2분).
+        setBusy("뼈대 코드를 만드는 중… (처음이면 AI 1번, 10~30초)");
+        for (let i = 0; ; i++) {
+          try { await call("/api/code/tutor/fill", { number: a.number, lang }); break; }
+          catch (e) { if (i >= 40 || !/아직 만드는 중/.test(errorText(e))) throw e; await new Promise((ok) => setTimeout(ok, 3000)); }
+        }
+      }
       onOpenProblem(r.problemId);
     } catch (e) { setErr(errorText(e)); } finally { setBusy(""); }
   };
@@ -161,11 +172,13 @@ function ActionCard({ a, onDone, onOpenProblem, pending, onLater }: { a: ActionV
   return (
     <section className="panel stack pt-card">
       <Problem a={a} />
-      <p className="small">이번에는 혼자 끝까지 구현해요. 문제 화면의 힌트를 쓰면 「도움 받고 맞힘」으로 남아요. 맞히고 이 탭으로 돌아오면 저절로 기록돼요.</p>
+      <p className="small">{a.fill ? "처음 짜 보는 방법이라 뼈대 코드를 드려요. 「여기를 채워요」라고 적힌 핵심 줄만 직접 채워서 제출해 보세요. 다음에는 다른 문제를 혼자 짜요."
+        : a.redo ? "빈 코드에서 시작해요. 혼자 통과하면 그때 막혔던 것이 「해결됨」이 돼요. 또 막히면 도움을 열어도 되고, 그러면 며칠 뒤 다시 나와요."
+        : "이번에는 혼자 끝까지 구현해요. 막히면 문제 화면의 「막혔을 때」에서 작은 도움부터 열어요. 도움을 받으면 「도움 받고 맞힘」으로 남고, 며칠 뒤 혼자 다시 풀어요."}</p>
       {err ? <p className="ws-err small">{err}</p> : null}
       <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
         {pending ? <button className="btn ghost small" onClick={() => void giveUp()}>그만하기</button> : null}
-        <button className="btn" disabled={Boolean(busy)} onClick={() => void open()}>{busy || (pending ? "문제 다시 열기" : "문제 열고 구현하기")}</button>
+        <button className="btn" disabled={Boolean(busy)} onClick={() => void open()}>{busy || (pending ? "문제 다시 열기" : a.fill ? "뼈대 코드로 시작하기" : a.redo ? "혼자 다시 풀기" : "문제 열고 구현하기")}</button>
       </div>
     </section>
   );
@@ -342,6 +355,45 @@ function Journal() {
           </div>
         );
       })}
+    </section>
+  );
+}
+
+type Log = { number: string; title: string; at: string; patterns: string[]; stuck: string | null; help: number; fill: boolean; solved: boolean; alone: boolean;
+  lessonId?: string; gap?: string; fix?: string; cue?: string; confirmed?: boolean; redo: "none" | "waiting" | "due" | "done"; redoAt?: string };
+const STUCK: Record<string, string> = { understand: "문제 이해", recognize: "방법 떠올리기", design: "계획 세우기", execute: "코드로 옮기기" };
+const RUNG = ["", "눈여겨볼 곳", "방법 이름", "계획", "뼈대 코드"];
+/** 풀이 일지(11/11): 문제마다 한 장. 어디서 막혔나 · 그때 내 생각 → 이렇게 풀려요 · 혼자 다시 풀었나. "그때 내 생각"은 사용자가 확인하거나 고친다. */
+function SolveLogs() {
+  const [data, setData] = useState<{ logs: Log[]; week: { text: string } } | null>(null);
+  const [all, setAll] = useState(false);
+  const [edit, setEdit] = useState<{ id: string; text: string } | null>(null);
+  const load = useCallback(() => { void call<{ logs: Log[]; week: { text: string } }>("/api/code/tutor/logs").then(setData).catch(() => setData({ logs: [], week: { text: "" } })); }, []);
+  useEffect(() => later(load), [load]);
+  if (!data?.logs.length) return null;
+  const confirm = async (id: string, gap?: string) => { await call("/api/code/tutor/lesson", { id, ...(gap ? { gap } : {}) }).catch(() => undefined); setEdit(null); load(); };
+  const day = (at: string) => new Date(at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+  return (
+    <section className="panel stack">
+      <div className="row" style={{ justifyContent: "space-between" }}><b>풀이 일지</b><span className="small muted">문제마다 한 장: 어디서 막혔고, 무엇이 풀어 줬나</span></div>
+      {data.week.text ? <p className="small pt-week">{data.week.text}</p> : null}
+      <ul className="pt-logs">{(all ? data.logs : data.logs.slice(0, 4)).map((l) => (
+        <li key={l.number} className="pt-log">
+          <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+            <b className="small">BOJ {l.number} {l.title} <span className="muted">· {day(l.at)}</span></b>
+            <span className="small muted">{l.patterns.slice(0, 2).join(", ")}</span>
+          </div>
+          <dl>
+            <dt>막힌 곳</dt><dd>{l.stuck ? `${STUCK[l.stuck]}${l.fill ? " (뼈대 코드에서 채움)" : l.help ? ` (도움 ${l.help}칸: ${RUNG[l.help]}까지)` : ""}` : l.solved ? "막힌 곳 없이 혼자 풀었어요" : "아직 푸는 중"}</dd>
+            {l.gap ? <><dt>그때 내 생각</dt><dd>{edit?.id === l.lessonId ? (
+              <span className="row" style={{ gap: 6 }}><input className="ws-input" value={edit!.text} onChange={(e) => setEdit({ id: edit!.id, text: e.target.value })} aria-label="그때 내 생각 고치기" /><button className="btn small" onClick={() => void confirm(edit!.id, edit!.text)}>저장</button></span>
+            ) : <>{l.gap} {l.lessonId && !l.confirmed ? <span className="small"><button className="linkish small" onClick={() => void confirm(l.lessonId!)}>맞아요</button> · <button className="linkish small" onClick={() => setEdit({ id: l.lessonId!, text: l.gap ?? "" })}>고칠게요</button></span> : l.lessonId ? <button className="linkish small" onClick={() => setEdit({ id: l.lessonId!, text: l.gap ?? "" })}>고치기</button> : null}</>}</dd></> : null}
+            {l.fix ? <><dt>이렇게 풀려요</dt><dd>{l.fix}</dd></> : null}
+            {l.cue ? <><dt>이럴 때 떠올리기</dt><dd>{l.cue}</dd></> : null}
+            {l.redo !== "none" ? <><dt>다시 풀기</dt><dd>{l.redo === "done" ? `${day(l.redoAt ?? l.at)} 혼자 성공 ✓` : l.redo === "due" ? "지금 혼자 다시 풀 차례예요 (위 「다음 할 일」에 나와요)" : "내일 혼자 다시 풀어요"}</dd></> : null}
+          </dl>
+        </li>))}</ul>
+      {data.logs.length > 4 ? <button className="linkish small" onClick={() => setAll((x) => !x)}>{all ? "접기" : `모두 보기 (${data.logs.length})`}</button> : null}
     </section>
   );
 }
