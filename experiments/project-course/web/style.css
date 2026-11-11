@@ -874,3 +874,9 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .fqueue { display: flex; flex-direction: column; gap: 6px; }
 .freeme.queued { opacity: .6; border-style: dashed; display: flex; align-items: center; gap: 6px; }
 .freeme.queued .fib { margin-left: auto; }
+/* 너무 쉬워요 · 너무 어려워요(11/11 사용자 "채팅창 위에 약간 끝이 동글동글한 직사각형으로") */
+.freefoot .fquick { display: flex; gap: 6px; flex-wrap: wrap; }
+.freefoot .fchip { border: 1px solid var(--f-line2, var(--line)); background: var(--f-s1, var(--panel)); color: var(--f-ink2, var(--ink)); border-radius: 10px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.06); transition: background .15s, border-color .15s; }
+.freefoot .fchip:hover { background: var(--f-s2, var(--soft)); border-color: var(--mut); }
+.freefoot .fchip.warm { color: #b8701a; border-color: color-mix(in srgb, #e8a33d 45%, transparent); background: color-mix(in srgb, #e8a33d 9%, var(--panel)); }
+.freefoot .flink { border: 0; background: none; color: var(--mut); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }

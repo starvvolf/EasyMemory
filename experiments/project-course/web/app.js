@@ -1596,8 +1596,7 @@ function drawFree() {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go(e); } });
   const foot = h("footer", { class: "freefoot" },
     lesson.chat ? null : stuckBar(lesson, send), lesson.chat ? null : stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
-    h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : null, h("button", { class: "btn primary", onclick: go }, lesson.busy ? "줄 세우기" : "보내기")),
-    // 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
+    // 11/11 사용자 "채팅창 위에 끝이 동글동글한 직사각형으로" · 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
     // 11/11 사용자: 목표가 정해지기 전에는 눌러도 할 일이 없어 숨긴다
     lesson.chat && lesson.goals && lesson.goals.current && !lesson.busy ? h("div", { class: "fquick" },
       // 11/7 사용자 "다음으로 넘어가는 게 기본, 새로 짜기는 고객센터 밑에 조그맣게 써 놓은 것처럼 덤으로"
@@ -1607,6 +1606,7 @@ function drawFree() {
         h("button", { class: "flink", onclick: (e) => { goalUi.easy = false; send({ do: "goal", op: "easy" })(e); }, title: "이 단계를 더 어렵게 다시 짜요(남은 로드맵도 같이)" }, "그래도 안 맞으면: 더 어렵게 다시 짜기"))
       : h("button", { class: "fchip", onclick: lesson.goals.current ? () => { goalUi.easy = true; goalUi.stuck = false; drawLesson(); } : send({ do: "goal", op: "easy" }) }, "너무 쉬워요"),
       h("button", { class: `fchip warm ${goalUi.stuck ? "on" : ""}`, onclick: () => { goalUi.stuck = !goalUi.stuck; drawLesson(); } }, "너무 어려워요")) : null,
+    h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : null, h("button", { class: "btn primary", onclick: go }, lesson.busy ? "줄 세우기" : "보내기")),
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
     // 제목은 한 줄 전체를 쓰고, 길면 … (2026-11-06 사용자 "제목한테 가로줄 하나주고 길면 ..."). 전체 제목은 마우스를 올리면 보인다.
