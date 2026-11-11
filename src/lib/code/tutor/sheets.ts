@@ -36,7 +36,7 @@ export type WeakKind = "core" | "build" | "edge" | "syntax";
 /** v9(11/12 사용자 "부족함의 흐름을 디테일하게 잡고, 그 순서대로 하나씩 흡입력 있게… 사용자는 이렇게 했는데 이건 사실 이런 거거든요, 이런 게 부족했어요…
  *  메인 스토리를 가져가면서 그 사이에 박스로… 그 자체로 공부가 되게"): 풀이를 시간 순서의 이야기 마디로, 마디마다 짚고 가는 공부 상자. */
 export type StoryBox = { title: string; points: string[]; example: string };
-export type Review = { v: 9; situation: string; solve: string; story: Array<{ kind: WeakKind; did: string; truth: string; gap: string; box: StoryBox }>; next: string };
+export type Review = { v: 10; situation: string; solve: string; story: Array<{ kind: WeakKind; did: string; truth: string; gap: string; box: StoryBox }>; next: string };
 
 const dir = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "tutor");
 const file = () => path.join(dir(), "sheets.jsonl");
@@ -218,7 +218,13 @@ export function checkReview(raw: { situation?: unknown; solve?: unknown; story?:
     const box = { title: clean(b.title, 40), points: (Array.isArray(b.points) ? b.points : []).map((p) => clean(p, 120)).filter(Boolean).slice(0, 4), example: block(b.example, 500) };
     return { kind: KINDS.find((k) => k === x.kind) ?? ("build" as const), did: clean(x.did, 400), truth: clean(x.truth, 420).replace(/^사실은\s*/, ""), gap: clean(x.gap, 120), box };
   }).filter((w) => w.did && w.gap && !/확인되지 않|알 수 없/.test(w.gap)).slice(0, 8);
-  return situation && solve ? { v: 9, situation, solve, story, next } : null;
+  return situation && solve ? { v: 10, situation, solve, story, next } : null;
+}
+/** 총정리가 다루는 대화의 범위(11/12 시험: 화면이 새로 고쳐지며 이번 풀이가 중간에 다시 시작돼 앞쪽 질문 20여 개가 빠졌다):
+ *  이 장 앞의 "맞힘·그만둠" 장이 끝난 뒤(없으면 12시간 전)부터 이 장이 끝날 때까지. 하다가 나간 장은 경계로 치지 않는다. */
+async function reviewWindow(problemId: string, sheet: Sheet) {
+  const prev = (await readSheets()).filter((x) => x.problemId === problemId && x.at < sheet.at && x.end !== "paused").at(-1)?.at;
+  return { since: prev ?? new Date(Date.parse(sheet.at) - 12 * 3600_000).toISOString(), until: new Date(Date.parse(sheet.at) + 60_000).toISOString() };
 }
 /** 총정리할 장: 이 문제의 마지막 장 중 한 게 있는 것(제출·물음·AI 힌트가 있거나 끝까지 간 것). 힌트만 열어 보고 나간 장은 건너뛴다(11/12 시험). */
 async function reviewTarget(problemId: string) {
@@ -232,11 +238,10 @@ export function reviewFor(problemId: string, onText?: (soFar: string) => void): 
   const job = (async () => {
     const sheet = await reviewTarget(problemId);
     if (!sheet) return null;
-    if (sheet.review?.v === 9) return sheet.review; // 예전 모양은 다시 만든다
+    if (sheet.review?.v === 10) return sheet.review; // 예전 모양은 다시 만든다
     const meta = await readProblemMeta(problemId).catch(() => null);
     if (!meta) return null;
-    const since = new Date(Number(/_(\d+)$/.exec(sheet.id)?.[1] ?? 0) - 60_000).toISOString();
-    const until = new Date(Date.parse(sheet.at) + 60_000).toISOString();
+    const { since, until } = await reviewWindow(problemId, sheet);
     const { readTalk } = await import("./talk.ts");
     const talk = (await readTalk({ problemId })).filter((t) => t.at >= since && t.at <= until).slice(-40);
     const user = [
@@ -259,7 +264,7 @@ export function reviewFor(problemId: string, onText?: (soFar: string) => void): 
 export async function reviewFacts(problemId: string) {
   const sheet = await reviewTarget(problemId);
   if (!sheet) return null;
-  const since = new Date(Number(/_(\d+)$/.exec(sheet.id)?.[1] ?? 0) - 60_000).toISOString(), until = new Date(Date.parse(sheet.at) + 60_000).toISOString();
+  const { since, until } = await reviewWindow(problemId, sheet);
   const { readTalk } = await import("./talk.ts");
   const talk = (await readTalk({ problemId })).filter((t) => t.at >= since && t.at <= until);
   const hints = Math.max(0, ...talk.filter((t) => t.kind === "도움 칸").map((t) => Number(/도움 (\d)칸/.exec(t.q)?.[1] ?? 0)));
