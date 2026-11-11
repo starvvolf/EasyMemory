@@ -1579,9 +1579,9 @@ function drawFree() {
   if (lesson.goals && goalUi.stuck && !lesson.busy) list.append(goalStuckCard(lesson.goals, send));
   if (lesson.busy) list.append(thinkLine(run, lesson));
   if (freeUi.queue.length) list.append(h("div", { class: "fqueue" }, freeUi.queue.map((t, i) => h("div", { class: "freeme queued" },
-    h("span", { class: "mut small" }, "답이 끝나면 보내요 · "), t,
+    t,
     h("button", { class: "fib", title: "보내지 않기", "aria-label": "보내지 않기", onclick: () => { freeUi.queue.splice(i, 1); drawLesson(); } }, "×")))));
-  const input = h("textarea", { rows: 2, placeholder: lesson.busy ? "답하는 중에도 써 두면 끝나고 보내요" : "물어보기 (Enter 보내기, Shift+Enter 줄바꿈)", "aria-label": "튜터에게 물어보기" });
+  const input = h("textarea", { rows: 2, placeholder: "물어보기 (Enter 보내기, Shift+Enter 줄바꿈)", "aria-label": "튜터에게 물어보기" });
   input.value = freeUi.draft;
   input.addEventListener("input", () => { freeUi.draft = input.value; });
   input.addEventListener("compositionstart", () => { freeUi.composing = true; });
@@ -1603,7 +1603,7 @@ function drawFree() {
     sendBtn.replaceChildren(icon(stopping ? "stop" : "send"));
     sendBtn.classList.toggle("stop", stopping);
     sendBtn.disabled = !stopping && !input.value.trim();
-    sendBtn.title = stopping ? "지금 답하는 걸 멈춰요" : lesson.busy ? "보내기(답이 끝나면 보내요)" : "보내기";
+    sendBtn.title = stopping ? "지금 답하는 걸 멈춰요" : "보내기";
     sendBtn.setAttribute("aria-label", sendBtn.title);
   };
   sendBtn.onclick = (e) => (lesson.busy && !input.value.trim() ? stop() : go(e));
