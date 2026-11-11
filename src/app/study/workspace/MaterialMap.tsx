@@ -26,7 +26,7 @@ type MatMap = { id: string; title: string; status: string; pages: number; sectio
   topics?: string[]; topicNotes?: Record<string, string>; principles?: Array<{ title: string; line: string; cardIds: string[] }>; counts: Record<MapState, number> & { cards: number; questions: number; core?: number };
   questionsLater?: boolean };
 
-const STATE: Record<MapState, [string, string]> = { unknown: ["몰랐음", "bad"], met: ["만남", "read"], known: ["앎", "good"], graduated: ["졸업", "good"], new: ["아직", ""] };
+const STATE: Record<MapState, [string, string]> = { unknown: ["몰랐음", "bad"], met: ["아직", ""], known: ["앎", "good"], graduated: ["졸업", "good"], new: ["아직", ""] };
 const range = (pages: number[]) => !pages.length ? "" : pages.length === 1 ? `p.${pages[0]}` : `p.${Math.min(...pages)}–${Math.max(...pages)}`;
 
 // A formula with its matrices drawn as grids (MathML's matrices came out cramped and misaligned): the text between them stays math.
@@ -1164,7 +1164,6 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                           {/* [경계] 2026-11-02 A (점검_UIUX화면연결 4번): 지도에서 이 지식의 내 상태와 지식창으로 가는 길 */}
                           {c.state !== "new" && c.state !== "met" && c.state !== "unknown" ? <span className={`chip ${STATE[c.state][1]}`}>{STATE[c.state][0]}</span> : null}
                           <span className="cs-gap" />
-                          {c.knowledgeId ? <button className="btn ghost small" onClick={() => { const id = c.knowledgeId!; onClose(); go("knowledge", { id }); }} title="기억창에서 이 기억의 뜻·기록·이어진 기억 보기">기억창에서 보기</button> : null}
                           {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
                         </div>
                         {/* 11/11 사용자 "눌렀을 때 제목이 안 뜨고 …으로 잘림, 카드만 봐서는 이해가 안 됨": 펼치면 제목 전체 → 질문 → 답 한 줄 → 핵심(모양·덧붙임) → 자세히 */}
@@ -1206,7 +1205,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
  * 기억 저장소 항목(옛 지식 줄: 같은 이름이면 다른 실행끼리 합쳐짐)을 그대로 늘어놓던 목록을 대신한다. 기록·복습 날짜는 그대로 저장소가 맡는다. */
 const known = (c: Card) => c.state === "known" || c.state === "graduated";
 const dueNow = (c: Card) => Boolean(c.dueAt && Date.parse(c.dueAt) <= Date.now());
-function ShelfCard({ genId, c, onPage, onHistory, all, onCard }: { genId: string; c: Card; onPage: (page: number) => void; onHistory: (knowledgeId: string) => void; all: Card[]; onCard: (id: string) => void }) {
+function ShelfCard({ genId, c, onPage, all, onCard }: { genId: string; c: Card; onPage: (page: number) => void; all: Card[]; onCard: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const m = c.memo;
   const side = m?.role && m.role !== "메인" ? (m.role === "바탕" ? "바탕 지식" : "곁가지") : "";
@@ -1225,12 +1224,11 @@ function ShelfCard({ genId, c, onPage, onHistory, all, onCard }: { genId: string
       {/* 출처(11/12 사용자 "만남 말고 출처"): 원문 구절과 쪽 — 상태는 줄 앞 점이 보여 준다 */}
       {c.quotes.length ? <p className="shelf-src small"><span className="shelf-srck">출처</span>{c.quotes.slice(0, 2).map((q, k) => <span key={k}>“{q}”</span>)}</p> : null}
       <div className="shelf-foot">{c.dueAt ? <span className="small muted">다음 복습 {new Date(c.dueAt).getMonth() + 1}/{new Date(c.dueAt).getDate()}</span> : null}<span className="cs-gap" />
-        {c.pages.slice(0, 4).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}
-        {c.knowledgeId ? <button className="btn ghost small" title="이 기억을 언제 만났고 맞혔는지·틀렸는지, 다른 자료에서도 만났는지, 이어진 기억" onClick={() => onHistory(c.knowledgeId!)}>공부 기록</button> : null}</div>
+        {c.pages.slice(0, 4).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
     </div> : null}
   </>;
 }
-export function MemoryShelf({ genId, title, onHistory }: { genId: string; title: string; onHistory: (knowledgeId: string) => void }) {
+export function MemoryShelf({ genId, title }: { genId: string; title: string }) {
   const [map, setMap] = useState<MatMap | null>(null);
   const [error, setError] = useState("");
   const [flash, setFlash] = useState<Card[] | null>(null);
@@ -1252,8 +1250,9 @@ export function MemoryShelf({ genId, title, onHistory }: { genId: string; title:
   if (!all.length) return <p className="small muted">이 자료에는 아직 기억이 없어요.</p>;
   return <div className="shelf">
     <div className="shelf-sum">
-      <span><b>{all.length}</b>기억</span><span className="good"><b>{all.filter(known).length}</b>앎</span><span className="bad"><b>{all.filter((c) => c.state === "unknown").length}</b>몰랐음</span>
-      <span><b>{all.filter((c) => c.state === "new" || c.state === "met").length}</b>아직</span>{all.some(dueNow) ? <span className="now"><b>{all.filter(dueNow).length}</b>복습 차례</span> : null}
+      {/* 11/12 사용자 "필요 없는 건 다 빼": 아직(만남) 수는 빼고, 플래시카드를 푼 뒤에만 앎 · 몰랐음 */}
+      <span><b>{all.length}</b>기억</span>{all.some(known) ? <span className="good"><b>{all.filter(known).length}</b>앎</span> : null}{all.some((c) => c.state === "unknown") ? <span className="bad"><b>{all.filter((c) => c.state === "unknown").length}</b>몰랐음</span> : null}
+      {all.some(dueNow) ? <span className="now"><b>{all.filter(dueNow).length}</b>복습 차례</span> : null}
       <span className="cs-gap" />
       {weak.length && weak.length < all.length ? <button className="btn small" onClick={() => setFlash(weak)}>몰랐던 · 차례 {weak.length}장</button> : null}
       <button className="btn small primary" onClick={() => setFlash(all)}>플래시카드로 풀기 ({all.length})</button>
@@ -1261,7 +1260,7 @@ export function MemoryShelf({ genId, title, onHistory }: { genId: string; title:
     {sections.map((s, i) => <section key={s.id} className="shelf-area">
       <header className="shelf-ah"><span className="mm3-num">{i + 1}</span><b><Rich text={s.title} /></b><span className="small muted">{range(s.pages)}</span><span className="cs-gap" />
         <span className="shelf-bar" title={`${s.cards.filter(known).length}/${s.cards.length} 앎`}>{s.cards.map((c) => <i key={c.id} className={STATE[c.state][1]} />)}</span></header>
-      <ul className="shelf-list">{s.cards.map((c) => <li key={c.id} id={`shelf-${c.id}`}><ShelfCard genId={genId} c={c} onPage={onPage} onHistory={onHistory} all={all} onCard={jump} /></li>)}</ul>
+      <ul className="shelf-list">{s.cards.map((c) => <li key={c.id} id={`shelf-${c.id}`}><ShelfCard genId={genId} c={c} onPage={onPage} all={all} onCard={jump} /></li>)}</ul>
     </section>)}
   </div>;
 }

@@ -174,7 +174,7 @@ function EntryView({ e: top, byId, onItem }: { e: Entry; byId: Map<string, ItemL
         {[top, ...top.older].map((x, i) => <option key={x.key} value={x.key}>{i ? "예전 · " : "최신 · "}{day(x.lastAt)} {x.title === top.title ? "" : x.title}</option>)}</select> : null}
       <button className="btn small" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: e.row!.genId } }))}>자료 지도 열기 ↗</button>
     </Head>
-    <MemoryShelf genId={e.row.genId} title={e.title} onHistory={onItem} />
+    <MemoryShelf genId={e.row.genId} title={e.title} />
   </>;
   return <>
     <Head icon={e.icon} title={e.title} sub={`${e.sub} · ${day(e.lastAt)}`}>
