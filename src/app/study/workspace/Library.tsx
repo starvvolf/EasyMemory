@@ -360,6 +360,58 @@ function TalkScene({ t }: { t: Talk }) {
     </details>
   </div>;
 }
+/* ---------- 총정리(B, 11/12) ----------
+ * 사용자 "총정리만 봐도 기억이 나야 돼… 다른 사람이 봐도 이해가", "깐깐하게 부족한 점", "처음 만들 때 스트리밍으로", "가독성 좋게 박스".
+ * 풀이가 끝날 때 AI가 한 번 쓴 것을 보여 준다. 없으면 이 자리에서 만들며 받는 대로 보여 준다(스트리밍). 위에는 코드가 센 사실 한 줄. */
+type Review = { v?: number; situation: string; solve: string; missed: Array<{ thought: string; truth: string }>; weak?: Array<{ gap: string; seen: string }>; next: string };
+type ReviewFacts = { end: "solved" | "gaveup" | "paused"; hints: number; skeleton: boolean; asked: number; submits: number; wrong: number; minutes: number };
+/** 받는 중인 JSON 글에서 지금까지 나온 칸만 꺼낸다(닫히지 않은 따옴표도 그때까지). */
+function partialReview(t: string): Review {
+  const str = (key: string, from = t) => { const m = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`).exec(from); if (!m) return ""; try { return JSON.parse(`"${m[1].replace(/\\$/, "")}"`) as string; } catch { return m[1]; } };
+  const list = (key: string) => { const i = t.indexOf(`"${key}"`); if (i < 0) return [] as string[]; const rest = t.slice(i); const end = rest.indexOf("]"); return (end < 0 ? rest : rest.slice(0, end)).split("{").slice(1); };
+  return { situation: str("situation"), solve: str("solve"), next: str("next"),
+    missed: list("missed").map((o) => ({ thought: str("thought", o), truth: str("truth", o) })).filter((x) => x.thought),
+    weak: list("weak").map((o) => ({ gap: str("gap", o), seen: str("seen", o) })).filter((x) => x.gap) };
+}
+function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
+  const [rv, setRv] = useState<Review | null>(null);
+  const [facts, setFacts] = useState<ReviewFacts | null>(null);
+  const [state, setState] = useState<"loading" | "live" | "done" | "none">("loading");
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/code/problem/${pid}/review?stream=1`, { cache: "no-store" });
+        if (!res.ok || !res.body) throw new Error();
+        const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+        for (;;) {
+          const { value, done } = await reader.read(); if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let nl; while ((nl = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, nl); buf = buf.slice(nl + 1); if (!line.trim() || !alive) continue;
+            const o = JSON.parse(line) as { t?: string; done?: boolean; review?: Review | null; facts?: ReviewFacts | null; error?: string };
+            if (o.t) { setRv(partialReview(o.t)); setState("live"); }
+            if (o.done) { setFacts(o.facts ?? null); if (o.review) { setRv(o.review); setState("done"); } else setState("none"); }
+            if (o.error) setState("none");
+          }
+        }
+      } catch { if (alive) setState("none"); }
+    })();
+    return () => { alive = false; };
+  }, [pid]);
+  if (state === "none" || (state === "done" && !rv)) return <>{fallback}</>;
+  if (state === "loading" || !rv) return <section className="rp-wrong rp-review"><p className="eyebrow">총정리</p><p className="small muted">이 풀이를 정리하는 중이에요…</p></section>;
+  const live = state === "live";
+  const END = { solved: "맞힘", gaveup: "그만둠", paused: "하다가 나감" } as const;
+  return <section className="rp-wrong rp-review"><p className="eyebrow">총정리{live ? <span className="lc2-caret" /> : null}</p>
+    {facts ? <p className="rp-facts">{[END[facts.end], facts.hints ? `힌트 ${facts.hints}칸${facts.skeleton ? "·뼈대" : ""}` : "힌트 안 봄", `AI에게 ${facts.asked}번 물음`, `제출 ${facts.submits}번${facts.wrong ? `(틀림 ${facts.wrong})` : ""}`, `${facts.minutes}분`].map((x) => <span key={x}>{x}</span>)}</p> : null}
+    {rv.situation ? <div className="rp-card"><b className="rp-h">문제 상황</b><p>{rv.situation}</p></div> : null}
+    {rv.solve ? <div className="rp-card ok"><b className="rp-h">이렇게 해야 풀려요</b><p>{rv.solve}</p></div> : null}
+    {rv.missed.length ? <div className="rp-card"><b className="rp-h bad">풀면서 헷갈린 것</b><ol className="rp-miss">{rv.missed.map((m, i) => <li key={i}><p>{m.thought}</p>{m.truth ? <p className="rp-truth"><span>사실은</span>{m.truth}</p> : null}</li>)}</ol></div> : null}
+    {rv.weak?.length ? <div className="rp-card bad"><b className="rp-h bad">부족한 점</b><ul className="rp-weak">{rv.weak.map((w, i) => <li key={i}><b>{w.gap}</b>{w.seen ? <span className="small muted">{w.seen}</span> : null}</li>)}</ul></div> : null}
+    {rv.next ? <div className="rp-card"><b className="rp-h">다음에 떠올릴 것</b><p>{rv.next}</p></div> : null}
+  </section>;
+}
 function SolveView({ log }: { log: SolveLog }) {
   const [js, setJs] = useState<JEntry[] | null>(null);
   const [talk, setTalk] = useState<Talk[] | null>(null);
@@ -373,27 +425,17 @@ function SolveView({ log }: { log: SolveLog }) {
   useEffect(() => later(() => { setProb(null); if (!pid && !talkPid) { setProb(false); return; }
     const get = (id: string) => call<{ problem: PubProblem; submissions: SubLite[] }>(`/api/code/problem/${id}`);
     (pid ? get(pid).catch(() => (talkPid && talkPid !== pid ? get(talkPid) : Promise.reject(new Error("없음")))) : get(talkPid)).then(setProb).catch(() => setProb(false)); }), [pid, talkPid]);
-  // 총정리(11/12 B, 사용자 "이 문제는 뭐를 알고 있는지 보는 문제… 사용자는 뭐를 모르는 모습… 그래서 어떻게 해서 풀었다… 쉽게"):
-  // 풀이가 끝날 때 AI가 한 번 쓴 것을 보여 준다(없으면 그때 만든다, 4~6초). 없으면 예전 오답 노트.
-  type Review = { v?: number; situation: string; solve: string; missed: Array<{ thought: string; truth: string }>; how: string; still?: string[]; next: string };
-  const [review, setReview] = useState<Review | null | "loading">("loading");
   const reviewPid = pid || talkPid;
-  useEffect(() => later(() => { setReview("loading"); if (!reviewPid) { setReview(null); return; }
-    call<{ review: Review | null }>(`/api/code/problem/${reviewPid}/review`).then((r) => setReview(r.review)).catch(() => setReview(null)); }), [reviewPid]);
   const verdict = log.alone ? ["처음부터 혼자 풂", "ok"] : log.solved ? ["도움 받고 풂", ""] : ["아직 못 풂", "bad"];
   return <>
     <Head icon="⌨" title={`${log.number}${log.title ? ` · ${log.title}` : ""}`} sub={[day(log.at), log.patterns.join(", ")].filter(Boolean).join(" · ")}><button className="btn ghost small" onClick={() => go("code", { id: log.number })}>문제 다시 열기</button></Head>
     <div className="rp-tags"><span className={`lib-res ${verdict[1]}`}>{verdict[0]}</span>{log.stuck ? <span className="lib-res bad">막힌 곳 · {STUCK[log.stuck] ?? log.stuck}</span> : null}
       {log.help ? <span className="lib-res">도움 {log.help}칸까지 열어 봄</span> : null}{log.fill ? <span className="lib-res">뼈대에서 채우기</span> : null}
       {REDO[log.redo] ? <span className={`lib-res ${log.redo === "done" ? "ok" : log.redo === "due" ? "now" : ""}`}>{REDO[log.redo]}</span> : null}</div>
-    {review && review !== "loading" && (review.v ?? 0) >= 2 ? <section className="rp-wrong rp-review"><p className="eyebrow">총정리</p>
-      <div><span className="lib-k">문제 상황</span><p>{review.situation}</p></div>
-      <div><span className="lib-k ok">이렇게 해야 풀려요</span><p>{review.solve}</p></div>
-      {review.missed.length ? <div><span className="lib-k bad">풀면서 헷갈린 것</span><ol className="rp-miss">{review.missed.map((m, i) => <li key={i}><p>{m.thought}</p><p className="rp-truth">→ {m.truth}</p></li>)}</ol></div> : null}
-      <div><span className="lib-k ok">이렇게 풀어 냈어요</span><p>{review.how}</p></div>
-      {review.still?.length ? <div><span className="lib-k bad">아직 혼자 힘으로 한 게 아닌 것</span><ul className="rp-miss">{review.still.map((x, i) => <li key={i}>{x}</li>)}</ul></div> : null}
-      {review.next ? <div><span className="lib-k">다음에 떠올릴 것</span><p>{review.next}</p></div> : null}</section>
-    : review === "loading" && reviewPid ? <section className="rp-wrong"><p className="eyebrow">총정리</p><p className="small muted">이 풀이를 정리하는 중이에요…</p></section>
+    {reviewPid ? <ReviewBox key={reviewPid} pid={reviewPid} fallback={log.gap || log.fix ? <section className="rp-wrong"><p className="eyebrow">오답 노트</p>
+      {log.gap ? <p><span className="lib-k bad">그때 내 생각</span>{log.gap}</p> : null}
+      {log.fix ? <p><span className="lib-k ok">이렇게 풀려요</span>{log.fix}</p> : null}
+      {log.cue ? <p className="small muted"><span className="lib-k">다음에 알아챌 신호</span>{log.cue}</p> : null}</section> : null} />
     : log.gap || log.fix ? <section className="rp-wrong"><p className="eyebrow">오답 노트</p>
       {log.gap ? <p><span className="lib-k bad">그때 내 생각</span>{log.gap}</p> : null}
       {log.fix ? <p><span className="lib-k ok">이렇게 풀려요</span>{log.fix}</p> : null}
