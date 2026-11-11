@@ -112,6 +112,8 @@ export type RecallerLab = {
   cardQA?: boolean;
   /** 줄기 계획을 줄 형식으로 받기(11/12, stem.ts STEM_PLAN_LINES) */
   planLines?: boolean;
+  /** 학습 목표를 줄기 계획 안에서(11/12): early = 기억 줄이 오면 채우기 시작, feed = 목표까지 받고 채우기가 목표를 본다 */
+  goalsInStem?: "early" | "feed";
   /** 줄기 모드에서 강의 소제목의 용어를 기억 이름에 남기기 (11/10 실험 옵션, stem.ts HEADING_TERMS). */
   headingTerms?: boolean;
   /** 빠른 전처리: read and draw pages in this many worker processes in one pass (a drawing crash ends a worker, not the server). */

@@ -55,7 +55,7 @@ export type DigestState = {
     /** cards in different topics with the same title or term: candidates to merge */ overlaps: Array<{ a: string; b: string; why: string }>;
     /** content pages the summary never cites (S1) */ uncited: number[];
   };
-  timing: { skeletonFirstMs?: number; skeletonMs?: number; firstBodyMs?: number; bodiesMs?: number; cardsMs?: number; doneMs?: number; goalsMs?: number };
+  timing: { skeletonFirstMs?: number; skeletonMs?: number; firstBodyMs?: number; bodiesMs?: number; cardsMs?: number; doneMs?: number; goalsMs?: number; /** lab.goalsInStem early: 줄기의 기억 줄이 다 온 때(채우기 시작) */ stemFirstMs?: number };
 };
 
 // Everyday domains handed out by code, one per topic, so the scenes do not repeat (B1).

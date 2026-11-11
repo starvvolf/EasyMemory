@@ -36,3 +36,12 @@ test("줄 형식 줄기 읽기 (11/12 lab.planLines): 영역·기억 줄, 쪽 �
   assert.deepEqual(p.memories.map((m) => [m.name, m.area, m.kind, m.role, m.pages]), [["DDA", 1, "절차", "메인", [5, 6, 7, 9]], ["원의 방정식", 2, "공식", "바탕", [21]], ["대칭성", 2, "개념", "메인", [22]]]);
   assert.deepEqual(parsePlan("없음"), { areas: [], memories: [] });
 });
+test("줄기 안 학습 목표 (11/12): --- 로 나누고, 목표의 기억 번호를 카드 id로", async () => {
+  const { splitGoals, goalsWithIds, parsePlan } = await import("./stem.ts");
+  const text = "영역|1|선|?\n기억|1|절차|메인|5|DDA\n기억|1|절차|메인|6|브레젠험\n---\n목표|o1|계산|두 끝점으로 화소를 계산할 수 있다|1,2|핵심|끝점|화소 좌표";
+  const { plan, goals } = splitGoals(text);
+  assert.ok(!plan.includes("목표|")); assert.ok(goals.includes("목표|o1"));
+  const raw = parsePlan(plan);
+  const out = goalsWithIds(goals, raw, (n) => ({ DDA: "t1.m1", 브레젠험: "t1.m2" } as Record<string, string>)[n]);
+  assert.ok(out.includes("|t1.m1,t1.m2|"));
+});
