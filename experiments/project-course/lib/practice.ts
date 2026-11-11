@@ -375,7 +375,9 @@ export async function practiceAct(runId: string, input: { do: string; text?: str
     // 11/8 실측: 보충 단계에서 [너무 쉬워요 → 넘어가기]마다 끝나지 않은 목표를 "건너뜀"으로 정리해 같은 목표 정리가 3번, 지식이 이름만 다르게 7개
     const g0 = op === "next" || op === "easy_next" ? await (await import("./goals.ts")).goalsOf(runId) : null;
     const inSupport = !!(g0?.support && !g0.support.back && g0.support.steps.some((x) => x.status === "doing"));
-    const before = op === "next" || (op === "easy_next" && !inSupport) ? g0 : null;
+    // 계획을 다시 확정해 하던 현재 목표가 바뀌는 것도 그 목표의 끝(11/12: 바꾸기 전 목표가 정리 없이 사라짐) → 건너뜀으로 정리
+    const g1 = op === "confirm" ? await (await import("./goals.ts")).goalsOf(runId) : null;
+    const before = op === "next" || (op === "easy_next" && !inSupport) ? g0 : g1?.current && g1.long ? g1 : null;
     // [해 봤어요](11/8 사용자 결정 "적용 과제의 답이 맞을 때만 적용 ✓"): 판정 호출 한 번(완료 조건 · 튜터가 낸 과제 · 학습자 답과 저장한 코드)
     if (op === "applied") (input as Record<string, unknown>).verdict = await applyVerdict(runId, run).catch((e) => { console.error("적용 판정:", e); return undefined; });
     // 부족함 원장(11/8): 판정이 일부만 · 틀림이면 열고, 맞음이면 그 단위에 열린 것을 채움으로. [너무 어려워요]도 연다

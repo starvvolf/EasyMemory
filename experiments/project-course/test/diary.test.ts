@@ -22,7 +22,7 @@ test("실습 일지: 장면 기록을 번호 붙여 넘기고, 받은 흐름을 
   const { setFakeAi } = await import("../lib/ai.ts");
   let seen = "", calls = 0;
   setFakeAi((purpose, user) => { if (purpose !== "diary") return ""; calls++; seen = user; return { line: "할 일 앱 목록까지 만듦", story: [
-    { g: 0, tag: "목표", text: "할 일 앱 목록 만들기로 시작함" }, { g: 2, tag: "알게 됨", text: "split 괄호 헷갈렸음 → 메서드는 괄호 붙여야 실행" },
+    { g: 0, tag: "목표", doing: "시작", text: "할 일 앱 목록 만들기로 시작함" }, { g: 2, tag: "알게 됨", text: "split 괄호 헷갈렸음 → 메서드는 괄호 붙여야 실행" },
     { g: 999, tag: "해냄", text: "근거 번호가 없는 것" }, { g: 4, tag: "아무거나", text: "꼬리표가 틀린 것" }], left: ["저장하기"] }; });
   const D = await import("../lib/diary.ts");
   const d = await D.writeDiary(R, "시험");

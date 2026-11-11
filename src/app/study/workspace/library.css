@@ -256,3 +256,18 @@
 /* 푼 과정의 AI 대화 한 줄(11/12 B): 다른 줄과 같은 모양, 점은 강조색, 원문은 접어 둠 */
 .dejipgi .rp-step.talk::before{background:var(--accent)}
 .dejipgi .rp-step.talk > details{flex-basis:100%}
+/* 11/12: 이 실습은(intro) · 판이 바뀐 것(점 없는 둥근 상자) · 배운 일(무엇을 하던 중 + 무엇을 어떻게) */
+.dejipgi .dy-intro{margin:0;font-size:14px;line-height:1.65;color:var(--ink)}
+.dejipgi .dy-story li.sys::before{display:none}
+.dejipgi .dy-story li.sys{margin:6px 0 4px -26px}
+.dejipgi .dy-sys{display:inline-flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:7px 14px;border-radius:999px;border:1.5px solid var(--line-strong);background:var(--surface);font-size:13.5px;line-height:1.5}
+.dejipgi .dy-sys b{font-size:12.5px;white-space:nowrap}
+.dejipgi .sys.goal .dy-sys{border-color:var(--accent);background:var(--accent-soft)}
+.dejipgi .sys.goal .dy-sys b{color:var(--accent)}
+.dejipgi .sys.turn .dy-sys,.dejipgi .sys.sup .dy-sys{border-color:var(--help);background:var(--help-soft)}
+.dejipgi .sys.turn .dy-sys b,.dejipgi .sys.sup .dy-sys b{color:var(--help)}
+.dejipgi .dy-story li.sys .dy-b{padding:2px 0}
+.dejipgi .dy-story li.sys .dy-b:hover{background:none}
+.dejipgi .dy-story li.sys .dy-b:hover .dy-sys{box-shadow:0 0 0 3px var(--surface-2)}
+.dejipgi .dy-body{display:flex;flex-direction:column;min-width:0}
+.dejipgi .dy-doing{font-size:11.5px;color:var(--muted);line-height:1.4}

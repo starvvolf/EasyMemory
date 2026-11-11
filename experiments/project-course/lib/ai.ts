@@ -85,6 +85,20 @@ function explain(error: unknown) {
   return new AiUnavailable("transient", `AI 호출이 실패했어요: ${(error as Error).message}`);
 }
 
+
+/** 한 호출의 시간 한도(11/12 실측: 목표 정리 호출 하나가 답 없이 멈춰 정리가 빠지고 학습 종료까지 같이 멈춤). 한도를 넘기면 실패로 보고 한 번 다시 묻는다 */
+const AI_TIMEOUT_MS = Number(process.env.PC_AI_TIMEOUT_MS ?? 120_000);
+async function withTimeout<T>(run: () => Promise<T>, heavy: boolean): Promise<T> {
+  const ms = heavy ? AI_TIMEOUT_MS * 1.5 : AI_TIMEOUT_MS;
+  for (let attempt = 0; ; attempt++) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error(`${Math.round(ms / 1000)}초 안에 답이 없었어요`), { timedOut: true })), ms); });
+    try { return await Promise.race([run(), late]); }
+    catch (e) { if (!(e as { timedOut?: boolean }).timedOut || attempt >= 1) throw e; }
+    finally { clearTimeout(timer); }
+  }
+}
+
 export async function aiJson<T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, heavy = false): Promise<T> {
   const mode = aiMode();
   if (mode === "off") throw new AiUnavailable("off", "AI를 끈 상태예요.");
@@ -93,7 +107,8 @@ export async function aiJson<T>(purpose: string, system: string, user: string, s
   try {
     const log = await logPrompt(purpose, { purpose, heavy, system, user, schema });
     const t0 = Date.now();
-    const out = await (await loadAssist()).askJson<T>(`project-course:${purpose}`, system, user, schema, { heavy });
+    const assist = await loadAssist();
+    const out = await withTimeout(() => assist.askJson<T>(`project-course:${purpose}`, system, user, schema, { heavy }), heavy);
     await logAnswer(log, out);
     void logUsage({ kind: purpose, ms: Date.now() - t0, calls: 1, chars: system.length + user.length, prompt: log });
     await count(purpose, true);
@@ -114,7 +129,8 @@ export async function aiText(purpose: string, system: string, user: string, heav
   try {
     const log = await logPrompt(purpose, { purpose, heavy, system, user });
     const t0 = Date.now();
-    const out = await (await loadAssist()).askText(`project-course:${purpose}`, system, user, { heavy });
+    const assist = await loadAssist();
+    const out = await withTimeout(() => assist.askText(`project-course:${purpose}`, system, user, { heavy }), heavy);
     await logAnswer(log, out);
     void logUsage({ kind: purpose, ms: Date.now() - t0, calls: 1, chars: system.length + user.length, prompt: log });
     await count(purpose, true);

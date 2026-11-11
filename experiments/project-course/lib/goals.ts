@@ -305,8 +305,12 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
       if (!g.plan) throw err("확정할 계획이 없어요.");
       const p = g.plan;
       g.long = { text: p.long, spec: p.spec, at: now() }; g.mode = p.mode;
-      g.map = (p.map.length ? p.map : [p.first.title]).map((t, i) => ({ id: nid(), title: t, status: i === 0 ? "doing" : "todo" }));
-      g.current = { id: nid(), title: p.first.title, done: p.first.done, understood: false, applied: false, mapId: g.map[0]?.id, at: now(), prereqs: p.first.prereqs ?? [] };
+      // 장기 목표를 바꿔 다시 확정할 때(11/12 실측: 이미 끝낸 단계가 다시 "하는 중 · 아직"으로 돌아감): 같은 이름의 단계는 끝냄 · 건너뜀을 그대로,
+      // 하는 중은 남은 것 중 맨 앞 하나만
+      const kept = new Map(g.map.filter((m) => !m.support && (m.status === "done" || m.status === "skipped")).map((m) => [norm(m.title), m.status]));
+      g.map = (p.map.length ? p.map : [p.first.title]).map((t) => ({ id: nid(), title: t, status: (kept.get(norm(t)) ?? "todo") as Item["status"] }));
+      const head = g.map.find((m) => m.status === "todo"); if (head) head.status = "doing";
+      g.current = { id: nid(), title: p.first.title, done: p.first.done, understood: false, applied: false, mapId: (head ?? g.map[0])?.id, at: now(), prereqs: p.first.prereqs ?? [] };
       markPrereqs(g, g.current);
       g.plan = null; g.support = null;
       logIt(g, "confirm", p.long);

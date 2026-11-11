@@ -223,8 +223,10 @@ function Scene({ ev }: { ev: SceneEv }) {
 
 /* ---------- 실습 일지(11/12 사용자 "AI의 손길이 한번 닿아서 요약이 딱 … 저장할 때 AI가 돌리고 여기서는 보여주기만"): 실습 서버 lib/diary.ts가 쓴 것.
  * 줄마다 근거 기록 번호(g)가 있어서, 올리면 그때 장면 앞부분, 누르면 아래 '장면 전체'의 그 자리로. */
-type Diary = { at: string; upto: number; why: string; line: string; story: Array<{ g: number | null; tag: string; text: string }>; left: string[] };
-const TAG: Record<string, [string, string]> = { 목표: ["🎯", "goal"], 바꿈: ["🔀", "turn"], 막힘: ["🧱", "bad"], "알게 됨": ["💡", "ok"], 해냄: ["✅", "ok"], 도움: ["🛠", "help"], 넘어감: ["⏭", ""] };
+type Diary = { at: string; upto: number; why: string; intro?: string; line: string; story: Array<{ g: number | null; tag: string; doing?: string; text: string }>; left: string[] };
+// 판이 바뀐 것(목표 · 목표 바꿈 · 보충)은 점 없이 둥근 상자로, 배운 일은 점이 찍힌 줄로(11/12 사용자 "시스템이 바뀌는 거는 구분")
+const SYS_TAGS = new Set(["목표", "목표 바꿈", "바꿈", "보충"]);
+const TAG: Record<string, [string, string]> = { 목표: ["🎯", "goal"], "목표 바꿈": ["🔀", "turn"], 바꿈: ["🔀", "turn"], 보충: ["🧩", "sup"], 막힘: ["🧱", "bad"], "알게 됨": ["💡", "ok"], 해냄: ["✅", "ok"], 도움: ["🛠", "help"], 넘어감: ["⏭", ""] };
 const clipT = (s: string, n: number) => { const t = s.replace(/```[\s\S]*?```/g, " [코드] ").replace(/\s+/g, " ").trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 /** 근거 장면 앞부분(올렸을 때): 그 기록과 바로 뒤 튜터 답 */
 function tipOf(evs: SceneEv[], i: number) {
@@ -277,12 +279,17 @@ function RunView({ e }: { e: Entry }) {
     </div>
     <section className="lib-sec dy"><h3>실습 일지 {d.diary ? <span className="small muted">— {day(d.diary.at)} {hm(d.diary.at)} · {d.diary.why}</span> : null}</h3>
       {d.diary ? <>
+        {d.diary.intro ? <p className="dy-intro">{d.diary.intro}</p> : null}
         <p className="dy-line">{d.diary.line}</p>
         <ol className="dy-story">{d.diary.story.map((it, i) => {
           const at = it.g === null ? null : where.get(it.g) ?? null;
           const [ic, cls] = TAG[it.tag] ?? ["•", ""];
-          const inner = <><span className="dy-tag">{ic} {it.tag}</span><span className="dy-text">{it.text}</span>{at ? <span className="fl-tip" role="tooltip">{tipOf(scenes[at[0]].events, at[1])}</span> : null}</>;
-          return <li key={i} className={cls}>{at ? <button className="dy-b" onClick={() => jump(at[0], at[1])}>{inner}</button> : <span className="dy-b static">{inner}</span>}</li>;
+          const sys = SYS_TAGS.has(it.tag);
+          const tip = at ? <span className="fl-tip" role="tooltip">{tipOf(scenes[at[0]].events, at[1])}</span> : null;
+          const inner = sys
+            ? <><span className="dy-sys"><b>{ic} {it.tag === "바꿈" ? "목표 바꿈" : it.tag}</b><span>{it.text}</span></span>{tip}</>
+            : <><span className="dy-tag">{ic} {it.tag}</span><span className="dy-body">{it.doing ? <small className="dy-doing">{it.doing}</small> : null}<span className="dy-text">{it.text}</span></span>{tip}</>;
+          return <li key={i} className={`${cls}${sys ? " sys" : ""}`}>{at ? <button className="dy-b" onClick={() => jump(at[0], at[1])}>{inner}</button> : <span className="dy-b static">{inner}</span>}</li>;
         })}</ol>
         {d.diary.left.length ? <p className="dy-left">아직 남은 것 {d.diary.left.map((x, i) => <span key={i}>{x}</span>)}</p> : null}
         {stale ? <p className="small muted">일지 뒤로 기록이 더 있어요. <button className="linkish small" disabled={writing} onClick={() => void writeNow()}>{writing ? "쓰는 중…" : "이어서 다시 쓰기 (AI 1번)"}</button></p> : null}
