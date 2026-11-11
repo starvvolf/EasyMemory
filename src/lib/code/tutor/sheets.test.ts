@@ -49,7 +49,8 @@ test("총정리 확인(이야기 + 약점 상자): 상황·풀리는 법이 없�
   const none = { kind: "none", title: "", state: "", lesson: "" };
   const weak = { kind: "syntax", title: " for 반복 ", state: "횟수를 안 정했어요", lesson: "for는 이래요.   \n\n\n```\nfor _ in range(3):\n    print(1)\n```" };
   const r = checkReview({ situation: " 상자 ", solve: "한 번에", story: [{ text: "처음엔", weak: none }, { text: "그다음", weak }, { text: "", weak }, ...Array.from({ length: 16 }, () => ({ text: "t", weak: none }))], next: "n" })!;
-  assert.equal(r.v, 16);
+  assert.equal(r.v, 17);
+  assert.equal(r.story[1].weak?.size, "small");
   assert.equal(r.story.length, 14);
   assert.equal(r.story[0].weak, undefined);
   assert.equal(r.story[1].weak?.title, "for 반복");
