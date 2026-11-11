@@ -133,15 +133,19 @@ review: 나중에 '기억 도서관'에서 이 목표 한 칸으로 보여 줄 �
   · code: 그 장면을 보여 주는 코드 2~6줄. 학습자가 실제로 쓴 코드가 있으면 [학습자 말]이나 [학습자 코드 저장]에서 글자 그대로(줄바꿈 \n). 학습자가 코드를 안 쓰고 말로만 물었으면 그 물음을 보여 주는 아주 짧은 예 코드(2~4줄, 주석으로 넣은 값 · 결과 표시 가능)를 쓰고 example을 true로. 코드가 필요 없는 장면이면 빈 글.
   · result: 그 코드를 돌렸을 때 화면에 나온 것(오류 마지막 한 줄 · 출력 몇 줄)을 [학습자가 터미널에서 돌린 것]이나 학습자 말에서 그대로. 예 코드면 그 결과를 짧게. 없으면 빈 글.
   · example: code가 학습자가 쓴 게 아니라 설명용 예시면 true.
+  · explain: 해설 2~4문장(220자 안팎). 틀렸다고만 하고 끝내지 않는다. 이 언어(파이썬 등)에서는 원래 어떻게 동작하는지, 왜 그 결과가 나왔는지, 그래서 어떻게 써야 하는지를 원리부터 차근차근. 예) "파이썬의 input()은 키보드로 친 것을 늘 글자(문자열)로 돌려줘요. 글자끼리 +를 하면 더하기가 아니라 이어 붙이기라서 \"12\" + \"7\"은 \"127\"이 돼요. 숫자로 계산하려면 int()로 숫자로 바꾼 다음 더해야 해요."
+  · fix: 바르게 고친 코드 2~6줄. 학습자가 나중에 실제로 고친 코드가 기록에 있으면 그것을 글자 그대로, 없으면 이 장면에 맞는 바른 예(fix_example을 true). 고칠 게 없는 장면(개념만 물은 것)이면 빈 글.
+  · fix_result: 고친 코드를 돌리면 나오는 것(기록에 있으면 그대로, 없으면 짧게). 없으면 빈 글.
+  · fix_example: fix가 학습자가 쓴 게 아니라 바른 예시면 true.
 - reached: 여기까지 했어요 1문장(80자 안팎). 무엇을 완성하거나 확인했는지, 도움을 받았으면 밝힌다. 확인하지 못한 것은 성과로 부풀리지 않는다.
 - weak: 이 목표에서 드러난 부족한 점 0~2개. 장면들을 묶어 "무엇을 아직 혼자 못 하는가"로. gap 한 문장(50자 안팎, "~를 몰라요 / ~를 아직 혼자 못 해요" 꼴), seen 어느 장면에서 드러났는지 한 문장(80자 안팎).
 - 코드를 언제 보여 줬는지 같은 절차 이야기는 학습 내용에 꼭 필요할 때만. 기록에 없는 대화 · 코드 · 결과는 지어내지 않는다.`;
 export const RECORD_SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str),
   cards: S.arr(S.obj({ name: S.str, situation: S.str, did: S.str, quote: S.str, learned: S.str, next: S.str, how: S.oneOf(...HOW), prereq: S.bool, code: S.obj({ save: S.str, from: S.int, to: S.int }), ids: S.arr(S.str), recheck: S.obj({ q: S.str, a: S.str }) })),
   memory: S.obj({ add: S.arr(S.obj({ text: S.str, evidence: S.arr(S.str) })), update: S.arr(S.obj({ id: S.str, text: S.str, evidence: S.arr(S.str) })), improved: S.arr(S.obj({ id: S.str, evidence: S.arr(S.str) })) }),
-  review: S.obj({ aim: S.str, scenes: S.arr(S.obj({ title: S.str, body: S.str, code: S.str, result: S.str, example: S.bool })), reached: S.str, weak: S.arr(S.obj({ gap: S.str, seen: S.str })) }) });
+  review: S.obj({ aim: S.str, scenes: S.arr(S.obj({ title: S.str, body: S.str, code: S.str, result: S.str, example: S.bool, explain: S.str, fix: S.str, fix_result: S.str, fix_example: S.bool })), reached: S.str, weak: S.arr(S.obj({ gap: S.str, seen: S.str })) }) });
 /** 목표 한 칸 총정리(11/12): 도서관이 목표마다 그대로 보여 준다 */
-export type Scene = { title: string; body: string; code?: string; result?: string; example?: boolean };
+export type Scene = { title: string; body: string; code?: string; result?: string; example?: boolean; explain?: string; fix?: string; fixResult?: string; fixExample?: boolean };
 export type Review = { aim: string; scenes: Scene[]; reached: string; weak: { gap: string; seen: string }[] };
 /** corpus: 학습자 말 · 저장한 코드 · 터미널 출력(띄어쓰기 무시). code 줄이 거기 없으면 예시로 표시, result가 거기 없으면(예시가 아니면) 버린다 */
 export function cleanReview(raw: unknown, corpus?: string): Review | undefined {
@@ -151,12 +155,16 @@ export function cleanReview(raw: unknown, corpus?: string): Review | undefined {
   const r: Review = { aim: c(o.aim, 200), reached: c(o.reached, 160),
     scenes: arr(o.scenes).map((x): Scene => {
       const sq = (t: string) => t.replace(/\s+/g, "");
-      const code = String(x.code ?? "").replace(/```\w*\n?|```/g, "").split("\n").map((l) => l.replace(/\s+$/, "")).filter((l) => l.trim()).slice(0, 8).join("\n").slice(0, 500);
-      const result = String(x.result ?? "").replace(/```\w*\n?|```/g, "").split("\n").map((l) => l.replace(/\s+$/, "")).filter((l) => l.trim()).slice(-4).join("\n").slice(0, 300);
+      const block = (v: unknown, n: number, tail = false) => { const ls = String(v ?? "").replace(/```\w*\n?|```/g, "").split("\n").map((l) => l.replace(/\s+$/, "")).filter((l) => l.trim()); return (tail ? ls.slice(-4) : ls.slice(0, 8)).join("\n").slice(0, n); };
+      const code = block(x.code, 500), result = block(x.result, 300, true), fix = block(x.fix, 500), fixResult = block(x.fix_result, 300, true);
       const inCorpus = (t: string) => !corpus || t.split("\n").every((l) => sq(l.replace(/#.*$/, "")) === "" || corpus.includes(sq(l.replace(/#.*$/, ""))));
+      const seenOut = (t: string) => !corpus || t.split("\n").some((l) => corpus.includes(sq(l)));
       const example = Boolean(x.example) || (code ? !inCorpus(code) : false);
-      const keepResult = result && (example || !corpus || result.split("\n").some((l) => corpus.includes(sq(l))));
-      return { title: c(x.title, 60), body: c(x.body, 360), ...(code ? { code } : {}), ...(keepResult ? { result } : {}), ...(code && example ? { example: true } : {}) };
+      const fixExample = Boolean(x.fix_example) || (fix ? !inCorpus(fix) : false);
+      const keepResult = result && (example || seenOut(result));
+      const keepFixResult = fixResult && (fixExample || seenOut(fixResult));
+      return { title: c(x.title, 60), body: c(x.body, 360), ...(code ? { code } : {}), ...(keepResult ? { result } : {}), ...(code && example ? { example: true } : {}),
+        ...(c(x.explain, 400) ? { explain: c(x.explain, 400) } : {}), ...(fix ? { fix } : {}), ...(keepFixResult ? { fixResult } : {}), ...(fix && fixExample ? { fixExample: true } : {}) };
     }).filter((x) => x.title && x.body).slice(0, 4),
     weak: arr(o.weak).map((x) => ({ gap: c(x.gap, 110), seen: c(x.seen, 160) })).filter((x) => x.gap && !/확인되지 않|알 수 없/.test(x.gap)).slice(0, 2) };
   return r.aim || r.scenes.length ? r : undefined;

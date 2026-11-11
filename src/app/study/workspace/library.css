@@ -357,3 +357,10 @@
 .dejipgi .rp-tag{font-size:11.5px;font-weight:700}
 .dejipgi .rp-pair .mine .rp-tag{color:var(--bad)}
 .dejipgi .rp-pair .right .rp-tag{color:var(--good)}
+/* 해설 · 바르게(11/12) */
+.dejipgi .rv-explain{margin:2px 12px 12px;border-radius:12px;border:1.5px solid var(--good);background:var(--good-soft);padding:10px 0 2px}
+.dejipgi .rv-eh{margin:0 12px 4px;font-size:12.5px;font-weight:800;color:var(--good)}
+.dejipgi .rv-et{margin:0 12px 10px;font-size:14px;line-height:1.7;color:var(--ink)}
+.dejipgi .rv-explain .rv-code{margin:0 10px 10px}
+.dejipgi .rv-code.ok pre{background:#13231c;color:#cdeedd}
+.dejipgi .rv-code.out.ok pre{background:#0f1a15;color:#9fe0bf}

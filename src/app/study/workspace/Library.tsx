@@ -223,7 +223,7 @@ function Scene({ ev }: { ev: SceneEv }) {
 
 /* ---------- 실습 정리(11/12 사용자 "목표 단위로 저장하면 총정리도 목표 정리 그대로 … 사이사이에 목표 변화 같은 상태 변화만 코드로", "4번은 빼"):
  * 목표마다 한 칸 = 그 목표가 끝날 때 목표 정리(③)가 쓴 총정리(review). 하다가 나간 목표는 '진행 중' 정리(ongoing). 칸 사이에는 장기 목표 · 보충 같은 판 바뀜을 기록에서 그대로. */
-type GoalReview = { aim: string; scenes: Array<{ title: string; body: string; code?: string; result?: string; example?: boolean }>; reached: string; weak: Array<{ gap: string; seen: string }> };
+type GoalReview = { aim: string; scenes: Array<{ title: string; body: string; code?: string; result?: string; example?: boolean; explain?: string; fix?: string; fixResult?: string; fixExample?: boolean }>; reached: string; weak: Array<{ gap: string; seen: string }> };
 type Ongoing = { goal: string; done?: string; from: string; at: string; summary: string; review?: GoalReview };
 /** 판 바뀜 한 줄(기록의 바뀜 글 → 쉬운 말). 로드맵 · 계획 제안 같은 자잘한 것은 뺀다 */
 function shiftOf(text: string, first: boolean): { icon: string; text: string; cls: string } | null {
@@ -244,6 +244,12 @@ function GoalCard({ n, goal, done, result, rv, summary, ongoing }: { n: number; 
       {rv.scenes.length ? <div className="rv-probs">{rv.scenes.map((s, k) => <div key={k} className="rv-prob"><p className="rv-q">{s.title}</p><p className="rv-body">{s.body}</p>
         {s.code ? <div className="rv-code"><span className="rv-cl">{s.example ? "예시 코드" : "그때 쓴 코드"}</span><pre>{s.code}</pre></div> : null}
         {s.result ? <div className={`rv-code out${/error|traceback|exception|오류/i.test(s.result) ? " bad" : ""}`}><span className="rv-cl">{s.example ? "돌리면" : "화면에 나온 것"}</span><pre>{s.result}</pre></div> : null}
+        {/* 해설 · 바르게(11/12 사용자 "틀렸어요 하고 끝나는 느낌 … 해설이 필요해. 파이썬에서는 어쩌고저쩌고") */}
+        {s.explain || s.fix ? <div className="rv-explain">
+          {s.explain ? <><p className="rv-eh">💡 해설</p><p className="rv-et">{s.explain}</p></> : null}
+          {s.fix ? <div className="rv-code ok"><span className="rv-cl">{s.fixExample ? "이렇게 쓰면 돼요 (예시)" : "이렇게 고쳤어요"}</span><pre>{s.fix}</pre></div> : null}
+          {s.fixResult ? <div className="rv-code out ok"><span className="rv-cl">돌리면</span><pre>{s.fixResult}</pre></div> : null}
+        </div> : null}
       </div>)}</div> : <p className="rv-none">막힌 곳 없이 지나갔어요.</p>}
       {rv.reached ? <p className="rv-reach"><span aria-hidden>✅</span>{rv.reached}</p> : null}
       {rv.weak.length ? <div className="rv-weak"><p className="rv-wh">부족한 점</p><ul>{rv.weak.map((w, k) => <li key={k}><b>{w.gap}</b>{w.seen ? <span>{w.seen}</span> : null}</li>)}</ul></div> : null}
