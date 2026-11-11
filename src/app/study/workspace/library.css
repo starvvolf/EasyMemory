@@ -364,3 +364,6 @@
 .dejipgi .rv-explain .rv-code{margin:0 10px 10px}
 .dejipgi .rv-code.ok pre{background:#13231c;color:#cdeedd}
 .dejipgi .rv-code.out.ok pre{background:#0f1a15;color:#9fe0bf}
+.dejipgi .rv-explain{padding:10px 14px 12px}
+.dejipgi .rv-explain .rv-eh,.dejipgi .rv-explain .rv-et{margin-left:0;margin-right:0;padding:0}
+.dejipgi .rv-explain .rv-et{margin-bottom:0}
