@@ -128,7 +128,9 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
       const m = pick(models, state, current.id, "walkthrough", "lecture", used, now.getTime());
       if (m) push(make({ kind: "walkthrough", number: m.number, pattern: current.id, mixed: false, why: `${current.name}: 3번 연달아 틀려서 다른 문제로 풀이 과정을 다시 봐요` }));
     } else if (r.failStreak >= 2) {
-      const m = models.find((mm) => mm.patterns.includes(current.id) && mm.contrast && !used.has(mm.number));
+      // 방금(30분 안) 비교한 문제는 다시 내지 않는다(11/11 시험: 비교를 맞혀도 알아채기 연속 틀림이 그대로라 같은 비교가 되풀이됐다).
+      const comparedJustNow = (n: string) => state.events.some((e) => e.kind === "contrast" && e.number === n && now.getTime() - Date.parse(e.at) < 30 * 60_000);
+      const m = models.find((mm) => mm.patterns.includes(current.id) && mm.contrast && !used.has(mm.number) && !comparedJustNow(mm.number));
       if (m) push(make({ kind: "contrast", number: m.number, pattern: current.id, mixed: false, why: `${current.name}: 언제 쓰는지 헷갈려서 비슷한 문제와 비교해 봐요` }));
     }
     const needR = knownBefore ? 1 : 2; // 알아요+확인 통과: 확인한 1번을 쳐서 계획 세우기로

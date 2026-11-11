@@ -18,3 +18,14 @@ test("방금 답을 본 문제를 바로 또 묻지 않는다(11/11 시험): 다
   const later = nextActions(computeState(events), models, new Date("2026-11-11T12:40:00.000Z"));
   assert.ok(later.some((a) => a.kind === "drill" && a.number === "2667"), "30분이 지나면 다시 낼 수 있다");
 });
+
+test("방금 비교한 문제를 또 비교하지 않는다(11/11 시험)", () => {
+  const a = { ...m("1926", "basic"), contrast: { number: "2667", differs: "d" } } as unknown as ProblemModel;
+  const models = { "1926": a, "2667": m("2667", "basic"), "1012": m("1012", "basic") };
+  const now = new Date("2026-11-11T12:00:00.000Z");
+  const ev = (o: Partial<TutorEvent>): TutorEvent => ({ id: Math.random().toString(), at: "2026-11-11T11:50:00.000Z", kind: "drill", number: "1012", patterns: ["components"], ability: "recognize", ok: false, grade: 0, ...o });
+  const base = [ev({ kind: "walkthrough", ability: undefined, ok: undefined, at: "2026-11-11T11:00:00.000Z" }), ev({}), ev({ number: "2667", at: "2026-11-11T11:51:00.000Z" })];
+  assert.ok(nextActions(computeState(base), models, now).some((x) => x.kind === "contrast"), "두 번 연속 틀리면 비교");
+  const after = [...base, ev({ kind: "contrast", number: "1926", ability: undefined, ok: true, at: "2026-11-11T11:55:00.000Z" })];
+  assert.ok(!nextActions(computeState(after), models, now).some((x) => x.kind === "contrast"), "방금 비교했으면 또 비교하지 않는다");
+});
