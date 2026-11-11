@@ -87,7 +87,7 @@ function explain(error: unknown) {
 
 
 /** 한 호출의 시간 한도(11/12 실측: 목표 정리 호출 하나가 답 없이 멈춰 정리가 빠지고 학습 종료까지 같이 멈춤). 한도를 넘기면 실패로 보고 한 번 다시 묻는다 */
-const AI_TIMEOUT_MS = Number(process.env.PC_AI_TIMEOUT_MS ?? 120_000);
+const AI_TIMEOUT_MS = Number(process.env.PC_AI_TIMEOUT_MS ?? 180_000); // 11/12 약점 카드로 목표 정리 출력이 길어져(알고리즘 실측 85초) 180초
 async function withTimeout<T>(run: () => Promise<T>, heavy: boolean): Promise<T> {
   const ms = heavy ? AI_TIMEOUT_MS * 1.5 : AI_TIMEOUT_MS;
   for (let attempt = 0; ; attempt++) {

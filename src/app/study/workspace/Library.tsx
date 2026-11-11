@@ -228,7 +228,9 @@ function Scene({ ev }: { ev: SceneEv }) {
 
 /* ---------- 실습 정리(11/12 사용자 "목표 단위로 저장하면 총정리도 목표 정리 그대로 … 사이사이에 목표 변화 같은 상태 변화만 코드로", "4번은 빼"):
  * 목표마다 한 칸 = 그 목표가 끝날 때 목표 정리(③)가 쓴 총정리(review). 하다가 나간 목표는 '진행 중' 정리(ongoing). 칸 사이에는 장기 목표 · 보충 같은 판 바뀜을 기록에서 그대로. */
-type GoalReview = { aim: string; scenes: Array<{ title: string; body: string; code?: string; result?: string; example?: boolean; explain?: string }>; reached: string; weak: Array<{ gap: string; seen: string }> };
+/** 목표 총정리. v2(11/12 약점 카드 정책, B와 같음): 하려던 일 · 이렇게 하면 되는 까닭 · 시간 순서 이야기 + 약점 카드. 예전 모양(scenes)은 요약만 보여 주고 [다시 정리]로 */
+type PgWeak = { size: "small" | "big"; title: string; state: string; lesson: string };
+type GoalReview = { v?: number; aim: string; why?: string; story?: Array<{ text: string; code?: string; result?: string; weak?: PgWeak }>; scenes?: unknown[] };
 type Ongoing = { goal: string; done?: string; from: string; at: string; summary: string; review?: GoalReview };
 /** 판 바뀜 한 줄(기록의 바뀜 글 → 쉬운 말). 로드맵 · 계획 제안 같은 자잘한 것은 뺀다 */
 function shiftOf(text: string, first: boolean): { icon: string; text: string; cls: string } | null {
@@ -239,22 +241,35 @@ function shiftOf(text: string, first: boolean): { icon: string; text: string; cl
   if ((m = /^보충 다시 짬[^:]*: (.+)$/.exec(text))) return { icon: "🧩", text: `보충 다시 짬 · ${m[1]}`, cls: "sup" };
   return null;
 }
-// 11/12 사용자 "상황에 대한 이해가 잘 안 됨": 끝나면(완료 조건) · 장면마다 실제 코드와 화면(기록에서, 없으면 '예시' 표시)
+// 목표 한 칸(11/12): 알고리즘 총정리(ReviewBox)와 같은 조각 — 도입 두 칸(하려던 일 · 이렇게 하면 돼요), 이야기 흐름, 약점 카드(작은 건 한 줄 상자, 핵심은 큰 카드).
+// 실습 것: '해낼 것'(완료 조건), 문단마다 그때 쓴 코드 · 화면에 나온 것(기록에서 그대로). 종류 칸은 나누지 않는다(정책 6).
 function GoalCard({ n, goal, done, result, rv, summary, ongoing }: { n: number; goal: string; done?: string; result: string; rv?: GoalReview | null; summary?: string; ongoing?: boolean }) {
-  return <div className="rv-goal">
-    <div className="rv-gh"><span className="rv-n">{n}</span><b>{goal}</b>{ongoing ? <span className="lib-res now">진행 중</span> : result ? <span className={`lib-res ${RES[result] ?? ""}`}>{result}</span> : null}</div>
-    {done ? <p className="rv-done"><b>해낼 것</b>{done}</p> : null}
-    {rv ? <>
-      {rv.aim ? <p className="rv-sit">{rv.aim}</p> : null}
-      {rv.scenes.length ? <div className="rv-probs">{rv.scenes.map((s, k) => <div key={k} className="rv-prob"><p className="rv-q">{s.title}</p><p className="rv-body">{s.body}</p>
-        {s.code ? <div className="rv-code"><span className="rv-cl">{s.example ? "예시 코드" : "그때 쓴 코드"}</span><pre>{s.code}</pre></div> : null}
-        {s.result ? <div className={`rv-code out${/error|traceback|exception|오류/i.test(s.result) ? " bad" : ""}`}><span className="rv-cl">{s.example ? "돌리면" : "화면에 나온 것"}</span><pre>{s.result}</pre></div> : null}
-        {/* 해설(11/12 사용자 "틀렸어요 하고 끝나는 느낌 … 해설이 필요해 … 바르게 고친 코드보다도 왜 틀렸는지") */}
-        {s.explain ? <div className="rv-explain"><p className="rv-eh">💡 왜 그렇게 됐을까요</p><p className="rv-et">{s.explain}</p></div> : null}
-      </div>)}</div> : <p className="rv-none">막힌 곳 없이 지나갔어요.</p>}
-      {rv.reached ? <p className="rv-reach"><span aria-hidden>✅</span>{rv.reached}</p> : null}
-      {rv.weak.length ? <div className="rv-weak"><p className="rv-wh">부족한 점</p><ul>{rv.weak.map((w, k) => <li key={k}><b>{w.gap}</b>{w.seen ? <span>{w.seen}</span> : null}</li>)}</ul></div> : null}
-    </> : summary ? <p className="rv-sit">{summary}</p> : <p className="rv-none">{ongoing ? "아직 정리 전이에요. 손 놓고 15분이 지나면 지금까지로 정리돼요." : "이 목표는 정리가 없어요."}</p>}
+  const story = rv?.v === 2 ? rv.story ?? [] : null;
+  let wn = 0;
+  return <div className="pg-goal">
+    <div className="pg-gh"><span className="pg-n">{n}</span><b>{goal}</b>{ongoing ? <span className="lib-res now">진행 중</span> : result ? <span className={`lib-res ${RES[result] ?? ""}`}>{result}</span> : null}</div>
+    {done ? <p className="pg-done"><b>해낼 것</b>{done}</p> : null}
+    {story ? <>
+      <div className="rv-two">
+        {rv!.aim ? <div className="rv-intro sit"><div className="rv-introhead"><span className="rv-icon" aria-hidden>?</span>하려던 일</div><Lines text={rv!.aim} /></div> : null}
+        {rv!.why ? <div className="rv-intro sol"><div className="rv-introhead"><span className="rv-icon" aria-hidden>✓</span>이렇게 하면 돼요</div><Lines text={rv!.why} /></div> : null}
+      </div>
+      {story.length ? <div className="rv-story"><h4 className="rv-sectitle">이렇게 흘러갔어요{(() => { const k = story.filter((x) => x.weak).length; return k ? <span>약점 {k}개</span> : null; })()}</h4>
+        <ol className="rv-flow">{story.map((b, i) => { const w = b.weak; if (w) wn++; return <li key={i} className={`rv-step${w ? " has" : ""}`}>
+          <p className="rv-tell"><Ic text={b.text} /></p>
+          {b.code ? <div className="pg-code"><span className="pg-cl">그때 쓴 코드</span><pre>{b.code}</pre></div> : null}
+          {b.result ? <div className={`pg-code out${/error|traceback|exception|오류|\b4\d\d\b|\b5\d\d\b/i.test(b.result) ? " bad" : ""}`}><span className="pg-cl">화면에 나온 것</span><pre>{b.result}</pre></div> : null}
+          {w && w.size === "big" ? <article className="rv-weak big">
+            <header className="rv-weakhead"><span className="rv-core">핵심 약점</span><span className="rv-chip">약점 {wn}</span>{w.title ? <b className="rv-weaktitle">{w.title}</b> : null}</header>
+            {w.state ? <div className="rv-state"><span className="rv-lab">지금 내 상태</span><p><Ic text={w.state} /></p></div> : null}
+            {w.lesson ? <div className="rv-lesson"><span className="rv-lab">제대로 알아보기</span><RvRich text={w.lesson} /></div> : null}
+          </article> : w ? <aside className="rv-weak small">
+            <div className="rv-smallhead"><span className="rv-chip">약점 {wn}</span>{w.title ? <b>{w.title}</b> : null}</div>
+            {w.state ? <p className="rv-smallstate"><Ic text={w.state} /></p> : null}
+            {w.lesson ? <RvRich text={w.lesson} /> : null}
+          </aside> : null}
+        </li>; })}</ol></div> : <p className="pg-none">막힌 곳 없이 지나갔어요.</p>}
+    </> : summary ? <p className="pg-sit">{summary}</p> : <p className="pg-none">{ongoing ? "아직 정리 전이에요. 손 놓고 15분이 지나면 지금까지로 정리돼요." : "이 목표는 정리가 없어요."}</p>}
   </div>;
 }
 
@@ -291,7 +306,7 @@ function RunView({ e }: { e: Entry }) {
   const goalsInOrder = [...new Set(scenes.map((c) => c.goal).filter(Boolean))];
   const shift = (x: SceneEv, key: string) => {
     const s = shiftOf(x.text, /^장기 목표/.test(x.text) && !longSeen); if (/^장기 목표/.test(x.text)) longSeen = true;
-    if (s) flow.push(<p key={key} className={`rv-shift ${s.cls}`}><span aria-hidden>{s.icon}</span>{s.text}<small>{hm(x.at)}</small></p>);
+    if (s) flow.push(<p key={key} className={`pg-shift ${s.cls}`}><span aria-hidden>{s.icon}</span>{s.text}<small>{hm(x.at)}</small></p>);
   };
   scenes.forEach((c, ci) => {
     // 학습자가 처음 말하기 전에 생긴 바뀜(계획 확정으로 장기 목표를 정함 등)은 그 목표 칸 앞에
@@ -311,12 +326,12 @@ function RunView({ e }: { e: Entry }) {
     }
     c.events.forEach((x, k) => { if (x.kind === "note" && !(newGoal && lead(k))) shift(x, `s${ci}-${k}`); });
   });
-  const oldOnes = recs.filter((r) => !r.review).length;
+  const oldOnes = recs.filter((r) => r.review?.v !== 2).length;
   return <>
     {head}
     <section className="rp-wrong rp-review"><p className="eyebrow">실습 정리</p>
       <p className="rp-facts">{[`목표 ${scenes.filter((c) => c.goal).length}개 · 마침 ${done}`, sup ? `보충 ${sup}번` : "보충 없음", `튜터에게 ${evs.filter((x) => x.kind === "me").length}번 말함`, errs ? `실행 오류 ${errs}번` : "", fixed ? `튜터가 고쳐 줌 ${fixed}번` : "", ms.length ? `막힌 순간 ${ms.length}` : "", span ? `${span}분` : ""].filter(Boolean).map((x) => <span key={x}>{x}</span>)}</p>
-      {d.demo ? <div className="rv-demo"><p className="rv-dh">이 실습에서 만든 것 <span className="small muted">— 마지막으로 돌려 본 화면</span></p><div className="rv-code out"><span className="rv-cl">$ {d.demo.command}</span><pre>{d.demo.out}</pre></div></div> : null}
+      {d.demo ? <div className="pg-demo"><p className="pg-dh">이 실습에서 만든 것 <span className="small muted">— 마지막으로 돌려 본 화면</span></p><div className="pg-code out"><span className="pg-cl">$ {d.demo.command}</span><pre>{d.demo.out}</pre></div></div> : null}
       {flow.length ? flow : <p className="small muted">이 실습은 장면 기록을 남기기 전에 한 것이라 정리할 장면이 없어요.</p>}
       {oldOnes ? <p className="small muted">예전 모양으로 정리된 목표가 {oldOnes}개 있어요. <button className="linkish small" disabled={redoing} onClick={() => void redo()}>{redoing ? "다시 정리하는 중…" : `목표마다 다시 정리 (AI ${recs.length}번)`}</button></p> : null}
       {rErr ? <p className="ws-err">{rErr}</p> : null}

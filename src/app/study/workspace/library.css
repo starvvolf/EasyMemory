@@ -291,53 +291,53 @@
 .dejipgi .rp-weak{margin:2px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
 .dejipgi .rp-weak li{display:flex;flex-direction:column;line-height:1.55}
 /* 실습 총정리 목표마다 한 칸(11/12) */
-.dejipgi .rv-goal{display:flex;flex-direction:column;gap:6px}
-.dejipgi .rv-gh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14.5px;color:var(--ink)}
-.dejipgi .rv-sub{margin:4px 0 0 !important;font-size:12px;font-weight:700;color:var(--muted)}
-.dejipgi .rv-sub.bad{color:var(--bad)}
+.dejipgi .pg-goal{display:flex;flex-direction:column;gap:6px}
+.dejipgi .pg-gh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14.5px;color:var(--ink)}
+.dejipgi .pg-sub{margin:4px 0 0 !important;font-size:12px;font-weight:700;color:var(--muted)}
+.dejipgi .pg-sub.bad{color:var(--bad)}
 
 /* 실습 총정리 다시 그림(11/12 사용자 "디자인 마음에 안 들어 · '사실은' 별로 · 회색/검정 구분 안 감 · 묶을 건 박스"):
    목표 = 테두리 있는 큰 상자, 문제 하나 = 안쪽 작은 상자(위: 그때 한 일, 아래: → 왜 · 어떻게, 색 다르게), 부족한 점 = 빨간 상자 */
-.dejipgi .rv-goal{display:flex;flex-direction:column;gap:10px;border:1.5px solid var(--line-strong);border-radius:18px;padding:14px 16px;background:var(--surface);margin-top:10px}
-.dejipgi .rv-gh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.dejipgi .rv-gh b{flex:1;min-width:0;font-size:15.5px;color:var(--ink);word-break:keep-all}
-.dejipgi .rv-n{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
-.dejipgi .rv-sit{margin:0;padding:10px 12px;border-radius:12px;background:var(--accent-soft);color:var(--ink);font-size:14px;line-height:1.65}
-.dejipgi .rv-probs{display:flex;flex-direction:column;gap:8px}
-.dejipgi .rv-prob{border-radius:14px;border:1px solid var(--line);overflow:hidden}
-.dejipgi .rv-what{margin:0;padding:10px 12px;display:flex;gap:8px;font-size:14px;line-height:1.6;color:var(--ink);background:var(--surface-2)}
-.dejipgi .rv-ico{flex:none}
-.dejipgi .rv-fix{margin:0;padding:10px 12px 10px 12px;display:flex;gap:8px;font-size:14px;line-height:1.6;color:var(--good);background:var(--good-soft);font-weight:500}
-.dejipgi .rv-arrow{flex:none;font-weight:800}
-.dejipgi .rv-none{margin:0;font-size:13px;color:var(--muted)}
-.dejipgi .rv-weak{border-radius:14px;border:1.5px solid var(--bad);background:var(--bad-soft);padding:10px 14px}
-.dejipgi .rv-wh{margin:0 0 6px;font-size:12.5px;font-weight:800;color:var(--bad)}
-.dejipgi .rv-weak ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
-.dejipgi .rv-weak li{display:flex;flex-direction:column;gap:2px}
-.dejipgi .rv-weak li b{font-size:14px;color:var(--ink)}
-.dejipgi .rv-weak li span{font-size:13px;color:var(--bad)}
+.dejipgi .pg-goal{display:flex;flex-direction:column;gap:10px;border:1.5px solid var(--line-strong);border-radius:18px;padding:14px 16px;background:var(--surface);margin-top:10px}
+.dejipgi .pg-gh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dejipgi .pg-gh b{flex:1;min-width:0;font-size:15.5px;color:var(--ink);word-break:keep-all}
+.dejipgi .pg-n{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.dejipgi .pg-sit{margin:0;padding:10px 12px;border-radius:12px;background:var(--accent-soft);color:var(--ink);font-size:14px;line-height:1.65}
+.dejipgi .pg-probs{display:flex;flex-direction:column;gap:8px}
+.dejipgi .pg-prob{border-radius:14px;border:1px solid var(--line);overflow:hidden}
+.dejipgi .pg-what{margin:0;padding:10px 12px;display:flex;gap:8px;font-size:14px;line-height:1.6;color:var(--ink);background:var(--surface-2)}
+.dejipgi .pg-ico{flex:none}
+.dejipgi .pg-fix{margin:0;padding:10px 12px 10px 12px;display:flex;gap:8px;font-size:14px;line-height:1.6;color:var(--good);background:var(--good-soft);font-weight:500}
+.dejipgi .pg-arrow{flex:none;font-weight:800}
+.dejipgi .pg-none{margin:0;font-size:13px;color:var(--muted)}
+.dejipgi .pg-weak{border-radius:14px;border:1.5px solid var(--bad);background:var(--bad-soft);padding:10px 14px}
+.dejipgi .pg-wh{margin:0 0 6px;font-size:12.5px;font-weight:800;color:var(--bad)}
+.dejipgi .pg-weak ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.dejipgi .pg-weak li{display:flex;flex-direction:column;gap:2px}
+.dejipgi .pg-weak li b{font-size:14px;color:var(--ink)}
+.dejipgi .pg-weak li span{font-size:13px;color:var(--bad)}
 /* 실습 정리 v2(11/12): 장면 = 물음 제목 + 이어진 글, 여기까지(초록 줄), 판 바뀜 = 칸 사이 둥근 줄 */
-.dejipgi .rv-q{margin:0;padding:10px 12px 4px;font-size:14px;font-weight:700;color:var(--ink);background:var(--surface-2)}
-.dejipgi .rv-body{margin:0;padding:0 12px 11px;font-size:14px;line-height:1.7;color:var(--ink);background:var(--surface-2)}
-.dejipgi .rv-reach{margin:0;display:flex;gap:8px;padding:9px 12px;border-radius:12px;background:var(--good-soft);color:var(--good);font-size:14px;font-weight:600;line-height:1.55}
-.dejipgi .rv-shift{align-self:flex-start;margin:10px 0 0 12px;display:inline-flex;align-items:baseline;gap:8px;padding:6px 14px;border-radius:999px;border:1.5px dashed var(--line-strong);font-size:13px;font-weight:600;color:var(--muted);background:var(--surface)}
-.dejipgi .rv-shift small{font-weight:400;color:var(--faint);font-size:11px}
-.dejipgi .rv-shift.goal{border-color:var(--accent);color:var(--accent)}
-.dejipgi .rv-shift.turn,.dejipgi .rv-shift.sup{border-color:var(--help);color:var(--help)}
+.dejipgi .pg-q{margin:0;padding:10px 12px 4px;font-size:14px;font-weight:700;color:var(--ink);background:var(--surface-2)}
+.dejipgi .pg-body{margin:0;padding:0 12px 11px;font-size:14px;line-height:1.7;color:var(--ink);background:var(--surface-2)}
+.dejipgi .pg-reach{margin:0;display:flex;gap:8px;padding:9px 12px;border-radius:12px;background:var(--good-soft);color:var(--good);font-size:14px;font-weight:600;line-height:1.55}
+.dejipgi .pg-shift{align-self:flex-start;margin:10px 0 0 12px;display:inline-flex;align-items:baseline;gap:8px;padding:6px 14px;border-radius:999px;border:1.5px dashed var(--line-strong);font-size:13px;font-weight:600;color:var(--muted);background:var(--surface)}
+.dejipgi .pg-shift small{font-weight:400;color:var(--faint);font-size:11px}
+.dejipgi .pg-shift.goal{border-color:var(--accent);color:var(--accent)}
+.dejipgi .pg-shift.turn,.dejipgi .pg-shift.sup{border-color:var(--help);color:var(--help)}
 .dejipgi .rp-review{display:flex;flex-direction:column}
 .dejipgi .shelf-src{margin:0;display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--muted);line-height:1.55}
 .dejipgi .shelf-srck{font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 5px}
 /* 상황이 그려지게(11/12): 끝나면 · 그때 쓴 코드 · 화면에 나온 것 · 이 실습에서 만든 것 */
-.dejipgi .rv-done{margin:0;display:flex;gap:8px;align-items:baseline;font-size:13px;color:var(--muted);line-height:1.55}
-.dejipgi .rv-done b{flex:none;font-size:11.5px;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink)}
-.dejipgi .rv-code{margin:0 12px 10px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
-.dejipgi .rv-code pre{margin:0;padding:8px 12px;font-family:var(--mono);font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;background:#1d2027;color:#e9ebef}
-.dejipgi .rv-code.out pre{background:#111317;color:#cfd3da}
-.dejipgi .rv-code.bad pre{color:#ff9c8a}
-.dejipgi .rv-cl{display:block;padding:3px 12px;font-size:11px;font-weight:700;color:var(--muted);background:var(--surface)}
-.dejipgi .rv-demo{margin-top:8px;border:1.5px solid var(--line-strong);border-radius:16px;padding:10px 4px 2px;background:var(--surface)}
-.dejipgi .rv-dh{margin:0 12px 8px;font-size:14px;font-weight:700}
-.dejipgi .rv-prob{background:var(--surface-2)}
+.dejipgi .pg-done{margin:0;display:flex;gap:8px;align-items:baseline;font-size:13px;color:var(--muted);line-height:1.55}
+.dejipgi .pg-done b{flex:none;font-size:11.5px;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink)}
+.dejipgi .pg-code{margin:0 12px 10px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.dejipgi .pg-code pre{margin:0;padding:8px 12px;font-family:var(--mono);font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;background:#1d2027;color:#e9ebef}
+.dejipgi .pg-code.out pre{background:#111317;color:#cfd3da}
+.dejipgi .pg-code.bad pre{color:#ff9c8a}
+.dejipgi .pg-cl{display:block;padding:3px 12px;font-size:11px;font-weight:700;color:var(--muted);background:var(--surface)}
+.dejipgi .pg-demo{margin-top:8px;border:1.5px solid var(--line-strong);border-radius:16px;padding:10px 4px 2px;background:var(--surface)}
+.dejipgi .pg-dh{margin:0 12px 8px;font-size:14px;font-weight:700}
+.dejipgi .pg-prob{background:var(--surface-2)}
 /* 부족한 점(11/12 B, 사용자 "구분감이 너무 없고… 두 개씩 묶어서 봐야 되는데"): 번호 + 굵은 한 줄, 그 밑에 장면마다 한 묶음 상자 —
    위 칸 "그때 내 생각"(빨강 바탕) · 아래 칸 "맞는 생각"(초록 바탕) */
 .dejipgi .rp-weak{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:14px}
@@ -356,15 +356,15 @@
 .dejipgi .rp-pair .mine .rp-tag{color:var(--bad)}
 .dejipgi .rp-pair .right .rp-tag{color:var(--good)}
 /* 해설 · 바르게(11/12) */
-.dejipgi .rv-explain{margin:2px 12px 12px;border-radius:12px;border:1.5px solid var(--good);background:var(--good-soft);padding:10px 0 2px}
-.dejipgi .rv-eh{margin:0 12px 4px;font-size:12.5px;font-weight:800;color:var(--good)}
-.dejipgi .rv-et{margin:0 12px 10px;font-size:14px;line-height:1.7;color:var(--ink)}
-.dejipgi .rv-explain .rv-code{margin:0 10px 10px}
-.dejipgi .rv-code.ok pre{background:#13231c;color:#cdeedd}
-.dejipgi .rv-code.out.ok pre{background:#0f1a15;color:#9fe0bf}
-.dejipgi .rv-explain{padding:10px 14px 12px}
-.dejipgi .rv-explain .rv-eh,.dejipgi .rv-explain .rv-et{margin-left:0;margin-right:0;padding:0}
-.dejipgi .rv-explain .rv-et{margin-bottom:0}
+.dejipgi .pg-explain{margin:2px 12px 12px;border-radius:12px;border:1.5px solid var(--good);background:var(--good-soft);padding:10px 0 2px}
+.dejipgi .pg-eh{margin:0 12px 4px;font-size:12.5px;font-weight:800;color:var(--good)}
+.dejipgi .pg-et{margin:0 12px 10px;font-size:14px;line-height:1.7;color:var(--ink)}
+.dejipgi .pg-explain .pg-code{margin:0 10px 10px}
+.dejipgi .pg-code.ok pre{background:#13231c;color:#cdeedd}
+.dejipgi .pg-code.out.ok pre{background:#0f1a15;color:#9fe0bf}
+.dejipgi .pg-explain{padding:10px 14px 12px}
+.dejipgi .pg-explain .pg-eh,.dejipgi .pg-explain .pg-et{margin-left:0;margin-right:0;padding:0}
+.dejipgi .pg-explain .pg-et{margin-bottom:0}
 /* 빈틈 카드(11/12 B v8, 사용자 "부족함을 정확하게… 처음 보는 사람이 봐도 뭐가 부족해서 뭘 해야 되는지"): 색 바탕 대신 흰 카드 + 왼쪽 띠 + 종류 칩.
    칸 이름(어디서 드러났나 · 알아야 하는 것 · 이렇게 채워요)은 왼쪽 열, 글은 오른쪽 열 */
 .dejipgi .rp-gaps{display:flex;flex-direction:column;gap:10px}
