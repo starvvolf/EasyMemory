@@ -264,26 +264,31 @@ async function renderTimeline(runId) {
   const k = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
   const metric = (u) => u ? h("span", { class: "tlmetric" }, u.input || u.output ? `입력 ${k(u.input)}(캐시 ${k(u.cached)}) · 출력 ${k(u.output)} · ` : "", `${(u.ms / 1000).toFixed(1)}초${u.calls ? ` · 호출 ${u.calls}` : ""}`) : null;
   const who = { message: "학습자", button: "버튼", save: "저장", system: "Recaller" };
+  // 11/11 사용자 "학습 기록 UI가 어색함. 컨셉 살려서 둥글둥글하게 가독성 좋게": 칸 = 둥근 카드, 학습자 말 · AI 답은 말풍선, 도구 · 바뀐 것은 알약
   const box = (s) => {
     const open = tlUi.open.has(s.n), full = tlUi.full.has(s.n), reply = s.reply || "";
-    return h("div", { class: `tlbox ${s.trigger.kind}` },
-      h("div", { class: "tlhead" }, h("span", { class: "tln" }, `#${s.n}`), h("span", { class: `tlwho ${s.trigger.kind}` }, who[s.trigger.kind] ?? s.trigger.kind), h("b", {}, s.trigger.kind === "message" ? "" : s.trigger.label),
+    const kind = s.trigger.kind;
+    return h("div", { class: `tlbox ${kind}` },
+      h("div", { class: "tlhead" }, h("span", { class: "tln" }, s.n), h("span", { class: `tlwho ${kind}` }, who[kind] ?? kind),
+        kind === "message" ? null : h("b", { class: "tllabel" }, s.trigger.label),
         h("span", { class: "grow" }), s.usage ? h("button", { class: "tlm", title: "토큰 · 속도", onclick: () => { tlUi.metrics = !tlUi.metrics; drawTl(); } }, "⏱") : null),
       tlUi.metrics && s.usage ? h("div", {}, metric(s.usage)) : null,
-      s.trigger.text ? h("div", { class: "tlsay" }, s.trigger.kind === "message" ? `“${s.trigger.text}”` : s.trigger.text) : null,
-      reply ? h("div", { class: "tlai" }, h("span", { class: "tlk" }, "AI"), h("div", { class: `tlreply ${full ? "" : "clip"}` }, reply), reply.length > 220 ? h("button", { class: "flink", onclick: () => { full ? tlUi.full.delete(s.n) : tlUi.full.add(s.n); drawTl(); } }, full ? "접기" : "더 보기") : null) : null,
-      s.tools?.length ? h("div", { class: "tltools" }, h("span", { class: "tlk" }, `도구 ${s.tools.length}`), ...s.tools.map((x) => h("span", { class: "tlchip tool" }, x))) : null,
+      s.trigger.text ? h("div", { class: `tlsay ${kind}` }, s.trigger.text) : null,
+      reply ? h("div", { class: "tlai" }, h("span", { class: "tlav" }, "R"),
+        h("div", { class: "tlbub" }, h("div", { class: `tlreply ${full || reply.length <= 220 ? "" : "clip"}` }, reply.replace(/\*\*(.+?)\*\*/g, "$1")),
+          reply.length > 220 ? h("button", { class: "tlpill", onclick: () => { full ? tlUi.full.delete(s.n) : tlUi.full.add(s.n); drawTl(); } }, full ? "접기" : "더 보기") : null)) : null,
+      s.tools?.length ? h("div", { class: "tltools" }, ...s.tools.map((x) => h("span", { class: "tlchip tool" }, "🔧 ", x))) : null,
       s.extra ? h("div", { class: "tlextra small" }, Object.entries(s.extra).filter(([, v]) => v && (!Array.isArray(v) || v.length)).map(([kk, v]) => h("div", {}, h("span", { class: "tlk" }, ({ learned: "배운 것", gaps: "부족했던 점", memory: "메모리 반영", recorded: "정리", synced: "기억에 넣음" })[kk] ?? kk), " ", Array.isArray(v) ? v.join(" · ") : typeof v === "object" ? JSON.stringify(v) : String(v)))) : null,
-      s.changes?.length ? h("ul", { class: "tlchg" }, s.changes.map((c) => h("li", {}, c))) : h("div", { class: "mut small" }, "상태 변화 없음"),
-      s.state ? h("button", { class: "flink", onclick: () => { open ? tlUi.open.delete(s.n) : tlUi.open.add(s.n); drawTl(); } }, open ? "상태 접기" : "이때 상태 보기") : null,
+      s.changes?.length ? h("div", { class: "tlchgbox" }, h("span", { class: "tlk" }, "바뀐 것"), h("ul", { class: "tlchg" }, s.changes.map((c) => h("li", {}, c)))) : null,
+      s.state ? h("div", {}, h("button", { class: "tlpill", onclick: () => { open ? tlUi.open.delete(s.n) : tlUi.open.add(s.n); drawTl(); } }, open ? "상태 접기" : "이때 상태 보기")) : null,
       open ? stateBox(s.state) : null);
   };
-  const drawTl = () => view.replaceChildren(h("div", { class: `home2 tl ${FLOAT ? "fw" : ""}` },
-    h("div", { class: "memhead" }, h("button", { class: "btn small", onclick: () => history.back() }, "← 돌아가기"), h("h1", {}, "학습 기록"), h("span", { class: "grow" }),
+  const drawTl = () => view.replaceChildren(h("div", { class: `home2 tl tlpage ${FLOAT ? "fw" : ""}` },
+    h("div", { class: "tltop" }, h("button", { class: "btn small", onclick: () => history.back() }, "← 돌아가기"), h("h1", {}, "학습 기록"), h("span", { class: "tlcount" }, `${steps.length}칸`), h("span", { class: "grow" }),
       h("button", { class: `btn small ${tlUi.metrics ? "primary" : ""}`, title: "칸마다 토큰 · 속도", onclick: () => { tlUi.metrics = !tlUi.metrics; drawTl(); } }, "⏱ 토큰 · 속도")),
-    h("p", { class: "mut small" }, `행동 ${steps.length}개 — 학습자의 말 · 버튼 · 저장 하나와 그에 대한 AI 응답이 한 칸이에요.${t.rough ? " 이 대화는 타임라인을 남기기 전이라 목표 기록으로 만든 거친 칸이에요." : ""}`),
-    tlUi.metrics ? h("p", { class: "small" }, `전체: 입력 ${k(sum.input)}(캐시 ${k(sum.cached)}) · 출력 ${k(sum.output)} · AI 시간 ${(sum.ms / 1000).toFixed(1)}초`) : null,
-    steps.length ? h("div", { class: "tlflow" }, steps.flatMap((s, i) => [box(s), i < steps.length - 1 ? h("div", { class: "tlarrow" }, "↓") : null])) : h("p", { class: "mut" }, "아직 기록이 없어요.")));
+    h("p", { class: "tlintro" }, `내가 한 말 · 누른 버튼 · 저장 하나와 그에 대한 튜터 답이 한 칸이에요.${t.rough ? " 이 대화는 기록을 남기기 전이라 목표 정리로 만든 거친 칸이에요." : ""}`),
+    tlUi.metrics ? h("p", { class: "tlintro" }, `전체: 입력 ${k(sum.input)}(캐시 ${k(sum.cached)}) · 출력 ${k(sum.output)} · AI 시간 ${(sum.ms / 1000).toFixed(1)}초`) : null,
+    steps.length ? h("div", { class: "tlflow" }, steps.flatMap((s, i) => [box(s), i < steps.length - 1 ? h("div", { class: "tlarrow" }) : null])) : h("p", { class: "mut" }, "아직 기록이 없어요.")));
   drawTl();
 }
 
