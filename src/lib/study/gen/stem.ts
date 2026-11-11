@@ -101,16 +101,26 @@ export function addMore(plan: StemPlan, more: StemPlan, pageNumbers: number[]) {
 }
 
 /**
- * 채우기 묶음: 한 영역의 기억을 쪽 순서로 이어 붙이다가 쪽이 `maxPages`장을 넘으면 끊는다(기억은 쪼개지 않는다). 호출 크기를 고르게 해
+ * 채우기 묶음: 기억을 쪽 순서로 이어 붙이다가 쪽이 `maxPages`장을 넘거나 기억이 `maxMemories`개가 되면 끊는다. 호출 크기를 고르게 해
  * 가장 긴 호출이 전체 시간을 정하지 않게 하려는 코드 쪽 나눔이다(지시문의 개수 제한이 아니다).
+ * 같은 쪽을 보는 기억은 (영역이 달라도) 한 묶음에서 같이 채운다 (11/11 사용자 "호출을 맞춰 주면 되는 거 아니야?"): 따로 채우면 각 호출이
+ * 상대를 몰라 그 쪽의 같은 사실을 둘 다 적었다(실행 4개에서 겹친 4건이 모두 다른 호출이었고, 한 호출 안에서 쪽을 나눈 경우는 겹침이 없었다).
+ * 그래서 쪽을 공유하는 기억들을 먼저 한 덩어리로 잇고, 덩어리는 쪼개지 않는다(덩어리 하나가 상한을 넘으면 그것만 한 묶음).
  */
 export function fillGroups<T extends { pages: number[] }>(memories: T[], maxPages = 6, maxMemories = 5): T[][] {
+  const parent = memories.map((_, i) => i);
+  const root = (i: number): number => (parent[i] === i ? i : (parent[i] = root(parent[i])));
+  const firstBy = new Map<number, number>();
+  memories.forEach((m, i) => { for (const p of m.pages) { const j = firstBy.get(p); if (j === undefined) firstBy.set(p, i); else parent[root(i)] = root(j); } });
+  const blocks = new Map<number, T[]>();
+  memories.forEach((m, i) => { const r = root(i); blocks.set(r, [...(blocks.get(r) ?? []), m]); });
+  const first = (b: T[]) => Math.min(...b.flatMap((m) => m.pages), Infinity);
   const groups: T[][] = [];
   let cur: T[] = [], pages = new Set<number>();
-  for (const m of [...memories].sort((a, b) => (a.pages[0] ?? 0) - (b.pages[0] ?? 0))) {
-    const next = new Set([...pages, ...m.pages]);
-    if (cur.length && (next.size > maxPages || cur.length >= maxMemories)) { groups.push(cur); cur = []; pages = new Set(); }
-    cur.push(m); for (const p of m.pages) pages.add(p);
+  for (const block of [...blocks.values()].sort((a, b) => first(a) - first(b))) {
+    const next = new Set([...pages, ...block.flatMap((m) => m.pages)]);
+    if (cur.length && (next.size > maxPages || cur.length + block.length > maxMemories)) { groups.push(cur); cur = []; pages = new Set(); }
+    cur.push(...block); for (const m of block) for (const p of m.pages) pages.add(p);
   }
   if (cur.length) groups.push(cur);
   return groups;

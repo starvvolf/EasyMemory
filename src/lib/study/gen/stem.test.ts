@@ -18,6 +18,12 @@ test("채우기 묶음: 쪽이 넘치면 끊고 기억은 쪼개지 않는다", 
   const g = fillGroups([{ pages: [1, 2, 3] }, { pages: [4, 5] }, { pages: [6, 7, 8] }, { pages: [9] }], 6);
   assert.deepEqual(g.map((x) => x.length), [2, 2]);
 });
+test("채우기 묶음: 같은 쪽을 보는 기억은 상한에 걸려도 한 호출에 같이 (11/11)", () => {
+  const a = { pages: [1, 2, 3, 4] }, b = { pages: [5, 6] }, c = { pages: [6, 7, 8] }, d = { pages: [9] };
+  const g = fillGroups([a, b, c, d], 6);
+  assert.ok(g.some((x) => x.includes(b) && x.includes(c)), "6쪽을 같이 보는 b·c는 한 묶음");
+  assert.equal(g.flat().length, 4);
+});
 test("기억 → 카드: 모양을 따라 종류를 맞추고 근거 쪽은 묶음 쪽만, 메인은 핵심", () => {
   const c = memoryCard("t1.m1", "메인", { memory: "t1-b1", title: "브레젠험", kind: "개념", question: "q", line: "l", idea: "", shape: { form: "procedure", steps: [{ action: "a", input: "", output: "" }, { action: "b", input: "", output: "" }] },
     facts: ["p0 = 2dy - dx"], details: [], evidence: [{ page: 3, quote: "x" }, { page: 50, quote: "y" }], mistakes: [], takes: [], gives: [], figure: null }, [3, 4]);
