@@ -1399,28 +1399,33 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pt-week{background:var(--accent-soft);border-radius:8px;padding:6px 10px}
 .dejipgi .pbt-debt{font-size:11.5px;color:var(--pbt-gap);line-height:1.5}
 
-/* 막혔을 때 (11/11, 자료 지도 강의 탭 모양을 따름: 위 게이지, 한 장씩 옆으로 넘김) */
+/* AI 튜터 (11/11, 자료 지도 강의 탭 모양을 따름: 위 게이지 다섯 칸, 한 장씩 옆으로 넘김) */
 .dejipgi .hd{display:flex;flex-direction:column;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line)}
-.dejipgi .hd-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.dejipgi .hd-gauge{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
-.dejipgi .hd-seg{display:block;width:100%;height:6px;padding:0;border:0;border-radius:99px;background:var(--line);cursor:pointer;transition:background .3s ease}
+.dejipgi .hd-top{display:flex;align-items:center;gap:8px}
+.dejipgi .hd-hint{font-size:12px;padding:2px 10px;border-radius:99px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.dejipgi .hd-hint:disabled{opacity:.4;cursor:default}
+.dejipgi .hd-nav{margin-left:auto;display:flex;gap:4px}
+.dejipgi .hd-nav button{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:15px;line-height:1;display:grid;place-items:center;padding:0}
+.dejipgi .hd-nav button:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}
+.dejipgi .hd-nav button:disabled{opacity:.35;cursor:default}
+.dejipgi .hd-gauge{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;user-select:none}
+.dejipgi .hd-seg{position:relative;display:block;height:6px;border-radius:99px;background:var(--line);cursor:pointer;transition:background .3s ease}
 .dejipgi .hd-seg.done{background:var(--accent)}
-.dejipgi .hd-seg.on{outline:2px solid var(--accent-soft);outline-offset:1px}
-.dejipgi .hd-seg:disabled{cursor:default}
+.dejipgi .hd-seg.on{box-shadow:0 0 0 2px var(--accent-soft)}
+.dejipgi .hd-seg.locked{cursor:default;opacity:.6}
+.dejipgi .hd-seg::before{content:"";position:absolute;inset:-6px 0}
+.dejipgi .hd-seg:hover::after,.dejipgi .hd-seg:focus-visible::after{content:attr(data-tip);position:absolute;top:12px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11.5px;line-height:1.3;padding:3px 7px;border-radius:6px;background:var(--ink);color:var(--surface);z-index:5;pointer-events:none}
+.dejipgi .hd-seg:first-child:hover::after{left:0;transform:none}
+.dejipgi .hd-seg:last-child:hover::after{left:auto;right:0;transform:none}
 .dejipgi .hd-box{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
 .dejipgi .hd-empty{background:var(--ground);gap:4px}
 .dejipgi .hd-empty p{margin:0}
 .dejipgi .hd-head{display:flex;align-items:flex-start;gap:10px}
 .dejipgi .hd-headtext{display:flex;flex-direction:column;min-width:0}
 .dejipgi .hd-say{font-size:14px;line-height:1.7;white-space:pre-line}
-.dejipgi .hd-foot{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.dejipgi .hd-prev{background:none;border:0;padding:4px 0;font-size:13px;color:var(--muted)}
-.dejipgi .hd-prev:disabled{opacity:.35;cursor:default}
-.dejipgi .hd-next{background:var(--accent-soft);color:var(--accent);border:1px solid transparent;border-radius:99px;padding:5px 12px;font-size:13px}
-.dejipgi .hd-next:hover:not(:disabled){border-color:var(--accent)}
-.dejipgi .hd-next b{font-weight:700}
+.dejipgi .hd-box .cg-needs{border:0;padding:0}
 /* 오른쪽 열: AI 칸은 제 높이 그대로(채팅은 그 안에서 스크롤), 필요한 능력 칸이 남는 높이를 쓰고 스크롤. 열 전체가 화면보다 길면 열이 스크롤. */
 .dejipgi .cs-side{overflow:auto}
-.dejipgi .cs-ai:not(.training){flex:0 0 auto;min-height:0}
-.dejipgi .cs-ai:not(.training) .cs-chat{flex:none;height:clamp(160px,32vh,360px);min-height:0}
+.dejipgi .cs-ai:not(.training){flex:1 0 auto;min-height:0}
+.dejipgi .cs-ai:not(.training) .cs-chat{flex:1 1 auto;min-height:220px}
 .dejipgi .cs-ai:not(.training) ~ .cs-needs{flex:1 1 auto;min-height:120px}

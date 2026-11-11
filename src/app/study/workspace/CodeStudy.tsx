@@ -2,7 +2,7 @@
 // 코드 학습: 문제 설명 + 코드 편집기 + 실행 결과 + 코드 옆 AI. 예제 실행은 예제만 돌려 모두 보여 주고, 제출은 숨은 테스트까지
 // 돌려 처음 틀린 하나만 보여 준다. Whether the code is right is the judge's call; the AI next to the code explains,
 // hints in three steps, checks an approach before submitting and looks for a counterexample.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { call, errorText, handoff, later, shareContext } from "./api";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
@@ -394,7 +394,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {coaching ? <>
         <p className="small muted">코드를 쓰기 전이라 AI는 답이나 코드를 주지 않고, 지금 단계를 스스로 생각하도록 도와요. 구현 단계부터는 힌트·반례 버튼이 다시 나와요.</p>
         </> : <>
-        {help ? <HelpDeck help={help} deck={deck} onOpen={(r) => void openHelp(r)} before={before} onUndo={() => { if (before !== null) { onCode(before); setBefore(null); } }} /> : null}
+        {help ? <HelpDeck key={id} help={help} deck={deck} onOpen={(r) => void openHelp(r)} before={before} onUndo={() => { if (before !== null) { onCode(before); setBefore(null); } }} needs={(grade.needs || problem.knowledge.length ? <>{grade.needs ? <NeedsPanel needs={grade.needs} /> : null}{problem.knowledge.length ? <div className="row small"><span className="muted">다루는 개념</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}</> : null)} /> : null}
         </>}
         <div className="cs-chat">
           {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">AI에게 무엇이든 물어보세요. 코드를 드래그하고 물으면 그 부분을 봐요. 물어본 풀이는 「도움 받고 맞힘」으로 남아요.</p> : null}
@@ -411,7 +411,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
           <button className="btn primary small" disabled={asking || !question.trim()}>묻기</button>
         </form>
       </aside>
-      {grade.needs || problem.knowledge.length ? <section className="cs-needs panel" aria-label="이 문제에 필요한 능력">
+      {/* 도움 칸이 있는 문제는 필요한 능력이 AI 튜터 3번 장으로 들어간다(11/11 사용자). */}
+      {!help && (grade.needs || problem.knowledge.length) ? <section className="cs-needs panel" aria-label="이 문제에 필요한 능력">
         {grade.needs ? <NeedsPanel needs={grade.needs} /> : null}
         {problem.knowledge.length ? <div className="row small"><span className="muted">다루는 개념</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
       </section> : null}
@@ -420,34 +421,59 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   );
 }
 
-const RUNG_NOTE = ["", "문제에서 무엇을 보면 되는지만", "어떤 방법을 쓰는지까지", "무엇을 적어 두고 어떻게 바꾸는지까지", "핵심 줄만 비운 코드 (편집기에 바로 들어가요)"];
-/** 막혔을 때(11/11): 자료 지도 강의 탭처럼 한 장씩 넘긴다. 위 게이지 4칸 = 연 만큼 차오름(눌러서 그 장으로), 아래 줄 = 이전 / 다음 도움. */
-function HelpDeck({ help, deck, onOpen, before, onUndo }: { help: { opened: number; labels: string[] }; deck: { at: number; dir: "next" | "prev"; texts: Record<number, string>; busy: boolean; err: string }; onOpen: (rung: number) => void; before: string | null; onUndo: () => void }) {
-  const at = deck.at, max = Math.min(4, help.opened + 1);
-  const label = (r: number) => help.labels[r - 1] ?? "";
+// AI 튜터(11/11 사용자): 다섯 장을 강의 탭처럼 넘긴다. 1 눈여겨볼 곳 · 2 방법 이름 · 3 필요한 능력 · 4 계획 · 5 뼈대 코드.
+// 필요한 능력은 방법 이름 뒤에 둔다(앞에 두면 방법이 먼저 보인다). 이 장은 화면 안의 것이라 기록하지 않는다. 나머지 장은 서버의 도움 칸 1~4.
+const CARDS: Array<{ label: string; note: string; rung: 0 | 1 | 2 | 3 | 4 }> = [
+  { label: "", note: "", rung: 0 },
+  { label: "눈여겨볼 곳", note: "문제에서 무엇을 보면 되는지만", rung: 1 },
+  { label: "방법 이름", note: "어떤 방법을 쓰는지까지", rung: 2 },
+  { label: "필요한 능력", note: "이 문제를 풀려면 어떤 능력이 필요한지", rung: 0 },
+  { label: "계획", note: "무엇을 적어 두고 어떻게 바꾸는지까지", rung: 3 },
+  { label: "뼈대 코드", note: "핵심 줄만 비운 코드 (편집기에 바로 들어가요)", rung: 4 },
+];
+type Deck = { at: number; dir: "next" | "prev"; texts: Record<number, string>; busy: boolean; err: string };
+function HelpDeck({ help, deck, onOpen, before, onUndo, needs }: { help: { opened: number; labels: string[] }; deck: Deck; onOpen: (rung: number) => void; before: string | null; onUndo: () => void; needs: ReactNode }) {
+  const s = help.opened;
+  const [needsSeen, setNeedsSeen] = useState(s >= 3);
+  const opened = s >= 3 ? s + 1 : s === 2 && needsSeen ? 3 : s; // 연 장 수(0~5)
+  const [view, setView] = useState(opened);
+  const [dir, setDir] = useState<"next" | "prev">("next");
+  const max = Math.min(5, opened + 1);
+  const go = (u: number) => {
+    if (u < 1 || u > max || deck.busy) return;
+    setDir(u < view ? "prev" : "next"); setView(u);
+    const c = CARDS[u];
+    if (c.rung) onOpen(c.rung); else setNeedsSeen(true);
+  };
+  const card = CARDS[view];
   return (
     <div className="hd">
-      <div className="hd-top"><b>막혔을 때</b><span className="small muted num">{help.opened ? `${help.opened}/4 열었어요` : "작은 도움부터 한 장씩"}</span></div>
-      <div className="hd-gauge" role="group" aria-label="도움 단계">{[1, 2, 3, 4].map((r) => (
-        <button key={r} className={`hd-seg${r <= help.opened ? " done" : ""}${r === at ? " on" : ""}`} disabled={r > max || deck.busy} onClick={() => onOpen(r)} title={`${r}. ${label(r)}`} aria-label={`${r}. ${label(r)}${r <= help.opened ? " (열었음)" : ""}`} />))}</div>
-      {at === 0 ? (
+      <div className="hd-top">
+        <b>AI 튜터</b>
+        <button className="hd-hint" disabled={opened >= 5 || deck.busy} onClick={() => go(opened + 1)} title={opened >= 5 ? "힌트를 다 열었어요" : `다음 힌트: ${CARDS[opened + 1].label}`}>힌트</button>
+        <span className="hd-nav">
+          <button disabled={view <= 1 || deck.busy} onClick={() => go(view - 1)} aria-label="이전 장">‹</button>
+          <button disabled={view >= max || deck.busy} onClick={() => go(view + 1)} aria-label="다음 장">›</button>
+        </span>
+      </div>
+      <div className="hd-gauge" role="group" aria-label="힌트 단계">{[1, 2, 3, 4, 5].map((u) => (
+        <span key={u} role="button" tabIndex={u <= max ? 0 : -1} aria-disabled={u > max} aria-label={`${u}. ${CARDS[u].label}${u <= opened ? " (열었음)" : ""}`} data-tip={`${u}. ${CARDS[u].label}`}
+          className={`hd-seg${u <= opened ? " done" : ""}${u === view ? " on" : ""}${u > max ? " locked" : ""}`} onClick={() => go(u)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(u); } }} />))}</div>
+      {view === 0 ? (
         <div className="hd-box hd-empty">
-          <p className="small">혼자 먼저 해 보고, 막히면 한 장씩 열어요.</p>
-          <p className="small muted">연 것은 기록에 남고, 도움 받고 푼 문제는 하루 뒤 혼자 다시 풀어요.</p>
+          <p className="small">혼자 먼저 해 보고, 막히면 [힌트]를 눌러 한 장씩 열어요.</p>
+          <p className="small muted">연 힌트는 기록에 남고, 힌트 받고 푼 문제는 하루 뒤 혼자 다시 풀어요.</p>
         </div>
       ) : (
-        <section key={at} className={`hd-box lc3-in-${deck.dir}`}>
-          <header className="hd-head"><span className="lc3-step num">{at}</span><div className="hd-headtext"><b>{label(at)}</b><span className="small muted">{RUNG_NOTE[at]}</span></div></header>
-          {deck.busy && !deck.texts[at] ? <p className="small muted">{at === 4 ? "뼈대 코드를 만드는 중… (처음이면 10~30초)" : "여는 중…"}</p>
-            : deck.err ? <p className="small bad">{deck.err}</p>
-            : <Rich text={deck.texts[at] ?? ""} className="hd-say" />}
-          {at === 4 && before !== null ? <button className="linkish small" onClick={onUndo}>내 코드로 되돌리기</button> : null}
+        <section key={view} className={`hd-box lc3-in-${dir}`}>
+          <header className="hd-head"><span className="lc3-step num">{view}</span><div className="hd-headtext"><b>{card.label}</b><span className="small muted">{card.note}</span></div></header>
+          {card.rung === 0 ? (needs ?? <p className="small muted">이 문제는 필요한 능력을 아직 정리하지 못했어요.</p>)
+            : deck.busy && !deck.texts[card.rung] ? <p className="small muted">{card.rung === 4 ? "뼈대 코드를 만드는 중… (처음이면 10~30초)" : "여는 중…"}</p>
+            : deck.err && deck.at === card.rung ? <p className="small bad">{deck.err}</p>
+            : <Rich text={deck.texts[card.rung] ?? ""} className="hd-say" />}
+          {card.rung === 4 && before !== null ? <button className="linkish small" onClick={onUndo}>내 코드로 되돌리기</button> : null}
         </section>
       )}
-      <div className="hd-foot">
-        <button className="hd-prev" disabled={at <= 1 || deck.busy} onClick={() => onOpen(at - 1)}>‹ 이전</button>
-        {at < 4 ? <button className="hd-next" disabled={deck.busy} onClick={() => onOpen(at + 1)}>{at + 1 > help.opened ? "다음 도움" : "다음"}: <b>{label(at + 1)}</b> ›</button> : <span className="small muted">더 막히면 아래에 물어보세요</span>}
-      </div>
     </div>
   );
 }
