@@ -41,19 +41,24 @@ export default function ProjectStudio({ run, courseUrl, onClose }: { run: Run; c
       // 위쪽: 공부 종류 줄(자료 · 알고리즘 · 실습)이 있으면 그 줄부터 덮는다
       const nav = document.querySelector(".study-nav");
       const nr = nav?.getBoundingClientRect();
+      // 11/11 사용자 "어쩔 때는 위에 Recaller 줄이 안 뜨고 어쩔 때는 뜬다": 실습 목록을 내려 둔 채 들어오면 공부 종류 줄이 화면 위로 올라가 있어
+      // 앱 창의 고정 머리(.masthead)까지 덮었다 → 고정 머리가 있으면 그 아래부터
+      const mh = document.querySelector(".masthead");
+      const mhb = mh && getComputedStyle(mh).position === "fixed" ? mh.getBoundingClientRect().bottom : 0;
       const top = nr && nr.height > 0 ? nr.top : (host.current?.getBoundingClientRect().top ?? 0);
-      setBox({ top: Math.max(0, Math.round(top)), right: r && r.width > 0 ? Math.round(window.innerWidth - r.left) + 8 : 10 });
+      setBox({ top: Math.max(0, Math.round(mhb), Math.round(top)), right: r && r.width > 0 ? Math.round(window.innerWidth - r.left) + 8 : 10 });
       const t = document.documentElement.dataset.theme;
       setTheme(t === "light" || t === "dark" ? t : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     };
     measure();
     window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, { passive: true });
     const ro = new ResizeObserver(measure);
     const sb = document.querySelector("aside.sb"); if (sb) ro.observe(sb);
     const mo = new MutationObserver(measure);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     mo.observe(document.body, { childList: true, subtree: false });
-    return () => { window.removeEventListener("resize", measure); ro.disconnect(); mo.disconnect(); };
+    return () => { window.removeEventListener("resize", measure); window.removeEventListener("scroll", measure); ro.disconnect(); mo.disconnect(); };
   }, []);
 
   const open = useCallback(async () => {
