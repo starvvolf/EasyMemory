@@ -328,7 +328,10 @@ export function studyRecallerLab(pages: number): NonNullable<GenInput["lab"]> {
     goalQuiz: true,
     // 줄기 먼저 (11/10 사용자 "기억 단위로 다 옮겨"): 목차 대신 줄기 계획 → 기억 채우기. 자료 전체 정리(rc-merge)는 하지 않는다(핵심 = 메인 기억).
     // 그래픽스 52쪽: 줄기 약 47초, 기억 채우기 약 39초 (전: 목차 50~68초 + 카드 57초 + 정리 80초 + 합치기 36초).
-    stem: true, consolidate: false };
+    stem: true, consolidate: false,
+    // 11/12 사용자 "테라로 하고 … 네 개 뜨는 것 고쳐": 줄기는 줄 형식(줄기 시간 거의 반, 50쪽 47 → 29초), 카드는 질문 하나 · 답 하나(칸 없음).
+    // 50쪽 실측 약 98초 → 74초. 학습 목표는 따로(줄기 안에 넣어 본 3가지는 느리거나 카드가 목표에 맞춰 늘어났다).
+    planLines: true, cardQA: true };
 }
 
 export const forkInputSchema = z.strictObject({

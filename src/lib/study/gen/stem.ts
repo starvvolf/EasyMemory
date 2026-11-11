@@ -65,6 +65,9 @@ export const STEM_MORE_LINES = `[빠진 쪽] 앞 계획에서 어느 기억에�
  * 모양·역할이 목록에 없으면 개념·메인. (11/11 줄기에 질문을 넣어 봤다가 카드가 그 질문에 묶여 에둘러 말해서 뺐다 — 뒤 칸이 있으면 질문으로만 읽어 둔다.)
  */
 export function parsePlan(text: string): StemPlan {
+  // 줄 대신 JSON으로 답했으면(가짜 모델 · 모델이 형식을 어겼을 때) 그것으로 읽는다
+  const json = text.trim();
+  if (json.startsWith("{")) { try { const got = stemPlanSchema.safeParse(JSON.parse(json)); if (got.success) return got.data; } catch { /* 줄로 읽기 */ } }
   const areas: Array<{ n: number; name: string; question: string }> = [];
   const memories: StemPlan["memories"] = [];
   const pagesOf = (x: string) => x.split(/[,\s]+/).flatMap((part) => { const r = /^p?\.?(\d+)\s*[-~–]\s*p?\.?(\d+)$/.exec(part); if (r) { const a = Number(r[1]), b = Number(r[2]); return b >= a && b - a < 400 ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : []; } const n = Number(part.replace(/^p\.?/, "")); return part && Number.isInteger(n) ? [n] : []; });

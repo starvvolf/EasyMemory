@@ -326,7 +326,6 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
         {self ? <>
           {/* 줄기 모드(11/10): 기억 하나가 곧 카드 한 장 — 모양(단계·기준…), 모양에 없는 식·조건, 근거, 그림을 바로 */}
           <Body s={self.shape} />
-          {mem.facts?.length ? <ul className="st-facts">{mem.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
           <CardDetails items={mem.details} />
           {self.quotes.length ? <div className="st-quotes small muted">{self.quotes.map((q, k) => <span key={k}>“{q}”</span>)}</div> : null}
           <FigureView genId={genId} c={self} onPage={onPage} />
@@ -506,7 +505,6 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
         <Body s={openCard.shape} />
         {memById.get(openCard.id) && cardById.get(openCard.id) ? <>
           {memById.get(openCard.id)!.line ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
-          {memById.get(openCard.id)!.facts?.length ? <ul className="st-facts">{memById.get(openCard.id)!.facts!.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
           <CardDetails items={memById.get(openCard.id)!.details} />
           <FigureView genId={genId} c={openCard} onPage={onPage} /></>
           : memById.get(openCard.id) ? <>{memById.get(openCard.id)!.steps.length ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
@@ -543,6 +541,21 @@ function LectureFig({ genId, label, says }: { genId: string; label: string; says
 function Answer({ text }: { text: string }) {
   return <div className="lc3-ca mm3-a mm3-ans"><span className="lc3-qtag a">A</span><RichBlock text={text} /></div>;
 }
+/** 예전 세 겹 카드의 나머지(풀이 · 모양 · 자세히)를 하나로 접어 둔다 (11/12 사용자 "네 개 뜨면 어디 집중할지 모르겠다"). 덧붙임은 화면에서 뺐다(사용자 "덧붙임 갖다 버려"). */
+// 모양이 단계 · 식 · 비교표 · 목록이면 답에 없는 내용이라 펼친 채로 두고(11/12 사용자: 원 그리기 카드의 단계는 제 몫을 한다), 정의 · 주장 · 사실처럼
+// 답을 다시 말하기 쉬운 모양만 접는다.
+const SHOWN_FORMS = new Set(["procedure", "formula", "compare", "list"]);
+function OldMore({ idea, shape, details }: { idea?: string; shape: Shape; details?: string[] }) {
+  const [open, setOpen] = useState(false);
+  const shown = SHOWN_FORMS.has(shape.form);
+  const rest = Boolean(idea || !shown || details?.length);
+  return <>{shown ? <Body s={shape} /> : null}{rest ? <div className="lc3-details">{open ? <>
+    {idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={idea} /></div> : null}
+    {shown ? null : <Body s={shape} />}
+    {details?.length ? <ul className="st-facts lc3-detaillist">{details.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+    <button className="lc3-detailsbtn" onClick={(e) => { e.stopPropagation(); setOpen(false); }}>접기</button></>
+    : <button className="lc3-detailsbtn" onClick={(e) => { e.stopPropagation(); setOpen(true); }}>자세히</button>}</div> : null}</>;
+}
 function CardDetails({ items }: { items?: string[] }) {
   const [open, setOpen] = useState(false);
   if (!items?.length) return null;
@@ -560,8 +573,7 @@ function LectureCard({ genId, c, onPage, startOpen = false }: { genId: string; c
         {c.memo?.line ? <span className="lc3-ca"><Rich text={c.memo.line} /></span> : null}</span>
       <span className="lc3-chev" aria-hidden>›</span>
     </button>
-    {open ? <div className="lc3-cardbody">{c.memo?.answer ? <Answer text={c.memo.answer} /> : <>{c.memo?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={c.memo.idea} /></div> : null}<Body s={c.shape} /></>}{c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
-      <CardDetails items={c.memo?.details} />
+    {open ? <div className="lc3-cardbody">{c.memo?.answer ? <><Answer text={c.memo.answer} /><CardDetails items={c.memo.details} /></> : c.memo?.line ? <OldMore idea={c.memo.idea} shape={c.shape} details={c.memo.details} /> : <Body s={c.shape} />}
       <FigureView genId={genId} c={c} onPage={onPage} />
       <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div></div> : null}</div>;
 }
@@ -790,11 +802,9 @@ function FlashCards({ genId, title, cards, onPage, onClose }: { genId: string; t
       <p className="fc-name"><Rich text={c.title} /></p>
       <p className="fc-q">{m?.question ? <Rich text={m.question} /> : <>이 기억을 떠올려 보세요</>}</p>
       {shown ? <div className="fc-back">
-        {m?.answer ? <Answer text={m.answer} /> : <>
-        {m?.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}
-        {m?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={m.idea} /></div> : null}
-        <Body s={c.shape} />
-        {m?.facts?.length ? <ul className="st-facts">{m.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}</>}
+        {m?.answer ? <Answer text={m.answer} /> : m?.line ? <>
+        <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p>
+        <OldMore idea={m.idea} shape={c.shape} details={m.details} /></> : <Body s={c.shape} />}
         <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
       </div> : null}
     </section>
@@ -1143,7 +1153,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                         <span className="mm3-star" aria-label={c.core ? "핵심" : undefined}>{map.topics?.length && c.core ? "★" : ""}</span>
                         <span className="mm3-name"><Rich text={c.title} /></span>
                         {/* 11/11 사용자 "공식만 박은 느낌": 기억 카드(줄기 모드)는 줄에 식 대신 답 한 줄을 */}
-                        <span className="mm3-key"><Rich text={c.memo?.line || keyLine(c.shape)} /></span>
+                        {/* 펼치면 아래 A에 같은 글이 나오니 줄의 한 줄은 숨긴다(11/12) */}
+                        <span className="mm3-key">{isOpen ? null : <Rich text={c.memo?.line || keyLine(c.shape)} />}</span>
                         {marked ? <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /> : <span />}
                       </button>
                       {isOpen ? <div className="mm3-detail">
@@ -1162,10 +1173,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                           {c.memo.question || c.memo.line ? <div className="mm3-qa">
                             {c.memo.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={c.memo.question} /></p> : null}
                             {c.memo.answer ? <Answer text={c.memo.answer} /> : c.memo.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={c.memo.line} /></p> : null}</div> : null}
-                          {!c.memo.answer && c.memo.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={c.memo.idea} /></div> : null}</div> : null}
-                        {c.memo?.answer ? null : <Body s={c.shape} />}
-                        {!c.memo?.answer && c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
-                        <CardDetails items={c.memo?.details} />
+                          </div> : null}
+                        {c.memo?.answer ? <CardDetails items={c.memo.details} /> : c.memo?.line ? <OldMore idea={c.memo.idea} shape={c.shape} details={c.memo.details} /> : <Body s={c.shape} />}
                         <FigureView genId={genId} c={c} onPage={onPage} all={everyCard} onCard={jump} />
                         {links.length ? <div className="mm3-rel"><span className="mm3-tag">이어지는 기억</span>
                           <div className="mm3-relchips">{links.map((x, i) =>
@@ -1204,17 +1213,14 @@ function ShelfCard({ genId, c, onPage, onHistory, all, onCard }: { genId: string
   return <>
     <button className={`shelf-row${open ? " on" : ""}${side ? " side" : ""}`} onClick={() => setOpen(!open)} aria-expanded={open}>
       <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /><b className="shelf-t"><Rich text={c.title} /></b>
-      <span className="shelf-l"><Rich text={m?.line || keyLine(c.shape)} /></span>
+      <span className="shelf-l">{open ? null : <Rich text={m?.line || keyLine(c.shape)} />}</span>
       {dueNow(c) ? <span className="shelf-due">복습 차례</span> : side ? <span className="shelf-side">{side}</span> : null}
     </button>
     {open ? <div className="shelf-card">
       {m?.question || m?.line ? <div className="mm3-qa">
         {m?.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={m.question} /></p> : null}
         {m?.answer ? <Answer text={m.answer} /> : m?.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}</div> : null}
-      {!m?.answer && m?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={m.idea} /></div> : null}
-      {m?.answer ? null : <Body s={c.shape} />}
-      {!m?.answer && m?.facts?.length ? <ul className="st-facts">{m.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
-      <CardDetails items={m?.details} />
+      {m?.answer ? <CardDetails items={m.details} /> : m?.line ? <OldMore idea={m.idea} shape={c.shape} details={m.details} /> : <Body s={c.shape} />}
       <FigureView genId={genId} c={c} onPage={onPage} all={all} onCard={onCard} />
       <div className="shelf-foot"><span className="small muted">{STATE[c.state][0]}{c.dueAt ? ` · 다음 복습 ${new Date(c.dueAt).getMonth() + 1}/${new Date(c.dueAt).getDate()}` : ""}</span><span className="cs-gap" />
         {c.pages.slice(0, 4).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}
