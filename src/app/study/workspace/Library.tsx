@@ -444,13 +444,13 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
       <ol className="rv-beats">{rv.story.map((b, i) => <li key={i} className={`rv-beat ${b.kind ?? ""}`}>
         <span className="rv-dot">{i + 1}</span>
         <div className="rv-beatbody">
-          <p className="rv-did">{b.did}</p>
-          {b.truth ? <p className="rv-truth">{b.truth}</p> : null}
-          {b.gap ? <p className="rv-gapline"><span>비어 있던 것</span>{b.gap}</p> : null}
+          <p className="rv-did"><Ic text={b.did} /></p>
+          {b.truth ? <p className="rv-truth"><Ic text={b.truth} /></p> : null}
+          {b.gap ? <p className="rv-gapline"><span>비어 있던 것</span><Ic text={b.gap} /></p> : null}
           {b.box && (b.box.title || b.box.points.length) ? <aside className="rv-box">
             <p className="rv-boxeye">짚고 가기</p>
             {b.box.title ? <p className="rv-boxtitle">{b.box.title}</p> : null}
-            {b.box.points.length ? <ul className="rv-points">{b.box.points.map((p, j) => <li key={j}>{p}</li>)}</ul> : null}
+            {b.box.points.length ? <ul className="rv-points">{b.box.points.map((p, j) => <li key={j}><Ic text={p} /></li>)}</ul> : null}
             {b.box.example ? <pre className="rv-example">{b.box.example}</pre> : null}
           </aside> : null}
         </div>
@@ -467,6 +467,10 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
       </details>)}</div> : null}
     {rv.next ? <div className="rv-next"><h4>다음에 떠올릴 것</h4><Lines text={rv.next} /></div> : null}
   </section>;
+}
+/** `코드`만 고정폭 글자로(나머지는 그대로). */
+function Ic({ text }: { text: string }) {
+  return <>{text.split(/(`[^`]+`)/).map((x, i) => (x.startsWith("`") && x.endsWith("`") && x.length > 2 ? <code key={i} className="rv-ic">{x.slice(1, -1)}</code> : <span key={i}>{x}</span>))}</>;
 }
 /** 문단을 문장마다 한 줄로(긴 덩어리 글을 읽기 쉽게). */
 function Lines({ text }: { text: string }) {

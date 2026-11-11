@@ -432,3 +432,4 @@
 .dejipgi .rv-points{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:5px}
 .dejipgi .rv-points li{font-size:14.5px;line-height:1.7;color:var(--ink)}
 .dejipgi .rv-example{margin:4px 0 0;padding:12px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--line);font-family:var(--mono, ui-monospace, monospace);font-size:13.5px;line-height:1.65;white-space:pre-wrap;overflow-x:auto;color:var(--ink)}
+.dejipgi .rv-ic{font-family:var(--mono, ui-monospace, monospace);font-size:.9em;padding:1px 5px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line)}
