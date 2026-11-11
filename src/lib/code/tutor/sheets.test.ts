@@ -48,7 +48,7 @@ test("총정리 확인: 상황·풀리는 법·풀어 낸 법이 없으면 버�
   assert.equal(checkReview({ situation: "s", solve: "", how: "x" }), null);
   const m = (t: string) => ({ thought: t, truth: "사실" });
   const r = checkReview({ situation: " 상자 속 토마토 ", solve: "한 번에 퍼뜨려요", missed: [m("a"), { thought: "b", truth: "" }, m("c"), m("d"), m("e"), m("f"), m("g"), m("h")], still: ["x", ""], how: "고쳤어요 ```py\nx\n```", next: "n" })!;
-  assert.equal(r.v, 3); assert.equal(r.situation, "상자 속 토마토");
+  assert.equal(r.v, 4); assert.equal(r.situation, "상자 속 토마토");
   assert.deepEqual(r.missed.map((x) => x.thought), ["a", "c", "d", "e", "f", "g"]); assert.deepEqual(r.still, ["x"]);
   assert.equal(r.how, "고쳤어요");
 });
