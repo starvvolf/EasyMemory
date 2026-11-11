@@ -257,7 +257,7 @@ function DrillCard({ a, elapsed, send, fb, busy, err, next, onLater }: CardProps
           {c.how ? <span>이렇게 풀어요: {c.how}</span> : null}
           {c.signals.length ? <span className="muted">이럴 때 떠올려요: {c.signals.join(" · ")}{c.ok ? ` · (${c.grade})` : ""}</span> : null}
         </div>
-      ) : fb ? <p className={`small ${fb.ok ? "pt-good" : "pt-bad"}`}><b>{fb.ok ? (fb.intended ? "맞았어요." : "되는 방법이에요. 다만 이 문제에 더 맞는 방법이 따로 있어요.") : "이 방법으로는 안 돼요."}</b> 이 문제에 쓰는 것: {(fb.patternNames as string[]).join(", ")} · 이럴 때 떠올려요: {(fb.signals as string[]).join(" · ")} <span className="muted">({String(fb.grade)})</span></p>
+      ) : fb ? <p className={`small ${fb.ok ? "pt-good" : "pt-bad"}`}><b>{fb.ok ? (fb.intended ? "맞았어요." : "되는 방법이에요. 다만 이 문제에 더 맞는 방법이 따로 있어요.") : "이 방법으로는 안 돼요."}</b> 이 문제에 쓰는 것: {(fb.patternNames as string[]).join(", ")} · 이럴 때 떠올려요: {(fb.signals as string[]).join(" · ")}{fb.ok ? <span className="muted"> ({String(fb.grade)})</span> : null}</p>
         : <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
           {/* 모르겠어요(11/11 시뮬레이션): 찍지 않아도 되게. 틀린 것으로 남고, 답과 까닭을 보여 줘요. */}
           {onLater ? <button className="btn ghost" disabled={Boolean(busy)} onClick={() => void onLater()}>나중에</button> : null}
@@ -290,7 +290,7 @@ function DesignCard({ a, elapsed, send, fb, busy, err, next }: CardProps) {
           <span>걸리는 시간: O({f.complexity}){f.theirs ? ` — ${f.theirs}` : ""}</span>
           {!f.cxOk && f.mine ? <span>고른 O({cx}): {f.mine}</span> : null}
           {f.pitfalls.length ? <span>흔한 실수: {f.pitfalls.join(" · ")}</span> : null}
-          <span className="muted">({f.grade})</span>
+          {f.ok ? <span className="muted">({f.grade})</span> : null}
         </div>
       ) : <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" disabled={!state || !cx || Boolean(busy)} onClick={() => void send({ kind: "design", mixed: a.mixed, state, complexity: cx, update, ms: elapsed?.() })}>{busy || "확인"}</button></div>}
       {f ? next : null}
