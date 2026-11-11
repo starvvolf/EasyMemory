@@ -36,7 +36,9 @@ const isTex = (inner: string) => /[\\_^{}=|]/.test(inner) || /^[A-Za-z]$/.test(i
   // 그리스 문자·수학 기호가 든 짧은 식(11/12 질문·답 카드 "$Δx$", "$0 ≤ m ≤ 1$", "$2Δy − 2Δx$"가 그대로 보임). 한글이 든 것은 글로 둔다.
   || (/[Α-Ωα-ω≤≥−×·→←∑√∞≠±∈∉⊂∩∪∠°]/.test(inner) && !/[가-힣]/.test(inner) && inner.length <= 80)
   // 쉼표로 늘어놓은 기호(11/12 "$A,B,C$"가 그대로 보임): 한두 글자 이름·숫자만 쉼표로 이은 것. 돈 표기("$5 and $")는 낱말이 있어 걸리지 않는다
-  || /^\s*[A-Za-z0-9]{1,2}(?:'|_\w+)?(?:\s*,\s*[A-Za-z0-9]{1,2}(?:'|_\w+)?)+\s*$/.test(inner);
+  || /^\s*[A-Za-z0-9]{1,2}(?:'|_\w+)?(?:\s*,\s*[A-Za-z0-9]{1,2}(?:'|_\w+)?)+\s*$/.test(inner)
+  // 괄호로 묶은 좌표·순서쌍(11/12 "$(0, 0)$")
+  || /^\s*\(\s*[A-Za-z0-9.]{1,6}(?:\s*,\s*[A-Za-z0-9.]{1,6})+\s*\)\s*$/.test(inner);
 /*
  * Formulas written with plain signs (n = N/|N|, u = (V × n)/|V × n|, P_0=(x_0,y_0,z_0)): a run of one- or two-letter
  * names, digits and signs that holds = or × becomes one $…$, cut where its brackets close.
