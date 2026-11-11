@@ -46,10 +46,10 @@ test("학습자 기억: 태그 한 줄씩, 고른 패턴만, 틀린 종류·최�
 test("총정리 확인: 상황·풀리는 법이 없으면 버리고, 부족한 점은 흐린 말을 빼고 넷까지, 장면은 생각·맞는 생각 둘 다 있어야 셋까지, '사실은'은 뗀다", async () => {
   const { checkReview } = await import("./sheets.ts");
   assert.equal(checkReview({ situation: "s", solve: "" }), null);
-  const p = (t: string) => ({ thought: t, truth: "사실은 이래요" });
+  const p = (t: string) => ({ when: "예제를 돌렸을 때", thought: t, truth: "사실은 이래요" });
   const r = checkReview({ situation: " 상자 속 토마토 ", solve: "한 번에 퍼뜨려요 ```py\nx\n```",
     weak: [{ gap: "BFS를 떠올리지 못해요", pairs: [p("a"), { thought: "b", truth: "" }, p("c"), p("d"), p("e")] }, { gap: "혼자 했는지 확인되지 않았어요", pairs: [] }, { gap: "x", pairs: [] }, { gap: "y" }, { gap: "z" }, { gap: "q" }], next: "n" })!;
-  assert.equal(r.v, 6); assert.equal(r.situation, "상자 속 토마토"); assert.equal(r.solve, "한 번에 퍼뜨려요");
+  assert.equal(r.v, 7); assert.equal(r.situation, "상자 속 토마토"); assert.equal(r.solve, "한 번에 퍼뜨려요");
   assert.deepEqual(r.weak.map((x) => x.gap), ["BFS를 떠올리지 못해요", "x", "y", "z"]);
   assert.deepEqual(r.weak[0].pairs.map((x) => x.thought), ["a", "c", "d"]); assert.equal(r.weak[0].pairs[0].truth, "이래요");
 });
