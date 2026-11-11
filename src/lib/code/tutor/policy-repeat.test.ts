@@ -29,3 +29,15 @@ test("방금 비교한 문제를 또 비교하지 않는다(11/11 시험)", () =
   const after = [...base, ev({ kind: "contrast", number: "1926", ability: undefined, ok: true, at: "2026-11-11T11:55:00.000Z" })];
   assert.ok(!nextActions(computeState(after), models, now).some((x) => x.kind === "contrast"), "방금 비교했으면 또 비교하지 않는다");
 });
+
+test("비교는 연속 틀림 한 번에 한 번만: 다른 비교 문제가 있어도 다시 알아채기로", () => {
+  const c = (n: string, o: string) => ({ ...m(n, "basic"), contrast: { number: o, differs: "d" } }) as unknown as ProblemModel;
+  const models = { "1926": c("1926", "2667"), "2667": c("2667", "1926"), "1012": m("1012", "basic"), "4963": m("4963", "basic") };
+  const now = new Date("2026-11-11T12:00:00.000Z");
+  const ev = (o: Partial<TutorEvent>): TutorEvent => ({ id: Math.random().toString(), at: "2026-11-11T11:50:00.000Z", kind: "drill", number: "1012", patterns: ["components"], ability: "recognize", ok: false, grade: 0, ...o });
+  const events = [ev({ kind: "walkthrough", ability: undefined, ok: undefined, at: "2026-11-11T11:00:00.000Z" }), ev({}), ev({ number: "4963", at: "2026-11-11T11:51:00.000Z" }),
+    ev({ kind: "contrast", number: "1926", ability: undefined, ok: true, at: "2026-11-11T11:55:00.000Z" })];
+  const acts = nextActions(computeState(events), models, now);
+  assert.ok(!acts.some((x) => x.kind === "contrast"), "2667도 비교 문제지만 또 비교하지 않는다");
+  assert.ok(acts.some((x) => x.kind === "drill"), "알아채기 문제로");
+});

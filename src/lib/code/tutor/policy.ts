@@ -66,6 +66,13 @@ export function redoList(state: LearnerState, now = new Date()) {
   return [...last].filter(([, v]) => !v.alone).map(([number, v]) => ({ number, pattern: v.pattern, since: v.at, due: now.getTime() - Date.parse(v.at) >= REDO_AFTER_MS })).sort((a, b) => a.since.localeCompare(b.since));
 }
 
+/** 마지막으로 알아채기를 틀린 뒤 이미 비교를 한 번 했나(11/11 시험: 비교를 맞혀도 알아채기 연속 틀림은 그대로라 비교만 끝없이 이어졌다).
+ *  비교는 연속 틀림 한 번에 한 번만. 그다음은 다시 알아채기 문제로. */
+function comparedSinceMiss(state: LearnerState, pattern: string) {
+  const mine = state.events.filter((e) => e.patterns.includes(pattern));
+  const lastMiss = mine.filter((e) => e.ability === "recognize" && e.ok === false).at(-1)?.at ?? "";
+  return mine.some((e) => e.kind === "contrast" && e.at >= lastMiss);
+}
 export function nextActions(state: LearnerState, modelMap: Record<string, ProblemModel>, now = new Date(), limit = 5, profile?: Profile): Action[] {
   const models = Object.values(modelMap);
   if (!models.length) return [];
@@ -127,7 +134,7 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
     } else if (stuck) {
       const m = pick(models, state, current.id, "walkthrough", "lecture", used, now.getTime());
       if (m) push(make({ kind: "walkthrough", number: m.number, pattern: current.id, mixed: false, why: `${current.name}: 3번 연달아 틀려서 다른 문제로 풀이 과정을 다시 봐요` }));
-    } else if (r.failStreak >= 2) {
+    } else if (r.failStreak >= 2 && !comparedSinceMiss(state, current.id)) {
       // 방금(30분 안) 비교한 문제는 다시 내지 않는다(11/11 시험: 비교를 맞혀도 알아채기 연속 틀림이 그대로라 같은 비교가 되풀이됐다).
       const comparedJustNow = (n: string) => state.events.some((e) => e.kind === "contrast" && e.number === n && now.getTime() - Date.parse(e.at) < 30 * 60_000);
       const m = models.find((mm) => mm.patterns.includes(current.id) && mm.contrast && !used.has(mm.number) && !comparedJustNow(mm.number));
