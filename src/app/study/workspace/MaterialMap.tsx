@@ -556,7 +556,7 @@ function LectureCard({ genId, c, onPage, startOpen = false }: { genId: string; c
         {c.memo?.line ? <span className="lc3-ca"><Rich text={c.memo.line} /></span> : null}</span>
       <span className="lc3-chev" aria-hidden>›</span>
     </button>
-    {open ? <div className="lc3-cardbody">{c.memo?.idea ? <p className="lc3-idea"><Rich text={c.memo.idea} /></p> : null}<Body s={c.shape} />{c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+    {open ? <div className="lc3-cardbody">{c.memo?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={c.memo.idea} /></div> : null}<Body s={c.shape} />{c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
       <CardDetails items={c.memo?.details} />
       <FigureView genId={genId} c={c} onPage={onPage} />
       <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div></div> : null}</div>;
@@ -786,8 +786,8 @@ function FlashCards({ genId, title, cards, onPage, onClose }: { genId: string; t
       <p className="fc-name"><Rich text={c.title} /></p>
       <p className="fc-q">{m?.question ? <Rich text={m.question} /> : <>이 기억을 떠올려 보세요</>}</p>
       {shown ? <div className="fc-back">
-        {m?.line ? <p className="lc3-ca"><Rich text={m.line} /></p> : null}
-        {m?.idea ? <p className="lc3-idea"><Rich text={m.idea} /></p> : null}
+        {m?.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}
+        {m?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={m.idea} /></div> : null}
         <Body s={c.shape} />
         {m?.facts?.length ? <ul className="st-facts">{m.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
         <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
@@ -1152,10 +1152,12 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                           {c.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)} title="이 쪽 원문으로">원문 p.{p}</button>)}
                         </div>
                         {/* 11/11 사용자 "눌렀을 때 제목이 안 뜨고 …으로 잘림, 카드만 봐서는 이해가 안 됨": 펼치면 제목 전체 → 질문 → 답 한 줄 → 핵심(모양·덧붙임) → 자세히 */}
+                        {/* 11/11 사용자 "질문과 답이 세트로 안 보임": 질문·답을 한 상자에(Q·A), 풀이는 상자 밖에 이름을 달아 따로 */}
                         {c.memo ? <div className="mm3-front"><p className="mm3-ftitle"><Rich text={c.title} /></p>
-                          {c.memo.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={c.memo.question} /></p> : null}
-                          {c.memo.line ? <p className="lc3-ca"><Rich text={c.memo.line} /></p> : null}
-                          {c.memo.idea ? <p className="lc3-idea"><Rich text={c.memo.idea} /></p> : null}</div> : null}
+                          {c.memo.question || c.memo.line ? <div className="mm3-qa">
+                            {c.memo.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={c.memo.question} /></p> : null}
+                            {c.memo.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={c.memo.line} /></p> : null}</div> : null}
+                          {c.memo.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={c.memo.idea} /></div> : null}</div> : null}
                         <Body s={c.shape} />
                         {c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
                         <CardDetails items={c.memo?.details} />
