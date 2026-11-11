@@ -312,7 +312,7 @@ type JEntry = { at: string; number: string; title: string; what: string; result:
 const STUCK: Record<string, string> = { understand: "문제 이해", recognize: "방법 떠올리기", design: "계획 세우기", execute: "코드로 옮기기" };
 const REDO: Record<string, string> = { none: "", waiting: "혼자 다시 풀기 · 기다리는 중", due: "혼자 다시 풀 차례", done: "혼자 다시 풀었어요" };
 const JRES: Record<string, string> = { alone: "ok", helped: "", learned: "bad", seen: "", other: "" };
-type PubProblem = { title: string; statement: string; inputText: string; outputText: string; examples: Array<{ input: string; output: string }>; timeLimitMs?: number; memoryLimitMb?: number };
+type PubProblem = { id?: string; title: string; statement: string; inputText: string; outputText: string; examples: Array<{ input: string; output: string }>; timeLimitMs?: number; memoryLimitMb?: number };
 type SubLite = { id: string; at: string; lang: string; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; lines: number };
 const VERDICT: Record<string, string> = { AC: "맞았습니다", WA: "틀렸습니다", TLE: "시간 초과", MLE: "메모리 초과", RE: "런타임 에러", CE: "컴파일 에러", MISSING: "실행기 없음" };
 /** 문제 원문: 접어 두고 펼치면 본문 · 입력 · 출력 · 예제 */
@@ -336,12 +336,13 @@ type Talk = { id: string; at: string; problemId: string; number?: string; kind: 
 /** AI와 주고받은 한 번(11/12 사용자 "채팅창이 통으로 나오면 안 돼… 사용자가 뭐를 몰라서 AI가 뭐를 제공했다 이런 식으로"):
  *  푼 과정의 다른 줄과 같은 모양으로 두 줄 요약(몰랐던 것 · 알려 준 것). 대화 원문은 접어 둔다. */
 function TalkScene({ t }: { t: Talk }) {
-  const kindLabel = t.kind === "힌트" && /단계/.test(t.q) ? t.q.split(/\s*[·:]\s*/)[0] : t.kind === "질문" ? "AI에게 물음" : t.kind;
+  const kindLabel = t.kind === "힌트" && /단계/.test(t.q) ? t.q.split(/\s*[·:]\s*/)[0] : t.kind === "질문" ? "AI에게 물음" : t.kind === "도움 칸" ? t.q.replace(/^도움 (\d)칸: /, "힌트 $1 · ") : t.kind;
   const first = (x: string) => (x.replace(/\s+/g, " ").split(/(?<=[.!?요])\s/)[0] ?? x).slice(0, 120);
   const need = t.note?.need ?? first(t.q), gave = t.note?.gave ?? first(t.a);
   return <div className="rp-step talk">
     <span className="rp-t">{hm(t.at)}</span><b>{kindLabel}</b>{t.verdict ? <span className="small muted">그때 {VERDICT[t.verdict] ?? t.verdict}</span> : null}
-    <p className="small"><span className="lib-k bad">몰랐던 것</span>{need}<br /><span className="lib-k ok">알려 준 것</span>{gave}</p>
+    {t.kind === "도움 칸" ? <p className="small"><span className="lib-k">본 것</span>{gave}</p>
+      : <p className="small"><span className="lib-k bad">몰랐던 것</span>{need}<br /><span className="lib-k ok">알려 준 것</span>{gave}</p>}
     <details className="rp-code"><summary className="small muted">대화 원문 보기</summary>
       <div className="rp-talk">
         {t.q ? <div className="rp-row me"><div className="rp-b me"><Para text={t.q} /></div></div> : null}
@@ -360,7 +361,11 @@ function SolveView({ log }: { log: SolveLog }) {
   useEffect(() => later(() => { call<{ entries: JEntry[] }>("/api/code/tutor/journal").then((r) => setJs(r.entries.filter((x) => x.number === log.number).sort((a, b) => a.at.localeCompare(b.at)))).catch(() => setJs([])); }), [log.number]);
   // 대화 장부(11/11 사용자 "AI한테 물어본 것도 푼 과정에"): 이 문제에서 AI와 주고받은 원문
   useEffect(() => later(() => { setTalk(null); call<{ items: Talk[] }>(`/api/code/tutor/talk?${/^\d+$/.test(log.number) ? `number=${log.number}` : `problem=${encodeURIComponent(pid || log.number)}`}`).then((r) => setTalk(r.items)).catch(() => setTalk([])); }), [log.number, pid]);
-  useEffect(() => later(() => { setProb(null); if (!pid) { setProb(false); return; } call<{ problem: PubProblem; submissions: SubLite[] }>(`/api/code/problem/${pid}`).then(setProb).catch(() => setProb(false)); }), [pid]);
+  // 유저가 넣은 백준 문제는 cp_boj_N이 아니다(11/12 B): 그때는 대화 장부에 적힌 문제 id로 원문·제출을 찾는다.
+  const talkPid = talk?.find((t) => t.problemId)?.problemId ?? "";
+  useEffect(() => later(() => { setProb(null); if (!pid && !talkPid) { setProb(false); return; }
+    const get = (id: string) => call<{ problem: PubProblem; submissions: SubLite[] }>(`/api/code/problem/${id}`);
+    (pid ? get(pid).catch(() => (talkPid && talkPid !== pid ? get(talkPid) : Promise.reject(new Error("없음")))) : get(talkPid)).then(setProb).catch(() => setProb(false)); }), [pid, talkPid]);
   const verdict = log.alone ? ["처음부터 혼자 풂", "ok"] : log.solved ? ["도움 받고 풂", ""] : ["아직 못 풂", "bad"];
   return <>
     <Head icon="⌨" title={`${log.number}${log.title ? ` · ${log.title}` : ""}`} sub={[day(log.at), log.patterns.join(", ")].filter(Boolean).join(" · ")}><button className="btn ghost small" onClick={() => go("code", { id: log.number })}>문제 다시 열기</button></Head>
@@ -381,7 +386,7 @@ function SolveView({ log }: { log: SolveLog }) {
         return <div className="rp-flow">{flow.map((f, i) => "j" in f ? <div key={i} className={`rp-step ${JRES[f.j.result] ?? ""}`}><span className="rp-t">{hm(f.j.at)}</span><b>{f.j.what}</b><span>{f.j.text}</span>
             {f.j.lesson?.gap ? <p className="small"><span className="lib-k bad">그때 생각</span>{f.j.lesson.gap}{f.j.lesson.fix ? <><br /><span className="lib-k ok">고친 생각</span>{f.j.lesson.fix}</> : null}</p> : null}</div>
           : "t" in f ? <TalkScene key={i} t={f.t} />
-          : <ul key={i} className="rp-subs">{<SubRow pid={pid} s={f.x} />}</ul>)}</div>;
+          : <ul key={i} className="rp-subs">{<SubRow pid={prob ? prob.problem.id ?? pid : pid} s={f.x} />}</ul>)}</div>;
       })()}
     </section>
   </>;
