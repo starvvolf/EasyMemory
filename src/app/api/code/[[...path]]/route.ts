@@ -168,7 +168,7 @@ async function inner(request: Request, context: RouteContext) {
       if (p[2] === "draft" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await saveDraft(id, b.lang, b.code)); }
       if (p[2] === "submission" && p[3] && m === "GET") { const s = (await readSubmissions(id)).find((x) => x.id === p[3]); return s ? json({ submission: s }) : NextResponse.json({ message: "제출을 찾을 수 없어요." }, { status: 404 }); }
       if (p[2] === "submit" && m === "POST") {
-        const b = await body(z.object({ lang, code, mode: z.enum(["example", "submit"]), hints: z.number().int().min(0).max(10).optional(), advice: z.number().int().min(0).max(20).optional() }));
+        const b = await body(z.object({ lang, code, mode: z.enum(["example", "submit"]), hints: z.number().int().min(0).transform((n) => Math.min(n, 999)).optional(), advice: z.number().int().min(0).transform((n) => Math.min(n, 999)).optional() }));
         const result = await submitAndRecord(id, b.lang, b.code, b.mode, b.hints ?? 0, b.advice ?? 0);
         // 튜터에서 "직접 짜기"로 연 문제면 맞히는 순간 튜터 기록에 남긴다(11/10, 전에는 튜터 탭으로 돌아와야 남았다).
         // 튜터를 거치지 않고 바로 푼 문제도 재료가 있으면 풀이로 남는다(11/11).
