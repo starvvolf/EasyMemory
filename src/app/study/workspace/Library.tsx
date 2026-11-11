@@ -290,11 +290,27 @@ function SubRow({ pid, s }: { pid: string; s: SubLite }) {
     <span className={`lib-res ${ok ? "ok" : "bad"}`}>{VERDICT[s.verdict] ?? s.verdict}</span><span className="small muted">{s.passed}/{s.total} · {s.lang} · {s.lines}줄{s.hints ? ` · 힌트 ${s.hints}` : ""}</span><span className="small muted">{open ? "▴" : "▾"}</span></button>
     {open ? <pre className="lib-diff">{code ?? "불러오는 중…"}</pre> : null}</li>;
 }
+/** 대화 장부 한 줄(B, /api/code/tutor/talk — 원문 그대로) */
+type Talk = { id: string; at: string; problemId: string; number?: string; kind: string; q: string; a: string; selection?: string; code?: string; verdict?: string };
+/** AI와 주고받은 한 번: 이름표(무엇을 했나) · 내 말(오른쪽) · AI 답(왼쪽, 길면 접기) · 그때 코드(접어 둠) · 그때 채점 */
+function TalkScene({ t }: { t: Talk }) {
+  const kindLabel = t.kind === "힌트" && /단계/.test(t.q) ? t.q.split(/\s*[·:]\s*/)[0] : t.kind;
+  return <div className="rp-talk">
+    <p className="rp-tk"><span className="lib-tag">{kindLabel}</span><span className="rp-t">{hm(t.at)}</span>{t.verdict ? <span className="small muted">그때: {VERDICT[t.verdict] ?? t.verdict}</span> : null}</p>
+    {t.q ? <div className="rp-row me"><div className="rp-b me"><Para text={t.q} /></div></div> : null}
+    {t.selection ? <details className="rp-code"><summary className="small muted">드래그한 코드</summary><pre className="lib-diff">{t.selection}</pre></details> : null}
+    <div className="rp-row"><span className="rp-who" aria-hidden>🧑‍🏫</span><div className="rp-b tutor"><Para text={t.a} /></div></div>
+    {t.code ? <details className="rp-code"><summary className="small muted">그때 코드</summary><pre className="lib-diff">{t.code}</pre></details> : null}
+  </div>;
+}
 function SolveView({ log }: { log: SolveLog }) {
   const [js, setJs] = useState<JEntry[] | null>(null);
+  const [talk, setTalk] = useState<Talk[] | null>(null);
   const [prob, setProb] = useState<{ problem: PubProblem; submissions: SubLite[] } | null | false>(null);
   const pid = /^\d+$/.test(log.number) ? `cp_boj_${log.number}` : "";
   useEffect(() => later(() => { call<{ entries: JEntry[] }>("/api/code/tutor/journal").then((r) => setJs(r.entries.filter((x) => x.number === log.number).sort((a, b) => a.at.localeCompare(b.at)))).catch(() => setJs([])); }), [log.number]);
+  // 대화 장부(11/11 사용자 "AI한테 물어본 것도 푼 과정에"): 이 문제에서 AI와 주고받은 원문
+  useEffect(() => later(() => { setTalk(null); call<{ items: Talk[] }>(`/api/code/tutor/talk?${/^\d+$/.test(log.number) ? `number=${log.number}` : `problem=${encodeURIComponent(pid || log.number)}`}`).then((r) => setTalk(r.items)).catch(() => setTalk([])); }), [log.number, pid]);
   useEffect(() => later(() => { setProb(null); if (!pid) { setProb(false); return; } call<{ problem: PubProblem; submissions: SubLite[] }>(`/api/code/problem/${pid}`).then(setProb).catch(() => setProb(false)); }), [pid]);
   const verdict = log.alone ? ["처음부터 혼자 풂", "ok"] : log.solved ? ["도움 받고 풂", ""] : ["아직 못 풂", "bad"];
   return <>
@@ -307,12 +323,18 @@ function SolveView({ log }: { log: SolveLog }) {
       {log.fix ? <p><span className="lib-k ok">이렇게 풀려요</span>{log.fix}</p> : null}
       {log.cue ? <p className="small muted"><span className="lib-k">다음에 알아챌 신호</span>{log.cue}</p> : null}</section> : null}
     {prob ? <Statement p={prob.problem} /> : null}
+    {/* 푼 과정 한 줄기(11/11): 한 일(관찰일지) · AI와 주고받은 것(대화 장부) · 낸 코드(제출)를 시간순으로 섞는다 */}
     <section className="lib-sec"><h3>푼 과정</h3>
-      {!js ? <p className="small muted">불러오는 중…</p> : !js.length ? <p className="small muted">한 일 기록이 없어요.</p> :
-        <ol className="rp-steps">{js.map((j, i) => <li key={i} className={JRES[j.result] ?? ""}><span className="rp-t">{hm(j.at)}</span><b>{j.what}</b><span>{j.text}</span>
-          {j.lesson?.gap ? <p className="small"><span className="lib-k bad">그때 생각</span>{j.lesson.gap}{j.lesson.fix ? <><br /><span className="lib-k ok">고친 생각</span>{j.lesson.fix}</> : null}</p> : null}</li>)}</ol>}
+      {!js || !talk || prob === null ? <p className="small muted">불러오는 중…</p> : (() => {
+        const subs = prob ? prob.submissions : [];
+        const flow = [...js.map((j) => ({ at: j.at, j })), ...talk.map((t) => ({ at: t.at, t })), ...subs.map((x) => ({ at: x.at, x }))].sort((a, b) => a.at.localeCompare(b.at));
+        if (!flow.length) return <p className="small muted">한 일 기록이 없어요.</p>;
+        return <div className="rp-flow">{flow.map((f, i) => "j" in f ? <div key={i} className={`rp-step ${JRES[f.j.result] ?? ""}`}><span className="rp-t">{hm(f.j.at)}</span><b>{f.j.what}</b><span>{f.j.text}</span>
+            {f.j.lesson?.gap ? <p className="small"><span className="lib-k bad">그때 생각</span>{f.j.lesson.gap}{f.j.lesson.fix ? <><br /><span className="lib-k ok">고친 생각</span>{f.j.lesson.fix}</> : null}</p> : null}</div>
+          : "t" in f ? <TalkScene key={i} t={f.t} />
+          : <ul key={i} className="rp-subs">{<SubRow pid={pid} s={f.x} />}</ul>)}</div>;
+      })()}
     </section>
-    {prob && prob.submissions.length ? <section className="lib-sec"><h3>낸 코드 {prob.submissions.length}</h3><ul className="rp-subs">{[...prob.submissions].reverse().map((x) => <SubRow key={x.id} pid={pid} s={x} />)}</ul></section> : null}
   </>;
 }
 

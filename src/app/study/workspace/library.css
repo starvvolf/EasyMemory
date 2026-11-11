@@ -192,3 +192,13 @@
 .dejipgi .shelf-card{margin:2px 6px 10px 22px;display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.7}
 .dejipgi .shelf-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 @media (max-width:760px){.dejipgi .shelf-row{grid-template-columns:auto 1fr auto}.dejipgi .shelf-l{grid-column:2/4;white-space:normal}}
+/* 푼 과정 한 줄기 (11/11): 한 일 · AI와 주고받은 것 · 낸 코드를 시간순 한 줄에 */
+.dejipgi .rp-flow{display:flex;flex-direction:column;gap:10px;padding:0 0 0 14px;border-left:2px solid var(--line)}
+.dejipgi .rp-step{position:relative;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:13.5px}
+.dejipgi .rp-step::before{content:"";position:absolute;left:-20px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--line-strong)}
+.dejipgi .rp-step.ok::before{background:var(--good)} .dejipgi .rp-step.bad::before{background:var(--bad)}
+.dejipgi .rp-step p{flex-basis:100%;margin:2px 0 0}
+.dejipgi .rp-talk{display:flex;flex-direction:column;gap:6px}
+.dejipgi .rp-tk{display:flex;align-items:baseline;gap:8px;margin:0}
+.dejipgi .rp-code summary{cursor:pointer}
+.dejipgi .rp-flow>.rp-subs{margin:0;padding:0;list-style:none}
