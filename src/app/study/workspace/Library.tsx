@@ -426,20 +426,32 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
   if (state === "loading" || !rv) return <section className="rp-wrong rp-review"><p className="eyebrow">총정리</p><p className="small muted">이 풀이를 정리하는 중이에요…</p></section>;
   const live = state === "live";
   const END = { solved: "맞힘", gaveup: "그만둠", paused: "하다가 나감" } as const;
-  return <section className="rp-wrong rp-review"><p className="eyebrow">총정리{live ? <span className="lc2-caret" /> : null}</p>
-    {facts ? <p className="rp-facts">{[END[facts.end], facts.hints ? `힌트 ${facts.hints}칸${facts.skeleton ? "·뼈대" : ""}` : "힌트 안 봄", `AI에게 ${facts.asked}번 물음`, `제출 ${facts.submits}번${facts.wrong ? `(틀림 ${facts.wrong})` : ""}`, `${facts.minutes}분`].map((x) => <span key={x}>{x}</span>)}</p> : null}
-    {rv.situation ? <div className="rp-card"><b className="rp-h">문제 상황</b><p>{rv.situation}</p></div> : null}
-    {rv.solve ? <div className="rp-card ok"><b className="rp-h">이렇게 해야 풀려요</b><p>{rv.solve}</p></div> : null}
-    {rv.weak?.length ? <div className="rp-gaps"><b className="rp-h bad">부족한 점</b>
-      {rv.weak.map((w, i) => <article key={i} className={`rp-gapcard ${w.kind ?? ""}`}>
-        <p className="rp-gap"><span className={`rp-kind ${w.kind ?? ""}`}>{GAP_KIND[w.kind ?? ""] ?? "빈틈"}</span>{w.gap}</p>
-        {w.seen ? <div className="rp-row2"><span className="rp-tag">어디서 드러났나</span><p>{w.seen}</p></div> : null}
-        {w.why ? <div className="rp-row2"><span className="rp-tag">알아야 하는 것</span><p>{w.why}</p></div> : null}
-        {w.fill ? <div className="rp-row2 fill"><span className="rp-tag">이렇게 채워요</span><p>{w.fill}</p></div> : null}
-        {(w.pairs ?? []).map((p, j) => <div key={j} className="rp-row2"><span className="rp-tag">장면</span><p>{[p.when, p.thought, p.truth].filter(Boolean).join(" → ")}</p></div>)}
-      </article>)}</div> : null}
-    {rv.next ? <div className="rp-card"><b className="rp-h">다음에 떠올릴 것</b><p>{rv.next}</p></div> : null}
+  // 읽기 좋게(11/12 사용자 "가독성이 구려… 읽기 좋게 정리가 안 된 느낌"): 글 폭을 줄이고, 문단은 문장마다 한 줄로,
+  // 빈틈은 먼저 한 줄 목록으로 보여 주고 누르면 펼침(맨 위 하나만 펼쳐 둠), "이렇게 채워요"는 눈에 띄는 상자.
+  return <section className="rp-review2">
+    <header className="rv-head"><b>총정리</b>{live ? <span className="lc2-caret" /> : null}
+      {facts ? <span className="rv-facts">{[END[facts.end], facts.hints ? `힌트 ${facts.hints}칸${facts.skeleton ? "·뼈대" : ""}` : "힌트 안 봄", `AI에게 ${facts.asked}번 물음`, `제출 ${facts.submits}번${facts.wrong ? `(틀림 ${facts.wrong})` : ""}`, `${facts.minutes}분`].join(" · ")}</span> : null}</header>
+    <div className="rv-two">
+      {rv.situation ? <div className="rv-block"><h4>문제 상황</h4><Lines text={rv.situation} /></div> : null}
+      {rv.solve ? <div className="rv-block"><h4>이렇게 해야 풀려요</h4><Lines text={rv.solve} /></div> : null}
+    </div>
+    {rv.weak?.length ? <div className="rv-gaps"><h4>비어 있던 것 {rv.weak.length}가지</h4>
+      {rv.weak.map((w, i) => <details key={i} className={`rv-gap ${w.kind ?? ""}`} open={i === 0}>
+        <summary><span className="rv-n">{i + 1}</span><span className="rv-gaptext">{w.gap}</span><span className={`rv-kind ${w.kind ?? ""}`}>{GAP_KIND[w.kind ?? ""] ?? "빈틈"}</span></summary>
+        <div className="rv-body">
+          {w.seen ? <div className="rv-part"><h5>어디서 드러났나</h5><Lines text={w.seen} /></div> : null}
+          {w.why ? <div className="rv-part"><h5>알아야 하는 것</h5><Lines text={w.why} /></div> : null}
+          {(w.pairs ?? []).map((p, j) => <div key={j} className="rv-part"><h5>장면</h5><Lines text={[p.when, p.thought, p.truth].filter(Boolean).join(" ")} /></div>)}
+          {w.fill ? <div className="rv-fill"><h5>이렇게 채워요</h5><Lines text={w.fill} /></div> : null}
+        </div>
+      </details>)}</div> : null}
+    {rv.next ? <div className="rv-next"><h4>다음에 떠올릴 것</h4><Lines text={rv.next} /></div> : null}
   </section>;
+}
+/** 문단을 문장마다 한 줄로(긴 덩어리 글을 읽기 쉽게). */
+function Lines({ text }: { text: string }) {
+  const parts = text.split(/(?<=[.!?]|요\.)\s+(?=\S)/).map((x) => x.trim()).filter(Boolean);
+  return parts.length > 1 ? <ul className="rv-lines">{parts.map((x, i) => <li key={i}>{x}</li>)}</ul> : <p className="rv-p">{text}</p>;
 }
 function SolveView({ log }: { log: SolveLog }) {
   const [js, setJs] = useState<JEntry[] | null>(null);

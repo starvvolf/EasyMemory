@@ -383,3 +383,32 @@
 .dejipgi .rp-row2 .rp-tag{font-size:12px;font-weight:700;color:var(--muted)}
 .dejipgi .rp-row2.fill .rp-tag{color:var(--good)}
 @media (max-width:700px){ .dejipgi .rp-row2{grid-template-columns:minmax(0,1fr);gap:2px} }
+/* 총정리 다시(11/12 B, 사용자 "가독성이 구려… 읽기 좋게 정리가 안 됨"): 글 폭 72자 안팎, 글자 15px·줄 간격 1.75,
+   제목은 작은 머리말, 문장마다 한 줄, 빈틈은 접는 목록, "이렇게 채워요"만 색 상자 */
+.dejipgi .rp-review2{display:flex;flex-direction:column;gap:22px;padding:22px 26px;border-radius:16px;border:1px solid var(--line);background:var(--surface)}
+.dejipgi .rp-review2 > *{max-width:860px}
+.dejipgi .rv-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.dejipgi .rv-head b{font-size:17px}
+.dejipgi .rv-facts{font-size:12.5px;color:var(--muted)}
+.dejipgi .rp-review2 h4{margin:0 0 6px;font-size:12.5px;font-weight:700;letter-spacing:.02em;color:var(--muted)}
+.dejipgi .rp-review2 h5{margin:0 0 4px;font-size:12px;font-weight:700;color:var(--muted)}
+.dejipgi .rv-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;max-width:none}
+@media (max-width:900px){ .dejipgi .rv-two{grid-template-columns:minmax(0,1fr)} }
+.dejipgi .rv-p{margin:0;font-size:15px;line-height:1.75;color:var(--ink)}
+.dejipgi .rv-lines{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.dejipgi .rv-lines li{font-size:15px;line-height:1.7;color:var(--ink)}
+.dejipgi .rv-lines li::marker{color:var(--faint)}
+.dejipgi .rv-gaps{display:flex;flex-direction:column;gap:8px}
+.dejipgi .rv-gap{border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.dejipgi .rv-gap[open]{border-color:var(--line-strong)}
+.dejipgi .rv-gap summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;padding:12px 16px}
+.dejipgi .rv-gap summary::-webkit-details-marker{display:none}
+.dejipgi .rv-n{flex:none;display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line-strong);font-size:12px;font-weight:700;transform:translateY(-1px)}
+.dejipgi .rv-gap.core .rv-n{background:var(--bad);border-color:var(--bad);color:var(--surface)}
+.dejipgi .rv-gaptext{flex:1;min-width:0;font-size:15.5px;font-weight:700;line-height:1.55}
+.dejipgi .rv-kind{flex:none;font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+.dejipgi .rv-kind.core{color:var(--bad)}
+.dejipgi .rv-body{display:flex;flex-direction:column;gap:14px;padding:2px 16px 16px 48px}
+.dejipgi .rv-fill{padding:10px 14px;border-radius:10px;background:color-mix(in srgb, var(--good-soft) 70%, var(--surface))}
+.dejipgi .rv-fill h5{color:var(--good)}
+.dejipgi .rv-next{padding-top:4px;border-top:1px solid var(--line)}
