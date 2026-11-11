@@ -28,5 +28,5 @@ test("질문 하나 · 답 하나 카드 (11/11): 답 원문은 memo.answer, 목
     evidence: [{ page: 3, quote: "x" }], mistakes: [], takes: [], gives: [], figure: null }, [3]);
   assert.equal(c.kind, "절차"); assert.equal(c.memo.answer?.split("\n").length, 2); assert.equal(c.memo.line, "결정 변수 $p_0 = 2dy - dx$"); assert.deepEqual(c.memo.details, ["유도"]);
   assert.equal(c.shape.form, "fact");
-  assert.equal(firstLine("| 대상 | 기준 |\n|---|---|\n| A | B |"), "대상 | 기준 |");
+  assert.equal(firstLine("| 대상 | 기준 |\n|---|---|\n| A | B |"), ""); assert.equal(firstLine("두 가지다.\n| A | B |"), "두 가지다.");
 });

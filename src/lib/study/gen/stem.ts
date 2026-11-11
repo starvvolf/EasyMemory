@@ -90,11 +90,12 @@ export const stemFillQASchema = z.object({
 });
 export type StemFillQA = z.infer<typeof stemFillQASchema>;
 /** 답의 첫 줄(목록 줄에 보일 한 줄): 마크다운 표시·번호를 떼고, 표·식만 있으면 이름 대신 첫 글. */
-export const firstLine = (answer: string) => (answer.split("\n").map((l) => l.replace(/^\s*(?:[-*]|\d+[.)]|#+|\|)\s*/, "").replace(/\*\*/g, "").trim()).find((l) => l && !/^[-|:\s]+$/.test(l)) ?? "");
+export const firstLine = (answer: string) => (answer.split("\n").filter((l) => !/^\s*\|/.test(l)).map((l) => l.replace(/^\s*(?:[-*]|\d+[.)]|#+)\s*/, "").replace(/\*\*/g, "").trim()).find(Boolean) ?? "");
 /** 질문·답 카드 → 엔진 카드(모양은 "사실" 한 칸에 답을 넣어 둔다 — 모양을 읽는 출제·강의·기억 저장소가 그대로 돈다). */
 export function memoryCardQA(id: string, role: StemRole, f: StemFillQA["memories"][number], pages: number[]): Card & { memo: CardMemo } {
   const answer = f.answer.trim();
-  return memoryCard(id, role, { memory: f.memory, title: f.title, kind: "사실", question: f.question, line: firstLine(answer), idea: "", shape: { form: "fact", subject: f.title.trim(), value: answer },
+  // 표로만 된 답이면 목록 줄에는 질문을 보인다(11/11 "상태 | 의미 |"가 줄에 보이던 것)
+  return memoryCard(id, role, { memory: f.memory, title: f.title, kind: "사실", question: f.question, line: firstLine(answer) || f.question.trim(), idea: "", shape: { form: "fact", subject: f.title.trim(), value: answer },
     facts: [], details: f.more, evidence: f.evidence, mistakes: f.mistakes, takes: f.takes, gives: f.gives, figure: f.figure }, pages, f.kind, answer);
 }
 
