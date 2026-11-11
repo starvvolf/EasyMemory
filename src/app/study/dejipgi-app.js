@@ -1233,8 +1233,9 @@ function importantOf(d){
   return d._imp;
 }
 function termMarks(d, tl){
-  if (!tl._tokens || !tl._tokens.length) return [];
-  const terms = importantOf(d); if (!terms || !terms.keys.size) return [];
+  // 찾을 용어나 글자가 없어도 "이 쪽 핵심 용어" 칸이 '그리는 중'에 머물지 않게 빈 목록을 알린다(11/11 데스크탑 점검).
+  if (!tl._tokens || !tl._tokens.length){ pageTermsFound(d, []); return []; }
+  const terms = importantOf(d); if (!terms || !terms.keys.size){ pageTermsFound(d, []); return []; }
   const out = [], seenLines = new Set(), found = [];
   for (const t of tl._tokens){
     if (seenLines.has(t.line)) continue; seenLines.add(t.line);
