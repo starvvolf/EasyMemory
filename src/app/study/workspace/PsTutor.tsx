@@ -2,6 +2,7 @@
 // PS 튜터 (2026-11-08, src/lib/code/tutor/): "다음 할 일" 카드 하나와 "내 PS 패턴" 표. 사용자는 늘 보기·판단하기·설계하기·
 // 구현하기 중 하나만 하고, 정답 대조·기록·다음 할 일은 서버의 코드가 정한다. 화면에는 답이 오지 않는다(제출 뒤 피드백으로만).
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo } from "./MemoToast";
 import { call, errorText, later } from "./api";
 import { Rich } from "./Rich";
 
@@ -162,12 +163,19 @@ function ActionCard({ a, onDone, onOpenProblem, pending, onLater }: { a: ActionV
         setBusy("뼈대 코드를 만드는 중… (처음이면 AI 1번, 10~30초)");
         for (let i = 0; ; i++) {
           try { await call("/api/code/tutor/fill", { number: a.number, lang }); break; }
-          catch (e) { if (i >= 40 || !/아직 만드는 중/.test(errorText(e))) throw e; await new Promise((ok) => setTimeout(ok, 3000)); }
+          catch (e) {
+            if (i < 40 && /아직 만드는 중/.test(errorText(e))) { await new Promise((ok) => setTimeout(ok, 3000)); continue; }
+            // 뼈대를 못 만들었으면(11/11 시험: 2751 파이썬 뼈대가 검증을 못 넘음) 막히지 않게 뼈대 없이 연다. 풀이도 뼈대 없는 풀이로 다시 시작해 기록이 맞게.
+            await call("/api/code/tutor/answer", { kind: "implement", number: a.number, pattern: a.pattern, mixed: a.mixed, action: "start", lang });
+            alert0(`${errorText(e)} 뼈대 없이 문제를 열어요. 막히면 오른쪽 AI 튜터의 [힌트]를 눌러요.`);
+            break;
+          }
         }
       }
       onOpenProblem(r.problemId);
     } catch (e) { setErr(errorText(e)); } finally { setBusy(""); }
   };
+  const alert0 = (text: string) => memo({ state: "done", text });
   const giveUp = async () => { await send({ kind: "implement", mixed: a.mixed, action: "giveup" }); onDone(); };
   return (
     <section className="panel stack pt-card">
