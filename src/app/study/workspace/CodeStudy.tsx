@@ -258,10 +258,15 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
       const lastAc = [...r.submissions].reverse().find((x) => x.mode === "submit" && x.verdict === "AC")?.at ?? "";
       const since = new Date(Date.now() - 12 * 3600_000).toISOString();
       void call<{ items: Array<{ at: string; kind: string; q: string; a: string }> }>(`/api/code/tutor/talk?problem=${encodeURIComponent(id)}`).then((t) => {
-        const keep = t.items.filter((x) => x.at > lastAc && x.at >= since && x.kind !== "도움 칸");
+        const keep = t.items.filter((x) => x.at >= since && x.kind !== "도움 칸");
         if (!keep.length) return;
-        setMsgs((m) => (m.length ? m : keep.flatMap((x) => [{ who: "me" as const, text: x.q, ...(x.kind !== "질문" ? { tag: x.kind } : {}) }, { who: "ai" as const, text: x.a }])));
-        setHints((h) => Math.max(h, keep.filter((x) => x.kind === "질문" || x.kind === "힌트").length));
+        const pair = (x: (typeof keep)[number]): Msg[] => [{ who: "me", text: x.q, ...(x.kind !== "질문" ? { tag: x.kind } : {}) }, { who: "ai", text: x.a }];
+        const before = keep.filter((x) => x.at <= lastAc), after = keep.filter((x) => x.at > lastAc);
+        // 맞힌 뒤 다시 열었으면 그 앞 대화는 "지난 풀이"로 보여 주고(튜터에게는 넘기지 않게 이름표를 붙임), 이번 풀이의 받은 도움 수에는 넣지 않는다.
+        const restored: Msg[] = [...before.flatMap((x) => pair(x).map((m) => ({ ...m, tag: "지난 풀이" }))),
+          ...(before.length && after.length ? [{ who: "ai" as const, tag: "채점", text: "여기까지 지난 풀이(맞힘)예요. 아래부터 이번 풀이예요." }] : []), ...after.flatMap(pair)];
+        setMsgs((m) => (m.length ? m : restored));
+        setHints((h) => Math.max(h, after.filter((x) => x.kind === "질문" || x.kind === "힌트").length));
       }).catch(() => undefined);
     }).catch((e) => setError(errorText(e)));
   }, [id]);
