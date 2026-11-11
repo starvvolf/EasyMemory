@@ -260,6 +260,22 @@ function stateBox(st) {
 async function renderTimeline(runId) {
   const t = await api("GET", `/api/runs/${runId}/timeline`);
   const steps = t.steps;
+  // 막힌 순간(11/11): 오류 · 틀림 · 어려워요부터 풀림 · 넘어감까지 한 장면씩. 타임라인 위에 모아 보인다
+  const moments = (await api("GET", `/api/runs/${runId}/moments`).catch(() => ({ moments: [] }))).moments ?? [];
+  const dur = (sec) => (sec >= 60 ? `${Math.round(sec / 60)}분` : `${sec}초`);
+  const momentBox = (m, i) => {
+    const state = !m.closedAt ? "open" : m.how === "안 풀고 넘어감" ? "left" : "solved";
+    const help = [m.help.replies ? `튜터 답 ${m.help.replies}번` : "", m.help.code ? "코드 받음" : "", m.help.edits.length ? `튜터가 고침: ${m.help.edits.join(", ")}` : ""].filter(Boolean).join(" · ");
+    return h("div", { class: `mbox ${state}` },
+      h("div", { class: "tlhead" }, h("span", { class: "tln" }, i + 1), h("span", { class: `tlwho m-${m.by === "오류" ? "err" : m.by === "판정" ? "judge" : "hard"}` }, m.by === "오류" ? "오류" : m.by === "판정" ? "틀림 판정" : "너무 어려워요"),
+        h("span", { class: `mhow ${state}` }, !m.closedAt ? "아직 막힘" : m.how), h("span", { class: "grow" }), h("span", { class: "tlmetric" }, `${dur(m.seconds)}${m.tries > 1 ? ` · ${m.tries}번 시도` : ""}`)),
+      m.goal ? h("div", { class: "mgoal" }, m.goal) : null,
+      m.command ? h("pre", { class: "mcode" }, `> ${m.command}
+${m.error ?? ""}`) : m.gap ? h("div", { class: "tlsay" }, `빠진 곳: ${m.gap}`) : m.reasons ? h("div", { class: "tlsay" }, m.reasons) : null,
+      m.said.length ? h("div", { class: "msaid" }, m.said.slice(0, 3).map((x) => h("div", { class: "tlsay message" }, x))) : null,
+      help ? h("div", { class: "mhelp" }, h("span", { class: "tlk" }, "받은 도움"), help) : m.closedAt && state === "solved" ? h("div", { class: "mhelp" }, h("span", { class: "tlk" }, "받은 도움"), "없음") : null,
+      m.changed?.length ? h("div", { class: "mchg" }, h("span", { class: "tlk" }, "이렇게 바꿔서 풀림"), m.changed.map((c) => h("div", {}, h("div", { class: "mfile" }, c.file), h("pre", { class: "mcode diff" }, c.diff.map((l) => h("span", { class: l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : "" }, l + "\n")))))) : null);
+  };
   const sum = steps.reduce((a, s) => (s.usage ? { input: a.input + s.usage.input, cached: a.cached + s.usage.cached, output: a.output + s.usage.output, ms: a.ms + s.usage.ms } : a), { input: 0, cached: 0, output: 0, ms: 0 });
   const k = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
   const metric = (u) => u ? h("span", { class: "tlmetric" }, u.input || u.output ? `입력 ${k(u.input)}(캐시 ${k(u.cached)}) · 출력 ${k(u.output)} · ` : "", `${(u.ms / 1000).toFixed(1)}초${u.calls ? ` · 호출 ${u.calls}` : ""}`) : null;
@@ -288,6 +304,10 @@ async function renderTimeline(runId) {
       h("button", { class: `btn small ${tlUi.metrics ? "primary" : ""}`, title: "칸마다 토큰 · 속도", onclick: () => { tlUi.metrics = !tlUi.metrics; drawTl(); } }, "⏱ 토큰 · 속도")),
     h("p", { class: "tlintro" }, `내가 한 말 · 누른 버튼 · 저장 하나와 그에 대한 튜터 답이 한 칸이에요.${t.rough ? " 이 대화는 기록을 남기기 전이라 목표 정리로 만든 거친 칸이에요." : ""}`),
     tlUi.metrics ? h("p", { class: "tlintro" }, `전체: 입력 ${k(sum.input)}(캐시 ${k(sum.cached)}) · 출력 ${k(sum.output)} · AI 시간 ${(sum.ms / 1000).toFixed(1)}초`) : null,
+    moments.length ? h("section", { class: "msec" }, h("div", { class: "msec-h" }, h("b", {}, "막힌 순간"), h("span", { class: "tlcount" }, `${moments.length}번`),
+      h("span", { class: "tlintro" }, `풀림 ${moments.filter((m) => m.closedAt && m.how !== "안 풀고 넘어감").length} · 넘어감 ${moments.filter((m) => m.how === "안 풀고 넘어감").length}${moments.some((m) => !m.closedAt) ? " · 지금 막힘 1" : ""}`)),
+      h("div", { class: "mlist" }, moments.map(momentBox))) : null,
+    moments.length ? h("div", { class: "msec-h" }, h("b", {}, "전체 기록")) : null,
     steps.length ? h("div", { class: "tlflow" }, steps.flatMap((s, i) => [box(s), i < steps.length - 1 ? h("div", { class: "tlarrow" }) : null])) : h("p", { class: "mut" }, "아직 기록이 없어요.")));
   drawTl();
 }

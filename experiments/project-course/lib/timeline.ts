@@ -127,6 +127,10 @@ export async function endStep(runId: string) {
         usage = { input: t.reduce((n, x) => n + x.input + (x.cache?.read ?? 0), 0), cached: t.reduce((n, x) => n + (x.cache?.read ?? 0), 0), output: t.reduce((n, x) => n + x.output, 0), ms: rows.reduce((n: number, r: { ms: number }) => n + (r.ms ?? 0), 0), calls: rows.reduce((n: number, r: { calls?: number }) => n + (r.calls ?? 1), 0) };
       }
     }
+    // 막힌 순간(11/11): 열려 있는 장면에 이 칸의 학습자 말 · 받은 도움을 보탠다
+    await (await import("./moments.ts")).onStep(runId, { trigger: p.trigger, reply, tools }).catch(() => {});
+    // 보충을 마치고 돌아왔으면 [너무 어려워요]로 연 장면은 풀린 것
+    await (async () => { const g = await (await import("./goals.ts")).goalsOf(runId); if (g.support?.back) await (await import("./moments.ts")).onSupportDone(runId); })().catch(() => {});
     return await append(runId, { at: p.at, endAt: new Date().toISOString(), trigger: p.trigger, reply: reply.slice(0, 4000), tools, usage, state: await snapshot(runId) });
   } catch { return null; }
 }

@@ -633,6 +633,14 @@ export async function act(runId: string, n: number, input: { do: string; choice?
     if (op === "applied") (input as Record<string, unknown>).verdict = await applyVerdict(runId, run).catch((e) => { console.error("적용 판정:", e); return undefined; });
     // 부족함 원장(11/8): 판정이 일부만 · 틀림이면 열고, 맞음이면 그 단위에 열린 것을 채움으로. [너무 어려워요]도 연다
     await noteGap(runId, op, input as Record<string, unknown>).catch((e) => console.error("부족함 원장:", e));
+    // 막힌 순간(11/11, lib/moments.ts): 틀림 · 일부 · [너무 어려워요]면 열고, 맞음이면 닫고(보충 단계의 맞음은 어려워요 장면을 닫지 않는다), 넘어가면 안 푼 채로 닫는다
+    await (async () => {
+      const M = await import("./moments.ts"); const b = input as Record<string, unknown>;
+      const v = b.verdict as { verdict?: string; gap?: string } | undefined;
+      if (op === "applied" && v?.verdict) { if (v.verdict === "correct" && inSupport) return; await M.onVerdict(runId, v.verdict, v.gap ?? ""); }
+      else if (op === "hard" || op === "stuck") await M.onHard(runId, [...((b.reasons as string[]) ?? []), String(b.text ?? "")].filter(Boolean).join(" · "));
+      else if (op === "next" || (op === "easy_next" && !inSupport) || op === "end") await M.onLeave(runId);
+    })().catch((e) => console.error("막힌 순간:", e));
     const TL = await import("./timeline.ts");
     // 튜터가 묻고 돌리려는 명령(11/8 결정 8): [실행]이면 돌리고 결과를 튜터에게 한 번, [안 함]이면 AI 안 부름(다음 차례 맥락에 한 줄)
     if (op === "cmd") {

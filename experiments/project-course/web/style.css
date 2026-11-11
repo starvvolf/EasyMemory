@@ -980,3 +980,25 @@ body:has(.tlpage), .embed body:has(.tlpage) { --tl-page: color-mix(in srgb, #000
 .fdial-b:hover { background: color-mix(in srgb, var(--f-ink, var(--ink)) 8%, transparent); }
 .fdial-b.on { background: var(--f-s1, var(--panel)); color: var(--f-ink, var(--ink)); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .fdial-b.busy { color: transparent; }
+/* 막힌 순간(11/11): 학습 기록 위에 한 장면씩 */
+.tlpage .msec { margin: 6px 0 18px; }
+.tlpage .msec-h { display: flex; align-items: baseline; gap: 8px; margin: 10px 2px 8px; font-size: 14px; }
+.tlpage .msec-h .tlintro { margin: 0; }
+.tlpage .mlist { display: flex; flex-direction: column; gap: 10px; }
+.tlpage .mbox { border-radius: 18px; padding: 14px 16px; background: var(--tl-card); display: flex; flex-direction: column; gap: 9px; box-shadow: 0 1px 3px rgba(0,0,0,.08), inset 4px 0 0 color-mix(in srgb, #2f9e6a 70%, transparent), 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent); }
+.tlpage .mbox.left { box-shadow: 0 1px 3px rgba(0,0,0,.08), inset 4px 0 0 color-mix(in srgb, var(--mut) 55%, transparent), 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent); }
+.tlpage .mbox.open { box-shadow: 0 1px 3px rgba(0,0,0,.08), inset 4px 0 0 #e8a33d, 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent); }
+.tlpage .tlwho.m-err { background: color-mix(in srgb, #d9534f 14%, var(--tl-card)); color: #c0392b; }
+.tlpage .tlwho.m-judge { background: color-mix(in srgb, #4a7bd8 15%, var(--tl-card)); color: #3d6bc4; }
+.tlpage .tlwho.m-hard { background: color-mix(in srgb, #e8a33d 18%, var(--tl-card)); color: #b0700f; }
+.tlpage .mhow { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.tlpage .mhow.solved { background: color-mix(in srgb, #2f9e6a 15%, var(--tl-card)); color: #2a8a5c; }
+.tlpage .mhow.left { background: var(--soft); color: var(--mut); }
+.tlpage .mhow.open { background: color-mix(in srgb, #e8a33d 20%, var(--tl-card)); color: #b0700f; }
+.tlpage .mgoal { font-size: 12px; color: var(--mut); }
+.tlpage .mcode { margin: 0; padding: 9px 12px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 7%, var(--tl-card)); font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+.tlpage .mcode.diff .add { color: #2a8a5c; } .tlpage .mcode.diff .del { color: #c0392b; }
+.tlpage .msaid { display: flex; flex-direction: column; gap: 5px; }
+.tlpage .mhelp { font-size: 12.5px; }
+.tlpage .mchg { display: flex; flex-direction: column; gap: 5px; }
+.tlpage .mfile { font-size: 11.5px; color: var(--mut); margin: 2px 2px 3px; }

@@ -316,7 +316,7 @@ const routes: [string, RegExp, Handler][] = [
     return { ...out, update, float: floatInUse() };
   }],
   // 학습자가 VS Code 터미널에서 친 명령(확장 0.8.0, 작업 폴더 안만): 다음 튜터 차례 맥락과 [해 봤어요] 판정에 들어간다
-  ["POST", /^\/api\/bridge\/terminal$/, async (req) => { const b = await body(req); const id = String(b.runId ?? ""); await getRun(id); const r = await (await import("../lib/shell.ts")).learnerRan(id, b); await (await import("../lib/timeline.ts")).systemStep(id, `터미널: ${String(b.command ?? "").slice(0, 80)}`, { exitCode: b.exitCode ?? null }, 0, "system").catch(() => {}); return r; }],
+  ["POST", /^\/api\/bridge\/terminal$/, async (req) => { const b = await body(req); const id = String(b.runId ?? ""); await getRun(id); const r = await (await import("../lib/shell.ts")).learnerRan(id, b); await (await import("../lib/moments.ts")).onCommand(id, String(b.command ?? ""), typeof b.exitCode === "number" ? b.exitCode : null, String(b.output ?? "")).catch(() => {}); await (await import("../lib/timeline.ts")).systemStep(id, `터미널: ${String(b.command ?? "").slice(0, 80)}`, { exitCode: b.exitCode ?? null }, 0, "system").catch(() => {}); return r; }],
   // 시험용(11/8): AI 없이 확장의 코드 이해 · 디버거에 바로 묻기
   ["POST", /^\/api\/dev\/bridge\/(\w+)$/, async (req, m) => { const b = await body(req); const op = String(b.op ?? ""); const nav = await import("../lib/codenav.ts"); return { text: op === "debug" ? await nav.debugPeekTool(m[1], b) : await nav.codeNavTool(m[1], b) }; }],
   // 부족함 원장 · 다시 확인 · 세션 노트(11/8)
@@ -345,6 +345,8 @@ const routes: [string, RegExp, Handler][] = [
     const r = b.result === "됨" || b.result === "비어 있음" ? b.result : null;
     return (await import("../lib/goals.ts")).setBaseSelf(m[1], String(b.name ?? ""), r);
   }],
+  // 막힌 순간(11/11): 오류 · 틀림 · 어려워요부터 풀림 · 넘어감까지 한 장면씩(걸린 시간 · 바뀐 줄은 볼 때 계산)
+  ["GET", /^\/api\/runs\/(\w+)\/moments$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/moments.ts")).momentsView(m[1]); }],
   ["GET", /^\/api\/runs\/(\w+)\/note$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/gaps.ts")).sessionNote(m[1]); }],
   ["POST", /^\/api\/bridge\/answer$/, async (req) => { const b = await body(req); return (await import("../lib/bridge.ts")).bridgeAnswer(String(b.id ?? ""), b.result ?? null); }],
   ["POST", /^\/api\/bridge\/state$/, async (req) => { const b = await body(req) as Record<string, never>; await getRun(String(b.runId)); const { runId, ...state } = b; bridgeSetState(runId, state); return { ok: true }; }],

@@ -266,7 +266,7 @@ function policyPlugin(fake: boolean) {
         const relOf = (x: string) => (x.startsWith(l.io.ws) ? path.relative(l.io.ws, x) : x).replace(/\\/g, "/");
         if (ev.tool === "read") await l.io.show({ type: "tool", icon: "📄", label: ok ? `파일을 읽었어요: ${relOf(p)}` : `파일을 읽지 못했어요: ${relOf(p)}`, ok });
         else if (ev.tool === "glob" || ev.tool === "grep") await l.io.show({ type: "tool", icon: "🔎", label: `${ev.tool === "grep" ? "코드에서" : "파일을"} 찾아봤어요: ${String(ev.input?.pattern ?? "")}`, ok });
-        else if (EDITS.has(ev.tool) && ok && l.io.learningChat) { for (const f of editPaths(ev.tool, ev.input)) await l.io.show({ type: "tool", icon: "✏️", label: `파일을 고쳤어요: ${relOf(f)}`, ok: true }); }
+        else if (EDITS.has(ev.tool) && ok && l.io.learningChat) { for (const f of editPaths(ev.tool, ev.input)) { await keepEdit(l, relOf(f)); await l.io.show({ type: "tool", icon: "✏️", label: `파일을 고쳤어요: ${relOf(f)}`, ok: true }); } }
         else if (EDITS.has(ev.tool) && ok) { for (const f of editPaths(ev.tool, ev.input)) await recordEdit(l, relOf(f)); }
         else if (EDITS.has(ev.tool) && !ok) await l.io.show({ type: "tool", icon: "✋", label: `고치지 않았어요: ${String(ev.error?.message ?? "").slice(0, 120)}`, ok: false });
       });
@@ -426,6 +426,17 @@ async function buildTour(ws: string, input: any) {
   return { type: "tour" as const, id: `t${Date.now().toString(36)}`, title: String(input?.title ?? "실제로 지나가는 길").slice(0, 80), steps };
 }
 
+/** 자유 대화 실습에서도 튜터가 고친 앞뒤를 남긴다(11/11 "누가 썼나": 지금까지는 파일 이름만 남았다). 줄 주인은 이 기록과 학습자 저장본을 견줘 볼 때 계산한다 */
+async function keepEdit(l: Live, rel: string) {
+  try {
+    const abs = safePath(l.io.ws, rel).abs;
+    const before = l.before.get(rel) ?? "", after = await readFile(abs, "utf8").catch(() => "");
+    if (before === after || before.length + after.length > 400_000) return;
+    const id = `e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    await mkdir(editsDir(l.io.runId), { recursive: true });
+    await writeFile(path.join(editsDir(l.io.runId), `${id}.json`), JSON.stringify({ id, file: rel, before, after, at: new Date().toISOString() } satisfies EditRecord));
+  } catch { /* 기록 실패는 학습을 막지 않는다 */ }
+}
 async function recordEdit(l: Live, rel: string) {
   const { io } = l;
   let abs: string; try { abs = safePath(io.ws, rel).abs; } catch { return; }
