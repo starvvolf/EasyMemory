@@ -36,12 +36,13 @@ export type WeakKind = "core" | "build" | "edge" | "syntax";
 /** v14(11/12 사용자 "흐름을 쫙 스토리처럼 가면서 그때그때 대화 내용에서 보이는 약점이 있으면 약점 표시하고 박스로 정리…
  *  1. 사용자가 어떤 상태인지(뭘 모르는지, 질문에서 유추) 2. 그거에 관한 정성스러운 설명(거의 강의책급)"):
  *  이야기는 문단으로 이어지고, 약점이 보인 문단에만 약점 상자(종류 · 제목 · 지금 상태 · 설명).
+ *  v18(같은 날): 설명의 예는 학습자 코드·문제가 좋으면 그대로, 아니면 새 예, 문법은 일반 예도.
  *  v17(같은 날 "묶는 것보다 타임라인으로 분리… 작은 건 작게, 큰 건 크게"): 약점은 드러난 때마다 따로, 크기(small·big)에 맞춰 설명 길이.
  *  v16(같은 날 "어쨌든 모르는 거… 깐깐하게"): 도움받고 넘어간 것은 모르는 것으로, 설명은 처음부터.
  *  v15(같은 날 "강의책급이라고 무조건 글자 수 길게 갈 필요는 없어… 걍 친절하고 디테일하게 약점을 채워 주는 거"): 설명 길이는 그 약점에 필요한 만큼. */
 export type StoryKind = "idea" | "impl" | "syntax";
 export type Weak = { kind: StoryKind; size: "small" | "big"; title: string; state: string; lesson: string };
-export type Review = { v: 17; situation: string; solve: string; story: Array<{ text: string; weak?: Weak }>; next: string };
+export type Review = { v: 18; situation: string; solve: string; story: Array<{ text: string; weak?: Weak }>; next: string };
 
 const dir = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "tutor");
 const file = () => path.join(dir(), "sheets.jsonl");
@@ -209,6 +210,7 @@ export const REVIEW_SYSTEM = `알고리즘 문제 하나를 푼 기록을 보고
       big = 문제를 푸는 생각의 뼈대를 모름(예: BFS가 어떻게 퍼져 나가는지, 왜 대기줄(큐)을 쓰는지, 연결을 어떻게 담아야 하는지, 방문 표시를 왜 넣을 때 하는지). 이것을 모르면 비슷한 문제를 다시 못 푼다.
     - state: 학습자가 지금 어떤 상태인지 2~3문장(200자 안팎). 무엇을 알고 무엇을 모르는지, 무엇을 무엇으로 착각하고 있는지를 그 질문·코드를 근거로 짚는다(예: "'for a,b=map(...)'처럼 쓴 걸 보면, for가 '몇 번 반복할지'를 정해 줘야 돈다는 걸 아직 모르는 상태예요").
     - lesson: 그 약점을 친절하고 디테일하게 채워 주는 설명. 학습자가 헷갈린 바로 그 지점을 풀어 준다. 크기에 맞춘다.
+      예는 설명하기 가장 좋은 것을 고른다(11/12 사용자): 그때 학습자 코드·질문·이 문제의 입력이 그 약점을 보여 주기 좋으면 그대로 가져다 쓰고, 오히려 헷갈리게 하면 더 작고 깔끔한 예를 새로 든다. 문법처럼 문제와 상관없이 통하는 것은 일반적인 예로 설명해도 된다.
       small: 1~3문장 + 필요하면 짧은 코드 블록 하나(3줄 안팎). 무엇이 틀렸고 어떻게 쓰는지만. state도 한 문장.
       big: 강의 책 한 꼭지처럼 크게. 이게 무엇이고 왜 필요한지부터 처음부터, 작은 예를 한 단계씩 손으로 따라가기(작은 그래프·대기줄이 어떻게 바뀌는지 표나 그림 글자로), 흔한 착각과 그 까닭, 이 문제에서 어떻게 쓰이는지까지. 그중 필요한 것만 골라: 이게 무엇이고 왜 필요한지 · 어떻게 하는지 · 아주 작은 예를 손으로 따라가기 · 흔한 실수와 그 까닭 · 이 문제에서는 어떻게 쓰이는지. 문단은 빈 줄로 나누고, 코드나 작은 격자·표는 \`\`\` 로 감싼 블록(3~10줄)으로 넣는다. 구현·문법 약점이면 그때 학습자 코드와 고친 코드를 블록으로 나란히 보여 준다. 이 문제의 전체 정답 코드는 쓰지 않는다.
 - next: 다음에 비슷한 문제를 보면 떠올릴 것 1~2문장(140자 안팎).
@@ -228,7 +230,7 @@ export function checkReview(raw: { situation?: unknown; solve?: unknown; story?:
     const weak = kind ? { kind, size: b.size === "big" ? "big" as const : "small" as const, title: clean(b.title, 40), state: clean(b.state, 320), lesson: rich(b.lesson, 2400) } : undefined;
     return { text: clean(x.text, 520), ...(weak && weak.title && weak.lesson ? { weak } : {}) };
   }).filter((w) => w.text).slice(0, 14);
-  return situation && solve ? { v: 17, situation, solve, story, next } : null;
+  return situation && solve ? { v: 18, situation, solve, story, next } : null;
 }
 /** 총정리가 다루는 대화의 범위(11/12 시험: 화면이 새로 고쳐지며 이번 풀이가 중간에 다시 시작돼 앞쪽 질문 20여 개가 빠졌다):
  *  이 장 앞의 "맞힘·그만둠" 장이 끝난 뒤(없으면 12시간 전)부터 이 장이 끝날 때까지. 하다가 나간 장은 경계로 치지 않는다. */
@@ -248,7 +250,7 @@ export function reviewFor(problemId: string, onText?: (soFar: string) => void): 
   const job = (async () => {
     const sheet = await reviewTarget(problemId);
     if (!sheet) return null;
-    if (sheet.review?.v === 17) return sheet.review; // 예전 모양은 다시 만든다
+    if (sheet.review?.v === 18) return sheet.review; // 예전 모양은 다시 만든다
     const meta = await readProblemMeta(problemId).catch(() => null);
     if (!meta) return null;
     const { since, until } = await reviewWindow(problemId, sheet);
