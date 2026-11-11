@@ -1434,8 +1434,9 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .hd-box .cg-needs{border:0;padding:0}
 /* 오른쪽 열(11/11 사용자 "왼쪽 사이드바를 기준으로 폭·높이를 맞추고, 채팅창만 움직이게"): 왼쪽 문제 칸과 같은 폭·같은 높이(화면 높이).
    열은 움직이지 않고 채팅만 스크롤. AI 튜터 장이 길면(필요한 능력) 그 장 안에서 스크롤. 좌우를 조금 더 씀(1240 → 1520). */
-html .dejipgi[data-view="code"] .wrap{max-width:1520px}
-.dejipgi .cs-solve{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr)}
+/* 11/12 사용자 "코드 창 좀 더 넓혀 봐. 왼쪽·오른쪽 여백을 더 줄여도": 화면 폭을 다 쓰고(양옆 16px만), 가운데 코드 칸을 더 넓게 */
+html .dejipgi[data-view="code"] .wrap{max-width:none}
+.dejipgi .cs-solve{grid-template-columns:minmax(0,.9fr) minmax(0,1.9fr) minmax(0,.95fr)}
 .dejipgi .cs-statement,.dejipgi .cs-side{height:calc(100vh - 24px);max-height:calc(100vh - 24px)}
 .dejipgi .cs-side{overflow:hidden}
 .dejipgi .cs-ai:not(.training){flex:1 1 auto;min-height:0;overflow:hidden}
