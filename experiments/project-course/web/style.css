@@ -860,10 +860,6 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 
 .gcmd { margin: 6px 0; padding: 6px 8px; border-radius: 6px; background: var(--code-bg, rgba(127,127,127,.12)); font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: pre-wrap; word-break: break-all; }
 /* 먼저 알 것 지도(11/10) */
-.gbase { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
-.gbn { font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--soft); color: var(--mut); cursor: default; }
-.gbn.ok { background: var(--ok-soft); color: var(--ok); }
-.gbn.bad { background: var(--bad-soft); color: var(--bad); }
 /* 새로 쓰는 이름(11/11) */
 .gnames { margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
 .gnames-h { all: unset; cursor: pointer; font-size: 12px; color: var(--mut); }

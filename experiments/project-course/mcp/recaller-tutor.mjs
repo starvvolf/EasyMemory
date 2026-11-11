@@ -66,12 +66,7 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { path: { type: "string", description: "작업 폴더 기준 경로" }, content: { type: "string", description: "파일 전체 내용" } }, required: ["path", "content"], additionalProperties: false },
     annotations: { title: "작업 폴더에 파일 쓰기", readOnlyHint: false, destructiveHint: true, openWorldHint: false },
   }] : []),
-  {
-    name: "remember_preference",
-    description: "학습자가 앞으로의 진행 방식을 말하면 기억한다(다음 대화에도 이어짐). quote는 학습자가 한 말에서 글자 그대로 옮긴 구절.",
-    inputSchema: { type: "object", properties: { text: { type: "string", description: "기억할 진행 방식 한 문장" }, quote: { type: "string", description: "근거가 된 학습자 말 그대로" } }, required: ["text", "quote"], additionalProperties: false },
-    annotations: { title: "진행 방식 기억", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  },
+
 ];
 
 // 학습 목표 도구(11/4)는 코스 서버가 알려 준다(정의는 lib/goals.ts 한 곳). 제품 대화가 아니면 빈 목록
@@ -90,8 +85,8 @@ async function call(name, args) {
     try { return { content: [{ type: "text", text: name === "list_workspace_files" ? wsList() : name === "read_workspace_file" ? wsRead(args?.path) : wsWrite(args?.path, args?.content) }] }; }
     catch (e) { return { content: [{ type: "text", text: `${name === "write_workspace_file" ? "쓰지" : "읽지"} 못했어요: ${e.message}` }], isError: true }; }
   }
-  const url = name === "learner_profile" ? `${BASE}/api/codex-chat/${CHAT}/learner` : `${BASE}/api/codex-chat/${CHAT}/preference`;
-  const r = await fetch(url, name === "learner_profile" ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(args ?? {}) });
+  if (name !== "learner_profile") return { content: [{ type: "text", text: `없는 도구예요: ${name}` }], isError: true };
+  const r = await fetch(`${BASE}/api/codex-chat/${CHAT}/learner`);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) return { content: [{ type: "text", text: j.error || `실패(${r.status})` }], isError: true };
   return { content: [{ type: "text", text: String(j.text ?? "") }] };

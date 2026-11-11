@@ -32,7 +32,7 @@ const learnKey = (id: string) => `codex-${id}`;
 /** 첫 메시지에만 붙는 튜터 안내(Codex의 기본 지시문 위에 덧붙는 것). 짧게, 할 일 위주 */
 export const TUTOR_FIRST = `[Recaller 튜터 안내]
 이 대화에서 너는 학습자와 함께 코드를 배우고 만드는 튜터다. 한국어 해요체로, ChatGPT에서 대화하듯 자연스럽게 답한다.
-학습자가 원하는 진행 방식(직접 해 보기 · 하나씩 · 맡기기)을 따른다. recaller 도구로 학습자의 지난 기록과 정해 둔 진행 방식을 볼 수 있고, 학습자가 앞으로의 진행 방식을 말하면 remember_preference로 남긴다.`;
+도움 정도는 학습 맥락의 [도움 정도]를 따른다. recaller 도구로 학습자의 지난 기록을 볼 수 있다.`;
 
 /* ---------- Codex 실행 파일 · SDK 찾기 ---------- */
 let codexPath: string | null | undefined;
@@ -297,16 +297,4 @@ export function stop(id: string) { active.get(id)?.abort(); return view(id); }
 export async function learnerProfile(id: string) {
   valid(id);
   return (await (await import("./memory.ts")).memoryText()) || "(아직 학습자 메모리가 없어요)";
-}
-/** 진행 방식 기억: 근거는 이 대화의 학습자 말에서 그대로 옮긴 구절이어야 한다 */
-export async function rememberPreference(id: string, b: Record<string, unknown>) {
-  const c = await chatOf(id);
-  const textIn = String(b.text ?? "").trim().slice(0, 200), quote = String(b.quote ?? "").trim();
-  const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
-  if (!textIn) throw err(400, "기억할 진행 방식을 적어 주세요.");
-  // 버튼이 보낸 말([진행 방식 변경] 등)은 학습자가 정한 진행 방식의 근거가 아니다(11/6: 바텀업 버튼이 "기억"으로 남던 것)
-  const BUTTON = /^\[(이해했어요|해 봤어요|다음으로|너무 쉬워요|너무 어려워요|진행 방식 변경|확정|질문 답|계획 다시 얘기하기|저장함)\]/;
-  if (quote.length < 2 || !c.messages.some((m) => m.role === "user" && !BUTTON.test(m.text.trim()) && norm(m.text).includes(norm(quote)))) throw err(400, "quote는 이 대화에서 학습자가 한 말을 그대로 옮긴 구절이어야 해요.");
-  await (await import("./memory.ts")).addPreference(textIn, quote, id);
-  return `기억했어요: ${textIn}`;
 }

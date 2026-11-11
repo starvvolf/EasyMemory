@@ -2,8 +2,6 @@ import path from "node:path";
 import { randomBytes, createHash } from "node:crypto";
 import { mkdir, readdir, stat } from "node:fs/promises";
 import { DATA, read, update, PRACTICE } from "./store.ts";
-import { loadCourse, stageFiles } from "./course.ts";
-import { writeWorkspace } from "./stagegen.ts";
 import { ready, stopRun } from "./oc-engine.ts";
 import { CHAT_SYSTEM, CHAT_TOOLS } from "./agent-chat-policy.ts";
 import type { AgentIO } from "./agent.ts";
@@ -97,8 +95,7 @@ export async function newChat(opts: { course?: string | null } = {}) {
   let courseId = "";
   // 새 대화의 작업 폴더는 Recaller 밖(PRACTICE, 11/8). 옛 대화는 workspace 칸이 없어 예전 자리(ws(id))를 그대로 쓴다
   const home = path.join(PRACTICE, `chat-${id}`);
-  if (opts.course === null) await mkdir(home, { recursive: true });
-  else { const course = await loadCourse(opts.course ?? "hello-api"); courseId = course.id; await writeWorkspace(home, await stageFiles(course, 1)); }
+  await mkdir(home, { recursive: true }); // 정해진 코스는 11/11에 뺐다: 늘 빈 폴더
   // 11/4 사용자 "프리스타일로, 뭐 여쭤보는 거 없이": 첫 인사·질문 없이 빈 대화로 시작, 목표·초점도 대화에서 정해진다
   const s: Chat = { id, courseId, goal: "", focus: "", support: [], observations: [], messages: [], at: now(), workspace: home };
   await update<Chat>(file(id), s, () => s);
@@ -151,11 +148,7 @@ export async function chatTool(id: string, name: string, input: Record<string, u
   }
   const s = await chatOf(id);
   if (name === "get_learning_state") return JSON.stringify({ goal: s.goal, focus: s.focus, support: s.support, observations: s.observations.slice(-15), learnerMessages: s.messages.filter((m) => m.role === "user").slice(-12).map((m) => ({ id: m.id, text: m.text })) });
-  if (name === "get_course_material" && !s.courseId) return "이 대화에는 정해진 코스가 없어요. 무엇을 할지는 학습자와 대화로 정하세요.";
-  if (name === "get_course_material") {
-    const course = await loadCourse(s.courseId);
-    return JSON.stringify({ title: course.title, stages: course.stages.map((st) => ({ title: st.title, goal: st.goal })), concepts: course.knowledge, startFiles: Object.fromEntries(await stageFiles(course, 1)) });
-  }
+  if (name === "get_course_material") return "정해진 코스는 없어요.";
   throw err(400, "없는 도구예요.");
 }
 type Runner = (io: AgentIO, question: string) => Promise<string>;

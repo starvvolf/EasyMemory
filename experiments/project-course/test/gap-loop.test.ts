@@ -13,7 +13,6 @@ const setFake = wrapFake(ai);
 const G = await import("../lib/gaps.ts");
 const R = await import("../lib/goal-record.ts");
 const { pending, markSent } = await import("../lib/sync.ts");
-const { loadCourse } = await import("../lib/course.ts");
 
 test("찾기 → 채우기 → 확인 → 정리 → 앱 → 다시 확인 → 앱", async () => {
   const t0 = "2026-11-01T01:00:00.000Z";
@@ -40,24 +39,23 @@ test("찾기 → 채우기 → 확인 → 정리 → 앱 → 다시 확인 → �
   assert.equal(g.concept, "없는 키 읽기"); assert.equal(g.status, "세션에서 채움"); assert.ok(g.recheck);
 
   const run = { id: "run1", chatId: "c1", courseId: "hello-api", createdAt: t0, plan: { start: 1, stages: [1], quick: [], transfer: false, reasons: [], notes: [], minutes: 5 }, current: 1, workspaces: {}, stages: {} } as never;
-  const course = await loadCourse("hello-api");
-  let p = await pending("run1", course, run);
+  let p = await pending("run1", run);
   const it = p.items.find((x) => x.title === "없는 키 읽기")!;
   assert.equal(it.state, "unknown"); assert.match(it.check!.q, /scores/);
   assert.ok(it.events.some((e) => e.kind === "note" && /채움 확인/.test(e.detail)));
   await markSent("run1", p.items.flatMap((i) => [i.key, ...i.events.map((e) => e.key), ...(i.checkKey ? [i.checkKey] : []), ...(i.mistakeKey ? [i.mistakeKey] : [])]));
-  assert.equal((await pending("run1", course, run)).items.length, 0);
+  assert.equal((await pending("run1", run)).items.length, 0);
 
   let r = await G.answerRecheck("run1", g.id, "모르겠어요", (x) => G.gradeRecheck(x, "모르겠어요"));
   assert.equal(r.gap!.status, "다시 틀림");
   r = await G.answerRecheck("run1", g.id, "KeyError요, 먼저 읽어서", (x) => G.gradeRecheck(x, "KeyError요, 먼저 읽어서"));
   assert.equal(r.gap!.status, "다시 확인 맞음");
-  p = await pending("run1", course, run);
+  p = await pending("run1", run);
   const kinds = p.items.find((x) => x.title === "없는 키 읽기")!.events.map((e) => e.kind);
   assert.deepEqual(kinds, ["wrong", "correct"], "실습에서 다시 확인한 결과가 앱 사건으로");
   assert.equal(p.items.find((x) => x.title === "없는 키 읽기")!.state, "met", "다시 확인까지 맞힌 것은 몰랐음으로 다시 보내지 않는다");
   // 다시 정리해도(ids 없이 같은 이름) 새 부족함이 안 생기고, 문항이 바뀌면 새 문항이 간다
   await G.mergeRecord("run1", goal, [{ type: "규칙", concept: "없는 키 읽기", wrong: "w", right: "r", quote: "", ids: [], recheck: { q: "d = {}; d['a'] -= 1 은?", a: "KeyError" } }], new Date().toISOString());
   assert.equal((await G.ledgerOf("run1")).length, 1);
-  assert.match(((await pending("run1", course, run)).items.find((x) => x.title === "없는 키 읽기")!.check ?? { q: "" }).q, /-= 1/);
+  assert.match(((await pending("run1", run)).items.find((x) => x.title === "없는 키 읽기")!.check ?? { q: "" }).q, /-= 1/);
 });

@@ -76,7 +76,6 @@ export default function ProjectStudy() {
   );
   // 앱 안 편집기(11/11 사용자 "기존 방식 남기고 한번 도입해봐"): 왼쪽 편집기(VSCodium 웹 서버판) · 오른쪽 튜터를 한 창에
   const studio = (r: RunLite) => <button className="btn ghost small" onClick={() => setStudioRun(r)} title="이 화면이 편집기 · 튜터로 바뀌어요(앱 머리는 그대로). 내 VS Code 설정과는 따로예요">앱 안에서 이어 하기</button>;
-  const notes = (r: RunLite) => <a className="btn ghost small" href={`${courseUrl}/#/run/${r.id}/notes`} target="_blank" rel="noreferrer">노트</a>;
 
   if (studioRun) return <ProjectStudio run={studioRun} courseUrl={courseUrl} onClose={() => { setStudioRun(null); void load(); }} />;
 
@@ -113,7 +112,7 @@ export default function ProjectStudy() {
             <p className="eyebrow">{status.active === top.id ? "하던 실습" : "가장 최근 실습"}</p>
             <h3>{top.courseTitle}</h3>
             <p className="small muted num">{where(top)}{top.done ? ` · ${top.done}단계 끝냄` : ""}{day(top) ? ` · ${day(top)} 시작` : ""}</p>
-            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(top)}{studio(top)}{notes(top)}</div>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(top)}{studio(top)}</div>
           </section>
 
           {rest.length ? (
@@ -131,7 +130,7 @@ export default function ProjectStudy() {
                       <div className="pj-more stack">
                         <p className="small" style={{ margin: 0 }}>{r.current}단계 「{r.stageTitle}」 하는 중{r.done ? ` · ${r.done}단계 끝냄` : ""}{day(r) ? ` · ${day(r)} 시작` : ""}</p>
                         {r.workspace ? <p className="small muted" style={{ margin: 0 }}>폴더 <code>{r.workspace}</code></p> : null}
-                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(r)}{studio(r)}{notes(r)}</div>
+                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>{resume(r)}{studio(r)}</div>
                       </div>
                     </details>
                   </li>

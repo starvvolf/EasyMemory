@@ -1,27 +1,22 @@
-// 프로젝트 코스 실험 서버: http://127.0.0.1:4100
-// 코스 정하기(채팅·문답) → 계획 확정 → 단계별 작업 폴더·VS Code·실습 서버·예측·없애 보기·고치기·재검사·기록 후보.
-// 앱(3000)·엔진 실험(3002)과 따로 돈다. 실습 서버 4101, 검사용 서버 4102.
+// 실습 서버: http://127.0.0.1:4100 — 대화로 배우는 실습(자유 대화 · Codex)의 튜터 화면 · 목표 · 기록 · VS Code 연결 · 앱 안 편집기.
+// 2026-11-11 사용자 "예전에 정해진 코스용 기능도 빼도 될 듯": 코스 정하기 · 단계 수업 · 맛보기 · 코스 생성 · 실험방 · [막혔어요] 칸 등을 뺐다(git 기록에 있다).
+// 앱(3000)과 따로 돈다. 튜터가 켜는 학습자 서버는 4101, 앱 안 편집기는 4103.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { ROOT, listCourses, loadCourse, knowledgeName, type Course } from "../lib/course.ts";
-import { answer, diagnose, getIntake, markConfirmed, normalizePlan, startIntake } from "../lib/intake.ts";
-import { PORTS, openAtStartup, updateBridgeIfOld, check, devStatus, explain, hint, openEditor, predict, skip, startDev, startStage, stopDev, tryRequest, workspaceOf, workspaceStage } from "../lib/learn.ts";
-import { DATA, addRun, candidates, getRun, recordsFile, runs, saveRun, setActive, type Run } from "../lib/store.ts";
+import { ROOT } from "../lib/course.ts";
+import { PORTS, openAtStartup, updateBridgeIfOld, openEditor } from "../lib/learn.ts";
+import { DATA, addRun, getRun, runs, saveRun, setActive, type Run } from "../lib/store.ts";
 import { aiStatus } from "../lib/ai.ts";
-import { knowledgeExport, notesView } from "../lib/notes.ts";
 import { markSent, pending } from "../lib/sync.ts";
 import { killAll, nodeSupport, portFree } from "../lib/proc.ts";
-import type { RunResult } from "../lib/checker.ts";
 import { installFakeAi } from "../lib/fake-ai.ts";
 import { blockedRequest } from "../lib/guard.ts";
-import { answerAsk, stopAsk, stuckWords } from "../lib/lesson.ts";
 import { runSnippet } from "../lib/tutor-tools.ts";
-import { genStatus, startGeneration } from "../lib/generate.ts";
 import { floatInUse, openFloat, poll as floatPoll, setFloat, typing as floatTyping } from "../lib/float.ts";
-import { act, ask as lessonAsk, explainBlock as lessonBlock, closeWatchers, lessonView, loadPlan, notifyLesson, refocus, subscribe, what as lessonWhat } from "../lib/lesson.ts";
-import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeConnect, onBridgeSaved, setState as bridgeSetState } from "../lib/bridge.ts";
+import { askAbout, notifyLesson, practiceAct, practiceView, subscribe } from "../lib/practice.ts";
+import { events as bridgeEvents, hello as bridgeHello, onBridgeChange, onBridgeSaved, setState as bridgeSetState } from "../lib/bridge.ts";
 
 /** 대화 실습의 이름: Codex 대화(codex-chat) 또는 실험판 대화(agent-chat)의 학습자 첫 말, 60자. 못 읽으면 null. */
 async function chatTitle(r: Run): Promise<string | null> {
@@ -37,8 +32,8 @@ if (process.env.PC_FAKE_AI === "1") installFakeAi();
 
 const PORT = Number(process.env.PC_PORT || PORTS.app);
 const WEB = path.join(ROOT, "web");
-const lastCheck = new Map<string, RunResult>();
 const BOOT = Date.now().toString(36);
+const isChat = (r: Run) => !!(r.chatId || r.codexId);
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -52,73 +47,40 @@ async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
   try { return JSON.parse(text); } catch { throw Object.assign(new Error("JSON이 아니에요."), { status: 400 }); }
 }
 
-/** 화면에 보낼 단계 정보. 예측 정답·힌트 글·정답 코드는 빼고 보낸다. */
-function stageView(course: Course, run: Run, n: number) {
-  const st = course.stages.find((s) => s.n === n)!;
-  const prog = run.stages[String(n)];
-  return {
-    n: st.n, template: st.template, transfer: !!st.transfer, title: st.title, goal: st.goal, intro: st.intro,
-    quick: run.plan.quick.includes(n), breaks: st.breaks ?? [],
-    knowledge: st.knowledge.map((id) => ({ id, name: knowledgeName(course, id), essentials: course.knowledge.find((k) => k.id === id)?.essentials ?? "" })),
-    parts: course.parts.filter((p) => st.parts.includes(p.id)),
-    predict: st.predict.map((p) => ({ id: p.id, q: p.q, options: p.options, done: prog?.predict?.[p.id] ? { ...prog.predict[p.id], answer: p.answer, why: p.why } : null })),
-    observe: { text: st.observe.text, checks: st.observe.checks.map((id) => course.checks.find((c) => c.id === id)?.title ?? id) },
-    fix: st.fix, explain: { q: st.explain.q, done: prog?.explain ?? null },
-    try: st.try,
-    checks: course.checks.filter((c) => c.template === st.template && c.stage <= n).map((c) => ({ id: c.id, stage: c.stage, title: c.title, kind: c.kind })),
-    progress: prog ?? null,
-  };
-}
-async function runView(run: Run) {
-  const course = await loadCourse(run.courseId);
-  const cur = course.stages.find((s) => s.n === run.current)!;
-  const ws = workspaceOf(run, cur.template);
-  const recs = await candidates(run.id);
-  const shown = [...run.plan.stages, ...(run.plan.transfer ? course.stages.filter((s) => s.transfer).map((s) => s.n) : [])];
-  return {
-    id: run.id, course: { id: course.id, title: course.title, stack: course.stack }, plan: run.plan, profile: run.profile ?? null,
-    current: run.current, workspace: ws, workspaceStage: await workspaceStage(ws),
-    stages: course.stages.map((s) => ({ n: s.n, title: s.title, transfer: !!s.transfer, inPlan: shown.includes(s.n), before: s.n < run.plan.start && !s.transfer,
-      quick: run.plan.quick.includes(s.n), status: run.stages[String(s.n)] ? { started: !!run.stages[String(s.n)].startedAt, done: !!run.stages[String(s.n)].doneAt, independent: run.stages[String(s.n)].independent, skipped: !!run.stages[String(s.n)].skipped } : null })),
-    stage: stageView(course, run, run.current),
-    lesson: !!(await loadPlan(course.id, run.current)), chat: !!(run.chatId || run.codexId),
-    dev: devStatus(run.id),
-    lastCheck: lastCheck.get(`${run.id}:${run.current}`) ?? null,
-    records: { file: recordsFile(run.id), count: recs.length, items: recs.filter((r) => r.stage === run.current).slice(-40) },
-  };
-}
-async function summary(run: Run) {
-  const course = await loadCourse(run.courseId);
-  const recs = await candidates(run.id);
-  const byK = new Map<string, { id: string; name: string; met: number; correct: number; wrong: number; hint: number; note: number; independent: boolean; lines: string[] }>();
-  for (const r of recs) {
-    const k = byK.get(r.knowledgeId) ?? { id: r.knowledgeId, name: r.knowledgeName, met: 0, correct: 0, wrong: 0, hint: 0, note: 0, independent: false, lines: [] };
-    if (r.kind in k) (k as unknown as Record<string, number>)[r.kind] += 1;
-    if (r.kind === "correct" && r.evidence.activity !== "predict" && r.evidence.independent) k.independent = true;
-    k.lines.push(`${r.stage}단계 ${r.kind}: ${r.detail}`);
-    byK.set(r.knowledgeId, k);
-  }
-  const stages = course.stages.map((s) => {
-    const p = run.stages[String(s.n)];
-    return { n: s.n, title: s.title, transfer: !!s.transfer, before: s.n < run.plan.start && !s.transfer, inPlan: run.plan.stages.includes(s.n) || (!!s.transfer && run.plan.transfer), done: !!p?.doneAt, independent: !!p?.independent, skipped: !!p?.skipped,
-      predictRight: p ? Object.values(p.predict).filter((x) => x.correct).length : 0, predictTotal: s.predict.length,
-      hints: p?.hints.length ?? 0, maxHint: Math.max(0, ...(p?.hints.map((h) => h.level) ?? [])), failedRuns: p?.runs.filter((r) => !r.stageOk).length ?? 0, explained: !!p?.explain };
-  });
-  return { course: { id: course.id, title: course.title }, stages, knowledge: [...byK.values()], file: recordsFile(run.id), total: recs.length };
-}
-
 type Handler = (req: IncomingMessage, m: RegExpExecArray, url: URL) => Promise<unknown>;
 const routes: [string, RegExp, Handler][] = [
-  // Codex 실험판(11/4 사용자 "SDK로 엔진 교체, MCP 추가한 코덱스 실험판"): /codex-chat.html
-  ["GET", /^\/api\/codex-chat$/, async () => ({ chats: await (await import("../lib/codex-chat.ts")).list(), status: (await import("../lib/codex-chat.ts")).codexStatus() })],
+  // 실습 목록(앱의 실습 탭 · 튜터 화면 홈). 예전 정해진 코스 실습은 보이지 않는다(데이터는 남아 있다)
+  ["GET", /^\/api\/status$/, async () => {
+    const f = await runs();
+    return { node: nodeSupport(), ai: await aiStatus(), engine: await import("../lib/oc-engine.ts").then((m) => m.engineName()).catch((e) => `기본 (엔진 파일 오류: ${(e as Error).message.slice(0, 120)})`), active: f.active ?? null, ports: PORTS,
+      runs: await Promise.all(f.runs.filter(isChat).slice(-10).reverse().map(async (r) => ({ id: r.id, course: "chat", courseTitle: (await chatTitle(r)) ?? "새 실습", stageTitle: "대화로 배우기", createdAt: r.createdAt,
+        current: 1, start: 1, done: 0, workspace: await (await import("../lib/goals.ts")).runWorkspace(r.id).catch(() => null), chat: true }))) };
+  }],
+  // 새 실습: 대화(기본 엔진 또는 Codex) + 빈 작업 폴더
+  ["POST", /^\/api\/free$/, async (req) => {
+    const b = await body(req);
+    const plan = { start: 1, stages: [1], quick: [], transfer: false, reasons: ["대화로 배우기"], notes: [], minutes: 0 };
+    const run: Run = { id: randomBytes(5).toString("hex"), courseId: "chat", createdAt: new Date().toISOString(), plan, current: 1, workspaces: {}, stages: {}, free: true };
+    if (b.engine === "codex") { const cx = await (await import("../lib/codex-chat.ts")).create(); run.codexId = cx.id; run.workspaces = { chat: cx.workspace }; }
+    else { const chat = await (await import("../lib/agent-chat.ts")).newChat({ course: null }); run.chatId = chat.id; run.workspaces = { chat: chat.workspace }; }
+    await addRun(run);
+    await (await import("../lib/learn.ts")).markChatFolder(run.workspaces.chat);
+    await setActive(run.id);
+    let editor: unknown = null;
+    // 웹 화면에서 시작하면 VS Code만 열고 튜터 창은 띄우지 않는다(float: false)
+    if (b.open !== false) { editor = await openEditor(run.id).catch((e) => ({ ok: false, message: (e as Error).message })); if (b.float !== false) openFloat(run.id, PORT); }
+    return { runId: run.id, workspace: run.workspaces.chat, editor };
+  }],
+  ["GET", /^\/api\/runs\/(\w+)$/, async (_q, m) => {
+    const r = await getRun(m[1]);
+    if (!isChat(r)) throw Object.assign(new Error("예전 정해진 코스 실습은 11/11에 뺐어요. 새 실습으로 시작해 주세요."), { status: 410 });
+    return { id: r.id, current: 1, chat: true, free: true, workspace: await (await import("../lib/goals.ts")).runWorkspace(r.id), dev: { running: false } };
+  }],
+  ["GET", /^\/api\/runs\/(\w+)\/lesson\/(\d+)$/, async (_q, m) => practiceView(m[1])],
+  ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/act$/, async (req, m) => { await practiceAct(m[1], (await body(req)) as never); return practiceView(m[1]); }],
+  // VS Code에서 고른 코드로 묻기(물어보기 · 이건 뭐예요? · 덩어리 설명): 대화에 그 코드를 붙여 넘긴다
+  ["POST", /^\/api\/bridge\/ask$/, async (req) => { const b = await body(req); const run = await getRun(String(b.runId)); await askAbout(run.id, b as never); notifyLesson(run.id); return { ok: true }; }],
   ["POST", /^\/api\/codex-chat\/login$/, async () => (await import("../lib/codex-chat.ts")).login()],
-  ["POST", /^\/api\/codex-chat$/, async () => (await import("../lib/codex-chat.ts")).create()],
-  ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})$/, async (_q, m) => (await import("../lib/codex-chat.ts")).view(m[1])],
-  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/ask$/, async (req, m) => (await import("../lib/codex-chat.ts")).ask(m[1], String((await body(req)).text ?? ""))],
-  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/open$/, async (_q, m) => (await import("../lib/codex-chat.ts")).openInCode(m[1])],
-  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/stop$/, async (_q, m) => (await import("../lib/codex-chat.ts")).stop(m[1])],
-  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/options$/, async (req, m) => (await import("../lib/codex-chat.ts")).setOptions(m[1], await body(req))],
-  // MCP 도구 목록: 기본 둘 + 제품 대화(진행 기록이 있는 것)면 학습 목표 도구(11/4)
   ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})\/tools$/, async (_q, m) => {
     const run = (await runs()).runs.find((r) => r.codexId === m[1]);
     return { goals: run ? (await import("../lib/goals.ts")).goalToolsMcp() : [] };
@@ -133,53 +95,6 @@ const routes: [string, RegExp, Handler][] = [
     return { text };
   }],
   ["GET", /^\/api\/codex-chat\/([a-f0-9]{16})\/learner$/, async (_q, m) => ({ text: await (await import("../lib/codex-chat.ts")).learnerProfile(m[1]) })],
-  ["POST", /^\/api\/codex-chat\/([a-f0-9]{16})\/preference$/, async (req, m) => ({ text: await (await import("../lib/codex-chat.ts")).rememberPreference(m[1], await body(req)) })],
-  ["POST", /^\/api\/agent-chat$/, async () => (await import("../lib/agent-chat.ts")).newChat()],
-  ["POST", /^\/api\/agent-chat\/prompts$/, async (req) => (await import("../lib/agent-chat.ts")).saveChatPrompts(await body(req))],
-  ["GET", /^\/api\/agent-chat\/([a-f0-9]{16})\/debug$/, async (_q, m) => (await import("../lib/agent-chat.ts")).chatDebug(m[1])],
-  ["POST", /^\/api\/agent-chat\/([a-f0-9]{16})\/restart$/, async (_q, m) => (await import("../lib/agent-chat.ts")).restartChat(m[1])],
-  ["GET", /^\/api\/agent-chat\/([a-f0-9]{16})$/, async (_q, m) => (await import("../lib/agent-chat.ts")).chatView(m[1])],
-  ["POST", /^\/api\/agent-chat\/([a-f0-9]{16})\/ask$/, async (req, m) => { const b = await body(req); return (await import("../lib/agent-chat.ts")).askChat(m[1], String(b.text ?? "")); }],
-  ["POST", /^\/api\/agent-chat\/([a-f0-9]{16})\/stop$/, async (_q, m) => (await import("../lib/agent-chat.ts")).stopChat(m[1])],
-  ["GET", /^\/api\/status$/, async () => {
-    const f = await runs();
-    return { node: nodeSupport(), ai: await aiStatus(), engine: await import("../lib/oc-engine.ts").then((m) => m.engineName()).catch((e) => `기본 (엔진 파일 오류: ${(e as Error).message.slice(0, 120)})`), active: f.active ?? null, ports: PORTS,
-      runs: await Promise.all(f.runs.slice(-10).reverse().map(async (r) => {
-        const course = await loadCourse(r.courseId).catch(() => null);
-        const st = course?.stages.find((s) => s.n === r.current);
-        // 대화로 시작한 실습(프리스타일·Codex)은 코스가 "hello-api"로만 붙어 있어 앱 실습 탭에 "인사 서버"로 보였다
-        // (2026-11-05 A 앱 한 바퀴 점검, [경계]). 그런 실습은 학습자의 첫 말을 이름으로 쓴다.
-        const chat = r.free ? await chatTitle(r) : null;
-        if (chat) return { id: r.id, course: r.courseId, courseTitle: chat, stageTitle: "대화로 배우기", createdAt: r.createdAt, current: r.current, start: r.plan.start,
-          done: Object.values(r.stages).filter((s) => s.doneAt).length, workspace: st ? workspaceOf(r, st.template) : null, chat: true };
-        return { id: r.id, course: r.courseId, courseTitle: course?.title ?? r.courseId, stageTitle: st?.title ?? "", createdAt: r.createdAt, current: r.current, start: r.plan.start,
-          done: Object.values(r.stages).filter((s) => s.doneAt).length, workspace: st ? workspaceOf(r, st.template) : null };
-      })) };
-  }],
-  ["GET", /^\/api\/courses$/, async () => (await listCourses()).map((c) => ({ id: c.id, title: c.title, summary: c.summary, stack: c.stack, audience: c.audience, stages: c.stages.map((s) => ({ n: s.n, title: s.title, goal: s.goal, transfer: !!s.transfer })) }))],
-
-  ["POST", /^\/api\/intake$/, async (req) => { const b = await body(req); return startIntake(b.mode === "script" ? "script" : b.mode === "ai" ? "ai" : undefined); }],
-  ["GET", /^\/api\/intake\/(\w+)$/, async (_q, m) => getIntake(m[1])],
-  ["POST", /^\/api\/intake\/(\w+)\/answer$/, async (req, m) => { const b = await body(req); return answer(m[1], { text: typeof b.text === "string" ? b.text : undefined, choice: Array.isArray(b.choice) ? b.choice.map(Number) : undefined }); }],
-  ["POST", /^\/api\/intake\/(\w+)\/diagnose$/, async (req, m) => { const b = await body(req); return diagnose(m[1], (b.answers ?? {}) as Record<string, number>); }],
-  ["POST", /^\/api\/intake\/(\w+)\/confirm$/, async (req, m) => {
-    const b = await body(req);
-    const it = await getIntake(m[1]);
-    if (it.confirmedRun) { const r = await getRun(it.confirmedRun); const c = await loadCourse(r.courseId); return { runId: r.id, workspace: workspaceOf(r, c.stages.find((s) => s.n === r.current)!.template) }; }
-    if (!it.plan) throw Object.assign(new Error("계획이 아직 없어요."), { status: 409 });
-    const course = await loadCourse(it.courseId);
-    const plan = normalizePlan(course, (b.plan ?? {}) as never, it.plan);
-    const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), intakeId: it.id,
-      profile: { ...it.profile, requests: it.requests, diag: it.diag }, plan, current: plan.start, workspaces: {}, stages: {} };
-    await addRun(run);
-    await markConfirmed(it.id, run.id, plan);
-    const out = await startStage(run.id, plan.start);
-    return { runId: run.id, workspace: out.workspace };
-  }],
-
-  // 바로 시작(11/2, 시험용 맛보기 코스): 묻기·확인 문제 없이 1단계부터 모든 단계를 직접
-  // 프리스타일(11/4 사용자 "실험판 느낌 그대로 제품에 연결"): 걸음 없이 대화만 하는 진행 기록을 만들고 VS Code + 튜터 창을 연다
-  // 11/4 사용자 "홈 누르면 세션 목록(클로드 앱·GPT 앱처럼 대화 목록)": 실험판 엔진 대화만, 최근 것부터
   ["GET", /^\/api\/chats$/, async () => {
     const ac = await import("../lib/agent-chat.ts");
     const cx = await import("../lib/codex-chat.ts");
@@ -193,7 +108,6 @@ const routes: [string, RegExp, Handler][] = [
     }));
     return out.filter((x) => x && x.count > 0).sort((a, b) => String(b!.at).localeCompare(String(a!.at)));
   }],
-  // AI 호출 실험실(11/6, 앱 /lab/ai의 실습 탭): 대화 실습 하나의 차례 기록 — 차례마다 학습자 말 · 보낸 글 · 도구 · 답 · 토큰 · 시간 · 모델
   ["GET", /^\/api\/lab\/practice\/(\w{4,40})$/, async (_q, m) => {
     const run = (await runs()).runs.find((r) => r.id === m[1]);
     if (!run || (!run.codexId && !run.chatId)) throw Object.assign(new Error("대화 실습이 아니에요."), { status: 404 });
@@ -210,99 +124,7 @@ const routes: [string, RegExp, Handler][] = [
     return { runId: run.id, engine: "basic", chatId: run.chatId, model: (c as { model?: string }).model ?? ac.CHAT_MODELS[0].id, models: ac.CHAT_MODELS, busy: c.busy, turns: [],
       live: c.messages.slice(-30) };
   }],
-  ["POST", /^\/api\/free$/, async (req) => {
-    const b = await body(req);
-    const course = await loadCourse(String(b.courseId || "hello-api"));
-    const main = course.generated ? course.generated.outline.map((o) => o.n) : course.stages.filter((s) => !s.transfer).map((s) => s.n);
-    const plan = { start: main[0], stages: main, quick: [], transfer: false, reasons: ["프리스타일"], notes: [], minutes: main.length * 5 };
-    const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), plan, current: plan.start, workspaces: {}, stages: {}, free: true };
-    // 11/4 사용자 "GPT가 만든 것까지 그대로 붙여 봐": 대화는 실험판(agent-chat) 엔진 그대로, 작업 폴더도 그 대화의 폴더(VS Code가 이 폴더를 연다)
-    // 11/4 사용자 A안: course "none"이면 코스 없이 빈 폴더로 시작(인사 서버로 흘러가지 않게)
-    let chatWs: string | null = null;
-    if (b.engine === "codex") {
-      // 11/4 사용자 "첫 화면에서 Codex 버전 · 기존 버전 골라 시작": Codex 엔진(lib/codex-chat), 코스 없이 빈 폴더
-      const cx = await (await import("../lib/codex-chat.ts")).create();
-      run.codexId = cx.id; chatWs = cx.workspace;
-      run.workspaces[course.stages.find((s) => s.n === plan.start)!.template] = cx.workspace;
-    } else if (b.engine !== "lesson" && course.id === "hello-api") {
-      const chat = await (await import("../lib/agent-chat.ts")).newChat({ course: b.course === "none" ? null : "hello-api" });
-      run.chatId = chat.id; chatWs = chat.workspace;
-      run.workspaces[course.stages.find((s) => s.n === plan.start)!.template] = chat.workspace;
-    }
-    await addRun(run);
-    // 실험판 엔진 대화는 폴더를 대화가 이미 만들었다 → 코스 단계 시작(시작 코드 덮어쓰기 · 지식 후보)은 하지 않는다
-    if (chatWs) await (await import("../lib/learn.ts")).markChatFolder(chatWs);
-    const out = chatWs ? { workspace: chatWs } : await startStage(run.id, plan.start);
-    await setActive(run.id);
-    let editor: unknown = null;
-    // 11/4 사용자 "홈에서 시작하면 대화창으로": 웹 화면에서 시작하면 VS Code만 열고 튜터 창은 띄우지 않는다(float: false)
-    if (b.open !== false) { editor = await openEditor(run.id).catch((e) => ({ ok: false, message: (e as Error).message })); if (b.float !== false) openFloat(run.id, PORT); }
-    return { runId: run.id, workspace: out.workspace, editor };
-  }],
-  ["POST", /^\/api\/quickstart$/, async (req) => {
-    const b = await body(req);
-    const course = await loadCourse(String(b.courseId ?? ""));
-    const main = course.generated ? course.generated.outline.map((o) => o.n) : course.stages.filter((s) => !s.transfer).map((s) => s.n);
-    const plan = { start: main[0], stages: main, quick: [], transfer: false, reasons: ["묻는 것 없이 처음부터 차례로 가요."], notes: [], minutes: main.length * 5 };
-    const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), plan, current: plan.start, workspaces: {}, stages: {} };
-    await addRun(run);
-    const out = await startStage(run.id, plan.start);
-    return { runId: run.id, workspace: out.workspace };
-  }],
-  ["GET", /^\/api\/runs\/(\w+)$/, async (_q, m) => runView(await getRun(m[1]))],
   ["POST", /^\/api\/runs\/(\w+)\/activate$/, async (_q, m) => { await getRun(m[1]); await setActive(m[1]); return { ok: true }; }],
-  ["GET", /^\/api\/runs\/(\w+)\/summary$/, async (_q, m) => summary(await getRun(m[1]))],
-  ["POST", /^\/api\/runs\/(\w+)\/stage\/(\d+)\/start$/, async (req, m) => { const b = await body(req); const out = await startStage(m[1], Number(m[2]), !!b.reset); return { workspace: out.workspace, backup: out.backup, rewritten: out.rewritten }; }],
-  ["POST", /^\/api\/runs\/(\w+)\/stage\/(\d+)\/predict$/, async (req, m) => { const b = await body(req); return predict(m[1], Number(m[2]), String(b.pid), Number(b.choice)); }],
-  ["POST", /^\/api\/runs\/(\w+)\/stage\/(\d+)\/check$/, async (req, m) => {
-    const b = await body(req);
-    const out = await check(m[1], Number(m[2]), b.purpose === "observe" ? "observe" : "check");
-    lastCheck.set(`${m[1]}:${m[2]}`, out);
-    return out;
-  }],
-  ["POST", /^\/api\/runs\/(\w+)\/stage\/(\d+)\/hint$/, async (req, m) => { const b = await body(req); const lvl = Number(b.level); if (![1, 2, 3].includes(lvl)) throw Object.assign(new Error("힌트는 1~3단계예요."), { status: 400 }); return hint(m[1], Number(m[2]), lvl as 1 | 2 | 3, lastCheck.get(`${m[1]}:${m[2]}`)); }],
-  ["POST", /^\/api\/runs\/(\w+)\/stage\/(\d+)\/explain$/, async (req, m) => { const b = await body(req); return explain(m[1], Number(m[2]), String(b.text ?? "")); }],
-  ["POST", /^\/api\/runs\/(\w+)\/stage\/(\d+)\/skip$/, async (_q, m) => skip(m[1], Number(m[2]))],
-  ["POST", /^\/api\/runs\/(\w+)\/dev\/start$/, async (_q, m) => startDev(m[1])],
-  ["POST", /^\/api\/runs\/(\w+)\/dev\/stop$/, async (_q, m) => stopDev(m[1])],
-  ["GET", /^\/api\/runs\/(\w+)\/dev$/, async (_q, m) => devStatus(m[1])],
-  ["POST", /^\/api\/runs\/(\w+)\/try$/, async (req, m) => tryRequest(m[1], (await body(req)) as never)],
-  ["GET", /^\/api\/runs\/(\w+)\/lesson\/(\d+)$/, async (_q, m) => {
-    const v = await lessonView(m[1], Number(m[2]));
-    if (!v) throw Object.assign(new Error("이 단계의 수업 계획서가 없어요."), { status: 404 });
-    return v;
-  }],
-  ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/act$/, async (req, m) => { await act(m[1], Number(m[2]), (await body(req)) as never); return lessonView(m[1], Number(m[2])); }],
-  // AI 채팅 실험방(11/3): 추가 지시 · 실험용 진행 기록 · 프롬프트 처리 방식과 마지막으로 간 것
-  ["GET", /^\/api\/lab$/, async () => {
-    const lab = await import("../lib/lab.ts"); const { SYSTEM } = await import("../lib/oc-engine.ts");
-    const runId = await lab.labRun();
-    const pr = await import("../lib/prompts.ts"); const { ROOT_RULES, CHILD_RULES } = await import("../lib/lesson.ts"); const gen = await import("../lib/generate.ts");
-    const defs: Record<string, string> = { system: SYSTEM, fixedTpl: pr.DEFAULT_FIXED, turnTpl: pr.DEFAULT_TURN, freeSystem: pr.FREE_SYSTEM, freeFixed: pr.DEFAULT_FREE_FIXED, freeTurn: pr.DEFAULT_FREE_TURN, stuckRoot: ROOT_RULES, stuckChild: CHILD_RULES, files: "on", genPlan: gen.SYSTEM_PLAN, genStage: gen.SYSTEM_STAGE };
-    const prompts = pr.EDITABLE.map((e) => ({ ...e, def: defs[e.key] ?? "", current: pr.promptOf(e.key, defs[e.key] ?? ""), changed: pr.changed(e.key) }));
-    return { runId, extra: await lab.getExtra(), pipeline: lab.PIPELINE, system: SYSTEM, prompts, last: await lab.lastPrompt(runId) };
-  }],
-  ["POST", /^\/api\/lab\/prompt$/, async (req) => { const pr = await import("../lib/prompts.ts"); const b = await body(req); const key = String(b.key ?? ""); if (!pr.EDITABLE.some((e) => e.key === key)) throw Object.assign(new Error("고칠 수 없는 항목이에요."), { status: 400 }); await pr.setPrompt(key, String(b.text ?? "")); return { ok: true }; }],
-  ["POST", /^\/api\/lab\/extra$/, async (req) => { const lab = await import("../lib/lab.ts"); const b = await body(req); return { extra: await lab.setExtra(String(b.extra ?? "")) }; }],
-  ["POST", /^\/api\/lab\/new$/, async (req) => {
-    const b = await body(req);
-    const lab = await import("../lib/lab.ts");
-    const course = await loadCourse(String(b.courseId || "hello-api"));
-    const main = course.generated ? course.generated.outline.map((o) => o.n) : course.stages.filter((s) => !s.transfer).map((s) => s.n);
-    const plan = { start: main[0], stages: main, quick: [], transfer: false, reasons: ["실험방"], notes: [], minutes: main.length * 5 };
-    const run: Run = { id: randomBytes(5).toString("hex"), courseId: course.id, createdAt: new Date().toISOString(), plan, current: plan.start, workspaces: {}, stages: {} };
-    await addRun(run);
-    await startStage(run.id, plan.start);
-    await lab.setLabRun(run.id);
-    return { runId: run.id };
-  }],
-  // [막혔어요](11/3): 고른 코드에서 단어 고르기
-  ["GET", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/stuck-words$/, async (_q, m) => { await getRun(m[1]); return stuckWords(m[1], Number(m[2])); }],
-  ["GET", /^\/api\/basics$/, async () => { const { basicsStore, promotable } = await import("../lib/basics.ts"); return { ...(await basicsStore()), promotable: await promotable() }; }],
-  // 답하는 중에: 멈추기 · 튜터가 고르게 물은 것에 답하기 (10/30)
-  ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/stop$/, async (_q, m) => { await getRun(m[1]); return stopAsk(m[1], Number(m[2])); }],
-  ["POST", /^\/api\/runs\/(\w+)\/lesson\/(\d+)\/answer$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return answerAsk(m[1], Number(m[2]), { id: String(b.id ?? ""), choice: typeof b.choice === "number" ? b.choice : undefined, text: typeof b.text === "string" ? b.text : undefined }); }],
-  // 튜터 설명 속 코드 블록 [▶ 돌려 보기]: 따로 떨어진 곳에서 4초까지
   ["POST", /^\/api\/runs\/(\w+)\/snippet$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return runSnippet(String(b.code ?? "")); }],
   ["POST", /^\/api\/bridge\/hello$/, async (req) => {
     const b = await body(req);
@@ -315,53 +137,33 @@ const routes: [string, RegExp, Handler][] = [
     if (out.runId) openFloat(out.runId, PORT);
     return { ...out, update, float: floatInUse() };
   }],
-  // 학습자가 VS Code 터미널에서 친 명령(확장 0.8.0, 작업 폴더 안만): 다음 튜터 차례 맥락과 [해 봤어요] 판정에 들어간다
   ["POST", /^\/api\/bridge\/terminal$/, async (req) => { const b = await body(req); const id = String(b.runId ?? ""); await getRun(id); const r = await (await import("../lib/shell.ts")).learnerRan(id, b); await (await import("../lib/moments.ts")).onCommand(id, String(b.command ?? ""), typeof b.exitCode === "number" ? b.exitCode : null, String(b.output ?? "")).catch(() => {}); await (await import("../lib/timeline.ts")).systemStep(id, `터미널: ${String(b.command ?? "").slice(0, 80)}`, { exitCode: b.exitCode ?? null }, 0, "system").catch(() => {}); return r; }],
-  // 시험용(11/8): AI 없이 확장의 코드 이해 · 디버거에 바로 묻기
   ["POST", /^\/api\/dev\/bridge\/(\w+)$/, async (req, m) => { const b = await body(req); const op = String(b.op ?? ""); const nav = await import("../lib/codenav.ts"); return { text: op === "debug" ? await nav.debugPeekTool(m[1], b) : await nav.codeNavTool(m[1], b) }; }],
-  // 부족함 원장 · 다시 확인 · 세션 노트(11/8)
   ["GET", /^\/api\/rechecks$/, async (req) => { const G = await import("../lib/gaps.ts"); const all = req.url?.includes("all=1"); const list = await G.rechecks({ due: !all }); return { items: list.slice(0, 30).map(G.recheckView), total: (await G.rechecks()).length }; }],
   ["POST", /^\/api\/rechecks\/(\w+)\/(G\d+-[0-9a-f]{4})$/, async (req, m) => {
     const b = await body(req); const G = await import("../lib/gaps.ts");
     const r = await G.answerRecheck(m[1], m[2], String(b.answer ?? ""), (g) => G.gradeRecheck(g, String(b.answer ?? "")));
     return { verdict: r.verdict.verdict, sameMistake: r.verdict.same_mistake, note: r.verdict.note, answer: r.gap?.recheck?.a ?? "", right: r.gap?.right ?? "", status: r.gap?.status, dueAt: r.gap?.dueAt ?? null };
   }],
-  ["POST", /^\/api\/dev\/rerecord\/(\w+)$/, async (_q, m) => (await import("../lib/lesson.ts")).rerecordWithLedger(m[1])],
-  // 나의 학습 노트(11/10): local=1이면 이 컴퓨터 것만(앱이 받아 앱 데이터에 둔다), 아니면 다른 컴퓨터 것까지 합친 네 칸
   ["GET", /^\/api\/learner-note$/, async (q) => { const L = await import("../lib/learner-note.ts"); return new URL(q.url ?? "/", "http://x").searchParams.get("local") ? L.localNote() : L.learnerNote(); }],
-  // 앱 안 편집기 위 띠(11/11 사용자 "위에 남은 공간에 장기 목표 단기 목표"): 짧은 목표 상태만(AI 없음)
   ["GET", /^\/api\/runs\/(\w+)\/goals-brief$/, async (_q, m) => {
     await getRun(m[1]);
     const g = await (await import("../lib/goals.ts")).goalsOf(m[1]);
     const sp = g.support && !g.support.back ? g.support.steps.find((x) => x.status === "doing") : null;
     return { long: g.long?.text ?? null, mode: g.mode, current: g.current ? { title: g.current.title, done: g.current.done, understood: g.current.understood, applied: g.current.applied } : null,
       support: sp ? { title: sp.title, target: g.support!.target.title } : null, map: g.map.filter((x) => !x.support).map((x) => ({ title: x.title, status: x.status })),
-      base: (await import("../lib/goals.ts")).baseBrief(g), prereqs: (await import("../lib/goals.ts")).prereqBrief(g) };
+      prereqs: (await import("../lib/goals.ts")).prereqBrief(g) };
   }],
-  // 먼저 알 것을 학습자가 직접 표시(11/11): { name, result: "됨" | "비어 있음" | null }
   ["POST", /^\/api\/runs\/(\w+)\/base$/, async (req, m) => {
     await getRun(m[1]);
     const b = await body(req);
     const r = b.result === "됨" || b.result === "비어 있음" ? b.result : null;
-    return (await import("../lib/goals.ts")).setBaseSelf(m[1], String(b.name ?? ""), r);
+    return (await import("../lib/goals.ts")).setPrereqSelf(m[1], String(b.name ?? ""), r);
   }],
-  // 막힌 순간(11/11): 오류 · 틀림 · 어려워요부터 풀림 · 넘어감까지 한 장면씩(걸린 시간 · 바뀐 줄은 볼 때 계산)
   ["GET", /^\/api\/runs\/(\w+)\/moments$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/moments.ts")).momentsView(m[1]); }],
   ["GET", /^\/api\/runs\/(\w+)\/note$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/gaps.ts")).sessionNote(m[1]); }],
   ["POST", /^\/api\/bridge\/answer$/, async (req) => { const b = await body(req); return (await import("../lib/bridge.ts")).bridgeAnswer(String(b.id ?? ""), b.result ?? null); }],
   ["POST", /^\/api\/bridge\/state$/, async (req) => { const b = await body(req) as Record<string, never>; await getRun(String(b.runId)); const { runId, ...state } = b; bridgeSetState(runId, state); return { ok: true }; }],
-  ["POST", /^\/api\/bridge\/ask$/, async (req) => {
-    const b = await body(req);
-    const run = await getRun(String(b.runId));
-    const plan = await loadPlan(run.courseId, run.current);
-    if (!plan) throw Object.assign(new Error("이 단계에는 튜터 수업이 없어요."), { status: 409 });
-    const quote = { file: String(b.file), from: Number(b.from), to: Number(b.to), code: String(b.code ?? "").slice(0, 4000) };
-    if (b.mode === "what") void lessonWhat(run.id, run.current, plan, quote).catch((e) => console.error(e));
-    else if (b.mode === "block") void lessonBlock(run.id, run.current, plan, { ...quote, code: String(b.code ?? "").slice(0, 6000) }).catch((e) => console.error(e));
-    else void lessonAsk(run.id, run.current, plan, String(b.question ?? ""), quote).catch((e) => console.error(e));
-    return { ok: true };
-  }],
-  // 앱 안 편집기(11/11): 상태(받기 전이면 크기) · 받기 · 실습 폴더를 연 주소
   ["GET", /^\/api\/editor-web$/, async () => (await import("../lib/editor-web.ts")).status()],
   ["POST", /^\/api\/editor-web\/install$/, async () => (await import("../lib/editor-web.ts")).install()],
   ["POST", /^\/api\/runs\/(\w+)\/editor-web$/, async (_req, m) => {
@@ -371,16 +173,14 @@ const routes: [string, RegExp, Handler][] = [
     return { folder, url: await (await import("../lib/editor-web.ts")).urlFor(folder) };
   }],
   ["POST", /^\/api\/runs\/(\w+)\/editor$/, async (req, m) => { const b = await body(req).catch(() => ({} as Record<string, unknown>)); const out = await openEditor(m[1]); if (b.float !== false) openFloat(m[1], PORT); return out; }],
-  // 11/4 사용자 "직접 고치는 권한(처음에 확인 요청)" · "채팅창에서 모델 변경": 대화 설정
   ["POST", /^\/api\/runs\/(\w+)\/chat-options$/, async (req, m) => {
     const run = await getRun(m[1]);
     if (!run.chatId && !run.codexId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
     if (run.codexId) { const b = await body(req); await (await import("../lib/codex-chat.ts")).setOptions(run.codexId, { ...(b.model !== undefined ? { model: b.model } : {}), ...(b.edit !== undefined ? { edit: b.edit } : {}) }); }
     else await (await import("../lib/agent-chat.ts")).setChatOptions(run.chatId!, await body(req));
     notifyLesson(run.id);
-    return lessonView(run.id, run.current);
+    return practiceView(run.id);
   }],
-  // 배운 것 지금 뽑기(11/4): 질문이 끝날 때 저절로 돌지만, 예전 대화나 실패했던 것을 다시 볼 때
   ["POST", /^\/api\/runs\/(\w+)\/learned$/, async (_q, m) => {
     const run = await getRun(m[1]);
     if (!run.chatId && !run.codexId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
@@ -391,65 +191,42 @@ const routes: [string, RegExp, Handler][] = [
     notifyLesson(run.id);
     return { accepted: got?.ok.length ?? 0, rejected: got?.bad ?? [], ...(await cl.learnedOf(key)) };
   }],
-  // 11/4 사용자 "현재 작업 폴더 위치도 사람이 보고 수정 가능하게": 대화(실험판 엔진)의 작업 폴더를 바꾼다. VS Code도 그 폴더를 연다
-  // 저장하면 튜터가 확인 켜고 끄기 (2026-11-06)
   ["POST", /^\/api\/runs\/(\w+)\/auto-check$/, async (req, m) => { const b = await body(req); await saveRun(m[1], (r) => { r.autoCheck = b.on !== false; }); notifyLesson(m[1]); return { autoCheck: b.on !== false }; }],
   ["POST", /^\/api\/runs\/(\w+)\/workspace$/, async (req, m) => {
     const b = await body(req);
     const run = await getRun(m[1]);
     if (!run.chatId && !run.codexId) throw Object.assign(new Error("대화가 아닌 진행이에요."), { status: 400 });
     const v = run.codexId ? await (await import("../lib/codex-chat.ts")).setOptions(run.codexId, { workspace: String(b.path ?? "") }) : await (await import("../lib/agent-chat.ts")).setChatWorkspace(run.chatId!, String(b.path ?? ""));
-    const course = await loadCourse(run.courseId);
-    await saveRun(run.id, (r) => { r.workspaces[course.stages.find((s) => s.n === r.current)!.template] = v.workspace; });
+    await saveRun(run.id, (r) => { r.workspaces = { chat: v.workspace }; });
     await (await import("../lib/learn.ts")).markChatFolder(v.workspace);
     notifyLesson(run.id);
     return { workspace: v.workspace };
   }],
-  // 튜터 창(lib/float.ts): 창이 0.25초마다 묻는다
-  // 코스 생성(lib/generate.ts): 목표 → 목차 → 1단계(관문) — AI 사용량이 든다
-  // 캐시 원인 확인(11/3): 마지막 튜터 요청을 변형해 두 번씩 보내 캐시 읽기를 본다(AI 사용량 듦, 사람이 부를 때만)
   ["POST", /^\/api\/debug\/cache-probe$/, async (req) => { const b = await body(req); const { cacheProbe } = await import("../lib/cacheprobe.ts"); return cacheProbe(Array.isArray(b.only) ? b.only.map(String) : undefined, Math.min(120000, Number(b.waitMs) || 0), b.apiKey === true, (b.headers && typeof b.headers === "object" ? b.headers : {}) as Record<string, string>); }],
-  ["POST", /^\/api\/generate$/, async (req) => { const b = await body(req); const goal = String(b.goal ?? "").trim(); if (goal.length < 4) throw Object.assign(new Error("만들고 싶은 걸 조금 더 적어 주세요."), { status: 400 }); return { id: await startGeneration(goal) }; }],
-  ["GET", /^\/api\/generate\/(gen-[a-f0-9]+)$/, async (_q, m) => (await genStatus(m[1])) ?? { phase: "failed", message: "없는 코스예요." }],
   ["GET", /^\/api\/float$/, async (_q, _m, url) => { const p = floatPoll(url.searchParams.has("w")); let workspace: string | null = null;
-    if (p.runId) { try { const r = await getRun(p.runId); const c = await loadCourse(r.courseId); workspace = workspaceOf(r, c.stages.find((s) => s.n === r.current)!.template); } catch { /* 지운 기록 */ } }
+    if (p.runId) workspace = (await (await import("../lib/goals.ts")).runWorkspace(p.runId).catch(() => null)) ?? null;
     return { ...p, workspace }; }],
   ["POST", /^\/api\/float$/, async (req) => setFloat(await body(req), PORT)],
   ["POST", /^\/api\/bridge\/typing$/, async () => { floatTyping(); return { ok: true }; }],
-  ["GET", /^\/api\/runs\/(\w+)\/knowledge-export$/, async (_q, m) => { const run = await getRun(m[1]); const course = await loadCourse(run.courseId); return knowledgeExport(run.id, course.title); }],
-  // 앱 지식 저장소 잇기: 앱(3000)이 안 보낸 것을 받아 넣고, 넣은 열쇠를 돌려준다(lib/sync.ts)
-  ["GET", /^\/api\/runs\/(\w+)\/sync$/, async (_q, m) => { const run = await getRun(m[1]); return pending(run.id, await loadCourse(run.courseId), run); }],
-  // 튜터 평가(11/8, 실험실): 판정 시험을 뒤에서 돌리고 결과를 .data/evals/에
+  ["GET", /^\/api\/runs\/(\w+)\/sync$/, async (_q, m) => { const run = await getRun(m[1]); return pending(run.id, run); }],
   ["POST", /^\/api\/dev\/eval\/judge$/, async (req) => { const b = await body(req) as { conds?: unknown; ids?: string[]; repeat?: number; set?: string }; return (await import("../lib/evals.ts")).startJudgeEval(Array.isArray(b.conds) ? b.conds as never : [{ name: "base-low", effort: "low" }], { ids: b.ids, repeat: b.repeat, set: b.set }); }],
   ["POST", /^\/api\/dev\/eval\/record$/, async (req) => { const b = await body(req) as { archive?: string; runIds?: string[]; efforts?: string[]; repeat?: number }; const { DATA } = await import("../lib/store.ts");
     // archive: .data/보관/<이름> (없으면 지금 데이터)
     const dir = b.archive ? path.join(DATA, "보관", path.basename(String(b.archive))) : DATA;
     return (await import("../lib/evals.ts")).startRecordEval({ dataDir: dir, runIds: (b.runIds ?? []).map(String), efforts: (b.efforts ?? ["low", "medium"]).map(String), repeat: b.repeat }); }],
-  // 평가 결과 보기(11/8 사용자 "실험도 같은 모양으로 보기 편하게")
   ["GET", /^\/api\/dev\/evals$/, async () => { const { DATA } = await import("../lib/store.ts"); const { readdir } = await import("node:fs/promises"); const xs = (await readdir(path.join(DATA, "evals")).catch(() => [] as string[])).filter((f) => f.endsWith(".json")).sort().reverse(); return { items: xs.map((f) => f.replace(/\.json$/, "")) }; }],
   ["GET", /^\/api\/dev\/evals\/([\w-]+)$/, async (_q, m) => { const { DATA } = await import("../lib/store.ts"); const { readFile } = await import("node:fs/promises"); const r = JSON.parse(await readFile(path.join(DATA, "evals", `${m[1]}.json`), "utf8"));
     if (String(m[1]).startsWith("judge")) { const { loadCases } = await import("../lib/evals.ts"); const all = [...await loadCases("main"), ...await loadCases("holdout")]; r.cases = Object.fromEntries(all.map((c) => [c.id, c])); }
     return r; }],
   ["GET", /^\/api\/dev\/eval\/([\w-]+)$/, async (_q, m) => (await import("../lib/evals.ts")).jobOf(m[1]) ?? { status: "none" }],
-  // 실험 자료 비우기(11/6): 실습 자료만 보관으로(앱 자료는 앱이 꺼져 있을 때 "자료 비우기(실험용).cmd")
   ["POST", /^\/api\/dev\/reset$/, async () => { const { archivePractice } = await import("../tools/reset-data.mjs"); const { DATA, PRACTICE } = await import("../lib/store.ts"); return archivePractice(DATA, "실험", PRACTICE) ?? { label: null, count: 0 }; }],
-  // 학습자 메모리(11/6): 보기 · 고치기 · 지우기
   ["GET", /^\/api\/memory$/, async () => ({ items: await (await import("../lib/memory.ts")).memoryOf() })],
   ["POST", /^\/api\/memory\/(m[a-f0-9]{6})$/, async (req, m) => (await import("../lib/memory.ts")).editMemory(m[1], await body(req))],
-  // 학습 기록 타임라인(11/8): 행동 하나 = 한 칸, 칸마다 상태 · 변화 · 도구 · 토큰
   ["GET", /^\/api\/runs\/(\w+)\/timeline$/, async (_q, m) => (await import("../lib/timeline.ts")).timelineView(m[1])],
-  ["POST", /^\/api\/runs\/(\w+)\/end$/, async (_q, m) => (await import("../lib/lesson.ts")).endLearning(m[1])],
-  ["POST", /^\/api\/runs\/(\w+)\/redo-records$/, async (_q, m) => (await import("../lib/lesson.ts")).redoGoalRecords(m[1])],
+  ["POST", /^\/api\/runs\/(\w+)\/end$/, async (_q, m) => (await import("../lib/practice.ts")).endLearning(m[1])],
+  ["POST", /^\/api\/runs\/(\w+)\/redo-records$/, async (_q, m) => (await import("../lib/practice.ts")).redoGoalRecords(m[1])],
   ["POST", /^\/api\/runs\/(\w+)\/sync$/, async (req, m) => { await getRun(m[1]); const b = await body(req); return markSent(m[1], Array.isArray(b.keys) ? b.keys.map(String) : []); }],
-  ["GET", /^\/api\/runs\/(\w+)\/notes$/, async (_q, m) => {
-    // 프로젝트 노트: 파일별 기록 + 연결 + 만난 말, 파일 역할은 코스의 부품 카드에서
-    const run = await getRun(m[1]);
-    const course = await loadCourse(run.courseId);
-    const ws = workspaceOf(run, course.stages.find((s) => s.n === run.current)!.template);
-    const view = await notesView(run.id, ws);
-    const role = (f: string) => course.parts.find((p) => p.files.includes(f));
-    return { ...view, workspace: ws, files: view.files.map((x) => ({ ...x, part: role(x.file) ? { name: role(x.file)!.name, role: role(x.file)!.role } : null })) };
-  }],
+  ["POST", /^\/api\/dev\/rerecord\/(\w+)$/, async (_q, m) => (await import("../lib/practice.ts")).rerecordWithLedger(m[1])],
 ];
 
 const TYPES: Record<string, string> = { ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml" };
@@ -489,9 +266,8 @@ const server = createServer(async (req, res) => {
 });
 
 onBridgeChange((id) => notifyLesson(id));
-onBridgeConnect((id) => { refocus(id).catch(() => {}); });
-onBridgeSaved((id, file) => { import("../lib/lesson.ts").then((m) => m.checkOnSave(id, file)).catch((e) => console.error("저장 확인:", e)); });
-const shutdown = () => { killAll(); closeWatchers(); process.exit(0); };
+onBridgeSaved((id, file) => { import("../lib/practice.ts").then((m) => m.checkOnSave(id, file)).catch((e) => console.error("저장 확인:", e)); });
+const shutdown = () => { killAll(); process.exit(0); };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 process.on("SIGHUP", shutdown);

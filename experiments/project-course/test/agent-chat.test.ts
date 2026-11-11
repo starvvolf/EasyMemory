@@ -12,12 +12,10 @@ const { runs } = await import("../lib/store.ts");
 const { shapeRequest, SYSTEM } = await import("../lib/oc-engine.ts");
 const { CHAT_SYSTEM } = await import("../lib/agent-chat-policy.ts");
 
-test("실험 기록은 기존 코스 진도와 분리되고 코스 자료를 재사용한다", async () => {
+test("실험 기록은 진도 기록과 분리되고, 정해진 코스 자료는 없다(11/11 뺌)", async () => {
   const s = await newChat();
   assert.equal((await runs()).runs.length, 0);
-  const material = JSON.parse(await chatTool(s.id, "get_course_material", {}));
-  assert.equal(material.stages.length, 2);
-  assert.ok(material.startFiles["src/app.ts"]);
+  assert.equal(await chatTool(s.id, "get_course_material", {}), "정해진 코스는 없어요.");
   await assert.rejects(chatOf("../runs"), /올바르지/);
 });
 
@@ -120,7 +118,6 @@ test("프롬프트 편집은 다음 질문에 적용하고 세션을 바꾸되 �
     await askChat(s.id, "두 번째 질문", async (io) => {
       second = io.sessKey!;
       assert.equal(io.learningChat!.system, "편집한 튜터 지시");
-      assert.equal(io.parts!.fixed, "편집한 코스 맥락");
       assert.match(io.parts!.turn, /번호: \d+/);
       assert.match(io.parts!.recent, /첫 답변/);
       await io.learningChat!.capture!({ instructions: io.learningChat!.system, input: [{ role: "user", content: "두 번째 질문" }] });
@@ -130,7 +127,6 @@ test("프롬프트 편집은 다음 질문에 적용하고 세션을 바꾸되 �
     const debug = await chatDebug(s.id);
     assert.equal(debug.trace!.question, "두 번째 질문");
     assert.equal(debug.trace!.requests[0].body.instructions, "편집한 튜터 지시");
-    assert.equal(debug.prompts.fixed, "편집한 코스 맥락");
     assert.ok(debug.layout.length > 0);
     const blank = shapeRequest({ instructions: SYSTEM }, false, "");
     assert.equal(blank.instructions, "");

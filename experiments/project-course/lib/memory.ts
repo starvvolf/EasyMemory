@@ -1,12 +1,11 @@
 // 학습자 메모리 (2026-11-06 사용자 "GPT에서 메모리 관리하듯이 이 사람이 어느 정도인지 관리하는 거 하나. 옛날 거 안 쓰는 거 다 버리고 학습자 메모리만").
 // 실습 전체에 한 사람에 하나(.data/learner-memory.json). 두 종류:
-// - 진행 방식: 학습자가 정해 둔 방식(remember_preference, 근거 = 학습자 말 그대로). 예전 preferences.json은 처음 읽을 때 옮긴다.
+// - (진행 방식은 11/11에 뺐다: 도움 다이얼과 겹침. 예전 항목은 파일에 남아 있지만 읽지 않는다)
 // - 경향: 목표 정리(goal-record) 호출이 같이 내는 갱신(더하기 · 이어 보임 · 나아짐). 근거는 그 정리의 "부족했던 점"(나아짐은 "배운 것") 이름만 인정.
 // 상태는 코드가 정한다: 새로 = 가설, 서로 다른 목표 2곳 이상에서 보이면 = 확인, 나아진 근거가 오면 = 나아짐(다시 보이면 확인으로).
 // 학습자가 화면에서 고치거나 지운다. 튜터는 매 차례 맥락([학습자 메모리])과 learner_profile 도구로 읽는다.
 import path from "node:path";
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
 import { DATA, read, update } from "./store.ts";
 
 export type MemKind = "진행 방식" | "경향";
@@ -24,29 +23,15 @@ const hist = (it: MemItem, what: string) => { it.history.push({ at: now(), what 
 const statusOf = (it: MemItem): MemStatus => (new Set(it.evidence.map((e) => `${e.runId}:${e.goal}`)).size >= 2 ? "확인" : "가설");
 
 export async function memoryOf(): Promise<MemItem[]> {
-  let m = await read<Mem>(FILE(), { items: [] });
-  if (!m.migrated) {
-    // 예전 Codex 진행 방식(codex-chat/preferences.json)을 한 번 옮긴다
-    const old = path.join(DATA, "codex-chat", "preferences.json");
-    const prefs = existsSync(old) ? (await read<{ items: { text: string; quote: string; chatId: string; at: string }[] }>(old, { items: [] })).items : [];
-    m = await update<Mem>(FILE(), { items: [] }, (x) => {
-      if (x.migrated) return;
-      for (const p of prefs) if (!x.items.some((i) => i.kind === "진행 방식" && norm(i.text) === norm(p.text)))
-        x.items.push({ id: newId(), kind: "진행 방식", text: p.text, status: "확인", evidence: [{ runId: p.chatId, goal: "", name: p.quote, at: p.at }], first: p.at, at: p.at, history: [{ at: p.at, what: "학습자가 정함" }] });
-      x.migrated = true;
-    });
-  }
-  return m.items;
+  // 진행 방식(11/11 뺌: 도움 다이얼이 맡는다)은 읽지 않는다
+  return (await read<Mem>(FILE(), { items: [] })).items.filter((i) => i.kind === "경향");
 }
 
-/** 튜터 맥락에 넣는 짧은 글. 나아짐은 빼고, 진행 방식 먼저 */
+/** 튜터 맥락에 넣는 짧은 글. 나아짐은 뺀다 */
 export async function memoryText(withIds = false) {
-  const items = await memoryOf();
-  const pref = items.filter((i) => i.kind === "진행 방식");
-  const tend = items.filter((i) => i.kind === "경향" && i.status !== "나아짐").sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
-  if (!pref.length && !tend.length) return "";
-  const line = (i: MemItem) => `- ${withIds ? `[${i.id}] ` : ""}${i.text}${i.kind === "경향" ? ` (${i.status}, 근거 ${i.evidence.length})` : ""}`;
-  return [pref.length ? `[학습자가 정해 둔 진행 방식]\n${pref.map(line).join("\n")}` : "", tend.length ? `[학습자 메모리 — 여러 목표에서 본 경향, 단정 아님]\n${tend.map(line).join("\n")}` : ""].filter(Boolean).join("\n\n");
+  const tend = (await memoryOf()).filter((i) => i.status !== "나아짐").sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
+  if (!tend.length) return "";
+  return `[학습자 메모리 — 여러 목표에서 본 경향, 단정 아님]\n${tend.map((i) => `- ${withIds ? `[${i.id}] ` : ""}${i.text} (${i.status}, 근거 ${i.evidence.length})`).join("\n")}`;
 }
 /** 목표 정리 호출에 넣는 지금 메모리(id 포함, 나아짐도 보여 다시 보이는지 판단하게) */
 export async function memoryForRecord() {
@@ -100,12 +85,4 @@ export async function editMemory(id: string, b: Record<string, unknown>) {
     if (text) { m.items[i].text = text; m.items[i].edited = true; m.items[i].at = now(); hist(m.items[i], "학습자가 고침"); }
   });
   return { items: await memoryOf() };
-}
-export async function addPreference(text: string, quote: string, chatId: string) {
-  await memoryOf();
-  await update<Mem>(FILE(), { items: [] }, (m) => {
-    const same = m.items.find((i) => i.kind === "진행 방식" && norm(i.text) === norm(text));
-    if (same) { same.evidence.push({ runId: chatId, goal: "", name: quote, at: now() }); same.at = now(); return; }
-    m.items.push({ id: newId(), kind: "진행 방식", text, status: "확인", evidence: [{ runId: chatId, goal: "", name: quote, at: now() }], first: now(), at: now(), history: [{ at: now(), what: "학습자가 정함" }] });
-  });
 }

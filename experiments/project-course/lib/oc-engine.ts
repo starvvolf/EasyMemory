@@ -11,12 +11,10 @@ import { pathToFileURL } from "node:url";
 import { lineDiff, ROOT } from "./course.ts";
 import { aiBudget, aiMode, AiUnavailable, chatGptBearer, countCalls } from "./ai.ts";
 import { bridgeContext, bridgeState, send as bridgeSend } from "./bridge.ts";
-import { editsDir, runTool, safePath, type AgentIO, type EditRecord, type ToolName } from "./agent.ts";
+import { editsDir, safePath, type AgentIO, type EditRecord } from "./agent.ts";
 import { DATA, saveRun, stageProgress } from "./store.ts";
 import { DOC_HOSTS, lookDocs, runSnippet } from "./tutor-tools.ts";
 import { logAnswer, logPrompt, logUsage } from "./promptlog.ts";
-import { getCourse, getLearningHistory, getProgress, getStep, recordObservation } from "./learning-tools.ts";
-import { goDeeper, nameGap, resolveTop } from "./stuck.ts";
 import { CHAT_SYSTEM, CHAT_TOOLS as CHAT_TOOLS_BASE } from "./agent-chat-policy.ts";
 import { GOAL_TOOLS } from "./goals.ts";
 // 자유 대화 도구 + 학습 목표 도구(11/4 사용자 설계 "장기 목표 / 현재 목표"). 목표 도구는 제품 대화에서만 보이고(그 밖엔 hide) 처리는 io.learningChat.execute가 한다
@@ -30,16 +28,12 @@ export const OC_VERSION = "2.2.1";
 const MODEL = process.env.RECALLER_ASSIST_MODEL?.trim() || "gpt-6.1-terra";
 const MAX_STEPS = 8;
 const READ = new Set(["read", "glob", "grep"]);
-const OURS = ["open_in_editor", "start_server", "send_request", "run_checks", "look_db"] as const;
 const EDITS = new Set(["edit", "write", "patch"]); // GPT 모델에서는 patch(apply_patch)로 고친다
 // GPT 앱처럼 넓히기(10/30 사용자 "45까지 해봐"): 되묻기 · 코드 조각 돌려 보기 · 공식 문서 찾기
 const EXTRA = ["ask_learner", "run_snippet", "look_docs"] as const;
-// 학습 도구(11/3 구조도): 읽기 넷 + 관찰 남기기. 진도를 바꾸는 도구는 없다
-const LEARN = ["get_course", "get_progress", "get_step", "get_learning_history", "record_observation"] as const;
-// [막혔어요] 칸 안에서만(11/3): 칸 이름 붙이기 · 한 칸 더 아래로 · 풀림
-const STUCK = ["stuck_name_gap", "stuck_go_deeper", "stuck_resolved"] as const;
-const SHOWN = new Set([...READ, ...EDITS, ...OURS, "show_tour", ...EXTRA, ...LEARN, ...STUCK]);
-const BASIC = ["read", "send_request", "run_snippet", "run_checks", ...LEARN];
+// (11/11 정해진 코스를 빼며 코스 도구 · 학습 도구 · [막혔어요] 칸 도구를 뺐다)
+const SHOWN = new Set([...READ, ...EDITS, "show_tour", ...EXTRA]);
+const BASIC = ["read", "run_snippet"];
 /** 생각 요약(reasoning summary)을 받는다. 계정이 안 받아 주면 한 번 실패한 뒤 끈다 */
 let reasoningSummary = process.env.PC_REASONING_SUMMARY !== "0";
 /** 고치기 도구 입력에서 파일 경로들 */
@@ -207,7 +201,6 @@ function policyPlugin(fake: boolean) {
         const custom = new Set<string>(l?.io.learningChat ? CHAT_TOOLS.map((t) => t.name) : []);
         const allow = l?.io.learningChat ? new Set([...READ, "run_snippet", ...custom, ...(l.io.learningChat.edit ? EDITS : [])])
           : l?.io.mode === "explain" ? new Set<string>() : l?.io.mode === "tour" ? new Set(["show_tour"])
-          : l?.io.stuck ? new Set([...BASIC, ...STUCK])
           : l?.io.scope?.length ? new Set([...BASIC, ...EDITS]) : new Set(BASIC);
         for (const k of Object.keys(ev.tools)) if ((!SHOWN.has(k) && !custom.has(k)) || !allow.has(k)) delete ev.tools[k];
         for (const k of l?.io.learningChat?.hide ?? []) delete ev.tools[k];
@@ -228,7 +221,7 @@ function policyPlugin(fake: boolean) {
           ev.effect = READ.has(ev.action) || ev.action === "run_snippet" || CHAT_TOOLS.some((t) => t.name === ev.action) ? "allow" : "deny";
           return;
         }
-        if (READ.has(ev.action) || (OURS as readonly string[]).includes(ev.action) || ev.action === "show_tour" || (EXTRA as readonly string[]).includes(ev.action) || (LEARN as readonly string[]).includes(ev.action) || (STUCK as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
+        if (READ.has(ev.action) || ev.action === "show_tour" || (EXTRA as readonly string[]).includes(ev.action)) { ev.effect = "allow"; return; }
         if (EDITS.has(ev.action)) {
           if (l?.io.mode === "explain") { ev.effect = "deny"; ev.message = "지금은 설명만 하는 시간이에요."; return; }
           const files: string[] = (ev.resources ?? []).map((r: string) => String(r).replace(/\\/g, "/"));
@@ -270,14 +263,6 @@ function policyPlugin(fake: boolean) {
         else if (EDITS.has(ev.tool) && ok) { for (const f of editPaths(ev.tool, ev.input)) await recordEdit(l, relOf(f)); }
         else if (EDITS.has(ev.tool) && !ok) await l.io.show({ type: "tool", icon: "✋", label: `고치지 않았어요: ${String(ev.error?.message ?? "").slice(0, 120)}`, ok: false });
       });
-      // 우리 도구: 기존 도구 코드를 그대로 쓴다(채팅 카드도 거기서 나온다)
-      const desc: Record<(typeof OURS)[number], [string, Record<string, unknown>, string[]]> = {
-        open_in_editor: ["학습자의 VS Code에서 그 파일·줄을 열고 강조한다. 학습자에게 보여 줄 곳은 꼭 이걸로 연다.", { path: { type: "string" }, line: { type: "number" }, toLine: { type: "number" }, note: { type: "string" } }, ["path", "line"]],
-        start_server: ["학습자의 실습 서버(4101)를 켠다.", {}, []],
-        send_request: ["실습 서버에 실제 HTTP 요청을 보내고 답장을 본다. as는 로그인한 사람(A/B) 또는 비움.", { method: { type: "string" }, path: { type: "string" }, body: {}, as: { type: "string" } }, ["method", "path"]],
-        run_checks: ["이번 단계 자동 검사를 돌린다(통과 판정은 검사기가 한다).", {}, []],
-        look_db: ["실습 서버가 쓰는 DB(SQLite)를 읽기만 한다. 응답이 아니라 실제로 저장된 값을 보여 줄 때 쓴다. SELECT만, 20줄까지.", { sql: { type: "string" } }, ["sql"]],
-      };
       await ctx.tool.transform((ed: any) => {
         for (const tool of CHAT_TOOLS) {
           ed.add({ name: tool.name, description: tool.description, options: { codemode: false }, input: { type: "object", additionalProperties: false, properties: tool.properties, required: [...tool.required] },
@@ -347,55 +332,6 @@ function policyPlugin(fake: boolean) {
               return { content: `문서를 열지 못했어요: ${(e as Error).message}. 아는 범위에서 답하되 확실하지 않은 건 그렇다고 말하세요.` };
             }
           } });
-        // 학습 도구(11/3): 코스·진도·과제·기록 읽기와 관찰 남기기
-        const learnTools: [string, string, Record<string, unknown>, string[], (l: Live, input: any) => Promise<string>][] = [
-          ["get_course", "코스 목표와 전체 단계(목차), 지금 단계를 본다.", {}, [], (l) => getCourse(l.io.runId)],
-          ["get_progress", "학습자의 진도와 개념별 상태(이해 · 배우는 중 · 약함, 검사로 확인했는지, 오개념 관찰)를 본다. 학습자 수준을 판단하기 전에 쓴다.", {}, [], (l) => getProgress(l.io.runId)],
-          ["get_step", "지금 단계의 목표 · 학습자가 고칠 곳 · 통과 기준(검사 목록) · 마지막 검사 결과를 본다.", {}, [], (l) => getStep(l.io.runId, l.io.n)],
-          ["get_learning_history", "최근 학습 기록(질문 · 예측 · 검사 · 힌트 · 누가 고쳤나)을 본다. 전에 막혔던 곳을 확인할 때 쓴다.", {}, [], (l) => getLearningHistory(l.io.runId)],
-          ["record_observation", "대화에서 본 학습자의 이해 · 헷갈림 · 오개념을 한 문장으로 남긴다. 검증 안 됨으로 남고 진도는 바꾸지 않는다. 분명히 드러났을 때만.",
-            { kind: { type: "string", enum: ["understood", "confused", "misconception"] }, concept: { type: "string", description: "개념 id 또는 이름(모르면 비움)" }, note: { type: "string", description: "무엇을 봤는지 한 문장" } }, ["kind", "note"],
-            async (l, input) => { const r = await recordObservation(l.io.runId, l.io.n, input ?? {}); if (r.ok) await l.io.show({ type: "tool", icon: "📝", label: `학습 메모: ${String(input?.note ?? "").slice(0, 60)}`, ok: true }); return r.text; }],
-        ];
-        for (const [name, description, properties, required, run] of learnTools) {
-          ed.add({ name, description, options: { codemode: false }, input: { type: "object", properties, required },
-            execute: async (input: any, c: any) => {
-              const l = live.get(c.sessionID);
-              if (!l) return { content: "지금은 쓸 수 없어요." };
-              try { return { content: (await run(l, input)).slice(0, 4000) }; } catch (e) { return { content: `실패: ${(e as Error).message}` }; }
-            } });
-        }
-        // [막혔어요] 칸 도구(11/3): 칸을 열고 닫는 건 코드(lib/stuck.ts)가 하고, 튜터는 무엇이 비었는지와 풀렸는지만 알린다
-        const stuckTools: [string, string, Record<string, unknown>, string[], (l: Live, input: any) => Promise<string>][] = [
-          ["stuck_name_gap", "지금 칸에서 무엇이 비었는지 정한다. [기초 칸 목록]의 id를 concept로, 목록에 맞는 게 없으면 other에 짧은 이름. 짧은 질문으로 층을 짚은 뒤, 설명하기 전에 한 번.",
-            { concept: { type: "string" }, other: { type: "string" }, why: { type: "string", description: "학습자가 실제로 막힌 것을 학습자 말에 가깝게 한 문장(예: \"() 안에 아무것도 안 받는데 key는 어디서 오는지 모름\")" } }, ["why"],
-            async (l, input) => (await nameGap(l.io.runId, l.io.stuck!.lang, { concept: input?.concept, other: input?.other, why: input?.why })).text],
-          ["stuck_go_deeper", "설명하다 보니 그보다 아래(더 기초)가 비어 있을 때 한 칸 아래를 연다. 열면 이번 답은 '그럼 그것부터 잠깐 볼게요' 한두 문장으로 끝낸다(아래 칸 설명은 다음 차례에 저절로 이어진다).",
-            { concept: { type: "string" }, other: { type: "string" }, why: { type: "string", description: "왜 내려가는지 한 문장" } }, ["why"],
-            async (l, input) => (await goDeeper(l.io.runId, l.io.stuck!.lang, { concept: input?.concept, other: input?.other, why: String(input?.why ?? "") })).text],
-          ["stuck_resolved", "이 칸이 풀렸다고 알린다. 학습자가 이 칸의 작은 확인에 맞게 답했거나 직접 써 봤을 때만. evidence: 학습자가 실제로 한 것 한 문장. 부른 뒤에는 짧게 칭찬 없이 한 문장으로 마무리한다(위 칸으로는 저절로 돌아간다).",
-            { evidence: { type: "string" } }, ["evidence"],
-            async (l, input) => (await resolveTop(l.io.runId, l.io.stuck!.lang, "tutor", String(input?.evidence ?? ""))).text],
-        ];
-        for (const [name, description, properties, required, run] of stuckTools) {
-          ed.add({ name, description, options: { codemode: false }, input: { type: "object", properties, required },
-            execute: async (input: any, c: any) => {
-              const l = live.get(c.sessionID);
-              if (!l?.io.stuck) return { content: "지금은 [막혔어요] 칸이 아니에요." };
-              try { const out = await run(l, input); await l.io.show({ type: "tool", icon: "🧩", label: out.slice(0, 80), ok: true }); return { content: out }; }
-              catch (e) { return { content: `실패: ${(e as Error).message}` }; }
-            } });
-        }
-        for (const name of OURS) {
-          const [description, properties, required] = desc[name];
-          ed.add({ name, description, options: { codemode: false }, input: { type: "object", properties, required },
-            execute: async (input: Record<string, unknown>, c: any) => {
-              const l = live.get(c.sessionID);
-              if (!l) return { content: "지금은 쓸 수 없어요." };
-              try { return { content: (await runTool(l.io, name as ToolName, input ?? {})).slice(0, 6000) }; }
-              catch (e) { await l.io.show({ type: "tool", icon: "⚠", label: `${name} 실패: ${(e as Error).message}`, ok: false }); return { content: `실패: ${(e as Error).message}` }; }
-            } });
-        }
       });
     },
   };

@@ -121,7 +121,7 @@ learned_unsupported: learned 중 학습자의 말 · 행동에 근거가 없는 
 const GRADE_RECORD_SCHEMA = S.obj({ found: S.arr(S.str), missed: S.arr(S.str), unsupported: S.arr(S.str), learned_unsupported: S.arr(S.str) });
 export async function startRecordEval(opts: { dataDir: string; runIds: string[]; efforts: string[]; repeat?: number }) {
   const R = await import("./goal-record.ts");
-  const { recordShow } = await import("./lesson.ts");
+  const { recordShow } = await import("./practice.ts");
   const id = `record-${new Date().toISOString().replace(/[:.]/g, "").slice(0, 15)}-${randomBytes(2).toString("hex")}`;
   const items: { runId: string; goal: { title: string; done: string; understood: boolean; applied: boolean; at: string }; to: string; messages: { role: string; text: string; at: string }[]; saves: { at: string; file: string; text: string }[] }[] = [];
   for (const runId of opts.runIds) {

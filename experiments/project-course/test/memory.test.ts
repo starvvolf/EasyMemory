@@ -17,7 +17,7 @@ const msgs = (t: string) => [{ role: "user", text: t, at: "2026-11-06T01:00:01Z"
 const goal = (title: string) => ({ title, done: "d", understood: true, applied: true, at: "2026-11-06T01:00:00Z" });
 
 test("학습자 메모리(11/6): 목표 정리 호출이 같이 갱신, 근거는 부족했던 점 이름만, 상태는 코드가", async () => {
-  assert.equal((await M.memoryOf())[0].text, "완성 코드를 한 번에 주지 않기"); // 예전 진행 방식 옮김
+  assert.equal((await M.memoryOf()).length, 0); // 진행 방식은 11/11에 뺐다(예전 파일이 있어도 읽지 않음)
   let sent = "";
   setFake((_p: string, user: string) => { sent = user; return { summary: "", steps: [], learned: [], gaps: [{ type: "규칙", concept: "return 순서", wrong: "w", right: "r", quote: "" }],
     memory: { add: [{ text: "함수의 반환 흐름이 부족해 보인다", evidence: ["return 순서"] }, { text: "지어낸 것", evidence: ["없는 이름"] }], update: [], improved: [] } }; });
@@ -39,8 +39,8 @@ test("학습자 메모리(11/6): 목표 정리 호출이 같이 갱신, 근거�
   await R.recordGoal("runB", goal("다음"), null, msgs("됐다"), (m) => m.text);
   const t3 = (await M.memoryOf()).find((i) => i.id === t.id)!;
   assert.equal(t3.status, "나아짐"); assert.equal(t3.text, "return 흐름 연습 중");
-  assert.match(await M.memoryText(), /완성 코드를 한 번에 주지 않기/);
+  assert.doesNotMatch(await M.memoryText(), /완성 코드를 한 번에 주지 않기/); // 진행 방식은 안 읽음
   assert.doesNotMatch(await M.memoryText(), /return 흐름/); // 나아진 것은 튜터 맥락에서 뺌
   await M.editMemory(t.id, { delete: true });
-  assert.equal((await M.memoryOf()).length, 1);
+  assert.equal((await M.memoryOf()).length, 0);
 });

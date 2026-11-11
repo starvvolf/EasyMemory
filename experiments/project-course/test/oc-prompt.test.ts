@@ -13,14 +13,6 @@ test("이어 쓰는 대화: 처음엔 코스·단계 + 대화, 다음엔 그 뒤
   assert.equal(promptParts(io("[파일 a] y", 2), ss).filter(Boolean)[0], "[코스]");
 });
 
-test("최근 대화: 마지막 12개, 지금 걸음은 자르지 않고 30개까지", async () => {
-  const { splitRecent } = await import("../lib/lesson.ts");
-  const ms = Array.from({ length: 40 }, (_, i) => ({ beat: i < 20 ? 1 : 2 }));
-  assert.equal(splitRecent(ms, 2).recent.length, 20, "지금 걸음(2) 20개는 통째로");
-  assert.equal(splitRecent(ms, 9).recent.length, 12);
-  assert.equal(splitRecent(Array.from({ length: 50 }, () => ({ beat: 3 })), 3).recent.length, 30);
-});
-
 test("나눈 맥락이 없으면(기본 엔진 모양) 전부 보낸다", () => {
   assert.deepEqual(promptParts({ context: "ALL" } as never, { turns: 3, files: new Map() }), ["ALL"]);
 });

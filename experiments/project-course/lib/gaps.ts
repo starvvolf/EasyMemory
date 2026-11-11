@@ -207,7 +207,6 @@ export async function sessionNote(runId: string) {
     runId, title: g.long?.text ?? "목표를 정하기 전", mode: g.mode, at: g.long?.at ?? null,
     tags: [...tags].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t]) => t),
     map: g.map.map((m) => ({ title: m.title, status: m.status, support: !!m.support })),
-    base: (g.base ?? []).map((b) => ({ name: b.name, kind: b.kind, needs: b.needs, result: b.result ?? null, by: b.by ?? null })),
     goals: recs.map((r) => ({ goal: r.goal, done: r.done, status: r.status, summary: r.summary, steps: r.steps, learned: r.learned.map((x) => ({ type: x.type, concept: x.concept, meaning: x.meaning, how: x.how })) })),
     // 묶인 칸(mergedInto)은 첫 칸에 합쳐 한 줄로: 드러난 곳 · 고른 이유를 더한다
     gaps: gaps.filter((x) => !x.mergedInto).map((x0) => { const extra = gaps.filter((y) => y.mergedInto === x0.id); return { ...x0, evidence: [...x0.evidence, ...extra.flatMap((y) => y.evidence)], cause: [...new Set([...x0.cause, ...extra.flatMap((y) => y.cause)])] }; }).map((x) => ({ id: x.id, goal: x.goal.title, unit: x.unit.title, concept: x.type ? x.concept : "", type: x.type, prereq: x.prereq ?? "", card: x.card ?? null, wrong: x.wrong, right: x.right, cause: x.cause,

@@ -40,7 +40,7 @@ test("부족한 점(11/6): 목표 정리의 gaps가 '몰랐음' 지식 + 틀림 
   assert.deepEqual(rec!.gaps!.map((x) => [x.concept, x.verified]), [["= 와 ==", true], ["캐시", true]]);
   const S = await import("../lib/sync.ts");
   const run = { id: "run2", codexId: "x" } as never;
-  const p = await S.pending("run2", { id: "hello-api", title: "t", knowledge: [] } as never, run);
+  const p = await S.pending("run2", run);
   assert.equal(p.source.ref, "project:run2");
   const cache = p.items.find((i) => i.title === "캐시")!;
   assert.equal(cache.state, "unknown"); // 배운 것 + 부족한 것 → 한 지식, 몰랐음
@@ -48,7 +48,7 @@ test("부족한 점(11/6): 목표 정리의 gaps가 '몰랐음' 지식 + 틀림 
   assert.deepEqual(cache.events.map((e) => e.kind), ["note", "wrong"]);
   assert.equal(p.items.find((i) => i.title === "= 와 ==")!.kind, "concept"); // 여섯 칸은 더 안 씀(11/10)
   await S.markSent("run2", p.items.flatMap((i) => [i.key, ...i.events.map((e) => e.key)]));
-  assert.equal((await S.pending("run2", { id: "hello-api", title: "t", knowledge: [] } as never, run)).items.length, 0);
+  assert.equal((await S.pending("run2", run)).items.length, 0);
 });
 
 test("코드 저장(11/6 A안): 목표 동안 저장한 코드의 바뀐 줄이 대화 사이에 들어가고, 코드 줄도 근거가 된다", async () => {
@@ -79,9 +79,9 @@ test("틀렸던 코드(11/6): AI가 저장본 번호 · 줄 범위로 짚으면 
   assert.equal(rec!.gaps![1].code, undefined); assert.equal(rec!.gaps![1].verified, false);
   assert.equal(R.cutCode([{ id: "S1", save: saves[0] }], { save: "S1", from: 1, to: 40 })!.to, 6); // 끝 줄 넘으면 잘림
   const S = await import("../lib/sync.ts");
-  const p = await S.pending("run5", { id: "hello-api", title: "t", knowledge: [] } as never, { id: "run5", codexId: "x" } as never);
+  const p = await S.pending("run5", { id: "run5", codexId: "x" } as never);
   const it = p.items.find((i) => i.title === "비교 연산")!;
   assert.equal(it.mistake!.code, "    if cache[n]=False:"); assert.equal(it.mistake!.note, "조건에 = 씀");
   await S.markSent("run5", p.items.flatMap((i) => [i.key, ...(i.mistakeKey ? [i.mistakeKey] : []), ...i.events.map((e) => e.key)]));
-  assert.equal((await S.pending("run5", { id: "hello-api", title: "t", knowledge: [] } as never, { id: "run5", codexId: "x" } as never)).items.length, 0);
+  assert.equal((await S.pending("run5", { id: "run5", codexId: "x" } as never)).items.length, 0);
 });

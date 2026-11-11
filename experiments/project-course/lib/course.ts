@@ -1,99 +1,13 @@
-// 코스 데이터 읽기. 코스 하나 = courses/<id>/course.json + 템플릿 폴더들.
-// 새 코스를 더할 때 코드를 고치지 않도록, 단계·활동·검사·지식 연결은 모두 데이터에 둔다.
-import { readdir, readFile } from "node:fs/promises";
+// 실습 서버의 경로와 줄 비교(2026-11-11 정해진 코스를 뺀 뒤 남은 것). 예전 코스 읽기(courses/ · 단계 · 템플릿)는 git 기록에 있다.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildFiles, type Build, type TemplateSpec } from "./stagegen.ts";
 
+/** 이 실습 서버 폴더(experiments/project-course) */
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const COURSES = path.join(ROOT, "courses");
-/** 학습자 목표로 만든 코스(lib/generate.ts, 11/3). id가 gen-로 시작하고 .data/courses 아래에 산다(깃에 안 올라감) */
-export const GEN_COURSES = path.join(process.env.PC_DATA_DIR ? path.resolve(process.env.PC_DATA_DIR) : path.join(ROOT, ".data"), "courses");
-export const isGenerated = (id: string) => id.startsWith("gen-");
-export const courseDir = (id: string) => path.join(isGenerated(id) ? GEN_COURSES : COURSES, id);
-/** 저장소 맨 위(앱). 앱 코드는 읽기만 한다. */
+/** 앱 저장소 맨 위 */
 export const APP_ROOT = path.resolve(ROOT, "..", "..");
 
-export type Knowledge = { id: string; name: string; essentials: string };
-export type Part = { id: string; name: string; files: string[]; role: string; core: string; io: string; links: string[]; without: string; mistake: string; knowledge: string[] };
-export type Predict = { id: string; q: string; options: string[]; answer: number; why: string; knowledge: string[] };
-export type TryRequest = { label: string; method: string; path: string; body?: unknown; raw?: string; as?: string };
-export type Stage = {
-  n: number; template: string; transfer?: boolean; title: string; goal: string; parts: string[]; knowledge: string[]; intro: string;
-  predict: Predict[]; observe: { text: string; checks: string[] }; fix: { text: string; files: string[] };
-  explain: { q: string; knowledge: string[] }; breaks?: string[]; hints: Record<"1" | "2", string>; try: TryRequest[];
-};
-export type Step = {
-  as?: string | null; req?: string; body?: unknown; raw?: string; save?: Record<string, string>;
-  db?: string; params?: unknown[]; restart?: boolean; seed?: { count: number; body: unknown };
-  expect?: {
-    status?: number; header?: Record<string, string>; noHeader?: string[]; has?: string[]; length?: number;
-    json?: Record<string, unknown>; some?: Record<string, unknown>; none?: Record<string, unknown>;
-    rows?: number; row?: Record<string, unknown>; rowNot?: Record<string, unknown>; rowMatch?: Record<string, string>;
-  };
-};
-export type Check = { id: string; stage: number; template: string; kind: string; target?: boolean; title: string; knowledge: string[]; where?: { file: string; anchor: string }; steps: Step[] };
-export type Diagnose = { id: string; stage: number; q: string; options: string[]; answer: number };
-export type Course = {
-  id: string; title: string; summary: string; stack: string; audience: string;
-  templates: Record<string, { dir: string; base?: { template: string; stage: number; drop: string[] } }>;
-  auth: Record<string, number>;
-  knowledge: Knowledge[]; parts: Part[]; stages: Stage[]; checks: Check[]; intake: { diagnose: Diagnose[] };
-  /** 생성 코스: 학습자 목표와 큰 목차(단계는 만들어지는 대로 stages에 붙는다) */
-  generated?: { goal: string; outline: { n: number; title: string; goal: string }[] };
-};
-
-const cache = new Map<string, Course>();
-export async function loadCourse(id: string): Promise<Course> {
-  if (!/^[a-z0-9-]+$/.test(id)) throw new Error("코스 이름이 이상해요.");
-  // 생성 코스는 뒤에서 단계가 붙으므로 매번 읽는다
-  if (!cache.has(id) || process.env.PC_DEV || isGenerated(id)) cache.set(id, JSON.parse(await readFile(path.join(courseDir(id), "course.json"), "utf8")));
-  return cache.get(id)!;
-}
-export async function listCourses() {
-  const out: Course[] = [];
-  for (const e of await readdir(COURSES, { withFileTypes: true })) {
-    if (e.isDirectory()) { try { out.push(await loadCourse(e.name)); } catch { /* 코스가 아님 */ } }
-  }
-  return out;
-}
-
-export function templateSpec(course: Course, name: string): TemplateSpec {
-  const t = course.templates[name];
-  if (!t) throw new Error(`템플릿 ${name}이 없어요.`);
-  const dir = path.join(COURSES, course.id, t.dir);
-  if (!t.base) return { dir };
-  const base = course.templates[t.base.template];
-  return { dir, base: { dir: path.join(COURSES, course.id, base.dir), stage: t.base.stage, drop: t.base.drop } };
-}
-
-export function stageOf(course: Course, n: number) {
-  const s = course.stages.find((x) => x.n === n);
-  if (!s) throw new Error(`${n}단계가 없어요.`);
-  return s;
-}
-
-export async function stageFiles(course: Course, n: number, build: Partial<Build> = {}) {
-  if (course.generated) return genStageFiles(course, n, !!build.solved);
-  const st = stageOf(course, n);
-  return buildFiles(templateSpec(course, st.template), { stage: n, ...build });
-}
-
-export const knowledgeName = (course: Course, id: string) => course.knowledge.find((k) => k.id === id)?.name ?? id;
-
-/** 단계의 정답 줄(시작 상태 → 푼 상태 차이). 힌트 3단계와 AI 힌트의 근거로 쓴다. */
-export async function solutionDiff(course: Course, n: number) {
-  const start = await stageFiles(course, n);
-  const solved = await stageFiles(course, n, { solved: true });
-  const out: { file: string; diff: string }[] = [];
-  for (const [file, text] of solved) {
-    const before = start.get(file) ?? "";
-    if (before === text) continue;
-    out.push({ file, diff: lineDiff(before.split("\n"), text.split("\n")) });
-  }
-  return out;
-}
-
+/** 줄 단위 차이(앞뒤 context줄). "+ 더함" · "- 뺌" · "  같음", 떨어진 곳은 "  …" */
 export function lineDiff(a: string[], b: string[], context = 2) {
   const n = a.length, m = b.length;
   const dp = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
@@ -113,10 +27,4 @@ export function lineDiff(a: string[], b: string[], context = 2) {
     out.push(`${o.t} ${o.text}`);
   });
   return out.join("\n");
-}
-
-/** 생성 코스의 단계 파일: stages/<n>.json에 시작·완성 상태 전체가 들어 있다 */
-export async function genStageFiles(course: Course, n: number, solved: boolean): Promise<Map<string, string>> {
-  const raw = JSON.parse(await readFile(path.join(courseDir(course.id), "stages", `${n}.json`), "utf8")) as { start: Record<string, string>; solved: Record<string, string> };
-  return new Map(Object.entries(solved ? raw.solved : raw.start));
 }
