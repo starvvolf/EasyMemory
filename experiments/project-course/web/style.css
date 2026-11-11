@@ -870,3 +870,7 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .gnames-h:hover { color: var(--fg, inherit); }
 .gnames-l { list-style: none; margin: 4px 0 2px; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
 .gnames-ex { font-size: 11.5px; opacity: .85; }
+/* 줄 선 말(11/11): 답이 끝나면 보낼 것 */
+.fqueue { display: flex; flex-direction: column; gap: 6px; }
+.freeme.queued { opacity: .6; border-style: dashed; display: flex; align-items: center; gap: 6px; }
+.freeme.queued .fib { margin-left: auto; }

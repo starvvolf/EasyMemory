@@ -1032,6 +1032,8 @@ function flashSaved() {
 }
 
 function drawLesson() {
+  // 한글 조합 중에 다시 그리면 조합이 깨진다: 조합이 끝나면 그린다(11/11)
+  if (lessonCtx?.lesson?.free && freeUi.composing) { freeUi.redraw = true; return; }
   if (lessonCtx?.lesson?.free) return drawFree();
   if (FLOAT) return drawFloat();
   const { run, lesson } = lessonCtx;
@@ -1549,8 +1551,15 @@ function drawLabSide(side, info) {
 
 /* ---------- 프리스타일(11/4 사용자 "실험판 느낌 그대로 제품에 연결"): 걸음 없이 대화만 ----------
  * 튜터 창(FLOAT)과 튜터 탭 둘 다. VS Code에서 고른 줄 · [막혔어요] · 실습 서버 · 검사는 그대로 쓴다 */
+/* 입력칸(11/11 사용자 "튜터가 얘기하는 동안 채팅창 눌러도 풀리는 문제 … 메시지 큐에 넣어서"):
+ * 답이 흘러나올 때마다 화면을 다시 그려도 쓰던 글 · 커서 · 포커스를 그대로 두고,
+ * 답하는 중에 보낸 말은 줄을 세웠다가 답이 끝나면 차례로 보낸다(이 화면 안에서만, 새로 고침하면 사라짐) */
+const freeUi = { run: "", draft: "", sel: [0, 0], focus: false, composing: false, redraw: false, queue: [], flushing: false };
 function drawFree() {
   const { run, lesson } = lessonCtx;
+  if (freeUi.run !== run.id) Object.assign(freeUi, { run: run.id, draft: "", sel: [0, 0], focus: false, queue: [] });
+  const old = view.querySelector(".freein textarea");
+  if (old) { freeUi.focus = document.activeElement === old; freeUi.sel = [old.selectionStart, old.selectionEnd]; }
   const ws = lesson.workspace;
   const send = (body) => (e) => busy(e?.target, async () => { lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, body); drawLesson(); });
   const list = h("div", { class: "freelist" });
@@ -1566,12 +1575,26 @@ function drawFree() {
   if (lesson.goals?.shell && !lesson.busy) list.append(shellCard(lesson.goals.shell, send));
   if (lesson.goals && goalUi.stuck && !lesson.busy) list.append(goalStuckCard(lesson.goals, send));
   if (lesson.busy) list.append(thinkLine(run, lesson));
-  const input = h("textarea", { rows: 2, placeholder: "물어보기 (Enter 보내기, Shift+Enter 줄바꿈)", "aria-label": "튜터에게 물어보기" });
-  const go = (e) => { const t = input.value.trim(); if (!t || lesson.busy) return; input.value = ""; send({ do: "ask", text: t })(e); };
+  if (freeUi.queue.length) list.append(h("div", { class: "fqueue" }, freeUi.queue.map((t, i) => h("div", { class: "freeme queued" },
+    h("span", { class: "mut small" }, "답이 끝나면 보내요 · "), t,
+    h("button", { class: "fib", title: "보내지 않기", "aria-label": "보내지 않기", onclick: () => { freeUi.queue.splice(i, 1); drawLesson(); } }, "×")))));
+  const input = h("textarea", { rows: 2, placeholder: lesson.busy ? "답하는 중에도 써 두면 끝나고 보내요" : "물어보기 (Enter 보내기, Shift+Enter 줄바꿈)", "aria-label": "튜터에게 물어보기" });
+  input.value = freeUi.draft;
+  input.addEventListener("input", () => { freeUi.draft = input.value; });
+  input.addEventListener("compositionstart", () => { freeUi.composing = true; });
+  input.addEventListener("compositionend", () => { freeUi.composing = false; freeUi.draft = input.value; if (freeUi.redraw) { freeUi.redraw = false; setTimeout(drawLesson, 0); } });
+  input.addEventListener("blur", () => { if (freeUi.composing) { freeUi.composing = false; if (freeUi.redraw) { freeUi.redraw = false; setTimeout(drawLesson, 0); } } });
+  const go = (e) => {
+    const t = input.value.trim(); if (!t) return;
+    input.value = ""; freeUi.draft = "";
+    freeUi.focus = true; freeUi.sel = [0, 0];
+    if (lessonCtx.lesson.busy || freeUi.flushing) { freeUi.queue.push(t); return drawLesson(); }
+    sendFree(run, t);
+  };
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go(e); } });
   const foot = h("footer", { class: "freefoot" },
     lesson.chat ? null : stuckBar(lesson, send), lesson.chat ? null : stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
-    h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : h("button", { class: "btn primary", onclick: go, disabled: lesson.busy }, "보내기")),
+    h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : null, h("button", { class: "btn primary", onclick: go }, lesson.busy ? "줄 세우기" : "보내기")),
     // 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
     // 11/11 사용자: 목표가 정해지기 전에는 눌러도 할 일이 없어 숨긴다
     lesson.chat && lesson.goals && lesson.goals.current && !lesson.busy ? h("div", { class: "fquick" },
@@ -1596,8 +1619,24 @@ function drawFree() {
     FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);
   view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat?.engine === "codex" && lesson.chat.codexLogin === false ? h("div", { class: "editask" }, h("span", { class: "grow" }, "Codex 버전은 Recaller 전용 Codex 로그인이 한 번 필요해요(평소 Codex 앱 설정 · 기억과 섞이지 않게)."), h("button", { class: "btn small primary", onclick: (e) => busy(e.target, async () => { const r = await api("POST", "/api/codex-chat/login"); toast(r.already ? "이미 로그인돼 있어요." : "브라우저에서 ChatGPT로 로그인해 주세요. 끝나면 이 화면을 새로고침해요."); }) }, "Codex 로그인")) : null, lesson.chat ? wsBar(run, lesson) : null, lesson.goals ? goalBar(lesson, send) : null, lesson.chat ? learnedBar(lesson) : null, list, lesson.chat && !lesson.chat.edit ? editAsk(run) : null, foot));
   list.scrollTop = list.scrollHeight;
-  if (!FLOAT) window.scrollTo({ top: document.body.scrollHeight });
+  if (!FLOAT && !freeUi.focus) window.scrollTo({ top: document.body.scrollHeight });
+  if (freeUi.focus) { input.focus({ preventScroll: true }); try { input.setSelectionRange(...freeUi.sel); } catch {} }
   tyAfterDraw();
+  // 답이 끝났고 줄 선 말이 있으면 하나 보낸다(판정 카드 · 설문이 떠 있어도 보통 질문으로 간다)
+  if (!lesson.busy && freeUi.queue.length && !freeUi.flushing) sendFree(run, freeUi.queue.shift());
+}
+/** 보내는 동안(서버가 아직 답하는 중으로 바뀌기 전)에 또 보내면 줄에 선다 */
+function sendFree(run, t) {
+  freeUi.flushing = true;
+  api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "ask", text: t })
+    .then((l) => { lessonCtx.lesson = l; })
+    .catch(async (e) => {
+      if (!/답하는 중|busy/i.test(e.message)) { freeUi.draft ||= t; return toast(e.message); }
+      freeUi.queue.unshift(t); // 아직 답하는 중: 상태를 다시 받아 끝나면(다음 알림 때) 보낸다
+      lessonCtx.lesson = await api("GET", `/api/runs/${run.id}/lesson/${run.current}`).catch(() => ({ ...lessonCtx.lesson, busy: true }));
+      if (!lessonCtx.lesson.busy) await new Promise((r) => setTimeout(r, 1500));
+    })
+    .finally(() => { freeUi.flushing = false; drawLesson(); });
 }
 const go_ = (hash) => go(hash);
 
