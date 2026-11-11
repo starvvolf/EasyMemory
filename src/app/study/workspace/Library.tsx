@@ -222,10 +222,66 @@ function Scene({ ev }: { ev: SceneEv }) {
   return <div className={`rp-btn ${verdict}`}><span className="rp-pill">{head}</span>{rest.length ? <span className="rp-bt">{rest.join(" · ")}</span> : null}</div>;
 }
 
+/* ---------- 한눈에 보기(11/12 사용자 "대화가 길어도 핵심은 딱딱딱 줄일 수 있잖아 … 뭐를 몰라서 뭐를 AI가 알려줬다, 목표가 바뀌었다 … 흐름을 한눈에,
+ * 마우스를 갖다 대면 상세"): 장면 기록에서 코드가 한 줄씩 골라 낸다(AI 없음). 물음 → 튜터 답의 첫 알맹이 문장, 판정, 오류 · 다시 성공, 학습자 버튼, 튜터가 고쳐 줌.
+ * 다이얼 돌리기 · 저장 줄 · 맞장구는 뺀다. 줄을 누르면 아래 '장면 전체'의 그 자리로. */
+type Beat = { icon: string; text: string; sub?: string; tone: "" | "ok" | "bad" | "ask" | "me" | "help"; tip: string; at: string; k: number };
+const clip = (s: string, n: number) => { const t = s.replace(/```[\s\S]*?```/g, " [코드] ").replace(/[*`#>]/g, "").replace(/\s+/g, " ").trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+const FILLER = /^(좋아요|좋습니다|네[,.! ]|네$|맞아요|맞습니다|잘\s?(하|했|작성)|그렇죠|훌륭|정확해요|오케이|알겠어요)/;
+/** 튜터 답에서 알맹이 한 문장: 코드 칸을 빼고, 맞장구 · 너무 짧은 문장은 건너뛴다 */
+function gist(text: string) {
+  const plain = text.replace(/```[\s\S]*?```/g, " ").replace(/\*\*/g, "").replace(/\n+/g, " ");
+  const ss = plain.split(/(?<=[.!?요다])\s+/).map((x) => x.trim()).filter(Boolean);
+  return clip(ss.find((x) => x.length >= 12 && !FILLER.test(x)) ?? ss[0] ?? "", 70);
+}
+const isAsk = (t: string) => /[?？]\s*$|[?？]\s|모르겠|뭐예요|뭔가요|뭐지|왜 |왜요|어떻게|인가요|건가요|나요\b|아닌가|맞나요|아니야|맞아\?/.test(t);
+const SKIP_BTN = /^(도움 정도 바꾸기|설문 답|확정)$/;
+function beatsOf(c: Chapter): Beat[] {
+  const out: Beat[] = [];
+  const evs = c.events;
+  let lastFail = false;
+  evs.forEach((ev, k) => {
+    if (ev.kind === "me") {
+      const reply = evs.slice(k + 1).find((x) => x.kind === "tutor" || x.kind === "me");
+      const ans = reply?.kind === "tutor" && reply.text ? gist(reply.text) : "";
+      const ask = isAsk(ev.text);
+      out.push({ icon: ask ? "❓" : "✍️", tone: ask ? "ask" : "me", text: clip(ev.text, 64), sub: ans ? `→ ${ans}` : undefined, at: ev.at, k,
+        tip: `나: ${clip(ev.text, 400)}${reply?.kind === "tutor" && reply.text ? `\n\n튜터: ${clip(reply.text, 500)}` : ""}` });
+    } else if (ev.kind === "button") {
+      const [head, ...rest] = ev.text.split(" · ");
+      if (SKIP_BTN.test(head)) return;
+      const v = /판정: 맞음/.test(ev.text) ? "ok" : /판정: (일부|틀림)/.test(ev.text) ? "bad" : "";
+      if (head === "해 봤어요" || v) {
+        const gap = rest.find((x) => x.startsWith("빠진 곳"))?.replace(/^빠진 곳:\s*/, "");
+        const good = rest.find((x) => x.startsWith("맞은 부분"))?.replace(/^맞은 부분:\s*/, "");
+        out.push({ icon: v === "ok" ? "✅" : v === "bad" ? "⚠️" : "🧪", tone: v || "", text: v === "ok" ? "해 봤어요 → 맞음" : /일부/.test(ev.text) ? "해 봤어요 → 일부만 맞음" : /틀림/.test(ev.text) ? "해 봤어요 → 틀림" : "해 봤어요",
+          sub: gap ? `빠진 곳: ${clip(gap, 70)}` : good ? clip(good, 70) : undefined, at: ev.at, k, tip: ev.text });
+      } else out.push({ icon: /어려워요/.test(head) ? "🆘" : /쉬워요/.test(head) ? "⏩" : /다음으로|종료/.test(head) ? "➡️" : "👆", tone: /어려워요/.test(head) ? "help" : "", text: head, sub: rest.length ? clip(rest.join(" · "), 70) : undefined, at: ev.at, k, tip: ev.text });
+    } else if (ev.kind === "cmd") {
+      if (ev.ok === false) { lastFail = true; out.push({ icon: "🟥", tone: "bad", text: `$ ${clip(ev.text, 50)} → 오류`, sub: ev.err ? clip(ev.err, 80) : undefined, at: ev.at, k, tip: `${ev.text}\n${ev.err ?? ""}` }); }
+      else if (ev.ok && lastFail) { lastFail = false; out.push({ icon: "🟩", tone: "ok", text: `$ ${clip(ev.text, 50)} → 다시 돌려 성공`, at: ev.at, k, tip: ev.text }); }
+    } else if (ev.kind === "tutor" && ev.tools?.some((t) => /^파일을 고쳤어요|^(edit|write|patch)$/.test(t))) {
+      out.push({ icon: "🛠", tone: "help", text: "튜터가 파일을 고쳐 줌", sub: ev.tools.filter((t) => /고쳤어요/.test(t)).map((t) => t.replace(/^파일을 고쳤어요:\s*/, "")).join(", ") || undefined, at: ev.at, k, tip: clip(ev.text, 400) });
+    }
+  });
+  return out;
+}
+
 function RunView({ e }: { e: Entry }) {
   const [d, setD] = useState<RunLib | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => later(() => { setD(null); call<RunLib>(`/api/project-course/runs/${encodeURIComponent(e.runId!)}/library`).then(setD).catch((x) => setError(errorText(x))); }), [e.runId]);
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const [hl, setHl] = useState<string | null>(null);
+  useEffect(() => later(() => { setD(null); setOpen(new Set()); call<RunLib>(`/api/project-course/runs/${encodeURIComponent(e.runId!)}/library`).then(setD).catch((x) => setError(errorText(x))); }), [e.runId]);
+  // 한눈에 보기의 줄을 누르면: 그 장을 펼치고 그 자리로 스크롤 + 잠깐 밝게
+  const jump = (ci: number, k: number) => {
+    setOpen((s) => new Set(s).add(ci)); const id = `rp-ev-${ci}-${k}`; setHl(id);
+    setTimeout(() => { // 가운데 칸만 움직인다(창 전체가 밀리지 않게)
+      const el = document.getElementById(id), box = el?.closest(".lib-page") as HTMLElement | null;
+      if (el && box) box.scrollTo({ top: box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight / 3, behavior: "smooth" });
+    }, 60);
+    setTimeout(() => setHl((x) => (x === id ? null : x)), 2600);
+  };
   const head = <Head icon="🛠" title={e.title} sub={`${day(e.lastAt)} · ${e.sub}`}><button className="btn ghost small" onClick={() => go("project")}>실습 탭 열기</button></Head>;
   if (error) return <>{head}<p className="ws-err">{error}</p></>;
   if (!d) return <>{head}<p className="small muted">실습 기록을 불러오는 중…</p></>;
@@ -234,30 +290,39 @@ function RunView({ e }: { e: Entry }) {
   const path = d.path ?? [];
   const done = recs.filter((r) => r.status === "마침").length;
   const cards = recs.reduce((n, r) => n + r.cards.length, 0);
-  const shownMoments = new Set<string>();
+  const resultOf = (c: Chapter) => recs.find((r) => r.goal === c.goal)?.status ?? path.find((g) => g.title === c.goal)?.result ?? "";
+  const numOf = (i: number) => (scenes[i].goal ? scenes.slice(0, i + 1).filter((x) => x.goal).length : 0);
+  const momentsOf = (c: Chapter) => ms.filter((m) => m.goal === c.goal);
   return <>
     {head}
     <div className="lib-stats">
       <span><b>{scenes.filter((c) => c.goal).length || path.length}</b>목표</span><span><b>{done}</b>마침</span><span><b>{ms.length}</b>막힌 순간</span><span><b>{cards}</b>남은 것</span>
     </div>
-    {scenes.map((c, i) => {
-      const rec = recs.find((r) => r.goal === c.goal);
-      const pg = path.find((g) => g.title === c.goal);
-      const mine = ms.filter((m) => m.goal === c.goal && !shownMoments.has(m.id)); mine.forEach((m) => shownMoments.add(m.id));
-      const result = rec?.status ?? pg?.result ?? "";
-      return <section key={i} className="rp-ch">
-        <header className="rp-chh"><span className="lib-dot">{c.goal ? scenes.slice(0, i + 1).filter((x) => x.goal).length : "·"}</span>
-          <b>{c.goal || "시작 · 무엇을 만들지 정하기"}</b>{result ? <span className={`lib-res ${RES[result] ?? ""}`}>{result}</span> : null}<span className="small muted">{hm(c.from)} · {mins(c.from, c.to)}</span></header>
-        {rec?.summary ? <p className="rp-sum"><span className="lib-k">정리</span>{rec.summary}</p> : null}
-        <div className="rp-feed">{c.events.map((ev, k) => <Scene key={k} ev={ev} />)}</div>
-        {mine.map((m) => <p key={m.id} className="rp-moment">🧱 <b>막힌 순간</b> {m.command ? <code>{m.command}</code> : m.gap || m.reasons} → {m.how ?? "아직 막힘"} · {secs(m.seconds)}{m.tries > 1 ? ` · ${m.tries}번 해 봄` : ""}</p>)}
-        {rec?.cards.length ? <div className="rp-left"><p className="eyebrow">이 장면에서 남은 것</p>{rec.cards.map((cd, k) => <div key={k} className="rp-note">
-          <b>{cd.name}</b><span className={`lib-how ${/혼자/.test(cd.how) ? "ok" : /아직/.test(cd.how) ? "bad" : ""}`}>{cd.how}</span>
-          {cd.did ? <p className="small muted">{cd.did}</p> : null}{cd.learned ? <p><span className="lib-k">배운 것</span>{cd.learned}</p> : null}{cd.next ? <p><span className="lib-k">다음엔</span>{cd.next}</p> : null}
-        </div>)}</div> : null}
-      </section>;
-    })}
-    {ms.some((m) => !shownMoments.has(m.id)) ? <section className="lib-sec"><h3>그 밖의 막힌 순간</h3>{ms.filter((m) => !shownMoments.has(m.id)).map((m) => <p key={m.id} className="rp-moment">🧱 {m.command ? <code>{m.command}</code> : m.gap || m.reasons} → {m.how ?? "아직 막힘"} · {secs(m.seconds)}</p>)}</section> : null}
+    {scenes.length ? <section className="lib-sec"><h3>한눈에 보기</h3><ol className="fl">{scenes.map((c, ci) => {
+      const beats = beatsOf(c), rec = recs.find((r) => r.goal === c.goal), result = resultOf(c), n = numOf(ci);
+      return <li key={ci} className="fl-ch">
+        <div className="fl-goal"><span className="lib-dot">{n || "·"}</span><b>{c.goal ? `🎯 ${c.goal}` : "시작 · 무엇을 만들지 정하기"}</b>{result ? <span className={`lib-res ${RES[result] ?? ""}`}>{result}</span> : null}<span className="small muted">{hm(c.from)} · {mins(c.from, c.to)}</span></div>
+        {rec?.summary ? <p className="fl-sum">{rec.summary}</p> : null}
+        <ul className="fl-beats">{beats.map((b) => (
+          <li key={b.k}><button className={`fl-b ${b.tone}`} onClick={() => jump(ci, b.k)}>
+            <span className="fl-t">{hm(b.at)}</span><span className="fl-i" aria-hidden>{b.icon}</span><span className="fl-x"><span>{b.text}</span>{b.sub ? <small>{b.sub}</small> : null}</span>
+            <span className="fl-tip" role="tooltip">{b.tip}</span></button></li>))}
+          {momentsOf(c).map((m) => <li key={m.id}><span className="fl-b help static"><span className="fl-t">{hm((m as Moment & { openedAt?: string }).openedAt ?? c.from)}</span><span className="fl-i" aria-hidden>🧱</span>
+            <span className="fl-x"><span>막힌 순간 → {m.how ?? "아직 막힘"}</span><small>{m.command ?? m.gap ?? m.reasons ?? ""} · {secs(m.seconds)}{m.tries > 1 ? ` · ${m.tries}번 해 봄` : ""}</small></span></span></li>)}
+        </ul>
+        {rec?.cards.length ? <p className="fl-left">📌 남은 것 {rec.cards.map((cd, k) => <span key={k} className="fl-card" tabIndex={0}>{cd.name}<span className="fl-tip" role="tooltip">{[cd.did, cd.learned && `배운 것: ${cd.learned}`, cd.next && `다음엔: ${cd.next}`, cd.how].filter(Boolean).join("\n")}</span></span>)}</p> : null}
+      </li>;
+    })}</ol></section> : null}
+    {scenes.length ? <section className="lib-sec"><h3>장면 전체 <span className="small muted">— 위의 줄을 누르면 그 자리로 와요</span></h3>
+      {scenes.map((c, ci) => {
+        const on = open.has(ci), result = resultOf(c), n = numOf(ci);
+        return <section key={ci} className="rp-ch">
+          <button className="rp-chh rp-tog" onClick={() => setOpen((s) => { const x = new Set(s); if (x.has(ci)) x.delete(ci); else x.add(ci); return x; })} aria-expanded={on}>
+            <span className="lib-dot">{n || "·"}</span><b>{c.goal || "시작 · 무엇을 만들지 정하기"}</b>{result ? <span className={`lib-res ${RES[result] ?? ""}`}>{result}</span> : null}
+            <span className="small muted">말 {c.events.filter((x) => x.kind === "me").length} · {on ? "▴" : "▾"}</span></button>
+          {on ? <div className="rp-feed">{c.events.map((ev, k) => <div key={k} id={`rp-ev-${ci}-${k}`} className={hl === `rp-ev-${ci}-${k}` ? "rp-hl" : undefined}><Scene ev={ev} /></div>)}</div> : null}
+        </section>;
+      })}</section> : null}
     {chunks.length ? <section className="lib-sec"><h3>먼저 알아야 했던 것</h3><ul className="lib-chunks">{chunks.map((c) => (
       <li key={c.name}><b>{c.name}</b>{c.result ? <span className={`lib-res ${c.result === "됨" ? "ok" : "bad"}`}>{c.result === "됨" ? "알아요" : "몰라요"}</span> : null}
         {c.debts.length ? <span className="small muted"> 받아 쓴 것: {c.debts.join(", ")}</span> : null}</li>))}</ul></section> : null}

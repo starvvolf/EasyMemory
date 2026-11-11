@@ -202,3 +202,31 @@
 .dejipgi .rp-tk{display:flex;align-items:baseline;gap:8px;margin:0}
 .dejipgi .rp-code summary{cursor:pointer}
 .dejipgi .rp-flow>.rp-subs{margin:0;padding:0;list-style:none}
+
+/* 한눈에 보기(11/12): 장면마다 한 줄, 마우스를 올리면 상세, 누르면 장면 전체의 그 자리 */
+.dejipgi .fl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.dejipgi .fl-ch{border:1px solid var(--line);border-radius:16px;padding:10px 12px;background:var(--surface)}
+.dejipgi .fl-goal{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dejipgi .fl-goal b{flex:1;min-width:0;font-size:14.5px;word-break:keep-all}
+.dejipgi .fl-sum{margin:6px 0 2px 28px;font-size:12.5px;color:var(--muted);line-height:1.55}
+.dejipgi .fl-beats{list-style:none;margin:6px 0 0 9px;padding:0 0 0 14px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:1px}
+.dejipgi .fl-b{position:relative;width:100%;display:flex;align-items:flex-start;gap:7px;padding:4px 8px;border:0;border-radius:10px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dejipgi .fl-b:hover,.dejipgi .fl-b:focus-visible{background:var(--surface-2);outline:none}
+.dejipgi .fl-b.static{cursor:default}
+.dejipgi .fl-t{font-size:11px;color:var(--faint);width:36px;flex:none;line-height:20px;font-variant-numeric:tabular-nums}
+.dejipgi .fl-i{font-size:13px;line-height:20px;flex:none}
+.dejipgi .fl-x{display:flex;flex-direction:column;min-width:0;font-size:13.5px;line-height:20px}
+.dejipgi .fl-x > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dejipgi .fl-x small{font-size:12px;color:var(--muted);line-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dejipgi .fl-b.ask .fl-x > span{font-weight:600}
+.dejipgi .fl-b.ok .fl-x > span{color:var(--good);font-weight:600}
+.dejipgi .fl-b.bad .fl-x > span{color:var(--bad);font-weight:600}
+.dejipgi .fl-b.help .fl-x > span{color:var(--help);font-weight:600}
+.dejipgi .fl-tip{display:none;position:absolute;left:52px;top:100%;z-index:20;width:min(520px,80vw);max-height:280px;overflow:auto;white-space:pre-wrap;
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,.14);font-weight:400}
+.dejipgi .fl-b:hover .fl-tip,.dejipgi .fl-b:focus-visible .fl-tip,.dejipgi .fl-card:hover .fl-tip,.dejipgi .fl-card:focus .fl-tip{display:block}
+.dejipgi .fl-left{margin:8px 0 0 28px;font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.dejipgi .fl-card{position:relative;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600;cursor:default}
+.dejipgi .fl-card .fl-tip{left:0}
+.dejipgi .rp-tog{width:100%;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;padding:0}
+.dejipgi .rp-hl{border-radius:14px;box-shadow:0 0 0 3px var(--accent-soft);background:var(--accent-soft);transition:background .4s}
