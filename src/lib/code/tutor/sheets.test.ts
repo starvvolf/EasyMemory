@@ -48,8 +48,8 @@ test("총정리 확인(이야기): 상황·풀리는 법이 없으면 버리고,
   assert.equal(checkReview({ situation: "s", solve: "" }), null);
   const beat = (gap: string, did = "힌트를 열어 봤어요") => ({ kind: "core", did, truth: "사실은 이래요", gap, box: { title: "시작점 여러 개 BFS", points: ["a", "", "b"], example: "```\n1 0 0\n0 0 1   \n```" } });
   const r = checkReview({ situation: " 상자 ", solve: "한 번에", story: [beat("g1"), beat("g2", ""), beat("혼자 했는지 확인되지 않았어요"), beat("g3"), beat("g4"), beat("g5"), beat("g6"), beat("g7"), ...Array.from({ length: 8 }, (_, i) => beat(`h${i}`))], next: "n" })!;
-  assert.equal(r.v, 11);
-  assert.equal(r.story.length, 12); assert.deepEqual(r.story.slice(0, 6).map((x) => x.gap), ["g1", "g3", "g4", "g5", "g6", "g7"]);
+  assert.equal(r.v, 12);
+  assert.equal(r.story.length, 14); assert.equal(r.story[0].kind, "idea"); assert.deepEqual(r.story.slice(0, 6).map((x) => x.gap), ["g1", "g3", "g4", "g5", "g6", "g7"]);
   assert.equal(r.story[0].truth, "이래요");
   assert.deepEqual(r.story[0].box.points, ["a", "b"]);
   assert.equal(r.story[0].box.example, "1 0 0\n0 0 1");
