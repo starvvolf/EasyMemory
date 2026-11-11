@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-export type SheetLite = { end: "solved" | "gaveup" | "paused"; help: number; skeleton?: boolean; stuck?: string; distill: string; gap?: string };
+export type SheetLite = { end: "solved" | "gaveup" | "paused"; help: number; skeleton?: boolean; stuck?: string; distill: string; gap?: string; asked?: number };
 export type Memo = { state: "saving"; text: string } | { state: "done"; text: string } | { state: "hide" };
 const EVENT = "recaller:memo";
 export const memo = (m: Memo) => { try { window.dispatchEvent(new CustomEvent<Memo>(EVENT, { detail: m })); } catch { /* 서버 쪽 */ } };
@@ -12,7 +12,7 @@ const STUCK: Record<string, string> = { read: "문제 이해", choose: "방법 �
 /** 한 장을 한 줄로: "기억에 남겼어요 · 도움 2칸 · 막힌 곳: 경계·예외" */
 export function sheetLine(s: SheetLite | null, quit = false) {
   if (!s) return "기억에 남겼어요";
-  const how = s.end === "paused" ? "하다가 나간 곳까지" : s.end === "gaveup" ? "그만둔 것까지" : s.skeleton ? "뼈대로 맞힘" : s.help ? `도움 ${s.help}칸 받고 맞힘` : "혼자 맞힘";
+  const how = s.end === "paused" ? "하다가 나간 곳까지" : s.end === "gaveup" ? "그만둔 것까지" : s.skeleton ? "뼈대로 맞힘" : s.help ? `도움 ${s.help}칸 받고 맞힘` : s.asked ? `AI에게 ${s.asked}번 묻고 맞힘` : "혼자 맞힘";
   return ["기억에 남겼어요", how, s.stuck ? `막힌 곳: ${STUCK[s.stuck] ?? s.stuck}` : "", s.distill === "later" || quit ? "정리는 다음에 켤 때 해요" : ""].filter(Boolean).join(" · ");
 }
 

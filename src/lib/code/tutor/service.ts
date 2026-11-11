@@ -112,6 +112,33 @@ export async function rememberLesson(n: string, target: string[], card: Card, ki
   await toMemory(target, "hint", true, lessonLine(card));
 }
 
+/** 그 사이에 AI 튜터에게 물은 수(대화 장부: 질문·힌트·오류 설명·맞는지 봐 줘). */
+async function askedSince(problemId: string, from: string, to: string) {
+  const { readTalk } = await import("./talk.ts");
+  return (await readTalk({ problemId })).filter((t) => t.kind !== "도움 칸" && t.kind !== "반례" && t.at >= from && t.at <= to).length;
+}
+/** 예전에 "혼자 맞힘"으로 남은 구현 중 그 풀이에서 AI에게 물은 것이 있던 것을 "도움 받고 맞힘"으로 고친다(11/12, 앱을 켤 때 한 번).
+ *  사건 기록 파일을 고쳐 쓴다(같은 사건 id, hinted·detail만). 그 앞 구현 사건(또는 12시간 전)부터 그 사건까지 센다. */
+let reconciled = false;
+async function reconcileChatHelp() {
+  if (reconciled || !process.env.NEXT_RUNTIME) return; reconciled = true;
+  const events = await readEvents();
+  const models = await readModels();
+  let changed = 0;
+  for (const [i, e] of events.entries()) {
+    if (e.kind !== "implement" || !e.ok || e.hinted) continue;
+    const prev = events.slice(0, i).filter((x) => x.kind === "implement" && x.number === e.number).at(-1)?.at;
+    const from = prev ?? new Date(Date.parse(e.at) - 12 * 3600_000).toISOString();
+    const asked = await askedSince(models[e.number]?.problemId ?? problemIdOf(e.number), from, e.at).catch(() => 0);
+    if (!asked) continue;
+    events[i] = { ...e, hinted: true, grade: 1, detail: `${e.detail ?? ""} · AI에게 ${asked}번 물음`.replace(/^ · /, "") };
+    changed++;
+  }
+  if (!changed) return;
+  const { rewriteEvents } = await import("./state.ts");
+  await rewriteEvents(events);
+}
+
 /* ---------- 혼자 구현: 문제 화면의 제출 기록으로 확인 ---------- */
 type Pending = { number: string; pattern: string; mixed: boolean; startedAt: string; /** 뼈대에서 채우기 */ fill?: boolean; /** 혼자 다시 풀기 */ redo?: boolean };
 /** 튜터를 거치지 않고 문제 화면에서 바로 푼 문제도(유저가 넣은 백준 문제) 재료가 있으면 풀이로 남긴다(11/11): 첫 제출 때 한 번. */
@@ -148,14 +175,16 @@ async function syncImplementOnce() {
     // 도움(11/11): 문제 화면의 AI 힌트(제출에 남음) + 연 도움 칸(help 사건). 가장 큰 칸을 그 풀이에 남긴다. AI 힌트만 받았으면 코드까지 본 것이라 4.
     const rungs = events.filter((e) => e.kind === "help" && e.number === p.number && e.at >= p.startedAt).map((e) => e.help ?? 0);
     const aiHints = subs.some((s) => s.hints > 0);
+    // AI 튜터에게 물은 것도 도움(11/12 사용자 "AI랑 대화를 거의 안 해야 혼자 풂"): 화면이 새로 고쳐지면 제출에 실린 수가 0이 되니 서버 대화 장부로 센다.
+    const asked = await askedSince(models[p.number]?.problemId ?? problemIdOf(p.number), p.startedAt, ac.at);
     const help = Math.max(p.fill ? 4 : 0, aiHints ? 4 : 0, ...rungs) as 0 | 1 | 2 | 3 | 4;
-    const hinted = help > 0;
+    const hinted = help > 0 || asked > 0;
     const m = models[p.number], where = `BOJ ${p.number}${m ? ` ${m.title}` : ""}`;
     // 어느 칸에서 풀렸는지가 곧 "어디서 막혔나"다: 1·2칸 → 방법을 못 떠올림, 3칸 → 계획, 4칸·AI 힌트·뼈대 → 코드로 옮기기.
     const gap = p.fill ? "뼈대가 있어야 짤 수 있었어요(핵심 줄만 직접 채움)" : help <= 2 ? "어떤 방법을 쓸지 혼자서는 떠올리지 못했어요" : help === 3 ? "방법은 알았지만 무엇을 적어 두고 어떻게 바꿀지 몰랐어요" : "계획은 섰지만 코드로 옮기다 막혔어요";
     const fix = !m ? "" : help <= 2 ? `${m.patterns.map((id) => patternOf(id)?.name ?? id).join(", ")} — ${m.approaches.find((x) => x.verdict === "best")?.name ?? m.walkthrough.choose}` : m.update || m.state.right;
     await record({ kind: "implement", number: p.number, patterns: [p.pattern], ability: "execute", ok: true, hinted, ...(hinted ? { help } : {}), ...(p.fill ? { fill: true } : {}), ...(p.redo ? { redo: true } : {}),
-      mixed: p.mixed, grade: gradeOf(events, p.number, "execute", { hinted, mixed: p.mixed }), ms: Date.parse(ac.at) - Date.parse(p.startedAt), detail: `제출 ${subs.length}번${hinted ? ` · 도움 ${help}칸(${RUNG_LABEL[help]})` : ""}` }, m,
+      mixed: p.mixed, grade: gradeOf(events, p.number, "execute", { hinted, mixed: p.mixed }), ms: Date.parse(ac.at) - Date.parse(p.startedAt), detail: `제출 ${subs.length}번${help ? ` · 도움 ${help}칸(${RUNG_LABEL[help]})` : ""}${asked ? ` · AI에게 ${asked}번 물음` : ""}` }, m,
       hinted ? { situation: `${where}를 ${p.fill ? "뼈대 코드에서 핵심 줄만 채워" : `도움 ${help}칸(${RUNG_LABEL[help]})까지 받고`} 제출 ${subs.length}번 만에 맞힘`, gap, fix, cue: m?.signals[0] ?? "" } : undefined);
   }
   await writeJson("pending.json", left);
@@ -185,6 +214,7 @@ function view(a: Action, m: ProblemModel, models: Record<string, ProblemModel>) 
 }
 
 export async function tutorOverview() {
+  await reconcileChatHelp().catch(() => undefined);
   await syncImplement().catch(() => undefined);
   const [models, events, profile] = await Promise.all([readModels(), readEvents(), readProfile()]);
   const state = computeState(events);

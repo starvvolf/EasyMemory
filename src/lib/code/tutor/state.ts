@@ -28,6 +28,14 @@ const file = () => path.join(dir(), "events.jsonl");
 export async function readEvents(): Promise<TutorEvent[]> {
   try { return (await readFile(file(), "utf8")).split("\n").filter(Boolean).map((l) => JSON.parse(l) as TutorEvent); } catch { return []; }
 }
+/** 사건 기록을 통째로 다시 쓴다(고쳐 쓰기용, 임시 파일에 쓰고 바꿈). 평소에는 appendEvent만 쓴다. */
+export async function rewriteEvents(events: TutorEvent[]) {
+  const { writeFile, rename } = await import("node:fs/promises");
+  await mkdir(dir(), { recursive: true });
+  const tmp = `${file()}.${randomBytes(4).toString("hex")}.tmp`;
+  await writeFile(tmp, events.map((e) => JSON.stringify(e)).join("\n") + (events.length ? "\n" : ""), "utf8");
+  await rename(tmp, file());
+}
 export async function appendEvent(e: Omit<TutorEvent, "id" | "at"> & { at?: string }): Promise<TutorEvent> {
   const event: TutorEvent = { id: `te_${randomBytes(5).toString("hex")}`, at: e.at ?? new Date().toISOString(), ...e };
   await mkdir(dir(), { recursive: true });

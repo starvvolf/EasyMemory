@@ -97,7 +97,7 @@ export function sheetPrompt(f: Omit<Sheet, "distill">, attempt: Attempt | undefi
 export function checkDistill(raw: { stuck?: string; gap?: string; fix?: string; learned?: string; pattern?: string }, f: Omit<Sheet, "distill">) {
   const clean = (v: unknown, n: number) => { const t = String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n); return /```|=>|\bfor\s*\(|\bwhile\s*\(|;\s*$/.test(t) ? "" : t; };
   const stuck = (["read", "choose", "plan", "code", "edge"] as const).find((k) => k === raw.stuck);
-  const clear = f.end === "solved" && f.help === 0 && !Object.keys(f.verdicts).length;
+  const clear = f.end === "solved" && f.help === 0 && !f.asked && !f.aiHints && !Object.keys(f.verdicts).length;
   if (clear) return {};
   const out: Partial<Pick<Sheet, "stuck" | "gap" | "fix" | "learned">> & { pattern?: string } = {};
   if (stuck) out.stuck = stuck;
@@ -193,7 +193,7 @@ export const REVIEW_SYSTEM = `알고리즘 문제 하나를 푼 기록을 보고
 말투는 옆에서 차분히 들려주는 "~해요" 체. 칭찬도 탓도 하지 않고 있었던 일과 비어 있던 것을 정확하게. 중학생도 읽히게 쉬운 말로, 용어는 바로 뒤에 쉬운 말로 풀어 준다(예: "BFS(가까운 칸부터 한 겹씩 넓혀 가며 살피는 방법)"). 문제 속 장면(토마토, 상자, 칸)으로 설명한다.
 - situation: 문제 상황 2문장(160자 안팎). 무엇이 주어지고 무엇을 구하는지, 까다로운 조건까지.
 - solve: 이렇게 해야 풀리는 까닭과 방법 2~3문장(220자 안팎).
-- story: 풀이의 흐름을 시간 순서의 마디 2~6개로. 한 마디 = 학습자가 한 일 하나와 거기서 드러난 빈틈 하나. 틀린 게 아닌 것(두 방법 다 되는데 어느 쪽인지 물은 것)은 마디로 만들지 않는다.
+- story: 풀이의 흐름을 시간 순서의 마디 2~8개로(물은 게 많으면 많은 만큼, 같은 빈틈을 여러 번 물었으면 한 마디로 묶는다). 한 마디 = 학습자가 한 일 하나와 거기서 드러난 빈틈 하나. 틀린 게 아닌 것(두 방법 다 되는데 어느 쪽인지 물은 것)은 마디로 만들지 않는다.
   - kind: core(이 문제가 원래 보려는 생각) · build(생각을 코드로 옮기는 순서·자료) · edge(예외·경계) · syntax(파이썬 문법) 중 하나.
   - did: 학습자가 그때 무엇을 하고 있었고 무엇을 했는지·말했는지를 장면처럼 2~3문장(220자 안팎). 앞 마디와 이어지게("힌트를 3칸까지 열어 본 뒤…", "그렇게 방법을 잡고 코드를 짜 예제를 돌렸더니…"). 예제·제출이면 어떤 입력에서 무엇이 나와야 했는데 무엇이 나왔는지까지.
   - truth: "그런데 이건 사실 ~거든요" 하고 무엇이 맞는지와 왜 그런지 2~3문장(240자 안팎). 문제 속 장면으로.
@@ -217,7 +217,7 @@ export function checkReview(raw: { situation?: unknown; solve?: unknown; story?:
     const b = (x.box ?? {}) as Record<string, unknown>;
     const box = { title: clean(b.title, 40), points: (Array.isArray(b.points) ? b.points : []).map((p) => clean(p, 120)).filter(Boolean).slice(0, 4), example: block(b.example, 500) };
     return { kind: KINDS.find((k) => k === x.kind) ?? ("build" as const), did: clean(x.did, 400), truth: clean(x.truth, 420).replace(/^사실은\s*/, ""), gap: clean(x.gap, 120), box };
-  }).filter((w) => w.did && w.gap && !/확인되지 않|알 수 없/.test(w.gap)).slice(0, 6);
+  }).filter((w) => w.did && w.gap && !/확인되지 않|알 수 없/.test(w.gap)).slice(0, 8);
   return situation && solve ? { v: 9, situation, solve, story, next } : null;
 }
 /** 총정리할 장: 이 문제의 마지막 장 중 한 게 있는 것(제출·물음·AI 힌트가 있거나 끝까지 간 것). 힌트만 열어 보고 나간 장은 건너뛴다(11/12 시험). */
@@ -238,12 +238,12 @@ export function reviewFor(problemId: string, onText?: (soFar: string) => void): 
     const since = new Date(Number(/_(\d+)$/.exec(sheet.id)?.[1] ?? 0) - 60_000).toISOString();
     const until = new Date(Date.parse(sheet.at) + 60_000).toISOString();
     const { readTalk } = await import("./talk.ts");
-    const talk = (await readTalk({ problemId })).filter((t) => t.at >= since && t.at <= until).slice(-20);
+    const talk = (await readTalk({ problemId })).filter((t) => t.at >= since && t.at <= until).slice(-40);
     const user = [
       `[문제] ${meta.title}\n${meta.statement.slice(0, 1200)}`,
       `[이 문제가 보는 방법] ${sheet.tags.map((id) => patternOf(id)?.name ?? id).join(", ") || "따로 정해 둔 것 없음"}`,
       `[결과] ${END_NAME[sheet.end]} · 제출 ${sheet.submits}번${Object.keys(sheet.verdicts).length ? ` (${Object.entries(sheet.verdicts).map(([k, n]) => `${VERDICT_NAME[k] ?? k} ${n}`).join(", ")})` : ""} · 예제 실행 ${sheet.examples}번 · 연 힌트 ${Math.max(0, ...talk.filter((t) => t.kind === "도움 칸").map((t) => Number(/도움 (\d)칸/.exec(t.q)?.[1] ?? 0)))}칸${sheet.skeleton ? "(뼈대 코드)" : ""} · AI에게 물은 것 ${talk.filter((t) => t.kind !== "도움 칸").length}번 · ${sheet.minutes}분`,
-      talk.length ? `[푼 과정에서 주고받은 것]\n${talk.map((t) => `- ${t.at.slice(11, 16)} ${t.kind}${t.verdict ? ` (그때 채점: ${VERDICT_NAME[t.verdict] ?? t.verdict})` : ""}\n  학습자: ${t.q.slice(0, 500)}\n  AI: ${t.a.slice(0, 900)}${t.code && t.kind !== "도움 칸" ? `\n  그때 코드(앞부분): ${t.code.slice(0, 700)}` : ""}`).join("\n")}` : "[푼 과정에서 주고받은 것] 없음",
+      talk.length ? `[푼 과정에서 주고받은 것]\n${talk.map((t) => `- ${t.at.slice(11, 16)} ${t.kind}${t.verdict ? ` (그때 채점: ${VERDICT_NAME[t.verdict] ?? t.verdict})` : ""}\n  학습자: ${t.q.slice(0, 400)}\n  AI: ${t.a.slice(0, 600)}${t.code && t.kind !== "도움 칸" ? `\n  그때 코드(앞부분): ${t.code.slice(0, 700)}` : ""}`).join("\n")}` : "[푼 과정에서 주고받은 것] 없음",
       sheet.gap ? `[코드가 남긴 한 줄] 그때 내 생각: ${sheet.gap}${sheet.fix ? ` / 이렇게 하면 돼요: ${sheet.fix}` : ""}` : "",
     ].filter(Boolean).join("\n\n");
     const raw = await askJson<Record<string, unknown>>("code:review-sheet", REVIEW_SYSTEM, user, REVIEW_SCHEMA, onText ? { onText } : {}).catch(() => null);
