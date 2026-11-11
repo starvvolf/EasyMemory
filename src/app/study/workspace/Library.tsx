@@ -382,7 +382,7 @@ function TalkScene({ t }: { t: Talk }) {
 /* ---------- 총정리(B, 11/12) ----------
  * 사용자 "총정리만 봐도 기억이 나야 돼… 다른 사람이 봐도 이해가", "깐깐하게 부족한 점", "처음 만들 때 스트리밍으로", "가독성 좋게 박스".
  * 풀이가 끝날 때 AI가 한 번 쓴 것을 보여 준다. 없으면 이 자리에서 만들며 받는 대로 보여 준다(스트리밍). 위에는 코드가 센 사실 한 줄. */
-type StoryBeat = { kind?: string; did: string; truth: string; gap: string; box?: { title: string; points: string[]; example: string } };
+type StoryBeat = { kind?: string; did: string; truth: string; gap: string; before?: string; after?: string; box?: { title: string; points: string[]; example: string } };
 type Review = { v?: number; situation: string; solve: string; story?: StoryBeat[]; weak?: Array<{ kind?: string; gap: string; seen?: string; why?: string; fill?: string; pairs?: Array<{ when?: string; thought: string; truth: string }> }>; next: string };
 type ReviewFacts = { end: "solved" | "gaveup" | "paused"; hints: number; skeleton: boolean; asked: number; submits: number; wrong: number; minutes: number };
 /** 받는 중인 JSON 글에서 지금까지 나온 칸만 꺼낸다(닫히지 않은 따옴표도 그때까지). */
@@ -395,7 +395,7 @@ function partialReview(t: string): Review {
     const pm = /"points"\s*:\s*\[([^\]]*)/.exec(part);
     const points = pm ? [...pm[1].matchAll(/"((?:[^"\\]|\\.)*)("|$)/g)].map((m) => { try { return JSON.parse(`"${m[1].replace(/\\$/, "")}"`) as string; } catch { return m[1]; } }).filter(Boolean) : [];
     const did = str("did", part);
-    if (did) story.push({ kind: str("kind", part), did, truth: str("truth", part), gap: str("gap", part), box: { title: str("title", part), points, example: str("example", part) } });
+    if (did) story.push({ kind: str("kind", part), did, truth: str("truth", part), gap: str("gap", part), before: str("before", part), after: str("after", part), box: { title: str("title", part), points, example: str("example", part) } });
   }
   const weak: NonNullable<Review["weak"]> = [];
   return { situation: str("situation"), solve: str("solve"), next: str("next"), weak, story };
@@ -452,6 +452,10 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
           <div className="rv-sec did"><span className="rv-lab">이렇게 했어요</span><p><Ic text={b.did} /></p></div>
           {b.truth ? <div className="rv-sec truth"><span className="rv-lab">사실은요</span><p><Ic text={b.truth} /></p></div> : null}
           {b.gap ? <div className="rv-sec gap"><span className="rv-lab">비어 있던 것</span><p><Ic text={b.gap} /></p></div> : null}
+          {b.kind !== "idea" && (b.before || b.after) ? <div className="rv-diff">
+            {b.before ? <div className="rv-code was"><span className="rv-codelab">그때 내 코드</span><pre>{b.before}</pre></div> : null}
+            {b.after ? <div className="rv-code fix"><span className="rv-codelab">이렇게 고쳐요</span><pre>{b.after}</pre></div> : null}
+          </div> : null}
           {b.box && (b.box.title || b.box.points.length) ? <aside className="rv-study">
             <div className="rv-studyhead"><span aria-hidden>✎</span> 짚고 가기{b.box.title ? <b>{b.box.title}</b> : null}</div>
             <div className="rv-studybody">

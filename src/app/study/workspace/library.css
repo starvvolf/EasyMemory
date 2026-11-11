@@ -497,3 +497,11 @@
 .dejipgi .rv-beat.idea .rv-dot,.dejipgi .rv-beat.impl .rv-dot{color:var(--surface);border:0}
 .dejipgi .rv-chip.idea{background:var(--accent)} .dejipgi .rv-chip.impl{background:var(--help)}
 .dejipgi .rv-beat.syntax .rv-card{margin-left:22px}
+
+/* 구현·문법 마디: 그때 내 코드 → 이렇게 고쳐요 (11/12 v13) */
+.dejipgi .rv-diff{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:2px 0 4px}
+.dejipgi .rv-diff .rv-code{min-width:0;margin:0}
+.dejipgi .rv-code.was .rv-codelab{color:#ffb4a6;background:#3a2326;border-bottom-color:#4a2c30}
+.dejipgi .rv-code.was{border-color:#4a2c30}
+.dejipgi .rv-code.fix .rv-codelab{color:#9fe3bf;background:#1d3328;border-bottom-color:#264537}
+.dejipgi .rv-code.fix{border-color:#264537}
