@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>알고리즘 파트 구조도</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{--bg:#f6f4ef;--panel:#fffdf8;--ink:#1f2328;--muted:#646a73;--line:#e2ddd2;--ai:#c97a12;--ai-bg:#fbefd9;--code:#2f8a5b;--code-bg:#e2f3e9;--data:#3d6fb6;--data-bg:#e4ecf8;--sol:#8a4fc7;--sol-bg:#efe5fa;--hot:#c2432f;--hot-bg:#f9e3de;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171b;--panel:#1d2026;--ink:#e9eaee;--muted:#9aa1ad;--line:#2e323b;--ai:#f0a948;--ai-bg:#3a2c16;--code:#5fd197;--code-bg:#173326;--data:#7fa8ec;--data-bg:#1b2840;--sol:#bf93f2;--sol-bg:#2d2140;--hot:#ff8a76;--hot-bg:#3d211c;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15171b;--panel:#1d2026;--ink:#e9eaee;--muted:#9aa1ad;--line:#2e323b;--ai:#f0a948;--ai-bg:#3a2c16;--code:#5fd197;--code-bg:#173326;--data:#7fa8ec;--data-bg:#1b2840;--sol:#bf93f2;--sol-bg:#2d2140;--hot:#ff8a76;--hot-bg:#3d211c;color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,sans-serif;font-size:15px;line-height:1.6}
+.wrap{max-width:1240px;margin:0 auto;padding-block:28px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
+h1{font-size:28px;font-weight:900;margin:0;text-wrap:balance}
+h2{font-size:19px;margin:0 0 12px;text-wrap:balance}
+.lede{color:var(--muted);margin:6px 0 0;max-width:72ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.chip.ai{background:var(--ai-bg);color:var(--ai)}.chip.code{background:var(--code-bg);color:var(--code)}.chip.data{background:var(--data-bg);color:var(--data)}.chip.sol{background:var(--sol-bg);color:var(--sol)}.chip.hot{background:var(--hot-bg);color:var(--hot)}
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+@media (max-width:980px){.flow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.flow{grid-template-columns:1fr}}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.stage h3{margin:0;font-size:16px;display:flex;gap:8px;align-items:baseline}
+.stage h3 .n{font-family:"JetBrains Mono",monospace;color:var(--muted);font-size:13px}
+.stage .who{font-size:13px;color:var(--muted);margin:-4px 0 0}
+.step{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--bg)}
+.step.ai{border-color:color-mix(in srgb,var(--ai) 45%,var(--line))}
+.step.code{border-color:color-mix(in srgb,var(--code) 40%,var(--line))}
+.step b{font-size:14px}
+.step p{margin:0;font-size:13px;color:var(--muted);line-height:1.55}
+.meta{display:flex;flex-wrap:wrap;gap:6px}
+.mono{font-family:"JetBrains Mono",monospace;font-size:12px}
+.store{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+.stores{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.st{border-left:3px solid var(--data);padding:6px 10px;background:var(--data-bg);border-radius:0 10px 10px 0;min-width:0}
+.st .mono{color:var(--data);word-break:break-all}
+.st p{margin:2px 0 0;font-size:13px}
+.layers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
+@media (max-width:760px){.layers{grid-template-columns:1fr}}
+.layer{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;position:relative;min-width:0}
+.layer .k{font-family:"JetBrains Mono",monospace;font-weight:600;color:var(--data)}
+.layer p{margin:6px 0 0;font-size:13.5px}
+.sample{margin-top:8px;font-family:"JetBrains Mono",monospace;font-size:12px;background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:8px;overflow-x:auto;white-space:pre}
+.tablebox{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:860px;font-size:13.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.04em;color:var(--muted);font-weight:700}
+td.num{font-family:"JetBrains Mono",monospace;font-size:12.5px;white-space:nowrap}
+tr.grp td{background:var(--bg);font-weight:700;font-size:13px;color:var(--muted)}
+tr.heavy td{background:color-mix(in srgb,var(--hot) 6%,transparent)}
+.note{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card h3{margin:0 0 6px;font-size:15px}
+.card p,.card li{font-size:13.5px;margin:0}
+.card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.big{font-size:26px;font-weight:900;font-family:"JetBrains Mono",monospace}
+.foot{color:var(--muted);font-size:12.5px}
+</style>
+
+<style>body{margin:0}</style>
+</head><body>
+<div class="wrap">
+  <header>
+    <h1>알고리즘 파트(PS 튜터) 구조도</h1>
+    <p class="lede">학습자가 백준 문제 하나를 넣고, 풀고, 막히면 도움을 받고, 끝나고 돌아볼 때까지 앱 안에서 무슨 일이 일어나는지. 어디서 AI를 부르고, 무엇을 넣고 받으며, 얼마나 드는지까지. 2026-11-12 기준 · B 세션.</p>
+  </header>
+
+  <div class="legend">
+    <span><span class="chip ai">AI</span> terra · low (기본)</span>
+    <span><span class="chip hot">AI medium</span> 틀리면 잘못 배우는 곳</span>
+    <span><span class="chip sol">AI sol</span> 다른 모델로 대조</span>
+    <span><span class="chip code">코드</span> AI 없이 코드가 정하거나 계산</span>
+    <span><span class="chip data">저장</span> 데이터 폴더(비공개 RecallerData)</span>
+  </div>
+
+  <section>
+    <h2>한 문제의 흐름</h2>
+    <div class="flow">
+      <div class="stage">
+        <h3><span class="n">01</span>문제 넣기</h3>
+        <p class="who">백준 번호 하나 → 채점되는 문제</p>
+        <div class="step code"><b>원문 가져오기</b><p>인터넷 아카이브 사본에서(백준은 2026-04 종료).</p><div class="meta"><span class="chip code">코드</span><span class="mono">source.ts · archive.ts</span></div></div>
+        <div class="step ai"><b>동시에 AI 넷</b><p>세팅(문제 글·제약·모범 풀이·단순 풀이) · 숨은 테스트 생성기 · 틀린 풀이 3~5개 · 독립 풀이.</p><div class="meta"><span class="chip ai">make</span><span class="chip ai">generator</span><span class="chip ai">mutants</span><span class="chip sol">solve</span></div></div>
+        <div class="step code"><b>검증</b><p>원문 예제 + 독립 풀이가 모든 테스트에서 같은 답이어야 저장. 어긋나면 이유를 붙여 다시(최대 3번). 틀린 풀이를 몇 개 잡는지로 테스트 세기를 잰다.</p><div class="meta"><span class="chip code">코드</span><span class="mono">testgen/</span></div></div>
+        <div class="step ai"><b>난이도 · 교육용 문제 모델</b><p>이 문제가 보는 패턴, 도움 1~3칸 재료, 흔한 틀린 접근. 문제마다 한 번.</p><div class="meta"><span class="chip ai">level(+웹)</span><span class="chip ai">tutor-model</span><span class="chip data">models.json</span></div></div>
+        <p class="foot">문제 하나 ≈ $0.03~0.04 · 바로 열기 2초, 제출 열림 15~50초</p>
+      </div>
+
+      <div class="stage">
+        <h3><span class="n">02</span>혼자 풀기</h3>
+        <p class="who">학습자 PC에서 실행·채점</p>
+        <div class="step code"><b>예제 실행 · 제출</b><p>4개 언어, 시간·메모리 제한, PC 속도 보정. 맞고 틀림은 출력 비교로만.</p><div class="meta"><span class="chip code">코드</span><span class="mono">run.ts · calibrate.ts</span><span class="chip data">submissions.jsonl</span></div></div>
+        <div class="step code"><b>이번 풀이 모으기</b><p>제출·틀림·도움 칸·채팅 답을 ① 이번 풀이에 쌓는다.</p><div class="meta"><span class="chip code">코드</span><span class="chip data">attempts.json</span></div></div>
+        <div class="step code"><b>튜터 상태</b><p>사건 기록 → 인식·설계·실행 상태(E0~E4) → 규칙으로 다음 할 일. AI는 실력을 판정하지 않는다.</p><div class="meta"><span class="chip code">코드</span><span class="mono">state · policy</span><span class="chip data">events.jsonl</span></div></div>
+      </div>
+
+      <div class="stage">
+        <h3><span class="n">03</span>막히면 도움</h3>
+        <p class="who">작은 도움부터</p>
+        <div class="step ai"><b>튜터 채팅</b><p>해요체, 한 걸음만, 연 힌트까지. 앞(고정): 지시문·문제·지난 기억·앞선 대화 전부 / 뒤(매번): 연 힌트·채점 결과·지금 코드·질문. 같은 문제는 캐시 키로 묶음.</p><div class="meta"><span class="chip ai">explain</span><span class="mono">≈2.1k→0.1k · 4초 · $0.003</span></div></div>
+        <div class="step code"><b>도움 1~3칸</b><p>눈여겨볼 곳 · 방법 이름 · 계획. 교육용 모델에서 그대로(AI 없음).</p><div class="meta"><span class="chip code">코드</span><span class="chip ai">hint-voice(말투)</span></div></div>
+        <div class="step ai"><b>도움 4칸 · 뼈대 코드</b><p>빈칸 있는 코드를 AI가 만들고, 채워서 채점을 통과하는지 코드가 확인.</p><div class="meta"><span class="chip hot">tutor-skeleton</span><span class="chip data">skeletons.json</span></div></div>
+        <div class="step ai"><b>그 밖의 도움</b><p>제출 뒤 힌트 · 오류 설명 · "맞는지 봐 줘" · 반례 찾기(깨지는지는 코드가 돌려 봄).</p><div class="meta"><span class="chip ai">hint</span><span class="chip ai">error</span><span class="chip hot">review</span><span class="chip ai">counter</span></div></div>
+        <div class="step code"><b>대화 장부</b><p>주고받은 것을 원문 그대로 덧붙이기만. 채팅 1번도 도움 1번으로 센다.</p><div class="meta"><span class="chip data">talk.jsonl</span></div></div>
+      </div>
+
+      <div class="stage">
+        <h3><span class="n">04</span>끝 · 돌아보기</h3>
+        <p class="who">맞힘 · 그만둠 · 하다 나감 · 앱 끔</p>
+        <div class="step ai"><b>문제 한 장</b><p>결과·제출·틀린 종류·도움·시간은 코드가 세고, AI는 짧은 칸 넷(막힌 곳·그때 내 생각·이렇게 하면 돼요·새로 안 것).</p><div class="meta"><span class="chip ai">sheet</span><span class="mono">≈1.1k→0.06k · 3초</span><span class="chip data">sheets.jsonl</span></div></div>
+        <div class="step ai"><b>푼 과정 요약</b><p>풀이 노트를 처음 볼 때: 주고받은 것마다 "몰랐던 것 / 알려 준 것" 두 줄.</p><div class="meta"><span class="chip ai">talk-note</span><span class="chip data">talk-notes.json</span></div></div>
+        <div class="step ai" style="border-color:var(--hot)"><b>총정리</b><p>이야기 문단 + 약점 카드(지금 내 상태 · 메워 주는 설명). 작은 건 작게, 핵심은 크게. 처음 볼 때 한 번 만들고 저장, 스트리밍.</p><div class="meta"><span class="chip ai">review-sheet</span><span class="mono">9.6k→4.6k · 85초 · $0.032</span></div></div>
+        <div class="step"><b>다음</b><p>도움 받은 문제는 하루 뒤 혼자 다시. 문제 찾아오기는 AI 웹 검색으로 후보 3~5개.</p><div class="meta"><span class="chip ai">find(+웹)</span><span class="chip ai">tutor-lesson</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>학습자 기억 세 층</h2>
+    <div class="layers">
+      <div class="layer"><span class="k">① 이번 풀이</span><p>채팅 답 · 제출 · 도움 칸 · 틀림. 풀이 중에만 있고, 끝나면 ②로 옮기고 버린다.</p><div class="sample">code/attempts.json</div></div>
+      <div class="layer"><span class="k">② 문제 한 장</span><p>끝날 때 한 장. 숫자는 코드가, 짧은 칸 넷은 AI 1번. 총정리도 여기에 붙는다.</p><div class="sample">code/tutor/sheets.jsonl</div></div>
+      <div class="layer"><span class="k">③ 압축 기억</span><p>태그 한 줄씩, 볼 때마다 코드가 계산(저장 안 함). 튜터 채팅·문제 찾기·추천이 같은 함수로 골라 쓴다.</p><div class="sample">#bfs-distance 거리 배열 BFS [알4]
+알✓ 계△ 짜✗ · 혼자1 도움2
+막힘:경계·예외 · 착각:"…"(2178)</div></div>
+    </div>
+  </section>
+
+  <section class="tablebox">
+    <h2>AI 호출 전부</h2>
+    <table>
+      <thead><tr><th>호출</th><th>언제</th><th>넣는 것 → 받는 것</th><th>모델</th><th>1번 평균(입력·출력·시간)</th><th>비용</th></tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="6">문제 넣을 때 (문제 하나에 한 번)</td></tr>
+        <tr><td class="mono">code:make</td><td>문제 세팅</td><td>원문 또는 주제 → 문제 초안 JSON</td><td>terra low</td><td class="num">2.2k · 0.7k · 16초</td><td class="num">$0.006</td></tr>
+        <tr><td class="mono">code:generator</td><td>숨은 테스트</td><td>문제 글·제약 → 생성기 JS</td><td>terra low</td><td class="num">1.0k · 1.5k · 29초</td><td class="num">$0.008</td></tr>
+        <tr><td class="mono">code:mutants</td><td>테스트 세기</td><td>문제 글 → 틀린 풀이 3~5개</td><td>terra low</td><td class="num">0.8k · 1.1k · 22초</td><td class="num">$0.006</td></tr>
+        <tr><td class="mono">code:solve</td><td>대조</td><td>문제 글·예제 → 독립 풀이</td><td><span class="chip sol">sol</span></td><td class="num">0.5k · 0.4k · 11초</td><td class="num">$0.005</td></tr>
+        <tr><td class="mono">code:level</td><td>난이도</td><td>문제 → 난이도·출처(모르면 웹)</td><td>terra low</td><td class="num">1.3k · 0.06k · 3초</td><td class="num">$0.002</td></tr>
+        <tr><td class="mono">code:tutor-model</td><td>교육용 모델</td><td>문제·풀이 → 패턴·도움 재료·틀린 접근</td><td>terra low</td><td class="num">6.5k · 0.9k · 17초</td><td class="num">$0.011</td></tr>
+        <tr class="grp"><td colspan="6">풀 때 (누를 때마다)</td></tr>
+        <tr><td class="mono">code:explain</td><td>튜터 채팅</td><td>고정 앞부분 + 지금 코드·질문 → 답 글(스트리밍)</td><td>terra low</td><td class="num">2.1k · 0.11k · 4초</td><td class="num">$0.003</td></tr>
+        <tr><td class="mono">code:tutor-skeleton</td><td>도움 4칸</td><td>문제·모델 → 빈칸 코드(채점 검증)</td><td><span class="chip hot">medium</span></td><td class="num">1.2k · 0.4k · 10초</td><td class="num">$0.003</td></tr>
+        <tr><td class="mono">code:tutor-hint-voice</td><td>도움 칸 말투</td><td>정해진 글 → 다듬은 글</td><td>terra low</td><td class="num">0.8k · 0.3k · 8초</td><td class="num">$0.002</td></tr>
+        <tr><td class="mono">code:hint · error · counter</td><td>힌트 · 오류 · 반례</td><td>문제·코드·결과 → 글 / 입력 후보</td><td>terra low(hint 2단계~ medium)</td><td class="num">이번 기록 없음</td><td class="num">—</td></tr>
+        <tr><td class="mono">code:review</td><td>"맞는지 봐 줘"</td><td>문제·코드·메모 → 검토 글</td><td><span class="chip hot">medium</span></td><td class="num">이번 기록 없음</td><td class="num">—</td></tr>
+        <tr class="grp"><td colspan="6">끝나고 볼 때</td></tr>
+        <tr><td class="mono">code:sheet</td><td>문제 한 장</td><td>센 사실·대화 → 짧은 칸 넷</td><td>terra low</td><td class="num">1.1k · 0.06k · 3초</td><td class="num">$0.001</td></tr>
+        <tr><td class="mono">code:talk-note</td><td>푼 과정</td><td>주고받은 것 12개씩 → 두 줄씩</td><td>terra low</td><td class="num">0.9k · 0.25k · 7초</td><td class="num">$0.002</td></tr>
+        <tr class="heavy"><td class="mono">code:review-sheet</td><td>총정리</td><td>문제·센 사실·대화 최대 40개 → 이야기 + 약점 카드</td><td>terra low</td><td class="num">9.6k · 4.6k · 85초</td><td class="num">$0.032</td></tr>
+        <tr><td class="mono">code:tutor-lesson</td><td>배운 것 카드</td><td>사건·대화 → 착각·고칠 것·떠올릴 말</td><td>terra low</td><td class="num">이번 기록 없음</td><td class="num">—</td></tr>
+        <tr class="grp"><td colspan="6">그 밖</td></tr>
+        <tr><td class="mono">code:find</td><td>문제 찾아오기</td><td>요청·내 기록 → 후보 3~5개(웹 검색)</td><td>terra low</td><td class="num">10k(캐시 4.4k) · 0.3k · 11초</td><td class="num">$0.007</td></tr>
+        <tr><td class="mono">code:train-* · watch</td><td>7단계 훈련</td><td>PS 실험 서버에서만(제품 흐름 아님)</td><td>terra low</td><td class="num">—</td><td class="num">—</td></tr>
+      </tbody>
+    </table>
+    <p class="foot">평균은 2026-11-11 밤~11-12 새벽 실제 호출 기록. 비용은 "API 키로 불렀다면"(terra 입력 $1 · 캐시 $0.05 · 출력 $5 / 100만 토큰, sol 두 배). 실제로는 ChatGPT 계정 사용량에서 빠진다.</p>
+  </section>
+
+  <section class="note">
+    <div class="card"><h3>하룻밤 실제 합계</h3><p class="big">$0.58</p><p>알고리즘 호출 112번(약 800원). 총정리 18번 $0.27(지시문을 고치며 다시 만듦) · 채팅 43번 $0.11 · 문제 넣기 23번 $0.13 · 나머지 $0.07.</p></div>
+    <div class="card"><h3>채팅 캐시 (11/12 고침)</h3><p>고치기 전에는 최근 대화 8개만 보내서 앞부분이 매번 바뀌었고, 입력 9만 토큰 중 캐시는 1천뿐이었다. 지금은 앞선 대화를 처음부터 전부 덧붙이기만 하고, 4.5만 자에 닿을 때만 앞에서 20개씩 덜어 낸다.</p></div>
+    <div class="card"><h3>지켜야 하는 것</h3><ul><li>판정은 코드가. AI는 실력을 판정하지 않는다.</li><li>도움은 작은 것부터, 받은 문제는 하루 뒤 혼자.</li><li>대화 1번도 도움. 거의 안 물어야 혼자 풂.</li><li>약점 카드: 깐깐하게, 드러난 때마다, 작은 건 작게·핵심은 크게.</li><li>문제 원문·기록은 데이터 폴더에만.</li></ul></div>
+  </section>
+
+  <p class="foot">자세한 글: <span class="mono">docs/알고리즘_동작정리.md</span> · 코드: <span class="mono">src/lib/code/</span>, <span class="mono">src/lib/assist/code-ai.ts</span>, <span class="mono">src/app/api/code/</span></p>
+</div>
+</body></html>
