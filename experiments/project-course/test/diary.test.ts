@@ -28,7 +28,7 @@ test("실습 일지: 장면 기록을 번호 붙여 넘기고, 받은 흐름을 
   const d = await D.writeDiary(R, "시험");
   assert.ok(d);
   assert.match(seen, /\[0\] 나: 할 일 앱 만들고 싶어/);
-  assert.match(seen, /== 현재 목표: 목록 만들기/);
+  assert.match(seen, /== 현재 목표 1: 목록 만들기/);
   assert.equal(d!.story.length, 3, "꼬리표가 틀린 것은 버림");
   assert.equal(d!.story[2].g, null, "없는 근거 번호는 null");
   assert.deepEqual(d!.left, ["저장하기"]);
