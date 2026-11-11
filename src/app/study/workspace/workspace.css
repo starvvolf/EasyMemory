@@ -1286,12 +1286,25 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pst{position:fixed;left:6px;right:10px;bottom:10px;display:flex;flex-direction:column;gap:8px;z-index:30;min-width:0;background:var(--ground, #f2f3f6);padding-top:2px}
 .dejipgi .pst-body{flex:1;display:flex;gap:8px;min-height:0;min-width:0}
 .dejipgi .pst-top{flex:none;display:flex;align-items:center;gap:10px;min-width:0;padding:4px 10px;min-height:40px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
-.dejipgi .pst-goal{display:flex;align-items:baseline;gap:6px;min-width:0;max-width:38%;font-size:13px}
-.dejipgi .pst-goal.now{max-width:44%}
+.dejipgi .pst-goals{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1;padding:2px 0}
+.dejipgi .pst-row{display:flex;align-items:baseline;gap:8px;min-width:0;font-size:13px}
 .dejipgi .pst-k{flex:none;font-size:11px;color:var(--muted, #888)}
 .dejipgi .pst-v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.dejipgi .pst-phase{flex:none;font-size:11px;padding:0 6px;border-radius:99px;background:rgba(107,140,255,.15);color:var(--accent, #6b8cff)}
-.dejipgi .pst-steps{flex:none;font-size:11.5px;color:var(--muted, #888);cursor:help}
+.dejipgi .pst-long{font-weight:600}
+.dejipgi .pst-count{flex:none;font-size:11px;color:var(--muted, #888)}
+.dejipgi .pst-map{display:flex;align-items:center;gap:4px;margin:0;padding:0;list-style:none;min-width:0;overflow-x:auto;scrollbar-width:none}
+.dejipgi .pst-st{flex:none;display:flex;align-items:center;gap:5px;height:22px;padding:0 8px 0 3px;border-radius:99px;font-size:11.5px;color:var(--muted, #888);background:color-mix(in srgb,var(--line) 45%,transparent);max-width:190px;cursor:default}
+.dejipgi .pst-n{flex:none;display:grid;place-items:center;width:16px;height:16px;border-radius:50%;font-size:10px;background:var(--surface);border:1px solid var(--line)}
+.dejipgi .pst-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dejipgi .pst-st.done .pst-n{background:color-mix(in srgb,var(--ok, #2f9e6a) 18%,var(--surface));border-color:transparent;color:var(--ok, #2f9e6a)}
+.dejipgi .pst-st.skipped{opacity:.6}
+.dejipgi .pst-st.doing{max-width:none;color:var(--ink);font-weight:600;background:color-mix(in srgb,var(--accent, #6b8cff) 13%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent, #6b8cff) 35%,transparent)}
+.dejipgi .pst-st.doing .pst-n{background:var(--accent, #6b8cff);border-color:transparent;color:#fff}
+.dejipgi .pst-st.doing .pst-t{max-width:360px}
+.dejipgi .pst-phase{flex:none;font-size:10.5px;font-weight:500;padding:0 6px;border-radius:99px;background:var(--surface);color:var(--accent, #6b8cff)}
+.dejipgi .pst-sup{flex:none;font-size:10.5px;font-weight:500;padding:0 6px;border-radius:99px;background:color-mix(in srgb,#e8a33d 20%,var(--surface));color:#b06d10;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 앱 창(데스크톱)의 맨 위 머리(고정, z 12)보다 편집 화면(z 30)이 위라 ⋯ 메뉴가 밑에 깔리던 것(11/11) */
+.dejipgi:has(.pst) .masthead{z-index:31}
 .dejipgi .pst-msg{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dejipgi .pst-side,.dejipgi .pst-main{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:0;position:relative}
 .dejipgi .pst-main{flex:1;background:#1f1f1f;display:flex}

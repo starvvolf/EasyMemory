@@ -125,7 +125,6 @@ export default function ProjectStudio({ run, courseUrl, onClose }: { run: Run; c
         <header className="pst-top">
           <button className="btn ghost small" onClick={onClose} title="실습 목록으로(편집기는 켜 둔 채)">← 실습</button>
           <Goals brief={brief} fallback={run.courseTitle} />
-          <span className="grow" />
           {msg ? <span className="small muted pst-msg">{msg}</span> : null}
           <button className="btn ghost small" onClick={() => void mine()} title="내 PC의 VS Code(내 확장 · 설정 그대로)로 이 폴더를 열어요">내 VS Code로 열기</button>
         </header>
@@ -146,15 +145,27 @@ export default function ProjectStudio({ run, courseUrl, onClose }: { run: Run; c
 
 /** 위 띠: 장기 목표 · 지금 목표(보충 중이면 보충) · 로드맵 몇 번째. 길면 한 줄로 자르고 마우스를 올리면 전부 */
 function Goals({ brief, fallback }: { brief: Brief | null; fallback: string }) {
-  if (!brief?.long) return <span className="pst-goal"><span className="pst-k">실습</span><b className="pst-v">{brief ? "튜터와 장기 목표를 정하는 중" : fallback}</b></span>;
+  if (!brief?.long) return <div className="pst-goals"><div className="pst-row"><span className="pst-k">실습</span><b className="pst-v">{brief ? "튜터와 장기 목표를 정하는 중" : fallback}</b></div></div>;
   const c = brief.current, steps = brief.map;
-  const idx = steps.findIndex((x) => x.status === "doing");
   const doneN = steps.filter((x) => x.status === "done" || x.status === "skipped").length;
-  const now = brief.support ? `보충: ${brief.support.title}` : c?.title ?? "다음 목표를 정하는 중";
-  const phase = c ? (c.applied ? "적용 ✓" : c.understood ? "① 이해 ✓ → ② 적용" : "① 이해 → ② 적용") : "";
-  return <>
-    <span className="pst-goal" title={brief.long}><span className="pst-k">장기 목표</span><span className="pst-v">{brief.long}</span></span>
-    <span className="pst-goal now" title={c ? `${now}\n완료 조건: ${c.done}` : now}><span className="pst-k">지금</span><b className="pst-v">{now}</b>{phase ? <span className="pst-phase">{phase}</span> : null}</span>
-    {steps.length ? <span className="pst-steps" title={steps.map((x, i) => `${i + 1}. ${x.title}${x.status === "done" ? " ✓" : x.status === "skipped" ? " (건너뜀)" : x.status === "doing" ? " ← 지금" : ""}`).join("\n")}>{idx >= 0 ? `${idx + 1}/${steps.length}단계` : `${doneN}/${steps.length}`}</span> : null}
-  </>;
+  const phase = c ? (c.applied ? "적용 ✓" : c.understood ? "이해 ✓ → 적용" : "이해 → 적용") : "";
+  // 11/11 사용자 "장기 로드맵, 지금 하는 거는 위 장기 목표 줄에 이쁘게": 윗줄 장기 목표 · 아랫줄 로드맵(지금 단계에 이해 · 적용, 보충이면 그 옆에)
+  return <div className="pst-goals">
+    <div className="pst-row" title={brief.long}>
+      <span className="pst-k">장기 목표</span><span className="pst-v pst-long">{brief.long}</span>
+      {steps.length ? <span className="pst-count">{doneN}/{steps.length} 끝남</span> : null}
+    </div>
+    <ol className="pst-map">
+      {steps.map((x, i) => {
+        const now = x.status === "doing";
+        return <li key={i} className={`pst-st ${x.status}`} title={`${i + 1}. ${x.title}${now && c ? `\n완료 조건: ${c.done}` : x.status === "skipped" ? " (건너뜀)" : ""}`}>
+          <span className="pst-n">{x.status === "done" ? "✓" : x.status === "skipped" ? "↷" : i + 1}</span>
+          <span className="pst-t">{x.title}</span>
+          {now && phase && !brief.support ? <span className="pst-phase">{phase}</span> : null}
+          {now && brief.support ? <span className="pst-sup" title={`보충: ${brief.support.title}`}>보충: {brief.support.title}</span> : null}
+        </li>;
+      })}
+      {!steps.length && c ? <li className="pst-st doing" title={`완료 조건: ${c.done}`}><span className="pst-t">{c.title}</span>{phase ? <span className="pst-phase">{phase}</span> : null}</li> : null}
+    </ol>
+  </div>;
 }
