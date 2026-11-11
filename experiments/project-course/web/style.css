@@ -957,3 +957,19 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .tlpage .tlchg li { font-size: 12.5px; line-height: 1.5; padding-left: 14px; position: relative; }
 .tlpage .tlchg li::before { content: ""; position: absolute; left: 3px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--acc); opacity: .6; }
 .tlpage .tlstate { border-top: 0; background: color-mix(in srgb, var(--soft) 55%, var(--panel)); border-radius: 14px; padding: 10px 12px; }
+/* 학습 기록 색 나누기(11/11 사용자 "박스끼리 색깔 구분이 너무 안 됨"): 바탕은 한 톤 어둡게, 카드는 밝게, 말풍선은 종류마다 다른 옅은 색 */
+body:has(.tlpage), .embed body:has(.tlpage) { --tl-page: color-mix(in srgb, #000 7%, var(--bg)); --tl-card: color-mix(in srgb, #fff 4%, var(--bg)); background: var(--tl-page); }
+.tlpage .tltop { background: var(--tl-page); }
+.tlpage .tlbox { background: var(--tl-card); box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent); }
+.tlpage .tlbox.system { background: var(--tl-card); }
+.tlpage .tlsay { background: color-mix(in srgb, var(--ink) 6%, var(--tl-card)); }
+.tlpage .tlsay.button { background: color-mix(in srgb, #4a7bd8 10%, var(--tl-card)); }
+.tlpage .tlsay.save { background: color-mix(in srgb, #e8a33d 12%, var(--tl-card)); }
+.tlpage .tlsay.message { background: color-mix(in srgb, #3aa06b 16%, var(--tl-card)); }
+.tlpage .tlbub { background: color-mix(in srgb, var(--acc) 8%, var(--tl-card)); }
+.tlpage .tlchip.tool { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 100%, var(--mut) 20%); }
+.tlpage .tlpill { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 100%, var(--mut) 20%); }
+.tlpage .tlpill:hover { background: color-mix(in srgb, var(--ink) 6%, var(--tl-card)); }
+.tlpage .tlstate { background: color-mix(in srgb, var(--ink) 4%, var(--tl-card)); }
+.tlpage .tlarrow { background: color-mix(in srgb, var(--mut) 45%, transparent); }
+.tlpage .tltop .btn:not(.primary), .tlpage .tlcount { background: var(--tl-card); box-shadow: 0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent); }
