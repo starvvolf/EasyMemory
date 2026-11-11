@@ -382,21 +382,20 @@ function TalkScene({ t }: { t: Talk }) {
 /* ---------- 총정리(B, 11/12) ----------
  * 사용자 "총정리만 봐도 기억이 나야 돼… 다른 사람이 봐도 이해가", "깐깐하게 부족한 점", "처음 만들 때 스트리밍으로", "가독성 좋게 박스".
  * 풀이가 끝날 때 AI가 한 번 쓴 것을 보여 준다. 없으면 이 자리에서 만들며 받는 대로 보여 준다(스트리밍). 위에는 코드가 센 사실 한 줄. */
-type Review = { v?: number; situation: string; solve: string; weak?: Array<{ gap: string; pairs?: Array<{ when?: string; thought: string; truth: string }> }>; next: string };
+type Review = { v?: number; situation: string; solve: string; weak?: Array<{ kind?: string; gap: string; seen?: string; why?: string; fill?: string; pairs?: Array<{ when?: string; thought: string; truth: string }> }>; next: string };
 type ReviewFacts = { end: "solved" | "gaveup" | "paused"; hints: number; skeleton: boolean; asked: number; submits: number; wrong: number; minutes: number };
 /** 받는 중인 JSON 글에서 지금까지 나온 칸만 꺼낸다(닫히지 않은 따옴표도 그때까지). */
 function partialReview(t: string): Review {
   const str = (key: string, from = t) => { const m = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`).exec(from); if (!m) return ""; try { return JSON.parse(`"${m[1].replace(/\\$/, "")}"`) as string; } catch { return m[1]; } };
-  // 부족한 점: "gap" 하나와 그 뒤의 장면들(thought·truth)을 차례로 묶는다.
+  // 빈틈: "kind"(없으면 "gap")에서 다음 빈틈 앞까지가 한 개.
   const wi = t.indexOf('"weak"');
   const weak: NonNullable<Review["weak"]> = [];
-  if (wi >= 0) for (const part of t.slice(wi).split(/(?="gap")/).slice(1)) {
-    const pairs = part.split(/(?="when"|"thought")/).reduce<string[]>((acc, o, i) => { if (i === 0) return acc; if (o.startsWith('"thought"') && acc.length && !/"thought"/.test(acc[acc.length - 1])) acc[acc.length - 1] += o; else acc.push(o); return acc; }, [])
-      .map((o) => ({ when: str("when", o), thought: str("thought", o), truth: str("truth", o) })).filter((x) => x.when || x.thought);
-    const gap = str("gap", part); if (gap) weak.push({ gap, pairs });
+  if (wi >= 0) for (const part of t.slice(wi).split(/(?="kind")/).slice(1)) {
+    const gap = str("gap", part); if (gap) weak.push({ kind: str("kind", part), gap, seen: str("seen", part), why: str("why", part), fill: str("fill", part) });
   }
   return { situation: str("situation"), solve: str("solve"), next: str("next"), weak };
 }
+const GAP_KIND: Record<string, string> = { core: "핵심 생각", build: "코드로 옮기기", edge: "예외·경계", syntax: "파이썬 문법" };
 function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
   const [rv, setRv] = useState<Review | null>(null);
   const [facts, setFacts] = useState<ReviewFacts | null>(null);
@@ -431,15 +430,14 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
     {facts ? <p className="rp-facts">{[END[facts.end], facts.hints ? `힌트 ${facts.hints}칸${facts.skeleton ? "·뼈대" : ""}` : "힌트 안 봄", `AI에게 ${facts.asked}번 물음`, `제출 ${facts.submits}번${facts.wrong ? `(틀림 ${facts.wrong})` : ""}`, `${facts.minutes}분`].map((x) => <span key={x}>{x}</span>)}</p> : null}
     {rv.situation ? <div className="rp-card"><b className="rp-h">문제 상황</b><p>{rv.situation}</p></div> : null}
     {rv.solve ? <div className="rp-card ok"><b className="rp-h">이렇게 해야 풀려요</b><p>{rv.solve}</p></div> : null}
-    {rv.weak?.length ? <div className="rp-card bad"><b className="rp-h bad">부족한 점</b>
-      <ol className="rp-weak">{rv.weak.map((w, i) => <li key={i}>
-        <p className="rp-gap"><span className="rp-num">{i + 1}</span>{w.gap}</p>
-        {(w.pairs ?? []).map((p, j) => <div key={j} className="rp-pair">
-          {p.when ? <div className="when"><span className="rp-tag">무슨 일이 있었나</span><p>{p.when}</p></div> : null}
-          {p.thought ? <div className="mine"><span className="rp-tag">그때 내 생각</span><p>{p.thought}</p></div> : null}
-          {p.truth ? <div className="right"><span className="rp-tag">맞는 생각</span><p>{p.truth}</p></div> : null}
-        </div>)}
-      </li>)}</ol></div> : null}
+    {rv.weak?.length ? <div className="rp-gaps"><b className="rp-h bad">부족한 점</b>
+      {rv.weak.map((w, i) => <article key={i} className={`rp-gapcard ${w.kind ?? ""}`}>
+        <p className="rp-gap"><span className={`rp-kind ${w.kind ?? ""}`}>{GAP_KIND[w.kind ?? ""] ?? "빈틈"}</span>{w.gap}</p>
+        {w.seen ? <div className="rp-row2"><span className="rp-tag">어디서 드러났나</span><p>{w.seen}</p></div> : null}
+        {w.why ? <div className="rp-row2"><span className="rp-tag">알아야 하는 것</span><p>{w.why}</p></div> : null}
+        {w.fill ? <div className="rp-row2 fill"><span className="rp-tag">이렇게 채워요</span><p>{w.fill}</p></div> : null}
+        {(w.pairs ?? []).map((p, j) => <div key={j} className="rp-row2"><span className="rp-tag">장면</span><p>{[p.when, p.thought, p.truth].filter(Boolean).join(" → ")}</p></div>)}
+      </article>)}</div> : null}
     {rv.next ? <div className="rp-card"><b className="rp-h">다음에 떠올릴 것</b><p>{rv.next}</p></div> : null}
   </section>;
 }

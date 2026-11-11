@@ -367,3 +367,19 @@
 .dejipgi .rv-explain{padding:10px 14px 12px}
 .dejipgi .rv-explain .rv-eh,.dejipgi .rv-explain .rv-et{margin-left:0;margin-right:0;padding:0}
 .dejipgi .rv-explain .rv-et{margin-bottom:0}
+/* 빈틈 카드(11/12 B v8, 사용자 "부족함을 정확하게… 처음 보는 사람이 봐도 뭐가 부족해서 뭘 해야 되는지"): 색 바탕 대신 흰 카드 + 왼쪽 띠 + 종류 칩.
+   칸 이름(어디서 드러났나 · 알아야 하는 것 · 이렇게 채워요)은 왼쪽 열, 글은 오른쪽 열 */
+.dejipgi .rp-gaps{display:flex;flex-direction:column;gap:10px}
+.dejipgi .rp-gapcard{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line-strong);border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+.dejipgi .rp-gapcard.core{border-left-color:var(--bad)}
+.dejipgi .rp-gapcard.build{border-left-color:var(--help)}
+.dejipgi .rp-gapcard.edge{border-left-color:var(--read)}
+.dejipgi .rp-gapcard.syntax{border-left-color:var(--ask)}
+.dejipgi .rp-gapcard .rp-gap{margin:0;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-weight:700;font-size:15px;line-height:1.5}
+.dejipgi .rp-kind{flex:none;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;border:1px solid currentColor}
+.dejipgi .rp-kind.core{color:var(--bad)} .dejipgi .rp-kind.build{color:var(--help)} .dejipgi .rp-kind.edge{color:var(--read)} .dejipgi .rp-kind.syntax{color:var(--ask)}
+.dejipgi .rp-row2{display:grid;grid-template-columns:112px minmax(0,1fr);gap:10px;align-items:baseline}
+.dejipgi .rp-row2 p{margin:0;line-height:1.65;font-size:13.5px;color:var(--ink)}
+.dejipgi .rp-row2 .rp-tag{font-size:12px;font-weight:700;color:var(--muted)}
+.dejipgi .rp-row2.fill .rp-tag{color:var(--good)}
+@media (max-width:700px){ .dejipgi .rp-row2{grid-template-columns:minmax(0,1fr);gap:2px} }
