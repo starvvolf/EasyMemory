@@ -29,9 +29,10 @@ test("도움 1~3칸은 교육용 모델에서(AI 없음): 눈여겨볼 곳 → �
 
 test("뼈대 검사: 알맹이 있는 줄 2~5개만, 한마디에 그 줄 코드가 그대로 있으면 버린다. 화면에는 비운 줄 자리에 한마디만", () => {
   const full = ["import sys", "n = int(input())", "dist = [-1] * n", "queue = [0]", "dist[0] = 0", "while queue:", "    cur = queue.pop(0)", "    for nxt in graph[cur]:", "        if dist[nxt] == -1:", "            dist[nxt] = dist[cur] + 1", "            queue.append(nxt)", "print(dist[n - 1])"].join("\n");
-  const ok = checkBlanks(full, [{ line: 9, hint: "다음 칸의 거리를 적어요" }, { line: 8, hint: "아직 안 간 칸인지 봐요" }, { line: 0, hint: "가져오기" }, { line: 99, hint: "밖" }, { line: 10, hint: "queue.append(nxt)" }]);
-  assert.deepEqual(ok?.map((b) => b.line), [8, 9], "import·범위 밖·코드를 그대로 담은 한마디는 빠진다");
+  const ok = checkBlanks(full, [{ line: 9, hint: "다음 칸의 거리를 적어요" }, { line: 6, hint: "앞에서 하나 꺼내요" }, { line: 8, hint: "아직 안 간 칸인지 봐요" }, { line: 0, hint: "가져오기" }, { line: 99, hint: "밖" }, { line: 10, hint: "queue.append(nxt)" }]);
+  assert.deepEqual(ok?.map((b) => b.line), [6, 9], "import·범위 밖·블록 머리·코드를 그대로 담은 한마디는 빠진다");
   assert.equal(checkBlanks(full, [{ line: 9, hint: "하나뿐" }]), null);
+  assert.equal(checkBlanks(full, [{ line: 8, hint: "아직 안 간 칸인지 봐요" }, { line: 5, hint: "큐가 빌 때까지" }, { line: 7, hint: "이웃을 돌아요" }]), null, "블록을 여는 줄(if·while·for 머리)은 고르지 않는다");
   const shown = skeletonText({ full, blanks: ok!, lang: "python" });
   assert.ok(!shown.includes("dist[cur] + 1"), "비운 줄의 코드는 화면에 가지 않는다");
   assert.match(shown.split("\n")[9], /^ {12}# ____ 여기를 채워요: 다음 칸의 거리를 적어요$/);
