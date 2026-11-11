@@ -253,6 +253,16 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
       const l = storedLang();
       setCode(r.drafts[l] ?? r.problem.starters[l]);
       shareContext({ view: "code", title: r.problem.title, refs: [`code:${id}`], knowledgeIds: r.problem.knowledgeIds, problemId: id, text: r.problem.statement });
+      // 채팅 되살리기(11/12 사용자 "방금까지 얘기한 대화 내용이 날아감"): 대화 장부(서버)에서 이번 풀이의 질문·답을 다시 채운다.
+      // 이번 풀이 = 마지막으로 맞힌 제출 뒤, 12시간 안. 화면을 새로 고치거나 앱을 다시 켜도 이어서 볼 수 있다.
+      const lastAc = [...r.submissions].reverse().find((x) => x.mode === "submit" && x.verdict === "AC")?.at ?? "";
+      const since = new Date(Date.now() - 12 * 3600_000).toISOString();
+      void call<{ items: Array<{ at: string; kind: string; q: string; a: string }> }>(`/api/code/tutor/talk?problem=${encodeURIComponent(id)}`).then((t) => {
+        const keep = t.items.filter((x) => x.at > lastAc && x.at >= since && x.kind !== "도움 칸");
+        if (!keep.length) return;
+        setMsgs((m) => (m.length ? m : keep.flatMap((x) => [{ who: "me" as const, text: x.q, ...(x.kind !== "질문" ? { tag: x.kind } : {}) }, { who: "ai" as const, text: x.a }])));
+        setHints((h) => Math.max(h, keep.filter((x) => x.kind === "질문" || x.kind === "힌트").length));
+      }).catch(() => undefined);
     }).catch((e) => setError(errorText(e)));
   }, [id]);
   // 바로 열기: while the hidden tests are made in the background, look again every 2 seconds (the code typed so far stays).
