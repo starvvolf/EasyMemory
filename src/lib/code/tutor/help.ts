@@ -64,8 +64,9 @@ export function skeletonFor(problemId: string, number: string, lang: Lang): Prom
     const saved = (await readSkeletons())[key];
     if (saved) return saved;
     const problem = await readProblem(problemId);
-    if (!problem.reference) throw Object.assign(new Error("이 문제에는 검증된 정답 코드가 없어서 뼈대를 만들 수 없어요."), { status: 409 });
+    // 만드는 중이면 정답 코드가 아직 없다: "아직 만드는 중"을 먼저 알려야 화면이 기다렸다가 다시 묻는다(11/11 시험: 바로 실패로 끝났다).
     if (problem.preparing) throw Object.assign(new Error("숨은 테스트를 아직 만드는 중이에요. 잠시 뒤 다시 눌러 주세요."), { status: 409 });
+    if (!problem.reference) throw Object.assign(new Error("이 문제에는 검증된 정답 코드가 없어서 뼈대를 만들 수 없어요."), { status: 409 });
     const tests = [...problem.examples, ...problem.tests];
     let why = "";
     for (let attempt = 0; attempt < 2; attempt++) {
