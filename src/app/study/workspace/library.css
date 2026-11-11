@@ -466,3 +466,4 @@
 .dejipgi .rv-codelab{display:block;padding:5px 12px;font-size:11px;font-weight:700;color:#9aa3b2;background:#252935;border-bottom:1px solid #2c303b}
 .dejipgi .rv-code pre{margin:0;padding:10px 12px;font-family:var(--mono, ui-monospace, monospace);font-size:13.5px;line-height:1.65;color:#e8eaf0;white-space:pre-wrap;overflow-x:auto}
 .dejipgi .rv-card .rv-ic{background:color-mix(in srgb, var(--ink) 8%, transparent);border-color:transparent}
+.dejipgi .rv-beat.core .rv-dot,.dejipgi .rv-beat.build .rv-dot,.dejipgi .rv-beat.edge .rv-dot,.dejipgi .rv-beat.syntax .rv-dot{color:var(--surface);border:0}
