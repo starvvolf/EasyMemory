@@ -28,15 +28,15 @@ export async function libraryRun(runId: string) {
     runId, title: g.long?.text ?? "", map: (g.map ?? []).map((x) => x.title), current: g.current?.title ?? null,
     goals: recs.map((x) => ({ goal: x.goal, status: x.status, summary: x.summary, steps: x.steps, from: x.from, to: x.to,
       cards: (x.cards ?? []).map((c) => ({ name: c.name, situation: c.situation, did: c.did, quote: c.verified ? c.quote : "", learned: c.learned, next: c.next, how: c.how, recheck: c.recheck?.q ?? "" })) })),
-    path: note?.path ?? [], moments: ms.moments, chunks, scenes: await scenesOf(runId, recs.map((x) => ({ goal: x.goal, from: x.from, to: x.to }))),
+    path: note?.path ?? [], moments: ms.moments, chunks, diary: await (await import("./diary.ts")).diaryOf(runId), scenes: await scenesOf(runId, recs.map((x) => ({ goal: x.goal, from: x.from, to: x.to }))),
   };
 }
 
 /* ---------- 장면 복기(11/11 사용자 "오답 노트 · 풀이 노트 · 일기장 … 내가 공부하던 장면을 복기할 수 있게") ----------
  * 타임라인 칸(학습자 말 · 버튼 · 저장 · 터미널 + 튜터 답 · 도구)과 저장본 차이를 시간순으로 펼치고, 그때의 현재 목표로 장(章)을 나눈다. 코드만, AI 없음. */
-export type SceneEv = { at: string; kind: "me" | "tutor" | "button" | "cmd" | "save" | "note"; text: string; tools?: string[]; ok?: boolean; diff?: string[]; file?: string; err?: string };
+export type SceneEv = { g?: number; at: string; kind: "me" | "tutor" | "button" | "cmd" | "save" | "note"; text: string; tools?: string[]; ok?: boolean; diff?: string[]; file?: string; err?: string };
 export type Chapter = { goal: string; from: string; to: string; events: SceneEv[] };
-async function scenesOf(runId: string, recs: { goal: string; from: string; to: string }[]): Promise<Chapter[]> {
+export async function scenesOf(runId: string, recs: { goal: string; from: string; to: string }[]): Promise<Chapter[]> {
   const TL = await import("./timeline.ts"), GR = await import("./goal-record.ts"), M = await import("./moments.ts");
   const [steps, saves, ms] = await Promise.all([TL.stepsOf(runId).catch(() => []), GR.savesOf(runId).catch(() => []), M.momentsOf(runId).catch(() => [])]);
   const chapters: Chapter[] = [];
@@ -67,6 +67,8 @@ async function scenesOf(runId: string, recs: { goal: string; from: string; to: s
       c.events.push({ at: st.at, kind: "cmd", text: cmd, ok, ...(m?.error ? { err: m.error } : {}) });
     } else if (t.kind === "button") c.events.push({ at: st.at, kind: "button", text: t.text ? `${label} · ${t.text}` : label });
     else c.events.push({ at: st.at, kind: "note", text: label });
+    // 큰 바뀜(장기 목표 · 로드맵 · 보충 · 어려움 표시)은 회색 한 줄로: 일지가 "왜 바꿨나"를 읽는 근거
+    for (const ch of st.changes ?? []) if (/^(장기 목표|로드맵:|보충 로드맵 생김|보충 끝|보충 다시|어려움 표시|계획 제안)/.test(ch)) c.events.push({ at: st.endAt || st.at, kind: "note", text: ch.slice(0, 200) });
     if (st.reply?.trim() || st.tools?.length) c.events.push({ at: st.endAt || st.at, kind: "tutor", text: (st.reply ?? "").trim().slice(0, 2400), tools: (st.tools ?? []).slice(0, 8) });
   }
   for (const c of chapters) c.events.sort((a, b) => a.at.localeCompare(b.at));
@@ -74,5 +76,9 @@ async function scenesOf(runId: string, recs: { goal: string; from: string; to: s
   for (const c of chapters) c.events = c.events.filter((e, i, xs) => !(e.kind === "button" && xs[i + 1]?.kind === "button" && xs[i + 1].text.split(" · ")[0] === e.text.split(" · ")[0]));
   // 타임라인이 없던 예전 실습: 목표 정리 시각으로 빈 장이라도
   if (!chapters.length) return recs.map((r) => ({ goal: r.goal, from: r.from, to: r.to, events: [] }));
-  return chapters.filter((c) => c.events.length);
+  // 기록 번호(g): 실습 일지(diary.ts)가 "이 장면" 근거로 가리키는 번호. 장을 건너 이어 센다
+  let g = 0;
+  const out = chapters.filter((c) => c.events.length);
+  for (const c of out) for (const e of c.events) e.g = g++;
+  return out;
 }

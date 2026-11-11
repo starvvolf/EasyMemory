@@ -144,6 +144,7 @@ async function recordFinished(runId: string, run: { codexId?: string; chatId?: s
   const rec = await R.recordGoal(runId, goal, mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId), gid ? await GP.gapsForRecord(runId, gid, await verdictLines(runId, goal.at)) : "").catch(() => null);
   if (rec && gid) await GP.mergeRecord(runId, { id: gid, title: goal.title, done: goal.done }, (rec.gaps ?? []) as never, rec.to).catch((e) => console.error("부족함 원장 합치기:", e));
   if (rec) { await (await import("./timeline.ts")).systemStep(runId, `목표 정리: ${goal.title}`, { learned: rec.learned.map((x) => `${x.type} · ${x.concept}`), gaps: (rec.gaps ?? []).map((x) => `${x.type} · ${x.concept}${x.code ? ` (코드 ${x.code.file} ${x.code.from}~${x.code.to}줄)` : ""}`) }, Date.now() - t0); notifyLesson(runId); }
+  (await import("./diary.ts")).diaryNow(runId, "목표 정리 뒤"); // 실습 일지(11/12): 목표가 끝날 때마다 그때까지로
   return rec;
 }
 /** 시험용(11/8): 원장에 있는 목표를 원장과 함께 다시 정리한다(학습 종료가 원장을 건너뛰던 때의 실습을 다시 보기). 정리 기록이 하나 더 생긴다 */
@@ -308,6 +309,7 @@ export async function endLearning(runId: string) {
   }
   await Promise.all(recordJobs.get(runId) ?? []); recordJobs.delete(runId);
   await saveRun(runId, (r) => { (r as { endedAt?: string }).endedAt = new Date().toISOString(); });
+  (await import("./diary.ts")).diaryNow(runId, "학습 종료");
   // 앱 지식 넣기: 코스 서버는 앱 데이터에 직접 쓰지 않는다 → 앱의 sync 주소를 불러 앱이 넣게 한다.
   // 앱은 POST에 같은 출처(origin)를 요구한다(local-experiment-mode isSameOriginExperimentMutation) → 앱 주소를 origin으로(11/6 한 바퀴 점검에서 synced null)
   const app = (process.env.PROJECT_APP_URL || "http://127.0.0.1:3000").replace(/\/$/, "");

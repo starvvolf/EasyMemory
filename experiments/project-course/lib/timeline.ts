@@ -131,6 +131,7 @@ export async function endStep(runId: string) {
     await (await import("./moments.ts")).onStep(runId, { trigger: p.trigger, reply, tools }).catch(() => {});
     // 보충을 마치고 돌아왔으면 [너무 어려워요]로 연 장면은 풀린 것
     await (async () => { const g = await (await import("./goals.ts")).goalsOf(runId); if (g.support?.back) await (await import("./moments.ts")).onSupportDone(runId); })().catch(() => {});
+    (await import("./diary.ts")).diaryLater(runId); // 손 놓고 15분이면 실습 일지(11/12)
     return await append(runId, { at: p.at, endAt: new Date().toISOString(), trigger: p.trigger, reply: reply.slice(0, 4000), tools, usage, state: await snapshot(runId) });
   } catch { return null; }
 }
