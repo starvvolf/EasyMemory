@@ -135,7 +135,7 @@ export default function Library() {
           {itemId ? <ItemView id={itemId} onBack={() => setItemId(null)} backLabel={cur ? `← ${cur.title}` : "← 목록으로"} onPick={setItemId} />
             : sel === "note" ? <><Head icon="📒" title="나의 학습 노트" sub="여러 실습에서 드러난 아직 모르는 것 · 자꾸 틀리는 것 · 이제 되는 것 · 내 환경" /><LearnerNote /></>
             : cur ? <EntryView key={cur.key} e={cur} byId={byId} onItem={setItemId} />
-            : <Welcome branch={branch} n={list.length} />}
+            : <Welcome />}
         </div>
         <Chat key={sel ?? branch} pageRef={main} focusIds={itemId ? [itemId] : (cur?.itemIds ?? []).slice(0, 6)}
           where={itemId ? `기억 하나: ${byId.get(itemId)?.title ?? ""}` : sel === "note" ? "나의 학습 노트" : cur ? `${BRANCHES.find((b) => b[0] === cur.branch)?.[1]} · ${cur.title}` : `${BRANCHES.find((b) => b[0] === branch)?.[1]} 목록`} />
@@ -147,9 +147,14 @@ export default function Library() {
 function Head({ icon, title, sub, children }: { icon: string; title: string; sub?: string; children?: ReactNode }) {
   return <header className="lib-head"><span className="lib-hic" aria-hidden>{icon}</span><div className="lib-ht"><h2>{title}</h2>{sub ? <p className="small muted">{sub}</p> : null}</div>{children ? <div className="lib-hact">{children}</div> : null}</header>;
 }
-function Welcome({ branch, n }: { branch: Branch; n: number }) {
-  const what = branch === "material" ? "읽은 자료" : branch === "code" ? "푼 문제" : "해 본 실습";
-  return <div className="lib-welcome"><p className="lib-big">📚</p><h2>기억 도서관</h2><p className="muted">왼쪽에서 {what}{n ? ` ${n}개` : ""} 중 하나를 고르면, 그때 남은 기억이 여기 펼쳐져요.<br />아래 채팅에 물으면 내 기억을 보고 답해요.</p></div>;
+// 빈 화면(11/12 사용자 "글자 없이 책만, 회색 단색으로 크게 가운데"): 책 그림 하나. 선 굵기·색은 글자색을 따른다(밝은·어두운 화면 둘 다)
+function Welcome() {
+  return <div className="lib-welcome" aria-label="왼쪽 목록에서 하나를 고르세요">
+    <svg viewBox="0 0 64 64" width="120" height="120" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M32 18c-6-4-14-5-22-4v34c8-1 16 0 22 4 6-4 14-5 22-4V14c-8-1-16 0-22 4z" />
+      <path d="M32 18v34" />
+    </svg>
+  </div>;
 }
 
 function ItemList({ ids, byId, onItem }: { ids: string[]; byId: Map<string, ItemLite>; onItem: (id: string) => void }) {
