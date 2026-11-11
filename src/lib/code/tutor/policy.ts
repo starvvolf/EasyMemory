@@ -44,13 +44,17 @@ const actionId = (a: Omit<Action, "id">) => `${a.kind}:${a.number}:${a.pattern}:
 const make = (a: Omit<Action, "id" | "minutes" | "ability">): Action => ({ ...a, id: actionId({ ...a, minutes: 0 }), minutes: MINUTES[a.kind], ...(ABILITY_OF[a.kind] ? { ability: ABILITY_OF[a.kind] } : {}) });
 
 /** 이 패턴의 문제 중 그 능력으로 처음 보는 것(강의 문제를 원하면 먼저). 없으면 가장 오래전에 본 것. */
-function pick(models: ProblemModel[], state: LearnerState, pattern: string, ability: Ability | "walkthrough", prefer: "lecture" | "basic", avoid: Set<string>): ProblemModel | null {
+function pick(models: ProblemModel[], state: LearnerState, pattern: string, ability: Ability | "walkthrough", prefer: "lecture" | "basic", avoid: Set<string>, now = Date.now()): ProblemModel | null {
   const pool = models.filter((m) => m.patterns.includes(pattern) && !avoid.has(m.number) && (ability === "walkthrough" ? m.walkthrough.choose : ability === "recognize" ? m.approaches.length : ability === "design" ? m.state.wrong.length && m.complexity : true));
   if (!pool.length) return null;
   const freshFor = (m: ProblemModel) => ability === "walkthrough" ? !state.exposed.has(m.number) : isFresh(state.events, m.number, ability);
   const lastSeen = (m: ProblemModel) => state.events.filter((e) => e.number === m.number).at(-1)?.at ?? "";
   const ordered = [...pool].sort((a, b) => Number(freshFor(b)) - Number(freshFor(a)) || Number(b.role === prefer) - Number(a.role === prefer) || lastSeen(a).localeCompare(lastSeen(b)) || a.number.localeCompare(b.number));
-  return ordered[0];
+  // 11/11 시험(못하는 학습자로 3000에서): 방금 답을 본 문제를 바로 또 묻지 않는다. 알아채기·계획은 답을 이미 봤으니, 30분 안에 답한 문제뿐이면
+  // 재료가 더 올 때까지 기다린다(같은 문제를 맞힐 때까지 되풀이하던 것). 짜기는 같은 문제를 다시 내도 된다.
+  const best = ordered[0];
+  if ((ability === "recognize" || ability === "design") && !freshFor(best) && now - Date.parse(lastSeen(best) || "1970-01-01") < 30 * 60_000) return null;
+  return best;
 }
 
 export const REDO_AFTER_MS = 24 * 3600_000;
@@ -79,7 +83,7 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
   const due = covered.flatMap((p) => (["recognize", "design", "execute"] as const).map((ab) => ({ p, ab, a: state.patterns[p.id].abilities[ab] })))
     .filter((x) => x.a.dueAt && Date.parse(x.a.dueAt) <= now.getTime()).sort((x, y) => (x.a.dueAt ?? "").localeCompare(y.a.dueAt ?? "")).slice(0, order.focused ? 1 : 2); // 분야 집중 중엔 복습을 하나만(나머지는 미뤄짐)
   for (const d of due) {
-    const m = pick(models, state, d.p.id, d.ab, "basic", used);
+    const m = pick(models, state, d.p.id, d.ab, "basic", used, now.getTime());
     if (m) push(make({ kind: KIND_OF[d.ab], number: m.number, pattern: d.p.id, mixed: true, why: `${d.p.name}: 다시 볼 날이에요` }));
   }
 
@@ -88,7 +92,7 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
     let n = 0;
     const checks = pendingChecks(state, profile);
     for (const p of checks) {
-      const m = pick(models, state, p.id, "recognize", "basic", used);
+      const m = pick(models, state, p.id, "recognize", "basic", used, now.getTime());
       if (!m) continue;
       push(make({ kind: "drill", number: m.number, pattern: p.id, mixed: true, why: `「${profile.levels[p.id] === "good" ? "잘해요" : "알아요"}」라고 하셔서 한 문제만 확인해요: ${p.name}`, check: true }));
       if (++n >= 2) break;
@@ -118,10 +122,10 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
     const r = ps.abilities.recognize, d = ps.abilities.design, x = ps.abilities.execute;
     const stuck = (["recognize", "design", "execute"] as const).find((ab) => ps.abilities[ab].failStreak >= 3);
     if (r.help === 0 && !ps.seen) {
-      const m = pick(models, state, current.id, "walkthrough", "lecture", used);
+      const m = pick(models, state, current.id, "walkthrough", "lecture", used, now.getTime());
       if (m) push(make({ kind: "walkthrough", number: m.number, pattern: current.id, mixed: false, why: `새로 배울 것: ${current.name}` }));
     } else if (stuck) {
-      const m = pick(models, state, current.id, "walkthrough", "lecture", used);
+      const m = pick(models, state, current.id, "walkthrough", "lecture", used, now.getTime());
       if (m) push(make({ kind: "walkthrough", number: m.number, pattern: current.id, mixed: false, why: `${current.name}: 3번 연달아 틀려서 다른 문제로 풀이 과정을 다시 봐요` }));
     } else if (r.failStreak >= 2) {
       const m = models.find((mm) => mm.patterns.includes(current.id) && mm.contrast && !used.has(mm.number));
@@ -129,7 +133,7 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
     }
     const needR = knownBefore ? 1 : 2; // 알아요+확인 통과: 확인한 1번을 쳐서 계획 세우기로
     const step: Ability = r.freshWins < needR ? "recognize" : d.freshWins < 1 ? "design" : x.freshWins < 1 && x.failStreak < 2 ? "execute" : x.freshWins < 1 ? "design" : "recognize";
-    const m = pick(models, state, current.id, step, "basic", used);
+    const m = pick(models, state, current.id, step, "basic", used, now.getTime());
     const why = step === "recognize" ? `${current.name}: 문제를 보고 이 방법을 떠올려 봐요` : step === "design" ? (x.failStreak >= 2 ? `${current.name}: 짜기를 2번 틀려서 계획부터 다시 세워 봐요` : `${current.name}: 풀면서 적어 둘 것과 걸리는 시간을 정해 봐요`) : `${current.name}: 혼자 직접 짜 봐요`;
     // 이 패턴을 처음 짜 보는 거면 뼈대에서 핵심 줄만 채우기부터(도움 받은 것으로 남고, 다음엔 다른 문제를 혼자).
     const first = step === "execute" && x.independent.n + x.assisted.n === 0;
@@ -141,7 +145,7 @@ export function nextActions(state: LearnerState, modelMap: Record<string, Proble
   if (recent.length >= 4 && !recent.some((e) => e.mixed)) {
     const learned = covered.filter((p) => p.id !== current?.id && (state.patterns[p.id].seen || skipKnown(profile, p.id))).sort((a, b) => (state.patterns[a.id].lastAt ?? "").localeCompare(state.patterns[b.id].lastAt ?? ""));
     for (const p of learned) {
-      const m = pick(models, state, p.id, "recognize", "basic", used);
+      const m = pick(models, state, p.id, "recognize", "basic", used, now.getTime());
       if (m) { push(make({ kind: "drill", number: m.number, pattern: p.id, mixed: true, why: `섞어 풀기: 어느 단원인지 모른 채 ${p.name}을 알아채는지 봐요` })); break; }
     }
   }

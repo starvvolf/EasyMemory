@@ -224,6 +224,7 @@ export async function ensurePool(patternId: string, want: number, deps?: Deps) {
   const todo = tutorTargets().filter((t) => pattern.chapters.includes(t.chapter) && !have[t.number] && !missing.has(t.number) && !building.has(t.number))
     .sort((a, b) => Number(b.role === (count ? "basic" : "lecture")) - Number(a.role === (count ? "basic" : "lecture")))
     .slice(0, Math.min(3, want - count));
+  if (!todo.length) return { started: [] }; // 11/11: 만들 게 없는데 "준비 중"으로 켜 두면 화면이 3초마다 다시 불러 답 피드백이 지워졌다
   for (const t of todo) building.add(t.number);
   Object.assign(prep, { running: true, total: prep.total + todo.length });
   const job = Promise.all(todo.map(async (t) => {
