@@ -10,7 +10,8 @@ import { call, errorText, later } from "./api";
 
 type EdStatus = { installed: boolean; running: boolean; asset: string; source: string; size: number | null; job: { phase: string; got: number; total: number; error?: string } | null };
 type Run = { id: string; courseTitle: string; workspace: string | null };
-type Brief = { long: string | null; current: { title: string; done: string; understood: boolean; applied: boolean } | null; support: { title: string; target: string } | null; map: Array<{ title: string; status: string }> };
+type BaseItem = { name: string; kind: "개념" | "도구"; needs: string[]; check: string; result: "됨" | "비어 있음" | null; by: "확인" | "노트" | "명령" | "학습자" | null; quote: string; now: boolean };
+type Brief = { long: string | null; current: { title: string; done: string; understood: boolean; applied: boolean } | null; support: { title: string; target: string } | null; map: Array<{ title: string; status: string }>; base?: BaseItem[] };
 
 const mb = (n: number | null | undefined) => (n ? `${Math.round(n / 1048576)}MB` : "크기 확인 못 함");
 // 11/11 저녁 사용자 "내장 VS Code 창 크기는 딱 적당 · 왼쪽으로 옮기고 오른쪽 대화창은 그만큼 비중을 키워": 왼쪽 칸을 뺀 만큼 튜터가 넓어진다(기본 폭 약 31%)
@@ -29,6 +30,7 @@ export default function ProjectStudio({ run, courseUrl, onClose }: { run: Run; c
   const [rightOpen, setRightOpen] = useState(true);
   const [tutorW, setTutorW] = useState(() => Math.max(320, Number(store.get(W_KEY)) || Math.round(Math.max(440, (typeof window === "undefined" ? 1400 : window.innerWidth) * 0.31))));
   const [drag, setDrag] = useState(false);
+  const [baseOpen, setBaseOpen] = useState(false);
 
   // 앱 머리 아래부터 화면 끝까지: 자리 잡은 높이를 재서 그 아래를 고정 칸으로 덮는다(가운데 좁은 글 칸에 갇히지 않게)
   // 오른쪽에 앱의 기억 칸(aside.sb)이 열려 있으면 그 앞까지만 — 앱 양옆 칸은 그대로 두고 그 사이를 쓴다
@@ -125,9 +127,14 @@ export default function ProjectStudio({ run, courseUrl, onClose }: { run: Run; c
         <header className="pst-top">
           <button className="btn ghost small" onClick={onClose} title="실습 목록으로(편집기는 켜 둔 채)">← 실습</button>
           <Goals brief={brief} fallback={run.courseTitle} />
+          {brief?.base?.length ? <button className={`pst-basebtn ${baseOpen ? "on" : ""}`} onClick={() => setBaseOpen((o) => !o)} aria-expanded={baseOpen}
+            title="장기 목표를 정할 때 튜터가 모아 둔 '먼저 알 것'. 눌러서 보고 안다 · 모른다를 표시해요">
+            먼저 알 것 <b>{brief.base.filter((b) => b.result === "됨").length}/{brief.base.length}</b>{brief.base.some((b) => b.result === "비어 있음") ? <i className="pst-dot" /> : null}
+          </button> : null}
           {msg ? <span className="small muted pst-msg">{msg}</span> : null}
           <button className="btn ghost small" onClick={() => void mine()} title="내 PC의 VS Code(내 확장 · 설정 그대로)로 이 폴더를 열어요">내 VS Code로 열기</button>
         </header>
+        {baseOpen && brief?.base?.length ? <BaseTab runId={run.id} items={brief.base} onClose={() => setBaseOpen(false)} onChange={(base) => setBrief((b) => (b ? { ...b, base } : b))} /> : null}
         <div className="pst-body">
         <main className="pst-main">{center}</main>
         {rightOpen ? <>
@@ -168,4 +175,49 @@ function Goals({ brief, fallback }: { brief: Brief | null; fallback: string }) {
       {!steps.length && c ? <li className="pst-st doing" title={`완료 조건: ${c.done}`}><span className="pst-t">{c.title}</span>{phase ? <span className="pst-phase">{phase}</span> : null}</li> : null}
     </ol>
   </div>;
+}
+
+/** 먼저 알 것 미니 창(11/11 사용자 "선행 개념 버튼 → 미니 탭에 잘 정리된 선행 개념 · 안다 모른다 체크"):
+ *  지금 단계에 쓰이는 것 먼저, 그다음 나머지(기대는 순서). 항목마다 그 전에 알 것 · 확인 방법 · 누가 확인했는지, [알아요] · [몰라요](한 번 더 누르면 지움) */
+function BaseTab({ runId, items, onClose, onChange }: { runId: string; items: BaseItem[]; onClose: () => void; onChange: (b: BaseItem[]) => void }) {
+  const [err, setErr] = useState("");
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+  const mark = async (it: BaseItem, want: "됨" | "비어 있음") => {
+    const result = it.result === want && it.by === "학습자" ? null : want;
+    setErr("");
+    onChange(items.map((x) => (x.name === it.name ? { ...x, result, by: result ? "학습자" : null } : x)));
+    try { const r = await call<{ base: BaseItem[] }>(`/api/project-course/runs/${runId}/base`, { name: it.name, result }); onChange(r.base); }
+    catch (e) { setErr(errorText(e)); onChange(items); }
+  };
+  const byText = (it: BaseItem) => !it.result ? "아직 확인 전" : it.by === "학습자" ? "내가 표시" : it.by === "노트" ? "지난 실습에서 확인" : it.by === "명령" ? `명령으로 확인${it.quote ? ` · ${it.quote}` : ""}` : "튜터가 물어보고 확인";
+  const known = items.filter((x) => x.result === "됨").length, gap = items.filter((x) => x.result === "비어 있음").length;
+  const now = items.filter((x) => x.now), rest = items.filter((x) => !x.now);
+  const row = (it: BaseItem) => (
+    <li key={it.name} className={`pbt-item ${it.result === "됨" ? "ok" : it.result === "비어 있음" ? "gap" : ""}`}>
+      <span className="pbt-mark" aria-hidden>{it.result === "됨" ? "✓" : it.result === "비어 있음" ? "!" : ""}</span>
+      <div className="pbt-main">
+        <div className="pbt-name">{it.name}{it.kind === "도구" ? <span className="pbt-tag">도구</span> : null}</div>
+        {it.needs.length ? <div className="pbt-sub">그 전에: {it.needs.join(", ")}</div> : null}
+        {it.check ? <div className="pbt-sub">확인: {it.check}</div> : null}
+        <div className="pbt-by">{byText(it)}</div>
+      </div>
+      <div className="pbt-acts">
+        <button className={`pbt-b yes ${it.result === "됨" ? "on" : ""}`} onClick={() => void mark(it, "됨")} title={it.result === "됨" && it.by === "학습자" ? "표시 지우기" : "알아요 — 튜터가 이건 묻지 않아요"}>알아요</button>
+        <button className={`pbt-b no ${it.result === "비어 있음" ? "on" : ""}`} onClick={() => void mark(it, "비어 있음")} title={it.result === "비어 있음" && it.by === "학습자" ? "표시 지우기" : "몰라요 — 튜터가 이 단계 전에 짧게 채워 줘요"}>몰라요</button>
+      </div>
+    </li>
+  );
+  return <>
+    <div className="pbt-scrim" onClick={onClose} />
+    <section className="pbt" role="dialog" aria-label="먼저 알 것">
+      <header className="pbt-head"><b>먼저 알 것</b><span className="pbt-sum">알아요 {known} · 몰라요 {gap} · 확인 전 {items.length - known - gap}</span><span className="grow" />
+        <button className="pbt-x" onClick={onClose} aria-label="닫기">×</button></header>
+      <p className="pbt-note">장기 목표를 정할 때 튜터가 모아 둔 것이에요. 아는 건 <b>알아요</b>, 모르는 건 <b>몰라요</b>로 표시하면 튜터가 아는 건 묻지 않고 모르는 건 먼저 짧게 채워 줘요.</p>
+      {err ? <p className="pbt-err">{err}</p> : null}
+      <div className="pbt-list">
+        {now.length ? <><div className="pbt-k">지금 단계에 쓰이는 것</div><ul>{now.map(row)}</ul></> : null}
+        {rest.length ? <><div className="pbt-k">{now.length ? "나머지 (아래일수록 바탕)" : "전체 (아래일수록 바탕)"}</div><ul>{rest.map(row)}</ul></> : null}
+      </div>
+    </section>
+  </>;
 }

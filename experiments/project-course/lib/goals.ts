@@ -31,7 +31,7 @@ type Current = { id: string; title: string; done: string; understood: boolean; a
  * 있어야 할 도구. needs = 이것을 알려면 먼저 알아야 할 다른 항목(이 지도 안에서만, 순환은 코드가 끊음), for = 이것이 쓰이는 지도 단계.
  * 확인 결과는 check_prereq(학습자 답) · 학습 노트(다시 확인까지 맞은 것) · 명령 결과(도구)에서 코드가 적는다.
  */
-export type Base = { name: string; kind: "개념" | "도구"; needs: string[]; for: string[]; check: string; result?: "됨" | "비어 있음"; by?: "확인" | "노트" | "명령"; quote?: string; at?: string };
+export type Base = { name: string; kind: "개념" | "도구"; needs: string[]; for: string[]; check: string; result?: "됨" | "비어 있음"; by?: "확인" | "노트" | "명령" | "학습자"; quote?: string; at?: string };
 type Support = { id: string; title: string; done: string; why: string; from: string; understood?: boolean; at: string; mapId?: string };
 /** 보충 로드맵(11/7). target = 막힌 단계 A(종착지), steps = 보충 단계, back = 보충을 다 하고 A로 돌아와 있는 중, round = 몇 번째로 짠 보충인지 */
 /** 보충 단계도 현재 목표와 같이 ① 이해 → ② 적용(11/8 사용자 "보충 단계도 현재 단계랑 똑같이. 쉬우면 너무 쉬워요로 넘어감") */
@@ -139,6 +139,26 @@ export async function setBaseResult(runId: string, name: string, result: "됨" |
     if (!b) { if (result === "됨" || x.base.length >= 20) return; b = { name: name.trim().slice(0, 60), kind: "개념", needs: [], for: [], check: "" }; x.base.push(b); }
     Object.assign(b, { result, by: "확인", at: now(), ...(quote ? { quote: quote.slice(0, 200) } : {}) });
   });
+}
+/** 학습자가 직접 표시(11/11 사용자 "선행 개념 … 사용자가 안다 모른다 체크"): 됨 · 비어 있음 · 지우기(null). 튜터 맥락에 ·학습자로 보인다 */
+export async function setBaseSelf(runId: string, name: string, result: "됨" | "비어 있음" | null) {
+  const g = await goalsOf(runId);
+  if (!g.long) throw Object.assign(new Error("장기 목표를 정한 뒤에 쓸 수 있어요."), { status: 409 });
+  let found = false;
+  await save(runId, (x) => {
+    const b = (x.base ?? []).find((y) => norm(y.name) === norm(name));
+    if (!b) return;
+    found = true;
+    if (result) Object.assign(b, { result, by: "학습자", at: now() }); else { delete b.result; delete b.by; delete b.quote; delete b.at; }
+  });
+  if (!found) throw Object.assign(new Error("그 항목을 찾지 못했어요."), { status: 404 });
+  if (result) await (await import("./history.ts")).add({ run: runId, goal: g.current?.title ?? g.long.text, kind: "확인", name, result: result === "됨" ? "됨(스스로 표시)" : "비어 있음(스스로 표시)" });
+  return baseBrief(await goalsOf(runId));
+}
+/** 위 띠 · 미니 창용: 지도 전체(기대는 순서) + 지금 단계에 쓰이는 것 표시 */
+export function baseBrief(g: Goals) {
+  const now = new Set(baseFor(g).map((b) => norm(b.name)));
+  return (g.base ?? []).map((b) => ({ name: b.name, kind: b.kind, needs: b.needs, check: b.check, result: b.result ?? null, by: b.by ?? null, quote: b.quote ?? "", now: !!g.current && now.has(norm(b.name)) }));
 }
 /** 명령을 돌린 뒤: 확인된 환경으로 먼저 알 것 지도의 도구 칸을 채운다 */
 export async function baseFromEnv(runId: string) {
@@ -429,7 +449,7 @@ export function baseFor(g: Goals): Base[] {
   const step = g.map.find((m) => m.id === g.current?.mapId)?.title ?? "";
   return (g.base ?? []).filter((b) => !b.for.length || b.for.some((f) => norm(f) === norm(step)));
 }
-export const PREREQ_RULE = "[선행 확인] 먼저 알 것 지도에서 지금 단계에 쓰이는 것 중 확인 전인 것은, 그것에 기대는 것이 많은 위쪽 항목부터 하나 묻고, 비어 있으면 그것이 기대는(← 뒤) 항목으로 한 칸씩 내려가 어디부터 비었는지 찾는다. 이 목표를 설명하기 전에, 선행 중 [학습 노트]에서 이미 된다고 적힌 것과 학습자가 대화에서 이미 보여 준 것은 건너뛰고, 의심되는 것(노트에서 아직 모르는 것, 처음 보는 것) 중 이 목표에 꼭 필요한 것만 한두 개 확인 문항으로 짧게 묻는다. 확인 문항은 이름을 아는지가 아니라 그 뜻을 아는지를 묻는다. 답을 보고 check_prereq로 적는다. 비어 있으면 그 선행을 지금 목표의 코드 · 상황으로 짧게 채우고 돌아온다(길면 plan_support). 도구 · 환경(설치 여부 · 버전)은 묻지 말고 그 check 명령을 run_command로 돌려 확인한다(결과는 Recaller가 적는다). 다 확인됐거나 확인할 게 없으면 바로 목표로 간다.";
+export const PREREQ_RULE = "[선행 확인] 먼저 알 것 지도에서 지금 단계에 쓰이는 것 중 확인 전인 것은, 그것에 기대는 것이 많은 위쪽 항목부터 하나 묻고, 비어 있으면 그것이 기대는(← 뒤) 항목으로 한 칸씩 내려가 어디부터 비었는지 찾는다. 이 목표를 설명하기 전에, 선행 중 [학습 노트]에서 이미 된다고 적힌 것 · 학습자가 스스로 안다고 표시한 것(·학습자) · 대화에서 이미 보여 준 것은 건너뛰고, 학습자가 모른다고 표시한 것은 묻지 말고 바로 짧게 채우며, 의심되는 것(노트에서 아직 모르는 것, 처음 보는 것) 중 이 목표에 꼭 필요한 것만 한두 개 확인 문항으로 짧게 묻는다. 확인 문항은 이름을 아는지가 아니라 그 뜻을 아는지를 묻는다. 답을 보고 check_prereq로 적는다. 비어 있으면 그 선행을 지금 목표의 코드 · 상황으로 짧게 채우고 돌아온다(길면 plan_support). 도구 · 환경(설치 여부 · 버전)은 묻지 말고 그 check 명령을 run_command로 돌려 확인한다(결과는 Recaller가 적는다). 다 확인됐거나 확인할 게 없으면 바로 목표로 간다.";
 
 export async function goalContext(runId: string) {
   // 학습자 메모리(11/6): 진행 방식 · 경향을 매 차례 맨 앞에(두 엔진 같게)
@@ -467,7 +487,7 @@ async function goalContextBody(runId: string) {
     g.map.length ? `${S ? "원래 로드맵(보충 중이라 잠시 보관)" : "지도"}: ${g.map.map((m, i) => `${i + 1}.${mark(m)} ${m.title}`).join(" · ")}` : "",
     S ? `보충 로드맵(${S.round}번째, 막힌 이유: ${S.why}): ${S.steps.map((x) => `${({ done: "✓", doing: "▶", todo: "·" })[x.status]} ${x.title}`).join(" → ")} → 🎯 ${S.target.title}${S.back ? " (보충을 다 하고 지금 여기로 돌아와 있음)" : ""}` : "",
     c ? `현재 목표: ${c.title} — 완료 조건: ${c.done} · 단계: ${!c.understood ? "① 이해 중" : !c.applied ? "② 적용 중(학습자가 직접 해 보는 중)" : "적용까지 끝(학습자가 다음으로 넘어갈 수 있음)"}` : "현재 목표: 없음 — set_current_goal로 정한다",
-    g.base?.length ? `먼저 알 것 지도(기대는 순서, ← 는 그 전에 알아야 할 것): ${g.base.map((b) => `${b.name}${b.kind === "도구" ? "[도구]" : ""}(${b.result ? `${b.result}${b.by === "노트" ? "·노트" : b.by === "명령" ? "·명령" : ""}` : "확인 전"})${b.needs.length ? ` ← ${b.needs.join(", ")}` : ""}`).join(" · ")}` : "",
+    g.base?.length ? `먼저 알 것 지도(기대는 순서, ← 는 그 전에 알아야 할 것): ${g.base.map((b) => `${b.name}${b.kind === "도구" ? "[도구]" : ""}(${b.result ? `${b.result}${b.by === "노트" ? "·노트" : b.by === "명령" ? "·명령" : b.by === "학습자" ? "·학습자가 스스로 표시" : ""}` : "확인 전"})${b.needs.length ? ` ← ${b.needs.join(", ")}` : ""}`).join(" · ")}` : "",
     c && baseFor(g).length ? `지금 단계에 쓰이는 먼저 알 것: ${baseFor(g).map((b) => `${b.name}(${b.result ?? "확인 전"})`).join(" · ")}` : "",
     c?.prereqs?.length ? `이 목표의 선행: ${c.prereqs.map((p) => `${p.name}(${p.result ?? "확인 전"})`).join(" · ")}` : "",
     c && !c.understood ? PREREQ_RULE : "",

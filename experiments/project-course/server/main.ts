@@ -335,7 +335,15 @@ const routes: [string, RegExp, Handler][] = [
     const g = await (await import("../lib/goals.ts")).goalsOf(m[1]);
     const sp = g.support && !g.support.back ? g.support.steps.find((x) => x.status === "doing") : null;
     return { long: g.long?.text ?? null, mode: g.mode, current: g.current ? { title: g.current.title, done: g.current.done, understood: g.current.understood, applied: g.current.applied } : null,
-      support: sp ? { title: sp.title, target: g.support!.target.title } : null, map: g.map.filter((x) => !x.support).map((x) => ({ title: x.title, status: x.status })) };
+      support: sp ? { title: sp.title, target: g.support!.target.title } : null, map: g.map.filter((x) => !x.support).map((x) => ({ title: x.title, status: x.status })),
+      base: (await import("../lib/goals.ts")).baseBrief(g) };
+  }],
+  // 먼저 알 것을 학습자가 직접 표시(11/11): { name, result: "됨" | "비어 있음" | null }
+  ["POST", /^\/api\/runs\/(\w+)\/base$/, async (req, m) => {
+    await getRun(m[1]);
+    const b = await body(req);
+    const r = b.result === "됨" || b.result === "비어 있음" ? b.result : null;
+    return { base: await (await import("../lib/goals.ts")).setBaseSelf(m[1], String(b.name ?? ""), r) };
   }],
   ["GET", /^\/api\/runs\/(\w+)\/note$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/gaps.ts")).sessionNote(m[1]); }],
   ["POST", /^\/api\/bridge\/answer$/, async (req) => { const b = await body(req); return (await import("../lib/bridge.ts")).bridgeAnswer(String(b.id ?? ""), b.result ?? null); }],
