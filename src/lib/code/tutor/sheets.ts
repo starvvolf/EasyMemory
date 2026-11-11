@@ -36,7 +36,7 @@ export type WeakKind = "core" | "build" | "edge" | "syntax";
 /** v9(11/12 사용자 "부족함의 흐름을 디테일하게 잡고, 그 순서대로 하나씩 흡입력 있게… 사용자는 이렇게 했는데 이건 사실 이런 거거든요, 이런 게 부족했어요…
  *  메인 스토리를 가져가면서 그 사이에 박스로… 그 자체로 공부가 되게"): 풀이를 시간 순서의 이야기 마디로, 마디마다 짚고 가는 공부 상자. */
 export type StoryBox = { title: string; points: string[]; example: string };
-export type Review = { v: 10; situation: string; solve: string; story: Array<{ kind: WeakKind; did: string; truth: string; gap: string; box: StoryBox }>; next: string };
+export type Review = { v: 11; situation: string; solve: string; story: Array<{ kind: WeakKind; did: string; truth: string; gap: string; box: StoryBox }>; next: string };
 
 const dir = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "tutor");
 const file = () => path.join(dir(), "sheets.jsonl");
@@ -193,7 +193,7 @@ export const REVIEW_SYSTEM = `알고리즘 문제 하나를 푼 기록을 보고
 말투는 옆에서 차분히 들려주는 "~해요" 체. 칭찬도 탓도 하지 않고 있었던 일과 비어 있던 것을 정확하게. 중학생도 읽히게 쉬운 말로, 용어는 바로 뒤에 쉬운 말로 풀어 준다(예: "BFS(가까운 칸부터 한 겹씩 넓혀 가며 살피는 방법)"). 문제 속 장면(토마토, 상자, 칸)으로 설명한다.
 - situation: 문제 상황 2문장(160자 안팎). 무엇이 주어지고 무엇을 구하는지, 까다로운 조건까지.
 - solve: 이렇게 해야 풀리는 까닭과 방법 2~3문장(220자 안팎).
-- story: 풀이의 흐름을 시간 순서의 마디 2~8개로(물은 게 많으면 많은 만큼, 같은 빈틈을 여러 번 물었으면 한 마디로 묶는다). 한 마디 = 학습자가 한 일 하나와 거기서 드러난 빈틈 하나. 틀린 게 아닌 것(두 방법 다 되는데 어느 쪽인지 물은 것)은 마디로 만들지 않는다.
+- story: 풀이의 흐름을 시간 순서의 마디 2~12개로. 드러난 빈틈은 하나도 빠뜨리지 않는다(물은 게 많으면 마디도 많아진다). 같은 빈틈을 여러 번 물었을 때만 한 마디로 묶는다. 한 마디 = 학습자가 한 일 하나와 거기서 드러난 빈틈 하나. 틀린 게 아닌 것(두 방법 다 되는데 어느 쪽인지 물은 것)은 마디로 만들지 않는다.
   - kind: core(이 문제가 원래 보려는 생각) · build(생각을 코드로 옮기는 순서·자료) · edge(예외·경계) · syntax(파이썬 문법) 중 하나.
   - did: 학습자가 그때 무엇을 하고 있었고 무엇을 했는지·말했는지를 장면처럼 2~3문장(220자 안팎). 앞 마디와 이어지게("힌트를 3칸까지 열어 본 뒤…", "그렇게 방법을 잡고 코드를 짜 예제를 돌렸더니…"). 예제·제출이면 어떤 입력에서 무엇이 나와야 했는데 무엇이 나왔는지까지.
   - truth: "그런데 이건 사실 ~거든요" 하고 무엇이 맞는지와 왜 그런지 2~3문장(240자 안팎). 문제 속 장면으로.
@@ -217,8 +217,8 @@ export function checkReview(raw: { situation?: unknown; solve?: unknown; story?:
     const b = (x.box ?? {}) as Record<string, unknown>;
     const box = { title: clean(b.title, 40), points: (Array.isArray(b.points) ? b.points : []).map((p) => clean(p, 120)).filter(Boolean).slice(0, 4), example: block(b.example, 500) };
     return { kind: KINDS.find((k) => k === x.kind) ?? ("build" as const), did: clean(x.did, 400), truth: clean(x.truth, 420).replace(/^사실은\s*/, ""), gap: clean(x.gap, 120), box };
-  }).filter((w) => w.did && w.gap && !/확인되지 않|알 수 없/.test(w.gap)).slice(0, 8);
-  return situation && solve ? { v: 10, situation, solve, story, next } : null;
+  }).filter((w) => w.did && w.gap && !/확인되지 않|알 수 없/.test(w.gap)).slice(0, 12);
+  return situation && solve ? { v: 11, situation, solve, story, next } : null;
 }
 /** 총정리가 다루는 대화의 범위(11/12 시험: 화면이 새로 고쳐지며 이번 풀이가 중간에 다시 시작돼 앞쪽 질문 20여 개가 빠졌다):
  *  이 장 앞의 "맞힘·그만둠" 장이 끝난 뒤(없으면 12시간 전)부터 이 장이 끝날 때까지. 하다가 나간 장은 경계로 치지 않는다. */
@@ -238,7 +238,7 @@ export function reviewFor(problemId: string, onText?: (soFar: string) => void): 
   const job = (async () => {
     const sheet = await reviewTarget(problemId);
     if (!sheet) return null;
-    if (sheet.review?.v === 10) return sheet.review; // 예전 모양은 다시 만든다
+    if (sheet.review?.v === 11) return sheet.review; // 예전 모양은 다시 만든다
     const meta = await readProblemMeta(problemId).catch(() => null);
     if (!meta) return null;
     const { since, until } = await reviewWindow(problemId, sheet);
