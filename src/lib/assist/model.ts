@@ -26,7 +26,8 @@ export function assistSettings(heavy = false) {
 const clip = (text: string, n: number) => text.length > n ? `${text.slice(0, n)}\n…(이하 생략)` : text;
 
 type AskOptions = { heavy?: boolean; caller?: ModelCaller; /** this call only: a model and effort other than the assist settings */ model?: string; effort?: string;
-  /** 웹 검색 도구(ChatGPT 경로만) */ webSearch?: boolean };
+  /** 웹 검색 도구(ChatGPT 경로만) */ webSearch?: boolean;
+  /** 글이 오는 대로 지금까지의 글(화면에 스트리밍으로, 11/11 알고리즘 AI 튜터 채팅). 끝난 글은 여전히 통째로 돌아온다. */ onText?: (textSoFar: string) => void };
 // AI 호출 실험실(11/6)에서 이 호출 종류의 모델·강도를 바꿨으면 그것이 먼저(lab-settings.ts).
 const settingsFor = (purpose: string, options: AskOptions) => { const s = assistSettings(options.heavy); const lab = labChoice(purpose); return { model: lab?.model || options.model || s.model, effort: lab?.effort || options.effort || s.effort }; };
 /** 걸린 시간 기록 (2026-10-29, 시연 시간 재기): one line per call in <data>/assist-log.jsonl — what for, which model, how long. */
@@ -57,7 +58,7 @@ export async function askText(purpose: string, system: string, user: string, opt
   const { model, effort } = settingsFor(purpose, options);
   const sent = { system: clip(system, 12000), user: clip(user, 60000) };
   const reply = await timed(purpose, model, effort, sent,
-    (onText) => callModel({ purpose, ...sent, model, effort, caller: options.caller ?? LOCAL_CALLER, onText }), (r) => r.text);
+    (onText) => callModel({ purpose, ...sent, model, effort, caller: options.caller ?? LOCAL_CALLER, onText: (t: string) => { onText(); options.onText?.(t); } }), (r) => r.text);
   return reply.text.trim();
 }
 export async function askJson<T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, options: AskOptions = {}): Promise<T> {

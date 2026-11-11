@@ -49,12 +49,12 @@ export async function hint(input: { problemId: string; lang: Lang; code: string;
   const user = [problemBlock(p), `[언어] ${LANG_LABEL[input.lang]}`, `[학습자 코드]\n${input.code.slice(0, 20000)}`, resultBlock(input.last), await pastMisses(p), await thisAttempt(p), LEVELS[input.level]].filter(Boolean).join("\n\n");
   return { text: await askText("code:hint", TUTOR, user, { heavy: input.level > 1 }) };
 }
-export async function explainCode(input: { problemId?: string; lang: Lang; code: string; selection: string; question?: string }) {
+export async function explainCode(input: { problemId?: string; lang: Lang; code: string; selection: string; question?: string }, onText?: (textSoFar: string) => void) {
   tagTrace({ ref: input.problemId, action: "explainCode" });
   const p = input.problemId ? await readProblemMeta(input.problemId).catch(() => null) : null;
   const user = [p ? problemBlock(p) : "", `[언어] ${LANG_LABEL[input.lang]}`, `[전체 코드]\n${input.code.slice(0, 20000)}`, `[학습자가 드래그한 부분]\n${input.selection.slice(0, 4000)}`,
     input.question ? `[질문] ${input.question}` : "드래그한 부분이 무엇을 하는지 한 줄씩 쉽게 설명한다."].filter(Boolean).join("\n\n");
-  return { text: await askText("code:explain", TUTOR, user) };
+  return { text: await askText("code:explain", TUTOR, user, { onText }) };
 }
 export async function reviewApproach(input: { problemId: string; lang: Lang; code: string; note?: string }) {
   tagTrace({ ref: input.problemId, action: "reviewApproach" });

@@ -25,7 +25,7 @@ type Problem = { id: string; title: string; statement: string; inputText: string
 type Result = { index: number; verdict: string; ms: number; input: string; expected: string; got: string; stderr: string; diff?: string; cpuMs?: number; peakKb?: number; near?: "time" | "memory" };
 type Judged = { verdict: string; passed: number; total: number; shown: Result[]; compile: string; ms: number };
 type SubLite = { id: string; at: string; lang: Lang; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; lines: number };
-type Msg = { who: "me" | "ai"; text: string; tag?: string; step?: string };
+type Msg = { who: "me" | "ai"; text: string; tag?: string; step?: string; /** 답이 아직 오는 중(스트리밍, 11/11) */ live?: boolean };
 
 const VERDICT: Record<string, [string, string]> = { AC: ["맞았습니다", "good"], WA: ["틀렸습니다", "bad"], TLE: ["시간 초과", "help"], MLE: ["메모리 초과", "help"], RE: ["런타임 에러", "bad"], CE: ["컴파일 에러", "bad"], MISSING: ["실행기 없음", "help"] };
 const STATUS: Record<ProblemLite["status"], [string, string]> = { new: ["새 문제", ""], tried: ["풀어 봄", "help"], wrong: ["틀림", "bad"], solved: ["맞음", "good"] };
@@ -307,6 +307,34 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
       setDeck((d) => ({ ...d, busy: false, texts: { ...d.texts, [rung]: r.skeleton ? (fresh ? "뼈대 코드를 편집기에 넣었어요. 「여기를 채워요」라고 적힌 줄만 직접 채워서 제출해 보세요." : "편집기에 넣었던 뼈대 코드예요. 「여기를 채워요」 줄만 채우면 돼요.") : r.text } }));
     } catch (e) { setDeck((d) => ({ ...d, busy: false, err: errorText(e) })); }
   };
+  // 스트리밍(11/11 사용자 "질문하는 거, 답 오는 거 스트리밍으로, 부드럽지 않으면 부드럽게"): 글이 오는 대로 마지막 AI 말풍선에 붙이고, 화면은 SmoothText가 고르게 풀어 보여 준다.
+  const streamAsk = async (q: string, payload: Record<string, unknown>) => {
+    if (asking) return;
+    setAsking(true);
+    setMsgs((m) => [...m, { step: stepNow, who: "me", text: q }, { step: stepNow, who: "ai", text: "", live: true }]);
+    const patch = (f: (last: Msg) => Msg) => setMsgs((m) => { const i = m.length - 1; return i >= 0 && m[i].who === "ai" ? [...m.slice(0, i), f(m[i])] : m; });
+    try {
+      const res = await fetch("/api/code/explain?stream=1", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => null)) as { message?: string } | null)?.message || `답을 받지 못했어요 (${res.status})`);
+      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+          if (!line.trim()) continue;
+          const o = JSON.parse(line) as { delta?: string; done?: boolean; text?: string; error?: string };
+          if (o.delta) patch((l) => ({ ...l, text: l.text + o.delta }));
+          if (o.done) patch((l) => ({ ...l, text: o.text ?? l.text, live: false }));
+          if (o.error) patch((l) => ({ ...l, text: `${l.text ? `${l.text}\n\n` : ""}답을 다 받지 못했어요: ${o.error}`, live: false }));
+        }
+      }
+      patch((l) => ({ ...l, live: false }));
+    } catch (e) { patch((l) => ({ ...l, text: `답을 받지 못했어요: ${errorText(e)}`, live: false })); }
+    finally { setAsking(false); }
+  };
   const coach = (q: string) => void assist("훈련", q, () => call(`/api/code/problem/${id}/train/ask`, { step: trainStep, question: q }));
   const ask = () => {
     if (!question.trim()) return;
@@ -314,7 +342,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     const sel = editor.current?.selection() ?? "";
     const q = question; setQuestion("");
     setHints((h) => h + 1); // AI에게 물어본 것도 도움 받은 풀이로 남긴다(11/11: 힌트 버튼을 빼고 채팅 하나로)
-    void assist("질문", q, () => call("/api/code/explain", { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q }));
+    void streamAsk(q, { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q });
   };
   const openSubmission = async (sid: string) => {
     try { const { submission } = await call<{ submission: { code: string; lang: Lang } }>(`/api/code/problem/${id}/submission/${sid}`); setLang(submission.lang); setCode(submission.code); } catch (e) { setError(errorText(e)); }
@@ -398,8 +426,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         </>}
         <div className="cs-chat">
           {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">AI에게 무엇이든 물어보세요. 코드를 드래그하고 물으면 그 부분을 봐요. 물어본 풀이는 「도움 받고 맞힘」으로 남아요.</p> : null}
-          {shownMsgs.map((m, i) => <div key={i} className={`cs-msg ${m.who}`}>{m.tag ? <span className="chip">{m.tag}</span> : null}<Rich text={m.text} className="small" /></div>)}
-          {asking ? <div className="cs-msg ai"><span className="small muted">생각하는 중…</span></div> : null}
+          {shownMsgs.map((m, i) => <div key={i} className={`cs-msg ${m.who}`}>{m.tag ? <span className="chip">{m.tag}</span> : null}{m.who === "ai" && (m.live || i === shownMsgs.length - 1) ? <SmoothText text={m.text} live={Boolean(m.live)} onGrow={() => chatEnd.current?.scrollIntoView({ block: "end" })} /> : <Rich text={m.text} className="small" />}</div>)}
+          {asking && shownMsgs.at(-1)?.live !== true ? <div className="cs-msg ai"><span className="small muted">생각하는 중…</span></div> : null}
           <div ref={chatEnd} />
         </div>
         {coaching ? <div className="cs-hints">
@@ -419,6 +447,25 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
       </div>
     </div>
   );
+}
+
+/** 스트리밍 글을 고르게 풀어 보여 준다(11/11): 받은 글보다 늦게, 남은 양에 맞춰 한 번에 몇 글자씩. 다 오면 남은 것을 빨리 따라잡는다. */
+function SmoothText({ text, live, onGrow }: { text: string; live: boolean; onGrow?: () => void }) {
+  const [shown, setShown] = useState(live ? 0 : text.length);
+  const grow = useRef(onGrow);
+  useEffect(() => { grow.current = onGrow; });
+  useEffect(() => {
+    if (shown >= text.length) return;
+    const id = requestAnimationFrame(() => {
+      const left = text.length - shown;
+      setShown((n) => Math.min(text.length, n + Math.max(1, Math.ceil(left / (live ? 18 : 6)))));
+      grow.current?.();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [shown, text, live]);
+  const behind = shown < text.length;
+  if (!text && live) return <span className="small muted">생각하는 중…</span>;
+  return <div className="cs-smooth"><Rich text={text.slice(0, shown)} className="small" />{live || behind ? <span className="lc2-caret" /> : null}</div>;
 }
 
 // AI 튜터(11/11 사용자): 다섯 장을 강의 탭처럼 넘긴다. 1 눈여겨볼 곳 · 2 방법 이름 · 3 필요한 능력 · 4 계획 · 5 뼈대 코드.

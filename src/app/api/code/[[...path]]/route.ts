@@ -66,6 +66,20 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "explain" && m === "POST") {
       const b = await body(z.object({ problemId: pid.optional(), lang, code, selection: z.string().min(1).max(8000), question: z.string().max(2000).optional() }));
       await recordAsked(b.problemId, b.question || `코드 드래그해서 물어봄: ${b.selection.split("\n")[0].slice(0, 60)}`);
+      // 스트리밍(11/11 사용자 "AI 튜터 답 오는 것도 스트리밍으로"): ?stream=1이면 지금까지의 글을 한 줄씩(JSON) 흘려보내고, 끝나면 {done, text}.
+      if (new URL(request.url).searchParams.get("stream") === "1") {
+        const enc = new TextEncoder();
+        const stream = new ReadableStream({ start(ctrl) {
+          let last = "";
+          const send = (o: unknown) => { try { ctrl.enqueue(enc.encode(`${JSON.stringify(o)}\n`)); } catch { /* 화면이 닫힘 */ } };
+          void explainCode(b, (t) => { if (t.length > last.length) { send({ delta: t.slice(last.length) }); last = t; } })
+            .then((out) => { if (out.text.length > last.length && out.text.startsWith(last)) send({ delta: out.text.slice(last.length) }); send({ done: true, text: out.text });
+              if (b.problemId) void noteAiHelp(b.problemId, "드래그한 코드 설명", `${b.question ? `물음: ${b.question} · ` : ""}${out.text}`).catch(() => undefined); })
+            .catch((e) => send({ error: (e as Error)?.message || "답을 받지 못했어요." }))
+            .finally(() => { try { ctrl.close(); } catch { /* 이미 닫힘 */ } });
+        } });
+        return new NextResponse(stream, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" } });
+      }
       const out = await explainCode(b);
       // 11/8: AI에게 배운 것은 PS 튜터 문제일 때 그 패턴의 기억으로(tutor/service.ts noteAiHelp).
       if (b.problemId) void noteAiHelp(b.problemId, "드래그한 코드 설명", `${b.question ? `물음: ${b.question} · ` : ""}${out.text}`).catch(() => undefined);
