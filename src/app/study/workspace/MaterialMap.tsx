@@ -1222,9 +1222,11 @@ function ShelfCard({ genId, c, onPage, onHistory, all, onCard }: { genId: string
         {m?.answer ? <Answer text={m.answer} /> : m?.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}</div> : null}
       {m?.answer ? <CardDetails items={m.details} /> : m?.line ? <OldMore idea={m.idea} shape={c.shape} details={m.details} /> : <Body s={c.shape} />}
       <FigureView genId={genId} c={c} onPage={onPage} all={all} onCard={onCard} />
-      <div className="shelf-foot"><span className="small muted">{STATE[c.state][0]}{c.dueAt ? ` · 다음 복습 ${new Date(c.dueAt).getMonth() + 1}/${new Date(c.dueAt).getDate()}` : ""}</span><span className="cs-gap" />
+      {/* 출처(11/12 사용자 "만남 말고 출처"): 원문 구절과 쪽 — 상태는 줄 앞 점이 보여 준다 */}
+      {c.quotes.length ? <p className="shelf-src small"><span className="shelf-srck">출처</span>{c.quotes.slice(0, 2).map((q, k) => <span key={k}>“{q}”</span>)}</p> : null}
+      <div className="shelf-foot">{c.dueAt ? <span className="small muted">다음 복습 {new Date(c.dueAt).getMonth() + 1}/{new Date(c.dueAt).getDate()}</span> : null}<span className="cs-gap" />
         {c.pages.slice(0, 4).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}
-        {c.knowledgeId ? <button className="btn ghost small" onClick={() => onHistory(c.knowledgeId!)}>지나온 일</button> : null}</div>
+        {c.knowledgeId ? <button className="btn ghost small" title="이 기억을 언제 만났고 맞혔는지·틀렸는지, 다른 자료에서도 만났는지, 이어진 기억" onClick={() => onHistory(c.knowledgeId!)}>공부 기록</button> : null}</div>
     </div> : null}
   </>;
 }

@@ -327,3 +327,5 @@
 .dejipgi .rv-shift.goal{border-color:var(--accent);color:var(--accent)}
 .dejipgi .rv-shift.turn,.dejipgi .rv-shift.sup{border-color:var(--help);color:var(--help)}
 .dejipgi .rp-review{display:flex;flex-direction:column}
+.dejipgi .shelf-src{margin:0;display:flex;flex-wrap:wrap;gap:4px 10px;color:var(--muted);line-height:1.55}
+.dejipgi .shelf-srck{font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 5px}
