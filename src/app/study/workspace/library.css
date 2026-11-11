@@ -349,8 +349,11 @@
 .dejipgi .rp-pair{margin-left:28px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .dejipgi .rp-pair > div{padding:8px 12px;display:flex;flex-direction:column;gap:2px}
 .dejipgi .rp-pair p{margin:0;line-height:1.6;font-size:13.5px;color:var(--ink)}
-.dejipgi .rp-pair .mine{background:var(--bad-soft)}
-.dejipgi .rp-pair .right{background:var(--good-soft);border-top:1px solid var(--line)}
+.dejipgi .rp-pair .when{background:var(--surface)}
+.dejipgi .rp-pair .mine{background:color-mix(in srgb, var(--bad-soft) 55%, var(--surface));border-top:1px solid var(--line)}
+.dejipgi .rp-pair .right{background:color-mix(in srgb, var(--good-soft) 55%, var(--surface));border-top:1px solid var(--line)}
+.dejipgi .rp-pair .when .rp-tag{color:var(--muted)}
+.dejipgi .rp-pair > div:first-child{border-top:0}
 .dejipgi .rp-tag{font-size:11.5px;font-weight:700}
 .dejipgi .rp-pair .mine .rp-tag{color:var(--bad)}
 .dejipgi .rp-pair .right .rp-tag{color:var(--good)}

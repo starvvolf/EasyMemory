@@ -380,7 +380,7 @@ function TalkScene({ t }: { t: Talk }) {
 /* ---------- 총정리(B, 11/12) ----------
  * 사용자 "총정리만 봐도 기억이 나야 돼… 다른 사람이 봐도 이해가", "깐깐하게 부족한 점", "처음 만들 때 스트리밍으로", "가독성 좋게 박스".
  * 풀이가 끝날 때 AI가 한 번 쓴 것을 보여 준다. 없으면 이 자리에서 만들며 받는 대로 보여 준다(스트리밍). 위에는 코드가 센 사실 한 줄. */
-type Review = { v?: number; situation: string; solve: string; weak?: Array<{ gap: string; pairs?: Array<{ thought: string; truth: string }> }>; next: string };
+type Review = { v?: number; situation: string; solve: string; weak?: Array<{ gap: string; pairs?: Array<{ when?: string; thought: string; truth: string }> }>; next: string };
 type ReviewFacts = { end: "solved" | "gaveup" | "paused"; hints: number; skeleton: boolean; asked: number; submits: number; wrong: number; minutes: number };
 /** 받는 중인 JSON 글에서 지금까지 나온 칸만 꺼낸다(닫히지 않은 따옴표도 그때까지). */
 function partialReview(t: string): Review {
@@ -389,7 +389,8 @@ function partialReview(t: string): Review {
   const wi = t.indexOf('"weak"');
   const weak: NonNullable<Review["weak"]> = [];
   if (wi >= 0) for (const part of t.slice(wi).split(/(?="gap")/).slice(1)) {
-    const pairs = part.split(/(?="thought")/).slice(1).map((o) => ({ thought: str("thought", o), truth: str("truth", o) })).filter((x) => x.thought);
+    const pairs = part.split(/(?="when"|"thought")/).reduce<string[]>((acc, o, i) => { if (i === 0) return acc; if (o.startsWith('"thought"') && acc.length && !/"thought"/.test(acc[acc.length - 1])) acc[acc.length - 1] += o; else acc.push(o); return acc; }, [])
+      .map((o) => ({ when: str("when", o), thought: str("thought", o), truth: str("truth", o) })).filter((x) => x.when || x.thought);
     const gap = str("gap", part); if (gap) weak.push({ gap, pairs });
   }
   return { situation: str("situation"), solve: str("solve"), next: str("next"), weak };
@@ -432,7 +433,8 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
       <ol className="rp-weak">{rv.weak.map((w, i) => <li key={i}>
         <p className="rp-gap"><span className="rp-num">{i + 1}</span>{w.gap}</p>
         {(w.pairs ?? []).map((p, j) => <div key={j} className="rp-pair">
-          <div className="mine"><span className="rp-tag">그때 내 생각</span><p>{p.thought}</p></div>
+          {p.when ? <div className="when"><span className="rp-tag">무슨 일이 있었나</span><p>{p.when}</p></div> : null}
+          {p.thought ? <div className="mine"><span className="rp-tag">그때 내 생각</span><p>{p.thought}</p></div> : null}
           {p.truth ? <div className="right"><span className="rp-tag">맞는 생각</span><p>{p.truth}</p></div> : null}
         </div>)}
       </li>)}</ol></div> : null}
