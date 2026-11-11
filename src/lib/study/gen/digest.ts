@@ -259,13 +259,13 @@ export const OBJECTIVES_GIVEN = `[주는 것·내는 것] 목표 줄마다 끝�
 - 주는 것: 이 목표를 확인하는 문제에서 학습자에게 줄 구체적인 상황 한 가지(예: "두 프로세스의 세마포어 실행 순서와 어디까지 실행했는지", "자원 할당 그래프의 간선 목록과 자원마다 인스턴스 수", "OS가 하는 동작 한두 문장"). 판정·계산·구별 목표는 반드시 구체적인 상황이다. 떠올리기 목표만 "정의 한 문장"일 수 있다.
 - 내는 것: 학습자가 그 상황에서 내야 할 답의 종류(예: "교착 발생 / 교착 가능성만 / 교착 없음 중 하나", "네 조건 중 깨지는 것", "고친 실행 순서", "왜 그런지 2~3문장").
 - 자료의 학습 목표 쪽은 큰 방향이다: 그것을 시험으로 확인할 수 있는 크기로 쪼갠다. 같은 규칙을 다른 상황에 적용하는 목표는 하나로 둔다.`;
-// 줄기 모드 (11/11): 목표가 기억을 모른 채 만들어져 기억과 따로 놀았다 — 목차의 주제 아래에 그 주제의 기억(id | 이름 | 떠올릴 질문)을 주고,
+// 줄기 모드 (11/11): 목표가 기억을 모른 채 만들어져 기억과 따로 놀았다 — 목차의 주제 아래에 그 주제의 기억(id | 이름)을 주고,
 // 목표가 확인하는 기억 id를 받는다.
-export const OBJECTIVES_MEMORIES = `[기억] 목차의 주제 아래에는 그 주제에서 학습자가 외울 기억이 "  기억 id | 이름 | 떠올릴 질문"으로 적혀 있다.
+export const OBJECTIVES_MEMORIES = `[기억] 목차의 주제 아래에는 그 주제에서 학습자가 외울 기억이 "  기억 id | 이름"으로 적혀 있다.
 - 목표는 이 기억들을 가지고 할 수 있어야 하는 것으로 쓴다. 기억 목록에 없는 내용을 목표로 삼지 않는다.
 - "관련 주제 id들" 칸에는 주제 id 대신 이 목표를 확인하는 데 쓰이는 기억 id(t1.m2 꼴)를 적는다(쉼표).`;
-export function objectivesUser(fileName: string, topics: DigestTopic[], pages: Array<{ page: number; text: string }>, memories: Array<{ id: string; topic: string; name: string; question: string }> = []) {
-  return [`[목차]`, ...topics.flatMap((t) => [`${t.id} | ${t.title} | ${t.pages.join(", ")}`, ...memories.filter((m) => m.topic === t.id).map((m) => `  ${m.id} | ${m.name} | ${m.question}`)]), "", oneUser(fileName, pages)].join("\n");
+export function objectivesUser(fileName: string, topics: DigestTopic[], pages: Array<{ page: number; text: string }>, memories: Array<{ id: string; topic: string; name: string }> = []) {
+  return [`[목차]`, ...topics.flatMap((t) => [`${t.id} | ${t.title} | ${t.pages.join(", ")}`, ...memories.filter((m) => m.topic === t.id).map((m) => `  ${m.id} | ${m.name}`)]), "", oneUser(fileName, pages)].join("\n");
 }
 /** lab.goalsInPlan (11/2 사용자 "목차 뽑으면서 뒤에 terra가 목표"): the plan call writes the 학습 목표 after its outline mark. */
 export const PLAN_TASK_GOALS = `${PLAN_TASK}
