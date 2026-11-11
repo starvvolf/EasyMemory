@@ -8,7 +8,7 @@ import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
 import { imageSize } from "./image-size.ts";
-import { addMore, fillGroups, HEADING_TERMS, memoryCard, memoryCardQA, missingPages, settlePlan, STEM_FILL, STEM_FILL_QA, STEM_MORE, STEM_PLAN, stemFakeReply, stemFillQASchema, stemFillSchema, stemPlanSchema, type StemFill, type StemFillQA, type StemRole } from "./stem.ts";
+import { addMore, fillGroups, HEADING_TERMS, memoryCard, memoryCardQA, missingPages, parsePlan, settlePlan, STEM_FILL, STEM_FILL_QA, STEM_MORE, STEM_MORE_LINES, STEM_PLAN, STEM_PLAN_LINES, stemFakeReply, stemFillQASchema, stemFillSchema, stemPlanSchema, type StemFill, type StemFillQA, type StemPlan, type StemRole } from "./stem.ts";
 import { cardKinds, cardLine, cardSchema, checkCards, cleanFigure, FIGURE_RULES, figureSchema, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
@@ -954,13 +954,19 @@ export async function runRecaller(ctx: RecallerContext) {
   async function stemPlanRun(d: NonNullable<typeof data.digest>) {
     const t0 = Date.now();
     const user = oneUser(input.fileName, input.pageNumbers.map((page) => ({ page, text: data.texts[page] ?? "" })));
-    let plan = settlePlan(await ctx.ask("rc-stem-plan", null, 1, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}`, user, stemPlanSchema, { images: await imagesOf(input.pageNumbers), maxChars: 200 * input.pageNumbers.length + 8000 }), input.pageNumbers);
+    // lab.planLines (11/12): 같은 뜻의 지시문을 줄 형식으로 받는다(출력이 짧아 빠르다). 줄이 하나도 없으면 한 번 더, 그래도 없으면 멈춘다.
+    const planSystem = lab.planLines ? `${prompt("STEM_PLAN_LINES", STEM_PLAN_LINES)}${lab.headingTerms ? HEADING_TERMS : ""}` : `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}`;
+    const askPlan = async (attempt: number, system: string, u: string, pages: number[]): Promise<StemPlan> => lab.planLines
+      ? parsePlan(await ctx.askText("rc-stem-plan", null, attempt, system, u, await imagesOf(pages)))
+      : await ctx.ask("rc-stem-plan", null, attempt, system, u, stemPlanSchema, { images: await imagesOf(pages), maxChars: 200 * pages.length + 8000 });
+    let plan = settlePlan(await askPlan(1, planSystem, user, input.pageNumbers), input.pageNumbers);
+    if (lab.planLines && (!plan.areas.length || !plan.memories.length)) plan = settlePlan(await askPlan(3, planSystem, user, input.pageNumbers), input.pageNumbers);
+    if (lab.planLines && (!plan.areas.length || !plan.memories.length)) throw new Error("줄기 계획에서 영역·기억 줄을 읽지 못했어요.");
     const miss = missingPages(plan, input.pageNumbers);
     if (miss.length) {
       try {
-        const more = await ctx.ask("rc-stem-plan", null, 2, `${prompt("STEM_PLAN", STEM_PLAN)}${lab.headingTerms ? HEADING_TERMS : ""}\n\n${prompt("STEM_MORE", STEM_MORE)}`,
-          `[이미 있는 기억]\n${plan.memories.map((m) => m.name).join("\n")}\n\n[영역]\n${plan.areas.map((a, i) => `${i + 1} ${a.name}`).join("\n")}\n\n${oneUser(input.fileName, miss.map((page) => ({ page, text: data.texts[page] ?? "" })))}`,
-          stemPlanSchema, { images: await imagesOf(miss), maxChars: 200 * miss.length + 4000 });
+        const more = await askPlan(2, `${planSystem}\n\n${lab.planLines ? prompt("STEM_MORE_LINES", STEM_MORE_LINES) : prompt("STEM_MORE", STEM_MORE)}`,
+          `[이미 있는 기억]\n${plan.memories.map((m) => m.name).join("\n")}\n\n[영역]\n${plan.areas.map((a, i) => `${i + 1} ${a.name}`).join("\n")}\n\n${oneUser(input.fileName, miss.map((page) => ({ page, text: data.texts[page] ?? "" })))}`, miss);
         plan = addMore(plan, more, input.pageNumbers);
       } catch (error) { if (pausesRun(error)) throw error; }
     }

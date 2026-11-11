@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addMore, fillGroups, firstLine, memoryCard, memoryCardQA, missingPages, settlePlan } from "./stem.ts";
+import { addMore, fillGroups, firstLine, parsePlan, memoryCard, memoryCardQA, missingPages, settlePlan } from "./stem.ts";
 
 const plan = { areas: [{ name: "선", question: "?" }, { name: "원", question: "?" }], memories: [
   { name: "DDA", kind: "절차" as const, role: "메인" as const, area: 1, pages: [5, 6, 99] },
@@ -29,4 +29,10 @@ test("질문 하나 · 답 하나 카드 (11/11): 답 원문은 memo.answer, 목
   assert.equal(c.kind, "절차"); assert.equal(c.memo.answer?.split("\n").length, 2); assert.equal(c.memo.line, "결정 변수 $p_0 = 2dy - dx$"); assert.deepEqual(c.memo.details, ["유도"]);
   assert.equal(c.shape.form, "fact");
   assert.equal(firstLine("| 대상 | 기준 |\n|---|---|\n| A | B |"), ""); assert.equal(firstLine("두 가지다.\n| A | B |"), "두 가지다.");
+});
+test("줄 형식 줄기 읽기 (11/12 lab.planLines): 영역·기억 줄, 쪽 범위, 건너뛴 영역 번호, 모르는 모양은 개념", () => {
+  const p = parsePlan(["설명", "영역|1|선 그리기|직선을 어떻게?", "영역|3|원 그리기|원은?", "기억|1|절차(알고리즘)|메인|5-7, 9|DDA", "- 기억|3|공식|바탕|21|원의 방정식", "기억|3|이상한모양|이상한역할|p.22|대칭성"].join("\n"));
+  assert.deepEqual(p.areas.map((a) => a.name), ["선 그리기", "원 그리기"]);
+  assert.deepEqual(p.memories.map((m) => [m.name, m.area, m.kind, m.role, m.pages]), [["DDA", 1, "절차", "메인", [5, 6, 7, 9]], ["원의 방정식", 2, "공식", "바탕", [21]], ["대칭성", 2, "개념", "메인", [22]]]);
+  assert.deepEqual(parsePlan("없음"), { areas: [], memories: [] });
 });

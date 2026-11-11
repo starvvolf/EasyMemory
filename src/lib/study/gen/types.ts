@@ -110,6 +110,8 @@ export type RecallerLab = {
   stem?: boolean;
   /** 기억 카드를 질문 하나 · 답 하나로(11/11, stem.ts STEM_FILL_QA) */
   cardQA?: boolean;
+  /** 줄기 계획을 줄 형식으로 받기(11/12, stem.ts STEM_PLAN_LINES) */
+  planLines?: boolean;
   /** 줄기 모드에서 강의 소제목의 용어를 기억 이름에 남기기 (11/10 실험 옵션, stem.ts HEADING_TERMS). */
   headingTerms?: boolean;
   /** 빠른 전처리: read and draw pages in this many worker processes in one pass (a drawing crash ends a worker, not the server). */

@@ -39,6 +39,49 @@ export const stemPlanSchema = z.object({
 });
 export type StemPlan = z.infer<typeof stemPlanSchema>;
 
+// 줄 형식 줄기 (11/12 lab.planLines, 사용자 "제이슨으로 안 받게 하면? 작은 걸로 한 번"): 지시문 뜻은 STEM_PLAN과 같고 답만 줄로.
+// 11/11 50쪽 실측: 줄기 출력 2,107 → 1,168토큰, 47초 → 29초. 형식은 서버가 강제하지 않으니 parsePlan이 읽고, 줄이 없으면 한 번 더 묻는다.
+export const STEM_PLAN_LINES = `너는 강의 자료 한 편 전체(쪽마다 [p.N] 원문, 그림으로 된 쪽과 그림 조각은 "원문 p.N" 이름표의 이미지)를 보고,
+학습자가 외우고 복습할 "기억"의 계획(줄기)을 세운다. 카드를 쪽마다 잘게 뽑는 것이 아니라, 서로 이어진 원리·알고리즘·개념 단위로 나눈다.
+먼저 (쓰지 말고) 생각한다: 이 강의가 가르치려는 것은 무엇인가? 큰 영역으로 나누면 무엇이고, 영역마다 "배우는 질문"은 무엇인가?
+자료를 앞에서부터 강의하듯 쪽 순서대로 따라가며 기억을 세운다. 기억은 그 내용을 처음 가르치는 자리에서 만든다. 뒤 쪽이 앞에서 이미 세운 기억을 다시 다루면(정리·복습·견주기) 새 기억을 만들지 않고 그 쪽을 앞 기억의 쪽에 넣는다. 뒤 쪽에서 처음 나오는 것(견주는 기준, 새 조건)만 새 기억이 된다.
+설명 없이 아래 두 가지 줄만 쓴다. 영역 줄을 자료 순서로 모두 쓴 다음 기억 줄을 자료 순서로 쓴다.
+영역|번호|이름|배우는 질문
+기억|영역 번호|모양|역할|쪽|이름
+- 영역: 번호는 1부터. 이름은 자료의 말로 짧게, 배우는 질문은 그 영역에서 배우는 것을 묻는 한 줄.
+- 기억:
+  - 하나의 알고리즘·절차·방법은 기억 하나다(그 방법의 식·조건·초깃값·경우·구현 단계를 모두 그 안에).
+  - 같은 것을 다른 꼴로 적은 쪽들(같은 식의 다른 표기, 같은 성질의 여러 장)은 기억 하나다.
+  - 따로 서는 정의·개념·판정 규칙은 혼자 기억이다. 억지로 합치지 않는다.
+  - 모양: 용어 · 사실 · 목록 · 조건(판정 규칙) · 절차(알고리즘·방법) · 공식 · 비교(둘 이상을 견줌) · 개념(원리·주장) · 패턴(틀·예).
+  - 역할: 메인 = 이 강의에서 새로 배우는 것. 바탕 = 이 강의 전에 알고 와야 하는 것을 다시 적은 것(앞 과목의 수학 식·정의). 곁 = 배경·종류 나열·제품 이름·덧붙인 이야기.
+  - 영역 번호: 위 영역 줄의 번호. 쪽: 이 기억의 근거가 되는 쪽 번호 전부(쉼표로, 예: 5,6,9).
+- 표지·목차·참고문헌 쪽이 아니면 모든 쪽이 어느 기억의 쪽에 들어가야 한다. 그림으로만 된 쪽도 그림을 읽고 넣는다.
+- 이름은 자료의 말로 짧게(원어가 있으면 괄호로). 이름 안에는 | 를 쓰지 않는다.`;
+export const STEM_MORE_LINES = `[빠진 쪽] 앞 계획에서 어느 기억에도 들어가지 않은 쪽만 다시 받는다. 이 쪽들에서 배울 것이 있으면 기억으로 더한다
+(이미 있는 기억에 들어가야 하면 그 기억의 이름을 그대로 쓰고 쪽에 이 쪽을 넣는다). 영역 줄은 다시 쓰지 않고 받은 영역 번호를 쓴다. 표지·목차·참고문헌처럼 배울 것이 없는 쪽이면 "없음" 한 줄만 쓴다.`;
+/**
+ * 줄기 계획의 답(줄 형식)을 읽는다 (11/11: 들여 쓴 JSON은 기억 하나에 약 57토큰). "쪽" 칸은 5,6,9 와 5-7 을 모두 받는다.
+ * 모양·역할이 목록에 없으면 개념·메인. (11/11 줄기에 질문을 넣어 봤다가 카드가 그 질문에 묶여 에둘러 말해서 뺐다 — 뒤 칸이 있으면 질문으로만 읽어 둔다.)
+ */
+export function parsePlan(text: string): StemPlan {
+  const areas: Array<{ n: number; name: string; question: string }> = [];
+  const memories: StemPlan["memories"] = [];
+  const pagesOf = (x: string) => x.split(/[,\s]+/).flatMap((part) => { const r = /^p?\.?(\d+)\s*[-~–]\s*p?\.?(\d+)$/.exec(part); if (r) { const a = Number(r[1]), b = Number(r[2]); return b >= a && b - a < 400 ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : []; } const n = Number(part.replace(/^p\.?/, "")); return part && Number.isInteger(n) ? [n] : []; });
+  for (const raw of text.split("\n")) {
+    const f = raw.trim().replace(/^[-*]\s*/, "").split("|").map((x) => x.trim());
+    if (f[0] === "영역" && f[2]) areas.push({ n: Number(f[1]) || areas.length + 1, name: f[2], question: f.slice(3).join(" ").trim() });
+    else if (f[0] === "기억" && f[5]) {
+      const kind = cardKinds.find((k) => (f[2] ?? "").startsWith(k)) ?? "개념";
+      const role = STEM_ROLES.find((r) => (f[3] ?? "").startsWith(r)) ?? "메인";
+      memories.push({ name: f[5], kind, role, area: Number(f[1]) || 0, pages: pagesOf(f[4] ?? "") });
+    }
+  }
+  // 영역 번호는 쓴 순서의 자리로 바꾼다(1, 2, 4처럼 건너뛴 번호도 맞게).
+  const at = new Map(areas.map((a, i) => [a.n, i + 1]));
+  return { areas: areas.map((a) => ({ name: a.name, question: a.question })), memories: memories.map((m) => ({ ...m, area: at.get(m.area) ?? m.area })) };
+}
+
 export const STEM_FILL = `강의 자료 몇 쪽(원문 [p.N]과 쪽 그림)과, 이 쪽들에서 학습자가 외울 기억의 계획(이름·모양·역할)을 받는다. 기억을 하나씩 완성한다.
 기억은 학습자가 외우고 복습하는 단위다. 원문을 낱장으로 다시 옮기지 말고, 이 기억을 이해하고 떠올리는 데 필요한 것을 쓴다.
 - memory: 받은 기억 id 그대로. title: 받은 이름(더 맞는 자료의 말이 있으면 고쳐도 된다). kind: 받은 모양(원문을 보니 다른 모양이 맞으면 바꿔도 된다).
