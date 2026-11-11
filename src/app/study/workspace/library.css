@@ -523,3 +523,18 @@
 .dejipgi .rv-rich{display:flex;flex-direction:column;gap:10px;margin-top:6px;max-width:74ch}
 .dejipgi .rv-rich p{margin:0;line-height:1.8;font-size:14.5px}
 .dejipgi .rv-pre{margin:0;padding:10px 14px;border-radius:10px;background:#1d2029;border:1px solid #2c303b;color:#e8eaf0;font-family:var(--mono,ui-monospace,monospace);font-size:13.5px;line-height:1.65;white-space:pre;overflow-x:auto}
+
+/* v17: 작은 약점은 작게, 핵심 약점은 크게 (11/12) */
+.dejipgi .rv-weak.small{max-width:680px;padding:10px 14px;display:flex;flex-direction:column;gap:6px;border-radius:10px}
+.dejipgi .rv-weak.small .rv-chip{font-size:11px}
+.dejipgi .rv-smallhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px}
+.dejipgi .rv-smallstate{margin:0;color:var(--muted);font-size:13.5px;line-height:1.65}
+.dejipgi .rv-weak.small .rv-rich{margin-top:0;gap:6px}
+.dejipgi .rv-weak.small .rv-rich p{font-size:14px;line-height:1.7}
+.dejipgi .rv-weak.small .rv-pre{font-size:12.5px;padding:7px 12px}
+.dejipgi .rv-weak.big{border-width:2px;box-shadow:0 6px 22px rgba(0,0,0,.18)}
+.dejipgi .rv-weak.big .rv-weakhead{padding:14px 18px}
+.dejipgi .rv-weak.big .rv-weaktitle{font-size:18px}
+.dejipgi .rv-core{font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:999px;background:#e0a23a;color:var(--surface)}
+.dejipgi .rv-weak.big .rv-lesson{padding:14px 18px 18px}
+.dejipgi .rv-weak.big .rv-rich p{font-size:15px}

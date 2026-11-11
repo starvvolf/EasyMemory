@@ -387,7 +387,7 @@ function TalkScene({ t }: { t: Talk }) {
 /* ---------- 총정리(B, 11/12) ----------
  * 사용자 "총정리만 봐도 기억이 나야 돼… 다른 사람이 봐도 이해가", "깐깐하게 부족한 점", "처음 만들 때 스트리밍으로", "가독성 좋게 박스".
  * 풀이가 끝날 때 AI가 한 번 쓴 것을 보여 준다. 없으면 이 자리에서 만들며 받는 대로 보여 준다(스트리밍). 위에는 코드가 센 사실 한 줄. */
-type Weak = { kind: string; title: string; state: string; lesson: string };
+type Weak = { kind: string; size?: string; title: string; state: string; lesson: string };
 type StoryBeat = { text: string; weak?: Weak };
 type Review = { v?: number; situation: string; solve: string; story?: StoryBeat[]; weak?: Array<{ kind?: string; gap: string; seen?: string; why?: string; fill?: string; pairs?: Array<{ when?: string; thought: string; truth: string }> }>; next: string };
 type ReviewFacts = { end: "solved" | "gaveup" | "paused"; hints: number; skeleton: boolean; asked: number; submits: number; wrong: number; minutes: number };
@@ -401,7 +401,7 @@ function partialReview(t: string): Review {
     const text = str("text", part);
     if (!text) continue;
     const kind = str("kind", part);
-    story.push({ text, ...(kind && kind !== "none" ? { weak: { kind, title: str("title", part), state: str("state", part), lesson: str("lesson", part) } } : {}) });
+    story.push({ text, ...(kind && kind !== "none" ? { weak: { kind, size: str("size", part), title: str("title", part), state: str("state", part), lesson: str("lesson", part) } } : {}) });
   }
   const weak: NonNullable<Review["weak"]> = [];
   return { situation: str("situation"), solve: str("solve"), next: str("next"), weak, story };
@@ -451,11 +451,15 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
     {rv.story?.length ? <div className="rv-story"><h4 className="rv-sectitle">이렇게 흘러갔어요{(() => { const n = rv.story.filter((x) => x.weak).length; return n ? <span>약점 {n}개</span> : null; })()}</h4>
       <ol className="rv-flow">{(() => { let n = 0; return rv.story.map((b, i) => { const w = b.weak; if (w) n++; return <li key={i} className={`rv-step${w ? " has" : ""}`}>
         <p className="rv-tell"><Ic text={b.text} /></p>
-        {w ? <article className={`rv-weak ${w.kind}`}>
-          <header className="rv-weakhead"><span className={`rv-chip ${w.kind}`}>약점 {n} · {GAP_KIND[w.kind] ?? "빈틈"}</span>{w.title ? <b className="rv-weaktitle">{w.title}</b> : null}</header>
+        {w && w.size === "big" ? <article className={`rv-weak big ${w.kind}`}>
+          <header className="rv-weakhead"><span className="rv-core">핵심 약점</span><span className={`rv-chip ${w.kind}`}>약점 {n} · {GAP_KIND[w.kind] ?? "빈틈"}</span>{w.title ? <b className="rv-weaktitle">{w.title}</b> : null}</header>
           {w.state ? <div className="rv-state"><span className="rv-lab">지금 내 상태</span><p><Ic text={w.state} /></p></div> : null}
           {w.lesson ? <div className="rv-lesson"><span className="rv-lab">제대로 알아보기</span><RvRich text={w.lesson} /></div> : null}
-        </article> : null}
+        </article> : w ? <aside className={`rv-weak small ${w.kind}`}>
+          <div className="rv-smallhead"><span className={`rv-chip ${w.kind}`}>약점 {n} · {GAP_KIND[w.kind] ?? "빈틈"}</span>{w.title ? <b>{w.title}</b> : null}</div>
+          {w.state ? <p className="rv-smallstate"><Ic text={w.state} /></p> : null}
+          {w.lesson ? <RvRich text={w.lesson} /> : null}
+        </aside> : null}
       </li>; }); })()}</ol></div> : null}
     {rv.weak?.length ? <div className="rv-gaps"><h4>비어 있던 것 {rv.weak.length}가지</h4>
       {rv.weak.map((w, i) => <details key={i} className={`rv-gap ${w.kind ?? ""}`} open={i === 0}>
