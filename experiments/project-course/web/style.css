@@ -908,3 +908,10 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .freewrap .fsendb .ico { display: grid; place-items: center; }
 .freewrap .fsendb:disabled { opacity: .35; cursor: default; box-shadow: none; }
 .freewrap .fsendb.stop { background: var(--f-ink, var(--ink)); color: var(--f-s1, var(--panel)); box-shadow: none; }
+/* 줄 선 말: 대기 중 느낌(11/11 사용자) — 흐리게 숨 쉬듯 + 점 셋 */
+.freeme.queued { animation: qbreath 2.4s ease-in-out infinite; }
+@keyframes qbreath { 0%, 100% { opacity: .45; } 50% { opacity: .75; } }
+.qwait { display: inline-flex; gap: 3px; flex: none; }
+.qwait i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .5; animation: qdot 1.2s infinite ease-in-out; }
+.qwait i:nth-child(2) { animation-delay: .15s; } .qwait i:nth-child(3) { animation-delay: .3s; }
+@keyframes qdot { 0%, 80%, 100% { transform: translateY(0); opacity: .35; } 40% { transform: translateY(-2px); opacity: .9; } }

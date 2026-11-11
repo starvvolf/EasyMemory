@@ -1578,8 +1578,8 @@ function drawFree() {
   if (lesson.goals?.shell && !lesson.busy) list.append(shellCard(lesson.goals.shell, send));
   if (lesson.goals && goalUi.stuck && !lesson.busy) list.append(goalStuckCard(lesson.goals, send));
   if (lesson.busy) list.append(thinkLine(run, lesson));
-  if (freeUi.queue.length) list.append(h("div", { class: "fqueue" }, freeUi.queue.map((t, i) => h("div", { class: "freeme queued" },
-    t,
+  if (freeUi.queue.length) list.append(h("div", { class: "fqueue" }, freeUi.queue.map((t, i) => h("div", { class: "freeme queued", title: "답이 끝나면 보내요" },
+    h("span", { class: "qwait", "aria-hidden": "true" }, h("i"), h("i"), h("i")), t,
     h("button", { class: "fib", title: "보내지 않기", "aria-label": "보내지 않기", onclick: () => { freeUi.queue.splice(i, 1); drawLesson(); } }, "×")))));
   const input = h("textarea", { rows: 2, placeholder: "물어보기 (Enter 보내기, Shift+Enter 줄바꿈)", "aria-label": "튜터에게 물어보기" });
   input.value = freeUi.draft;
