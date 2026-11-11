@@ -382,18 +382,23 @@ function TalkScene({ t }: { t: Talk }) {
 /* ---------- 총정리(B, 11/12) ----------
  * 사용자 "총정리만 봐도 기억이 나야 돼… 다른 사람이 봐도 이해가", "깐깐하게 부족한 점", "처음 만들 때 스트리밍으로", "가독성 좋게 박스".
  * 풀이가 끝날 때 AI가 한 번 쓴 것을 보여 준다. 없으면 이 자리에서 만들며 받는 대로 보여 준다(스트리밍). 위에는 코드가 센 사실 한 줄. */
-type Review = { v?: number; situation: string; solve: string; weak?: Array<{ kind?: string; gap: string; seen?: string; why?: string; fill?: string; pairs?: Array<{ when?: string; thought: string; truth: string }> }>; next: string };
+type StoryBeat = { kind?: string; did: string; truth: string; gap: string; box?: { title: string; points: string[]; example: string } };
+type Review = { v?: number; situation: string; solve: string; story?: StoryBeat[]; weak?: Array<{ kind?: string; gap: string; seen?: string; why?: string; fill?: string; pairs?: Array<{ when?: string; thought: string; truth: string }> }>; next: string };
 type ReviewFacts = { end: "solved" | "gaveup" | "paused"; hints: number; skeleton: boolean; asked: number; submits: number; wrong: number; minutes: number };
 /** 받는 중인 JSON 글에서 지금까지 나온 칸만 꺼낸다(닫히지 않은 따옴표도 그때까지). */
 function partialReview(t: string): Review {
   const str = (key: string, from = t) => { const m = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`).exec(from); if (!m) return ""; try { return JSON.parse(`"${m[1].replace(/\\$/, "")}"`) as string; } catch { return m[1]; } };
-  // 빈틈: "kind"(없으면 "gap")에서 다음 빈틈 앞까지가 한 개.
-  const wi = t.indexOf('"weak"');
-  const weak: NonNullable<Review["weak"]> = [];
-  if (wi >= 0) for (const part of t.slice(wi).split(/(?="kind")/).slice(1)) {
-    const gap = str("gap", part); if (gap) weak.push({ kind: str("kind", part), gap, seen: str("seen", part), why: str("why", part), fill: str("fill", part) });
+  // 이야기 마디: "kind"에서 다음 "kind" 앞까지가 한 마디. 공부 상자의 points는 배열, example은 줄바꿈이 든 글.
+  const si = t.indexOf('"story"');
+  const story: StoryBeat[] = [];
+  if (si >= 0) for (const part of t.slice(si).split(/(?="kind")/).slice(1)) {
+    const pm = /"points"\s*:\s*\[([^\]]*)/.exec(part);
+    const points = pm ? [...pm[1].matchAll(/"((?:[^"\\]|\\.)*)("|$)/g)].map((m) => { try { return JSON.parse(`"${m[1].replace(/\\$/, "")}"`) as string; } catch { return m[1]; } }).filter(Boolean) : [];
+    const did = str("did", part);
+    if (did) story.push({ kind: str("kind", part), did, truth: str("truth", part), gap: str("gap", part), box: { title: str("title", part), points, example: str("example", part) } });
   }
-  return { situation: str("situation"), solve: str("solve"), next: str("next"), weak };
+  const weak: NonNullable<Review["weak"]> = [];
+  return { situation: str("situation"), solve: str("solve"), next: str("next"), weak, story };
 }
 const GAP_KIND: Record<string, string> = { core: "핵심 생각", build: "코드로 옮기기", edge: "예외·경계", syntax: "파이썬 문법" };
 function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
@@ -435,6 +440,21 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
       {rv.situation ? <div className="rv-block"><h4>문제 상황</h4><Lines text={rv.situation} /></div> : null}
       {rv.solve ? <div className="rv-block"><h4>이렇게 해야 풀려요</h4><Lines text={rv.solve} /></div> : null}
     </div>
+    {rv.story?.length ? <div className="rv-story"><h4>이렇게 흘러갔어요</h4>
+      <ol className="rv-beats">{rv.story.map((b, i) => <li key={i} className={`rv-beat ${b.kind ?? ""}`}>
+        <span className="rv-dot">{i + 1}</span>
+        <div className="rv-beatbody">
+          <p className="rv-did">{b.did}</p>
+          {b.truth ? <p className="rv-truth">{b.truth}</p> : null}
+          {b.gap ? <p className="rv-gapline"><span>비어 있던 것</span>{b.gap}</p> : null}
+          {b.box && (b.box.title || b.box.points.length) ? <aside className="rv-box">
+            <p className="rv-boxeye">짚고 가기</p>
+            {b.box.title ? <p className="rv-boxtitle">{b.box.title}</p> : null}
+            {b.box.points.length ? <ul className="rv-points">{b.box.points.map((p, j) => <li key={j}>{p}</li>)}</ul> : null}
+            {b.box.example ? <pre className="rv-example">{b.box.example}</pre> : null}
+          </aside> : null}
+        </div>
+      </li>)}</ol></div> : null}
     {rv.weak?.length ? <div className="rv-gaps"><h4>비어 있던 것 {rv.weak.length}가지</h4>
       {rv.weak.map((w, i) => <details key={i} className={`rv-gap ${w.kind ?? ""}`} open={i === 0}>
         <summary><span className="rv-n">{i + 1}</span><span className="rv-gaptext">{w.gap}</span><span className={`rv-kind ${w.kind ?? ""}`}>{GAP_KIND[w.kind ?? ""] ?? "빈틈"}</span></summary>
