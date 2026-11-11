@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>실습 구조도</title>
+<style>
+:root{
+  --bg:#f7f7f5; --card:#ffffff; --ink:#1d1d1b; --sub:#5d5d58; --line:#deddd7;
+  --code:#e8eefb; --codeink:#1f4fb8; --ai:#fdf1dc; --aiink:#9a5b00; --data:#e7f4ea; --dataink:#22703a;
+  --app:#f1e9fb; --appink:#6a3fa8; --who:#f0f0ec;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161615; --card:#1f1f1d; --ink:#ecebe6; --sub:#a4a39c; --line:#34332f;
+    --code:#1c2a45; --codeink:#8fb2ff; --ai:#3a2c14; --aiink:#f3c06d; --data:#18321f; --dataink:#86d69d;
+    --app:#2c2140; --appink:#c6a6f5; --who:#2a2a27;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161615; --card:#1f1f1d; --ink:#ecebe6; --sub:#a4a39c; --line:#34332f;
+  --code:#1c2a45; --codeink:#8fb2ff; --ai:#3a2c14; --aiink:#f3c06d; --data:#18321f; --dataink:#86d69d;
+  --app:#2c2140; --appink:#c6a6f5; --who:#2a2a27;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:28px 16px 60px}
+h1{font-size:26px;margin:0 0 4px}
+h2{font-size:19px;margin:40px 0 12px}
+.lead{color:var(--sub);margin:0 0 18px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+.tag{display:inline-block;border-radius:999px;padding:1px 10px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.t-code{background:var(--code);color:var(--codeink)} .t-ai{background:var(--ai);color:var(--aiink)}
+.t-data{background:var(--data);color:var(--dataink)} .t-app{background:var(--app);color:var(--appink)}
+.t-who{background:var(--who);color:var(--sub)}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+
+/* 큰 그림 */
+.big{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:stretch}
+.lane h3{margin:0 0 8px;font-size:15px}
+.lane ul{margin:0;padding-left:18px} .lane li{margin:2px 0}
+.lane.app{border-top:4px solid var(--appink)} .lane.srv{border-top:4px solid var(--codeink)} .lane.ai{border-top:4px solid var(--aiink)}
+.arrow-row{display:flex;justify-content:space-around;color:var(--sub);font-size:13px;margin:6px 0}
+
+/* 흐름 */
+.flow{position:relative;margin:0;padding:0;list-style:none}
+.flow>li{position:relative;padding:0 0 14px 44px}
+.flow>li::before{content:attr(data-n);position:absolute;left:0;top:2px;width:30px;height:30px;border-radius:50%;background:var(--card);border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.flow>li::after{content:"";position:absolute;left:15px;top:34px;bottom:0;width:2px;background:var(--line)}
+.flow>li:last-child::after{display:none}
+.step{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.step b.t{font-size:15.5px}
+.step p{margin:4px 0 6px}
+.step .tags{display:flex;flex-wrap:wrap;gap:6px}
+.step.hasai{border-left:4px solid var(--aiink)}
+
+/* AI 표 */
+.ai-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.aic{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;border-top:4px solid var(--aiink)}
+.aic h3{margin:0 0 2px;font-size:16px}
+.aic .when{color:var(--sub);font-size:13.5px;margin:0 0 8px}
+.io{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:14px}
+.io dt{font-weight:700;color:var(--sub)} .io dd{margin:0}
+.meter{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);font-size:13.5px}
+code{font:12.5px/1.4 ui-monospace,Consolas,monospace;background:var(--who);padding:1px 5px;border-radius:5px}
+.weight{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;color:var(--sub)}
+.bar{flex:1;height:8px;border-radius:4px;background:var(--who);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--aiink)}
+
+/* 한 판 */
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.sum .n{font-size:28px;font-weight:800}
+.sum .l{color:var(--sub);font-size:13.5px}
+
+/* 총정리 예 */
+.rv{display:grid;grid-template-columns:minmax(0,1fr);gap:10px} .rv>*,.mini{min-width:0}
+.rv .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mini{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card)}
+.mini .k{font-size:12px;color:var(--sub);font-weight:700}
+.weakbig{border:2px solid var(--aiink);border-radius:12px;padding:10px 12px;background:var(--ai)}
+.weaksm{border:1px solid var(--aiink);border-radius:10px;padding:8px 12px}
+.codeblk{font:12.5px/1.45 ui-monospace,Consolas,monospace;background:#1e2330;color:#e6e6e6;border-radius:8px;padding:8px 10px;white-space:pre;overflow-x:auto}
+.codeblk.bad{color:#ff9b8f}
+
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);border-radius:12px;overflow:hidden}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--who);font-size:13px}
+.scroll{overflow-x:auto}
+.note{color:var(--sub);font-size:13.5px}
+@media (max-width:760px){ .big{grid-template-columns:1fr} .rv .two{grid-template-columns:1fr} h1{font-size:22px} }
+</style>
+</head>
+<body>
+<main>
+<h1>실습은 이렇게 돌아가요</h1>
+<p class="lead">학습자가 직접 만들고, 튜터(AI)가 옆에서 도와요. 막힌 것과 푼 방법은 <b>코드가</b> 적고, 목표 하나가 끝나면 <b>AI가 한 번</b> 정리해요. 2026-11-12 기준 · D</p>
+<div class="legend">
+  <span class="tag t-who">학습자</span><span class="tag t-code">코드가 함 (AI 없음)</span><span class="tag t-ai">AI 호출</span><span class="tag t-data">저장</span><span class="tag t-app">앱(3000)</span>
+</div>
+
+<h2>큰 그림: 세 곳</h2>
+<div class="big">
+  <div class="box lane app"><h3>앱 · 127.0.0.1:3000</h3>
+    <ul><li>공부 → 실습 화면</li><li>기억 → 기억 도서관</li><li>기억 저장소(A)</li><li><code>/api/project-course/*</code>로 실습 서버를 부름</li></ul></div>
+  <div class="box lane srv"><h3>실습 서버 · 4100</h3>
+    <ul><li>목표 · 로드맵 · 다이얼</li><li>막힌 순간 · 타임라인 · 부족함 원장</li><li>저장본 · 터미널 기록</li><li>도서관에 보여 줄 것 모으기</li></ul></div>
+  <div class="box lane ai"><h3>AI · ChatGPT 로그인</h3>
+    <ul><li>모델 <b>gpt-6.1-terra · low</b></li><li>튜터 대화 (OpenCode)</li><li>판정 · 목표 정리 · 다시 확인 채점</li><li>앱과 같은 로그인을 읽기만</li></ul></div>
+</div>
+<div class="arrow-row"><span>← 화면 · 기억 넣기 →</span><span>← 부르고 받기 →</span></div>
+<p class="note">편집기: 학습자 VS Code(확장 <code>vscode-bridge</code>) 또는 앱 안 편집기(4103). 저장과 터미널 명령이 실습 서버로 알려져요.</p>
+
+<h2>한 판의 흐름</h2>
+<ol class="flow">
+  <li data-n="1"><div class="step hasai"><b class="t">시작: 무엇을 만들지 말해요</b>
+    <p>튜터가 몇 가지 묻고 로드맵(목표 여러 개)을 제안해요. 학습자가 고르면 첫 목표가 시작돼요.</p>
+    <div class="tags"><span class="tag t-ai">① 튜터 대화</span><span class="tag t-code">목표 도구로만 상태 바꿈</span><span class="tag t-data">goals/&lt;run&gt;.json</span></div></div></li>
+  <li data-n="2"><div class="step hasai"><b class="t">만들면서 물어요</b>
+    <p>튜터는 파일을 읽고, 작은 코드 조각을 돌려 보고(4초), 공식 문서 6곳에서 찾아 답해요. 답을 바로 주지 않고 어디를 볼지 짚어요.</p>
+    <div class="tags"><span class="tag t-ai">① 튜터 대화 · 질문마다 1번</span><span class="tag t-data">agent-chat/</span></div></div></li>
+  <li data-n="3"><div class="step"><b class="t">저장하면 저장본이 남아요</b>
+    <p>나중에 "그때 코드"를 지어내지 않으려고 남겨요. 자동 확인이 켜져 있으면 튜터가 짧게 확인해요(①이 1번 더).</p>
+    <div class="tags"><span class="tag t-code">저장본 · 앞뒤 차이</span><span class="tag t-data">goals/&lt;run&gt;.saves.jsonl</span></div></div></li>
+  <li data-n="4"><div class="step"><b class="t">막히면 "막힌 순간"이 열려요</b>
+    <p>명령 실패 · 틀림 판정 · [너무 어려워요]로 열리고, 같은 명령 성공 · 맞음으로 닫혀요. 몇 번 물었나, 튜터가 고쳤나, 어떻게 풀렸나(혼자 · 힌트 · 코드 보고 · 튜터가 고쳐 줌)는 코드가 세요.</p>
+    <div class="tags"><span class="tag t-code">moments.ts</span><span class="tag t-data">moments/&lt;run&gt;.json</span></div></div></li>
+  <li data-n="5"><div class="step hasai"><b class="t">[해 봤어요] → 판정</b>
+    <p>완료 조건과 학습자가 한 것(마지막 말 · 저장한 파일 · 터미널 결과)만 비교해요. 틀리면 부족함 원장에 올라가요.</p>
+    <div class="tags"><span class="tag t-ai">② 판정</span><span class="tag t-code">원장 반영</span><span class="tag t-data">gaps/</span></div></div></li>
+  <li data-n="6"><div class="step hasai"><b class="t">[다음으로] → 목표 정리</b>
+    <p>이 목표 동안의 대화 · 저장본 차이 · 터미널 · 막힌 순간을 모아 AI가 <b>한 번</b> 정리해요. 배운 것 카드 · 메모리 바꿀 것 · 총정리(약점 카드)가 나와요. 코드는 기록에 있던 것만 남겨요.</p>
+    <div class="tags"><span class="tag t-ai">③ 목표 정리</span><span class="tag t-code">코드 · 결과 대조 검사</span><span class="tag t-data">goals/&lt;run&gt;.records.json</span></div></div></li>
+  <li data-n="7"><div class="step hasai"><b class="t">하다가 나가면 "진행 중"</b>
+    <p>손 놓고 15분 · 다른 실습으로 옮김 · 새 실습 시작 때 그때까지로 정리해요. 새 말이 없으면 다시 부르지 않아요. 기억에는 안 넣어요.</p>
+    <div class="tags"><span class="tag t-ai">③ 목표 정리(진행 중)</span><span class="tag t-data">goals/&lt;run&gt;.ongoing.json</span></div></div></li>
+  <li data-n="8"><div class="step"><b class="t">학습 종료 → 앱 기억으로</b>
+    <p>실습 서버는 "아직 안 보낸 것"만 내주고, 앱이 기억 저장소에 넣은 뒤 넣은 열쇠를 돌려줘요. 실습 서버는 앱 데이터에 직접 쓰지 않아요.</p>
+    <div class="tags"><span class="tag t-code">sync.ts</span><span class="tag t-app">knowledge/api.ts saveMany</span><span class="tag t-data">sync/&lt;run&gt;.json</span></div></div></li>
+  <li data-n="9"><div class="step"><b class="t">기억 도서관에서 다시 봐요</b>
+    <p>목표마다 총정리, 만든 것(실행 결과), 장면 원문. 저장된 것을 보여 주기만 하고 <b>AI를 부르지 않아요</b>. 아래 채팅만 앱의 기억 묻기를 써요.</p>
+    <div class="tags"><span class="tag t-code">library.ts</span><span class="tag t-app">Library.tsx</span></div></div></li>
+</ol>
+
+<h2>AI 호출 네 가지</h2>
+<div class="ai-grid">
+  <div class="aic"><h3>① 튜터 대화</h3><p class="when">학습자가 말할 때 · 저장 확인 때 · <code>lib/oc-engine.ts</code></p>
+    <dl class="io"><dt>입력</dt><dd>고정 지시문 + 이번 차례 맥락(지금 목표 · 선행 · 다이얼 · 학습자 메모리) + 대화를 뒤에 이어 붙임</dd>
+    <dt>출력</dt><dd>답 글 + 도구 호출(파일 읽기 · 고치기, 코드 조각 실행, 문서 찾기, 목표 바꾸기)</dd></dl>
+    <div class="meter">terra · low · 답 하나 <b>3~4초</b>(중간값 3.4초)<br>입력 약 <b>5,100토큰</b>, 그중 약 39% 캐시 · 24,000토큰 넘으면 요약 후 새 대화</div>
+    <div class="weight">한 판 비중<span class="bar"><i style="width:55%"></i></span>가장 자주</div></div>
+  <div class="aic"><h3>② 판정</h3><p class="when">[해 봤어요] · <code>lib/judge.ts</code></p>
+    <dl class="io"><dt>입력</dt><dd>완료 조건 · 튜터가 낸 과제 · 과제가 가리키는 코드 · 학습자 마지막 말 · 저장 파일 최신본(200줄) · 터미널 5개</dd>
+    <dt>출력</dt><dd>맞음 / 일부 / 틀림 · 맞은 것 · 빈 곳 · 비어 있는 선행</dd></dl>
+    <div class="meter">terra · low · <b>약 3~5초</b></div>
+    <div class="weight">한 판 비중<span class="bar"><i style="width:10%"></i></span>목표마다 1~2번</div></div>
+  <div class="aic"><h3>③ 목표 정리 · 총정리</h3><p class="when">[다음으로] · 학습 종료 · 진행 중 · <code>lib/goal-record.ts</code></p>
+    <dl class="io"><dt>입력</dt><dd>목표 · 완료 조건 · 학습자 메모리 · 이 목표 동안 대화와 저장본 차이(시간순, 6만 자까지) · 터미널 8개 · 막힌 순간 8개 · 부족함 원장 · 이미 쓴 지식 이름</dd>
+    <dt>출력</dt><dd>한 줄 정리 · 배운 것 카드 · 메모리 바꿀 것 · 총정리(하려던 일 · 까닭 · 이야기 3~12문단 · 약점 카드)</dd></dl>
+    <div class="meter">terra · low · 제한 180초, 넘으면 한 번 다시<br>옛 모양 5.6~6.5초. 새 총정리는 <b>실측 전</b> — B의 비슷한 모양: 85초 · 입력 9.6k · 출력 4.6k토큰(API였다면 약 $0.03)</div>
+    <div class="weight">한 판 비중<span class="bar"><i style="width:30%"></i></span>목표마다 1번, 가장 무거움</div></div>
+  <div class="aic"><h3>④ 다시 확인 채점</h3><p class="when">복습에서 다시 확인 문항에 답할 때 · <code>lib/gaps.ts</code></p>
+    <dl class="io"><dt>입력</dt><dd>문항 · 모범답 · 예전에 잘못 알았던 것 · 학습자 답</dd>
+    <dt>출력</dt><dd>맞음 / 일부 / 틀림 · 같은 실수인지 · 한 줄</dd></dl>
+    <div class="meter">terra · low · 짧은 호출</div>
+    <div class="weight">한 판 비중<span class="bar"><i style="width:5%"></i></span>복습 때만</div></div>
+</div>
+<p class="note">꺼 둔 것: 질문마다 배운 것 뽑기(<code>chat-learned</code>, 11/5부터 목표 정리로 바꿈). <code>lib/evals.ts</code>는 실험용 채점이라 제품 흐름에 없어요. 호출 수 <code>.data/ai-usage.json</code>, 원문 · 토큰 <code>.data/prompts/</code>.</p>
+
+<h2>실습 한 판에 드는 양 (예)</h2>
+<div class="sum">
+  <div class="box"><div class="n">약 32번</div><div class="l">① 튜터 대화 — 목표 4개 × 질문 8번</div></div>
+  <div class="box"><div class="n">4번</div><div class="l">② 판정 — 목표마다 [해 봤어요] 1번</div></div>
+  <div class="box"><div class="n">4~5번</div><div class="l">③ 목표 정리 — 목표마다 1번 (+진행 중)</div></div>
+  <div class="box"><div class="n">0번</div><div class="l">도서관 보기 — 저장된 것만 보여 줌</div></div>
+</div>
+<p class="note">정리는 한 번 만들면 저장해요. 옛 모양을 새 모양으로 바꿀 때만 [목표마다 다시 정리 (AI n번)]으로 다시 불러요.</p>
+
+<h2>총정리는 이렇게 보여요</h2>
+<div class="box rv">
+  <div class="two">
+    <div class="mini"><div class="k">하려던 일</div>글을 띄어쓰기로 나눠 단어를 하나씩 살펴보려 했어요.</div>
+    <div class="mini"><div class="k">이렇게 하면 돼요</div>split()은 글을 공백 기준으로 잘라 단어 리스트를 돌려줘요.</div>
+  </div>
+  <div class="mini">공백으로 글을 나누는 방법을 몰라서 한 글자씩 살펴야 하는지 물었어요.</div>
+  <div class="weakbig"><span class="tag t-ai">핵심 약점</span> <b>글을 단어로 나누는 split</b><br><span class="note">지금 내 상태 —</span> 글자 하나하나를 돌며 공백을 찾아야 한다고 생각해요.<br><span class="note">제대로 알아보기 —</span> 왜 필요한지 · 작은 예 · 흔한 착각 · 이번 일에서 쓰는 법</div>
+  <div class="mini">text.split처럼 괄호 없이 썼다가 TypeError가 났어요.
+    <div class="codeblk">for w in text.split:
+    print(w)</div>
+    <div class="codeblk bad">TypeError: 'builtin_function_or_method' object is not iterable</div></div>
+  <div class="weaksm"><b>메서드는 괄호로 부른다</b> — 이름만 쓰면 기능을 가리킬 뿐, <code>text.split()</code>처럼 불러야 실행돼요.</div>
+  <p class="note">깐깐하게(도움 받고 넘어갔으면 모르는 것) · 묶지 않고 드러난 때마다 · 종류 칸 없음 · 코드와 화면은 기록에 있던 것만.</p>
+</div>
+
+<h2>코드가 맡는 것 (AI 없음)</h2>
+<div class="scroll"><table>
+<tr><th>무엇</th><th>파일</th><th>저장</th></tr>
+<tr><td>목표 · 로드맵 · 다이얼 · 선행 덩어리</td><td><code>lib/goals.ts</code></td><td><code>goals/&lt;run&gt;.json</code></td></tr>
+<tr><td>막힌 순간 열고 닫기 · 어떻게 풀렸나</td><td><code>lib/moments.ts</code></td><td><code>moments/</code></td></tr>
+<tr><td>한 차례마다 무엇이 바뀌었나</td><td><code>lib/timeline.ts</code></td><td><code>goals/&lt;run&gt;.timeline.jsonl</code></td></tr>
+<tr><td>부족함 원장 · 다시 확인 날짜</td><td><code>lib/gaps.ts</code></td><td><code>gaps/</code></td></tr>
+<tr><td>터미널 명령 · 결과</td><td><code>lib/shell.ts</code></td><td><code>shell/</code></td></tr>
+<tr><td>총정리 코드 · 결과 대조</td><td><code>goal-record.ts cleanReview</code></td><td>—</td></tr>
+<tr><td>진행 중 정리 시점(15분 · 옮김)</td><td><code>lib/ongoing.ts</code></td><td><code>goals/&lt;run&gt;.ongoing.json</code></td></tr>
+<tr><td>도서관에 보일 것 모으기</td><td><code>lib/library.ts</code></td><td>—</td></tr>
+<tr><td>앱 기억으로 보낼 것</td><td><code>lib/sync.ts</code></td><td><code>sync/</code></td></tr>
+<tr><td>사람 하나의 학습 기록</td><td><code>lib/history.ts</code></td><td><code>history.jsonl</code></td></tr>
+</table></div>
+<p class="note">저장 위치는 모두 <code>experiments/project-course/.data/</code>(깃에 안 올라감). 글로 된 설명: <code>docs/실습_파이프라인.md</code>.</p>
+</main>
+</body>
+</html>
