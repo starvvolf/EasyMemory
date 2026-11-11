@@ -348,9 +348,12 @@ export async function answer(a: Answer) {
   const still = (await readJson<Pending[]>("pending.json", [])).find((p) => p.number === a.number);
   if (still) {
     const subs = (await readSubmissions(m.problemId ?? problemIdOf(a.number)).catch(() => [])).filter((s) => s.mode === "submit" && s.at >= still.startedAt);
-    if (subs.length) await record({ kind: "implement", number: a.number, patterns: [still.pattern], ability: "execute", ok: false, hinted: subs.some((s) => s.hints > 0), mixed: still.mixed,
-      grade: gradeOf(events, a.number, "execute", { mixed: still.mixed }), detail: `제출 ${subs.length}번, 맞히지 못함` }, m,
-      { situation: `BOJ ${a.number} ${m.title}를 혼자 구현하다 제출 ${subs.length}번 모두 틀리고 그만둠`, gap: "끝까지 짜지 못했어요", fix: m.update, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
+    // 그만둘 때도 도움을 셈한다(11/11 점검): 뼈대에서 시작했거나 도움 칸·AI 힌트를 썼으면 "도움 받고 틀림"이지 "혼자 틀림"이 아니다.
+    const rungs = events.filter((e) => e.kind === "help" && e.number === a.number && e.at >= still.startedAt).map((e) => e.help ?? 0);
+    const help = Math.max(still.fill ? 4 : 0, subs.some((s) => s.hints > 0) ? 4 : 0, ...rungs) as 0 | 1 | 2 | 3 | 4;
+    if (subs.length) await record({ kind: "implement", number: a.number, patterns: [still.pattern], ability: "execute", ok: false, hinted: help > 0, ...(help ? { help } : {}), ...(still.fill ? { fill: true } : {}), ...(still.redo ? { redo: true } : {}), mixed: still.mixed,
+      grade: gradeOf(events, a.number, "execute", { hinted: help > 0, mixed: still.mixed }), detail: `제출 ${subs.length}번, 맞히지 못함${help ? ` · 도움 ${help}칸` : ""}` }, m,
+      { situation: `BOJ ${a.number} ${m.title}를 ${still.fill ? "뼈대 코드에서 채우다" : help ? `도움 ${help}칸까지 받고도` : "혼자 구현하다"} 제출 ${subs.length}번 모두 틀리고 그만둠`, gap: "끝까지 짜지 못했어요", fix: m.update, cue: m.signals[0] ?? "", distinguish: distinguishOf(m) });
     await writeJson("pending.json", (await readJson<Pending[]>("pending.json", [])).filter((p) => p.number !== a.number));
   }
   return { ok: false };
