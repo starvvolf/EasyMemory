@@ -98,7 +98,7 @@ test("도움 다이얼 · 받아 쓴 것(11/11): 다이얼은 AI 없이 바뀌�
   assert.match(await GO.goalContext(run), /\[선행 — 미리 묻지 않는다\]/);
   const r = await GO.goalAction(run, "help", { help: "fast" });
   assert.equal(r, null); // 튜터를 부르지 않는다
-  assert.match(await GO.goalContext(run), /\[도움 정도: 빨리 만들기\]/);
+  assert.match(await GO.goalContext(run), /\[도움 정도: 빨리 만들기/);
   await GO.runGoalTool(run, "new_names", { names: [{ name: "const", what: "값에 이름 붙이기", example: "const a = 1", from: "JavaScript 기본" }, { name: "=>", what: "짧은 함수", example: "(x) => x + 1", from: "javascript  기본" }] }, []);
   assert.doesNotMatch(await GO.goalContext(run), /\[자꾸 걸림\]/);
   await GO.runGoalTool(run, "new_names", { names: [{ name: "map", what: "배열을 바꿔 새 배열로", example: "xs.map(f)", from: "JavaScript 기본" }, { name: "useState", what: "화면이 기억할 값", example: "useState(0)" }] }, []);
@@ -107,4 +107,16 @@ test("도움 다이얼 · 받아 쓴 것(11/11): 다이얼은 AI 없이 바뀌�
   assert.match(await GO.goalContext(run), /\[자꾸 걸림\] "JavaScript 기본"에서 받아 쓴 것이 3개/);
   assert.doesNotMatch(await GO.goalContext(run), /\[자꾸 걸림\]/); // 한 번만
   assert.deepEqual(GO.prereqBrief(await GO.goalsOf(run))[0].debts, ["const", "=>", "map"]);
+});
+
+test("[깊이](11/11 점검): 스스로 몰라요로 표시한 덩어리는 '목표를 낮추자'를 부르지 않고, 막혀서 드러난 것만 센다", async () => {
+  const run = "rd";
+  await GO.runGoalTool(run, "propose_plan", { long: "React 앱", spec: "", mode: "topdown", map: ["화면", "목록"],
+    first: { title: "화면 띄우기", done: "제목이 보인다", prereqs: [{ name: "JavaScript 기본", check: "?" }, { name: "HTML/CSS", check: "?" }, { name: "Node와 npm", check: "?" }] } }, []);
+  await GO.goalAction(run, "confirm", {});
+  await GO.setBaseSelf(run, "JavaScript 기본", "비어 있음"); await GO.setBaseSelf(run, "HTML/CSS", "비어 있음");
+  assert.doesNotMatch(await GO.goalContext(run), /\[깊이\]/);
+  await GO.runGoalTool(run, "check_prereq", { name: "Node와 npm", result: "비어 있음", quote: "npm이 뭔지 몰라요" }, ["npm이 뭔지 몰라요"]);
+  await GO.runGoalTool(run, "check_prereq", { name: "JavaScript 기본", result: "비어 있음", quote: "map이 뭐예요" }, ["map이 뭐예요"]);
+  assert.match(await GO.goalContext(run), /\[깊이\]/);
 });

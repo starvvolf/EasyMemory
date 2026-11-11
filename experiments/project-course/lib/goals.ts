@@ -30,7 +30,7 @@ export const HELP_LABEL: Record<Help, string> = { self: "스스로", together: "
 const HELP_RULE: Record<Help, string> = {
   self: "[도움 정도: 스스로] 학습자가 직접 하고 싶어 한다. 방향과 생각할 거리만 주고 코드 · 답은 쓰지 않는다(달라고 하면 그 순간만 준다). 정해진 이름 · 문법은 이름만 알려 준다.",
   together: "[도움 정도: 같이] 틀(빈칸 · 뼈대 · 순서)은 주고 핵심은 학습자가 채우게 한다. 두 번 해도 안 되면 그 부분을 보여 주고 왜 그런지 한 줄로 설명한다.",
-  fast: "[도움 정도: 빨리 만들기] 학습자는 빨리 만들면서 설명을 듣고 싶어 한다. 되묻지 말고 필요한 코드를 바로 파일에 쓰고(고치기 허용일 때, 아니면 채팅에) 줄마다 무엇을 하는지 짧게 설명한다. 확인 문항 · 적용 과제를 강요하지 않는다(학습자가 원하면 한다).",
+  fast: "[도움 정도: 빨리 만들기 — 아래 [학습자가 물을 때]의 '고치는 법은 묻기 전까지 말하지 않는다'보다 이것이 우선] 학습자는 빨리 만들면서 설명을 듣고 싶어 한다. 되묻지 말고 필요한 코드를 바로 파일에 쓰고(고치기 허용일 때, 아니면 채팅에) 줄마다 무엇을 하는지 짧게 설명한다. 확인 문항 · 적용 과제를 강요하지 않는다(학습자가 원하면 한다).",
 };
 /** 새 이름(11/11 사용자 "문법 같이 머릿속으로 생각하기 힘든 거는 그냥 알려 주는 게 맞는"): 과제에 쓰는 정해진 이름(함수 · 명령 · 문법 · 파일 이름). seen = 학습자가 펼쳐 봄 */
 export type NewName = { name: string; what: string; example: string; seen?: boolean; from?: string };
@@ -101,7 +101,7 @@ export const GOAL_TOOLS = [
     properties: { names: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: str, what: str, example: str, from: str }, required: ["name", "what", "example"] } } }, required: ["names"] },
   { name: "set_prereqs", description: "현재 목표의 선행 목록을 새로 적는다(지금 목표에 선행이 비어 있을 때, 또는 목표를 다듬어 선행이 달라졌을 때). 이미 확인한 결과는 같은 이름이면 남는다. " + PREREQ_SPEC,
     properties: { prereqs: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: str, check: str }, required: ["name", "check"] } } }, required: ["prereqs"] },
-  { name: "check_prereq", description: "선행 하나를 학습자에게 확인한 결과를 적는다. 확인 문항에 학습자가 답한 뒤에 쓴다. result는 됨 · 비어 있음, quote는 그 판단의 근거가 된 학습자 말을 글자 그대로. 비어 있으면 Recaller가 부족함으로 잡고, 튜터는 그 선행을 지금 목표의 코드 · 상황으로 짧게 채우거나(plan_support) 이어 간다.",
+  { name: "check_prereq", description: "선행 덩어리 하나가 됐는지 · 비었는지 드러난 결과를 적는다. 미리 묻지 않고, 학습자가 막히거나 틀렸을 때 그 원인이 선행 덩어리로 드러났거나 학습자가 스스로 말했을 때 쓴다. result는 됨 · 비어 있음, quote는 그 판단의 근거가 된 학습자 말을 글자 그대로. 비어 있으면 Recaller가 부족함으로 잡고, 튜터는 그 선행을 지금 목표의 코드 · 상황으로 짧게 채우거나(plan_support) 이어 간다.",
     properties: { name: str, result: { type: "string", enum: ["됨", "비어 있음"] }, quote: str }, required: ["name", "result", "quote"] },
   { name: "plan_support", description: "보충 로드맵을 짠다. 학습자가 [너무 어려워요]로 어려운 점을 보냈을 때, 또는 학습자 말에서 막힘이 분명할 때(why_quote에 그 말을 글자 그대로). 원래 로드맵은 잠시 보관되고, 보충 로드맵의 종착지는 막힌 지금 단계다(따로 넣지 않는다). steps는 거기 닿는 데 필요한 작은 보충 단계 1~4개(각각 title과 완료 조건 done). 먼저 알 것 지도에 비어 있는 항목이 있으면 그것부터, 기대는 순서(아래 항목 먼저)로 지금 목표에 필요한 만큼만 채운다. 보충 중에 다시 부르면 끝낸 보충은 두고 남은 보충을 이 steps로 바꾼다.",
     properties: { steps: { type: "array", items: { type: "object", additionalProperties: false, properties: { title: str, done: str }, required: ["title", "done"] } }, why_quote: str }, required: ["steps", "why_quote"] },
@@ -289,7 +289,7 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
       logIt(g, "prereq", `${nm}: ${result}`);
       checked = { goal: c.title, name: nm, result, quote: q };
       if (result === "비어 있음") prereqGap = { goal: { id: c.id, title: c.title }, name: nm, quote: q };
-      const empties = Math.max(c.prereqs.filter((x) => x.result === "비어 있음").length, baseFor(g).filter((x) => x.result === "비어 있음").length);
+      const empties = Math.max(c.prereqs.filter((x) => x.result === "비어 있음" && x.by !== "학습자").length, baseFor(g).filter((x) => x.result === "비어 있음" && x.by !== "학습자").length);
       out = result === "됨" ? `선행 "${nm}" 됨으로 적었어요.` : `선행 "${nm}"이(가) 비어 있다고 적었어요(부족함으로 잡힘). 지금 목표의 코드 · 상황으로 짧게 채우거나 plan_support로 보충을 짜세요.${empties >= 2 ? " 이 목표에서 비어 있는 선행이 2개 이상이에요. 계속 내려가기보다 목표를 낮추거나 기초부터 깔고 올라가는 지도로 바꾸자고 학습자에게 제안하세요." : ""}`;
     } else if (name === "plan_support") {
       const q = s(input.why_quote, 300);
@@ -552,7 +552,7 @@ async function goalContextBody(runId: string) {
     c && !c.prereqs?.length && !S && !awaitingNext(g) ? "[선행 비어 있음] 이 목표의 선행이 아직 없다. 이번 답에서 다른 것보다 먼저 set_prereqs로 이 목표의 선행을 적는다." : "",
     c ? PREREQ_RULE : "",
     // 너무 깊이 내려감(11/10): 코드가 조건을 보고 그때만 한 줄
-    c && ((S?.round ?? 0) >= 3 || (c.prereqs ?? []).filter((p) => p.result === "비어 있음").length >= 2 || baseFor(g).filter((b) => b.result === "비어 있음").length >= 2) ? "[깊이] 이 목표에서 보충을 여러 번 짰거나 비어 있는 선행이 2개 이상이다. 계속 아래로 내려가기보다, 목표를 낮추거나 기초부터 깔고 올라가는 지도(update_map)로 바꾸자고 학습자에게 한 번 제안한다." : "",
+    c && ((S?.round ?? 0) >= 3 || (c.prereqs ?? []).filter((p) => p.result === "비어 있음" && p.by !== "학습자").length >= 2 || baseFor(g).filter((b) => b.result === "비어 있음" && b.by !== "학습자").length >= 2) ? "[깊이] 이 목표에서 보충을 여러 번 짰거나 비어 있는 선행이 2개 이상이다. 계속 아래로 내려가기보다, 목표를 낮추거나 기초부터 깔고 올라가는 지도(update_map)로 바꾸자고 학습자에게 한 번 제안한다." : "",
     sp ? `지금 보충: ${sp.title} — 완료 조건: ${sp.done} · 단계: ${!sp.understood ? "① 이해 중" : !sp.applied ? "② 적용 중" : "적용까지 끝"}. 끝나면 다음 보충(없으면 종착지)으로 간다. 지금은 보충에 집중한다.` : "",
     g.survey ? "지금 화면에 질문을 띄워 두었다 — 학습자 답을 기다린다." : "",
     (() => { const r = g.log.slice(-12); const e = r.filter((l) => l.kind === "easy").length, h = r.filter((l) => l.kind === "stuck").length; return e || h ? `최근 학습자 표시: 너무 쉬움 ${e}번 · 너무 어려움 ${h}번 — 설명 수준을 여기에 맞춘다.` : ""; })(),
