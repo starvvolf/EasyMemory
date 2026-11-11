@@ -3,7 +3,7 @@
 // and the learner's state on each. Page reading is for the first pass; this is for the second pass and the night before.
 // Data: GET /api/study-map/<material> (src/lib/study/material-map.ts). Opened from the PDF reader's bar.
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { call, errorText, go } from "./api";
+import { call, errorText } from "./api";
 import { Rich as RichBlock, RichInline as Rich } from "./Rich";
 
 type Shape =
