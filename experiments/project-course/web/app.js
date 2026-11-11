@@ -3,6 +3,8 @@
 const $ = (s, el = document) => el.querySelector(s);
 // VS Code 오른쪽 탭 안에서 열릴 때(?embed=1): 위쪽 바와 VS Code 열기 버튼을 빼고 좁은 폭에 맞춘다.
 const EMBED = new URLSearchParams(location.search).has("embed");
+// 앱 안 편집기 화면의 오른쪽 튜터(11/11): 장기 · 지금 목표는 앱 위 띠에 있으니 여기서는 버튼만 남긴다
+const STUDIO = new URLSearchParams(location.search).has("studio");
 if (EMBED) {
   const root = document.documentElement;
   const q = new URLSearchParams(location.search);
@@ -1608,11 +1610,11 @@ function drawFree() {
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
     // 제목은 한 줄 전체를 쓰고, 길면 … (2026-11-06 사용자 "제목한테 가로줄 하나주고 길면 ..."). 전체 제목은 마우스를 올리면 보인다.
-    h("div", { class: "fhtitle", title: lesson.chat ? (lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일" }, h("b", {}, lesson.chat ? (lesson.goals?.current?.title ?? lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · ${lesson.chat.engine === "codex" ? "Codex" : "기존"} 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
+    h("div", { class: "fhtitle", title: lesson.chat ? (lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일" }, h("b", {}, STUDIO && lesson.chat ? "튜터" : lesson.chat ? (lesson.goals?.current?.title ?? lesson.goals?.long?.text ?? "새 대화") : run.course?.title ?? "프리스타일"), h("span", { class: "mut small" }, lesson.chat ? ` · ${lesson.chat.engine === "codex" ? "Codex" : "기존"} 엔진${lesson.chat.focus ? ` · 초점: ${lesson.chat.focus}` : ""}${lesson.chat.support.length ? ` · 보충: ${lesson.chat.support.join(" › ")}` : ""}` : " · 프리스타일")),
     lesson.chat ? modelPick(run, lesson) : null,
     h("button", { class: "fib", title: "대화 목록", "aria-label": "대화 목록", onclick: () => go_("#/home") }, icon("home")),
     h("button", { class: "btn small", title: "새 대화", onclick: () => go_("#/home") }, "+ 새 대화"),
-    lesson.chat ? h("button", { class: "btn small", title: "행동마다 상태가 어떻게 바뀌었는지 기록 보기", onclick: () => go(`#/timeline/${run.id}`) }, "기록") : null,
+    lesson.chat ? h("button", { class: "btn small", title: "행동마다 상태가 어떻게 바뀌었는지 기록 보기", onclick: () => go_(`#/timeline/${run.id}`) }, "기록") : null,
     lesson.goals?.long ? h("button", { class: "btn small", title: "하던 목표를 정리하고(배운 것 · 부족했던 점 · 학습자 메모리) 앱 지식으로 넣은 뒤 끝내요", disabled: lesson.busy, onclick: () => endLearning(run) }, "학습 종료") : null,
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
@@ -1648,6 +1650,15 @@ function goalBar(lesson, send) {
   const op = (o, extra = {}) => send({ do: "goal", op: o, ...extra });
   const mark = { done: "✓", skipped: "↷", doing: "▶", todo: "" };
   const c = g.current, S = g.support, sp = S && !S.back ? S.steps.find((x) => x.status === "doing") : null;
+  if (STUDIO) { // 제목 · 완료 조건 · 로드맵은 위 띠(마우스를 올리면 완료 조건)에. 여기는 지금 할 버튼과 새 이름만
+    const t = sp ?? c;
+    if (!t) return null;
+    return h("div", { class: "gbar gslim" }, !sp && c.names?.length ? namesBox(c.names, send) : null,
+      h("div", { class: "grow2" },
+        !t.understood ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 직접 해 볼 과제를 내요", onclick: op("understood") }, "이해했어요 → 적용하기")
+          : !t.applied ? h("button", { class: "btn small primary", disabled: lesson.busy, title: "튜터가 완료 조건에 맞게 했는지 판정해요. 맞으면 다음으로 가요", onclick: op("applied") }, "해 봤어요") : null,
+        sp ? null : h("button", { class: `btn small ${c.understood && c.applied ? "primary" : ""}`, disabled: lesson.busy, title: c.understood && c.applied ? "" : "이해 · 적용을 다 안 해도 넘어갈 수 있어요(건너뜀으로 남아요)", onclick: op("next") }, "다음으로 →")));
+  }
   // 11/6 사용자 "지금만 보이게 하고 장기 목표는 눌러서 보게": 장기 목표 · 로드맵은 접어 두고 한 줄 버튼으로 연다
   const prog = g.progress.total ? `${g.progress.done}/${g.progress.total}` : `해 본 것 ${g.progress.done}개`;
   const fold = h("button", { class: "gfold", "aria-expanded": String(goalUi.showLong), onclick: () => { goalUi.showLong = !goalUi.showLong; drawLesson(); } },

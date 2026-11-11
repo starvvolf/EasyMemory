@@ -135,7 +135,7 @@ export default function ProjectStudio({ run, courseUrl, onClose }: { run: Run; c
           <div className={`pst-grip ${drag ? "on" : ""}`} onPointerDown={startDrag} role="separator" aria-label="편집기와 튜터 사이 크기 바꾸기" />
           <aside className={`pst-side pst-right ${theme}`} style={{ width: tutorW }}>
             <button className="pst-fold" onClick={() => setRightOpen(false)} title="튜터 칸 접기" aria-label="튜터 칸 접기">⟩</button>
-            <iframe title="튜터" src={`${courseUrl}/?embed=1&theme=${theme}#/run/${run.id}`} allow="clipboard-read; clipboard-write" className={drag ? "nopt" : ""} />
+            <iframe title="튜터" src={`${courseUrl}/?embed=1&studio=1&theme=${theme}#/run/${run.id}`} allow="clipboard-read; clipboard-write" className={drag ? "nopt" : ""} />
           </aside>
         </> : <button className="pst-rail" onClick={() => setRightOpen(true)} title="튜터 칸 열기" aria-label="튜터 칸 열기">⟨ 튜터</button>}
         </div>
