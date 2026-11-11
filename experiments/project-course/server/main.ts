@@ -329,6 +329,14 @@ const routes: [string, RegExp, Handler][] = [
   ["POST", /^\/api\/dev\/rerecord\/(\w+)$/, async (_q, m) => (await import("../lib/lesson.ts")).rerecordWithLedger(m[1])],
   // 나의 학습 노트(11/10): local=1이면 이 컴퓨터 것만(앱이 받아 앱 데이터에 둔다), 아니면 다른 컴퓨터 것까지 합친 네 칸
   ["GET", /^\/api\/learner-note$/, async (q) => { const L = await import("../lib/learner-note.ts"); return new URL(q.url ?? "/", "http://x").searchParams.get("local") ? L.localNote() : L.learnerNote(); }],
+  // 앱 안 편집기 위 띠(11/11 사용자 "위에 남은 공간에 장기 목표 단기 목표"): 짧은 목표 상태만(AI 없음)
+  ["GET", /^\/api\/runs\/(\w+)\/goals-brief$/, async (_q, m) => {
+    await getRun(m[1]);
+    const g = await (await import("../lib/goals.ts")).goalsOf(m[1]);
+    const sp = g.support && !g.support.back ? g.support.steps.find((x) => x.status === "doing") : null;
+    return { long: g.long?.text ?? null, mode: g.mode, current: g.current ? { title: g.current.title, done: g.current.done, understood: g.current.understood, applied: g.current.applied } : null,
+      support: sp ? { title: sp.title, target: g.support!.target.title } : null, map: g.map.filter((x) => !x.support).map((x) => ({ title: x.title, status: x.status })) };
+  }],
   ["GET", /^\/api\/runs\/(\w+)\/note$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/gaps.ts")).sessionNote(m[1]); }],
   ["POST", /^\/api\/bridge\/answer$/, async (req) => { const b = await body(req); return (await import("../lib/bridge.ts")).bridgeAnswer(String(b.id ?? ""), b.result ?? null); }],
   ["POST", /^\/api\/bridge\/state$/, async (req) => { const b = await body(req) as Record<string, never>; await getRun(String(b.runId)); const { runId, ...state } = b; bridgeSetState(runId, state); return { ok: true }; }],

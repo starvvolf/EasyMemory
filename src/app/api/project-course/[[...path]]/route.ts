@@ -114,6 +114,7 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "runs" && p[1] && p.length === 3 && m === "POST" && (p[2] === "editor" || p[2] === "activate")) {
       return NextResponse.json(await course(`runs/${runId.parse(p[1])}/${p[2]}`, { method: "POST", body: {} }));
     }
+    if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "goals-brief" && m === "GET") return NextResponse.json(await course(`runs/${runId.parse(p[1])}/goals-brief`));
     // 새 실습(11/11 사용자 "새 실습 뭐 이어지게 옵션"): 코스 없는 빈 대화 실습 하나를 만들고 앱 안 편집기로 연다(VS Code · 튜터 창은 안 띄움)
     if (p[0] === "free" && p.length === 1 && m === "POST") return NextResponse.json(await course("free", { method: "POST", body: { courseId: "hello-api", course: "none", open: false, float: false } }));
     // 앱 안 편집기(11/11): 상태(받기 전이면 크기) · 받기 · 실습 폴더를 연 편집기 주소(켜는 데 몇십 초 걸릴 수 있다)

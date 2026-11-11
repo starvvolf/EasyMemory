@@ -1283,7 +1283,16 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .fc-donetitle{margin:0;font-size:19px;font-weight:700}
 /* 앱 안 편집기 화면 (ProjectStudio, 11/11 D): 앱 머리 아래 세 칸 — 왼쪽 Recaller 칸 · 가운데 편집기 · 오른쪽 튜터. 칸마다 둥근 판, 사이 틈 */
 .dejipgi .pst-host{min-height:60vh}
-.dejipgi .pst{position:fixed;left:10px;right:10px;bottom:10px;display:flex;gap:8px;z-index:30;min-width:0}
+.dejipgi .pst{position:fixed;left:6px;right:10px;bottom:10px;display:flex;flex-direction:column;gap:8px;z-index:30;min-width:0;background:var(--ground, #f2f3f6);padding-top:2px}
+.dejipgi .pst-body{flex:1;display:flex;gap:8px;min-height:0;min-width:0}
+.dejipgi .pst-top{flex:none;display:flex;align-items:center;gap:10px;min-width:0;padding:4px 10px;min-height:40px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.dejipgi .pst-goal{display:flex;align-items:baseline;gap:6px;min-width:0;max-width:38%;font-size:13px}
+.dejipgi .pst-goal.now{max-width:44%}
+.dejipgi .pst-k{flex:none;font-size:11px;color:var(--muted, #888)}
+.dejipgi .pst-v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dejipgi .pst-phase{flex:none;font-size:11px;padding:0 6px;border-radius:99px;background:rgba(107,140,255,.15);color:var(--accent, #6b8cff)}
+.dejipgi .pst-steps{flex:none;font-size:11.5px;color:var(--muted, #888);cursor:help}
+.dejipgi .pst-msg{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dejipgi .pst-side,.dejipgi .pst-main{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:0;position:relative}
 .dejipgi .pst-main{flex:1;background:#1f1f1f;display:flex}
 .dejipgi .pst-main iframe,.dejipgi .pst-right iframe{border:0;width:100%;height:100%;display:block}
