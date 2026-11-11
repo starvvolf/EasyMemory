@@ -24,7 +24,7 @@ export type Limits = { cpuMs: number; memMb: number };
 const OUTPUT_CAP = 8_000_000;
 
 /** Run one program: stdin in, stdout/stderr out, killed (with its children) after `timeMs`. */
-export async function execute(cmd: string, args: string[], options: { cwd: string; input?: string; timeMs: number; env?: Record<string, string>; limits?: Limits }): Promise<Exec> {
+export async function execute(cmd: string, args: string[], options: { cwd: string; input?: string; timeMs: number; env?: Record<string, string>; limits?: Limits; outputCap?: number }): Promise<Exec> {
   const helper = options.limits ? await jobrun() : null;
   if (!helper || !options.limits) return spawnOnce(cmd, args, options);
   const stats = path.join(options.cwd, `job-${randomBytes(4).toString("hex")}.json`);
@@ -37,7 +37,7 @@ export async function execute(cmd: string, args: string[], options: { cwd: strin
   } catch { return out; } // killed by the wall clock before it could write
 }
 
-function spawnOnce(cmd: string, args: string[], options: { cwd: string; input?: string; timeMs: number; env?: Record<string, string> }): Promise<Exec> {
+function spawnOnce(cmd: string, args: string[], options: { cwd: string; input?: string; timeMs: number; env?: Record<string, string>; outputCap?: number }): Promise<Exec> {
   return new Promise((resolve) => {
     const started = Date.now();
     let stdout = "", stderr = "", timedOut = false, tooMuch = false, settled = false;
@@ -52,13 +52,13 @@ function spawnOnce(cmd: string, args: string[], options: { cwd: string; input?: 
     const timer = setTimeout(() => { timedOut = true; kill(); }, options.timeMs);
     const take = (chunk: Buffer, into: "out" | "err") => {
       if (into === "out") stdout += chunk.toString("utf8"); else stderr += chunk.toString("utf8");
-      if (stdout.length + stderr.length > OUTPUT_CAP) { tooMuch = true; kill(); }
+      if (stdout.length + stderr.length > (options.outputCap ?? OUTPUT_CAP)) { tooMuch = true; kill(); }
     };
     child.stdout.on("data", (c: Buffer) => take(c, "out"));
     child.stderr.on("data", (c: Buffer) => take(c, "err"));
     const done = (code: number | null, failedToStart?: string) => {
       if (settled) return; settled = true; clearTimeout(timer);
-      resolve({ stdout: stdout.slice(0, OUTPUT_CAP), stderr: stderr.slice(0, 20_000), code, timedOut, tooMuch, ms: Date.now() - started, ...(failedToStart ? { failedToStart } : {}) });
+      resolve({ stdout: stdout.slice(0, options.outputCap ?? OUTPUT_CAP), stderr: stderr.slice(0, 20_000), code, timedOut, tooMuch, ms: Date.now() - started, ...(failedToStart ? { failedToStart } : {}) });
     };
     child.on("error", (error) => done(null, error.message));
     child.on("close", (code) => done(code));
@@ -257,7 +257,10 @@ export async function judge(lang: Lang, code: string, tests: TestCase[], options
     const hard = limitsFor(limit, memory, lang, options.calibration);
     let measured = true;
     for (const [index, test] of tests.entries()) {
-      const out = await execute(prepared.cmd, prepared.args, { cwd: prepared.dir, input: test.input, timeMs: hard.wallMs, limits: { cpuMs: hard.cpuMs, memMb: hard.memMb }, ...(prepared.env ? { env: prepared.env } : {}) });
+      // 출력 상한(11/11 시험): 정답 출력 자체가 8MB에 가까운 문제(2751, 100만 줄)는 맞는 코드도 "출력이 너무 많아요"로 런타임 에러가 됐다.
+      // 정답 출력의 두 배까지는 받는다(최소 8MB).
+      const outputCap = Math.max(OUTPUT_CAP, test.output.length * 2 + 100_000);
+      const out = await execute(prepared.cmd, prepared.args, { cwd: prepared.dir, input: test.input, timeMs: hard.wallMs, limits: { cpuMs: hard.cpuMs, memMb: hard.memMb }, outputCap, ...(prepared.env ? { env: prepared.env } : {}) });
       const u = out.usage ? { ...out.usage, ...effectiveUsage(out.usage, lang, options.calibration) } : undefined;
       if (!u) measured = false;
       // Without measurements (not Windows) the wall clock is all there is, held to the time limit itself.
