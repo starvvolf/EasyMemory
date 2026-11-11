@@ -17,7 +17,7 @@ import { confirmLesson, readLessons } from "@/lib/code/tutor/lessons";
 import { readEvents } from "@/lib/code/tutor/state";
 import { LANGS } from "@/lib/code/run";
 import { readModels } from "@/lib/code/tutor/problem-model";
-import { readTalk } from "@/lib/code/tutor/talk";
+import { readTalkWithNotes } from "@/lib/code/tutor/talk";
 
 export const runtime = "nodejs";
 const num = z.string().regex(/^\d{1,6}$/);
@@ -48,12 +48,12 @@ async function handle(request: Request, context: RouteContext) {
         const models = await readModels();
         return NextResponse.json({ entries: await journal(Object.fromEntries(Object.values(models).map((m) => [m.number, m.title]))) });
       }
-      // 대화 장부(11/11): 문제 화면에서 AI와 주고받은 원문, 시간순. ?problem=<문제 id> 또는 ?number=<백준 번호>.
+      // 대화 장부(11/11): 문제 화면에서 AI와 주고받은 원문, 시간순. 한 번마다 두 줄 요약(note: 무엇을 몰랐나 · AI가 준 것)을 붙인다(없으면 AI 1번). ?problem=<문제 id> 또는 ?number=<백준 번호>.
       if (p[0] === "talk" && request.method === "GET") {
         const q = new URL(request.url).searchParams;
         const problem = q.get("problem")?.trim(), number = q.get("number")?.trim();
         if (!problem && !number) return NextResponse.json({ message: "problem이나 number가 필요해요." }, { status: 400 });
-        return NextResponse.json({ items: await readTalk({ ...(problem ? { problemId: problem } : {}), ...(number && /^\d{1,6}$/.test(number) ? { number } : {}) }) });
+        return NextResponse.json({ items: await readTalkWithNotes({ ...(problem ? { problemId: problem } : {}), ...(number && /^\d{1,6}$/.test(number) ? { number } : {}) }) });
       }
       if (p[0] === "logs" && request.method === "GET") {
         const [models, events, lessons] = await Promise.all([readModels(), readEvents(), readLessons()]);

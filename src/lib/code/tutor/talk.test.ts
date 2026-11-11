@@ -22,3 +22,10 @@ test("대화 장부: 원문 그대로 덧붙이고, 문제·번호로 시간순�
     assert.equal((await readTalk({ problemId: "cp_y" }))[0].number, undefined, "번호를 모르면 비움");
   } finally { process.env.STUDY_FORGE_DATA_DIR = prior; }
 });
+
+test("대화 요약 확인: 빈 칸은 버리고, 코드 덩어리는 빼고, 길이는 자른다", async () => {
+  const { checkNote } = await import("./talk.ts");
+  assert.equal(checkNote({ need: "", gave: "x" }), null);
+  assert.deepEqual(checkNote({ need: " for에 정수를 넣으면 될 줄 알았어요 ", gave: "range(t)를 써요 ```py\nfor i in range(t): pass\n```" }), { need: "for에 정수를 넣으면 될 줄 알았어요", gave: "range(t)를 써요" });
+  assert.equal(checkNote({ need: "가".repeat(200), gave: "나" })!.need.length, 80);
+});
