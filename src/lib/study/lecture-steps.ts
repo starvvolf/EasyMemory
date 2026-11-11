@@ -90,7 +90,7 @@ async function lectureOf(id: string) {
   lectures.set(id, l);
   return l;
 }
-const cardText = (c: MapCard) => [`[${c.id}] ${c.title} (${c.kind}, ${c.memo?.role ?? (c.core ? "메인" : "바탕")}, p.${c.pages.join(",")})`, c.memo?.line ? `  요지: ${c.memo.line}` : "", ...(c.memo?.facts ?? []).map((f) => `  식·조건: ${f}`)].filter(Boolean).join("\n");
+const cardText = (c: MapCard) => [`[${c.id}] ${c.title} (${c.kind}, ${c.memo?.role ?? (c.core ? "메인" : "바탕")}, p.${c.pages.join(",")})`, c.memo?.answer ? `  답: ${c.memo.answer.replace(/\n+/g, " / ")}` : c.memo?.line ? `  요지: ${c.memo.line}` : "", ...(c.memo?.facts ?? []).map((f) => `  식·조건: ${f}`)].filter(Boolean).join("\n");
 
 function history(l: LectureSteps, upto: string, titles: Map<string, string>) {
   const idx = l.order.indexOf(upto);

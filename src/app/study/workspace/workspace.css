@@ -1501,3 +1501,8 @@ html .dejipgi[data-view="code"] .wrap{max-width:1520px}
 @media (max-width:560px){.dejipgi .st-row{grid-template-columns:1fr}.dejipgi .st-line{white-space:normal}}
 .dejipgi .st-facts{margin:2px 0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:2px}
 .dejipgi .st-quotes{display:flex;flex-wrap:wrap;gap:4px 10px}
+/* 질문 하나 · 답 하나 카드의 답(11/11): 여러 줄 · 표 · 식이 그대로 */
+.dejipgi .mm3-ans{align-items:flex-start}
+.dejipgi .mm3-ans>.ws-rich{flex:1;min-width:0}
+.dejipgi .mm3-ans>.ws-rich p{margin:0 0 4px}
+.dejipgi .mm3-ans>.ws-rich p:last-child{margin-bottom:0}

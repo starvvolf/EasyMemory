@@ -20,7 +20,7 @@ type MapState = "new" | "met" | "unknown" | "known" | "graduated";
 type Card = { id: string; ref: string; kind: string; title: string; core: boolean; shape: Shape; pages: number[]; quotes: string[]; mistakes: string[];
   takes: string[]; gives: string[]; questions: number; same: Array<{ id: string; pages: number[] }>; state: MapState; knowledgeId?: string; dueAt?: string; topic?: string;
   figure?: { page: number; role: string; says: string; file: string; mode?: string };
-  memo?: { question?: string; line?: string; idea?: string; facts?: string[]; details?: string[]; role?: string } };
+  memo?: { question?: string; line?: string; answer?: string; idea?: string; facts?: string[]; details?: string[]; role?: string } };
 type Section = { id: string; title: string; pages: number[]; cards: Card[] };
 type MatMap = { id: string; title: string; status: string; pages: number; sections: Section[]; chains: Array<{ from: string; to: string; what: string; by?: string }>;
   topics?: string[]; topicNotes?: Record<string, string>; principles?: Array<{ title: string; line: string; cardIds: string[] }>; counts: Record<MapState, number> & { cards: number; questions: number; core?: number };
@@ -539,6 +539,10 @@ function LectureFig({ genId, label, says }: { genId: string; label: string; says
     <figcaption className="small muted">{says}</figcaption></figure>;
 }
 /** 자세히(11/11): 외울 핵심은 아닌 참고 — 눌러야 보인다. */
+/** 질문 하나 · 답 하나 카드의 답(11/11 lab.cardQA): 한 줄이면 한 줄, 단계·식·표가 있으면 그 모양 그대로(마크다운) */
+function Answer({ text }: { text: string }) {
+  return <div className="lc3-ca mm3-a mm3-ans"><span className="lc3-qtag a">A</span><RichBlock text={text} /></div>;
+}
 function CardDetails({ items }: { items?: string[] }) {
   const [open, setOpen] = useState(false);
   if (!items?.length) return null;
@@ -556,7 +560,7 @@ function LectureCard({ genId, c, onPage, startOpen = false }: { genId: string; c
         {c.memo?.line ? <span className="lc3-ca"><Rich text={c.memo.line} /></span> : null}</span>
       <span className="lc3-chev" aria-hidden>›</span>
     </button>
-    {open ? <div className="lc3-cardbody">{c.memo?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={c.memo.idea} /></div> : null}<Body s={c.shape} />{c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+    {open ? <div className="lc3-cardbody">{c.memo?.answer ? <Answer text={c.memo.answer} /> : <>{c.memo?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={c.memo.idea} /></div> : null}<Body s={c.shape} /></>}{c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
       <CardDetails items={c.memo?.details} />
       <FigureView genId={genId} c={c} onPage={onPage} />
       <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div></div> : null}</div>;
@@ -786,10 +790,11 @@ function FlashCards({ genId, title, cards, onPage, onClose }: { genId: string; t
       <p className="fc-name"><Rich text={c.title} /></p>
       <p className="fc-q">{m?.question ? <Rich text={m.question} /> : <>이 기억을 떠올려 보세요</>}</p>
       {shown ? <div className="fc-back">
+        {m?.answer ? <Answer text={m.answer} /> : <>
         {m?.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}
         {m?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={m.idea} /></div> : null}
         <Body s={c.shape} />
-        {m?.facts?.length ? <ul className="st-facts">{m.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+        {m?.facts?.length ? <ul className="st-facts">{m.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}</>}
         <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
       </div> : null}
     </section>
@@ -1156,10 +1161,10 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                         {c.memo ? <div className="mm3-front"><p className="mm3-ftitle"><Rich text={c.title} /></p>
                           {c.memo.question || c.memo.line ? <div className="mm3-qa">
                             {c.memo.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={c.memo.question} /></p> : null}
-                            {c.memo.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={c.memo.line} /></p> : null}</div> : null}
-                          {c.memo.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={c.memo.idea} /></div> : null}</div> : null}
-                        <Body s={c.shape} />
-                        {c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+                            {c.memo.answer ? <Answer text={c.memo.answer} /> : c.memo.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={c.memo.line} /></p> : null}</div> : null}
+                          {!c.memo.answer && c.memo.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={c.memo.idea} /></div> : null}</div> : null}
+                        {c.memo?.answer ? null : <Body s={c.shape} />}
+                        {!c.memo?.answer && c.memo?.facts?.length ? <ul className="st-facts">{c.memo.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
                         <CardDetails items={c.memo?.details} />
                         <FigureView genId={genId} c={c} onPage={onPage} all={everyCard} onCard={jump} />
                         {links.length ? <div className="mm3-rel"><span className="mm3-tag">이어지는 기억</span>
@@ -1205,10 +1210,10 @@ function ShelfCard({ genId, c, onPage, onHistory, all, onCard }: { genId: string
     {open ? <div className="shelf-card">
       {m?.question || m?.line ? <div className="mm3-qa">
         {m?.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={m.question} /></p> : null}
-        {m?.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}</div> : null}
-      {m?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={m.idea} /></div> : null}
-      <Body s={c.shape} />
-      {m?.facts?.length ? <ul className="st-facts">{m.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
+        {m?.answer ? <Answer text={m.answer} /> : m?.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}</div> : null}
+      {!m?.answer && m?.idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={m.idea} /></div> : null}
+      {m?.answer ? null : <Body s={c.shape} />}
+      {!m?.answer && m?.facts?.length ? <ul className="st-facts">{m.facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
       <CardDetails items={m?.details} />
       <FigureView genId={genId} c={c} onPage={onPage} all={all} onCard={onCard} />
       <div className="shelf-foot"><span className="small muted">{STATE[c.state][0]}{c.dueAt ? ` · 다음 복습 ${new Date(c.dueAt).getMonth() + 1}/${new Date(c.dueAt).getDate()}` : ""}</span><span className="cs-gap" />

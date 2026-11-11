@@ -8,7 +8,7 @@ import type { ModelRequest } from "../../ai/model.ts";
 import type { AuthoredQuestion } from "../../../../tools/problem-authoring-lab/contract.ts";
 import { checkSteps, evaluate, formatValue, plainValue, sameValue, stepScope, type Step } from "./calc.ts";
 import { imageSize } from "./image-size.ts";
-import { addMore, fillGroups, HEADING_TERMS, memoryCard, missingPages, settlePlan, STEM_FILL, STEM_MORE, STEM_PLAN, stemFakeReply, stemFillSchema, stemPlanSchema, type StemRole } from "./stem.ts";
+import { addMore, fillGroups, HEADING_TERMS, memoryCard, memoryCardQA, missingPages, settlePlan, STEM_FILL, STEM_FILL_QA, STEM_MORE, STEM_PLAN, stemFakeReply, stemFillQASchema, stemFillSchema, stemPlanSchema, type StemFill, type StemFillQA, type StemRole } from "./stem.ts";
 import { cardKinds, cardLine, cardSchema, checkCards, cleanFigure, FIGURE_RULES, figureSchema, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
 import { RunawayReply } from "./astra.ts";
@@ -988,8 +988,11 @@ export async function runRecaller(ctx: RecallerContext) {
     let left = group;
     for (let attempt = 1; attempt <= 2 && left.length; attempt++) {
       const user = `[자료] ${input.fileName}\n영역: ${section.title}${data.digest?.stem?.questions[section.id] ? ` — ${data.digest.stem.questions[section.id]}` : ""}\n\n[기억 계획] (id|역할|모양|이름|쪽)\n${left.map((m) => `${m.line.id}|${m.role}|${m.kind}|${m.line.name}|p.${m.pages.join(",")}`).join("\n")}\n\n${pages.map((p) => `[p.${p}]\n${(data.texts[p] ?? "").trim() || "(글자 없음)"}`).join("\n\n")}`;
-      let reply: z.infer<typeof stemFillSchema>;
-      try { reply = await ctx.ask("rc-stem-fill", section.id, attempt, `${prompt("STEM_FILL", STEM_FILL)}${lab.headingTerms ? HEADING_TERMS : ""}${images.length ? `\n${INLINE_READ}` : ""}`, user, stemFillSchema, { maxChars: 3000 * left.length + 4000, ...(images.length ? { images } : {}), cacheKey: `recaller-stemfill-${(data.pdfHash ?? state.id).slice(0, 16)}` }); }
+      // lab.cardQA (11/11): 칸 없이 질문 하나 · 답 하나
+      let reply: { memories: Array<StemFill["memories"][number] | StemFillQA["memories"][number]> };
+      try { reply = lab.cardQA
+        ? await ctx.ask("rc-stem-fill", section.id, attempt, `${prompt("STEM_FILL_QA", STEM_FILL_QA)}${lab.headingTerms ? HEADING_TERMS : ""}${images.length ? `\n${INLINE_READ}` : ""}`, user, stemFillQASchema, { maxChars: 3000 * left.length + 4000, ...(images.length ? { images } : {}), cacheKey: `recaller-stemfillqa-${(data.pdfHash ?? state.id).slice(0, 16)}` })
+        : await ctx.ask("rc-stem-fill", section.id, attempt, `${prompt("STEM_FILL", STEM_FILL)}${lab.headingTerms ? HEADING_TERMS : ""}${images.length ? `\n${INLINE_READ}` : ""}`, user, stemFillSchema, { maxChars: 3000 * left.length + 4000, ...(images.length ? { images } : {}), cacheKey: `recaller-stemfill-${(data.pdfHash ?? state.id).slice(0, 16)}` }); }
       catch (error) { if (error instanceof RunawayReply) continue; throw error; }
       const done = new Set<string>();
       for (const f of reply.memories) {
@@ -997,7 +1000,7 @@ export async function runRecaller(ctx: RecallerContext) {
         if (!m || done.has(m.line.id)) continue;
         done.add(m.line.id);
         const id = `${section.id}.m${m.line.id.split("-b")[1] ?? out.length + 1}`;
-        const card = memoryCard(id, m.role, f, pages);
+        const card = "answer" in f ? memoryCardQA(id, m.role, f, pages) : memoryCard(id, m.role, f, pages);
         // 글자 층에 없는 인용은 그림에서 읽은 것으로 본다(lenientQuotes처럼 빈 인용으로).
         card.evidence = card.evidence.map((e) => e.quote && !flat(texts.get(e.page) ?? "").includes(flat(e.quote)) ? { ...e, quote: "" } : e);
         const figure = lab.figures ? cleanFigure(f.figure, pages, (n) => sizes.get(n)) : undefined;

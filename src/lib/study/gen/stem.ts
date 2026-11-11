@@ -66,6 +66,37 @@ export const stemFillSchema = z.object({
   })),
 });
 export type StemFill = z.infer<typeof stemFillSchema>;
+// 질문 하나 · 답 하나 (11/11 사용자 "칸으로 접근하면 빡이야 — 한 줄로 설명 가능한 게 있잖아", lab.cardQA): 칸(한 줄·풀이·모양·덧붙임)을 채우게 하면
+// 정의 한 문장짜리 기억도 칸 수만큼 같은 말을 바꿔 썼다(교착 상태 카드: 답·풀이·주장이 같은 정의). 카드를 질문 + 답 하나로, 답 길이는 내용이 정한다.
+export const STEM_FILL_QA = `강의 자료 몇 쪽(원문 [p.N]과 쪽 그림)과, 이 쪽들에서 학습자가 외울 기억의 계획(이름·모양·역할)을 받는다. 기억마다 카드 한 장을 쓴다.
+카드는 질문 하나와 답 하나다. 학습자는 질문을 보고 떠올린 뒤 답을 보고 맞춰 본다.
+- memory: 받은 기억 id 그대로. title: 받은 이름(더 맞는 자료의 말이 있으면 고쳐도 된다). kind: 받은 모양(원문을 보니 다른 모양이 맞으면 바꿔도 된다).
+- question: 이 기억에서 떠올려야 할 것 하나를 묻는 질문 한 줄. 기억 이름이 가리키는 것을 묻는다. 두 가지를 한꺼번에 묻지 않는다.
+- answer: 그 질문의 답. 처음 보는 사람이 이 답 하나만 읽고 질문에 답할 수 있게, 원문이 이 기억에서 말하는 핵심을 빠짐없이 쓴다.
+  - 길이는 내용이 정한다. 한 문장으로 다 말해지면 한 문장으로 끝낸다. 같은 말을 다른 말로 다시 쓰지 않는다.
+  - 내용에 모양이 있으면 답 안에 그 모양 그대로 쓴다: 절차는 번호 단계(1. 2. 3.), 공식은 식($…$)과 기호의 뜻, 그리고 식이 말로 무엇을 뜻하는지(무엇이 커지면 무엇이 어떻게 되는지) 한 줄, 비교는 마크다운 표, 목록은 항목(- ). 조건·경우·경계가 결과를 바꾸면 답에 넣는다.
+  - 쉬운 말로 쓴다. 식은 원문 그대로. 원문에 없는 사실은 넣지 않는다.
+- more: 알면 좋지만 외울 핵심은 아닌 참고(유도 과정, 표의 개별 값, 구현 세부, 배경). 답에 쓴 것은 다시 쓰지 않는다. 없으면 빈 배열.
+- evidence: 이 기억을 원문에서 확인할 구절 {page, quote: 원문 그대로}. 그림에서 읽은 것이면 그림 속 글을 쓴다.
+- mistakes: 학습자가 실제로 할 법한 틀린 생각(원문으로 분명할 때만, 없으면 빈 배열). 화면에 안 보이고 문제를 만들 때 쓴다.
+- takes·gives: 이 지식을 쓰려면 주어져야 하는 것, 쓰면 나오는 것(자료의 말로, 계산·판정·절차에 쓰이지 않으면 빈 배열).
+- figure: 이 기억을 가장 잘 보여 주는 그림이 쪽 이미지에 있으면 {page, box: [x0, y0, x1, y1] 쪽의 가로·세로를 0~100으로 본 퍼센트(이미지 픽셀이 아님), role: 근거(그림에서 읽은 내용) · 장면(쓰이는 장면·예) · 그림풀이(글을 그림으로), says: 그림이 보여 주는 것 한 줄}. 없으면 null.
+- 바탕·곁 기억은 어디에 쓰이는지가 보이게 짧게.`;
+export const stemFillQASchema = z.object({
+  memories: z.array(z.object({
+    memory: z.string(), title: z.string().trim().min(1), kind: z.enum(cardKinds), question: z.string(), answer: z.string(), more: z.array(z.string()),
+    evidence: z.array(z.object({ page: z.number().int(), quote: z.string() })), mistakes: z.array(z.string()), takes: z.array(z.string()), gives: z.array(z.string()), figure: figureSchema.nullable(),
+  })),
+});
+export type StemFillQA = z.infer<typeof stemFillQASchema>;
+/** 답의 첫 줄(목록 줄에 보일 한 줄): 마크다운 표시·번호를 떼고, 표·식만 있으면 이름 대신 첫 글. */
+export const firstLine = (answer: string) => (answer.split("\n").map((l) => l.replace(/^\s*(?:[-*]|\d+[.)]|#+|\|)\s*/, "").replace(/\*\*/g, "").trim()).find((l) => l && !/^[-|:\s]+$/.test(l)) ?? "");
+/** 질문·답 카드 → 엔진 카드(모양은 "사실" 한 칸에 답을 넣어 둔다 — 모양을 읽는 출제·강의·기억 저장소가 그대로 돈다). */
+export function memoryCardQA(id: string, role: StemRole, f: StemFillQA["memories"][number], pages: number[]): Card & { memo: CardMemo } {
+  const answer = f.answer.trim();
+  return memoryCard(id, role, { memory: f.memory, title: f.title, kind: "사실", question: f.question, line: firstLine(answer), idea: "", shape: { form: "fact", subject: f.title.trim(), value: answer },
+    facts: [], details: f.more, evidence: f.evidence, mistakes: f.mistakes, takes: f.takes, gives: f.gives, figure: f.figure }, pages, f.kind, answer);
+}
 
 /** 코드가 다듬는다: 영역 번호가 틀린 기억은 앞 기억의 영역으로, 쪽은 입력 안의 것만, 같은 이름은 하나로(쪽을 합침). */
 export function settlePlan(plan: StemPlan, pageNumbers: number[]) {
@@ -119,13 +150,13 @@ export function fillGroups<T extends { pages: number[] }>(memories: T[], maxPage
 
 const formKind = Object.fromEntries(Object.entries(kindForm).map(([k, f]) => [f, k])) as Record<string, CardKind>;
 /** 채운 기억 → 엔진 카드 한 장(모양과 종류가 어긋나면 모양을 따른다, 근거 쪽은 그 묶음 쪽만). */
-export function memoryCard(id: string, role: StemRole, f: StemFill["memories"][number], pages: number[]): Card & { memo: CardMemo } {
-  const kind = kindForm[f.kind] === f.shape.form ? f.kind : formKind[f.shape.form] ?? f.kind;
+export function memoryCard(id: string, role: StemRole, f: StemFill["memories"][number], pages: number[], kindAs?: CardKind, answer?: string): Card & { memo: CardMemo } {
+  const kind = kindAs ?? (kindForm[f.kind] === f.shape.form ? f.kind : formKind[f.shape.form] ?? f.kind);
   const evidence = f.evidence.filter((e) => pages.includes(e.page)).map((e) => ({ page: e.page, quote: e.quote.trim() }));
   return { id, kind, title: f.title.trim(), weight: role === "메인" ? "핵심" : "보조", shape: f.shape,
     evidence: evidence.length ? evidence : [{ page: pages[0], quote: "" }],
     mistakes: f.mistakes.map((x) => x.trim()).filter(Boolean), links: [], takes: f.takes.map((x) => x.trim()).filter(Boolean), gives: f.gives.map((x) => x.trim()).filter(Boolean),
-    memo: { question: f.question.trim(), line: f.line.trim(), ...(f.idea?.trim() ? { idea: f.idea.trim() } : {}), facts: f.facts.map((x) => x.trim()).filter(Boolean), details: (f.details ?? []).map((x) => x.trim()).filter(Boolean), role } };
+    memo: { question: f.question.trim(), line: f.line.trim(), ...(answer ? { answer } : {}), ...(f.idea?.trim() ? { idea: f.idea.trim() } : {}), facts: f.facts.map((x) => x.trim()).filter(Boolean), details: (f.details ?? []).map((x) => x.trim()).filter(Boolean), role } };
 }
 
 /** 가짜 답(테스트·fake provider). */
@@ -138,7 +169,7 @@ export function stemFakeReply(step: string, user: string): string | undefined {
   if (step === "rc-stem-fill") {
     const ids = [...user.matchAll(/^(t\d+-b\d+)\|/gm)].map((m) => m[1]);
     const page = Number(/\[p\.(\d+)\]/.exec(user)?.[1] ?? 1);
-    return JSON.stringify({ memories: ids.map((id) => ({ memory: id, title: `${id} 기억`, kind: "사실", question: "무엇인가?", line: "요지", idea: "", shape: { form: "fact", subject: id, value: "값" },
+    return JSON.stringify({ memories: ids.map((id) => ({ memory: id, title: `${id} 기억`, kind: "사실", question: "무엇인가?", line: "요지", answer: "요지 한 줄", more: [], idea: "", shape: { form: "fact", subject: id, value: "값" },
       facts: [], details: [], evidence: [{ page, quote: "" }], mistakes: [], takes: [], gives: [], figure: null })) });
   }
   return undefined;

@@ -108,6 +108,8 @@ export type RecallerLab = {
   consolidate?: boolean;
   /** 줄기 먼저 (11/10, stem.ts): 목차 호출 자리에 줄기 계획, 주제별 카드 대신 기억 채우기(기억 하나 = 카드 한 장). 정리·흐름 카드·목차 글 없음. */
   stem?: boolean;
+  /** 기억 카드를 질문 하나 · 답 하나로(11/11, stem.ts STEM_FILL_QA) */
+  cardQA?: boolean;
   /** 줄기 모드에서 강의 소제목의 용어를 기억 이름에 남기기 (11/10 실험 옵션, stem.ts HEADING_TERMS). */
   headingTerms?: boolean;
   /** 빠른 전처리: read and draw pages in this many worker processes in one pass (a drawing crash ends a worker, not the server). */

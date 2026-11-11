@@ -91,7 +91,7 @@ export function designInput(map: MaterialMap, structure: Structure | null, goals
   const cards = map.sections.flatMap((s) => s.cards).filter((c) => !c.title.startsWith("흐름: ") && c.memo?.role !== "곁");
   const num = new Map(cards.map((c, i) => [c.id, i + 1]));
   const lines = cards.map((c, i) => [`${i + 1}|${c.memo?.role ?? (c.core ? "메인" : "보조")}|${c.kind}|${c.title}`,
-    c.memo?.line ? `  요지: ${c.memo.line}` : `  ${line(c)}`,
+    c.memo?.answer ? `  답: ${c.memo.answer.replace(/\n+/g, " / ")}` : c.memo?.line ? `  요지: ${c.memo.line}` : `  ${line(c)}`,
     ...(c.memo?.facts ?? []).map((f) => `  식·조건: ${f}`), ...(c.memo?.details ?? []).map((f) => `  참고: ${f}`),
     ...(c.mistakes ?? []).map((m) => `  헷갈림: ${m}`)].join("\n"));
   const rel = [...(structure?.versus ?? []).map((v) => `대비 ${num.get(v.a)} vs ${num.get(v.b)}: ${v.on}`), ...(structure?.pairs ?? []).map((p) => `짝 ${num.get(p.a)} — ${num.get(p.b)}: ${p.why}`)]
