@@ -248,9 +248,31 @@ type JEntry = { at: string; number: string; title: string; what: string; result:
 const STUCK: Record<string, string> = { understand: "문제 이해", recognize: "방법 떠올리기", design: "계획 세우기", execute: "코드로 옮기기" };
 const REDO: Record<string, string> = { none: "", waiting: "혼자 다시 풀기 · 기다리는 중", due: "혼자 다시 풀 차례", done: "혼자 다시 풀었어요" };
 const JRES: Record<string, string> = { alone: "ok", helped: "", learned: "bad", seen: "", other: "" };
+type PubProblem = { title: string; statement: string; inputText: string; outputText: string; examples: Array<{ input: string; output: string }>; timeLimitMs?: number; memoryLimitMb?: number };
+type SubLite = { id: string; at: string; lang: string; mode: "example" | "submit"; verdict: string; passed: number; total: number; hints: number; lines: number };
+const VERDICT: Record<string, string> = { AC: "맞았습니다", WA: "틀렸습니다", TLE: "시간 초과", MLE: "메모리 초과", RE: "런타임 에러", CE: "컴파일 에러", MISSING: "실행기 없음" };
+/** 문제 원문: 접어 두고 펼치면 본문 · 입력 · 출력 · 예제 */
+function Statement({ p }: { p: PubProblem }) {
+  return <details className="rp-src"><summary>문제 원문{p.timeLimitMs ? <span className="small muted"> · 시간 {p.timeLimitMs / 1000}초{p.memoryLimitMb ? ` · 메모리 ${p.memoryLimitMb}MB` : ""}</span> : null}</summary>
+    <div className="rp-srcb"><Rich text={p.statement} />{p.inputText ? <><p className="eyebrow">입력</p><Rich text={p.inputText} /></> : null}{p.outputText ? <><p className="eyebrow">출력</p><Rich text={p.outputText} /></> : null}
+      {p.examples.map((x, i) => <div key={i} className="rp-ex"><div><p className="eyebrow">예제 입력 {i + 1}</p><pre className="lib-diff">{x.input}</pre></div><div><p className="eyebrow">예제 출력 {i + 1}</p><pre className="lib-diff">{x.output}</pre></div></div>)}</div></details>;
+}
+/** 제출 하나: 누르면 그때 낸 코드 */
+function SubRow({ pid, s }: { pid: string; s: SubLite }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const toggle = () => { setOpen(!open); if (code === null) call<{ submission: { code: string } }>(`/api/code/problem/${pid}/submission/${s.id}`).then((r) => setCode(r.submission.code)).catch(() => setCode("(코드를 못 불러왔어요)")); };
+  const ok = s.verdict === "AC";
+  return <li className={ok ? "ok" : "bad"}><button className="rp-sub" onClick={toggle} aria-expanded={open}><span className="rp-t">{day(s.at)} {hm(s.at)}</span><b>{s.mode === "example" ? "예제 실행" : "제출"}</b>
+    <span className={`lib-res ${ok ? "ok" : "bad"}`}>{VERDICT[s.verdict] ?? s.verdict}</span><span className="small muted">{s.passed}/{s.total} · {s.lang} · {s.lines}줄{s.hints ? ` · 힌트 ${s.hints}` : ""}</span><span className="small muted">{open ? "▴" : "▾"}</span></button>
+    {open ? <pre className="lib-diff">{code ?? "불러오는 중…"}</pre> : null}</li>;
+}
 function SolveView({ log }: { log: SolveLog }) {
   const [js, setJs] = useState<JEntry[] | null>(null);
+  const [prob, setProb] = useState<{ problem: PubProblem; submissions: SubLite[] } | null | false>(null);
+  const pid = /^\d+$/.test(log.number) ? `cp_boj_${log.number}` : "";
   useEffect(() => later(() => { call<{ entries: JEntry[] }>("/api/code/tutor/journal").then((r) => setJs(r.entries.filter((x) => x.number === log.number).sort((a, b) => a.at.localeCompare(b.at)))).catch(() => setJs([])); }), [log.number]);
+  useEffect(() => later(() => { setProb(null); if (!pid) { setProb(false); return; } call<{ problem: PubProblem; submissions: SubLite[] }>(`/api/code/problem/${pid}`).then(setProb).catch(() => setProb(false)); }), [pid]);
   const verdict = log.alone ? ["처음부터 혼자 풂", "ok"] : log.solved ? ["도움 받고 풂", ""] : ["아직 못 풂", "bad"];
   return <>
     <Head icon="⌨" title={`${log.number}${log.title ? ` · ${log.title}` : ""}`} sub={[day(log.at), log.patterns.join(", ")].filter(Boolean).join(" · ")}><button className="btn ghost small" onClick={() => go("code", { id: log.number })}>문제 다시 열기</button></Head>
@@ -261,11 +283,13 @@ function SolveView({ log }: { log: SolveLog }) {
       {log.gap ? <p><span className="lib-k bad">그때 내 생각</span>{log.gap}</p> : null}
       {log.fix ? <p><span className="lib-k ok">이렇게 풀려요</span>{log.fix}</p> : null}
       {log.cue ? <p className="small muted"><span className="lib-k">다음에 알아챌 신호</span>{log.cue}</p> : null}</section> : null}
+    {prob ? <Statement p={prob.problem} /> : null}
     <section className="lib-sec"><h3>푼 과정</h3>
       {!js ? <p className="small muted">불러오는 중…</p> : !js.length ? <p className="small muted">한 일 기록이 없어요.</p> :
         <ol className="rp-steps">{js.map((j, i) => <li key={i} className={JRES[j.result] ?? ""}><span className="rp-t">{hm(j.at)}</span><b>{j.what}</b><span>{j.text}</span>
           {j.lesson?.gap ? <p className="small"><span className="lib-k bad">그때 생각</span>{j.lesson.gap}{j.lesson.fix ? <><br /><span className="lib-k ok">고친 생각</span>{j.lesson.fix}</> : null}</p> : null}</li>)}</ol>}
     </section>
+    {prob && prob.submissions.length ? <section className="lib-sec"><h3>낸 코드 {prob.submissions.length}</h3><ul className="rp-subs">{[...prob.submissions].reverse().map((x) => <SubRow key={x.id} pid={pid} s={x} />)}</ul></section> : null}
   </>;
 }
 

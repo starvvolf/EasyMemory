@@ -154,3 +154,13 @@
 .dejipgi .rp-rich p{margin:0 0 4px}
 .dejipgi .rp-rich .ws-code{margin:4px 0;font-size:12px;border-radius:10px}
 .dejipgi .rp-b.me .rp-rich .ws-code{background:rgba(0,0,0,.18);color:inherit}
+.dejipgi .rp-src{border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.dejipgi .rp-src summary{cursor:pointer;padding:10px 14px;font-weight:600;font-size:14px}
+.dejipgi .rp-srcb{padding:0 16px 14px;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.65}
+.dejipgi .rp-ex{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dejipgi .rp-subs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.dejipgi .rp-subs li{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.dejipgi .rp-subs li.ok{border-left:4px solid var(--good)}
+.dejipgi .rp-subs li.bad{border-left:4px solid var(--bad)}
+.dejipgi .rp-subs .lib-diff{margin:0 10px 10px}
+.dejipgi .rp-sub{width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
