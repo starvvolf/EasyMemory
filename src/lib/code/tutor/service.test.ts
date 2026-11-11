@@ -144,7 +144,7 @@ test("설문(11/11): 처음엔 설문부터, 저장하면 알아요는 확인 �
     const { tutorOverview, answer, setProfile } = await import("./service.ts");
     let o = await tutorOverview();
     assert.equal(o.survey.needed, true); assert.equal(o.actions.length, 0, "no diagnosis drills before the survey");
-    assert.equal(o.survey.patterns.length, 44);
+    assert.equal(o.survey.patterns.length, 42, "합쳐진 둘은 설문에 없다");
     await setProfile({ op: "survey", levels: { "stack-match": "know", "없는패턴": "good" } });
     o = await tutorOverview();
     const c = o.actions[0];

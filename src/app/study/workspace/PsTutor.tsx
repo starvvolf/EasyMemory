@@ -21,7 +21,7 @@ type Overview = { targets: number; ready: number; prep: { running: boolean; tota
   board?: Array<{ id: string; name: string; stage: string; marks: Record<Ab, "ok" | "help" | "bad" | "none">; open: number; wrong?: string }>;
   survey?: Survey; learning?: { focused: boolean; focus: string[]; next: Array<{ id: string; name: string; ready: boolean }>; checks: number } };
 type Level = "none" | "know" | "good";
-type Survey = { needed: boolean; surveyed: boolean; patterns: Array<{ id: string; name: string; tier: number; tierName: string; example: string; level: Level; now: Level; checked: "pass" | "fail" | "skip" | null; solid: boolean }> };
+type Survey = { needed: boolean; surveyed: boolean; steps?: Array<{ n: number; part: 1 | 2 | 3; code: string; name: string; planned: string[] }>; patterns: Array<{ id: string; name: string; tier: number; tierName: string; example: string; level: Level; now: Level; checked: "pass" | "fail" | "skip" | null; solid: boolean }> };
 
 // 쉬운 말로(11/10 사용자 "항상 인간이 이해하기 쉽게").
 const KIND_LABEL: Record<Base["kind"], string> = { walkthrough: "풀이 과정 보기", contrast: "비슷한 문제 구별", drill: "방법 고르기", design: "계획 세우기", implement: "직접 짜기" };
@@ -412,9 +412,11 @@ function SurveyCard({ s, onSave, onCancel }: { s: Survey; onSave: (levels: Recor
         <h2>먼저, 지금 어디까지 아세요?</h2>
         <p className="small muted">쉬운 것부터 놓았어요. 처음 보는 건 「모름」 그대로 두세요. 「알아요」는 배운 적 있는 것, 「잘해요」는 보면 바로 풀 수 있는 것이에요. 알아요·잘해요는 쉬운 것부터 한 문제씩만 확인하고, 틀리면 한 칸 내려서 거기부터 배워요.</p>
       </div>
-      {tiers.map((t) => { const rows = s.patterns.filter((p) => p.tier === t); return (
+      {tiers.map((t) => { const rows = s.patterns.filter((p) => p.tier === t); const st = s.steps?.find((x) => x.n === t); const prev = s.steps?.find((x) => x.n === tiers[tiers.indexOf(t) - 1]); return (<div key={`part${t}`} className="stack" style={{ gap: 6 }}>
+        {/* 커리큘럼 3부(11/11): 부가 바뀌는 칸 위에 부 이름 */}
+        {st && st.n <= 12 && (!prev || prev.part !== st.part) ? <p className="pt-part">{st.part}부 {["", "구현과 정렬", "자료구조와 탐색", "최적화와 그래프 심화"][st.part]}</p> : st && st.n > 12 ? <p className="pt-part">선택</p> : null}
         <div key={t} className="stack" style={{ gap: 4 }}>
-          <div className="row" style={{ justifyContent: "space-between", gap: 8 }}><p className="eyebrow">{t}. {rows[0]?.tierName}</p>
+          <div className="row" style={{ justifyContent: "space-between", gap: 8 }}><p className="eyebrow">{rows[0]?.tierName}</p>
             <span className="small muted">이 묶음 모두 {(["none", "know"] as const).map((l, i) => <span key={l}>{i ? " · " : ""}<button className="linkish small" onClick={() => setTier(t, l)}>{LEVEL_LABEL[l]}</button></span>)}</span></div>
           <ul className="pt-survey-list">{rows.map((p) => (
             <li key={p.id}>
@@ -422,7 +424,8 @@ function SurveyCard({ s, onSave, onCancel }: { s: Survey; onSave: (levels: Recor
               <div className="pt-seg" role="radiogroup" aria-label={p.name}>{(["none", "know", "good"] as const).map((l) => (
                 <button key={l} role="radio" aria-checked={levels[p.id] === l} className={levels[p.id] === l ? "on" : ""} onClick={() => setLevels((x) => ({ ...x, [p.id]: l }))}>{LEVEL_LABEL[l]}</button>))}</div>
             </li>))}</ul>
-        </div>); })}
+          {st?.planned.length ? <p className="small muted">곧 들어올 것: {st.planned.join(" · ")}</p> : null}
+        </div></div>); })}
       <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
         {onCancel ? <button className="btn ghost" onClick={onCancel}>닫기</button> : null}
         <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { await onSave(levels); } finally { setBusy(false); } }}>{busy ? "저장하는 중…" : known ? `저장하고 시작 (확인할 것 ${known}개)` : "처음부터 시작"}</button>

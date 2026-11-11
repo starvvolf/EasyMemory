@@ -1429,3 +1429,8 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .cs-ai:not(.training){flex:1 0 auto;min-height:0}
 .dejipgi .cs-ai:not(.training) .cs-chat{flex:1 1 auto;min-height:220px}
 .dejipgi .cs-ai:not(.training) ~ .cs-needs{flex:1 1 auto;min-height:120px}
+.dejipgi .hd-place{display:grid;grid-template-columns:max-content 1fr;gap:6px 10px;margin:0;font-size:13.5px;align-items:baseline}
+.dejipgi .hd-place dt{color:var(--muted);font-size:12.5px}
+.dejipgi .hd-place dd{margin:0;min-width:0;display:flex;flex-wrap:wrap;gap:4px}
+.dejipgi .hd-path{display:block;width:100%}
+.dejipgi .pt-part{margin:10px 0 0;font-size:15px;font-weight:700;color:var(--ink)}

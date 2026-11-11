@@ -169,10 +169,10 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [hints, setHints] = useState(0);
   // 도움 네 칸(11/11): 작은 도움부터 차례로. 재료(교육용 문제 모델)가 있는 문제에서만 나온다. 연 칸은 서버가 튜터 기록에 남긴다.
-  const [help, setHelp] = useState<{ opened: number; labels: string[] } | null>(null);
+  const [help, setHelp] = useState<HelpInfo | null>(null);
   // 뼈대 코드(4칸)는 누르면 편집기에 바로 들어간다(11/11 사용자 "자동으로 덮어 써주면"). 그 전 코드는 [내 코드로 되돌리기]로.
   const [before, setBefore] = useState<string | null>(null);
-  useEffect(() => { setHelp(null); setBefore(null); void call<{ help: { opened: number; labels: string[] } | null }>(`/api/code/problem/${id}/help`).then((r) => setHelp(r.help)).catch(() => undefined); }, [id]);
+  useEffect(() => { setHelp(null); setBefore(null); void call<{ help: HelpInfo | null }>(`/api/code/problem/${id}/help`).then((r) => setHelp(r.help)).catch(() => undefined); }, [id]);
   const [asking, setAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
@@ -394,7 +394,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {coaching ? <>
         <p className="small muted">코드를 쓰기 전이라 AI는 답이나 코드를 주지 않고, 지금 단계를 스스로 생각하도록 도와요. 구현 단계부터는 힌트·반례 버튼이 다시 나와요.</p>
         </> : <>
-        {help ? <HelpDeck key={id} help={help} deck={deck} onOpen={(r) => void openHelp(r)} before={before} onUndo={() => { if (before !== null) { onCode(before); setBefore(null); } }} needs={(grade.needs || problem.knowledge.length ? <>{grade.needs ? <NeedsPanel needs={grade.needs} /> : null}{problem.knowledge.length ? <div className="row small"><span className="muted">다루는 개념</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}</> : null)} /> : null}
+        {help ? <HelpDeck key={id} help={help} deck={deck} onOpen={(r) => void openHelp(r)} before={before} onUndo={() => { if (before !== null) { onCode(before); setBefore(null); } }} needs={<PlaceCard place={help.place} basics={(grade.needs?.steps ?? []).filter((x) => x.step <= 2).flatMap((x) => x.needs.map((n) => n.name))} knowledge={problem.knowledge} />} /> : null}
         </>}
         <div className="cs-chat">
           {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">AI에게 무엇이든 물어보세요. 코드를 드래그하고 물으면 그 부분을 봐요. 물어본 풀이는 「도움 받고 맞힘」으로 남아요.</p> : null}
@@ -423,16 +423,30 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
 
 // AI 튜터(11/11 사용자): 다섯 장을 강의 탭처럼 넘긴다. 1 눈여겨볼 곳 · 2 방법 이름 · 3 필요한 능력 · 4 계획 · 5 뼈대 코드.
 // 필요한 능력은 방법 이름 뒤에 둔다(앞에 두면 방법이 먼저 보인다). 이 장은 화면 안의 것이라 기록하지 않는다. 나머지 장은 서버의 도움 칸 1~4.
+type HelpInfo = { opened: number; labels: string[]; place: Array<{ code: string; trackName: string; stepName: string; name: string; optional: boolean; mergedInto?: string; prereqs: Array<{ id: string; name: string; solid: boolean }> }> };
+/** AI 튜터 3번 장(11/11 "커리큘럼 하나로"): 능력 사다리 대신 커리큘럼 말로. 이 문제가 있는 곳 · 먼저 알 것 · 기본 문법 · 다루는 개념. */
+function PlaceCard({ place, basics, knowledge }: { place: HelpInfo["place"]; basics: string[]; knowledge: string[] }) {
+  const pre = [...new Map(place.flatMap((p) => p.prereqs).map((r) => [r.id, r])).values()];
+  return (
+    <dl className="hd-place">
+      <dt>이 문제가 있는 곳</dt>
+      <dd>{place.length ? place.map((p) => <span key={p.name} className="hd-path"><span className="chip">{p.code}</span> {p.trackName} › {p.stepName} › <b>{p.mergedInto ?? p.name}</b>{p.optional ? <span className="muted"> (선택)</span> : null}</span>) : <span className="muted">커리큘럼에서 아직 자리를 못 찾았어요</span>}</dd>
+      {pre.length ? <><dt>먼저 알 것</dt><dd>{pre.map((r) => <span key={r.id} className={`chip${r.solid ? " good" : ""}`}>{r.solid ? "✓ " : ""}{r.name}</span>)}</dd></> : null}
+      {basics.length ? <><dt>기본 문법</dt><dd className="small">{basics.join(" · ")}</dd></> : null}
+      {knowledge.length ? <><dt>다루는 개념</dt><dd>{knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</dd></> : null}
+    </dl>
+  );
+}
 const CARDS: Array<{ label: string; note: string; rung: 0 | 1 | 2 | 3 | 4 }> = [
   { label: "", note: "", rung: 0 },
   { label: "눈여겨볼 곳", note: "문제에서 무엇을 보면 되는지만", rung: 1 },
   { label: "방법 이름", note: "어떤 방법을 쓰는지까지", rung: 2 },
-  { label: "필요한 능력", note: "이 문제를 풀려면 어떤 능력이 필요한지", rung: 0 },
+  { label: "필요한 능력", note: "커리큘럼에서 이 문제가 있는 곳과 먼저 알 것", rung: 0 },
   { label: "계획", note: "무엇을 적어 두고 어떻게 바꾸는지까지", rung: 3 },
   { label: "뼈대 코드", note: "핵심 줄만 비운 코드 (편집기에 바로 들어가요)", rung: 4 },
 ];
 type Deck = { at: number; dir: "next" | "prev"; texts: Record<number, string>; busy: boolean; err: string };
-function HelpDeck({ help, deck, onOpen, before, onUndo, needs }: { help: { opened: number; labels: string[] }; deck: Deck; onOpen: (rung: number) => void; before: string | null; onUndo: () => void; needs: ReactNode }) {
+function HelpDeck({ help, deck, onOpen, before, onUndo, needs }: { help: HelpInfo; deck: Deck; onOpen: (rung: number) => void; before: string | null; onUndo: () => void; needs: ReactNode }) {
   const s = help.opened;
   const [needsSeen, setNeedsSeen] = useState(s >= 3);
   const opened = s >= 3 ? s + 1 : s === 2 && needsSeen ? 3 : s; // 연 장 수(0~5)

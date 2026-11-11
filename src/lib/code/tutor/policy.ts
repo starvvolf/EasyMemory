@@ -20,9 +20,10 @@ import { levelOf, ORDERED, type Profile } from "./profile.ts";
 
 /** 잘해요라고 했고 확인도 맞혔으면 배우기에서 건너뛴다(섞어 풀기에만 나온다). */
 const skipKnown = (profile: Profile | undefined, id: string) => Boolean(profile && levelOf(profile, id) === "good" && profile.checked[id] === "pass");
-/** 배울 순서(11/11): 분야 집중이 남아 있으면 그 패턴만, 설문을 했으면 쉬운 순서, 아니면 목록 순서. 단단해진 것·건너뛴 것은 뺀다. */
+/** 배울 순서(11/11): 분야 집중이 남아 있으면 그 패턴만, 아니면 커리큘럼 순서(curriculum.ts). 단단해진 것·건너뛴 것은 뺀다. */
 export function learningOrder(state: LearnerState, profile?: Profile) {
-  const base = profile?.surveyed ? ORDERED : PATTERNS;
+  // 커리큘럼 순서 하나로(11/11): 설문을 했든 안 했든 같은 순서.
+  const base = ORDERED;
   const focus = (profile?.focus ?? []).filter((id) => !state.patterns[id]?.solid);
   return { focused: focus.length > 0, list: (focus.length ? base.filter((p) => focus.includes(p.id)) : base).filter((p) => !state.patterns[p.id]?.solid && !skipKnown(profile, p.id)) };
 }

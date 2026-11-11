@@ -18,12 +18,12 @@ let n = 100;
 for (const id of ["count-array", "exist-table", "stack-match", "queue-sim", "bfs-distance", "dijkstra"]) for (let i = 0; i < 4; i++) { const k = String(n++); models[k] = model(k, [id]); }
 const soon = (es: TutorEvent[]) => new Date(Date.parse(es.at(-1)?.at ?? "2026-11-11T00:00:00Z") + 60_000);
 
-test("쉬운 순서: 기본 도구가 먼저, 그래프 심화가 나중", () => {
+test("커리큘럼 순서: 기본기·배열이 먼저, 그래프 심화가 나중", () => {
   const ids = ORDERED.map((p) => p.id);
   assert.ok(ids.indexOf("count-array") < ids.indexOf("stack-match"));
   assert.ok(ids.indexOf("stack-match") < ids.indexOf("bfs-distance"));
   assert.ok(ids.indexOf("bfs-distance") < ids.indexOf("dijkstra"));
-  assert.equal(ids.length, 44);
+  assert.equal(ids.length, 42, "44개 중 합쳐진 둘(방문 표시·안정 정렬)은 따로 배우지 않는다");
 });
 
 test("설문 뒤: 알아요·잘해요만 쉬운 것부터 한 문제씩 확인하고, 확인이 남으면 배우기보다 먼저", () => {
@@ -39,7 +39,7 @@ test("설문 뒤: 알아요·잘해요만 쉬운 것부터 한 문제씩 확인�
 });
 
 test("확인 결과: 잘해요+맞힘은 건너뛰고, 알아요+맞힘은 시범 없이 계획으로, 틀리면 한 칸 내림", () => {
-  const p = prof({ levels: { "count-array": "good", "exist-table": "know", "stack-match": "good" }, checked: { "count-array": "pass", "exist-table": "pass", "stack-match": "fail" } });
+  const p = prof({ levels: { "fast-io": "good", "min-max-init": "good", "count-array": "good", "exist-table": "know", "stack-match": "good" }, checked: { "fast-io": "pass", "min-max-init": "pass", "count-array": "pass", "exist-table": "pass", "stack-match": "fail" } });
   assert.equal(levelOf(p, "stack-match"), "know");
   assert.equal(levelOf(p, "exist-table"), "know");
   const events = [ev({ number: "100", patterns: ["count-array"], ability: "recognize", ok: true, mixed: true }), ev({ number: "104", patterns: ["exist-table"], ability: "recognize", ok: true, mixed: true }),
@@ -64,7 +64,7 @@ test("분야 집중: 고른 패턴만, 복습은 하나만, 다 하면 원래 �
     ev({ number: "118", patterns: ["bfs-distance"], ability: "design", ok: true, kind: "design" }), ev({ number: "119", patterns: ["bfs-distance"], ability: "execute", ok: true, kind: "implement" })];
   const after = learningOrder(computeState(solid), p);
   assert.equal(after.focused, false);
-  assert.equal(after.list[0].id, "count-array");
+  assert.equal(after.list[0].id, "fast-io", "커리큘럼 첫 칸(기본기)");
 });
 
 test("설문 없이(예전처럼): 처음엔 진단, 순서는 목록 순서", () => {

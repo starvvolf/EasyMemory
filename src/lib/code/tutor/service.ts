@@ -16,7 +16,8 @@ import { RUNG_LABEL, skeletonFor, skeletonText } from "./help.ts";
 import { COMPLEXITIES, complexityVerdict } from "../train.ts";
 import { patternOf, PATTERNS } from "./patterns.ts";
 import { learningOrder, nextActions, pendingChecks, type Action } from "./policy.ts";
-import { levelOf, ORDERED, readProfile, TIER, TIER_NAME, updateProfile, type Level, type Profile } from "./profile.ts";
+import { levelOf, ORDERED, readProfile, updateProfile, type Level, type Profile } from "./profile.ts";
+import { OPTIONAL_STEP, placeOf, STEPS } from "./curriculum.ts";
 import { board } from "./summary.ts";
 import { answerOf, conceptIdOf, conceptOf, conceptOptions, diffOf, USUALLY } from "./concepts.ts";
 import { ensurePool, modelForProblem, prepareModels, prepStatus, readModels, tutorNumberOf, tutorTargets, type ProblemModel } from "./problem-model.ts";
@@ -379,7 +380,9 @@ async function noteCheck(pattern: string, ok: boolean) {
 }
 function surveyView(p: Profile, needed: boolean, state: ReturnType<typeof computeState>) {
   return { needed, surveyed: p.surveyed,
-    patterns: ORDERED.map((x) => ({ id: x.id, name: x.name, tier: TIER[x.id] ?? 3, tierName: TIER_NAME[TIER[x.id] ?? 3], example: x.signals.slice(0, 2).join(" · "),
+    // 묶음 = 커리큘럼 칸(11/11). tier는 칸 번호, tierName은 "자3 줄 서는 것"처럼. 커리큘럼에만 있는 것은 planned로 알려 준다(아직 고를 수 없음).
+    steps: [...STEPS, OPTIONAL_STEP].map((s) => ({ n: s.n, part: s.part, code: s.code, name: s.name, planned: s.planned })),
+    patterns: ORDERED.map((x) => ({ id: x.id, name: x.name, tier: placeOf(x.id)?.step ?? 13, tierName: `${placeOf(x.id)?.code ?? ""} ${placeOf(x.id)?.stepName ?? ""}`.trim(), example: x.signals.slice(0, 2).join(" · "),
       level: p.levels[x.id] ?? "none", now: levelOf(p, x.id), checked: p.checked[x.id] ?? null, solid: Boolean(state.patterns[x.id]?.solid) })) };
 }
 export type ProfileOp =

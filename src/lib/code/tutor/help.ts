@@ -11,7 +11,8 @@ import { judge, LANG_LABEL, type Lang } from "../run.ts";
 import { answerOf, conceptOf } from "./concepts.ts";
 import { patternOf } from "./patterns.ts";
 import { readModels, tutorNumberOf, type ProblemModel } from "./problem-model.ts";
-import { appendEvent, readEvents } from "./state.ts";
+import { appendEvent, computeState, readEvents } from "./state.ts";
+import { placeOf } from "./curriculum.ts";
 
 export type Rung = 1 | 2 | 3 | 4;
 export const RUNG_LABEL = ["", "눈여겨볼 곳", "방법 이름", "계획", "뼈대 코드"] as const;
@@ -108,7 +109,11 @@ export async function helpState(problemId: string) {
   const lastOk = (await readEvents()).filter((e) => e.number === n && e.kind === "implement" && e.ok).at(-1)?.at ?? "";
   const since = new Date(Date.now() - 12 * 3600_000).toISOString();
   const now = opened.filter((e) => e.at > lastOk && e.at > since);
-  return { number: n, opened: Math.max(0, ...now.map((e) => e.help ?? 0)) as 0 | Rung, labels: RUNG_LABEL.slice(1) };
+  // AI 튜터 3번 장(11/11 커리큘럼 하나로): 이 문제가 커리큘럼 어디인지 + 먼저 알 것(단단해졌는지).
+  const state = computeState(await readEvents());
+  const place = m.patterns.map((id) => placeOf(id)).filter((x): x is NonNullable<ReturnType<typeof placeOf>> => Boolean(x))
+    .map((x) => ({ ...x, prereqs: x.prereqs.map((r) => ({ ...r, solid: Boolean(state.patterns[r.id]?.solid) })) }));
+  return { number: n, opened: Math.max(0, ...now.map((e) => e.help ?? 0)) as 0 | Rung, labels: RUNG_LABEL.slice(1), place };
 }
 /** 도움 칸 열기: 앞 칸을 먼저 열어야 한다(작은 도움부터). 연 것은 사건 기록에 남는다. */
 export async function openHelp(problemId: string, rung: Rung, lang: Lang) {
