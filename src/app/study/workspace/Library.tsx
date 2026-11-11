@@ -446,7 +446,7 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
         <div className="rv-beatbody">
           <p className="rv-did"><Ic text={b.did} /></p>
           {b.truth ? <p className="rv-truth"><Ic text={b.truth} /></p> : null}
-          {b.gap ? <p className="rv-gapline"><span>비어 있던 것</span><Ic text={b.gap} /></p> : null}
+          {b.gap ? <p className="rv-gapline"><span className="rv-gaplabel">비어 있던 것</span><span><Ic text={b.gap} /></span></p> : null}
           {b.box && (b.box.title || b.box.points.length) ? <aside className="rv-box">
             <p className="rv-boxeye">짚고 가기</p>
             {b.box.title ? <p className="rv-boxtitle">{b.box.title}</p> : null}
