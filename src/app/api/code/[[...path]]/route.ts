@@ -7,6 +7,7 @@ import { calibration } from "@/lib/code/calibrate";
 import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblem, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, idleAttempts, listProblemsWithKnowledge, noteAnswer, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
 import { closeSheet, distillLater, waitSheet } from "@/lib/code/tutor/sheets";
+import { keepTalk } from "@/lib/code/tutor/talk";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
 import { chapters as bakingdogChapters, fillProblem } from "@/lib/code/bakingdog";
@@ -73,6 +74,8 @@ async function inner(request: Request, context: RouteContext) {
         history: z.array(z.object({ q: z.string().max(2000), a: z.string().max(4000) })).max(12).optional(),
         /** 마지막 채점 결과(11/11): 튜터가 "왜 틀렸어요?"에 답할 수 있게 */ last: z.object({ verdict: z.string().max(20).optional(), input: z.string().max(4000).optional(), expected: z.string().max(2000).optional(), got: z.string().max(2000).optional(), stderr: z.string().max(3000).optional(), compile: z.string().max(4000).optional() }).optional() }));
       await recordAsked(b.problemId, b.question || `코드 드래그해서 물어봄: ${b.selection.split("\n")[0].slice(0, 60)}`);
+      // 대화 장부(11/11): 물은 말·답 원문 그대로(talk.ts). 질문 없이 드래그만 했으면 무엇을 했는지로.
+      const talk = (a: string) => { if (b.problemId) keepTalk({ problemId: b.problemId, kind: "질문", q: b.question || "드래그한 코드 설명해 줘", a, selection: b.selection, code: b.code, ...(b.last?.verdict ? { verdict: b.last.verdict } : {}) }); };
       // 스트리밍(11/11 사용자 "AI 튜터 답 오는 것도 스트리밍으로"): ?stream=1이면 지금까지의 글을 한 줄씩(JSON) 흘려보내고, 끝나면 {done, text}.
       if (new URL(request.url).searchParams.get("stream") === "1") {
         const enc = new TextEncoder();
@@ -81,7 +84,7 @@ async function inner(request: Request, context: RouteContext) {
           const send = (o: unknown) => { try { ctrl.enqueue(enc.encode(`${JSON.stringify(o)}\n`)); } catch { /* 화면이 닫힘 */ } };
           void explainCode(b, (t) => { if (t.length > last.length) { send({ delta: t.slice(last.length) }); last = t; } }, (u) => { usage = u; })
             .then((out) => { if (out.text.length > last.length && out.text.startsWith(last)) send({ delta: out.text.slice(last.length) }); send({ done: true, text: out.text, usage });
-              if (b.problemId) void noteAnswer(b.problemId, out.text).catch(() => undefined); })
+              if (b.problemId) void noteAnswer(b.problemId, out.text).catch(() => undefined); talk(out.text); })
             .catch((e) => send({ error: (e as Error)?.message || "답을 받지 못했어요." }))
             .finally(() => { try { ctrl.close(); } catch { /* 이미 닫힘 */ } });
         } });
@@ -90,9 +93,15 @@ async function inner(request: Request, context: RouteContext) {
       const out = await explainCode(b);
       // 11/8: AI에게 배운 것은 PS 튜터 문제일 때 그 패턴의 기억으로(tutor/service.ts noteAiHelp).
       if (b.problemId) void noteAnswer(b.problemId, out.text).catch(() => undefined);
+      talk(out.text);
       return json(out);
     }
-    if (p[0] === "error" && m === "POST") { const b = await body(z.object({ problemId: pid.optional(), lang, code, error: z.string().min(1).max(12000) })); return json(await explainError(b)); }
+    if (p[0] === "error" && m === "POST") {
+      const b = await body(z.object({ problemId: pid.optional(), lang, code, error: z.string().min(1).max(12000) }));
+      const out = await explainError(b);
+      if (b.problemId) keepTalk({ problemId: b.problemId, kind: "오류 설명", q: b.error.slice(0, 600), a: out.text, code: b.code });
+      return json(out);
+    }
     // 문제 찾아오기(11/11): AI 웹 검색 1번 → 후보 3개(이미 있는 문제는 코드가 거름). 고르면 화면이 make(from)로 만든다.
     if (p[0] === "find" && m === "POST") { const b = await body(z.object({ query: z.string().max(300) })); return json(await findProblems(b.query)); }
     if (p[0] === "make" && m === "POST") {
@@ -174,7 +183,9 @@ async function inner(request: Request, context: RouteContext) {
       if (p[2] === "help" && m === "GET") return json({ help: await helpState(id) });
       if (p[2] === "help" && m === "POST") {
         const b = await body(z.object({ rung: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]), lang }));
-        return json(await openHelp(id, b.rung, b.lang));
+        const out = await openHelp(id, b.rung, b.lang);
+        keepTalk({ problemId: id, kind: "도움 칸", q: `도움 ${b.rung}칸: ${out.label}`, a: [out.text, "skeleton" in out && out.skeleton ? `[뼈대 코드]\n${out.skeleton}` : ""].filter(Boolean).join("\n\n") });
+        return json(out);
       }
       if (p[2] === "hint" && m === "POST") {
         const b = await body(z.object({ lang, code, level: z.union([z.literal(1), z.literal(2), z.literal(3)]), last }));
@@ -182,6 +193,7 @@ async function inner(request: Request, context: RouteContext) {
         const out = await hint({ problemId: id, ...b });
         await recordHint(id, b.level);
         void noteAnswer(id, out.text, "hint").catch(() => undefined); // 11/11: 카드 정리는 끝날 때 문제 한 장에서 한 번(tutor/sheets.ts)
+        keepTalk({ problemId: id, kind: "힌트", q: `힌트 ${b.level}단계`, a: out.text, code: b.code, ...(b.last?.verdict ? { verdict: b.last.verdict } : {}) });
         return json(out);
       }
       // 문제 목록으로 돌아가거나 다른 문제로: this attempt's 틀림 · 힌트 · 물어봄 go into the knowledge record now.
@@ -253,7 +265,9 @@ async function inner(request: Request, context: RouteContext) {
           const b = await body(z.object({ step: z.enum(["understand", "model", "approach", "correct", "complexity"]), question: z.string().min(1).max(2000) }));
           await recordAsked(id, `[훈련] ${b.question}`);
           const answers = Object.fromEntries(Object.entries((await readTrain(id)).steps).map(([k, v]) => [k, v?.answer]));
-          return json(await trainAsk({ problemId: id, step: b.step, answers, question: b.question }));
+          const out = await trainAsk({ problemId: id, step: b.step, answers, question: b.question });
+          keepTalk({ problemId: id, kind: "훈련 질문", q: b.question, a: out.text });
+          return json(out);
         }
         if (p[3] === "step" && m === "POST") {
           const b = await body(z.object({ step: z.enum(STEPS), answer: z.record(z.string(), z.unknown()).optional(), skipped: z.boolean().optional() }));
@@ -270,8 +284,19 @@ async function inner(request: Request, context: RouteContext) {
           return json(await saveReview(id, b));
         }
       }
-      if (p[2] === "review" && m === "POST") { const b = await body(z.object({ lang, code, note: z.string().max(1000).optional() })); return json(await reviewApproach({ problemId: id, ...b })); }
-      if (p[2] === "counter" && m === "POST") { const b = await body(z.object({ lang, code })); return json(await counterexample({ problemId: id, ...b })); }
+      if (p[2] === "review" && m === "POST") {
+        const b = await body(z.object({ lang, code, note: z.string().max(1000).optional() }));
+        const out = await reviewApproach({ problemId: id, ...b });
+        keepTalk({ problemId: id, kind: "맞는지 봐 줘", q: b.note?.trim() || "이 방향이 맞는지 봐 줘", a: out.text, code: b.code });
+        return json(out);
+      }
+      if (p[2] === "counter" && m === "POST") {
+        const b = await body(z.object({ lang, code }));
+        const out = await counterexample({ problemId: id, ...b });
+        const c = out.found ? out.case : undefined;
+        keepTalk({ problemId: id, kind: "반례", q: "반례 찾아 줘", code: b.code, a: c ? `깨지는 입력을 찾았어요 (${out.tried}개 중).\n[입력]\n${c.input.slice(0, 1500)}\n[기대]\n${c.expected.slice(0, 600)}\n[내 출력]\n${c.got.slice(0, 600)}${c.stderr ? `\n[에러]\n${c.stderr.slice(0, 600)}` : ""}` : `입력 ${out.tried}개로 돌려 봤는데 깨지는 것을 못 찾았어요.${out.compile ? `\n[컴파일]\n${out.compile.slice(0, 600)}` : ""}` });
+        return json(out);
+      }
     }
     return NextResponse.json({ message: "경로를 찾을 수 없어요." }, { status: 404 });
   } catch (error) { return fail(error); }
