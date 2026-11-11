@@ -1276,6 +1276,8 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 /* 플래시카드(11/11) */
 .dejipgi .fc-wrap{display:flex;flex-direction:column;gap:14px;width:100%;max-width:720px;margin:8px auto;box-sizing:border-box} /* 11/11: 문제가 짧아도 카드 폭이 줄었다 늘지 않게 늘 같은 폭 */
 .dejipgi .fc-top{display:flex;align-items:center;gap:10px}
+.dejipgi .fc-pics{border:1px solid var(--line);background:var(--surface-2);color:var(--muted);border-radius:999px;font:inherit;font-size:12px;padding:3px 10px;cursor:pointer;white-space:nowrap}
+.dejipgi .fc-pics.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .dejipgi .fc-bar{flex:1;height:4px;border-radius:99px;background:var(--line);overflow:hidden}
 .dejipgi .fc-bar span{display:block;height:100%;background:var(--accent);transition:width .3s ease}
 .dejipgi .fc-card{border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:26px 26px 22px;display:flex;flex-direction:column;gap:14px;min-height:220px;box-shadow:0 8px 24px -14px rgba(0,0,0,.25)}
