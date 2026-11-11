@@ -1186,6 +1186,7 @@ const ICON = {
   home: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2.5 7.5L8 3l5.5 4.5M4 6.5V13h8V6.5"/></svg>',
   close: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
   send: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"/></svg>',
+  stop: '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="2.5" y="2.5" width="9" height="9" rx="2" fill="currentColor"/></svg>',
 };
 const icon = (name) => { const s = h("span", { class: "ico" }); s.innerHTML = ICON[name]; return s; };
 const MODE_SUB = { diagnose: "정답 대신 다른 원인 하나와 확인 방법", mode_self: "저장하면 바로 확인해요", mode_pair: "빈칸으로 나눠 하나씩 같이", mode_auto: "바뀐 줄을 보여 드려요 · 기록에 그대로 남아요", hint: "한 칸씩만 더 알려 드려요", check: "지금 코드로 바로 확인" };
@@ -1594,6 +1595,20 @@ function drawFree() {
     sendFree(run, t);
   };
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go(e); } });
+  const stop = () => lesson.chat ? api("POST", `/api/runs/${run.id}/lesson/${run.current}/act`, { do: "stop_chat" }).then((l) => { lessonCtx.lesson = l; drawLesson(); }).catch((e) => toast(e.message))
+    : api("POST", `/api/runs/${run.id}/lesson/${run.current}/stop`).then((l) => { lessonCtx.lesson = l; drawLesson(); }).catch((e) => toast(e.message));
+  const sendBtn = h("button", { class: "fsendb", type: "button" });
+  const paint = () => {
+    const stopping = lesson.busy && !input.value.trim();
+    sendBtn.replaceChildren(icon(stopping ? "stop" : "send"));
+    sendBtn.classList.toggle("stop", stopping);
+    sendBtn.disabled = !stopping && !input.value.trim();
+    sendBtn.title = stopping ? "지금 답하는 걸 멈춰요" : lesson.busy ? "보내기(답이 끝나면 보내요)" : "보내기";
+    sendBtn.setAttribute("aria-label", sendBtn.title);
+  };
+  sendBtn.onclick = (e) => (lesson.busy && !input.value.trim() ? stop() : go(e));
+  input.addEventListener("input", paint);
+  paint();
   const foot = h("footer", { class: "freefoot" },
     lesson.chat ? null : stuckBar(lesson, send), lesson.chat ? null : stuckPicker(run, lesson, send, FLOAT ? "in-float" : ""),
     // 11/11 사용자 "채팅창 위에 끝이 동글동글한 직사각형으로" · 11/5 사용자 "너무 쉬워 · 너무 어려워 두 개가 막혔어요보다 낫다"
@@ -1606,7 +1621,8 @@ function drawFree() {
         h("button", { class: "flink", onclick: (e) => { goalUi.easy = false; send({ do: "goal", op: "easy" })(e); }, title: "이 단계를 더 어렵게 다시 짜요(남은 로드맵도 같이)" }, "그래도 안 맞으면: 더 어렵게 다시 짜기"))
       : h("button", { class: "fchip", onclick: lesson.goals.current ? () => { goalUi.easy = true; goalUi.stuck = false; drawLesson(); } : send({ do: "goal", op: "easy" }) }, "너무 쉬워요"),
       h("button", { class: `fchip warm ${goalUi.stuck ? "on" : ""}`, onclick: () => { goalUi.stuck = !goalUi.stuck; drawLesson(); } }, "너무 어려워요")) : null,
-    h("div", { class: "freein" }, input, lesson.chat && lesson.busy ? h("button", { class: "btn", onclick: send({ do: "stop_chat" }) }, "멈추기") : null, h("button", { class: "btn primary", onclick: go }, lesson.busy ? "줄 세우기" : "보내기")),
+    // 11/11 사용자 "코덱스나 클로드 앱처럼": 입력칸 안 오른쪽 아래 둥근 아이콘 하나. 답하는 중 · 칸이 비면 ■ 멈추기, 글이 있으면 ↑(답하는 중이면 알아서 줄 섬)
+    h("div", { class: "freein" }, input, sendBtn),
     lesson.chat || lesson.stuck || lesson.busy ? null : h("div", { class: "fquick" }, h("button", { class: "fchip warm", onclick: () => { stuckUi.open = !stuckUi.open; drawLesson(); } }, "막혔어요")));
   const head = h("header", { class: "freehead" },
     // 제목은 한 줄 전체를 쓰고, 길면 … (2026-11-06 사용자 "제목한테 가로줄 하나주고 길면 ..."). 전체 제목은 마우스를 올리면 보인다.

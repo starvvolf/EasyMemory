@@ -900,3 +900,11 @@ html.float.pill .fpill { display: flex; align-items: center; gap: 12px; width: 1
 .freewrap .fchip:hover { background: color-mix(in srgb, var(--f-ink, var(--ink)) 9%, var(--f-s2, var(--soft))); }
 .freewrap .fchip.warm { background: color-mix(in srgb, #e8a33d 16%, var(--f-s1, var(--panel))); color: #b8701a; border: 0; }
 .freewrap .fchip.on { outline: 2px solid color-mix(in srgb, #e8a33d 60%, transparent); }
+/* 보내기 아이콘(11/11 사용자 "코덱스나 클로드 앱처럼"): 입력칸 안 오른쪽 아래 둥근 단추 */
+.freewrap .freein { position: relative; }
+.freewrap .freein textarea { padding-right: 48px; }
+.freewrap .fsendb { position: absolute; right: 8px; bottom: 8px; width: 32px; height: 32px; border: 0; border-radius: 999px; display: grid; place-items: center; cursor: pointer;
+  background: var(--acc); color: var(--acc-ink); box-shadow: 0 2px 8px color-mix(in srgb, var(--acc) 30%, transparent); transition: opacity .15s, background .15s; }
+.freewrap .fsendb .ico { display: grid; place-items: center; }
+.freewrap .fsendb:disabled { opacity: .35; cursor: default; box-shadow: none; }
+.freewrap .fsendb.stop { background: var(--f-ink, var(--ink)); color: var(--f-s1, var(--panel)); box-shadow: none; }
