@@ -72,3 +72,19 @@ test("현재 목표의 선행(11/11): 비면 맥락이 set_prereqs를 시키고,
   g = await GO.goalsOf(run);
   assert.equal(g.current!.prereqs![0].result, undefined);
 });
+
+test("[다음으로] 뒤(11/11 실제로 꼬인 것): 선행 적기가 끼어도 새 목표를 정할 수 있고, 기다리는 중엔 set_prereqs를 막고 [선행 비어 있음]도 안 띄운다", async () => {
+  const run = "rn";
+  await GO.runGoalTool(run, "propose_plan", { long: "REST API", spec: "", mode: "topdown", map: ["요청 · 응답", "HTTP 메서드"], first: { title: "요청 · 응답", done: "말한다", prereqs: [] } }, []);
+  await GO.goalAction(run, "confirm", {});
+  await GO.goalAction(run, "next", {});
+  assert.doesNotMatch(await GO.goalContext(run), /\[선행 비어 있음\]/);
+  await assert.rejects(GO.runGoalTool(run, "set_prereqs", { prereqs: [{ name: "a", check: "?" }, { name: "b", check: "?" }] }, []), /set_current_goal/);
+  // 예전 기록처럼 선행 적기가 끼어 있어도
+  const g0 = await GO.goalsOf(run); g0.log.push({ at: new Date().toISOString(), kind: "prereqs", text: "a, b" } as never);
+  await (await import("../lib/store.ts")).writeAtomic(path.join(process.env.PC_DATA_DIR!, "goals", `${run}.json`), JSON.stringify(g0));
+  await GO.runGoalTool(run, "set_current_goal", { title: "GET과 주소", done: "GET /weather/seoul의 뜻을 말한다", prereqs: [{ name: "URL", check: "?" }, { name: "요청과 응답", check: "?" }] }, []);
+  const g = await GO.goalsOf(run);
+  assert.equal(g.current!.title, "GET과 주소");
+  assert.equal(g.current!.prereqs!.length, 2);
+});

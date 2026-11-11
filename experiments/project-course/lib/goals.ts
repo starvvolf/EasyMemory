@@ -225,7 +225,7 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
     } else if (name === "set_current_goal") {
       if (!g.long) throw err("아직 장기 목표가 없어요. 먼저 propose_plan으로 제안하세요.");
       // 바꿀 수 있는 때: 현재 목표가 없을 때 · 학습자가 [다음으로]를 누른 직후 · [확정] 직후(첫 목표를 다듬기). 그 밖엔 학습자 버튼으로만
-      const last = [...g.log].reverse().find((l) => !["survey", "answer", "map", "support-close"].includes(l.kind))?.kind;
+      const last = lastKind(g);
       if (g.support) throw err("보충 로드맵을 진행 중이에요. 보충은 plan_support로 고쳐요.");
       if (g.current && last !== "next" && last !== "confirm" && last !== "easy") throw err("현재 목표가 진행 중이에요. 학습자가 [다음으로]를 누르면 바꿀 수 있어요.");
       let item = g.map.find((m) => m.status === "doing" && !m.support) ?? g.map.find((m) => m.status === "todo" && !m.support);
@@ -250,6 +250,7 @@ export async function runGoalTool(runId: string, name: string, input: Record<str
     } else if (name === "set_prereqs") {
       const c = g.current;
       if (!c) throw err("현재 목표가 없어요.");
+      if (awaitingNext(g)) throw err("학습자가 [다음으로]를 눌러 새 목표를 기다리는 중이에요. set_current_goal로 다음 목표를 정하고, 선행은 거기 prereqs로 적으세요.");
       const list = prereqsOf(input.prereqs);
       if (list.length < 2) throw err("prereqs를 3~5개 적어 주세요. " + PREREQ_SPEC);
       c.prereqs = list.map((p) => ({ ...p, ...(() => { const o = (c.prereqs ?? []).find((y) => norm(y.name) === norm(p.name)); return o?.result ? { result: o.result, quote: o.quote, at: o.at, by: o.by } : {}; })() }));
@@ -465,6 +466,10 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
 /* ---------- 매 차례 맥락(두 엔진 공통) ---------- */
 // 선행 찔러 보기(11/10 사용자 "선행관계도 안 돼 있고 의존성도 안 돼 있을 때 어떻게 가르칠 것인가, 어떻게 파악할 것인가")
 /** 지금 지도 단계에 쓰이는 먼저 알 것(for가 비면 장기 목표 전체에 쓰이는 것으로 본다) */
+/** 목표를 바꿀 수 있는지 볼 때의 마지막 일(설문 · 지도 · 선행 적기/확인 같은 곁일은 건너뜀 — 11/11 [다음으로] 뒤 set_prereqs가 끼어 목표 바꾸기가 막혔던 것) */
+const lastKind = (g: Goals) => [...g.log].reverse().find((l) => !["survey", "answer", "map", "support-close", "prereq", "prereqs"].includes(l.kind))?.kind;
+/** [다음으로]를 눌러 새 목표를 기다리는 중(현재 목표 칸에는 아직 앞 목표가 남아 있다) */
+const awaitingNext = (g: Goals) => !!g.current && lastKind(g) === "next";
 /** 선행에 먼저 알 것 지도의 같은 이름 결과를 옮긴다(이미 확인된 건 다시 묻지 않게) */
 function markPrereqs(g: Goals, c: Current) {
   for (const p of c.prereqs ?? []) {
@@ -518,7 +523,8 @@ async function goalContextBody(runId: string) {
     g.base?.length ? `먼저 알 것 지도(기대는 순서, ← 는 그 전에 알아야 할 것): ${g.base.map((b) => `${b.name}${b.kind === "도구" ? "[도구]" : ""}(${b.result ? `${b.result}${b.by === "노트" ? "·노트" : b.by === "명령" ? "·명령" : b.by === "학습자" ? "·학습자가 스스로 표시" : ""}` : "확인 전"})${b.needs.length ? ` ← ${b.needs.join(", ")}` : ""}`).join(" · ")}` : "",
     c && baseFor(g).length ? `지금 단계에 쓰이는 먼저 알 것: ${baseFor(g).map((b) => `${b.name}(${b.result ?? "확인 전"})`).join(" · ")}` : "",
     c?.prereqs?.length ? `이 목표의 선행: ${c.prereqs.map((p) => `${p.name}(${p.result ? `${p.result}${p.by === "학습자" ? "·학습자가 스스로 표시" : p.by === "노트" ? "·노트" : ""}` : "확인 전"})`).join(" · ")}` : "",
-    c && !c.prereqs?.length && !S ? "[선행 비어 있음] 이 목표의 선행이 아직 없다. 이번 답에서 다른 것보다 먼저 set_prereqs로 이 목표의 선행을 적는다." : "",
+    awaitingNext(g) ? `[다음으로 뒤] 학습자가 "${c!.title}"을(를) 넘겼고 새 목표를 기다린다. 다른 것보다 먼저 set_current_goal로 다음 목표(선행 prereqs 포함)를 정하고 바로 시작한다.` : "",
+    c && !c.prereqs?.length && !S && !awaitingNext(g) ? "[선행 비어 있음] 이 목표의 선행이 아직 없다. 이번 답에서 다른 것보다 먼저 set_prereqs로 이 목표의 선행을 적는다." : "",
     c && !c.understood ? PREREQ_RULE : "",
     // 너무 깊이 내려감(11/10): 코드가 조건을 보고 그때만 한 줄
     c && ((S?.round ?? 0) >= 3 || (c.prereqs ?? []).filter((p) => p.result === "비어 있음").length >= 2 || baseFor(g).filter((b) => b.result === "비어 있음").length >= 2) ? "[깊이] 이 목표에서 보충을 여러 번 짰거나 비어 있는 선행이 2개 이상이다. 계속 아래로 내려가기보다, 목표를 낮추거나 기초부터 깔고 올라가는 지도(update_map)로 바꾸자고 학습자에게 한 번 제안한다." : "",
