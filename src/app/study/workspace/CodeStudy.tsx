@@ -206,7 +206,21 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const [help, setHelp] = useState<HelpInfo | null>(null);
   // 뼈대 코드(4칸)는 누르면 편집기에 바로 들어간다(11/11 사용자 "자동으로 덮어 써주면"). 그 전 코드는 [내 코드로 되돌리기]로.
   const [before, setBefore] = useState<string | null>(null);
+  // 도움 칸(AI 튜터)은 이 문제의 교육용 모델이 있어야 나온다. 방금 만든 백준 문제는 모델을 뒤에서 만드는 중(AI 1번, 20초쯤)이라
+  // 처음엔 없다 → 백준 문제면 생길 때까지 4초마다 다시 물어본다(최대 2분). 11/12 사용자 "새로 문제 만들었는데 AI 튜터가 없음".
+  const [helpWait, setHelpWait] = useState(false);
+  const isBoj = /^BOJ\s*\d+/.test(problem?.title ?? "");
   useEffect(() => { setHelp(null); setBefore(null); void call<{ help: HelpInfo | null }>(`/api/code/problem/${id}/help`).then((r) => setHelp(r.help)).catch(() => undefined); }, [id]);
+  useEffect(() => {
+    if (help || !isBoj) { setHelpWait(false); return; }
+    let n = 0;
+    setHelpWait(true);
+    const t = setInterval(() => {
+      if (++n > 30) { clearInterval(t); setHelpWait(false); return; }
+      void call<{ help: HelpInfo | null }>(`/api/code/problem/${id}/help`).then((r) => { if (r.help) { setHelp(r.help); clearInterval(t); setHelpWait(false); } }).catch(() => undefined);
+    }, 4000);
+    return () => clearInterval(t);
+  }, [id, help, isBoj]);
   const [asking, setAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
@@ -505,6 +519,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {coaching ? <>
         <p className="small muted">코드를 쓰기 전이라 AI는 답이나 코드를 주지 않고, 지금 단계를 스스로 생각하도록 도와요. 구현 단계부터는 힌트·반례 버튼이 다시 나와요.</p>
         </> : <>
+        {!help && helpWait ? <div className="hd hd-wait"><div className="hd-top"><b>AI 튜터</b><span className="lc2-caret" /></div><p className="small muted">이 문제의 힌트 재료를 만드는 중이에요(처음 한 번, 20초쯤). 그동안 문제를 읽고 먼저 짜 봐요.</p></div> : null}
         {help ? <HelpDeck key={id} help={help} deck={deck} onOpen={(r) => void openHelp(r)} onRefill={refillSkeleton} before={before} onUndo={() => { if (before !== null) { onCode(before); setBefore(null); } }} needs={<PlaceCard place={help.place} basics={(grade.needs?.steps ?? []).filter((x) => x.step <= 2).flatMap((x) => x.needs.map((n) => n.name))} knowledge={problem.knowledge} />} /> : null}
         </>}
         <div className="cs-chat">
