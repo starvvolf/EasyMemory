@@ -32,15 +32,16 @@
 | 총괄 · 앱 구조 · 자료 엔진 (PDF·자료 지도·문제) | A | 공부 화면(`src/app/study/`, `StudyApp.tsx`·`dejipgi-app.js`), `src/lib/study/`(엔진 `gen/`·자료 지도·강의·문제), `src/app/lab/`, `src/app/api/lab/`, `src/app/api/study-map/`, 켜고 끄기(`scripts/`, `desktop/`), `tools/` |
 | 알고리즘 (PS 튜터, 안쪽 이름 code) | B | `src/lib/code/`, `src/lib/assist/code-ai.ts`, `src/app/api/code/`, `workspace/CodeStudy.tsx`·`PsTutor.tsx` 등 |
 | 실습 (안쪽 이름 project) | D | `experiments/project-course/`, `workspace/ProjectStudy.tsx`·`ProjectStudio.tsx`, `src/app/api/project-course/` |
-| 기억 저장소 (지식 시스템) | 정하는 중 (11/11, `협업/현황.md` 📢 참고) | `src/lib/knowledge/`, `src/lib/assist/knowledge-ai.ts`, `src/app/api/knowledge/`, `workspace/Knowledge*.tsx`, `TodayBoard.tsx` |
+| 기억 저장소 바닥 (저장·불러오기 약속, 복습 날짜, 같은 기억 합치기, 기억 탭·오늘 복습 화면 틀) | A | `src/lib/knowledge/`, `src/lib/assist/knowledge-ai.ts`, `src/app/api/knowledge/`, `workspace/Knowledge*.tsx`, `TodayBoard.tsx` |
+| 갈래별 기억 (무엇을 남기나·카드 모양·그 기억으로 묻는 것) | 그 갈래 주인: 자료 A · 알고리즘 B · 실습 D | 각 갈래 폴더(기억으로 넘기는 코드) |
 | (C) | 쉬는 중 (11/11) | — |
 | 함께 쓰는 곳 | 모두 | `src/lib/study/knowledge-contract.ts`, `src/lib/assist/model.ts`, `src/lib/ai/model.ts`, `src/lib/schedule/`(일정, 주인 미정), `docs/DECISIONS.md`, `협업/현황.md` |
 
-- 영역 바꿈 (2026-11-11 사용자): A 총괄·엔진, B PS, C 쉬는 중, D 실습. 예전 표(A 알고리즘, B 지식, C 엔진, D 실습)로 적힌 옛 문서·커밋의 A/B/C는 그때 기준이다.
+- 영역 바꿈 (2026-11-11 사용자): A 총괄·엔진·기억 저장소 바닥, B PS, C 쉬는 중, D 실습. 기억은 두 겹: 갈래마다 다른 부분(무엇을 남기나·모양·묻는 것)은 각 갈래가, 셋이 같이 쓰는 바닥은 A가 지킨다. 바닥을 바꿔야 하면 고칠 것 보드에 올려 A가 맞춘다. 예전 표(A 알고리즘, B 지식, C 엔진, D 실습)로 적힌 옛 문서·커밋의 A/B/C는 그때 기준이다.
 
 - 화면 이름과 안쪽 이름 (2026-11-05): 화면에 보이는 "알고리즘"은 안쪽에서 `code`(`src/lib/code/`, `/api/code`, 화면 `code`, 지식 출처 `code`), "실습"은 `project`(`experiments/project-course/`, `/api/project-course`, 화면 `project`)다. 안쪽 이름은 바꾸지 않았다. 새 화면 글에는 알고리즘·실습을 쓴다.
 - 자기 영역 밖 파일을 고치면 커밋 첫 줄에 `[경계]`를 붙이고 무엇을 왜 바꿨는지 적는다.
-- 다른 영역은 지식 저장소를 `src/lib/knowledge/api.ts`로만 부른다. B는 그 함수 이름과 받는 값을 바꾸지 않는다(바꿔야 하면 새 함수를 더한다).
+- 다른 영역은 지식 저장소를 `src/lib/knowledge/api.ts`로만 부른다. 바닥 주인(A)은 그 함수 이름과 받는 값을 바꾸지 않는다(바꿔야 하면 새 함수를 더한다).
 
 ## 사용자와 일하는 법
 
