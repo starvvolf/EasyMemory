@@ -290,22 +290,22 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     finally { setAsking(false); }
   };
   const hint = (level: 1 | 2 | 3) => { setHints((h) => h + 1); void assist(`힌트 ${level}`, ["", "방향만 알려 줘", "어느 줄이 문제인지 짚어 줘", "고친 코드를 보여 줘"][level], () => call(`/api/code/problem/${id}/hint`, { lang, code: now(), level, last })); };
+  // 도움 칸(11/11 사용자 "강의 탭처럼 넘기는 느낌"): 한 장에 한 칸, 위에 게이지, 오른쪽으로 가면 다음 칸. 이미 연 칸은 다시 봐도 기록이 안 늘어난다.
+  const [deck, setDeck] = useState<{ at: number; dir: "next" | "prev"; texts: Record<number, string>; busy: boolean; err: string }>({ at: 0, dir: "next", texts: {}, busy: false, err: "" });
+  useEffect(() => { setDeck({ at: help?.opened ?? 0, dir: "next", texts: {}, busy: false, err: "" }); }, [id, help === null]); // eslint-disable-line react-hooks/exhaustive-deps -- 문제가 바뀌거나 도움 칸 정보가 처음 올 때만
   const openHelp = async (rung: number) => {
-    if (asking) return;
-    setAsking(true);
-    setMsgs((m) => [...m, { step: stepNow, who: "me", text: `도움 ${rung}칸: ${help?.labels[rung - 1] ?? ""}` }]);
+    if (!help || deck.busy || rung < 1 || rung > Math.min(4, help.opened + 1)) return;
+    const fresh = rung > help.opened;
+    setDeck((d) => ({ ...d, at: rung, dir: rung < d.at ? "prev" : "next", err: "" }));
+    if (deck.texts[rung] && !fresh) return;
+    setDeck((d) => ({ ...d, busy: true }));
     try {
       const r = await call<{ text: string; skeleton?: string; opened: number }>(`/api/code/problem/${id}/help`, { rung, lang });
       setHelp((h) => (h ? { ...h, opened: r.opened } : h));
-      if (r.skeleton) { setBefore(now()); onCode(r.skeleton); }
-      setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: `도움 ${rung}`, text: r.skeleton ? "뼈대 코드를 편집기에 넣었어요. 「여기를 채워요」라고 적힌 줄만 직접 채워서 제출해 보세요." : r.text }]);
-    } catch (e) { setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: `도움 ${rung}`, text: `도움을 열지 못했어요: ${errorText(e)}` }]); }
-    finally { setAsking(false); }
-  };
-  const explainSel = () => {
-    const sel = editor.current?.selection() ?? "";
-    if (!sel.trim()) { setMsgs((m) => [...m, { step: stepNow, who: "ai", text: "편집기에서 설명을 듣고 싶은 부분을 드래그한 다음 눌러 주세요." }]); return; }
-    void assist("설명", `이 부분 설명해 줘:\n\`\`\`\n${sel.slice(0, 600)}\n\`\`\``, () => call("/api/code/explain", { problemId: id, lang, code: now(), selection: sel }));
+      // 뼈대 코드는 처음 열 때만 편집기에 넣는다(다시 보기로는 덮어쓰지 않음). 그 전 코드는 되돌릴 수 있게.
+      if (r.skeleton && fresh) { setBefore(now()); onCode(r.skeleton); }
+      setDeck((d) => ({ ...d, busy: false, texts: { ...d.texts, [rung]: r.skeleton ? (fresh ? "뼈대 코드를 편집기에 넣었어요. 「여기를 채워요」라고 적힌 줄만 직접 채워서 제출해 보세요." : "편집기에 넣었던 뼈대 코드예요. 「여기를 채워요」 줄만 채우면 돼요.") : r.text } }));
+    } catch (e) { setDeck((d) => ({ ...d, busy: false, err: errorText(e) })); }
   };
   const coach = (q: string) => void assist("훈련", q, () => call(`/api/code/problem/${id}/train/ask`, { step: trainStep, question: q }));
   const ask = () => {
@@ -313,6 +313,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     if (coaching) { const q = question; setQuestion(""); coach(q); return; }
     const sel = editor.current?.selection() ?? "";
     const q = question; setQuestion("");
+    setHints((h) => h + 1); // AI에게 물어본 것도 도움 받은 풀이로 남긴다(11/11: 힌트 버튼을 빼고 채팅 하나로)
     void assist("질문", q, () => call("/api/code/explain", { problemId: id, lang, code: now(), selection: sel.trim() ? sel : now().slice(0, 6000), question: q }));
   };
   const openSubmission = async (sid: string) => {
@@ -389,31 +390,14 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
       <div className="cs-side">
       <aside className={`cs-ai panel${training ? " training" : ""}`} aria-label="코드 옆 AI">
         {training ? <div className="cs-ai-train"><b>훈련</b><TrainPanel id={id} train={train} onStep={setTrainStep} timeLimitMs={problem.timeLimitMs} lang={lang} code={now} solved={subs.some((s) => s.mode === "submit" && s.verdict === "AC")} /></div> : null}
-        <b>AI</b>{coaching ? <span className="small muted"> · 훈련 코치 ({STEP_LABEL[trainStep]} 단계)</span> : null}
+        {coaching || !help ? <b>AI</b> : null}{coaching ? <span className="small muted"> · 훈련 코치 ({STEP_LABEL[trainStep]} 단계)</span> : null}
         {coaching ? <>
         <p className="small muted">코드를 쓰기 전이라 AI는 답이나 코드를 주지 않고, 지금 단계를 스스로 생각하도록 도와요. 구현 단계부터는 힌트·반례 버튼이 다시 나와요.</p>
         </> : <>
-        <p className="small muted">통과 여부는 채점기가 정해요. AI는 설명과 힌트만 줘요. PS 튜터 문제라면 AI 힌트·설명으로 배운 것은 그 패턴의 기억에 남아요.</p>
-        {help ? <div className="cs-help">
-          <p className="small"><b>막혔을 때</b> <span className="muted">작은 도움부터 차례로 열어요. 연 것은 기록에 남고, 도움 받고 푼 문제는 며칠 뒤 혼자 다시 풀어요.</span></p>
-          <div className="cs-hints">{help.labels.map((label, i) => (
-            <button key={label} className={`btn small${i < help.opened ? " opened" : ""}`} disabled={asking || i > help.opened} title={i === 3 ? "핵심 줄만 비운 코드를 편집기에 바로 넣어요(처음이면 AI 1번, 10~30초). 쓰던 코드는 되돌릴 수 있어요" : "AI를 쓰지 않아요"} onClick={() => void openHelp(i + 1)}>{i < help.opened ? "✓ " : ""}{i + 1} · {label}</button>))}</div>
-          {before !== null ? <button className="linkish small" onClick={() => { onCode(before); setBefore(null); }}>내 코드로 되돌리기 (뼈대 넣기 전 코드)</button> : null}
-        </div> : null}
-        {help ? <p className="small muted">내 코드를 보고 짚어 주는 AI 힌트</p> : null}
-        <div className="cs-hints">
-          <button className="btn small" disabled={asking} onClick={() => hint(1)}>힌트 1 · 방향</button>
-          <button className="btn small" disabled={asking} onClick={() => hint(2)}>힌트 2 · 줄 짚기</button>
-          <button className="btn small" disabled={asking} onClick={() => hint(3)}>힌트 3 · 고친 코드</button>
-        </div>
-        <div className="cs-hints">
-          <button className="btn ghost small" disabled={asking} onClick={() => void assist("확인", "제출 전에 접근이 맞는지 봐 줘", () => call(`/api/code/problem/${id}/review`, { lang, code: now() }))}>맞는지 봐 줘</button>
-          <button className="btn ghost small" disabled={asking} onClick={explainSel}>드래그한 부분 설명</button>
-          {problem.hasReference ? <button className="btn ghost small" disabled={asking} onClick={() => void assist("반례", "내 코드가 틀리는 입력 찾아 줘", () => call(`/api/code/problem/${id}/counter`, { lang, code: now() }))}>반례 찾기</button> : null}
-        </div>
+        {help ? <HelpDeck help={help} deck={deck} onOpen={(r) => void openHelp(r)} before={before} onUndo={() => { if (before !== null) { onCode(before); setBefore(null); } }} /> : null}
         </>}
         <div className="cs-chat">
-          {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">{help ? "막히면 위 「막혔을 때」 1번부터 열어 보세요." : "막히면 힌트 1부터 받아 보세요."} 편집기에서 코드를 드래그하고 질문하면 그 부분을 설명해요.</p> : null}
+          {!shownMsgs.length ? coaching ? <p className="small muted">막히면 아래 예시 질문을 누르거나, 지금 단계에 대해 직접 물어보세요. 쓴 답을 보고 대답해요.</p> : <p className="small muted">{help ? "막히면 위 「막혔을 때」를 한 장씩 넘겨 보세요. " : ""}AI에게 무엇이든 물어보세요. 편집기에서 코드를 드래그하고 물으면 그 부분을 봐요. 물어본 풀이는 「도움 받고 맞힘」으로 남아요.</p> : null}
           {shownMsgs.map((m, i) => <div key={i} className={`cs-msg ${m.who}`}>{m.tag ? <span className="chip">{m.tag}</span> : null}<Rich text={m.text} className="small" /></div>)}
           {asking ? <div className="cs-msg ai"><span className="small muted">생각하는 중…</span></div> : null}
           <div ref={chatEnd} />
@@ -431,6 +415,45 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {grade.needs ? <NeedsPanel needs={grade.needs} /> : null}
         {problem.knowledge.length ? <div className="row small"><span className="muted">다루는 개념</span>{problem.knowledge.map((k) => <span key={k} className="chip">{k}</span>)}</div> : null}
       </section> : null}
+      </div>
+    </div>
+  );
+}
+
+const RUNG_NOTE = ["", "문제에서 무엇을 보면 되는지만", "어떤 방법을 쓰는지까지", "무엇을 적어 두고 어떻게 바꾸는지까지", "핵심 줄만 비운 코드 (편집기에 바로 들어가요)"];
+/** 막혔을 때(11/11): 자료 지도 강의 탭처럼 한 장씩 넘긴다. 위 게이지 4칸 = 연 만큼 차오름, › = 다음 도움. */
+function HelpDeck({ help, deck, onOpen, before, onUndo }: { help: { opened: number; labels: string[] }; deck: { at: number; dir: "next" | "prev"; texts: Record<number, string>; busy: boolean; err: string }; onOpen: (rung: number) => void; before: string | null; onUndo: () => void }) {
+  const at = deck.at, max = Math.min(4, help.opened + 1);
+  const label = (r: number) => help.labels[r - 1] ?? "";
+  const nextFresh = at + 1 > help.opened;
+  return (
+    <div className="hd">
+      <div className="hd-top"><b>막혔을 때</b><span className="small muted num">{help.opened}/4 열었어요</span></div>
+      <div className="lc3-bar hd-bar">
+        <button className="lc3-arrow" disabled={at <= 1 || deck.busy} onClick={() => onOpen(at - 1)} aria-label="이전 도움">‹</button>
+        <div className="hd-gauge" role="group" aria-label="도움 단계">{[1, 2, 3, 4].map((r) => (
+          <button key={r} className={`hd-seg${r <= help.opened ? " done" : ""}${r === at ? " on" : ""}`} disabled={r > max || deck.busy} onClick={() => onOpen(r)} title={`${r}. ${label(r)}`} aria-label={`${r}. ${label(r)}${r <= help.opened ? " (열었음)" : ""}`}>
+            <span className="hd-bar-fill" /><span className="hd-seglabel num">{r}</span></button>))}</div>
+        <button className="lc3-arrow" disabled={at >= max || deck.busy} onClick={() => onOpen(at + 1)} aria-label="다음 도움">›</button>
+      </div>
+      {at === 0 ? (
+        <div className="hd-box hd-empty">
+          <p className="hd-title">혼자 먼저 해 보고, 막히면 한 장씩</p>
+          <p className="small muted">작은 도움부터 열어요. 연 것은 기록에 남고, 도움 받고 푼 문제는 하루 뒤 혼자 다시 풀어요.</p>
+        </div>
+      ) : (
+        <section key={at} className={`hd-box lc3-in-${deck.dir}`}>
+          <header className="lc3-head"><span className="lc3-step num">{at}</span><div className="lc3-headtext"><h3 className="lc3-title">{label(at)}</h3><span className="small muted">{RUNG_NOTE[at]}</span></div></header>
+          {deck.busy && !deck.texts[at] ? <p className="small muted">{at === 4 ? "뼈대 코드를 만드는 중… (처음이면 10~30초)" : "여는 중…"}</p>
+            : deck.err ? <p className="small bad">{deck.err}</p>
+            : <Rich text={deck.texts[at] ?? ""} className="hd-say" />}
+          {at === 4 && before !== null ? <button className="linkish small" onClick={onUndo}>내 코드로 되돌리기 (뼈대 넣기 전 코드)</button> : null}
+        </section>
+      )}
+      <div className="lc3-foot">
+        {at < 4 ? <button className="lc3-next" disabled={deck.busy} onClick={() => onOpen(at + 1)}>
+          <span className="small">{at === 0 ? "첫 도움" : nextFresh ? "다음 도움" : "다음"}</span><b>{label(at + 1)}</b><span aria-hidden>›</span></button>
+          : <span className="small muted">도움은 여기까지예요. 더 막히면 아래에 물어보세요.</span>}
       </div>
     </div>
   );

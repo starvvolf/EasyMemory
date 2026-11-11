@@ -1391,8 +1391,6 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pbt-item.prev{background:color-mix(in srgb,var(--line) 22%,var(--surface));opacity:.9}
 
 /* 도움 네 칸 · 풀이 일지 (11/11) */
-.dejipgi .cs-help{border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:8px}
-.dejipgi .cs-help .btn.opened{border-color:var(--accent);color:var(--accent)}
 .dejipgi .pt-logs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 .dejipgi .pt-log{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
 .dejipgi .pt-log dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:0;font-size:13.5px}
@@ -1400,3 +1398,27 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .pt-log dd{margin:0;min-width:0}
 .dejipgi .pt-week{background:var(--accent-soft);border-radius:8px;padding:6px 10px}
 .dejipgi .pbt-debt{font-size:11.5px;color:var(--pbt-gap);line-height:1.5}
+
+/* 막혔을 때 (11/11, 자료 지도 강의 탭 모양을 따름) */
+.dejipgi .hd{display:flex;flex-direction:column;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.dejipgi .hd-top{display:flex;justify-content:space-between;align-items:baseline}
+.dejipgi .hd-bar{gap:8px}
+.dejipgi .hd-bar .lc3-arrow{width:28px;height:28px;flex:0 0 28px;font-size:17px}
+.dejipgi .hd-gauge{flex:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.dejipgi .hd-seg{display:flex;flex-direction:column;gap:5px;background:none;border:0;padding:0;cursor:pointer;text-align:left;min-width:0}
+.dejipgi .hd-seg:disabled{cursor:default}
+.dejipgi .hd-bar-fill{display:block;height:4px;border-radius:99px;background:var(--line);transition:background .3s ease}
+.dejipgi .hd-seg.done .hd-bar-fill{background:var(--accent)}
+.dejipgi .hd-seg.on .hd-bar-fill{box-shadow:0 0 0 2px var(--accent-soft)}
+.dejipgi .hd-seglabel{font-size:11.5px;color:var(--muted);text-align:center}
+.dejipgi .hd-seg.on .hd-seglabel{color:var(--ink);font-weight:700}
+.dejipgi .hd-seg:disabled:not(.done) .hd-seglabel{opacity:.55}
+.dejipgi .hd-box{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.dejipgi .hd-box .lc3-head{padding-bottom:8px}
+.dejipgi .hd-box .lc3-title{font-size:15.5px}
+.dejipgi .hd-empty{background:var(--ground)}
+.dejipgi .hd-title{margin:0;font-weight:700}
+.dejipgi .hd-say{font-size:14.5px;line-height:1.75;white-space:pre-line}
+.dejipgi .hd .lc3-next{padding:8px 14px;border-radius:12px}
+/* 힌트 버튼을 뺀 만큼 채팅을 크게 */
+.dejipgi .cs-ai:not(.training) .cs-chat{min-height:260px}
