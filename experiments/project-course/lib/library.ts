@@ -28,6 +28,51 @@ export async function libraryRun(runId: string) {
     runId, title: g.long?.text ?? "", map: (g.map ?? []).map((x) => x.title), current: g.current?.title ?? null,
     goals: recs.map((x) => ({ goal: x.goal, status: x.status, summary: x.summary, steps: x.steps, from: x.from, to: x.to,
       cards: (x.cards ?? []).map((c) => ({ name: c.name, situation: c.situation, did: c.did, quote: c.verified ? c.quote : "", learned: c.learned, next: c.next, how: c.how, recheck: c.recheck?.q ?? "" })) })),
-    path: note?.path ?? [], moments: ms.moments, chunks,
+    path: note?.path ?? [], moments: ms.moments, chunks, scenes: await scenesOf(runId, recs.map((x) => ({ goal: x.goal, from: x.from, to: x.to }))),
   };
+}
+
+/* ---------- 장면 복기(11/11 사용자 "오답 노트 · 풀이 노트 · 일기장 … 내가 공부하던 장면을 복기할 수 있게") ----------
+ * 타임라인 칸(학습자 말 · 버튼 · 저장 · 터미널 + 튜터 답 · 도구)과 저장본 차이를 시간순으로 펼치고, 그때의 현재 목표로 장(章)을 나눈다. 코드만, AI 없음. */
+export type SceneEv = { at: string; kind: "me" | "tutor" | "button" | "cmd" | "save" | "note"; text: string; tools?: string[]; ok?: boolean; diff?: string[]; file?: string; err?: string };
+export type Chapter = { goal: string; from: string; to: string; events: SceneEv[] };
+async function scenesOf(runId: string, recs: { goal: string; from: string; to: string }[]): Promise<Chapter[]> {
+  const TL = await import("./timeline.ts"), GR = await import("./goal-record.ts"), M = await import("./moments.ts");
+  const [steps, saves, ms] = await Promise.all([TL.stepsOf(runId).catch(() => []), GR.savesOf(runId).catch(() => []), M.momentsOf(runId).catch(() => [])]);
+  const chapters: Chapter[] = [];
+  let prevGoal = "";
+  const chapterFor = (goal: string, at: string) => {
+    let c = chapters.at(-1);
+    if (!c || c.goal !== goal) { c = { goal, from: at, to: at, events: [] }; chapters.push(c); }
+    c.to = at; return c;
+  };
+  for (const st of steps) {
+    // 그 행동을 할 때의 목표 = 바로 앞 칸 뒤의 상태(첫 칸은 자기 상태)
+    const goal = prevGoal || st.state?.current?.title || "";
+    prevGoal = st.state?.current?.title ?? prevGoal;
+    const t = st.trigger, label = t.label ?? "";
+    if (/^목표 정리:/.test(label)) continue; // 정리는 장 머리에 따로 붙는다
+    const c = chapterFor(goal, st.at);
+    if (t.kind === "message") c.events.push({ at: st.at, kind: "me", text: t.text ?? "" });
+    else if (t.kind === "save") {
+      const f = label.replace(/^저장:\s*/, "");
+      const i = saves.findIndex((x) => x.file === f && Math.abs(Date.parse(x.at) - Date.parse(st.at)) < 5000);
+      const before = i > 0 ? [...saves.slice(0, i)].reverse().find((x) => x.file === f)?.text ?? "" : "";
+      c.events.push({ at: st.at, kind: "save", text: `${f} 저장`, file: f, diff: i >= 0 ? GR.lineDiff(before, saves[i].text).slice(0, 14) : [] });
+    } else if (/^터미널:/.test(label)) {
+      const code = (st.extra as { exitCode?: number | null } | undefined)?.exitCode;
+      const cmd = label.replace(/^터미널:\s*/, ""), ok = typeof code === "number" ? code === 0 : undefined;
+      // 실패한 명령의 오류 한 줄은 막힌 순간 장부에 있다(같은 명령, 몇 초 안)
+      const m = ok === false ? ms.find((x) => x.command && cmd.startsWith(x.command.slice(0, 60)) && Math.abs(Date.parse(x.openedAt) - Date.parse(st.at)) < 5000) : undefined;
+      c.events.push({ at: st.at, kind: "cmd", text: cmd, ok, ...(m?.error ? { err: m.error } : {}) });
+    } else if (t.kind === "button") c.events.push({ at: st.at, kind: "button", text: t.text ? `${label} · ${t.text}` : label });
+    else c.events.push({ at: st.at, kind: "note", text: label });
+    if (st.reply?.trim() || st.tools?.length) c.events.push({ at: st.endAt || st.at, kind: "tutor", text: (st.reply ?? "").trim().slice(0, 2400), tools: (st.tools ?? []).slice(0, 8) });
+  }
+  for (const c of chapters) c.events.sort((a, b) => a.at.localeCompare(b.at));
+  // 같은 버튼을 연달아 여러 번(다이얼 돌려 보기 등)은 마지막 하나만
+  for (const c of chapters) c.events = c.events.filter((e, i, xs) => !(e.kind === "button" && xs[i + 1]?.kind === "button" && xs[i + 1].text.split(" · ")[0] === e.text.split(" · ")[0]));
+  // 타임라인이 없던 예전 실습: 목표 정리 시각으로 빈 장이라도
+  if (!chapters.length) return recs.map((r) => ({ goal: r.goal, from: r.from, to: r.to, events: [] }));
+  return chapters.filter((c) => c.events.length);
 }

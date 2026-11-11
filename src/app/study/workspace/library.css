@@ -103,3 +103,54 @@
   .dejipgi .lib-side{max-height:40vh}
   .dejipgi .lib-page{padding:16px}
 }
+
+/* 장면 복기(11/11 사용자 "공부하던 장면을 복기"): 실습은 장(목표)마다 대화 · 버튼 · 명령 · 저장을 시간순으로, 알고리즘은 풀이 노트 */
+.dejipgi .rp-ch{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:18px;padding:14px 16px;background:var(--surface)}
+.dejipgi .rp-chh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dejipgi .rp-chh b{flex:1;min-width:0;font-size:15.5px;word-break:keep-all}
+.dejipgi .rp-sum{margin:0;padding:8px 12px;border-radius:12px;background:var(--accent-soft);font-size:13.5px;line-height:1.6}
+.dejipgi .rp-feed{display:flex;flex-direction:column;gap:8px;padding:4px 2px}
+.dejipgi .rp-row{display:flex;align-items:flex-end;gap:8px}
+.dejipgi .rp-row.me{justify-content:flex-end}
+.dejipgi .rp-who{font-size:16px;flex:none;margin-bottom:4px}
+.dejipgi .rp-b{max-width:78%;padding:8px 12px;border-radius:16px;font-size:13.5px;line-height:1.6}
+.dejipgi .rp-b p{margin:0 0 4px}
+.dejipgi .rp-b p:last-child{margin-bottom:0}
+.dejipgi .rp-b.me{background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:6px}
+.dejipgi .rp-b.me code{background:rgba(255,255,255,.18);color:inherit}
+.dejipgi .rp-b.tutor{background:var(--surface-2);border-bottom-left-radius:6px}
+.dejipgi .rp-t{font-size:11px;color:var(--faint);flex:none}
+.dejipgi .rp-tools{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px !important}
+.dejipgi .rp-tools span{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+.dejipgi .rp-btn{align-self:center;display:flex;align-items:baseline;gap:8px;max-width:88%;font-size:12.5px;color:var(--muted);text-align:center;flex-wrap:wrap;justify-content:center}
+.dejipgi .rp-pill{padding:3px 11px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);font-weight:600;color:var(--ink);flex:none}
+.dejipgi .rp-btn.ok .rp-pill{border-color:var(--good);color:var(--good);background:var(--good-soft)}
+.dejipgi .rp-btn.bad .rp-pill{border-color:var(--bad);color:var(--bad);background:var(--bad-soft)}
+.dejipgi .rp-bt{line-height:1.5}
+.dejipgi .rp-cmd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 11px;border-radius:12px;background:#1d2027;color:#e9ebef;font-size:12.5px}
+.dejipgi .rp-cmd code{font-family:var(--mono);flex:1;min-width:0}
+.dejipgi .rp-cmd span{font-size:11px;font-weight:700}
+.dejipgi .rp-cmd.ok span{color:#5fcb9a}
+.dejipgi .rp-cmd.bad span{color:#ff8c78}
+.dejipgi .rp-cmd pre{width:100%;margin:0;font-family:var(--mono);font-size:12px;color:#ffb3a6;white-space:pre-wrap}
+.dejipgi .rp-save{display:flex;flex-direction:column;gap:4px}
+.dejipgi .rp-moment{margin:0;padding:8px 12px;border-radius:12px;background:var(--help-soft);font-size:13px}
+.dejipgi .rp-moment code{font-family:var(--mono);font-size:12px}
+.dejipgi .rp-left{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--line);padding-top:10px}
+.dejipgi .rp-note{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:8px 12px;border-radius:12px;background:var(--surface-2);font-size:13px}
+.dejipgi .rp-note b{font-size:13.5px}
+.dejipgi .rp-note p{width:100%;margin:0;line-height:1.55}
+.dejipgi .rp-tags{display:flex;gap:6px;flex-wrap:wrap}
+.dejipgi .rp-wrong{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:16px;border:1px solid var(--line);background:var(--surface-2)}
+.dejipgi .rp-wrong p{margin:0;line-height:1.6}
+.dejipgi .lib-k.bad{color:var(--bad)}
+.dejipgi .lib-k.ok{color:var(--good)}
+.dejipgi .rp-steps{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.dejipgi .rp-steps li{position:relative;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:13.5px}
+.dejipgi .rp-steps li::before{content:"";position:absolute;left:-20px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--line-strong)}
+.dejipgi .rp-steps li.ok::before{background:var(--good)}
+.dejipgi .rp-steps li.bad::before{background:var(--bad)}
+.dejipgi .rp-steps li p{width:100%;margin:0}
+.dejipgi .rp-rich p{margin:0 0 4px}
+.dejipgi .rp-rich .ws-code{margin:4px 0;font-size:12px;border-radius:10px}
+.dejipgi .rp-b.me .rp-rich .ws-code{background:rgba(0,0,0,.18);color:inherit}

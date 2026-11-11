@@ -8,13 +8,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { call, errorText, go, handoff, later, type ItemLite, type Tree } from "./api";
 import { MaterialArticle, StateChip, tidyLine, type MaterialRow } from "./KnowledgeWindow";
 import LearnerNote from "./LearnerNote";
-import { Inline } from "./Rich";
+import { Inline, Rich } from "./Rich";
 import "./library.css";
 
 type Branch = "material" | "code" | "project";
 const BRANCHES: Array<[Branch, string]> = [["material", "자료"], ["code", "알고리즘"], ["project", "실습"]];
 const KEY = "recaller:lib-branch";
-type Entry = { key: string; branch: Branch; icon: string; title: string; sub: string; lastAt: string; itemIds: string[]; row?: MaterialRow; runId?: string; pages?: number };
+type Entry = { key: string; branch: Branch; icon: string; title: string; sub: string; lastAt: string; itemIds: string[]; row?: MaterialRow; runId?: string; pages?: number; log?: SolveLog };
 type RunRow = { id: string; title: string; createdAt: string; lastAt: string; ended: boolean; goals: number; cards: number; moments: number; gaps: number };
 type Msg = { role: "me" | "ai"; text: string };
 
@@ -27,6 +27,7 @@ export default function Library() {
   const [items, setItems] = useState<ItemLite[]>([]);
   const [runs, setRuns] = useState<RunRow[] | null>(null);
   const [runsOnline, setRunsOnline] = useState(true);
+  const [logs, setLogs] = useState<SolveLog[] | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [itemId, setItemId] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -36,6 +37,8 @@ export default function Library() {
       const [v, t, g, lib] = await Promise.all([call<{ materials: MaterialRow[] }>("/api/knowledge/material-view"), call<Tree>("/api/knowledge"),
         call<{ runs: Array<{ id: string; createdAt: string; status: string; fileName: string; pages: number[]; sectionCount?: number }> }>("/api/lab/gen?origin=study").catch(() => ({ runs: [] })),
         call<{ online: boolean; runs: RunRow[] }>("/api/project-course/library").catch(() => ({ online: false, runs: [] as RunRow[] }))]);
+      // 알고리즘: 기억 줄이 아니라 문제마다 풀이 일지(PS 튜터, B의 /api/code/tutor/logs)
+      void call<{ logs: SolveLog[] }>("/api/code/tutor/logs").then((r) => setLogs(r.logs)).catch(() => setLogs([]));
       // 자료(PDF)는 실제로 만든 자료(study-gen) 기준, 기억은 같은 자료 줄(genId)에서 가져온다
       const pdfRows = v.materials.filter((r) => r.group === "material" && r.kind === "pdf");
       const pdfs: MaterialRow[] = g.runs.filter((r) => r.status === "done" || r.status === "cards").map((r) => {
@@ -59,7 +62,7 @@ export default function Library() {
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
 
   const entries = useMemo<Entry[]>(() => {
-    const mat: Entry[] = (rows ?? []).filter((r) => r.group !== "project").map((r) => ({ key: r.key, branch: r.group as Branch, row: r, itemIds: r.itemIds, lastAt: r.lastAt, title: r.title,
+    const mat: Entry[] = (rows ?? []).filter((r) => r.group === "material").map((r) => ({ key: r.key, branch: r.group as Branch, row: r, itemIds: r.itemIds, lastAt: r.lastAt, title: r.title,
       icon: r.kind === "web" ? "🌐" : r.group === "code" ? "⌨" : "📄", pages: (r as MaterialRow & { pages?: number }).pages,
       sub: r.key.startsWith("gen:") ? `${(r as MaterialRow & { pages?: number }).pages ?? "?"}쪽 · 기억 ${r.items}` : `기억 ${r.items}` }));
     // 실습: 실습 서버의 대화 실습 한 줄씩 + 그 실습에서 앱 기억으로 넘어간 것(ref project:<runId>)
@@ -69,8 +72,13 @@ export default function Library() {
       return { key: `run:${r.id}`, branch: "project", runId: r.id, icon: "🛠", title: r.title || "(목표를 정하기 전)", lastAt: r.lastAt, itemIds: mine,
         sub: [r.goals ? `목표 ${r.goals}` : "", r.cards ? `카드 ${r.cards}` : "", r.moments ? `막힘 ${r.moments}` : ""].filter(Boolean).join(" · ") || "기록 없음" };
     });
-    return [...mat, ...proj].sort((a, b) => b.lastAt.localeCompare(a.lastAt));
-  }, [rows, runs]);
+    // 알고리즘: 문제 하나에 한 줄(그 문제에서 생긴 기억 id는 채팅에 붙이려고 같은 문제 번호의 기억 줄에서)
+    const codeRows = (rows ?? []).filter((r) => r.group === "code");
+    const code: Entry[] = (logs ?? []).map((l) => ({ key: `ps:${l.number}`, branch: "code", icon: "⌨", title: `${l.number}${l.title ? ` · ${l.title}` : ""}`, lastAt: l.at, log: l,
+      itemIds: codeRows.filter((r) => r.keys.some((k) => k.includes(l.number)) || r.title.includes(l.number)).flatMap((r) => r.itemIds),
+      sub: [l.alone ? "혼자 풂" : l.solved ? "도움 받고 풂" : "아직 못 풂", l.stuck ? `막힌 곳 ${STUCK[l.stuck] ?? l.stuck}` : ""].filter(Boolean).join(" · ") }));
+    return [...mat, ...code, ...proj].sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+  }, [rows, runs, logs]);
   const list = entries.filter((e) => e.branch === branch && (!q.trim() || e.title.toLowerCase().includes(q.trim().toLowerCase())));
   const cur = entries.find((e) => e.key === sel) ?? null;
   const pick = (b: Branch) => { setBranch(b); setSel(null); setItemId(null); try { localStorage.setItem(KEY, b); } catch { /* storage off */ } };
@@ -89,7 +97,7 @@ export default function Library() {
   const main = useRef<HTMLDivElement>(null);
   const counts = (b: Branch) => entries.filter((e) => e.branch === b).length;
   const empty = !rows ? "불러오는 중…" : branch === "material" ? "아직 자료가 없어요. 공부 › 자료에서 PDF나 웹 글로 자료를 만들면 여기 꽂혀요."
-    : branch === "code" ? "아직 알고리즘 기억이 없어요. 문제를 풀면 여기 꽂혀요." : !runsOnline ? "실습 서버가 꺼져 있어 실습 목록을 못 불러왔어요. 실습 탭을 열면 켜져요." : "아직 실습 기록이 없어요.";
+    : branch === "code" ? "아직 푼 문제가 없어요. 알고리즘 문제를 풀면 풀이 노트가 여기 꽂혀요." : !runsOnline ? "실습 서버가 꺼져 있어 실습 목록을 못 불러왔어요. 실습 탭을 열면 켜져요." : "아직 실습 기록이 없어요.";
 
   return (
     <div className="lib" ref={box} style={h ? { height: h } : undefined}>
@@ -142,7 +150,8 @@ function ItemList({ ids, byId, onItem }: { ids: string[]; byId: Map<string, Item
 }
 
 function EntryView({ e, byId, onItem }: { e: Entry; byId: Map<string, ItemLite>; onItem: (id: string) => void }) {
-  if (e.branch === "project" && e.runId) return <RunView e={e} byId={byId} onItem={onItem} />;
+  if (e.branch === "project" && e.runId) return <RunView e={e} />;
+  if (e.branch === "code" && e.log) return <SolveView log={e.log} />;
   if (e.branch === "material" && e.row?.kind === "web" && e.row.sourceId) return <><Head icon="🌐" title={e.title} sub={`${e.sub} · ${day(e.lastAt)}`} /><MaterialArticle id={e.row.sourceId} onChanged={() => {}} /></>;
   return <>
     <Head icon={e.icon} title={e.title} sub={`${e.sub} · ${day(e.lastAt)}`}>
@@ -159,12 +168,38 @@ type Card = { name: string; situation: string; did: string; quote: string; learn
 type GoalRec = { goal: string; status: string; summary: string; steps: string[]; from: string; to: string; cards: Card[] };
 type PGoal = { title: string; at: string; endAt: string | null; result: string; gaps: Array<{ id: string; name: string; wrong: string; status: string }> };
 type Moment = { id: string; goal: string; by: string; command?: string; error?: string; gap?: string; reasons?: string; said: string[]; tries: number; how?: string; seconds: number; changed: Array<{ file: string; diff: string[] }> };
-type RunLib = { online: boolean; title?: string; map?: string[]; current?: string | null; goals?: GoalRec[]; path?: PGoal[]; moments?: Moment[]; chunks?: Array<{ name: string; result: string | null; debts: string[] }> };
+type SceneEv = { at: string; kind: "me" | "tutor" | "button" | "cmd" | "save" | "note"; text: string; tools?: string[]; ok?: boolean; diff?: string[]; file?: string; err?: string };
+type Chapter = { goal: string; from: string; to: string; events: SceneEv[] };
+type RunLib = { online: boolean; title?: string; map?: string[]; current?: string | null; goals?: GoalRec[]; path?: PGoal[]; moments?: Moment[]; scenes?: Chapter[]; chunks?: Array<{ name: string; result: string | null; debts: string[] }> };
 const RES: Record<string, string> = { 마침: "ok", "너무 쉬움": "ok", 건너뜀: "skip", 멈춤: "skip", "진행 중": "now" };
 const mins = (a: string, b: string | null) => { if (!b) return ""; const m = Math.round((Date.parse(b) - Date.parse(a)) / 60000); return m < 1 ? "1분 안" : m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간 ${m % 60}분`; };
 const secs = (s: number) => s < 60 ? `${s}초` : s < 3600 ? `${Math.round(s / 60)}분` : `${Math.floor(s / 3600)}시간 ${Math.round((s % 3600) / 60)}분`;
+const hm = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
-function RunView({ e, byId, onItem }: { e: Entry; byId: Map<string, ItemLite>; onItem: (id: string) => void }) {
+/** 여러 줄 글: 줄마다 Inline(코드 · 굵게), 길면 접기 */
+function Para({ text, clamp = 520 }: { text: string; clamp?: number }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > clamp;
+  let shown = (long && !open ? `${text.slice(0, clamp).trimEnd()}…` : text).replace(/\*\*([^*\n]+)\*\*/g, "$1");
+  if ((shown.match(/```/g) ?? []).length % 2) shown += "\n```"; // 접다가 코드 칸 중간에서 끊기면 닫아 준다
+  return <><Rich text={shown} className="rp-rich" />{long ? <button className="linkish small" onClick={() => setOpen(!open)}>{open ? "접기" : "더 보기"}</button> : null}</>;
+}
+// 튜터 도구 이름 → 쉬운 말(모르는 이름은 그대로)
+const TOOL: Record<string, string> = { check_prereq: "선행 확인", set_prereqs: "선행 적기", new_names: "새 이름 알려 줌", set_current_goal: "현재 목표 정함", propose_plan: "계획 세우기", set_long_goal: "장기 목표 정함",
+  read: "파일 읽기", glob: "파일 찾기", grep: "코드 찾기", run_snippet: "코드 조각 실행", edit: "파일 고침", write: "파일 씀", patch: "파일 고침", search_history: "지난 기록 찾기", learner_profile: "학습자 메모리 보기" };
+function Scene({ ev }: { ev: SceneEv }) {
+  if (ev.kind === "me") return <div className="rp-row me"><div className="rp-b me"><Para text={ev.text} /></div><span className="rp-t">{hm(ev.at)}</span></div>;
+  if (ev.kind === "tutor") return <div className="rp-row"><span className="rp-who" aria-hidden>🧑‍🏫</span><div className="rp-b tutor">{ev.text ? <Para text={ev.text} /> : null}
+    {ev.tools?.length ? <p className="rp-tools">{[...new Set(ev.tools.map((t) => TOOL[t] ?? t))].map((t) => <span key={t}>{t}</span>)}</p> : null}</div></div>;
+  if (ev.kind === "cmd") return <div className={`rp-cmd ${ev.ok === false ? "bad" : ev.ok ? "ok" : ""}`}><code>$ {ev.text}</code><span>{ev.ok === false ? "오류" : ev.ok ? "성공" : ""}</span>{ev.err ? <pre>{ev.err}</pre> : null}</div>;
+  if (ev.kind === "save") return <div className="rp-save"><span className="small muted">💾 {ev.file} 저장 · {hm(ev.at)}</span>{ev.diff?.length ? <pre className="lib-diff">{ev.diff.join("\n")}</pre> : null}</div>;
+  // 버튼: 판정이면 색으로(맞음 초록 · 일부 · 틀림 빨강)
+  const verdict = /판정: 맞음/.test(ev.text) ? "ok" : /판정: (일부|틀림)/.test(ev.text) ? "bad" : "";
+  const [head, ...rest] = ev.text.split(" · ");
+  return <div className={`rp-btn ${verdict}`}><span className="rp-pill">{head}</span>{rest.length ? <span className="rp-bt">{rest.join(" · ")}</span> : null}</div>;
+}
+
+function RunView({ e }: { e: Entry }) {
   const [d, setD] = useState<RunLib | null>(null);
   const [error, setError] = useState("");
   useEffect(() => later(() => { setD(null); call<RunLib>(`/api/project-course/runs/${encodeURIComponent(e.runId!)}/library`).then(setD).catch((x) => setError(errorText(x))); }), [e.runId]);
@@ -172,50 +207,65 @@ function RunView({ e, byId, onItem }: { e: Entry; byId: Map<string, ItemLite>; o
   if (error) return <>{head}<p className="ws-err">{error}</p></>;
   if (!d) return <>{head}<p className="small muted">실습 기록을 불러오는 중…</p></>;
   if (!d.online) return <>{head}<p className="small muted">실습 서버가 꺼져 있어요. 실습 탭을 열면 켜져요.</p></>;
-  const recs = d.goals ?? [], ms = d.moments ?? [], chunks = d.chunks ?? [];
-  // 지나온 목표: 타임라인 길(세션 노트)에 목표 정리를 합친다(정리만 있고 길에 없는 목표도, 이름 없는 빈 칸은 정리가 있으면 뺀다)
-  const seen = new Set((d.path ?? []).map((g) => g.title));
-  const path = [...(d.path ?? []).filter((g) => g.title || !recs.length),
-    ...recs.filter((r) => !seen.has(r.goal)).map((r) => ({ title: r.goal, at: r.from, endAt: r.to, result: r.status, gaps: [] }) as PGoal)].sort((a, b) => a.at.localeCompare(b.at));
-  const cards = recs.flatMap((r) => r.cards.map((c) => ({ ...c, goal: r.goal })));
-  const gaps = path.flatMap((g) => g.gaps);
-  const done = path.filter((g) => g.result === "마침" || g.result === "너무 쉬움").length;
+  const recs = d.goals ?? [], ms = d.moments ?? [], chunks = d.chunks ?? [], scenes = d.scenes ?? [];
+  const path = d.path ?? [];
+  const done = recs.filter((r) => r.status === "마침").length;
+  const cards = recs.reduce((n, r) => n + r.cards.length, 0);
+  const shownMoments = new Set<string>();
   return <>
     {head}
     <div className="lib-stats">
-      <span><b>{path.length}</b>목표</span><span><b>{done}</b>마침</span><span><b>{cards.length}</b>기억 카드</span><span><b>{ms.length}</b>막힌 순간</span><span><b>{gaps.length}</b>부족했던 것</span>
+      <span><b>{scenes.filter((c) => c.goal).length || path.length}</b>목표</span><span><b>{done}</b>마침</span><span><b>{ms.length}</b>막힌 순간</span><span><b>{cards}</b>남은 것</span>
     </div>
-    {path.length ? <section className="lib-sec"><h3>지나온 목표</h3>
-      <ol className="lib-path">{path.map((g, i) => {
-        const rec = recs.find((r) => r.goal === g.title);
-        return <li key={i} className={RES[g.result] ?? ""}>
-          <div className="lib-pg"><span className="lib-dot">{i + 1}</span><b>{g.title || "(이름 없는 목표)"}</b><span className={`lib-res ${RES[g.result] ?? ""}`}>{g.result}</span><span className="small muted">{mins(g.at, g.endAt)}</span></div>
-          {rec?.summary ? <p className="lib-sum">{rec.summary}</p> : null}
-          {g.gaps.length ? <p className="small">{g.gaps.map((x) => <span key={x.id} className="lib-tag bad" title={x.wrong}>부족 · {x.name}</span>)}</p> : null}
-        </li>;
-      })}</ol></section> : null}
-    {cards.length ? <section className="lib-sec"><h3>기억 카드</h3><div className="lib-cards">{cards.map((c, i) => (
-      <article key={i} className="lib-card">
-        <header><b>{c.name}</b><span className={`lib-how ${/혼자/.test(c.how) ? "ok" : /아직/.test(c.how) ? "bad" : ""}`}>{c.how}</span></header>
-        {c.situation ? <p className="small muted">{c.situation}</p> : null}
-        {c.did ? <p>{c.did}</p> : null}
-        {c.quote ? <blockquote>“{c.quote}”</blockquote> : null}
-        {c.learned ? <p><span className="lib-k">배운 것</span>{c.learned}</p> : null}
-        {c.next ? <p><span className="lib-k">다음엔</span>{c.next}</p> : null}
-        {c.recheck ? <p className="small muted"><span className="lib-k">다시 물을 것</span>{c.recheck}</p> : null}
-      </article>))}</div></section> : null}
-    {ms.length ? <section className="lib-sec"><h3>막힌 순간</h3><ul className="lib-moments">{ms.map((m) => (
-      <li key={m.id}>
-        <div className="lib-pg"><span className="lib-tag">{m.by}</span><b>{m.command ? <code>{m.command}</code> : m.gap || m.reasons || m.goal}</b><span className={`lib-res ${m.how === "안 풀고 넘어감" ? "skip" : m.how ? "ok" : "now"}`}>{m.how ?? "아직 막힘"}</span><span className="small muted">{secs(m.seconds)}{m.tries > 1 ? ` · ${m.tries}번 해 봄` : ""}</span></div>
-        {m.error ? <p className="lib-err">{m.error}</p> : null}
-        {m.said.length ? <p className="small muted">내가 한 말: {m.said.map((s) => `“${s}”`).join(" ")}</p> : null}
-        {m.changed.map((c) => <pre key={c.file} className="lib-diff"><span className="small muted">{c.file}</span>{"\n"}{c.diff.join("\n")}</pre>)}
-      </li>))}</ul></section> : null}
+    {scenes.map((c, i) => {
+      const rec = recs.find((r) => r.goal === c.goal);
+      const pg = path.find((g) => g.title === c.goal);
+      const mine = ms.filter((m) => m.goal === c.goal && !shownMoments.has(m.id)); mine.forEach((m) => shownMoments.add(m.id));
+      const result = rec?.status ?? pg?.result ?? "";
+      return <section key={i} className="rp-ch">
+        <header className="rp-chh"><span className="lib-dot">{c.goal ? scenes.slice(0, i + 1).filter((x) => x.goal).length : "·"}</span>
+          <b>{c.goal || "시작 · 무엇을 만들지 정하기"}</b>{result ? <span className={`lib-res ${RES[result] ?? ""}`}>{result}</span> : null}<span className="small muted">{hm(c.from)} · {mins(c.from, c.to)}</span></header>
+        {rec?.summary ? <p className="rp-sum"><span className="lib-k">정리</span>{rec.summary}</p> : null}
+        <div className="rp-feed">{c.events.map((ev, k) => <Scene key={k} ev={ev} />)}</div>
+        {mine.map((m) => <p key={m.id} className="rp-moment">🧱 <b>막힌 순간</b> {m.command ? <code>{m.command}</code> : m.gap || m.reasons} → {m.how ?? "아직 막힘"} · {secs(m.seconds)}{m.tries > 1 ? ` · ${m.tries}번 해 봄` : ""}</p>)}
+        {rec?.cards.length ? <div className="rp-left"><p className="eyebrow">이 장면에서 남은 것</p>{rec.cards.map((cd, k) => <div key={k} className="rp-note">
+          <b>{cd.name}</b><span className={`lib-how ${/혼자/.test(cd.how) ? "ok" : /아직/.test(cd.how) ? "bad" : ""}`}>{cd.how}</span>
+          {cd.did ? <p className="small muted">{cd.did}</p> : null}{cd.learned ? <p><span className="lib-k">배운 것</span>{cd.learned}</p> : null}{cd.next ? <p><span className="lib-k">다음엔</span>{cd.next}</p> : null}
+        </div>)}</div> : null}
+      </section>;
+    })}
+    {ms.some((m) => !shownMoments.has(m.id)) ? <section className="lib-sec"><h3>그 밖의 막힌 순간</h3>{ms.filter((m) => !shownMoments.has(m.id)).map((m) => <p key={m.id} className="rp-moment">🧱 {m.command ? <code>{m.command}</code> : m.gap || m.reasons} → {m.how ?? "아직 막힘"} · {secs(m.seconds)}</p>)}</section> : null}
     {chunks.length ? <section className="lib-sec"><h3>먼저 알아야 했던 것</h3><ul className="lib-chunks">{chunks.map((c) => (
       <li key={c.name}><b>{c.name}</b>{c.result ? <span className={`lib-res ${c.result === "됨" ? "ok" : "bad"}`}>{c.result === "됨" ? "알아요" : "몰라요"}</span> : null}
         {c.debts.length ? <span className="small muted"> 받아 쓴 것: {c.debts.join(", ")}</span> : null}</li>))}</ul></section> : null}
-    {e.itemIds.length ? <section className="lib-sec"><h3>기억으로 넘어간 것</h3><ItemList ids={e.itemIds} byId={byId} onItem={onItem} /></section> : null}
-    {!path.length && !cards.length && !ms.length ? <p className="small muted">이 실습에는 아직 남은 기록이 없어요. 목표를 끝까지 하거나 [다음으로]를 누르면 정리가 생겨요.</p> : null}
+    {!scenes.length ? <p className="small muted">이 실습은 장면 기록(타임라인)을 남기기 전에 한 것이라 다시 볼 장면이 없어요.</p> : null}
+  </>;
+}
+
+/* ---------- 알고리즘: 문제 하나의 풀이 노트(PS 튜터의 풀이 일지 · 관찰일지, B) ---------- */
+type SolveLog = { number: string; title: string; at: string; patterns: string[]; stuck: string | null; help: number; fill: boolean; solved: boolean; alone: boolean; gap?: string; fix?: string; cue?: string; redo: "none" | "waiting" | "due" | "done"; redoAt?: string };
+type JEntry = { at: string; number: string; title: string; what: string; result: string; text: string; lesson?: { gap?: string; fix?: string; cue?: string } };
+const STUCK: Record<string, string> = { understand: "문제 이해", recognize: "방법 떠올리기", design: "계획 세우기", execute: "코드로 옮기기" };
+const REDO: Record<string, string> = { none: "", waiting: "혼자 다시 풀기 · 기다리는 중", due: "혼자 다시 풀 차례", done: "혼자 다시 풀었어요" };
+const JRES: Record<string, string> = { alone: "ok", helped: "", learned: "bad", seen: "", other: "" };
+function SolveView({ log }: { log: SolveLog }) {
+  const [js, setJs] = useState<JEntry[] | null>(null);
+  useEffect(() => later(() => { call<{ entries: JEntry[] }>("/api/code/tutor/journal").then((r) => setJs(r.entries.filter((x) => x.number === log.number).sort((a, b) => a.at.localeCompare(b.at)))).catch(() => setJs([])); }), [log.number]);
+  const verdict = log.alone ? ["처음부터 혼자 풂", "ok"] : log.solved ? ["도움 받고 풂", ""] : ["아직 못 풂", "bad"];
+  return <>
+    <Head icon="⌨" title={`${log.number}${log.title ? ` · ${log.title}` : ""}`} sub={[day(log.at), log.patterns.join(", ")].filter(Boolean).join(" · ")}><button className="btn ghost small" onClick={() => go("code", { id: log.number })}>문제 다시 열기</button></Head>
+    <div className="rp-tags"><span className={`lib-res ${verdict[1]}`}>{verdict[0]}</span>{log.stuck ? <span className="lib-res bad">막힌 곳 · {STUCK[log.stuck] ?? log.stuck}</span> : null}
+      {log.help ? <span className="lib-res">도움 {log.help}칸까지 열어 봄</span> : null}{log.fill ? <span className="lib-res">뼈대에서 채우기</span> : null}
+      {REDO[log.redo] ? <span className={`lib-res ${log.redo === "done" ? "ok" : log.redo === "due" ? "now" : ""}`}>{REDO[log.redo]}</span> : null}</div>
+    {log.gap || log.fix ? <section className="rp-wrong"><p className="eyebrow">오답 노트</p>
+      {log.gap ? <p><span className="lib-k bad">그때 내 생각</span>{log.gap}</p> : null}
+      {log.fix ? <p><span className="lib-k ok">이렇게 풀려요</span>{log.fix}</p> : null}
+      {log.cue ? <p className="small muted"><span className="lib-k">다음에 알아챌 신호</span>{log.cue}</p> : null}</section> : null}
+    <section className="lib-sec"><h3>푼 과정</h3>
+      {!js ? <p className="small muted">불러오는 중…</p> : !js.length ? <p className="small muted">한 일 기록이 없어요.</p> :
+        <ol className="rp-steps">{js.map((j, i) => <li key={i} className={JRES[j.result] ?? ""}><span className="rp-t">{hm(j.at)}</span><b>{j.what}</b><span>{j.text}</span>
+          {j.lesson?.gap ? <p className="small"><span className="lib-k bad">그때 생각</span>{j.lesson.gap}{j.lesson.fix ? <><br /><span className="lib-k ok">고친 생각</span>{j.lesson.fix}</> : null}</p> : null}</li>)}</ol>}
+    </section>
   </>;
 }
 
