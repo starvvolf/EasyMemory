@@ -115,9 +115,19 @@ export function Rich({ text, className }: { text: string; className?: string }) 
       // 한 줄 전체가 식 하나($…$ 또는 $$…$$)면 따로 떼어 쓴 식으로
       const solo = lines.map((l) => /^\s*\$\$?([^$]+?)\$\$?\s*$/.exec(l)?.[1] ?? null);
       if (solo.every((x) => x !== null && isTex(x))) { lines.forEach((_, k) => out.push(<div key={`${key}d${k}`} className="ws-display"><TeX tex={solo[k]!} display /></div>)); return; }
-      if (lines.every((l) => /^\s*([-*•]|\d+[.)])\s+/.test(l))) {
+      const isItem = (l: string) => /^\s*([-*•]|\d+[.)])\s+/.test(l);
+      if (lines.every(isItem)) {
         const items = lines.map((l, k) => <li key={k}>{inline(l.replace(/^\s*([-*•]|\d+[.)])\s+/, ""))}</li>);
         out.push(/^\s*\d/.test(lines[0]) ? <ol key={key}>{items}</ol> : <ul key={key}>{items}</ul>);
+      } else if (lines.some(isItem) && lines.length > 1) {
+        // 글 줄과 목록 줄이 빈 줄 없이 섞인 덩어리(11/11 질문·답 카드 "간선은 두 종류다.\n- …\n- …"): 이어진 줄끼리 나눠 글은 문단, 목록은 목록으로
+        const runs: Array<{ item: boolean; ls: string[] }> = [];
+        for (const l of lines) { const it = isItem(l); const last = runs[runs.length - 1]; if (last && last.item === it) last.ls.push(l); else runs.push({ item: it, ls: [l] }); }
+        runs.forEach((r, ri) => {
+          if (!r.item) { out.push(<p key={`${key}r${ri}`}>{r.ls.map((l, k) => <Fragment key={k}>{k ? <br /> : null}{inline(l)}</Fragment>)}</p>); return; }
+          const items = r.ls.map((l, k) => <li key={k}>{inline(l.replace(/^\s*([-*•]|\d+[.)])\s+/, ""))}</li>);
+          out.push(/^\s*\d/.test(r.ls[0]) ? <ol key={`${key}r${ri}`}>{items}</ol> : <ul key={`${key}r${ri}`}>{items}</ul>);
+        });
       } else if (/^#{1,4}\s/.test(lines[0]) && lines.length === 1) out.push(<p key={key} className="ws-h">{inline(lines[0].replace(/^#+\s/, ""))}</p>);
       else out.push(<p key={key}>{lines.map((l, k) => <Fragment key={k}>{k ? <br /> : null}{inline(l)}</Fragment>)}</p>);
       });
