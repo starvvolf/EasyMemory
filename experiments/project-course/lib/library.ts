@@ -26,7 +26,10 @@ export async function libraryRun(runId: string) {
   const chunks = Object.values(g.chunks ?? {}).filter((c) => c.result || c.debts?.length).map((c) => ({ name: c.name, result: c.result ?? null, debts: c.debts ?? [] }));
   return {
     runId, title: g.long?.text ?? "", map: (g.map ?? []).map((x) => x.title), current: g.current?.title ?? null,
-    goals: recs.map((x) => ({ goal: x.goal, status: x.status, summary: x.summary, steps: x.steps, from: x.from, to: x.to,
+    // 이 실습에서 만든 것(11/12): 학습자가 마지막으로 성공해 돌린 명령과 그 화면(코드가 셸 기록에서)
+    demo: await (async () => { const h = (await (await import("./shell.ts")).shellOf(runId).catch(() => ({ history: [] as { by: string; code: number | null; out: string; command: string }[] }))).history;
+      const r = [...h].reverse().find((x) => x.by === "learner" && x.code === 0 && x.out.trim()); return r ? { command: r.command.slice(0, 120), out: r.out.trim().split("\n").slice(-10).join("\n").slice(-600) } : null; })(),
+    goals: recs.map((x) => ({ goal: x.goal, done: x.done, status: x.status, summary: x.summary, steps: x.steps, from: x.from, to: x.to,
       review: x.review ?? null, cards: (x.cards ?? []).map((c) => ({ name: c.name, situation: c.situation, did: c.did, quote: c.verified ? c.quote : "", learned: c.learned, next: c.next, how: c.how, recheck: c.recheck?.q ?? "" })) })),
     path: note?.path ?? [], moments: ms.moments, chunks, ongoing: await GR.ongoingOf(runId).catch(() => null), scenes: await scenesOf(runId, recs.map((x) => ({ goal: x.goal, from: x.from, to: x.to }))),
   };

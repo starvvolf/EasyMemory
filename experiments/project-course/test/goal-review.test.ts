@@ -29,3 +29,15 @@ test("목표 정리 총정리 · 진행 중 정리", async () => {
   assert.equal(rec?.review?.aim, "지출을 파일에 쌓으려 했어요.");
   assert.equal(await R.ongoingOf("r1"), null, "끝나 정리되면 진행 중 정리는 지움");
 });
+
+test("총정리 장면 코드: 기록에 있으면 그대로, 없으면 예시 표시, 없는 결과는 버림", async () => {
+  const R = await import("../lib/goal-record.ts");
+  const corpus = "a = input()\nprint(a + b)\nTypeError: x".replace(/\s+/g, "");
+  const r = R.cleanReview({ aim: "x", reached: "", weak: [], scenes: [
+    { title: "t1", body: "b", code: "a = input()\nprint(a + b)  # 이어 붙음", result: "TypeError: x", example: false },
+    { title: "t2", body: "b", code: "print(int('5') + 3)", result: "8", example: false },
+    { title: "t3", body: "b", code: "", result: "지어낸 결과", example: false }] }, corpus)!;
+  assert.equal(r.scenes[0].example, undefined); assert.equal(r.scenes[0].result, "TypeError: x");
+  assert.equal(r.scenes[1].example, true, "기록에 없는 코드는 예시"); assert.equal(r.scenes[1].result, "8");
+  assert.equal(r.scenes[2].result, undefined, "기록에 없는 결과는 버림");
+});

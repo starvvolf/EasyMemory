@@ -188,12 +188,12 @@ function EntryView({ e: top, byId, onItem }: { e: Entry; byId: Map<string, ItemL
 
 /* ---------- 실습 한 판 정리 ---------- */
 type Card = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: string; recheck: string };
-type GoalRec = { goal: string; status: string; summary: string; steps: string[]; from: string; to: string; cards: Card[]; review?: GoalReview | null };
+type GoalRec = { goal: string; done?: string; status: string; summary: string; steps: string[]; from: string; to: string; cards: Card[]; review?: GoalReview | null };
 type PGoal = { title: string; at: string; endAt: string | null; result: string; gaps: Array<{ id: string; name: string; wrong: string; status: string }> };
 type Moment = { id: string; goal: string; by: string; command?: string; error?: string; gap?: string; reasons?: string; said: string[]; tries: number; how?: string; seconds: number; changed: Array<{ file: string; diff: string[] }> };
 type SceneEv = { g?: number; at: string; kind: "me" | "tutor" | "button" | "cmd" | "save" | "note"; text: string; tools?: string[]; ok?: boolean; diff?: string[]; file?: string; err?: string };
 type Chapter = { goal: string; from: string; to: string; events: SceneEv[] };
-type RunLib = { online: boolean; title?: string; map?: string[]; current?: string | null; goals?: GoalRec[]; path?: PGoal[]; moments?: Moment[]; scenes?: Chapter[]; ongoing?: Ongoing | null; chunks?: Array<{ name: string; result: string | null; debts: string[] }> };
+type RunLib = { online: boolean; title?: string; map?: string[]; current?: string | null; goals?: GoalRec[]; path?: PGoal[]; moments?: Moment[]; scenes?: Chapter[]; ongoing?: Ongoing | null; demo?: { command: string; out: string } | null; chunks?: Array<{ name: string; result: string | null; debts: string[] }> };
 const RES: Record<string, string> = { 마침: "ok", "너무 쉬움": "ok", 건너뜀: "skip", 멈춤: "skip", "바꿔서 멈춤": "skip", "진행 중": "now" };
 const mins = (a: string, b: string | null) => { if (!b) return ""; const m = Math.round((Date.parse(b) - Date.parse(a)) / 60000); return m < 1 ? "1분 안" : m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간 ${m % 60}분`; };
 const hm = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
@@ -223,8 +223,8 @@ function Scene({ ev }: { ev: SceneEv }) {
 
 /* ---------- 실습 정리(11/12 사용자 "목표 단위로 저장하면 총정리도 목표 정리 그대로 … 사이사이에 목표 변화 같은 상태 변화만 코드로", "4번은 빼"):
  * 목표마다 한 칸 = 그 목표가 끝날 때 목표 정리(③)가 쓴 총정리(review). 하다가 나간 목표는 '진행 중' 정리(ongoing). 칸 사이에는 장기 목표 · 보충 같은 판 바뀜을 기록에서 그대로. */
-type GoalReview = { aim: string; scenes: Array<{ title: string; body: string }>; reached: string; weak: Array<{ gap: string; seen: string }> };
-type Ongoing = { goal: string; from: string; at: string; summary: string; review?: GoalReview };
+type GoalReview = { aim: string; scenes: Array<{ title: string; body: string; code?: string; result?: string; example?: boolean }>; reached: string; weak: Array<{ gap: string; seen: string }> };
+type Ongoing = { goal: string; done?: string; from: string; at: string; summary: string; review?: GoalReview };
 /** 판 바뀜 한 줄(기록의 바뀜 글 → 쉬운 말). 로드맵 · 계획 제안 같은 자잘한 것은 뺀다 */
 function shiftOf(text: string, first: boolean): { icon: string; text: string; cls: string } | null {
   let m: RegExpExecArray | null;
@@ -234,12 +234,17 @@ function shiftOf(text: string, first: boolean): { icon: string; text: string; cl
   if ((m = /^보충 다시 짬[^:]*: (.+)$/.exec(text))) return { icon: "🧩", text: `보충 다시 짬 · ${m[1]}`, cls: "sup" };
   return null;
 }
-function GoalCard({ n, goal, result, rv, summary, ongoing }: { n: number; goal: string; result: string; rv?: GoalReview | null; summary?: string; ongoing?: boolean }) {
+// 11/12 사용자 "상황에 대한 이해가 잘 안 됨": 끝나면(완료 조건) · 장면마다 실제 코드와 화면(기록에서, 없으면 '예시' 표시)
+function GoalCard({ n, goal, done, result, rv, summary, ongoing }: { n: number; goal: string; done?: string; result: string; rv?: GoalReview | null; summary?: string; ongoing?: boolean }) {
   return <div className="rv-goal">
     <div className="rv-gh"><span className="rv-n">{n}</span><b>{goal}</b>{ongoing ? <span className="lib-res now">진행 중</span> : result ? <span className={`lib-res ${RES[result] ?? ""}`}>{result}</span> : null}</div>
+    {done ? <p className="rv-done"><b>끝나면</b>{done}</p> : null}
     {rv ? <>
       {rv.aim ? <p className="rv-sit">{rv.aim}</p> : null}
-      {rv.scenes.length ? <div className="rv-probs">{rv.scenes.map((s, k) => <div key={k} className="rv-prob"><p className="rv-q">{s.title}</p><p className="rv-body">{s.body}</p></div>)}</div> : <p className="rv-none">막힌 곳 없이 지나갔어요.</p>}
+      {rv.scenes.length ? <div className="rv-probs">{rv.scenes.map((s, k) => <div key={k} className="rv-prob"><p className="rv-q">{s.title}</p><p className="rv-body">{s.body}</p>
+        {s.code ? <div className="rv-code"><span className="rv-cl">{s.example ? "예시 코드" : "그때 쓴 코드"}</span><pre>{s.code}</pre></div> : null}
+        {s.result ? <div className={`rv-code out${/error|traceback|exception|오류/i.test(s.result) ? " bad" : ""}`}><span className="rv-cl">{s.example ? "돌리면" : "화면에 나온 것"}</span><pre>{s.result}</pre></div> : null}
+      </div>)}</div> : <p className="rv-none">막힌 곳 없이 지나갔어요.</p>}
       {rv.reached ? <p className="rv-reach"><span aria-hidden>✅</span>{rv.reached}</p> : null}
       {rv.weak.length ? <div className="rv-weak"><p className="rv-wh">부족한 점</p><ul>{rv.weak.map((w, k) => <li key={k}><b>{w.gap}</b>{w.seen ? <span>{w.seen}</span> : null}</li>)}</ul></div> : null}
     </> : summary ? <p className="rv-sit">{summary}</p> : <p className="rv-none">{ongoing ? "아직 정리 전이에요. 손 놓고 15분이 지나면 지금까지로 정리돼요." : "이 목표는 정리가 없어요."}</p>}
@@ -295,7 +300,7 @@ function RunView({ e }: { e: Entry }) {
       let result = resultOf(c);
       const later = goalsInOrder.indexOf(c.goal) < goalsInOrder.length - 1;
       if (result === "진행 중" && later) result = "바꿔서 멈춤";
-      flow.push(<GoalCard key={`g${ci}`} n={gn} goal={c.goal} result={result} rv={rec?.review ?? og?.review ?? null} summary={rec?.summary ?? og?.summary} ongoing={!rec && !later && (Boolean(og) || d.current === c.goal)} />);
+      flow.push(<GoalCard key={`g${ci}`} n={gn} goal={c.goal} done={rec?.done ?? og?.done} result={result} rv={rec?.review ?? og?.review ?? null} summary={rec?.summary ?? og?.summary} ongoing={!rec && !later && (Boolean(og) || d.current === c.goal)} />);
     }
     c.events.forEach((x, k) => { if (x.kind === "note" && !(newGoal && lead(k))) shift(x, `s${ci}-${k}`); });
   });
@@ -304,6 +309,7 @@ function RunView({ e }: { e: Entry }) {
     {head}
     <section className="rp-wrong rp-review"><p className="eyebrow">실습 정리</p>
       <p className="rp-facts">{[`목표 ${scenes.filter((c) => c.goal).length}개 · 마침 ${done}`, sup ? `보충 ${sup}번` : "보충 없음", `튜터에게 ${evs.filter((x) => x.kind === "me").length}번 말함`, errs ? `실행 오류 ${errs}번` : "", fixed ? `튜터가 고쳐 줌 ${fixed}번` : "", ms.length ? `막힌 순간 ${ms.length}` : "", span ? `${span}분` : ""].filter(Boolean).map((x) => <span key={x}>{x}</span>)}</p>
+      {d.demo ? <div className="rv-demo"><p className="rv-dh">이 실습에서 만든 것 <span className="small muted">— 마지막으로 돌려 본 화면</span></p><div className="rv-code out"><span className="rv-cl">$ {d.demo.command}</span><pre>{d.demo.out}</pre></div></div> : null}
       {flow.length ? flow : <p className="small muted">이 실습은 장면 기록을 남기기 전에 한 것이라 정리할 장면이 없어요.</p>}
       {oldOnes ? <p className="small muted">예전 모양으로 정리된 목표가 {oldOnes}개 있어요. <button className="linkish small" disabled={redoing} onClick={() => void redo()}>{redoing ? "다시 정리하는 중…" : `목표마다 다시 정리 (AI ${recs.length}번)`}</button></p> : null}
       {rErr ? <p className="ws-err">{rErr}</p> : null}
