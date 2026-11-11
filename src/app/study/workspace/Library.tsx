@@ -443,17 +443,19 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
     {rv.story?.length ? <div className="rv-story"><h4>이렇게 흘러갔어요</h4>
       <ol className="rv-beats">{rv.story.map((b, i) => <li key={i} className={`rv-beat ${b.kind ?? ""}`}>
         <span className="rv-dot">{i + 1}</span>
-        <div className="rv-beatbody">
-          <p className="rv-did"><Ic text={b.did} /></p>
-          {b.truth ? <p className="rv-truth"><Ic text={b.truth} /></p> : null}
-          {b.gap ? <p className="rv-gapline"><span className="rv-gaplabel">비어 있던 것</span><span><Ic text={b.gap} /></span></p> : null}
-          {b.box && (b.box.title || b.box.points.length) ? <aside className="rv-box">
-            <p className="rv-boxeye">짚고 가기</p>
-            {b.box.title ? <p className="rv-boxtitle">{b.box.title}</p> : null}
-            {b.box.points.length ? <ul className="rv-points">{b.box.points.map((p, j) => <li key={j}><Ic text={p} /></li>)}</ul> : null}
-            {b.box.example ? <pre className="rv-example">{b.box.example}</pre> : null}
+        <article className="rv-card">
+          <header className="rv-cardhead"><span className={`rv-chip ${b.kind ?? ""}`}>{GAP_KIND[b.kind ?? ""] ?? "빈틈"}</span>{b.box?.title ? <span className="rv-cardtitle">{b.box.title}</span> : null}</header>
+          <div className="rv-sec did"><span className="rv-lab">이렇게 했어요</span><p><Ic text={b.did} /></p></div>
+          {b.truth ? <div className="rv-sec truth"><span className="rv-lab">사실은요</span><p><Ic text={b.truth} /></p></div> : null}
+          {b.gap ? <div className="rv-sec gap"><span className="rv-lab">비어 있던 것</span><p><Ic text={b.gap} /></p></div> : null}
+          {b.box && (b.box.title || b.box.points.length) ? <aside className="rv-study">
+            <div className="rv-studyhead"><span aria-hidden>✎</span> 짚고 가기{b.box.title ? <b>{b.box.title}</b> : null}</div>
+            <div className="rv-studybody">
+              {b.box.points.length ? <ul className="rv-checks">{b.box.points.map((p, j) => <li key={j}><Ic text={p} /></li>)}</ul> : null}
+              {b.box.example ? <div className="rv-code"><span className="rv-codelab">따라 해 보기</span><pre>{b.box.example}</pre></div> : null}
+            </div>
           </aside> : null}
-        </div>
+        </article>
       </li>)}</ol></div> : null}
     {rv.weak?.length ? <div className="rv-gaps"><h4>비어 있던 것 {rv.weak.length}가지</h4>
       {rv.weak.map((w, i) => <details key={i} className={`rv-gap ${w.kind ?? ""}`} open={i === 0}>

@@ -433,3 +433,36 @@
 .dejipgi .rv-points li{font-size:14.5px;line-height:1.7;color:var(--ink)}
 .dejipgi .rv-example{margin:4px 0 0;padding:12px 14px;border-radius:10px;background:var(--surface);border:1px solid var(--line);font-family:var(--mono, ui-monospace, monospace);font-size:13.5px;line-height:1.65;white-space:pre-wrap;overflow-x:auto;color:var(--ink)}
 .dejipgi .rv-ic{font-family:var(--mono, ui-monospace, monospace);font-size:.9em;padding:1px 5px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line)}
+/* 총정리 이야기 카드(11/12 B, 사용자 "색깔이랑 박스, 글자 색깔을 잘 써서 구분감 있게… 카드 느낌이 아니라 보고서 쓴 느낌"):
+   마디마다 그림자 있는 카드. 칸마다 바탕색이 다르다: 한 일(흰) · 사실은(파랑 바탕) · 비어 있던 것(빨강 바탕, 굵게) ·
+   짚고 가기(보라 머리띠 + 연보라 바탕, 체크 목록, 어두운 코드 판). 종류는 꽉 찬 칩. */
+.dejipgi .rv-beat{grid-template-columns:34px minmax(0,1fr);gap:14px;padding-bottom:22px}
+.dejipgi .rv-beat::before{left:16px;top:36px}
+.dejipgi .rv-dot{width:34px;height:34px;font-size:14px;background:var(--accent);border:0;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.dejipgi .rv-beat.core .rv-dot{background:var(--bad)} .dejipgi .rv-beat.build .rv-dot{background:var(--help)}
+.dejipgi .rv-beat.edge .rv-dot{background:var(--read)} .dejipgi .rv-beat.syntax .rv-dot{background:var(--ask)}
+.dejipgi .rv-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden;display:flex;flex-direction:column}
+.dejipgi .rv-cardhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.dejipgi .rv-cardtitle{font-size:16px;font-weight:800;color:var(--ink)}
+.dejipgi .rv-chip{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;color:#fff;background:var(--accent)}
+.dejipgi .rv-chip.core{background:var(--bad)} .dejipgi .rv-chip.build{background:var(--help)} .dejipgi .rv-chip.edge{background:var(--read)} .dejipgi .rv-chip.syntax{background:var(--ask)}
+.dejipgi .rv-sec{padding:12px 18px;display:flex;flex-direction:column;gap:4px}
+.dejipgi .rv-sec p{margin:0;font-size:15px;line-height:1.75;color:var(--ink)}
+.dejipgi .rv-lab{font-size:12px;font-weight:800;letter-spacing:.02em}
+.dejipgi .rv-sec.did .rv-lab{color:var(--muted)}
+.dejipgi .rv-sec.truth{background:var(--read-soft);border-left:4px solid var(--read)}
+.dejipgi .rv-sec.truth .rv-lab{color:var(--read)}
+.dejipgi .rv-sec.gap{background:var(--bad-soft);border-left:4px solid var(--bad)}
+.dejipgi .rv-sec.gap .rv-lab{color:var(--bad)}
+.dejipgi .rv-sec.gap p{font-weight:700}
+.dejipgi .rv-study{margin:14px 18px 18px;border-radius:14px;border:1.5px solid var(--ask);overflow:hidden;background:var(--ask-soft)}
+.dejipgi .rv-studyhead{display:flex;align-items:baseline;gap:8px;padding:9px 14px;background:var(--ask);color:#fff;font-size:12.5px;font-weight:800}
+.dejipgi .rv-studyhead b{font-size:14.5px;font-weight:800;margin-left:4px}
+.dejipgi .rv-studybody{padding:12px 16px 14px;display:flex;flex-direction:column;gap:10px}
+.dejipgi .rv-checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.dejipgi .rv-checks li{position:relative;padding-left:24px;font-size:14.5px;line-height:1.65;color:var(--ink)}
+.dejipgi .rv-checks li::before{content:"✓";position:absolute;left:2px;top:0;color:var(--ask);font-weight:800}
+.dejipgi .rv-code{border-radius:10px;overflow:hidden;background:#1d2029;border:1px solid #2c303b}
+.dejipgi .rv-codelab{display:block;padding:5px 12px;font-size:11px;font-weight:700;color:#9aa3b2;background:#252935;border-bottom:1px solid #2c303b}
+.dejipgi .rv-code pre{margin:0;padding:10px 12px;font-family:var(--mono, ui-monospace, monospace);font-size:13.5px;line-height:1.65;color:#e8eaf0;white-space:pre-wrap;overflow-x:auto}
+.dejipgi .rv-card .rv-ic{background:color-mix(in srgb, var(--ink) 8%, transparent);border-color:transparent}
