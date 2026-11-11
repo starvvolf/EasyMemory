@@ -6,7 +6,7 @@ import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
 import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblem, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, idleAttempts, listProblemsWithKnowledge, noteAnswer, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
-import { closeSheet, distillLater, reviewFor, waitSheet } from "@/lib/code/tutor/sheets";
+import { closeSheet, distillLater, reviewFacts, reviewFor, waitSheet } from "@/lib/code/tutor/sheets";
 import { keepTalk } from "@/lib/code/tutor/talk";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
@@ -210,7 +210,22 @@ async function inner(request: Request, context: RouteContext) {
       }
       if (p[2] === "sheet" && m === "GET") return json({ sheet: await waitSheet(id) });
       // 총정리(11/12): 이 문제의 마지막 장. 없으면 만든다(AI 1번, 보통 4~6초).
-      if (p[2] === "review" && m === "GET") return json({ review: await reviewFor(id) });
+      if (p[2] === "review" && m === "GET") {
+        const facts = await reviewFacts(id);
+        // 처음 만들 때는 스트리밍(11/12 사용자 "총정리 처음 만들 때 스트리밍으로"): 지금까지 받은 JSON 글을 {t} 줄로, 끝나면 {done, review, facts}.
+        if (new URL(request.url).searchParams.get("stream") === "1") {
+          const enc = new TextEncoder();
+          const stream = new ReadableStream({ start(ctrl) {
+            const send = (o: unknown) => { try { ctrl.enqueue(enc.encode(`${JSON.stringify(o)}\n`)); } catch { /* 화면이 닫힘 */ } };
+            let last = 0;
+            void reviewFor(id, (t) => { if (t.length - last >= 24) { last = t.length; send({ t }); } })
+              .then((review) => send({ done: true, review, facts })).catch((e) => send({ error: (e as Error)?.message || "정리하지 못했어요." }))
+              .finally(() => { try { ctrl.close(); } catch { /* 이미 닫힘 */ } });
+          } });
+          return new NextResponse(stream, { headers: { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" } });
+        }
+        return json({ review: await reviewFor(id), facts });
+      }
       // 바로 열기 failed: make the hidden tests again from the same address.
       if (p[2] === "prepare" && m === "POST") {
         const meta = await readProblemMeta(id);
