@@ -271,3 +271,4 @@
 .dejipgi .dy-story li.sys .dy-b:hover .dy-sys{box-shadow:0 0 0 3px var(--surface-2)}
 .dejipgi .dy-body{display:flex;flex-direction:column;min-width:0}
 .dejipgi .dy-doing{font-size:11.5px;color:var(--muted);line-height:1.4}
+.dejipgi .rp-miss{margin:4px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:3px;line-height:1.6}
