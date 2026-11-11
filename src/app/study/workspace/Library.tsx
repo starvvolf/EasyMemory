@@ -224,7 +224,7 @@ function Scene({ ev }: { ev: SceneEv }) {
 /* ---------- 실습 일지(11/12 사용자 "AI의 손길이 한번 닿아서 요약이 딱 … 저장할 때 AI가 돌리고 여기서는 보여주기만"): 실습 서버 lib/diary.ts가 쓴 것.
  * 줄마다 근거 기록 번호(g)가 있어서, 올리면 그때 장면 앞부분, 누르면 아래 '장면 전체'의 그 자리로. */
 type Diary = { v?: number; at: string; upto: number; why: string; intro?: string; line: string; story: Array<{ g: number | null; tag: string; doing?: string; text: string }>; left: string[];
-  missed?: Array<{ thought: string; truth: string }>; weak?: Array<{ gap: string; seen: string }>; next?: string };
+  reviews?: Array<{ goal: string; situation: string; missed: Array<{ thought: string; truth: string }>; weak: Array<{ gap: string; seen: string }> }> };
 // 판이 바뀐 것(목표 · 목표 바꿈 · 보충)은 점 없이 둥근 상자로, 배운 일은 점이 찍힌 줄로(11/12 사용자 "시스템이 바뀌는 거는 구분")
 const SYS_TAGS = new Set(["목표", "목표 바꿈", "바꿈", "보충"]);
 const TAG: Record<string, [string, string]> = { 목표: ["🎯", "goal"], "목표 바꿈": ["🔀", "turn"], 바꿈: ["🔀", "turn"], 보충: ["🧩", "sup"], 막힘: ["🧱", "bad"], "알게 됨": ["💡", "ok"], 해냄: ["✅", "ok"], 도움: ["🛠", "help"], 넘어감: ["⏭", ""] };
@@ -272,14 +272,15 @@ function RunView({ e }: { e: Entry }) {
   // 기록 번호 → (장, 칸)
   const where = new Map<number, [number, number]>(); scenes.forEach((c, ci) => c.events.forEach((x, k) => { if (x.g !== undefined) where.set(x.g, [ci, k]); }));
   const total = scenes.reduce((n, c) => n + c.events.length, 0);
-  const stale = Boolean(d.diary && (d.diary.upto < total || d.diary.v !== 2)); // 총정리가 없는 예전 일지(v1)도 다시 쓰기
+  const stale = Boolean(d.diary && (d.diary.upto < total || d.diary.v !== 3)); // 총정리가 없는 예전 일지(v1)도 다시 쓰기
   return <>
     {head}
     <div className="lib-stats">
       <span><b>{scenes.filter((c) => c.goal).length || path.length}</b>목표</span><span><b>{done}</b>마침</span><span><b>{ms.length}</b>막힌 순간</span><span><b>{cards}</b>남은 것</span>
     </div>
-    {d.diary && (d.diary.missed?.length || d.diary.weak?.length || d.diary.next) ? (() => {
-      // 실습 총정리(11/12 사용자 "알고리즘 토마토 총정리처럼"): 알고리즘 총정리(ReviewBox)와 같은 칸 · 같은 모양. 위의 사실 한 줄은 코드가 장면 기록에서 셈
+    {d.diary?.reviews?.length ? (() => {
+      // 실습 총정리(11/12 사용자 "알고리즘 토마토 총정리처럼" → "한 개의 목표 단위로 … 해요체 … 이거만 봐도 뭔 소린지"): 현재 목표마다 한 칸.
+      // 위의 사실 한 줄은 코드가 장면 기록에서 셈
       const evs = scenes.flatMap((c) => c.events);
       const sup = evs.filter((x) => x.kind === "note" && /^보충 로드맵 생김/.test(x.text)).length;
       const errs = evs.filter((x) => x.kind === "cmd" && x.ok === false).length;
@@ -288,15 +289,20 @@ function RunView({ e }: { e: Entry }) {
       const dy = d.diary!;
       return <section className="rp-wrong rp-review"><p className="eyebrow">총정리</p>
         <p className="rp-facts">{[`목표 ${scenes.filter((c) => c.goal).length}개 · 마침 ${done}`, sup ? `보충 ${sup}번` : "보충 없음", `튜터에게 ${evs.filter((x) => x.kind === "me").length}번 말함`, errs ? `실행 오류 ${errs}번` : "", fixed ? `튜터가 고쳐 줌 ${fixed}번` : "", `${span}분`].filter(Boolean).map((x) => <span key={x}>{x}</span>)}</p>
-        {dy.intro ? <div className="rp-card"><b className="rp-h">이 실습은</b><p>{dy.intro}</p></div> : null}
-        {dy.missed?.length ? <div className="rp-card"><b className="rp-h bad">하면서 헷갈린 것</b><ol className="rp-miss">{dy.missed.map((m, i) => <li key={i}><p>{m.thought}</p>{m.truth ? <p className="rp-truth"><span>사실은</span>{m.truth}</p> : null}</li>)}</ol></div> : null}
-        {dy.weak?.length ? <div className="rp-card bad"><b className="rp-h bad">부족한 점</b><ul className="rp-weak">{dy.weak.map((w, i) => <li key={i}><b>{w.gap}</b>{w.seen ? <span className="small muted">{w.seen}</span> : null}</li>)}</ul></div> : null}
-        {dy.next ? <div className="rp-card"><b className="rp-h">다음에 떠올릴 것</b><p>{dy.next}</p></div> : null}
+        {dy.reviews!.map((r, i) => {
+          const res = resultOf({ goal: r.goal, from: "", to: "", events: [] });
+          return <div key={i} className="rp-card rv-goal">
+            <b className="rp-h rv-gh"><span className="lib-dot">{i + 1}</span>{r.goal}{res ? <span className={`lib-res ${RES[res] ?? ""}`}>{res}</span> : null}</b>
+            {r.situation ? <p>{r.situation}</p> : null}
+            {r.missed.length ? <><p className="rv-sub bad">이 목표에서 생긴 문제</p><ol className="rp-miss">{r.missed.map((m, k) => <li key={k}><p>{m.thought}</p>{m.truth ? <p className="rp-truth"><span>사실은</span>{m.truth}</p> : null}</li>)}</ol></> : <p className="small muted">걸린 문제 없이 지나갔어요.</p>}
+            {r.weak.length ? <><p className="rv-sub bad">부족한 점</p><ul className="rp-weak">{r.weak.map((w, k) => <li key={k}><b>{w.gap}</b>{w.seen ? <span className="small muted">{w.seen}</span> : null}</li>)}</ul></> : null}
+          </div>;
+        })}
       </section>;
     })() : null}
     <section className="lib-sec dy"><h3>실습 일지 {d.diary ? <span className="small muted">— {day(d.diary.at)} {hm(d.diary.at)} · {d.diary.why}</span> : null}</h3>
       {d.diary ? <>
-        {d.diary.intro && !(d.diary.missed?.length || d.diary.weak?.length) ? <p className="dy-intro">{d.diary.intro}</p> : null}
+        {d.diary.intro ? <p className="dy-intro">{d.diary.intro}</p> : null}
         <p className="dy-line">{d.diary.line}</p>
         <ol className="dy-story">{d.diary.story.map((it, i) => {
           const at = it.g === null ? null : where.get(it.g) ?? null;
@@ -309,7 +315,7 @@ function RunView({ e }: { e: Entry }) {
           return <li key={i} className={`${cls}${sys ? " sys" : ""}`}>{at ? <button className="dy-b" onClick={() => jump(at[0], at[1])}>{inner}</button> : <span className="dy-b static">{inner}</span>}</li>;
         })}</ol>
         {d.diary.left.length ? <p className="dy-left">아직 남은 것 {d.diary.left.map((x, i) => <span key={i}>{x}</span>)}</p> : null}
-        {stale ? <p className="small muted">{d.diary.v !== 2 ? "총정리가 없는 예전 일지예요." : "일지 뒤로 기록이 더 있어요."} <button className="linkish small" disabled={writing} onClick={() => void writeNow()}>{writing ? "쓰는 중…" : "이어서 다시 쓰기 (AI 1번)"}</button></p> : null}
+        {stale ? <p className="small muted">{d.diary.v !== 3 ? "총정리가 예전 모양이에요." : "일지 뒤로 기록이 더 있어요."} <button className="linkish small" disabled={writing} onClick={() => void writeNow()}>{writing ? "쓰는 중…" : "이어서 다시 쓰기 (AI 1번)"}</button></p> : null}
       </> : <p className="small muted">{scenes.length ? <>아직 일지가 없어요. 목표를 끝내거나 학습을 끝내면, 아니면 손 놓고 15분 지나면 저절로 써져요. <button className="linkish small" disabled={writing} onClick={() => void writeNow()}>{writing ? "쓰는 중…" : "지금 쓰기 (AI 1번)"}</button></> : "남은 장면이 없어서 일지를 쓸 게 없어요."}</p>}
       {wErr ? <p className="ws-err">{wErr}</p> : null}
     </section>
