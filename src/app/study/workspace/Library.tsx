@@ -400,7 +400,9 @@ function partialReview(t: string): Review {
   const weak: NonNullable<Review["weak"]> = [];
   return { situation: str("situation"), solve: str("solve"), next: str("next"), weak, story };
 }
-const GAP_KIND: Record<string, string> = { core: "핵심 생각", build: "코드로 옮기기", edge: "예외·경계", syntax: "파이썬 문법" };
+const GAP_KIND: Record<string, string> = { idea: "발상", impl: "구현", syntax: "문법", core: "발상", build: "구현", edge: "발상" };
+/** 예전 종류 이름을 발상·구현·문법으로(11/12 v12). */
+const KIND3: Record<string, string> = { core: "idea", edge: "idea", build: "impl" };
 function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
   const [rv, setRv] = useState<Review | null>(null);
   const [facts, setFacts] = useState<ReviewFacts | null>(null);
@@ -443,10 +445,10 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
       {rv.solve ? <div className="rv-intro sol"><div className="rv-introhead"><span className="rv-icon" aria-hidden>✓</span>이렇게 해야 풀려요</div><Lines text={rv.solve} /></div> : null}
     </div>
     {rv.story?.length ? <div className="rv-story"><h4 className="rv-sectitle">이렇게 흘러갔어요 <span>{rv.story.length}단계</span></h4>
-      <ol className="rv-beats">{rv.story.map((b, i) => <li key={i} className={`rv-beat ${b.kind ?? ""}`}>
+      <ol className="rv-beats">{(() => { let round = 0; return rv.story.map((b0, i) => { const b = { ...b0, kind: KIND3[b0.kind ?? ""] ?? b0.kind }; if (b.kind === "idea" || (i === 0 && b.kind !== "idea")) round++; return <li key={i} className={`rv-beat ${b.kind ?? ""}`}>
         <span className="rv-dot">{i + 1}</span>
         <article className="rv-card">
-          <header className="rv-cardhead"><span className={`rv-chip ${b.kind ?? ""}`}>{GAP_KIND[b.kind ?? ""] ?? "빈틈"}</span>{b.box?.title ? <span className="rv-cardtitle">{b.box.title}</span> : null}</header>
+          <header className="rv-cardhead"><span className={`rv-chip ${b.kind ?? ""}`}>{GAP_KIND[b.kind ?? ""] ?? "빈틈"}{b.kind !== "syntax" ? ` ${round}` : ""}</span>{b.box?.title ? <span className="rv-cardtitle">{b.box.title}</span> : null}</header>
           <div className="rv-sec did"><span className="rv-lab">이렇게 했어요</span><p><Ic text={b.did} /></p></div>
           {b.truth ? <div className="rv-sec truth"><span className="rv-lab">사실은요</span><p><Ic text={b.truth} /></p></div> : null}
           {b.gap ? <div className="rv-sec gap"><span className="rv-lab">비어 있던 것</span><p><Ic text={b.gap} /></p></div> : null}
@@ -458,7 +460,7 @@ function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
             </div>
           </aside> : null}
         </article>
-      </li>)}</ol></div> : null}
+      </li>; }); })()}</ol></div> : null}
     {rv.weak?.length ? <div className="rv-gaps"><h4>비어 있던 것 {rv.weak.length}가지</h4>
       {rv.weak.map((w, i) => <details key={i} className={`rv-gap ${w.kind ?? ""}`} open={i === 0}>
         <summary><span className="rv-n">{i + 1}</span><span className="rv-gaptext">{w.gap}</span><span className={`rv-kind ${w.kind ?? ""}`}>{GAP_KIND[w.kind ?? ""] ?? "빈틈"}</span></summary>

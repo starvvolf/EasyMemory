@@ -492,3 +492,8 @@
 .dejipgi .rv-sectitle{margin:0 0 12px!important;font-size:17px!important;font-weight:800!important;color:var(--ink)!important;letter-spacing:0!important;display:flex;align-items:baseline;gap:8px}
 .dejipgi .rv-sectitle span{font-size:12.5px;font-weight:700;color:var(--muted)}
 .dejipgi .rp-review2 > .rv-story{max-width:none}
+/* v12 발상 · 구현 · 문법(11/12): 발상 파랑 · 구현 주황 · 문법 보라 */
+.dejipgi .rv-beat.idea .rv-dot{background:var(--accent)} .dejipgi .rv-beat.impl .rv-dot{background:var(--help)}
+.dejipgi .rv-beat.idea .rv-dot,.dejipgi .rv-beat.impl .rv-dot{color:var(--surface);border:0}
+.dejipgi .rv-chip.idea{background:var(--accent)} .dejipgi .rv-chip.impl{background:var(--help)}
+.dejipgi .rv-beat.syntax .rv-card{margin-left:22px}
