@@ -170,8 +170,9 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
   const [hints, setHints] = useState(0);
   // 도움 네 칸(11/11): 작은 도움부터 차례로. 재료(교육용 문제 모델)가 있는 문제에서만 나온다. 연 칸은 서버가 튜터 기록에 남긴다.
   const [help, setHelp] = useState<{ opened: number; labels: string[] } | null>(null);
-  const [skeleton, setSkeleton] = useState("");
-  useEffect(() => { setHelp(null); setSkeleton(""); void call<{ help: { opened: number; labels: string[] } | null }>(`/api/code/problem/${id}/help`).then((r) => setHelp(r.help)).catch(() => undefined); }, [id]);
+  // 뼈대 코드(4칸)는 누르면 편집기에 바로 들어간다(11/11 사용자 "자동으로 덮어 써주면"). 그 전 코드는 [내 코드로 되돌리기]로.
+  const [before, setBefore] = useState<string | null>(null);
+  useEffect(() => { setHelp(null); setBefore(null); void call<{ help: { opened: number; labels: string[] } | null }>(`/api/code/problem/${id}/help`).then((r) => setHelp(r.help)).catch(() => undefined); }, [id]);
   const [asking, setAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
@@ -296,8 +297,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
     try {
       const r = await call<{ text: string; skeleton?: string; opened: number }>(`/api/code/problem/${id}/help`, { rung, lang });
       setHelp((h) => (h ? { ...h, opened: r.opened } : h));
-      if (r.skeleton) setSkeleton(r.skeleton);
-      setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: `도움 ${rung}`, text: r.skeleton ? `${r.text}\n\n\`\`\`\n${r.skeleton}\n\`\`\`` : r.text }]);
+      if (r.skeleton) { setBefore(now()); onCode(r.skeleton); }
+      setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: `도움 ${rung}`, text: r.skeleton ? "뼈대 코드를 편집기에 넣었어요. 「여기를 채워요」라고 적힌 줄만 직접 채워서 제출해 보세요." : r.text }]);
     } catch (e) { setMsgs((m) => [...m, { step: stepNow, who: "ai", tag: `도움 ${rung}`, text: `도움을 열지 못했어요: ${errorText(e)}` }]); }
     finally { setAsking(false); }
   };
@@ -396,8 +397,8 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
         {help ? <div className="cs-help">
           <p className="small"><b>막혔을 때</b> <span className="muted">작은 도움부터 차례로 열어요. 연 것은 기록에 남고, 도움 받고 푼 문제는 며칠 뒤 혼자 다시 풀어요.</span></p>
           <div className="cs-hints">{help.labels.map((label, i) => (
-            <button key={label} className={`btn small${i < help.opened ? " opened" : ""}`} disabled={asking || i > help.opened} title={i === 3 ? "핵심 줄만 비운 코드를 만들어요(처음이면 AI 1번, 10~30초)" : "AI를 쓰지 않아요"} onClick={() => void openHelp(i + 1)}>{i < help.opened ? "✓ " : ""}{i + 1} · {label}</button>))}</div>
-          {skeleton ? <button className="linkish small" onClick={() => onCode(skeleton)}>뼈대 코드를 편집기에 넣기 (지금 코드를 덮어써요)</button> : null}
+            <button key={label} className={`btn small${i < help.opened ? " opened" : ""}`} disabled={asking || i > help.opened} title={i === 3 ? "핵심 줄만 비운 코드를 편집기에 바로 넣어요(처음이면 AI 1번, 10~30초). 쓰던 코드는 되돌릴 수 있어요" : "AI를 쓰지 않아요"} onClick={() => void openHelp(i + 1)}>{i < help.opened ? "✓ " : ""}{i + 1} · {label}</button>))}</div>
+          {before !== null ? <button className="linkish small" onClick={() => { onCode(before); setBefore(null); }}>내 코드로 되돌리기 (뼈대 넣기 전 코드)</button> : null}
         </div> : null}
         {help ? <p className="small muted">내 코드를 보고 짚어 주는 AI 힌트</p> : null}
         <div className="cs-hints">
