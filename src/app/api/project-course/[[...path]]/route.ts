@@ -134,6 +134,15 @@ async function handle(request: Request, context: RouteContext) {
       try { await pullNote(); return NextResponse.json({ online: true, ...await course<object>("learner-note") }); }
       catch (error) { if (offline(error)) return NextResponse.json({ online: false }); throw error; }
     }
+    // 기억 도서관(11/11): 실습 목록 · 실습 한 판 정리. 코스 서버가 꺼져 있으면 online:false
+    if (p[0] === "library" && p.length === 1 && m === "GET") {
+      try { return NextResponse.json({ online: true, ...await course<object>("library") }); }
+      catch (error) { if (offline(error)) return NextResponse.json({ online: false, runs: [] }); throw error; }
+    }
+    if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "library" && m === "GET") {
+      try { return NextResponse.json({ online: true, ...await course<object>(`runs/${runId.parse(p[1])}/library`) }); }
+      catch (error) { if (offline(error)) return NextResponse.json({ online: false }); throw error; }
+    }
     // 세션 노트(지나온 목표 길 · 부족함): 기억 탭 실습 갈래가 읽는다(11/9). 코스 서버가 꺼져 있으면 online:false
     if (p[0] === "runs" && p[1] && p.length === 3 && p[2] === "note" && m === "GET") {
       try { return NextResponse.json({ online: true, ...await course<object>(`runs/${runId.parse(p[1])}/note`) }); }

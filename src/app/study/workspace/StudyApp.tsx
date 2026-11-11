@@ -16,7 +16,7 @@ import type { FlowApi } from "../FlowBench";
 /* 공부 화면 전체 (11/11 사용자 "리액트로 다 싹 다"). 상태·채점·기록·복습 날짜는 앱(dejipgi-app.js)이 들고, 이 화면은 그 값을 그린다.
    한 번 연 큰 화면(알고리즘·실습·웹 글·기억·기록·오늘·작업대)은 다른 화면에 갔다 와도 그대로 남게 숨겨 둔다(예전 viewHost와 같은 뜻). */
 const TodayBoard = lazy(() => import("./TodayBoard"));
-const KnowledgeTabs = lazy(() => import("./KnowledgeTabs"));
+const Library = lazy(() => import("./Library")); // 11/11 기억 탭 → 기억 도서관(사용자 "완전히 바꿈")
 const CodeStudy = lazy(() => import("./CodeStudy"));
 const ProjectStudy = lazy(() => import("./ProjectStudy"));
 const WebStudy = lazy(() => import("./WebStudy"));
@@ -91,7 +91,7 @@ export default function StudyApp({ ui, api }: { ui: Bridge; api: ShellApi }) {
         {s.view === "home" ? <HomeHead /> : null}
         {keep("home", <TodayBoard />)}
         {s.view === "knowledge" && s.legacy && s.knowledgeLegacy ? <LegacyKnowledge k={s.knowledgeLegacy} api={api} /> : null}
-        {keep("knowledge", <KnowledgeTabs onLegacy={() => api.legacy(true)} />)}
+        {keep("knowledge", <Library />)}
         {keep("code", <CodeStudy />)}
         {keep("project", <ProjectStudy />)}
         {(s.view === "practice" && !s.session) || s.view === "start" ? <MaterialList ui={ui} api={A.materials} /> : null}

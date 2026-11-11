@@ -160,6 +160,9 @@ const routes: [string, RegExp, Handler][] = [
     const r = b.result === "됨" || b.result === "비어 있음" ? b.result : null;
     return (await import("../lib/goals.ts")).setPrereqSelf(m[1], String(b.name ?? ""), r);
   }],
+  // 기억 도서관(11/11): 앱 기억 화면 › 실습의 목록 · 실습 한 판 정리
+  ["GET", /^\/api\/library$/, async () => (await import("../lib/library.ts")).libraryList()],
+  ["GET", /^\/api\/runs\/(\w+)\/library$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/library.ts")).libraryRun(m[1]); }],
   ["GET", /^\/api\/runs\/(\w+)\/moments$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/moments.ts")).momentsView(m[1]); }],
   ["GET", /^\/api\/runs\/(\w+)\/note$/, async (_q, m) => { await getRun(m[1]); return (await import("../lib/gaps.ts")).sessionNote(m[1]); }],
   ["POST", /^\/api\/bridge\/answer$/, async (req) => { const b = await body(req); return (await import("../lib/bridge.ts")).bridgeAnswer(String(b.id ?? ""), b.result ?? null); }],
