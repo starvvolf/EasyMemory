@@ -375,7 +375,7 @@ function SolveView({ log }: { log: SolveLog }) {
     (pid ? get(pid).catch(() => (talkPid && talkPid !== pid ? get(talkPid) : Promise.reject(new Error("없음")))) : get(talkPid)).then(setProb).catch(() => setProb(false)); }), [pid, talkPid]);
   // 총정리(11/12 B, 사용자 "이 문제는 뭐를 알고 있는지 보는 문제… 사용자는 뭐를 모르는 모습… 그래서 어떻게 해서 풀었다… 쉽게"):
   // 풀이가 끝날 때 AI가 한 번 쓴 것을 보여 준다(없으면 그때 만든다, 4~6초). 없으면 예전 오답 노트.
-  type Review = { v?: number; situation: string; solve: string; missed: Array<{ thought: string; truth: string }>; how: string; next: string };
+  type Review = { v?: number; situation: string; solve: string; missed: Array<{ thought: string; truth: string }>; how: string; still?: string[]; next: string };
   const [review, setReview] = useState<Review | null | "loading">("loading");
   const reviewPid = pid || talkPid;
   useEffect(() => later(() => { setReview("loading"); if (!reviewPid) { setReview(null); return; }
@@ -386,11 +386,12 @@ function SolveView({ log }: { log: SolveLog }) {
     <div className="rp-tags"><span className={`lib-res ${verdict[1]}`}>{verdict[0]}</span>{log.stuck ? <span className="lib-res bad">막힌 곳 · {STUCK[log.stuck] ?? log.stuck}</span> : null}
       {log.help ? <span className="lib-res">도움 {log.help}칸까지 열어 봄</span> : null}{log.fill ? <span className="lib-res">뼈대에서 채우기</span> : null}
       {REDO[log.redo] ? <span className={`lib-res ${log.redo === "done" ? "ok" : log.redo === "due" ? "now" : ""}`}>{REDO[log.redo]}</span> : null}</div>
-    {review && review !== "loading" && review.v === 2 ? <section className="rp-wrong rp-review"><p className="eyebrow">총정리</p>
+    {review && review !== "loading" && (review.v ?? 0) >= 2 ? <section className="rp-wrong rp-review"><p className="eyebrow">총정리</p>
       <div><span className="lib-k">문제 상황</span><p>{review.situation}</p></div>
       <div><span className="lib-k ok">이렇게 해야 풀려요</span><p>{review.solve}</p></div>
       {review.missed.length ? <div><span className="lib-k bad">풀면서 헷갈린 것</span><ol className="rp-miss">{review.missed.map((m, i) => <li key={i}><p>{m.thought}</p><p className="rp-truth">→ {m.truth}</p></li>)}</ol></div> : null}
       <div><span className="lib-k ok">이렇게 풀어 냈어요</span><p>{review.how}</p></div>
+      {review.still?.length ? <div><span className="lib-k bad">아직 혼자 힘으로 한 게 아닌 것</span><ul className="rp-miss">{review.still.map((x, i) => <li key={i}>{x}</li>)}</ul></div> : null}
       {review.next ? <div><span className="lib-k">다음에 떠올릴 것</span><p>{review.next}</p></div> : null}</section>
     : review === "loading" && reviewPid ? <section className="rp-wrong"><p className="eyebrow">총정리</p><p className="small muted">이 풀이를 정리하는 중이에요…</p></section>
     : log.gap || log.fix ? <section className="rp-wrong"><p className="eyebrow">오답 노트</p>
