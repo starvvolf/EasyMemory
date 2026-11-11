@@ -62,10 +62,15 @@ export async function hint(input: { problemId: string; lang: Lang; code: string;
 }
 /** AI 튜터 채팅(11/11): 앞부분(지시문 · 문제 · 언어 · 이 문제에서 나눈 대화)은 대화가 이어지는 동안 그대로라 프롬프트 캐시를 탄다.
  *  지금 코드·드래그한 부분·질문은 매번 바뀌므로 맨 뒤(tail). 캐시 키는 문제마다 하나. */
+/** 앞선 대화를 어디서부터 넣을지: 16개까지는 처음부터, 넘으면 8개 단위로 앞을 덜어 낸다(16~23개가 남음). */
+export const keepFrom = (n: number) => Math.floor(Math.max(0, n - 16) / 8) * 8;
 export async function explainCode(input: { problemId?: string; lang: Lang; code: string; selection: string; question?: string; history?: Array<{ q: string; a: string }>; last?: LastResult }, onText?: (textSoFar: string) => void, onUsage?: (u: { inputTokens?: number; cachedInputTokens?: number; outputTokens?: number }) => void) {
   tagTrace({ ref: input.problemId, action: "explainCode" });
   const p = input.problemId ? await readProblemMeta(input.problemId).catch(() => null) : null;
-  const history = (input.history ?? []).slice(-8).map((h, i) => `[앞선 대화 ${i + 1}]\n학습자: ${h.q.slice(0, 1000)}\n튜터: ${h.a.slice(0, 2000)}`).join("\n\n");
+  // 앞선 대화는 덧붙기만 해서 앞부분이 그대로 남게(11/12 실측: 최근 8개씩 밀려 매번 [앞선 대화 1]이 바뀌어 43번 중 캐시 0번).
+  // 길어지면 앞에서 8개씩 한꺼번에 덜어 낸다: 그 사이 8번은 같은 앞부분 → 캐시.
+  const all = input.history ?? [];
+  const history = all.slice(keepFrom(all.length)).map((h, i) => `[앞선 대화 ${i + 1}]\n학습자: ${h.q.slice(0, 1000)}\n튜터: ${h.a.slice(0, 2000)}`).join("\n\n");
   // 앞부분(고정): 문제 → 학습자의 지난 기록(이 문제 패턴의 남은 착각) → 언어 → 앞선 대화(덧붙기만 함).
   const past = input.problemId ? await learnerNoteFor(input.problemId).catch(() => "") : "";
   const user = [p ? problemBlock(p) : "", past, `[언어] ${LANG_LABEL[input.lang]}`, history].filter(Boolean).join("\n\n");

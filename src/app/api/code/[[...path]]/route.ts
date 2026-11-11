@@ -71,7 +71,7 @@ async function inner(request: Request, context: RouteContext) {
     if (p[0] === "run" && m === "POST") { const b = await body(z.object({ lang, code, input: z.string().max(500_000) })); return json(await runCustom(b.lang, b.code, b.input)); }
     if (p[0] === "explain" && m === "POST") {
       const b = await body(z.object({ problemId: pid.optional(), lang, code, selection: z.string().min(1).max(8000), question: z.string().max(2000).optional(),
-        history: z.array(z.object({ q: z.string().max(2000), a: z.string().max(4000) })).max(12).optional(),
+        history: z.array(z.object({ q: z.string().max(2000), a: z.string().max(4000) })).max(40).optional(),
         /** 마지막 채점 결과(11/11): 튜터가 "왜 틀렸어요?"에 답할 수 있게 */ last: last.optional() }));
       await recordAsked(b.problemId, b.question || `코드 드래그해서 물어봄: ${b.selection.split("\n")[0].slice(0, 60)}`);
       // 대화 장부(11/11): 물은 말·답 원문 그대로(talk.ts). 질문 없이 드래그만 했으면 무엇을 했는지로.
