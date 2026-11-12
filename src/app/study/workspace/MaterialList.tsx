@@ -4,7 +4,7 @@ import { RichInline } from "./Rich";
 import { useBridge, type Bridge } from "./bridge";
 import { call, errorText, go, later } from "./api";
 import type { MaterialRow } from "./KnowledgeWindow";
-import { loadShelfRows, materialEntries, setBranch, shelfSel, type ShelfEntry } from "./shelf";
+import { BRANCH_KEY, loadShelfRows, materialEntries, projectOpen, setBranch, shelfSel, type ShelfEntry } from "./shelf";
 import "./library.css";
 
 /* 공부 › 자료 (11/11 바닐라 renderHome을 React로, 11/12 "같은 틀, 두 얼굴"): 왼쪽은 기억 탭과 같은 자료 목록, 오른쪽은 고른 자료로 할 것.
@@ -34,10 +34,13 @@ export default function MaterialList({ ui, api }: { ui: Bridge; api: Api }) {
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [sel, setSel] = useState<string | null>(() => shelfSel.get());
+  // 갈래(자료 · 알고리즘 · 실습)는 위 단추 줄이 바꾼다 — 사이드바 목록만 바뀌고, 알고리즘 문제 · 실습을 누르면 그 화면으로 들어간다(11/12 사용자)
+  const [branch, setBr] = useState<Branch>(() => { try { const t = localStorage.getItem(BRANCH_KEY); return t === "code" || t === "project" ? t : "material"; } catch { return "material"; } });
+  useEffect(() => { const on = (e: Event) => { const b = (e as CustomEvent<Branch>).detail; if (b) setBr(b); }; window.addEventListener("recaller:branch", on); return () => window.removeEventListener("recaller:branch", on); }, []);
   const reloadKey = `${s.decks}:${s.pendings}:${s.loose.map((p) => p.status).join(",")}`; // 새 자료가 생기거나 다 만들어지면 목록을 다시
   useEffect(() => { let alive = true; loadShelfRows().then((r) => { if (alive) { setRows(r); setError(""); } }).catch((e) => { if (alive) setError(errorText(e)); }); return () => { alive = false; }; }, [reloadKey]);
   useEffect(() => shelfSel.on((k) => setSel(k)), []);
-  const pick = (k: string | null) => { setSel(k); if (k && k !== TODAY) shelfSel.set(k); };
+  const pick = (k: string | null) => { setSel(k); if (k) shelfSel.set(k); };
 
   // 자료 id → 앱이 아는 연습 상태(문제 · 복습 · 만드는 중)
   const decks = s.mats.flatMap((m) => m.decks);
@@ -78,22 +81,20 @@ export default function MaterialList({ ui, api }: { ui: Bridge; api: Api }) {
       <aside className="lib-side" aria-label="공부할 자료">
         <input className="lib-find" value={q} onChange={(e) => setQ(e.target.value)} placeholder="제목으로 찾기" aria-label="목록에서 찾기" />
         <nav className="lib-list">
-          <button className={`lib-row pin${sel === TODAY ? " on" : ""}`} onClick={() => pick(TODAY)}>
-            <span className="lib-ic" aria-hidden>📝</span><span className="lib-rt"><b>오늘 풀 PDF 문제</b><small>{s.todayLeft ? `${s.todayLeft}개 · 다시 풀 차례 ${s.due}` : "오늘 몫은 끝"}</small></span></button>
-          {list.map((e) => (
-            <button key={e.key} className={`lib-row${curTop?.key === e.key && sel !== TODAY ? " on" : ""}`} onClick={() => pick(e.key)} title={e.title}>
+          {branch !== "material" ? <OtherList branch={branch} q={q} /> : list.map((e) => (
+            <button key={e.key} className={`lib-row${curTop?.key === e.key ? " on" : ""}`} onClick={() => pick(e.key)} title={e.title}>
               <span className="lib-ic" aria-hidden>{e.icon}</span>
               <span className="lib-rt"><b>{e.title}</b><small>{e.sub}{e.lastAt && !e.key.startsWith("deck:") && !"⏳⚠".includes(e.icon) ? ` · ${ago(e.lastAt)}` : ""}</small></span>
             </button>
           ))}
-          {!rows && !error ? <p className="lib-empty small muted">불러오는 중…</p> : null}
-          {rows && !list.length ? <p className="lib-empty small muted">{q.trim() ? "찾는 제목이 없어요." : "아직 자료가 없어요. 위의 + 새 자료로 PDF를 넣어 보세요."}</p> : null}
+          {branch === "material" && !rows && !error ? <p className="lib-empty small muted">불러오는 중…</p> : null}
+          {branch === "material" && rows && !list.length ? <p className="lib-empty small muted">{q.trim() ? "찾는 제목이 없어요." : "아직 자료가 없어요. 위의 + 새 자료로 PDF를 넣어 보세요."}</p> : null}
         </nav>
       </aside>
       <section className="lib-main">
         <div className="lib-page">
           {error ? <p className="ws-err">{error}</p> : null}
-          {sel === TODAY ? <TodayFace s={s} api={api} />
+          {branch === "code" ? <CodeLanding /> : branch === "project" ? <ProjectLanding />
             : curTop ? <StudyFace key={curTop.key} top={curTop} pickedKey={sel} onPick={pick} deckOf={deckOf} pendingOf={pendingOf} api={api} />
             : <TodayFace s={s} api={api} />}
         </div>
@@ -102,7 +103,7 @@ export default function MaterialList({ ui, api }: { ui: Bridge; api: Api }) {
   );
 }
 
-const TODAY = "today";
+type Branch = "material" | "code" | "project";
 type Entry = ShelfEntry | (Omit<ShelfEntry, "branch"> & { branch: "material" });
 const ago = (iso: string) => { if (!iso) return ""; const d = Math.round((Date.now() - Date.parse(iso)) / 86_400_000); return d <= 0 ? "오늘" : d === 1 ? "어제" : `${d}일 전`; };
 const day = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : `${d.getMonth() + 1}/${d.getDate()}`; };
@@ -149,20 +150,22 @@ function StudyFace({ top, pickedKey, onPick, deckOf, pendingOf, api }: { top: En
   }
   const genId = e.row.genId ?? "";
   const d = deckOf(genId), p = pendingOf(genId);
-  const openMap = () => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId } }));
+  // 자료 지도는 줄기부터, 강의 보기는 지도의 [강의] 탭으로 바로 (지도는 마지막에 본 탭을 기억한다)
+  const openMap = (tab: "summary" | "lecture" = "summary") => { try { localStorage.setItem("recaller:map-tab", tab); } catch { /* storage off */ } window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId } })); };
   return <>
     <Head icon={e.icon} title={e.title} sub={[e.pages ? `${e.pages}쪽` : "", day(e.lastAt)].filter(Boolean).join(" · ")}>
       {runs}{e.row.lastAt ? <button className="btn small" onClick={() => toMemory(e.key)}>기억 보기 →</button> : null}
     </Head>
     <div className="row sf-acts">
-      <button className="btn primary" onClick={openMap}>자료 지도 열기</button>
+      <button className="btn primary" onClick={() => openMap("lecture")}>강의 보기</button>
+      <button className="btn" onClick={() => openMap("summary")}>자료 지도</button>
       {d ? <DeckButtons d={d} api={api} /> : p?.note.canQuestions ? <button className="btn" disabled={p.note.making} onClick={() => api.makeQuestions(p.id)}>{p.note.making ? "시작하는 중…" : "문제 만들기"}</button> : null}
     </div>
     {d ? <DeckMeta d={d} /> : null}
     {p && !(p.status === "cards" && p.note.canQuestions) ? <PendingNote p={p} api={api} /> : null}
     {d?.growing ? <PendingNote p={d.growing} api={api} /> : null}
     {p && !d && p.status === "cards" ? <p className="small muted">기억 정리는 끝났어요. 문제는 [문제 만들기]로 만들거나, 지도에서 기억마다 플래시카드로 바로 확인할 수 있어요.</p> : null}
-    <AreaOverview genId={genId} onOpen={openMap} />
+    <AreaOverview genId={genId} onOpen={() => openMap("summary")} />
   </>;
 }
 const bareId = (id: string) => id.replace(/^pending:/, "");
@@ -187,6 +190,68 @@ function DeckMeta({ d }: { d: DeckV }) {
       <i className="g" style={{ width: pct(c.good) }} /><i className="r" style={{ width: pct(c.review) }} /><i className="h" style={{ width: pct(c.help + c.read) }} />
     </div>
   </div>;
+}
+
+/* 알고리즘 · 실습 갈래 (11/12 사용자 "실습은 실습으로, 알고리즘은 알고리즘으로 자연스럽게, 들어가면 왼쪽 사이드바가 빠지는 느낌"):
+   사이드바에는 그 갈래에서 할 것(문제 · 실습), 누르면 그 화면으로 바로 들어간다(넓은 작업 화면, 위 단추 줄의 ← 목록으로 돌아옴). */
+type ProblemLite = { id: string; title: string; status: "new" | "tried" | "wrong" | "solved"; lastAt?: string };
+type RunLite = { id: string; title: string; lastAt: string; ended: boolean; goals: number; cards: number };
+const P_STATE: Record<ProblemLite["status"], [string, string]> = { solved: ["풂", "good"], wrong: ["틀림", "bad"], tried: ["푸는 중", "help"], new: ["안 풂", ""] };
+function useOther<T>(url: string, pick: (r: unknown) => T[]) {
+  const [xs, setXs] = useState<T[] | null>(null);
+  useEffect(() => { if (!url) return; let alive = true; call<unknown>(url).then((r) => { if (alive) setXs(pick(r)); }).catch(() => { if (alive) setXs([]); }); return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]);
+  return xs;
+}
+const problemsOf = (r: unknown) => ((r as { problems?: ProblemLite[] }).problems ?? []).slice().sort((a, b) => (b.lastAt ?? "").localeCompare(a.lastAt ?? ""));
+const runsOf = (r: unknown) => ((r as { runs?: RunLite[] }).runs ?? []).slice().sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+export const enterCode = (id?: string) => { setBranch("code"); go("code", id ? { id } : {}); };
+export const enterProject = (id?: string) => { setBranch("project"); if (id) projectOpen.id = id; go("project"); if (id) window.dispatchEvent(new CustomEvent("recaller:project-open", { detail: id })); };
+function OtherList({ branch, q }: { branch: "code" | "project"; q: string }) {
+  const probs = useOther<ProblemLite>(branch === "code" ? "/api/code/problems" : "", problemsOf);
+  const runs = useOther<RunLite>(branch === "project" ? "/api/project-course/library" : "", runsOf);
+  const f = (t: string) => !q.trim() || t.toLowerCase().includes(q.trim().toLowerCase());
+  if (branch === "code") {
+    if (!probs) return <p className="lib-empty small muted">불러오는 중…</p>;
+    const xs = probs.filter((p) => f(p.title));
+    return <>{xs.map((p) => <button key={p.id} className="lib-row" onClick={() => enterCode(p.id)} title={`${p.title} — 풀이 화면으로`}>
+      <span className="lib-ic" aria-hidden>⌨</span><span className="lib-rt"><b>{p.title.replace(/^BOJ (\d+)번: /, "$1 · ")}</b><small><span className={`sf-st ${P_STATE[p.status][1]}`}>{P_STATE[p.status][0]}</span>{p.lastAt ? ` · ${ago(p.lastAt)}` : ""}</small></span>
+      <span className="lib-go" aria-hidden>→</span></button>)}
+      {!xs.length ? <p className="lib-empty small muted">{q.trim() ? "찾는 제목이 없어요." : "아직 넣은 문제가 없어요."}</p> : null}</>;
+  }
+  if (!runs) return <p className="lib-empty small muted">불러오는 중…</p>;
+  const xs = runs.filter((r) => f(r.title));
+  return <>{xs.map((r) => <button key={r.id} className="lib-row" onClick={() => enterProject(r.id)} title={`${r.title} — 실습 화면으로`}>
+    <span className="lib-ic" aria-hidden>🛠</span><span className="lib-rt"><b>{r.title || "(목표를 정하기 전)"}</b><small>{r.ended ? "끝남" : "하는 중"}{r.goals ? ` · 목표 ${r.goals}` : ""} · {ago(r.lastAt)}</small></span>
+    <span className="lib-go" aria-hidden>→</span></button>)}
+    {!xs.length ? <p className="lib-empty small muted">{q.trim() ? "찾는 제목이 없어요." : "아직 실습 기록이 없어요."}</p> : null}</>;
+}
+function CodeLanding() {
+  const probs = useOther<ProblemLite>("/api/code/problems", problemsOf);
+  const n = (st: ProblemLite["status"]) => probs?.filter((p) => p.status === st).length ?? 0;
+  const wrong = probs?.filter((p) => p.status === "wrong") ?? [];
+  return <>
+    <Head icon="⌨" title="알고리즘" sub="왼쪽에서 문제를 누르면 풀이 화면으로 바로 들어가요." />
+    {probs ? <div className="counts sf-counts">
+      <div><b className="num">{n("solved")}</b><span>푼 문제</span></div><div><b className="num">{n("wrong")}</b><span>틀린 문제</span></div><div><b className="num">{n("new") + n("tried")}</b><span>아직 못 푼 문제</span></div>
+    </div> : <p className="small muted">불러오는 중…</p>}
+    <div className="row sf-acts">
+      <button className="btn primary" onClick={() => enterCode()}>새 문제 고르기 →</button>
+      {wrong[0] ? <button className="btn" onClick={() => enterCode(wrong[0].id)}>틀린 문제 다시: {wrong[0].title.replace(/^BOJ /, "")}</button> : null}
+    </div>
+  </>;
+}
+function ProjectLanding() {
+  const runs = useOther<RunLite>("/api/project-course/library", runsOf);
+  const going = runs?.find((r) => !r.ended);
+  return <>
+    <Head icon="🛠" title="실습" sub="왼쪽에서 실습을 누르면 그 실습 화면으로 바로 들어가요." />
+    <div className="row sf-acts">
+      <button className="btn primary" onClick={() => enterProject()}>실습 화면 열기 →</button>
+      {going ? <button className="btn" onClick={() => enterProject(going.id)}>이어 하기: {going.title.slice(0, 30)}</button> : null}
+    </div>
+  </>;
 }
 
 /* 이 자료에서 배울 차례: 줄기 영역마다 기억 수 · 몰랐던 것 · 복습 차례. 누르면 자료 지도 (기억 카드 자체는 기억 탭에서). */

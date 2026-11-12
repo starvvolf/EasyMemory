@@ -54,3 +54,5 @@ export function setBranch(b: "material" | "code" | "project") {
 }
 /** 목록 줄 key가 가리키는 자료 id (gen:<id> → <id>) */
 export const genOfKey = (key: string | null | undefined) => (key && key.startsWith("gen:") ? key.slice(4) : null);
+/** 공부 › 실습 목록에서 누른 실습: 실습 화면이 열리면 그 실습의 편집기 · 튜터로 (ProjectStudy가 읽고 비운다) */
+export const projectOpen: { id: string | null } = { id: null };

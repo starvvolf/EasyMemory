@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, go, later } from "./api";
 import ProjectStudio from "./ProjectStudio";
+import { projectOpen } from "./shelf";
 
 type RunLite = { id: string; courseTitle: string; stageTitle: string; current: number; done: number; workspace: string | null; createdAt: string };
 type Status = { online: boolean; url: string; runs: RunLite[]; active?: string | null; starting?: boolean; error?: string };
@@ -18,6 +19,10 @@ export default function ProjectStudy() {
   // 앱 안 편집기(11/11 사용자 "새 창 말고 앱 안의 창이 바뀌면서 vscode 나오면"): 이 창 전체를 편집기 · 튜터 화면으로 바꾼다
   const [studioRun, setStudioRun] = useState<RunLite | null>(null);
   const syncing = useRef(false);
+  // [경계] A 11/12: 공부 › 실습 목록에서 누른 실습은 이 화면이 열리자마자 그 실습의 편집기 · 튜터로(사용자 "실습은 실습으로 자연스럽게 연결")
+  const [wantRun, setWantRun] = useState<string | null>(() => { const id = projectOpen.id; projectOpen.id = null; return id; });
+  useEffect(() => { const on = (e: Event) => { projectOpen.id = null; setWantRun((e as CustomEvent<string>).detail); }; window.addEventListener("recaller:project-open", on); return () => window.removeEventListener("recaller:project-open", on); }, []);
+  useEffect(() => later(() => { if (!wantRun || !status) return; const r = status.runs.find((x) => x.id === wantRun); if (r) setStudioRun(r); setWantRun(null); }), [wantRun, status]);
 
   const load = useCallback(async () => {
     try { setStatus(await call<Status>("/api/project-course/status")); } catch (e) { setMsg(errorText(e)); }

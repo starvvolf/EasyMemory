@@ -12,7 +12,7 @@ import NewMaterial from "./NewMaterial";
 import ReaderView from "./reader/ReaderView";
 import ReaderOverlays from "./reader/ReaderOverlays";
 import type { FlowApi } from "../FlowBench";
-import { setBranch } from "./shelf";
+import { BRANCH_KEY, setBranch } from "./shelf";
 
 /* 공부 화면 전체 (11/11 사용자 "리액트로 다 싹 다"). 상태·채점·기록·복습 날짜는 앱(dejipgi-app.js)이 들고, 이 화면은 그 값을 그린다.
    한 번 연 큰 화면(알고리즘·실습·웹 글·기억·기록·오늘·작업대)은 다른 화면에 갔다 와도 그대로 남게 숨겨 둔다(예전 viewHost와 같은 뜻). */
@@ -67,7 +67,11 @@ export default function StudyApp({ ui, api }: { ui: Bridge; api: ShellApi }) {
   const keep = (k: Keep, node: ReactNode) => seen.has(k) || wanted === k ? <div key={k} className={`view-host view-${k}`} hidden={!shown(k)}>{node}</div> : null;
 
   const studyNav = s.view === "code" || s.view === "project" || s.view === "web" || s.view === "start" || (s.view === "practice" && !s.session);
-  const navActive = s.view === "web" || s.view === "start" ? "practice" : s.view;
+  // 11/12 사용자: 공부 탭은 왼쪽 사이드바(갈래별 목록) + 오른쪽. 단추 줄은 사이드바 목록만 바꾸고, 알고리즘 문제 · 실습을 누르면 그 화면으로 들어간다(사이드바가 빠짐).
+  const [br, setBr] = useState<string>(() => { try { return localStorage.getItem(BRANCH_KEY) || "material"; } catch { return "material"; } });
+  useEffect(() => { const on = (e: Event) => setBr((e as CustomEvent<string>).detail || "material"); window.addEventListener("recaller:branch", on); return () => window.removeEventListener("recaller:branch", on); }, []);
+  const inside = s.view === "code" || s.view === "project"; // 알고리즘 · 실습 작업 화면 안
+  const navActive = inside ? s.view : br === "code" || br === "project" ? br : "practice";
   return (
     <>
       <Header s={s} api={api} />
@@ -83,10 +87,12 @@ export default function StudyApp({ ui, api }: { ui: Bridge; api: ShellApi }) {
           <div className="seg study-seg" role="tablist" aria-label="공부 종류">
             {/* 11/9 사용자 "웹글 PDF 그냥 하나로 합치는 거지 UI를": PDF 자료·웹 글 갈래를 "자료" 하나로(웹 글은 자료 목록 아래에). */}
             {[["practice", "자료"], ["code", "알고리즘"], ["project", "실습"]].map(([v, label]) => (
-              <button key={v} role="tab" aria-selected={navActive === v} className={navActive === v ? "on" : ""} onClick={() => { setBranch(v === "practice" ? "material" : (v as "code" | "project")); if (v === "practice") api.leaveToPractice(); else api.tab(v); }}>{label}</button>
+              <button key={v} role="tab" aria-selected={navActive === v} className={navActive === v ? "on" : ""} onClick={() => { setBranch(v === "practice" ? "material" : (v as "code" | "project")); if (s.view !== "practice" || s.session) api.leaveToPractice(); }}>{label}</button>
             ))}
           </div>
-          {navActive === "practice" ? <button className="btn primary small" onClick={() => api.go("create")}>+ 새 자료</button> : null}
+          {/* 단추 줄 왼쪽은 늘 같은 자리: 돌아가기는 오른쪽에 */}
+          {inside ? <button className="btn small study-back" onClick={() => { setBranch(s.view as "code" | "project"); api.leaveToPractice(); }} title="왼쪽 목록이 있는 공부 화면으로">← {s.view === "code" ? "알고리즘" : "실습"} 목록</button>
+            : navActive === "practice" ? <button className="btn primary small" onClick={() => api.go("create")}>+ 새 자료</button> : null}
         </div>
       ) : null}
       <Suspense fallback={<p className="small muted">불러오는 중…</p>}>

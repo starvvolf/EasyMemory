@@ -1549,3 +1549,10 @@ html .dejipgi #app:has(.study-shelf){max-width:1240px}
 /* 13번 */
 .dejipgi .lc3-starting{display:flex;align-items:center;gap:8px}
 html:has(.dejipgi){scrollbar-gutter:stable} /* 14번: 짧은 화면(오늘)과 긴 화면 사이에 스크롤 막대 때문에 머리가 7px 움직이지 않게 */
+/* 11/12 공부 탭 사이드바: 알고리즘 · 실습 목록 줄(누르면 그 화면으로), 그 화면에 들어갈 때 오른쪽에서 밀려 들어오는 느낌 */
+.dejipgi .lib-row .lib-go{margin-left:auto;align-self:center;color:var(--muted);opacity:0;transition:opacity .15s}
+.dejipgi .lib-row:hover .lib-go{opacity:1}
+.dejipgi .sf-st.good{color:var(--good)} .dejipgi .sf-st.bad{color:var(--bad)} .dejipgi .sf-st.help{color:var(--help)}
+.dejipgi .view-code:not([hidden]),.dejipgi .view-project:not([hidden]){animation:sf-enter .22s ease-out}
+@keyframes sf-enter{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.dejipgi .view-code:not([hidden]),.dejipgi .view-project:not([hidden]){animation:none}}
