@@ -9,15 +9,15 @@
 //   raw        카드 없이 원문에서 바로: ① 쪽 첫 줄들로 영역(쪽 범위) → ② 영역마다 그 쪽 원문으로 기억(근거는 쪽)
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { askJson, LOCAL_CALLER, logAssistCall, S } from "../assist/model.ts";
-import { callModel } from "../ai/model.ts";
-import { currentTrace } from "../ai/trace.ts";
-import { withTrace } from "../ai/trace.ts";
-import { costOf } from "../ai/prices.ts";
-import { loadGen } from "./gen/runner.ts";
-import { materialMap } from "./material-map.ts";
-import { loadStructure } from "./structure.ts";
-import { AREA_MEMORY_SYSTEM, AREA_SCHEMA, AREA_SYSTEM, COMPACT_MODEL, COMPACT_SYSTEM, MEM_SCHEMA, MEMORY_KINDS, MEMORY_ROLES, checkCompact, compactInput, type Reply } from "./compact.ts";
+import { askJson, LOCAL_CALLER, logAssistCall, S } from "../../assist/model.ts";
+import { callModel } from "../../ai/model.ts";
+import { currentTrace } from "../../ai/trace.ts";
+import { withTrace } from "../../ai/trace.ts";
+import { costOf } from "../../ai/prices.ts";
+import { loadGen } from "../gen/runner.ts";
+import { materialMap } from "../material-map.ts";
+import { loadStructure } from "../structure.ts";
+import { AREA_MEMORY_SYSTEM, AREA_SCHEMA, AREA_SYSTEM, COMPACT_MODEL, COMPACT_SYSTEM, MEM_SCHEMA, MEMORY_KINDS, MEMORY_ROLES, checkCompact, compactInput, type Reply } from "../compact.ts";
 
 export const LAB_METHODS = ["two", "one", "codeAreas", "short", "allInOne", "raw", "plan", "planCards", "planDirect", "planShort", "stemDirect", "outlineNow", "stemCards", "stemInline"] as const;
 // stemInline (11/10 사용자 "카드가 왜 이렇게 많냐" → "누누이 말하지만 줄 수 제한 이런 거 걸지 마"): 카드를 따로 쪼개지 않고 기억 안에
@@ -166,8 +166,8 @@ export async function runCompactLab(id: string, method: LabMethod) {
     const saved = JSON.parse(await readFile(path.join(dataDir(), "study-gen", id, "compact-lab", "stemDirect.json"), "utf8").catch(() => "null")) as { planMemories: Array<{ area: number; name: string; role: string; kind: string; pages: number[] }>; areas: Array<{ name: string; question: string }> } | null;
     if (!saved?.planMemories?.length) throw Object.assign(new Error("먼저 stemDirect를 돌려야 해요."), { status: 409 });
     const state = await loadGen(id) as unknown as { input: { sourceId: string; fileName: string }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
-    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
-    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
+    const { renderPageFigures, renderPageImages } = await import("../gen/pages.ts");
     const pdf = await readRegisteredMcpSourcePdf(state.input.sourceId);
     if (!pdf) throw Object.assign(new Error("원본 PDF를 읽을 수 없어요."), { status: 409 });
     const route = new Map((state.recaller?.prep?.pages ?? []).map((x) => [x.page, x.route ?? "text"]));
@@ -241,8 +241,8 @@ export async function runCompactLab(id: string, method: LabMethod) {
     return summary;
   } else if (method === "stemDirect" || method === "outlineNow") {
     const state = await loadGen(id) as unknown as { input: { sourceId: string; fileName: string; pageNumbers: number[] }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
-    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
-    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
+    const { renderPageFigures, renderPageImages } = await import("../gen/pages.ts");
     const pdf = await readRegisteredMcpSourcePdf(state.input.sourceId);
     if (!pdf) throw Object.assign(new Error("원본 PDF를 읽을 수 없어요."), { status: 409 });
     const pages = state.input.pageNumbers;
@@ -254,7 +254,7 @@ export async function runCompactLab(id: string, method: LabMethod) {
     for (const p of pages) { const f = figs.get(p) ?? []; if (f.length) images.push(...f.map((x) => ({ label: `p.${p} ${x.label}`, dataUrl: x.dataUrl }))); else if (wholes.get(p)) images.push({ label: `원문 p.${p}`, dataUrl: wholes.get(p)! }); }
     const drawMs = Date.now() - tDraw;
     const user = [`[자료] ${state.input.fileName}`, ...pages.map((p) => `[p.${p}]\n${(texts[p] ?? "").trim() || "(글자 없음)"}`)].join("\n\n");
-    const { PLAN_COMMON, PLAN_TASK_CONCEPTS } = await import("./gen/digest.ts");
+    const { PLAN_COMMON, PLAN_TASK_CONCEPTS } = await import("../gen/digest.ts");
     const system = method === "outlineNow" ? PLAN_COMMON : `${PLAN_SYSTEM.replace("강의 자료 한 편의 목차(주제·항목 이름·쪽)와 쪽마다 첫 줄을 받는다.", "강의 자료 한 편 전체(쪽마다 [p.N] 원문, 그림으로 된 쪽과 그림 조각은 이미지로 \"원문 p.N\" 이름표)를 받는다.").replace("- 목차의 항목을 빠뜨리지 않는다(표지·목차 쪽 빼고).", "- 자료에서 배울 것을 빠뜨리지 않는다(표지·목차 쪽 빼고). 그림으로만 된 쪽도 그림을 읽고 넣는다.")}${SHORT_RULE}\n출력은 JSON으로만 한다.`;
     const started = Date.now(); let first = 0;
     const plan = await withTrace({ area: "pdf", action: `clab:${run}:stem`, ref: id }, async () => {

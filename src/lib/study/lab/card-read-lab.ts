@@ -2,9 +2,9 @@
 // 어떻게 처리할지 테스트 돌려 봐, 비용·시간 측정"). 제품 흐름에 넣지 않는다. 결과는 study-gen/<id>/quiz-lab2/<방법>.json.
 //   readCode  AI 없이: 모양의 칸을 사람이 읽는 순서로 이어 한 덩어리 글로(칸 이름표 없음)
 //   readAI    다 만든 뒤 영역마다 AI 1번(terra low, 동시): 기억마다 처음 보는 사람이 바로 이해하는 설명
-import { withTrace } from "../ai/trace.ts";
-import { askJson, S } from "../assist/model.ts";
-import type { MapCard } from "./material-map.ts";
+import { withTrace } from "../../ai/trace.ts";
+import { askJson, S } from "../../assist/model.ts";
+import type { MapCard } from "../material-map.ts";
 
 type Shape = NonNullable<MapCard["shape"]>;
 const end = (s: string) => (/[.?!다요]$/.test(s.trim()) ? s.trim() : `${s.trim()}.`);

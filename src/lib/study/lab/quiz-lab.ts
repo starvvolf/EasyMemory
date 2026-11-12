@@ -1,11 +1,11 @@
 // /api/study-map/<id>/quiz-lab 의 몸 (quiz-plan.ts 시험): GET ?o=<설정 JSON>&label= 계획(AI 없음) + 저장된 결과
 // · POST {options?, label?, only?, units?, noRetry?, noBlind?} 만들고 따로 풀기.
 import { NextResponse } from "next/server";
-import { boundedJson } from "../assist/http.ts";
-import { loadGen } from "./gen/runner.ts";
-import { materialMap } from "./material-map.ts";
-import { loadStructure } from "./structure.ts";
-import { loadQuizRun, makeQuiz, planQuiz, type QuizOptions } from "./quiz-plan.ts";
+import { boundedJson } from "../../assist/http.ts";
+import { loadGen } from "../gen/runner.ts";
+import { materialMap } from "../material-map.ts";
+import { loadStructure } from "../structure.ts";
+import { loadQuizRun, makeQuiz, planQuiz, type QuizOptions } from "../quiz-plan.ts";
 
 async function inputs(id: string) {
   if (!/^gen_[a-z0-9]{8,64}$/.test(id)) throw Object.assign(new Error("자료를 찾을 수 없어요."), { status: 404 });

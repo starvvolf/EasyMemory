@@ -6,13 +6,13 @@
 // 메인 기억(핵심)만. 결과는 study-gen/<id>/quiz-lab2/<방법>.json, 토큰은 assist-log에서.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { withTrace } from "../ai/trace.ts";
-import { costOf } from "../ai/prices.ts";
-import { loadGen } from "./gen/runner.ts";
-import type { DigestObjective } from "./gen/digest.ts";
-import { materialMap, type MapCard } from "./material-map.ts";
-import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "./quiz-plan.ts";
-import { loadGoalLinks, makeGoalLinks } from "./goal-links.ts";
+import { withTrace } from "../../ai/trace.ts";
+import { costOf } from "../../ai/prices.ts";
+import { loadGen } from "../gen/runner.ts";
+import type { DigestObjective } from "../gen/digest.ts";
+import { materialMap, type MapCard } from "../material-map.ts";
+import { DEFAULT_QUIZ_OPTIONS, formFor, makeOne, type Form, type MadeQuestion, type PlanItem } from "../quiz-plan.ts";
+import { loadGoalLinks, makeGoalLinks } from "../goal-links.ts";
 
 export const LAB2_METHODS = ["nine", "five", "goals", "stem", "design", "readCode", "readAI", "lecture", "lectureFirst", "lfKnow", "lfLearn", "lfParts", "lfSteps", "lpPlan", "lpLecture", "quickCode", "quickAI", "quickAI2", "quickMCQ"] as const;
 export type Lab2Method = (typeof LAB2_METHODS)[number];
@@ -55,8 +55,8 @@ export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?
   if (method === "lpPlan" || method === "lpLecture") {
     // 줄기 먼저 + 영역 강의(lecture-plan-lab.ts, 11/10): lpPlan = sol low·medium 동시(?effort=로 하나만), lpLecture = 저장한 줄기로 ?area=N 강의(?from=low면 low 줄기).
     const { runLpPlan, runLpLecture } = await import("./lecture-plan-lab.ts");
-    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
-    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
+    const { renderPageFigures, renderPageImages } = await import("../gen/pages.ts");
     const st = state as unknown as { input: { sourceId: string; fileName: string; pageNumbers: number[] }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
     const pdf = await readRegisteredMcpSourcePdf(st.input.sourceId);
     if (!pdf) throw Object.assign(new Error("원본 PDF를 읽을 수 없어요."), { status: 409 });
@@ -84,8 +84,8 @@ export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?
   if (method === "lfKnow" || method === "lfLearn" || method === "lfParts" || method === "lfSteps") {
     // 강의 먼저 3차(lecture-first-lab.ts runLectureFirst3, 11/10): 카드 목록을 강의보다 먼저. 안다 = 목록까지, 모른다 = 이어서 강의. 쪽을 골라 작게(?pages=2-13).
     const { runLectureFirst3, compareLists } = await import("./lecture-first-lab.ts");
-    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
-    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
+    const { renderPageFigures, renderPageImages } = await import("../gen/pages.ts");
     const st = state as unknown as { input: { sourceId: string; fileName: string; pageNumbers: number[] }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
     const pdf = await readRegisteredMcpSourcePdf(st.input.sourceId);
     if (!pdf) throw Object.assign(new Error("원본 PDF를 읽을 수 없어요."), { status: 409 });
@@ -133,8 +133,8 @@ export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?
   if (method === "lectureFirst") {
     // 강의 먼저 엔진(lecture-first-lab.ts, 11/10): sol 강의(스트리밍) + 카드 표시 → 표시마다 terra 카드
     const { runLectureFirst } = await import("./lecture-first-lab.ts");
-    const { readRegisteredMcpSourcePdf } = await import("../mcp-source-registry.ts");
-    const { renderPageFigures, renderPageImages } = await import("./gen/pages.ts");
+    const { readRegisteredMcpSourcePdf } = await import("../../mcp-source-registry.ts");
+    const { renderPageFigures, renderPageImages } = await import("../gen/pages.ts");
     const st = state as unknown as { input: { sourceId: string; fileName: string; pageNumbers: number[] }; recaller?: { prep?: { pages?: Array<{ page: number; route?: string }> } } };
     const pdf = await readRegisteredMcpSourcePdf(st.input.sourceId);
     if (!pdf) throw Object.assign(new Error("원본 PDF를 읽을 수 없어요."), { status: 409 });
@@ -187,7 +187,7 @@ export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?
   }
   if (method === "design") {
     // 시험지 설계 → 문제 쓰기(exam-design.ts), 풀기 검사 없음
-    const [{ designExam }, { loadStructure }] = await Promise.all([import("./exam-design.ts"), import("./structure.ts")]);
+    const [{ designExam }, { loadStructure }] = await Promise.all([import("../exam-design.ts"), import("../structure.ts")]);
     const goals = (state as unknown as { recaller?: { digest?: { objectives?: DigestObjective[] } } }).recaller?.digest?.objectives ?? [];
     const t0 = Date.now();
     const r = await designExam(id, map, await loadStructure(id), goals, texts);
@@ -229,7 +229,7 @@ export async function runQuizLab2(id: string, method: Lab2Method, opts: { pages?
   const limit = 8; const made: MadeQuestion[] = [];
   if (method === "stem") {
     // 제품 경로 그대로(stem-quiz.ts): 목표 문제 → 실제로 안 쓰인 메인 기억 문제
-    const { makeStemQuestions } = await import("./stem-quiz.ts");
+    const { makeStemQuestions } = await import("../stem-quiz.ts");
     const goals = (state as unknown as { recaller?: { digest?: { objectives?: DigestObjective[] } } }).recaller?.digest?.objectives ?? [];
     const r = await makeStemQuestions(id, map, texts, goals);
     items.push(...r.items); made.push(...r.made);

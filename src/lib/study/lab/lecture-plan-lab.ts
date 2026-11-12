@@ -6,9 +6,9 @@
 //      앞쪽(지시문 · 줄기 · 영역 쪽)은 영역 안 질문과 같게 두어 session_id 캐시가 붙게 하고, 할 일은 tail로.
 // GPT 채팅으로 해 본 것(11/10)에서 나온 것을 지시문에 반영: 밖의 그림 금지, 기호는 원문 이름 그대로, 큰 방법은 흐름 + 부품, 표의 값은 곁, 답은 글로.
 // 지시문에 개수·글자 수 제한을 두지 않는다(사용자).
-import { callModel } from "../ai/model.ts";
-import { currentTrace, withTrace } from "../ai/trace.ts";
-import { LOCAL_CALLER, logAssistCall, S } from "../assist/model.ts";
+import { callModel } from "../../ai/model.ts";
+import { currentTrace, withTrace } from "../../ai/trace.ts";
+import { LOCAL_CALLER, logAssistCall, S } from "../../assist/model.ts";
 
 type Img = { page: number; label: string; dataUrl: string };
 const log = (purpose: string, m: { model: string; effort: string }, started: number, u: { inputTokens?: number; cachedInputTokens?: number; outputTokens?: number; reasoningTokens?: number } | undefined, inChars: number, firstTextMs?: number) =>

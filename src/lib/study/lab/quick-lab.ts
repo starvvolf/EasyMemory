@@ -3,9 +3,9 @@
 //   quickCode  코드가 카드마다 형식을 정한다(헷갈림 2개 이상·이웃 용어·목록·비교 → 객관식, 헷갈림 1개 → OX, 없음 → 안 냄). AI는 그 형식으로 쓰기만.
 //   quickAI    AI가 기준과 예시를 보고 카드마다 OX · 객관식 · 안 냄을 고르고 쓴다.
 // 둘 다 영역마다 terra low 1번(동시) → 코드 점검 → 따로 풀기(terra low, 영역마다 1번, 답 가림)로 답이 갈리는지 본다. 제품 흐름에 넣지 않는다.
-import { askJson, S } from "../assist/model.ts";
-import { withTrace } from "../ai/trace.ts";
-import type { MapCard, MaterialMap } from "./material-map.ts";
+import { askJson, S } from "../../assist/model.ts";
+import { withTrace } from "../../ai/trace.ts";
+import type { MapCard, MaterialMap } from "../material-map.ts";
 
 export const QUICK_MODEL = { model: "gpt-6.1-terra", effort: "low" };
 type Form = "ox" | "choice" | "none";

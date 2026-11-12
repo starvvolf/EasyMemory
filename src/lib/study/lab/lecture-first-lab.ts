@@ -5,11 +5,11 @@
 //      알아야 할 것이 나오는 자리에 ⟦카드: 이름 | 모양 | 역할 | p.쪽⟧, 보여 줄 그림에 ⟦그림: 이미지 이름표 | 볼 것⟧, 표에 ⟦표: p.쪽 | 무엇⟧
 //   ② 카드(terra, 표시가 몇 개 모이거나 장이 바뀌면 묶어서 따로): 그 카드들의 쪽 원문 + 쪽 그림 → 엔진의 기억 채우기와 같은 모양(stem.ts STEM_FILL)
 // 2차(11/10 사용자 "고칠 거 다 고쳐서 테스트"): 카드 기준을 줄기 엔진의 기억 기준대로(단위·역할·이름·겹침), 그림·표 표시, 카드 묶어 부르기, 수식은 $…$.
-import { callModel } from "../ai/model.ts";
-import { currentTrace, withTrace } from "../ai/trace.ts";
-import { LOCAL_CALLER, logAssistCall } from "../assist/model.ts";
-import { astraJsonSchema } from "./gen/astra.ts";
-import { STEM_FILL, stemFillSchema } from "./gen/stem.ts";
+import { callModel } from "../../ai/model.ts";
+import { currentTrace, withTrace } from "../../ai/trace.ts";
+import { LOCAL_CALLER, logAssistCall } from "../../assist/model.ts";
+import { astraJsonSchema } from "../gen/astra.ts";
+import { STEM_FILL, stemFillSchema } from "../gen/stem.ts";
 
 export const LECTURE_FIRST_SYSTEM = `너는 이 강의를 맡은 강사다. 강의 자료 한 편 전체(쪽마다 [p.N] 원문, 그림은 "[이미지] 이름표"가 붙은 이미지)를 받는다.
 학생에게 이 자료를 처음부터 끝까지 강의한다. 채팅으로 말하듯 바로 써 내려간다.

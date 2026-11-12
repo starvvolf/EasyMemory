@@ -4,9 +4,9 @@
 //   1. 여는 말(자료당 1번, 기억이 다 찬 뒤): 강의 전체 이야기 줄기 — 영역마다 "왜 이게 필요한가 → 무엇을 배우나 → 다음으로 넘어가는 다리"
 //   2. 영역 수업(영역마다 1번, 학생이 그 영역에 들어갈 때 / 바로 앞 영역을 듣는 동안 미리): 장면 단위 설명 + 중간에 한 번 따져 보기
 // 둘 다 terra low. 입력은 이미 만든 기억(요지·식과 조건·헷갈림·그림 설명)과 그 영역 쪽의 원문 글자. 쪽 그림은 다시 보내지 않고 잘라 둔 그림을 가리킨다.
-import { withTrace } from "../ai/trace.ts";
-import { askJson, S } from "../assist/model.ts";
-import type { MapCard } from "./material-map.ts";
+import { withTrace } from "../../ai/trace.ts";
+import { askJson, S } from "../../assist/model.ts";
+import type { MapCard } from "../material-map.ts";
 
 type Memo = { line?: string; facts?: string[]; role?: string };
 const memoOf = (c: MapCard): Memo => (c as MapCard & { memo?: Memo }).memo ?? {};
