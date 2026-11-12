@@ -144,9 +144,9 @@ th{background:var(--who);font-size:13px}
 <h2>AI 호출 네 가지</h2>
 <div class="ai-grid">
   <div class="aic"><h3>① 튜터 대화</h3><p class="when">학습자가 말할 때 · 저장 확인 때 · <code>lib/oc-engine.ts</code></p>
-    <dl class="io"><dt>입력</dt><dd>고정 지시문 + 이번 차례 맥락(지금 목표 · 선행 · 다이얼 · 학습자 메모리) + 대화를 뒤에 이어 붙임</dd>
+    <dl class="io"><dt>입력</dt><dd>고정 지시문 + 이번 차례 맥락(지금 목표 · 선행 · 다이얼 · 학습자 메모리 · 지난번 뒤 바뀐 코드, 11/12) + 대화를 뒤에 이어 붙임</dd>
     <dt>출력</dt><dd>답 글 + 도구 호출(파일 읽기 · 고치기, 코드 조각 실행, 문서 찾기, 목표 바꾸기)</dd></dl>
-    <div class="meter">terra · low · 답 하나 <b>3~4초</b>(중간값 3.4초)<br>입력 약 <b>5,100토큰</b>, 그중 약 39% 캐시 · 24,000토큰 넘으면 요약 후 새 대화</div>
+    <div class="meter">기본 terra · low(학습자가 모델 · 생각 강도를 바꿀 수 있음, 11/12) · 답 하나 <b>3~4초</b>(중간값 3.4초)<br>입력 약 <b>5,100토큰</b>, 그중 약 39% 캐시 · 24,000토큰 넘으면 요약 후 새 대화</div>
     <div class="weight">한 판 비중<span class="bar"><i style="width:55%"></i></span>가장 자주</div></div>
   <div class="aic"><h3>② 판정</h3><p class="when">[해 봤어요] · <code>lib/judge.ts</code></p>
     <dl class="io"><dt>입력</dt><dd>완료 조건 · 튜터가 낸 과제 · 과제가 가리키는 코드 · 학습자 마지막 말 · 저장 파일 최신본(200줄) · 터미널 5개</dd>
