@@ -122,7 +122,7 @@ async function logSaved(runId: string, run: { codexId?: string; workspaces: Reco
 }
 async function codexAsk(runId: string, codexId: string, text: string, skip?: string) {
   const cx = await import("./codex-chat.ts");
-  await cx.ask(codexId, text, { context: () => turnContext(runId, skip), noLearned: true });
+  await cx.ask(codexId, text, { context: () => turnContext(runId, skip), noLearned: true, fixed: (await import("./goals.ts")).goalRules() });
   // Codex 대화는 파일에 바로 쓴다 → 답하는 동안 0.45초마다 화면에 알리고, 끝나면 한 번 더(배운 것 뽑기 뒤에도 한 번)
   clearInterval(chatPolls.get(runId));
   chatPolls.set(runId, setInterval(async () => {
@@ -380,7 +380,7 @@ async function chatAsk(runId: string, chatId: string, text: string, skip?: strin
   // 학습 목표(11/4): 매 차례 맥락 + 목표 도구. 실험판의 목표 · 초점 도구(adjust_learning · get_learning_state)는 숨겨 두 체계가 섞이지 않게
   // 파일 고치기(11/12 사용자): 스스로면 안 고침, 같이 · 빨리 만들기면 화면에서 허락을 묻고 그대로, 아직 안 골랐으면 빨리 만들기만 허락으로 본다
   const editAllowed = async () => editRule((await G.goalsOf(runId)).help, (await ac.chatOf(chatId)).edit);
-  const ext = { context: () => turnContext(runId, skip), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: async (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner, { edit: await editAllowed() }), onTool: () => notifyLesson(runId),
+  const ext = { context: () => turnContext(runId, skip), fixed: (await import("./goals.ts")).goalRules(), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: async (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner, { edit: await editAllowed() }), onTool: () => notifyLesson(runId),
     // 11/12 실습 시뮬: "빨리 만들기"를 골랐는데 파일 고치기 도구가 숨겨져 튜터가 셸로 파일을 쓰다 잘림 → 다이얼과 허락으로 정한다(editRule)
     edit: async (chatEdit: "allow" | "deny" | undefined) => editRule((await G.goalsOf(runId)).help, chatEdit) };
   const job = ac.askChat(chatId, text, undefined, ext).catch(() => {}).finally(async () => {

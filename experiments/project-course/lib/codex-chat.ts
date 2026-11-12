@@ -7,7 +7,7 @@ import path from "node:path";
 import os from "node:os";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, appendFile, readFile } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { DATA, read, update, PRACTICE } from "./store.ts";
@@ -16,7 +16,7 @@ import { CHAT_MODELS } from "./agent-chat.ts";
 
 type Role = "user" | "assistant" | "tool" | "error";
 type Msg = { id: number; role: Role; text: string; at: string; item?: string; status?: string };
-export type CodexChat = { id: string; threadId?: string; threadSandbox?: string; workspace?: string; model?: string; edit?: "allow" | "deny"; messages: Msg[]; at: string; usage?: { input: number; cached: number; output: number; ms: number }[] };
+export type CodexChat = { id: string; threadId?: string; rulesKey?: string; threadSandbox?: string; workspace?: string; model?: string; edit?: "allow" | "deny"; messages: Msg[]; at: string; usage?: { input: number; cached: number; output: number; ms: number }[] };
 
 const now = () => new Date().toISOString();
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
@@ -183,7 +183,7 @@ function label(item: any): string {
 }
 
 /** ext.context: 제품 대화(11/4)가 매 차례 붙이는 학습 목표 맥락 */
-export async function ask(id: string, text: string, ext?: { context?: () => Promise<string>; noLearned?: boolean }) {
+export async function ask(id: string, text: string, ext?: { context?: () => Promise<string>; noLearned?: boolean; fixed?: string }) {
   const q = String(text ?? "").trim();
   if (!q || q.length > 12000) throw err(400, "질문은 1~12,000자로 적어 주세요.");
   if (active.has(id)) throw err(409, "아직 답하는 중이에요.");
@@ -232,7 +232,10 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
     // 허락했을 때(11/6 A안): Windows에서는 셸 · 기본 쓰기가 막혀 있어 튜터가 "읽기 전용이라 못 써요"로 포기하던 것 → 쓰는 길을 알려 준다
     const editLine = c.edit === "allow" ? "[파일 고치기] 학습자가 허락했다. 작업 폴더에 파일을 쓸 때는 write_workspace_file 도구를 쓴다(이 환경의 셸 · 기본 쓰기는 막혀 있다).\n\n" : "[파일 고치기] 학습자가 아직 허락하지 않았다. 고칠 곳과 코드를 알려 주고 학습자가 직접 고치게 한다.\n\n";
     const goal = ext?.context ? `${await ext.context()}\n\n` : "";
-    const input = `${fresh ? `${TUTOR_FIRST}\n\n${prior ? `[앞 대화]\n${prior}\n\n` : ""}` : ""}${pref}${goal}${editLine}[학습자] ${q}`;
+    // 매번 같은 규칙(11/13): 대화를 열 때 한 번. 규칙 글이 바뀌었으면(이 대화에서 보낸 것과 다르면) 그 차례에 한 번 더
+    const rulesKey = ext?.fixed ? createHash("sha1").update(ext.fixed).digest("hex").slice(0, 12) : "";
+    const rules = ext?.fixed && (fresh || c.rulesKey !== rulesKey) ? `${ext.fixed}\n\n` : "";
+    const input = `${fresh ? `${TUTOR_FIRST}\n\n${prior ? `[앞 대화]\n${prior}\n\n` : ""}` : ""}${rules}${pref}${goal}${editLine}[학습자] ${q}`;
     log.fresh = fresh; log.model = opts.model; log.sandbox = opts.sandboxMode; log.inputChars = input.length;
     // AI 호출 실험실(11/6): 이 차례에 실제로 보낸 글(Codex 자체 지시문은 빼고 우리가 붙인 것)과 학습자 말, 도구, 답을 남긴다
     log.q = q.slice(0, 4000); log.input = input.length > 20000 ? `${input.slice(0, 20000)}\n…(${input.length - 20000}자 더)` : input; log.engine = "codex";
@@ -257,7 +260,7 @@ async function run(id: string, q: string, exe: string, Codex: any, ac: AbortCont
         const u = ev.usage ?? {};
         const use = { input: u.input_tokens ?? 0, cached: u.cached_input_tokens ?? 0, output: u.output_tokens ?? 0, ms: Date.now() - t0 };
         log.usage = use; log.tools = tools; log.reply = reply.slice(0, 20000); if (firstText) log.firstTextMs = firstText - t0;
-        await update<CodexChat>(file(id), c, (x) => { (x.usage ??= []).push(use); });
+        await update<CodexChat>(file(id), c, (x) => { (x.usage ??= []).push(use); if (rules) x.rulesKey = rulesKey; });
       } else if (ev.type === "turn.failed" || ev.type === "error") {
         const msg = ev.error?.message ?? ev.message ?? "알 수 없는 오류";
         log.error = msg;

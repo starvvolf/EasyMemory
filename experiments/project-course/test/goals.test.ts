@@ -47,7 +47,7 @@ test("보충 로드맵(11/7~8): 설문 뒤 짜고 원래 로드맵은 보관, �
   assert.equal(g.support!.target.title, "딕셔너리"); assert.equal(g.map.length, 3);
   const ctx = await G.goalContext(r);
   assert.match(ctx, /원래 로드맵\(보충 중이라 잠시 보관\)/); assert.match(ctx, /지금 보충: 키와 값 — 완료 조건: 키로 값을 찾는다 · 단계: ① 이해 중/);
-  assert.match(ctx, /답에서 버튼을 누르라고 안내하지 않는다/); assert.match(ctx, /\[답에 반응하기\]/);
+  assert.doesNotMatch(ctx, /\[답에 반응하기\]/); assert.match(G.goalRules(), /답에서 버튼을 누르라고 안내하지 않는다/); assert.match(G.goalRules(), /\[답에 반응하기\]/);
   await assert.rejects(G.runGoalTool(r, "set_current_goal", { title: "x", done: "y" }, []), /보충 로드맵을 진행 중/);
   // 보충도 ① 이해 → ② 적용
   assert.match((await G.goalAction(r, "understood", {}))!, /보충 "키와 값"을\(를\) 이해했어요.*적용 단계/s);

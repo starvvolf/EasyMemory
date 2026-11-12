@@ -45,5 +45,5 @@ test("새 이름 칸(11/11): new_names → 화면에 이름마다 펼침 여부,
   v = await GO.goalsView(run);
   assert.equal(v.current!.names!.find((n) => n.name === "console.log")!.seen, true);
   assert.ok((await H.search({ name: "console.log", kind: "봤음" })).some((e) => e.run === run));
-  assert.match(await GO.goalContext(run), /search_history로 찾아본다/);
+  assert.match(GO.goalRules(), /search_history로 찾아본다/);
 });

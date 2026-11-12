@@ -11,7 +11,7 @@
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { DATA, read, update } from "./store.ts";
-import { RESPOND_RULE } from "./judge.ts";
+import { RESPOND_RULE, QUESTION_RULE, ON_REQUEST_RULE, EXPLAIN_RULE, NAME_RULE, TOOL_RULE, ACT_RULE } from "./judge.ts";
 import { SHELL_TOOL } from "./shell.ts";
 import { CODE_TOOL, DEBUG_TOOL } from "./codenav.ts";
 import { CAUSE_PLAN } from "./gaps.ts";
@@ -29,7 +29,7 @@ export const HELP_LABEL: Record<Help, string> = { self: "스스로", together: "
 const HELP_RULE: Record<Help, string> = {
   self: "[도움 정도: 스스로] 학습자가 직접 하고 싶어 한다. 방향과 생각할 거리만 주고 코드 · 답은 쓰지 않는다(달라고 하면 그 순간만 준다). 정해진 이름 · 문법은 이름만 알려 준다.",
   together: "[도움 정도: 같이] 틀(빈칸 · 뼈대 · 순서)은 주고 핵심은 학습자가 채우게 한다. 두 번 해도 안 되면 그 부분을 보여 주고 왜 그런지 한 줄로 설명한다.",
-  fast: "[도움 정도: 빨리 만들기 — 아래 [학습자가 물을 때]의 '고치는 법은 묻기 전까지 말하지 않는다'보다 이것이 우선] 학습자는 빨리 만들면서 설명을 듣고 싶어 한다. 되묻지 말고 필요한 코드를 바로 파일에 쓰고(고치기 허용일 때, 아니면 채팅에) 줄마다 무엇을 하는지 짧게 설명한다. 확인 문항 · 적용 과제를 강요하지 않는다(학습자가 원하면 한다).",
+  fast: "[도움 정도: 빨리 만들기 — [학습자가 물을 때]의 '고치는 법은 묻기 전까지 말하지 않는다'보다 이것이 우선] 학습자는 빨리 만들면서 설명을 듣고 싶어 한다. 되묻지 말고 필요한 코드를 바로 파일에 쓰고(고치기 허용일 때, 아니면 채팅에) 줄마다 무엇을 하는지 짧게 설명한다. 확인 문항 · 적용 과제를 강요하지 않는다(학습자가 원하면 한다).",
 };
 /** 새 이름(11/11 사용자 "문법 같이 머릿속으로 생각하기 힘든 거는 그냥 알려 주는 게 맞는"): 과제에 쓰는 정해진 이름(함수 · 명령 · 문법 · 파일 이름). seen = 학습자가 펼쳐 봄 */
 export type NewName = { name: string; what: string; example: string; seen?: boolean; from?: string };
@@ -356,12 +356,22 @@ export async function goalContext(runId: string) {
   const mem = await (await import("./memory.ts")).memoryText().catch(() => "");
   const body = await goalContextBody(runId);
   const sh = await (await import("./shell.ts")).shellContext(runId).catch(() => "");
-  // 학습자가 물을 때(11/8): 장기 목표가 없을 때도 붙는다
-  const J = await import("./judge.ts");
   const refail = await (await import("./gaps.ts")).refailedContext().catch(() => "");
   // 나의 학습 노트(11/10): 여러 실습에 걸친 아직 모르는 것 · 이제 되는 것 · 확인된 환경
   const note = await (await import("./learner-note.ts")).noteText().catch(() => "");
-  return [mem, note, body, refail, sh, `${J.QUESTION_RULE} ${J.ON_REQUEST_RULE} ${J.EXPLAIN_RULE} ${J.NAME_RULE} ${J.TOOL_RULE} ${J.ACT_RULE}`].filter(Boolean).join("\n\n");
+  return [mem, note, body, refail, sh].filter(Boolean).join("\n\n");
+}
+/**
+ * 매번 같은 튜터 규칙(11/13 사용자 "그렇게 하면 될 것 같고"): 예전엔 차례마다 맥락 끝에 붙여 대화에 같은 글이 쌓이고 캐시도 안 맞았다 →
+ * 고정 지시(엔진의 시스템 지시 · Codex는 대화를 열 때 한 번)로 옮겼다. 글은 그대로, 차례마다 바뀌는 것(도움 정도 · 목표 · 단계)만 맥락에 남는다
+ */
+export function goalRules() {
+  return [
+    "[학습 목표 진행]",
+    // 11/8 사용자 결정: 버튼 안내 끄기("버튼을 잘 다듬으면 사용자가 누르겠지"), 적용은 Recaller가 판정
+    "목표와 보충 모두 ① 이해 → ② 적용 순서로 간다. 이해 단계에서는 설명과 예시로 이해를 돕고, 학습자가 이해했다고 하면 적용 과제를 낸다. 적용은 학습자가 해 봤다고 하면 Recaller가 완료 조건에 비추어 판정해 알려 준다. 단계를 넘기는 건 학습자가 화면 버튼으로 한다. 답에서 버튼을 누르라고 안내하지 않는다.",
+    RESPOND_RULE, QUESTION_RULE, ON_REQUEST_RULE, EXPLAIN_RULE, NAME_RULE, TOOL_RULE, ACT_RULE,
+  ].join("\n");
 }
 /** 진행 기록의 작업 폴더(Codex는 그 대화의 폴더, 기본 엔진은 실험판 대화의 폴더) */
 export async function runWorkspace(runId: string): Promise<string | undefined> {
@@ -394,9 +404,6 @@ async function goalContextBody(runId: string) {
     sp ? `지금 보충: ${sp.title} — 완료 조건: ${sp.done} · 단계: ${!sp.understood ? "① 이해 중" : !sp.applied ? "② 적용 중" : "적용까지 끝"}. 끝나면 다음 보충(없으면 종착지)으로 간다. 지금은 보충에 집중한다.` : "",
     g.survey ? "지금 화면에 질문을 띄워 두었다 — 학습자 답을 기다린다." : "",
     (() => { const r = g.log.slice(-12); const e = r.filter((l) => l.kind === "easy").length, h = r.filter((l) => l.kind === "stuck").length; return e || h ? `최근 학습자 표시: 너무 쉬움 ${e}번 · 너무 어려움 ${h}번 — 설명 수준을 여기에 맞춘다.` : ""; })(),
-    // 11/8 사용자 결정: 버튼 안내 끄기("버튼을 잘 다듬으면 사용자가 누르겠지"), 적용은 Recaller가 판정
-    "목표와 보충 모두 ① 이해 → ② 적용 순서로 간다. 이해 단계에서는 설명과 예시로 이해를 돕고, 학습자가 이해했다고 하면 적용 과제를 낸다. 적용은 학습자가 해 봤다고 하면 Recaller가 완료 조건에 비추어 판정해 알려 준다. 단계를 넘기는 건 학습자가 화면 버튼으로 한다. 답에서 버튼을 누르라고 안내하지 않는다.",
-    RESPOND_RULE,
   ].filter(Boolean).join("\n");
 }
 

@@ -50,3 +50,12 @@ test("판정에서도 선행 뺌(11/13 사용자 \"그런 거는 당연히 다 �
   assert.equal((GP as Record<string, unknown>).prereqUnit, undefined);
   assert.equal((GP as Record<string, unknown>).fillPrereqs, undefined);
 });
+
+test("매번 같은 규칙은 고정 지시로(11/13): 차례 맥락에는 없고 goalRules에만, 도움 정도는 맥락에 남는다", async () => {
+  const run = "rr";
+  await GO.runGoalTool(run, "propose_plan", { long: "x", spec: "", mode: "bottomup", map: ["a"], first: { title: "a", done: "d" } }, []);
+  await GO.goalAction(run, "confirm", {});
+  const ctx = await GO.goalContext(run);
+  for (const r of ["[답에 반응하기]", "[학습자가 물을 때]", "① 이해 → ② 적용 순서로 간다"]) { assert.ok(!ctx.includes(r), r); assert.ok(GO.goalRules().includes(r), r); }
+  assert.match(ctx, /\[도움 정도: /);
+});
