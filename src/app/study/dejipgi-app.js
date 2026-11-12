@@ -796,6 +796,7 @@ const materialsApi = {
   practice: (id) => startSession(id, true),
   records: (id) => { S.recordsDeck = id; setView("records"); },
   map: (id) => { const d = S.decks[id]; if (d) MaterialMapView.open(d); },
+  mapProps: (gid) => MaterialMapView.props(gid),
   read: (id, page) => openReader(id, page),
   fold: (key) => Fold.toggle(key),
   toggleGoal: (id, gid) => { const d = S.decks[id]; if (!d) return; const p = d.pending, chosen = new Set(p.chosen || []); p.chosen = chosen.has(gid) ? [...chosen].filter(x => x !== gid) : [...chosen, gid]; savePending(); render(); },
@@ -1937,35 +1938,36 @@ const TM = { open:false, run:null, err:null, sel:null, key:"" };
 // 사용자 10/30: a material the engine made is studied from its map, not a reading screen. 원문 opens one page over the map,
 // 문제 풀기 starts that page's questions, and a material made without questions gets them here (문제 만들기).
 const genDeck = (id) => !!env.mountView && /^(pending:)?gen_/.test(String(id || ""));
+/* 자료 지도 (11/12 사용자 "기존 자료 지도 화면을 버리자"): 덮는 화면 대신 공부 › 자료 오른쪽 칸에 바로 보인다.
+   open(d)는 공부 › 자료로 가서 그 자료를 고르고(왼쪽 목록과 기억 탭이 함께 기억), 지도 칸의 동작(원문 보기 · 문제 풀기 · 문제 만들기)은 props(gid)가 준다. */
 const MaterialMapView = {
   cur: null,
   asked: {},
   open(d){
-    this.close();
-    const ov = h("div", { class:"mm2-overlay" }), host = h("div");
-    ov.append(host);
-    // 11/12 사용자 점검 4번: 지도는 앱 머리(오늘·공부·기억·기록) 아래에 띄운다. 머리가 보여야 다른 탭으로 바로 가고, 스크롤하던 자리와 상관없이 위에서 시작한다.
-    window.scrollTo({ top:0 });
-    const mast = document.querySelector(".dejipgi .masthead");
-    if (mast){ const b = Math.round(mast.getBoundingClientRect().bottom); if (b > 0) ov.style.top = b + "px"; }
-    (document.getElementById("app").closest(".dejipgi") || document.body).append(ov);
     const gid = String(d.id).replace(/^pending:/, "");
-    const deckNow = () => S.decks[gid] || S.decks["pending:" + gid] || d;
-    const stop = env.mountView("map", host, { genId: gid,
-      onPage: (p) => SourcePeek.open(deckNow(), p),
+    S.session = null;
+    try{ localStorage.setItem("recaller:lib-branch", "material"); localStorage.setItem("recaller:shelf-sel", "gen:" + gid); }catch(e){}
+    try{ window.dispatchEvent(new CustomEvent("recaller:branch", { detail:"material" })); window.dispatchEvent(new CustomEvent("recaller:shelf-sel", { detail:"gen:" + gid })); }catch(e){}
+    if (S.view !== "practice") setView("practice"); else render();
+    window.scrollTo({ top:0 });
+  },
+  props(gid){
+    const d0 = S.decks[gid] || S.decks["pending:" + gid];
+    const deckNow = () => S.decks[gid] || S.decks["pending:" + gid] || d0;
+    return { genId: gid,
+      onPage: (p) => { const d = deckNow(); if (d) SourcePeek.open(d, p); },
       // The card's own question (objective "s4-q4c3" for card "s4.4c3"), or the page's when it has none of its own.
       onPractice: (p, cardId) => {
         const real = S.decks[gid];
         if (!real){ toast("문제가 아직 연습에 붙지 않았어요. 잠시 뒤 다시 눌러 주세요."); return; }
         const objId = String(cardId || "").replace(/^(s\d+)\.(.+)$/, "$1-q$2");
-        this.close(); S.session = null;
+        S.session = null;
         startCheck(gid, p, real.items.some(it => it.objectiveId === objId) ? objId : undefined);
         if (S.session) S.session.fromMap = gid;
       },
       onMakeQuestions: () => makeQuestions(deckNow()),
       practiceLeft: () => { const real = S.decks[gid]; if (!real) return 0; const asked = this.asked[gid]; const fresh = real.items.filter(it => !asked || !asked.has(it.id)).length; return fresh || real.items.length; },
-      // 만든 문제부터 풀기 (11/6 사용자 "자료 입력하고 실시간으로 만들어지는 창에서 문제도 바로 풀 수 있게, 만들어진 문제부터"):
-      // while the material is still being made, the questions published so far; pressed again, only the ones not yet asked here.
+      // 만든 문제부터 풀기 (11/6): while the material is still being made, the questions published so far; pressed again, only the ones not yet asked here.
       onPracticeAll: () => {
         const real = S.decks[gid];
         const items = real ? real.items : [];
@@ -1974,24 +1976,23 @@ const MaterialMapView = {
         const fresh = items.filter(it => !asked.has(it.id));
         const pick = fresh.length ? fresh : items;
         for (const it of pick) asked.add(it.id);
-        this.close(); S.session = null;
+        S.session = null;
         startCheck(gid, pick[0].page, undefined, pick);
         if (S.session) S.session.fromMap = gid;
       },
-      onClose: () => this.close() });
-    this.cur = { ov, stop };
+      onClose: () => {} };
   },
-  close(){ if (this.cur){ this.cur.stop(); this.cur.ov.remove(); this.cur = null; } },
+  close(){},
 };
 /* 뒤로 한 칸(11/11 사용자 "뒤로 가기, 하나 더 열린 탭 있으면 그것만 닫기"): Esc · 마우스 뒤로 버튼 · Alt+← 가 맨 위의 것 하나만 닫는다.
    원문 보기(자기 Esc가 먼저) → 자료 지도 안에서 열린 것(플래시카드·펼친 카드: 지도가 recaller:back을 받아 처리하면 끝) → 자료 지도 → 새 자료 화면은 PDF 자료로. */
 function backOne(){
   if (SourcePeek.cur){ SourcePeek.close(); return true; }
-  if (MaterialMapView.cur){
+  // 공부 › 자료 칸의 지도 안에서 열린 것(펼친 카드 등)이 먼저
+  if (S.view === "practice" && !S.session && document.querySelector(".study-shelf .mm2")){
     const ev = new CustomEvent("recaller:back", { cancelable:true });
     window.dispatchEvent(ev);
-    if (!ev.defaultPrevented) MaterialMapView.close();
-    return true;
+    if (ev.defaultPrevented) return true;
   }
   if (S.view === "create" && !S.builder?.busy){ setView("practice"); render(); return true; }
   if (S.session && S.view === "practice"){ leaveSession(); return true; }
@@ -2002,7 +2003,10 @@ function backOne(){
 document.addEventListener("keydown", (e) => {
   if (e.defaultPrevented || e.isComposing) return;
   const t = e.target; const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
-  if ((e.key === "Escape" && MaterialMapView.cur && !typing) || (e.altKey && e.key === "ArrowLeft")){ if (backOne()) e.preventDefault(); }
+  if ((e.key === "Escape" && !typing && S.view === "practice" && document.querySelector(".study-shelf .mm2")) || (e.altKey && e.key === "ArrowLeft")){
+    if (e.key === "Escape"){ const ev = new CustomEvent("recaller:back", { cancelable:true }); window.dispatchEvent(ev); if (ev.defaultPrevented) e.preventDefault(); return; }
+    if (backOne()) e.preventDefault();
+  }
 });
 document.addEventListener("mouseup", (e) => { if (e.button === 3 && backOne()) e.preventDefault(); });
 // 원문 보기가 열려 있으면 Esc·←·→는 그 창 것 (다른 곳보다 먼저)

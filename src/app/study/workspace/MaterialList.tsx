@@ -6,6 +6,8 @@ import { call, errorText, go, later } from "./api";
 import type { MaterialRow } from "./KnowledgeWindow";
 import { BRANCH_KEY, loadShelfRows, materialEntries, projectOpen, setBranch, shelfSel, type ShelfEntry } from "./shelf";
 import "./library.css";
+import MaterialMap from "./MaterialMap";
+type MapProps = Omit<Parameters<typeof MaterialMap>[0], "embedded" | "extra">;
 
 /* 공부 › 자료 (11/11 바닐라 renderHome을 React로, 11/12 "같은 틀, 두 얼굴"): 왼쪽은 기억 탭과 같은 자료 목록, 오른쪽은 고른 자료로 할 것.
    값과 동작은 앱(dejipgi-app.js)의 materialsApi가 준다. */
@@ -22,6 +24,8 @@ type LooseGroup = { key: string; open: boolean; first: Pending; more: Pending[] 
 type Snap = { todayLeft: number; due: number; fresh: number; chunk: number; pendings: number; decks: number; loose: Pending[]; looseGroups?: LooseGroup[]; mats: Mat[]; lib: { status: string; error: string } };
 type Api = {
   snapshot(): Snap; startToday(): void; startAll(): void; practice(id: string): void; records(id: string): void; map(id: string): void; read(id: string, page: number): void;
+  /** 공부 › 자료 칸에 바로 그리는 자료 지도의 동작(원문 보기 · 문제 풀기 · 문제 만들기, 11/12) */
+  mapProps(genId: string): MapProps;
   fold(key: string): void; toggleGoal(id: string, gid: string): void; confirmGoals(id: string): void; makeQuestions(id: string): void; connect(): void;
   resume(id: string): void; restart(id: string): void; remove(id: string): void;
 };
@@ -150,22 +154,13 @@ function StudyFace({ top, pickedKey, onPick, deckOf, pendingOf, api }: { top: En
   }
   const genId = e.row.genId ?? "";
   const d = deckOf(genId), p = pendingOf(genId);
-  // 자료 지도는 줄기부터, 강의 보기는 지도의 [강의] 탭으로 바로 (지도는 마지막에 본 탭을 기억한다)
-  const openMap = (tab: "summary" | "lecture" = "summary") => { try { localStorage.setItem("recaller:map-tab", tab); } catch { /* storage off */ } window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId } })); };
+  // 자료 지도를 덮는 화면 대신 여기 오른쪽 칸에 바로 (11/12 사용자 "자료 지도 화면을 버리자"). 줄기 · 구조 · 강의 탭과 문제 풀기는 지도가, 기억 카드는 기억 탭이.
+  const extra = <>{runs}{d ? <button className="btn ghost small" onClick={() => api.records(d.id)}>푼 기록</button> : null}
+    {e.row.lastAt ? <button className="btn small" onClick={() => toMemory(e.key)}>기억 보기 →</button> : null}</>;
   return <>
-    <Head icon={e.icon} title={e.title} sub={[e.pages ? `${e.pages}쪽` : "", day(e.lastAt)].filter(Boolean).join(" · ")}>
-      {runs}{e.row.lastAt ? <button className="btn small" onClick={() => toMemory(e.key)}>기억 보기 →</button> : null}
-    </Head>
-    <div className="row sf-acts">
-      <button className="btn primary" onClick={() => openMap("lecture")}>강의 보기</button>
-      <button className="btn" onClick={() => openMap("summary")}>자료 지도</button>
-      {d ? <DeckButtons d={d} api={api} /> : p?.note.canQuestions ? <button className="btn" disabled={p.note.making} onClick={() => api.makeQuestions(p.id)}>{p.note.making ? "시작하는 중…" : "문제 만들기"}</button> : null}
-    </div>
-    {d ? <DeckMeta d={d} /> : null}
-    {p && !(p.status === "cards" && p.note.canQuestions) ? <PendingNote p={p} api={api} /> : null}
-    {d?.growing ? <PendingNote p={d.growing} api={api} /> : null}
-    {p && !d && p.status === "cards" ? <p className="small muted">기억 정리는 끝났어요. 문제는 [문제 만들기]로 만들거나, 지도에서 기억마다 플래시카드로 바로 확인할 수 있어요.</p> : null}
-    <AreaOverview genId={genId} onOpen={() => openMap("summary")} />
+    {p && (p.status === "paused" || p.status === "failed" || p.note.goals) ? <PendingNote p={p} api={api} /> : null}
+    {d?.growing && (d.growing.status === "paused" || d.growing.status === "failed") ? <PendingNote p={d.growing} api={api} /> : null}
+    <MaterialMap key={genId} {...api.mapProps(genId)} embedded extra={extra} />
   </>;
 }
 const bareId = (id: string) => id.replace(/^pending:/, "");
@@ -252,35 +247,6 @@ function ProjectLanding() {
       {going ? <button className="btn" onClick={() => enterProject(going.id)}>이어 하기: {going.title.slice(0, 30)}</button> : null}
     </div>
   </>;
-}
-
-/* 이 자료에서 배울 차례: 줄기 영역마다 기억 수 · 몰랐던 것 · 복습 차례. 누르면 자료 지도 (기억 카드 자체는 기억 탭에서). */
-type AreaLite = { id: string; title: string; pages: number[]; cards: Array<{ state: string; dueAt?: string | null }> };
-function AreaOverview({ genId, onOpen }: { genId: string; onOpen: () => void }) {
-  const [areas, setAreas] = useState<AreaLite[] | null | undefined>(undefined);
-  const [now, setNow] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    call<{ map: { sections: AreaLite[] } }>(`/api/study-map/${genId}`).then((r) => { if (alive) { setAreas(r.map.sections); setNow(Date.now()); } }).catch(() => { if (alive) setAreas(null); });
-    return () => { alive = false; };
-  }, [genId]);
-  if (areas === undefined) return <p className="small muted">불러오는 중…</p>;
-  if (!areas?.length) return null;
-  const range = (ps: number[]) => ps.length ? (ps[0] === ps.at(-1) ? `p.${ps[0]}` : `p.${ps[0]}–${ps.at(-1)}`) : "";
-  return <section className="sf-areas">
-    <p className="eyebrow">배울 차례</p>
-    <ol>{areas.map((a, i) => {
-      const unknown = a.cards.filter((c) => c.state === "unknown").length, due = a.cards.filter((c) => c.dueAt && Date.parse(c.dueAt) <= now).length;
-      const fresh = a.cards.filter((c) => c.state === "new" || c.state === "met").length;
-      return <li key={a.id}><button className="sf-area" onClick={onOpen}>
-        <span className="sf-n num">{i + 1}</span><b>{a.title}</b><span className="small muted">{range(a.pages)}</span><span className="cs-gap" />
-        <span className="small muted num">기억 {a.cards.length}</span>
-        {unknown ? <span className="chip bad num">몰랐음 {unknown}</span> : null}
-        {due ? <span className="chip num">복습 {due}</span> : null}
-        {!unknown && !due && fresh === a.cards.length ? <span className="chip num">처음</span> : null}
-      </button></li>;
-    })}</ol>
-  </section>;
 }
 
 export function PendingNote({ p, api }: { p: Pending; api: Pick<Api, "toggleGoal" | "confirmGoals" | "makeQuestions" | "connect" | "resume" | "restart" | "remove"> }) {

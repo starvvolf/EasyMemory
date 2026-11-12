@@ -1514,8 +1514,15 @@ html .dejipgi[data-view="code"] .wrap{max-width:none}
 /* 11/12 사용자 UI 점검 (A) */
 /* 자료 · 알고리즘 · 실습 단추 줄은 화면마다 넓이가 달라도(알고리즘은 화면 끝까지) 늘 같은 자리 (11/12 사용자 "가로로 이리 갔다 저리 갔다") */
 /* 11/12 "같은 틀, 두 얼굴": 공부 · 기억 탭의 자료 칸이 같은 1240 두 칸이라, 단추 줄도 그 왼쪽 끝에 맞춘다. 화면 넓이와 상관없이 가운데 기준 1240 */
-.dejipgi .study-nav{width:min(1240px,calc(100vw - 32px));position:relative;left:50%;transform:translateX(-50%);box-sizing:border-box}
-html .dejipgi #app:has(.study-shelf){max-width:1240px}
+/* 11/12 사용자 "공부 · 기억 탭 좌우 여백 줄이고 넓게(GPT처럼)": 공부(자료 · 알고리즘 · 실습)와 기억은 화면 끝까지(바깥 여백 16px).
+   실습 · 웹 글 화면은 그 안에서 예전 넓이(860) 그대로. 단추 줄은 늘 왼쪽 끝이라 갈래를 바꿔도 안 움직인다. */
+html .dejipgi:is([data-view="practice"],[data-view="knowledge"],[data-view="project"],[data-view="code"],[data-view="web"]) .wrap{max-width:none}
+html .dejipgi #app:has(.study-shelf),html .dejipgi:is([data-view="project"],[data-view="web"]) #app{max-width:none}
+html .dejipgi[data-view="project"] .view-project,html .dejipgi[data-view="web"] .view-web{max-width:860px;margin-inline:auto}
+.dejipgi .study-nav{width:100%;box-sizing:border-box}
+/* 지도가 공부 칸 안에 바로(11/12 "자료 지도 화면을 버리자"): 칸 안이라 겉 테두리 · 그림자 없이, 넓이는 칸 그대로 */
+.dejipgi .study-shelf .mm2.mm3-embed{max-width:1200px;width:100%;margin:0 auto;padding:0;border:0;box-shadow:none;background:none}
+.dejipgi .study-shelf .lib-page:has(.mm3-embed){max-width:none}
 /* 공부 얼굴(공부 › 자료 오른쪽) */
 .dejipgi .sf-acts{gap:8px;flex-wrap:wrap;align-items:center}
 .dejipgi .sf-deck{display:flex;flex-direction:column;gap:8px}

@@ -963,7 +963,11 @@ function LiveBoard({ data }: { data: LiveData }) {
 
 // 사용자 10/30: the map is where a material is studied (no reading screen): 원문 opens one page over it, 문제 풀기 starts that
 // page's questions, and a material made without questions gets them here (문제 만들기).
-export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, practiceLeft, onMakeQuestions, onClose }: { genId: string; onPage: (page: number) => void;
+export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, practiceLeft, onMakeQuestions, onClose, embedded, extra }: { genId: string; onPage: (page: number) => void;
+  /** 공부 탭 오른쪽에 바로 (11/12 사용자 "자료 지도 화면을 버리자"): 덮는 화면이 아니라 칸 안에. 닫기 없음, 기억 카드 목록은 기억 탭에서(만드는 중일 때만 보임) */
+  embedded?: boolean;
+  /** 머리 오른쪽에 더 붙일 단추(공부 탭: 만든 때 고르기 · 푼 기록 · 기억 보기) */
+  extra?: ReactNode;
   /** 누르면 실제로 풀 문제 수 (11/12 점검 7번: 지도가 센 문제 수와 연습에 붙은 수가 달랐다) */
   practiceLeft?: () => number;
   onPractice?: (page: number, cardId: string) => void;
@@ -1096,12 +1100,13 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const firstLabel = summary && !hasOutline ? "요약" : "줄기";
   const noFirst = digest !== undefined && summary !== undefined && !hasOutline && !(summary && (summary.text || summary.status === "writing"));
   const picked = (tab === "structure" && !(hasOutline || !summary)) || (tab === "lecture" && running) ? null : tab;
-  const shownTab: Tab = picked ?? (noFirst ? "knowledge" : "summary");
-  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ["knowledge", "기억"], ...(running ? [] : [["lecture", "강의"] as const])] as const).map(([k, label]) =>
+  const knowTab = !embedded || running || noFirst;
+  const shownTab: Tab = (picked === "knowledge" && !knowTab ? null : picked) ?? (noFirst ? "knowledge" : "summary");
+  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ...(knowTab ? [["knowledge", "기억"] as const] : []), ...(running ? [] : [["lecture", "강의"] as const])] as const).map(([k, label]) =>
     <button key={k} className={shownTab === k ? "on" : ""} aria-pressed={shownTab === k} onClick={() => setTab(k)}>{label}{k === "knowledge" && running ? <span className="mm5-badge">만드는 중</span> : null}</button>)}</div>;
   // 11/12 점검 11번: 다 만든 지도를 여는 몇 초 동안 "목차가 나오는 중"이 떠서 다시 만드는 것처럼 보였다 — 만드는 중일 때만 단계를 보인다.
-  if (!map && !error && (!live || !["queued", "running"].includes(live.status))) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>불러오는 중…</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div></div>;
-  if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>{hasOutline ? "목차가 나오는 중…" : "자료를 읽는 중…"}</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
+  if (!map && !error && (!live || !["queued", "running"].includes(live.status))) return <div className="mm2 mm3"><div className="mm2-head"><div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>불러오는 중…</b></div>{embedded ? extra : <button className="btn ghost small" onClick={onClose}>닫기</button>}</div></div>;
+  if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>{hasOutline ? "목차가 나오는 중…" : "자료를 읽는 중…"}</b></div>{embedded ? extra : <button className="btn ghost small" onClick={onClose}>닫기</button>}</div>
     <Steps steps={steps} />{tabs}
     {shownTab === "summary" ? (hasOutline || !summary ? <OutlinePane genId={genId} digest={digest} cards={[]} making onPage={onPage} onPractice={onPractice} /> : <SummaryPane summary={summary} making />)
       : shownTab === "structure" ? <p className="small muted">기억 카드가 다 만들어지면 구조를 만들 수 있어요.</p>
@@ -1115,9 +1120,9 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   // State dots say something only once the learner has answered (all 만남 at first is one colour, noise).
   const marked = Boolean(n.unknown || n.known || n.graduated);
   return (
-    <div className={`mm2 mm3${shownTab === "structure" ? " mm3-wide" : ""}`} role="dialog" aria-label="자료 지도">
+    <div className={`mm2 mm3${shownTab === "structure" && !embedded ? " mm3-wide" : ""}${embedded ? " mm3-embed" : ""}`} role={embedded ? undefined : "dialog"} aria-label="자료 지도">
       <div className="mm2-head">
-        <div><p className="eyebrow">자료 지도</p><b>{map.title.replace(/\.pdf$/i, "")}</b>
+        <div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>{map.title.replace(/\.pdf$/i, "")}</b>
           <span className="small muted"> · {map.pages}쪽 · 기억 {n.cards}{n.core !== undefined && map.topics?.length ? ` · 핵심 ${n.core}` : ""}{map.questionsLater ? "" : ` · 문제 ${n.questions}`}</span>
           {making ? <span className="small mm3-making"> · {board !== "off" ? "카드 쓰는 중" : map.questionsLater ? (n.cards ? "기억 정리 중" : "자료 읽는 중") : map.topics?.length ? "문제 만드는 중" : n.cards ? "기억 정리 중" : "자료 읽는 중"}…</span> : null}</div>
         <span className="row small">
@@ -1125,7 +1130,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
             onClick={() => { setAsking(true); void onMakeQuestions().then((ok) => { if (ok) setReload((k) => k + 1); }).finally(() => setAsking(false)); }}>{asking ? "시작하는 중…" : "문제 만들기"}</button> : null}
           {!map.questionsLater && n.questions && onPracticeAll ? <button className="btn small primary" title={making ? "지금까지 만들어진 문제부터 풀어요. 나머지는 계속 만들어져요." : "이 자료의 문제를 풀어요."}
             onClick={onPracticeAll}>{making ? `만든 문제부터 풀기 (${practiceLeft?.() ?? n.questions})` : `문제 풀기 (${practiceLeft?.() ?? n.questions})`}</button> : null}
-          <button className="btn ghost small" onClick={onClose}>닫기</button>
+          {embedded ? extra : <button className="btn ghost small" onClick={onClose}>닫기</button>}
         </span>
       </div>
       {making ? <Steps steps={steps} /> : null}
