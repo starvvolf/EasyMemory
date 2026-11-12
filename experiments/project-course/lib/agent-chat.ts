@@ -242,15 +242,15 @@ export async function setChatWorkspace(id: string, dir: string) {
 }
 /** 고를 수 있는 모델(11/4 사용자 "채팅창에서 모델 변경"). 첫 것이 기본 */
 export const CHAT_MODELS = [
-  { id: "gpt-6.1-terra", label: "GPT-6.1 terra (기본 · 빠름)" },
-  { id: "gpt-6.1-sol", label: "GPT-6.1 sol (더 똑똑 · 느림)" },
-  { id: "gpt-6-luna", label: "GPT-6 luna (싸고 가벼움)" },
+  { id: "gpt-6.1-terra", label: "GPT-6.1 terra · 기본" },
+  { id: "gpt-6.1-sol", label: "GPT-6.1 sol · 똑똑 · 느림" },
+  { id: "gpt-6-luna", label: "GPT-6 luna · 가벼움" },
 ];
 /** 생각 강도(11/12 사용자 "추론 레벨도 정할 수 있게"). 높을수록 답 전에 더 생각해서 느려진다 */
 export const CHAT_EFFORTS = [
-  { id: "low", label: "생각 적게 (기본 · 빠름)" },
+  { id: "low", label: "생각 적게 · 기본" },
   { id: "medium", label: "생각 보통" },
-  { id: "high", label: "생각 많이 (느림)" },
+  { id: "high", label: "생각 많이 · 느림" },
 ] as const;
 /** 파일 고치기를 허락한 대화의 매 차례 맥락 끝에 붙는 한 줄(고정 지시문은 그대로) */
 export const EDIT_ALLOWED = "[파일 고치기 허용] 학습자가 허락해서 이 대화에서는 edit·write로 작업 폴더의 파일을 만들고 고칠 수 있다. 학습자가 코드나 파일을 만들어 달라 · 쳐 달라 · 바꿔 달라고 하면(\"예시 코드 만들어 주면 보면서 해 보자\"처럼) 채팅에 코드를 보여 주기만 하지 말고 같은 답에서 바로 파일로 만든다. 고친 뒤에는 무엇을 왜 바꿨는지 짧게 말한다.";
