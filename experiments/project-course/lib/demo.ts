@@ -62,8 +62,8 @@ export async function demoReset(name: string) {
   }
   { // 시연: 튜터는 파일을 고치지 않는다(학습자가 직접) — "고쳐도 될까요?" 물음이 매번 뜨지 않게 정해 둔다
     const cf = path.join(DATA, "agent-chat", `${chat.id}.json`);
-    const c = JSON.parse(await readFile(cf, "utf8")) as { edit?: boolean };
-    c.edit = false; await writeFile(cf, JSON.stringify(c, null, 1));
+    const c = JSON.parse(await readFile(cf, "utf8")) as { edit?: "allow" | "deny" };
+    c.edit = "deny"; await writeFile(cf, JSON.stringify(c, null, 1));
   }
   await rm(chat.workspace, { recursive: true, force: true }).catch(() => undefined); // newChat이 만든 빈 폴더
   const now = new Date().toISOString();
