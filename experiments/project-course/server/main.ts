@@ -153,14 +153,7 @@ const routes: [string, RegExp, Handler][] = [
     const g = await (await import("../lib/goals.ts")).goalsOf(m[1]);
     const sp = g.support && !g.support.back ? g.support.steps.find((x) => x.status === "doing") : null;
     return { long: g.long?.text ?? null, mode: g.mode, current: g.current ? { title: g.current.title, done: g.current.done, understood: g.current.understood, applied: g.current.applied } : null,
-      support: sp ? { title: sp.title, target: g.support!.target.title } : null, map: g.map.filter((x) => !x.support).map((x) => ({ title: x.title, status: x.status })),
-      prereqs: (await import("../lib/goals.ts")).prereqBrief(g) };
-  }],
-  ["POST", /^\/api\/runs\/(\w+)\/base$/, async (req, m) => {
-    await getRun(m[1]);
-    const b = await body(req);
-    const r = b.result === "됨" || b.result === "비어 있음" ? b.result : null;
-    return (await import("../lib/goals.ts")).setPrereqSelf(m[1], String(b.name ?? ""), r);
+      support: sp ? { title: sp.title, target: g.support!.target.title } : null, map: g.map.filter((x) => !x.support).map((x) => ({ title: x.title, status: x.status })) };
   }],
   // 기억 도서관(11/11): 앱 기억 화면 › 실습의 목록 · 실습 한 판 정리
   ["GET", /^\/api\/library$/, async () => (await import("../lib/library.ts")).libraryList()],

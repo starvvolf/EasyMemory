@@ -22,27 +22,6 @@ test("선행(11/10): 판정이 선행을 짚으면 그 이름으로 열고, 목�
   assert.equal(l[0].status, "세션에서 채움"); assert.ok(l[0].dueAt);
 });
 
-test("선행 확인(11/10): check_prereq — 근거는 학습자 말 그대로, 비어 있음이면 부족함, 2개 넘게 비면 목표 낮추기 제안", async () => {
-  const run = "r2";
-  await GO.goalAction(run, "answer", { answers: [] }).catch(() => null);
-  // 계획 확정까지
-  await GO.runGoalTool(run, "propose_plan", { long: "React로 할 일 목록", spec: "", mode: "bottomup", map: [], first: { title: "카운터 만들기", done: "버튼을 누르면 숫자가 1 늘어난다", prereqs: [{ name: "JS 함수", check: "함수를 만드는 법?" }, { name: "객체 참조", check: "b = a 뒤 b를 바꾸면 a는?" }] } }, []);
-  await GO.goalAction(run, "confirm", {});
-  let g = await GO.goalsOf(run);
-  assert.deepEqual(g.current!.prereqs!.map((p) => p.name), ["JS 함수", "객체 참조"]);
-  await assert.rejects(GO.runGoalTool(run, "check_prereq", { name: "객체 참조", result: "비어 있음", quote: "지어낸 말" }, ["a도 안 바뀌어요"]));
-  const out = await GO.runGoalTool(run, "check_prereq", { name: "객체 참조", result: "비어 있음", quote: "a도 안 바뀌어요" }, ["a도 안 바뀌어요"]);
-  assert.match(out, /부족함으로 잡힘/);
-  const gap = (await G.ledgerOf(run))[0];
-  assert.equal(gap.prereq, "객체 참조"); assert.equal(gap.evidence[0].from, "선행 확인");
-  const out2 = await GO.runGoalTool(run, "check_prereq", { name: "JS 함수", result: "비어 있음", quote: "몰라요" }, ["몰라요"]);
-  assert.match(out2, /목표를 낮추거나/);
-  const ctx = await GO.goalContext(run);
-  assert.match(ctx, /이 목표의 선행\(큰 덩어리\): JS 함수\(몰라요\) · 객체 참조\(몰라요\)/);
-  assert.match(ctx, /\[깊이\]/);
-  g = await GO.goalsOf(run);
-  assert.equal(g.current!.prereqs!.length, 2);
-});
 
 test("목표 정리 카드(11/10): 도움 받고 됨 · 틀렸다 고침은 세션에서 채움, 아직 모름은 열림 — 모두 다시 확인 날짜", async () => {
   const goal = { id: "gC", title: "단어 세기", done: "d" };

@@ -901,7 +901,6 @@ function goalPlanCard(p, send) {
     // 진행 방식은 11/12 사용자 결정으로 묻지도 보이지도 않는다(튜터가 고르고 안에서만 씀)
     p.map.length ? h("ol", { class: "small" }, p.map.map((t) => h("li", {}, t))) : null,
     h("div", { class: "small" }, h("b", {}, "첫 목표: "), p.first.title, h("span", { class: "mut" }, ` — 완료 조건: ${p.first.done}`)),
-    // 먼저 알 것 지도(11/10 사용자 "장기목표 잡으면서 선행개념이랑 의존성을 다 정리해"): 아래 것부터, ← 는 그 전에 알아야 할 것
     h("div", { class: "grow2" }, h("button", { class: "btn small primary", onclick: send({ do: "goal", op: "confirm" }) }, "확정"), h("button", { class: "btn small", onclick: send({ do: "goal", op: "dismiss_plan" }) }, "다시 얘기하기")));
 }
 function goalStuckCard(g, send) {

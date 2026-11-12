@@ -32,7 +32,7 @@ test("새 이름 펼침(11/11): 혼자 씀 · 다시 확인 맞음 · 이번에 
   assert.equal(H.shouldOpen("npm init", await H.localEntries(), "", true), false);
 });
 
-test("새 이름 칸(11/11): new_names → 화면에 이름마다 펼침 여부, 펼쳐 보면 봤음(AI 없음), 선행 확인도 기록", async () => {
+test("새 이름 칸(11/11): new_names → 화면에 이름마다 펼침 여부, 펼쳐 보면 봤음(AI 없음)", async () => {
   const run = "rn";
   await GO.runGoalTool(run, "propose_plan", { long: "풀스택 세팅", spec: "", mode: "bottomup", map: ["Node 실행"], first: { title: "Node로 파일 실행", done: "node hello.js로 글이 찍힘", prereqs: [] }, base: [] }, []);
   await GO.goalAction(run, "answer", { answers: [] }).catch(() => null);
@@ -45,7 +45,5 @@ test("새 이름 칸(11/11): new_names → 화면에 이름마다 펼침 여부,
   v = await GO.goalsView(run);
   assert.equal(v.current!.names!.find((n) => n.name === "console.log")!.seen, true);
   assert.ok((await H.search({ name: "console.log", kind: "봤음" })).some((e) => e.run === run));
-  await GO.runGoalTool(run, "check_prereq", { name: "파일과 폴더 경로", result: "비어 있음", quote: "모르겠어요" }, ["모르겠어요"]);
-  assert.equal((await H.search({ kind: "확인", name: "경로" }))[0].result, "비어 있음");
   assert.match(await GO.goalContext(run), /search_history로 찾아본다/);
 });
