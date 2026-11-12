@@ -1011,8 +1011,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   // 11/6 사용자: 목차별·개념별을 빼고 위에 [요약 | 지식] 두 탭. 지식은 목차(자료의 순서)로만 보인다.
   const view = "outline" as const;
   // 11/9 사용자 "기존 목록형 탭으로 돌아가지 않게": 고른 탭을 기억하고(원문을 보고 돌아와도, 다시 열어도), 불러오는 동안 [기억] 목록으로 떨어지지 않는다.
-  type Tab = "summary" | "structure" | "knowledge" | "lecture";
-  const [tab, setTabState] = useState<Tab | null>(() => { try { const t = localStorage.getItem("recaller:map-tab"); return t === "summary" || t === "structure" || t === "knowledge" || t === "lecture" ? t : null; } catch { return null; } });
+  type Tab = "summary" | "structure" | "knowledge" | "lecture" | "flash";
+  const [tab, setTabState] = useState<Tab | null>(() => { try { const t = localStorage.getItem("recaller:map-tab"); return t === "summary" || t === "structure" || t === "knowledge" || t === "lecture" || t === "flash" ? t : null; } catch { return null; } });
   const setTab = (t: Tab) => { setTabState(t); try { localStorage.setItem("recaller:map-tab", t); } catch { /* storage off */ } };
   const [summary, setSummary] = useState<Summary | null | undefined>(undefined);
   const [digest, setDigest] = useState<DigestLite | null | undefined>(undefined);
@@ -1126,16 +1126,18 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const hasOutline = Boolean(digest?.skeleton && (digest.skeleton.topics.length || digest.skeleton.text));
   const firstLabel = summary && !hasOutline ? "요약" : "줄기";
   const noFirst = digest !== undefined && summary !== undefined && !hasOutline && !(summary && (summary.text || summary.status === "writing"));
-  const picked = (tab === "structure" && !(hasOutline || !summary)) || (tab === "lecture" && running) ? null : tab;
+  const picked = (tab === "structure" && !(hasOutline || !summary)) || ((tab === "lecture" || tab === "flash") && running) || (tab === "flash" && !embedded) ? null : tab;
   const knowTab = !embedded || running || noFirst;
+  // 공부 탭(11/13 사용자 "문제 풀기랑 푼 기록 없애. 줄기 구조 강의 3개로"): 문제 풀기 단추 없음, 대신 [플래시카드] 탭에 카드 전부.
+  const practice = embedded ? undefined : onPractice;
   const shownTab: Tab = (picked === "knowledge" && !knowTab ? null : picked) ?? (noFirst ? "knowledge" : "summary");
-  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ...(knowTab ? [["knowledge", "기억"] as const] : []), ...(running ? [] : [["lecture", "강의"] as const])] as const).map(([k, label]) =>
+  const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ...(knowTab ? [["knowledge", "기억"] as const] : []), ...(running ? [] : [["lecture", "강의"] as const]), ...(embedded && !running ? [["flash", "플래시카드"] as const] : [])] as const).map(([k, label]) =>
     <button key={k} className={shownTab === k ? "on" : ""} aria-pressed={shownTab === k} onClick={() => setTab(k)}>{label}{k === "knowledge" && running ? <span className="mm5-badge">만드는 중</span> : null}</button>)}</div>;
   // 11/12 점검 11번: 다 만든 지도를 여는 몇 초 동안 "목차가 나오는 중"이 떠서 다시 만드는 것처럼 보였다 — 만드는 중일 때만 단계를 보인다.
   if (!map && !error && (!live || !["queued", "running"].includes(live.status))) return <div className="mm2 mm3"><div className="mm2-head"><div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>불러오는 중…</b></div>{embedded ? extra : <button className="btn ghost small" onClick={onClose}>닫기</button>}</div></div>;
   if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div>{embedded ? null : <p className="eyebrow">자료 지도</p>}<b>{hasOutline ? "목차가 나오는 중…" : "자료를 읽는 중…"}</b></div>{embedded ? extra : <button className="btn ghost small" onClick={onClose}>닫기</button>}</div>
     <Steps steps={steps} />{tabs}
-    {shownTab === "summary" ? (hasOutline || !summary ? <OutlinePane genId={genId} digest={digest} cards={[]} making onPage={onPage} onPractice={onPractice} /> : <SummaryPane summary={summary} making />)
+    {shownTab === "summary" ? (hasOutline || !summary ? <OutlinePane genId={genId} digest={digest} cards={[]} making onPage={onPage} onPractice={practice} /> : <SummaryPane summary={summary} making />)
       : shownTab === "structure" ? <p className="small muted">기억 카드가 다 만들어지면 구조를 만들 수 있어요.</p>
       : board !== "off" && live ? <LiveBoard data={live} />
       : <p className="small muted">{error || "목차 항목마다 기억을 만드는 중이에요. 다 되면 여기에 목차별로 보여요."}</p>}</div>;
@@ -1155,16 +1157,17 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
         <span className="row small">
           {map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="기억마다 확인 문제를 만들어 연습·복습에 붙여요"
             onClick={() => { setAsking(true); void onMakeQuestions().then((ok) => { if (ok) setReload((k) => k + 1); }).finally(() => setAsking(false)); }}>{asking ? "시작하는 중…" : "문제 만들기"}</button> : null}
-          {!map.questionsLater && n.questions && onPracticeAll ? <button className="btn small primary" title={making ? "지금까지 만들어진 문제부터 풀어요. 나머지는 계속 만들어져요." : "이 자료의 문제를 풀어요."}
+          {!embedded && !map.questionsLater && n.questions && onPracticeAll ? <button className="btn small primary" title={making ? "지금까지 만들어진 문제부터 풀어요. 나머지는 계속 만들어져요." : "이 자료의 문제를 풀어요."}
             onClick={onPracticeAll}>{making ? `만든 문제부터 풀기 (${practiceLeft?.() ?? n.questions})` : `문제 풀기 (${practiceLeft?.() ?? n.questions})`}</button> : null}
           {embedded ? extra : <button className="btn ghost small" onClick={onClose}>닫기</button>}
         </span>
       </div>
       {making ? <Steps steps={steps} /> : null}
       {tabs}
-      {shownTab === "summary" ? (hasOutline || !summary ? <StemPane genId={genId} digest={digest} cards={map.sections.flatMap((x) => x.cards)} making={making} onPage={onPage} onPractice={onPractice} />
+      {shownTab === "flash" ? <FlashCards genId={genId} title={map.title} cards={map.sections.flatMap((x) => x.cards).filter((c) => !isFlowCard(c))} onPage={onPage} onClose={() => { setTab("summary"); setReload((k) => k + 1); }} />
+      : shownTab === "summary" ? (hasOutline || !summary ? <StemPane genId={genId} digest={digest} cards={map.sections.flatMap((x) => x.cards)} making={making} onPage={onPage} onPractice={practice} />
         : <SummaryPane summary={summary} making={making} />)
-      : shownTab === "structure" ? <StructurePane genId={genId} cards={map.sections.flatMap((x) => x.cards)} chains={map.chains} making={making} onPage={onPage} onPractice={onPractice} />
+      : shownTab === "structure" ? <StructurePane genId={genId} cards={map.sections.flatMap((x) => x.cards)} chains={map.chains} making={making} onPage={onPage} onPractice={practice} />
       : shownTab === "lecture" ? <LecturePane genId={genId} cards={map.sections.flatMap((x) => x.cards)} onPage={onPage} /> : <>
       {making ? <p className="small mm5-note-line">기억은 목차 항목마다 조금씩 만들어져요. 다 되기 전에도 지금까지 된 것을 볼 수 있어요.</p> : null}
       <div className="row small mm3-tools">
@@ -1239,7 +1242,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                         {c.same.length || c.questions ? <div className="mm3-dfoot">
                           {c.same.length ? <span className="small muted">같은 내용: {c.same.map((x) => range(x.pages)).join(", ")}</span> : null}
                           <span className="cs-gap" />
-                          {c.questions ? <button className="btn small primary" onClick={() => onPractice ? onPractice(c.pages[0], c.id) : onPage(c.pages[0])}>이 기억 문제 풀기 ({c.questions})</button> : null}
+                          {c.questions && !embedded ? <button className="btn small primary" onClick={() => onPractice ? onPractice(c.pages[0], c.id) : onPage(c.pages[0])}>이 기억 문제 풀기 ({c.questions})</button> : null}
                         </div> : null}
                       </div> : null}
                     </li>

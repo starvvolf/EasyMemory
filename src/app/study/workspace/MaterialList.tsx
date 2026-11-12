@@ -154,8 +154,8 @@ function StudyFace({ top, pickedKey, onPick, deckOf, pendingOf, api }: { top: En
   }
   const genId = e.row.genId ?? "";
   const d = deckOf(genId), p = pendingOf(genId);
-  // 자료 지도를 덮는 화면 대신 여기 오른쪽 칸에 바로 (11/12 사용자 "자료 지도 화면을 버리자"). 줄기 · 구조 · 강의 탭과 문제 풀기는 지도가, 기억 카드는 기억 탭이.
-  const extra = <>{runs}{d ? <button className="btn ghost small" onClick={() => api.records(d.id)}>푼 기록</button> : null}
+  // 자료 지도를 덮는 화면 대신 여기 오른쪽 칸에 바로 (11/12 사용자 "자료 지도 화면을 버리자"). 줄기 · 구조 · 강의 · 플래시카드 탭은 지도가, 기억 분석은 기억 탭이. 문제 풀기 · 푼 기록은 뺌(11/13 사용자).
+  const extra = <>{runs}
     {e.row.lastAt ? <button className="btn small" onClick={() => toMemory(e.key)}>기억 보기 →</button> : null}</>;
   return <>
     {p && (p.status === "paused" || p.status === "failed" || p.note.goals) ? <PendingNote p={p} api={api} /> : null}
