@@ -52,7 +52,7 @@ export default function TodayBoard() {
         const refs = map.sections.flatMap((x) => x.cards.filter((c) => !/flow$/.test(c.id)).map((c) => c.ref));
         const st = await call<{ cards: Record<string, { group: string }> }>("/api/knowledge/material-stats", { gen, refs });
         const gs = Object.values(st.cards).map((c) => c.group);
-        return { gen, title: map.title || title, weak: gs.filter((g) => g === "stuck" || g === "shaky").length, unseen: gs.filter((g) => g === "unseen").length };
+        return { gen, title: (map.title || title).replace(/\.pdf$/i, ""), weak: gs.filter((g) => g === "stuck" || g === "shaky").length, unseen: gs.filter((g) => g === "unseen").length };
       } catch { return null; }
     }));
     setMat(mats.find((m) => m && m.weak) ?? mats.find((m) => m && m.unseen) ?? null);
