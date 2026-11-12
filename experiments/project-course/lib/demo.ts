@@ -46,6 +46,9 @@ export async function demoSave(name: string, runId: string) {
 export async function demoReset(name: string) {
   const dir = path.join(DEMO, name);
   const meta: Meta = JSON.parse(await readFile(path.join(dir, "meta.json"), "utf8").catch(() => { throw Object.assign(new Error(`시연 틀 "${name}"이 없어요.`), { status: 404 }); }));
+  // 앱 안 편집기를 끈다: 리허설 때 켜 둔 서버(dotnet 등) · 터미널이 같이 꺼져야 포트 · 폴더가 풀린다. 실습을 다시 열면 새로 켜진다.
+  (await import("./editor-web.ts")).stop();
+  await new Promise((r) => setTimeout(r, 800));
   const chats = await import("./agent-chat.ts");
   // 새 대화(빈 대화) + 시연용 작업 폴더(틀 코드로 통째로)
   const chat = await chats.newChat({ course: null });
