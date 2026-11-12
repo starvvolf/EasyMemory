@@ -41,7 +41,7 @@
 .rlab-empty{color:var(--muted)}
 .rlab-run-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .rlab-run-card.picked{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
-.rlab-run-card header{display:flex;flex-direction:column;gap:6px}
+.rlab-run-card > header{display:flex;flex-direction:column;gap:6px}
 .rlab-run-card .meta{display:flex;flex-wrap:wrap;gap:6px}
 .rlab-run-card .chip{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-family:"JetBrains Mono",monospace;white-space:nowrap}
 .rlab-run-card .chip.m{background:var(--accent-bg);color:var(--accent);border-color:transparent;font-weight:600}
