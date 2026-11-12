@@ -305,8 +305,8 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
         const list = data.memories.filter((m) => m.area === i + 1);
         const mains = list.filter((m) => m.role === "메인"), rest = list.filter((m) => m.role !== "메인");
         const ps = [...new Set(list.flatMap(pagesOf))].sort((x, y) => x - y);
-        const row = (m: MemoryLite) => <li key={m.id}><button className={`st-row${open === m.id ? " on" : ""}${m.role !== "메인" ? " side" : ""}`} onClick={() => { setOpen(open === m.id ? null : m.id); setCard(null); }}>
-          <span className="st-name"><Rich text={m.name} /></span>{m.kind === "알고리즘" ? <span className="st-kind">알고리즘 · {m.steps.length}단계</span> : <span className="st-kind">{m.kind}</span>}
+        const row = (m: MemoryLite) => <li key={m.id}><button className={`st-row${open === m.id ? " on" : ""}${m.role !== "메인" ? " side" : ""}${roleClass(m.role === "바탕" || m.role === "곁" ? m.role : "메인")}`} onClick={() => { setOpen(open === m.id ? null : m.id); setCard(null); }}>
+          <span className="st-name"><RoleChip role={m.role === "바탕" || m.role === "곁" ? m.role : "메인"} /><Rich text={m.name} /></span>{m.kind === "알고리즘" ? <span className="st-kind">알고리즘 · {m.steps.length}단계</span> : <span className="st-kind">{m.kind}</span>}
           <span className="st-line"><Rich text={byId.get(m.id)?.memo?.answer ? rowLine(byId.get(m.id)!) : m.line} /></span></button></li>;
         return <li key={i} className="mm6-topic">
           <div className="mm6-thead"><span className="mm3-num">{i + 1}</span><b><Rich text={a.name} /></b><span className="small muted">{range(ps)}</span></div>
@@ -550,6 +550,14 @@ function rowLine(c: Card): string {
   }
   return m?.line || keyLine(c.shape);
 }
+/** 기억의 몫 (11/12 사용자 "바탕 · 곁이랑 메인을 다르게 표시"): 메인 = 이 강의에서 새로 배우는 것, 바탕 = 미리 알아야 할 것을 다시 적은 것, 곁 = 곁가지 */
+type Role = "메인" | "바탕" | "곁";
+const roleOfCard = (c: Card): Role => (c.memo?.role === "바탕" || c.memo?.role === "곁" ? c.memo.role : "메인");
+const ROLE_CHIP: Record<Role, [string, string]> = { 메인: ["메인", "새로 배우는 것"], 바탕: ["바탕", "미리 알아야 할 것을 다시 적은 것"], 곁: ["곁가지", "알아 두면 좋은 곁 내용"] };
+function RoleChip({ role }: { role: Role }) {
+  return <span className={`role-chip role-${role === "메인" ? "main" : role === "바탕" ? "base" : "side"}`} title={ROLE_CHIP[role][1]}>{ROLE_CHIP[role][0]}</span>;
+}
+const roleClass = (r: Role) => ` role-${r === "메인" ? "main" : r === "바탕" ? "base" : "side"}`;
 function Answer({ text }: { text: string }) {
   return <div className="lc3-ca mm3-a mm3-ans"><span className="lc3-qtag a">A</span><RichBlock text={text} /></div>;
 }
@@ -577,9 +585,10 @@ function CardDetails({ items }: { items?: string[] }) {
 // 카드 세 겹(11/11 사용자 "중요 내용 · 보이는 부분은 의미 전달 · 문제로 바꿀 때도 도움"): 앞면 = 이름 + 질문 + 답 한 줄, 펼치면 핵심(모양 · 덧붙임), 자세히는 눌러야.
 function LectureCard({ genId, c, onPage, startOpen = false }: { genId: string; c: Card; onPage: (page: number) => void; startOpen?: boolean }) {
   const [open, setOpen] = useState(startOpen);
-  return <div className={`lc3-card${open ? " open" : ""}`}>
+  const role = roleOfCard(c);
+  return <div className={`lc3-card${open ? " open" : ""}${roleClass(role)}`}>
     <button className="lc3-cardhead" onClick={(e) => { e.stopPropagation(); setOpen(!open); }} aria-expanded={open}>
-      <span className="lc3-cardtag">기억 카드</span>
+      <span className="lc3-cardtag">{role === "메인" ? "기억 카드" : role === "바탕" ? "바탕 지식" : "곁가지"}</span>
       <span className="lc3-cardtitle"><Rich text={c.title} /></span>
       <span className="lc3-cardline">{c.memo?.question ? <span className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={c.memo.question} /></span> : null}
         {/* 11/12 사용자 "A가 답이면 Q 밑의 줄은 뭐냐": 그 줄은 답의 첫 줄(접었을 때 미리 보기)이라, 펼치면 A와 겹친다 — 질문·답 카드는 펼치면 숨기고, 접었을 때도 'A' 표시를 붙여 답 미리 보기임을 밝힌다 */}
@@ -1179,10 +1188,10 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                   const isOpen = openCard === c.id;
                   const links = (next.get(c.id) ?? []).filter((x) => titles.has(x.to)).slice(0, 4);
                   return (
-                    <li key={c.id} id={`mm3-${c.id}`} className={`mm3-item st-${c.state}${c.core ? " core" : ""}${isOpen ? " open" : ""}`}>
+                    <li key={c.id} id={`mm3-${c.id}`} className={`mm3-item st-${c.state}${c.core ? " core" : ""}${isOpen ? " open" : ""}${roleClass(roleOfCard(c))}`}>
                       <button className="mm3-line" aria-expanded={isOpen} onClick={() => setOpenCard(isOpen ? null : c.id)}>
                         <span className="mm3-star" aria-label={c.core ? "핵심" : undefined}>{map.topics?.length && c.core ? "★" : ""}</span>
-                        <span className="mm3-name"><Rich text={c.title} /></span>
+                        <span className="mm3-name">{c.memo?.role ? <RoleChip role={roleOfCard(c)} /> : null}<Rich text={c.title} /></span>
                         {/* 11/11 사용자 "공식만 박은 느낌": 기억 카드(줄기 모드)는 줄에 식 대신 답 한 줄을 */}
                         {/* 펼치면 아래 A에 같은 글이 나오니 줄의 한 줄은 숨긴다(11/12) */}
                         <span className="mm3-key">{isOpen ? null : <Rich text={rowLine(c)} />}</span>
@@ -1239,12 +1248,12 @@ const dueNow = (c: Card) => Boolean(c.dueAt && Date.parse(c.dueAt) <= Date.now()
 function ShelfCard({ genId, c, onPage, all, onCard }: { genId: string; c: Card; onPage: (page: number) => void; all: Card[]; onCard: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const m = c.memo;
-  const side = m?.role && m.role !== "메인" ? (m.role === "바탕" ? "바탕 지식" : "곁가지") : "";
+  const role = roleOfCard(c);
   return <>
-    <button className={`shelf-row${open ? " on" : ""}${side ? " side" : ""}`} onClick={() => setOpen(!open)} aria-expanded={open}>
-      <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /><b className="shelf-t"><Rich text={c.title} /></b>
+    <button className={`shelf-row${open ? " on" : ""}${roleClass(role)}`} onClick={() => setOpen(!open)} aria-expanded={open}>
+      <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /><RoleChip role={role} /><b className="shelf-t"><Rich text={c.title} /></b>
       <span className="shelf-l">{open ? null : <Rich text={rowLine(c)} />}</span>
-      {dueNow(c) ? <span className="shelf-due">복습 차례</span> : side ? <span className="shelf-side">{side}</span> : null}
+      {dueNow(c) ? <span className="shelf-due">복습 차례</span> : null}
     </button>
     {open ? <div className="shelf-card">
       {m?.question || m?.line ? <div className="mm3-qa">

@@ -1563,3 +1563,15 @@ html:has(.dejipgi){scrollbar-gutter:stable} /* 14번: 짧은 화면(오늘)과 �
 .dejipgi .view-code:not([hidden]),.dejipgi .view-project:not([hidden]){animation:sf-enter .22s ease-out}
 @keyframes sf-enter{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.dejipgi .view-code:not([hidden]),.dejipgi .view-project:not([hidden]){animation:none}}
+/* 기억의 몫 (11/12 사용자 "바탕 · 곁이랑 메인을 다르게"): 메인은 진하게 + 왼쪽 강조 줄, 바탕은 회색 칩 · 흐린 글, 곁가지는 점선 칩 · 더 흐린 글 */
+.dejipgi .role-chip{display:inline-flex;align-items:center;flex:none;font-size:10.5px;font-weight:700;line-height:1;padding:3px 6px;border-radius:999px;margin-right:6px;vertical-align:1px;white-space:nowrap}
+.dejipgi .role-chip.role-main{background:var(--accent-soft);color:var(--accent)}
+.dejipgi .role-chip.role-base{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.dejipgi .role-chip.role-side{background:transparent;color:var(--muted);border:1px dashed var(--line-strong)}
+.dejipgi .shelf-row.role-main,.dejipgi .mm3-item.role-main>.mm3-line,.dejipgi .st-row.role-main{box-shadow:inset 3px 0 0 var(--accent)}
+.dejipgi .shelf-row.role-base .shelf-t,.dejipgi .shelf-row.role-side .shelf-t,.dejipgi .mm3-item.role-base .mm3-name,.dejipgi .mm3-item.role-side .mm3-name{font-weight:500;color:var(--muted)}
+.dejipgi .shelf-row.role-side,.dejipgi .mm3-item.role-side>.mm3-line{opacity:.8}
+.dejipgi .shelf-row.side{opacity:1}
+.dejipgi .lc3-card.role-base .lc3-cardtag,.dejipgi .lc3-card.role-side .lc3-cardtag{background:var(--surface-2);color:var(--muted)}
+.dejipgi .lc3-card.role-side .lc3-cardtag{border:1px dashed var(--line-strong)}
+.dejipgi .lc3-card.role-base,.dejipgi .lc3-card.role-side{border-color:var(--line)}
