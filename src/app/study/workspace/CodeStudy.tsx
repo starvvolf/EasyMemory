@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { call, errorText, go, handoff, later, shareContext } from "./api";
 import { ReviewAfterSolve } from "./ReviewProgress";
+import { setBranch } from "./shelf";
 import { CodeEditor, type EditorHandle } from "./CodeEditor";
 import { Rich } from "./Rich";
 import PsTutor from "./PsTutor";
@@ -53,7 +54,8 @@ export default function CodeStudy({ openId }: { openId?: string }) {
     window.addEventListener("recaller:code-open", on);
     return () => window.removeEventListener("recaller:code-open", on);
   }, []);
-  if (current) return <><MemoToast /><Solve key={current} id={current} langs={langs} onBack={() => { setCurrent(null); void load(); }} /></>;
+  // 문제에서 나가면 공부 › 알고리즘 목록으로(위 "← 알고리즘 목록"과 같은 곳, 11/13)
+  if (current) return <><MemoToast /><Solve key={current} id={current} langs={langs} onBack={() => { setCurrent(null); void load(); setBranch("code"); go("practice"); }} /></>;
   const shown = list.filter((p) => filter === "all" || p.status === filter);
   const tabs = <div className="ws-seg" role="tablist" style={{ alignSelf: "flex-start" }}>{([["tutor", "PS 튜터"], ["list", "문제 목록"]] as const).map(([k, label]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => pickTab(k)}>{label}</button>)}</div>;
   if (tab === "tutor") return <div className="cs stack"><MemoToast />{tabs}<PsTutor onOpenProblem={(id) => { void load(); setCurrent(id); }} /></div>;
@@ -480,7 +482,7 @@ function Solve({ id, langs, onBack }: { id: string; langs: LangInfo[]; onBack: (
       {reviewPid === id ? <ReviewAfterSolve pid={id} number={/(\d{3,6})/.exec(problem.title)?.[1]} onClose={() => setReviewPid("")}
         onOpen={(key) => { setReviewPid(""); handoff.libraryKey = key; go("knowledge"); setTimeout(() => window.dispatchEvent(new CustomEvent("recaller:library-open", { detail: { key } })), 80); }} /> : null}
       <section className="cs-statement panel">
-        <div className="row" style={{ justifyContent: "space-between" }}><button className="btn ghost small" onClick={onBack}>← 문제 목록</button></div>
+        {/* 11/13 [경계] A: 안쪽 "← 문제 목록"은 PS 튜터 첫 화면(옛 추천 · 옛 문제)으로 가서 헷갈렸다 — 위의 "← 알고리즘 목록" 하나만 둔다 */}
         {lab.train ? <ModeSwitch mode={training ? "train" : "base"} onMode={(m) => void train.setMode(m)} /> : null}
         <div className="row"><span className="chip">{problem.kind === "blank" ? "빈칸" : "코드"}</span><span className="small muted">{problem.folder}</span></div>
         <h2>{problem.title}</h2>

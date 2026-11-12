@@ -1016,8 +1016,9 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const view = "outline" as const;
   // 11/9 사용자 "기존 목록형 탭으로 돌아가지 않게": 고른 탭을 기억하고(원문을 보고 돌아와도, 다시 열어도), 불러오는 동안 [기억] 목록으로 떨어지지 않는다.
   type Tab = "summary" | "structure" | "knowledge" | "lecture" | "flash";
-  const [tab, setTabState] = useState<Tab | null>(() => { try { const t = localStorage.getItem("recaller:map-tab"); return t === "summary" || t === "structure" || t === "knowledge" || t === "lecture" || t === "flash" ? t : null; } catch { return null; } });
-  const setTab = (t: Tab) => { setTabState(t); try { localStorage.setItem("recaller:map-tab", t); } catch { /* storage off */ } };
+  const [tab, setTabState] = useState<Tab | null>(() => { try { const t = localStorage.getItem("recaller:map-tab"); return t === "summary" || t === "structure" || t === "knowledge" || t === "lecture" ? t : null; } catch { return null; } });
+  // 플래시카드는 기억하지 않는다(11/13: 다음에 자료를 열면 카드 풀기부터 떠서 이상했다)
+  const setTab = (t: Tab) => { setTabState(t); if (t === "flash") return; try { localStorage.setItem("recaller:map-tab", t); } catch { /* storage off */ } };
   const [summary, setSummary] = useState<Summary | null | undefined>(undefined);
   const [digest, setDigest] = useState<DigestLite | null | undefined>(undefined);
   const [coreOnly, setCoreOnly] = useState(false);
