@@ -32,6 +32,12 @@ export async function demoSave(name: string, runId: string) {
   for (const g of GLOBAL) if (await exists(path.join(DATA, g))) { await mkdir(path.join(dir, "global"), { recursive: true }); await cp(path.join(DATA, g), path.join(dir, "global", g)); }
   const ws = run.workspaces.chat;
   if (ws && await exists(ws)) await cp(ws, path.join(dir, "workspace"), { recursive: true, filter: (s) => !skip(s) });
+  // 대화 첫머리(처음 한 말 + 튜터 첫 답): 목록 제목이 같고, 튜터도 무엇을 만들려는지 안다
+  if (run.chatId) {
+    const c = JSON.parse(await readFile(path.join(DATA, "agent-chat", `${run.chatId}.json`), "utf8").catch(() => "null")) as { messages?: Array<{ role?: string }> } | null;
+    const ms = c?.messages ?? [], u = ms.findIndex((m) => m.role === "user"), a = ms.findIndex((m, i) => i > u && m.role === "assistant");
+    if (u >= 0) await writeFile(path.join(dir, "chat-head.json"), JSON.stringify(ms.slice(0, (a > u ? a : u) + 1), null, 1));
+  }
   const meta: Meta = { name, fromRun: run.id, ...(run.chatId ? { fromChat: run.chatId } : {}), savedAt: new Date().toISOString(), ...(old?.demoRun ? { demoRun: old.demoRun } : {}) };
   await writeFile(path.join(dir, "meta.json"), JSON.stringify(meta, null, 1));
   return { saved: name, from: run.id, files: (await readdir(path.join(dir, "run"), { recursive: true }).catch(() => [])).length };
@@ -48,6 +54,12 @@ export async function demoReset(name: string) {
   if (await exists(path.join(dir, "workspace"))) await cp(path.join(dir, "workspace"), ws, { recursive: true });
   else await mkdir(ws, { recursive: true });
   await chats.setChatWorkspace(chat.id, ws);
+  const head = JSON.parse(await readFile(path.join(dir, "chat-head.json"), "utf8").catch(() => "[]")) as unknown[];
+  if (head.length) {
+    const cf = path.join(DATA, "agent-chat", `${chat.id}.json`);
+    const c = JSON.parse(await readFile(cf, "utf8")) as { messages: unknown[] };
+    c.messages = head; await writeFile(cf, JSON.stringify(c, null, 1));
+  }
   await rm(chat.workspace, { recursive: true, force: true }).catch(() => undefined); // newChat이 만든 빈 폴더
   const now = new Date().toISOString();
   let run: Run | undefined = meta.demoRun ? (await runs()).runs.find((r) => r.id === meta.demoRun) : undefined;
