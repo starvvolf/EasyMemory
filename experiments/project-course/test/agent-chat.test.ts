@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 
 process.env.PC_DATA_DIR = await mkdtemp(path.join(os.tmpdir(), "pc-chat-test-"));
 process.env.PC_FAKE_AI = "1";
-const { newChat, askChat, chatOf, chatView, adjustLearning, chatTool, chatDebug, chatPrompts, saveChatPrompts, restartChat, CHAT_PROMPTS } = await import("../lib/agent-chat.ts");
+const { newChat, askChat, chatOf, chatView, adjustLearning, chatTool, chatDebug, chatPrompts, saveChatPrompts, restartChat, setChatOptions, CHAT_PROMPTS } = await import("../lib/agent-chat.ts");
 const { runs } = await import("../lib/store.ts");
 const { shapeRequest, SYSTEM } = await import("../lib/oc-engine.ts");
 const { CHAT_SYSTEM } = await import("../lib/agent-chat-policy.ts");
@@ -150,4 +150,17 @@ test("코스 재시작은 이전 기록을 보존하고 상태·코드 폴더를
     await assert.rejects(saveChatPrompts({ system: "x" }), /프롬프트/);
     await assert.rejects(saveChatPrompts({ ...CHAT_PROMPTS, fixed: "x".repeat(40001) }), /40,000/);
   } finally { await saveChatPrompts(CHAT_PROMPTS); }
+});
+
+test("파일 고치기 허락(11/12): 따로 안 정했으면 다이얼(ext.edit)을 따르고, 대화에서 '안 돼'로 막았으면 다이얼이 켜도 막는다", async () => {
+  const seen: boolean[] = [];
+  const run = async (io: { learningChat?: { edit?: boolean } }) => { seen.push(!!io.learningChat?.edit); return "답"; };
+  const s = await newChat();
+  await askChat(s.id, "첫 질문", run as never);
+  await askChat(s.id, "빨리 만들기", run as never, { edit: async () => true });
+  await setChatOptions(s.id, { edit: "deny" });
+  await askChat(s.id, "막은 뒤", run as never, { edit: async () => true });
+  await setChatOptions(s.id, { edit: "allow" });
+  await askChat(s.id, "허락 뒤", run as never, { edit: async () => false });
+  assert.deepEqual(seen, [false, true, false, true]);
 });

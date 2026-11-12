@@ -1,6 +1,7 @@
 // AI 호출: 앱과 같은 ChatGPT 로그인을 쓴다(src/lib/assist/model.ts를 읽기만 하고 고치지 않는다).
 // 호출 수는 .data/ai-usage.json에 센다. 한도는 10/30 사용자 결정으로 없음(PC_AI_LIMIT을 주면 그만큼).
 // AI는 판정하지 않는다: 코스 고르기 대화와 힌트·설명만 한다.
+import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -31,9 +32,19 @@ export async function aiStatus() {
 }
 
 type Assist = {
-  askText: (purpose: string, system: string, user: string, options?: { heavy?: boolean }) => Promise<string>;
-  askJson: <T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, options?: { heavy?: boolean }) => Promise<T>;
+  askText: (purpose: string, system: string, user: string, options?: { heavy?: boolean; onUsage?: OnUsage }) => Promise<string>;
+  askJson: <T>(purpose: string, system: string, user: string, schema: Record<string, unknown>, options?: { heavy?: boolean; onUsage?: OnUsage }) => Promise<T>;
 };
+type OnUsage = (u: { inputTokens?: number; cachedInputTokens?: number; outputTokens?: number }) => void;
+/** 토큰 세기(11/12): withTokens 안에서 부른 aiJson · aiText의 토큰을 더한다(목표 정리처럼 타임라인에 토큰을 남길 곳) */
+export type Tokens = { input: number; cached: number; output: number };
+const tokenSink = new AsyncLocalStorage<Tokens>();
+const onUsage: OnUsage = (u) => { const t = tokenSink.getStore(); if (!t) return; t.input += u.inputTokens ?? 0; t.cached += u.cachedInputTokens ?? 0; t.output += u.outputTokens ?? 0; };
+export async function withTokens<T>(fn: () => Promise<T>): Promise<{ out: T; tokens: Tokens }> {
+  const tokens = { input: 0, cached: 0, output: 0 };
+  const out = await tokenSink.run(tokens, fn);
+  return { out, tokens };
+}
 let assist: Promise<Assist> | null = null;
 function loadAssist(): Promise<Assist> {
   // 앱 서버(3000)와 같은 로그인 기록·암호화 키를 쓴다. 이미 설정돼 있으면 그대로.
@@ -108,7 +119,7 @@ export async function aiJson<T>(purpose: string, system: string, user: string, s
     const log = await logPrompt(purpose, { purpose, heavy, system, user, schema });
     const t0 = Date.now();
     const assist = await loadAssist();
-    const out = await withTimeout(() => assist.askJson<T>(`project-course:${purpose}`, system, user, schema, { heavy }), heavy);
+    const out = await withTimeout(() => assist.askJson<T>(`project-course:${purpose}`, system, user, schema, { heavy, onUsage }), heavy);
     await logAnswer(log, out);
     void logUsage({ kind: purpose, ms: Date.now() - t0, calls: 1, chars: system.length + user.length, prompt: log });
     await count(purpose, true);
@@ -130,7 +141,7 @@ export async function aiText(purpose: string, system: string, user: string, heav
     const log = await logPrompt(purpose, { purpose, heavy, system, user });
     const t0 = Date.now();
     const assist = await loadAssist();
-    const out = await withTimeout(() => assist.askText(`project-course:${purpose}`, system, user, { heavy }), heavy);
+    const out = await withTimeout(() => assist.askText(`project-course:${purpose}`, system, user, { heavy, onUsage }), heavy);
     await logAnswer(log, out);
     void logUsage({ kind: purpose, ms: Date.now() - t0, calls: 1, chars: system.length + user.length, prompt: log });
     await count(purpose, true);

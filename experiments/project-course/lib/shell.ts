@@ -53,15 +53,20 @@ export function classify(command: string, ws: string): { kind: Kind; reason: str
     const head = path.basename(first).replace(/\.(exe|cmd|bat)$/i, "");
     const args = words.slice(1).map((w) => w.replace(/^["']|["']$/g, ""));
     // 작업 폴더 밖 경로
-    const root = path.resolve(ws);
+    const P = win ? path.win32 : path; // 경로 규칙은 그 OS 것으로(시험에서 Windows를 흉내 낼 때도 맞게)
+    const root = P.resolve(ws);
     for (const a of args) {
       if (/^-/.test(a) || /^https?:/i.test(a)) continue;
       if (win && /^\/[A-Za-z?][-:A-Za-z0-9]{0,3}$/.test(a)) continue; // Windows 옵션(dir /b, findstr /i …)은 경로가 아니다(11/8 실측)
-      const looksPath = path.isAbsolute(a) || /^~[\\/]?/.test(a) || /(^|[\\/])\.\.([\\/]|$)/.test(a) || /^[A-Za-z]:/.test(a);
+      // Windows: path.isAbsolute는 "/orders\")" · "\\" · /c:"java.home" 같은 조각도 절대 경로로 본다(11/12 실습 시뮬 오탐).
+      // 드라이브(C:…) · UNC(\\서버) · 깨끗한 \폴더 경로만 경로로 본다. / 로 시작하는 건 옵션이나 주소 조각이다
+      const rooted = win ? /^\\\\[^\\]/.test(a) || /^\\[A-Za-z0-9_.-]+(\\[A-Za-z0-9_. -]+)*\\?$/.test(a) : path.isAbsolute(a);
+      const looksPath = rooted || /^~[\\/]?/.test(a) || /(^|[\\/])\.\.([\\/]|$)/.test(a) || /^[A-Za-z]:/.test(a);
       if (!looksPath) continue;
       if (/^[A-Za-z]:/.test(a) && !a.replace(/\\/g, "/").toLowerCase().startsWith(root.replace(/\\/g, "/").toLowerCase())) return { kind: "ask", reason: `작업 폴더 밖(${a})을 건드려요` };
-      const abs = path.resolve(root, a.replace(/^~/, process.env.USERPROFILE ?? process.env.HOME ?? "~"));
-      if (abs !== root && !abs.startsWith(root + path.sep)) return { kind: "ask", reason: `작업 폴더 밖(${a})을 건드려요` };
+      const abs = P.resolve(root, a.replace(/^~/, process.env.USERPROFILE ?? process.env.HOME ?? "~"));
+      const low = (x: string) => (win ? x.toLowerCase() : x);
+      if (abs !== root && !low(abs).startsWith(low(root + P.sep))) return { kind: "ask", reason: `작업 폴더 밖(${a})을 건드려요` };
     }
     if (path.isAbsolute(first) || first.includes("..")) return { kind: "ask", reason: "작업 폴더 밖 프로그램을 돌려요" };
     if (head.toLowerCase() === "git") {

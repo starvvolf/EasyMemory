@@ -62,3 +62,13 @@ test("뒤에서 켜 두는 명령은 처음 출력만 돌려주고 끌 수 있�
   assert.equal(r.running, true); assert.match(r.out, /켜짐/);
   assert.equal(stopBackground("r6"), 1);
 });
+
+test("Windows 경로 오탐(11/12): / 로 시작하는 주소 조각 · 따옴표 섞인 옵션은 폴더 밖이 아니다. 드라이브 · UNC · \\폴더는 그대로 묻는다", () => {
+  const was = Object.getOwnPropertyDescriptor(process, "platform")!;
+  Object.defineProperty(process, "platform", { value: "win32" });
+  try {
+    const w = "C:\\work\\pay";
+    for (const c of ['curl.exe -s -X POST "http://localhost:8080/orders/1/pay"', 'Invoke-WebRequest -Uri http://localhost:8080 /orders\\")', 'java -XshowSettings:properties -version /c:"java.home"']) assert.doesNotMatch(classify(c, w).reason ?? "", /작업 폴더 밖/, c);
+    for (const c of ["type D:\\secret.txt", "type \\\\server\\share\\a.txt", "type \\Windows\\win.ini"]) assert.match(classify(c, w).reason ?? "", /작업 폴더 밖/, c);
+  } finally { Object.defineProperty(process, "platform", was); }
+});

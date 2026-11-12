@@ -42,3 +42,10 @@ test("막힌 순간: 판정 틀림 → 튜터가 고쳐 줌 / 어려워요 → �
   assert.deepEqual(ms.map((m) => [m.by, m.how]), [["판정", "튜터가 고쳐 줌"], ["어려워요", "안 풀고 넘어감"]]);
   assert.deepEqual(ms[0].help.edits, ["api.py"]);
 });
+
+test("오류 줄(11/12): 터미널 프롬프트는 건너뛰고, Gradle은 What went wrong 다음 줄", () => {
+  assert.equal(M.errorLine("> Task :bootRun FAILED\n\nFAILURE: Build failed with an exception.\n\n* What went wrong:\nExecution failed for task ':bootRun'.\n> Process 'command 'java'' finished with non-zero exit value 1\n\nBUILD FAILED in 6s\n(base) PS C:\\work\\pay> "), "Execution failed for task ':bootRun'.");
+  assert.equal(M.errorLine("Caused by: java.net.BindException: Address already in use\nPS C:\\work> "), "Caused by: java.net.BindException: Address already in use");
+  assert.equal(M.errorLine("뭔가 이상함\nC:\\work>"), "뭔가 이상함");
+  assert.equal(M.errorLine("oops\nuser@host:~/w$ "), "oops");
+});

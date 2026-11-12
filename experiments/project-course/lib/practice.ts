@@ -141,9 +141,11 @@ async function recordFinished(runId: string, run: { codexId?: string; chatId?: s
   // 부족함 원장(11/8): 이 목표 동안 잡힌 부족함을 정리에 같이 보내고, 정리 결과(이름 · 재확인 문항)를 원장에 합친다
   const GP = await import("./gaps.ts");
   const gid = (goal as { id?: string }).id ?? "";
-  const rec = await R.recordGoal(runId, goal, mode, await chatMessages(run), recordShow, undefined, await R.savesOf(runId), gid ? await GP.gapsForRecord(runId, gid, await verdictLines(runId, goal.at)) : "").catch(() => null);
+  const msgs = await chatMessages(run), saves = await R.savesOf(runId), ledger = gid ? await GP.gapsForRecord(runId, gid, await verdictLines(runId, goal.at)) : "";
+  // 11/12 실습 시뮬: 타임라인의 목표 정리 칸에 토큰이 0으로 찍혀서, 이 호출의 토큰을 세어 같이 남긴다
+  const { out: rec, tokens } = await (await import("./ai.ts")).withTokens(() => R.recordGoal(runId, goal, mode, msgs, recordShow, undefined, saves, ledger).catch(() => null));
   if (rec && gid) await GP.mergeRecord(runId, { id: gid, title: goal.title, done: goal.done }, (rec.gaps ?? []) as never, rec.to).catch((e) => console.error("부족함 원장 합치기:", e));
-  if (rec) { await (await import("./timeline.ts")).systemStep(runId, `목표 정리: ${goal.title}`, { learned: rec.learned.map((x) => `${x.type} · ${x.concept}`), gaps: (rec.gaps ?? []).map((x) => `${x.type} · ${x.concept}${x.code ? ` (코드 ${x.code.file} ${x.code.from}~${x.code.to}줄)` : ""}`) }, Date.now() - t0); notifyLesson(runId); }
+  if (rec) { await (await import("./timeline.ts")).systemStep(runId, `목표 정리: ${goal.title}`, { learned: rec.learned.map((x) => `${x.type} · ${x.concept}`), gaps: (rec.gaps ?? []).map((x) => `${x.type} · ${x.concept}${x.code ? ` (코드 ${x.code.file} ${x.code.from}~${x.code.to}줄)` : ""}`) }, Date.now() - t0, "system", tokens); notifyLesson(runId); }
   return rec;
 }
 /** 시험용(11/8): 원장에 있는 목표를 원장과 함께 다시 정리한다(학습 종료가 원장을 건너뛰던 때의 실습을 다시 보기). 정리 기록이 하나 더 생긴다 */
@@ -336,11 +338,24 @@ export async function redoGoalRecords(runId: string) {
   notifyLesson(runId);
   return { redone: out.filter(Boolean).length, total: out.length };
 }
+/** VS Code에서 고른 코드를 질문 앞에 붙일 글. 지난 질문에 이미 붙인 같은 선택이면 붙이지 않는다
+ * (11/12 실습 시뮬: 한참 전에 고른 줄이 그 뒤 모든 질문 앞에 계속 붙어 튜터가 엉뚱한 코드를 봄) */
+const sentSelection = new Map<string, string>();
+export function freshSelection(runId: string, state = bridgeState(runId)) {
+  const sel = state?.selection;
+  if (!sel?.text) { sentSelection.delete(runId); return ""; }
+  const key = `${state?.file ?? ""}:${sel.from}:${sel.to}:${sel.text}`;
+  if (sentSelection.get(runId) === key) return "";
+  sentSelection.set(runId, key);
+  return `[VS Code에서 고른 코드 ${state?.file ?? ""} ${sel.from}~${sel.to}줄]\n${sel.text}\n\n`;
+}
 async function chatAsk(runId: string, chatId: string, text: string) {
   const ac = await import("./agent-chat.ts");
   const G = await import("./goals.ts");
   // 학습 목표(11/4): 매 차례 맥락 + 목표 도구. 실험판의 목표 · 초점 도구(adjust_learning · get_learning_state)는 숨겨 두 체계가 섞이지 않게
-  const ext = { context: () => G.goalContext(runId), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner), onTool: () => notifyLesson(runId) };
+  const ext = { context: () => G.goalContext(runId), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner), onTool: () => notifyLesson(runId),
+    // 11/12 실습 시뮬: "빨리 만들기"를 골랐는데 파일 고치기 도구가 숨겨져 튜터가 셸로 파일을 쓰다 잘림 → 다이얼이 빨리면 허락으로 본다(대화에서 "안 돼"로 막았으면 그대로)
+    edit: async () => (await G.goalsOf(runId)).help === "fast" };
   const job = ac.askChat(chatId, text, undefined, ext).catch(() => {}).finally(async () => {
     clearInterval(chatPolls.get(runId)); chatPolls.delete(runId);
     await (await import("./timeline.ts")).endStep(runId); notifyLesson(runId);
@@ -426,8 +441,7 @@ export async function practiceAct(runId: string, input: { do: string; text?: str
   }
   if (run.codexId && (input.do === "ask" || input.do === "stop_chat")) {
     if (input.do === "stop_chat") { await (await import("./codex-chat.ts")).stop(run.codexId); notifyLesson(runId); return; }
-    const sel = bridgeState(runId)?.selection;
-    const pre = sel?.text ? `[VS Code에서 고른 코드 ${bridgeState(runId)?.file ?? ""} ${sel.from}~${sel.to}줄]\n${sel.text}\n\n` : "";
+    const pre = freshSelection(runId);
     await (await import("./timeline.ts")).beginStep(runId, { kind: "message", label: "학습자", text: String(input.text ?? "").slice(0, 600) });
     await codexAsk(runId, run.codexId, pre + String(input.text ?? ""));
     return;
@@ -435,8 +449,7 @@ export async function practiceAct(runId: string, input: { do: string; text?: str
   if (run.chatId && (input.do === "ask" || input.do === "stop_chat")) {
     if (input.do === "stop_chat") { await (await import("./agent-chat.ts")).stopChat(run.chatId); return; }
     // VS Code에서 고른 줄이 있으면 질문 앞에 붙인다(실험판 엔진에는 고른 줄 칸이 없다)
-    const sel = bridgeState(runId)?.selection;
-    const pre = sel?.text ? `[VS Code에서 고른 코드 ${bridgeState(runId)?.file ?? ""} ${sel.from}~${sel.to}줄]\n${sel.text}\n\n` : "";
+    const pre = freshSelection(runId);
     await (await import("./timeline.ts")).beginStep(runId, { kind: "message", label: "학습자", text: String(input.text ?? "").slice(0, 600) });
     await chatAsk(runId, run.chatId, pre + String(input.text ?? ""));
     return;

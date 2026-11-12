@@ -28,9 +28,17 @@ const clip = (s: unknown, n: number) => String(s ?? "").replace(/\s+/g, " ").tri
 const normCmd = (c: string) => c.replace(/\s+/g, " ").trim().toLowerCase();
 const openOf = (s: State) => s.moments.find((m) => !m.closedAt);
 /** 오류 글에서 알맹이 한 줄: 마지막 "XxxError: …" 줄, 없으면 끝의 안 빈 줄 */
+// 터미널 프롬프트 줄(PS C:\…>, (base) PS …>, C:\…>, user@host:~$)은 오류 줄이 아니다(11/12 실습 시뮬: 오류 칸에 프롬프트가 찍힘)
+const PROMPT = /^(\([\w.-]+\)\s*)?(PS\s+\S.*>|[A-Za-z]:\\[^>]*>|[\w.-]+@[\w.-]+:.*[$#]|[$#>])\s*$/;
 export function errorLine(out: string) {
-  const lines = String(out ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  return clip([...lines].reverse().find((l) => /\b\w*(Error|Exception)\b[:\s]|not recognized|not found|No such file|Traceback/i.test(l) && !/^Traceback/i.test(l)) ?? lines.at(-1) ?? "", 240);
+  const lines = String(out ?? "").split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !PROMPT.test(l));
+  const rev = [...lines].reverse();
+  const hit = rev.find((l) => /\b\w*(Error|Exception)\b[:\s]|not recognized|not found|No such file|Traceback/i.test(l) && !/^Traceback/i.test(l));
+  if (hit) return clip(hit, 240);
+  // Gradle · Maven: "What went wrong:" 다음 줄, 없으면 Caused by · FAILURE 줄
+  const ww = lines.findIndex((l) => /^\*?\s*What went wrong:?/i.test(l));
+  if (ww >= 0 && lines[ww + 1]) return clip(lines[ww + 1], 240);
+  return clip(rev.find((l) => /^Caused by\b|FAILURE|BUILD FAILED|\bfailed\b/i.test(l)) ?? lines.at(-1) ?? "", 240);
 }
 function howOf(m: Moment): How {
   return m.help.edits.length ? "튜터가 고쳐 줌" : m.help.code ? "코드를 보고 풂" : m.help.replies > 0 ? "힌트 받고 풂" : "혼자 풂";
