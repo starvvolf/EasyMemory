@@ -1534,3 +1534,4 @@ html .dejipgi[data-view="code"] .wrap{max-width:none}
 .dejipgi .loose-more{align-self:flex-start;margin-left:6px}
 /* 13번 */
 .dejipgi .lc3-starting{display:flex;align-items:center;gap:8px}
+html:has(.dejipgi){scrollbar-gutter:stable} /* 14번: 짧은 화면(오늘)과 긴 화면 사이에 스크롤 막대 때문에 머리가 7px 움직이지 않게 */
