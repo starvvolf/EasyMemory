@@ -4,6 +4,7 @@
 // 이어서 하기는 자료·알고리즘·실습마다 가장 최근에 한 것 하나(11/9).
 import { useCallback, useEffect, useState } from "react";
 import { call, go, later } from "./api";
+import { enterProject } from "./MaterialList";
 
 type ProblemLite = { id: string; title: string; status: "new" | "tried" | "wrong" | "solved"; lastAt: string };
 type SourceLite = { id: string; title: string; readAt: string; goals: Record<string, { done: boolean }> };
@@ -44,7 +45,8 @@ export default function TodayBoard() {
     lastProblem ? { kind: "code", title: lastProblem.title, at: lastProblem.lastAt, open: () => go("code", { id: lastProblem.id }), note: "이어서 풀기" } : null,
   ]);
   const lab = newest(studied.filter((x) => x.kind === "code" && x.ref.startsWith("project:")).slice(0, 1)
-    .map((x): Last => ({ kind: "project", title: x.title.replace(/^프로젝트 코스: /, ""), at: x.last, open: () => go("project"), note: "실습 열기" })));
+    // 그 실습의 편집기 · 튜터로 바로(11/13: 실습 목록 화면에 멈추던 것)
+    .map((x): Last => ({ kind: "project", title: x.title.replace(/^(프로젝트 코스|실습): /, ""), at: x.last, open: () => enterProject(x.ref.slice("project:".length)), note: "실습 열기" })));
   const rows: Array<{ label: string; last: Last | null; empty: string; to: () => void }> = [
     { label: "자료", last: material, empty: "자료 열기", to: () => go("practice") },
     { label: "알고리즘", last: algo, empty: "알고리즘 열기", to: () => go("code") },
