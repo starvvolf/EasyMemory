@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recaller 모듈 구조</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* 모듈 구조도: 왼쪽 갈래(자료·알고리즘·실습·기억 바닥) × 층(화면 → API → 기능), 오른쪽은 모두가 같이 쓰는 문. 배포판에 남는 것만. */
+:root{
+  --bg:#f7f8fa; --panel:#ffffff; --fg:#1b2230; --muted:#5d6678; --line:#8a93a6; --soft:#e7eaf0;
+  --io:#2f63d6; --io-soft:#e6eefc; --kn:#c2334d; --kn-soft:#fbe8ec; --qa:#c8661a; --qa-soft:#fcefe2;
+  --code:#3d7a57; --code-soft:#e3f2e9; --user:#8a4fc4; --user-soft:#f1e8fb;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151c; --panel:#1a1f29; --fg:#e8ebf2; --muted:#9aa3b5; --line:#6f7890; --soft:#2a3140;
+  --io:#7fa6ff; --io-soft:#1d2a45; --kn:#ff7d93; --kn-soft:#3a1f27; --qa:#f0a060; --qa-soft:#3a2a1c;
+  --code:#7fcf9f; --code-soft:#1b3326; --user:#c9a2f0; --user-soft:#2e2240; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151c; --panel:#1a1f29; --fg:#e8ebf2; --muted:#9aa3b5; --line:#6f7890; --soft:#2a3140;
+  --io:#7fa6ff; --io-soft:#1d2a45; --kn:#ff7d93; --kn-soft:#3a1f27; --qa:#f0a060; --qa-soft:#3a2a1c;
+  --code:#7fcf9f; --code-soft:#1b3326; --user:#c9a2f0; --user-soft:#2e2240; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+header h1{margin:0;font-size:26px;letter-spacing:-.01em}
+header p{margin:4px 0 0;color:var(--muted)}
+.canvas{background:var(--panel);border:1px solid var(--soft);border-radius:14px;overflow-x:auto}
+.canvas svg{display:block;min-width:960px;width:100%;height:auto}
+svg text{font-family:var(--sans);fill:var(--fg)}
+.box{fill:var(--panel);stroke:var(--line);stroke-width:1.4}
+.dash{stroke-dasharray:6 5}
+.src{fill:var(--soft);stroke:var(--soft);stroke-width:1.4}
+.src.main{stroke:var(--fg);stroke-width:2.6}
+.ai{fill:var(--io-soft);stroke:var(--io);stroke-width:1.4}
+.code{fill:var(--code-soft);stroke:var(--code);stroke-width:1.4}
+.user{fill:var(--user-soft);stroke:var(--user);stroke-width:1.4}
+.qa{fill:var(--qa-soft);stroke:var(--qa);stroke-width:1.4}
+.kn{fill:var(--kn-soft);stroke:var(--kn);stroke-width:1.8}
+.layer{fill:var(--panel);stroke:var(--kn);stroke-width:1;stroke-opacity:.5}
+.arrow{stroke:var(--line);stroke-width:1.6;fill:none}
+.arrow.loop{stroke:var(--kn);stroke-width:1.8}
+.arrow.thin{stroke-dasharray:5 4;stroke-width:1.3}
+.head{fill:var(--line)} .head.kn{fill:var(--kn)}
+.t-lg{font-size:17px;font-weight:700} .t-md{font-size:14px;font-weight:500} .t-sm{font-size:12.5px;fill:var(--muted)}
+.t-kn{font-size:12.5px;fill:var(--kn);font-weight:500}
+.tag rect{rx:6} .tag text{font-family:var(--mono);font-size:12px;font-weight:500}
+.tag.io rect{fill:var(--io-soft);stroke:var(--io)} .tag.io text{fill:var(--io)}
+.tag.kn rect{fill:var(--kn-soft);stroke:var(--kn)} .tag.kn text{fill:var(--kn)}
+.tag.qa rect{fill:var(--qa-soft);stroke:var(--qa)} .tag.qa text{fill:var(--qa)}
+.hint{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 16px}
+.hint b{color:var(--fg);font-weight:500}
+.mono{font-family:var(--mono);font-size:12px;fill:var(--muted)}
+.t-hd{font-size:13px;font-weight:700;fill:var(--muted)}
+.arrow.ai-l{stroke:var(--io);stroke-dasharray:5 4;stroke-width:1.4}
+.head.io{fill:var(--io)}
+</style></head><body>
+<div class="wrap">
+  <header><h1>Recaller 모듈 구조</h1><p>배포판에 남는 것만. 갈래마다 화면 → API → 기능으로 내려가고, 갈래끼리는 서로 부르지 않는다. 같이 쓰는 건 오른쪽 문 셋뿐. (2026-11-12 기준)</p></header>
+  <div class="canvas">
+<svg viewBox="0 0 1180 890" xmlns="http://www.w3.org/2000/svg" aria-label="Recaller 모듈 구조">
+<defs>
+<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="ahk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head kn" d="M0,0 L10,5 L0,10 z"/></marker>
+<marker id="ahi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head io" d="M0,0 L10,5 L0,10 z"/></marker>
+</defs>
+<text x="30" y="40" class="t-hd">갈래</text>
+<text x="226" y="40" class="t-hd">화면  src/app/study</text>
+<text x="468" y="40" class="t-hd">API  src/app/api</text>
+<text x="634" y="40" class="t-hd">기능  src/lib</text>
+<text x="950" y="40" class="t-hd">모두가 같이 쓰는 문</text>
+<rect class="box" x="226" y="54" width="654" height="70" rx="12"/>
+<text x="240" y="78" class="t-md">화면 뼈대</text>
+<text x="240" y="100" class="t-sm">StudyApp (탭 · 갈래 단추) · dejipgi-app.js (상태 · 채점 · 기록)</text>
+<text x="240" y="117" class="t-sm">shelf (공부 · 기억 같은 목록) · Rich (수식 · 표) · QuestionCard (문제 카드)</text>
+<rect class="src main" x="30" y="140" width="180" height="150" rx="12"/>
+<text x="44" y="168" class="t-lg">자료 · 이론</text>
+<text x="44" y="192" class="t-sm">PDF → 자료 지도</text>
+<path class="arrow" d="M210,215.0 L222,215.0" marker-end="url(#ah)"/>
+<rect class="box" x="226" y="140" width="226" height="150" rx="10"/>
+<text x="240" y="166"><tspan class="t-md" style="font-size:13.5px">NewMaterial</tspan><tspan class="t-sm" dx="6">PDF 넣기</tspan></text>
+<text x="240" y="190"><tspan class="t-md" style="font-size:13.5px">MaterialList</tspan><tspan class="t-sm" dx="6">공부 › 자료</tspan></text>
+<text x="240" y="214"><tspan class="t-md" style="font-size:13.5px">MaterialMap</tspan><tspan class="t-sm" dx="6">줄기·구조·강의·문제</tspan></text>
+<text x="240" y="238"><tspan class="t-md" style="font-size:13.5px">PracticeSession</tspan><tspan class="t-sm" dx="6">문제 풀기</tspan></text>
+<text x="240" y="262"><tspan class="t-md" style="font-size:13.5px">reader/</tspan><tspan class="t-sm" dx="6">원문 보기</tspan></text>
+<path class="arrow" d="M452,215.0 L464,215.0" marker-end="url(#ah)"/>
+<rect class="box" x="468" y="140" width="150" height="150" rx="10"/>
+<text x="482" y="166" class="mono">lab/gen *</text>
+<text x="482" y="189" class="mono">study-map</text>
+<text x="482" y="212" class="mono">mcp-runs/sources *</text>
+<text x="482" y="235" class="mono">study-records</text>
+<text x="482" y="258" class="mono">study-archive</text>
+<path class="arrow" d="M618,215.0 L630,215.0" marker-end="url(#ah)"/>
+<rect class="ai" x="634" y="140" width="246" height="150" rx="10"/>
+<text x="648" y="166" class="t-md">study/gen/  자료 엔진</text>
+<text x="648" y="190" class="t-sm">줄기 계획 → 카드 채우기 · 그림</text>
+<text x="648" y="214" class="mono">study/lecture* · structure</text>
+<text x="648" y="233" class="mono">study/stem-quiz · material-map</text>
+<rect class="src" x="30" y="310" width="180" height="150" rx="12"/>
+<text x="44" y="338" class="t-lg">알고리즘 · PS</text>
+<text x="44" y="362" class="t-sm">PS 튜터</text>
+<path class="arrow" d="M210,385.0 L222,385.0" marker-end="url(#ah)"/>
+<rect class="box" x="226" y="310" width="226" height="150" rx="10"/>
+<text x="240" y="336"><tspan class="t-md" style="font-size:13.5px">CodeStudy</tspan><tspan class="t-sm" dx="6">문제 · 풀기</tspan></text>
+<text x="240" y="360"><tspan class="t-md" style="font-size:13.5px">PsTutor</tspan><tspan class="t-sm" dx="6">튜터 대화</tspan></text>
+<text x="240" y="384"><tspan class="t-md" style="font-size:13.5px">CodeTrain</tspan><tspan class="t-sm" dx="6">혼자 다시 풀기</tspan></text>
+<text x="240" y="408"><tspan class="t-md" style="font-size:13.5px">CodeGrade · CodeEditor</tspan><tspan class="t-sm" dx="6"></tspan></text>
+<path class="arrow" d="M452,385.0 L464,385.0" marker-end="url(#ah)"/>
+<rect class="box" x="468" y="310" width="150" height="150" rx="10"/>
+<text x="482" y="336" class="mono">code</text>
+<path class="arrow" d="M618,385.0 L630,385.0" marker-end="url(#ah)"/>
+<rect class="code" x="634" y="310" width="246" height="150" rx="10"/>
+<text x="648" y="336" class="t-md">code/  문제 · 실행 · 채점</text>
+<text x="648" y="360" class="t-sm">채점은 코드가 테스트로</text>
+<text x="648" y="384" class="mono">code/tutor/ talk · help</text>
+<text x="648" y="403" class="mono">code/tutor/ sheets · review</text>
+<rect class="src" x="30" y="480" width="180" height="150" rx="12"/>
+<text x="44" y="508" class="t-lg">실습 · 직접 만들기</text>
+<text x="44" y="532" class="t-sm">VS Code + 튜터</text>
+<path class="arrow" d="M210,555.0 L222,555.0" marker-end="url(#ah)"/>
+<rect class="box" x="226" y="480" width="226" height="150" rx="10"/>
+<text x="240" y="506"><tspan class="t-md" style="font-size:13.5px">ProjectStudy</tspan><tspan class="t-sm" dx="6">실습 고르기</tspan></text>
+<text x="240" y="530"><tspan class="t-md" style="font-size:13.5px">ProjectStudio</tspan><tspan class="t-sm" dx="6">실습 한 판</tspan></text>
+<path class="arrow" d="M452,555.0 L464,555.0" marker-end="url(#ah)"/>
+<rect class="box" x="468" y="480" width="150" height="150" rx="10"/>
+<text x="482" y="506" class="mono">project-course</text>
+<text x="482" y="529" class="t-sm">→ :4100으로</text>
+<path class="arrow" d="M618,555.0 L630,555.0" marker-end="url(#ah)"/>
+<rect class="ai" x="634" y="480" width="246" height="150" rx="10"/>
+<text x="648" y="506" class="t-md">실습 서버 :4100 (따로 돈다)</text>
+<text x="648" y="530" class="t-sm">한 판 · 목표 · 검사</text>
+<text x="648" y="550" class="t-sm">OpenCode 튜터 (Codex 고를 수 있음)</text>
+<text x="648" y="574" class="mono">experiments/project-course/</text>
+<text x="648" y="593" class="mono">vscode-bridge  VS Code 확장</text>
+<rect class="kn" x="30" y="650" width="180" height="150" rx="12"/>
+<text x="44" y="678" class="t-lg">기억 · 오늘 · 기록</text>
+<text x="44" y="702" class="t-sm">세 갈래가 같이 쓰는 바닥</text>
+<path class="arrow" d="M210,725.0 L222,725.0" marker-end="url(#ah)"/>
+<rect class="box" x="226" y="650" width="226" height="150" rx="10"/>
+<text x="240" y="676"><tspan class="t-md" style="font-size:13.5px">Library</tspan><tspan class="t-sm" dx="6">기억 탭</tspan></text>
+<text x="240" y="700"><tspan class="t-md" style="font-size:13.5px">TodayBoard</tspan><tspan class="t-sm" dx="6">오늘 탭</tspan></text>
+<text x="240" y="724"><tspan class="t-md" style="font-size:13.5px">PlanView</tspan><tspan class="t-sm" dx="6">기록 탭</tspan></text>
+<path class="arrow" d="M452,725.0 L464,725.0" marker-end="url(#ah)"/>
+<rect class="box" x="468" y="650" width="150" height="150" rx="10"/>
+<text x="482" y="676" class="mono">knowledge</text>
+<text x="482" y="699" class="mono">schedule</text>
+<path class="arrow" d="M618,725.0 L630,725.0" marker-end="url(#ah)"/>
+<rect class="kn" x="634" y="650" width="246" height="150" rx="10"/>
+<text x="648" y="676" class="t-md">knowledge/  기억 저장소</text>
+<text x="648" y="700" class="t-sm">저장 · 같은 기억 합치기</text>
+<text x="648" y="720" class="t-sm">복습 날짜 · 복습 문제 · 묻기</text>
+<text x="648" y="744" class="mono">schedule/  공부 시간</text>
+<rect class="ai" x="950" y="140" width="210" height="170" rx="12"/>
+<text x="964" y="166" class="t-lg">AI 문</text>
+<text x="964" y="192" class="t-sm">ChatGPT 로그인 하나</text>
+<text x="964" y="212" class="t-sm">기본 gpt-6.1-terra · low</text>
+<text x="964" y="232" class="t-sm">만들고 돕기만 한다</text>
+<text x="964" y="258" class="mono">ai/model.ts</text>
+<text x="964" y="276" class="mono">assist/model.ts</text>
+<text x="964" y="294" class="mono">ai/trace.ts  호출 기록</text>
+<rect class="kn" x="950" y="330" width="210" height="150" rx="12"/>
+<text x="964" y="356" class="t-lg">기억 문</text>
+<text x="964" y="382" class="t-sm">갈래가 기억을 넘기는</text>
+<text x="964" y="402" class="t-sm">약속은 이 둘뿐</text>
+<text x="964" y="432" class="mono" style="font-size:11px">study/knowledge-contract.ts</text>
+<text x="964" y="451" class="mono">knowledge/api.ts</text>
+<rect class="box" x="950" y="500" width="210" height="130" rx="12"/>
+<text x="964" y="526" class="t-lg">데이터 폴더</text>
+<text x="964" y="552" class="t-sm">RecallerData (비공개 git)</text>
+<text x="964" y="572" class="t-sm">자료 · 기억 · 기록 파일</text>
+<text x="964" y="592" class="t-sm">켤 때 받고 끌 때 올림</text>
+<path class="arrow ai-l" d="M880,193.0 C920,193.0 910,225 946,225" marker-end="url(#ahi)"/>
+<path class="arrow ai-l" d="M880,363.0 C920,363.0 910,225 946,225" marker-end="url(#ahi)"/>
+<path class="arrow ai-l" d="M880,533.0 C920,533.0 910,225 946,225" marker-end="url(#ahi)"/>
+<path class="arrow ai-l" d="M880,703.0 C920,703.0 910,225 946,225" marker-end="url(#ahi)"/>
+<path class="arrow loop" d="M880,237.0 C920,237.0 910,405 946,405" marker-end="url(#ahk)"/>
+<path class="arrow loop" d="M880,407.0 C920,407.0 910,405 946,405" marker-end="url(#ahk)"/>
+<path class="arrow loop" d="M880,577.0 C920,577.0 910,405 946,405" marker-end="url(#ahk)"/>
+<path class="arrow" d="M880,747.0 C920,747.0 910,565 946,565" marker-end="url(#ah)"/>
+<rect class="box dash" x="30" y="820" width="1130" height="52" rx="12"/>
+<text x="48" y="851" class="t-md">앱 창 · 켜고 끄기</text>
+<text x="190" y="851" class="mono">desktop/ (Electron) · scripts/ (켜기: 코드·데이터 받기 → 서버 3000 → 실습 서버 4100 / 끄기: 저장 → 서버 끄기 → 데이터 올리기) · api/auth</text>
+</svg>
+  </div>
+  <p class="hint"><span><b>파란 점선</b> = AI 부르기</span><span><b>빨간 선</b> = 기억으로 넘기기</span><span><b>*</b> = 배포 때 이름 바꿀 것 (lab/gen → PDF 만들기, mcp-runs/sources → PDF 원본)</span></p>
+</div>
+</body></html>
