@@ -240,7 +240,7 @@ function Scene({ ev }: { ev: SceneEv }) {
  * 목표마다 한 칸 = 그 목표가 끝날 때 목표 정리(③)가 쓴 총정리(review). 하다가 나간 목표는 '진행 중' 정리(ongoing). 칸 사이에는 장기 목표 · 보충 같은 판 바뀜을 기록에서 그대로. */
 /** 목표 총정리. v2(11/12 약점 카드 정책, B와 같음): 하려던 일 · 이렇게 하면 되는 까닭 · 시간 순서 이야기 + 약점 카드. 예전 모양(scenes)은 요약만 보여 주고 [다시 정리]로 */
 type PgWeak = { size: "small" | "big"; title: string; state: string; lesson: string };
-type GoalReview = { v?: number; aim: string; why?: string; story?: Array<{ text: string; code?: string; result?: string; weak?: PgWeak }>; scenes?: unknown[] };
+type GoalReview = { v?: number; md?: string; aim: string; why?: string; story?: Array<{ text: string; code?: string; result?: string; weak?: PgWeak }>; scenes?: unknown[] };
 type Ongoing = { goal: string; done?: string; from: string; at: string; summary: string; review?: GoalReview };
 /** 판 바뀜 한 줄(기록의 바뀜 글 → 쉬운 말). 로드맵 · 계획 제안 같은 자잘한 것은 뺀다 */
 function shiftOf(text: string, first: boolean): { icon: string; text: string; cls: string } | null {
@@ -259,7 +259,7 @@ function GoalCard({ n, goal, done, result, rv, summary, ongoing }: { n: number; 
   return <div className="pg-goal">
     <div className="pg-gh"><span className="pg-n">{n}</span><b>{goal}</b>{ongoing ? <span className="lib-res now">진행 중</span> : result ? <span className={`lib-res ${RES[result] ?? ""}`}>{result}</span> : null}</div>
     {done ? <p className="pg-done"><b>해낼 것</b>{done}</p> : null}
-    {story ? <>
+    {rv?.v === 3 && rv.md ? <MdReviewView md={rv.md} /> : story ? <>
       <div className="rv-two">
         {rv!.aim ? <div className="rv-intro sit"><div className="rv-introhead"><span className="rv-icon" aria-hidden>?</span>하려던 일</div><Lines text={rv!.aim} /></div> : null}
         {rv!.why ? <div className="rv-intro sol"><div className="rv-introhead"><span className="rv-icon" aria-hidden>✓</span>이렇게 하면 돼요</div><Lines text={rv!.why} /></div> : null}
@@ -336,7 +336,7 @@ function RunView({ e }: { e: Entry }) {
     }
     c.events.forEach((x, k) => { if (x.kind === "note" && !(newGoal && lead(k))) shift(x, `s${ci}-${k}`); });
   });
-  const oldOnes = recs.filter((r) => r.review?.v !== 2).length;
+  const oldOnes = recs.filter((r) => r.review?.v !== 2 && r.review?.v !== 3).length;
   return <>
     {head}
     <section className="rp-wrong rp-review"><p className="eyebrow">실습 정리</p>
