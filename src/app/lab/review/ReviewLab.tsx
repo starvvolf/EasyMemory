@@ -8,7 +8,8 @@ type Weak = { size: "small" | "big"; title: string; state: string; lesson: strin
 type Review = { situation: string; solve: string; story: Array<{ text: string; weak?: Weak }>; next: string };
 type Talk = { i: number; at: string; kind: string; q: string; a: string; verdict: string };
 type Run = { id: string; at: string; problemId: string; title: string; range: { from: number; to: number } | null; model: string; effort: string; note: string;
-  system: string; ms: number; tokens?: { in?: number; cached?: number; out?: number }; review: Review | null; raw: unknown; error?: string; cost: number | null };
+  system: string; ms: number; tokens?: { in?: number; cached?: number; out?: number }; review: Review | null; raw: unknown; error?: string; cost: number | null; format?: "json" | "text" };
+type Preset = { id: string; label: string; system: string; format: string; output: "json" | "text" };
 type Problem = { id: string; title: string; talks: number };
 
 const api = async <T,>(path: string, body?: unknown): Promise<T> => {
@@ -40,10 +41,14 @@ export default function ReviewLab() {
   const [error, setError] = useState("");
   const [userText, setUserText] = useState<string | null>(null);
   const [pick, setPick] = useState<string[]>([]);
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [output, setOutput] = useState<"json" | "text">(() => (store.get("rlab-output") as "json" | "text") || "json");
+  const [textFormat, setTextFormat] = useState("");
 
   useEffect(() => {
-    void api<{ problems: Problem[]; system: string; models: string[]; efforts: string[] }>("").then((d) => {
-      setProblems(d.problems); setProduct(d.system); setModels(d.models); setEfforts(d.efforts);
+    void api<{ problems: Problem[]; system: string; models: string[]; efforts: string[]; presets: Preset[] }>("").then((d) => {
+      setProblems(d.problems); setProduct(d.system); setModels(d.models); setEfforts(d.efforts); setPresets(d.presets);
+      setTextFormat(store.get("rlab-format")?.trim() || d.presets.find((x) => x.id === "product")?.format || "");
       setSystem(store.get("rlab-system")?.trim() || d.system);
       setPid((cur) => cur && d.problems.some((x) => x.id === cur) ? cur : d.problems[0]?.id ?? "");
     }).catch((e: Error) => setError(e.message));
@@ -55,7 +60,9 @@ export default function ReviewLab() {
     void api<{ runs: Run[] }>(`/${pid}/runs`).then((d) => setRuns(d.runs)).catch(() => undefined);
   }, [pid]);
   useEffect(() => { if (system.trim()) store.set("rlab-system", system); }, [system]);
-  useEffect(() => { store.set("rlab-model", model); store.set("rlab-effort", effort); }, [model, effort]);
+  useEffect(() => { store.set("rlab-model", model); store.set("rlab-effort", effort); store.set("rlab-output", output); }, [model, effort, output]);
+  useEffect(() => { if (textFormat.trim()) store.set("rlab-format", textFormat); }, [textFormat]);
+  const applyPreset = (p: Preset) => { setSystem(p.system); setTextFormat(p.format); setOutput(p.output); };
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => { if (!running) return; const t = setInterval(() => setElapsed(Math.round((Date.now() - running) / 1000)), 1000); return () => clearInterval(t); }, [running]);
 
@@ -66,7 +73,7 @@ export default function ReviewLab() {
   const showUser = async () => { setUserText((await api<{ user: string }>(`/${pid}${range ? `?range=${range.from}-${range.to}` : ""}`)).user); };
   const run = async () => {
     setError(""); setElapsed(0); setRunning(Date.now());
-    try { const d = await api<{ run: Run }>(`/${pid}`, { system, model, effort, note, ...(range ? { range } : {}) }); setRuns((r) => [d.run, ...r]); }
+    try { const d = await api<{ run: Run }>(`/${pid}`, { system, model, effort, note, format: output, ...(output === "text" ? { textFormat } : {}), ...(range ? { range } : {}) }); setRuns((r) => [d.run, ...r]); }
     catch (e) { setError((e as Error).message); }
     finally { setRunning(0); }
   };
@@ -100,6 +107,10 @@ export default function ReviewLab() {
             <label className="rlab-field">모델<select value={model} onChange={(e) => setModel(e.target.value)}>{models.map((x) => <option key={x}>{x}</option>)}</select></label>
             <label className="rlab-field">강도<select value={effort} onChange={(e) => setEffort(e.target.value)}>{efforts.map((x) => <option key={x}>{x}</option>)}</select></label>
           </div>
+          <div className="rlab-row">
+            <label className="rlab-field">출력<select value={output} onChange={(e) => setOutput(e.target.value as "json" | "text")}><option value="json">JSON</option><option value="text">글(표시 있는 마크다운)</option></select></label>
+            <div className="rlab-field">지시문 묶음<div className="rlab-quick">{presets.map((p) => <button key={p.id} onClick={() => applyPreset(p)}>{p.label}</button>)}</div></div>
+          </div>
           <label className="rlab-field">메모<input value={note} onChange={(e) => setNote(e.target.value)} placeholder="이번에 바꾼 것 (예: 핵심 기준 좁힘)" /></label>
         </section>
         <section className="rlab-box grow">
@@ -108,6 +119,10 @@ export default function ReviewLab() {
           <button className="link" onClick={() => (userText === null ? void showUser() : setUserText(null))}>{userText === null ? "AI에 보낼 기록 보기" : "기록 접기"}</button>
           {userText !== null ? <pre className="rlab-user">{userText}</pre> : null}
         </section>
+        {output === "text" ? <section className="rlab-box">
+          <div className="rlab-boxhead"><b>출력 틀(글)</b><span>지시문 뒤에 붙어요</span></div>
+          <textarea className="short" value={textFormat} onChange={(e) => setTextFormat(e.target.value)} spellCheck={false} />
+        </section> : null}
         <button className="rlab-run" disabled={!!running || !pid || !system.trim()} onClick={() => void run()}>
           {running ? `만드는 중… ${elapsed}초` : `돌려 보기 (AI 1번 · ${model.replace("gpt-", "")} ${effort})`}
         </button>
@@ -139,7 +154,9 @@ function RunCard({ r, total, picked, product, onPick, onUse }: { r: Run; total: 
         <span className="chip">입력 {k(r.tokens?.in)}{r.tokens?.cached ? ` (캐시 ${k(r.tokens.cached)})` : ""} · 출력 {k(r.tokens?.out)}</span>
         <span className="chip">{r.cost == null ? "$—" : `$${r.cost.toFixed(4)}`}</span>
         {r.review ? <span className="chip w">약점 {weak.length} · 핵심 {big} · 작은 {weak.length - big}</span> : null}
-        {r.system.trim() !== product.trim() ? <span className="chip d">지시문 바꿈</span> : null}
+        {r.format === "text" ? <span className="chip d">글</span> : null}
+        {r.format === "text" && typeof r.raw === "string" && !r.review ? <span className="chip w">주제 {(r.raw.match(/^##\s/gm) ?? []).length} · 핵심 {(r.raw.match(/^##.*\[핵심\]/gm) ?? []).length} · 작은 {(r.raw.match(/^##.*\[작은\]/gm) ?? []).length} · {r.raw.length}자</span> : null}
+        {!r.system.trim().startsWith(product.trim().slice(0, 200)) ? <span className="chip d">지시문 바꿈</span> : null}
       </div>
       <div className="acts">
         <span className="when">{new Date(r.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
@@ -160,13 +177,13 @@ function RunCard({ r, total, picked, product, onPick, onUse }: { r: Run; total: 
         </div> : null}
       </li>)}</ol>
       {r.review.next ? <p className="next"><b>다음에 떠올릴 것</b> {r.review.next}</p> : null}
-    </div> : null}
+    </div> : r.format === "text" && typeof r.raw === "string" ? <Md text={r.raw} /> : null}
     <div className="foot">
       <button className="link" onClick={() => setSys((x) => !x)}>{sys ? "지시문 접기" : "이때 지시문"}</button>
-      <button className="link" onClick={() => setRaw((x) => !x)}>{raw ? "원본 접기" : "AI 원본(JSON)"}</button>
+      <button className="link" onClick={() => setRaw((x) => !x)}>{raw ? "원본 접기" : r.format === "text" ? "AI 원본(글)" : "AI 원본(JSON)"}</button>
     </div>
     {sys ? <pre className="raw">{r.system}</pre> : null}
-    {raw ? <pre className="raw">{JSON.stringify(r.raw, null, 1)}</pre> : null}
+    {raw ? <pre className="raw">{typeof r.raw === "string" ? r.raw : JSON.stringify(r.raw, null, 1)}</pre> : null}
   </article>;
 }
 function Ic({ text }: { text: string }) {
@@ -176,4 +193,33 @@ function Rich({ text }: { text: string }) {
   return <div className="rich">{text.split(/```/).map((x, i) => i % 2 === 1
     ? <pre key={i}>{x.replace(/^[\w+-]*\n/, "").replace(/\n$/, "")}</pre>
     : x.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p, j) => <p key={`${i}-${j}`}><Ic text={p} /></p>))}</div>;
+}
+/** 글 결과 보기: # 큰 머리 · ## 주제(끝의 [핵심]/[작은]은 표시로) · **굵은 머리말** · - 목록 · ``` 코드. 받은 글을 그대로 보여 준다. */
+function Md({ text }: { text: string }) {
+  const out: React.ReactNode[] = [];
+  const lines = text.replace(/\r/g, "").split("\n");
+  let buf: string[] = [], list: string[] = [], code: string[] | null = null, key = 0;
+  const flush = () => {
+    if (buf.length) { out.push(<p key={key++}><Inline text={buf.join(" ")} /></p>); buf = []; }
+    if (list.length) { out.push(<ul key={key++}>{list.map((x, i) => <li key={i}><Inline text={x} /></li>)}</ul>); list = []; }
+  };
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) { if (code) { out.push(<pre key={key++}>{code.join("\n")}</pre>); code = null; } else { flush(); code = []; } continue; }
+    if (code) { code.push(line); continue; }
+    const h1 = /^#\s+(.+)/.exec(line), h2 = /^##\s+(.+)/.exec(line);
+    if (h1) { flush(); out.push(<h3 key={key++} className="md-h1">{h1[1]}</h3>); continue; }
+    if (h2) { flush(); const sz = /\[(핵심|작은)\]\s*$/.exec(h2[1]); out.push(<h4 key={key++} className={`md-h2 ${sz ? (sz[1] === "핵심" ? "big" : "small") : ""}`}>{sz ? <span className="sz">{sz[1]}</span> : null}{h2[1].replace(/\[(핵심|작은)\]\s*$/, "")}</h4>); continue; }
+    const li = /^\s*[-•]\s+(.*)/.exec(line);
+    if (li) { if (buf.length) { const b = buf; buf = []; out.push(<p key={key++}><Inline text={b.join(" ")} /></p>); } list.push(li[1]); continue; }
+    if (!line.trim()) { flush(); continue; }
+    if (list.length) flush();
+    buf.push(line);
+  }
+  if (code) out.push(<pre key={key++}>{(code as string[]).join("\n")}</pre>);
+  flush();
+  return <div className="md">{out}</div>;
+}
+function Inline({ text }: { text: string }) {
+  return <>{text.split(/(\*\*[^*]+\*\*|`[^`]+`)/).map((x, i) => x.startsWith("**") && x.endsWith("**") && x.length > 4 ? <b key={i} className="md-b">{x.slice(2, -2)}</b>
+    : x.startsWith("`") && x.endsWith("`") && x.length > 2 ? <code key={i}>{x.slice(1, -1)}</code> : <span key={i}>{x}</span>)}</>;
 }
