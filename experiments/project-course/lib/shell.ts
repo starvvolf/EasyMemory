@@ -197,7 +197,7 @@ export const changedFiles = (a: Map<string, string>, b: Map<string, string>) => 
 export const WRITE_BLOCKED = (edit?: boolean) => edit === true
   ? "명령으로는 파일 내용을 쓰지 않아요(긴 명령은 잘려요). 파일은 파일 고치기 도구(edit · write)로 만들고 고친다."
   : edit === false
-    ? "이 대화는 파일 고치기를 허락받지 않아 명령으로도 파일을 쓸 수 없어요. 코드를 채팅에 보여 주고 학습자가 직접 넣게 한다. 학습자가 대신 써 주길 바라면 \"파일 고치기 허락을 켜면 바로 써 드릴 수 있어요\"라고 한 줄로 알린다."
+    ? "이 대화는 파일 고치기를 허락받지 않아 명령으로도 파일을 쓸 수 없어요. 코드를 채팅에 보여 주고 학습자가 직접 넣게 한다. 학습자가 대신 써 주길 바라면 \"아래 도움을 같이나 빨리 만들기로 바꾸고 파일 고치기를 허락하면 바로 써 드릴 수 있어요\"라고 한 줄로 알린다."
     : "명령으로는 파일 내용을 쓰지 않아요. 파일 고치기가 허락돼 있으면 파일 고치기 도구(edit · write · write_workspace_file)로 쓰고, 아니면 코드를 채팅에 보여 주고 학습자가 직접 넣게 한다.";
 export async function runCommandTool(runId: string, ws: string | undefined, input: Record<string, unknown>, opts: { edit?: boolean } = {}): Promise<string> {
   const command = String(input.command ?? "").trim().slice(0, 2000), why = String(input.why ?? "").trim().slice(0, 300);
