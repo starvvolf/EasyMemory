@@ -12,6 +12,7 @@ import { MemoryShelf } from "./MaterialMap";
 import { BRANCH_KEY, loadShelfRows, materialEntries, setBranch as shareBranch, shelfSel } from "./shelf";
 import { Inline, Rich } from "./Rich";
 import "./library.css";
+import { ReviewProgress, useReviewStream } from "./ReviewProgress";
 
 type Branch = "material" | "code" | "project";
 const BRANCHES: Array<[Branch, string]> = [["material", "자료"], ["code", "알고리즘"], ["project", "실습"]];
@@ -54,6 +55,14 @@ export default function Library() {
     const on = (e: Event) => open((e as CustomEvent<{ id?: string }>).detail?.id);
     window.addEventListener("recaller:knowledge-focus", on);
     return () => window.removeEventListener("recaller:knowledge-focus", on);
+  }, []);
+  // 문제 화면의 "리뷰 보기"로 왔을 때(11/12): 알고리즘 갈래의 그 문제 풀이 노트를 연다(key = ps:<번호>).
+  useEffect(() => {
+    const open = (key?: string) => { if (key) { setBranch("code"); shareBranch("code"); setSel(key); setItemId(null); handoff.libraryKey = undefined; } };
+    open(handoff.libraryKey);
+    const on = (e: Event) => open((e as CustomEvent<{ key?: string }>).detail?.key);
+    window.addEventListener("recaller:library-open", on);
+    return () => window.removeEventListener("recaller:library-open", on);
   }, []);
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
 
@@ -458,53 +467,20 @@ function MdReviewView({ md }: { md: string }) {
   </>;
 }
 type ReviewFacts = { end: "solved" | "gaveup" | "paused"; hints: number; skeleton: boolean; asked: number; submits: number; wrong: number; minutes: number };
-/** 받는 중인 JSON 글에서 지금까지 나온 칸만 꺼낸다(닫히지 않은 따옴표도 그때까지). */
-function partialReview(t: string): Review {
-  const str = (key: string, from = t) => { const m = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`).exec(from); if (!m) return ""; try { return JSON.parse(`"${m[1].replace(/\\$/, "")}"`) as string; } catch { return m[1]; } };
-  // 이야기 문단: "text"에서 다음 "text" 앞까지가 한 문단. 약점 상자의 lesson은 줄바꿈·코드 블록이 든 글(11/12 v14).
-  const si = t.indexOf('"story"');
-  const story: StoryBeat[] = [];
-  if (si >= 0) for (const part of t.slice(si).split(/(?="text")/).slice(1)) {
-    const text = str("text", part);
-    if (!text) continue;
-    const kind = str("kind", part);
-    story.push({ text, ...(kind && kind !== "none" ? { weak: { kind, size: str("size", part), title: str("title", part), state: str("state", part), lesson: str("lesson", part) } } : {}) });
-  }
-  const weak: NonNullable<Review["weak"]> = [];
-  return { situation: str("situation"), solve: str("solve"), next: str("next"), weak, story };
-}
 const GAP_KIND: Record<string, string> = { idea: "발상", impl: "구현", syntax: "문법", core: "발상", build: "구현", edge: "발상" };
 function ReviewBox({ pid, fallback }: { pid: string; fallback: ReactNode }) {
-  const [rv, setRv] = useState<Review | null>(null);
-  const [md, setMd] = useState("");
-  const [facts, setFacts] = useState<ReviewFacts | null>(null);
-  const [state, setState] = useState<"loading" | "live" | "done" | "none">("loading");
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      try {
-        const res = await fetch(`/api/code/problem/${pid}/review?stream=1`, { cache: "no-store" });
-        if (!res.ok || !res.body) throw new Error();
-        const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-        for (;;) {
-          const { value, done } = await reader.read(); if (done) break;
-          buf += dec.decode(value, { stream: true });
-          let nl; while ((nl = buf.indexOf("\n")) >= 0) {
-            const line = buf.slice(0, nl); buf = buf.slice(nl + 1); if (!line.trim() || !alive) continue;
-            const o = JSON.parse(line) as { t?: string; done?: boolean; review?: (Review & { md?: string }) | null; facts?: ReviewFacts | null; error?: string };
-            // v19는 글로 온다: 받는 중인 글을 그대로(머리글로 잘라) 보여 준다. 예전 JSON이면 지금까지의 칸만.
-            if (o.t) { if (o.t.trimStart().startsWith("{")) setRv(partialReview(o.t)); else setMd(o.t); setState("live"); }
-            if (o.done) { setFacts(o.facts ?? null); if (o.review?.md) { setMd(o.review.md); setState("done"); } else if (o.review) { setRv(o.review); setState("done"); } else setState("none"); }
-            if (o.error) setState("none");
-          }
-        }
-      } catch { if (alive) setState("none"); }
-    })();
-    return () => { alive = false; };
-  }, [pid]);
+  // 받기는 진행 카드와 같은 훅(11/12): 없으면 만들고, 만드는 중이면 이어 받고, 있으면 바로.
+  const st = useReviewStream(pid);
+  const facts = st.facts as ReviewFacts | null;
+  const md = st.state === "done" ? st.md : "";
+  const rv = st.state === "done" && !st.md ? (st.review as Review | null) : null;
+  const state = st.state;
   if (state === "none" || (state === "done" && !rv && !md)) return <>{fallback}</>;
-  if (state === "loading" || (!rv && !md)) return <section className="rp-wrong rp-review"><p className="eyebrow">총정리</p><p className="small muted">이 풀이를 정리하는 중이에요…</p></section>;
-  const live = state === "live";
+  // 만드는 중(11/12 사용자 "리뷰를 제작 중입니다 하면서 … 끝나면 제작"): 쓰다 만 글 대신 진행 카드, 다 되면 한 번에.
+  if (state === "loading" || state === "live") return <section className="rp-review2"><header className="rv-head"><div className="rv-titlerow"><span className="rv-eyebrow">풀이 노트</span><h3 className="rv-title">총정리</h3></div></header>
+    <ReviewProgress text={st.text} asked={facts?.asked ?? null} /></section>;
+  if (!rv && !md) return null;
+  const live = false;
   const END = { solved: "맞힘", gaveup: "그만둠", paused: "하다가 나감" } as const;
   // 읽기 좋게(11/12 사용자 "가독성이 구려… 읽기 좋게 정리가 안 된 느낌"): 글 폭을 줄이고, 문단은 문장마다 한 줄로,
   // 빈틈은 먼저 한 줄 목록으로 보여 주고 누르면 펼침(맨 위 하나만 펼쳐 둠), "이렇게 채워요"는 눈에 띄는 상자.
