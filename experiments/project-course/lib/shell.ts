@@ -6,7 +6,7 @@
 // 두 엔진 공통: OpenCode는 GOAL_TOOLS로, Codex는 MCP goal-tool로 같은 runGoalTool을 거친다.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DATA, read, update } from "./store.ts";
 
@@ -170,8 +170,29 @@ export function writesFile(command: string) {
     || /\b(Set-Content|Add-Content|Out-File)\b/i.test(c)
     || /\[(System\.)?IO\.File\]::(Write|Append)/i.test(c)
     || /(^|[|;&]\s*)tee\b/.test(c) || /\bsed\s+(-\w*\s+)*-i\b/.test(c)
-    || /\bwriteFile(Sync)?\s*\(|\bappendFile(Sync)?\s*\(|\bopen\s*\([^)]*['"][wa]\+?['"]|\.write_text\s*\(/.test(c);
+    // 11/12 실습 시험: python -c "Path('todo.py').open('x').write(...)"가 빠져나감 → 열기 모드 x · Path 쓰기 · 복사도 본다
+    || /\b(writeFile|appendFile|copyFile|createWriteStream)(Sync)?\s*\(|\bopen\s*\([^)]*['"][wax]\+?b?['"]|\.(write_text|write_bytes|touch)\s*\(|\bshutil\.(copy|move)|\bos\.(rename|replace)\s*\(/.test(c)
+    || /\bNew-Item\b[^|;]*-(ItemType\s+File|Value)\b|\b(Copy-Item|Move-Item)\b/i.test(c);
 }
+/** 작업 폴더 파일의 수정 시각 · 크기(빌드 결과 · 의존성 폴더는 뺌). 명령이 몰래 파일을 바꿨는지 보는 마지막 확인용 */
+const SKIP_DIRS = new Set(["node_modules", ".git", "bin", "obj", "build", "dist", "target", ".gradle", ".venv", "venv", "__pycache__", ".idea", ".vscode", ".recaller"]);
+export async function snapshotFiles(ws: string, limit = 3000): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const walk = async (dir: string, depth: number) => {
+    if (depth > 6 || out.size >= limit) return;
+    const items = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const it of items) {
+      if (out.size >= limit) return;
+      const abs = path.join(dir, it.name);
+      if (it.isDirectory()) { if (!SKIP_DIRS.has(it.name)) await walk(abs, depth + 1); continue; }
+      const st = await stat(abs).catch(() => null);
+      if (st) out.set(path.relative(ws, abs).split(path.sep).join("/"), `${st.mtimeMs}:${st.size}`);
+    }
+  };
+  await walk(ws, 0);
+  return out;
+}
+export const changedFiles = (a: Map<string, string>, b: Map<string, string>) => [...new Set([...a.keys(), ...b.keys()])].filter((k) => a.get(k) !== b.get(k));
 /** 쓰기 명령을 막을 때 튜터에게 돌려줄 말. edit: 이 대화에서 파일 고치기 도구를 쓸 수 있나(모르면 undefined) */
 export const WRITE_BLOCKED = (edit?: boolean) => edit === true
   ? "명령으로는 파일 내용을 쓰지 않아요(긴 명령은 잘려요). 파일은 파일 고치기 도구(edit · write)로 만들고 고친다."
@@ -196,10 +217,14 @@ export async function runCommandTool(runId: string, ws: string | undefined, inpu
     await remember(runId, { command: `${command} (뒤에서)`, by: "auto", code: b.code, out: b.out, ms: b.ms, at: new Date().toISOString() });
     return pre + bgResult(b);
   }
+  // 마지막 확인(11/12): 글자로 못 잡은 쓰기 명령이 허락 없이 파일을 바꿨으면 튜터에게 알린다
+  const before = opts.edit === true ? null : await snapshotFiles(ws).catch(() => null);
   const r = await exec(command, ws);
   await remember(runId, { command, by: "auto", code: r.code, out: r.out, ms: r.ms, at: new Date().toISOString() });
-  return pre + result(r);
+  const changed = before ? changedFiles(before, await snapshotFiles(ws).catch(() => before)) : [];
+  return pre + result(r) + (changed.length ? `\n\n${WROTE_WITHOUT_EDIT(changed)}` : "");
 }
+export const WROTE_WITHOUT_EDIT = (files: string[]) => `[주의] 이 명령이 작업 폴더의 파일을 바꿨어요(${files.slice(0, 5).join(", ")}${files.length > 5 ? " 외" : ""}). 이 대화는 파일 고치기를 허락받지 않았다. 학습자에게 무엇이 바뀌었는지 알리고, 앞으로는 명령으로 파일을 쓰지 않는다. 코드는 채팅에 보여 준다.`;
 
 /** 학습자가 [실행] / [안 함]을 골랐을 때. 실행했으면 튜터에게 넘길 말을 돌려준다 */
 export async function decide(runId: string, ws: string | undefined, id: string, ok: boolean): Promise<{ say: string | null; label: string; text: string }> {

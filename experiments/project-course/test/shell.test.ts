@@ -75,10 +75,19 @@ test("Windows 경로 오탐(11/12): / 로 시작하는 주소 조각 · 따옴�
 
 test("명령으로 파일 쓰기(11/12): 묻지 않고 막고, 허락 여부에 맞는 길을 알린다", async () => {
   const { writesFile, WRITE_BLOCKED } = await import("../lib/shell.ts");
-  for (const c of ["echo hi > a.txt", "cat >> b.txt", "Set-Content -Path A.java -Value 'class A {}'", "'x' | Out-File a.txt", "[IO.File]::WriteAllText('a.txt','x')", "echo x | tee a.txt", "sed -i 's/a/b/' a.txt", "node -e \"require('fs').writeFileSync('a.js','x')\"", "python -c \"open('a.py','w').write('x')\""]) assert.ok(writesFile(c), c);
+  for (const c of ["echo hi > a.txt", "cat >> b.txt", "Set-Content -Path A.java -Value 'class A {}'", "'x' | Out-File a.txt", "[IO.File]::WriteAllText('a.txt','x')", "echo x | tee a.txt", "sed -i 's/a/b/' a.txt", "node -e \"require('fs').writeFileSync('a.js','x')\"", "python -c \"open('a.py','w').write('x')\"", "python -c \"from pathlib import Path; p = Path('todo.py'); p.open('x', encoding='utf-8').write('x')\"", "python -c \"import pathlib; pathlib.Path('a.py').write_text('x')\"", "New-Item -ItemType File a.py", "Copy-Item a.py b.py"]) assert.ok(writesFile(c), c);
   for (const c of ["node a.js", "gradlew bootRun 2>&1", "dir > nul", "npm test", "node -e \"console.log(1 > 0)\"", "java -version", "curl http://localhost:8080/orders/1"]) assert.ok(!writesFile(c), c);
   const ws = await mkdtemp(path.join(os.tmpdir(), "ws-"));
   assert.equal(await runCommandTool("w1", ws, { command: "echo hi > a.txt" }, { edit: false }), WRITE_BLOCKED(false));
   assert.match(await runCommandTool("w2", ws, { command: "echo hi > a.txt" }, { edit: true }), /edit · write/);
   assert.equal((await shellOf("w1")).pending, null, "학습자에게 묻지도 않는다");
+});
+
+test("명령이 몰래 파일을 바꾸면(11/12): 허락이 없으면 결과에 주의를 붙인다", async () => {
+  const { WROTE_WITHOUT_EDIT } = await import("../lib/shell.ts");
+  const ws = await mkdtemp(path.join(os.tmpdir(), "ws-"));
+  const out = await runCommandTool("w3", ws, { command: "node -e \"require('fs')['write'+'FileSync']('made.txt','x')\"" }, { edit: false });
+  assert.ok(out.includes(WROTE_WITHOUT_EDIT(["made.txt"])), out);
+  const ok = await runCommandTool("w4", ws, { command: "node -e \"console.log(1)\"" }, { edit: false });
+  assert.ok(!ok.includes("[주의]"), ok);
 });
