@@ -534,7 +534,7 @@ function LectureFig({ genId, label, says }: { genId: string; label: string; says
   // eslint-disable-next-line @next/next/no-img-element
   const img = src ? <img src={src} alt={says || label} /> : null;
   return <figure className="lc2-fig">{img ?? <div className="small muted">{src === null ? "그림을 불러오지 못했어요" : "그림 불러오는 중…"}</div>}
-    <figcaption className="small muted">{says}</figcaption></figure>;
+    <figcaption className="small muted">{says ? <Rich text={says} /> : null}</figcaption></figure>; /* 11/12 사용자 "$E_2$ 왜 못 잡냐": 강의 그림 설명도 수식으로 */
 }
 /** 자세히(11/11): 외울 핵심은 아닌 참고 — 눌러야 보인다. */
 /** 질문 하나 · 답 하나 카드의 답(11/11 lab.cardQA): 한 줄이면 한 줄, 단계·식·표가 있으면 그 모양 그대로(마크다운) */
