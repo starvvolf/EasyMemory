@@ -7,7 +7,7 @@
 // 데이터 폴더 code/tutor/sheets.jsonl (한 줄 = 한 장, 같은 id가 다시 나오면 뒤의 것이 이긴다).
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { askJson, S } from "../../assist/model.ts";
+import { askJson, askText, S } from "../../assist/model.ts";
 import { peekAttempt, takeEnded, type Attempt, type AttemptEvent } from "../service.ts";
 import { readProblemMeta, readSubmissions, type Submission } from "../problems.ts";
 import { patternOf } from "./patterns.ts";
@@ -41,7 +41,7 @@ export type WeakKind = "core" | "build" | "edge" | "syntax";
  *  v16(같은 날 "어쨌든 모르는 거… 깐깐하게"): 도움받고 넘어간 것은 모르는 것으로, 설명은 처음부터.
  *  v15(같은 날 "강의책급이라고 무조건 글자 수 길게 갈 필요는 없어… 걍 친절하고 디테일하게 약점을 채워 주는 거"): 설명 길이는 그 약점에 필요한 만큼. */
 export type StoryKind = "idea" | "impl" | "syntax";
-export type Weak = { kind: StoryKind; size: "small" | "big"; title: string; state: string; lesson: string };
+export type Weak = { kind?: StoryKind; size: "small" | "big"; title: string; state: string; lesson: string };
 export type Review = { v: 18; situation: string; solve: string; story: Array<{ text: string; weak?: Weak }>; next: string };
 
 const dir = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "tutor");
@@ -227,11 +227,89 @@ export function checkReview(raw: { situation?: unknown; solve?: unknown; story?:
     const x = w as Record<string, unknown>;
     const b = (x.weak ?? {}) as Record<string, unknown>;
     const kind = KINDS.find((k) => k === b.kind);
-    const weak = kind ? { kind, size: b.size === "big" ? "big" as const : "small" as const, title: clean(b.title, 40), state: clean(b.state, 320), lesson: rich(b.lesson, 2400) } : undefined;
+    // 종류(발상·구현·문법)는 없어도 된다(11/12 글 출력: 약점 카드 정책 "종류 칸은 미리 안 나눔"). "none"이면 약점 없음.
+    const weak = b.kind !== "none" && (kind || b.title) ? { ...(kind ? { kind } : {}), size: b.size === "big" ? "big" as const : "small" as const, title: clean(b.title, 40), state: clean(b.state, 320), lesson: rich(b.lesson, 2400) } : undefined;
     return { text: clean(x.text, 520), ...(weak && weak.title && weak.lesson ? { weak } : {}) };
   }).filter((w) => w.text).slice(0, 14);
   return situation && solve ? { v: 18, situation, solve, story, next } : null;
 }
+/* ---------- 글로 받기 (11/12 사용자 "JSON으로 꼭 해야 함? … 그런 식으로 가는 게 좋을 것 같아, 가이드라인을 잘 줘야 함") ----------
+ * JSON 대신 정해진 표시가 있는 글로 받고 코드가 잘라 같은 모양(Review)으로 만든다. 출력이 줄고(따옴표·\n 이스케이프·칸 이름 반복 없음),
+ * 받는 중에도 그대로 보이고, 설명 속 ``` 코드 블록이 깨지지 않는다. 표시를 빼먹은 곳은 너그럽게: 그냥 이야기 문단으로 둔다. */
+export const REVIEW_TEXT_FORMAT = `[출력 형식] JSON을 쓰지 않는다. 위에서 말한 칸(situation·solve·story·text·weak·next)을 아래 표시로 쓴다. 표시 줄은 줄 맨 앞에 글자 그대로 쓰고, 표시 말고는 # 로 시작하는 줄을 쓰지 않는다(코드 블록 안은 괜찮다).
+
+# 문제 상황
+(situation 내용)
+
+# 이렇게 해야 풀려요
+(solve 내용)
+
+# 이야기
+## 1
+(그 문단의 이야기 2~4문장)
+[작은 약점] 약점 제목
+상태: (지금 내 상태, 한 줄로)
+설명:
+(설명. 여러 줄·빈 줄로 문단 나누기·\`\`\` 코드 블록 그대로)
+
+## 2
+(약점이 드러나지 않은 문단은 이야기만 쓰고 [ ] 줄·상태·설명을 쓰지 않는다)
+
+## 3
+(…)
+[핵심 약점] 약점 제목
+상태: …
+설명:
+…
+
+# 다음에 떠올릴 것
+(next 내용)
+
+- 크기는 [작은 약점] 또는 [핵심 약점] 둘 중 하나로만 쓴다. 한 문단에 약점은 하나까지.
+- 문단 번호(## 1, ## 2…)는 1부터 차례로. 문단 사이에는 빈 줄 하나.
+- 마크다운 꾸밈(굵게 **, 머리글 ###, 목록 기호)은 쓰지 않는다. 코드·식은 \`\`로, 여러 줄 코드·표는 \`\`\` 블록으로.`;
+
+/** 표시가 있는 글 → JSON과 같은 날것(checkReview가 확인). 코드 블록 안의 줄은 표시로 보지 않는다. 받는 중인 글도 그대로 넣으면 지금까지의 모양이 나온다. */
+export function parseReviewText(text: string) {
+  const out = { situation: "", solve: "", next: "", story: [] as Array<{ text: string; weak: { kind: string; size: string; title: string; state: string; lesson: string } }> };
+  let sec: "situation" | "solve" | "story" | "next" | "" = "";
+  let part: "text" | "state" | "lesson" = "text";
+  let fence = false;
+  const cur = () => out.story.at(-1);
+  const newPara = () => { out.story.push({ text: "", weak: { kind: "none", size: "small", title: "", state: "", lesson: "" } }); part = "text"; };
+  const add = (line: string) => {
+    if (sec === "story") {
+      if (!cur()) newPara();
+      const w = cur()!;
+      if (part === "text") w.text += (w.text ? "\n" : "") + line;
+      else if (part === "state") w.weak.state += (w.weak.state ? " " : "") + line;
+      else w.weak.lesson += `${line}\n`;
+    } else if (sec) out[sec] += (out[sec] ? "\n" : "") + line;
+  };
+  for (const raw of text.replace(/\r/g, "").split("\n")) {
+    const line = raw.replace(/\s+$/, "");
+    if (/^\s*```/.test(line)) { fence = !fence; add(line); continue; }
+    if (fence) { add(line); continue; }
+    const h1 = /^#\s+(.+)$/.exec(line);
+    if (h1) {
+      const t = h1[1];
+      sec = /상황/.test(t) ? "situation" : /풀려|풀리|방법/.test(t) ? "solve" : /이야기|흐름/.test(t) ? "story" : /다음|떠올/.test(t) ? "next" : sec;
+      part = "text"; continue;
+    }
+    if (/^##\s*\d*\s*$/.test(line)) { sec = "story"; newPara(); continue; }
+    const wk = /^\[\s*(작은|핵심)\s*약점\s*\]\s*(.*)$/.exec(line);
+    if (wk && sec === "story") { if (!cur()) newPara(); const w = cur()!.weak; w.kind = "weak"; w.size = wk[1] === "핵심" ? "big" : "small"; w.title = wk[2]; part = "state"; continue; }
+    const st = /^상태\s*[:：]\s*(.*)$/.exec(line);
+    if (st && sec === "story" && part !== "lesson" && cur()?.weak.title) { part = "state"; add(st[1]); continue; }
+    const ls = /^설명\s*[:：]?\s*(.*)$/.exec(line);
+    if (ls && sec === "story" && cur()?.weak.title && part !== "lesson") { part = "lesson"; if (ls[1]) add(ls[1]); continue; }
+    if (!line.trim() && sec === "story" && part !== "lesson") continue;
+    add(line);
+  }
+  for (const w of out.story) { w.text = w.text.trim(); w.weak.lesson = w.weak.lesson.trim(); }
+  return out;
+}
+
 /** 총정리가 다루는 대화의 범위(11/12 시험: 화면이 새로 고쳐지며 이번 풀이가 중간에 다시 시작돼 앞쪽 질문 20여 개가 빠졌다):
  *  이 장 앞의 "맞힘·그만둠" 장이 끝난 뒤(없으면 12시간 전)부터 이 장이 끝날 때까지. 하다가 나간 장은 경계로 치지 않는다. */
 async function reviewWindow(problemId: string, sheet: Sheet) {
@@ -269,7 +347,7 @@ export function reviewUser({ sheet, meta, talk }: Material, range?: { from: numb
 
 /* ---------- 총정리 실험실 (11/12 사용자 "단위 작게 할 수 있게 해서 프롬프트랑 모델 조정하면서 뭐 나오는지 볼 수 있는") ----------
  * 제품 총정리는 건드리지 않는다(장에 저장 안 함). 한 번 돌릴 때마다 code/tutor/review-lab.jsonl에 남긴다. */
-export type LabRun = { id: string; at: string; problemId: string; title: string; range: { from: number; to: number } | null; model: string; effort: string; note: string;
+export type LabRun = { id: string; at: string; problemId: string; title: string; range: { from: number; to: number } | null; model: string; effort: string; note: string; format?: "json" | "text";
   system: string; ms: number; tokens?: { in?: number; cached?: number; out?: number }; review: Review | null; raw: unknown; error?: string };
 const labFile = () => path.join(process.env.STUDY_FORGE_DATA_DIR?.trim() || path.join(process.cwd(), ".study-forge-data"), "code", "tutor", "review-lab.jsonl");
 export async function readLabRuns(problemId?: string): Promise<LabRun[]> {
@@ -277,18 +355,25 @@ export async function readLabRuns(problemId?: string): Promise<LabRun[]> {
   try { lines = (await readFile(labFile(), "utf8")).split("\n").filter(Boolean); } catch { return []; }
   return lines.flatMap((l) => { try { return [JSON.parse(l) as LabRun]; } catch { return []; } }).filter((r) => !problemId || r.problemId === problemId).reverse();
 }
-export async function runReviewLab(input: { problemId: string; range?: { from: number; to: number }; system: string; model: string; effort: string; note?: string }): Promise<LabRun> {
+export async function runReviewLab(input: { problemId: string; range?: { from: number; to: number }; system: string; model: string; effort: string; note?: string; format?: "json" | "text"; textFormat?: string }): Promise<LabRun> {
   const mat = await reviewMaterial(input.problemId);
   if (!mat) throw new Error("정리할 풀이 기록이 없어요.");
   const started = Date.now();
   let tokens: LabRun["tokens"]; let raw: unknown = null; let error = "";
+  const onUsage = (u: { inputTokens?: number; cachedInputTokens?: number; outputTokens?: number }) => { tokens = { in: u.inputTokens, cached: u.cachedInputTokens, out: u.outputTokens }; };
+  let parsed: Record<string, unknown> | null = null;
   try {
-    raw = await askJson<Record<string, unknown>>("code:review-lab", input.system, reviewUser(mat, input.range), REVIEW_SCHEMA,
-      { model: input.model, effort: input.effort, onUsage: (u) => { tokens = { in: u.inputTokens, cached: u.cachedInputTokens, out: u.outputTokens }; } });
+    if (input.format === "text") {
+      const text = await askText("code:review-lab", `${input.system}\n\n${input.textFormat?.trim() || REVIEW_TEXT_FORMAT}`, reviewUser(mat, input.range), { model: input.model, effort: input.effort, onUsage });
+      raw = text; parsed = parseReviewText(text);
+    } else {
+      raw = await askJson<Record<string, unknown>>("code:review-lab", input.system, reviewUser(mat, input.range), REVIEW_SCHEMA, { model: input.model, effort: input.effort, onUsage });
+      parsed = raw as Record<string, unknown>;
+    }
   } catch (e) { error = (e as Error)?.message?.slice(0, 300) ?? String(e); }
   const run: LabRun = { id: `rl_${started.toString(36)}`, at: new Date(started).toISOString(), problemId: input.problemId, title: mat.meta.title, range: input.range ?? null,
-    model: input.model, effort: input.effort, note: (input.note ?? "").slice(0, 200), system: input.system, ms: Date.now() - started, ...(tokens ? { tokens } : {}),
-    review: raw ? checkReview(raw as Record<string, unknown>) : null, raw, ...(error ? { error } : {}) };
+    model: input.model, effort: input.effort, note: (input.note ?? "").slice(0, 200), format: input.format ?? "json", system: input.format === "text" ? `${input.system}\n\n${input.textFormat?.trim() || REVIEW_TEXT_FORMAT}` : input.system, ms: Date.now() - started, ...(tokens ? { tokens } : {}),
+    review: parsed ? checkReview(parsed) : null, raw, ...(error ? { error } : {}) };
   await mkdir(path.dirname(labFile()), { recursive: true });
   await appendFile(labFile(), `${JSON.stringify(run)}\n`, "utf8");
   return run;

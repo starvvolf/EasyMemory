@@ -56,3 +56,12 @@ test("총정리 확인(이야기 + 약점 상자): 상황·풀리는 법이 없�
   assert.equal(r.story[1].weak?.title, "for 반복");
   assert.equal(r.story[1].weak?.lesson, "for는 이래요.\n\n```\nfor _ in range(3):\n    print(1)\n```");
 });
+
+test("총정리 글 출력: 표시로 잘라 같은 모양으로, 코드 블록 안의 # 줄은 표시로 안 봄, 약점 없는 문단은 상자 없음", async () => {
+  const { parseReviewText, checkReview } = await import("./sheets.ts");
+  const t = "# 문제 상황\n상황이에요.\n\n# 이렇게 해야 풀려요\n풀려요.\n\n# 이야기\n## 1\n처음엔 입력을 물었어요.\n[작은 약점] 입력받기\n상태: 문법을 몰랐어요.\n설명:\n이렇게 써요.\n```python\n# 주석\nn = int(input())\n```\n\n## 2\n그다음 BFS.\n\n# 다음에 떠올릴 것\n다음.";
+  const r = checkReview(parseReviewText(t))!;
+  assert.equal(r.situation, "상황이에요."); assert.equal(r.story.length, 2);
+  assert.equal(r.story[0].weak?.title, "입력받기"); assert.equal(r.story[0].weak?.size, "small");
+  assert.match(r.story[0].weak!.lesson, /# 주석\nn = int/); assert.equal(r.story[1].weak, undefined); assert.equal(r.next, "다음.");
+});
