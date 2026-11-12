@@ -778,7 +778,7 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
       <section key={cur.key} className={`lc3-box lc3-in-${dir}`}>
         <header className="lc3-head">
           <span className="lc3-step num">{step ? step.n : "…"}</span>
-          <div className="lc3-headtext"><span className="lc3-area">{area.title}</span><h3 className="lc3-title">{step?.title ? <Rich text={step.title} /> : step ? "" : "강의를 준비하고 있어요"}</h3></div>
+          <div className="lc3-headtext"><span className="lc3-area"><Rich text={area.title} /></span><h3 className="lc3-title">{step?.title ? <Rich text={step.title} /> : step ? "" : "강의를 준비하고 있어요"}</h3></div>
           {writing ? <button className="lc3-stop" onClick={() => void post({ action: "stop" })}>멈추기</button> : null}
         </header>
         {step ? <div className="lc3-say">

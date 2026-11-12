@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { call, errorText, go, later, type Detail, type ItemLite, type Question, type ScreenContext, type Tree } from "./api";
 import { QuestionCard } from "./QuestionCard";
 import { StateChip } from "./KnowledgeWindow";
-import { Rich } from "./Rich";
+import { Rich, RichInline } from "./Rich";
 import { CardQA } from "./MaterialMap";
 
 type Answer = { answer: string; link: { from: string; to: string; relation: string } };
@@ -104,7 +104,7 @@ export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: bool
       {sel ? (
         <section className="sb-card">
           <div className="row" style={{ justifyContent: "space-between" }}><StateChip state={sel.item.state} graduated={sel.item.graduated} /><button className="btn ghost small" onClick={() => setSel(null)}>목록</button></div>
-          <h4>{sel.item.title}</h4>
+          <h4><RichInline text={sel.item.title} /></h4>
           <p className="small muted">{sel.path || "폴더 없음"}</p>
           {genRef ? <CardQA cardRef={genRef} fallback={sel.item.body ? <Rich text={sel.item.body} className="small" /> : null} /> : sel.item.body ? <Rich text={sel.item.body} className="small" /> : <p className="small muted">설명이 아직 없어요.</p>}
           {sel.links.length || sel.backlinks.length ? <ul className="sb-links small">
@@ -118,8 +118,8 @@ export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: bool
         <section>
           <p className="eyebrow">{hits ? `찾은 것 ${hits.length}` : context?.title ? `지금 화면: ${context.title.slice(0, 30)}` : "지금 화면과 관련된 기억"}</p>
           {!list.length ? <p className="small muted">{hits ? "찾은 기억이 없어요." : "이 화면과 이어진 기억이 아직 없어요."}</p> : null}
-          <ul className="sb-list">{list.map((i) => <li key={i.id}><button className="sb-item" onClick={() => void pick(i.id)}><StateChip state={i.state} graduated={i.graduated} /><span>{i.title}</span></button></li>)}</ul>
-          {!hits && recent.length ? <><p className="eyebrow">최근</p><ul className="sb-list">{recent.map((i) => <li key={i.id}><button className="sb-item" onClick={() => void pick(i.id)}><StateChip state={i.state} graduated={i.graduated} /><span>{i.title}</span></button></li>)}</ul></> : null}
+          <ul className="sb-list">{list.map((i) => <li key={i.id}><button className="sb-item" onClick={() => void pick(i.id)}><StateChip state={i.state} graduated={i.graduated} /><span><RichInline text={i.title} /></span></button></li>)}</ul>
+          {!hits && recent.length ? <><p className="eyebrow">최근</p><ul className="sb-list">{recent.map((i) => <li key={i.id}><button className="sb-item" onClick={() => void pick(i.id)}><StateChip state={i.state} graduated={i.graduated} /><span><RichInline text={i.title} /></span></button></li>)}</ul></> : null}
         </section>
       )}
 
