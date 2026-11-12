@@ -21,6 +21,9 @@ export { reviewQueue, reviewStatus, dayOf } from "./store.ts";
 export { REVIEW_BOXES } from "./store.ts";
 // 자료 지도(src/lib/study/material-map.ts, A 10/29): 카드 ref마다 저장된 지식, 읽기만.
 export { itemsForRefs } from "./store.ts";
+// 기억 탭 "모르는 것 분석"(A 11/13): 자료 하나의 카드마다 기록 분석(AI 없음).
+export { materialStats } from "./store.ts";
+export type { MaterialStats, CardStat, CardGroup, Round } from "./flash-stats.ts";
 
 /* ---------- 비슷한 지식 후보 (임베딩, 2026-10-28 추가) ---------- */
 export { similarKnowledge } from "./embed.ts";

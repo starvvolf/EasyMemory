@@ -7,6 +7,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { analyze } from "./flash-stats.ts";
 
 /*
  * 복습 간격: the same boxes as PDF practice (src/app/study/dejipgi-app.js INTERVALS), so one piece of knowledge waits the
@@ -965,6 +966,19 @@ export async function itemsForRefs(refs: string[]): Promise<Record<string, ItemL
   const wanted = new Set(refs), out: Record<string, ItemLite> = {};
   for (const item of store.items) for (const s of item.sources) if (s.ref && wanted.has(s.ref) && !out[s.ref]) out[s.ref] = lite(item);
   return out;
+}
+/**
+ * 기억 탭 "모르는 것 분석"(11/13): 자료 하나(gen id)의 카드마다 기록을 모아 flash-stats.ts의 analyze로. 그 자료에서 남은 기록(source.ref = gen id)과
+ * 출처 없는 기록(자료 지도 "모름")만 센다 — 같은 기억이 다른 자료에서 받은 기록은 빼고.
+ */
+export async function materialStats(genId: string, refs: string[]) {
+  const store = await readStore();
+  const wanted = new Set(refs);
+  const refsOf = new Map<string, string[]>();
+  for (const item of store.items) { const mine = item.sources.map((s) => s.ref).filter((r): r is string => Boolean(r && wanted.has(r))); if (mine.length) refsOf.set(item.id, mine); }
+  const events = (await readEvents()).filter((e) => refsOf.has(e.knowledgeId) && (!e.source?.ref || e.source.ref === genId))
+    .map((e) => ({ at: e.at, kind: e.kind, detail: e.detail, refs: refsOf.get(e.knowledgeId)! }));
+  return analyze(refs, events);
 }
 /** A practice result on a PDF question, passed on to the knowledge its objective covers. */
 export async function recordByRef(refs: string[], kind: KEventKind, detail = "", source?: KEvent["source"], takeBack?: "correct" | "read") {

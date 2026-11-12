@@ -556,3 +556,29 @@
 .dejipgi .rv-sum{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px;line-height:1.65;font-size:14px}
 .dejipgi .rv-smalllist{padding:12px 14px;border-radius:12px;border:1px dashed var(--line)}
 .dejipgi .rv-smalllist ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:14px;line-height:1.65}
+
+/* 기억 탭 "모르는 것 분석"(11/13): 돌려 본 기록 · 영역마다 지금 앎 · 무리별 카드 */
+.dejipgi .st-box{margin-top:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.dejipgi .st-h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.dejipgi .st-h b{font-size:14px}
+.dejipgi .st-rounds{display:flex;gap:10px;align-items:flex-end;overflow-x:auto;padding-bottom:2px}
+.dejipgi .st-round{display:grid;justify-items:center;gap:3px;min-width:38px}
+.dejipgi .st-col{display:flex;align-items:flex-end;width:22px;height:72px;border-radius:6px;background:var(--line)}
+.dejipgi .st-col i{display:block;width:100%;border-radius:6px;background:var(--good)}
+.dejipgi .st-pct{font-size:12px;font-weight:600}
+.dejipgi .st-day,.dejipgi .st-n{font-size:11px;color:var(--muted)}
+.dejipgi .st-areas{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.dejipgi .st-areas li{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:10px}
+.dejipgi .st-an{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dejipgi .st-abar{display:inline-flex;gap:3px}
+.dejipgi .st-abar i{width:10px;height:10px;border-radius:3px;background:var(--line-strong)}
+.dejipgi .st-abar i.good{background:var(--good)} .dejipgi .st-abar i.bad{background:var(--bad)}
+.dejipgi .st-group{margin-top:14px}
+.dejipgi .st-group.stuck>.shelf-ah b{color:var(--bad)} .dejipgi .st-group.learned>.shelf-ah b{color:var(--good)}
+.dejipgi .st-line{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.dejipgi .st-line b.bad{color:var(--bad);font-weight:600}
+.dejipgi .st-seq{display:inline-flex;gap:2px}
+.dejipgi .st-seq i{width:7px;height:7px;border-radius:50%}
+.dejipgi .st-seq i.good{background:var(--good)} .dejipgi .st-seq i.bad{background:var(--bad)}
+.dejipgi .st-notes{margin:0 0 8px;padding:8px 10px 8px 24px;border-radius:10px;background:var(--bad-soft,rgba(208,97,63,.08))}
+@media (max-width:640px){.dejipgi .st-areas li{grid-template-columns:auto minmax(0,1fr) auto}.dejipgi .st-abar{display:none}}

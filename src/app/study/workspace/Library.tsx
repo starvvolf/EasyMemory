@@ -144,8 +144,9 @@ export default function Library() {
             : cur ? <EntryView key={cur.key} e={cur} byId={byId} onItem={setItemId} />
             : <Welcome />}
         </div>
-        <Chat key={sel ?? branch} pageRef={main} focusIds={itemId ? [itemId] : (cur?.itemIds ?? []).slice(0, 6)}
-          where={itemId ? `기억 하나: ${byId.get(itemId)?.title ?? ""}` : sel === "note" ? "나의 학습 노트" : cur ? `${BRANCHES.find((b) => b[0] === cur.branch)?.[1]} · ${cur.title}` : `${BRANCHES.find((b) => b[0] === branch)?.[1]} 목록`} />
+        {/* 자료(PDF) 한 권을 볼 때는 채팅 없이 분석만(11/13 사용자) */}
+        {!itemId && cur?.branch === "material" && cur.row?.genId ? null : <Chat key={sel ?? branch} pageRef={main} focusIds={itemId ? [itemId] : (cur?.itemIds ?? []).slice(0, 6)}
+          where={itemId ? `기억 하나: ${byId.get(itemId)?.title ?? ""}` : sel === "note" ? "나의 학습 노트" : cur ? `${BRANCHES.find((b) => b[0] === cur.branch)?.[1]} · ${cur.title}` : `${BRANCHES.find((b) => b[0] === branch)?.[1]} 목록`} />}
       </section>
     </div>
     </>
