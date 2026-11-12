@@ -256,6 +256,24 @@ async function noteGap(runId: string, op: string, b: Record<string, unknown>) {
     await H.add({ run: runId, goal: c.title, kind: "막힘", name: unit.title, result: reasons.join(" · "), quote: text });
   }
 }
+/** 작업 폴더에서 파일들의 지금 내용(줄 번호, 파일당 200줄 · 3개 · 12,000자까지). skip: 이미 판정 자료에 들어간 파일 */
+export async function filesNow(runId: string, files: string[], skip: (f: string) => boolean) {
+  const ws = await (await import("./goals.ts")).runWorkspace(runId);
+  if (!ws) return [];
+  const root = path.resolve(ws), out: string[] = [];
+  let size = 0;
+  for (const f of [...new Set(files.filter(Boolean))].reverse()) {
+    if (skip(f) || out.length >= 3) continue;
+    const abs = path.resolve(root, f);
+    if (abs !== root && !abs.startsWith(root + path.sep)) continue;
+    const text = await readFile(abs, "utf8").catch(() => null);
+    if (text == null) continue;
+    const block = `[작업 폴더의 지금 파일 ${f} — 이번 과제에서 고쳤는지는 모름]\n${text.split(/\r?\n/).slice(0, 200).map((l, i) => `${String(i + 1).padStart(3)}| ${l}`).join("\n")}`;
+    if (size + block.length > 12_000) continue;
+    size += block.length; out.push(block);
+  }
+  return out;
+}
 /** [해 봤어요] 판정: 지금 단위(보충 단계 또는 현재 목표)가 이해된 뒤 튜터가 낸 과제와 학습자가 한 것만 본다 */
 async function applyVerdict(runId: string, run: { codexId?: string; chatId?: string }) {
   const G = await import("./goals.ts"), R = await import("./goal-record.ts"), J = await import("./judge.ts");
@@ -284,7 +302,10 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
   // 과제가 가리키는 코드(11/8 실측: "goals.ts 119줄을 따라가 보라"는 과제에서 판정이 코드를 못 봐 틀린 답을 맞은 부분으로 봄)
   const taskText = lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task;
   const refs = await referencedCode(runId, taskText).catch(() => "");
-  const v = await J.judgeApply(unit, refs ? `${taskText}\n\n${refs}` : taskText, [...said, ...code, ...typed].join("\n\n"));
+  // 작업 폴더의 지금 파일(11/13 사용자 승인 안 1: 판정 25번 중 근거 부족 6 — "했다"는데 과제 뒤 저장본이 없어 코드를 못 봄).
+  // 이 실습에서 저장했거나 지금 열린 파일 중 위에 안 들어간 것을 디스크에서 읽어 붙인다(코드만, AI 호출은 그대로 한 번)
+  const now = said.length || typed.length ? await filesNow(runId, [...saves.map((x) => x.file), bridgeState(runId)?.file ?? ""], (f) => lastBy.has(f) && (beforeBy.get(f) ?? "") !== lastBy.get(f) || refs.includes(f)) : [];
+  const v = await J.judgeApply(unit, refs ? `${taskText}\n\n${refs}` : taskText, [...said, ...code, ...now, ...typed].join("\n\n"));
   return { verdict: v.verdict, right: v.right, gap: v.gap, quote: lastU?.text.trim().slice(0, 400) ?? "" };
 }
 const recordJobs = new Map<string, Promise<unknown>[]>();
