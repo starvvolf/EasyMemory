@@ -604,13 +604,15 @@ function LectureCard({ genId, c, onPage, startOpen = false }: { genId: string; c
  * 같은 빠르기로 따라가고, 밀린 글이 많으면 조금씩 빨라진다. animate가 아니면(이미 본 글) 바로 다 보인다. 쓰다 만 식($)·표시(⟦)는 감춘다.
  */
 function useSmoothText(target: string, animate: boolean, onCaughtUp?: () => void) {
-  const [shown, setShown] = useState(() => (animate ? 0 : target.length));
+  // 11/12 사용자 "만들어지는 거 받을 때만 부드럽게, 이미 받아 놨으면 다시 만드는 척 안 해도": 화면을 열 때 이미 받은 글은 바로 다 보이고,
+  // 그 뒤에 새로 오는 글만 일정한 속도로 따라간다(예전엔 쓰는 중인 장을 다시 열면 처음부터 다시 타자 치듯 보였다).
+  const [shown, setShown] = useState(() => target.length);
   const want = useRef(target);
   const done = useRef(onCaughtUp);
   useEffect(() => { want.current = target; done.current = onCaughtUp; });
   useEffect(() => {
     if (!animate) return;
-    let raf = 0, last = 0, pos = 0, acc = 0, told = false;
+    let raf = 0, last = 0, pos = want.current.length, acc = 0, told = false;
     const tick = (t: number) => {
       const dt = last ? Math.min(100, t - last) : 16; last = t;
       const total = want.current.length;
@@ -696,7 +698,13 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
   const writing = Boolean(areas?.some((a) => a.status === "writing" || a.steps.some((s) => s.asks.some((x) => x.status === "writing"))));
   const load = () => call<{ lecture: { areas: L3Area[] } }>(base).then((r) => { setAreas(r.lecture.areas); return r.lecture.areas; }).catch((e) => { setError(errorText(e)); setAreas(null); return null; });
   const slotsOf = (list: L3Area[]): L3Slot[] => list.flatMap((a, ai): L3Slot[] => a.steps.length ? a.steps.map((s) => ({ key: `${a.id}:${s.n}`, ai, area: a, step: s })) : a.status ? [{ key: `${a.id}:0`, ai, area: a, step: null }] : []);
-  useEffect(() => { void load().then((l) => { if (!l) return; setSeen(new Set(l.filter((a) => a.status === "done").flatMap((a) => a.steps.flatMap((s) => [`${a.id}:${s.n}`, ...s.asks.map((_, k) => `${a.id}:${s.n}:${k}`)])))); const sl = slotsOf(l); if (sl.length) setAtKey(sl[sl.length - 1].key); }); }, [genId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 보던 장을 기억한다(11/12 사용자 "카드 눌렀는데 다음으로 넘어간 것 같다"): 다른 탭에 다녀오거나 문제를 풀고 와서 강의를 다시 열면
+  // 마지막으로 쓴 장이 아니라 보던 장으로. 처음 여는 강의만 마지막 장으로.
+  const atStore = `recaller:lecture-at:${genId}`;
+  useEffect(() => { void load().then((l) => { if (!l) return; setSeen(new Set(l.filter((a) => a.status === "done").flatMap((a) => a.steps.flatMap((s) => [`${a.id}:${s.n}`, ...s.asks.map((_, k) => `${a.id}:${s.n}:${k}`)])))); const sl = slotsOf(l);
+    let saved: string | null = null; try { saved = localStorage.getItem(atStore); } catch { /* storage off */ }
+    if (saved && sl.some((x) => x.key === saved)) setAtKey(saved); else if (sl.length) setAtKey(sl[sl.length - 1].key); }); }, [genId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (atKey) try { localStorage.setItem(atStore, atKey); } catch { /* storage off */ } }, [atKey, atStore]);
   useEffect(() => { if (!writing) return; const t = setTimeout(() => void load(), 400); return () => clearTimeout(t); }); // 쓰는 동안 0.4초마다
   const post = (body: Record<string, unknown>) => call(base, body).then(() => load()).catch((e) => setError(errorText(e)));
   const slots = areas ? slotsOf(areas) : [];
