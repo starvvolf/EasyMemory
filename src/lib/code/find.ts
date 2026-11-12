@@ -32,7 +32,7 @@ export async function findContext() {
       import("./tutor/state.ts"), import("./tutor/profile.ts"), import("./tutor/policy.ts"), import("./tutor/problem-model.ts"), import("./tutor/memory.ts")]);
     const [events, profile, models] = await Promise.all([readEvents(), readProfile(), readModels()]);
     for (const n of Object.keys(models)) have.add(n);
-    next = learningOrder(computeState(events), profile.surveyed || profile.focus.length ? profile : undefined).list.slice(0, 3).map((p) => p.name);
+    next = learningOrder(computeState(events), profile.focus.length ? profile : undefined).list.slice(0, 3).map((p) => p.name);
     const text = memoryText(await readMemory(), { maxRows: 6, withErrors: true, withRecent: true });
     memory = text ? `${MEMORY_LEGEND}\n${text}` : "";
   } catch { /* 튜터 기록이 없으면 문제 목록만 */ }

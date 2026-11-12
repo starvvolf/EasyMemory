@@ -58,12 +58,12 @@ test("상태: 혼자·도움을 따로, 새 문제 승리로 도움 수준이 �
   assert.equal(worse.failStreak, 2); assert.equal(worse.help, 1); assert.equal(worse.box, 0);
 });
 
-test("다음 할 일: 처음엔 진단, 새 패턴은 시범 → 드릴, 드릴 둘 뒤 설계, 설계 뒤 구현", () => {
+test("다음 할 일: 처음부터 바로 새 패턴은 시범 → 드릴, 드릴 둘 뒤 설계, 설계 뒤 구현(진단은 11/12에 없앰)", () => {
   const models = { "1926": model("1926", ["fast-io"], "lecture"), "2667": model("2667", ["fast-io"]), "1012": model("1012", ["fast-io"]), "2583": model("2583", ["fast-io"]), "2468": model("2468", ["fast-io"]) };
   // 사건 시각이 고정이라, "지금"을 마지막 사건 1분 뒤로 둔다(아니면 날이 지나 복습이 먼저 나온다, 11/9).
   const soon = (es: TutorEvent[]) => new Date(Date.parse(es.at(-1)!.at) + 60_000);
-  const diag = nextActions(computeState([]), models);
-  assert.ok(diag.length >= 1 && diag.every((a) => a.kind === "drill" && a.mixed), "diagnosis hides the chapter");
+  const first = nextActions(computeState([]), models);
+  assert.equal(first[0].kind, "walkthrough", "처음이어도 진단 없이 바로 시범");
   let events: TutorEvent[] = [ev({ number: "9", patterns: ["count-array"], ability: "recognize", ok: true })];
   let next = nextActions(computeState(events), models, soon(events));
   assert.equal(next[0].kind, "walkthrough"); assert.equal(next[0].number, "1926", "a lecture problem first");

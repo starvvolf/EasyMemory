@@ -141,22 +141,12 @@ test("설문(11/11): 처음엔 설문부터, 저장하면 알아요는 확인 �
       state: { right: "스택", wrong: ["합계", "정렬된 배열"] }, update: "u", complexity: "n", pitfalls: [], walkthrough: { observe: "o", choose: "c", compare: "x", verify: "v" }, at: "" });
     await mkdir(path.join(dir, "code", "tutor"), { recursive: true });
     await writeFile(path.join(dir, "code", "tutor", "models.json"), JSON.stringify({ "9012": m("9012", ["stack-match"]), "4949": m("4949", ["stack-match"]), "10845": m("10845", ["queue-sim"]), "2164": m("2164", ["queue-sim"]) }));
-    const { tutorOverview, answer, setProfile } = await import("./service.ts");
+    const { tutorOverview, setProfile } = await import("./service.ts");
     let o = await tutorOverview();
-    assert.equal(o.survey.needed, true); assert.equal(o.actions.length, 0, "no diagnosis drills before the survey");
-    assert.equal(o.survey.patterns.length, 42, "합쳐진 둘은 설문에 없다");
-    await setProfile({ op: "survey", levels: { "stack-match": "know", "없는패턴": "good" } });
-    o = await tutorOverview();
-    const c = o.actions[0];
-    assert.ok(c.check && c.pattern === "stack-match" && c.kind === "drill");
-    const r = await answer({ kind: "drill", number: c.number, pattern: "stack-match", mixed: true, choice: "", dunno: true }) as { ok: boolean; dunno: boolean };
-    assert.equal(r.ok, false); assert.equal(r.dunno, true);
-    o = await tutorOverview();
-    const row = o.survey.patterns.find((p) => p.id === "stack-match")!;
-    assert.equal(row.checked, "fail"); assert.equal(row.now, "none", "알아요 + 모르겠어요 → 모름");
-    assert.ok(!o.survey.patterns.some((p) => p.id === "없는패턴"));
-    const { readLessons } = await import("./lessons.ts");
-    assert.ok((await readLessons()).some((l) => l.gap.includes("떠올리지 못했어요")), "모르겠어요 leaves a card");
+    // 시작 전 점검(설문)은 없앴다(11/12): 처음이어도 바로 할 일이 있고, 설문 칸은 없다.
+    assert.ok(o.actions.length > 0, "처음이어도 바로 할 일");
+    assert.ok(!("survey" in o));
+    assert.equal(o.catalog.patterns.length, 42, "분야 집중에서 고를 목록(합쳐진 둘은 없다)");
     await setProfile({ op: "focus", patterns: ["queue-sim"] });
     o = await tutorOverview();
     assert.equal(o.learning.focused, true);

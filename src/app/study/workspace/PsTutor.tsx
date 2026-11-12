@@ -9,7 +9,7 @@ import { Rich } from "./Rich";
 type Ab = "recognize" | "design" | "execute";
 type PatternRow = { id: string; name: string; what: string; seen: boolean; solid: boolean; graduated: boolean;
   abilities: Record<Ab, { help: 0 | 1 | 2 | 3; freshWins: number; accuracy: number | null; dueAt: string | null; due: boolean; failStreak: number; n: number }> };
-type Base = { id: string; kind: "walkthrough" | "contrast" | "drill" | "design" | "implement"; number: string; pattern: string; mixed: boolean; minutes: number; why: string; check?: boolean; redo?: boolean; fill?: boolean;
+type Base = { id: string; kind: "walkthrough" | "contrast" | "drill" | "design" | "implement"; number: string; pattern: string; mixed: boolean; minutes: number; why: string; redo?: boolean; fill?: boolean;
   title: string; url: string; chapter: string | null; patternName: string | null; summary: string; statement: string; inputText: string; outputText: string;
   example: { input: string; output: string } | null; maxN: number | null };
 type ActionView = Base & {
@@ -20,9 +20,8 @@ type ActionView = Base & {
 type Overview = { targets: number; ready: number; prep: { running: boolean; total: number; done: number; failed: Array<{ number: string; why: string }> };
   pending: Array<{ number: string }>; patterns: PatternRow[]; actions: ActionView[]; done: number;
   board?: Array<{ id: string; name: string; stage: string; marks: Record<Ab, "ok" | "help" | "bad" | "none">; open: number; wrong?: string }>;
-  survey?: Survey; learning?: { focused: boolean; focus: string[]; next: Array<{ id: string; name: string; ready: boolean }>; checks: number } };
-type Level = "none" | "know" | "good";
-type Survey = { needed: boolean; surveyed: boolean; steps?: Array<{ n: number; part: 1 | 2 | 3; code: string; name: string; planned: string[] }>; patterns: Array<{ id: string; name: string; tier: number; tierName: string; example: string; level: Level; now: Level; checked: "pass" | "fail" | "skip" | null; solid: boolean }> };
+  catalog?: Catalog; learning?: { focused: boolean; focus: string[]; next: Array<{ id: string; name: string; ready: boolean }> } };
+type Catalog = { patterns: Array<{ id: string; name: string; tier: number; tierName: string; solid: boolean }> };
 
 // 쉬운 말로(11/10 사용자 "항상 인간이 이해하기 쉽게").
 const KIND_LABEL: Record<Base["kind"], string> = { walkthrough: "풀이 과정 보기", contrast: "비슷한 문제 구별", drill: "방법 고르기", design: "계획 세우기", implement: "직접 짜기" };
@@ -43,19 +42,11 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
   useEffect(() => { if (!running) return; const t = setInterval(() => void load(), 3000); return () => clearInterval(t); }, [running, load]);
   // 실패한 것이 있으면(인터넷 아카이브가 막음) 다시 할 때는 하나씩.
 
-  const [surveying, setSurveying] = useState(false);
   const saveProfile = useCallback(async (body: Record<string, unknown>) => {
     try { const d = await call<Overview>("/api/code/tutor/profile", body); setData(d); setPinned(d.actions[0] ?? null); setError(""); } catch (e) { setError(errorText(e)); }
   }, []);
 
   if (!data) return <section className="panel small muted">{error || "PS 튜터를 여는 중…"}</section>;
-  // 처음이면 설문부터(11/11): 44개를 쉬운 순서로, 패턴마다 모름/알아요/잘해요.
-  if (data.survey && (data.survey.needed || surveying)) return (
-    <div className="stack pt">
-      {error ? <p className="ws-err">{error}</p> : null}
-      <SurveyCard s={data.survey} onSave={async (levels) => { await saveProfile({ op: "survey", levels }); setSurveying(false); }} onCancel={data.survey.needed ? undefined : () => setSurveying(false)} />
-    </div>
-  );
   const action = pinned ?? data.actions[0];
   return (
     <div className="stack pt">
@@ -66,13 +57,12 @@ export default function PsTutor({ onOpenProblem }: { onOpenProblem: (id: string)
       {error ? <p className="ws-err">{error}</p> : null}
       {/* 문제 재료는 필요할 때 조금씩 뒤에서 만든다(11/10). 만드는 동안만 한 줄. */}
       {running ? <p className="small muted pt-prep">다음에 배울 패턴의 문제를 준비하는 중… ({data.prep.done}/{data.prep.total})</p> : null}
-      {data.learning?.focused ? <p className="small pt-focus">지금은 고른 분야만 배워요: {data.learning.focus.map((id) => data.survey?.patterns.find((p) => p.id === id)?.name ?? id).join(", ")} <button className="linkish small" onClick={() => void saveProfile({ op: "unfocus" })}>집중 끝내기</button></p> : null}
+      {data.learning?.focused ? <p className="small pt-focus">지금은 고른 분야만 배워요: {data.learning.focus.map((id) => data.catalog?.patterns.find((p) => p.id === id)?.name ?? id).join(", ")} <button className="linkish small" onClick={() => void saveProfile({ op: "unfocus" })}>집중 끝내기</button></p> : null}
       {action ? <ActionCard key={action.id + data.done} a={action} onDone={next} onOpenProblem={onOpenProblem} pending={data.pending.some((p) => p.number === action.number)}
-        onLater={action.check ? async () => { await saveProfile({ op: "later", pattern: action.pattern }); } : undefined} />
-        : data.learning?.checks ? <section className="panel small muted">「알아요」「잘해요」라고 한 것을 확인할 문제를 준비하고 있어요. 잠시 뒤에 열려요.</section>
+        />
         : data.learning?.next[0] && !data.learning.next[0].ready ? <section className="panel small muted">「{data.learning.next[0].name}」 문제를 준비하고 있어요. 잠시 뒤에 열려요.</section>
         : data.ready ? <section className="panel small muted">지금 할 일이 없어요. 복습 날짜가 되면 다시 나와요.</section> : null}
-      {data.learning && data.survey ? <NextPicker l={data.learning} s={data.survey} onFocus={(patterns) => void saveProfile({ op: "focus", patterns })} onSurvey={() => setSurveying(true)} /> : null}
+      {data.learning && data.catalog ? <NextPicker l={data.learning} s={data.catalog} onFocus={(patterns) => void saveProfile({ op: "focus", patterns })} /> : null}
       {data.board?.length ? <Board rows={data.board} /> : null}
       {data.actions.length > 1 ? (
         <section className="stack" style={{ gap: 4 }}>
@@ -132,7 +122,7 @@ function Problem({ a, full }: { a: ActionView; full?: boolean }) {
 
 function useElapsed() { const t0 = useRef(0); useEffect(() => { t0.current = Date.now(); }, []); return () => Date.now() - t0.current; }
 
-function ActionCard({ a, onDone, onOpenProblem, pending, onLater }: { a: ActionView; onDone: () => void; onOpenProblem: (id: string) => void; pending: boolean; onLater?: () => Promise<void> }) {
+function ActionCard({ a, onDone, onOpenProblem, pending }: { a: ActionView; onDone: () => void; onOpenProblem: (id: string) => void; pending: boolean }) {
   const elapsed = useElapsed();
   const [fb, setFb] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(""); const [err, setErr] = useState("");
@@ -146,7 +136,7 @@ function ActionCard({ a, onDone, onOpenProblem, pending, onLater }: { a: ActionV
   if (a.kind === "walkthrough" && a.walkthrough) return <Walkthrough a={a} send={send} onDone={onDone} />;
 
   if (a.kind === "drill") {
-    return <DrillCard a={a} elapsed={elapsed} send={send} fb={fb} busy={busy} err={err} next={next} onLater={onLater} />;
+    return <DrillCard a={a} elapsed={elapsed} send={send} fb={fb} busy={busy} err={err} next={next} />;
   }
   if (a.kind === "design") return <DesignCard a={a} elapsed={elapsed} send={send} fb={fb} busy={busy} err={err} next={next} />;
   if (a.kind === "contrast") return <ContrastCard a={a} send={send} fb={fb} busy={busy} err={err} next={next} />;
@@ -230,7 +220,7 @@ function Walkthrough({ a, send, onDone }: { a: ActionView; send: (b: Record<stri
 
 type CardProps = { a: ActionView; elapsed?: () => number; send: (b: Record<string, unknown>) => Promise<Record<string, unknown> | null>; fb: Record<string, unknown> | null; busy: string; err: string; next: ReactNode };
 
-function DrillCard({ a, elapsed, send, fb, busy, err, next, onLater }: CardProps & { onLater?: () => Promise<void> }) {
+function DrillCard({ a, elapsed, send, fb, busy, err, next }: CardProps) {
   const [hint, setHint] = useState(false);
   const [pick, setPick] = useState("");
   const [picks, setPicks] = useState<string[]>([]);
@@ -243,7 +233,6 @@ function DrillCard({ a, elapsed, send, fb, busy, err, next, onLater }: CardProps
     <section className="panel stack pt-card">
       <Problem a={a} />
       <p className="small"><b>이 문제에서는 무엇을 써야 할까요?</b> {a.concept ? "맞는 것을 모두 고르세요." : ""} 코드는 짜지 않아요. 30초~1분 안에 골라 보세요.</p>
-      {a.check ? <p className="small muted">맞히면 처음부터 배우지 않고 넘어가요. 모르면 「모르겠어요」를 눌러도 돼요.</p> : null}
       {a.concept ? (
         <div className="pt-options concept">{(a.options ?? []).map((o) => (
           <button key={o} className={`pt-opt${picks.includes(o) ? " on" : ""}${tone(o)}`} aria-pressed={picks.includes(o)} disabled={Boolean(fb) || Boolean(busy)} onClick={() => toggle(o)}>{picks.includes(o) ? "✓ " : ""}{o}</button>))}</div>
@@ -268,7 +257,6 @@ function DrillCard({ a, elapsed, send, fb, busy, err, next, onLater }: CardProps
       ) : fb ? <p className={`small ${fb.ok ? "pt-good" : "pt-bad"}`}><b>{fb.ok ? (fb.intended ? "맞았어요." : "되는 방법이에요. 다만 이 문제에 더 맞는 방법이 따로 있어요.") : "이 방법으로는 안 돼요."}</b> 이 문제에 쓰는 것: {(fb.patternNames as string[]).join(", ")} · 이럴 때 떠올려요: {(fb.signals as string[]).join(" · ")}{fb.ok ? <span className="muted"> ({String(fb.grade)})</span> : null}</p>
         : <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
           {/* 모르겠어요(11/11 시뮬레이션): 찍지 않아도 되게. 틀린 것으로 남고, 답과 까닭을 보여 줘요. */}
-          {onLater ? <button className="btn ghost" disabled={Boolean(busy)} onClick={() => void onLater()}>나중에</button> : null}
           <button className="btn ghost" disabled={Boolean(busy)} onClick={() => void send({ kind: "drill", mixed: a.mixed, choice: "", dunno: true, hinted: hint, ms: elapsed?.() })}>모르겠어요</button>
           <button className="btn" disabled={(a.concept ? !picks.length : !pick) || Boolean(busy)}
           onClick={() => void send(a.concept ? { kind: "drill", mixed: a.mixed, choice: picks.join(", "), choices: picks, hinted: hint, ms: elapsed?.() } : { kind: "drill", mixed: a.mixed, choice: pick, hinted: hint, ms: elapsed?.() })}>{busy || "확인"}</button></div>}
@@ -406,59 +394,19 @@ function SolveLogs() {
   );
 }
 
-const LEVEL_LABEL: Record<Level, string> = { none: "모름", know: "알아요", good: "잘해요" };
-/** 설문(11/11, 사용자 "44개 던져 주고 아는 것만 찍게", "모른다·안다·완전 잘한다 세 가지"). 쉬운 층부터. */
-function SurveyCard({ s, onSave, onCancel }: { s: Survey; onSave: (levels: Record<string, Level>) => Promise<void>; onCancel?: () => void }) {
-  const [levels, setLevels] = useState<Record<string, Level>>(() => Object.fromEntries(s.patterns.map((p) => [p.id, p.level])));
-  const [busy, setBusy] = useState(false);
-  const tiers = [...new Set(s.patterns.map((p) => p.tier))].sort();
-  const setTier = (t: number, l: Level) => setLevels((x) => ({ ...x, ...Object.fromEntries(s.patterns.filter((p) => p.tier === t).map((p) => [p.id, l])) }));
-  const known = Object.values(levels).filter((l) => l !== "none").length;
-  return (
-    <section className="panel stack pt-survey">
-      <div className="stack" style={{ gap: 4 }}>
-        <h2>먼저, 지금 어디까지 아세요?</h2>
-        <p className="small muted">쉬운 것부터 놓았어요. 처음 보는 건 「모름」 그대로 두세요. 「알아요」는 배운 적 있는 것, 「잘해요」는 보면 바로 풀 수 있는 것이에요. 알아요·잘해요는 쉬운 것부터 한 문제씩만 확인하고, 틀리면 한 칸 내려서 거기부터 배워요.</p>
-      </div>
-      {tiers.map((t) => { const rows = s.patterns.filter((p) => p.tier === t); const st = s.steps?.find((x) => x.n === t); const prev = s.steps?.find((x) => x.n === tiers[tiers.indexOf(t) - 1]); return (<div key={`part${t}`} className="stack" style={{ gap: 6 }}>
-        {/* 커리큘럼 3부(11/11): 부가 바뀌는 칸 위에 부 이름 */}
-        {st && st.n <= 12 && (!prev || prev.part !== st.part) ? <p className="pt-part">{st.part}부 {["", "구현과 정렬", "자료구조와 탐색", "최적화와 그래프 심화"][st.part]}</p> : st && st.n > 12 ? <p className="pt-part">선택</p> : null}
-        <div key={t} className="stack" style={{ gap: 4 }}>
-          <div className="row" style={{ justifyContent: "space-between", gap: 8 }}><p className="eyebrow">{rows[0]?.tierName}</p>
-            <span className="small muted">이 묶음 모두 {(["none", "know"] as const).map((l, i) => <span key={l}>{i ? " · " : ""}<button className="linkish small" onClick={() => setTier(t, l)}>{LEVEL_LABEL[l]}</button></span>)}</span></div>
-          <ul className="pt-survey-list">{rows.map((p) => (
-            <li key={p.id}>
-              <div className="stack" style={{ gap: 0, minWidth: 0 }}><b className="small">{p.name}</b><span className="small muted">이런 문제: {p.example}{p.checked === "fail" ? " · 확인에서 틀려서 한 칸 내렸어요" : p.checked === "pass" ? " · 확인했어요" : ""}</span></div>
-              <div className="pt-seg" role="radiogroup" aria-label={p.name}>{(["none", "know", "good"] as const).map((l) => (
-                <button key={l} role="radio" aria-checked={levels[p.id] === l} className={levels[p.id] === l ? "on" : ""} onClick={() => setLevels((x) => ({ ...x, [p.id]: l }))}>{LEVEL_LABEL[l]}</button>))}</div>
-            </li>))}</ul>
-          {st?.planned.length ? <p className="small muted">곧 들어올 것: {st.planned.join(" · ")}</p> : null}
-        </div></div>); })}
-      <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
-        {onCancel ? <button className="btn ghost" onClick={onCancel}>닫기</button> : null}
-        <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { await onSave(levels); } finally { setBusy(false); } }}>{busy ? "저장하는 중…" : known ? `저장하고 시작 (확인할 것 ${known}개)` : "처음부터 시작"}</button>
-      </div>
-    </section>
-  );
-}
-
-/** 다음에 배울 것(11/11): 추천은 쉬운 순서의 맨 앞, 사용자가 다른 걸 고르면 그 분야만(분야 집중). 앞 묶음에 모르는 게 남았으면 알려 준다. */
-function NextPicker({ l, s, onFocus, onSurvey }: { l: NonNullable<Overview["learning"]>; s: Survey; onFocus: (patterns: string[]) => void; onSurvey: () => void }) {
+function NextPicker({ l, s, onFocus }: { l: NonNullable<Overview["learning"]>; s: Catalog; onFocus: (patterns: string[]) => void }) {
   const [open, setOpen] = useState(false);
-  const firstGap = s.patterns.find((p) => p.now === "none" && !p.solid)?.tier ?? 99;
   const tiers = [...new Set(s.patterns.map((p) => p.tier))].sort();
   return (
     <section className="stack pt-picker" style={{ gap: 4 }}>
       <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
         <p className="eyebrow">다음에 배울 것</p>
-        <span className="small"><button className="linkish small" onClick={() => setOpen((x) => !x)}>{open ? "접기" : "다른 걸 배울래요"}</button> · <button className="linkish small" onClick={onSurvey}>내 수준 다시 알려 주기</button></span>
+        <span className="small"><button className="linkish small" onClick={() => setOpen((x) => !x)}>{open ? "접기" : "다른 걸 배울래요"}</button></span>
       </div>
-      {l.checks ? <p className="small muted">알아요·잘해요라고 한 것 중 확인할 것이 {l.checks}개 남았어요. 확인부터 해요.</p> : null}
       <p className="small">{l.next.slice(0, 3).map((p, i) => <span key={p.id}>{i ? " → " : ""}{i === 0 ? <b>{p.name}</b> : p.name}{p.ready ? "" : " (준비 중)"}</span>)}</p>
       {open ? tiers.map((t) => { const rows = s.patterns.filter((p) => p.tier === t && !p.solid); if (!rows.length) return null; return (
         <div key={t} className="stack" style={{ gap: 2 }}>
-          <div className="row" style={{ gap: 8 }}><b className="small">{rows[0].tierName}</b><button className="linkish small" onClick={() => onFocus(rows.map((p) => p.id))}>이 묶음만 배우기</button>
-            {t > firstGap ? <span className="small muted">앞 묶음에 아직 모르는 게 있어요. 막히면 앞으로 돌아가도 돼요.</span> : null}</div>
+          <div className="row" style={{ gap: 8 }}><b className="small">{rows[0].tierName}</b><button className="linkish small" onClick={() => onFocus(rows.map((p) => p.id))}>이 묶음만 배우기</button></div>
           <div className="row" style={{ flexWrap: "wrap", gap: 4 }}>{rows.map((p) => <button key={p.id} className={`chip pt-pick${l.focus.includes(p.id) ? " on" : ""}`} onClick={() => onFocus([p.id])}>{p.name}</button>)}</div>
         </div>); }) : null}
     </section>

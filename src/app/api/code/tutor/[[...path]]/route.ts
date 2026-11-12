@@ -2,7 +2,7 @@
 //   GET  /api/code/tutor            패턴별 상태 · 다음 할 일 · 교육용 모델 준비 상태 (AI 없음)
 //   GET  /api/code/tutor/journal    학습 관찰일지(사건 + 배운 것 카드, AI 없음)
 //   POST /api/code/tutor/prepare    교육용 문제 모델을 아직 없는 문제만큼 만든다(문제당 AI 1번, 백그라운드, 동시에 6개)
-//   POST /api/code/tutor/profile    설문(모름/알아요/잘해요) 저장 · 확인 미루기 · 분야 집중 시작/끝 (11/11, AI 없음)
+//   POST /api/code/tutor/profile    분야 집중 시작/끝 (11/11, AI 없음. 설문·빠른 확인은 11/12에 없앰)
 //   GET  /api/code/tutor/logs       풀이 일지(문제마다 한 장) + 이번 주 한 줄 (11/11, AI 없음)
 //   POST /api/code/tutor/lesson     "뭐가 막았나" 한 줄을 확인(맞아요)하거나 고침
 //   POST /api/code/tutor/fill       뼈대 코드 준비(처음이면 AI 1번 + 채점) → 문제 화면의 쓰던 코드로
@@ -31,8 +31,6 @@ const ANSWER = z.discriminatedUnion("kind", [
 ]);
 
 const PROFILE = z.discriminatedUnion("op", [
-  z.object({ op: z.literal("survey"), levels: z.record(pat, z.enum(["none", "know", "good"])) }),
-  z.object({ op: z.literal("later"), pattern: pat }),
   z.object({ op: z.literal("focus"), patterns: z.array(pat).min(1).max(12) }),
   z.object({ op: z.literal("unfocus") }),
 ]);

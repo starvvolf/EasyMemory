@@ -15,9 +15,9 @@ import type { Lang } from "../run.ts";
 import { RUNG_LABEL, skeletonFor, skeletonText } from "./help.ts";
 import { COMPLEXITIES, complexityVerdict } from "../train.ts";
 import { patternOf, PATTERNS } from "./patterns.ts";
-import { learningOrder, nextActions, pendingChecks, type Action } from "./policy.ts";
-import { levelOf, ORDERED, readProfile, updateProfile, type Level, type Profile } from "./profile.ts";
-import { OPTIONAL_STEP, placeOf, STEPS } from "./curriculum.ts";
+import { learningOrder, nextActions, type Action } from "./policy.ts";
+import { ORDERED, readProfile, updateProfile, type Profile } from "./profile.ts";
+import { placeOf } from "./curriculum.ts";
 import { board } from "./summary.ts";
 import { answerOf, conceptIdOf, conceptOf, conceptOptions, diffOf, USUALLY } from "./concepts.ts";
 import { ensurePool, modelForProblem, prepareModels, prepStatus, readModels, tutorNumberOf, tutorTargets, type ProblemModel } from "./problem-model.ts";
@@ -218,13 +218,13 @@ export async function tutorOverview() {
   await syncImplement().catch(() => undefined);
   const [models, events, profile] = await Promise.all([readModels(), readEvents(), readProfile()]);
   const state = computeState(events);
-  // 설문(11/11): 처음이면 설문부터(할 일 없음). 이미 풀어 온 사람은 설문 없이도 그대로, 원하면 언제든.
-  const needSurvey = !profile.surveyed && !events.length;
-  const planned = needSurvey ? [] : nextActions(state, models, new Date(), 5, profile.surveyed || profile.focus.length ? profile : undefined);
+  // 시작 전 점검(설문)은 없앴다(11/12): 처음이어도 바로 할 일.
+  const use = profile.focus.length ? profile : undefined;
+  const planned = nextActions(state, models, new Date(), 5, use);
   const actions = planned.flatMap((a) => (models[a.number] ? [view(a, models[a.number], models)] : []));
   prefetchImplement(planned, events, models);
   void fillAsNeeded(state, planned, models, profile).catch(() => undefined);
-  const order = learningOrder(state, profile.surveyed || profile.focus.length ? profile : undefined);
+  const order = learningOrder(state, use);
   const covered = PATTERNS.filter((p) => Object.values(models).some((m) => m.patterns.includes(p.id)));
   return {
     targets: tutorTargets().length, ready: Object.keys(models).length, prep: prepStatus(), pending: await readJson<Pending[]>("pending.json", []),
@@ -233,10 +233,10 @@ export async function tutorOverview() {
     actions, done: events.filter((e) => e.ability).length,
     // 한눈에 보기(11/10): 해 본 패턴마다 "지금 어디서 막혔나" 한 줄, 아직 남은 착각이 있는 것부터.
     board: await board().catch(() => []),
-    survey: surveyView(profile, needSurvey, state),
+    // 분야 집중에서 고를 목록(커리큘럼 칸 순서).
+    catalog: catalogView(state),
     // 다음에 배울 것(11/11): 추천은 순서에서 맨 앞. 사용자가 고르면 분야 집중이 된다.
-    learning: { focused: order.focused, focus: profile.focus, next: order.list.slice(0, 6).map((p) => ({ id: p.id, name: p.name, ready: Object.values(models).some((m) => m.patterns.includes(p.id)) })),
-      checks: pendingChecks(state, profile).length },
+    learning: { focused: order.focused, focus: profile.focus, next: order.list.slice(0, 6).map((p) => ({ id: p.id, name: p.name, ready: Object.values(models).some((m) => m.patterns.includes(p.id)) })) },
   };
 }
 /** 미리 만들기(11/9, 사용자 "느리다"): 구현 차례가 오기 전에 그 문제의 숨은 테스트를 뒤에서 만든다. 지금 할 일이 설계면 설계를
@@ -266,9 +266,8 @@ async function fillAsNeeded(state: ReturnType<typeof computeState>, planned: Ret
   if (!process.env.NEXT_RUNTIME) return;
   const chaptersWithTargets = new Set(tutorTargets().map((t) => t.chapter));
   const has = (p: { chapters: string[] }) => p.chapters.some((c) => chaptersWithTargets.has(c));
-  const use = profile && (profile.surveyed || profile.focus.length) ? profile : undefined;
-  // 확인할 것 둘은 1개씩, 배울 순서(분야 집중이면 그 안)의 앞 둘은 3개씩.
-  for (const p of pendingChecks(state, use).filter(has).slice(0, 2)) await ensurePool(p.id, 1);
+  const use = profile?.focus.length ? profile : undefined;
+  // 배울 순서(분야 집중이면 그 안)의 앞 둘은 3개씩.
   const upcoming = learningOrder(state, use).list.filter(has).slice(0, 2);
   for (const p of upcoming) await ensurePool(p.id, 3);
   for (const id of new Set(planned.map((a) => a.pattern))) await ensurePool(id, 2);
@@ -327,7 +326,6 @@ export async function answer(a: Answer) {
       fix: (() => { const usual = answers.size > 1 ? [a.pattern, ...m.patterns].map((p) => USUALLY[p]).find(Boolean) : undefined;
         return ok ? (usual ?? `${mainC?.name ?? ""}: ${mainC?.what ?? ""}`) : `정답은 「${[...answers].map((c) => conceptOf(c)?.name).join("」·「")}」 — ${[why, usual].filter(Boolean).join(" ")}`.trim(); })(), cue: m.signals[0] ?? "" };
     await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: dunno ? "모르겠어요" : `고른 것: ${picks.join(", ")}` }, m, card);
-    await noteCheck(a.pattern, ok);
     return { ok, concept: true, dunno, intended: ok, answer: mainC?.name ?? "", answers: [...okSet].map((c) => conceptOf(c)?.name ?? c), alsoOk: [...okSet].filter((c) => c !== main).map((c) => conceptOf(c)?.name ?? c),
       wrongPick: wrongPick ? conceptOf(wrongPick)?.name ?? "" : "", missed: missed.map((c) => conceptOf(c)?.name ?? c), why: why ?? "",
       usually: okSet.size > 1 ? [a.pattern, ...m.patterns].map((p) => USUALLY[p]).find(Boolean) ?? "" : "",
@@ -344,7 +342,6 @@ export async function answer(a: Answer) {
       gap: dunno ? "이 문제에 어떤 방법을 써야 할지 떠올리지 못했어요" : ok ? "힌트를 보기 전에는 이 방법이 떠오르지 않았어요" : `「${a.choice}」로 풀면 될 줄 알았어요${chosen ? ` (그러면 ${{ slow: "느려요", wrong: "틀려요", ok: "되긴 하지만 더 좋은 방법이 있어요", best: "" }[chosen.verdict]}${chosen.why ? ` — ${chosen.why}` : ""})` : ""}`,
       fix: `「${best?.name ?? "?"}」${best?.why ? ` — ${best.why}` : ""}`, cue: m.signals.join(" · "), distinguish: distinguishOf(m) };
     await record({ kind: "drill", number: a.number, patterns: focus, ability: "recognize", ok, hinted: Boolean(a.hinted), mixed: a.mixed, grade, ms: a.ms, detail: dunno ? "모르겠어요" : `고른 것: ${a.choice}` }, m, card);
-    await noteCheck(a.pattern, ok);
     return { ok, dunno, intended: chosen?.verdict === "best", grade: GRADE_LABEL[grade], approaches: m.approaches, signals: m.signals, patternNames: patterns.map((id) => patternOf(id)?.name ?? id), chapter: m.chapter };
   }
   if (a.kind === "design") {
@@ -410,34 +407,17 @@ export async function startFill(number: string, lang: Lang) {
   return { ok: true, problemId, blanks: sk.blanks.length };
 }
 
-/* ---------- 설문·빠른 확인·분야 집중 (11/11) ---------- */
-/** 알아요·잘해요라고 한 패턴의 첫 알아채기 결과를 확인 결과로 남긴다: 틀리면(모르겠어요 포함) 한 칸 내림. */
-async function noteCheck(pattern: string, ok: boolean) {
-  const p = await readProfile();
-  if (!p.surveyed || p.checked[pattern] || (p.levels[pattern] !== "know" && p.levels[pattern] !== "good")) return;
-  await updateProfile((x) => ({ ...x, checked: { ...x.checked, [pattern]: ok ? "pass" : "fail" } }));
-}
-function surveyView(p: Profile, needed: boolean, state: ReturnType<typeof computeState>) {
-  return { needed, surveyed: p.surveyed,
-    // 묶음 = 커리큘럼 칸(11/11). tier는 칸 번호, tierName은 "자3 줄 서는 것"처럼. 커리큘럼에만 있는 것은 planned로 알려 준다(아직 고를 수 없음).
-    steps: [...STEPS, OPTIONAL_STEP].map((s) => ({ n: s.n, part: s.part, code: s.code, name: s.name, planned: s.planned })),
-    patterns: ORDERED.map((x) => ({ id: x.id, name: x.name, tier: placeOf(x.id)?.step ?? 13, tierName: `${placeOf(x.id)?.code ?? ""} ${placeOf(x.id)?.stepName ?? ""}`.trim(), example: x.signals.slice(0, 2).join(" · "),
-      level: p.levels[x.id] ?? "none", now: levelOf(p, x.id), checked: p.checked[x.id] ?? null, solid: Boolean(state.patterns[x.id]?.solid) })) };
+/* ---------- 분야 집중 (11/11) · 설문과 빠른 확인은 11/12에 없앰 ---------- */
+function catalogView(state: ReturnType<typeof computeState>) {
+  // 묶음 = 커리큘럼 칸(11/11). tier는 칸 번호, tierName은 "자3 줄 서는 것"처럼.
+  return { patterns: ORDERED.map((x) => ({ id: x.id, name: x.name, tier: placeOf(x.id)?.step ?? 13, tierName: `${placeOf(x.id)?.code ?? ""} ${placeOf(x.id)?.stepName ?? ""}`.trim(), solid: Boolean(state.patterns[x.id]?.solid) })) };
 }
 export type ProfileOp =
-  | { op: "survey"; levels: Record<string, Level> }
-  | { op: "later"; pattern: string }
   | { op: "focus"; patterns: string[] }
   | { op: "unfocus" };
-/** 설문 저장 · 확인 미루기 · 분야 집중 시작/끝. 패턴 id는 목록에 있는 것만 받는다. */
+/** 분야 집중 시작/끝. 패턴 id는 목록에 있는 것만 받는다. */
 export async function setProfile(o: ProfileOp) {
   const known = new Set(PATTERNS.map((x) => x.id));
-  if (o.op === "survey") {
-    const levels = Object.fromEntries(Object.entries(o.levels).filter(([k]) => known.has(k))) as Record<string, Level>;
-    // 다시 하면: 수준을 바꾼 패턴만 확인을 다시 한다.
-    return updateProfile((x) => ({ ...x, surveyed: true, levels, checked: Object.fromEntries(Object.entries(x.checked).filter(([k]) => x.levels[k] === levels[k])) }));
-  }
-  if (o.op === "later") return updateProfile((x) => (known.has(o.pattern) ? { ...x, checked: { ...x.checked, [o.pattern]: "skip" } } : x));
   if (o.op === "focus") return updateProfile((x) => ({ ...x, focus: o.patterns.filter((id) => known.has(id)).slice(0, 12) }));
   return updateProfile((x) => ({ ...x, focus: [] }));
 }
