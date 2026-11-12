@@ -1,113 +1,174 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="utf-8"><title>Recaller 앱 구조</title>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recaller 앱 구조</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-:root{--ink:#1b2230;--sub:#5b6577;--line:#8a93a3;--bg:#f5f6f8;--panel:#fff;--bd:#d9dde4;
---blue:#e7eefc;--blueb:#3b6fd8;--pink:#fbe9ec;--pinkb:#d0435b;--gray:#e9ebef;--green:#e6f4ea;--greenb:#2f8a4c;--violet:#efe9fb;--violetb:#7a55c9;--amber:#fff3df;--amberb:#d98b12}
+/* 구조도.html과 같은 모양: 왼쪽 공부 영역 셋 → 공부 탭 화면 → 앱 서버 → 기억 → 다시 묻기, 아래 띠는 내 PC의 바탕. */
+:root{
+  --bg:#f7f8fa; --panel:#ffffff; --fg:#1b2230; --muted:#5d6678; --line:#8a93a6; --soft:#e7eaf0;
+  --io:#2f63d6; --io-soft:#e6eefc; --kn:#c2334d; --kn-soft:#fbe8ec; --qa:#c8661a; --qa-soft:#fcefe2;
+  --code:#3d7a57; --code-soft:#e3f2e9; --user:#8a4fc4; --user-soft:#f1e8fb;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151c; --panel:#1a1f29; --fg:#e8ebf2; --muted:#9aa3b5; --line:#6f7890; --soft:#2a3140;
+  --io:#7fa6ff; --io-soft:#1d2a45; --kn:#ff7d93; --kn-soft:#3a1f27; --qa:#f0a060; --qa-soft:#3a2a1c;
+  --code:#7fcf9f; --code-soft:#1b3326; --user:#c9a2f0; --user-soft:#2e2240; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151c; --panel:#1a1f29; --fg:#e8ebf2; --muted:#9aa3b5; --line:#6f7890; --soft:#2a3140;
+  --io:#7fa6ff; --io-soft:#1d2a45; --kn:#ff7d93; --kn-soft:#3a1f27; --qa:#f0a060; --qa-soft:#3a2a1c;
+  --code:#7fcf9f; --code-soft:#1b3326; --user:#c9a2f0; --user-soft:#2e2240; color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);font-family:"Pretendard","Noto Sans CJK KR","Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink)}
-.canvas{position:relative;width:1600px;height:1000px;margin:0 auto}
-h1{position:absolute;left:48px;top:26px;margin:0;font-size:34px;letter-spacing:-.5px}
-.lead{position:absolute;left:50px;top:72px;margin:0;color:var(--sub);font-size:17px}
-.band{position:absolute;left:40px;right:40px;border:1px solid var(--bd);border-radius:18px;background:var(--panel)}
-.blabel{position:absolute;left:58px;font-size:14px;color:var(--sub);font-weight:600;line-height:1.35}
-.blabel b{display:block;color:var(--ink);font-size:16px}
-.box{position:absolute;border:1.6px solid #c6ccd6;border-radius:14px;background:#fff;padding:12px 14px}
-.box h3{margin:0 0 4px;font-size:18px;letter-spacing:-.3px}
-.box p{margin:0;font-size:13.5px;color:var(--sub);line-height:1.45}
-.box small{display:block;margin-top:6px;font-size:12px;color:#7d8696;font-family:ui-monospace,Consolas,monospace}
-.tab{background:var(--gray);border:none}
-.study{background:#f7f9ff;border:2.4px solid var(--ink)}
-.blue{background:var(--blue);border-color:var(--blueb)}
-.pink{background:var(--pink);border:2.4px solid var(--pinkb)}
-.green{background:var(--green);border-color:var(--greenb)}
-.violet{background:var(--violet);border-color:var(--violetb)}
-.amber{background:var(--amber);border-color:var(--amberb)}
-.chip{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid currentColor;margin-right:4px}
-.seg{position:absolute;display:flex;gap:6px}
-.seg span{font-size:13px;padding:3px 12px;border-radius:999px;background:#fff;border:1px solid #c6ccd6}
-.note{position:absolute;font-size:13px;color:var(--pinkb);font-weight:600}
-svg{position:absolute;left:0;top:0;pointer-events:none;z-index:1}
-.box{z-index:2}
-.foot{position:absolute;left:48px;bottom:18px;font-size:13px;color:var(--sub)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+header h1{margin:0;font-size:26px;letter-spacing:-.01em}
+header p{margin:4px 0 0;color:var(--muted)}
+.canvas{background:var(--panel);border:1px solid var(--soft);border-radius:14px;overflow-x:auto}
+.canvas svg{display:block;min-width:960px;width:100%;height:auto}
+svg text{font-family:var(--sans);fill:var(--fg)}
+.box{fill:var(--panel);stroke:var(--line);stroke-width:1.4}
+.dash{stroke-dasharray:6 5}
+.src{fill:var(--soft);stroke:var(--soft);stroke-width:1.4}
+.src.main{stroke:var(--fg);stroke-width:2.6}
+.ai{fill:var(--io-soft);stroke:var(--io);stroke-width:1.4}
+.code{fill:var(--code-soft);stroke:var(--code);stroke-width:1.4}
+.user{fill:var(--user-soft);stroke:var(--user);stroke-width:1.4}
+.qa{fill:var(--qa-soft);stroke:var(--qa);stroke-width:1.4}
+.kn{fill:var(--kn-soft);stroke:var(--kn);stroke-width:1.8}
+.layer{fill:var(--panel);stroke:var(--kn);stroke-width:1;stroke-opacity:.5}
+.arrow{stroke:var(--line);stroke-width:1.6;fill:none}
+.arrow.loop{stroke:var(--kn);stroke-width:1.8}
+.arrow.thin{stroke-dasharray:5 4;stroke-width:1.3}
+.head{fill:var(--line)} .head.kn{fill:var(--kn)}
+.t-lg{font-size:17px;font-weight:700} .t-md{font-size:14px;font-weight:500} .t-sm{font-size:12.5px;fill:var(--muted)}
+.t-kn{font-size:12.5px;fill:var(--kn);font-weight:500}
+.tag rect{rx:6} .tag text{font-family:var(--mono);font-size:12px;font-weight:500}
+.tag.io rect{fill:var(--io-soft);stroke:var(--io)} .tag.io text{fill:var(--io)}
+.tag.kn rect{fill:var(--kn-soft);stroke:var(--kn)} .tag.kn text{fill:var(--kn)}
+.tag.qa rect{fill:var(--qa-soft);stroke:var(--qa)} .tag.qa text{fill:var(--qa)}
+.hint{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 16px}
+.hint b{color:var(--fg);font-weight:500}
 </style></head><body>
-<div class="canvas">
-<h1>Recaller 앱 구조</h1>
-<p class="lead">내 PC 앱 하나로 켜고 끈다. 자료·알고리즘·실습에서 한 공부가 기억 하나로 모이고, 잊을 때쯤 오늘 탭이 다시 묻는다. (2026-11-12 기준)</p>
+<div class="wrap">
+  <header>
+    <h1>Recaller 앱 구조</h1>
+    <p>공부 탭에서 갈래마다 공부하면, 앱 서버가 남길 것을 골라 기억 하나로 모으고, 잊을 때쯤 오늘 탭이 다시 묻는다. (2026-11-12 기준)</p>
+  </header>
+  <div class="canvas">
+    <svg viewBox="0 0 1180 760" xmlns="http://www.w3.org/2000/svg" aria-label="Recaller 앱 구조">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="ahk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head kn" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <text x="40" y="44" class="t-sm">공부 영역 (공부 탭의 세 갈래)</text>
+      <text x="290" y="44" class="t-sm">화면 · 해 보기</text>
+      <text x="474" y="44" class="t-sm">앱 서버 · AI</text>
+      <text x="690" y="44" class="t-sm">쌓기</text>
+      <text x="972" y="44" class="t-sm">다시 묻기</text>
 
-<!-- 1. 화면 -->
-<div class="band" style="top:118px;height:300px"></div>
-<div class="blabel" style="top:132px"><b>① 화면</b>탭 네 개</div>
+      <!-- 자료 -->
+      <rect class="src main" x="30" y="70" width="220" height="110" rx="12"/>
+      <text x="50" y="102" class="t-lg">자료 · 이론</text>
+      <text x="50" y="128" class="t-md">PDF → 자료 지도</text>
+      <text x="50" y="150" class="t-sm">줄기 · 구조 · 강의 · 문제 풀기</text>
+      <path class="arrow" d="M250,125 L278,125" marker-end="url(#ah)"/>
+      <rect class="user" x="282" y="90" width="160" height="70" rx="10"/>
+      <text x="298" y="120" class="t-md">사용자</text>
+      <text x="298" y="142" class="t-sm">읽기 · 강의 · 풀기</text>
+      <path class="arrow" d="M442,125 L462,125" marker-end="url(#ah)"/>
+      <rect class="ai" x="466" y="90" width="176" height="70" rx="10"/>
+      <text x="482" y="120" class="t-md">자료 엔진 · AI</text>
+      <text x="482" y="142" class="t-sm">줄기 계획 → 카드 채우기</text>
+      <g class="tag io"><rect x="466" y="168" width="176" height="26"/><text x="476" y="186">문제·강의는 누를 때</text></g>
+      <path class="arrow" d="M642,125 L686,150" marker-end="url(#ah)"/>
 
-<div class="box study" style="left:200px;top:140px;width:800px;height:262px"></div>
-<div style="position:absolute;z-index:3;left:218px;top:150px;font-size:20px;font-weight:700">공부</div>
-<div style="position:absolute;z-index:3;left:276px;top:156px;font-size:13px;color:var(--sub)">왼쪽 목록 + 오른쪽에서 바로 공부 · 고른 갈래와 자료는 기억 탭과 같이 기억</div>
-<div class="box blue" style="left:218px;top:190px;width:250px;height:196px"><span class="chip" style="color:var(--blueb)">자료</span>
-  <h3 style="margin-top:8px">자료 지도</h3><p>PDF를 넣으면 기억 목록(줄기)·카드<br>줄기 · 구조 · 강의 · 문제 풀기</p></div>
-<div class="box green" style="left:484px;top:190px;width:250px;height:196px"><span class="chip" style="color:var(--greenb)">알고리즘</span>
-  <h3 style="margin-top:8px">PS 튜터</h3><p>문제 · 테스트 채점 · 튜터 채팅<br>도움 네 칸 · 혼자 다시 풀기<br>맞히면 리뷰 진행 → 기억 탭 풀이 노트</p></div>
-<div class="box violet" style="left:750px;top:190px;width:234px;height:196px"><span class="chip" style="color:var(--violetb)">실습</span>
-  <h3 style="margin-top:8px">VS Code + 튜터</h3><p>목표 세우기 → 직접 만들기<br>→ 튜터와 검사<br>도움 다이얼(스스로·같이·빨리)<br>편집기: 내 VS Code 또는 앱 안</p></div>
+      <!-- 알고리즘 -->
+      <rect class="src" x="30" y="260" width="220" height="90" rx="12"/>
+      <text x="50" y="292" class="t-lg">알고리즘 · PS</text>
+      <text x="50" y="318" class="t-md">PS 튜터 · 풀이 노트</text>
+      <path class="arrow" d="M250,305 L278,305" marker-end="url(#ah)"/>
+      <rect class="user" x="282" y="270" width="160" height="70" rx="10"/>
+      <text x="298" y="300" class="t-md">사용자</text>
+      <text x="298" y="322" class="t-sm">풀기 · 제출 · 다시 풀기</text>
+      <path class="arrow" d="M442,305 L462,305" marker-end="url(#ah)"/>
+      <rect class="code" x="466" y="270" width="84" height="70" rx="10"/>
+      <text x="478" y="300" class="t-md">채점</text>
+      <text x="478" y="322" class="t-sm">코드가</text>
+      <rect class="ai" x="558" y="270" width="84" height="70" rx="10"/>
+      <text x="570" y="300" class="t-md">튜터</text>
+      <text x="570" y="322" class="t-sm">도움 네 칸</text>
+      <path class="arrow" d="M642,305 L686,330" marker-end="url(#ah)"/>
 
-<div class="box pink" style="left:1030px;top:140px;width:250px;height:262px"><h3>기억</h3><p>기억 도서관<br>공부 탭과 같은 목록·같은 갈래<br>고른 것의 카드 · 정리를 다시 보고<br>아래 채팅으로 묻기</p></div>
-<div class="box tab" style="left:1296px;top:140px;width:120px;height:262px"><h3>오늘</h3><p>문제 풀기<br>(복습 차례)<br><br>이어서 하기</p></div>
-<div class="box tab" style="left:1430px;top:140px;width:110px;height:262px"><h3>기록</h3><p>이번 주<br>공부 시간<br><br>1년 잔디</p></div>
+      <!-- 실습 -->
+      <rect class="src" x="30" y="420" width="220" height="90" rx="12"/>
+      <text x="50" y="452" class="t-lg">실습 · 직접 만들기</text>
+      <text x="50" y="478" class="t-md">VS Code + 튜터</text>
+      <path class="arrow" d="M250,465 L278,465" marker-end="url(#ah)"/>
+      <rect class="user" x="282" y="430" width="160" height="70" rx="10"/>
+      <text x="298" y="460" class="t-md">사용자</text>
+      <text x="298" y="482" class="t-sm">목표 → 만들기 → 검사</text>
+      <path class="arrow" d="M442,465 L462,465" marker-end="url(#ah)"/>
+      <rect class="ai" x="466" y="430" width="176" height="70" rx="10"/>
+      <text x="482" y="460" class="t-md">실습 서버 · AI 튜터</text>
+      <text x="482" y="482" class="t-sm">:4100 · OpenCode</text>
+      <path class="arrow" d="M642,465 L686,430" marker-end="url(#ah)"/>
 
+      <!-- 기억 -->
+      <rect class="kn" x="690" y="70" width="240" height="440" rx="16"/>
+      <text x="710" y="104" class="t-lg">기억</text>
+      <text x="710" y="126" class="t-sm">갈래마다 남길 것을 골라 한곳에</text>
+      <rect class="layer" x="706" y="142" width="208" height="130" rx="10"/>
+      <text x="722" y="170" class="t-md">기억 탭 · 기억 도서관</text>
+      <text x="722" y="194" class="t-sm">공부 탭과 같은 목록 · 같은 갈래</text>
+      <text x="722" y="214" class="t-sm">카드 · 정리를 다시 보기</text>
+      <text x="722" y="234" class="t-sm">아래 채팅으로 내 기억에 묻기</text>
+      <rect class="layer" x="706" y="286" width="208" height="164" rx="10"/>
+      <text x="722" y="314" class="t-md">기억 저장소</text>
+      <text x="722" y="338" class="t-sm">뜻 = 카드 (질문 · 답)</text>
+      <text x="722" y="358" class="t-sm">경험 = 맞힘 · 틀림 · 막힌 곳</text>
+      <text x="722" y="378" class="t-sm">같은 기억은 하나로 합치기</text>
+      <text x="722" y="398" class="t-sm">복습 날짜는 코드가 계산</text>
+      <text x="722" y="430" class="t-sm">내 상태: 몰랐음 · 앎 · 졸업</text>
+      <g class="tag kn"><rect x="706" y="466" width="208" height="26"/><text x="716" y="484">셋이 같이 쓰는 바닥</text></g>
 
-<!-- 2. 앱 서버 -->
-<div class="band" style="top:440px;height:230px"></div>
-<div class="blabel" style="top:454px"><b>② 앱 서버</b>내 PC<br>127.0.0.1:3000<br>(Next.js)</div>
-<div class="box blue" style="left:218px;top:462px;width:250px;height:124px"><h3>자료 엔진</h3><p>PDF → 줄기 계획 → 카드 채우기<br>강의 · 문제는 누를 때 만듦</p><small>/api/lab/gen · study-map</small></div>
-<div class="box green" style="left:484px;top:462px;width:250px;height:124px"><h3>알고리즘</h3><p>문제 · 코드 채점(코드가 판정)<br>튜터 · 풀이 총정리 · 풀이 기록</p><small>/api/code</small></div>
-<div class="box violet" style="left:750px;top:462px;width:234px;height:124px"><h3>실습</h3><p>실습 서버를 불러 화면에 전달<br>남길 것을 받아 기억으로</p><small>/api/project-course</small></div>
-<div class="box pink" style="left:1030px;top:462px;width:390px;height:190px"><h3>기억 저장소 <span style="font-weight:400;font-size:13px;color:var(--sub)">(셋이 같이 쓰는 바닥)</span></h3>
-  <p>기억 = 뜻(카드) + 경험(맞힘·틀림·막힌 곳)<br>같은 기억은 하나로 합치기<br>복습 날짜 계산 · 오늘 낼 문제 고르기<br>내 기억을 보고 답하는 묻기</p><small>/api/knowledge · lib/knowledge/api.ts</small></div>
-<div class="box tab" style="left:1430px;top:462px;width:110px;height:124px"><h3>기록</h3><p>공부 시간<br>한 일</p><small style="font-size:11px">/api/schedule</small></div>
-<div class="note" style="left:628px;top:626px;z-index:3">갈래마다 남길 것을 골라 기억으로 →</div>
+      <!-- 다시 묻기 -->
+      <g class="tag qa"><rect x="972" y="70" width="110" height="26"/><text x="982" y="88">복습 차례</text></g>
+      <path class="arrow" d="M930,140 L968,140" marker-end="url(#ah)"/>
+      <rect class="box" x="972" y="104" width="180" height="84" rx="12"/>
+      <text x="990" y="134" class="t-lg">오늘 탭</text>
+      <text x="990" y="160" class="t-sm">문제 풀기 · 이어서 하기</text>
+      <path class="arrow" d="M1062,188 L1062,252" marker-end="url(#ah)"/>
+      <rect class="box" x="972" y="256" width="180" height="84" rx="12"/>
+      <text x="990" y="286" class="t-lg">사용자</text>
+      <text x="990" y="312" class="t-sm">풀기 · 맞힘 · 틀림</text>
+      <path class="arrow loop" d="M1062,340 C1062,420 1010,440 934,420" marker-end="url(#ahk)"/>
+      <text x="960" y="462" class="t-kn">결과가 쌓이고 잊을 때쯤 다시</text>
+      <rect class="box" x="972" y="474" width="180" height="36" rx="10"/>
+      <text x="990" y="497" class="t-sm"><tspan style="fill:var(--fg);font-weight:500">기록 탭</tspan> · 이번 주 · 1년 잔디</text>
 
-<!-- 3. 바깥 -->
-<div class="band" style="top:692px;height:250px"></div>
-<svg width="1600" height="1000" viewBox="0 0 1600 1000">
-<defs>
- <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#8a93a3"/></marker>
- <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#d0435b"/></marker>
-</defs>
-<g stroke="#8a93a3" stroke-width="1.8" fill="none" marker-end="url(#a)" marker-start="url(#a)">
- <!-- 화면 ↔ 서버 -->
- <path d="M343 405V460"/><path d="M609 405V460"/><path d="M867 405V460"/>
- <path d="M1485 405V460"/>
- <!-- 서버 ↔ 바깥 -->
- <path d="M343 589V712"/><path d="M609 589V712"/>
- <path d="M867 589V712"/>
- <path d="M1225 652V712"/>
- <!-- 실습 서버 → AI (직접 부름) -->
- <path d="M750 769H736" marker-start="none"/>
-</g>
-<g stroke="#8a93a3" stroke-width="1.8" fill="none" marker-end="url(#a)">
- <path d="M1155 405V460"/>
- <path d="M1290 652 C1290 690 700 690 690 712" stroke-dasharray="5 4"/>
-</g>
-<!-- 같은 틀 두 얼굴 -->
-<path d="M1000 210H1028" stroke="#d0435b" stroke-width="2" stroke-dasharray="4 3" fill="none" marker-end="url(#r)" marker-start="url(#r)"/>
-<!-- 갈래 → 기억 저장소 -->
-<g stroke="#d0435b" stroke-width="2.4" fill="none">
- <path d="M343 586V620H1030" marker-end="url(#r)"/><path d="M609 586V620"/><path d="M867 586V620"/>
-</g>
-<!-- 복습 고리: 기억 저장소 → 오늘 → 공부 -->
-<path d="M1356 460V406" stroke="#d0435b" stroke-width="2.4" fill="none" marker-end="url(#r)"/>
-<path d="M1356 140V112H600V138" stroke="#d0435b" stroke-width="2.4" fill="none" marker-end="url(#r)"/>
-<text x="1346" y="105" font-size="13" fill="#d0435b" font-weight="700" text-anchor="end">복습 차례가 된 기억을 오늘 탭이 다시 묻고, 틀리면 다시 공부로</text>
-<text x="1364" y="438" font-size="12" fill="#d0435b" font-weight="700">복습 차례</text>
-<text x="1015" y="232" font-size="11" fill="#d0435b" font-weight="700" text-anchor="middle">같은</text><text x="1015" y="246" font-size="11" fill="#d0435b" font-weight="700" text-anchor="middle">틀</text>
-</svg>
-<div class="blabel" style="top:706px"><b>③ 바깥과<br>켜고 끄기</b></div>
-<div class="box amber" style="left:218px;top:714px;width:516px;height:110px"><h3>AI · ChatGPT 로그인</h3><p>기본 gpt-6.1-terra · low. 만들고 돕기만 한다:<br>카드·강의·문제 만들기, 튜터·풀이 총정리, 기억 묻기, 같은 기억 판정<br>실습 튜터·판정·목표 정리는 4100이 직접 부른다</p></div>
-<div class="box violet" style="left:750px;top:714px;width:234px;height:110px;background:#fff"><h3>실습 서버 :4100</h3><p>목표 · 튜터(OpenCode) · 판정<br>VS Code 확장 · 앱 안 편집기 4103<br>실습 기록은 이 PC에만</p></div>
-<div class="box" style="left:1030px;top:714px;width:510px;height:110px"><h3>데이터 폴더 RecallerData</h3><p>자료 · 기억 · 기록이 파일로 남는 곳 (비공개 git 저장소)<br>켤 때 받고, 끌 때 올린다 → 다른 PC에서도 이어서</p></div>
-<div class="box" style="left:218px;top:840px;width:1322px;height:84px;background:#f2f3f6;border-style:dashed"><h3 style="font-size:16px">Recaller 앱 창 (Electron) — 켜고 끄는 유일한 길</h3>
-  <p>켤 때: 코드 받기 → 데이터 받기 → 앱 서버 3000 → 실습 서버 4100 → 공부 화면 &nbsp;·&nbsp; 끌 때: 화면 저장 → 서버 끄기 → 데이터 올리기</p></div>
-
-
-
-<div class="foot">AI는 만들고 돕기만 하고, 채점 · 기록 · 복습 날짜는 코드가 정한다. &nbsp; 회색 화살표 = 부르고 받기 · 빨강 = 기억으로 쌓이고 다시 묻는 고리</div>
+      <!-- 바탕 -->
+      <text x="40" y="572" class="t-sm">바탕 (내 PC에서 돈다)</text>
+      <rect class="ai" x="30" y="586" width="300" height="82" rx="12"/>
+      <text x="48" y="616" class="t-md">AI · ChatGPT 로그인</text>
+      <text x="48" y="640" class="t-sm">기본 gpt-6.1-terra · low</text>
+      <text x="48" y="658" class="t-sm">만들고 돕기만 한다</text>
+      <rect class="box" x="346" y="586" width="296" height="82" rx="12"/>
+      <text x="364" y="616" class="t-md">앱 서버 127.0.0.1:3000</text>
+      <text x="364" y="640" class="t-sm">화면 + 엔진 · 채점 · 기억 저장소</text>
+      <text x="364" y="658" class="t-sm">(Next.js)</text>
+      <rect class="box" x="658" y="586" width="272" height="82" rx="12"/>
+      <text x="676" y="616" class="t-md">데이터 폴더 RecallerData</text>
+      <text x="676" y="640" class="t-sm">자료 · 기억 · 기록 (비공개 git)</text>
+      <text x="676" y="658" class="t-sm">켤 때 받고 끌 때 올림</text>
+      <rect class="box dash" x="946" y="586" width="206" height="82" rx="12"/>
+      <text x="964" y="616" class="t-md">Recaller 앱 창</text>
+      <text x="964" y="640" class="t-sm">Electron · 켜고 끄는</text>
+      <text x="964" y="658" class="t-sm">유일한 길</text>
+      <text x="30" y="716" class="t-sm">켤 때: 코드 받기 → 데이터 받기 → 앱 서버 3000 → 실습 서버 4100 → 공부 화면 · 끌 때: 화면 저장 → 서버 끄기 → 데이터 올리기</text>
+    </svg>
+  </div>
+  <p class="hint"><span><b>회색 화살표</b> = 흐름</span><span><b>빨간 선</b> = 복습 고리</span><span>AI는 만들고 돕기만 하고, 채점 · 기록 · 복습 날짜는 코드가 정한다.</span></p>
 </div>
 </body></html>
