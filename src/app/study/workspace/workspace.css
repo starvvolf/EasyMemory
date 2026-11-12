@@ -1512,9 +1512,8 @@ html .dejipgi[data-view="code"] .wrap{max-width:none}
 .dejipgi .mm3-ans>.ws-rich p:last-child{margin-bottom:0}
 
 /* 11/12 사용자 UI 점검 (A) */
-/* 14번: 오늘 · 공부 · 기억 · 기록이 같은 너비 — 탭을 바꿔도 머리(로고 · 탭)가 옆으로 움직이지 않는다 */
-.dejipgi[data-view="home"] .wrap,.dejipgi[data-view="practice"] .wrap,.dejipgi[data-view="start"] .wrap,.dejipgi[data-view="create"] .wrap,.dejipgi[data-view="web"] .wrap,
-.dejipgi[data-view="knowledge"] .wrap,.dejipgi[data-view="plan"] .wrap,.dejipgi[data-view="summary"] .wrap,.dejipgi[data-view="records"] .wrap{max-width:1180px}
+/* 자료 · 알고리즘 · 실습 단추 줄은 화면마다 넓이가 달라도(알고리즘은 화면 끝까지) 늘 같은 자리 (11/12 사용자 "가로로 이리 갔다 저리 갔다") */
+.dejipgi .study-nav{width:min(860px,100%);margin-inline:auto;box-sizing:border-box}
 /* 지도 탭을 바꿀 때 스크롤 막대 때문에 몇 px씩 흔들리지 않게, 구조 탭(넓은 그림)도 머리 · 탭 자리는 그대로 */
 .mm2-overlay{scrollbar-gutter:stable}
 .dejipgi .mm3.mm3-wide>.mm2-head{width:min(900px,100%);align-self:center}
