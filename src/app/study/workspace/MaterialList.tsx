@@ -145,7 +145,7 @@ function StudyFace({ top, pickedKey, onPick, deckOf, pendingOf, api }: { top: En
   // 예전 문제 묶음(지도 없음)
   if (e.key.startsWith("deck:")) {
     const d = deckOf(e.key.slice(5)) ?? deckOf(bareId(e.key.slice(5)));
-    return <><Head icon="🗂" title={e.title} sub="예전 방식으로 만든 문제 묶음" />{d ? <DeckActions d={d} api={api} /> : null}</>;
+    return <><Head icon="🗂" title={e.title} sub="예전 방식으로 만든 문제 묶음" />{d ? <><div className="row sf-acts"><DeckButtons d={d} api={api} primary /></div><DeckMeta d={d} /></> : null}</>;
   }
   const genId = e.row.genId ?? "";
   const d = deckOf(genId), p = pendingOf(genId);
@@ -156,8 +156,9 @@ function StudyFace({ top, pickedKey, onPick, deckOf, pendingOf, api }: { top: En
     </Head>
     <div className="row sf-acts">
       <button className="btn primary" onClick={openMap}>자료 지도 열기</button>
-      {d ? <DeckActions d={d} api={api} inline /> : p?.note.canQuestions ? <button className="btn" disabled={p.note.making} onClick={() => api.makeQuestions(p.id)}>{p.note.making ? "시작하는 중…" : "문제 만들기"}</button> : null}
+      {d ? <DeckButtons d={d} api={api} /> : p?.note.canQuestions ? <button className="btn" disabled={p.note.making} onClick={() => api.makeQuestions(p.id)}>{p.note.making ? "시작하는 중…" : "문제 만들기"}</button> : null}
     </div>
+    {d ? <DeckMeta d={d} /> : null}
     {p && !(p.status === "cards" && p.note.canQuestions) ? <PendingNote p={p} api={api} /> : null}
     {d?.growing ? <PendingNote p={d.growing} api={api} /> : null}
     {p && !d && p.status === "cards" ? <p className="small muted">기억 정리는 끝났어요. 문제는 [문제 만들기]로 만들거나, 지도에서 기억마다 플래시카드로 바로 확인할 수 있어요.</p> : null}
@@ -166,26 +167,26 @@ function StudyFace({ top, pickedKey, onPick, deckOf, pendingOf, api }: { top: En
 }
 const bareId = (id: string) => id.replace(/^pending:/, "");
 
-function DeckActions({ d, api, inline }: { d: DeckV; api: Api; inline?: boolean }) {
-  const c = d.counts, pct = (n: number) => (c.total ? (n / c.total * 100) : 0) + "%";
-  const btns = <>
-    <button className={inline ? "btn" : "btn primary"} onClick={() => api.practice(d.id)}>{c.due || c.fresh ? `문제 풀기 (${Math.min(c.total, c.due + Math.min(c.fresh, 10))})` : "더 풀기"}</button>
-    <button className="btn ghost small" onClick={() => api.records(d.id)}>푼 기록</button>
-  </>;
+function DeckButtons({ d, api, primary }: { d: DeckV; api: Api; primary?: boolean }) {
+  const c = d.counts;
   return <>
-    {inline ? btns : <div className="row sf-acts">{btns}</div>}
-    <div className="sf-deck">
-      <div className="meta">
-        <span className="num">문제 {d.items}</span>
-        {c.due ? <span className="chip bad num">다시 풀 차례 {c.due}</span> : null}
-        {c.fresh ? <span className="chip num">안 푼 문제 {c.fresh}</span> : null}
-        {d.skipped.length ? <span className="chip help num" title={d.skipped.join("\n")}>빠진 문항 {d.skipped.length}</span> : null}
-      </div>
-      <div className="bar" aria-hidden="true">
-        <i className="g" style={{ width: pct(c.good) }} /><i className="r" style={{ width: pct(c.review) }} /><i className="h" style={{ width: pct(c.help + c.read) }} />
-      </div>
-    </div>
+    <button className={primary ? "btn primary" : "btn"} onClick={() => api.practice(d.id)}>{c.due || c.fresh ? `문제 풀기 (${Math.min(c.total, c.due + Math.min(c.fresh, 10))})` : "더 풀기"}</button>
+    <button className="btn" onClick={() => api.records(d.id)}>푼 기록</button>
   </>;
+}
+function DeckMeta({ d }: { d: DeckV }) {
+  const c = d.counts, pct = (n: number) => (c.total ? (n / c.total * 100) : 0) + "%";
+  return <div className="sf-deck">
+    <div className="meta">
+      <span className="num">문제 {d.items}</span>
+      {c.due ? <span className="chip bad num">다시 풀 차례 {c.due}</span> : null}
+      {c.fresh ? <span className="chip num">안 푼 문제 {c.fresh}</span> : null}
+      {d.skipped.length ? <span className="chip help num" title={d.skipped.join("\n")}>빠진 문항 {d.skipped.length}</span> : null}
+    </div>
+    <div className="bar" aria-hidden="true">
+      <i className="g" style={{ width: pct(c.good) }} /><i className="r" style={{ width: pct(c.review) }} /><i className="h" style={{ width: pct(c.help + c.read) }} />
+    </div>
+  </div>;
 }
 
 /* 이 자료에서 배울 차례: 줄기 영역마다 기억 수 · 몰랐던 것 · 복습 차례. 누르면 자료 지도 (기억 카드 자체는 기억 탭에서). */
