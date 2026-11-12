@@ -49,6 +49,8 @@ export default function Library() {
     } catch (e) { setError(errorText(e)); }
   }, []);
   useEffect(() => later(() => void load()), [load]);
+  // 기억 탭이 다시 보일 때 새로(11/13: 방금 푼 문제 · 새 실습 정리가 새로고침 전까지 안 보였다)
+  useEffect(() => { const on = (e: Event) => { if ((e as CustomEvent<string>).detail === "knowledge") void load(); }; window.addEventListener("recaller:shown", on); return () => window.removeEventListener("recaller:shown", on); }, [load]);
   // 다른 화면에서 "이 기억 보기"로 왔을 때(go("knowledge", { id }))
   useEffect(() => {
     const open = (id?: string) => { if (id) { setItemId(id); handoff.knowledgeId = undefined; } };

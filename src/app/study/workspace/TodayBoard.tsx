@@ -26,6 +26,7 @@ export default function TodayBoard() {
     if (w.status === "fulfilled") setStudied(w.value.studied ?? []);
   }, []);
   useEffect(() => later(() => void load()), [load]);
+  useEffect(() => { const on = (e: Event) => { if ((e as CustomEvent<string>).detail === "home") void load(); }; window.addEventListener("recaller:shown", on); return () => window.removeEventListener("recaller:shown", on); }, [load]);
 
   // 이어서 하기 (11/9 사용자 "자료/알고리즘/실습 세 가지 탭에서 각각 하나씩"): 갈래마다 가장 최근에 한 것 하나.
   const newest = (xs: Array<Last | null>) => xs.filter((x): x is Last => !!x).sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;

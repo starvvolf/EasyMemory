@@ -64,6 +64,9 @@ export default function StudyApp({ ui, api }: { ui: Bridge; api: ShellApi }) {
   const wanted: Keep | null = (KEEP as readonly string[]).includes(s.view) && !(s.view === "knowledge" && s.legacy) ? (s.view as Keep) : null;
   if (wanted && !seen.has(wanted)) setSeen(new Set([...seen, wanted]));
   const shown = (k: Keep) => (k === "web" ? s.view === "web" : s.view === k && !(k === "knowledge" && s.legacy));
+  // 11/13 사용자 "기억이랑 공부 합쳐서 이상하게 움직이는 거": 남겨 둔 화면은 처음 한 번만 불러와서, 다른 탭에서 한 일(방금 푼 문제 등)이
+  // 다시 와도 안 보였다. 화면이 다시 보일 때마다 알린다(Library · TodayBoard가 듣고 다시 불러옴).
+  useEffect(() => { window.dispatchEvent(new CustomEvent("recaller:shown", { detail: s.view })); }, [s.view]);
   const keep = (k: Keep, node: ReactNode) => seen.has(k) || wanted === k ? <div key={k} className={`view-host view-${k}`} hidden={!shown(k)}>{node}</div> : null;
 
   const studyNav = s.view === "code" || s.view === "project" || s.view === "web" || s.view === "start" || (s.view === "practice" && !s.session);
