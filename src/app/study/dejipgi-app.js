@@ -531,7 +531,7 @@ on(window, "recaller:go", (e) => {
 on(window, "recaller:map-open", (e) => {
   let id = String((e.detail && e.detail.genId) || "");
   // 11/12: 기록에 자료 id가 없는 예전 기록(제목만)은 제목으로 찾는다(오늘 › 이어서 하기).
-  if (!id && e.detail && e.detail.title){ const t = String(e.detail.title); const hit = Object.values(S.decks).filter(x => genDeck(x.id) && (displayTitle(x) === t || x.title === t)).sort((a, b) => (b.madeAt || 0) - (a.madeAt || 0))[0]; if (hit) id = String(hit.id).replace(/^pending:/, ""); }
+  if (!id && e.detail && e.detail.title){ const norm = (x) => looseText(String(x || "").replace(/\s*·\s*p\.[\d–-]+.*$/, "")); const t = norm(e.detail.title); const hit = Object.values(S.decks).filter(x => genDeck(x.id) && (norm(displayTitle(x)) === t || norm(x.title) === t)).sort((a, b) => (b.madeAt || 0) - (a.madeAt || 0))[0]; if (hit) id = String(hit.id).replace(/^pending:/, ""); }
   if (!id){ setView("practice"); return; }
   const d = S.decks[id] || S.decks["pending:" + id];
   const page = Number(e.detail && e.detail.page) || 0;
