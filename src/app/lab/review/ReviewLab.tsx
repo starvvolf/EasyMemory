@@ -3,6 +3,9 @@
 // 돌릴 때마다 AI 1번(데이터 폴더 code/tutor/review-lab.jsonl에 남음). 제품 총정리(풀이 노트)는 건드리지 않는다.
 import { useEffect, useMemo, useState } from "react";
 import "./review-lab.css";
+import "../../study/dejipgi.css";
+import "../../study/workspace/library.css";
+import { MdReviewView } from "../../study/workspace/ReviewView";
 
 type Weak = { size: "small" | "big"; title: string; state: string; lesson: string };
 type Review = { situation: string; solve: string; story: Array<{ text: string; weak?: Weak }>; next: string };
@@ -181,7 +184,7 @@ function RunCard({ r, total, picked, product, onPick, onUse }: { r: Run; total: 
         </div> : null}
       </li>)}</ol>
       {r.review.next ? <p className="next"><b>다음에 떠올릴 것</b> {r.review.next}</p> : null}
-    </div> : r.format === "text" && typeof r.raw === "string" ? <Md text={r.raw} /> : null}
+    </div> : r.format === "text" && typeof r.raw === "string" ? <Pretty text={r.raw} /> : null}
     <div className="foot">
       <button className="link" onClick={() => setSys((x) => !x)}>{sys ? "지시문 접기" : "이때 지시문"}</button>
       <button className="link" onClick={() => setRaw((x) => !x)}>{raw ? "원본 접기" : r.format === "text" ? "AI 원본(글)" : "AI 원본(JSON)"}</button>
@@ -305,7 +308,7 @@ function HistCard({ r, ver, prev, title }: { r: CallFull; ver: number; prev: str
     </header>
     {sys === "diff" ? <Diff a={prev} b={r.system} /> : sys === "all" ? <pre className="raw">{r.system}</pre> : null}
     {user ? <pre className="raw">{r.user}</pre> : null}
-    {open ? (json ? (parsed ? <div className="jv"><JsonView v={parsed} /></div> : <pre className="raw">{reply}</pre>) : <Md text={reply} />) : null}
+    {open ? (json ? (parsed ? <div className="jv"><JsonView v={parsed} /></div> : <pre className="raw">{reply}</pre>) : <Pretty text={reply} />) : null}
   </article>;
 }
 /** 줄 단위 차이: 앞 판에 없던 줄은 +, 사라진 줄은 −. (순서는 새 판 기준) */
@@ -322,4 +325,13 @@ function JsonView({ v, name }: { v: unknown; name?: string }) {
   if (typeof v === "number" || typeof v === "boolean" || v == null) return <div className="jv-s">{name ? <b className="jv-k">{name}</b> : null}<code>{String(v)}</code></div>;
   if (Array.isArray(v)) return <div className="jv-a">{name ? <b className="jv-k">{name} ({v.length})</b> : null}<ol>{v.map((x, i) => <li key={i}><JsonView v={x} /></li>)}</ol></div>;
   return <div className="jv-o">{name ? <b className="jv-k">{name}</b> : null}{Object.entries(v as Record<string, unknown>).map(([key, x]) => <JsonView key={key} v={x} name={key} />)}</div>;
+}
+/** 글 결과를 풀이 노트와 같은 모양으로(11/12 사용자 "2606 바이러스에 있는 것처럼 이쁘게 정리된 형식으로"). 리뷰어 틀이 아니면 그냥 글로. */
+function Pretty({ text }: { text: string }) {
+  const [raw, setRaw] = useState(false);
+  if (!/^#\s+학습 총평/m.test(text)) return <Md text={text} />;
+  return <div className="rlab-prettywrap">
+    <div className="rlab-quick"><button className={raw ? "" : "on"} onClick={() => setRaw(false)}>풀이 노트 모양</button><button className={raw ? "on" : ""} onClick={() => setRaw(true)}>글 그대로</button></div>
+    {raw ? <Md text={text} /> : <div className="dejipgi rlab-pretty"><section className="rp-review2"><MdReviewView md={text} /></section></div>}
+  </div>;
 }
