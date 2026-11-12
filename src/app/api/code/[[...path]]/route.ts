@@ -8,6 +8,7 @@ import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing
 import { endAttempt, ensureProblemKnowledge, idleAttempts, listProblemsWithKnowledge, noteAnswer, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
 import { closeSheet, distillLater, readLabRuns, readSheets, REVIEW_SYSTEM, reviewFacts, reviewFor, reviewMaterial, reviewUser, runReviewLab, waitSheet } from "@/lib/code/tutor/sheets";
 import { costOf } from "@/lib/ai/prices";
+import { REVIEW_PRESETS } from "@/lib/code/tutor/review-presets";
 import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
 import { keepTalk } from "@/lib/code/tutor/talk";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
@@ -65,7 +66,7 @@ async function inner(request: Request, context: RouteContext) {
       if (!p[1] && m === "GET") {
         const ids = [...new Set((await readSheets()).filter((x) => x.asked > 0 || x.submits > 0).map((x) => x.problemId))];
         const list = await Promise.all(ids.map(async (id) => { const mat = await reviewMaterial(id).catch(() => null); return mat ? { id, title: mat.meta.title, talks: mat.talk.length, at: mat.sheet.at } : null; }));
-        return json({ problems: list.filter(Boolean).sort((a, b) => b!.at.localeCompare(a!.at)), system: REVIEW_SYSTEM, models: ["gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"], efforts: ["low", "medium", "high"] });
+        return json({ problems: list.filter(Boolean).sort((a, b) => b!.at.localeCompare(a!.at)), system: REVIEW_SYSTEM, presets: REVIEW_PRESETS, models: ["gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"], efforts: ["low", "medium", "high"] });
       }
       const id = pid.parse(p[1]);
       if (p[2] === "runs" && m === "GET") return json({ runs: (await readLabRuns(id)).map((r) => ({ ...r, cost: cost(r) })) });
@@ -78,6 +79,7 @@ async function inner(request: Request, context: RouteContext) {
       }
       if (!p[2] && m === "POST") {
         const b = await body(z.object({ system: z.string().min(20).max(20_000), model: z.string().max(40), effort: z.enum(["low", "medium", "high"]), note: z.string().max(200).optional(),
+          format: z.enum(["json", "text"]).optional(), textFormat: z.string().max(10_000).optional(),
           range: z.object({ from: z.number().int().min(0), to: z.number().int().min(0) }).optional() }));
         const run = await runReviewLab({ problemId: id, ...b });
         return json({ run: { ...run, cost: cost(run) } });
