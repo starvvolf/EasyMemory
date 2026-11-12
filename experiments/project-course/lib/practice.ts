@@ -108,7 +108,8 @@ export async function checkOnSave(runId: string, saved: string) {
   savedAt.set(key, Date.now());
   await (await import("./timeline.ts")).beginStep(runId, { kind: "save", label: `저장: ${saved}` });
   const say = `[저장함] ${saved}을(를) 저장했어요. 작업 폴더에서 이 파일을 읽고, 지금 목표 기준으로 맞게 했는지 짧게 확인해 주세요. 틀린 곳은 답을 바로 주지 말고 어디를 보면 되는지 알려 주세요.`;
-  if (run.codexId) await codexAsk(runId, run.codexId, sysSay("저장함", say)); else await chatAsk(runId, run.chatId!, sysSay("저장함", say));
+  // 저장 확인은 튜터가 그 파일을 직접 읽으므로 바뀐 코드로 또 붙이지 않는다(본 것으로만 친다)
+  if (run.codexId) await codexAsk(runId, run.codexId, sysSay("저장함", say), saved); else await chatAsk(runId, run.chatId!, sysSay("저장함", say), saved);
 }
 async function logSaved(runId: string, run: { codexId?: string; workspaces: Record<string, string> }, saved: string) {
   const ws = run.codexId ? (await (await import("./codex-chat.ts")).view(run.codexId)).workspace : Object.values(run.workspaces)[0];
@@ -119,9 +120,9 @@ async function logSaved(runId: string, run: { codexId?: string; workspaces: Reco
   if (text === null) return;
   await (await import("./goal-record.ts")).logSave(runId, path.relative(root, abs).split(path.sep).join("/"), text);
 }
-async function codexAsk(runId: string, codexId: string, text: string) {
+async function codexAsk(runId: string, codexId: string, text: string, skip?: string) {
   const cx = await import("./codex-chat.ts");
-  await cx.ask(codexId, text, { context: async () => (await import("./goals.ts")).goalContext(runId), noLearned: true });
+  await cx.ask(codexId, text, { context: () => turnContext(runId, skip), noLearned: true });
   // Codex 대화는 파일에 바로 쓴다 → 답하는 동안 0.45초마다 화면에 알리고, 끝나면 한 번 더(배운 것 뽑기 뒤에도 한 번)
   clearInterval(chatPolls.get(runId));
   chatPolls.set(runId, setInterval(async () => {
@@ -349,13 +350,19 @@ export function freshSelection(runId: string, state = bridgeState(runId)) {
   sentSelection.set(runId, key);
   return `[VS Code에서 고른 코드 ${state?.file ?? ""} ${sel.from}~${sel.to}줄]\n${sel.text}\n\n`;
 }
-async function chatAsk(runId: string, chatId: string, text: string) {
+/** 매 차례 맥락: 학습 목표 + 지난번 뒤 바뀐 코드(lib/changes.ts, 바뀐 게 없으면 안 붙음) */
+async function turnContext(runId: string, skip?: string) {
+  const g = await (await import("./goals.ts")).goalContext(runId);
+  const ch = await (await import("./changes.ts")).changesForTurn(runId, bridgeState(runId), skip).catch((e) => { console.error("바뀐 코드:", e); return ""; });
+  return ch ? `${g}\n\n${ch}` : g;
+}
+async function chatAsk(runId: string, chatId: string, text: string, skip?: string) {
   const ac = await import("./agent-chat.ts");
   const G = await import("./goals.ts");
   // 학습 목표(11/4): 매 차례 맥락 + 목표 도구. 실험판의 목표 · 초점 도구(adjust_learning · get_learning_state)는 숨겨 두 체계가 섞이지 않게
   // 파일 고치기 허락: 대화에서 정했으면 그대로, 아니면 다이얼이 빨리 만들기일 때(agent-chat askChat과 같은 규칙)
   const editAllowed = async () => { const o = (await ac.chatOf(chatId)).edit; return o === "allow" || (o !== "deny" && (await G.goalsOf(runId)).help === "fast"); };
-  const ext = { context: () => G.goalContext(runId), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: async (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner, { edit: await editAllowed() }), onTool: () => notifyLesson(runId),
+  const ext = { context: () => turnContext(runId, skip), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: async (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner, { edit: await editAllowed() }), onTool: () => notifyLesson(runId),
     // 11/12 실습 시뮬: "빨리 만들기"를 골랐는데 파일 고치기 도구가 숨겨져 튜터가 셸로 파일을 쓰다 잘림 → 다이얼이 빨리면 허락으로 본다(대화에서 "안 돼"로 막았으면 그대로)
     edit: async () => (await G.goalsOf(runId)).help === "fast" };
   const job = ac.askChat(chatId, text, undefined, ext).catch(() => {}).finally(async () => {
