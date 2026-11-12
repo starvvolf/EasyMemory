@@ -1324,6 +1324,7 @@ export function MemoryShelf({ genId, title }: { genId: string; title: string }) 
   const [flash, setFlash] = useState<Card[] | null>(null);
   const [reload, setReload] = useState(0);
   const [openSolid, setOpenSolid] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   useEffect(() => {
     let alive = true;
     call<{ map: MatMap }>(`/api/study-map/${genId}`).then(async (r) => {
@@ -1355,9 +1356,19 @@ export function MemoryShelf({ genId, title }: { genId: string; title: string }) 
       <span><b>{all.length}</b>기억</span>
       {stats ? <><span className="good"><b>{all.filter(lastOk).length}</b>지금 앎</span><span className="bad"><b>{weak.length}</b>약함</span></> : null}
       <span className="cs-gap" />
-      {weak.length ? <button className="btn small" onClick={() => setFlash(weak)}>약한 것만 {weak.length}장</button> : null}
-      <button className="btn small primary" onClick={() => setFlash(all)}>플래시카드로 풀기 ({all.length})</button>
+      <button className="btn small primary" aria-expanded={choosing} onClick={() => setChoosing(!choosing)}>플래시카드로 풀기</button>
     </div>
+    {/* 풀 범위 고르기(11/13 사용자 "풀기 누르면 옵션을 제공") */}
+    {choosing ? <div className="st-pick">
+      <p className="st-pk">무엇을 풀까요?</p>
+      <div className="st-opts">
+        {([["전체", all], ["약한 것만", weak], ...GROUPS.filter(([g]) => g !== "solid").map(([g, label]) => [label, all.filter((c) => groupOf(c) === g)] as const)] as Array<readonly [string, Card[]]>)
+          .map(([label, xs]) => <button key={label} className="st-opt" disabled={!xs.length} onClick={() => { setChoosing(false); setFlash([...xs]); }}><b>{label}</b><span className="num">{xs.length}장</span></button>)}
+      </div>
+      <p className="st-pk">영역 하나만</p>
+      <div className="st-opts">{sections.map((s, i) => <button key={s.id} className="st-opt" onClick={() => { setChoosing(false); setFlash(s.cards); }}>
+        <b><span className="mm3-num">{i + 1}</span><Rich text={s.title} /></b><span className="num">{s.cards.length}장</span></button>)}</div>
+    </div> : null}
     {/* 돌려 본 기록: 회차(20분 안에 이어서 본 묶음)마다 알았어요 비율 */}
     <section className="st-box">
       <header className="st-h"><b>돌려 본 기록</b><span className="small muted">{rounds.length ? `${rounds.length}번 · 한 번에 이어 본 묶음마다 알았어요 비율` : ""}</span></header>
@@ -1380,8 +1391,7 @@ export function MemoryShelf({ genId, title }: { genId: string; title: string }) 
       const folded = g === "solid" && !openSolid;
       return <section key={g} className={`shelf-area st-group ${g}`}>
         <header className="shelf-ah"><b>{label}</b><span className="small muted">{xs.length}장 · {why}</span><span className="cs-gap" />
-          {g === "solid" ? <button className="btn ghost small" onClick={() => setOpenSolid(!openSolid)}>{openSolid ? "접기" : "펼치기"}</button>
-            : <button className="btn ghost small" onClick={() => setFlash(xs)}>이것만 풀기</button>}</header>
+          {g === "solid" ? <button className="btn ghost small" onClick={() => setOpenSolid(!openSolid)}>{openSolid ? "접기" : "펼치기"}</button> : null}</header>
         {folded ? null : <ul className="shelf-list">{xs.map((c) => <li key={c.id} id={`shelf-${c.id}`}><ShelfCard genId={genId} c={c} onPage={onPage} all={all} onCard={jump} stat={st(c)} /></li>)}</ul>}
       </section>;
     })}

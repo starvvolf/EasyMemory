@@ -186,8 +186,8 @@ function EntryView({ e: top, byId, onItem }: { e: Entry; byId: Map<string, ItemL
     <Head icon={e.icon} title={e.title} sub={`${e.pages ?? "?"}쪽 · ${day(e.lastAt)}`}>
       {top.older?.length ? <select className="lib-runs" value={e.key} onChange={(x) => setPickKey(x.target.value)} aria-label="만든 때 고르기">
         {[top, ...top.older].map((x, i) => <option key={x.key} value={x.key}>{i ? "예전 · " : "최신 · "}{day(x.lastAt)} {x.title === top.title ? "" : x.title}</option>)}</select> : null}
-      <button className="btn small" onClick={() => window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: e.row!.genId } }))}>자료 지도 열기 ↗</button>
-      <button className="btn small primary" onClick={() => { shelfSel.set(e.key); go("practice"); }}>← 공부하러 가기</button>
+      {/* 11/13 사용자: 자료 지도는 공부하러 가서 연다 — 단추는 하나만 */}
+      <button className="btn small" onClick={() => { shelfSel.set(e.key); go("practice"); }}>공부하러 가기</button>
     </Head>
     <MemoryShelf genId={e.row.genId} title={e.title} />
   </>;
