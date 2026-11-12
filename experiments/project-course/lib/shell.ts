@@ -161,12 +161,30 @@ const remember = async (runId: string, ran: Ran) => {
 };
 
 /** 모델이 부른 run_command */
-export async function runCommandTool(runId: string, ws: string | undefined, input: Record<string, unknown>): Promise<string> {
+/** 명령으로 파일 내용을 쓰는가(11/12 실습 시뮬: 파일 고치기 도구가 없던 튜터가 셸로 파일을 쓰다 긴 명령이 잘림).
+ * 글을 직접 돌려 쓰기(echo … > · cat > · here-string) · PowerShell Set-Content · Add-Content · Out-File · [IO.File]::Write… · tee · sed -i · node/python 한 줄로 파일 쓰기 */
+export function writesFile(command: string) {
+  const c = command.replace(/>\s*(nul|NUL|\$null|\/dev\/null)\b/g, "").replace(/2>&1/g, "");
+  // > 돌리기는 글을 직접 써 넣는 것(echo · cat · printf · type · Write-Output · 문자열 · here-string)만. 프로그램 출력 저장(node a.js > out.txt)은 예전처럼 묻는다
+  return /(^|[|;&]\s*)(echo|printf|cat|type|Write-Output|@["']|["'])[^|;&]*?(^|[^0-9&=>-])>{1,2}(?!&)\s*\S/i.test(c.replace(/"[^"]*"|'[^']*'/g, '""').replace(/^\s+/, ""))
+    || /\b(Set-Content|Add-Content|Out-File)\b/i.test(c)
+    || /\[(System\.)?IO\.File\]::(Write|Append)/i.test(c)
+    || /(^|[|;&]\s*)tee\b/.test(c) || /\bsed\s+(-\w*\s+)*-i\b/.test(c)
+    || /\bwriteFile(Sync)?\s*\(|\bappendFile(Sync)?\s*\(|\bopen\s*\([^)]*['"][wa]\+?['"]|\.write_text\s*\(/.test(c);
+}
+/** 쓰기 명령을 막을 때 튜터에게 돌려줄 말. edit: 이 대화에서 파일 고치기 도구를 쓸 수 있나(모르면 undefined) */
+export const WRITE_BLOCKED = (edit?: boolean) => edit === true
+  ? "명령으로는 파일 내용을 쓰지 않아요(긴 명령은 잘려요). 파일은 파일 고치기 도구(edit · write)로 만들고 고친다."
+  : edit === false
+    ? "이 대화는 파일 고치기를 허락받지 않아 명령으로도 파일을 쓸 수 없어요. 코드를 채팅에 보여 주고 학습자가 직접 넣게 한다. 학습자가 대신 써 주길 바라면 \"파일 고치기 허락을 켜면 바로 써 드릴 수 있어요\"라고 한 줄로 알린다."
+    : "명령으로는 파일 내용을 쓰지 않아요. 파일 고치기가 허락돼 있으면 파일 고치기 도구(edit · write · write_workspace_file)로 쓰고, 아니면 코드를 채팅에 보여 주고 학습자가 직접 넣게 한다.";
+export async function runCommandTool(runId: string, ws: string | undefined, input: Record<string, unknown>, opts: { edit?: boolean } = {}): Promise<string> {
   const command = String(input.command ?? "").trim().slice(0, 2000), why = String(input.why ?? "").trim().slice(0, 300);
   if (!ws) return "작업 폴더가 없어 명령을 돌릴 수 없어요.";
   if (!command) return "command가 비었어요.";
   const s = await shellOf(runId);
   if (s.pending) return `학습자가 아직 \`${s.pending.command}\` 실행 여부를 고르지 않았어요. 고를 때까지 기다린다.`;
+  if (writesFile(command)) return WRITE_BLOCKED(opts.edit);
   const c = classify(command, ws);
   if (c.kind === "ask") {
     await update<ShellState>(file(runId), empty(), (st) => { st.pending = { id: Math.random().toString(36).slice(2, 10), command, why, reason: c.reason, at: new Date().toISOString(), ...(input.background === true ? { background: true } : {}) }; });

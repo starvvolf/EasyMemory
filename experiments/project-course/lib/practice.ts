@@ -353,7 +353,9 @@ async function chatAsk(runId: string, chatId: string, text: string) {
   const ac = await import("./agent-chat.ts");
   const G = await import("./goals.ts");
   // 학습 목표(11/4): 매 차례 맥락 + 목표 도구. 실험판의 목표 · 초점 도구(adjust_learning · get_learning_state)는 숨겨 두 체계가 섞이지 않게
-  const ext = { context: () => G.goalContext(runId), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner), onTool: () => notifyLesson(runId),
+  // 파일 고치기 허락: 대화에서 정했으면 그대로, 아니면 다이얼이 빨리 만들기일 때(agent-chat askChat과 같은 규칙)
+  const editAllowed = async () => { const o = (await ac.chatOf(chatId)).edit; return o === "allow" || (o !== "deny" && (await G.goalsOf(runId)).help === "fast"); };
+  const ext = { context: () => G.goalContext(runId), hide: ["adjust_learning", "get_learning_state", "get_course_material", "record_observation"], tool: async (name: string, input: Record<string, unknown>, learner: string[]) => G.runGoalTool(runId, name, input, learner, { edit: await editAllowed() }), onTool: () => notifyLesson(runId),
     // 11/12 실습 시뮬: "빨리 만들기"를 골랐는데 파일 고치기 도구가 숨겨져 튜터가 셸로 파일을 쓰다 잘림 → 다이얼이 빨리면 허락으로 본다(대화에서 "안 돼"로 막았으면 그대로)
     edit: async () => (await G.goalsOf(runId)).help === "fast" };
   const job = ac.askChat(chatId, text, undefined, ext).catch(() => {}).finally(async () => {

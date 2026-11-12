@@ -151,12 +151,12 @@ export function prereqBrief(g: Goals) {
 const prereqsOf = (v: unknown): Prereq[] => (Array.isArray(v) ? v : []).map((x: any) => ({ name: String(x?.name ?? "").trim().slice(0, 60), check: String(x?.check ?? "").trim().slice(0, 300) })).filter((x) => x.name).slice(0, 6);
 
 /** 모델이 부른 도구를 처리한다. learner: 이 대화의 학습자 말들(근거 대조용) */
-export async function runGoalTool(runId: string, name: string, input: Record<string, unknown>, learner: string[]): Promise<string> {
+export async function runGoalTool(runId: string, name: string, input: Record<string, unknown>, learner: string[], opts: { edit?: boolean } = {}): Promise<string> {
   if (name === BROWSE_TOOL.name) return (await import("./browse.ts")).lookPageTool(runId, input);
   if (name === HISTORY_TOOL.name) return (await import("./history.ts")).historyTool(input);
   if (name === CODE_TOOL.name) return (await import("./codenav.ts")).codeNavTool(runId, input);
   if (name === DEBUG_TOOL.name) return (await import("./codenav.ts")).debugPeekTool(runId, input);
-  if (name === SHELL_TOOL.name) { const sh = await import("./shell.ts"); const r = await sh.runCommandTool(runId, await runWorkspace(runId), input); return r; }
+  if (name === SHELL_TOOL.name) { const sh = await import("./shell.ts"); const r = await sh.runCommandTool(runId, await runWorkspace(runId), input, opts); return r; }
   const s = (v: unknown, n = 300) => String(v ?? "").trim().slice(0, n);
   let out = "";
   let prereqGap: { goal: { id: string; title: string }; name: string; quote: string } | null = null;

@@ -72,3 +72,13 @@ test("Windows 경로 오탐(11/12): / 로 시작하는 주소 조각 · 따옴�
     for (const c of ["type D:\\secret.txt", "type \\\\server\\share\\a.txt", "type \\Windows\\win.ini"]) assert.match(classify(c, w).reason ?? "", /작업 폴더 밖/, c);
   } finally { Object.defineProperty(process, "platform", was); }
 });
+
+test("명령으로 파일 쓰기(11/12): 묻지 않고 막고, 허락 여부에 맞는 길을 알린다", async () => {
+  const { writesFile, WRITE_BLOCKED } = await import("../lib/shell.ts");
+  for (const c of ["echo hi > a.txt", "cat >> b.txt", "Set-Content -Path A.java -Value 'class A {}'", "'x' | Out-File a.txt", "[IO.File]::WriteAllText('a.txt','x')", "echo x | tee a.txt", "sed -i 's/a/b/' a.txt", "node -e \"require('fs').writeFileSync('a.js','x')\"", "python -c \"open('a.py','w').write('x')\""]) assert.ok(writesFile(c), c);
+  for (const c of ["node a.js", "gradlew bootRun 2>&1", "dir > nul", "npm test", "node -e \"console.log(1 > 0)\"", "java -version", "curl http://localhost:8080/orders/1"]) assert.ok(!writesFile(c), c);
+  const ws = await mkdtemp(path.join(os.tmpdir(), "ws-"));
+  assert.equal(await runCommandTool("w1", ws, { command: "echo hi > a.txt" }, { edit: false }), WRITE_BLOCKED(false));
+  assert.match(await runCommandTool("w2", ws, { command: "echo hi > a.txt" }, { edit: true }), /edit · write/);
+  assert.equal((await shellOf("w1")).pending, null, "학습자에게 묻지도 않는다");
+});
