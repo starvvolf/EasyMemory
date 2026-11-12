@@ -6,7 +6,9 @@ import { languages, LANGS } from "@/lib/code/run";
 import { calibration } from "@/lib/code/calibrate";
 import { deleteProblem, findBySource, publicProblem, savePreparing, setPreparing, readDrafts, readProblem, readProblemMeta, readSubmissions, runCustom, saveDraft, warmTests } from "@/lib/code/problems";
 import { endAttempt, ensureProblemKnowledge, idleAttempts, listProblemsWithKnowledge, noteAnswer, recordAsked, recordHint, saveReview, submitAndRecord } from "@/lib/code/service";
-import { closeSheet, distillLater, reviewFacts, reviewFor, waitSheet } from "@/lib/code/tutor/sheets";
+import { closeSheet, distillLater, readLabRuns, readSheets, REVIEW_SYSTEM, reviewFacts, reviewFor, reviewMaterial, reviewUser, runReviewLab, waitSheet } from "@/lib/code/tutor/sheets";
+import { costOf } from "@/lib/ai/prices";
+import { isLocalExperimentRequest } from "@/lib/local-experiment-mode";
 import { keepTalk } from "@/lib/code/tutor/talk";
 import { checkUnderstand, COMPLEXITIES, complexityVerdict, psLab, quickCheck, readTrain, saveStep, setMode, sizeOf, STEPS, tryInputs } from "@/lib/code/train";
 import { counterexample, explainCode, explainError, hint, makeProblem, reviewApproach, solveCheck, trainAsk, trainCheck, trainReview, watchAdvice } from "@/lib/assist/code-ai";
@@ -56,6 +58,31 @@ async function inner(request: Request, context: RouteContext) {
     const json = (value: unknown) => NextResponse.json(value);
 
     if (p[0] === "lab" && m === "GET") return json(psLab());
+    // 총정리 실험실(11/12 사용자 "단위 작게 할 수 있게 해서 프롬프트랑 모델 조정하면서"): 로컬 실험 모드에서만. 제품 총정리에는 쓰지 않는다.
+    if (p[0] === "review-lab") {
+      if (!isLocalExperimentRequest(request)) return json({ error: "로컬 실험 모드에서만" });
+      const cost = (r: { model: string; tokens?: { in?: number; cached?: number; out?: number } }) => costOf(r.model, r.tokens ? { inputTokens: r.tokens.in, cachedInputTokens: r.tokens.cached, outputTokens: r.tokens.out } : undefined);
+      if (!p[1] && m === "GET") {
+        const ids = [...new Set((await readSheets()).filter((x) => x.asked > 0 || x.submits > 0).map((x) => x.problemId))];
+        const list = await Promise.all(ids.map(async (id) => { const mat = await reviewMaterial(id).catch(() => null); return mat ? { id, title: mat.meta.title, talks: mat.talk.length, at: mat.sheet.at } : null; }));
+        return json({ problems: list.filter(Boolean).sort((a, b) => b!.at.localeCompare(a!.at)), system: REVIEW_SYSTEM, models: ["gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"], efforts: ["low", "medium", "high"] });
+      }
+      const id = pid.parse(p[1]);
+      if (p[2] === "runs" && m === "GET") return json({ runs: (await readLabRuns(id)).map((r) => ({ ...r, cost: cost(r) })) });
+      if (!p[2] && m === "GET") {
+        const mat = await reviewMaterial(id);
+        if (!mat) return json({ error: "정리할 풀이 기록이 없어요." });
+        const range = new URL(request.url).searchParams.get("range");
+        const rg = range && /^\d+-\d+$/.test(range) ? { from: Number(range.split("-")[0]), to: Number(range.split("-")[1]) } : undefined;
+        return json({ title: mat.meta.title, talks: mat.talk.map((t, i) => ({ i, at: t.at, kind: t.kind, q: t.q.slice(0, 160), a: t.a.slice(0, 200), verdict: t.verdict ?? "" })), user: reviewUser(mat, rg) });
+      }
+      if (!p[2] && m === "POST") {
+        const b = await body(z.object({ system: z.string().min(20).max(20_000), model: z.string().max(40), effort: z.enum(["low", "medium", "high"]), note: z.string().max(200).optional(),
+          range: z.object({ from: z.number().int().min(0), to: z.number().int().min(0) }).optional() }));
+        const run = await runReviewLab({ problemId: id, ...b });
+        return json({ run: { ...run, cost: cost(run) } });
+      }
+    }
     if (p[0] === "langs" && m === "GET") { void calibration(); return json({ langs: await languages() }); } // measure in the background while the tab opens
     if (p[0] === "calibration" && m === "GET") return json({ calibration: await calibration() });
     if (p[0] === "calibration" && m === "POST") return json({ calibration: await calibration(true) });
