@@ -50,9 +50,10 @@ export async function demoReset(name: string) {
   // 새 대화(빈 대화) + 시연용 작업 폴더(틀 코드로 통째로)
   const chat = await chats.newChat({ course: null });
   const ws = path.join(PRACTICE, `demo-${name}`);
-  await rm(ws, { recursive: true, force: true });
-  if (await exists(path.join(dir, "workspace"))) await cp(path.join(dir, "workspace"), ws, { recursive: true });
-  else await mkdir(ws, { recursive: true });
+  // 폴더 자체는 두고 안만 비운다(편집기 · 터미널이 그 폴더를 열고 있으면 폴더 지우기가 막힌다, 11/13 EBUSY)
+  await mkdir(ws, { recursive: true });
+  for (const e of await readdir(ws)) await rm(path.join(ws, e), { recursive: true, force: true }).catch(() => undefined);
+  if (await exists(path.join(dir, "workspace"))) await cp(path.join(dir, "workspace"), ws, { recursive: true, force: true });
   await chats.setChatWorkspace(chat.id, ws);
   const head = JSON.parse(await readFile(path.join(dir, "chat-head.json"), "utf8").catch(() => "[]")) as unknown[];
   if (head.length) {
