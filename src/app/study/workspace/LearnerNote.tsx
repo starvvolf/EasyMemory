@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { call, errorText, later } from "./api";
 
-type Item = { key: string; name: string; status: string; prereq: boolean; wrong: string; next: string; goal: string; at: string; dueAt: string | null; places: string[] };
+type Item = { key: string; name: string; status: string; wrong: string; next: string; goal: string; at: string; dueAt: string | null; places: string[] };
 type Note = { online: boolean; unknown?: Item[]; known?: Item[]; env?: Array<{ tool: string; fact: string }>; tendencies?: Array<{ text: string; status: string }> };
 
 // 상태는 쉬운 말로(11/10 사용자 "항상 사람이 바로 이해하기 쉽게")
@@ -37,7 +37,6 @@ export default function LearnerNote() {
           const tip = [i.wrong && `어떻게 알고 있었나: ${i.wrong}`, i.next && `다음엔: ${i.next}`, `어디서: ${i.places.join(" / ")}`, dueText(i.dueAt)].filter(Boolean).join("\n");
           return <li key={i.key} title={tip}>
             <span className={`pp-gap ${cls}`}>{label}</span>
-            {i.prereq ? <span className="ln-pre" title="지금 배우던 것 아래, 먼저 알아야 했던 것">먼저 알 것</span> : null}
             <b>{i.name}</b>
             {i.wrong ? <span className="muted"> — {i.wrong}</span> : null}
             {i.places.length >= 2 ? <span className="ln-rep" title={i.places.join("\n")}>{i.places.length}곳에서</span> : null}

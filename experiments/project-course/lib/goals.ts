@@ -270,19 +270,17 @@ export async function goalAction(runId: string, op: string, b: Record<string, un
         }
       } else {
         // [해 봤어요]: 판정(practice.ts가 한 번 부름)이 "맞음"일 때만 적용 ✓
-        const v = b.verdict as { verdict: string; right: string; gap: string; prereq?: string } | undefined;
+        const v = b.verdict as { verdict: string; right: string; gap: string } | undefined;
         const ko = ({ correct: "맞음", partial: "일부만 맞음", incorrect: "틀림", unclear: "판단 근거 부족", not_answer: "판단 근거 부족" } as Record<string, string>)[v?.verdict ?? ""] ?? "";
-        const line = v ? `판정: ${ko}${v.right ? ` · 맞은 부분: ${v.right}` : ""}${v.gap ? ` · 빠지거나 틀린 부분: ${v.gap}` : ""}${v.prereq ? ` · 원인은 선행 "${v.prereq}"이(가) 비어 있는 것으로 보임` : ""}` : "";
+        const line = v ? `판정: ${ko}${v.right ? ` · 맞은 부분: ${v.right}` : ""}${v.gap ? ` · 빠지거나 틀린 부분: ${v.gap}` : ""}` : "";
         const vq = String((v as { quote?: string } | undefined)?.quote ?? "").slice(0, 200);
-        logIt(g, "apply-check", `${sp ? `보충 ${sp.title}` : c!.title}: ${ko || "판정 없음"}${v?.gap ? ` · 빠진 곳: ${v.gap}` : ""}${v?.prereq ? ` · 선행: ${v.prereq}` : ""}${vq ? ` · 학습자 답: "${vq}"` : ""}`);
+        logIt(g, "apply-check", `${sp ? `보충 ${sp.title}` : c!.title}: ${ko || "판정 없음"}${v?.gap ? ` · 빠진 곳: ${v.gap}` : ""}${vq ? ` · 학습자 답: "${vq}"` : ""}`);
         if (!v || v.verdict === "correct") {
           u.applied = true; u.understood = true; logIt(g, "applied", sp ? `보충 ${sp.title}` : c!.title);
           say = sp ? `[해 봤어요 — ${line}] ${what} 적용을 확인했어요. ${finishSupport("적용까지 함")}`
             : `[해 봤어요${line ? ` — ${line}` : ""}] ${what} 적용을 확인했어요.${closeIfBack()} 맞은 점을 짧게 확인해 주세요.`;
         } else if (v.verdict === "partial" || v.verdict === "incorrect") {
-          say = v.prereq
-            ? `[해 봤어요 — ${line}] 아직 적용 단계예요. '맞아요'로 시작하지 말고, 맞은 부분은 인정해 주세요. 막힌 곳이 지금 목표보다 아래의 "${v.prereq}"에서 온 것으로 보여요. 그 선행을 지금 목표의 코드 · 상황으로 짧게 확인하고, 비어 있으면 plan_support로 그 선행부터 채운 뒤 돌아오게 해 주세요(정답은 통째로 주지 않아요).`
-            : `[해 봤어요 — ${line}] 아직 적용 단계예요. '맞아요'로 시작하지 말고, 맞은 부분은 인정하고 빠지거나 틀린 곳은 정답을 통째로 주지 말고 질문이나 힌트로 짚어 주세요.`;
+          say = `[해 봤어요 — ${line}] 아직 적용 단계예요. '맞아요'로 시작하지 말고, 맞은 부분은 인정하고 빠지거나 틀린 곳은 정답을 통째로 주지 말고 질문이나 힌트로 짚어 주세요.`;
         } else {
           say = `[해 봤어요 — ${line}] 학습자가 무엇을 했는지 아직 판단할 근거가 부족해요. 해 본 결과(답 · 코드 · 실행 결과)를 짧게 보여 달라고 해 주세요.`;
         }

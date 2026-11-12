@@ -26,11 +26,9 @@ right: 맞은 부분 한 구절(없으면 빈 글). gap: 빠지거나 틀린 부
 학습자가 실제로 말한 것만으로 판단한다. 학습자가 알 거라고 너그럽게 채우지 않는다.
 [과제가 가리키는 코드]가 있으면 그 코드가 실제로 하는 일을 기준으로 맞고 틀림을 본다(튜터 말보다 코드가 우선). 학습자 말이 코드와 어긋나면 그 부분은 맞은 부분이 아니다.
 다만 과제가 가정한 상황("파일에 ○○가 있다고 하자", "이렇게 바꿨다면")이 있으면 그 가정이 기준이다. 실제 파일의 지금 내용과 다르다는 이유로 틀렸다고 하지 않는다.
-완료 조건과 과제가 요구한 것만 본다. 요구하지 않은 것을 말하지 않은 것은 빠진 곳이 아니다.
-prereq: 빠지거나 틀린 원인이 지금 목표 자체가 아니라 그 아래 먼저 알아야 할 것(선행: 앞서 알아야 할 개념 · 문법 · 도구 사용)이 비어서라고 학습자의 답에서 드러나면 그 선행의 이름(다른 곳에서도 통하는 짧은 이름, 예: 객체 참조, 반복문, 리스트 인덱스, 터미널에서 파일 실행). 지금 목표 자체를 덜 이해한 것이거나 드러나지 않으면 빈 글.`;
-// prereq(11/10 사용자 "개념 간의 선행관계랑 의존성 … 어떻게 파악할 것인가"): 증상은 목표에서, 원인은 선행에서 — 원장에 선행 이름으로 연다
-export const JUDGE_SCHEMA = S.obj({ verdict: S.oneOf("correct", "partial", "incorrect", "unclear", "not_answer"), right: S.str, gap: S.str, prereq: S.str });
-export type Verdict = { verdict: "correct" | "partial" | "incorrect" | "unclear" | "not_answer"; right: string; gap: string; prereq?: string };
+완료 조건과 과제가 요구한 것만 본다. 요구하지 않은 것을 말하지 않은 것은 빠진 곳이 아니다.`;
+export const JUDGE_SCHEMA = S.obj({ verdict: S.oneOf("correct", "partial", "incorrect", "unclear", "not_answer"), right: S.str, gap: S.str });
+export type Verdict = { verdict: "correct" | "partial" | "incorrect" | "unclear" | "not_answer"; right: string; gap: string };
 export const VERDICT_KO: Record<string, string> = { correct: "맞음", partial: "일부만 맞음", incorrect: "틀림", unclear: "판단 근거 부족", not_answer: "답이 아님" };
 
 /** [해 봤어요] 판정. answer가 비면(한 게 안 보이면) AI를 부르지 않고 근거 부족 */

@@ -225,28 +225,26 @@ async function noteGap(runId: string, op: string, b: Record<string, unknown>) {
   const unit = sp ? { id: sp.id, title: `보충: ${sp.title}`, done: sp.done, support: true } : { id: c.id, title: c.title, done: c.done };
   const goal = { id: c.id, title: c.title };
   const GP = await import("./gaps.ts");
-  const v = b.verdict as { verdict: string; right: string; gap: string; prereq?: string; quote?: string } | undefined;
+  const v = b.verdict as { verdict: string; right: string; gap: string; quote?: string } | undefined;
   // 학습 기록(11/11, lib/history.ts): 판정 · 새 이름을 직접 씀 · 막힘을 이름 단위로 한 줄씩
   const H = await import("./history.ts");
   if (op === "applied" && v) {
     const KIND: Record<string, "맞음" | "일부" | "틀림"> = { correct: "맞음", partial: "일부", incorrect: "틀림" };
     const k = KIND[v.verdict];
-    if (k) await H.add({ run: runId, goal: c.title, kind: k, name: v.prereq || unit.title, result: k === "맞음" ? "" : v.gap, quote: v.quote });
+    if (k) await H.add({ run: runId, goal: c.title, kind: k, name: unit.title, result: k === "맞음" ? "" : v.gap, quote: v.quote });
     // 과제의 새 이름을 답 · 최근 명령에서 직접 썼으면 "씀"(펼쳐 본 뒤면 "본 뒤에", 아니면 "혼자")
     const typed = (await (await import("./shell.ts")).shellOf(runId)).history.filter((r) => r.by === "learner").slice(-10).map((r) => r.command).join("\n");
     const said = `${v.quote ?? ""}\n${typed}`.toLowerCase();
     const used = (c.names ?? []).filter((n) => n.name.length >= 2 && said.includes(n.name.toLowerCase()));
     if (used.length) await H.add(...used.map((n) => ({ run: runId, goal: c.title, kind: "씀" as const, name: n.name, result: n.seen ? "본 뒤에" : "혼자", quote: v.quote })));
-    // 선행이 빈 것(11/10): 단위를 그 선행으로 연다 → 같은 선행을 또 틀리면 같은 칸, 목표가 맞으면 함께 채움
     if (v.verdict === "partial" || v.verdict === "incorrect") {
-      await GP.openGap(runId, { goal, unit: v.prereq ? GP.prereqUnit(c.id, v.prereq) : unit, from: "판정", wrong: v.gap, right: "", quote: v.quote, prereq: v.prereq });
+      await GP.openGap(runId, { goal, unit, from: "판정", wrong: v.gap, right: "", quote: v.quote });
     }
     else if (v.verdict === "correct") {
       await GP.fillUnit(runId, unit.id, v.quote || v.right);
-      // 보충을 거쳐 돌아온 종착지가 맞으면, 그 목표에서 막혔던 것(선행 포함)도 채운 것으로
+      // 보충을 거쳐 돌아온 종착지가 맞으면, 그 목표에서 막혔던 것도 채운 것으로
       if (!sp) {
         await GP.fillUnit(runId, c.id, v.quote || v.right);
-        await GP.fillPrereqs(runId, c.id, v.quote || v.right);
       }
     }
   } else if (op === "hard" || op === "stuck") {
@@ -287,8 +285,7 @@ async function applyVerdict(runId: string, run: { codexId?: string; chatId?: str
   const taskText = lastTutor && lastTutor !== task ? `${task}\n\n(이어서 튜터: ${lastTutor})` : task;
   const refs = await referencedCode(runId, taskText).catch(() => "");
   const v = await J.judgeApply(unit, refs ? `${taskText}\n\n${refs}` : taskText, [...said, ...code, ...typed].join("\n\n"));
-  const prereq = v.verdict === "partial" || v.verdict === "incorrect" ? String(v.prereq ?? "").trim().slice(0, 60) : "";
-  return { verdict: v.verdict, right: v.right, gap: v.gap, ...(prereq ? { prereq } : {}), quote: lastU?.text.trim().slice(0, 400) ?? "" };
+  return { verdict: v.verdict, right: v.right, gap: v.gap, quote: lastU?.text.trim().slice(0, 400) ?? "" };
 }
 const recordJobs = new Map<string, Promise<unknown>[]>();
 export async function endLearning(runId: string) {

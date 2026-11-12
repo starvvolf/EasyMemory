@@ -11,7 +11,7 @@ import { DATA, read, update } from "./store.ts";
 import type { Gap } from "./gaps.ts";
 
 export type NoteStatus = "아직 모름" | "다시 틀림" | "채움, 다시 확인 전" | "이제 됨";
-export type NoteItem = { key: string; name: string; status: NoteStatus; prereq: boolean; wrong: string; next: string; goal: string; runId: string; gapId: string; at: string; dueAt: string | null; places: string[] };
+export type NoteItem = { key: string; name: string; status: NoteStatus; wrong: string; next: string; goal: string; runId: string; gapId: string; at: string; dueAt: string | null; places: string[] };
 export type EnvFact = { tool: string; fact: string; at: string };
 export type LocalNote = { machine: string; at: string; items: NoteItem[]; env: EnvFact[]; history?: import("./history.ts").Entry[] };
 export type LearnerNote = { at: string; unknown: NoteItem[]; repeated: NoteItem[]; known: NoteItem[]; env: EnvFact[]; tendencies: { text: string; status: string }[]; machines: string[] };
@@ -44,7 +44,7 @@ export async function localNote(): Promise<LocalNote> {
     if (!key) continue;
     const place = `${long.get(g.runId) || "실습"} › ${g.goal.title}`;
     const have = by.get(key);
-    const it: NoteItem = { key, name, status: STATUS[g.status] ?? "아직 모름", prereq: !!g.prereq, wrong: g.wrong, next: g.card?.next ?? "", goal: g.goal.title, runId: g.runId, gapId: g.id, at: lastAt(g), dueAt: g.dueAt ?? null,
+    const it: NoteItem = { key, name, status: STATUS[g.status] ?? "아직 모름", wrong: g.wrong, next: g.card?.next ?? "", goal: g.goal.title, runId: g.runId, gapId: g.id, at: lastAt(g), dueAt: g.dueAt ?? null,
       places: [...new Set([...(have?.places ?? []), place])].slice(-6) };
     by.set(key, it); // 오래된 것부터 덮어써 가장 최근 일의 상태가 남는다
   }
@@ -98,11 +98,11 @@ export async function noteText() {
   const n = await learnerNote().catch(() => null);
   if (!n || (!n.unknown.length && !n.known.length && !n.env.length)) return "";
   const cut = (s: string, k: number) => (s.length > k ? `${s.slice(0, k - 1)}…` : s);
-  const un = n.unknown.slice(0, 10).map((i) => `- ${i.prereq ? "(선행) " : ""}${i.name} — ${i.status}${i.places.length >= 2 ? ` · ${i.places.length}곳에서` : ""}${i.wrong ? `: ${cut(i.wrong, 80)}` : ""}`);
+  const un = n.unknown.slice(0, 10).map((i) => `- ${i.name} — ${i.status}${i.places.length >= 2 ? ` · ${i.places.length}곳에서` : ""}${i.wrong ? `: ${cut(i.wrong, 80)}` : ""}`);
   return [
     "[학습 노트 — 여러 실습에 걸친 이 학습자, Recaller가 원장에서 계산]",
     un.length ? `아직 모르는 것(최근 순):\n${un.join("\n")}` : "",
-    n.known.length ? `이제 되는 것(다시 확인까지 맞음 — 선행 확인에서 건너뛴다): ${n.known.slice(0, 20).map((i) => i.name).join(" · ")}` : "",
+    n.known.length ? `이제 되는 것(다시 확인까지 맞음): ${n.known.slice(0, 20).map((i) => i.name).join(" · ")}` : "",
     n.env.length ? `확인된 환경: ${n.env.map((e) => e.fact).join(" · ")}` : "",
     un.length ? "지금 목표와 관련된 아직 모르는 것이 있으면, 설명할 때 그 부분을 한 번 더 짚어 준다(확인 문항을 따로 내지 않는다, 관련 없으면 꺼내지 않는다)." : "",
   ].filter(Boolean).join("\n");

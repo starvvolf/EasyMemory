@@ -41,3 +41,12 @@ test("적용 과제(11/12): [이해했어요] 때 같은 걸 다시 돌리지 �
   assert.match(say, /조건을 하나 바꾼 변형/);
   assert.match(say, /정답 코드나 기대 출력을 그대로 적지 않는다/);
 });
+
+test("판정에서도 선행 뺌(11/13 사용자 \"그런 거는 당연히 다 빼는 거지\"): 판정 형식 · 지시 · 원장에 선행이 없다", async () => {
+  const J = await import("../lib/judge.ts");
+  assert.doesNotMatch(J.JUDGE_SYSTEM, /prereq|선행/);
+  assert.doesNotMatch(JSON.stringify(J.JUDGE_SCHEMA), /prereq/);
+  const GP = await import("../lib/gaps.ts");
+  assert.equal((GP as Record<string, unknown>).prereqUnit, undefined);
+  assert.equal((GP as Record<string, unknown>).fillPrereqs, undefined);
+});

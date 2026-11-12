@@ -7,7 +7,7 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { DATA, read, update } from "./store.ts";
 
-export type GapFrom = "판정" | "막힘" | "목표 정리" | "선행 확인";
+export type GapFrom = "판정" | "막힘" | "목표 정리";
 export type GapStatus = "열림" | "채우는 중" | "세션에서 채움" | "다시 확인 맞음" | "다시 틀림";
 export type Unit = { id: string; title: string; done: string; support?: boolean };
 export type Recheck = { q: string; a: string };
@@ -26,7 +26,7 @@ export type Gap = {
   recheck?: Recheck;
   /** 목표 정리가 같은 부족함으로 묶은 것(11/8 실측: 판정 · 막힘 두 칸이 같은 문항을 두 번): 다시 확인은 묶인 첫 칸에서만 */
   mergedInto?: string;
-  /** 선행(11/10): 지금 목표 아래 먼저 알아야 할 것이 비어서 생긴 부족함이면 그 이름 */
+  /** 선행(11/10) — 11/12 선행을 뺐다. 옛 기록을 읽을 때만 */
   prereq?: string;
   /** 실습 기억 카드(11/10): 상황 · 다음엔 · 어떻게 알게 됐나 */
   card?: { situation: string; next: string; how: string };
@@ -48,17 +48,15 @@ const open = (g: Gap) => g.status === "열림" || g.status === "채우는 중" |
 
 /** 부족함을 연다. 같은 단위에 아직 안 채워진 같은 출처의 부족함이 있으면 근거만 더한다(같은 걸 여러 번 틀린 것) */
 const keyOf = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
-/** 선행 단위: 같은 목표에서 같은 선행은 한 칸 */
-export const prereqUnit = (goalId: string, name: string): Unit => ({ id: `pre:${goalId}:${keyOf(name).slice(0, 60)}`, title: `먼저 알 것: ${clean(name, 60)}`, done: "" });
-export async function openGap(runId: string, x: { goal: { id: string; title: string }; unit: Unit; from: GapFrom; wrong: string; right?: string; quote?: string; cause?: string[]; prereq?: string }) {
+export async function openGap(runId: string, x: { goal: { id: string; title: string }; unit: Unit; from: GapFrom; wrong: string; right?: string; quote?: string; cause?: string[] }) {
   let out: Gap | null = null;
   await update<Ledger>(file(runId), empty(), (l) => {
     // 같은 단계에서 아직 안 채워진 부족함은 판정에서 왔든 막힘에서 왔든 하나로(11/9 시험: 같은 단계의 판정 · 막힘이 처방 · 근거가 같은 두 칸으로 남음)
     const same = l.gaps.find((g) => g.unit.id === x.unit.id && (g.status === "열림" || g.status === "채우는 중"));
     const ev = { at: now(), from: x.from, text: clean([x.wrong, x.quote ? `학습자: "${clean(x.quote, 300)}"` : "", x.cause?.length ? `고른 이유: ${x.cause.join(", ")}` : ""].filter(Boolean).join(" · "), 700) };
     if (same) { same.evidence.push(ev); if (x.wrong) same.wrong = clean(x.wrong); for (const c of x.cause ?? []) if (!same.cause.includes(c)) same.cause.push(c); out = same; return; }
-    const g: Gap = { id: `G${l.gaps.length + 1}-${randomBytes(2).toString("hex")}`, runId, goal: x.goal, unit: x.unit, concept: x.prereq ? clean(x.prereq, 60) : x.unit.title, type: "", wrong: clean(x.wrong), right: clean(x.right ?? ""),
-      cause: x.cause ?? [], evidence: [ev], remedy: [], status: "열림", checks: [], box: 0, at: now(), ...(x.prereq ? { prereq: clean(x.prereq, 60) } : {}) };
+    const g: Gap = { id: `G${l.gaps.length + 1}-${randomBytes(2).toString("hex")}`, runId, goal: x.goal, unit: x.unit, concept: x.unit.title, type: "", wrong: clean(x.wrong), right: clean(x.right ?? ""),
+      cause: x.cause ?? [], evidence: [ev], remedy: [], status: "열림", checks: [], box: 0, at: now() };
     l.gaps.push(g); out = g;
   });
   return out as Gap | null;
@@ -75,17 +73,6 @@ export async function fillUnit(runId: string, unitId: string, evidence: string) 
   await update<Ledger>(file(runId), empty(), (l) => {
     for (const g of l.gaps) if (g.unit.id === unitId && (g.status === "열림" || g.status === "채우는 중")) {
       g.status = "세션에서 채움"; g.filledAt = now(); g.fillEvidence = clean(evidence, 600); g.box = 0; g.dueAt = dueFrom(0); filled.push(g.id);
-    }
-  });
-  return filled;
-}
-
-/** 목표가 맞으면(보충 밖) 그 목표에서 열린 선행 부족함도 채운 것으로 */
-export async function fillPrereqs(runId: string, goalId: string, evidence: string) {
-  const filled: string[] = [];
-  await update<Ledger>(file(runId), empty(), (l) => {
-    for (const g of l.gaps) if (g.goal.id === goalId && g.prereq && (g.status === "열림" || g.status === "채우는 중")) {
-      g.status = "세션에서 채움"; g.filledAt = now(); g.fillEvidence = clean(`목표를 해냄: ${evidence}`, 600); g.box = 0; g.dueAt = dueFrom(0); filled.push(g.id);
     }
   });
   return filled;
@@ -114,7 +101,7 @@ export async function gapsForRecord(runId: string, goalId: string, verdicts: str
   return `${vline}[이 목표 동안 Recaller가 잡은 부족함 — 정리할 때 같은 것이면 ids에 그 id를 넣는다]\n${gs.map((g) => `${g.id} (${g.evidence.map((e) => e.from).join("·")}, ${g.status}) 단위 "${g.unit.title}": ${g.wrong}${g.cause.length ? ` · 막힌 이유: ${g.cause.join(", ")} → 재확인 꼴: ${planOf(g.cause).map((p) => p.recheck).join(" / ") || "틀린 지점 그대로"}` : " · 재확인 꼴: 틀렸던 그 지점을 이름 · 값만 바꿔 다시"}${g.remedy.length ? ` · 처방: ${g.remedy.map((r) => r.text).join(" / ")}` : ""}${g.fillEvidence ? ` · 채운 근거: ${g.fillEvidence}` : ""}`).join("\n")}`;
 }
 /** 목표 정리 결과(gaps)를 원장에 합친다: ids로 이은 것은 이름 · 칸 · 바로 알 것 · 코드 · 재확인 문항을 채우고, 원장에 없던 것은 "목표 정리"로 새로 연다 */
-export async function mergeRecord(runId: string, goal: { id: string; title: string; done: string }, recGaps: { type: string; concept: string; wrong: string; right: string; quote: string; ids?: string[]; recheck?: Recheck; code?: { file: string; from: number; to: number; code: string } | null; prereq?: boolean; card?: { situation: string; next: string; how: string } }[], endAt: string) {
+export async function mergeRecord(runId: string, goal: { id: string; title: string; done: string }, recGaps: { type: string; concept: string; wrong: string; right: string; quote: string; ids?: string[]; recheck?: Recheck; code?: { file: string; from: number; to: number; code: string } | null; card?: { situation: string; next: string; how: string } }[], endAt: string) {
   await update<Ledger>(file(runId), empty(), (l) => {
     for (const r of recGaps) {
       // ids로 이은 것, 없으면 같은 목표에서 같은 이름으로 이미 연 것(다시 정리할 때 같은 부족함이 새로 생기지 않게)
@@ -135,7 +122,6 @@ export async function mergeRecord(runId: string, goal: { id: string; title: stri
         if (r.code?.code) g.code = { file: r.code.file, from: r.code.from, to: r.code.to, code: r.code.code.slice(0, 1500) };
         if (r.recheck?.q && r.recheck?.a) g.recheck = { q: clean(r.recheck.q, 1200), a: clean(r.recheck.a, 600) };
         if (r.card) g.card = { situation: clean(r.card.situation, 160), next: clean(r.card.next, 200), how: clean(r.card.how, 20) };
-        if (r.prereq && !g.prereq) g.prereq = g.concept;
         // 세션 안에서 채움 확인을 못 한 것도 다시 확인 날짜는 잡는다(알려 준 데서 끝나지 않게)
         if (!g.dueAt) { g.box = 0; g.dueAt = dueFrom(0, Date.parse(endAt) || Date.now()); }
       }
@@ -209,12 +195,12 @@ export async function sessionNote(runId: string) {
     map: g.map.map((m) => ({ title: m.title, status: m.status, support: !!m.support })),
     goals: recs.map((r) => ({ goal: r.goal, done: r.done, status: r.status, summary: r.summary, steps: r.steps, learned: r.learned.map((x) => ({ type: x.type, concept: x.concept, meaning: x.meaning, how: x.how })) })),
     // 묶인 칸(mergedInto)은 첫 칸에 합쳐 한 줄로: 드러난 곳 · 고른 이유를 더한다
-    gaps: gaps.filter((x) => !x.mergedInto).map((x0) => { const extra = gaps.filter((y) => y.mergedInto === x0.id); return { ...x0, evidence: [...x0.evidence, ...extra.flatMap((y) => y.evidence)], cause: [...new Set([...x0.cause, ...extra.flatMap((y) => y.cause)])] }; }).map((x) => ({ id: x.id, goal: x.goal.title, unit: x.unit.title, concept: x.type ? x.concept : "", type: x.type, prereq: x.prereq ?? "", card: x.card ?? null, wrong: x.wrong, right: x.right, cause: x.cause,
+    gaps: gaps.filter((x) => !x.mergedInto).map((x0) => { const extra = gaps.filter((y) => y.mergedInto === x0.id); return { ...x0, evidence: [...x0.evidence, ...extra.flatMap((y) => y.evidence)], cause: [...new Set([...x0.cause, ...extra.flatMap((y) => y.cause)])] }; }).map((x) => ({ id: x.id, goal: x.goal.title, unit: x.unit.title, concept: x.type ? x.concept : "", type: x.type, card: x.card ?? null, wrong: x.wrong, right: x.right, cause: x.cause,
       from: [...new Set(x.evidence.map((e) => e.from))], evidence: x.evidence.map((e) => e.text).slice(-4), remedy: x.remedy.map((r) => `${r.kind}: ${r.text}`), status: x.status,
       fillEvidence: x.fillEvidence ?? "", code: x.code ?? null, recheck: x.recheck?.q ?? "", dueAt: x.dueAt ?? null, checks: x.checks })),
     // 지나온 목표 길(11/9): 목표마다 그 안의 일 + 그 목표에서 드러난 부족함 · 정리에서 남긴 지식(이름으로 맞춤)
     path: (await import("./goal-path.ts")).goalPath(g.log, g.current).map((p) => ({ ...p,
-      gaps: gaps.filter((x) => !x.mergedInto && x.goal.title === p.title).map((x) => ({ id: x.id, name: x.type ? `${x.prereq ? "먼저 알 것: " : ""}${x.concept}` : x.unit.title, wrong: x.wrong, status: x.status })),
+      gaps: gaps.filter((x) => !x.mergedInto && x.goal.title === p.title).map((x) => ({ id: x.id, name: x.type ? x.concept : x.unit.title, wrong: x.wrong, status: x.status })),
       learned: recs.filter((r) => r.goal === p.title).flatMap((r) => r.learned.map((x) => x.concept)) })),
     counts: { all: gaps.filter((x) => !x.mergedInto).length, filled: count(["세션에서 채움", "다시 확인 맞음"]), open: count(["열림", "채우는 중", "다시 틀림"]), rechecked: count(["다시 확인 맞음"]) },
   };
