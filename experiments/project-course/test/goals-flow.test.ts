@@ -32,3 +32,12 @@ test("도움 다이얼(11/11): AI 없이 바뀌어 맥락에 붙는다 · [깊�
   for (let i = 0; i < 3; i++) await GO.runGoalTool(run, "plan_support", { steps: [{ title: `보충 ${i}`, done: "말한다" }], why_quote: "모르겠어요" }, ["모르겠어요"]);
   assert.match(await GO.goalContext(run), /\[깊이\] 이 목표에서 보충을 여러 번 짰다/);
 });
+
+test("적용 과제(11/12): [이해했어요] 때 같은 걸 다시 돌리지 말고 변형을, 정답 · 기대 출력은 적지 말라고 넘긴다", async () => {
+  const run = "ra";
+  await GO.runGoalTool(run, "propose_plan", { long: "할 일 CLI", spec: "", mode: "bottomup", map: ["추가 · 보기"], first: { title: "추가 · 보기", done: "추가한 할 일이 목록에 보인다" } }, []);
+  await GO.goalAction(run, "confirm", {});
+  const say = String(await GO.goalAction(run, "understood", {}));
+  assert.match(say, /조건을 하나 바꾼 변형/);
+  assert.match(say, /정답 코드나 기대 출력을 그대로 적지 않는다/);
+});
