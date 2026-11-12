@@ -66,7 +66,7 @@ export default function DejipgiStudy() {
     if (!root) return;
     const findSource = async (id: string) => {
       const { sources: catalog } = await readJson<{ sources: McpSourceCatalogEntry[] }>(
-        await fetchExperiment("/api/mcp-runs/sources"), "원본 자료를 확인하지 못했어요.");
+        await fetchExperiment("/api/pdf-sources"), "원본 자료를 확인하지 못했어요.");
       const source = catalog.find((item) => item.id === id);
       if (!source) throw new Error("등록한 원본 PDF를 자료 목록에서 찾지 못했어요.");
       return source;
@@ -105,12 +105,12 @@ export default function DejipgiStudy() {
       if (response.status === 409) return;
       await readJson(response, "자동 생성을 시작하지 못했어요.");
     };
-    // ---- engine v2 (/api/lab/gen) ----
+    // ---- engine v2 (/api/material) ----
     const isGen = (id: string) => /^gen_[a-f0-9]{32}$/.test(id);
-    const genState = async (id: string) => (await readJson<{ gen: GenState; label: string }>(await fetchExperiment(`/api/lab/gen/${id}`), "만드는 상태를 읽지 못했어요."));
+    const genState = async (id: string) => (await readJson<{ gen: GenState; label: string }>(await fetchExperiment(`/api/material/${id}`), "만드는 상태를 읽지 못했어요."));
     const startGen = async (source: McpSourceCatalogEntry, from: number, to: number, purpose: string, note: string, readImages: boolean, pastExamSourceIds?: string[], engine?: Engine, survey?: GenSurvey, deep?: boolean, deepDrafts?: 1 | 2, autoQuestions = true, lecture = false) => {
       const pageNumbers = Array.from({ length: Math.max(1, to - from + 1) }, (_, index) => from + index);
-      const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/lab/gen", {
+      const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment("/api/material", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceId: source.id, fileName: source.fileName, pageNumbers, purpose, note: note.slice(0, 2000), provider: "chatgpt",
           models: DEFAULT_GEN_MODELS, origin: "study", readImages, ...(lecture ? { lecture: true } : {}), ...(engine === "recaller" && !autoQuestions ? { questionsLater: true } : {}), ...(engine === "recaller" && deep ? { deep: true, ...(deepDrafts === 2 ? { deepDrafts } : {}) } : {}), ...(pastExamSourceIds?.length ? { pastExamSourceIds } : {}), ...(engine && !pastExamSourceIds?.length ? { engine } : {}),
@@ -162,11 +162,11 @@ export default function DejipgiStudy() {
     const archivedIds = async () => session.mode !== "local-experiment" ? new Set<string>()
       : new Set((await readJson<{ entries: Array<{ id: string }> }>(await fetchExperiment("/api/study-archive"), "보관함을 읽지 못했어요.").catch(() => ({ entries: [] }))).entries.map((entry) => entry.id));
     const loadGenDecks = async (archived: Set<string>) => {
-      const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number; pastExam?: boolean; createdAt?: string }> }>(await fetchExperiment("/api/lab/gen?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
+      const { runs } = await readJson<{ runs: Array<{ id: string; status: string; sectionsDone: number; pastExam?: boolean; createdAt?: string }> }>(await fetchExperiment("/api/material?origin=study"), "새 엔진 자료 목록을 불러오지 못했어요.");
       // Finished runs, and runs still being made whose first sections are authored.
       // 2026-11-02 A (점검_UIUX화면연결 8번): 지식만 정리한 실행(문제 0구역)은 문제 세트가 없어 /study가 404 — 부르지 않는다.
       return Promise.all(runs.filter((run) => !archived.has(run.id) && run.status !== "failed" && run.sectionsDone > 0).map(async (run) => readJson<{ meta: StudyArtifactMeta; document: AuthoringDocument; outline?: StudyOutlineSection[]; knowledge?: string; points?: KnowledgeLayer }>(
-        await fetchExperiment(`/api/lab/gen/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").then((deck) => ({ ...deck, pastExam: run.pastExam === true, madeAt: run.createdAt })).catch(() => null)));
+        await fetchExperiment(`/api/material/${run.id}/study`), "새 엔진 자료를 불러오지 못했어요.").then((deck) => ({ ...deck, pastExam: run.pastExam === true, madeAt: run.createdAt })).catch(() => null)));
     };
     const loadQuality = async () => readJson<{ patches: PatchMap; counts: Record<string, number> }>(await fetchExperiment("/api/study-quality"), "고친 문제 목록을 읽지 못했어요.");
     const loadPatches = async () => (await loadQuality()).patches;
@@ -188,19 +188,19 @@ export default function DejipgiStudy() {
           if (session.mode !== "local-experiment") throw new Error("기출 등록은 로컬 실험 모드에서만 할 수 있어요.");
           const form = new FormData();
           form.append("pdf", file);
-          const { source: registered } = await readJson<{ source: { id: string } }>(await fetchExperiment("/api/mcp-runs/sources", { method: "POST", body: form }), "기출 PDF를 등록하지 못했어요.");
+          const { source: registered } = await readJson<{ source: { id: string } }>(await fetchExperiment("/api/pdf-sources", { method: "POST", body: form }), "기출 PDF를 등록하지 못했어요.");
           const source = await findSource(registered.id);
           return { id: source.id, fileName: source.fileName };
         },
         async pastExamSources() {
-          const { sources } = await readJson<{ sources: McpSourceCatalogEntry[] }>(await fetchExperiment("/api/mcp-runs/sources"), "등록한 PDF를 읽지 못했어요.");
+          const { sources } = await readJson<{ sources: McpSourceCatalogEntry[] }>(await fetchExperiment("/api/pdf-sources"), "등록한 PDF를 읽지 못했어요.");
           return sources.filter((source) => /^src_[a-f0-9]{64}$/.test(source.id));
         },
         async start({ file, from, to, purpose, note, readImages, pastExamSourceIds, engine, survey, deep, deepDrafts, autoQuestions, lecture }) {
           if (session.mode !== "local-experiment") throw new Error("자료 등록과 문제 만들기는 로컬 실험 모드에서만 할 수 있어요.");
           const form = new FormData();
           form.append("pdf", file);
-          const { source: registered } = await readJson<{ source: { id: string } }>(await fetchExperiment("/api/mcp-runs/sources", {
+          const { source: registered } = await readJson<{ source: { id: string } }>(await fetchExperiment("/api/pdf-sources", {
             method: "POST", body: form,
           }), "PDF를 등록하지 못했어요.");
           const source = await findSource(registered.id);
@@ -209,7 +209,7 @@ export default function DejipgiStudy() {
         },
         async focus(requestId, page) {
           if (!isGen(requestId)) return;
-          await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/focus`, {
+          await readJson(await fetchExperiment(`/api/material/${requestId}/focus`, {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ page }) }), "읽는 위치를 알리지 못했어요.");
         },
         async restart({ requestId, sourceId, from, to, purpose, note }) {
@@ -228,7 +228,7 @@ export default function DejipgiStudy() {
           if (isGen(artifactId)) {
             // Same objectives, authoring only, with the reported questions shown so the new ones differ.
             const { gen: base } = await genState(artifactId);
-            const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment(`/api/lab/gen/${artifactId}/fork`, {
+            const { gen } = await readJson<{ gen: GenState }>(await fetchExperiment(`/api/material/${artifactId}/fork`, {
               method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from: "author", objectiveIds, confirmed: true }),
             }), "다시 만들기를 시작하지 못했어요.");
             const pages = base.input.pageNumbers;
@@ -253,17 +253,17 @@ export default function DejipgiStudy() {
         },
         async resume(requestId) {
           if (!isGen(requestId)) { await kickExecutor(requestId); return; }
-          await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/continue`, {
+          await readJson(await fetchExperiment(`/api/material/${requestId}/continue`, {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmed: true }),
           }), "다시 시작하지 못했어요.");
         },
         async questions(requestId: string) {
-          await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/questions`, {
+          await readJson(await fetchExperiment(`/api/material/${requestId}/questions`, {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmed: true }),
           }), "문제 만들기를 시작하지 못했어요.");
         },
         async confirm(requestId, objectiveIds) {
-          await readJson(await fetchExperiment(`/api/lab/gen/${requestId}/confirm`, {
+          await readJson(await fetchExperiment(`/api/material/${requestId}/confirm`, {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ objectiveIds, confirmed: true }),
           }), "목표를 확정하지 못했어요.");
         },
@@ -445,7 +445,7 @@ export default function DejipgiStudy() {
         },
       },
       async loadPdf(sourceCatalogId: string) {
-        const response = await fetchExperiment(`/api/mcp-runs/sources/${encodeURIComponent(sourceCatalogId)}/pdf`);
+        const response = await fetchExperiment(`/api/pdf-sources/${encodeURIComponent(sourceCatalogId)}/pdf`);
         if (!response.ok) throw new Error("원본 PDF를 열지 못했어요.");
         return response.arrayBuffer();
       },

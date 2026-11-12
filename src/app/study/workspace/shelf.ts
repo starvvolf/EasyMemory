@@ -10,7 +10,7 @@ type GenRun = { id: string; createdAt: string; status: string; fileName: string;
 /** 기억 탭이 쓰던 그대로: PDF는 실제로 만든 자료(study-gen, 다 됐거나 기억까지 된 것), 기억은 같은 자료 줄(genId)에서. 나머지 갈래 줄은 그대로. */
 export async function loadShelfRows(): Promise<MaterialRow[]> {
   const [v, g] = await Promise.all([call<{ materials: MaterialRow[] }>("/api/knowledge/material-view"),
-    call<{ runs: GenRun[] }>("/api/lab/gen?origin=study").catch(() => ({ runs: [] as GenRun[] }))]);
+    call<{ runs: GenRun[] }>("/api/material?origin=study").catch(() => ({ runs: [] as GenRun[] }))]);
   const pdfRows = v.materials.filter((r) => r.group === "material" && r.kind === "pdf");
   const pdfs: ShelfRow[] = g.runs.filter((r) => r.status === "done" || r.status === "cards").map((r) => {
     const same = pdfRows.find((x) => x.genId === r.id);
