@@ -9,6 +9,8 @@ export type BridgeState = {
   at: string; file: string | null; line?: number;
   selection?: { from: number; to: number; text: string } | null;
   dirty?: boolean; text?: string | null; errors?: { line: number; message: string }[];
+  /** 연결 확장 0.9.6부터: 방금 저장한 파일(한 번만 온다) */
+  saved?: string;
 };
 export type BridgeCommand =
   | { type: "open"; file: string; line: number; toLine?: number; note?: string; highlight?: boolean }
@@ -55,9 +57,13 @@ let onSaved: (runId: string, file: string) => void = () => {};
 export function onBridgeSaved(fn: (runId: string, file: string) => void) { onSaved = fn; }
 export function setState(runId: string, s: Omit<BridgeState, "at">) {
   const before = states.get(runId);
-  states.set(runId, { ...s, at: new Date().toISOString() });
+  const { saved, ...rest } = s;
+  states.set(runId, { ...rest, at: new Date().toISOString() });
   onChange(runId);
-  if (before?.dirty && !s.dirty && s.file && before.file === s.file) onSaved(runId, s.file);
+  // 0.9.6 확장은 저장을 바로 알린다. 옛 확장은 '저장 안 한 변경 있음 → 없음'으로 본다
+  // (11/12 실습 시뮬: 고치고 1.2초 안에 저장하면 고친 상태가 안 보내져 저장본 · 판정 · 목표 정리가 코드를 못 봄)
+  const file = typeof saved === "string" && saved ? saved : before?.dirty && !rest.dirty && rest.file && before.file === rest.file ? rest.file : null;
+  if (file) onSaved(runId, file);
 }
 export const connected = (runId: string) => (streams.get(runId)?.size ?? 0) > 0;
 export const bridgeState = (runId: string) => (connected(runId) ? states.get(runId) ?? null : null);

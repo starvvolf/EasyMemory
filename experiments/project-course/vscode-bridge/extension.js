@@ -23,6 +23,7 @@ let status = null;
 let deco = null;
 let decoTimer = null;
 let lastSent = "";
+let pendingSaved = null;  // 방금 저장한 파일(0.9.6: 고치고 1.2초 안에 저장하면 "고친 상태"가 안 보내져 서버가 저장을 놓침)
 let dimDeco = null;       // 오늘 안 볼 덩어리: 흐리게
 let labelDeco = null;     // 덩어리 이름표
 let labelFocusDeco = null;
@@ -151,6 +152,7 @@ async function report() {
       dirty: doc.isDirty, text: doc.isDirty ? doc.getText().slice(0, 40000) : null, errors,
     };
   }
+  if (pendingSaved) { state.saved = pendingSaved; pendingSaved = null; }
   const key = JSON.stringify(state);
   if (key === lastSent) return;
   lastSent = key;
@@ -729,7 +731,7 @@ function activate(context) {
     vscode.window.onDidChangeActiveTextEditor((ed) => { if (ed && inRoot(ed.document)) lastEditor = ed; scheduleReport(); }),
     vscode.window.onDidChangeTextEditorSelection(() => scheduleReport(700)),
     vscode.workspace.onDidChangeTextDocument((e) => { if (inRoot(e.document)) { scheduleReport(1200); applyFocus(); if (e.contentChanges.length) typingPing(); } }),
-    vscode.workspace.onDidSaveTextDocument(() => scheduleReport(100)),
+    vscode.workspace.onDidSaveTextDocument((doc) => { if (inRoot(doc)) pendingSaved = rel(doc.uri.fsPath); scheduleReport(100); }),
     vscode.languages.onDidChangeDiagnostics(() => scheduleReport(800)),
     { dispose: () => { clearTimeout(retryTimer); clearTimeout(reportTimer); if (stream) stream.destroy(); if (panel) panel.dispose(); } },
   );
