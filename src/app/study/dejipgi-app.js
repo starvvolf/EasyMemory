@@ -657,7 +657,7 @@ const shellApi = {
     return { view:S.view, group:TAB_OF[S.view] || "", session:!!S.session, overlay:overlayCheck(), legacy: !!S.kp.legacy,
       suggest: S.view !== "create" && !(S.session && S.session.phase === "ask") ? suggestView() : null,
       account: account && a && a.show ? { ready:!!a.ready, message:a.message || "" } : null,
-      create:{ engineReady:!!engine, devEngines: location.port === "3002" || /[?&]engines=1/.test(location.search), noteSeed:(S.plan.prefs && S.plan.prefs.genNote) || "", key:S.createKey || 0 },
+      create:{ engineReady:!!engine, noteSeed:(S.plan.prefs && S.plan.prefs.genNote) || "", key:S.createKey || 0 },
       store:Store.mode, toast:S.toast ? S.toast.msg : "", tablet:tabletView(), prompts:!!notesApi,
       knowledgeLegacy: S.view === "knowledge" && S.kp.legacy ? legacyKnowledgeView() : null, flow: !!(env.notes && env.notes.compose && env.mountFlow) };
   },

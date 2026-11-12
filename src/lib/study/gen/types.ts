@@ -204,7 +204,7 @@ export type Objective = {
   qtype?: string;
   conceptIds?: string[];
   relationIds?: string[];
-  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: import("./astra.ts").AstraEvidence[]; keepGoal?: boolean;
+  astra?: { practiceIds: string[]; conceptIds: string[]; checkedSkill: string; requiredPoints: string[]; evidence: Array<{ page: number; quote: string; kind?: string; supports?: string }>; keepGoal?: boolean;
     /** v5: what the learner must be able to do, the format chosen for it, and whether a figure is the evidence. */
     level?: string; format?: StudyFormat; figurePages?: number[];
     /** alpha: how the goal is assessed — the knowledge to check, the operation, and what separates the answer from plausible wrong ones. */
@@ -262,10 +262,12 @@ export type GenState = {
   /** 실험: made from this run's cards, with only the 자료 전체 정리 done again (runner.remergeGen). */
   remergeOf?: string;
   /** v3: the knowledge map (① 전체 읽기), plan warnings and the gate's verdicts per question. */
-  v3?: { map?: import("./v3.ts").KnowledgeMap; warnings?: Issue[]; gate?: Array<{ objectiveId: string; attempt: number; passed: boolean; reasons: string[] }> };
-  astra?: import("./astra.ts").AstraState;
+  /** 예전 v3 엔진 상태(11/12 엔진을 지움, 옛 기록 읽기용) */
+  v3?: unknown;
+  /** 예전 astra 엔진 상태(11/12 엔진을 지움, 옛 기록 읽기용) */
+  astra?: unknown;
   recaller?: import("./recaller.ts").RecallerState;
-  pastExam?: { cacheKey: string; card: import("./pastexam.ts").VibeCard; checks: Array<{ objectiveId: string; attempt: number; passed: boolean; reason: string }> };
+  pastExam?: { cacheKey: string; card: unknown; checks: Array<{ objectiveId: string; attempt: number; passed: boolean; reason: string }> };
 };
 
 /** Where a fixed-prefix rerun starts: redo design+authoring, or authoring only (same objectives). */
@@ -391,14 +393,3 @@ export function genOutline(state: GenState) {
   });
 }
 
-/** The v3 knowledge map as plain text, for reader features that would otherwise read the pages again (용어 지도). */
-export function mapDigest(state: GenState, limit = 30000) {
-  const map = state.v3?.map;
-  if (!map?.concepts?.length) return "";
-  const lines = ["[지식 지도 — 자료를 통째로 읽고 뽑은 개념·관계]"];
-  for (const concept of map.concepts) {
-    lines.push(`- ${concept.name} (${concept.kind}, p.${concept.pages.join(",")}): ${concept.content}${concept.conditions.length ? ` / 조건: ${concept.conditions.join("; ")}` : ""}`);
-  }
-  for (const relation of map.relations ?? []) lines.push(`- [${relation.kind}] ${relation.statement}`);
-  return lines.join("\n").slice(0, limit);
-}

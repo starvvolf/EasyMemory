@@ -51,26 +51,7 @@ export function knowledgeLayer(state: GenState): KnowledgeLayer {
     for (const slot of Object.values(state.recaller.deep)) for (const q of slot.parts ?? (slot.question ? [slot.question] : [])) byObjective[q.objectiveId] = q.cardIds;
     return { points, byObjective };
   }
-  const plan = state.astra?.plan;
-  const sectionTitle = (outlineIds: string[]) => state.sections.find((section) => outlineIds.includes(section.id))?.title ?? "";
   const objectives = state.sections.flatMap((section) => ((section.design?.objectives ?? []) as ObjectiveLike[]).map((objective) => ({ objective, section: section.title })));
-  if (plan?.concepts?.length) {
-    const points: KnowledgePoint[] = plan.concepts.map((concept) => ({
-      id: concept.id,
-      title: concept.title,
-      essentials: [...concept.essentials, ...concept.conditions].filter((line) => line.trim()).slice(0, 6),
-      section: sectionTitle(concept.outlineIds),
-      pages: [...new Set(concept.evidence.map((evidence) => evidence.page))].sort((a, b) => a - b),
-      spans: concept.evidence.map((evidence) => ({ page: evidence.page, kind: evidence.kind, quote: evidence.quote || evidence.supports })),
-    }));
-    const known = new Set(points.map((point) => point.id));
-    const byObjective: Record<string, string[]> = {};
-    for (const { objective } of objectives) {
-      const ids = (objective.astra?.conceptIds ?? []).filter((id) => known.has(id));
-      if (ids.length) byObjective[objective.id] = ids;
-    }
-    return { points, byObjective };
-  }
   const points: KnowledgePoint[] = objectives.map(({ objective, section }) => ({
     id: `o:${objective.id}`,
     title: (objective.recall || objective.statement).slice(0, 80),

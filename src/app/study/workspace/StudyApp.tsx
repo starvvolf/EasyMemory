@@ -34,7 +34,7 @@ type KnowledgeLegacy = {
 type Snap = {
   view: string; group: string; session: boolean; overlay: boolean; legacy: boolean;
   suggest: { n: number; from: string; list: string[] } | null; account: { ready: boolean; message: string } | null;
-  create: { engineReady: boolean; devEngines: boolean; noteSeed: string; key: number }; store: string; toast: string;
+  create: { engineReady: boolean; noteSeed: string; key: number }; store: string; toast: string;
   tablet: { open: false } | { open: true; urls: string[]; live: boolean; code: string; hadCode: boolean; left: string; devices: number; err: string } | null;
   prompts: boolean; knowledgeLegacy: KnowledgeLegacy | null; flow: boolean;
 };
@@ -117,7 +117,7 @@ export default function StudyApp({ ui, api }: { ui: Bridge; api: ShellApi }) {
                 <button className="btn small" onClick={api.connect}>ChatGPT 연결</button></div>
             ) : null}
             <div className="view-host view-create">
-              <NewMaterial key={s.create.key} engineReady={s.create.engineReady} devEngines={s.create.devEngines} noteSeed={s.create.noteSeed} loadPdfjs={api.loadPdfjs} onStart={api.startMaterial} />
+              <NewMaterial key={s.create.key} engineReady={s.create.engineReady} noteSeed={s.create.noteSeed} loadPdfjs={api.loadPdfjs} onStart={api.startMaterial} />
             </div>
           </>
         ) : null}

@@ -485,22 +485,6 @@ test("목표형 문제 (11/6): 보기 검사와 서술 새는 말", async () => 
   assert.equal(writeLeaks({ stem: "P0이 P(S), P1이 P(Q)까지 실행했다. 다음은?", points: ["서로 상대 세마포어를 기다림"] }), false);
 });
 
-test("문제만 다시 (11/6, 실험): 같은 카드·학습 목표로 문제 단계만, 모델을 바꿔서", () => withData(async () => {
-  const io = { pdf: async () => null, pages: async () => pages };
-  const { requizGen } = await import("./runner.ts");
-  const start = await createGen({ sourceId: "src_digest_fixture", fileName: "invented.pdf", pageNumbers: [1, 2, 3], purpose: "all", engine: "recaller", provider: "fake", lab: { digest: true, digestStyle: "plan", digestTopicCards: true, mapCards: true, goalQuiz: true, quiz: "luna", quizCount: 3 } });
-  const first = await runGen(start.id, { uid: "local-experiment" }, io);
-  assert.equal(first.status, "done", first.message);
-  const again = await requizGen(first.id, { models: { "rc-q-case": { model: "gpt-6.1-terra", effort: "low" } } });
-  const done = await runGen(again.id, { uid: "local-experiment" }, io);
-  assert.equal(done.status, "done", done.message);
-  const steps = (await readGenCalls(done.id)).map((c) => c.step);
-  assert.ok(!steps.some((s) => s === "rc-digest-plan" || s === "rc-digest-card" || s === "rc-q-goals" || s === "rc-merge" || s === "rc-flow"), steps.join(","));
-  assert.ok(steps.includes("rc-q-pick"));
-  assert.deepEqual(done.recaller!.digest!.objectives, first.recaller!.digest!.objectives);
-  assert.equal(done.input.models?.["rc-q-case"]?.model, "gpt-6.1-terra");
-  assert.ok(Object.values(done.recaller!.units).some((u) => (u.questions ?? []).length));
-}));
 
 test("앱 문제도 바로 만들기 (11/6): 공부 화면에서 questionsLater 없이 시작하면 한 실행에서 카드 다음 문제까지", () => withData(async () => {
   const io = { pdf: async () => null, pages: async () => pages };

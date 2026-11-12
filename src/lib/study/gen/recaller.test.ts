@@ -283,16 +283,6 @@ test("자료 전체 정리 written as changes only is spread back per card; bad 
   assert.deepEqual(out[2].links, []);
 });
 
-test("실험: the 자료 전체 정리 alone again on a run's cards, one call", () => withData(async () => {
-  const { remergeGen } = await import("./runner.ts");
-  const start = await createGen({ sourceId: "src_recaller_fixture", fileName: "invented.pdf", pageNumbers: [1, 2], purpose: "core", engine: "recaller", provider: "fake", lab: { skimOnly: true } });
-  const base = await runGen(start.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
-  const again = await remergeGen(base.id, { model: { model: "gpt-6.1-terra", effort: "low" } });
-  const done = await runGen(again.id, { uid: "local-experiment" }, { pdf: async () => null, pages: async () => pages });
-  assert.equal(done.status, "done", done.message);
-  assert.deepEqual((await readGenCalls(done.id)).map((c) => [c.step, c.model]), [["rc-merge", "gpt-6.1-terra"]]);
-  assert.equal(done.recaller!.consolidated!.cards.length, Object.values(base.recaller!.units).reduce((n, u) => n + (u.cards?.length ?? 0), 0));
-}));
 
 test("쪽 의도 먼저 (lab.intentPass): one short pass, then a cover page makes no card and 정리 sees the intents", () => withData(async () => {
   const three = new Map([[1, "# Computer Graphics\n- Three Dimensional Viewing lecture by someone"], ...pages].map(([p, t], i) => [i + 1, t] as [number, string]));

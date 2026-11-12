@@ -22,7 +22,6 @@ export type StartOptions = {
 type Props = {
   engineReady: boolean;
   /** 엔진 고르기(개발용): 엔진 실험 서버(3002)나 ?engines=1 일 때만 */
-  devEngines: boolean;
   /** 코치가 남긴 다음 자료 메모(예: "너무 지엽적") — 메모 칸의 처음 값 */
   noteSeed?: string;
   loadPdfjs: () => Promise<Pdfjs>;
@@ -57,7 +56,7 @@ async function readSections(doc: PdfDoc, pages: Page[]): Promise<Section[]> {
 
 type WebSource = { id: string; title: string; url?: string; readAt?: string };
 
-export default function NewMaterial({ engineReady, devEngines, noteSeed, loadPdfjs, onStart }: Props) {
+export default function NewMaterial({ engineReady, noteSeed, loadPdfjs, onStart }: Props) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -73,8 +72,9 @@ export default function NewMaterial({ engineReady, devEngines, noteSeed, loadPdf
   const [lecture, setLecture] = useState(false);
   const [deep, setDeep] = useState(false);
   const [deepFast, setDeepFast] = useState(false);
-  const [engine, setEngine] = useState("recaller");
-  const [survey, setSurvey] = useState<Record<string, string | undefined>>({});
+  // 11/12 A 정리: 엔진은 Recaller 하나(예전 엔진 v2·v3·v5·alpha 고르기와 설문은 지움)
+  const engine = "recaller";
+  const survey: Record<string, string | undefined> = {};
   const [webOpen, setWebOpen] = useState(false);
   const [webList, setWebList] = useState<WebSource[] | null>(null);
   const [over, setOver] = useState(false);
@@ -207,18 +207,6 @@ export default function NewMaterial({ engineReady, devEngines, noteSeed, loadPdf
       {engine === "recaller" && deep ? <label className="row small" style={{ gap: 8, cursor: "pointer", marginLeft: 24 }}>
         <input type="checkbox" checked={deepFast} disabled={busy} onChange={(e) => setDeepFast(e.target.checked)} />
         <span><b>심화 빠르게</b><span className="muted"> · 초안 두 개를 동시에 써서 먼저 통과한 것을 써요. 사용량이 두 배예요.</span></span></label> : null}
-      {devEngines ? <div className="field"><label>엔진 (실험)</label>
-        <div className="chat-sugs">{[["recaller", "Recaller · 기본"], ["v2", "v2"], ["v3", "v3"], ["v5", "v5 · 자료 맞춤"], ["alpha", "Alpha · 첫 출제 품질"]].map(([key, label]) =>
-          <button key={key} className="chip-btn" aria-pressed={engine === key ? "true" : "false"} disabled={busy} onClick={() => setEngine(key)}>{label}</button>)}</div>
-        {engine === "v5" || engine === "alpha" ? <div className="row small" style={{ gap: 6, flexWrap: "wrap" }}>
-          <span className="muted">설문(선택) · 비우면 자료에 맞게 정해요</span>
-          {([["style", "시험 유형", [["recall", "암기형"], ["understand", "이해형"]]], ["exam", "시험 형태", [["choice", "객관식 위주"], ["mixed", "섞어서"], ["written", "서술 포함"]]], ["depth", "깊이", [["core", "핵심만"], ["all", "전부"]]], ["time", "시간", [["short", "빠듯함"], ["normal", "보통"], ["long", "넉넉함"]]],
-            ...(engine === "alpha" ? [["difficulty", "난이도", [["easy", "쉬움"], ["normal", "보통"], ["hard", "어려움"]]]] : [])] as Array<[string, string, string[][]]>).map(([key, label, opts]) =>
-            <select key={key} disabled={busy} value={survey[key] ?? ""} onChange={(e) => setSurvey({ ...survey, [key]: e.target.value || undefined })}>
-              <option value="">{label}</option>{opts.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>)}
-          <input placeholder="이미 아는 부분" value={survey.known ?? ""} disabled={busy} onChange={(e) => setSurvey({ ...survey, known: e.target.value || undefined })} />
-        </div> : null}
-      </div> : null}
       <div className="row">
         <button className="btn primary" id="startBtn" disabled={busy || !engineReady} onClick={() => void start()}>기억 정리 시작</button>
         <span className="small muted">바로 자료 지도로 넘어가요. 기억이 정리되는 대로 채워지고, 문제는 지도에서 원할 때 만들어요.</span>

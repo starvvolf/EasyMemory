@@ -11,7 +11,7 @@ import { imageSize } from "./image-size.ts";
 import { addMore, fillGroups, HEADING_TERMS, goalsWithIds, memoryCard, STEM_FILL_GOALS, memoryCardQA, missingPages, parsePlan, settlePlan, splitGoals, STEM_GOALS_LINES, STEM_FILL, STEM_FILL_QA, STEM_MORE, STEM_MORE_LINES, STEM_PLAN, STEM_PLAN_LINES, stemFakeReply, stemFillQASchema, stemFillSchema, stemPlanSchema, type StemFill, type StemFillQA, type StemPlan, type StemRole } from "./stem.ts";
 import { cardKinds, cardLine, cardSchema, checkCards, cleanFigure, FIGURE_RULES, figureSchema, INTENT_PASS, intentLeanSchema, intentPassSchema, NO_CARD_INTENTS, ORGANIZE, organizeIntentSchema, PAGE_INTENT_GIVEN, SECTION_SCOPE, organizeSchema, organizeUser, PAGE_INTENT, type Card, type CardIssue, type PageIntent } from "./cards.ts";
 import type { LoadedGuide } from "./guide.ts";
-import { RunawayReply } from "./astra.ts";
+import { RunawayReply } from "./reply.ts";
 import { answerShapeProblem, inspectQuestion, layoutQuestion } from "./layout.ts";
 import { TRANSCRIBE_SYSTEM } from "./pages.ts";
 import { pageText, pdfBookmarks, type PrepResult, type PrepRoute, type PrepRouter } from "./prep.ts";

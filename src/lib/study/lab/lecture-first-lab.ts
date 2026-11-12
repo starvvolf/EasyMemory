@@ -8,7 +8,7 @@
 import { callModel } from "../../ai/model.ts";
 import { currentTrace, withTrace } from "../../ai/trace.ts";
 import { LOCAL_CALLER, logAssistCall } from "../../assist/model.ts";
-import { astraJsonSchema } from "../gen/astra.ts";
+import { jsonSchemaOf as astraJsonSchema } from "../gen/reply.ts";
 import { STEM_FILL, stemFillSchema } from "../gen/stem.ts";
 
 export const LECTURE_FIRST_SYSTEM = `너는 이 강의를 맡은 강사다. 강의 자료 한 편 전체(쪽마다 [p.N] 원문, 그림은 "[이미지] 이름표"가 붙은 이미지)를 받는다.

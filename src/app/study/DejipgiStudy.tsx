@@ -9,7 +9,7 @@ import type { McpSourceCatalogEntry } from "@/lib/mcp-source-catalog";
 import type { ExperimentRequest } from "@/lib/mcp-experiment-requests";
 import type { AuthoringDocument } from "../../../tools/problem-authoring-lab/contract.ts";
 import { mountDejipgi, type DejipgiEnv, type DejipgiMaterialStatus, type PlannerDeck } from "./dejipgi-app.js";
-import { DEFAULT_GEN_MODELS, defaultChosen, genOutline, mapDigest, type Engine, type GenState, type GenSurvey } from "@/lib/study/gen/types";
+import { DEFAULT_GEN_MODELS, defaultChosen, genOutline, type Engine, type GenState, type GenSurvey } from "@/lib/study/gen/types";
 import type { StudyNote } from "@/lib/study/notes";
 import type { KnowledgeLayer } from "@/lib/study/knowledge";
 import { IMPORT_LIMITS, importPayload, practiceRefs } from "@/lib/study/knowledge-contract";
@@ -124,7 +124,7 @@ export default function DejipgiStudy() {
       const done = gen.sections.filter((section) => section.author).length;
       const calls = gen.calls ? ` · 호출 ${gen.calls}번` : "";
       // 만들면서 바로 읽기: the outline and planned goals show as soon as they exist, with each unit's state.
-      const shown = { ...(gen.sections.length ? { outline: genOutline(gen) } : {}), ...(gen.v3?.map ? { knowledge: mapDigest(gen) } : {}) };
+      const shown = { ...(gen.sections.length ? { outline: genOutline(gen) } : {}) };
       if (gen.status === "awaiting-confirm") {
         const objectives = gen.sections.flatMap((section) => (section.design?.objectives ?? []).map((objective) => ({
           id: objective.id, section: section.title, part: section.parts?.find((part) => part.pages.includes(objective.pages[0]))?.title,
