@@ -12,6 +12,8 @@ export type KnowledgePoint = {
   title: string;
   /** What the point says, in a few short lines (the plan's essentials, or the goal's recall). */
   essentials: string[];
+  /** 질문·답 카드의 질문 (11/12) */
+  ask?: string;
   section: string;
   pages: number[];
   spans: Span[];
@@ -40,7 +42,9 @@ export function knowledgeLayer(state: GenState): KnowledgeLayer {
       !settled ? "pending" : (merged.get(card.id) ?? card.weight) === "핵심" ? "core" : "minor";
     const points: KnowledgePoint[] = state.sections.flatMap((section) => (units[section.id]?.cards ?? []).map((card) => ({
       // 줄기 모드(11/10): 카드 한 장이 기억 하나 — 요지, 모양(단계·기준…), 모양에 없는 식·조건 순으로.
-      id: card.id, title: card.title, essentials: [...(card.memo?.line ? [card.memo.line] : []), cardLine(card).replace(/^\[[^\]]+\] [^:]+: /, ""), ...(card.memo?.facts ?? []), ...card.mistakes.slice(0, 2).map((m) => `헷갈림: ${m}`)], section: section.title,
+      id: card.id, title: card.title, ...(card.memo?.question ? { ask: card.memo.question } : {}),
+      // 질문·답 카드(11/12)는 답 그대로가 뜻이다(첫 줄 + 모양 줄을 겹쳐 쓰지 않는다).
+      essentials: card.memo?.answer ? [card.memo.answer, ...card.mistakes.slice(0, 2).map((m) => `헷갈림: ${m}`)] : [...(card.memo?.line ? [card.memo.line] : []), cardLine(card).replace(/^\[[^\]]+\] [^:]+: /, ""), ...(card.memo?.facts ?? []), ...card.mistakes.slice(0, 2).map((m) => `헷갈림: ${m}`)], section: section.title,
       pages: [...new Set(card.evidence.map((e) => e.page))].sort((a, b) => a - b), spans: card.evidence.map((e) => ({ page: e.page, kind: e.quote ? "text" : "figure", quote: e.quote })), importance: importance(card) })));
     const byObjective: Record<string, string[]> = {};
     for (const unit of Object.values(units)) for (const q of unit.questions ?? []) byObjective[q.objectiveId] = q.cardIds;

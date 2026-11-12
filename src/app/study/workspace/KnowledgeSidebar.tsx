@@ -7,6 +7,7 @@ import { call, errorText, go, later, type Detail, type ItemLite, type Question, 
 import { QuestionCard } from "./QuestionCard";
 import { StateChip } from "./KnowledgeWindow";
 import { Rich } from "./Rich";
+import { CardQA } from "./MaterialMap";
 
 type Answer = { answer: string; link: { from: string; to: string; relation: string } };
 
@@ -78,11 +79,25 @@ export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: bool
     } catch (e) { setError(errorText(e)); }
   };
 
+  // 11/12 점검 5번: Esc로 닫는다(글을 쓰는 중이거나 자료 지도가 떠 있으면 그쪽이 먼저)
+  useEffect(() => {
+    if (!open) return;
+    const on = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== "Escape" || e.defaultPrevented || document.querySelector(".mm2-overlay")) return;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA") && (t as HTMLInputElement).value) return;
+      onClose();
+    };
+    window.addEventListener("keydown", on);
+    return () => window.removeEventListener("keydown", on);
+  }, [open, onClose]);
   const list = hits ?? related;
+  // PDF 자료에서 온 기억이면 지도와 같은 질문 · 답 카드로 보인다(11/12 점검 10번)
+  const genRef = sel?.item.sources.find((x) => x.kind === "pdf" && /^gen_[a-z0-9]+:/.test(x.ref ?? ""))?.ref;
   if (!open) return <button className="sb-handle" onClick={onOpen} title="기억 사이드바 열기" aria-label="기억 사이드바 열기"><span>기억</span>{related.length ? <i className="num">{related.length}</i> : null}</button>;
   return (
     <aside className="sb" aria-label="기억 사이드바">
-      <div className="sb-head"><b>기억</b><div className="row"><button className="btn ghost small" onClick={() => go("knowledge")}>기억창 열기</button><button className="btn ghost small" aria-label="사이드바 닫기" title="닫기" onClick={onClose}>→</button></div></div>
+      <div className="sb-head"><b>기억</b><div className="row"><button className="btn ghost small" onClick={() => go("knowledge")}>기억 탭 열기</button><button className="btn ghost small" aria-label="사이드바 닫기" title="닫기" onClick={onClose}>→</button></div></div>
       <input className="ws-input" type="search" placeholder="기억 찾기" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="사이드바 기억 찾기" />
       {error ? <p className="ws-err" onClick={() => setError("")}>{error}</p> : null}
 
@@ -91,11 +106,11 @@ export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: bool
           <div className="row" style={{ justifyContent: "space-between" }}><StateChip state={sel.item.state} graduated={sel.item.graduated} /><button className="btn ghost small" onClick={() => setSel(null)}>목록</button></div>
           <h4>{sel.item.title}</h4>
           <p className="small muted">{sel.path || "폴더 없음"}</p>
-          {sel.item.body ? <Rich text={sel.item.body} className="small" /> : <p className="small muted">설명이 아직 없어요.</p>}
+          {genRef ? <CardQA cardRef={genRef} fallback={sel.item.body ? <Rich text={sel.item.body} className="small" /> : null} /> : sel.item.body ? <Rich text={sel.item.body} className="small" /> : <p className="small muted">설명이 아직 없어요.</p>}
           {sel.links.length || sel.backlinks.length ? <ul className="sb-links small">
             {sel.backlinks.map((l) => <li key={`b${l.item.id}`}><button className="linkish" onClick={() => void pick(l.item.id)}>{l.item.title}</button> —{l.relation}→ 이것</li>)}
             {sel.links.map((l) => <li key={`f${l.item.id}`}>이것 —{l.relation}→ <button className="linkish" onClick={() => void pick(l.item.id)}>{l.item.title}</button></li>)}</ul> : null}
-          <p className="small muted num">맞힘 {sel.item.stats.correct} · 틀림 {sel.item.stats.wrong} · 힌트 {sel.item.stats.hint} · 물어봄 {sel.item.stats.asked}</p>
+          {genRef ? null : <p className="small muted num">맞힘 {sel.item.stats.correct} · 틀림 {sel.item.stats.wrong} · 힌트 {sel.item.stats.hint} · 물어봄 {sel.item.stats.asked}</p>}
           <div className="row"><button className="btn small" onClick={() => void oneQuestion()}>확인 문제</button><button className="btn ghost small" onClick={() => { go("knowledge"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("recaller:knowledge-focus", { detail: { id: sel.item.id } })), 50); }}>자세히</button></div>
           {question ? <QuestionCard key={question.id} question={question} compact onDone={() => window.dispatchEvent(new Event("recaller:knowledge-changed"))} /> : null}
         </section>
@@ -115,6 +130,7 @@ export default function KnowledgeSidebar({ open, onClose, onOpen }: { open: bool
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />
           <button className="btn primary small" disabled={busy || !ask.trim()}>{busy ? "생각하는 중…" : "묻기"}</button>
         </form>
+        {busy ? <p className="small muted"><span className="lc2-caret" /> 내 기억을 보며 답을 쓰는 중… (10초쯤)</p> : null}
         {answer ? <div className="sb-answer"><Rich text={answer.answer} className="small" />
           {answer.link.from && answer.link.to ? <div className="row small"><span className="muted">고리 제안: {answer.link.from} —{answer.link.relation}→ {answer.link.to}</span>{linked ? <span className="chip good">이었어요</span> : <button className="btn small" onClick={() => void addLink()}>잇기</button>}</div> : null}</div> : null}
       </section>

@@ -12,7 +12,8 @@ export type Pending = { id: string; title: string; sourceName: string; status: s
 type Counts = { due: number; fresh: number; good: number; review: number; help: number; read: number; total: number };
 type DeckV = { id: string; title: string; pastExam: boolean; objectives: number; items: number; counts: Counts; skipped: string[]; map: boolean; lastPage: number; firstPage: number; growing: Pending | null };
 type Mat = { key: string; name: string; open: boolean; count: number; due: number; fresh: number; extra: Pending[]; decks: DeckV[] };
-type Snap = { todayLeft: number; due: number; fresh: number; chunk: number; pendings: number; decks: number; loose: Pending[]; mats: Mat[]; lib: { status: string; error: string } };
+type LooseGroup = { key: string; open: boolean; first: Pending; more: Pending[] };
+type Snap = { todayLeft: number; due: number; fresh: number; chunk: number; pendings: number; decks: number; loose: Pending[]; looseGroups?: LooseGroup[]; mats: Mat[]; lib: { status: string; error: string } };
 type Api = {
   snapshot(): Snap; startToday(): void; startAll(): void; practice(id: string): void; records(id: string): void; map(id: string): void; read(id: string, page: number): void;
   fold(key: string): void; toggleGoal(id: string, gid: string): void; confirmGoals(id: string): void; makeQuestions(id: string): void; connect(): void;
@@ -31,9 +32,10 @@ export default function MaterialList({ ui, api }: { ui: Bridge; api: Api }) {
           <h2>{head}</h2>
           <p className="small muted" style={{ margin: "4px 0 10px" }}>새 자료는 자료 지도부터 열려요. 문제는 지도에서 원할 때 만들어요.</p>
           <div className="counts">
-            <div><b className="num">{s.todayLeft}</b><span>오늘 할 것 (오늘 화면과 같음)</span></div>
-            <div><b className="num">{s.due}</b><span>복습 차례</span></div>
-            <div><b className="num">{s.fresh}</b><span>새 문제 (자료당 최대 10)</span></div>
+            {/* 11/12 점검 6번: 오늘 화면의 "복습 차례"(기억 + PDF 문제)와 헷갈리지 않게 PDF 문제 숫자라고 밝힌다 */}
+            <div><b className="num">{s.todayLeft}</b><span>오늘 풀 PDF 문제</span></div>
+            <div><b className="num">{s.due}</b><span>다시 풀 차례</span></div>
+            <div><b className="num">{s.fresh}</b><span>아직 안 푼 문제 (자료당 10개까지)</span></div>
           </div>
         </div>
         <div className="row">
@@ -41,15 +43,15 @@ export default function MaterialList({ ui, api }: { ui: Bridge; api: Api }) {
           <button className={s.todayLeft ? "btn" : "btn primary"} disabled={!(s.due || s.fresh)} onClick={api.startAll}>전체 연습</button>
         </div>
       </section>
-      {s.loose.map(p => (
-        <article className="deck" key={p.id}>
-          <div><h3>{p.title}</h3><div className="meta"><span>{p.sourceName}</span><span className={`chip ${p.status === "failed" ? "bad" : "acc"}`}>{p.label}</span></div></div>
-          <div className="row">
-            {p.map ? <button className="btn small primary" onClick={() => api.map(p.id)}>자료 지도</button>
-              : <button className="btn small primary" onClick={() => api.read(p.id, p.readPage)}>{p.lastPage ? `이어 읽기 p.${p.lastPage}` : "읽기"}</button>}
-          </div>
-          <div style={{ gridColumn: "1/-1" }}><PendingNote p={p} api={api} /></div>
-        </article>
+      {(s.looseGroups ?? s.loose.map((p) => ({ key: p.id, open: false, first: p, more: [] }))).map((g) => (
+        <div key={g.key} className="loose-group">
+          <LooseCard p={g.first} api={api} />
+          {g.more.length ? <>
+            <button className="fold-btn loose-more" aria-expanded={g.open} onClick={() => api.fold(g.key)}>
+              <span className="fold-caret" aria-hidden="true">{g.open ? "▾" : "▸"}</span><span className="small muted">같은 자료로 만든 것 {g.more.length}개 더</span></button>
+            {g.open ? g.more.map((p) => <LooseCard key={p.id} p={p} api={api} />) : null}
+          </> : null}
+        </div>
       ))}
       <section className="subj-group">
         <div className="decks">
@@ -67,6 +69,22 @@ export default function MaterialList({ ui, api }: { ui: Bridge; api: Api }) {
       {s.lib.status === "loading" ? <p className="small muted">Recaller 문제를 불러오는 중…</p> : s.lib.status === "error" ? <div className="note err">{s.lib.error}</div> : null}
       <p className="small muted">정답을 보기 전에 스스로 떠올려 맞힌 것만 ‘혼자 맞힘’으로 셉니다. 한 번 맞혔다고 끝내지 않고, 간격을 늘려 가며 다시 물어봅니다.</p>
     </div>
+  );
+}
+
+/* 기억만 정리한 자료 한 칸 (11/12 점검 15번): 다 된 것은 안내 글 없이 [자료 지도] [문제 만들기]만, 도는 중·멈춤·실패만 안내 글을 보인다. */
+function LooseCard({ p, api }: { p: Pending; api: Api }) {
+  const done = p.status === "cards" && p.note.canQuestions && !p.note.goals;
+  return (
+    <article className={`deck${done ? " deck-done" : ""}`}>
+      <div><h3>{p.title}</h3><div className="meta"><span>{p.sourceName}</span><span className={`chip ${p.status === "failed" ? "bad" : "acc"}`}>{p.label}</span></div></div>
+      <div className="row">
+        {done ? <button className="btn small ghost" disabled={p.note.making} onClick={() => api.makeQuestions(p.id)}>{p.note.making ? "시작하는 중…" : "문제 만들기"}</button> : null}
+        {p.map ? <button className="btn small primary" onClick={() => api.map(p.id)}>자료 지도</button>
+          : <button className="btn small primary" onClick={() => api.read(p.id, p.readPage)}>{p.lastPage ? `이어 읽기 p.${p.lastPage}` : "읽기"}</button>}
+      </div>
+      {done ? null : <div style={{ gridColumn: "1/-1" }}><PendingNote p={p} api={api} /></div>}
+    </article>
   );
 }
 

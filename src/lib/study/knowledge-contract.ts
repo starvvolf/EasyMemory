@@ -8,7 +8,7 @@ import type { KnowledgeLayer } from "./knowledge.ts";
 /** What `/api/knowledge/import` accepts for one point (its zod schema in src/app/api/knowledge/[[...path]]/route.ts). */
 export const IMPORT_LIMITS = { ref: 200, title: 120, essentials: 8, essential: 600, folder: 200, material: 200, points: 2000 } as const;
 /** importance (B, 2026-10-30): core만 바로 지식이 되고, minor·pending은 기다렸다가 풀거나 "모름"을 누를 때 지식이 된다. 없으면 전부 지식. */
-export type ImportPoint = { ref: string; title: string; essentials: string[]; folder: string; material: string; page?: number; importance?: "core" | "minor" | "pending" };
+export type ImportPoint = { ref: string; title: string; essentials: string[]; folder: string; material: string; page?: number; importance?: "core" | "minor" | "pending"; ask?: string };
 
 const materialOf = (deck: { sourceName?: string; title?: string }) => String(deck.sourceName || deck.title || "").replace(/\.pdf$/i, "");
 
@@ -23,6 +23,7 @@ export function importPayload(deck: { id: string; sourceName?: string; title?: s
     material: material.slice(0, IMPORT_LIMITS.material),
     ...(point.pages[0] ? { page: point.pages[0] } : {}),
     ...(point.importance ? { importance: point.importance } : {}),
+    ...(point.ask ? { ask: point.ask.slice(0, 300) } : {}),
   }));
 }
 

@@ -400,7 +400,12 @@ function touchMemory(subject){
 /* 메뉴 넷 (2026-10-26): 오늘 · 공부 · 지식 · 일정. Every screen belongs to one of them; the rest live under ⋯ 더보기. */
 const TAB_OF = { home:"home", practice:"practice", read:"practice", code:"practice", web:"practice", project:"practice", start:"practice", create:"practice",
   knowledge:"knowledge", summary:"knowledge", plan:"plan" };
+/* 뒤로 가기(11/12 사용자 점검 3번): 앞에 있던 화면을 기억해 Esc가 아닌 마우스 뒤로 · Alt+← 로 돌아간다. 자료 지도는 앞 화면 위에 떠서 NAV.from이 그 화면이다. */
+const NAV = { stack:[], from:"home", back:false };
 function setView(v){
+  if (S.view && S.view !== v && !NAV.back){ NAV.stack.push(S.view); if (NAV.stack.length > 30) NAV.stack.shift(); }
+  NAV.back = false;
+  if (v !== "read" && v !== "practice") NAV.from = v; else if (v === "practice" && !S.session) NAV.from = v;
   // 11/11 사용자 "자료 지도에서 [오늘] 눌러도 아무 반응 없음": 위에 떠 있는 자료 지도·원문 보기가 바뀐 화면을 가렸다. 다른 화면으로 가면 닫는다.
   if (typeof SourcePeek !== "undefined") SourcePeek.close();
   if (typeof MaterialMapView !== "undefined") MaterialMapView.close();
@@ -524,7 +529,10 @@ on(window, "recaller:go", (e) => {
 });
 // [경계] 지식 창(B, 2026-10-30): 왼쪽에서 PDF 자료를 누르면 그 자료의 자료 지도를 연다 (같은 PDF를 여러 번 만들었으면 가장 최근 것).
 on(window, "recaller:map-open", (e) => {
-  const id = String((e.detail && e.detail.genId) || "");
+  let id = String((e.detail && e.detail.genId) || "");
+  // 11/12: 기록에 자료 id가 없는 예전 기록(제목만)은 제목으로 찾는다(오늘 › 이어서 하기).
+  if (!id && e.detail && e.detail.title){ const t = String(e.detail.title); const hit = Object.values(S.decks).filter(x => genDeck(x.id) && (displayTitle(x) === t || x.title === t)).sort((a, b) => (b.madeAt || 0) - (a.madeAt || 0))[0]; if (hit) id = String(hit.id).replace(/^pending:/, ""); }
+  if (!id){ setView("practice"); return; }
   const d = S.decks[id] || S.decks["pending:" + id];
   const page = Number(e.detail && e.detail.page) || 0;
   // 11/10: 공부 기록에 없는 자료(기억 탭이 실제로 만든 자료 목록에서 연 것)도 지도는 연다(문제 풀기는 자료가 공부에 붙은 뒤).
@@ -721,7 +729,10 @@ function materialName(list){
 /* 11/11 PDF 자료 목록을 React로(workspace/MaterialList.tsx): 위 renderHome과 같은 값을 그림 없이 넘긴다. */
 function pendingView(d){
   const p = d.pending;
-  let text = p.message || PENDING_LABEL[p.status] || "";
+  let text = String(p.message || PENDING_LABEL[p.status] || "").replace("지식 정리 끝", "기억 정리 끝");
+  // 11/12 점검 15번: 만든 기록이 없어진 것은 이어 만들 수 없다 — 지우기만 남긴다.
+  const gone = /찾을 수 없/.test(text);
+  if (gone) text = "만든 기록이 없어져서 이어 만들 수 없어요. 지워 주세요.";
   if (p.status === "paused" && /호출 수\((\d+)\)/.test(text)) text = `만들다 멈췄어요. 한 번에 AI를 부를 수 있는 횟수(${text.match(/호출 수\((\d+)\)/)[1]}번)를 다 썼어요. ‘이어 만들기’를 누르면 멈춘 곳부터 다시 만들어요 (AI 사용량이 들어요).`;
   const goals = p.status === "confirm" && p.objectives && p.objectives.length ? {
     chosen: [...(p.chosen || [])], confirming: !!p.confirming,
@@ -735,7 +746,7 @@ function pendingView(d){
       failed: p.status === "failed", making: !!p.making,
       canQuestions: p.status === "cards" && !!(engine && engine.questions),
       canConnect: p.status === "paused" && !!(account && S.account && S.account.show && !S.account.ready),
-      canResume: p.status === "paused" && !!(engine && engine.resume),
+      canResume: p.status === "paused" && !gone && !!(engine && engine.resume),
       canRestart: p.status === "failed", canRemove: p.status === "failed" || p.status === "paused" },
   };
 }
@@ -761,6 +772,10 @@ const materialsApi = {
       if (d.pending.status === "cards" && realNames.has(matKey(d))){ const k = matKey(d); if (!joined.has(k)) joined.set(k, []); joined.get(k).push(d); continue; }
       loose.push(pendingView(d));
     }
+    // 11/12 점검 15번: 같은 PDF로 여러 번 만든 것(기억만 정리한 것)은 가장 최근 하나만 보이고 나머지는 그 아래 접어 둔다.
+    const looseBy = new Map();
+    for (const v of loose){ const k = "l:" + matKey(v); if (!looseBy.has(k)) looseBy.set(k, []); looseBy.get(k).push(v); }
+    const looseGroups = [...looseBy.entries()].map(([key, list]) => ({ key, open:Fold.is(key), first:list[0], more:list.slice(1) }));
     const byMat = new Map();
     for (const d of decks.slice().sort(byTitle)){ const k = planKey(d); if (!byMat.has(k)) byMat.set(k, []); byMat.get(k).push(d); }
     const mats = [...byMat.entries()].map(([k, list]) => {
@@ -769,7 +784,7 @@ const materialsApi = {
         due:list.reduce((n, d) => n + deckCounts(d).due, 0), fresh:list.reduce((n, d) => n + deckCounts(d).fresh, 0),
         extra:extra.map(pendingView), decks:list.map(d => deckView(d, growing)) };
     }).sort((a, b) => a.name.localeCompare(b.name, "ko", { numeric:true }));
-    return { todayLeft, due, fresh, chunk:chunkSize(), pendings:pendings.length, decks:decks.length, loose, mats, lib:{ status:S.lib.status, error:S.lib.error || "" } };
+    return { todayLeft, due, fresh, chunk:chunkSize(), pendings:pendings.length, decks:decks.length, loose, looseGroups, mats, lib:{ status:S.lib.status, error:S.lib.error || "" } };
   },
   startToday: () => startToday(),
   startAll: () => startSession(null),
@@ -1076,7 +1091,10 @@ const sessionApi = {
 /* 그만하기·처음으로 (2026-11-02 A, 점검_UIUX화면연결 2번): back to the screen the practice was started from (오늘 → 오늘). */
 function leaveSession(){
   const back = S.session && S.session.from;
+  // 11/12 사용자 점검 2번: 자료 지도에서 시작한 문제는 그만두면 그 지도로 돌아간다.
+  const map = S.session && S.session.fromMap;
   S.session = null;
+  if (map){ setView(NAV.from || "practice"); const d = S.decks[map]; if (d) MaterialMapView.open(d); return; }
   if (back && back !== "practice" && back !== S.view) setView(back); else render();
 }
 function fmtWhen(t){
@@ -1921,6 +1939,10 @@ const MaterialMapView = {
     this.close();
     const ov = h("div", { class:"mm2-overlay" }), host = h("div");
     ov.append(host);
+    // 11/12 사용자 점검 4번: 지도는 앱 머리(오늘·공부·기억·기록) 아래에 띄운다. 머리가 보여야 다른 탭으로 바로 가고, 스크롤하던 자리와 상관없이 위에서 시작한다.
+    window.scrollTo({ top:0 });
+    const mast = document.querySelector(".dejipgi .masthead");
+    if (mast){ const b = Math.round(mast.getBoundingClientRect().bottom); if (b > 0) ov.style.top = b + "px"; }
     (document.getElementById("app").closest(".dejipgi") || document.body).append(ov);
     const gid = String(d.id).replace(/^pending:/, "");
     const deckNow = () => S.decks[gid] || S.decks["pending:" + gid] || d;
@@ -1933,8 +1955,10 @@ const MaterialMapView = {
         const objId = String(cardId || "").replace(/^(s\d+)\.(.+)$/, "$1-q$2");
         this.close(); S.session = null;
         startCheck(gid, p, real.items.some(it => it.objectiveId === objId) ? objId : undefined);
+        if (S.session) S.session.fromMap = gid;
       },
       onMakeQuestions: () => makeQuestions(deckNow()),
+      practiceLeft: () => { const real = S.decks[gid]; if (!real) return 0; const asked = this.asked[gid]; const fresh = real.items.filter(it => !asked || !asked.has(it.id)).length; return fresh || real.items.length; },
       // 만든 문제부터 풀기 (11/6 사용자 "자료 입력하고 실시간으로 만들어지는 창에서 문제도 바로 풀 수 있게, 만들어진 문제부터"):
       // while the material is still being made, the questions published so far; pressed again, only the ones not yet asked here.
       onPracticeAll: () => {
@@ -1947,6 +1971,7 @@ const MaterialMapView = {
         for (const it of pick) asked.add(it.id);
         this.close(); S.session = null;
         startCheck(gid, pick[0].page, undefined, pick);
+        if (S.session) S.session.fromMap = gid;
       },
       onClose: () => this.close() });
     this.cur = { ov, stop };
@@ -1964,6 +1989,9 @@ function backOne(){
     return true;
   }
   if (S.view === "create" && !S.builder?.busy){ setView("practice"); render(); return true; }
+  if (S.session && S.view === "practice"){ leaveSession(); return true; }
+  const prev = NAV.stack.pop();
+  if (prev && prev !== S.view){ NAV.back = true; S.session = null; setView(prev); window.scrollTo({ top:0 }); return true; }
   return false;
 }
 document.addEventListener("keydown", (e) => {

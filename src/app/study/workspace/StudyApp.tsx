@@ -104,9 +104,10 @@ export default function StudyApp({ ui, api }: { ui: Bridge; api: ShellApi }) {
         {s.view === "create" ? (
           <>
             <div className="study-nav"><button className="btn ghost small" onClick={() => api.go("practice")}>← PDF 자료</button><span className="small muted">PDF · 강의 자료 넣기</span></div>
-            {s.account ? (
-              <div className={`note row${s.account.ready ? "" : " warn"}`} role="status"><span style={{ flex: 1, minWidth: 0 }}>{s.account.message}</span>
-                {s.account.ready ? <button className="btn small ghost" onClick={api.disconnect}>연결 해제</button> : <button className="btn small" onClick={api.connect}>ChatGPT 연결</button>}</div>
+            {/* 11/12 점검 17번: 연결돼 있으면 안내를 띄우지 않는다(연결 해제는 위 "ChatGPT 연결됨" 칩 안에 있다) — 연결이 안 됐을 때만 알린다 */}
+            {s.account && !s.account.ready ? (
+              <div className="note row warn" role="status"><span style={{ flex: 1, minWidth: 0 }}>{s.account.message}</span>
+                <button className="btn small" onClick={api.connect}>ChatGPT 연결</button></div>
             ) : null}
             <div className="view-host view-create">
               <NewMaterial key={s.create.key} engineReady={s.create.engineReady} devEngines={s.create.devEngines} noteSeed={s.create.noteSeed} loadPdfjs={api.loadPdfjs} onStart={api.startMaterial} />

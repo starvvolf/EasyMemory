@@ -824,7 +824,7 @@ function pointBody(title: string, essentials: string[]) {
  * runs on every load, so it also tidies points brought in before (wiring out of the text, the file-name folder renamed)
  * and turns each card's 냄 → 받음 into 고리 inside one material, without a model call.
  */
-type ImportedPoint = { ref: string; title: string; essentials: string[]; folder: string; material: string; page?: number; importance?: "core" | "minor" | "pending" };
+type ImportedPoint = { ref: string; title: string; essentials: string[]; folder: string; material: string; page?: number; importance?: "core" | "minor" | "pending"; /** 질문·답 카드의 질문(11/12): 복습 플래시카드 앞면 */ ask?: string };
 /*
  * 핵심 카드만 지식으로 (2026-10-30 사용자 "ㅇㅇ ㄱㄱ"): 엔진이 보조(minor)라고 했거나 아직 중요도가 안 정해진(pending) 카드는 바로
  * 지식이 되지 않고 여기서 기다린다. 학습자가 그 카드 문제를 풀거나(recordByRef) 자료 지도에서 "모름"을 누르면(pickWaiting) 그때
@@ -842,7 +842,7 @@ async function writeWaiting(all: Record<string, ImportedPoint>) {
 }
 const pointInput = (p: ImportedPoint, state?: KState) => {
   const [material, ...rest] = p.folder.split("/");
-  return { title: p.title, body: pointBody(p.title, p.essentials), topicHint: [folderName(material ?? ""), ...rest].join(" / "), ...(state ? { state } : {}),
+  return { title: p.title, body: pointBody(p.title, p.essentials), ...(p.ask ? { ask: p.ask } : {}), topicHint: [folderName(material ?? ""), ...rest].join(" / "), ...(state ? { state } : {}),
     source: { kind: "pdf" as const, title: p.material, ref: p.ref, ...(p.page ? { page: p.page } : {}) } };
 };
 /** Waiting points that become knowledge now (the learner touched them). Refs already knowledge or not waiting are left alone. */
@@ -907,6 +907,8 @@ export async function importPoints(input: ImportedPoint[]) {
       if (!item) continue;
       const body = pointBody(item.title, item.body.split("\n"));
       if (body && body !== item.body && (item.body.includes("⟨받음:") || p.essentials.some((e) => stripWiring(e).startsWith(item.title)))) { item.body = body; dirty = true; }
+      // 질문·답 카드(11/12): 예전에 들어온 기억에도 질문을 붙여 복습 앞면이 이름이 아니라 질문이 되게(사용자가 고친 질문은 그대로)
+      if (p.ask && !item.ask) { item.ask = p.ask.slice(0, 300); dirty = true; }
     }
     let added = 0;
     const groups = new Map<string, Array<{ item: Knowledge; takes: string[]; gives: string[] }>>();

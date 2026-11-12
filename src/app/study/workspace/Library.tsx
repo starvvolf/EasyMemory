@@ -107,14 +107,15 @@ export default function Library() {
 
   const main = useRef<HTMLDivElement>(null);
   const counts = (b: Branch) => entries.filter((e) => e.branch === b).length;
-  const empty = !rows ? "불러오는 중…" : branch === "material" ? "아직 자료가 없어요. 공부 › 자료에서 PDF나 웹 글로 자료를 만들면 여기 꽂혀요."
+  // 11/12 점검 12번: 갈래마다 자기 목록을 다 받기 전엔 "없어요"가 아니라 불러오는 중 (알고리즘이 0 → 12로 바뀌어 보였다)
+  const empty = !rows || (branch === "code" && !logs) || (branch === "project" && !runs && runsOnline) ? "불러오는 중…" : branch === "material" ? "아직 자료가 없어요. 공부 › 자료에서 PDF나 웹 글로 자료를 만들면 여기 꽂혀요."
     : branch === "code" ? "아직 푼 문제가 없어요. 알고리즘 문제를 풀면 풀이 노트가 여기 꽂혀요." : !runsOnline ? "실습 서버가 꺼져 있어 실습 목록을 못 불러왔어요. 실습 탭을 열면 켜져요." : "아직 실습 기록이 없어요.";
 
   return (
     <div className="lib" ref={box} style={h ? { height: h } : undefined}>
       <aside className="lib-side" aria-label="기억 목록">
         <div className="lib-seg" role="tablist" aria-label="기억 갈래">{BRANCHES.map(([b, label]) => (
-          <button key={b} role="tab" aria-selected={branch === b} className={branch === b ? "on" : ""} onClick={() => pick(b)}>{label}{rows ? <small>{counts(b)}</small> : null}</button>
+          <button key={b} role="tab" aria-selected={branch === b} className={branch === b ? "on" : ""} onClick={() => pick(b)}>{label}{(b === "code" ? logs : b === "project" ? runs : rows) ? <small>{counts(b)}</small> : null}</button>
         ))}</div>
         <input className="lib-find" value={q} onChange={(e) => setQ(e.target.value)} placeholder="제목으로 찾기" aria-label="목록에서 찾기" />
         <nav className="lib-list">

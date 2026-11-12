@@ -244,10 +244,10 @@ async function handle(request: Request, context: RouteContext) {
     if (p[0] === "ref-event" && m === "POST") {
       const b = await body(z.object({ refs: z.array(z.string().max(200)).min(1).max(20), kind: z.enum(["met", "asked", "wrong", "hint", "correct", "note"]), detail: z.string().max(600).optional(), material: z.string().max(200).optional(),
         takeBack: z.enum(["correct", "read"]).optional() }));
-      return json(await recordByRef(b.refs, b.kind, b.detail ?? "", b.material ? { kind: "pdf", title: b.material } : undefined, b.takeBack));
+      return json(await recordByRef(b.refs, b.kind, b.detail ?? "", b.material ? { kind: "pdf", title: b.material, ...(/^(gen_[a-z0-9]+)/.test(b.refs[0]) ? { ref: /^(gen_[a-z0-9]+)/.exec(b.refs[0])![1] } : {}) } : undefined, b.takeBack));
     }
     if (p[0] === "import" && m === "POST") {
-      const b = await body(z.object({ points: z.array(z.object({ ref: z.string().max(200), title: z.string().min(1).max(120), essentials: z.array(z.string().max(600)).max(8), folder: z.string().max(200), material: z.string().max(200), page: z.number().int().optional(), importance: z.enum(["core", "minor", "pending"]).optional() })).max(2000) }));
+      const b = await body(z.object({ points: z.array(z.object({ ref: z.string().max(200), title: z.string().min(1).max(120), essentials: z.array(z.string().max(600)).max(8), folder: z.string().max(200), material: z.string().max(200), page: z.number().int().optional(), importance: z.enum(["core", "minor", "pending"]).optional(), ask: z.string().max(300).optional() })).max(2000) }));
       return json(await importPoints(b.points));
     }
 

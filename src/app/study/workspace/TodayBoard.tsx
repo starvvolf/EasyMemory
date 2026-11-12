@@ -47,7 +47,7 @@ export default function TodayBoard() {
     if (questions.length) setRun({ title, questions }); else setNote("지금 풀 문제가 없어요.");
   };
 
-  if (run) return <QuestionRun title={run.title} questions={run.questions} onClose={() => { setRun(null); setPick(false); void load(); }} />;
+  if (run) return <QuestionRun title={run.title} questions={run.questions} onClose={() => { setRun(null); void load(); }} /* 그만하기 → 고르던 목록으로 (11/12 점검 2번) */ />;
 
   const unknown = review.filter((i) => i.state === "unknown").length;
   const wrong = problems.filter((p) => p.status === "wrong");
@@ -57,7 +57,8 @@ export default function TodayBoard() {
 
   // 이어서 하기 (11/9 사용자 "자료/알고리즘/실습 세 가지 탭에서 각각 하나씩"): 갈래마다 가장 최근에 한 것 하나.
   const newest = (xs: Array<Last | null>) => xs.filter((x): x is Last => !!x).sort((a, b) => b.at.localeCompare(a.at))[0] ?? null;
-  const openPdf = (s: Studied) => () => { const gen = /^(gen_[a-z0-9]+)/.exec(s.ref)?.[1]; if (gen) window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: { genId: gen } })); else go("practice"); };
+  // 11/12 사용자 점검 1번: 자료 id가 없는 예전 기록도 제목으로 그 지도를 바로 연다(목록으로 보내지 않는다).
+  const openPdf = (s: Studied) => () => { const gen = /^(gen_[a-z0-9]+)/.exec(s.ref)?.[1]; window.dispatchEvent(new CustomEvent("recaller:map-open", { detail: gen ? { genId: gen } : { title: s.title } })); };
   const lastSource = [...sources].sort((a, b) => b.readAt.localeCompare(a.readAt))[0];
   const lastProblem = [...problems].filter((p) => p.lastAt).sort((a, b) => b.lastAt.localeCompare(a.lastAt))[0];
   const material = newest([
@@ -82,6 +83,8 @@ export default function TodayBoard() {
       <section className="td-card">
         <p className="eyebrow">문제 풀기</p>
         <p className="td-big num">{due}<small>개 복습 차례</small></p>
+        {/* 11/12 점검 6번: 무엇이 합쳐진 숫자인지 (공부 › 자료 화면은 PDF 문제만 센다) */}
+        {review.length && pdfLeft ? <p className="small muted td-split num">기억 {review.length} · PDF 문제 {pdfLeft}</p> : null}
         {!pick ? (
           <>
             <p className="small muted">{unknown ? `몰랐던 기억 ${unknown}개가 먼저 나와요.` : due ? "오래 안 본 것부터 나와요." : "복습 차례는 없어요. 미리 연습하거나 새 문제를 풀어 보세요."}</p>

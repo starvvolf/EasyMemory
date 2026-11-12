@@ -538,6 +538,18 @@ function LectureFig({ genId, label, says }: { genId: string; label: string; says
 }
 /** 자세히(11/11): 외울 핵심은 아닌 참고 — 눌러야 보인다. */
 /** 질문 하나 · 답 하나 카드의 답(11/11 lab.cardQA): 한 줄이면 한 줄, 단계·식·표가 있으면 그 모양 그대로(마크다운) */
+/** 목록 한 줄 (11/12 점검 16번): 늘 답의 첫 줄. 답이 표뿐이면 질문 대신 표 머리("대상 · 기준 (표)"). */
+function rowLine(c: Card): string {
+  const m = c.memo;
+  if (m?.answer) {
+    const lines = m.answer.split("\n").map((x) => x.trim()).filter(Boolean);
+    const text = lines.find((x) => !x.startsWith("|"));
+    if (text) return text.replace(/^(\d+[.)]|[-*•])\s+/, "");
+    const head = (lines[0] ?? "").split("|").map((x) => x.trim()).filter(Boolean);
+    if (head.length) return `${head.join(" · ")} (표)`;
+  }
+  return m?.line || keyLine(c.shape);
+}
 function Answer({ text }: { text: string }) {
   return <div className="lc3-ca mm3-a mm3-ans"><span className="lc3-qtag a">A</span><RichBlock text={text} /></div>;
 }
@@ -664,6 +676,7 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
   const [areas, setAreas] = useState<L3Area[] | null | undefined>(undefined);
   const [error, setError] = useState("");
   const [atKey, setAtKey] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false); // 11/12 점검 13번: [강의 시작] 뒤 첫 장이 올 때까지 기다린다는 표시
   const [dir, setDir] = useState<"next" | "prev">("next");
   const [q, setQ] = useState("");
   const [seen, setSeen] = useState<Set<string>>(() => new Set()); // 끝까지 흘려 보여 준 글(다시 오면 바로 다 보임)
@@ -716,12 +729,12 @@ function LecturePane({ genId, cards, onPage }: { genId: string; cards: Card[]; o
   if (areas === undefined) return <p className="small muted mm6-wait">불러오는 중…</p>;
   if (!areas) return <p className="small bad">{error || "강의를 열 수 없어요."}</p>;
   if (!areas.length) return <p className="small muted">강의할 영역이 없어요.</p>;
-  const begin = () => { void post({ action: "area", section: areas[0].id }); setAtKey(`${areas[0].id}:0`); };
+  const begin = () => { setStarting(true); void post({ action: "area", section: areas[0].id }); setAtKey(`${areas[0].id}:0`); };
   if (!slots.length || !cur) return <div className="lc3-empty">
     <p className="lc3-empty-title">강사와 함께 한 장씩 넘기며 공부해요</p>
     <p className="small muted">영역 {areas.length}개 · 강사가 영역마다 이야기를 이어 설명하고, 설명이 끝난 자리에 기억 카드를 띄워요. 모르는 게 있으면 그 장 밑에 물어보세요.</p>
     {error ? <p className="small bad">{error}</p> : null}
-    <button className="btn primary" onClick={begin}>강의 시작</button></div>;
+    {starting && !error ? <p className="small muted lc3-starting"><span className="lc2-caret" /> 강사가 첫 장을 쓰고 있어요 (10초쯤)</p> : <button className="btn primary" onClick={begin}>강의 시작</button>}</div>;
   const area = cur.area, step = cur.step;
   const isLastOfArea = Boolean(step && area.status === "done" && area.steps[area.steps.length - 1]?.n === step.n);
   const allText = area.steps.map((s) => s.text).join("\n");
@@ -950,7 +963,9 @@ function LiveBoard({ data }: { data: LiveData }) {
 
 // 사용자 10/30: the map is where a material is studied (no reading screen): 원문 opens one page over it, 문제 풀기 starts that
 // page's questions, and a material made without questions gets them here (문제 만들기).
-export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, onMakeQuestions, onClose }: { genId: string; onPage: (page: number) => void;
+export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, practiceLeft, onMakeQuestions, onClose }: { genId: string; onPage: (page: number) => void;
+  /** 누르면 실제로 풀 문제 수 (11/12 점검 7번: 지도가 센 문제 수와 연습에 붙은 수가 달랐다) */
+  practiceLeft?: () => number;
   onPractice?: (page: number, cardId: string) => void;
   /** 만든 문제부터 풀기 (11/6): the questions made so far, even while the material is still being made. */
   onPracticeAll?: () => void;
@@ -1068,11 +1083,12 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
     { label: "자료 읽기", state: live?.outline.length || cardsN || summary?.text ? "done" : "now" },
     ...(summary ? [{ label: "요약", state: (summary.status === "done" || summary.status === "failed" ? "done" : summary.status === "writing" ? "now" : running ? "wait" : "done") as Step["state"],
       note: summary.status === "failed" ? "못 씀" : summary.ms ? `${Math.round(summary.ms / 1000)}초` : undefined }]
-      : [{ label: "목차", state: (digest?.skeleton?.status === "done" ? "done" : digest?.skeleton?.text ? "now" : running ? "now" : "done") as Step["state"],
+      : [{ label: digest?.skeleton ? "줄기" : "목차", state: (digest?.skeleton?.status === "done" ? "done" : digest?.skeleton?.text ? "now" : running ? "now" : "done") as Step["state"],
         note: digest?.skeleton?.topics.length ? `주제 ${digest.skeleton.topics.length}` : undefined }]),
     { label: "기억 카드", state: !running || map?.topics?.length ? "done" : cardsN || board === "live" ? "now" : "wait",
       note: cardsN ? `${cardsN}개` : board === "live" && live?.outline.length ? `${pagesIn}/${live.outline.length}쪽` : undefined },
-    { label: "핵심·연결 정리", state: map?.topics?.length || !running ? "done" : cardsN && board === "off" ? "now" : "wait" },
+    // 줄기 모드(목차가 있는 실행)는 자료 전체 정리 단계가 없다 (11/12 점검 9번: 없는 단계가 보였다)
+    ...(digest?.skeleton ? [] : [{ label: "핵심·연결 정리", state: (map?.topics?.length || !running ? "done" : cardsN && board === "off" ? "now" : "wait") as Step["state"] }]),
     ...(map && !map.questionsLater ? [{ label: "문제", state: (!running ? "done" : map.topics?.length ? "now" : "wait") as Step["state"], note: map.counts.questions ? `${map.counts.questions}개` : undefined }] : []),
   ];
   // 목차가 있으면(엔진의 목차 → 카드) 첫 탭은 목차, 예전 실행의 정리 글은 요약으로 그대로 보인다.
@@ -1083,6 +1099,8 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
   const shownTab: Tab = picked ?? (noFirst ? "knowledge" : "summary");
   const tabs = <div className="ws-seg mm5-tabs" role="group" aria-label="자료 지도 보기">{([["summary", firstLabel], ...(hasOutline || !summary ? [["structure", "구조"] as const] : []), ["knowledge", "기억"], ...(running ? [] : [["lecture", "강의"] as const])] as const).map(([k, label]) =>
     <button key={k} className={shownTab === k ? "on" : ""} aria-pressed={shownTab === k} onClick={() => setTab(k)}>{label}{k === "knowledge" && running ? <span className="mm5-badge">만드는 중</span> : null}</button>)}</div>;
+  // 11/12 점검 11번: 다 만든 지도를 여는 몇 초 동안 "목차가 나오는 중"이 떠서 다시 만드는 것처럼 보였다 — 만드는 중일 때만 단계를 보인다.
+  if (!map && !error && (!live || !["queued", "running"].includes(live.status))) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>불러오는 중…</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div></div>;
   if (!map) return <div className="mm2 mm3"><div className="mm2-head"><div><p className="eyebrow">자료 지도</p><b>{hasOutline ? "목차가 나오는 중…" : "자료를 읽는 중…"}</b></div><button className="btn ghost small" onClick={onClose}>닫기</button></div>
     <Steps steps={steps} />{tabs}
     {shownTab === "summary" ? (hasOutline || !summary ? <OutlinePane genId={genId} digest={digest} cards={[]} making onPage={onPage} onPractice={onPractice} /> : <SummaryPane summary={summary} making />)
@@ -1106,7 +1124,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
           {map.questionsLater && !making && n.cards && onMakeQuestions ? <button className="btn small primary" disabled={asking} title="기억마다 확인 문제를 만들어 연습·복습에 붙여요"
             onClick={() => { setAsking(true); void onMakeQuestions().then((ok) => { if (ok) setReload((k) => k + 1); }).finally(() => setAsking(false)); }}>{asking ? "시작하는 중…" : "문제 만들기"}</button> : null}
           {!map.questionsLater && n.questions && onPracticeAll ? <button className="btn small primary" title={making ? "지금까지 만들어진 문제부터 풀어요. 나머지는 계속 만들어져요." : "이 자료의 문제를 풀어요."}
-            onClick={onPracticeAll}>{making ? `만든 문제부터 풀기 (${n.questions})` : `문제 풀기 (${n.questions})`}</button> : null}
+            onClick={onPracticeAll}>{making ? `만든 문제부터 풀기 (${practiceLeft?.() ?? n.questions})` : `문제 풀기 (${practiceLeft?.() ?? n.questions})`}</button> : null}
           <button className="btn ghost small" onClick={onClose}>닫기</button>
         </span>
       </div>
@@ -1161,7 +1179,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                         <span className="mm3-name"><Rich text={c.title} /></span>
                         {/* 11/11 사용자 "공식만 박은 느낌": 기억 카드(줄기 모드)는 줄에 식 대신 답 한 줄을 */}
                         {/* 펼치면 아래 A에 같은 글이 나오니 줄의 한 줄은 숨긴다(11/12) */}
-                        <span className="mm3-key">{isOpen ? null : <Rich text={c.memo?.line || keyLine(c.shape)} />}</span>
+                        <span className="mm3-key">{isOpen ? null : <Rich text={rowLine(c)} />}</span>
                         {marked ? <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /> : <span />}
                       </button>
                       {isOpen ? <div className="mm3-detail">
@@ -1219,7 +1237,7 @@ function ShelfCard({ genId, c, onPage, all, onCard }: { genId: string; c: Card; 
   return <>
     <button className={`shelf-row${open ? " on" : ""}${side ? " side" : ""}`} onClick={() => setOpen(!open)} aria-expanded={open}>
       <span className={`dot ${STATE[c.state][1]}`} title={STATE[c.state][0]} /><b className="shelf-t"><Rich text={c.title} /></b>
-      <span className="shelf-l">{open ? null : <Rich text={m?.line || keyLine(c.shape)} />}</span>
+      <span className="shelf-l">{open ? null : <Rich text={rowLine(c)} />}</span>
       {dueNow(c) ? <span className="shelf-due">복습 차례</span> : side ? <span className="shelf-side">{side}</span> : null}
     </button>
     {open ? <div className="shelf-card">
@@ -1235,6 +1253,26 @@ function ShelfCard({ genId, c, onPage, all, onCard }: { genId: string; c: Card; 
     </div> : null}
   </>;
 }
+/** 기억 하나의 질문 · 답 (11/12 점검 10번): 오른쪽 기억 패널처럼 지도 밖에서도 지도·기억 탭과 같은 Q · A로 보인다. ref = `<자료 id>:<카드 id>`. */
+const mapOnce = new Map<string, Promise<MatMap>>();
+export function CardQA({ cardRef, fallback }: { cardRef: string; fallback?: ReactNode }) {
+  const [c, setC] = useState<Card | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    const genId = cardRef.split(":")[0];
+    if (!mapOnce.has(genId)) mapOnce.set(genId, call<{ map: MatMap }>(`/api/study-map/${genId}`).then((r) => r.map));
+    mapOnce.get(genId)!.then((m) => { if (alive) setC(m.sections.flatMap((x) => x.cards).find((x) => x.ref === cardRef) ?? null); })
+      .catch(() => { mapOnce.delete(genId); if (alive) setC(null); });
+    return () => { alive = false; };
+  }, [cardRef]);
+  const m = c?.memo;
+  if (c === undefined) return null;
+  if (!m?.question && !m?.answer) return <>{fallback ?? null}</>;
+  return <div className="mm3-qa">
+    {m.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={m.question} /></p> : null}
+    {m.answer ? <Answer text={m.answer} /> : m.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}</div>;
+}
+
 export function MemoryShelf({ genId, title }: { genId: string; title: string }) {
   const [map, setMap] = useState<MatMap | null>(null);
   const [error, setError] = useState("");

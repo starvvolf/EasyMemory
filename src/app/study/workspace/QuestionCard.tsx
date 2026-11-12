@@ -25,11 +25,13 @@ export function QuestionCard({ question, sourceId, onDone, compact }: { question
     <article className={`ws-q${compact ? " compact" : ""}`} aria-live="polite">
       <div className="ws-q-head"><span className="chip">{question.label}</span></div>
       {question.context ? <blockquote className="ws-q-context">{question.context}</blockquote> : null}
-      <p className="ws-q-prompt"><Inline text={question.prompt} /></p>
+      {/* 11/12 점검 10번: 플래시카드는 자료 지도와 같은 질문 · 답 모양(Q · A), 질문이 따로 있으면 기억 이름은 위에 작게 */}
+      {question.kind === "flashcard" && question.label === "플래시카드" && question.explain && question.explain !== question.prompt ? <p className="small muted ws-q-name"><Inline text={question.explain} /></p> : null}
+      <p className="ws-q-prompt">{question.kind === "flashcard" ? <span className="lc3-qtag">Q</span> : null}<Inline text={question.prompt} /></p>
       {question.kind === "flashcard" ? (
-        !shown ? <button className="btn" onClick={() => setShown(true)}>뜻 보기</button> : (
+        !shown ? <button className="btn" onClick={() => setShown(true)}>답 보기</button> : (
           <>
-            <div className="ws-q-back"><Rich text={question.answer} /></div>
+            <div className="ws-q-back lc3-ca"><span className="lc3-qtag a">A</span><Rich text={question.answer} /></div>
             {!result ? <div className="row"><button className="btn primary small" disabled={busy} onClick={() => submit("knew")}>알았어요</button><button className="btn small" disabled={busy} onClick={() => submit("didnt")}>몰랐어요</button></div> : null}
           </>
         )

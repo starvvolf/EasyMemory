@@ -16,6 +16,8 @@ type Week = {
 };
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 const KIND: Record<string, string> = { pdf: "PDF", web: "웹 글", code: "알고리즘", project: "실습", manual: "직접", review: "복습" };
+// 11/12 점검 8번: 실습 기록도 출처 종류가 code로 남는다(ref "project:…") — 갈래는 ref로 가른다.
+const kindOf = (s: { kind: string; ref?: string; title: string }) => s.kind === "code" && (s.ref?.startsWith("project:") || s.title.startsWith("실습:")) ? "project" : s.kind;
 const addDays = (day: string, n: number) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const minutes = (m: number) => m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`;
 const level = (m: number) => (m <= 0 ? 0 : m < 15 ? 1 : m < 40 ? 2 : m < 90 ? 3 : 4);
@@ -69,7 +71,7 @@ export default function PlanView() {
         </div>
         {week.studied?.length ? (
           <ul className="pl-studied">{week.studied.map((s) => (
-            <li key={`${s.kind}:${s.title}`}><span className="chip">{KIND[s.kind] ?? s.kind}</span><span className="pl-st-title">{s.kind === "review" ? "기억 복습" : s.title}</span><span className="small muted num">{s.n}번 · {Number(s.last.slice(5, 7))}/{Number(s.last.slice(8, 10))}</span></li>))}
+            <li key={`${s.kind}:${s.title}`}><span className="chip">{KIND[kindOf(s)] ?? s.kind}</span><span className="pl-st-title">{s.kind === "review" ? "기억 복습" : s.title.replace(/^실습: /, "")}</span><span className="small muted num">{s.n}번 · {Number(s.last.slice(5, 7))}/{Number(s.last.slice(8, 10))}</span></li>))}
           </ul>
         ) : <p className="small muted">이 주에는 기록이 없어요.</p>}
       </section>

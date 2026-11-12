@@ -1,7 +1,5 @@
 /* 지식창 · 지식 사이드바 · 코드 학습 · 일정 · 타이머 · 문제 블록 (2026-10-26). Same tokens as dejipgi.css, scoped under .dejipgi. */
-.dejipgi[data-view="knowledge"] .wrap{max-width:1240px}
 .dejipgi[data-view="code"] .wrap{max-width:1440px}
-.dejipgi[data-view="plan"] .wrap{max-width:1180px}
 .dejipgi .ws-input{border:1px solid var(--line-strong);background:var(--surface);border-radius:9px;padding:7px 10px;min-height:34px;font-size:14px;min-width:0;width:100%;box-sizing:border-box}
 .dejipgi .row>.ws-input,.dejipgi .row>form>.ws-input{flex:1 1 160px;width:auto}
 .dejipgi textarea.ws-input{resize:vertical;line-height:1.5;width:100%}
@@ -1512,3 +1510,27 @@ html .dejipgi[data-view="code"] .wrap{max-width:none}
 .dejipgi .mm3-ans>.ws-rich{flex:1;min-width:0}
 .dejipgi .mm3-ans>.ws-rich p{margin:0 0 4px}
 .dejipgi .mm3-ans>.ws-rich p:last-child{margin-bottom:0}
+
+/* 11/12 사용자 UI 점검 (A) */
+/* 14번: 오늘 · 공부 · 기억 · 기록이 같은 너비 — 탭을 바꿔도 머리(로고 · 탭)가 옆으로 움직이지 않는다 */
+.dejipgi[data-view="home"] .wrap,.dejipgi[data-view="practice"] .wrap,.dejipgi[data-view="start"] .wrap,.dejipgi[data-view="create"] .wrap,.dejipgi[data-view="web"] .wrap,
+.dejipgi[data-view="knowledge"] .wrap,.dejipgi[data-view="plan"] .wrap,.dejipgi[data-view="summary"] .wrap,.dejipgi[data-view="records"] .wrap{max-width:1180px}
+/* 지도 탭을 바꿀 때 스크롤 막대 때문에 몇 px씩 흔들리지 않게, 구조 탭(넓은 그림)도 머리 · 탭 자리는 그대로 */
+.mm2-overlay{scrollbar-gutter:stable}
+.dejipgi .mm3.mm3-wide>.mm2-head{width:min(900px,100%);align-self:center}
+.dejipgi .mm3.mm3-wide>.mm5-tabs,.dejipgi .mm3.mm3-wide>.mm-steps{align-self:flex-start;margin-left:max(0px,calc((100% - 900px) / 2))}
+/* 16번: 기억 이름은 두 줄까지 */
+.dejipgi .mm3-name{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+/* 10번: 복습 플래시카드도 Q · A */
+.dejipgi .ws-q-prompt .lc3-qtag{margin-right:7px;vertical-align:2px}
+.dejipgi .ws-q-back.lc3-ca{display:flex;gap:7px;align-items:flex-start}
+.dejipgi .ws-q-back.lc3-ca>.lc3-qtag{margin-top:3px}
+.dejipgi .ws-q-name{margin:0 0 2px}
+.dejipgi .sb-card .mm3-qa{margin:6px 0}
+/* 6번 */
+.dejipgi .td-split{margin:-4px 0 6px}
+/* 15번: 같은 자료로 만든 것 접기 */
+.dejipgi .loose-group{display:flex;flex-direction:column;gap:6px}
+.dejipgi .loose-more{align-self:flex-start;margin-left:6px}
+/* 13번 */
+.dejipgi .lc3-starting{display:flex;align-items:center;gap:8px}
