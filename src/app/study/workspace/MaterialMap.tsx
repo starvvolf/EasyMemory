@@ -349,7 +349,8 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
 // members는 안의 것과 대표의 관계(이루는 것·갈래·모두 성립해야·차례로), versus는 나란히 견주는 카드(같은 상자면 A vs B 한 덩어리).
 type StructGroup = { id: string; name: string; parent: string; head?: string; cards: string[]; members?: string; explain: string; link?: string; role?: StructRole };
 type StructVersus = { a: string; b: string; on: string };
-const MEMBER_LABEL: Record<string, string> = { 부분: "이루는 것", 종류: "갈래", 모두: "모두 성립해야", 순서: "차례로" };
+// 11/12 사용자 "이루는 것 · 갈래가 뭐냐": 상자 머리(대표)와 안의 것의 관계를 바로 읽히는 말로 — 구성 요소(이걸로 이뤄짐) · 종류(이것의 여러 가지)
+const MEMBER_LABEL: Record<string, string> = { 부분: "구성 요소", 종류: "종류", 모두: "모두 성립해야", 순서: "차례로" };
 const MEMBER_JOIN: Record<string, string> = { 모두: "+", 순서: "→" };
 const sameName = (a: string, b: string) => { const n = (x: string) => x.replace(/\(.*?\)|[\s·]/g, "").toLowerCase(); const x = n(a), y = n(b); return !!x && !!y && (x.includes(y) || y.includes(x)); };
 type StructRole = "메인" | "바탕" | "곁";
@@ -421,8 +422,8 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
   // 메인·바탕·곁 (11/9 사용자: 목표 기준 강조는 "이렇게 하면 안 될 것 같음" → "구조 묶을 때 AI가 메인 포인트를 잡게, 기울기·절편 방정식은 메인이
   // 아니라 사전에 알아야 하는 지식"): 구조 AI가 묶음마다 role을 고른다(src/lib/study/structure.ts). 메인은 위에 옅게 강조, 바탕·곁은 흐리게 아래로.
   // 아래 묶음에 role이 없으면(큰 상자 다시 정리로 생긴 것) 위 묶음을 따른다. "풀기"(사용자 "풀기 하나 만들어 봐")는 체크 상자로 끈다.
-  const [roleOn, setRoleOnState] = useState(() => { try { return localStorage.getItem("recaller:role-hl") !== "0"; } catch { return true; } });
-  const setRoleOn = (on: boolean) => { setRoleOnState(on); try { localStorage.setItem("recaller:role-hl", on ? "1" : "0"); } catch { /* storage off */ } };
+  // 11/12 사용자 "메인 포인트 보기 빼고": 메인 · 바탕 · 곁 강조와 그 체크 상자를 뺐다(구조는 뜻으로 묶은 그림만).
+  const roleOn = false;
   const roleView = useMemo(() => {
     const groups = s?.groups ?? [];
     const byG = new Map(groups.map((g) => [g.id, g]));
@@ -486,9 +487,6 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
     <div className={`mm8${openCard ? " has-detail" : ""}`} onClick={(e) => { if (open && !(e.target as HTMLElement).closest("[data-c],button,a,input,label,.mm8-detail")) setOpen(null); }}>
       <div className="row small mm7-bar"><span className="small muted">뜻으로 묶은 그림 · 상자 안은 그 부분 · 카드를 열면 다른 묶음의 짝</span><span className="cs-gap" />
         {data?.stale ? <span className="small bad">{s?.unit === "memory" ? "줄기가 바뀌었어요" : "줄기나 카드가 바뀌었어요"}</span> : null}{makeBtn("다시 만들기", Boolean(data?.stale))}</div>
-      {roleView.has ? <div className="row small mm8-goalbar"><label className="row small" style={{ gap: 6, cursor: "pointer" }}><input type="checkbox" checked={roleOn} onChange={(e) => setRoleOn(e.target.checked)} /> 메인 포인트 보기</label>
-        {roleOn ? <span className="muted">이 강의에서 새로 배우는 것이 위에 · 흐린 것은 바탕 지식(미리 알아야 할 것)·곁가지</span> : null}</div>
-        : s ? <p className="small muted mm8-goalbar">구조를 다시 만들면 메인 포인트와 바탕 지식이 나뉘어 보여요.</p> : null}
       {error ? <p className="small bad">{error}</p> : null}
       {/* 11/8 사용자 "눌렀을 때 아래 칸이 덮어서 다시 누를 수 없다": 빈 곳을 누르면 닫히고, 연 카드는 아래 칸 위로 보이게 굴린다. */}
       <div className="mm8-wrap" ref={wrap} onMouseLeave={() => setHover(null)} onMouseOver={(e) => {
