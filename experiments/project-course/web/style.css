@@ -1003,3 +1003,11 @@ body:has(.tlpage), .embed body:has(.tlpage) { --tl-page: color-mix(in srgb, #000
 .tlpage .mhelp { font-size: 12.5px; }
 .tlpage .mchg { display: flex; flex-direction: column; gap: 5px; }
 .tlpage .mfile { font-size: 11.5px; color: var(--mut); margin: 2px 2px 3px; }
+
+/* 11/13 사용자: 단계 버튼을 너무 쉬워요 · 너무 어려워요 옆으로 · "도움"은 누르는 게 아니라 제목으로 보이게 */
+.freefoot .fchip.main, .freewrap .fchip.main { background: var(--acc, #3b82f6); color: var(--acc-ink, #fff); border-color: transparent; font-weight: 600; }
+.freefoot .fchip.main:hover, .freewrap .fchip.main:hover { background: color-mix(in srgb, var(--acc, #3b82f6) 85%, #000); }
+.fquick .fsep { width: 1px; align-self: stretch; margin: 2px 2px; background: var(--f-line2, var(--line)); }
+.fquick { align-items: center; }
+.fdial-k { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--f-ink2, var(--ink)); padding: 0 8px 0 4px; margin-right: 2px; border-right: 1px solid var(--f-line2, var(--line)); cursor: default; user-select: none; }
+.fdial-k::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--acc, #3b82f6); }
