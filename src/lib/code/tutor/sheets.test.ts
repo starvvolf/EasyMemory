@@ -65,3 +65,11 @@ test("총정리 글 출력: 표시로 잘라 같은 모양으로, 코드 블록 
   assert.equal(r.story[0].weak?.title, "입력받기"); assert.equal(r.story[0].weak?.size, "small");
   assert.match(r.story[0].weak!.lesson, /# 주석\nn = int/); assert.equal(r.story[1].weak, undefined); assert.equal(r.next, "다음.");
 });
+
+test("총정리 글(v19) 확인: 머리글 둘이 있어야 하고 앞 군말·울타리는 뗀다", async () => {
+  const { checkReviewText } = await import("./sheets.ts");
+  const body = "# 학습 총평\n" + "가".repeat(120) + "\n\n# 핵심 학습 리뷰\n## 1. 대기줄 [핵심]\n" + "나".repeat(100);
+  assert.equal(checkReviewText("```markdown\n" + body + "\n```"), body);
+  assert.equal(checkReviewText("다음은 리뷰예요.\n\n" + body), body);
+  assert.equal(checkReviewText("# 학습 총평\n짧음"), null);
+});
