@@ -44,7 +44,7 @@ export default function ReviewLab() {
   useEffect(() => {
     void api<{ problems: Problem[]; system: string; models: string[]; efforts: string[] }>("").then((d) => {
       setProblems(d.problems); setProduct(d.system); setModels(d.models); setEfforts(d.efforts);
-      setSystem(store.get("rlab-system") ?? d.system);
+      setSystem(store.get("rlab-system")?.trim() || d.system);
       setPid((cur) => cur && d.problems.some((x) => x.id === cur) ? cur : d.problems[0]?.id ?? "");
     }).catch((e: Error) => setError(e.message));
   }, []);
@@ -54,7 +54,7 @@ export default function ReviewLab() {
     void api<{ talks: Talk[] }>(`/${pid}`).then((d) => { setTalks(d.talks); setFrom(0); setTo(Math.min(4, d.talks.length - 1)); }).catch((e: Error) => setError(e.message));
     void api<{ runs: Run[] }>(`/${pid}/runs`).then((d) => setRuns(d.runs)).catch(() => undefined);
   }, [pid]);
-  useEffect(() => { store.set("rlab-system", system); }, [system]);
+  useEffect(() => { if (system.trim()) store.set("rlab-system", system); }, [system]);
   useEffect(() => { store.set("rlab-model", model); store.set("rlab-effort", effort); }, [model, effort]);
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => { if (!running) return; const t = setInterval(() => setElapsed(Math.round((Date.now() - running) / 1000)), 1000); return () => clearInterval(t); }, [running]);
