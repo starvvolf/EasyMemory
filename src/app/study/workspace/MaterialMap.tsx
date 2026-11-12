@@ -582,7 +582,8 @@ function LectureCard({ genId, c, onPage, startOpen = false }: { genId: string; c
       <span className="lc3-cardtag">기억 카드</span>
       <span className="lc3-cardtitle"><Rich text={c.title} /></span>
       <span className="lc3-cardline">{c.memo?.question ? <span className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={c.memo.question} /></span> : null}
-        {c.memo?.line ? <span className="lc3-ca"><Rich text={c.memo.line} /></span> : null}</span>
+        {/* 11/12 사용자 "A가 답이면 Q 밑의 줄은 뭐냐": 그 줄은 답의 첫 줄(접었을 때 미리 보기)이라, 펼치면 A와 겹친다 — 질문·답 카드는 펼치면 숨기고, 접었을 때도 'A' 표시를 붙여 답 미리 보기임을 밝힌다 */}
+        {c.memo?.line && !(open && c.memo.answer) ? <span className="lc3-ca">{c.memo.answer ? <span className="lc3-qtag a">A</span> : null}<Rich text={c.memo.answer ? rowLine(c) : c.memo.line} /></span> : null}</span>
       <span className="lc3-chev" aria-hidden>›</span>
     </button>
     {open ? <div className="lc3-cardbody">{c.memo?.answer ? <><Answer text={c.memo.answer} /><CardDetails items={c.memo.details} /></> : c.memo?.line ? <OldMore idea={c.memo.idea} shape={c.shape} details={c.memo.details} /> : <Body s={c.shape} />}
