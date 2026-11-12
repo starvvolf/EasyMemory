@@ -48,4 +48,5 @@ test("오류 줄(11/12): 터미널 프롬프트는 건너뛰고, Gradle은 What 
   assert.equal(M.errorLine("Caused by: java.net.BindException: Address already in use\nPS C:\\work> "), "Caused by: java.net.BindException: Address already in use");
   assert.equal(M.errorLine("뭔가 이상함\nC:\\work>"), "뭔가 이상함");
   assert.equal(M.errorLine("oops\nuser@host:~/w$ "), "oops");
+  assert.equal(M.errorLine("The command could not be loaded, possibly because:\n  * You intended to execute a .NET SDK command:\n      No .NET SDKs were found.\n\nDownload a .NET SDK:\nhttps://aka.ms/dotnet-download\n(base)\nPS C:\\w> "), "No .NET SDKs were found.");
 });
