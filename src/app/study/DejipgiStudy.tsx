@@ -22,7 +22,6 @@ import "katex/dist/katex.min.css";
 import "./dejipgi.css";
 import "./workspace/workspace.css";
 import AccountChip from "./workspace/AccountChip";
-import KnowledgeSidebar from "./workspace/KnowledgeSidebar";
 import AgentScreen from "./workspace/AgentScreen";
 import MoreMenu from "./workspace/MoreMenu";
 
@@ -58,15 +57,6 @@ function ThemeToggle() {
 export default function DejipgiStudy() {
   const session = useAuthSession();
   const rootRef = useRef<HTMLDivElement>(null);
-  // 지식 사이드바: open by default on wide screens; the choice is remembered in this browser.
-  const [side, setSide] = useState(false);
-  useEffect(() => {
-    let open = window.matchMedia("(min-width: 1300px)").matches;
-    try { const saved = localStorage.getItem("recaller:side"); if (saved) open = saved === "1"; } catch { /* storage off */ }
-    const t = setTimeout(() => setSide(open), 0);
-    return () => clearTimeout(t);
-  }, []);
-  const toggleSide = (open: boolean) => { setSide(open); try { localStorage.setItem("recaller:side", open ? "1" : "0"); } catch { /* storage off */ } };
   const fetchExperiment = useCallback((url: string, init: RequestInit = {}) => session.mode === "local-experiment"
     ? fetch(url, { cache: "no-store", ...init })
     : authenticatedFetch(url, { cache: "no-store", ...init }), [session.mode]);
@@ -512,7 +502,7 @@ export default function DejipgiStudy() {
         const detail = outcome === "assisted" ? "정답 보고 풂" : outcome === "wrong" ? "PDF 문제를 틀림" : "PDF 문제를 맞힘";
         void fetchExperiment("/api/knowledge/ref-event", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ refs, kind, detail, material: String(deck.sourceName || deck.title || "").slice(0, 200), ...(takeBack ? { takeBack } : {}) }) })
-          .then(() => window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar"))).catch(() => undefined);
+          .catch(() => undefined);
       },
       // 작업대 흐름: a React Flow canvas mounted into a host element the vanilla app keeps across re-renders.
       mountFlow(host, api) {
@@ -528,7 +518,7 @@ export default function DejipgiStudy() {
   }, [fetchExperiment, session.mode, session.uid]);
 
   return (
-    <div className={`dejipgi${side ? " with-side" : ""}`} ref={rootRef} data-view="home">
+    <div className="dejipgi" ref={rootRef} data-view="home">
       {/* Plain link (no precedence) so a blocked font request never suspends or errors the page. */}
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600&display=swap" />
@@ -552,7 +542,6 @@ export default function DejipgiStudy() {
         </div>
         <main id="app"></main>
       </div>
-      {session.mode === "local-experiment" ? <KnowledgeSidebar open={side} onClose={() => toggleSide(false)} onOpen={() => toggleSide(true)} /> : null}
       {session.mode === "local-experiment" ? <AgentScreen /> : null}
       {session.mode === "local-experiment" ? <SpeedCheck /> : null}
     </div>

@@ -114,21 +114,10 @@
 @media (max-width:1100px){ .dejipgi .kw-grid{grid-template-columns:200px minmax(0,1fr)} .dejipgi .kw-detail{grid-column:1/-1;position:static;max-height:none} .dejipgi .kw-tree{position:static} }
 @media (max-width:700px){ .dejipgi .kw-grid{grid-template-columns:minmax(0,1fr)} .dejipgi .kw-tree{position:static;max-height:none} }
 
-/* 지식 사이드바 (fixed at the right; the page makes room on wide screens) */
-.dejipgi .sb-toggle.on{color:var(--accent);border-color:var(--accent)}
-.dejipgi .sb{position:fixed;top:0;right:0;bottom:0;width:320px;z-index:40;background:var(--surface);border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(0,0,0,.06);
-  padding:calc(14px + env(safe-area-inset-top,0px)) calc(14px + env(safe-area-inset-right,0px)) 14px 14px;overflow:auto;display:flex;flex-direction:column;gap:12px}
-@media (min-width:1300px){ .dejipgi.with-side{padding-right:336px} .dejipgi.with-side .sb{box-shadow:none} }
-.dejipgi .sb-head{display:flex;justify-content:space-between;align-items:center}
 .dejipgi .sb-list{list-style:none;margin:4px 0 8px;padding:0;display:flex;flex-direction:column;gap:2px}
 .dejipgi .sb-item{width:100%;display:flex;gap:8px;align-items:center;text-align:left;border:0;background:none;padding:5px 6px;border-radius:8px;font-size:14px}
 .dejipgi .sb-item:hover{background:var(--surface-2)}
 .dejipgi .sb-item span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dejipgi .sb-card{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
-.dejipgi .sb-card h4{margin:0;font-size:17px}
-.dejipgi .sb-links{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
-.dejipgi .sb-ask{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px;margin-top:auto}
-.dejipgi .sb-ask form{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .dejipgi .sb-answer{padding:10px;background:var(--ask-soft);border-radius:10px;display:flex;flex-direction:column;gap:6px}
 
 /* 코드 학습 */
@@ -234,11 +223,6 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 .dejipgi .mm-item span{font-weight:600;font-size:14px}
 .dejipgi .mm-item small{color:var(--muted);font-size:12px}
 .dejipgi .mm-note{margin:6px 10px 4px;font-size:12px;color:var(--faint)}
-/* 지식 사이드바 손잡이 */
-.dejipgi .sb-handle{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:39;border:1px solid var(--line);border-right:0;background:var(--surface);color:var(--muted);border-radius:12px 0 0 12px;
-  padding:12px 7px calc(12px) 8px;writing-mode:vertical-rl;font-weight:700;font-size:13px;letter-spacing:.1em;box-shadow:-4px 0 14px rgba(0,0,0,.06);display:flex;align-items:center;gap:6px;cursor:pointer}
-.dejipgi .sb-handle:hover{color:var(--accent);border-color:var(--accent)}
-.dejipgi .sb-handle i{writing-mode:horizontal-tb;font-style:normal;font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:1px 6px}
 /* 공부 안의 갈래 */
 .dejipgi .study-nav{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .dejipgi .seg{display:inline-flex;gap:2px;padding:3px;border-radius:11px;background:var(--surface-2);border:1px solid var(--line)}
@@ -1073,7 +1057,6 @@ body:has(.dejipgi) [data-shell-hide]{display:none}
 /* 11/10 사용자 "상태표시줄이 온전히 자기 영역을 가지지 못해서 UI 버튼이 가려짐": 데스크톱 창에서는 맨 위 40px가 제목 표시줄(윈도우 창 버튼이
    그 위에 그려짐)이라, 위에 뜨는 화면(자료 지도·옆 패널)은 그 아래에서 시작한다. */
 :root[data-shell="desktop"] .mm2-overlay{top:var(--shell-top,40px)}
-:root[data-shell="desktop"] .dejipgi .sb{top:var(--shell-top,40px)}
 /* 자료 지도 [강의] (11/10) */
 .dejipgi .lc{display:flex;flex-direction:column;gap:12px}
 .dejipgi .lc-empty{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding:16px;border:1px dashed var(--line-strong);border-radius:12px}
@@ -1547,7 +1530,6 @@ html .dejipgi[data-view="project"] .view-project,html .dejipgi[data-view="web"] 
 .dejipgi .ws-q-back.lc3-ca{display:flex;gap:7px;align-items:flex-start}
 .dejipgi .ws-q-back.lc3-ca>.lc3-qtag{margin-top:3px}
 .dejipgi .ws-q-name{margin:0 0 2px}
-.dejipgi .sb-card .mm3-qa{margin:6px 0}
 /* 6번 */
 .dejipgi .td-split{margin:-4px 0 6px}
 /* 15번: 같은 자료로 만든 것 접기 */

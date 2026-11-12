@@ -1031,9 +1031,6 @@ html .dejipgi[data-view] .wrap{max-width:1240px}
 html .dejipgi[data-view="read"] .wrap{max-width:1480px}
 html .dejipgi[data-view="bench"] .wrap{max-width:none}
 .dejipgi:is([data-view="home"],[data-view="practice"],[data-view="web"],[data-view="project"],[data-view="start"],[data-view="create"],[data-view="summary"],[data-view="records"],[data-view="archive"]) #app{max-width:860px;margin-inline:auto}
-/* 지식 손잡이: 화면 가운데가 아니라 오른쪽 아래, 내용(코드 AI 칸·카드 오른쪽)을 덜 가리게 */
-html .dejipgi .sb-handle{top:auto;bottom:88px;transform:none;padding:9px 6px 9px 7px;font-size:12px;opacity:.85}
-html .dejipgi .sb-handle:hover{opacity:1}
 /* 오늘 복습 카드의 두 줄 (지식 · PDF 문제) */
 .dejipgi .td-rev{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;width:100%}
 .dejipgi .td-rev li{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:14px}
@@ -1047,7 +1044,6 @@ html .dejipgi .sb-handle:hover{opacity:1}
 .dejipgi .home-clock{font-size:22px;font-weight:600;color:var(--muted)}
 /* 앱(Electron) 창에서는 맨 위 40px가 창 버튼(최소화·최대화·X) 띠라, 지식 사이드바를 그 아래에서 시작한다
    (2026-11-06 사용자 "사이드바 높이를 상태 표시줄에 안 걸리게"). 닫기(→) 버튼이 X 밑에 숨지 않게. */
-:root[data-shell="desktop"] .dejipgi .sb{top:env(titlebar-area-height,40px)}
 .dejipgi .study-sub{margin:22px 0 8px;font-size:15px}
 /* 11/11 React: 알림(예전엔 바닐라가 style을 직접 붙였다) · 머리 단추 자리 */
 .dejipgi #toast.toast-msg{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:10px;font-size:13.5px;max-width:calc(100% - 32px);z-index:9;box-shadow:var(--shadow)}

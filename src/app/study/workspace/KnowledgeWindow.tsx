@@ -115,7 +115,7 @@ export default function KnowledgeWindow({ onLegacy, focusId }: { onLegacy?: () =
 
   const act = async (run: () => Promise<unknown>, after?: () => void) => {
     setError("");
-    try { await run(); await load(); if (sel) await loadDetail(sel); after?.(); window.dispatchEvent(new Event("recaller:knowledge-changed-sidebar")); } catch (e) { setError(errorText(e)); }
+    try { await run(); await load(); if (sel) await loadDetail(sel); after?.(); } catch (e) { setError(errorText(e)); }
   };
 
   const children = useMemo(() => {

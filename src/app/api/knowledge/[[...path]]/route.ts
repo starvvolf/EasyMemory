@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedJson, fail, guard, type RouteContext } from "@/lib/assist/http";
-import { readAll, createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, itemsByRef, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
+import { readAll, createFolder, deleteFolder, deleteKnowledge, getKnowledge, importPoints, recordByRef, linkKnowledge, memoryEvents, memoryOverview, memorySummary, mergeKnowledge,
   onKnowledgeCreated, originsOf, pickWaiting, recordEvent, reviewQueue, reviewStatus, saveKnowledge, searchKnowledge, setKnowledgeState, tree, unlinkKnowledge, updateFolder, updateKnowledge, type Origin } from "@/lib/knowledge/store";
 /** ?origin=theory|algo|lab (11/9 자료·알고리즘·실습 기억 따로 복습) */
 const originParam = (url: URL): Origin | undefined => { const o = url.searchParams.get("origin"); return o === "theory" || o === "algo" || o === "lab" ? o : undefined; };
@@ -238,7 +238,6 @@ async function handle(request: Request, context: RouteContext) {
       if (q.kind === "recognize" && g.correct && b.sourceId) await markGoal(b.sourceId, "recognize", true, "예전 지식을 알아봄").catch(() => undefined);
       return json(g);
     }
-    if (p[0] === "related" && m === "GET") return json({ items: await itemsByRef(url.searchParams.getAll("ref").slice(0, 200), url.searchParams.get("prefix") === "1") });
     // 핵심 카드만 지식으로 (10/30): 아직 지식이 아닌 보조 카드에서 "모름"을 누르면 그때 지식(몰랐음)이 된다.
     if (p[0] === "ref-pick" && m === "POST") { const b = await body(z.object({ ref: z.string().min(1).max(200) })); return json(await pickWaiting(b.ref)); }
     if (p[0] === "ref-event" && m === "POST") {
