@@ -88,7 +88,7 @@ const str = { type: "string" } as const;
 /** 현재 목표의 선행을 구체적으로(11/11 사용자 "구체적이지 않은 느낌 · 현재 목표의 선행 개념을 적게 해") */
 const PREREQ_SPEC = "선행은 큰 덩어리로 3~5개만 적는다(11/11 사용자 \"리액트를 하려면 자바스크립트를 알아야 되고, 그런 것\"): 이 목표를 하려면 먼저 알고 있어야 하는 과목 · 기술 · 도구 단위(예: React 목표면 JavaScript 기본 · HTML/CSS · Node와 npm, REST API 서버 목표면 Python 기본 · HTTP가 무엇인지 · JSON). 누가 들어도 \"그건 알아야지\" 싶은 것만. 괄호 · 변수 하나 같은 잔 문법으로 쪼개지 않는다. check는 그 덩어리를 써 봤는지 스스로 가늠할 한 줄(예: \"함수와 배열을 써서 짧은 JavaScript 코드를 짜 본 적이 있나요?\").";
 export const GOAL_TOOLS = [
-  { name: "ask_questions", description: "학습자에게 고르기형 질문을 화면에 띄운다(설문지). 만들 것을 어느 수준으로 할지 좁힐 때, 진행 방식(topdown: 구조부터 / bottomup: 작은 것부터)을 물을 때 쓴다. 앞에서 학습자가 한 말을 바탕으로 3~5개. 띄운 뒤에는 답을 기다린다.",
+  { name: "ask_questions", description: "학습자에게 고르기형 질문을 화면에 띄운다(설문지). 만들 것을 어느 수준으로 할지 좁힐 때 쓴다. 진행 방식은 묻지 않는다. 앞에서 학습자가 한 말을 바탕으로 3~5개. 띄운 뒤에는 답을 기다린다.",
     properties: { intro: str, questions: { type: "array", items: { type: "object", additionalProperties: false, properties: { q: str, options: { type: "array", items: str }, multi: { type: "boolean" } }, required: ["q", "options", "multi"] } } }, required: ["intro", "questions"] },
   { name: "propose_plan", description: "좁혀진 내용으로 장기 목표를 제안한다(이미 장기 목표가 있어도 학습자가 방향 · 목표를 바꾸자고 하면 바로 쓴다). 학습자가 [확정]을 누르면 장기 목표 · 방식 · 지도 · 첫 현재 목표가 정해진다. map은 큰 단계 제목: topdown이면 3~6개, bottomup이면 지금 보이는 첫 몇 단계만(넓혀 가며 update_map으로 더한다). first는 첫 현재 목표와 완료 조건(학습자가 확인할 수 있는 한 문장), 그 목표 전에 이미 알고 있어야 할 선행 prereqs(set_current_goal과 같은 꼴, 목표 자체는 넣지 않는다, 꼭 3~5개). " + PREREQ_SPEC + " ",
     properties: { long: str, spec: str, mode: { type: "string", enum: ["topdown", "bottomup"] }, map: { type: "array", items: str }, first: { type: "object", additionalProperties: false, properties: { title: str, done: str, prereqs: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: str, check: str }, required: ["name", "check"] } } }, required: ["title", "done", "prereqs"] } }, required: ["long", "spec", "mode", "map", "first"] },
@@ -476,7 +476,7 @@ async function goalContextBody(runId: string) {
   if (!g.long) {
     const wait = g.survey ? "\n지금 화면에 질문을 띄워 두었다 — 학습자 답이 오면 이어 간다." : g.plan ? "\n지금 화면에 계획을 띄워 두었다 — 학습자가 확정하거나 고칠 곳을 말한다." : "";
     return `[목표 정하기 — 아직 장기 목표 없음]
-학습자가 만들거나 배우고 싶은 것을 말하면, plan 모드처럼 무엇을 어느 수준으로 만들지 좁힌다. 앞에서 한 말을 바탕으로 ask_questions로 고르기형 질문 3~5개를 띄우고, 진행 방식(topdown: 구조부터 보고 시작 / bottomup: 작은 것 하나부터 넓혀 가기)도 함께 묻는다. 좁혀지면 propose_plan으로 제안한다. 인사나 가벼운 질문에는 그냥 답한다.${wait}`;
+학습자가 만들거나 배우고 싶은 것을 말하면, plan 모드처럼 무엇을 어느 수준으로 만들지 좁힌다. 앞에서 한 말을 바탕으로 ask_questions로 고르기형 질문 3~5개를 띄운다. 진행 방식(topdown / bottomup)은 묻지 않고, 학습자가 한 말과 수준을 보고 propose_plan에서 직접 고른다(처음 해 보는 분야면 bottomup). 좁혀지면 propose_plan으로 제안한다. 인사나 가벼운 질문에는 그냥 답한다.${wait}`;
   }
   const mark = (m: Item) => ({ done: "✓", skipped: "↷", doing: "▶", todo: "·" })[m.status];
   const c = g.current, sp = supNow(g), S = g.support;

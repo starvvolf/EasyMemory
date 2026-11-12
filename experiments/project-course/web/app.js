@@ -898,7 +898,7 @@ function shellCard(p, send) {
 }
 function goalPlanCard(p, send) {
   return h("div", { class: "gcard plan" }, h("div", { class: "gk" }, "장기 목표 제안"), h("h3", {}, p.long), p.spec ? h("p", { class: "small" }, p.spec) : null,
-    h("div", { class: "small" }, h("b", {}, "진행 방식: "), p.mode === "topdown" ? "탑다운 — 구조부터 보고, 지도를 따라" : "바텀업 — 작은 것 하나부터 넓혀 가기"),
+    // 진행 방식은 11/12 사용자 결정으로 묻지도 보이지도 않는다(튜터가 고르고 안에서만 씀)
     p.map.length ? h("ol", { class: "small" }, p.map.map((t) => h("li", {}, t))) : null,
     h("div", { class: "small" }, h("b", {}, "첫 목표: "), p.first.title, h("span", { class: "mut" }, ` — 완료 조건: ${p.first.done}`)),
     // 먼저 알 것 지도(11/10 사용자 "장기목표 잡으면서 선행개념이랑 의존성을 다 정리해"): 아래 것부터, ← 는 그 전에 알아야 할 것
