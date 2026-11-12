@@ -789,7 +789,7 @@ function drawFree() {
     FLOAT ? h("button", { class: "fib", title: floatUi.size === "wide" ? "작게" : "넓게", onclick: () => { floatUi.size = floatUi.size === "wide" ? "normal" : "wide"; floatPost({ size: floatUi.size }); drawLesson(); } }, icon(floatUi.size === "wide" ? "narrow" : "wide")) : null,
     FLOAT ? h("button", { class: `fib ${floatUi.pinned ? "on" : ""}`, title: "고정", onclick: async () => { const out = await floatPost({ pinned: !floatUi.pinned }); floatUi.pinned = !!out?.pinned; drawLesson(); } }, icon("pin")) : null,
     FLOAT ? h("button", { class: "fib", title: "닫기", onclick: () => floatPost({ open: false }) }, icon("close")) : null);
-  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat?.engine === "codex" && lesson.chat.codexLogin === false ? h("div", { class: "editask" }, h("span", { class: "grow" }, "Codex 버전은 Recaller 전용 Codex 로그인이 한 번 필요해요(평소 Codex 앱 설정 · 기억과 섞이지 않게)."), h("button", { class: "btn small primary", onclick: (e) => busy(e.target, async () => { const r = await api("POST", "/api/codex-chat/login"); toast(r.already ? "이미 로그인돼 있어요." : "브라우저에서 ChatGPT로 로그인해 주세요. 끝나면 이 화면을 새로고침해요."); }) }, "Codex 로그인")) : null, lesson.chat ? wsBar(run, lesson) : null, lesson.goals ? goalBar(lesson, send) : null, lesson.chat ? learnedBar(lesson) : null, list, lesson.chat && !lesson.chat.edit && lesson.goals && (lesson.goals.help ?? "together") !== "self" ? editAsk(run, lesson.goals.help ?? "together") : null, foot));
+  view.replaceChildren(h("div", { class: `freewrap ${FLOAT ? "fw " + floatUi.size : ""}` }, head, lesson.chat?.engine === "codex" && lesson.chat.codexLogin === false ? h("div", { class: "editask" }, h("span", { class: "grow" }, "Codex 버전은 Recaller 전용 Codex 로그인이 한 번 필요해요(평소 Codex 앱 설정 · 기억과 섞이지 않게)."), h("button", { class: "btn small primary", onclick: (e) => busy(e.target, async () => { const r = await api("POST", "/api/codex-chat/login"); toast(r.already ? "이미 로그인돼 있어요." : "브라우저에서 ChatGPT로 로그인해 주세요. 끝나면 이 화면을 새로고침해요."); }) }, "Codex 로그인")) : null, lesson.chat ? wsBar(run, lesson) : null, lesson.goals ? goalBar(lesson, send) : null, list, lesson.chat && !lesson.chat.edit && lesson.goals && (lesson.goals.help ?? "together") !== "self" ? editAsk(run, lesson.goals.help ?? "together") : null, foot));
   list.scrollTop = list.scrollHeight;
   if (!FLOAT && !freeUi.focus) window.scrollTo({ top: document.body.scrollHeight });
   if (freeUi.focus) { input.focus({ preventScroll: true }); try { input.setSelectionRange(...freeUi.sel); } catch {} }
@@ -917,56 +917,7 @@ function goalStuckCard(g, send) {
       h("button", { class: "btn small", onclick: () => { goalUi.stuck = false; drawLesson(); } }, "취소")));
 }
 
-/* 배운 것(11/4 사용자 "배운 거 갱신"): 질문이 끝날 때마다 대화에서 뽑은 사건. 근거는 학습자 말 그대로 */
-const KIND_KO = { asked: "물어봄", confused: "헷갈림", misconception: "틀리게 앎", explained: "자기 말로 설명", applied: "직접 써 봄" };
-const learnedUi = { open: false };
-function learnedBar(lesson) {
-  if (lesson.records) return recordsBar(lesson);
-  const items = lesson.learned || [];
-  if (!items.length) return null;
-  const byConcept = new Map();
-  for (const x of items) { if (!byConcept.has(x.concept)) byConcept.set(x.concept, []); byConcept.get(x.concept).push(x); }
-  const head = h("button", { class: "lhead", onclick: () => { learnedUi.open = !learnedUi.open; drawLesson(); } }, `배운 것 ${byConcept.size}개`, h("span", { class: "mut small" }, learnedUi.open ? " 접기" : " 펼치기"));
-  if (!learnedUi.open) return h("div", { class: "learned" }, head);
-  return h("div", { class: "learned" }, head, h("ul", {}, [...byConcept].map(([c, xs]) => h("li", {},
-    h("b", {}, c), " ", xs.map((x) => h("span", { class: `lk ${x.kind}`, title: `"${x.quote}"` }, KIND_KO[x.kind] ?? x.kind)),
-    xs[0].meaning ? h("div", { class: "mut small" }, xs[0].meaning) : null))));
-}
-
-/* 목표 정리(11/5 사용자 "목표가 끝나면 쭉 대화 기록 받아서 정리, 학습자가 어떤 절차를 거쳐서 뭘 배웠는지") */
-const recUi = { tab: "개념" };
-const REC_TABS = ["개념", "원리", "절차", "규칙", "방법", "비교"];
-function recordsBar(lesson) {
-  const rs = lesson.records || [];
-  if (!rs.length) return null;
-  // 11/5 사용자 "개념/원리/절차/규칙/방법/비교 탭": 끝낸 목표들에서 배운 것을 칸별로, 그 밑에 목표별 과정
-  const all = rs.flatMap((r) => (r.learned || []).map((x) => ({ ...x, goal: r.goal })));
-  // 11/6 사용자 "부족한 점을 캐치해서 지식으로": 목표 정리의 부족한 점은 맨 위에 따로
-  const gaps = rs.flatMap((r) => (r.gaps || []).map((x) => ({ ...x, goal: r.goal })));
-  const head = h("button", { class: "lhead", onclick: () => { learnedUi.open = !learnedUi.open; drawLesson(); } }, `배운 것 ${all.length}개 · 부족했던 점 ${gaps.length}개 · 끝낸 목표 ${rs.length}개`, h("span", { class: "mut small" }, learnedUi.open ? " 접기" : " 펼치기"));
-  if (!learnedUi.open) return h("div", { class: "learned" }, head);
-  const count = (t) => all.filter((x) => (x.type || "개념") === t).length;
-  const tabs = h("div", { class: "rtabs" }, REC_TABS.map((t) => h("button", { class: `rtab ${recUi.tab === t ? "on" : ""}`, onclick: () => { recUi.tab = t; drawLesson(); } }, `${t} ${count(t)}`)));
-  const items = all.filter((x) => (x.type || "개념") === recUi.tab);
-  const gapList = gaps.length ? h("div", { class: "gaps" }, h("div", { class: "small" }, h("b", {}, "부족했던 점")), h("ul", {}, gaps.map((x) => h("li", {},
-    h("b", {}, x.concept), h("span", { class: "mut small" }, ` · ${x.type}`),
-    x.wrong ? h("div", { class: "small" }, `헷갈린 것: ${x.wrong}`) : null,
-    x.right ? h("div", { class: "small" }, `바로 알기: ${x.right}`) : null,
-    x.code ? h("details", { class: "small" }, h("summary", {}, `틀렸던 코드 ${x.code.file} ${x.code.from}~${x.code.to}줄`), h("pre", { class: "gcode" }, x.code.code)) : null,
-    h("div", { class: "mut small" }, `목표: ${x.goal}${x.quote ? ` · "${x.quote}"` : ""}`))))) : null;
-  // 학습자 메모리에 반영한 것(11/6) → 자세히는 학습자 메모리 화면
-  const memN = rs.reduce((n, r) => n + (r.memory?.done?.length ?? 0), 0);
-  const obsList = memN ? h("div", { class: "small mut" }, `학습자 메모리에 ${memN}번 반영 `, h("a", { href: "#/memory" }, "보기")) : null;
-  const noteLink = h("div", { class: "small" }, h("a", { href: `#/note/${lessonCtx.run?.id ?? ""}` }, "세션 노트 보기"), h("span", { class: "mut" }, " — 부족했던 것마다 채웠는지 · 다시 확인 문항"));
-  return h("div", { class: "learned" }, head, noteLink, obsList, gapList, tabs,
-    items.length ? h("ul", {}, items.map((x) => h("li", {}, h("b", {}, x.concept), h("span", { class: "mut small" }, ` · ${x.how}`),
-      x.meaning ? h("div", { class: "small" }, x.meaning) : null,
-      h("div", { class: "mut small" }, `목표: ${x.goal}${x.quote ? ` · "${x.quote}"` : ""}`)))) : h("p", { class: "mut small" }, "이 칸에는 아직 없어요."),
-    h("details", { class: "small" }, h("summary", {}, "목표별 과정"), h("ul", {}, [...rs].reverse().map((r) => h("li", {},
-      h("b", {}, r.goal), h("span", { class: `lk ${r.status === "마침" ? "applied" : ""}` }, r.status),
-      r.summary ? h("div", {}, r.summary) : null,
-      r.steps?.length ? h("div", { class: "mut" }, "과정: ", r.steps.join(" → ")) : null)))));
-}
+/* 배운 것 · 부족했던 점 · 끝낸 목표 칸(11/4~11/6)은 11/13 사용자 "필요 없으면 없애라"로 뺐다 — 목표 정리는 기억 도서관 리뷰로 본다 */
 
 /* 대화 설정(11/4 사용자): 모델 고르기 · 파일 고치기 허락(처음에 묻고, 작업 폴더 줄에서 바꿈) */
 const chatOpt = (run, body) => busy(null, async () => { try { lessonCtx.lesson = await api("POST", `/api/runs/${run.id}/chat-options`, body); drawLesson(); } catch (e) { toast(e.message); } });
