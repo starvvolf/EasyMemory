@@ -567,11 +567,13 @@ function Answer({ text }: { text: string }) {
 // 모양이 단계 · 식 · 비교표 · 목록이면 답에 없는 내용이라 펼친 채로 두고(11/12 사용자: 원 그리기 카드의 단계는 제 몫을 한다), 정의 · 주장 · 사실처럼
 // 답을 다시 말하기 쉬운 모양만 접는다.
 const SHOWN_FORMS = new Set(["procedure", "formula", "compare", "list"]);
-function OldMore({ idea, shape, details }: { idea?: string; shape: Shape; details?: string[] }) {
+// 11/13: 11/10~11/11 사이에 만든 자료는 식과 조건이 memo.facts에 있다(자세히 칸이 생기기 전). 화면 어디에도 안 나오던 것을 모양 바로 밑에 보인다
+// (11/11 결정: 계산에 쓰이는 식은 자세히로 내리지 않는다).
+function OldMore({ idea, shape, details, facts }: { idea?: string; shape: Shape; details?: string[]; facts?: string[] }) {
   const [open, setOpen] = useState(false);
   const shown = SHOWN_FORMS.has(shape.form);
   const rest = Boolean(idea || !shown || details?.length);
-  return <>{shown ? <Body s={shape} /> : null}{rest ? <div className="lc3-details">{open ? <>
+  return <>{shown ? <Body s={shape} /> : null}{facts?.length ? <ul className="st-facts lc3-detaillist">{facts.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}{rest ? <div className="lc3-details">{open ? <>
     {idea ? <div className="lc3-idea"><span className="lc3-ideatag">풀이</span><Rich text={idea} /></div> : null}
     {shown ? null : <Body s={shape} />}
     {details?.length ? <ul className="st-facts lc3-detaillist">{details.map((x, k) => <li key={k}><Rich text={x} /></li>)}</ul> : null}
@@ -597,7 +599,7 @@ function LectureCard({ genId, c, onPage, startOpen = false }: { genId: string; c
         {c.memo?.line && !(open && c.memo.answer) ? <span className="lc3-ca">{c.memo.answer ? <span className="lc3-qtag a">A</span> : null}<Rich text={c.memo.answer ? rowLine(c) : c.memo.line} /></span> : null}</span>
       <span className="lc3-chev" aria-hidden>›</span>
     </button>
-    {open ? <div className="lc3-cardbody">{c.memo?.answer ? <><Answer text={c.memo.answer} /><CardDetails items={c.memo.details} /></> : c.memo?.line ? <OldMore idea={c.memo.idea} shape={c.shape} details={c.memo.details} /> : <Body s={c.shape} />}
+    {open ? <div className="lc3-cardbody">{c.memo?.answer ? <><Answer text={c.memo.answer} /><CardDetails items={c.memo.details} /></> : c.memo?.line ? <OldMore idea={c.memo.idea} shape={c.shape} details={c.memo.details} facts={c.memo.facts} /> : <Body s={c.shape} />}
       <FigureView genId={genId} c={c} onPage={onPage} />
       <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div></div> : null}</div>;
 }
@@ -848,7 +850,7 @@ function FlashCards({ genId, title, cards, onPage, onClose }: { genId: string; t
       {shown ? <div className="fc-back">
         {m?.answer ? <Answer text={m.answer} /> : m?.line ? <>
         <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p>
-        <OldMore idea={m.idea} shape={c.shape} details={m.details} /></> : <Body s={c.shape} />}
+        <OldMore idea={m.idea} shape={c.shape} details={m.details} facts={m.facts} /></> : <Body s={c.shape} />}
         {pics ? null : <FigureView genId={genId} c={c} onPage={onPage} />}
         <div className="lc3-pages">{c.pages.slice(0, 4).map((p) => <button key={p} className="lc3-pagechip" onClick={() => onPage(p)}>원문 p.{p}</button>)}</div>
       </div> : null}
@@ -1228,7 +1230,7 @@ export default function MaterialMap({ genId, onPage, onPractice, onPracticeAll, 
                             {c.memo.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={c.memo.question} /></p> : null}
                             {c.memo.answer ? <Answer text={c.memo.answer} /> : c.memo.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={c.memo.line} /></p> : null}</div> : null}
                           </div> : null}
-                        {c.memo?.answer ? <CardDetails items={c.memo.details} /> : c.memo?.line ? <OldMore idea={c.memo.idea} shape={c.shape} details={c.memo.details} /> : <Body s={c.shape} />}
+                        {c.memo?.answer ? <CardDetails items={c.memo.details} /> : c.memo?.line ? <OldMore idea={c.memo.idea} shape={c.shape} details={c.memo.details} facts={c.memo.facts} /> : <Body s={c.shape} />}
                         <FigureView genId={genId} c={c} onPage={onPage} all={everyCard} onCard={jump} />
                         {links.length ? <div className="mm3-rel"><span className="mm3-tag">이어지는 기억</span>
                           <div className="mm3-relchips">{links.map((x, i) =>
@@ -1284,7 +1286,7 @@ function ShelfCard({ genId, c, onPage, all, onCard, stat }: { genId: string; c: 
       {m?.question || m?.line ? <div className="mm3-qa">
         {m?.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={m.question} /></p> : null}
         {m?.answer ? <Answer text={m.answer} /> : m?.line ? <p className="lc3-ca mm3-a"><span className="lc3-qtag a">A</span><Rich text={m.line} /></p> : null}</div> : null}
-      {m?.answer ? <CardDetails items={m.details} /> : m?.line ? <OldMore idea={m.idea} shape={c.shape} details={m.details} /> : <Body s={c.shape} />}
+      {m?.answer ? <CardDetails items={m.details} /> : m?.line ? <OldMore idea={m.idea} shape={c.shape} details={m.details} facts={m.facts} /> : <Body s={c.shape} />}
       <FigureView genId={genId} c={c} onPage={onPage} all={all} onCard={onCard} />
       {/* 출처(11/12 사용자 "만남 말고 출처"): 원문 구절과 쪽 — 상태는 줄 앞 점이 보여 준다 */}
       {c.quotes.length ? <p className="shelf-src small"><span className="shelf-srck">출처</span>{c.quotes.slice(0, 2).map((q, k) => <span key={k}>“{q}”</span>)}</p> : null}
