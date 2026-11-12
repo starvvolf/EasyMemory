@@ -17,7 +17,7 @@ const mb = (n: number | null | undefined) => (n ? `${Math.round(n / 1048576)}MB`
 const W_KEY = "recaller.studio.tutorWidth.v2";
 const store = { get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* */ } } };
 
-export default function ProjectStudio({ run, courseUrl, onClose }: { run: Run; courseUrl: string; onClose: () => void }) {
+export default function ProjectStudio({ run, courseUrl }: { run: Run; courseUrl: string; onClose?: () => void }) {
   const host = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ top: 0, right: 10 });
   const [theme, setTheme] = useState<"light" | "dark">("dark");
@@ -128,7 +128,7 @@ export default function ProjectStudio({ run, courseUrl, onClose }: { run: Run; c
     <div ref={host} className="pst-host">
       <div className="pst" style={{ top: box.top, right: box.right }}>
         <header className="pst-top">
-          <button className="btn ghost small" onClick={onClose} title="실습 목록으로(편집기는 켜 둔 채)">← 실습</button>
+          {/* [경계] A 11/13: 위 줄의 [← 실습 목록]과 겹쳐 뺌(둘 다 같은 곳으로 감) */}
           <Goals brief={brief} fallback={run.courseTitle} />
           {msg ? <span className="small muted pst-msg">{msg}</span> : null}
           <button className="btn ghost small" onClick={() => void mine()} title="내 PC의 VS Code(내 확장 · 설정 그대로)로 이 폴더를 열어요">내 VS Code로 열기</button>
