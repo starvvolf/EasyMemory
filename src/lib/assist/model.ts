@@ -71,5 +71,6 @@ export async function askJson<T>(purpose: string, system: string, user: string, 
   const reply = await timed(purpose, model, effort, sent,
     (onText) => callModel({ purpose, ...sent, json: true, schema, schemaName: `recaller_${purpose.replace(/\W+/g, "_")}`,
       model, effort, caller: options.caller ?? LOCAL_CALLER, onText: (t: string) => { onText(); options.onText?.(t); }, ...(options.webSearch ? { webSearch: true } : {}) }), (r) => JSON.stringify(r.data ?? "", null, 1));
+  if (reply.usage) options.onUsage?.(reply.usage);
   return reply.data as T;
 }
