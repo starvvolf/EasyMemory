@@ -31,7 +31,7 @@ PDF·웹 글·코드 문제·프로젝트가 같이 쓰는 저장소. 같은 지
 - 무엇이 지식이 되나: PDF는 핵심(★) 카드만(보조는 풀거나 "모름"을 누를 때), 웹 글은 핵심 3~5개 + 학습자가 "모름"을 누른 개념어, 코드 문제는 쓰이는 개념, 프로젝트는 코스 개념 + 물어본 문법·도구 말.
 - 같은 지식 찾기: 이름 → 같은 주제 안 임베딩 후보 5 → AI 25개씩 판정. "같음"은 자동으로 합치지 않고 지식 창 "정리할 것"에서 학습자가 확인. 포함·씀·조건·먼저는 방향을 맞춰 고리, 비슷한 말은 고리 없이 "가까운 지식". 이유는 "같음"일 때만 쓰게 한다(`RECALLER_DEDUPE_REASONS=all`이면 전부).
 - 지식은 주제·유형·출처로 본다(목표 축은 10/30에 뺌). 유형은 개념·원리·절차·규칙·방법·비교 6가지(11/5), 어휘는 개념 아래 `vocab` 표시. 예전 종류(사실·공식·어휘)는 읽을 때 바뀐다(`asKind`). 지식 창은 자료가 먼저, PDF를 누르면 목차(`/api/study-map`), 웹 글은 글 지도.
-- 모델: 글 지도·주제 정리·층·쉽게 풀어 보기 모두 gpt-6.1-terra·low(10/31부터 기본값, `assist/model.ts`). 같은 지식 판정(저장 경로)은 API 키가 있으면 Decisions(gpt-6-luna, 문턱 0.5), 없거나 실패하면 sol·low(`RECALLER_DEDUPE_ENGINE=sol`로 끄기). 끄기: `RECALLER_AFTER_SAVE=off`, `RECALLER_DEDUPE=off`, `RECALLER_LAYER=off`.
+- 모델: 글 지도·주제 정리·층·쉽게 풀어 보기 모두 gpt-6.1-terra·low(10/31부터 기본값, `assist/model.ts`). 같은 지식 판정(저장 경로)은 API 키가 있으면 Decisions(gpt-6-luna, 문턱 0.5), 없거나 실패하면 sol·low(`RECALLER_DEDUPE_ENGINE=sol`로 끄기). 저장 뒤 처리(주제 정리 · 같은 기억 찾기 · 층 나누기)는 11/13부터 **기본 꺼짐**(사용자 "기억 시스템이 바뀌었으니 끄고"), 켜기 `RECALLER_AFTER_SAVE=on`. 켰을 때 따로 끄기: `RECALLER_DEDUPE=off`, `RECALLER_LAYER=off`.
 
 ## 남은 문제 (10/31)
 

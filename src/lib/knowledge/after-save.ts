@@ -12,7 +12,9 @@ const WAIT_MS = 4000;
 const RETRY_MS = [15_000, 30_000, 60_000, 120_000];
 const state = globalThis as unknown as { __afterSaveTimer?: ReturnType<typeof setTimeout>; __afterSaveTries?: number };
 export function scheduleAfterSave(wait = WAIT_MS, retry = false) {
-  if (process.env.RECALLER_AFTER_SAVE === "off") return;
+  // 11/13 사용자 "기억 시스템 자체가 바뀌었으니까 끄고": 주제 정리 · 같은 기억 찾기(임베딩 + AI 판정) · 층 나누기는 결과를 보여 주던
+  // 예전 기억 탭이 없어져 AI 호출만 나갔다. 기본은 꺼짐, 다시 켜려면 RECALLER_AFTER_SAVE=on.
+  if (process.env.RECALLER_AFTER_SAVE !== "on") return;
   if (!retry) state.__afterSaveTries = 0;
   if (state.__afterSaveTimer) clearTimeout(state.__afterSaveTimer);
   state.__afterSaveTimer = setTimeout(() => {
