@@ -252,7 +252,7 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
       card: { situation: c.situation, next: c.next, how: c.how } }));
     // 메모리 갱신: 근거는 이번 정리의 부족했던 점(나아짐은 배운 것) 이름만 인정, 상태는 코드가(lib/memory.ts)
     const memory = await applyMemory(runId, goal.title, out.memory, gaps.map((g) => g.concept), learned.map((l) => l.concept));
-    const rec: GoalRecord = { goal: goal.title, done: goal.done, status: goal.understood && goal.applied ? "마침" : "건너뜀", mode, from: goal.at, to: redo?.to ?? new Date().toISOString(),
+    const rec: GoalRecord = { goal: goal.title, done: goal.done, status: goal.understood && goal.applied ? "마침" : "건너뜀", mode, from: goal.at, to, // 11/13: 정리를 부른 때(AI 1분 뒤가 아니라) — 늦게 찍혀 다음 목표 구간과 겹쳤다
       ...(out.review ? { review: out.review } : {}), summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), cards, learned, gaps, memory, at: new Date().toISOString() };
     await update<{ items: GoalRecord[] }>(file(runId), { items: [] }, (s) => { if (redo && s.items[redo.index]) s.items[redo.index] = rec; else s.items.push(rec); });
     // 진짜로 끝나 정리됐으니 그 목표의 '진행 중' 정리는 지운다
@@ -275,7 +275,10 @@ export async function redoRecords(runId: string, messages: Msg[], show: (m: Msg)
   for (let i = 0; i < old.length; i++) {
     const r = old[i];
     const done = r.status === "마침";
-    out.push(await recordGoal(runId, { title: r.goal, done: r.done, understood: done, applied: done, at: r.from }, r.mode, messages, show, { to: r.to, index: i }, saves));
+    // 예전 기록의 to는 정리가 끝난 때(AI 1분 뒤)라 다음 목표 구간과 겹친다 → 다음 목표 시작에서 자른다(11/13)
+    const next = old[i + 1]?.from;
+    const to = next && next < r.to ? next : r.to;
+    out.push(await recordGoal(runId, { title: r.goal, done: r.done, understood: done, applied: done, at: r.from }, r.mode, messages, show, { to, index: i }, saves));
   }
   return out;
 }

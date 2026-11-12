@@ -52,3 +52,21 @@ test("총정리 문단 코드: 기록에 있는 코드 · 결과만 남김", asy
   assert.equal(r.story[0].code, "a = input()\nprint(a + b)  # 이어 붙음"); assert.equal(r.story[0].result, "TypeError: x");
   assert.equal(r.story[1].code, undefined, "기록에 없는 코드는 버림"); assert.equal(r.story[1].result, undefined, "기록에 없는 결과는 버림");
 });
+
+test("목표 구간(11/13): 기록의 to는 정리를 부른 때, 다시 정리할 때는 다음 목표 시작에서 자름", async () => {
+  const { setFakeAi } = await import("../lib/ai.ts");
+  const R = await import("../lib/goal-record.ts");
+  const { toMd } = await import("./old-record.ts");
+  const seen: string[] = [];
+  setFakeAi((p: string, u: string) => { if (p !== "goal-record") return ""; seen.push(u); return toMd({ summary: "s", steps: [], cards: [] }); });
+  const show = (m: { role: string; text: string }) => `[학습자] ${m.text}`;
+  const msgs = [{ role: "user", text: "첫 목표 말", at: "2026-11-02T00:01:00Z" }, { role: "user", text: "둘째 목표 말", at: "2026-11-02T00:06:00Z" }];
+  const g1 = { title: "g1", done: "", understood: true, applied: true, at: "2026-11-02T00:00:00Z" };
+  const r1 = await R.recordGoal("r9", g1, null, msgs, show, { to: "2026-11-02T00:07:00Z", index: 0 }, []);
+  assert.equal(r1?.to, "2026-11-02T00:07:00Z");
+  await R.recordGoal("r9", { ...g1, title: "g2", at: "2026-11-02T00:05:00Z" }, null, msgs, show, { to: "2026-11-02T00:08:00Z", index: 1 }, []);
+  seen.length = 0;
+  await R.redoRecords("r9", msgs, show);
+  assert.doesNotMatch(seen[0], /둘째 목표 말/, "앞 목표는 다음 목표 시작에서 잘림");
+  assert.match(seen[1], /둘째 목표 말/);
+});
