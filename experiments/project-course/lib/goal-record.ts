@@ -4,7 +4,8 @@
 import path from "node:path";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { DATA, read, update, writeAtomic } from "./store.ts";
-import { aiJson, S } from "./ai.ts";
+import { aiText, S } from "./ai.ts";
+import { REVIEW_SYSTEM, REVIEW_FORMAT, ONGOING_NOTE } from "./review-prompt.ts";
 import { applyMemory, memoryForRecord, type MemOps } from "./memory.ts";
 
 export type GoalRecord = {
@@ -102,6 +103,7 @@ export const recordsOf = async (runId: string) => (await read<{ items: GoalRecor
 export const HOW = ["혼자 해냄", "도움 받고 됨", "틀렸다 고침", "아직 모름"] as const;
 export type How = (typeof HOW)[number];
 export type Card = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: How; verified: boolean; code?: GapCode; ids?: string[]; recheck?: { q: string; a: string } };
+/** 11/12까지 쓰던 JSON 정리 지시(이야기 + 약점 카드). 11/13부터 제품은 review-prompt.ts(글)를 쓰고, 이것은 옛 평가(lib/evals.ts)만 쓴다 */
 export const SYSTEM_RECORD = `학습 목표 하나 동안 나눈 대화를 읽고, 학습자가 어떤 과정을 거쳐 무엇을 알게 됐고 무엇이 부족했는지 실습 기억 카드로 정리한다.
 summary: 이 목표에서 학습자가 한 일과 도달한 곳을 2~3문장으로.
 steps: 학습자가 거친 과정을 일어난 순서대로 3~8개. 각각 짧은 한 구절(예: "리스트 인덱스 예측 질문에 답함", "빈 리스트 pop이 오류인지 예측해 맞힘", "튜터가 만든 파일을 실행해 봄", "너무 쉽다고 해서 괄호 검사로 넘어감").
@@ -151,9 +153,12 @@ export const RECORD_SCHEMA = S.obj({ summary: S.str, steps: S.arr(S.str),
 /** 11/12 약점 카드 정책(B와 같음): 시간 순서 이야기 문단 + 약점이 드러난 문단마다 카드(작은 건 한 줄, 핵심은 큰 카드). 예전 모양(scenes)도 화면은 읽는다 */
 export type Weak = { size: "small" | "big"; title: string; state: string; lesson: string };
 export type Step = { text: string; code?: string; result?: string; weak?: Weak };
-export type Review = { v: 2; aim: string; why: string; story: Step[] };
+export type ReviewV2 = { v: 2; aim: string; why: string; story: Step[] };
+/** 11/13 사용자 "B 문서대로": 리뷰어 3차를 실습 말로 바꾼 글 리뷰(머리글로 잘라 보여 줌, 화면은 B의 MdReviewView) */
+export type ReviewMd = { v: 3; md: string };
+export type Review = ReviewV2 | ReviewMd;
 /** corpus: 학습자 말 · 저장한 코드 · 터미널 출력(띄어쓰기 무시). 기록에 없는 code · result는 버린다(지어내지 않게) */
-export function cleanReview(raw: unknown, corpus?: string): Review | undefined {
+export function cleanReview(raw: unknown, corpus?: string): ReviewV2 | undefined {
   const o = (raw ?? {}) as Record<string, unknown>;
   const c = (v: unknown, n: number) => String(v ?? "").replace(/```[\s\S]*?```/g, "").replace(/\s+/g, " ").trim().slice(0, n);
   // 설명은 문단과 코드 블록을 살린다(B의 checkReview와 같게)
@@ -169,7 +174,7 @@ export function cleanReview(raw: unknown, corpus?: string): Review | undefined {
     const weak = size ? { size, title: c(w.title, 40), state: c(w.state, 320), lesson: rich(w.lesson, 2400) } as Weak : undefined;
     return { text: c(x.text, 520), ...(code && inCorpus(code) ? { code } : {}), ...(result && seenOut(result) ? { result } : {}), ...(weak && weak.title && weak.lesson ? { weak } : {}) };
   }).filter((x) => x.text).slice(0, 12);
-  const r: Review = { v: 2, aim: c(o.aim, 260), why: c(o.why, 360), story };
+  const r: ReviewV2 = { v: 2, aim: c(o.aim, 260), why: c(o.why, 360), story };
   return r.aim || r.story.length ? r : undefined;
 }
 const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
@@ -177,12 +182,12 @@ const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase();
 /** 목표 하나를 정리한다. messages: 그 대화 전체(at 포함), since: 목표가 시작된 시각 */
 type GoalIn = { title: string; done: string; understood: boolean; applied: boolean; at: string };
 /** 정리 호출에 보낼 글(평가에서도 같은 것을 쓴다, lib/evals.ts). 대화와 코드 저장을 시각 순서로 섞는다 */
-export function recordInput(goal: GoalIn, messages: Msg[], show: (m: Msg) => string, saves: Save[], to: string, memory: string) {
+export function recordInput(goal: GoalIn, messages: Msg[], show: (m: Msg) => string, saves: Save[], to: string, memory: string, result?: string) {
   const seg = messages.filter((m) => m.at >= goal.at && m.at <= to);
   const code = codeTurns(saves, goal.at, to);
   const text = [...seg.map((m) => ({ at: m.at, text: show(m) })), ...code.map((c) => ({ at: c.at, text: c.text }))]
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).map((x) => x.text).filter(Boolean).join("\n\n").slice(-60000);
-  const user = `[목표] ${goal.title}\n[완료 조건] ${goal.done}\n[지금 학습자 메모리]\n${memory}\n[결과] ${goal.understood && goal.applied ? "이해 · 적용까지 하고 마침" : `건너뜀(이해 ${goal.understood ? "✓" : "–"}, 적용 ${goal.applied ? "✓" : "–"})`}\n\n[이 목표 동안의 대화]\n${text}`;
+  const user = `[목표] ${goal.title}\n[완료 조건] ${goal.done}\n[지금 학습자 메모리]\n${memory}\n[결과] ${result ?? (goal.understood && goal.applied ? "이해 · 적용까지 하고 마침" : `건너뜀(이해 ${goal.understood ? "✓" : "–"}, 적용 ${goal.applied ? "✓" : "–"})`)}\n\n[이 목표 동안의 대화]\n${text}`;
   return { seg, code, user };
 }
 /** 하다가 나간 목표(11/12 사용자 "하다가 나간 목표는 진행 중으로 정리해서 관리"): 끝나지 않은 현재 목표를 그때까지로 정리한 것. 기록 · 메모리 · 앱 기억에는 안 넣고 따로 둔다.
@@ -191,7 +196,8 @@ export type Ongoing = { goal: string; done?: string; from: string; at: string; m
 const ongoingFile = (runId: string) => path.join(DATA, "goals", `${runId}.ongoing.json`);
 export const ongoingOf = (runId: string) => read<Ongoing | null>(ongoingFile(runId), null);
 export async function recordGoal(runId: string, goal: GoalIn, mode: string | null, messages: Msg[], show: (m: Msg) => string, redo?: { to: string; index: number }, saves: Save[] = [], ledger = "", ongoing = false) {
-  const base = recordInput(goal, messages, show, saves, redo?.to ?? new Date().toISOString(), await memoryForRecord());
+  const to = redo?.to ?? new Date().toISOString();
+  const base = recordInput(goal, messages, show, saves, to, await memoryForRecord(), await resultLine(runId, goal, to, messages, show, ongoing));
   // 부족함 원장(11/8): 이 목표 동안 코드가 잡은 부족함을 같이 보내 이름 · 재확인 문항을 받는다
   // 이미 쓴 지식 이름(11/8 실측: 정리마다 "빈 목표 상태와 대체값" / "빈 목표 상태"처럼 이름이 흔들려 앱 지식이 늘어남) — 같은 것이면 그 이름 그대로
   const used = [...new Set((await recordsOf(runId)).flatMap((r) => [...r.learned.map((x) => x.concept), ...(r.gaps ?? []).map((x) => x.concept)]))].slice(-60);
@@ -206,7 +212,6 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
   const ms = (await (await import("./moments.ts")).momentsOf(runId).catch(() => [])).filter((m) => m.openedAt >= goal.at && m.openedAt <= (redo?.to ?? new Date().toISOString())).slice(-8);
   const momentText = ms.length ? `\n\n[막힌 순간]\n${ms.map((m) => `- ${m.by}${m.command ? ` \`${m.command}\`` : ""}${m.error ? ` → ${m.error}` : m.gap ? ` → ${m.gap}` : m.reasons ? ` → ${m.reasons}` : ""} · ${m.how ?? "아직 막힘"} · 다시 해 본 ${m.tries}번${m.help.edits.length ? ` · 튜터가 고친 파일 ${m.help.edits.join(", ")}` : ""}`).join("\n")}` : "";
   const { seg, code } = base, user = `${base.user}${runText}${momentText}${ledger ? `\n\n${ledger}` : ""}${names}`;
-  const corpus = [...seg.filter((m) => m.role === "user").map((m) => m.text), ...code.flatMap((c) => c.added), ...runs.map((r) => r.out)].join("\n").replace(/\s+/g, "");
   const log: Record<string, unknown> = { at: new Date().toISOString(), runId, goal: goal.title, messages: seg.length };
   const t0 = Date.now();
   try {
@@ -215,10 +220,11 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
       const was = await ongoingOf(runId);
       if (was && was.goal === goal.title && was.msgs >= seg.length) { log.skipped = "진행 중 정리: 새 말 없음"; return null; }
     }
-    type RawCard = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: string; code?: { save: string; from: number; to: number }; ids?: string[]; recheck?: { q: string; a: string } };
-    const out = await aiJson<{ summary: string; steps: string[]; cards: RawCard[]; memory?: MemOps; review?: unknown }>("goal-record", SYSTEM_RECORD, user + (ongoing ? "\n\n[참고] 이 목표는 아직 끝나지 않았다(학습자가 하다가 손을 놓음). 지금까지로만 쓴다. reached는 어디까지 하다 멈췄는지." : ""), RECORD_SCHEMA);
+    // 11/13: 리뷰어 3차(글) 한 번. JSON 대신 마크다운, 원장 · 메모리용은 같은 글 끝 "# 기록용"에서 코드가 읽는다
+    const text = await aiText("goal-record", `${REVIEW_SYSTEM}\n\n${REVIEW_FORMAT}`, user + (ongoing ? `\n\n${ONGOING_NOTE}` : ""));
+    const out = parseRecordTail(text);
     if (ongoing) {
-      const o: Ongoing = { goal: goal.title, done: goal.done, from: goal.at, at: new Date().toISOString(), msgs: seg.length, summary: String(out.summary ?? "").trim().slice(0, 600), review: cleanReview(out.review, corpus) };
+      const o: Ongoing = { goal: goal.title, done: goal.done, from: goal.at, at: new Date().toISOString(), msgs: seg.length, summary: String(out.summary ?? "").trim().slice(0, 600), ...(out.review ? { review: out.review } : {}) };
       await mkdir(path.dirname(ongoingFile(runId)), { recursive: true });
       await writeAtomic(ongoingFile(runId), JSON.stringify(o, null, 1));
       Object.assign(log, { ms: Date.now() - t0, chars: user.length, ongoing: true });
@@ -247,11 +253,11 @@ export async function recordGoal(runId: string, goal: GoalIn, mode: string | nul
     // 메모리 갱신: 근거는 이번 정리의 부족했던 점(나아짐은 배운 것) 이름만 인정, 상태는 코드가(lib/memory.ts)
     const memory = await applyMemory(runId, goal.title, out.memory, gaps.map((g) => g.concept), learned.map((l) => l.concept));
     const rec: GoalRecord = { goal: goal.title, done: goal.done, status: goal.understood && goal.applied ? "마침" : "건너뜀", mode, from: goal.at, to: redo?.to ?? new Date().toISOString(),
-      review: cleanReview(out.review, corpus), summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), cards, learned, gaps, memory, at: new Date().toISOString() };
+      ...(out.review ? { review: out.review } : {}), summary: String(out.summary ?? "").trim().slice(0, 600), steps: (out.steps ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 10), cards, learned, gaps, memory, at: new Date().toISOString() };
     await update<{ items: GoalRecord[] }>(file(runId), { items: [] }, (s) => { if (redo && s.items[redo.index]) s.items[redo.index] = rec; else s.items.push(rec); });
     // 진짜로 끝나 정리됐으니 그 목표의 '진행 중' 정리는 지운다
     if (!redo) { const was = await ongoingOf(runId); if (was?.goal === goal.title) await writeAtomic(ongoingFile(runId), "null"); }
-    Object.assign(log, { ms: Date.now() - t0, chars: user.length, codeSaves: code.length, raw: out, unverified });
+    Object.assign(log, { ms: Date.now() - t0, chars: user.length, codeSaves: code.length, outChars: text.length, raw: text.slice(-20000), unverified });
     return rec;
   } catch (e) {
     Object.assign(log, { ms: Date.now() - t0, error: (e as Error).message });
@@ -272,4 +278,72 @@ export async function redoRecords(runId: string, messages: Msg[], show: (m: Msg)
     out.push(await recordGoal(runId, { title: r.goal, done: r.done, understood: done, applied: done, at: r.from }, r.mode, messages, show, { to: r.to, index: i }, saves));
   }
   return out;
+}
+
+/** [결과] 한 줄(11/13, B의 "[결과] = 코드가 센 사실"): 이 목표 동안의 버튼 · 판정 · 터미널 · 튜터가 고친 파일 · 걸린 분 */
+export async function resultLine(runId: string, goal: GoalIn, to: string, messages: Msg[], show: (m: Msg) => string, ongoing = false) {
+  const g = await (await import("./goals.ts")).goalsOf(runId).catch(() => null);
+  const log = (g?.log ?? []).filter((l) => l.at >= goal.at && l.at <= to);
+  const checks = log.filter((l) => l.kind === "apply-check").map((l) => /: (맞음|일부만 맞음|틀림|판단 근거 부족)/.exec(l.text)?.[1] ?? "");
+  const cnt = (k: string) => checks.filter((x) => x === k).length;
+  const stuck = log.filter((l) => l.kind === "stuck").length, easy = log.filter((l) => l.kind === "easy").length, sup = log.filter((l) => l.kind === "support").length;
+  const runs = (await (await import("./shell.ts")).learnerRunsSince(runId, goal.at).catch(() => [])).filter((r) => r.at <= to);
+  const fails = runs.filter((r) => r.code != null && r.code !== 0).length;
+  const edits = [...new Set((await (await import("./moments.ts")).momentsOf(runId).catch(() => [])).filter((m) => m.openedAt >= goal.at && m.openedAt <= to).flatMap((m) => m.help.edits))];
+  const said = messages.filter((m) => m.at >= goal.at && m.at <= to && show(m).startsWith("[학습자]")).length;
+  // 걸린 분: 목표 시작부터 마지막 말 · 명령까지(정리를 부른 때가 아니라)
+  const last = [...messages.filter((m) => m.at >= goal.at && m.at <= to).map((m) => m.at), ...runs.map((r) => r.at)].sort().at(-1) ?? goal.at;
+  const min = Math.max(0, Math.round((Date.parse(last) - Date.parse(goal.at)) / 60000));
+  const HELP: Record<string, string> = { self: "스스로", together: "같이", fast: "빨리 만들기" };
+  const end = ongoing ? "아직 하는 중(손 놓음)" : goal.understood && goal.applied ? "마침(이해 ✓ · 적용 ✓)" : `건너뜀(이해 ${goal.understood ? "✓" : "–"} · 적용 ${goal.applied ? "✓" : "–"})`;
+  return [end,
+    checks.length ? `[해 봤어요] 판정 ${checks.length}번(맞음 ${cnt("맞음")} · 일부만 ${cnt("일부만 맞음")} · 틀림 ${cnt("틀림")} · 근거 부족 ${cnt("판단 근거 부족")})` : "[해 봤어요] 판정 없음",
+    stuck ? `너무 어려워요 ${stuck}번${sup ? ` · 보충 ${sup}번` : ""}` : "", easy ? `너무 쉬워요 ${easy}번` : "",
+    g?.help ? `도움 다이얼: ${HELP[g.help] ?? g.help}` : "",
+    `튜터에게 한 말 ${said}번`, runs.length ? `터미널 명령 ${runs.length}번(실패 ${fails})` : "터미널 명령 없음",
+    edits.length ? `튜터가 고친 파일 ${edits.join(", ")}` : "", `${min}분`].filter(Boolean).join(" · ");
+}
+
+type RawCard = { name: string; situation: string; did: string; quote: string; learned: string; next: string; how: string; code?: { save: string; from: number; to: number }; ids?: string[]; recheck?: { q: string; a: string } };
+/** 리뷰 글 = "# 기록용" 앞, 기록용 = 요약 · 과정 · 카드 · 메모리(정해진 꼴). 코드 블록 안의 # 줄은 머리글로 보지 않는다 */
+export function parseRecordTail(text: string): { review?: ReviewMd; summary: string; steps: string[]; cards: RawCard[]; memory: MemOps } {
+  const lines = String(text ?? "").replace(/\r/g, "").split("\n");
+  let fence = false, cut = -1;
+  for (let i = 0; i < lines.length; i++) { if (/^\s*```/.test(lines[i])) fence = !fence; else if (!fence && /^#\s*기록용\s*$/.test(lines[i].trim())) { cut = i; break; } }
+  const md = (cut >= 0 ? lines.slice(0, cut) : lines).join("\n").trim().slice(0, 30000);
+  const tail = cut >= 0 ? lines.slice(cut + 1) : [];
+  // B의 checkReviewText와 같은 생각: 머리글 · 길이만 본다(내용 판단 안 함). 막힘 없이 끝난 목표는 주제가 없을 수 있어 총평만 있어도 받는다
+  const review = /^#\s*학습 총평/m.test(md) && md.length >= 150 ? { v: 3 as const, md } : undefined;
+  const memory: MemOps = { add: [], update: [], improved: [] };
+  const cards: RawCard[] = [];
+  let summary = "", steps: string[] = [], sec = "";
+  const KEY: Record<string, string> = { "코드": "code", "어떻게": "how", "상황": "situation", "한 것": "did", "인용": "quote", "알게 된 것": "learned", "다음엔": "next", "다시 확인": "q", "모범답": "a", "원장": "ids" };
+  const clean = (v: string) => v.trim().replace(/^`(.*)`$/, "$1").trim();
+  const names = (v: string) => v.split(/[,，·]/).map((x) => x.trim()).filter(Boolean);
+  for (const raw of tail) {
+    const l = raw.trim();
+    if (!l) continue;
+    let m: RegExpExecArray | null;
+    if ((m = /^요약\s*[:：]\s*(.*)$/.exec(l))) { summary = m[1].trim(); continue; }
+    if ((m = /^과정\s*[:：]\s*(.*)$/.exec(l))) { steps = m[1].split(/\s+\/\s+/).map((x) => x.trim()).filter(Boolean); continue; }
+    if ((m = /^##\s*카드\s*[:：]\s*(.+)$/.exec(l))) { sec = "card"; cards.push({ name: m[1].trim(), situation: "", did: "", quote: "", learned: "", next: "", how: "", ids: [], recheck: { q: "", a: "" } }); continue; }
+    if (/^##\s*메모리/.test(l)) { sec = "mem"; continue; }
+    if (/^#/.test(l)) { sec = ""; continue; }
+    const b = /^[-•]\s*(.*)$/.exec(l)?.[1];
+    if (b == null) continue;
+    if (sec === "card" && cards.length) {
+      const kv = /^([^:：]{1,8})\s*[:：]\s*(.*)$/.exec(b); const k = kv ? KEY[kv[1].trim()] : undefined;
+      if (!k || !kv) continue;
+      const c = cards[cards.length - 1], v = clean(kv[2]);
+      const cm = k === "code" ? /^(S\d+)\s+(\d+)\s*[-~]\s*(\d+)/.exec(v) ?? /^(S\d+)\s+(\d+)/.exec(v) : null;
+      if (k === "code") { if (cm) c.code = { save: cm[1], from: Number(cm[2]), to: Number(cm[3] ?? cm[2]) }; }
+      else if (k === "q") c.recheck!.q = v; else if (k === "a") c.recheck!.a = v; else if (k === "ids") c.ids = names(v); else (c as Record<string, unknown>)[k] = v;
+    } else if (sec === "mem") {
+      const [head, ev = ""] = b.split(/\s*←\s*/);
+      if ((m = /^추가\s*[:：]\s*(.+)$/.exec(head))) memory.add.push({ text: m[1].trim(), evidence: names(ev) });
+      else if ((m = /^유지\s*\[([^\]]+)\]\s*[:：]\s*(.+)$/.exec(head))) memory.update.push({ id: m[1].trim(), text: m[2].trim(), evidence: names(ev) });
+      else if ((m = /^나아짐\s*\[([^\]]+)\]/.exec(head))) memory.improved.push({ id: m[1].trim(), evidence: names(ev) });
+    }
+  }
+  return { ...(review ? { review } : {}), summary, steps, cards, memory };
 }

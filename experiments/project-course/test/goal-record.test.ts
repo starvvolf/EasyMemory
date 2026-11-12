@@ -24,7 +24,7 @@ test("목표 정리(11/5): 그 목표 시작 뒤의 대화만 보내고, 근거 
   const rec = await R.recordGoal("run1", { title: "push · pop", done: "넣고 꺼낸다", understood: true, applied: false, at: "2026-11-05T01:00:00Z" }, "bottomup", msgs, (m) => `[${m.role}] ${m.text}`);
   assert.ok(rec);
   assert.ok(!sent.includes("예전 말")); // 목표 시작 전 대화는 안 보냄
-  assert.match(sent, /건너뜀\(이해 ✓, 적용 –\)/);
+  assert.match(sent, /건너뜀\(이해 ✓ · 적용 –\)/);
   assert.equal(rec!.status, "건너뜀");
   assert.deepEqual(rec!.learned.map((x) => [x.concept, x.verified]), [["스택", true], ["IndexError", false]]); // 지어낸 구절은 근거 없음으로
   assert.equal((await R.recordsOf("run1")).length, 1);
