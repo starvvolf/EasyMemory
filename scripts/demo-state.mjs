@@ -67,7 +67,8 @@ async function main() {
         if (keep.has(f)) continue;
         try { await rm(path.join(to, f), { force: true }); gone++; } catch { stuck++; }
       }
-      await cp(from, to, { recursive: true, force: true });
+      // 덮어쓰기는 파일 내용만 바꾼다(지우고 새로 만들지 않음 — 지우기가 막힌 폴더에서도 되게)
+      for (const f of keep) { await mkdir(path.dirname(path.join(to, f)), { recursive: true }); await writeFile(path.join(to, f), await readFile(path.join(from, f))); }
       console.log(`- ${d}: ${keep.size}개 되돌림${gone ? `, 새로 생긴 ${gone}개 지움` : ""}${stuck ? `, 못 지운 ${stuck}개` : ""}`);
     }
     console.log(`"${name}" 상태로 되돌렸어요 (저장: ${meta.savedAt}).`);
