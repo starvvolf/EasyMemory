@@ -307,7 +307,7 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
         const ps = [...new Set(list.flatMap(pagesOf))].sort((x, y) => x - y);
         const row = (m: MemoryLite) => <li key={m.id}><button className={`st-row${open === m.id ? " on" : ""}${m.role !== "메인" ? " side" : ""}`} onClick={() => { setOpen(open === m.id ? null : m.id); setCard(null); }}>
           <span className="st-name"><Rich text={m.name} /></span>{m.kind === "알고리즘" ? <span className="st-kind">알고리즘 · {m.steps.length}단계</span> : <span className="st-kind">{m.kind}</span>}
-          <span className="st-line"><Rich text={m.line} /></span></button></li>;
+          <span className="st-line"><Rich text={byId.get(m.id)?.memo?.answer ? rowLine(byId.get(m.id)!) : m.line} /></span></button></li>;
         return <li key={i} className="mm6-topic">
           <div className="mm6-thead"><span className="mm3-num">{i + 1}</span><b><Rich text={a.name} /></b><span className="small muted">{range(ps)}</span></div>
           {a.question ? <p className="st-q small muted"><Rich text={a.question} /></p> : null}
@@ -322,10 +322,11 @@ function StemPane(props: { genId: string; digest: DigestLite | null | undefined;
         <div className="mm3-dhead"><b><Rich text={mem.name} /></b><span className="mm3-kind">{mem.kind}</span>{mem.role !== "메인" ? <span className="mm3-kind">{mem.role === "바탕" ? "바탕 지식" : "곁가지"}</span> : null}<span className="cs-gap" />
           {pagesOf(mem).slice(0, 6).map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}<button className="btn ghost small" onClick={() => { setOpen(null); setCard(null); }}>닫기</button></div>
         {mem.question ? <p className="lc3-cq"><span className="lc3-qtag">Q</span><Rich text={mem.question} /></p> : null}
-        <p className="lc3-ca"><Rich text={mem.line} /></p>
+        {/* 질문·답 카드(11/12 사용자 "표가 왜 안 되냐 · 절차 번호가 왜 이어붙냐"): 답은 한 줄로 줄인 글이 아니라 원문 답 그대로(표 · 번호 목록 · 식) */}
+        {self?.memo?.answer ? <Answer text={self.memo.answer} /> : <p className="lc3-ca"><Rich text={mem.line} /></p>}
         {self ? <>
-          {/* 줄기 모드(11/10): 기억 하나가 곧 카드 한 장 — 모양(단계·기준…), 모양에 없는 식·조건, 근거, 그림을 바로 */}
-          <Body s={self.shape} />
+          {/* 줄기 모드(11/10): 기억 하나가 곧 카드 한 장 — 모양(단계·기준…), 모양에 없는 식·조건, 근거, 그림을 바로. 질문·답 카드는 모양 = 답이라 다시 안 그린다 */}
+          {self.memo?.answer ? null : <Body s={self.shape} />}
           <CardDetails items={mem.details} />
           {self.quotes.length ? <div className="st-quotes small muted">{self.quotes.map((q, k) => <span key={k}>“{q}”</span>)}</div> : null}
           <FigureView genId={genId} c={self} onPage={onPage} />
@@ -502,9 +503,10 @@ function StructurePane({ genId, cards: cardList, chains: chainList, making, onPa
       {openCard ? <div className="mm8-detail mm6-card">
         <div className="mm3-dhead"><b><Rich text={openCard.title} /></b><span className="mm3-kind">{openCard.kind}</span>{openCard.core ? <span className="mm3-kind core">핵심</span> : null}<span className="cs-gap" />
           {openCard.pages.map((p) => <button key={p} className="btn ghost small" onClick={() => onPage(p)}>원문 p.{p}</button>)}<button className="btn ghost small" onClick={() => setOpen(null)}>닫기</button></div>
-        <Body s={openCard.shape} />
+        {/* 질문·답 카드는 원문 답 그대로(표 · 번호 목록), 한 줄 요약을 겹쳐 쓰지 않는다 (11/12) */}
+        {openCard.memo?.answer ? <Answer text={openCard.memo.answer} /> : <Body s={openCard.shape} />}
         {memById.get(openCard.id) && cardById.get(openCard.id) ? <>
-          {memById.get(openCard.id)!.line ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
+          {memById.get(openCard.id)!.line && !openCard.memo?.answer ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
           <CardDetails items={memById.get(openCard.id)!.details} />
           <FigureView genId={genId} c={openCard} onPage={onPage} /></>
           : memById.get(openCard.id) ? <>{memById.get(openCard.id)!.steps.length ? <p className="small" style={{ margin: 0 }}><Rich text={memById.get(openCard.id)!.line} /></p> : null}
