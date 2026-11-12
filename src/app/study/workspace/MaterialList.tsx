@@ -5,6 +5,7 @@ import { useBridge, type Bridge } from "./bridge";
 import { call, errorText, go, later } from "./api";
 import type { MaterialRow } from "./KnowledgeWindow";
 import { loadShelfRows, materialEntries, setBranch, shelfSel, type ShelfEntry } from "./shelf";
+import "./library.css";
 
 /* 공부 › 자료 (11/11 바닐라 renderHome을 React로, 11/12 "같은 틀, 두 얼굴"): 왼쪽은 기억 탭과 같은 자료 목록, 오른쪽은 고른 자료로 할 것.
    값과 동작은 앱(dejipgi-app.js)의 materialsApi가 준다. */
