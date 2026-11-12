@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { call, errorText, go, later } from "./api";
 import ProjectStudio from "./ProjectStudio";
-import { projectOpen } from "./shelf";
+import { projectOpen, setBranch } from "./shelf";
 
 type RunLite = { id: string; courseTitle: string; stageTitle: string; current: number; done: number; workspace: string | null; createdAt: string };
 type Status = { online: boolean; url: string; runs: RunLite[]; active?: string | null; starting?: boolean; error?: string };
@@ -82,7 +82,8 @@ export default function ProjectStudy() {
   // 앱 안 편집기(11/11 사용자 "기존 방식 남기고 한번 도입해봐"): 왼쪽 편집기(VSCodium 웹 서버판) · 오른쪽 튜터를 한 창에
   const studio = (r: RunLite) => <button className="btn ghost small" onClick={() => setStudioRun(r)} title="이 화면이 편집기 · 튜터로 바뀌어요(앱 머리는 그대로). 내 VS Code 설정과는 따로예요">앱 안에서 이어 하기</button>;
 
-  if (studioRun) return <ProjectStudio run={studioRun} courseUrl={courseUrl} onClose={() => { setStudioRun(null); void load(); }} />;
+  // [경계] A 11/13 사용자 "실습 목록으로 버튼 누르면 옛날 목록이 뜬다": [← 실습]은 이 화면의 예전 목록 대신 공부 › 실습 목록으로
+  if (studioRun) return <ProjectStudio run={studioRun} courseUrl={courseUrl} onClose={() => { setStudioRun(null); void load(); setBranch("project"); go("practice"); }} />;
 
   return (
     <div className="pj stack">
