@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { call, errorText, go, handoff, later, type ItemLite, type Tree } from "./api";
 import { MaterialArticle, StateChip, tidyLine, type MaterialRow } from "./KnowledgeWindow";
 import LearnerNote from "./LearnerNote";
+import { enterProject } from "./MaterialList";
 import { MemoryShelf } from "./MaterialMap";
 import { BRANCH_KEY, loadShelfRows, materialEntries, setBranch as shareBranch, shelfSel } from "./shelf";
 import { Inline, Rich } from "./Rich";
@@ -297,7 +298,7 @@ function RunView({ e }: { e: Entry }) {
     setRedoing(true); setRErr("");
     try { await call(`/api/project-course/runs/${encodeURIComponent(e.runId!)}/redo-records`, {}); await load(); } catch (x) { setRErr(errorText(x)); } finally { setRedoing(false); }
   };
-  const head = <Head icon="🛠" title={e.title} sub={`${day(e.lastAt)} · ${e.sub}`}><button className="btn ghost small" onClick={() => go("project")}>실습 탭 열기</button></Head>;
+  const head = <Head icon="🛠" title={e.title} sub={`${day(e.lastAt)} · ${e.sub}`}>{/* 11/13: 실습 목록(옛 화면)에 멈추지 않고 그 실습의 편집기 · 튜터로 바로 */}<button className="btn small" onClick={() => enterProject(e.runId)}>실습하러 가기</button></Head>;
   if (error) return <>{head}<p className="ws-err">{error}</p></>;
   if (!d) return <>{head}<p className="small muted">실습 기록을 불러오는 중…</p></>;
   if (!d.online) return <>{head}<p className="small muted">실습 서버가 꺼져 있어요. 실습 탭을 열면 켜져요.</p></>;
