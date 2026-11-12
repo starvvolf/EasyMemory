@@ -217,6 +217,10 @@ const routes: [string, RegExp, Handler][] = [
     if (String(m[1]).startsWith("judge")) { const { loadCases } = await import("../lib/evals.ts"); const all = [...await loadCases("main"), ...await loadCases("holdout")]; r.cases = Object.fromEntries(all.map((c) => [c.id, c])); }
     return r; }],
   ["GET", /^\/api\/dev\/eval\/([\w-]+)$/, async (_q, m) => (await import("../lib/evals.ts")).jobOf(m[1]) ?? { status: "none" }],
+  // 시연 준비(11/13, lib/demo.ts): 실습 한 판을 틀로 떠 두고, 시연용 실습을 그 틀로 되돌린다
+  ["GET", /^\/api\/dev\/demo$/, async () => (await import("../lib/demo.ts")).demoList()],
+  ["POST", /^\/api\/dev\/demo\/save$/, async (req) => { const b = await body(req); return (await import("../lib/demo.ts")).demoSave(String(b.name ?? ""), String(b.run ?? "")); }],
+  ["POST", /^\/api\/dev\/demo\/reset$/, async (req) => { const b = await body(req); const r = await (await import("../lib/demo.ts")).demoReset(String(b.name ?? "")); notifyLesson(r.runId); return r; }],
   ["POST", /^\/api\/dev\/reset$/, async () => { const { archivePractice } = await import("../tools/reset-data.mjs"); const { DATA, PRACTICE } = await import("../lib/store.ts"); return archivePractice(DATA, "실험", PRACTICE) ?? { label: null, count: 0 }; }],
   ["GET", /^\/api\/memory$/, async () => ({ items: await (await import("../lib/memory.ts")).memoryOf() })],
   ["POST", /^\/api\/memory\/(m[a-f0-9]{6})$/, async (req, m) => (await import("../lib/memory.ts")).editMemory(m[1], await body(req))],
